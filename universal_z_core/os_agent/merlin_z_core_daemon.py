@@ -55,7 +55,7 @@ import plugin_aggrofilter  # noqa: E402
 import ghosti_setup_parity  # noqa: E402
 import plugin_ghosti_superpowers  # noqa: E402
 
-CORE_VERSION = "2.3.5"
+CORE_VERSION = "2.3.6"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -63,6 +63,17 @@ TRAY_LOGO_PNG = (_BUNDLE_DIR / "logo-symbol.png") if (_BUNDLE_DIR / "logo-symbol
 
 
 def get_unified_health() -> Dict[str, Any]:
+    builtin_plugins: Dict[str, Any] = {
+        "ghosti_os": plugin_ghosti_os.PLUGIN_METADATA,
+        "senstalk": plugin_senstalk.PLUGIN_METADATA,
+        "aggrofilter": plugin_aggrofilter.PLUGIN_METADATA,
+    }
+    try:
+        import plugin_ghosti_care_suite
+
+        builtin_plugins["ghosti_care_suite"] = plugin_ghosti_care_suite.PLUGIN_METADATA
+    except Exception:
+        pass
     return {
         "ok": True,
         "coreName": "Merlin_Z_Core",
@@ -78,11 +89,7 @@ def get_unified_health() -> Dict[str, Any]:
         "extraInstallRequired": False,
         "chromeExtensionRequired": False,
         "autostartEnabled": w32.is_autostart_enabled(),
-        "builtinPlugins": {
-            "ghosti_os": plugin_ghosti_os.PLUGIN_METADATA,
-            "senstalk": plugin_senstalk.PLUGIN_METADATA,
-            "aggrofilter": plugin_aggrofilter.PLUGIN_METADATA,
-        },
+        "builtinPlugins": builtin_plugins,
     }
 
 
@@ -91,6 +98,10 @@ def dispatch_plugin_call(plugin_name: str, action: str, payload: Dict[str, Any] 
     data = payload or {}
     if p in ("ghosti", "ghosti_os", "os", "monster"):
         return plugin_ghosti_os.handle_request(action, data)
+    if p in ("care", "care_suite", "ghosti_care_suite"):
+        import plugin_ghosti_care_suite
+
+        return plugin_ghosti_care_suite.handle_care_suite_request(action, data)
     if p in ("senstalk", "sensebot", "messenger"):
         return plugin_senstalk.handle_request(action, data)
     if p in ("aggrofilter", "youtube", "caption"):
@@ -98,7 +109,7 @@ def dispatch_plugin_call(plugin_name: str, action: str, payload: Dict[str, Any] 
     return {
         "ok": False,
         "error": f"UNKNOWN_BUILTIN_PLUGIN: {plugin_name}",
-        "availablePlugins": ["ghosti_os", "senstalk", "aggrofilter"],
+        "availablePlugins": ["ghosti_os", "ghosti_care_suite", "senstalk", "aggrofilter"],
     }
 
 
@@ -180,10 +191,35 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args: Any) -> None:
         return
 
-    def _reject_untrusted(self) -> bool:
-        """신뢰할 수 없는 출처면 403 응답 후 True 반환"""
+    def _check_origin_and_fetch_site(self) -> tuple[bool, str | None]:
+        """Origin 헤더 및 Sec-Fetch-Site 헤더를 동시에 검증하여 외부 악성 웹페이지의 CSRF(<img src>, <form>, fetch)를 원천 차단합니다."""
         origin = self.headers.get("Origin")
-        if is_trusted_origin(origin):
+        sec_fetch_site = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
+        if origin:
+            return (is_trusted_origin(origin), origin)
+        if sec_fetch_site == "cross-site":
+            return (False, "sec-fetch-site:cross-site")
+        return (True, None)
+
+    def _write_cors_headers(self, expose_range: bool = False) -> None:
+        trusted, origin = self._check_origin_and_fetch_site()
+        if not trusted:
+            return
+        if origin:
+            self.send_header("Access-Control-Allow-Origin", origin)
+            self.send_header("Vary", "Origin")
+        else:
+            self.send_header("Access-Control-Allow-Origin", "*")
+        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
+        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merlin-App, Range")
+        if expose_range:
+            self.send_header("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
+        self.send_header("Access-Control-Allow-Private-Network", "true")
+
+    def _reject_untrusted(self) -> bool:
+        """신뢰할 수 없는 출처(Untrusted Origin 또는 Cross-Site Fetch)면 403 응답 후 True 반환"""
+        trusted, origin = self._check_origin_and_fetch_site()
+        if trusted:
             return False
         self._send_json({"ok": False, "error": "UNTRUSTED_ORIGIN", "origin": origin}, status=403)
         return True
@@ -193,10 +229,7 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(raw)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merlin-App, Range")
-        self.send_header("Access-Control-Allow-Private-Network", "true")
+        self._write_cors_headers(expose_range=False)
         self.end_headers()
         self.wfile.write(raw)
 
@@ -217,11 +250,7 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 self.send_header("Accept-Ranges", "bytes")
                 self.send_header("Content-Range", f"bytes {start}-{end}/{total_len}")
                 self.send_header("Content-Length", str(len(chunk)))
-                self.send_header("Access-Control-Allow-Origin", "*")
-                self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-                self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merlin-App, Range")
-                self.send_header("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
-                self.send_header("Access-Control-Allow-Private-Network", "true")
+                self._write_cors_headers(expose_range=True)
                 self.end_headers()
                 self.wfile.write(chunk)
                 return
@@ -231,11 +260,7 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         self.send_header("Content-Type", content_type)
         self.send_header("Accept-Ranges", "bytes")
         self.send_header("Content-Length", str(total_len))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merlin-App, Range")
-        self.send_header("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
-        self.send_header("Access-Control-Allow-Private-Network", "true")
+        self._write_cors_headers(expose_range=True)
         self.end_headers()
         self.wfile.write(data)
 
@@ -265,7 +290,7 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 if start >= total_len:
                     self.send_response(416)
                     self.send_header("Content-Range", f"bytes */{total_len}")
-                    self.send_header("Access-Control-Allow-Origin", "*")
+                    self._write_cors_headers(expose_range=True)
                     self.end_headers()
                     return
                 start = max(0, start)
@@ -286,11 +311,7 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self.send_header("Content-Length", str(send_len))
             if cache_max_age > 0:
                 self.send_header("Cache-Control", f"public, max-age={cache_max_age}")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merlin-App, Range")
-            self.send_header("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
-            self.send_header("Access-Control-Allow-Private-Network", "true")
+            self._write_cors_headers(expose_range=True)
             self.end_headers()
 
             if send_len > 0:
@@ -371,10 +392,7 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "video/mp4")
             self.send_header("Cache-Control", "no-store")
-            self.send_header("Access-Control-Allow-Origin", "*")
-            self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-            self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merlin-App, Range")
-            self.send_header("Access-Control-Allow-Private-Network", "true")
+            self._write_cors_headers(expose_range=False)
             self.end_headers()
             if proc.stdout:
                 while True:
@@ -402,11 +420,13 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             return {}
 
     def do_OPTIONS(self) -> None:
+        trusted, _ = self._check_origin_and_fetch_site()
+        if not trusted:
+            self.send_response(403)
+            self.end_headers()
+            return
         self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merlin-App, Range")
-        self.send_header("Access-Control-Allow-Private-Network", "true")
+        self._write_cors_headers(expose_range=True)
         self.end_headers()
 
     def do_GET(self) -> None:
@@ -415,6 +435,8 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         qp = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
 
         if path in ("/", "/health", "/__merlin/health"):
+            if self._reject_untrusted():
+                return
             self._send_json(get_unified_health())
             return
 
@@ -424,6 +446,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             remove_win32_tray_icon()
             self._send_json({"ok": True, "message": "Merlin_Z_Core shutting down", "version": CORE_VERSION})
             threading.Thread(target=lambda: (time.sleep(0.15), os._exit(0)), daemon=True).start()
+            return
+
+        # 외부 악성 사이트(<img src>, <video src>, <script>, cross-site fetch)가 내 PC 파일·사진·보안 API를 조회/조작하는 것을 일괄 차단
+        if self._reject_untrusted():
             return
 
         # [귀신같이 내 PC 전수 인덱싱 API: 사진 / 서류 / 동영상]
@@ -530,19 +556,25 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_ghosti_superpowers.sync_e2ee_mailbox_api({}))
             return
 
-        # [방어 21·22] 구 3대장 척결 독립 격리 플러그인 (Try-Except Firewall + Lazy-Import)
+        # [방어 21·22] 구 3대장 척결 독립 격리 플러그인 (Try-Except Firewall + Lazy-Import + GET Read-Only 강제)
         if path.startswith("/api/care/"):
             try:
                 import plugin_ghosti_care_suite  # Lazy-Import
-                sub = path[len("/api/care/") :].strip("/")
+                sub = path[len("/api/care/") :].strip("/").lower()
+                if sub in ("archive/peek", "peek-archive"):
+                    self._send_json(plugin_ghosti_care_suite.handle_care_suite_request("peek-archive", qp))
+                    return
+                if sub not in plugin_ghosti_care_suite.READONLY_CARE_ACTIONS:
+                    self._send_json(
+                        {"ok": False, "error": "METHOD_NOT_ALLOWED_USE_POST", "action": sub},
+                        status=405,
+                    )
+                    return
                 if sub in ("security-services/status", "security-status", "status"):
                     self._send_json(plugin_ghosti_care_suite.handle_care_suite_request("status", qp))
                     return
                 if sub in ("defender/history", "guardian-history"):
                     self._send_json(plugin_ghosti_care_suite.handle_care_suite_request("guardian-history", qp))
-                    return
-                if sub in ("archive/peek", "peek-archive"):
-                    self._send_json(plugin_ghosti_care_suite.handle_care_suite_request("peek-archive", qp))
                     return
                 self._send_json(plugin_ghosti_care_suite.handle_care_suite_request(sub, qp))
                 return
@@ -563,18 +595,26 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path.startswith("/__zcore/") or path.startswith("/api/ghosti/"):
             act = path.split("/")[-1]
-            if act.lower() in ("deep-uninstall-scan", "deep-uninstall-execute"):
-                if self._reject_untrusted():
-                    return
+            if act.lower() == "deep-uninstall-execute":
+                self._send_json(
+                    {"ok": False, "error": "METHOD_NOT_ALLOWED_USE_POST", "action": act.lower()},
+                    status=405,
+                )
+                return
+            if act.lower() == "deep-uninstall-scan":
                 try:
                     import plugin_ghosti_care_suite  # Lazy-Import
-                    self._send_json(plugin_ghosti_care_suite.handle_care_suite_request(act.lower(), body))
+                    self._send_json(plugin_ghosti_care_suite.handle_care_suite_request("deep-uninstall-scan", qp))
                     return
                 except Exception as exc:
                     self._send_json({"ok": False, "error": str(exc)}, status=200)
                     return
             mutating_set = getattr(plugin_ghosti_os, "MUTATING_ACTIONS", set())
-            if act.lower() in mutating_set and self._reject_untrusted():
+            if act.lower() in mutating_set:
+                self._send_json(
+                    {"ok": False, "error": "METHOD_NOT_ALLOWED_USE_POST", "action": act.lower()},
+                    status=405,
+                )
                 return
             try:
                 self._send_json(plugin_ghosti_os.handle_request(act, qp))
@@ -624,6 +664,9 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
         body = self._read_body()
+
+        if self._reject_untrusted():
+            return
 
         # [귀신같이 윈도우 휴지통 / 격리 / 폴더열기]
         if path.startswith("/__quarantine/"):
@@ -1112,6 +1155,12 @@ def start_win32_tray_icon(port: int, replaced_pids: list[int] | None = None) -> 
                         1003,
                         "🏦 은행·결제 보안프로그램 즉시 깨우기",
                     )
+                    win32gui.AppendMenu(
+                        menu,
+                        win32con.MF_STRING,
+                        1004,
+                        "↩️ 은행·보안프로그램 전부 원래 설정으로 복구",
+                    )
                     win32gui.AppendMenu(menu, win32con.MF_SEPARATOR, 0, "")
                     win32gui.AppendMenu(
                         menu,
@@ -1135,29 +1184,33 @@ def start_win32_tray_icon(port: int, replaced_pids: list[int] | None = None) -> 
                         def _wake_from_tray() -> None:
                             try:
                                 import plugin_ghosti_care_suite
-                                wres = plugin_ghosti_care_suite.wake_security_services(trigger_title="tray_manual_wake")
-                                wcnt = int(wres.get("wokenCount") or 0)
+                                wres = plugin_ghosti_care_suite.wake_security_services(reason="tray_manual_wake")
+                                wcnt = int(
+                                    wres.get("wokenCount")
+                                    or (int(wres.get("wokenServicesCount") or 0) + int(wres.get("wokenBridgesCount") or 0))
+                                )
                                 msg_txt = (
-                                    f"잠자던 보안 서비스 {wcnt}개를 즉시 깨웠습니다! (15분간 유지)"
+                                    f"잠자던 보안 프로그램 {wcnt}개를 즉시 깨웠습니다! 화면에 설치 안내가 보이면 F5(새로고침)를 눌러주세요."
                                     if wcnt > 0
                                     else "현재 잠자고 있는 은행·결제 보안 서비스가 없습니다 (모두 정상 대기 중)."
                                 )
-                                nid_wake = (
-                                    hwnd,
-                                    0,
-                                    win32gui.NIF_INFO,
-                                    msg_tray,
-                                    hicon,
-                                    tip,
-                                    msg_txt,
-                                    3000,
-                                    "👻 귀신같이 은행·결제 모드 기상 완료",
-                                    win32gui.NIIF_INFO,
-                                )
-                                win32gui.Shell_NotifyIcon(win32gui.NIM_MODIFY, nid_wake)
+                                _push_tray_balloon("👻 귀신같이 은행·결제 모드 기상 완료", msg_txt)
                             except Exception:
                                 pass
                         threading.Thread(target=_wake_from_tray, daemon=True).start()
+                    elif cmd == 1004:
+                        def _restore_from_tray() -> None:
+                            try:
+                                import plugin_ghosti_care_suite
+                                rres = plugin_ghosti_care_suite.restore_security_services_default(allow_uac_prompt=True)
+                                msg_txt = str(
+                                    rres.get("message")
+                                    or "모든 은행·보안 서비스를 원래 자동실행 설정으로 복구했습니다."
+                                )
+                                _push_tray_balloon("↩️ 은행·보안프로그램 원상복구 완료", msg_txt)
+                            except Exception:
+                                pass
+                        threading.Thread(target=_restore_from_tray, daemon=True).start()
                     elif cmd == 1002:
                         try:
                             win32gui.Shell_NotifyIcon(win32gui.NIM_DELETE, (hwnd, 0))
@@ -1207,6 +1260,32 @@ def start_win32_tray_icon(port: int, replaced_pids: list[int] | None = None) -> 
                 hicon = win32gui.LoadIcon(0, win32con.IDI_APPLICATION)
 
             tip = f"귀신같이 멀린 Z-코어 v{CORE_VERSION} (포트 {port} 실행 중 - 클릭 시 종료 메뉴)"
+
+            def _push_tray_balloon(title_txt: str, body_txt: str) -> None:
+                try:
+                    nid_b = (
+                        hwnd,
+                        0,
+                        win32gui.NIF_INFO,
+                        msg_tray,
+                        hicon,
+                        tip,
+                        str(body_txt or "")[:250],
+                        4000,
+                        str(title_txt or "👻 귀신같이 멀린 Z-코어")[:60],
+                        win32gui.NIIF_INFO,
+                    )
+                    win32gui.Shell_NotifyIcon(win32gui.NIM_MODIFY, nid_b)
+                except Exception:
+                    pass
+
+            try:
+                import plugin_ghosti_care_suite
+
+                plugin_ghosti_care_suite.set_tray_balloon_callback(_push_tray_balloon)
+            except Exception:
+                pass
+
             if port == STANDARD_PORT:
                 info_msg = (
                     f"구버전(PID {replaced_pids})을 자동 종료하고 최신 v{CORE_VERSION} 엔진으로 교체되었습니다."
@@ -1243,6 +1322,30 @@ def start_win32_tray_icon(port: int, replaced_pids: list[int] | None = None) -> 
 
 
 def main() -> None:
+    raw_argv = sys.argv[1:]
+    # 0-A) 패키징된 단일 Z-코어(.exe)에서 초능력 귀신호출(Ctrl+0 / Ctrl+우클릭) 데몬 서브프로세스 직접 구동
+    if "--seq-paste-daemon" in raw_argv:
+        sys.argv = [sys.argv[0]] + [a for a in raw_argv if a != "--seq-paste-daemon"]
+        import seq_paste_daemon
+
+        seq_paste_daemon.main()
+        return
+
+    # 0-B) 더블클릭·탐색기 우클릭 압축 풀기/묶기 및 권한 헬퍼 단발성 CLI 고속 실행 (포트 바인딩·뮤텍스 간섭 0%)
+    _care_cli_flags = {
+        "--smart-unzip",
+        "--smart-zip",
+        "--register-menu",
+        "--unregister-menu",
+        "--install-and-run-helper",
+        "--run-elevated-helper",
+    }
+    if any(a in _care_cli_flags or any(a.startswith(f + "=") for f in _care_cli_flags) for a in raw_argv):
+        import plugin_ghosti_care_suite
+
+        plugin_ghosti_care_suite.handle_care_cli_args(raw_argv)
+        return
+
     parser = argparse.ArgumentParser(description="Merlin_Z_Core Unified PC Daemon (Port 5199)")
     parser.add_argument("--selftest", action="store_true", help="내장 소프트웨어 플러그인 3종 통합 자가진단")
     parser.add_argument("--selftest-live", action="store_true", help="자가진단 + 실제 유튜브 4종 자막 실측(네트워크 필요)")
@@ -1318,6 +1421,12 @@ def main() -> None:
     start_win32_tray_icon(args.port, replaced_pids=replaced_pids)
 
     def _start_auxiliary_watchers() -> None:
+        if getattr(sys, "frozen", False):
+            try:
+                w32.ensure_persistent_frozen_install()
+                w32.set_autostart_enabled(True)
+            except Exception:
+                pass
         try:
             plugin_ghosti_superpowers.ensure_superpower_daemon_running()
         except Exception:
@@ -1339,7 +1448,8 @@ def main() -> None:
         except Exception:
             pass
 
-    threading.Thread(target=_start_auxiliary_watchers, daemon=True).start()
+    if args.port == STANDARD_PORT:
+        threading.Thread(target=_start_auxiliary_watchers, daemon=True).start()
     print(
         json.dumps(
             {
@@ -1348,7 +1458,7 @@ def main() -> None:
                 "status": "LISTENING",
                 "endpoint": f"http://127.0.0.1:{args.port}",
                 "replacedOldPids": replaced_pids,
-                "plugins": ["ghosti_os", "senstalk", "aggrofilter"],
+                "plugins": ["ghosti_os", "ghosti_care_suite", "senstalk", "aggrofilter"],
             },
             ensure_ascii=False,
         ),

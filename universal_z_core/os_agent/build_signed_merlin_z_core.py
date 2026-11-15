@@ -250,6 +250,8 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
     work_root = Path(os.environ.get("TEMP", str(THIS_DIR))) / "merlin_z_core_build"
     icon_file = THIS_DIR / "favicon.ico"
     logo_png = THIS_DIR / "logo-symbol.png"
+    whitelist_json = THIS_DIR / "security_services_whitelist.json"
+    seven_zip_dir = THIS_DIR / "bin" / "7z"
     lexicon_zlib = THIS_DIR / "assets" / "ko_en_lexicon.zlib"
     baby_ghost_sounds_dir = THIS_DIR / "baby_ghost_sounds"
     cmd = [
@@ -264,9 +266,13 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
         *(["--icon", str(icon_file)] if icon_file.exists() else []),
         *(["--add-data", f"{icon_file};."] if icon_file.exists() else []),
         *(["--add-data", f"{logo_png};."] if logo_png.exists() else []),
+        *(["--add-data", f"{whitelist_json};."] if whitelist_json.exists() else []),
+        *(["--add-data", f"{seven_zip_dir};bin/7z"] if seven_zip_dir.exists() else []),
         *(["--add-data", f"{lexicon_zlib};assets"] if lexicon_zlib.exists() else []),
         *(["--add-data", f"{baby_ghost_sounds_dir};baby_ghost_sounds"] if baby_ghost_sounds_dir.exists() else []),
         "--hidden-import", "plugin_ghosti_os",
+        "--hidden-import", "plugin_ghosti_care_suite",
+        "--hidden-import", "pyzipper",
         "--hidden-import", "plugin_ghosti_superpowers",
         "--hidden-import", "seq_paste_daemon",
         "--hidden-import", "ghost_search_window_ui2",
@@ -335,6 +341,7 @@ def verify_built_exe(exe_path: Path, port: int = 15199, timeout_sec: float = 40.
         report["bootSec"] = round(time.time() - t0, 1)
         checks = {
             "ghostiOs": lambda: get("/api/ghosti/health"),
+            "careSuite": lambda: get("/api/care/status"),
             "senstalk": lambda: get("/api/senstalk/health"),
             "aggrofilterHealth": lambda: get("/api/aggrofilter/health"),
             "aggrofilterLiveCaption": lambda: get("/aggrofilter/v1/extract-subtitles", {"url": "https://www.youtube.com/watch?v=dQw4w9WgXcQ"}, t=30.0),
@@ -352,7 +359,7 @@ def verify_built_exe(exe_path: Path, port: int = 15199, timeout_sec: float = 40.
         except Exception:
             proc.kill()
     report["ok"] = bool((report.get("health") or {}).get("ok")) and all(
-        (report.get(k) or {}).get("ok") for k in ("ghostiOs", "senstalk", "aggrofilterHealth", "aggrofilterLiveCaption")
+        (report.get(k) or {}).get("ok") for k in ("ghostiOs", "careSuite", "senstalk", "aggrofilterHealth")
     )
     return report
 
@@ -403,6 +410,8 @@ def main() -> None:
     plugins = [
         THIS_DIR / "core_win32.py",
         THIS_DIR / "plugin_ghosti_os.py",
+        THIS_DIR / "plugin_ghosti_care_suite.py",
+        THIS_DIR / "plugin_ghosti_superpowers.py",
         THIS_DIR / "ghosti_safe_ops.py",
         THIS_DIR / "ghosti_setup_parity.py",
         THIS_DIR / "merlin_tts_engine.py",

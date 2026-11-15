@@ -246,6 +246,8 @@ export interface MonsterDeepUninstallPayload {
   targetAppQuery: string;
   targetAppLabel: string;
   foundAny: boolean;
+  needsClarification?: boolean;
+  zCoreOffline?: boolean;
   runningProcessCount: number;
   serviceAndTaskCount: number;
   totalResidualMb: number;
@@ -255,6 +257,8 @@ export interface MonsterDeepUninstallPayload {
   sampleProcesses: string[];
   sampleServicesAndTasks: string[];
   sampleFolders: string[];
+  residualFolderItems?: Array<{ path: string; sizeMb: number }>;
+  selectedFolderPaths?: string[];
   executed?: boolean;
   approvedTypedText?: string;
   snapshotFile?: string;
@@ -979,7 +983,29 @@ export async function scanDeepUninstallTarget(appQuery: string): Promise<Monster
     scheduledTasks?: string[];
     startupEntries?: Array<{ name?: string }>;
     residualFolders?: Array<{ path?: string; sizeMb?: number }>;
+    needsClarification?: boolean;
+    error?: string;
   }>('/__zcore/deep-uninstall-scan', postJson({ appQuery }));
+
+  if (r.ok && r.data?.needsClarification) {
+    return {
+      targetAppQuery: appQuery,
+      targetAppLabel: '삭제 대상 프로그램 확인 필요',
+      foundAny: false,
+      needsClarification: true,
+      runningProcessCount: 0,
+      serviceAndTaskCount: 0,
+      totalResidualMb: 0,
+      estimatedRamMb: 0,
+      summaryBadge: '삭제할 프로그램 이름을 알려주세요',
+      honestBriefingKo:
+        r.data.honestBriefingKo ||
+        '👻 어떤 프로그램을 깨끗하게 지워드릴까요? 실수로 소중한 앱을 건드리지 않도록 **삭제할 프로그램 이름**을 함께 말씀해 주세요!\n(예: `"알약 완전히 지워줘"`, `"알집 삭제해줘"`, `"어도비 싹 다 지워줘"`)',
+      sampleProcesses: [],
+      sampleServicesAndTasks: [],
+      sampleFolders: [],
+    };
+  }
 
   if (r.ok && r.data?.ok) {
     const d = r.data;
@@ -991,9 +1017,10 @@ export async function scanDeepUninstallTarget(appQuery: string): Promise<Monster
       ...(d.scheduledTasks || []).map((t) => `[스케줄러] ${t}`),
       ...(d.startupEntries || []).map((st) => `[시작Run] ${st.name}`),
     ].slice(0, 6);
-    const sampleDirs = (d.residualFolders || [])
-      .slice(0, 6)
-      .map((f) => `${f.path} (${f.sizeMb ?? 0}MB)`);
+    const folderItems = (d.residualFolders || [])
+      .filter((f): f is { path: string; sizeMb?: number } => Boolean(f?.path))
+      .map((f) => ({ path: String(f.path), sizeMb: Number(f.sizeMb ?? 0) }));
+    const sampleDirs = folderItems.slice(0, 6).map((f) => `${f.path} (${f.sizeMb}MB)`);
 
     return {
       targetAppQuery: appQuery,
@@ -1006,31 +1033,32 @@ export async function scanDeepUninstallTarget(appQuery: string): Promise<Monster
       summaryBadge:
         d.summaryBadge ||
         `상주 프로세스 ${d.runningProcessCount ?? 0}개 / 서비스·스케줄러 ${d.serviceAndTaskCount ?? 0}개 / 잔여 폴더 ${d.totalResidualMb ?? 0}MB`,
-      honestBriefingKo: d.honestBriefingKo || '4단계 심층 앱 적출(Deep Uninstaller) 사전 스캔을 완료했습니다.',
+      honestBriefingKo: d.honestBriefingKo || '심층 앱 제거(Deep Uninstaller) 사전 스캔을 완료했습니다.',
       sampleProcesses: sampleProcs,
       sampleServicesAndTasks: sampleSvcs,
       sampleFolders: sampleDirs,
+      residualFolderItems: folderItems,
+      selectedFolderPaths: folderItems.map((f) => f.path),
     };
   }
 
   return {
     targetAppQuery: appQuery,
-    targetAppLabel: `${appQuery} 상주 모듈 및 잔여 캐시 폴더`,
-    foundAny: true,
-    runningProcessCount: 3,
-    serviceAndTaskCount: 4,
-    totalResidualMb: 218.8,
-    estimatedRamMb: 145,
-    summaryBadge: '상주 프로세스 3개 / 서비스·스케줄러 4개 / 잔여 폴더 218.8MB',
+    targetAppLabel: `${appQuery} 정밀 스캔 대기`,
+    foundAny: false,
+    zCoreOffline: true,
+    runningProcessCount: 0,
+    serviceAndTaskCount: 0,
+    totalResidualMb: 0,
+    estimatedRamMb: 0,
+    summaryBadge: '내 PC 엔진(멀린 Z-코어) 연결 필요',
     honestBriefingKo:
-      `🧹 **[${appQuery} — 4단계 심층 적출(Deep Uninstaller) 사전 검진 완료]**\n` +
-      `• **발견된 상주 프로세스**: **3개** (점유 메모리 약 145MB)\n` +
-      `• **부활형 서비스·스케줄러·시작프로그램**: **4개**\n` +
-      `• **잔여 캐시·공용 폴더**: **218.8MB**\n\n` +
-      `아래 **[🔥 흔적까지 100% 심층 적출 실행]** 버튼을 누르시거나 채팅창에 **"응 진행해"**라고 입력하시면, 복원 스냅샷을 백업한 뒤 상주 프로세스 강제 종료 ➔ 언인스톨 ➔ 부활 스케줄러·잔여 폴더까지 한 번에 뿌리째 뽑아드립니다!`,
-    sampleProcesses: ['CCXProcess.exe', 'AdobeIPCBroker.exe', 'CoreSync.exe'],
-    sampleServicesAndTasks: ['[서비스] AGMService', '[서비스] AGSService', '[스케줄러] AdobeGCInvoker-1.0'],
-    sampleFolders: ['C:\\Program Files (x86)\\Common Files\\Adobe', 'C:\\ProgramData\\Adobe', '%LOCALAPPDATA%\\Adobe'],
+      `🔌 **[내 PC 엔진(멀린 Z-코어) 연결이 필요합니다]**\n` +
+      `내 PC에 실제로 설치된 프로그램의 상주 프로세스·스케줄러·잔여 캐시 폴더를 가짜 수치 없이 100% 실측 스캔하려면 **멀린 Z-코어 엔진**이 켜져 있어야 합니다.\n` +
+      `엔진을 실행하신 뒤 다시 말씀해 주시면 즉시 정밀 스캔해 드릴게요!`,
+    sampleProcesses: [],
+    sampleServicesAndTasks: [],
+    sampleFolders: [],
   };
 }
 
@@ -1041,7 +1069,7 @@ export async function executeDeepUninstallApproval(
   ok: boolean;
   reportKo: string;
   snapshotFile?: string;
-  healthRecord: DigitalHealthCheckRecord;
+  healthRecord?: DigitalHealthCheckRecord;
 }> {
   const r = await zcoreJson<{
     ok: boolean;
@@ -1056,35 +1084,49 @@ export async function executeDeepUninstallApproval(
     reclaimedRamMb?: number;
     totalRemovedTriggers?: number;
     reportKo?: string;
+    message?: string;
+    error?: string;
   }>(
     '/__zcore/deep-uninstall-execute',
     postJson({
       appQuery: payload.targetAppQuery,
       invokeOfficialUninstaller: true,
       userApprovalTypedText: userTypedText,
+      selectedFolders: payload.selectedFolderPaths,
     }),
-    8000
+    35000
   );
 
-  const d = r.ok && r.data?.ok ? r.data : undefined;
-  const reclaimedMb = Number(d?.reclaimedMb ?? payload.totalResidualMb ?? 0);
-  const totalTriggers = Number(
-    d?.totalRemovedTriggers ?? payload.runningProcessCount + payload.serviceAndTaskCount
-  );
-  const snapshotFile = d?.snapshotFile || `%LOCALAPPDATA%\\Ghosti\\quarantine\\uninstall_${Date.now()}.json`;
+  if (!r.ok || !r.data?.ok) {
+    const errMsg = r.ok
+      ? r.data?.message ||
+        r.data?.reportKo ||
+        `제거 실행 중 확인이 필요합니다 (${r.data?.error || 'UNKNOWN_ERROR'}).`
+      : '내 PC 엔진(멀린 Z-코어) 응답이 없거나 연결이 끊겨 실제 제거를 진행하지 않았습니다. 엔진 실행 상태를 확인해 주세요.';
+    return {
+      ok: false,
+      reportKo: errMsg,
+    };
+  }
+
+  const d = r.data;
+  const reclaimedMb = Number(d.reclaimedMb ?? 0);
+  const reclaimedRamMb = Number(d.reclaimedRamMb ?? 0);
+  const totalTriggers = Number(d.totalRemovedTriggers ?? 0);
+  const snapshotFile = d.snapshotFile;
   const reportKo =
-    d?.reportKo ||
-    `🔥 **[${payload.targetAppLabel} — 4단계 심층 적출(Deep Uninstaller) 완료 브리핑]**\n` +
-      `• **제거된 상주 프로세스·스케줄러·서비스**: 총 **${totalTriggers}개** 영구 무력화 완료\n` +
-      `• **확보된 디스크 용량 및 메모리**: 잔여 캐시 폴더 **${reclaimedMb}MB** 소거 · 상주 메모리 **${payload.estimatedRamMb}MB** 회수\n` +
-      `• **안전 격리 스냅샷 백업**: \`${snapshotFile}\` 기록 완료`;
+    d.reportKo ||
+    `🔥 **[${d.targetAppLabel || payload.targetAppLabel} — 심층 제거 완료 보고]**\n` +
+      `• **정리된 상주 프로세스·스케줄러·서비스**: 총 **${totalTriggers}개**\n` +
+      `• **Windows [휴지통]으로 안전 이동한 잔여 캐시 폴더**: **${reclaimedMb}MB** · 상주 메모리 **${reclaimedRamMb}MB** 회수\n` +
+      `• **안심 복구 안내**: 지운 잔여 폴더는 바탕화면 **[휴지통]**에 그대로 들어 있어 언제든 우클릭 \`[복원]\`으로 되살릴 수 있습니다!`;
 
   const healthRecord = appendLocalHealthCheckRecord({
     category: '🧹 치우기',
-    title: `[심층 적출] ${payload.targetAppLabel} (승인: "${userTypedText}")`,
-    reclaimedSizeLabel: `디스크 ${reclaimedMb}MB 확보 · 상주/스케줄러 ${totalTriggers}개 적출`,
-    cleanedItemCount: totalTriggers || 1,
-    securityPluginsFrozen: totalTriggers || 1,
+    title: `[심층 제거] ${d.targetAppLabel || payload.targetAppLabel} (승인: "${userTypedText}")`,
+    reclaimedSizeLabel: `휴지통 안전 이동 ${reclaimedMb}MB · 상주/스케줄러 ${totalTriggers}개 정리`,
+    cleanedItemCount: (d.cleanedFolderCount ?? 0) + totalTriggers || 1,
+    securityPluginsFrozen: totalTriggers,
     speedUpSummary: reportKo,
     restoreId: '#1',
   });
@@ -1705,12 +1747,89 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
   const lastAssistantText = recentAssistantMsgs[recentAssistantMsgs.length - 1]?.text || '';
   const isSimpleYes = /^(응|네|넹|예|좋아|좋아요|ㅇㅇ|ㅇㅋ|오케이|ok|그래|해줘|알려줘|뭔데|뭔지\s*알려줘|궁금해)$/i.test(clean);
 
-  // 1) 은행·관공서 보안프로그램 자동 재우기/깨우기 동의 (최초 1회 동의 또는 명시적 요청)
+  // 0-A) 은행·관공서 보안프로그램 전부 원래 자동실행 설정으로 1초 완전 복구
+  if (/(은행.*?보안\s*프로그램.*?(원래|원복|복구|해제|되돌려)|보안\s*프로그램.*?(원래대로|원상\s*복구|절전\s*해제))/i.test(clean)) {
+    const restoreRes = await fetch('http://127.0.0.1:5199/api/care/security-services/restore-default', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+    })
+      .then((r) => r.json())
+      .catch(() => null);
+
+    if (!restoreRes?.ok) {
+      const errKo = restoreRes?.uacDeclined
+        ? '⚠️ 관리자 권한 승인 창에서 취소하셔서 원상복구가 진행되지 않았습니다. 다시 말씀해 주시고 [예]를 눌러주시면 1초 만에 원래 설정으로 복구됩니다.'
+        : '🔌 내 PC 엔진(멀린 Z-코어) 연결이 확인되지 않아 보안프로그램 설정을 변경하지 못했습니다. 엔진 실행 후 다시 말씀해 주세요!';
+      return reply(sourceTab, errKo, {
+        followUpSuggestions: ['은행 보안프로그램 상태 확인해줘'],
+      });
+    }
+
+    try {
+      const rawSt = localStorage.getItem('ghosti_ghost_secretary_state_v1');
+      const parsedSt = rawSt ? JSON.parse(rawSt) : {};
+      parsedSt.consents = { ...(parsedSt.consents || {}), bankSecurityAutoSleep: false };
+      localStorage.setItem('ghosti_ghost_secretary_state_v1', JSON.stringify(parsedSt));
+    } catch {
+      /* ignore */
+    }
+
+    const restoredCnt = Math.max(0, Number(restoreRes.restoredCount ?? 0));
+    const msgKo =
+      `↩️ **[은행·관공서 보안프로그램 원래 설정 복구 완료]**\n` +
+      (restoreRes.message ||
+        `잠재워 두었던 보안 서비스 **${restoredCnt}개**를 모두 설치 당시의 원래 시작 설정으로 복구하고 자동 절전을 해제했습니다.`);
+    speak('은행 보안프로그램을 모두 원래 설정으로 복구했습니다.');
+    return reply(sourceTab, msgKo, {
+      followUpSuggestions: ['은행 보안프로그램 상태 확인해줘', '최근 [복원 기록] 보여줘'],
+    });
+  }
+
+  // 0-B) 은행·관공서 보안프로그램 현재 상태 조회 ("확인해줘" 발화가 멋대로 절전을 실행하지 않도록 분리)
+  if (/(은행.*?보안\s*프로그램.*?(확인|상태|점검|몇\s*개|보여)|보안\s*프로그램\s*(상태|확인|몇\s*개))/i.test(clean)) {
+    const stRes = await fetch('http://127.0.0.1:5199/api/care/security-services/status')
+      .then((r) => r.json())
+      .catch(() => null);
+
+    if (!stRes?.ok) {
+      return reply(
+        sourceTab,
+        '🔌 내 PC의 은행·관공서 보안프로그램 실행 개수를 실제로 점검하려면 **멀린 Z-코어 엔진**이 켜져 있어야 합니다. 엔진을 실행한 뒤 다시 확인해 주세요!',
+        { followUpSuggestions: ['요즘 컴퓨터가 좀 느린데 내 사양이랑 상태 봐줘'] }
+      );
+    }
+
+    const activeCnt = Math.max(0, Number(stRes.activeCount ?? 0));
+    const ramMb = Math.max(0, Number(stRes.estimatedRamMb ?? 0));
+    const sleepingCnt = Array.isArray(stRes.sleepingServices) ? stRes.sleepingServices.length : 0;
+    const msgKo =
+      `🏦 **[내 PC 은행·관공서 보안프로그램 실시간 점검 결과]**\n` +
+      `• **현재 뒤에서 켜져 있는 보안 서비스**: **${activeCnt}개** (점유 메모리 약 ${ramMb}MB)\n` +
+      `• **현재 절전(잠자는 중) 보안 서비스**: **${sleepingCnt}개**\n` +
+      `• **자동 절전·기상 관리**: **${stRes.autoSleepEnabled ? '켜짐 (은행 접속 시 1초 자동 기상)' : '꺼짐'}**\n\n` +
+      (stRes.honestBriefing || '');
+    speak(
+      activeCnt > 0
+        ? `현재 미사용 은행 보안프로그램 ${activeCnt}개가 실행 중입니다. 잠재울까요?`
+        : `현재 뒤에서 켜져 있는 미사용 은행 보안프로그램은 0개입니다.`
+    );
+    return reply(sourceTab, msgKo, {
+      followUpSuggestions:
+        activeCnt > 0
+          ? ['응 은행 보안프로그램 알아서 재우고 깨워줘', '최근 [복원 기록] 보여줘']
+          : sleepingCnt > 0
+          ? ['지금 은행 업무 볼 거라 보안프로그램 깨워줘', '은행 보안프로그램 원래대로 복구해줘']
+          : ['📊 그동안 모아둔 비서 실적 보고서 보여줘'],
+    });
+  }
+
+  // 1) 은행·관공서 보안프로그램 자동 재우기/깨우기 동의 (최초 1회 동의 또는 명시적 절전 요청)
   const isBankSleepConsent =
-    /(알아서\s*재우고\s*깨워|은행.*?보안\s*프로그램.*?(재워|절전|자동|관리|확인)|보안\s*프로그램.*?(재우고|잠재워|자동\s*절전))/i.test(
+    /(알아서\s*재우고\s*깨워|은행.*?보안\s*프로그램.*?(재워|절전|잠재워|자동\s*관리)|보안\s*프로그램.*?(재우고|잠재워|자동\s*절전))/i.test(
       clean
     ) ||
-    (isSimpleYes && /은행·관공서\s*보안프로그램.*?깨워드릴까요/.test(lastAssistantText));
+    (isSimpleYes && /(은행·관공서\s*보안프로그램.*?깨워드릴까요|삭제하지\s*않고\s*쿨쿨\s*잠재울까요)/.test(lastAssistantText));
 
   if (isBankSleepConsent) {
     const sleepRes = await fetch('http://127.0.0.1:5199/api/care/security-services/sleep', {
@@ -1720,6 +1839,17 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
     })
       .then((r) => r.json())
       .catch(() => null);
+
+    if (!sleepRes?.ok) {
+      const failMsg = sleepRes?.uacDeclined
+        ? `⚠️ **[관리자 권한 승인 보류 안내]**\n` +
+          `윈도우 보안 서비스를 안전하게 잠재우려면 최초 1회 관리자 권한 창에서 **[예]**를 눌러주셔야 합니다. 준비되셨을 때 다시 말씀해 주세요! (이후에는 권한 팝업이 다시 뜨지 않습니다)`
+        : `🔌 **[내 PC 엔진(멀린 Z-코어) 연결 필요]**\n` +
+          `내 PC의 은행·관공서 보안프로그램을 실제로 잠재우려면 **멀린 Z-코어 엔진**이 켜져 있어야 합니다. 엔진을 실행한 뒤 다시 말씀해 주세요!`;
+      return reply(sourceTab, failMsg, {
+        followUpSuggestions: ['은행 보안프로그램 상태 확인해줘'],
+      });
+    }
 
     try {
       const rawSt = localStorage.getItem('ghosti_ghost_secretary_state_v1');
@@ -1747,7 +1877,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
       stoppedCount > 0
         ? `🏦 **[은행·관공서 보안프로그램 자동 관리 설정 완료]**\n` +
           `지금 뒤에서 메모리를 차지하던 은행·관공서 보안프로그램 **${stoppedCount}개**를 삭제하지 않고 조용히 재워두었습니다! (메모리 약 **${reclaimedMb}MB** 확보 완료)\n` +
-          `앞으로는 제가 평소엔 잠재워 두었다가, **은행이나 홈택스 사이트에 들어가실 때만 귀신같이 자동으로 깨워드릴게요!**`
+          `앞으로는 평소엔 잠재워 두었다가 **은행이나 홈택스 사이트에 들어가실 때만 1초 만에 자동 기상**시켜 드릴게요! (언제든 *"은행 보안프로그램 원래대로 복구해줘"*라고 하시면 1초 만에 원상복구됩니다)`
         : `🏦 **[은행·관공서 보안프로그램 자동 관리 설정 완료]**\n` +
           `지금은 켜져 있는 불필요 은행·관공서 보안프로그램이 **0개**로 아주 깨끗합니다!\n` +
           `앞으로 은행이나 홈택스 사이트에 들어가실 때만 자동으로 깨우고, 업무가 끝난 뒤에는 제가 다시 조용히 재워드릴게요!`;
@@ -1761,6 +1891,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
       healthRecordIssued: issuedRec,
       followUpSuggestions: [
         '📊 그동안 모아둔 비서 실적 보고서 보여줘',
+        '은행 보안프로그램 원래대로 복구해줘',
       ],
     });
   }
@@ -1928,21 +2059,43 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
 
   // 5) 은행·관공서 업무를 위해 잠자던 보안프로그램 즉시 깨우기
   if (/(은행\s*업무.*?깨워|은행.*?보안\s*프로그램.*?(깨워|켜)|은행\s*모드\s*(켜|즉시)|은행\s*사이트\s*안\s*돼)/i.test(clean)) {
-    await fetch('http://127.0.0.1:5199/api/care/security-services/wake', {
+    const wakeRes = await fetch('http://127.0.0.1:5199/api/care/security-services/wake', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: 'secretary_chat_request' }),
-    }).catch(() => null);
+    })
+      .then((r) => r.json())
+      .catch(() => null);
 
+    if (!wakeRes?.ok) {
+      return reply(
+        sourceTab,
+        '🔌 내 PC의 보안프로그램을 실제로 깨우려면 **멀린 Z-코어 엔진**이 켜져 있어야 합니다. 엔진 실행 상태를 먼저 확인해 주세요!',
+        { followUpSuggestions: ['은행 보안프로그램 상태 확인해줘'] }
+      );
+    }
+
+    const wokenCnt = Math.max(
+      0,
+      Number(wakeRes.wokenCount ?? Number(wakeRes.wokenServicesCount ?? 0) + Number(wakeRes.wokenBridgesCount ?? 0))
+    );
     const msgKo =
-      `🏦 **[은행·관공서 보안프로그램 즉시 기상 완료]**\n` +
-      `잠자고 있던 은행·관공서 보안프로그램을 방금 모두 깨워두었습니다! 편하게 은행·홈택스 업무를 보시고 나면, 15분 뒤에 제가 다시 조용히 재워두겠습니다.`;
+      wokenCnt > 0
+        ? `🏦 **[은행·관공서 보안프로그램 ${wokenCnt}개 즉시 기상 완료]**\n` +
+          `잠자고 있던 보안프로그램 **${wokenCnt}개**를 방금 모두 깨워두었습니다!\n` +
+          `💡 **이미 열려 있던 은행·홈택스 화면에 '보안프로그램 설치' 안내가 보이면 키보드 \`F5(새로고침)\`를 한 번 눌러주세요.** 업무를 마치시고 창을 닫으시면 15분 뒤 다시 조용히 재워두겠습니다.`
+        : `🏦 **[은행·관공서 보안프로그램 대기 확인 완료]**\n` +
+          `현재 잠들어 있는 보안프로그램이 없습니다(모두 정상 대기 중). 이미 열려 있던 은행 창이 인식을 못 한다면 **\`F5(새로고침)\`**를 한 번 눌러보세요!`;
 
-    speak('잠자고 있던 은행 관공서 보안프로그램을 모두 깨워두었습니다.');
+    speak(
+      wokenCnt > 0
+        ? `잠자고 있던 은행 보안프로그램 ${wokenCnt}개를 모두 깨웠습니다. 열려 있던 은행 창에서 에프오 새로고침을 한 번 눌러주세요.`
+        : '현재 잠들어 있는 보안프로그램이 없으며 모두 정상 대기 중입니다.'
+    );
     return reply(sourceTab, msgKo, {
       followUpSuggestions: [
-        '📊 그동안 모아둔 비서 실적 보고서 보여줘',
-        '최근 [복원 기록] 보여줘',
+        '은행 보안프로그램 상태 확인해줘',
+        '은행 보안프로그램 원래대로 복구해줘',
       ],
     });
   }
@@ -2394,6 +2547,24 @@ export async function processUnifiedMonsterChatQuery(params: {
     ) {
       const execRes = await executeDeepUninstallApproval(pendingApprovalMsg.deepUninstallPayload, clean);
       cachedPcContext = null;
+      if (!execRes.ok) {
+        setSharedMonsterMessages((prev) =>
+          prev.map((m) =>
+            m.id === pendingApprovalMsg.id && m.deepUninstallPayload
+              ? {
+                  ...m,
+                  deepUninstallPayload: {
+                    ...m.deepUninstallPayload,
+                    executionError: execRes.reportKo,
+                  },
+                }
+              : m
+          )
+        );
+        return reply(sourceTab, `⚠️ ${execRes.reportKo}`, {
+          followUpSuggestions: ['요즘 컴퓨터가 좀 느린데 내 사양이랑 상태 봐줘'],
+        });
+      }
       setSharedMonsterMessages((prev) =>
         prev.map((m) =>
           m.id === pendingApprovalMsg.id && m.deepUninstallPayload
@@ -2402,17 +2573,18 @@ export async function processUnifiedMonsterChatQuery(params: {
                 deepUninstallPayload: {
                   ...m.deepUninstallPayload,
                   executed: true,
+                  executionError: undefined,
                   approvedTypedText: clean,
                   snapshotFile: execRes.snapshotFile,
                   executionReportKo: execRes.reportKo,
                 },
-                healthRecordIssued: execRes.healthRecord,
+                healthRecordIssued: execRes.healthRecord || m.healthRecordIssued,
               }
             : m
         )
       );
-      const msgText = `${execRes.reportKo}\n📋 **블랙박스 심층 적출 승인 기록 완료** — 승인 발화: \`"${clean}"\``;
-      speak('승인 말씀이 블랙박스에 기록되었으며 상주 프로세스와 부활 스케줄러, 잔여 캐시 폴더까지 모두 심층 적출했습니다.');
+      const msgText = `${execRes.reportKo}\n📋 **블랙박스 심층 제거 승인 기록 완료** — 승인 발화: \`"${clean}"\``;
+      speak('승인 말씀이 기록되었으며 상주 프로세스와 스케줄러 정리 후 잔여 캐시 폴더를 윈도우 휴지통으로 안전하게 옮겼습니다.');
       return reply(sourceTab, msgText, {
         healthRecordIssued: execRes.healthRecord,
         followUpSuggestions: [
@@ -3037,14 +3209,21 @@ export async function processUnifiedMonsterChatQuery(params: {
 
   if (isDeepUninstallRequest) {
     const payload = await scanDeepUninstallTarget(clean);
+    if (payload.needsClarification || payload.zCoreOffline) {
+      return reply(sourceTab, payload.honestBriefingKo, {
+        followUpSuggestions: payload.needsClarification
+          ? ['알약 흔적까지 지워줘', '알집 완전히 삭제해줘', '고클린 제거해줘']
+          : ['요즘 컴퓨터가 좀 느린데 내 사양이랑 상태 봐줘'],
+      });
+    }
     speak(
       payload.foundAny
-        ? `${payload.targetAppLabel} 심층 적출 사전 스캔을 완료했습니다. 상주 프로세스 ${payload.runningProcessCount}개와 잔여 폴더 ${payload.totalResidualMb}메가바이트가 발견되었습니다. 흔적까지 심층 적출 실행 버튼을 누르시거나 응 진행해라고 입력해 주세요.`
+        ? `${payload.targetAppLabel} 심층 제거 사전 스캔을 완료했습니다. 상주 프로세스 ${payload.runningProcessCount}개와 잔여 폴더 ${payload.totalResidualMb}메가바이트가 발견되었습니다. 심층 제거 실행 버튼을 누르시거나 응 진행해라고 입력해 주세요.`
         : `${payload.targetAppLabel} 관련 잔여 흔적을 모두 스캔했으나 남아 있는 항목이 없습니다.`
     );
     return reply(sourceTab, payload.honestBriefingKo, {
-      cardKind: 'DEEP_UNINSTALL_GATE',
-      deepUninstallPayload: payload,
+      cardKind: payload.foundAny ? 'DEEP_UNINSTALL_GATE' : undefined,
+      deepUninstallPayload: payload.foundAny ? payload : undefined,
       followUpSuggestions: payload.foundAny
         ? [
             '응 진행해',

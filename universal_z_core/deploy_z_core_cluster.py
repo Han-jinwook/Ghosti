@@ -133,7 +133,7 @@ def update_pc4():
     remote_dest = "USER@100.114.100.24:C:/MerlinTools/universal_z_core/"
     scp_cmd = ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-r", local_dir, remote_dest]
     log("4호기로 최신 universal_z_core 전송 중 (SCP)...")
-    res = subprocess.run(scp_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=40)
+    res = subprocess.run(scp_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120)
     if res.returncode != 0:
         log(f"❌ 4호기 SCP 전송 실패: {res.stderr}")
         return

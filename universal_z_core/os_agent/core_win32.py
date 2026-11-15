@@ -55,6 +55,79 @@ AUTOSTART_REG_PATH = r"Software\Microsoft\Windows\CurrentVersion\Run"
 AUTOSTART_VALUE_NAME = "MerlinZCoreDaemon"
 
 
+def get_persistent_zcore_exe_path() -> str:
+    """포터블 Z-코어 영구 보관 표준 경로 (%LOCALAPPDATA%\\Programs\\MerlinFamily\\Merlin_Z_Core_Setup.exe)."""
+    local_app = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Local")
+    return os.path.join(local_app, "Programs", "MerlinFamily", "Merlin_Z_Core_Setup.exe")
+
+
+def ensure_persistent_frozen_install() -> str:
+    """
+    PyInstaller 단일 실행파일(.exe)로 실행된 경우(예: Downloads 폴더에서 실행),
+    유저가 나중에 Downloads 폴더를 비우더라도 자동실행·더블클릭 압축·권한 헬퍼가 영구 작동하도록
+    표준 경로(%LOCALAPPDATA%\\Programs\\MerlinFamily\\Merlin_Z_Core_Setup.exe) 및
+    보조 에셋(%LOCALAPPDATA%\\Ghosti\\bin\\)에 최신 바이너리를 무소음 동기화합니다.
+    """
+    if not getattr(sys, "frozen", False):
+        return os.path.abspath(sys.executable)
+    cur_exe = os.path.abspath(sys.executable)
+    target_exe = get_persistent_zcore_exe_path()
+    try:
+        os.makedirs(os.path.dirname(target_exe), exist_ok=True)
+        if os.path.normcase(cur_exe) != os.path.normcase(target_exe):
+            import hashlib
+            import shutil
+
+            need_copy = not os.path.exists(target_exe)
+            if not need_copy:
+                try:
+                    if os.path.getsize(cur_exe) != os.path.getsize(target_exe):
+                        need_copy = True
+                    else:
+                        with open(cur_exe, "rb") as f1, open(target_exe, "rb") as f2:
+                            need_copy = hashlib.sha256(f1.read(262144)).digest() != hashlib.sha256(f2.read(262144)).digest()
+                except Exception:
+                    need_copy = True
+            if need_copy:
+                tmp_exe = target_exe + ".tmp"
+                shutil.copy2(cur_exe, tmp_exe)
+                try:
+                    os.replace(tmp_exe, target_exe)
+                except OSError:
+                    try:
+                        os.remove(tmp_exe)
+                    except OSError:
+                        pass
+    except Exception:
+        pass
+
+    # 보조 에셋(아이콘 및 LGPL 7z 해제기)을 영구 경로(%LOCALAPPDATA%\Ghosti\bin)에 동기화
+    try:
+        import shutil
+
+        bundle_dir = getattr(sys, "_MEIPASS", os.path.dirname(cur_exe))
+        local_app = os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Local")
+        ghosti_bin = os.path.join(local_app, "Ghosti", "bin")
+        os.makedirs(ghosti_bin, exist_ok=True)
+        ico_src = os.path.join(bundle_dir, "favicon.ico")
+        ico_dst = os.path.join(ghosti_bin, "favicon.ico")
+        if os.path.exists(ico_src) and (not os.path.exists(ico_dst) or os.path.getsize(ico_src) != os.path.getsize(ico_dst)):
+            shutil.copy2(ico_src, ico_dst)
+        z7_src_dir = os.path.join(bundle_dir, "bin", "7z")
+        if os.path.isdir(z7_src_dir):
+            z7_dst_dir = os.path.join(ghosti_bin, "7z")
+            os.makedirs(z7_dst_dir, exist_ok=True)
+            for fn in ("7z.exe", "7z.dll", "7z-LICENSE.txt"):
+                s = os.path.join(z7_src_dir, fn)
+                d = os.path.join(z7_dst_dir, fn)
+                if os.path.exists(s) and (not os.path.exists(d) or os.path.getsize(s) != os.path.getsize(d)):
+                    shutil.copy2(s, d)
+    except Exception:
+        pass
+
+    return target_exe if os.path.exists(target_exe) else cur_exe
+
+
 def bind_interactive_desktop() -> bool:
     """현재 스레드를 사용자의 활성 대화형 데스크톱(WinSta0\\Default)에 직결합니다."""
     if sys.platform != "win32" or not user32:
@@ -211,8 +284,9 @@ def set_autostart_enabled(enable: bool, daemon_script_path: Optional[str] = None
             if enable:
                 is_frozen = bool(getattr(sys, "frozen", False))
                 if is_frozen:
-                    # PyInstaller 단일 실행파일(.exe) 환경: _MEIPASS 임시 폴더 경로를 인자로 넣지 않고 순수 .exe 경로만 등록!
-                    cmd = f'"{os.path.abspath(sys.executable)}"'
+                    # PyInstaller 단일 실행파일(.exe) 환경: 영구 경로(%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe) 등록!
+                    persistent_exe = ensure_persistent_frozen_install()
+                    cmd = f'"{persistent_exe}"'
                 else:
                     target_script = daemon_script_path or os.path.abspath(
                         os.path.join(os.path.dirname(__file__), "merlin_z_core_daemon.py")

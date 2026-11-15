@@ -41,13 +41,15 @@ timeout /t 3 > nul
 exit
 """
 
-    readme_content = """❖ 멀린 Z-코어 (Merlin Z-Core) 사용 안내
+    readme_content = """❖ 멀린 Z-코어 (Merlin Z-Core v2.3.6) 사용 안내
 
-1. [Merlin_Z_Core_Setup.exe]를 더블 클릭하여 실행합니다.
-2. 실행 후 윈도우 작업표시줄 시계 옆(시스템 트레이)에 Ghosti 아이콘이 생성됩니다.
+1. [Merlin_Z_Core_Setup.exe]를 더블 클릭하여 실행합니다. (별도 설치 창 없이 영구 경로에 자동 안착됩니다)
+2. 실행 후 윈도우 작업표시줄 시계 옆(시스템 트레이)에 귀신같이 아이콘이 생성됩니다.
 3. 귀신같이 웹 브라우저(https://ghosti.sundreamer.app)의 [1. 귀신비서] 창으로 돌아가시면
    자동 연결되며, 외부 클라우드 전송 없이 내 컴퓨터 속 진짜 사진·동영상·문서만
-   조용히 로컬 인덱싱하여 0.1초 만에 귀신검색됩니다!
+   조용히 로컬 인덱싱하여 1초 만에 귀신검색됩니다!
+4. 압축파일(.zip/.7z/.rar 등) 더블클릭·우클릭 1초 압축 풀기(암호파일 완벽 지원) 및
+   다중 파일 우클릭 ZIP 묶기, 안 쓰는 은행 보안프로그램 스마트 절전·자동 기상이 함께 작동합니다.
 """
 
     print(f"Creating pure engine zip (0 sample photos) at: {PUBLIC_ZIP}")

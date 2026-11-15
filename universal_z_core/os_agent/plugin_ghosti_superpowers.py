@@ -41,11 +41,33 @@ _DAEMON_LOCK = threading.Lock()
 def ensure_superpower_daemon_running() -> bool:
     """
     [프로세스 완전 분리 모드 (멀린님 지시 반영)]
-    - 귀신창 데몬(seq_paste_daemon.py, 포트 51988)은 전속비서(Secretary)가 관리하는
-      독립 프로세스(MerlinGhostWindowStart / start_seq_daemon.vbs)로만 단독 구동합니다.
-    - 기본 엔진(5199)이 내장 스레드(threading.Thread)로 중복 기동하여 포트를 선점하거나
-      인덱싱/재기동 시 귀신창에 간섭하는 현상을 100% 원천 차단합니다.
+    - 귀신창 데몬(seq_paste_daemon, 포트 51988)은 메인 Z-코어(5199)와 반드시 별도 프로세스로 분리합니다.
+    - 이미 51988 포트가 실행 중이면(사내 개발기 스케줄러 등) 건드리지 않고 즉시 True를 반환합니다.
+    - 순수 Z-코어(.exe)만 설치한 일반 유저/테스터 PC에서 51988이 미실행 상태면,
+      내장 스레드가 아닌 '독립 자식 프로세스(--seq-paste-daemon)'로 분리 기동하여 Ctrl+0·Ctrl+우클릭을 즉시 활성화합니다.
     """
+    if os.name != "nt":
+        return True
+    try:
+        import socket
+
+        with socket.create_connection(("127.0.0.1", 51988), timeout=0.35):
+            return True
+    except Exception:
+        pass
+
+    if getattr(sys, "frozen", False):
+        try:
+            import core_win32 as _cw32
+
+            target_exe = _cw32.ensure_persistent_frozen_install()
+            subprocess.Popen(
+                [target_exe, "--seq-paste-daemon"],
+                creationflags=0x08000000 | 0x00000008,  # CREATE_NO_WINDOW | DETACHED_PROCESS
+                close_fds=True,
+            )
+        except Exception:
+            pass
     return True
 
 

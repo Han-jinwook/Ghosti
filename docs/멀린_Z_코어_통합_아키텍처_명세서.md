@@ -22,7 +22,7 @@
 ## 2. 도메인 화이트리스트(`*.sundreamer.app`) 기반 ‘무재빌드 범용 쿼리 게이트웨이’
 
 - 향후 신규 패밀리 앱이 출시될 때마다 APK나 `.exe`를 업데이트하고 스토어 재심사를 받는 일이 없도록, 코어 내부에 특정 앱 전용 API를 하드코딩하지 않습니다.
-- **CORS 및 Origin 보안:** 로컬 브릿지 서버(`localhost` 지정 포트 및 P2P 터널)는 오직 `*.sundreamer.app` (및 당사 공식 패밀리 도메인)에서 발신된 요청만 허용하도록 와일드카드 화이트리스트를 적용합니다 (`Access-Control-Allow-Private-Network: true` 포함).
+- **CORS, Origin 및 `Sec-Fetch-Site` 보안:** 로컬 브릿지 서버(`127.0.0.1:5199` 및 P2P 터널)는 와일드카드(`*`)를 외부 사이트에 개방하지 않고 오직 `*.sundreamer.app`, `*.merlincode.com`, 로컬 개발 환경 등 당사 공식 패밀리 도메인(`is_trusted_origin`)에만 `Access-Control-Allow-Origin`을 에코 응답하며(`Access-Control-Allow-Private-Network: true` 포함), `Origin` 헤더 없이 발송되는 외부 웹페이지의 `<img src>` / `<form>` CSRF 공격까지 `Sec-Fetch-Site: cross-site` 검사 및 상태 변경 API의 `POST` 전용(`GET` 405) 강제로 원천 차단합니다.
 - **단일 범용 인터페이스 (`window.MerlinZCore.executeQuery` / `executeMerlinQuery`):** 패밀리 웹앱이 JSON 형태의 조건문(`Target DB`, `Filter`, `Action`)을 던지면 코어가 수행 후 결과만 반환하는 범용 실행기로 구축합니다.
 
 ---
@@ -69,19 +69,20 @@
 
 ---
 
-## 🧩 [확정 추가] 단일 표준 포트(`127.0.0.1:5199`) 내장 소프트웨어 플러그인 3종 상세 입출력 아키텍처 (`merlin_z_core_daemon.py`)
+## 🧩 [확정 추가] 단일 표준 포트(`127.0.0.1:5199`) 내장 소프트웨어 플러그인 4종 상세 입출력 아키텍처 (`merlin_z_core_daemon.py` v2.3.6)
 
 ### 1. 왜 단일 포트(`5199`) + 내장 소프트웨어 플러그인(`Built-in Software Plugins`)인가?
 - 유저가 귀신같이·센스톡·어그로필터·썬드리머 스튜디오를 쓸 때마다 별도 설치파일을 2중으로 설치하거나 포트를 나누면 방화벽 경고와 포트 충돌이 발생합니다.
-- 따라서 Microsoft Artifact Signing(월 $9.99) 서명이 완료된 단일 설치파일 **`Merlin_Z_Core_Setup.exe`** 내부에 3대 소프트웨어 플러그인(`plugin_ghosti_os.py`, `plugin_senstalk.py`, `plugin_aggrofilter.py`)을 기본 내장하고, `ThreadingHTTPServer` 멀티스레드 비동기 서버로 **단일 표준 포트 `http://127.0.0.1:5199`**에서 모든 패밀리 앱 요청을 병렬 처리합니다.
+- 따라서 단일 설치파일 **`Merlin_Z_Core_Setup.exe` (`v2.3.6`, 실행 즉시 `%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe` 영구 경로 자동 동기화)** 내부에 4대 소프트웨어 플러그인(`plugin_ghosti_os.py`, `plugin_ghosti_care_suite.py`, `plugin_senstalk.py`, `plugin_aggrofilter.py`) 및 `seq_paste_daemon.py`(`--seq-paste-daemon`)를 기본 내장하고, `ThreadingHTTPServer` 멀티스레드 비동기 서버로 **단일 표준 포트 `http://127.0.0.1:5199`**에서 모든 패밀리 앱 요청을 병렬 처리합니다.
 
 ### 2. 표준 라우팅 테이블 및 JSON 입출력 규격 (`merlin_z_core_daemon.py` 직결)
 
 | 구분 | HTTP Method & Path | 담당 모듈 | 요청 Payload (JSON) | 응답 Payload (JSON) |
 | :--- | :--- | :--- | :--- | :--- |
-| **통합 헬스체크** | `GET /__merlin/health`<br>*(또는 `/`, `/health`)* | `merlin_z_core_daemon.py` | Query Params 없음 | `{ "ok": true, "coreName": "Merlin_Z_Core", "version": "2.1.0", "standardPort": 5199, "builtinPlugins": { "zeye_os": {...}, "senstalk": {...}, "aggrofilter": {...} } }` |
-| **통합 게이트웨이** | `POST /__merlin/query` | `merlin_z_core_daemon.py` | `{ "plugin": "zeye" \| "senstalk" \| "aggrofilter", "action": "...", "payload": {...} }` | 각 플러그인의 `handle_request(action, payload)` 실행 결과 JSON 반환 |
+| **통합 헬스체크** | `GET /__merlin/health`<br>*(또는 `/`, `/health`)* | `merlin_z_core_daemon.py` | Query Params 없음 | `{ "ok": true, "coreName": "Merlin_Z_Core", "version": "2.3.6", "standardPort": 5199, "builtinPlugins": { "ghosti_os": {...}, "ghosti_care_suite": {...}, "senstalk": {...}, "aggrofilter": {...} } }` |
+| **통합 게이트웨이** | `POST /__merlin/query` | `merlin_z_core_daemon.py` | `{ "plugin": "ghosti" \| "ghosti_care_suite" \| "senstalk" \| "aggrofilter", "action": "...", "payload": {...} }` | 각 플러그인의 `handle_request(action, payload)` 실행 결과 JSON 반환 |
 | **귀신같이(Ghosti)** | `GET / POST /__zcore/*`<br>*(또는 `/api/ghosti/*`)* | `plugin_ghosti_os.py` | • `/__zcore/trace-missing-file`: `{ "query": "거래처_정산" }`<br>• `/__zcore/gdrive-smart-scan`: `{ "query": "비번" }`<br>• `/__zcore/restore-points-list`: `{}`<br>• `/__zcore/restore-point-rollback`: `{ "restoreId": "#104" }`<br>• `/__zcore/ai-baton-touch`: `{ "query": "...", "autoLaunch": false }` | • 5대 은닉 금고 + `$Recycle.Bin` `$I` 바이너리 해독 결과<br>• `G:` 드라이브 `.gsheet`/`.gdoc` 색인 및 무마스킹 ID/PW(`📋` 복사)<br>• `[복원 기록]` 3단계 무결성 배지(`🟢/🟡/🔴`) 및 1초 롤백 결과<br>• 단골 AI 자동 감지(기록 0건 시 기본값 `gemini`) |
+| **구 3대장 대체 케어 스위트** | `GET(조회) / POST(실행) /api/care/*`<br>*(및 CLI `--smart-unzip` / `--smart-zip`)* | `plugin_ghosti_care_suite.py`<br>*(v2.2.0)* | • `GET /api/care/status`, `GET /api/care/defender/history`<br>• `POST /api/care/security-services/{sleep\|wake\|restore-default}`<br>• `POST /api/care/archive/{extract\|zip}`<br>• `POST /__zcore/deep-uninstall-{scan\|execute}` | • 미사용 웹 보안 서비스 누적 스냅샷 절전·기상(`F5` 풍선 안내)·1초 원복<br>• 알집 동급 암호 압축(`.zip` AES-256 / `.7z`·`.rar` 헤더암호화, 오입력 무찌꺼기 재입력) & 다중선택 1개 ZIP 병합<br>• Windows 기본 `[휴지통]` 직행 심층 제거 & AMSI 무소음 검문 |
 | **센스톡 플러그인** | `GET / POST /api/senstalk/*` | `plugin_senstalk.py`<br>*(2,439줄 원본)* | • `GET /api/senstalk/health`<br>• `GET /api/senstalk/badges`<br>• `POST /api/senstalk/sync`: `{ "queue": [...] }`<br>• `POST /api/senstalk/send`: `{ "target": "이쁜이", "msg": "..." }` | • 6대 메신저(카카오톡·라인·텔레그램·위챗·와츠앱·페메) 창 탐색 상태, 미확인 배지 카운트, 실채팅방 타겟 검색 및 입력창 장전 결과 |
 | **어그로필터 플러그인** | `GET / POST /api/aggrofilter/*` | `plugin_aggrofilter.py` | • `GET /api/aggrofilter/health`<br>• `POST /api/aggrofilter/extract`: `{ "url": "https://youtu.be/...", "lang": "ko" }` | • 크롬 확장팩 없이 유저 로컬 가정용 IP로 직접 추출한 유튜브 자막 세그먼트, 전체 텍스트, 타임스탬프 요약 반환 |
 

@@ -2,21 +2,22 @@
 # -*- coding: utf-8 -*-
 r"""
 ❖ Ghosti Care Suite Plugin (plugin_ghosti_care_suite.py)
-- 구시대 유틸리티 3대장(고클린·알집·알약)을 광고 0%·추가 엔진 용량 0MB로 흡수하는 35KB 초경량 독립 플러그인.
+- 구시대 유틸리티 3대장(고클린·알집·알약)을 광고 0%·서버 전송 0%로 대체하는 독립 격리 플러그인 (v2.2.0).
 - 3대 경량·격리 아키텍처 철칙(Zero-Engine Delegation & Try-Except Plugin Isolation & Hard Resource Quota) 준수:
-  1) 모듈 A: 미사용 웹 보안 서비스 스마트 절전(Demand-Start + Stop) & 2-Layer Snapshot & Wake 선행 기상 (15분 유예)
-     - 포터블 무권한 설치 유지 + 절전 기능 최초 활성화 시 1회 On-Demand 권한 승격 헬퍼(runas -> GhostiSecurityCareHelper 작업 스케줄러 최고권한 등록)로 이후 평생 UAC 팝업 0회 구동
-     - 사내 DRM(MaEPSBroker, Fasoo, SoftCamp) 100% 불가침 제외, 커널 자가보호 모듈 안전 가이드 분기
-     - 5KB 정적 JSON(security_services_whitelist.json) 원격 무소음 자동 갱신 + 로컬 폴백
-     - sc query 100% 실측 정직 브리핑 (0개일 때 허위 경보 0%)
-  2) 모듈 B: 스마트 압축 풀기·묶기 (더블클릭 자동실행 + 일반 우클릭 메뉴 `딸깍` 중심 + 보조: 귀신호출 `Ctrl+0`/`Ctrl+우클릭`) & 봉인 존중(풀기 전 압축 내부 미열람)
-     - 일반 유저 습관 1순위(더블클릭 ProgID `Ghosti.Archive` & `OpenWithProgids`) + 2순위(탐색기 기본 우클릭 메뉴 `HKCU\Software\Classes` 정적 등록 — Shell Extension DLL 인젝션 0% ➔ 평시 RAM/CPU 0%)
-     - 탐색기 COM Shell.Application 무오염 선택 파일 경로 추출 (`win32com` 미설치 시 순수 PowerShell COM 폴백 내장)
-     - Lazy-Import & Instant Unload (평시 메모리 0바이트), `.zip`/`.tar`/`.gz`/`.tgz` 및 Windows 내장 `tar.exe` 연동 `.7z`/`.rar` 지원
-     - UTF-8 NFD ➔ NFC 한글 자소 결합 및 CP437 ➔ CP949 복원, 루트 엔트리 판별 압축폭탄 방지, Zip Slip 차단, Disk Full 사전 체크, 암호 압축 미니 입력창 지원
-     - 봉인 존중 원칙: 풀기 전에는 압축 내부 스트림을 열람하지 않으며(겉봉투 파일명만 인식), 사용자가 직접 압축을 푼 직후에만 풀린 일반 문서들을 즉시 인덱싱(index_extracted_files_immediately)하고 인라인 공유 브릿지 노출
-  3) 모듈 C: 윈도우 디펜더(amsi.dll In-Memory 0.01초 + Downloads 무소음 워처 + Defender Event ID 1116/1117) 무소음 수호 히스토리
-     - 자체 백신 DB 0MB, 평시 알림 팝업 0회, 로컬 SQLite(defender_guardian_history.db) 누적 기록 및 최근 30일 통계 반환
+  1) 모듈 A: 미사용 웹 보안 서비스 스마트 절전(Demand-Start + Stop) & 누적 스냅샷(원래 시작유형 보존) & 선행 기상·원상복구
+     - 포터블 무권한 설치 유지 + 절전 기능 명시적 동의 시 최초 1회 On-Demand 권한 승격 헬퍼(GhostiSecurityCareHelper) 등록
+     - 백그라운드 UAC 팝업 영구 0회, 모든 열린 창 제목(EnumWindows) 검사 후 안전 절전, 기상 시 F5 새로고침 안내, 1초 완전 원복 지원
+     - 승격 헬퍼 내 번들 화이트리스트 재검증으로 권한 상승 통로 원천 차단, 사내 DRM 불가침 제외
+  2) 모듈 B: 스마트 압축 풀기·묶기 (더블클릭 자동실행 + 일반 우클릭 메뉴 `딸깍` 중심 + 보조: 귀신호출 `Ctrl+0`/`Ctrl+우클릭`) & 봉인 존중
+     - 패키징된 Z-코어(.exe) 영구 경로(%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe) 자동 기준 등록
+     - 타사 압축앱(반디집·7-Zip·알집 HKLM/UserChoice) 존중 및 해제 시 기존 연결값 완전 복원
+     - 알집 동일 수준 암호 압축 완벽 지원(.zip ZipCrypto/AES-256/Deflate64, .7z 데이터+헤더 암호화, .rar RAR4/RAR5 데이터+헤더 암호화)
+     - 눈 아이콘 표시 토글 + 오입력 시 찌꺼기 0바이트 클린 롤백 & 무제한 재입력 암호창
+     - UTF-8 우선 판별 + NFD->NFC 한글 복원, __MACOSX/AppleDouble 제외, 금지문자 자동 치환, Zip-Slip commonpath 방어, 기존 폴더 덮어쓰기 원천 차단(_1), 단일 .gz 지원, 다중 선택 1개 ZIP 병합(YYMMDD_대표파일_외N건.zip)
+  3) 모듈 C: 윈도우 기본 보안(amsi.dll In-Memory + 공식 Downloads 폴더 워처 + Defender Event ID 1116/1117 30일 필터) 무소음 수호
+     - 압축 해제 직후 풀린 실행·스크립트 파일 자동 AMSI 검문, 비차단 스레드 위협 알림
+  4) 모듈 D: 심층 앱 적출 (Deep Uninstaller) — 별도 격리폴더 없이 Windows OS 기본 휴지통(SHFileOperationW FOF_ALLOWUNDO) 직행,
+     사용자 데이터 폴더 보호, MsiExec /I -> /X 변환 및 언인스톨러 종료 대기, 빈 질의 되묻기, 가짜 숫자 0%
 """
 
 from __future__ import annotations
@@ -24,25 +25,42 @@ from __future__ import annotations
 import argparse
 from concurrent.futures import ThreadPoolExecutor
 import ctypes
+from ctypes import wintypes
 import datetime
+import hashlib
 import json
 import os
 from pathlib import Path
+import re
+import shlex
 import shutil
 import sqlite3
 import subprocess
 import sys
+import tempfile
+import threading
 import time
-from typing import Any, Dict, List, Optional, Tuple
+import unicodedata
+import uuid
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 THIS_DIR = Path(__file__).resolve().parent
+_BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 LOCAL_APPDATA = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")))
-GHOSTI_DATA_DIR = LOCAL_APPDATA / "Ghosti" / "data"
+GHOSTI_ROOT_DIR = LOCAL_APPDATA / "Ghosti"
+GHOSTI_BIN_DIR = GHOSTI_ROOT_DIR / "bin"
+GHOSTI_DATA_DIR = GHOSTI_ROOT_DIR / "data"
 CARE_DIR = GHOSTI_DATA_DIR
 
-WHITELIST_JSON_LOCAL = THIS_DIR / "security_services_whitelist.json"
+WHITELIST_JSON_BUNDLED = (
+    (_BUNDLE_DIR / "security_services_whitelist.json")
+    if (_BUNDLE_DIR / "security_services_whitelist.json").exists()
+    else (THIS_DIR / "security_services_whitelist.json")
+)
+WHITELIST_JSON_LOCAL = WHITELIST_JSON_BUNDLED
 WHITELIST_JSON_CACHE = CARE_DIR / "security_services_whitelist_cache.json"
 SLEEP_SNAPSHOT_FILE = CARE_DIR / "security_sleep_snapshot.json"
+CARE_SETTINGS_FILE = CARE_DIR / "care_suite_settings.json"
 GUARDIAN_DB_FILE = CARE_DIR / "defender_guardian_history.db"
 CARE_METRICS_FILE = CARE_DIR / "weekly_care_metrics.json"
 EXTRACTED_INDEX_QUEUE_FILE = CARE_DIR / "extracted_files_index_queue.json"
@@ -64,7 +82,7 @@ PRIVACY_BADGE_TEXT = (
 
 PLUGIN_METADATA = {
     "id": "ghosti_care_suite",
-    "version": "2.1.0",
+    "version": "2.2.0",
     "architecture": "ZERO_ENGINE_DELEGATION_ISOLATED_PLUGIN",
     "sealedArchiveRespect": True,
     "doubleClickNonInterference": True,
@@ -74,15 +92,217 @@ PLUGIN_METADATA = {
 
 _LAST_WAKE_TIMESTAMP: float = 0.0
 _LAST_FINANCE_WINDOW_SEEN: float = 0.0
+_CURRENTLY_AWAKE: bool = False
 _CONTEXT_MENU_ENSURED: bool = False
+_TRAY_BALLOON_CALLBACK: Optional[Callable[[str, str], None]] = None
+
+
+def set_tray_balloon_callback(cb: Optional[Callable[[str, str], None]]) -> None:
+    """메인 Z-코어 트레이 아이콘이 기상·F5 새로고침 안내 풍선을 띄울 수 있도록 콜백을 연결합니다."""
+    global _TRAY_BALLOON_CALLBACK
+    _TRAY_BALLOON_CALLBACK = cb
+
+
+def _notify_tray_balloon(title: str, message: str) -> None:
+    cb = _TRAY_BALLOON_CALLBACK
+    if cb is not None:
+        try:
+            threading.Thread(target=cb, args=(title, message), daemon=True).start()
+        except Exception:
+            pass
 
 
 def _ensure_care_dir() -> None:
     CARE_DIR.mkdir(parents=True, exist_ok=True)
 
 
+def _load_care_settings() -> Dict[str, Any]:
+    _ensure_care_dir()
+    if CARE_SETTINGS_FILE.exists():
+        try:
+            data = json.loads(CARE_SETTINGS_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+    return {"bankAutoSleepEnabled": False}
+
+
+def _save_care_settings(settings: Dict[str, Any]) -> None:
+    _ensure_care_dir()
+    try:
+        tmp = CARE_SETTINGS_FILE.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp, CARE_SETTINGS_FILE)
+    except Exception:
+        pass
+
+
+def _is_bank_auto_sleep_enabled() -> bool:
+    return bool(_load_care_settings().get("bankAutoSleepEnabled", False))
+
+
 # ============================================================================
-# 0. [R1 해결] 포터블 무권한 설치 유지 + 절전 기능 최초 활성화 시 1회 On-Demand 권한 승격 헬퍼(runas)
+# 공통 OS 경로 헬퍼 (영구 Z-코어 실행파일 · 공식 Downloads 폴더 · 7z · 휴지통)
+# ============================================================================
+def _get_persistent_or_current_exe() -> str:
+    """frozen(.exe) 환경에서는 %LOCALAPPDATA%\\Programs\\MerlinFamily\\Merlin_Z_Core_Setup.exe 영구 경로를 보장·반환합니다."""
+    if getattr(sys, "frozen", False):
+        try:
+            import core_win32 as _cw32
+
+            return _cw32.ensure_persistent_frozen_install()
+        except Exception:
+            return os.path.abspath(sys.executable)
+    exe_path = Path(sys.executable)
+    if exe_path.name.lower() == "python.exe":
+        pyw = exe_path.with_name("pythonw.exe")
+        if pyw.exists():
+            exe_path = pyw
+    return str(exe_path.resolve())
+
+
+def _build_care_cli_command(mode_flag: str, with_arg_placeholder: bool = False) -> Tuple[str, str, str]:
+    """
+    (full_command_line, executable_path, arguments_only) 튜플을 반환합니다.
+    - frozen(.exe) 모드: script 경로 없이 순수 Merlin_Z_Core_Setup.exe + 플래그만 호출합니다.
+    - 개발(.py) 모드: pythonw.exe + plugin_ghosti_care_suite.py + 플래그를 호출합니다.
+    """
+    exe_str = _get_persistent_or_current_exe()
+    arg_tail = f' "{ "%1" }"' if with_arg_placeholder else ""
+    if getattr(sys, "frozen", False):
+        args_only = f"{mode_flag}{arg_tail}".strip()
+        return f'"{exe_str}" {args_only}', exe_str, args_only
+    script_path = str(Path(__file__).resolve())
+    args_only = f'"{script_path}" {mode_flag}{arg_tail}'.strip()
+    return f'"{exe_str}" {args_only}', exe_str, args_only
+
+
+def _get_downloads_dir() -> Path:
+    """Windows 공식 알려진 폴더(FOLDERID_Downloads — D: 이동 및 OneDrive 리디렉션 포함)를 반환합니다."""
+    try:
+        import ghosti_safe_ops
+
+        dl = ghosti_safe_ops.known_folder("downloads")
+        if dl and dl.exists():
+            return dl
+    except Exception:
+        pass
+    if sys.platform == "win32":
+        try:
+            class _GUID(ctypes.Structure):
+                _fields_ = [
+                    ("Data1", ctypes.c_ulong),
+                    ("Data2", ctypes.c_ushort),
+                    ("Data3", ctypes.c_ushort),
+                    ("Data4", ctypes.c_ubyte * 8),
+                ]
+
+            u = uuid.UUID("374DE290-123F-4565-9164-39C4925E467B")
+            g = _GUID()
+            g.Data1, g.Data2, g.Data3 = u.time_low, u.time_mid, u.time_hi_version
+            for idx_b, b_val in enumerate(u.bytes[8:]):
+                g.Data4[idx_b] = b_val
+            ptr = ctypes.c_wchar_p()
+            hr = ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(g), 0, None, ctypes.byref(ptr))
+            if hr == 0 and ptr.value:
+                res_p = Path(ptr.value)
+                ctypes.windll.ole32.CoTaskMemFree(ptr)
+                if res_p.exists():
+                    return res_p
+        except Exception:
+            pass
+    return Path.home() / "Downloads"
+
+
+def _find_7z_exe() -> Optional[Path]:
+    """Z-코어 내장(LGPL 7z.exe+7z.dll) 또는 시스템 설치된 7z.exe 경로를 반환합니다."""
+    persistent_7z = GHOSTI_BIN_DIR / "7z" / "7z.exe"
+    persistent_dll = GHOSTI_BIN_DIR / "7z" / "7z.dll"
+    if persistent_7z.exists() and persistent_dll.exists():
+        return persistent_7z
+
+    for src_dir in (_BUNDLE_DIR / "bin" / "7z", THIS_DIR / "bin" / "7z"):
+        src_exe = src_dir / "7z.exe"
+        src_dll = src_dir / "7z.dll"
+        if src_exe.exists() and src_dll.exists():
+            try:
+                dst_dir = GHOSTI_BIN_DIR / "7z"
+                dst_dir.mkdir(parents=True, exist_ok=True)
+                for fn in ("7z.exe", "7z.dll", "7z-LICENSE.txt"):
+                    s = src_dir / fn
+                    d = dst_dir / fn
+                    if s.exists() and (not d.exists() or d.stat().st_size != s.stat().st_size):
+                        shutil.copy2(s, d)
+                if persistent_7z.exists():
+                    return persistent_7z
+            except Exception:
+                return src_exe
+
+    for sys_cand in (
+        Path(r"C:\Program Files\7-Zip\7z.exe"),
+        Path(r"C:\Program Files (x86)\7-Zip\7z.exe"),
+    ):
+        if sys_cand.exists():
+            return sys_cand
+    return None
+
+
+def _send_path_to_windows_recycle_bin(target_path: Path) -> Dict[str, Any]:
+    """
+    [멀린님 확정 철칙] 별도 격리 폴더를 만들지 않고 유저가 쓰던 Windows 기본 휴지통(SHFileOperationW FOF_ALLOWUNDO)으로 이동합니다.
+    네트워크/USB 등 휴지통이 없는 드라이브는 영구 삭제 위험이 있으므로 거부합니다.
+    """
+    if sys.platform != "win32":
+        return {"ok": False, "error": "WINDOWS_ONLY"}
+    resolved = target_path.resolve()
+    if not resolved.exists():
+        return {"ok": False, "error": "PATH_NOT_FOUND"}
+    p_str = str(resolved)
+    if p_str.startswith("\\\\") or len(resolved.parts) < 3:
+        return {"ok": False, "error": "UNSAFE_OR_NETWORK_PATH"}
+    drive_root = p_str[:3].upper()
+    try:
+        if ctypes.windll.kernel32.GetDriveTypeW(drive_root) != 3:  # DRIVE_FIXED
+            return {"ok": False, "error": "DRIVE_HAS_NO_RECYCLE_BIN"}
+    except Exception:
+        return {"ok": False, "error": "DRIVE_CHECK_FAILED"}
+
+    class _SHFILEOPSTRUCTW(ctypes.Structure):
+        _fields_ = [
+            ("hwnd", wintypes.HWND),
+            ("wFunc", wintypes.UINT),
+            ("pFrom", wintypes.LPCWSTR),
+            ("pTo", wintypes.LPCWSTR),
+            ("fFlags", ctypes.c_ushort),
+            ("fAnyOperationsAborted", wintypes.BOOL),
+            ("hNameMappings", ctypes.c_void_p),
+            ("lpszProgressTitle", wintypes.LPCWSTR),
+        ]
+
+    # FO_DELETE=0x3, FOF_SILENT=0x4 | FOF_NOCONFIRMATION=0x10 | FOF_ALLOWUNDO=0x40 | FOF_NOERRORUI=0x400
+    op = _SHFILEOPSTRUCTW()
+    op.hwnd = 0
+    op.wFunc = 0x0003
+    op.pFrom = p_str + "\x00\x00"
+    op.pTo = None
+    op.fFlags = 0x0004 | 0x0010 | 0x0040 | 0x0400
+    op.fAnyOperationsAborted = False
+    op.hNameMappings = None
+    op.lpszProgressTitle = None
+
+    rc = int(ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op)))
+    moved_ok = (rc == 0) and (not bool(op.fAnyOperationsAborted)) and (not resolved.exists())
+    return {
+        "ok": moved_ok,
+        "returnCode": rc,
+        "path": p_str,
+        "movedToRecycleBin": moved_ok,
+    }
+
+
+# ============================================================================
+# 0. 포터블 무권한 설치 유지 + 절전 기능 최초 활성화 시 1회 On-Demand 권한 승격 헬퍼(runas)
 # ============================================================================
 def is_running_as_admin() -> bool:
     """현재 프로세스가 관리자 권한(Elevated)으로 실행 중인지 확인합니다."""
@@ -95,17 +315,28 @@ def is_running_as_admin() -> bool:
 
 
 def is_security_care_helper_task_registered() -> bool:
-    """작업 스케줄러에 최고권한 헬퍼(GhostiSecurityCareHelper)가 등록되어 있는지 확인합니다."""
+    """작업 스케줄러에 최고권한 헬퍼(GhostiSecurityCareHelper)가 등록되어 있고 실행 대상이 유효한지 확인합니다."""
     if sys.platform != "win32":
         return False
     try:
         r = subprocess.run(
-            ["schtasks", "/query", "/tn", SECURITY_CARE_HELPER_TASK_NAME],
+            ["schtasks", "/query", "/tn", SECURITY_CARE_HELPER_TASK_NAME, "/v", "/fo", "LIST"],
             capture_output=True,
-            timeout=2.0,
+            text=True,
+            encoding="oem",
+            errors="replace",
+            timeout=2.5,
             creationflags=CREATE_NO_WINDOW,
         )
-        return r.returncode == 0
+        if r.returncode != 0:
+            return False
+        # 과거 구버전(.exe + _MEIPASS .py 혼합)으로 잘못 등록된 태스크면 재등록 유도
+        out = r.stdout or ""
+        if "_MEIPASS" in out or "zcore_rt" in out:
+            return False
+        if getattr(sys, "frozen", False) and ".py" in out:
+            return False
+        return True
     except Exception:
         return False
 
@@ -114,13 +345,7 @@ def _register_security_care_helper_task_as_admin() -> bool:
     """관리자 권한 컨텍스트에서 작업 스케줄러 최고권한(HIGHEST) 헬퍼를 등록합니다."""
     if sys.platform != "win32":
         return False
-    exe_path = Path(sys.executable)
-    if exe_path.name.lower() == "python.exe":
-        pyw = exe_path.with_name("pythonw.exe")
-        if pyw.exists():
-            exe_path = pyw
-    script_path = Path(__file__).resolve()
-    tr_cmd = f'"{exe_path}" "{script_path}" --run-elevated-helper'
+    tr_cmd, _, _ = _build_care_cli_command("--run-elevated-helper", with_arg_placeholder=False)
     try:
         r = subprocess.run(
             [
@@ -139,7 +364,7 @@ def _register_security_care_helper_task_as_admin() -> bool:
                 "/f",
             ],
             capture_output=True,
-            timeout=3.0,
+            timeout=3.5,
             creationflags=CREATE_NO_WINDOW,
         )
         return r.returncode == 0
@@ -147,21 +372,98 @@ def _register_security_care_helper_task_as_admin() -> bool:
         return False
 
 
-def execute_elevated_service_control(mode: str, service_names: List[str]) -> Dict[str, Any]:
+def _load_bundled_only_whitelist() -> Dict[str, Any]:
+    """승격 헬퍼 전용: 사용자 쓰기 가능 캐시를 읽지 않고 오직 번들 원본 화이트리스트만 로드합니다."""
+    if WHITELIST_JSON_BUNDLED.exists():
+        try:
+            data = json.loads(WHITELIST_JSON_BUNDLED.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+    return {
+        "corporate_drm_never_touch": [
+            "maepsbroker", "markany", "fasoo", "softcamp", "v3lite", "alyac", "msmpeng", "windefend", "securityhealth"
+        ],
+        "web_security_services_whitelist": [],
+    }
+
+
+def _filter_strictly_whitelisted_services(service_names: List[str]) -> List[str]:
+    """권한 상승 방어: 오직 번들 화이트리스트에 등재된 웹 보안 서비스만 통과시킵니다."""
+    wl = _load_bundled_only_whitelist()
+    never_touch = {s.lower() for s in wl.get("corporate_drm_never_touch", [])}
+    never_touch.update({"windefend", "sense", "wdnissvc", "mpssvc", "wscsvc", "securityhealthservice"})
+    patterns: List[str] = []
+    for item in wl.get("web_security_services_whitelist", []):
+        for pat in item.get("service_patterns", []):
+            if pat and str(pat).strip():
+                patterns.append(str(pat).strip().lower())
+
+    allowed: List[str] = []
+    for raw_name in service_names:
+        sname = (raw_name or "").strip()
+        if not sname or not re.match(r"^[A-Za-z0-9_.\- ]{1,80}$", sname):
+            continue
+        s_low = sname.lower()
+        if any(drm in s_low for drm in never_touch):
+            continue
+        if any(pat in s_low for pat in patterns):
+            allowed.append(sname)
+    return allowed
+
+
+def _query_service_start_type(service_name: str) -> str:
+    """서비스의 현재 시작 유형(auto / delayed-auto / demand)을 조회합니다."""
+    if sys.platform != "win32":
+        return "demand"
+    try:
+        r = subprocess.run(
+            ["sc", "qc", service_name],
+            capture_output=True,
+            text=True,
+            encoding="oem",
+            errors="replace",
+            timeout=2.0,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        out = (r.stdout or "").upper()
+        if "DELAYED" in out:
+            return "delayed-auto"
+        if "AUTO_START" in out:
+            return "auto"
+        if "DEMAND_START" in out:
+            return "demand"
+    except Exception:
+        pass
+    return "demand"
+
+
+def execute_elevated_service_control(
+    mode: str,
+    service_names: List[str],
+    start_types_map: Optional[Dict[str, str]] = None,
+    allow_uac_prompt: bool = True,
+    register_helper_even_if_empty: bool = False,
+) -> Dict[str, Any]:
     """
-    [R1 해결]
     - 현재 프로세스가 관리자 권한이면 즉시 직접 `sc config` / `sc stop` / `sc start` 수행.
-    - 일반 권한(포터블 무권한)이면:
-      1) 작업 스케줄러에 `GhostiSecurityCareHelper`가 이미 등록되어 있으면 `schtasks /run /tn "GhostiSecurityCareHelper"`로 UAC 팝업 0회 무소음 실행!
-      2) 아직 등록되어 있지 않으면 딱 1회 `ShellExecuteW(None, "runas", ...)` UAC 승인을 띄워 헬퍼 등록과 동시에 절전/기상을 즉시 완수!
+    - 일반 권한이면:
+      1) 작업 스케줄러에 `GhostiSecurityCareHelper`가 이미 등록되어 있으면 `schtasks /run`으로 UAC 팝업 0회 무소음 실행!
+      2) 미등록 상태이고 allow_uac_prompt=True(유저 명시적 클릭)일 때만 딱 1회 `runas` 승격!
+         백그라운드 워처(allow_uac_prompt=False)에서는 절대 UAC 창을 띄우지 않습니다.
     """
     _ensure_care_dir()
-    clean_names = [s.strip() for s in service_names if s and s.strip()]
-    if not clean_names or sys.platform != "win32":
+    clean_names = _filter_strictly_whitelisted_services(service_names)
+    if sys.platform != "win32":
+        return {"ok": True, "processedServices": [], "elevationMethod": "NON_WINDOWS"}
+    if not clean_names and not register_helper_even_if_empty:
         return {"ok": True, "processedServices": [], "elevationMethod": "NONE_NEEDED"}
 
     if is_running_as_admin():
-        processed = _perform_direct_sc_operations(mode, clean_names)
+        if register_helper_even_if_empty and not is_security_care_helper_task_registered():
+            _register_security_care_helper_task_as_admin()
+        processed = _perform_direct_sc_operations(mode, clean_names, start_types_map=start_types_map)
         return {
             "ok": True,
             "processedServices": processed,
@@ -169,11 +471,12 @@ def execute_elevated_service_control(mode: str, service_names: List[str]) -> Dic
             "uacPromptShown": False,
         }
 
-    req_id = f"{mode}_{int(time.time() * 1000)}"
+    req_id = f"{mode}_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}"
     queue_payload = {
         "requestId": req_id,
         "mode": mode,
         "serviceNames": clean_names,
+        "startTypesMap": start_types_map or {},
         "requestedAt": datetime.datetime.now().isoformat(),
         "completed": False,
         "processedServices": [],
@@ -188,6 +491,8 @@ def execute_elevated_service_control(mode: str, service_names: List[str]) -> Dic
 
     # 1) 이미 작업 스케줄러 최고권한 헬퍼가 등록된 경우 -> UAC 팝업 0회로 즉시 트리거
     if is_security_care_helper_task_registered():
+        if not clean_names:
+            return {"ok": True, "processedServices": [], "elevationMethod": "SCHTASKS_ALREADY_READY", "uacPromptShown": False}
         try:
             subprocess.run(
                 ["schtasks", "/run", "/tn", SECURITY_CARE_HELPER_TASK_NAME],
@@ -195,47 +500,55 @@ def execute_elevated_service_control(mode: str, service_names: List[str]) -> Dic
                 timeout=2.5,
                 creationflags=CREATE_NO_WINDOW,
             )
-            for _ in range(25):
+            for _ in range(35):
                 time.sleep(0.1)
                 if ELEVATED_ACTION_QUEUE_FILE.exists():
                     data = json.loads(ELEVATED_ACTION_QUEUE_FILE.read_text(encoding="utf-8"))
                     if data.get("requestId") == req_id and data.get("completed"):
                         return {
                             "ok": True,
-                            "processedServices": data.get("processedServices", clean_names),
+                            "processedServices": list(data.get("processedServices") or []),
                             "elevationMethod": "SCHTASKS_HIGHEST_ZERO_UAC",
                             "uacPromptShown": False,
                         }
         except Exception:
             pass
+        if not allow_uac_prompt:
+            return {
+                "ok": False,
+                "processedServices": [],
+                "elevationMethod": "SCHTASKS_TIMEOUT_NO_UAC",
+                "uacPromptShown": False,
+            }
 
-    # 2) 최초 1회: 작업 스케줄러 미등록 상태 -> ShellExecuteW(None, "runas", ...)로 1회 승격하여 헬퍼 등록 + 즉시 실행
-    exe_path = Path(sys.executable)
-    if exe_path.name.lower() == "python.exe":
-        pyw = exe_path.with_name("pythonw.exe")
-        if pyw.exists():
-            exe_path = pyw
-    script_path = Path(__file__).resolve()
-    params = f'"{script_path}" --install-and-run-helper'
+    if not allow_uac_prompt:
+        return {
+            "ok": False,
+            "processedServices": [],
+            "elevationMethod": "BACKGROUND_UAC_SUPPRESSED",
+            "uacPromptShown": False,
+        }
 
+    # 2) 최초 1회: 유저 명시적 클릭 시에만 ShellExecuteW(None, "runas", ...)로 헬퍼 등록 + 즉시 실행
+    _, exe_str, params = _build_care_cli_command("--install-and-run-helper", with_arg_placeholder=False)
     try:
         ret = ctypes.windll.shell32.ShellExecuteW(
             None,
             "runas",
-            str(exe_path),
+            exe_str,
             params,
-            str(THIS_DIR),
+            str(Path(exe_str).parent),
             0,  # SW_HIDE
         )
         if int(ret) > 32:
-            for _ in range(50):
+            for _ in range(60):
                 time.sleep(0.1)
                 if ELEVATED_ACTION_QUEUE_FILE.exists():
                     data = json.loads(ELEVATED_ACTION_QUEUE_FILE.read_text(encoding="utf-8"))
                     if data.get("requestId") == req_id and data.get("completed"):
                         return {
                             "ok": True,
-                            "processedServices": data.get("processedServices", clean_names),
+                            "processedServices": list(data.get("processedServices") or []),
                             "elevationMethod": "ON_DEMAND_RUNAS_ONCE_AND_SCHTASKS_REGISTERED",
                             "uacPromptShown": True,
                         }
@@ -244,16 +557,27 @@ def execute_elevated_service_control(mode: str, service_names: List[str]) -> Dic
 
     return {
         "ok": False,
+        "uacDeclined": True,
         "processedServices": [],
         "elevationMethod": "UAC_DECLINED_OR_PENDING",
         "uacPromptShown": True,
     }
 
 
-def _perform_direct_sc_operations(mode: str, service_names: List[str]) -> List[str]:
-    """관리자 권한 상태에서 sc config / sc stop / sc start를 병렬 수행합니다."""
+def _perform_direct_sc_operations(
+    mode: str,
+    service_names: List[str],
+    start_types_map: Optional[Dict[str, str]] = None,
+) -> List[str]:
+    """관리자 권한 상태에서 화이트리스트 재검증 후 sc config / sc stop / sc start를 병렬 수행합니다."""
     if sys.platform != "win32" or not service_names:
         return []
+    if mode not in ("sleep", "wake", "restore"):
+        return []
+    safe_names = _filter_strictly_whitelisted_services(service_names)
+    if not safe_names:
+        return []
+    st_map = start_types_map or {}
 
     def _work(sname: str) -> Optional[str]:
         try:
@@ -261,13 +585,13 @@ def _perform_direct_sc_operations(mode: str, service_names: List[str]) -> List[s
                 subprocess.run(
                     ["sc", "config", sname, "start=", "demand"],
                     capture_output=True,
-                    timeout=1.5,
+                    timeout=2.0,
                     creationflags=CREATE_NO_WINDOW,
                 )
                 r = subprocess.run(
                     ["sc", "stop", sname],
                     capture_output=True,
-                    timeout=2.0,
+                    timeout=3.0,
                     creationflags=CREATE_NO_WINDOW,
                 )
                 out_str = r.stdout.decode("oem", errors="ignore") if r.stdout else ""
@@ -277,7 +601,26 @@ def _perform_direct_sc_operations(mode: str, service_names: List[str]) -> List[s
                 r = subprocess.run(
                     ["sc", "start", sname],
                     capture_output=True,
+                    timeout=3.0,
+                    creationflags=CREATE_NO_WINDOW,
+                )
+                out_str = r.stdout.decode("oem", errors="ignore") if r.stdout else ""
+                if r.returncode == 0 or "START" in out_str or "RUNNING" in out_str or "1056" in out_str:
+                    return sname
+            elif mode == "restore":
+                orig_st = str(st_map.get(sname) or "auto").strip().lower()
+                if orig_st not in ("auto", "delayed-auto", "demand"):
+                    orig_st = "auto"
+                subprocess.run(
+                    ["sc", "config", sname, "start=", orig_st],
+                    capture_output=True,
                     timeout=2.0,
+                    creationflags=CREATE_NO_WINDOW,
+                )
+                r = subprocess.run(
+                    ["sc", "start", sname],
+                    capture_output=True,
+                    timeout=3.0,
                     creationflags=CREATE_NO_WINDOW,
                 )
                 out_str = r.stdout.decode("oem", errors="ignore") if r.stdout else ""
@@ -288,12 +631,12 @@ def _perform_direct_sc_operations(mode: str, service_names: List[str]) -> List[s
         return None
 
     with ThreadPoolExecutor(max_workers=8) as pool:
-        results = list(pool.map(_work, service_names))
+        results = list(pool.map(_work, safe_names))
     return [r for r in results if r]
 
 
 def _process_elevated_helper_queue(install_task_too: bool = False) -> None:
-    """승격된 헬퍼 프로세스에서 호출되어 작업 스케줄러 등록 및 큐에 담긴 서비스 제어를 수행합니다."""
+    """승격된 헬퍼 프로세스에서 호출되어 작업 스케줄러 등록 및 화이트리스트 검증된 서비스 제어를 수행합니다."""
     _ensure_care_dir()
     if install_task_too:
         _register_security_care_helper_task_as_admin()
@@ -304,11 +647,19 @@ def _process_elevated_helper_queue(install_task_too: bool = False) -> None:
         data = json.loads(ELEVATED_ACTION_QUEUE_FILE.read_text(encoding="utf-8"))
         if data.get("completed"):
             return
-        mode = str(data.get("mode") or "sleep")
-        service_names = list(data.get("serviceNames") or [])
-        processed = _perform_direct_sc_operations(mode, service_names)
-        data["completed"] = True
-        data["processedServices"] = processed
+        mode = str(data.get("mode") or "sleep").strip().lower()
+        if mode not in ("sleep", "wake", "restore"):
+            data["completed"] = True
+            data["processedServices"] = []
+            data["rejectedReason"] = "INVALID_MODE"
+        else:
+            raw_names = [str(x) for x in (data.get("serviceNames") or []) if x]
+            safe_names = _filter_strictly_whitelisted_services(raw_names)
+            raw_st_map = data.get("startTypesMap")
+            st_map = {str(k): str(v) for k, v in raw_st_map.items()} if isinstance(raw_st_map, dict) else {}
+            processed = _perform_direct_sc_operations(mode, safe_names, start_types_map=st_map) if safe_names else []
+            data["completed"] = True
+            data["processedServices"] = processed
         data["completedAt"] = datetime.datetime.now().isoformat()
         ELEVATED_ACTION_QUEUE_FILE.write_text(
             json.dumps(data, ensure_ascii=False, indent=2),
@@ -319,7 +670,7 @@ def _process_elevated_helper_queue(install_task_too: bool = False) -> None:
 
 
 # ============================================================================
-# 1. [방어 20] 5KB 정적 JSON 화이트리스트 로더 & 주간 무소음 원격 동기화
+# 1. 5KB 정적 JSON 화이트리스트 로더 & 주간 무소음 원격 동기화
 # ============================================================================
 def load_security_whitelist(allow_remote_sync: bool = False) -> Dict[str, Any]:
     _ensure_care_dir()
@@ -329,7 +680,7 @@ def load_security_whitelist(allow_remote_sync: bool = False) -> Dict[str, Any]:
 
             req = urllib.request.Request(
                 REMOTE_WHITELIST_URL,
-                headers={"User-Agent": "Merlin-Z-Core-CareSuite/2.1"},
+                headers={"User-Agent": "Merlin-Z-Core-CareSuite/2.2"},
             )
             with urllib.request.urlopen(req, timeout=1.5) as resp:
                 raw = resp.read().decode("utf-8")
@@ -343,29 +694,38 @@ def load_security_whitelist(allow_remote_sync: bool = False) -> Dict[str, Any]:
         except Exception:
             pass
 
-    for candidate in (WHITELIST_JSON_CACHE, WHITELIST_JSON_LOCAL):
+    for candidate in (WHITELIST_JSON_BUNDLED, WHITELIST_JSON_CACHE):
         if candidate.exists():
             try:
                 data = json.loads(candidate.read_text(encoding="utf-8"))
-                if isinstance(data, dict):
+                if isinstance(data, dict) and data.get("web_security_services_whitelist"):
                     return data
             except Exception:
                 continue
 
     return {
-        "version": "2026.11.09.fallback",
+        "version": "2026.11.15.fallback",
         "corporate_drm_never_touch": [
             "maepsbroker", "markany", "fasoo", "softcamp", "v3lite", "alyac", "msmpeng"
         ],
-        "kernel_self_defense_services": [],
-        "web_security_services_whitelist": [],
-        "wake_window_title_keywords": ["은행", "뱅크", "홈택스", "정부24", "결제", "본인인증", "공동인증서"],
+        "kernel_self_defense_services": ["ahnlab", "astx", "npkcrypt"],
+        "web_security_services_whitelist": [
+            {"id": "anysign", "display_name": "AnySign4PC (한컴위드 전자서명)", "service_patterns": ["anysign"], "tray_executables": ["anysign4pc.exe"]},
+            {"id": "touchen_nxkey", "display_name": "TouchEn nxKey (라온시큐어 키보드보안)", "service_patterns": ["touchen", "nxkey"], "tray_executables": ["touchen_nxkey.exe"]},
+            {"id": "veraport", "display_name": "VeraPort (위즈베라 통합설치)", "service_patterns": ["veraport"], "tray_executables": ["veraport.exe"]},
+            {"id": "delfino", "display_name": "Delfino (위즈베라 전자서명)", "service_patterns": ["delfino"], "tray_executables": ["delfino.exe"]},
+            {"id": "iniline", "display_name": "CrossEX / INISAFE (이니텍 금융보안)", "service_patterns": ["iniline", "crossex", "inisafe"], "tray_executables": ["crossexservice.exe"]},
+            {"id": "ipinside", "display_name": "IPinside LWS (인터리젠 단말정보)", "service_patterns": ["ipinside", "i3gproc"], "tray_executables": ["i3gproc.exe"]},
+            {"id": "nprotect", "display_name": "nProtect Online Security (잉카인터넷)", "service_patterns": ["nossvc", "nprotect"], "tray_executables": ["nosstarter.npe"]},
+            {"id": "magicline", "display_name": "MagicLine4NX (드림시큐리티)", "service_patterns": ["magicline"], "tray_executables": ["magicline4nx.exe"]},
+        ],
+        "wake_window_title_keywords": ["은행", "뱅크", "홈택스", "정부24", "결제", "본인인증", "공동인증서", "인터넷뱅킹", "카드"],
         "sleep_grace_period_seconds": 900,
     }
 
 
 # ============================================================================
-# 2. [모듈 A] 미사용 웹 보안 서비스 스마트 절전 & 2-Layer Snapshot & Wake
+# 2. [모듈 A] 미사용 웹 보안 서비스 스마트 절전 & 누적 스냅샷 & 기상 · 완전 원복
 # ============================================================================
 def _load_weekly_metrics() -> Dict[str, Any]:
     _ensure_care_dir()
@@ -393,13 +753,13 @@ def _save_weekly_metrics(metrics: Dict[str, Any]) -> None:
 
 
 def _count_downloads_archive_files() -> Dict[str, Any]:
-    """다운로드 폴더 내 압축파일(.zip/.7z/.rar/.tar/.gz) 누적 건수(3건 이상 임계치 판정) 및 최신 파일 경로(풀기 전 내부 미열람 원칙 준수)"""
+    """공식 다운로드 폴더 내 압축파일(.zip/.7z/.rar/.tar/.gz/.tgz) 누적 건수 및 최신 파일 경로(풀기 전 내부 미열람 원칙)"""
     count = 0
     samples: List[str] = []
     latest_path = ""
     latest_name = ""
     try:
-        dl_dir = Path.home() / "Downloads"
+        dl_dir = _get_downloads_dir()
         if dl_dir.exists() and dl_dir.is_dir():
             archive_exts = {".zip", ".7z", ".rar", ".tar", ".gz", ".tgz"}
             entries = sorted(
@@ -423,8 +783,29 @@ def _count_downloads_archive_files() -> Dict[str, Any]:
     }
 
 
+def _load_sleep_snapshot() -> Dict[str, Any]:
+    if SLEEP_SNAPSHOT_FILE.exists():
+        try:
+            data = json.loads(SLEEP_SNAPSHOT_FILE.read_text(encoding="utf-8"))
+            if isinstance(data, dict):
+                return data
+        except Exception:
+            pass
+    return {"savedAt": None, "services": [], "userBridgeProcesses": []}
+
+
+def _save_sleep_snapshot(snap: Dict[str, Any]) -> None:
+    _ensure_care_dir()
+    try:
+        tmp = SLEEP_SNAPSHOT_FILE.with_suffix(".json.tmp")
+        tmp.write_text(json.dumps(snap, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp, SLEEP_SNAPSHOT_FILE)
+    except Exception:
+        pass
+
+
 def get_security_services_status() -> Dict[str, Any]:
-    """[방어 1·2·5] sc query 및 프로세스 100% 실측 기반 정직 브리핑 (0개일 때 거짓 경보 금지)"""
+    """sc query 및 프로세스 100% 실측 기반 정직 브리핑 (0개일 때 거짓 경보 금지)"""
     global _CONTEXT_MENU_ENSURED
     if not _CONTEXT_MENU_ENSURED:
         _CONTEXT_MENU_ENSURED = True
@@ -491,19 +872,22 @@ def get_security_services_status() -> Dict[str, Any]:
     active_count = len(running_services)
     estimated_ram_mb = sum(s.get("estimatedRamMb", 45) for s in running_services)
 
-    snapshot_exists = SLEEP_SNAPSHOT_FILE.exists()
-    sleeping_services: List[str] = []
-    if snapshot_exists:
-        try:
-            snap = json.loads(SLEEP_SNAPSHOT_FILE.read_text(encoding="utf-8"))
-            sleeping_services = [s.get("serviceName", "") for s in snap.get("services", []) if s.get("serviceName")]
-        except Exception:
-            pass
+    snap = _load_sleep_snapshot()
+    sleeping_services = [
+        str(s.get("serviceName", ""))
+        for s in (snap.get("services") or [])
+        if isinstance(s, dict) and s.get("serviceName")
+    ]
 
     if active_count > 0:
         honest_message = (
             f"👻 현재 미사용 웹 보안 서비스 {active_count}개(약 {estimated_ram_mb}MB)가 뒤에서 실행 중이에요. "
-            "삭제하지 않고 쿨쿨 잠재울까요? (은행 접속 시 2초 만에 자동 기상합니다)"
+            "삭제하지 않고 쿨쿨 잠재울까요? (은행 접속 시 1초 만에 자동 기상합니다)"
+        )
+    elif sleeping_services:
+        honest_message = (
+            f"👻 현재 은행·관공서 보안 서비스 {len(sleeping_services)}개가 조용히 잠들어 있어요. "
+            "은행 사이트에 들어가시면 자동으로 깨어나고, 원하실 때 1초 만에 원래 설정으로 복구할 수 있어요."
         )
     else:
         honest_message = (
@@ -520,6 +904,8 @@ def get_security_services_status() -> Dict[str, Any]:
         "estimatedRamMb": estimated_ram_mb,
         "runningServices": running_services,
         "sleepingServices": sleeping_services,
+        "autoSleepEnabled": _is_bank_auto_sleep_enabled(),
+        "currentlyAwake": _CURRENTLY_AWAKE,
         "selfDefenseGuided": list(dict.fromkeys(self_defense_detected)),
         "corporateDrmUntouchedCount": len(set(corporate_drm_protected)),
         "helperTaskRegistered": is_security_care_helper_task_registered(),
@@ -541,10 +927,40 @@ def get_security_services_status() -> Dict[str, Any]:
     }
 
 
+def _split_windows_cmdline(cmd_str: str, fallback_exe: str = "") -> List[str]:
+    """Win32 CommandLineToArgvW로 인자 유실 없이 프로세스 명령줄을 파싱합니다."""
+    raw = (cmd_str or "").strip()
+    if not raw:
+        return [fallback_exe] if fallback_exe else []
+    if sys.platform == "win32":
+        try:
+            argc = ctypes.c_int(0)
+            ctypes.windll.shell32.CommandLineToArgvW.restype = ctypes.POINTER(ctypes.c_wchar_p)
+            argv_ptr = ctypes.windll.shell32.CommandLineToArgvW(ctypes.c_wchar_p(raw), ctypes.byref(argc))
+            if argv_ptr and argc.value > 0:
+                try:
+                    parts = [str(argv_ptr[i]) for i in range(argc.value) if argv_ptr[i]]
+                    if parts:
+                        if fallback_exe and not os.path.isabs(parts[0]) and os.path.exists(fallback_exe):
+                            parts[0] = fallback_exe
+                        return parts
+                finally:
+                    ctypes.windll.kernel32.LocalFree(argv_ptr)
+        except Exception:
+            pass
+    try:
+        parts = [p.strip('"') for p in shlex.split(raw, posix=False) if p]
+        if parts:
+            return parts
+    except Exception:
+        pass
+    return [fallback_exe] if fallback_exe else [raw]
+
+
 def _iter_windows_processes_stdlib() -> List[Dict[str, Any]]:
     """
-    psutil이 설치되어 있으면 고속 조회하고, 미설치된 순정 Python 환경에서도
-    PowerShell Win32_Process CIM을 통해 프로세스 목록(pid, name, exe, cmdline, rss_mb)을 100% 반환합니다.
+    psutil이 설치되어 있으면 고속 조회하고, 미설치 환경에서도 PowerShell Win32_Process CIM을 통해
+    실행 인자(CommandLine) 유실 없이 프로세스 목록(pid, name, exe, cmdline, memoryMb)을 반환합니다.
     """
     procs: List[Dict[str, Any]] = []
     if sys.platform != "win32":
@@ -585,7 +1001,7 @@ def _iter_windows_processes_stdlib() -> List[Dict[str, Any]]:
             text=True,
             encoding="utf-8",
             errors="replace",
-            timeout=4.0,
+            timeout=4.5,
             creationflags=CREATE_NO_WINDOW,
         )
         raw_out = (r.stdout or "").strip()
@@ -604,7 +1020,7 @@ def _iter_windows_processes_stdlib() -> List[Dict[str, Any]]:
                     "pid": pid,
                     "name": pname,
                     "exe": pexe,
-                    "cmdline": [pexe] if pexe else ([cmd_str] if cmd_str else []),
+                    "cmdline": _split_windows_cmdline(cmd_str, fallback_exe=pexe),
                     "cmdlineRaw": cmd_str,
                     "memoryMb": max(1.0, round(ws_bytes / (1024 * 1024), 1)),
                 })
@@ -613,25 +1029,71 @@ def _iter_windows_processes_stdlib() -> List[Dict[str, Any]]:
     return procs
 
 
-def sleep_security_services() -> Dict[str, Any]:
+def sleep_security_services(
+    explicit_opt_in: bool = True,
+    allow_uac_prompt: bool = True,
+) -> Dict[str, Any]:
     """
-    [모듈 A & R1 해결]
-    - 2-Layer Snapshot(서비스명 + 유저 브릿지 프로세스 cmdline) 기록
-    - 일반 권한(포터블 무권한 설치)에서는 최초 1회 On-Demand 권한 승격 헬퍼(`runas` -> 작업 스케줄러 최고권한 등록)를 거쳐
-      이후 평생 UAC 팝업 0회로 `sc config ... start= demand` 및 `sc stop`을 완벽 수행합니다.
+    [모듈 A — 스냅샷 누적 보존 & 무허가 자동 재우기/UAC 차단]
+    - 이미 잠든 상태에서 재호출되더라도 기존 스냅샷(SLEEP_SNAPSHOT_FILE)을 절대 빈 배열로 덮어쓰지 않고 병합 보존합니다!
+    - 각 서비스의 원래 시작 유형(auto/delayed-auto/demand)을 기록해 두어 언제든 1초 완전 원복이 가능합니다.
+    - UAC 승인 거절 시 실패를 정직하게 반환하며, 실제 정지되지 않은 서비스를 잠든 것으로 허위 기록하지 않습니다.
     """
+    global _CURRENTLY_AWAKE
     _ensure_care_dir()
     status = get_security_services_status()
-    targets = status.get("runningServices", [])
+    targets: List[Dict[str, Any]] = list(status.get("runningServices", []) or [])
     wl_data = load_security_whitelist(allow_remote_sync=False)
     whitelist_items = wl_data.get("web_security_services_whitelist", [])
 
+    # 각 서비스의 원래 시작유형을 절전 전에 미리 조회
+    existing_snap = _load_sleep_snapshot()
+    existing_svc_map: Dict[str, Dict[str, Any]] = {}
+    for s in (existing_snap.get("services") or []):
+        if isinstance(s, dict) and s.get("serviceName"):
+            existing_svc_map[str(s["serviceName"]).lower()] = dict(s)
+
+    for t in targets:
+        sname = str(t.get("serviceName") or "")
+        if not sname:
+            continue
+        prev_entry = existing_svc_map.get(sname.lower())
+        if prev_entry and prev_entry.get("originalStartType"):
+            t["originalStartType"] = prev_entry["originalStartType"]
+        else:
+            t["originalStartType"] = _query_service_start_type(sname)
+
+    target_service_names = [str(t.get("serviceName") or "") for t in targets if t.get("serviceName")]
+    need_helper_setup = explicit_opt_in and not is_security_care_helper_task_registered() and not is_running_as_admin()
+
+    elevation_res = execute_elevated_service_control(
+        "sleep",
+        target_service_names,
+        allow_uac_prompt=allow_uac_prompt,
+        register_helper_even_if_empty=need_helper_setup,
+    )
+    if not elevation_res.get("ok"):
+        return {
+            "ok": False,
+            "uacDeclined": bool(elevation_res.get("uacDeclined")),
+            "stoppedCount": 0,
+            "stoppedServices": [],
+            "reclaimedRamMb": 0,
+            "elevationMethod": elevation_res.get("elevationMethod"),
+            "error": "ELEVATION_REQUIRED_OR_DECLINED",
+            "toastMessage": "⚠️ Windows 관리자 권한(최초 1회) 승인이 취소되어 보안 서비스 절전 설정을 완료하지 못했습니다.",
+        }
+
+    stopped_services = list(elevation_res.get("processedServices") or [])
+    stopped_low = {s.lower() for s in stopped_services}
+
+    # 서비스 절전 승인이 통과된 뒤에만 유저 세션 트레이 브릿지 종료 및 기록
     tray_exe_set = set()
     for item in whitelist_items:
         for exe_name in item.get("tray_executables", []):
             tray_exe_set.add(exe_name.lower())
 
-    user_bridge_processes: List[Dict[str, Any]] = []
+    newly_killed_bridges: List[Dict[str, Any]] = []
     for pinfo in _iter_windows_processes_stdlib():
         try:
             pname = (pinfo.get("name") or "").lower()
@@ -639,36 +1101,59 @@ def sleep_security_services() -> Dict[str, Any]:
             if pname in tray_exe_set and pid > 4:
                 cmdline = pinfo.get("cmdline") or ([pinfo.get("exe")] if pinfo.get("exe") else [])
                 if cmdline and cmdline[0]:
-                    user_bridge_processes.append({
-                        "name": pname,
-                        "cmdline": cmdline,
-                    })
-                    subprocess.run(
+                    r_kill = subprocess.run(
                         ["taskkill", "/F", "/PID", str(pid)],
                         capture_output=True,
                         timeout=2.0,
                         creationflags=CREATE_NO_WINDOW,
                     )
+                    if r_kill.returncode == 0:
+                        newly_killed_bridges.append({
+                            "name": pname,
+                            "exe": str(cmdline[0]),
+                            "cmdline": cmdline,
+                        })
         except Exception:
             continue
 
-    target_service_names = [t.get("serviceName", "") for t in targets if t.get("serviceName")]
-    elevation_res = execute_elevated_service_control("sleep", target_service_names)
-    stopped_services = elevation_res.get("processedServices", [])
+    # 기존 스냅샷과 누적 병합 (절대 빈 목록으로 덮어쓰지 않음!)
+    for t in targets:
+        sname = str(t.get("serviceName") or "")
+        if sname and sname.lower() in stopped_low:
+            existing_svc_map[sname.lower()] = t
 
-    snapshot_payload = {
-        "savedAt": datetime.datetime.now().isoformat(),
-        "services": targets,
-        "userBridgeProcesses": user_bridge_processes,
-    }
-    try:
-        SLEEP_SNAPSHOT_FILE.write_text(json.dumps(snapshot_payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
+    existing_bridge_map: Dict[str, Dict[str, Any]] = {}
+    for b in (existing_snap.get("userBridgeProcesses") or []):
+        if isinstance(b, dict):
+            b_cmd = b.get("cmdline") or []
+            b_key = str(b_cmd[0] if b_cmd else b.get("name") or "").lower()
+            if b_key:
+                existing_bridge_map[b_key] = b
+    for nb in newly_killed_bridges:
+        nb_cmd = nb.get("cmdline") or []
+        nb_key = str(nb_cmd[0] if nb_cmd else nb.get("name") or "").lower()
+        if nb_key:
+            existing_bridge_map[nb_key] = nb
 
-    reclaimed_mb = sum(t.get("estimatedRamMb", 45) for t in targets) if stopped_services else 0
+    if existing_svc_map or existing_bridge_map:
+        _save_sleep_snapshot({
+            "savedAt": datetime.datetime.now().isoformat(),
+            "services": list(existing_svc_map.values()),
+            "userBridgeProcesses": list(existing_bridge_map.values()),
+        })
+
+    if explicit_opt_in:
+        st_cfg = _load_care_settings()
+        st_cfg["bankAutoSleepEnabled"] = True
+        st_cfg["updatedAt"] = datetime.datetime.now().isoformat()
+        _save_care_settings(st_cfg)
+
+    _CURRENTLY_AWAKE = False
+
+    stopped_targets = [t for t in targets if str(t.get("serviceName") or "").lower() in stopped_low]
+    reclaimed_mb = sum(int(t.get("estimatedRamMb", 45)) for t in stopped_targets)
     metrics = _load_weekly_metrics()
-    if stopped_services:
+    if stopped_services or newly_killed_bridges:
         metrics["sleepCountThisWeek"] = int(metrics.get("sleepCountThisWeek", 0)) + 1
         metrics["savedRamMbCumulative"] = int(metrics.get("savedRamMbCumulative", 0)) + reclaimed_mb
         metrics["lastSleepAt"] = datetime.datetime.now().isoformat()
@@ -678,53 +1163,100 @@ def sleep_security_services() -> Dict[str, Any]:
         "ok": True,
         "stoppedCount": len(stopped_services),
         "stoppedServices": stopped_services,
-        "savedUserBridgesCount": len(user_bridge_processes),
+        "savedUserBridgesCount": len(newly_killed_bridges),
+        "totalManagedSleepingCount": len(existing_svc_map),
         "reclaimedRamMb": reclaimed_mb,
+        "autoSleepEnabled": _is_bank_auto_sleep_enabled(),
         "elevationMethod": elevation_res.get("elevationMethod"),
         "toastMessage": (
             f"👻 미사용 웹 보안 서비스 {len(stopped_services)}개를 삭제하지 않고 쿨쿨 잠재웠어요! "
-            f"(메모리 {reclaimed_mb}MB 회수 완료 · 다음 은행 접속 시 자동 깨어납니다)"
+            f"(메모리 {reclaimed_mb}MB 회수 완료 · 다음 은행 접속 시 1초 만에 자동 깨어납니다)"
             if stopped_services
             else "👻 현재 추가로 잠재울 미사용 웹 보안 서비스가 없습니다 (이미 쾌적한 상태예요!)."
         ),
     }
 
 
-def wake_security_services(reason: str = "manual_button") -> Dict[str, Any]:
-    """[모듈 A & R1 해결] 2-Layer Snapshot 기반 최고권한 헬퍼(UAC 0회) sc start + 유저 세션 브릿지 동반 기상"""
-    global _LAST_WAKE_TIMESTAMP
-    _LAST_WAKE_TIMESTAMP = time.time()
+def wake_security_services(reason: str = "manual_button", allow_uac_prompt: bool = True) -> Dict[str, Any]:
+    """2-Layer 누적 스냅샷 기반 최고권한 헬퍼(UAC 0회) sc start + 미실행 유저 브릿지 중복 없이 동반 기상"""
+    global _LAST_WAKE_TIMESTAMP, _CURRENTLY_AWAKE
     _ensure_care_dir()
 
-    services_to_wake: List[str] = []
-    bridges_to_wake: List[Dict[str, Any]] = []
+    snap = _load_sleep_snapshot()
+    services_to_wake = [
+        str(s.get("serviceName") or "")
+        for s in (snap.get("services") or [])
+        if isinstance(s, dict) and s.get("serviceName")
+    ]
+    bridges_to_wake = [b for b in (snap.get("userBridgeProcesses") or []) if isinstance(b, dict)]
 
-    if SLEEP_SNAPSHOT_FILE.exists():
-        try:
-            snap = json.loads(SLEEP_SNAPSHOT_FILE.read_text(encoding="utf-8"))
-            services_to_wake = [s.get("serviceName", "") for s in snap.get("services", []) if s.get("serviceName")]
-            bridges_to_wake = snap.get("userBridgeProcesses", [])
-        except Exception:
-            pass
+    if not services_to_wake and not bridges_to_wake:
+        return {
+            "ok": True,
+            "reason": reason,
+            "wokenServicesCount": 0,
+            "wokenServices": [],
+            "wokenBridgesCount": 0,
+            "wokenCount": 0,
+            "elevationMethod": "NONE_SLEEPING",
+            "gracePeriodMinutes": 15,
+            "toastMessage": "👻 현재 잠자고 있는 은행·결제 보안 프로그램이 없습니다 (모두 정상 대기 중).",
+        }
 
-    elevation_res = execute_elevated_service_control("wake", services_to_wake)
-    woken_services = elevation_res.get("processedServices", [])
+    is_auto_trigger = reason.startswith("window_title_match:")
+    elevation_res = execute_elevated_service_control(
+        "wake",
+        services_to_wake,
+        allow_uac_prompt=(False if is_auto_trigger else allow_uac_prompt),
+    )
+    if not elevation_res.get("ok") and services_to_wake:
+        return {
+            "ok": False,
+            "reason": reason,
+            "wokenServicesCount": 0,
+            "wokenServices": [],
+            "wokenBridgesCount": 0,
+            "wokenCount": 0,
+            "elevationMethod": elevation_res.get("elevationMethod"),
+            "error": "WAKE_ELEVATION_FAILED",
+            "toastMessage": "⚠️ 권한 승인이 완료되지 않아 잠자던 보안 서비스를 깨우지 못했습니다.",
+        }
 
+    woken_services = list(elevation_res.get("processedServices") or [])
+
+    # 이미 실행 중인 트레이 브릿지는 중복 실행하지 않음
+    running_proc_names = {(p.get("name") or "").lower() for p in _iter_windows_processes_stdlib()}
     woken_bridges: List[str] = []
     if sys.platform == "win32" and bridges_to_wake:
         for b in bridges_to_wake:
+            bname = str(b.get("name") or "").lower()
+            if bname and bname in running_proc_names:
+                continue
             cmdline = b.get("cmdline")
             if isinstance(cmdline, list) and cmdline and os.path.exists(str(cmdline[0])):
                 try:
                     subprocess.Popen(cmdline, creationflags=CREATE_NO_WINDOW, close_fds=True)
                     woken_bridges.append(b.get("name", str(cmdline[0])))
+                    if bname:
+                        running_proc_names.add(bname)
                 except Exception:
                     continue
 
-    metrics = _load_weekly_metrics()
-    metrics["wakeCountThisWeek"] = int(metrics.get("wakeCountThisWeek", 0)) + 1
-    metrics["lastWakeAt"] = datetime.datetime.now().isoformat()
-    _save_weekly_metrics(metrics)
+    _LAST_WAKE_TIMESTAMP = time.time()
+    _CURRENTLY_AWAKE = True
+
+    total_woken = len(woken_services) + len(woken_bridges)
+    if total_woken > 0:
+        metrics = _load_weekly_metrics()
+        metrics["wakeCountThisWeek"] = int(metrics.get("wakeCountThisWeek", 0)) + 1
+        metrics["lastWakeAt"] = datetime.datetime.now().isoformat()
+        _save_weekly_metrics(metrics)
+
+        if is_auto_trigger:
+            _notify_tray_balloon(
+                "👻 귀신같이 은행·결제 보안 자동 기상",
+                f"보안 프로그램 {total_woken}개를 1초 만에 깨웠어요! 화면에 설치 안내가 떠 있다면 F5(새로고침)를 한 번 눌러주세요.",
+            )
 
     return {
         "ok": True,
@@ -732,81 +1264,232 @@ def wake_security_services(reason: str = "manual_button") -> Dict[str, Any]:
         "wokenServicesCount": len(woken_services),
         "wokenServices": woken_services,
         "wokenBridgesCount": len(woken_bridges),
+        "wokenCount": total_woken,
+        "refreshHintKo": "화면에 보안프로그램 설치 안내가 이미 떠 있다면 브라우저에서 F5(새로고침)를 한 번 눌러주세요!",
         "elevationMethod": elevation_res.get("elevationMethod"),
         "gracePeriodMinutes": 15,
         "toastMessage": (
-            "👻 은행·관공서 업무를 위해 잠자던 보안 서비스를 0.1초 만에 깨웠어요! "
-            "(업무 종료 15분 뒤 알아서 다시 잠듭니다)"
+            f"👻 은행·관공서 업무를 위해 잠자던 보안 프로그램 {total_woken}개를 1초 만에 깨웠어요! "
+            "(설치 안내가 보이면 F5 새로고침 · 창을 닫고 15분 뒤 다시 잠듭니다)"
         ),
     }
 
 
+def restore_security_services_default(allow_uac_prompt: bool = True) -> Dict[str, Any]:
+    """
+    [1초 완전 원상복구]
+    - 절전해 두었던 모든 보안 서비스의 시작 유형(auto/delayed-auto/demand)을 원래대로 되돌리고 즉시 시작합니다.
+    - 자동 절전 설정(bankAutoSleepEnabled)을 끄고 스냅샷을 정리합니다.
+    """
+    global _CURRENTLY_AWAKE, _LAST_FINANCE_WINDOW_SEEN
+    _ensure_care_dir()
+    snap = _load_sleep_snapshot()
+    svc_entries = [s for s in (snap.get("services") or []) if isinstance(s, dict) and s.get("serviceName")]
+    bridges = [b for b in (snap.get("userBridgeProcesses") or []) if isinstance(b, dict)]
+
+    svc_names = [str(s["serviceName"]) for s in svc_entries]
+    st_map = {str(s["serviceName"]): str(s.get("originalStartType") or "auto") for s in svc_entries}
+
+    restored_svcs: List[str] = []
+    if svc_names:
+        elev = execute_elevated_service_control(
+            "restore",
+            svc_names,
+            start_types_map=st_map,
+            allow_uac_prompt=allow_uac_prompt,
+        )
+        if not elev.get("ok"):
+            return {
+                "ok": False,
+                "error": "RESTORE_ELEVATION_FAILED",
+                "toastMessage": "⚠️ 관리자 권한 승인이 취소되어 시작 유형 원상복구를 완료하지 못했습니다.",
+            }
+        restored_svcs = list(elev.get("processedServices") or [])
+
+    running_proc_names = {(p.get("name") or "").lower() for p in _iter_windows_processes_stdlib()}
+    restored_bridges: List[str] = []
+    if sys.platform == "win32" and bridges:
+        for b in bridges:
+            bname = str(b.get("name") or "").lower()
+            if bname and bname in running_proc_names:
+                continue
+            cmdline = b.get("cmdline")
+            if isinstance(cmdline, list) and cmdline and os.path.exists(str(cmdline[0])):
+                try:
+                    subprocess.Popen(cmdline, creationflags=CREATE_NO_WINDOW, close_fds=True)
+                    restored_bridges.append(b.get("name", str(cmdline[0])))
+                    if bname:
+                        running_proc_names.add(bname)
+                except Exception:
+                    continue
+
+    try:
+        if SLEEP_SNAPSHOT_FILE.exists():
+            SLEEP_SNAPSHOT_FILE.unlink()
+    except Exception:
+        pass
+
+    cfg = _load_care_settings()
+    cfg["bankAutoSleepEnabled"] = False
+    cfg["restoredAt"] = datetime.datetime.now().isoformat()
+    _save_care_settings(cfg)
+    _CURRENTLY_AWAKE = False
+    _LAST_FINANCE_WINDOW_SEEN = 0.0
+
+    total_restored = len(restored_svcs) + len(restored_bridges)
+    return {
+        "ok": True,
+        "restoredServicesCount": len(restored_svcs),
+        "restoredServices": restored_svcs,
+        "restoredBridgesCount": len(restored_bridges),
+        "totalRestoredCount": total_restored,
+        "autoSleepEnabled": False,
+        "toastMessage": (
+            f"↩️ 보안 프로그램 {total_restored}개를 원래 시작 설정으로 1초 만에 완벽 복구했습니다! (자동 재우기 해제됨)"
+            if total_restored > 0
+            else "↩️ 보안 프로그램 자동 재우기 설정을 해제하고 기본 상태로 되돌렸습니다."
+        ),
+    }
+
+
+def _any_open_window_matches_keywords(keywords: List[str]) -> bool:
+    """포그라운드 창뿐 아니라 백그라운드에 열려 있는 모든 가시 창 제목(EnumWindows)에 은행/결제 창이 남아있는지 확인합니다."""
+    if sys.platform != "win32" or not keywords:
+        return False
+    u32 = ctypes.windll.user32
+    found = [False]
+    WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def _cb(hwnd: int, _lp: int) -> bool:
+        hw = wintypes.HWND(hwnd)
+        if not u32.IsWindowVisible(hw):
+            return True
+        tlen = u32.GetWindowTextLengthW(hw)
+        if tlen <= 0 or tlen > 512:
+            return True
+        buf = ctypes.create_unicode_buffer(tlen + 2)
+        u32.GetWindowTextW(hw, buf, tlen + 1)
+        t_low = (buf.value or "").lower()
+        if any(kw in t_low for kw in keywords):
+            found[0] = True
+            return False
+        return True
+
+    try:
+        u32.EnumWindows(WNDENUMPROC(_cb), 0)
+    except Exception:
+        return False
+    return found[0]
+
+
 def check_window_title_for_prewake(window_title: str) -> Optional[Dict[str, Any]]:
     """
-    [방어 3·4·21] Zero Extra Polling Loop — 기존 seq_paste_daemon 포그라운드 창 체크에 1줄 편승.
-    은행·관공서·결제 키워드 감지 시 2초 선행 기상 트리거 및 15분 유예(Hysteresis) 관리.
+    [은행·관공서 선행 기상 & 15분 안전 재수면]
+    - 오직 유저가 자동 절전에 동의했고(bankAutoSleepEnabled) 최고권한 헬퍼가 준비된 경우에만 동작합니다 (백그라운드 UAC 팝업 0회!).
+    - 이미 깨어 있는 동안(_CURRENTLY_AWAKE)에는 60초마다 중복 기상하지 않습니다.
+    - 15분 유예 만료 시 모든 열린 창 제목을 전수 확인하여 은행 창이 열려 있으면 절전을 미룹니다.
     """
-    global _LAST_FINANCE_WINDOW_SEEN
+    global _LAST_FINANCE_WINDOW_SEEN, _CURRENTLY_AWAKE
     if not window_title:
         return None
+    if not _is_bank_auto_sleep_enabled():
+        return None
+    if not (is_security_care_helper_task_registered() or is_running_as_admin()):
+        return None
+
     title_low = window_title.lower()
     wl = load_security_whitelist(allow_remote_sync=False)
-    keywords = [k.lower() for k in wl.get("wake_window_title_keywords", [])]
+    keywords = [k.lower() for k in wl.get("wake_window_title_keywords", []) if k]
     grace_sec = int(wl.get("sleep_grace_period_seconds", 900))
 
     now = time.time()
     if any(kw in title_low for kw in keywords):
         _LAST_FINANCE_WINDOW_SEEN = now
-        if now - _LAST_WAKE_TIMESTAMP > 60.0 and SLEEP_SNAPSHOT_FILE.exists():
-            return wake_security_services(reason=f"window_title_match:{window_title[:24]}")
+        if not _CURRENTLY_AWAKE and SLEEP_SNAPSHOT_FILE.exists():
+            return wake_security_services(
+                reason=f"window_title_match:{window_title[:24]}",
+                allow_uac_prompt=False,
+            )
     else:
         if (
             _LAST_FINANCE_WINDOW_SEEN > 0
             and (now - _LAST_FINANCE_WINDOW_SEEN) >= grace_sec
             and (now - _LAST_WAKE_TIMESTAMP) >= grace_sec
         ):
+            if _any_open_window_matches_keywords(keywords):
+                _LAST_FINANCE_WINDOW_SEEN = now
+                return None
             _LAST_FINANCE_WINDOW_SEEN = 0.0
-            return sleep_security_services()
+            _CURRENTLY_AWAKE = False
+            return sleep_security_services(explicit_opt_in=False, allow_uac_prompt=False)
     return None
 
 
 # ============================================================================
-# 3. [모듈 B] 스마트 압축(더블클릭 자동실행 + 일반 우클릭 메뉴 `딸깍` 주력 · Ctrl+0/Ctrl+우클릭 보조)
-#    - 풀기 전 압축 내부 미열람 봉인 존중 원칙
-#    - Ghosti.Archive ProgID 연결 및 탐색기 2중 우클릭 메뉴 등록
+# 3. [모듈 B] 스마트 압축 (알집 100% 동급 암호 해제 · 한글 복원 · 안전 경로 · 다중 ZIP 병합)
 # ============================================================================
 def _get_pythonw_or_exe_command(mode_flag: str) -> str:
-    exe_path = Path(sys.executable)
-    if exe_path.name.lower() == "python.exe":
-        pyw = exe_path.with_name("pythonw.exe")
-        if pyw.exists():
-            exe_path = pyw
-    script_path = Path(__file__).resolve()
-    return f'"{exe_path}" "{script_path}" {mode_flag} "%1"'
+    full_cmd, _, _ = _build_care_cli_command(mode_flag, with_arg_placeholder=True)
+    return full_cmd
 
 
 def _get_ghosti_icon_path() -> str:
+    """Win32 탐색기 메뉴용 영구 .ico 경로만 반환합니다 (.png 및 임시 _MEIPASS 경로 원천 배제)."""
+    persistent_ico = GHOSTI_BIN_DIR / "favicon.ico"
     for cand in (
+        _BUNDLE_DIR / "favicon.ico",
         THIS_DIR / "favicon.ico",
-        THIS_DIR / "assets" / "gwisinkachi_app_icon_512.png",
         THIS_DIR.parent.parent / "public" / "favicon.ico",
     ):
-        if cand.exists():
-            return str(cand.resolve())
+        if cand.exists() and cand.suffix.lower() == ".ico":
+            try:
+                GHOSTI_BIN_DIR.mkdir(parents=True, exist_ok=True)
+                if not persistent_ico.exists() or persistent_ico.stat().st_size != cand.stat().st_size:
+                    shutil.copy2(cand, persistent_ico)
+                return str(persistent_ico)
+            except Exception:
+                if not getattr(sys, "frozen", False):
+                    return str(cand.resolve())
+    if persistent_ico.exists():
+        return str(persistent_ico)
+    if getattr(sys, "frozen", False):
+        return f"{_get_persistent_or_current_exe()},0"
     return ""
+
+
+def _has_third_party_archive_handler(winreg_mod: Any, ext: str, prog_id: str) -> bool:
+    """반디집·7-Zip·알집·WinRAR 등 타사 프로그램이 이미 HKCU UserChoice 또는 HKLM 기본값에 연결되어 있는지 확인합니다."""
+    builtin_or_ours = {"", "compressedfolder", prog_id.lower()}
+    # 1) HKCU UserChoice 확인
+    try:
+        uc_path = f"Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\FileExts\\{ext}\\UserChoice"
+        with winreg_mod.OpenKey(winreg_mod.HKEY_CURRENT_USER, uc_path, 0, winreg_mod.KEY_READ) as uck:
+            uc_prog, _ = winreg_mod.QueryValueEx(uck, "Progid")
+            if uc_prog and str(uc_prog).strip().lower() not in builtin_or_ours:
+                return True
+    except Exception:
+        pass
+    # 2) HKLM\Software\Classes\<ext> 기본값 확인
+    try:
+        with winreg_mod.OpenKey(winreg_mod.HKEY_LOCAL_MACHINE, f"Software\\Classes\\{ext}", 0, winreg_mod.KEY_READ) as lmk:
+            lm_prog, _ = winreg_mod.QueryValueEx(lmk, "")
+            if lm_prog and str(lm_prog).strip().lower() not in builtin_or_ours:
+                return True
+    except Exception:
+        pass
+    return False
 
 
 def register_explorer_context_menu() -> Dict[str, Any]:
     """
-    관리자 권한(UAC) 없이 현재 사용자 레지스트리(HKCU\\Software\\Classes)에
-    1) 더블클릭 자동실행 ProgID(Ghosti.Archive) 및 OpenWithProgids 등록
-    2) 탐색기 일반 우클릭(`딸깍`) 컨텍스트 메뉴 정적 커맨드 등록
-    을 함께 수행합니다.
-    - Shell Extension DLL을 explorer.exe에 인젝션하지 않아 평시 메모리/CPU 점유율 0바이트 / 0.0%!
+    관리자 권한(UAC) 없이 HKCU\\Software\\Classes에
+    1) 더블클릭 자동실행 ProgID(Ghosti.Archive) — 타사 압축앱(반디집·7-Zip·알집) 미설치 확장자에만 공손하게 기본 연결 & 이전값 백업
+    2) 탐색기 일반 우클릭(`딸깍`) 컨텍스트 메뉴 정적 커맨드 등록 (다중 선택 MultiSelectModel=Player 지원)
+    을 수행합니다.
     """
     if sys.platform != "win32":
         return {"ok": False, "reason": "NON_WINDOWS"}
-    import winreg  # Lazy-Import
+    import winreg
 
     icon_path = _get_ghosti_icon_path()
     unzip_cmd = _get_pythonw_or_exe_command("--smart-unzip")
@@ -817,7 +1500,6 @@ def register_explorer_context_menu() -> Dict[str, Any]:
     prog_id = "Ghosti.Archive"
 
     try:
-        # 1) 더블클릭 자동실행 & 연결 프로그램용 ProgID (HKCU\Software\Classes\Ghosti.Archive) 등록
         prog_base = f"Software\\Classes\\{prog_id}"
         with winreg.CreateKey(winreg.HKEY_CURRENT_USER, prog_base) as pk:
             winreg.SetValueEx(pk, "", 0, winreg.REG_SZ, "귀신같이 스마트 압축파일")
@@ -833,15 +1515,17 @@ def register_explorer_context_menu() -> Dict[str, Any]:
             winreg.SetValueEx(ock, "", 0, winreg.REG_SZ, unzip_cmd)
         registered_keys.append(prog_base)
 
-        # 2) 확장자별 더블클릭 연결(OpenWithProgids + 미지정 확장자 기본 ProgID) 및 탐색기 우클릭 메뉴 2중 등록
         for ext in archive_exts:
             ext_cls_key = f"Software\\Classes\\{ext}"
+            third_party_bound = _has_third_party_archive_handler(winreg, ext, prog_id)
             with winreg.CreateKey(winreg.HKEY_CURRENT_USER, ext_cls_key) as ek:
                 try:
                     cur_default, _ = winreg.QueryValueEx(ek, "")
                 except Exception:
                     cur_default = ""
-                if not cur_default or cur_default in ("CompressedFolder", prog_id):
+                if not third_party_bound and (not cur_default or cur_default in ("CompressedFolder", prog_id)):
+                    if cur_default != prog_id:
+                        winreg.SetValueEx(ek, "GhostiPrevDefault", 0, winreg.REG_SZ, str(cur_default or ""))
                     winreg.SetValueEx(ek, "", 0, winreg.REG_SZ, prog_id)
             with winreg.CreateKey(winreg.HKEY_CURRENT_USER, f"{ext_cls_key}\\OpenWithProgids") as owk:
                 winreg.SetValueEx(owk, prog_id, 0, winreg.REG_NONE, b"")
@@ -859,12 +1543,12 @@ def register_explorer_context_menu() -> Dict[str, Any]:
                     winreg.SetValueEx(ck, "", 0, winreg.REG_SZ, unzip_cmd)
                 registered_keys.append(base_key_path)
 
-        # 3) 일반 파일(*) 및 폴더(Directory) 우클릭 'ZIP 압축 묶기' 등록
         for target_cls in ("*", "Directory"):
             base_key_path = f"Software\\Classes\\{target_cls}\\shell\\GhostiSmartZip"
             with winreg.CreateKey(winreg.HKEY_CURRENT_USER, base_key_path) as k:
                 winreg.SetValueEx(k, "", 0, winreg.REG_SZ, "👻 귀신같이로 ZIP 압축 묶기")
                 winreg.SetValueEx(k, "MUIVerb", 0, winreg.REG_SZ, "👻 귀신같이로 ZIP 압축 묶기")
+                winreg.SetValueEx(k, "MultiSelectModel", 0, winreg.REG_SZ, "Player")
                 if icon_path:
                     winreg.SetValueEx(k, "Icon", 0, winreg.REG_SZ, icon_path)
             with winreg.CreateKey(winreg.HKEY_CURRENT_USER, f"{base_key_path}\\command") as ck:
@@ -880,6 +1564,7 @@ def register_explorer_context_menu() -> Dict[str, Any]:
             "ok": True,
             "registeredCount": len(registered_keys),
             "doubleClickProgId": prog_id,
+            "commandTemplate": unzip_cmd,
             "zeroBackgroundRam": True,
         }
     except Exception as e:
@@ -887,13 +1572,52 @@ def register_explorer_context_menu() -> Dict[str, Any]:
 
 
 def unregister_explorer_context_menu() -> Dict[str, Any]:
-    """HKCU\\Software\\Classes에 등록된 귀신같이 더블클릭 ProgID 및 우클릭 컨텍스트 메뉴를 깔끔하게 제거합니다."""
+    """HKCU\\Software\\Classes의 귀신같이 메뉴를 제거하고, 백업된 원래 확장자 기본 연결값(CompressedFolder 등)을 완벽 복원합니다."""
     if sys.platform != "win32":
         return {"ok": False, "reason": "NON_WINDOWS"}
-    import winreg  # Lazy-Import
+    import winreg
 
     archive_exts = (".zip", ".7z", ".rar", ".tar", ".gz", ".tgz")
+    prog_id = "Ghosti.Archive"
     removed = 0
+
+    # 확장자 기본 연결값 복원 및 OpenWithProgids 정리
+    for ext in archive_exts:
+        ext_cls_key = f"Software\\Classes\\{ext}"
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, ext_cls_key, 0, winreg.KEY_READ | winreg.KEY_SET_VALUE) as ek:
+                try:
+                    cur_def, _ = winreg.QueryValueEx(ek, "")
+                except Exception:
+                    cur_def = ""
+                try:
+                    prev_def, _ = winreg.QueryValueEx(ek, "GhostiPrevDefault")
+                except Exception:
+                    prev_def = "CompressedFolder" if ext == ".zip" else ""
+                if cur_def == prog_id:
+                    if prev_def:
+                        winreg.SetValueEx(ek, "", 0, winreg.REG_SZ, str(prev_def))
+                    elif ext == ".zip":
+                        winreg.SetValueEx(ek, "", 0, winreg.REG_SZ, "CompressedFolder")
+                    else:
+                        try:
+                            winreg.DeleteValue(ek, "")
+                        except Exception:
+                            pass
+                try:
+                    winreg.DeleteValue(ek, "GhostiPrevDefault")
+                except Exception:
+                    pass
+        except Exception:
+            pass
+        try:
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER, f"{ext_cls_key}\\OpenWithProgids", 0, winreg.KEY_SET_VALUE
+            ) as owk:
+                winreg.DeleteValue(owk, prog_id)
+        except Exception:
+            pass
+
     targets = [
         *(f"Software\\Classes\\SystemFileAssociations\\{ext}\\shell\\GhostiSmartUnzip" for ext in archive_exts),
         *(f"Software\\Classes\\{ext}\\shell\\GhostiSmartUnzip" for ext in archive_exts),
@@ -918,15 +1642,16 @@ def unregister_explorer_context_menu() -> Dict[str, Any]:
             removed += 1
         except Exception:
             pass
+
+    try:
+        ctypes.windll.shell32.SHChangeNotify(0x08000000, 0x0000, None, None)
+    except Exception:
+        pass
     return {"ok": True, "removedSubKeys": removed}
 
 
 def get_explorer_selected_paths_non_destructive(target_hwnd: Optional[int] = None) -> List[str]:
-    """
-    [방어 15·21] COM Shell.Application을 사용하여 기존 클립보드(텍스트/이미지)를 1비트도 오염시키지 않고
-    현재 포그라운드 탐색기·바탕화면에서 선택된 파일 경로를 추출합니다.
-    (win32com 미설치 환경에서도 순수 PowerShell COM 폴백으로 100% 작동)
-    """
+    """COM Shell.Application으로 클립보드를 오염시키지 않고 현재 탐색기/바탕화면 선택 파일 경로를 추출합니다."""
     if sys.platform != "win32":
         return []
     paths: List[str] = []
@@ -981,15 +1706,33 @@ def get_explorer_selected_paths_non_destructive(target_hwnd: Optional[int] = Non
     return paths
 
 
-def _decode_archive_filename(raw_name: str, flag_bits: int = 0) -> str:
-    """[모듈 B] macOS UTF-8 NFD 자소 분리 ➔ NFC 결합 & 레거시 CP437 ➔ CP949/EUC-KR 완벽 복원"""
-    import unicodedata  # Lazy-Import
+_WIN_FORBIDDEN_CHARS_RE = re.compile(r'[<>:"|?*\x00-\x1f]')
+_WIN_RESERVED_NAMES = {
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+}
 
+
+def _has_hangul(s: str) -> bool:
+    return any(
+        ("\uAC00" <= ch <= "\uD7A3") or ("\u3131" <= ch <= "\u318E") or ("\u1100" <= ch <= "\u11FF")
+        for ch in s
+    )
+
+
+def _decode_archive_filename(raw_name: str, flag_bits: int = 0) -> str:
+    """
+    [한글 복원 핵심]
+    - flag 0x800 미설정 시 UTF-8 strict를 CP949보다 먼저 시도하여 '최종'->'理쒖쥌' 오판을 100% 차단합니다.
+    - 구형 웹서버/압축기가 CP437·Latin1로 잘못 읽은 문자열을 0x800 플래그와 함께 이중 인코딩한 경우까지 자동 복원합니다.
+    - macOS NFD 자소분리 문자열을 Windows 표준 NFC 완성형으로 결합합니다.
+    """
     fixed = raw_name
     if not (flag_bits & 0x800):
         try:
             raw_bytes = raw_name.encode("cp437")
-            for enc in ("cp949", "utf-8", "euc-kr", "shift_jis"):
+            for enc in ("utf-8", "cp949", "euc-kr", "shift_jis"):
                 try:
                     fixed = raw_bytes.decode(enc)
                     break
@@ -997,17 +1740,110 @@ def _decode_archive_filename(raw_name: str, flag_bits: int = 0) -> str:
                     continue
         except Exception:
             pass
+    elif not _has_hangul(fixed) and any(ord(ch) > 127 for ch in fixed):
+        for bridge_enc in ("cp437", "latin1"):
+            try:
+                raw_bytes = fixed.encode(bridge_enc)
+            except UnicodeEncodeError:
+                continue
+            recovered = None
+            for target_enc in ("utf-8", "cp949"):
+                try:
+                    cand = raw_bytes.decode(target_enc)
+                    if _has_hangul(cand):
+                        recovered = cand
+                        break
+                except UnicodeDecodeError:
+                    continue
+            if recovered:
+                fixed = recovered
+                break
     return unicodedata.normalize("NFC", fixed)
 
 
-def is_split_archive_follower(file_path: str) -> bool:
-    """분할 압축의 후속 볼륨(.z01, .z02, .part2.rar, .7z.002 등)인지 판별하여 중복 인덱싱 차단"""
-    low = file_path.lower()
-    import re
+def _is_macos_or_os_junk(rel_path: str) -> bool:
+    """맥(macOS) 압축 쓰레기(__MACOSX, ._ 리소스 포크, .DS_Store)를 판별합니다."""
+    norm = rel_path.replace("\\", "/").strip("/")
+    if not norm:
+        return True
+    parts = [seg for seg in norm.split("/") if seg]
+    if not parts:
+        return True
+    if parts[0] == "__MACOSX" or "__MACOSX" in parts:
+        return True
+    leaf = parts[-1]
+    if leaf == ".DS_Store" or leaf.startswith("._"):
+        return True
+    return False
 
+
+def _sanitize_single_segment(seg: str) -> str:
+    cleaned = _WIN_FORBIDDEN_CHARS_RE.sub("_", unicodedata.normalize("NFC", seg))
+    cleaned = cleaned.rstrip(" .")
+    if not cleaned:
+        return "_"
+    stem_part = cleaned.split(".", 1)[0].upper()
+    if stem_part in _WIN_RESERVED_NAMES:
+        cleaned = f"_{cleaned}"
+    return cleaned
+
+
+def _sanitize_archive_relpath(rel_name: str) -> Tuple[Optional[str], bool]:
+    """
+    압축 내부 상대경로를 안전하게 정화합니다.
+    - '..' 상위 경로 탈출 포함 시 (None, True) 반환하여 Zip-Slip을 원천 차단합니다.
+    - Windows 금지문자(?*:<>|")가 있으면 '_'로 치환하고 (정화경로, was_sanitized)를 반환합니다.
+    """
+    is_dir_hint = rel_name.endswith("/") or rel_name.endswith("\\")
+    norm = rel_name.replace("\\", "/").lstrip("/")
+    raw_parts = [p for p in norm.split("/") if p and p != "."]
+    if not raw_parts:
+        return None, False
+    if any(p == ".." for p in raw_parts):
+        return None, False
+    sanitized_parts: List[str] = []
+    changed = False
+    for p in raw_parts:
+        sp = _sanitize_single_segment(p)
+        if sp != unicodedata.normalize("NFC", p):
+            changed = True
+        sanitized_parts.append(sp)
+    joined = "/".join(sanitized_parts) + ("/" if is_dir_hint else "")
+    return joined, changed
+
+
+def _is_safe_within_dir(dest_path: Path, root_dir: Path) -> bool:
+    """os.path.commonpath 기반 엄격한 하위 경로 검증 (sibling prefix 우회 100% 차단)."""
+    try:
+        root_abs = os.path.abspath(str(root_dir))
+        dest_abs = os.path.abspath(str(dest_path))
+        return os.path.commonpath([root_abs, dest_abs]) == root_abs
+    except Exception:
+        return False
+
+
+def _pick_unique_output_folder(parent_dir: Path, desired_name: str) -> Path:
+    """기존 폴더 안에 유저 파일이 있으면 절대 덮어쓰지 않고 _1, _2 새 폴더를 선택합니다."""
+    safe_base = _sanitize_single_segment(desired_name) or "압축해제_폴더"
+    cand = (parent_dir / safe_base).resolve()
+    counter = 1
+    while cand.exists():
+        try:
+            if cand.is_dir() and not any(cand.iterdir()):
+                return cand
+        except Exception:
+            pass
+        cand = (parent_dir / f"{safe_base}_{counter}").resolve()
+        counter += 1
+    return cand
+
+
+def is_split_archive_follower(file_path: str) -> bool:
+    """분할 압축의 후속 볼륨(.z01, .z02, .part2.rar, .7z.002 등)인지 판별하여 중복 처리 차단"""
+    low = file_path.lower()
     if re.search(r"\.z\d{2,}$", low):
         return True
-    if re.search(r"\.part([2-9]|\d{2,})\.rar$", low):
+    if re.search(r"\.part(0*[2-9]|[1-9]\d+)\.rar$", low):
         return True
     if re.search(r"\.7z\.(00[2-9]|0[1-9]\d|[1-9]\d{2})$", low):
         return True
@@ -1015,12 +1851,7 @@ def is_split_archive_follower(file_path: str) -> bool:
 
 
 def index_extracted_files_immediately(extracted_folder: str, extracted_files: List[str]) -> Dict[str, Any]:
-    """
-    [봉인 존중 원칙(Sealed-Archive Respect)]
-    - 고객이 직접 압축을 풀기 전에는 압축 파일 내부 스트림을 절대 열람·인덱싱하지 않습니다(겉봉투 파일명만 인식).
-    - 오직 고객이 명시적으로 더블클릭 또는 우클릭 스마트 압축 해제를 실행한 직후에만, 방금 풀려 나온 일반 문서·사진들을
-      즉시 인덱싱 큐에 등록하여 0.1초 만에 귀신검색창에서 내용까지 찾을 수 있도록 연결합니다.
-    """
+    """[봉인 존중 원칙] 사용자가 직접 압축을 푼 직후에만 풀려 나온 일반 문서·사진을 즉시 인덱싱 큐에 등록합니다."""
     _ensure_care_dir()
     folder_path = Path(extracted_folder)
     if not folder_path.exists():
@@ -1101,22 +1932,235 @@ def index_extracted_files_immediately(extracted_folder: str, extracted_files: Li
     }
 
 
+def _finalize_staged_tree_to_folder(
+    tmp_stage: Path,
+    parent_dir: Path,
+    fallback_stem: str,
+) -> Tuple[Path, List[str], int]:
+    """
+    임시 스테이징 폴더(tmp_stage)에 풀린 파일들에서 맥 쓰레기(__MACOSX/._/.DS_Store)를 제거하고,
+    NFC 한글 정규화·금지문자 치환을 마친 뒤 단일 루트 폴더 자동 판별 + 기존 폴더 덮어쓰기 방지(_1)로 최종 폴더에 안착시킵니다.
+    """
+    # 1) 맥 쓰레기 삭제 및 하위 폴더/파일명 NFC 정규화 (bottom-up)
+    for root_w, dirs_w, files_w in os.walk(tmp_stage, topdown=False):
+        root_p = Path(root_w)
+        if root_p.name == "__MACOSX":
+            shutil.rmtree(root_p, ignore_errors=True)
+            continue
+        for fw in files_w:
+            fp = root_p / fw
+            if fw == ".DS_Store" or fw.startswith("._"):
+                try:
+                    fp.unlink()
+                except Exception:
+                    pass
+                continue
+            safe_fw = _sanitize_single_segment(fw)
+            if safe_fw != fw:
+                target_fp = root_p / safe_fw
+                if not target_fp.exists():
+                    try:
+                        fp.rename(target_fp)
+                    except Exception:
+                        pass
+        for dw in dirs_w:
+            dp = root_p / dw
+            if dw == "__MACOSX":
+                shutil.rmtree(dp, ignore_errors=True)
+                continue
+            safe_dw = _sanitize_single_segment(dw)
+            if safe_dw != dw and dp.exists():
+                target_dp = root_p / safe_dw
+                if not target_dp.exists():
+                    try:
+                        dp.rename(target_dp)
+                    except Exception:
+                        pass
+
+    top_items = [x for x in tmp_stage.iterdir() if x.name != "__MACOSX"]
+    if len(top_items) == 1 and top_items[0].is_dir():
+        single_dir = top_items[0]
+        created_folder = _pick_unique_output_folder(parent_dir, single_dir.name)
+        if created_folder.exists():
+            try:
+                created_folder.rmdir()
+            except Exception:
+                pass
+        shutil.move(str(single_dir), str(created_folder))
+    else:
+        created_folder = _pick_unique_output_folder(parent_dir, fallback_stem)
+        created_folder.mkdir(parents=True, exist_ok=True)
+        for ti in top_items:
+            dest_ti = created_folder / _sanitize_single_segment(ti.name)
+            shutil.move(str(ti), str(dest_ti))
+
+    extracted_files: List[str] = []
+    total_bytes = 0
+    for root_f, _, files_f in os.walk(created_folder):
+        for fn in files_f:
+            fp_f = Path(root_f) / fn
+            extracted_files.append(fn)
+            try:
+                total_bytes += fp_f.stat().st_size
+            except Exception:
+                pass
+    return created_folder, extracted_files, total_bytes
+
+
+def _extract_via_7z(
+    archive_path: Path,
+    password: Optional[str] = None,
+) -> Dict[str, Any]:
+    """
+    내장 LGPL 7z.exe를 사용하여 암호 걸린 .7z(데이터+헤더 암호화), .rar(RAR4/RAR5 데이터+헤더 암호화),
+    Deflate64/AES .zip 등을 알집과 동일하게 처리합니다.
+    """
+    z7_exe = _find_7z_exe()
+    if not z7_exe:
+        return {
+            "ok": False,
+            "error": "SEVENZIP_HELPER_NOT_FOUND",
+            "message": "이 형식의 압축 해제 모듈을 찾지 못했습니다. Z-코어를 다시 실행해 주세요.",
+        }
+
+    # 1) 비밀번호가 주어지지 않은 경우: 디스크에 아무 폴더도 만들기 전에 암호 유무(헤더 암호화 포함) 즉시 판별!
+    if not password:
+        r_list = subprocess.run(
+            [str(z7_exe), "l", "-slt", "-sccUTF-8", "-p", str(archive_path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=25.0,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        combined_list = ((r_list.stdout or "") + "\n" + (r_list.stderr or "")).lower()
+        if (
+            "encrypted = +" in combined_list
+            or "wrong password" in combined_list
+            or "cannot open encrypted archive" in combined_list
+            or "can not open encrypted archive" in combined_list
+        ):
+            return {
+                "ok": False,
+                "needPassword": True,
+                "wrongPassword": False,
+                "message": "🔑 암호가 걸린 압축 파일입니다. 비밀번호를 입력해 주세요.",
+            }
+
+    # 2) 격리 스테이징 폴더에 해제 (중간 오류·암호 불일치 시 찌꺼기 0바이트 완벽 삭제!)
+    tmp_stage = Path(tempfile.mkdtemp(prefix=".ghosti_7z_", dir=str(archive_path.parent)))
+    try:
+        pwd_arg = f"-p{password}" if password else "-p"
+        r_ext = subprocess.run(
+            [str(z7_exe), "x", "-y", "-sccUTF-8", pwd_arg, f"-o{tmp_stage}", str(archive_path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=600.0,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        if r_ext.returncode != 0:
+            err_txt = ((r_ext.stderr or "") + "\n" + (r_ext.stdout or "")).strip()
+            err_low = err_txt.lower()
+            shutil.rmtree(tmp_stage, ignore_errors=True)
+            if (
+                "wrong password" in err_low
+                or "cannot open encrypted archive" in err_low
+                or "can not open encrypted archive" in err_low
+                or "data error in encrypted" in err_low
+                or ("headers error" in err_low and password)
+                or "encrypted" in err_low
+            ):
+                return {
+                    "ok": False,
+                    "needPassword": True,
+                    "wrongPassword": bool(password),
+                    "message": (
+                        "비밀번호가 일치하지 않습니다. 다시 입력해 주세요."
+                        if password
+                        else "🔑 암호가 걸린 압축 파일입니다. 비밀번호를 입력해 주세요."
+                    ),
+                }
+            return {
+                "ok": False,
+                "error": "ARCHIVE_CORRUPTED_OR_FAILED",
+                "message": "압축 파일이 손상되었거나 지원하지 않는 구조여서 풀지 못했습니다.",
+                "detail": err_txt[:240],
+            }
+
+        created_folder, extracted_files, total_bytes = _finalize_staged_tree_to_folder(
+            tmp_stage, archive_path.parent, archive_path.stem
+        )
+        return {
+            "ok": True,
+            "createdFolder": created_folder,
+            "extractedFiles": extracted_files,
+            "totalBytes": total_bytes,
+        }
+    finally:
+        shutil.rmtree(tmp_stage, ignore_errors=True)
+
+
+def _scan_extracted_folder_executables(folder: Path, fallback_archive: Path) -> Dict[str, Any]:
+    """압축 해제 후 풀려 나온 실행·스크립트·매크로 파일들을 실제로 AMSI 검문합니다."""
+    risky_exts = {
+        ".exe", ".msi", ".bat", ".cmd", ".ps1", ".vbs", ".vbe", ".js", ".jse",
+        ".wsf", ".scr", ".hta", ".pif", ".com", ".dll", ".lnk", ".docm", ".xlsm", ".pptm",
+    }
+    scanned_count = 0
+    threats: List[str] = []
+    engine_used = "Windows 기본 보안(AMSI)"
+    try:
+        for root_d, _, files_d in os.walk(folder):
+            for fn in files_d:
+                if Path(fn).suffix.lower() in risky_exts:
+                    fp = Path(root_d) / fn
+                    sres = scan_file_with_defender_amsi(str(fp), source="smart_unzip_extracted")
+                    scanned_count += 1
+                    engine_used = str(sres.get("engine") or engine_used)
+                    if sres.get("status") == "THREAT_DETECTED":
+                        threats.append(fn)
+                    if scanned_count >= 25:
+                        break
+            if scanned_count >= 25:
+                break
+    except Exception:
+        pass
+
+    if scanned_count == 0:
+        base_scan = scan_file_with_defender_amsi(str(fallback_archive), source="smart_unzip")
+        engine_used = str(base_scan.get("engine") or engine_used)
+        if base_scan.get("status") == "THREAT_DETECTED":
+            threats.append(fallback_archive.name)
+
+    return {
+        "ok": True,
+        "status": "THREAT_DETECTED" if threats else "CLEAN",
+        "scannedExecutableCount": scanned_count,
+        "threatFiles": threats,
+        "engine": engine_used,
+    }
+
+
 def smart_extract_archive(archive_path: str, password: Optional[str] = None) -> Dict[str, Any]:
     """
-    [모듈 B & 봉인 존중 원칙] 더블클릭 자동실행 & 일반 우클릭 메뉴(`딸깍`) 중심 (+ 보조: Ctrl+0) 1초 스마트 압축 해제:
-    1) UTF-8 NFD ➔ NFC 한글 자소 결합 및 CP437 ➔ CP949 복원.
-    2) 최상위 루트 엔트리 판별: 낱개 파일 2개 이상이면 단일 폴더 자동 생성(압축 폭탄 방지),
-       이미 단일 루트 폴더가 있으면 이중 폴더(보고서/보고서) 방지.
-    3) Zip Slip(상위 경로 탈출 `../../`) 100% 차단 및 Disk Full 여유 공간 사전 검증.
-    4) `.7z`, `.rar` 파일도 Windows 순정 내장 `System32\\tar.exe` 위임(추가 엔진 0MB)으로 동일하게 해제.
-    5) 해제 완료 직후 `index_extracted_files_immediately()`로 풀린 일반 파일만 즉시 인덱싱 + 인라인 공유 브릿지 반환.
+    [모듈 B — 알집 완벽 대체 1초 스마트 압축 해제]
+    - 지원 포맷: .zip (ZipCrypto / AES-128·192·256 / Deflate64), .7z (데이터·헤더 암호화),
+      .rar (RAR4/RAR5 데이터·헤더 암호화), .tar, .tgz, .tar.gz, .tar.bz2, .tar.xz, 단일 .gz/.bz2/.xz
+    - 모든 해제는 임시 스테이징 폴더에서 먼저 수행 후 원자적으로 이동하므로 실패/암호오류 시 부분 폴더가 절대 남지 않습니다.
     """
-    import zipfile  # Lazy-Import
     import tarfile
+    import zipfile
+    import zlib
+
+    if not archive_path or not str(archive_path).strip():
+        return {"ok": False, "error": "ARCHIVE_NOT_FOUND", "message": "압축 파일 경로가 비어 있습니다."}
 
     p = Path(archive_path).resolve()
     if not p.exists() or not p.is_file():
-        return {"ok": False, "error": "ARCHIVE_NOT_FOUND"}
+        return {"ok": False, "error": "ARCHIVE_NOT_FOUND", "message": f"압축 파일을 찾을 수 없습니다: {p.name}"}
 
     if is_split_archive_follower(str(p)):
         return {
@@ -1125,13 +2169,53 @@ def smart_extract_archive(archive_path: str, password: Optional[str] = None) -> 
             "message": "분할 압축 보조 파일입니다. 1번 대표 압축 파일(.zip / .part1.rar / .7z.001)에서 풀기를 눌러주세요!",
         }
 
+    low_name = p.name.lower()
+    suffix_low = p.suffix.lower()
+    if suffix_low in (".alz", ".egg"):
+        return {
+            "ok": False,
+            "error": "PROPRIETARY_FORMAT_NOT_SUPPORTED",
+            "message": f"'{suffix_low}' 형식은 특정 제조사 독점 규격입니다. 표준 압축(.zip · .7z · .rar · .tar · .gz)은 모두 1초 해제를 지원합니다.",
+        }
+
+    # 동일 압축파일 중복 더블클릭 동시 해제 방어 (Windows Named Mutex)
+    mutex_handle = None
+    if sys.platform == "win32":
+        try:
+            path_hash = hashlib.sha1(str(p).lower().encode("utf-8")).hexdigest()[:16]
+            mutex_name = f"Local\\Ghosti_Extract_{path_hash}"
+            mutex_handle = ctypes.windll.kernel32.CreateMutexW(None, False, mutex_name)
+            if mutex_handle:
+                wait_rc = ctypes.windll.kernel32.WaitForSingleObject(mutex_handle, 0)
+                if wait_rc not in (0x00000000, 0x00000080):  # WAIT_OBJECT_0 or WAIT_ABANDONED
+                    ctypes.windll.kernel32.CloseHandle(mutex_handle)
+                    return {
+                        "ok": False,
+                        "alreadyRunning": True,
+                        "error": "ALREADY_EXTRACTING",
+                        "message": f"'{p.name}' 압축을 이미 푸는 중입니다. 잠시만 기다려 주세요!",
+                    }
+        except Exception:
+            mutex_handle = None
+
+    created_folder: Optional[Path] = None
     extracted_files: List[str] = []
     total_uncompressed = 0
 
     try:
-        if p.suffix.lower() == ".zip":
-            with zipfile.ZipFile(p, mode="r") as zf:
-                infos = zf.infolist()
+        # ── A) .zip (표준 + ZipCrypto + WinZip AES-256 + Deflate64) ──
+        if suffix_low == ".zip":
+            try:
+                zf_probe = zipfile.ZipFile(p, mode="r")
+            except zipfile.BadZipFile:
+                return {
+                    "ok": False,
+                    "error": "CORRUPTED_ZIP",
+                    "message": f"'{p.name}' 파일이 손상되었거나 올바른 ZIP 파일이 아닙니다.",
+                }
+
+            with zf_probe:
+                infos = zf_probe.infolist()
                 total_uncompressed = sum(int(i.file_size or 0) for i in infos)
                 comp_size = max(1, p.stat().st_size)
 
@@ -1152,153 +2236,228 @@ def smart_extract_archive(archive_path: str, password: Optional[str] = None) -> 
                         "message": "🚨 비정상적인 팽창률(압축 폭탄 의심)이 감지되어 PC 보호를 위해 해제를 차단했습니다.",
                     }
 
-                root_segments = set()
-                decoded_map: List[Tuple[zipfile.ZipInfo, str]] = []
-                for info in infos:
-                    dec_name = _decode_archive_filename(info.filename, info.flag_bits).replace("\\", "/").lstrip("/")
-                    if not dec_name:
-                        continue
-                    first_seg = dec_name.split("/", 1)[0]
-                    root_segments.add(first_seg)
-                    decoded_map.append((info, dec_name))
-
-                if len(root_segments) == 1 and any("/" in dn for _, dn in decoded_map):
-                    target_root = p.parent.resolve()
-                    created_folder = (target_root / list(root_segments)[0]).resolve()
-                else:
-                    base_folder_name = p.stem
-                    created_folder = (p.parent / base_folder_name).resolve()
-                    counter = 1
-                    while created_folder.exists() and any(created_folder.iterdir()):
-                        created_folder = (p.parent / f"{base_folder_name}_{counter}").resolve()
-                        counter += 1
-                    created_folder.mkdir(parents=True, exist_ok=True)
-                    target_root = created_folder
-
-                pwd_bytes = password.encode("utf-8") if password else None
-
-                for info, dec_name in decoded_map:
-                    dest_path = (target_root / dec_name).resolve()
-                    if not str(dest_path).startswith(str(target_root)):
-                        continue
-                    if info.is_dir() or dec_name.endswith("/"):
-                        dest_path.mkdir(parents=True, exist_ok=True)
-                        continue
-                    dest_path.parent.mkdir(parents=True, exist_ok=True)
-                    with zf.open(info, mode="r", pwd=pwd_bytes) as src_f, open(dest_path, "wb") as dst_f:
-                        shutil.copyfileobj(src_f, dst_f, length=1024 * 1024)
-                    extracted_files.append(dest_path.name)
-
-        elif p.suffix.lower() in (".tar", ".gz", ".tgz"):
-            import unicodedata
-
-            base_folder_name = p.stem.replace(".tar", "")
-            created_folder = (p.parent / base_folder_name).resolve()
-            created_folder.mkdir(parents=True, exist_ok=True)
-            with tarfile.open(p, mode="r:*") as tf:
-                for member in tf.getmembers():
-                    dec_name = unicodedata.normalize("NFC", member.name).replace("\\", "/").lstrip("/")
-                    dest_path = (created_folder / dec_name).resolve()
-                    if not str(dest_path).startswith(str(created_folder)):
-                        continue
-                    if member.isdir():
-                        dest_path.mkdir(parents=True, exist_ok=True)
-                    elif member.isfile():
-                        dest_path.parent.mkdir(parents=True, exist_ok=True)
-                        src_f = tf.extractfile(member)
-                        if src_f:
-                            with src_f, open(dest_path, "wb") as dst_f:
-                                shutil.copyfileobj(src_f, dst_f, length=1024 * 1024)
-                            extracted_files.append(dest_path.name)
-                            total_uncompressed += int(member.size or 0)
-        elif p.suffix.lower() in (".7z", ".rar") and sys.platform == "win32":
-            import tempfile
-            import unicodedata
-
-            sys_tar = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "tar.exe"
-            if not sys_tar.exists():
-                return {"ok": False, "error": "SYSTEM_TAR_NOT_AVAILABLE"}
-            tmp_stage = Path(tempfile.mkdtemp(prefix="ghosti_arc_", dir=str(p.parent)))
-            try:
-                r_tar = subprocess.run(
-                    [str(sys_tar), "-xf", str(p), "-C", str(tmp_stage)],
-                    capture_output=True,
-                    text=True,
-                    errors="replace",
-                    timeout=60.0,
-                    creationflags=CREATE_NO_WINDOW,
+                is_encrypted = any(
+                    ((i.flag_bits & 0x1) != 0 or int(i.compress_type) == 99)
+                    for i in infos
+                    if not i.is_dir()
                 )
-                if r_tar.returncode != 0:
-                    err_txt = (r_tar.stderr or r_tar.stdout or "").strip()
-                    shutil.rmtree(tmp_stage, ignore_errors=True)
-                    if "passphrase" in err_txt.lower() or "encrypted" in err_txt.lower() or "password" in err_txt.lower():
+                if is_encrypted and not password:
+                    return {
+                        "ok": False,
+                        "needPassword": True,
+                        "wrongPassword": False,
+                        "message": "🔑 암호가 걸린 압축 파일입니다. 비밀번호를 입력해 주세요.",
+                    }
+
+                comp_types = {int(i.compress_type) for i in infos if not i.is_dir()}
+                uses_aes = 99 in comp_types
+                uses_exotic_method = bool(comp_types - {0, 8, 12, 14, 99})  # 예: 9(Deflate64), 93(Zstd)
+
+            if uses_exotic_method:
+                ext7 = _extract_via_7z(p, password=password)
+                if not ext7.get("ok"):
+                    return ext7
+                created_folder = ext7["createdFolder"]
+                extracted_files = ext7["extractedFiles"]
+                total_uncompressed = ext7["totalBytes"]
+            else:
+                zip_opener: Any = zipfile.ZipFile
+                if uses_aes:
+                    try:
+                        import pyzipper  # type: ignore
+
+                        zip_opener = pyzipper.AESZipFile
+                    except Exception:
+                        ext7 = _extract_via_7z(p, password=password)
+                        if not ext7.get("ok"):
+                            return ext7
+                        created_folder = ext7["createdFolder"]
+                        extracted_files = ext7["extractedFiles"]
+                        total_uncompressed = ext7["totalBytes"]
+                        zip_opener = None
+
+                if zip_opener is not None:
+                    tmp_stage = Path(tempfile.mkdtemp(prefix=".ghosti_zip_", dir=str(p.parent)))
+                    try:
+                        with zip_opener(p, mode="r") as zf:
+                            pwd_candidates: List[Optional[bytes]] = [None]
+                            if password:
+                                pwd_candidates = [password.encode("utf-8")]
+                                try:
+                                    cp_b = password.encode("cp949")
+                                    if cp_b != pwd_candidates[0]:
+                                        pwd_candidates.append(cp_b)
+                                except Exception:
+                                    pass
+
+                            for info in zf.infolist():
+                                dec_raw = _decode_archive_filename(info.filename, info.flag_bits)
+                                if _is_macos_or_os_junk(dec_raw):
+                                    continue
+                                clean_rel, _ = _sanitize_archive_relpath(dec_raw)
+                                if not clean_rel:
+                                    continue
+                                dest_path = (tmp_stage / clean_rel.rstrip("/")).resolve()
+                                if not _is_safe_within_dir(dest_path, tmp_stage):
+                                    continue
+                                if info.is_dir() or clean_rel.endswith("/"):
+                                    dest_path.mkdir(parents=True, exist_ok=True)
+                                    continue
+                                dest_path.parent.mkdir(parents=True, exist_ok=True)
+
+                                last_pwd_err: Optional[Exception] = None
+                                extracted_ok = False
+                                for pb in pwd_candidates:
+                                    try:
+                                        with zf.open(info, mode="r", pwd=pb) as src_f, open(dest_path, "wb") as dst_f:
+                                            shutil.copyfileobj(src_f, dst_f, length=1024 * 1024)
+                                        extracted_ok = True
+                                        break
+                                    except (RuntimeError, zlib.error, zipfile.BadZipFile) as pe:
+                                        last_pwd_err = pe
+                                        try:
+                                            if dest_path.exists():
+                                                dest_path.unlink()
+                                        except Exception:
+                                            pass
+                                if not extracted_ok and last_pwd_err is not None:
+                                    raise last_pwd_err
+
+                        created_folder, extracted_files, total_uncompressed = _finalize_staged_tree_to_folder(
+                            tmp_stage, p.parent, p.stem
+                        )
+                    except (RuntimeError, zlib.error, zipfile.BadZipFile) as e_pwd:
+                        err_s = str(e_pwd).lower()
+                        if is_encrypted or "password" in err_s or "encrypted" in err_s or "bad crc" in err_s or isinstance(e_pwd, zlib.error):
+                            return {
+                                "ok": False,
+                                "needPassword": True,
+                                "wrongPassword": bool(password),
+                                "message": (
+                                    "비밀번호가 일치하지 않습니다. 다시 입력해 주세요."
+                                    if password
+                                    else "🔑 암호가 걸린 압축 파일입니다. 비밀번호를 입력해 주세요."
+                                ),
+                            }
                         return {
                             "ok": False,
-                            "needPassword": True,
-                            "message": "🔑 암호가 걸린 .7z/.rar 압축 파일입니다.",
+                            "error": "CORRUPTED_ZIP_STREAM",
+                            "message": f"압축 해제 중 손상된 데이터가 감지되었습니다 ({e_pwd}).",
                         }
-                    return {"ok": False, "error": err_txt or "TAR_EXTRACT_FAILED"}
+                    finally:
+                        shutil.rmtree(tmp_stage, ignore_errors=True)
 
-                top_items = list(tmp_stage.iterdir())
-                if len(top_items) == 1 and top_items[0].is_dir():
-                    single_dir = top_items[0]
-                    norm_name = unicodedata.normalize("NFC", single_dir.name)
-                    created_folder = (p.parent / norm_name).resolve()
-                    cnt_d = 1
-                    while created_folder.exists() and any(created_folder.iterdir()):
-                        created_folder = (p.parent / f"{norm_name}_{cnt_d}").resolve()
-                        cnt_d += 1
-                    shutil.move(str(single_dir), str(created_folder))
+        # ── B) .tar / .tgz / .tar.gz / .tar.bz2 / .tar.xz 및 단일 파일 .gz / .bz2 / .xz ──
+        elif suffix_low in (".tar", ".gz", ".tgz", ".bz2", ".xz"):
+            is_tar = False
+            try:
+                is_tar = tarfile.is_tarfile(p)
+            except Exception:
+                is_tar = False
+
+            tmp_stage = Path(tempfile.mkdtemp(prefix=".ghosti_tar_", dir=str(p.parent)))
+            try:
+                if is_tar:
+                    base_stem = re.sub(r"\.tar$", "", p.stem, flags=re.IGNORECASE)
+                    with tarfile.open(p, mode="r:*") as tf:
+                        for member in tf.getmembers():
+                            if member.issym() or member.islnk():
+                                continue  # 심볼릭/하드링크 우회 차단
+                            dec_raw = unicodedata.normalize("NFC", member.name)
+                            if _is_macos_or_os_junk(dec_raw):
+                                continue
+                            clean_rel, _ = _sanitize_archive_relpath(dec_raw)
+                            if not clean_rel:
+                                continue
+                            dest_path = (tmp_stage / clean_rel.rstrip("/")).resolve()
+                            if not _is_safe_within_dir(dest_path, tmp_stage):
+                                continue
+                            if member.isdir():
+                                dest_path.mkdir(parents=True, exist_ok=True)
+                            elif member.isfile():
+                                dest_path.parent.mkdir(parents=True, exist_ok=True)
+                                src_f = tf.extractfile(member)
+                                if src_f:
+                                    with src_f, open(dest_path, "wb") as dst_f:
+                                        shutil.copyfileobj(src_f, dst_f, length=1024 * 1024)
+                    created_folder, extracted_files, total_uncompressed = _finalize_staged_tree_to_folder(
+                        tmp_stage, p.parent, base_stem
+                    )
+                elif suffix_low in (".gz", ".bz2", ".xz") and not low_name.endswith(".tgz"):
+                    # 단일 파일 압축 (예: server.log.gz -> server.log 폴더 내 server.log 생성, 실패 시 빈 폴더 0개!)
+                    import bz2
+                    import gzip
+                    import lzma
+
+                    inner_name = _sanitize_single_segment(p.stem) or "decompressed_file"
+                    folder_stem = Path(inner_name).stem or inner_name
+                    opener_map = {".gz": gzip.open, ".bz2": bz2.open, ".xz": lzma.open}
+                    out_file = tmp_stage / inner_name
+                    with opener_map[suffix_low](p, "rb") as sf, open(out_file, "wb") as df:
+                        shutil.copyfileobj(sf, df, length=1024 * 1024)
+                    created_folder, extracted_files, total_uncompressed = _finalize_staged_tree_to_folder(
+                        tmp_stage, p.parent, folder_stem
+                    )
                 else:
-                    base_folder_name = unicodedata.normalize("NFC", p.stem)
-                    created_folder = (p.parent / base_folder_name).resolve()
-                    cnt_d = 1
-                    while created_folder.exists() and any(created_folder.iterdir()):
-                        created_folder = (p.parent / f"{base_folder_name}_{cnt_d}").resolve()
-                        cnt_d += 1
-                    created_folder.mkdir(parents=True, exist_ok=True)
-                    for ti in top_items:
-                        shutil.move(str(ti), str(created_folder / unicodedata.normalize("NFC", ti.name)))
+                    return {
+                        "ok": False,
+                        "error": "CORRUPTED_TAR",
+                        "message": f"'{p.name}' 파일이 손상되었거나 올바른 압축 형식이 아닙니다.",
+                    }
+            except Exception as e_tar:
+                return {
+                    "ok": False,
+                    "error": "TAR_GZIP_EXTRACT_FAILED",
+                    "message": f"'{p.name}' 압축을 푸는 중 오류가 발생했습니다 ({e_tar}).",
+                }
             finally:
                 shutil.rmtree(tmp_stage, ignore_errors=True)
 
-            for root_w, _, files_w in os.walk(created_folder):
-                for fw in files_w:
-                    fp_w = Path(root_w) / fw
-                    norm_fw = unicodedata.normalize("NFC", fw)
-                    if norm_fw != fw:
-                        try:
-                            fp_norm = fp_w.with_name(norm_fw)
-                            fp_w.rename(fp_norm)
-                            fp_w = fp_norm
-                        except Exception:
-                            pass
-                    extracted_files.append(fp_w.name)
-                    try:
-                        total_uncompressed += fp_w.stat().st_size
-                    except Exception:
-                        pass
-        else:
-            return {"ok": False, "error": "UNSUPPORTED_ARCHIVE_FORMAT"}
+        # ── C) .7z / .rar (암호 압축 + 헤더 암호화 + RAR5 완벽 지원) ──
+        elif suffix_low in (".7z", ".rar"):
+            ext7 = _extract_via_7z(p, password=password)
+            if not ext7.get("ok"):
+                return ext7
+            created_folder = ext7["createdFolder"]
+            extracted_files = ext7["extractedFiles"]
+            total_uncompressed = ext7["totalBytes"]
 
-    except RuntimeError as e:
-        if "password" in str(e).lower() or "encrypted" in str(e).lower():
+        else:
             return {
                 "ok": False,
-                "needPassword": True,
-                "message": "🔑 비밀번호가 걸린 압축 파일입니다. 미니창에 암호를 입력해 주세요.",
+                "error": "UNSUPPORTED_ARCHIVE_FORMAT",
+                "message": f"지원하지 않는 압축 형식입니다 ({p.suffix}).",
             }
-        return {"ok": False, "error": str(e)}
-    except Exception as e:
-        return {"ok": False, "error": str(e)}
 
+    except Exception as e:
+        return {
+            "ok": False,
+            "error": str(e),
+            "message": f"압축 해제 중 오류가 발생했습니다: {e}",
+        }
+    finally:
+        if mutex_handle and sys.platform == "win32":
+            try:
+                ctypes.windll.kernel32.ReleaseMutex(mutex_handle)
+                ctypes.windll.kernel32.CloseHandle(mutex_handle)
+            except Exception:
+                pass
+
+    assert created_folder is not None
     index_res = index_extracted_files_immediately(str(created_folder), extracted_files)
-    scan_res = scan_file_with_defender_amsi(str(p), source="smart_unzip")
+    scan_res = _scan_extracted_folder_executables(created_folder, fallback_archive=p)
 
     total_mb = round(total_uncompressed / (1024 * 1024), 2)
     preview_names = ", ".join(extracted_files[:3])
     if len(extracted_files) > 3:
         preview_names += f" 외 {len(extracted_files) - 3}건"
+
+    is_clean = scan_res.get("status") != "THREAT_DETECTED"
+    guard_line = (
+        f"🛡️ Windows 기본 보안 무소음 검문 완료 ({total_mb}MB · 풀린 문서 즉시 검색 준비 완료)"
+        if is_clean
+        else f"🚨 주의: 풀린 파일({', '.join(scan_res.get('threatFiles') or [])})에서 위험 요소가 감지되었습니다! 실행하지 마세요."
+    )
 
     return {
         "ok": True,
@@ -1310,13 +2469,13 @@ def smart_extract_archive(archive_path: str, password: Optional[str] = None) -> 
         "defenderCheck": scan_res,
         "inlineBridge": {
             "summaryLines": [
-                f"✅ 한글 깨짐·바탕화면 폭탄 없이 '{created_folder.name}' 폴더에 {len(extracted_files)}개 파일을 풀었어요!",
+                f"✅ 한글 깨짐·바탕화면 폭탄 없이 '{created_folder.name}' 폴더에 {len(extracted_files)}개 파일을 1초 만에 풀었어요!",
                 f"📄 포함 파일: {preview_names or '폴더 구조'}",
-                f"🛡️ 윈도우 디펜더 무소음 안전 검문 통과 ({total_mb}MB · 풀린 문서 즉시 검색 준비 완료)",
+                guard_line,
             ],
             "primaryCta": {
                 "action": "search_extracted_docs",
-                "label": f"🔍 방금 푼 문서 {len(extracted_files)}개 안의 내용 0.1초 검색",
+                "label": f"🔍 방금 푼 문서 {len(extracted_files)}개 안의 내용 1초 검색",
                 "targetFolder": str(created_folder),
             },
             "secondaryCta": {
@@ -1332,53 +2491,227 @@ def smart_extract_archive(archive_path: str, password: Optional[str] = None) -> 
     }
 
 
-def smart_create_zip(target_path: str) -> Dict[str, Any]:
+def _read_file_bytes_shared_win32(file_path: Path) -> Optional[Path]:
+    """엑셀 등에서 열려 잠긴 파일도 FILE_SHARE_READ|WRITE|DELETE로 임시 사본을 떠서 압축 실패를 막습니다."""
+    if sys.platform != "win32":
+        return None
+    GENERIC_READ = 0x80000000
+    FILE_SHARE_ALL = 0x00000001 | 0x00000002 | 0x00000004
+    OPEN_EXISTING = 3
+    INVALID_HANDLE_VALUE = ctypes.c_void_p(-1).value
+    k32 = ctypes.windll.kernel32
+    handle = k32.CreateFileW(str(file_path), GENERIC_READ, FILE_SHARE_ALL, None, OPEN_EXISTING, 0, None)
+    if not handle or handle == INVALID_HANDLE_VALUE:
+        return None
+    tmp_fd, tmp_name = tempfile.mkstemp(prefix=".ghosti_shared_")
+    os.close(tmp_fd)
+    tmp_p = Path(tmp_name)
+    try:
+        buf = ctypes.create_string_buffer(262144)
+        bytes_read = wintypes.DWORD(0)
+        with open(tmp_p, "wb") as out_f:
+            while k32.ReadFile(handle, buf, 262144, ctypes.byref(bytes_read), None) and bytes_read.value > 0:
+                out_f.write(buf.raw[: bytes_read.value])
+        return tmp_p
+    except Exception:
+        tmp_p.unlink(missing_ok=True)
+        return None
+    finally:
+        k32.CloseHandle(handle)
+
+
+def _write_path_into_zip(zf: Any, full_f: Path, arcname: str) -> None:
+    try:
+        zf.write(full_f, arcname=arcname)
+    except PermissionError:
+        shared_copy = _read_file_bytes_shared_win32(full_f)
+        if shared_copy is not None:
+            try:
+                zf.write(shared_copy, arcname=arcname)
+                return
+            finally:
+                shared_copy.unlink(missing_ok=True)
+        raise
+
+
+def smart_create_zip(target_path: str | List[str]) -> Dict[str, Any]:
     """
-    일반 파일·폴더 우클릭 `👻 귀신같이로 ZIP 압축 묶기` 실행 시
-    Windows 표준 UTF-8 NFC 정규화 파일명으로 맥(macOS)·윈도우 양쪽에서 절대 깨지지 않는 깔끔한 .zip 생성
+    일반 파일·폴더 우클릭 `👻 귀신같이로 ZIP 압축 묶기`:
+    - 다중 선택(2개 이상) 시 온보딩 시연과 100% 동일한 `YYMMDD_대표파일_외N건.zip` 1개로 묶습니다!
+    - 임시 파일(.tmp)에 먼저 완성한 뒤 원자적으로 이름을 바꾸어 실패 시 깨진 zip이 절대 남지 않습니다.
+    - 엑셀 등에 열려 있는 파일도 공유 읽기(FILE_SHARE_READ|WRITE)로 안전하게 담아냅니다.
     """
-    import unicodedata  # Lazy-Import
     import zipfile
 
-    src = Path(target_path).resolve()
-    if not src.exists():
-        return {"ok": False, "error": "SOURCE_NOT_FOUND"}
+    raw_list = [target_path] if isinstance(target_path, str) else list(target_path or [])
+    sources: List[Path] = []
+    seen_src = set()
+    for item in raw_list:
+        if not item or not str(item).strip():
+            continue
+        rp = Path(str(item)).resolve()
+        if rp.exists() and str(rp).lower() not in seen_src:
+            seen_src.add(str(rp).lower())
+            sources.append(rp)
 
-    out_zip = src.parent / f"{src.stem if src.is_file() else src.name}.zip"
+    if not sources:
+        return {"ok": False, "error": "SOURCE_NOT_FOUND", "message": "압축할 원본 파일을 찾지 못했습니다."}
+
+    parent_dir = sources[0].parent
+    first_src = sources[0]
+    first_label = _sanitize_single_segment(first_src.stem if first_src.is_file() else first_src.name)
+
+    if len(sources) >= 2:
+        yymmdd = datetime.datetime.now().strftime("%y%m%d")
+        base_zip_stem = f"{yymmdd}_{first_label}_외{len(sources) - 1}건"
+    else:
+        base_zip_stem = first_label
+
+    out_zip = parent_dir / f"{base_zip_stem}.zip"
     counter = 1
     while out_zip.exists():
-        out_zip = src.parent / f"{src.stem if src.is_file() else src.name}_{counter}.zip"
+        out_zip = parent_dir / f"{base_zip_stem}_{counter}.zip"
         counter += 1
 
+    tmp_zip = parent_dir / f".ghosti_mkzip_{uuid.uuid4().hex[:8]}.zip.tmp"
     added_count = 0
     try:
-        with zipfile.ZipFile(out_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
-            if src.is_file():
-                arcname = unicodedata.normalize("NFC", src.name)
-                zf.write(src, arcname=arcname)
-                added_count = 1
-            else:
-                for root, _, files in os.walk(src):
-                    for f in files:
-                        full_f = Path(root) / f
-                        rel = full_f.relative_to(src.parent)
-                        arcname = unicodedata.normalize("NFC", str(rel).replace("\\", "/"))
-                        zf.write(full_f, arcname=arcname)
-                        added_count += 1
+        with zipfile.ZipFile(tmp_zip, mode="w", compression=zipfile.ZIP_DEFLATED) as zf:
+            used_arcnames: set[str] = set()
+            for src in sources:
+                if src.is_file():
+                    arcname = unicodedata.normalize("NFC", src.name)
+                    if arcname.lower() in used_arcnames:
+                        arcname = f"{src.stem}_{added_count + 1}{src.suffix}"
+                    used_arcnames.add(arcname.lower())
+                    _write_path_into_zip(zf, src, arcname=arcname)
+                    added_count += 1
+                else:
+                    wrote_any_in_dir = False
+                    for root, dirs, files in os.walk(src):
+                        for f in files:
+                            full_f = Path(root) / f
+                            if full_f.resolve() == tmp_zip.resolve():
+                                continue
+                            rel = full_f.relative_to(src.parent)
+                            arcname = unicodedata.normalize("NFC", str(rel).replace("\\", "/"))
+                            _write_path_into_zip(zf, full_f, arcname=arcname)
+                            added_count += 1
+                            wrote_any_in_dir = True
+                        if not files and not dirs and not wrote_any_in_dir:
+                            rel_dir = Path(root).relative_to(src.parent)
+                            zinfo_dir = zipfile.ZipInfo(unicodedata.normalize("NFC", str(rel_dir).replace("\\", "/")) + "/")
+                            zf.writestr(zinfo_dir, b"")
+                            wrote_any_in_dir = True
+        os.replace(tmp_zip, out_zip)
     except Exception as e:
-        return {"ok": False, "error": str(e)}
+        tmp_zip.unlink(missing_ok=True)
+        return {
+            "ok": False,
+            "error": str(e),
+            "message": f"ZIP 압축 생성 중 오류가 발생했습니다: {e}",
+        }
 
     return {
         "ok": True,
         "zipPath": str(out_zip),
         "zipName": out_zip.name,
+        "sourceCount": len(sources),
         "addedCount": added_count,
-        "toastMessage": f"🗜️ '{out_zip.name}' ({added_count}개 항목) 압축 묶기 완료! (맥·윈도우 한글 호환 100%)",
+        "toastMessage": f"🗜️ '{out_zip.name}' ({added_count}개 파일) 압축 묶기 완료! (맥·윈도우 한글 호환 100%)",
     }
 
 
+def _cli_smart_zip_coalesced(arg_path: str) -> Optional[Dict[str, Any]]:
+    """
+    탐색기에서 여러 파일을 드래그 선택해 우클릭 'ZIP 압축 묶기'를 누르면 Windows가 파일마다 프로세스를 띄웁니다.
+    짧은 Named Mutex + 배치 큐로 동시 호출들을 1개의 리더 프로세스로 모아 단 1개의 통합 ZIP(`YYMMDD_대표_외N건.zip`)으로 생성합니다!
+    """
+    if sys.platform != "win32":
+        return smart_create_zip(arg_path)
+
+    src = Path(arg_path).resolve()
+    if not src.exists():
+        return {"ok": False, "error": "SOURCE_NOT_FOUND"}
+
+    _ensure_care_dir()
+    dir_hash = hashlib.sha1(str(src.parent).lower().encode("utf-8")).hexdigest()[:14]
+    batch_file = CARE_DIR / f"smart_zip_batch_{dir_hash}.jsonl"
+    k32 = ctypes.windll.kernel32
+
+    stage_mutex = k32.CreateMutexW(None, False, f"Local\\Ghosti_ZipStage_{dir_hash}")
+    try:
+        if stage_mutex:
+            k32.WaitForSingleObject(stage_mutex, 2000)
+        with open(batch_file, "a", encoding="utf-8") as bf:
+            bf.write(json.dumps({"path": str(src), "ts": time.time()}, ensure_ascii=False) + "\n")
+    finally:
+        if stage_mutex:
+            k32.ReleaseMutex(stage_mutex)
+            k32.CloseHandle(stage_mutex)
+
+    leader_mutex = k32.CreateMutexW(None, False, f"Local\\Ghosti_ZipLeader_{dir_hash}")
+    if leader_mutex:
+        rc = k32.WaitForSingleObject(leader_mutex, 0)
+        if rc not in (0x00000000, 0x00000080):
+            k32.CloseHandle(leader_mutex)
+            return None  # 팔로워 프로세스는 경로만 등록하고 조용히 종료
+
+    try:
+        # 동시 실행된 팔로워 프로세스들이 모두 기록할 때까지 짧게 대기 (최대 1.0초, 220ms 안정화 시 즉시 진행)
+        last_size = -1
+        stable_ticks = 0
+        for _ in range(15):
+            time.sleep(0.075)
+            cur_size = batch_file.stat().st_size if batch_file.exists() else 0
+            if cur_size == last_size:
+                stable_ticks += 1
+                if stable_ticks >= 3:
+                    break
+            else:
+                last_size = cur_size
+                stable_ticks = 0
+
+        collected: List[str] = []
+        if stage_mutex := k32.CreateMutexW(None, False, f"Local\\Ghosti_ZipStage_{dir_hash}"):
+            k32.WaitForSingleObject(stage_mutex, 2000)
+            try:
+                if batch_file.exists():
+                    now_t = time.time()
+                    for line in batch_file.read_text(encoding="utf-8", errors="ignore").splitlines():
+                        try:
+                            row = json.loads(line)
+                            if (now_t - float(row.get("ts") or 0)) <= 10.0 and row.get("path"):
+                                collected.append(str(row["path"]))
+                        except Exception:
+                            continue
+                    batch_file.unlink(missing_ok=True)
+            finally:
+                k32.ReleaseMutex(stage_mutex)
+                k32.CloseHandle(stage_mutex)
+
+        # 만약 Windows가 대표 1개만 전달했는데 탐색기에 같은 폴더 다중 선택이 잡혀 있으면 함께 병합
+        if len(collected) == 1:
+            try:
+                sel = get_explorer_selected_paths_non_destructive()
+                same_dir_sel = [
+                    sp for sp in sel
+                    if Path(sp).resolve().parent == src.parent
+                ]
+                if len(same_dir_sel) > 1 and any(Path(sp).resolve() == src for sp in same_dir_sel):
+                    collected = [str(src)] + [sp for sp in same_dir_sel if Path(sp).resolve() != src]
+            except Exception:
+                pass
+
+        return smart_create_zip(collected or [str(src)])
+    finally:
+        if leader_mutex:
+            k32.ReleaseMutex(leader_mutex)
+            k32.CloseHandle(leader_mutex)
+
+
 # ============================================================================
-# 4. [모듈 C] 윈도우 디펜더(amsi.dll In-Memory + Event ID 1116/1117) 무소음 수호 히스토리
+# 4. [모듈 C] Windows 기본 보안(amsi.dll In-Memory + Event ID 1116/1117 30일 필터) 무소음 수호
 # ============================================================================
 def _init_guardian_db() -> None:
     _ensure_care_dir()
@@ -1392,7 +2725,7 @@ def _init_guardian_db() -> None:
                 file_path TEXT NOT NULL,
                 file_size_bytes INTEGER DEFAULT 0,
                 source TEXT DEFAULT 'download',
-                engine TEXT DEFAULT 'Windows Defender AMSI',
+                engine TEXT DEFAULT 'Windows 기본 보안 (AMSI)',
                 result_code INTEGER DEFAULT 0,
                 status TEXT DEFAULT 'CLEAN'
             )
@@ -1403,9 +2736,8 @@ def _init_guardian_db() -> None:
 
 def scan_file_with_defender_amsi(file_path: str, source: str = "download") -> Dict[str, Any]:
     """
-    [모듈 C & 방어 8·21] 자체 백신 데몬 0MB!
-    50MB 이하 파일은 ctypes.windll.amsi In-Memory 0.01초 검문,
-    정상 판정(CLEAN) 시 알림 팝업 0회로 로컬 SQLite 수호 장부(defender_guardian_history.db)에만 조용히 기록.
+    자체 무거운 백신 데몬 0MB! Windows 기본 보안 인터페이스(amsi.dll)를 통해 현재 활성화된 백신(Defender 등)으로
+    0.01초 검문하고, 정상 판정(CLEAN) 시 알림 팝업 0회로 로컬 수호 장부에만 조용히 기록합니다.
     """
     _init_guardian_db()
     p = Path(file_path)
@@ -1418,7 +2750,7 @@ def scan_file_with_defender_amsi(file_path: str, source: str = "download") -> Di
     fsize = p.stat().st_size
     status = "CLEAN"
     result_code = 0
-    engine_used = "Windows Defender (AMSI In-Memory)"
+    engine_used = "Windows 기본 보안 (AMSI 실시간 검문)"
 
     if sys.platform == "win32" and fsize <= 50 * 1024 * 1024:
         try:
@@ -1445,9 +2777,9 @@ def scan_file_with_defender_amsi(file_path: str, source: str = "download") -> Di
                 finally:
                     amsi.AmsiUninitialize(amsi_ctx)
         except Exception:
-            engine_used = "Windows Defender Operational Log"
+            engine_used = "Windows 보안 이벤트 확인"
     else:
-        engine_used = "Windows Defender Operational Log (Zero-Overhead)"
+        engine_used = "Windows 보안 대용량 위임 (무부하)"
 
     now_iso = datetime.datetime.now().isoformat()
     try:
@@ -1472,7 +2804,7 @@ def scan_file_with_defender_amsi(file_path: str, source: str = "download") -> Di
         "engine": engine_used,
         "alertPopupShown": status != "CLEAN",
         "alertMessage": (
-            f"🚨 방금 확인한 '{p.name}'에서 위협 요소가 감지되어 격리 안내를 띄웠습니다!"
+            f"🚨 방금 확인한 '{p.name}'에서 위험 요소가 감지되었습니다! 파일을 열지 마시고 바로 휴지통으로 지워주세요."
             if status != "CLEAN"
             else ""
         ),
@@ -1480,9 +2812,10 @@ def scan_file_with_defender_amsi(file_path: str, source: str = "download") -> Di
 
 
 def get_defender_guardian_history(days: int = 30, limit: int = 30) -> Dict[str, Any]:
-    """[모듈 C] [🛡️ 안심 수호 히스토리 (최근 30일 N건 무소음 통과)] 대시보드 카드 및 타임라인 조회"""
+    """[모듈 C] 최근 N일 안심 수호 히스토리 조회 (Defender Event ID 1116/1117 동일 기간 필터 적용)"""
     _init_guardian_db()
-    cutoff = (datetime.datetime.now() - datetime.timedelta(days=days)).isoformat()
+    safe_days = max(1, min(int(days or 30), 365))
+    cutoff = (datetime.datetime.now() - datetime.timedelta(days=safe_days)).isoformat()
     items: List[Dict[str, Any]] = []
     total_clean_count = 0
     threat_count = 0
@@ -1508,9 +2841,10 @@ def get_defender_guardian_history(days: int = 30, limit: int = 30) -> Dict[str, 
                 """
                 SELECT scanned_at, file_name, file_size_bytes, source, engine, status
                 FROM guardian_history
+                WHERE scanned_at >= ?
                 ORDER BY id DESC LIMIT ?
                 """,
-                (limit,),
+                (cutoff, limit),
             )
             for r in cur.fetchall():
                 items.append({
@@ -1524,14 +2858,15 @@ def get_defender_guardian_history(days: int = 30, limit: int = 30) -> Dict[str, 
     except Exception:
         pass
 
-    # Windows Defender Operational Event Log (Event ID 1116/1117 위협 탐지 이력) 보조 확인
+    # Windows Defender Operational Event Log — 반드시 최근 safe_days 기간(StartTime)으로 한정!
     defender_event_threats = 0
     if sys.platform == "win32":
         try:
             ps_evt = (
                 "try { "
-                "$evts = Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Windows Defender/Operational'; Id=1116,1117} "
-                "-MaxEvents 10 -ErrorAction Stop; "
+                f"$st = (Get-Date).AddDays(-{safe_days}); "
+                "$evts = Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Windows Defender/Operational'; Id=1116,1117; StartTime=$st} "
+                "-MaxEvents 20 -ErrorAction Stop; "
                 "@($evts).Count "
                 "} catch { 0 }"
             )
@@ -1539,7 +2874,7 @@ def get_defender_guardian_history(days: int = 30, limit: int = 30) -> Dict[str, 
                 ["powershell", "-NoProfile", "-Command", ps_evt],
                 capture_output=True,
                 text=True,
-                timeout=2.0,
+                timeout=2.5,
                 creationflags=CREATE_NO_WINDOW,
             )
             defender_event_threats = int((r_ev.stdout or "0").strip() or "0")
@@ -1549,8 +2884,8 @@ def get_defender_guardian_history(days: int = 30, limit: int = 30) -> Dict[str, 
     dl_archives = _count_downloads_archive_files()
     return {
         "ok": True,
-        "cardTitle": f"🛡️ 다운로드·문서 조용한 안전 검사 (최근 {days}일 {total_clean_count}건 확인)",
-        "days": days,
+        "cardTitle": f"🛡️ 다운로드·문서 조용한 안전 검사 (최근 {safe_days}일 {total_clean_count}건 확인)",
+        "days": safe_days,
         "silentPassCount": total_clean_count,
         "threatBlockedCount": max(threat_count, defender_event_threats),
         "defenderOperationalThreats": defender_event_threats,
@@ -1559,19 +2894,15 @@ def get_defender_guardian_history(days: int = 30, limit: int = 30) -> Dict[str, 
         "downloadsArchiveSamples": dl_archives["samples"],
         "downloadsArchiveLatestFile": dl_archives["latestFileName"],
         "recentItems": items,
-        "zeroBloatNote": "자체 무거운 백신 상주 0MB · Windows 내장 보안 엔진 직결 무소음 보호로 평시 CPU 0.0% 유지",
+        "zeroBloatNote": "자체 무거운 백신 상주 0MB · Windows 기본 보안 엔진 직결 무소음 보호로 평시 CPU 0.0% 유지",
         "privacyBadge": PLUGIN_METADATA["privacyBadge"],
     }
 
 
 # ============================================================================
-# 4-B. [모듈 D] 어도비(Adobe)급 좀비 프로그램 4단계 심층 앱 적출 (Deep Uninstaller)
-#    - 1단계(Scan): 레지스트리(HKLM/HKCU Uninstall + WOW6432Node) + 상주 프로세스 + 서비스 + 작업 스케줄러 + 시작프로그램 + 잔여 폴더 용량 실측
-#    - 2단계(Quarantine Snapshot): 적출 실행 직전 %LOCALAPPDATA%\Ghosti\quarantine\uninstall_<app>_<timestamp>.json 스냅샷 백업
-#    - 3단계(Kill & Uninstall): 상주 프로세스(taskkill /F) 및 좀비 서비스 선행 제압 + 공식 언인스톨러 호출
-#    - 4단계(Deep Sweep): 부활형 작업 스케줄러·시작프로그램 Run 레지스트리·잔여 캐시 폴더 영구 소탕 및 확보 용량 브리핑
+# 4-B. [모듈 D] 심층 앱 적출 (Deep Uninstaller) — 휴지통 직행 · 사용자 데이터 보호 · 정직 보고
 # ============================================================================
-QUARANTINE_SNAPSHOT_DIR = LOCAL_APPDATA / "Ghosti" / "quarantine"
+AUDIT_LOG_DIR = CARE_DIR / "uninstall_logs"
 
 DEEP_UNINSTALL_SYNONYM_MAP: Dict[str, Dict[str, Any]] = {
     "adobe": {
@@ -1649,9 +2980,16 @@ NEVER_UNINSTALL_PROTECTED_KEYWORDS = {
     "nvidia", "amd ", "intel(", "realtek",
 }
 
+# 메신저 대화 기록·브라우저 북마크·노트 등 소중한 개인 데이터가 담긴 폴더는 잔여 폴더 정리 대상에서 영구 보호!
+USER_PERSONAL_DATA_FOLDER_PROTECTED = {
+    "kakao", "kakaotalk", "line", "telegram desktop", "wechat", "discord", "slack",
+    "google", "chrome", "microsoft", "edge", "naver", "whale", "mozilla", "firefox", "bravesoftware",
+    "obsidian", "notion", "evernote", "1password", "bitwarden",
+}
+
 
 def _extract_target_app_profile(raw_query: str) -> Tuple[str, List[str], str]:
-    """자연어 발화에서 적출 대상 앱 이름과 매칭 키워드 리스트를 추출합니다."""
+    """자연어 발화에서 적출 대상 앱 이름을 추출합니다. 대상이 불분명하면 절대 임의 앱(어도비 등)으로 추정하지 않고 빈 목록을 반환합니다."""
     q = (raw_query or "").strip()
     q_low = q.lower()
     for trig, info in DEEP_UNINSTALL_SYNONYM_MAP.items():
@@ -1659,18 +2997,24 @@ def _extract_target_app_profile(raw_query: str) -> Tuple[str, List[str], str]:
             return info["label"], list(info["keywords"]), trig
 
     cleaned = q
-    for noise in (
-        "귀신비서", "프로그램", "어플", "앱", "소프트웨어", "흔적까지", "뿌리째", "싹 다", "싹다",
-        "깨끗하게", "완전히", "완전", "강제로", "강제", "심층", "적출", "언인스톨", "삭제해줘", "삭제해",
-        "지워줘", "지워", "뽑아줘", "뽑아", "없애줘", "없애", "제거해줘", "제거해", "안 지워지는", "안지워지는",
-        "안 꺼지는", "안꺼지는", "해줘", "해주세요", "좀", "에서", "내 컴퓨터", "피씨", "pc",
-    ):
-        cleaned = cleaned.replace(noise, " ")
+    noise_phrases = sorted(
+        (
+            "안 지워지는", "안지워지는", "안 꺼지는", "안꺼지는", "안 쓰는", "안쓰는", "불필요한", "이상한", "좀비",
+            "귀신비서", "내 컴퓨터에서", "내 컴퓨터", "컴퓨터에서", "컴퓨터", "노트북", "피씨", "pc",
+            "프로그램", "어플리케이션", "어플", "소프트웨어", "앱",
+            "흔적까지", "뿌리째", "싹 다", "싹다", "깨끗하게", "깨끗이", "완전히", "완전", "강제로", "강제", "심층", "적출",
+            "언인스톨해줘", "언인스톨", "uninstall", "삭제해줘", "삭제해", "삭제", "제거해줘", "제거해", "제거",
+            "지워줘", "지워", "뽑아줘", "뽑아", "없애줘", "없애", "치워줘", "치워",
+            "해줘", "해주세요", "좀", "에서", "다", "그냥",
+        ),
+        key=len,
+        reverse=True,
+    )
+    for noise in noise_phrases:
+        cleaned = re.sub(re.escape(noise), " ", cleaned, flags=re.IGNORECASE)
     cleaned = " ".join(cleaned.split()).strip(" '\"?!.~,")
     if not cleaned or len(cleaned) < 2:
-        # 기본값: 어도비 또는 미사용 상주 프로그램
-        info = DEEP_UNINSTALL_SYNONYM_MAP["어도비"]
-        return info["label"], list(info["keywords"]), "adobe"
+        return "", [], ""
 
     slug = "".join(ch for ch in cleaned.lower() if ch.isalnum()) or "target_app"
     return f"{cleaned} 관련 상주 프로그램·잔여 흔적", [cleaned.lower()], slug
@@ -1681,8 +3025,15 @@ def _is_protected_system_entity(text: str) -> bool:
     return any(pk in t_low for pk in NEVER_UNINSTALL_PROTECTED_KEYWORDS)
 
 
+def _is_protected_personal_data_dir(folder_name: str, full_path_str: str) -> bool:
+    fn_low = (folder_name or "").strip().lower()
+    p_low = (full_path_str or "").lower()
+    if any(u == fn_low or f"\\{u}\\" in (p_low + "\\") for u in USER_PERSONAL_DATA_FOLDER_PROTECTED):
+        return True
+    return False
+
+
 def _calc_dir_size_fast(folder: Path, max_files: int = 800) -> int:
-    """폴더 스캔 루프 내 동기 AI 추론 0% 철칙 준수 — 순수 os.scandir로 최대 800개 파일까지만 0.1초 내 고속 합산"""
     total = 0
     counted = 0
     stack = [folder]
@@ -1709,13 +3060,38 @@ def _calc_dir_size_fast(folder: Path, max_files: int = 800) -> int:
 
 
 def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
-    """
-    [1단계: 레지스트리 & 상주 프로세스·서비스·스케줄러·잔여 폴더 정밀 탐색]
-    """
+    """[1단계: 레지스트리 & 상주 프로세스·서비스·스케줄러·잔여 폴더 정밀 탐색]"""
     _ensure_care_dir()
     target_label, keywords, slug = _extract_target_app_profile(app_query)
-    kw_lows = [k.lower() for k in keywords if k]
+    if not keywords:
+        clarify_ko = (
+            "👻 어떤 프로그램을 정리해 드릴까요?\n"
+            "**\"어도비 지워줘\"**, **\"알약 삭제해줘\"**, **\"줌 깨끗하게 제거해줘\"**처럼 정리할 프로그램 이름을 함께 말씀해 주세요!"
+        )
+        return {
+            "ok": True,
+            "needsClarification": True,
+            "targetAppQuery": app_query,
+            "targetAppLabel": "정리할 프로그램 이름 확인 필요",
+            "targetSlug": "",
+            "matchedKeywords": [],
+            "foundAny": False,
+            "installedEntries": [],
+            "runningProcesses": [],
+            "services": [],
+            "scheduledTasks": [],
+            "startupEntries": [],
+            "residualFolders": [],
+            "runningProcessCount": 0,
+            "serviceAndTaskCount": 0,
+            "totalResidualBytes": 0,
+            "totalResidualMb": 0.0,
+            "estimatedRamMb": 0.0,
+            "summaryBadge": "삭제 대상 프로그램 이름을 알려주세요",
+            "honestBriefingKo": clarify_ko,
+        }
 
+    kw_lows = [k.lower() for k in keywords if k]
     installed_entries: List[Dict[str, Any]] = []
     running_processes: List[Dict[str, Any]] = []
     matched_services: List[Dict[str, Any]] = []
@@ -1726,7 +3102,6 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
     if sys.platform == "win32":
         import winreg
 
-        # 1) Uninstall 레지스트리 스캔 (HKLM 64/32 + HKCU)
         uninstall_roots = [
             (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall", "HKLM"),
             (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall", "HKLM_WOW64"),
@@ -1773,7 +3148,6 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
             except Exception:
                 continue
 
-        # 2) 시작프로그램(Run) 레지스트리 스캔
         run_roots = [
             (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", "HKCU"),
             (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Run", "HKLM"),
@@ -1799,7 +3173,6 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
             except Exception:
                 continue
 
-        # 3) 실행 중인 상주 프로세스 스캔 (psutil 미설치 환경에서도 100% 작동)
         my_pid = os.getpid()
         for pinfo in _iter_windows_processes_stdlib():
             try:
@@ -1821,7 +3194,6 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
             except Exception:
                 continue
 
-        # 4) Windows Services 스캔 (sc query state= all)
         try:
             proc_sc = subprocess.run(
                 ["sc", "query", "state=", "all"],
@@ -1853,7 +3225,6 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
         except Exception:
             pass
 
-        # 5) 작업 스케줄러(schtasks) 부활 트리거 스캔
         try:
             proc_sch = subprocess.run(
                 ["schtasks", "/query", "/fo", "CSV", "/nh"],
@@ -1880,7 +3251,6 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
         except Exception:
             pass
 
-        # 6) 잔여 폴더(Program Files, ProgramData, AppData\Local, AppData\Roaming) 탐색 및 용량 산출
         candidate_roots = [
             Path(os.environ.get("ProgramFiles", r"C:\Program Files")),
             Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")),
@@ -1902,9 +3272,11 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
                         dname_low = entry.name.lower()
                         if _is_protected_system_entity(dname_low):
                             continue
+                        full_p = Path(entry.path).resolve()
+                        p_str = str(full_p)
+                        if _is_protected_personal_data_dir(entry.name, p_str):
+                            continue
                         if any(k in dname_low for k in kw_lows):
-                            full_p = Path(entry.path).resolve()
-                            p_str = str(full_p)
                             if p_str.lower() not in seen_dirs:
                                 seen_dirs.add(p_str.lower())
                                 sz = _calc_dir_size_fast(full_p)
@@ -1930,17 +3302,17 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
 
     if found_any:
         briefing_ko = (
-            f"🧹 **[{target_label} — 4단계 심층 적출(Deep Uninstaller) 사전 검진 완료]**\n"
+            f"🧹 **[{target_label} — 심층 제거 사전 검진 완료]**\n"
             f"• **발견된 상주 프로세스**: **{len(running_processes)}개** (점유 메모리 약 {estimated_ram_mb}MB)\n"
             f"• **부활형 서비스·스케줄러·시작프로그램**: **{svc_and_task_count}개** "
             f"(서비스 {len(matched_services)} · 스케줄러 {len(scheduled_tasks)} · 시작Run {len(startup_entries)})\n"
-            f"• **설치 엔트리 및 잔여 폴더**: 설치 항목 **{len(installed_entries)}건** · 잔여 폴더 **{len(residual_folders)}곳 ({total_residual_mb}MB)**\n\n"
-            f"임의로 삭제하지 않습니다. 아래 **[🔥 흔적까지 100% 심층 적출 실행]** 버튼을 누르시거나 채팅창에 **\"응 진행해\"**라고 입력하시면, "
-            f"복원 스냅샷을 먼저 백업한 뒤 상주 프로세스 강제 종료 ➔ 언인스톨 ➔ 부활 스케줄러·잔여 캐시 폴더까지 한 번에 뿌리째 뽑아드립니다!"
+            f"• **설치 엔트리 및 잔여 캐시 폴더**: 설치 항목 **{len(installed_entries)}건** · 잔여 폴더 **{len(residual_folders)}곳 ({total_residual_mb}MB)**\n\n"
+            f"마음대로 영구 삭제하지 않습니다! 아래 버튼을 누르시거나 채팅창에 **\"응 진행해\"**라고 입력하시면, "
+            f"공식 언인스톨러 실행 후 남은 잔여 캐시 폴더는 **평소 쓰시는 Windows [휴지통]으로 안전하게 이동**시켜 언제든 휴지통에서 되살리실 수 있습니다."
         )
     else:
         briefing_ko = (
-            f"👻 **[{target_label}]** 관련 레지스트리·상주 프로세스·서비스·스케줄러·잔여 폴더(AppData/ProgramData)를 전수 스캔했으나, "
+            f"👻 **[{target_label}]** 관련 레지스트리·상주 프로세스·서비스·스케줄러·잔여 폴더를 전수 스캔했으나, "
             f"현재 내 PC에 남아 있는 흔적이 **0건**으로 이미 완벽히 깨끗한 상태입니다!"
         )
 
@@ -1969,89 +3341,111 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
     }
 
 
+def _normalize_msi_uninstall_cmd(raw_cmd: str) -> str:
+    """MsiExec.exe /I{GUID} 형태는 복구 설치가 아닌 실제 제거(/X{GUID})로 정확히 변환합니다."""
+    cmd = (raw_cmd or "").strip()
+    if not cmd:
+        return ""
+    if re.match(r'^"?msiexec(\.exe)?"?\b', cmd, flags=re.IGNORECASE):
+        cmd = re.sub(r'(?i)(/\s*i)(\s*\{[0-9a-fA-F\-]+\})', r'/X\2', cmd)
+        if "/passive" not in cmd.lower() and "/qn" not in cmd.lower() and "/qb" not in cmd.lower():
+            cmd = f"{cmd} /passive"
+        if "/norestart" not in cmd.lower():
+            cmd = f"{cmd} /norestart"
+    return cmd
+
+
 def execute_deep_uninstall_target(
     app_query: str,
     invoke_official_uninstaller: bool = True,
     user_approval_text: str = "흔적까지 100% 심층 적출 실행",
+    selected_folder_paths: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
-    [2·3·4단계: 스냅샷 백업 ➔ 상주 프로세스/서비스 선행 사살 ➔ 공식 언인스톨러 호출 ➔ 부활 스케줄러·Run 레지스트리·잔여 캐시 폴더 영구 소탕]
+    [심층 제거 실행 — 영구 삭제(rmtree) 전면 금지 · Windows 기본 휴지통 직행]
+    1) 상주 프로세스 종료 -> 2) 공식 언인스톨러 실행 및 종료 대기(파일 락 해제) ->
+    3) 부활 스케줄러·시작 Run 정리 -> 4) 남은 잔여 캐시 폴더를 Windows OS [휴지통]으로 안전 이동!
     """
     _ensure_care_dir()
-    QUARANTINE_SNAPSHOT_DIR.mkdir(parents=True, exist_ok=True)
+    AUDIT_LOG_DIR.mkdir(parents=True, exist_ok=True)
 
     scan = scan_deep_uninstall_target(app_query)
+    if scan.get("needsClarification"):
+        return {
+            "ok": False,
+            "needsClarification": True,
+            "error": "TARGET_APP_QUERY_EMPTY",
+            "reportKo": str(scan.get("honestBriefingKo") or ""),
+        }
+
     slug = str(scan.get("targetSlug") or "app")
     target_label = str(scan.get("targetAppLabel") or app_query)
     ts_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-    snapshot_path = QUARANTINE_SNAPSHOT_DIR / f"uninstall_{slug}_{ts_str}.json"
-
-    snapshot_payload = {
-        "createdAt": datetime.datetime.now().isoformat(),
-        "targetAppQuery": app_query,
-        "targetAppLabel": target_label,
-        "userApprovalTypedText": user_approval_text,
-        "scanSnapshot": scan,
-    }
-    try:
-        snapshot_path.write_text(json.dumps(snapshot_payload, ensure_ascii=False, indent=2), encoding="utf-8")
-    except Exception:
-        pass
+    audit_log_path = AUDIT_LOG_DIR / f"uninstall_{slug}_{ts_str}.json"
 
     killed_procs: List[str] = []
     disabled_services: List[str] = []
     deleted_tasks: List[str] = []
     removed_startups: List[str] = []
-    cleaned_folders: List[str] = []
+    recycled_folders: List[str] = []
     reclaimed_bytes = 0
     uninstaller_triggered: List[str] = []
 
+    allowed_folder_set = (
+        {str(Path(p).resolve()).lower() for p in selected_folder_paths if p}
+        if selected_folder_paths is not None
+        else None
+    )
+
     if sys.platform == "win32":
-        # [3단계-A] 실행 중인 상주 프로세스 선행 강제 종료 (파일 잠금 해제)
+        # 1) 실행 중인 상주 프로세스 종료
         for pinfo in scan.get("runningProcesses", []):
             pid = pinfo.get("pid")
             pname = str(pinfo.get("name") or pid)
             if not pid:
                 continue
             try:
-                subprocess.run(
+                r_k = subprocess.run(
                     ["taskkill", "/F", "/PID", str(pid), "/T"],
                     capture_output=True,
                     timeout=2.5,
                     creationflags=CREATE_NO_WINDOW,
                 )
-                killed_procs.append(f"{pname}(PID {pid})")
+                if r_k.returncode == 0:
+                    killed_procs.append(f"{pname}(PID {pid})")
             except Exception:
                 pass
 
-        # [3단계-B] 상주 서비스 정지 및 수동 전환 (On-Demand 권한 승격 헬퍼 연동)
+        # 2) 화이트리스트 해당 서비스만 안전 정지
         svc_names = [str(s.get("serviceName") or "") for s in scan.get("services", []) if s.get("serviceName")]
         if svc_names:
-            elev_res = execute_elevated_service_control("sleep", svc_names)
-            disabled_services = list(elev_res.get("processedServices") or svc_names)
+            elev_res = execute_elevated_service_control("sleep", svc_names, allow_uac_prompt=True)
+            disabled_services = list(elev_res.get("processedServices") or [])
 
-        # [3단계-C] 공식 언인스톨러 실행 (QuietUninstallString 최우선, 없으면 UninstallString 비동기/단기 호출)
+        # 3) 공식 언인스톨러 실행 (MsiExec /I -> /X 변환 및 최대 25초 종료 대기 후 잔여 폴더 확인)
         if invoke_official_uninstaller:
             for entry in scan.get("installedEntries", [])[:3]:
-                cmd = str(entry.get("quietUninstallString") or entry.get("uninstallString") or "").strip()
+                raw_cmd = str(entry.get("quietUninstallString") or entry.get("uninstallString") or "").strip()
                 disp = str(entry.get("displayName") or "")
+                cmd = _normalize_msi_uninstall_cmd(raw_cmd)
                 if not cmd:
                     continue
                 try:
-                    if cmd.lower().startswith("msiexec"):
-                        # MSI 패키지는 조용한 제거(/qn /norestart) 유도
-                        subprocess.Popen(
-                            f"{cmd} /passive /norestart",
-                            shell=True,
-                            creationflags=CREATE_NO_WINDOW,
-                        )
-                    else:
-                        subprocess.Popen(cmd, shell=True)
+                    is_msi = cmd.lower().startswith("msiexec") or '"msiexec' in cmd.lower()
+                    proc_u = subprocess.Popen(
+                        cmd,
+                        shell=True,
+                        creationflags=(CREATE_NO_WINDOW if is_msi else 0),
+                    )
                     uninstaller_triggered.append(disp or cmd[:40])
+                    try:
+                        proc_u.wait(timeout=25.0)
+                    except subprocess.TimeoutExpired:
+                        pass
                 except Exception:
                     continue
 
-        # [4단계-A] 부활형 작업 스케줄러(schtasks) 트리거 제거
+        # 4) 부활형 작업 스케줄러 제거/비활성화
         for tname in scan.get("scheduledTasks", []):
             try:
                 r_del = subprocess.run(
@@ -2063,18 +3457,18 @@ def execute_deep_uninstall_target(
                 if r_del.returncode == 0:
                     deleted_tasks.append(tname)
                 else:
-                    # 일반 권한에서 삭제 거부 시 비활성화(/disable) 시도
-                    subprocess.run(
+                    r_dis = subprocess.run(
                         ["schtasks", "/change", "/tn", tname, "/disable"],
                         capture_output=True,
                         timeout=2.0,
                         creationflags=CREATE_NO_WINDOW,
                     )
-                    deleted_tasks.append(f"{tname}(비활성화)")
+                    if r_dis.returncode == 0:
+                        deleted_tasks.append(f"{tname}(비활성화)")
             except Exception:
                 continue
 
-        # [4단계-B] 시작프로그램(HKCU/HKLM Run) 레지스트리 엔트리 제거
+        # 5) 시작프로그램(HKCU/HKLM Run) 레지스트리 엔트리 제거
         import winreg
 
         for st_item in scan.get("startupEntries", []):
@@ -2091,59 +3485,59 @@ def execute_deep_uninstall_target(
             except Exception:
                 continue
 
-        # [4단계-C] 잔여 캐시·임시 데이터 폴더(AppData/ProgramData/Common Files) 및 빈 폴더 영구 청소
+        # 6) 남은 잔여 캐시 폴더를 영구 삭제(rmtree) 대신 Windows OS [휴지통]으로 안전 이동!
         for finfo in scan.get("residualFolders", []):
             fpath = Path(str(finfo.get("path") or ""))
             fsize = int(finfo.get("sizeBytes") or 0)
-            if not fpath.exists() or _is_protected_system_entity(str(fpath)):
+            if not fpath.exists():
                 continue
-            # 안전 가드: 드라이브 루트나 2단계 이하 상위 경로는 절대 삭제하지 않음
-            if len(fpath.parts) < 3:
+            resolved_str = str(fpath.resolve())
+            if allowed_folder_set is not None and resolved_str.lower() not in allowed_folder_set:
                 continue
-            try:
-                if finfo.get("isSafeCacheOrData"):
-                    shutil.rmtree(fpath, ignore_errors=True)
-                    if not fpath.exists():
-                        cleaned_folders.append(str(fpath))
-                        reclaimed_bytes += fsize
-                    else:
-                        # 잠긴 파일 외 나머지 캐시 파일 개별 삭제
-                        for sub_root, sub_dirs, sub_files in os.walk(fpath, topdown=False):
-                            for sf in sub_files:
-                                try:
-                                    sp = Path(sub_root) / sf
-                                    sz = sp.stat().st_size
-                                    sp.unlink()
-                                    reclaimed_bytes += sz
-                                except Exception:
-                                    pass
-                            for sd in sub_dirs:
-                                try:
-                                    (Path(sub_root) / sd).rmdir()
-                                except Exception:
-                                    pass
-                        cleaned_folders.append(f"{fpath} (잔여 캐시 정밀 소거)")
-            except Exception:
+            if _is_protected_system_entity(resolved_str) or _is_protected_personal_data_dir(fpath.name, resolved_str):
                 continue
+            if len(fpath.parts) < 3 or not finfo.get("isSafeCacheOrData"):
+                continue
+            rb_res = _send_path_to_windows_recycle_bin(fpath)
+            if rb_res.get("ok"):
+                recycled_folders.append(resolved_str)
+                reclaimed_bytes += fsize
+
+    audit_payload = {
+        "createdAt": datetime.datetime.now().isoformat(),
+        "targetAppQuery": app_query,
+        "targetAppLabel": target_label,
+        "userApprovalTypedText": user_approval_text,
+        "recycledFolders": recycled_folders,
+        "killedProcesses": killed_procs,
+        "disabledServices": disabled_services,
+        "deletedTasks": deleted_tasks,
+        "removedStartups": removed_startups,
+        "uninstallerTriggered": uninstaller_triggered,
+    }
+    try:
+        audit_log_path.write_text(json.dumps(audit_payload, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
 
     reclaimed_mb = round(reclaimed_bytes / (1024 * 1024), 1)
-    reclaimed_ram_mb = float(scan.get("estimatedRamMb") or 0.0)
+    reclaimed_ram_mb = round(float(scan.get("estimatedRamMb") or 0.0), 1) if killed_procs else 0.0
     total_removed_triggers = len(killed_procs) + len(disabled_services) + len(deleted_tasks) + len(removed_startups)
 
     report_ko = (
-        f"🔥 **[{target_label} — 4단계 심층 적출(Deep Uninstaller) 완료 브리핑]**\n"
-        f"• **제거된 상주 프로세스·스케줄러·서비스**: 총 **{total_removed_triggers}개** "
-        f"(상주 프로세스 사살 {len(killed_procs)}개 · 서비스 무력화 {len(disabled_services)}개 · 부활 스케줄러/Run 제거 {len(deleted_tasks) + len(removed_startups)}개)\n"
-        f"• **확보된 디스크 용량 및 메모리**: 잔여 폴더 **{len(cleaned_folders)}곳 ({reclaimed_mb}MB)** 소거 · 상주 메모리 **{reclaimed_ram_mb}MB** 즉시 회수\n"
-        f"• **안전 격리 스냅샷 백업**: `{snapshot_path.name}` 기록 완료"
+        f"🔥 **[{target_label} — 심층 제거 완료 보고]**\n"
+        f"• **정리된 상주 프로세스·스케줄러·서비스**: 총 **{total_removed_triggers}개** "
+        f"(프로세스 종료 {len(killed_procs)}개 · 서비스 절전 {len(disabled_services)}개 · 스케줄러/시작Run 제거 {len(deleted_tasks) + len(removed_startups)}개)\n"
+        f"• **Windows [휴지통]으로 안전 이동한 잔여 캐시 폴더**: **{len(recycled_folders)}곳 ({reclaimed_mb}MB)** · 상주 메모리 **{reclaimed_ram_mb}MB** 회수\n"
+        f"• **안심 복구 안내**: 지운 잔여 폴더는 별도 격리함 없이 평소 쓰시는 바탕화면 **[휴지통]**에 그대로 들어 있어 언제든 우클릭 `[복원]`으로 되살릴 수 있습니다!"
     )
     if uninstaller_triggered:
-        report_ko += f"\n• **공식 언인스톨러 연동 호출**: {', '.join(uninstaller_triggered)}"
+        report_ko += f"\n• **공식 언인스톨러 실행 완료**: {', '.join(uninstaller_triggered)}"
 
     return {
         "ok": True,
         "targetAppLabel": target_label,
-        "snapshotFile": str(snapshot_path),
+        "snapshotFile": str(audit_log_path),
         "killedProcessCount": len(killed_procs),
         "killedProcesses": killed_procs,
         "disabledServiceCount": len(disabled_services),
@@ -2152,8 +3546,9 @@ def execute_deep_uninstall_target(
         "deletedTasks": deleted_tasks,
         "removedStartupCount": len(removed_startups),
         "removedStartups": removed_startups,
-        "cleanedFolderCount": len(cleaned_folders),
-        "cleanedFolders": cleaned_folders,
+        "cleanedFolderCount": len(recycled_folders),
+        "cleanedFolders": recycled_folders,
+        "movedToWindowsRecycleBin": True,
         "uninstallerTriggered": uninstaller_triggered,
         "reclaimedBytes": reclaimed_bytes,
         "reclaimedMb": reclaimed_mb,
@@ -2164,22 +3559,41 @@ def execute_deep_uninstall_target(
 
 
 # ============================================================================
-# 5. [방어 22] Try-Except Firewall 단일 게이트웨이 디스패처 & 탐색기 우클릭 CLI 엔트리
+# 5. Try-Except Firewall 단일 게이트웨이 디스패처 & 알집 동급 암호 입력창 / CLI 엔트리
 # ============================================================================
+READONLY_CARE_ACTIONS = {
+    "status",
+    "security-status",
+    "security_services_status",
+    "security-services/status",
+    "guardian-history",
+    "guardian_history",
+    "defender-history",
+    "defender/history",
+    "explorer-selected",
+    "explorer_selected",
+}
+
+
 def handle_care_suite_request(action: str, payload: Optional[Dict[str, Any]] = None) -> Dict[str, Any]:
-    """
-    메인 데몬(merlin_z_core_daemon.py)에서 호출되는 방화벽 격리 진입점.
-    어떠한 예외가 발생해도 Z-코어 본체로 전파되지 않고 안전하게 JSON 응답을 반환합니다.
-    """
+    """메인 데몬(merlin_z_core_daemon.py)에서 호출되는 방화벽 격리 진입점."""
     data = payload or {}
     act = (action or "status").strip().lower()
     try:
-        if act in ("status", "security-status", "security_services_status"):
+        if act in ("status", "security-status", "security_services_status", "security-services/status"):
             return get_security_services_status()
-        if act in ("sleep", "security-sleep", "sleep_security_services"):
-            return sleep_security_services()
-        if act in ("wake", "security-wake", "wake_security_services"):
+        if act in ("sleep", "security-sleep", "sleep_security_services", "security-services/sleep"):
+            return sleep_security_services(explicit_opt_in=True, allow_uac_prompt=True)
+        if act in ("wake", "security-wake", "wake_security_services", "security-services/wake"):
             return wake_security_services(reason=str(data.get("reason") or "manual_emergency_switch"))
+        if act in (
+            "restore-default",
+            "security-restore",
+            "restore_security_services_default",
+            "security-services/restore-default",
+            "security-services/restore",
+        ):
+            return restore_security_services_default(allow_uac_prompt=True)
         if act in ("sync-whitelist", "sync_whitelist"):
             wl = load_security_whitelist(allow_remote_sync=True)
             return {"ok": True, "version": wl.get("version"), "synced": True}
@@ -2187,17 +3601,27 @@ def handle_care_suite_request(action: str, payload: Optional[Dict[str, Any]] = N
             return register_explorer_context_menu()
         if act in ("archive/context-menu/remove", "unregister-context-menu"):
             return unregister_explorer_context_menu()
+        if act in ("peek-archive", "peek_archive", "archive/peek"):
+            return {
+                "ok": False,
+                "sealedArchiveRespect": True,
+                "error": "SEALED_ARCHIVE_RESPECT_NO_PRE_PEEK",
+                "message": "귀신같이는 유저가 직접 풀기 전까지 압축파일 내부를 미리 열어보지 않습니다(봉인 존중 원칙).",
+            }
         if act in ("extract-archive", "extract_archive", "smart-unzip", "archive/extract"):
             return smart_extract_archive(
                 archive_path=str(data.get("path") or data.get("archivePath") or ""),
                 password=data.get("password"),
             )
         if act in ("create-zip", "create_zip", "smart-zip", "archive/zip"):
+            raw_paths = data.get("paths")
+            if isinstance(raw_paths, list) and raw_paths:
+                return smart_create_zip([str(x) for x in raw_paths if x])
             return smart_create_zip(
                 target_path=str(data.get("path") or data.get("targetPath") or ""),
             )
         if act in ("open-downloads", "open_downloads"):
-            dl_dir = Path.home() / "Downloads"
+            dl_dir = _get_downloads_dir()
             dl_archives = _count_downloads_archive_files()
             latest_path = dl_archives.get("latestPath") or ""
             latest_name = dl_archives.get("latestFileName") or ""
@@ -2227,12 +3651,12 @@ def handle_care_suite_request(action: str, payload: Optional[Dict[str, Any]] = N
             return {"ok": True, "opened": "ms-settings:defaultapps"}
         if act in ("explorer-selected", "explorer_selected"):
             return {"ok": True, "selectedPaths": get_explorer_selected_paths_non_destructive()}
-        if act in ("amsi-scan", "amsi_scan"):
+        if act in ("amsi-scan", "amsi_scan", "defender/scan"):
             return scan_file_with_defender_amsi(
                 file_path=str(data.get("path") or data.get("filePath") or ""),
                 source=str(data.get("source") or "manual"),
             )
-        if act in ("guardian-history", "guardian_history", "defender-history"):
+        if act in ("guardian-history", "guardian_history", "defender-history", "defender/history"):
             return get_defender_guardian_history(
                 days=int(data.get("days") or 30),
                 limit=int(data.get("limit") or 30),
@@ -2242,10 +3666,12 @@ def handle_care_suite_request(action: str, payload: Optional[Dict[str, Any]] = N
                 app_query=str(data.get("appQuery") or data.get("query") or data.get("app") or ""),
             )
         if act in ("deep-uninstall/execute", "deep-uninstall-execute", "deep_uninstall_execute"):
+            sel_folders = data.get("selectedFolders")
             return execute_deep_uninstall_target(
                 app_query=str(data.get("appQuery") or data.get("query") or data.get("app") or ""),
                 invoke_official_uninstaller=bool(data.get("invokeOfficialUninstaller", True)),
                 user_approval_text=str(data.get("userApprovalTypedText") or "흔적까지 100% 심층 적출 실행"),
+                selected_folder_paths=([str(x) for x in sel_folders] if isinstance(sel_folders, list) else None),
             )
         return {"ok": False, "error": f"UNKNOWN_CARE_SUITE_ACTION: {action}"}
     except Exception as exc:
@@ -2263,15 +3689,13 @@ def start_care_suite_background_watchers() -> None:
     """
     [merlin_z_core_daemon.py 내장 무소음 워처 — 평시 CPU 0.0%]
     1) 데몬 기동 즉시 더블클릭 ProgID(Ghosti.Archive) + 탐색기 일반 우클릭 메뉴 보장 등록
-    2) 1.5초 주기 포그라운드 창 제목 체크 ➔ 은행·홈택스·결제 창 마우스 클릭 진입 즉시 보안 서비스 선행 기상 & 15분 뒤 자동 수면
-    3) 6.0초 주기 Downloads 폴더 mtime 워터마크 체크 ➔ 신규 다운로드 완료 파일 무소음 AMSI 검문 및 수호 장부 누적
+    2) 1.5초 주기 포그라운드 창 제목 체크 ➔ 동의된 유저에 한해 은행·홈택스 창 진입 즉시 선행 기상 & 모든 창 확인 후 15분 뒤 절전
+    3) 6.0초 주기 공식 Downloads 폴더 mtime 체크 ➔ 신규 다운로드 완료 파일 무소음 AMSI 검문 (위협 알림은 별도 데몬 스레드로 비차단 표시!)
     """
     global _CARE_WATCHER_STARTED
     if _CARE_WATCHER_STARTED or sys.platform != "win32":
         return
     _CARE_WATCHER_STARTED = True
-
-    import threading
 
     def _watcher_loop() -> None:
         try:
@@ -2281,7 +3705,7 @@ def start_care_suite_background_watchers() -> None:
 
         u32 = ctypes.windll.user32
         title_buf = ctypes.create_unicode_buffer(512)
-        dl_dir = Path.home() / "Downloads"
+        dl_dir = _get_downloads_dir()
         last_dl_mtime = 0.0
         seen_dl_files: Dict[str, float] = {}
         try:
@@ -2297,7 +3721,6 @@ def start_care_suite_background_watchers() -> None:
         while True:
             time.sleep(1.5)
             tick += 1
-            # A) 은행·관공서 창 클릭 진입 무타이핑 선행 기상 & 15분 뒤 자동 절전
             try:
                 fg_h = u32.GetForegroundWindow()
                 if fg_h:
@@ -2307,9 +3730,9 @@ def start_care_suite_background_watchers() -> None:
             except Exception:
                 pass
 
-            # B) Downloads 폴더 신규 다운로드 완료 파일 무소음 AMSI 검문 (약 6초 간격, mtime 변경 시에만 스캔)
             if tick % 4 == 0:
                 try:
+                    dl_dir = _get_downloads_dir()
                     if dl_dir.exists():
                         cur_mtime = dl_dir.stat().st_mtime
                         if cur_mtime != last_dl_mtime:
@@ -2326,12 +3749,19 @@ def start_care_suite_background_watchers() -> None:
                                     seen_dl_files[entry.path] = f_mt
                                     res_scan = scan_file_with_defender_amsi(entry.path, source="download_auto")
                                     if res_scan.get("ok") and res_scan.get("status") != "CLEAN":
-                                        ctypes.windll.user32.MessageBoxW(
-                                            0,
-                                            res_scan.get("alertMessage") or f"위협 요소가 감지되었습니다: {entry.name}",
-                                            "👻 귀신같이 보안 경호 알림",
-                                            0x00000030 | 0x00040000,
+                                        alert_txt = (
+                                            res_scan.get("alertMessage")
+                                            or f"위험 요소가 감지되었습니다: {entry.name}"
                                         )
+                                        threading.Thread(
+                                            target=lambda msg=alert_txt: ctypes.windll.user32.MessageBoxW(
+                                                0,
+                                                msg,
+                                                "👻 귀신같이 보안 경호 알림",
+                                                0x00000030 | 0x00040000,
+                                            ),
+                                            daemon=True,
+                                        ).start()
                                 else:
                                     seen_dl_files[entry.path] = f_mt
                 except Exception:
@@ -2340,128 +3770,247 @@ def start_care_suite_background_watchers() -> None:
     threading.Thread(target=_watcher_loop, name="GhostiCareSuiteWatcher", daemon=True).start()
 
 
-def _prompt_archive_password_tk(archive_name: str) -> Optional[str]:
-    """더블클릭·우클릭 메뉴로 암호 걸린 압축파일을 열었을 때 깔끔한 미니 암호 입력창을 띄웁니다."""
+def _prompt_archive_password_tk(
+    archive_name: str,
+    error_message: str = "",
+    parent_win: Any = None,
+) -> Optional[str]:
+    """
+    [알집 동일 UX] 암호 걸린 압축파일(.zip/.7z/.rar, 헤더 암호화 포함) 열람 시:
+    - 오입력 시 창을 닫아버리지 않고 상단에 빨간 안내 문구를 띄워 재입력을 유도합니다.
+    - [☑ 입력한 암호 글자 보기] 토글을 기본 제공합니다.
+    """
     try:
         import tkinter as tk
 
         result_holder: List[Optional[str]] = [None]
-        root = tk.Tk()
-        root.title("👻 귀신같이 스마트 압축해제")
-        root.configure(bg="#0B1120")
-        root.resizable(False, False)
-        root.attributes("-topmost", True)
+        use_toplevel = parent_win is not None
+        dlg = tk.Toplevel(parent_win) if use_toplevel else tk.Tk()
+        dlg.title("👻 귀신같이 스마트 압축해제 — 비밀번호 입력")
+        dlg.configure(bg="#0B1120")
+        dlg.resizable(False, False)
+        dlg.attributes("-topmost", True)
+        if use_toplevel:
+            try:
+                dlg.transient(parent_win)
+                dlg.grab_set()
+            except Exception:
+                pass
 
-        w, h = 380, 155
-        sx = max(40, (root.winfo_screenwidth() - w) // 2)
-        sy = max(40, (root.winfo_screenheight() - h) // 2)
-        root.geometry(f"{w}x{h}+{sx}+{sy}")
+        w = 400
+        h = 215 if error_message else 185
+        sx = max(40, (dlg.winfo_screenwidth() - w) // 2)
+        sy = max(40, (dlg.winfo_screenheight() - h) // 2)
+        dlg.geometry(f"{w}x{h}+{sx}+{sy}")
 
-        frm = tk.Frame(root, bg="#0B1120", padx=16, pady=14)
+        frm = tk.Frame(dlg, bg="#0B1120", padx=18, pady=14)
         frm.pack(fill="both", expand=True)
 
+        short_name = archive_name if len(archive_name) <= 32 else (archive_name[:29] + "...")
         tk.Label(
             frm,
-            text=f"🔑 암호가 걸린 압축파일입니다 ({archive_name[:28]})",
+            text=f"🔒 암호가 걸린 압축파일입니다 ({short_name})",
             fg="#5EEAD4",
             bg="#0B1120",
             font=("Malgun Gothic", 9, "bold"),
             anchor="w",
-        ).pack(fill="x", pady=(0, 8))
+        ).pack(fill="x", pady=(0, 6))
 
-        ent = tk.Entry(frm, show="*", font=("Malgun Gothic", 10), bg="#1E293B", fg="#F8FAFC", insertbackground="#5EEAD4", relief="flat")
-        ent.pack(fill="x", ipady=5, pady=(0, 10))
+        err_lbl = tk.Label(
+            frm,
+            text=f"⚠️ {error_message}" if error_message else "",
+            fg="#FCA5A5",
+            bg="#0B1120",
+            font=("Malgun Gothic", 8, "bold"),
+            anchor="w",
+        )
+        if error_message:
+            err_lbl.pack(fill="x", pady=(0, 6))
+
+        ent = tk.Entry(
+            frm,
+            show="●",
+            font=("Malgun Gothic", 10),
+            bg="#1E293B",
+            fg="#F8FAFC",
+            insertbackground="#5EEAD4",
+            relief="flat",
+        )
+        ent.pack(fill="x", ipady=6, pady=(0, 8))
         ent.focus_set()
+
+        show_var = tk.BooleanVar(value=False)
+
+        def _toggle_show() -> None:
+            ent.config(show="" if show_var.get() else "●")
+
+        chk = tk.Checkbutton(
+            frm,
+            text="입력한 암호 글자 보기",
+            variable=show_var,
+            command=_toggle_show,
+            fg="#CBD5E1",
+            bg="#0B1120",
+            selectcolor="#1E293B",
+            activebackground="#0B1120",
+            activeforeground="#5EEAD4",
+            font=("Malgun Gothic", 8),
+            anchor="w",
+            cursor="hand2",
+        )
+        chk.pack(fill="x", pady=(0, 10))
 
         def _submit(_e: Any = None) -> None:
             val = ent.get()
-            if val:
-                result_holder[0] = val
-            root.destroy()
+            if not val:
+                err_lbl.config(text="⚠️ 비밀번호를 입력해 주세요.")
+                if not err_lbl.winfo_ismapped():
+                    err_lbl.pack(fill="x", pady=(0, 4), before=ent)
+                ent.focus_set()
+                return
+            result_holder[0] = val
+            dlg.destroy()
+
+        def _cancel(_e: Any = None) -> None:
+            result_holder[0] = None
+            dlg.destroy()
 
         ent.bind("<Return>", _submit)
-        ent.bind("<Escape>", lambda _e: root.destroy())
+        ent.bind("<Escape>", _cancel)
+        dlg.protocol("WM_DELETE_WINDOW", _cancel)
 
         btn_f = tk.Frame(frm, bg="#0B1120")
         btn_f.pack(fill="x")
         tk.Button(
             btn_f,
-            text="1초 압축 풀기",
+            text="확인 (압축 풀기)",
             command=_submit,
             bg="#2DD4BF",
             fg="#0B1120",
             font=("Malgun Gothic", 9, "bold"),
             relief="flat",
-            padx=12,
+            padx=14,
             pady=4,
             cursor="hand2",
         ).pack(side="right")
         tk.Button(
             btn_f,
             text="취소",
-            command=root.destroy,
+            command=_cancel,
             bg="#1E293B",
             fg="#CBD5E1",
             font=("Malgun Gothic", 9),
             relief="flat",
-            padx=10,
+            padx=12,
             pady=4,
             cursor="hand2",
         ).pack(side="right", padx=(0, 6))
 
-        root.mainloop()
+        if use_toplevel:
+            parent_win.wait_window(dlg)
+        else:
+            dlg.mainloop()
         return result_holder[0]
     except Exception:
         return None
 
 
-def _cli_main() -> None:
-    parser = argparse.ArgumentParser(description="Ghosti Care Suite CLI (Double-Click / Explorer Context Menu & Elevation Helper)")
-    parser.add_argument("--smart-unzip", dest="smart_unzip", type=str, help="압축 파일 스마트 해제 (더블클릭·우클릭 메뉴)")
-    parser.add_argument("--smart-zip", dest="smart_zip", type=str, help="파일/폴더 ZIP 묶기 (우클릭 메뉴)")
-    parser.add_argument("--register-menu", action="store_true", help="더블클릭 ProgID 및 탐색기 기본 우클릭 메뉴 등록")
-    parser.add_argument("--unregister-menu", action="store_true", help="더블클릭 ProgID 및 탐색기 기본 우클릭 메뉴 해제")
-    parser.add_argument("--install-and-run-helper", action="store_true", help="최초 1회 UAC 승격 헬퍼 등록 및 즉시 실행")
-    parser.add_argument("--run-elevated-helper", action="store_true", help="작업 스케줄러 최고권한 헬퍼 실행")
-    args = parser.parse_args()
+def run_interactive_smart_unzip(
+    archive_path: str,
+    open_folder_on_success: bool = True,
+    show_error_dialog: bool = True,
+) -> Dict[str, Any]:
+    """
+    더블클릭·우클릭 실행 시 알집과 동일하게:
+    - 암호가 걸려 있으면 암호 입력창을 띄우고,
+    - 비밀번호가 틀리면 찌꺼기 없이 즉시 '비밀번호가 일치하지 않습니다' 경고와 함께 맞을 때까지(또는 취소할 때까지) 재입력받습니다!
+    """
+    res = smart_extract_archive(archive_path)
+    while not res.get("ok") and res.get("needPassword"):
+        err_msg = str(res.get("message") or "") if res.get("wrongPassword") else ""
+        pwd = _prompt_archive_password_tk(Path(archive_path).name, error_message=err_msg)
+        if pwd is None:
+            return {"ok": False, "cancelled": True, "message": "암호 입력이 취소되었습니다."}
+        res = smart_extract_archive(archive_path, password=pwd)
+
+    if res.get("ok") and res.get("extractedFolder") and open_folder_on_success and sys.platform == "win32":
+        try:
+            os.startfile(res["extractedFolder"])
+        except Exception:
+            pass
+    elif not res.get("ok") and not res.get("cancelled") and show_error_dialog and sys.platform == "win32":
+        msg = str(res.get("message") or res.get("error") or "압축 해제 중 오류가 발생했습니다.")
+        ctypes.windll.user32.MessageBoxW(0, msg, "👻 귀신같이 스마트 압축해제", 0x00000030)
+    return res
+
+
+def handle_care_cli_args(argv: Optional[List[str]] = None) -> bool:
+    """
+    merlin_z_core_daemon.py(단일 .exe 진입점) 및 단독 .py 실행 양쪽에서 공통으로 호출되는 고속 CLI 핸들러.
+    케어 스위트 단발성 플래그가 감지되면 즉시 처리 후 True를 반환하여 데몬 기동 없이 0.1초 만에 종료하게 합니다.
+    """
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    care_flags = {
+        "--smart-unzip",
+        "--smart-zip",
+        "--register-menu",
+        "--unregister-menu",
+        "--install-and-run-helper",
+        "--run-elevated-helper",
+    }
+    if not any(arg in care_flags or any(arg.startswith(f + "=") for f in care_flags) for arg in raw_argv):
+        return False
+
+    parser = argparse.ArgumentParser(add_help=False)
+    parser.add_argument("--smart-unzip", dest="smart_unzip", type=str, default="")
+    parser.add_argument("--smart-zip", dest="smart_zip", type=str, default="")
+    parser.add_argument("--register-menu", action="store_true")
+    parser.add_argument("--unregister-menu", action="store_true")
+    parser.add_argument("--install-and-run-helper", action="store_true")
+    parser.add_argument("--run-elevated-helper", action="store_true")
+    args, _ = parser.parse_known_args(raw_argv)
 
     if args.install_and_run_helper:
         _process_elevated_helper_queue(install_task_too=True)
-        return
+        return True
     if args.run_elevated_helper:
         _process_elevated_helper_queue(install_task_too=False)
-        return
+        return True
     if args.register_menu:
         print(json.dumps(register_explorer_context_menu(), ensure_ascii=False))
-        return
+        return True
     if args.unregister_menu:
         print(json.dumps(unregister_explorer_context_menu(), ensure_ascii=False))
-        return
+        return True
+    headless_test = os.environ.get("GHOSTI_HEADLESS_TEST") == "1"
     if args.smart_unzip:
-        res = smart_extract_archive(args.smart_unzip)
-        if not res.get("ok") and res.get("needPassword"):
-            pwd = _prompt_archive_password_tk(Path(args.smart_unzip).name)
-            if pwd:
-                res = smart_extract_archive(args.smart_unzip, password=pwd)
-            else:
-                return
-        if res.get("ok") and res.get("extractedFolder") and sys.platform == "win32":
-            try:
-                os.startfile(res["extractedFolder"])
-            except Exception:
-                pass
-        elif not res.get("ok") and sys.platform == "win32":
-            msg = str(res.get("message") or res.get("error") or "압축 해제 중 오류가 발생했습니다.")
-            ctypes.windll.user32.MessageBoxW(0, msg, "👻 귀신같이 스마트 압축해제", 0x00000030)
-        return
+        ures = run_interactive_smart_unzip(
+            args.smart_unzip,
+            open_folder_on_success=not headless_test,
+            show_error_dialog=not headless_test,
+        )
+        if headless_test:
+            print(json.dumps(ures, ensure_ascii=False))
+        return True
     if args.smart_zip:
-        zres = smart_create_zip(args.smart_zip)
-        if zres.get("ok") and zres.get("zipPath") and sys.platform == "win32":
-            try:
-                subprocess.Popen(["explorer.exe", f"/select,{zres['zipPath']}"])
-            except Exception:
-                pass
-        return
+        zres = _cli_smart_zip_coalesced(args.smart_zip)
+        if zres is not None:
+            if headless_test:
+                print(json.dumps(zres, ensure_ascii=False))
+            elif zres.get("ok") and zres.get("zipPath") and sys.platform == "win32":
+                try:
+                    subprocess.Popen(["explorer.exe", f"/select,{zres['zipPath']}"])
+                except Exception:
+                    pass
+            elif not zres.get("ok") and sys.platform == "win32":
+                msg = str(zres.get("message") or zres.get("error") or "ZIP 압축 생성 중 오류가 발생했습니다.")
+                ctypes.windll.user32.MessageBoxW(0, msg, "👻 귀신같이 ZIP 압축 묶기", 0x00000030)
+        return True
+    return False
+
+
+def _cli_main() -> None:
+    handle_care_cli_args(sys.argv[1:])
 
 
 if __name__ == "__main__":

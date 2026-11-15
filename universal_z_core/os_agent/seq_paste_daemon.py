@@ -3016,57 +3016,117 @@ def _toast_worker() -> None:
                         btn_row.pack(fill="x")
 
                         bridge_box = tk.Frame(outer, bg="#0F172A")
+                        unzip_busy = [False]
+
+                        def _load_care_suite_mod():
+                            _bdir = Path(getattr(sys, "_MEIPASS", str(Path(__file__).resolve().parent)))
+                            for _cand_ag in (
+                                _bdir,
+                                Path(__file__).resolve().parent,
+                                Path(__file__).resolve().parent / "os_agent",
+                                Path(r"D:\Ghosti\universal_z_core\os_agent"),
+                            ):
+                                if _cand_ag.exists() and str(_cand_ag) not in sys.path:
+                                    sys.path.insert(0, str(_cand_ag))
+                            import plugin_ghosti_care_suite as _cs
+
+                            return _cs
+
+                        def _on_unzip_result(res):
+                            try:
+                                if not win.winfo_exists():
+                                    return
+                            except Exception:
+                                return
+
+                            if not res.get("ok") and res.get("needPassword"):
+                                try:
+                                    _cs = _load_care_suite_mod()
+                                    err_msg = str(res.get("message") or "") if res.get("wrongPassword") else ""
+                                    pwd = _cs._prompt_archive_password_tk(
+                                        arch_name,
+                                        error_message=err_msg,
+                                        parent_win=win,
+                                    )
+                                except Exception:
+                                    pwd = None
+                                if pwd is None:
+                                    unzip_busy[0] = False
+                                    ext_btn.config(text="📂 한글깨짐/폭탄 없이 1초 만에 풀기")
+                                    status_lbl.config(
+                                        text="암호 입력이 취소되었습니다. 다시 풀려면 버튼을 눌러주세요.",
+                                        fg="#94A3B8",
+                                    )
+                                    return
+                                status_lbl.config(text="🔓 입력한 비밀번호로 압축 해제 중...", fg="#5EEAD4")
+                                threading.Thread(target=_unzip_worker, args=(pwd,), daemon=True).start()
+                                return
+
+                            unzip_busy[0] = False
+                            if res.get("ok"):
+                                ext_btn.config(text="✅ 해제 완료 (폴더 열기)")
+                                extracted_dir = str(res.get("extractedFolder") or "")
+                                if extracted_dir:
+                                    ext_btn.bind(
+                                        "<Button-1>",
+                                        lambda _ev, d=extracted_dir: os.startfile(d) if os.path.exists(d) else None,
+                                    )
+                                ib = res.get("inlineBridge", {})
+                                lines = ib.get("summaryLines", [])
+                                status_lbl.config(text="\n".join(lines), fg="#FDE047")
+                                for ch in bridge_box.winfo_children():
+                                    ch.destroy()
+                                bridge_box.pack(fill="x", pady=(8, 0))
+                                b1 = tk.Label(
+                                    bridge_box,
+                                    text=ib.get("primaryCta", {}).get("label", "🔍 방금 푼 문서 내용 1초 검색"),
+                                    fg="#0B1120",
+                                    bg="#2DD4BF",
+                                    padx=8,
+                                    pady=4,
+                                    font=("Malgun Gothic", 8, "bold"),
+                                    cursor="hand2",
+                                )
+                                b1.pack(fill="x", pady=(0, 4))
+                                b1.bind("<Button-1>", lambda _ev: _toast_queue.put(("__UI2_SEARCH__|medium|", 10000)))
+                                b2 = tk.Label(
+                                    bridge_box,
+                                    text=ib.get("secondaryCta", {}).get("label", "📱 내 폰으로 바로 보내기 / 💼 팀 공유폴더(S:) 넣기"),
+                                    fg="#F8FAFC",
+                                    bg="#1E293B",
+                                    padx=8,
+                                    pady=4,
+                                    font=("Malgun Gothic", 8, "bold"),
+                                    cursor="hand2",
+                                )
+                                b2.pack(fill="x")
+                                b2.bind("<Button-1>", lambda _ev: (_close_win(), _open_ghosti_web()))
+                                win.update_idletasks()
+                                rw, rh = max(win.winfo_reqwidth(), 380), max(win.winfo_reqheight(), 90)
+                                _apply_win_topmost(win, win_rect[0][0], win_rect[0][1], rw, rh, activate=False)
+                            else:
+                                ext_btn.config(text="📂 한글깨짐/폭탄 없이 1초 만에 풀기")
+                                status_lbl.config(text=res.get("message") or res.get("error") or "해제 실패", fg="#FCA5A5")
+
+                        def _unzip_worker(pwd_val=None):
+                            try:
+                                _cs = _load_care_suite_mod()
+                                res = _cs.smart_extract_archive(arch_path, password=pwd_val)
+                            except Exception as ex:
+                                res = {"ok": False, "message": f"오류: {ex}"}
+                            try:
+                                win.after(0, lambda r=res: _on_unzip_result(r))
+                            except Exception:
+                                pass
 
                         def _do_smart_unzip(_e=None):
+                            if unzip_busy[0]:
+                                return
+                            unzip_busy[0] = True
                             is_hovered[0] = True
-                            try:
-                                for _cand_ag in (
-                                    Path(__file__).resolve().parent,
-                                    Path(__file__).resolve().parent / "os_agent",
-                                    Path(r"D:\Ghosti\universal_z_core\os_agent"),
-                                ):
-                                    if _cand_ag.exists() and str(_cand_ag) not in sys.path:
-                                        sys.path.insert(0, str(_cand_ag))
-                                import plugin_ghosti_care_suite as _cs
-                                res = _cs.smart_extract_archive(arch_path)
-                                if res.get("ok"):
-                                    ib = res.get("inlineBridge", {})
-                                    lines = ib.get("summaryLines", [])
-                                    status_lbl.config(text="\n".join(lines), fg="#FDE047")
-                                    for ch in bridge_box.winfo_children():
-                                        ch.destroy()
-                                    bridge_box.pack(fill="x", pady=(8, 0))
-                                    b1 = tk.Label(
-                                        bridge_box,
-                                        text=ib.get("primaryCta", {}).get("label", "🔍 풀린 문서 내용 바로 검색"),
-                                        fg="#0B1120",
-                                        bg="#2DD4BF",
-                                        padx=8,
-                                        pady=4,
-                                        font=("Malgun Gothic", 8, "bold"),
-                                        cursor="hand2",
-                                    )
-                                    b1.pack(fill="x", pady=(0, 4))
-                                    b1.bind("<Button-1>", lambda _ev: _toast_queue.put(("__UI2_SEARCH__|medium|", 10000)))
-                                    b2 = tk.Label(
-                                        bridge_box,
-                                        text=ib.get("secondaryCta", {}).get("label", "📱 내 폰으로 바로 보내기 / 💼 팀 공유폴더(S:) 넣기"),
-                                        fg="#F8FAFC",
-                                        bg="#1E293B",
-                                        padx=8,
-                                        pady=4,
-                                        font=("Malgun Gothic", 8, "bold"),
-                                        cursor="hand2",
-                                    )
-                                    b2.pack(fill="x")
-                                    b2.bind("<Button-1>", lambda _ev: (_close_win(), _open_ghosti_web()))
-                                    win.update_idletasks()
-                                    rw, rh = max(win.winfo_reqwidth(), 380), max(win.winfo_reqheight(), 90)
-                                    _apply_win_topmost(win, win_rect[0][0], win_rect[0][1], rw, rh, activate=False)
-                                else:
-                                    status_lbl.config(text=res.get("message") or res.get("error") or "해제 실패", fg="#FCA5A5")
-                            except Exception as ex:
-                                status_lbl.config(text=f"오류: {ex}", fg="#FCA5A5")
+                            ext_btn.config(text="⏳ 압축 푸는 중...")
+                            status_lbl.config(text="⏳ 압축 해제 및 파일명 검사 중... (잠시만 기다려 주세요)", fg="#5EEAD4")
+                            threading.Thread(target=_unzip_worker, args=(None,), daemon=True).start()
 
                         ext_btn = tk.Label(
                             btn_row,

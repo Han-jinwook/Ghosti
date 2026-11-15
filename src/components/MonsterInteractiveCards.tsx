@@ -1171,20 +1171,77 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
           {(message.deepUninstallPayload.sampleProcesses.length > 0 ||
             message.deepUninstallPayload.sampleServicesAndTasks.length > 0 ||
             message.deepUninstallPayload.sampleFolders.length > 0) && (
-            <div className="rounded-lg bg-slate-950/85 border border-slate-800 p-2.5 text-[11px] text-slate-300 space-y-1">
+            <div className="rounded-lg bg-slate-950/85 border border-slate-800 p-2.5 text-[11px] text-slate-300 space-y-1.5">
               <div className="font-bold text-slate-400">🔍 포착된 상주 모듈·부활 트리거·잔여 폴더:</div>
               {[
                 ...message.deepUninstallPayload.sampleProcesses,
                 ...message.deepUninstallPayload.sampleServicesAndTasks,
-                ...message.deepUninstallPayload.sampleFolders,
               ]
-                .slice(0, 8)
+                .slice(0, 6)
                 .map((item, idx) => (
-                  <div key={idx} className="flex items-center gap-1.5">
+                  <div key={`proc-${idx}`} className="flex items-center gap-1.5">
                     <span className="text-rose-400">•</span>
                     <span className="font-mono break-all">{item}</span>
                   </div>
                 ))}
+
+              {(message.deepUninstallPayload.residualFolderItems &&
+              message.deepUninstallPayload.residualFolderItems.length > 0 ? (
+                <div className="pt-1 space-y-1 border-t border-slate-800/80">
+                  <div className="text-[10.5px] font-bold text-teal-300">
+                    🗑️ Windows [휴지통]으로 옮길 잔여 캐시 폴더 선택 (체크 해제 시 보존):
+                  </div>
+                  {message.deepUninstallPayload.residualFolderItems.map((fItem) => {
+                    const selectedList =
+                      message.deepUninstallPayload?.selectedFolderPaths ??
+                      message.deepUninstallPayload?.residualFolderItems?.map((x) => x.path) ??
+                      [];
+                    const isChecked = selectedList.includes(fItem.path);
+                    return (
+                      <label
+                        key={fItem.path}
+                        className="flex items-center gap-2 cursor-pointer hover:text-white select-none"
+                      >
+                        <input
+                          type="checkbox"
+                          checked={isChecked}
+                          disabled={Boolean(message.deepUninstallPayload?.executed)}
+                          onChange={(e) => {
+                            if (!message.deepUninstallPayload) return;
+                            const nextSel = e.target.checked
+                              ? Array.from(new Set([...selectedList, fItem.path]))
+                              : selectedList.filter((p) => p !== fItem.path);
+                            onUpdateMessage({
+                              ...message,
+                              deepUninstallPayload: {
+                                ...message.deepUninstallPayload,
+                                selectedFolderPaths: nextSel,
+                              },
+                            });
+                          }}
+                          className="accent-teal-400 rounded cursor-pointer"
+                        />
+                        <span className="font-mono break-all">
+                          {fItem.path} ({fItem.sizeMb}MB)
+                        </span>
+                      </label>
+                    );
+                  })}
+                </div>
+              ) : (
+                message.deepUninstallPayload.sampleFolders.slice(0, 6).map((item, idx) => (
+                  <div key={`dir-${idx}`} className="flex items-center gap-1.5">
+                    <span className="text-rose-400">•</span>
+                    <span className="font-mono break-all">{item}</span>
+                  </div>
+                ))
+              ))}
+            </div>
+          )}
+
+          {message.deepUninstallPayload.executionError && !message.deepUninstallPayload.executed && (
+            <div className="px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs">
+              ⚠️ {message.deepUninstallPayload.executionError}
             </div>
           )}
 
@@ -1193,7 +1250,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4" />
-                  🔥 흔적까지 100% 심층 적출 및 스냅샷 백업 완료
+                  🔥 심층 제거 완료 (잔여 캐시 폴더 ➔ Windows [휴지통] 안전 이동)
                 </span>
                 {message.deepUninstallPayload.approvedTypedText && (
                   <span className="text-[11px] text-emerald-200 font-mono">
@@ -1210,7 +1267,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               <span className="text-[11px] text-slate-300">
-                ✍️ 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력하거나 우측 버튼을 눌러 주세요 (실행 전 복원 스냅샷 자동 백업).
+                ✍️ 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력하거나 우측 버튼을 눌러 주세요 (잔여 폴더는 Windows <strong>[휴지통]</strong>으로 안전 이동).
               </span>
               <button
                 type="button"
@@ -1220,28 +1277,40 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   setBusyId('deep_uninstall_exec');
                   const res = await executeDeepUninstallApproval(
                     message.deepUninstallPayload,
-                    '🔥 흔적까지 100% 심층 적출 실행 (버튼 승인)'
+                    '🔥 흔적까지 100% 심층 제거 실행 (버튼 승인)'
                   );
                   setBusyId(null);
+                  if (!res.ok) {
+                    onUpdateMessage({
+                      ...message,
+                      deepUninstallPayload: {
+                        ...message.deepUninstallPayload,
+                        executionError: res.reportKo,
+                      },
+                    });
+                    onToast?.(`⚠️ ${res.reportKo}`);
+                    return;
+                  }
                   onUpdateMessage({
                     ...message,
                     deepUninstallPayload: {
                       ...message.deepUninstallPayload,
                       executed: true,
-                      approvedTypedText: '🔥 흔적까지 100% 심층 적출 실행',
+                      executionError: undefined,
+                      approvedTypedText: '🔥 흔적까지 100% 심층 제거 실행',
                       snapshotFile: res.snapshotFile,
                       executionReportKo: res.reportKo,
                     },
                     healthRecordIssued: res.healthRecord || message.healthRecordIssued,
                   });
-                  onToast?.('🔥 상주 프로세스·스케줄러·잔여 폴더까지 100% 심층 적출을 완료했습니다!');
+                  onToast?.('🔥 심층 제거 완료! 잔여 캐시 폴더는 Windows [휴지통]으로 안전하게 옮겼습니다.');
                 }}
                 className="px-3.5 py-2 rounded-xl bg-rose-500 hover:bg-rose-400 text-white text-xs font-black cursor-pointer shadow flex items-center gap-1.5"
               >
                 <span>
                   {busyId === 'deep_uninstall_exec'
-                    ? '심층 적출 중...'
-                    : '🔥 흔적까지 100% 심층 적출 실행'}
+                    ? '심층 제거 중...'
+                    : '🔥 흔적까지 100% 심층 제거 실행'}
                 </span>
               </button>
             </div>
