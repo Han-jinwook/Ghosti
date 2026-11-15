@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getActivePersonaForCluster, useSaySeeStore } from '../store/useSaySeeStore';
-import { hasActiveGhostiLoginSession, zCoreBridge } from '../services/zCoreBridge';
+import { getZCoreUrl, hasActiveGhostiLoginSession, zCoreBridge } from '../services/zCoreBridge';
 import { jumpToGhostSecretary } from './GhostSecretaryFirstGuard';
 import type { FaceMemberCluster, RoomPersonaMap, YearlyFaceBestCut } from '../types/saysee';
 
@@ -31,6 +31,11 @@ export const AutonomousCanvasFaceAvatar: React.FC<{
   useEffect(() => {
     let cancelled = false;
     setCanvasReady(false);
+    if (!zCoreBridge.isConnected && !hasActiveGhostiLoginSession()) {
+      return () => {
+        cancelled = true;
+      };
+    }
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = () => {
@@ -62,7 +67,10 @@ export const AutonomousCanvasFaceAvatar: React.FC<{
       ctx.drawImage(img, sx, sy, sw, sh, 0, 0, 220, 220);
       setCanvasReady(true);
     };
-    img.src = `/__photos/file?p=${encodeURIComponent(photoFile)}`;
+    img.src =
+      photoFile.startsWith('http') || photoFile.startsWith('/sample_photos_301/')
+        ? photoFile
+        : getZCoreUrl(`/__photos/file?p=${encodeURIComponent(photoFile)}`);
     return () => {
       cancelled = true;
     };

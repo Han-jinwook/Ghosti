@@ -1,5 +1,6 @@
 import io
 import os
+import re
 import sys
 import time
 import zipfile
@@ -8,9 +9,20 @@ from pathlib import Path
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8")
 
 ROOT = Path(__file__).resolve().parent
+DAEMON_PY = ROOT / "universal_z_core" / "os_agent" / "merlin_z_core_daemon.py"
 DIST_EXE = ROOT / "universal_z_core" / "os_agent" / "dist" / "Merlin_Z_Core_Setup.exe"
 PUBLIC_DIR = ROOT / "public"
 PUBLIC_ZIP = PUBLIC_DIR / "Merlin_Z_Core.zip"
+
+
+def _read_core_version() -> str:
+    try:
+        m = re.search(r'CORE_VERSION\s*=\s*["\']([^"\']+)["\']', DAEMON_PY.read_text(encoding="utf-8"))
+        if m:
+            return m.group(1)
+    except Exception:
+        pass
+    return "2.3.9"
 
 
 def add_file_to_zip(z: zipfile.ZipFile, arcname: str, data: bytes):
@@ -41,13 +53,14 @@ timeout /t 3 > nul
 exit
 """
 
-    readme_content = """❖ 멀린 Z-코어 (Merlin Z-Core v2.3.8) 사용 안내
+    ver = _read_core_version()
+    readme_content = f"""❖ 멀린 Z-코어 (Merlin Z-Core v{ver}) 사용 안내
 
 1. [Merlin_Z_Core_Setup.exe]를 더블 클릭하여 실행합니다. (별도 설치 창 없이 영구 경로에 자동 안착됩니다)
 2. 실행 후 윈도우 작업표시줄 시계 옆(시스템 트레이)에 귀신같이 아이콘이 생성됩니다.
-3. 귀신같이 웹 브라우저(https://ghosti.sundreamer.app)의 [1. 귀신비서] 창으로 돌아가시면
+3. 귀신같이 웹 브라우저(https://ghosti.sundreamer.app)의 [1. 귀신비서] · [2. 귀신검색] 창으로 돌아가시면
    자동 연결되며, 외부 클라우드 전송 없이 내 컴퓨터 속 진짜 사진·동영상·문서만
-   조용히 로컬 인덱싱하여 1초 만에 귀신검색됩니다!
+   조용히 로컬 인덱싱하여 1초 만에 귀신검색됩니다! (어느 앱에서든 Ctrl+0 귀신검색창 즉시 소환)
 4. 압축파일(.zip/.7z/.rar 등) 더블클릭·우클릭 1초 압축 풀기(암호파일 완벽 지원) 및
    다중 파일 우클릭 ZIP 묶기, 안 쓰는 은행 보안프로그램 스마트 절전·자동 기상이 함께 작동합니다.
 """
@@ -60,7 +73,19 @@ exit
         add_file_to_zip(z, "Merlin_Z_Core_실행.bat", bat_content.encode("utf-8"))
         add_file_to_zip(z, "안내_README.txt", readme_content.encode("utf-8"))
 
-    os.replace(tmp_zip, PUBLIC_ZIP)
+    last_err = None
+    for _ in range(8):
+        try:
+            os.replace(tmp_zip, PUBLIC_ZIP)
+            last_err = None
+            break
+        except PermissionError as e:
+            last_err = e
+            time.sleep(0.5)
+    if last_err is not None:
+        if PUBLIC_ZIP.exists():
+            PUBLIC_ZIP.unlink()
+        os.replace(tmp_zip, PUBLIC_ZIP)
     size_mb = round(PUBLIC_ZIP.stat().st_size / 1024 / 1024, 2)
     print(f"✅ Merlin_Z_Core.zip created successfully in public/! Size: {size_mb} MB (sample_photos: 0)")
 

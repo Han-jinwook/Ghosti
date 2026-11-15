@@ -23,26 +23,26 @@ import {
 } from '../services/aiEngine';
 
 const PLAN_LABELS: Record<PricingPlanId, string> = {
-  free_trial: '🆓 1번 내 기기 (PC·폰) + 2번 사진 공유 (가족·동호회·동창회) : 평생 0원 (3·4번 유료 기능 🎁 1개월 무료체험 포함)',
-  personal_single_2900: '🆓 1번 내 기기 (PC·폰) : 언제나 0원 • 🔍 찾기 & ✋ 손보기',
+  free_trial: '🆓 1~4번 무료 코어 (귀신비서 · 귀신검색 · 귀신창 · 사진 공유) : 평생 0원 (5·6번 유료 확장 🎁 30일 무료체험 포함)',
+  personal_single_2900: '🆓 1~3번 내 기기 (PC·폰) : 언제나 0원 • 👻 귀신비서 · 🎯 귀신검색 · ⚡ 귀신창',
   personal_sub_3900: '👑 5번 내 기기 통합 (PC+폰+PC+) • 🎁 30일 무료체험 (이후 월 3,900원)',
   personal_year_35000: '👑 5번 내 기기 통합 (PC+폰+PC+) • 연간 결제 39,000원 (월 3,250원꼴 · 2개월 무료 할인)',
-  family_home_5900: '👨‍👩‍👧‍👦 2번 사진 공유 (가족 · 우리집) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  family_home_year_59000: '👨‍👩‍👧‍👦 2번 사진 공유 (가족 · 우리집) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  family_three_8900: '👨‍👩‍👧‍👦 2번 사진 공유 (가족 · 양가 3방) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  family_three_year_89000: '👨‍👩‍👧‍👦 2번 사진 공유 (가족 · 양가 3방) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  club_mini_free_300: '⛰️ 2번 사진 공유 (동호회 · 소모임) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  club_mini_2900: '⛰️ 2번 사진 공유 (동호회 · 소모임) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  club_small_4900: '⛰️ 2번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  club_small_year_49000: '⛰️ 2번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  club_medium_7900: '⛰️ 2번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  club_medium_year_79000: '⛰️ 2번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  club_large_14900: '⛰️ 2번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  club_large_year_149000: '⛰️ 2번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  student_sub_900: '🎓 2번 사진 공유 (동창회 · 학급) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  student_year_9000: '🎓 2번 사진 공유 (동창회 · 학급) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  work_soho_9900: '💼 6번 업무 공유 (S: 드라이브 · 문서/계약서) • 소호 ~5인 (🎁 30일 무료체험 / 월 9,900원)',
-  work_soho_year_99000: '💼 6번 업무 공유 (S: 드라이브 · 문서/계약서) • 소호 ~5인 (연간 결제 99,000원 · 월 8,250원꼴)',
+  family_home_5900: '👨‍👩‍👧‍👦 4번 사진 공유 (가족 · 우리집) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  family_home_year_59000: '👨‍👩‍👧‍👦 4번 사진 공유 (가족 · 우리집) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  family_three_8900: '👨‍👩‍👧‍👦 4번 사진 공유 (가족 · 양가 3방) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  family_three_year_89000: '👨‍👩‍👧‍👦 4번 사진 공유 (가족 · 양가 3방) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  club_mini_free_300: '⛰️ 4번 사진 공유 (동호회 · 소모임) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  club_mini_2900: '⛰️ 4번 사진 공유 (동호회 · 소모임) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  club_small_4900: '⛰️ 4번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  club_small_year_49000: '⛰️ 4번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  club_medium_7900: '⛰️ 4번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  club_medium_year_79000: '⛰️ 4번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  club_large_14900: '⛰️ 4번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  club_large_year_149000: '⛰️ 4번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  student_sub_900: '🎓 4번 사진 공유 (동창회 · 학급) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  student_year_9000: '🎓 4번 사진 공유 (동창회 · 학급) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  work_soho_9900: '💼 6번 업무 공유 (S: 드라이브 · 5인·30GB 평생 0원 / 초과 시 월 9,900원)',
+  work_soho_year_99000: '💼 6번 업무 공유 (S: 드라이브 · 소호 ~5인 연간 결제 99,000원 · 월 8,250원꼴)',
   work_biz_19900: '💼 6번 업무 공유 • 소기업 ~20인 (월 19,000원) / 중소기업 ~50인 (월 29,000원)',
   work_biz_year_199000: '💼 6번 업무 공유 • 소기업 ~20인 (연 190,000원) / 중소기업 ~50인 (연 290,000원)',
 };
@@ -73,7 +73,7 @@ export function validateClubSignboardName(rawName: string): {
     return {
       valid: false,
       blockedCategory: 'WORK',
-      reason: '🚫 [AI 문패 필터] 기업/부서/업무 명칭은 무료 사진 공유방 문패로 사용할 수 없습니다. 엑셀·한글·PDF·워드 업무 서류 검색 및 윈도우 탐색기 S: 드라이브는 [💼 4번 업무 공유 (1개월 무료체험 / 월 9,900원~)]를 이용해 주세요.',
+      reason: '🚫 [AI 문패 필터] 기업/부서/업무 명칭은 무료 사진 공유방 문패로 사용할 수 없습니다. 엑셀·한글·PDF·워드 업무 서류 검색 및 윈도우 탐색기 S: 드라이브는 [💼 6번 업무 공유 (5인·30GB 평생 0원 / 월 9,900원~)]를 이용해 주세요.',
     };
   }
   return { valid: true };
@@ -473,15 +473,15 @@ export const PricingModal: React.FC = () => {
                   }}
                   className="px-2.5 py-1 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[11px] font-bold"
                 >
-                  ✨ 1·2번 무료 모드 (내 기기 + 사진 공유 0원)로 전환
+                  ✨ 1~4번 무료 모드 (내 기기 + 사진 공유 0원)로 전환
                 </button>
               )}
             </div>
             <h2 className="font-headline-lg text-[21px] md:text-[25px] text-white font-black tracking-tight mt-1">
-              1·2번(내 기기 · 사진 공유)은 평생 0원! 3·4번(내 기기 통합 · 업무 공유)은 🎁 1개월 무료체험 후 결정하세요
+              1~4번(귀신비서 · 귀신검색 · 귀신창 · 사진 공유)은 평생 0원! 5·6번(내 기기 통합 · 업무 공유)은 🎁 30일 무료체험 후 결정하세요
             </h2>
             <p className="font-body-sm text-[13px] text-zinc-200 font-medium">
-              • 내 기기(찾기·손보기)와 사진 공유(👨‍👩‍👧‍👦가족 · ⛰️동호회 · 🎓동창회)는 내 PC 하드 직결로 클라우드 서버비가 안 들기 때문에 인원 무제한 평생 0원입니다. (단, 2번 사진 공유는 오직 사진·동영상 전용이며, 업무 서류·S: 드라이브는 4번 업무 공유 전용입니다.)
+              • 내 기기(귀신비서·귀신검색·귀신창)와 4번 사진 공유(👨‍👩‍👧‍👦가족 · ⛰️동호회 · 🎓동창회)는 내 PC 하드 직결로 클라우드 서버비가 안 들기 때문에 인원 무제한 평생 0원입니다. (단, 4번 사진 공유는 오직 사진·동영상 전용이며, 업무 서류·S: 드라이브는 6번 업무 공유 전용입니다.)
             </p>
           </div>
 
@@ -554,12 +554,12 @@ export const PricingModal: React.FC = () => {
             </div>
           </div>
 
-          {/* ② [2번 — 평생 무료] 사진 공유: 👨‍👩‍👧‍👦 가족 / ⛰️ 동호회 / 🎓 동창회 (오직 사진·동영상 전용) */}
+          {/* ② [4번 — 평생 무료] 사진 공유: 👨‍👩‍👧‍👦 가족 / ⛰️ 동호회 / 🎓 동창회 (오직 사진·동영상 전용) */}
           <div className="p-5 rounded-2xl bg-[#18181B] border-2 border-emerald-400/60 flex flex-col justify-between gap-4">
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-md bg-emerald-400 text-zinc-950 font-label-sm text-[11.5px] font-black">
-                  2번 [평생 무료] 사진 공유 (👨‍👩‍👧‍👦 가족 · ⛰️ 동호회 · 🎓 동창회)
+                  4번 [평생 무료] 사진 공유 (👨‍👩‍👧‍👦 가족 · ⛰️ 동호회 · 🎓 동창회)
                 </span>
                 <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/50 text-emerald-200 font-label-sm text-[10.5px] font-extrabold">
                   📸 사진·동영상 전용 · 인원 무제한 평생 0원
@@ -581,7 +581,7 @@ export const PricingModal: React.FC = () => {
                 <p className="font-body-sm text-[12px] text-zinc-200 leading-relaxed">
                   • 👨‍👩‍👧‍👦 <strong>가족</strong> (우리집 · 친가 · 처가) / ⛰️ <strong>동호회</strong> (산악회 · 골프 · 소모임) / 🎓 <strong>동창회</strong> 모두 <strong>인원수·장수 제한 없이 100% 평생 무료</strong>!<br />
                   • 💬 <strong>카톡 단톡방 인앱 무가입 1초 프리뷰</strong> + 🛂 <strong>각 방 인물 얼굴 1초 찾기</strong> 기본 제공<br />
-                  • ⚠️ <strong className="text-amber-300">오직 사진 · 동영상 공유만 작동</strong>합니다. (엑셀·한글·PDF·워드 등 업무 문서 공유 및 윈도우 탐색기 <code>S: 드라이브</code> 마운트는 <strong>4번 업무 공유(유료)</strong> 전용입니다.)
+                  • ⚠️ <strong className="text-amber-300">오직 사진 · 동영상 공유만 작동</strong>합니다. (엑셀·한글·PDF·워드 등 업무 문서 공유 및 윈도우 탐색기 <code>S: 드라이브</code> 마운트는 <strong>6번 업무 공유(5인·30GB 평생 0원 / 유료 확장)</strong> 전용입니다.)
                 </p>
                 <div className="grid grid-cols-3 gap-1.5 pt-1">
                   <button
@@ -1067,7 +1067,17 @@ export const LocalDocPreviewModal: React.FC = () => {
 
   const effectiveQuery = hasExecutedUserSearch ? activeQuery : '';
   const isSpeakingNow = getIsTtsSpeaking();
-  const fallbackDocVoiceText = `${selectedDocModal.title}. ${selectedDocModal.extractedText}`;
+  const maskedDocText = selectedDocModal.extractedText.replace(
+    /((?:비밀번호|패스워드|비번|password|pw|pin|암호)\s*[:=]?\s*)([^\s,\n]+)/gi,
+    '$1••••••••'
+  );
+  const safeVoiceBody = revealDocPasswords
+    ? selectedDocModal.extractedText
+    : selectedDocModal.extractedText.replace(
+        /((?:비밀번호|패스워드|비번|password|pw|pin|암호)\s*[:=]?\s*)([^\s,\n]+)/gi,
+        '$1 비공개 마스킹됨'
+      );
+  const fallbackDocVoiceText = `${selectedDocModal.title}. ${safeVoiceBody}`;
 
   const handleCloseModal = () => {
     stopSetupMonsterTts();
@@ -1152,7 +1162,7 @@ export const LocalDocPreviewModal: React.FC = () => {
               {/(비밀번호|패스워드|password|계정|비번|암호)/i.test(
                 `${selectedDocModal.title} ${selectedDocModal.extractedText}`
               ) && (
-                <button
+                  <button
                   type="button"
                   onClick={() => setRevealDocPasswords((v) => !v)}
                   className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/50 text-amber-200 font-label-sm text-[11.5px] font-extrabold shrink-0 cursor-pointer"
@@ -1160,28 +1170,11 @@ export const LocalDocPreviewModal: React.FC = () => {
                   {revealDocPasswords ? '🙈 비번 숨기기' : '👁️ 보기'}
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => {
-                  void navigator.clipboard?.writeText(selectedDocModal.extractedText);
-                  useSaySeeStore.setState({
-                    lastQuarantineToast: `📋 복사 완료! [${selectedDocModal.title}] 본문 내용이 클립보드에 복사되었습니다.`,
-                  });
-                }}
-                className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-400/50 text-emerald-300 font-label-sm text-[11.5px] font-extrabold shrink-0 cursor-pointer"
-              >
-                📋 복사
-              </button>
             </div>
           </div>
           <p className="font-body-md text-[13.5px] sm:text-[14px] text-on-surface leading-relaxed whitespace-pre-wrap break-words">
             {renderHighlightedDocText(
-              revealDocPasswords
-                ? selectedDocModal.extractedText
-                : selectedDocModal.extractedText.replace(
-                    /((?:비밀번호|패스워드|비번|password|pw)\s*[:=]?\s*)([^\s,\n]+)/gi,
-                    '$1••••••••'
-                  ),
+              revealDocPasswords ? selectedDocModal.extractedText : maskedDocText,
               effectiveQuery,
               selectedDocModal.keywords.slice(0, 4)
             )}
@@ -1270,7 +1263,7 @@ export const LocalDocPreviewModal: React.FC = () => {
                   });
                 });
               }}
-              className="hidden sm:flex px-3.5 py-2 rounded-xl bg-amber-500 text-zinc-950 font-label-md text-[12.5px] font-black items-center gap-1 shadow-md hover:bg-amber-400 transition-colors cursor-pointer"
+              className="flex px-3.5 py-2 rounded-xl bg-amber-500 text-zinc-950 font-label-md text-[12.5px] font-black items-center gap-1 shadow-md hover:bg-amber-400 transition-colors cursor-pointer"
             >
               <span>🔍 파일 띄우기</span>
             </button>

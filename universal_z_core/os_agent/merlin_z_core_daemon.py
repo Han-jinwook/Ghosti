@@ -55,7 +55,7 @@ import plugin_aggrofilter  # noqa: E402
 import ghosti_setup_parity  # noqa: E402
 import plugin_ghosti_superpowers  # noqa: E402
 
-CORE_VERSION = "2.3.8"
+CORE_VERSION = "2.3.9"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -465,6 +465,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 self._send_json({"ok": False, "error": "FILE_NOT_FOUND"}, status=status)
             return
 
+        if path in ("/__photos/ocr", "/api/ghosti/photos/ocr"):
+            self._send_json(plugin_ghosti_os.extract_photo_winrt_ocr(qp))
+            return
+
         if path in ("/__videos/thumb", "/api/ghosti/videos/thumb"):
             t_path, status = plugin_ghosti_os.get_or_create_video_thumb(qp)
             if t_path is not None and status == 200:
@@ -772,6 +776,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_ghosti_os.ingest_browser_video_ocr_frames(body))
             return
 
+        if path in ("/__photos/ocr", "/api/ghosti/photos/ocr"):
+            self._send_json(plugin_ghosti_os.extract_photo_winrt_ocr(body))
+            return
+
         if path in ("/__videos/extract-ocr-text", "/api/ghosti/videos/extract-ocr-text"):
             self._send_json(plugin_ghosti_os.extract_full_video_ocr_text(body))
             return
@@ -875,12 +883,20 @@ def run_selftest(live: bool = False) -> Dict[str, Any]:
     # 자가진단에서는 실제 파일을 되돌리는 롤백을 실행하지 않는다 (유저 파일 보호)
     rollback_res = {"message": "자가진단에서는 실제 롤백을 실행하지 않습니다 (유저 파일 보호)"}
     tree_summary = plugin_ghosti_os.handle_request("folder-tree-summary")
-    all_ok = bool(ag_vid == "dQw4w9WgXcQ" and ag_parser_ok and (ag_live.get("skipped") or ag_live.get("allOk")))
+    sp_telemetry = plugin_ghosti_superpowers.get_telemetry()
+    ocr_guard = plugin_ghosti_os.extract_photo_winrt_ocr({})
+    sp_ok = bool(sp_telemetry.get("ok") is True and ocr_guard.get("error") == "MISSING_IMAGE_TARGET")
+    all_ok = bool(ag_vid == "dQw4w9WgXcQ" and ag_parser_ok and sp_ok and (ag_live.get("skipped") or ag_live.get("allOk")))
     return {
         "ok": all_ok,
         "selftest": "PASSED" if all_ok else "FAILED",
         "unifiedHealth": h,
         "ghostiPluginHealth": ghosti_status,
+        "superpowerAndSearchCheck": {
+            "ok": sp_ok,
+            "telemetryOk": sp_telemetry.get("ok"),
+            "photoOcrGuard": ocr_guard.get("error"),
+        },
         "restorePointsPrecheck": {
             "officialTerm": restore_precheck.get("officialTerm"),
             "precheckElapsedMs": restore_precheck.get("precheckElapsedMs"),

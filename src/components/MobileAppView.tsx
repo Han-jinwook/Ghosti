@@ -590,6 +590,11 @@ export const MobileAppView: React.FC = () => {
                         <div className="absolute top-2 right-2 px-2.5 py-0.5 rounded bg-zinc-950/90 border border-white/15 text-white font-label-mono text-[10.5px] font-extrabold">
                           ⏱️ {vid.durationText}
                         </div>
+                        {vid.hasScreenOcrText && (
+                          <div className="absolute bottom-2 left-2 px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10px] font-black shadow-sm">
+                            ✨ 화면 글자 감지됨
+                          </div>
+                        )}
                         <div className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/85 border border-white/20 text-emerald-300 font-label-mono text-[10.5px] font-extrabold">
                           ▶ {vid.durationText}
                         </div>
@@ -604,16 +609,33 @@ export const MobileAppView: React.FC = () => {
                             {vid.matchedFrameCaption}
                           </p>
                         )}
-                        <span className="font-label-mono text-[10.5px] text-zinc-400 pt-0.5 flex items-center justify-between">
-                          <span>📍 {vid.locationKo}</span>
-                          <span className="text-primary-container font-bold">
-                            {hasExecutedUserSearch && activeQuery
-                              ? isWholeClip
-                                ? '▶ 처음부터 재생'
-                                : `▶ ${cleanTs} 바로 재생`
-                              : '▶ 재생'}
-                          </span>
-                        </span>
+                        <div className="font-label-mono text-[10.5px] text-zinc-400 pt-0.5 flex items-center justify-between gap-2">
+                          <span className="truncate">📍 {vid.locationKo}</span>
+                          <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                try {
+                                  sessionStorage.setItem('ghosti_auto_extract_video_ocr', vid.id);
+                                } catch {
+                                  /* ignore */
+                                }
+                                setSelectedVideoModal(vid, vid.matchedSeekSec);
+                              }}
+                              className="px-2 py-0.5 rounded-lg bg-teal-500/20 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/50 font-label-sm text-[10.5px] font-black cursor-pointer"
+                            >
+                              📝 글자 뽑기
+                            </button>
+                            <span className="text-primary-container font-bold">
+                              {hasExecutedUserSearch && activeQuery
+                                ? isWholeClip
+                                  ? '▶ 처음부터'
+                                  : `▶ ${cleanTs}`
+                                : '▶ 재생'}
+                            </span>
+                          </div>
+                        </div>
                       </div>
                     </article>
                     );

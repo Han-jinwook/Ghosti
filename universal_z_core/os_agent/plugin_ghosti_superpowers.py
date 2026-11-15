@@ -568,12 +568,19 @@ def simulate_superpower(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
     return {"ok": False, "error": f"UNKNOWN_SIMULATE_MODE: {mode}"}
 
 
-def get_telemetry() -> Dict[str, Any]:
+def get_telemetry(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """[100% 합법 익명 통계(Zero-Content Telemetry)] 원문 0 Byte, 기능별 호출 횟수만 반환"""
     enabled = spd.is_telemetry_enabled()
     data: Dict[str, Any] = {"daily": {}, "total": {}, "updated_at": None}
-    for cand in (spd.TELEMETRY_FILE, spd.TELEMETRY_SEC_MIRROR):
-        if cand.exists():
+    cand_paths = [spd.TELEMETRY_FILE]
+    legacy_dir = getattr(spd, "_LEGACY_MERLIN_APPDATA", None)
+    if isinstance(legacy_dir, Path):
+        cand_paths.append(legacy_dir / "superpower_telemetry.json")
+    sec_mirror = getattr(spd, "TELEMETRY_SEC_MIRROR", None)
+    if isinstance(sec_mirror, Path):
+        cand_paths.append(sec_mirror)
+    for cand in cand_paths:
+        if cand and cand.exists():
             try:
                 loaded = json.loads(cand.read_text(encoding="utf-8"))
                 if isinstance(loaded, dict):
@@ -581,10 +588,10 @@ def get_telemetry() -> Dict[str, Any]:
                     break
             except Exception:
                 pass
-    wav_files = sorted(w.name for w in spd.SOUNDS_DIR.glob("*.wav")) if spd.SOUNDS_DIR.exists() else []
+    wav_files = sorted(w.name for w in spd.SOUNDS_DIR.glob("*.wav")) if getattr(spd, "SOUNDS_DIR", None) and spd.SOUNDS_DIR.exists() else []
     return {
         "ok": True,
-        "version": "3.1",
+        "version": "3.2",
         "zero_content_guaranteed": True,
         "collected_content_bytes": 0,
         "telemetry_enabled": enabled,
@@ -601,9 +608,9 @@ def update_telemetry(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
     if "enabled" in data and data["enabled"] is not None:
         spd.set_telemetry_enabled(bool(data["enabled"]))
     feature_key = str(data.get("feature_key") or data.get("featureKey") or "").strip()
-    if feature_key and spd.is_telemetry_enabled():
+    if feature_key and (spd.is_telemetry_enabled() or feature_key.startswith("ghost_search_window_")):
         spd.record_feature_telemetry(feature_key)
-        time.sleep(0.03)
+        time.sleep(0.04)
     res = get_telemetry()
     res["message"] = (
         "✅ 익명 기능 사용 통계 수집이 활성화되었습니다 (원문 텍스트 0 Byte 수집)."

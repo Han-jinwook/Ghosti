@@ -28,11 +28,11 @@ import plugin_ghosti_os as gos  # noqa: E402
 
 
 class GhostSecretaryEdgeAuditTest(unittest.TestCase):
-    def test_01_version_parity_238(self) -> None:
-        self.assertEqual(zdaemon.CORE_VERSION, "2.3.8")
-        self.assertEqual(gos.PLUGIN_METADATA.get("version"), "2.3.8")
+    def test_01_version_parity(self) -> None:
+        ver = zdaemon.CORE_VERSION
+        self.assertEqual(gos.PLUGIN_METADATA.get("version"), ver)
         zcore_ts = (REPO_ROOT / "src" / "services" / "zCoreBridge.ts").read_text(encoding="utf-8")
-        self.assertIn("LATEST_Z_CORE_VERSION = '2.3.8'", zcore_ts)
+        self.assertIn(f"LATEST_Z_CORE_VERSION = '{ver}'", zcore_ts)
 
     def test_02_zero_hardcoded_fake_gdocs_and_samples(self) -> None:
         res = gos.scan_g_drive_google_docs_and_sheets()

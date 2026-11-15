@@ -35,6 +35,35 @@ except Exception:
     ImageTk = None
 
 _VIDEO_OCR_UI_CACHE: dict[str, Any] = {"ts": 0.0, "by_name": {}}
+_UI2_SMALL_THUMB_CACHE: dict[str, bytes] = {}
+
+
+def _get_or_make_small_thumb_bytes(img_path_str: str) -> bytes:
+    if not img_path_str or Image is None:
+        return b""
+    try:
+        if not os.path.isfile(img_path_str):
+            return b""
+        st = os.stat(img_path_str)
+        if st.st_size <= 0 or st.st_size > 25 * 1024 * 1024:
+            return b""
+        sig = f"{os.path.normcase(os.path.abspath(img_path_str))}|{st.st_size}|{int(st.st_mtime)}"
+        cached = _UI2_SMALL_THUMB_CACHE.get(sig)
+        if cached is not None:
+            return cached
+        with Image.open(img_path_str) as raw_im:
+            im_c = raw_im.convert("RGBA")
+            resamp = getattr(getattr(Image, "Resampling", Image), "BILINEAR", Image.NEAREST)
+            im_c.thumbnail((42, 28), resamp)
+            bio = io.BytesIO()
+            im_c.save(bio, "PNG")
+            tb = bio.getvalue()
+        if len(_UI2_SMALL_THUMB_CACHE) > 160:
+            _UI2_SMALL_THUMB_CACHE.clear()
+        _UI2_SMALL_THUMB_CACHE[sig] = tb
+        return tb
+    except Exception:
+        return b""
 
 
 def _load_local_video_ocr_by_name() -> dict[str, dict[str, Any]]:
@@ -43,11 +72,11 @@ def _load_local_video_ocr_by_name() -> dict[str, dict[str, Any]]:
     if _VIDEO_OCR_UI_CACHE["by_name"] and (now - float(_VIDEO_OCR_UI_CACHE["ts"])) < 15.0:
         return _VIDEO_OCR_UI_CACHE["by_name"]
 
+    local_appdata = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
     candidates = [
-        Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
-        / "Programs"
-        / "MerlinFamily"
-        / "video_scene_ocr_cache_v2.json",
+        local_appdata / "Merlin" / "video_scene_ocr_cache_v2.json",
+        local_appdata / "Ghosti" / "data" / "video_scene_ocr_cache_v2.json",
+        local_appdata / "Programs" / "MerlinFamily" / "video_scene_ocr_cache_v2.json",
         Path.home() / ".merlin_z_core" / "video_scene_ocr_cache_v2.json",
     ]
     by_name: dict[str, dict[str, Any]] = {}
@@ -61,7 +90,7 @@ def _load_local_video_ocr_by_name() -> dict[str, dict[str, Any]]:
                     if not isinstance(val, dict):
                         continue
                     fname = str(val.get("videoFileName") or sig_key.split("|", 1)[0]).strip()
-                    if not fname:
+                    if not fname or fname in by_name:
                         continue
                     frames = val.get("frames") if isinstance(val.get("frames"), list) else []
                     full_txt = str(val.get("fullText") or "").strip()
@@ -79,7 +108,6 @@ def _load_local_video_ocr_by_name() -> dict[str, dict[str, Any]]:
                             "lineCount": int(val.get("lineCount") or len(full_txt.splitlines())),
                             "keywords": val.get("keywords") or [],
                         }
-            break
         except Exception:
             pass
 
@@ -93,7 +121,7 @@ def _fetch_video_ocr_from_zcore(file_path_or_name: str) -> dict[str, Any]:
     q = urllib.parse.quote(file_path_or_name)
     url = f"http://127.0.0.1:5199/__videos/extract-ocr-text?p={q}"
     try:
-        req = urllib.request.Request(url, method="GET")
+        req = urllib.request.Request(url, headers={"Origin": "http://127.0.0.1:5199"}, method="GET")
         with urllib.request.urlopen(req, timeout=25.0) as resp:
             data = json.loads(resp.read().decode("utf-8", errors="replace"))
             if isinstance(data, dict):
@@ -162,6 +190,10 @@ def build_ui2_search_window(
         "video_ocr_result_text": "",
         "video_ocr_copied_msg": "",
     }
+    try:
+        record_feature_telemetry(f"ghost_search_window_{st_state['stage']}")
+    except Exception:
+        pass
 
     outer = tk.Frame(win, bg="#0B1120", highlightbackground="#38BDF8", highlightthickness=2, padx=8, pady=6)
     outer.pack(fill="both", expand=True)
@@ -245,7 +277,15 @@ def build_ui2_search_window(
         cursor="hand2",
     )
     lbl_quick_btn.pack(side="right", padx=(4, 2))
-    lbl_quick_btn.bind("<Button-1>", lambda _e: (close_win(), clicked_superpower_queue.put(2)))
+    def _on_hdr_labeler(_e=None) -> None:
+        sel_fp = ""
+        if st_state["items"]:
+            cur_r = st_state["items"][min(st_state["sel_idx"], len(st_state["items"]) - 1)]
+            sel_fp = str(cur_r.get("file_path") or cur_r.get("img_path") or "").strip()
+        close_win()
+        clicked_superpower_queue.put((2, sel_fp, False) if sel_fp else 2)
+
+    lbl_quick_btn.bind("<Button-1>", _on_hdr_labeler)
 
     s_entry = tk.Entry(
         hdr,
@@ -536,6 +576,7 @@ def build_ui2_search_window(
                     pool.append({
                         "kind": ekind,
                         "file_path": efp,
+                        "img_path": efp if ekind == "image" else "",
                         "ts": float(erec.get("indexedTs") or time.time()),
                         "text": f"📦 {efn}" + (f" — {esnip}" if esnip else f" ({Path(efp).parent.name})"),
                     })
@@ -744,17 +785,22 @@ def build_ui2_search_window(
             )
             num_l.pack(side="left", padx=(0, 5))
 
-            if st_now != "medium" and kind == "image" and rec.get("thumb_bytes") and Image is not None and ImageTk is not None:
+            if st_now != "medium" and kind == "image" and Image is not None and ImageTk is not None:
                 try:
-                    im_p = Image.open(io.BytesIO(rec["thumb_bytes"]))
-                    th_p = ImageTk.PhotoImage(im_p, master=root)
-                    thumb_refs.append(th_p)
-                    tl = tk.Label(card, image=th_p, bg=c_bg, bd=0)
-                    tl.pack(side="left", padx=(0, 5))
+                    tb_raw = rec.get("thumb_bytes") or _get_or_make_small_thumb_bytes(
+                        str(rec.get("img_path") or rec.get("file_path") or "").strip()
+                    )
+                    if tb_raw:
+                        im_p = Image.open(io.BytesIO(tb_raw))
+                        th_p = ImageTk.PhotoImage(im_p, master=root)
+                        thumb_refs.append(th_p)
+                        tl = tk.Label(card, image=th_p, bg=c_bg, bd=0)
+                        tl.pack(side="left", padx=(0, 5))
                 except Exception:
                     pass
 
             if kind == "image":
+                img_ref_p = str(rec.get("img_path") or rec.get("file_path") or "").strip()
                 ocr_b = tk.Label(
                     card,
                     text="📝OCR",
@@ -768,7 +814,7 @@ def build_ui2_search_window(
                 ocr_b.pack(side="right", padx=(4, 0))
                 ocr_b.bind(
                     "<Button-1>",
-                    lambda _e, r=rec: toast_queue.put((f"__UI3_OCR__|{r.get('img_path','')}", 8000)),
+                    lambda _e, ip=img_ref_p: toast_queue.put((f"__UI3_OCR__|{ip}", 8000)),
                 )
             elif kind == "video":
                 has_v_ocr = bool(rec.get("video_ocr_full"))
@@ -923,7 +969,7 @@ def build_ui2_search_window(
                 ocr_jump.pack(fill="x", pady=2)
                 ocr_jump.bind(
                     "<Button-1>",
-                    lambda _e, r=sel_rec: toast_queue.put((f"__UI3_OCR__|{r.get('img_path','')}", 8000)),
+                    lambda _e, ip=s_fpath: toast_queue.put((f"__UI3_OCR__|{ip}", 8000)),
                 )
             elif sel_rec.get("kind") == "video":
                 vocr_jump = tk.Label(
@@ -938,6 +984,22 @@ def build_ui2_search_window(
                 )
                 vocr_jump.pack(fill="x", pady=2)
                 vocr_jump.bind("<Button-1>", lambda _e, r=sel_rec: _open_video_ocr_extractor(r))
+            if s_fpath and os.path.isfile(s_fpath):
+                lbl_jump = tk.Label(
+                    preview_pane,
+                    text="🏷️ 이 파일 귀신라벨링🔒",
+                    fg="#0B1120",
+                    bg="#5EEAD4",
+                    padx=8,
+                    pady=4,
+                    font=("Malgun Gothic", 9, "bold"),
+                    cursor="hand2",
+                )
+                lbl_jump.pack(fill="x", pady=2)
+                lbl_jump.bind(
+                    "<Button-1>",
+                    lambda _e, fp=s_fpath: (close_win(), clicked_superpower_queue.put((2, fp, True))),
+                )
 
     def _on_key_rel(event=None):
         is_hovered[0] = True

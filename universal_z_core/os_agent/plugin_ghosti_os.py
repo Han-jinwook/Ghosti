@@ -41,7 +41,7 @@ FILE_ATTRIBUTE_NORMAL = 0x80
 PLUGIN_METADATA = {
     "pluginId": "ghosti_os",
     "pluginName": "Ghosti & 3-Monsters OS + RestorePoint + RecycleBin Omni-Tracker Plugin",
-    "version": "2.3.8",
+    "version": "2.3.9",
     "type": "BUILTIN_SOFTWARE_PLUGIN",
     "port": 5199,
     "capabilities": [
@@ -57,6 +57,8 @@ PLUGIN_METADATA = {
         "ai-baton-touch",
         "gdrive-smart-scan",
         "kakao-real-chatroom-send",
+        "photo-winrt-ocr",
+        "pdf-deep-text",
     ],
 }
 
@@ -545,12 +547,14 @@ def scan_g_drive_google_docs_and_sheets(query: str = "") -> Dict[str, Any]:
     }
 
 
+import base64
 import re
 import subprocess
 import tempfile
 import threading
 import urllib.parse
 import zipfile
+import zlib
 
 _PHOTO_PATH_INDEX: Dict[str, Path] = {}
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".heic"}
@@ -643,32 +647,55 @@ def _save_custom_scan_roots(new_paths: List[Path]) -> List[Path]:
 
 def _get_user_scan_roots(extra_path: str = "") -> List[Path]:
     home = Path.home()
-    onedrive = home / "OneDrive"
     roots: List[Path] = []
     if extra_path:
         p = Path(extra_path)
         if p.exists() and p.is_dir():
             roots.append(p)
+    onedrive_roots: List[Path] = []
+    for env_k in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+        ev = (os.environ.get(env_k) or "").strip()
+        if ev:
+            onedrive_roots.append(Path(ev))
+    onedrive_roots.append(home / "OneDrive")
+
+    kf_pics = safe.known_folder("pictures")
+    kf_vids = safe.known_folder("videos")
+    kf_docs = safe.known_folder("documents")
+    kf_desk = safe.known_folder("desktop")
+    kf_down = safe.known_folder("downloads")
+
     # [정본 원칙] 엔진 설치 시 가짜 샘플 사진을 절대 스캔·포함하지 않고 오직 실제 유저의 문서·사진·영상 폴더만 스캔!
-    # (0순위: 사용자 지정 폴더 ➔ 1순위: 사진·동영상·문서·카톡 받은 파일 ➔ 2순위: 바탕화면·다운로드)
-    candidates = [
+    # (0순위: 사용자 지정 폴더 ➔ 1순위: Windows Known Folders(OneDrive 리디렉션 포함) + 사진·동영상·문서·카톡 받은 파일 ➔ 2순위: 바탕화면·다운로드)
+    candidates: List[Path] = [
         *_load_custom_scan_roots(),
+        kf_pics,
+        kf_vids,
+        kf_docs,
+        kf_docs / "카카오톡 받은 파일",
         home / "Pictures",
         home / "Videos",
         home / "Documents",
         home / "Documents" / "카카오톡 받은 파일",
-        onedrive / "Pictures",
-        onedrive / "사진",
-        onedrive / "Videos",
-        onedrive / "동영상",
-        onedrive / "Documents",
-        onedrive / "문서",
-        onedrive / "문서" / "카카오톡 받은 파일",
-        home / "Desktop",
-        onedrive / "Desktop",
-        onedrive / "바탕 화면",
-        home / "Downloads",
     ]
+    for od in onedrive_roots:
+        candidates.extend([
+            od / "Pictures",
+            od / "사진",
+            od / "Videos",
+            od / "동영상",
+            od / "Documents",
+            od / "문서",
+            od / "문서" / "카카오톡 받은 파일",
+            od / "Desktop",
+            od / "바탕 화면",
+        ])
+    candidates.extend([
+        kf_desk,
+        home / "Desktop",
+        kf_down,
+        home / "Downloads",
+    ])
     seen_resolved: set[str] = set()
     for c in candidates:
         try:
@@ -1038,7 +1065,12 @@ def resolve_local_media_file(params: Dict[str, Any] | None = None) -> tuple[Path
         ".mkv": "video/x-matroska",
     }
     ext = full_path.suffix.lower()
-    content_type = mime_map.get(ext, "application/octet-stream")
+    if ext not in mime_map:
+        return None, "text/plain", 403
+    low_resolved = str(full_path.resolve()).lower()
+    if "\\windows\\" in low_resolved or "\\system32\\" in low_resolved:
+        return None, "text/plain", 403
+    content_type = mime_map[ext]
     return full_path, content_type, 200
 
 
@@ -1054,16 +1086,700 @@ def read_local_photo_file(params: Dict[str, Any] | None = None) -> tuple[bytes |
         return None, "text/plain", 500
 
 
-def _extract_doc_text(entry: Path) -> str:
+_DOC_TEXT_CACHE_FILE = MERLIN_DIR / "doc_text_cache_v1.json"
+_DOC_TEXT_CACHE_LOCK = threading.Lock()
+_DOC_TEXT_MEM_CACHE: Dict[str, str] | None = None
+_PDF_BG_OCR_RUNNING = False
+
+_PHOTO_OCR_CACHE_FILE = MERLIN_DIR / "photo_ocr_cache_v1.json"
+_PHOTO_OCR_LOCK = threading.Lock()
+_PHOTO_OCR_MEM_CACHE: Dict[str, Dict[str, Any]] | None = None
+
+
+def _load_doc_text_cache() -> Dict[str, str]:
+    global _DOC_TEXT_MEM_CACHE
+    with _DOC_TEXT_CACHE_LOCK:
+        if _DOC_TEXT_MEM_CACHE is not None:
+            return _DOC_TEXT_MEM_CACHE
+        loaded: Dict[str, str] = {}
+        try:
+            if _DOC_TEXT_CACHE_FILE.exists():
+                raw = json.loads(_DOC_TEXT_CACHE_FILE.read_text(encoding="utf-8", errors="ignore"))
+                if isinstance(raw, dict):
+                    loaded = {str(k): str(v) for k, v in raw.items() if isinstance(v, str)}
+        except Exception:
+            loaded = {}
+        _DOC_TEXT_MEM_CACHE = loaded
+        return _DOC_TEXT_MEM_CACHE
+
+
+def _save_doc_text_cache_entry(sig: str, text_val: str) -> None:
+    global _DOC_TEXT_MEM_CACHE
+    if not text_val:
+        return
+    with _DOC_TEXT_CACHE_LOCK:
+        cache = _DOC_TEXT_MEM_CACHE if _DOC_TEXT_MEM_CACHE is not None else {}
+        cache[sig] = text_val[:2000]
+        if len(cache) > 1500:
+            for old_k in list(cache.keys())[:300]:
+                if old_k != sig:
+                    cache.pop(old_k, None)
+        _DOC_TEXT_MEM_CACHE = cache
+        try:
+            _DOC_TEXT_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+            tmp_f = _DOC_TEXT_CACHE_FILE.with_suffix(".json.tmp")
+            tmp_f.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+            os.replace(tmp_f, _DOC_TEXT_CACHE_FILE)
+        except Exception:
+            pass
+
+
+_PDF_STRUCT_NOISE_RX = re.compile(
+    r"(?:%PDF-[\d.]+|\b(?:obj|endobj|stream|endstream|xref|trailer|startxref|FlateDecode|MediaBox|CropBox|Resources|FontDescriptor|BaseFont|Subtype|Type|Pages|Catalog|Parent|Length|Filter)\b|/[A-Za-z0-9_+#]+)",
+    re.IGNORECASE,
+)
+
+
+def _count_meaningful_doc_chars(txt: str) -> int:
+    if not txt:
+        return 0
+    cleaned = _PDF_STRUCT_NOISE_RX.sub(" ", txt)
+    non_sp = re.sub(r"\s+", "", cleaned)
+    if not non_sp:
+        return 0
+    # 바이너리/폰트 글리프 매핑 깨짐(모지바케: ¢€ž­©Û 등) 차단
+    mojibake_cnt = len(re.findall(r"[\u0080-\u024f\ufffd]", non_sp))
+    if mojibake_cnt > max(2, int(len(non_sp) * 0.06)):
+        return 0
+    valid_alnum_ko = len(re.findall(r"[가-힣A-Za-z0-9]", non_sp))
+    if (valid_alnum_ko / len(non_sp)) < 0.55:
+        return 0
+    ko = len(re.findall(r"[가-힣]", cleaned))
+    en = len(re.findall(r"[A-Za-z]{2,}", cleaned))
+    digits = len(re.findall(r"\d{2,}", cleaned))
+    return (ko * 3) + (en * 2) + digits
+
+
+def _decode_pdf_literal_bytes(raw_b: bytes) -> str:
+    out = bytearray()
+    i = 0
+    n = len(raw_b)
+    while i < n:
+        ch = raw_b[i]
+        if ch == 0x5C and i + 1 < n:  # backslash
+            nxt = raw_b[i + 1]
+            if nxt in (0x0A, 0x0D):
+                i += 2
+                if nxt == 0x0D and i < n and raw_b[i] == 0x0A:
+                    i += 1
+                continue
+            esc_map = {ord("n"): 10, ord("r"): 13, ord("t"): 9, ord("b"): 8, ord("f"): 12, ord("("): 40, ord(")"): 41, ord("\\"): 92}
+            if nxt in esc_map:
+                out.append(esc_map[nxt])
+                i += 2
+                continue
+            if 0x30 <= nxt <= 0x37:
+                oct_digits = bytes([nxt])
+                j = i + 2
+                while j < min(n, i + 4) and 0x30 <= raw_b[j] <= 0x37:
+                    oct_digits += bytes([raw_b[j]])
+                    j += 1
+                out.append(int(oct_digits, 8) & 0xFF)
+                i = j
+                continue
+            out.append(nxt)
+            i += 2
+        else:
+            out.append(ch)
+            i += 1
+    b = bytes(out)
+    if not b:
+        return ""
+    if b.startswith(b"\xfe\xff"):
+        return b[2:].decode("utf-16-be", errors="ignore")
+    if b.startswith(b"\xff\xfe"):
+        return b[2:].decode("utf-16-le", errors="ignore")
+    for enc in ("utf-8", "cp949"):
+        try:
+            return b.decode(enc)
+        except Exception:
+            continue
+    ascii_printable = sum(1 for byte_v in b if 32 <= byte_v <= 126 or byte_v in (9, 10, 13))
+    if ascii_printable / len(b) >= 0.85:
+        return b.decode("ascii", errors="ignore")
+    return ""
+
+
+def _decode_pdf_hex_bytes(hex_b: bytes) -> str:
+    cleaned = re.sub(rb"\s+", b"", hex_b)
+    if not cleaned:
+        return ""
+    if len(cleaned) % 2 == 1:
+        cleaned += b"0"
+    try:
+        b = bytes.fromhex(cleaned.decode("ascii", errors="ignore"))
+    except Exception:
+        return ""
+    if not b:
+        return ""
+    if b.startswith(b"\xfe\xff"):
+        return b[2:].decode("utf-16-be", errors="ignore")
+    if len(b) >= 4 and len(b) % 2 == 0:
+        try:
+            u16 = b.decode("utf-16-be")
+            if re.search(r"[가-힣A-Za-z0-9]", u16) and not re.search(r"[\x00-\x08\x0e-\x1f]", u16):
+                return u16
+        except Exception:
+            pass
+    for enc in ("utf-8", "cp949"):
+        try:
+            return b.decode(enc)
+        except Exception:
+            continue
+    return ""
+
+
+def _extract_pdf_streams_text_pure(entry: Path) -> str:
+    try:
+        with open(entry, "rb") as fp:
+            raw_pdf = fp.read(2560 * 1024)
+    except Exception:
+        return ""
+    if not raw_pdf:
+        return ""
+
+    stream_blobs: List[bytes] = []
+    for m in re.finditer(rb"stream(?:\r\n|\n|\r)(.*?)(?:\r\n|\n|\r)?endstream", raw_pdf, re.DOTALL):
+        hdr_lookbehind = raw_pdf[max(0, m.start() - 260) : m.start()]
+        if re.search(rb"/(?:Image|DCTDecode|JPXDecode|CCITTFaxDecode|JBIG2Decode|FontFile\d?|XRef)\b", hdr_lookbehind):
+            continue
+        chunk = m.group(1)
+        if not chunk:
+            continue
+        decompressed = None
+        for wbits in (zlib.MAX_WBITS, -zlib.MAX_WBITS):
+            try:
+                decompressed = zlib.decompress(chunk, wbits)
+                break
+            except Exception:
+                continue
+        stream_blobs.append(decompressed if decompressed is not None else chunk)
+        if len(stream_blobs) >= 45:
+            break
+
+    pieces: List[str] = []
+    for blob in stream_blobs:
+        bt_blocks = re.findall(rb"BT\b(.*?)\bET", blob, re.DOTALL)
+        for tb in bt_blocks[:80]:
+            for m_tok in re.finditer(rb"\((?:\\.|[^\\()])*\)|<([0-9A-Fa-f\s]{4,})>", tb):
+                tok = m_tok.group(0)
+                if tok.startswith(b"(") and tok.endswith(b")"):
+                    s = _decode_pdf_literal_bytes(tok[1:-1])
+                else:
+                    s = _decode_pdf_hex_bytes(m_tok.group(1) or b"")
+                s = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]+", " ", s).strip()
+                if s:
+                    pieces.append(s)
+        if sum(len(x) for x in pieces) >= 2400:
+            break
+
+    joined = re.sub(r"\s+", " ", " ".join(pieces)).strip()
+    joined = _PDF_STRUCT_NOISE_RX.sub(" ", joined)
+    joined = re.sub(r"\s+", " ", joined).strip()
+    if _count_meaningful_doc_chars(joined) >= 12:
+        return joined[:1500]
+
+    # 비표준 초경량 텍스트 PDF 폴백 (단 PDF 구조 키워드 제거 후 실제 의미 텍스트가 있을 때만 반환)
+    head_raw = raw_pdf[:65536]
+    for enc in ("utf-8", "cp949"):
+        try:
+            dec = head_raw.decode(enc)
+            dec_clean = re.sub(r"\s+", " ", _PDF_STRUCT_NOISE_RX.sub(" ", dec)).strip()
+            if _count_meaningful_doc_chars(dec_clean) >= 12:
+                return dec_clean[:1500]
+        except Exception:
+            continue
+    return ""
+
+
+def _reconstruct_ocr_geometry_and_spots(ocr_data: Dict[str, Any]) -> Dict[str, Any]:
+    raw_lines = ocr_data.get("lines") or []
+    if isinstance(raw_lines, dict):
+        raw_lines = [raw_lines]
+
+    flat_words: List[Dict[str, Any]] = []
+    heights: List[float] = []
+    for ln in raw_lines:
+        if not isinstance(ln, dict):
+            continue
+        w_list = ln.get("words") or []
+        if isinstance(w_list, dict):
+            w_list = [w_list]
+        if w_list:
+            for w in w_list:
+                if not isinstance(w, dict):
+                    continue
+                t_val = str(w.get("t") or "").strip()
+                if not t_val:
+                    continue
+                x_v = float(w.get("x") or 0.0)
+                y_v = float(w.get("y") or 0.0)
+                w_v = max(1.0, float(w.get("w") or 8.0))
+                h_v = max(4.0, float(w.get("h") or 16.0))
+                heights.append(h_v)
+                flat_words.append({"t": t_val, "x": x_v, "y": y_v, "w": w_v, "h": h_v, "cy": y_v + h_v * 0.5})
+        else:
+            lt = str(ln.get("text") or "").strip()
+            if lt:
+                flat_words.append({"t": lt, "x": 0.0, "y": float(len(flat_words) * 28), "w": 120.0, "h": 20.0, "cy": float(len(flat_words) * 28 + 10)})
+
+    if not flat_words:
+        return {
+            "hasText": False,
+            "hasTable": False,
+            "fullText": "",
+            "tsvTable": "",
+            "tableRows": [],
+            "spots": [],
+            "chips": [],
+        }
+
+    heights_sorted = sorted(heights) if heights else [18.0]
+    med_h = heights_sorted[len(heights_sorted) // 2]
+    row_tol = max(11.0, med_h * 0.62)
+
+    flat_words.sort(key=lambda item: (item["cy"], item["x"]))
+    clustered_rows: List[List[Dict[str, Any]]] = []
+    row_centers: List[float] = []
+    for wd in flat_words:
+        placed = False
+        for idx_r, r_cy in enumerate(row_centers):
+            if abs(wd["cy"] - r_cy) <= row_tol:
+                clustered_rows[idx_r].append(wd)
+                n_r = len(clustered_rows[idx_r])
+                row_centers[idx_r] = ((r_cy * (n_r - 1)) + wd["cy"]) / n_r
+                placed = True
+                break
+        if not placed:
+            clustered_rows.append([wd])
+            row_centers.append(wd["cy"])
+
+    paired = sorted(zip(row_centers, clustered_rows), key=lambda p: p[0])
+    table_rows: List[List[str]] = []
+    text_lines: List[str] = []
+    col_gap_thresh = max(26.0, med_h * 1.45)
+    tight_join_thresh = max(7.0, med_h * 0.30)
+
+    for _, r_words in paired:
+        r_words.sort(key=lambda item: item["x"])
+        cells: List[str] = []
+        prev_right: float | None = None
+        for wd in r_words:
+            tok = wd["t"]
+            if prev_right is None or not cells:
+                cells.append(tok)
+            else:
+                gap = wd["x"] - prev_right
+                if gap <= tight_join_thresh and (cells[-1].endswith(("-", ".", "/", ":")) or tok.startswith(("-", ".", "/", ":"))):
+                    cells[-1] = f"{cells[-1]}{tok}"
+                elif gap <= col_gap_thresh:
+                    # 단일 한글 음절 분리 보정 (예: '거 래'가 아닌 긴 간격 외 결합)
+                    cells[-1] = f"{cells[-1]} {tok}"
+                else:
+                    cells.append(tok)
+            prev_right = wd["x"] + wd["w"]
+        clean_cells = [re.sub(r"\s+", " ", c).strip() for c in cells if c.strip()]
+        if clean_cells:
+            table_rows.append(clean_cells)
+            text_lines.append("  ".join(clean_cells))
+
+    full_text = "\n".join(text_lines).strip()
+    tsv_table = "\n".join("\t".join(r) for r in table_rows).strip()
+    multi_col_rows = sum(1 for r in table_rows if len(r) >= 2)
+    has_table = multi_col_rows >= 2
+
+    spots: List[Dict[str, str]] = []
+    seen_spot_vals: set[str] = set()
+
+    def _add_spot(label: str, val: str) -> None:
+        v_clean = val.strip()
+        if not v_clean or v_clean in seen_spot_vals or len(spots) >= 12:
+            return
+        seen_spot_vals.add(v_clean)
+        spots.append({"id": f"sp_{len(spots) + 1}", "label": label, "value": v_clean})
+
+    if text_lines:
+        first_headline = re.sub(r"\s{2,}", " · ", text_lines[0]).strip()
+        if len(first_headline) >= 2:
+            _add_spot("첫 줄 제목/상호", first_headline[:60])
+
+    for m_biz in re.findall(r"\b\d{3}-\d{2}-\d{5}\b", full_text):
+        _add_spot("사업자번호", m_biz)
+    for m_tel in re.findall(r"\b(?:01[016789]|02|0[3-6][1-5]|1[568]\d{2})[-.\s]?\d{3,4}[-.\s]?\d{4}\b", full_text):
+        _add_spot("전화번호", re.sub(r"\s+", "-", m_tel))
+    for m_money in re.findall(r"\b\d{1,3}(?:,\d{3})+(?:\s*원)?\b|\b\d{4,9}\s*원\b", full_text):
+        _add_spot("금액", m_money)
+    for m_date in re.findall(r"\b(?:19|20)\d{2}[-./년]\s*\d{1,2}[-./월]\s*\d{1,2}일?\b", full_text):
+        _add_spot("날짜", m_date)
+    for m_acct in re.findall(r"\b\d{3,6}-\d{2,6}-\d{4,8}\b", full_text):
+        _add_spot("계좌/승인번호", m_acct)
+    for m_mail in re.findall(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}", full_text):
+        _add_spot("이메일", m_mail)
+
+    chips: List[str] = [sp["value"] for sp in spots[1:]]
+    for r in table_rows:
+        for cell in r:
+            c_trim = cell.strip("()[]{}'\"<>:;,. ")
+            if 2 <= len(c_trim) <= 36 and c_trim not in chips:
+                chips.append(c_trim)
+            if len(chips) >= 24:
+                break
+        if len(chips) >= 24:
+            break
+
+    # 핵심 셀 보강: spots가 3개 미만이면 표의 주요 셀도 spots에 추가
+    if len(spots) < 6:
+        for ch_val in chips:
+            if len(spots) >= 8:
+                break
+            _add_spot("추출 항목", ch_val)
+
+    return {
+        "hasText": bool(full_text),
+        "hasTable": has_table,
+        "fullText": full_text,
+        "tsvTable": tsv_table,
+        "tableRows": table_rows,
+        "spots": spots,
+        "chips": chips[:24],
+    }
+
+
+def _run_winrt_image_ocr_raw(img_path: Path) -> Dict[str, Any]:
+    if os.name != "nt" or not img_path.exists():
+        return {"width": 0, "height": 0, "lines": []}
+    creationflags = 0x08000000
+    tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_img_ocr_"))
+    try:
+        ps_script = (
+            "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
+            "Add-Type -AssemblyName System.Runtime.WindowsRuntime\n"
+            "$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]\n"
+            "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]\n"
+            "$null = [Windows.Graphics.Imaging.BitmapTransform, Windows.Foundation, ContentType = WindowsRuntime]\n"
+            "$null = [Windows.Graphics.Imaging.BitmapRotation, Windows.Foundation, ContentType = WindowsRuntime]\n"
+            "$null = [Windows.Globalization.Language, Windows.Globalization, ContentType = WindowsRuntime]\n"
+            "$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]\n"
+            "$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]\n"
+            "function Await($WinRtTask, $ResultType) {\n"
+            "    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)\n"
+            "    $netTask = $asTask.Invoke($null, @($WinRtTask))\n"
+            "    $netTask.Wait(-1) | Out-Null\n"
+            "    $netTask.Result\n"
+            "}\n"
+            "function Score-Res($r) {\n"
+            "    if (-not $r) { return 0 }\n"
+            "    $t = ($r.Lines | ForEach-Object { $_.Text }) -join ' '\n"
+            "    if (-not $t) { return 0 }\n"
+            "    $ko = ([regex]::Matches($t, '[가-힣]')).Count\n"
+            "    $en = ([regex]::Matches($t, '[a-zA-Z0-9]')).Count\n"
+            "    $cjk = ([regex]::Matches($t, '[\\u4e00-\\u9fff]')).Count\n"
+            "    return ($ko * 4) + $en - ($cjk * 3)\n"
+            "}\n"
+            "$lang = New-Object Windows.Globalization.Language('ko')\n"
+            "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)\n"
+            "if (-not $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }\n"
+            "$sf = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($args[0])) ([Windows.Storage.StorageFile])\n"
+            "$st = Await ($sf.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])\n"
+            "$dec = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($st)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
+            "$bmp0 = Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
+            "$bestRes = Await ($engine.RecognizeAsync($bmp0)) ([Windows.Media.Ocr.OcrResult])\n"
+            "$bestSc = Score-Res $bestRes\n"
+            "if ($bestSc -lt 18) {\n"
+            "    foreach ($rot in @([Windows.Graphics.Imaging.BitmapRotation]::Clockwise90Degrees, [Windows.Graphics.Imaging.BitmapRotation]::Clockwise270Degrees)) {\n"
+            "        $tf = New-Object Windows.Graphics.Imaging.BitmapTransform\n"
+            "        $tf.Rotation = $rot\n"
+            "        $bmpR = Await ($dec.GetSoftwareBitmapAsync($dec.BitmapPixelFormat, $dec.BitmapAlphaMode, $tf, [Windows.Graphics.Imaging.ExifOrientationMode]::RespectExifOrientation, [Windows.Graphics.Imaging.ColorManagementMode]::DoNotColorManage)) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
+            "        $resR = Await ($engine.RecognizeAsync($bmpR)) ([Windows.Media.Ocr.OcrResult])\n"
+            "        $scR = Score-Res $resR\n"
+            "        if ($scR -gt ($bestSc + 14)) { $bestSc = $scR; $bestRes = $resR }\n"
+            "    }\n"
+            "}\n"
+            "$linesOut = @()\n"
+            "foreach ($ln in $bestRes.Lines) {\n"
+            "    $wordsOut = @()\n"
+            "    foreach ($w in $ln.Words) {\n"
+            "        $rc = $w.BoundingRect\n"
+            "        $wordsOut += @{ t = $w.Text; x = [Math]::Round($rc.X, 1); y = [Math]::Round($rc.Y, 1); w = [Math]::Round($rc.Width, 1); h = [Math]::Round($rc.Height, 1) }\n"
+            "    }\n"
+            "    $linesOut += @{ text = $ln.Text; words = $wordsOut }\n"
+            "}\n"
+            "$pw = $dec.PixelWidth; $ph = $dec.PixelHeight\n"
+            "$st.Dispose()\n"
+            "Write-Output (@{ width = $pw; height = $ph; lines = $linesOut } | ConvertTo-Json -Depth 6 -Compress)\n"
+        )
+        ps_f = tmp_dir / "img_ocr.ps1"
+        ps_f.write_text(ps_script, encoding="utf-8-sig")
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps_f), str(img_path)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=25,
+            creationflags=creationflags,
+        )
+        raw_out = (proc.stdout or "").strip()
+        if raw_out:
+            last_json_line = raw_out.splitlines()[-1].strip()
+            parsed = json.loads(last_json_line)
+            if isinstance(parsed, dict):
+                return parsed
+    except Exception:
+        pass
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+    return {"width": 0, "height": 0, "lines": []}
+
+
+def _load_photo_ocr_cache() -> Dict[str, Dict[str, Any]]:
+    global _PHOTO_OCR_MEM_CACHE
+    with _PHOTO_OCR_LOCK:
+        if _PHOTO_OCR_MEM_CACHE is not None:
+            return _PHOTO_OCR_MEM_CACHE
+        loaded: Dict[str, Dict[str, Any]] = {}
+        try:
+            if _PHOTO_OCR_CACHE_FILE.exists():
+                raw = json.loads(_PHOTO_OCR_CACHE_FILE.read_text(encoding="utf-8", errors="ignore"))
+                if isinstance(raw, dict):
+                    loaded = {str(k): v for k, v in raw.items() if isinstance(v, dict)}
+        except Exception:
+            loaded = {}
+        _PHOTO_OCR_MEM_CACHE = loaded
+        return _PHOTO_OCR_MEM_CACHE
+
+
+def extract_photo_winrt_ocr(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """
+    [웹 & 네이티브 UI ③ 공통 실물 사진·표 WinRT OCR 엔진 (`/__photos/ocr`, `/api/ghosti/photos/ocr`)]
+    - 가짜 영수증 데이터를 100% 배제하고 실제 로컬 이미지(또는 Base64 캡처본)에서
+      단어별 바운딩 박스(X,Y,W,H) 기반 엑셀 TSV 표(`tsvTable`)와 핵심 단어칩(`chips`, `spots`)을 추출합니다.
+    """
+    global _PHOTO_OCR_MEM_CACHE
+    data = params or {}
+    force = str(data.get("force") or "").lower() in ("1", "true", "yes")
+    b64_in = str(data.get("imageBase64") or data.get("dataUrl") or "").strip()
+
+    temp_b64_file: Path | None = None
+    target_path: Path | None = None
+    cache_sig = ""
+
+    try:
+        if b64_in:
+            if "," in b64_in and b64_in.startswith("data:"):
+                b64_in = b64_in.split(",", 1)[1]
+            raw_img_bytes = base64.b64decode(b64_in)
+            digest = hashlib.sha1(raw_img_bytes).hexdigest()[:24]
+            cache_sig = f"b64_{digest}|v1"
+            fd, tmp_name = tempfile.mkstemp(prefix="ghosti_ocr_b64_", suffix=".png")
+            os.close(fd)
+            temp_b64_file = Path(tmp_name)
+            temp_b64_file.write_bytes(raw_img_bytes)
+            target_path = temp_b64_file
+        else:
+            raw_ref = str(data.get("fullPath") or data.get("p") or data.get("path") or data.get("fileName") or "").strip()
+            if not raw_ref:
+                return {"ok": False, "error": "MISSING_IMAGE_TARGET"}
+            resolved_media, _, status_m = resolve_local_media_file({"p": raw_ref, "loc": data.get("loc") or ""})
+            if resolved_media is not None and status_m == 200 and resolved_media.suffix.lower() in _IMAGE_EXTS:
+                target_path = resolved_media.resolve()
+            else:
+                cand_p = Path(urllib.parse.unquote(raw_ref))
+                if cand_p.exists() and cand_p.is_file() and cand_p.suffix.lower() in _IMAGE_EXTS:
+                    low_c = str(cand_p.resolve()).lower()
+                    if "\\windows\\" not in low_c and "\\system32\\" not in low_c:
+                        target_path = cand_p.resolve()
+            if target_path is None or not target_path.exists():
+                return {"ok": False, "error": "IMAGE_NOT_FOUND"}
+            st_i = target_path.stat()
+            cache_sig = f"{target_path}|{st_i.st_size}|{int(st_i.st_mtime)}|v1"
+
+        cache_map = _load_photo_ocr_cache()
+        if not force and cache_sig in cache_map:
+            cached_payload = dict(cache_map[cache_sig])
+            cached_payload["ok"] = True
+            cached_payload["cached"] = True
+            return cached_payload
+
+        ocr_raw = _run_winrt_image_ocr_raw(target_path)
+        reconstructed = _reconstruct_ocr_geometry_and_spots(ocr_raw)
+        result_payload: Dict[str, Any] = {
+            "ok": True,
+            "cached": False,
+            "fileName": target_path.name if temp_b64_file is None else str(data.get("fileName") or "captured_image.png"),
+            "filePath": str(target_path) if temp_b64_file is None else "",
+            "imageSize": {"width": int(ocr_raw.get("width") or 0), "height": int(ocr_raw.get("height") or 0)},
+            **reconstructed,
+        }
+
+        with _PHOTO_OCR_LOCK:
+            cur_c = _PHOTO_OCR_MEM_CACHE if _PHOTO_OCR_MEM_CACHE is not None else {}
+            to_store = {k: v for k, v in result_payload.items() if k not in ("ok", "cached")}
+            cur_c[cache_sig] = to_store
+            if len(cur_c) > 600:
+                for old_k in list(cur_c.keys())[:120]:
+                    if old_k != cache_sig:
+                        cur_c.pop(old_k, None)
+            _PHOTO_OCR_MEM_CACHE = cur_c
+            try:
+                _PHOTO_OCR_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+                tmp_c = _PHOTO_OCR_CACHE_FILE.with_suffix(".json.tmp")
+                tmp_c.write_text(json.dumps(cur_c, ensure_ascii=False), encoding="utf-8")
+                os.replace(tmp_c, _PHOTO_OCR_CACHE_FILE)
+            except Exception:
+                pass
+
+        return result_payload
+    except Exception as exc:
+        return {"ok": False, "error": f"OCR_FAILED: {exc}"}
+    finally:
+        if temp_b64_file is not None and temp_b64_file.exists():
+            try:
+                temp_b64_file.unlink(missing_ok=True)
+            except Exception:
+                pass
+
+
+def _run_winrt_pdf_first_pages_ocr(entry: Path, max_pages: int = 2) -> str:
+    """텍스트 스트림이 없거나 커스텀 CID 폰트인 스캔 계약서·증빙 PDF의 앞 1~2페이지를 Windows 내장 WinRT PdfDocument + OcrEngine으로 고속 해독합니다."""
+    if os.name != "nt" or not entry.exists():
+        return ""
+    creationflags = 0x08000000
+    tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_pdf_ocr_"))
+    try:
+        ps_script = (
+            "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
+            "Add-Type -AssemblyName System.Runtime.WindowsRuntime\n"
+            "$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]\n"
+            "$null = [Windows.Data.Pdf.PdfDocument, Windows.Data.Pdf, ContentType = WindowsRuntime]\n"
+            "$null = [Windows.Data.Pdf.PdfPageRenderOptions, Windows.Data.Pdf, ContentType = WindowsRuntime]\n"
+            "$null = [Windows.Storage.Streams.InMemoryRandomAccessStream, Windows.Storage.Streams, ContentType = WindowsRuntime]\n"
+            "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]\n"
+            "$null = [Windows.Globalization.Language, Windows.Globalization, ContentType = WindowsRuntime]\n"
+            "$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]\n"
+            "$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]\n"
+            "$asTaskAction = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncAction' })[0]\n"
+            "function Await($WinRtTask, $ResultType) {\n"
+            "    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)\n"
+            "    $netTask = $asTask.Invoke($null, @($WinRtTask))\n"
+            "    $netTask.Wait(-1) | Out-Null\n"
+            "    $netTask.Result\n"
+            "}\n"
+            "function AwaitAction($WinRtAction) {\n"
+            "    $netTask = $asTaskAction.Invoke($null, @($WinRtAction))\n"
+            "    $netTask.Wait(-1) | Out-Null\n"
+            "}\n"
+            "$lang = New-Object Windows.Globalization.Language('ko')\n"
+            "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)\n"
+            "if (-not $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }\n"
+            "$sf = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($args[0])) ([Windows.Storage.StorageFile])\n"
+            "$pdf = Await ([Windows.Data.Pdf.PdfDocument]::LoadFromFileAsync($sf)) ([Windows.Data.Pdf.PdfDocument])\n"
+            "if ($pdf.IsPasswordProtected) { exit 0 }\n"
+            "$maxP = [Math]::Min([int]$pdf.PageCount, [int]$args[1])\n"
+            "$linesOut = @()\n"
+            "for ($i = 0; $i -lt $maxP; $i++) {\n"
+            "    $page = $pdf.GetPage([uint32]$i)\n"
+            "    $mem = New-Object Windows.Storage.Streams.InMemoryRandomAccessStream\n"
+            "    $opts = New-Object Windows.Data.Pdf.PdfPageRenderOptions\n"
+            "    $opts.DestinationWidth = [uint32]1800\n"
+            "    AwaitAction ($page.RenderToStreamAsync($mem, $opts))\n"
+            "    $mem.Seek(0)\n"
+            "    $dec = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($mem)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
+            "    $bmp = Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
+            "    $res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])\n"
+            "    $yOffset = $i * 4000\n"
+            "    foreach ($ln in $res.Lines) {\n"
+            "        $wordsOut = @()\n"
+            "        foreach ($w in $ln.Words) {\n"
+            "            $rc = $w.BoundingRect\n"
+            "            $wordsOut += @{ t = $w.Text; x = [Math]::Round($rc.X, 1); y = [Math]::Round($rc.Y + $yOffset, 1); w = [Math]::Round($rc.Width, 1); h = [Math]::Round($rc.Height, 1) }\n"
+            "        }\n"
+            "        $linesOut += @{ text = $ln.Text; words = $wordsOut }\n"
+            "    }\n"
+            "    $mem.Dispose()\n"
+            "    $page.Dispose()\n"
+            "}\n"
+            "Write-Output (@{ width = 1800; height = 2400; lines = $linesOut } | ConvertTo-Json -Depth 6 -Compress)\n"
+        )
+        ps_f = tmp_dir / "pdf_ocr.ps1"
+        ps_f.write_text(ps_script, encoding="utf-8-sig")
+        proc = subprocess.run(
+            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps_f), str(entry), str(max_pages)],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=25,
+            creationflags=creationflags,
+        )
+        raw_out = (proc.stdout or "").strip()
+        if raw_out:
+            parsed = json.loads(raw_out.splitlines()[-1].strip())
+            if isinstance(parsed, dict):
+                rec = _reconstruct_ocr_geometry_and_spots(parsed)
+                return str(rec.get("fullText") or "").strip()[:1500]
+    except Exception:
+        pass
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+    return ""
+
+
+def _extract_hwp_v5_preview_text(entry: Path) -> str:
+    """한글(.hwp) OLE2 파일 내 PrvText(UTF-16LE 미리보기 스트림) 또는 텍스트 런을 1ms 내에 추출합니다."""
+    try:
+        with open(entry, "rb") as fp:
+            raw = fp.read(1536 * 1024)
+        # UTF-16LE 연속 한글/영문/숫자 구문 추출 (PrvText 스트림 포함)
+        u16 = raw.decode("utf-16-le", errors="ignore")
+        runs = re.findall(r"[가-힣A-Za-z0-9][가-힣A-Za-z0-9\s.,:;/()\-_%~]{6,200}", u16)
+        good = [re.sub(r"\s+", " ", r).strip() for r in runs if len(re.findall(r"[가-힣]", r)) >= 3]
+        if good:
+            return " · ".join(dict.fromkeys(good))[:1500]
+    except Exception:
+        pass
+    return ""
+
+
+def _extract_doc_text(entry: Path, *, allow_pdf_winrt_ocr: bool = True) -> str:
     if _is_cloud_virtual_or_unpinned_file(entry):
         return f"[{entry.parent.name}] 폴더에 보관된 {entry.name} 클라우드 연동 문서입니다. 파일명 및 키워드로 즉시 검색됩니다."
     ext = entry.suffix.lower()
+    cache_sig = ""
+    try:
+        st_e = entry.stat()
+        cache_sig = f"{entry.resolve()}|{st_e.st_size}|{int(st_e.st_mtime)}|v1"
+        doc_cache = _load_doc_text_cache()
+        if cache_sig in doc_cache and doc_cache[cache_sig]:
+            return doc_cache[cache_sig]
+    except Exception:
+        pass
+
     try:
         if ext in (".txt", ".md", ".csv"):
             raw = entry.read_bytes()[:32768]
-            for enc in ("utf-8", "cp949", "euc-kr"):
+            if raw.startswith(b"\xff\xfe"):
+                txt = raw[2:].decode("utf-16-le", errors="ignore").strip()[:1500]
+                if txt and cache_sig:
+                    _save_doc_text_cache_entry(cache_sig, txt)
+                return txt
+            for enc in ("utf-8-sig", "utf-8", "cp949", "euc-kr"):
                 try:
-                    return raw.decode(enc).strip()[:1500]
+                    txt = raw.decode(enc).strip()[:1500]
+                    if txt:
+                        if cache_sig:
+                            _save_doc_text_cache_entry(cache_sig, txt)
+                        return txt
                 except Exception:
                     continue
             return raw.decode("utf-8", errors="ignore").strip()[:1500]
@@ -1072,9 +1788,11 @@ def _extract_doc_text(entry: Path) -> str:
                 if "word/document.xml" in zf.namelist():
                     xml_bytes = zf.read("word/document.xml")
                     text = re.sub(r"<[^>]+>", " ", xml_bytes.decode("utf-8", errors="ignore"))
-                    text = re.sub(r"\s+", " ", text).strip()
+                    text = re.sub(r"\s+", " ", text).strip()[:1500]
                     if text:
-                        return text[:1500]
+                        if cache_sig:
+                            _save_doc_text_cache_entry(cache_sig, text)
+                        return text
         if ext == ".xlsx":
             with zipfile.ZipFile(entry, "r") as zf:
                 names = zf.namelist()
@@ -1091,9 +1809,25 @@ def _extract_doc_text(entry: Path) -> str:
                     sh_text = re.sub(r"\s+", " ", sh_text).strip()
                     if sh_text:
                         chunks.append(sh_text[:600])
-                joined_xl = " | ".join(chunks).strip()
+                joined_xl = " | ".join(chunks).strip()[:1500]
                 if joined_xl:
-                    return joined_xl[:1500]
+                    if cache_sig:
+                        _save_doc_text_cache_entry(cache_sig, joined_xl)
+                    return joined_xl
+        if ext == ".pptx":
+            with zipfile.ZipFile(entry, "r") as zf:
+                sl_chunks: List[str] = []
+                for sl_name in sorted(n for n in zf.namelist() if n.startswith("ppt/slides/slide") and n.endswith(".xml"))[:8]:
+                    sl_bytes = zf.read(sl_name)
+                    sl_text = re.sub(r"<[^>]+>", " ", sl_bytes.decode("utf-8", errors="ignore"))
+                    sl_text = re.sub(r"\s+", " ", sl_text).strip()
+                    if sl_text:
+                        sl_chunks.append(sl_text[:300])
+                joined_ppt = " | ".join(sl_chunks).strip()[:1500]
+                if joined_ppt:
+                    if cache_sig:
+                        _save_doc_text_cache_entry(cache_sig, joined_ppt)
+                    return joined_ppt
         if ext == ".hwpx":
             with zipfile.ZipFile(entry, "r") as zf:
                 sec_chunks: List[str] = []
@@ -1103,34 +1837,62 @@ def _extract_doc_text(entry: Path) -> str:
                     sec_text = re.sub(r"\s+", " ", sec_text).strip()
                     if sec_text:
                         sec_chunks.append(sec_text)
-                joined_hwpx = " ".join(sec_chunks).strip()
+                joined_hwpx = " ".join(sec_chunks).strip()[:1500]
                 if joined_hwpx:
-                    return joined_hwpx[:1500]
+                    if cache_sig:
+                        _save_doc_text_cache_entry(cache_sig, joined_hwpx)
+                    return joined_hwpx
+        if ext == ".hwp":
+            hwp_txt = _extract_hwp_v5_preview_text(entry)
+            if hwp_txt:
+                if cache_sig:
+                    _save_doc_text_cache_entry(cache_sig, hwp_txt)
+                return hwp_txt
         if ext == ".pdf":
-            raw_pdf = entry.read_bytes()[:65536]
-            # 텍스트 기반 샘플 PDF이거나 평문 메타가 포함된 경우 즉시 추출
-            if b"startxref" not in raw_pdf[-1024:]:
-                for enc in ("utf-8", "cp949"):
-                    try:
-                        decoded_p = raw_pdf.decode(enc).replace("%PDF-1.4", "").strip()
-                        if decoded_p:
-                            return decoded_p[:1500]
-                    except Exception:
-                        continue
+            pdf_pure = _extract_pdf_streams_text_pure(entry)
+            if pdf_pure:
+                if cache_sig:
+                    _save_doc_text_cache_entry(cache_sig, pdf_pure)
+                return pdf_pure
+            if allow_pdf_winrt_ocr:
+                pdf_ocr = _run_winrt_pdf_first_pages_ocr(entry, max_pages=2)
+                if pdf_ocr:
+                    if cache_sig:
+                        _save_doc_text_cache_entry(cache_sig, pdf_ocr)
+                    return pdf_ocr
+                elif cache_sig:
+                    # 암호 보호·빈 이미지 PDF가 매번 재실행되지 않도록 기본 문구 캐싱
+                    fallback_empty = f"[{entry.parent.name}] 폴더에 보관된 {entry.name} PDF 문서입니다."
+                    _save_doc_text_cache_entry(cache_sig, fallback_empty)
+                    return fallback_empty
     except Exception:
         pass
     return f"[{entry.parent.name}] 폴더에 보관된 {entry.name} 로컬 문서 파일입니다. 파일명 및 키워드로 즉시 검색됩니다."
 
 
+def _bg_prewarm_pdf_ocr_worker(targets: List[Path]) -> None:
+    global _PDF_BG_OCR_RUNNING
+    try:
+        for p in targets[:40]:
+            try:
+                _extract_doc_text(p, allow_pdf_winrt_ocr=True)
+                time.sleep(0.08)
+            except Exception:
+                pass
+    finally:
+        _PDF_BG_OCR_RUNNING = False
+
+
 def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    """내 PC 전 폴더(문서, 바탕화면, 다운로드 등)의 서류 파일을 전수 스캔하여 반환합니다."""
+    """내 PC 전 폴더(문서, 바탕화면, 다운로드, OneDrive 등)의 서류 파일을 전수 스캔하여 반환합니다."""
+    global _PDF_BG_OCR_RUNNING
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
-    docs: List[Dict[str, Any]] = []
+    raw_entries: List[tuple[Path, Path, os.stat_result]] = []
     seen_paths: set[str] = set()
 
     for d in scan_dirs:
         try:
-            for entry in sorted(d.iterdir(), key=lambda x: x.name):
+            for entry in d.iterdir():
                 if not entry.is_file():
                     continue
                 ext_low = entry.suffix.lower()
@@ -1144,45 +1906,73 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                     continue
                 seen_paths.add(norm_doc)
                 st = entry.stat()
-                stem = entry.stem.replace("_", " ").replace("-", " ").strip()
-                extracted = _extract_doc_text(entry)
-                ext_badge_map = {
-                    ".pdf": ("PDF", "📑 PDF 전자문서 · 계약/증빙"),
-                    ".txt": ("TXT", "📝 텍스트 메모 · 기록"),
-                    ".md": ("TXT", "📝 마크다운 문서 · 노트"),
-                    ".csv": ("TXT", "📊 CSV 데이터 시트"),
-                    ".docx": ("DOCX", "📘 워드(DOCX) 보고서 · 서류"),
-                    ".doc": ("DOCX", "📘 워드 문서"),
-                    ".hwp": ("DOCX", "📗 한글(HWP) 공문 · 서류"),
-                    ".hwpx": ("DOCX", "📗 한글(HWPX) 문서"),
-                    ".xlsx": ("PDF", "📊 엑셀(XLSX) 장부 · 내역서"),
-                    ".xls": ("PDF", "📊 엑셀 시트"),
-                    ".pptx": ("PDF", "📙 파워포인트 발표자료"),
-                }
-                norm_ext, badge = ext_badge_map.get(ext_low, ("PDF", "📄 로컬 문서 파일"))
-                kw_tokens = [w for w in re.split(r"[\s_\-.,()\[\]]+", f"{stem} {d.name} {extracted[:300]}") if len(w) >= 2][:18]
-                docs.append({
-                    "id": f"local_doc_{len(docs) + 1}_{entry.stem[:20]}",
-                    "fileName": entry.name,
-                    "name": entry.name,
-                    "path": str(entry.resolve()),
-                    "ext": norm_ext,
-                    "title": stem or entry.name,
-                    "categoryBadge": badge,
-                    "extractedText": extracted,
-                    "keywords": list(dict.fromkeys(kw_tokens)),
-                    "date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y.%m.%d"),
-                    "modified": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M"),
-                    "sizeKB": max(1, round(st.st_size / 1024)),
-                    "size": int(st.st_size),
-                    "deviceSource": _detect_folder_label(d),
-                })
-                if len(docs) >= 300:
-                    break
+                raw_entries.append((d, entry, st))
         except Exception:
             pass
-        if len(docs) >= 300:
-            break
+
+    # 최신 수정 문서 우선 정렬 (방금 저장·스캔한 계약서/영수증 PDF가 즉시 1순위로 본문 추출되도록 보장)
+    raw_entries.sort(key=lambda item: item[2].st_mtime, reverse=True)
+    docs: List[Dict[str, Any]] = []
+    deferred_pdfs: List[Path] = []
+    sync_pdf_ocr_budget = 3
+    doc_cache_ref = _load_doc_text_cache()
+
+    ext_badge_map = {
+        ".pdf": ("PDF", "📑 PDF 전자문서 · 계약/증빙"),
+        ".txt": ("TXT", "📝 텍스트 메모 · 기록"),
+        ".md": ("TXT", "📝 마크다운 문서 · 노트"),
+        ".csv": ("TXT", "📊 CSV 데이터 시트"),
+        ".docx": ("DOCX", "📘 워드(DOCX) 보고서 · 서류"),
+        ".doc": ("DOCX", "📘 워드 문서"),
+        ".hwp": ("DOCX", "📗 한글(HWP) 공문 · 서류"),
+        ".hwpx": ("DOCX", "📗 한글(HWPX) 문서"),
+        ".xlsx": ("PDF", "📊 엑셀(XLSX) 장부 · 내역서"),
+        ".xls": ("PDF", "📊 엑셀 시트"),
+        ".pptx": ("PDF", "📙 파워포인트 발표자료"),
+        ".ppt": ("PDF", "📙 파워포인트 발표자료"),
+    }
+
+    for d, entry, st in raw_entries[:300]:
+        try:
+            ext_low = entry.suffix.lower()
+            stem = entry.stem.replace("_", " ").replace("-", " ").strip()
+            allow_sync_ocr = False
+            if ext_low == ".pdf":
+                sig_chk = f"{entry.resolve()}|{st.st_size}|{int(st.st_mtime)}|v1"
+                if sig_chk in doc_cache_ref:
+                    allow_sync_ocr = True
+                elif sync_pdf_ocr_budget > 0:
+                    allow_sync_ocr = True
+                    sync_pdf_ocr_budget -= 1
+                else:
+                    deferred_pdfs.append(entry)
+            extracted = _extract_doc_text(entry, allow_pdf_winrt_ocr=allow_sync_ocr)
+            if ext_low == ".pdf" and not allow_sync_ocr and f"보관된 {entry.name} 로컬 문서" in extracted:
+                pass
+            norm_ext, badge = ext_badge_map.get(ext_low, ("PDF", "📄 로컬 문서 파일"))
+            kw_tokens = [w for w in re.split(r"[\s_\-.,()\[\]]+", f"{stem} {d.name} {extracted[:360]}") if len(w) >= 2][:22]
+            docs.append({
+                "id": f"local_doc_{len(docs) + 1}_{entry.stem[:20]}",
+                "fileName": entry.name,
+                "name": entry.name,
+                "path": str(entry.resolve()),
+                "ext": norm_ext,
+                "title": stem or entry.name,
+                "categoryBadge": badge,
+                "extractedText": extracted,
+                "keywords": list(dict.fromkeys(kw_tokens)),
+                "date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y.%m.%d"),
+                "modified": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d %H:%M"),
+                "sizeKB": max(1, round(st.st_size / 1024)),
+                "size": int(st.st_size),
+                "deviceSource": _detect_folder_label(d),
+            })
+        except Exception:
+            pass
+
+    if deferred_pdfs and not _PDF_BG_OCR_RUNNING:
+        _PDF_BG_OCR_RUNNING = True
+        threading.Thread(target=_bg_prewarm_pdf_ocr_worker, args=(deferred_pdfs,), daemon=True).start()
 
     return {
         "ok": True,
@@ -1792,6 +2582,7 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
         "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]\n"
         "$null = [Windows.Graphics.Imaging.BitmapTransform, Windows.Foundation, ContentType = WindowsRuntime]\n"
         "$null = [Windows.Graphics.Imaging.BitmapRotation, Windows.Foundation, ContentType = WindowsRuntime]\n"
+        "$null = [Windows.Globalization.Language, Windows.Globalization, ContentType = WindowsRuntime]\n"
         "$null = [Windows.Storage.StorageFile, Windows.Foundation, ContentType = WindowsRuntime]\n"
         "$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]\n"
         "function Await($WinRtTask, $ResultType) {\n"
@@ -2089,6 +2880,7 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
                 "$null = [Windows.Media.Editing.MediaClip, Windows.Media.Editing, ContentType = WindowsRuntime]\n"
                 "$null = [Windows.Media.Editing.MediaComposition, Windows.Media.Editing, ContentType = WindowsRuntime]\n"
                 "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]\n"
+                "$null = [Windows.Globalization.Language, Windows.Globalization, ContentType = WindowsRuntime]\n"
                 "$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]\n"
                 "$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]\n"
                 "function Await($WinRtTask, $ResultType) {\n"
@@ -2890,6 +3682,9 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
 
     if act in ("photos-list", "photos", "list-photos"):
         return list_local_photos(data)
+
+    if act in ("photo-ocr", "photos-ocr", "extract-photo-ocr"):
+        return extract_photo_winrt_ocr(data)
 
     if act in ("docs-list", "docs", "list-docs"):
         return list_local_docs(data)

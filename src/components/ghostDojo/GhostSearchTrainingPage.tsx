@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { zCoreBridge, hasActiveGhostiLoginSession } from '../../services/zCoreBridge';
+import { getZCoreUrl, zCoreBridge } from '../../services/zCoreBridge';
 import {
   computeGhostSearchWindowRect,
   resolveGhostSearchResponsiveSpec,
@@ -36,7 +36,7 @@ export async function openRealGhostSearchWindowViaDaemon(
   const daemonStage = stage === 'large' ? 'gallery' : stage;
   const q = (query || '').trim();
   try {
-    const res = await fetch('http://127.0.0.1:5199/api/superpower/open_search_window', {
+    const res = await fetch(getZCoreUrl('/api/superpower/open_search_window'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ stage: daemonStage, query: q }),
@@ -50,7 +50,7 @@ export async function openRealGhostSearchWindowViaDaemon(
   }
   const qs = `stage=${encodeURIComponent(daemonStage)}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
   try {
-    const res = await fetch(`http://127.0.0.1:5199/__merlin/open-ghost-search?${qs}`);
+    const res = await fetch(getZCoreUrl(`/__merlin/open-ghost-search?${qs}`));
     if (res.ok) {
       const data = await res.json().catch(() => ({}));
       return data?.ok !== false;
@@ -725,9 +725,9 @@ export const GhostSearchTrainingPage: React.FC = () => {
 
     let baseline: Record<string, number> | null = null;
     const pollTelemetry = async () => {
-      if (!hasActiveGhostiLoginSession() || !zCoreBridge.isConnected) return;
+      if (!zCoreBridge.isConnected) return;
       try {
-        const res = await fetch('http://127.0.0.1:5199/api/superpower/telemetry');
+        const res = await fetch(getZCoreUrl('/api/superpower/telemetry'));
         if (!res.ok) return;
         const data = await res.json();
         const total = (data?.total || {}) as Record<string, number>;

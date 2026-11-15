@@ -246,8 +246,15 @@ export const GhostSearchPane: React.FC<{
                             </div>
                           )}
 
-                          <div className="absolute top-2.5 right-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-white/15 text-white font-label-mono text-[11px] font-extrabold shadow-md">
-                            ⏱️ {vid.durationText}
+                          <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+                            {vid.hasScreenOcrText && (
+                              <span className="px-2 py-1 rounded-md bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-black shadow-md">
+                                ✨ 화면 글자 감지됨
+                              </span>
+                            )}
+                            <span className="px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-white/15 text-white font-label-mono text-[11px] font-extrabold shadow-md">
+                              ⏱️ {vid.durationText}
+                            </span>
                           </div>
 
                           <div className="absolute inset-x-0 bottom-0 px-3 py-2 bg-gradient-to-t from-black/95 via-black/60 to-transparent flex items-center justify-between gap-2">

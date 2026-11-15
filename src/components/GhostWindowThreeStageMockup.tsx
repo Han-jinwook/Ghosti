@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import { getZCoreUrl, zCoreBridge } from '../services/zCoreBridge';
 import type { PhotoItem } from '../types/saysee';
 
 export type GhostWindowTierMode = 'pc_free' | 'phone_pc' | 'work_team';
@@ -506,61 +507,47 @@ const OCR_PRESETS: OcrSamplePreset[] = [
 ];
 
 export function buildOcrPresetFromPhoto(photo: PhotoItem): OcrSamplePreset {
-  const cleanTags = photo.tags.map((t) => t.replace(/^#/, ''));
+  const cleanTags = photo.tags.map((t) => t.replace(/^#/, '')).filter(Boolean);
   const baseName = photo.name.replace(/\.[^.]+$/, '');
+  const desc = (photo.captionKo || cleanTags.join(' · ') || baseName).trim();
+  const spots: LiveTextOverlaySpot[] = [
+    {
+      id: 'p_spot_1',
+      topPercent: 16,
+      leftPercent: 6,
+      categoryHint: '파일명',
+      displayText: photo.name,
+      insertValue: photo.name,
+      isPrimaryHighlight: true,
+    },
+    {
+      id: 'p_spot_2',
+      topPercent: 38,
+      leftPercent: 6,
+      categoryHint: '촬영·보관일',
+      displayText: `날짜: ${photo.date}`,
+      insertValue: photo.date,
+    },
+  ];
+  if (desc) {
+    spots.push({
+      id: 'p_spot_3',
+      topPercent: 60,
+      leftPercent: 6,
+      categoryHint: '장면·태그 요약',
+      displayText: desc,
+      insertValue: desc,
+      isPrimaryHighlight: true,
+    });
+  }
   return {
     id: `photo_ocr_${photo.id}`,
     title: `${photo.name}`,
-    sourceLabel: '🔍 사진에서 글자 따기',
+    sourceLabel: '🔍 사진 정보 요약',
     thumbUrl: photo.thumbUrl,
-    fullText: `[사진 글자 추출] 파일명: ${photo.name} | 촬영일: ${photo.date} | 상호: (주)성수오피스디포 | 사업자번호: 123-45-67890 | 품목: ${cleanTags.join(' · ') || baseName} | 합계금액: 145,000원 | 입금계좌: 국민은행 012-3456-7890-11`,
-    tsvTableText: `항목\t추출값\n파일명\t${photo.name}\n촬영일\t${photo.date}\n핵심내용\t${cleanTags.join(', ')}\n사업자번호\t123-45-67890\n합계금액\t145,000원\n입금계좌\t국민은행 012-3456-7890-11`,
-    liveTextSpots: [
-      {
-        id: 'p_spot_1',
-        topPercent: 10,
-        leftPercent: 6,
-        categoryHint: '제목·촬영일',
-        displayText: `${baseName} (${photo.date})`,
-        insertValue: `${baseName} (${photo.date})`,
-      },
-      {
-        id: 'p_spot_2',
-        topPercent: 26,
-        leftPercent: 6,
-        categoryHint: '상호·내용',
-        displayText: `(주)성수오피스디포  |  ${cleanTags.slice(0, 2).join(' · ') || baseName}`,
-        insertValue: `(주)성수오피스디포 (${cleanTags.slice(0, 2).join(', ') || baseName})`,
-        isPrimaryHighlight: true,
-      },
-      {
-        id: 'p_spot_3',
-        topPercent: 43,
-        leftPercent: 6,
-        categoryHint: '사업자번호',
-        displayText: '사업자등록번호: 123-45-67890',
-        insertValue: '123-45-67890',
-        isPrimaryHighlight: true,
-      },
-      {
-        id: 'p_spot_4',
-        topPercent: 60,
-        leftPercent: 6,
-        categoryHint: '합계금액',
-        displayText: '공급가액 131,818원  |  부가세 13,182원  |  합계: 145,000원',
-        insertValue: '145,000원',
-        isPrimaryHighlight: true,
-      },
-      {
-        id: 'p_spot_5',
-        topPercent: 78,
-        leftPercent: 6,
-        categoryHint: '입금계좌',
-        displayText: '입금계좌: 국민은행 012-3456-7890-11',
-        insertValue: '국민은행 012-3456-7890-11',
-        isPrimaryHighlight: true,
-      },
-    ],
+    fullText: `${photo.name} (${photo.date})${desc ? ` — ${desc}` : ''}`,
+    tsvTableText: `항목\t내용\n파일명\t${photo.name}\n날짜\t${photo.date}\n요약\t${desc}`,
+    liveTextSpots: spots,
   };
 }
 
@@ -1680,7 +1667,10 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
                   onClick={() => {
                     setOneTimePopUsed(true);
                     setUi3CursorEditorText(activeOcrPreset.tsvTableText.replace(/\n/g, ' | '));
-                    setLastInsertedSpotNotice('📊 표 전체가 엑셀 규격으로 복사되었습니다.');
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      void navigator.clipboard.writeText(activeOcrPreset.tsvTableText);
+                    }
+                    setLastInsertedSpotNotice('📊 표 전체가 엑셀(TSV) 규격으로 클립보드에 복사되었습니다.');
                   }}
                   className="px-2.5 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[11px] font-black cursor-pointer"
                 >
@@ -1691,7 +1681,10 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
                   onClick={() => {
                     setOneTimePopUsed(true);
                     setUi3CursorEditorText(activeOcrPreset.fullText);
-                    setLastInsertedSpotNotice('📋 전체 문장이 복사되었습니다.');
+                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                      void navigator.clipboard.writeText(activeOcrPreset.fullText);
+                    }
+                    setLastInsertedSpotNotice('📋 전체 문장이 클립보드에 복사되었습니다.');
                   }}
                   className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 text-[11px] font-extrabold cursor-pointer"
                 >
@@ -2031,11 +2024,205 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
   );
 };
 
+interface RealPhotoOcrSpot {
+  id: string;
+  categoryHint: string;
+  displayText: string;
+  insertValue: string;
+  isPrimaryHighlight?: boolean;
+}
+
+interface RealPhotoOcrResponse {
+  ok: boolean;
+  hasText: boolean;
+  hasTable?: boolean;
+  fullText: string;
+  tsvTable: string;
+  spots?: RealPhotoOcrSpot[];
+  chips?: string[];
+  cached?: boolean;
+  error?: string;
+}
+
+function extractLocalPhotoPathParam(photo: PhotoItem): string {
+  for (const rawUrl of [photo.fullUrl, photo.thumbUrl]) {
+    if (!rawUrl) continue;
+    try {
+      const u = new URL(rawUrl, typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:5199');
+      const pVal = u.searchParams.get('p');
+      if (pVal && pVal.trim()) return pVal.trim();
+    } catch {
+      const m = rawUrl.match(/[?&]p=([^&]+)/);
+      if (m && m[1]) {
+        try {
+          return decodeURIComponent(m[1]).trim();
+        } catch {
+          return m[1].trim();
+        }
+      }
+    }
+  }
+  return photo.name;
+}
+
 export const GhostPhotoOcrTeleportModal: React.FC<{
   photo: PhotoItem | null;
   onClose: () => void;
 }> = ({ photo, onClose }) => {
+  const [loading, setLoading] = useState(false);
+  const [ocrResult, setOcrResult] = useState<RealPhotoOcrResponse | null>(null);
+  const [gateState, setGateState] = useState<'checking' | 'allowed' | 'need_opt_in' | 'expired'>('allowed');
+  const [gateMessage, setGateMessage] = useState<string>('');
+  const [trialBadge, setTrialBadge] = useState<string>('');
+  const [copiedNotice, setCopiedNotice] = useState<string>('');
+  const [cursorBuffer, setCursorBuffer] = useState<string>('');
+  const [reloadSeq, setReloadSeq] = useState(0);
+
+  const isDemoSamplePhoto = Boolean(
+    photo &&
+      (photo.fullUrl?.startsWith('/sample_photos_301/') ||
+        photo.thumbUrl?.startsWith('/sample_photos_301/') ||
+        !zCoreBridge.isConnected)
+  );
+
+  useEffect(() => {
+    if (!photo || isDemoSamplePhoto) {
+      setOcrResult(null);
+      setCopiedNotice('');
+      setCursorBuffer('');
+      return;
+    }
+
+    let cancelled = false;
+    const runRealOcrFlow = async () => {
+      setLoading(true);
+      setCopiedNotice('');
+      setOcrResult(null);
+      setGateState('checking');
+      try {
+        // 1) 유료 티어 30일 Opt-in 무료체험 게이트 점검
+        try {
+          const gateRes = await fetch(getZCoreUrl('/api/superpower/consume-action'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ actionType: 'feat_6_screen_ocr' }),
+          });
+          if (gateRes.ok) {
+            const gateJson = await gateRes.json();
+            if (gateJson && gateJson.allowed === false) {
+              const reasonStr = String(gateJson.reason || gateJson.status || '');
+              const msgStr = String(gateJson.message || '');
+              if (reasonStr === 'TRIAL_NOT_STARTED' || msgStr.includes('무료체험 시작') || gateJson.trialOptInRequired) {
+                if (!cancelled) {
+                  setGateState('need_opt_in');
+                  setGateMessage(
+                    msgStr ||
+                      '🎁 [사진·표 OCR 창🔒]은 신용카드 등록 없이 30일 무제한 무료체험 동의 후 바로 사용하실 수 있습니다.'
+                  );
+                  setLoading(false);
+                }
+                return;
+              }
+              if (!cancelled) {
+                setGateState('expired');
+                setGateMessage(
+                  msgStr ||
+                    '🔒 30일 무료체험이 만료되었습니다. [5번 내 기기 통합 · 월 3,900원]에서 무제한 해금되며, 무료 기본기 검색은 평생 0원입니다.'
+                );
+                setLoading(false);
+              }
+              return;
+            }
+            if (gateJson?.daysLeft !== undefined && gateJson?.status !== 'FREE_FOREVER') {
+              setTrialBadge(
+                gateJson.isSubscribed ? '👑 내 기기 통합 무제한' : `🎁 무료체험 D-${gateJson.daysLeft}`
+              );
+            }
+          }
+        } catch {
+          // 게이트 일시 응답 지연 시 로컬 OCR은 계속 진행
+        }
+
+        if (cancelled) return;
+        setGateState('allowed');
+
+        // 2) 내 PC 로컬 WinRT OCR + 기하학적 표(TSV) 복원 호출
+        const targetKey = extractLocalPhotoPathParam(photo);
+        const res = await fetch(getZCoreUrl('/__photos/ocr'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ p: targetKey }),
+        });
+        const data = (await res.json().catch(() => null)) as RealPhotoOcrResponse | null;
+        if (cancelled) return;
+        if (res.ok && data && data.ok) {
+          setOcrResult(data);
+        } else {
+          setOcrResult({
+            ok: false,
+            hasText: false,
+            fullText: '',
+            tsvTable: '',
+            spots: [],
+            chips: [],
+            error: data?.error || '사진 OCR 판독에 실패했습니다.',
+          });
+        }
+      } catch {
+        if (!cancelled) {
+          setOcrResult({
+            ok: false,
+            hasText: false,
+            fullText: '',
+            tsvTable: '',
+            spots: [],
+            chips: [],
+            error: '로컬 Z-코어 엔진 응답을 기다리는 중 오류가 발생했습니다.',
+          });
+        }
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    };
+
+    void runRealOcrFlow();
+    return () => {
+      cancelled = true;
+    };
+  }, [photo, isDemoSamplePhoto, reloadSeq]);
+
   if (!photo) return null;
+
+  const handleStart30DayTrial = async () => {
+    try {
+      await fetch(getZCoreUrl('/api/superpower/start-trial'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ optIn: true }),
+      });
+    } catch {
+      /* ignore */
+    }
+    setGateState('allowed');
+    setReloadSeq((s) => s + 1);
+  };
+
+  const handleCopyText = async (val: string, label: string) => {
+    if (!val.trim()) return;
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      try {
+        await navigator.clipboard.writeText(val);
+      } catch {
+        /* ignore */
+      }
+    }
+    setCursorBuffer((prev) => (prev ? `${prev} / ${val}` : val));
+    setCopiedNotice(`✅ ${label} 클립보드 복사 완료! (원하는 입력창에서 Ctrl+V)`);
+    useSaySeeStore.setState({
+      lastQuarantineToast: `📋 ${label} 복사 완료!`,
+    });
+  };
+
   return (
     <div
       onClick={onClose}
@@ -2045,27 +2232,243 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-5xl rounded-3xl bg-[#0B0E14] border-2 border-teal-400 p-5 sm:p-6 shadow-[0_0_60px_rgba(20,184,166,0.3)] flex flex-col gap-4 my-auto"
       >
-        <div className="flex items-center justify-between gap-3 border-b border-white/10 pb-3">
-          <div className="flex items-center gap-2.5">
-            <GhostBabyMascotBadge subtitle="📝 사진·표 OCR 창 (창 UI ③ 별도 독립 창 · 글자·단어칩 톡톡 찍기)" />
-            <span className="text-[14px] font-black text-white truncate">
-              {photo.name}
-            </span>
+        <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
+          <div className="flex items-center gap-2.5 min-w-0">
+            <GhostBabyMascotBadge subtitle="📝 사진·표 OCR 창🔒 (창 UI ③ 독립 창 · 실제 글자·엑셀 표 1초 추출)" />
+            <span className="text-[14px] font-black text-white truncate">{photo.name}</span>
+            {trialBadge && (
+              <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 border border-amber-300/50 text-amber-200 text-[11px] font-extrabold shrink-0">
+                {trialBadge}
+              </span>
+            )}
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[12px] font-extrabold cursor-pointer"
+            className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[12px] font-extrabold cursor-pointer shrink-0"
           >
             ✕ 닫기
           </button>
         </div>
 
-        <GhostWindowThreeStageMockup
-          activeTier="pc_free"
-          initialWindowTab="ui3_ocr"
-          externalOcrPhoto={photo}
-        />
+        {isDemoSamplePhoto ? (
+          <div className="flex flex-col gap-3">
+            <div className="px-3.5 py-2.5 rounded-2xl bg-amber-500/15 border border-amber-400/40 text-amber-200 text-[12px] font-bold">
+              🧪 현재 샘플 사진 체험 모드입니다. 내 PC에 <strong>멀린 Z-코어</strong>가 연결된 상태에서 내 실제 영수증·계약서·캡처 사진을 열면 내 사진의 실제 글자와 엑셀 표(TSV)를 100% 정밀 추출합니다.
+            </div>
+            <GhostWindowThreeStageMockup
+              activeTier="pc_free"
+              initialWindowTab="ui3_ocr"
+              externalOcrPhoto={photo}
+            />
+          </div>
+        ) : gateState === 'need_opt_in' ? (
+          <div className="p-6 rounded-2xl bg-zinc-950 border border-amber-400/50 flex flex-col items-center text-center gap-4">
+            <span className="px-3 py-1 rounded-full bg-amber-400 text-zinc-950 text-[11.5px] font-black">
+              🎁 신용카드 등록 0% · 자동 결제 0%
+            </span>
+            <h3 className="text-[18px] font-black text-white">{gateMessage}</h3>
+            <p className="text-[13px] text-zinc-300 max-w-xl">
+              30일 체험 기간이 끝나도 몰래 결제되지 않고 이 고급 창만 깔끔하게 잠기며, 기본 사진·문서·영상 검색은 평생 0원 그대로 유지됩니다.
+            </p>
+            <div className="flex flex-wrap items-center justify-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => void handleStart30DayTrial()}
+                className="px-5 py-2.5 rounded-xl bg-teal-400 hover:bg-teal-300 text-zinc-950 text-[13px] font-black cursor-pointer shadow-lg"
+              >
+                🎁 30일 무제한 무료체험 시작하고 바로 글자 뽑기
+              </button>
+              <a
+                href={photo.fullUrl || photo.thumbUrl}
+                download={photo.name}
+                className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[12.5px] font-extrabold"
+              >
+                🖼️ 원본 사진만 저장
+              </a>
+            </div>
+          </div>
+        ) : gateState === 'expired' ? (
+          <div className="p-6 rounded-2xl bg-zinc-950 border border-rose-400/40 flex flex-col items-center text-center gap-4">
+            <span className="px-3 py-1 rounded-full bg-rose-500/20 border border-rose-400/50 text-rose-200 text-[11.5px] font-black">
+              🔒 30일 무료체험 만료
+            </span>
+            <h3 className="text-[17px] font-black text-white">{gateMessage}</h3>
+            <div className="flex flex-wrap items-center justify-center gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  onClose();
+                  useSaySeeStore.getState().setShowProModal(true);
+                }}
+                className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[13px] font-black cursor-pointer"
+              >
+                👑 5번 내 기기 통합 (월 3,900원) 안내 보기
+              </button>
+              <a
+                href={photo.fullUrl || photo.thumbUrl}
+                download={photo.name}
+                className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[12.5px] font-extrabold"
+              >
+                🖼️ 원본 사진 저장 (무료)
+              </a>
+            </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+            {/* 좌측: 실제 원본 사진 프리뷰 + 원본 저장 / 표(TSV) 복사 / 전체 텍스트 복사 */}
+            <div className="lg:col-span-5 rounded-2xl bg-zinc-950 border border-white/15 p-4 flex flex-col justify-between gap-3">
+              <div className="relative rounded-xl overflow-hidden bg-black border border-white/10 min-h-[220px] max-h-[340px] flex items-center justify-center">
+                <img
+                  src={photo.fullUrl || photo.thumbUrl}
+                  alt={photo.name}
+                  className="max-h-[330px] w-auto object-contain"
+                />
+              </div>
+
+              <div className="flex flex-col gap-2">
+                <a
+                  href={photo.fullUrl || photo.thumbUrl}
+                  download={photo.name}
+                  className="w-full py-2.5 px-3 rounded-xl bg-teal-400 hover:bg-teal-300 text-zinc-950 text-[12.5px] font-black text-center cursor-pointer"
+                >
+                  🖼️ 원본 사진 그대로 저장
+                </a>
+                <button
+                  type="button"
+                  disabled={loading || !ocrResult?.hasText}
+                  onClick={() =>
+                    void handleCopyText(
+                      ocrResult?.tsvTable || ocrResult?.fullText || '',
+                      '📊 표 전체 엑셀(TSV) 규격'
+                    )
+                  }
+                  className="w-full py-2.5 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-40 text-zinc-950 text-[12.5px] font-black cursor-pointer"
+                >
+                  📊 표 전체 엑셀(TSV)로 복사 {ocrResult?.hasTable ? '✨(표 구조 감지됨)' : ''}
+                </button>
+                <button
+                  type="button"
+                  disabled={loading || !ocrResult?.hasText}
+                  onClick={() =>
+                    void handleCopyText(ocrResult?.fullText || '', '📋 추출된 전체 글자')
+                  }
+                  className="w-full py-2 px-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 disabled:opacity-40 border border-white/15 text-zinc-100 text-[12px] font-extrabold cursor-pointer"
+                >
+                  📋 전체 텍스트 통째로 복사
+                </button>
+              </div>
+            </div>
+
+            {/* 우측: 실제 WinRT OCR 추출 항목 & 단어칩 */}
+            <div className="lg:col-span-7 rounded-2xl bg-zinc-950 border border-teal-400/40 p-4 flex flex-col justify-between gap-3">
+              {loading ? (
+                <div className="flex-1 min-h-[240px] flex flex-col items-center justify-center text-center gap-3 p-6">
+                  <div className="w-9 h-9 rounded-full border-3 border-teal-400 border-t-transparent animate-spin" />
+                  <p className="text-[14px] font-extrabold text-teal-200">
+                    ⏳ 내 PC 로컬 WinRT OCR 엔진이 사진 속 글자와 표를 정밀 판독하고 있습니다...
+                  </p>
+                  <span className="text-[11.5px] text-zinc-400">
+                    외부 서버 전송 0 Byte · 가로/세로 회전 자동 보정 · 한번 읽은 사진은 0.01초 즉시 열람
+                  </span>
+                </div>
+              ) : !ocrResult?.hasText ? (
+                <div className="flex-1 min-h-[240px] flex flex-col items-center justify-center text-center gap-2.5 p-6">
+                  <span className="text-[28px]">💡</span>
+                  <h4 className="text-[15px] font-black text-white">
+                    이 사진에서는 인식된 글자나 표가 없습니다
+                  </h4>
+                  <p className="text-[12.5px] text-zinc-400 max-w-md leading-relaxed">
+                    가짜 예시 텍스트를 억지로 표시하지 않습니다. 풍경·인물 사진은 좌측 <strong>[🖼️ 원본 사진 그대로 저장]</strong>을 이용해 주세요.
+                  </p>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-3">
+                  {ocrResult.spots && ocrResult.spots.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[12px] font-black text-amber-300">
+                        🎯 핵심 추출 항목 (클릭하면 즉시 복사)
+                      </span>
+                      <div className="flex flex-col gap-1.5 max-h-[165px] overflow-y-auto pr-1">
+                        {ocrResult.spots.map((sp) => (
+                          <button
+                            key={sp.id}
+                            type="button"
+                            onClick={() => void handleCopyText(sp.insertValue, `[${sp.categoryHint}]`)}
+                            className="w-full text-left px-3 py-2 rounded-xl bg-zinc-900 hover:bg-teal-500/20 border border-white/15 hover:border-teal-400 flex items-center justify-between gap-2 cursor-pointer transition-colors"
+                          >
+                            <div className="flex items-center gap-2 min-w-0">
+                              <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 text-[10px] font-black shrink-0">
+                                {sp.categoryHint}
+                              </span>
+                              <span className="font-mono text-[12px] text-white font-bold truncate">
+                                {sp.displayText}
+                              </span>
+                            </div>
+                            <span className="text-[10.5px] font-black text-teal-300 shrink-0">복사 ↵</span>
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {ocrResult.chips && ocrResult.chips.length > 0 && (
+                    <div className="flex flex-col gap-1.5">
+                      <span className="text-[12px] font-black text-teal-300">
+                        📝 추출된 단어 조각(칩) — 콕 찍으면 즉시 복사
+                      </span>
+                      <div className="flex flex-wrap gap-1.5 max-h-[110px] overflow-y-auto">
+                        {ocrResult.chips.map((ch, idx) => (
+                          <button
+                            key={`${ch}_${idx}`}
+                            type="button"
+                            onClick={() => void handleCopyText(ch, `"${ch}"`)}
+                            className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/40 text-[12px] font-extrabold cursor-pointer transition-colors"
+                          >
+                            {ch}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col gap-1">
+                    <span className="text-[11.5px] font-extrabold text-zinc-400">
+                      📄 추출된 원문 / 표 미리보기 {ocrResult.cached ? '(⚡ 캐시 즉시 로드)' : ''}
+                    </span>
+                    <pre className="p-3 rounded-xl bg-zinc-900/90 border border-white/10 text-[12px] text-zinc-100 font-mono whitespace-pre-wrap max-h-[150px] overflow-y-auto leading-relaxed">
+                      {ocrResult.tsvTable || ocrResult.fullText}
+                    </pre>
+                  </div>
+                </div>
+              )}
+
+              <div className="pt-2 border-t border-white/10 flex flex-col gap-1.5">
+                {copiedNotice && (
+                  <span className="text-[12px] font-extrabold text-emerald-300">{copiedNotice}</span>
+                )}
+                <div className="flex items-center gap-2">
+                  <input
+                    type="text"
+                    value={cursorBuffer}
+                    onChange={(e) => setCursorBuffer(e.target.value)}
+                    placeholder="단어칩이나 항목을 클릭하면 여기에 누적되며 클립보드로 즉시 복사됩니다"
+                    className="flex-1 px-3 py-1.5 rounded-xl bg-zinc-900 border border-teal-400/50 text-white text-[12px] font-bold outline-none"
+                  />
+                  {cursorBuffer && (
+                    <button
+                      type="button"
+                      onClick={() => void handleCopyText(cursorBuffer, '누적 텍스트')}
+                      className="px-3 py-1.5 rounded-xl bg-teal-400 text-zinc-950 text-[11.5px] font-black cursor-pointer shrink-0"
+                    >
+                      전체 복사
+                    </button>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

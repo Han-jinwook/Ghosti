@@ -175,6 +175,7 @@ export const PhotoDetailModal: React.FC = () => {
     pickBestInBurstPhotos,
     isGuestPreviewMode,
     triggerGuestJoinWall,
+    activeLoungeType,
   } = useSaySeeStore();
 
   const [activeTab, setActiveTab] = useState<ContextTab>('same-day');
@@ -352,7 +353,9 @@ export const PhotoDetailModal: React.FC = () => {
                 </div>
                 <div className="flex flex-wrap items-center gap-2 mt-1">
                   <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-700 dark:text-emerald-300 font-label-sm text-[11.5px] font-extrabold">
-                    📸 촬영자: 김총무(방장) · 본인 업로드
+                    {activeLoungeType === 'personal'
+                      ? `💻 내 기기 원본 · ${selectedPhoto.locationKo || '내 PC 로컬 폴더'}`
+                      : `📸 촬영·업로드: ${selectedPhoto.uploaderLabel || '방장 · 본인 업로드'}`}
                   </span>
                   <span className="px-2.5 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-400/40 text-cyan-700 dark:text-cyan-300 font-label-sm text-[11.5px] font-extrabold">
                     📅 촬영 날짜: {selectedPhoto.date}

@@ -115,12 +115,23 @@ class _GUID(ctypes.Structure):
 _KNOWN_FOLDER_IDS = {
     "desktop": "B4BFCC3A-DB2C-424C-B029-7FE99A87C641",
     "downloads": "374DE290-123F-4565-9164-39C4925E467B",
+    "documents": "FDD39AD0-238F-46AF-ADB4-6C85480369C7",
+    "pictures": "33E28130-4E1E-4676-835A-98395C3BC3BB",
+    "videos": "18989B1D-99B5-455B-841C-AB7C74E4DDFC",
+}
+
+_KNOWN_FOLDER_FALLBACK_NAMES = {
+    "desktop": "Desktop",
+    "downloads": "Downloads",
+    "documents": "Documents",
+    "pictures": "Pictures",
+    "videos": "Videos",
 }
 
 
 def known_folder(name: str) -> Path:
     key = name.lower()
-    fallback = Path.home() / ("Desktop" if key == "desktop" else "Downloads")
+    fallback = Path.home() / _KNOWN_FOLDER_FALLBACK_NAMES.get(key, "Downloads")
     if os.name != "nt" or key not in _KNOWN_FOLDER_IDS:
         return fallback
     try:

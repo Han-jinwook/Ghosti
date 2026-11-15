@@ -245,7 +245,7 @@ export interface LocalDocumentFile {
   id: string;
   fileName: string;
   path?: string;
-  ext: 'PDF' | 'TXT' | 'DOCX' | 'XLSX';
+  ext: 'PDF' | 'TXT' | 'DOCX' | 'XLSX' | 'PPTX' | 'HWP' | string;
   title: string;
   categoryBadge: string;
   extractedText: string;

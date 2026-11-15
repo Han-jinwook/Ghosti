@@ -36,7 +36,9 @@ import tempfile
 import threading
 import time
 import unicodedata
+import urllib.parse
 import urllib.request
+import zlib
 
 u32 = ctypes.windll.user32
 k32 = ctypes.windll.kernel32
@@ -1894,6 +1896,9 @@ def complete_feature_action_success(raw_feature_key: str) -> dict:
         return {"status": "OK", "feature_id": feat_id, "consumed_daily": False, "daily_remaining": 0}
 
 
+_TELEMETRY_LOCK = threading.Lock()
+
+
 def record_feature_telemetry(feature_key: str) -> None:
     """
     [100% 합법 익명 통계(Zero-Content Telemetry)]
@@ -1902,21 +1907,22 @@ def record_feature_telemetry(feature_key: str) -> None:
     """
     def _save():
         try:
-            today = datetime.date.today().isoformat()
-            data: dict = {"daily": {}, "total": {}}
-            if TELEMETRY_FILE.exists():
-                try:
-                    data = json.loads(TELEMETRY_FILE.read_text(encoding="utf-8"))
-                except Exception:
-                    data = {"daily": {}, "total": {}}
-            daily = data.setdefault("daily", {})
-            day_bucket = daily.setdefault(today, {})
-            day_bucket[feature_key] = day_bucket.get(feature_key, 0) + 1
-            total = data.setdefault("total", {})
-            total[feature_key] = total.get(feature_key, 0) + 1
-            data["updated_at"] = datetime.datetime.now().isoformat(timespec="seconds")
-            TELEMETRY_FILE.parent.mkdir(parents=True, exist_ok=True)
-            TELEMETRY_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+            with _TELEMETRY_LOCK:
+                today = datetime.date.today().isoformat()
+                data: dict = {"daily": {}, "total": {}}
+                if TELEMETRY_FILE.exists():
+                    try:
+                        data = json.loads(TELEMETRY_FILE.read_text(encoding="utf-8"))
+                    except Exception:
+                        data = {"daily": {}, "total": {}}
+                daily = data.setdefault("daily", {})
+                day_bucket = daily.setdefault(today, {})
+                day_bucket[feature_key] = day_bucket.get(feature_key, 0) + 1
+                total = data.setdefault("total", {})
+                total[feature_key] = total.get(feature_key, 0) + 1
+                data["updated_at"] = datetime.datetime.now().isoformat(timespec="seconds")
+                TELEMETRY_FILE.parent.mkdir(parents=True, exist_ok=True)
+                TELEMETRY_FILE.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
         except Exception:
             pass
 
@@ -2115,29 +2121,139 @@ def _make_context_snippet(text: str, query: str, max_len: int = 54) -> str:
 
 
 _LOCAL_FILE_CACHE: dict = {"ts": 0.0, "items": []}
+_ONDEMAND_IMG_OCR_MEM_CACHE: dict[str, dict] = {}
+_ONDEMAND_IMG_OCR_LOCK = threading.Lock()
 
 
-def _get_lightweight_local_files() -> list[dict]:
-    """
-    바탕화면·다운로드·문서·사진 폴더의 최근 파일 메타데이터만 60초 주기로 초경량 캐싱 (< 5ms, 디스크/메모리 부하 0%)
-    """
-    now = time.time()
-    if _LOCAL_FILE_CACHE["items"] and (now - _LOCAL_FILE_CACHE["ts"]) < 60.0:
-        return _LOCAL_FILE_CACHE["items"]
+def _resolve_win_known_folder_safe(guid_str: str) -> Path | None:
+    if sys.platform != "win32":
+        return None
+    try:
+        import uuid
+
+        class _GUID(ctypes.Structure):
+            _fields_ = [
+                ("Data1", wintypes.DWORD),
+                ("Data2", wintypes.WORD),
+                ("Data3", wintypes.WORD),
+                ("Data4", ctypes.c_ubyte * 8),
+            ]
+
+        u = uuid.UUID(guid_str)
+        g = _GUID(u.time_low, u.time_mid, u.time_hi_version, (ctypes.c_ubyte * 8).from_buffer_copy(u.bytes[8:]))
+        ptr = ctypes.c_wchar_p()
+        hr = ctypes.windll.shell32.SHGetKnownFolderPath(ctypes.byref(g), 0, None, ctypes.byref(ptr))
+        if hr == 0 and ptr.value:
+            val = Path(ptr.value)
+            ctypes.windll.ole32.CoTaskMemFree(ptr)
+            return val
+    except Exception:
+        pass
+    return None
+
+
+def _get_known_user_folders_for_search() -> list[Path]:
     home = Path.home()
-    folders = [
+    raw_cands: list[Path] = []
+    # Win32 KnownFolders: Desktop, Downloads, Documents, Pictures, Videos
+    for guid_s in (
+        "{B4BFCC3A-DB2C-424C-B029-7FE99A87C641}",
+        "{374DE290-123F-4565-9164-39C4925E467B}",
+        "{FDD39AD0-238F-46AF-ADB4-6C85480369C7}",
+        "{33E28130-4E1E-4676-835A-98395C3BC3BB}",
+        "{18989B1D-99B5-455B-841C-AB7C74E4DDFC}",
+    ):
+        kp = _resolve_win_known_folder_safe(guid_s)
+        if kp is not None:
+            raw_cands.append(kp)
+
+    raw_cands.extend([
         home / "Desktop",
         home / "Downloads",
         home / "Documents",
         home / "Pictures",
-    ]
+        home / "Videos",
+        home / "Documents" / "카카오톡 받은 파일",
+        home / "Downloads" / "카카오톡 받은 파일",
+    ])
+
+    od_roots: list[Path] = []
+    for env_k in ("OneDrive", "OneDriveConsumer", "OneDriveCommercial"):
+        ev = (os.environ.get(env_k) or "").strip()
+        if ev:
+            od_roots.append(Path(ev))
+    od_roots.append(home / "OneDrive")
+    for od in od_roots:
+        if od.exists() and od.is_dir():
+            for sub in ("Desktop", "바탕 화면", "Documents", "문서", "Pictures", "사진", "Videos", "동영상"):
+                raw_cands.append(od / sub)
+            raw_cands.append(od / "Documents" / "카카오톡 받은 파일")
+            raw_cands.append(od / "문서" / "카카오톡 받은 파일")
+
+    deduped: list[Path] = []
+    seen_dirs: set[str] = set()
+    for d in raw_cands:
+        try:
+            if not d.exists() or not d.is_dir():
+                continue
+            norm_d = os.path.normcase(os.path.abspath(str(d)))
+            if norm_d not in seen_dirs:
+                seen_dirs.add(norm_d)
+                deduped.append(d)
+        except Exception:
+            pass
+    return deduped
+
+
+def _get_lightweight_local_files() -> list[dict]:
+    """
+    바탕화면·다운로드·문서·사진·동영상·OneDrive·카톡받은파일 폴더(및 1단계 하위 폴더)의
+    최근 파일 메타데이터를 60초 주기로 카테고리별 균형 캐싱 (문서/사진/영상 기아 현상 원천 방지)
+    """
+    now = time.time()
+    if _LOCAL_FILE_CACHE["items"] and (now - _LOCAL_FILE_CACHE["ts"]) < 60.0:
+        return _LOCAL_FILE_CACHE["items"]
+    folders = _get_known_user_folders_for_search()
     doc_exts = {".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md"}
     img_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
-    vid_exts = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv"}
-    collected: list[dict] = []
-    for fd in folders:
-        if not fd.exists():
-            continue
+    vid_exts = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v"}
+    skip_sub_dirs = {
+        "node_modules", ".git", "appdata", "__pycache__", "venv", ".venv",
+        "dist", "build", "universal_z_core", "merlin_z_core", "$recycle.bin",
+    }
+
+    scan_dirs: list[Path] = []
+    seen_scan_dirs: set[str] = set()
+    for root_fd in folders:
+        norm_r = os.path.normcase(os.path.abspath(str(root_fd)))
+        if norm_r not in seen_scan_dirs:
+            seen_scan_dirs.add(norm_r)
+            scan_dirs.append(root_fd)
+        sub_added = 0
+        try:
+            with os.scandir(root_fd) as it_sub:
+                for sub_e in it_sub:
+                    if sub_added >= 15:
+                        break
+                    try:
+                        if not sub_e.is_dir(follow_symlinks=False):
+                            continue
+                        sname = sub_e.name
+                        if sname.startswith((".", "$", "~")) or sname.lower() in skip_sub_dirs:
+                            continue
+                        norm_s = os.path.normcase(os.path.abspath(sub_e.path))
+                        if norm_s not in seen_scan_dirs:
+                            seen_scan_dirs.add(norm_s)
+                            scan_dirs.append(Path(sub_e.path))
+                            sub_added += 1
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    by_kind: dict[str, list[dict]] = {"doc": [], "image": [], "video": []}
+    seen_files: set[str] = set()
+    for fd in scan_dirs:
         try:
             with os.scandir(fd) as it:
                 for entry in it:
@@ -2156,8 +2272,12 @@ def _get_lightweight_local_files() -> list[dict]:
                             fkind = "video"
                         else:
                             continue
+                        norm_fp = os.path.normcase(os.path.abspath(entry.path))
+                        if norm_fp in seen_files:
+                            continue
+                        seen_files.add(norm_fp)
                         st = entry.stat()
-                        collected.append({
+                        by_kind[fkind].append({
                             "kind": fkind,
                             "file_path": entry.path,
                             "img_path": entry.path if fkind == "image" else "",
@@ -2169,13 +2289,209 @@ def _get_lightweight_local_files() -> list[dict]:
                         pass
         except Exception:
             pass
-    collected.sort(key=lambda x: x.get("ts", 0.0), reverse=True)
-    top_items = collected[:80]
+
+    for fk in by_kind:
+        by_kind[fk].sort(key=lambda x: x.get("ts", 0.0), reverse=True)
+    top_items = by_kind["doc"][:50] + by_kind["image"][:60] + by_kind["video"][:40]
+    top_items.sort(key=lambda x: x.get("ts", 0.0), reverse=True)
     for it_f in top_items:
         it_f["vec"] = AI_ENGINE.embed_128d(it_f.pop("_name", ""))
     _LOCAL_FILE_CACHE["items"] = top_items
     _LOCAL_FILE_CACHE["ts"] = now
     return _LOCAL_FILE_CACHE["items"]
+
+
+def _reconstruct_words_to_tsv_and_text(words: list[dict]) -> tuple[str, str]:
+    if not words:
+        return "", ""
+    heights = sorted(max(6.0, float(w.get("h") or 12.0)) for w in words)
+    med_h = heights[len(heights) // 2]
+    row_tol = max(8.0, med_h * 0.58)
+    items = []
+    for w in words:
+        txt = str(w.get("t") or "").strip()
+        if not txt:
+            continue
+        x = float(w.get("x") or 0.0)
+        y = float(w.get("y") or 0.0)
+        wv = max(1.0, float(w.get("w") or 8.0))
+        hv = max(1.0, float(w.get("h") or med_h))
+        items.append({"t": txt, "x": x, "y": y, "w": wv, "h": hv, "cy": y + hv * 0.5})
+    if not items:
+        return "", ""
+    items.sort(key=lambda it: (it["cy"], it["x"]))
+    rows: list[list[dict]] = []
+    for it in items:
+        if not rows:
+            rows.append([it])
+            continue
+        avg_cy = sum(r["cy"] for r in rows[-1]) / len(rows[-1])
+        if abs(it["cy"] - avg_cy) <= row_tol:
+            rows[-1].append(it)
+        else:
+            rows.append([it])
+    full_lines: list[str] = []
+    tsv_lines: list[str] = []
+    tight_gap = max(7.0, med_h * 0.30)
+    col_gap = max(26.0, med_h * 1.45)
+    for r_words in rows:
+        r_words.sort(key=lambda it: it["x"])
+        cols: list[str] = []
+        cur = ""
+        prev_r = None
+        for w in r_words:
+            if prev_r is None:
+                cur = w["t"]
+            else:
+                gap = w["x"] - prev_r
+                if gap > col_gap:
+                    cols.append(cur.strip())
+                    cur = w["t"]
+                elif gap <= tight_gap or cur.endswith(("-", "/", ".", "(", "₩")) or w["t"].startswith(("-", "/", ".", ")", "%", "원", ",")):
+                    cur = f"{cur}{w['t']}"
+                else:
+                    cur = f"{cur} {w['t']}"
+            prev_r = max(prev_r or 0.0, w["x"] + w["w"])
+        if cur.strip():
+            cols.append(cur.strip())
+        if cols:
+            full_lines.append("  ".join(cols))
+            tsv_lines.append("\t".join(cols))
+    return "\n".join(full_lines).strip(), "\n".join(tsv_lines).strip()
+
+
+def _run_ondemand_winrt_image_ocr(img_path: Path | str) -> dict:
+    """
+    로컬 디스크 사진의 실제 한글/영문/숫자/표를 즉시 추출합니다.
+    1순위: 로컬 5199 Z-코어 `/__photos/ocr` (영구 디스크 캐시 + 회전 보정 + 표 TSV 복원)
+    2순위: 5199 미기동 단독 실행 환경에서도 자체 WinRT OcrEngine(한국어) 폴백으로 100% 무인 작동!
+    """
+    p = Path(str(img_path))
+    if not p.exists() or not p.is_file():
+        return {"ok": False, "hasText": False, "fullText": "", "tsvTable": "", "chips": []}
+    try:
+        st = p.stat()
+        sig = f"{os.path.normcase(os.path.abspath(str(p)))}|{st.st_size}|{int(st.st_mtime)}"
+    except Exception:
+        sig = str(p)
+
+    with _ONDEMAND_IMG_OCR_LOCK:
+        cached = _ONDEMAND_IMG_OCR_MEM_CACHE.get(sig)
+    if cached is not None:
+        return cached
+
+    # 1) 5199 Z-Core API 우선 호출
+    try:
+        qp = urllib.parse.quote(str(p.resolve()))
+        req = urllib.request.Request(
+            f"http://127.0.0.1:5199/__photos/ocr?p={qp}",
+            headers={"Origin": "http://127.0.0.1:5199"},
+            method="GET",
+        )
+        with urllib.request.urlopen(req, timeout=8.0) as resp:
+            payload = json.loads(resp.read().decode("utf-8", errors="replace"))
+            if isinstance(payload, dict) and payload.get("ok"):
+                ft = str(payload.get("fullText") or "").strip()
+                tsv = str(payload.get("tsvTable") or ft).strip()
+                raw_chips = [str(c).strip() for c in (payload.get("chips") or []) if str(c).strip()]
+                merged_chips = list(dict.fromkeys(raw_chips + _extract_word_chips_from_text(ft)))[:18]
+                out = {
+                    "ok": True,
+                    "hasText": bool(payload.get("hasText")) and bool(ft),
+                    "fullText": ft,
+                    "tsvTable": tsv,
+                    "chips": merged_chips,
+                }
+                with _ONDEMAND_IMG_OCR_LOCK:
+                    _ONDEMAND_IMG_OCR_MEM_CACHE[sig] = out
+                return out
+    except Exception:
+        pass
+
+    # 2) 내장 WinRT OcrEngine 직접 폴백 (5199 미실행 단독 모드 지원)
+    if sys.platform == "win32":
+        ps1_path: Path | None = None
+        try:
+            ps_code = r"""
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+    $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
+})[0]
+function Await($WinRtTask, $ResultType) {
+    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)
+    $netTask = $asTask.Invoke($null, @($WinRtTask))
+    $netTask.Wait(-1) | Out-Null
+    $netTask.Result
+}
+$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]
+$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics.Imaging, ContentType = WindowsRuntime]
+$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics.Imaging, ContentType = WindowsRuntime]
+$null = [Windows.Media.Ocr.OcrEngine, Windows.Media.Ocr, ContentType = WindowsRuntime]
+$null = [Windows.Globalization.Language, Windows.Globalization, ContentType = WindowsRuntime]
+$koLang = New-Object Windows.Globalization.Language('ko')
+$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($koLang)
+if ($null -eq $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }
+$file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($env:GHOSTI_OCR_IMG_PATH)) ([Windows.Storage.StorageFile])
+$stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
+$decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
+$bmp = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+$res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])
+$words = @()
+foreach ($ln in $res.Lines) {
+    foreach ($w in $ln.Words) {
+        $r = $w.BoundingRect
+        $words += @{ t = $w.Text; x = [math]::Round($r.X, 1); y = [math]::Round($r.Y, 1); w = [math]::Round($r.Width, 1); h = [math]::Round($r.Height, 1) }
+    }
+}
+$stream.Dispose()
+@{ ok = $true; words = $words } | ConvertTo-Json -Compress -Depth 5
+"""
+            with tempfile.NamedTemporaryFile("w", suffix=".ps1", delete=False, encoding="utf-8-sig") as tf:
+                tf.write(ps_code)
+                ps1_path = Path(tf.name)
+            env_copy = dict(os.environ)
+            env_copy["GHOSTI_OCR_IMG_PATH"] = str(p.resolve())
+            proc = subprocess.run(
+                ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(ps1_path)],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                env=env_copy,
+                timeout=10.0,
+                creationflags=0x08000000,
+            )
+            raw_out = (proc.stdout or "").strip()
+            if raw_out:
+                j_idx = raw_out.find("{")
+                if j_idx >= 0:
+                    parsed = json.loads(raw_out[j_idx:])
+                    ft, tsv = _reconstruct_words_to_tsv_and_text(parsed.get("words") or [])
+                    alnum = re.sub(r"[^가-힣A-Za-z0-9]", "", ft)
+                    has_t = len(alnum) >= 2
+                    out = {
+                        "ok": True,
+                        "hasText": has_t,
+                        "fullText": ft if has_t else "",
+                        "tsvTable": tsv if has_t else "",
+                        "chips": _extract_word_chips_from_text(ft) if has_t else [],
+                    }
+                    with _ONDEMAND_IMG_OCR_LOCK:
+                        _ONDEMAND_IMG_OCR_MEM_CACHE[sig] = out
+                    return out
+        except Exception:
+            pass
+        finally:
+            if ps1_path is not None:
+                try:
+                    ps1_path.unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+    empty_res = {"ok": False, "hasText": False, "fullText": "", "tsvTable": "", "chips": []}
+    return empty_res
 
 
 def _extract_word_chips_from_text(text: str) -> list[str]:
@@ -2427,6 +2743,7 @@ def _toast_worker() -> None:
             "items": [],
             "debounce_job": None,
         }
+        record_feature_telemetry(f"ghost_search_window_{st_state['stage']}")
 
         outer = tk.Frame(win, bg="#0B1120", highlightbackground="#38BDF8", highlightthickness=2, padx=8, pady=6)
         outer.pack(fill="both", expand=True)
@@ -2487,7 +2804,15 @@ def _toast_worker() -> None:
             cursor="hand2",
         )
         lbl_quick_btn.pack(side="right", padx=(4, 2))
-        lbl_quick_btn.bind("<Button-1>", lambda _e: (_close_win(), _CLICKED_SUPERPOWER_QUEUE.put(2)))
+        def _on_hdr_labeler(_e=None):
+            sel_fp = ""
+            if st_state["items"]:
+                cur_r = st_state["items"][min(st_state["sel_idx"], len(st_state["items"]) - 1)]
+                sel_fp = str(cur_r.get("file_path") or cur_r.get("img_path") or "").strip()
+            _close_win()
+            _CLICKED_SUPERPOWER_QUEUE.put((2, sel_fp, False) if sel_fp else 2)
+
+        lbl_quick_btn.bind("<Button-1>", _on_hdr_labeler)
 
         # 2단 필터 바: [전체] [📄문서] [🖼️사진] [🎬영상] + 우측 실시간 체험 배지
         fbar = tk.Frame(outer, bg="#0B1120")
@@ -2682,9 +3007,10 @@ def _toast_worker() -> None:
                         pass
 
                 if kind == "image":
+                    img_ref_p = str(rec.get("img_path") or rec.get("file_path") or "").strip()
                     ocr_b = tk.Label(card, text="📝OCR", fg="#FDE047", bg="#0B1120", padx=4, pady=1, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
                     ocr_b.pack(side="right", padx=(4, 0))
-                    ocr_b.bind("<Button-1>", lambda _e, r=rec: _toast_queue.put((f"__UI3_OCR__|{r.get('img_path','')}", 8000)))
+                    ocr_b.bind("<Button-1>", lambda _e, ip=img_ref_p: _toast_queue.put((f"__UI3_OCR__|{ip}", 8000)))
 
                 time_l = tk.Label(card, text=rel_t, fg="#64748B", bg=c_bg, font=("Malgun Gothic", 8))
                 time_l.pack(side="right", padx=(4, 0))
@@ -2702,6 +3028,7 @@ def _toast_worker() -> None:
             if preview_pane is not None and candidates:
                 sel_rec = candidates[st_state["sel_idx"]]
                 s_txt = sel_rec.get("text", "")
+                s_fp = str(sel_rec.get("img_path") or sel_rec.get("file_path") or "").strip()
                 tk.Label(preview_pane, text="👻 선택 항목 상세 미리보기", fg="#5EEAD4", bg="#0F172A", font=("Malgun Gothic", 9, "bold"), anchor="w").pack(fill="x", pady=(0, 6))
                 tk.Label(preview_pane, text=s_txt[:360], fg="#F8FAFC", bg="#0F172A", font=("Malgun Gothic", 9), justify="left", wraplength=330, anchor="w").pack(fill="x", pady=(0, 8))
                 act_b = tk.Label(preview_pane, text="📎 현재 커서에 바로 꽂기 (Enter)", fg="#0B1120", bg="#2DD4BF", padx=8, pady=4, font=("Malgun Gothic", 9, "bold"), cursor="hand2")
@@ -2710,7 +3037,11 @@ def _toast_worker() -> None:
                 if sel_rec.get("kind") == "image":
                     ocr_jump = tk.Label(preview_pane, text="📝 사진·OCR 단어칩 창으로 열기", fg="#FDE047", bg="#1E293B", padx=8, pady=4, font=("Malgun Gothic", 9, "bold"), cursor="hand2")
                     ocr_jump.pack(fill="x", pady=2)
-                    ocr_jump.bind("<Button-1>", lambda _e, r=sel_rec: _toast_queue.put((f"__UI3_OCR__|{r.get('img_path','')}", 8000)))
+                    ocr_jump.bind("<Button-1>", lambda _e, ip=s_fp: _toast_queue.put((f"__UI3_OCR__|{ip}", 8000)))
+                if s_fp and os.path.isfile(s_fp):
+                    lbl_jump = tk.Label(preview_pane, text="🏷️ 이 파일 귀신라벨링🔒", fg="#0B1120", bg="#5EEAD4", padx=8, pady=4, font=("Malgun Gothic", 9, "bold"), cursor="hand2")
+                    lbl_jump.pack(fill="x", pady=2)
+                    lbl_jump.bind("<Button-1>", lambda _e, fp=s_fp: (_close_win(), _CLICKED_SUPERPOWER_QUEUE.put((2, fp, True))))
 
         def _on_key_rel(event=None):
             is_hovered[0] = True
@@ -2770,12 +3101,24 @@ def _toast_worker() -> None:
         _CURRENT_OPEN_UI_MODE = "ui3"
         m_left, m_top, m_right, m_bottom = work_area
 
+        norm_arg = os.path.normcase(os.path.abspath(img_path_arg)) if img_path_arg else ""
         target_rec = None
         for r in reversed(GLOBAL_AI_HISTORY):
             if r.get("kind") == "image":
-                if not img_path_arg or r.get("img_path") == img_path_arg:
+                cand_p = str(r.get("img_path") or r.get("file_path") or "").strip()
+                if not img_path_arg:
                     target_rec = r
                     break
+                if cand_p and os.path.normcase(os.path.abspath(cand_p)) == norm_arg:
+                    target_rec = r
+                    break
+        if target_rec is None and norm_arg:
+            for frec in _get_lightweight_local_files():
+                if frec.get("kind") == "image":
+                    cand_p = str(frec.get("img_path") or frec.get("file_path") or "").strip()
+                    if cand_p and os.path.normcase(os.path.abspath(cand_p)) == norm_arg:
+                        target_rec = frec
+                        break
 
         outer = tk.Frame(win, bg="#0B1120", highlightbackground="#FDE047", highlightthickness=2, padx=8, pady=6)
         outer.pack(fill="both", expand=True)
@@ -2802,14 +3145,21 @@ def _toast_worker() -> None:
         right_p = tk.Frame(body, bg="#0F172A", highlightbackground="#334155", highlightthickness=1, padx=8, pady=6)
         right_p.pack(side="left", fill="both", expand=True)
 
-        img_p_str = (target_rec.get("img_path") if target_rec else "") or img_path_arg
-        if target_rec and target_rec.get("png_bytes") and Image is not None:
+        img_p_str = str((target_rec.get("img_path") or target_rec.get("file_path") if target_rec else "") or img_path_arg or "").strip()
+        if Image is not None and ImageTk is not None:
             try:
-                im_o = Image.open(io.BytesIO(target_rec["png_bytes"])).convert("RGBA")
-                im_o.thumbnail((190, 125), Image.Resampling.LANCZOS)
-                ph_o = ImageTk.PhotoImage(im_o, master=root)
-                thumb_refs.append(ph_o)
-                tk.Label(left_p, image=ph_o, bg="#0F172A").pack(pady=(0, 6))
+                im_o = None
+                if target_rec and target_rec.get("png_bytes"):
+                    im_o = Image.open(io.BytesIO(target_rec["png_bytes"])).convert("RGBA")
+                elif img_p_str and os.path.isfile(img_p_str):
+                    with Image.open(img_p_str) as disk_im:
+                        im_o = disk_im.convert("RGBA")
+                if im_o is not None:
+                    resamp = getattr(getattr(Image, "Resampling", Image), "LANCZOS", Image.BICUBIC)
+                    im_o.thumbnail((190, 125), resamp)
+                    ph_o = ImageTk.PhotoImage(im_o, master=root)
+                    thumb_refs.append(ph_o)
+                    tk.Label(left_p, image=ph_o, bg="#0F172A").pack(pady=(0, 6))
             except Exception:
                 pass
 
@@ -2817,26 +3167,113 @@ def _toast_worker() -> None:
         b_orig.pack(fill="x", pady=2)
         b_orig.bind("<Button-1>", lambda _e: _paste_to_target(file_path=img_p_str))
 
-        raw_ocr_t = (target_rec.get("text", "") if target_rec else "") or get_clipboard_text()
+        rec_txt_raw = str(target_rec.get("text", "") if target_rec else "").strip()
+        is_placeholder_txt = (
+            not rec_txt_raw
+            or rec_txt_raw in ("화면 캡처 이미지", "원본 사진 첨부 가능")
+            or bool(re.match(r"^\[[^\]]+\]\s+[^\n|]+$", rec_txt_raw))
+            or rec_txt_raw.startswith("📦 ")
+        )
+        if not is_placeholder_txt and " | " in rec_txt_raw and rec_txt_raw.startswith("["):
+            rec_txt_raw = rec_txt_raw.split(" | ", 1)[1].strip()
+
+        init_ocr_t = ""
+        if not is_placeholder_txt:
+            init_ocr_t = rec_txt_raw
+        elif not img_p_str:
+            init_ocr_t = get_clipboard_text()
+
+        need_ondemand_ocr = bool(img_p_str and os.path.isfile(img_p_str) and not init_ocr_t.strip())
+        ocr_state: dict[str, str] = {
+            "full": init_ocr_t,
+            "tsv": re.sub(r"  +", "\t", _clean_ocr_noise(init_ocr_t)) if init_ocr_t else "",
+        }
+
         b_tsv = tk.Label(left_p, text="📊 표 전체 엑셀(TSV)로 넣기", fg="#F8FAFC", bg="#1E293B", padx=6, pady=4, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
         b_tsv.pack(fill="x", pady=2)
-        b_tsv.bind("<Button-1>", lambda _e: _paste_to_target(text_val=re.sub(r"  +", "	", _clean_ocr_noise(raw_ocr_t))))
+        b_tsv.bind(
+            "<Button-1>",
+            lambda _e: _paste_to_target(
+                text_val=ocr_state["tsv"] or re.sub(r"  +", "\t", _clean_ocr_noise(ocr_state["full"]))
+            )
+            if ocr_state["full"].strip()
+            else None,
+        )
 
         tk.Label(right_p, text="📝 추출된 단어 조각(칩) — 콕 찍으면 커서에 즉시 입력", fg="#FDE047", bg="#0F172A", font=("Malgun Gothic", 8, "bold"), anchor="w").pack(fill="x", pady=(0, 6))
         chips_box = tk.Frame(right_p, bg="#0F172A")
         chips_box.pack(fill="both", expand=True)
 
-        chips = _extract_word_chips_from_text(raw_ocr_t)
-        if not chips:
-            chips = ["화면 캡처 이미지", "원본 사진 첨부 가능"]
-        for idx_ch, ch_val in enumerate(chips):
-            ch_lbl = tk.Label(chips_box, text=f" {ch_val} ", fg="#5EEAD4", bg="#1E293B", padx=6, pady=3, font=("Malgun Gothic", 9, "bold"), cursor="hand2")
-            ch_lbl.grid(row=idx_ch // 3, column=idx_ch % 3, padx=3, pady=3, sticky="ew")
-            ch_lbl.bind("<Button-1>", lambda _e, v=ch_val: _paste_to_target(text_val=v))
+        def _render_ui3_chips(chip_items: list[str], status_msg: str = "") -> None:
+            for w_ch in chips_box.winfo_children():
+                w_ch.destroy()
+            if status_msg:
+                tk.Label(
+                    chips_box,
+                    text=status_msg,
+                    fg="#94A3B8",
+                    bg="#0F172A",
+                    font=("Malgun Gothic", 9, "bold"),
+                    justify="left",
+                    wraplength=350,
+                    anchor="w",
+                ).pack(fill="x", pady=12)
+                return
+            for idx_ch, ch_val in enumerate(chip_items[:15]):
+                ch_lbl = tk.Label(chips_box, text=f" {ch_val} ", fg="#5EEAD4", bg="#1E293B", padx=6, pady=3, font=("Malgun Gothic", 9, "bold"), cursor="hand2")
+                ch_lbl.grid(row=idx_ch // 3, column=idx_ch % 3, padx=3, pady=3, sticky="ew")
+                ch_lbl.bind("<Button-1>", lambda _e, v=ch_val: _paste_to_target(text_val=v))
+
+        if need_ondemand_ocr:
+            _render_ui3_chips([], status_msg="⏳ 사진 속 글자·표를 읽어오는 중...")
+
+            def _bg_ocr_worker(target_img_p: str) -> None:
+                res = _run_ondemand_winrt_image_ocr(target_img_p)
+                ft = str(res.get("fullText") or "").strip()
+                tsv = str(res.get("tsvTable") or ft).strip()
+                ch_list = [str(c).strip() for c in (res.get("chips") or []) if str(c).strip()]
+                if ft and not ch_list:
+                    ch_list = _extract_word_chips_from_text(ft)
+                if ft and target_rec is not None:
+                    prev_t = str(target_rec.get("text") or "")
+                    if prev_t.startswith("[") and " | " not in prev_t:
+                        target_rec["text"] = f"{prev_t} | {ft[:240]}"
+                    elif not prev_t or prev_t == "화면 캡처 이미지":
+                        target_rec["text"] = ft
+
+                def _apply_on_ui() -> None:
+                    if current_win[0] is not win:
+                        return
+                    if res.get("hasText") and ft:
+                        ocr_state["full"] = ft
+                        ocr_state["tsv"] = tsv
+                        _render_ui3_chips(ch_list or [ft[:28]])
+                    else:
+                        ocr_state["full"] = ""
+                        ocr_state["tsv"] = ""
+                        _render_ui3_chips([], status_msg="인식된 글자가 없어요 (좌측 [원본 사진 그대로 넣기] 가능)")
+
+                try:
+                    win.after(0, _apply_on_ui)
+                except Exception:
+                    pass
+
+            threading.Thread(target=_bg_ocr_worker, args=(img_p_str,), daemon=True).start()
+        else:
+            chips = _extract_word_chips_from_text(init_ocr_t)
+            if chips:
+                _render_ui3_chips(chips)
+            else:
+                _render_ui3_chips([], status_msg="인식된 글자가 없어요 (좌측 [원본 사진 그대로 넣기] 가능)")
 
         b_all = tk.Label(right_p, text="📋 전체 텍스트 통째로 넣기", fg="#E2E8F0", bg="#334155", padx=6, pady=3, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
         b_all.pack(fill="x", pady=(6, 0))
-        b_all.bind("<Button-1>", lambda _e: _paste_to_target(text_val=_clean_ocr_noise(raw_ocr_t)))
+        b_all.bind(
+            "<Button-1>",
+            lambda _e: _paste_to_target(text_val=_clean_ocr_noise(ocr_state["full"]))
+            if ocr_state["full"].strip()
+            else None,
+        )
 
         rw, rh = 620, 310
         x = max(m_left + 12, min(pt_x - 20, m_right - rw - 16))
@@ -6097,6 +6534,197 @@ def _generate_smart_filename_prefix() -> str:
     return clean_title[:18]
 
 
+def _is_mechanical_filename_stem(stem: str) -> bool:
+    s = (stem or "").strip()
+    if not s:
+        return True
+    if re.fullmatch(r"[\da-fA-F_\-\s().]+", s):
+        return True
+    rem = re.sub(
+        r"^(IMG|DSC|DCIM|PXL|SAM|DJI|Screenshot|Screen[\s_-]*Shot|스크린샷|화면[\s_-]*캡처|KakaoTalk|카톡|스캔|scan|문서|새\s*텍스트\s*문서|새\s*문서|제목[\s_-]*없음|이름[\s_-]*없음|무제|Untitled|Document|image|photo|캡처)[\s_-]*\d*[\s_-]*\d*",
+        "",
+        s,
+        flags=re.IGNORECASE,
+    ).strip("_- ()")
+    return (not rem) or bool(re.fullmatch(r"[\d_\-()]+", rem))
+
+
+def _decode_pdf_literal_for_labeler(raw_lit: bytes) -> str:
+    out = bytearray()
+    i = 0
+    n = len(raw_lit)
+    while i < n:
+        b = raw_lit[i]
+        if b == 0x5C and i + 1 < n:
+            nxt = raw_lit[i + 1]
+            if 0x30 <= nxt <= 0x37:
+                oct_s = bytes([nxt])
+                i += 2
+                for _ in range(2):
+                    if i < n and 0x30 <= raw_lit[i] <= 0x37:
+                        oct_s += bytes([raw_lit[i]])
+                        i += 1
+                    else:
+                        break
+                out.append(int(oct_s, 8) & 0xFF)
+                continue
+            esc_map = {ord("n"): 10, ord("r"): 13, ord("t"): 9, ord("b"): 8, ord("f"): 12}
+            if nxt in esc_map:
+                out.append(esc_map[nxt])
+            elif nxt in (ord("\r"), ord("\n")):
+                pass
+            else:
+                out.append(nxt)
+            i += 2
+        else:
+            out.append(b)
+            i += 1
+    b_val = bytes(out)
+    if b_val.startswith(b"\xfe\xff"):
+        return b_val[2:].decode("utf-16-be", errors="ignore")
+    if b_val.startswith(b"\xff\xfe"):
+        return b_val[2:].decode("utf-16-le", errors="ignore")
+    try:
+        return b_val.decode("utf-8")
+    except UnicodeDecodeError:
+        return b_val.decode("cp949", errors="ignore")
+
+
+def _extract_pdf_text_for_labeler(fpath: Path) -> str:
+    chunks: list[str] = []
+    try:
+        raw_pdf = fpath.read_bytes()[: 4 * 1024 * 1024]
+        for m_st in re.finditer(rb"<<(.*?)>>\s*stream\r?\n(.*?)\r?\nendstream", raw_pdf, re.DOTALL):
+            hdr_b, body_b = m_st.group(1), m_st.group(2)
+            if re.search(rb"/(?:Image|DCTDecode|JPXDecode|CCITTFaxDecode|JBIG2Decode|FontFile\d*|Metadata|XRef)\b", hdr_b):
+                continue
+            dec_b = body_b
+            if b"/FlateDecode" in hdr_b:
+                decomp_ok = False
+                for wbits in (zlib.MAX_WBITS, -zlib.MAX_WBITS):
+                    try:
+                        dec_b = zlib.decompress(body_b.strip(b"\r\n"), wbits)
+                        decomp_ok = True
+                        break
+                    except Exception:
+                        pass
+                if not decomp_ok:
+                    continue
+            bt_blocks = re.findall(rb"\bBT\b(.*?)\bET\b", dec_b, re.DOTALL)
+            for blk in bt_blocks[:120]:
+                for hx in re.findall(rb"<([0-9A-Fa-f\s]{4,})>", blk):
+                    clean_hx = re.sub(rb"\s+", b"", hx)
+                    if len(clean_hx) % 2 == 1:
+                        clean_hx += b"0"
+                    try:
+                        hb = bytes.fromhex(clean_hx.decode("ascii"))
+                        if hb.startswith(b"\xfe\xff"):
+                            s_dec = hb[2:].decode("utf-16-be", errors="ignore")
+                        elif len(hb) % 2 == 0 and any(0xAC <= hb[k] <= 0xD7 for k in range(0, len(hb), 2)):
+                            s_dec = hb.decode("utf-16-be", errors="ignore")
+                        else:
+                            s_dec = hb.decode("utf-8", errors="ignore")
+                        if s_dec.strip():
+                            chunks.append(s_dec.strip())
+                    except Exception:
+                        pass
+                for lit_m in re.finditer(rb"\(((?:\\.|[^\\()])+)\)", blk):
+                    s_lit = _decode_pdf_literal_for_labeler(lit_m.group(1)).strip()
+                    if s_lit:
+                        chunks.append(s_lit)
+    except Exception:
+        pass
+
+    joined = " ".join(chunks)
+    meaningful_cnt = len(re.findall(r"[가-힣A-Za-z0-9]", joined))
+    if meaningful_cnt >= 6:
+        return joined[:8000]
+
+    # 스캔 이미지 PDF 폴백: WinRT PdfDocument 첫 2페이지 고속 OCR
+    if sys.platform == "win32":
+        ps1_p: Path | None = None
+        try:
+            if fpath.stat().st_size <= 25 * 1024 * 1024:
+                ps_pdf = r"""
+$ErrorActionPreference = 'Stop'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+Add-Type -AssemblyName System.Runtime.WindowsRuntime
+$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+    $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
+})[0]
+$asTaskAction = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
+    $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncAction'
+})[0]
+function Await($WinRtTask, $ResultType) {
+    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)
+    $netTask = $asTask.Invoke($null, @($WinRtTask))
+    $netTask.Wait(-1) | Out-Null
+    $netTask.Result
+}
+function AwaitAction($WinRtAction) {
+    $netTask = $asTaskAction.Invoke($null, @($WinRtAction))
+    $netTask.Wait(-1) | Out-Null
+}
+$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]
+$null = [Windows.Data.Pdf.PdfDocument, Windows.Data.Pdf, ContentType = WindowsRuntime]
+$null = [Windows.Data.Pdf.PdfPageRenderOptions, Windows.Data.Pdf, ContentType = WindowsRuntime]
+$null = [Windows.Storage.Streams.InMemoryRandomAccessStream, Windows.Storage.Streams, ContentType = WindowsRuntime]
+$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics.Imaging, ContentType = WindowsRuntime]
+$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics.Imaging, ContentType = WindowsRuntime]
+$null = [Windows.Media.Ocr.OcrEngine, Windows.Media.Ocr, ContentType = WindowsRuntime]
+$null = [Windows.Globalization.Language, Windows.Globalization, ContentType = WindowsRuntime]
+$koLang = New-Object Windows.Globalization.Language('ko')
+$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($koLang)
+if ($null -eq $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }
+$file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($env:GHOSTI_PDF_OCR_PATH)) ([Windows.Storage.StorageFile])
+$pdf = Await ([Windows.Data.Pdf.PdfDocument]::LoadFromFileAsync($file)) ([Windows.Data.Pdf.PdfDocument])
+$maxP = [Math]::Min([int]$pdf.PageCount, 2)
+$linesOut = @()
+for ($i = 0; $i -lt $maxP; $i++) {
+    $page = $pdf.GetPage([uint32]$i)
+    $stream = New-Object Windows.Storage.Streams.InMemoryRandomAccessStream
+    $opts = New-Object Windows.Data.Pdf.PdfPageRenderOptions
+    $opts.DestinationWidth = [uint32]([Math]::Max(1400, [int]($page.Size.Width * 2.0)))
+    AwaitAction ($page.RenderToStreamAsync($stream, $opts))
+    $stream.Seek(0)
+    $dec = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
+    $bmp = Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
+    $res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])
+    if ($res.Text) { $linesOut += $res.Text }
+    $stream.Dispose()
+    $page.Dispose()
+}
+($linesOut -join "`n")
+"""
+                with tempfile.NamedTemporaryFile("w", suffix=".ps1", delete=False, encoding="utf-8-sig") as tf:
+                    tf.write(ps_pdf)
+                    ps1_p = Path(tf.name)
+                env_c = dict(os.environ)
+                env_c["GHOSTI_PDF_OCR_PATH"] = str(fpath.resolve())
+                r_p = subprocess.run(
+                    ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(ps1_p)],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    env=env_c,
+                    timeout=12.0,
+                    creationflags=0x08000000,
+                )
+                ocr_out = (r_p.stdout or "").strip()
+                if ocr_out:
+                    return ocr_out[:8000]
+        except Exception:
+            pass
+        finally:
+            if ps1_p is not None:
+                try:
+                    ps1_p.unlink(missing_ok=True)
+                except Exception:
+                    pass
+    return joined[:8000]
+
+
 def _extract_file_date_and_slug_for_labeler(fpath: Path) -> tuple[str | None, str | None, str, str]:
     """
     실물 파일(사진·카톡·문서)에서 (exif_yymmdd, kakao_yymmdd, ocr_or_doc_text, summary_slug)를 추출합니다.
@@ -6120,8 +6748,8 @@ def _extract_file_date_and_slug_for_labeler(fpath: Path) -> tuple[str | None, st
             except Exception:
                 kakao_yymmdd = datetime.date.today().strftime("%y%m%d")
 
-    # 2) 이미지 파일인 경우 EXIF 촬영일(DateTimeOriginal=36867, DateTime=306) 추출
-    if ext_low in (".jpg", ".jpeg", ".png", ".webp", ".heic", ".tif", ".tiff"):
+    # 2) 이미지 파일인 경우 EXIF 촬영일(DateTimeOriginal=36867, DateTime=306) 추출 + 기계식 파일명 스샷/영수증 온디맨드 OCR
+    if ext_low in (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".heic", ".tif", ".tiff"):
         try:
             from PIL import Image
             with Image.open(fpath) as im:
@@ -6133,8 +6761,14 @@ def _extract_file_date_and_slug_for_labeler(fpath: Path) -> tuple[str | None, st
                         exif_yymmdd = f"{m_ex.group(1)}{m_ex.group(2)}{m_ex.group(3)}"
         except Exception:
             pass
+        if ext_low in (".jpg", ".jpeg", ".png", ".webp", ".bmp") and (
+            _is_mechanical_filename_stem(stem) or (not exif_yymmdd and not kakao_yymmdd)
+        ):
+            ocr_info = _run_ondemand_winrt_image_ocr(fpath)
+            if ocr_info.get("hasText") and ocr_info.get("fullText"):
+                doc_text = str(ocr_info["fullText"])[:8000]
 
-    # 3) 일반 문서(.txt, .md, .csv, .json, .html, .xml, .docx, .pdf, .hwp) 본문 첫 날짜 및 제목 추출
+    # 3) 일반 문서(.txt, .md, .csv, .json, .html, .xml, .docx, .pptx, .hwpx, .pdf, .hwp) 본문 첫 날짜 및 제목 추출
     if ext_low in (".txt", ".md", ".csv", ".json", ".log", ".html", ".xml"):
         try:
             raw_b = fpath.read_bytes()[:16384]
@@ -6144,23 +6778,32 @@ def _extract_file_date_and_slug_for_labeler(fpath: Path) -> tuple[str | None, st
                 doc_text = raw_b.decode("cp949", errors="ignore")[:8000]
         except Exception:
             pass
-    elif ext_low == ".docx":
+    elif ext_low in (".docx", ".hwpx", ".pptx"):
         try:
             import zipfile
             with zipfile.ZipFile(fpath, "r") as zf:
-                if "word/document.xml" in zf.namelist():
-                    raw_xml = zf.read("word/document.xml").decode("utf-8", errors="ignore")
-                    doc_text = re.sub(r"<[^>]+>", " ", raw_xml)[:8000]
+                xml_parts: list[str] = []
+                for zname in zf.namelist():
+                    if zname.endswith(".xml") and (
+                        "word/document" in zname or "Contents/section" in zname or "ppt/slides/slide" in zname
+                    ):
+                        raw_xml = zf.read(zname).decode("utf-8", errors="ignore")
+                        xml_parts.append(re.sub(r"<[^>]+>", " ", raw_xml))
+                        if len(xml_parts) >= 8:
+                            break
+                doc_text = " ".join(xml_parts)[:8000]
         except Exception:
             pass
-    elif ext_low in (".pdf", ".hwp"):
+    elif ext_low == ".pdf":
+        doc_text = _extract_pdf_text_for_labeler(fpath)
+    elif ext_low == ".hwp":
         try:
-            raw_b = fpath.read_bytes()[:65536]
-            txt_u8 = raw_b.decode("utf-8", errors="ignore")
+            raw_b = fpath.read_bytes()[:131072]
+            txt_u16 = raw_b.decode("utf-16-le", errors="ignore")
             txt_cp = raw_b.decode("cp949", errors="ignore")
-            kor_chunks = [w for w in re.findall(r"[가-힣]{2,12}", txt_u8 + " " + txt_cp) if is_valid_korean_word(w)]
-            dates_found = re.findall(r"20[0-3]\d[-./년\s]*[01]?\d[-./월\s]*[0-3]?\d", txt_u8)
-            doc_text = " ".join(dates_found + kor_chunks)
+            kor_chunks = [w for w in re.findall(r"[가-힣]{2,12}", txt_u16 + " " + txt_cp) if is_valid_korean_word(w)]
+            dates_found = re.findall(r"20[0-3]\d[-./년\s]*[01]?\d[-./월\s]*[0-3]?\d", txt_u16 + " " + txt_cp)
+            doc_text = " ".join(dates_found + kor_chunks)[:8000]
         except Exception:
             pass
 
@@ -6192,7 +6835,7 @@ def _extract_file_date_and_slug_for_labeler(fpath: Path) -> tuple[str | None, st
     if not slug:
         # 기존 파일명에서 기계식 접두사(IMG_, KakaoTalk_2026..., 새 텍스트 문서 등) 제거 후 남은 의미 단어가 있으면 보존
         rem = re.sub(
-            r"^(IMG|DSC|DCIM|PXL|SAM|DJI|Screenshot|Screen[\s_-]*Shot|KakaoTalk|스캔|scan|문서|새\s*텍스트\s*문서|새\s*문서|제목[\s_-]*없음|이름[\s_-]*없음|무제|Untitled|Document|image|photo|캡처)[\s_-]*\d*[\s_-]*\d*",
+            r"^(IMG|DSC|DCIM|PXL|SAM|DJI|Screenshot|Screen[\s_-]*Shot|스크린샷|화면[\s_-]*캡처|KakaoTalk|카톡|스캔|scan|문서|새\s*텍스트\s*문서|새\s*문서|제목[\s_-]*없음|이름[\s_-]*없음|무제|Untitled|Document|image|photo|캡처)[\s_-]*\d*[\s_-]*\d*",
             "",
             stem,
             flags=re.IGNORECASE,
@@ -6200,7 +6843,7 @@ def _extract_file_date_and_slug_for_labeler(fpath: Path) -> tuple[str | None, st
         if rem and not re.fullmatch(r"[\d_-]+", rem):
             slug = rem[:16]
         else:
-            slug = "사진" if ext_low in (".jpg", ".jpeg", ".png", ".webp", ".heic") else "문서"
+            slug = "사진" if ext_low in (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".heic") else "문서"
 
     return exif_yymmdd, kakao_yymmdd, doc_text, slug
 
@@ -6317,10 +6960,15 @@ def _get_explorer_selected_paths_safe(target_hwnd: int | None = None) -> list[st
     return paths
 
 
-def superpower_9_image_or_pdf_file(recent_png_bytes: list[bytes], target_hwnd: int | None = None) -> None:
+def superpower_9_image_or_pdf_file(
+    recent_png_bytes: list[bytes],
+    target_hwnd: int | None = None,
+    explicit_files: list[str] | None = None,
+    force_explicit: bool = False,
+) -> None:
     """
     [①번 — 🏷️ 귀신 라벨러(사진·카톡·문서 날짜별 파일명 자동 정리) & 스샷/웹 이미지 실물 파일(.png/.pdf) 1초 변환]:
-    1) 탐색기에서 파일(사진·카톡사진·문서)을 선택하거나 복사(Ctrl+C)한 상태면:
+    1) 탐색기에서 파일(사진·카톡사진·문서)을 선택하거나 복사(Ctrl+C)한 상태(또는 귀신검색창에서 지정한 파일)면:
        - 직접 찍은 사진(EXIF 보유): `YYMMDD_장소/내용.jpg`
        - 카톡 수신 사진: `YYMMDD_카톡_내용.jpg`
        - 일반 문서(전화번호 010-2026-1234·금액 오인 방지): `YYMMDD_내용_제목.ext`
@@ -6328,11 +6976,17 @@ def superpower_9_image_or_pdf_file(recent_png_bytes: list[bytes], target_hwnd: i
     2) 스샷 2장 이상이면 합본 .pdf, 1장이면 단일 .png 파일로 변환하며 귀신 라벨러 날짜 규칙으로 자동 작명합니다!
     """
     try:
-        # 0) 현재 탐색기에서 명시적으로 선택한 파일이 있으면 1순위, 없으면 복사된 파일(CF_HDROP)로 [🏷️ 귀신 라벨러] 즉시 실행!
-        sel_f = _get_explorer_selected_paths_safe(target_hwnd)
-        target_files = [str(x) for x in sel_f if Path(str(x)).is_file()] if sel_f else []
-        if not target_files:
-            target_files = get_clipboard_hdrop_files()
+        explicit_valid = [str(x) for x in (explicit_files or []) if x and Path(str(x)).is_file()]
+        if force_explicit and explicit_valid:
+            target_files = explicit_valid
+        else:
+            # 0) 현재 탐색기에서 명시적으로 선택한 파일이 있으면 1순위, 없으면 복사된 파일(CF_HDROP), 그다음 귀신검색창 선택 파일!
+            sel_f = _get_explorer_selected_paths_safe(target_hwnd)
+            target_files = [str(x) for x in sel_f if Path(str(x)).is_file()] if sel_f else []
+            if not target_files:
+                target_files = get_clipboard_hdrop_files()
+            if not target_files and explicit_valid:
+                target_files = explicit_valid
 
         if target_files:
             renamed_paths: list[str] = []
@@ -6370,6 +7024,7 @@ def superpower_9_image_or_pdf_file(recent_png_bytes: list[bytes], target_hwnd: i
                     rename_pairs.append((p_orig.name, p_orig.name))
 
             if renamed_paths:
+                _LOCAL_FILE_CACHE["ts"] = 0.0
                 set_clipboard_hdrop_files(renamed_paths)
                 first_old, first_new = rename_pairs[0]
                 more_sfx = f" 외 {len(rename_pairs) - 1}건" if len(rename_pairs) > 1 else ""
@@ -6630,7 +7285,11 @@ def main() -> None:
                 u32.UnregisterHotKey(None, 300 + fnum)
             menu_armed = False
 
-    def _execute_superpower_num(num: int) -> None:
+    def _execute_superpower_num(
+        num: int,
+        explicit_files: list[str] | None = None,
+        force_explicit: bool = False,
+    ) -> None:
         """
         [귀신창 Wave 1 정식 연속 1~4번 체계 (한영·띄어쓰기는 타이핑 자동 감지)]:
         1줄(하늘색 주력): [Ctrl+V] 순차·칸맞춤 | [1] 🧹서식·줄바꿈   | [2] 📄스샷·PDF·OCR🔒
@@ -6673,8 +7332,13 @@ def main() -> None:
                 complete_feature_action_success("superpower_key_1")
         elif num in (2, 9):
             last_hdrop_copy_ts = 0.0
-            is_pdf_m = len(recent_images) >= 2
-            superpower_9_image_or_pdf_file(recent_images, target_hwnd=_LAST_TARGET_HWND)
+            is_pdf_m = len(recent_images) >= 2 and not explicit_files
+            superpower_9_image_or_pdf_file(
+                recent_images,
+                target_hwnd=_LAST_TARGET_HWND,
+                explicit_files=explicit_files,
+                force_explicit=force_explicit,
+            )
             complete_feature_action_success("feat_b3_pdf_merge" if is_pdf_m else "superpower_key_2")
         elif num == 3:
             superpower_5_merge_or_ai_search(recent_unpasted, seq_queue, ai_clipboard_history, daemon_set_clipboard)
@@ -7046,7 +7710,17 @@ def main() -> None:
                         pass
                 while not _CLICKED_SUPERPOWER_QUEUE.empty():
                     try:
-                        c_num = _CLICKED_SUPERPOWER_QUEUE.get_nowait()
+                        q_cmd = _CLICKED_SUPERPOWER_QUEUE.get_nowait()
+                        exp_files: list[str] | None = None
+                        force_exp = False
+                        if isinstance(q_cmd, tuple):
+                            c_num = int(q_cmd[0])
+                            if len(q_cmd) >= 2 and q_cmd[1]:
+                                exp_files = [str(q_cmd[1])]
+                            if len(q_cmd) >= 3:
+                                force_exp = bool(q_cmd[2])
+                        else:
+                            c_num = int(q_cmd)
                         if c_num == -1:
                             disarm_sub_hotkeys()
                             close_ghost_toast()
@@ -7057,7 +7731,7 @@ def main() -> None:
                                 time.sleep(0.025)
                             tap_key_combo([VK_CONTROL], VK_V)
                         elif 1 <= c_num <= 9:
-                            _execute_superpower_num(c_num)
+                            _execute_superpower_num(c_num, explicit_files=exp_files, force_explicit=force_exp)
                     except Exception:
                         pass
                 # [Zero-Hook 마우스 Ctrl+우클릭 감지 — 귀신호출 2종 단일화]
