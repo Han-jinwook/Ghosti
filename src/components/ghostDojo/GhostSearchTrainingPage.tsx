@@ -49,13 +49,14 @@ export async function openRealGhostSearchWindowViaDaemon(
     // 5199 POST 실패 시 GET 또는 51988 폴백 시도
   }
   const qs = `stage=${encodeURIComponent(daemonStage)}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
-  for (const base of ['http://127.0.0.1:5199', 'http://127.0.0.1:51988']) {
-    try {
-      const res = await fetch(`${base}/__merlin/open-ghost-search?${qs}`);
-      if (res.ok) return true;
-    } catch {
-      /* ignore */
+  try {
+    const res = await fetch(`http://127.0.0.1:5199/__merlin/open-ghost-search?${qs}`);
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      return data?.ok !== false;
     }
+  } catch {
+    /* ignore */
   }
   return false;
 }

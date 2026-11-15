@@ -12,7 +12,9 @@ export interface SuperpowerTrialStatus {
   engine_running: boolean;
   machine_hwid: string;
   account_id: string;
-  trial_status: 'NOT_STARTED' | 'ACTIVE' | 'TRIAL_UNLIMITED' | 'PER_FEATURE_ACTIVE' | 'EXPIRED_LOCKED' | 'EXPIRED' | 'SUBSCRIBED';
+  trial_status: 'NOT_STARTED' | 'ACTIVE' | 'ACTIVE_30D' | 'TRIAL_UNLIMITED' | 'PER_FEATURE_ACTIVE' | 'EXPIRED_LOCKED' | 'EXPIRED' | 'SUBSCRIBED';
+  trial_opt_in_status?: 'NOT_STARTED' | 'DEFERRED' | 'ACTIVE_30D' | 'EXPIRED_LOCKED' | 'SUBSCRIBED';
+  badge_label?: string;
   feature_trials?: Record<string, any>;
   cross_device_trial?: Record<string, any>;
   trial_days_left: number;
@@ -162,14 +164,25 @@ function engWordToKorLocal(word: string): string {
   return res;
 }
 
+function spaceKorSimpleLocal(s: string): string {
+  if (!/[가-힣]{4,}/.test(s) || /\s/.test(s)) return s;
+  let out = s;
+  out = out.replace(/(안녕하세요|감사합니다|반갑습니다|죄송합니다)(?=[가-힣])/g, '$1 ');
+  out = out.replace(/(오늘|내일|지금|방금|한글이|시간이|회의|연락)(?=[가-힣]{2,})/g, '$1 ');
+  out = out.replace(/([가-힣])(안쳐져|안돼요|안되네요)/g, '$1 $2');
+  out = out.replace(/안쳐져/g, '안 쳐져');
+  return out.replace(/\s{2,}/g, ' ').trim();
+}
+
 export function simulateSuperpowerLocal(mode: 'typo' | 'number9' | 'extract8' | 'hyphen7', text: string): string {
   const s = text.trim();
   if (!s) return '';
   if (mode === 'typo') {
-    return s
+    const morphed = s
       .split(/(\s+)/)
       .map((tok) => (/^[A-Za-z]+$/.test(tok) ? engWordToKorLocal(tok) : tok))
       .join('');
+    return spaceKorSimpleLocal(morphed);
   }
   if (mode === 'hyphen7') {
     if (/^\d{2,4}-\d{3,4}-\d{4}$/.test(s)) return s.replace(/\D/g, '');
@@ -306,26 +319,48 @@ export async function fetchSuperpowerStatus(accountId: string, isSubscribed: boo
   };
 }
 
-export async function startSuperpowerTrialAction(accountId: string, isSubscribed: boolean): Promise<SuperpowerTrialStatus> {
+export async function startSuperpowerTrialAction(
+  accountId: string,
+  isSubscribed: boolean,
+  agreed: boolean = true,
+): Promise<SuperpowerTrialStatus> {
   const localSnippets = loadLocalSnippets();
-  try {
-    const res = await fetch(getZCoreUrl('/api/superpower/start-trial'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ accountId, isSubscribed }),
-      signal: AbortSignal.timeout(1800),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      if (data && data.ok) {
-        const mergedData = { ...data, snippets: { ...(data.snippets || {}), ...localSnippets } };
-        localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(mergedData));
-        window.dispatchEvent(new CustomEvent('ghosti_superpower_status_updated', { detail: mergedData }));
-        return mergedData as SuperpowerTrialStatus;
+  if (hasActiveGhostiLoginSession()) {
+    try {
+      const res = await fetch(getZCoreUrl('/api/superpower/start-trial'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accountId, isSubscribed, agreed }),
+        signal: AbortSignal.timeout(1800),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        if (data && data.ok) {
+          const mergedData = { ...data, snippets: { ...(data.snippets || {}), ...localSnippets } };
+          localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(mergedData));
+          window.dispatchEvent(new CustomEvent('ghosti_superpower_status_updated', { detail: mergedData }));
+          return mergedData as SuperpowerTrialStatus;
+        }
       }
+    } catch {
+      // 로컬 폴백
     }
-  } catch {
-    // 로컬 폴백
+  }
+  if (!agreed) {
+    const deferredStatus: SuperpowerTrialStatus = {
+      engine_running: false,
+      machine_hwid: 'sha256_local_pc_device',
+      account_id: accountId,
+      trial_status: isSubscribed ? 'SUBSCRIBED' : 'NOT_STARTED',
+      trial_opt_in_status: isSubscribed ? 'SUBSCRIBED' : 'DEFERRED',
+      trial_days_left: isSubscribed ? 9999 : 30,
+      started_at: null,
+      expires_at: null,
+      is_subscribed: isSubscribed,
+      snippets: localSnippets,
+    };
+    localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(deferredStatus));
+    return deferredStatus;
   }
   const now = new Date();
   const exp = new Date(now.getTime() + 30 * 86400 * 1000); // [v1.3 마감] 30일 무제한 체험 (데몬 ACTIVE_30D 와 동일)

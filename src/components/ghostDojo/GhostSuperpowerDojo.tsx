@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
+import { getZCoreUrl, hasActiveGhostiLoginSession, zCoreBridge } from '../../services/zCoreBridge';
 import {
   playBabyGhostChime,
   simulateSuperpowerLocal,
@@ -146,7 +147,7 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
           <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11.5px] text-[#E2E8F0]">
             <div className="flex flex-wrap gap-1.5">
               <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[3] 🔗다중합본🔒</span>
-              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[5] 📌창고정🔒</span>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[4] 📌창고정🔒</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               <span className="px-2 py-0.5 rounded bg-amber-400/20 border border-amber-300/50 text-amber-200 font-bold">[⌨️상용구▾]</span>
@@ -238,6 +239,34 @@ const Basic3: React.FC<{ onDone: () => void }> = ({ onDone }) => {
  * ───────────────────────────────────────────────────────────── */
 const Dojo1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const [text, setText] = useState('');
+  const idleTimerRef = useRef<number>(0);
+
+  const applyTypoMorph = useCallback(
+    (rawVal: string, appendSpace: boolean) => {
+      const trimmed = rawVal.trim();
+      if (!trimmed || !/[A-Za-z]/.test(trimmed)) return false;
+      const converted = simulateSuperpowerLocal('typo', trimmed);
+      if (converted !== trimmed && /[가-힣]/.test(converted)) {
+        setText(appendSpace ? `${converted} ` : converted);
+        playBabyGhostChime('typo');
+        onDone();
+        return true;
+      }
+      return false;
+    },
+    [onDone],
+  );
+
+  useEffect(() => {
+    window.clearTimeout(idleTimerRef.current);
+    const trimmed = text.trim();
+    if (!trimmed || !/[A-Za-z]{4,}/.test(trimmed) || /[가-힣]/.test(trimmed)) return;
+    idleTimerRef.current = window.setTimeout(() => {
+      applyTypoMorph(trimmed, false);
+    }, 1000);
+    return () => window.clearTimeout(idleTimerRef.current);
+  }, [text, applyTypoMorph]);
+
   return (
     <div className="flex flex-col gap-2">
       <div className="flex gap-2">
@@ -246,12 +275,8 @@ const Dojo1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
             if (e.key === ' ' && /[A-Za-z]/.test(text)) {
-              const converted = simulateSuperpowerLocal('typo', text.trim());
-              if (converted !== text.trim() && /[가-힣]/.test(converted)) {
+              if (applyTypoMorph(text, true)) {
                 e.preventDefault();
-                setText(`${converted} `);
-                playBabyGhostChime('typo');
-                onDone();
               }
             }
           }}
@@ -261,6 +286,9 @@ const Dojo1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
         <button type="button" className={btnCls} onClick={() => setText(DOJO1_TYPO_SAMPLE)}>
           예제 넣기
         </button>
+      </div>
+      <div className="text-[11.5px] text-zinc-400">
+        💡 실전 안내: <strong className="text-zinc-200">메모장·카카오톡·엑셀 셀 편집</strong>에서는 스페이스바 또는 1초 정지 시 실시간 자동변환되며, <strong className="text-zinc-200">크롬·노션·한글(HWP)</strong> 등 웹/문서창은 자소 꼬임 방지를 위해 <strong className="text-teal-300">Ctrl+0 ➔ [1]</strong>로 안전하게 변환됩니다.
       </div>
     </div>
   );
@@ -291,7 +319,29 @@ const Dojo2: React.FC<{ onDone: () => void }> = ({ onDone }) => {
 const Dojo3: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const [loaded, setLoaded] = useState(false);
   const [fields, setFields] = useState<string[]>(['', '', '']);
+  const boxRefs = useRef<Array<HTMLDivElement | null>>([null, null, null]);
   const next = fields.findIndex((f) => !f);
+
+  const fireNextPaste = useCallback(
+    (targetIdx?: number) => {
+      if (!loaded || next < 0) return;
+      if (targetIdx !== undefined && targetIdx !== next) return;
+      const updated = [...fields];
+      updated[next] = DOJO3_SEQUENCE[next];
+      setFields(updated);
+      if (updated.every(Boolean)) {
+        playBabyGhostChime('typo');
+        onDone();
+      } else {
+        const nextEmpty = updated.findIndex((f) => !f);
+        if (nextEmpty >= 0) {
+          window.setTimeout(() => boxRefs.current[nextEmpty]?.focus(), 20);
+        }
+      }
+    },
+    [loaded, next, fields, onDone],
+  );
+
   return (
     <div className="flex flex-col gap-2">
       <div className="flex flex-wrap items-center gap-1.5">
@@ -300,7 +350,15 @@ const Dojo3: React.FC<{ onDone: () => void }> = ({ onDone }) => {
             {i + 1}. {v}
           </span>
         ))}
-        <button type="button" className={btnCls} disabled={loaded} onClick={() => setLoaded(true)}>
+        <button
+          type="button"
+          className={btnCls}
+          disabled={loaded}
+          onClick={() => {
+            setLoaded(true);
+            window.setTimeout(() => boxRefs.current[0]?.focus(), 30);
+          }}
+        >
           📋 3개 연속 복사
         </button>
       </div>
@@ -308,22 +366,30 @@ const Dojo3: React.FC<{ onDone: () => void }> = ({ onDone }) => {
         {['이름', '전화', '주소'].map((label, i) => (
           <div
             key={label}
+            ref={(el) => {
+              boxRefs.current[i] = el;
+            }}
+            tabIndex={0}
+            onClick={() => fireNextPaste(i)}
             onContextMenu={(e) => {
               e.preventDefault();
-              if (!loaded || i !== next) return;
-              const updated = [...fields];
-              updated[i] = DOJO3_SEQUENCE[i];
-              setFields(updated);
-              if (updated.every(Boolean)) {
-                playBabyGhostChime('typo');
-                onDone();
+              fireNextPaste(i);
+            }}
+            onKeyDown={(e) => {
+              if ((e.ctrlKey || e.metaKey) && (e.key.toLowerCase() === 'v' || e.code === 'KeyV')) {
+                e.preventDefault();
+                fireNextPaste();
               }
             }}
-            className={`${boxCls} select-none cursor-context-menu ${
+            onPaste={(e) => {
+              e.preventDefault();
+              fireNextPaste();
+            }}
+            className={`${boxCls} select-none cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/60 ${
               loaded && i === next ? 'border-[#2DD4BF] animate-pulse' : ''
             }`}
           >
-            <div className="text-[11px] text-zinc-500">{label}</div>
+            <div className="text-[11px] text-zinc-500">{label} {loaded && i === next ? '(Ctrl+V 또는 클릭)' : ''}</div>
             <div className="font-bold min-h-[18px]">{fields[i]}</div>
           </div>
         ))}
@@ -574,8 +640,8 @@ const TrialRewardCard: React.FC = () => {
   const { merlinAuth, activePricingPlan, subscribedLounges } = useSaySeeStore();
   const accountId = merlinAuth?.email || merlinAuth?.userId || 'local_user';
   const isSubscribed = activePricingPlan !== 'free_trial' || Object.values(subscribedLounges).some(Boolean);
-  const [, setStatus] = useState<SuperpowerTrialStatus | null>(null);
-  const [choice, setChoice] = useState<'none' | 'trial' | 'later'>(() => {
+  const [status, setStatus] = useState<SuperpowerTrialStatus | null>(null);
+  const [choice, setChoice] = useState<'none' | 'trial' | 'later' | 'expired'>(() => {
     try {
       const saved = localStorage.getItem(DOJO_TRIAL_CHOICE_STORAGE_KEY);
       if (saved === 'trial' || saved === 'later') return saved;
@@ -586,19 +652,47 @@ const TrialRewardCard: React.FC = () => {
   });
 
   useEffect(() => {
-    void fetchSuperpowerStatus(accountId, isSubscribed).then(setStatus);
+    const syncFromBackend = async () => {
+      const st = await fetchSuperpowerStatus(accountId, isSubscribed);
+      setStatus(st);
+      if (st.trial_status === 'ACTIVE_30D' || st.trial_status === 'SUBSCRIBED') {
+        setChoice('trial');
+        try {
+          localStorage.setItem(DOJO_TRIAL_CHOICE_STORAGE_KEY, 'trial');
+        } catch {
+          /* ignore */
+        }
+      } else if (st.trial_status === 'EXPIRED_LOCKED' || st.trial_status === 'EXPIRED') {
+        setChoice('expired');
+      } else if (st.trial_opt_in_status === 'DEFERRED') {
+        setChoice('later');
+      }
+    };
+    void syncFromBackend();
+    const unsub = zCoreBridge.subscribe((connected) => {
+      if (connected) void syncFromBackend();
+    });
     const syncChoice = () => {
       try {
         const saved = localStorage.getItem(DOJO_TRIAL_CHOICE_STORAGE_KEY);
         if (saved === 'trial' || saved === 'later') setChoice(saved);
-        else setChoice('none');
       } catch {
         /* ignore */
       }
     };
     window.addEventListener('ghosti_dojo_trial_choice_updated', syncChoice);
-    return () => window.removeEventListener('ghosti_dojo_trial_choice_updated', syncChoice);
+    return () => {
+      unsub();
+      window.removeEventListener('ghosti_dojo_trial_choice_updated', syncChoice);
+    };
   }, [accountId, isSubscribed]);
+
+  const daysLeftBadge =
+    status?.trial_status === 'SUBSCRIBED'
+      ? '평생 무제한 구독중'
+      : status?.trial_days_left && status.trial_days_left < 9999
+        ? `잔여 D-${status.trial_days_left}`
+        : '30일간 무제한';
 
   return (
     <div className="p-5 rounded-2xl bg-gradient-to-br from-amber-500/15 to-emerald-500/10 border-2 border-amber-400/60 flex flex-col gap-2.5">
@@ -615,7 +709,8 @@ const TrialRewardCard: React.FC = () => {
       <div className="flex flex-wrap gap-2 pt-1">
         <button
           type="button"
-          className={`px-4 py-2.5 rounded-xl text-[13px] font-extrabold cursor-pointer transition-all ${
+          disabled={choice === 'expired'}
+          className={`px-4 py-2.5 rounded-xl text-[13px] font-extrabold cursor-pointer transition-all disabled:opacity-50 ${
             choice === 'trial'
               ? 'bg-emerald-400 text-zinc-950 ring-2 ring-emerald-300 shadow-md'
               : 'bg-amber-400 hover:bg-amber-300 text-zinc-950'
@@ -629,45 +724,56 @@ const TrialRewardCard: React.FC = () => {
               /* ignore */
             }
             playBabyGhostChime('summon');
-            const st = await startSuperpowerTrialAction(accountId, isSubscribed);
+            const st = await startSuperpowerTrialAction(accountId, isSubscribed, true);
             setStatus(st);
           }}
         >
           {choice === 'trial'
-            ? '✓ 🚀 오늘부터 30일 무제한 초능력 체험 중!'
-            : '🚀 네! 오늘부터 30일 무제한 초능력 체험 시작하기'}
+            ? `✓ 🚀 30일 무제한 초능력 체험 중 (${daysLeftBadge})`
+            : choice === 'expired'
+              ? '🔒 30일 무료체험 종료됨 (무료 기본기는 평생 0원)'
+              : '🚀 네! 오늘부터 30일 무제한 초능력 체험 시작하기'}
         </button>
-        <button
-          type="button"
-          className={`px-4 py-2.5 rounded-xl border text-[13px] font-bold cursor-pointer transition-all ${
-            choice === 'later'
-              ? 'border-teal-400 bg-teal-500/20 text-teal-200 ring-1 ring-teal-400'
-              : 'border-white/20 text-zinc-300 hover:bg-white/5'
-          }`}
-          onClick={() => {
-            setChoice('later');
-            try {
-              localStorage.setItem(DOJO_TRIAL_CHOICE_STORAGE_KEY, 'later');
-              window.dispatchEvent(new CustomEvent('ghosti_dojo_trial_choice_updated'));
-            } catch {
-              /* ignore */
-            }
-            playBabyGhostChime('typo');
-          }}
-        >
-          {choice === 'later'
-            ? '✓ 평생 무료 기본기부터 쓰는 중 (언제든 왼쪽 버튼으로 30일 체험 시작 가능)'
-            : '나중에 필요할 때 시작할게요 (평생 무료 기본기부터 쓰기)'}
-        </button>
+        {choice !== 'trial' && choice !== 'expired' && (
+          <button
+            type="button"
+            className={`px-4 py-2.5 rounded-xl border text-[13px] font-bold cursor-pointer transition-all ${
+              choice === 'later'
+                ? 'border-teal-400 bg-teal-500/20 text-teal-200 ring-1 ring-teal-400'
+                : 'border-white/20 text-zinc-300 hover:bg-white/5'
+            }`}
+            onClick={async () => {
+              setChoice('later');
+              try {
+                localStorage.setItem(DOJO_TRIAL_CHOICE_STORAGE_KEY, 'later');
+                window.dispatchEvent(new CustomEvent('ghosti_dojo_trial_choice_updated'));
+              } catch {
+                /* ignore */
+              }
+              playBabyGhostChime('typo');
+              const st = await startSuperpowerTrialAction(accountId, isSubscribed, false);
+              setStatus(st);
+            }}
+          >
+            {choice === 'later'
+              ? '✓ 평생 무료 기본기부터 쓰는 중 (언제든 왼쪽 버튼으로 30일 체험 시작 가능)'
+              : '나중에 필요할 때 시작할게요 (평생 무료 기본기부터 쓰기)'}
+          </button>
+        )}
       </div>
       {choice === 'trial' && (
         <div className="px-3.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/50 text-[12.5px] font-extrabold text-emerald-300">
-          ✨ 체험중 — 오늘부터 30일간 모든 🔒 유료 티어 초능력을 횟수 제한 없이 무제한으로 사용하실 수 있습니다!
+          ✨ 체험중 ({daysLeftBadge}) — 내 PC 귀신창(Ctrl+0)과 웹에서 모든 🔒 유료 티어 초능력을 횟수 제한 없이 무제한으로 사용하실 수 있습니다!
         </div>
       )}
       {choice === 'later' && (
         <div className="px-3.5 py-2 rounded-xl bg-teal-500/15 border border-teal-400/50 text-[12.5px] font-extrabold text-teal-200">
-          📌 평생 무료 기본기 모드가 적용되었습니다. (30일 무제한 무료체험권은 아껴두었으며 언제든 왼쪽 버튼을 눌러 시작하실 수 있습니다!)
+          📌 평생 무료 기본기 모드가 적용되었습니다. (30일 무제한 무료체험권은 몰래 차감되지 않고 아껴두었으며 언제든 왼쪽 버튼이나 귀신창 🔒 도구를 눌러 시작하실 수 있습니다!)
+        </div>
+      )}
+      {choice === 'expired' && (
+        <div className="px-3.5 py-2 rounded-xl bg-amber-500/15 border border-amber-400/50 text-[12.5px] font-extrabold text-amber-200">
+          🔒 30일 무제한 무료체험이 종료되어 유료 도구만 잠겼습니다. 평생 무료 기본기(자동 한영·순차복붙·[1]다림질·F1~F6·압축)는 앞으로도 영구 0원으로 작동합니다!
         </div>
       )}
     </div>
@@ -675,6 +781,7 @@ const TrialRewardCard: React.FC = () => {
 };
 
 const PERSONAL_SNIPPETS_STORAGE_KEY = 'ghosti_personal_snippets_v1';
+const LEGACY_ONBOARDING_SNIPPETS_KEY = 'ghosti_superpower_snippets_v27';
 
 interface PersonalSnippetSlot {
   slot: 'F1' | 'F2' | 'F3' | 'F4' | 'F5' | 'F6';
@@ -699,12 +806,95 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
         const parsed = JSON.parse(raw) as PersonalSnippetSlot[];
         if (Array.isArray(parsed) && parsed.length === 6) return parsed;
       }
+      const legacyRaw = localStorage.getItem(LEGACY_ONBOARDING_SNIPPETS_KEY);
+      if (legacyRaw) {
+        const legMap = JSON.parse(legacyRaw) as Record<string, string>;
+        if (legMap && typeof legMap === 'object') {
+          return DEFAULT_PERSONAL_SNIPPETS.map((s) => ({
+            ...s,
+            value: typeof legMap[s.slot] === 'string' ? legMap[s.slot] : s.value,
+          }));
+        }
+      }
     } catch {
       /* ignore */
     }
     return DEFAULT_PERSONAL_SNIPPETS;
   });
   const [savedNoticeSlot, setSavedNoticeSlot] = useState<string | null>(null);
+  const [zCoreSynced, setZCoreSynced] = useState<boolean>(false);
+  const syncTimerRef = useRef<number>(0);
+
+  const pushSnippetsToZCore = useCallback(async (targetSlots: PersonalSnippetSlot[]) => {
+    const snippetMap: Record<string, string> = {};
+    targetSlots.forEach((s) => {
+      snippetMap[s.slot] = s.value;
+    });
+    try {
+      localStorage.setItem(LEGACY_ONBOARDING_SNIPPETS_KEY, JSON.stringify(snippetMap));
+    } catch {
+      /* ignore */
+    }
+    if (!hasActiveGhostiLoginSession() && !zCoreBridge.isConnected) return;
+    try {
+      const res = await fetch(getZCoreUrl('/api/superpower/snippets'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ snippets: snippetMap }),
+        signal: AbortSignal.timeout(1500),
+      });
+      if (res.ok) {
+        setZCoreSynced(true);
+      }
+    } catch {
+      /* offline fallback */
+    }
+  }, []);
+
+  useEffect(() => {
+    const hydrateFromZCore = async () => {
+      if (!hasActiveGhostiLoginSession() && !zCoreBridge.isConnected) return;
+      const hadCustomLocal = Boolean(localStorage.getItem(PERSONAL_SNIPPETS_STORAGE_KEY));
+      try {
+        const res = await fetch(getZCoreUrl('/api/superpower/snippets'), {
+          signal: AbortSignal.timeout(1500),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const remote = (data?.snippets || {}) as Record<string, string>;
+        if (hadCustomLocal) {
+          // 로컬에서 먼저 적어둔 상용구가 있으면 Z-코어로 즉시 밀어넣어 100% 일치시킴
+          void pushSnippetsToZCore(slots);
+          return;
+        }
+        setSlots((prev) => {
+          const next = prev.map((item) => ({
+            ...item,
+            value: typeof remote[item.slot] === 'string' ? remote[item.slot] : item.value,
+          }));
+          try {
+            localStorage.setItem(PERSONAL_SNIPPETS_STORAGE_KEY, JSON.stringify(next));
+          } catch {
+            /* ignore */
+          }
+          return next;
+        });
+        setZCoreSynced(true);
+      } catch {
+        /* ignore */
+      }
+    };
+    void hydrateFromZCore();
+    const unsub = zCoreBridge.subscribe((connected) => {
+      if (connected) void hydrateFromZCore();
+      else setZCoreSynced(false);
+    });
+    return () => {
+      unsub();
+      window.clearTimeout(syncTimerRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const updateSlot = (idx: number, field: 'title' | 'value', nextVal: string) => {
     const updated = slots.map((item, i) => (i === idx ? { ...item, [field]: nextVal } : item));
@@ -713,6 +903,12 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
       localStorage.setItem(PERSONAL_SNIPPETS_STORAGE_KEY, JSON.stringify(updated));
     } catch {
       /* ignore */
+    }
+    if (field === 'value') {
+      window.clearTimeout(syncTimerRef.current);
+      syncTimerRef.current = window.setTimeout(() => {
+        void pushSnippetsToZCore(updated);
+      }, 320);
     }
   };
 
@@ -750,7 +946,7 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
           </p>
         </div>
         <span className="px-2.5 py-1 rounded-full bg-teal-500/15 border border-teal-400/40 text-teal-200 text-[11px] font-black shrink-0">
-          내 PC 자동 저장 · 평생 0원
+          {zCoreSynced ? '✅ 내 PC 귀신창(F1~F6) 실시간 연동됨' : '내 PC 자동 저장 · 평생 0원'}
         </span>
       </div>
 
@@ -967,7 +1163,7 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
           {activeFreeCore === 'typo' && (
             <>
               <div className="text-[12.5px] text-teal-200 font-bold">
-                ⌨️ 영문으로 잘못 친 문장 끝에서 스페이스바를 탁 눌러보세요! (이메일·URL·영문 약어는 자동 보호)
+                ⌨️ 영문으로 잘못 친 뒤 스페이스바를 누르거나 1초만 기다려보세요! (이메일·URL·영문 ID는 자동 보호)
               </div>
               <Dojo1 key={`free_typo_${sandboxKey}`} onDone={() => markDojo(1)} />
             </>
@@ -975,7 +1171,7 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
           {activeFreeCore === 'seq' && (
             <>
               <div className="text-[12.5px] text-teal-200 font-bold">
-                📋 [3개 연속 복사]를 누른 뒤 아래 이름·전화·주소 칸을 차례대로 우클릭해 꽂아보세요! (실전에선 Ctrl+V 연타)
+                📋 [3개 연속 복사]를 누른 뒤 이름·전화·주소 칸에서 Ctrl+V를 연타하거나 클릭해 차례대로 꽂아보세요!
               </div>
               <Dojo3 key={`free_seq_${sandboxKey}`} onDone={() => markDojo(3)} />
             </>
@@ -1012,7 +1208,7 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
       {/* 하단 3: 유료 고급 도구 & 30일 무제한 체험 아코디언 접힘 */}
       <details className="rounded-2xl bg-zinc-900/80 border border-white/10 p-4">
         <summary className="cursor-pointer select-none text-[13.5px] font-extrabold text-amber-300 hover:text-amber-200 flex items-center justify-between gap-2">
-          <span>🔒 유료 확장 기술 미리 체험해보기 ([2] 스샷·PDF변환 · [3] 다중합본 · [5] 창고정 · F7~F12 팀 상용구) ▾</span>
+          <span>🔒 유료 확장 기술 미리 체험해보기 ([2] 스샷·PDF변환 · [3] 다중합본 · [4] 창고정 · F7~F12 팀 상용구) ▾</span>
           <span className="text-[11.5px] text-zinc-400 font-semibold shrink-0">카드 등록 없는 30일 무료체험</span>
         </summary>
         <div className="pt-4 mt-3 border-t border-white/10 flex flex-col gap-4">

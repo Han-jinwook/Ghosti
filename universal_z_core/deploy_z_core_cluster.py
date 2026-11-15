@@ -61,9 +61,22 @@ def update_pc1():
                 shutil.copy2(spd_src, r"C:\MerlinTools\seq_paste_daemon.py")
                 if os.path.exists(ui2_src):
                     shutil.copy2(ui2_src, r"C:\MerlinTools\ghost_search_window_ui2.py")
+                os.makedirs(r"C:\MerlinTools\assets", exist_ok=True)
                 if os.path.exists(lex_src):
-                    os.makedirs(r"C:\MerlinTools\assets", exist_ok=True)
                     shutil.copy2(lex_src, r"C:\MerlinTools\assets\ko_en_lexicon.zlib")
+                os_assets_dir = os.path.join(UZC_DIR, "os_agent", "assets")
+                if os.path.isdir(os_assets_dir):
+                    for fn in os.listdir(os_assets_dir):
+                        fp = os.path.join(os_assets_dir, fn)
+                        if os.path.isfile(fp):
+                            shutil.copy2(fp, os.path.join(r"C:\MerlinTools\assets", fn))
+                snd_dir = os.path.join(UZC_DIR, "baby_ghost_sounds")
+                if os.path.isdir(snd_dir):
+                    os.makedirs(r"C:\MerlinTools\baby_ghost_sounds", exist_ok=True)
+                    for fn in os.listdir(snd_dir):
+                        fp = os.path.join(snd_dir, fn)
+                        if os.path.isfile(fp):
+                            shutil.copy2(fp, os.path.join(r"C:\MerlinTools\baby_ghost_sounds", fn))
         except Exception as e:
             log(f"1호기 seq_paste_daemon 복사 경고: {e}")
 
@@ -154,7 +167,7 @@ def update_pc4():
         timeout=15,
     )
     subprocess.run(
-        ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "USER@100.114.100.24", 'powershell -Command "New-Item -ItemType Directory -Force -Path C:/MerlinTools/assets | Out-Null"'],
+        ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "USER@100.114.100.24", 'powershell -Command "New-Item -ItemType Directory -Force -Path C:/MerlinTools/assets, C:/MerlinTools/baby_ghost_sounds | Out-Null"'],
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -169,7 +182,23 @@ def update_pc4():
         errors="replace",
         timeout=15,
     )
-    log("✅ 4호기 SCP 전송 완료 (universal_z_core + C:/MerlinTools/seq_paste_daemon.py + assets/ko_en_lexicon.zlib)")
+    os_assets_dir = os.path.join(UZC_DIR, "os_agent", "assets")
+    if os.path.isdir(os_assets_dir):
+        asset_files = [os.path.join(os_assets_dir, f) for f in os.listdir(os_assets_dir) if os.path.isfile(os.path.join(os_assets_dir, f))]
+        if asset_files:
+            subprocess.run(
+                ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", *asset_files, "USER@100.114.100.24:C:/MerlinTools/assets/"],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20,
+            )
+    snd_dir = os.path.join(UZC_DIR, "baby_ghost_sounds")
+    if os.path.isdir(snd_dir):
+        snd_files = [os.path.join(snd_dir, f) for f in os.listdir(snd_dir) if os.path.isfile(os.path.join(snd_dir, f))]
+        if snd_files:
+            subprocess.run(
+                ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", *snd_files, "USER@100.114.100.24:C:/MerlinTools/baby_ghost_sounds/"],
+                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20,
+            )
+    log("✅ 4호기 SCP 전송 완료 (universal_z_core + C:/MerlinTools/seq_paste_daemon.py + assets + baby_ghost_sounds)")
 
     # 2) 4호기 기존 5199/51988 프로세스 우아한 종료 + LISTENING 잔존 프로세스 강제 종료
     shutdown_cmd = [

@@ -144,6 +144,7 @@ def build_ui2_search_window(
     toast_queue = ctx["toast_queue"]
     paste_to_target = ctx["paste_to_target"]
     get_last_rbtn_dismiss_esc_ts = ctx["get_last_rbtn_dismiss_esc_ts"]
+    get_trial_badge_summary = ctx.get("get_trial_badge_summary")
 
     active_mode[0] = "ui2"
     set_current_open_ui_mode("ui2")
@@ -235,7 +236,7 @@ def build_ui2_search_window(
 
     lbl_quick_btn = tk.Label(
         hdr,
-        text="🏷️파일라벨러",
+        text="🏷️파일라벨러🔒",
         fg="#0B1120",
         bg="#5EEAD4",
         padx=5,
@@ -279,9 +280,20 @@ def build_ui2_search_window(
         fb.bind("<Button-1>", lambda _e, fk=f_key: _switch_filter(fk))
         filter_btns[f_key] = fb
 
+    def _resolve_ui2_trial_text(stage_name: str = "small") -> str:
+        if callable(get_trial_badge_summary):
+            try:
+                ts = get_trial_badge_summary() or {}
+                hint = str(ts.get("ui2_hint") or "").strip()
+                if hint:
+                    return hint
+            except Exception:
+                pass
+        return "✨ 자율크기 검색 평생 0원"
+
     trial_lbl = tk.Label(
         fbar,
-        text="🎁 30일 무제한(D-30·차감없음)",
+        text=_resolve_ui2_trial_text(st_state["stage"]),
         fg="#FDE047",
         bg="#0B1120",
         font=("Malgun Gothic", 8, "bold"),
@@ -607,7 +619,7 @@ def build_ui2_search_window(
         if not q:
             candidates = pool[:max_cnt]
             trial_lbl.config(
-                text="✨ 자율크기 · 🎁 30일 체험" if st_now == "small" else "✨ 크기 자율 호흡 · 🎁 30일 무제한 체험",
+                text=_resolve_ui2_trial_text(st_now),
                 fg="#FDE047",
             )
         elif matched:

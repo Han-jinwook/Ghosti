@@ -30,9 +30,10 @@ if str(THIS_DIR) not in sys.path:
 import seq_paste_daemon as spd  # noqa: E402
 
 LOCAL_APPDATA = Path(os.environ.get("LOCALAPPDATA", Path.home() / "AppData" / "Local"))
-MERLIN_DIR = LOCAL_APPDATA / "Merlin"
+LEGACY_MERLIN_DIR = LOCAL_APPDATA / "Merlin"
+MERLIN_DIR = spd._MERLIN_APPDATA
 TRIAL_LEDGER_FILE = MERLIN_DIR / "superpower_trial_ledger.json"
-USER_SNIPPETS_FILE = MERLIN_DIR / "user_snippets.json"
+USER_SNIPPETS_FILE = spd.USER_SNIPPETS_APPDATA
 
 _DAEMON_THREAD_STARTED = False
 _DAEMON_LOCK = threading.Lock()
@@ -72,23 +73,21 @@ def ensure_superpower_daemon_running() -> bool:
 
 
 def get_machine_hwid() -> str:
-    """메인보드 UUID / 머신 GUID 기반 기기 고유 해시(sha256_...) 반환"""
-    raw_id = f"{platform.node()}::{platform.machine()}"
-    if os.name == "nt":
-        try:
-            import winreg
-            with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Cryptography") as k:
-                guid, _ = winreg.QueryValueEx(k, "MachineGuid")
-                if guid:
-                    raw_id = f"{guid}::{platform.node()}"
-        except Exception:
-            pass
-    digest = hashlib.sha256(raw_id.encode("utf-8")).hexdigest()[:20]
-    return f"sha256_{digest}"
+    """메인보드 UUID / 머신 GUID 기반 기기 고유 해시(sha256_...) 반환 (seq_paste_daemon과 100% 단일 해시 공유)"""
+    return spd._get_machine_hwid_local()
 
 
 def _load_trial_ledger() -> Dict[str, Any]:
     MERLIN_DIR.mkdir(parents=True, exist_ok=True)
+    if not TRIAL_LEDGER_FILE.exists():
+        legacy_ledger = LEGACY_MERLIN_DIR / "superpower_trial_ledger.json"
+        if legacy_ledger.exists():
+            try:
+                raw_leg = json.loads(legacy_ledger.read_text(encoding="utf-8"))
+                if isinstance(raw_leg, dict):
+                    TRIAL_LEDGER_FILE.write_text(json.dumps(raw_leg, ensure_ascii=False, indent=2), encoding="utf-8")
+            except Exception:
+                pass
     if TRIAL_LEDGER_FILE.exists():
         try:
             data = json.loads(TRIAL_LEDGER_FILE.read_text(encoding="utf-8"))
@@ -273,31 +272,43 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
     cross_ledger = m_entry.setdefault("crossDeviceTrial", {})
     cross_res = _compute_cross_device_trial(cross_ledger, linked_device_count, is_subscribed or m_entry.get("isSubscribed", False))
 
-    # 3. [2026-11-13 확정 정책] 30일 무료체험 만료 후 만료 시 유료 티어 깔끔 잠금(0회)
+    # 3. [2026-11-15 확정 정책] Opt-in 30일 무제한 무료체험 (설치 시 몰래 자동개시 0% · 만료 후 유료 티어만 깔끔 잠금🔒)
     daily_free_limit = 0
     daily_free_remaining = 0
 
-    # 종합 상태 결정
-    if is_subscribed or m_entry.get("isSubscribed"):
+    summary = spd.get_trial_badge_summary()
+    opt_in_raw = str(m_entry.get("trialOptInStatus") or "").strip().upper()
+    if is_subscribed or m_entry.get("isSubscribed") or summary["status"] == "SUBSCRIBED":
         trial_status = "SUBSCRIBED"
+        trial_opt_in_status = "SUBSCRIBED"
         trial_days_left = 9999
         daily_free_remaining = 9999
-    elif ft_res["unopened_count"] > 0 or ft_res["active_count"] > 0:
-        trial_status = "PER_FEATURE_ACTIVE"  # 미개봉 또는 30일 무제한 기능 보유 중
-        trial_days_left = max([t["days_left"] for t in ft_res["trials"].values() if t["status"] in ("ACTIVE_30D", "ACTIVE_7D")] or [30])
-    else:
-        trial_status = "EXPIRED_LOCKED"  # 30일 체험 만료 시 즉시 유료 기능 잠금(🔒) · 평생 무료 기본기는 상시 개방
+    elif summary["status"] == "ACTIVE_30D":
+        trial_status = "ACTIVE_30D"
+        trial_opt_in_status = "ACTIVE_30D"
+        trial_days_left = int(summary["days_left"])
+    elif summary["status"] == "EXPIRED_LOCKED":
+        trial_status = "EXPIRED_LOCKED"
+        trial_opt_in_status = "EXPIRED_LOCKED"
         trial_days_left = 0
+    else:
+        trial_status = "NOT_STARTED"
+        trial_opt_in_status = "DEFERRED" if opt_in_raw == "DEFERRED" else "NOT_STARTED"
+        trial_days_left = 30
 
     ensure_superpower_daemon_running()
     return {
         "ok": True,
         "engine_running": True,
-        "version": "3.5",
+        "version": "3.7",
         "port": 5199,
         "machine_hwid": hwid,
         "account_id": account_id,
         "trial_status": trial_status,
+        "trial_opt_in_status": trial_opt_in_status,
+        "trial_opt_in_at": m_entry.get("trialOptInAt") or m_entry.get("startedAt"),
+        "trial_expires_at": m_entry.get("trialExpiresAt") or m_entry.get("expiresAt"),
+        "badge_label": summary["short_badge"],
         "trial_days_left": trial_days_left,
         "daily_free_limit": daily_free_limit,
         "daily_free_remaining": daily_free_remaining,
@@ -318,84 +329,73 @@ def start_superpower_trial(body: Dict[str, Any] | None = None) -> Dict[str, Any]
     data = body or {}
     account_id = str(data.get("accountId") or "local_user").strip()
     is_subscribed = bool(data.get("isSubscribed", False))
-    hwid = get_machine_hwid()
-    ledger = _load_trial_ledger()
-    machines = ledger.setdefault("machines", {})
+    agreed = True if "agreed" not in data else bool(data.get("agreed"))
 
-    now_ts = time.time()
-    now_dt = datetime.datetime.now()
-    exp_dt = now_dt + datetime.timedelta(days=30)
-
-    # 동일 PC(Machine HWID)에서 이미 체험을 시작한 이력이 있으면 기존 시작 시각을 유지(다계정 꼼수 차단),
-    # 처음 시작하는 PC이면 오늘부터 30일 무료체험 부여!
-    existing = machines.get(hwid)
-    if not existing or not existing.get("startedAtTs"):
-        machines[hwid] = {
-            "accountId": account_id,
-            "machineHwid": hwid,
-            "startedAtTs": now_ts,
-            "startedAt": now_dt.strftime("%Y-%m-%d %H:%M:%S"),
-            "expiresAt": exp_dt.strftime("%Y-%m-%d %H:%M:%S"),
-            "isSubscribed": is_subscribed,
-        }
+    opt_res = spd.opt_in_30d_unlimited_superpower_trial(agreed=agreed, account_id=account_id)
+    if is_subscribed:
+        ledger = _load_trial_ledger()
+        hwid = get_machine_hwid()
+        m_entry = ledger.setdefault("machines", {}).setdefault(hwid, {"machineHwid": hwid})
+        m_entry["isSubscribed"] = True
         _save_trial_ledger(ledger)
 
     ensure_superpower_daemon_running()
     status = get_superpower_status({"accountId": account_id, "isSubscribed": is_subscribed})
-    status["message"] = "🎉 30일 무료체험이 시작되었습니다! (구독 회원은 전 기기 평생 무료)"
+    if agreed:
+        status["message"] = f"🎁 30일 무제한 무료체험이 시작되었습니다! ({opt_res.get('badge_label', 'D-30')})"
+    else:
+        status["message"] = "✨ 무료 기본기는 지금부터 평생 0원이며, 30일 무료체험은 나중에 🔒 도구를 쓰실 때 시작됩니다."
     return status
 
 
 SNIPPET_KEYS = ("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10")
 
 SUPERPOWER_12_FEATURES: Dict[str, str] = {
-    "feat_1_seq_paste": "[Ctrl+V] 순차·칸맞춤",
-    "feat_2_typo_morph": "[1] 한영성형",
-    "feat_4_iron_lines": "[2] 줄바꿈정리",
-    "feat_3_clean_format": "[3] 서식세탁",
-    "feat_9_image_file": "[4] 파일·PDF변환🔒",
-    "feat_6_screen_ocr": "[5] 글자·표OCR🔒",
-    "feat_5_ai_search": "[6] 합본🔒",
-    "feat_8_format_numbers": "[7] 번호·일정🔒",
-    "feat_7_toggle_topmost": "[8] 창고정🔒",
-    "feat_b1_snippets": "[⌨️상용구▾] F1~F12 상용구 슬롯",
-    "feat_b2_excel_split": "[💡꿀팁·추가▾] 엑셀 다중 칸 자동 쪼개기",
-    "feat_b3_pdf_merge": "[💡꿀팁·추가▾] 다중 스샷 300DPI PDF 합본",
+    "feat_1_seq_paste": "[Ctrl+V] 순차·칸맞춤 (평생 무료)",
+    "feat_2_typo_morph": "[자동] 한영·띄어쓰기 성형 (평생 무료)",
+    "feat_4_iron_lines": "[1] 서식·줄바꿈 다림질 (평생 무료)",
+    "feat_3_clean_format": "[1] 서식 세탁·특수문자 보존 (평생 무료)",
+    "feat_9_image_file": "[2] 스샷·PDF·파일변환🔒",
+    "feat_6_screen_ocr": "[UI③] 사진·표 OCR 공간이동🔒",
+    "feat_5_ai_search": "[3] 다중 문서 합본🔒",
+    "feat_7_toggle_topmost": "[4] 창 고정 Pin🔒",
+    "feat_b1_snippets": "[⌨️상용구▾] F1~F6 내 상용구 (평생 무료)",
+    "feat_b2_excel_split": "[💡꿀팁·기타▾] 엑셀 다중 칸 자동 쪼개기 (평생 무료)",
+    "feat_b3_pdf_merge": "[2] 다중 스샷 300DPI PDF 합본🔒",
 }
 
 
 
 def get_snippets() -> Dict[str, str]:
-    snippets = spd.ensure_default_snippets()
-    if USER_SNIPPETS_FILE.exists():
-        try:
-            custom = json.loads(USER_SNIPPETS_FILE.read_text(encoding="utf-8"))
-            if isinstance(custom, dict):
-                snippets.update({k: str(v) for k, v in custom.items() if k in SNIPPET_KEYS})
-        except Exception:
-            pass
-    return snippets
+    return spd.ensure_default_snippets()
 
 
 def save_snippets(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
     data = body or {}
     raw_snippets = data.get("snippets") if isinstance(data.get("snippets"), dict) else data
-    current = get_snippets()
+    current = spd.ensure_default_snippets()
     for key in SNIPPET_KEYS:
         if key in raw_snippets and raw_snippets[key] is not None:
             current[key] = str(raw_snippets[key]).strip()[:300]
 
+    payload_txt = json.dumps(current, ensure_ascii=False, indent=2)
     MERLIN_DIR.mkdir(parents=True, exist_ok=True)
-    USER_SNIPPETS_FILE.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+    USER_SNIPPETS_FILE.write_text(payload_txt, encoding="utf-8")
     try:
         spd.SNIPPETS_FILE.parent.mkdir(parents=True, exist_ok=True)
-        spd.SNIPPETS_FILE.write_text(json.dumps(current, ensure_ascii=False, indent=2), encoding="utf-8")
+        spd.SNIPPETS_FILE.write_text(payload_txt, encoding="utf-8")
+    except Exception:
+        pass
+    try:
+        legacy_snip = LEGACY_MERLIN_DIR / "user_snippets.json"
+        if legacy_snip.exists():
+            legacy_snip.write_text(payload_txt, encoding="utf-8")
     except Exception:
         pass
     return {
         "ok": True,
         "snippets": current,
-        "message": "✅ F1~F10 내 상용구가 Z-코어에 즉시 저장되었습니다! (재시작 없이 Ctrl+0 ➔ F1~F10 즉시 사용 가능)",
+        "message": "✅ F1~F6 내 상용구가 내 PC 귀신창에 즉시 연동·저장되었습니다! (재시작 없이 Ctrl+0 ➔ F1~F6 즉시 사용 가능)",
     }
 
 
@@ -637,21 +637,30 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
         m_entry["featureTrials"] = {}
         m_entry["crossDeviceTrial"] = {}
         m_entry["dailyUsage"] = {}
+        for k_del in ("trialOptInTs", "trialOptInAt", "trialExpiresAt", "startedAtTs", "startedAt", "expiresAt", "trialOptInStatus"):
+            m_entry.pop(k_del, None)
         _save_trial_ledger(ledger)
-        return {"ok": True, "message": "🧹 모든 12대 초능력 30일 무제한 타이머 원장을 미개봉 초기 상태로 리셋했습니다."}
+        return {"ok": True, "message": "🧹 모든 귀신 초능력 30일 무제한 Opt-in 원장을 미시작 초기 상태로 리셋했습니다."}
 
-    # 🧪 시뮬레이션 지원: 특정 기능 강제 만료
+    # 🧪 시뮬레이션 지원: 특정 기능 또는 전체 30일 강제 만료
     sim_expire = data.get("simulateExpireFeature")
     if sim_expire and sim_expire in SUPERPOWER_12_FEATURES:
         ft_ledger = m_entry.setdefault("featureTrials", {})
         thirty_one_days_ago = time.time() - (31 * 86400)
+        exp_iso = datetime.datetime.fromtimestamp(thirty_one_days_ago + 30 * 86400).strftime("%Y-%m-%d %H:%M:%S")
+        first_iso = datetime.datetime.fromtimestamp(thirty_one_days_ago).strftime("%Y-%m-%d %H:%M:%S")
         ft_ledger[sim_expire] = {
             "firstUsedTs": thirty_one_days_ago,
-            "firstUsedAt": datetime.datetime.fromtimestamp(thirty_one_days_ago).strftime("%Y-%m-%d %H:%M:%S"),
-            "expiresAt": datetime.datetime.fromtimestamp(thirty_one_days_ago + 30 * 86400).strftime("%Y-%m-%d %H:%M:%S"),
+            "firstUsedAt": first_iso,
+            "expiresAt": exp_iso,
         }
+        m_entry["trialOptInTs"] = thirty_one_days_ago
+        m_entry["startedAtTs"] = thirty_one_days_ago
+        m_entry["trialOptInAt"] = first_iso
+        m_entry["trialExpiresAt"] = exp_iso
+        m_entry["trialOptInStatus"] = "EXPIRED_LOCKED"
         _save_trial_ledger(ledger)
-        return {"ok": True, "message": f"🧪 [{SUPERPOWER_12_FEATURES[sim_expire]}] 기능을 30일 만료 상태로 시뮬레이션 설정했습니다."}
+        return {"ok": True, "message": f"🧪 [{SUPERPOWER_12_FEATURES[sim_expire]}] 및 기기 30일 체험을 만료 상태로 시뮬레이션 설정했습니다."}
 
     # 기능 ID 정규화 (feat_1 ~ feat_9, feat_b1 ~ feat_b3 또는 숫자 매핑)
     feature_id = raw_action
@@ -710,20 +719,11 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
             "message": f"[{feature_name}] 구독 회원 무제한 통과",
         }
 
-    # 2. 해당 기능의 30일 타이머 확인
-    ft_ledger = m_entry.setdefault("featureTrials", {})
-    entry = ft_ledger.get(feature_id)
-    now_ts = time.time()
-    now_dt = datetime.datetime.now()
-
-    # Case A: 미개봉 상태인 기능 ➔ 첫 성공 완수 시점부터 30일 무제한 개시! (차감 0)
-    if not entry or not entry.get("firstUsedTs"):
-        exp_dt = now_dt + datetime.timedelta(days=30)
-        ft_ledger[feature_id] = {
-            "firstUsedTs": now_ts,
-            "firstUsedAt": now_dt.strftime("%Y-%m-%d %H:%M:%S"),
-            "expiresAt": exp_dt.strftime("%Y-%m-%d %H:%M:%S"),
-        }
+    # 2. 기기 통합 Opt-in 30일 타이머 확인 (동의 전 몰래 자동 카운트다운 0%)
+    allowed_q, msg_q = spd.check_feature_quota_allowed(feature_id, interactive_opt_in=False)
+    summary_q = spd.get_trial_badge_summary()
+    if allowed_q:
+        now_dt = datetime.datetime.now()
         m_entry["lastActionAt"] = now_dt.isoformat()
         m_entry["lastActionType"] = feature_id
         _save_trial_ledger(ledger)
@@ -733,30 +733,24 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
             "consumed": False,
             "feature_id": feature_id,
             "feature_name": feature_name,
-            "feature_status": "ACTIVE_30D",
-            "days_left": 30,
+            "feature_status": summary_q["status"],
+            "days_left": summary_q["days_left"],
             "daily_free_remaining": 9999,
-            "message": f"🎁 [{feature_name}] 첫 실행 축하드립니다! 앞으로 30일간 무제한 무료로 사용하실 수 있습니다.",
+            "message": f"🎁 [{feature_name}] 30일 무제한 무료체험 적용 중 (잔여 D-{summary_q['days_left']})",
         }
 
-    # Case B: 이미 개봉되었으나 아직 30일 이내인 기능 ➔ 무제한 통과! (차감 0)
-    first_ts = float(entry["firstUsedTs"])
-    elapsed_days = (now_ts - first_ts) / 86400.0
-    rem_days = int(max(0, round(30.0 - elapsed_days + 0.49)))
-    if rem_days > 0:
-        m_entry["lastActionAt"] = now_dt.isoformat()
-        m_entry["lastActionType"] = feature_id
-        _save_trial_ledger(ledger)
+    if summary_q["status"] == "NOT_STARTED":
         return {
-            "ok": True,
-            "allowed": True,
+            "ok": False,
+            "allowed": False,
             "consumed": False,
             "feature_id": feature_id,
             "feature_name": feature_name,
-            "feature_status": "ACTIVE_30D",
-            "days_left": rem_days,
-            "daily_free_remaining": 9999,
-            "message": f"🔥 [{feature_name}] 30일 무제한 혜택 적용 중 (잔여 {rem_days}일)",
+            "feature_status": "NOT_STARTED",
+            "daily_free_remaining": 0,
+            "daily_free_limit": 0,
+            "error": "TRIAL_OPT_IN_REQUIRED",
+            "message": msg_q,
         }
 
     # Case C: 30일 무제한이 만료된 🔒 유료 티어 기능 ➔ 즉시 깔끔하게 유료 잠금(EXPIRED_LOCKED)
@@ -770,7 +764,7 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
         "daily_free_remaining": 0,
         "daily_free_limit": 0,
         "error": "TRIAL_EXPIRED_LOCKED",
-        "message": f"🔒 [{feature_name}] 30일 무제한 무료체험이 종료되어 유료 잠금 상태로 전환되었습니다. 기본 습관기와 내 PC 로컬 파일은 그대로 평생 무료로 유지되며, [내 기기 통합(월 3,900원 / 연간 결제 시 월 3,250원꼴)] 구독 시 모든 🔒 유료 기능이 전 기기 무제한으로 열립니다!",
+        "message": msg_q,
     }
 
 

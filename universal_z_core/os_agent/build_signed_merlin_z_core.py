@@ -252,7 +252,7 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
     logo_png = THIS_DIR / "logo-symbol.png"
     whitelist_json = THIS_DIR / "security_services_whitelist.json"
     seven_zip_dir = THIS_DIR / "bin" / "7z"
-    lexicon_zlib = THIS_DIR / "assets" / "ko_en_lexicon.zlib"
+    assets_dir = THIS_DIR / "assets"
     baby_ghost_sounds_dir = THIS_DIR / "baby_ghost_sounds"
     cmd = [
         sys.executable, "-m", "PyInstaller",
@@ -268,7 +268,7 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
         *(["--add-data", f"{logo_png};."] if logo_png.exists() else []),
         *(["--add-data", f"{whitelist_json};."] if whitelist_json.exists() else []),
         *(["--add-data", f"{seven_zip_dir};bin/7z"] if seven_zip_dir.exists() else []),
-        *(["--add-data", f"{lexicon_zlib};assets"] if lexicon_zlib.exists() else []),
+        *(["--add-data", f"{assets_dir};assets"] if assets_dir.exists() else []),
         *(["--add-data", f"{baby_ghost_sounds_dir};baby_ghost_sounds"] if baby_ghost_sounds_dir.exists() else []),
         "--hidden-import", "plugin_ghosti_os",
         "--hidden-import", "plugin_ghosti_care_suite",
@@ -292,6 +292,8 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
         "--hidden-import", "psutil",
         "--hidden-import", "PIL.Image",
         "--hidden-import", "PIL.ImageDraw",
+        "--hidden-import", "PIL.ImageGrab",
+        "--hidden-import", "PIL.ImageTk",
         "--console" if console else "--noconsole",
         str(THIS_DIR / "merlin_z_core_daemon.py"),
     ]
