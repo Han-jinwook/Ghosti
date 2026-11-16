@@ -182,6 +182,7 @@ export async function executeRealOsAction(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, targetPath }),
+      signal: AbortSignal.timeout(9000),
     });
     if (!res.ok) return { ok: false };
     return await res.json();
