@@ -1116,9 +1116,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             letter-spacing: -0.02em !important;
           }
           .showroom-cert-h3 {
-            font-size: clamp(15px, 4.4vw, 18.5px) !important;
+            font-size: clamp(14px, 4.05vw, 17.5px) !important;
             line-height: 1.35 !important;
-            letter-spacing: -0.02em !important;
+            letter-spacing: -0.025em !important;
           }
         }
       `}</style>
@@ -3509,24 +3509,25 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           }}
           className="rounded-3xl border-2 border-amber-400/50 p-4 sm:p-9 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center shadow-2xl overflow-hidden"
         >
-          <div className="lg:col-span-8 space-y-4 min-w-0">
+          <div className="lg:col-span-8 space-y-4 min-w-0 flex flex-col items-center text-center lg:items-start lg:text-left">
             <div
               style={{ backgroundColor: 'rgba(251, 191, 36, 0.18)', color: '#FCD34D' }}
-              className="showroom-fit-1line inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1 rounded-full border border-amber-400/40 sm:text-[13px] font-black whitespace-nowrap break-keep max-w-full"
+              className="showroom-fit-1line inline-flex items-center justify-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1 rounded-full border border-amber-400/40 sm:text-[13px] font-black whitespace-nowrap break-keep max-w-full"
             >
               <span className="shrink-0">📜</span>
               <span>대표이사 직인 날인 · 무료 사용 공식 확인서</span>
             </div>
             <h3 className="showroom-cert-h3 text-lg sm:text-3xl font-black text-white leading-tight break-keep">
-              “회사 컴퓨터에 깔아도 저작권 단속 안 오나요?”<br />
+              <span className="inline-block whitespace-nowrap">“회사 컴퓨터에 깔아도 저작권 단속 안 오나요?”</span>
+              <br />
               <span style={{ color: '#00F0B5' }}>
-                <span>✓ 개인·기업 PC 기본 기능 영구 무료!</span>{' '}
+                <span className="inline-block whitespace-nowrap">✓ 개인·기업 PC 기본 기능 영구 무료!</span>{' '}
                 <span className="inline-block whitespace-nowrap">(라이선스 비용 0원)</span>
               </span>
             </h3>
 
             {/* 빽빽한 줄글 대신 한눈에 읽히는 3대 안심 체크 배지 (우리가 책임질 수 있는 범위만 명시) */}
-            <div className="flex flex-wrap gap-2 text-[13px] font-extrabold">
+            <div className="flex flex-wrap justify-center lg:justify-start gap-2 text-[13px] font-extrabold">
               {[
                 '🏢 법인·개인사업자·병원·세무사 사내 PC 무료',
                 '🛡️ 라이선스 비용 0원 · 광고 0%',
@@ -3545,7 +3546,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               ※ 내 기기 로컬 기본 기능(귀신비서·귀신검색·귀신창·사진공유) 영구 무료 (내 기기 통합·팀 공용 폴더 등 확장 옵션 및 공공기관 제외)
             </p>
 
-            <div className="flex flex-wrap items-center gap-3 pt-1">
+            <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 pt-1">
               <button
                 type="button"
                 onClick={() => setCertModalOpen(true)}
