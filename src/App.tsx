@@ -542,6 +542,140 @@ export const App: React.FC = () => {
     return () => window.removeEventListener('zCoreConnected', handleZCoreConnected);
   }, [initApp]);
 
+  // 모바일(iOS Safari/Chrome/인앱 · Android Chrome/삼성인터넷/인앱 · PWA) 전 화면 공통 Pull-to-refresh 핸들러
+  const [ptrPullDist, setPtrPullDist] = useState(0);
+  const [isPtrRefreshing, setIsPtrRefreshing] = useState(false);
+  const ptrStartRef = useRef<{ x: number; y: number } | null>(null);
+  const ptrDistRef = useRef(0);
+  const ptrActivePullRef = useRef(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || typeof document === 'undefined') return;
+
+    const getRootScrollTop = () => {
+      const se = document.scrollingElement;
+      if (se) return se.scrollTop;
+      return window.scrollY || document.documentElement.scrollTop || document.body.scrollTop || 0;
+    };
+
+    const hasInnerScrolledOrBlockedAncestor = (target: EventTarget | null): boolean => {
+      if (hasAnyModalOpen || document.body.style.overflow === 'hidden') return true;
+      let el = target instanceof HTMLElement ? target : null;
+      while (el && el !== document.body && el !== document.documentElement) {
+        const tag = el.tagName;
+        if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || el.isContentEditable) {
+          return true;
+        }
+        if (el.getAttribute('role') === 'dialog' || el.classList.contains('overscroll-contain')) {
+          return true;
+        }
+        const style = window.getComputedStyle(el);
+        const oy = style.overflowY;
+        if ((oy === 'auto' || oy === 'scroll') && el.scrollHeight > el.clientHeight + 2 && el.scrollTop > 0) {
+          return true;
+        }
+        el = el.parentElement;
+      }
+      return false;
+    };
+
+    const resetPtr = () => {
+      ptrStartRef.current = null;
+      ptrDistRef.current = 0;
+      ptrActivePullRef.current = false;
+      setPtrPullDist(0);
+    };
+
+    const onTouchStart = (e: TouchEvent) => {
+      if (isPtrRefreshing || e.touches.length !== 1) {
+        ptrStartRef.current = null;
+        return;
+      }
+      if (getRootScrollTop() <= 2 && !hasInnerScrolledOrBlockedAncestor(e.target)) {
+        ptrStartRef.current = {
+          x: e.touches[0].clientX,
+          y: e.touches[0].clientY,
+        };
+        ptrDistRef.current = 0;
+        ptrActivePullRef.current = false;
+      } else {
+        ptrStartRef.current = null;
+      }
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (!ptrStartRef.current || isPtrRefreshing || e.touches.length !== 1) return;
+      const dx = e.touches[0].clientX - ptrStartRef.current.x;
+      const dy = e.touches[0].clientY - ptrStartRef.current.y;
+
+      // 위로 올리는 일반 스크롤(dy <= 0) 또는 좌우 가로 스와이프는 즉시 네이티브 스크롤에 양보
+      if (!ptrActivePullRef.current) {
+        if (dy < -4 || (Math.abs(dx) > 8 && Math.abs(dx) >= Math.abs(dy))) {
+          resetPtr();
+          return;
+        }
+      }
+
+      const curScrollTop = getRootScrollTop();
+      if (curScrollTop > 2) {
+        resetPtr();
+        return;
+      }
+
+      const iosOverscroll = curScrollTop < 0 ? Math.abs(curScrollTop) : 0;
+      if (dy > 10 && dy > Math.abs(dx) * 1.2) {
+        ptrActivePullRef.current = true;
+        // 최상단(scrollTop <= 0)에서 아래로 당길 때만 preventDefault로 AOS touchcancel 중단 없이 부드러운 당김 보장
+        if (curScrollTop <= 0 && e.cancelable) {
+          e.preventDefault();
+        }
+        const damped = Math.min(96, Math.max(Math.round((dy - 10) * 0.55), Math.round(iosOverscroll * 0.85)));
+        ptrDistRef.current = damped;
+        setPtrPullDist(damped);
+      } else if (ptrActivePullRef.current && dy <= 6) {
+        ptrDistRef.current = 0;
+        setPtrPullDist(0);
+      }
+    };
+
+    const onTouchEnd = () => {
+      if (!ptrStartRef.current) return;
+      const finalDist = Math.max(
+        ptrDistRef.current,
+        getRootScrollTop() < 0 ? Math.abs(getRootScrollTop()) : 0
+      );
+      ptrStartRef.current = null;
+      ptrActivePullRef.current = false;
+      if (finalDist >= 50 && !isPtrRefreshing) {
+        setIsPtrRefreshing(true);
+        setPtrPullDist(58);
+        window.setTimeout(() => {
+          window.location.reload();
+        }, 160);
+      } else {
+        ptrDistRef.current = 0;
+        setPtrPullDist(0);
+      }
+    };
+
+    const onTouchCancel = () => {
+      if (!isPtrRefreshing) {
+        resetPtr();
+      }
+    };
+
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: false });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', onTouchCancel, { passive: true });
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchCancel);
+    };
+  }, [hasAnyModalOpen, isPtrRefreshing]);
+
   // 모바일 및 데스크톱 전 페이지 공통 '맨 위로 가기 (Scroll to Top)' 플로팅 버튼 노출 상태
   const [showScrollTopBtn, setShowScrollTopBtn] = useState(false);
 
@@ -577,6 +711,26 @@ export const App: React.FC = () => {
     <GhostiHubRootProvider>
       {/* 앱 진입 시 0.5초 가벼운 로딩 스플래시 */}
       <GhostiLoadingSplash />
+
+      {/* 모바일(iOS/AOS) 전 화면 공통 상단 당겨서 새로고침(Pull-to-refresh) 플로팅 인디케이터 */}
+      {(ptrPullDist > 0 || isPtrRefreshing) && (
+        <div
+          style={{
+            transform: `translate3d(-50%, ${Math.min(72, Math.max(8, ptrPullDist - 12))}px, 0)`,
+          }}
+          className="fixed top-0 left-1/2 z-[180] pointer-events-none transition-transform duration-75"
+        >
+          <div className="px-4 py-1.5 rounded-full bg-teal-50 border-2 border-teal-500 text-teal-800 text-[12.5px] font-extrabold shadow-[0_8px_24px_rgba(13,148,136,0.32)] flex items-center gap-1.5 whitespace-nowrap">
+            <span>
+              {isPtrRefreshing
+                ? '🔄 새로고침 중...'
+                : ptrPullDist >= 50
+                ? '✨ 손을 떼면 새로고침돼요!'
+                : '⬇️ 아래로 당겨서 새로고침'}
+            </span>
+          </div>
+        </div>
+      )}
 
       {/* 공식 쇼룸 & 하이브리드 온보딩 대문 vs 내부 개발 워크스페이스 분기 */}
       {viewMode === 'showroom' ? (
