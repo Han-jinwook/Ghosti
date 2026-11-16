@@ -708,6 +708,9 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     // [v1.3 필수 통과의례 게이트]: PC에서 아직 로컬 엔진(Z-코어)이 연결되지 않은 상태일 때,
     // 별명 등록 이후 손보기 동의 / 급한 검색 요청 / 거절(눈으로 구경) 분기를 귀신비서가 정직하고 귀엽게 직접 안내!
     if (sourceTab === 'trash' && !isMobileOrStore && !zCoreBridge.isConnected) {
+      await zCoreBridge.checkHealth();
+    }
+    if (sourceTab === 'trash' && !isMobileOrStore && !zCoreBridge.isConnected) {
       const preSt = loadGhostSecretaryState();
       const hasNicknameReady = !preSt.awaitingNickname && Boolean(preSt.nickname);
       const isNickOrStoreSpecial =
@@ -773,7 +776,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           const riteText = isImpatientIntent(raw)
             ? `앗, 급하시군요 ${nickLabel}! 내 진짜 사진·문서를 1초 만에 찾으시려면 먼저 여기서 **내 컴퓨터 1초 연결(무광고 · 샘플 사진 0장 · 외부 전송 0%)**만 딱 한 번 켜주셔야 해요!\n연결되자마자 뒤에서 내 진짜 파일들을 조용히 읽어들여 바로 검색하실 수 있게 해드릴게요. 지금 연결 창을 띄워 드렸어요 👻⚡`
             : isBootOrStartupDiagOffline
-            ? `좋아요 ${nickLabel}! 말씀하신 **컴퓨터 부팅 경과 시간 진단과 시작프로그램 점검·손보기는 유료인 '내 기기 통합(월 3,900원)'을 신청하지 않으셔도 내 PC 1대에서 평생 0원(무료)**으로 이용하실 수 있어요! 💡\n단, 윈도우 실제 켜둔 시간과 시작프로그램 목록을 정확히 읽어오려면 **내 컴퓨터 1초 연결(외부 전송 0%)**만 딱 한 번 켜주시면 돼요. 켜주시는 즉시 분석 목록부터 먼저 보여드릴게요 👻✨`
+            ? `좋아요 ${nickLabel}! 💡 **요금 안내**: 시작프로그램 목록 점검과 불필요 자동실행 정리는 내 PC 1대에서 평생 0원(무료)으로 이용하실 수 있습니다!\n단, 윈도우 실제 켜둔 시간과 시작프로그램 목록을 정확히 읽어오려면 **내 컴퓨터 1초 연결(외부 전송 0%)**만 딱 한 번 켜주시면 돼요. 켜주시는 즉시 분석 목록부터 먼저 보여드릴게요 👻✨`
             : `좋아요 ${nickLabel}! 🔒 **안심하세요 — 연결하셔도 제가 마음대로 프로그램을 지우거나 설정을 바꾸지 않아요!**\n지금 띄워 드린 **내 컴퓨터 1초 연결**만 켜주시면, 누가 내 컴퓨터 속도를 잡아먹고 있는지 **1초 만에 분석해서 목록만 먼저 보여드릴게요.** 보시고 정리할지 편하게 선택만 해주세요 👻✨`;
 
           setSharedMonsterMessages((prev) => [

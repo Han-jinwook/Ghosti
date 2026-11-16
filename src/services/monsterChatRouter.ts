@@ -3257,8 +3257,8 @@ export async function processUnifiedMonsterChatQuery(params: {
       const offlineStartupMsg =
         `⚙️ **[내 PC 시작프로그램 점검 안내]**\n` +
         `윈도우가 켜질 때 자동으로 실행되는 시작프로그램 목록과 은행·관공서 보안모듈을 실시간으로 읽어오려면 **무료 귀신비서 로컬 엔진**이 켜져 있어야 합니다.\n\n` +
-        `💡 **요금 안내**: 시작프로그램 목록 점검과 불필요 자동실행 정리는 **유료인 '내 기기 통합(월 3,900원)'을 신청하지 않으셔도 내 PC 1대에서 평생 0원(무료)**으로 이용하실 수 있습니다!`;
-      speak('시작프로그램 점검은 내 기기 통합 신청 없이 평생 무료로 이용하실 수 있으며, 로컬 엔진을 켜주시면 즉시 목록을 보여드립니다.');
+        `💡 **요금 안내**: 시작프로그램 목록 점검과 불필요 자동실행 정리는 내 PC 1대에서 평생 0원(무료)으로 이용하실 수 있습니다!`;
+      speak('시작프로그램 점검은 내 PC 1대에서 평생 무료로 이용하실 수 있으며, 로컬 엔진을 켜주시면 즉시 목록을 보여드립니다.');
       return reply(sourceTab, offlineStartupMsg, {
         followUpSuggestions: [
           '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
@@ -3292,7 +3292,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       sourceTab,
       `⚙️ **[내 PC 부팅 시작프로그램 & 상주 보안모듈 실측 목록${
         typeof cpuLoad === 'number' ? ` (현재 CPU 부하 ${cpuLoad}%)` : ''
-      }]**\n${startupListPreview}${secListPreview}\n\n💡 **안내**: 시작프로그램 점검·정리는 **유료인 '내 기기 통합' 신청 없이 내 PC 1대에서 평생 0원(무료)**입니다. 불필요한 항목을 정리하시려면 채팅창에 **"응 진행해"** 또는 **"응 정리해줘"**라고 입력해 주세요.`,
+      }]**\n${startupListPreview}${secListPreview}\n\n💡 **요금 안내**: 시작프로그램 목록 점검과 불필요 자동실행 정리는 내 PC 1대에서 평생 0원(무료)으로 이용하실 수 있습니다! 불필요한 항목을 정리하시려면 채팅창에 **"응 진행해"** 또는 **"응 정리해줘"**라고 입력해 주세요.`,
       {
         cardKind: 'DEVICE_REPAIR_GATE',
         deviceRepairPayload: {
@@ -3336,8 +3336,8 @@ export async function processUnifiedMonsterChatQuery(params: {
         ? '⏱️ **[내 PC 부팅 경과 시간 & 컨디션 진단 안내]**\n현재 무료 로컬 엔진이 꺼져 있어 정확한 윈도우 경과 시간을 읽지 못했습니다. 로컬 엔진을 켜두시면 켜둔 시간(시간·분)을 1초 만에 실측해 드리며, 하루(24시간) 이상 연속으로 켜두셨다면 억지 메모리 청소 대신 다시 시작(재부팅)을 한 번 해주시는 것이 가장 빠르고 안전합니다!'
         : '하루 이상(24시간 초과) 켜두어 윈도우에 쌓인 피로는 억지 메모리 청소 대신 다시 시작(재부팅)을 한 번 해주시는 것이 가장 빠르고 깨끗합니다! (권장 기준: 매일 1회 재부팅)');
     const freeTierNote =
-      `\n\n💡 **요금 안내**: 컴퓨터 부팅 경과 시간 진단·자동 재부팅 예약·보안프로그램 손보기는 **유료인 '내 기기 통합(월 3,900원)'을 신청하지 않으셔도 내 PC 1대에서 평생 0원(무료)**으로 이용하실 수 있습니다! ('내 기기 통합'은 내 스마트폰과 집·회사 여러 대의 PC를 하나로 묶어 복사 내역·검색을 연동하실 때만 선택하시는 플랜입니다.)`;
-    const fullReplyText = baseSummary.includes('내 기기 통합') ? baseSummary : `${baseSummary}${freeTierNote}`;
+      `\n\n💡 **요금 안내**: 시작프로그램 목록 점검과 불필요 자동실행 정리는 내 PC 1대에서 평생 0원(무료)으로 이용하실 수 있습니다!`;
+    const fullReplyText = baseSummary.includes('요금 안내') ? baseSummary : `${baseSummary}${freeTierNote}`;
     speak(baseSummary);
     return reply(sourceTab, fullReplyText, {
       followUpSuggestions: [
@@ -3356,7 +3356,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     const defRes = await executeRealOsAction(subDef);
     const summaryText =
       defRes.summaryKo ||
-      '🛡️ 안심하세요! 윈도우 순정 바이러스·랜섬웨어 방어막(Windows Defender)이 기본 보호를 수행합니다. (무겁고 광고 뜨는 무료 백신을 따로 설치하실 필요가 없으며, 순정 백신 점검 역시 내 기기 통합 신청 없이 평생 0원 무료입니다!)';
+      '🛡️ 안심하세요! 윈도우 순정 바이러스·랜섬웨어 방어막(Windows Defender)이 기본 보호를 수행합니다. (무겁고 광고 뜨는 무료 백신을 따로 설치하실 필요가 없으며, 순정 백신 점검 역시 내 PC 1대에서 평생 0원 무료입니다!)';
     speak(summaryText);
     return reply(sourceTab, summaryText, {
       followUpSuggestions: [
@@ -4308,8 +4308,8 @@ export async function processUnifiedMonsterChatQuery(params: {
       osRes.summaryKo ||
       '하루 이상(24시간 초과) 켜두어 윈도우에 쌓인 피로는 강제로 메모리를 청소하면 오히려 열려 있는 브라우저(구글시트 등) 화면이 깨질 수 있습니다. 억지 청소 대신 지금 다시 시작(재부팅)을 한 번 해주시는 것이 가장 빠르고 깨끗합니다! (권장 기준: 매일 1회 재부팅)';
     const freeTierNote =
-      `\n\n💡 **요금 안내**: 컴퓨터 부팅 경과 시간 진단·자동 재부팅 예약·보안프로그램 손보기는 **유료인 '내 기기 통합(월 3,900원)'을 신청하지 않으셔도 내 PC 1대에서 평생 0원(무료)**으로 이용하실 수 있습니다!`;
-    const summaryText = baseSummary.includes('내 기기 통합') ? baseSummary : `${baseSummary}${freeTierNote}`;
+      `\n\n💡 **요금 안내**: 시작프로그램 목록 점검과 불필요 자동실행 정리는 내 PC 1대에서 평생 0원(무료)으로 이용하실 수 있습니다!`;
+    const summaryText = baseSummary.includes('요금 안내') ? baseSummary : `${baseSummary}${freeTierNote}`;
     speak(baseSummary);
     return reply(sourceTab, summaryText, {
       followUpSuggestions: [
