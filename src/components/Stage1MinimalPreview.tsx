@@ -279,12 +279,15 @@ const SecretarySamplePcCarePanel: React.FC = () => {
         ))}
       </div>
 
-      <div className="flex flex-wrap gap-2 text-xs font-extrabold">
-        <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">
-          🔒 지운 프로그램 {deletedCount}개 · 1초 원상복구
+      <div className="flex flex-wrap gap-2 text-[11.5px] sm:text-xs font-extrabold">
+        <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep">
+          🔒 마음대로 지우지 않아요 (지운 프로그램 {deletedCount}개)
         </span>
-        <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">
-          ✋ 마음대로 지우지 않고 내가 고른 것만
+        <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep">
+          ✋ 내가 고른 것만
+        </span>
+        <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep">
+          ↩️ 지운 프로그램 {deletedCount}개 · 1초 원상복구
         </span>
       </div>
     </div>
