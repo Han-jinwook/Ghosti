@@ -1105,6 +1105,16 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             letter-spacing: -0.04em !important;
             -webkit-text-size-adjust: 100% !important;
           }
+          .showroom-chip-title {
+            font-size: clamp(11.5px, 3.2vw, 13px) !important;
+            line-height: 1.3 !important;
+            letter-spacing: -0.02em !important;
+          }
+          .showroom-chip-sub {
+            font-size: clamp(10.5px, 2.9vw, 12px) !important;
+            line-height: 1.3 !important;
+            letter-spacing: -0.02em !important;
+          }
         }
       `}</style>
       {/* 1. 최상단 마스터 GNB */}
@@ -1727,10 +1737,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           {item.keywordBadge}
                         </span>
                       </div>
-                      <div className="text-[13.5px] font-black text-white line-clamp-2 break-keep leading-snug mt-0.5">
+                      <div className="showroom-chip-title sm:text-[13.5px] font-black text-white break-keep leading-snug mt-0.5">
                         {item.chipLabel}
                       </div>
-                      <div className="text-xs text-zinc-400 font-semibold line-clamp-2 break-keep leading-snug">
+                      <div className="showroom-chip-sub sm:text-xs text-zinc-400 font-semibold break-keep leading-snug">
                         {item.chipSub}
                       </div>
                     </button>
