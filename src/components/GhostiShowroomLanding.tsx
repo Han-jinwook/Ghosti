@@ -1115,6 +1115,11 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             line-height: 1.3 !important;
             letter-spacing: -0.02em !important;
           }
+          .showroom-cert-h3 {
+            font-size: clamp(15px, 4.4vw, 18.5px) !important;
+            line-height: 1.35 !important;
+            letter-spacing: -0.02em !important;
+          }
         }
       `}</style>
       {/* 1. 최상단 마스터 GNB */}
@@ -3502,9 +3507,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           style={{
             background: 'linear-gradient(135deg, #07131E 0%, #0D292C 55%, #091322 100%)',
           }}
-          className="rounded-3xl border-2 border-amber-400/50 p-6 sm:p-9 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center shadow-2xl"
+          className="rounded-3xl border-2 border-amber-400/50 p-4 sm:p-9 grid grid-cols-1 lg:grid-cols-12 gap-6 items-center shadow-2xl overflow-hidden"
         >
-          <div className="lg:col-span-8 space-y-4">
+          <div className="lg:col-span-8 space-y-4 min-w-0">
             <div
               style={{ backgroundColor: 'rgba(251, 191, 36, 0.18)', color: '#FCD34D' }}
               className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-amber-400/40 text-[13px] font-black"
@@ -3512,10 +3517,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               <span>📜</span>
               <span>대표이사 직인 날인 · 무료 사용 공식 확인서</span>
             </div>
-            <h3 className="text-xl sm:text-3xl font-black text-white leading-tight break-keep">
+            <h3 className="showroom-cert-h3 text-lg sm:text-3xl font-black text-white leading-tight break-keep">
               “회사 컴퓨터에 깔아도 저작권 단속 안 오나요?”<br />
               <span style={{ color: '#00F0B5' }}>
-                <span className="inline-block whitespace-nowrap">✓ 개인·기업 PC 기본 기능 영구 무료!</span>{' '}
+                <span>✓ 개인·기업 PC 기본 기능 영구 무료!</span>{' '}
                 <span className="inline-block whitespace-nowrap">(라이선스 비용 0원)</span>
               </span>
             </h3>
@@ -3589,18 +3594,16 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             }}
             className="rounded-3xl border border-teal-400/30 p-6 sm:p-8 space-y-5 shadow-xl"
           >
-            <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
-              <div className="space-y-1.5">
-                <span
-                  style={{ backgroundColor: 'rgba(20, 184, 166, 0.18)', color: '#5EEAD4' }}
-                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-teal-400/40 text-xs font-extrabold"
-                >
-                  🔗 기기 통합 &amp; 팀 공용 폴더 확장 (카드 등록 없는 30일 무료체험)
-                </span>
-                <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight break-keep">
-                  클라우드 월세 0원, 내 모든 기기와 우리 팀을 1초 만에 하나로
-                </h3>
-              </div>
+            <div className="space-y-2">
+              <span
+                style={{ backgroundColor: 'rgba(20, 184, 166, 0.18)', color: '#5EEAD4' }}
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-teal-400/40 text-xs font-extrabold"
+              >
+                🔗 기기 통합 &amp; 팀 공용 폴더 확장 (카드 등록 없는 30일 무료체험)
+              </span>
+              <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight break-keep">
+                클라우드 월세 0원, 내 모든 기기와 우리 팀을 1초 만에 하나로
+              </h3>
               <p className="text-[13px] text-zinc-300 font-semibold break-keep">
                 기본 4대 초능력은 평생 0원이며, 내 기기 직결이나 팀 공용 폴더가 필요하신 분만 투명한 정찰제로 이용하세요.
               </p>
