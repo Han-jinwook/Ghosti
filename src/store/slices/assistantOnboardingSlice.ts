@@ -541,10 +541,11 @@ export const createAssistantOnboardingSlice: StateCreator<
     // 데스크톱에서 Z-코어가 연결되면 내 PC 실제 동영상 키프레임 및 실사진의 768차원 비전 벡터를 조용히 인덱싱·캐싱합니다.
     try {
       const hasVectors = enrichedPhotos.some((p) => p.vec && p.vec.length > 0);
-      const isCoarsePointer =
-        typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+      const isMobileUA =
+        typeof navigator !== 'undefined' &&
+        /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
       const saveData = typeof navigator !== 'undefined' && (navigator as any).connection?.saveData === true;
-      if (!isCoarsePointer && !saveData && typeof window !== 'undefined') {
+      if (!isMobileUA && !saveData && typeof window !== 'undefined') {
         if (zCoreBridge.isConnected) {
           // 첫 화면 썸네일 렌더 직후(0.9초) 동영상 키프레임 및 실사진 비전 벡터를 조용히 고속 인덱싱
           window.setTimeout(() => {

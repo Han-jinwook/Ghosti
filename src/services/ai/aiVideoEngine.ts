@@ -699,6 +699,21 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
         }
       }
     }
+    const staticVideoByName = new Map<string, VideoSceneItem>();
+    if (sRes.status === 'fulfilled' && sRes.value.ok) {
+      try {
+        const sJson = await sRes.value.json();
+        const sVids: VideoSceneItem[] = Array.isArray(sJson.videos) ? sJson.videos : [];
+        for (const sv of sVids) {
+          if (sv && sv.videoFileName) {
+            staticVideoByName.set(sv.videoFileName, sv);
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
     // [실물 파일 순수성 철칙]: 로컬 Z-코어 엔진이 연결된 상태에서는 쇼윈도 샘플 영상을 절대 섞지 않고 100% 내 진짜 PC 영상만 반환!
     if (canProbeLocal) {
       await hydrateRealMediaVectorCacheOnce();
@@ -709,7 +724,70 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
         const realVideos = new Map<string, VideoSceneItem>();
         for (const v of zVids) {
           if (!v || !v.videoFileName || v.isAllBlack) continue;
-          realVideos.set(v.videoFileName, normalizeLocalVideoSceneItem(v));
+          let normalizedVid = normalizeLocalVideoSceneItem(v);
+          const sv = staticVideoByName.get(v.videoFileName);
+          if (sv) {
+            const enh = BUNDLED_SAMPLE_VIDEO_ENHANCEMENTS[v.videoFileName];
+            const svKws = Array.from(
+              new Set([
+                ...(normalizedVid.keywords || []),
+                ...(sv.keywords || []),
+                ...(enh?.extraKeywords || []),
+              ])
+            );
+            const svVec =
+              Array.isArray((sv as any).vec) && (sv as any).vec.length === DEFAULT_DIM
+                ? new Float32Array((sv as any).vec)
+                : undefined;
+            if (svVec) {
+              const baseKey = getVideoMediaBaseKey(normalizedVid);
+              if (!localVideoFrameVecMap.has(`vrep:${baseKey}`)) {
+                localVideoFrameVecMap.set(`vrep:${baseKey}`, svVec);
+              }
+            }
+            normalizedVid = {
+              ...normalizedVid,
+              keywords: svKws,
+              sceneDescription: sv.sceneDescription || normalizedVid.sceneDescription,
+              timelineFrames: (normalizedVid.timelineFrames || []).map((f) => ({
+                ...f,
+                keywords: Array.from(new Set([...(f.keywords || []), ...svKws.slice(0, 20)])),
+              })),
+            };
+          }
+          const vTs = parseFileTimestampSecOfDay(v.videoFileName);
+          if (vTs && photoSemEntries.length > 0) {
+            const nearbyPhotos = photoSemEntries
+              .map((p) => ({
+                ...p,
+                diffSec: Math.abs(p.secOfDay - vTs.secOfDay),
+              }))
+              .filter((p) => p.dateYmd === vTs.dateYmd && p.diffSec <= 600)
+              .sort((a, b) => a.diffSec - b.diffSec);
+            if (nearbyPhotos.length > 0) {
+              const nearKws = Array.from(
+                new Set(nearbyPhotos.slice(0, 8).flatMap((p) => p.keywordsKo))
+              );
+              const closestCap = nearbyPhotos[0].captionKo;
+              const mergedKws = Array.from(new Set([...(normalizedVid.keywords || []), ...nearKws]));
+              const nextDesc =
+                closestCap &&
+                (!normalizedVid.sceneDescription ||
+                  normalizedVid.sceneDescription.includes('로컬 동영상 파일'))
+                  ? closestCap
+                  : normalizedVid.sceneDescription;
+              normalizedVid = {
+                ...normalizedVid,
+                keywords: mergedKws,
+                sceneDescription: nextDesc,
+                timelineFrames: (normalizedVid.timelineFrames || []).map((f) => ({
+                  ...f,
+                  keywords: Array.from(new Set([...(f.keywords || []), ...nearKws])),
+                })),
+              };
+            }
+          }
+          realVideos.set(v.videoFileName, normalizedVid);
         }
         return Array.from(realVideos.values());
       }
@@ -718,11 +796,8 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
     }
 
     const merged = new Map<string, VideoSceneItem>();
-    if (sRes.status === 'fulfilled' && sRes.value.ok) {
-      const sJson = await sRes.value.json();
-      const sVids: VideoSceneItem[] = Array.isArray(sJson.videos) ? sJson.videos : [];
-      for (const v of sVids) {
-        if (v && v.videoFileName) {
+    for (const v of staticVideoByName.values()) {
+      if (v && v.videoFileName) {
           const enh = BUNDLED_SAMPLE_VIDEO_ENHANCEMENTS[v.videoFileName];
           const mergedKeywords = Array.from(
             new Set([...(v.keywords || []), ...(enh?.extraKeywords || [])])
@@ -757,7 +832,6 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
               ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(v.videoFileName)}`)
               : v.videoUrl || '',
           });
-        }
       }
     }
     for (const showcaseVid of BUNDLED_SHOWCASE_VIDEO_ITEMS) {
@@ -957,22 +1031,16 @@ export async function searchVideoSceneItemsAsync(
     return Array.from(lexicalByKey.values());
   }
 
-  // 검색 시점에 아직 시각 벡터가 하나도 없는 로컬 영상이 있으면 대표 프레임(1장)을 우선 임베딩하여 37개 전수 누락 원천 차단
+  // 검색 시점에 아직 시각 벡터가 없는 로컬 영상이 있으면 백그라운드로 비블로킹 큐잉하여 검색창이 5초씩 멈추는 현상을 원천 차단합니다.
   const unembeddedLocalCount = nonBlackVideos.filter(
     (v) => String(v.id || '').startsWith('local_vid_') && !hasAnyCachedVectorForVideo(v)
   ).length;
   if (unembeddedLocalCount > 0) {
-    const syncEmbedDeadline = performance.now() + 4800;
-    await ensureVideoKeyframesEmbeddedForSearch(
-      nonBlackVideos,
-      48,
-      () => performance.now() > syncEmbedDeadline,
-      1
-    );
+    void ensureVideoKeyframesEmbeddedForSearch(nonBlackVideos, 12, undefined, 1);
   }
 
   const [queryVecs, hubRefVecs] = await Promise.all([
-    encodeMultimodalSearchQueryVecs(q, 8000),
+    encodeMultimodalSearchQueryVecs(q, 1400),
     ensureHubnessReferenceVecsLoaded(),
   ]);
 
@@ -1228,7 +1296,7 @@ export async function searchVideoSceneItemsAsync(
     const passesVisual = hasCorpusSeparation && ev.bestSim > 0 && effectiveSim >= admitThreshold;
     const passesSessionContinuity =
       isTightSessionBurst &&
-      ev.bestSim >= Math.max(0.635, admitThreshold - 0.02);
+      (ev.bestSim <= 0 || ev.bestSim >= Math.max(0.625, admitThreshold - 0.03));
 
     if (!lexHit && !passesVisual && !passesSessionContinuity) continue;
 

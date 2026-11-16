@@ -1114,7 +1114,7 @@ export async function executeTextSearch(
 
   let queryVecs: Float32Array[] = [];
   if (activePhotos.some((p) => p.vec && p.vec.length === DEFAULT_DIM)) {
-    queryVecs = await encodeMultimodalSearchQueryVecs(qRaw, 8000);
+    queryVecs = await encodeMultimodalSearchQueryVecs(qRaw, 1400);
   }
   const embedMs = +(performance.now() - t0).toFixed(1);
   const s0 = performance.now();
@@ -2143,11 +2143,12 @@ export async function startSilentRealMediaVisionIndexing(params: {
   if (aiRuntimeFlags.silentMediaIndexingRunning) return;
   if (!hasActiveGhostiLoginSession() || !zCoreBridge.isConnected) return;
 
-  const isCoarsePointer =
-    typeof window !== 'undefined' && window.matchMedia?.('(pointer: coarse)').matches;
+  const isMobileUA =
+    typeof navigator !== 'undefined' &&
+    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
   const saveData =
     typeof navigator !== 'undefined' && (navigator as any).connection?.saveData === true;
-  if (isCoarsePointer || saveData) return;
+  if (isMobileUA || saveData) return;
 
   aiRuntimeFlags.silentMediaIndexingRunning = true;
   try {

@@ -776,7 +776,7 @@ export async function ensureHubnessReferenceVecsLoaded(): Promise<Float32Array[]
       if (!isTextQueryEncoderReady()) {
         const ok = await Promise.race([
           ensureTextQueryEncoderLoaded(),
-          new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 6000)),
+          new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1200)),
         ]);
         if (!ok && !isTextQueryEncoderReady()) return [];
       }
@@ -790,9 +790,14 @@ export async function ensureHubnessReferenceVecsLoaded(): Promise<Float32Array[]
       if (!qModel || !qTok) return [];
 
       const prefixed = HUBNESS_REFERENCE_PROMPTS.map((p) => QUERY_PREFIX + p);
-      const inputs = await qTok(prefixed, { padding: true, truncation: true });
-      const out = await qModel(inputs);
-      const rows = toRows(out.sentence_embedding).map((r) => normalizeVector(r, DEFAULT_DIM));
+      const rows = await Promise.race([
+        (async () => {
+          const inputs = await qTok(prefixed, { padding: true, truncation: true });
+          const out = await qModel(inputs);
+          return toRows(out.sentence_embedding).map((r) => normalizeVector(r, DEFAULT_DIM));
+        })(),
+        new Promise<Float32Array[]>((resolve) => setTimeout(() => resolve([]), 1200)),
+      ]);
       if (rows.length > 0) {
         cachedHubnessRefVecs = rows;
         frameHubnessScoreCache.clear();
@@ -861,74 +866,96 @@ const VISUAL_QUERY_CONCEPT_EXPANSIONS: Array<[RegExp, string]> = [
   [/음식|식사|맛집|요리|삼겹살|바비큐/, '식탁 위 맛있는 음식 요리 식사 delicious food dishes on dining table'],
 ];
 
+let cachedEncodedQueryVecs = new Map<string, Float32Array[]>();
+let pendingEncodeQueryMap = new Map<string, Promise<Float32Array[]>>();
+
 export async function encodeMultimodalSearchQueryVecs(
   rawQuery: string,
   maxWaitMs?: number
 ): Promise<Float32Array[]> {
   const q = rawQuery.trim();
   if (!q) return [];
-  if (!isTextQueryEncoderReady()) {
-    const loadPromise = ensureTextQueryEncoderLoaded();
-    if (typeof maxWaitMs === 'number' && maxWaitMs > 0) {
+  const cached = cachedEncodedQueryVecs.get(q);
+  if (cached && cached.length > 0) return cached;
+  const inflight = pendingEncodeQueryMap.get(q);
+  if (inflight) return inflight;
+
+  const task = (async (): Promise<Float32Array[]> => {
+    const waitMs = typeof maxWaitMs === 'number' && maxWaitMs > 0 ? Math.min(maxWaitMs, 1500) : 1500;
+    if (!isTextQueryEncoderReady()) {
+      const loadPromise = ensureTextQueryEncoderLoaded();
       const readyInTime = await Promise.race([
         loadPromise,
-        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), maxWaitMs)),
+        new Promise<boolean>((resolve) => setTimeout(() => resolve(false), waitMs)),
       ]);
       if (!readyInTime && !isTextQueryEncoderReady()) {
         return [];
       }
-    } else {
-      await loadPromise;
     }
-  }
-  const qModel =
-    searchModel && tokenizer
-      ? searchModel
-      : textQueryModel
-      ? textQueryModel
-      : sharedVisionModel;
-  const qTok = searchModel && tokenizer ? tokenizer : textQueryTokenizer;
-  if (!qModel || !qTok) return [];
+    const qModel =
+      searchModel && tokenizer
+        ? searchModel
+        : textQueryModel
+        ? textQueryModel
+        : sharedVisionModel;
+    const qTok = searchModel && tokenizer ? tokenizer : textQueryTokenizer;
+    if (!qModel || !qTok) return [];
 
-  const coreQ = q
-    .replace(/(동영상|영상|비디오|클립|사진|이미지|장면|모습|구간|부분|찾아줘|찾아|보여줘|보여|검색해줘|검색)/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+    const coreQ = q
+      .replace(/(동영상|영상|비디오|클립|사진|이미지|장면|모습|구간|부분|찾아줘|찾아|보여줘|보여|검색해줘|검색)/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
 
-  const promptSet = new Set<string>([QUERY_PREFIX + q]);
-  if (coreQ.length >= 2 && coreQ !== q) {
-    promptSet.add(QUERY_PREFIX + coreQ);
-  }
-  if (/[,/·]/.test(coreQ || q)) {
-    const subTerms = (coreQ || q)
-      .split(/[,/·]+/)
-      .map((s) => s.trim())
-      .filter((s) => s.length >= 2)
-      .slice(0, 3);
-    for (const st of subTerms) {
-      promptSet.add(QUERY_PREFIX + st);
+    const promptSet = new Set<string>([QUERY_PREFIX + q]);
+    if (coreQ.length >= 2 && coreQ !== q) {
+      promptSet.add(QUERY_PREFIX + coreQ);
     }
-  }
-
-  const qLow = (coreQ || q).toLowerCase();
-  let matchedExpansions = 0;
-  for (const [rx, visualDesc] of VISUAL_QUERY_CONCEPT_EXPANSIONS) {
-    if (rx.test(qLow) || rx.test(q.toLowerCase())) {
-      promptSet.add(`${QUERY_PREFIX}${coreQ || q} ${visualDesc}`);
-      matchedExpansions += 1;
-      if (matchedExpansions >= 2) break;
+    if (/[,/·]/.test(coreQ || q)) {
+      const subTerms = (coreQ || q)
+        .split(/[,/·]+/)
+        .map((s) => s.trim())
+        .filter((s) => s.length >= 2)
+        .slice(0, 3);
+      for (const st of subTerms) {
+        promptSet.add(QUERY_PREFIX + st);
+      }
     }
-  }
 
-  const prompts = Array.from(promptSet);
-  try {
-    const inputs = await qTok(prompts, { padding: true, truncation: true });
-    const out = await qModel(inputs);
-    const rows = toRows(out.sentence_embedding);
-    return rows.map((r) => normalizeVector(r, DEFAULT_DIM));
-  } catch {
-    return [];
-  }
+    const qLow = (coreQ || q).toLowerCase();
+    let matchedExpansions = 0;
+    for (const [rx, visualDesc] of VISUAL_QUERY_CONCEPT_EXPANSIONS) {
+      if (rx.test(qLow) || rx.test(q.toLowerCase())) {
+        promptSet.add(`${QUERY_PREFIX}${coreQ || q} ${visualDesc}`);
+        matchedExpansions += 1;
+        if (matchedExpansions >= 2) break;
+      }
+    }
+
+    const prompts = Array.from(promptSet);
+    try {
+      const inferPromise = (async () => {
+        const inputs = await qTok(prompts, { padding: true, truncation: true });
+        const out = await qModel(inputs);
+        const rows = toRows(out.sentence_embedding);
+        return rows.map((r) => normalizeVector(r, DEFAULT_DIM));
+      })();
+      const encoded = await Promise.race([
+        inferPromise,
+        new Promise<Float32Array[]>((resolve) => setTimeout(() => resolve([]), 1500)),
+      ]);
+      if (encoded.length > 0) {
+        cachedEncodedQueryVecs.set(q, encoded);
+      }
+      return encoded;
+    } catch {
+      return [];
+    } finally {
+      pendingEncodeQueryMap.delete(q);
+    }
+  })();
+
+  pendingEncodeQueryMap.set(q, task);
+  return task;
 }
 
 let sharedVisionModel: any = null;
