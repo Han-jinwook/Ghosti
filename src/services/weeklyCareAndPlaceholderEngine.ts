@@ -228,7 +228,7 @@ export function parseConversationalCareScheduleCommand(rawQuery: string): {
 
   // 1) 지금 즉시 정기 건강검진 / 손 없는 날 점검 실행 요청
   if (
-    /(?:지금|당장|오늘|바로)?\s*(?:정기\s*(?:건강)?\s*검진|수요\s*손\s*없는\s*날|손\s*없는\s*날\s*검진|종합\s*건강\s*검진).*?(?:해\s*줘|실행|시작|진단|봐\s*줘|손봐\s*줘)/i.test(
+    /(?:지금|당장|오늘|바로)?\s*(?:정기\s*(?:건강)?\s*검진|수요\s*손\s*없는\s*날|손\s*없는\s*날\s*검진|종합\s*건강\s*검진).*?(?:해\s*(?:줘|주세요)|실행|시작|진단|봐\s*(?:줘|주세요)|손봐\s*(?:줘|주세요))/i.test(
       clean
     )
   ) {
@@ -243,7 +243,7 @@ export function parseConversationalCareScheduleCommand(rawQuery: string): {
   if (!hasCareKeyword) return { matched: false };
 
   // 2) 정기 검진 끄기/해제
-  if (/(?:꺼\s*줘|끄기|해제|중지|그만|안\s*할래|하지\s*마|취소)/i.test(clean)) {
+  if (/(?:꺼\s*(?:줘|주세요)|끄기|해제|중지|그만|안\s*할래|안\s*할게|하지\s*마|취소)/i.test(clean)) {
     return { matched: true, action: 'DISABLE_SCHEDULE' };
   }
 

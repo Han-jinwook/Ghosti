@@ -30,6 +30,7 @@ import {
   evaluateDualProactiveCareEngine,
   type ProactiveCareBriefingResult,
 } from './weeklyCareAndPlaceholderEngine';
+import { normalizeSuggestionChips } from './ghostSecretaryEngine';
 
 /**
  * 🧹 치우기(클린몬스터) × ⚙️ 고치기(설정몬스터) 공용 대화형 AI & JSON Z-코어 위임 라우터
@@ -633,7 +634,7 @@ function extractJsonObject(raw: string): any | null {
   }
 }
 
-async function callMonsterLlmGateway(prompt: string, timeoutMs = 9500): Promise<{ ok: boolean; text: string; model?: string }> {
+async function callMonsterLlmGateway(prompt: string, timeoutMs = 4800): Promise<{ ok: boolean; text: string; model?: string }> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
   try {
@@ -652,7 +653,7 @@ async function callMonsterLlmGateway(prompt: string, timeoutMs = 9500): Promise<
         messages: [{ role: 'user', content: prompt }],
         config: {
           temperature: 0.3,
-          maxOutputTokens: 600,
+          maxOutputTokens: 320,
           thinkingConfig: { thinkingBudget: 0 },
         },
       }),
@@ -671,7 +672,7 @@ async function callMonsterLlmGateway(prompt: string, timeoutMs = 9500): Promise<
 
   // 2순위: Netlify Serverless Function 폴백
   const controller2 = new AbortController();
-  const timer2 = setTimeout(() => controller2.abort(), 5000);
+  const timer2 = setTimeout(() => controller2.abort(), 2800);
   try {
     const fnRes = await fetch('/.netlify/functions/monster-llm-chat', {
       method: 'POST',
@@ -734,7 +735,7 @@ export async function callMonsterLowCostLlmJson(params: {
     '    "action": "실행할 코어 액션 요약 영문 코드",',
     '    "params": { "keyword": "추출 키워드(선택)", "siteName": "사이트명(선택)", "targetUrl": "https://...(선택)", "repairSymptom": "수리 증상(선택)" }',
     '  },',
-    '  "followUpSuggestions": ["유저가 이어서 클릭해 말할 수 있는 자연스러운 후속 대화 문장 1", "후속 대화 문장 2", "후속 대화 문장 3"]',
+    '  "followUpSuggestions": ["정중한 해요체(~해 주세요, ~보여 주세요, ~인가요?, ~볼게요)로 통일된 후속 버튼 문구 1 (반말 금지)", "정중한 해요체 후속 버튼 문구 2", "정중한 해요체 후속 버튼 문구 3"]',
     '}',
   ].join('\n');
 
@@ -752,7 +753,9 @@ export async function callMonsterLowCostLlmJson(params: {
       params: parsed?.zCoreCommand?.params || {},
     },
     followUpSuggestions: Array.isArray(parsed.followUpSuggestions)
-      ? parsed.followUpSuggestions.map((s: any) => String(s || '').trim()).filter(Boolean).slice(0, 3)
+      ? normalizeSuggestionChips(
+          parsed.followUpSuggestions.map((s: any) => String(s || '').trim()).filter(Boolean).slice(0, 3)
+        ) || []
       : [],
     modelUsed: res.model || 'gemini-2.5-flash',
   };
@@ -1218,13 +1221,16 @@ function reply(
   text: string,
   extra: Partial<MonsterChatMessage> = {}
 ): MonsterChatMessage {
+  const normalizedExtra = extra.followUpSuggestions
+    ? { ...extra, followUpSuggestions: normalizeSuggestionChips(extra.followUpSuggestions) }
+    : extra;
   return {
     id: `monster_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
     role: 'assistant',
     timestamp: nowLabel(),
     text,
     sourceTab,
-    ...extra,
+    ...normalizedExtra,
   };
 }
 
@@ -1436,7 +1442,7 @@ ${payload.summaryText}`, {
 
   // 3) F1 ~ F10 상용구 말 한마디로 즉시 등록/변경
   const snippetMatch =
-    clean.match(/(?:F|상용구\s*)([1-9]|10)\s*번?(?:에|에는|을|를|슬롯에)?\s*["'“”]?(.+?)["'“”]?\s*(?:넣어|등록|저장|설정|바꿔|입력)(?:해\s*줘|해\s*주세요|해|줘)?$/i) ||
+    clean.match(/(?:F|상용구\s*)([1-9]|10)\s*번?(?:에|에는|을|를|슬롯에)?\s*["'“”]?(.+?)["'“”]?\s*(?:넣어|등록|저장|설정|바꿔|입력)(?:해\s*줘|해\s*주세요|\s*주세요|해|줘)?$/i) ||
     clean.match(/^(?:F|상용구\s*)([1-9]|10)\s*[:=-]\s*(.+)$/i);
   if (snippetMatch) {
     const slotKey = `F${snippetMatch[1]}`;
@@ -1745,7 +1751,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
 ): Promise<MonsterChatMessage | null> {
   const recentAssistantMsgs = sharedChatState.messages.filter((m) => m.role === 'assistant');
   const lastAssistantText = recentAssistantMsgs[recentAssistantMsgs.length - 1]?.text || '';
-  const isSimpleYes = /^(응|네|넹|예|좋아|좋아요|ㅇㅇ|ㅇㅋ|오케이|ok|그래|해줘|알려줘|뭔데|뭔지\s*알려줘|궁금해)$/i.test(clean);
+  const isSimpleYes = /^(응|네|넹|예|좋아|좋아요|ㅇㅇ|ㅇㅋ|오케이|ok|그래|해\s*줘|해\s*주세요|알려\s*줘|알려\s*주세요|뭔데|뭔지\s*알려\s*(?:줘|주세요)|궁금해|궁금해요)$/i.test(clean);
 
   // 0-A) 은행·관공서 보안프로그램 전부 원래 자동실행 설정으로 1초 완전 복구
   if (/(은행.*?보안\s*프로그램.*?(원래|원복|복구|해제|되돌려)|보안\s*프로그램.*?(원래대로|원상\s*복구|절전\s*해제))/i.test(clean)) {
@@ -1962,7 +1968,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
   }
 
   // 3) 다운로드 폴더 열어서 최근 압축파일 자동 포커스(explorer /select) 후 더블클릭·우클릭 1초 압축 풀기 바로 써보기
-  if (/다운로드\s*폴더\s*열어.*?(우클릭|더블클릭|압축|써보|확인)|1초\s*압축\s*풀기\s*써보/i.test(clean)) {
+  if (/다운로드\s*폴더\s*열어.*?(우클릭|더블클릭|압축|써\s*보|확인)|1초\s*압축\s*풀기\s*써\s*보/i.test(clean)) {
     const openRes = await fetch(getZCoreUrl('/api/care/open-downloads'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -2723,7 +2729,7 @@ export async function processUnifiedMonsterChatQuery(params: {
   // 서류 검색(SEARCH_ROUTING)이나 외부 AI 바톤터치(BATON_TOUCH_CUTOFF)로 빠지는 현상을 원천 차단합니다!
   const isCleanupActionStatusVerification =
     !/속도|cpu|메모리|램|ram|빨라/i.test(clean) &&
-    /(진행\s*된\s*거|진행된거|진행\s*한\s*거|진행한거|진행\s*됐|진행됐|진행\s*했|진행했|정리\s*된\s*거|정리된거|정리\s*한\s*거|정리한거|정리\s*됐|정리됐|정리\s*했|정리했|다\s*된\s*거|다된거|다\s*됐|다됐|완료\s*된\s*거|완료된거|완료\s*됐|완료됐|끝난\s*거|끝났어)/i.test(
+    /(진행\s*된\s*(?:거|건가)|진행된거|진행\s*한\s*(?:거|건가)|진행한거|진행\s*됐|진행됐|진행\s*했|진행했|정리\s*된\s*(?:거|건가)|정리된거|정리\s*한\s*(?:거|건가)|정리한거|정리\s*됐|정리됐|정리\s*했|정리했|다\s*된\s*(?:거|건가)|다된거|다\s*됐|다됐|완료\s*된\s*(?:거|건가)|완료된거|완료\s*됐|완료됐|끝난\s*(?:거|건가)|끝났어|끝났나)/i.test(
       clean
     );
 
@@ -2805,7 +2811,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       clean
     ) ||
       (Boolean(lastSpecMsgEarly || lastSpeedCleanMsgEarly) &&
-        /(개선된|세이브|줄어든|된\s*거야|된거야|한\s*거야|한거야|만\s*세이브|왜\s*(그래|그대로|안\s*줄|남아|여전히\s*느려)|차이가|효과가)/i.test(
+        /(개선된|세이브|줄어든|된\s*거야|된거야|된\s*건가|한\s*거야|한거야|한\s*건가|만\s*세이브|왜\s*(그래|그대로|안\s*줄|남아|여전히\s*느려)|차이가|효과가)/i.test(
           clean
         )));
 
@@ -3389,7 +3395,7 @@ export async function processUnifiedMonsterChatQuery(params: {
   // 0-A) 우리 앱·기기·설정 키워드와 무관한 범위 밖 질문은 차갑게 거절하지 않고
   //      3단계 원칙에 따라 대화 내용을 클립보드에 복사해 두고 외부 AI로 바로 점프시켜 주는 버튼을 제공합니다 (무토큰 0원).
   const hasAnyAppOrPcCue =
-    /귀신|여권|라벨러|초능력|상용구|별명|닉네임|호칭|프로필|계정|로그인|가입|동기화|연동|요금|구독|결제|환불|해지|특판|무료|유료|모임|라운지|문패|캐스트|리모컨|싱크|알림|검진|손없는\s*날|손\s*없는\s*날|단축키|우클릭|ctrl|컨트롤|클립보드|복사|붙여넣기|오타|한영|서식|줄바꿈|합본|ocr|컴퓨터|피씨|pc|노트북|스마트폰|휴대폰|폰|갤러리|사진첩|바탕화면|다운로드|폴더|파일|문서|사진|영상|엑셀|워드|한글|파워포인트|사양|스펙|속도|느려|느린|느리|버벅|렉|애드웨어|구라|점유율|프로세스|백그라운드|최적화|빠르게|용량|메모리|램|ram|cpu|그래픽|글카|배그|롤|게임|편집|포토샵|프리미어|프린터|인쇄|와이파이|인터넷|블루투스|소리|스피커|음성|목소리|화면|글씨|글자|테마|다크|라이트|주사율|팝업|광고|보안|백신|바이러스|랜섬웨어|디펜더|시작프로그램|부팅|재부팅|바로가기|아이콘|복원|되돌|취소|휴지통|사라|없어|날아|복구|찾아|검색|치워|정리|고쳐|손봐|손보|수리|설치|exe|apk|msi|zip|pdf|드라이브|윈도우|에러|오류|버그|먹통|멈춤|꺼졌|스튜디오|문의|건의|제안|아이디어|진행|실행|완료|끝났|된\s*거야|된거야|한\s*거야|한거야|됐어|했어|승인|동의/i.test(
+    /귀신|여권|라벨러|초능력|상용구|별명|닉네임|호칭|프로필|계정|로그인|가입|동기화|연동|요금|구독|결제|환불|해지|특판|무료|유료|모임|라운지|문패|캐스트|리모컨|싱크|알림|검진|손없는\s*날|손\s*없는\s*날|단축키|우클릭|ctrl|컨트롤|클립보드|복사|붙여넣기|오타|한영|서식|줄바꿈|합본|ocr|컴퓨터|피씨|pc|노트북|스마트폰|휴대폰|폰|갤러리|사진첩|바탕화면|다운로드|폴더|파일|문서|사진|영상|엑셀|워드|한글|파워포인트|사양|스펙|속도|느려|느린|느리|버벅|렉|애드웨어|구라|점유율|프로세스|백그라운드|최적화|빠르게|용량|메모리|램|ram|cpu|그래픽|글카|배그|롤|게임|편집|포토샵|프리미어|프린터|인쇄|와이파이|인터넷|블루투스|소리|스피커|음성|목소리|화면|글씨|글자|테마|다크|라이트|주사율|팝업|광고|보안|백신|바이러스|랜섬웨어|디펜더|시작프로그램|부팅|재부팅|바로가기|아이콘|복원|되돌|취소|휴지통|사라|없어|날아|복구|찾아|검색|치워|정리|고쳐|손봐|손보|수리|설치|exe|apk|msi|zip|pdf|드라이브|윈도우|에러|오류|버그|먹통|멈춤|꺼졌|스튜디오|문의|건의|제안|아이디어|진행|실행|완료|끝났|된\s*거야|된거야|된\s*건가|한\s*거야|한거야|한\s*건가|됐어|됐나|했어|했나|승인|동의/i.test(
       clean
     );
   if (!hasAnyAppOrPcCue) {
@@ -3411,36 +3417,15 @@ export async function processUnifiedMonsterChatQuery(params: {
         userQuestion: clean,
       },
       followUpSuggestions: [
-        '내 컴퓨터 사양으로 영상편집이나 게임 잘 돌아가는지 봐줘',
-        '다운로드 폴더 방치된 설치파일 정리해 줘',
-        '어제 보던 파일이 사라졌는데 찾아줘',
+        '내 컴퓨터 사양으로 영상편집이나 게임 잘 돌아가는지 봐 주세요',
+        '다운로드 폴더 방치된 설치파일 정리해 주세요',
+        '어제 보던 파일이 사라졌는데 찾아 주세요',
       ],
     });
   }
 
-  // 내 PC 실시간 사양/상태(~200토큰) 컨텍스트 + 저가 LLM(Gemini 2.5 Flash) JSON 판단 호출
-  const pcCtx = await fetchRealtimePcContextForLlm();
-  const recentTurns = sharedChatState.messages
-    .filter((m) => m.id !== 'monster_welcome_init')
-    .slice(-6)
-    .map((m) => ({ role: m.role, text: m.text }));
-
-  const llmDecision = await callMonsterLowCostLlmJson({
-    query: clean,
-    sourceTab,
-    literacyLevel,
-    pcContextText: pcCtx.summaryText,
-    recentTurns,
-  });
-
-  const hasLlm = Boolean(llmDecision && llmDecision.replyKo);
+  // 0-0) [무토큰 초고속 패스] 정형화된 로컬 진단·정리·복원·수리 명령은 외부 LLM 네트워크 대기(3~6초) 없이 0.05초 만에 직결!
   const isSyntheticMissingTest = /없는파일_테스트|카톡받은_영수증캡처_01\.jpg/i.test(clean);
-  const llmIntro = llmDecision?.replyKo ? `💬 ${llmDecision.replyKo}\n\n` : '';
-  const defaultFollowUps = llmDecision?.followUpSuggestions?.length
-    ? llmDecision.followUpSuggestions
-    : undefined;
-
-  // 0-0) [즉시 처치] 애드웨어·보안 쓰레기·CPU 과점유·느린 속도/시작프로그램 강제종료 및 1초 건강검진/최적화 실행 요청
   const isDirectSlowOrAdwareFix =
     /(애드웨어|광고\s*프로그램|보안\s*프로그램|보안\s*모듈|보안\s*쓰레기|구라|시작\s*프로그램|cpu\s*점유|과점유|속도\s*최적화).*?(정리|강제\s*종료|종료|고쳐|해결|꺼|끄|없애|치워|잡아)/i.test(
       clean
@@ -3449,6 +3434,68 @@ export async function processUnifiedMonsterChatQuery(params: {
       clean
     ) ||
     /(1초\s*건강\s*검진|건강\s*검진\s*(해\s*줘|해\s*주세요|실행|시작))/i.test(clean);
+
+  const isSpeedOrStatusQuestionFastCheck =
+    !/바탕화면|다운로드|폴더|설치\s*파일|잡파일|스크린샷|\.exe|\.zip|\.apk|\.msi/i.test(clean) &&
+    /(속도|개선|빨라|세이브|점유율|부하|상태\s*어때|상태\s*봐|사양|스펙|잘\s*됐|된\s*거야|된거야|된\s*건가|한\s*거야|한거야|한\s*건가|메모리|램|ram|cpu)/i.test(
+      clean
+    );
+
+  const hasPriorSpecMsgFastCheck = sharedChatState.messages.some(
+    (m) => m.role === 'assistant' && m.cardKind === 'PC_SPEC_CONSULTATION' && Boolean(m.pcSpecPayload)
+  );
+
+  const shouldSkipLlmForFastLocalAction =
+    isDirectSlowOrAdwareFix ||
+    /복원\s*기록|히스토리|되돌려|원래대로|타임머신|정리한\s*거\s*취소|#\d+/i.test(clean) ||
+    isSyntheticMissingTest ||
+    /없어졌|사라졌|증발|지웠|날아갔|어디\s*갔|휴지통|복구해|못\s*찾겠|저장\s*안\s*하고/i.test(clean) ||
+    /바로가기|바탕화면에\s*꺼내|아이콘\s*만들|자주\s*가는\s*(카페|사이트|유튜브|은행)/i.test(clean) ||
+    (!isSpeedOrStatusQuestionFastCheck &&
+      /바탕화면|다운로드|폴더|정리|치워|숨겨|설치\s*파일|apk|exe|msi|보안\s*프로그램|구라제거|anysign|magicline|veraport|touchen|부팅\s*느려|시작\s*프로그램|자동\s*실행/i.test(
+        clean
+      )) ||
+    (hasPriorSpecMsgFastCheck &&
+      /(개선된|세이브된|줄어든|된\s*거야|된거야|된\s*건가|한\s*거야|한거야|한\s*건가|만\s*세이브|왜\s*(그래|그대로|안\s*줄|남아)|얼마나\s*(줄|빨라|개선)|차이가|효과가)/i.test(
+        clean
+      )) ||
+    /느려|느린|느리|속도|버벅|답답|애드웨어|사양|스펙|돌아가|배그|포토샵|프리미어|영상\s*편집|롤|게임|램|ram|메모리|글카|그래픽|cpu|주사율|60hz|144hz|업그레이드/i.test(
+      clean
+    ) ||
+    /독소\s*조항|소송|세금\s*계산|법률|변호사|번역해|요약해|메인보드\s*타|전원\s*안\s*켜|액정\s*깨/i.test(clean) ||
+    /고클린|구라제거기|버벅|렉\s*풀|응급\s*리셋|핸들\s*누수|재부팅|부팅\s*경과|켜\s*둔\s*지|경과\s*시간|안\s*끄고|보안\s*프로그램|보안\s*쓰레기|부팅\s*컨디션|알약|바이러스|랜섬웨어|백신|디펜더|defender|악성코드|방어막/i.test(
+      clean
+    ) ||
+    /프린터|인쇄|스풀러|와이파이|인터넷|네트워크|블루투스|소리|스피커|글씨|화면|주사율|광고|팝업|s\s*드라이브|고쳐/i.test(
+      clean
+    );
+
+  // 자유 일상 상담일 때만 내 PC 컨텍스트 + 저가 LLM(Gemini 2.5 Flash) 호출 (정형 명령은 즉시 통과!)
+  const pcCtx = shouldSkipLlmForFastLocalAction
+    ? { fetchedAt: Date.now(), summaryText: '' }
+    : await fetchRealtimePcContextForLlm();
+  const recentTurns = shouldSkipLlmForFastLocalAction
+    ? []
+    : sharedChatState.messages
+        .filter((m) => m.id !== 'monster_welcome_init')
+        .slice(-6)
+        .map((m) => ({ role: m.role, text: m.text }));
+
+  const llmDecision = shouldSkipLlmForFastLocalAction
+    ? null
+    : await callMonsterLowCostLlmJson({
+        query: clean,
+        sourceTab,
+        literacyLevel,
+        pcContextText: pcCtx.summaryText,
+        recentTurns,
+      });
+
+  const hasLlm = Boolean(llmDecision && llmDecision.replyKo);
+  const llmIntro = llmDecision?.replyKo ? `💬 ${llmDecision.replyKo}\n\n` : '';
+  const defaultFollowUps = llmDecision?.followUpSuggestions?.length
+    ? llmDecision.followUpSuggestions
+    : undefined;
 
   if (isDirectSlowOrAdwareFix) {
     const isMobileRuntime =
@@ -3818,7 +3865,7 @@ export async function processUnifiedMonsterChatQuery(params: {
   //    속도·상태 확인 질문을 했을 때는 LLM이 CLEANUP_FOLDER_REORG를 반환하더라도 절대 다운로드 .zip/파일 정리 스캔으로 들어가지 않음!
   const isSpeedOrStatusQuestionNotFolderCleanup =
     !/바탕화면|다운로드|폴더|설치\s*파일|잡파일|스크린샷|\.exe|\.zip|\.apk|\.msi/i.test(clean) &&
-    /(속도|개선|빨라|세이브|점유율|부하|상태\s*어때|상태\s*봐|사양|스펙|잘\s*됐|된\s*거야|된거야|메모리|램|ram|cpu)/i.test(clean);
+    /(속도|개선|빨라|세이브|점유율|부하|상태\s*어때|상태\s*봐|사양|스펙|잘\s*됐|된\s*거야|된거야|된\s*건가|한\s*거야|한거야|한\s*건가|메모리|램|ram|cpu)/i.test(clean);
 
   if (
     !isSpeedOrStatusQuestionNotFolderCleanup &&
@@ -3976,7 +4023,7 @@ export async function processUnifiedMonsterChatQuery(params: {
         cleanupPreview,
         shortformTip: tipRes.tip,
         llmActionJson: actionJson,
-        followUpSuggestions: defaultFollowUps,
+        followUpSuggestions: defaultFollowUps || actionJson.followUpSuggestions,
       }
     );
   }
@@ -3988,7 +4035,7 @@ export async function processUnifiedMonsterChatQuery(params: {
   const lastSpecMsg = [...recentAssistantMessages].reverse().find((m) => m.cardKind === 'PC_SPEC_CONSULTATION' && m.pcSpecPayload);
   const isFollowUpAboutPriorSpec =
     Boolean(lastSpecMsg) &&
-    (/(개선된|세이브된|줄어든|된\s*거야|된거야|한\s*거야|한거야|만\s*세이브|왜\s*(그래|그대로|안\s*줄|남아)|얼마나\s*(줄|빨라|개선)|차이가|효과가)/i.test(
+    (/(개선된|세이브된|줄어든|된\s*거야|된거야|된\s*건가|한\s*거야|한거야|한\s*건가|만\s*세이브|왜\s*(그래|그대로|안\s*줄|남아)|얼마나\s*(줄|빨라|개선)|차이가|효과가)/i.test(
       clean
     ) ||
       (hasLlm && llmDecision?.intent === 'GENERAL_CONVERSATION'));

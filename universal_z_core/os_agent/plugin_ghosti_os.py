@@ -3548,92 +3548,106 @@ MUTATING_ACTIONS = {
 import threading
 
 _INSPECT_CACHE_LOCK = threading.Lock()
-
 _SPEC_CACHE_LOCK = threading.Lock()
-
 _CACHED_OS_INSPECT_DATA: Dict[str, Any] | None = None
-
 _CACHED_OS_INSPECT_TS: float = 0.0
-
+_OS_INSPECT_REFRESHING: bool = False
 _CACHED_PC_SPEC_DATA: Dict[str, Any] | None = None
-
 _CACHED_PC_SPEC_TS: float = 0.0
+_PC_SPEC_REFRESHING: bool = False
+
+_OS_INSPECT_FRESH_TTL_SEC = 28.0
+_PC_SPEC_FRESH_TTL_SEC = 60.0
 
 
+def _refresh_os_inspect_bg() -> None:
+    global _CACHED_OS_INSPECT_DATA, _CACHED_OS_INSPECT_TS, _OS_INSPECT_REFRESHING
+    try:
+        with _INSPECT_CACHE_LOCK:
+            res = zos.inspect_real_pc_state()
+            _CACHED_OS_INSPECT_DATA = res
+            _CACHED_OS_INSPECT_TS = time.perf_counter()
+    except Exception:
+        pass
+    finally:
+        _OS_INSPECT_REFRESHING = False
 
+
+def _refresh_pc_spec_bg() -> None:
+    global _CACHED_PC_SPEC_DATA, _CACHED_PC_SPEC_TS, _PC_SPEC_REFRESHING
+    try:
+        with _SPEC_CACHE_LOCK:
+            res = safe.measure_pc_spec()
+            _CACHED_PC_SPEC_DATA = res
+            _CACHED_PC_SPEC_TS = time.perf_counter()
+    except Exception:
+        pass
+    finally:
+        _PC_SPEC_REFRESHING = False
+
+
+def _prewarm_caches_async() -> None:
+    global _OS_INSPECT_REFRESHING, _PC_SPEC_REFRESHING
+    if not _PC_SPEC_REFRESHING:
+        _PC_SPEC_REFRESHING = True
+        threading.Thread(target=_refresh_pc_spec_bg, daemon=True).start()
+    if not _OS_INSPECT_REFRESHING:
+        _OS_INSPECT_REFRESHING = True
+        threading.Thread(target=_refresh_os_inspect_bg, daemon=True).start()
 
 
 def _invalidate_os_inspect_cache() -> None:
-
     global _CACHED_OS_INSPECT_DATA, _CACHED_OS_INSPECT_TS, _CACHED_PC_SPEC_DATA, _CACHED_PC_SPEC_TS
-
     _CACHED_OS_INSPECT_DATA = None
-
     _CACHED_OS_INSPECT_TS = 0.0
-
     _CACHED_PC_SPEC_DATA = None
-
     _CACHED_PC_SPEC_TS = 0.0
-
-
-
+    _prewarm_caches_async()
 
 
 def _get_cached_os_inspect(force: bool = False) -> Dict[str, Any]:
-
-    global _CACHED_OS_INSPECT_DATA, _CACHED_OS_INSPECT_TS
-
+    global _CACHED_OS_INSPECT_DATA, _CACHED_OS_INSPECT_TS, _OS_INSPECT_REFRESHING
     now = time.perf_counter()
-
-    if not force and _CACHED_OS_INSPECT_DATA is not None and (now - _CACHED_OS_INSPECT_TS) < 4.0:
-
+    if not force and _CACHED_OS_INSPECT_DATA is not None:
+        if (now - _CACHED_OS_INSPECT_TS) < _OS_INSPECT_FRESH_TTL_SEC:
+            return _CACHED_OS_INSPECT_DATA
+        if not _OS_INSPECT_REFRESHING:
+            _OS_INSPECT_REFRESHING = True
+            threading.Thread(target=_refresh_os_inspect_bg, daemon=True).start()
         return _CACHED_OS_INSPECT_DATA
 
     with _INSPECT_CACHE_LOCK:
-
         now2 = time.perf_counter()
-
-        if not force and _CACHED_OS_INSPECT_DATA is not None and (now2 - _CACHED_OS_INSPECT_TS) < 4.0:
-
+        if not force and _CACHED_OS_INSPECT_DATA is not None and (now2 - _CACHED_OS_INSPECT_TS) < _OS_INSPECT_FRESH_TTL_SEC:
             return _CACHED_OS_INSPECT_DATA
-
         res = zos.inspect_real_pc_state()
-
         _CACHED_OS_INSPECT_DATA = res
-
         _CACHED_OS_INSPECT_TS = time.perf_counter()
-
         return res
-
-
-
 
 
 def _get_cached_pc_spec(force: bool = False) -> Dict[str, Any]:
-
-    global _CACHED_PC_SPEC_DATA, _CACHED_PC_SPEC_TS
-
+    global _CACHED_PC_SPEC_DATA, _CACHED_PC_SPEC_TS, _PC_SPEC_REFRESHING
     now = time.perf_counter()
-
-    if not force and _CACHED_PC_SPEC_DATA is not None and (now - _CACHED_PC_SPEC_TS) < 15.0:
-
+    if not force and _CACHED_PC_SPEC_DATA is not None:
+        if (now - _CACHED_PC_SPEC_TS) < _PC_SPEC_FRESH_TTL_SEC:
+            return _CACHED_PC_SPEC_DATA
+        if not _PC_SPEC_REFRESHING:
+            _PC_SPEC_REFRESHING = True
+            threading.Thread(target=_refresh_pc_spec_bg, daemon=True).start()
         return _CACHED_PC_SPEC_DATA
 
     with _SPEC_CACHE_LOCK:
-
         now2 = time.perf_counter()
-
-        if not force and _CACHED_PC_SPEC_DATA is not None and (now2 - _CACHED_PC_SPEC_TS) < 15.0:
-
+        if not force and _CACHED_PC_SPEC_DATA is not None and (now2 - _CACHED_PC_SPEC_TS) < _PC_SPEC_FRESH_TTL_SEC:
             return _CACHED_PC_SPEC_DATA
-
         res = safe.measure_pc_spec()
-
         _CACHED_PC_SPEC_DATA = res
-
         _CACHED_PC_SPEC_TS = time.perf_counter()
-
         return res
+
+
+_prewarm_caches_async()
 
 
 
@@ -3766,7 +3780,10 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
     if act in ("boot-lag-care", "boot_lag_care"):
         sub = str(data.get("subAction") or data.get("mode") or "diagnose").strip()
         param = str(data.get("targetParam") or data.get("scheduleTime") or "04:00").strip()
-        return zos.run_boot_lag_care(sub, param)
+        res_boot = zos.run_boot_lag_care(sub, param)
+        if "clean" in sub.lower():
+            _invalidate_os_inspect_cache()
+        return res_boot
 
     if act in ("defender-security-check", "defender_security_check", "defender-check"):
         sub = str(data.get("subAction") or data.get("mode") or "status").strip()
