@@ -1300,7 +1300,16 @@ def create_mission(
         else:
             clean_title = f"🎯 [1귀신] {clean_title}"
 
-    if track_select_name and track_select_name.strip() in ("UX", "로직"):
+    if "[1귀신]" in clean_title:
+        clean_title = clean_title.replace("🟢", "🟣").replace("[UX]", "[로직]")
+        if "[로직]" not in clean_title:
+            clean_title = clean_title.replace("[1귀신]", "[1귀신] [로직]", 1)
+        if not clean_title.startswith("🟣"):
+            clean_title = "🟣 " + clean_title.lstrip("🎯🟢🟣 ")
+
+    if "[1귀신]" in clean_title:
+        resolved_track = "로직"
+    elif track_select_name and track_select_name.strip() in ("UX", "로직"):
         resolved_track = track_select_name.strip()
     elif "[로직]" in clean_title or "🟣" in clean_title:
         resolved_track = "로직"
