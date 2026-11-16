@@ -1093,6 +1093,18 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
         .font-story-kr { font-family: 'Gowun Batang', 'Batang', serif; }
         .font-code-kr { font-family: 'JetBrains Mono', 'Pretendard', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; letter-spacing: 0; }
         .borderless-shape { border: none !important; }
+        @media (max-width: 639px) {
+          .showroom-fit-1line {
+            font-size: clamp(10px, 2.95vw, 12px) !important;
+            line-height: 1.35 !important;
+            letter-spacing: -0.03em !important;
+          }
+          .showroom-photo-cap {
+            font-size: clamp(10px, 2.85vw, 11.5px) !important;
+            line-height: 1.3 !important;
+            letter-spacing: -0.03em !important;
+          }
+        }
       `}</style>
       {/* 1. 최상단 마스터 GNB */}
       <header className="sticky top-0 z-50 backdrop-blur-xl bg-[#070B11]/85 border-b border-white/10 transition-all">
@@ -1375,7 +1387,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
             {/* 좌측 (7칸): 임팩트 타이포그래피 & 한눈에 보는 무료 핵심 4종 스탯 카드 */}
             <div className="lg:col-span-7 space-y-4">
-              <div className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full bg-white/10 border border-[#00F0B5]/40 text-[#00F0B5] text-[10.5px] sm:text-[13px] tracking-tighter sm:tracking-normal font-black whitespace-nowrap break-keep">
+              <div className="showroom-fit-1line inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full bg-white/10 border border-[#00F0B5]/40 text-[#00F0B5] sm:text-[13px] font-black whitespace-nowrap break-keep max-w-full">
                 <span className="shrink-0">⚡</span>
                 <span>광고 0% · 클라우드 월세 0원 · PC·모바일 초능력</span>
               </div>
@@ -1677,7 +1689,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
             {/* 4대 무료 핵심 무기 스킬 카드 (클릭 시 우측 단일 스테이지 즉시 전환) */}
             <div className="p-3.5 bg-zinc-900/90 border-t border-white/10 space-y-2">
-              <div className="text-[10.5px] sm:text-[13px] tracking-tighter sm:tracking-normal font-extrabold text-teal-300 flex items-center justify-between gap-1.5 sm:gap-2 px-0.5 sm:px-1 whitespace-nowrap">
+              <div className="showroom-fit-1line sm:text-[13px] font-extrabold text-teal-300 flex items-center justify-between gap-1.5 sm:gap-2 px-0.5 sm:px-1 whitespace-nowrap">
                 <span className="whitespace-nowrap">👇 보고 싶은 초능력 카드를 톡 눌러보세요!</span>
                 <span className="text-zinc-400 shrink-0 whitespace-nowrap">우측 즉시 시연</span>
               </div>
@@ -1751,7 +1763,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           {/* -----------------------------------------------------------------
               👉 우측 (7칸): 비주얼 인터랙티브 체험 스테이지 (실제 사진·프리뷰 탑재)
              ----------------------------------------------------------------- */}
-          <div className="lg:col-span-7 flex flex-col justify-between rounded-3xl bg-gradient-to-b from-zinc-900/95 to-zinc-950/95 border-2 border-teal-500/40 px-6 py-12 sm:px-8 sm:py-14 lg:px-9 lg:py-16 shadow-[0_25px_70px_rgba(0,0,0,0.65)] space-y-7">
+          <div className="lg:col-span-7 flex flex-col justify-between rounded-3xl bg-gradient-to-b from-zinc-900/95 to-zinc-950/95 border-2 border-teal-500/40 px-3.5 py-6 sm:px-8 sm:py-14 lg:px-9 lg:py-16 shadow-[0_25px_70px_rgba(0,0,0,0.65)] space-y-7">
             {/* 스테이지 상단 헤더 */}
             <div className="flex flex-wrap items-center justify-between gap-3.5 pb-4 border-b border-white/10">
               <div>
@@ -2182,7 +2194,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                         <div
                           data-keep-dark="true"
                           style={{ background: 'linear-gradient(145deg, #07131E 0%, #0B1F2A 100%)' }}
-                          className="rounded-2xl border border-teal-400/40 p-5 sm:p-6 space-y-4"
+                          className="rounded-2xl border border-teal-400/40 p-3.5 sm:p-6 space-y-4 overflow-hidden"
                         >
                           {/* 샘플 PC 라벨 + 속도 게이지 */}
                           <div className="flex flex-wrap items-center justify-between gap-3">
@@ -2287,14 +2299,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           </div>
 
                           {/* 상시 안심 고정 문구 */}
-                          <div className="flex flex-wrap gap-2 text-[11.5px] sm:text-xs font-extrabold">
-                            <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep">
+                          <div className="flex flex-wrap gap-1.5 sm:gap-2 font-extrabold">
+                            <span className="showroom-fit-1line sm:text-xs px-2 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep max-w-full">
                               🔒 마음대로 지우지 않아요 (지운 프로그램 {deletedCount}개)
                             </span>
-                            <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep">
+                            <span className="showroom-fit-1line sm:text-xs px-2 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep max-w-full">
                               ✋ 내가 고른 것만
                             </span>
-                            <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep">
+                            <span className="showroom-fit-1line sm:text-xs px-2 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep max-w-full">
                               ↩️ 지운 프로그램 {deletedCount}개 · 1초 원상복구
                             </span>
                           </div>
@@ -2303,7 +2315,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     })()}
 
                     {cleanSubTab === 'photo' && (
-                  <div className="rounded-2xl bg-zinc-950 border border-teal-500/40 p-6 sm:p-7 space-y-5">
+                  <div className="rounded-2xl bg-zinc-950 border border-teal-500/40 p-3.5 sm:p-7 space-y-5 overflow-hidden">
                     <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
                       <div className="space-y-1">
                         <h4 className="text-[15px] sm:text-base font-black text-white break-keep">
@@ -2390,12 +2402,20 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                 : 'border-white/15'
                             }`}
                           >
-                            <div className="aspect-[16/10] w-full overflow-hidden">
+                            <div className="relative aspect-[16/10] w-full overflow-hidden">
                               <img
                                 src={shot.img}
                                 alt={shot.label}
                                 className={`w-full h-full object-cover transition-all ${shot.imgClass}`}
                               />
+                              {shot.best && (
+                                <span
+                                  style={{ backgroundColor: '#00F0B5', color: '#020617' }}
+                                  className="showroom-photo-cap absolute top-1.5 right-1.5 px-1.5 py-0.5 rounded sm:text-xs font-black shadow shrink-0"
+                                >
+                                  보존
+                                </span>
+                              )}
                             </div>
                             <div
                               data-keep-dark="true"
@@ -2404,22 +2424,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                   ? 'rgba(6, 78, 59, 0.92)'
                                   : 'rgba(9, 17, 30, 0.88)',
                               }}
-                              className="px-2.5 py-1.5 flex items-center justify-between gap-1 text-xs"
+                              className="px-2 py-1.5 flex items-center justify-center gap-1 sm:text-xs"
                             >
                               <span
                                 style={{ color: shot.best ? '#5EEAD4' : '#E2E8F0' }}
-                                className="font-black truncate"
+                                className="showroom-photo-cap font-black whitespace-nowrap break-keep"
                               >
                                 {isMovedToTrash ? '🗑️ 휴지통 안전 격리' : shot.label}
                               </span>
-                              {shot.best && (
-                                <span
-                                  style={{ backgroundColor: '#00F0B5', color: '#020617' }}
-                                  className="px-1.5 py-0.5 rounded text-xs font-black shrink-0"
-                                >
-                                  보존
-                                </span>
-                              )}
                             </div>
                           </div>
                         );
@@ -2427,14 +2439,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     </div>
 
                     {/* 상시 안심 고정 문구 (사진 정리) */}
-                    <div className="flex flex-wrap gap-2 text-[11.5px] sm:text-xs font-extrabold">
-                      <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep">
+                    <div className="flex flex-wrap gap-1.5 sm:gap-2 font-extrabold">
+                      <span className="showroom-fit-1line sm:text-xs px-2 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep max-w-full">
                         🗑️ 바로 지우지 않고 Windows 휴지통으로
                       </span>
-                      <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep">
+                      <span className="showroom-fit-1line sm:text-xs px-2 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep max-w-full">
                         ↩️ 언제든 1초 복원
                       </span>
-                      <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep">
+                      <span className="showroom-fit-1line sm:text-xs px-2 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep max-w-full">
                         ✋ 내가 확인한 것만 정리
                       </span>
                     </div>
