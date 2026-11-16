@@ -1927,8 +1927,7 @@ async function captureHighResFramesForVideoOcr(
           if (!seekOk) continue;
           const vw = videoEl.videoWidth || 640;
           const vh = videoEl.videoHeight || 360;
-          const maxDim = Math.max(vw, vh);
-          const scale = maxDim < 1100 ? Math.min(2, 1440 / maxDim) : Math.min(1, 1440 / maxDim);
+          const scale = Math.min(1, 1280 / Math.max(vw, vh));
           canvas.width = Math.max(160, Math.round(vw * scale));
           canvas.height = Math.max(90, Math.round(vh * scale));
           ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);

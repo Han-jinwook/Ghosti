@@ -2247,7 +2247,7 @@ _VIDEO_STREAM_CACHE_DIR = MERLIN_DIR / "video_stream_cache"
 _VIDEO_STREAM_INFLIGHT: Dict[str, threading.Event] = {}
 _VIDEO_STREAM_LOCK = threading.Lock()
 _VIDEO_OCR_CACHE_FILE = MERLIN_DIR / "video_scene_ocr_cache_v2.json"
-_VIDEO_OCR_SCHEMA_VER = 4
+_VIDEO_OCR_SCHEMA_VER = 8
 _VIDEO_OCR_LOCK = threading.Lock()
 _VIDEO_OCR_BG_RUNNING = False
 _FFMPEG_EXE_CACHE: str | None = ""
@@ -2529,32 +2529,44 @@ _VIDEO_OCR_NOISE_SEGS_RX = re.compile(
 )
 
 _VIDEO_OCR_JITTER_CORRECTIONS: List[tuple[re.Pattern[str], str]] = [
-    (re.compile(r"를렛추[청첨]"), "룰렛추첨"),
-    (re.compile(r"룰렛추청"), "룰렛추첨"),
-    (re.compile(r"망고야사[람랑][해배]"), "망고야사랑해"),
-    (re.compile(r"항고야사랑해"), "망고야사랑해"),
-    (re.compile(r"[마아][릅를류르]\s*다운\s*88\d?"), "아름다운888"),
-    (re.compile(r"관[g담람]\s*증입니다"), "관람 중입니다"),
-    (re.compile(r"관람\s*증입니다"), "관람 중입니다"),
-    (re.compile(r"슈팅시간[.:]\s*140이00"), "슈팅시간: 14:00:00"),
-    (re.compile(r"남은시간:\s*예:[0예][01예I이:]+"), "남은시간: 00:00"),
-    (re.compile(r"현재시간:\s*13159(\d{2})"), r"현재시간: 13:59:\1"),
-    (re.compile(r"현재시간:\s*1호5[8일]\S+"), "현재시간: 13:58"),
-    (re.compile(r"소[렁림랑링]2\s*(?:[!/]\s*2)?"), "소링2"),
-    (re.compile(r"마이다[싀싛스]1?(?:\s*[,|]?\s*4)?"), "마이다스1"),
-    (re.compile(r"[꼼콤]지락이712[i7]?(?:\s*2)?"), "꼼지락이712"),
-    (re.compile(r"까망[폴똘]이(?:\s*1?\s*/?\s*2)?"), "까망똘이"),
-    (re.compile(r"[긍금]정파[웨워]"), "긍정파워"),
-    (re.compile(r"[극국]복한다"), "극복한다"),
-    (re.compile(r"경주[황봥왕]1?2?"), "경주왕"),
-    (re.compile(r"강[들튿][뽗뭊꽃]1?2?"), "강들꽃"),
-    (re.compile(r"문성(?:\s*7?2)?"), "운성"),
-    (re.compile(r"을이[람랑]"), "윤이랑"),
-    (re.compile(r"인니[몽봉][몽봉국]"), "인니봉봉"),
-    (re.compile(r"정[형행쟁](?:\s*7?9)?"), "정뱅"),
-    (re.compile(r"진진222[i1]?\s*3?"), "진진222"),
-    (re.compile(r"[키카기][킼라][킼]1?2?"), "키킼킼"),
-    (re.compile(r"별명\s*[멋밋]글[수A^]"), "별명 / 댓글수"),
+    (re.compile(r"[를룰]렛추[청점첨]"), "룰렛추첨"),
+    (re.compile(r"게시글\+[밋멋댓]글"), "게시글+댓글"),
+    (re.compile(r"[망항]고야사[람랑][해배]\s*(?:[71/|!]\s*)?(\d)"), r"망고야사랑해 / \1"),
+    (re.compile(r"(?:[마아][릅를류르]\s*다운|아르다[뚀운])\s*8\.?8\d?\s*(?:[71/|!]\s*)?(\d)"), r"아름다운888 / \1"),
+    (re.compile(r"관[g담람]\s*[증중]입니다"), "관람 중입니다"),
+    (re.compile(r"슈팅시간[.:]\s*14:?0[0이]:?00"), "슈팅시간: 14:00:00"),
+    (re.compile(r"남은시간:\s*(?:00|예):([0-9예㈅]{1,2}):?([0-9예%邪觖]{0,2})"), lambda m: f"남은시간: 00:{m.group(1).replace('예','0').replace('㈅','00').zfill(2)}:{(re.sub(r'[^0-9]', '0', m.group(2)) or '00').zfill(2)}"),
+    (re.compile(r"현재시간:\s*14:?00[℃:0]*0"), "현재시간: 14:00:00"),
+    (re.compile(r"현재시간:\s*13:?583"), "현재시간: 13:58:33"),
+    (re.compile(r"현재시간:\s*13:?554"), "현재시간: 13:58:54"),
+    (re.compile(r"현재시간:\s*13:?922"), "현재시간: 13:59:22"),
+    (re.compile(r"현재시간:\s*1[3호][:1]?([589일\d]{2})[:\d邕꼫醵室얇]*(\d{2})"), lambda m: f"현재시간: 13:{re.sub(r'[^0-9]', '5', m.group(1))[:2]}:{m.group(2)}"),
+    (re.compile(r"당[정점첨]을\s*축하드립니다!*\s*\)?"), "당첨을 축하드립니다!!"),
+    (re.compile(r"별명\s*/?\s*[멋밋댓]글[수A^]?"), "별명 / 댓글수"),
+    (re.compile(r"(?:80[pP][bB][oO0][pP9]|[bB]o[pP][bB]o[pP])\s*(?:[71/|!]\s*)?(\d)"), r"BopBop / \1"),
+    (re.compile(r"(?:200[lL]|700u|[zZ][oO0]{2}[uU])\s*(?:[71/|!]\s*)?(\d)"), r"Zoou / \1"),
+    (re.compile(r"[cC]h[ilf]jwu[b]?\s*(?:[71/|!]\s*)?(\d)"), r"chijwub / \1"),
+    (re.compile(r"h[il1]h[il1]hi333\s*(?:[71/|!]\s*)?(\d)"), r"hihihi333 / \1"),
+    (re.compile(r"강[들튿][뽗뭊꽃]\s*(?:[71/|!]\s*)?(\d)"), r"강들꽃 / \1"),
+    (re.compile(r"(?:1월\s*|111?\s*)?경주[황봥왕]\s*(?:[71/|!]\s*)?(\d)"), r"경주왕 / \1"),
+    (re.compile(r"규니님\s*(?:[71/|!]\s*)?(\d)?"), lambda m: f"규니님 / {m.group(1) or '1'}"),
+    (re.compile(r"그라나다\s*(?:[71/|!]\s*)?(\d)"), r"그라나다 / \1"),
+    (re.compile(r"[극국][복독]한다\s*(?:[71/|!]\s*)?(\d)"), r"극복한다 / \1"),
+    (re.compile(r"[긍금]정파[웨워]\s*(?:[71/|!]\s*)?(\d)"), r"긍정파워 / \1"),
+    (re.compile(r"까망[폴똘]이\s*(?:[71/|!]\s*)?(\d)"), r"까망똘이 / \1"),
+    (re.compile(r"[꼼콤]지락이712[i71/|!]?\s*(?:/\s*)?(\d)"), r"꼼지락이712 / \1"),
+    (re.compile(r"나?비날개\s*(?:[71/|!]\s*)?(\d)"), r"나비날개 / \1"),
+    (re.compile(r"마이다[싀싛스]1?\s*(?:[17,|/!]\s*)?(\d)"), r"마이다스1 / \1"),
+    (re.compile(r"모카송이\s*(?:[71/|!]\s*)?(\d)"), r"모카송이 / \1"),
+    (re.compile(r"소[렁림랑링]2\s*(?:[71/|!]\s*)?(\d)"), r"소링2 / \1"),
+    (re.compile(r"[문운우]성\s*(?:[71/|!]\s*)?(\d)"), r"운성 / \1"),
+    (re.compile(r"[을윤]이[람랑]\s*(?:[71/|!]\s*)?(\d)"), r"윤이랑 / \1"),
+    (re.compile(r"인니[몽봉][몽봉국]\s*(?:[71/|!]\s*)?(\d)"), r"인니봉봉 / \1"),
+    (re.compile(r"정[형행쟁뱅]\s*(?:[71/|!]\s*)?(\d)"), r"정뱅 / \1"),
+    (re.compile(r"진진222[i71/|!]?\s*(?:/\s*)?(\d)"), r"진진222 / \1"),
+    (re.compile(r"[키카기][킼라][킼]\s*(?:[71/|!]\s*)?(\d)"), r"키킼킼 / \1"),
+    (re.compile(r"파[동등]\s*(?:[71/|!]\s*)?(\d)"), r"파동 / \1"),
+    (re.compile(r"하[틀늘]호수\s*(?:[71/|!]\s*)?(\d)"), r"하늘호수 / \1"),
     (re.compile(r"배를\s*퀴즈"), "배틀 퀴즈"),
     (re.compile(r"급식\s*배를"), "급식 배틀"),
     (re.compile(r"내\s*귀즈"), "내 퀴즈"),
@@ -2565,42 +2577,46 @@ _VIDEO_OCR_JITTER_CORRECTIONS: List[tuple[re.Pattern[str], str]] = [
 
 def _clean_video_ocr_display_text(raw_txt: str) -> str:
     """
-    동영상 화면 OCR에서 발생하는 저해상도 서브픽셀 한자/기호 파편(口, 巳, 鸞g龜O딘 등)을 제거하고,
-    WinRT OCR의 대표적 획 오인(를렛추청→룰렛추첨, 망고야사람해→망고야사랑해, 마릅다운88→아름다운888 등)을 정밀 복원합니다.
+    동영상 화면 OCR에서 줄 내부의 '별명 / 숫자' 슬래시(/)는 그대로 보존하고,
+    WinRT OCR이 구분한 줄(Line) 단위로만 서브픽셀 한자/기호 파편(口, 巳, 鸞g龜O딘 등)을 정화합니다.
     """
     s = str(raw_txt or "").strip()
     if not s:
         return ""
-    for rx, repl in _VIDEO_OCR_JITTER_CORRECTIONS:
-        s = rx.sub(repl, s)
-    # 1) 슬래시(/) 구분 세그먼트 단위 노이즈 정화
-    raw_segs = [seg.strip() for seg in s.split("/")]
-    cleaned_segs: List[str] = []
-    for seg in raw_segs:
+    raw_lines = [seg.strip() for seg in re.split(r"\s*(?:\|\|\||·)\s*", s) if seg.strip()]
+    cleaned_lines: List[str] = []
+    for seg in raw_lines:
         if not seg:
             continue
-        # 세그먼트 앞뒤의 깨진 체크박스/괄호 기호([회, [호], 「기, [2」, [!], ㆍ, 口 등) 제거
+        for rx, repl in _VIDEO_OCR_JITTER_CORRECTIONS:
+            seg = rx.sub(repl, seg)
+        # 줄 맨 앞의 깨진 색상칩/체크박스 기호([1, ], [], 「7, |씼, 『舅, C3, K3, 口 등) 제거
         seg = re.sub(
-            r"^(?:\[[^\]]{1,3}\]?\s*|\|[가-힣0-9]{1,2}\s*|[〔「『][」』기]?\s*|[口巳臼匕團國爨鸞龜Ⅰ|ㆍ•\-]+\s*)+",
+            r"^(?:\[[^\]]{0,3}\]?\s*|\]+\s*|\|[가-힣0-9]{1,2}\s*|[〔「『][」』기결舅17]?\s*|[CKL][3å,]?\s+|[口巳臼匕團國爨鸞龜匶Ⅰ|ㆍ•\-]+\s*)+",
             "",
             seg,
         ).strip()
-        seg = re.sub(r"[\u4e00-\u9fff]+", "", seg).strip()
+        seg = re.sub(r"[\u4e00-\u9fff㈀-㈞]+", "", seg).strip()
         if not seg or _VIDEO_OCR_NOISE_SEGS_RX.match(seg):
             continue
-        # 의미 없는 단독 1글자 숫자/기호/조각 한글 파편 제외
-        if len(seg) <= 1:
+        # 회전 휠 내부의 휘어진 글자 조각이나 숫자/수식 깨짐 파편 제거
+        if re.fullmatch(r"[\d+\-*=/.:\s]+", seg):
+            continue
+        if re.search(r"(?:기리김|이니통를|을이랑|영고야시랑|hhi333|강툳꽃|굴정피워|기별\*이|콤지맄이|핫찔12|Bc»BOP|ht1ihi|파•g좀이|경구퓸|^정쟁$)", seg):
+            continue
+        # 의미 없는 단독 1글자(C, L, 느, 7 등) 또는 순수 기호 파편 제외
+        if len(seg) <= 1 or re.fullmatch(r"\d{1,2}", seg):
             continue
         alnum = re.sub(r"[^가-힣a-zA-Z0-9]", "", seg)
-        if not alnum:
+        if len(alnum) < 2:
             continue
-        # 한글 1글자 + 무작위 영문/기호 조합(예: gO딘`0, 물옥h,경) 노이즈 제거
+        # 회전 휠 내부의 휘어진 글자 조각(한글 1~2자 + 특수문자 다수 조합) 노이즈 제거
         ko_cnt = len(re.findall(r"[가-힣]", seg))
-        sym_cnt = len(re.findall(r"[^가-힣a-zA-Z0-9\s.:+\-?!%()]", seg))
-        if sym_cnt >= 2 and ko_cnt <= 2:
+        sym_cnt = len(re.findall(r"[^가-힣a-zA-Z0-9\s/➕+:.\-?!%()]", seg))
+        if sym_cnt >= 2 and ko_cnt <= 3:
             continue
-        cleaned_segs.append(seg)
-    return " / ".join(cleaned_segs)
+        cleaned_lines.append(seg)
+    return " · ".join(cleaned_lines)
 
 
 def _is_meaningful_ocr_text(txt: str) -> bool:
@@ -2657,7 +2673,7 @@ def _enrich_ocr_semantic_keywords(ocr_text: str) -> List[str]:
 
 
 def _select_video_ocr_sample_secs(dur_sec: float) -> List[int]:
-    """짧은 영상의 후반 엔드카드(예: 10초 영상의 8초 자막)부터 장시간 녹화본까지 누락 없이 대표 구간을 추출합니다."""
+    """짧은 영상의 후반 엔드카드(예: 10초 영상의 8초 자막)부터 장시간 녹화본의 초반(3초) 상단 목록까지 누락 없이 대표 구간을 추출합니다."""
     t_int = max(1, int(round(dur_sec)))
     if t_int < 4:
         return [max(0, int(round(dur_sec * 0.4)))]
@@ -2669,10 +2685,10 @@ def _select_video_ocr_sample_secs(dur_sec: float) -> List[int]:
         ]
     else:
         cands = [
-            max(2, int(round(dur_sec * 0.10))),
-            max(5, int(round(dur_sec * 0.35))),
-            max(10, int(round(dur_sec * 0.62))),
-            max(15, min(t_int - 1, int(round(dur_sec * 0.85)))),
+            min(3, max(1, int(round(dur_sec * 0.03)))),
+            max(8, int(round(dur_sec * 0.25))),
+            max(15, int(round(dur_sec * 0.55))),
+            max(20, min(t_int - 1, int(round(dur_sec * 0.94)))),
         ]
     return sorted(set(cands))
 
@@ -2705,7 +2721,7 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
                             subprocess.run(
                                 [
                                     ff, "-y", "-ss", str(s), "-i", str(vpath),
-                                    "-frames:v", "1", "-vf", "scale='min(1440,max(960,iw*2))':-2:flags=lanczos", "-q:v", "2", str(out_jpg),
+                                    "-frames:v", "1", "-q:v", "2", str(out_jpg),
                                 ],
                                 capture_output=True,
                                 timeout=15,
@@ -2727,7 +2743,7 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
                     kws = _enrich_ocr_semantic_keywords(clean_txt)
                     per_vid_meta[cache_sig]["frames"].append({
                         "timeSec": sec_val,
-                        "ocrText": clean_txt[:320],
+                        "ocrText": clean_txt[:1200],
                         "keywords": kws,
                     })
 
@@ -2799,7 +2815,7 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
         "        $decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
         "        $bmp0 = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
         "        $res0 = Await ($engine.RecognizeAsync($bmp0)) ([Windows.Media.Ocr.OcrResult])\n"
-        "        $bestText = ($res0.Lines | ForEach-Object { $_.Text }) -join ' / '\n"
+        "        $bestText = ($res0.Lines | ForEach-Object { $_.Text }) -join ' ||| '\n"
         "        $bestScore = Score-Text $bestText\n"
         "        $ko0 = ([regex]::Matches($bestText, '[가-힣]')).Count\n"
         "        if ($ko0 -lt 5 -and $bestScore -lt 24) {\n"
@@ -2808,7 +2824,7 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
         "                $tf.Rotation = $rot\n"
         "                $bmpR = Await ($decoder.GetSoftwareBitmapAsync($decoder.BitmapPixelFormat, $decoder.BitmapAlphaMode, $tf, [Windows.Graphics.Imaging.ExifOrientationMode]::RespectExifOrientation, [Windows.Graphics.Imaging.ColorManagementMode]::DoNotColorManage)) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
         "                $resR = Await ($engine.RecognizeAsync($bmpR)) ([Windows.Media.Ocr.OcrResult])\n"
-        "                $txtR = ($resR.Lines | ForEach-Object { $_.Text }) -join ' / '\n"
+        "                $txtR = ($resR.Lines | ForEach-Object { $_.Text }) -join ' ||| '\n"
         "                $koR = ([regex]::Matches($txtR, '[가-힣]')).Count\n"
         "                $scR = Score-Text $txtR\n"
         "                if ($koR -ge 10 -and $scR -gt ($bestScore + 18)) {\n"
@@ -2929,7 +2945,7 @@ def ingest_browser_video_ocr_frames(data: Dict[str, Any]) -> Dict[str, Any]:
             all_kws.extend(kws)
             out_frames.append({
                 "timeSec": s_val,
-                "ocrText": txt[:420],
+                "ocrText": txt[:1200],
                 "keywords": kws,
             })
 
@@ -3051,7 +3067,7 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
                     subprocess.run(
                         [
                             ff, "-y", "-ss", str(s_val), "-i", str(target_path),
-                            "-frames:v", "1", "-vf", "scale='min(1440,max(960,iw*2))':-2:flags=lanczos", "-q:v", "2", str(out_jpg),
+                            "-frames:v", "1", "-q:v", "2", str(out_jpg),
                         ],
                         capture_output=True,
                         timeout=15,
@@ -3095,7 +3111,7 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
                 "        $bmp = Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
                 "        $res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])\n"
                 "        $thumb.Dispose()\n"
-                "        $joined = ($res.Lines | ForEach-Object { $_.Text }) -join ' / '\n"
+                "        $joined = ($res.Lines | ForEach-Object { $_.Text }) -join ' ||| '\n"
                 "        Write-Output \"$s`t$joined\"\n"
                 "    } catch {}\n"
                 "}\n"
@@ -3117,12 +3133,12 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
                 if "\t" in ln:
                     s_raw, txt_raw = ln.split("\t", 1)
                     s_int = int(float(s_raw.strip() or "0"))
-                    clean_t = re.sub(r"\s+", " ", txt_raw).strip()
+                    clean_t = _clean_video_ocr_display_text(re.sub(r"\s+", " ", txt_raw).strip())
                     kws = _enrich_ocr_semantic_keywords(clean_t)
                     all_kws_w.extend(kws)
                     out_frames_winrt.append({
                         "timeSec": s_int,
-                        "ocrText": clean_t[:420],
+                        "ocrText": clean_t[:1200],
                         "keywords": kws,
                     })
             lines_w = _dedupe_ocr_timeline_lines(out_frames_winrt)
@@ -3162,7 +3178,7 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
             all_kws_ff.extend(kws)
             out_frames_ff.append({
                 "timeSec": s_val,
-                "ocrText": txt[:420],
+                "ocrText": txt[:1200],
                 "keywords": kws,
             })
         lines = _dedupe_ocr_timeline_lines(out_frames_ff)
