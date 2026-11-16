@@ -514,7 +514,11 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   const [b2bFocused, setB2bFocused] = useState<boolean>(() => {
     try {
       const params = new URLSearchParams(window.location.search);
-      return params.get('from') === 'b2b' || window.location.hash === '#work-share';
+      return (
+        params.get('from') === 'b2b' ||
+        /[?&]from=b2b\b/i.test(window.location.href) ||
+        window.location.hash === '#work-share'
+      );
     } catch {
       return false;
     }
@@ -524,7 +528,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     const syncB2bFocus = () => {
       try {
         const params = new URLSearchParams(window.location.search);
-        const isB2b = params.get('from') === 'b2b' || window.location.hash === '#work-share';
+        const isB2b =
+          params.get('from') === 'b2b' ||
+          /[?&]from=b2b\b/i.test(window.location.href) ||
+          window.location.hash === '#work-share';
         if (isB2b) {
           setB2bFocused(true);
           // [SSOT v2.2 ③] 중간으로 강제 스크롤하지 않고 최상단 B2B 전용 요약 뷰를 우선 노출
@@ -536,7 +543,11 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     };
     syncB2bFocus();
     window.addEventListener('hashchange', syncB2bFocus);
-    return () => window.removeEventListener('hashchange', syncB2bFocus);
+    window.addEventListener('popstate', syncB2bFocus);
+    return () => {
+      window.removeEventListener('hashchange', syncB2bFocus);
+      window.removeEventListener('popstate', syncB2bFocus);
+    };
   }, []);
 
   // 좌측 귀신비서 채팅창 ⇄ 우측 단일 인터랙티브 체험 스테이지 상태 (100% 독립 안전 상태)
@@ -1235,6 +1246,49 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             )}
           </div>
         </div>
+
+        {/* 모바일 전용 4알약 GNB 바 (모바일 화면에서도 4알약이 잘리지 않고 노출·작동하도록 보장) */}
+        <nav className="md:hidden max-w-7xl mx-auto px-4 pb-2.5 flex items-center gap-1.5 overflow-x-auto text-[12px] font-extrabold whitespace-nowrap">
+          <button
+            type="button"
+            onClick={() =>
+              document.getElementById('interactive-demo')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }
+            className="px-3 py-1 rounded-full bg-[#00F0B5]/15 text-[#00F0B5] border border-[#00F0B5]/50 cursor-pointer whitespace-nowrap shrink-0"
+          >
+            ⚡ 4대 무료 초능력
+          </button>
+          {!isStoreAppMode && (
+            <button
+              type="button"
+              onClick={() => {
+                setB2bFocused(true);
+                document.getElementById('extensions')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+              }}
+              className="px-3 py-1 rounded-full bg-zinc-900/90 text-amber-300 border border-amber-400/35 cursor-pointer whitespace-nowrap shrink-0"
+            >
+              💼 기기·업무 확장
+            </button>
+          )}
+          <button
+            type="button"
+            onClick={() =>
+              document.getElementById('shorts')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }
+            className="px-3 py-1 rounded-full bg-zinc-900/90 text-zinc-300 border border-white/10 cursor-pointer whitespace-nowrap shrink-0"
+          >
+            🎬 15초 예고편
+          </button>
+          <button
+            type="button"
+            onClick={() =>
+              document.getElementById('manifesto')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+            }
+            className="px-3 py-1 rounded-full bg-zinc-900/90 text-zinc-300 border border-white/10 cursor-pointer whitespace-nowrap shrink-0"
+          >
+            📜 브랜드 선언문
+          </button>
+        </nav>
       </header>
 
       {/* =====================================================================
@@ -1321,9 +1375,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
             {/* 좌측 (7칸): 임팩트 타이포그래피 & 한눈에 보는 무료 핵심 4종 스탯 카드 */}
             <div className="lg:col-span-7 space-y-4">
-              <div className="inline-flex flex-wrap items-center gap-2 px-3.5 py-1.5 rounded-full bg-white/10 border border-[#00F0B5]/40 text-[#00F0B5] text-[13px] font-black">
-                <span>⚡</span>
-                <span>광고 0% · 클라우드 월세 0원 · PC·모바일 초능력</span>
+              <div className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-full bg-white/10 border border-[#00F0B5]/40 text-[#00F0B5] text-[11.5px] sm:text-[13px] font-black whitespace-nowrap break-keep max-w-full">
+                <span className="shrink-0">⚡</span>
+                <span className="truncate">광고 0% · 클라우드 월세 0원 · PC·모바일 초능력</span>
               </div>
 
               {/* 붓글씨 캘리그라피 + 대표 헤드라인(H1 18자 심장 타격) + 서브 헤드라인(H2) */}
@@ -1623,9 +1677,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
             {/* 4대 무료 핵심 무기 스킬 카드 (클릭 시 우측 단일 스테이지 즉시 전환) */}
             <div className="p-3.5 bg-zinc-900/90 border-t border-white/10 space-y-2">
-              <div className="text-[13px] font-extrabold text-teal-300 flex items-center justify-between px-1">
-                <span>👇 보고 싶은 초능력 카드를 톡 눌러보세요!</span>
-                <span className="text-zinc-400">우측 즉시 시연</span>
+              <div className="text-[12px] sm:text-[13px] font-extrabold text-teal-300 flex items-center justify-between gap-2 px-1 whitespace-nowrap">
+                <span className="truncate">👇 보고 싶은 초능력 카드를 톡 눌러보세요!</span>
+                <span className="text-zinc-400 shrink-0 whitespace-nowrap">우측 즉시 시연</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
                 {(['video', 'doc', 'clean', 'share', 'superpower'] as OnboardingWeaponTab[]).map((tabKey, chipIdx, arr) => {

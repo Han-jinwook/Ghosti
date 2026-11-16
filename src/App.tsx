@@ -150,7 +150,11 @@ export const App: React.FC = () => {
         return 'workspace';
       }
       const params = new URLSearchParams(window.location.search);
-      if (params.get('view') === 'showroom') {
+      const isB2bEntry =
+        params.get('from') === 'b2b' ||
+        /[?&]from=b2b\b/i.test(window.location.href) ||
+        window.location.hash === '#work-share';
+      if (params.get('view') === 'showroom' || isB2bEntry) {
         return 'showroom';
       }
       if (
@@ -210,7 +214,7 @@ export const App: React.FC = () => {
     try {
       const params = new URLSearchParams(window.location.search);
       if (nav.viewMode === 'showroom') {
-        params.set('view', 'showroom');
+        params.delete('view');
         params.delete('lounge');
         params.delete('tab');
         params.delete('room');
@@ -287,8 +291,13 @@ export const App: React.FC = () => {
         normalizeFamilyRoomParam(savedNav?.familyRoom) ||
         urlRoom ||
         useSaySeeStore.getState().activeFamilyRoom;
+      const isB2bUrl =
+        params.get('from') === 'b2b' ||
+        /[?&]from=b2b\b/i.test(window.location.href) ||
+        window.location.hash === '#work-share';
+      const hasExplicitWorkspaceUrl = Boolean(urlLounge || urlTab || hasInviteLink || params.get('dev') === 'true');
       const targetView: 'showroom' | 'workspace' =
-        urlView === 'showroom'
+        urlView === 'showroom' || isB2bUrl || !hasExplicitWorkspaceUrl
           ? 'showroom'
           : savedNav?.viewMode || viewMode;
 
