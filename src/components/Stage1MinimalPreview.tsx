@@ -7,7 +7,11 @@ import {
   resolveVideoCardThumbUrl,
 } from '../services/aiEngine';
 import { executeRealOsAction } from '../services/setupMonsterEngine';
-import { renderHighlightedDocText } from './PricingModal';
+import {
+  renderHighlightedDocText,
+  maskSensitiveDocText,
+  formatQuickKoreanLabelForFile,
+} from './PricingModal';
 import {
   requestConnectMyComputer,
   zCoreBridge,
@@ -1193,7 +1197,7 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
 
                       <p className="font-body-sm text-[12px] text-zinc-400 line-clamp-2 leading-relaxed bg-zinc-950/80 p-2.5 rounded-xl border border-white/5">
                         {renderHighlightedDocText(
-                          doc.extractedText,
+                          maskSensitiveDocText(doc.extractedText),
                           hasExecutedUserSearch ? activeQuery : ''
                         )}
                       </p>
@@ -1201,7 +1205,21 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
 
                     <div className="flex items-center justify-between pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400 gap-2">
                       <span>{doc.date}</span>
-                      <div className="flex items-center gap-1.5">
+                      <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            const newLabel = formatQuickKoreanLabelForFile(doc.fileName, doc.date, doc.title);
+                            void navigator.clipboard?.writeText(newLabel);
+                            useSaySeeStore.setState({
+                              lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${doc.fileName} ➔ ${newLabel} (클립보드에 한글 라벨명 복사됨)`,
+                            });
+                          }}
+                          className="px-2 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/50 text-teal-200 font-label-sm text-[11px] font-extrabold transition-colors cursor-pointer"
+                        >
+                          🏷️ 이 파일 귀신라벨링🔒
+                        </button>
                         <button
                           type="button"
                           onClick={(e) => {
@@ -1314,17 +1332,38 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                           </span>
                         </button>
 
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setOcrModalPhoto(item.photo);
-                          }}
-                          title="귀신검색창에서 이 사진의 별도 독립 사진·OCR 창(창 UI ③)을 열어 글자·표를 추출합니다"
-                          className="absolute bottom-10 right-2.5 z-10 px-2.5 py-1 rounded-lg bg-zinc-950/90 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/60 font-label-sm text-[11px] font-black shadow-md transition-all cursor-pointer"
-                        >
-                          📝 OCR
-                        </button>
+                        <div className="absolute bottom-10 right-2.5 z-10 flex items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              const newLabel = formatQuickKoreanLabelForFile(
+                                item.photo.name,
+                                item.photo.date,
+                                item.photo.tags
+                              );
+                              void navigator.clipboard?.writeText(newLabel);
+                              useSaySeeStore.setState({
+                                lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${item.photo.name} ➔ ${newLabel} (클립보드에 한글 라벨명 복사됨)`,
+                              });
+                            }}
+                            title="기계적 파일명을 촬영일·내용 기반 한글 라벨명(YYMMDD_내용)으로 생성·복사합니다"
+                            className="px-2 py-1 rounded-lg bg-zinc-950/90 hover:bg-amber-400 text-amber-200 hover:text-zinc-950 border border-amber-400/60 font-label-sm text-[10.5px] font-black shadow-md transition-all cursor-pointer"
+                          >
+                            🏷️ 이 파일 귀신라벨링🔒
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setOcrModalPhoto(item.photo);
+                            }}
+                            title="귀신검색창에서 이 사진의 별도 독립 사진·OCR 창(창 UI ③)을 열어 글자·표를 추출합니다"
+                            className="px-2.5 py-1 rounded-lg bg-zinc-950/90 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/60 font-label-sm text-[11px] font-black shadow-md transition-all cursor-pointer"
+                          >
+                            📝 OCR
+                          </button>
+                        </div>
 
                         <div className="absolute inset-x-0 bottom-0 h-[22%] min-h-[44px] px-3 pb-2.5 pt-4 bg-gradient-to-t from-black/90 via-black/55 to-transparent flex items-end justify-between gap-2 pointer-events-none">
                           <span className="font-label-sm text-[11.5px] font-semibold text-white whitespace-nowrap shrink-0">

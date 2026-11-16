@@ -17,7 +17,10 @@ import {
   LoungeIndexingWaitingRoom,
   LoungeView,
 } from '../../components/LoungeView';
-import { renderHighlightedDocText } from '../../components/PricingModal';
+import {
+  renderHighlightedDocText,
+  maskSensitiveDocText,
+} from '../../components/PricingModal';
 import { GhostSearchTrainingPage } from '../../components/ghostDojo/GhostSearchTrainingPage';
 import { GhostSecretaryFirstGuard } from '../../components/GhostSecretaryFirstGuard';
 import { useDashboardNavStore } from '../shared/dashboardNavState';
@@ -143,7 +146,7 @@ export const GhostSearchPane: React.FC<{
                         </div>
                       </div>
                       <div className="text-[11px] text-slate-300 leading-relaxed line-clamp-8 whitespace-pre-line bg-black/30 p-2.5 rounded-lg border border-white/5">
-                        {topDoc.extractedText || '문서 본문 미리보기 준비 완료'}
+                        {maskSensitiveDocText(topDoc.extractedText) || '문서 본문 미리보기 준비 완료'}
                       </div>
                       <button
                         type="button"
@@ -513,7 +516,7 @@ export const GhostSearchPane: React.FC<{
 
                             <p className="font-body-sm text-[12px] text-zinc-400 line-clamp-2 leading-relaxed bg-zinc-950/80 p-2.5 rounded-xl border border-white/5">
                               {renderHighlightedDocText(
-                                doc.extractedText,
+                                maskSensitiveDocText(doc.extractedText),
                                 hasExecutedUserSearch ? activeQuery : ''
                               )}
                             </p>

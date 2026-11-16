@@ -2390,24 +2390,31 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
                         🎯 핵심 추출 항목 (클릭하면 즉시 복사)
                       </span>
                       <div className="flex flex-col gap-1.5 max-h-[165px] overflow-y-auto pr-1">
-                        {ocrResult.spots.map((sp) => (
-                          <button
-                            key={sp.id}
-                            type="button"
-                            onClick={() => void handleCopyText(sp.insertValue, `[${sp.categoryHint}]`)}
-                            className="w-full text-left px-3 py-2 rounded-xl bg-zinc-900 hover:bg-teal-500/20 border border-white/15 hover:border-teal-400 flex items-center justify-between gap-2 cursor-pointer transition-colors"
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 text-[10px] font-black shrink-0">
-                                {sp.categoryHint}
-                              </span>
-                              <span className="font-mono text-[12px] text-white font-bold truncate">
-                                {sp.displayText}
-                              </span>
-                            </div>
-                            <span className="text-[10.5px] font-black text-teal-300 shrink-0">복사 ↵</span>
-                          </button>
-                        ))}
+                        {ocrResult.spots.map((sp) => {
+                          const rawSp = sp as unknown as Record<string, string | undefined>;
+                          const hintLabel = sp.categoryHint || rawSp.label || '추출 항목';
+                          const dispVal = sp.displayText || rawSp.value || '';
+                          const insertVal = sp.insertValue || rawSp.value || dispVal;
+                          if (!dispVal) return null;
+                          return (
+                            <button
+                              key={sp.id}
+                              type="button"
+                              onClick={() => void handleCopyText(insertVal, `[${hintLabel}]`)}
+                              className="w-full text-left px-3 py-2 rounded-xl bg-zinc-900 hover:bg-teal-500/20 border border-white/15 hover:border-teal-400 flex items-center justify-between gap-2 cursor-pointer transition-colors"
+                            >
+                              <div className="flex items-center gap-2 min-w-0">
+                                <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 text-[10px] font-black shrink-0">
+                                  {hintLabel}
+                                </span>
+                                <span className="font-mono text-[12px] text-white font-bold truncate">
+                                  {dispVal}
+                                </span>
+                              </div>
+                              <span className="text-[10.5px] font-black text-teal-300 shrink-0">복사 ↵</span>
+                            </button>
+                          );
+                        })}
                       </div>
                     </div>
                   )}

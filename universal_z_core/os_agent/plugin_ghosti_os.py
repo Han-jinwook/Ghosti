@@ -1415,6 +1415,69 @@ def _extract_pdf_streams_text_pure(entry: Path) -> str:
     return ""
 
 
+def _normalize_winrt_ocr_ligatures(text: str) -> str:
+    if not text:
+        return ""
+    s = text
+    replacements = (
+        ("회원전용 얩", "회원전용 앱"),
+        ("럼그 계산기", "램프 계산기"),
+        ("Safari에서 일기", "Safari에서 열기"),
+        ("우원카페", "우리카페"),
+        ("구카페", "우리카페"),
+        ("실구마자의", "실구매자의"),
+        ("5,000P 학력", "5,000P 혜택"),
+        ("이메일 인즉", "이메일 인증"),
+        ("브라우저로 풀기", "브라우저로 열기"),
+        ("홀 화면에", "홈 화면에"),
+    )
+    for bad, good in replacements:
+        if bad in s:
+            s = s.replace(bad, good)
+    return s
+
+
+def _prepare_deunderlined_image_if_needed(img_path: Path, tmp_dir: Path) -> Path | None:
+    """
+    텍스트 하단에 1px 수평 실선 밑줄이 맞닿아 있어 WinRT OCR이 글자 획과 밑줄을 한 덩어리로 오독하는 현상을 방지합니다.
+    - 업스케일링 없이 원본 해상도 그대로, 바로 위 픽셀(y-1)에 글자 획이 없는 열의 밑줄 픽셀만 배경색(255)으로 분리합니다.
+    """
+    try:
+        from PIL import Image
+        import numpy as np
+
+        with Image.open(img_path) as im:
+            gray = np.array(im.convert("L"))
+            rgb = np.array(im.convert("RGB"))
+        h, w = gray.shape
+        if h < 12 or w < 40:
+            return None
+        not_white = gray < 238
+        row_counts = not_white.sum(axis=1)
+        changed = False
+        for y in range(2, h - 2):
+            c_prev = int(row_counts[y - 1])
+            c_cur = int(row_counts[y])
+            c_next = int(row_counts[y + 1])
+            if (
+                c_prev >= 40
+                and c_cur >= max(180, int(w * 0.55))
+                and c_cur > c_prev * 1.8
+                and c_cur > c_next * 1.8
+            ):
+                underline_only = not_white[y] & (~not_white[y - 1])
+                if int(underline_only.sum()) >= max(80, int(w * 0.25)):
+                    rgb[y, underline_only] = [255, 255, 255]
+                    changed = True
+        if not changed:
+            return None
+        out_p = tmp_dir / "deunderlined.png"
+        Image.fromarray(rgb).save(out_p)
+        return out_p
+    except Exception:
+        return None
+
+
 def _reconstruct_ocr_geometry_and_spots(ocr_data: Dict[str, Any]) -> Dict[str, Any]:
     raw_lines = ocr_data.get("lines") or []
     if isinstance(raw_lines, dict):
@@ -1459,7 +1522,7 @@ def _reconstruct_ocr_geometry_and_spots(ocr_data: Dict[str, Any]) -> Dict[str, A
 
     heights_sorted = sorted(heights) if heights else [18.0]
     med_h = heights_sorted[len(heights_sorted) // 2]
-    row_tol = max(11.0, med_h * 0.62)
+    row_tol = max(6.5, min(10.5, med_h * 0.42))
 
     flat_words.sort(key=lambda item: (item["cy"], item["x"]))
     clustered_rows: List[List[Dict[str, Any]]] = []
@@ -1468,11 +1531,17 @@ def _reconstruct_ocr_geometry_and_spots(ocr_data: Dict[str, Any]) -> Dict[str, A
         placed = False
         for idx_r, r_cy in enumerate(row_centers):
             if abs(wd["cy"] - r_cy) <= row_tol:
-                clustered_rows[idx_r].append(wd)
-                n_r = len(clustered_rows[idx_r])
-                row_centers[idx_r] = ((r_cy * (n_r - 1)) + wd["cy"]) / n_r
-                placed = True
-                break
+                has_x_overlap = any(
+                    (min(wd["x"] + wd["w"], ew["x"] + ew["w"]) - max(wd["x"], ew["x"]))
+                    > min(wd["w"], ew["w"]) * 0.35
+                    for ew in clustered_rows[idx_r]
+                )
+                if not has_x_overlap:
+                    clustered_rows[idx_r].append(wd)
+                    n_r = len(clustered_rows[idx_r])
+                    row_centers[idx_r] = ((r_cy * (n_r - 1)) + wd["cy"]) / n_r
+                    placed = True
+                    break
         if not placed:
             clustered_rows.append([wd])
             row_centers.append(wd["cy"])
@@ -1501,12 +1570,23 @@ def _reconstruct_ocr_geometry_and_spots(ocr_data: Dict[str, Any]) -> Dict[str, A
                 else:
                     cells.append(tok)
             prev_right = wd["x"] + wd["w"]
-        clean_cells = [re.sub(r"\s+", " ", c).strip() for c in cells if c.strip()]
+        clean_cells = [_normalize_winrt_ocr_ligatures(re.sub(r"\s+", " ", c).strip()) for c in cells if c.strip()]
         if clean_cells:
             table_rows.append(clean_cells)
             text_lines.append("  ".join(clean_cells))
 
-    full_text = "\n".join(text_lines).strip()
+    full_text = _normalize_winrt_ocr_ligatures("\n".join(text_lines).strip())
+    if not full_text or not _is_meaningful_ocr_text(full_text):
+        return {
+            "hasText": False,
+            "hasTable": False,
+            "fullText": "",
+            "tsvTable": "",
+            "tableRows": [],
+            "spots": [],
+            "chips": [],
+        }
+
     tsv_table = "\n".join("\t".join(r) for r in table_rows).strip()
     multi_col_rows = sum(1 for r in table_rows if len(r) >= 2)
     has_table = multi_col_rows >= 2
@@ -1519,19 +1599,28 @@ def _reconstruct_ocr_geometry_and_spots(ocr_data: Dict[str, Any]) -> Dict[str, A
         if not v_clean or v_clean in seen_spot_vals or len(spots) >= 12:
             return
         seen_spot_vals.add(v_clean)
-        spots.append({"id": f"sp_{len(spots) + 1}", "label": label, "value": v_clean})
+        spots.append({
+            "id": f"sp_{len(spots) + 1}",
+            "label": label,
+            "value": v_clean,
+            "categoryHint": label,
+            "displayText": v_clean,
+            "insertValue": v_clean,
+        })
 
     if text_lines:
         first_headline = re.sub(r"\s{2,}", " · ", text_lines[0]).strip()
         if len(first_headline) >= 2:
             _add_spot("첫 줄 제목/상호", first_headline[:60])
 
+    for m_url in re.findall(r"https?://[^\s,)\]]+", full_text):
+        _add_spot("웹사이트/링크", m_url)
     for m_biz in re.findall(r"\b\d{3}-\d{2}-\d{5}\b", full_text):
         _add_spot("사업자번호", m_biz)
     for m_tel in re.findall(r"\b(?:01[016789]|02|0[3-6][1-5]|1[568]\d{2})[-.\s]?\d{3,4}[-.\s]?\d{4}\b", full_text):
         _add_spot("전화번호", re.sub(r"\s+", "-", m_tel))
-    for m_money in re.findall(r"\b\d{1,3}(?:,\d{3})+(?:\s*원)?\b|\b\d{4,9}\s*원\b", full_text):
-        _add_spot("금액", m_money)
+    for m_money in re.findall(r"\b\d{1,3}(?:,\d{3})+(?:\s*[원Pp])?\b|\b\d{4,9}\s*[원Pp]\b", full_text):
+        _add_spot("금액/포인트", m_money)
     for m_date in re.findall(r"\b(?:19|20)\d{2}[-./년]\s*\d{1,2}[-./월]\s*\d{1,2}일?\b", full_text):
         _add_spot("날짜", m_date)
     for m_acct in re.findall(r"\b\d{3,6}-\d{2,6}-\d{4,8}\b", full_text):
@@ -1543,19 +1632,32 @@ def _reconstruct_ocr_geometry_and_spots(ocr_data: Dict[str, Any]) -> Dict[str, A
     for r in table_rows:
         for cell in r:
             c_trim = cell.strip("()[]{}'\"<>:;,. ")
-            if 2 <= len(c_trim) <= 36 and c_trim not in chips:
-                chips.append(c_trim)
+            if 2 <= len(c_trim) <= 42:
+                if c_trim not in chips:
+                    chips.append(c_trim)
+            elif len(c_trim) > 42:
+                for sub_part in re.split(r"\s*(?:->|→|\||(?<!\d),(?!\d)|·|/)\s*", c_trim):
+                    sp_clean = sub_part.strip("()[]{}'\"<>:;,. -")
+                    if 2 <= len(sp_clean) <= 42 and sp_clean not in chips:
+                        chips.append(sp_clean)
+                        if len(chips) >= 24:
+                            break
             if len(chips) >= 24:
                 break
         if len(chips) >= 24:
             break
 
-    # 핵심 셀 보강: spots가 3개 미만이면 표의 주요 셀도 spots에 추가
+    # 핵심 셀 보강: spots가 6개 미만이면 주요 셀/구절도 spots에 추가
     if len(spots) < 6:
         for ch_val in chips:
             if len(spots) >= 8:
                 break
-            _add_spot("추출 항목", ch_val)
+            _add_spot("핵심 구절", ch_val)
+    if len(spots) < 4:
+        for ln_txt in text_lines[1:6]:
+            if len(spots) >= 6:
+                break
+            _add_spot("본문 줄", ln_txt[:70])
 
     return {
         "hasText": bool(full_text),
@@ -1574,6 +1676,7 @@ def _run_winrt_image_ocr_raw(img_path: Path) -> Dict[str, Any]:
     creationflags = 0x08000000
     tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_img_ocr_"))
     try:
+        deunderlined_path = _prepare_deunderlined_image_if_needed(img_path, tmp_dir)
         ps_script = (
             "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
             "Add-Type -AssemblyName System.Runtime.WindowsRuntime\n"
@@ -1608,6 +1711,16 @@ def _run_winrt_image_ocr_raw(img_path: Path) -> Dict[str, Any]:
             "$bmp0 = Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
             "$bestRes = Await ($engine.RecognizeAsync($bmp0)) ([Windows.Media.Ocr.OcrResult])\n"
             "$bestSc = Score-Res $bestRes\n"
+            "if ($args.Count -ge 2 -and $args[1] -and (Test-Path -LiteralPath $args[1])) {\n"
+            "    $sfU = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($args[1])) ([Windows.Storage.StorageFile])\n"
+            "    $stU = Await ($sfU.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])\n"
+            "    $decU = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stU)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
+            "    $bmpU = Await ($decU.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
+            "    $resU = Await ($engine.RecognizeAsync($bmpU)) ([Windows.Media.Ocr.OcrResult])\n"
+            "    $scU = Score-Res $resU\n"
+            "    if ($scU -gt $bestSc) { $bestSc = $scU; $bestRes = $resU }\n"
+            "    $stU.Dispose()\n"
+            "}\n"
             "if ($bestSc -lt 18) {\n"
             "    foreach ($rot in @([Windows.Graphics.Imaging.BitmapRotation]::Clockwise90Degrees, [Windows.Graphics.Imaging.BitmapRotation]::Clockwise270Degrees)) {\n"
             "        $tf = New-Object Windows.Graphics.Imaging.BitmapTransform\n"
@@ -1633,8 +1746,11 @@ def _run_winrt_image_ocr_raw(img_path: Path) -> Dict[str, Any]:
         )
         ps_f = tmp_dir / "img_ocr.ps1"
         ps_f.write_text(ps_script, encoding="utf-8-sig")
+        cmd_args = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps_f), str(img_path)]
+        if deunderlined_path is not None:
+            cmd_args.append(str(deunderlined_path))
         proc = subprocess.run(
-            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps_f), str(img_path)],
+            cmd_args,
             capture_output=True,
             text=True,
             encoding="utf-8",
@@ -1693,7 +1809,7 @@ def extract_photo_winrt_ocr(params: Dict[str, Any] | None = None) -> Dict[str, A
                 b64_in = b64_in.split(",", 1)[1]
             raw_img_bytes = base64.b64decode(b64_in)
             digest = hashlib.sha1(raw_img_bytes).hexdigest()[:24]
-            cache_sig = f"b64_{digest}|v1"
+            cache_sig = f"b64_{digest}|v4"
             fd, tmp_name = tempfile.mkstemp(prefix="ghosti_ocr_b64_", suffix=".png")
             os.close(fd)
             temp_b64_file = Path(tmp_name)
@@ -1715,11 +1831,29 @@ def extract_photo_winrt_ocr(params: Dict[str, Any] | None = None) -> Dict[str, A
             if target_path is None or not target_path.exists():
                 return {"ok": False, "error": "IMAGE_NOT_FOUND"}
             st_i = target_path.stat()
-            cache_sig = f"{target_path}|{st_i.st_size}|{int(st_i.st_mtime)}|v1"
+            cache_sig = f"{target_path}|{st_i.st_size}|{int(st_i.st_mtime)}|v4"
 
         cache_map = _load_photo_ocr_cache()
         if not force and cache_sig in cache_map:
             cached_payload = dict(cache_map[cache_sig])
+            raw_spots = cached_payload.get("spots")
+            if isinstance(raw_spots, list):
+                norm_spots = []
+                for idx_s, sp in enumerate(raw_spots):
+                    if isinstance(sp, dict):
+                        lbl_s = str(sp.get("categoryHint") or sp.get("label") or "추출 항목").strip()
+                        val_s = str(sp.get("displayText") or sp.get("value") or sp.get("insertValue") or "").strip()
+                        ins_s = str(sp.get("insertValue") or val_s).strip()
+                        if val_s:
+                            norm_spots.append({
+                                "id": str(sp.get("id") or f"sp_{idx_s + 1}"),
+                                "label": lbl_s,
+                                "value": val_s,
+                                "categoryHint": lbl_s,
+                                "displayText": val_s,
+                                "insertValue": ins_s,
+                            })
+                cached_payload["spots"] = norm_spots
             cached_payload["ok"] = True
             cached_payload["cached"] = True
             return cached_payload

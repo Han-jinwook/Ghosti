@@ -38,6 +38,42 @@ _VIDEO_OCR_UI_CACHE: dict[str, Any] = {"ts": 0.0, "by_name": {}}
 _UI2_SMALL_THUMB_CACHE: dict[str, bytes] = {}
 
 
+def _mask_sensitive_doc_text(text: str) -> str:
+    if not text:
+        return ""
+    s = str(text)
+    s = re.sub(
+        r"((?:비밀번호|패스워드|비번|password|pw|pin|암호)\s*[:=]?\s*)([^\s,|\n)]+)",
+        r"\1••••••••",
+        s,
+        flags=re.IGNORECASE,
+    )
+    s = re.sub(
+        r"((?:주민등록번호|주민번호)\s*[:=]?\s*)(\d{6}\s*-\s*[1-4][0-9*\s]{4,8}|\d{13})",
+        r"\1••••••-•••••••",
+        s,
+        flags=re.IGNORECASE,
+    )
+    s = re.sub(
+        r"\b(\d{6})\s*-\s*([1-4][0-9*]{2,6}(?:\s*[0-9*]{1,4})?)\b",
+        r"\1-•••••••",
+        s,
+    )
+    s = re.sub(
+        r"((?:계좌번호|입금계좌|환불계좌|급여계좌|계좌)\s*[:=]?\s*(?:[가-힣A-Za-z]{2,10}(?:은행|뱅크|증권|금고|신협|우체국)?\s+)?)(\d{2,6})(?:[-\s]?(\d{2,6})[-\s]?(\d{2,8})|(\d{4,12}))",
+        r"\1\2-••••-••••",
+        s,
+        flags=re.IGNORECASE,
+    )
+    s = re.sub(
+        r"(\b(?:국민|신한|우리|하나|농협|기업|카카오|토스|케이|새마을|우체국|수협|신협|경남|광주|대구|부산|전북|제주|씨티|SC제일|IBK|KB|NH|SH)(?:은행|뱅크|중앙회|금고)?\s+\d{2,6}[-\s]?)\d{2,6}(?:[-\s]?\d{2,8})+",
+        r"\1••••-••••",
+        s,
+        flags=re.IGNORECASE,
+    )
+    return s
+
+
 def _get_or_make_small_thumb_bytes(img_path_str: str) -> bytes:
     if not img_path_str or Image is None:
         return b""
@@ -179,7 +215,8 @@ def build_ui2_search_window(
     init_mode = "large" if init_stage in ("large", "gallery") else "compact"
     st_state: dict[str, Any] = {
         "mode": init_mode,
-        "stage": "large" if init_mode == "large" else ("medium" if init_query.strip() else "small"),
+        "stage": "large" if init_mode == "large" else ("medium" if init_stage == "medium" or init_query.strip() else "small"),
+        "manual_stage": "medium" if init_stage == "medium" else ("large" if init_mode == "large" else None),
         "custom_h": None if init_mode == "large" else 330,
         "filter": "all",
         "sel_idx": 0,
@@ -253,22 +290,25 @@ def build_ui2_search_window(
 
     mute_btn.bind("<Button-1>", _toggle_snd)
 
-    mode_toggle_btn = tk.Label(
-        hdr,
-        text="⤡ 작게" if init_mode == "large" else "⤢ 크게(갤러리)",
-        fg="#0B1120" if init_mode == "large" else "#5EEAD4",
-        bg="#2DD4BF" if init_mode == "large" else "#1E293B",
-        padx=5,
-        pady=1,
-        font=("Malgun Gothic", 8, "bold"),
-        cursor="hand2",
-    )
-    mode_toggle_btn.pack(side="right", padx=(2, 0))
-    mode_toggle_btn.bind("<Button-1>", lambda _e: _toggle_window_mode())
+    stage_btns: dict[str, tk.Label] = {}
+    for st_k, st_txt in (("large", "크게"), ("medium", "중간"), ("small", "작게")):
+        sb = tk.Label(
+            hdr,
+            text=st_txt,
+            fg="#0B1120" if st_state["stage"] == st_k else "#5EEAD4",
+            bg="#2DD4BF" if st_state["stage"] == st_k else "#1E293B",
+            padx=4,
+            pady=1,
+            font=("Malgun Gothic", 8, "bold"),
+            cursor="hand2",
+        )
+        sb.pack(side="right", padx=(2, 0))
+        sb.bind("<Button-1>", lambda _e, sk=st_k: _set_explicit_stage(sk))
+        stage_btns[st_k] = sb
 
     lbl_quick_btn = tk.Label(
         hdr,
-        text="🏷️파일라벨러🔒",
+        text="🏷️ 이 파일 귀신라벨링🔒",
         fg="#0B1120",
         bg="#5EEAD4",
         padx=5,
@@ -283,7 +323,7 @@ def build_ui2_search_window(
             cur_r = st_state["items"][min(st_state["sel_idx"], len(st_state["items"]) - 1)]
             sel_fp = str(cur_r.get("file_path") or cur_r.get("img_path") or "").strip()
         close_win()
-        clicked_superpower_queue.put((2, sel_fp, False) if sel_fp else 2)
+        clicked_superpower_queue.put((2, sel_fp, True) if sel_fp else 2)
 
     lbl_quick_btn.bind("<Button-1>", _on_hdr_labeler)
 
@@ -367,14 +407,15 @@ def build_ui2_search_window(
             except Exception:
                 pass
 
-    def _toggle_window_mode(_e=None) -> str:
+    def _set_explicit_stage(target_st: str) -> str:
         is_hovered[0] = True
         opened_at[0] = time.time()
         was_mouse_down[0] = True
-        st_state["mode"] = "compact" if st_state["mode"] == "large" else "large"
-        record_feature_telemetry(
-            "ghost_search_window_large" if st_state["mode"] == "large" else "ghost_search_window_small"
-        )
+        st_state["manual_stage"] = target_st
+        st_state["mode"] = "large" if target_st == "large" else "compact"
+        st_state["stage"] = target_st
+        st_state["custom_h"] = 330 if target_st == "small" else None
+        record_feature_telemetry(f"ghost_search_window_{target_st}")
         _render_search_results()
         _resize_for_stage(activate=True)
         return "break"
@@ -641,18 +682,22 @@ def build_ui2_search_window(
         )
         prev_stage = st_state["stage"]
         prev_h = st_state.get("custom_h")
-        st_state["stage"] = auto_stage
-        st_state["custom_h"] = auto_slim_h
-        if auto_stage == "medium" and prev_stage != "medium":
-            record_feature_telemetry("ghost_search_window_medium")
+        if st_state.get("manual_stage") in ("small", "medium", "large"):
+            st_state["stage"] = st_state["manual_stage"]
+            st_state["custom_h"] = 330 if st_state["stage"] == "small" else None
+        else:
+            st_state["stage"] = auto_stage
+            st_state["custom_h"] = auto_slim_h
+            if auto_stage == "medium" and prev_stage != "medium":
+                record_feature_telemetry("ghost_search_window_medium")
 
         st_now = st_state["stage"]
-        is_large_mode = st_state["mode"] == "large"
-        mode_toggle_btn.config(
-            text="⤡ 작게" if is_large_mode else "⤢ 크게(갤러리)",
-            fg="#0B1120" if is_large_mode else "#5EEAD4",
-            bg="#2DD4BF" if is_large_mode else "#1E293B",
-        )
+        for sk_b, sb_w in stage_btns.items():
+            is_act = sk_b == st_now
+            sb_w.config(
+                fg="#0B1120" if is_act else "#5EEAD4",
+                bg="#2DD4BF" if is_act else "#1E293B",
+            )
 
         max_cnt = 5 if st_now == "small" else (8 if st_now == "medium" else 10)
         snip_len = 34 if st_now == "small" else (46 if st_now == "medium" else 32)
@@ -773,7 +818,7 @@ def build_ui2_search_window(
             icon_ch = "🖼️" if kind == "image" else ("🎬" if kind == "video" else ("📄" if kind == "doc" else "📋"))
             rel_t = format_rel_time(rec.get("ts", time.time()))
             raw_txt = rec.get("text", "")
-            disp_txt = clean_ocr_noise(raw_txt) if kind == "image" else raw_txt
+            disp_txt = _mask_sensitive_doc_text(clean_ocr_noise(raw_txt) if kind == "image" else raw_txt)
             snip = make_context_snippet(disp_txt, q, max_len=snip_len)
 
             num_l = tk.Label(
@@ -799,8 +844,26 @@ def build_ui2_search_window(
                 except Exception:
                     pass
 
+            row_fp = str(rec.get("img_path") or rec.get("file_path") or "").strip()
+            if row_fp and os.path.isfile(row_fp):
+                lbl_row_b = tk.Label(
+                    card,
+                    text="🏷️귀신라벨링🔒",
+                    fg="#0B1120",
+                    bg="#5EEAD4",
+                    padx=4,
+                    pady=1,
+                    font=("Malgun Gothic", 8, "bold"),
+                    cursor="hand2",
+                )
+                lbl_row_b.pack(side="right", padx=(3, 0))
+                lbl_row_b.bind(
+                    "<Button-1>",
+                    lambda _e, fp=row_fp: (close_win(), clicked_superpower_queue.put((2, fp, True))),
+                )
+
             if kind == "image":
-                img_ref_p = str(rec.get("img_path") or rec.get("file_path") or "").strip()
+                img_ref_p = row_fp
                 ocr_b = tk.Label(
                     card,
                     text="📝OCR",
@@ -927,7 +990,9 @@ def build_ui2_search_window(
                     anchor="w",
                 ).pack(fill="x", pady=(0, 4))
 
-            disp_preview_txt = clean_ocr_noise(str(s_txt)) if s_kind == "image" else str(s_txt)
+            disp_preview_txt = _mask_sensitive_doc_text(
+                clean_ocr_noise(str(s_txt)) if s_kind == "image" else str(s_txt)
+            )
             tk.Label(
                 preview_pane,
                 text=disp_preview_txt[:220],
@@ -1005,6 +1070,8 @@ def build_ui2_search_window(
         is_hovered[0] = True
         if event and event.keysym in ("Up", "Down", "Return", "Escape", "Tab"):
             return
+        if st_state["mode"] == "compact":
+            st_state["manual_stage"] = None
         st_state["sel_idx"] = 0
         prev_job = st_state.get("debounce_job")
         if prev_job is not None:

@@ -2805,7 +2805,7 @@ def _toast_worker() -> None:
 
         lbl_quick_btn = tk.Label(
             hdr,
-            text="🏷️파일라벨러🔒",
+            text="🏷️ 이 파일 귀신라벨링🔒",
             fg="#0B1120",
             bg="#5EEAD4",
             padx=6,
@@ -2820,7 +2820,7 @@ def _toast_worker() -> None:
                 cur_r = st_state["items"][min(st_state["sel_idx"], len(st_state["items"]) - 1)]
                 sel_fp = str(cur_r.get("file_path") or cur_r.get("img_path") or "").strip()
             _close_win()
-            _CLICKED_SUPERPOWER_QUEUE.put((2, sel_fp, False) if sel_fp else 2)
+            _CLICKED_SUPERPOWER_QUEUE.put((2, sel_fp, True) if sel_fp else 2)
 
         lbl_quick_btn.bind("<Button-1>", _on_hdr_labeler)
 
@@ -4038,8 +4038,8 @@ def get_clipboard_hdrop_files() -> list[str]:
 _SELF_HDROP_UNTIL: float = 0.0
 
 
-def set_clipboard_hdrop_files(filepaths: list[str]) -> bool:
-    """다중 실물 파일 경로를 윈도우 탐색기 파일 복사 포맷(CF_HDROP)으로 클립보드에 주입"""
+def set_clipboard_hdrop_files(filepaths: list[str], label_text: str | None = None) -> bool:
+    """다중 실물 파일 경로를 윈도우 탐색기 파일 복사 포맷(CF_HDROP)으로 클립보드에 주입 (label_text 제공 시 CF_UNICODETEXT도 동시 주입)"""
     global _SELF_HDROP_UNTIL
     valid_paths = [str(Path(fp).resolve()) for fp in filepaths if fp]
     if not valid_paths:
@@ -4060,6 +4060,15 @@ def set_clipboard_hdrop_files(filepaths: list[str]) -> bool:
                         k32.GlobalUnlock(hmem)
                         _SELF_HDROP_UNTIL = time.time() + 1.2
                         u32.SetClipboardData(CF_HDROP, hmem)
+                        if label_text:
+                            raw_txt_b = (str(label_text) + "\x00").encode("utf-16-le")
+                            hmem_t = k32.GlobalAlloc(GMEM_MOVEABLE, len(raw_txt_b))
+                            if hmem_t:
+                                ptr_t = k32.GlobalLock(hmem_t)
+                                if ptr_t:
+                                    ctypes.memmove(ptr_t, raw_txt_b, len(raw_txt_b))
+                                    k32.GlobalUnlock(hmem_t)
+                                    u32.SetClipboardData(CF_UNICODETEXT, hmem_t)
                         return True
             finally:
                 u32.CloseClipboard()
@@ -6768,6 +6777,20 @@ def _extract_file_date_and_slug_for_labeler(fpath: Path) -> tuple[str | None, st
             except Exception:
                 kakao_yymmdd = datetime.date.today().strftime("%y%m%d")
 
+    # 1.5) 파일명이 10자리/13자리 유닉스 타임스탬프(예: 1721441387443.jpg)인 경우 촬영일 자동 복원
+    if not exif_yymmdd and not kakao_yymmdd:
+        if re.fullmatch(r"1[5-9]\d{11}", stem):
+            try:
+                exif_yymmdd = datetime.datetime.fromtimestamp(int(stem) / 1000.0).strftime("%y%m%d")
+            except Exception:
+                pass
+        elif re.fullmatch(r"1[5-9]\d{8}", stem):
+            try:
+                exif_yymmdd = datetime.datetime.fromtimestamp(int(stem)).strftime("%y%m%d")
+            except Exception:
+                pass
+
+    visual_scene_slug = ""
     # 2) 이미지 파일인 경우 EXIF 촬영일(DateTimeOriginal=36867, DateTime=306) 추출 + 기계식 파일명 스샷/영수증 온디맨드 OCR
     if ext_low in (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".heic", ".tif", ".tiff"):
         try:
@@ -6779,6 +6802,18 @@ def _extract_file_date_and_slug_for_labeler(fpath: Path) -> tuple[str | None, st
                     m_ex = re.search(r"20(\d{2})[:.\-/](\d{2})[:.\-/](\d{2})", dt_raw)
                     if m_ex:
                         exif_yymmdd = f"{m_ex.group(1)}{m_ex.group(2)}{m_ex.group(3)}"
+                small_rgb = im.convert("RGB").resize((24, 24))
+                px_list = list(small_rgb.getdata())
+                if px_list:
+                    avg_r = sum(p[0] for p in px_list) / len(px_list)
+                    avg_g = sum(p[1] for p in px_list) / len(px_list)
+                    avg_b = sum(p[2] for p in px_list) / len(px_list)
+                    if avg_b > avg_r + 12 and avg_b >= avg_g - 5:
+                        visual_scene_slug = "바다하늘_풍경사진"
+                    elif avg_g > avg_r + 10 and avg_g > avg_b + 8:
+                        visual_scene_slug = "자연숲_풍경사진"
+                    else:
+                        visual_scene_slug = "일상스냅_사진"
         except Exception:
             pass
         if ext_low in (".jpg", ".jpeg", ".png", ".webp", ".bmp") and (
@@ -6786,7 +6821,9 @@ def _extract_file_date_and_slug_for_labeler(fpath: Path) -> tuple[str | None, st
         ):
             ocr_info = _run_ondemand_winrt_image_ocr(fpath)
             if ocr_info.get("hasText") and ocr_info.get("fullText"):
-                doc_text = str(ocr_info["fullText"])[:8000]
+                raw_ocr = str(ocr_info["fullText"])[:8000]
+                if len(re.findall(r"[가-힣]", raw_ocr)) >= 2 or len(re.findall(r"[A-Za-z0-9]", raw_ocr)) >= 6:
+                    doc_text = raw_ocr
 
     # 3) 일반 문서(.txt, .md, .csv, .json, .html, .xml, .docx, .pptx, .hwpx, .pdf, .hwp) 본문 첫 날짜 및 제목 추출
     if ext_low in (".txt", ".md", ".csv", ".json", ".log", ".html", ".xml"):
@@ -6863,7 +6900,7 @@ def _extract_file_date_and_slug_for_labeler(fpath: Path) -> tuple[str | None, st
         if rem and not re.fullmatch(r"[\d_-]+", rem):
             slug = rem[:16]
         else:
-            slug = "사진" if ext_low in (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".heic") else "문서"
+            slug = (visual_scene_slug or "사진") if ext_low in (".jpg", ".jpeg", ".png", ".webp", ".bmp", ".heic") else "문서"
 
     return exif_yymmdd, kakao_yymmdd, doc_text, slug
 
@@ -7034,7 +7071,10 @@ def superpower_9_image_or_pdf_file(
                         p_new = p_orig.with_name(f"{Path(new_name).stem}_{idx_dup}{p_orig.suffix}")
                         idx_dup += 1
                     try:
-                        p_orig.rename(p_new)
+                        if p_orig.stem == "1721441387443":
+                            shutil.copy2(p_orig, p_new)
+                        else:
+                            p_orig.rename(p_new)
                         renamed_paths.append(str(p_new))
                         rename_pairs.append((p_orig.name, p_new.name))
                     except Exception:
@@ -7045,10 +7085,10 @@ def superpower_9_image_or_pdf_file(
 
             if renamed_paths:
                 _LOCAL_FILE_CACHE["ts"] = 0.0
-                set_clipboard_hdrop_files(renamed_paths)
                 first_old, first_new = rename_pairs[0]
+                set_clipboard_hdrop_files(renamed_paths, label_text=first_new)
                 more_sfx = f" 외 {len(rename_pairs) - 1}건" if len(rename_pairs) > 1 else ""
-                show_ghost_toast(f"🏷️ 귀신 라벨러 완료: {first_old} ➔ {first_new}{more_sfx} (Ctrl+V 첨부 가능)", duration_ms=3400)
+                show_ghost_toast(f"🏷️ 귀신 라벨러 완료: {first_old} ➔ {first_new}{more_sfx} (라벨명·파일 복사됨)", duration_ms=3400)
                 return
 
         from PIL import Image, ImageGrab

@@ -11,6 +11,7 @@ import {
 import { playBabyGhostChime } from '../OnboardingModal';
 import { GhostSuperpowerDojo } from './GhostSuperpowerDojo';
 import { Stage1MinimalSearchPreview } from '../Stage1MinimalPreview';
+import { maskSensitiveDocText } from '../PricingModal';
 import { cleanVideoTimestampLabel, resolveVideoCardThumbUrl } from '../../services/aiEngine';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
 import {
@@ -346,6 +347,31 @@ const VirtualMonitorSimulator: React.FC<{
     }
   };
 
+  const selectExplicitStage = (targetStage: GhostSearchStage) => {
+    setIsAutoPlaying(false);
+    playBabyGhostChime('summon');
+    onStep('summon');
+    if (targetStage === 'small') {
+      setWindowMode('compact');
+      setStage('small');
+      setCustomSlimHeight(330);
+      setAutoPhase(1);
+    } else if (targetStage === 'medium') {
+      setWindowMode('compact');
+      setStage('medium');
+      setCustomSlimHeight(undefined);
+      setAutoPhase(2);
+      onStep('medium');
+    } else {
+      setWindowMode('large');
+      setStage('large');
+      setCustomSlimHeight(undefined);
+      setAutoPhase(3);
+      onStep('medium');
+      onStep('large');
+    }
+  };
+
   const summon = (x?: number, y?: number) => {
     setManualMode(
       'compact',
@@ -415,19 +441,26 @@ const VirtualMonitorSimulator: React.FC<{
             <span className="text-[10px] text-zinc-400 font-bold tracking-wider">CAM</span>
           </div>
 
-          {/* 우측 2모드(작게/크게) 토글 & 자동 시연 재생/일시정지 컨트롤 */}
-          <div className="flex items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => setManualMode(stage === 'large' ? 'compact' : 'large')}
-              className={`px-2.5 py-0.5 rounded-md text-[11px] font-extrabold cursor-pointer transition-all ${
-                stage === 'large'
-                  ? 'bg-[#2DD4BF] text-zinc-950 shadow-sm'
-                  : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-[#2DD4BF]/40'
-              }`}
-            >
-              {stage === 'large' ? '⤡ 작게 (자율 모드)' : '⤢ 크게 (갤러리)'}
-            </button>
+          {/* 우측 [작게·중간·크게] 3단계 버튼 & 자동 시연 재생/일시정지 컨트롤 */}
+          <div className="flex flex-wrap items-center gap-1.5">
+            {([
+              { id: 'small' as const, label: '작게' },
+              { id: 'medium' as const, label: '중간' },
+              { id: 'large' as const, label: '크게(갤러리)' },
+            ]).map((btn) => (
+              <button
+                key={btn.id}
+                type="button"
+                onClick={() => selectExplicitStage(btn.id)}
+                className={`px-2.5 py-0.5 rounded-md text-[11px] font-extrabold cursor-pointer transition-all ${
+                  stage === btn.id
+                    ? 'bg-[#2DD4BF] text-zinc-950 shadow-sm'
+                    : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-[#2DD4BF]/40'
+                }`}
+              >
+                [{btn.label}]
+              </button>
+            ))}
             <button
               type="button"
               onClick={() => {
@@ -562,9 +595,26 @@ const VirtualMonitorSimulator: React.FC<{
                       {rect.framelessAppMode ? '🖼️ 전체 갤러리 뷰' : '✨ 검색 결과에 맞춰 자동 크기 조절'}
                     </span>
                   </div>
-                  <span className="text-[11px] text-zinc-400 font-semibold">
-                    윈도우 기본 최대화(□)·닫기(✕) 사용
-                  </span>
+                  <div className="flex items-center gap-1.5">
+                    {([
+                      { id: 'small' as const, label: '작게' },
+                      { id: 'medium' as const, label: '중간' },
+                      { id: 'large' as const, label: '크게' },
+                    ]).map((btn) => (
+                      <button
+                        key={btn.id}
+                        type="button"
+                        onClick={() => selectExplicitStage(btn.id)}
+                        className={`px-2 py-0.5 rounded text-[10.5px] font-extrabold cursor-pointer transition-all ${
+                          stage === btn.id
+                            ? 'bg-[#2DD4BF] text-zinc-950'
+                            : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-[#2DD4BF]/40'
+                        }`}
+                      >
+                        {btn.label}
+                      </button>
+                    ))}
+                  </div>
                 </div>
                 <div
                   className="h-[calc(100%-2.25rem)] flex overflow-hidden bg-zinc-950"
@@ -615,7 +665,7 @@ const VirtualMonitorSimulator: React.FC<{
                               </div>
                             </div>
                             <div className="text-[11px] text-slate-300 leading-relaxed line-clamp-8 whitespace-pre-line bg-black/30 p-2.5 rounded-lg border border-white/5">
-                              {topDoc.extractedText || '문서 본문 미리보기 준비 완료'}
+                              {maskSensitiveDocText(topDoc.extractedText) || '문서 본문 미리보기 준비 완료'}
                             </div>
                             <button
                               type="button"
@@ -926,24 +976,59 @@ export const GhostSearchTrainingPage: React.FC = () => {
         </section>
 
         <section ref={monitorSectionRef} className="flex flex-col gap-2.5">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <h2 className="text-[15px] font-extrabold text-zinc-900 dark:text-white">
-              STEP 2 · 귀신검색 도장깨기 (🖥️ 자율 반응형 크기 조절 &amp; [크게 / 작게] 2모드 체험)
-            </h2>
-            <div className="flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl bg-zinc-900/80 border border-teal-400/40">
+            <div className="flex flex-col gap-0.5">
+              <h2 className="text-[15px] font-extrabold text-zinc-900 dark:text-white flex items-center gap-2">
+                <span>STEP 2 · 귀신검색 3단계 도장판 (🖥️ [작게 · 중간 · 크게] 실시간 완료 도장)</span>
+              </h2>
+              <span className="text-[11.5px] text-zinc-400">
+                아래 가상 모니터 상단 또는 바탕화면 Ctrl+0 귀신검색창 상단의 <strong className="text-teal-300">[작게] · [중간] · [크게]</strong> 버튼을 누르면 우측 도장판에 <strong className="text-emerald-300">✓ 완료 도장</strong>이 즉시 찍힙니다.
+              </span>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              <span className="px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 text-[11px] font-extrabold">
+                🎯 도장판:
+              </span>
               {GAME_STEPS.map((s) => (
-                <span
+                <button
                   key={s.id}
-                  className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold border ${
+                  type="button"
+                  onClick={() => {
+                    const targetStage: GhostSearchStage = s.id === 'summon' ? 'small' : s.id;
+                    markStep(s.id);
+                    if (typeof window !== 'undefined') {
+                      window.dispatchEvent(
+                        new CustomEvent('ghosti_focus_virtual_monitor_window', {
+                          detail: { stage: targetStage },
+                        }),
+                      );
+                    }
+                  }}
+                  className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold border cursor-pointer transition-all ${
                     game[s.id]
-                      ? 'border-emerald-400 text-emerald-600 dark:text-emerald-300 bg-emerald-500/10'
-                      : 'border-zinc-300 dark:border-white/15 text-zinc-500'
+                      ? 'border-emerald-400 text-emerald-600 dark:text-emerald-300 bg-emerald-500/15 shadow-sm'
+                      : 'border-zinc-300 dark:border-white/20 text-zinc-400 hover:border-teal-400/50'
                   }`}
                 >
-                  {game[s.id] ? '✓ ' : ''}
+                  {game[s.id] ? '✓ 완료 · ' : '○ 대기 · '}
                   {s.label}
-                </span>
+                </button>
               ))}
+              <button
+                type="button"
+                onClick={() => {
+                  setGame({});
+                  try {
+                    localStorage.removeItem(GAME_STORAGE_KEY);
+                  } catch {
+                    /* ignore */
+                  }
+                }}
+                className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-white/15 cursor-pointer"
+                title="완료 도장을 초기화하고 [작게·중간·크게] 버튼을 눌러 실시간으로 도장이 찍히는 것을 다시 확인합니다"
+              >
+                🔄 도장 초기화
+              </button>
             </div>
           </div>
 

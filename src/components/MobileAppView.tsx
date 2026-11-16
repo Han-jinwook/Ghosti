@@ -20,7 +20,11 @@ import {
   LoungeIndexingWaitingRoom,
   LoungeView,
 } from './LoungeView';
-import { PcMasterQuickSendPanel, renderHighlightedDocText } from './PricingModal';
+import {
+  PcMasterQuickSendPanel,
+  renderHighlightedDocText,
+  maskSensitiveDocText,
+} from './PricingModal';
 
 const MainLoungeMonoIcon: React.FC<{ id: LoungeType; className?: string }> = ({
   id,
@@ -689,7 +693,7 @@ export const MobileAppView: React.FC = () => {
                         </h4>
                         <p className="font-body-sm text-[12px] text-zinc-400 line-clamp-2">
                           {renderHighlightedDocText(
-                            doc.extractedText,
+                            maskSensitiveDocText(doc.extractedText),
                             hasExecutedUserSearch ? activeQuery : ''
                           )}
                         </p>

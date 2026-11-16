@@ -1041,6 +1041,97 @@ export function renderHighlightedDocText(
   );
 }
 
+export function maskSensitiveDocText(text: string, forVoice = false): string {
+  if (!text) return '';
+  const pwMask = forVoice ? '비공개 마스킹됨' : '••••••••';
+  const rrnMask = forVoice ? '$1 주민번호 비공개' : '$1-•••••••';
+  const rrnFullMask = forVoice ? '$1 주민번호 비공개 마스킹됨' : '$1••••••-•••••••';
+  const acctMask = forVoice ? '$1 계좌번호 비공개 마스킹됨' : '$1$2-••••-••••';
+  const bankAcctMask = forVoice ? '$1 계좌번호 비공개 마스킹됨' : '$1••••-••••';
+
+  return text
+    .replace(
+      /((?:비밀번호|패스워드|비번|password|pw|pin|암호)\s*[:=]?\s*)([^\s,|\n)]+)/gi,
+      `$1${pwMask}`
+    )
+    .replace(
+      /((?:주민등록번호|주민번호)\s*[:=]?\s*)(\d{6}\s*-\s*[1-4][0-9*\s]{4,8}|\d{13})/gi,
+      rrnFullMask
+    )
+    .replace(
+      /\b(\d{6})\s*-\s*([1-4][0-9*]{2,6}(?:\s*[0-9*]{1,4})?)\b/g,
+      rrnMask
+    )
+    .replace(
+      /((?:계좌번호|입금계좌|환불계좌|급여계좌|계좌)\s*[:=]?\s*(?:[가-힣A-Za-z]{2,10}(?:은행|뱅크|증권|금고|신협|우체국)?\s+)?)(\d{2,6})(?:[-\s]?(\d{2,6})[-\s]?(\d{2,8})|(\d{4,12}))/gi,
+      acctMask
+    )
+    .replace(
+      /(\b(?:국민|신한|우리|하나|농협|기업|카카오|토스|케이|새마을|우체국|수협|신협|경남|광주|대구|부산|전북|제주|씨티|SC제일|IBK|KB|NH|SH)(?:은행|뱅크|중앙회|금고)?\s+\d{2,6}[-\s]?)\d{2,6}(?:[-\s]?\d{2,8})+/gi,
+      bankAcctMask
+    );
+}
+
+export function hasSensitiveDocInfo(text: string): boolean {
+  if (!text) return false;
+  return maskSensitiveDocText(text) !== text;
+}
+
+export function formatQuickKoreanLabelForFile(
+  fileName: string,
+  dateStr?: string,
+  tagsOrTitle?: string | string[]
+): string {
+  const rawName = (fileName || '파일.jpg').trim();
+  const dotIdx = rawName.lastIndexOf('.');
+  const stem = dotIdx > 0 ? rawName.slice(0, dotIdx) : rawName;
+  const ext = dotIdx > 0 ? rawName.slice(dotIdx) : '';
+
+  let yymmdd = '';
+  const mDate = (dateStr || '').match(/20(\d{2})[-./](\d{2})[-./](\d{2})/);
+  if (mDate) {
+    yymmdd = `${mDate[1]}${mDate[2]}${mDate[3]}`;
+  } else if (/^1[5-9]\d{11}$/.test(stem)) {
+    const dt = new Date(Number(stem));
+    if (!Number.isNaN(dt.getTime())) {
+      const yy = String(dt.getFullYear()).slice(-2);
+      const mm = String(dt.getMonth() + 1).padStart(2, '0');
+      const dd = String(dt.getDate()).padStart(2, '0');
+      yymmdd = `${yy}${mm}${dd}`;
+    }
+  } else {
+    const mStemDate = stem.match(/20(\d{6})/);
+    if (mStemDate) yymmdd = mStemDate[1];
+  }
+  if (!yymmdd) {
+    const now = new Date();
+    yymmdd = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  }
+
+  const tagList = Array.isArray(tagsOrTitle)
+    ? tagsOrTitle
+    : typeof tagsOrTitle === 'string'
+      ? [tagsOrTitle]
+      : [];
+  const cleanTags = tagList
+    .map((t) =>
+      String(t || '')
+        .replace(/[#[\]()/\\:*?"<>|]/g, ' ')
+        .trim()
+    )
+    .filter((t) => t.length >= 2 && /[가-힣]/.test(t));
+
+  let slug = '';
+  if (cleanTags.length > 0) {
+    slug = cleanTags.slice(0, 2).join('_').replace(/\s+/g, '_').slice(0, 18);
+  } else if (/^1[5-9]\d{8,11}$/.test(stem) || /^(IMG|DSC|PXL|SAM|Screenshot|화면\s*캡처)/i.test(stem)) {
+    slug = '풍경스냅_사진';
+  } else {
+    slug = stem.replace(/\s+/g, '_').slice(0, 18) || '정리파일';
+  }
+  return `${yymmdd}_${slug}${ext}`;
+}
+
 const videoBlobUrlCache = new Map<string, string>();
 
 /**
@@ -1058,6 +1149,10 @@ export const LocalDocPreviewModal: React.FC = () => {
   const [revealDocPasswords, setRevealDocPasswords] = useState(false);
 
   useEffect(() => {
+    setRevealDocPasswords(false);
+  }, [selectedDocModal?.id]);
+
+  useEffect(() => {
     return subscribeGhostiVoicePrefs(() => {
       setVoiceTick((t) => t + 1);
     });
@@ -1067,16 +1162,10 @@ export const LocalDocPreviewModal: React.FC = () => {
 
   const effectiveQuery = hasExecutedUserSearch ? activeQuery : '';
   const isSpeakingNow = getIsTtsSpeaking();
-  const maskedDocText = selectedDocModal.extractedText.replace(
-    /((?:비밀번호|패스워드|비번|password|pw|pin|암호)\s*[:=]?\s*)([^\s,\n]+)/gi,
-    '$1••••••••'
-  );
+  const maskedDocText = maskSensitiveDocText(selectedDocModal.extractedText, false);
   const safeVoiceBody = revealDocPasswords
     ? selectedDocModal.extractedText
-    : selectedDocModal.extractedText.replace(
-        /((?:비밀번호|패스워드|비번|password|pw|pin|암호)\s*[:=]?\s*)([^\s,\n]+)/gi,
-        '$1 비공개 마스킹됨'
-      );
+    : maskSensitiveDocText(selectedDocModal.extractedText, true);
   const fallbackDocVoiceText = `${selectedDocModal.title}. ${safeVoiceBody}`;
 
   const handleCloseModal = () => {
@@ -1159,15 +1248,16 @@ export const LocalDocPreviewModal: React.FC = () => {
               🔍 로컬 문서 본문 미리보기 (검색어 노란색 하이라이트 • 1초 복사 지원)
             </span>
             <div className="flex items-center gap-1.5">
-              {/(비밀번호|패스워드|password|계정|비번|암호)/i.test(
-                `${selectedDocModal.title} ${selectedDocModal.extractedText}`
-              ) && (
-                  <button
+              {(hasSensitiveDocInfo(`${selectedDocModal.title} ${selectedDocModal.extractedText}`) ||
+                /(비밀번호|패스워드|password|계정|비번|암호|주민등록번호|주민번호|계좌)/i.test(
+                  `${selectedDocModal.title} ${selectedDocModal.extractedText}`
+                )) && (
+                <button
                   type="button"
                   onClick={() => setRevealDocPasswords((v) => !v)}
                   className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/50 text-amber-200 font-label-sm text-[11.5px] font-extrabold shrink-0 cursor-pointer"
                 >
-                  {revealDocPasswords ? '🙈 비번 숨기기' : '👁️ 보기'}
+                  {revealDocPasswords ? '🙈 개인정보·비번 숨기기' : '👁️ 보기'}
                 </button>
               )}
             </div>
