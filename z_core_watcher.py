@@ -317,6 +317,17 @@ def main() -> None:
 
     active_role = _resolve_active_role()
     is_primary_watcher = active_role == "all" or "1" in active_role
+    if is_primary_watcher and POST_OFFICE_DIR.parent.exists():
+        try:
+            subprocess.run(
+                ["git", "pull", "--rebase", "--autostash", "origin", "main"],
+                cwd=str(POST_OFFICE_DIR.parent),
+                timeout=8,
+                capture_output=True,
+                creationflags=0x08000000 if os.name == "nt" else 0,
+            )
+        except Exception:
+            pass
     initial_inbox = scan_post_office_files(role=active_role)
     if initial_inbox:
         print("\n" + "📮" * 24)
@@ -461,6 +472,17 @@ def main() -> None:
             sync_antigravity_session_title()
 
         if is_primary_watcher:
+            if POST_OFFICE_DIR.parent.exists():
+                try:
+                    subprocess.run(
+                        ["git", "pull", "--rebase", "--autostash", "origin", "main"],
+                        cwd=str(POST_OFFICE_DIR.parent),
+                        timeout=8,
+                        capture_output=True,
+                        creationflags=0x08000000 if os.name == "nt" else 0,
+                    )
+                except Exception:
+                    pass
             current_doctrine_hash = file_md5(DOCTRINE_FILE)
             if current_doctrine_hash and current_doctrine_hash != baseline_doctrine_hash:
                 print("\n" + "📜" * 24)
