@@ -1100,9 +1100,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             letter-spacing: -0.03em !important;
           }
           .showroom-photo-cap {
-            font-size: clamp(10px, 2.85vw, 11.5px) !important;
-            line-height: 1.3 !important;
-            letter-spacing: -0.03em !important;
+            font-size: clamp(9.5px, 2.5vw, 10.5px) !important;
+            line-height: 1.25 !important;
+            letter-spacing: -0.04em !important;
+            -webkit-text-size-adjust: 100% !important;
           }
         }
       `}</style>
@@ -2343,7 +2344,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     </div>
 
                     {/* 실제 샘플 사진 6장 비교 그리드 */}
-                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5">
+                    <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3.5">
                       {[
                         {
                           id: 1,
@@ -2424,7 +2425,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                   ? 'rgba(6, 78, 59, 0.92)'
                                   : 'rgba(9, 17, 30, 0.88)',
                               }}
-                              className="px-2 py-1.5 flex items-center justify-center gap-1 sm:text-xs"
+                              className="px-1 sm:px-2.5 py-1.5 flex items-center justify-center gap-1 sm:text-xs"
                             >
                               <span
                                 style={{ color: shot.best ? '#5EEAD4' : '#E2E8F0' }}
