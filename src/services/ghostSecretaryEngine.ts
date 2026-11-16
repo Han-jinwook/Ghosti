@@ -130,6 +130,9 @@ function detectWebGlGpuShortLabel(): string {
       .replace(/\(R\)|\(TM\)/gi, '')
       .replace(/\s+/g, ' ')
       .trim();
+    if (/Microsoft Basic Render Driver|SwiftShader|llvmpipe|Google/i.test(cleaned)) {
+      return '내장 그래픽';
+    }
     return cleaned.slice(0, 32) || '내장 그래픽';
   } catch {
     return '내장 그래픽';
@@ -661,7 +664,15 @@ export function resolveGhostSecretaryTurn(
   // ① 첫인사 별명 답변 또는 별명 재설정 대기 중인 경우 (단, 손보기·사양진단·승인 명령은 별명으로 오인식하지 않고 즉시 손보기 라우터로 통과)
   if (st.awaitingNickname && !isCareActionApprovalText && !CARE_COMMAND_RE.test(text) && text.length <= 16) {
     const nick = sanitizeNicknameAnswer(text);
-    if (nick) {
+    // 초성/자모음 단타(예: 'ㅇㄴ', 'ㅋㅋ', 'ㅎㅎ', 'ㄴㄴ')가 평생 별명으로 잘못 저장되는 현상 차단
+    if (nick && /^[ㄱ-ㅎㅏ-ㅣ]+$/.test(nick)) {
+      return {
+        scenarioId: 'nickname_jamo_reask',
+        text: '앗, 초성 대신 편하게 부를 수 있는 별명(예: 은호, 멀린)으로 알려주실래요? 바로 기능부터 체험해 보고 싶으시면 왼쪽의 [🔍 1초 진단] 버튼을 눌러보셔도 돼요! 👻✨',
+        nextState: st,
+      };
+    }
+    if (nick && !INVALID_NICKNAME_CANDIDATE_RE.test(nick)) {
       const isFirstTime = !st.nickname;
       return {
         scenarioId: isFirstTime ? 'nickname_registered' : 'profile_change_nickname',

@@ -552,9 +552,27 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       ]);
     };
 
+    const onSamplePcStepChat = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ text?: string }>).detail;
+      const msgText = detail?.text?.trim();
+      if (!msgText) return;
+      setSharedMonsterMessages((prev) => [
+        ...prev,
+        {
+          id: `secretary_sample_pc_${Date.now()}`,
+          role: 'assistant',
+          timestamp: nowTimeKo(),
+          sourceTab: 'trash',
+          text: msgText,
+        },
+      ]);
+    };
+
     window.addEventListener('ghosti_defer_photo_cleanup_and_continue', onDeferCleanupAndContinue);
+    window.addEventListener('ghosti_sample_pc_step_chat', onSamplePcStepChat);
     return () => {
       window.removeEventListener('ghosti_defer_photo_cleanup_and_continue', onDeferCleanupAndContinue);
+      window.removeEventListener('ghosti_sample_pc_step_chat', onSamplePcStepChat);
     };
   }, [sourceTab, isMobileOrStore]);
 

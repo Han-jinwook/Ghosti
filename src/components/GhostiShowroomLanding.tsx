@@ -582,6 +582,16 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
     setSleptCount(0);
     setSpeedStep(1);
+    const ts = nowTimeStr();
+    setChatMessages((prev) => [
+      ...prev.slice(-6),
+      {
+        id: `s-diag-${Date.now()}`,
+        role: 'secretary',
+        text: '🔍 1초 진단 완료! 은행·결제 보안프로그램 8개가 뒤에서 돌아가며 원래 속도의 61%만 쓰고 있어요. 이제 [💤 안 지우고 재우기]를 눌러볼까요? 👻',
+        timestamp: ts,
+      },
+    ]);
   };
 
   const runSpeedSleep = () => {
@@ -598,6 +608,16 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
         sleepTimerRef.current = null;
       }
     }, 140);
+    const ts = nowTimeStr();
+    setChatMessages((prev) => [
+      ...prev.slice(-6),
+      {
+        id: `s-sleep-${Date.now()}`,
+        role: 'secretary',
+        text: '💤 프로그램은 하나도 안 지우고 8개 모두 잠만 재웠더니 속도가 61% → 93%로 살아났어요! 이제 [🏦 은행 사이트 열어보기]를 눌러보세요~ ✨',
+        timestamp: ts,
+      },
+    ]);
   };
 
   const runSpeedBankOpen = () => {
@@ -605,6 +625,16 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
     setSleptCount(SAMPLE_PC_PROGRAMS.length);
     setSpeedStep(3);
+    const ts = nowTimeStr();
+    setChatMessages((prev) => [
+      ...prev.slice(-6),
+      {
+        id: `s-bank-${Date.now()}`,
+        role: 'secretary',
+        text: '🏦 은행 사이트를 열면 은행 업무에 꼭 필요한 2개만 ⚡1초 만에 깨어나고(속도 85%), 나머지 6개는 계속 쿨쿨 자고 있어요! 마지막으로 [↩️ 전부 원래대로]를 눌러보세요!',
+        timestamp: ts,
+      },
+    ]);
   };
 
   const runSpeedRestore = () => {
@@ -612,6 +642,16 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
     setSleptCount(0);
     setSpeedStep(4);
+    const ts = nowTimeStr();
+    setChatMessages((prev) => [
+      ...prev.slice(-6),
+      {
+        id: `s-restore-${Date.now()}`,
+        role: 'secretary',
+        text: '↩️ 61% 처음 상태로 1초 만에 완벽 복구됐어요! 지운 프로그램 0개 · 언제든 1초 원상복구되니 안심하고 쓰실 수 있어요~ 👻💚',
+        timestamp: ts,
+      },
+    ]);
   };
 
   // 무기 4 (귀신창 v1.4 — 100% 무버튼 자동 성형 & 평생 무료 5총사 체험 상태)
@@ -700,6 +740,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     playBabyGhostChime();
     setDemoTab(tab);
     setShowStageShortVideo(false);
+    if (tab === 'clean') {
+      setCleanSubTab('speed');
+    }
     if (tab === 'share') {
       setShareStep(0);
       setSharePickedPhoto(null);
@@ -2192,13 +2235,10 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                           {/* 상시 안심 고정 문구 */}
                           <div className="flex flex-wrap gap-2 text-xs font-extrabold">
                             <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">
-                              🔒 마음대로 지우지 않아요 (지운 프로그램 {deletedCount}개)
+                              🔒 지운 프로그램 {deletedCount}개 · 1초 원상복구
                             </span>
                             <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">
-                              ✋ 내가 고른 것만
-                            </span>
-                            <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">
-                              ↩️ 언제든 1초 원상복구
+                              ✋ 마음대로 지우지 않고 내가 고른 것만
                             </span>
                           </div>
                         </div>

@@ -30,6 +30,267 @@ import { GhostSecretaryFirstGuard, jumpToGhostSecretary } from './GhostSecretary
 
 const STAGE1_ROLLING_INTERVAL_MS = 10_000; // 10초 자동 롤링
 
+interface Stage1SamplePcProgram {
+  id: string;
+  name: string;
+  memMb: number;
+  neededForBank: boolean;
+}
+
+const STAGE1_SAMPLE_PC_PROGRAMS: Stage1SamplePcProgram[] = [
+  { id: 'kb1', name: '○○은행 키보드 보안', memMb: 210, neededForBank: true },
+  { id: 'cert', name: '공동인증서 실행 플러그인', memMb: 240, neededForBank: true },
+  { id: 'kb2', name: '△△은행 키보드 보안', memMb: 180, neededForBank: false },
+  { id: 'pay', name: '쇼핑몰 결제 보안 모듈', memMb: 150, neededForBank: false },
+  { id: 'fw', name: '개인 방화벽 에이전트', memMb: 190, neededForBank: false },
+  { id: 'term', name: '접속 단말 정보 수집기', memMb: 130, neededForBank: false },
+  { id: 'sign', name: '전자서명 실행기', memMb: 160, neededForBank: false },
+  { id: 'upd', name: '금융 보안 업데이트 도우미', memMb: 120, neededForBank: false },
+];
+const STAGE1_SAMPLE_PC_BASE_PCT = 61;
+const STAGE1_SAMPLE_PC_REVIVED_PCT = 93;
+
+const SecretarySamplePcCarePanel: React.FC = () => {
+  const [speedStep, setSpeedStep] = useState<0 | 1 | 2 | 3 | 4>(0);
+  const [sleptCount, setSleptCount] = useState<number>(0);
+  const sleepTimerRef = React.useRef<ReturnType<typeof setInterval> | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
+    };
+  }, []);
+
+  const emitChatStep = (text: string) => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ghosti_sample_pc_step_chat', { detail: { text } }));
+    }
+  };
+
+  const runSpeedDiagnose = () => {
+    if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
+    setSleptCount(0);
+    setSpeedStep(1);
+    emitChatStep(
+      '🔍 1초 진단 완료! 은행·결제 보안프로그램 8개가 뒤에서 돌아가며 원래 속도의 61%만 쓰고 있어요. 이제 [💤 안 지우고 재우기]를 눌러볼까요? 👻'
+    );
+  };
+
+  const runSpeedSleep = () => {
+    if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
+    setSpeedStep(2);
+    setSleptCount(0);
+    let n = 0;
+    sleepTimerRef.current = setInterval(() => {
+      n += 1;
+      setSleptCount(n);
+      if (n >= STAGE1_SAMPLE_PC_PROGRAMS.length && sleepTimerRef.current) {
+        clearInterval(sleepTimerRef.current);
+        sleepTimerRef.current = null;
+      }
+    }, 140);
+    emitChatStep(
+      '💤 프로그램은 하나도 안 지우고 8개 모두 잠만 재웠더니 속도가 61% → 93%로 살아났어요! 이제 [🏦 은행 사이트 열어보기]를 눌러보세요~ ✨'
+    );
+  };
+
+  const runSpeedBankOpen = () => {
+    if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
+    setSleptCount(STAGE1_SAMPLE_PC_PROGRAMS.length);
+    setSpeedStep(3);
+    emitChatStep(
+      '🏦 은행 사이트를 열면 은행 업무에 꼭 필요한 2개만 ⚡1초 만에 깨어나고(속도 85%), 나머지 6개는 계속 쿨쿨 자고 있어요! 마지막으로 [↩️ 전부 원래대로]를 눌러보세요!'
+    );
+  };
+
+  const runSpeedRestore = () => {
+    if (sleepTimerRef.current) clearInterval(sleepTimerRef.current);
+    setSleptCount(0);
+    setSpeedStep(4);
+    emitChatStep(
+      '↩️ 61% 처음 상태로 1초 만에 완벽 복구됐어요! 지운 프로그램 0개 · 언제든 1초 원상복구되니 안심하고 쓰실 수 있어요~ 👻💚'
+    );
+  };
+
+  const total = STAGE1_SAMPLE_PC_PROGRAMS.length;
+  const neededCount = STAGE1_SAMPLE_PC_PROGRAMS.filter((p) => p.neededForBank).length;
+  const totalMemGb = (STAGE1_SAMPLE_PC_PROGRAMS.reduce((s, p) => s + p.memMb, 0) / 1024).toFixed(1);
+  const isAsleep = (p: Stage1SamplePcProgram, idx: number) => {
+    if (speedStep === 2) return idx < sleptCount;
+    if (speedStep === 3) return !p.neededForBank;
+    return false;
+  };
+  const sleepingNow = STAGE1_SAMPLE_PC_PROGRAMS.filter((p, i) => isAsleep(p, i)).length;
+  const gaugePct =
+    speedStep === 0
+      ? null
+      : Math.round(
+          STAGE1_SAMPLE_PC_BASE_PCT +
+            ((STAGE1_SAMPLE_PC_REVIVED_PCT - STAGE1_SAMPLE_PC_BASE_PCT) * sleepingNow) / total
+        );
+  const deletedCount = 0;
+  const stepMsg =
+    speedStep === 0
+      ? '👇 먼저 [🔍 1초 진단]을 눌러 샘플 PC를 누가 느리게 만드는지 확인해 보세요.'
+      : speedStep === 1
+      ? `은행·결제 때 한 번 쓰고 마는 보안프로그램 ${total}개가 늘 켜져서 메모리 ${totalMemGb}GB를 차지하고 있어요. 지우지 말고 재워볼까요?`
+      : speedStep === 2
+      ? sleptCount < total
+        ? '💤 하나씩 재우는 중… 프로그램 파일은 그대로 두고 잠만 재워요.'
+        : `💤 ${total}개 모두 재웠어요! 지운 건 하나도 없어요. 은행 갈 땐 어떻게 될까요?`
+      : speedStep === 3
+      ? `🏦 은행 사이트를 여니 꼭 필요한 ${neededCount}개만 1초 만에 저절로 깨어났어요. 나머지는 계속 쿨쿨~`
+      : '↩️ 전부 처음 상태 그대로 되돌렸어요. 이렇게 언제든 1초 만에 원래대로 돌릴 수 있어요!';
+
+  return (
+    <div
+      data-allow-secretary-jump="true"
+      data-keep-dark="true"
+      style={{ background: 'linear-gradient(145deg, #07131E 0%, #0B1F2A 100%)' }}
+      className="rounded-2xl border border-teal-400/40 p-4 sm:p-5 space-y-3.5"
+    >
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="space-y-0.5">
+          <div className="text-[13px] font-black text-teal-200 flex items-center gap-2 flex-wrap">
+            <span>🖥️ 샘플 PC 살려보기 · 사무실 4년 차 노트북</span>
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'))}
+              className="px-2.5 py-0.5 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/40 text-teal-200 text-[11.5px] font-extrabold cursor-pointer"
+            >
+              🏠 첫 화면(온보딩 쇼룸) 보기
+            </button>
+          </div>
+          <div className="text-xs text-zinc-400 font-semibold break-keep">
+            진짜 내 PC는 건드리지 않고 ‘샘플 PC’로 재우기 · 은행 기상 · 1초 원상복구를 바로 체험해 보세요
+          </div>
+        </div>
+        <div className="min-w-[180px] flex-1 max-w-[260px] space-y-1">
+          <div className="flex items-center justify-between text-xs font-black">
+            <span className="text-zinc-300">원래 속도 대비</span>
+            <span
+              style={{
+                color:
+                  gaugePct === null ? '#A1A1AA' : gaugePct >= 85 ? '#34D399' : gaugePct >= 75 ? '#FBBF24' : '#F87171',
+              }}
+            >
+              {gaugePct === null ? '진단 전' : `${gaugePct}%`}
+            </span>
+          </div>
+          <div style={{ backgroundColor: 'rgba(255,255,255,0.14)' }} className="h-2.5 rounded-full overflow-hidden">
+            <div
+              style={{
+                width: `${gaugePct ?? 0}%`,
+                backgroundColor:
+                  gaugePct !== null && gaugePct >= 85
+                    ? '#34D399'
+                    : gaugePct !== null && gaugePct >= 75
+                    ? '#FBBF24'
+                    : '#F87171',
+              }}
+              className="h-full rounded-full transition-all duration-300"
+            />
+          </div>
+        </div>
+      </div>
+
+      {speedStep > 0 && (
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+          {STAGE1_SAMPLE_PC_PROGRAMS.map((p, idx) => {
+            const asleep = isAsleep(p, idx);
+            const wokeForBank = speedStep === 3 && p.neededForBank;
+            return (
+              <div
+                key={p.id}
+                style={{
+                  backgroundColor: asleep
+                    ? 'rgba(255,255,255,0.03)'
+                    : wokeForBank
+                    ? 'rgba(0,240,181,0.12)'
+                    : 'rgba(248,113,113,0.10)',
+                }}
+                className={`rounded-xl px-3 py-2 flex items-center justify-between gap-2 text-[13px] border transition-all duration-300 ${
+                  asleep ? 'border-white/10 opacity-60' : wokeForBank ? 'border-[#00F0B5]/60' : 'border-rose-400/30'
+                }`}
+              >
+                <span className="font-bold text-zinc-100 truncate">
+                  {asleep ? '💤' : wokeForBank ? '⚡' : '🔥'} {p.name}
+                </span>
+                <span
+                  className={`text-xs font-black shrink-0 ${
+                    asleep ? 'text-zinc-500' : wokeForBank ? 'text-[#00F0B5]' : 'text-rose-300'
+                  }`}
+                >
+                  {asleep ? '수면 중' : wokeForBank ? '은행용 기상' : `${p.memMb}MB 상주`}
+                </span>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <div
+        style={{ backgroundColor: 'rgba(13,148,136,0.16)' }}
+        className="rounded-xl px-4 py-2.5 text-[13px] text-zinc-100 font-bold leading-relaxed break-keep flex items-start gap-2.5"
+      >
+        <img src="/gwisinkachi_app_icon_512.png" alt="아기귀신" className="w-6 h-6 rounded-full object-cover shrink-0" />
+        <span>{stepMsg}</span>
+      </div>
+
+      <div className="flex flex-wrap items-center gap-2">
+        {[
+          { label: '🔍 1초 진단', onClick: runSpeedDiagnose, enabled: true, active: speedStep === 0 || speedStep === 4 },
+          { label: '💤 안 지우고 재우기', onClick: runSpeedSleep, enabled: speedStep >= 1, active: speedStep === 1 },
+          {
+            label: '🏦 은행 사이트 열어보기',
+            onClick: runSpeedBankOpen,
+            enabled: speedStep >= 2,
+            active: speedStep === 2 && sleptCount >= total,
+          },
+          {
+            label: '↩️ 전부 원래대로',
+            onClick: runSpeedRestore,
+            enabled: speedStep >= 2 && speedStep !== 4,
+            active: speedStep === 3,
+          },
+        ].map((b) => (
+          <button
+            key={b.label}
+            type="button"
+            disabled={!b.enabled}
+            onClick={b.onClick}
+            style={
+              !b.enabled
+                ? { backgroundColor: 'rgba(255,255,255,0.03)', color: '#52525B' }
+                : b.active
+                ? { backgroundColor: '#00F0B5', color: '#020617' }
+                : { backgroundColor: 'rgba(255,255,255,0.07)', color: '#E4E4E7' }
+            }
+            className={`px-3.5 py-2 rounded-xl text-[13px] font-black border transition-all ${
+              !b.enabled
+                ? 'border-white/5 cursor-not-allowed'
+                : b.active
+                ? 'border-[#00F0B5] shadow-[0_0_14px_rgba(0,240,181,0.35)] cursor-pointer animate-pulse'
+                : 'border-white/15 hover:border-teal-400/50 cursor-pointer'
+            }`}
+          >
+            {b.label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex flex-wrap gap-2 text-xs font-extrabold">
+        <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">
+          🔒 지운 프로그램 {deletedCount}개 · 1초 원상복구
+        </span>
+        <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30">
+          ✋ 마음대로 지우지 않고 내가 고른 것만
+        </span>
+      </div>
+    </div>
+  );
+};
+
 const TRASH_TABS_4: {
   key: 'duplicate' | 'memo' | 'screenshot' | 'blurry';
   stepNum: string;
@@ -1448,6 +1709,8 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 </button>
               </div>
             </div>
+
+            <SecretarySamplePcCarePanel />
 
             <div className="font-headline-md text-[16px] md:text-[18px] text-zinc-900 dark:text-white font-extrabold tracking-tight leading-snug">
               {activeTrash.length > 0 ? (

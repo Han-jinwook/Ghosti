@@ -182,10 +182,9 @@ export const App: React.FC = () => {
       if (!OFFICIAL_LAUNCH_LIVE) {
         return 'showroom';
       }
-      const hasActiveSession = Boolean(localStorage.getItem('merlin_session_token'));
-      if (hasActiveSession) {
-        return 'workspace';
-      }
+      // [라우팅 잠금 철칙 1 준수]:
+      // ?lounge=... 또는 ?tab=... 파라미터가 없는 순수 루트(https://ghosti.sundreamer.app/) 접속 시에는
+      // 이전 세션 토큰 유무와 무관하게 무조건 온보딩 첫 화면('showroom')을 먼저 노출합니다.
     } catch {
       // ignore
     }
