@@ -563,20 +563,28 @@ export interface GhostSecretaryTurn {
   needsColdReading?: boolean;
 }
 
-export const QUEST_YES_LABELER = '좋아요, 예쁘게 바꿔 주세요';
-export const QUEST_YES_ALERT = '좋아요, 알려 주세요';
-export const QUEST_NO = '다음에요';
+export const QUEST_YES_LABELER = '좋아, 예쁘게 바꿔줘';
+export const QUEST_YES_ALERT = '좋아, 알려줘';
+export const QUEST_NO = '다음에 할래';
+
+function hasHangulBatchim(ch: string): boolean {
+  if (!ch) return false;
+  const code = ch.charCodeAt(0);
+  if (code < 0xac00 || code > 0xd7a3) return false;
+  return (code - 0xac00) % 28 !== 0;
+}
 
 /**
- * 귀신비서가 제시하는 모든 추천 버튼(칩)의 문구를 정중하고 일관된 존댓말(해요체)로 통일합니다.
- * - LLM 생성 문구·기존 대본·세션 복원 메시지에 반말(~해줘, ~보여줘, ~볼래, ~할래, ~거야?, 응 ...)이 섞여 있어도
- *   100% 일관된 해요체(~해 주세요, ~보여 주세요, ~볼게요, ~할게요, ~건가요?, 네, ...)로 정규화합니다.
+ * [전사 UX 확정 규칙]
+ * - 귀신비서(응답 말풍선): 다정하고 친근한 애기귀신 말투(해요체)로 응대
+ * - 유저 입장(추천 버튼/칩): 100% 반말(~해줘, ~보여줘, ~볼래, ~할래, ~까?, 응 ...)로 전부 통일!
+ * LLM 생성 문구나 세션 복원 메시지에 존댓말(~해 주세요, ~까요?, ~나요?, ~볼래요, 네 ...)이 섞여 있어도
+ * 유저 입장의 자연스러운 반말로 일괄 정규화합니다.
  */
 export function normalizeSuggestionChipTone(rawChip: string): string {
   const trimmed = String(rawChip || '').trim();
   if (!trimmed) return '';
 
-  // 괄호 부가설명("(복원 기록 확인)" 등)과 우측 화살표("➔")를 분리한 뒤 본문 어미를 정규화하고 재결합
   const tailMatch = trimmed.match(/^(.*?)(\s*\([^)]*\))?(\s*➔)?([!.~?]*)$/);
   if (!tailMatch) return trimmed;
 
@@ -585,52 +593,75 @@ export function normalizeSuggestionChipTone(rawChip: string): string {
   const arrowPart = tailMatch[3] || '';
   let punct = tailMatch[4] || '';
 
-  // 1) 문두 반말 감탄사·연결어 정중화 ("응, ..." / "응 ..." -> "네, ...", "마음 바꿨어!" -> "마음 바꿨어요!")
-  core = core.replace(/^((?:[^\w가-힣]+\s*)*)응,\s*/, '$1네, ');
-  core = core.replace(/^((?:[^\w가-힣]+\s*)*)응\s+/, '$1네, ');
-  core = core.replace(/마음\s*바꿨어([!.~?]*)\s*/g, '마음 바꿨어요$1 ');
-
-  // 2) 명사형 액션 라벨 통일 ("써보기" -> "써 볼게요", "구경하기" -> "구경할게요", "연결하기" -> "연결할게요")
-  if (/써\s*보기$/.test(core)) {
-    core = core.replace(/써\s*보기$/, '써 볼게요');
-  } else if (/구경하기$/.test(core)) {
-    core = core.replace(/구경하기$/, '구경할게요');
-  } else if (/연결하기$/.test(core)) {
-    core = core.replace(/연결하기$/, '연결할게요');
-  } else if (/자동\s*재우기$/.test(core)) {
-    core = core.replace(/자동\s*재우기$/, '알아서 재워 주세요');
+  // 1) 단독 정중 거절·긍정 치환
+  if (/^((?:[^\w가-힣]+\s*)*)다음에요$/.test(core)) {
+    core = core.replace(/다음에요$/, '다음에 할래');
+  } else if (/^((?:[^\w가-힣]+\s*)*)나중에요$/.test(core)) {
+    core = core.replace(/나중에요$/, '나중에 할래');
   }
 
-  // 3) 반말 요청·청유·의문 어미 -> 해요체 통일
-  if (/해\s*줄래$/.test(core)) {
-    core = core.replace(/해\s*줄래$/, '해 주실래요');
+  // 2) 문두 존댓말 감탄사·연결어 -> 반말 통일 ("네, ..." -> "응, ...", "좋아요, ..." -> "좋아, ...", "마음 바꿨어요!" -> "마음 바꿨어!")
+  core = core.replace(/^((?:[^\w가-힣]+\s*)*)네,\s*/, '$1응, ');
+  core = core.replace(/^((?:[^\w가-힣]+\s*)*)네\s+/, '$1응, ');
+  core = core.replace(/^((?:[^\w가-힣]+\s*)*)좋아요,\s*/, '$1좋아, ');
+  core = core.replace(/^((?:[^\w가-힣]+\s*)*)좋아요\s+/, '$1좋아, ');
+  core = core.replace(/마음\s*바꿨어요([!.~?]*)\s*/g, '마음 바꿨어$1 ');
+
+  // 3) 명사형 액션 라벨 -> 유저 반말 어미 통일
+  if (/써\s*보기$/.test(core)) {
+    core = core.replace(/써\s*보기$/, '써볼래');
+  } else if (/구경하기$/.test(core)) {
+    core = core.replace(/구경하기$/, '구경할래');
+  } else if (/연결하기$/.test(core)) {
+    core = core.replace(/연결하기$/, '연결할래');
+  } else if (/자동\s*재우기$/.test(core)) {
+    core = core.replace(/자동\s*재우기$/, '알아서 재워줘');
+  }
+
+  // 4) 존댓말 요청·청유·의문 어미 -> 반말 통일
+  if (/([가-힣])\s*주실래요$/.test(core)) {
+    core = core.replace(/([가-힣])\s*주실래요$/, '$1 줄래');
     if (!punct) punct = '?';
-  } else if (/([가-힣])\s*줘$/.test(core)) {
-    core = core.replace(/([가-힣])\s*줘$/, '$1 주세요');
-  } else if (/(진행|실행|계속)해$/.test(core)) {
-    core = core.replace(/(진행|실행|계속)해$/, '$1해 주세요');
-  } else if (/([가-힣])\s*볼래$/.test(core)) {
-    core = core.replace(/([가-힣])\s*볼래$/, '$1볼게요');
-  } else if (/([가-힣])\s*할래$/.test(core)) {
-    core = core.replace(/([가-힣])\s*할래$/, '$1할게요');
-  } else if (/된\s*거야$/.test(core)) {
-    core = core.replace(/된\s*거야$/, '된 건가요');
+  } else if (/([가-힣])\s*주세요$/.test(core)) {
+    core = core.replace(/([가-힣])\s*주세요$/, '$1줘');
+  } else if (/([가-힣])\s*(?:볼래요|볼게요)$/.test(core)) {
+    core = core.replace(/([가-힣])\s*(?:볼래요|볼게요)$/, '$1볼래');
+  } else if (/([가-힣])\s*(?:할래요|할게요)$/.test(core)) {
+    core = core.replace(/([가-힣])\s*(?:할래요|할게요)$/, '$1할래');
+  } else if (/([가-힣])\s*(?:갈래요|갈게요)$/.test(core)) {
+    core = core.replace(/([가-힣])\s*(?:갈래요|갈게요)$/, '$1갈래');
+  } else if (/([가-힣]+?)까요$/.test(core)) {
+    core = core.replace(/([가-힣]+?)까요$/, '$1까');
     if (!punct) punct = '?';
-  } else if (/한\s*거야$/.test(core)) {
-    core = core.replace(/한\s*거야$/, '한 건가요');
+  } else if (/된\s*건가요$/.test(core)) {
+    core = core.replace(/된\s*건가요$/, '된 거야');
     if (!punct) punct = '?';
-  } else if (/얼마야$/.test(core)) {
-    core = core.replace(/얼마야$/, '얼마인가요');
+  } else if (/한\s*건가요$/.test(core)) {
+    core = core.replace(/한\s*건가요$/, '한 거야');
     if (!punct) punct = '?';
-  } else if (/있어$/.test(core)) {
-    core = core.replace(/있어$/, '있나요');
+  } else if (/([가-힣])인가요$/.test(core)) {
+    core = core.replace(/([가-힣])인가요$/, (_, ch: string) => `${ch}${hasHangulBatchim(ch) ? '이야' : '야'}`);
     if (!punct) punct = '?';
-  } else if (/돌아가$/.test(core)) {
-    core = core.replace(/돌아가$/, '돌아가나요');
+  } else if (/있나요$/.test(core)) {
+    core = core.replace(/있나요$/, '있어');
     if (!punct) punct = '?';
-  } else if (/빨라졌어$/.test(core)) {
-    core = core.replace(/빨라졌어$/, '빨라졌나요');
+  } else if (/없나요$/.test(core)) {
+    core = core.replace(/없나요$/, '없어');
     if (!punct) punct = '?';
+  } else if (/되나요$/.test(core)) {
+    core = core.replace(/되나요$/, '돼');
+    if (!punct) punct = '?';
+  } else if (/돌아가나요$/.test(core)) {
+    core = core.replace(/돌아가나요$/, '돌아가');
+    if (!punct) punct = '?';
+  } else if (/빨라졌나요$/.test(core)) {
+    core = core.replace(/빨라졌나요$/, '빨라졌어');
+    if (!punct) punct = '?';
+  } else if (/([가-힣])나요$/.test(core)) {
+    core = core.replace(/([가-힣])나요$/, '$1나');
+    if (!punct) punct = '?';
+  } else if (/([가-힣])(?:어요|아요|여요|해요)$/.test(core)) {
+    core = core.replace(/요$/, '');
   }
 
   return `${core}${parenPart}${arrowPart}${punct}`.replace(/\s{2,}/g, ' ').trim();
@@ -745,8 +776,8 @@ export function resolveGhostSecretaryTurn(
         scenarioId: 'nickname_jamo_reask',
         text: '앗, 초성 대신 편하게 부를 수 있는 별명(예: 은호, 멀린)으로 알려주실래요? 지금 바로 진짜 내 컴퓨터 점검부터 해보고 싶으시면 아래 버튼을 눌러보셔도 돼요! 👻✨',
         followUps: [
-          '부팅할 때 켜지는 시작프로그램 목록도 보여 주세요',
-          '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해 주세요',
+          '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
+          '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
         ],
         nextState: st,
       };
@@ -825,7 +856,7 @@ export function resolveGhostSecretaryTurn(
     return {
       scenarioId: 'cleanup_defer_remaining_flexible',
       text: `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두었어요 👻✨ 그럼 바로 다음 순서로 왼쪽 두 번째 메뉴 **『👻 귀신검색』**(또는 단축키 \`Ctrl + 0\`)에서 방금 읽어둔 내 진짜 사진·문서를 1초 만에 찾아보실까요?`,
-      followUps: ['🔍 귀신검색으로 내 파일 찾아볼래요'],
+      followUps: ['🔍 귀신검색으로 내 파일 찾아볼래'],
       nextState: st,
     };
   }
@@ -1100,7 +1131,7 @@ export function buildMobileRemainingPhotosChoicePrompt(
       nickname,
       remaining_photos: remainingPhotos.toLocaleString('ko-KR'),
     }),
-    followUps: ['지금 천천히 돌려 주세요 (30분 뒤 안내)', '저녁에 쉴 때 조용히 해 주세요'],
+    followUps: ['지금 천천히 돌려줘 (30분 뒤 안내)', '저녁에 쉴 때 조용히 해줘'],
   };
 }
 

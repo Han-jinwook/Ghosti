@@ -61,6 +61,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
   onToast,
 }) => {
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [expandedDetails, setExpandedDetails] = useState(false);
   const [showAllRestorePoints, setShowAllRestorePoints] = useState(false);
   const [restoreFilterText, setRestoreFilterText] = useState('');
   const [extraSupportKind, setExtraSupportKind] = useState<'CLAIM' | 'AS_BUG' | 'IDEA'>('IDEA');
@@ -215,82 +216,86 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
 
       {/* 3) 대화형 폴더 정리 / 다운로드 설치파일(.apk/.exe) 청소 미리보기 게이트 */}
       {message.cardKind === 'CLEANUP_PREVIEW_GATE' && message.cleanupPreview && (
-        <div className="rounded-xl border border-amber-500/40 bg-slate-900/90 p-3.5 space-y-2.5">
+        <div className="rounded-xl border border-amber-500/40 bg-slate-900/90 p-3.5 space-y-2.5 text-[13px] overflow-hidden break-words [overflow-wrap:anywhere]">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[11px] font-extrabold">
-              <FolderCheck className="w-3.5 h-3.5" />
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[13px] font-extrabold">
+              <FolderCheck className="w-4 h-4 shrink-0" />
               {message.cleanupPreview.summaryTitle}
             </span>
-            <span className="text-[11px] font-extrabold text-emerald-400">
+            <span className="text-[13px] font-extrabold text-emerald-400">
               {message.cleanupPreview.reclaimSizeLabel}
             </span>
           </div>
 
-          <p className="text-xs text-slate-300 leading-relaxed">
+          <p className="text-[13px] text-slate-300 leading-relaxed">
             {message.cleanupPreview.previewDescriptionKo}
           </p>
 
-          <div className="grid grid-cols-2 gap-2 text-center">
-            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2">
-              <div className="text-[10px] text-slate-400">&apos;기타_정리함&apos;으로 이동 대상</div>
-              <div className="text-sm font-black text-amber-300">
+          <div className="grid grid-cols-2 gap-2 text-center text-[13px]">
+            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5">
+              <div className="text-slate-400">&apos;기타_정리함&apos; 이동 대상</div>
+              <div className="font-black text-amber-300">
                 {message.cleanupPreview.moveCount}건
               </div>
             </div>
-            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2">
-              <div className="text-[10px] text-slate-400">대상 파일 합계</div>
-              <div className="text-sm font-black text-sky-300">
+            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5">
+              <div className="text-slate-400">대상 파일 합계</div>
+              <div className="font-black text-sky-300">
                 {formatBytes(message.cleanupPreview.totalBytes)}
               </div>
             </div>
           </div>
 
-          <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5 text-[11px] text-slate-300 space-y-1">
-            <div className="font-bold text-slate-400">📋 정리 대상 파일 목록 ({message.cleanupPreview.sampleFiles.length}건):</div>
-            {message.cleanupPreview.sampleFiles.map((f, idx) => (
-              <div key={idx} className="flex items-center gap-1.5">
-                <span className="text-amber-400">•</span>
-                <span className="font-mono">{f}</span>
+          <div className="space-y-2">
+            <button
+              type="button"
+              onClick={() => setExpandedDetails((v) => !v)}
+              className="w-full py-2 px-3 rounded-lg bg-slate-950/80 hover:bg-slate-800 border border-slate-700 text-[13px] font-bold text-amber-300 flex items-center justify-between gap-2 cursor-pointer transition text-left"
+            >
+              <span>📋 정리 대상 파일 상세 목록 ({message.cleanupPreview.sampleFiles.length}건)</span>
+              <span className="shrink-0">{expandedDetails ? '▴ 접기' : '▾ 펼치기'}</span>
+            </button>
+            {expandedDetails && (
+              <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-3 text-[13px] text-slate-200 space-y-1.5 max-h-52 overflow-y-auto">
+                {message.cleanupPreview.sampleFiles.map((f, idx) => (
+                  <div key={idx} className="flex items-start gap-1.5 break-words [overflow-wrap:anywhere]">
+                    <span className="text-amber-400 shrink-0">•</span>
+                    <span>{f}</span>
+                  </div>
+                ))}
               </div>
-            ))}
+            )}
           </div>
 
           {message.cleanupPreview.executionError && (
-            <div className="text-[11px] font-bold text-rose-300">{message.cleanupPreview.executionError}</div>
+            <div className="text-[13px] font-bold text-rose-300">{message.cleanupPreview.executionError}</div>
           )}
           <div className="pt-1">
             {message.cleanupPreview.approved ? (
-              <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold flex items-center justify-between gap-2 flex-wrap">
+              <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-[13px] font-extrabold flex items-center justify-between gap-2 flex-wrap">
                 <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
                   ✅ 정리 완료 · [복원 기록 {message.cleanupPreview.createdRestoreId || '#1'}]
                 </span>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {message.cleanupPreview.approvedTypedText && (
-                    <span className="text-[11px] text-emerald-200 font-mono">
-                      승인 발화: &ldquo;{message.cleanupPreview.approvedTypedText}&rdquo;
-                    </span>
-                  )}
-                  <button
-                    type="button"
-                    disabled={busyId === 'cleanup_undo'}
-                    onClick={async () => {
-                      const rid = message.cleanupPreview?.createdRestoreId || '#1';
-                      setBusyId('cleanup_undo');
-                      const res = await executeRestorePointRollback(rid, '원래대로 되돌리기 버튼 클릭');
-                      setBusyId(null);
-                      onToast?.(res.message);
-                    }}
-                    className="px-2.5 py-1 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-[11px] font-extrabold cursor-pointer shadow-xs transition"
-                  >
-                    {busyId === 'cleanup_undo' ? '복원 중...' : '↩️ 원래대로 되돌리기'}
-                  </button>
-                </div>
+                <button
+                  type="button"
+                  disabled={busyId === 'cleanup_undo'}
+                  onClick={async () => {
+                    const rid = message.cleanupPreview?.createdRestoreId || '#1';
+                    setBusyId('cleanup_undo');
+                    const res = await executeRestorePointRollback(rid, '원래대로 되돌려줘');
+                    setBusyId(null);
+                    onToast?.(res.message);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-[13px] font-extrabold cursor-pointer shadow-xs transition"
+                >
+                  {busyId === 'cleanup_undo' ? '복원 중...' : '↩️ 원래대로 되돌려줘'}
+                </button>
               </div>
             ) : (
-              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-200 font-semibold leading-relaxed flex items-center justify-between gap-2 flex-wrap">
+              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2.5 text-[13px] text-amber-200 font-semibold leading-relaxed flex items-center justify-between gap-2 flex-wrap">
                 <span>
-                  ✍️ 실행하시려면 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력하거나 우측 버튼을 눌러 주세요.
+                  ✍️ 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력하거나 우측 버튼을 눌러 정리해 보세요!
                 </span>
                 <button
                   type="button"
@@ -316,9 +321,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     });
                     onToast?.(res.message);
                   }}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11.5px] font-extrabold cursor-pointer shadow transition"
+                  className="px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[13px] font-extrabold cursor-pointer shadow transition shrink-0"
                 >
-                  {busyId === 'cleanup_approve' ? '정리 중...' : '✅ 승인 및 안전 정리 실행'}
+                  {busyId === 'cleanup_approve' ? '정리 중...' : '✅ 응, 안전 정리해줘'}
                 </button>
               </div>
             )}
@@ -505,19 +510,19 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
 
       {/* 6) 내 PC 실시간 사양 스캔(200토큰) 카드 (심플 노션 스타일) */}
       {message.cardKind === 'PC_SPEC_CONSULTATION' && message.pcSpecPayload && (
-        <div className="rounded-xl border border-cyan-500/30 bg-slate-900/90 p-3.5 space-y-2.5">
+        <div className="rounded-xl border border-cyan-500/30 bg-slate-900/90 p-3.5 space-y-2.5 text-[13px] overflow-hidden break-words [overflow-wrap:anywhere]">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 text-xs font-extrabold text-cyan-300">
-              <Cpu className="w-4 h-4" />
+            <span className="inline-flex items-center gap-1.5 text-[13px] font-extrabold text-cyan-300">
+              <Cpu className="w-4 h-4 shrink-0" />
               내 PC 실측 하드웨어 요약
             </span>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-extrabold">
+            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[13px] font-extrabold">
               {message.pcSpecPayload.verdictBadge}
             </span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[11px]">
-            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[13px]">
+            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5">
               <div className="text-slate-400">
                 CPU {typeof message.pcSpecPayload.cpuLoadPercent === 'number' ? `(부하 ${message.pcSpecPayload.cpuLoadPercent}%)` : ''}
               </div>
@@ -525,7 +530,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 {message.pcSpecPayload.cpuModel}
               </div>
             </div>
-            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2">
+            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5">
               <div className="text-slate-400">메모리 (RAM)</div>
               <div className="font-bold text-emerald-300 whitespace-normal break-words leading-snug">
                 {message.pcSpecPayload.ramTotalGb ?? '확인 불가'}
@@ -533,62 +538,69 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 {message.pcSpecPayload.ramUsedPercent !== null ? ` (${message.pcSpecPayload.ramUsedPercent}%)` : ''}
               </div>
             </div>
-            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2">
+            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5">
               <div className="text-slate-400">그래픽 (GPU)</div>
               <div className="font-bold text-sky-300 whitespace-normal break-words leading-snug">
                 {message.pcSpecPayload.gpuModel}
               </div>
             </div>
-            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2">
+            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5">
               <div className="text-slate-400">여유 공간</div>
               <div className="font-bold text-amber-300 flex items-center gap-1 whitespace-normal break-words leading-snug">
-                <HardDrive className="w-3 h-3 shrink-0" />
+                <HardDrive className="w-3.5 h-3.5 shrink-0" />
                 <span>{message.pcSpecPayload.diskFreeGb !== null ? `${message.pcSpecPayload.diskFreeGb} GB 여유` : '확인 불가'}</span>
               </div>
             </div>
           </div>
 
           {message.pcSpecPayload.bloatwareCleanSummary && (
-            <div className="rounded-lg bg-emerald-950/60 border border-emerald-500/40 p-2.5 text-xs text-emerald-200 font-bold whitespace-normal break-words">
+            <div className="rounded-lg bg-emerald-950/60 border border-emerald-500/40 p-2.5 text-[13px] text-emerald-200 font-bold whitespace-normal break-words">
               {message.pcSpecPayload.bloatwareCleanSummary}
             </div>
           )}
 
           {(message.pcSpecPayload.detectedBloatwareLabels?.length || 0) > 0 && (
-            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5 text-[11px] text-slate-300 space-y-1">
-              <div className="font-bold text-amber-300">
-                📋 적발된 애드웨어·보안·자동실행 상주 모듈 ({message.pcSpecPayload.detectedBloatwareLabels!.length}건):
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-1 max-h-36 overflow-y-auto pr-1">
-                {message.pcSpecPayload.detectedBloatwareLabels!.map((lbl, idx) => (
-                  <div key={idx} className="flex items-center gap-1.5 truncate">
-                    <span className="text-amber-400">•</span>
-                    <span className="font-mono truncate">{lbl}</span>
-                  </div>
-                ))}
-              </div>
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setExpandedDetails((v) => !v)}
+                className="w-full py-2 px-3 rounded-lg bg-slate-950/80 hover:bg-slate-800 border border-slate-700 text-[13px] font-bold text-amber-300 flex items-center justify-between gap-2 cursor-pointer transition text-left"
+              >
+                <span>📋 감지된 보안·자동실행 모듈 상세 목록 ({message.pcSpecPayload.detectedBloatwareLabels!.length}종)</span>
+                <span className="shrink-0">{expandedDetails ? '▴ 접기' : '▾ 펼치기'}</span>
+              </button>
+              {expandedDetails && (
+                <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-3 text-[13px] text-slate-200 space-y-1.5 max-h-52 overflow-y-auto">
+                  {message.pcSpecPayload.detectedBloatwareLabels!.map((lbl, idx) => (
+                    <div key={idx} className="flex items-start gap-1.5 break-words [overflow-wrap:anywhere]">
+                      <span className="text-amber-400 shrink-0">•</span>
+                      <span>{lbl}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
           <div className="pt-1 space-y-2">
             {message.pcSpecPayload.bloatwareCleaned ? (
-              <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold flex items-center justify-between gap-2 flex-wrap">
+              <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-[13px] font-extrabold flex items-center justify-between gap-2 flex-wrap">
                 <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4" />
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
                   실행 및 블랙박스 기록 완료 · [복원 기록 {message.pcSpecPayload.createdRestoreId || '#1'}]
                 </span>
                 {message.pcSpecPayload.approvedTypedText && (
-                  <span className="text-[11px] text-emerald-200 font-mono">
-                    승인 발화: &ldquo;{message.pcSpecPayload.approvedTypedText}&rdquo;
+                  <span className="text-[13px] text-emerald-200">
+                    승인: &ldquo;{message.pcSpecPayload.approvedTypedText}&rdquo;
                   </span>
                 )}
               </div>
             ) : (
               ((message.pcSpecPayload.detectedBloatwareLabels?.length || 0) > 0 ||
                 (message.pcSpecPayload.cpuLoadPercent ?? 0) >= 50) && (
-                <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-200 font-semibold leading-relaxed flex items-center justify-between gap-2 flex-wrap">
+                <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2.5 text-[13px] text-amber-200 font-semibold leading-relaxed flex items-center justify-between gap-2 flex-wrap">
                   <span>
-                    ✍️ 위 상주 애드웨어·보안모듈 정리를 실행하시려면 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력하거나 우측 버튼을 눌러 주세요. (승인 내역이 블랙박스·[복원 기록]에 남아요)
+                    ✍️ 불필요 항목만 정리할까요? 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 치거나 버튼을 눌러 주세요!
                   </span>
                   <button
                     type="button"
@@ -598,9 +610,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       await submitExternalMonsterChatQuery('응 진행해', message.sourceTab || 'trash');
                       setBusyId(null);
                     }}
-                    className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11.5px] font-extrabold cursor-pointer shadow transition shrink-0"
+                    className="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[13px] font-extrabold cursor-pointer shadow transition shrink-0"
                   >
-                    {busyId === 'spec_approve' ? '정리 중...' : '✅ 확인 완료 · 바로 정리하기'}
+                    {busyId === 'spec_approve' ? '정리 중...' : '✅ 응, 바로 정리해줘'}
                   </button>
                 </div>
               )
@@ -675,128 +687,145 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         </div>
       )}
 
-      {/* 6-B) ⚙️ 고치기 진단 & 1초 수리 / 빨간 손가락(👆) 화면 안내 카드 */}
+      {/* 6-B) ⚙️ 고치기 진단 & 1초 수리 / 상세 목록 펼치기·접기 카드 */}
       {message.cardKind === 'DEVICE_REPAIR_GATE' && message.deviceRepairPayload && (
-        <div className="rounded-xl border border-teal-500/45 bg-slate-900/95 p-3.5 space-y-2.5">
+        <div className="rounded-xl border border-teal-500/45 bg-slate-900/95 p-3.5 space-y-2.5 text-[13px] overflow-hidden break-words [overflow-wrap:anywhere]">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 text-[11px] font-extrabold">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 text-[13px] font-extrabold">
               ✋ 손보기 진단 카드
             </span>
-            <span className="text-[11px] font-extrabold text-emerald-300">
+            <span className="text-[13px] font-extrabold text-emerald-300">
               {message.deviceRepairPayload.badgeText}
             </span>
           </div>
 
-          <div className="text-xs font-extrabold text-white whitespace-normal break-words">
+          <div className="text-[13px] font-extrabold text-white whitespace-normal break-words leading-snug">
             {message.deviceRepairPayload.title}
           </div>
-          <p className="text-[11.5px] text-slate-300 leading-relaxed whitespace-normal break-words">
+          <p className="text-[13px] text-slate-300 leading-relaxed whitespace-normal break-words">
             {message.deviceRepairPayload.rootCause}
           </p>
 
-          {message.deviceRepairPayload.executed && (
-            <div className="rounded-lg bg-emerald-950/50 border border-emerald-500/40 p-2.5 text-xs text-emerald-200 font-bold whitespace-normal break-words">
-              {message.deviceRepairPayload.undone
-                ? '↩️ 수리 전 원래 설정으로 1초 원상복구되었습니다!'
-                : message.deviceRepairPayload.completionMessage || '✅ 1초 자동 수리 및 설정 백업이 완료되었습니다!'}
+          {message.deviceRepairPayload.detailGroups && message.deviceRepairPayload.detailGroups.length > 0 && (
+            <div className="space-y-2">
+              <button
+                type="button"
+                onClick={() => setExpandedDetails((v) => !v)}
+                className="w-full py-2 px-3 rounded-lg bg-slate-950/80 hover:bg-slate-800 border border-slate-700 text-[13px] font-bold text-teal-300 flex items-center justify-between gap-2 cursor-pointer transition text-left"
+              >
+                <span>
+                  📋 상세 목록 {expandedDetails ? '접기' : '펼치기'} (
+                  {message.deviceRepairPayload.detailGroups.map((g) => g.groupTitle).join(' · ')})
+                </span>
+                <span className="shrink-0 font-extrabold">{expandedDetails ? '▴ 접기' : '▾ 펼치기'}</span>
+              </button>
+              {expandedDetails && (
+                <div className="rounded-lg bg-slate-950/85 border border-slate-800 p-3 space-y-3 max-h-60 overflow-y-auto text-[13px]">
+                  {message.deviceRepairPayload.detailGroups.map((grp, gIdx) => (
+                    <div key={gIdx} className="space-y-1.5">
+                      <div className="font-extrabold text-teal-300">{grp.groupTitle}</div>
+                      <div className="space-y-1">
+                        {grp.items.map((item, iIdx) => (
+                          <div
+                            key={iIdx}
+                            className="flex items-start gap-1.5 text-slate-200 break-words [overflow-wrap:anywhere] leading-snug"
+                          >
+                            <span className="text-emerald-400 shrink-0">•</span>
+                            <span>{item}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           )}
 
-          <div className="pt-1 space-y-2">
+          {message.deviceRepairPayload.executed && (
+            <div className="rounded-lg bg-emerald-950/50 border border-emerald-500/40 p-2.5 text-[13px] text-emerald-200 font-bold whitespace-normal break-words">
+              {message.deviceRepairPayload.undone
+                ? '↩️ 수리 전 원래 설정으로 1초 원상복구했어요!'
+                : message.deviceRepairPayload.completionMessage || '✅ 1초 자동 정리 및 설정 백업을 마쳤어요!'}
+            </div>
+          )}
+
+          <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
             {message.deviceRepairPayload.executed && !message.deviceRepairPayload.undone ? (
-              <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold flex items-center justify-between gap-2 flex-wrap">
-                <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4" />
-                  실행 및 블랙박스 기록 완료 · [복원 기록 {message.deviceRepairPayload.createdRestoreId || '#1'}]
-                </span>
-                {message.deviceRepairPayload.approvedTypedText && (
-                  <span className="text-[11px] text-emerald-200 font-mono">
-                    승인 발화: &ldquo;{message.deviceRepairPayload.approvedTypedText}&rdquo;
-                  </span>
-                )}
-              </div>
-            ) : (
-              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2 text-xs text-amber-200 font-semibold leading-relaxed flex items-center justify-between gap-2 flex-wrap">
-                <span>
-                  ✍️ 수리·정리를 실행하시려면 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력하거나 아래 실행 버튼을 눌러 주세요. (블랙박스·[복원 기록]에 자동 기록돼요)
+              <>
+                <span className="px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-[13px] font-extrabold flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4 shrink-0" />
+                  정리 완료 · [복원 기록 {message.deviceRepairPayload.createdRestoreId || '#1'}]
                 </span>
                 <button
                   type="button"
-                  disabled={busyId === 'repair_approve'}
+                  disabled={busyId === 'repair_undo'}
                   onClick={async () => {
-                    setBusyId('repair_approve');
-                    await submitExternalMonsterChatQuery('응 진행해', message.sourceTab || 'trash');
+                    setBusyId('repair_undo');
+                    await submitExternalMonsterChatQuery('방금 한 거 되돌려줘', message.sourceTab || 'trash');
                     setBusyId(null);
                   }}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11.5px] font-extrabold cursor-pointer shadow transition shrink-0"
+                  className="px-3.5 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-[13px] font-extrabold cursor-pointer shadow flex items-center gap-1"
                 >
-                  {busyId === 'repair_approve' ? '수리 중...' : '✅ 확인 완료 · 바로 실행하기'}
+                  {busyId === 'repair_undo' ? '복원 중...' : '↩️ 방금 한 거 되돌려줘'}
                 </button>
+              </>
+            ) : (
+              <div className="w-full rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2.5 text-[13px] text-amber-200 font-semibold leading-relaxed flex items-center justify-between gap-2 flex-wrap">
+                <span>
+                  ✍️ 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력하거나 우측 버튼을 눌러 실행해 보세요! (언제든 복원 가능해요)
+                </span>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    disabled={busyId === 'repair_approve'}
+                    onClick={async () => {
+                      setBusyId('repair_approve');
+                      await submitExternalMonsterChatQuery('응 진행해', message.sourceTab || 'trash');
+                      setBusyId(null);
+                    }}
+                    className="px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[13px] font-extrabold cursor-pointer shadow transition shrink-0"
+                  >
+                    {busyId === 'repair_approve' ? '정리 중...' : '⚡ 응, 지금 바로 정리해줘'}
+                  </button>
+                  {message.deviceRepairPayload.hasOverlayGuide && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const plan = buildSetupDiagnosisPlan(
+                          'pc',
+                          message.deviceRepairPayload!.symptomQuery,
+                          message.deviceRepairPayload!.presetId
+                        );
+                        if (plan.overlaySteps && plan.overlaySteps.length > 0) {
+                          useSaySeeStore.getState().openSetupOverlayGuide(plan);
+                        } else {
+                          const fallbackPlan = buildSetupDiagnosisPlan(
+                            'pc',
+                            message.deviceRepairPayload!.symptomQuery,
+                            'pc_excel_overlay'
+                          );
+                          useSaySeeStore.getState().openSetupOverlayGuide({
+                            ...fallbackPlan,
+                            title: `👆 [${message.deviceRepairPayload!.symptomQuery}] 빨간 손가락 화면 안내`,
+                          });
+                        }
+                        await launchRealOsTopmostOverlay({
+                          x: 420,
+                          y: 180,
+                          text: `👆 [${message.deviceRepairPayload!.symptomQuery}] 여기를 클릭해 설정을 확인하세요!`,
+                          durationSec: 10,
+                        });
+                        onToast?.('👆 화면 위에 빨간 손가락(👆) 동행 가이드를 띄웠습니다!');
+                      }}
+                      className="px-3.5 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[13px] font-extrabold cursor-pointer shadow flex items-center gap-1"
+                    >
+                      👆 빨간 손가락 화면 안내 봐줘
+                    </button>
+                  )}
+                </div>
               </div>
             )}
-          </div>
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            {!message.deviceRepairPayload.executed || message.deviceRepairPayload.undone ? (
-              <button
-                type="button"
-                disabled={busyId === 'repair_approve'}
-                onClick={async () => {
-                  setBusyId('repair_approve');
-                  await submitExternalMonsterChatQuery('응 진행해', message.sourceTab || 'trash');
-                  setBusyId(null);
-                }}
-                className="px-3 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 text-xs font-extrabold cursor-pointer shadow flex items-center gap-1"
-              >
-                {busyId === 'repair_approve' ? '수리 실행 중...' : '⚡ 이 증상 1초 수리 시작하기'}
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled={busyId === 'repair_undo'}
-                onClick={async () => {
-                  setBusyId('repair_undo');
-                  await submitExternalMonsterChatQuery('방금 한 거 되돌려줘', message.sourceTab || 'trash');
-                  setBusyId(null);
-                }}
-                className="px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-xs font-extrabold cursor-pointer shadow flex items-center gap-1"
-              >
-                {busyId === 'repair_undo' ? '복원 중...' : '↩️ 원래 설정으로 되돌리기'}
-              </button>
-            )}
-
-            <button
-              type="button"
-              onClick={async () => {
-                const plan = buildSetupDiagnosisPlan(
-                  'pc',
-                  message.deviceRepairPayload!.symptomQuery,
-                  message.deviceRepairPayload!.presetId
-                );
-                if (plan.overlaySteps && plan.overlaySteps.length > 0) {
-                  useSaySeeStore.getState().openSetupOverlayGuide(plan);
-                } else {
-                  const fallbackPlan = buildSetupDiagnosisPlan(
-                    'pc',
-                    message.deviceRepairPayload!.symptomQuery,
-                    'pc_excel_overlay'
-                  );
-                  useSaySeeStore.getState().openSetupOverlayGuide({
-                    ...fallbackPlan,
-                    title: `👆 [${message.deviceRepairPayload!.symptomQuery}] 빨간 손가락 화면 안내`,
-                  });
-                }
-                await launchRealOsTopmostOverlay({
-                  x: 420,
-                  y: 180,
-                  text: `👆 [${message.deviceRepairPayload!.symptomQuery}] 여기를 클릭해 설정을 확인하세요!`,
-                  durationSec: 10,
-                });
-                onToast?.('👆 화면 위에 빨간 손가락(👆) 동행 가이드를 띄웠습니다!');
-              }}
-              className="px-3 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-extrabold cursor-pointer shadow flex items-center gap-1"
-            >
-              👆 빨간 손가락 화면 안내 보기
-            </button>
           </div>
         </div>
       )}

@@ -75,7 +75,7 @@ import {
 import { rankPassportCandidates, countUniqueFacePhotos } from './GhostPassportCandidatesPanel';
 
 /** [v1.3] 내 컴퓨터 연결 직후 자동 실행할 1단계 분석 문구 — 멋대로 삭제하지 않고 실측 사양 + 속도 저하 범인(상주 보안모듈·애드웨어) 분석표를 먼저 제시 */
-const SECRETARY_FIRST_CARE_QUERY = '요즘 컴퓨터가 좀 느린데 내 사양이랑 누가 속도 잡아먹는지 분석해 주세요';
+const SECRETARY_FIRST_CARE_QUERY = '요즘 컴퓨터가 좀 느린데 내 사양이랑 누가 속도 잡아먹는지 분석해줘';
 
 /** 이미 타이핑 연출이 완료된 귀신비서 메시지 ID 캐시 (탭 전환·리렌더 시 중복 재생 방지) */
 const completedSecretaryAnimIds = new Set<string>();
@@ -407,7 +407,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                 sourceTab: 'trash',
                 text: introText,
                 followUpSuggestions: [
-                  '👍 네, 앞으로 알아서 재우고 깨워 주세요',
+                  '👍 응, 앞으로 알아서 재우고 깨워줘',
                 ],
               },
             ];
@@ -451,8 +451,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                   `👻 ${nickLabel}참! 제가 뒤에서 컴퓨터를 챙기다 보니 지금 다운로드 폴더에 압축파일${sampleHint}이 **총 ${zipCount}건** 쌓여 있더라고요.\n` +
                   `제가 사진 정리랑 속도 관리 말고도 뒤에서 조용히 돕는 **'숨은 초능력'이 두 가지(광고 없는 파일 경호 & 더블클릭·우클릭 1초 압축 풀기)** 더 있는데, 우리 걸로 써보실 수 있게 간단히 알려드릴까요?`,
                 followUpSuggestions: [
-                  '✨ 네, 숨은 초능력 두 가지 알려 주세요',
-                  '📂 다운로드 폴더 열어서 1초 압축 풀기 써 볼게요',
+                  '✨ 응, 숨은 초능력 두 가지 알려줘',
+                  '📂 다운로드 폴더 열어서 1초 압축 풀기 써볼래',
                 ],
               },
             ];
@@ -548,7 +548,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           timestamp: nowTimeKo(),
           sourceTab: 'trash',
           text: `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두고 다음 안내로 넘어갈게요 👻✨\n이제 왼쪽 두 번째 메뉴 **『👻 귀신검색』**(또는 단축키 \`Ctrl + 0\`)에서 방금 읽어둔 내 진짜 사진·문서를 1초 만에 찾아보실까요?`,
-          followUpSuggestions: ['🔍 귀신검색으로 내 파일 찾아볼래요', '✨ 귀신비서의 숨은 초능력 알려 주세요'],
+          followUpSuggestions: ['🔍 귀신검색으로 내 파일 찾아볼래', '✨ 귀신비서의 숨은 초능력 알려줘'],
         },
       ]);
     };
@@ -573,9 +573,9 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           followUpSuggestions:
             isRestoreDone && zCoreBridge.isConnected
               ? [
-                  '부팅할 때 켜지는 시작프로그램 목록도 보여 주세요',
-                  '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해 주세요',
-                  '내 PC 사양이랑 남은 용량 진단해 주세요',
+                  '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
+                  '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
+                  '내 PC 사양이랑 남은 용량 진단해줘',
                 ]
               : undefined,
         },
@@ -619,8 +619,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           cardKind: 'WEEKLY_CARE_BRIEFING',
           proactiveCareBriefing: briefing,
           followUpSuggestions: [
-            '네, 지금 1초 만에 손봐 주세요',
-            '정기 검진 요일 금요일 오후 4시로 바꿔 주세요',
+            '응, 지금 1초 만에 손봐줘',
+            '정기 검진 요일 금요일 오후 4시로 바꿔줘',
           ],
         };
         return [...prev, proactiveMsg];
@@ -781,8 +781,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                 `좋아요 ${nickLabel}! 위쪽 다른 메뉴들을 눌러 위아래로 스크롤하며 **눈으로 둘러보시는 건 언제든 환영**이에요!\n` +
                 `다만 내 진짜 사진·문서를 실제로 검색하거나 정리하시려면 **내 컴퓨터 연결**이 필요하고, 연결 없이 샘플 데이터로 직접 클릭 체험만 해보고 싶으시다면 아래 버튼을 눌러 **온보딩 체험관**으로 가보실 수도 있어요 👻✨`,
               followUpSuggestions: [
-                '🏠 온보딩 체험관으로 나가서 구경할게요 ➔',
-                '⚡ 마음 바꿨어요! 내 컴퓨터 연결해 볼게요',
+                '🏠 온보딩 체험관으로 나가서 구경할래 ➔',
+                '⚡ 마음 바꿨어! 내 컴퓨터 연결해 볼래',
               ],
             },
           ]);
@@ -908,10 +908,10 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               ? reading.text
               : `${nextState.nickname}님! 지금 내 컴퓨터에 최신 제트코어(v${zCoreBridge.version || '2.3.9'})가 바로 연결되어 있어요! 👻✨\n아래 버튼을 누르거나 채팅창에 편하게 말씀해 주시면 진짜 내 PC의 시작프로그램 목록·부팅 경과 시간·사양을 1초 만에 바로 보여드릴게요!`,
             followUpSuggestions: needsEngineRite
-              ? ['🔍 네, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해 주세요']
+              ? ['🔍 응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘']
               : [
-                  '부팅할 때 켜지는 시작프로그램 목록도 보여 주세요',
-                  '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해 주세요',
+                  '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
+                  '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
                   SECRETARY_FIRST_CARE_QUERY,
                 ],
           });
@@ -1368,7 +1368,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           <button
             type="button"
             disabled={busy}
-            onClick={() => void handleSend('최근 [복원 기록] 보여 주세요', 'text')}
+            onClick={() => void handleSend('최근 [복원 기록] 보여줘', 'text')}
             title="최근 손보기·정리 내역 조회 및 원래대로 1초 되돌리기"
             style={{ backgroundColor: '#F5F3FF', color: '#5B21B6', borderColor: '#8B5CF6' }}
             className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
@@ -1430,7 +1430,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               </div>
 
               <div
-                className={`max-w-[95%] rounded-2xl px-4 py-3 text-[13.5px] leading-relaxed whitespace-pre-line shadow-xs ${
+                className={`max-w-[95%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] overflow-hidden shadow-xs ${
                   isUser
                     ? 'bg-teal-600 text-white rounded-tr-sm border border-teal-700 font-semibold'
                     : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-tl-sm'
@@ -1529,7 +1529,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                 {!isUser && msg.followUpSuggestions && msg.followUpSuggestions.length > 0 && (
                   <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-800/80 flex flex-wrap gap-1.5">
                     {msg.followUpSuggestions.map((sug, sIdx) => {
-                      const politeSug = normalizeSuggestionChipTone(sug);
+                      const casualSug = normalizeSuggestionChipTone(sug);
                       return (
                         <button
                           key={sIdx}
@@ -1540,11 +1540,11 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                             setSharedMonsterMessages((prev) =>
                               prev.map((m) => (m.id === msg.id ? { ...m, followUpSuggestions: [] } : m))
                             );
-                            void handleSend(politeSug, 'text');
+                            void handleSend(casualSug, 'text');
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
+                          className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[13px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left break-words [overflow-wrap:anywhere]"
                         >
-                          💬 {politeSug}
+                          💬 {casualSug}
                         </button>
                       );
                     })}
@@ -1568,22 +1568,22 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                             disabled={busy}
                             onClick={() => {
                               setWelcomeChipsDismissed(true);
-                              void handleSend('🤝 네, 엔진 연결하고 1초 건강검진 해 주세요', 'text');
+                              void handleSend('🤝 응, 엔진 연결하고 1초 건강검진 해줘', 'text');
                             }}
-                            className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 border border-emerald-300 dark:border-emerald-500/40 text-[11.5px] font-extrabold text-emerald-800 dark:text-emerald-300 transition cursor-pointer text-left"
+                            className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 border border-emerald-300 dark:border-emerald-500/40 text-[13px] font-extrabold text-emerald-800 dark:text-emerald-300 transition cursor-pointer text-left break-words"
                           >
-                            🤝 네, 엔진 연결하고 1초 건강검진 해 주세요
+                            🤝 응, 엔진 연결하고 1초 건강검진 해줘
                           </button>
                           <button
                             type="button"
                             disabled={busy}
                             onClick={() => {
                               setWelcomeChipsDismissed(true);
-                              void handleSend('👀 일단 눈으로 구경부터 할게요', 'text');
+                              void handleSend('👀 일단 눈으로 구경부터 할래', 'text');
                             }}
-                            className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
+                            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[13px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left break-words"
                           >
-                            👀 일단 눈으로 구경부터 할게요
+                            👀 일단 눈으로 구경부터 할래
                           </button>
                         </>
                       ) : (
@@ -1593,22 +1593,22 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                             disabled={busy}
                             onClick={() => {
                               setWelcomeChipsDismissed(true);
-                              void handleSend('부팅할 때 켜지는 시작프로그램 목록도 보여 주세요', 'text');
+                              void handleSend('부팅할 때 켜지는 시작프로그램 목록도 보여줘', 'text');
                             }}
-                            className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 border border-emerald-300 dark:border-emerald-500/40 text-[11.5px] font-extrabold text-emerald-800 dark:text-emerald-300 transition cursor-pointer text-left"
+                            className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 border border-emerald-300 dark:border-emerald-500/40 text-[13px] font-extrabold text-emerald-800 dark:text-emerald-300 transition cursor-pointer text-left break-words"
                           >
-                            ⚙️ 부팅할 때 켜지는 시작프로그램 목록도 보여 주세요
+                            ⚙️ 부팅할 때 켜지는 시작프로그램 목록도 보여줘
                           </button>
                           <button
                             type="button"
                             disabled={busy}
                             onClick={() => {
                               setWelcomeChipsDismissed(true);
-                              void handleSend('👍 네, 앞으로 알아서 재우고 깨워 주세요', 'text');
+                              void handleSend('👍 응, 앞으로 알아서 재우고 깨워줘', 'text');
                             }}
-                            className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
+                            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[13px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left break-words"
                           >
-                            🏦 안 쓰는 은행 보안프로그램 알아서 재워 주세요
+                            🏦 안 쓰는 은행 보안프로그램 알아서 재워줘
                           </button>
                         </>
                       )}
