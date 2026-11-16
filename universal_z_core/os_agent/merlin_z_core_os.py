@@ -1867,10 +1867,10 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
                 clean_bat_path = MERLIN_DIR / "merlin_fast_clean_bloatware.cmd"
                 try:
                     clean_bat_path.write_text("\r\n".join(batch_lines) + "\r\n", encoding="cp949", errors="ignore")
-                    subprocess.run(
+                    subprocess.Popen(
                         ["cmd.exe", "/c", str(clean_bat_path)],
-                        capture_output=True,
-                        timeout=2.5,
+                        stdout=subprocess.DEVNULL,
+                        stderr=subprocess.DEVNULL,
                         creationflags=0x08000000,
                     )
                 except Exception:
