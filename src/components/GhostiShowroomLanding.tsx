@@ -3512,9 +3512,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           <div className="lg:col-span-8 space-y-4 min-w-0">
             <div
               style={{ backgroundColor: 'rgba(251, 191, 36, 0.18)', color: '#FCD34D' }}
-              className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full border border-amber-400/40 text-[13px] font-black"
+              className="showroom-fit-1line inline-flex items-center gap-1.5 sm:gap-2 px-3 sm:px-3.5 py-1 rounded-full border border-amber-400/40 sm:text-[13px] font-black whitespace-nowrap break-keep max-w-full"
             >
-              <span>📜</span>
+              <span className="shrink-0">📜</span>
               <span>대표이사 직인 날인 · 무료 사용 공식 확인서</span>
             </div>
             <h3 className="showroom-cert-h3 text-lg sm:text-3xl font-black text-white leading-tight break-keep">
