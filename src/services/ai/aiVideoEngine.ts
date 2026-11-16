@@ -1927,11 +1927,12 @@ async function captureHighResFramesForVideoOcr(
           if (!seekOk) continue;
           const vw = videoEl.videoWidth || 640;
           const vh = videoEl.videoHeight || 360;
-          const scale = Math.min(1, 960 / Math.max(vw, vh));
+          const maxDim = Math.max(vw, vh);
+          const scale = maxDim < 1100 ? Math.min(2, 1440 / maxDim) : Math.min(1, 1440 / maxDim);
           canvas.width = Math.max(160, Math.round(vw * scale));
           canvas.height = Math.max(90, Math.round(vh * scale));
           ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-          const dataUrl = canvas.toDataURL('image/jpeg', 0.86);
+          const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
           if (dataUrl && dataUrl.startsWith('data:image/')) {
             results.push({ timeSec: Math.floor(sec), dataUrl });
           }
@@ -1971,12 +1972,17 @@ export async function extractVideoScreenTextOnDemand(
       });
       if (res1.ok) {
         const data1 = await res1.json();
-        if (data1?.hasText && Array.isArray(data1.ocrLines) && data1.ocrLines.length > 0) {
+        const lines1: VideoOcrLineItem[] = Array.isArray(data1?.ocrLines)
+          ? data1.ocrLines
+          : Array.isArray(data1?.lines)
+          ? data1.lines
+          : [];
+        if ((data1?.hasText || lines1.length > 0) && lines1.length > 0) {
           return {
             ok: true,
             hasText: true,
             videoFileName: vid.videoFileName,
-            ocrLines: data1.ocrLines,
+            ocrLines: lines1,
             fullText: String(data1.fullText || ''),
           };
         }

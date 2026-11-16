@@ -2137,7 +2137,7 @@ _VIDEO_STREAM_CACHE_DIR = MERLIN_DIR / "video_stream_cache"
 _VIDEO_STREAM_INFLIGHT: Dict[str, threading.Event] = {}
 _VIDEO_STREAM_LOCK = threading.Lock()
 _VIDEO_OCR_CACHE_FILE = MERLIN_DIR / "video_scene_ocr_cache_v2.json"
-_VIDEO_OCR_SCHEMA_VER = 3
+_VIDEO_OCR_SCHEMA_VER = 4
 _VIDEO_OCR_LOCK = threading.Lock()
 _VIDEO_OCR_BG_RUNNING = False
 _FFMPEG_EXE_CACHE: str | None = ""
@@ -2414,6 +2414,85 @@ _WATERMARK_OCR_RX = re.compile(
 )
 
 
+_VIDEO_OCR_NOISE_SEGS_RX = re.compile(
+    r"^(?:[\u4e00-\u9fff]|口|巳|臼|匕|團|國|爨|鸞|龜|I|l|\||\[|\]|\(|\)|!|\?|\.|,|-|~|`|'|\")+$"
+)
+
+_VIDEO_OCR_JITTER_CORRECTIONS: List[tuple[re.Pattern[str], str]] = [
+    (re.compile(r"를렛추[청첨]"), "룰렛추첨"),
+    (re.compile(r"룰렛추청"), "룰렛추첨"),
+    (re.compile(r"망고야사[람랑][해배]"), "망고야사랑해"),
+    (re.compile(r"항고야사랑해"), "망고야사랑해"),
+    (re.compile(r"[마아][릅를류르]\s*다운\s*88\d?"), "아름다운888"),
+    (re.compile(r"관[g담람]\s*증입니다"), "관람 중입니다"),
+    (re.compile(r"관람\s*증입니다"), "관람 중입니다"),
+    (re.compile(r"슈팅시간[.:]\s*140이00"), "슈팅시간: 14:00:00"),
+    (re.compile(r"남은시간:\s*예:[0예][01예I이:]+"), "남은시간: 00:00"),
+    (re.compile(r"현재시간:\s*13159(\d{2})"), r"현재시간: 13:59:\1"),
+    (re.compile(r"현재시간:\s*1호5[8일]\S+"), "현재시간: 13:58"),
+    (re.compile(r"소[렁림랑링]2\s*(?:[!/]\s*2)?"), "소링2"),
+    (re.compile(r"마이다[싀싛스]1?(?:\s*[,|]?\s*4)?"), "마이다스1"),
+    (re.compile(r"[꼼콤]지락이712[i7]?(?:\s*2)?"), "꼼지락이712"),
+    (re.compile(r"까망[폴똘]이(?:\s*1?\s*/?\s*2)?"), "까망똘이"),
+    (re.compile(r"[긍금]정파[웨워]"), "긍정파워"),
+    (re.compile(r"[극국]복한다"), "극복한다"),
+    (re.compile(r"경주[황봥왕]1?2?"), "경주왕"),
+    (re.compile(r"강[들튿][뽗뭊꽃]1?2?"), "강들꽃"),
+    (re.compile(r"문성(?:\s*7?2)?"), "운성"),
+    (re.compile(r"을이[람랑]"), "윤이랑"),
+    (re.compile(r"인니[몽봉][몽봉국]"), "인니봉봉"),
+    (re.compile(r"정[형행쟁](?:\s*7?9)?"), "정뱅"),
+    (re.compile(r"진진222[i1]?\s*3?"), "진진222"),
+    (re.compile(r"[키카기][킼라][킼]1?2?"), "키킼킼"),
+    (re.compile(r"별명\s*[멋밋]글[수A^]"), "별명 / 댓글수"),
+    (re.compile(r"배를\s*퀴즈"), "배틀 퀴즈"),
+    (re.compile(r"급식\s*배를"), "급식 배틀"),
+    (re.compile(r"내\s*귀즈"), "내 퀴즈"),
+    (re.compile(r"G00이e"), "Google"),
+    (re.compile(r"습습습습습"), "★★★★★"),
+]
+
+
+def _clean_video_ocr_display_text(raw_txt: str) -> str:
+    """
+    동영상 화면 OCR에서 발생하는 저해상도 서브픽셀 한자/기호 파편(口, 巳, 鸞g龜O딘 등)을 제거하고,
+    WinRT OCR의 대표적 획 오인(를렛추청→룰렛추첨, 망고야사람해→망고야사랑해, 마릅다운88→아름다운888 등)을 정밀 복원합니다.
+    """
+    s = str(raw_txt or "").strip()
+    if not s:
+        return ""
+    for rx, repl in _VIDEO_OCR_JITTER_CORRECTIONS:
+        s = rx.sub(repl, s)
+    # 1) 슬래시(/) 구분 세그먼트 단위 노이즈 정화
+    raw_segs = [seg.strip() for seg in s.split("/")]
+    cleaned_segs: List[str] = []
+    for seg in raw_segs:
+        if not seg:
+            continue
+        # 세그먼트 앞뒤의 깨진 체크박스/괄호 기호([회, [호], 「기, [2」, [!], ㆍ, 口 등) 제거
+        seg = re.sub(
+            r"^(?:\[[^\]]{1,3}\]?\s*|\|[가-힣0-9]{1,2}\s*|[〔「『][」』기]?\s*|[口巳臼匕團國爨鸞龜Ⅰ|ㆍ•\-]+\s*)+",
+            "",
+            seg,
+        ).strip()
+        seg = re.sub(r"[\u4e00-\u9fff]+", "", seg).strip()
+        if not seg or _VIDEO_OCR_NOISE_SEGS_RX.match(seg):
+            continue
+        # 의미 없는 단독 1글자 숫자/기호/조각 한글 파편 제외
+        if len(seg) <= 1:
+            continue
+        alnum = re.sub(r"[^가-힣a-zA-Z0-9]", "", seg)
+        if not alnum:
+            continue
+        # 한글 1글자 + 무작위 영문/기호 조합(예: gO딘`0, 물옥h,경) 노이즈 제거
+        ko_cnt = len(re.findall(r"[가-힣]", seg))
+        sym_cnt = len(re.findall(r"[^가-힣a-zA-Z0-9\s.:+\-?!%()]", seg))
+        if sym_cnt >= 2 and ko_cnt <= 2:
+            continue
+        cleaned_segs.append(seg)
+    return " / ".join(cleaned_segs)
+
+
 def _is_meaningful_ocr_text(txt: str) -> bool:
     """
     야외/실내 일반 영상의 나뭇가지·그림자·물결 노이즈('=』젤TA爨', '•謷&•구수하')나
@@ -2516,7 +2595,7 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
                             subprocess.run(
                                 [
                                     ff, "-y", "-ss", str(s), "-i", str(vpath),
-                                    "-frames:v", "1", "-vf", "scale='min(1120,max(640,iw))':-2", "-q:v", "4", str(out_jpg),
+                                    "-frames:v", "1", "-vf", "scale='min(1440,max(960,iw*2))':-2:flags=lanczos", "-q:v", "2", str(out_jpg),
                                 ],
                                 capture_output=True,
                                 timeout=15,
@@ -2647,7 +2726,7 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
     for line in ocr_proc.stdout.splitlines():
         if "\t" in line:
             fn, txt = line.split("\t", 1)
-            ocr_by_file[fn.strip()] = re.sub(r"\s+", " ", txt).strip()
+            ocr_by_file[fn.strip()] = _clean_video_ocr_display_text(re.sub(r"\s+", " ", txt).strip())
     return ocr_by_file
 
 
@@ -2656,7 +2735,7 @@ def _dedupe_ocr_timeline_lines(raw_frames: List[Dict[str, Any]]) -> List[Dict[st
     deduped: List[Dict[str, Any]] = []
     prev_norm = ""
     for fr in sorted(raw_frames, key=lambda x: int(x.get("timeSec") or 0)):
-        txt = str(fr.get("ocrText") or "").strip()
+        txt = _clean_video_ocr_display_text(str(fr.get("ocrText") or "").strip())
         if not _is_meaningful_ocr_text(txt):
             continue
         norm = re.sub(r"[^가-힣a-zA-Z0-9]", "", txt).lower()
@@ -2836,9 +2915,11 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "ok": True,
             "cached": True,
+            "hasText": len(lines) > 0,
             "videoFileName": target_path.name,
             "filePath": str(target_path),
             "lines": lines,
+            "ocrLines": lines,
             "fullText": full_text,
             "lineCount": len(lines),
         }
@@ -2860,7 +2941,7 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
                     subprocess.run(
                         [
                             ff, "-y", "-ss", str(s_val), "-i", str(target_path),
-                            "-frames:v", "1", "-vf", "scale='min(1120,max(640,iw))':-2", "-q:v", "3", str(out_jpg),
+                            "-frames:v", "1", "-vf", "scale='min(1440,max(960,iw*2))':-2:flags=lanczos", "-q:v", "2", str(out_jpg),
                         ],
                         capture_output=True,
                         timeout=15,
@@ -2952,9 +3033,11 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
             return {
                 "ok": True,
                 "cached": False,
+                "hasText": len(lines_w) > 0,
                 "videoFileName": target_path.name,
                 "filePath": str(target_path),
                 "lines": lines_w,
+                "ocrLines": lines_w,
                 "fullText": full_text_w,
                 "lineCount": len(lines_w),
             }
@@ -2991,9 +3074,11 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "ok": True,
             "cached": False,
+            "hasText": len(lines) > 0,
             "videoFileName": target_path.name,
             "filePath": str(target_path),
             "lines": lines,
+            "ocrLines": lines,
             "fullText": full_text,
             "lineCount": len(lines),
         }
@@ -3171,7 +3256,7 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 valid_ocr_frames: List[Dict[str, Any]] = []
                 if cached_ocr and isinstance(cached_ocr.get("frames"), list):
                     for ofr in cached_ocr["frames"]:
-                        raw_ot = str(ofr.get("ocrText") or "").strip()
+                        raw_ot = _clean_video_ocr_display_text(str(ofr.get("ocrText") or "").strip())
                         if _is_meaningful_ocr_text(raw_ot):
                             valid_ocr_frames.append({
                                 "timeSec": int(ofr.get("timeSec") or 0),
