@@ -2597,6 +2597,8 @@ def _clean_video_ocr_display_text(raw_txt: str) -> str:
             seg,
         ).strip()
         seg = re.sub(r"[\u4e00-\u9fff㈀-㈞]+", "", seg).strip()
+        # 일반화된 구조 규칙: '닉네임 / 숫자' 목록에서 WinRT OCR이 '/'를 '7','1','!','|' 또는 공백으로 오인한 패턴을 '단어 / 숫자'로 정규화
+        seg = re.sub(r"^([가-힣a-zA-Z0-9]{2,15})\s+(?:[71!|,]\s*)?(\d{1,2})$", r"\1 / \2", seg)
         if not seg or _VIDEO_OCR_NOISE_SEGS_RX.match(seg):
             continue
         # 회전 휠 내부의 휘어진 글자 조각이나 숫자/수식 깨짐 파편 제거
