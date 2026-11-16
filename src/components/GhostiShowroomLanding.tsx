@@ -3504,7 +3504,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             <h3 className="text-xl sm:text-3xl font-black text-white leading-tight break-keep">
               “회사 컴퓨터에 깔아도 저작권 단속 안 오나요?”<br />
               <span style={{ color: '#00F0B5' }}>
-                ✓ 개인·기업 PC 기본 기능 영구 무료! (라이선스 비용 0원)
+                <span className="inline-block whitespace-nowrap">✓ 개인·기업 PC 기본 기능 영구 무료!</span>{' '}
+                <span className="inline-block whitespace-nowrap">(라이선스 비용 0원)</span>
               </span>
             </h3>
 
@@ -3518,7 +3519,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <span
                   key={pill}
                   style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)', color: '#E2E8F0' }}
-                  className="px-3 py-1.5 rounded-xl border border-white/15"
+                  className="px-3 py-1.5 rounded-xl border border-white/15 break-keep"
                 >
                   {pill}
                 </span>
@@ -3533,7 +3534,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 type="button"
                 onClick={() => setCertModalOpen(true)}
                 style={{ backgroundColor: '#FBBF24', color: '#020617' }}
-                className="px-5 py-3 rounded-xl hover:opacity-95 font-black text-[13.5px] sm:text-sm cursor-pointer shadow-lg"
+                className="px-4 sm:px-5 py-3 rounded-xl hover:opacity-95 font-black text-[13px] sm:text-sm cursor-pointer shadow-lg whitespace-nowrap"
               >
                 📜 공식 무료 라이선스 보증서 크게 보기
               </button>
@@ -3542,7 +3543,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 target="_blank"
                 rel="noopener noreferrer"
                 style={{ backgroundColor: 'rgba(255, 255, 255, 0.1)', color: '#FFFFFF' }}
-                className="px-4 py-3 rounded-xl hover:opacity-90 border border-white/25 font-bold text-[13.5px] sm:text-sm"
+                className="px-4 py-3 rounded-xl hover:opacity-90 border border-white/25 font-bold text-[13px] sm:text-sm whitespace-nowrap"
               >
                 🖨️ 인쇄·비치용 보증서 새 창 열기 ↗
               </a>
@@ -3579,38 +3580,53 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           >
             <div className="flex flex-col md:flex-row md:items-end justify-between gap-3">
               <div className="space-y-1.5">
-                <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-500/15 border border-teal-400/35 text-teal-300 text-xs font-extrabold">
+                <span
+                  style={{ backgroundColor: 'rgba(20, 184, 166, 0.18)', color: '#5EEAD4' }}
+                  className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full border border-teal-400/40 text-xs font-extrabold"
+                >
                   🔗 기기 통합 &amp; 팀 공용 폴더 확장 (카드 등록 없는 30일 무료체험)
                 </span>
                 <h3 className="text-xl sm:text-2xl font-black text-white tracking-tight break-keep">
                   클라우드 월세 0원, 내 모든 기기와 우리 팀을 1초 만에 하나로
                 </h3>
               </div>
-              <p className="text-[13px] text-zinc-400 font-semibold break-keep">
+              <p className="text-[13px] text-zinc-300 font-semibold break-keep">
                 기본 4대 초능력은 평생 0원이며, 내 기기 직결이나 팀 공용 폴더가 필요하신 분만 투명한 정찰제로 이용하세요.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div data-keep-dark="true" className="grid grid-cols-1 md:grid-cols-2 gap-4">
               {/* 5. 📱 내 기기 통합 — 핵심 가격 상시 노출 */}
-              <div className="rounded-2xl bg-zinc-950/90 border border-white/12 hover:border-teal-400/45 p-5 transition-all space-y-2.5">
+              <div
+                data-keep-dark="true"
+                style={{ backgroundColor: '#060D17' }}
+                className="rounded-2xl border border-teal-400/35 hover:border-teal-400/65 p-5 transition-all space-y-2.5"
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm font-black text-[#00F0B5]">5. 📱 내 기기 통합</span>
-                  <span className="px-2.5 py-0.5 rounded-full bg-teal-500/15 text-teal-200 text-xs font-extrabold">
+                  <span style={{ color: '#00F0B5' }} className="text-sm font-black">
+                    5. 📱 내 기기 통합
+                  </span>
+                  <span
+                    style={{ backgroundColor: 'rgba(13, 148, 136, 0.28)', color: '#5EEAD4' }}
+                    className="px-2.5 py-0.5 rounded-full border border-teal-400/40 text-xs font-extrabold whitespace-nowrap"
+                  >
                     30일 무료체험 · 월 3,900원
                   </span>
                 </div>
                 <div className="text-base sm:text-lg font-black text-white break-keep">
                   카톡 ‘나에게 보내기’ 끝, 내 모든 기기를 하나로
                 </div>
-                <p className="text-[13px] text-zinc-200 font-semibold leading-relaxed break-keep">
-                  매달 내는 클라우드 월세 없이 내 폰·집컴·회사컴을 1초 만에 직결합니다. <span className="text-teal-300 font-bold">(카드 등록 없는 30일 무료체험 · 월 3,900원)</span>
+                <p className="text-[13px] text-zinc-100 font-semibold leading-relaxed break-keep">
+                  매달 내는 클라우드 월세 없이 내 폰·집컴·회사컴을 1초 만에 직결합니다.{' '}
+                  <span style={{ color: '#5EEAD4' }} className="font-bold">
+                    (카드 등록 없는 30일 무료체험 · 월 3,900원)
+                  </span>
                 </p>
-                <details className="pt-1 text-xs text-zinc-400">
-                  <summary className="cursor-pointer font-bold text-teal-300 hover:text-teal-200 select-none">
+                <details className="pt-1 text-xs text-zinc-300">
+                  <summary style={{ color: '#5EEAD4' }} className="cursor-pointer font-bold hover:opacity-90 select-none">
                     상세 연동 방식 보기 ▾
                   </summary>
-                  <p className="mt-2 leading-relaxed text-zinc-300 break-keep">
+                  <p className="mt-2 leading-relaxed text-zinc-200 break-keep">
                     동일 이메일 하나로 내 스마트폰 사진·영수증과 집·회사 PC 문서를 중앙 클라우드 업로드 없이 직접 암호화 연결합니다(연간 결제 시 월 3,250원꼴). 체험 만료 시에도 자동 결제 없이 유료 기능만 잠기며 내 PC 원본 파일은 그대로 보존됩니다.
                   </p>
                 </details>
@@ -3619,27 +3635,35 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               {/* 6. 💼 업무 공유 (공용 폴더 S:) — 공용 폴더 병기 & 핵심 요금·보안 상시 노출 */}
               <div
                 id="work-share"
-                className={`rounded-2xl bg-zinc-950/90 p-5 transition-all space-y-2.5 ${
+                data-keep-dark="true"
+                style={{ backgroundColor: '#060D17' }}
+                className={`rounded-2xl p-5 transition-all space-y-2.5 ${
                   b2bFocused
                     ? 'border-2 border-amber-400 ring-4 ring-amber-400/25 shadow-[0_0_32px_rgba(251,191,36,0.3)]'
-                    : 'border border-white/12 hover:border-amber-400/45'
+                    : 'border border-amber-400/35 hover:border-amber-400/65'
                 }`}
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-sm font-black text-amber-300">6. 💼 업무 공유 (공용 폴더 S:)</span>
+                  <span style={{ color: '#FCD34D' }} className="text-sm font-black">
+                    6. 💼 업무 공유 (공용 폴더 S:)
+                  </span>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <button
                       type="button"
                       onClick={() => setCertModalOpen(true)}
-                      className={`px-2.5 py-0.5 rounded-full text-xs font-black transition-all cursor-pointer ${
+                      style={
                         b2bFocused
-                          ? 'bg-amber-400 text-slate-950 ring-2 ring-amber-200 shadow-md'
-                          : 'bg-amber-400/20 hover:bg-amber-400 hover:text-slate-950 text-amber-200 border border-amber-400/45'
-                      }`}
+                          ? { backgroundColor: '#FBBF24', color: '#020617' }
+                          : { backgroundColor: 'rgba(245, 158, 11, 0.24)', color: '#FDE68A' }
+                      }
+                      className="px-2.5 py-0.5 rounded-full text-xs font-black border border-amber-400/50 transition-all cursor-pointer whitespace-nowrap"
                     >
                       📜 민간 기업 영구 무료 보증서
                     </button>
-                    <span className="px-2.5 py-0.5 rounded-full bg-amber-400/15 text-amber-200 text-xs font-extrabold">
+                    <span
+                      style={{ backgroundColor: 'rgba(245, 158, 11, 0.2)', color: '#FDE68A' }}
+                      className="px-2.5 py-0.5 rounded-full border border-amber-400/40 text-xs font-extrabold whitespace-nowrap"
+                    >
                       5인·30GB 평생 0원 보증
                     </span>
                   </div>
@@ -3647,14 +3671,17 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <div className="text-base sm:text-lg font-black text-white break-keep">
                   클라우드 월세 0원, 우리 팀 PC를 공용 폴더(S: 드라이브) 하나로
                 </div>
-                <p className="text-[13px] text-zinc-200 font-semibold leading-relaxed break-keep">
-                  비싼 서버나 클라우드 구독 없이 사내 문서·현장 사진을 공유 드라이브(S:) 하나로 묶어 1초 만에 찾고 씁니다. <span className="text-amber-300 font-bold">(소기업 5인·30GB 평생 0원 보증 · 추가 팀 월 9,900원~)</span>
+                <p className="text-[13px] text-zinc-100 font-semibold leading-relaxed break-keep">
+                  비싼 서버나 클라우드 구독 없이 사내 문서·현장 사진을 공유 드라이브(S:) 하나로 묶어 1초 만에 찾고 씁니다.{' '}
+                  <span style={{ color: '#FCD34D' }} className="font-bold">
+                    (소기업 5인·30GB 평생 0원 보증 · 추가 팀 월 9,900원~)
+                  </span>
                 </p>
-                <details open={b2bFocused || undefined} className="pt-1 text-xs text-zinc-400">
-                  <summary className="cursor-pointer font-bold text-amber-300 hover:text-amber-200 select-none">
+                <details open={b2bFocused || undefined} className="pt-1 text-xs text-zinc-300">
+                  <summary style={{ color: '#FCD34D' }} className="cursor-pointer font-bold hover:opacity-90 select-none">
                     사내 공용 폴더(S: 드라이브) 도입 &amp; 팀 요금 안내 보기 ▾
                   </summary>
-                  <p className="mt-2 leading-relaxed text-zinc-300 break-keep">
+                  <p className="mt-2 leading-relaxed text-zinc-200 break-keep">
                     NAS 장비 도입이나 인당 클라우드 월세 부담 없이 사무실 대표 PC 한 대를 사내 공용 폴더(S: 드라이브)로 종단간 암호화(E2EE) 연결해, 계약서·단가표·현장 시공 사진을 전 직원이 1초 만에 함께 찾고 활용합니다. 5인 이하·30GB 이하 민간 소기업은 평생 0원 보증서가 발급되며, 6인 이상·용량 확장 팀은 월 9,900원~ 정찰제로 운영됩니다.
                   </p>
                 </details>
@@ -3662,23 +3689,31 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             </div>
 
             {/* 상시 노출: 원가 투명화 1줄 + B2B 4대 신뢰 보증 배지 (SSOT v2.3) */}
-            <div className="rounded-2xl bg-zinc-950/90 border border-white/12 p-4 sm:p-5 space-y-3">
-              <p className="text-[12.5px] sm:text-[13px] text-zinc-200 font-semibold leading-relaxed break-keep">
-                <strong className="text-[#00F0B5]">💡 기본 4대 초능력은 외부 클라우드 서버 없이 내 기기 안에서만 작동해 서버 비용이 0원이므로 평생 무료로 제공됩니다.</strong>
+            <div
+              data-keep-dark="true"
+              style={{ backgroundColor: '#060D17' }}
+              className="rounded-2xl border border-white/15 p-4 sm:p-5 space-y-3"
+            >
+              <p className="text-[12.5px] sm:text-[13px] text-zinc-100 font-semibold leading-relaxed break-keep">
+                <strong style={{ color: '#00F0B5' }}>
+                  💡 기본 4대 초능력은 외부 클라우드 서버 없이 내 기기 안에서만 작동해 서버 비용이 0원이므로 평생 무료로 제공됩니다.
+                </strong>
               </p>
-              <div className="flex flex-wrap gap-2 text-xs font-extrabold text-zinc-200">
-                <span className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10">
-                  🔒 종단간 암호화(E2EE)
-                </span>
-                <span className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10">
-                  🛡️ 랜섬웨어 격리·스마트 캐시
-                </span>
-                <span className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10">
-                  🧾 법인 세금계산서 발행
-                </span>
-                <span className="px-3 py-1.5 rounded-xl bg-white/5 border border-white/10">
-                  🏢 썬드림(주) 공식 고객지원
-                </span>
+              <div className="flex flex-wrap gap-2 text-xs font-extrabold">
+                {[
+                  '🔒 종단간 암호화(E2EE)',
+                  '🛡️ 랜섬웨어 격리·스마트 캐시',
+                  '🧾 법인 세금계산서 발행',
+                  '🏢 썬드림(주) 공식 고객지원',
+                ].map((badge) => (
+                  <span
+                    key={badge}
+                    style={{ backgroundColor: 'rgba(255, 255, 255, 0.08)', color: '#F1F5F9' }}
+                    className="px-3 py-1.5 rounded-xl border border-white/15 whitespace-nowrap"
+                  >
+                    {badge}
+                  </span>
+                ))}
               </div>
             </div>
           </div>
@@ -3686,27 +3721,39 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       )}
 
       {/* =====================================================================
-          4-C. 📜 About Ghosti · 국문 & Global Brand Manifesto (SSOT v2.3 고유 정체성 복원)
+          4-C. 📜 귀신같이 브랜드 선언문 (한국어 문단 구분 & 고대비 다크 카드)
          ===================================================================== */}
       <section id="manifesto" className="py-10 px-4 sm:px-6 max-w-7xl mx-auto border-t border-white/5">
-        <div className="rounded-3xl bg-zinc-900/50 border border-white/10 p-6 sm:p-8 space-y-5">
-          <div className="space-y-1.5">
-            <span className="text-xs font-extrabold tracking-wider uppercase text-[#00F0B5]">
-              📜 About Ghosti · Brand Manifesto
+        <div
+          data-keep-dark="true"
+          style={{
+            background: 'linear-gradient(135deg, #07111E 0%, #0B1D28 55%, #071220 100%)',
+          }}
+          className="rounded-3xl border border-teal-400/35 p-6 sm:p-8 space-y-5 shadow-xl"
+        >
+          <div className="space-y-2">
+            <span
+              style={{ backgroundColor: 'rgba(0, 240, 181, 0.16)', color: '#00F0B5' }}
+              className="inline-block px-3 py-1 rounded-full border border-[#00F0B5]/40 text-xs font-extrabold"
+            >
+              📜 귀신같이 브랜드 선언문
             </span>
-            <p className="text-sm sm:text-base font-black text-zinc-100 break-keep">
-              귀신같이(Ghosti)는 지금 쓰는 내 PC와 모바일의 모든 답답함을 1초 만에 풀어내는 광고 0%·클라우드 월세 0원 초능력입니다.
+            <p className="text-base sm:text-lg font-black text-white break-keep">
+              귀신같이(Ghosti)는 지금 쓰는 내 PC와 모바일의 답답함을 1초 만에 풀어주는 ‘광고 0% · 클라우드 월세 0원’ 초능력입니다.
             </p>
-            <p className="text-xs sm:text-[13px] font-bold text-teal-300/90 break-keep">
-              평소엔 내 PC와 폰 속에 유령처럼 조용히 숨어 있다가, 부르면 광고도 월세도 없이 1초 만에 나타나 뭐든 해결하는 PC·모바일 초능력입니다.
+            <p style={{ color: '#5EEAD4' }} className="text-xs sm:text-[13.5px] font-extrabold break-keep">
+              평소엔 내 PC와 폰 속에 조용히 숨어 있다가, 부르면 광고도 월세도 없이 1초 만에 나타나 해결합니다.
             </p>
           </div>
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 pt-2 border-t border-white/10 text-[13px] leading-relaxed">
-            <p className="text-zinc-300 font-medium break-keep">
-              당신이 지금 쓰고 있는 PC와 모바일은 더 빠르고 똑똑해질 자격이 있습니다. 그동안 수많은 프로그램이 해결사를 자처하며 내 기기를 무겁게 만들고, 시도 때도 없이 광고를 띄우며, 매달 클라우드 월세를 요구해 왔습니다. 그래서 우리는 평소엔 아무것도 차지하지 않는 투명한 유령처럼 조용히 숨어 있다가, 당신이 부르는 단 1초의 순간에만 나타나 모든 답답함을 풀어내는 ‘귀신같이(Ghosti)’를 만들었습니다. 수십 개의 복잡한 도구를 깔고 배울 필요 없이, 지금 내 기기 안에서만 조용히 깨어나는 작지만 강력한 PC·모바일 초능력—광고 공해도, 클라우드 월세도, 끝없는 기다림도 없는 내 기기의 진짜 주권을 이제 귀신같이 누리세요.
+          <div className="space-y-3.5 pt-3 border-t border-white/15 text-[13.5px] sm:text-sm leading-relaxed text-zinc-100 font-medium break-keep">
+            <p>
+              지금 쓰고 계신 PC와 스마트폰은 원래 훨씬 더 빠르고 편리하게 쓰실 수 있는 기기입니다. 하지만 그동안 수많은 유틸리티 프로그램이 내 컴퓨터를 오히려 무겁게 만들고, 시도 때도 없이 광고창을 띄우며, 내 사진을 볼 때마다 매달 클라우드 월세를 요구해 왔습니다.
             </p>
-            <p className="text-zinc-400 font-normal">
-              The PC and mobile devices you already use every day deserve to feel effortless again. For too long, bloated software has slowed down your machines, hijacked your screen with relentless ads, and locked your memories and work behind monthly cloud rent. That is why we created Ghosti—a tiny, friendly ghost that rests quietly inside your devices with zero background drag, zero ads, and zero cloud storage fees, appearing the exact second you summon it to solve everything in a flash. No steep learning curve, no clutter, and no waiting: Ghosti is the quiet everyday superpower that gives your devices, your focus, and your time back to you.
+            <p>
+              그래서 우리는 평소엔 아무것도 차지하지 않는 착한 유령처럼 조용히 숨어 있다가, 꼭 필요한 순간에만 1초 만에 나타나 답답함을 해결해 주는 <strong style={{ color: '#00F0B5' }}>‘귀신같이’</strong>를 만들었습니다.
+            </p>
+            <p>
+              복잡한 기능을 새로 배울 필요도, 내 소중한 파일이 외부 서버로 넘어갈 걱정도 없습니다. 광고와 클라우드 월세 없는 내 컴퓨터·스마트폰의 진짜 편리함을 이제 귀신같이 누려보세요.
             </p>
           </div>
         </div>
