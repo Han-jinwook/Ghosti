@@ -19,6 +19,14 @@ export const LATEST_Z_CORE_VERSION = '2.3.9';
  * - 비로그인 게스트 상태에서는 백그라운드에서 `http://127.0.0.1:5199`로 요청을 보내지 않아야
  *   Chrome 142+ 로컬 네트워크 액세스(LNA: "이 기기의 다른 앱 및 서비스에 액세스") 권한 팝업이 뜨지 않습니다!
  */
+function isMobileBrowserRuntime(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return true;
+  if (/Macintosh/i.test(ua) && (navigator.maxTouchPoints || 0) > 1) return true;
+  return false;
+}
+
 export function hasActiveGhostiLoginSession(): boolean {
   if (typeof window === 'undefined') return false;
   if ((window as any).__GHOSTI_ZCORE_BRIDGE__?.isConnected === true) {
@@ -162,6 +170,13 @@ class ZCoreBridgeManager {
   }
 
   public async checkHealth(forceProbe: boolean = false): Promise<boolean> {
+    if (isMobileBrowserRuntime()) {
+      if (this.isConnected) {
+        this.isConnected = false;
+        this.notify();
+      }
+      return false;
+    }
     if (!forceProbe && !hasActiveGhostiLoginSession()) {
       if (this.isConnected) {
         this.isConnected = false;

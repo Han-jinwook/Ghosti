@@ -180,7 +180,9 @@ export async function collectColdReadingContext(): Promise<ColdReadingContext> {
     getBattery?: () => Promise<{ level: number; charging: boolean }>;
   };
   const ua = nav.userAgent || '';
-  const isMobile = /Android|iPhone|iPad|iPod|Mobile/i.test(ua);
+  const isMobile =
+    /Android|iPhone|iPad|iPod|Mobile/i.test(ua) ||
+    (/Macintosh/i.test(ua) && (nav.maxTouchPoints || 0) > 1);
   const dpr = typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1;
   const sw = typeof screen !== 'undefined' ? Math.round(screen.width * dpr) : 1920;
   const sh = typeof screen !== 'undefined' ? Math.round(screen.height * dpr) : 1080;
@@ -246,7 +248,7 @@ export function buildColdReadingText(nickname: string, ctx: ColdReadingContext):
     hour: ctx.hour,
     battery: ctx.batteryPct ?? '—',
     battery_msg: batteryMsg,
-  });
+  }).replace(/\(배터리\s*—%\)/g, '');
   return { id, text };
 }
 

@@ -62,9 +62,9 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
   }, [shouldCycle, cycleIntervalMs]);
 
   const isMobile = size === 'mobile';
-  const symbolSizeClass = isMobile ? 'w-9 h-9' : 'w-[42px] h-[42px]';
-  const wordmarkHeightClass = isMobile ? 'h-[28px]' : 'h-[34px]';
-  const slotWidthClass = isMobile ? 'w-[108px]' : 'w-[126px]';
+  const symbolSizeClass = isMobile ? 'w-8 h-8 sm:w-9 sm:h-9' : 'w-[42px] h-[42px]';
+  const wordmarkHeightClass = isMobile ? 'h-[22px] sm:h-[28px]' : 'h-[34px]';
+  const slotWidthClass = isMobile ? 'w-[78px] sm:w-[108px]' : 'w-[126px]';
 
   const sloganColorClass =
     themeMode === 'light'
@@ -83,7 +83,7 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
         onClick?.();
       }}
       title="귀신같이 — 1초 AI 내용검색 사진·영상·문서 찾기"
-      className={`inline-flex items-center gap-2 select-none ${
+      className={`inline-flex items-center ${isMobile ? 'gap-1.5 sm:gap-2' : 'gap-2'} shrink-0 select-none ${
         onClick ? 'cursor-pointer group' : ''
       } ${className}`}
     >

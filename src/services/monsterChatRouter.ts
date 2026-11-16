@@ -3297,12 +3297,30 @@ export async function processUnifiedMonsterChatQuery(params: {
     });
   }
 
+  const isMobileClient =
+    typeof navigator !== 'undefined' &&
+    (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') ||
+      (/Macintosh/i.test(navigator.userAgent || '') && (navigator.maxTouchPoints || 0) > 1));
+
   // 0-0G) [0토큰 즉시 실행: 시작프로그램 목록 실측 / 부팅 경과 시간 진단(내 기기 통합 불필요 안내 포함) / 순정 백신 점검]
   // 추천 칩이나 자연어 진단 요청이 단순 파일 검색(SEARCH_ROUTING)이나 엉뚱한 요금·일상 대화로 빠지지 않도록 LLM 호출 전에 즉시 정확히 처리합니다.
   const isExplicitStartupListInspect =
     !/강제\s*종료|정리해|꺼\s*줘|치워|삭제해|지워/i.test(clean) &&
     /시작\s*프로그램|자동\s*실행\s*(목록|프로그램)/i.test(clean);
   if (isExplicitStartupListInspect) {
+    if (isMobileClient) {
+      const mobileStartupMsg =
+        `👻 지금은 **스마트폰**으로 접속해 계시네요!\n` +
+        `윈도우 시작프로그램과 은행·관공서 보안모듈 점검은 **PC(컴퓨터)에서 접속하셨을 때** 1초 만에 바로 보여드려요 ✨ 스마트폰에서는 사진첩 중복·연사 정리와 1초 사진·문서 내용검색을 바로 써보실 수 있어요!\n\n` +
+        `💡 **요금 안내**: 시작프로그램 목록 점검과 불필요 자동실행 정리는 내 PC 1대에서 평생 0원(무료)으로 이용하실 수 있습니다!`;
+      return reply(sourceTab, mobileStartupMsg, {
+        followUpSuggestions: [
+          '중복·연사 사진 정리하는 법 알려줘',
+          '귀신검색으로 내 파일 찾아볼래',
+          '귀신비서의 숨은 초능력 알려줘',
+        ],
+      });
+    }
     const r = await zcoreJson<{
       ok: boolean;
       startupPrograms?: Array<{ name?: string; command?: string; location?: string }>;
@@ -3386,6 +3404,19 @@ export async function processUnifiedMonsterChatQuery(params: {
       clean
     );
   if (isExplicitBootUptimeOrRebootCare) {
+    if (isMobileClient) {
+      const mobileBootMsg =
+        `👻 지금은 **스마트폰**으로 접속해 계시네요!\n` +
+        `컴퓨터 부팅 경과 시간 진단은 **PC(컴퓨터)에서 접속하셨을 때** 윈도우 켜둔 시간(시간·분)을 1초 만에 측정해 드려요 ✨ 스마트폰에서는 사진첩 중복·흔들린 사진 정리와 1초 사진·문서 내용검색을 바로 써보실 수 있어요!\n\n` +
+        `💡 **요금 안내**: 시작프로그램 목록 점검과 불필요 자동실행 정리는 내 PC 1대에서 평생 0원(무료)으로 이용하실 수 있습니다!`;
+      return reply(sourceTab, mobileBootMsg, {
+        followUpSuggestions: [
+          '중복·연사 사진 정리하는 법 알려줘',
+          '귀신검색으로 내 파일 찾아볼래',
+          '귀신비서의 숨은 초능력 알려줘',
+        ],
+      });
+    }
     const subAct =
       /예약|새벽/i.test(clean)
         ? 'boot_lag_schedule_reboot'

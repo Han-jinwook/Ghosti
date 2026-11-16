@@ -475,8 +475,8 @@ export const DesktopSidebarContainer: React.FC<{
                 className={mainBtnClass(isGhostSecretaryActive)}
               >
                 <div className="flex flex-col text-left min-w-0 flex-1">
-                  <span className="truncate text-[14.5px]">👻 귀신비서</span>
-                  <span className="text-[10.5px] opacity-75 font-normal truncate">
+                  <span className="text-[14.5px] leading-snug">👻 귀신비서</span>
+                  <span className="text-[10.5px] opacity-75 font-normal whitespace-normal break-keep leading-snug">
                     안 지우고 재우고 · 1초 만에 새것처럼
                   </span>
                 </div>
@@ -497,8 +497,8 @@ export const DesktopSidebarContainer: React.FC<{
                 className={mainBtnClass(isGhostSearchActive)}
               >
                 <div className="flex flex-col text-left min-w-0 flex-1">
-                  <span className="truncate text-[14.5px]">🎯 귀신검색</span>
-                  <span className="text-[10.5px] opacity-75 font-normal truncate">
+                  <span className="text-[14.5px] leading-snug">🎯 귀신검색</span>
+                  <span className="text-[10.5px] opacity-75 font-normal whitespace-normal break-keep leading-snug">
                     파일 이름 몰라도, 열지 않고 1초 소환
                   </span>
                 </div>
@@ -522,8 +522,8 @@ export const DesktopSidebarContainer: React.FC<{
                   className={mainBtnClass(isPcFreeSuperpowerActive)}
                 >
                   <div className="flex flex-col text-left min-w-0 flex-1">
-                    <span className="truncate text-[14.5px]">⚡ 귀신창</span>
-                    <span className="text-[10.5px] opacity-75 font-normal truncate">
+                    <span className="text-[14.5px] leading-snug">⚡ 귀신창</span>
+                    <span className="text-[10.5px] opacity-75 font-normal whitespace-normal break-keep leading-snug">
                       하던 일 멈추지 않고, 쓰던 자리에서 1초 끝
                     </span>
                   </div>
@@ -550,14 +550,14 @@ export const DesktopSidebarContainer: React.FC<{
                   className={mainBtnClass(isPhotoShareActive)}
                 >
                   <div className="flex flex-col text-left min-w-0 flex-1">
-                    <span className="truncate text-[14.5px]">📸 사진 공유</span>
-                    <span className="text-[10.5px] opacity-75 font-normal truncate">
+                    <span className="text-[14.5px] leading-snug">📸 사진 공유</span>
+                    <span className="text-[10.5px] opacity-75 font-normal whitespace-normal break-keep leading-snug">
                       {isStoreAppMode
                         ? '개인 사진·영상 전용 (가족·모임 원본)'
                         : '개인 사진·영상 전용 · 만료 없이 평생 0원'}
                     </span>
                   </div>
-                  <span className="text-[10px] opacity-60">{isPhotoShareActive ? '▾' : '▸'}</span>
+                  <span className="text-[10px] opacity-60 shrink-0">{isPhotoShareActive ? '▾' : '▸'}</span>
                 </button>
 
                 {isPhotoShareActive && (
@@ -576,9 +576,9 @@ export const DesktopSidebarContainer: React.FC<{
                       <div className="flex flex-col min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="grayscale opacity-75 shrink-0 text-[13px]">👨‍👩‍👧‍👦</span>
-                          <span className="truncate font-bold">가족</span>
+                          <span className="font-bold">가족</span>
                         </div>
-                        <span className="pl-[21px] text-[11px] opacity-75 font-normal truncate">
+                        <span className="pl-[21px] text-[11px] opacity-75 font-normal whitespace-normal break-keep leading-snug">
                           우리집 · 본가 · 처가 앨범 (평생 0원)
                         </span>
                       </div>
@@ -598,9 +598,9 @@ export const DesktopSidebarContainer: React.FC<{
                       <div className="flex flex-col min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="grayscale opacity-75 shrink-0 text-[13px]">⛰️</span>
-                          <span className="truncate font-bold">동호회·모임</span>
+                          <span className="font-bold">동호회·모임</span>
                         </div>
-                        <span className="pl-[21px] text-[11px] opacity-75 font-normal truncate">
+                        <span className="pl-[21px] text-[11px] opacity-75 font-normal whitespace-normal break-keep leading-snug">
                           인원·장수 무제한 사진/영상 (평생 0원)
                         </span>
                       </div>
@@ -620,9 +620,9 @@ export const DesktopSidebarContainer: React.FC<{
                       <div className="flex flex-col min-w-0 flex-1">
                         <div className="flex items-center gap-2 min-w-0">
                           <span className="grayscale opacity-75 shrink-0 text-[13px]">🎓</span>
-                          <span className="truncate font-bold">동창회</span>
+                          <span className="font-bold">동창회</span>
                         </div>
-                        <span className="pl-[21px] text-[11px] opacity-75 font-normal truncate">
+                        <span className="pl-[21px] text-[11px] opacity-75 font-normal whitespace-normal break-keep leading-snug">
                           학창시절 · 동창 사진/영상 (평생 0원)
                         </span>
                       </div>
@@ -634,7 +634,7 @@ export const DesktopSidebarContainer: React.FC<{
               {/* ━━━ 기기 연동 · 팀 확장 (SSOT v2.2: !isStoreAppMode 시 핵심 요금·원가 투명화 상시 표기) ━━━ */}
               <div className="mt-2 pt-2 border-t border-white/10 flex flex-col gap-1 select-none" aria-label="확장 메뉴">
                 {!isStoreAppMode && (
-                  <div className="px-3 pb-0.5 text-[10px] font-extrabold tracking-tight opacity-65">
+                  <div className="px-3 pb-0.5 text-[10px] font-extrabold tracking-tight opacity-65 whitespace-normal break-keep leading-snug">
                     클라우드 월세 0원 · 30일 무료체험 · 투명 정찰제
                   </div>
                 )}
@@ -662,7 +662,7 @@ export const DesktopSidebarContainer: React.FC<{
                         className={mainBtnClass(isPhonePcIntegrationActive)}
                       >
                         <div className="flex flex-col text-left min-w-0 flex-1">
-                          <div className="flex items-center gap-1">
+                          <div className="flex flex-wrap items-center gap-1">
                             <span className="shrink-0 text-[13.5px]">📱 내 기기 통합</span>
                             {!isStoreAppMode && (
                               <span className="px-1.5 py-0.5 text-[9.5px] font-bold rounded bg-teal-500/15 text-teal-400 shrink-0">
@@ -678,13 +678,13 @@ export const DesktopSidebarContainer: React.FC<{
                                 </span>
                               )}
                           </div>
-                          <span className="text-[10.5px] opacity-70 font-normal truncate">
+                          <span className="text-[10.5px] opacity-70 font-normal whitespace-normal break-keep leading-snug">
                             {isStoreAppMode
                               ? '내 폰 ↔ 집·회사 PC 대화면 연동'
                               : '카톡 ‘나에게 보내기’ 끝 · 30일 무료체험'}
                           </span>
                         </div>
-                        <span className="text-[10px] opacity-60">{isDeviceIntegrationExpanded ? '▾' : '▸'}</span>
+                        <span className="text-[10px] opacity-60 shrink-0">{isDeviceIntegrationExpanded ? '▾' : '▸'}</span>
                       </button>
 
                       {isDeviceIntegrationExpanded && (
@@ -704,7 +704,7 @@ export const DesktopSidebarContainer: React.FC<{
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="grayscale opacity-75 shrink-0 text-[13px]">🔗</span>
-                              <span className="truncate font-bold">기기 연결 (PC ↔ 폰)</span>
+                              <span className="font-bold whitespace-normal break-keep leading-snug">기기 연결 (PC ↔ 폰)</span>
                             </div>
                           </button>
 
@@ -727,7 +727,7 @@ export const DesktopSidebarContainer: React.FC<{
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="shrink-0 text-[13px]">⚡</span>
-                              <span className="truncate font-bold">귀신창 : 📱 폰 + PC</span>
+                              <span className="font-bold whitespace-normal break-keep leading-snug">귀신창 : 📱 폰 + PC</span>
                             </div>
                           </button>
                         </div>
@@ -759,15 +759,15 @@ export const DesktopSidebarContainer: React.FC<{
                       >
                         <div className="flex flex-col text-left min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
-                            <span className="truncate text-[14px]">💼 업무 공유 (공용 폴더 S:)</span>
+                            <span className="text-[14px] whitespace-normal break-keep leading-snug">💼 업무 공유 (공용 폴더 S:)</span>
                           </div>
-                          <span className="text-[10.5px] opacity-70 font-normal truncate">
+                          <span className="text-[10.5px] opacity-70 font-normal whitespace-normal break-keep leading-snug">
                             {isStoreAppMode
                               ? '팀 문서·현장 사진 공용 폴더(S:) 통합'
                               : '5인·30GB 평생 0원 보증 · 추가 월 9,900원~'}
                           </span>
                         </div>
-                        <span className="text-[10px] opacity-60">
+                        <span className="text-[10px] opacity-60 shrink-0">
                           {isWorkShareExpanded ? '▾' : '▸'}
                         </span>
                       </button>
@@ -787,7 +787,7 @@ export const DesktopSidebarContainer: React.FC<{
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="grayscale opacity-75 shrink-0 text-[13px]">💼</span>
-                              <span className="truncate font-bold">공용 폴더(S: 드라이브) · 문서 공유</span>
+                              <span className="font-bold whitespace-normal break-keep leading-snug">공용 폴더(S: 드라이브) · 문서 공유</span>
                             </div>
                           </button>
 
@@ -806,7 +806,7 @@ export const DesktopSidebarContainer: React.FC<{
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="shrink-0 text-[13px]">⚡</span>
-                              <span className="truncate font-bold">귀신창 : 💼 팀 공유</span>
+                              <span className="font-bold whitespace-normal break-keep leading-snug">귀신창 : 💼 팀 공유</span>
                             </div>
                           </button>
                         </div>
@@ -846,7 +846,7 @@ export const DesktopSidebarContainer: React.FC<{
   return (
     <>
       {!isSidebarCollapsed && !ghostSearchWindowStage && (
-        <aside className="hidden lg:block w-[258px] shrink-0 sticky top-0 h-screen z-40">
+        <aside className="hidden lg:block w-[278px] shrink-0 sticky top-0 h-screen z-40">
           {renderSidebarNavigationContent(false)}
         </aside>
       )}
@@ -857,7 +857,7 @@ export const DesktopSidebarContainer: React.FC<{
             onTouchMove={(e) => e.preventDefault()}
             className="fixed inset-0 bg-black/60 backdrop-blur-xs touch-none"
           />
-          <aside className="relative w-[264px] max-w-[82vw] h-full z-10 shadow-2xl overscroll-contain">
+          <aside className="relative w-[286px] max-w-[88vw] h-full z-10 shadow-2xl overscroll-contain">
             {renderSidebarNavigationContent(true)}
           </aside>
         </div>
@@ -897,20 +897,24 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
     <>
         <header className={`sticky top-0 z-30 backdrop-blur-xl ${ghostSearchWindowStage ? 'hidden' : ''}`}>
           <div
-            className={`px-3.5 sm:px-5 md:px-7 py-2 flex flex-col gap-2 border-b transition-colors ${
+            className={`px-2.5 sm:px-5 md:px-7 py-2 flex flex-col gap-2 border-b transition-colors ${
               themeMode === 'light'
                 ? 'bg-white/90 border-[#EAE8E1]'
                 : 'bg-[#09090B]/90 border-white/8'
             }`}
           >
-            <div className="flex items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-x-1.5 gap-y-1.5">
               {/* 좌측: 모바일 ☰ 버튼 / PC 사이드바 열기 버튼 + 현재 위치 브레드크럼 */}
-              <div className="flex items-center gap-2 min-w-0">
+              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => setIsMobileDrawerOpen(true)}
                   title="전체 메뉴 열기"
-                  className="lg:hidden w-8 h-8 rounded-lg bg-zinc-900 border border-white/10 text-zinc-300 flex items-center justify-center cursor-pointer shrink-0"
+                  className={`lg:hidden w-7 h-7 sm:w-8 sm:h-8 rounded-lg border flex items-center justify-center cursor-pointer shrink-0 ${
+                    themeMode === 'light'
+                      ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
+                      : 'bg-zinc-900 border-white/10 text-zinc-300'
+                  }`}
                 >
                   ☰
                 </button>
@@ -952,13 +956,13 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                     resetToZenCanvas();
                     scrollAppToTop();
                   }}
-                  className="lg:hidden mr-1"
+                  className="lg:hidden"
                 />
 
               </div>
 
               {/* 우측 상단 심플 앵커: [🕰️ 복원 기록] + 가이드(온보딩 점프) + 공유 아이콘 + 프로필(맨 우측) */}
-              <div className="flex items-center gap-1.5 sm:gap-2 shrink-0" aria-label="가이드 공유 및 프로필 영역">
+              <div className="flex items-center gap-1 sm:gap-2 shrink-0 ml-auto" aria-label="가이드 공유 및 프로필 영역">
                 {activeLoungeType === 'personal' && desktopTab === 'trash' && (
                   <button
                     type="button"
@@ -970,13 +974,13 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                       );
                     }}
                     title="최근 손보기·정리 복원 기록 조회 및 원래대로 1초 되돌리기"
-                    className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-extrabold text-[12px] border transition-all cursor-pointer ${
+                    className={`flex items-center gap-1 px-2 sm:px-2.5 py-1 rounded-lg font-extrabold text-[11px] sm:text-[12px] whitespace-nowrap border transition-all cursor-pointer shrink-0 ${
                       themeMode === 'light'
                         ? 'bg-violet-50 border-violet-300 text-violet-800 hover:bg-violet-100'
                         : 'bg-violet-950/70 border-violet-500/40 text-violet-200 hover:bg-violet-900/80'
                     }`}
                   >
-                    <span className="text-[13px]">🕰️</span>
+                    <span className="text-[12px] sm:text-[13px]">🕰️</span>
                     <span>복원 기록</span>
                   </button>
                 )}
@@ -987,13 +991,13 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                     window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
                   }}
                   title="공식 온보딩/가이드 페이지로 이동"
-                  className={`flex items-center gap-1 px-2.5 py-1 rounded-lg font-bold text-[12px] transition-all cursor-pointer ${
+                  className={`flex items-center gap-1 px-1.5 sm:px-2.5 py-1 rounded-lg font-bold text-[11px] sm:text-[12px] whitespace-nowrap transition-all cursor-pointer shrink-0 ${
                     themeMode === 'light'
                       ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5'
                       : 'text-zinc-300 hover:text-white hover:bg-white/10'
                   }`}
                 >
-                  <span className="text-[13px]">📖</span>
+                  <span className="text-[12px] sm:text-[13px]">📖</span>
                   <span>가이드</span>
                 </button>
 
@@ -1010,7 +1014,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                     });
                   }}
                   title="지인·가족에게 앱 공유하기 (초대받은 가족·회원·직원은 언제나 무료)"
-                  className={`flex w-7 h-7 rounded-lg items-center justify-center transition-all cursor-pointer shrink-0 outline-none ${
+                  className={`flex w-6 h-6 sm:w-7 sm:h-7 rounded-lg items-center justify-center transition-all cursor-pointer shrink-0 outline-none ${
                     themeMode === 'light'
                       ? 'text-slate-500 hover:text-slate-800 hover:bg-black/5'
                       : 'text-zinc-300 hover:text-white hover:bg-white/10'

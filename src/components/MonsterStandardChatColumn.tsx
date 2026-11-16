@@ -890,8 +890,12 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         setAwaitingNickname(Boolean(nextState.awaitingNickname));
         if (turn.needsColdReading && nextState.nickname) {
           const ctx = await collectColdReadingContext();
-          const reading = buildColdReadingText(nextState.nickname, ctx);
-          const needsEngineRite = !isMobileOrStore && !zCoreBridge.isConnected;
+          const isMobileReading = isMobileOrStore || ctx.device === 'mobile';
+          const reading = buildColdReadingText(
+            nextState.nickname,
+            isMobileReading ? { ...ctx, device: 'mobile' } : ctx
+          );
+          const needsEngineRite = !isMobileReading && !zCoreBridge.isConnected;
           if (needsEngineRite) {
             try {
               sessionStorage.setItem('ghosti_awaiting_engine_rite', '1');
@@ -904,11 +908,22 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             role: 'assistant',
             timestamp: nowTimeKo(),
             sourceTab,
-            text: needsEngineRite
+            text: isMobileReading
+              ? reading.text
+              : needsEngineRite
               ? reading.text
               : `${nextState.nickname}님! 지금 내 컴퓨터에 최신 제트코어(v${zCoreBridge.version || '2.3.9'})가 바로 연결되어 있어요! 👻✨\n아래 버튼을 누르거나 채팅창에 편하게 말씀해 주시면 진짜 내 PC의 시작프로그램 목록·부팅 경과 시간·사양을 1초 만에 바로 보여드릴게요!`,
-            followUpSuggestions: needsEngineRite
-              ? ['🔍 응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘']
+            followUpSuggestions: isMobileReading
+              ? [
+                  '중복·연사 사진 정리하는 법 알려줘',
+                  '🔍 귀신검색으로 내 파일 찾아볼래',
+                  '✨ 귀신비서의 숨은 초능력 알려줘',
+                ]
+              : needsEngineRite
+              ? [
+                  '🔍 응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘',
+                  '👀 일단 눈으로 구경부터 할래',
+                ]
               : [
                   '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
                   '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
@@ -1347,15 +1362,15 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         </span>
       </div>
 
-      {/* 1. 상단 슬림 원복 안내 + 우측 상단 [🏠 온보딩 체험관] & [🕰️ 복원 기록] 원클릭 버튼 */}
-      <div className="px-3.5 py-2 bg-emerald-50/60 dark:bg-emerald-950/25 border-b border-emerald-200 dark:border-emerald-500/20 flex flex-wrap items-center justify-between gap-2 text-[12px] text-emerald-900 dark:text-emerald-200">
-        <div className="flex items-center gap-1.5">
+      {/* 1. 상단 슬림 원복 안내 + 우측 상단 [🏠 온보딩 체험관] & [🕰️ 복원 기록] 원클릭 버튼 (모바일 잘림 0% 방어) */}
+      <div className="px-3 py-2 bg-emerald-50/60 dark:bg-emerald-950/25 border-b border-emerald-200 dark:border-emerald-500/20 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 text-[12px] text-emerald-900 dark:text-emerald-200">
+        <div className="flex items-center gap-1.5 min-w-0">
           <span className="shrink-0 font-bold">🛡️</span>
-          <span className="font-bold text-emerald-800 dark:text-emerald-300 whitespace-nowrap">
+          <span className="font-bold text-emerald-800 dark:text-emerald-300 whitespace-normal break-keep leading-snug">
             손보기 후 원하는 시점으로 복원 가능
           </span>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5 shrink-0 ml-auto">
+        <div className="flex flex-wrap items-center gap-1.5 max-w-full min-w-0">
           <button
             type="button"
             onClick={() => window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'))}
@@ -1363,7 +1378,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
             className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
           >
-            <span>🏠 온보딩 체험관으로 나가서 구경하기 ➔</span>
+            <span>🏠 온보딩 체험관 구경하기 ➔</span>
           </button>
           <button
             type="button"
