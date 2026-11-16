@@ -117,26 +117,30 @@ export const DesktopDashboard: React.FC = () => {
     }
   };
 
-  const toggleStandaloneGhostSearchLargeMode = () => {
-    if (!ghostSearchWindowStage) return;
-    if (ghostSearchWindowStage === 'large') {
-      const totalMatched =
-        searchResults.length +
-        matchedLocalDocs.length +
-        matchedVaultPhotos.length +
-        matchedVideoScenes.length;
-      const spec = resolveGhostSearchResponsiveSpec({
-        mode: 'compact',
-        hasQuery: Boolean(hasExecutedUserSearch && activeQuery.trim()),
-        resultCount: totalMatched,
-        hasRichPreview:
-          searchResults.length > 0 || matchedVaultPhotos.length > 0 || matchedLocalDocs.length > 0,
-      });
-      applyStandaloneWindowGeometry(spec.stage, spec.customHeight);
-    } else {
-      applyStandaloneWindowGeometry('large');
-    }
-  };
+  useEffect(() => {
+    if (!ghostSearchWindowStage || isInsideIframe) return;
+    const onNativeWindowResize = () => {
+      const w = window.innerWidth || 0;
+      if (w >= 1150) {
+        setGhostSearchWindowStage((prev) => (prev === 'large' ? prev : 'large'));
+        try {
+          const saved = JSON.parse(localStorage.getItem('ghosti_search_game_v1') || '{}');
+          localStorage.setItem(
+            'ghosti_search_game_v1',
+            JSON.stringify({ ...saved, summon: true, medium: true, large: true })
+          );
+        } catch {
+          /* ignore */
+        }
+      } else if (w > 0 && w < 1150) {
+        setGhostSearchWindowStage((prev) =>
+          prev === 'large' ? (w >= 760 ? 'medium' : 'small') : prev
+        );
+      }
+    };
+    window.addEventListener('resize', onNativeWindowResize);
+    return () => window.removeEventListener('resize', onNativeWindowResize);
+  }, [ghostSearchWindowStage, isInsideIframe]);
 
   useEffect(() => {
     if (!ghostSearchWindowStage || ghostSearchWindowStage === 'large' || isInsideIframe) return;
@@ -204,47 +208,21 @@ export const DesktopDashboard: React.FC = () => {
 
       <div className="flex-1 min-w-0 flex flex-col">
         {ghostSearchWindowStage && !isInsideIframe && (
-          <div className="sticky top-0 z-40 h-9 px-3 flex items-center justify-between bg-zinc-900 border-b border-white/15 text-white text-[12px] font-bold">
-            <span className="flex items-center gap-2">
-              <span className="text-[#2DD4BF] font-extrabold">
-                👻 귀신검색창{' '}
-                {ghostSearchWindowStage === 'large'
-                  ? '· 크게 (스마트 갤러리 1440×900)'
-                  : ghostSearchWindowStage === 'medium'
-                    ? '· 작게 (검색량 반응형 확장 · 960×640)'
-                    : '· 작게 (자율 슬림 · 520px)'}
+          <div
+            data-keep-dark="true"
+            className="sticky top-0 z-40 h-9 px-3.5 flex items-center justify-between bg-zinc-900 border-b border-white/15 text-white text-[12px] font-bold"
+          >
+            <span className="flex items-center gap-2 min-w-0">
+              <span className="text-[#2DD4BF] font-extrabold whitespace-nowrap">
+                👻 귀신검색창
               </span>
-              <span className="px-2 py-0.5 rounded bg-teal-500/20 text-[#5EEAD4] text-[10.5px] font-extrabold">
-                {ghostSearchWindowStage === 'large' ? '🖼️ 전체 갤러리' : '✨ 크기 자율 호흡 중'}
+              <span className="px-2 py-0.5 rounded bg-teal-500/20 text-[#5EEAD4] text-[10.5px] font-extrabold whitespace-nowrap">
+                {ghostSearchWindowStage === 'large' ? '🖼️ 전체 갤러리 뷰' : '✨ 검색 결과에 맞춰 자동 크기 조절'}
               </span>
             </span>
-            <div className="flex items-center gap-1.5">
-              <button
-                type="button"
-                onClick={toggleStandaloneGhostSearchLargeMode}
-                title="크게(갤러리) / 작게(자율 반응형) 전환"
-                className={`px-2.5 py-0.5 rounded cursor-pointer transition-colors ${
-                  ghostSearchWindowStage === 'large'
-                    ? 'bg-[#2DD4BF] text-zinc-950 font-extrabold'
-                    : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] font-extrabold border border-[#2DD4BF]/40'
-                }`}
-              >
-                {ghostSearchWindowStage === 'large' ? '⤡ 작게' : '⤢ 크게(갤러리)'}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  try {
-                    window.close();
-                  } catch {
-                    /* ignore */
-                  }
-                }}
-                className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-zinc-700 text-zinc-300 cursor-pointer"
-              >
-                ✕
-              </button>
-            </div>
+            <span className="text-[11px] text-zinc-400 font-semibold hidden sm:inline whitespace-nowrap">
+              창 우측 상단 기본 최대화(□)·닫기(✕) 사용
+            </span>
           </div>
         )}
 

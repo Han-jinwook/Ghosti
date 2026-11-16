@@ -38,8 +38,39 @@ export async function openRealGhostSearchWindowViaDaemon(
   query?: string,
 ): Promise<boolean> {
   const targetStage: GhostSearchStage = stage === 'large' ? 'large' : 'medium';
-  const targetUrl = ghostSearchWindowUrl(targetStage, query);
+  const daemonStage = targetStage === 'large' ? 'gallery' : targetStage;
+  const q = (query || '').trim();
 
+  // 1순위: 로컬 제트코어 연결 시 주소창·설치아이콘 없는 깔끔한 독립 앱 창(--app)으로 즉시 오픈!
+  try {
+    const res = await fetch(getZCoreUrl('/api/superpower/open_search_window'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage: daemonStage, query: q, ui_mode: 'web_monitor' }),
+      signal: AbortSignal.timeout(1800),
+    });
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data && data.ok !== false && data.launched !== false) return true;
+    }
+  } catch {
+    // 5199 POST 실패 시 GET 폴백 시도
+  }
+  const qs = `stage=${encodeURIComponent(daemonStage)}&ui_mode=web_monitor${q ? `&q=${encodeURIComponent(q)}` : ''}`;
+  try {
+    const res = await fetch(getZCoreUrl(`/__merlin/open-ghost-search?${qs}`), {
+      signal: AbortSignal.timeout(1500),
+    });
+    if (res.ok) {
+      const data = await res.json().catch(() => ({}));
+      if (data?.ok !== false && data?.launched !== false) return true;
+    }
+  } catch {
+    /* ignore */
+  }
+
+  // 2순위 폴백: 제트코어 미실행 웹 환경에서는 브라우저 팝업으로 오픈
+  const targetUrl = ghostSearchWindowUrl(targetStage, query);
   if (typeof window !== 'undefined') {
     try {
       const availW = window.screen?.availWidth || DEFAULT_WORK_AREA.right;
@@ -68,34 +99,8 @@ export async function openRealGhostSearchWindowViaDaemon(
         return true;
       }
     } catch {
-      /* fallback to daemon below */
+      /* ignore */
     }
-  }
-
-  const daemonStage = targetStage === 'large' ? 'gallery' : targetStage;
-  const q = (query || '').trim();
-  try {
-    const res = await fetch(getZCoreUrl('/api/superpower/open_search_window'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stage: daemonStage, query: q, ui_mode: 'web_monitor' }),
-    });
-    if (res.ok) {
-      const data = await res.json().catch(() => ({}));
-      if (data && data.ok !== false) return true;
-    }
-  } catch {
-    // 5199 POST 실패 시 GET 폴백 시도
-  }
-  const qs = `stage=${encodeURIComponent(daemonStage)}&ui_mode=web_monitor${q ? `&q=${encodeURIComponent(q)}` : ''}`;
-  try {
-    const res = await fetch(getZCoreUrl(`/__merlin/open-ghost-search?${qs}`));
-    if (res.ok) {
-      const data = await res.json().catch(() => ({}));
-      return data?.ok !== false;
-    }
-  } catch {
-    /* ignore */
   }
   return false;
 }
@@ -551,39 +556,15 @@ const VirtualMonitorSimulator: React.FC<{
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-[#2DD4BF] font-extrabold">
-                      👻 귀신검색창{' '}
-                      {rect.framelessAppMode
-                        ? '· 크게 (스마트 갤러리 1440×900)'
-                        : stage === 'medium'
-                          ? '· 작게 (검색량 반응형 확장 · 960×640)'
-                          : '· 작게 (자율 슬림 · 520px)'}
+                      👻 귀신검색창
                     </span>
                     <span className="px-2 py-0.5 rounded bg-teal-500/20 text-[#5EEAD4] text-[10.5px] font-extrabold">
-                      {rect.framelessAppMode ? '🖼️ 전체 갤러리' : '✨ 크기 자율 호흡 중'}
+                      {rect.framelessAppMode ? '🖼️ 전체 갤러리 뷰' : '✨ 검색 결과에 맞춰 자동 크기 조절'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={() => setManualMode(stage === 'large' ? 'compact' : 'large')}
-                      className={`px-2.5 py-0.5 rounded font-extrabold cursor-pointer transition-all ${
-                        stage === 'large'
-                          ? 'bg-[#2DD4BF] text-zinc-950 shadow-sm ring-2 ring-[#5EEAD4]/60'
-                          : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-[#2DD4BF]/40'
-                      }`}
-                    >
-                      {stage === 'large' ? '⤡ 작게' : '⤢ 크게(갤러리)'}
-                    </button>
-                    <button
-                      type="button"
-                      onMouseDown={(e) => e.stopPropagation()}
-                      onClick={() => setManualMode(null)}
-                      className="px-2 py-0.5 rounded bg-zinc-800 hover:bg-rose-600 text-zinc-200 cursor-pointer"
-                    >
-                      ✕
-                    </button>
-                  </div>
+                  <span className="text-[11px] text-zinc-400 font-semibold">
+                    윈도우 기본 최대화(□)·닫기(✕) 사용
+                  </span>
                 </div>
                 <div
                   className="h-[calc(100%-2.25rem)] flex overflow-hidden bg-zinc-950"
