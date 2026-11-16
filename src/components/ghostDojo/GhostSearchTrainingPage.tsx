@@ -11,6 +11,7 @@ import {
 import { playBabyGhostChime } from '../OnboardingModal';
 import { GhostSuperpowerDojo } from './GhostSuperpowerDojo';
 import { Stage1MinimalSearchPreview } from '../Stage1MinimalPreview';
+import { cleanVideoTimestampLabel, resolveVideoCardThumbUrl } from '../../services/aiEngine';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
 import {
   GhostSecretaryFirstGuard,
@@ -186,13 +187,17 @@ const VirtualMonitorSimulator: React.FC<{
 }) => {
   const {
     photos,
+    searchSpace,
     hasExecutedUserSearch,
     activeQuery,
     searchResults,
     matchedLocalDocs,
     matchedVaultPhotos,
+    videoSceneItems,
     matchedVideoScenes,
     setSelectedPhoto,
+    setSelectedDocModal,
+    setSelectedVideoModal,
   } = useSaySeeStore();
   const monitorRef = useRef<HTMLDivElement | null>(null);
   const [monitorW, setMonitorW] = useState(960);
@@ -592,16 +597,84 @@ const VirtualMonitorSimulator: React.FC<{
                   </div>
                   {stage === 'medium' && (() => {
                     const topPhoto =
-                      searchResults[0]?.photo ||
-                      matchedVaultPhotos[0] ||
-                      photos.find((p) => !p.quarantined);
-                    const topDoc = matchedLocalDocs[0];
+                      searchSpace === 'gallery'
+                        ? searchResults[0]?.photo ||
+                          (!hasExecutedUserSearch ? photos.find((p) => !p.quarantined) : undefined)
+                        : searchSpace === 'vault'
+                        ? matchedVaultPhotos[0]?.photo
+                        : undefined;
+                    const topVideo =
+                      searchSpace === 'video'
+                        ? matchedVideoScenes[0] || (!hasExecutedUserSearch ? videoSceneItems[0] : undefined)
+                        : undefined;
+                    const topDoc =
+                      searchSpace === 'vault'
+                        ? matchedLocalDocs[0]
+                        : !topPhoto && !topVideo
+                        ? matchedLocalDocs[0]
+                        : undefined;
                     return (
                       <aside className="w-[330px] shrink-0 h-full border-l border-[#2DD4BF]/40 bg-[#0F172A] p-3.5 flex flex-col gap-2.5 overflow-y-auto">
                         <div className="text-[12.5px] font-extrabold text-[#5EEAD4] flex items-center gap-1.5">
-                          <span>👻 선택 항목 상세 미리보기</span>
+                          <span>👻 첫 번째 결과 요약 미리보기</span>
                         </div>
-                        {topPhoto ? (
+                        {topDoc ? (
+                          <>
+                            <div className="w-full p-3 rounded-lg bg-slate-900/90 border border-slate-700 flex flex-col gap-1.5">
+                              <div className="flex items-center gap-1.5">
+                                <span className="px-1.5 py-0.5 rounded bg-teal-500/20 text-[#5EEAD4] text-[10px] font-extrabold">
+                                  {topDoc.ext?.toUpperCase() || 'DOC'}
+                                </span>
+                                <span className="text-[10.5px] text-slate-400 truncate">
+                                  {topDoc.categoryBadge || '내 PC 문서'}
+                                </span>
+                              </div>
+                              <div className="text-[12px] font-bold text-slate-100 break-all">
+                                📄 {topDoc.fileName}
+                              </div>
+                            </div>
+                            <div className="text-[11px] text-slate-300 leading-relaxed line-clamp-8 whitespace-pre-line bg-black/30 p-2.5 rounded-lg border border-white/5">
+                              {topDoc.extractedText || '문서 본문 미리보기 준비 완료'}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedDocModal(topDoc)}
+                              className="mt-auto w-full py-2 rounded-lg bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[12px] font-extrabold cursor-pointer transition-colors"
+                            >
+                              📄 문서 내용 상세 보기
+                            </button>
+                          </>
+                        ) : topVideo ? (
+                          <>
+                            <div className="w-full h-[180px] rounded-lg overflow-hidden bg-black border border-slate-700 flex items-center justify-center relative">
+                              {resolveVideoCardThumbUrl(topVideo) ? (
+                                <img
+                                  src={resolveVideoCardThumbUrl(topVideo)}
+                                  alt={topVideo.videoFileName}
+                                  className="w-full h-full object-cover"
+                                />
+                              ) : (
+                                <span className="text-[12px] text-slate-400 font-bold">🎬 {topVideo.videoFileName}</span>
+                              )}
+                              <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/80 text-[#5EEAD4] text-[10.5px] font-extrabold">
+                                🎯 {cleanVideoTimestampLabel(topVideo.matchedTimestamp)}
+                              </span>
+                            </div>
+                            <div className="text-[11.5px] font-bold text-slate-200 truncate">
+                              🎬 {topVideo.videoFileName}
+                            </div>
+                            <div className="text-[11px] text-slate-400 line-clamp-3">
+                              {topVideo.matchedFrameCaption || topVideo.sceneDescription}
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedVideoModal(topVideo)}
+                              className="mt-auto w-full py-2 rounded-lg bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[12px] font-extrabold cursor-pointer transition-colors"
+                            >
+                              ▶ 해당 장면 바로 재생하기
+                            </button>
+                          </>
+                        ) : topPhoto ? (
                           <>
                             <div className="w-full h-[200px] rounded-lg overflow-hidden bg-black border border-slate-700 flex items-center justify-center">
                               <img
@@ -624,18 +697,9 @@ const VirtualMonitorSimulator: React.FC<{
                               🔍 상세 크게 보기 / 사진·OCR 열기
                             </button>
                           </>
-                        ) : topDoc ? (
-                          <>
-                            <div className="text-[12px] font-bold text-slate-100">
-                              📄 {topDoc.fileName}
-                            </div>
-                            <div className="text-[11px] text-slate-300 line-clamp-6">
-                              {topDoc.extractedText}
-                            </div>
-                          </>
                         ) : (
                           <div className="text-[11.5px] text-slate-400">
-                            왼쪽 검색 결과를 선택하면 이곳에 큰 상세 미리보기가 표시됩니다.
+                            현재 탭의 첫 번째 검색 결과 요약이 이곳에 자동으로 표시됩니다.
                           </div>
                         )}
                       </aside>

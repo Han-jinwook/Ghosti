@@ -923,20 +923,29 @@ export const createSearchSlice: StateCreator<
     }
     const vaultPhotoMatches = isExplicitPhotoOnlyQuery ? [] : Array.from(vaultMap.values());
 
-    // [규칙 1 & 2 + 동창회 타임라인 검색 시 갤러리 즉시 표시 + 동영상 전용 질의 시 동영상 탭 자동 포커스]
+    // [규칙 1 & 2: 다중 탭 동시 매칭 시 우선 표시 탭 규칙]
+    // 1) 검색어에 '동영상/영상/장면' 또는 '문서/서류/PDF/계약서/엑셀' 등 명시적 매체 키워드가 있으면 해당 탭 우선
+    // 2) 매체 지정 없는 일반 단어(예: '패러세일링')이고 여러 탭에 모두 파일이 있을 때는:
+    //    사용자가 현재 보고 있는 탭에 결과가 있으면 그 탭을 유지하고, 없으면 좌측 탭 순서대로 [사진 ➔ 동영상 ➔ 문서] 순으로 표시합니다.
     const isExplicitVideoIntent =
       !isExplicitPhotoOnlyQuery &&
-      /영상|동영상|장면|구간|순간|말하는\s*부분|외치는|패러세일링|화이트보드|판서|룰렛|급식|리얼픽/.test(query);
+      /영상|동영상|장면|구간|순간|말하는\s*부분|외치는|화이트보드|판서/.test(query);
+    const isExplicitDocIntent =
+      !isExplicitPhotoOnlyQuery &&
+      /문서|서류|파일|계약|견적|영수증|전표|엑셀|시트|한글|워드|피디에프|pdf|xlsx|xls|docx|hwp|txt/i.test(query);
+
     let targetSpace: SearchSpaceMode =
       isExplicitPhotoOnlyQuery || isTimeRangeOrAlumniQuery
         ? 'gallery'
         : isExplicitVideoIntent && videoMatches.length > 0
         ? 'video'
+        : isExplicitDocIntent && (docMatches.length > 0 || vaultPhotoMatches.length > 0)
+        ? 'vault'
         : hasUserSelectedSearchTab
         ? searchSpace
         : 'gallery';
 
-    // 유저가 이전에 문서(vault)나 사진(gallery) 탭을 열어둔 상태였더라도, 새 검색어가 현재 탭에서 0건이고 다른 탭에 결과가 있다면 결과가 있는 탭으로 자동 전환!
+    // 유저가 이전에 문서(vault)나 사진(gallery) 탭을 열어둔 상태였더라도, 새 검색어가 현재 탭에서 0건이고 다른 탭에 결과가 있다면 [사진 ➔ 동영상 ➔ 문서] 우선순위로 자동 전환!
     if (targetSpace === 'gallery' && results.length === 0) {
       if (videoMatches.length > 0) targetSpace = 'video';
       else if (docMatches.length > 0 || vaultPhotoMatches.length > 0) targetSpace = 'vault';
@@ -948,8 +957,8 @@ export const createSearchSlice: StateCreator<
       docMatches.length === 0 &&
       vaultPhotoMatches.length === 0
     ) {
-      if (videoMatches.length > 0) targetSpace = 'video';
-      else if (results.length > 0) targetSpace = 'gallery';
+      if (results.length > 0) targetSpace = 'gallery';
+      else if (videoMatches.length > 0) targetSpace = 'video';
     }
 
     const topTags =
