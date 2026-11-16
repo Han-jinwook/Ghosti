@@ -57,7 +57,7 @@ def derive_session_title(explicit_title: str | None = None) -> str:
     if HANDOVER_FILE.exists():
         try:
             text = HANDOVER_FILE.read_text(encoding="utf-8", errors="ignore")
-            m_explicit = re.search(r"세션\s*제목[^:\n]*:\s*([^\r\n]+)", text)
+            m_explicit = re.search(r"세션(?:\s*창)?\s*제목[^:\n]*:\s*([^\r\n]+)", text)
             if m_explicit:
                 val = m_explicit.group(1).strip().strip("`*")
                 val = re.sub(r"^\d{1,2}-\d{1,2},?\s*(?:\d{1,2}:\d{2})?\s*-\s*", "", val)

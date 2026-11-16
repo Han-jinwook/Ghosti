@@ -1939,18 +1939,18 @@ def build_ghost_search_window_url(stage: str = "small", query: str = "", base_ur
     else:
         norm_stage = "small"
     root_u = (base_url or GHOSTI_WEB_URL).rstrip("/")
-    url = f"{root_u}/?preview=legacy&ghostSearchWindow={norm_stage}"
+    url = f"{root_u}/?dev=true&preview=legacy&ghostSearchWindow={norm_stage}"
     q_clean = (query or "").strip()
     if q_clean:
         url += f"&q={quote(q_clean)}"
     return url
 
 
-def _open_ghost_search_window_popup(stage: str = "small", query: str = "", anchor_x: int | None = None, anchor_y: int | None = None) -> dict:
+def _open_ghost_search_window_popup(stage: str = "medium", query: str = "", anchor_x: int | None = None, anchor_y: int | None = None) -> dict:
     """
-    [단일 네이티브 UI ② 일원화]:
-    웹 수련장·귀신검색 페이지에서 호출할 때도 레거시 브라우저(--app) 대신
-    Ctrl+0과 100% 동일한 네이티브 Tkinter 『👻 귀신검색창(UI ②)』을 0.05초 만에 즉시 소환합니다!
+    [웹 『👻 내 진짜 파일로 리얼 귀신검색창 바로 띄우기』 호출 시 모니터 안의 창과 동일한 프레임리스 앱 창 오픈]:
+    웹 수련장·귀신검색 페이지에서 호출 시 모니터 안의 창(`/?dev=true&preview=legacy&ghostSearchWindow=...`)과
+    100% 동일한 화면을 Chrome/Edge 프레임리스 앱 창(`--app`)으로 즉시 띄웁니다.
     """
     pt = wintypes.POINT()
     if anchor_x is None or anchor_y is None:
@@ -1960,36 +1960,44 @@ def _open_ghost_search_window_popup(stage: str = "small", query: str = "", ancho
         ax, ay = int(anchor_x), int(anchor_y)
     work_area = _get_monitor_workarea_for_point(ax, ay)
     q_clean = (query or "").strip()
-    norm_in = "large" if stage in ("large", "gallery") else ("medium" if (stage == "medium" or q_clean) else "small")
+    norm_in = "large" if stage in ("large", "gallery") else ("small" if stage == "small" else "medium")
     custom_h = 340 if norm_in == "small" and not q_clean else None
     rect = compute_ghost_search_window_3stage_rect(norm_in, ax, ay, work_area=work_area, custom_height=custom_h)
+    target_url = build_ghost_search_window_url(str(rect["stage"]), query=q_clean)
     record_feature_telemetry(f"ghost_search_window_{rect['stage']}")
 
+    browser_candidates = [
+        Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
+        Path(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"),
+        Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
+        Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
+    ]
     launched = False
-    payload_sig = {
-        "ts": time.time(),
-        "stage": str(rect["stage"]),
-        "query": q_clean,
-    }
-    try:
-        _MERLIN_APPDATA.mkdir(parents=True, exist_ok=True)
-        OPEN_UI2_SIGNAL_FILE.write_text(json.dumps(payload_sig, ensure_ascii=False), encoding="utf-8")
-    except Exception:
-        pass
-    try:
-        with socket.create_connection(("127.0.0.1", LOCK_PORT), timeout=0.35) as sock:
-            cmd_bytes = f"__OPEN_UI2__|{rect['stage']}|{q_clean}".encode("utf-8")[:512]
-            sock.sendall(cmd_bytes)
-            launched = True
-    except Exception:
-        # 현재 프로세스 내부에서 직접 실행 중인 경우 큐로 직결
+    for b_exe in browser_candidates:
+        if b_exe.exists():
+            try:
+                subprocess.Popen(
+                    [
+                        str(b_exe),
+                        f"--app={target_url}",
+                        f"--window-size={rect['width']},{rect['height']}",
+                        f"--window-position={rect['x']},{rect['y']}",
+                    ],
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=0x08000000,
+                )
+                launched = True
+                break
+            except Exception:
+                pass
+    if not launched:
         try:
-            _toast_queue.put((f"__UI2_SEARCH__|{rect['stage']}|{q_clean}", 8000))
-            _toast_event.set()
+            os.startfile(target_url)
             launched = True
         except Exception:
             pass
-    return {"mode": "native_tk_ui2", "rect": rect, "launched": launched}
+    return {"mode": "web_monitor_app", "url": target_url, "rect": rect, "launched": launched}
 
 
 def _open_ghosti_web() -> None:

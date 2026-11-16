@@ -197,6 +197,32 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         sec_fetch_site = (self.headers.get("Sec-Fetch-Site") or "").strip().lower()
         if origin:
             return (is_trusted_origin(origin), origin)
+        referer = (self.headers.get("Referer") or "").strip()
+        if referer:
+            try:
+                p_ref = urllib.parse.urlparse(referer)
+                ref_origin = f"{p_ref.scheme}://{p_ref.netloc}" if p_ref.scheme and p_ref.netloc else ""
+                if ref_origin and is_trusted_origin(ref_origin):
+                    return (True, ref_origin)
+            except Exception:
+                pass
+        if getattr(self, "command", "") == "GET":
+            req_path = urllib.parse.urlparse(getattr(self, "path", "") or "").path.rstrip("/")
+            sec_dest = (self.headers.get("Sec-Fetch-Dest") or "").strip().lower()
+            if (
+                req_path in (
+                    "/__photos/file",
+                    "/api/ghosti/photos/file",
+                    "/__videos/thumb",
+                    "/api/ghosti/videos/thumb",
+                    "/__videos/stream",
+                    "/api/ghosti/videos/stream",
+                    "/__videos/frame",
+                    "/api/ghosti/videos/frame",
+                )
+                or req_path.startswith("/__tts/audio/")
+            ) and sec_dest in ("image", "video", "audio", "empty", ""):
+                return (True, None)
         if sec_fetch_site == "cross-site":
             return (False, "sec-fetch-site:cross-site")
         return (True, None)

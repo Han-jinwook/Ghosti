@@ -26,29 +26,67 @@ export function ghostSearchWindowUrl(stage: GhostSearchStage, query?: string): s
 }
 
 /**
- * 로컬 엔진(127.0.0.1:5199 / 51988)이 연결되어 있을 때 가짜 웹 시뮬레이터 대신
- * 실제 모니터 위에 프레임리스 로컬 『👻 귀신검색창』 독립 팝업을 즉시 띄웁니다.
+ * 로컬 엔진(127.0.0.1:5199 / 51988)이 연결되어 있을 때
+ * 가상 모니터 안의 창(`/?dev=true&preview=legacy&ghostSearchWindow=...`)과 100% 동일한
+ * 실제 모니터 위 독립 귀신검색창 팝업을 즉시 띄웁니다.
  */
+let _activeRealGhostSearchPopup: Window | null = null;
+
 export async function openRealGhostSearchWindowViaDaemon(
   stage: GhostSearchStage = 'medium',
   query?: string,
 ): Promise<boolean> {
-  const daemonStage = stage === 'large' ? 'gallery' : stage;
+  const targetStage: GhostSearchStage = stage === 'large' ? 'large' : 'medium';
+  const targetUrl = ghostSearchWindowUrl(targetStage, query);
+
+  if (typeof window !== 'undefined') {
+    try {
+      const availW = window.screen?.availWidth || DEFAULT_WORK_AREA.right;
+      const availH = window.screen?.availHeight || DEFAULT_WORK_AREA.bottom;
+      const anchorX = Math.max(40, Math.round((availW - 960) / 2));
+      const anchorY = Math.max(40, Math.round((availH - 640) / 2));
+      const rect = computeGhostSearchWindowRect(
+        targetStage,
+        anchorX,
+        anchorY,
+        { left: 0, top: 0, right: availW, bottom: availH },
+        20,
+      );
+      const features = `popup=yes,width=${rect.width},height=${rect.height},left=${rect.x},top=${rect.y},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
+      if (_activeRealGhostSearchPopup && !_activeRealGhostSearchPopup.closed) {
+        _activeRealGhostSearchPopup.location.href = targetUrl;
+        _activeRealGhostSearchPopup.resizeTo(rect.width, rect.height);
+        _activeRealGhostSearchPopup.moveTo(rect.x, rect.y);
+        _activeRealGhostSearchPopup.focus();
+        return true;
+      }
+      const win = window.open(targetUrl, 'ghosti_real_search_window', features);
+      if (win) {
+        _activeRealGhostSearchPopup = win;
+        win.focus();
+        return true;
+      }
+    } catch {
+      /* fallback to daemon below */
+    }
+  }
+
+  const daemonStage = targetStage === 'large' ? 'gallery' : targetStage;
   const q = (query || '').trim();
   try {
     const res = await fetch(getZCoreUrl('/api/superpower/open_search_window'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stage: daemonStage, query: q }),
+      body: JSON.stringify({ stage: daemonStage, query: q, ui_mode: 'web_monitor' }),
     });
     if (res.ok) {
       const data = await res.json().catch(() => ({}));
       if (data && data.ok !== false) return true;
     }
   } catch {
-    // 5199 POST 실패 시 GET 또는 51988 폴백 시도
+    // 5199 POST 실패 시 GET 폴백 시도
   }
-  const qs = `stage=${encodeURIComponent(daemonStage)}${q ? `&q=${encodeURIComponent(q)}` : ''}`;
+  const qs = `stage=${encodeURIComponent(daemonStage)}&ui_mode=web_monitor${q ? `&q=${encodeURIComponent(q)}` : ''}`;
   try {
     const res = await fetch(getZCoreUrl(`/__merlin/open-ghost-search?${qs}`));
     if (res.ok) {
@@ -201,15 +239,17 @@ const VirtualMonitorSimulator: React.FC<{
   // 직접 조작 중 & '작게(compact)' 모드일 때: 창 안 검색어의 검색량·미리보기에 따라 소(520) ↔ 중(960) 자동 반응형 조절!
   useEffect(() => {
     if (isAutoPlaying || !stage || windowMode === 'large') return;
+    const cleanQ =
+      hasExecutedUserSearch &&
+      activeQuery &&
+      !activeQuery.startsWith('전체 갤러리 사진') &&
+      !activeQuery.startsWith('동영상 ') &&
+      !activeQuery.startsWith('최근 서류 ')
+        ? activeQuery.trim()
+        : '';
+    // 사용자가 검색어를 직접 입력하지 않은 상태에서 이미 중형(960×640) 창이 열려 있다면 임의로 소형(520)으로 축소하지 않음
+    if (!cleanQ && stage === 'medium') return;
     const timer = window.setTimeout(() => {
-      const cleanQ =
-        hasExecutedUserSearch &&
-        activeQuery &&
-        !activeQuery.startsWith('전체 갤러리 사진') &&
-        !activeQuery.startsWith('동영상 ') &&
-        !activeQuery.startsWith('최근 서류 ')
-          ? activeQuery.trim()
-          : '';
       const totalMatched =
         searchResults.length + matchedLocalDocs.length + matchedVaultPhotos.length + matchedVideoScenes.length;
       const spec = resolveGhostSearchResponsiveSpec({
@@ -237,6 +277,23 @@ const VirtualMonitorSimulator: React.FC<{
     matchedVaultPhotos.length,
     matchedVideoScenes.length,
   ]);
+
+  useEffect(() => {
+    const onFocusMonitorWin = (e: Event) => {
+      const detail = (e as CustomEvent<{ stage?: GhostSearchStage }>).detail;
+      const nextStage: GhostSearchStage = detail?.stage || 'medium';
+      setIsAutoPlaying(false);
+      setWindowMode(nextStage === 'large' ? 'large' : 'compact');
+      setStage(nextStage);
+      setCustomSlimHeight(nextStage === 'small' ? 340 : undefined);
+      setAutoPhase(nextStage === 'large' ? 3 : nextStage === 'medium' ? 2 : 1);
+      onStep('summon');
+      if (nextStage === 'medium' || nextStage === 'large') onStep('medium');
+      if (nextStage === 'large') onStep('large');
+    };
+    window.addEventListener('ghosti_focus_virtual_monitor_window', onFocusMonitorWin as EventListener);
+    return () => window.removeEventListener('ghosti_focus_virtual_monitor_window', onFocusMonitorWin as EventListener);
+  }, []);
 
   const setManualMode = (nextMode: GhostSearchWindowMode | null, customAnchor?: { x: number; y: number }) => {
     setIsAutoPlaying(false);
@@ -697,12 +754,19 @@ export const GhostSearchTrainingPage: React.FC = () => {
       markStep('medium');
       markStep('large');
     }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('ghosti_focus_virtual_monitor_window', { detail: { stage } }),
+      );
+    }
     const ok = await openRealGhostSearchWindowViaDaemon(stage, query ?? pendingQuery);
     if (ok) {
       setRealPopupToast(
         `👻 내 진짜 PC 파일·사진·여권이 연동된 리얼 귀신검색창(${GHOST_SEARCH_STAGE_LABELS[stage]})을 모니터에 바로 띄웠습니다!`,
       );
       setTimeout(() => setRealPopupToast(null), 5000);
+    } else {
+      monitorSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
   };
 
@@ -869,7 +933,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
         {connected ? (
           <button
             type="button"
-            onClick={() => void triggerRealGhostSearchWindow(pendingQuery ? 'medium' : 'small', pendingQuery)}
+            onClick={() => void triggerRealGhostSearchWindow('medium', pendingQuery)}
             className="px-4 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[13px] font-extrabold cursor-pointer"
           >
             👻 내 진짜 파일로 리얼 귀신검색창 바로 띄우기

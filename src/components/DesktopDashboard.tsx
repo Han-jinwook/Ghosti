@@ -140,15 +140,16 @@ export const DesktopDashboard: React.FC = () => {
 
   useEffect(() => {
     if (!ghostSearchWindowStage || ghostSearchWindowStage === 'large' || isInsideIframe) return;
+    const cleanQ =
+      hasExecutedUserSearch &&
+      activeQuery &&
+      !activeQuery.startsWith('전체 갤러리 사진') &&
+      !activeQuery.startsWith('동영상 ') &&
+      !activeQuery.startsWith('최근 서류 ')
+        ? activeQuery.trim()
+        : '';
+    if (!cleanQ && ghostSearchWindowStage === 'medium') return;
     const timer = window.setTimeout(() => {
-      const cleanQ =
-        hasExecutedUserSearch &&
-        activeQuery &&
-        !activeQuery.startsWith('전체 갤러리 사진') &&
-        !activeQuery.startsWith('동영상 ') &&
-        !activeQuery.startsWith('최근 서류 ')
-          ? activeQuery.trim()
-          : '';
       const totalMatched =
         searchResults.length +
         matchedLocalDocs.length +
@@ -199,14 +200,17 @@ export const DesktopDashboard: React.FC = () => {
       <div className="flex-1 min-w-0 flex flex-col">
         {ghostSearchWindowStage && !isInsideIframe && (
           <div className="sticky top-0 z-40 h-9 px-3 flex items-center justify-between bg-zinc-900 border-b border-white/15 text-white text-[12px] font-bold">
-            <span className="flex items-center gap-1.5">
-              <span>👻 귀신검색창</span>
-              <span className="text-[11px] text-[#5EEAD4]">
+            <span className="flex items-center gap-2">
+              <span className="text-[#2DD4BF] font-extrabold">
+                👻 귀신검색창{' '}
                 {ghostSearchWindowStage === 'large'
-                  ? '· 크게 (갤러리 1440×900)'
+                  ? '· 크게 (스마트 갤러리 1440×900)'
                   : ghostSearchWindowStage === 'medium'
                     ? '· 작게 (검색량 반응형 확장 · 960×640)'
                     : '· 작게 (자율 슬림 · 520px)'}
+              </span>
+              <span className="px-2 py-0.5 rounded bg-teal-500/20 text-[#5EEAD4] text-[10.5px] font-extrabold">
+                {ghostSearchWindowStage === 'large' ? '🖼️ 전체 갤러리' : '✨ 크기 자율 호흡 중'}
               </span>
             </span>
             <div className="flex items-center gap-1.5">
@@ -242,7 +246,9 @@ export const DesktopDashboard: React.FC = () => {
         <DesktopTopHeaderAndLoungeBar ghostSearchWindowStage={ghostSearchWindowStage} />
 
         {/* 3창 무충돌 도메인 라우팅 스위치 (1귀신 비서 / 2귀신 검색 / 3귀신 공유·통합 / 업무 공유 S:) */}
-        {activeLoungeType === 'work' ? (
+        {ghostSearchWindowStage ? (
+          <GhostSearchPane ghostSearchWindowStage={ghostSearchWindowStage} />
+        ) : activeLoungeType === 'work' ? (
           <PaidWorkSharePane />
         ) : desktopTab === 'sync' ? (
           <PaidDeviceSyncPane />
