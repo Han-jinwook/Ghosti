@@ -547,8 +547,12 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           role: 'assistant',
           timestamp: nowTimeKo(),
           sourceTab: 'trash',
-          text: `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두고 다음 안내로 넘어갈게요 👻✨\n이제 왼쪽 두 번째 메뉴 **『👻 귀신검색』**(또는 단축키 \`Ctrl + 0\`)에서 방금 읽어둔 내 진짜 사진·문서를 1초 만에 찾아보실까요?`,
-          followUpSuggestions: ['🔍 귀신검색으로 내 파일 찾아볼래', '✨ 귀신비서의 숨은 초능력 알려줘'],
+          text: `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두고 다음 안내로 넘어갈게요 👻✨\n이제 **🛂 인물 사진 이름 등록(귀신계 여권)**을 해보거나, 왼쪽 두 번째 메뉴 **『👻 귀신검색』**에서 방금 읽어둔 내 사진·문서를 1초 만에 찾아보실까요?`,
+          followUpSuggestions: [
+            '🛂 인물 사진 이름 등록(귀신계 여권) 해볼래',
+            '🔍 귀신검색으로 내 파일 찾아볼래',
+            '✨ 귀신비서의 숨은 초능력 알려줘',
+          ],
         },
       ]);
     };
@@ -915,19 +919,20 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               : `${nextState.nickname}님! 지금 내 컴퓨터에 최신 제트코어(v${zCoreBridge.version || '2.3.9'})가 바로 연결되어 있어요! 👻✨\n아래 버튼을 누르거나 채팅창에 편하게 말씀해 주시면 진짜 내 PC의 시작프로그램 목록·부팅 경과 시간·사양을 1초 만에 바로 보여드릴게요!`,
             followUpSuggestions: isMobileReading
               ? [
+                  '🛂 인물 사진 이름 등록(귀신계 여권) 해볼래',
                   '중복·연사 사진 정리하는 법 알려줘',
                   '🔍 귀신검색으로 내 파일 찾아볼래',
-                  '✨ 귀신비서의 숨은 초능력 알려줘',
                 ]
               : needsEngineRite
               ? [
                   '🔍 응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘',
+                  '🛂 인물 사진 이름 등록(귀신계 여권) 해볼래',
                   '👀 일단 눈으로 구경부터 할래',
                 ]
               : [
                   '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
                   '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
-                  SECRETARY_FIRST_CARE_QUERY,
+                  '🛂 인물 사진 이름 등록(귀신계 여권) 해볼래',
                 ],
           });
           nextState = { ...nextState, coldReadingShownAt: new Date().toISOString() };
@@ -1350,35 +1355,50 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     activePlaceholderPool[0];
 
   return (
-    <aside className="flex flex-col h-[calc(100vh-155px)] min-h-[580px] max-h-[840px] rounded-2xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-950/95 shadow-lg overflow-hidden">
-      {/* 0. 최상단 독립 배너: 수요 손 없는 날 & 20% 과부하 자동 검진 안내 (불필요한 '✋ 손보기 대화창' 제목줄 및 '↺ 새 대화' 버튼 전면 제거!) */}
+    <aside className="flex flex-col h-[calc(100vh-155px)] min-h-[580px] max-h-[840px] rounded-2xl border-2 border-teal-500/55 dark:border-teal-400/45 bg-[#E6F1EF] dark:bg-[#0B161C] shadow-[0_12px_36px_rgba(13,148,136,0.18)] overflow-hidden">
+      {/* 0. 카톡 채팅방 스타일 전용 상단 타이틀 바 (PC·모바일 메인 화면과 뚜렷한 시각적 구분) */}
       <div
         title={careScheduleSummary}
-        className="px-3.5 py-2 border-b border-emerald-200/80 dark:border-emerald-500/20 bg-emerald-50/90 dark:bg-emerald-950/40 flex flex-wrap items-center justify-between gap-1.5 text-[11.5px] font-extrabold text-emerald-900 dark:text-emerald-300 leading-snug"
+        className="px-3.5 py-2.5 bg-gradient-to-r from-[#0F766E] via-[#0D9488] to-[#059669] text-white flex flex-wrap items-center justify-between gap-2 shadow-xs"
       >
-        <span>🗓️ 매주 수요일 오후 1시 「수요 손 없는 날」</span>
-        <span className="text-emerald-700 dark:text-emerald-400 font-bold">
-          ⚡ 20% 과부하 시 자동 검진
+        <div className="flex items-center gap-2 min-w-0">
+          <img
+            src={GHOST_SECRETARY_AVATAR_SRC}
+            alt=""
+            aria-hidden="true"
+            className="w-7 h-7 rounded-full object-cover ring-2 ring-white/80 shadow-xs shrink-0"
+          />
+          <span className="text-[14px] font-black tracking-tight whitespace-nowrap">
+            👻 귀신비서 대화창
+          </span>
+          <span className="px-1.5 py-0.5 rounded-full bg-white/20 text-[10.5px] font-extrabold whitespace-nowrap">
+            ● 대화 중
+          </span>
+        </div>
+        <span className="text-[11px] font-bold text-teal-50 bg-black/20 px-2 py-0.5 rounded-full whitespace-nowrap">
+          🗓️ 수요 손 없는 날 · 20% 과부하 자동검진
         </span>
       </div>
 
-      {/* 1. 상단 슬림 원복 안내 + 우측 상단 [🏠 온보딩 체험관] & [🕰️ 복원 기록] 원클릭 버튼 (모바일 잘림 0% 방어) */}
-      <div className="px-3 py-2 bg-emerald-50/60 dark:bg-emerald-950/25 border-b border-emerald-200 dark:border-emerald-500/20 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 text-[12px] text-emerald-900 dark:text-emerald-200">
-        <div className="flex items-center gap-1.5 min-w-0">
+      {/* 1. 상단 원클릭 바로가기 바: [🛂 귀신계 여권] + [🕰️ 복원 기록] + [🏠 온보딩 체험관] (모바일 잘림 0% 방어) */}
+      <div className="px-3 py-2 bg-white/90 dark:bg-[#10212B] border-b border-teal-600/20 dark:border-teal-400/20 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 text-[12px] text-emerald-950 dark:text-emerald-200">
+        <div className="flex items-center gap-1 min-w-0">
           <span className="shrink-0 font-bold">🛡️</span>
-          <span className="font-bold text-emerald-800 dark:text-emerald-300 whitespace-normal break-keep leading-snug">
-            손보기 후 원하는 시점으로 복원 가능
+          <span className="font-bold text-teal-900 dark:text-emerald-300 whitespace-normal break-keep leading-snug">
+            언제든 1초 복원 보장
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 max-w-full min-w-0">
           <button
             type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'))}
-            title="온보딩 체험관으로 나가서 구경하기"
-            style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
+            disabled={busy}
+            onClick={() => void handleSend('인물 사진 이름 등록(귀신계 여권) 해볼래', 'text')}
+            title="인물 사진 이름 등록(귀신계 여권) 안내 열기"
+            style={{ backgroundColor: '#FFFBEB', color: '#92400E', borderColor: '#F59E0B' }}
             className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
           >
-            <span>🏠 온보딩 체험관 구경하기 ➔</span>
+            <span>🛂</span>
+            <span>귀신계 여권</span>
           </button>
           <button
             type="button"
@@ -1391,14 +1411,23 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             <span>🕰️</span>
             <span>복원 기록</span>
           </button>
+          <button
+            type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'))}
+            title="온보딩 체험관으로 나가서 구경하기"
+            style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
+            className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
+          >
+            <span>🏠 체험관 ➔</span>
+          </button>
           {isMobileOrStore && <VoiceActorControlPill compact />}
         </div>
       </div>
 
-      {/* 2. 본문 대화 스트림 (노션 스타일 미니멀 버블) */}
+      {/* 2. 본문 대화 스트림 (카톡 채팅방 스타일 전용 배경색 & 또렷한 말풍선 대비) */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto px-4 py-4 space-y-3.5 bg-[#FAF9F5] dark:bg-transparent"
+        className="flex-1 overflow-y-auto px-3.5 sm:px-4 py-4 space-y-3.5 bg-[#E6F1EF] dark:bg-[#0B161C]"
       >
         {(() => {
           const activePendingId =
@@ -1445,10 +1474,10 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               </div>
 
               <div
-                className={`max-w-[95%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] overflow-hidden shadow-xs ${
+                className={`max-w-[95%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] overflow-hidden shadow-sm ${
                   isUser
-                    ? 'bg-teal-600 text-white rounded-tr-sm border border-teal-700 font-semibold'
-                    : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-slate-100 rounded-tl-sm'
+                    ? 'bg-[#0D9488] text-white rounded-tr-sm border border-[#0F766E] font-semibold'
+                    : 'bg-white dark:bg-[#13252E] border border-teal-900/10 dark:border-teal-400/25 text-slate-900 dark:text-slate-100 rounded-tl-sm'
                 }`}
               >
                 {isUser ? (
@@ -1625,6 +1654,17 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                           >
                             🏦 안 쓰는 은행 보안프로그램 알아서 재워줘
                           </button>
+                          <button
+                            type="button"
+                            disabled={busy}
+                            onClick={() => {
+                              setWelcomeChipsDismissed(true);
+                              void handleSend('인물 사진 이름 등록(귀신계 여권) 해볼래', 'text');
+                            }}
+                            className="px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-500/40 text-[13px] font-extrabold text-amber-900 dark:text-amber-300 transition cursor-pointer text-left break-words"
+                          >
+                            🛂 인물 사진 이름 등록(귀신계 여권) 해볼래
+                          </button>
                         </>
                       )}
                     </div>
@@ -1678,8 +1718,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         </div>
       )}
 
-      {/* 3. 하단 초미니멀 입력창 (고정 스타터 칩 그리드 완전 폐지 ➔ 입력창 내 연한 색 1줄 롤링 플레이스홀더 10선) */}
-      <div className="px-3.5 py-3 border-t border-slate-200 dark:border-slate-800/80 bg-slate-50 dark:bg-slate-900/60">
+      {/* 3. 하단 초미니멀 입력창 (카톡 채팅방 하단 입력 도크처럼 또렷한 경계) */}
+      <div className="px-3.5 py-3 border-t-2 border-teal-600/20 dark:border-teal-400/25 bg-white dark:bg-[#10212B]">
         <form
           onSubmit={(e) => {
             e.preventDefault();

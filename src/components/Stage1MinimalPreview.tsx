@@ -131,16 +131,16 @@ const SecretarySamplePcCarePanel: React.FC = () => {
   const deletedCount = 0;
   const stepMsg =
     speedStep === 0
-      ? '👇 먼저 [🔍 1초 진단]을 눌러 샘플 PC를 누가 느리게 만드는지 확인해 보세요.'
+      ? '👇 먼저 [🔍 1초 진단]을 눌러 은행·결제 보안앱이 얼마나 속도를 늦추는지 체험해 보세요!'
       : speedStep === 1
-      ? `은행·결제 때 한 번 쓰고 마는 보안프로그램 ${total}개가 늘 켜져서 메모리 ${totalMemGb}GB를 차지하고 있어요. 지우지 말고 재워볼까요?`
+      ? `은행·결제 때 한 번 쓰고 마는 보안앱 ${total}개가 늘 켜져서 메모리 ${totalMemGb}GB를 차지하고 있어요. 지우지 말고 잠만 재워볼까요?`
       : speedStep === 2
       ? sleptCount < total
-        ? '💤 하나씩 재우는 중… 프로그램 파일은 그대로 두고 잠만 재워요.'
-        : `💤 ${total}개 모두 재웠어요! 지운 건 하나도 없어요. 은행 갈 땐 어떻게 될까요?`
+        ? '💤 하나씩 재우는 중… 프로그램은 지우지 않고 잠만 재워요.'
+        : `💤 ${total}개 모두 재웠어요! 지운 건 0개예요. 이제 [🏦 은행 사이트 열어보기]를 눌러볼까요?`
       : speedStep === 3
-      ? `🏦 은행 사이트를 여니 꼭 필요한 ${neededCount}개만 1초 만에 저절로 깨어났어요. 나머지는 계속 쿨쿨~`
-      : '↩️ 전부 처음 상태 그대로 되돌렸어요. 이렇게 언제든 1초 만에 원래대로 돌릴 수 있어요!';
+      ? `🏦 은행 사이트를 열면 꼭 필요한 ${neededCount}개만 1초 만에 저절로 깨어나고, 나머지는 계속 잠들어 있어요!`
+      : '↩️ 처음 상태 그대로 1초 만에 되돌렸어요! 언제든 원하는 시점으로 원상복구할 수 있어요.';
 
   return (
     <div
@@ -149,24 +149,22 @@ const SecretarySamplePcCarePanel: React.FC = () => {
       style={{ background: 'linear-gradient(145deg, #07131E 0%, #0B1F2A 100%)' }}
       className="rounded-2xl border border-teal-400/40 p-4 sm:p-5 space-y-3.5"
     >
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-0.5">
-          <div className="text-[13px] font-black text-teal-200 flex items-center gap-2 flex-wrap">
-            <span>🖥️ 샘플 PC 살려보기 · 사무실 4년 차 노트북</span>
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'))}
-              style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
-              className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap"
-            >
-              🏠 온보딩 체험관으로 나가서 구경하기 ➔
-            </button>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="space-y-1 min-w-0 flex-1">
+          <div className="text-[13.5px] sm:text-[14.5px] font-black text-teal-200 flex items-center gap-2 flex-wrap leading-snug break-keep">
+            <span className="whitespace-nowrap">⚡ 느려진 PC 살리기 미리 체험</span>
+            <span className="px-2 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-200 text-[11px] font-extrabold whitespace-nowrap">
+              안전 예시 · 내 PC 변경 없음
+            </span>
           </div>
-          <div className="text-xs text-zinc-400 font-semibold break-keep">
-            진짜 내 PC는 건드리지 않고 ‘샘플 PC’로 재우기 · 은행 기상 · 1초 원상복구를 바로 체험해 보세요
+          <div className="text-[12px] text-zinc-300 font-semibold break-keep leading-relaxed">
+            <span className="whitespace-nowrap">은행·결제 보안앱을 지우지 않고</span>{' '}
+            <span className="whitespace-nowrap">잠만 재워 속도를 살리고,</span>{' '}
+            <span className="whitespace-nowrap">은행 접속 때만 자동 기상시키는 과정을</span>{' '}
+            <span className="whitespace-nowrap">미리 눌러보실 수 있어요.</span>
           </div>
         </div>
-        <div className="min-w-[180px] flex-1 max-w-[260px] space-y-1">
+        <div className="min-w-[170px] w-full sm:w-auto sm:max-w-[240px] space-y-1">
           <div className="flex items-center justify-between text-xs font-black">
             <span className="text-zinc-300">원래 속도 대비</span>
             <span
@@ -281,14 +279,14 @@ const SecretarySamplePcCarePanel: React.FC = () => {
       </div>
 
       <div className="flex flex-wrap gap-2 text-[11.5px] sm:text-xs font-extrabold">
-        <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep">
-          🔒 마음대로 지우지 않아요 (지운 프로그램 {deletedCount}개)
+        <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 break-keep leading-snug">
+          🔒 마음대로 지우지 않아요 (삭제 {deletedCount}개)
         </span>
-        <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep">
-          ✋ 내가 고른 것만
+        <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 break-keep leading-snug">
+          ✋ 내가 승인한 것만 실행
         </span>
-        <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 whitespace-nowrap break-keep">
-          ↩️ 지운 프로그램 {deletedCount}개 · 1초 원상복구
+        <span className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 text-emerald-200 border border-emerald-400/30 break-keep leading-snug">
+          ↩️ 언제든 1초 원상복구
         </span>
       </div>
     </div>
@@ -1652,8 +1650,11 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   <span>👻 귀신비서</span>
                 </h1>
                 {/* [SSOT v2.3] 1. 👻 귀신비서 대표 1줄 부제 상시 노출 */}
-                <p className="basis-full -mt-1.5 text-[12.5px] md:text-[13px] font-semibold text-zinc-500 dark:text-zinc-400 leading-snug">
-                  느려진 내 PC·폰, 클릭 한 번에 새것처럼 — 은행 보안프로그램은 안 지우고 재우고, 중복 사진·흩어진 문서·깨진 한글 압축까지 광고 없이 1초 만에 해결합니다.
+                <p className="basis-full -mt-1.5 text-[12.5px] md:text-[13px] font-semibold text-zinc-500 dark:text-zinc-400 break-keep leading-relaxed">
+                  <span className="whitespace-nowrap">느려진 내 PC·폰, 클릭 한 번에 새것처럼</span> —{' '}
+                  <span className="whitespace-nowrap">은행 보안프로그램은 안 지우고 재우고,</span>{' '}
+                  <span className="whitespace-nowrap">중복 사진·흩어진 문서까지</span>{' '}
+                  <span className="whitespace-nowrap">광고 없이 1초 만에 해결합니다.</span>
                 </p>
 
                 <input
@@ -1865,6 +1866,80 @@ export const Stage1MinimalCarePreview: React.FC = () => {
               </div>
             )}
           </section>
+
+          {/* 1-B. [상단 즉시 노출] 🛡️ 귀신비서의 상시 케어 능력 3종 — 사진 후보 목록을 펼쳐도 묻히지 않도록 상단 배치 & PC/모바일 깔끔 줄바꿈 */}
+          {!isStoreAppMode && (
+            <section
+              data-allow-secretary-jump="true"
+              aria-label="귀신비서 상시 케어 능력 안내"
+              className="p-4 sm:p-5 rounded-2xl bg-emerald-50 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-500/30 shadow-sm flex flex-col gap-3"
+            >
+              <div className="flex flex-wrap items-center justify-between gap-1.5">
+                <span className="text-[13.5px] sm:text-[14px] font-extrabold text-emerald-900 dark:text-emerald-200 break-keep leading-snug">
+                  🛡️ 귀신비서의 상시 케어 능력 3종 (평생 0원)
+                </span>
+                <span className="text-[11.5px] sm:text-[12px] text-emerald-800 dark:text-emerald-300 font-semibold break-keep">
+                  카드를 누르면 귀신비서 대화창에서 바로 실행돼요
+                </span>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[12.5px]">
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.dispatchEvent(
+                      new CustomEvent('ghosti_toss_to_monster_chat', {
+                        detail: { query: '부팅할 때 켜지는 시작프로그램 목록도 보여줘' },
+                      })
+                    )
+                  }
+                  className="text-left p-3.5 rounded-xl bg-white dark:bg-zinc-900/90 hover:bg-emerald-50/70 dark:hover:bg-zinc-900 border border-emerald-200/90 dark:border-emerald-500/25 shadow-xs flex flex-col gap-1.5 transition cursor-pointer"
+                >
+                  <span className="font-extrabold text-slate-900 dark:text-white break-keep leading-snug">
+                    ① ⚡ 은행·관공서 보안앱 자동 절전·기상
+                  </span>
+                  <span className="text-slate-700 dark:text-zinc-300 break-keep leading-relaxed text-[12px]">
+                    평소엔 메모리를 먹는 보안모듈을 재워 컴퓨터를 가볍게 하고, 은행 사이트를 열 때만 자동으로 깨워드려요.
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.dispatchEvent(
+                      new CustomEvent('ghosti_toss_to_monster_chat', {
+                        detail: { query: '윈도우 순정 백신으로 빠른 바이러스 검사 실행해줘' },
+                      })
+                    )
+                  }
+                  className="text-left p-3.5 rounded-xl bg-white dark:bg-zinc-900/90 hover:bg-emerald-50/70 dark:hover:bg-zinc-900 border border-emerald-200/90 dark:border-emerald-500/25 shadow-xs flex flex-col gap-1.5 transition cursor-pointer"
+                >
+                  <span className="font-extrabold text-slate-900 dark:text-white break-keep leading-snug">
+                    ② 🛡️ 다운로드 파일 무소음 백신 경호
+                  </span>
+                  <span className="text-slate-700 dark:text-zinc-300 break-keep leading-relaxed text-[12px]">
+                    광고 팝업 없이 새로 받은 설치파일·압축파일을 윈도우 기본 백신으로 조용하고 안전하게 검사해요.
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() =>
+                    window.dispatchEvent(
+                      new CustomEvent('ghosti_toss_to_monster_chat', {
+                        detail: { query: '방금 지운 파일 찾아줘' },
+                      })
+                    )
+                  }
+                  className="text-left p-3.5 rounded-xl bg-white dark:bg-zinc-900/90 hover:bg-emerald-50/70 dark:hover:bg-zinc-900 border border-emerald-200/90 dark:border-emerald-500/25 shadow-xs flex flex-col gap-1.5 transition cursor-pointer"
+                >
+                  <span className="font-extrabold text-slate-900 dark:text-white break-keep leading-snug">
+                    ③ 🗑️↩️ 미저장 문서 &amp; 휴지통 3초 구출
+                  </span>
+                  <span className="text-slate-700 dark:text-zinc-300 break-keep leading-relaxed text-[12px]">
+                    실수로 저장 안 하고 끈 문서 임시본을 찾거나, 잘못 지운 휴지통 파일을 5줄 미리보기로 즉시 복원해요.
+                  </span>
+                </button>
+              </div>
+            </section>
+          )}
 
           {/* 2. 깔끔한 4열 정리 카테고리 카드 (글자 잘림 0% + 미니 샘플 썸네일 프리뷰 내장) */}
           <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
@@ -2347,46 +2422,10 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             </section>
           )}
 
-          {/* [메뉴 1 · 👻 귀신비서 하단 고정 소속 설명란] 비서의 상시 케어 능력 3종 (PC 환경 전용 노출) */}
-          {layout !== 'mobile' && !isStoreAppMode && (
-            <section
-              aria-label="귀신비서 상시 케어 능력 안내"
-              className="p-4 sm:p-5 rounded-2xl bg-emerald-50 border border-emerald-200 shadow-sm flex flex-col gap-3"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <span className="text-[13.5px] font-extrabold text-emerald-900">
-                  🛡️ 기타 · 귀신비서의 상시 케어 능력 3종 (언제나 평생 무료)
-                </span>
-                <span className="text-[11.5px] text-emerald-800 font-semibold">
-                  우측 귀신비서 채팅창에서 언제든 말로 점검·복구 가능
-                </span>
-              </div>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[12px] text-slate-900">
-                <div className="p-3 rounded-xl bg-white border border-emerald-200/80 shadow-xs flex flex-col gap-1">
-                  <span className="font-extrabold text-slate-900">① ⚡ 은행·관공서 보안프로그램 자동 절전·기상</span>
-                  <span className="text-slate-700 leading-snug">
-                    평소엔 메모리를 먹는 보안모듈을 재워 컴퓨터를 가볍게 하고, 은행 접속 시에만 자동 기상 (고클린 대체)
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-white border border-emerald-200/80 shadow-xs flex flex-col gap-1">
-                  <span className="font-extrabold text-slate-900">② 🛡️ 다운로드 파일 무소음 백신 경호</span>
-                  <span className="text-slate-700 leading-snug">
-                    광고 팝업 없이 새로 받은 설치파일·압축파일을 Windows Defender 직결로 조용히 즉시 검사 (알약 대체)
-                  </span>
-                </div>
-                <div className="p-3 rounded-xl bg-white border border-emerald-200/80 shadow-xs flex flex-col gap-1">
-                  <span className="font-extrabold text-slate-900">③ 🗑️↩️ 미저장 종료 문서 &amp; 휴지통 3초 구출</span>
-                  <span className="text-slate-700 leading-snug">
-                    실수로 저장 안 하고 끈 엑셀·한글 임시본 추적 및 잘못 지운 휴지통 파일 3초 원복
-                  </span>
-                </div>
-              </div>
-            </section>
-          )}
         </GhostSecretaryFirstGuard>
 
-        {/* ═══════════════ [우측 열] 손보기 대화창 (모바일/태블릿에서는 최상단 노출, PC에서는 우측 고정) ═══════════════ */}
-        <div className="order-first xl:order-none xl:col-span-5 2xl:col-span-4 xl:sticky xl:top-20">
+        {/* ═══════════════ [우측 열] 귀신비서 전용 대화방 (PC에서는 좌측 메인 화면과 뚜렷이 구분되는 카톡형 채팅방 프레임) ═══════════════ */}
+        <div className="order-first xl:order-none xl:col-span-5 2xl:col-span-4 xl:sticky xl:top-20 xl:pl-4 xl:border-l-2 xl:border-teal-500/25">
           <MonsterStandardChatColumn
             sourceTab="trash"
             externalQueryTrigger={externalQueryTrigger}

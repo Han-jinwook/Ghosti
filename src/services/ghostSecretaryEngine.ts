@@ -704,6 +704,30 @@ export function resolveGhostSecretaryTurn(
   if (!text) return null;
   const nickname = st.nickname || '';
 
+  // ⓪-0 사용자가 직접 '🛂 귀신계 여권' 또는 '인물 사진 이름 등록'을 요청한 경우 즉시 여권 등록 안내 진입!
+  if (
+    /(귀신계?\s*여권|여권\s*(등록|발급|만들|보여|확인|열어|안내|설정|해\s*볼래|할래)|인물\s*사진\s*이름|얼굴\s*이름\s*(등록|설정|붙이|알려)|사진\s*속\s*(사람|인물|가족)\s*이름)/i.test(
+      text
+    ) &&
+    !/\d+\s*번\s*(?:은|는|이|가)/.test(text)
+  ) {
+    const nickLabel = nickname ? `${nickname}님! ` : '';
+    const clusterCnt = ctx.passportClusterCount || 0;
+    const passportGuideText =
+      clusterCnt > 0
+        ? `${nickLabel}🛂 **귀신계 여권(인물 사진 이름 등록)** 화면을 바로 열어드렸어요! 👻✨\n내 사진첩에서 자주 나오는 인물 후보 **${clusterCnt}명**을 왼쪽(상단) 카드에 번호표(①~)로 띄워뒀어요.\n채팅창에 **"1번은 나, 2번은 홍길동"**처럼 실제 이름을 알려주시면 내 기기 안에서만 안전하게 기억해 두고 다음부터 이름으로 1초 만에 찾아드릴게요!`
+        : `${nickLabel}🛂 **귀신계 여권(인물 사진 이름 등록)** 안내 카드를 바로 열어드렸어요! 👻✨\n내 사진첩에 가족·지인 인물 사진이 모이면 자주 나오는 얼굴을 번호표(①, ②…)로 모아드려요.\n그때 **"1번은 나, 2번은 홍길동"**처럼 실제 이름만 한 번 알려주시면, 다음부터 **'홍길동 웃는 사진 찾아줘'** 한마디로 1초 만에 찾아드려요! (원본 사진은 외부 서버로 절대 나가지 않고 100% 내 기기 안에서만 보관돼요 🔒)`;
+    return {
+      scenarioId: 'passport_manual_open_guide',
+      text: passportGuideText,
+      followUps:
+        clusterCnt > 0
+          ? ['1번은 나야', '귀신검색으로 내 파일 찾아볼래', '최근 복원 기록 보여줘']
+          : ['귀신검색으로 내 파일 찾아볼래', '최근 복원 기록 보여줘', '부팅할 때 켜지는 시작프로그램 목록도 보여줘'],
+      nextState: { ...st, awaitingNickname: false, passportStep: 'naming' },
+    };
+  }
+
   // ⓪ 🛂 귀신계 여권 발급 대행 (성별·나이대 힌트 → 후보 번호별 실명 입력)
   if (st.passportStep === 'ask_hint') {
     if (isPassportGenderAgeHint(text)) {
@@ -765,7 +789,7 @@ export function resolveGhostSecretaryTurn(
   }
 
   const isCareActionApprovalText =
-    /(진행|실행|정리|복구|복원|치워|꺼\s*줘|고쳐|되돌|원복|원래대로|승인|동의|지워|삭제|적출|언인스톨|사양|스펙|상태\s*봐|느려|느린|버벅|애드웨어)/i.test(
+    /(진행|실행|정리|복구|복원|치워|꺼\s*줘|고쳐|되돌|원복|원래대로|승인|동의|지워|삭제|적출|언인스톨|사양|스펙|상태\s*봐|느려|느린|버벅|애드웨어|여권|인물\s*사진)/i.test(
       text
     );
 
