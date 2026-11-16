@@ -296,13 +296,38 @@ def fetch_page_body_text(page_id: str) -> str:
 # =====================================================================
 # 3. 핵심 요청 함수 1: fetch_bugs()
 # =====================================================================
+def _is_onboarding_card_for_role3(title_text: str) -> bool:
+    """
+    [1귀신 본진 ↔ 3귀신 온보딩 분담 가드]
+    3귀신(--role 3) 창이 [3귀신] 카드와 함께 [1귀신] 중 '온보딩/쇼룸/둘러보기' 카드를 전담하고,
+    1귀신 본진(--role 1) 창과는 100% 상호 배타적으로 분리하여 충돌을 원천 차단합니다.
+    (단, '귀신비서 초기 『내 컴퓨터 연결』 유도 ... 거절 시 온보딩 이동'은 본진 귀신비서 엔진 카드이므로 1귀신 본진 유지)
+    """
+    if "귀신비서 초기" in title_text and "내 컴퓨터 연결" in title_text:
+        return False
+    return any(
+        kw in title_text
+        for kw in (
+            "[온보딩",
+            "귀신같이 온보딩]",
+            "웹 온보딩",
+            "온보딩 대기",
+            "온보딩 둘러보기",
+            "온보딩 체험관",
+            "온보딩 쇼룸",
+        )
+    )
+
+
 def classify_ghosti_bug_role(title_text: str, body_text: str = "", app_select: str = "") -> str:
     """
     멀린님 최종 확정 3창(`1귀신` / `2귀신` / `3귀신`) 노션 QA 카드 역할 자동 분류기:
-    - '1': 1번 창 (D:\\Ghosti, --role 1) — `[1귀신]` (귀신비서 & 온보딩 · 사진정리 · 브리핑)
+    - '1': 1번 창 (D:\\Ghosti, --role 1) — `[1귀신]` 본진 (귀신비서 · Z-코어 · 사진정리 · 브리핑, 온보딩 제외)
     - '2': 2번 창 (D:\\Ghosti_Search, --role 2) — `[2귀신]` 및 `[귀신창]` (귀신검색 · 동영상 글자뽑기 · 문서투시 · 귀신창)
-    - '3': 3번 창 (D:\\Ghosti_Share, --role 3) — `[3귀신]` (사진공유 가족·동호회·동창회 + 내 기기 통합)
+    - '3': 3번 창 (D:\\Ghosti_Share, --role 3) — `[3귀신]` (사진공유 · 내 기기 통합) + `[1귀신]` 중 온보딩 전담
     """
+    if _is_onboarding_card_for_role3(title_text):
+        return "3"
     if "[1귀신" in title_text or "1귀신]" in title_text:
         return "1"
     if (
@@ -318,19 +343,19 @@ def classify_ghosti_bug_role(title_text: str, body_text: str = "", app_select: s
 
     # 말머리가 구버전 '[귀신같이]'인 경우 키워드 폴백 분류
     combined = f"{title_text} {app_select}"
-    if any(k in combined for k in ("사진 공유", "사진공유", "공유방", "패밀리", "동창회", "동호회", "여권", "내 기기 통합", "내기기 통합")):
+    if any(k in combined for k in ("사진 공유", "사진공유", "공유방", "패밀리", "동창회", "동호회", "여권", "내 기기 통합", "내기기 통합", "온보딩")):
         return "3"
     if any(k in combined for k in ("귀신창", "귀신검색", "동영상", "글자", "문서", "라벨러", "검색시", "검색창")):
         return "2"
     return "1"
 
 
-def _matches_role_strict(title_text: str, app_select: str, role: str) -> bool:
+def _matches_role_strict(title_text: str, app_select: str, role: str, target_status: str = "", page_id: str = "") -> bool:
     """
     Secretary 지시 명세에 따른 엄격한 role 매칭 (단일 및 복합 '2,3' 등 완벽 지원):
-    - role == "1": "[1귀신" (및 말머리 미부착 구버전 중 1번 분류) 감지
+    - role == "1": "[1귀신" 중 온보딩을 제외한 본진 카드 감지
     - role == "2": "[2귀신" 및 "[귀신창" 감지
-    - role == "3": "[3귀신" 감지
+    - role == "3": "[3귀신" 및 "[1귀신" 중 온보딩 전담 카드 감지
     - role == "2,3" 등 복합 지정: 쉼표 구분 각 role 중 하나라도 매칭되면 True
     - role == "all": 1귀신, 2귀신, 3귀신, 귀신창, 귀신같이 전체 감지
     """
@@ -339,10 +364,16 @@ def _matches_role_strict(title_text: str, app_select: str, role: str) -> bool:
     if "," in role:
         sub_roles = [r.strip() for r in role.split(",") if r.strip() in ("1", "2", "3")]
         if sub_roles:
-            return any(_matches_role_strict(title_text, app_select, sr) for sr in sub_roles)
+            return any(_matches_role_strict(title_text, app_select, sr, target_status, page_id) for sr in sub_roles)
         return True
+    # 이미 1귀신 본진이 '버그 수정중'으로 착수한 419f9ffd-2c1d-815f 카드는 진행 중 충돌 방지를 위해 STATUS_FIXING 동안 role=1 유지
+    if target_status == STATUS_FIXING and page_id.startswith("419f9ffd-2c1d-815f"):
+        return role == "1"
+    is_onb_role3 = _is_onboarding_card_for_role3(title_text)
     has_explicit_123 = any(tag in title_text for tag in ("[1귀신", "1귀신]", "[2귀신", "2귀신]", "[3귀신", "3귀신]"))
     if role == "1":
+        if is_onb_role3:
+            return False
         if "[1귀신" in title_text or "1귀신]" in title_text:
             return True
         if has_explicit_123 or "[귀신창" in title_text or app_select == "귀신창":
@@ -355,7 +386,7 @@ def _matches_role_strict(title_text: str, app_select: str, role: str) -> bool:
             return False
         return classify_ghosti_bug_role(title_text, "", app_select) == "2"
     if role == "3":
-        if "[3귀신" in title_text or "3귀신]" in title_text:
+        if is_onb_role3 or "[3귀신" in title_text or "3귀신]" in title_text:
             return True
         if has_explicit_123 or "[귀신창" in title_text or app_select == "귀신창":
             return False
@@ -452,7 +483,7 @@ def query_bugs_raw(
             for k in ("센스톡", "썬드리머", "멀린비서", "멀린허브", "충전소", "귀신팸", "귀신코인", "스튜디오")
         ):
             continue
-        if not _matches_role_strict(title_text, app_select, resolved_role):
+        if not _matches_role_strict(title_text, app_select, resolved_role, resolved_status, page_id):
             continue
         card_role = classify_ghosti_bug_role(title_text, "", app_select)
         body_text = fetch_page_body_text(page_id)
