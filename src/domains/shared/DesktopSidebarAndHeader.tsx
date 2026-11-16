@@ -477,7 +477,7 @@ export const DesktopSidebarContainer: React.FC<{
                 <div className="flex flex-col text-left min-w-0 flex-1">
                   <span className="truncate text-[14.5px]">👻 귀신비서</span>
                   <span className="text-[10.5px] opacity-75 font-normal truncate">
-                    느려진 내 PC·폰, 클릭 한 번에 새것처럼
+                    안 지우고 재우고 · 1초 만에 새것처럼
                   </span>
                 </div>
               </button>
@@ -524,7 +524,7 @@ export const DesktopSidebarContainer: React.FC<{
                   <div className="flex flex-col text-left min-w-0 flex-1">
                     <span className="truncate text-[14.5px]">⚡ 귀신창</span>
                     <span className="text-[10.5px] opacity-75 font-normal truncate">
-                      하던 일 멈추지 마세요, 쓰던 자리에서 1초면 끝
+                      하던 일 멈추지 않고, 쓰던 자리에서 1초 끝
                     </span>
                   </div>
                 </button>
@@ -553,8 +553,8 @@ export const DesktopSidebarContainer: React.FC<{
                     <span className="truncate text-[14.5px]">📸 사진 공유</span>
                     <span className="text-[10.5px] opacity-75 font-normal truncate">
                       {isStoreAppMode
-                        ? '개인 사진·영상 원본 모음 (가족·모임)'
-                        : '가족·모임 원본 사진, 만료 없이 평생 0원 (개인 사진·영상 전용)'}
+                        ? '개인 사진·영상 전용 (가족·모임 원본)'
+                        : '개인 사진·영상 전용 · 만료 없이 평생 0원'}
                     </span>
                   </div>
                   <span className="text-[10px] opacity-60">{isPhotoShareActive ? '▾' : '▸'}</span>
@@ -634,7 +634,7 @@ export const DesktopSidebarContainer: React.FC<{
               {/* ━━━ 기기 연동 · 팀 확장 (SSOT v2.2: !isStoreAppMode 시 핵심 요금·원가 투명화 상시 표기) ━━━ */}
               <div className="mt-2 pt-2 border-t border-white/10 flex flex-col gap-1 select-none" aria-label="확장 메뉴">
                 {!isStoreAppMode && (
-                  <div className="px-3 pb-0.5 text-[10px] font-extrabold tracking-tight opacity-65 truncate">
+                  <div className="px-3 pb-0.5 text-[10px] font-extrabold tracking-tight opacity-65">
                     클라우드 월세 0원 · 30일 무료체험 · 투명 정찰제
                   </div>
                 )}
@@ -662,8 +662,8 @@ export const DesktopSidebarContainer: React.FC<{
                         className={mainBtnClass(isPhonePcIntegrationActive)}
                       >
                         <div className="flex flex-col text-left min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5">
-                            <span className="truncate text-[14px]">📱 내 기기 통합</span>
+                          <div className="flex items-center gap-1">
+                            <span className="shrink-0 text-[13.5px]">📱 내 기기 통합</span>
                             {!isStoreAppMode && (
                               <span className="px-1.5 py-0.5 text-[9.5px] font-bold rounded bg-teal-500/15 text-teal-400 shrink-0">
                                 월 3,900원
@@ -673,7 +673,7 @@ export const DesktopSidebarContainer: React.FC<{
                               superpowerStatus.trial_status !== 'NOT_STARTED' &&
                               superpowerStatus.trial_status !== 'EXPIRED' &&
                               superpowerStatus.trial_status !== 'EXPIRED_LOCKED' && (
-                                <span className="px-1.5 py-0.5 text-[9.5px] font-bold rounded bg-emerald-500/20 text-emerald-400 shrink-0">
+                                <span className="px-1 py-0.5 text-[9px] font-bold rounded bg-emerald-500/20 text-emerald-400 shrink-0">
                                   ✨ 체험중
                                 </span>
                               )}
