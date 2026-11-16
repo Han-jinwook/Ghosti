@@ -156,9 +156,9 @@ const SecretarySamplePcCarePanel: React.FC = () => {
             <button
               type="button"
               onClick={() => window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'))}
-              className="px-2.5 py-0.5 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/40 text-teal-200 text-[11.5px] font-extrabold cursor-pointer"
+              className="px-2.5 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/50 text-[#00F0B5] text-[11.5px] font-extrabold cursor-pointer"
             >
-              🏠 첫 화면(온보딩 쇼룸) 보기
+              🏠 온보딩 체험관으로 나가서 구경하기 ➔
             </button>
           </div>
           <div className="text-xs text-zinc-400 font-semibold break-keep">
@@ -1666,7 +1666,15 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex flex-wrap items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2" data-allow-secretary-jump="true">
+                <button
+                  type="button"
+                  data-allow-secretary-jump="true"
+                  onClick={() => window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'))}
+                  className="px-3.5 py-2.5 rounded-xl bg-teal-950/90 hover:bg-teal-900 border border-[#00F0B5]/50 text-[#00F0B5] font-label-sm text-[12px] font-extrabold flex items-center justify-center gap-1.5 transition-all cursor-pointer whitespace-nowrap shadow-xs"
+                >
+                  <span>🏠 온보딩 체험관으로 나가서 구경하기 ➔</span>
+                </button>
                 {liveActiveTrash.length > 0 &&
                   (isCleanupPaused ? (
                     <button

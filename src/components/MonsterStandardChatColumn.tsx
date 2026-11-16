@@ -1357,6 +1357,14 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         <div className="flex items-center gap-1.5 shrink-0">
           <button
             type="button"
+            onClick={() => window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'))}
+            title="온보딩 체험관으로 나가서 구경하기"
+            className="px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-[11.5px] font-extrabold shadow-xs transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
+          >
+            <span>🏠 온보딩 체험관으로 나가서 구경하기 ➔</span>
+          </button>
+          <button
+            type="button"
             disabled={busy}
             onClick={() => void handleSend('최근 [복원 기록] 보여줘', 'text')}
             title="최근 손보기·정리 내역 조회 및 원래대로 1초 되돌리기"

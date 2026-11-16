@@ -396,6 +396,11 @@ export const App: React.FC = () => {
       };
 
       isApplyingPopStateRef.current = true;
+      if (targetNav.viewMode === 'showroom') {
+        try {
+          sessionStorage.setItem('ghosti_entered_showroom_from_app', '1');
+        } catch {}
+      }
       setViewMode(targetNav.viewMode === 'showroom' ? 'showroom' : 'workspace');
       useSaySeeStore.setState({
         activeLoungeType: targetNav.lounge,
