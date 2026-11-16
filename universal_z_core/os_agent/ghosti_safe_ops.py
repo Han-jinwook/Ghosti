@@ -635,11 +635,13 @@ def precheck_restore_points() -> Dict[str, Any]:
         ops = pt.get("operations", []) or []
         total = len(ops)
         ok_count = 0
+        rolled_back_count = 0
         missing: List[str] = []
         for op in ops:
             to_p = Path(str(op.get("toPath", "")))
             name = str(op.get("name") or to_p.name)
             if op.get("rolledBack"):
+                rolled_back_count += 1
                 missing.append(f"{name} (이미 되돌림)")
             elif op.get("op") in ("REGISTRY_RUN_RESTORE", "ADWARE_PROCESS_STOP", "ADWARE_TASK_DISABLE", "ADWARE_CLEAN_CHECK"):
                 ok_count += 1
@@ -647,16 +649,21 @@ def precheck_restore_points() -> Dict[str, Any]:
                 ok_count += 1
             else:
                 missing.append(name)
-        if total > 0 and ok_count == total:
+        all_rolled_back = bool(total > 0 and rolled_back_count == total)
+        if all_rolled_back:
+            status, badge = "FULL_RESTORABLE", "✅ [원위치 복원 완료]"
+            guide = "이미 원래 위치로 안전하게 복원 완료된 기록입니다. (추가 되돌리기 불필요)"
+        elif total > 0 and ok_count == total:
             status, badge = "FULL_RESTORABLE", "🟢 [100% 완벽 복원 가능]"
             guide = f"되돌릴 항목 {total}건이 모두 안전하게 보호되어 즉시 복원 가능합니다."
         elif ok_count > 0:
             status, badge = "PARTIAL_RESTORABLE", f"🟡 [부분 복원 가능 ({total}건 중 {ok_count}건)]"
             guide = f"{total}건 중 {ok_count}건을 되돌릴 수 있습니다. 없는 항목: {', '.join(missing[:3])}"
         else:
-            status, badge = "UNRESTORABLE", "🔴 [복원 불가 (파일 없음)]"
-            guide = "되돌릴 대상 파일이 현재 위치에 없습니다."
+            status, badge = "UNRESTORABLE", "⚪ [대상 파일 이동·삭제됨]"
+            guide = "현재 위치에 되돌릴 파일이 없어 실행할 필요가 없습니다."
         row = dict(pt)
+        bb = pt.get("blackbox") if isinstance(pt.get("blackbox"), dict) else {}
         row.update(
             {
                 "integrityStatus": status,
@@ -665,6 +672,8 @@ def precheck_restore_points() -> Dict[str, Any]:
                 "restorableItems": ok_count,
                 "missingFiles": missing,
                 "precheckGuideMessage": guide,
+                "rolledBack": all_rolled_back,
+                "rollbackTypedText": str(bb.get("lastUserRollbackTypedText") or ""),
             }
         )
         evaluated.append(row)
@@ -835,7 +844,7 @@ def sync_desktop_timemachine_snapshot() -> None:
                     "rolledBack": False,
                 }
                 add_restore_point(
-                    summary=f"바탕화면 '{fname}' 영구삭제(Shift+Delete) 타임머신 스냅샷 보호본",
+                    summary=f"바탕화면 '{fname}' 삭제 파일 타임머신 자동 보호본",
                     user_prompt=f"방금 지운 '{fname}' 파일 복원 대기 (타임머신 자동 감지)",
                     preview=f"원래 위치({orig_p})로 원본 내용 그대로 1초 즉시 복원 가능",
                     operations=[op_item],

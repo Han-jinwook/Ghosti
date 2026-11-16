@@ -20,6 +20,7 @@ import {
   formatBytes,
   triggerUserFavoriteAiLiveVoiceBatonTouch,
   executeMissingFileRecovery,
+  openMissingFileOrRecycleBinLocation,
   executeMonsterCleanupApproval,
   executeRestorePointRollback,
   executeDeepUninstallApproval,
@@ -107,17 +108,22 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         </div>
       )}
 
-      {/* 2) 1초 블랙박스 소명 & 5대 은닉 금고 / $Recycle.Bin $I 포렌식 + 5줄 실물 미리보기 */}
+      {/* 2) 1초 블랙박스 소명 & 5대 은닉 금고 / $Recycle.Bin $I 포렌식 + 지운 파일 5줄 미리보기 카드 */}
       {message.cardKind === 'MISSING_FILE_EXONERATION' && message.missingFilePayload && (
         <div className="rounded-xl border border-emerald-500/40 bg-slate-900/90 p-3.5 space-y-2.5 text-[13px] overflow-hidden break-words [overflow-wrap:anywhere]">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[13px] font-extrabold">
-              <ShieldCheck className="w-4 h-4 shrink-0" />
-              5줄 실물 미리보기
-            </span>
-            <span className="text-[13px] text-slate-400 font-semibold">
-              {message.missingFilePayload.deletedAtOrSavedAt}
-            </span>
+          <div className="space-y-1">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[13px] font-extrabold">
+                <ShieldCheck className="w-4 h-4 shrink-0" />
+                📄 지운 파일 5줄 미리보기 카드
+              </span>
+              <span className="text-[13px] text-slate-400 font-semibold">
+                {message.missingFilePayload.deletedAtOrSavedAt}
+              </span>
+            </div>
+            <p className="text-[13px] text-slate-300 leading-snug">
+              복원하기 전에 찾은 파일의 이름·원래 위치·보관 상태를 5줄로 미리 확인하는 카드예요.
+            </p>
           </div>
 
           <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-3 text-[13px] text-emerald-200 space-y-1.5">
@@ -161,7 +167,10 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                         ? '📂 윈도우 [휴지통] 폴더를 여는 중이에요...'
                         : `📂 탐색기에서 [${message.missingFilePayload!.fileName}] 위치를 여는 중이에요...`
                     );
-                    const res = await executeRealOsAction('open_file_location', targetPath);
+                    const res = await openMissingFileOrRecycleBinLocation(
+                      targetPath,
+                      isInRecycleBin
+                    );
                     if (res.ok) {
                       onToast?.(
                         isInRecycleBin
@@ -453,7 +462,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                           ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                           : pt.integrityStatus === 'PARTIAL_RESTORABLE'
                           ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                          : 'bg-rose-500/20 text-rose-300 border border-rose-500/40'
+                          : 'bg-slate-700/40 text-slate-300 border border-slate-600/50'
                       }`}
                     >
                       {pt.statusBadge}
@@ -466,6 +475,10 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       <span className="text-[13px] font-extrabold text-emerald-400 flex items-center gap-1">
                         <CheckCircle2 className="w-4 h-4 shrink-0" />
                         원위치 복원 완료
+                      </span>
+                    ) : pt.integrityStatus === 'UNRESTORABLE' || pt.restorableItems === 0 ? (
+                      <span className="text-[13px] font-semibold text-slate-400">
+                        되돌릴 대상 파일 없음 (추가 작업 불필요)
                       </span>
                     ) : (
                       <div className="flex items-center gap-2 flex-wrap">
@@ -486,7 +499,10 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                                         ...item,
                                         rolledBack: true,
                                         rollbackTypedText: typed,
-                                        statusBadge: '↩️ 원위치 복원 완료',
+                                        integrityStatus: 'FULL_RESTORABLE',
+                                        statusBadge: '✅ [원위치 복원 완료]',
+                                        precheckGuideMessage:
+                                          '이미 원래 위치로 안전하게 복원 완료된 기록이에요! (추가 되돌리기 불필요)',
                                       }
                                     : item
                                 ),

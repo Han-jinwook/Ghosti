@@ -99,9 +99,11 @@ def _parse_recycle_bin_i_file(i_file: Path) -> Dict[str, Any] | None:
 
 
 _TRACE_STOPWORDS = {
-    "파일", "사진", "문서", "자료", "폴더", "영상", "동영상", "내", "제", "우리", "그", "그거", "이거", "저거",
-    "어디", "어디갔어", "어디갔지", "어디있어", "어디로", "방금", "방금전", "조금전", "아까", "최근", "최근에",
-    "오늘", "어제", "그제", "일전에", "없어졌어", "없어졌어요", "없어진", "사라졌어", "사라졌어요", "사라진",
+    "파일", "사진", "이미지", "그림", "문서", "자료", "폴더", "영상", "동영상",
+    "내", "내가", "제", "제가", "우리", "우리가", "나", "저", "그", "그거", "이거", "저거",
+    "어디", "어디갔어", "어디갔지", "어디있어", "어디로", "방금", "방금전", "방금전에", "조금전", "조금전에", "아까", "최근", "최근에",
+    "오늘", "어제", "그제", "일전에", "실수로", "모르고", "일부러", "잘못", "거기", "여기",
+    "없어졌어", "없어졌어요", "없어진", "사라졌어", "사라졌어요", "사라진",
     "증발", "증발했어", "지운", "지웠던", "지웠지", "지웠어", "지웠어요", "지워진", "삭제", "삭제한", "삭제된",
     "삭제했어", "삭제했어요", "버린", "버렸던", "버렸어", "버렸어요", "날아갔어", "날아간", "넣은", "넣었던",
     "보낸", "옮긴", "복구", "복구해", "복구해줘", "복구해주세요", "복원", "복원해", "복원해줘", "복원해주세요",
@@ -113,10 +115,11 @@ _TRACE_STOPWORDS = {
 
 
 def _extract_trace_keywords(query: str) -> List[str]:
-    toks = re.findall(r"[0-9A-Za-z가-힣._\-]{2,}", query or "")
+    cleaned_q = re.sub(r"['\"‘’“”`]", " ", query or "")
+    toks = re.findall(r"[0-9A-Za-z가-힣._\-]{2,}", cleaned_q)
     out: List[str] = []
     for t in toks:
-        t2 = re.sub(r"(이|가|을|를|은|는|도|에|에서|으로|로|의|만)$", "", t) if len(t) > 2 else t
+        t2 = re.sub(r"(이|가|을|를|은|는|도|에|에서|으로|로|의|만|랑|이랑)$", "", t) if len(t) > 2 else t
         if t2 and t2 not in _TRACE_STOPWORDS and t not in _TRACE_STOPWORDS and len(t2) >= 2 and t2 not in out:
             out.append(t2)
     return out[:6]
@@ -3549,7 +3552,10 @@ def handle_quarantine(action: str, payload: Dict[str, Any] | None = None) -> Dic
             zos.open_file_location_on_interactive_desktop(ddir, mode="open_file_location")
             return {"ok": True, "opened": str(ddir)}
         else:
-            subprocess.Popen(["explorer.exe", "shell:RecycleBinFolder"])
+            try:
+                zos.execute_real_os_action("open_file_location", "$Recycle.Bin")
+            except Exception:
+                subprocess.Popen(["explorer.exe", "shell:RecycleBinFolder"])
             return {"ok": True, "opened": "RecycleBin"}
 
     return {"ok": False, "error": f"UNKNOWN_QUARANTINE_ACTION: {act}"}
