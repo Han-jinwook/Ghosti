@@ -708,7 +708,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     // [v1.3 필수 통과의례 게이트]: PC에서 아직 로컬 엔진(Z-코어)이 연결되지 않은 상태일 때,
     // 별명 등록 이후 손보기 동의 / 급한 검색 요청 / 거절(눈으로 구경) 분기를 귀신비서가 정직하고 귀엽게 직접 안내!
     if (sourceTab === 'trash' && !isMobileOrStore && !zCoreBridge.isConnected) {
-      await zCoreBridge.checkHealth();
+      await zCoreBridge.checkHealth(true);
     }
     if (sourceTab === 'trash' && !isMobileOrStore && !zCoreBridge.isConnected) {
       const preSt = loadGhostSecretaryState();

@@ -24,14 +24,27 @@ export function hasActiveGhostiLoginSession(): boolean {
   if ((window as any).__GHOSTI_ZCORE_BRIDGE__?.isConnected === true) {
     return true;
   }
+  if ((window as any).__GHOSTI_ACTIVE_ROUTE__?.viewMode === 'workspace') {
+    return true;
+  }
   const params = new URLSearchParams(window.location.search);
-  if (params.get('ghostSearchWindow')) {
+  if (
+    params.get('ghostSearchWindow') ||
+    params.get('dev') === 'true' ||
+    params.get('lounge') ||
+    params.get('tab') ||
+    window.location.hostname === 'localhost' ||
+    window.location.hostname === '127.0.0.1'
+  ) {
     return true;
   }
   try {
     if (
       sessionStorage.getItem('ghosti_one_stop_agreed') === '1' ||
-      localStorage.getItem('ghosti_secretary_engine_agreed') === '1'
+      sessionStorage.getItem('ghosti_entered_from_showroom') === '1' ||
+      localStorage.getItem('ghosti_secretary_engine_agreed') === '1' ||
+      localStorage.getItem('ghosti_onboarding_completed') === 'true' ||
+      localStorage.getItem('userNickname')
     ) {
       return true;
     }

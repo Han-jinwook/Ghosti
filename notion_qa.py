@@ -366,9 +366,6 @@ def _matches_role_strict(title_text: str, app_select: str, role: str, target_sta
         if sub_roles:
             return any(_matches_role_strict(title_text, app_select, sr, target_status, page_id) for sr in sub_roles)
         return True
-    # 이미 1귀신 본진이 '버그 수정중'으로 착수한 419f9ffd-2c1d-815f 카드는 진행 중 충돌 방지를 위해 STATUS_FIXING 동안 role=1 유지
-    if target_status == STATUS_FIXING and page_id.startswith("419f9ffd-2c1d-815f"):
-        return role == "1"
     is_onb_role3 = _is_onboarding_card_for_role3(title_text)
     has_explicit_123 = any(tag in title_text for tag in ("[1귀신", "1귀신]", "[2귀신", "2귀신]", "[3귀신", "3귀신]"))
     if role == "1":

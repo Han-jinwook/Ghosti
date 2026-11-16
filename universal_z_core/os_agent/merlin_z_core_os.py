@@ -344,16 +344,19 @@ def get_real_startup_programs() -> List[Dict[str, str]]:
             pass
 
     startup_folder = APPDATA / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"
-    if startup_folder.exists():
-        for p in startup_folder.iterdir():
-            if p.name.lower() != "desktop.ini":
-                items.append(
-                    {
-                        "name": p.stem,
-                        "command": str(p),
-                        "location": "StartupFolder",
-                    }
-                )
+    try:
+        if startup_folder.exists():
+            for p in startup_folder.iterdir():
+                if p.name.lower() != "desktop.ini":
+                    items.append(
+                        {
+                            "name": p.stem,
+                            "command": str(p),
+                            "location": "StartupFolder",
+                        }
+                    )
+    except Exception:
+        pass
     return items
 
 
@@ -402,11 +405,11 @@ def get_real_spooler_and_security_status(startup_items: List[Dict[str, str]]) ->
     high_cpu_suspects: List[Dict[str, Any]] = []
 
     spool_dir = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "spool" / "PRINTERS"
-    if spool_dir.exists():
-        try:
+    try:
+        if spool_dir.exists():
             spool_files_count = len([f for f in spool_dir.iterdir() if f.is_file()])
-        except PermissionError:
-            spool_files_count = 0
+    except Exception:
+        spool_files_count = 0
 
     # 1) 0.15초 순수 Win32 커널 호출로 실시간 CPU 부하(%) 즉시 측정
     cpu_load_percent = _measure_cpu_load_fast_win32(0.15)
@@ -587,14 +590,14 @@ def get_real_spooler_and_security_status(startup_items: List[Dict[str, str]]) ->
         )
         tasks_dir = Path(os.environ.get("SystemRoot", r"C:\Windows")) / "System32" / "Tasks"
         for t_cand in known_revival_tasks:
-            t_path = tasks_dir / t_cand
-            if t_path.exists():
-                try:
+            try:
+                t_path = tasks_dir / t_cand
+                if t_path.exists():
                     xml_txt = t_path.read_text(encoding="utf-16", errors="ignore")
                     if "<Enabled>false</Enabled>" not in xml_txt and "<Enabled>False</Enabled>" not in xml_txt:
                         active_task_names.add(f"{t_cand.lower()} (작업스케줄러)")
-                except Exception:
-                    pass
+            except Exception:
+                pass
 
     # 4) 애드웨어·보안 플러그인 65종 + 비필수 시작프로그램(HKCU/HKLM/WOW6432 Run) + 활성 서비스/스케줄러 즉시 매칭
     startup_names = [f"{s['name'].lower()} ({s['location']})" for s in startup_items]
