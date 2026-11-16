@@ -556,6 +556,11 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       const detail = (ev as CustomEvent<{ text?: string }>).detail;
       const msgText = detail?.text?.trim();
       if (!msgText) return;
+      const isRestoreDone = msgText.includes('원상복구') || msgText.includes('복구됐어요');
+      const extraRealHint =
+        isRestoreDone && zCoreBridge.isConnected
+          ? '\n\n💡 지금 제트코어가 연결되어 있으니 아래 버튼을 눌러 **진짜 내 PC의 시작프로그램 목록**도 바로 점검해 보세요!'
+          : '';
       setSharedMonsterMessages((prev) => [
         ...prev,
         {
@@ -563,7 +568,15 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           role: 'assistant',
           timestamp: nowTimeKo(),
           sourceTab: 'trash',
-          text: msgText,
+          text: `${msgText}${extraRealHint}`,
+          followUpSuggestions:
+            isRestoreDone && zCoreBridge.isConnected
+              ? [
+                  '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
+                  '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
+                  '내 PC 사양이랑 남은 용량 진단해 줘',
+                ]
+              : undefined,
         },
       ]);
     };
@@ -890,12 +903,15 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             role: 'assistant',
             timestamp: nowTimeKo(),
             sourceTab,
-            text: reading.text,
+            text: needsEngineRite
+              ? reading.text
+              : `${nextState.nickname}님! 지금 내 컴퓨터에 최신 제트코어(v${zCoreBridge.version || '2.3.9'})가 바로 연결되어 있어요! 👻✨\n아래 버튼을 누르거나 채팅창에 편하게 말씀해 주시면 진짜 내 PC의 시작프로그램 목록·부팅 경과 시간·사양을 1초 만에 바로 보여드릴게요!`,
             followUpSuggestions: needsEngineRite
               ? ['🔍 응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘']
               : [
+                  '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
+                  '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
                   SECRETARY_FIRST_CARE_QUERY,
-                  '✨ 귀신비서의 숨은 초능력 알려줘',
                 ],
           });
           nextState = { ...nextState, coldReadingShownAt: new Date().toISOString() };
@@ -1563,22 +1579,22 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                             disabled={busy}
                             onClick={() => {
                               setWelcomeChipsDismissed(true);
-                              void handleSend('👍 응, 앞으로 알아서 재우고 깨워줘', 'text');
+                              void handleSend('부팅할 때 켜지는 시작프로그램 목록도 보여줘', 'text');
                             }}
                             className="px-2.5 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 border border-emerald-300 dark:border-emerald-500/40 text-[11.5px] font-extrabold text-emerald-800 dark:text-emerald-300 transition cursor-pointer text-left"
                           >
-                            🏦 안 쓰는 은행 보안프로그램 자동 재우기
+                            ⚙️ 부팅할 때 켜지는 시작프로그램 목록도 보여줘
                           </button>
                           <button
                             type="button"
                             disabled={busy}
                             onClick={() => {
                               setWelcomeChipsDismissed(true);
-                              void handleSend('✨ 귀신비서의 숨은 초능력 알려줘', 'text');
+                              void handleSend('👍 응, 앞으로 알아서 재우고 깨워줘', 'text');
                             }}
                             className="px-2.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[11.5px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left"
                           >
-                            ✨ 숨은 초능력 2가지 알려줘
+                            🏦 안 쓰는 은행 보안프로그램 자동 재우기
                           </button>
                         </>
                       )}

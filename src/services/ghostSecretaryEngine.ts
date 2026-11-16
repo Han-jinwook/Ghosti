@@ -668,7 +668,11 @@ export function resolveGhostSecretaryTurn(
     if (nick && /^[ㄱ-ㅎㅏ-ㅣ]+$/.test(nick)) {
       return {
         scenarioId: 'nickname_jamo_reask',
-        text: '앗, 초성 대신 편하게 부를 수 있는 별명(예: 은호, 멀린)으로 알려주실래요? 바로 기능부터 체험해 보고 싶으시면 왼쪽의 [🔍 1초 진단] 버튼을 눌러보셔도 돼요! 👻✨',
+        text: '앗, 초성 대신 편하게 부를 수 있는 별명(예: 은호, 멀린)으로 알려주실래요? 지금 바로 진짜 내 컴퓨터 점검부터 해보고 싶으시면 아래 버튼을 눌러보셔도 돼요! 👻✨',
+        followUps: [
+          '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
+          '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
+        ],
         nextState: st,
       };
     }
