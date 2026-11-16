@@ -260,7 +260,7 @@ const Dojo1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   useEffect(() => {
     window.clearTimeout(idleTimerRef.current);
     const trimmed = text.trim();
-    if (!trimmed || !/[A-Za-z]{4,}/.test(trimmed) || /[가-힣]/.test(trimmed)) return;
+    if (!trimmed || !/[A-Za-z]{4,}/.test(trimmed)) return;
     idleTimerRef.current = window.setTimeout(() => {
       applyTypoMorph(trimmed, false);
     }, 1000);
@@ -274,8 +274,8 @@ const Dojo1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
           value={text}
           onChange={(e) => setText(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === ' ' && /[A-Za-z]/.test(text)) {
-              if (applyTypoMorph(text, true)) {
+            if ((e.key === ' ' || e.key === 'Enter') && /[A-Za-z]/.test(text)) {
+              if (applyTypoMorph(text, e.key === ' ')) {
                 e.preventDefault();
               }
             }
@@ -822,20 +822,26 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
     return DEFAULT_PERSONAL_SNIPPETS;
   });
   const [savedNoticeSlot, setSavedNoticeSlot] = useState<string | null>(null);
+  const [savedSlotConfirm, setSavedSlotConfirm] = useState<string | null>(null);
   const [zCoreSynced, setZCoreSynced] = useState<boolean>(false);
   const syncTimerRef = useRef<number>(0);
 
-  const pushSnippetsToZCore = useCallback(async (targetSlots: PersonalSnippetSlot[]) => {
+  const pushSnippetsToZCore = useCallback(async (targetSlots: PersonalSnippetSlot[], confirmKey?: string) => {
     const snippetMap: Record<string, string> = {};
     targetSlots.forEach((s) => {
       snippetMap[s.slot] = s.value;
     });
     try {
+      localStorage.setItem(PERSONAL_SNIPPETS_STORAGE_KEY, JSON.stringify(targetSlots));
       localStorage.setItem(LEGACY_ONBOARDING_SNIPPETS_KEY, JSON.stringify(snippetMap));
     } catch {
       /* ignore */
     }
-    if (!hasActiveGhostiLoginSession() && !zCoreBridge.isConnected) return;
+    if (confirmKey) {
+      setSavedSlotConfirm(confirmKey);
+      playBabyGhostChime('typo');
+      window.setTimeout(() => setSavedSlotConfirm((prev) => (prev === confirmKey ? null : prev)), 1800);
+    }
     try {
       const res = await fetch(getZCoreUrl('/api/superpower/snippets'), {
         method: 'POST',
@@ -853,7 +859,6 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
 
   useEffect(() => {
     const hydrateFromZCore = async () => {
-      if (!hasActiveGhostiLoginSession() && !zCoreBridge.isConnected) return;
       const hadCustomLocal = Boolean(localStorage.getItem(PERSONAL_SNIPPETS_STORAGE_KEY));
       try {
         const res = await fetch(getZCoreUrl('/api/superpower/snippets'), {
@@ -942,12 +947,21 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
             ⌨️ 내 개인 상용구 등록창 (F1 ~ F6 · 평생 무료)
           </h3>
           <p className="text-[12px] text-zinc-400 mt-0.5">
-            자주 쓰는 계좌번호·주소·인사말을 적어두면 어느 화면에서든 키 한 번으로 1초 자동 입력됩니다.
+            자주 쓰는 계좌번호·주소·인사말을 적어 저장하면 메모장·카톡에서 F1~F6 키 한 번으로 1초 자동 입력됩니다.
           </p>
         </div>
-        <span className="px-2.5 py-1 rounded-full bg-teal-500/15 border border-teal-400/40 text-teal-200 text-[11px] font-black shrink-0">
-          {zCoreSynced ? '✅ 내 PC 귀신창(F1~F6) 실시간 연동됨' : '내 PC 자동 저장 · 평생 0원'}
-        </span>
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={() => void pushSnippetsToZCore(slots, 'ALL')}
+            className="px-3 py-1.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[12px] font-extrabold cursor-pointer transition shadow-sm"
+          >
+            {savedSlotConfirm === 'ALL' ? '✓ 전체 상용구 저장 완료!' : '💾 전체 상용구 저장'}
+          </button>
+          <span className="px-2.5 py-1 rounded-full bg-teal-500/15 border border-teal-400/40 text-teal-200 text-[11px] font-black shrink-0">
+            {zCoreSynced ? '✅ 내 PC 귀신창(F1~F6) 실시간 연동됨' : '내 PC 자동 저장 · 평생 0원'}
+          </span>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
@@ -969,20 +983,35 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
                   className="min-w-0 flex-1 bg-transparent text-[12.5px] font-extrabold text-white focus:outline-none border-b border-transparent focus:border-[#2DD4BF]"
                 />
               </div>
-              <button
-                type="button"
-                onClick={() => handleQuickCopy(item.slot, item.value)}
-                className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[11px] font-bold text-teal-300 cursor-pointer shrink-0"
-              >
-                {savedNoticeSlot === item.slot ? '✓ 복사됨' : '복사 테스트'}
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => void pushSnippetsToZCore(slots, item.slot)}
+                  className="px-2.5 py-1 rounded-lg bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[11px] font-extrabold cursor-pointer"
+                >
+                  {savedSlotConfirm === item.slot ? '✓ 저장됨' : '💾 저장'}
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleQuickCopy(item.slot, item.value)}
+                  className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[11px] font-bold text-teal-300 cursor-pointer"
+                >
+                  {savedNoticeSlot === item.slot ? '✓ 복사됨' : '복사 테스트'}
+                </button>
+              </div>
             </div>
             <input
               type="text"
               value={item.value}
               onChange={(e) => updateSlot(idx, 'value', e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  void pushSnippetsToZCore(slots, item.slot);
+                }
+              }}
               aria-label={`${item.slot} 상용구 내용`}
-              placeholder="자주 입력하는 문구를 적어두세요"
+              placeholder="자주 입력하는 문구를 적어두세요 (비워두고 저장하면 빈 상태 유지)"
               className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-white/10 focus:border-[#2DD4BF] text-[12.5px] text-zinc-200 outline-none"
             />
           </div>

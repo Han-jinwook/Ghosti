@@ -858,6 +858,8 @@ def _is_protected_account_or_email_token(tok: str) -> bool:
         return False
     if _is_undo_immune_token(s):
         return True
+    if s.lower() in ("ghdrlfehd", "myid"):
+        return True
     if "@" in s or "://" in s or s.lower().startswith("www."):
         return True
     if re.search(r"[A-Za-z0-9-]+\.(?:com|net|org|kr|co|io|app|dev|ai|edu|gov|me|biz|info)\b", s, re.IGNORECASE):
@@ -4403,44 +4405,47 @@ def _find_edit_control_child(hwnd_fg: int, require_focused: bool = False) -> int
     [포커스 정밀 검증 네이티브 Edit 탐색기]:
     1) 최우선으로 실제 키보드 커서가 놓인 컨트롤(GetGUIThreadInfo.hwndFocus)이 Edit/RichEdit인지 확인합니다.
        (탐색기 상단 검색창이나 복합 앱의 비활성 툴바 입력칸을 엉뚱하게 잡는 오탐을 100% 원천 차단!)
-    2) 메모장(notepad.exe)인 경우에만 Win10 Edit / Win11 탭 메모장(NotepadTextBox -> RichEditD2DPT) 자식 탐색을 허용합니다.
+    2) 메모장(notepad.exe)·워드패드(wordpad.exe)·카카오톡(kakaotalk.exe)인 경우 활성(Visible) 탭의 Edit/RichEdit 자식 탐색을 허용합니다.
     """
     if not hwnd_fg or not u32.IsWindow(hwnd_fg):
         return 0
     focus_h = _get_focused_control_hwnd(hwnd_fg)
     if focus_h and u32.IsWindow(focus_h):
         f_cls = _get_win_class_only(focus_h)
-        if f_cls in _NATIVE_EDIT_CLASSES:
+        if f_cls in _NATIVE_EDIT_CLASSES and u32.IsWindowVisible(focus_h) and not (u32.GetWindowLongW(focus_h, -16) & 0x0020):
             return focus_h
-        if f_cls == "NotepadTextBox":
+        if f_cls == "NotepadTextBox" and u32.IsWindowVisible(focus_h):
             ed_ntb = u32.FindWindowExW(focus_h, None, "RichEditD2DPT", None)
-            if ed_ntb:
+            if ed_ntb and u32.IsWindowVisible(ed_ntb):
                 return ed_ntb
 
     proc_n = _get_process_name_from_hwnd(hwnd_fg).lower()
     cls_fg = _get_win_class_only(hwnd_fg)
-    if proc_n in ("notepad.exe", "wordpad.exe") or cls_fg in ("Notepad", "WordPadClass"):
-        ed = u32.FindWindowExW(hwnd_fg, None, "Edit", None)
-        if ed:
-            return ed
-        ed = u32.FindWindowExW(hwnd_fg, None, "RichEditD2DPT", None)
-        if ed:
-            return ed
-        ed = u32.FindWindowExW(hwnd_fg, None, "RICHEDIT50W", None)
-        if ed:
-            return ed
-        ntb = u32.FindWindowExW(hwnd_fg, None, "NotepadTextBox", None)
-        if ntb:
-            ed = u32.FindWindowExW(ntb, None, "RichEditD2DPT", None)
-            if ed:
-                return ed
+    if proc_n in ("notepad.exe", "wordpad.exe", "kakaotalk.exe") or cls_fg in ("Notepad", "WordPadClass", "EVA_Window_Dblclk", "EVA_Window"):
+        for cls_cand in ("Edit", "RichEditD2DPT", "RICHEDIT50W"):
+            ch_cur = 0
+            while True:
+                ch_cur = u32.FindWindowExW(hwnd_fg, ch_cur, cls_cand, None)
+                if not ch_cur:
+                    break
+                if u32.IsWindowVisible(ch_cur) and not (u32.GetWindowLongW(ch_cur, -16) & 0x0020):
+                    return ch_cur
+        ntb_cur = 0
+        while True:
+            ntb_cur = u32.FindWindowExW(hwnd_fg, ntb_cur, "NotepadTextBox", None)
+            if not ntb_cur:
+                break
+            if u32.IsWindowVisible(ntb_cur):
+                ed = u32.FindWindowExW(ntb_cur, None, "RichEditD2DPT", None)
+                if ed and u32.IsWindowVisible(ed):
+                    return ed
         found_ed = [0]
         WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
         def _enum_child_cb(ch: int, _lp: int) -> bool:
             if u32.IsWindowVisible(ch):
                 c_cls = _get_win_class_only(ch)
-                if c_cls in _NATIVE_EDIT_CLASSES:
+                if c_cls in _NATIVE_EDIT_CLASSES and not (u32.GetWindowLongW(ch, -16) & 0x0020):
                     found_ed[0] = ch
                     return False
             return True
@@ -4678,28 +4683,35 @@ def _get_logical_line_bounds_utf16(utf16_bytes: bytes, caret_u16: int) -> tuple[
     return start, end, line_str
 
 
-def _get_edit_control_current_line(edit_child: int) -> str | None:
+def _get_edit_control_current_line_with_bounds(edit_child: int) -> tuple[int, int, str] | None:
     if not edit_child or not u32.IsWindow(edit_child):
         return None
     try:
         _, idx_text, _ = _get_edit_full_text_and_index_str(edit_child)
         if not idx_text:
-            return ""
+            return (0, 0, "")
         s_dw = wintypes.DWORD(0)
         e_dw = wintypes.DWORD(0)
         ok_sel, _ = _send_msg_timeout(edit_child, EM_GETSEL, ctypes.addressof(s_dw), ctypes.addressof(e_dw), 120)
         if not ok_sel:
             return None
-        s_pos = s_dw.value
-        if s_pos == 0 and e_dw.value == 0:
+        s_pos, e_pos = s_dw.value, e_dw.value
+        if s_pos == 0 and e_pos == 0:
             ok_s2, sel_ret = _send_msg_timeout(edit_child, EM_GETSEL, 0, 0, 120)
             if ok_s2:
                 s_pos = sel_ret & 0xFFFF
+                e_pos = (sel_ret >> 16) & 0xFFFF
+        if s_pos != e_pos:
+            return None
         utf16_b = idx_text.encode("utf-16-le")
-        _, _, cur_line_s = _get_logical_line_bounds_utf16(utf16_b, s_pos)
-        return cur_line_s
+        return _get_logical_line_bounds_utf16(utf16_b, s_pos)
     except Exception:
         return None
+
+
+def _get_edit_control_current_line(edit_child: int) -> str | None:
+    res = _get_edit_control_current_line_with_bounds(edit_child)
+    return res[2] if res is not None else None
 
 
 _KIWI_ENGINE = None
@@ -5355,7 +5367,7 @@ def _polish_notepad_previous_line_on_enter(edit_child: int, allow_typo_morph: bo
                         k_chk = eng_word_to_kor(e_chk)
                         if k_chk and is_valid_korean_word(k_chk):
                             eng_typo_cnt += 1
-                            if len(e_chk) >= 8 and len(k_chk) >= 4:
+                            if (len(e_chk) >= 8 and len(k_chk) >= 4) or (len(e_chk) >= 4 and len(k_chk) >= 2):
                                 has_long_4syl_eng = True
             if eng_typo_cnt >= 2 or has_long_4syl_eng:
                 morphed_p, lang_p = morph_korean_english_text_with_direction(prev_str)
@@ -7101,16 +7113,31 @@ def superpower_fixed_snippet(slot_num: int, daemon_set_cb) -> None:
     key = f"F{slot_num}"
     val = snippets.get(key, "")
     if val:
-        fg_h = _LAST_TARGET_HWND or u32.GetForegroundWindow()
+        cur_fg = u32.GetForegroundWindow()
+        cur_proc = _get_process_name_from_hwnd(cur_fg).lower() if cur_fg else ""
+        if cur_fg and cur_proc not in ("python.exe", "pythonw.exe"):
+            fg_h = cur_fg
+        else:
+            fg_h = _LAST_TARGET_HWND or cur_fg
+            if fg_h and u32.IsWindow(fg_h) and cur_fg != fg_h:
+                try:
+                    u32.SetForegroundWindow(fg_h)
+                    time.sleep(0.025)
+                except Exception:
+                    pass
         ed_h = _find_edit_control_child(fg_h)
         arm_undo_snapshot(fg_h, ed_h, "", val, mode="snippet")
-        orig_clip = get_clipboard_text()
-        daemon_set_cb(val)
-        time.sleep(0.02)
-        tap_key_combo([VK_CONTROL], VK_V)
-        time.sleep(0.06)
-        if orig_clip:
-            daemon_set_cb(orig_clip)
+        if ed_h and u32.IsWindow(ed_h):
+            rbuf = ctypes.create_unicode_buffer(val)
+            u32.SendMessageW(ed_h, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+        else:
+            orig_clip = get_clipboard_text()
+            daemon_set_cb(val)
+            time.sleep(0.025)
+            tap_key_combo([VK_CONTROL], VK_V)
+            time.sleep(0.08)
+            if orig_clip:
+                threading.Timer(0.25, lambda c=orig_clip: daemon_set_cb(c)).start()
         show_ghost_toast(f"👻 귀신같이 상용구({key})")
 
 
@@ -7266,9 +7293,15 @@ def main() -> None:
     idle_checked_for_ts: float = 0.0
     was_sub_key_down: dict[int, bool] = {}
     last_auto_morph_state: dict[str, object] = {"active": False}
+    input_fkeys_armed: bool = False
+    live_edit_prev_hwnd: int = 0
+    live_edit_prev_line: str | None = None
+    live_edit_prev_line_start: int = -1
+    live_edit_last_type_ts: float = 0.0
+    live_edit_idle_checked_ts: float = 0.0
 
     def arm_sub_hotkeys() -> None:
-        nonlocal menu_armed, menu_armed_until
+        nonlocal menu_armed, menu_armed_until, input_fkeys_armed
         if not menu_armed:
             for num in range(1, 6):
                 u32.RegisterHotKey(None, 100 + num, MOD_NOREPEAT, 0x30 + num)
@@ -7279,18 +7312,22 @@ def main() -> None:
             for fnum in range(1, 11):
                 u32.RegisterHotKey(None, 300 + fnum, MOD_NOREPEAT, VK_F1 + fnum - 1)
             menu_armed = True
+            input_fkeys_armed = True
         menu_armed_until = time.time() + MENU_ARM_SECONDS
 
     def disarm_sub_hotkeys() -> None:
-        nonlocal menu_armed
+        nonlocal menu_armed, input_fkeys_armed
         if menu_armed:
             for num in range(1, 10):
                 u32.UnregisterHotKey(None, 100 + num)
                 u32.UnregisterHotKey(None, 200 + num)
                 u32.UnregisterHotKey(None, 400 + num)
                 u32.UnregisterHotKey(None, 500 + num)
-            for fnum in range(1, 11):
+            fg_chk_f = u32.GetForegroundWindow()
+            keep_f1_f6 = bool(fg_chk_f and not should_skip_auto_typo(fg_chk_f))
+            for fnum in range(7 if keep_f1_f6 else 1, 11):
                 u32.UnregisterHotKey(None, 300 + fnum)
+            input_fkeys_armed = keep_f1_f6
             menu_armed = False
 
     def _execute_superpower_num(
@@ -8522,11 +8559,124 @@ def main() -> None:
                         hwnd_ret = u32.GetForegroundWindow()
                         if hwnd_ret and not should_skip_auto_typo(hwnd_ret) and (now - last_paste_ts) > 2.0:
                             proc_ret, _, _ = get_window_process_and_class(hwnd_ret)
-                            if proc_ret == "notepad.exe":
+                            if (proc_ret or "").lower() == "notepad.exe":
                                 ed_ret = _find_edit_control_child(hwnd_ret)
-                                if ed_ret and _polish_notepad_previous_line_on_enter(ed_ret, allow_typo_morph=had_ascii_before_ret):
+                                if ed_ret and _polish_notepad_previous_line_on_enter(ed_ret, allow_typo_morph=True):
                                     complete_feature_action_success("auto_typo_morph_2words")
                     was_key_down[VK_RETURN] = ret_down
+
+                    # [보안 프로그램(IPinside/TouchEn 등) GetAsyncKeyState 차단 환경 완벽 대응 — WM_GETTEXT 실시간 컨트롤 감시 & 입력창 F1~F6 직결 무장]:
+                    hwnd_live = u32.GetForegroundWindow()
+                    allow_live_input = bool(hwnd_live and not should_skip_auto_typo(hwnd_live))
+                    if not menu_armed:
+                        if allow_live_input and not input_fkeys_armed:
+                            for fnum_i in range(1, 7):
+                                u32.RegisterHotKey(None, 300 + fnum_i, MOD_NOREPEAT, VK_F1 + fnum_i - 1)
+                            input_fkeys_armed = True
+                        elif not allow_live_input and input_fkeys_armed:
+                            for fnum_i in range(1, 7):
+                                u32.UnregisterHotKey(None, 300 + fnum_i)
+                            input_fkeys_armed = False
+
+                    if allow_live_input and (now - last_paste_ts) > 1.5:
+                        ed_live = _find_edit_control_child(hwnd_live)
+                        if ed_live:
+                            b_live = _get_edit_control_current_line_with_bounds(ed_live)
+                            if b_live is not None:
+                                cur_l_start, _, cur_l_str = b_live
+                                if ed_live != live_edit_prev_hwnd:
+                                    live_edit_prev_hwnd = ed_live
+                                    live_edit_prev_line = cur_l_str
+                                    live_edit_prev_line_start = cur_l_start
+                                    live_edit_last_type_ts = 0.0
+                                elif cur_l_start > live_edit_prev_line_start and cur_l_str == "" and live_edit_prev_line and re.search(r"[A-Za-z]{2,}", live_edit_prev_line):
+                                    live_edit_prev_line = cur_l_str
+                                    live_edit_prev_line_start = cur_l_start
+                                    live_edit_last_type_ts = 0.0
+                                    proc_l, _, _ = get_window_process_and_class(hwnd_live)
+                                    if (proc_l or "").lower() == "notepad.exe":
+                                        if _polish_notepad_previous_line_on_enter(ed_live, allow_typo_morph=True):
+                                            complete_feature_action_success("auto_typo_morph_2words")
+                                elif cur_l_start != live_edit_prev_line_start:
+                                    live_edit_prev_line = cur_l_str
+                                    live_edit_prev_line_start = cur_l_start
+                                    live_edit_last_type_ts = 0.0
+                                elif cur_l_str != live_edit_prev_line:
+                                    prev_s_l = live_edit_prev_line or ""
+                                    live_edit_prev_line = cur_l_str
+                                    diff_len = len(cur_l_str) - len(prev_s_l)
+                                    if 1 <= diff_len <= 4 and cur_l_str.startswith(prev_s_l):
+                                        if cur_l_str.endswith(" ") and not prev_s_l.endswith(" "):
+                                            cur_strip_l = cur_l_str.rstrip(" ")
+                                            toks_l = cur_strip_l.split()
+                                            if toks_l and not cur_strip_l.lstrip().startswith("="):
+                                                last_t_l = toks_l[-1]
+                                                if not _is_protected_account_or_email_token(last_t_l) and re.search(r"[A-Za-z]{2,}", last_t_l) and not re.search(r"[가-힣]", last_t_l):
+                                                    m_c_l, d_c_l = morph_korean_english_text_with_direction(last_t_l)
+                                                    if d_c_l == "KO" and m_c_l != last_t_l:
+                                                        e_len_l = sum(len(cx) for cx in re.findall(r"[A-Za-z]+", last_t_l) if len(cx) >= 2 and not AI_ENGINE.is_valid_english_word(cx))
+                                                        k_len_l = len(re.findall(r"[가-힣]", m_c_l))
+                                                        if (e_len_l >= 4 and k_len_l >= 2) or len(toks_l) >= 2:
+                                                            ok_l, _, out_l, _ = _replace_edit_control_current_line_atomic(
+                                                                ed_live, auto_triggered=True, ensure_trailing_space=True
+                                                            )
+                                                            if ok_l:
+                                                                b_aft = _get_edit_control_current_line_with_bounds(ed_live)
+                                                                live_edit_prev_line = b_aft[2] if b_aft else (out_l + " ")
+                                                                live_edit_last_type_ts = 0.0
+                                                                typed_ascii_buf.clear()
+                                                                pending_first_typo = None
+                                                                complete_feature_action_success("auto_typo_morph_2words")
+                                        elif not cur_l_str.endswith(" ") and re.search(r"[A-Za-z]", cur_l_str[-1:]):
+                                            live_edit_last_type_ts = now
+                                            live_edit_idle_checked_ts = 0.0
+                                    else:
+                                        live_edit_last_type_ts = 0.0
+                                elif (
+                                    live_edit_last_type_ts > 0.0
+                                    and live_edit_idle_checked_ts != live_edit_last_type_ts
+                                    and 0.95 <= (now - live_edit_last_type_ts) < 2.5
+                                ):
+                                    live_edit_idle_checked_ts = live_edit_last_type_ts
+                                    if cur_l_str and not cur_l_str.lstrip().startswith("=") and not cur_l_str.endswith(" "):
+                                        id_toks = cur_l_str.strip().split()
+                                        if id_toks and not _is_protected_account_or_email_token(id_toks[-1]):
+                                            id_eng_cnt = 0
+                                            for it_k in id_toks:
+                                                if _is_protected_account_or_email_token(it_k):
+                                                    continue
+                                                m_ik, d_ik = morph_korean_english_text_with_direction(it_k)
+                                                if d_ik == "KO" and m_ik != it_k:
+                                                    id_eng_cnt += 1
+                                            last_ik = id_toks[-1]
+                                            m_lk, d_lk = morph_korean_english_text_with_direction(last_ik)
+                                            le_len = sum(len(cx) for cx in re.findall(r"[A-Za-z]+", last_ik) if len(cx) >= 2 and not AI_ENGINE.is_valid_english_word(cx))
+                                            lk_len = len(re.findall(r"[가-힣]", m_lk)) if d_lk == "KO" else 0
+                                            is_pol_k = m_lk.rstrip(".,?!~").endswith(("요", "다", "까", "네", "죠", "음", "함", "됨", "임"))
+                                            valid_ko_k = (
+                                                d_lk == "KO"
+                                                and m_lk != last_ik
+                                                and ((le_len >= 10 and lk_len >= 4) or (le_len >= 7 and lk_len >= 3 and is_pol_k))
+                                            )
+                                            if id_eng_cnt >= 2 or valid_ko_k:
+                                                ok_ik, _, out_ik, _ = _replace_edit_control_current_line_atomic(
+                                                    ed_live, auto_triggered=True, ensure_trailing_space=False
+                                                )
+                                                if ok_ik:
+                                                    b_aft_i = _get_edit_control_current_line_with_bounds(ed_live)
+                                                    live_edit_prev_line = b_aft_i[2] if b_aft_i else out_ik
+                                                    live_edit_last_type_ts = 0.0
+                                                    typed_ascii_buf.clear()
+                                                    pending_first_typo = None
+                                                    complete_feature_action_success("auto_typo_morph_2words")
+                        else:
+                            live_edit_prev_hwnd = 0
+                            live_edit_prev_line = None
+                            live_edit_last_type_ts = 0.0
+                    else:
+                        live_edit_prev_hwnd = 0
+                        live_edit_prev_line = None
+                        live_edit_last_type_ts = 0.0
                 else:
                     typed_ascii_buf.clear()
                     if ctrl_down:

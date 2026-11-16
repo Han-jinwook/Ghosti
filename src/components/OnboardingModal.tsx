@@ -107,7 +107,7 @@ const COMPOUND_JUNG: Record<string, string> = {
 const COMPOUND_JONG: Record<string, string> = {
   'ㄱㅅ': 'ㄳ', 'ㄴㅈ': 'ㄵ', 'ㄴㅎ': 'ㄶ', 'ㄹㄱ': 'ㄺ', 'ㄹㅁ': 'ㄻ', 'ㄹㅂ': 'ㄼ', 'ㄹㅅ': 'ㄽ', 'ㄹㅌ': 'ㄾ', 'ㄹㅍ': 'ㄿ', 'ㄹㅎ': 'ㅀ', 'ㅂㅅ': 'ㅄ',
 };
-const COMMON_ENG_ALLOW = new Set(['iphone', 'youtube', 'google', 'naver', 'kakao', 'excel', 'office', 'windows', 'ghost', 'ghosti', 'hello', 'world', 'test']);
+const COMMON_ENG_ALLOW = new Set(['iphone', 'youtube', 'google', 'naver', 'kakao', 'excel', 'office', 'windows', 'ghost', 'ghosti', 'hello', 'world', 'test', 'ghdrlfehd', 'myid']);
 
 function engWordToKorLocal(word: string): string {
   if (COMMON_ENG_ALLOW.has(word.toLowerCase())) return word;
@@ -169,6 +169,7 @@ function spaceKorSimpleLocal(s: string): string {
   let out = s;
   out = out.replace(/(안녕하세요|감사합니다|반갑습니다|죄송합니다)(?=[가-힣])/g, '$1 ');
   out = out.replace(/(오늘|내일|지금|방금|한글이|시간이|회의|연락)(?=[가-힣]{2,})/g, '$1 ');
+  out = out.replace(/(회의)(?=시간)/g, '$1 ');
   out = out.replace(/([가-힣])(안쳐져|안돼요|안되네요)/g, '$1 $2');
   out = out.replace(/안쳐져/g, '안 쳐져');
   return out.replace(/\s{2,}/g, ' ').trim();
@@ -180,7 +181,12 @@ export function simulateSuperpowerLocal(mode: 'typo' | 'number9' | 'extract8' | 
   if (mode === 'typo') {
     const morphed = s
       .split(/(\s+)/)
-      .map((tok) => (/^[A-Za-z]+$/.test(tok) ? engWordToKorLocal(tok) : tok))
+      .map((tok) => {
+        if (tok.includes('@') || tok.includes('://') || /^www\./i.test(tok) || /\.(?:com|net|org|kr|co|io|app)$/i.test(tok)) {
+          return tok;
+        }
+        return /^[A-Za-z]+$/.test(tok) ? engWordToKorLocal(tok) : tok;
+      })
       .join('');
     return spaceKorSimpleLocal(morphed);
   }
