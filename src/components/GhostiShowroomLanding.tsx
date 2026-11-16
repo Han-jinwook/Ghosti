@@ -1081,14 +1081,92 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
   const activeMeta = WEAPON_META[demoTab];
 
+  // 모바일(iOS/AOS) Pull-to-refresh(위로/아래로 당겨서 새로고침) 터치 폴백 핸들러
+  const [pullDist, setPullDist] = useState<number>(0);
+  const [isPtrRefreshing, setIsPtrRefreshing] = useState<boolean>(false);
+  const ptrStartYRef = useRef<number | null>(null);
+  const ptrDistRef = useRef<number>(0);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onTouchStart = (e: TouchEvent) => {
+      if (window.scrollY <= 2 && e.touches.length === 1) {
+        ptrStartYRef.current = e.touches[0].clientY;
+        ptrDistRef.current = 0;
+      } else {
+        ptrStartYRef.current = null;
+      }
+    };
+    const onTouchMove = (e: TouchEvent) => {
+      if (ptrStartYRef.current === null || isPtrRefreshing) return;
+      if (window.scrollY > 2) {
+        ptrStartYRef.current = null;
+        ptrDistRef.current = 0;
+        setPullDist(0);
+        return;
+      }
+      const dy = e.touches[0].clientY - ptrStartYRef.current;
+      if (dy > 12) {
+        const damped = Math.min(110, Math.round((dy - 12) * 0.55));
+        ptrDistRef.current = damped;
+        setPullDist(damped);
+      } else {
+        ptrDistRef.current = 0;
+        setPullDist(0);
+      }
+    };
+    const onTouchEnd = () => {
+      if (ptrStartYRef.current === null) return;
+      ptrStartYRef.current = null;
+      if (ptrDistRef.current >= 58 && !isPtrRefreshing) {
+        setIsPtrRefreshing(true);
+        setPullDist(64);
+        window.setTimeout(() => {
+          window.location.reload();
+        }, 180);
+      } else {
+        ptrDistRef.current = 0;
+        setPullDist(0);
+      }
+    };
+    window.addEventListener('touchstart', onTouchStart, { passive: true });
+    window.addEventListener('touchmove', onTouchMove, { passive: true });
+    window.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      window.removeEventListener('touchstart', onTouchStart);
+      window.removeEventListener('touchmove', onTouchMove);
+      window.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [isPtrRefreshing]);
+
   return (
-    <div className="min-h-screen bg-[#070B11] text-zinc-100 font-sans selection:bg-[#00F0B5]/30 selection:text-[#00F0B5] relative overflow-x-hidden">
+    <div
+      style={{ overflowX: 'clip' }}
+      className="min-h-screen bg-[#070B11] text-zinc-100 font-sans selection:bg-[#00F0B5]/30 selection:text-[#00F0B5] relative"
+    >
+      {(pullDist > 0 || isPtrRefreshing) && (
+        <div
+          style={{
+            height: `${pullDist}px`,
+            backgroundColor: '#070B11',
+          }}
+          className="w-full flex items-center justify-center overflow-hidden transition-all duration-150 z-[60]"
+        >
+          <span
+            style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
+            className="px-3.5 py-1 rounded-full border text-xs font-black shadow-sm flex items-center gap-1.5"
+          >
+            <span>{isPtrRefreshing ? '🔄 새로고침 중...' : pullDist >= 58 ? '✨ 손을 떼면 새로고침됩니다' : '⬇️ 아래로 당겨서 새로고침'}</span>
+          </span>
+        </div>
+      )}
       {/* 백그라운드 앰비언트 글로우 */}
       <div className="absolute top-0 left-1/2 -translate-x-1/2 w-[1000px] h-[550px] bg-gradient-to-b from-[#00F0B5]/10 via-[#0D9488]/5 to-transparent blur-[120px] pointer-events-none -z-10" />
 
       {/* 3종 서체 로드 (타이틀: Jua / 포인트 감성체: Gowun Batang / 영문·수치: JetBrains Mono + 한글 맑은고딕 폴백으로 굴림체 자간 벌어짐 원천 차단) */}
       <style>{`
         @import url('https://fonts.googleapis.com/css2?family=Gowun+Batang:wght@700&family=Jua&family=JetBrains+Mono:wght@600;800&display=swap');
+        html, body { overscroll-behavior-y: auto !important; }
         .font-display-kr { font-family: 'Jua', 'Malgun Gothic', sans-serif; letter-spacing: 0.01em; }
         .font-story-kr { font-family: 'Gowun Batang', 'Batang', serif; }
         .font-code-kr { font-family: 'JetBrains Mono', 'Pretendard', 'Malgun Gothic', 'Apple SD Gothic Neo', sans-serif; letter-spacing: 0; }
