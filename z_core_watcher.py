@@ -188,15 +188,21 @@ def file_md5(path: Path) -> str:
         return ""
 
 
-def scan_post_office_files() -> Dict[str, str]:
-    """전사 중앙 우체국(D:\\Secretary\\post_office\\) 내 Ghosti / ALL 수신 문서의 경로와 해시를 반환합니다."""
+def scan_post_office_files(role: str = "all") -> Dict[str, str]:
+    """전사 중앙 우체국(D:\\Secretary\\post_office\\) 내 Ghosti / ALL 수신 문서의 경로와 해시를 반환합니다.
+    2호(role=2)·3호(role=3) 보조 창은 중복 기상 방지를 위해 일반 Ghosti/ALL 공문을 감시하지 않고 1호(role=1/all)가 전담합니다."""
     if not POST_OFFICE_DIR.exists():
         return {}
+    is_primary = role == "all" or "1" in (role or "")
     receipts_dir = POST_OFFICE_DIR / "receipts"
     result: Dict[str, str] = {}
     for p in sorted(POST_OFFICE_DIR.glob("*.md")):
         if p.name.lower() in ("readme.md", ".gitkeep") or p.name.startswith("(읽음)"):
             continue
+        if not is_primary:
+            has_sub_role_tag = ("2" in role and "2귀신" in p.name) or ("3" in role and "3귀신" in p.name)
+            if not has_sub_role_tag:
+                continue
         prefix = p.name.split("_", 1)[0].strip("[]").lower()
         parts = p.name.split("_")
         sender = parts[1].strip("[]").lower() if len(parts) > 1 else ""
@@ -208,6 +214,35 @@ def scan_post_office_files() -> Dict[str, str]:
         if prefix in ("ghosti", "all"):
             result[p.name] = file_md5(p)
     return result
+
+
+def claim_post_office_mail_immediately(fname: str) -> Path:
+    """1귀신(본진 대장 창)이 메일 감지 즉시 0.001초 만에 선점 읽음 처리하여 2호·3호 중복 기상을 원천 차단합니다.
+    - Ghosti 단독 수신: 파일명 앞에 '(읽음)' 즉시 부착
+    - ALL 전체 공문: 타 앱 열람을 보존하기 위해 파일명은 유지하고 receipts/<stem>.Ghosti.read 영수증 즉시 생성"""
+    fpath = POST_OFFICE_DIR / fname
+    if not fpath.exists():
+        alt = POST_OFFICE_DIR / f"(읽음){fname}"
+        return alt if alt.exists() else fpath
+    prefix = fname.split("_", 1)[0].strip("[]").lower()
+    if prefix == "all":
+        try:
+            receipts_dir = POST_OFFICE_DIR / "receipts"
+            receipts_dir.mkdir(parents=True, exist_ok=True)
+            now_str = time.strftime("%Y-%m-%d %H:%M:%S")
+            (receipts_dir / f"{fpath.stem}.Ghosti.read").write_text(now_str, encoding="utf-8")
+            (receipts_dir / f"{fpath.name}.Ghosti.read").write_text(now_str, encoding="utf-8")
+        except Exception:
+            pass
+        return fpath
+    if not fname.startswith("(읽음)"):
+        target = POST_OFFICE_DIR / f"(읽음){fname}"
+        try:
+            fpath.rename(target)
+            return target
+        except Exception:
+            return fpath
+    return fpath
 
 
 def _normalize_role_arg(raw_val: str) -> str:
@@ -280,30 +315,32 @@ def main() -> None:
     else:
         print(f"🏷️ [{ROOT_DIR.name} 세션 창 제목 확인 완료] ➔ '{derive_session_title()}'")
 
-    initial_inbox = scan_post_office_files()
+    active_role = _resolve_active_role()
+    is_primary_watcher = active_role == "all" or "1" in active_role
+    initial_inbox = scan_post_office_files(role=active_role)
     if initial_inbox:
         print("\n" + "📮" * 24)
         print(
             f"🔔 [전사 중앙 우체국 자동 감지] D:\\Secretary\\post_office\\ 에 Ghosti 수신 문서 {len(initial_inbox)}건이 도착해 있습니다!"
         )
-        for fname in initial_inbox:
-            fpath = POST_OFFICE_DIR / fname
-            content_preview = fpath.read_text(encoding="utf-8", errors="replace")[:800]
-            print(f"\n📄 파일명: {fname}")
+        for fname in list(initial_inbox.keys()):
+            fpath = claim_post_office_mail_immediately(fname) if is_primary_watcher else (POST_OFFICE_DIR / fname)
+            content_preview = fpath.read_text(encoding="utf-8", errors="replace")[:1500]
+            print(f"\n📄 파일명: {fpath.name} (1귀신 즉시 선점 읽음 처리 완료)")
             print("-" * 60)
             print(content_preview)
             print("-" * 60)
         print(
-            "\n👉 [AI 에이전트 지시] 위 중앙 우체국 문서를 읽고 바로 작업에 착수하지 말고, 먼저 멀린님께 의견/플랜을 보고하여 승인받은 뒤 진행하세요! (완료 후 파일명 맨 앞에 (읽음) 부착)"
+            "\n👉 [AI 에이전트 지시] 위 중앙 우체국 문서가 [즉시실행]이면 지체 없이 접목·완결하고, [일반 공문]이면 멀린님께 먼저 보고하세요!"
         )
         print("📮" * 24)
+        if "--watch" in sys.argv:
+            return
     else:
         print("📮 [전사 중앙 우체국 확인 완료] 새로 도착한 미열람 메시지가 없습니다.")
 
-    baseline_inbox = initial_inbox
+    baseline_inbox = scan_post_office_files(role=active_role)
     baseline_doctrine_hash = file_md5(DOCTRINE_FILE)
-
-    active_role = _resolve_active_role()
     role_label_map = {
         "1": "role=1 (1귀신 본진: 비서·Z코어·손보기)",
         "2": "role=2 (2귀신: 검색·귀신창)",
@@ -389,49 +426,55 @@ def main() -> None:
 
     tick = 0
     while True:
-        time.sleep(interval_sec)
+        # 1귀신(본진)은 로컬 우체국을 1초 주기로 초고속 스캔하여 도착 즉시 선점 읽음 처리(2호·3호 중복 감지 원천 차단)하고,
+        # 노션 API는 기존처럼 interval_sec(기본 25초) 주기로만 호출합니다.
+        sub_steps = max(1, interval_sec) if is_primary_watcher else 1
+        step_sleep = (interval_sec / sub_steps) if is_primary_watcher else interval_sec
+        for _ in range(sub_steps):
+            time.sleep(step_sleep)
+            current_inbox = scan_post_office_files(role=active_role)
+            new_or_changed_inbox = [
+                fname
+                for fname, fhash in current_inbox.items()
+                if fname not in baseline_inbox or baseline_inbox[fname] != fhash
+            ]
+            if new_or_changed_inbox:
+                print("\n" + "📮" * 24)
+                print(
+                    f"🔔 [전사 중앙 우체국 신규 도착 — 1귀신 선점 접수!] D:\\Secretary\\post_office\\ 에 {len(new_or_changed_inbox)}건의 Ghosti 수신 문서가 도착했습니다!"
+                )
+                for fname in new_or_changed_inbox:
+                    fpath = claim_post_office_mail_immediately(fname) if is_primary_watcher else (POST_OFFICE_DIR / fname)
+                    content_preview = fpath.read_text(encoding="utf-8", errors="replace")[:2000]
+                    print(f"\n📄 파일명: {fpath.name} (선점 읽음 처리 완료)")
+                    print("-" * 60)
+                    print(content_preview)
+                    print("-" * 60)
+                print(
+                    "\n👉 [AI 에이전트 지시] 수신 공문이 [즉시실행]이면 지체 없이 Ghosti에 접목·완결 후 답변 메일을 발송하세요!"
+                )
+                print("📮" * 24, flush=True)
+                return
+
         tick += 1
         if tick <= 6:
             sync_antigravity_session_title()
 
-        current_inbox = scan_post_office_files()
-        new_or_changed_inbox = [
-            fname
-            for fname, fhash in current_inbox.items()
-            if fname not in baseline_inbox or baseline_inbox[fname] != fhash
-        ]
-        if new_or_changed_inbox:
-            print("\n" + "📮" * 24)
-            print(
-                f"🔔 [전사 중앙 우체국 신규 도착!] D:\\Secretary\\post_office\\ 에 {len(new_or_changed_inbox)}건의 Ghosti 수신 문서가 도착했습니다!"
-            )
-            for fname in new_or_changed_inbox:
-                fpath = POST_OFFICE_DIR / fname
-                content_preview = fpath.read_text(encoding="utf-8", errors="replace")[:1000]
-                print(f"\n📄 파일명: {fname}")
-                print("-" * 60)
-                print(content_preview)
-                print("-" * 60)
-            print(
-                "\n👉 [AI 에이전트 지시] 중앙 우체국 문서를 1) 원 코어 내장 플러그인 vs 파워 코어 분류, 2) 스토어 심사 리스크 검열 기준으로 분석하여 멀린님께 즉시 보고하세요!"
-            )
-            print("📮" * 24)
-            return
-
-        current_doctrine_hash = file_md5(DOCTRINE_FILE)
-        if current_doctrine_hash and current_doctrine_hash != baseline_doctrine_hash:
-            print("\n" + "📜" * 24)
-            print(
-                "🔔 [전사 코딩강령 외부 이식 자동 감지!] 비서(Secretary)로부터 'docs/멀린코딩강령_v20261020.md' 업데이트가 이식되었습니다!"
-            )
-            tail_lines = DOCTRINE_FILE.read_text(encoding="utf-8", errors="replace").splitlines()[-35:]
-            print("\n📌 [최신 강령 하단 변경 내역 미리보기]")
-            print("\n".join(tail_lines))
-            print(
-                "\n👉 [AI 에이전트 지시] 업데이트된 강령을 즉시 숙지하고 멀린님께 변경 요약을 보고하세요!"
-            )
-            print("📜" * 24)
-            return
+        if is_primary_watcher:
+            current_doctrine_hash = file_md5(DOCTRINE_FILE)
+            if current_doctrine_hash and current_doctrine_hash != baseline_doctrine_hash:
+                print("\n" + "📜" * 24)
+                print(
+                    "🔔 [전사 코딩강령 외부 이식 자동 감지!] 비서(Secretary)로부터 'docs/멀린코딩강령_v20261020.md' 업데이트가 이식되었습니다!"
+                )
+                tail_lines = DOCTRINE_FILE.read_text(encoding="utf-8", errors="replace").splitlines()[-35:]
+                print("\n📌 [최신 강령 하단 변경 내역 미리보기]")
+                print("\n".join(tail_lines))
+                print(
+                    "\n👉 [AI 에이전트 지시] 업데이트된 강령을 즉시 숙지하고 멀린님께 변경 요약을 보고하세요!"
+                )
+                print("📜" * 24, flush=True)
+                return
 
         new_bugs = check_notion_new_bugs(seen_bug_ids, role=active_role)
         if new_bugs:

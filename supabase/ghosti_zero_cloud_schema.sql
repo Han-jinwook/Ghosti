@@ -106,11 +106,41 @@ create table if not exists public.users (
   id uuid primary key,                    -- 허브 family_users.id 그대로 저장
   email text not null unique,
   nickname text,
+  native_push_token text,
+  push_channel_id text not null default 'ghosti',
+  signup_source text,
+  launch_notify_opt_in boolean,
+  device_platform text check (
+    device_platform is null or device_platform in ('windows', 'macos', 'android', 'ios', 'web')
+  ),
   app_settings jsonb not null default '{}'::jsonb,
   last_login_at timestamptz not null default now(),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+-- [제18조 정규화 마이그레이션] 기존 운영 DB에서 app_settings JSONB에 기생하던 푸시·가입출처·사전알림 컬럼을 정식 컬럼으로 무중단 승격
+alter table public.users add column if not exists native_push_token text;
+alter table public.users add column if not exists push_channel_id text not null default 'ghosti';
+alter table public.users add column if not exists signup_source text;
+alter table public.users add column if not exists launch_notify_opt_in boolean;
+alter table public.users add column if not exists device_platform text;
+
+update public.users
+   set native_push_token    = coalesce(native_push_token, nullif(app_settings ->> 'native_push_token', '')),
+       push_channel_id      = coalesce(nullif(push_channel_id, ''), nullif(app_settings ->> 'push_channel_id', ''), 'ghosti'),
+       signup_source        = coalesce(signup_source, nullif(app_settings ->> 'signup_source', '')),
+       launch_notify_opt_in = coalesce(
+         launch_notify_opt_in,
+         case
+           when (app_settings ->> 'launch_notify_opt_in') in ('true', 'false')
+           then (app_settings ->> 'launch_notify_opt_in')::boolean
+           else null
+         end
+       ),
+       device_platform      = coalesce(device_platform, nullif(app_settings ->> 'device_platform', '')),
+       app_settings         = app_settings - 'native_push_token' - 'push_channel_id' - 'signup_source' - 'launch_notify_opt_in' - 'device_platform' - 'last_synced_at'
+ where app_settings ?| array['native_push_token', 'push_channel_id', 'signup_source', 'launch_notify_opt_in', 'device_platform', 'last_synced_at'];
 
 drop trigger if exists trg_users_touch on public.users;
 create trigger trg_users_touch
@@ -731,6 +761,9 @@ create table if not exists public.unmatched_questions (
   reason text not null default 'no_playbook_match' check (reason in ('no_playbook_match', 'feature_request')),
   created_at timestamptz not null default now()
 );
+
+create index if not exists idx_unmatched_questions_owner_created
+  on public.unmatched_questions (owner_email, created_at desc);
 
 alter table public.unmatched_questions enable row level security;
 

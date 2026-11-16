@@ -100,40 +100,53 @@ export default async (req) => {
     return json(403, { ok: false, reason: '요청 userId와 허브 검증 userId 불일치' });
   }
 
-  // ② service_role Upsert (id = 허브 family_users.id) + 온보딩/사전가입 메타데이터 수집
-  const appSettings = {};
-  if (body.nativePushToken) {
-    appSettings.native_push_token = String(body.nativePushToken);
-    appSettings.push_channel_id = 'ghosti';
-  }
-  if (body.signupSource) {
-    appSettings.signup_source = String(body.signupSource);
-  }
-  if (typeof body.launchNotifyOptIn === 'boolean') {
-    appSettings.launch_notify_opt_in = body.launchNotifyOptIn;
-  }
-  if (body.devicePlatform) {
-    appSettings.device_platform = String(body.devicePlatform);
-  }
-  appSettings.last_synced_at = new Date().toISOString();
-
-  const row = {
+  // ② service_role Upsert (id = 허브 family_users.id)
+  // [제18조 준수]: app_settings JSONB에 기생시키거나 빈 객체로 덮어쓰지 않고, 정식 분리 컬럼에만 전달된 값만 부분 반영!
+  const baseRow = {
     id: userId,
     email,
     nickname: hubUser.nickname || body.nickname || email.split('@')[0],
     last_login_at: new Date().toISOString(),
-    app_settings: appSettings,
   };
-  const up = await fetch(`${supabaseUrl}/rest/v1/users?on_conflict=id`, {
+
+  const row = { ...baseRow };
+  if (body.nativePushToken) {
+    row.native_push_token = String(body.nativePushToken);
+    row.push_channel_id = 'ghosti';
+  }
+  if (body.signupSource) {
+    row.signup_source = String(body.signupSource);
+  }
+  if (typeof body.launchNotifyOptIn === 'boolean') {
+    row.launch_notify_opt_in = body.launchNotifyOptIn;
+  }
+  if (
+    body.devicePlatform &&
+    ['windows', 'macos', 'android', 'ios', 'web'].includes(String(body.devicePlatform))
+  ) {
+    row.device_platform = String(body.devicePlatform);
+  }
+
+  const upsertHeaders = {
+    apikey: serviceKey,
+    Authorization: `Bearer ${serviceKey}`,
+    'Content-Type': 'application/json',
+    Prefer: 'resolution=merge-duplicates,return=minimal',
+  };
+
+  let up = await fetch(`${supabaseUrl}/rest/v1/users?on_conflict=id`, {
     method: 'POST',
-    headers: {
-      apikey: serviceKey,
-      Authorization: `Bearer ${serviceKey}`,
-      'Content-Type': 'application/json',
-      Prefer: 'resolution=merge-duplicates,return=minimal',
-    },
+    headers: upsertHeaders,
     body: JSON.stringify(row),
   });
+  if (!up.ok && Object.keys(row).length > Object.keys(baseRow).length) {
+    // 정식 컬럼 ALTER TABLE 실행 전 환경에서도 로그인이 막히거나 기존 app_settings가 덮어써지지 않도록 baseRow 안전 폴백
+    up = await fetch(`${supabaseUrl}/rest/v1/users?on_conflict=id`, {
+      method: 'POST',
+      headers: upsertHeaders,
+      body: JSON.stringify(baseRow),
+    });
+  }
   if (!up.ok) {
     const detail = await up.text().catch(() => '');
     return json(500, { ok: false, reason: `users Upsert 실패 (HTTP ${up.status})`, detail: detail.slice(0, 300) });
