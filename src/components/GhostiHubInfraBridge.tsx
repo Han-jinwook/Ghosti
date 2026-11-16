@@ -69,7 +69,7 @@ export const GhostiTopRightHubAnchor: React.FC<{ themeMode: 'light' | 'dark' }> 
     <div className="flex items-center gap-1.5 shrink-0">
       {/* 🐾 허브 표준 프로필 위젯 (클릭 시 통합 프로필·귀신여권·코인/선물함·문의방 모달 오픈) */}
       <div
-        className={`rounded-full px-1 py-0.5 border transition-colors ${
+        className={`rounded-full px-0.5 sm:px-1 py-0.5 border transition-colors ${
           themeMode === 'light'
             ? 'bg-slate-50/90 border-slate-200/80'
             : 'bg-zinc-900/90 border-white/10'

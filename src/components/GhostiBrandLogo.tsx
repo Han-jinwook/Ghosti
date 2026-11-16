@@ -62,9 +62,13 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
   }, [shouldCycle, cycleIntervalMs]);
 
   const isMobile = size === 'mobile';
-  const symbolSizeClass = isMobile ? 'w-8 h-8 sm:w-9 sm:h-9' : 'w-[42px] h-[42px]';
-  const wordmarkHeightClass = isMobile ? 'h-[22px] sm:h-[28px]' : 'h-[34px]';
-  const slotWidthClass = isMobile ? 'w-[78px] sm:w-[108px]' : 'w-[126px]';
+  const symbolSizeClass = isMobile ? 'w-7 h-7 sm:w-9 sm:h-9' : 'w-[42px] h-[42px]';
+  const wordmarkHeightClass = isMobile ? 'h-[20px] sm:h-[26px]' : 'h-[34px]';
+  const slotWidthClass = shouldCycle
+    ? isMobile
+      ? 'min-w-[118px] sm:min-w-[126px]'
+      : 'min-w-[128px]'
+    : 'w-auto';
 
   const sloganColorClass =
     themeMode === 'light'
@@ -95,7 +99,11 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
         }`}
       />
 
-      <div className={`relative flex items-center min-h-[42px] ${slotWidthClass} shrink-0 overflow-hidden`}>
+      <div
+        className={`relative flex items-center ${
+          isMobile ? 'min-h-[30px] sm:min-h-[38px]' : 'min-h-[42px]'
+        } ${slotWidthClass} shrink-0`}
+      >
         <div
           className={`w-full flex items-center transition-all duration-300 ease-in-out ${
             isFading ? 'opacity-0 scale-95' : 'opacity-100 scale-100'
