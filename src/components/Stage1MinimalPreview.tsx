@@ -557,17 +557,22 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
     return zCoreBridge.subscribe((connected) => setIsZCoreConnected(connected));
   }, []);
 
+  const consumedInitialQueryRef = React.useRef<string>('');
+
+  const isFirstAutoSyncRef = React.useRef<boolean>(true);
+
   useEffect(() => {
     const q = (initialQuery || '').trim();
-    if (q) {
+    if (q && initialized && consumedInitialQueryRef.current !== q) {
+      consumedInitialQueryRef.current = q;
       setTextInput(q);
-      // 초기 코퍼스 적재(initialized) 완료 전에는 빈 배열에 runTextQuery를 호출하지 않아 (0) 깜빡임을 원천 차단!
-      if (initialized && (!hasExecutedUserSearch || activeQuery !== q)) {
+      if (!hasExecutedUserSearch || activeQuery !== q) {
         void runTextQuery(q);
       }
       return;
     }
     if (
+      !isInputFocused &&
       hasExecutedUserSearch &&
       activeQuery &&
       !activeQuery.startsWith('전체 갤러리 사진') &&
@@ -576,6 +581,7 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
     ) {
       setTextInput(activeQuery);
     }
+    isFirstAutoSyncRef.current = false;
   }, [initialQuery, initialized, hasExecutedUserSearch, activeQuery, runTextQuery]);
 
   const isMobile = layout === 'mobile';

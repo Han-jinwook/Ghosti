@@ -176,15 +176,20 @@ export const DesktopDashboard: React.FC = () => {
     matchedVideoScenes.length,
   ]);
 
+  const consumedUrlQueryRef = React.useRef<string>('');
+
   useEffect(() => {
     if (!ghostSearchWindowStage) return;
     setActiveLoungeType('personal');
     setDesktopTab('dashboard');
     if (!initialized) return;
     const q = (new URLSearchParams(window.location.search).get('q') || '').trim();
-    const st = useSaySeeStore.getState();
-    if (q && (!st.hasExecutedUserSearch || st.activeQuery !== q)) {
-      void st.runTextQuery(q);
+    if (q && consumedUrlQueryRef.current !== q) {
+      consumedUrlQueryRef.current = q;
+      const st = useSaySeeStore.getState();
+      if (!st.hasExecutedUserSearch || st.activeQuery !== q) {
+        void st.runTextQuery(q);
+      }
     }
   }, [ghostSearchWindowStage, initialized, setActiveLoungeType, setDesktopTab]);
 

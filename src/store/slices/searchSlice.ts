@@ -936,17 +936,17 @@ export const createSearchSlice: StateCreator<
         ? searchSpace
         : 'gallery';
 
+    // 유저가 이전에 문서(vault)나 사진(gallery) 탭을 열어둔 상태였더라도, 새 검색어가 현재 탭에서 0건이고 다른 탭에 결과가 있다면 결과가 있는 탭으로 자동 전환!
     if (targetSpace === 'gallery' && results.length === 0) {
       if (videoMatches.length > 0) targetSpace = 'video';
       else if (docMatches.length > 0 || vaultPhotoMatches.length > 0) targetSpace = 'vault';
-    } else if (targetSpace === 'video' && videoMatches.length === 0 && !hasUserSelectedSearchTab) {
+    } else if (targetSpace === 'video' && videoMatches.length === 0) {
       if (results.length > 0) targetSpace = 'gallery';
       else if (docMatches.length > 0 || vaultPhotoMatches.length > 0) targetSpace = 'vault';
     } else if (
       targetSpace === 'vault' &&
       docMatches.length === 0 &&
-      vaultPhotoMatches.length === 0 &&
-      !hasUserSelectedSearchTab
+      vaultPhotoMatches.length === 0
     ) {
       if (videoMatches.length > 0) targetSpace = 'video';
       else if (results.length > 0) targetSpace = 'gallery';
