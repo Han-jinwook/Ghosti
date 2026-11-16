@@ -1500,6 +1500,13 @@ export const Stage1MinimalCarePreview: React.FC = () => {
   const memoAndScreenCount = memoCount + screenshotCount;
 
   React.useEffect(() => {
+    if (liveActiveTrash.length === 0 && (isCleanupPaused || pausedSnapshot)) {
+      setIsCleanupPaused(false);
+      setPausedSnapshot(null);
+    }
+  }, [liveActiveTrash.length, isCleanupPaused, pausedSnapshot]);
+
+  React.useEffect(() => {
     const onPauseCleanupPaneOnly = () => {
       setPausedSnapshot({
         activeTrash: liveActiveTrash,
@@ -1673,13 +1680,13 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex flex-wrap items-center gap-2" data-allow-secretary-jump="true">
+              <div className="flex flex-wrap items-center gap-2 max-w-full" data-allow-secretary-jump="true">
                 <button
                   type="button"
                   data-allow-secretary-jump="true"
                   onClick={() => window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'))}
                   style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
-                  className="px-3.5 py-2 rounded-xl border-2 font-black text-[12px] sm:text-[13px] flex items-center justify-center gap-1.5 transition-all hover:opacity-90 cursor-pointer whitespace-nowrap shadow-xs"
+                  className="px-3 py-2 rounded-xl border-2 font-black text-[12px] sm:text-[13px] flex items-center justify-center gap-1.5 transition-all hover:opacity-90 cursor-pointer max-w-full shadow-xs"
                 >
                   <span>🏠 온보딩 체험관으로 나가서 구경하기 ➔</span>
                 </button>
@@ -1687,6 +1694,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   (isCleanupPaused ? (
                     <button
                       type="button"
+                      disabled={quarantineMoving}
                       onClick={() => {
                         setIsCleanupPaused(false);
                         setPausedSnapshot(null);
@@ -1694,18 +1702,26 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                           duplicateGroups.length > 0 ? 'duplicate' : 'all'
                         );
                       }}
-                      className="px-3.5 py-2.5 rounded-xl bg-teal-950/80 hover:bg-teal-900/80 border border-teal-400/40 text-teal-200 font-label-sm text-[12px] font-extrabold flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap"
+                      className="px-3.5 py-2.5 rounded-xl bg-teal-950/80 hover:bg-teal-900/80 border border-teal-400/40 text-teal-200 font-label-sm text-[12px] font-extrabold flex items-center justify-center gap-1 transition-all disabled:opacity-40 cursor-pointer max-w-full"
                     >
                       <span>▶️ 남은 사진 정리 다시 펼치기 ({liveActiveTrash.length}장)</span>
                     </button>
                   ) : (
                     <button
                       type="button"
+                      disabled={quarantineMoving && liveActiveTrash.length <= 10}
                       onClick={() => {
-                        setPausedSnapshot({
-                          activeTrash: liveActiveTrash,
-                          duplicateGroups,
-                        });
+                        if (quarantineMoving) {
+                          window.dispatchEvent(new CustomEvent('ghosti_cancel_inflight_quarantine'));
+                        }
+                        setPausedSnapshot(
+                          quarantineMoving
+                            ? null
+                            : {
+                                activeTrash: liveActiveTrash,
+                                duplicateGroups,
+                              }
+                        );
                         setIsCleanupPaused(true);
                         clearTrashSelection();
                         setActiveTrashCategoryFilter('none');
@@ -1713,18 +1729,26 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                           new CustomEvent('ghosti_defer_photo_cleanup_and_continue')
                         );
                       }}
-                      className="px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap"
+                      className="px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold flex items-center justify-center gap-1 transition-all disabled:opacity-40 cursor-pointer max-w-full"
                     >
-                      <span>⏭️ 남은 사진 정리는 다음에</span>
+                      <span>
+                        {quarantineMoving && liveActiveTrash.length > 10
+                          ? '⏹️ 정리 멈추기 · 남은 사진은 다음에'
+                          : '⏭️ 남은 사진 정리는 다음에'}
+                      </span>
                     </button>
                   ))}
                 <button
                   type="button"
                   disabled={activeTrash.length === 0 || quarantineMoving || isCleanupPaused}
                   onClick={() => void moveAllTrashToQuarantine()}
-                  className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer whitespace-nowrap shadow-sm"
+                  className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer max-w-full shadow-sm"
                 >
-                  <span>⚡ 원본 남기고 {activeTrash.length}장 일괄 정리</span>
+                  <span>
+                    {quarantineMoving
+                      ? '⏳ 휴지통으로 안전 정리 중...'
+                      : `⚡ 원본 남기고 ${activeTrash.length}장 일괄 정리`}
+                  </span>
                 </button>
               </div>
             </div>
@@ -1882,42 +1906,43 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                         }
                       : undefined
                   }
-                  className={`group text-left cursor-pointer rounded-2xl p-3.5 transition-all flex flex-col justify-between gap-2.5 border-2 ${
+                  className={`group text-left cursor-pointer rounded-2xl p-3 sm:p-3.5 transition-all flex flex-col justify-between gap-2 border-2 min-w-0 overflow-hidden ${
                     isSelected
                       ? 'bg-teal-500/15 border-[#0D9488] shadow-md ring-2 ring-[#0D9488]/40'
                       : 'bg-[#18181B] hover:bg-zinc-900/70 border-white/10'
                   }`}
                 >
-                  <div className="flex flex-col gap-1.5 w-full">
-                    <div className="flex items-center justify-between gap-1.5 w-full">
-                      <div className="flex items-center gap-1 whitespace-nowrap">
-                        <span className="font-headline-sm text-[13px] text-primary-container font-extrabold shrink-0">
-                          {tab.stepNum}
-                        </span>
-                        <span className="font-headline-sm text-[13.5px] xl:text-[14px] text-white font-extrabold tracking-tight">
-                          {tab.shortTitle}
-                        </span>
-                      </div>
+                  <div className="flex flex-col gap-1.5 w-full min-w-0">
+                    {/* 상단 상태 줄: 좌측 번호 배지 + 우측 펼치기/접기 알약 (모바일 2열 카드에서도 100% 내부 수납) */}
+                    <div className="flex items-center justify-between gap-1 w-full min-w-0">
+                      <span className="font-headline-sm text-[13px] text-primary-container font-extrabold shrink-0">
+                        {tab.stepNum}
+                      </span>
                       {isSelected ? (
                         <span
                           style={{ backgroundColor: '#0D9488', color: '#FFFFFF' }}
-                          className="px-2 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap shadow-xs shrink-0"
+                          className="px-2 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap shadow-xs shrink-0 max-w-full"
                         >
                           ✓ 선택됨 · 접기 ▲
                         </span>
                       ) : (
-                        <span className="px-1.5 py-0.5 rounded-full bg-zinc-800/80 border border-white/10 text-zinc-400 text-[10px] font-bold whitespace-nowrap shrink-0">
+                        <span className="px-2 py-0.5 rounded-full bg-zinc-800/80 border border-white/10 text-zinc-300 text-[10px] font-bold whitespace-nowrap shrink-0 max-w-full">
                           펼치기 ▼
                         </span>
                       )}
                     </div>
-                    <span className="font-body-sm text-[11px] text-zinc-400 leading-snug">
+
+                    <span className="font-headline-sm text-[13.5px] sm:text-[14.5px] text-white font-extrabold tracking-tight break-keep leading-snug">
+                      {tab.shortTitle}
+                    </span>
+
+                    <span className="font-body-sm text-[11px] text-zinc-400 break-keep leading-snug">
                       {tab.subtitle}
                     </span>
                   </div>
 
                   {/* 카드 내 미니 썸네일 프리뷰 (실제 0장일 때도 어떤 기능인지 한눈에 보이도록 샘플 제공) */}
-                  <div className="flex items-center gap-1.5 pt-0.5">
+                  <div className="flex flex-wrap items-center gap-1.5 pt-0.5 min-w-0">
                     {sampleThumbs.map((sp) => (
                       <div
                         key={sp.id}
@@ -1938,9 +1963,9 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     )}
                   </div>
 
-                  <div className="flex items-center justify-between gap-1 pt-2 border-t border-white/10 w-full whitespace-nowrap">
+                  <div className="flex flex-wrap items-center justify-between gap-1 pt-2 border-t border-white/10 w-full min-w-0">
                     <div className="flex items-baseline gap-1 whitespace-nowrap">
-                      <span className="font-headline-md text-[16px] text-white font-extrabold">
+                      <span className="font-headline-md text-[15px] sm:text-[16px] text-white font-extrabold">
                         {items.length}
                       </span>
                       <span className="font-label-sm text-[11px] text-zinc-400">장</span>

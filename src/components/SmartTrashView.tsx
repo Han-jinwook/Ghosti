@@ -292,20 +292,23 @@ export const SmartTrashView: React.FC = () => {
                 (isCleanupPaused ? (
                   <button
                     type="button"
+                    disabled={quarantineMoving}
                     onClick={() => {
                       setIsCleanupPaused(false);
                       setActiveTrashCategoryFilter(
                         activeDuplicateGroups.length > 0 ? 'duplicate' : 'all'
                       );
                     }}
-                    className="px-3.5 py-2.5 rounded-xl bg-teal-950/80 hover:bg-teal-900/80 border border-teal-400/40 text-teal-200 font-label-sm text-[12px] font-extrabold flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap"
+                    className="px-3.5 py-2.5 rounded-xl bg-teal-950/80 hover:bg-teal-900/80 border border-teal-400/40 text-teal-200 font-label-sm text-[12px] font-extrabold flex items-center justify-center gap-1 transition-all disabled:opacity-40 cursor-pointer max-w-full"
                   >
                     <span>▶️ 남은 사진 정리 다시 펼치기 ({activeTrash.length}장)</span>
                   </button>
                 ) : (
                   <button
                     type="button"
+                    disabled={quarantineMoving}
                     onClick={() => {
+                      if (quarantineMoving) return;
                       setIsCleanupPaused(true);
                       clearTrashSelection();
                       setActiveTrashCategoryFilter('none');
@@ -313,7 +316,7 @@ export const SmartTrashView: React.FC = () => {
                         new CustomEvent('ghosti_defer_photo_cleanup_and_continue')
                       );
                     }}
-                    className="px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold flex items-center justify-center gap-1 transition-all cursor-pointer whitespace-nowrap"
+                    className="px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold flex items-center justify-center gap-1 transition-all disabled:opacity-40 cursor-pointer max-w-full"
                   >
                     <span>⏭️ 남은 사진 정리는 다음에</span>
                   </button>
@@ -322,9 +325,13 @@ export const SmartTrashView: React.FC = () => {
                 type="button"
                 disabled={activeTrash.length === 0 || quarantineMoving || isCleanupPaused}
                 onClick={() => void moveAllTrashToQuarantine()}
-                className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer whitespace-nowrap shadow-sm"
+                className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer max-w-full shadow-sm"
               >
-                <span>⚡ 원본 남기고 {activeTrash.length}장 일괄 정리</span>
+                <span>
+                  {quarantineMoving
+                    ? '⏳ 휴지통으로 안전 정리 중...'
+                    : `⚡ 원본 남기고 ${activeTrash.length}장 일괄 정리`}
+                </span>
               </button>
             </div>
           </div>
@@ -736,38 +743,36 @@ export const SmartTrashView: React.FC = () => {
                     }
                   : undefined
               }
-              className={`group text-left cursor-pointer rounded-2xl p-4 transition-all flex flex-col justify-between gap-2.5 border-2 ${
+              className={`group text-left cursor-pointer rounded-2xl p-3.5 transition-all flex flex-col justify-between gap-2 border-2 min-w-0 overflow-hidden ${
                 isSelected
                   ? 'bg-teal-500/15 border-[#0D9488] shadow-md ring-2 ring-[#0D9488]/40'
                   : 'bg-[#18181B] hover:bg-zinc-900/70 border-white/10'
               }`}
             >
-              <div className="flex items-start justify-between gap-2 w-full">
-                <div className="flex flex-col gap-0.5 min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="font-headline-sm text-[13.5px] text-primary-container font-bold">
-                      {tab.stepNum}
-                    </span>
-                    <span className="font-headline-sm text-[14.5px] text-white font-bold truncate">
-                      {tab.shortTitle}
-                    </span>
-                  </div>
-                  <span className="font-body-sm text-[11px] text-zinc-400 line-clamp-1">
-                    {tab.subtitle}
+              <div className="flex flex-col gap-1.5 w-full min-w-0">
+                <div className="flex items-center justify-between gap-1 w-full min-w-0">
+                  <span className="font-headline-sm text-[13.5px] text-primary-container font-bold shrink-0">
+                    {tab.stepNum}
                   </span>
+                  {isSelected ? (
+                    <span
+                      style={{ backgroundColor: '#0D9488', color: '#FFFFFF' }}
+                      className="px-2 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap shrink-0 max-w-full"
+                    >
+                      ✓ 선택됨 · 접기 ▲
+                    </span>
+                  ) : (
+                    <span className="px-2 py-0.5 rounded-full bg-zinc-800/80 border border-white/10 text-zinc-300 text-[10px] font-bold whitespace-nowrap shrink-0 max-w-full">
+                      펼치기 ▼
+                    </span>
+                  )}
                 </div>
-                {isSelected ? (
-                  <span
-                    style={{ backgroundColor: '#0D9488', color: '#FFFFFF' }}
-                    className="px-2 py-0.5 rounded-full text-[10px] font-extrabold whitespace-nowrap shrink-0"
-                  >
-                    ✓ 선택됨 · 접기 ▲
-                  </span>
-                ) : (
-                  <span className="material-symbols-outlined text-[17px] text-zinc-400 shrink-0">
-                    {tab.icon}
-                  </span>
-                )}
+                <span className="font-headline-sm text-[14px] text-white font-bold break-keep leading-snug">
+                  {tab.shortTitle}
+                </span>
+                <span className="font-body-sm text-[11px] text-zinc-400 break-keep leading-snug">
+                  {tab.subtitle}
+                </span>
               </div>
 
               <div className="flex items-center justify-between pt-2 border-t border-white/10 w-full">

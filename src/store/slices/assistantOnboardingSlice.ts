@@ -1032,12 +1032,41 @@ export const createAssistantOnboardingSlice: StateCreator<
     if (targetNames.length === 0) return;
 
     set({ quarantineMoving: true });
-    const moveRes = await requestQuarantineOp('move', targetNames);
-    if (moveRes.done.length === 0) {
-      set({ quarantineMoving: false, lastQuarantineToast: quarantineFailureToast('move', moveRes) });
+    let cancelRequested = false;
+    const onCancel = () => {
+      cancelRequested = true;
+    };
+    if (typeof window !== 'undefined') {
+      window.addEventListener('ghosti_cancel_inflight_quarantine', onCancel);
+    }
+
+    const CHUNK_SIZE = 10;
+    const movedList: string[] = [];
+    let lastMoveRes: Awaited<ReturnType<typeof requestQuarantineOp>> | null = null;
+    try {
+      for (let offset = 0; offset < targetNames.length; offset += CHUNK_SIZE) {
+        if (cancelRequested && offset > 0) break;
+        const chunk = targetNames.slice(offset, offset + CHUNK_SIZE);
+        const chunkRes = await requestQuarantineOp('move', chunk);
+        lastMoveRes = chunkRes;
+        if (chunkRes.done.length > 0) {
+          movedList.push(...chunkRes.done);
+        } else if (offset === 0) {
+          set({ quarantineMoving: false, lastQuarantineToast: quarantineFailureToast('move', chunkRes) });
+          return;
+        }
+      }
+    } finally {
+      if (typeof window !== 'undefined') {
+        window.removeEventListener('ghosti_cancel_inflight_quarantine', onCancel);
+      }
+    }
+
+    if (movedList.length === 0 || !lastMoveRes) {
+      set({ quarantineMoving: false });
       return;
     }
-    const movedList: string[] = moveRes.done;
+    const moveRes = lastMoveRes;
     const moveNote = quarantineResultNote('move', moveRes);
 
     const movedSet = new Set<string>(movedList);
