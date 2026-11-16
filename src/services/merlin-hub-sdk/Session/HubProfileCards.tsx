@@ -1,7 +1,8 @@
 /**
- * Version: v2.3.2
- * Last Updated: 2026-10-24
+ * Version: v2.3.4
+ * Last Updated: 2026-11-13
  * Merlin Hub SDK — 프로필/선물함/알림/로그아웃 카드
+ * - v2.3.4: 프로필 정보 창(HubProfileCard) 상단의 중복 배너(내 잔여 코인 / 코인 선물함) 기본 제거 (showCoin = false 기본값 적용)
  */
 'use client';
 
@@ -20,14 +21,14 @@ import { getGiftList } from '../Wallet/wallet';
 export interface HubProfileCardProps {
   onSuccess?: (nickname: string, avatarUrl: string) => void;
   className?: string;
-  showCoin?: boolean; // 코인이 없는 무료/회원용 앱(썬드리머 등)을 위한 분기 플래그 (기본값: true)
+  showCoin?: boolean; // 프로필 창 상단 코인/선물함 배너 노출 여부 (전사 표준: 기본값 false로 중복 배너 제거)
   hideCoinSection?: boolean; // 하위 호환용 코인 섹션 숨김 플래그
   nicknameLabel?: React.ReactNode; // 커스텀 닉네임 라벨 (예: 앱 닉네임 (카페 별명 권장))
   customGiftProducts?: GiftProductItem[];
   minCustomCoin?: number; onOpenPurchase?: () => void;
 }
 
-export const HubProfileCard: React.FC<HubProfileCardProps> = ({ onSuccess, className = '', showCoin = true, hideCoinSection = false, nicknameLabel, customGiftProducts, minCustomCoin, onOpenPurchase }) => {
+export const HubProfileCard: React.FC<HubProfileCardProps> = ({ onSuccess, className = '', showCoin = false, hideCoinSection = false, nicknameLabel, customGiftProducts, minCustomCoin, onOpenPurchase }) => {
   const effectiveShowCoin = showCoin && !hideCoinSection;
   const { user, isLoggedIn, balance } = useHub();
   const [isEditing, setIsEditing] = useState(false);
