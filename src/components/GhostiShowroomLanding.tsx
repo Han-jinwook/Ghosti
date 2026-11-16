@@ -1375,9 +1375,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           <div className="relative z-10 grid grid-cols-1 lg:grid-cols-12 gap-6 lg:gap-8 items-center">
             {/* 좌측 (7칸): 임팩트 타이포그래피 & 한눈에 보는 무료 핵심 4종 스탯 카드 */}
             <div className="lg:col-span-7 space-y-4">
-              <div className="inline-flex items-center gap-1.5 px-3 sm:px-3.5 py-1.5 rounded-full bg-white/10 border border-[#00F0B5]/40 text-[#00F0B5] text-[11.5px] sm:text-[13px] font-black whitespace-nowrap break-keep max-w-full">
+              <div className="inline-flex items-center gap-1 sm:gap-1.5 px-2.5 sm:px-3.5 py-1.5 rounded-full bg-white/10 border border-[#00F0B5]/40 text-[#00F0B5] text-[10.5px] sm:text-[13px] tracking-tighter sm:tracking-normal font-black whitespace-nowrap break-keep">
                 <span className="shrink-0">⚡</span>
-                <span className="truncate">광고 0% · 클라우드 월세 0원 · PC·모바일 초능력</span>
+                <span>광고 0% · 클라우드 월세 0원 · PC·모바일 초능력</span>
               </div>
 
               {/* 붓글씨 캘리그라피 + 대표 헤드라인(H1 18자 심장 타격) + 서브 헤드라인(H2) */}
@@ -1677,8 +1677,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
             {/* 4대 무료 핵심 무기 스킬 카드 (클릭 시 우측 단일 스테이지 즉시 전환) */}
             <div className="p-3.5 bg-zinc-900/90 border-t border-white/10 space-y-2">
-              <div className="text-[12px] sm:text-[13px] font-extrabold text-teal-300 flex items-center justify-between gap-2 px-1 whitespace-nowrap">
-                <span className="truncate">👇 보고 싶은 초능력 카드를 톡 눌러보세요!</span>
+              <div className="text-[10.5px] sm:text-[13px] tracking-tighter sm:tracking-normal font-extrabold text-teal-300 flex items-center justify-between gap-1.5 sm:gap-2 px-0.5 sm:px-1 whitespace-nowrap">
+                <span className="whitespace-nowrap">👇 보고 싶은 초능력 카드를 톡 눌러보세요!</span>
                 <span className="text-zinc-400 shrink-0 whitespace-nowrap">우측 즉시 시연</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
