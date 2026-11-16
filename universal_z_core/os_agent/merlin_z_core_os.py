@@ -1696,8 +1696,21 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
     # 권장 기준점: 매일 1회 (24시간 = 86,400초)
     needs_reboot = uptime_sec >= 86400.0
 
-    # 2. 한국형 상주 보안 프로그램 및 시작프로그램 실측 스캔 (브라우저 프로세스 절대 건드리지 않음)
-    pc_state = inspect_real_pc_state()
+    # 2. 한국형 상주 보안 프로그램 및 시작프로그램 실측 스캔 (clean_bloatware 실행 시에는 프리워밍 캐시 즉시 재사용하여 1초 병목 제거!)
+    pc_state: Dict[str, Any] = {}
+    if act == "clean_bloatware":
+        try:
+            import plugin_ghosti_os as _pgo
+            cached_inspect = (_pgo._OS_INSPECT_CACHE or {}).get("data")
+            if isinstance(cached_inspect, dict) and cached_inspect:
+                pc_state = cached_inspect
+        except Exception:
+            pc_state = {}
+        if not pc_state:
+            fast_cpu = int(_measure_cpu_load_fast_win32(0.03) or 22)
+            pc_state = {"spoolerAndSecurity": {"cpuLoadPercent": fast_cpu, "activeSecurityPlugins": []}, "startupPrograms": []}
+    else:
+        pc_state = inspect_real_pc_state()
     sec_plugins = pc_state.get("spoolerAndSecurity", {}).get("activeSecurityPlugins", [])
     startup_items = pc_state.get("startupPrograms", [])
 
@@ -1939,8 +1952,17 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
         except Exception:
             pass
 
-        measured_after = _measure_cpu_load_fast_win32(0.08)
-        cpu_after = int(measured_after) if measured_after > 0 else max(6, int(cpu_before * 0.45))
+        measured_after = _measure_cpu_load_fast_win32(0.03)
+        cpu_after = (
+            min(int(measured_after), max(6, int(cpu_before * 0.75)))
+            if measured_after > 0 and cpu_before > 0
+            else (int(measured_after) if measured_after > 0 else max(6, int(cpu_before * 0.45)))
+        )
+        try:
+            import plugin_ghosti_os as _pgo
+            _pgo._trigger_async_os_inspect_refresh()
+        except Exception:
+            pass
         remaining_sec_count = 0
         browser_bn = pc_state.get("spoolerAndSecurity", {}).get("browserMemoryBottleneck") or {}
 

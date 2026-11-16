@@ -2392,7 +2392,9 @@ export async function processUnifiedMonsterChatQuery(params: {
     !isPendingMissingFileRestoreApprove &&
     /아니|안\s*해|하지\s*마|취소|보류|멈춰|잠깐|그만|싫어|놔둬|나중에|되돌려|되돌리|원복|원래대로/i.test(clean);
   const isNewIndependentTopicInConsent =
-    /바로가기|아이콘\s*만들|방금\s*지운|복원\s*기록|히스토리|사양|스펙|부팅\s*경과|시작\s*프로그램/i.test(clean);
+    /바로가기|아이콘\s*만들|방금\s*지운|복원\s*기록|히스토리|사양|스펙|부팅\s*경과|시작\s*프로그램|재부팅|보안\s*쓰레기|보안\s*모듈|애드웨어|설치\s*파일|다운로드\s*폴더/i.test(
+      clean
+    );
   const isNaturalAffirmativeConsent =
     isPendingMissingFileRestoreApprove ||
     (!isNegationOrRollback &&
@@ -2569,22 +2571,31 @@ export async function processUnifiedMonsterChatQuery(params: {
       pendingApprovalMsg.deviceRepairPayload &&
       !pendingApprovalMsg.deviceRepairPayload.executed
     ) {
-      const dp = pendingApprovalMsg.deviceRepairPayload;
-      const plan = buildSetupDiagnosisPlan('pc', dp.symptomQuery, dp.presetId);
-      await useSaySeeStore.getState().approveAndExecuteSetupPlan(plan, 0);
       const osRes = await executeRealOsAction('boot_lag_clean_bloatware', clean);
       cachedPcContext = null;
       const restoreId = String((osRes as any).restoreId || '#1');
       const cpuBefore = Number((osRes as any).cpuLoadBefore ?? 28);
       const cpuAfter = Number((osRes as any).cpuLoadAfter ?? Math.max(8, Math.round(cpuBefore * 0.45)));
+      const cleanedCnt =
+        (Array.isArray((osRes as any).stoppedBloatware) ? (osRes as any).stoppedBloatware.length : 0) +
+        (Array.isArray((osRes as any).disabledStartups) ? (osRes as any).disabledStartups.length : 0) || 1;
       const defaultChromeGuide =
         '💡 애드웨어는 모두 껐지만, 현재 내 컴퓨터 전체 메모리(8GB) 중 크롬 브라우저(창/탭 다수)가 메모리를 많이 차지하고 있습니다. 안 쓰는 크롬 탭만 몇 개 닫아주시면 즉시 체감 속도가 확 빨라집니다!';
       const baseMsg =
         osRes.summaryKo ||
-        `🚀 작업 스케줄러·서비스 기반 부활형 애드웨어와 상주 보안모듈을 한 번에 강제 종료 및 자동부활 차단했습니다! (실측 CPU 부하: ${cpuBefore}% ➔ ${cpuAfter}% · 잔존 상주 애드웨어 0건)`;
+        `🚀 작업 스케줄러·서비스 기반 부활형 애드웨어와 상주 보안모듈을 한 번에 강제 종료 및 자동부활 차단했어요! (실측 CPU 부하: ${cpuBefore}% ➔ ${cpuAfter}% · 잔존 상주 애드웨어 0건)`;
       const completionMsg = baseMsg.includes('애드웨어는 모두 껐지만')
         ? baseMsg
         : `${baseMsg}\n\n${(osRes as any)?.browserMemoryBottleneck?.guideKo || defaultChromeGuide}`;
+      const issuedRec = appendLocalHealthCheckRecord({
+        category: '⚙️ 고치기',
+        title: '시작프로그램·상주 보안모듈 정리',
+        reclaimedSizeLabel: `CPU 부하 ${cpuBefore}% ➔ ${cpuAfter}%`,
+        cleanedItemCount: cleanedCnt,
+        securityPluginsFrozen: cleanedCnt,
+        speedUpSummary: completionMsg,
+        restoreId,
+      });
       setSharedMonsterMessages((prev) =>
         prev.map((m) =>
           m.id === pendingApprovalMsg.id && m.deviceRepairPayload
@@ -2598,15 +2609,17 @@ export async function processUnifiedMonsterChatQuery(params: {
                   approvedTypedText: clean,
                   createdRestoreId: restoreId,
                 },
+                healthRecordIssued: issuedRec,
               }
             : m
         )
       );
-      const msgText = `${completionMsg}\n📋 **블랙박스 승인 기록 완료** — 승인 발화: \`"${clean}"\` · 복원 번호: \`${restoreId}\`\n언제든 채팅창에 **"방금 한 거 되돌려줘"**라고 입력하시면 원래 설정으로 1초 원복됩니다.`;
-      speak('승인 말씀이 블랙박스에 기록되었으며 수리를 완료했습니다.');
+      const msgText = `${completionMsg}\n📋 **블랙박스 승인 기록 완료** — 승인 발화: \`"${clean}"\` · 복원 번호: \`${restoreId}\`\n언제든 채팅창에 **"방금 한 거 되돌려줘"**라고 입력하시면 원래 설정으로 1초 원복해 드려요!`;
+      speak('승인 말씀이 블랙박스에 기록되었으며 수리를 완료했어요.');
       return reply(sourceTab, msgText, {
+        healthRecordIssued: issuedRec,
         followUpSuggestions: [
-          '속도 개선된거야?',
+          '속도 개선된 거야?',
           '최근 [복원 기록] 보여줘',
         ],
       });

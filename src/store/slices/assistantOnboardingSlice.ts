@@ -1689,7 +1689,7 @@ export const createAssistantOnboardingSlice: StateCreator<
             message: `⚠️ 애드웨어·보안 프로세스 정리를 완료하지 못했습니다: ${String(osRes?.message || osRes?.error || '멀린 Z-코어 연결을 확인해 주세요')}`,
           };
         }
-        await fetchRealPcOsInspection();
+        void fetchRealPcOsInspection();
       } catch {
         realExecution = { ok: false, message: '⚠️ 멀린 Z-코어에 연결되지 않아 실행하지 못했습니다.' };
       }
@@ -1706,6 +1706,7 @@ export const createAssistantOnboardingSlice: StateCreator<
           ...savedAudit,
           selfHealingOta: evalResult.otaEntry,
         }),
+        signal: AbortSignal.timeout(800),
       });
       const data = await res.json();
       if (data?.ok && data.auditEntry) {
