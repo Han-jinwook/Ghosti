@@ -18,6 +18,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import re
 import shutil
 import struct
 import sys
@@ -98,9 +99,16 @@ def _parse_recycle_bin_i_file(i_file: Path) -> Dict[str, Any] | None:
 
 
 _TRACE_STOPWORDS = {
-    "파일", "사진", "문서", "자료", "내", "제", "우리", "그", "그거", "이거", "저거", "어디", "어디갔어", "어디갔지",
-    "없어졌어", "없어졌어요", "사라졌어", "사라졌어요", "증발", "증발했어", "지웠지", "지웠어", "날아갔어", "복구해",
-    "복구해줘", "찾아줘", "못", "찾겠어", "휴지통", "니가", "너가", "왜", "좀", "있던", "있었던", "바탕화면에", "폴더에",
+    "파일", "사진", "문서", "자료", "폴더", "영상", "동영상", "내", "제", "우리", "그", "그거", "이거", "저거",
+    "어디", "어디갔어", "어디갔지", "어디있어", "어디로", "방금", "방금전", "조금전", "아까", "최근", "최근에",
+    "오늘", "어제", "그제", "일전에", "없어졌어", "없어졌어요", "없어진", "사라졌어", "사라졌어요", "사라진",
+    "증발", "증발했어", "지운", "지웠던", "지웠지", "지웠어", "지웠어요", "지워진", "삭제", "삭제한", "삭제된",
+    "삭제했어", "삭제했어요", "버린", "버렸던", "버렸어", "버렸어요", "날아갔어", "날아간", "넣은", "넣었던",
+    "보낸", "옮긴", "복구", "복구해", "복구해줘", "복구해주세요", "복원", "복원해", "복원해줘", "복원해주세요",
+    "되돌려", "되돌려줘", "되돌려주세요", "원복", "원복해줘", "원래대로", "살려", "살려줘", "구출", "구출해줘",
+    "찾아", "찾아줘", "찾아주세요", "찾기", "보여", "보여줘", "보여주세요", "알려", "알려줘", "못", "찾겠어",
+    "휴지통", "휴지통에", "휴지통에서", "니가", "너가", "왜", "좀", "다시", "있던", "있었던", "바탕화면",
+    "바탕화면에", "바탕화면에서", "내문서", "문서함", "다운로드", "폴더에", "폴더에서", "거", "것",
 }
 
 
@@ -108,10 +116,67 @@ def _extract_trace_keywords(query: str) -> List[str]:
     toks = re.findall(r"[0-9A-Za-z가-힣._\-]{2,}", query or "")
     out: List[str] = []
     for t in toks:
-        t2 = re.sub(r"(이|가|을|를|은|는|도|에|에서|으로|로)$", "", t) if len(t) > 2 else t
-        if t2 and t2 not in _TRACE_STOPWORDS and t not in _TRACE_STOPWORDS and t2 not in out:
+        t2 = re.sub(r"(이|가|을|를|은|는|도|에|에서|으로|로|의|만)$", "", t) if len(t) > 2 else t
+        if t2 and t2 not in _TRACE_STOPWORDS and t not in _TRACE_STOPWORDS and len(t2) >= 2 and t2 not in out:
             out.append(t2)
     return out[:6]
+
+
+def _format_size_human(size_bytes: int) -> str:
+    b = max(0, int(size_bytes or 0))
+    if b < 1024:
+        return f"{b} B"
+    if b < 1024 * 1024:
+        return f"{b / 1024:.1f} KB"
+    return f"{b / (1024 * 1024):.2f} MB"
+
+
+def _build_recycle_5_lines_preview(meta: Dict[str, Any]) -> List[str]:
+    orig_name = str(meta.get("originalName") or "파일")
+    orig_path = str(meta.get("originalPath") or "-")
+    deleted_at = str(meta.get("deletedAt") or "-")
+    size_label = _format_size_human(int(meta.get("sizeBytes") or 0))
+    r_path = Path(str(meta.get("recycleDataFile") or ""))
+
+    real_text_lines: List[str] = []
+    if r_path.exists() and r_path.is_file():
+        try:
+            extracted = zos.extract_real_5_lines_preview(r_path)
+            if isinstance(extracted, list):
+                for ln in extracted:
+                    s = str(ln or "").strip()
+                    if (
+                        s
+                        and not s.startswith("📄 실물 문서 확인:")
+                        and not s.startswith("📂 실제 디스크 경로:")
+                        and not s.startswith("🕒 마지막 저장 시각:")
+                        and not s.startswith("📦 실측 파일 크기:")
+                        and not s.startswith("✅ 디스크 무결성 검증:")
+                        and not s.startswith("[파일 접근")
+                    ):
+                        real_text_lines.append(s[:120])
+                        if len(real_text_lines) >= 2:
+                            break
+        except Exception:
+            real_text_lines = []
+
+    lines = [
+        f"📄 파일 이름: {orig_name} ({size_label})",
+        f"📍 원래 위치: {orig_path}",
+        f"🗑️ 현재 상태: 윈도우 휴지통 보관 중 (삭제 시각: {deleted_at})",
+    ]
+    if real_text_lines:
+        lines.append(f"📝 내용 미리보기: {real_text_lines[0]}")
+        lines.append(
+            f"   {real_text_lines[1]}"
+            if len(real_text_lines) > 1
+            else "✅ 아래 [원위치/바탕화면 복원] 버튼만 누르면 원래 자리에 바로 복구돼요!"
+        )
+    else:
+        ext_label = (Path(orig_name).suffix.lstrip(".").upper() or "일반")
+        lines.append(f"📦 파일 형식: {ext_label} 파일 (내용 손상 없이 안전 보관 중)")
+        lines.append("✅ 아래 [원위치/바탕화면 복원] 버튼만 누르면 원래 자리에 바로 복구돼요!")
+    return lines[:5]
 
 
 def scan_windows_recycle_bin(query: str = "", max_results: int = 25) -> Dict[str, Any]:
@@ -137,59 +202,63 @@ def list_restore_points_with_precheck() -> Dict[str, Any]:
 
 def trace_missing_file_omni(query: str) -> Dict[str, Any]:
     """
-    사라진 파일 정직 수색: ① [복원 기록] ② 귀신같이 휴지통 장부 ③ 현재 사용자 휴지통($I 해독).
-    못 찾으면 '못 찾았다'고만 답한다(소멸 여부 등 확인하지 않은 사실을 단정하지 않음).
+    사라진 파일 정직 수색: ① 현재 사용자 휴지통($Recycle.Bin 최신 삭제순 / 키워드 매칭) ② [복원 기록] 이동·스냅샷 보관분.
+    파일명 단서 없이 '방금 지운 파일 찾아줘'라고 물어도 가장 최근 휴지통 삭제 파일을 즉시 찾아 5줄 미리보기로 안내한다.
     """
     t0 = time.perf_counter()
     kws = _extract_trace_keywords(query)
-    base = {"ok": True, "query": query, "keywords": kws}
-    if not kws:
-        base.update(
-            {
-                "caseType": "CASE_B_NOT_IN_RECYCLE_OR_RESTORE",
-                "elapsedMs": round((time.perf_counter() - t0) * 1000, 1),
-                "briefingKo": "100% 정직 판정: 내 PC 5대 은닉 금고와 윈도우 휴지통을 모두 스캔했으나 흔적이 없습니다. 찾을 파일 이름의 단서(예: '영수증', '단가표')를 함께 말씀해 주시면 복원 기록과 휴지통을 바로 대조해 드립니다.",
-            }
-        )
-        return base
+    base: Dict[str, Any] = {"ok": True, "query": query, "keywords": kws}
+    is_explicit_recycle_or_delete = bool(re.search(r"지운|지웠|지워진|삭제|버린|버렸|휴지통", query or ""))
 
     def _hit(name: str) -> bool:
+        if not kws:
+            return True
         low = name.lower()
         return any(k.lower() in low for k in kws)
 
-    # 1) [복원 기록]: 귀신같이가 유저 승인으로 옮긴 파일
-    for pt in safe.load_restore_points():
-        bb = pt.get("blackbox", {})
-        for op in pt.get("operations", []) or []:
-            if op.get("op") != "MOVE" or op.get("rolledBack"):
-                continue
-            name = str(op.get("name", ""))
-            to_p = Path(str(op.get("toPath", "")))
-            if _hit(name) and to_p.exists():
-                base.update(
-                    {
-                        "caseType": "CASE_A_USER_APPROVED_RESTORE_POINT",
-                        "restoreId": pt.get("restoreId"),
-                        "fileName": name,
-                        "currentLocation": str(to_p),
-                        "originalLocation": str(op.get("fromPath", "")),
-                        "deletedAt": pt.get("createdAt"),
-                        "elapsedMs": round((time.perf_counter() - t0) * 1000, 1),
-                        "briefingKo": (
-                            f"{pt.get('createdAt')}에 유저님이 승인하신 [{pt.get('restoreId')} 복원 기록]으로 "
-                            f"'{to_p.parent.name}' 폴더에 옮겨져 있습니다. 원래 자리로 되돌릴까요?"
-                        ),
-                        "blackbox": bb,
-                    }
-                )
-                return base
+    # 1) 키워드가 있고 명시적 '지운/휴지통' 요청이 아닌 경우: 귀신같이가 유저 승인으로 폴더 이동(MOVE)한 [복원 기록] 우선 대조
+    if kws and not is_explicit_recycle_or_delete:
+        for pt in safe.load_restore_points():
+            bb = pt.get("blackbox", {})
+            for op in pt.get("operations", []) or []:
+                if op.get("op") != "MOVE" or op.get("rolledBack"):
+                    continue
+                name = str(op.get("name", ""))
+                to_p = Path(str(op.get("toPath", "")))
+                if _hit(name) and to_p.exists():
+                    from_p_str = str(op.get("fromPath", ""))
+                    size_lbl = _format_size_human(int(op.get("sizeBytes") or (to_p.stat().st_size if to_p.exists() else 0)))
+                    base.update(
+                        {
+                            "caseType": "CASE_A_USER_APPROVED_RESTORE_POINT",
+                            "restoreId": pt.get("restoreId"),
+                            "fileName": name,
+                            "currentLocation": str(to_p),
+                            "originalLocation": from_p_str,
+                            "deletedAt": pt.get("createdAt"),
+                            "preview5Lines": [
+                                f"📄 파일 이름: {name} ({size_lbl})",
+                                f"📍 원래 위치: {from_p_str or '-'}",
+                                f"📂 현재 위치: {to_p}",
+                                f"🕰️ 보관 근거: [{pt.get('restoreId')} 복원 기록] ({pt.get('createdAt')})",
+                                "✅ 아래 [원위치/바탕화면 복원] 버튼만 누르면 원래 자리로 바로 돌아가요!",
+                            ],
+                            "elapsedMs": round((time.perf_counter() - t0) * 1000, 1),
+                            "briefingKo": (
+                                f"👻 찾았어요! {pt.get('createdAt')}에 승인하신 **[{pt.get('restoreId')} 복원 기록]**으로 "
+                                f"**'{to_p.parent.name}'** 폴더에 안전하게 보관되어 있어요. 원래 자리로 바로 되돌려 드릴까요?"
+                            ),
+                            "blackbox": bb,
+                        }
+                    )
+                    return base
 
-    # 2) 현재 사용자 휴지통 실물 스캔 (귀신같이 사진 정리분 포함)
+    # 2) 현재 사용자 윈도우 휴지통($Recycle.Bin) 실물 스캔 (kws=[]이면 가장 최근 삭제된 파일 1순위 반환!)
     rb = safe.scan_user_recycle_bin(kws, max_results=5)
     if rb.get("items"):
         top = rb["items"][0]
         led = next((r for r in safe.ledger_load() if r.get("recycleMetaFile") == top["recycleMetaFile"]), None)
-        who = "귀신같이 사진 정리로" if led else "윈도우에서"
+        who = "귀신같이 사진 정리로" if led else "방금 윈도우에서"
         base.update(
             {
                 "caseType": "CASE_B_FOUND_IN_RECYCLE_BIN",
@@ -198,23 +267,64 @@ def trace_missing_file_omni(query: str) -> Dict[str, Any]:
                 "originalLocation": top["originalPath"],
                 "recycleMetaFile": top["recycleMetaFile"],
                 "deletedAt": top["deletedAt"],
+                "preview5Lines": _build_recycle_5_lines_preview(top),
                 "elapsedMs": round((time.perf_counter() - t0) * 1000, 1),
                 "briefingKo": (
-                    f"{who} 휴지통으로 옮겨진 '{top['originalName']}'을(를) 찾았습니다 "
-                    f"(삭제 시각 {top['deletedAt']}). 원래 위치({top['originalPath']})로 되돌릴까요?"
+                    f"👻 찾았어요! {who} 휴지통에 들어간 **{top['originalName']}** 파일을 확인했어요 "
+                    f"(삭제 시각: {top['deletedAt']}).\n"
+                    f"아래 5줄 미리보기를 확인하시고 **[📂 폴더 열기]**나 **[↩️ 원위치/바탕화면 복원]** 버튼을 눌러 원래 위치(`{top['originalPath']}`)로 바로 되살려 보세요!"
                 ),
             }
         )
         return base
 
+    # 3) 휴지통에 없을 때: [복원 기록] 내 MOVE 또는 Shift+Delete 타임머신 보호본(SHADOW_PROTECT) 확인
+    for pt in safe.load_restore_points():
+        bb = pt.get("blackbox", {})
+        for op in pt.get("operations", []) or []:
+            if op.get("op") not in ("MOVE", "SHADOW_PROTECT") or op.get("rolledBack"):
+                continue
+            name = str(op.get("name", ""))
+            to_p = Path(str(op.get("toPath", "")))
+            if _hit(name) and to_p.exists():
+                from_p_str = str(op.get("fromPath", ""))
+                size_lbl = _format_size_human(int(op.get("sizeBytes") or (to_p.stat().st_size if to_p.exists() else 0)))
+                is_shadow = op.get("op") == "SHADOW_PROTECT"
+                base.update(
+                    {
+                        "caseType": "CASE_A_USER_APPROVED_RESTORE_POINT",
+                        "restoreId": pt.get("restoreId"),
+                        "fileName": name,
+                        "currentLocation": str(to_p),
+                        "originalLocation": from_p_str,
+                        "deletedAt": pt.get("createdAt"),
+                        "preview5Lines": [
+                            f"📄 파일 이름: {name} ({size_lbl})",
+                            f"📍 원래 위치: {from_p_str or '-'}",
+                            f"🛡️ 현재 상태: {'타임머신 보호 금고 안전 보관 중' if is_shadow else f'{to_p.parent.name} 폴더 보관 중'}",
+                            f"🕰️ 보관 근거: [{pt.get('restoreId')} 복원 기록] ({pt.get('createdAt')})",
+                            "✅ 아래 [원위치/바탕화면 복원] 버튼만 누르면 원래 자리로 바로 복구돼요!",
+                        ],
+                        "elapsedMs": round((time.perf_counter() - t0) * 1000, 1),
+                        "briefingKo": (
+                            f"👻 찾았어요! **[{pt.get('restoreId')} 복원 기록]**에 **{name}** 보호본이 안전하게 남아 있어요 "
+                            f"({pt.get('createdAt')}). 아래 **[↩️ 원위치/바탕화면 복원]** 버튼을 누르시면 원래 자리(`{from_p_str}`)로 1초 만에 복구해 드려요!"
+                        ),
+                        "blackbox": bb,
+                    }
+                )
+                return base
+
+    kw_desc = f"'{', '.join(kws)}'(으)로 " if kws else ""
     base.update(
         {
             "caseType": "CASE_B_NOT_IN_RECYCLE_OR_RESTORE",
             "elapsedMs": round((time.perf_counter() - t0) * 1000, 1),
             "timedOut": bool(rb.get("timedOut")),
             "briefingKo": (
-                f"100% 정직 판정: 내 PC 5대 은닉 금고와 윈도우 휴지통을 모두 스캔했으나 흔적이 없습니다. '{', '.join(kws)}'(으)로 [복원 기록]과 내 휴지통을 확인했지만 찾지 못했습니다. "
-                "귀신같이가 옮기거나 지운 기록도 없습니다. 다른 폴더로 옮겨졌을 수 있으니 [👻 귀신검색]에서 이름으로 검색해 보세요."
+                f"100% 정직 판정: 내 PC 5대 은닉 금고와 윈도우 휴지통을 모두 스캔했으나 흔적이 없습니다. "
+                f"{kw_desc}[복원 기록]과 윈도우 휴지통을 모두 살펴봤지만 현재 휴지통에 남아 있는 지운 파일이 없어요. "
+                "다른 폴더로 옮겨졌을 수 있으니 파일 이름 단서가 있다면 함께 알려주세요!"
             ),
         }
     )
@@ -3813,7 +3923,11 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
         return scan_windows_recycle_bin(q)
 
     if act in ("recycle-restore",):
-        return safe.restore_from_recycle_bin(str(data.get("recycleMetaFile") or data.get("metaFile") or ""))
+        return safe.restore_from_recycle_bin(
+            str(data.get("recycleMetaFile") or data.get("metaFile") or ""),
+            user_prompt=str(data.get("userPrompt") or ""),
+            user_approval_text=str(data.get("userApprovalTypedText") or "").strip(),
+        )
 
     if act in ("recover-copy",):
         return safe.recover_copy_to_desktop(

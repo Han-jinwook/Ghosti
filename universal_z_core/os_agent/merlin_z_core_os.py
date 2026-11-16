@@ -2269,6 +2269,38 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
 
     # [초고속 직결] 문서/파일 기본 뷰어 직접 실행(open_file_direct) 또는 탐색기 /select 위치 표시!
     if action in ("open_file_location", "open_file_search", "open_file_direct") and target_path:
+        if "$recycle.bin" in str(target_path).lower() and action in ("open_file_location", "open_file_search"):
+            attach_thread_to_interactive_desktop()
+            existing_explorers = {w["rawHwnd"] for w in find_explorer_windows_on_default_desktop([])}
+            try:
+                spawn_on_interactive_desktop("explorer.exe shell:RecycleBinFolder", hide_console=False)
+            except Exception:
+                try:
+                    subprocess.Popen("explorer.exe shell:RecycleBinFolder")
+                except Exception:
+                    pass
+            opened_rb: Dict[str, Any] = {}
+            for tick in range(12):
+                time.sleep(0.08)
+                found_rb = find_explorer_windows_on_default_desktop(
+                    ["휴지통", "Recycle Bin"],
+                    exclude_hwnds=existing_explorers if tick < 5 else None,
+                )
+                if found_rb:
+                    opened_rb = found_rb[0]
+                    try:
+                        bring_window_to_front_immediately(opened_rb["rawHwnd"])
+                    except Exception:
+                        pass
+                    break
+            return {
+                "ok": True,
+                "action": action,
+                "targetPath": str(target_path),
+                "openedRecycleBin": True,
+                "windowBroughtToFront": bool(opened_rb),
+                "summaryKo": "윈도우 휴지통 폴더를 열었습니다.",
+            }
         p = Path(target_path)
         if not p.exists():
             fname = p.name

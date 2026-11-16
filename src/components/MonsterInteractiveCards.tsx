@@ -109,27 +109,27 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
 
       {/* 2) 1초 블랙박스 소명 & 5대 은닉 금고 / $Recycle.Bin $I 포렌식 + 5줄 실물 미리보기 */}
       {message.cardKind === 'MISSING_FILE_EXONERATION' && message.missingFilePayload && (
-        <div className="rounded-xl border border-emerald-500/40 bg-slate-900/90 p-3.5 space-y-2.5">
+        <div className="rounded-xl border border-emerald-500/40 bg-slate-900/90 p-3.5 space-y-2.5 text-[13px] overflow-hidden break-words [overflow-wrap:anywhere]">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[11px] font-extrabold">
-              <ShieldCheck className="w-3.5 h-3.5" />
-              실물 증거 미리보기
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[13px] font-extrabold">
+              <ShieldCheck className="w-4 h-4 shrink-0" />
+              5줄 실물 미리보기
             </span>
-            <span className="text-[11px] text-slate-400 font-semibold">
+            <span className="text-[13px] text-slate-400 font-semibold">
               {message.missingFilePayload.deletedAtOrSavedAt}
             </span>
           </div>
 
-          <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2.5 font-mono text-[11px] text-emerald-200 space-y-1">
+          <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-3 text-[13px] text-emerald-200 space-y-1.5">
             {message.missingFilePayload.fiveLinePreview.map((line, i) => (
-              <div key={i} className="whitespace-normal break-words leading-snug">
+              <div key={i} className="whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
                 {line}
               </div>
             ))}
           </div>
 
           <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-2">
               {isMobileVoiceEnvironment() && (
                 <button
                   type="button"
@@ -139,9 +139,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       'sunhi_doc_reader'
                     )
                   }
-                  className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[11px] font-bold flex items-center gap-1 cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[13px] font-bold flex items-center gap-1 cursor-pointer"
                 >
-                  <Volume2 className="w-3.5 h-3.5 text-amber-400" />
+                  <Volume2 className="w-4 h-4 text-amber-400 shrink-0" />
                   👩 음성으로 미리듣기
                 </button>
               )}
@@ -150,16 +150,29 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 <button
                   type="button"
                   onClick={async () => {
-                    const targetPath = message.missingFilePayload!.currentLocation;
-                    onToast?.(`📂 탐색기에서 [${message.missingFilePayload!.fileName}] 위치를 엽니다...`);
-                    const res = await executeRealOsAction('open_file_search', targetPath);
+                    const targetPath =
+                      message.missingFilePayload!.restoredPath ||
+                      message.missingFilePayload!.currentLocation;
+                    const isInRecycleBin =
+                      !message.missingFilePayload!.restored &&
+                      targetPath.toLowerCase().includes('$recycle.bin');
+                    onToast?.(
+                      isInRecycleBin
+                        ? '📂 윈도우 [휴지통] 폴더를 여는 중이에요...'
+                        : `📂 탐색기에서 [${message.missingFilePayload!.fileName}] 위치를 여는 중이에요...`
+                    );
+                    const res = await executeRealOsAction('open_file_location', targetPath);
                     if (res.ok) {
-                      onToast?.(`📂 윈도우 탐색기에서 [${message.missingFilePayload!.fileName}] 폴더를 열었습니다!`);
+                      onToast?.(
+                        isInRecycleBin
+                          ? '📂 윈도우 [휴지통] 폴더를 열었어요!'
+                          : `📂 윈도우 탐색기에서 [${message.missingFilePayload!.fileName}] 폴더를 열었어요!`
+                      );
                     } else {
-                      onToast?.(`⚠️ Z-코어 연결을 확인해 주세요.`);
+                      onToast?.('⚠️ 내 컴퓨터 연결(제트코어) 상태를 확인해 주세요.');
                     }
                   }}
-                  className="px-2.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-[11px] font-extrabold flex items-center gap-1 cursor-pointer shadow"
+                  className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-[13px] font-extrabold flex items-center gap-1 cursor-pointer shadow"
                 >
                   📂 폴더 열기
                 </button>
@@ -181,35 +194,40 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       missingFilePayload: {
                         ...message.missingFilePayload!,
                         restored: res.ok,
-                        approvedTypedText: '응 복구해줘 (버튼 원클릭)',
+                        restoredPath: res.restoredPath,
+                        currentLocation:
+                          res.restoredPath || message.missingFilePayload!.currentLocation,
+                        createdRestoreId: res.restoreId,
+                        approvedTypedText: '원위치 복원 버튼 원클릭',
                         restoreError: res.ok ? undefined : res.message,
                       },
+                      healthRecordIssued: res.healthRecord || message.healthRecordIssued,
                     });
                     onToast?.(res.message);
                   }}
-                  className="px-2.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] font-black flex items-center gap-1 cursor-pointer shadow"
+                  className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[13px] font-black flex items-center gap-1 cursor-pointer shadow"
                 >
-                  ↩️ 원위치/바탕화면 복원
+                  {busyId === 'missing_restore' ? '복원 중...' : '↩️ 원위치/바탕화면 복원'}
                 </button>
               )}
             </div>
 
             {message.missingFilePayload.restored ? (
-              <span className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4" />
-                복구 및 블랙박스 기록 완료
-                {message.missingFilePayload.approvedTypedText
-                  ? ` · 승인 발화: "${message.missingFilePayload.approvedTypedText}"`
+              <span className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[13px] font-extrabold flex items-center gap-1.5 flex-wrap">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                ✅ 원위치 복원 완료
+                {message.missingFilePayload.createdRestoreId
+                  ? ` · [복원 기록 ${message.missingFilePayload.createdRestoreId}]`
                   : ''}
               </span>
             ) : (
-              <div className="rounded-lg bg-slate-950/90 border border-emerald-500/30 px-3 py-1.5 text-[12px] text-emerald-200 font-semibold">
-                ✍️ 채팅창에 <strong>&ldquo;응 복구해줘&rdquo;</strong>라고 입력하거나 위 버튼을 눌러 주세요.
+              <div className="rounded-lg bg-slate-950/90 border border-emerald-500/30 px-3 py-1.5 text-[13px] text-emerald-200 font-semibold">
+                ✍️ 위 <strong>[↩️ 원위치/바탕화면 복원]</strong> 버튼을 누르거나 채팅창에 <strong>&ldquo;응 복구해줘&rdquo;</strong>라고 입력해 보세요!
               </div>
             )}
           </div>
           {message.missingFilePayload.restoreError && (
-            <div className="text-[11px] font-bold text-rose-300">{message.missingFilePayload.restoreError}</div>
+            <div className="text-[13px] font-bold text-rose-300">{message.missingFilePayload.restoreError}</div>
           )}
         </div>
       )}
@@ -401,11 +419,11 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         const hiddenCount = Math.max(0, filteredPts.length - visiblePts.length);
 
         return (
-          <div className="rounded-xl border border-violet-500/40 bg-slate-900/90 p-3.5 space-y-2.5">
-            <div className="text-xs font-extrabold text-violet-200 flex items-center justify-between flex-wrap gap-2">
+          <div className="rounded-xl border border-violet-500/40 bg-slate-900/90 p-3.5 space-y-2.5 text-[13px] overflow-hidden break-words [overflow-wrap:anywhere]">
+            <div className="text-[13px] font-extrabold text-violet-200 flex items-center justify-between flex-wrap gap-2">
               <span>🕰️ [복원 기록] 히스토리 (총 {message.restorePoints.length}건)</span>
-              <span className="text-[11px] text-violet-300 font-semibold">
-                ✍️ 채팅창에 &ldquo;1번 복원해줘&rdquo;(또는 &ldquo;#번호&rdquo;)를 타이핑해 선택
+              <span className="text-[13px] text-violet-300 font-semibold">
+                ✍️ 버튼 클릭 또는 &ldquo;1번 복원해줘&rdquo; 입력
               </span>
             </div>
 
@@ -415,22 +433,22 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 value={restoreFilterText}
                 onChange={(e) => setRestoreFilterText(e.target.value)}
                 placeholder="🔍 복원 지점이 많을 땐 번호(#12)·날짜·작업명으로 바로 검색..."
-                className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-[11px] text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500/50"
+                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-[13px] text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500/50"
               />
             )}
 
-            <div className="space-y-2 max-h-64 overflow-y-auto pr-0.5">
+            <div className="space-y-2 max-h-72 overflow-y-auto pr-0.5">
               {visiblePts.map((pt) => (
                 <div
                   key={pt.restoreId}
-                  className="rounded-lg bg-slate-950/90 border border-slate-800 p-2.5 space-y-1.5"
+                  className="rounded-lg bg-slate-950/90 border border-slate-800 p-3 space-y-1.5"
                 >
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <span className="text-xs font-black text-white">
+                    <span className="text-[13px] font-black text-white break-words [overflow-wrap:anywhere]">
                       [{pt.restoreId}] {pt.summary}
                     </span>
                     <span
-                      className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
+                      className={`px-2.5 py-0.5 rounded-full text-[13px] font-extrabold ${
                         pt.integrityStatus === 'FULL_RESTORABLE'
                           ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
                           : pt.integrityStatus === 'PARTIAL_RESTORABLE'
@@ -441,20 +459,16 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       {pt.statusBadge}
                     </span>
                   </div>
-                  <p className="text-[11px] text-slate-400">{pt.precheckGuideMessage}</p>
+                  <p className="text-[13px] text-slate-300 leading-snug">{pt.precheckGuideMessage}</p>
                   <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
-                    <span className="text-[10px] text-slate-500">{pt.createdAt}</span>
+                    <span className="text-[13px] text-slate-400">{pt.createdAt}</span>
                     {pt.rolledBack ? (
-                      <span className="text-xs font-extrabold text-emerald-400 flex items-center gap-1">
-                        <CheckCircle2 className="w-3.5 h-3.5" />
-                        원위치 복원 및 블랙박스 기록 완료
-                        {pt.rollbackTypedText ? ` · "${pt.rollbackTypedText}"` : ''}
+                      <span className="text-[13px] font-extrabold text-emerald-400 flex items-center gap-1">
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        원위치 복원 완료
                       </span>
                     ) : (
                       <div className="flex items-center gap-2 flex-wrap">
-                        <span className="text-[11px] text-violet-300 font-semibold">
-                          선택 타이핑: <code>&ldquo;{pt.restoreId.replace('#', '')}번 복원해줘&rdquo;</code>
-                        </span>
                         <button
                           type="button"
                           disabled={busyId === `rb-${pt.restoreId}`}
@@ -480,7 +494,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                             }
                             onToast?.(res.message);
                           }}
-                          className="px-2.5 py-1 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[11px] font-extrabold cursor-pointer shadow-xs transition"
+                          className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[13px] font-extrabold cursor-pointer shadow-xs transition"
                         >
                           {busyId === `rb-${pt.restoreId}`
                             ? '복원 중...'
@@ -497,7 +511,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               <button
                 type="button"
                 onClick={() => setShowAllRestorePoints((v) => !v)}
-                className="w-full py-1.5 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[11px] font-bold text-violet-300 transition"
+                className="w-full py-2 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[13px] font-bold text-violet-300 transition cursor-pointer"
               >
                 {showAllRestorePoints
                   ? '▴ 최근 3건만 심플하게 보기'

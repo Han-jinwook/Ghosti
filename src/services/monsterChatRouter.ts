@@ -176,6 +176,8 @@ export interface MonsterMissingFilePayload {
   fiveLinePreview: string[];
   briefingKo: string;
   restored?: boolean;
+  restoredPath?: string;
+  createdRestoreId?: string;
   approvedTypedText?: string;
   restoreError?: string;
 }
@@ -1158,31 +1160,64 @@ export async function executeMissingFileRecovery(
 ): Promise<{
   ok: boolean;
   message: string;
+  restoreId?: string;
+  restoredPath?: string;
+  healthRecord?: DigitalHealthCheckRecord;
 }> {
   if (payload.caseType === 'CASE_A_USER_APPROVED_RESTORE_POINT' && payload.restoreId) {
     const res = await executeRestorePointRollback(payload.restoreId, userTypedText);
-    return { ok: res.ok, message: res.message };
+    return {
+      ok: res.ok,
+      message: res.message,
+      restoreId: res.restoreId || payload.restoreId,
+      restoredPath: payload.originalLocation || undefined,
+    };
   }
   if (payload.caseType === 'CASE_B_FOUND_IN_RECYCLE_BIN' && payload.recycleMetaFile) {
-    const r = await zcoreJson<{ ok: boolean; restoredPath?: string; renamed?: boolean; error?: string }>(
+    const r = await zcoreJson<{
+      ok: boolean;
+      restoreId?: string;
+      restoredPath?: string;
+      renamed?: boolean;
+      error?: string;
+    }>(
       '/__zcore/recycle-restore',
-      postJson({ recycleMetaFile: payload.recycleMetaFile, userApprovalTypedText: userTypedText })
+      postJson({
+        recycleMetaFile: payload.recycleMetaFile,
+        userPrompt: payload.query || '방금 지운 파일 찾아줘',
+        userApprovalTypedText: userTypedText,
+      })
     );
     if (!r.ok) return { ok: false, message: `⚠️ ${r.error}` };
-    if (!r.data?.ok) return { ok: false, message: `⚠️ 복원하지 못했습니다: ${r.data?.error || '알 수 없는 오류'}` };
+    if (!r.data?.ok) return { ok: false, message: `⚠️ 복원하지 못했어요: ${r.data?.error || '알 수 없는 오류'}` };
     const renamedNote = r.data.renamed ? ' (같은 이름 파일이 있어 새 이름으로 복원)' : '';
-    return { ok: true, message: `✅ 휴지통에서 [${r.data.restoredPath}]로 복원했습니다${renamedNote}.` };
+    const restoreId = r.data.restoreId || '#1';
+    const restoredPath = r.data.restoredPath || payload.originalLocation;
+    const msg = `✅ 휴지통에서 [${restoredPath}] 위치로 안전하게 복원했어요${renamedNote}! ([${restoreId} 복원 기록]에 등록 완료)`;
+    const healthRecord = appendLocalHealthCheckRecord({
+      category: '↩️ 복원 기록',
+      title: `휴지통 '${payload.fileName}' 원위치 복원`,
+      reclaimedSizeLabel: '원위치 1초 복원 완료',
+      cleanedItemCount: 1,
+      securityPluginsFrozen: 0,
+      speedUpSummary: msg,
+      restoreId,
+    });
+    return { ok: true, message: msg, restoreId, restoredPath, healthRecord };
   }
   if (payload.caseType === 'CASE_C_OFFICE_AUTORECOVER' && payload.recoverFullPath) {
-    const r = await zcoreJson<{ ok: boolean; recoveredPath?: string; message?: string; error?: string }>(
+    const r = await zcoreJson<{ ok: boolean; restoreId?: string; recoveredPath?: string; message?: string; error?: string }>(
       '/__zcore/recover-copy',
       postJson({ fullPath: payload.recoverFullPath, userPrompt: payload.query, userApprovalTypedText: userTypedText })
     );
     if (!r.ok) return { ok: false, message: `⚠️ ${r.error}` };
-    if (!r.data?.ok) return { ok: false, message: `⚠️ 복구본을 만들지 못했습니다: ${r.data?.error || '알 수 없는 오류'}` };
-    return { ok: true, message: `✅ ${r.data.message || `바탕화면에 복구본을 만들었습니다: ${r.data.recoveredPath}`}` };
+    if (!r.data?.ok) return { ok: false, message: `⚠️ 복구본을 만들지 못했어요: ${r.data?.error || '알 수 없는 오류'}` };
+    const restoreId = r.data.restoreId || '#1';
+    const recoveredPath = r.data.recoveredPath;
+    const msg = `✅ ${r.data.message || `바탕화면에 복구본을 만들었어요: ${recoveredPath}`}`;
+    return { ok: true, message: msg, restoreId, restoredPath: recoveredPath };
   }
-  return { ok: false, message: '⚠️ 이 항목은 자동 복구 경로 정보가 없어 복구할 수 없습니다.' };
+  return { ok: false, message: '⚠️ 이 항목은 자동 복구 경로 정보가 없어 복구할 수 없어요.' };
 }
 
 // ---------------------------------------------------------------------------
@@ -2317,38 +2352,58 @@ export async function processUnifiedMonsterChatQuery(params: {
 
   // 0-0A) [자연어 타이핑 승인 인터셉터 (0 토큰 · 블랙박스 영구 기록)]
   // 대기 중인 미리보기 카드(폴더 정리 / 바로가기 생성 / 사라진 파일 복구)가 있을 때 유저가 자연스러운 긍정/승인 발화를 타이핑하면 즉시 실행 후 블랙박스에 기록합니다.
+  const recentTwoAssistantIds = new Set(
+    sharedChatState.messages
+      .filter((m) => m.role === 'assistant')
+      .slice(-2)
+      .map((m) => m.id)
+  );
   const pendingApprovalMsg = [...sharedChatState.messages]
     .reverse()
     .find(
       (m) =>
-        (m.cleanupPreview && !m.cleanupPreview.approved) ||
-        (m.shortcutPreview && !m.shortcutPreview.approved) ||
-        (m.missingFilePayload && !m.missingFilePayload.restored) ||
-        (m.cardKind === 'PC_SPEC_CONSULTATION' &&
-          m.pcSpecPayload &&
-          !m.pcSpecPayload.bloatwareCleaned) ||
-        (m.cardKind === 'DEVICE_REPAIR_GATE' &&
-          m.deviceRepairPayload &&
-          !m.deviceRepairPayload.executed) ||
-        (m.cardKind === 'WEEKLY_CARE_BRIEFING' &&
-          m.proactiveCareBriefing &&
-          !m.proactiveCareBriefing.executed) ||
-        (m.cardKind === 'DEEP_UNINSTALL_GATE' &&
-          m.deepUninstallPayload &&
-          !m.deepUninstallPayload.executed)
+        recentTwoAssistantIds.has(m.id) &&
+        ((m.cleanupPreview && !m.cleanupPreview.approved) ||
+          (m.shortcutPreview && !m.shortcutPreview.approved) ||
+          (m.missingFilePayload && !m.missingFilePayload.restored) ||
+          (m.cardKind === 'PC_SPEC_CONSULTATION' &&
+            m.pcSpecPayload &&
+            !m.pcSpecPayload.bloatwareCleaned) ||
+          (m.cardKind === 'DEVICE_REPAIR_GATE' &&
+            m.deviceRepairPayload &&
+            !m.deviceRepairPayload.executed) ||
+          (m.cardKind === 'WEEKLY_CARE_BRIEFING' &&
+            m.proactiveCareBriefing &&
+            !m.proactiveCareBriefing.executed) ||
+          (m.cardKind === 'DEEP_UNINSTALL_GATE' &&
+            m.deepUninstallPayload &&
+            !m.deepUninstallPayload.executed))
+    );
+
+  const isPendingMissingFileRestoreApprove =
+    Boolean(pendingApprovalMsg?.missingFilePayload && !pendingApprovalMsg.missingFilePayload.restored) &&
+    !/복원\s*기록|복원\s*지점|히스토리|바로가기|찾아\s*줘|찾아\s*주세요/i.test(clean) &&
+    clean.length <= 50 &&
+    /^(응|네|예|그래|좋아|바로|당장)?\s*(원위치로\s*|원래\s*자리로\s*|바탕화면으로\s*)?(복구|복원|되돌려|살려)\s*(해\s*)?(줘|주세요|라|할래)?[.!~]*$/i.test(
+      clean
     );
 
   const isNegationOrRollback =
+    !isPendingMissingFileRestoreApprove &&
     /아니|안\s*해|하지\s*마|취소|보류|멈춰|잠깐|그만|싫어|놔둬|나중에|되돌려|되돌리|원복|원래대로/i.test(clean);
+  const isNewIndependentTopicInConsent =
+    /바로가기|아이콘\s*만들|방금\s*지운|복원\s*기록|히스토리|사양|스펙|부팅\s*경과|시작\s*프로그램/i.test(clean);
   const isNaturalAffirmativeConsent =
-    !isNegationOrRollback &&
-    clean.length <= 60 &&
-    (/^(응|네|예|그래|좋아|오케이|ok|okay|ㅇㅇ|ㅇㅋ|콜|고고|진행|실행|승인|동의|확인|그대로|부탁|당장|바로|해\s*줘|해\s*주세요|해라|하자)(\s|$|[.!~,])/i.test(
-      clean
-    ) ||
-      /진행해|실행해|승인할|동의할|그대로\s*(해|진행|실행|부탁)|정리해\s*(줘|주세요|라)?|치워\s*(줘|주세요|라)?|옮겨\s*(줘|주세요|라)?|만들어\s*(줘|주세요|라)?|복구해\s*(줘|주세요|라)?|꺼\s*(줘|주세요|라)?|고쳐\s*(줘|주세요|라)?|해결해\s*(줘|주세요|라)?|최적화해\s*(줘|주세요|라)?|적출해\s*(줘|주세요|라)?|삭제해\s*(줘|주세요|라)?|지워\s*(줘|주세요|라)?|뽑아\s*(줘|주세요|라)?/i.test(
+    isPendingMissingFileRestoreApprove ||
+    (!isNegationOrRollback &&
+      !isNewIndependentTopicInConsent &&
+      clean.length <= 60 &&
+      (/^(응|네|예|그래|좋아|오케이|ok|okay|ㅇㅇ|ㅇㅋ|콜|고고|진행|실행|승인|동의|확인|그대로|부탁|당장|바로|해\s*줘|해\s*주세요|해라|하자)(\s|$|[.!~,])/i.test(
         clean
-      ));
+      ) ||
+        /진행해|실행해|승인할|동의할|그대로\s*(해|진행|실행|부탁)|정리해\s*(줘|주세요|라)?|치워\s*(줘|주세요|라)?|옮겨\s*(줘|주세요|라)?|만들어\s*(줘|주세요|라)?|복구해\s*(줘|주세요|라)?|복원해\s*(줘|주세요|라)?|꺼\s*(줘|주세요|라)?|고쳐\s*(줘|주세요|라)?|해결해\s*(줘|주세요|라)?|최적화해\s*(줘|주세요|라)?|적출해\s*(줘|주세요|라)?|삭제해\s*(줘|주세요|라)?|지워\s*(줘|주세요|라)?|뽑아\s*(줘|주세요|라)?/i.test(
+          clean
+        )));
 
   if (pendingApprovalMsg && isNaturalAffirmativeConsent) {
     if (pendingApprovalMsg.cleanupPreview && !pendingApprovalMsg.cleanupPreview.approved) {
@@ -2424,18 +2479,27 @@ export async function processUnifiedMonsterChatQuery(params: {
                 missingFilePayload: {
                   ...m.missingFilePayload,
                   restored: res.ok,
+                  restoredPath: res.restoredPath,
+                  currentLocation: res.restoredPath || m.missingFilePayload.currentLocation,
+                  createdRestoreId: res.restoreId,
                   approvedTypedText: clean,
                   restoreError: res.ok ? undefined : res.message,
                 },
+                healthRecordIssued: res.healthRecord || m.healthRecordIssued,
               }
             : m
         )
       );
       const msgText = res.ok
-        ? `${res.message}\n📋 **블랙박스 복구 승인 기록 완료** — 승인 발화: \`"${clean}"\``
+        ? `${res.message}\n📋 **블랙박스 복구 승인 기록 완료** — 승인 발화: \`"${clean}"\`${
+            res.restoreId ? ` · 복원 번호: \`${res.restoreId}\`` : ''
+          }`
         : res.message;
-      speak(res.ok ? '승인 말씀이 블랙박스에 기록되었으며 파일을 복구했습니다.' : res.message);
-      return reply(sourceTab, msgText);
+      speak(res.ok ? '승인 말씀이 블랙박스에 기록되었으며 파일을 원래 자리로 복구했어요.' : res.message);
+      return reply(sourceTab, msgText, {
+        healthRecordIssued: res.healthRecord,
+        followUpSuggestions: ['최근 복원 기록 보여줘', '바탕화면 정리할 거 봐줘'],
+      });
     }
 
     if (
@@ -3000,7 +3064,14 @@ export async function processUnifiedMonsterChatQuery(params: {
 
   // 번호를 아직 지정하지 않고 "복원해줘", "원래대로 되돌려줘", "복원지점 보여줘"라고 말한 경우:
   // 즉시 복원 히스토리 목록(#1, #2...)을 먼저 보여주고 몇 번을 복원할지 타이핑하게 안내합니다 (LLM 토큰 0원!).
+  // 단, "방금 지운 파일 되돌려줘", "휴지통에 넣은 파일 복원해줘"처럼 지운/휴지통 실물 파일을 찾는 요청은
+  // 아래 2) 휴지통($Recycle.Bin)·실종 파일 추적 엔진이 직접 스캔하도록 통과시킵니다!
+  const hasExplicitRecycleOrDeletedFileCue =
+    !/복원\s*기록|복원\s*지점|히스토리/i.test(clean) &&
+    /지운|지웠|지워진|삭제|버린|버렸|휴지통|사라진|사라졌|없어진|없어졌|날아간|날아갔/i.test(clean);
+
   const isGeneralRestoreRequest =
+    !hasExplicitRecycleOrDeletedFileCue &&
     /복원\s*기록|복원\s*지점|되돌려|되돌리|원복|원래대로|(방금|아까|최근|이전).*?(취소|복원|복구|되돌|원복)|(정리한\s*거|치운\s*거|옮긴\s*거|만든\s*거).*?(취소|복원|복구|되돌|원복)/i.test(
       clean
     );
@@ -3008,17 +3079,24 @@ export async function processUnifiedMonsterChatQuery(params: {
   if (isGeneralRestoreRequest) {
     const { points, error } = await fetchRestorePointsWithPrecheck();
     if (error) {
-      speak('Z-코어에 연결되지 않아 복원 기록을 불러오지 못했습니다.');
+      speak('Z-코어에 연결되지 않아 복원 기록을 불러오지 못했어요.');
       return reply(sourceTab, `⚠️ ${error}`);
     }
     if (points.length === 0) {
-      speak('아직 저장된 복원 기록이 없습니다.');
+      speak('아직 저장된 복원 기록이 없어요.');
       return reply(
         sourceTab,
-        '🕰️ 아직 저장된 [복원 기록]이 없습니다. 폴더 정리나 바로가기 생성을 승인해 실행하시면 번호별 복원 지점이 이곳에 기록됩니다.'
+        '🕰️ 아직 저장된 **[복원 기록]**이 없어요! 바로가기 만들기·폴더 정리·휴지통 파일 복원을 실행하시면 번호별 복원 지점이 이곳에 차곡차곡 기록돼요.',
+        {
+          followUpSuggestions: [
+            '방금 지운 파일 찾아줘',
+            '유튜브 바탕화면 바로가기 만들어줘',
+          ],
+        }
       );
     }
-    // 복원지점이 수십 개일 때 유저가 특정 키워드(예: "바탕화면 복원 기록", "설치파일 복원")를 언급했으면 해당 기록을 최상단으로 배치
+    // 복원지점이 많을 때 특정 키워드(예: "바탕화면 복원 기록", "유튜브 복원 기록")를 언급했으면 해당 기록 우선,
+    // 일반 조회("최근 복원 기록 보여줘")는 방금 실행한 최신 기록(#N)이 맨 위(1순위)에 오도록 시간순 그대로 유지!
     const filterKwMatch = clean
       .replace(
         /방금|아까|최근|이전|지운|삭제한|영구삭제한|사라진|파일|문서|복원|복구|기록|지점|히스토리|목록|보여|줘|주세요|알려|원래대로|되돌려|원복|취소|해|할래/g,
@@ -3031,23 +3109,24 @@ export async function processUnifiedMonsterChatQuery(params: {
             ...points.filter((p) => p.summary.includes(filterKwMatch) || p.userPrompt.includes(filterKwMatch)),
             ...points.filter((p) => !p.summary.includes(filterKwMatch) && !p.userPrompt.includes(filterKwMatch)),
           ]
-        : [
-            ...points.filter((p) => p.summary.includes('영구삭제') || p.summary.includes('타임머신')),
-            ...points.filter((p) => !p.summary.includes('영구삭제') && !p.summary.includes('타임머신')),
-          ];
+        : points;
 
     const countGuide =
       sortedPoints.length > 3
-        ? `총 ${sortedPoints.length}건 중 **가장 최근 3건**을 먼저 보여드립니다 (이전 기록은 카드 하단 **[▾ 더 보기]**로 펼칠 수 있습니다).`
-        : `총 ${sortedPoints.length}건의 복원 지점이 있습니다.`;
+        ? `총 ${sortedPoints.length}건 중 **가장 최근 3건**을 먼저 보여드릴게요! (이전 기록은 카드 하단 **[▾ 이전 복원 기록 더 보기]**로 펼칠 수 있어요)`
+        : `총 ${sortedPoints.length}건의 복원 기록이 있어요!`;
 
-    speak(`복원 기록 ${sortedPoints.length}건을 확인했습니다. 되돌릴 번호를 입력해 주세요.`);
+    speak(`복원 기록 ${sortedPoints.length}건을 확인했어요. 되돌리기 버튼을 누르거나 번호를 말씀해 주세요.`);
     return reply(
       sourceTab,
-      `🕰️ **[복원 기록] 히스토리 조회** — ${countGuide}\n어느 시점으로 되돌릴까요? 채팅창에 **"1번 복원해줘"** (또는 **"#1"**)처럼 번호를 타이핑해 주세요.`,
+      `🕰️ **[복원 기록] 히스토리 조회** — ${countGuide}\n아래 카드에서 **[↩️ 원래대로 되돌리기 (1초 복원)]** 버튼을 바로 누르시거나, 채팅창에 **"1번 복원해줘"**처럼 입력해 주세요!`,
       {
         cardKind: 'RESTORE_POINTS_LIST',
         restorePoints: sortedPoints,
+        followUpSuggestions: [
+          '1번 복원해줘',
+          '방금 지운 파일 찾아줘',
+        ],
       }
     );
   }
@@ -3494,7 +3573,7 @@ export async function processUnifiedMonsterChatQuery(params: {
   const earlySearchIntent = detectZeroLlmPerspectiveSearchIntent(clean);
   if (
     earlySearchIntent.isSimpleSearchIntent &&
-    !/프린터|와이파이|블루투스|소리|스피커|글씨|광고|팝업|고쳐|사라졌|없어졌|날아갔|휴지통|정리|치워|복원|복구|사양|스펙|부팅|재부팅|경과|켜\s*둔|진단|점검|시작\s*프로그램|자동\s*실행|보안|백신|디펜더|바이러스|랜섬웨어|온보딩|문의방|상용구|복사\s*기록|실적|보고서/i.test(
+    !/프린터|와이파이|블루투스|소리|스피커|글씨|광고|팝업|고쳐|사라졌|사라진|없어졌|없어진|날아갔|날아간|지운|지웠|지워진|삭제|버린|버렸|증발|어디\s*갔|못\s*찾겠|저장\s*안\s*하고|휴지통|정리|치워|복원|복구|되돌|사양|스펙|부팅|재부팅|경과|켜\s*둔|진단|점검|시작\s*프로그램|자동\s*실행|보안|백신|디펜더|바이러스|랜섬웨어|온보딩|문의방|상용구|복사\s*기록|실적|보고서/i.test(
       clean
     )
   ) {
@@ -3567,7 +3646,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     isDirectSlowOrAdwareFix ||
     /복원\s*기록|히스토리|되돌려|원래대로|타임머신|정리한\s*거\s*취소|#\d+/i.test(clean) ||
     isSyntheticMissingTest ||
-    /없어졌|사라졌|증발|지웠|날아갔|어디\s*갔|휴지통|복구해|못\s*찾겠|저장\s*안\s*하고/i.test(clean) ||
+    /없어졌|없어진|사라졌|사라진|증발|지웠|지운|지워진|삭제한|삭제된|삭제했|버린|버렸|날아갔|날아간|어디\s*갔|휴지통|복구해|못\s*찾겠|저장\s*안\s*하고/i.test(clean) ||
     /바로가기|바탕화면에\s*꺼내|아이콘\s*만들|자주\s*가는\s*(카페|사이트|유튜브|은행)/i.test(clean) ||
     (!isSpeedOrStatusQuestionFastCheck &&
       /바탕화면|다운로드|폴더|정리|치워|숨겨|설치\s*파일|apk|exe|msi|보안\s*프로그램|구라제거|anysign|magicline|veraport|touchen|부팅\s*느려|시작\s*프로그램|자동\s*실행/i.test(
@@ -3742,7 +3821,10 @@ export async function processUnifiedMonsterChatQuery(params: {
     llmDecision?.intent === 'OFFICE_CRASH_RECOVER' ||
     llmDecision?.zCoreCommand?.endpoint === '/__zcore/omni-trace' ||
     llmDecision?.zCoreCommand?.endpoint === '/__zcore/forensic-scan' ||
-    (!hasLlm && /없어졌|사라졌|증발|지웠|날아갔|어디\s*갔|휴지통|복구해|못\s*찾겠|저장\s*안\s*하고/i.test(clean))
+    (!hasLlm &&
+      /없어졌|없어진|사라졌|사라진|증발|지웠|지운|지워진|삭제한|삭제된|삭제했|버린|버렸|날아갔|날아간|어디\s*갔|휴지통|복구해|못\s*찾겠|저장\s*안\s*하고/i.test(
+        clean
+      ))
   ) {
     const verdictHeader = '100% 정직 판정: 내 PC 5대 은닉 금고와 윈도우 휴지통을 모두 스캔했으나 흔적이 없습니다.';
     const isOfficeCrash =
@@ -3816,9 +3898,10 @@ export async function processUnifiedMonsterChatQuery(params: {
       deletedAt?: string;
       restoreId?: string;
       recycleMetaFile?: string;
+      preview5Lines?: string[];
       briefingKo?: string;
       keywords?: string[];
-    }>('/__zcore/omni-trace', postJson({ query: traceQuery }), 2500);
+    }>('/__zcore/omni-trace', postJson({ query: traceQuery }), 3500);
     const d = r.ok ? r.data : undefined;
     if (
       !isSyntheticMissingTest &&
@@ -3826,6 +3909,20 @@ export async function processUnifiedMonsterChatQuery(params: {
       (d.caseType === 'CASE_A_USER_APPROVED_RESTORE_POINT' || d.caseType === 'CASE_B_FOUND_IN_RECYCLE_BIN') &&
       d.fileName
     ) {
+      const previewLines =
+        Array.isArray(d.preview5Lines) && d.preview5Lines.length > 0
+          ? d.preview5Lines.slice(0, 5)
+          : [
+              `📄 파일 이름: ${d.fileName}`,
+              `📍 원래 위치: ${d.originalLocation || '-'}`,
+              d.caseType === 'CASE_A_USER_APPROVED_RESTORE_POINT'
+                ? `📂 현재 위치: ${d.currentLocation || '-'}`
+                : `🗑️ 현재 상태: 윈도우 휴지통 보관 중 (삭제 시각: ${d.deletedAt || '-'})`,
+              d.caseType === 'CASE_A_USER_APPROVED_RESTORE_POINT'
+                ? `🕰️ 보관 근거: [${d.restoreId} 복원 기록]`
+                : '📦 파일 내용 손상 없이 안전하게 보관되어 있어요!',
+              '✅ 아래 [원위치/바탕화면 복원] 버튼만 누르면 원래 자리에 바로 복구돼요!',
+            ];
       const payload: MonsterMissingFilePayload = {
         query: clean,
         caseType: d.caseType,
@@ -3835,27 +3932,26 @@ export async function processUnifiedMonsterChatQuery(params: {
         deletedAtOrSavedAt: d.deletedAt || '',
         restoreId: d.restoreId,
         recycleMetaFile: d.recycleMetaFile,
-        fiveLinePreview: [
-          `파일명: ${d.fileName}`,
-          `현재 위치: ${d.currentLocation || '-'}`,
-          `원래 위치: ${d.originalLocation || '-'}`,
-          d.caseType === 'CASE_A_USER_APPROVED_RESTORE_POINT'
-            ? `근거: [${d.restoreId} 복원 기록] (유저 승인 이력)`
-            : `근거: 내 휴지통 $I 기록 해독 (삭제 시각 ${d.deletedAt || '-'})`,
-        ],
+        fiveLinePreview: previewLines,
         briefingKo: `${llmIntro}${d.briefingKo || ''}`,
       };
-      speak('파일이 있는 위치를 찾았습니다. 확인하시고 복구해달라고 입력해 주세요.');
+      speak('방금 지운 파일이 있는 위치를 찾았어요. 미리보기를 확인하시고 원위치 복원 버튼을 눌러 주세요.');
       return reply(sourceTab, payload.briefingKo, {
         cardKind: 'MISSING_FILE_EXONERATION',
         missingFilePayload: payload,
         llmActionJson: actionJson,
-        followUpSuggestions: defaultFollowUps,
+        followUpSuggestions: defaultFollowUps || [
+          '응 복구해줘',
+          '최근 복원 기록 보여줘',
+        ],
       });
     }
 
     // 휴지통/복원기록에 없더라도 내 PC 5대 은닉 금고(문서·다운로드·자동복구·서류함) 3초 포렌식 스캔 시도
-    if (!isSyntheticMissingTest) {
+    // 단, 명시적으로 '지운/휴지통' 파일을 물었는데 키워드 단서가 없고 휴지통이 비어 있다면 엉뚱한 일반 파일을 대신 띄우지 않음!
+    const isExplicitRecycleOnlyNoKeyword =
+      /지운|지웠|지워진|삭제|버린|버렸|휴지통/i.test(clean) && (!d?.keywords || d.keywords.length === 0);
+    if (!isSyntheticMissingTest && !isExplicitRecycleOnlyNoKeyword) {
       const fKeyword = d?.keywords?.[0] || (/계약서/.test(clean) ? '계약서' : '');
       const fRes = await zcoreJson<{
         ok: boolean;

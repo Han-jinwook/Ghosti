@@ -377,7 +377,12 @@ def send_to_recycle_bin(path: Path) -> Dict[str, Any]:
     }
 
 
-def restore_from_recycle_bin(meta_file: str) -> Dict[str, Any]:
+def restore_from_recycle_bin(
+    meta_file: str,
+    user_prompt: str = "",
+    user_approval_text: str = "",
+    record_restore_point: bool = True,
+) -> Dict[str, Any]:
     """현재 사용자 휴지통의 $I 메타파일을 해독해 $R 실물을 원래 위치로 되돌린다(덮어쓰기 금지)."""
     mf = Path(meta_file or "")
     if not mf.name.startswith("$I"):
@@ -397,8 +402,33 @@ def restore_from_recycle_bin(meta_file: str) -> Dict[str, Any]:
         mf.unlink()
     except Exception:
         pass
+
+    restore_id = ""
+    if record_restore_point:
+        try:
+            orig_name = Path(meta["originalPath"]).name
+            op = {
+                "op": "RECYCLE_RESTORE",
+                "name": target.name,
+                "fromPath": meta["originalPath"],
+                "toPath": str(target),
+                "sizeBytes": int(target.stat().st_size) if target.exists() else int(meta.get("sizeBytes", 0)),
+                "hash": quick_hash(target),
+            }
+            pt = add_restore_point(
+                f"휴지통 '{orig_name}' 원위치 복원",
+                user_prompt or "방금 지운 파일 찾아줘",
+                f"윈도우 휴지통 → {target}",
+                [op],
+                user_approval_text=user_approval_text or "원위치 복원 승인",
+            )
+            restore_id = str(pt.get("restoreId") or "")
+        except Exception:
+            restore_id = ""
+
     return {
         "ok": True,
+        "restoreId": restore_id,
         "restoredPath": str(target),
         "originalPath": meta["originalPath"],
         "renamed": str(target).lower() != meta["originalPath"].lower(),
@@ -471,7 +501,7 @@ def restore_photos(names: List[str]) -> Dict[str, Any]:
             if not meta_file:
                 errors.append({"file": name, "error": "휴지통 위치를 확인하지 못해 자동 복원할 수 없습니다. 휴지통에서 직접 복원해 주세요."})
                 continue
-            res = restore_from_recycle_bin(meta_file)
+            res = restore_from_recycle_bin(meta_file, record_restore_point=False)
             if not res.get("ok"):
                 errors.append({"file": name, "error": str(res.get("error"))})
                 continue
@@ -752,12 +782,25 @@ def sync_desktop_timemachine_snapshot() -> None:
                 _write_json_list_atomic(RESTORE_POINTS_FILE, points)
 
         # 2) 이전에 바탕화면에 있었는데 지금 사라진 파일(Shift+Delete 영구삭제 등) 감지 → restore_points.json 자동 등재
+        #    단, 일반 삭제(Delete)로 현재 윈도우 휴지통($Recycle.Bin)에 정상 보관 중인 파일은 휴지통 추적(CASE_B)이 전담하므로
+        #    '영구삭제(Shift+Delete)'로 잘못 중복 등재하지 않는다.
         points = load_restore_points()
+        recycle_orig_paths: Optional[set] = None
         for orig_path, meta in list(prev_index.items()):
             orig_p = Path(orig_path)
             shadow_p = Path(str(meta.get("shadowPath") or ""))
             fname = str(meta.get("name") or orig_p.name)
             if orig_p.exists() or not shadow_p.exists():
+                continue
+            if recycle_orig_paths is None:
+                try:
+                    rb_now = scan_user_recycle_bin([], max_results=200, deadline_sec=1.5)
+                    recycle_orig_paths = {
+                        str(it.get("originalPath") or "").lower() for it in (rb_now.get("items") or [])
+                    }
+                except Exception:
+                    recycle_orig_paths = set()
+            if str(orig_p).lower() in recycle_orig_paths:
                 continue
 
             # 이미 활성(미복원) SHADOW_PROTECT 복원 기록이 있는지 확인 (있더라도 최신 해시/크기로 동기화)
@@ -854,7 +897,7 @@ def rollback_restore_point(restore_id: str, user_rollback_text: str = "") -> Dic
             from_p = Path(str(op.get("fromPath", "")))
             name = str(op.get("name") or to_p.name)
             try:
-                if kind in ("CREATE_SHORTCUT", "CREATE_COPY"):
+                if kind in ("CREATE_SHORTCUT", "CREATE_COPY", "RECYCLE_RESTORE"):
                     # 만들어 둔 파일만 지운다: 기록된 해시와 다르면(유저가 수정) 건드리지 않음 → 휴지통으로 이동
                     if to_p.exists() and (not op.get("hash") or quick_hash(to_p) == op.get("hash")):
                         res = send_to_recycle_bin(to_p)
