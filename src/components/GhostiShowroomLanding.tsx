@@ -1202,11 +1202,12 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 type="button"
                 onClick={() => onEnterWorkspace(true)}
                 title="귀신비서 방으로 돌아가기"
-                className="px-2.5 sm:px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-[#00F0B5] border-2 border-[#00F0B5]/60 text-[13px] font-black shadow-[0_0_16px_rgba(0,240,181,0.2)] transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
+                className="px-2.5 sm:px-3.5 py-2 rounded-xl border-2 text-[12px] sm:text-[13px] font-black shadow-sm hover:opacity-90 transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
               >
                 <span>👻</span>
                 <span className="hidden sm:inline">귀신비서 방으로 돌아가기 ➔</span>
-                <span className="sm:hidden">➔</span>
+                <span className="sm:hidden">본 웹 ➔</span>
               </button>
             )}
 

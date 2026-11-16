@@ -1346,20 +1346,21 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         </span>
       </div>
 
-      {/* 1. 상단 슬림 원복 안내 + 우측 상단 [🕰️ 복원 기록] 원클릭 버튼 */}
-      <div className="px-3.5 py-2 bg-emerald-50/60 dark:bg-emerald-950/25 border-b border-emerald-200 dark:border-emerald-500/20 flex items-center justify-between gap-2 text-[12px] text-emerald-900 dark:text-emerald-200">
-        <div className="flex items-center gap-1.5 min-w-0">
+      {/* 1. 상단 슬림 원복 안내 + 우측 상단 [🏠 온보딩 체험관] & [🕰️ 복원 기록] 원클릭 버튼 */}
+      <div className="px-3.5 py-2 bg-emerald-50/60 dark:bg-emerald-950/25 border-b border-emerald-200 dark:border-emerald-500/20 flex flex-wrap items-center justify-between gap-2 text-[12px] text-emerald-900 dark:text-emerald-200">
+        <div className="flex items-center gap-1.5">
           <span className="shrink-0 font-bold">🛡️</span>
-          <span className="font-bold text-emerald-800 dark:text-emerald-300 truncate">
+          <span className="font-bold text-emerald-800 dark:text-emerald-300 whitespace-nowrap">
             손보기 후 원하는 시점으로 복원 가능
           </span>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex flex-wrap items-center gap-1.5 shrink-0 ml-auto">
           <button
             type="button"
             onClick={() => window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'))}
             title="온보딩 체험관으로 나가서 구경하기"
-            className="px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-[11.5px] font-extrabold shadow-xs transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
+            style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
+            className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
           >
             <span>🏠 온보딩 체험관으로 나가서 구경하기 ➔</span>
           </button>
@@ -1368,7 +1369,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             disabled={busy}
             onClick={() => void handleSend('최근 [복원 기록] 보여줘', 'text')}
             title="최근 손보기·정리 내역 조회 및 원래대로 1초 되돌리기"
-            className="px-2.5 py-1 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-[11.5px] font-extrabold shadow-xs transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
+            style={{ backgroundColor: '#F5F3FF', color: '#5B21B6', borderColor: '#8B5CF6' }}
+            className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
           >
             <span>🕰️</span>
             <span>복원 기록</span>
