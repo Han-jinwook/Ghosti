@@ -21,6 +21,7 @@ import {
   LoungeIndexingWaitingRoom,
   LoungeView,
 } from './LoungeView';
+import { SampleSharedRoomExperienceCard } from '../domains/free_photo_share/SampleSharedRoomExperienceCard';
 import {
   PcMasterQuickSendPanel,
   renderHighlightedDocText,
@@ -778,7 +779,15 @@ export const MobileAppView: React.FC = () => {
                 <div className="flex items-center justify-between px-0.5">
                   <div className="flex items-center gap-2">
                     <span className="font-headline-sm text-[15px] text-white font-bold">
-                      “{activeQuery}” 검색 결과
+                      {hasExecutedUserSearch && activeQuery
+                        ? `“${activeQuery}” 검색 결과`
+                        : activeLoungeType === 'family'
+                        ? `${activeFamilyRoom} 패밀리 앨범`
+                        : activeLoungeType === 'club'
+                        ? '동호회·모임 앨범'
+                        : activeLoungeType === 'student'
+                        ? '동창회 앨범'
+                        : '전체 사진 목록'}
                     </span>
                     <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-medium">
                       {searchResults.length}장
@@ -869,17 +878,10 @@ export const MobileAppView: React.FC = () => {
                   (activeLoungeType === 'family' ||
                     activeLoungeType === 'club' ||
                     activeLoungeType === 'student') ? (
-                  <div className="py-12 px-4 rounded-2xl bg-[#18181B] border border-white/10 text-center flex flex-col items-center gap-2.5">
-                    <span className="material-symbols-outlined text-zinc-500 text-[34px]">
-                      photo_library
-                    </span>
-                    <p className="font-headline-sm text-[14px] text-white font-bold">
-                      아직 이 {activeLoungeType === 'club' ? '동호회·모임' : activeLoungeType === 'student' ? '동창회' : '가족'} 공유방에는 올라온 사진이 없습니다 (0장)
-                    </p>
-                    <p className="font-body-sm text-[11.5px] text-zinc-400">
-                      가족방·동호회방·동창회방 사진첩은 서로 섞이지 않게 안전하게 분리되어 있습니다.
-                    </p>
-                  </div>
+                  <SampleSharedRoomExperienceCard
+                    loungeType={activeLoungeType}
+                    familyRoom={activeFamilyRoom}
+                  />
                 ) : (
                   <div className="py-12 px-4 rounded-2xl bg-[#18181B] border border-white/10 text-center flex flex-col items-center gap-2">
                     <span className="material-symbols-outlined text-zinc-500 text-[34px]">

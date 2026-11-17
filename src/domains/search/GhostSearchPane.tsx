@@ -24,6 +24,7 @@ import {
 import { GhostSearchTrainingPage } from '../../components/ghostDojo/GhostSearchTrainingPage';
 import { GhostSecretaryFirstGuard } from '../../components/GhostSecretaryFirstGuard';
 import { useDashboardNavStore } from '../shared/dashboardNavState';
+import { SampleSharedRoomExperienceCard } from '../free_photo_share/SampleSharedRoomExperienceCard';
 
 
 /**
@@ -637,24 +638,10 @@ export const GhostSearchPane: React.FC<{
                   (activeLoungeType === 'family' ||
                     activeLoungeType === 'club' ||
                     activeLoungeType === 'student') ? (
-                  <div className="py-14 px-6 rounded-2xl bg-[#18181B] border border-white/10 text-center flex flex-col items-center gap-3">
-                    <span className="material-symbols-outlined text-zinc-500 text-[38px]">
-                      photo_library
-                    </span>
-                    <p className="font-headline-sm text-[15.5px] text-white font-bold">
-                      아직 이 {activeLoungeType === 'club' ? '동호회·모임' : activeLoungeType === 'student' ? '동창회' : `${activeFamilyRoom} 가족`} 공유방에는 올라온 사진이 없습니다 (0장)
-                    </p>
-                    <p className="font-body-sm text-[12.5px] text-zinc-400 max-w-lg">
-                      가족방·동호회방·동창회방 및 내 기기 사진첩은 서로 섞이지 않도록 안전하게 분리되어 있습니다. 초대받은 방 링크로 입장하거나 새 사진을 추가해 보세요.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => useSaySeeStore.getState().requestAddMyPhotosToSharedRoom()}
-                      className="mt-1 px-4 py-2 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[12.5px] font-black cursor-pointer"
-                    >
-                      📸 이 방에 내 사진 추가하기
-                    </button>
-                  </div>
+                  <SampleSharedRoomExperienceCard
+                    loungeType={activeLoungeType}
+                    familyRoom={activeFamilyRoom}
+                  />
                 ) : (
                   <div className="py-14 rounded-2xl bg-[#18181B] border border-white/10 text-center flex flex-col items-center gap-2">
                     <span className="material-symbols-outlined text-zinc-500 text-[36px]">

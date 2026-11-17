@@ -112,6 +112,8 @@ const GhostiHubGlobalModals: React.FC = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isPurchaseOpen, setIsPurchaseOpen] = useState(false);
   const [isGiftBoxOpen, setIsGiftBoxOpen] = useState(false);
+  const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
+  const [withdrawingApp, setWithdrawingApp] = useState(false);
   const wasLoggedInRef = useRef(false);
 
   // 허브 인증/잔액 변화 시 Ghosti 내부 스토어(merlinAuth) 및 단독 Supabase(`public.users.id = family_users.id`) 자동 동기화
@@ -311,6 +313,83 @@ const GhostiHubGlobalModals: React.FC = () => {
                 setIsProfileOpen(false);
               }}
             />
+
+            {isLoggedIn && (
+              <div className="pt-1 flex flex-col items-center gap-2">
+                {!showWithdrawConfirm ? (
+                  <button
+                    type="button"
+                    onClick={() => setShowWithdrawConfirm(true)}
+                    className="text-xs font-semibold text-slate-400 hover:text-rose-600 underline underline-offset-4 transition-colors cursor-pointer py-1"
+                  >
+                    회원 탈퇴 (귀신같이 서비스 이용 해지)
+                  </button>
+                ) : (
+                  <div className="w-full rounded-2xl bg-rose-50 border border-rose-200 p-3.5 space-y-2.5 text-left">
+                    <p className="text-xs font-extrabold text-rose-700">
+                      ⚠️ 귀신같이 앱 이용을 해지(회원 탈퇴)하시겠습니까?
+                    </p>
+                    <p className="text-[11.5px] text-slate-700 leading-relaxed break-keep">
+                      <strong>귀신같이</strong> 앱의 기기 연동·공유방 설정만 해지되며, <strong>다른 멀린 패밀리 앱 계정(센스톡·썬드리머 등)과 보유 코인은 안전하게 그대로 유지</strong>됩니다. (내 기기 원본 파일은 절대 삭제되지 않습니다.)
+                    </p>
+                    <div className="flex items-center justify-end gap-2 pt-1">
+                      <button
+                        type="button"
+                        disabled={withdrawingApp}
+                        onClick={() => setShowWithdrawConfirm(false)}
+                        className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer"
+                      >
+                        취소
+                      </button>
+                      <button
+                        type="button"
+                        disabled={withdrawingApp}
+                        onClick={async () => {
+                          setWithdrawingApp(true);
+                          try {
+                            const { hubFetch, clearSessionToken } = await import(
+                              '../services/merlin-hub-sdk/CoreLogic/client'
+                            );
+                            await hubFetch('/api/auth/withdraw-app', {
+                              method: 'POST',
+                              body: JSON.stringify({ appId: 'Ghosti' }),
+                            }).catch(() => {});
+                            clearSessionToken('local');
+                          } catch {
+                            /* ignore */
+                          }
+                          void clearGhostiSupabaseSession();
+                          if (typeof window !== 'undefined') {
+                            try {
+                              localStorage.removeItem('merlin_session_token');
+                              localStorage.removeItem('merlin_cached_user');
+                              localStorage.removeItem('merlin_cached_balance');
+                              localStorage.removeItem('merlin_user_id');
+                              localStorage.removeItem('merlin_family_uid');
+                              localStorage.removeItem('ghosti_secretary_engine_agreed');
+                              localStorage.removeItem('ghosti_invited_member_email');
+                              localStorage.removeItem('ghosti_invited_member_nickname');
+                              localStorage.removeItem('ghosti_shared_family_added_photos_v1');
+                              sessionStorage.clear();
+                              document.cookie = 'merlin_session_token=; path=/; max-age=0;';
+                            } catch {
+                              /* ignore */
+                            }
+                            setShowWithdrawConfirm(false);
+                            setWithdrawingApp(false);
+                            setIsProfileOpen(false);
+                            window.location.href = window.location.origin + '/';
+                          }
+                        }}
+                        className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-xs font-extrabold text-white cursor-pointer"
+                      >
+                        {withdrawingApp ? '처리 중...' : '귀신같이 탈퇴 확인'}
+                      </button>
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -336,7 +415,7 @@ const GhostiHubGlobalModals: React.FC = () => {
       )}
 
       {/* 5. 1초 미니 오류·불편 즉시 신고 모달 & 전역 토스트 */}
-      <HubBugReporter appId="Ghosti" appVersion="v1.0.0" />
+      <HubBugReporter appId="Ghosti" appVersion="v1.0.6" />
       <HubNotifier />
     </>
   );

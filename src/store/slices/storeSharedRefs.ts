@@ -25,21 +25,39 @@ export function isSharedPhotoLounge(loungeType: LoungeType): boolean {
 }
 
 export function resolveInvitedHostLoungeAndRoom(): {
-  hostLounge: LoungeType;
+  hasActiveInvite: boolean;
+  hostLounge: LoungeType | null;
   hostFamilyRoom: FamilyRoomId;
 } {
   if (typeof window === 'undefined') {
-    return { hostLounge: 'family', hostFamilyRoom: '우리집' };
+    return { hasActiveInvite: false, hostLounge: null, hostFamilyRoom: '우리집' };
   }
   try {
     const params = new URLSearchParams(window.location.search);
-    const inviteVal = (params.get('invite') || '').trim().toLowerCase();
-    const roomVal = (params.get('room') || inviteVal).trim().toLowerCase();
-    if (inviteVal.startsWith('club')) {
-      return { hostLounge: 'club', hostFamilyRoom: '우리집' };
+    const urlInvite = (params.get('invite') || '').trim().toLowerCase();
+    let storedInvite = '';
+    try {
+      if (urlInvite) {
+        sessionStorage.setItem('ghosti_active_invite_room', urlInvite);
+        storedInvite = urlInvite;
+      } else {
+        storedInvite = (sessionStorage.getItem('ghosti_active_invite_room') || '').trim().toLowerCase();
+      }
+    } catch {
+      storedInvite = urlInvite;
     }
-    if (inviteVal.startsWith('student') || inviteVal.startsWith('alumni')) {
-      return { hostLounge: 'student', hostFamilyRoom: '우리집' };
+
+    const effectiveInvite = urlInvite || storedInvite;
+    if (!effectiveInvite) {
+      return { hasActiveInvite: false, hostLounge: null, hostFamilyRoom: '우리집' };
+    }
+
+    const roomVal = (params.get('room') || effectiveInvite).trim().toLowerCase();
+    if (effectiveInvite.startsWith('club')) {
+      return { hasActiveInvite: true, hostLounge: 'club', hostFamilyRoom: '우리집' };
+    }
+    if (effectiveInvite.startsWith('student') || effectiveInvite.startsWith('alumni')) {
+      return { hasActiveInvite: true, hostLounge: 'student', hostFamilyRoom: '우리집' };
     }
     const hostFamilyRoom: FamilyRoomId =
       roomVal.includes('parent') || roomVal.includes('본가') || roomVal.includes('친가')
@@ -47,16 +65,16 @@ export function resolveInvitedHostLoungeAndRoom(): {
         : roomVal.includes('inlaw') || roomVal.includes('처가') || roomVal.includes('친정')
         ? '처가(친정)'
         : '우리집';
-    return { hostLounge: 'family', hostFamilyRoom };
+    return { hasActiveInvite: true, hostLounge: 'family', hostFamilyRoom };
   } catch {
-    return { hostLounge: 'family', hostFamilyRoom: '우리집' };
+    return { hasActiveInvite: false, hostLounge: null, hostFamilyRoom: '우리집' };
   }
 }
 
 /**
  * [라운지별 사진첩 완전 분리 SSOT]
- * - 'family': 초대받은 해당 가족방(예: 우리집)의 호스트 공유 사진 + 해당 가족방에 추가한 사진만 반환 (본가/처가 및 내 로컬 PC와 엄격 분리)
- * - 'club' (동호회·모임) / 'student' (동창회): 각 방에 직접 추가된 사진만 반환 (가족방 36장이나 내 로컬 PC/샘플 사진이 절대 새어 나오지 않고 미참여 시 0장 유지)
+ * - 초대 링크(?invite=...) 없이 접속한 비로그인·신규 유저는 가족·동호회·동창회 모두 0장(빈 방 + 온보딩 샘플 체험 위젯)으로 통일하여 타 PC 사진 오해를 원천 차단
+ * - 초대 링크로 입장한 경우에만 해당 방(예: 우리집 가족방)의 호스트 공유 사진(36장) + 추가한 사진을 노출
  * - 'personal' / 'work': 내 기기 사진만 반환 (공유방 호스트 사진 제외)
  */
 export function resolveLoungePhotoCorpus(args: {
@@ -75,14 +93,14 @@ export function resolveLoungePhotoCorpus(args: {
   } = args;
 
   if (activeLoungeType === 'family') {
-    const { hostLounge, hostFamilyRoom } = resolveInvitedHostLoungeAndRoom();
+    const { hasActiveInvite, hostLounge, hostFamilyRoom } = resolveInvitedHostLoungeAndRoom();
     const addedForFamily = sharedRoomAddedPhotos.filter(
       (p) =>
         (p.sharedLoungeType ?? 'family') === 'family' &&
         (p.sharedFamilyRoom ?? '우리집') === activeFamilyRoom
     );
     const hostForFamily =
-      hostLounge === 'family' && activeFamilyRoom === hostFamilyRoom
+      hasActiveInvite && hostLounge === 'family' && activeFamilyRoom === hostFamilyRoom
         ? sharedRoomHostPhotos
         : [];
     return [...addedForFamily, ...hostForFamily];
