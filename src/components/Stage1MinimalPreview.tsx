@@ -1907,9 +1907,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
           context="secretary_left"
           className="xl:col-span-7 2xl:col-span-8 flex flex-col gap-5 min-w-0"
         >
-          {/* [v1.3] 🪪 귀신계 여권 후보 — 귀신비서가 실명을 물을 때만 노출 */}
-          <GhostPassportCandidatesPanel />
-          {/* 1. 슬림 헤더: 현재 쾌적한 상태 요약 + [⚡ 원본 남기고 N장 일괄 정리] 버튼만 깔끔하게 유지 */}
+          {/* 1. 슬림 헤더: 현재 쾌적한 상태 요약 + [⚡ 원본 남기고 N장 일괄 정리] 버튼만 깔끔하게 유지 (여권은 설정방 내부 보관으로 외부 비노출) */}
           <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
             <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-white/10">
               <div className="flex flex-wrap items-center gap-3">

@@ -200,10 +200,14 @@ def scan_post_office_files(role: str = "all") -> Dict[str, str]:
         for p in sorted(POST_OFFICE_DIR.glob("*.md")):
             if p.name.lower() in ("readme.md", ".gitkeep") or p.name.startswith("(읽음)"):
                 continue
-            if not is_primary:
-                has_sub_role_tag = ("2" in role and "2귀신" in p.name) or ("3" in role and "3귀신" in p.name)
-                if not has_sub_role_tag:
-                    continue
+            explicit_r2 = "2귀신" in p.name and "1귀신" not in p.name
+            explicit_r3 = "3귀신" in p.name and "1귀신" not in p.name
+            if explicit_r2 and role != "all" and "2" not in (role or ""):
+                continue
+            if explicit_r3 and role != "all" and "3" not in (role or ""):
+                continue
+            if not is_primary and not explicit_r2 and not explicit_r3:
+                continue
             prefix = p.name.split("_", 1)[0].strip("[]").lower()
             parts = p.name.split("_")
             sender = parts[1].strip("[]").lower() if len(parts) > 1 else ""
@@ -338,7 +342,7 @@ def main() -> None:
             f"🔔 [전사 중앙 우체국 자동 감지] D:\\Secretary\\post_office\\ 에 Ghosti 수신 문서 {len(initial_inbox)}건이 도착해 있습니다!"
         )
         for fname in list(initial_inbox.keys()):
-            fpath = claim_post_office_mail_immediately(fname) if is_primary_watcher else (POST_OFFICE_DIR / fname)
+            fpath = claim_post_office_mail_immediately(fname)
             content_preview = fpath.read_text(encoding="utf-8", errors="replace")[:1500]
             print(f"\n📄 파일명: {fpath.name} (1귀신 즉시 선점 읽음 처리 완료)")
             print("-" * 60)
@@ -458,7 +462,7 @@ def main() -> None:
                     f"🔔 [전사 중앙 우체국 신규 도착 — 1귀신 선점 접수!] D:\\Secretary\\post_office\\ 에 {len(new_or_changed_inbox)}건의 Ghosti 수신 문서가 도착했습니다!"
                 )
                 for fname in new_or_changed_inbox:
-                    fpath = claim_post_office_mail_immediately(fname) if is_primary_watcher else (POST_OFFICE_DIR / fname)
+                    fpath = claim_post_office_mail_immediately(fname)
                     content_preview = fpath.read_text(encoding="utf-8", errors="replace")[:2000]
                     print(f"\n📄 파일명: {fpath.name} (선점 읽음 처리 완료)")
                     print("-" * 60)

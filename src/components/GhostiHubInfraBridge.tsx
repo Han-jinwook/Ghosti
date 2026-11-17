@@ -281,9 +281,10 @@ const GhostiHubGlobalModals: React.FC = () => {
                     }
                   }}
                   className="px-3 py-1 rounded-full bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                  title="설정방 보관 내 귀신계 여권(본인 전용) 확인 및 문패 스타일 관리"
                 >
-                  <span>👑</span>
-                  <span>귀신여권</span>
+                  <span>🛂</span>
+                  <span>내 귀신여권</span>
                 </button>
                 <button
                   type="button"

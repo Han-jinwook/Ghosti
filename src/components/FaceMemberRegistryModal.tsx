@@ -200,6 +200,14 @@ export function isRelationshipOrRoleTerm(raw: string): boolean {
 export const FaceMemberInlineBar: React.FC<{
   onRunRealNameQuery?: (query: string, targetSpace?: 'gallery' | 'video') => void;
 }> = () => {
+  // [멀린님 확정 지시 — 2026-11-17]: 귀신계 여권 얼굴 칩·카드는 외부 화면(PC·모바일 검색창/공유방 상단 등)에 일절 노출하지 않고,
+  // 평소에 뒤에서 자동으로 잡아주며 확인·설정은 오직 [설정방(프로필·계정 설정)] 안에 '내 여권(본인 내 것만)'으로 보관합니다.
+  return null;
+};
+
+const _LegacyFaceMemberInlineBarUnused: React.FC<{
+  onRunRealNameQuery?: (query: string, targetSpace?: 'gallery' | 'video') => void;
+}> = () => {
   const {
     faceClusters,
     retroScanRunning,
@@ -1162,10 +1170,13 @@ export const PassportDoorplateStyleModal: React.FC = () => {
   if (!doorplatePickerClusterId || activeLoungeType === 'work') return null;
 
   const namedClusters = faceClusters.filter((c) => !c.excludedAsPasserby && c.registeredName);
+  // [멀린님 확정 지시]: 설정방 안의 여권은 타인 목록 없이 오직 '내 여권(본인 내 것만)'만 표시·관리합니다.
   const targetCluster =
-    faceClusters.find((c) => c.clusterId === doorplatePickerClusterId) ||
     namedClusters.find((c) => c.clusterId === 'face_member_5') ||
-    namedClusters[0];
+    faceClusters.find((c) => c.clusterId === 'face_member_5') ||
+    faceClusters.find((c) => c.clusterId === doorplatePickerClusterId) ||
+    namedClusters[0] ||
+    faceClusters[0];
 
   if (!targetCluster) return null;
 
@@ -1220,41 +1231,9 @@ export const PassportDoorplateStyleModal: React.FC = () => {
           </button>
         </div>
 
-        {/* 본문 */}
+        {/* 본문 — 오직 '내 여권(본인 내 것만)' 단독 표시 (타인 얼굴 전환 칩 미노출) */}
         <div className="p-5 overflow-y-auto flex flex-col gap-4">
-          {/* 멤버 전환 탭 */}
-          {namedClusters.length > 1 && (
-            <div className="flex items-center gap-1.5 flex-wrap">
-              <span className="font-label-sm text-[11.5px] text-zinc-400 mr-1">문패 주인공:</span>
-              {namedClusters.map((mc) => {
-                const pInfo = getActivePersonaForCluster(mc, activeLoungeType, activeFamilyRoom);
-                const isSelected = mc.clusterId === targetCluster.clusterId;
-                return (
-                  <button
-                    key={mc.clusterId}
-                    type="button"
-                    onClick={() => setDoorplatePickerClusterId(mc.clusterId)}
-                    className={`px-3 py-1.5 rounded-full font-label-sm text-[12px] font-bold flex items-center gap-1.5 border transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold shadow-sm'
-                        : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
-                    }`}
-                  >
-                    <img
-                      src={mc.avatarUrl || mc.representativePhoto}
-                      alt={pInfo.activePersona}
-                      className="w-4 h-4 rounded-full object-cover"
-                    />
-                    <span>
-                      {pInfo.isRoomCreator ? `👑 ${pInfo.activePersona}` : pInfo.activePersona}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
-          )}
-
-          {/* 현재 장착된 대표 문패 프리뷰 카드 */}
+          {/* 현재 장착된 내 여권 대표 문패 프리뷰 카드 */}
           <div className="p-4 rounded-2xl bg-zinc-900/90 border border-primary-container/35 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
             <div className="flex items-center gap-4">
               <AutonomousCanvasFaceAvatar

@@ -1883,82 +1883,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
     return null;
   }
 
-  const renderMemberPersonaPills = (labelText: string) => {
-    if (namedClusters.length === 0) {
-      return (
-        <div className="flex flex-wrap items-center gap-1.5">
-          <span className="font-label-sm text-[11.5px] text-zinc-400 mr-0.5 whitespace-nowrap">
-            {labelText}
-          </span>
-          <span className="px-2.5 py-1 rounded-full bg-zinc-900/70 border border-white/10 text-zinc-400 font-label-sm text-[11.5px] font-medium whitespace-nowrap">
-            아직 등록된 여권 인물이 없습니다
-          </span>
-          <button
-            type="button"
-            onClick={() => setShowFaceRegistryModal(true)}
-            className="px-3 py-1.5 rounded-full bg-zinc-950 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-bold ml-0.5 shrink-0 whitespace-nowrap cursor-pointer"
-          >
-            🛂 인물 여권 등록
-          </button>
-        </div>
-      );
-    }
-    return (
-      <div className="flex flex-wrap items-center gap-1.5">
-        <span className="font-label-sm text-[11.5px] text-zinc-400 mr-0.5 whitespace-nowrap">
-          {labelText}
-        </span>
-        {namedClusters.map((c) => {
-          const { activePersona, isRoomCreator } = getActivePersonaForCluster(
-            c,
-            activeLoungeType,
-            activeFamilyRoom
-          );
-          const displayPersona = activePersona || c.registeredName;
-          const queryTarget =
-            activeFamilyRoom === '처가(친정)' && isRoomCreator
-              ? `${displayPersona} 선글라스`
-              : `${displayPersona} 나무 다리`;
-          return (
-            <div
-              key={c.clusterId}
-              className="pl-1.5 pr-3 py-1 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-primary-container/35 text-primary-container font-label-sm text-[12px] font-bold flex items-center gap-1.5 transition-colors shrink-0 whitespace-nowrap"
-            >
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDoorplatePickerClusterId(c.clusterId);
-                }}
-                title={`${displayPersona} 문패 사진 클릭: 5대 스타일 슬롯(${c.doorplateSlotLabelKo || '① 정면'}) 원터치 변경`}
-                className="relative group/avatar shrink-0 cursor-pointer"
-              >
-                <img
-                  src={c.avatarUrl || c.representativePhoto}
-                  alt={displayPersona}
-                  className="w-5 h-5 rounded-full object-cover border border-primary-container/70 group-hover/avatar:ring-2 group-hover/avatar:ring-primary-container transition-all"
-                />
-              </button>
-              <button
-                type="button"
-                onClick={() => void runTextQuery(queryTarget)}
-                title={`클릭 시 "${queryTarget}" 검색`}
-                className="flex items-center gap-1 cursor-pointer"
-              >
-                <span>{isRoomCreator ? `👑 ${displayPersona}` : displayPersona}</span>
-              </button>
-            </div>
-          );
-        })}
-        <button
-          type="button"
-          onClick={() => setShowFaceRegistryModal(true)}
-          className="px-3 py-1.5 rounded-full bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11.5px] font-bold ml-0.5 shrink-0 whitespace-nowrap cursor-pointer"
-        >
-          🛂 인물 관리
-        </button>
-      </div>
-    );
+  const renderMemberPersonaPills = (_labelText: string) => {
+    // [멀린님 확정 지시 — 2026-11-17]: 여권 얼굴 칩은 외부 화면에 노출하지 않고 필요할 때 뒤에서 자동으로 잡아주며, 설정방 안에 '내 여권'만 보관합니다.
+    return null;
   };
 
   if (activeLoungeType === 'family') {

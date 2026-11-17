@@ -547,9 +547,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           role: 'assistant',
           timestamp: nowTimeKo(),
           sourceTab: 'trash',
-          text: `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두고 다음 안내로 넘어갈게요 👻✨\n이제 **🛂 인물 사진 이름 등록(귀신계 여권)**을 해보거나, 왼쪽 두 번째 메뉴 **『👻 귀신검색』**에서 방금 읽어둔 내 사진·문서를 1초 만에 찾아보실까요?`,
+          text: `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두고 다음 안내로 넘어갈게요 👻✨\n이제 **『👻 귀신검색』**으로 방금 읽어둔 내 사진·문서를 1초 만에 찾아보시거나 숨은 초능력을 구경해 보실까요?`,
           followUpSuggestions: [
-            '🛂 인물 사진 이름 등록(귀신계 여권) 해볼래',
             '🔍 귀신검색으로 내 파일 찾아볼래',
             '✨ 귀신비서의 숨은 초능력 알려줘',
           ],
@@ -989,7 +988,6 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             text: reading.text,
             followUpSuggestions: isMobileReading
               ? [
-                  '🛂 인물 사진 이름 등록(귀신계 여권) 해볼래',
                   '중복·연사 사진 정리하는 법 알려줘',
                   '🔍 귀신검색으로 내 파일 찾아볼래',
                 ]
@@ -1000,7 +998,6 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               : [
                   '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
                   '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
-                  '🛂 인물 사진 이름 등록(귀신계 여권) 해볼래',
                 ],
           });
           nextState = { ...nextState, coldReadingShownAt: new Date().toISOString() };
@@ -1474,7 +1471,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         </span>
       </div>
 
-      {/* 1. 상단 원클릭 바로가기 바: [🛂 귀신계 여권] + [🕰️ 복원 기록] + [🏠 온보딩 체험관] (모바일 잘림 0% 방어) */}
+      {/* 1. 상단 원클릭 바로가기 바: [🕰️ 복원 기록] + [🏠 온보딩 체험관] (여권은 설정방 내부 보관으로 외부 비노출) */}
       <div className="px-3 py-2 bg-white/90 dark:bg-[#10212B] border-b border-teal-600/20 dark:border-teal-400/20 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 text-[12px] text-emerald-950 dark:text-emerald-200">
         <div className="flex items-center gap-1 min-w-0">
           <span className="shrink-0 font-bold">🛡️</span>
@@ -1483,17 +1480,6 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 max-w-full min-w-0">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void handleSend('인물 사진 이름 등록(귀신계 여권) 해볼래', 'text')}
-            title="인물 사진 이름 등록(귀신계 여권) 안내 열기"
-            style={{ backgroundColor: '#FFFBEB', color: '#92400E', borderColor: '#F59E0B' }}
-            className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
-          >
-            <span>🛂</span>
-            <span>귀신계 여권</span>
-          </button>
           <button
             type="button"
             disabled={busy}
@@ -1747,17 +1733,6 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                             className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[13px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left break-words"
                           >
                             🏦 안 쓰는 은행 보안프로그램 알아서 재워줘
-                          </button>
-                          <button
-                            type="button"
-                            disabled={busy}
-                            onClick={() => {
-                              setWelcomeChipsDismissed(true);
-                              void handleSend('인물 사진 이름 등록(귀신계 여권) 해볼래', 'text');
-                            }}
-                            className="px-3 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 dark:bg-amber-950/50 dark:hover:bg-amber-900/60 border border-amber-300 dark:border-amber-500/40 text-[13px] font-extrabold text-amber-900 dark:text-amber-300 transition cursor-pointer text-left break-words"
-                          >
-                            🛂 인물 사진 이름 등록(귀신계 여권) 해볼래
                           </button>
                         </>
                       )}

@@ -713,7 +713,7 @@ export function resolveGhostSecretaryTurn(
   if (!text) return null;
   const nickname = st.nickname || '';
 
-  // ⓪-0 사용자가 직접 '🛂 귀신계 여권' 또는 '인물 사진 이름 등록'을 요청한 경우 즉시 여권 등록 안내 진입!
+  // ⓪-0 사용자가 직접 '🛂 귀신계 여권' 또는 '인물 사진 이름 등록'을 요청한 경우 설정방 내 본인 여권 보관 원칙 안내!
   if (
     /(귀신계?\s*여권|여권\s*(등록|발급|만들|보여|확인|열어|안내|설정|해\s*볼래|할래)|인물\s*사진\s*이름|얼굴\s*이름\s*(등록|설정|붙이|알려)|사진\s*속\s*(사람|인물|가족)\s*이름)/i.test(
       text
@@ -721,19 +721,12 @@ export function resolveGhostSecretaryTurn(
     !/\d+\s*번\s*(?:은|는|이|가)/.test(text)
   ) {
     const nickLabel = nickname ? `${nickname}님! ` : '';
-    const clusterCnt = ctx.passportClusterCount || 0;
-    const passportGuideText =
-      clusterCnt > 0
-        ? `${nickLabel}🛂 **귀신계 여권 카드(인물 사진 이름 등록)**를 왼쪽(상단)에 바로 열어드렸어요! 👻✨\n내 사진첩에서 자주 나오는 인물 후보 **${clusterCnt}명**을 카드 안에 번호표(①~)로 띄워뒀어요.\n채팅창에 **"1번은 나, 2번은 홍길동"**처럼 실제 이름을 알려주시면 내 기기 안에서만 안전하게 기억해 두고 다음부터 이름으로 1초 만에 찾아드릴게요!`
-        : `${nickLabel}🛂 **귀신계 여권 카드(인물 사진 이름 등록)**를 왼쪽(상단)에 바로 열어드렸어요! 👻✨\n내 사진첩에 가족·지인 인물 사진이 모이면 이 여권 카드 안에 자주 나오는 얼굴이 번호표(①, ②…)로 채워져요.\n그때 **"1번은 나, 2번은 홍길동"**처럼 실제 이름만 한 번 알려주시면, 다음부터 **'홍길동 웃는 사진 찾아줘'** 한마디로 1초 만에 찾아드려요! (원본 사진은 외부 서버로 절대 나가지 않고 100% 내 기기 안에서만 보관돼요 🔒)`;
+    const passportGuideText = `${nickLabel}🛂 **내 귀신계 여권**은 화면 바깥에 복잡하게 나와 있지 않고, 사진 검색이나 공유를 하실 때 제가 뒤에서 자동으로 알아보고 잡아드려요! 👻✨\n혹시 **내 여권(본인 전용)**을 직접 확인하거나 문패 스타일을 바꾸고 싶으실 때는 화면 상단 **[🐾 내 프로필 · 계정 설정(설정방)] ➔ [🛂 내 귀신여권]** 안에 안전하게 보관되어 있으니 언제든 열어보실 수 있어요! 🔒`;
     return {
       scenarioId: 'passport_manual_open_guide',
       text: passportGuideText,
-      followUps:
-        clusterCnt > 0
-          ? ['1번은 나야', '귀신검색으로 내 파일 찾아볼래', '최근 복원 기록 보여줘']
-          : ['귀신검색으로 내 파일 찾아볼래', '최근 복원 기록 보여줘', '부팅할 때 켜지는 시작프로그램 목록도 보여줘'],
-      nextState: { ...st, awaitingNickname: false, passportStep: 'naming' },
+      followUps: ['귀신검색으로 내 파일 찾아볼래', '최근 복원 기록 보여줘'],
+      nextState: { ...st, awaitingNickname: false, passportStep: 'done' },
     };
   }
 

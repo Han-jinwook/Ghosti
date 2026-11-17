@@ -178,7 +178,7 @@ const LOUNGE_SUBMENU_CONFIG: Record<
 > = {
   personal: [
     // [v1.3] 귀신 3총사 명칭·순서 통일: 1순위 귀신비서(구 손보기+채팅) → 2순위 귀신검색(구 찾기)
-    { id: 'trash', icon: '👻', label: '귀신비서', subcaption: '손보기 · 귀신계 여권 · 채팅', showTrashCount: true },
+    { id: 'trash', icon: '👻', label: '귀신비서', subcaption: '손보기 · 사진정리 · 채팅', showTrashCount: true },
     { id: 'dashboard', icon: '👻', label: '귀신검색', subcaption: 'Ctrl + 0 현장 소환 수련' },
   ],
   family: [
