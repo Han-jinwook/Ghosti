@@ -546,10 +546,13 @@ export const DEMO_SEARCH_SAMPLE_VIDEOS_2: VideoSceneItem[] = [
     ocrFullText: 'KOTA KINABALU PARASAILING TOUR / 2인 탑승 완료',
     timelineFrames: [
       {
+        frameId: 'demo_v1_f1',
         timeSec: 12,
-        timestampLabel: '00:12',
+        timestampText: '00:12',
+        phaseLabel: '하이라이트',
         sceneCaption: '패러세일링 낙하산 활강 장면',
         keywords: ['패러세일링', '바다', '보트'],
+        tags: ['#패러세일링', '#바다'],
         thumbUrl: '/poc/results/video_frames/20240719_105706_t12.jpg',
       },
     ],
@@ -572,10 +575,13 @@ export const DEMO_SEARCH_SAMPLE_VIDEOS_2: VideoSceneItem[] = [
     ocrFullText: '2026 목표 매출 35억 달성 로드맵 / Q4 핵심 과제',
     timelineFrames: [
       {
+        frameId: 'demo_v2_f1',
         timeSec: 8,
-        timestampLabel: '00:08',
+        timestampText: '00:08',
+        phaseLabel: '브리핑',
         sceneCaption: '화이트보드 매출 목표 판서 장면',
         keywords: ['회의실', '화이트보드', '매출'],
+        tags: ['#회의실', '#화이트보드'],
         thumbUrl: '/poc/results/video_frames/20260918_202442_t00.jpg',
       },
     ],
@@ -590,7 +596,7 @@ export const DEMO_SEARCH_SAMPLE_DOCS_2: LocalDocumentFile[] = [
     ext: 'PDF',
     categoryBadge: '계약·법무 샘플',
     date: '2025-08-12',
-    sizeText: '420 KB',
+    sizeKB: 420,
     deviceSource: '체험판 샘플 문서',
     extractedText:
       '제3조(보증금 및 월세) 보증금 금 오천만원정(50,000,000원), 월 차임 금 삼백이십만원정(3,200,000원, 매월 25일 지급)으로 한다.',
@@ -603,7 +609,7 @@ export const DEMO_SEARCH_SAMPLE_DOCS_2: LocalDocumentFile[] = [
     ext: 'XLSX',
     categoryBadge: '견적·단가 샘플',
     date: '2025-09-03',
-    sizeText: '185 KB',
+    sizeKB: 185,
     deviceSource: '체험판 샘플 문서',
     extractedText:
       '품목: 고효율 LED 모듈 A형 | 공급단가: 145,000원(VAT 별도) | 최소 발주수량: 50EA | 담당: 한일건재 김대리',
