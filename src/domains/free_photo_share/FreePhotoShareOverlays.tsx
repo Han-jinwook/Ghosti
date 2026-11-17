@@ -1,22 +1,20 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
 import { jumpToGhostSecretary } from '../../components/GhostSecretaryFirstGuard';
 
 export const FreePhotoShareOverlays: React.FC = () => {
-  const {
-    activeLoungeType,
-    photos,
-    activeFamilyRoom,
-    guestJoinWallReason,
-    triggerGuestJoinWall,
-    completeGuestOneSecJoin,
-    showSharedPhotoUploadModal,
-    setShowSharedPhotoUploadModal,
-    addLocalPhotosToSharedRoom,
-    sharedRoomHostPhotos,
-    sharedRoomAddedPhotos,
-    importMobileLocalPhotos,
-  } = useSaySeeStore();
+  const activeLoungeType = useSaySeeStore((s) => s.activeLoungeType);
+  const photos = useSaySeeStore((s) => s.photos);
+  const activeFamilyRoom = useSaySeeStore((s) => s.activeFamilyRoom);
+  const guestJoinWallReason = useSaySeeStore((s) => s.guestJoinWallReason);
+  const triggerGuestJoinWall = useSaySeeStore((s) => s.triggerGuestJoinWall);
+  const completeGuestOneSecJoin = useSaySeeStore((s) => s.completeGuestOneSecJoin);
+  const showSharedPhotoUploadModal = useSaySeeStore((s) => s.showSharedPhotoUploadModal);
+  const setShowSharedPhotoUploadModal = useSaySeeStore((s) => s.setShowSharedPhotoUploadModal);
+  const addLocalPhotosToSharedRoom = useSaySeeStore((s) => s.addLocalPhotosToSharedRoom);
+  const sharedRoomHostPhotos = useSaySeeStore((s) => s.sharedRoomHostPhotos);
+  const sharedRoomAddedPhotos = useSaySeeStore((s) => s.sharedRoomAddedPhotos);
+  const importMobileLocalPhotos = useSaySeeStore((s) => s.importMobileLocalPhotos);
 
   const [guestNicknameDraft, setGuestNicknameDraft] = useState(
     activeLoungeType === 'family' ? '해나라' : '박총무'
@@ -26,6 +24,12 @@ export const FreePhotoShareOverlays: React.FC = () => {
   );
   const [selectedSharedUploadIds, setSelectedSharedUploadIds] = useState<string[]>([]);
   const [visibleUploadCount, setVisibleUploadCount] = useState(48);
+  const wasUploadModalOpenRef = useRef(false);
+
+  const selectedSharedUploadSet = useMemo(
+    () => new Set(selectedSharedUploadIds),
+    [selectedSharedUploadIds]
+  );
 
   const uploadableLocalPhotos = useMemo(() => {
     const existingSharedNames = new Set([
@@ -43,10 +47,11 @@ export const FreePhotoShareOverlays: React.FC = () => {
   }, [photos, sharedRoomHostPhotos, sharedRoomAddedPhotos]);
 
   useEffect(() => {
-    if (showSharedPhotoUploadModal) {
+    if (showSharedPhotoUploadModal && !wasUploadModalOpenRef.current) {
       setVisibleUploadCount(48);
       setSelectedSharedUploadIds(uploadableLocalPhotos.slice(0, 12).map((p) => p.id));
     }
+    wasUploadModalOpenRef.current = showSharedPhotoUploadModal;
   }, [showSharedPhotoUploadModal, uploadableLocalPhotos]);
 
   return (
@@ -138,7 +143,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
       {showSharedPhotoUploadModal && (
         <div
           onClick={() => setShowSharedPhotoUploadModal(false)}
-          className="fixed inset-0 z-[120] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+          className="fixed inset-0 z-[120] bg-black/85 flex items-center justify-center p-4"
         >
           <div
             onClick={(e) => e.stopPropagation()}
@@ -242,7 +247,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
                 <div className="flex flex-col gap-3">
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
                     {uploadableLocalPhotos.slice(0, visibleUploadCount).map((p) => {
-                      const checked = selectedSharedUploadIds.includes(p.id);
+                      const checked = selectedSharedUploadSet.has(p.id);
                       return (
                         <button
                           key={p.id}
@@ -252,10 +257,10 @@ export const FreePhotoShareOverlays: React.FC = () => {
                               prev.includes(p.id) ? prev.filter((id) => id !== p.id) : [...prev, p.id]
                             )
                           }
-                          className={`relative aspect-square rounded-2xl overflow-hidden border-2 transition-all cursor-pointer group ${
+                          className={`relative aspect-square rounded-2xl overflow-hidden border-2 transition-colors cursor-pointer group ${
                             checked
-                              ? 'border-[#2DD4BF] ring-2 ring-[#2DD4BF]/40 scale-[0.99]'
-                              : 'border-white/10 hover:border-white/30 opacity-80 hover:opacity-100'
+                              ? 'border-[#2DD4BF] ring-2 ring-[#2DD4BF]/40'
+                              : 'border-white/10 hover:border-white/30 opacity-85 hover:opacity-100'
                           }`}
                         >
                           <img

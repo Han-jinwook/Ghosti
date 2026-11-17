@@ -486,6 +486,12 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         if path in ("/__photos/file", "/api/ghosti/photos/file"):
             f_path, mime, status = plugin_ghosti_os.resolve_local_media_file(qp)
             if f_path is not None and status == 200:
+                is_thumb = str(qp.get("thumb") or "").strip() in ("1", "true", "yes")
+                if is_thumb and mime.startswith("image/"):
+                    thumb_path = plugin_ghosti_os.get_or_create_photo_thumb(f_path)
+                    if thumb_path is not None:
+                        self._send_file_stream(thumb_path, content_type="image/jpeg", cache_max_age=86400)
+                        return
                 self._send_file_stream(f_path, content_type=mime)
             else:
                 self._send_json({"ok": False, "error": "FILE_NOT_FOUND"}, status=status)

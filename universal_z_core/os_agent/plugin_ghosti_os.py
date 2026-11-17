@@ -1187,6 +1187,43 @@ def resolve_local_media_file(params: Dict[str, Any] | None = None) -> tuple[Path
     return full_path, content_type, 200
 
 
+_PHOTO_THUMBS_DIR = safe.QUARANTINE_DIR / "photo_thumbs"
+
+
+def get_or_create_photo_thumb(full_path: Path, max_px: int = 360) -> Path | None:
+    """고해상도 원본 사진(4~12MB)을 360px 경량 JPEG 썸네일(10~20KB)로 디스크 캐싱해 즉시 서빙합니다."""
+    try:
+        if _is_cloud_virtual_or_unpinned_file(full_path):
+            return None
+        st = full_path.stat()
+        # 이미 120KB 이하의 초경량 파일이면 리사이징 없이 원본 그대로 서빙
+        if st.st_size <= 120 * 1024:
+            return full_path
+        cache_key = hashlib.sha1(
+            f"{full_path}|{st.st_size}|{int(st.st_mtime)}|{max_px}".encode("utf-8", errors="ignore")
+        ).hexdigest()[:20]
+        _PHOTO_THUMBS_DIR.mkdir(parents=True, exist_ok=True)
+        out_jpg = _PHOTO_THUMBS_DIR / f"pt_{cache_key}.jpg"
+        if out_jpg.exists() and out_jpg.stat().st_size > 500:
+            return out_jpg
+
+        from PIL import Image, ImageOps
+
+        with Image.open(full_path) as im:
+            im = ImageOps.exif_transpose(im)
+            if im.mode != "RGB":
+                im = im.convert("RGB")
+            im.thumbnail((max_px, max_px), Image.Resampling.BILINEAR)
+            tmp_jpg = _PHOTO_THUMBS_DIR / f"pt_{cache_key}.{os.getpid()}.tmp.jpg"
+            im.save(tmp_jpg, "JPEG", quality=78, optimize=False)
+        if tmp_jpg.exists() and tmp_jpg.stat().st_size > 500:
+            os.replace(tmp_jpg, out_jpg)
+            return out_jpg
+    except Exception:
+        return None
+    return None
+
+
 def read_local_photo_file(params: Dict[str, Any] | None = None) -> tuple[bytes | None, str, int]:
     """로컬 사진 및 동영상 바이너리와 Content-Type을 읽어옵니다 (레거시 호출 호환용)."""
     full_path, content_type, status = resolve_local_media_file(params)
