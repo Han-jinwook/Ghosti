@@ -741,34 +741,39 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       (hasPendingCareApproval &&
         /^(응|네|넹|예|좋아|좋아요|ㅇㅇ|ㅇㅋ|오케이|ok|그래|해\s*(?:줘|주세요)|알려\s*(?:줘|주세요)|뭔데|진행|실행|승인|동의|콜|고고|#?\d+\s*번?)/i.test(raw));
 
-    // [v1.3 필수 통과의례 게이트]: PC에서 아직 로컬 엔진(Z-코어)이 연결되지 않은 상태일 때,
-    // 별명 등록 이후 손보기 동의 / 급한 검색 요청 / 거절(눈으로 구경) 분기를 귀신비서가 정직하고 귀엽게 직접 안내!
+    // [v1.3 필수 통과의례 게이트]: PC에서 첫 진입 또는 연결 유도 단계일 때,
+    // 별명 등록 전후를 불문하고 '싫어 / 구경만 할래' 거절 발화와 '[🔍 응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘]' 동의 발화를 정직하게 처리!
     if (sourceTab === 'trash' && !isMobileOrStore && !zCoreBridge.isConnected && hasActiveGhostiLoginSession()) {
       await zCoreBridge.checkHealth(false);
     }
-    if (sourceTab === 'trash' && !isMobileOrStore && !zCoreBridge.isConnected) {
+    if (sourceTab === 'trash' && !isMobileOrStore) {
       const preSt = loadGhostSecretaryState();
-      const hasNicknameReady = !preSt.awaitingNickname && Boolean(preSt.nickname);
       const isNickOrStoreSpecial =
         Boolean(parseNicknameSettingIntent(raw, preSt.nickname)) || isStoreLinkIntent(raw);
 
-      if (hasNicknameReady && !isNickOrStoreSpecial) {
+      if (!isNickOrStoreSpecial) {
         const nickLabel = preSt.nickname ? `${preSt.nickname}님` : '회원님';
         const awaitingRite =
           typeof sessionStorage !== 'undefined' &&
           sessionStorage.getItem('ghosti_awaiting_engine_rite') === '1';
-        const isBrowseOrRefuseEngine =
+        const isExplicitBrowseOrRefuse =
           /(구경\s*부터|구경\s*만|눈으로\s*구경|둘러\s*보|둘러\s*볼|안\s*깔|설치\s*안|연결\s*안|엔진\s*싫|깔기\s*싫)/i.test(raw) ||
+          /^(싫어|싫어요|안\s*할래|안\s*해|됐어)(\s*[,!.~]*\s*(구경|둘러).*)?$/i.test(raw) ||
           (awaitingRite && isNo(raw));
+        const isExplicitConnectAndAnalyzeChip =
+          /(내\s*컴퓨터\s*연결하고\s*누가\s*속도\s*잡아먹는지|마음\s*바꿨어.*내\s*컴퓨터\s*연결|엔진\s*연결하고\s*1초\s*건강검진)/i.test(
+            raw
+          );
         const isAgreeOrCareOrImpatient =
-          /(내\s*컴퓨터\s*연결|pc\s*연결|엔진\s*연결|연결\s*해|연결하고|누가\s*속도\s*잡아먹는지|분석\s*해\s*(?:줘|주세요)|설치\s*해|깔아|깔래|마음\s*바꿨)/i.test(
+          !zCoreBridge.isConnected &&
+          (/(내\s*컴퓨터\s*연결|pc\s*연결|엔진\s*연결|연결\s*해|연결하고|누가\s*속도\s*잡아먹는지|분석\s*해\s*(?:줘|주세요)|설치\s*해|깔아|깔래|마음\s*바꿨)/i.test(
             raw
           ) ||
-          isDirectCareOrStatusCommand ||
-          isImpatientIntent(raw) ||
-          (awaitingRite && isYes(raw));
+            isDirectCareOrStatusCommand ||
+            isImpatientIntent(raw) ||
+            (awaitingRite && isYes(raw)));
 
-        if (isBrowseOrRefuseEngine) {
+        if (isExplicitBrowseOrRefuse) {
           try {
             sessionStorage.removeItem('ghosti_awaiting_engine_rite');
           } catch {
@@ -785,11 +790,30 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                 `좋아요 ${nickLabel}! 위쪽 다른 메뉴들을 눌러 위아래로 스크롤하며 **눈으로 둘러보시는 건 언제든 환영**이에요!\n` +
                 `다만 내 진짜 사진·문서를 실제로 검색하거나 정리하시려면 **내 컴퓨터 연결**이 필요하고, 연결 없이 샘플 데이터로 직접 클릭 체험만 해보고 싶으시다면 아래 버튼을 눌러 **온보딩 체험관**으로 가보실 수도 있어요 👻✨`,
               followUpSuggestions: [
-                '🏠 온보딩 체험관으로 나가서 구경할래 ➔',
-                '⚡ 마음 바꿨어! 내 컴퓨터 연결해 볼래',
+                '🏠 온보딩 체험관으로 나가서 구경하기 ➔',
+                '🔍 응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘',
               ],
             },
           ]);
+          setSharedMonsterBusy(false);
+          return;
+        }
+
+        if (isExplicitConnectAndAnalyzeChip && zCoreBridge.isConnected) {
+          try {
+            sessionStorage.removeItem('ghosti_awaiting_engine_rite');
+            sessionStorage.setItem('ghosti_one_stop_agreed', '1');
+            localStorage.setItem('ghosti_secretary_engine_agreed', '1');
+          } catch {
+            /* ignore */
+          }
+          const routerReply = await processUnifiedMonsterChatQuery({
+            query: SECRETARY_FIRST_CARE_QUERY,
+            sourceTab,
+            literacyLevel,
+            ttsEnabled: false,
+          });
+          setSharedMonsterMessages((prev) => [...prev, routerReply]);
           setSharedMonsterBusy(false);
           return;
         }
@@ -899,7 +923,12 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             nextState.nickname,
             isMobileReading ? { ...ctx, device: 'mobile' } : ctx
           );
-          const needsEngineRite = !isMobileReading && !zCoreBridge.isConnected;
+          const hasExplicitlyAgreedInWeb =
+            typeof localStorage !== 'undefined' &&
+            localStorage.getItem('ghosti_secretary_engine_agreed') === '1' &&
+            typeof sessionStorage !== 'undefined' &&
+            sessionStorage.getItem('ghosti_one_stop_agreed') === '1';
+          const needsEngineRite = !isMobileReading && (!zCoreBridge.isConnected || !hasExplicitlyAgreedInWeb);
           if (needsEngineRite) {
             try {
               sessionStorage.setItem('ghosti_awaiting_engine_rite', '1');
@@ -912,11 +941,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             role: 'assistant',
             timestamp: nowTimeKo(),
             sourceTab,
-            text: isMobileReading
-              ? reading.text
-              : needsEngineRite
-              ? reading.text
-              : `${nextState.nickname}님! 지금 내 컴퓨터에 최신 제트코어(v${zCoreBridge.version || '2.3.9'})가 바로 연결되어 있어요! 👻✨\n아래 버튼을 누르거나 채팅창에 편하게 말씀해 주시면 진짜 내 PC의 시작프로그램 목록·부팅 경과 시간·사양을 1초 만에 바로 보여드릴게요!`,
+            text: reading.text,
             followUpSuggestions: isMobileReading
               ? [
                   '🛂 인물 사진 이름 등록(귀신계 여권) 해볼래',
@@ -926,8 +951,6 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               : needsEngineRite
               ? [
                   '🔍 응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘',
-                  '🛂 인물 사진 이름 등록(귀신계 여권) 해볼래',
-                  '👀 일단 눈으로 구경부터 할래',
                 ]
               : [
                   '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
