@@ -22,6 +22,7 @@ import re
 import shutil
 import struct
 import sys
+import threading
 import time
 from typing import Any, Dict, List
 
@@ -42,7 +43,7 @@ FILE_ATTRIBUTE_NORMAL = 0x80
 PLUGIN_METADATA = {
     "pluginId": "ghosti_os",
     "pluginName": "Ghosti & 3-Monsters OS + RestorePoint + RecycleBin Omni-Tracker Plugin",
-    "version": "2.3.24",
+    "version": "2.3.25",
     "type": "BUILTIN_SOFTWARE_PLUGIN",
     "port": 5199,
     "capabilities": [
@@ -1081,6 +1082,8 @@ def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 ext = entry.suffix.lower()
                 if ext not in _IMAGE_EXTS:
                     continue
+                if _is_cloud_virtual_or_unpinned_file(entry):
+                    continue
                 resolved = entry.resolve()
                 norm_resolved = str(resolved).lower()
                 if norm_resolved in seen_paths:
@@ -1109,6 +1112,8 @@ def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
             break
 
     primary_dir = resolve_active_photo_dir(req_dir)
+    if files:
+        _trigger_bg_photo_thumb_prewarm([Path(f["fullPath"]) for f in files[:360] if f.get("fullPath")])
     return {
         "ok": True,
         "dir": str(primary_dir),
@@ -1196,40 +1201,110 @@ def resolve_local_media_file(params: Dict[str, Any] | None = None) -> tuple[Path
 
 
 _PHOTO_THUMBS_DIR = getattr(safe, "MERLIN_DIR", Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Merlin") / "photo_thumbs"
+_PREWARM_RUNNING = False
 
 
-def get_or_create_photo_thumb(full_path: Path, max_px: int = 360) -> Path | None:
-    """고해상도 원본 사진(4~12MB)을 360px 경량 JPEG 썸네일(10~20KB)로 디스크 캐싱해 즉시 서빙합니다."""
+def get_or_create_photo_thumb(full_path: Path, max_px: int = 280) -> Path | None:
+    """고해상도 원본 사진(4~12MB)을 libjpeg DCT draft 가속 기반 280px 경량 JPEG 썸네일(6~14KB)로 디스크 캐싱해 즉시 서빙합니다."""
     try:
         if _is_cloud_virtual_or_unpinned_file(full_path):
             return None
         st = full_path.stat()
-        # 이미 120KB 이하의 초경량 파일이면 리사이징 없이 원본 그대로 서빙
-        if st.st_size <= 120 * 1024:
+        if st.st_size <= 45 * 1024 and full_path.suffix.lower() in (".jpg", ".jpeg"):
             return full_path
         cache_key = hashlib.sha1(
             f"{full_path}|{st.st_size}|{int(st.st_mtime)}|{max_px}".encode("utf-8", errors="ignore")
         ).hexdigest()[:20]
         _PHOTO_THUMBS_DIR.mkdir(parents=True, exist_ok=True)
         out_jpg = _PHOTO_THUMBS_DIR / f"pt_{cache_key}.jpg"
-        if out_jpg.exists() and out_jpg.stat().st_size > 500:
+        if out_jpg.exists() and out_jpg.stat().st_size > 400:
             return out_jpg
 
         from PIL import Image, ImageOps
 
         with Image.open(full_path) as im:
+            try:
+                im.draft("RGB", (max_px * 2, max_px * 2))
+            except Exception:
+                pass
             im = ImageOps.exif_transpose(im)
             if im.mode != "RGB":
                 im = im.convert("RGB")
             im.thumbnail((max_px, max_px), Image.Resampling.BILINEAR)
-            tmp_jpg = _PHOTO_THUMBS_DIR / f"pt_{cache_key}.{os.getpid()}.tmp.jpg"
-            im.save(tmp_jpg, "JPEG", quality=78, optimize=False)
-        if tmp_jpg.exists() and tmp_jpg.stat().st_size > 500:
+            tmp_jpg = _PHOTO_THUMBS_DIR / f"pt_{cache_key}.{os.getpid()}_{threading.get_ident()}.tmp.jpg"
+            im.save(tmp_jpg, "JPEG", quality=74, optimize=False)
+        if tmp_jpg.exists() and tmp_jpg.stat().st_size > 400:
             os.replace(tmp_jpg, out_jpg)
             return out_jpg
     except Exception:
         return None
     return None
+
+
+def _trigger_bg_photo_thumb_prewarm(paths: List[Path]) -> None:
+    """/__photos/list 직후 백그라운드에서 저부하로 디스크 썸네일 캐시를 미리 달궈 두어 수백·수천 장 스크롤 시 대기 시간을 0ms로 만듭니다."""
+    global _PREWARM_RUNNING
+    if _PREWARM_RUNNING or not paths:
+        return
+    _PREWARM_RUNNING = True
+
+    def _worker() -> None:
+        global _PREWARM_RUNNING
+        try:
+            for p in paths:
+                try:
+                    if p.exists() and p.is_file():
+                        get_or_create_photo_thumb(p, max_px=280)
+                except Exception:
+                    pass
+                time.sleep(0.006)
+        finally:
+            _PREWARM_RUNNING = False
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+def get_photo_thumbs_batch(payload: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """브라우저의 HTTP 6-소켓 병목을 원천 제거하기 위해 최대 64장의 경량 썸네일을 단일 요청(멀티스레드 병렬)으로 한 번에 반환합니다."""
+    import base64
+    from concurrent.futures import ThreadPoolExecutor
+
+    data = payload or {}
+    raw_items = data.get("items")
+    if not isinstance(raw_items, list) or not raw_items:
+        return {"ok": True, "thumbs": {}}
+
+    batch = raw_items[:64]
+
+    def _encode_one(entry: Any) -> tuple[str, str | None]:
+        if not isinstance(entry, dict):
+            return ("", None)
+        item_id = str(entry.get("id") or entry.get("path") or "").strip()
+        if not item_id:
+            return ("", None)
+        f_path, mime, status = resolve_local_media_file(
+            {"p": entry.get("path") or item_id, "fp": entry.get("fullPath") or ""}
+        )
+        if f_path is None or status != 200 or not mime.startswith("image/"):
+            return (item_id, None)
+        t_path = get_or_create_photo_thumb(f_path, max_px=280)
+        if t_path is None or not t_path.exists():
+            return (item_id, None)
+        try:
+            raw = t_path.read_bytes()
+            b64 = base64.b64encode(raw).decode("ascii")
+            t_mime = "image/jpeg" if t_path.suffix.lower() in (".jpg", ".jpeg") else mime
+            return (item_id, f"data:{t_mime};base64,{b64}")
+        except Exception:
+            return (item_id, None)
+
+    thumbs: Dict[str, str] = {}
+    with ThreadPoolExecutor(max_workers=4) as pool:
+        for k, v in pool.map(_encode_one, batch):
+            if k and v:
+                thumbs[k] = v
+
+    return {"ok": True, "count": len(thumbs), "thumbs": thumbs}
 
 
 def read_local_photo_file(params: Dict[str, Any] | None = None) -> tuple[bytes | None, str, int]:

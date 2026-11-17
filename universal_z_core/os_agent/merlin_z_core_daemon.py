@@ -55,7 +55,7 @@ import plugin_aggrofilter  # noqa: E402
 import ghosti_setup_parity  # noqa: E402
 import plugin_ghosti_superpowers  # noqa: E402
 
-CORE_VERSION = "2.3.24"
+CORE_VERSION = "2.3.25"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -497,7 +497,11 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 if is_thumb and mime.startswith("image/"):
                     thumb_path = plugin_ghosti_os.get_or_create_photo_thumb(f_path)
                     if thumb_path is not None:
-                        self._send_file_stream(thumb_path, content_type="image/jpeg", cache_max_age=86400)
+                        t_mime = "image/jpeg" if thumb_path.suffix.lower() in (".jpg", ".jpeg") else mime
+                        self._send_file_stream(thumb_path, content_type=t_mime, cache_max_age=86400)
+                        return
+                    if plugin_ghosti_os._is_cloud_virtual_or_unpinned_file(f_path):
+                        self._send_json({"ok": False, "error": "CLOUD_UNPINNED_SKIP"}, status=404)
                         return
                 self._send_file_stream(f_path, content_type=mime)
             else:
@@ -731,6 +735,12 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             if self._reject_untrusted():
                 return
             self._send_json(trigger_silent_self_update(body))
+            return
+
+        if path in ("/__photos/thumbs-batch", "/api/ghosti/photos/thumbs-batch"):
+            if self._reject_untrusted():
+                return
+            self._send_json(plugin_ghosti_os.get_photo_thumbs_batch(body))
             return
 
         if path == "/__merlin/query":

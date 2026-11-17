@@ -3,6 +3,10 @@ import { useSaySeeStore } from '../../store/useSaySeeStore';
 import { resolveLoungePhotoCorpus } from '../../store/slices/storeSharedRefs';
 import { jumpToGhostSecretary } from '../../components/GhostSecretaryFirstGuard';
 import { aiRuntimeFlags } from '../../services/ai/aiSharedRuntime';
+import { getZCoreUrl, zCoreBridge } from '../../services/zCoreBridge';
+
+const PERSISTENT_BATCH_THUMB_CACHE = new Map<string, string>();
+const INFLIGHT_BATCH_THUMB_IDS = new Set<string>();
 
 export const FreePhotoShareOverlays: React.FC = () => {
   const activeLoungeType = useSaySeeStore((s) => s.activeLoungeType);
@@ -25,7 +29,13 @@ export const FreePhotoShareOverlays: React.FC = () => {
     activeLoungeType === 'family' ? 'family@sundreamer.app' : 'friend@sundreamer.app'
   );
   const [selectedSharedUploadIds, setSelectedSharedUploadIds] = useState<string[]>([]);
-  const [visibleUploadCount, setVisibleUploadCount] = useState(24);
+  const [, setThumbCacheTick] = useState(0);
+  const scrollWrapRef = useRef<HTMLDivElement | null>(null);
+  const [scrollState, setScrollState] = useState({
+    scrollTop: 0,
+    viewportH: 560,
+    containerW: 780,
+  });
   const wasUploadModalOpenRef = useRef(false);
 
   const selectedSharedUploadSet = useMemo(
@@ -62,14 +72,133 @@ export const FreePhotoShareOverlays: React.FC = () => {
   useEffect(() => {
     aiRuntimeFlags.priorityModalGalleryOpen = showSharedPhotoUploadModal;
     if (showSharedPhotoUploadModal && !wasUploadModalOpenRef.current) {
-      setVisibleUploadCount(24);
       setSelectedSharedUploadIds([]);
+      setScrollState((prev) => ({ ...prev, scrollTop: 0 }));
+      if (scrollWrapRef.current) {
+        scrollWrapRef.current.scrollTop = 0;
+      }
     }
     wasUploadModalOpenRef.current = showSharedPhotoUploadModal;
     return () => {
       aiRuntimeFlags.priorityModalGalleryOpen = false;
     };
   }, [showSharedPhotoUploadModal]);
+
+  useEffect(() => {
+    if (!showSharedPhotoUploadModal) return;
+    const el = scrollWrapRef.current;
+    if (!el) return;
+    const syncMeasure = () => {
+      setScrollState((prev) => ({
+        scrollTop: el.scrollTop,
+        viewportH: el.clientHeight || prev.viewportH,
+        containerW: el.clientWidth || prev.containerW,
+      }));
+    };
+    syncMeasure();
+    if (typeof ResizeObserver !== 'undefined') {
+      const ro = new ResizeObserver(syncMeasure);
+      ro.observe(el);
+      return () => ro.disconnect();
+    }
+  }, [showSharedPhotoUploadModal, uploadableLocalPhotos.length]);
+
+  const gridCols = useMemo(() => {
+    if (typeof window === 'undefined') return 6;
+    const vw = window.innerWidth;
+    if (vw >= 768) return 6;
+    if (vw >= 640) return 4;
+    return 3;
+  }, [scrollState.containerW]);
+
+  const gapPx = 10;
+  const cardSidePx = Math.max(
+    84,
+    Math.floor((Math.max(280, scrollState.containerW - 6) - (gridCols - 1) * gapPx) / gridCols)
+  );
+  const rowHeightPx = cardSidePx + gapPx;
+  const totalRows = Math.ceil(uploadableLocalPhotos.length / gridCols);
+  const startRow = Math.max(0, Math.floor(scrollState.scrollTop / rowHeightPx) - 4);
+  const endRow = Math.min(
+    totalRows,
+    Math.ceil((scrollState.scrollTop + scrollState.viewportH) / rowHeightPx) + 6
+  );
+  const startIndex = startRow * gridCols;
+  const endIndex = Math.min(uploadableLocalPhotos.length, endRow * gridCols);
+  const topSpacerPx = startRow * rowHeightPx;
+  const bottomSpacerPx = Math.max(0, (totalRows - endRow) * rowHeightPx);
+
+  // [수백·수천 장 초고속 무지연 배치 프리페처]:
+  // 브라우저 6-소켓 병목 없이 1회 HTTP 요청으로 48장씩 묶어 가져오고, 현재 스크롤 위치 앞쪽으로 144장을 선행 캐싱합니다.
+  useEffect(() => {
+    if (!showSharedPhotoUploadModal || !zCoreBridge.isConnected || uploadableLocalPhotos.length === 0) {
+      return;
+    }
+    let cancelled = false;
+    const lookaheadEnd = Math.min(uploadableLocalPhotos.length, endIndex + 96);
+    const prioritySlice = [
+      ...uploadableLocalPhotos.slice(startIndex, lookaheadEnd),
+      ...uploadableLocalPhotos.slice(0, startIndex),
+      ...uploadableLocalPhotos.slice(lookaheadEnd),
+    ];
+
+    const pumpBatches = async () => {
+      for (let cursor = 0; cursor < prioritySlice.length; ) {
+        if (cancelled || !showSharedPhotoUploadModal) return;
+        const batch: typeof uploadableLocalPhotos = [];
+        while (cursor < prioritySlice.length && batch.length < 48) {
+          const item = prioritySlice[cursor++];
+          if (
+            item.thumbUrl?.startsWith('http://127.0.0.1') &&
+            !PERSISTENT_BATCH_THUMB_CACHE.has(item.id) &&
+            !INFLIGHT_BATCH_THUMB_IDS.has(item.id)
+          ) {
+            batch.push(item);
+            INFLIGHT_BATCH_THUMB_IDS.add(item.id);
+          }
+        }
+        if (batch.length === 0) continue;
+        try {
+          const res = await fetch(getZCoreUrl('/__photos/thumbs-batch'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              items: batch.map((b) => ({
+                id: b.id,
+                path: b.name,
+                fullPath: b.fullPath || '',
+              })),
+            }),
+          });
+          if (!res.ok) {
+            batch.forEach((b) => INFLIGHT_BATCH_THUMB_IDS.delete(b.id));
+            return;
+          }
+          const json = await res.json();
+          const thumbsObj = (json?.thumbs || {}) as Record<string, string>;
+          let added = 0;
+          for (const b of batch) {
+            INFLIGHT_BATCH_THUMB_IDS.delete(b.id);
+            if (thumbsObj[b.id]) {
+              PERSISTENT_BATCH_THUMB_CACHE.set(b.id, thumbsObj[b.id]);
+              added += 1;
+            }
+          }
+          if (added > 0 && !cancelled) {
+            setThumbCacheTick((t) => t + 1);
+          }
+        } catch {
+          batch.forEach((b) => INFLIGHT_BATCH_THUMB_IDS.delete(b.id));
+          return;
+        }
+      }
+    };
+
+    void pumpBatches();
+    return () => {
+      cancelled = true;
+    };
+  }, [showSharedPhotoUploadModal, startIndex, endIndex, uploadableLocalPhotos]);
 
   return (
     <>
@@ -226,15 +355,15 @@ export const FreePhotoShareOverlays: React.FC = () => {
             </div>
 
             <div
+              ref={scrollWrapRef}
               className="flex-1 overflow-y-auto pr-1"
               onScroll={(e) => {
                 const el = e.currentTarget;
-                if (
-                  visibleUploadCount < uploadableLocalPhotos.length &&
-                  el.scrollTop + el.clientHeight >= el.scrollHeight - 220
-                ) {
-                  setVisibleUploadCount((c) => Math.min(uploadableLocalPhotos.length, c + 24));
-                }
+                setScrollState((prev) => ({
+                  scrollTop: el.scrollTop,
+                  viewportH: el.clientHeight || prev.viewportH,
+                  containerW: el.clientWidth || prev.containerW,
+                }));
               }}
             >
               {uploadableLocalPhotos.length === 0 ? (
@@ -272,10 +401,16 @@ export const FreePhotoShareOverlays: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="flex flex-col gap-3">
+                <div
+                  style={{
+                    paddingTop: topSpacerPx,
+                    paddingBottom: bottomSpacerPx,
+                  }}
+                >
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
-                    {uploadableLocalPhotos.slice(0, visibleUploadCount).map((p, idx) => {
+                    {uploadableLocalPhotos.slice(startIndex, endIndex).map((p) => {
                       const checked = selectedSharedUploadSet.has(p.id);
+                      const resolvedSrc = PERSISTENT_BATCH_THUMB_CACHE.get(p.id) || p.thumbUrl;
                       return (
                         <button
                           key={p.id}
@@ -292,11 +427,10 @@ export const FreePhotoShareOverlays: React.FC = () => {
                           }`}
                         >
                           <img
-                            src={p.thumbUrl}
+                            src={resolvedSrc}
                             alt={p.name}
-                            crossOrigin={p.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
-                            loading={idx < 18 ? 'eager' : 'lazy'}
-                            fetchPriority={idx < 12 ? 'high' : 'auto'}
+                            crossOrigin={resolvedSrc?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
+                            loading="eager"
                             decoding="async"
                             onError={(e) => {
                               const img = e.currentTarget;
@@ -324,15 +458,6 @@ export const FreePhotoShareOverlays: React.FC = () => {
                       );
                     })}
                   </div>
-                  {uploadableLocalPhotos.length > visibleUploadCount && (
-                    <button
-                      type="button"
-                      onClick={() => setVisibleUploadCount((c) => Math.min(uploadableLocalPhotos.length, c + 24))}
-                      className="w-full py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-teal-300 font-label-sm text-[12px] font-bold cursor-pointer"
-                    >
-                      ➕ 사진 더 보기 (남은 {uploadableLocalPhotos.length - visibleUploadCount}장)
-                    </button>
-                  )}
                 </div>
               )}
             </div>
