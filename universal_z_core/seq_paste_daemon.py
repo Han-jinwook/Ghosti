@@ -5676,7 +5676,7 @@ def _strip_copyright_and_ad_boilerplate(raw_txt: str) -> str:
     return "\n".join(lines).strip()
 
 
-def clean_and_iron_text(raw_txt: str, allow_typo_morph: bool = True) -> str:
+def clean_and_iron_text(raw_txt: str, allow_typo_morph: bool = False) -> str:
     """서식 세탁(순수 텍스트화 + 광고·저작권 꼬리말 절삭) + 한영 오타 성형 + 줄바꿈·유령공백(NFKC)·띄어쓰기 다림질 통합"""
     if not raw_txt or not raw_txt.strip():
         return raw_txt or ""
@@ -5749,18 +5749,10 @@ def superpower_1_clean_and_iron_lines(
                     daemon_set_cb(clip_ready)
                     show_ghost_toast("👻 귀신같이 [1] 서식·줄바꿈 다림질 완료 (Ctrl+Z 원복)")
                     return True
-                elif not has_sel:
-                    ok_line, _, out_line, _ = _replace_edit_control_current_line_atomic(
-                        ed_target, auto_triggered=False, prefer_full_doc=False, allow_typo_morph=True
-                    )
-                    if ok_line:
-                        daemon_set_cb(out_line)
-                        show_ghost_toast("👻 귀신같이 [1] 현재 줄 한영·서식 다림질 완료 (Ctrl+Z 원복)")
-                        return True
         except Exception:
             pass
 
-    # 2) 일반 앱(노션·구글시트·구글독스·브라우저·워드 등)에서 드래그/단어선택/시트 셀 선택 직후 [1]번 호출 시 자동 복사 ➔ 한영·서식 변환 ➔ 제자리 교체
+    # 2) 일반 앱(노션·구글시트·구글독스·브라우저·워드 등)에서 드래그/단어선택/시트 셀 선택 직후 [1]번 호출 시 자동 복사 ➔ 서식·줄바꿈 세탁 ➔ 제자리 교체
     _, target_title = _get_win_class_and_title(_LAST_TARGET_HWND) if (_LAST_TARGET_HWND and u32.IsWindow(_LAST_TARGET_HWND)) else ("", "")
     title_low = target_title.lower()
     is_gsheets_win = any(k in title_low for k in ("google sheets", "google 스프레드시트", "스프레드시트"))
@@ -5781,8 +5773,7 @@ def superpower_1_clean_and_iron_lines(
             if sel_copied and sel_copied != sentinel and sel_copied.strip():
                 is_cell_or_tsv_copy = ("\t" in sel_copied) or (is_gsheets_win and sel_copied.endswith(("\r\n", "\n")))
                 had_trailing_nl = sel_copied.endswith(("\r\n", "\n")) and "\n" not in sel_copied.rstrip("\r\n")
-                _, sel_lang = morph_korean_english_text_with_direction(sel_copied)
-                out_sel = clean_and_iron_text(sel_copied, allow_typo_morph=True)
+                out_sel = clean_and_iron_text(sel_copied, allow_typo_morph=False)
                 out_sel_win = out_sel.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n")
                 if not had_trailing_nl and "\t" not in out_sel_win:
                     out_sel_win = out_sel_win.rstrip("\r\n")
@@ -5794,10 +5785,8 @@ def superpower_1_clean_and_iron_lines(
                 daemon_set_cb(out_sel_win)
                 time.sleep(0.035)
                 tap_key_combo([VK_CONTROL], VK_V)
-                if sel_lang in ("KO", "EN"):
-                    set_ime_language(target_korean=(sel_lang == "KO"))
                 arm_undo_snapshot(_LAST_TARGET_HWND, 0, sel_copied, out_sel_win, mode="clipboard_paste")
-                show_ghost_toast("👻 귀신같이 [1] 선택 영역 한영·서식 다림질 완료 (Ctrl+Z 원복)")
+                show_ghost_toast("👻 귀신같이 [1] 선택 영역 서식·줄바꿈 다림질 완료 (Ctrl+Z 원복)")
                 return True
             elif clip_txt:
                 daemon_set_cb(clip_txt)
@@ -6050,7 +6039,8 @@ AUTOCORRECT_EXCLUDE_PROCESSES: set[str] = {
     "hshow.exe",
     "hcell.exe",
     "hword.exe",
-    # 2. 글로벌 Microsoft Office / LibreOffice 계열 (자체 한/영 자동 고침 및 AutoCorrect 보유)
+    # 2. 글로벌 Microsoft Office / LibreOffice 계열 (자체 한/영 자동 고침 및 AutoCorrect 보유 — 엑셀 포함 전수)
+    "excel.exe",
     "winword.exe",
     "powerpnt.exe",
     "soffice.bin",
@@ -6093,6 +6083,7 @@ AUTOCORRECT_EXCLUDE_CLASS_KEYWORDS: tuple[str, ...] = (
     "hwp",
     "hnc_",
     "hncedit",
+    "xlmain",
     "opusapp",
     "_wwg",
     "pptframeclass",
@@ -6204,20 +6195,14 @@ def should_skip_auto_typo(hwnd: int) -> bool:
                 return False
             return True
 
-        # [허용 3] 엑셀(excel.exe) — 오직 인라인 셀 편집(EXCEL6) 또는 수식줄 편집(EXCEL<) 포커스일 때만 허용 (시트 그리드 EXCEL7 차단)
-        if proc_root_low == "excel.exe" or "xlmain" in cls_root_low:
-            if focus_cls.upper() in ("EXCEL6", "EXCEL<"):
-                return False
-            return True
-
-        # [허용 4] 카카오톡 PC 채팅 입력창 (최신 EVA_Window_Dblclk / 무포커스 핸들 포함, 비밀번호 칸 제외)
+        # [허용 3] 카카오톡 PC 채팅 입력창 (최신 EVA_Window_Dblclk / 무포커스 핸들 포함, 비밀번호 칸 제외)
         if proc_root_low == "kakaotalk.exe":
             if focus_h and (u32.GetWindowLongW(focus_h, -16) & 0x0020):
                 return True
             if not focus_cls or focus_cls in ("RICHEDIT50W", "Edit", "EVA_ChildWindow", "EVA_Window_Dblclk", "EVA_Window"):
                 return False
 
-        # 그 외 모든 프로그램·커스텀 캔버스·단축키 뷰포트는 실시간 자동성형 100% 차단 (수동 [1]번만 지원)
+        # 그 외 모든 프로그램(엑셀·워드·한글 등 자체 오토코렉트 보유 앱 및 웹/TSF 캔버스)은 실시간 자동성형 100% 차단
         return True
     except Exception:
         return True
