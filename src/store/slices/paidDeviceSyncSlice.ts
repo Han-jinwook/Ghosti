@@ -292,12 +292,25 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
           matchPercentage: 97,
           matchedBy: 'text-direct' as const,
         }));
+      const vaultPhotos: SearchResultItem[] = state.photos
+        .filter((p) => !p.quarantined && p.isVaultDocument)
+        .map((photo) => ({
+          photo,
+          score: 0.96,
+          matchPercentage: 98,
+          matchedBy: 'text-direct' as const,
+        }));
       return {
         activeLoungeType,
         activePricingPlan: state.subscribedLounges[activeLoungeType] ?? 'free_trial',
-        ...(isSwitchingLounge && !state.hasExecutedUserSearch
+        ...(isSwitchingLounge
           ? {
+              hasExecutedUserSearch: false,
+              searchSpace: 'gallery' as const,
               searchResults: refreshedGalleryResults,
+              matchedVideoScenes: state.videoSceneItems,
+              matchedLocalDocs: state.localDocuments,
+              matchedVaultPhotos: vaultPhotos,
               activeQuery:
                 activeLoungeType === 'family'
                   ? `${state.activeFamilyRoom} 패밀리 앨범 (${refreshedGalleryResults.length}장)`
