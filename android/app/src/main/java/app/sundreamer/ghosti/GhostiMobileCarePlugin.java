@@ -5,6 +5,7 @@ import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
+import android.content.pm.ResolveInfo;
 import android.net.Uri;
 import android.provider.Settings;
 
@@ -14,6 +15,17 @@ import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+
+import org.json.JSONArray;
+import org.json.JSONObject;
+
+import java.util.Arrays;
+import java.util.HashMap;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Set;
 
 @CapacitorPlugin(name = "GhostiMobileCare")
 public class GhostiMobileCarePlugin extends Plugin {
@@ -116,30 +128,109 @@ public class GhostiMobileCarePlugin extends Plugin {
         "com.korea.phonecleaner"
     };
 
+    private static final String[] STORAGE_CLEANER_INTENT_ACTIONS = new String[] {
+        "android.os.storage.action.CLEAR_APP_CACHE",
+        "android.os.storage.action.MANAGE_STORAGE",
+        "android.intent.action.MANAGE_PACKAGE_STORAGE"
+    };
+
+    private boolean isSuspiciousCleanerKeyword(String pkgOrLabel) {
+        if (pkgOrLabel == null) return false;
+        String low = pkgOrLabel.toLowerCase(Locale.ROOT);
+        return low.contains("clean")
+            || low.contains("boost")
+            || low.contains("junk")
+            || low.contains("cooler")
+            || low.contains("optimizer")
+            || low.contains("클리너")
+            || low.contains("청소")
+            || low.contains("부스터");
+    }
+
     @PluginMethod
     public void scanInstalledBloatCleaners(PluginCall call) {
         Context context = getContext();
         PackageManager pm = context.getPackageManager();
-        JSArray detected = new JSArray();
+        Set<String> candidatePackages = new LinkedHashSet<>(Arrays.asList(TARGET_BLOAT_PACKAGES));
+        Map<String, String> customRiskByPkg = new HashMap<>();
 
-        for (String pkg : TARGET_BLOAT_PACKAGES) {
+        // 1) 웹 원격 DB(public/mobile_bloat_cleaners_db.json)에서 실시간 전달된 신종 패키지 병합
+        try {
+            JSArray extraPackages = call.getArray("extraPackages");
+            if (extraPackages != null) {
+                for (int i = 0; i < extraPackages.length(); i++) {
+                    String extraPkg = extraPackages.optString(i, "").trim();
+                    if (!extraPkg.isEmpty()) {
+                        candidatePackages.add(extraPkg);
+                    }
+                }
+            }
+            JSObject customRiskMap = call.getObject("customRiskMap");
+            if (customRiskMap != null) {
+                JSONArray keys = customRiskMap.names();
+                if (keys != null) {
+                    for (int i = 0; i < keys.length(); i++) {
+                        String k = keys.optString(i, "");
+                        String v = customRiskMap.optString(k, "");
+                        if (!k.isEmpty() && !v.isEmpty()) {
+                            customRiskByPkg.put(k, v);
+                        }
+                    }
+                }
+            }
+        } catch (Exception ignored) {
+        }
+
+        // 2) <queries>의 <intent> 시그니처를 통해 노출된 신종 서드파티 클리너 패키지 자동 포착
+        for (String action : STORAGE_CLEANER_INTENT_ACTIONS) {
+            try {
+                Intent queryIntent = new Intent(action);
+                List<ResolveInfo> resolved = pm.queryIntentActivities(queryIntent, 0);
+                if (resolved != null) {
+                    for (ResolveInfo ri : resolved) {
+                        if (ri.activityInfo == null || ri.activityInfo.packageName == null) continue;
+                        String foundPkg = ri.activityInfo.packageName;
+                        ApplicationInfo ai = ri.activityInfo.applicationInfo;
+                        boolean isSystemApp = ai != null && ((ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0
+                            || (ai.flags & ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0);
+                        if (isSystemApp || foundPkg.startsWith("app.sundreamer.") || foundPkg.startsWith("com.android.") || foundPkg.startsWith("com.google.android.")) {
+                            continue;
+                        }
+                        String label = ai != null ? String.valueOf(pm.getApplicationLabel(ai)) : foundPkg;
+                        if (isSuspiciousCleanerKeyword(foundPkg) || isSuspiciousCleanerKeyword(label)) {
+                            candidatePackages.add(foundPkg);
+                        }
+                    }
+                }
+            } catch (Exception ignored) {
+            }
+        }
+
+        JSArray detected = new JSArray();
+        for (String pkg : candidatePackages) {
             try {
                 PackageInfo info = pm.getPackageInfo(pkg, 0);
                 if (info != null) {
                     ApplicationInfo appInfo = info.applicationInfo;
                     String appLabel = appInfo != null ? String.valueOf(pm.getApplicationLabel(appInfo)) : pkg;
-                    boolean isCleanX = pkg.contains("cleanx");
+                    boolean isCleanX = pkg.toLowerCase(Locale.ROOT).contains("cleanx");
+                    boolean isSubTrap = isCleanX
+                        || pkg.contains("guru")
+                        || pkg.contains("swipe")
+                        || pkg.contains("ai.cleaner");
+                    String customRisk = customRiskByPkg.get(pkg);
+                    String riskSummary = (customRisk != null && !customRisk.isEmpty())
+                        ? customRisk
+                        : isCleanX
+                        ? "🚨 [구독함정·권한침투] 3일 무료체험 후 주 13,000원(월 52,000원) 자동결제 유도 및 Google 계정 데이터 접근 권한 위험"
+                        : "⚠️ [애드웨어·구독함정] 불필요한 광고 팝업·백그라운드 배터리 소모 및 유료 구독 유도 위험 청소앱";
+
                     JSObject item = new JSObject();
                     item.put("packageName", pkg);
                     item.put("appName", appLabel);
                     item.put("versionName", info.versionName != null ? info.versionName : "");
-                    item.put("isSubscriptionTrap", isCleanX || pkg.contains("guru") || pkg.contains("swipe") || pkg.contains("ai.cleaner"));
-                    item.put(
-                        "riskSummaryKo",
-                        isCleanX
-                            ? "🚨 3일 무료체험 후 주 13,000원(월 52,000원) 자동결제 유도 및 Google 계정 데이터 접근 권한 위험"
-                            : "⚠️ 불필요한 광고 팝업·백그라운드 배터리 소모 및 유료 구독 유도 위험 클리너"
-                    );
+                    item.put("isSubscriptionTrap", isSubTrap);
+                    item.put("riskSummaryKo", riskSummary);
                     detected.put(item);
                 }
             } catch (PackageManager.NameNotFoundException ignored) {
@@ -150,7 +241,7 @@ public class GhostiMobileCarePlugin extends Plugin {
 
         JSObject ret = new JSObject();
         ret.put("ok", true);
-        ret.put("scannedCount", TARGET_BLOAT_PACKAGES.length);
+        ret.put("scannedCount", candidatePackages.size());
         ret.put("detected", detected);
         call.resolve(ret);
     }

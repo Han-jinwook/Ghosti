@@ -11,11 +11,29 @@ export interface DetectedBloatCleanerItem {
 export interface ScanBloatCleanersResult {
   ok: boolean;
   scannedCount: number;
+  dbVersion?: string;
   detected: DetectedBloatCleanerItem[];
 }
 
+export interface RemoteBloatCleanerEntry {
+  packageName: string;
+  appNameHint?: string;
+  category?: string;
+  isSubscriptionTrap?: boolean;
+  riskSummaryKo?: string;
+}
+
+export interface RemoteBloatCleanerDb {
+  dbVersion: string;
+  updatedAt: string;
+  packages: RemoteBloatCleanerEntry[];
+}
+
 export interface GhostiMobileCarePluginInterface {
-  scanInstalledBloatCleaners(): Promise<ScanBloatCleanersResult>;
+  scanInstalledBloatCleaners(options?: {
+    extraPackages?: string[];
+    customRiskMap?: Record<string, string>;
+  }): Promise<ScanBloatCleanersResult>;
   openAppUninstallScreen(options: { packageName: string }): Promise<{ ok: boolean; packageName: string; mode: string }>;
   openPlayStoreSubscriptions(options?: { packageName?: string }): Promise<{ ok: boolean; url: string }>;
   openGoogleAccountPermissions(): Promise<{ ok: boolean; url: string }>;
@@ -23,6 +41,35 @@ export interface GhostiMobileCarePluginInterface {
 }
 
 const GhostiMobileCareNative = registerPlugin<GhostiMobileCarePluginInterface>('GhostiMobileCare');
+
+let cachedRemoteDb: RemoteBloatCleanerDb | null = null;
+
+/**
+ * [1단계 실시간 원격 DB 갱신 (스토어 재심사 없이 git push 즉시 반영)]:
+ * `/mobile_bloat_cleaners_db.json`에서 최신 플리스웨어(구독함정)·애드웨어·권한침투 클리너 명단을 로드하여
+ * 네이티브 스캐너(`GhostiMobileCarePlugin`)에 동적으로 주입합니다.
+ */
+export async function fetchRemoteBloatCleanersDb(): Promise<RemoteBloatCleanerDb> {
+  try {
+    const res = await fetch('/mobile_bloat_cleaners_db.json', { cache: 'no-cache' });
+    if (res.ok) {
+      const json = (await res.json()) as RemoteBloatCleanerDb;
+      if (json && Array.isArray(json.packages)) {
+        cachedRemoteDb = json;
+        return json;
+      }
+    }
+  } catch {
+    /* offline fallback */
+  }
+  return (
+    cachedRemoteDb || {
+      dbVersion: '2026.11.17.1',
+      updatedAt: '2026-11-17',
+      packages: [],
+    }
+  );
+}
 
 export function isCapacitorAndroidRuntime(): boolean {
   if (typeof window === 'undefined') return false;
@@ -38,11 +85,28 @@ export function isAndroidMobileBrowserOrApp(): boolean {
 }
 
 export async function scanMobileBloatCleaners(): Promise<ScanBloatCleanersResult> {
+  const remoteDb = await fetchRemoteBloatCleanersDb();
+  const extraPackages: string[] = [];
+  const customRiskMap: Record<string, string> = {};
+  for (const item of remoteDb.packages || []) {
+    if (!item?.packageName) continue;
+    extraPackages.push(item.packageName);
+    if (item.riskSummaryKo) {
+      customRiskMap[item.packageName] = item.riskSummaryKo;
+    }
+  }
+
   if (isCapacitorAndroidRuntime()) {
     try {
-      const res = await GhostiMobileCareNative.scanInstalledBloatCleaners();
+      const res = await GhostiMobileCareNative.scanInstalledBloatCleaners({
+        extraPackages,
+        customRiskMap,
+      });
       if (res && Array.isArray(res.detected)) {
-        return res;
+        return {
+          ...res,
+          dbVersion: remoteDb.dbVersion,
+        };
       }
     } catch {
       /* fallback below */
@@ -50,7 +114,8 @@ export async function scanMobileBloatCleaners(): Promise<ScanBloatCleanersResult
   }
   return {
     ok: true,
-    scannedCount: 100,
+    scannedCount: Math.max(92, extraPackages.length),
+    dbVersion: remoteDb.dbVersion,
     detected: [],
   };
 }

@@ -147,5 +147,16 @@
         <package android:name="com.kr.smartcleaner" />
         <package android:name="kr.co.smartcleaner" />
         <package android:name="com.korea.phonecleaner" />
+
+        <!-- 3순위: 향후 출시될 미등록 신종 클리너·저장공간 관리 앱 자동 포착용 합법 인텐트 시그니처 -->
+        <intent>
+            <action android:name="android.os.storage.action.CLEAR_APP_CACHE" />
+        </intent>
+        <intent>
+            <action android:name="android.os.storage.action.MANAGE_STORAGE" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.MANAGE_PACKAGE_STORAGE" />
+        </intent>
     </queries>
 </manifest>

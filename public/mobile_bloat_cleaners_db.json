@@ -1,0 +1,77 @@
+{
+  "dbVersion": "2026.11.17.1",
+  "updatedAt": "2026-11-17T11:50:00+09:00",
+  "description": "귀신같이(Ghosti) 모바일 귀신비서 — 유료결제 유도 악성 청소앱(Fleeceware·구독함정·애드웨어·계정권한 침투) 실시간 원격 탐지 DB (스토어 재심사 없이 git push로 즉시 갱신)",
+  "packages": [
+    {
+      "packageName": "com.xstudios.cleanx",
+      "appNameHint": "CleanX: 저장공간 정리 (TapSuite)",
+      "category": "fleeceware_oauth_risk",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "🚨 [구독함정·권한침투] 3일 무료체험 후 주 13,000원(월 52,000원) 자동결제 유도 및 Google 계정 데이터 접근 권한 요구"
+    },
+    {
+      "packageName": "com.tapsuite.cleanx",
+      "appNameHint": "CleanX Variant",
+      "category": "fleeceware_oauth_risk",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "🚨 [구독함정·권한침투] 주간 고액 자동결제 유도 및 Google 계정 권한 요구 위험"
+    },
+    {
+      "packageName": "com.cleanx.storage.cleaner",
+      "appNameHint": "CleanX Storage Cleaner",
+      "category": "fleeceware_subscription",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "🚨 [구독함정] 무료체험 후 주간/월간 고액 자동결제 유도 클리너"
+    },
+    {
+      "packageName": "com.cleanx.phone.cleaner",
+      "appNameHint": "CleanX Phone Cleaner",
+      "category": "fleeceware_subscription",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "🚨 [구독함정] 무료체험 후 주간/월간 고액 자동결제 유도 클리너"
+    },
+    {
+      "packageName": "com.cleaner.guru.storage.clean",
+      "appNameHint": "Cleaner Guru",
+      "category": "fleeceware_subscription",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "🚨 [구독함정] 주간 고액 정기결제 유도형 사진·저장공간 클리너"
+    },
+    {
+      "packageName": "com.ai.photo.cleaner.swipe",
+      "appNameHint": "AI Photo Cleaner Swipe",
+      "category": "fleeceware_subscription",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "🚨 [구독함정] 무료체험 후 주간 정기결제 유도형 사진 정리 앱"
+    },
+    {
+      "packageName": "com.ai.cleaner.storage.master",
+      "appNameHint": "AI Cleaner Storage Master",
+      "category": "fleeceware_subscription",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "🚨 [구독함정] 무료체험 후 주간 정기결제 유도형 클리너"
+    },
+    {
+      "packageName": "com.fancyclean.security.antivirus",
+      "appNameHint": "FancyClean",
+      "category": "adware_booster",
+      "isSubscriptionTrap": false,
+      "riskSummaryKo": "⚠️ [애드웨어] 가짜 위험 알림 팝업 및 전체화면 광고 도배 클리너"
+    },
+    {
+      "packageName": "com.noxgroup.app.cleaner",
+      "appNameHint": "NoxCleaner",
+      "category": "adware_booster",
+      "isSubscriptionTrap": false,
+      "riskSummaryKo": "⚠️ [애드웨어] 상시 백그라운드 배터리 소모 및 전체화면 광고 팝업 클리너"
+    },
+    {
+      "packageName": "com.oneapp.max.cleaner.booster",
+      "appNameHint": "OneApp Max Cleaner",
+      "category": "adware_booster",
+      "isSubscriptionTrap": false,
+      "riskSummaryKo": "⚠️ [애드웨어] 과장된 메모리 경고 및 전면 광고 유도 클리너"
+    }
+  ]
+}

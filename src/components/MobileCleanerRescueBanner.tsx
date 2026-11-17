@@ -67,8 +67,8 @@ export const MobileCleanerRescueBanner: React.FC = () => {
             }`}
           >
             {hasDetected
-              ? `🚨 주의! 유료결제 유도 클리너 ${detectedList.length}건 발견`
-              : `🛡️ 스마트폰 유료유도 클리너(${scannedCount}종) 안심 경호`}
+              ? `🚨 주의! 유료결제 유도 악성 청소앱(구독함정·애드웨어) ${detectedList.length}건 발견`
+              : `🛡️ 유료결제 유도 악성 청소앱(구독함정·애드웨어·권한침투 ${scannedCount}종) 안심 경호`}
           </span>
           <span className="text-[11.5px] text-zinc-300 font-bold">
             {isNativeAndroid ? '앱 실시간 스캔 완료' : '모바일 3단 구출 센터'}
