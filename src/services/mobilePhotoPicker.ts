@@ -1,5 +1,15 @@
 import type { DuplicateGroup, PhotoItem, TrashCategory } from '../types/saysee';
 
+interface OpticalSignatureMeta {
+  dhash: string;
+  sharpness: number;
+  aspect: number;
+  whitePct: number;
+  rgbGrid: Uint8Array; // 8x8x3 = 192 bytes
+}
+
+const opticalSigByPhotoId = new Map<string, OpticalSignatureMeta>();
+
 /**
  * 두 64-bit dHash (16자리 hex) 간의 해밍 거리(0~64)를 계산합니다.
  */
@@ -20,17 +30,47 @@ export function computeDhashHammingDistance(hashA?: string, hashB?: string): num
 }
 
 /**
+ * 두 8x8 RGB 컬러 그리드(192바이트) 간의 평균 절대 색상·밝기 오차(0~255) 및 최대 블록 오차를 계산합니다.
+ * - 서로 다른 문서 페이지(예: 2021-07-12 (1).png vs (2).png)나 배경색이 다른 이미지(예: 게시판 캡처 vs 민트색 포스터)가
+ *   한 세트로 잘못 묶이는 현상을 원천 차단합니다.
+ */
+function computeRgbGridDifference(
+  gridA?: Uint8Array,
+  gridB?: Uint8Array
+): { meanDiff: number; maxBlockDiff: number } {
+  if (!gridA || !gridB || gridA.length !== 192 || gridB.length !== 192) {
+    return { meanDiff: 255, maxBlockDiff: 255 };
+  }
+  let sum = 0;
+  let maxBlock = 0;
+  for (let i = 0; i < 192; i += 3) {
+    const dr = Math.abs(gridA[i] - gridB[i]);
+    const dg = Math.abs(gridA[i + 1] - gridB[i + 1]);
+    const db = Math.abs(gridA[i + 2] - gridB[i + 2]);
+    const blockDiff = (dr + dg + db) / 3;
+    sum += dr + dg + db;
+    if (blockDiff > maxBlock) maxBlock = blockDiff;
+  }
+  return {
+    meanDiff: sum / 192,
+    maxBlockDiff: maxBlock,
+  };
+}
+
+/**
  * HTMLImageElement로부터:
  * 1) 9x8 그레이스케일 기반 64-bit dHash (16자리 hex)
- * 2) 128x128 그레이스케일 2D 라플라시안(Laplacian) 선명도 점수 (흐린 사진 < 3200, 선명한 사진 >= 3200)
+ * 2) 8x8 RGB 블록 컬러 시그니처 (192 bytes) & 백색 배경 비율(whitePct)
+ * 3) 128x128 그레이스케일 2D 라플라시안(Laplacian) 선명도 점수
  * 를 동시에 계산합니다.
  */
-export function computeOpticalDhashAndSharpness(img: HTMLImageElement): {
-  dhash: string;
-  sharpness: number;
-} {
+export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalSignatureMeta {
   let dhash = '';
   let sharpness = 12000;
+  let whitePct = 0;
+  const rgbGrid = new Uint8Array(192);
+  const aspect = img.width > 0 ? img.height / img.width : 1;
+
   try {
     // 1) 9x8 dHash 계산
     const hashCanvas = document.createElement('canvas');
@@ -55,7 +95,31 @@ export function computeOpticalDhashAndSharpness(img: HTMLImageElement): {
       }
     }
 
-    // 2) 128x128 2D 라플라시안(Laplacian) 고주파 엣지 분산 기반 실제 선명도 측정 (흔들린 사진 정밀 판별)
+    // 2) 8x8 RGB 블록 시그니처 & 백색 배경 비율 측정
+    const rgbCanvas = document.createElement('canvas');
+    rgbCanvas.width = 8;
+    rgbCanvas.height = 8;
+    const rCtx = rgbCanvas.getContext('2d');
+    if (rCtx) {
+      rCtx.drawImage(img, 0, 0, 8, 8);
+      const rData = rCtx.getImageData(0, 0, 8, 8).data;
+      let whiteCells = 0;
+      for (let i = 0; i < 64; i++) {
+        const p = i * 4;
+        const r = rData[p];
+        const g = rData[p + 1];
+        const b = rData[p + 2];
+        rgbGrid[i * 3] = r;
+        rgbGrid[i * 3 + 1] = g;
+        rgbGrid[i * 3 + 2] = b;
+        if (r >= 232 && g >= 232 && b >= 232) {
+          whiteCells++;
+        }
+      }
+      whitePct = (whiteCells / 64) * 100;
+    }
+
+    // 3) 128x128 2D 라플라시안(Laplacian) 고주파 엣지 분산 기반 실제 선명도 측정 (흔들린 사진 정밀 판별)
     const W = 128;
     const H = 128;
     const lapCanvas = document.createElement('canvas');
@@ -89,20 +153,22 @@ export function computeOpticalDhashAndSharpness(img: HTMLImageElement): {
       if (count > 0) {
         const mean = lapSum / count;
         const variance = Math.max(0, lapSqSum / count - mean * mean);
-        // 선명한 일반 사진: 4500~28000+, 흔들리거나 초점 나간 사진: 300~3100
         sharpness = Math.round(variance * 18 + mean * 95);
       }
     }
   } catch {
     dhash = '';
   }
-  return { dhash, sharpness };
+  return { dhash, sharpness, aspect, whitePct, rgbGrid };
 }
 
 /**
- * 사진 배열(PC 실사진 또는 모바일 사진)에서 64-bit dHash 해밍 거리와 촬영 시각을 기반으로
- * 2장~20장 단위의 다중 연사·중복 묶음(DuplicateGroup)을 클러스터링하고,
- * 각 묶음 내에서 가장 선명하고 해상도/용량이 높은 1장을 `bestPhotoId`(👑 추천 베스트 1장)로 선정합니다.
+ * 사진 배열(PC 실사진 또는 모바일 사진)에서:
+ * - [트랙 A: 동일 사진 중복 사본] (예: 다른 폴더에 복사된 동일 파일 `2021-07-12 (1).png` & `2021-07-12 (1)__스크린샷.png`)
+ *   ➔ dHash 해밍거리 <= 2 AND 8x8 RGB 평균오차 <= 4.5 & 최대블록오차 <= 18
+ * - [트랙 B: 실제 카메라 연속 촬영 연사 묶음] (백색 문서/스크린샷이 아닌 실물 사진 whitePct < 45%)
+ *   ➔ 기준 사진(first) 대비 10초 이내 촬영 & 화면비 일치 & dHash 해밍거리 <= 8 & 8x8 RGB 평균오차 <= 11.5 & 최대블록오차 <= 35
+ * 로 엄격히 클러스터링하여, 다른 페이지 문서(`(1)` vs `(2)`)나 다른 구도/색상 이미지가 한 세트로 섞이는 현상을 100% 차단합니다.
  */
 export function clusterPhotosIntoDuplicateGroups(
   photos: PhotoItem[]
@@ -112,7 +178,6 @@ export function clusterPhotosIntoDuplicateGroups(
       !p.quarantined &&
       p.dhash &&
       p.dhash.length === 16 &&
-      p.trashCategory !== 'screenshot' &&
       p.trashCategory !== 'memo'
   );
 
@@ -130,6 +195,7 @@ export function clusterPhotosIntoDuplicateGroups(
   for (let i = 0; i < sorted.length; i++) {
     const first = sorted[i];
     if (visited.has(first.id)) continue;
+    const firstSig = opticalSigByPhotoId.get(first.id);
 
     const members: PhotoItem[] = [first];
     let maxDist = 0;
@@ -138,24 +204,51 @@ export function clusterPhotosIntoDuplicateGroups(
     for (let j = i + 1; j < sorted.length; j++) {
       const cand = sorted[j];
       if (visited.has(cand.id)) continue;
+      const candSig = opticalSigByPhotoId.get(cand.id);
 
       const last = members[members.length - 1];
-      const distToLast = computeDhashHammingDistance(last.dhash, cand.dhash);
+      const lastSig = opticalSigByPhotoId.get(last.id);
+
       const distToFirst = computeDhashHammingDistance(first.dhash, cand.dhash);
-      const deltaSec = Math.abs((cand.mtimeMs || 0) - (last.mtimeMs || 0)) / 1000;
+      const distToLast = computeDhashHammingDistance(last.dhash, cand.dhash);
+      const deltaSecFromFirst = Math.abs((cand.mtimeMs || 0) - (first.mtimeMs || 0)) / 1000;
+      const deltaSecFromLast = Math.abs((cand.mtimeMs || 0) - (last.mtimeMs || 0)) / 1000;
 
-      // 1) 완전 동일/거의 동일한 중복 사진 (시간 무관, 해밍거리 <= 10)
-      // 2) 연속 촬영된 연사 묶음 (해밍거리 <= 16 & 직전 컷과 해밍거리 <= 14, 또는 30초 이내 촬영 & 해밍거리 <= 18)
-      const isSameBurstOrDup =
-        distToLast <= 10 ||
-        (distToLast <= 14 && distToFirst <= 18) ||
-        (deltaSec <= 30 && distToLast <= 18 && distToFirst <= 22);
+      const rgbToFirst = computeRgbGridDifference(firstSig?.rgbGrid, candSig?.rgbGrid);
+      const rgbToLast = computeRgbGridDifference(lastSig?.rgbGrid, candSig?.rgbGrid);
+      const sameAspect =
+        !firstSig || !candSig || Math.abs(firstSig.aspect - candSig.aspect) <= 0.04;
 
-      if (isSameBurstOrDup) {
+      // 1) 트랙 A: 완전 동일 사진 중복 사본 (해밍거리 <= 2 & 8x8 RGB 색상/밝기 거의 100% 일치)
+      const isExactDuplicateCopy =
+        sameAspect &&
+        distToFirst <= 2 &&
+        rgbToFirst.meanDiff <= 4.5 &&
+        rgbToFirst.maxBlockDiff <= 18;
+
+      // 2) 트랙 B: 실제 카메라 연속 촬영 연사 (백색 문서/스크린샷 페이지가 아닌 실사 촬영본에 한해 허용)
+      const isDocumentOrWhiteSheet =
+        (firstSig && firstSig.whitePct >= 45) ||
+        (candSig && candSig.whitePct >= 45) ||
+        first.trashCategory === 'screenshot' ||
+        cand.trashCategory === 'screenshot';
+
+      const isCameraBurstShot =
+        !isDocumentOrWhiteSheet &&
+        sameAspect &&
+        deltaSecFromFirst <= 10 &&
+        deltaSecFromLast <= 4 &&
+        distToFirst <= 8 &&
+        distToLast <= 6 &&
+        rgbToFirst.meanDiff <= 11.5 &&
+        rgbToFirst.maxBlockDiff <= 34 &&
+        rgbToLast.meanDiff <= 10.0;
+
+      if (isExactDuplicateCopy || isCameraBurstShot) {
         members.push(cand);
         visited.add(cand.id);
-        if (distToLast > maxDist) maxDist = distToLast;
-        if (deltaSec > maxDeltaSec) maxDeltaSec = deltaSec;
+        if (distToFirst > maxDist) maxDist = distToFirst;
+        if (deltaSecFromFirst > maxDeltaSec) maxDeltaSec = deltaSecFromFirst;
       }
     }
 
@@ -187,7 +280,6 @@ export function clusterPhotosIntoDuplicateGroups(
   const updatedPhotos = photos.map((p) => {
     const role = groupRoleByPhotoId.get(p.id);
     if (!role) {
-      // 이전에 duplicate였으나 그룹이 아닌 경우 원복
       if (p.trashCategory === 'duplicate') {
         return { ...p, trashCategory: undefined, isBestInDuplicateGroup: false };
       }
@@ -232,7 +324,10 @@ export async function analyzeMobilePickedPhotoFiles(
       const objUrl = URL.createObjectURL(file);
       const img = new Image();
       img.onload = () => {
-        const { dhash, sharpness } = computeOpticalDhashAndSharpness(img);
+        const meta = computeOpticalDhashAndSharpness(img);
+        const { dhash, sharpness } = meta;
+        const itemId = `mobile_local_${batchTs}_${index}`;
+        opticalSigByPhotoId.set(itemId, meta);
 
         const lowerName = file.name.toLowerCase();
         const isScreenshot =
@@ -250,6 +345,7 @@ export async function analyzeMobilePickedPhotoFiles(
         const isBlurry =
           !isScreenshot &&
           !isReceiptOrDoc &&
+          meta.whitePct < 50 &&
           (sharpness < 3200 || lowerName.includes('blur') || lowerName.includes('흔들'));
 
         let trashCategory: TrashCategory | undefined = undefined;
@@ -273,7 +369,7 @@ export async function analyzeMobilePickedPhotoFiles(
         ).padStart(2, '0')}`;
 
         resolve({
-          id: `mobile_local_${batchTs}_${index}`,
+          id: itemId,
           name: file.name || `내폰사진_${index + 1}.jpg`,
           size: file.size || 1840000,
           date: dateStr,
@@ -326,9 +422,10 @@ export async function analyzeMobilePickedPhotoFiles(
 
 /**
  * PC Z-코어 연결 시 불러온 실사용 PC 사진들의 썸네일을 고속 디코딩하여
- * 실제 64-bit dHash 및 2D 라플라시안 선명도(흐린 사진 판별)를 계산하고 다중 연사 묶음(DuplicateGroup)을 생성합니다.
+ * 실제 64-bit dHash, 8x8 RGB 컬러 시그니처 및 2D 라플라시안 선명도(흐린 사진 판별)를 계산하고
+ * 오차 없는 정밀 연사·중복 묶음(DuplicateGroup)을 생성합니다.
  */
-const pcOpticalAuditCache = new Map<string, { dhash: string; sharpness: number; aspect: number }>();
+const pcOpticalAuditCache = new Map<string, OpticalSignatureMeta>();
 
 export async function auditRealPcPhotosAndCluster(
   photos: PhotoItem[]
@@ -341,27 +438,32 @@ export async function auditRealPcPhotosAndCluster(
     return { updatedPhotos: photos, duplicateGroups: [] };
   }
 
-  // 최근 사진 우선 최대 200장 고속 광학 스캔 (8장 병렬 배치)
   const targetSlice = realCandidates.slice(0, 200);
   const BATCH = 8;
+
+  const applyMetaToPhoto = (p: PhotoItem, meta: OpticalSignatureMeta) => {
+    opticalSigByPhotoId.set(p.id, meta);
+    p.dhash = meta.dhash;
+    p.opticalSharpness = meta.sharpness;
+    if (
+      !p.trashCategory &&
+      meta.whitePct < 50 &&
+      meta.sharpness < 3200 &&
+      !(meta.aspect >= 1.95 && meta.aspect <= 2.35)
+    ) {
+      p.trashCategory = 'blurry';
+      p.trashConfidence = 0.95;
+      if (!p.tags.includes('#초점이탈·심한흔들림')) {
+        p.tags = ['#초점이탈·심한흔들림', ...p.tags];
+      }
+    }
+  };
 
   const auditOne = (p: PhotoItem): Promise<void> => {
     const cacheKey = `${p.name}_${p.size}_${p.mtimeMs}`;
     const cached = pcOpticalAuditCache.get(cacheKey);
     if (cached) {
-      p.dhash = cached.dhash;
-      p.opticalSharpness = cached.sharpness;
-      if (
-        !p.trashCategory &&
-        cached.sharpness < 3200 &&
-        !(cached.aspect >= 1.95 && cached.aspect <= 2.35)
-      ) {
-        p.trashCategory = 'blurry';
-        p.trashConfidence = 0.95;
-        if (!p.tags.includes('#초점이탈·심한흔들림')) {
-          p.tags = ['#초점이탈·심한흔들림', ...p.tags];
-        }
-      }
+      applyMetaToPhoto(p, cached);
       return Promise.resolve();
     }
 
@@ -371,22 +473,9 @@ export async function auditRealPcPhotosAndCluster(
       const timer = window.setTimeout(() => resolve(), 2500);
       img.onload = () => {
         window.clearTimeout(timer);
-        const { dhash, sharpness } = computeOpticalDhashAndSharpness(img);
-        const aspect = img.width > 0 ? img.height / img.width : 1;
-        pcOpticalAuditCache.set(cacheKey, { dhash, sharpness, aspect });
-        p.dhash = dhash;
-        p.opticalSharpness = sharpness;
-        if (
-          !p.trashCategory &&
-          sharpness < 3200 &&
-          !(aspect >= 1.95 && aspect <= 2.35)
-        ) {
-          p.trashCategory = 'blurry';
-          p.trashConfidence = 0.95;
-          if (!p.tags.includes('#초점이탈·심한흔들림')) {
-            p.tags = ['#초점이탈·심한흔들림', ...p.tags];
-          }
-        }
+        const meta = computeOpticalDhashAndSharpness(img);
+        pcOpticalAuditCache.set(cacheKey, meta);
+        applyMetaToPhoto(p, meta);
         resolve();
       };
       img.onerror = () => {
