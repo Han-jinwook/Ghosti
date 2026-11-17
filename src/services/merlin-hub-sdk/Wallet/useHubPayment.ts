@@ -1,7 +1,7 @@
 /**
- * Version: v1.5.0
- * Last Updated: 2026-11-03
- * Description: KCP 간편결제 다이렉트 플래그(kakaopay_direct, naverpay_direct, tosspay_direct, sspay_direct, applepay_direct, payco_direct) 히든 폼 주입 완비
+ * Version: v1.5.1
+ * Last Updated: 2026-11-17
+ * Description: KCP 간편결제 다이렉트 플래그 히든 폼 주입 (네이버페이 naverpay_direct='B' 브릿지 호출로 머니/포인트 및 카드 선택 동시 지원)
  */
 import { useState, useCallback, useEffect } from 'react';
 import { requestKcpPayment, HubPayMethodType } from './wallet';
@@ -142,17 +142,22 @@ export function useHubPayment() {
       };
 
       // 간편결제 다이렉트 호출 플래그 주입 (서버 응답 또는 클라이언트 선택값 기반)
-      const directFlags: Array<[HubPayMethodType, string]> = [
-        ['kakaopay', 'kakaopay_direct'],
-        ['naverpay', 'naverpay_direct'],
-        ['tosspay', 'tosspay_direct'],
-        ['sspay', 'sspay_direct'],
-        ['applepay', 'applepay_direct'],
-        ['payco', 'payco_direct'],
+      // ※ NHN KCP 공식 규격상 네이버페이(naverpay_direct)는 'B'(머니/포인트 결제 + 카드 결제 선택 브릿지)를 사용하며,
+      //    타 간편결제(카카오·토스·삼성·애플·페이코)는 'Y'를 사용합니다.
+      const directFlags: Array<[HubPayMethodType, string, string]> = [
+        ['kakaopay', 'kakaopay_direct', 'Y'],
+        ['naverpay', 'naverpay_direct', 'B'],
+        ['tosspay', 'tosspay_direct', 'Y'],
+        ['sspay', 'sspay_direct', 'Y'],
+        ['applepay', 'applepay_direct', 'Y'],
+        ['payco', 'payco_direct', 'Y'],
       ];
-      for (const [methodKey, fieldName] of directFlags) {
-        if (orderData[fieldName] === 'Y' || params.payMethodType === methodKey) {
-          fields[fieldName] = 'Y';
+      for (const [methodKey, fieldName, defaultFlagVal] of directFlags) {
+        const serverVal = orderData[fieldName];
+        if (serverVal === 'Y' || serverVal === 'B') {
+          fields[fieldName] = serverVal;
+        } else if (params.payMethodType === methodKey) {
+          fields[fieldName] = defaultFlagVal;
         }
       }
 
