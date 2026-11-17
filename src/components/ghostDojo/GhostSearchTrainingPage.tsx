@@ -434,7 +434,7 @@ const VirtualMonitorSimulator: React.FC<{
         >
           <div className="flex items-center gap-2">
             <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/50 text-[#5EEAD4] font-extrabold">
-              🖥️ 가상 모니터 시뮬레이터
+              🖥️ 체험판 검색창 (웹 미리보기)
             </span>
             <span className="text-zinc-400 hidden sm:inline">
               {isAutoPlaying
@@ -566,7 +566,7 @@ const VirtualMonitorSimulator: React.FC<{
                 className="px-4 py-2.5 rounded-full bg-black/70 hover:bg-black/85 border-2 border-[#2DD4BF] text-white text-[13px] font-extrabold shadow-xl cursor-pointer transition-all flex items-center gap-2"
               >
                 <span className="w-2.5 h-2.5 rounded-full bg-[#2DD4BF] animate-ping" />
-                {'🖱️ 여기를 클릭하거나 Ctrl + 0 / Ctrl + 우클릭으로 귀신검색창 소환하기'}
+                {'🖱️ 여기를 클릭하거나 Ctrl + 0 / Ctrl + 우클릭으로 체험판 검색창 열어보기'}
               </button>
             </div>
           )}
@@ -597,7 +597,7 @@ const VirtualMonitorSimulator: React.FC<{
                 >
                   <div className="flex items-center gap-2">
                     <span className="text-[#2DD4BF] font-extrabold">
-                      👻 귀신검색창
+                      👻 체험판 검색창
                     </span>
                     <span className="px-2 py-0.5 rounded bg-teal-500/20 text-[#5EEAD4] text-[10.5px] font-extrabold">
                       {rect.framelessAppMode ? '🖼️ 전체 갤러리 뷰' : '✨ 검색 결과에 맞춰 자동 크기 조절'}
@@ -845,7 +845,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
     const ok = await openRealGhostSearchWindowViaDaemon(stage, query ?? pendingQuery);
     if (ok) {
       setRealPopupToast(
-        `👻 내 진짜 PC 파일·사진·여권이 연동된 리얼 귀신검색창(${GHOST_SEARCH_STAGE_LABELS[stage]})을 모니터에 바로 띄웠습니다!`,
+        `👻 내 진짜 PC 파일·사진·여권이 연동된 귀신검색창(${GHOST_SEARCH_STAGE_LABELS[stage]})을 모니터에 바로 띄웠습니다!`,
       );
       setTimeout(() => setRealPopupToast(null), 5000);
     } else {
@@ -970,7 +970,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
                 <span>STEP 2 · 귀신검색 2단계 도장판 (🖥️ [작게 · 크게] 실시간 완료 도장)</span>
               </h2>
               <span className="text-[11.5px] text-zinc-400">
-                아래 가상 모니터 상단 또는 바탕화면 Ctrl+0 귀신검색창 상단의 <strong className="text-teal-300">[작게] · [크게(갤러리)]</strong> 버튼을 누르면 우측 도장판에 <strong className="text-emerald-300">✓ 완료 도장</strong>이 즉시 찍힙니다.
+                아래 체험판 검색창 상단 또는 바탕화면 Ctrl+0 귀신검색창 상단의 <strong className="text-teal-300">[작게] · [크게(갤러리)]</strong> 버튼을 누르면 우측 도장판에 <strong className="text-emerald-300">✓ 완료 도장</strong>이 즉시 찍힙니다.
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -1054,7 +1054,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
             onClick={() => void triggerRealGhostSearchWindow('medium', pendingQuery)}
             className="px-4 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[13px] font-extrabold cursor-pointer"
           >
-            👻 내 진짜 파일로 리얼 귀신검색창 바로 띄우기
+            👻 내 진짜 파일로 귀신검색창 바로 띄우기
           </button>
         ) : (
           <button
