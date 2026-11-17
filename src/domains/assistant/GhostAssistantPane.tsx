@@ -4,6 +4,7 @@ import { SmartTrashView } from '../../components/SmartTrashView';
 import { Stage1MinimalCarePreview } from '../../components/Stage1MinimalPreview';
 import { LoungeIndexingWaitingRoom } from '../../components/LoungeView';
 import { GhostSecretaryFirstGuard } from '../../components/GhostSecretaryFirstGuard';
+import { MobileCleanerRescueBanner } from '../../components/MobileCleanerRescueBanner';
 
 /**
  * [1번 창: 🎯 [1귀신] 전담 UI 패널]
@@ -23,13 +24,18 @@ export const GhostAssistantPane: React.FC = () => {
   return (
     <>
       {activeLoungeType === 'personal' ? (
-        isStage1MinimalPreview ? (
-          <Stage1MinimalCarePreview />
-        ) : (
-          <GhostSecretaryFirstGuard>
-            <SmartTrashView />
-          </GhostSecretaryFirstGuard>
-        )
+        <>
+          <div className="w-full max-w-[1640px] mx-auto px-4 sm:px-6 md:px-8 pt-4">
+            <MobileCleanerRescueBanner />
+          </div>
+          {isStage1MinimalPreview ? (
+            <Stage1MinimalCarePreview />
+          ) : (
+            <GhostSecretaryFirstGuard>
+              <SmartTrashView />
+            </GhostSecretaryFirstGuard>
+          )}
+        </>
       ) : (
         <GhostSecretaryFirstGuard>
           <LoungeIndexingWaitingRoom />

@@ -49,4 +49,103 @@
     <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- [Ghosti] 패밀리 공용 푸시 알림 (Android 13+) -->
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!-- [Ghosti 귀신비서] 유료결제 유도(Fleeceware)·광고폭탄 클리너/부스터 합법 타겟 스캔 (<queries>) -->
+    <queries>
+        <!-- 1순위: CleanX (TapSuite) 및 변종 주간구독 유도 클리너 패밀리 -->
+        <package android:name="com.xstudios.cleanx" />
+        <package android:name="com.tapsuite.cleanx" />
+        <package android:name="com.cleanx.storage.cleaner" />
+        <package android:name="com.cleanx.phone.cleaner" />
+        <package android:name="com.storage.cleaner.cleanx" />
+        <package android:name="com.smart.cleaner.cleanx" />
+
+        <!-- 2순위: 주간/월간 고액 자동결제 유도(Fleeceware) 및 광고폭탄 폰 클리너·부스터 대표 패키지 총망라 -->
+        <package android:name="com.fancyclean.security.antivirus" />
+        <package android:name="com.fancyclean.booster" />
+        <package android:name="com.fancybattery.cleaner.security" />
+        <package android:name="com.bravo.cleaner" />
+        <package android:name="com.bravo.security" />
+        <package android:name="com.noxgroup.app.cleaner" />
+        <package android:name="com.noxgroup.app.security" />
+        <package android:name="com.oneapp.max.cleaner.booster" />
+        <package android:name="com.oneapp.max.security.pro" />
+        <package android:name="com.lionmobi.powerclean" />
+        <package android:name="com.cleanmaster.mguard" />
+        <package android:name="com.cleanmaster.security" />
+        <package android:name="com.piriform.ccleaner" />
+        <package android:name="com.avg.cleaner" />
+        <package android:name="com.avast.android.cleaner" />
+        <package android:name="com.nortonmobile.nortonclean" />
+        <package android:name="com.symantec.cleansweep" />
+        <package android:name="com.allgoritm.youla.cleaner" />
+        <package android:name="com.supercleaner.phone.booster" />
+        <package android:name="com.speedbooster.junk.cleaner" />
+        <package android:name="com.rocket.cleaner.booster" />
+        <package android:name="com.hyper.cleaner.booster" />
+        <package android:name="com.fast.cleaner.battery.saver" />
+        <package android:name="com.phone.cleaner.antivirus.speed.booster" />
+        <package android:name="com.master.cleaner.phone.booster" />
+        <package android:name="com.smart.phone.cleaner.booster" />
+        <package android:name="com.easy.cleaner.junk.remover" />
+        <package android:name="com.deep.cleaner.storage.booster" />
+        <package android:name="com.power.cleaner.antivirus" />
+        <package android:name="com.space.cleaner.junk.removal" />
+        <package android:name="com.storage.analyzer.cleaner" />
+        <package android:name="com.duplicate.photo.remover.cleaner" />
+        <package android:name="com.photo.cleaner.duplicate.finder" />
+        <package android:name="com.ai.cleaner.storage.master" />
+        <package android:name="com.ai.photo.cleaner.swipe" />
+        <package android:name="com.swipe.photo.cleaner" />
+        <package android:name="com.cleanup.phone.storage.cleaner" />
+        <package android:name="com.cleaner.guru.storage.clean" />
+        <package android:name="com.smartcleaner.storage.clean" />
+        <package android:name="com.phonecleaner.smart.boost" />
+        <package android:name="com.junkcleaner.phone.cooler" />
+        <package android:name="com.cpucooler.phone.cleaner" />
+        <package android:name="com.batterysaver.fast.charger.cleaner" />
+        <package android:name="com.rambooster.memory.cleaner" />
+        <package android:name="com.viruscleaner.security.antivirus" />
+        <package android:name="com.keepclean.cleaner.antivirus" />
+        <package android:name="com.apps.keepclean" />
+        <package android:name="com.alphacleaner.phone.booster" />
+        <package android:name="com.turbocleaner.booster.clean" />
+        <package android:name="com.maxcleaner.phone.antivirus" />
+        <package android:name="com.acecleaner.phone.booster" />
+        <package android:name="com.goclean.phone.cleaner" />
+        <package android:name="com.iclean.master.boost" />
+        <package android:name="com.ora.phone.cleaner" />
+        <package android:name="com.orasecurity.antivirus.cleaner" />
+        <package android:name="com.lark.cleaner.storage" />
+        <package android:name="com.flash.cleaner.booster" />
+        <package android:name="com.zero.cleaner.junk" />
+        <package android:name="com.Dr.Clean.Phone.Cleaner" />
+        <package android:name="com.drcleaner.storage.boost" />
+        <package android:name="com.hawk.security" />
+        <package android:name="com.duapps.cleaner" />
+        <package android:name="com.qihoo.security" />
+        <package android:name="com.tencent.qqpimsecure" />
+        <package android:name="com.psafe.msuite" />
+        <package android:name="com.ancleaner.android.cleaner" />
+        <package android:name="com.systweak.systemoptimizer" />
+        <package android:name="com.nero.tuneitup" />
+        <package android:name="com.dfndr.security.cleaner" />
+        <package android:name="com.mobikeeper.cleaner.booster" />
+        <package android:name="com.topcleaner.phone.clean" />
+        <package android:name="com.starcleaner.junk.clean" />
+        <package android:name="com.zen.cleaner.booster" />
+        <package android:name="com.pure.cleaner.booster" />
+        <package android:name="com.mint.cleaner.storage" />
+        <package android:name="com.nova.cleaner.booster" />
+        <package android:name="com.prime.cleaner.junk" />
+        <package android:name="com.ultra.cleaner.booster" />
+        <package android:name="com.pro.cleaner.storage" />
+        <package android:name="com.lite.cleaner.booster" />
+        <package android:name="com.quick.cleaner.junk" />
+        <package android:name="com.daily.cleaner.phone" />
+        <package android:name="com.auto.cleaner.memory" />
+        <package android:name="com.kr.smartcleaner" />
+        <package android:name="kr.co.smartcleaner" />
+        <package android:name="com.korea.phonecleaner" />
+    </queries>
 </manifest>

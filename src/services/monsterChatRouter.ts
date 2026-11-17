@@ -14,6 +14,12 @@ import {
 } from './voiceSearchAndAiBatonEngine';
 import { getZCoreUrl, zCoreBridge } from './zCoreBridge';
 import {
+  scanMobileBloatCleaners,
+  triggerMobileCleanerUninstall,
+  triggerOpenGoogleAccountPermissions,
+  triggerOpenPlaySubscriptions,
+} from './ghostiMobileCareBridge';
+import {
   submitStudioSupportTicket,
   buildStudioSupportJumpUrl,
 } from './merlin-hub-sdk/Support/blackbox';
@@ -2506,6 +2512,39 @@ export async function processUnifiedMonsterChatQuery(params: {
   const speak = (text: string) => {
     if (ttsEnabled) void speakWithHyunsuOrSunhi(text, 'hyunsu_briefing');
   };
+
+  // 0-00) [모바일 유료결제 유도 클리너(CleanX 등) 3단 원터치 구출 라우터]
+  if (/(cleanx|클린\s*x|클린엑스|유료\s*청소\s*앱|이상한\s*청소\s*앱|주간\s*결제.*?청소)/i.test(clean)) {
+    const scanRes = await scanMobileBloatCleaners();
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ghosti_trigger_mobile_cleaner_scan'));
+    }
+    if (/(삭제|지워|제거)/i.test(clean)) {
+      const targetPkg = scanRes.detected[0]?.packageName || 'com.xstudios.cleanx';
+      void triggerMobileCleanerUninstall(targetPkg);
+    } else if (/(구독|정기\s*결제|해지)/i.test(clean)) {
+      const targetPkg = scanRes.detected[0]?.packageName || 'com.xstudios.cleanx';
+      void triggerOpenPlaySubscriptions(targetPkg);
+    } else if (/(구글\s*권한|계정\s*권한|액세스)/i.test(clean)) {
+      void triggerOpenGoogleAccountPermissions();
+    }
+    const foundNames =
+      scanRes.detected.length > 0
+        ? scanRes.detected.map((d) => `${d.appName}(${d.packageName})`).join(', ')
+        : 'CleanX(com.xstudios.cleanx)';
+    const msgText =
+      scanRes.detected.length > 0
+        ? `🚨 휴대폰에서 유료결제 유도 클리너 **[${foundNames}]**가 감지되었어요!\n앱만 지워서는 주 13,000원 자동결제와 구글 계정 데이터 접근 권한이 그대로 남을 수 있으니, 상단 구출 카드의 **① [🗑️ 앱 즉시 삭제] · ② [💳 주간 정기결제 해지 확인] · ③ [🔒 구글 계정 데이터 권한 끊기]** 3단계를 꼭 순서대로 눌러주세요! 👻🛡️`
+        : `🛡️ **${foundNames}** 등 주간 자동결제 유도 청소앱 구출 화면을 준비했어요!\n상단의 **① [🗑️ CleanX 앱 삭제 화면 열기] · ② [💳 Play 정기구독 해지 확인] · ③ [🔒 구글 계정 연결 권한 끊기] · ④ [📋 내 폰 전체 설치 앱 목록 열기]** 버튼으로 원터치 점검하실 수 있어요! 👻✨`;
+    speak('유료결제 유도 청소앱 삭제와 정기결제 해지, 구글 계정 권한 해제 화면을 바로 준비했어요.');
+    return reply(sourceTab, msgText, {
+      followUpSuggestions: [
+        '클린X 지금 바로 삭제해줘',
+        '구글 플레이 정기결제 해지 확인해줘',
+        '구글 계정 데이터 접근 권한 끊어줘',
+      ],
+    });
+  }
 
   // 0-0A) [자연어 타이핑 승인 인터셉터 (0 토큰 · 블랙박스 영구 기록)]
   // 대기 중인 미리보기 카드(폴더 정리 / 바로가기 생성 / 사라진 파일 복구)가 있을 때 유저가 자연스러운 긍정/승인 발화를 타이핑하면 즉시 실행 후 블랙박스에 기록합니다.

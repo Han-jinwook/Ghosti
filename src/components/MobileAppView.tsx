@@ -14,6 +14,7 @@ import {
 import { executeRealOsAction } from '../services/setupMonsterEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
 import { Stage1MinimalCarePreview } from './Stage1MinimalPreview';
+import { MobileCleanerRescueBanner } from './MobileCleanerRescueBanner';
 import {
   LoungeCustomSettingsHeader,
   LoungeFeedContextBanner,
@@ -880,9 +881,12 @@ export const MobileAppView: React.FC = () => {
 
       {/* 서브메뉴 1번: 개인은 [👻 귀신비서], 사진 공유(패밀리·동호·동창회)는 [⏳ AI 인덱싱 대기실] */}
       {mobileTab === 'trash' && (
-        <div className="flex-1 w-full px-3 pt-3 pb-10">
+        <div className="flex-1 w-full px-3 pt-3 pb-10 flex flex-col gap-3">
           {activeLoungeType === 'personal' ? (
-            <Stage1MinimalCarePreview />
+            <>
+              <MobileCleanerRescueBanner />
+              <Stage1MinimalCarePreview />
+            </>
           ) : (
             <LoungeIndexingWaitingRoom />
           )}
