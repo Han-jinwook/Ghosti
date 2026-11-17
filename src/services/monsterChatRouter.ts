@@ -1154,6 +1154,15 @@ export async function scanDeepUninstallTarget(appQuery: string): Promise<Monster
       .map((f) => ({ path: String(f.path), sizeMb: Number(f.sizeMb ?? 0) }));
     const sampleDirs = folderItems.slice(0, 6).map((f) => `${f.path} (${f.sizeMb}MB)`);
 
+    const isProtectedMessengerOrBrowser =
+      /카카오톡|카톡|kakao|라인|텔레그램|디스코드|슬랙|크롬|chrome|엣지|edge|웨일|whale/i.test(appQuery) ||
+      /카카오톡|카톡|kakao|라인|텔레그램|디스코드|슬랙|크롬|chrome|엣지|edge|웨일|whale/i.test(d.targetAppLabel || '');
+    const baseBriefing = d.honestBriefingKo || '심층 앱 제거(Deep Uninstaller) 사전 스캔을 완료했습니다.';
+    const protectedNote =
+      isProtectedMessengerOrBrowser && !baseBriefing.includes('개인 데이터 보호')
+        ? `\n\n🛡️ **개인 데이터 보호 적용**: 대화 기록·북마크 등 소중한 개인 데이터 폴더(\`KakaoTalk\` 등)는 잔여 삭제 목록에서 **자동 제외·영구 보호**되었습니다.`
+        : '';
+
     return {
       targetAppQuery: appQuery,
       targetAppLabel: d.targetAppLabel || `${appQuery} 상주 모듈 및 잔여 폴더`,
@@ -1165,7 +1174,7 @@ export async function scanDeepUninstallTarget(appQuery: string): Promise<Monster
       summaryBadge:
         d.summaryBadge ||
         `상주 프로세스 ${d.runningProcessCount ?? 0}개 / 서비스·스케줄러 ${d.serviceAndTaskCount ?? 0}개 / 잔여 폴더 ${d.totalResidualMb ?? 0}MB`,
-      honestBriefingKo: d.honestBriefingKo || '심층 앱 제거(Deep Uninstaller) 사전 스캔을 완료했습니다.',
+      honestBriefingKo: `${baseBriefing}${protectedNote}`,
       sampleProcesses: sampleProcs,
       sampleServicesAndTasks: sampleSvcs,
       sampleFolders: sampleDirs,
@@ -3473,18 +3482,36 @@ export async function processUnifiedMonsterChatQuery(params: {
   }
 
   // [🧹 귀신비서 심층 앱 적출(Deep Uninstaller) 프로토콜]
-  // "어도비 싹 다 지워줘", "안 지워지는 프로그램 깨끗하게 삭제해줘", "○○ 프로그램 흔적까지 뿌리째 뽑아줘", "○○ 언인스톨해줘"
+  // "어도비 싹 다 지워줘", "안 지워지는 프로그램 깨끗하게 삭제해줘", "카카오톡 삭제해줘", "○○ 언인스톨해줘"
+  const lastAssistantMsgForUninstall = [...sharedChatState.messages]
+    .reverse()
+    .find((m) => m.role === 'assistant');
+  const isFollowUpAppNameAfterClarify =
+    Boolean(
+      lastAssistantMsgForUninstall?.text &&
+        /어떤 프로그램을 (정리|깨끗하게 지워|삭제).*?프로그램 이름을 함께 말씀해 주세요/s.test(
+          lastAssistantMsgForUninstall.text
+        )
+    ) &&
+    clean.length >= 2 &&
+    clean.length <= 30 &&
+    !/바탕화면|다운로드|휴지통|사진|동영상|문서|복원|부팅|시작\s*프로그램|사양|초능력|여권/i.test(clean);
+
   const isDeepUninstallRequest =
-    !/바탕화면|다운로드\s*폴더|휴지통|사진|동영상|문서|복사\s*기록|상용구/i.test(clean) &&
-    (/(어도비|adobe|포토샵|아크로뱃|acrobat|creative\s*cloud|알약|알집|고클린|한컴|줌|zoom|팀뷰어|teamviewer|애니데스크|anydesk).*?(지워|삭제|제거|없애|뽑아|적출|언인스톨|치워)/i.test(
+    isFollowUpAppNameAfterClarify ||
+    (!/바탕화면|다운로드\s*폴더|휴지통|사진|동영상|문서|파일|폴더|복사\s*기록|상용구|중복|연사|보안\s*쓰레기|보안\s*프로그램|시작\s*프로그램|방금\s*지운/i.test(
       clean
-    ) ||
-      /(안\s*지워지|안\s*꺼지|좀비\s*프로그램|흔적까지|뿌리째|싹\s*다\s*(지워|삭제|제거)|깨끗하게\s*(지워|삭제|제거)|완전히\s*(지워|삭제|제거)|완전\s*삭제|강제\s*삭제|심층\s*적출|언인스톨|uninstall)/i.test(
+    ) &&
+      (/(어도비|adobe|포토샵|아크로뱃|acrobat|creative\s*cloud|알약|알집|고클린|한컴|줌|zoom|팀뷰어|teamviewer|애니데스크|anydesk|카카오톡|카톡|kakaotalk|라인|텔레그램|디스코드|슬랙|배틀넷|스팀|steam|구글\s*드라이브|원드라이브|드롭박스).*?(지워|삭제|제거|없애|뽑아|적출|언인스톨|치워)/i.test(
         clean
       ) ||
-      /(프로그램|어플|앱|소프트웨어).*?(흔적|뿌리째|싹\s*다|완전|깨끗하게|강제).*?(지워|삭제|제거|뽑아|적출)/i.test(
-        clean
-      ));
+        /(안\s*지워지|안\s*꺼지|좀비\s*프로그램|흔적까지|뿌리째|싹\s*다\s*(지워|삭제|제거)|깨끗하게\s*(지워|삭제|제거)|완전히\s*(지워|삭제|제거)|완전\s*삭제|강제\s*삭제|심층\s*적출|심층\s*제거|언인스톨|uninstall)/i.test(
+          clean
+        ) ||
+        /(프로그램|어플|앱|소프트웨어).*?(지워|삭제|제거|뽑아|적출|언인스톨)/i.test(clean) ||
+        /^[가-힣A-Za-z0-9_.\s]{2,20}\s*(프로그램|어플|앱)?\s*(완전히\s*|깨끗하게\s*|싹\s*다\s*)?(삭제해\s*줘|삭제해\s*주세요|지워\s*줘|지워\s*주세요|제거해\s*줘|제거해\s*주세요)$/i.test(
+          clean
+        )));
 
   if (isDeepUninstallRequest) {
     const payload = await scanDeepUninstallTarget(clean);
