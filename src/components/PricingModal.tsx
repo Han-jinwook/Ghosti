@@ -1047,7 +1047,8 @@ export function maskSensitiveDocText(text: string, forVoice = false): string {
   const rrnMask = forVoice ? '$1 주민번호 비공개' : '$1-•••••••';
   const rrnFullMask = forVoice ? '$1 주민번호 비공개 마스킹됨' : '$1••••••-•••••••';
   const acctMask = forVoice ? '$1 계좌번호 비공개 마스킹됨' : '$1$2-••••-••••';
-  const bankAcctMask = forVoice ? '$1 계좌번호 비공개 마스킹됨' : '$1••••-••••';
+  const bankAcctMask = forVoice ? '$1$2 계좌번호 비공개 마스킹됨' : '$1$2-••••-••••';
+  const multiSegAcctMask = forVoice ? '$1 계좌번호 비공개 마스킹됨' : '$1-••••-••••';
 
   return text
     .replace(
@@ -1059,16 +1060,20 @@ export function maskSensitiveDocText(text: string, forVoice = false): string {
       rrnFullMask
     )
     .replace(
-      /\b(\d{6})\s*-\s*([1-4][0-9*]{2,6}(?:\s*[0-9*]{1,4})?)\b/g,
+      /(?<![0-9])(\d{6})\s*-\s*([1-4][0-9*]{2,6}(?:\s*[0-9*]{1,4})?)(?![0-9])/g,
       rrnMask
     )
     .replace(
-      /((?:계좌번호|입금계좌|환불계좌|급여계좌|계좌)\s*[:=]?\s*(?:[가-힣A-Za-z]{2,10}(?:은행|뱅크|증권|금고|신협|우체국)?\s+)?)(\d{2,6})(?:[-\s]?(\d{2,6})[-\s]?(\d{2,8})|(\d{4,12}))/gi,
+      /((?:국세계좌|지방세계좌|가상계좌|계좌번호|입금계좌|환불계좌|급여계좌|납부계좌|계좌)\s*[:=]?\s*(?:[가-힣A-Za-z]{2,10}(?:은행|뱅크|증권|금고|신협|우체국)?\s+)?)(\d{2,6})(?:(?:\s*-\s*\d+(?:[ \t]+\d+)*(?=\s*-))*\s*-\s*\d{1,12}|\d{5,12})/gi,
       acctMask
     )
     .replace(
-      /(\b(?:국민|신한|우리|하나|농협|기업|카카오|토스|케이|새마을|우체국|수협|신협|경남|광주|대구|부산|전북|제주|씨티|SC제일|IBK|KB|NH|SH)(?:은행|뱅크|중앙회|금고)?\s+\d{2,6}[-\s]?)\d{2,6}(?:[-\s]?\d{2,8})+/gi,
+      /(^|[^가-힣A-Za-z0-9])((?:국민|국미|신한|신하|우리|하나|농협|농현|기업|카카오|토스|케이|새마을|우체국|우체|수협|신협|산업|외환|경남|광주|대구|부산|전북|제주|씨티|아이엠|SC제일|SC|IBK|KB|NH|SH|KDB|iM)(?:은행|뱅크|중앙회|금고|증권)?\s*[:=]?\s*\d{2,6})(?:(?:\s*-\s*\d+(?:[ \t]+\d+)*(?=\s*-))*\s*-\s*\d{1,12}|\d{5,12})/gi,
       bankAcctMask
+    )
+    .replace(
+      /(?<![0-9-])(\d{2,6})(?:\s*-\s*\d+(?:[ \t]+\d+)*){2,}\s*-\s*\d{1,12}(?![0-9-])/g,
+      multiSegAcctMask
     );
 }
 
