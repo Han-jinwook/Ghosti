@@ -21,7 +21,16 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
   const [snap, setSnap] = useState<SilentIndexingBrakeSnapshot>(() =>
     silentIndexingBrake.getSnapshot()
   );
-  const { localDocuments, photos, videoSceneItems, searchSpace, runTextQuery } = useSaySeeStore();
+  const {
+    activeLoungeType,
+    localDocuments,
+    photos,
+    sharedRoomHostPhotos,
+    sharedRoomAddedPhotos,
+    videoSceneItems,
+    searchSpace,
+    runTextQuery,
+  } = useSaySeeStore();
 
   useEffect(() => {
     return silentIndexingBrake.subscribe(setSnap);
@@ -30,7 +39,14 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
   const isTurbo = snap.speedMode === 'turbo';
   const guard = snap.hardwareGuard;
 
-  const activePhotos = useMemo(() => photos.filter((p) => !p.quarantined), [photos]);
+  const activePhotos = useMemo(() => {
+    const sharedCorpus = [...sharedRoomAddedPhotos, ...sharedRoomHostPhotos];
+    const sourcePhotos =
+      (activeLoungeType === 'family' || activeLoungeType === 'club') && sharedCorpus.length > 0
+        ? sharedCorpus
+        : photos;
+    return sourcePhotos.filter((p) => !p.quarantined);
+  }, [activeLoungeType, photos, sharedRoomAddedPhotos, sharedRoomHostPhotos]);
   const gallerySceneCount = useMemo(
     () =>
       activePhotos.filter(

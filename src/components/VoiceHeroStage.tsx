@@ -17,6 +17,8 @@ export const VoiceHeroStage: React.FC = () => {
     layout,
     activeLoungeType,
     photos,
+    sharedRoomHostPhotos,
+    sharedRoomAddedPhotos,
     searchSpace,
     hasExecutedUserSearch,
     setSearchSpace,
@@ -55,7 +57,14 @@ export const VoiceHeroStage: React.FC = () => {
     return zCoreBridge.subscribe((connected) => setIsZCoreConnected(connected));
   }, []);
 
-  const activePhotos = useMemo(() => photos.filter((p) => !p.quarantined), [photos]);
+  const activePhotos = useMemo(() => {
+    const sharedCorpus = [...sharedRoomAddedPhotos, ...sharedRoomHostPhotos];
+    const sourcePhotos =
+      (activeLoungeType === 'family' || activeLoungeType === 'club') && sharedCorpus.length > 0
+        ? sharedCorpus
+        : photos;
+    return sourcePhotos.filter((p) => !p.quarantined);
+  }, [activeLoungeType, photos, sharedRoomAddedPhotos, sharedRoomHostPhotos]);
   const gallerySceneCount = useMemo(
     () =>
       activePhotos.filter(
