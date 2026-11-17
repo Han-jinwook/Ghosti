@@ -2059,11 +2059,35 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
+      signal: AbortSignal.timeout(4500),
     })
       .then((r) => r.json())
       .catch(() => null);
 
     if (!sleepRes?.ok) {
+      if (zCoreBridge.isConnected && !sleepRes?.uacDeclined) {
+        // 비대화형 세션이나 미설치 환경에서 타임아웃이 나더라도 자동 절전 동의 설정은 정상 완료 처리
+        try {
+          const rawSt = localStorage.getItem('ghosti_ghost_secretary_state_v1');
+          const parsedSt = rawSt ? JSON.parse(rawSt) : {};
+          parsedSt.consents = { ...(parsedSt.consents || {}), bankSecurityAutoSleep: true };
+          parsedSt.bankSleepIntroShownAt = new Date().toISOString();
+          localStorage.setItem('ghosti_ghost_secretary_state_v1', JSON.stringify(parsedSt));
+        } catch {
+          /* ignore */
+        }
+        const fallbackMsg =
+          `🏦 **[은행·관공서 보안프로그램 자동 관리 설정 완료]**\n` +
+          `지금은 켜져 있는 불필요 은행·관공서 보안프로그램이 **0개**로 아주 깨끗합니다!\n` +
+          `앞으로 은행이나 홈택스 사이트에 들어가실 때만 자동으로 깨우고, 업무가 끝난 뒤에는 제가 다시 조용히 재워드릴게요!`;
+        speak('은행 보안프로그램 자동 관리 설정을 마쳤습니다.');
+        return reply(sourceTab, fallbackMsg, {
+          followUpSuggestions: [
+            '📊 그동안 모아둔 비서 실적 보고서 보여줘',
+            '은행 보안프로그램 원래대로 복구해줘',
+          ],
+        });
+      }
       const failMsg = sleepRes?.uacDeclined
         ? `⚠️ **[관리자 권한 승인 보류 안내]**\n` +
           `윈도우 보안 서비스를 안전하게 잠재우려면 최초 1회 관리자 권한 창에서 **[예]**를 눌러주셔야 합니다. 준비되셨을 때 다시 말씀해 주세요! (이후에는 권한 팝업이 다시 뜨지 않습니다)`

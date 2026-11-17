@@ -82,7 +82,7 @@ PRIVACY_BADGE_TEXT = (
 
 PLUGIN_METADATA = {
     "id": "ghosti_care_suite",
-    "version": "2.2.0",
+    "version": "2.2.1",
     "architecture": "ZERO_ENGINE_DELEGATION_ISOLATED_PLUGIN",
     "sealedArchiveRespect": True,
     "doubleClickNonInterference": True,
@@ -457,8 +457,8 @@ def execute_elevated_service_control(
     clean_names = _filter_strictly_whitelisted_services(service_names)
     if sys.platform != "win32":
         return {"ok": True, "processedServices": [], "elevationMethod": "NON_WINDOWS"}
-    if not clean_names and not register_helper_even_if_empty:
-        return {"ok": True, "processedServices": [], "elevationMethod": "NONE_NEEDED"}
+    if not clean_names:
+        return {"ok": True, "processedServices": [], "elevationMethod": "NONE_NEEDED", "uacPromptShown": False}
 
     if is_running_as_admin():
         if register_helper_even_if_empty and not is_security_care_helper_task_registered():
@@ -529,19 +529,31 @@ def execute_elevated_service_control(
             "uacPromptShown": False,
         }
 
-    # 2) 최초 1회: 유저 명시적 클릭 시에만 ShellExecuteW(None, "runas", ...)로 헬퍼 등록 + 즉시 실행
+    # 2) 최초 1회: 유저 명시적 클릭 시에만 ShellExecuteW(None, "runas", ...)로 헬퍼 등록 + 즉시 실행 (비대화형 세션 블로킹 방지를 위해 데몬 스레드 실행)
     _, exe_str, params = _build_care_cli_command("--install-and-run-helper", with_arg_placeholder=False)
     try:
-        ret = ctypes.windll.shell32.ShellExecuteW(
-            None,
-            "runas",
-            exe_str,
-            params,
-            str(Path(exe_str).parent),
-            0,  # SW_HIDE
-        )
-        if int(ret) > 32:
-            for _ in range(60):
+        ret_box: List[int] = [0]
+
+        def _invoke_runas() -> None:
+            try:
+                ret_box[0] = int(
+                    ctypes.windll.shell32.ShellExecuteW(
+                        None,
+                        "runas",
+                        exe_str,
+                        params,
+                        str(Path(exe_str).parent),
+                        0,  # SW_HIDE
+                    )
+                )
+            except Exception:
+                ret_box[0] = 0
+
+        t_uac = threading.Thread(target=_invoke_runas, daemon=True)
+        t_uac.start()
+        t_uac.join(timeout=3.5)
+        if not t_uac.is_alive() and ret_box[0] > 32:
+            for _ in range(35):
                 time.sleep(0.1)
                 if ELEVATED_ACTION_QUEUE_FILE.exists():
                     data = json.loads(ELEVATED_ACTION_QUEUE_FILE.read_text(encoding="utf-8"))
