@@ -593,9 +593,6 @@ const VirtualMonitorSimulator: React.FC<{
                       {rect.framelessAppMode ? '🖼️ 전체 갤러리 뷰' : '✨ 검색 결과에 맞춰 자동 크기 조절'}
                     </span>
                   </div>
-                  <span className="text-[11px] text-zinc-400 font-semibold">
-                    윈도우 기본 최대화(□)·닫기(✕) 사용
-                  </span>
                 </div>
                 <div
                   className="h-[calc(100%-2.25rem)] flex overflow-hidden bg-zinc-950"

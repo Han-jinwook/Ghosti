@@ -220,9 +220,6 @@ export const DesktopDashboard: React.FC = () => {
                 {ghostSearchWindowStage === 'large' ? '🖼️ 전체 갤러리 뷰' : '✨ 검색 결과에 맞춰 자동 크기 조절'}
               </span>
             </span>
-            <span className="text-[11px] text-zinc-400 font-semibold hidden sm:inline whitespace-nowrap">
-              창 우측 상단 기본 최대화(□)·닫기(✕) 사용
-            </span>
           </div>
         )}
 

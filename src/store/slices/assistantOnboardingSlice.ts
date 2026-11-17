@@ -1176,7 +1176,30 @@ export const createAssistantOnboardingSlice: StateCreator<
 
   openLocalFolder: async (target: 'quarantine' | 'photos' | 'docs' | 'videos', targetPath?: string) => {
     try {
-      const cleanTargetPath = (targetPath || '').trim();
+      let cleanTargetPath = (targetPath || '').trim();
+      if (!cleanTargetPath && target === 'photos') {
+        const firstRealPhoto = get().photos.find((p) => !p.quarantined && p.fullPath);
+        if (firstRealPhoto?.fullPath) {
+          cleanTargetPath = firstRealPhoto.fullPath;
+        }
+      }
+      if (!cleanTargetPath && target === 'videos') {
+        const firstRealVideo = get().videoSceneItems.find((v) => v.fullPath);
+        if (firstRealVideo?.fullPath) {
+          cleanTargetPath = firstRealVideo.fullPath;
+        }
+      }
+      if (!cleanTargetPath && target === 'docs') {
+        const firstRealDoc = get().localDocuments.find(
+          (d) => (d as { fullPath?: string; path?: string }).fullPath || (d as { fullPath?: string; path?: string }).path
+        );
+        const docPath =
+          (firstRealDoc as { fullPath?: string; path?: string } | undefined)?.fullPath ||
+          (firstRealDoc as { fullPath?: string; path?: string } | undefined)?.path;
+        if (docPath) {
+          cleanTargetPath = String(docPath);
+        }
+      }
       if (cleanTargetPath) {
         const osRes = await executeRealOsAction('open_file_location', cleanTargetPath);
         if (!osRes?.ok) {
