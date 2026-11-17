@@ -55,7 +55,7 @@ import plugin_aggrofilter  # noqa: E402
 import ghosti_setup_parity  # noqa: E402
 import plugin_ghosti_superpowers  # noqa: E402
 
-CORE_VERSION = "2.3.22"
+CORE_VERSION = "2.3.24"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1055,12 +1055,18 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
             except Exception:
                 pass
 
-            # 1줄짜리 updater.bat 생성 후 무소음(CREATE_NO_WINDOW) 스왑 및 재실행
+            # PyInstaller 부모 부트로더(_MEI 정리) 파일 잠금이 해제될 때까지 최대 15초 재시도 후 무소음 교체·재기동
             bat_path = update_dir / "updater.bat"
             bat_content = (
                 "@echo off\r\n"
-                "timeout /t 1 /nobreak > NUL\r\n"
-                f'move /y "{extracted_exe}" "{current_exe}" > NUL\r\n'
+                "setlocal\r\n"
+                "timeout /t 2 /nobreak > NUL\r\n"
+                "for /L %%i in (1,1,15) do (\r\n"
+                f'  copy /y "{extracted_exe}" "{current_exe}" > NUL 2>&1 && goto :LAUNCH\r\n'
+                "  timeout /t 1 /nobreak > NUL\r\n"
+                ")\r\n"
+                ":LAUNCH\r\n"
+                f'del /f /q "{extracted_exe}" > NUL 2>&1\r\n'
                 f'start "" "{current_exe}" --replace\r\n'
                 'del "%~f0"\r\n'
             )
@@ -1083,6 +1089,48 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
         "currentVersion": CORE_VERSION,
         "targetVersion": target_version or "latest",
     }
+
+
+def _is_remote_version_newer(remote_ver: str, local_ver: str) -> bool:
+    try:
+        r_parts = [int(x) if x.isdigit() else 0 for x in (remote_ver or "").strip().split(".")]
+        l_parts = [int(x) if x.isdigit() else 0 for x in (local_ver or "").strip().split(".")]
+        for i in range(max(len(r_parts), len(l_parts))):
+            rv = r_parts[i] if i < len(r_parts) else 0
+            lv = l_parts[i] if i < len(l_parts) else 0
+            if rv != lv:
+                return rv > lv
+    except Exception:
+        pass
+    return False
+
+
+def start_periodic_remote_version_watcher() -> None:
+    """브라우저를 열지 않은 상태에서도 상주 Z-코어(.exe)가 원격 최신 버전을 주기 감지해 무소음 자동 업데이트합니다."""
+    if not getattr(sys, "frozen", False):
+        return
+
+    def _poll_loop() -> None:
+        time.sleep(15.0)
+        while True:
+            try:
+                url = f"https://ghosti.sundreamer.app/z_core_version.json?ts={int(time.time())}"
+                req = urllib.request.Request(
+                    url,
+                    headers={"User-Agent": f"Merlin_Z_Core_AutoWatcher/{CORE_VERSION}"},
+                )
+                with urllib.request.urlopen(req, timeout=8.0) as resp:
+                    info = json.loads(resp.read().decode("utf-8", errors="replace"))
+                remote_ver = str(info.get("version") or "").strip()
+                zip_url = str(info.get("zipUrl") or "https://ghosti.sundreamer.app/Merlin_Z_Core.zip").strip()
+                if remote_ver and _is_remote_version_newer(remote_ver, CORE_VERSION):
+                    trigger_silent_self_update({"targetVersion": remote_ver, "downloadUrl": zip_url})
+                    return
+            except Exception:
+                pass
+            time.sleep(1200.0)
+
+    threading.Thread(target=_poll_loop, daemon=True).start()
 
 
 def ensure_port_free(port: int, force_replace: bool = False) -> list[int]:
@@ -1487,6 +1535,7 @@ def main() -> None:
             try:
                 w32.ensure_persistent_frozen_install()
                 w32.set_autostart_enabled(True)
+                start_periodic_remote_version_watcher()
             except Exception:
                 pass
         try:

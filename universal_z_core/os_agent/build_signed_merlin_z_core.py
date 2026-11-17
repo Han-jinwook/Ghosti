@@ -366,6 +366,90 @@ def verify_built_exe(exe_path: Path, port: int = 15199, timeout_sec: float = 40.
     return report
 
 
+def sync_release_zip_and_frontend_version(exe_path: Path) -> Dict[str, Any]:
+    """
+    빌드된 최신 Merlin_Z_Core_Setup.exe를 public/Merlin_Z_Core.zip으로 자동 패키징하고,
+    public/z_core_version.json 및 src/services/zCoreBridge.ts의 LATEST_Z_CORE_VERSION을
+    CORE_VERSION과 100% 자동 일치시켜 모든 연결 기기가 무소음 자동 업데이트되게 보장합니다.
+    """
+    import re
+    import zipfile
+
+    repo_root = THIS_DIR.parents[1]
+    daemon_py = THIS_DIR / "merlin_z_core_daemon.py"
+    m = re.search(r'CORE_VERSION\s*=\s*["\']([^"\']+)["\']', daemon_py.read_text(encoding="utf-8", errors="ignore"))
+    core_version = m.group(1) if m else "2.3.23"
+
+    public_dir = repo_root / "public"
+    public_dir.mkdir(parents=True, exist_ok=True)
+    zip_target = public_dir / "Merlin_Z_Core.zip"
+    ver_json_target = public_dir / "z_core_version.json"
+
+    bat_content = (
+        "@echo off\r\n"
+        "chcp 65001 > nul\r\n"
+        "echo ========================================================\r\n"
+        "echo  [Merlin Z-Core] 귀신같이 만능 PC 상주 엔진 기동 중...\r\n"
+        "echo ========================================================\r\n"
+        'start "" "Merlin_Z_Core_Setup.exe"\r\n'
+        "echo  성공! 윈도우 시계 옆 트레이 및 로컬 포트 5199에서 실행 중입니다.\r\n"
+        "echo  귀신같이 웹 브라우저 창으로 돌아가시면 1초 만에 자동 연결됩니다.\r\n"
+        "timeout /t 3 > nul\r\n"
+        "exit\r\n"
+    )
+    readme_content = (
+        f"❖ 멀린 Z-코어 (Merlin Z-Core v{core_version}) 사용 안내\n\n"
+        "1. [Merlin_Z_Core_Setup.exe]를 더블 클릭하여 실행합니다. (별도 설치 창 없이 영구 경로에 자동 안착됩니다)\n"
+        "2. 실행 후 윈도우 작업표시줄 시계 옆(시스템 트레이)에 귀신같이 아이콘이 생성됩니다.\n"
+        "3. 귀신같이 웹 브라우저(https://ghosti.sundreamer.app)의 [1. 귀신비서] · [2. 귀신검색] 창으로 돌아가시면\n"
+        "   자동 연결되며, 외부 클라우드 전송 없이 내 컴퓨터 속 진짜 사진·동영상·문서만\n"
+        "   조용히 로컬 인덱싱하여 1초 만에 귀신검색됩니다! (어느 앱에서든 Ctrl+0 귀신검색창 즉시 소환)\n"
+        "4. 이후 신규 버전이 출시되면 별도 다운로드 없이 백그라운드에서 항상 최신 버전으로 자동 업데이트됩니다.\n"
+    )
+
+    tmp_zip = public_dir / "Merlin_Z_Core.zip.tmp"
+    with zipfile.ZipFile(tmp_zip, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
+        zf.write(exe_path, arcname="Merlin_Z_Core_Setup.exe")
+        zf.writestr("Merlin_Z_Core_실행.bat", bat_content.encode("utf-8"))
+        zf.writestr("안내_README.txt", readme_content.encode("utf-8"))
+    os.replace(tmp_zip, zip_target)
+
+    ver_json_target.write_text(
+        json.dumps(
+            {
+                "version": core_version,
+                "zipUrl": "https://ghosti.sundreamer.app/Merlin_Z_Core.zip",
+            },
+            ensure_ascii=False,
+            indent=2,
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+
+    bridge_ts = repo_root / "src" / "services" / "zCoreBridge.ts"
+    bridge_updated = False
+    if bridge_ts.exists():
+        raw_ts = bridge_ts.read_text(encoding="utf-8")
+        new_ts, cnt = re.subn(
+            r"(export\s+const\s+LATEST_Z_CORE_VERSION\s*=\s*['\"])([^'\"]+)(['\"];)",
+            rf"\g<1>{core_version}\g<3>",
+            raw_ts,
+        )
+        if cnt > 0 and new_ts != raw_ts:
+            bridge_ts.write_text(new_ts, encoding="utf-8")
+            bridge_updated = True
+
+    return {
+        "ok": zip_target.exists(),
+        "version": core_version,
+        "zipPath": str(zip_target),
+        "zipSizeMB": round(zip_target.stat().st_size / 1024 / 1024, 1) if zip_target.exists() else 0,
+        "versionJsonPath": str(ver_json_target),
+        "zCoreBridgeUpdated": bridge_updated,
+    }
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Build & MS Code-Sign Merlin_Z_Core_Setup.exe")
     parser.add_argument("--check", action="store_true", help="MS 서명 도구(signtool, Dlib, metadata) 및 플러그인 패키징 준비 상태 점검")
@@ -401,6 +485,8 @@ def main() -> None:
             out["verify"] = verify_built_exe(exe, port=args.verify_port)
             out["sign"] = sign_binary_with_ms_codesign(exe)
             out["authenticode"] = verify_authenticode_signature(exe)
+            if (out.get("verify") or {}).get("ok"):
+                out["releaseSync"] = sync_release_zip_and_frontend_version(exe)
         out["ok"] = bool(out["build"]["built"] and (out.get("verify") or {}).get("ok"))
         print(json.dumps(out, ensure_ascii=False, indent=2))
         sys.exit(0 if out["ok"] else 1)

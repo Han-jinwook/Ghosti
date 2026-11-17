@@ -240,11 +240,110 @@ def update_pc4():
     else:
         log(f"⚠️ 4호기 헬스체크 출력: {check_res.stdout} (에러: {check_res.stderr})")
 
+def _read_current_core_version() -> str:
+    import re
+    daemon_py = os.path.join(UZC_DIR, "os_agent", "merlin_z_core_daemon.py")
+    try:
+        with open(daemon_py, "r", encoding="utf-8", errors="ignore") as f:
+            m = re.search(r'CORE_VERSION\s*=\s*["\']([^"\']+)["\']', f.read())
+            if m:
+                return m.group(1)
+    except Exception:
+        pass
+    return "2.3.23"
+
+
+def ensure_release_zip_and_bridge_synced() -> str:
+    """CORE_VERSION이 변경되었거나 public/z_core_version.json과 다르면 자동으로 exe 재빌드 + Merlin_Z_Core.zip + LATEST_Z_CORE_VERSION을 최신화합니다."""
+    core_ver = _read_current_core_version()
+    repo_root = os.path.dirname(UZC_DIR)
+    ver_json_path = os.path.join(repo_root, "public", "z_core_version.json")
+    zip_path = os.path.join(repo_root, "public", "Merlin_Z_Core.zip")
+    packaged_ver = ""
+    if os.path.exists(ver_json_path):
+        try:
+            with open(ver_json_path, "r", encoding="utf-8") as f:
+                packaged_ver = str(json.load(f).get("version") or "").strip()
+        except Exception:
+            packaged_ver = ""
+
+    if packaged_ver == core_ver and os.path.exists(zip_path):
+        log(f"✅ 배포용 Merlin_Z_Core.zip 및 LATEST_Z_CORE_VERSION 이미 최신 상태 (v{core_ver})")
+        return core_ver
+
+    log(f"=== [자동 릴리즈 패키징] Z-코어 v{core_ver} 단일 실행파일(.exe) 빌드 및 Merlin_Z_Core.zip 동기화 시작 ===")
+    build_script = os.path.join(UZC_DIR, "os_agent", "build_signed_merlin_z_core.py")
+    res = subprocess.run(
+        [sys.executable, build_script, "--build"],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=300,
+    )
+    if res.returncode == 0:
+        log(f"✅ Merlin_Z_Core.zip 및 zCoreBridge.ts (LATEST_Z_CORE_VERSION='{core_ver}') 자동 동기화 완료!")
+    else:
+        log(f"⚠️ exe 자동 빌드 경고 (exit={res.returncode}): {res.stderr[-300:]}")
+    return core_ver
+
+
+def update_pc2(core_ver: str):
+    log("\n=== [2호기 (사무실 100.88.230.16)] Z-코어 무소음 자동 업데이트 시작 ===")
+    key_path = _resolve_ssh_key()
+    exe_path = os.path.join(UZC_DIR, "os_agent", "dist", "Merlin_Z_Core_Setup.exe")
+    if not os.path.exists(key_path) or not os.path.exists(exe_path):
+        log("⚠️ 2호기 배포 건너뜀 (SSH 키 또는 Merlin_Z_Core_Setup.exe 없음)")
+        return
+
+    # 1) 기존 2호기 5199 데몬 우아한 종료 및 프로세스 정리
+    subprocess.run(
+        [
+            "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "sun-multi@100.88.230.16",
+            'curl.exe -s --max-time 2 -H Origin:https://ghosti.sundreamer.app http://127.0.0.1:5199/__merlin/shutdown & taskkill /F /IM Merlin_Z_Core_Setup.exe >NUL 2>&1'
+        ],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
+    )
+    time.sleep(1.5)
+
+    # 2) 최신 Merlin_Z_Core_Setup.exe 전송
+    remote_exe = "C:/Users/sun-multi/AppData/Local/Programs/MerlinFamily/Merlin_Z_Core_Setup.exe"
+    scp_res = subprocess.run(
+        ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", exe_path, f"sun-multi@100.88.230.16:{remote_exe}"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=90,
+    )
+    if scp_res.returncode != 0:
+        log(f"⚠️ 2호기 SCP 실패: {scp_res.stderr}")
+        return
+
+    # 3) 2호기 인터랙티브 세션(Session 1) 스케줄러 등록 및 즉시 기동
+    start_cmd = (
+        'schtasks /create /tn StartMerlinZCore5199 /tr "\\"C:\\Users\\sun-multi\\AppData\\Local\\Programs\\MerlinFamily\\Merlin_Z_Core_Setup.exe\\" --replace" /sc onlogon /it /f >NUL 2>&1 '
+        '&& schtasks /run /tn StartMerlinZCore5199 >NUL 2>&1'
+    )
+    subprocess.run(
+        ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "sun-multi@100.88.230.16", start_cmd],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
+    )
+    for _ in range(10):
+        time.sleep(1.5)
+        chk = subprocess.run(
+            ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "sun-multi@100.88.230.16", "curl.exe -s http://127.0.0.1:5199/__merlin/health"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
+        )
+        if chk.returncode == 0 and f'"{core_ver}"' in chk.stdout:
+            log(f"✅ 2호기 Z-코어 v{core_ver} 무소음 자동 교체 및 기동 확인 성공!")
+            return
+    log("⚠️ 2호기 헬스체크 대기 초과")
+
+
 def main():
     sync_internal_z_core_mirrors()
+    core_ver = ensure_release_zip_and_bridge_synced()
     update_pc1()
+    update_pc2(core_ver)
     update_pc4()
-    log("\n🎉 1호기 및 4호기 Z-코어 클러스터 배포가 완료되었습니다!")
+    log(f"\n🎉 1호기 · 2호기 · 4호기 및 웹 자동 업데이트 패키지(v{core_ver}) 클러스터 배포가 완료되었습니다!")
 
 if __name__ == "__main__":
     main()
