@@ -2516,13 +2516,15 @@ export async function processUnifiedMonsterChatQuery(params: {
     !isPendingMissingFileRestoreApprove &&
     /아니|안\s*해|하지\s*마|취소|보류|멈춰|잠깐|그만|싫어|놔둬|나중에|되돌려|되돌리|원복|원래대로/i.test(clean);
   const isNewIndependentTopicInConsent =
-    /바로가기|아이콘\s*만들|방금\s*지운|복원\s*기록|히스토리|사양|스펙|부팅\s*경과|시작\s*프로그램|재부팅|보안\s*쓰레기|보안\s*모듈|애드웨어|설치\s*파일|다운로드\s*폴더/i.test(
+    /바로가기|아이콘\s*만들|방금\s*지운|복원\s*기록|히스토리|사양|스펙|부팅\s*경과|시작\s*프로그램|재부팅|보안\s*쓰레기|보안\s*모듈|애드웨어|설치\s*파일|다운로드\s*폴더|숨은\s*초능력|초능력|실적\s*보고|보고서|알려\s*줘|알려\s*주세요|보여\s*줘|보여\s*주세요|설명해|여권|이름\s*등록/i.test(
       clean
     );
+  const isPronounNePrefix = /^네\s+(숨은|초능력|능력|기능|이름|정체|실적)/i.test(clean);
   const isNaturalAffirmativeConsent =
     isPendingMissingFileRestoreApprove ||
     (!isNegationOrRollback &&
       !isNewIndependentTopicInConsent &&
+      !isPronounNePrefix &&
       clean.length <= 60 &&
       (/^(응|네|예|그래|좋아|오케이|ok|okay|ㅇㅇ|ㅇㅋ|콜|고고|진행|실행|승인|동의|확인|그대로|부탁|당장|바로|해\s*줘|해\s*주세요|해라|하자)(\s|$|[.!~,])/i.test(
         clean
