@@ -1,11 +1,12 @@
 import { GHOST_COIN_WINK_BASE64, GHOST_COIN_HUG_BASE64, GHOST_COIN_TITLE_BASE64 } from '../assets/ghostCoinBase64';
 /**
- * Version: v1.7.0
- * Last Updated: 2026-11-06
+ * Version: v1.7.3
+ * Last Updated: 2026-11-17
  * Description:
  * - 『👻 귀신코인 충전소』 원포인트 다크 카드 & 은은한 인디고·스카이 타이틀 배너 & 담백한 라이트 탭/금액 버튼 시각적 위계 완성
  * - 중앙 단일 스마트 카드(아기귀신 2배 확대 + 3D 도자기체 귀신코인 로고 + 3만 이상 코인 안은 귀신 동적 전환) 및 네이버페이식 누적 금액 컨트롤러(+1천, +5천, +1만, +5만, 0코인 초기화) 탑재
  * - KCP 간편결제 다이렉트 호출(카카오페이 / 네이버페이 / 토스페이 / 삼성월렛 / 애플페이 / 신용·체크카드) 원터치 선택 지원
+ * - 애플페이는 Apple Pay 지원 환경(아이폰·아이패드·맥 Safari, window.ApplePaySession)에서만 노출하고 비지원 기기에서는 목록에서 숨김
  */
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { hubFetch } from '../CoreLogic/client';
@@ -335,9 +336,33 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
     discount: discountPercent,
   }), [selectedOption, finalPrice, discountPercent]);
 
+  // 🍎 애플페이는 Apple 기기(아이폰·아이패드·맥)의 Safari에서만 작동(window.ApplePaySession)하므로,
+  //    비지원 기기/브라우저(Windows·안드로이드·크롬 등)에서는 결제수단 목록에서 아예 숨김 처리
+  const [applePaySupported, setApplePaySupported] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      const APS = (window as any).ApplePaySession;
+      setApplePaySupported(!!(APS && typeof APS.canMakePayments === 'function' && APS.canMakePayments()));
+    } catch {
+      setApplePaySupported(false);
+    }
+  }, []);
+
+  const visiblePayMethods = useMemo(
+    () => PAY_METHOD_OPTIONS.filter((m) => m.id !== 'applepay' || applePaySupported),
+    [applePaySupported]
+  );
+
+  useEffect(() => {
+    if (!visiblePayMethods.some((m) => m.id === method)) {
+      setMethod(visiblePayMethods[0]?.id || 'card');
+    }
+  }, [visiblePayMethods, method]);
+
   const selectedMethodObj = useMemo(
-    () => PAY_METHOD_OPTIONS.find((m) => m.id === method) || PAY_METHOD_OPTIONS[0],
-    [method]
+    () => visiblePayMethods.find((m) => m.id === method) || visiblePayMethods[0],
+    [method, visiblePayMethods]
   );
 
   const formatDate = (iso: string) => {
@@ -805,7 +830,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                {PAY_METHOD_OPTIONS.map((item) => {
+                {visiblePayMethods.map((item) => {
                   const isActive = method === item.id;
                   return (
                     <label
