@@ -574,7 +574,12 @@ export const PhotoDetailModal: React.FC = () => {
                         : 'border-outline-variant/30 opacity-80 hover:opacity-100'
                     }`}
                   >
-                    <img src={bp.thumbUrl} alt={bp.name} className="w-full h-full object-cover" />
+                    <img
+                      src={bp.thumbUrl}
+                      alt={bp.name}
+                      crossOrigin={bp.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
+                      className="w-full h-full object-cover"
+                    />
                     <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/75 text-[10px] font-bold text-white">
                       #{idx + 1}
                     </div>
@@ -596,6 +601,7 @@ export const PhotoDetailModal: React.FC = () => {
             <img
               src={selectedPhoto.fullUrl}
               alt={selectedPhoto.name}
+              crossOrigin={selectedPhoto.fullUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
               className="max-h-[380px] w-auto object-contain"
             />
           </div>
@@ -773,6 +779,7 @@ export const PhotoDetailModal: React.FC = () => {
                     <img
                       src={item.thumbUrl}
                       alt={item.name}
+                      crossOrigin={item.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
                     <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/75 text-white font-label-mono text-[10px] font-bold">

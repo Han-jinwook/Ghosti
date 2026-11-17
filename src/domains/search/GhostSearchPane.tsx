@@ -468,6 +468,7 @@ export const GhostSearchPane: React.FC<{
                             <img
                               src={item.photo.thumbUrl}
                               alt={item.photo.name}
+                              crossOrigin={item.photo.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
                               loading="lazy"
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             />
@@ -556,6 +557,7 @@ export const GhostSearchPane: React.FC<{
                             <img
                               src={item.photo.thumbUrl}
                               alt={item.photo.name}
+                              crossOrigin={item.photo.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
                               loading="lazy"
                               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                             />

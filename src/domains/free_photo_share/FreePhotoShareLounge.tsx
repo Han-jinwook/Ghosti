@@ -2730,6 +2730,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                     <img
                       src={ap.thumbUrl}
                       alt={ap.captionKo}
+                      crossOrigin={ap.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
                       className="w-full h-full object-cover sepia-[0.25] contrast-[1.04]"
                     />
                     <div className="absolute top-2 left-2 flex flex-wrap items-center gap-1">
@@ -2900,6 +2901,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                   <img
                     src={photo.thumbUrl}
                     alt={photo.name}
+                    crossOrigin={photo.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
                     loading="lazy"
                     className="w-full h-full object-cover"
                   />

@@ -795,6 +795,7 @@ export const SmartTrashView: React.FC = () => {
                         key={p.id}
                         src={p.thumbUrl}
                         alt=""
+                        crossOrigin={p.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
                         className="inline-block w-5 h-5 rounded-full object-cover ring-1 ring-zinc-900"
                       />
                     ))}
@@ -919,7 +920,12 @@ export const SmartTrashView: React.FC = () => {
                   className="group relative rounded-xl overflow-hidden bg-zinc-950 border border-white/10 flex flex-col justify-between"
                 >
                   <div className="relative aspect-square w-full overflow-hidden">
-                    <img src={p.thumbUrl} alt="" className="w-full h-full object-cover" />
+                    <img
+                      src={p.thumbUrl}
+                      alt=""
+                      crossOrigin={p.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
+                      className="w-full h-full object-cover"
+                    />
                     <button
                       type="button"
                       onClick={() => setSelectedPhoto(p)}
@@ -1118,6 +1124,7 @@ export const SmartTrashView: React.FC = () => {
                           <img
                             src={ph.thumbUrl}
                             alt=""
+                            crossOrigin={ph.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
                             loading="lazy"
                             className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300"
                           />
@@ -1284,6 +1291,7 @@ export const SmartTrashView: React.FC = () => {
                       <img
                         src={photo.thumbUrl}
                         alt=""
+                        crossOrigin={photo.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
                         loading="lazy"
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                       />
@@ -1404,7 +1412,12 @@ export const SmartTrashView: React.FC = () => {
                     className="group relative rounded-xl overflow-hidden bg-zinc-950 border border-white/10"
                   >
                     <div className="aspect-square w-full overflow-hidden">
-                      <img src={p.thumbUrl} alt="" className="w-full h-full object-cover" />
+                      <img
+                      src={p.thumbUrl}
+                      alt=""
+                      crossOrigin={p.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
+                      className="w-full h-full object-cover"
+                    />
                     </div>
                     <div className="p-2 flex flex-col gap-1 bg-zinc-900">
                       <span className="font-label-sm text-[11px] text-zinc-200 font-semibold truncate">

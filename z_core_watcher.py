@@ -191,29 +191,32 @@ def file_md5(path: Path) -> str:
 def scan_post_office_files(role: str = "all") -> Dict[str, str]:
     """전사 중앙 우체국(D:\\Secretary\\post_office\\) 내 Ghosti / ALL 수신 문서의 경로와 해시를 반환합니다.
     2호(role=2)·3호(role=3) 보조 창은 중복 기상 방지를 위해 일반 Ghosti/ALL 공문을 감시하지 않고 1호(role=1/all)가 전담합니다."""
-    if not POST_OFFICE_DIR.exists():
+    try:
+        if not POST_OFFICE_DIR.exists():
+            return {}
+        is_primary = role == "all" or "1" in (role or "")
+        receipts_dir = POST_OFFICE_DIR / "receipts"
+        result: Dict[str, str] = {}
+        for p in sorted(POST_OFFICE_DIR.glob("*.md")):
+            if p.name.lower() in ("readme.md", ".gitkeep") or p.name.startswith("(읽음)"):
+                continue
+            if not is_primary:
+                has_sub_role_tag = ("2" in role and "2귀신" in p.name) or ("3" in role and "3귀신" in p.name)
+                if not has_sub_role_tag:
+                    continue
+            prefix = p.name.split("_", 1)[0].strip("[]").lower()
+            parts = p.name.split("_")
+            sender = parts[1].strip("[]").lower() if len(parts) > 1 else ""
+            if sender == "ghosti":
+                continue
+            if prefix == "all":
+                if (receipts_dir / f"{p.stem}.Ghosti.read").exists() or (receipts_dir / f"{p.name}.Ghosti.read").exists():
+                    continue
+            if prefix in ("ghosti", "all"):
+                result[p.name] = file_md5(p)
+        return result
+    except Exception:
         return {}
-    is_primary = role == "all" or "1" in (role or "")
-    receipts_dir = POST_OFFICE_DIR / "receipts"
-    result: Dict[str, str] = {}
-    for p in sorted(POST_OFFICE_DIR.glob("*.md")):
-        if p.name.lower() in ("readme.md", ".gitkeep") or p.name.startswith("(읽음)"):
-            continue
-        if not is_primary:
-            has_sub_role_tag = ("2" in role and "2귀신" in p.name) or ("3" in role and "3귀신" in p.name)
-            if not has_sub_role_tag:
-                continue
-        prefix = p.name.split("_", 1)[0].strip("[]").lower()
-        parts = p.name.split("_")
-        sender = parts[1].strip("[]").lower() if len(parts) > 1 else ""
-        if sender == "ghosti":
-            continue
-        if prefix == "all":
-            if (receipts_dir / f"{p.stem}.Ghosti.read").exists() or (receipts_dir / f"{p.name}.Ghosti.read").exists():
-                continue
-        if prefix in ("ghosti", "all"):
-            result[p.name] = file_md5(p)
-    return result
 
 
 def claim_post_office_mail_immediately(fname: str) -> Path:

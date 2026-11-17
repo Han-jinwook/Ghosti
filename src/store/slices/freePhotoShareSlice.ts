@@ -1039,7 +1039,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     const targetRoom: FamilyRoomId = pending?.familyRoom || get().activeFamilyRoom || '우리집';
     const roomTitle = pending?.roomTitle || `${targetRoom} 패밀리 앨범`;
 
-    if (zCoreBridge.isConnected && get().photos.length === 0) {
+    if (zCoreBridge.isConnected) {
       await get().initApp(true);
     }
     if (get().sharedRoomHostPhotos.length === 0) {

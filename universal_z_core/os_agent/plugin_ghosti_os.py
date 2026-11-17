@@ -42,7 +42,7 @@ FILE_ATTRIBUTE_NORMAL = 0x80
 PLUGIN_METADATA = {
     "pluginId": "ghosti_os",
     "pluginName": "Ghosti & 3-Monsters OS + RestorePoint + RecycleBin Omni-Tracker Plugin",
-    "version": "2.3.20",
+    "version": "2.3.21",
     "type": "BUILTIN_SOFTWARE_PLUGIN",
     "port": 5199,
     "capabilities": [
@@ -1143,8 +1143,16 @@ def resolve_local_media_file(params: Dict[str, Any] | None = None) -> tuple[Path
             return q_path, _guess_image_mime(q_path, base_name), 200
         return None, "text/plain", 404
 
-    full_path: Path | None = _PHOTO_PATH_INDEX.get(rel) or _PHOTO_PATH_INDEX.get(base_name)
-    if (full_path is None or not full_path.exists()) and "__" in base_name:
+    full_path: Path | None = None
+    fp_raw = str(data.get("fp") or "").strip()
+    if fp_raw:
+        fp_cand = Path(fp_raw)
+        if fp_cand.exists() and fp_cand.is_file() and fp_cand.suffix.lower() in _PHOTO_EXTS:
+            full_path = fp_cand.resolve()
+
+    if full_path is None:
+        full_path = _PHOTO_PATH_INDEX.get(rel) or _PHOTO_PATH_INDEX.get(base_name)
+    if (full_path is None or not full_path.exists()) and ("__" in base_name or not _PHOTO_PATH_INDEX):
         list_local_photos({})
         full_path = _PHOTO_PATH_INDEX.get(rel) or _PHOTO_PATH_INDEX.get(base_name)
 

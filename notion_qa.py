@@ -909,9 +909,9 @@ def complete_bug(
         print("⚠️ 인라인 본문 블록 추가에 실패했습니다.")
         return False
 
-    # 2단계: 카드를 '재테스트 대기' 컬럼 맨 아래(Bottom, 새치기 방지)로 배치 (POST /v1/pages 복제 생성 + 기존 카드 보관)
-    if not move_card_to_column_bottom(clean_page_id, STATUS_READY_FOR_QA):
-        print("❌ 카드 상태 변경(맨 아래 배치) 실패")
+    # 2단계: 원본 카드를 삭제(archived: True)하지 않고 상태만 안전하게 '재테스트 대기'로 변경 (드래그 중 카드 증발 원천 방지)
+    if not _patch_status_raw(clean_page_id, STATUS_READY_FOR_QA):
+        print("❌ 카드 상태 변경 실패")
         return False
 
     print("\n✅ [노션 인라인 피드백 자동 반영 완료!]")
@@ -1262,15 +1262,12 @@ def move_card_to_column_bottom(page_id: str, target_status: str) -> bool:
 
 
 def update_bug_status(page_id: str, new_status: str) -> bool:
-    """카드의 상태만 원하는 단계(예: '재테스트 대기', '발견된 버그')로 변경합니다 ('재테스트 대기' 등은 맨 아래로 배치)."""
-    if new_status in (STATUS_READY_FOR_QA, STATUS_MISSION):
-        ok = move_card_to_column_bottom(page_id, new_status)
-    else:
-        ensure_valid_token()
-        SCHEMA.detect(DATABASE_ID)
-        ok = _patch_status_raw(page_id, new_status)
+    """카드의 상태만 원하는 단계(예: '재테스트 대기', '발견된 버그')로 변경합니다 (원본 카드 삭제/복제 없이 안전하게 상태만 패치)."""
+    ensure_valid_token()
+    SCHEMA.detect(DATABASE_ID)
+    ok = _patch_status_raw(page_id.strip(), new_status)
     if ok:
-        print(f"✅ 카드({page_id}) 상태가 '{new_status}'(으)로 변경되었습니다 (새치기 방지 맨 아래 배치).")
+        print(f"✅ 카드({page_id}) 상태가 '{new_status}'(으)로 변경되었습니다.")
         return True
     print(f"❌ 상태 변경 실패 ({page_id} -> {new_status})")
     return False

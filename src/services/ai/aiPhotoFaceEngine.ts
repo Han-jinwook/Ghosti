@@ -859,6 +859,7 @@ export async function loadInitialPhotoDataset(): Promise<{
     const audit = auditByPhoto.get(f.path);
     const vaultLabel = vaultDocByPhoto.get(f.path);
     const locParam = isQuarantined ? '&loc=quarantine' : '';
+    const fpParam = f.fullPath ? `&fp=${encodeURIComponent(f.fullPath)}` : '';
     // 미연결 신입 유저용 체험 샘플 파일은 정적 번들(/sample_photos_301/)에서 100% 깨짐 없이 즉시 렌더링합니다.
     const isBundledSampleFile = /^(IMG_2025|PET_2025|TRV_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(
       f.path
@@ -870,7 +871,7 @@ export async function loadInitialPhotoDataset(): Promise<{
       ? `/sample_photos_301/${encodeURIComponent(f.path)}`
       : isVideoFrameStillFile
       ? `/poc/results/video_frames/${encodeURIComponent(f.path)}`
-      : getZCoreUrl(`/__photos/file?p=${encodeURIComponent(f.path)}${locParam}`);
+      : getZCoreUrl(`/__photos/file?p=${encodeURIComponent(f.path)}${locParam}${fpParam}`);
     const thumbUrl = isBundledSampleFile || isVideoFrameStillFile ? fullUrl : `${fullUrl}&thumb=1`;
 
     const dateFromFilenameMatch = f.path.match(/(20\d{2})(\d{2})(\d{2})/);

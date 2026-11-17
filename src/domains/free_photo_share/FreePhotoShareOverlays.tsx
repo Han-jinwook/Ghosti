@@ -266,8 +266,15 @@ export const FreePhotoShareOverlays: React.FC = () => {
                           <img
                             src={p.thumbUrl}
                             alt={p.name}
+                            crossOrigin={p.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
                             loading="lazy"
                             decoding="async"
+                            onError={(e) => {
+                              const img = e.currentTarget;
+                              if (p.fullUrl && img.src !== p.fullUrl) {
+                                img.src = p.fullUrl;
+                              }
+                            }}
                             className="w-full h-full object-cover"
                           />
                           <div
