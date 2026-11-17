@@ -613,6 +613,9 @@ export const GhostSearchPane: React.FC<{
                     </h2>
                     <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-medium">
                       총 {searchResults.length}장
+                      {(activeLoungeType === 'family' || activeLoungeType === 'club')
+                        ? ' · 공유방 전용 (내 PC와 분리)'
+                        : ''}
                       {groupBurstsInSearch && collapsedBurstCount > 0
                         ? ' · 연사 묶음 1세트 포함'
                         : ''}
@@ -673,7 +676,11 @@ export const GhostSearchPane: React.FC<{
                               </div>
                             ) : item.photo.uploaderLabel && (activeLoungeType === 'family' || activeLoungeType === 'club') ? (
                               <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-zinc-950/85 backdrop-blur-md border border-teal-400/40 text-teal-300 font-label-sm text-[10.5px] font-bold flex items-center gap-1">
-                                <span>{item.photo.uploaderLabel.includes('방장') ? '👑' : '📸'} {item.photo.uploaderLabel}</span>
+                                <span>
+                                  {/^[👑📸]/.test(item.photo.uploaderLabel)
+                                    ? item.photo.uploaderLabel
+                                    : `${item.photo.uploaderLabel.includes('방장') ? '👑' : '📸'} ${item.photo.uploaderLabel}`}
+                                </span>
                               </div>
                             ) : null}
 

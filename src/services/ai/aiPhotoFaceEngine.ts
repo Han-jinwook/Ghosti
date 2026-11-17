@@ -2241,8 +2241,13 @@ export async function fetchSharedFamilyHostPhotos(): Promise<PhotoItem[]> {
     const res = await fetch('/shared_family_host_manifest.json', { cache: 'no-cache' });
     if (!res.ok) return [];
     const data = await res.json();
-    if (!Array.isArray(data)) return [];
-    cachedSharedFamilyHostPhotos = data as PhotoItem[];
+    const rawItems = Array.isArray(data)
+      ? data
+      : Array.isArray((data as { items?: unknown })?.items)
+      ? (data as { items: unknown[] }).items
+      : [];
+    if (rawItems.length === 0) return [];
+    cachedSharedFamilyHostPhotos = rawItems as PhotoItem[];
     return cachedSharedFamilyHostPhotos;
   } catch {
     return [];

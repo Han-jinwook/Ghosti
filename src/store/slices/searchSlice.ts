@@ -303,7 +303,21 @@ export const createSearchSlice: StateCreator<
         matchedLocalDocs: localDocuments,
       });
     } else {
-      const galleryPhotos = photos
+      const stateNow = get();
+      const sharedCorpus = [
+        ...stateNow.sharedRoomAddedPhotos,
+        ...stateNow.sharedRoomHostPhotos,
+      ];
+      const sourcePhotos =
+        (stateNow.activeLoungeType === 'family' || stateNow.activeLoungeType === 'club') &&
+        sharedCorpus.length > 0
+          ? sharedCorpus
+          : photos.filter(
+              (p) =>
+                !String(p.id || '').startsWith('shared_host_') &&
+                !String(p.thumbUrl || '').startsWith('/shared_family_host_thumbs/')
+            );
+      const galleryPhotos = sourcePhotos
         .filter(
           (p) =>
             !p.quarantined &&
@@ -322,7 +336,10 @@ export const createSearchSlice: StateCreator<
       set({
         searchSpace: 'gallery',
         hasUserSelectedSearchTab: true,
-        activeQuery: `전체 갤러리 사진 (${galleryPhotos.length}장)`,
+        activeQuery:
+          stateNow.activeLoungeType === 'family'
+            ? `${stateNow.activeFamilyRoom} 패밀리 앨범 (${galleryPhotos.length}장)`
+            : `전체 갤러리 사진 (${galleryPhotos.length}장)`,
         matchedTags: ['#전체갤러리', '#자율얼굴검출', '#768차원벡터검색'],
         searchResults: galleryPhotos,
       });
@@ -331,7 +348,24 @@ export const createSearchSlice: StateCreator<
 
   resetSearchSpaceToAll: (searchSpace) => {
     storeSharedRefs.latestRunTextQuerySeq += 1;
-    const { photos, videoSceneItems, localDocuments } = get();
+    const {
+      photos,
+      videoSceneItems,
+      localDocuments,
+      activeLoungeType,
+      activeFamilyRoom,
+      sharedRoomAddedPhotos,
+      sharedRoomHostPhotos,
+    } = get();
+    const sharedCorpus = [...sharedRoomAddedPhotos, ...sharedRoomHostPhotos];
+    const sourcePhotos =
+      (activeLoungeType === 'family' || activeLoungeType === 'club') && sharedCorpus.length > 0
+        ? sharedCorpus
+        : photos.filter(
+            (p) =>
+              !String(p.id || '').startsWith('shared_host_') &&
+              !String(p.thumbUrl || '').startsWith('/shared_family_host_thumbs/')
+          );
     const vaultPhotos = photos
       .filter((p) => !p.quarantined && p.isVaultDocument)
       .map((photo) => ({
@@ -340,7 +374,7 @@ export const createSearchSlice: StateCreator<
         matchPercentage: 98,
         matchedBy: 'text-direct' as const,
       }));
-    const galleryPhotos = photos
+    const galleryPhotos = sourcePhotos
       .filter(
         (p) =>
           !p.quarantined &&
@@ -367,6 +401,8 @@ export const createSearchSlice: StateCreator<
           ? `동영상 ${videoSceneItems.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`
           : searchSpace === 'vault'
           ? `최근 서류 ${localDocuments.length + vaultPhotos.length}건 통합 (로컬 문서 ${localDocuments.length}건 + 촬영 서류 ${vaultPhotos.length}장)`
+          : activeLoungeType === 'family'
+          ? `${activeFamilyRoom} 패밀리 앨범 (${galleryPhotos.length}장)`
           : `전체 갤러리 사진 (${galleryPhotos.length}장)`,
       matchedVideoScenes: videoSceneItems,
       matchedLocalDocs: localDocuments,
