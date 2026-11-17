@@ -667,7 +667,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
    */
   const handleSend = async (overrideQuery?: string, inputMode: 'text' | 'voice' = 'text') => {
     const raw = (overrideQuery ?? inputText).trim();
-    if (!raw || busy) return;
+    if (!raw || getSharedMonsterChatState().busy) return;
     if (!overrideQuery) setInputText('');
 
     // 새 질문을 보낼 때 아직 순차 등장 중이던 이전 귀신비서 말풍선은 즉시 완료 처리하여 다음 답변이 가려지지 않게 보장
@@ -736,10 +736,20 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       /(진행해|실행해|정리해|치워\s*(?:줘|주세요)|복구해|복원\s*기록|복원\s*지점|복원해|되돌려|원복|원래대로|진행된|진행한|정리된|정리한|다\s*된|완료된|개선된|빨라졌|1초\s*건강|건강\s*검진|임시\s*설치|바탕화면|다운로드|기본\s*압축\s*앱|[c-zC-Z]\s*드라이브|사양|스펙|상태\s*봐|손봐\s*(?:줘|주세요)|느려|느린|버벅|부팅|재부팅|경과\s*시간|켜\s*둔\s*지|안\s*끄고|진단해|점검해|시작\s*프로그램|자동\s*실행|애드웨어|보안\s*모듈|보안\s*프로그램|보안\s*쓰레기|백신|디펜더|바이러스|랜섬웨어|알아서\s*재우고|숨은\s*초능력|비서\s*실적|실적\s*보고서|우클릭\s*0\.35초|은행\s*업무.*?깨워|강제\s*종료|지워\s*(?:줘|주세요)|삭제해\s*(?:줘|주세요)|적출|언인스톨|뿌리째|뿌리\s*뽑|유령\s*앱|온보딩\s*[123]\s*탭|스튜디오\s*문의방|복사\s*기록.*?(보관|바꿔)|상용구)/i.test(
         raw
       );
+    const preStForPlaybook = loadGhostSecretaryState();
+    const isNickOrStoreSpecial =
+      Boolean(parseNicknameSettingIntent(raw, preStForPlaybook.nickname)) || isStoreLinkIntent(raw);
+    const isAnsweringInitialNickname =
+      Boolean(preStForPlaybook.awaitingNickname) &&
+      !preStForPlaybook.nickname &&
+      raw.length <= 18 &&
+      !/(진단해|점검해|정리해|치워|지워|삭제해|복구해|복원해|손봐|알려\s*줘|보여\s*줘|찾아\s*줘|깨워|재워)/i.test(raw);
     const shouldBypassSecretaryPlaybook =
-      isDirectCareOrStatusCommand ||
-      (hasPendingCareApproval &&
-        /^(응|네|넹|예|좋아|좋아요|ㅇㅇ|ㅇㅋ|오케이|ok|그래|해\s*(?:줘|주세요)|알려\s*(?:줘|주세요)|뭔데|진행|실행|승인|동의|콜|고고|#?\d+\s*번?)/i.test(raw));
+      !isNickOrStoreSpecial &&
+      !isAnsweringInitialNickname &&
+      (isDirectCareOrStatusCommand ||
+        (hasPendingCareApproval &&
+          /^(응|네|넹|예|좋아|좋아요|ㅇㅇ|ㅇㅋ|오케이|ok|그래|해\s*(?:줘|주세요)|알려\s*(?:줘|주세요)|뭔데|진행|실행|승인|동의|콜|고고|#?\d+\s*번?)/i.test(raw)));
 
     // [v1.3 필수 통과의례 게이트]: PC에서 첫 진입 또는 연결 유도 단계일 때,
     // 별명 등록 전후를 불문하고 '싫어 / 구경만 할래' 거절 발화와 '[🔍 응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘]' 동의 발화를 정직하게 처리!
@@ -747,9 +757,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       await zCoreBridge.checkHealth(false);
     }
     if (sourceTab === 'trash' && !isMobileOrStore) {
-      const preSt = loadGhostSecretaryState();
-      const isNickOrStoreSpecial =
-        Boolean(parseNicknameSettingIntent(raw, preSt.nickname)) || isStoreLinkIntent(raw);
+      const preSt = preStForPlaybook;
 
       if (!isNickOrStoreSpecial) {
         const nickLabel = preSt.nickname ? `${preSt.nickname}님` : '회원님';
@@ -764,8 +772,12 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           /(내\s*컴퓨터\s*연결하고\s*누가\s*속도\s*잡아먹는지|마음\s*바꿨어.*내\s*컴퓨터\s*연결|엔진\s*연결하고\s*1초\s*건강검진)/i.test(
             raw
           );
+        if (isExplicitConnectAndAnalyzeChip && !zCoreBridge.isConnected) {
+          await zCoreBridge.checkHealth(true);
+        }
         const isAgreeOrCareOrImpatient =
           !zCoreBridge.isConnected &&
+          !isAnsweringInitialNickname &&
           (/(내\s*컴퓨터\s*연결|pc\s*연결|엔진\s*연결|연결\s*해|연결하고|누가\s*속도\s*잡아먹는지|분석\s*해\s*(?:줘|주세요)|설치\s*해|깔아|깔래|마음\s*바꿨)/i.test(
             raw
           ) ||
@@ -1290,7 +1302,17 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
   // 채팅창에서는 축하 인사와 함께 실제 PC 1초 건강검진 → 홀림 퀘스트 → 귀신계 여권 대화를 즉시 이어간다!
   useEffect(() => {
     if (sourceTab !== 'trash') return;
+    let handledInThisMount = false;
     const onConnectedInSecretary = () => {
+      if (
+        handledInThisMount ||
+        getSharedMonsterChatState().messages.some((m) =>
+          m.id.startsWith('secretary_engine_rite_complete_')
+        )
+      ) {
+        return;
+      }
+      handledInThisMount = true;
       let pendingCare = SECRETARY_FIRST_CARE_QUERY;
       try {
         sessionStorage.removeItem('ghosti_awaiting_engine_rite');
@@ -1319,9 +1341,25 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           },
         ];
       });
-      window.setTimeout(() => {
-        void handleSend(pendingCare, 'text');
-      }, 380);
+      window.setTimeout(async () => {
+        if (
+          getSharedMonsterChatState().messages.some((m) => m.cardKind === 'PC_SPEC_CONSULTATION')
+        ) {
+          return;
+        }
+        setSharedMonsterBusy(true);
+        try {
+          const routerReply = await processUnifiedMonsterChatQuery({
+            query: pendingCare,
+            sourceTab: 'trash',
+            literacyLevel,
+            ttsEnabled: false,
+          });
+          setSharedMonsterMessages((prev) => [...prev, routerReply]);
+        } finally {
+          setSharedMonsterBusy(false);
+        }
+      }, 320);
     };
 
     const onZCoreConnectedBackup = () => {

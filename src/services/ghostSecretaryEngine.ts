@@ -835,6 +835,7 @@ export function resolveGhostSecretaryTurn(
   if (nickIntent) {
     if (nickIntent.kind === 'change') {
       const newNick = nickIntent.newNickname;
+      const isFirstTime = !st.nickname || !st.coldReadingShownAt;
       const sc = findScenario('profile_change_nickname');
       saveGhostPassportBook(setPassportSelf(loadGhostPassportBook(), newNick));
       try {
@@ -843,11 +844,14 @@ export function resolveGhostSecretaryTurn(
         /* ignore */
       }
       return {
-        scenarioId: sc?.id || 'profile_change_nickname',
-        text: sc
+        scenarioId: isFirstTime ? 'nickname_registered' : sc?.id || 'profile_change_nickname',
+        text: isFirstTime
+          ? `${newNick}님! 이름 예쁘네요, 평생 이렇게 불러드릴게요. 🛂 귀신계 여권(나)에도 새겨뒀어요!`
+          : sc
           ? renderPlaybookText(sc.response, { nickname: newNick })
           : `앗, 알겠어요! 앞으로는 『${newNick}』님이라고 꼭 기억해서 불러드릴게요! 프로필과 🛂 귀신계 여권(나) 이름도 『${newNick}』님으로 바로 바꿔뒀어요!`,
         nextState: { ...st, nickname: newNick, awaitingNickname: false },
+        needsColdReading: isFirstTime,
       };
     }
     if (nickIntent.kind === 'ask') {
