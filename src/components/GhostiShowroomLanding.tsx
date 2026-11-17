@@ -1204,7 +1204,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             </button>
           </nav>
 
-          {/* 우측 액션 영역 (단일 CTA 집중 · 모바일 390px에서도 CTA가 화면 밖으로 밀리지 않도록 축약 라벨) */}
+          {/* 우측 액션 영역 (단일 CTA 집중 · 모바일 360~390px에서도 CTA가 화면 밖으로 밀리지 않도록 축약 라벨) */}
           <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
             {canReturnToWorkspace && (
               <button
@@ -1212,19 +1212,19 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 onClick={() => onEnterWorkspace(true)}
                 title="귀신비서 방으로 돌아가기"
                 style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
-                className="px-2.5 sm:px-3.5 py-2 rounded-xl border-2 text-[12px] sm:text-[13px] font-black shadow-sm hover:opacity-90 transition-all cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                className="px-2.5 sm:px-3.5 py-1.5 sm:py-2 rounded-xl border-2 text-[11.5px] sm:text-[13px] font-black shadow-sm hover:opacity-90 transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0"
               >
                 <span>👻</span>
                 <span className="hidden sm:inline">귀신비서 방으로 돌아가기 ➔</span>
-                <span className="sm:hidden">본 웹 ➔</span>
+                <span className="sm:hidden">{isStoreAppMode ? '앱으로 ➔' : '본 웹 ➔'}</span>
               </button>
             )}
 
             {!isLaunched ? (
               verifiedUserEmail ? (
-                <div className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[13px] font-extrabold flex items-center gap-1.5 whitespace-nowrap shrink-0">
+                <div className="px-2.5 sm:px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[12px] sm:text-[13px] font-extrabold flex items-center gap-1 whitespace-nowrap shrink-0">
                   <span>✅</span>
-                  <span className="max-w-[90px] sm:max-w-[140px] truncate">{verifiedUserEmail}</span>
+                  <span className="max-w-[76px] sm:max-w-[140px] truncate">{verifiedUserEmail}</span>
                   <span className="hidden sm:inline">알림 예약됨</span>
                 </div>
               ) : (
@@ -1233,7 +1233,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   onClick={scrollToEmailBox}
                   data-keep-dark="true"
                   style={{ background: 'linear-gradient(90deg, #00F0B5 0%, #2DD4BF 100%)', color: '#020617' }}
-                  className="px-3 sm:px-4 py-2 rounded-xl text-[13px] sm:text-sm font-black shadow-[0_0_20px_rgba(0,240,181,0.35)] transition-all hover:opacity-90 cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0"
+                  className={`${canReturnToWorkspace ? 'hidden sm:flex' : 'flex'} px-2.5 sm:px-4 py-1.5 sm:py-2 rounded-xl text-[12px] sm:text-sm font-black shadow-[0_0_20px_rgba(0,240,181,0.35)] transition-all hover:opacity-90 cursor-pointer items-center gap-1 whitespace-nowrap shrink-0`}
                 >
                   <span>🔔</span>
                   <span className="sm:hidden">알림받기</span>
@@ -1280,14 +1280,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
           </div>
         </div>
 
-        {/* 모바일 전용 4알약 GNB 바 (모바일 화면에서도 4알약이 잘리지 않고 노출·작동하도록 보장) */}
-        <nav className="md:hidden max-w-7xl mx-auto px-4 pb-2.5 flex items-center gap-1.5 overflow-x-auto text-[12px] font-extrabold whitespace-nowrap">
+        {/* 모바일 전용 4알약 GNB 바 (모바일 360px 화면에서도 알약이 우측으로 잘리지 않고 한눈에 노출·작동하도록 보장) */}
+        <nav className="md:hidden max-w-7xl mx-auto px-3 pb-2.5 flex items-center gap-1 overflow-x-auto no-scrollbar text-[11.5px] font-extrabold whitespace-nowrap">
           <button
             type="button"
             onClick={() =>
               document.getElementById('interactive-demo')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
             }
-            className="px-3 py-1 rounded-full bg-[#00F0B5]/15 text-[#00F0B5] border border-[#00F0B5]/50 cursor-pointer whitespace-nowrap shrink-0"
+            className="px-2.5 py-1 rounded-full bg-[#00F0B5]/15 text-[#00F0B5] border border-[#00F0B5]/50 cursor-pointer whitespace-nowrap shrink-0"
           >
             ⚡ 4대 무료 초능력
           </button>
@@ -1298,7 +1298,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 setB2bFocused(true);
                 document.getElementById('extensions')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
               }}
-              className="px-3 py-1 rounded-full bg-zinc-900/90 text-amber-300 border border-amber-400/35 cursor-pointer whitespace-nowrap shrink-0"
+              className="px-2.5 py-1 rounded-full bg-zinc-900/90 text-amber-300 border border-amber-400/35 cursor-pointer whitespace-nowrap shrink-0"
             >
               💼 기기·업무 확장
             </button>
@@ -1308,7 +1308,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             onClick={() =>
               document.getElementById('shorts')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
             }
-            className="px-3 py-1 rounded-full bg-zinc-900/90 text-zinc-300 border border-white/10 cursor-pointer whitespace-nowrap shrink-0"
+            className="px-2.5 py-1 rounded-full bg-zinc-900/90 text-zinc-300 border border-white/10 cursor-pointer whitespace-nowrap shrink-0"
           >
             🎬 15초 예고편
           </button>
@@ -1317,7 +1317,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             onClick={() =>
               document.getElementById('manifesto')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
             }
-            className="px-3 py-1 rounded-full bg-zinc-900/90 text-zinc-300 border border-white/10 cursor-pointer whitespace-nowrap shrink-0"
+            className="px-2.5 py-1 rounded-full bg-zinc-900/90 text-zinc-300 border border-white/10 cursor-pointer whitespace-nowrap shrink-0"
           >
             📜 브랜드 선언문
           </button>
