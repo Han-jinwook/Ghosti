@@ -144,6 +144,25 @@ u32.SetWindowPos.argtypes = [wintypes.HWND, wintypes.HWND, ctypes.c_int, ctypes.
 u32.SetWindowPos.restype = wintypes.BOOL
 u32.SendMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
 u32.SendMessageW.restype = wintypes.LPARAM
+u32.SendMessageTimeoutW.argtypes = [
+    wintypes.HWND,
+    wintypes.UINT,
+    wintypes.WPARAM,
+    wintypes.LPARAM,
+    wintypes.UINT,
+    wintypes.UINT,
+    ctypes.POINTER(ctypes.c_size_t),
+]
+u32.SendMessageTimeoutW.restype = wintypes.LPARAM
+u32.GetForegroundWindow.restype = wintypes.HWND
+u32.GetAncestor.argtypes = [wintypes.HWND, wintypes.UINT]
+u32.GetAncestor.restype = wintypes.HWND
+u32.IsWindow.argtypes = [wintypes.HWND]
+u32.IsWindow.restype = wintypes.BOOL
+u32.IsWindowVisible.argtypes = [wintypes.HWND]
+u32.IsWindowVisible.restype = wintypes.BOOL
+u32.EnumChildWindows.argtypes = [wintypes.HWND, ctypes.c_void_p, wintypes.LPARAM]
+u32.EnumChildWindows.restype = wintypes.BOOL
 u32.FindWindowExW.argtypes = [wintypes.HWND, wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR]
 u32.FindWindowExW.restype = wintypes.HWND
 u32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
@@ -4161,20 +4180,26 @@ INPUT_KEYBOARD = 1
 KEYEVENTF_UNICODE = 0x0004
 
 
-def send_unicode_text_preserve_style(text: str) -> bool:
+def send_unicode_text_preserve_style(text: str, delete_count: int = 0) -> bool:
     """
     [서식·색상 100% 보존 무클립보드 유니코드 직접 타이핑 사출 (SendInput KEYEVENTF_UNICODE)]
-    - 노션·워드·브라우저 등 리치 텍스트 편집기에서 Ctrl+V(플레인 텍스트 붙여넣기)를 하면
-      기존 인라인 글자 색상(파란색·빨간색 등)·굵기·배경 서식이 초기화되는 문제를 원천 해결합니다!
-    - 선택된 영역 또는 커서 위치에서 사용자가 직접 키보드로 글자를 친 것과 동일하게 작동하므로
-      기존 글자 색상과 인라인 스타일이 100% 그대로 유지됩니다.
+    - delete_count > 0 인 경우(엑셀 셀 편집 EXCEL6 등) 백스페이스(VK_BACK)와 유니코드 문자열을
+      단 1회의 원자적 SendInput 배열로 일괄 주입하여 한글자씩 지워지는 잔상 모션 없이 즉시 교체합니다!
     """
-    if not text:
+    if not text and delete_count <= 0:
         return False
     try:
         u32.SendInput.argtypes = [wintypes.UINT, ctypes.POINTER(_INPUT), ctypes.c_int]
         u32.SendInput.restype = wintypes.UINT
         events: list[_INPUT] = []
+        if delete_count > 0:
+            sc_bs = u32.MapVirtualKeyW(VK_BACK, 0)
+            for _ in range(delete_count):
+                kd_bs = _INPUT(type=INPUT_KEYBOARD)
+                kd_bs.u.ki = _KEYBDINPUT(wVk=VK_BACK, wScan=sc_bs, dwFlags=0, time=0, dwExtraInfo=0)
+                ku_bs = _INPUT(type=INPUT_KEYBOARD)
+                ku_bs.u.ki = _KEYBDINPUT(wVk=VK_BACK, wScan=sc_bs, dwFlags=KEYEVENTF_KEYUP, time=0, dwExtraInfo=0)
+                events.extend((kd_bs, ku_bs))
         norm_text = text.replace("\r\n", "\n").replace("\r", "\n")
         for ch in norm_text:
             if ch == "\n":
@@ -8363,16 +8388,14 @@ def main() -> None:
                                             last_alpha_type_ts = 0.0
                                             orig_c_id = get_clipboard_text()
                                             release_all_modifiers()
-                                            bs_sc = u32.MapVirtualKeyW(VK_BACK, 0)
-                                            for _ in range(total_bs_id):
-                                                u32.keybd_event(VK_BACK, bs_sc, 0, 0)
-                                                time.sleep(0.008)
-                                                u32.keybd_event(VK_BACK, bs_sc, KEYEVENTF_KEYUP, 0)
-                                                time.sleep(0.005)
-                                            time.sleep(0.025)
-                                            if send_unicode_text_preserve_style(comb_conv_id):
-                                                time.sleep(0.04)
+                                            if send_unicode_text_preserve_style(comb_conv_id, delete_count=total_bs_id):
+                                                time.sleep(0.02)
                                             else:
+                                                bs_sc = u32.MapVirtualKeyW(VK_BACK, 0)
+                                                for _ in range(total_bs_id):
+                                                    u32.keybd_event(VK_BACK, bs_sc, 0, 0)
+                                                    u32.keybd_event(VK_BACK, bs_sc, KEYEVENTF_KEYUP, 0)
+                                                time.sleep(0.015)
                                                 daemon_set_clipboard(comb_conv_id)
                                                 time.sleep(0.025)
                                                 tap_key_combo([VK_CONTROL], VK_V)
@@ -8553,19 +8576,16 @@ def main() -> None:
                                     # [엑셀 셀 편집(EXCEL6)·카톡 채팅창 무충돌 원자적 백스페이스 교체 + 원복 스냅샷 무장]:
                                     prev_ime_bs = get_ime_is_korean(hwnd_fg)
                                     orig_c = get_clipboard_text()
-                                    time.sleep(0.025)
                                     release_all_modifiers()
-                                    bs_sc = u32.MapVirtualKeyW(VK_BACK, 0)
-                                    for _ in range(total_backspaces):
-                                        u32.keybd_event(VK_BACK, bs_sc, 0, 0)
-                                        time.sleep(0.008)
-                                        u32.keybd_event(VK_BACK, bs_sc, KEYEVENTF_KEYUP, 0)
-                                        time.sleep(0.005)
-                                    time.sleep(0.025)
                                     final_paste = (_fix_korean_spacing_general(combined_conv.strip()) + " ") if target_ko else (combined_conv.strip() + " ")
-                                    if send_unicode_text_preserve_style(final_paste):
-                                        time.sleep(0.04)
+                                    if send_unicode_text_preserve_style(final_paste, delete_count=total_backspaces):
+                                        time.sleep(0.02)
                                     else:
+                                        bs_sc = u32.MapVirtualKeyW(VK_BACK, 0)
+                                        for _ in range(total_backspaces):
+                                            u32.keybd_event(VK_BACK, bs_sc, 0, 0)
+                                            u32.keybd_event(VK_BACK, bs_sc, KEYEVENTF_KEYUP, 0)
+                                        time.sleep(0.015)
                                         daemon_set_clipboard(final_paste)
                                         time.sleep(0.025)
                                         tap_key_combo([VK_CONTROL], VK_V)
