@@ -226,16 +226,6 @@ const VirtualMonitorSimulator: React.FC<{
     setStage(stepInfo.stage);
     setWindowMode(stepInfo.stage === 'large' ? 'large' : 'compact');
     setCustomSlimHeight(stepInfo.stage === 'small' ? 340 : undefined);
-    if (stepInfo.stage === 'small') {
-      onStep('summon');
-    } else if (stepInfo.stage === 'medium') {
-      onStep('summon');
-      onStep('medium');
-    } else if (stepInfo.stage === 'large') {
-      onStep('summon');
-      onStep('medium');
-      onStep('large');
-    }
     const duration = stepInfo.stage === null ? 1600 : 2900;
     const timer = window.setTimeout(() => {
       setAutoPhase((prev) => (prev + 1) % AUTO_MORPH_SCRIPT.length);
@@ -267,10 +257,6 @@ const VirtualMonitorSimulator: React.FC<{
       });
       setStage(spec.stage);
       setCustomSlimHeight(spec.customHeight);
-      if (spec.stage === 'medium') {
-        onStep('summon');
-        onStep('medium');
-      }
     }, 120);
     return () => window.clearTimeout(timer);
   }, [
@@ -294,9 +280,12 @@ const VirtualMonitorSimulator: React.FC<{
       setStage(nextStage);
       setCustomSlimHeight(nextStage === 'small' ? 340 : undefined);
       setAutoPhase(nextStage === 'large' ? 3 : nextStage === 'medium' ? 2 : 1);
-      onStep('summon');
-      if (nextStage === 'medium' || nextStage === 'large') onStep('medium');
-      if (nextStage === 'large') onStep('large');
+      if (nextStage === 'large') {
+        onStep('large');
+      } else {
+        onStep('summon');
+        if (nextStage === 'medium') onStep('medium');
+      }
     };
     window.addEventListener('ghosti_focus_virtual_monitor_window', onFocusMonitorWin as EventListener);
     return () => window.removeEventListener('ghosti_focus_virtual_monitor_window', onFocusMonitorWin as EventListener);
@@ -312,14 +301,13 @@ const VirtualMonitorSimulator: React.FC<{
     }
     setWindowMode(nextMode);
     playBabyGhostChime('summon');
-    onStep('summon');
     if (nextMode === 'large') {
       setStage('large');
       setCustomSlimHeight(undefined);
       setAutoPhase(3);
-      onStep('medium');
       onStep('large');
     } else {
+      onStep('summon');
       const cleanQ =
         hasExecutedUserSearch &&
         activeQuery &&
@@ -346,24 +334,24 @@ const VirtualMonitorSimulator: React.FC<{
   const selectExplicitStage = (targetStage: GhostSearchStage) => {
     setIsAutoPlaying(false);
     playBabyGhostChime('summon');
-    onStep('summon');
     if (targetStage === 'small') {
       setWindowMode('compact');
       setStage('small');
       setCustomSlimHeight(330);
       setAutoPhase(1);
+      onStep('summon');
     } else if (targetStage === 'medium') {
       setWindowMode('compact');
       setStage('medium');
       setCustomSlimHeight(undefined);
       setAutoPhase(2);
+      onStep('summon');
       onStep('medium');
     } else {
       setWindowMode('large');
       setStage('large');
       setCustomSlimHeight(undefined);
       setAutoPhase(3);
-      onStep('medium');
       onStep('large');
     }
   };
@@ -825,11 +813,11 @@ export const GhostSearchTrainingPage: React.FC = () => {
 
   const triggerRealGhostSearchWindow = async (stage: GhostSearchStage = 'medium', query?: string) => {
     playBabyGhostChime('summon');
-    markStep('summon');
-    if (stage === 'medium') markStep('medium');
     if (stage === 'large') {
-      markStep('medium');
       markStep('large');
+    } else {
+      markStep('summon');
+      if (stage === 'medium') markStep('medium');
     }
     if (typeof window !== 'undefined') {
       window.dispatchEvent(
@@ -855,7 +843,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
 
   useEffect(() => zCoreBridge.subscribe((c: boolean) => setConnected(c)), []);
 
-  // 로컬 OS 귀신검색창(Tkinter / --app 독립창)에서 소환·중형·갤러리를 클릭했을 때도 위쪽 3대 미션 도장(✓)이 실시간 자동 각인되도록 동기화
+  // 로컬 OS 귀신검색창(Tkinter / --app 독립창)에서 소환·중형·갤러리를 클릭했을 때도 위쪽 도장(✓)이 개별 단계별로만 정확히 각인되도록 동기화
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === GAME_STORAGE_KEY) {
@@ -876,22 +864,22 @@ export const GhostSearchTrainingPage: React.FC = () => {
           baseline = { ...total };
           return;
         }
+        const prevBase = baseline;
+        baseline = { ...total };
         if (
-          (total.ctrl0_summon_bar || 0) > (baseline.ctrl0_summon_bar || 0) ||
-          (total.ghost_search_window_small || 0) > (baseline.ghost_search_window_small || 0)
+          (total.ctrl0_summon_bar || 0) > (prevBase.ctrl0_summon_bar || 0) ||
+          (total.ghost_search_window_small || 0) > (prevBase.ghost_search_window_small || 0)
         ) {
           markStep('summon');
         }
-        if ((total.ghost_search_window_medium || 0) > (baseline.ghost_search_window_medium || 0)) {
+        if ((total.ghost_search_window_medium || 0) > (prevBase.ghost_search_window_medium || 0)) {
           markStep('summon');
           markStep('medium');
         }
         if (
-          (total.ghost_search_window_large || 0) > (baseline.ghost_search_window_large || 0) ||
-          (total.ghost_search_window_gallery || 0) > (baseline.ghost_search_window_gallery || 0)
+          (total.ghost_search_window_large || 0) > (prevBase.ghost_search_window_large || 0) ||
+          (total.ghost_search_window_gallery || 0) > (prevBase.ghost_search_window_gallery || 0)
         ) {
-          markStep('summon');
-          markStep('medium');
           markStep('large');
         }
       } catch {
