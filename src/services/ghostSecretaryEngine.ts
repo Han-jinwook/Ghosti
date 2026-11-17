@@ -440,8 +440,17 @@ function writeJson(key: string, value: unknown): void {
   }
 }
 
+let _didClearStalePassportStepOnBoot = false;
+
 export function loadGhostSecretaryState(): GhostSecretaryState {
   const st = readJson<GhostSecretaryState>(GHOST_SECRETARY_STATE_KEY, {});
+  if (!_didClearStalePassportStepOnBoot) {
+    _didClearStalePassportStepOnBoot = true;
+    if (st.passportStep === 'naming' || st.passportStep === 'ask_hint') {
+      delete st.passportStep;
+      writeJson(GHOST_SECRETARY_STATE_KEY, st);
+    }
+  }
   if (!st.nickname) {
     try {
       const hubNick = localStorage.getItem('userNickname');
