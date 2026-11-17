@@ -42,7 +42,7 @@ FILE_ATTRIBUTE_NORMAL = 0x80
 PLUGIN_METADATA = {
     "pluginId": "ghosti_os",
     "pluginName": "Ghosti & 3-Monsters OS + RestorePoint + RecycleBin Omni-Tracker Plugin",
-    "version": "2.3.12",
+    "version": "2.3.13",
     "type": "BUILTIN_SOFTWARE_PLUGIN",
     "port": 5199,
     "capabilities": [
@@ -1187,7 +1187,7 @@ def resolve_local_media_file(params: Dict[str, Any] | None = None) -> tuple[Path
     return full_path, content_type, 200
 
 
-_PHOTO_THUMBS_DIR = safe.QUARANTINE_DIR / "photo_thumbs"
+_PHOTO_THUMBS_DIR = getattr(safe, "MERLIN_DIR", Path(os.environ.get("LOCALAPPDATA", Path.home())) / "Merlin") / "photo_thumbs"
 
 
 def get_or_create_photo_thumb(full_path: Path, max_px: int = 360) -> Path | None:
