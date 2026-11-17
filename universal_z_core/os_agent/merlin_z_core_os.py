@@ -1304,9 +1304,10 @@ def find_explorer_windows_on_default_desktop(
             user32.GetWindowTextW(hw, buf, n + 1)
             title_val = buf.value
 
-        is_new = exclude_hwnds is not None and int(hwnd) not in exclude_hwnds
+        if exclude_hwnds is not None and int(hwnd) in exclude_hwnds:
+            return True
         title_matched = any(k in title_val.lower() for k in kw_lowers) if kw_lowers else True
-        if is_new or title_matched:
+        if title_matched or (exclude_hwnds is not None):
             rect = wintypes.RECT()
             user32.GetWindowRect(hw, ctypes.byref(rect))
             found.append(
@@ -1400,6 +1401,43 @@ def run_interactive_gui_via_schtasks(task_name: str, tr_command: str) -> bool:
                 pass
             return True
         return False
+    except Exception:
+        return False
+
+
+def _sh_open_folder_and_select_file(target_file: Path) -> bool:
+    """
+    Win32 공식 Shell API(SHOpenFolderAndSelectItems)로 탐색기를 열고 파일을 선택합니다.
+    - 파일명·경로에 쉼표(,), 공백, 괄호, 한글(카카오톡 받은 파일·바탕 화면), OneDrive 경로가 있어도 100% 동작하며,
+    - 이미 열려 있는 동일 폴더 탐색기 탭/창이 브라우저 뒤에 가려져 있어도 즉시 해당 항목을 선택하고 활성화합니다.
+    """
+    if os.name != "nt":
+        return False
+    try:
+        resolved_str = str(target_file.resolve())
+        ole32 = ctypes.windll.ole32
+        shell32 = ctypes.windll.shell32
+        ole32.CoInitialize(None)
+        shell32.ILCreateFromPathW.argtypes = [wintypes.LPCWSTR]
+        shell32.ILCreateFromPathW.restype = ctypes.c_void_p
+        shell32.SHOpenFolderAndSelectItems.argtypes = [
+            ctypes.c_void_p,
+            wintypes.UINT,
+            ctypes.c_void_p,
+            wintypes.DWORD,
+        ]
+        shell32.SHOpenFolderAndSelectItems.restype = ctypes.c_long
+        shell32.ILFree.argtypes = [ctypes.c_void_p]
+        shell32.ILFree.restype = None
+
+        pidl = shell32.ILCreateFromPathW(resolved_str)
+        if not pidl:
+            return False
+        try:
+            hr = shell32.SHOpenFolderAndSelectItems(pidl, 0, None, 0)
+            return hr == 0
+        finally:
+            shell32.ILFree(pidl)
     except Exception:
         return False
 
@@ -1629,17 +1667,24 @@ def run_gui_task_runner() -> None:
                 os.startfile(str(target_file))
             except Exception:
                 pass
-        try:
-            subprocess.Popen(["explorer.exe", f"/select,{str(target_file.resolve())}"])
-        except Exception:
-            pass
+        resolved_tf = target_file.resolve()
+        if not _sh_open_folder_and_select_file(resolved_tf):
+            try:
+                if "," in str(resolved_tf):
+                    os.startfile(str(resolved_tf.parent))
+                else:
+                    subprocess.Popen(f'explorer.exe /select,"{resolved_tf}"')
+            except Exception:
+                pass
         folder_titles = get_explorer_folder_title_candidates(target_file.parent) + [target_file.stem, target_file.name]
         for tick in range(35):
             time.sleep(0.05)
             candidates = find_explorer_windows_on_default_desktop(
                 folder_titles,
-                exclude_hwnds=existing_explorers if tick < 8 else None,
+                exclude_hwnds=existing_explorers if tick < 5 else None,
             )
+            if not candidates and tick >= 12:
+                candidates = find_explorer_windows_on_default_desktop([])
             if candidates:
                 bring_window_to_front_immediately(candidates[0]["rawHwnd"])
                 break
@@ -2442,8 +2487,11 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
             search_dirs = [
                 USERPROFILE / "Desktop",
                 USERPROFILE / "Documents",
+                USERPROFILE / "Documents" / "카카오톡 받은 파일",
                 USERPROFILE / "Downloads",
                 USERPROFILE / "Pictures",
+                USERPROFILE / "Videos",
+                USERPROFILE / "OneDrive",
                 Path("C:/Users/Public/Documents"),
             ]
             for cand_dir in search_dirs:
@@ -2503,13 +2551,22 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
 
             folder_titles = get_explorer_folder_title_candidates(resolved_p.parent)
             existing_explorers = {w["rawHwnd"] for w in find_explorer_windows_on_default_desktop([])}
-            try:
-                spawn_on_interactive_desktop(f'explorer.exe /select,"{str(resolved_p)}"', hide_console=False)
-            except Exception:
+            if resolved_p.is_dir():
                 try:
-                    subprocess.Popen(f'explorer.exe /select,"{str(resolved_p)}"')
+                    os.startfile(str(resolved_p))
                 except Exception:
-                    pass
+                    spawn_on_interactive_desktop(f'explorer.exe "{str(resolved_p)}"', hide_console=False)
+            elif not _sh_open_folder_and_select_file(resolved_p):
+                try:
+                    if "," in str(resolved_p):
+                        os.startfile(str(resolved_p.parent))
+                    else:
+                        spawn_on_interactive_desktop(f'explorer.exe /select,"{str(resolved_p)}"', hide_console=False)
+                except Exception:
+                    try:
+                        subprocess.Popen(f'explorer.exe /select,"{str(resolved_p)}"')
+                    except Exception:
+                        pass
             opened_win: Dict[str, Any] = {}
             viewer_win: Dict[str, Any] = {}
             search_titles = folder_titles + [resolved_p.stem, resolved_p.name]
@@ -2519,8 +2576,10 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
                 if not opened_win:
                     found = find_explorer_windows_on_default_desktop(
                         search_titles,
-                        exclude_hwnds=existing_explorers if tick < 8 else None,
+                        exclude_hwnds=existing_explorers if tick < 4 else None,
                     )
+                    if not found and tick >= 10:
+                        found = find_explorer_windows_on_default_desktop([])
                     if found:
                         opened_win = found[0]
                         try:

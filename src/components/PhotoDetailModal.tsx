@@ -379,9 +379,11 @@ export const PhotoDetailModal: React.FC = () => {
                     📁 실제 PC 위치: {selectedPhoto.fullPath}
                   </p>
                 ) : selectedPhoto.fullUrl?.startsWith('/sample_photos_301/') ||
-                  selectedPhoto.fullUrl?.startsWith('/poc/') ? (
+                  selectedPhoto.fullUrl?.startsWith('/poc/') ||
+                  selectedPhoto.fullUrl?.startsWith('/shared_family_host_thumbs/') ||
+                  String(selectedPhoto.id || '').startsWith('shared_host_') ? (
                   <p className="font-body-sm text-[11.5px] text-amber-600 dark:text-amber-300 mt-1">
-                    ℹ️ 체험용 내장 샘플입니다 (내 PC 폴더에는 저장되지 않음 · PC 연결 시 실제 컴퓨터 폴더 경로가 표시됩니다)
+                    ℹ️ 공유방·체험용 예시 사진입니다 (내 PC 로컬 폴더에는 저장되지 않은 항목입니다)
                   </p>
                 ) : null}
               </div>
@@ -483,20 +485,25 @@ export const PhotoDetailModal: React.FC = () => {
                 onClick={() => {
                   if (selectedPhoto.fullPath) {
                     void openLocalFolder('photos', selectedPhoto.fullPath);
-                    setActionNotice(`📂 실제 PC 원본 위치: ${selectedPhoto.fullPath}`);
+                    setActionNotice(`📂 실제 PC 원본 위치 열기: ${selectedPhoto.fullPath}`);
                     return;
                   }
-                  const isSampleUrl =
+                  const isSampleOrSharedUrl =
                     selectedPhoto.fullUrl?.startsWith('/sample_photos_301/') ||
-                    selectedPhoto.fullUrl?.startsWith('/poc/');
-                  if (isSampleUrl) {
+                    selectedPhoto.fullUrl?.startsWith('/poc/') ||
+                    selectedPhoto.fullUrl?.startsWith('/shared_family_host_thumbs/') ||
+                    String(selectedPhoto.id || '').startsWith('shared_host_');
+                  if (isSampleOrSharedUrl) {
                     setActionNotice(
-                      'ℹ️ 이 사진은 체험용 내장 샘플(웹 번들)이라 내 PC 폴더에는 저장되어 있지 않습니다. 내 PC와 연결하시면 실제 컴퓨터 폴더 속 파일을 바로 열어드립니다.'
+                      'ℹ️ 이 사진은 공유방·체험용 예시 항목이라 내 PC 로컬 폴더에는 저장되어 있지 않습니다.'
                     );
                     return;
                   }
-                  void openLocalFolder('photos');
-                  setActionNotice('📂 윈도우 탐색기에서 내 PC 사진 폴더를 열었습니다.');
+                  const fallbackTarget = selectedPhoto.fullUrl?.includes('/__photos/file')
+                    ? selectedPhoto.name
+                    : undefined;
+                  void openLocalFolder('photos', fallbackTarget);
+                  setActionNotice('📂 윈도우 탐색기에서 사진 원본 위치를 열었습니다.');
                 }}
                 title={selectedPhoto.fullPath || '원본 파일이 있는 내 PC 폴더를 엽니다'}
                 className="px-3 py-1.5 rounded-full bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-sm text-label-sm flex items-center gap-1"

@@ -42,7 +42,7 @@ FILE_ATTRIBUTE_NORMAL = 0x80
 PLUGIN_METADATA = {
     "pluginId": "ghosti_os",
     "pluginName": "Ghosti & 3-Monsters OS + RestorePoint + RecycleBin Omni-Tracker Plugin",
-    "version": "2.3.9",
+    "version": "2.3.11",
     "type": "BUILTIN_SOFTWARE_PLUGIN",
     "port": 5199,
     "capabilities": [
@@ -3704,6 +3704,8 @@ def handle_quarantine(action: str, payload: Dict[str, Any] | None = None) -> Dic
         target_path = str(data.get("targetPath") or data.get("fullPath") or "").strip()
         if target_path:
             tp = Path(target_path)
+            if not tp.exists() and target_path in _PHOTO_PATH_INDEX:
+                tp = _PHOTO_PATH_INDEX[target_path]
             if tp.exists():
                 zos.open_file_location_on_interactive_desktop(tp, mode="open_file_location")
                 return {"ok": True, "opened": str(tp), "selectedFile": tp.is_file()}
@@ -4195,6 +4197,10 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
             return scan_windows_recycle_bin(target)
         if exec_action in ("omni-file-trace", "trace-missing"):
             return trace_missing_file_omni(target)
+        if exec_action in ("open_file_location", "open_file_search", "open_file_direct") and target and not Path(target).exists():
+            idx_cand = _PHOTO_PATH_INDEX.get(target) or _PHOTO_PATH_INDEX.get(Path(target).name)
+            if idx_cand and idx_cand.exists():
+                target = str(idx_cand)
         res_exec = zos.execute_real_os_action(exec_action, target)
         _invalidate_os_inspect_cache()
         return res_exec
