@@ -333,18 +333,12 @@ export async function loadInitialPhotoDataset(): Promise<{
       }
       const isConnectedSession = hasActiveGhostiLoginSession() && zCoreBridge.isConnected;
       const curatedSampleFiles = [
-        // 초정예 명품 쇼윈도 갤러리 8장 (1번 해변 가족 노을은 3장 연사 묶음 1세트 포함)
+        // 미연결 미리보기용 갤러리 샘플 2장 (1번 해변 가족 노을 3장 연사 묶음 1세트 + 2번 바다 패러세일링 1장 = 갤러리 총 2장)
         'IMG_20250510_1001.jpg',
         'IMG_20250510_1002.jpg',
         'IMG_20250510_1003.jpg',
-        'PET_20250610_1091.jpg',
         'TRV_20250720_1139.jpg',
-        'IMG_20250515_1053.jpg',
-        'TRV_20250720_1136.jpg',
-        'TRV_20250720_1141.jpg',
-        'TRV_20250720_1143.jpg',
-        'IMG_20250815_1008.jpg',
-        // AI 클린몬스터 4대 탭 체험용 정예 샘플
+        // AI 클린몬스터 4대 탭 체험용 정예 샘플 (각 2장씩, 갤러리 카운트 제외)
         'MEMO_202509_1259_주차장_기둥.jpg',
         'MEMO_202509_1261_택배_상자.jpg',
         'Screenshot_20250802_1001_쇼핑위시리스트.jpg',

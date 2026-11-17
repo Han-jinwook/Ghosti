@@ -250,12 +250,12 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
     if (canProbeLocal) {
       return [];
     }
-    return Array.from(staticByFileName.values()).slice(0, 6);
+    return Array.from(staticByFileName.values()).slice(0, 2);
   } catch {
     if (hasActiveGhostiLoginSession() && zCoreBridge.isConnected) {
       return [];
     }
-    return [...GDRIVE_SMART_DOC_ITEMS];
+    return [...GDRIVE_SMART_DOC_ITEMS].slice(0, 2);
   }
 }
 

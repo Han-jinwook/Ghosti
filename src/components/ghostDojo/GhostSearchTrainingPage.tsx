@@ -125,10 +125,11 @@ function consumePendingGhostSearchQuery(): string {
 const GAME_STORAGE_KEY = 'ghosti_search_game_v1';
 type GameStepId = 'summon' | 'medium' | 'large';
 const GAME_STEPS: Array<{ id: GameStepId; label: string }> = [
-  { id: 'summon', label: '① 빈 곳에서 Ctrl + 0 소환 (작게·슬림)' },
-  { id: 'medium', label: '② 검색량에 따라 자율 확장 체험' },
-  { id: 'large', label: '③ [⤢ 크게(갤러리)] 전환' },
+  { id: 'summon', label: '① [작게] 모드 소환 (Ctrl + 0)' },
+  { id: 'large', label: '② [⤢ 크게(갤러리)] 모드 전환' },
 ];
+
+const SIMULATOR_WORK_AREA = { left: 0, top: 0, right: 1120, bottom: 660 };
 
 function loadGame(): Partial<Record<GameStepId, boolean>> {
   try {
@@ -151,32 +152,24 @@ const AUTO_MORPH_SCRIPT: Array<{
     stage: null,
     cursorPct: { x: 62, y: 54 },
     clicking: true,
-    badge: '🎬 자동 시연 1/4 · 바탕화면 Ctrl + 0 / Ctrl + 우클릭 1초 소환',
-    desc: '가상 모니터 빈 곳에서 Ctrl + 0 또는 Ctrl + 우클릭을 누르면 마우스 위치에 슬림한 귀신검색창이 즉시 소환됩니다.',
+    badge: '🎬 자동 시연 1/3 · 바탕화면 Ctrl + 0 / Ctrl + 우클릭 1초 소환',
+    desc: '가상 모니터 빈 곳에서 Ctrl + 0 또는 Ctrl + 우클릭을 누르면 마우스 위치에 귀신검색창이 즉시 소환됩니다.',
   },
   {
     phase: 1,
     stage: 'small',
-    cursorPct: { x: 58, y: 34 },
+    cursorPct: { x: 56, y: 32 },
     clicking: false,
-    badge: '🎬 자동 시연 2/4 · [작게 모드 · 자율 슬림 520px] 시야 방해 없는 빠른 검색!',
-    desc: '소환 직후나 단답 결과(1~3건)일 때는 시야를 가리지 않는 슬림한 크기를 스스로 유지합니다.',
+    badge: '🎬 자동 시연 2/3 · [작게 모드] 빠른 검색 & 결과 요약 미리보기!',
+    desc: '작게 모드에서도 사진·동영상·문서 검색 결과와 첫 번째 요약 미리보기가 한눈에 또렷하게 보입니다.',
   },
   {
     phase: 2,
-    stage: 'medium',
-    cursorPct: { x: 56, y: 28 },
-    clicking: false,
-    badge: '🎬 자동 시연 3/4 · [작게 모드 · 자율 확장 960×640] 검색 결과·사진에 맞춰 알아서 스르륵!',
-    desc: '수동 버튼 없이도 검색 결과가 많아지거나 사진·문서 미리보기(OCR)가 잡히면 창이 알아서 쾌적하게 넓어집니다.',
-  },
-  {
-    phase: 3,
     stage: 'large',
     cursorPct: { x: 82, y: 12 },
     clicking: true,
-    badge: '🎬 자동 시연 4/4 · [⤢ 크게(갤러리) 1440×900] 일반 창처럼 크게/작게 단 2가지 모드!',
-    desc: '수동 버튼은 우측 상단 [⤢ 크게(갤러리) ↔ ⤡ 작게] 단 1개뿐! 한눈에 크게 볼 때만 눌러주세요.',
+    badge: '🎬 자동 시연 3/3 · [⤢ 크게(갤러리)] 넓게 펼쳐 보는 전체 갤러리 모드!',
+    desc: '보기 모드는 [작게] / [크게(갤러리)] 단 2가지! 실제 창이 띄워지면 테두리를 잡고 자유롭게 크기 조절도 가능합니다.',
   },
 ];
 
@@ -395,13 +388,31 @@ const VirtualMonitorSimulator: React.FC<{
     return () => window.removeEventListener('keydown', onKey);
   });
 
-  const scale = monitorW / DEFAULT_WORK_AREA.right;
-  const rect = stage ? computeGhostSearchWindowRect(stage, anchor.x, anchor.y, DEFAULT_WORK_AREA, 20, customSlimHeight) : null;
+  const scale = monitorW / SIMULATOR_WORK_AREA.right;
+  const rect = stage
+    ? stage === 'large'
+      ? {
+          stage: 'large' as const,
+          x: 16,
+          y: 36,
+          width: 1088,
+          height: 590,
+          framelessAppMode: true,
+        }
+      : {
+          stage: 'small' as const,
+          x: 100,
+          y: 52,
+          width: 920,
+          height: 540,
+          framelessAppMode: false,
+        }
+    : null;
   const currentScript = AUTO_MORPH_SCRIPT[autoPhase] || AUTO_MORPH_SCRIPT[1];
 
   const toVirtual = (e: React.MouseEvent) => {
     const box = monitorRef.current?.getBoundingClientRect();
-    if (!box) return { x: 1300, y: 600 };
+    if (!box) return { x: 560, y: 330 };
     return { x: Math.round((e.clientX - box.left) / scale), y: Math.round((e.clientY - box.top) / scale) };
   };
 
@@ -439,11 +450,10 @@ const VirtualMonitorSimulator: React.FC<{
             <span className="text-[10px] text-zinc-400 font-bold tracking-wider">CAM</span>
           </div>
 
-          {/* 우측 [작게·중간·크게] 3단계 버튼 & 자동 시연 재생/일시정지 컨트롤 */}
+          {/* 우측 [작게·크게] 2가지 보기 모드 버튼 & 자동 시연 재생/일시정지 컨트롤 */}
           <div className="flex flex-wrap items-center gap-1.5">
             {([
               { id: 'small' as const, label: '작게' },
-              { id: 'medium' as const, label: '중간' },
               { id: 'large' as const, label: '크게(갤러리)' },
             ]).map((btn) => (
               <button
@@ -451,7 +461,7 @@ const VirtualMonitorSimulator: React.FC<{
                 type="button"
                 onClick={() => selectExplicitStage(btn.id)}
                 className={`px-2.5 py-0.5 rounded-md text-[11px] font-extrabold cursor-pointer transition-all ${
-                  stage === btn.id
+                  (btn.id === 'large' ? stage === 'large' : stage === 'small' || stage === 'medium')
                     ? 'bg-[#2DD4BF] text-zinc-950 shadow-sm'
                     : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-[#2DD4BF]/40'
                 }`}
@@ -497,7 +507,7 @@ const VirtualMonitorSimulator: React.FC<{
           }}
           className="relative w-full overflow-hidden rounded-xl border-2 border-black shadow-inner"
           style={{
-            aspectRatio: `${DEFAULT_WORK_AREA.right} / ${DEFAULT_WORK_AREA.bottom}`,
+            aspectRatio: `${SIMULATOR_WORK_AREA.right} / ${SIMULATOR_WORK_AREA.bottom}`,
             background: 'linear-gradient(135deg, #0c192c 0%, #172554 42%, #1e1b4b 74%, #09090b 100%)',
           }}
         >
@@ -604,7 +614,7 @@ const VirtualMonitorSimulator: React.FC<{
                   <div className="flex-1 min-w-0 h-full overflow-y-auto">
                     <Stage1MinimalSearchPreview initialQuery={initialQuery} />
                   </div>
-                  {stage === 'medium' && (() => {
+                  {(stage === 'small' || stage === 'medium') && (() => {
                     const topPhoto =
                       searchSpace === 'gallery'
                         ? searchResults[0]?.photo ||
@@ -957,10 +967,10 @@ export const GhostSearchTrainingPage: React.FC = () => {
           <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl bg-zinc-900/80 border border-teal-400/40">
             <div className="flex flex-col gap-0.5">
               <h2 className="text-[15px] font-extrabold text-zinc-900 dark:text-white flex items-center gap-2">
-                <span>STEP 2 · 귀신검색 3단계 도장판 (🖥️ [작게 · 중간 · 크게] 실시간 완료 도장)</span>
+                <span>STEP 2 · 귀신검색 2단계 도장판 (🖥️ [작게 · 크게] 실시간 완료 도장)</span>
               </h2>
               <span className="text-[11.5px] text-zinc-400">
-                아래 가상 모니터 상단 또는 바탕화면 Ctrl+0 귀신검색창 상단의 <strong className="text-teal-300">[작게] · [중간] · [크게]</strong> 버튼을 누르면 우측 도장판에 <strong className="text-emerald-300">✓ 완료 도장</strong>이 즉시 찍힙니다.
+                아래 가상 모니터 상단 또는 바탕화면 Ctrl+0 귀신검색창 상단의 <strong className="text-teal-300">[작게] · [크게(갤러리)]</strong> 버튼을 누르면 우측 도장판에 <strong className="text-emerald-300">✓ 완료 도장</strong>이 즉시 찍힙니다.
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">

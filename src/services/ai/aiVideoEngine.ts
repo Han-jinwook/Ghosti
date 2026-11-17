@@ -922,9 +922,9 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
         }
       }
     }
-    return Array.from(merged.values());
+    return Array.from(merged.values()).slice(0, 2);
   } catch {
-    return [...BUNDLED_SHOWCASE_VIDEO_ITEMS];
+    return [...BUNDLED_SHOWCASE_VIDEO_ITEMS].slice(0, 2);
   }
 }
 

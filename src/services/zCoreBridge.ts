@@ -29,31 +29,24 @@ function isMobileBrowserRuntime(): boolean {
 
 export function hasActiveGhostiLoginSession(): boolean {
   if (typeof window === 'undefined') return false;
-  if ((window as any).__GHOSTI_ZCORE_BRIDGE__?.isConnected === true) {
-    return true;
-  }
-  if ((window as any).__GHOSTI_ACTIVE_ROUTE__?.viewMode === 'workspace') {
-    return true;
-  }
   const params = new URLSearchParams(window.location.search);
-  if (
-    params.get('ghostSearchWindow') ||
-    params.get('dev') === 'true' ||
-    params.get('lounge') ||
-    params.get('tab') ||
-    window.location.hostname === 'localhost' ||
-    window.location.hostname === '127.0.0.1'
-  ) {
+  if (params.get('ghostSearchWindow') || params.get('dev') === 'true') {
     return true;
   }
   try {
-    if (
+    // 초대 링크(?invite=... 또는 ?preview=guest)나 초대 합류 세션에서는
+    // 유저가 귀신비서에서 명시적으로 [내 컴퓨터 연결]에 동의하기 전까지 로컬 PC 파일을 임의로 조회하지 않음
+    const isInviteContext =
+      params.has('invite') ||
+      params.get('preview') === 'guest' ||
+      Boolean(localStorage.getItem('ghosti_invited_member_email'));
+    const hasExplicitEngineAgreement =
       sessionStorage.getItem('ghosti_one_stop_agreed') === '1' ||
-      sessionStorage.getItem('ghosti_entered_from_showroom') === '1' ||
-      localStorage.getItem('ghosti_secretary_engine_agreed') === '1' ||
-      localStorage.getItem('ghosti_onboarding_completed') === 'true' ||
-      localStorage.getItem('userNickname')
-    ) {
+      localStorage.getItem('ghosti_secretary_engine_agreed') === '1';
+    if (isInviteContext && !hasExplicitEngineAgreement) {
+      return false;
+    }
+    if (hasExplicitEngineAgreement) {
       return true;
     }
     return Boolean(
