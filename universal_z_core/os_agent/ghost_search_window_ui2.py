@@ -420,6 +420,12 @@ def build_ui2_search_window(
         _resize_for_stage(activate=True)
         return "break"
 
+    def _toggle_window_mode(_e=None) -> str:
+        order = ("small", "medium", "large")
+        cur_s = str(st_state.get("stage") or "small")
+        nxt_s = order[(order.index(cur_s) + 1) % len(order)] if cur_s in order else "medium"
+        return _set_explicit_stage(nxt_s)
+
     def _switch_filter(new_flt: str) -> None:
         is_hovered[0] = True
         st_state["video_ocr_modal_rec"] = None

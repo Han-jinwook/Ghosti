@@ -2699,7 +2699,18 @@ def _toast_worker() -> None:
 
     def _build_ui2_search_window(win: tk.Toplevel, init_stage: str, init_query: str, pt_x: int, pt_y: int, work_area: tuple[int, int, int, int]) -> None:
         global _CURRENT_OPEN_UI_MODE
+        for _old_ch in list(win.winfo_children()):
+            try:
+                _old_ch.destroy()
+            except Exception:
+                pass
         try:
+            if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+                _mp = str(getattr(sys, "_MEIPASS"))
+                if _mp and (not sys.path or sys.path[0] != _mp):
+                    if _mp in sys.path:
+                        sys.path.remove(_mp)
+                    sys.path.insert(0, _mp)
             import ghost_search_window_ui2  # type: ignore
 
             ui2_ctx = {
@@ -2739,7 +2750,11 @@ def _toast_worker() -> None:
             )
             return
         except Exception:
-            pass
+            for _partial_ch in list(win.winfo_children()):
+                try:
+                    _partial_ch.destroy()
+                except Exception:
+                    pass
         active_mode[0] = "ui2"
         _CURRENT_OPEN_UI_MODE = "ui2"
         m_left, m_top, m_right, m_bottom = work_area
@@ -4449,21 +4464,24 @@ def _find_edit_control_child(hwnd_fg: int, require_focused: bool = False) -> int
                 if ed and u32.IsWindowVisible(ed):
                     return ed
         found_ed = [0]
+        found_rich = [0]
         WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
 
         def _enum_child_cb(ch: int, _lp: int) -> bool:
             if u32.IsWindowVisible(ch):
                 c_cls = _get_win_class_only(ch)
                 if c_cls in _NATIVE_EDIT_CLASSES and not (u32.GetWindowLongW(ch, -16) & 0x0020):
-                    found_ed[0] = ch
-                    return False
+                    if "richedit" in c_cls.lower():
+                        found_rich[0] = ch
+                    if not found_ed[0]:
+                        found_ed[0] = ch
             return True
 
         try:
             u32.EnumChildWindows(hwnd_fg, WNDENUMPROC(_enum_child_cb), 0)
         except Exception:
             pass
-        return found_ed[0]
+        return found_rich[0] or found_ed[0]
 
     return 0
 
@@ -5706,6 +5724,14 @@ def superpower_1_clean_and_iron_lines(
                     daemon_set_cb(clip_ready)
                     show_ghost_toast("👻 귀신같이 [1] 서식·줄바꿈 다림질 완료 (Ctrl+Z 원복)")
                     return True
+                elif not has_sel:
+                    ok_line, _, out_line, _ = _replace_edit_control_current_line_atomic(
+                        ed_target, auto_triggered=False, prefer_full_doc=False, allow_typo_morph=True
+                    )
+                    if ok_line:
+                        daemon_set_cb(out_line)
+                        show_ghost_toast("👻 귀신같이 [1] 현재 줄 한영·서식 다림질 완료 (Ctrl+Z 원복)")
+                        return True
         except Exception:
             pass
 
@@ -8645,7 +8671,7 @@ def main() -> None:
                                     prev_s_l = live_edit_prev_line or ""
                                     live_edit_prev_line = cur_l_str
                                     diff_len = len(cur_l_str) - len(prev_s_l)
-                                    if 1 <= diff_len <= 4 and cur_l_str.startswith(prev_s_l):
+                                    if 1 <= diff_len <= 20 and cur_l_str.startswith(prev_s_l):
                                         if cur_l_str.endswith(" ") and not prev_s_l.endswith(" "):
                                             cur_strip_l = cur_l_str.rstrip(" ")
                                             toks_l = cur_strip_l.split()
@@ -8667,7 +8693,7 @@ def main() -> None:
                                                                 typed_ascii_buf.clear()
                                                                 pending_first_typo = None
                                                                 complete_feature_action_success("auto_typo_morph_2words")
-                                        elif not cur_l_str.endswith(" ") and re.search(r"[A-Za-z]", cur_l_str[-1:]):
+                                        elif not cur_l_str.endswith(" ") and re.search(r"[A-Za-z0-9.,?!~]", cur_l_str[-1:]) and re.search(r"[A-Za-z]{2,}", cur_l_str):
                                             live_edit_last_type_ts = now
                                             live_edit_idle_checked_ts = 0.0
                                     else:

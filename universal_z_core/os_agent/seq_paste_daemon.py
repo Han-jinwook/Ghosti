@@ -2699,7 +2699,18 @@ def _toast_worker() -> None:
 
     def _build_ui2_search_window(win: tk.Toplevel, init_stage: str, init_query: str, pt_x: int, pt_y: int, work_area: tuple[int, int, int, int]) -> None:
         global _CURRENT_OPEN_UI_MODE
+        for _old_ch in list(win.winfo_children()):
+            try:
+                _old_ch.destroy()
+            except Exception:
+                pass
         try:
+            if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+                _mp = str(getattr(sys, "_MEIPASS"))
+                if _mp and (not sys.path or sys.path[0] != _mp):
+                    if _mp in sys.path:
+                        sys.path.remove(_mp)
+                    sys.path.insert(0, _mp)
             import ghost_search_window_ui2  # type: ignore
 
             ui2_ctx = {
@@ -2739,7 +2750,11 @@ def _toast_worker() -> None:
             )
             return
         except Exception:
-            pass
+            for _partial_ch in list(win.winfo_children()):
+                try:
+                    _partial_ch.destroy()
+                except Exception:
+                    pass
         active_mode[0] = "ui2"
         _CURRENT_OPEN_UI_MODE = "ui2"
         m_left, m_top, m_right, m_bottom = work_area
