@@ -655,6 +655,34 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
     return orderedGroups;
   }, [searchResults, searchSpace]);
 
+  const [visiblePhotoLimit, setVisiblePhotoLimit] = useState<number>(48);
+  const photoLoadMoreRef = React.useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setVisiblePhotoLimit(48);
+  }, [activeQuery, searchSpace]);
+
+  useEffect(() => {
+    const el = photoLoadMoreRef.current;
+    if (!el || visiblePhotoLimit >= groupedResults.length) return;
+    if (typeof IntersectionObserver === 'undefined') return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setVisiblePhotoLimit((prev) => Math.min(groupedResults.length, prev + 48));
+        }
+      },
+      { rootMargin: '320px' }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [visiblePhotoLimit, groupedResults.length]);
+
+  const visibleGroupedResults = useMemo(
+    () => groupedResults.slice(0, visiblePhotoLimit),
+    [groupedResults, visiblePhotoLimit]
+  );
+
   const scrollToResults = () => {
     if (typeof document !== 'undefined') {
       window.setTimeout(() => {
@@ -696,7 +724,7 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
   };
 
   return (
-    <main className="flex-1 w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 py-6 sm:py-8 flex flex-col gap-6">
+    <main className="flex-1 w-full px-4 sm:px-6 py-5 sm:py-6 flex flex-col gap-5">
       {/* 상단 검색 프레임 */}
       <div className="w-full flex flex-col gap-3">
         <div className="flex flex-wrap items-baseline justify-between gap-2 px-1">
@@ -1069,7 +1097,7 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                 <article
                   key={vid.id}
                   onClick={() => setSelectedVideoModal(vid, vid.matchedSeekSec)}
-                  className="min-w-0 group rounded-2xl overflow-hidden bg-[#18181B] hover:bg-zinc-900 border border-white/10 hover:border-white/25 flex flex-col cursor-pointer transition-all"
+                  className="min-w-0 group rounded-2xl overflow-hidden bg-[#18181B] hover:bg-zinc-900 border border-white/10 hover:border-white/25 flex flex-col cursor-pointer transition-colors"
                 >
                   <div className="relative aspect-video w-full overflow-hidden bg-black">
                     {cardThumbUrl ? (
@@ -1174,7 +1202,7 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                   <article
                     key={doc.id}
                     onClick={() => setSelectedDocModal(doc)}
-                    className="group p-4 rounded-2xl bg-[#18181B] hover:bg-zinc-900 border border-white/10 hover:border-white/25 flex flex-col justify-between gap-3 cursor-pointer transition-all"
+                    className="group p-4 rounded-2xl bg-[#18181B] hover:bg-zinc-900 border border-white/10 hover:border-white/25 flex flex-col justify-between gap-3 cursor-pointer transition-colors"
                   >
                     <div className="flex flex-col gap-2">
                       <div className="flex items-center justify-between gap-2">
@@ -1271,14 +1299,15 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
             </div>
 
             {groupedResults.length > 0 ? (
+              <>
               <div
                 className={
                   groupedResults.length <= 16
                     ? 'grid grid-cols-[repeat(auto-fill,minmax(175px,1fr))] gap-3.5'
-                    : 'grid grid-cols-[repeat(auto-fill,minmax(135px,1fr))] gap-2.5'
+                    : 'grid grid-cols-[repeat(auto-fill,minmax(145px,1fr))] gap-2.5'
                 }
               >
-                {groupedResults.map((group) => {
+                {visibleGroupedResults.map((group) => {
                   const item = group.representative;
                   const isBurst = group.burstCount >= 2;
                   return (
@@ -1288,7 +1317,7 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                         // [레드팀 보완] 연사 묶음(❐ N장 연사) 클릭 시 상세 모달에 group.burstPhotos를 그대로 넘겨 모달 내에서 나란히 펼쳐 골라볼 수 있도록 보장
                         setSelectedPhoto(item.photo, isBurst ? group.burstPhotos : null)
                       }
-                      className="group relative rounded-2xl overflow-hidden bg-[#18181B] border border-white/10 hover:border-white/25 transition-all cursor-pointer flex flex-col"
+                      className="group relative rounded-2xl overflow-hidden bg-[#18181B] border border-white/10 hover:border-white/25 transition-colors cursor-pointer flex flex-col"
                     >
                       <div
                         className={`relative ${
@@ -1299,11 +1328,12 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                           src={item.photo.thumbUrl}
                           alt={item.photo.name}
                           loading="lazy"
-                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                          decoding="async"
+                          className="w-full h-full object-cover"
                         />
 
                         {isBurst && (
-                          <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-zinc-950/85 backdrop-blur-md border border-white/15 text-primary-container font-label-sm text-[10.5px] font-bold flex items-center gap-1">
+                          <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-zinc-950/90 border border-white/15 text-primary-container font-label-sm text-[10.5px] font-bold flex items-center gap-1">
                             <span>❐ {group.burstCount}장 연사</span>
                           </div>
                         )}
@@ -1314,10 +1344,10 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                             toggleBookmark(item.photo.id);
                           }}
                           aria-label="즐겨찾기"
-                          className={`absolute top-2.5 right-2.5 w-7.5 h-7.5 rounded-full backdrop-blur-md flex items-center justify-center transition-all cursor-pointer ${
+                          className={`absolute top-2.5 right-2.5 w-7.5 h-7.5 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
                             item.photo.bookmarked
                               ? 'bg-red-600/95 text-white ring-2 ring-white/80 shadow-md scale-105'
-                              : 'bg-black/60 text-white/85 hover:text-red-400 hover:bg-black/80'
+                              : 'bg-black/75 text-white/85 hover:text-red-400 hover:bg-black/90'
                           }`}
                         >
                           <span
@@ -1380,6 +1410,18 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                   );
                 })}
               </div>
+              {visiblePhotoLimit < groupedResults.length && (
+                <div ref={photoLoadMoreRef} className="py-4 flex justify-center">
+                  <button
+                    type="button"
+                    onClick={() => setVisiblePhotoLimit((prev) => Math.min(groupedResults.length, prev + 72))}
+                    className="px-4 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 text-[12.5px] font-bold cursor-pointer"
+                  >
+                    사진 더 보기 ({visiblePhotoLimit} / {groupedResults.length}장)
+                  </button>
+                </div>
+              )}
+              </>
             ) : (
               <div className="py-14 rounded-2xl bg-[#18181B] border border-white/10 text-center flex flex-col items-center gap-2">
                 <span className="material-symbols-outlined text-zinc-500 text-[36px]">

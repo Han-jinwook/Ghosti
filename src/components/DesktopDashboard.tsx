@@ -1,11 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { zCoreBridge } from '../services/zCoreBridge';
 import { useSaySeeStore } from '../store/useSaySeeStore';
-import {
-  computeGhostSearchWindowRect,
-  resolveGhostSearchResponsiveSpec,
-  type GhostSearchStage,
-} from '../services/ghostSearchWindowGeometry';
 import { GhostPhotoOcrTeleportModal } from './GhostWindowThreeStageMockup';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
 import { GhostSecretaryFirstModal } from './GhostSecretaryFirstGuard';
@@ -30,13 +25,7 @@ export const DesktopDashboard: React.FC = () => {
     activeLoungeType,
     setActiveLoungeType,
     activeFamilyRoom,
-    matchedLocalDocs,
-    matchedVaultPhotos,
-    matchedVideoScenes,
-    activeQuery,
-    searchResults,
     themeMode,
-    hasExecutedUserSearch,
     initialized,
   } = useSaySeeStore();
 
@@ -59,18 +48,11 @@ export const DesktopDashboard: React.FC = () => {
     };
   }, [setShowZCoreGuideModal]);
 
-  const [ghostSearchWindowStage, setGhostSearchWindowStage] = useState<
-    'small' | 'medium' | 'large' | null
-  >(() => {
+  const [ghostSearchWindowStage] = useState<'small' | 'medium' | 'large' | null>(() => {
     if (typeof window === 'undefined') return null;
     const v = new URLSearchParams(window.location.search).get('ghostSearchWindow');
-    if (v === 'compact') return 'small';
-    return v === 'small' || v === 'medium' || v === 'large' ? v : null;
-  });
-
-  const [ghostSearchAnchor] = useState<{ x: number; y: number }>(() => {
-    if (typeof window === 'undefined') return { x: 200, y: 120 };
-    return { x: window.screenX || 200, y: window.screenY || 120 };
+    if (!v) return null;
+    return v === 'small' || v === 'large' ? v : 'medium';
   });
 
   const [isInsideIframe] = useState<boolean>(() => {
@@ -82,124 +64,19 @@ export const DesktopDashboard: React.FC = () => {
     }
   });
 
-  const userManuallyResizedRef = React.useRef<boolean>(false);
-  const lastProgrammaticResizeTsRef = React.useRef<number>(0);
-
-  const applyStandaloneWindowGeometry = (nextStage: GhostSearchStage, customHeight?: number) => {
-    setGhostSearchWindowStage(nextStage);
-    try {
-      const prev = JSON.parse(localStorage.getItem('ghosti_search_game_v1') || '{}');
-      const next = {
-        ...prev,
-        summon: true,
-        ...(nextStage === 'medium' ? { medium: true } : {}),
-        ...(nextStage === 'large' ? { medium: true, large: true } : {}),
-      };
-      localStorage.setItem('ghosti_search_game_v1', JSON.stringify(next));
-    } catch {
-      /* ignore */
-    }
-    try {
-      const rect = computeGhostSearchWindowRect(
-        nextStage,
-        ghostSearchAnchor.x,
-        ghostSearchAnchor.y,
-        {
-          left: 0,
-          top: 0,
-          right: window.screen?.availWidth || 1920,
-          bottom: window.screen?.availHeight || 1040,
-        },
-        20,
-        customHeight
-      );
-      lastProgrammaticResizeTsRef.current = Date.now();
-      window.resizeTo(rect.width, rect.height);
-      window.moveTo(rect.x, rect.y);
-    } catch {
-      /* ignore */
-    }
-  };
-
-  useEffect(() => {
-    if (!ghostSearchWindowStage || isInsideIframe) return;
-    let rafId = 0;
-    const onNativeWindowResize = () => {
-      if (Date.now() - lastProgrammaticResizeTsRef.current > 350) {
-        userManuallyResizedRef.current = true;
-      }
-      if (rafId) cancelAnimationFrame(rafId);
-      rafId = requestAnimationFrame(() => {
-        const w = window.innerWidth || 0;
-        if (w <= 0) return;
-        const nextStage: GhostSearchStage = w >= 1150 ? 'large' : w >= 760 ? 'medium' : 'small';
-        setGhostSearchWindowStage((prev) => {
-          if (prev === nextStage) return prev;
-          if (nextStage === 'large') {
-            try {
-              const saved = JSON.parse(localStorage.getItem('ghosti_search_game_v1') || '{}');
-              localStorage.setItem(
-                'ghosti_search_game_v1',
-                JSON.stringify({ ...saved, summon: true, medium: true, large: true })
-              );
-            } catch {
-              /* ignore */
-            }
-          }
-          return nextStage;
-        });
-      });
-    };
-    window.addEventListener('resize', onNativeWindowResize, { passive: true });
-    return () => {
-      if (rafId) cancelAnimationFrame(rafId);
-      window.removeEventListener('resize', onNativeWindowResize);
-    };
-  }, [Boolean(ghostSearchWindowStage), isInsideIframe]);
-
-  useEffect(() => {
-    if (!ghostSearchWindowStage || ghostSearchWindowStage === 'large' || isInsideIframe) return;
-    if (userManuallyResizedRef.current) return;
-    const cleanQ =
-      hasExecutedUserSearch &&
-      activeQuery &&
-      !activeQuery.startsWith('전체 갤러리 사진') &&
-      !activeQuery.startsWith('동영상 ') &&
-      !activeQuery.startsWith('최근 서류 ')
-        ? activeQuery.trim()
-        : '';
-    if (!cleanQ && ghostSearchWindowStage === 'medium') return;
-    const timer = window.setTimeout(() => {
-      if (userManuallyResizedRef.current) return;
-      const totalMatched =
-        searchResults.length +
-        matchedLocalDocs.length +
-        matchedVaultPhotos.length +
-        matchedVideoScenes.length;
-      const spec = resolveGhostSearchResponsiveSpec({
-        mode: 'compact',
-        hasQuery: Boolean(cleanQ),
-        resultCount: totalMatched,
-        hasRichPreview:
-          searchResults.length > 0 || matchedVaultPhotos.length > 0 || matchedLocalDocs.length > 0,
-      });
-      applyStandaloneWindowGeometry(spec.stage, spec.customHeight);
-    }, 120);
-    return () => window.clearTimeout(timer);
-  }, [
-    isInsideIframe,
-    hasExecutedUserSearch,
-    activeQuery,
-    searchResults.length,
-    matchedLocalDocs.length,
-    matchedVaultPhotos.length,
-    matchedVideoScenes.length,
-  ]);
-
   const consumedUrlQueryRef = React.useRef<string>('');
 
   useEffect(() => {
     if (!ghostSearchWindowStage) return;
+    try {
+      const saved = JSON.parse(localStorage.getItem('ghosti_search_game_v1') || '{}');
+      localStorage.setItem(
+        'ghosti_search_game_v1',
+        JSON.stringify({ ...saved, summon: true, medium: true, large: true })
+      );
+    } catch {
+      /* ignore */
+    }
     setActiveLoungeType('personal');
     setDesktopTab('dashboard');
     if (!initialized) return;
@@ -231,9 +108,6 @@ export const DesktopDashboard: React.FC = () => {
             <span className="flex items-center gap-2 min-w-0">
               <span className="text-[#2DD4BF] font-extrabold whitespace-nowrap">
                 👻 귀신검색창
-              </span>
-              <span className="px-2 py-0.5 rounded bg-teal-500/20 text-[#5EEAD4] text-[10.5px] font-extrabold whitespace-nowrap">
-                {ghostSearchWindowStage === 'large' ? '🖼️ 전체 갤러리 뷰' : '✨ 검색 결과에 맞춰 자동 크기 조절'}
               </span>
             </span>
           </div>
