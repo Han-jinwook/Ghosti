@@ -595,26 +595,9 @@ const VirtualMonitorSimulator: React.FC<{
                       {rect.framelessAppMode ? '🖼️ 전체 갤러리 뷰' : '✨ 검색 결과에 맞춰 자동 크기 조절'}
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5">
-                    {([
-                      { id: 'small' as const, label: '작게' },
-                      { id: 'medium' as const, label: '중간' },
-                      { id: 'large' as const, label: '크게' },
-                    ]).map((btn) => (
-                      <button
-                        key={btn.id}
-                        type="button"
-                        onClick={() => selectExplicitStage(btn.id)}
-                        className={`px-2 py-0.5 rounded text-[10.5px] font-extrabold cursor-pointer transition-all ${
-                          stage === btn.id
-                            ? 'bg-[#2DD4BF] text-zinc-950'
-                            : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-[#2DD4BF]/40'
-                        }`}
-                      >
-                        {btn.label}
-                      </button>
-                    ))}
-                  </div>
+                  <span className="text-[11px] text-zinc-400 font-semibold">
+                    윈도우 기본 최대화(□)·닫기(✕) 사용
+                  </span>
                 </div>
                 <div
                   className="h-[calc(100%-2.25rem)] flex overflow-hidden bg-zinc-950"
