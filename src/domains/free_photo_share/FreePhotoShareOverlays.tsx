@@ -25,6 +25,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
     activeLoungeType === 'family' ? 'family@sundreamer.app' : 'friend@sundreamer.app'
   );
   const [selectedSharedUploadIds, setSelectedSharedUploadIds] = useState<string[]>([]);
+  const [visibleUploadCount, setVisibleUploadCount] = useState(48);
 
   const uploadableLocalPhotos = useMemo(() => {
     const existingSharedNames = new Set([
@@ -43,6 +44,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
 
   useEffect(() => {
     if (showSharedPhotoUploadModal) {
+      setVisibleUploadCount(48);
       setSelectedSharedUploadIds(uploadableLocalPhotos.slice(0, 12).map((p) => p.id));
     }
   }, [showSharedPhotoUploadModal, uploadableLocalPhotos]);
@@ -237,47 +239,59 @@ export const FreePhotoShareOverlays: React.FC = () => {
                   </div>
                 </div>
               ) : (
-                <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
-                  {uploadableLocalPhotos.map((p) => {
-                    const checked = selectedSharedUploadIds.includes(p.id);
-                    return (
-                      <button
-                        key={p.id}
-                        type="button"
-                        onClick={() =>
-                          setSelectedSharedUploadIds((prev) =>
-                            prev.includes(p.id) ? prev.filter((id) => id !== p.id) : [...prev, p.id]
-                          )
-                        }
-                        className={`relative aspect-square rounded-2xl overflow-hidden border-2 transition-all cursor-pointer group ${
-                          checked
-                            ? 'border-[#2DD4BF] ring-2 ring-[#2DD4BF]/40 scale-[0.99]'
-                            : 'border-white/10 hover:border-white/30 opacity-80 hover:opacity-100'
-                        }`}
-                      >
-                        <img
-                          src={p.thumbUrl}
-                          alt={p.name}
-                          loading="lazy"
-                          className="w-full h-full object-cover"
-                        />
-                        <div
-                          className={`absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-black shadow ${
+                <div className="flex flex-col gap-3">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
+                    {uploadableLocalPhotos.slice(0, visibleUploadCount).map((p) => {
+                      const checked = selectedSharedUploadIds.includes(p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          onClick={() =>
+                            setSelectedSharedUploadIds((prev) =>
+                              prev.includes(p.id) ? prev.filter((id) => id !== p.id) : [...prev, p.id]
+                            )
+                          }
+                          className={`relative aspect-square rounded-2xl overflow-hidden border-2 transition-all cursor-pointer group ${
                             checked
-                              ? 'bg-[#2DD4BF] text-zinc-950'
-                              : 'bg-black/65 border border-white/30 text-white'
+                              ? 'border-[#2DD4BF] ring-2 ring-[#2DD4BF]/40 scale-[0.99]'
+                              : 'border-white/10 hover:border-white/30 opacity-80 hover:opacity-100'
                           }`}
                         >
-                          {checked ? '✓' : ''}
-                        </div>
-                        <div className="absolute inset-x-0 bottom-0 px-1.5 py-1 bg-gradient-to-t from-black/85 to-transparent text-left">
-                          <span className="block text-[10px] text-zinc-200 font-medium truncate">
-                            {p.date.split(' ')[0]}
-                          </span>
-                        </div>
-                      </button>
-                    );
-                  })}
+                          <img
+                            src={p.thumbUrl}
+                            alt={p.name}
+                            loading="lazy"
+                            decoding="async"
+                            className="w-full h-full object-cover"
+                          />
+                          <div
+                            className={`absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-black shadow ${
+                              checked
+                                ? 'bg-[#2DD4BF] text-zinc-950'
+                                : 'bg-black/65 border border-white/30 text-white'
+                            }`}
+                          >
+                            {checked ? '✓' : ''}
+                          </div>
+                          <div className="absolute inset-x-0 bottom-0 px-1.5 py-1 bg-gradient-to-t from-black/85 to-transparent text-left">
+                            <span className="block text-[10px] text-zinc-200 font-medium truncate">
+                              {p.date.split(' ')[0]}
+                            </span>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  {uploadableLocalPhotos.length > visibleUploadCount && (
+                    <button
+                      type="button"
+                      onClick={() => setVisibleUploadCount((c) => c + 48)}
+                      className="w-full py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-teal-300 font-label-sm text-[12px] font-bold cursor-pointer"
+                    >
+                      ➕ 사진 48장 더 보기 (남은 {uploadableLocalPhotos.length - visibleUploadCount}장)
+                    </button>
+                  )}
                 </div>
               )}
             </div>

@@ -176,7 +176,17 @@ export const PhotoDetailModal: React.FC = () => {
     isGuestPreviewMode,
     triggerGuestJoinWall,
     activeLoungeType,
+    sharedRoomHostPhotos,
+    sharedRoomAddedPhotos,
   } = useSaySeeStore();
+
+  const scopedPhotos = useMemo(() => {
+    const sharedCorpus = [...sharedRoomAddedPhotos, ...sharedRoomHostPhotos];
+    if ((activeLoungeType === 'family' || activeLoungeType === 'club') && sharedCorpus.length > 0) {
+      return sharedCorpus;
+    }
+    return photos;
+  }, [activeLoungeType, photos, sharedRoomAddedPhotos, sharedRoomHostPhotos]);
 
   const [activeTab, setActiveTab] = useState<ContextTab>('same-day');
   const [drillQuery, setDrillQuery] = useState('');
@@ -210,7 +220,7 @@ export const PhotoDetailModal: React.FC = () => {
   // 1번 탭: 이 날 찍은 사진 전체 (동일 장면 중복 사본은 대표 1장만 남겨 다양한 장면 노출)
   const sameDayPhotos = useMemo(() => {
     if (!selectedPhoto) return [];
-    const active = photos.filter(
+    const active = scopedPhotos.filter(
       (p) =>
         !p.quarantined &&
         p.id !== selectedPhoto.id &&
@@ -232,12 +242,12 @@ export const PhotoDetailModal: React.FC = () => {
     if (combined.length >= 6) return combined.slice(0, 12);
     const fallback = dedupedActive.filter((p) => !combined.some((c) => c.id === p.id));
     return [...combined, ...fallback].slice(0, 12);
-  }, [selectedPhoto, photos]);
+  }, [selectedPhoto, scopedPhotos]);
 
   // 2번 탭: 비슷한 피사체 사진 (768차원 벡터 코사인 유사도 + 핵심 피사체 카테고리 매칭)
   const similarVisualWithScores = useMemo(() => {
     if (!selectedPhoto) return [];
-    const active = photos.filter(
+    const active = scopedPhotos.filter(
       (p) =>
         !p.quarantined &&
         p.id !== selectedPhoto.id &&
@@ -267,7 +277,7 @@ export const PhotoDetailModal: React.FC = () => {
 
     scored.sort((a, b) => b.score - a.score);
     return scored.slice(0, 12);
-  }, [selectedPhoto, photos]);
+  }, [selectedPhoto, scopedPhotos]);
 
   const similarVisualPhotos = useMemo(
     () => similarVisualWithScores.map((s) => s.photo),
@@ -277,7 +287,7 @@ export const PhotoDetailModal: React.FC = () => {
   // 3번 탭: 2차 자연어 좁혀가기 (결과 내 재검색)
   const drillDownPhotos = useMemo(() => {
     if (!selectedPhoto) return [];
-    const active = photos.filter(
+    const active = scopedPhotos.filter(
       (p) =>
         !p.quarantined &&
         p.id !== selectedPhoto.id &&
@@ -303,7 +313,7 @@ export const PhotoDetailModal: React.FC = () => {
 
     const matched = dedupedActive.filter((p) => tokens.every((tk) => matchPhotoQuery(p, tk)));
     return matched.slice(0, 12);
-  }, [selectedPhoto, photos, sameDayPhotos, similarVisualPhotos, drillQuery]);
+  }, [selectedPhoto, scopedPhotos, sameDayPhotos, similarVisualPhotos, drillQuery]);
 
   if (!selectedPhoto) return null;
 

@@ -1042,6 +1042,12 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     if (zCoreBridge.isConnected && get().photos.length === 0) {
       await get().initApp(true);
     }
+    if (get().sharedRoomHostPhotos.length === 0) {
+      const hostPhotos = await fetchSharedFamilyHostPhotos();
+      if (hostPhotos.length > 0) {
+        set({ sharedRoomHostPhotos: hostPhotos });
+      }
+    }
 
     const st = get();
     const mergedShared = [...st.sharedRoomAddedPhotos, ...st.sharedRoomHostPhotos];
