@@ -886,8 +886,8 @@ export const MobileAppView: React.FC = () => {
         <div className="flex-1 w-full px-3 pt-3 pb-10 flex flex-col gap-3">
           {activeLoungeType === 'personal' ? (
             <>
-              <MobileCleanerRescueBanner />
               <Stage1MinimalCarePreview />
+              <MobileCleanerRescueBanner />
             </>
           ) : (
             <LoungeIndexingWaitingRoom />

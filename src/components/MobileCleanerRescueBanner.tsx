@@ -15,10 +15,12 @@ export const MobileCleanerRescueBanner: React.FC = () => {
   const [scannedCount, setScannedCount] = useState(100);
   const [detectedList, setDetectedList] = useState<DetectedBloatCleanerItem[]>([]);
   const [lastScanDone, setLastScanDone] = useState(false);
+  const [manualRequested, setManualRequested] = useState(false);
   const isNativeAndroid = isCapacitorAndroidRuntime();
   const isAndroidEnv = isAndroidMobileBrowserOrApp();
 
-  const runScan = async () => {
+  const runScan = async (isManual = false) => {
+    if (isManual) setManualRequested(true);
     setScanning(true);
     try {
       const res = await scanMobileBloatCleaners();
@@ -32,21 +34,22 @@ export const MobileCleanerRescueBanner: React.FC = () => {
 
   useEffect(() => {
     if (isAndroidEnv) {
-      void runScan();
+      void runScan(false);
     }
   }, [isAndroidEnv]);
 
   useEffect(() => {
     const onExternalScan = () => {
-      void runScan();
+      void runScan(true);
     };
     window.addEventListener('ghosti_trigger_mobile_cleaner_scan', onExternalScan);
     return () => window.removeEventListener('ghosti_trigger_mobile_cleaner_scan', onExternalScan);
   }, []);
 
-  if (!isAndroidEnv) return null;
-
   const hasDetected = detectedList.length > 0;
+  // 평상시(악성 클리너 미감지 상태)에는 첫 화면에 불필요한 메뉴 박스를 띄우지 않고,
+  // 실제 악성 클리너(CleanX 등)가 감지되었거나 사용자가 채팅으로 클리너 점검을 요청했을 때만 노출!
+  if (!isAndroidEnv || (!hasDetected && !manualRequested)) return null;
 
   return (
     <section

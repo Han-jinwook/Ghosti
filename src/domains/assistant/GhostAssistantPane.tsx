@@ -25,9 +25,6 @@ export const GhostAssistantPane: React.FC = () => {
     <>
       {activeLoungeType === 'personal' ? (
         <>
-          <div className="w-full max-w-[1640px] mx-auto px-4 sm:px-6 md:px-8 pt-4">
-            <MobileCleanerRescueBanner />
-          </div>
           {isStage1MinimalPreview ? (
             <Stage1MinimalCarePreview />
           ) : (
@@ -35,6 +32,9 @@ export const GhostAssistantPane: React.FC = () => {
               <SmartTrashView />
             </GhostSecretaryFirstGuard>
           )}
+          <div className="w-full max-w-[1640px] mx-auto px-4 sm:px-6 md:px-8 pb-4">
+            <MobileCleanerRescueBanner />
+          </div>
         </>
       ) : (
         <GhostSecretaryFirstGuard>
