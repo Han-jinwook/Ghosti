@@ -354,7 +354,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
   useEffect(() => {
     if (sourceTab !== 'trash') return;
     const refreshWelcomeForSecretary = () => {
-      const t = buildWelcomeTurn(loadGhostSecretaryState());
+      const t = buildWelcomeTurn(loadGhostSecretaryState(), isMobileOrStore);
       saveGhostSecretaryState(t.nextState);
       setAwaitingNickname(Boolean(t.nextState.awaitingNickname));
       setSharedMonsterMessages((prev) =>
@@ -479,7 +479,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     return () => {
       window.removeEventListener('ghosti_jump_to_secretary', onJumpRefresh);
     };
-  }, [sourceTab]);
+  }, [sourceTab, isMobileOrStore]);
 
   useEffect(() => {
     const timer = window.setInterval(() => {
@@ -547,11 +547,15 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           role: 'assistant',
           timestamp: nowTimeKo(),
           sourceTab: 'trash',
-          text: `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두고 다음 안내로 넘어갈게요 👻✨\n이제 **『👻 귀신검색』**으로 방금 읽어둔 내 사진·문서를 1초 만에 찾아보시거나 숨은 초능력을 구경해 보실까요?`,
-          followUpSuggestions: [
-            '🔍 귀신검색으로 내 파일 찾아볼래',
-            '✨ 귀신비서의 숨은 초능력 알려줘',
-          ],
+          text: isMobileOrStore
+            ? `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두고 다음 안내로 넘어갈게요 👻✨\n이제 화면 맨 위 **통합 검색창(또는 🎤 마이크)**으로 방금 읽어둔 내 사진·문서를 1초 만에 찾아보실까요?`
+            : `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두고 다음 안내로 넘어갈게요 👻✨\n이제 **『👻 귀신검색』**으로 방금 읽어둔 내 사진·문서를 1초 만에 찾아보시거나 숨은 초능력을 구경해 보실까요?`,
+          followUpSuggestions: isMobileOrStore
+            ? ['🔍 맨 위 검색창으로 바로 찾아볼래']
+            : [
+                '🔍 귀신검색으로 내 파일 찾아볼래',
+                '✨ 귀신비서의 숨은 초능력 알려줘',
+              ],
         },
       ]);
     };
@@ -587,15 +591,23 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
 
     const onPhotoAuditSummary = (ev: Event) => {
       const detail = (
-        ev as CustomEvent<{ total?: number; dupSets?: number; blurry?: number; memoScreen?: number }>
+        ev as CustomEvent<{
+          total?: number;
+          dupSets?: number;
+          blurry?: number;
+          memoScreen?: number;
+          remainingOldPhotos?: number;
+        }>
       ).detail;
       if (!detail) return;
       const total = Number(detail.total ?? 0);
       const dupSets = Number(detail.dupSets ?? 0);
       const blurry = Number(detail.blurry ?? 0);
       const memoScreen = Number(detail.memoScreen ?? 0);
+      const remainingOldPhotos = Number(detail.remainingOldPhotos ?? 0);
       const st = loadGhostSecretaryState();
       const nickPrefix = st.nickname ? `${st.nickname}님, ` : '';
+      const paneLabel = isMobileOrStore ? '아래 정리 화면에서' : '아래(왼쪽) 정리 화면에서';
       const text =
         dupSets === 0 && blurry === 0 && memoScreen === 0
           ? `✨ ${nickPrefix}방금 사진 ${total}장을 꼼꼼히 살펴봤는데요! **중복·연사 사진 묶음도 0세트**이고 **흐린 사진도 0장**으로 버릴 사진 없이 아주 깨끗해요! 👻✨`
@@ -603,17 +615,64 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             `• **중복·연사 묶음**: **${dupSets}세트**\n` +
             `• **흔들린(흐린) 사진**: **${blurry}장**\n` +
             (memoScreen > 0 ? `• **메모·캡처 후보**: **${memoScreen}장**\n` : '') +
-            `\n🔒 제가 마음대로 지우지 않아요! 아래(왼쪽) 정리 화면에서 **한 세트씩 실사진과 👑 AI 추천 베스트 1장을 직접 보시고 [👍 OK! 베스트 1장만 남기고 나머지 버리기]** 버튼을 눌러 결정해 주세요!`;
-      setSharedMonsterMessages((prev) => [
-        ...prev,
+            `\n🔒 제가 마음대로 지우지 않아요! ${paneLabel} **한 세트씩 실사진과 👑 AI 추천 베스트 1장을 직접 보시고 [👍 OK! 베스트 1장만 남기고 나머지 버리기]** 버튼을 눌러 결정해 주세요!`;
+
+      const nextBubbles: MonsterChatMessage[] = [
         {
           id: `secretary_photo_audit_${Date.now()}`,
           role: 'assistant',
           timestamp: nowTimeKo(),
           sourceTab: 'trash',
           text,
+          followUpSuggestions: isMobileOrStore
+            ? ['🔍 맨 위 검색창으로 방금 불러온 사진 찾아볼래']
+            : undefined,
         },
-      ]);
+      ];
+
+      if (isMobileOrStore && remainingOldPhotos > 0 && !st.mobileRemainingScanChoice) {
+        const choicePrompt = buildMobileRemainingPhotosChoicePrompt(
+          st.nickname || '회원',
+          remainingOldPhotos
+        );
+        if (choicePrompt) {
+          nextBubbles.push({
+            id: `secretary_mobile_remaining_audit_${Date.now() + 1}`,
+            role: 'assistant',
+            timestamp: nowTimeKo(),
+            sourceTab: 'trash',
+            text: choicePrompt.text,
+            followUpSuggestions: choicePrompt.followUps,
+          });
+        }
+      }
+
+      if (isMobileOrStore) {
+        const storeNow = useSaySeeStore.getState();
+        const allowPcBridge = !storeNow.isStoreAppMode || storeNow.enablePcGuideShareButton;
+        let alreadyShownBridge = false;
+        try {
+          alreadyShownBridge = sessionStorage.getItem('ghosti_mobile_pc_bridge_shown') === '1';
+          if (allowPcBridge && !alreadyShownBridge) {
+            sessionStorage.setItem('ghosti_mobile_pc_bridge_shown', '1');
+          }
+        } catch {
+          /* ignore */
+        }
+        if (allowPcBridge && !alreadyShownBridge) {
+          const pcBridge = buildMobileToPcBridgePrompt(st.nickname);
+          nextBubbles.push({
+            id: `secretary_mobile_pc_bridge_audit_${Date.now() + 2}`,
+            role: 'assistant',
+            timestamp: nowTimeKo(),
+            sourceTab: 'trash',
+            text: pcBridge.text,
+            showMobileToPcBridgeButton: true,
+          });
+        }
+      }
+
+      setSharedMonsterMessages((prev) => [...prev, ...nextBubbles]);
     };
 
     window.addEventListener('ghosti_defer_photo_cleanup_and_continue', onDeferCleanupAndContinue);
@@ -732,7 +791,65 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       return;
     }
 
-    if (/^(🔍\s*)?(귀신검색으로\s*내\s*파일\s*(?:찾아볼래|찾아볼게)(?:요)?|사진\s*검색\s*바로\s*(?:해볼래|해볼게)(?:요)?)$/i.test(raw)) {
+    if (
+      /^(📱\s*)?(내\s*폰\s*사진\s*불러와|폰\s*사진\s*불러와|사진\s*불러와\s*(?:1분\s*)?정리|폰\s*사진\s*정리\s*시작)/i.test(
+        raw
+      )
+    ) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ghosti_trigger_mobile_photo_picker'));
+      }
+      setSharedMonsterMessages((prev) => [
+        ...prev,
+        {
+          id: `secretary_mobile_pick_${Date.now()}`,
+          role: 'assistant',
+          timestamp: nowTimeKo(),
+          sourceTab,
+          text:
+            '좋아요! 내 폰 사진 선택 창을 열어드렸어요 📸✨\n' +
+            '정리해 보고 싶은 사진들(중복·연사·영수증·캡처 등)을 편하게 골라주시면, **외부 서버 전송 0%**로 내 폰 안에서 1초 만에 분류해 드릴게요! (실제 폰 갤러리 원본은 절대 임의 삭제되지 않으니 안심하세요!)',
+        },
+      ]);
+      setSharedMonsterBusy(false);
+      return;
+    }
+
+    if (
+      isMobileOrStore &&
+      !zCoreBridge.isConnected &&
+      /(복원\s*기록|복원\s*지점|정리한\s*사진\s*복원)/i.test(raw)
+    ) {
+      const mobileQuarantined = (useSaySeeStore.getState().photos || []).filter((p) => p.quarantined);
+      if (mobileQuarantined.length > 0 && typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ghosti_open_mobile_quarantine_drawer'));
+      }
+      setSharedMonsterMessages((prev) => [
+        ...prev,
+        {
+          id: `secretary_mobile_restore_info_${Date.now()}`,
+          role: 'assistant',
+          timestamp: nowTimeKo(),
+          sourceTab,
+          text:
+            mobileQuarantined.length > 0
+              ? `🕰️ 지금 앱 내 정리 보관함에 **${mobileQuarantined.length}장**의 사진이 안전하게 보관되어 있어요!\n아래 펼쳐드린 **[↩️ 정리한 사진 복원 (${mobileQuarantined.length}장)]** 목록에서 언제든 1초 만에 원래대로 되돌리실 수 있어요 👻✨`
+              : '🕰️ 아직 모바일 정리 보관함으로 옮긴 사진이 **0장**이에요!\n아래에서 **[📱 내 폰 사진 불러와 정리하기]**로 중복·흐린 사진을 골라 정리하시면, 언제든 1초 만에 원래대로 되돌리실 수 있어요 👻✨',
+          followUpSuggestions:
+            mobileQuarantined.length === 0
+              ? ['📱 내 폰 사진 불러와 1분 정리 시작할래']
+              : undefined,
+        },
+      ]);
+      setSharedMonsterBusy(false);
+      return;
+    }
+
+    if (
+      /^(🔍\s*)?((?:맨\s*위\s*검색창으로|방금\s*불러온\s*사진\s*맨\s*위\s*검색창에서|맨\s*위\s*검색창에서)\s*(?:방금\s*불러온\s*사진\s*)?(?:바로\s*)?(?:찾아볼래|찾아볼게)(?:요)?|귀신검색으로\s*내\s*파일\s*(?:찾아볼래|찾아볼게)(?:요)?|사진\s*검색\s*바로\s*(?:해볼래|해볼게)(?:요)?)$/i.test(
+        raw
+      )
+    ) {
       setSharedMonsterMessages((prev) => [
         ...prev,
         {
@@ -740,7 +857,9 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           role: 'assistant',
           timestamp: nowTimeKo(),
           sourceTab,
-          text: '좋아요! 바로 『👻 귀신검색』 화면을 열어드렸어요 — 찾고 싶은 사진이나 서류를 편하게 불러보세요 👻✨',
+          text: isMobileOrStore
+            ? '좋아요! 화면 맨 위 통합 검색창으로 이동해 드렸어요 — 찾고 싶은 사진이나 서류를 글자나 🎤 목소리로 편하게 불러보세요 👻✨'
+            : '좋아요! 바로 『👻 귀신검색』 화면을 열어드렸어요 — 찾고 싶은 사진이나 서류를 편하게 불러보세요 👻✨',
         },
       ]);
       setSharedMonsterBusy(false);
@@ -904,6 +1023,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       const secretaryState = loadGhostSecretaryState();
       const turn = resolveGhostSecretaryTurn(raw, secretaryState, {
         passportClusterCount: rankPassportCandidates(useSaySeeStore.getState().faceClusters || []).length,
+        isMobileEnv: isMobileOrStore,
       });
       if (turn) {
         let nextState = turn.nextState;
@@ -988,8 +1108,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             text: reading.text,
             followUpSuggestions: isMobileReading
               ? [
-                  '중복·연사 사진 정리하는 법 알려줘',
-                  '🔍 귀신검색으로 내 파일 찾아볼래',
+                  '📱 내 폰 사진 불러와 1분 정리 시작할래',
+                  '🔍 맨 위 검색창으로 바로 찾아볼래',
                 ]
               : needsEngineRite
               ? [
@@ -1467,11 +1587,13 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           </span>
         </div>
         <span className="text-[11px] font-bold text-teal-50 bg-black/20 px-2 py-0.5 rounded-full whitespace-nowrap">
-          🗓️ 수요 손 없는 날 · 20% 과부하 자동검진
+          {isMobileOrStore
+            ? '🔒 서버 전송 0% · 폰 안전 정리'
+            : '🗓️ 수요 손 없는 날 · 20% 과부하 자동검진'}
         </span>
       </div>
 
-      {/* 1. 상단 원클릭 바로가기 바: [🕰️ 복원 기록] + [🏠 온보딩 체험관] (여권은 설정방 내부 보관으로 외부 비노출) */}
+      {/* 1. 상단 원클릭 바로가기 바: PC는 [🕰️ 복원 기록]+[🏠 체험관], 모바일은 [📱 폰 사진 불러오기] & 성우 토글 (여권은 설정방 내부 보관으로 외부 비노출) */}
       <div className="px-3 py-2 bg-white/90 dark:bg-[#10212B] border-b border-teal-600/20 dark:border-teal-400/20 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 text-[12px] text-emerald-950 dark:text-emerald-200">
         <div className="flex items-center gap-1 min-w-0">
           <span className="shrink-0 font-bold">🛡️</span>
@@ -1480,26 +1602,44 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 max-w-full min-w-0">
-          <button
-            type="button"
-            disabled={busy}
-            onClick={() => void handleSend('최근 [복원 기록] 보여줘', 'text')}
-            title="최근 손보기·정리 내역 조회 및 원래대로 1초 되돌리기"
-            style={{ backgroundColor: '#F5F3FF', color: '#5B21B6', borderColor: '#8B5CF6' }}
-            className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
-          >
-            <span>🕰️</span>
-            <span>복원 기록</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'))}
-            title="온보딩 체험관으로 나가서 구경하기"
-            style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
-            className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
-          >
-            <span>🏠 체험관 ➔</span>
-          </button>
+          {isMobileOrStore && !isZCoreLive ? (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() =>
+                window.dispatchEvent(new CustomEvent('ghosti_trigger_mobile_photo_picker'))
+              }
+              title="내 폰 사진을 불러와 중복·연사·흐린 사진을 안전하게 골라냅니다"
+              style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
+              className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
+            >
+              <span>📱</span>
+              <span>폰 사진 불러오기</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              disabled={busy}
+              onClick={() => void handleSend('최근 [복원 기록] 보여줘', 'text')}
+              title="최근 손보기·정리 내역 조회 및 원래대로 1초 되돌리기"
+              style={{ backgroundColor: '#F5F3FF', color: '#5B21B6', borderColor: '#8B5CF6' }}
+              className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
+            >
+              <span>🕰️</span>
+              <span>복원 기록</span>
+            </button>
+          )}
+          {!isMobileOrStore && (
+            <button
+              type="button"
+              onClick={() => window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'))}
+              title="온보딩 체험관으로 나가서 구경하기"
+              style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
+              className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
+            >
+              <span>🏠 체험관 ➔</span>
+            </button>
+          )}
           {isMobileOrStore && <VoiceActorControlPill compact />}
         </div>
       </div>

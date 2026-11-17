@@ -677,7 +677,13 @@ export const createAssistantOnboardingSlice: StateCreator<
     if (analyzed.length === 0) return;
     const isSample = (name: string) =>
       /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(name);
-    let summaryDetail = { total: analyzed.length, dupSets: 0, blurry: 0, memoScreen: 0 };
+    let summaryDetail = {
+      total: analyzed.length,
+      dupSets: 0,
+      blurry: 0,
+      memoScreen: 0,
+      remainingOldPhotos: 0,
+    };
     set((state) => {
       const existingReal = state.photos.filter((p) => !isSample(p.name));
       const mergedReal = [...analyzed, ...existingReal];
@@ -695,11 +701,26 @@ export const createAssistantOnboardingSlice: StateCreator<
         (p) =>
           (p.trashCategory === 'memo' || p.trashCategory === 'screenshot') && !p.quarantined
       ).length;
+      const stepping = executeMobileSteppingStoneScan({
+        totalPhotoCount: updatedPhotos.length,
+        countFacesInWindow: (windowLimit) =>
+          updatedPhotos
+            .slice(0, windowLimit)
+            .filter((p) => (p.tags || []).some((t) => /인물|가족|얼굴|셀카/.test(t))).length,
+        minFacesToStop: 1,
+      });
+      const secSt = loadGhostSecretaryState();
+      saveGhostSecretaryState({
+        ...secSt,
+        mobileSteppingStoneScanned: stepping.scannedPhotos,
+        mobileRemainingOldPhotos: stepping.remainingOldPhotos,
+      });
       summaryDetail = {
         total: analyzed.length,
         dupSets: dupSetsCount,
         blurry: blurryCount,
         memoScreen: memoScreenCount,
+        remainingOldPhotos: stepping.remainingOldPhotos,
       };
       const addedSearchResults: SearchResultItem[] = updatedPhotos.map((photo) => ({
         photo,

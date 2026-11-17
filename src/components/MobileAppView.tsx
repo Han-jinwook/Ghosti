@@ -334,44 +334,25 @@ export const MobileAppView: React.FC = () => {
               />
             </div>
 
-            {/* 우상단 심플 앵커: [복원 기록] + 가이드(온보딩 점프) + 공유 아이콘 + 프로필(맨 우측) */}
+            {/* 우상단 심플 앵커: 가이드(모바일 웹 전용, 스토어 앱은 Anti-Steering 비노출) + 공유 아이콘 + 프로필(맨 우측) */}
             <div className="flex items-center gap-1 shrink-0 ml-auto" aria-label="가이드 공유 및 프로필 영역">
-              {activeLoungeType === 'personal' && (
+              {!isStoreAppMode && (
                 <button
                   type="button"
                   onClick={() => {
-                    window.dispatchEvent(
-                      new CustomEvent('ghosti_toss_to_monster_chat', {
-                        detail: { query: '최근 [복원 기록] 보여줘' },
-                      })
-                    );
+                    window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
                   }}
-                  title="최근 손보기·정리 복원 기록 조회 및 원래대로 1초 되돌리기"
-                  className={`px-2 py-1.5 rounded-lg font-extrabold text-[11px] flex items-center gap-0.5 shrink-0 whitespace-nowrap border cursor-pointer ${
+                  title="공식 온보딩/가이드 페이지로 이동"
+                  className={`px-2 py-1.5 rounded-lg font-bold text-[11px] flex items-center gap-0.5 shrink-0 whitespace-nowrap cursor-pointer ${
                     themeMode === 'light'
-                      ? 'bg-violet-50 border-violet-300 text-violet-800 hover:bg-violet-100'
-                      : 'bg-violet-950/70 border-violet-500/40 text-violet-200 hover:bg-violet-900/80'
+                      ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5'
+                      : 'text-zinc-300 hover:text-white hover:bg-white/10'
                   }`}
                 >
-                  <span>🕰️</span>
-                  <span>복원 기록</span>
+                  <span>📖</span>
+                  <span>가이드</span>
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => {
-                  window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
-                }}
-                title="공식 온보딩/가이드 페이지로 이동"
-                className={`px-2 py-1.5 rounded-lg font-bold text-[11px] flex items-center gap-0.5 shrink-0 whitespace-nowrap cursor-pointer ${
-                  themeMode === 'light'
-                    ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5'
-                    : 'text-zinc-300 hover:text-white hover:bg-white/10'
-                }`}
-              >
-                <span>📖</span>
-                <span>가이드</span>
-              </button>
               <button
                 type="button"
                 onClick={() => {

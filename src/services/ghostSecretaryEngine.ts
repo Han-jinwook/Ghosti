@@ -707,11 +707,27 @@ function nextQuest(step: QuestStep): QuestStep {
 export function resolveGhostSecretaryTurn(
   rawText: string,
   st: GhostSecretaryState,
-  ctx: { passportClusterCount?: number } = {}
+  ctx: { passportClusterCount?: number; isMobileEnv?: boolean } = {}
 ): GhostSecretaryTurn | null {
   const text = rawText.trim();
   if (!text) return null;
   const nickname = st.nickname || '';
+  const adaptSearchGuideForMobile = (msg: string): string => {
+    if (!ctx.isMobileEnv) return msg;
+    return msg
+      .replace(
+        /왼쪽 두 번째 메뉴인 『👻 귀신검색』을 눌러서/g,
+        '화면 맨 위 검색창(또는 🎤 마이크)에서'
+      )
+      .replace(
+        /왼쪽 두 번째 메뉴인 『👻 귀신검색』을 누르시거나,\s*바탕화면 빈 곳에서 『Ctrl \+ 0』\(또는 『Ctrl \+ 우클릭』\)을 눌러/g,
+        '화면 맨 위 검색창에 글자로 입력하시거나 🎤 마이크 버튼을 눌러'
+      )
+      .replace(
+        /왼쪽 두 번째 메뉴\s*(\*\*)?『👻 귀신검색』(\*\*)?(\(또는 단축키 `Ctrl \+ 0`\))?에서/g,
+        '화면 맨 위 **통합 검색창(또는 🎤 마이크)**에서'
+      );
+  };
 
   // ⓪-0 사용자가 직접 '🛂 귀신계 여권' 또는 '인물 사진 이름 등록'을 요청한 경우 설정방 내 본인 여권 보관 원칙 안내!
   if (
@@ -725,7 +741,9 @@ export function resolveGhostSecretaryTurn(
     return {
       scenarioId: 'passport_manual_open_guide',
       text: passportGuideText,
-      followUps: ['귀신검색으로 내 파일 찾아볼래', '최근 복원 기록 보여줘'],
+      followUps: ctx.isMobileEnv
+        ? ['🔍 맨 위 검색창으로 바로 찾아볼래', '📱 내 폰 사진 불러와 1분 정리 시작할래']
+        : ['귀신검색으로 내 파일 찾아볼래', '최근 복원 기록 보여줘'],
       nextState: { ...st, awaitingNickname: false, passportStep: 'done' },
     };
   }
@@ -756,9 +774,11 @@ export function resolveGhostSecretaryTurn(
     if (parsed.names.length || parsed.selfIndex !== undefined) {
       const firstFamily = parsed.names[0]?.realName;
       const sc = findScenario('passport_complete_suggest_natural_search');
-      const done = firstFamily && sc
-        ? renderPlaybookText(sc.response, { nickname, registered_family_name: firstFamily })
-        : `${nickname}님 본인 여권을 새겨뒀어요! 이제 왼쪽 두 번째 메뉴인 『👻 귀신검색』에서 직접 불러보는 마법을 따라 해볼까요?`;
+      const done = adaptSearchGuideForMobile(
+        firstFamily && sc
+          ? renderPlaybookText(sc.response, { nickname, registered_family_name: firstFamily })
+          : `${nickname}님 본인 여권을 새겨뒀어요! 이제 왼쪽 두 번째 메뉴인 『👻 귀신검색』에서 직접 불러보는 마법을 따라 해볼까요?`
+      );
       const viralAsk = firstFamily
         ? `\n\n방금 찾아낸 『${firstFamily}』 사진들을 가족 카톡방에 로그인 없이 1초 만에 구경시켜 드릴까요?`
         : '';
@@ -887,8 +907,10 @@ export function resolveGhostSecretaryTurn(
     const nickPrefix = nickname ? `${nickname}님, ` : '';
     return {
       scenarioId: 'cleanup_defer_remaining_flexible',
-      text: `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두었어요 👻✨ 그럼 바로 다음 순서로 왼쪽 두 번째 메뉴 **『👻 귀신검색』**(또는 단축키 \`Ctrl + 0\`)에서 방금 읽어둔 내 진짜 사진·문서를 1초 만에 찾아보실까요?`,
-      followUps: ['🔍 귀신검색으로 내 파일 찾아볼래'],
+      text: adaptSearchGuideForMobile(
+        `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두었어요 👻✨ 그럼 바로 다음 순서로 왼쪽 두 번째 메뉴 **『👻 귀신검색』**(또는 단축키 \`Ctrl + 0\`)에서 방금 읽어둔 내 진짜 사진·문서를 1초 만에 찾아보실까요?`
+      ),
+      followUps: [ctx.isMobileEnv ? '🔍 맨 위 검색창으로 바로 찾아볼래' : '🔍 귀신검색으로 내 파일 찾아볼래'],
       nextState: st,
     };
   }
@@ -956,9 +978,11 @@ export function resolveGhostSecretaryTurn(
     if (parsedDirect.names.length || parsedDirect.selfIndex !== undefined) {
       const firstFamily = parsedDirect.names[0]?.realName;
       const sc = findScenario('passport_complete_suggest_natural_search');
-      const done = firstFamily && sc
-        ? renderPlaybookText(sc.response, { nickname, registered_family_name: firstFamily })
-        : `${nickname}님 본인 여권을 새겨뒀어요! 이제 왼쪽 두 번째 메뉴인 『👻 귀신검색』에서 직접 불러보는 마법을 따라 해볼까요?`;
+      const done = adaptSearchGuideForMobile(
+        firstFamily && sc
+          ? renderPlaybookText(sc.response, { nickname, registered_family_name: firstFamily })
+          : `${nickname}님 본인 여권을 새겨뒀어요! 이제 왼쪽 두 번째 메뉴인 『👻 귀신검색』에서 직접 불러보는 마법을 따라 해볼까요?`
+      );
       const viralAsk = firstFamily
         ? `\n\n방금 찾아낸 『${firstFamily}』 사진들을 가족 카톡방에 로그인 없이 1초 만에 구경시켜 드릴까요?`
         : '';
@@ -975,7 +999,13 @@ export function resolveGhostSecretaryTurn(
   // ④ 급한 유저 → 채팅으로 말 걸었을 때만 귀신검색 안내 (버튼 없음)
   if (isImpatientIntent(text)) {
     const sc = findScenario('impatient_user_wants_search_now');
-    if (sc) return { scenarioId: sc.id, text: renderPlaybookText(sc.response, { nickname }), nextState: st };
+    if (sc) {
+      return {
+        scenarioId: sc.id,
+        text: adaptSearchGuideForMobile(renderPlaybookText(sc.response, { nickname })),
+        nextState: st,
+      };
+    }
   }
 
   // ④-2 귀신창 음소거/소리 켜기 즉시 제어 (cmd_unmute_ghost_sound / cmd_mute_ghost_sound 우선 처리)
@@ -1184,11 +1214,26 @@ export function buildMobileToPcBridgePrompt(nickname?: string): {
   };
 }
 
-/** 첫 환영 문구: 별명이 없으면 대본집 ask_nickname_first, 있으면 별명 호칭 인사 */
-export function buildWelcomeTurn(st: GhostSecretaryState): { text: string; nextState: GhostSecretaryState } {
+/** 첫 환영 문구: 별명이 없으면 대본집 ask_nickname_first(모바일은 스마트폰 맞춤 문구), 있으면 별명 호칭 인사 */
+export function buildWelcomeTurn(
+  st: GhostSecretaryState,
+  isMobileEnv = false
+): { text: string; nextState: GhostSecretaryState } {
   if (!st.nickname) {
+    if (isMobileEnv) {
+      return {
+        text: '반가워요! 저는 앞으로 내 폰 사진 1분 정리부터 말로 찾는 1초 검색, 귀신계 여권까지 다 챙겨드릴 전용 『👻 귀신비서』예요! 먼저 제가 앞으로 뭐라고 불러드리면 기분 좋으실까요? 편한 별명(닉네임) 하나만 알려주세요!',
+        nextState: { ...st, awaitingNickname: true },
+      };
+    }
     const sc = findScenario('ask_nickname_first');
     return { text: sc?.response || '', nextState: { ...st, awaitingNickname: true } };
+  }
+  if (isMobileEnv) {
+    return {
+      text: `${st.nickname}님, 다시 오셨네요! 내 폰 사진 정리, 1초 음성·글자 검색, 귀신계 여권까지 편하게 말씀해 주세요.`,
+      nextState: st,
+    };
   }
   return {
     text: `${st.nickname}님, 다시 오셨네요! 컴퓨터·휴대폰 손보기, 복원, 귀신계 여권까지 편하게 말씀해 주세요.`,

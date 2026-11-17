@@ -334,9 +334,32 @@ export const App: React.FC = () => {
         params.get('from') === 'b2b' ||
         /[?&]from=b2b\b/i.test(window.location.href) ||
         window.location.hash === '#work-share';
-      const hasExplicitWorkspaceUrl = Boolean(urlLounge || urlTab || hasInviteLink || params.get('dev') === 'true');
+      const isNativeRuntime = Boolean(
+        (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+      );
+      const isLocalhostRuntime =
+        window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+      const canAutoBypassToWorkspace =
+        OFFICIAL_LAUNCH_LIVE &&
+        (hasActiveGhostiLoginSession() ||
+          localStorage.getItem('ghosti_onboarding_completed') === 'true');
+      const hasExplicitWorkspaceUrl = Boolean(
+        isNativeRuntime ||
+          isLocalhostRuntime ||
+          params.get('storeApp') === '1' ||
+          params.get('ghostSearchWindow') ||
+          params.get('preview') === 'legacy' ||
+          params.get('preview') === 'guest' ||
+          urlLounge ||
+          urlTab ||
+          hasInviteLink ||
+          params.get('dev') === 'true' ||
+          canAutoBypassToWorkspace
+      );
       const targetView: 'showroom' | 'workspace' =
-        urlView === 'showroom' || isB2bUrl || !hasExplicitWorkspaceUrl
+        !isNativeRuntime &&
+        params.get('storeApp') !== '1' &&
+        (urlView === 'showroom' || isB2bUrl || !hasExplicitWorkspaceUrl)
           ? 'showroom'
           : savedNav?.viewMode || viewMode;
 
@@ -528,6 +551,10 @@ export const App: React.FC = () => {
   // 워크스페이스 내부 상단 헤더의 [🏠 공식 쇼룸 대문] 또는 귀신비서 [온보딩 체험관 구경하기]를 눌렀을 때 해당 세션에서 대문 열람
   // (단, ghosti_onboarding_completed는 유지되므로 다음 날 앱에 재접속할 때는 다시 자동으로 워크스페이스로 직행)
   const handleEnterShowroom = () => {
+    // 모바일 스토어 심사 클린 모드(Capacitor 네이티브 / ?storeApp=1)에서는 요금표·PC .zip 다운로드가 있는 웹 쇼룸으로 이탈 차단(Anti-Steering)
+    if (useSaySeeStore.getState().isStoreAppMode) {
+      return;
+    }
     try {
       sessionStorage.setItem('ghosti_entered_showroom_from_app', '1');
     } catch {}

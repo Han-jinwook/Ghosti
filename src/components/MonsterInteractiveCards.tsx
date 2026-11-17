@@ -1016,18 +1016,26 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   const st = useSaySeeStore.getState();
                   if (btn.actionType === 'OPEN_PRICING_MODAL') {
                     st.setShowProModal(true);
-                  } else if (btn.actionType === 'OPEN_ONBOARDING_TAB1') {
-                    window.dispatchEvent(
-                      new CustomEvent('ghosti_open_onboarding_tab', { detail: { tab: 'tab1_find_care' } })
-                    );
-                  } else if (btn.actionType === 'OPEN_ONBOARDING_TAB2') {
-                    window.dispatchEvent(
-                      new CustomEvent('ghosti_open_onboarding_tab', { detail: { tab: 'tab2_superpower' } })
-                    );
-                  } else if (btn.actionType === 'OPEN_ONBOARDING_TAB3') {
-                    window.dispatchEvent(
-                      new CustomEvent('ghosti_open_onboarding_tab', { detail: { tab: 'tab3_share_pro' } })
-                    );
+                  } else if (
+                    btn.actionType === 'OPEN_ONBOARDING_TAB1' ||
+                    btn.actionType === 'OPEN_ONBOARDING_TAB2' ||
+                    btn.actionType === 'OPEN_ONBOARDING_TAB3'
+                  ) {
+                    if (st.isStoreAppMode) {
+                      onJumpToSearch('');
+                    } else if (st.layout === 'mobile') {
+                      window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
+                    } else {
+                      const targetTab =
+                        btn.actionType === 'OPEN_ONBOARDING_TAB2'
+                          ? 'tab2_superpower'
+                          : btn.actionType === 'OPEN_ONBOARDING_TAB3'
+                          ? 'tab3_share_pro'
+                          : 'tab1_find_care';
+                      window.dispatchEvent(
+                        new CustomEvent('ghosti_open_onboarding_tab', { detail: { tab: targetTab } })
+                      );
+                    }
                   } else if (btn.actionType === 'JUMP_SEARCH') {
                     onJumpToSearch('');
                   }

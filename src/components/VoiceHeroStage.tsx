@@ -220,6 +220,7 @@ export const VoiceHeroStage: React.FC = () => {
                 : 'search'}
             </span>
             <input
+              id="ghosti-voice-hero-search-input"
               type="text"
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}

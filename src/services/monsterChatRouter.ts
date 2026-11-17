@@ -2383,35 +2383,68 @@ function handleGhostiInfoDeskIfMatched(
   const isStoreCleanMode =
     isCapacitorNative ||
     (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('storeApp') === '1');
+  const isMobileViewportRuntime =
+    isStoreCleanMode ||
+    (typeof window !== 'undefined' &&
+      !new URLSearchParams(window.location.search).get('ghostSearchWindow') &&
+      (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 860));
 
-  // 모바일 스토어 심사 클린 모드일 때: 가격/구독료 언급과 OPEN_PRICING_MODAL을 100% 배제하고 순수 무료 기능·연동 안내만 반환 (Apple 3.1.1 방어)
+  // 모바일 스토어 심사 클린 모드일 때: 가격/구독료 언급과 OPEN_PRICING_MODAL·PC 전용 OnboardingModal을 100% 배제하고 순수 무료 기능·연동 안내만 반환 (Apple 3.1.1 방어)
   if (isStoreCleanMode) {
     const cleanInfoPayload: MonsterInfoDeskPayload = {
-      topicBadge: '📱 귀신같이 모바일 핵심 기능 & 이메일 기기 연동 안내',
-      title: '내 기기 속 사진·문서 1초 AI 내용검색과 갤러리 스마트 정리를 지원합니다',
+      topicBadge: '📱 귀신같이 모바일 3대 메뉴 & 이메일 기기 연동 안내',
+      title: '내 폰 사진·문서 1초 AI 내용검색과 스마트 사진 정리·공유를 지원합니다',
       bulletPoints: [
-        '🎯 1초 AI 내용검색: 파일 이름이 기억나지 않아도 사진 속 사물·인물·장소, 서류 본문 글자로 1초 만에 찾아냅니다.',
-        '🧹 스마트 갤러리 손보기: 중복·연사 사진 중 가장 선명한 베스트 컷 1장만 남기고, 영수증·주차메모·스크린샷·흔들린 사진을 안전하게 정리 보관함으로 분류합니다.',
-        '🔗 이메일 1초 기기 연동: 동일한 이메일 계정으로 로그인하면 내 스마트폰과 데스크톱(PC)이 자동으로 연결되어 복사한 클립보드(암호화 우체통)와 공유 라운지를 이어서 확인할 수 있습니다.',
+        '👻 ① 귀신비서 (올인원 홈): 맨 위 1초 음성·글자 검색창 + 비서 대화창 + 내 폰 중복·흐린 사진 1초 정리 + 내 기기 통합을 한 화면에서 이용합니다.',
+        '📸 ② 사진 공유 & 💼 ③ 업무 공유: 가족(우리집·본가·처가)·동호회·동창회 고선명 앨범 공유 및 사무실 업무 문서를 깔끔하게 열람합니다.',
+        '🔗 이메일 1초 기기 연동: 동일한 이메일 계정으로 로그인하면 복잡한 QR 없이 내 스마트폰과 데스크톱(PC)이 자동으로 연결됩니다.',
         '📮 스튜디오 직결 창구: 이 대화창에 불편사항·A/S·아이디어를 말씀하시면 회원님 이름으로 스튜디오에 즉시 접수해 드립니다.',
       ],
       actionButtons: [
-        { label: '📖 온보딩 1탭(🎯 찾기 · 🪄 손보기 가이드) 열기', actionType: 'OPEN_ONBOARDING_TAB1' },
-        { label: '🔗 데스크톱(PC) 기기 연동 안내 보기', actionType: 'OPEN_PRICING_MODAL' },
+        { label: '🔍 맨 위 검색창으로 내 파일 찾아보기', actionType: 'JUMP_SEARCH' },
       ],
     };
     speak('귀신같이 앱은 사진과 문서를 일 초 만에 찾아주고 중복 사진을 깔끔하게 정리해 드리며, 같은 이메일로 로그인하시면 피씨와 자동으로 연결됩니다.');
     return reply(
       sourceTab,
-      `💁‍♂️ **[귀신같이 인포메이션 데스크 — 핵심 기능 & 이메일 자동 기기 연결 안내]**\n` +
-        `우리 앱은 **가입하신 이메일 계정 하나로 스마트폰과 데스크톱(PC)이 자동 연결**되어 어디서나 편리하게 찾고 정리하실 수 있습니다.`,
+      `💁‍♂️ **[귀신같이 모바일 안내 — 3대 통합 메뉴 & 이메일 자동 연결]**\n` +
+        `우리 앱은 **가입하신 이메일 계정 하나로 스마트폰과 데스크톱(PC)이 자동 연결**되어 어디서나 편리하게 찾고 정리하실 수 있어요!`,
       {
         cardKind: 'GHOSTI_INFO_DESK',
         infoDeskPayload: cleanInfoPayload,
         followUpSuggestions: [
-          '중복·연사 사진 정리하는 법 알려줘',
-          '복사 기록 한 달(30일) 동안 보관하게 바꿔줘',
+          '📱 내 폰 사진 불러와 1분 정리 시작할래',
+          '🔍 맨 위 검색창으로 바로 찾아볼래',
           '아이디어 건의하고 싶은데 스튜디오에 접수해줘',
+        ],
+      }
+    );
+  }
+
+  // 일반 모바일 웹일 때도 PC 전용(QR코드·Ctrl+0·바탕화면 폴더) 3탭 OnboardingModal 대신 모바일 맞춤 버튼 제공
+  if (isMobileViewportRuntime && !/요금|가격|구독|얼마(?!나)|특판|마스터권|얼리버드|3,?900|9,?900/i.test(clean)) {
+    const mobileWebPayload: MonsterInfoDeskPayload = {
+      topicBadge: '📱 귀신같이 모바일 3대 통합 영역 & PC 연동 가이드',
+      title: '모바일에서는 [① 귀신비서 · ② 사진 공유 · ③ 업무 공유] 3탭으로 한눈에 해결합니다',
+      bulletPoints: [
+        '👻 ① 귀신비서: 화면 맨 위 통합 검색창(사진·동영상 글자뽑기·문서) + 비서 대화창 + 내 폰 사진 4대 분류 정리 + 내 기기 통합(폰↔PC)이 하나로 통합되어 있습니다.',
+        '📸 ② 사진 공유 (평생 0원): 가족(우리집·본가·처가)·동호회·동창회 고화질 앨범을 인원·장수 제한 없이 무료로 나눕니다.',
+        '⚡ PC 귀신창(Ctrl+0) 연동: 같은 이메일로 PC에서도 로그인하시면 무버튼 한영 자동변환·순차붙여넣기·폰↔PC 클립보드 우체통까지 이어집니다.',
+      ],
+      actionButtons: [
+        { label: '🔍 맨 위 검색창으로 바로 찾아보기', actionType: 'JUMP_SEARCH' },
+        { label: '👑 내 기기 통합(월 3,900원) 안내 보기', actionType: 'OPEN_PRICING_MODAL' },
+      ],
+    };
+    return reply(
+      sourceTab,
+      `💁‍♂️ **[귀신같이 모바일 사용 가이드]**\n스마트폰에서는 복잡한 서브탭 없이 **상단 3개 탭**만으로 검색·정리·공유를 모두 쓰실 수 있어요!`,
+      {
+        cardKind: 'GHOSTI_INFO_DESK',
+        infoDeskPayload: mobileWebPayload,
+        followUpSuggestions: [
+          '📱 내 폰 사진 불러와 1분 정리 시작할래',
+          '내 기기 통합 3,900원 요금제 혜택 알려줘',
         ],
       }
     );
@@ -2435,10 +2468,12 @@ function handleGhostiInfoDeskIfMatched(
         '📸 사진 공유 (가족·동호회·동창회): 인원·장수 제한 없이 100% 평생 무제한 무료!',
         '💼 업무 공유 (S: 드라이브 + 팀 상용구): 민간 소기업 5인·30GB 평생 0원 보증 / 소호(~5인 확장) 월 9,900원 (연 99,000원) / 소기업(~20인) 월 19,000원 (연 190,000원) / 중소기업(~50인) 월 29,000원 (연 290,000원) — 방장 1인만 결제하면 초대받은 멤버는 전원 0원!',
       ],
-      actionButtons: [
-        { label: '👑 내 기기 통합(월 3,900원) 요금제 창 열기', actionType: 'OPEN_PRICING_MODAL' },
-        { label: '📖 온보딩 3탭(기기 묶기 혜택) 보기', actionType: 'OPEN_ONBOARDING_TAB3' },
-      ],
+      actionButtons: isMobileViewportRuntime
+        ? [{ label: '👑 내 기기 통합(월 3,900원) 요금제 창 열기', actionType: 'OPEN_PRICING_MODAL' }]
+        : [
+            { label: '👑 내 기기 통합(월 3,900원) 요금제 창 열기', actionType: 'OPEN_PRICING_MODAL' },
+            { label: '📖 온보딩 3탭(기기 묶기 혜택) 보기', actionType: 'OPEN_ONBOARDING_TAB3' },
+          ],
     };
     speak('내 기기 한 대의 기본 기능과 사진 공유는 평생 무료이며, 이메일 하나로 폰과 집 피씨, 회사 피씨를 모두 묶는 내 기기 통합 플랜은 월 삼천구백 원입니다.');
     return reply(

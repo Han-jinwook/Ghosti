@@ -1764,6 +1764,26 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     });
   }, []);
 
+  React.useEffect(() => {
+    const onTriggerMobilePicker = () => {
+      trashMobilePhotoInputRef.current?.click();
+    };
+    const onOpenMobileQuarantine = () => {
+      setShowQuarantineDrawer(true);
+      window.setTimeout(() => {
+        document
+          .getElementById('ghosti-quarantine-restore-section')
+          ?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 80);
+    };
+    window.addEventListener('ghosti_trigger_mobile_photo_picker', onTriggerMobilePicker);
+    window.addEventListener('ghosti_open_mobile_quarantine_drawer', onOpenMobileQuarantine);
+    return () => {
+      window.removeEventListener('ghosti_trigger_mobile_photo_picker', onTriggerMobilePicker);
+      window.removeEventListener('ghosti_open_mobile_quarantine_drawer', onOpenMobileQuarantine);
+    };
+  }, []);
+
   const isShowroomSamplePhoto = (name: string): boolean =>
     /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(name);
   const hasAnyRealUserPhoto = photos.some((p) => !isShowroomSamplePhoto(p.name));
@@ -1967,15 +1987,17 @@ export const Stage1MinimalCarePreview: React.FC = () => {
               </div>
 
               <div className="flex flex-wrap items-center gap-2 max-w-full" data-allow-secretary-jump="true">
-                <button
-                  type="button"
-                  data-allow-secretary-jump="true"
-                  onClick={() => window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'))}
-                  style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
-                  className="px-3 py-2 rounded-xl border-2 font-black text-[12px] sm:text-[13px] flex items-center justify-center gap-1.5 transition-all hover:opacity-90 cursor-pointer max-w-full shadow-xs"
-                >
-                  <span>🏠 온보딩 체험관으로 나가서 구경하기 ➔</span>
-                </button>
+                {!(isStoreAppMode || layout === 'mobile') && (
+                  <button
+                    type="button"
+                    data-allow-secretary-jump="true"
+                    onClick={() => window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'))}
+                    style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
+                    className="px-3 py-2 rounded-xl border-2 font-black text-[12px] sm:text-[13px] flex items-center justify-center gap-1.5 transition-all hover:opacity-90 cursor-pointer max-w-full shadow-xs"
+                  >
+                    <span>🏠 온보딩 체험관으로 나가서 구경하기 ➔</span>
+                  </button>
+                )}
                 {liveActiveTrash.length > 0 &&
                   (isCleanupPaused ? (
                     <button
@@ -2032,7 +2054,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
 
             {!(isStoreAppMode || layout === 'mobile') && <SecretarySamplePcCarePanel />}
 
-            <div className="font-headline-md text-[16px] md:text-[18px] text-zinc-900 dark:text-white font-extrabold tracking-tight leading-snug">
+            <div className="font-headline-md text-[15.5px] sm:text-[16px] md:text-[18px] text-zinc-900 dark:text-white font-extrabold tracking-tight leading-snug break-keep">
               {activeTrash.length > 0 ? (
                 <>
                   정리 후보 <span className="text-primary-container">{activeTrash.length}장</span>{' '}
@@ -2043,6 +2065,12 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   <span className="text-zinc-900 dark:text-white">{memoAndScreenCount}장</span> · 흔들림{' '}
                   <span className="text-zinc-900 dark:text-white">{blurryCount}장</span>
                 </>
+              ) : (isStoreAppMode || layout === 'mobile') &&
+                displayPhotos.length === 0 &&
+                quarantinedPhotos.length === 0 ? (
+                <span className="text-teal-600 dark:text-teal-300">
+                  📱 아직 불러온 내 폰 사진이 없어요 — 위 [📱 내 폰 사진 불러와 정리하기]를 눌러 중복·연사·흔들린 사진을 1초 만에 골라보세요!
+                </span>
               ) : (
                 <span className="text-primary-container">
                   ✨ 현재 가장 쾌적한 상태입니다 (정리 완료 {quarantinedPhotos.length}장)
@@ -2083,7 +2111,10 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             )}
 
             {quarantinedPhotos.length > 0 && (
-              <div className="pt-2 border-t border-white/10 flex flex-col gap-2.5">
+              <div
+                id="ghosti-quarantine-restore-section"
+                className="pt-2 border-t border-white/10 flex flex-col gap-2.5"
+              >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <button
                     type="button"
@@ -2226,7 +2257,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
               const sampleThumbs =
                 items.length > 0
                   ? items.slice(0, 2)
-                  : !zConnected
+                  : !isRealDeviceMode
                   ? FALLBACK_SAMPLE_TRASH_ITEMS[tab.key].slice(0, 2)
                   : [];
 
@@ -2307,11 +2338,19 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                         />
                       </div>
                     ))}
-                    {items.length === 0 && !zConnected && (
+                    {items.length === 0 && !isRealDeviceMode && (
                       <span className="px-1.5 py-0.5 rounded bg-zinc-800/90 border border-white/10 text-[10px] text-zinc-300 font-bold whitespace-nowrap">
                         예시 샘플
                       </span>
                     )}
+                    {items.length === 0 &&
+                      isRealDeviceMode &&
+                      (isStoreAppMode || layout === 'mobile') &&
+                      displayPhotos.length === 0 && (
+                        <span className="px-1.5 py-0.5 rounded bg-teal-950/70 border border-teal-400/30 text-[10px] text-teal-200 font-bold whitespace-nowrap">
+                          폰 사진 대기
+                        </span>
+                      )}
                   </div>
 
                   <div className="flex flex-wrap items-center justify-between gap-1 pt-2 border-t border-white/10 w-full min-w-0">
@@ -2596,18 +2635,31 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   })}
                 </div>
               ) : (
-                <div className="p-8 rounded-xl bg-zinc-950/60 border border-white/5 text-center flex flex-col items-center gap-2">
+                <div className="p-6 sm:p-8 rounded-xl bg-zinc-950/60 border border-white/5 text-center flex flex-col items-center gap-2.5">
                   <span className="material-symbols-outlined text-primary-container text-[32px]">
-                    verified
-                  </span>
-                  <span className="font-headline-sm text-[15.5px] text-white font-extrabold">
-                    ✨ 중복되거나 연속으로 찍힌 사진 묶음이 0세트예요!
-                  </span>
-                  <span className="font-body-sm text-[13px] text-zinc-400">
                     {displayPhotos.length === 0 && (isStoreAppMode || layout === 'mobile')
-                      ? '위쪽 [📱 내 폰 사진 불러와 정리하기] 버튼을 눌러 내 폰 사진을 불러오시면 중복·연사 세트와 흐린 사진을 찾아 보여드려요!'
+                      ? 'add_photo_alternate'
+                      : 'verified'}
+                  </span>
+                  <span className="font-headline-sm text-[15px] sm:text-[15.5px] text-white font-extrabold break-keep">
+                    {displayPhotos.length === 0 && (isStoreAppMode || layout === 'mobile')
+                      ? '📱 아직 내 폰 사진을 불러오지 않았어요!'
+                      : '✨ 중복되거나 연속으로 찍힌 사진 묶음이 0세트예요!'}
+                  </span>
+                  <span className="font-body-sm text-[12.5px] sm:text-[13px] text-zinc-400 break-keep">
+                    {displayPhotos.length === 0 && (isStoreAppMode || layout === 'mobile')
+                      ? '아래 버튼을 눌러 내 폰 사진을 골라주시면 중복·연사 세트와 흐린 사진을 외부 전송 0%로 1초 만에 찾아 보여드려요!'
                       : '버릴 중복·연사 사진 없이 현재 아주 깨끗한 상태입니다.'}
                   </span>
+                  {displayPhotos.length === 0 && (isStoreAppMode || layout === 'mobile') && (
+                    <button
+                      type="button"
+                      onClick={() => trashMobilePhotoInputRef.current?.click()}
+                      className="mt-1 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[12.5px] font-extrabold shadow-sm cursor-pointer"
+                    >
+                      📱 내 폰 사진 불러와 정리하기
+                    </button>
+                  )}
                   {skippedGroupIds.size > 0 && (
                     <button
                       type="button"
@@ -2764,12 +2816,16 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   })}
                 </div>
               ) : (
-                <div className="p-8 rounded-xl bg-zinc-950/60 border border-white/5 text-center flex flex-col items-center gap-2">
+                <div className="p-6 sm:p-8 rounded-xl bg-zinc-950/60 border border-white/5 text-center flex flex-col items-center gap-2.5">
                   <span className="material-symbols-outlined text-primary-container text-[32px]">
-                    verified
+                    {displayPhotos.length === 0 && (isStoreAppMode || layout === 'mobile')
+                      ? 'add_photo_alternate'
+                      : 'verified'}
                   </span>
-                  <span className="font-headline-sm text-[15.5px] text-white font-extrabold">
-                    {currentTab === 'blurry'
+                  <span className="font-headline-sm text-[15px] sm:text-[15.5px] text-white font-extrabold break-keep">
+                    {displayPhotos.length === 0 && (isStoreAppMode || layout === 'mobile')
+                      ? '📱 아직 내 폰 사진을 불러오지 않았어요!'
+                      : currentTab === 'blurry'
                       ? '✨ 흔들리거나 초점이 나간 흐린 사진이 0장이에요!'
                       : currentTab === 'memo'
                       ? '✨ 정리할 일회성 메모·영수증 사진이 0장이에요!'
@@ -2777,9 +2833,20 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                       ? '✨ 정리할 화면 캡처(스크린샷) 사진이 0장이에요!'
                       : '✨ 현재 이 카테고리에 정리할 사진이 없습니다 (0장)'}
                   </span>
-                  <span className="font-body-sm text-[13px] text-zinc-400">
-                    버릴 사진 없이 현재 아주 깨끗한 상태입니다.
+                  <span className="font-body-sm text-[12.5px] sm:text-[13px] text-zinc-400 break-keep">
+                    {displayPhotos.length === 0 && (isStoreAppMode || layout === 'mobile')
+                      ? '아래 버튼을 눌러 내 폰 사진을 골라주시면 메모·영수증·캡처·흐린 사진을 외부 전송 0%로 1초 만에 분류해 보여드려요!'
+                      : '버릴 사진 없이 현재 아주 깨끗한 상태입니다.'}
                   </span>
+                  {displayPhotos.length === 0 && (isStoreAppMode || layout === 'mobile') && (
+                    <button
+                      type="button"
+                      onClick={() => trashMobilePhotoInputRef.current?.click()}
+                      className="mt-1 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[12.5px] font-extrabold shadow-sm cursor-pointer"
+                    >
+                      📱 내 폰 사진 불러와 정리하기
+                    </button>
+                  )}
                 </div>
               )}
             </section>
@@ -2801,7 +2868,24 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             onJumpToSearch={(kw) => {
               if (layout === 'mobile') {
                 setMobileTab('search');
-                void runTextQuery(kw);
+                const cleanKw = kw.trim();
+                if (cleanKw) {
+                  void runTextQuery(cleanKw).then(() => {
+                    window.setTimeout(() => {
+                      document
+                        .getElementById('ghosti-search-results')
+                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    }, 80);
+                  });
+                } else {
+                  window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
+                  window.setTimeout(() => {
+                    const searchInput = document.getElementById(
+                      'ghosti-voice-hero-search-input'
+                    ) as HTMLInputElement | null;
+                    searchInput?.focus();
+                  }, 180);
+                }
                 return;
               }
               // [v1.3] 웹 검색창 폐지 이후: 귀신비서가 찾아준 검색어는 『👻 귀신검색』 화면의 귀신검색창(기존 찾기 화면)으로 결과를 띄움
