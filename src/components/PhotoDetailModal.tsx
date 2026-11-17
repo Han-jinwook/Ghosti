@@ -336,61 +336,72 @@ export const PhotoDetailModal: React.FC = () => {
   return (
     <div
       onClick={() => setSelectedPhoto(null)}
-      className="fixed inset-0 z-[90] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      className="fixed inset-0 z-[90] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-4xl rounded-3xl glass-l2 p-5 md:p-7 border border-primary-container/30 shadow-[0_0_60px_rgba(0,0,0,0.75)] flex flex-col gap-5 my-auto"
+        className="relative w-full max-w-4xl max-h-[90dvh] overflow-y-auto rounded-3xl glass-l2 p-4 sm:p-5 md:p-7 border border-primary-container/30 shadow-[0_0_60px_rgba(0,0,0,0.75)] flex flex-col gap-4 sm:gap-5 my-auto"
       >
         {/* Top Bar */}
         <div className="flex flex-col gap-3">
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="material-symbols-outlined text-primary-container text-[22px]">
-                auto_awesome
-              </span>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h3 className="font-headline-sm text-headline-sm text-on-surface font-bold truncate">
-                    {selectedPhoto.name}
-                  </h3>
-                  {hasBurstGroup && (
-                    <span className="px-2.5 py-0.5 rounded-full bg-teal-600 text-white dark:bg-primary-container/25 dark:text-primary-container border border-teal-700/40 dark:border-primary-container/50 font-label-sm text-[11px] font-extrabold shrink-0">
-                      ❐ {resolvedBurstPhotos.length}장 연사 묶음
+          <div className="flex flex-col gap-3">
+            <div className="flex items-start justify-between gap-2.5 min-w-0">
+              <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                <span className="material-symbols-outlined text-primary-container text-[22px] mt-0.5 shrink-0">
+                  auto_awesome
+                </span>
+                <div className="min-w-0 flex-1">
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
+                    <h3 className="font-headline-sm text-[16px] sm:text-headline-sm text-on-surface font-bold truncate max-w-full">
+                      {selectedPhoto.name}
+                    </h3>
+                    {hasBurstGroup && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-teal-600 text-white dark:bg-primary-container/25 dark:text-primary-container border border-teal-700/40 dark:border-primary-container/50 font-label-sm text-[11px] font-extrabold shrink-0">
+                        ❐ {resolvedBurstPhotos.length}장 연사 묶음
+                      </span>
+                    )}
+                    {isHiddenInLounge && (
+                      <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/50 font-label-sm text-[11px] font-extrabold shrink-0">
+                        🙈 공유방에서 숨김 처리됨 (원본 안전 보존)
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1">
+                    <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-700 dark:text-emerald-300 font-label-sm text-[11.5px] font-extrabold">
+                      {activeLoungeType === 'personal'
+                        ? `💻 내 기기 원본 · ${selectedPhoto.locationKo || '내 기기 보관'}`
+                        : `📸 촬영·업로드: ${selectedPhoto.uploaderLabel || '방장 · 본인 업로드'}`}
                     </span>
-                  )}
-                  {isHiddenInLounge && (
-                    <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/50 font-label-sm text-[11px] font-extrabold shrink-0">
-                      🙈 공유방에서 숨김 처리됨 (원본 안전 보존)
+                    <span className="px-2.5 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-400/40 text-cyan-700 dark:text-cyan-300 font-label-sm text-[11.5px] font-extrabold">
+                      📅 촬영 날짜: {selectedPhoto.date}
                     </span>
-                  )}
+                    <span className="font-label-mono text-[11px] text-on-surface-variant">
+                      • {(selectedPhoto.size / 1024 / 1024).toFixed(2)} MB • 원본 해상도 100% 보존
+                    </span>
+                  </div>
+                  {selectedPhoto.fullPath ? (
+                    <p className="font-label-mono text-[11px] text-teal-600 dark:text-teal-300 mt-1 break-all">
+                      📁 실제 위치: {selectedPhoto.fullPath}
+                    </p>
+                  ) : selectedPhoto.fullUrl?.startsWith('/sample_photos_301/') ||
+                    selectedPhoto.fullUrl?.startsWith('/poc/') ||
+                    selectedPhoto.fullUrl?.startsWith('/shared_family_host_thumbs/') ||
+                    String(selectedPhoto.id || '').startsWith('shared_host_') ? (
+                    <p className="font-body-sm text-[11.5px] text-amber-600 dark:text-amber-300 mt-1">
+                      ℹ️ 공유방·체험용 예시 사진입니다
+                    </p>
+                  ) : null}
                 </div>
-                <div className="flex flex-wrap items-center gap-2 mt-1">
-                  <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-700 dark:text-emerald-300 font-label-sm text-[11.5px] font-extrabold">
-                    {activeLoungeType === 'personal'
-                      ? `💻 내 기기 원본 · ${selectedPhoto.locationKo || '내 PC 로컬 폴더'}`
-                      : `📸 촬영·업로드: ${selectedPhoto.uploaderLabel || '방장 · 본인 업로드'}`}
-                  </span>
-                  <span className="px-2.5 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-400/40 text-cyan-700 dark:text-cyan-300 font-label-sm text-[11.5px] font-extrabold">
-                    📅 촬영 날짜: {selectedPhoto.date}
-                  </span>
-                  <span className="font-label-mono text-[11px] text-on-surface-variant">
-                    • {(selectedPhoto.size / 1024 / 1024).toFixed(2)} MB • 원본 해상도 100% 보존 (카톡 화질 저하 0%)
-                  </span>
-                </div>
-                {selectedPhoto.fullPath ? (
-                  <p className="font-label-mono text-[11px] text-teal-600 dark:text-teal-300 mt-1 break-all">
-                    📁 실제 PC 위치: {selectedPhoto.fullPath}
-                  </p>
-                ) : selectedPhoto.fullUrl?.startsWith('/sample_photos_301/') ||
-                  selectedPhoto.fullUrl?.startsWith('/poc/') ||
-                  selectedPhoto.fullUrl?.startsWith('/shared_family_host_thumbs/') ||
-                  String(selectedPhoto.id || '').startsWith('shared_host_') ? (
-                  <p className="font-body-sm text-[11.5px] text-amber-600 dark:text-amber-300 mt-1">
-                    ℹ️ 공유방·체험용 예시 사진입니다 (내 PC 로컬 폴더에는 저장되지 않은 항목입니다)
-                  </p>
-                ) : null}
               </div>
+
+              <button
+                type="button"
+                onClick={() => setSelectedPhoto(null)}
+                aria-label="닫기"
+                className="w-9 h-9 rounded-full bg-surface-container-highest hover:bg-surface-bright flex items-center justify-center text-on-surface shrink-0 cursor-pointer"
+              >
+                <span className="material-symbols-outlined text-[19px]">close</span>
+              </button>
             </div>
 
             <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0 max-w-full">
@@ -510,27 +521,21 @@ export const PhotoDetailModal: React.FC = () => {
                   setActionNotice('📂 윈도우 탐색기에서 사진 원본 위치를 열었습니다.');
                 }}
                 title={selectedPhoto.fullPath || '원본 파일이 있는 내 PC 폴더를 엽니다'}
-                className="px-3 py-1.5 rounded-full bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-sm text-label-sm flex items-center gap-1"
+                className="hidden sm:flex px-3 py-1.5 rounded-full bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-sm text-label-sm items-center gap-1 cursor-pointer"
               >
                 <span className="material-symbols-outlined text-[16px]">folder_open</span>
                 <span>원본 폴더</span>
-              </button>
-              <button
-                onClick={() => setSelectedPhoto(null)}
-                className="w-8 h-8 rounded-full bg-surface-container-highest hover:bg-surface-bright flex items-center justify-center text-on-surface"
-              >
-                <span className="material-symbols-outlined text-[18px]">close</span>
               </button>
             </div>
           </div>
 
           {actionNotice && (
-            <div className="px-4 py-2.5 rounded-xl bg-emerald-950/90 border border-emerald-400/50 text-emerald-200 font-body-sm text-[12.5px] font-bold flex items-center justify-between gap-2">
-              <span>{actionNotice}</span>
+            <div className="px-4 py-2.5 rounded-xl bg-emerald-950/90 border border-emerald-400/50 text-emerald-200 font-body-sm text-[12.5px] font-bold flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
+              <span className="min-w-0 break-keep">{actionNotice}</span>
               <button
                 type="button"
                 onClick={() => setActionNotice(null)}
-                className="text-xs text-emerald-300 hover:text-white font-extrabold px-2 py-0.5 rounded bg-emerald-900/60"
+                className="text-xs text-emerald-300 hover:text-white font-extrabold px-2.5 py-1 rounded bg-emerald-900/60 shrink-0 cursor-pointer"
               >
                 닫기
               </button>

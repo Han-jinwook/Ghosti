@@ -21,6 +21,9 @@ export const FreePhotoShareOverlays: React.FC = () => {
   const sharedRoomHostPhotos = useSaySeeStore((s) => s.sharedRoomHostPhotos);
   const sharedRoomAddedPhotos = useSaySeeStore((s) => s.sharedRoomAddedPhotos);
   const importMobileLocalPhotos = useSaySeeStore((s) => s.importMobileLocalPhotos);
+  const layout = useSaySeeStore((s) => s.layout);
+  const isStoreAppMode = useSaySeeStore((s) => s.isStoreAppMode);
+  const isMobileEnv = layout === 'mobile' || Boolean(isStoreAppMode);
 
   const [guestNicknameDraft, setGuestNicknameDraft] = useState(
     activeLoungeType === 'family' ? '해나라' : '박총무'
@@ -206,11 +209,11 @@ export const FreePhotoShareOverlays: React.FC = () => {
       {guestJoinWallReason && (
         <div
           onClick={() => triggerGuestJoinWall('')}
-          className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+          className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-md rounded-3xl bg-zinc-950 border-2 border-amber-400/60 p-6 shadow-[0_0_50px_rgba(251,191,36,0.25)] flex flex-col gap-4"
+            className="w-full max-w-md max-h-[90dvh] overflow-y-auto rounded-3xl bg-zinc-950 border-2 border-amber-400/60 p-5 sm:p-6 shadow-[0_0_50px_rgba(251,191,36,0.25)] flex flex-col gap-4 my-auto"
           >
             <div className="flex items-center justify-between gap-2">
               <span className="px-2.5 py-1 rounded-full bg-[#FEE500] text-[#191919] font-label-sm text-[11.5px] font-black">
@@ -265,18 +268,18 @@ export const FreePhotoShareOverlays: React.FC = () => {
               </label>
             </div>
 
-            <div className="flex items-center gap-2 pt-1">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
               <button
                 type="button"
                 onClick={() => completeGuestOneSecJoin(guestNicknameDraft, guestEmailDraft)}
-                className="flex-1 py-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[13px] font-black cursor-pointer shadow-md"
+                className="flex-1 py-3 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[13px] font-black cursor-pointer shadow-md break-keep"
               >
                 🚀 1초 합류하고 고화질 원본·댓글 바로 쓰기 (0원)
               </button>
               <button
                 type="button"
                 onClick={() => useSaySeeStore.setState({ guestJoinWallReason: null })}
-                className="px-3.5 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 text-[12px] font-bold cursor-pointer"
+                className="px-3.5 py-2.5 sm:py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 text-[12px] font-bold cursor-pointer shrink-0"
               >
                 더 구경하기
               </button>
@@ -285,34 +288,34 @@ export const FreePhotoShareOverlays: React.FC = () => {
         </div>
       )}
 
-      {/* 📸 공유 사진방(가족방/모임방) — 내 컴퓨터 색인 사진 골라 올리기 모달 */}
+      {/* 📸 공유 사진방(가족방/모임방) — 내 기기 사진 골라 올리기 모달 */}
       {showSharedPhotoUploadModal && (
         <div
           onClick={() => setShowSharedPhotoUploadModal(false)}
-          className="fixed inset-0 z-[120] bg-black/85 flex items-center justify-center p-4"
+          className="fixed inset-0 z-[120] bg-black/85 flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-4xl max-h-[88vh] rounded-3xl bg-zinc-950 border-2 border-[#2DD4BF]/65 p-5 md:p-6 shadow-[0_0_55px_rgba(45,212,191,0.22)] flex flex-col gap-4 overflow-hidden"
+            className="w-full max-w-4xl max-h-[88dvh] rounded-3xl bg-zinc-950 border-2 border-[#2DD4BF]/65 p-4 sm:p-5 md:p-6 shadow-[0_0_55px_rgba(45,212,191,0.22)] flex flex-col gap-3.5 sm:gap-4 overflow-hidden"
           >
             <div className="flex items-start justify-between gap-3">
-              <div className="flex flex-col gap-1">
+              <div className="flex flex-col gap-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 font-label-sm text-[11.5px] font-black">
-                    📸 내 기기 색인 사진 골라 올리기 (초경량 13KB 섀도우 공유)
+                  <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 font-label-sm text-[11px] sm:text-[11.5px] font-black">
+                    📸 내 기기 사진 골라 올리기 (초경량 섀도우 공유)
                   </span>
                 </div>
-                <h3 className="font-headline-sm text-[18px] md:text-[20px] text-white font-black">
-                  『{activeSharedRoomTitle}』에 추가할 내 컴퓨터 사진을 선택해 주세요
+                <h3 className="font-headline-sm text-[16.5px] sm:text-[18px] md:text-[20px] text-white font-black break-keep">
+                  『{activeSharedRoomTitle}』에 추가할 {isMobileEnv ? '내 스마트폰 사진' : '내 컴퓨터 사진'}을 선택해 주세요
                 </h3>
-                <p className="text-[12px] text-zinc-300">
+                <p className="text-[12px] text-zinc-300 break-keep">
                   중복·흔들린 사진과 신분증 서류는 자동으로 걸러낸 깔끔한 새 사진 <strong>{uploadableLocalPhotos.length}장</strong>이 준비되어 있습니다.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowSharedPhotoUploadModal(false)}
-                className="w-8 h-8 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 flex items-center justify-center text-sm font-bold cursor-pointer shrink-0"
+                className="w-9 h-9 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 flex items-center justify-center text-sm font-bold cursor-pointer shrink-0"
               >
                 ✕
               </button>
@@ -320,12 +323,29 @@ export const FreePhotoShareOverlays: React.FC = () => {
 
             <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/10">
               <div className="flex flex-wrap items-center gap-2">
+                {isMobileEnv && (
+                  <label className="px-3 py-1.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer">
+                    📱 내 폰 갤러리에서 사진 고르기
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        if (e.target.files && e.target.files.length > 0) {
+                          void importMobileLocalPhotos(e.target.files);
+                          e.target.value = '';
+                        }
+                      }}
+                    />
+                  </label>
+                )}
                 <button
                   type="button"
                   onClick={() => setSelectedSharedUploadIds(uploadableLocalPhotos.map((p) => p.id))}
                   className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-teal-400/50 text-teal-300 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
                 >
-                  ✨ 내 컴퓨터 새 사진 {uploadableLocalPhotos.length}장 전체 선택
+                  ✨ {isMobileEnv ? '내 폰 새 사진' : '내 컴퓨터 새 사진'} {uploadableLocalPhotos.length}장 전체 선택
                 </button>
                 <button
                   type="button"
@@ -348,7 +368,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
                   });
                   jumpToGhostSecretary();
                 }}
-                className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-bold cursor-pointer"
+                className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-bold cursor-pointer break-keep"
               >
                 👻 올리기 전에 귀신비서에서 중복·흔들린 사진 먼저 점검하기
               </button>
@@ -367,24 +387,36 @@ export const FreePhotoShareOverlays: React.FC = () => {
               }}
             >
               {uploadableLocalPhotos.length === 0 ? (
-                <div className="py-12 px-4 rounded-2xl bg-zinc-900/70 border border-white/10 flex flex-col items-center justify-center text-center gap-3">
-                  <span className="text-3xl">📂</span>
-                  <p className="text-[14px] text-white font-bold">
-                    새로 추가할 내 컴퓨터 사진이 아직 보이지 않아요.
+                <div className="py-10 sm:py-12 px-4 rounded-2xl bg-zinc-900/70 border border-white/10 flex flex-col items-center justify-center text-center gap-3">
+                  <span className="text-3xl">{isMobileEnv ? '📱' : '📂'}</span>
+                  <p className="text-[14px] text-white font-bold break-keep">
+                    {isMobileEnv
+                      ? '아래 버튼을 눌러 공유방에 추가할 내 스마트폰 사진을 선택해 주세요!'
+                      : '새로 추가할 내 컴퓨터 사진이 아직 보이지 않아요.'}
                   </p>
-                  <p className="text-[12px] text-zinc-400 max-w-md">
-                    내 PC의 사진 폴더(`Pictures`)에 사진을 넣어두셨다면 로컬 엔진을 새로고침하거나 스마트폰에서 직접 사진을 골라 올릴 수 있어요.
+                  <p className="text-[12px] text-zinc-400 max-w-md break-keep">
+                    {isMobileEnv
+                      ? '내 폰 갤러리에서 원하는 사진들을 고르면 중복·흐린 사진은 자동으로 구분하여 깔끔하게 올릴 수 있어요.'
+                      : '내 PC의 사진 폴더(`Pictures`)에 사진을 넣어두셨다면 로컬 엔진을 새로고침하거나 직접 사진을 골라 올릴 수 있어요.'}
                   </p>
-                  <div className="flex flex-wrap items-center gap-2 mt-1">
-                    <button
-                      type="button"
-                      onClick={() => void useSaySeeStore.getState().initApp(true)}
-                      className="px-4 py-2 rounded-xl bg-[#2DD4BF] text-zinc-950 font-label-sm text-[12px] font-black cursor-pointer"
+                  <div className="flex flex-wrap items-center justify-center gap-2 mt-1">
+                    {!isMobileEnv && (
+                      <button
+                        type="button"
+                        onClick={() => void useSaySeeStore.getState().initApp(true)}
+                        className="px-4 py-2 rounded-xl bg-[#2DD4BF] text-zinc-950 font-label-sm text-[12px] font-black cursor-pointer"
+                      >
+                        🔄 내 컴퓨터 사진 폴더 다시 스캔하기
+                      </button>
+                    )}
+                    <label
+                      className={`px-4 py-2.5 rounded-xl font-label-sm text-[12.5px] font-black cursor-pointer ${
+                        isMobileEnv
+                          ? 'bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 shadow-md'
+                          : 'bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-bold'
+                      }`}
                     >
-                      🔄 내 컴퓨터 사진 폴더 다시 스캔하기
-                    </button>
-                    <label className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-sm text-[12px] font-bold cursor-pointer">
-                      📱 파일 탐색기에서 직접 사진 고르기
+                      📱 {isMobileEnv ? '내 스마트폰 갤러리에서 사진 고르기' : '파일 탐색기에서 직접 사진 고르기'}
                       <input
                         type="file"
                         accept="image/*"
@@ -478,11 +510,11 @@ export const FreePhotoShareOverlays: React.FC = () => {
                   type="button"
                   disabled={selectedSharedUploadIds.length === 0}
                   onClick={() => addLocalPhotosToSharedRoom(selectedSharedUploadIds)}
-                  className="px-5 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] disabled:opacity-40 text-zinc-950 font-label-md text-[13px] font-black shadow-lg shadow-teal-500/25 cursor-pointer"
+                  className="px-4 sm:px-5 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] disabled:opacity-40 text-zinc-950 font-label-md text-[12.5px] sm:text-[13px] font-black shadow-lg shadow-teal-500/25 cursor-pointer"
                 >
                   {selectedSharedUploadIds.length > 0
                     ? `📸 선택한 ${selectedSharedUploadIds.length}장 공유방에 올리기`
-                    : '📸 올릴 사진을 클릭해 선택해 주세요'}
+                    : '📸 올릴 사진을 선택해 주세요'}
                 </button>
               </div>
             </div>

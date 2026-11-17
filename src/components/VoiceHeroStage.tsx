@@ -224,13 +224,13 @@ export const VoiceHeroStage: React.FC = () => {
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full h-11 md:h-13 pl-10 pr-20 rounded-2xl bg-[#18181B] border border-white/15 focus:border-primary-container shadow-sm outline-none font-body-md text-[13px] md:text-[14.5px] text-white placeholder:text-zinc-400/75 transition-colors"
+              className="w-full h-11 md:h-13 pl-10 pr-24 rounded-2xl bg-[#18181B] border border-white/15 focus:border-primary-container shadow-sm outline-none font-body-md text-[13px] md:text-[14.5px] text-white placeholder:text-zinc-400/75 transition-colors"
             />
             {textInput && (
               <button
                 type="button"
                 onClick={() => setTextInput('')}
-                className="absolute right-16 text-zinc-400 hover:text-white p-1 cursor-pointer"
+                className="absolute right-[70px] text-zinc-400 hover:text-white p-1.5 cursor-pointer"
                 title="지우기"
               >
                 <span className="material-symbols-outlined text-[17px]">close</span>
@@ -299,8 +299,8 @@ export const VoiceHeroStage: React.FC = () => {
         )}
 
         {/* 1-B. 3대 카테고리 스위칭 캡슐 탭: [사진] | [동영상] | [문서] (이모지 없이 깔끔한 캡슐 디자인) */}
-        <div className="flex flex-wrap items-center justify-between gap-2 overflow-x-auto no-scrollbar pb-0.5">
-          <div className="flex items-center gap-2 shrink-0">
+        <div className="flex flex-wrap items-center justify-between gap-2 pb-0.5">
+          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar max-w-full">
             <button
               type="button"
               onClick={() => setSearchSpace('gallery')}
@@ -430,21 +430,23 @@ export const VoiceHeroStage: React.FC = () => {
                 📱 내 스마트폰 갤러리 사진을 불러와 선명도·중복·영수증을 1초 만에 정리·검색해 보세요!
               </span>
             </div>
-            <div className="flex items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
               <button
                 type="button"
                 onClick={() => mobilePhotoInputRef.current?.click()}
-                className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs whitespace-nowrap transition-all cursor-pointer shrink-0"
+                className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs whitespace-nowrap transition-all cursor-pointer shrink-0"
               >
                 📱 내 폰 사진 불러오기
               </button>
-              <button
-                type="button"
-                onClick={() => requestConnectMyComputer()}
-                className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/15 font-bold text-xs whitespace-nowrap transition-all cursor-pointer shrink-0"
-              >
-                💻 내 PC 연결 안내
-              </button>
+              {!isStoreAppMode && (
+                <button
+                  type="button"
+                  onClick={() => requestConnectMyComputer()}
+                  className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border border-white/15 font-bold text-xs whitespace-nowrap transition-all cursor-pointer shrink-0"
+                >
+                  💻 내 PC 연결 안내
+                </button>
+              )}
             </div>
           </div>
         ) : (

@@ -748,30 +748,30 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
       className={
         inlineSuperpowerOnly
           ? 'w-full'
-          : 'fixed inset-0 z-[100] bg-black/80 backdrop-blur-xl flex items-center justify-center p-3 sm:p-5 overflow-y-auto'
+          : 'fixed inset-0 z-[100] bg-black/80 backdrop-blur-xl flex items-center justify-center p-3 sm:p-5 pt-safe pb-safe overflow-y-auto'
       }
     >
       <div
         className={
           inlineSuperpowerOnly
-            ? 'relative w-full rounded-2xl bg-[#18181B] border border-white/10 p-5 md:p-6 flex flex-col gap-5 text-zinc-100'
-            : 'relative w-full max-w-4xl rounded-3xl bg-[#111114] border border-white/15 p-5 md:p-7 shadow-[0_0_60px_rgba(0,229,255,0.18)] flex flex-col gap-5 my-auto text-zinc-100'
+            ? 'relative w-full rounded-2xl bg-[#18181B] border border-white/10 p-4 sm:p-5 md:p-6 flex flex-col gap-5 text-zinc-100'
+            : 'relative w-full max-w-4xl max-h-[90dvh] overflow-y-auto rounded-3xl bg-[#111114] border border-white/15 p-4 sm:p-5 md:p-7 shadow-[0_0_60px_rgba(0,229,255,0.18)] flex flex-col gap-5 my-auto text-zinc-100'
         }
       >
         {inlineSuperpowerOnly && (
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
-            <div className="flex flex-col gap-1">
+            <div className="flex flex-col gap-1 min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
                   ⚡ 귀신창 (Ctrl + 0)
                 </span>
               </div>
-              <h1 className="font-headline-sm text-[20px] md:text-[22px] text-white font-extrabold tracking-tight mt-0.5">
+              <h1 className="font-headline-sm text-[18px] sm:text-[20px] md:text-[22px] text-white font-extrabold tracking-tight mt-0.5 break-keep">
                 ⚡ 귀신창 (Ctrl + 0) — 어디서나 부르는 1초 단축키
               </h1>
             </div>
 
-            <span className="px-3.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/50 text-emerald-300 font-label-sm text-[12px] font-extrabold whitespace-nowrap">
+            <span className="px-3.5 py-1.5 rounded-full bg-emerald-500/15 border border-emerald-400/50 text-emerald-300 font-label-sm text-[11.5px] sm:text-[12px] font-extrabold sm:whitespace-nowrap break-keep">
               🎁 30일 무제한 무료체험 (기본기 평생 무료 · 🔒 유료 기능 만료 시 잠금)
             </span>
           </div>
@@ -779,8 +779,8 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
         {!inlineSuperpowerOnly && (
           <>
         {/* 1) 상단 헤더 + 닫기 버튼 */}
-        <div className="flex items-start justify-between gap-4">
-          <div className="flex flex-col gap-1">
+        <div className="flex items-start justify-between gap-3 sm:gap-4">
+          <div className="flex flex-col gap-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               <GhostiBrandLogo size="desktop" showBadge={true} />
               <span className="px-2.5 py-0.5 rounded-full bg-teal-500/15 border border-teal-400/40 text-teal-300 font-mono text-[11px] font-bold">
@@ -1037,9 +1037,9 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                 </div>
               </div>
 
-              <div className="flex items-center gap-3 shrink-0 bg-zinc-950/90 p-2.5 rounded-2xl border border-teal-400/30">
+              <div className="flex flex-wrap sm:flex-nowrap items-center gap-3 w-full sm:w-auto sm:shrink-0 bg-zinc-950/90 p-2.5 rounded-2xl border border-teal-400/30">
                 <PairingQrCodeSvg />
-                <div className="flex flex-col gap-1 max-w-[215px]">
+                <div className="flex flex-col gap-1 min-w-0 sm:max-w-[215px]">
                   <span className="text-[11px] font-extrabold text-teal-300">
                     📱 스마트폰 앱 1초 설치 QR 코드
                   </span>
@@ -1087,7 +1087,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                 <span className="text-[13px] font-extrabold text-white">
                   ⚡ 윈도우 어디서나 <strong className="text-amber-300">Ctrl + 0</strong>을 누르면 커서 옆에 귀신창이 바로 열립니다
                 </span>
-                <span className="px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/50 text-emerald-300 text-[11.5px] font-extrabold whitespace-nowrap">
+                <span className="px-3 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/50 text-emerald-300 text-[11.5px] font-extrabold sm:whitespace-nowrap break-keep">
                   🎁 30일 무제한 무료체험 (기본기 평생 무료 · 🔒 유료 기능 만료 시 잠금)
                 </span>
               </div>
@@ -1096,7 +1096,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
             {/* [1층 — 수술 4 완료] ⚡ Ctrl + 0 귀신창 실물 체험 바 (중복 배지 5개 전면 삭제 + 로고·검색창 1줄 통합) */}
             <div className="p-4 rounded-2xl bg-zinc-900 border-2 border-[#2DD4BF] shadow-[0_0_24px_rgba(45,212,191,0.16)] flex flex-col gap-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] text-zinc-300">
-                <span className="font-extrabold text-white flex items-center gap-1.5">
+                <span className="font-extrabold text-white flex flex-wrap items-center gap-1.5">
                   <span>⚡ Ctrl + 0 귀신창 실물 체험 바</span>
                   <span className="text-[11.5px] font-normal text-zinc-400">
                     (검색창을 클릭하면 최근 복사한 5개 내역이 바로 펼쳐집니다)
@@ -1176,7 +1176,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                     }
                   }}
                   placeholder="클릭하면 최근 복사 내역 5건 펼침 · 단어 검색..."
-                  className="w-52 sm:w-64 px-2.5 py-1 rounded-lg bg-zinc-800 text-[11.5px] text-white outline-none border border-transparent focus:border-teal-400"
+                  className="w-full sm:w-64 min-w-0 px-2.5 py-1 rounded-lg bg-zinc-800 text-[11.5px] text-white outline-none border border-transparent focus:border-teal-400"
                 />
                 <span className="text-[11.5px] text-emerald-300 font-bold truncate flex-1">
                   {ghostMemoryResult || '검색창을 클릭해 최근 복사 내역을 바로 골라 붙여넣어 보세요'}

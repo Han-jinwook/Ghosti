@@ -136,6 +136,29 @@ export function isMobileOrStoreRuntime(): boolean {
   return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 860;
 }
 
+/**
+ * 뷰포트 및 런타임 기기 기준 레이아웃('mobile' | 'desktop') 판별 SSOT
+ * - PC 전용 독립 귀신검색창(?ghostSearchWindow=...)은 창 폭을 좁혀도 항상 'desktop' 유지
+ * - Capacitor 스토어 앱, 모바일 브라우저(< 1024px), 또는 좁은 웹 뷰포트(< 860px)는 'mobile' 적용
+ */
+export function resolveViewportLayout(): ViewportLayout {
+  if (typeof window === 'undefined') return 'desktop';
+  try {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('ghostSearchWindow')) return 'desktop';
+    const isCap = Boolean(
+      (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+    );
+    if (isCap || params.get('storeApp') === '1') return 'mobile';
+    if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) && window.innerWidth < 1024) {
+      return 'mobile';
+    }
+    return window.innerWidth < 860 ? 'mobile' : 'desktop';
+  } catch {
+    return 'desktop';
+  }
+}
+
 export async function requestQuarantineOp(kind: 'move' | 'restore', names: string[]): Promise<QuarantineOpResult> {
   if (!zCoreBridge.isConnected) {
     const isMobileEnv = isMobileOrStoreRuntime();

@@ -114,7 +114,8 @@ export const SampleSharedRoomExperienceCard: React.FC<{
                     />
                     <div className="absolute inset-0 flex items-center justify-center p-1.5 text-center">
                       <span className="text-[10.5px] sm:text-[11px] font-black text-slate-900 bg-white/90 rounded px-1.5 py-0.5 leading-tight break-keep">
-                        보관 기간이 만료된 사진
+                        <span className="sm:hidden">만료된 사진</span>
+                        <span className="hidden sm:inline">보관 기간이 만료된 사진</span>
                       </span>
                     </div>
                   </div>

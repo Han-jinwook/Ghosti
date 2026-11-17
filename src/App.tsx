@@ -22,10 +22,17 @@ import {
 } from './components/FaceMemberRegistryModal';
 import { SetupFloatingOverlayGuide } from './components/SetupMonsterModal';
 import { GhostCastAndLiveGlobalOverlay } from './components/GhostCastAndLiveSystem';
+import { FreePhotoShareOverlays } from './domains/free_photo_share/FreePhotoShareOverlays';
+import { GhostSecretaryFirstModal } from './components/GhostSecretaryFirstGuard';
+import { GhostPhotoOcrTeleportModal } from './components/GhostWindowThreeStageMockup';
+import { useDashboardNavStore } from './domains/shared/dashboardNavState';
+import { resolveViewportLayout } from './store/slices/storeSharedRefs';
 
 export const App: React.FC = () => {
   const {
     layout,
+    setLayout,
+    themeMode,
     initApp,
     activeLoungeType,
     desktopTab,
@@ -52,7 +59,28 @@ export const App: React.FC = () => {
     setShowFaceRegistryModal,
     doorplatePickerClusterId,
     setDoorplatePickerClusterId,
+    showSharedPhotoUploadModal,
+    guestJoinWallReason,
   } = useSaySeeStore();
+  const { ocrModalPhoto, setOcrModalPhoto } = useDashboardNavStore();
+
+  // 뷰포트 크기·회전 변경 시 PC ↔ 모바일 레이아웃 실시간 반응형 동기화 (?ghostSearchWindow 제외)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const syncViewportLayout = () => {
+      const next = resolveViewportLayout();
+      if (useSaySeeStore.getState().layout !== next) {
+        setLayout(next);
+      }
+    };
+    syncViewportLayout();
+    window.addEventListener('resize', syncViewportLayout, { passive: true });
+    window.addEventListener('orientationchange', syncViewportLayout, { passive: true });
+    return () => {
+      window.removeEventListener('resize', syncViewportLayout);
+      window.removeEventListener('orientationchange', syncViewportLayout);
+    };
+  }, [setLayout]);
 
   // 모바일 뒤로가기(Hardware Back Button / History PopState) 시 앱 자체가 꺼지지 않고 열려 있는 상세보기 모달만 닫히도록 방어
   const hasAnyModalOpen = Boolean(
@@ -63,7 +91,10 @@ export const App: React.FC = () => {
       showSetupMonsterModal ||
       showOnboarding ||
       showFaceRegistryModal ||
-      doorplatePickerClusterId
+      doorplatePickerClusterId ||
+      showSharedPhotoUploadModal ||
+      guestJoinWallReason ||
+      ocrModalPhoto
   );
 
   useEffect(() => {
@@ -80,6 +111,8 @@ export const App: React.FC = () => {
 
     const handlePopState = () => {
       const st = useSaySeeStore.getState();
+      const navSt = useDashboardNavStore.getState();
+      if (navSt.ocrModalPhoto) navSt.setOcrModalPhoto(null);
       if (st.selectedPhoto) st.setSelectedPhoto(null);
       if (st.selectedVideoModal) st.setSelectedVideoModal(null);
       if (st.selectedDocModal) st.setSelectedDocModal(null);
@@ -88,6 +121,8 @@ export const App: React.FC = () => {
       if (st.showOnboarding) st.setShowOnboarding(false);
       if (st.showFaceRegistryModal) st.setShowFaceRegistryModal(false);
       if (st.doorplatePickerClusterId) st.setDoorplatePickerClusterId(null);
+      if (st.showSharedPhotoUploadModal) st.setShowSharedPhotoUploadModal(false);
+      if (st.guestJoinWallReason) useSaySeeStore.setState({ guestJoinWallReason: null });
     };
 
     window.addEventListener('popstate', handlePopState);
@@ -779,30 +814,41 @@ export const App: React.FC = () => {
           {/* [고스트 캐스트 & 라이브 3대 핵심 무기] ① PC/노트북 모니터 풀스크린 클린 뷰어 + 무선 리모컨, ② 방 전용 프라이빗 라이브 생중계 & 라이브 포토 싱크, ③ 원격 모니터링 셔터(선별/즉시 공유 선택) */}
           <GhostCastAndLiveGlobalOverlay />
 
+          {/* PC·모바일 공통 공유방 오버레이 (카톡 1초 합류 Auth-Wall & 공유방 사진 골라 올리기 모달) 및 사진 OCR 모달 */}
+          <FreePhotoShareOverlays />
+          <GhostSecretaryFirstModal themeMode={themeMode} />
+          <GhostPhotoOcrTeleportModal photo={ocrModalPhoto} onClose={() => setOcrModalPhoto(null)} />
+
           {/* [스펙 2] 글로벌 플로팅 3중 타임머신 안전망 (즉시 되돌리기 Undo 바) */}
           {lastUndoBatch && (
-            <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-[115] w-[94%] max-w-2xl px-5 py-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/95 via-[#072b35]/95 to-surface-container-highest/95 backdrop-blur-2xl border-2 border-emerald-400 text-white shadow-[0_0_40px_rgba(16,185,129,0.45)] flex flex-wrap items-center justify-between gap-3">
-              <div className="flex items-center gap-2.5 min-w-0">
-                <span className="material-symbols-outlined text-emerald-300 text-[22px] shrink-0">
+            <div
+              className={`fixed ${
+                layout === 'mobile' && activeLoungeType !== 'personal'
+                  ? 'bottom-20'
+                  : 'bottom-6'
+              } mb-safe left-1/2 -translate-x-1/2 z-[115] w-[94%] max-w-2xl px-4 sm:px-5 py-3 sm:py-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/95 via-[#072b35]/95 to-surface-container-highest/95 backdrop-blur-2xl border-2 border-emerald-400 text-white shadow-[0_0_40px_rgba(16,185,129,0.45)] flex flex-wrap items-center justify-between gap-2.5 sm:gap-3`}
+            >
+              <div className="flex items-center gap-2 min-w-0">
+                <span className="material-symbols-outlined text-emerald-300 text-[20px] sm:text-[22px] shrink-0">
                   history
                 </span>
-                <span className="font-label-md text-[13px] md:text-[13.5px] font-bold truncate">
-                  🗑️ 방금 정리한 {lastUndoBatch.count}장이 정리 보관함(휴지통)으로 이동되었습니다.
+                <span className="font-label-md text-[12.5px] md:text-[13.5px] font-bold break-keep">
+                  🗑️ 방금 정리한 {lastUndoBatch.count}장이 정리 보관함으로 이동되었습니다.
                 </span>
               </div>
 
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 ml-auto">
                 <button
                   type="button"
                   onClick={() => void undoLastQuarantine()}
-                  className="px-4 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-surface-container-lowest font-label-sm text-[12.5px] font-black shadow-md transition-all"
+                  className="px-3.5 sm:px-4 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-surface-container-lowest font-label-sm text-[12px] sm:text-[12.5px] font-black shadow-md transition-all whitespace-nowrap cursor-pointer"
                 >
-                  ↩️ 1초 실행 취소 (원래대로 되돌리기)
+                  ↩️ 1초 실행 취소
                 </button>
                 <button
                   type="button"
                   onClick={dismissUndoBatch}
-                  className="text-white/70 hover:text-white p-1"
+                  className="text-white/70 hover:text-white p-1.5 cursor-pointer"
                   title="닫기"
                 >
                   <span className="material-symbols-outlined text-[16px]">close</span>
@@ -811,17 +857,23 @@ export const App: React.FC = () => {
             </div>
           )}
 
-          {/* 글로벌 액션 피드백 토스트 (라이트/다크 테마 적응형 고명도 스타일) */}
+          {/* 글로벌 액션 피드백 토스트 (라이트/다크 테마 적응형 고명도 스타일 + 모바일 2줄 허용) */}
           {lastQuarantineToast && (
             <div
               className={`fixed ${
-                lastUndoBatch ? 'bottom-24' : 'bottom-16'
-              } left-1/2 -translate-x-1/2 z-[110] px-5 py-3 rounded-full bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-teal-500/40 text-slate-800 dark:text-zinc-100 font-label-md text-[13px] font-bold shadow-[0_10px_30px_rgba(13,148,136,0.25)] flex items-center gap-2.5 max-w-[92vw]`}
+                lastUndoBatch
+                  ? layout === 'mobile' && activeLoungeType !== 'personal'
+                    ? 'bottom-36'
+                    : 'bottom-24'
+                  : layout === 'mobile' && activeLoungeType !== 'personal'
+                  ? 'bottom-20'
+                  : 'bottom-16'
+              } mb-safe left-1/2 -translate-x-1/2 z-[110] px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl sm:rounded-full bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-teal-500/40 text-slate-800 dark:text-zinc-100 font-label-md text-[12.5px] sm:text-[13px] font-bold shadow-[0_10px_30px_rgba(13,148,136,0.25)] flex items-center gap-2.5 w-max max-w-[92vw]`}
             >
-              <span className="truncate">{lastQuarantineToast}</span>
+              <span className="line-clamp-2 sm:truncate break-keep">{lastQuarantineToast}</span>
               <button
                 onClick={dismissQuarantineToast}
-                className="text-slate-400 hover:text-slate-700 dark:text-zinc-400 dark:hover:text-white shrink-0 cursor-pointer"
+                className="text-slate-400 hover:text-slate-700 dark:text-zinc-400 dark:hover:text-white p-1 shrink-0 cursor-pointer"
                 aria-label="닫기"
               >
                 ✕
@@ -843,7 +895,11 @@ export const App: React.FC = () => {
           onClick={handleScrollToTop}
           aria-label="맨 위로 가기"
           title="맨 위로 가기"
-          className="fixed bottom-6 right-5 z-[120] w-11 h-11 rounded-full bg-white hover:bg-slate-50 active:scale-95 text-slate-700 border border-slate-200/80 shadow-[0_6px_20px_rgba(15,23,42,0.16)] flex items-center justify-center transition-all cursor-pointer"
+          className={`fixed ${
+            viewMode === 'workspace' && layout === 'mobile' && activeLoungeType !== 'personal'
+              ? 'bottom-20'
+              : 'bottom-6'
+          } mb-safe right-4 sm:right-5 z-[120] w-11 h-11 rounded-full bg-white hover:bg-slate-50 active:scale-95 text-slate-700 border border-slate-200/80 shadow-[0_6px_20px_rgba(15,23,42,0.16)] flex items-center justify-center transition-all cursor-pointer`}
         >
           <svg
             className="w-5 h-5"

@@ -609,11 +609,11 @@ export const FaceMemberRegistryModal: React.FC = () => {
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-4 overflow-y-auto">
-      <div className="w-full max-w-5xl rounded-2xl bg-[#18181B] border border-white/15 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto">
+      <div className="w-full max-w-5xl rounded-2xl bg-[#18181B] border border-white/15 shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] my-auto">
         {/* 모달 상단 헤더 */}
-        <div className="px-6 py-4 border-b border-white/10 flex items-center justify-between gap-3 bg-zinc-950/80">
-          <div className="flex flex-col gap-0.5">
+        <div className="px-4 sm:px-6 py-4 border-b border-white/10 flex items-start sm:items-center justify-between gap-3 bg-zinc-950/80">
+          <div className="flex flex-col gap-0.5 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-extrabold">
                 🛂 귀신같이 얼굴 여권 관리 · 👑 방장 총점검 (v{globalSeedVersion})
@@ -1200,32 +1200,32 @@ export const PassportDoorplateStyleModal: React.FC = () => {
 
   return (
     <div
-      className="fixed inset-0 z-[130] bg-black/80 backdrop-blur-md flex items-center justify-center p-4"
+      className="fixed inset-0 z-[130] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
       onClick={() => setDoorplatePickerClusterId(null)}
     >
       <div
-        className="w-full max-w-2xl rounded-3xl bg-[#121318] border border-primary-container/40 text-zinc-100 shadow-2xl overflow-hidden flex flex-col max-h-[90vh]"
+        className="w-full max-w-2xl rounded-3xl bg-[#121318] border border-primary-container/40 text-zinc-100 shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] my-auto"
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 */}
-        <div className="px-5 py-4 border-b border-white/10 bg-zinc-950/90 flex items-center justify-between gap-3">
-          <div className="flex flex-col gap-0.5">
-            <div className="flex items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
+        <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-white/10 bg-zinc-950/90 flex items-start sm:items-center justify-between gap-3">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-full bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold shrink-0">
                 🛂 귀신같이 여권 자동 문패
               </span>
-              <h2 className="font-headline-sm text-[16px] sm:text-[18px] font-extrabold text-white">
+              <h2 className="font-headline-sm text-[15.5px] sm:text-[18px] font-extrabold text-white break-keep">
                 최신 연도 정면 얼굴 자동 문패 &amp; 5대 스타일 슬롯
               </h2>
             </div>
-            <p className="font-body-sm text-[12px] text-zinc-400">
+            <p className="font-body-sm text-[12px] text-zinc-400 break-keep">
               수동 업로드 없이 귀신같이 여권의 최신 정면 기준컷(① 정면)이 자동 장착되며, 원터치로 스타일을 바꿀 수 있습니다.
             </p>
           </div>
           <button
             type="button"
             onClick={() => setDoorplatePickerClusterId(null)}
-            className="w-8 h-8 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer shrink-0"
+            className="w-9 h-9 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer shrink-0"
           >
             ✕
           </button>
@@ -1279,11 +1279,11 @@ export const PassportDoorplateStyleModal: React.FC = () => {
 
           {/* 5대 스타일 슬롯 원터치 선택 그리드 */}
           <div className="flex flex-col gap-2">
-            <div className="flex items-center justify-between">
-              <span className="font-label-md text-[13px] font-extrabold text-white">
+            <div className="flex flex-wrap items-center justify-between gap-1.5">
+              <span className="font-label-md text-[13px] font-extrabold text-white break-keep">
                 🎨 귀신같이 여권에 확보된 5대 스타일 슬롯 (원터치 문패 변경)
               </span>
-              <span className="font-label-sm text-[11px] text-zinc-400">
+              <span className="font-label-sm text-[11px] text-zinc-400 break-keep">
                 클릭 즉시 상단 프로필 및 라운지 문패에 반영됩니다
               </span>
             </div>
@@ -1350,14 +1350,14 @@ export const PassportDoorplateStyleModal: React.FC = () => {
         </div>
 
         {/* 푸터 */}
-        <div className="px-5 py-3.5 border-t border-white/10 bg-zinc-950/90 flex items-center justify-between">
-          <span className="font-body-sm text-[11.5px] text-zinc-400">
+        <div className="px-4 sm:px-5 py-3.5 border-t border-white/10 bg-zinc-950/90 flex flex-wrap items-center justify-between gap-2.5">
+          <span className="font-body-sm text-[11.5px] text-zinc-400 break-keep min-w-0 flex-1">
             💡 새해(2027년~)에 더 선명한 정면 사진이 찍히면 Slot 1 문패가 자동으로 최신화됩니다.
           </span>
           <button
             type="button"
             onClick={() => setDoorplatePickerClusterId(null)}
-            className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12.5px] font-extrabold cursor-pointer"
+            className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12.5px] font-extrabold shrink-0 ml-auto cursor-pointer"
           >
             완료
           </button>

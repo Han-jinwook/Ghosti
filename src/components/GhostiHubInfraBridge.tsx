@@ -256,18 +256,18 @@ const GhostiHubGlobalModals: React.FC = () => {
       {/* 2. 통합 프로필 설정 모달 (프로필 수정 + 코인/선물함 + 알림 스위치 + 1:1 문의방 + 1초 오류신고 + 로그아웃) */}
       {isProfileOpen && (
         <div
-          className="fixed inset-0 z-[130] flex items-center justify-center bg-black/65 backdrop-blur-sm p-4 overflow-y-auto"
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-black/65 backdrop-blur-sm p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
           onClick={() => setIsProfileOpen(false)}
         >
           <div
-            className="relative w-full max-w-md max-h-[90vh] overflow-y-auto rounded-3xl bg-slate-50 p-4 sm:p-5 shadow-2xl border border-slate-200 space-y-3.5 text-slate-900"
+            className="relative w-full max-w-md max-h-[88dvh] overflow-y-auto rounded-3xl bg-slate-50 p-4 sm:p-5 shadow-2xl border border-slate-200 space-y-3.5 text-slate-900 my-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between pb-1">
-              <h3 className="text-base font-extrabold text-slate-900 flex items-center gap-1.5">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
+              <h3 className="text-[15px] sm:text-base font-extrabold text-slate-900 flex items-center gap-1.5 min-w-0">
                 <span>🐾 내 프로필 · 계정 설정</span>
               </h3>
-              <div className="flex items-center gap-1.5">
+              <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                 <button
                   type="button"
                   onClick={() => {
@@ -280,7 +280,7 @@ const GhostiHubGlobalModals: React.FC = () => {
                       st.setDoorplatePickerClusterId(cluster.clusterId);
                     }
                   }}
-                  className="px-3 py-1 rounded-full bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold shadow-xs transition-all cursor-pointer flex items-center gap-1"
+                  className="px-3 py-1.5 rounded-full bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold shadow-xs transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap"
                   title="설정방 보관 내 귀신계 여권(본인 전용) 확인 및 문패 스타일 관리"
                 >
                   <span>🛂</span>
@@ -289,7 +289,7 @@ const GhostiHubGlobalModals: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => setIsProfileOpen(false)}
-                  className="w-8 h-8 rounded-full bg-white hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 cursor-pointer"
+                  className="w-9 h-9 rounded-full bg-white hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 shrink-0 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>

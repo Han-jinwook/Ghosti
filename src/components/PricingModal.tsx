@@ -450,15 +450,15 @@ export const PricingModal: React.FC = () => {
   return (
     <div
       onClick={() => setShowProModal(false)}
-      className="fixed inset-0 z-[105] bg-black/85 backdrop-blur-xl flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-[105] bg-black/85 backdrop-blur-xl flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-5xl rounded-3xl bg-[#121215] border border-white/15 p-6 md:p-8 shadow-2xl flex flex-col gap-6 my-auto"
+        className="w-full max-w-5xl max-h-[90dvh] overflow-y-auto rounded-3xl bg-[#121215] border border-white/15 p-4 sm:p-6 md:p-8 shadow-2xl flex flex-col gap-5 sm:gap-6 my-auto"
       >
         {/* 모달 헤더 */}
-        <div className="flex items-start justify-between gap-4 border-b border-white/10 pb-4">
-          <div className="flex flex-col gap-1.5">
+        <div className="flex items-start justify-between gap-3 sm:gap-4 border-b border-white/10 pb-4">
+          <div className="flex flex-col gap-1.5 min-w-0">
             <div className="flex flex-wrap items-center gap-2.5">
               <GhostiBrandLogo size="desktop" showBadge={true} />
               <span className="px-3 py-1 rounded-full bg-zinc-900 border border-white/10 text-zinc-300 font-label-mono text-[11px] font-bold">
@@ -522,7 +522,7 @@ export const PricingModal: React.FC = () => {
           {/* ① [평생 무료] 내 기기 (PC·폰): 👻 귀신비서 · 🎯 귀신검색 · ⚡ 귀신창 */}
           <div className="p-5 rounded-2xl bg-[#18181B] border border-emerald-400/40 flex flex-col justify-between gap-4">
             <div className="flex flex-col gap-2.5">
-              <div className="flex items-center justify-between gap-2">
+              <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-bold">
                   1~3번 [평생 무료] 내 기기 (PC·폰)
                 </span>
@@ -583,25 +583,25 @@ export const PricingModal: React.FC = () => {
                   • 💬 <strong>카톡 단톡방 인앱 무가입 1초 프리뷰</strong> + 🛂 <strong>각 방 인물 얼굴 1초 찾기</strong> 기본 제공<br />
                   • ⚠️ <strong className="text-amber-300">오직 사진 · 동영상 공유만 작동</strong>합니다. (엑셀·한글·PDF·워드 등 업무 문서 공유 및 윈도우 탐색기 <code>S: 드라이브</code> 마운트는 <strong>6번 업무 공유(5인·30GB 평생 0원 / 유료 확장)</strong> 전용입니다.)
                 </p>
-                <div className="grid grid-cols-3 gap-1.5 pt-1">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 pt-1">
                   <button
                     type="button"
                     onClick={() => activatePricingPlan('family_home_5900')}
-                    className="py-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer"
+                    className="py-2 px-2 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer"
                   >
                     👨‍👩‍👧‍👦 가족방 0원 시작
                   </button>
                   <button
                     type="button"
                     onClick={() => activatePricingPlan('club_small_4900')}
-                    className="py-2 rounded-lg bg-emerald-400/90 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer"
+                    className="py-2 px-2 rounded-lg bg-emerald-400/90 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer"
                   >
                     ⛰️ 동호회방 0원 시작
                   </button>
                   <button
                     type="button"
                     onClick={() => activatePricingPlan('student_sub_900')}
-                    className="py-2 rounded-lg bg-emerald-400/80 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer"
+                    className="py-2 px-2 rounded-lg bg-emerald-400/80 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer"
                   >
                     🎓 동창회방 0원 시작
                   </button>
@@ -611,12 +611,12 @@ export const PricingModal: React.FC = () => {
           </div>
 
           {/* ── 무료(1~4번) / 유료 확장(5·6번 — 30일 무료체험) 경계선 ── */}
-          <div className="md:col-span-2 flex items-center gap-3 py-1">
-            <div className="flex-1 border-t border-dashed border-amber-400/40" />
-            <span className="px-3 py-1 rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 font-label-mono text-[11.5px] font-extrabold">
-              ── 🎁 5·6번 유료 확장 기능 (신용카드 등록 없이 30일 무료체험 · 연간 결제 2개월 무료) ──
+          <div className="md:col-span-2 flex items-center gap-2 sm:gap-3 py-1">
+            <div className="hidden sm:block flex-1 border-t border-dashed border-amber-400/40" />
+            <span className="w-full sm:w-auto text-center break-keep px-3 py-1.5 rounded-2xl sm:rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 font-label-mono text-[11px] sm:text-[11.5px] font-extrabold">
+              🎁 5·6번 유료 확장 기능 (신용카드 등록 없이 30일 무료체험 · 연간 결제 2개월 무료)
             </span>
-            <div className="flex-1 border-t border-dashed border-amber-400/40" />
+            <div className="hidden sm:block flex-1 border-t border-dashed border-amber-400/40" />
           </div>
 
           {/* ③ [5번 — 30일 무료체험 / 유료] 내 기기 통합 (PC+폰+PC+): 🔗 내 기기 연결 (PC↔폰) + ⚡ 귀신창 확장 */}
@@ -1159,11 +1159,11 @@ export const LocalDocPreviewModal: React.FC = () => {
   return (
     <div
       onClick={handleCloseModal}
-      className="fixed inset-0 z-[105] bg-black/80 backdrop-blur-xl flex items-start sm:items-center justify-center p-3 sm:p-4 overflow-y-auto"
+      className="fixed inset-0 z-[105] bg-black/80 backdrop-blur-xl flex items-start sm:items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl max-h-[92vh] overflow-y-auto rounded-3xl bg-surface-container-low border border-primary-container/50 p-4 sm:p-6 md:p-7 shadow-2xl flex flex-col gap-3.5 sm:gap-4 my-auto"
+        className="w-full max-w-2xl max-h-[90dvh] overflow-y-auto rounded-3xl bg-surface-container-low border border-primary-container/50 p-4 sm:p-6 md:p-7 shadow-2xl flex flex-col gap-3.5 sm:gap-4 my-auto"
       >
         {selectedDocModal.matchType === 'SIMILAR' && (
           <div className="px-3.5 py-2.5 rounded-2xl bg-amber-500/15 border border-amber-400/50 text-amber-200 font-label-md text-[12.5px] sm:text-[13px] font-extrabold flex items-center gap-2">
@@ -1210,7 +1210,7 @@ export const LocalDocPreviewModal: React.FC = () => {
           </button>
         </div>
 
-        <div className="p-3.5 sm:p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 flex flex-col gap-2 max-h-[45vh] overflow-y-auto">
+        <div className="p-3.5 sm:p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 flex flex-col gap-2 max-h-[45dvh] overflow-y-auto">
           <div className="flex items-center justify-between gap-2">
             <span className="font-label-mono text-[11px] text-primary-container font-bold">
               🔍 로컬 문서 본문 미리보기 (검색어 노란색 하이라이트 • 1초 복사 지원)
@@ -1307,7 +1307,7 @@ export const LocalDocPreviewModal: React.FC = () => {
                   });
                 });
               }}
-              className="flex px-3.5 py-2 rounded-xl bg-amber-500 text-zinc-950 font-label-md text-[12.5px] font-black items-center gap-1 shadow-md hover:bg-amber-400 transition-colors cursor-pointer"
+              className="hidden sm:flex px-3.5 py-2 rounded-xl bg-amber-500 text-zinc-950 font-label-md text-[12.5px] font-black items-center gap-1 shadow-md hover:bg-amber-400 transition-colors cursor-pointer"
             >
               <span>🔍 파일 띄우기</span>
             </button>
@@ -1534,14 +1534,14 @@ export const VideoScenePreviewModal: React.FC = () => {
   return (
     <div
       onClick={() => setSelectedVideoModal(null)}
-      className="fixed inset-0 z-[105] bg-black/85 backdrop-blur-xl flex items-center justify-center p-4 overflow-y-auto"
+      className="fixed inset-0 z-[105] bg-black/85 backdrop-blur-xl flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-4xl rounded-3xl bg-surface-container-low border-2 border-primary-container/60 p-5 md:p-7 shadow-[0_0_64px_rgba(0,229,255,0.25)] flex flex-col gap-4 my-auto"
+        className="w-full max-w-4xl max-h-[90dvh] overflow-y-auto rounded-3xl bg-surface-container-low border-2 border-primary-container/60 p-4 sm:p-5 md:p-7 shadow-[0_0_64px_rgba(0,229,255,0.25)] flex flex-col gap-3.5 sm:gap-4 my-auto"
       >
         <div className="flex items-start justify-between gap-3">
-          <div className="flex flex-col gap-1">
+          <div className="flex flex-col gap-1 min-w-0">
             <div className="flex flex-wrap items-center gap-2">
               {hasExecutedUserSearch && activeQuery && (
                 <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-on-primary-container font-label-mono text-[11px] font-black">
@@ -1751,7 +1751,7 @@ export const VideoScenePreviewModal: React.FC = () => {
               void openLocalFolder('videos');
             }}
             title={selectedVideoModal.fullPath || '원본 동영상이 있는 내 PC 폴더를 엽니다'}
-            className="px-4 py-2.5 rounded-xl bg-primary-container text-on-primary-container font-label-md text-[13px] font-extrabold flex items-center gap-1.5 cursor-pointer"
+            className="hidden sm:flex px-4 py-2.5 rounded-xl bg-primary-container text-on-primary-container font-label-md text-[13px] font-extrabold items-center gap-1.5 cursor-pointer"
           >
             <span className="material-symbols-outlined text-[18px]">folder_open</span>
             <span>원본 동영상 폴더 열기</span>

@@ -1386,13 +1386,15 @@ export const Stage1MinimalSearchPreview: React.FC<{
                 </span>
               </div>
 
-              <button
-                onClick={() => void openLocalFolder('docs')}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-label-sm text-[12px] font-medium border border-white/10 flex items-center gap-1.5 cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[15px]">folder_open</span>
-                <span>내 PC 문서 폴더 열기</span>
-              </button>
+              {!isMobileOrStore && (
+                <button
+                  onClick={() => void openLocalFolder('docs')}
+                  className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-label-sm text-[12px] font-medium border border-white/10 flex items-center gap-1.5 cursor-pointer"
+                >
+                  <span className="material-symbols-outlined text-[15px]">folder_open</span>
+                  <span>내 PC 문서 폴더 열기</span>
+                </button>
+              )}
             </div>
 
             {matchedLocalDocs.length > 0 && (
@@ -1464,6 +1466,10 @@ export const Stage1MinimalSearchPreview: React.FC<{
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
+                            if (isMobileOrStore || !isZCoreConnected) {
+                              setSelectedDocModal(doc);
+                              return;
+                            }
                             void executeRealOsAction('open_file_search', doc.path || doc.fileName).then((res) => {
                               useSaySeeStore.setState({
                                 lastQuarantineToast: res.summaryKo || `📂 탐색기에서 [${doc.fileName}] 파일을 바로 띄웠습니다.`,
@@ -1472,7 +1478,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
                           }}
                           className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/50 text-amber-300 font-label-sm text-[11.5px] font-extrabold transition-colors cursor-pointer"
                         >
-                          🔍 파일 열기
+                          {isMobileOrStore || !isZCoreConnected ? '📖 본문 보기' : '🔍 파일 열기'}
                         </button>
                       </div>
                     </div>
@@ -1861,7 +1867,13 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     zConnected && isZCoreOutdated(zCoreBridge.version);
 
   return (
-    <div className="w-full max-w-[1640px] mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col gap-5 pb-24">
+    <div
+      className={
+        layout === 'mobile'
+          ? 'w-full flex flex-col gap-3.5'
+          : 'w-full max-w-[1640px] mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col gap-5 pb-24'
+      }
+    >
       {pendingReturnShareRoom && (
         <div className="p-4 rounded-2xl bg-gradient-to-r from-teal-950/90 via-emerald-950/85 to-zinc-900 border-2 border-[#2DD4BF]/70 flex flex-wrap items-center justify-between gap-3 shadow-lg">
           <div className="flex flex-col gap-0.5">
@@ -1908,18 +1920,26 @@ export const Stage1MinimalCarePreview: React.FC = () => {
           className="xl:col-span-7 2xl:col-span-8 flex flex-col gap-5 min-w-0"
         >
           {/* 1. 슬림 헤더: 현재 쾌적한 상태 요약 + [⚡ 원본 남기고 N장 일괄 정리] 버튼만 깔끔하게 유지 (여권은 설정방 내부 보관으로 외부 비노출) */}
-          <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
-            <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-white/10">
-              <div className="flex flex-wrap items-center gap-3">
-                <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2 whitespace-nowrap">
+          <section className="p-3.5 sm:p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3.5 sm:gap-4">
+            <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 pb-3 border-b border-white/10">
+              <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+                <h1 className="font-headline-sm text-[19px] sm:text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2 whitespace-nowrap">
                   <span>👻 귀신비서</span>
                 </h1>
-                {/* [SSOT v2.3] 1. 👻 귀신비서 대표 1줄 부제 상시 노출 */}
-                <p className="basis-full -mt-1.5 text-[12.5px] md:text-[13px] font-semibold text-zinc-500 dark:text-zinc-400 break-keep leading-relaxed">
-                  <span className="whitespace-nowrap">느려진 내 PC·폰, 클릭 한 번에 새것처럼</span> —{' '}
-                  <span className="whitespace-nowrap">은행 보안프로그램은 안 지우고 재우고,</span>{' '}
-                  <span className="whitespace-nowrap">중복 사진·흩어진 문서까지</span>{' '}
-                  <span className="whitespace-nowrap">광고 없이 1초 만에 해결합니다.</span>
+                {/* [SSOT v2.3] 1. 👻 귀신비서 대표 1줄 부제 상시 노출 (모바일은 모바일 맞춤 문구로 분기) */}
+                <p className="basis-full -mt-1 text-[12px] sm:text-[12.5px] md:text-[13px] font-semibold text-zinc-500 dark:text-zinc-400 break-keep leading-relaxed">
+                  {isStoreAppMode || layout === 'mobile' ? (
+                    <>
+                      중복·연사 사진과 일회성 영수증·캡처·흔들린 사진을 AI 임의 삭제 없이 1초 만에 골라 정리하고 언제든 즉시 복원합니다.
+                    </>
+                  ) : (
+                    <>
+                      <span className="whitespace-nowrap">느려진 내 PC·폰, 클릭 한 번에 새것처럼</span> —{' '}
+                      <span className="whitespace-nowrap">은행 보안프로그램은 안 지우고 재우고,</span>{' '}
+                      <span className="whitespace-nowrap">중복 사진·흩어진 문서까지</span>{' '}
+                      <span className="whitespace-nowrap">광고 없이 1초 만에 해결합니다.</span>
+                    </>
+                  )}
                 </p>
 
                 <input
@@ -2010,7 +2030,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
               </div>
             </div>
 
-            <SecretarySamplePcCarePanel />
+            {!(isStoreAppMode || layout === 'mobile') && <SecretarySamplePcCarePanel />}
 
             <div className="font-headline-md text-[16px] md:text-[18px] text-zinc-900 dark:text-white font-extrabold tracking-tight leading-snug">
               {activeTrash.length > 0 ? (
@@ -2123,8 +2143,8 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             )}
           </section>
 
-          {/* 1-B. [상단 즉시 노출] 🛡️ 귀신비서의 상시 케어 능력 3종 — 사진 후보 목록을 펼쳐도 묻히지 않도록 상단 배치 & PC/모바일 깔끔 줄바꿈 */}
-          {!isStoreAppMode && (
+          {/* 1-B. [PC 전용 상단 노출] 🛡️ 귀신비서의 상시 케어 능력 3종 — 모바일에서는 PC 전용 단어 비노출 */}
+          {!(isStoreAppMode || layout === 'mobile') && (
             <section
               data-allow-secretary-jump="true"
               aria-label="귀신비서 상시 케어 능력 안내"
@@ -2356,7 +2376,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
 
           {/* 3-A. ① 중복 사진 & 연사 묶음 1세트씩 순차 확인 및 유저 [OK] 승인 (currentTab === 'duplicate'일 때만 순수 표시) */}
           {showDuplicatePickSection && (
-            <div className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
+            <div className="p-3.5 sm:p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/10 pb-3.5">
                 <div className="flex flex-col gap-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -2604,7 +2624,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
 
           {/* 3-B. 탭 ②·③·④ (메모·영수증 / 스크린샷 / 흔들린 사진) 실사진 확인 및 유저 [OK] 승인 그리드 */}
           {currentTab !== 'duplicate' && currentTab !== 'none' && (
-            <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
+            <section className="p-3.5 sm:p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
               <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-headline-sm text-[16.5px] text-white font-bold">

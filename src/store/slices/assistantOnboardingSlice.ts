@@ -127,6 +127,7 @@ import {
   quarantineResultNote,
   requestQuarantineOp,
   resolveLoungePhotoCorpus,
+  resolveViewportLayout,
   restoreAllExcludedCustomFaceRegistrations,
   saveCustomFaceRegistration,
   storeSharedRefs,
@@ -300,7 +301,7 @@ export const createAssistantOnboardingSlice: StateCreator<
     applyHtmlThemeClass('light');
     set({ themeMode: 'light' });
   },
-  layout: 'desktop',
+  layout: resolveViewportLayout(),
   mobileTab: 'trash',
   desktopTab: 'trash',
   setLayout: (layout) => set({ layout }),

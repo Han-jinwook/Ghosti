@@ -5,7 +5,7 @@ import { GhostiTopRightHubAnchor } from './GhostiHubInfraBridge';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
-import type { GpuHelperTierId, LoungeType } from '../types/saysee';
+import type { FamilyRoomId, GpuHelperTierId, LoungeType } from '../types/saysee';
 import {
   cleanVideoTimestampLabel,
   groupBurstSearchResults,
@@ -145,6 +145,12 @@ const PHOTO_SHARE_GROUPS: Array<{ id: LoungeType; label: string }> = [
   { id: 'student', label: '🎓 동창회' },
 ];
 
+const FAMILY_ROOM_PILLS: Array<{ id: FamilyRoomId; label: string }> = [
+  { id: '우리집', label: '🏠 우리집' },
+  { id: '본가(친가)', label: '🏡 본가(친가)' },
+  { id: '처가(친정)', label: '🌸 처가(친정)' },
+];
+
 const resolveMainMenuId = (lounge: LoungeType): MainMenuId =>
   PHOTO_SHARE_LOUNGES.includes(lounge) ? 'photo_share' : lounge === 'work' ? 'work' : 'personal';
 
@@ -245,6 +251,7 @@ export const MobileAppView: React.FC = () => {
     setShowProModal,
     faceClusters,
     activeFamilyRoom,
+    setActiveFamilyRoom,
     setDoorplatePickerClusterId,
   } = useSaySeeStore();
 
@@ -293,20 +300,25 @@ export const MobileAppView: React.FC = () => {
   const isCurrentLoungeSubscribed = Boolean(subscribedLounges[activeLoungeType]);
 
   return (
-    <div className="bg-[#09090B] text-zinc-100 font-body-md flex flex-col min-h-screen max-w-xl mx-auto relative shadow-2xl border-x border-white/10 pb-20">
+    <div
+      className={`bg-[#09090B] text-zinc-100 font-body-md flex flex-col min-h-screen min-h-dvh max-w-xl mx-auto relative shadow-2xl border-x border-white/10 ${
+        currentSubmenus.length > 0 ? 'pb-24' : 'pb-12'
+      }`}
+    >
       {/* 상단 2단 통합 헤더 (뭐먹지? 스타일): 1단(화이트 바 + 흑백 라인 아이콘 메인메뉴 캡슐) + 2단(이모지 없는 언더라인 서브메뉴 탭) */}
       <header className="sticky top-0 inset-x-0 z-50 backdrop-blur-xl pt-safe">
         <div
-          className={`px-3.5 py-2 flex flex-col gap-2 border-b transition-colors ${
+          className={`px-3 py-2 flex flex-col gap-2 border-b transition-colors ${
             themeMode === 'light'
               ? 'bg-white/95 border-[#EAE8E1]'
               : 'bg-[#09090B]/95 border-white/10'
           }`}
         >
-          <div className="flex items-center justify-between gap-1 overflow-x-auto no-scrollbar">
-            <div className="flex items-center gap-1 shrink-0 min-w-0 max-w-[48%]">
+          <div className="flex items-center justify-between gap-1 flex-nowrap min-w-0">
+            <div className="flex items-center gap-1 shrink-0 min-w-0">
               <GhostiBrandLogo
                 size="mobile"
+                autoCycle={false}
                 themeMode={themeMode}
                 showBadge={false}
                 subtitle=""
@@ -318,19 +330,40 @@ export const MobileAppView: React.FC = () => {
                     hasUserSelectedSearchTab: false,
                   });
                 }}
-                className="shrink-0 max-w-full"
+                className="shrink-0"
               />
             </div>
 
-            {/* 우상단 심플 앵커: 가이드(온보딩 점프) + 공유 아이콘 + 프로필(맨 우측) */}
-            <div className="flex items-center gap-1 shrink-0" aria-label="가이드 공유 및 프로필 영역">
+            {/* 우상단 심플 앵커: [복원 기록] + 가이드(온보딩 점프) + 공유 아이콘 + 프로필(맨 우측) */}
+            <div className="flex items-center gap-1 shrink-0 ml-auto" aria-label="가이드 공유 및 프로필 영역">
+              {activeLoungeType === 'personal' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    window.dispatchEvent(
+                      new CustomEvent('ghosti_toss_to_monster_chat', {
+                        detail: { query: '최근 [복원 기록] 보여줘' },
+                      })
+                    );
+                  }}
+                  title="최근 손보기·정리 복원 기록 조회 및 원래대로 1초 되돌리기"
+                  className={`px-2 py-1.5 rounded-lg font-extrabold text-[11px] flex items-center gap-0.5 shrink-0 whitespace-nowrap border cursor-pointer ${
+                    themeMode === 'light'
+                      ? 'bg-violet-50 border-violet-300 text-violet-800 hover:bg-violet-100'
+                      : 'bg-violet-950/70 border-violet-500/40 text-violet-200 hover:bg-violet-900/80'
+                  }`}
+                >
+                  <span>🕰️</span>
+                  <span>복원 기록</span>
+                </button>
+              )}
               <button
                 type="button"
                 onClick={() => {
                   window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
                 }}
                 title="공식 온보딩/가이드 페이지로 이동"
-                className={`px-2 py-1 rounded-lg font-bold text-[11px] flex items-center gap-1 shrink-0 cursor-pointer ${
+                className={`px-2 py-1.5 rounded-lg font-bold text-[11px] flex items-center gap-0.5 shrink-0 whitespace-nowrap cursor-pointer ${
                   themeMode === 'light'
                     ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5'
                     : 'text-zinc-300 hover:text-white hover:bg-white/10'
@@ -352,13 +385,13 @@ export const MobileAppView: React.FC = () => {
                   });
                 }}
                 title="지인·가족에게 앱 공유하기"
-                className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 cursor-pointer outline-none ${
+                className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 cursor-pointer outline-none ${
                   themeMode === 'light'
                     ? 'text-slate-500 hover:text-slate-800 hover:bg-black/5'
                     : 'text-zinc-300 hover:text-white hover:bg-white/10'
                 }`}
               >
-                <span className="material-symbols-outlined text-[15px]">share</span>
+                <span className="material-symbols-outlined text-[16px]">share</span>
               </button>
               <GhostiTopRightHubAnchor themeMode={themeMode} />
             </div>
@@ -378,8 +411,8 @@ export const MobileAppView: React.FC = () => {
             <span className="text-emerald-600 dark:text-emerald-400">광고 0% · 클라우드 월세 0원</span>
           </div>
 
-          {/* 1단 메인메뉴 3개 (내 기기 / 사진 공유 / 업무 공유): 흑백 라인 아이콘 + 캡슐 스타일 */}
-          <nav className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+          {/* 1단 메인메뉴 3개 (① 👻 귀신비서 / ② 📸 사진 공유 / ③ 💼 업무 공유(S:)): 균등 3분할 캡슐 */}
+          <nav className="grid grid-cols-3 gap-1">
             {MAIN_LOUNGE_MENUS.map((menu) => {
               const active = resolveMainMenuId(activeLoungeType) === menu.id;
               return (
@@ -395,52 +428,80 @@ export const MobileAppView: React.FC = () => {
                       setMobileTab('search');
                     }
                   }}
-                  className={`px-3 py-1.5 rounded-full font-label-sm text-[12px] flex items-center gap-1 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none ${
+                  className={`px-1.5 py-2 rounded-full font-label-sm text-[11.5px] flex items-center justify-center gap-1 transition-all whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
                     active
                       ? themeMode === 'light'
-                        ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold'
+                        ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold shadow-2xs'
                         : 'bg-zinc-800 text-primary-container font-extrabold'
                       : themeMode === 'light'
-                      ? 'text-slate-500 hover:text-slate-900 font-bold'
-                      : 'text-zinc-400 hover:text-white font-bold'
+                      ? 'bg-slate-100/80 text-slate-600 hover:text-slate-900 font-bold'
+                      : 'bg-zinc-900/70 text-zinc-400 hover:text-white font-bold'
                   }`}
                 >
-                  <MainLoungeMonoIcon id={menu.iconId} className="w-[14px] h-[14px] shrink-0" />
                   <span>{menu.label}</span>
                 </button>
               );
             })}
           </nav>
 
-          {/* 사진 공유 하위 선택: 패밀리 ↔ 동호회·동창회 */}
+          {/* 사진 공유 하위 선택: 패밀리 ↔ 동호회·모임 ↔ 동창회 + (가족일 때 우리집/본가/처가) */}
           {resolveMainMenuId(activeLoungeType) === 'photo_share' && (
-            <div className="flex items-center gap-1.5 -mt-0.5 overflow-x-auto no-scrollbar">
-              {PHOTO_SHARE_GROUPS.map((group) => {
-                const groupActive = activeLoungeType === group.id;
-                return (
-                  <button
-                    key={group.id}
-                    type="button"
-                    onClick={() => {
-                      if (!groupActive) {
-                        setActiveLoungeType(group.id);
-                        setMobileTab('search');
-                      }
-                    }}
-                    className={`px-2.5 py-1 rounded-lg border text-[11.5px] shrink-0 whitespace-nowrap transition-all outline-none focus:outline-none ${
-                      groupActive
-                        ? themeMode === 'light'
-                          ? 'bg-white border-[#0D9488] text-[#0D9488] font-extrabold'
-                          : 'bg-zinc-900 border-primary-container text-primary-container font-extrabold'
-                        : themeMode === 'light'
-                        ? 'bg-transparent border-[#E5E0D5] text-slate-500 hover:text-slate-900 font-bold'
-                        : 'bg-transparent border-white/10 text-zinc-400 hover:text-white font-bold'
-                    }`}
-                  >
-                    {group.label}
-                  </button>
-                );
-              })}
+            <div className="flex flex-col gap-1.5 -mt-0.5">
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                {PHOTO_SHARE_GROUPS.map((group) => {
+                  const groupActive = activeLoungeType === group.id;
+                  return (
+                    <button
+                      key={group.id}
+                      type="button"
+                      onClick={() => {
+                        if (!groupActive) {
+                          setActiveLoungeType(group.id);
+                          setMobileTab('search');
+                        }
+                      }}
+                      className={`px-2.5 py-1.5 rounded-lg border text-[11.5px] shrink-0 whitespace-nowrap transition-all outline-none focus:outline-none cursor-pointer ${
+                        groupActive
+                          ? themeMode === 'light'
+                            ? 'bg-white border-[#0D9488] text-[#0D9488] font-extrabold'
+                            : 'bg-zinc-900 border-primary-container text-primary-container font-extrabold'
+                          : themeMode === 'light'
+                          ? 'bg-transparent border-[#E5E0D5] text-slate-500 hover:text-slate-900 font-bold'
+                          : 'bg-transparent border-white/10 text-zinc-400 hover:text-white font-bold'
+                      }`}
+                    >
+                      {group.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {activeLoungeType === 'family' && (
+                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                  {FAMILY_ROOM_PILLS.map((room) => {
+                    const roomActive = activeFamilyRoom === room.id;
+                    return (
+                      <button
+                        key={room.id}
+                        type="button"
+                        onClick={() => {
+                          setActiveFamilyRoom(room.id);
+                          if (mobileTab !== 'search') setMobileTab('search');
+                        }}
+                        className={`px-2.5 py-1 rounded-full border text-[11px] shrink-0 whitespace-nowrap transition-all cursor-pointer ${
+                          roomActive
+                            ? 'bg-[#0D9488] border-[#0D9488] text-white font-extrabold'
+                            : themeMode === 'light'
+                            ? 'bg-white border-slate-200 text-slate-600 font-bold'
+                            : 'bg-zinc-900 border-white/10 text-zinc-300 font-bold'
+                        }`}
+                      >
+                        {room.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -517,15 +578,15 @@ export const MobileAppView: React.FC = () => {
 
       {/* [모바일 통합 1번 영역: 👻 귀신비서 (비서 대화 + 사진 정리 + 1초 검색 + 내 기기 통합 원스톱)] & [공유방 검색 피드] */}
       {(activeLoungeType === 'personal' || mobileTab === 'search') && (
-        <main className="flex-1 w-full px-3.5 pt-3.5 pb-8 flex flex-col gap-4">
+        <main className="flex-1 w-full px-3 sm:px-4 pt-3.5 pb-8 flex flex-col gap-4">
           {activeLoungeType !== 'personal' && <LoungeFeedContextBanner />}
 
-          {/* 1층: 통합 검색·음성 바 (귀신비서에서는 검색어 입력 시 아래에 즉시 검색 결과가 펼쳐지고, 닫으면 비서·정리 화면 유지) */}
-          <VoiceHeroStage />
+          {/* 1층: 통합 검색·음성 바 (업무 공유 S:는 자체 전용 문서 검색창이 있으므로 제외) */}
+          {activeLoungeType !== 'work' && <VoiceHeroStage />}
 
           {activeLoungeType === 'personal' && hasExecutedUserSearch && Boolean(activeQuery.trim()) && (
-            <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-teal-500/15 border border-teal-400/50 text-teal-200 text-[12px] font-extrabold">
-              <span>🔍 &ldquo;{activeQuery}&rdquo; 통합 검색 결과</span>
+            <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-teal-500/15 border border-teal-400/50 text-teal-200 text-[12px] font-extrabold">
+              <span className="min-w-0 truncate">🔍 &ldquo;{activeQuery}&rdquo; 통합 검색 결과</span>
               <button
                 type="button"
                 onClick={() =>
@@ -535,15 +596,16 @@ export const MobileAppView: React.FC = () => {
                     hasUserSelectedSearchTab: false,
                   })
                 }
-                className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white border border-white/15 text-[11px] font-black cursor-pointer"
+                className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white border border-white/15 text-[11px] font-black shrink-0 cursor-pointer"
               >
                 ✕ 검색 닫고 비서 홈으로
               </button>
             </div>
           )}
 
-          {/* 검색 결과 영역 (공유방에서는 상시 노출, 귀신비서에서는 검색 실행 시 인플레이스 노출) */}
-          {(activeLoungeType !== 'personal' || (hasExecutedUserSearch && Boolean(activeQuery.trim()))) && (
+          {/* 검색 결과 영역 (공유 사진방에서는 상시 노출, 귀신비서에서는 검색 실행 시 인플레이스 노출, 업무 공유는 WorkLoungeB2BHub 단독 노출) */}
+          {activeLoungeType !== 'work' &&
+            (activeLoungeType !== 'personal' || (hasExecutedUserSearch && Boolean(activeQuery.trim()))) && (
           <div id="ghosti-search-results" className="scroll-mt-16">
             {searchSpace === 'video' ? (
               <section className="flex flex-col gap-2.5">
@@ -729,7 +791,7 @@ export const MobileAppView: React.FC = () => {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (isStoreAppMode) {
+                                if (isStoreAppMode || !zCoreBridge.isConnected) {
                                   setSelectedDocModal(doc);
                                   return;
                                 }
@@ -741,7 +803,7 @@ export const MobileAppView: React.FC = () => {
                               }}
                               className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/50 text-amber-300 font-label-sm text-[11px] font-extrabold cursor-pointer"
                             >
-                              🔍 이 문서 바로 열기
+                              {isStoreAppMode || !zCoreBridge.isConnected ? '📖 본문 바로 열기' : '🔍 이 문서 바로 열기'}
                             </button>
                           </div>
                           <span className="text-primary-container text-[11px] font-bold">본문 →</span>
@@ -918,22 +980,22 @@ export const MobileAppView: React.FC = () => {
               <section className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden transition-all">
                 <div
                   onClick={() => setShowPrivateSyncSection((prev) => !prev)}
-                  className="p-4 flex items-center justify-between gap-2 cursor-pointer hover:bg-zinc-900/60 transition-colors"
+                  className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-2.5 cursor-pointer hover:bg-zinc-900/60 transition-colors"
                 >
-                  <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-zinc-400 text-[12px] font-mono select-none">
+                  <div className="flex items-start sm:items-center gap-2 min-w-0 flex-1">
+                    <span className="text-zinc-400 text-[12px] font-mono select-none mt-0.5 sm:mt-0">
                       {showPrivateSyncSection ? '▾' : '▸'}
                     </span>
                     <div className="flex flex-col min-w-0">
                       <div className="flex flex-wrap items-center gap-1.5">
-                        <h2 className="font-headline-sm text-[14.5px] text-white font-bold">
+                        <h2 className="font-headline-sm text-[14px] sm:text-[14.5px] text-white font-bold break-keep">
                           📱 내 기기 통합 (폰↔PC 프라이빗 싱크)
                         </h2>
-                        <span className="px-2 py-0.5 rounded-full bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[10.5px] font-bold">
+                        <span className="px-2 py-0.5 rounded-full bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[10.5px] font-bold whitespace-nowrap">
                           {syncState.privateSyncStrategy === 'mirror' ? '모드 A · 100% 원본 미러링' : '모드 B · 폰 용량 99.4% 절약'}
                         </span>
                       </div>
-                      <p className="font-body-sm text-[11.5px] text-zinc-400 truncate mt-0.5">
+                      <p className="font-body-sm text-[11.5px] text-zinc-400 break-keep mt-0.5">
                         Wi-Fi + 충전 중 자동 동기화 · 마지막 일치화: {syncState.lastSyncedAt}
                       </p>
                     </div>
@@ -945,7 +1007,7 @@ export const MobileAppView: React.FC = () => {
                       e.stopPropagation();
                       void triggerSyncNow();
                     }}
-                    className="px-3 py-1.5 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold shrink-0"
+                    className="px-3 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold shrink-0 whitespace-nowrap ml-auto cursor-pointer"
                   >
                     {syncState.syncing ? '일치화 중...' : '⚡ 지금 일치시키기'}
                   </button>
@@ -1013,7 +1075,14 @@ export const MobileAppView: React.FC = () => {
 
       {/* 모바일 하단 서브메뉴 바: 서브탭이 존재하는 공유방에서만 노출 (귀신비서 단일 통합 화면에서는 중복 바 미노출) */}
       {currentSubmenus.length > 0 && (
-      <nav className="fixed bottom-0 inset-x-0 max-w-xl mx-auto h-15 bg-[#09090B]/95 backdrop-blur-xl border-t border-white/10 z-50 px-2 flex items-center justify-around">
+      <nav
+        style={{ paddingBottom: 'max(0.35rem, env(safe-area-inset-bottom, 0px))' }}
+        className={`fixed bottom-0 inset-x-0 max-w-xl mx-auto min-h-[56px] backdrop-blur-xl border-t z-50 px-2 pt-1.5 flex items-center justify-around transition-colors ${
+          themeMode === 'light'
+            ? 'bg-white/95 border-[#E5E0D5]'
+            : 'bg-[#09090B]/95 border-white/10'
+        }`}
+      >
         {currentSubmenus.map((sub) => {
           if (sub.id === 'trial' && activePricingPlan !== 'free_trial') {
             return null;
@@ -1022,6 +1091,7 @@ export const MobileAppView: React.FC = () => {
           return (
             <button
               key={sub.id}
+              type="button"
               onClick={() => {
                 if (sub.id === 'share') {
                   setActiveLoungeType('family');
@@ -1031,14 +1101,18 @@ export const MobileAppView: React.FC = () => {
                 }
               }}
               title={sub.subcaption ? `${sub.label} — ${sub.subcaption}` : sub.label}
-              className={`flex-1 py-2 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all ${
+              className={`flex-1 py-2 px-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer ${
                 isSubActive
-                  ? 'text-primary-container font-bold'
-                  : 'text-zinc-400'
+                  ? themeMode === 'light'
+                    ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold'
+                    : 'bg-primary-container/15 text-primary-container font-extrabold'
+                  : themeMode === 'light'
+                  ? 'text-slate-600 font-bold'
+                  : 'text-zinc-400 font-bold'
               }`}
             >
-              <div className="flex items-center gap-1">
-                <span className="text-[11px] font-bold truncate max-w-[96px]">{sub.label}</span>
+              <div className="flex items-center gap-1 max-w-full">
+                <span className="text-[11.5px] font-extrabold truncate max-w-[44vw]">{sub.label}</span>
                 {sub.showTrashCount && (
                   <span className="px-1.5 py-0.2 rounded-md bg-zinc-800 border border-white/10 text-zinc-300 text-[9.5px] font-mono font-bold">
                     {activeTrashCount}
@@ -1046,7 +1120,7 @@ export const MobileAppView: React.FC = () => {
                 )}
               </div>
               {sub.subcaption && (
-                <span className="text-[9px] opacity-60 truncate max-w-[96px]">
+                <span className="text-[9.5px] opacity-65 truncate max-w-[44vw]">
                   {sub.subcaption}
                 </span>
               )}

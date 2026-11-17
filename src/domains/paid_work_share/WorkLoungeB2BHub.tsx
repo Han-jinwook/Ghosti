@@ -5,6 +5,7 @@ import {
   type P2PHybridConnectionDiagnostics,
 } from '../../services/p2pHybridBridge';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
+import { isMobileOrStoreRuntime } from '../../store/slices/storeSharedRefs';
 import { zCoreBridge } from '../../services/zCoreBridge';
 import { HostThreeBodyControlPanel, PLAN_BADGE_LABELS } from '../shared/loungeHelpers';
 
@@ -236,7 +237,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const [newBackupPcName, setNewBackupPcName] = useState<string>('');
   const [newBackupPcPath, setNewBackupPcPath] = useState<string>('D:\\Ghosti_추가백업_폴더');
   const [nightSleepBannerPhase, setNightSleepBannerPhase] = useState<'hidden' | 'visible' | 'fading'>('hidden');
-  const [showMemberPermissions, setShowMemberPermissions] = useState<boolean>(true);
+  const [showMemberPermissions, setShowMemberPermissions] = useState<boolean>(() => !isMobileOrStoreRuntime());
   const [hiddenDocIds, setHiddenDocIds] = useState<string[]>([]);
   const [docActionNotice, setDocActionNotice] = useState<string | null>(null);
   const [teamMembers, setTeamMembers] = useState<
@@ -394,20 +395,23 @@ export const WorkLoungeB2BHub: React.FC = () => {
       simulateSymmetricNatBlock: false,
     });
 
-    void fetch('/__work/s-drive', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'mount', openExplorer: false }),
-    })
-      .then((r) => r.json())
-      .then((data: { targetDir?: string }) => {
-        if (data?.targetDir) setDriveTargetPath(data.targetDir);
+    if (!isMobileOrStoreRuntime()) {
+      void fetch('/__work/s-drive', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action: 'mount', openExplorer: false }),
       })
-      .catch(() => {});
+        .then((r) => r.json())
+        .then((data: { targetDir?: string }) => {
+          if (data?.targetDir) setDriveTargetPath(data.targetDir);
+        })
+        .catch(() => {});
 
-    syncRealWorkFiles();
-    const interval = setInterval(syncRealWorkFiles, 4000);
-    return () => clearInterval(interval);
+      syncRealWorkFiles();
+      const interval = setInterval(syncRealWorkFiles, 4000);
+      return () => clearInterval(interval);
+    }
+    return undefined;
   }, []);
 
   // 업무 공유(work)에서는 귀신같이 인물 여권(얼굴 클러스터링·인물 별명)이 발동하지 않으며 검색 대상에서도 제외됨
@@ -530,7 +534,18 @@ export const WorkLoungeB2BHub: React.FC = () => {
         </div>
 
         {/* ⚡ 호스트(방장) PC 전용: 사무실 연결 PC 삼체(Three-Body) 실시간 관제 목록 & 마스터/개별 ON·OFF 제어 */}
-        <HostThreeBodyControlPanel contextMode="work" />
+        <div className="hidden md:block">
+          <HostThreeBodyControlPanel contextMode="work" />
+        </div>
+        <details className="md:hidden rounded-2xl bg-zinc-950/90 border border-cyan-400/35 px-3.5 py-2.5">
+          <summary className="cursor-pointer list-none flex items-center justify-between gap-2 text-[12px] font-extrabold text-cyan-200">
+            <span>⚡ 호스트 PC 삼체 관제 센터 펼치기</span>
+            <span className="text-cyan-400 text-[11px] shrink-0">▾</span>
+          </summary>
+          <div className="pt-3">
+            <HostThreeBodyControlPanel contextMode="work" />
+          </div>
+        </details>
 
         {/* 🌙 퇴근·취침 시 실행되는 야간 초절전 모드 페이드아웃 안내 메시지 */}
         {nightSleepBannerPhase !== 'hidden' && (
@@ -722,8 +737,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
                     </span>
                   </div>
 
-                  <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-white/10">
-                    <span className="text-[10.5px] text-cyan-300 font-bold truncate">
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-white/10">
+                    <span className="text-[10.5px] text-cyan-300 font-bold truncate min-w-0">
                       🔗 {member.statusText}
                     </span>
                     {member.role === 'host' ? (
@@ -750,7 +765,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                             )
                           );
                         }}
-                        className="px-2 py-1 rounded-lg bg-zinc-900 border border-cyan-400/40 text-white text-[11px] font-bold cursor-pointer"
+                        className="px-2 py-1 rounded-lg bg-zinc-900 border border-cyan-400/40 text-white text-[11px] font-bold shrink-0 cursor-pointer"
                       >
                         <option value="editor">✏️ 편집·업로드 허용</option>
                         <option value="viewer">👁️ 읽기·다운로드 전용</option>
@@ -874,17 +889,20 @@ export const WorkLoungeB2BHub: React.FC = () => {
         <div className={`${isSidePeekOpen ? 'xl:col-span-7' : 'xl:col-span-12'} flex flex-col transition-all`}>
           <div className="rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-white/10 shadow-sm overflow-hidden">
             {/* 테이블 헤더 */}
-            <div className="px-4 py-2.5 bg-slate-50 dark:bg-zinc-950/70 border-b border-slate-200 dark:border-white/10 flex items-center justify-between text-[11.5px] text-slate-600 dark:text-zinc-400 font-bold">
-              <span>
-                문서 및 미디어 ({filteredDocs.length}건) · 항목을 클릭하면 우측에 상세 표·미리보기가 열립니다
+            <div className="px-4 py-2.5 bg-slate-50 dark:bg-zinc-950/70 border-b border-slate-200 dark:border-white/10 flex flex-wrap items-center justify-between gap-1.5 text-[11.5px] text-slate-600 dark:text-zinc-400 font-bold">
+              <span className="break-keep">
+                문서 및 미디어 ({filteredDocs.length}건) · 항목을 클릭하면{' '}
+                <span className="xl:hidden">아래에 상세 표·미리보기가 열립니다</span>
+                <span className="hidden xl:inline">우측에 상세 표·미리보기가 열립니다</span>
               </span>
               {isSidePeekOpen && (
                 <button
                   type="button"
                   onClick={() => setIsSidePeekOpen(false)}
-                  className="text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white text-[11px] font-bold cursor-pointer"
+                  className="text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white text-[11px] font-bold shrink-0 cursor-pointer"
                 >
-                  우측 미리보기 닫기 ✕
+                  <span className="xl:hidden">미리보기 닫기 ✕</span>
+                  <span className="hidden xl:inline">우측 미리보기 닫기 ✕</span>
                 </button>
               )}
             </div>
@@ -964,10 +982,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
         {/* 우측 Side Peek 패널: 문서를 클릭했을 때만 우측에서 스르륵 열림 */}
         {isSidePeekOpen && selectedDoc && (
-          <div className="xl:col-span-5 p-4 md:p-5 rounded-2xl bg-[#18181B] border border-cyan-400/40 shadow-xl flex flex-col gap-3.5 sticky top-16">
+          <div className="xl:col-span-5 p-4 md:p-5 rounded-2xl bg-[#18181B] border border-cyan-400/40 shadow-xl flex flex-col gap-3.5 xl:sticky xl:top-16">
             <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-white/10">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-md bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
+              <div className="flex flex-wrap items-center gap-2 min-w-0">
+                <span className="px-2.5 py-0.5 rounded-md bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-extrabold shrink-0">
                   📄 문서 내용 미리보기
                 </span>
                 <span className="text-[11px] text-zinc-400 font-bold">
@@ -977,14 +995,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setIsSidePeekOpen(false)}
-                className="px-2 py-0.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white text-[11.5px] font-bold cursor-pointer"
+                className="px-2 py-0.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-400 hover:text-white text-[11.5px] font-bold shrink-0 cursor-pointer"
               >
                 ✕ 닫기
               </button>
             </div>
 
-            <div className="flex flex-col gap-1">
-              <span className="font-label-sm text-[11px] text-cyan-300 font-bold">
+            <div className="flex flex-col gap-1 min-w-0">
+              <span className="font-label-sm text-[11px] text-cyan-300 font-bold break-all">
                 {selectedDoc.folderPath}\{selectedDoc.fileName}
               </span>
               <h3 className="font-headline-sm text-[16px] text-white font-extrabold leading-snug">

@@ -300,7 +300,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
       ==================================================================== */}
       {monitorCastOpen && currentCastPhoto && (
         <div
-          className="fixed inset-0 z-[140] bg-black/95 backdrop-blur-2xl flex flex-col p-3 md:p-6 overflow-y-auto"
+          className="fixed inset-0 z-[140] bg-black/95 backdrop-blur-2xl flex flex-col p-3 md:p-6 pt-safe pb-safe overflow-y-auto"
           onClick={() => {
             updateCastState({ active: false });
             setMonitorCastOpen(false);
@@ -384,11 +384,11 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                     monitorViewMode === 'split_demo' ? 'lg:col-span-8' : ''
                   } rounded-2xl bg-black border border-cyan-400/30 p-4 flex flex-col justify-between min-h-[380px] md:min-h-[480px] relative overflow-hidden`}
                 >
-                  <div className="flex items-center justify-between z-10">
-                    <span className="px-2.5 py-1 rounded-lg bg-zinc-900/90 border border-white/15 text-[11px] text-emerald-300 font-bold">
+                  <div className="flex flex-wrap items-center justify-between gap-2 z-10">
+                    <span className="px-2.5 py-1 rounded-lg bg-zinc-900/90 border border-white/15 text-[11px] text-emerald-300 font-bold break-keep">
                       🛡️ 사생활 보호 클린 뷰어 ON (카카오톡·문자·메신저 알림 원천 차단됨)
                     </span>
-                    <span className="px-2.5 py-1 rounded-lg bg-zinc-900/90 border border-white/15 text-[11px] text-zinc-300 font-mono">
+                    <span className="px-2.5 py-1 rounded-lg bg-zinc-900/90 border border-white/15 text-[11px] text-zinc-300 font-mono shrink-0">
                       {castState.photoIndex + 1} / {activePhotos.length} • 배율 {castState.zoom.toFixed(1)}x • 회전 {castState.rotation}°
                     </span>
                   </div>
@@ -550,18 +550,18 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
           무기 2: [📡 다 같이 사진 보기 — 앨범 라이브 싱크 (Live Photo Sync)] 플로팅 컨트롤러
       ==================================================================== */}
       {photoSyncState.active && currentSyncPhoto && (
-        <div className="fixed bottom-6 right-6 z-[135] w-[92%] max-w-md rounded-3xl bg-zinc-950/95 backdrop-blur-2xl border-2 border-emerald-400 shadow-[0_0_50px_rgba(16,185,129,0.4)] p-4 flex flex-col gap-3 text-white">
-          <div className="flex items-center justify-between gap-2 border-b border-white/10 pb-2.5">
-            <div className="flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping" />
-              <span className="text-xs font-black text-emerald-300">
+        <div className="fixed bottom-20 sm:bottom-6 mb-safe left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-6 z-[135] w-[94%] max-w-md rounded-3xl bg-zinc-950/95 backdrop-blur-2xl border-2 border-emerald-400 shadow-[0_0_50px_rgba(16,185,129,0.4)] p-4 flex flex-col gap-3 text-white">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2.5">
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
+              <span className="text-xs font-black text-emerald-300 truncate">
                 📡 다 같이 보기 (앨범 라이브 싱크 ON)
               </span>
             </div>
             <button
               type="button"
               onClick={() => updatePhotoSync({ active: false })}
-              className="px-2.5 py-0.5 rounded-full bg-zinc-800 hover:bg-zinc-700 text-[11px] text-zinc-300 font-bold cursor-pointer"
+              className="px-2.5 py-1 rounded-full bg-zinc-800 hover:bg-zinc-700 text-[11px] text-zinc-300 font-bold shrink-0 cursor-pointer"
             >
               싱크 끄기 ✕
             </button>
@@ -589,7 +589,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
             </div>
           </div>
 
-          <div className="grid grid-cols-4 gap-1.5">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
             <button
               type="button"
               onClick={() =>

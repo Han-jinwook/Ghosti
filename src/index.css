@@ -7,6 +7,7 @@
   body {
     width: 100%;
     min-height: 100vh;
+    min-height: 100dvh;
     margin: 0;
     padding: 0;
     background-color: #F8F7F4;
@@ -19,6 +20,7 @@
   #root {
     width: 100%;
     min-height: 100vh;
+    min-height: 100dvh;
     overflow-x: clip;
   }
 
@@ -33,6 +35,18 @@
   }
   .pt-safe {
     padding-top: env(safe-area-inset-top, 0px);
+  }
+  .mb-safe {
+    margin-bottom: env(safe-area-inset-bottom, 0px);
+  }
+
+  /* 모바일(iOS Safari / WKWebView / 인앱) 입력창 포커스 시 자동 화면 확대(Auto-Zoom) 원천 차단 */
+  @media (max-width: 767px) {
+    input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
+    textarea,
+    select {
+      font-size: 16px !important;
+    }
   }
 }
 
@@ -449,37 +463,55 @@ html.dark .text-slate-500 {
   color: #CBD5E1 !important;
 }
 
-/* 9. 전 화면 타이포그래피 가독성 상향 보정 (노인·중장년층도 한눈에 읽히도록 확대) */
-.text-\[9px\],
-.text-\[9\.5px\] {
-  font-size: 12px !important;
-  line-height: 16.5px !important;
+/* 9. 타이포그래피 가독성 보정
+   - 모바일(< 768px): 360px 좁은 화면에서 배지·탭이 넘치거나 세로로 깨지지 않도록 초소형 글씨(9~10.5px)만 11.5~12px 바닥선 보장
+   - 태블릿/PC(>= 768px): 기존 시인성 확대 스케일 100% 그대로 유지 */
+@media (max-width: 767px) {
+  .text-\[9px\],
+  .text-\[9\.5px\] {
+    font-size: 11px !important;
+    line-height: 15px !important;
+  }
+
+  .text-\[10px\],
+  .text-\[10\.5px\] {
+    font-size: 11.5px !important;
+    line-height: 16px !important;
+  }
 }
 
-.text-\[10px\],
-.text-\[10\.5px\] {
-  font-size: 12.5px !important;
-  line-height: 17.5px !important;
-}
+@media (min-width: 768px) {
+  .text-\[9px\],
+  .text-\[9\.5px\] {
+    font-size: 12px !important;
+    line-height: 16.5px !important;
+  }
 
-.text-\[11px\],
-.text-\[11\.5px\],
-.text-xs {
-  font-size: 13.5px !important;
-  line-height: 19px !important;
-}
+  .text-\[10px\],
+  .text-\[10\.5px\] {
+    font-size: 12.5px !important;
+    line-height: 17.5px !important;
+  }
 
-.text-\[12px\],
-.text-\[12\.5px\] {
-  font-size: 14px !important;
-  line-height: 20px !important;
-}
+  .text-\[11px\],
+  .text-\[11\.5px\],
+  .text-xs {
+    font-size: 13.5px !important;
+    line-height: 19px !important;
+  }
 
-.text-\[13px\],
-.text-\[13\.5px\],
-.text-sm {
-  font-size: 14.8px !important;
-  line-height: 21px !important;
+  .text-\[12px\],
+  .text-\[12\.5px\] {
+    font-size: 14px !important;
+    line-height: 20px !important;
+  }
+
+  .text-\[13px\],
+  .text-\[13\.5px\],
+  .text-sm {
+    font-size: 14.8px !important;
+    line-height: 21px !important;
+  }
 }
 
 @keyframes fadeIn {

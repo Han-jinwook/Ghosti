@@ -1110,7 +1110,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
 
           {/* 추가 클레임 / A/S / 아이디어 1초 구분 접수 미니 입력줄 */}
           <div className="pt-2 border-t border-slate-800 space-y-1.5">
-            <div className="flex items-center gap-1.5 text-[11px]">
+            <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
               <span className="text-slate-400 font-bold">추가 접수 구분:</span>
               {(
                 [
@@ -1123,7 +1123,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   key={tab.id}
                   type="button"
                   onClick={() => setExtraSupportKind(tab.id)}
-                  className={`px-2 py-0.5 rounded font-bold cursor-pointer ${
+                  className={`px-2 py-0.5 rounded font-bold whitespace-nowrap cursor-pointer ${
                     extraSupportKind === tab.id
                       ? 'bg-amber-400 text-slate-950 font-black'
                       : 'bg-slate-950 text-slate-300 border border-slate-800'
@@ -1133,13 +1133,13 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 </button>
               ))}
             </div>
-            <div className="flex gap-1.5">
+            <div className="flex flex-wrap sm:flex-nowrap gap-1.5">
               <input
                 type="text"
                 value={extraSupportText}
                 onChange={(e) => setExtraSupportText(e.target.value)}
-                placeholder="추가로 전달할 클레임·A/S·아이디어를 입력하면 회원 이름으로 즉시 스튜디오에 접수됩니다..."
-                className="flex-1 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-[11.5px] text-white outline-none focus:border-amber-400"
+                placeholder="추가로 전달할 클레임·A/S·아이디어를 입력해 주세요..."
+                className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-[11.5px] text-white outline-none focus:border-amber-400"
               />
               <button
                 type="button"
@@ -1276,21 +1276,21 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             </span>
           </div>
 
-          <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2">
-              <div className="text-[10px] text-slate-400">발견된 상주 프로세스</div>
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
+            <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2 flex sm:block items-center justify-between">
+              <div className="text-[11px] sm:text-[10px] text-slate-400">발견된 상주 프로세스</div>
               <div className="text-sm font-black text-rose-300">
                 {message.deepUninstallPayload.runningProcessCount}개
               </div>
             </div>
-            <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2">
-              <div className="text-[10px] text-slate-400">서비스·스케줄러</div>
+            <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2 flex sm:block items-center justify-between">
+              <div className="text-[11px] sm:text-[10px] text-slate-400">서비스·스케줄러</div>
               <div className="text-sm font-black text-amber-300">
                 {message.deepUninstallPayload.serviceAndTaskCount}개
               </div>
             </div>
-            <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2">
-              <div className="text-[10px] text-slate-400">잔여 폴더 용량</div>
+            <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2 flex sm:block items-center justify-between">
+              <div className="text-[11px] sm:text-[10px] text-slate-400">잔여 폴더 용량</div>
               <div className="text-sm font-black text-sky-300">
                 {message.deepUninstallPayload.totalResidualMb}MB
               </div>
@@ -1516,14 +1516,14 @@ export const PersonalHealthCheckHistoryDrawer: React.FC<{
 }> = ({ records, onClose }) => {
   return (
     <div className="rounded-2xl border border-emerald-500/40 bg-slate-900/95 p-4 space-y-3 shadow-xl">
-      <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2">
-          <Activity className="w-5 h-5 text-emerald-400" />
-          <div>
-            <h4 className="text-sm font-black text-white">
+      <div className="flex items-start sm:items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <Activity className="w-5 h-5 text-emerald-400 shrink-0" />
+          <div className="min-w-0">
+            <h4 className="text-sm font-black text-white break-keep">
               📋 내 기기 건강검진 & 블랙박스 기록함
             </h4>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-slate-400 break-keep">
               자연어 타이핑으로 승인·원복한 내역이 내 기기에 영구 보관됩니다.
             </p>
           </div>
@@ -1531,7 +1531,7 @@ export const PersonalHealthCheckHistoryDrawer: React.FC<{
         <button
           type="button"
           onClick={onClose}
-          className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold"
+          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold shrink-0 whitespace-nowrap cursor-pointer"
         >
           닫기 ✕
         </button>

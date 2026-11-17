@@ -382,7 +382,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 bg-black/75 backdrop-blur-md animate-fade-in overflow-y-auto"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe bg-black/75 backdrop-blur-md animate-fade-in overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget && step !== 'indexing') onClose();
       }}
@@ -407,7 +407,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
         </div>
       )}
       <div
-        className={`w-full max-w-lg rounded-3xl p-5 sm:p-7 shadow-2xl border transition-all max-h-[92vh] overflow-y-auto no-scrollbar ${
+        className={`w-full max-w-lg rounded-3xl p-4 sm:p-7 shadow-2xl border transition-all max-h-[90dvh] overflow-y-auto no-scrollbar my-auto ${
           isLight
             ? 'bg-white border-slate-200 text-slate-800'
             : 'bg-zinc-950 border-white/15 text-zinc-100'
@@ -417,15 +417,15 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
         {step === 'intro' && (
           <>
             <div className="flex items-start justify-between gap-3 mb-3">
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 min-w-0">
                 <div className="w-10 h-10 rounded-2xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center shrink-0">
                   <span className="text-xl">{isMobileEnv ? '📱' : '✨'}</span>
                 </div>
-                <div>
+                <div className="min-w-0">
                   <span className="inline-block px-2 py-0.5 rounded-full text-[10.5px] font-black bg-teal-500/15 text-teal-600 dark:text-teal-300 border border-teal-400/30 mb-0.5">
-                    ⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어)
+                    {isMobileEnv ? '📱 모바일 갤러리 & PC 연동' : '⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어)'}
                   </span>
-                  <h3 className="text-base sm:text-lg font-black tracking-tight">
+                  <h3 className="text-base sm:text-lg font-black tracking-tight break-keep">
                     {isMobileEnv
                       ? '모바일 시작 & PC 폴더 연동'
                       : '⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어) · 사진·영상·서류 인덱싱'}
@@ -435,7 +435,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
               <button
                 type="button"
                 onClick={onClose}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-white cursor-pointer"
+                className="w-9 h-9 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-white shrink-0 cursor-pointer"
                 aria-label="닫기"
               >
                 ✕

@@ -1,9 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { zCoreBridge } from '../services/zCoreBridge';
 import { useSaySeeStore } from '../store/useSaySeeStore';
-import { GhostPhotoOcrTeleportModal } from './GhostWindowThreeStageMockup';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
-import { GhostSecretaryFirstModal } from './GhostSecretaryFirstGuard';
 import {
   scrollAppToTop,
   useDashboardNavStore,
@@ -16,7 +14,6 @@ import { GhostAssistantPane } from '../domains/assistant/GhostAssistantPane';
 import { GhostSearchPane } from '../domains/search/GhostSearchPane';
 import { PaidDeviceSyncPane } from '../domains/paid_device_sync/PaidDeviceSyncPane';
 import { PaidWorkSharePane } from '../domains/paid_work_share/PaidWorkSharePane';
-import { FreePhotoShareOverlays } from '../domains/free_photo_share/FreePhotoShareOverlays';
 
 export const DesktopDashboard: React.FC = () => {
   const {
@@ -31,8 +28,6 @@ export const DesktopDashboard: React.FC = () => {
 
   const {
     isMobileDrawerOpen,
-    ocrModalPhoto,
-    setOcrModalPhoto,
     showZCoreGuideModal,
     setShowZCoreGuideModal,
   } = useDashboardNavStore();
@@ -130,8 +125,6 @@ export const DesktopDashboard: React.FC = () => {
         )}
       </div>
 
-      <GhostPhotoOcrTeleportModal photo={ocrModalPhoto} onClose={() => setOcrModalPhoto(null)} />
-      <GhostSecretaryFirstModal themeMode={themeMode} />
       <MerlinZCoreGuideModal
         isOpen={showZCoreGuideModal}
         onClose={() => {
@@ -142,7 +135,6 @@ export const DesktopDashboard: React.FC = () => {
         }}
         themeMode={themeMode}
       />
-      <FreePhotoShareOverlays />
     </div>
   );
 };

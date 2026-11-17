@@ -1446,7 +1446,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     activePlaceholderPool[0];
 
   return (
-    <aside className="flex flex-col h-[calc(100vh-155px)] min-h-[580px] max-h-[840px] rounded-2xl border-2 border-teal-500/55 dark:border-teal-400/45 bg-[#E6F1EF] dark:bg-[#0B161C] shadow-[0_12px_36px_rgba(13,148,136,0.18)] overflow-hidden">
+    <aside className="flex flex-col h-[min(66dvh,540px)] sm:h-[calc(100dvh-155px)] min-h-[360px] sm:min-h-[580px] max-h-[840px] rounded-2xl border-2 border-teal-500/55 dark:border-teal-400/45 bg-[#E6F1EF] dark:bg-[#0B161C] shadow-[0_12px_36px_rgba(13,148,136,0.18)] overflow-hidden">
       {/* 0. 카톡 채팅방 스타일 전용 상단 타이틀 바 (PC·모바일 메인 화면과 뚜렷한 시각적 구분) */}
       <div
         title={careScheduleSummary}

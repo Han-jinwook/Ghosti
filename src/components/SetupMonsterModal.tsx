@@ -1295,7 +1295,7 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
                       Excel·Word·한글 자동복구 폴더, 문서(Documents), 다운로드, ShadowVault를 실제로 뒤져 파일 내부 5줄을 먼저 보여줍니다.
                     </span>
                   </div>
-                  <div className="flex items-center gap-1.5">
+                  <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
                     <input
                       type="text"
                       value={forensicQuery}
@@ -1304,7 +1304,7 @@ export const SetupMonsterContent: React.FC<{ embedded?: boolean }> = ({ embedded
                         if (e.key === 'Enter') void handleRunForensicScan();
                       }}
                       placeholder="찾을 문서 키워드 (예: 계약서, 정산, 견적)"
-                      className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-white/15 text-zinc-900 dark:text-white text-[12px] w-52 focus:outline-none focus:border-emerald-500"
+                      className="px-3 py-1.5 rounded-lg bg-white dark:bg-zinc-950 border border-zinc-300 dark:border-white/15 text-zinc-900 dark:text-white text-[12px] w-full sm:w-52 min-w-0 focus:outline-none focus:border-emerald-500"
                     />
                     <button
                       id="zcore-target-btn-scan"
@@ -1441,7 +1441,7 @@ export const SetupMonsterModal: React.FC = () => {
   if (!showSetupMonsterModal) return null;
 
   return (
-    <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-sm flex items-center justify-center p-4 overflow-y-auto">
+    <div className="fixed inset-0 z-[100] bg-black/75 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto">
       <div className="relative w-full max-w-7xl my-auto">
         <div className="flex items-center justify-between mb-2 px-1">
           <GhostiBrandLogo size="desktop" showBadge={true} />

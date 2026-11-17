@@ -2512,8 +2512,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                                     className="w-full h-full object-cover blur-md grayscale opacity-60"
                                   />
                                   <div className="absolute inset-0 flex items-center justify-center p-1.5 text-center">
-                                    <span className="text-[11px] font-black text-slate-800 bg-white/85 rounded px-1.5 py-0.5 leading-tight break-keep">
-                                      보관 기간이 만료된 사진
+                                    <span className="text-[10.5px] sm:text-[11px] font-black text-slate-800 bg-white/85 rounded px-1.5 py-0.5 leading-tight break-keep">
+                                      <span className="sm:hidden">만료된 사진</span>
+                                      <span className="hidden sm:inline">보관 기간이 만료된 사진</span>
                                     </span>
                                   </div>
                                 </div>
@@ -2574,7 +2575,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                               <div className="text-[13px] font-bold text-sky-100 break-keep">
                                 👇 가입 없이 바로 열렸어요! 마음에 드는 사진을 하나 눌러보세요.
                               </div>
-                              <div className="grid grid-cols-4 sm:grid-cols-6 gap-1.5 max-h-[260px] overflow-y-auto pr-1">
+                              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 max-h-[260px] overflow-y-auto pr-1">
                                 {group.photos.map((p) => (
                                   <button
                                     key={p}
@@ -3075,11 +3076,11 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     </div>
                   ) : otpStatus === 'sent' || otpStatus === 'verifying' ? (
                     <div className="space-y-3">
-                      <div className="flex items-center justify-between gap-2">
-                        <span className="text-[13.5px] sm:text-sm font-extrabold text-[#00F0B5]">
-                          📩 {emailInput.trim().toLowerCase()}로 발송된 인증번호 6자리를 입력해 주세요!
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <span className="text-[13.5px] sm:text-sm font-extrabold text-[#00F0B5] min-w-0 break-keep">
+                          📩 <span className="break-all">{emailInput.trim().toLowerCase()}</span>로 발송된 인증번호 6자리를 입력해 주세요!
                         </span>
-                        <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[13px] font-mono font-bold">
+                        <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 text-[13px] font-mono font-bold shrink-0">
                           ⏱ {formatTimer()}
                         </span>
                       </div>
@@ -3808,17 +3809,17 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       {/* 6. 세로형 15초 쇼츠 재생 모달 팝업 */}
       {activeShortsModal && (
         <div
-          className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+          className="fixed inset-0 z-[100] bg-black/85 backdrop-blur-md flex items-center justify-center p-4 pt-safe pb-safe"
           onClick={() => setActiveShortsModal(null)}
         >
           <div
-            className="relative w-full max-w-sm rounded-3xl bg-zinc-950 border border-teal-500/40 p-5 shadow-2xl flex flex-col justify-between max-h-[90vh] overflow-y-auto"
+            className="relative w-full max-w-sm rounded-3xl bg-zinc-950 border border-teal-500/40 p-4 sm:p-5 shadow-2xl flex flex-col justify-between max-h-[90dvh] overflow-y-auto"
             onClick={(e) => e.stopPropagation()}
           >
             <button
               type="button"
               onClick={() => setActiveShortsModal(null)}
-              className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-sm font-bold z-20 cursor-pointer"
+              className="absolute top-3.5 right-3.5 w-9 h-9 shrink-0 rounded-full bg-white/10 hover:bg-white/20 text-white flex items-center justify-center text-sm font-bold z-20 cursor-pointer"
             >
               ✕
             </button>
@@ -3873,21 +3874,21 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       {/* 7. 공식 무료 보증서 라이트박스 모달 */}
       {certModalOpen && (
         <div
-          className="fixed inset-0 z-[110] bg-black/85 backdrop-blur-md flex items-center justify-center p-4"
+          className="fixed inset-0 z-[110] bg-black/85 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe"
           onClick={() => setCertModalOpen(false)}
         >
           <div
-            className="relative max-w-2xl w-full max-h-[92vh] overflow-y-auto rounded-3xl bg-zinc-950 border-2 border-amber-400 p-4 sm:p-6 shadow-2xl space-y-4"
+            className="relative max-w-2xl w-full max-h-[92dvh] overflow-y-auto rounded-3xl bg-zinc-950 border-2 border-amber-400 p-4 sm:p-6 shadow-2xl space-y-4"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between text-white">
-              <span className="text-amber-300 font-black text-sm sm:text-base">
+            <div className="flex items-center justify-between gap-2 text-white">
+              <span className="text-amber-300 font-black text-sm sm:text-base min-w-0 break-keep">
                 📜 개인 및 민간 기업 PC 기본 기능 영구 무료 공식 보증서
               </span>
               <button
                 type="button"
                 onClick={() => setCertModalOpen(false)}
-                className="w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white cursor-pointer"
+                className="w-9 h-9 shrink-0 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white cursor-pointer"
               >
                 ✕
               </button>

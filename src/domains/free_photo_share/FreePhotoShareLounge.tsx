@@ -227,8 +227,8 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
               )}
             </div>
 
-            <div className="flex flex-col items-start lg:items-center text-left lg:text-center gap-0.5">
-              <h2 className="font-headline-md text-[22px] md:text-[25px] text-white font-black tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] whitespace-nowrap">
+            <div className="flex flex-col items-start lg:items-center text-left lg:text-center gap-0.5 min-w-0">
+              <h2 className="font-headline-md text-[19px] sm:text-[22px] md:text-[25px] text-white font-black tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] break-keep">
                 {bannerTitle}
               </h2>
               <span className="text-[12px] text-amber-200/95 font-medium">
@@ -969,17 +969,17 @@ export const LoungeView: React.FC = () => {
               <div className="flex flex-col gap-3.5 pt-3 border-t border-white/10">
                 <div
                   onClick={() => setShowLoungePricing((prev) => !prev)}
-                  className="flex items-center justify-between gap-2 cursor-pointer select-none py-1"
+                  className="flex flex-wrap items-center justify-between gap-2 cursor-pointer select-none py-1"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="text-zinc-400 text-[12px] font-mono">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="text-zinc-400 text-[12px] font-mono shrink-0">
                       {showLoungePricing ? '▾' : '▸'}
                     </span>
-                    <span className="font-headline-sm text-[14.5px] text-white font-bold">
+                    <span className="font-headline-sm text-[13.5px] sm:text-[14.5px] text-white font-bold break-keep">
                       🆓 가족 사진 공유방 — 우리집 단독 &amp; 양가 3방 통합 모두 인원 무제한 평생 0원 (사진·동영상 전용)
                     </span>
                   </div>
-                  <span className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[13px] font-extrabold select-none shadow-sm cursor-pointer transition-all">
+                  <span className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[12px] sm:text-[13px] font-extrabold select-none shadow-sm cursor-pointer transition-all shrink-0 whitespace-nowrap ml-auto">
                     {showLoungePricing ? '무료 혜택 접기 ▴' : '무료 혜택 펼치기 ▾'}
                   </span>
                 </div>
@@ -1263,17 +1263,17 @@ export const LoungeView: React.FC = () => {
               <div className="flex flex-col gap-3.5 pt-3 border-t border-white/10">
                 <div
                   onClick={() => setShowLoungePricing((prev) => !prev)}
-                  className="flex items-center justify-between gap-2 cursor-pointer select-none py-1"
+                  className="flex flex-wrap items-center justify-between gap-2 cursor-pointer select-none py-1"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="text-zinc-400 text-[12px] font-mono">
+                  <div className="flex items-center gap-2 min-w-0 flex-1">
+                    <span className="text-zinc-400 text-[12px] font-mono shrink-0">
                       {showLoungePricing ? '▾' : '▸'}
                     </span>
-                    <span className="font-headline-sm text-[14.5px] text-white font-bold">
+                    <span className="font-headline-sm text-[13.5px] sm:text-[14.5px] text-white font-bold break-keep">
                       🆓 ⛰️ 동호회 · 🎓 동창회 · 🥂 소모임 사진 공유방 — 인원 무제한 평생 0원 (사진·동영상 전용)
                     </span>
                   </div>
-                  <span className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[13px] font-extrabold select-none shadow-sm cursor-pointer transition-all">
+                  <span className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[12px] sm:text-[13px] font-extrabold select-none shadow-sm cursor-pointer transition-all shrink-0 whitespace-nowrap ml-auto">
                     {showLoungePricing ? '무료 혜택 접기 ▴' : '무료 혜택 펼치기 ▾'}
                   </span>
                 </div>
@@ -1827,12 +1827,12 @@ export const LoungeFeedContextBanner: React.FC = () => {
             <span className="text-emerald-300 font-extrabold">
               📂 원본 동기화 저장 경로
             </span>
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 shrink-0 max-w-full">
               <input
                 type="text"
                 value={downloadDirPath}
                 onChange={(e) => setDownloadDirPath(e.target.value)}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white font-mono text-[11.5px] font-bold w-60"
+                className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white font-mono text-[11.5px] font-bold w-full sm:w-60 min-w-0"
                 aria-label="원본 동기화 저장 경로"
               />
               <button
@@ -1855,7 +1855,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
                     body: JSON.stringify({ openExplorer: true }),
                   }).catch(() => {});
                 }}
-                className="px-3 py-1.5 rounded-xl bg-primary-container text-zinc-950 hover:opacity-90 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+                className="hidden sm:inline-flex px-3 py-1.5 rounded-xl bg-primary-container text-zinc-950 hover:opacity-90 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
               >
                 📂 내 기기 원본 폴더 열기
               </button>
@@ -2060,8 +2060,8 @@ export const LoungeFeedContextBanner: React.FC = () => {
                 )}
               </div>
 
-              <div className="flex flex-col items-start lg:items-center text-left lg:text-center gap-0.5">
-                <h2 className="font-headline-md text-[22px] md:text-[25px] text-white font-black tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] whitespace-nowrap">
+              <div className="flex flex-col items-start lg:items-center text-left lg:text-center gap-0.5 min-w-0">
+                <h2 className="font-headline-md text-[19px] sm:text-[22px] md:text-[25px] text-white font-black tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] break-keep">
                   {clubBannerTitle}
                 </h2>
                 <span className="text-[12px] text-amber-200/95 font-medium">
@@ -3497,7 +3497,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               value={familyShortsWatermark}
               onChange={(e) => setFamilyShortsWatermark(e.target.value)}
               placeholder="예: 사랑하는 우리가족"
-              className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white text-[12px] font-bold w-44"
+              className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white text-[12px] font-bold w-full sm:w-44 min-w-0"
             />
             <button
               type="button"
@@ -3510,7 +3510,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void handleCopyFamilyTrojanCoupon()}
-                className={`px-3.5 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold whitespace-nowrap cursor-pointer ${
+                className={`px-3.5 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold break-keep text-left cursor-pointer ${
                   familyTrojanBragCopied
                     ? 'bg-emerald-400 text-zinc-950'
                     : 'bg-zinc-900 hover:bg-zinc-800 border border-primary-container/45 text-primary-container'
@@ -3604,17 +3604,17 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                   activatePricingPlan(t.plan);
                 }
               }}
-              className={`p-3.5 rounded-xl border cursor-pointer flex items-center justify-between ${
+              className={`p-3.5 rounded-xl border cursor-pointer flex items-center justify-between gap-2 ${
                 clubSizeTier === t.id
                   ? 'bg-zinc-900 border-primary-container'
                   : 'bg-zinc-950 border-white/10'
               }`}
             >
-              <div className="flex flex-col">
-                <span className="font-label-sm text-[12.5px] text-white font-bold">{t.label}</span>
+              <div className="flex flex-col min-w-0">
+                <span className="font-label-sm text-[12.5px] text-white font-bold break-keep">{t.label}</span>
                 <span className="font-label-mono text-[11.5px] text-primary-container font-bold">{t.price}</span>
               </div>
-              <span className="text-[11px] text-zinc-400 font-bold">
+              <span className="text-[11px] text-zinc-400 font-bold shrink-0 whitespace-nowrap">
                 {clubSizeTier === t.id ? '✓ 선택됨' : '선택'}
               </span>
             </div>
@@ -3638,13 +3638,13 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               </p>
             </div>
 
-            <div className="flex flex-wrap items-center gap-2 shrink-0">
+            <div className="flex flex-wrap items-center gap-2 shrink-0 max-w-full">
               <input
                 type="text"
                 value={clubShortsWatermark}
                 onChange={(e) => setClubShortsWatermark(e.target.value)}
                 placeholder="예: 제주여고 89회 공식 갤러리"
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white text-[12px] font-bold w-52"
+                className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white text-[12px] font-bold w-full sm:w-52 min-w-0"
               />
               <button
                 type="button"
@@ -3657,7 +3657,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void handleCopyTrojanCoupon()}
-                  className={`px-3.5 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold whitespace-nowrap cursor-pointer ${
+                  className={`px-3.5 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold break-keep text-left cursor-pointer ${
                     trojanBragCopied
                       ? 'bg-emerald-400 text-zinc-950'
                       : 'bg-zinc-900 hover:bg-zinc-800 border border-amber-400/45 text-amber-300'
@@ -3795,10 +3795,10 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
           ) : (
             <button
               type="button"
-              onClick={() => activatePricingPlan('student_sub_900')}
-              className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold"
+              onClick={copyInviteLink}
+              className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer"
             >
-              🎒 월 900원 (연 9,000원) 개통
+              {inviteCopied ? '✓ 동창회 초대 링크 복사됨!' : '💌 동창회 무가입 1초 초대 링크 복사'}
             </button>
           )}
         </div>
