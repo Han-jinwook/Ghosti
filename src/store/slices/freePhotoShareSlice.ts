@@ -1071,7 +1071,10 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         ? '동호회·모임 앨범'
         : '동창회 앨범');
 
-    if (zCoreBridge.isConnected) {
+    const hasRealLocalPhotosAlready = get().photos.some((p) =>
+      String(p.fullUrl || '').includes('127.0.0.1')
+    );
+    if (zCoreBridge.isConnected && !hasRealLocalPhotosAlready) {
       await get().initApp(true);
     }
     if (get().sharedRoomHostPhotos.length === 0) {

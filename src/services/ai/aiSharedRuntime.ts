@@ -18,6 +18,7 @@ import type { HardwareTelemetry, TrashCategory, VideoSceneItem } from '../../typ
 
 export const aiRuntimeFlags = {
   priorityVideoSearchDepth: 0,
+  priorityModalGalleryOpen: false,
   silentMediaIndexingRunning: false,
   activeVideoPlaybackCount: 0,
   precomputedSearches: [] as PrecomputedSearchEntry[],

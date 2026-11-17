@@ -2163,7 +2163,11 @@ export async function startSilentRealMediaVisionIndexing(params: {
     );
     for (let i = 0; i < localVids.length; i++) {
       if (!zCoreBridge.isConnected) break;
-      while (aiRuntimeFlags.priorityVideoSearchDepth > 0 || aiRuntimeFlags.activeVideoPlaybackCount > 0) {
+      while (
+        aiRuntimeFlags.priorityVideoSearchDepth > 0 ||
+        aiRuntimeFlags.activeVideoPlaybackCount > 0 ||
+        aiRuntimeFlags.priorityModalGalleryOpen
+      ) {
         await new Promise((r) => setTimeout(r, 350));
       }
       await silentIndexingBrake.waitForIndexingSlot(i);
@@ -2185,7 +2189,11 @@ export async function startSilentRealMediaVisionIndexing(params: {
 
     for (let i = 0; i < unindexedPhotos.length; i++) {
       if (!zCoreBridge.isConnected) break;
-      while (aiRuntimeFlags.priorityVideoSearchDepth > 0 || aiRuntimeFlags.activeVideoPlaybackCount > 0) {
+      while (
+        aiRuntimeFlags.priorityVideoSearchDepth > 0 ||
+        aiRuntimeFlags.activeVideoPlaybackCount > 0 ||
+        aiRuntimeFlags.priorityModalGalleryOpen
+      ) {
         await new Promise((r) => setTimeout(r, 450));
       }
       await silentIndexingBrake.waitForIndexingSlot(i);

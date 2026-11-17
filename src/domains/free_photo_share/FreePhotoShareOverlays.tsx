@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
 import { resolveLoungePhotoCorpus } from '../../store/slices/storeSharedRefs';
 import { jumpToGhostSecretary } from '../../components/GhostSecretaryFirstGuard';
+import { aiRuntimeFlags } from '../../services/ai/aiSharedRuntime';
 
 export const FreePhotoShareOverlays: React.FC = () => {
   const activeLoungeType = useSaySeeStore((s) => s.activeLoungeType);
@@ -24,7 +25,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
     activeLoungeType === 'family' ? 'family@sundreamer.app' : 'friend@sundreamer.app'
   );
   const [selectedSharedUploadIds, setSelectedSharedUploadIds] = useState<string[]>([]);
-  const [visibleUploadCount, setVisibleUploadCount] = useState(48);
+  const [visibleUploadCount, setVisibleUploadCount] = useState(24);
   const wasUploadModalOpenRef = useRef(false);
 
   const selectedSharedUploadSet = useMemo(
@@ -59,12 +60,16 @@ export const FreePhotoShareOverlays: React.FC = () => {
   }, [activeLoungeType, activeFamilyRoom, photos, sharedRoomHostPhotos, sharedRoomAddedPhotos]);
 
   useEffect(() => {
+    aiRuntimeFlags.priorityModalGalleryOpen = showSharedPhotoUploadModal;
     if (showSharedPhotoUploadModal && !wasUploadModalOpenRef.current) {
-      setVisibleUploadCount(48);
-      setSelectedSharedUploadIds(uploadableLocalPhotos.slice(0, 12).map((p) => p.id));
+      setVisibleUploadCount(24);
+      setSelectedSharedUploadIds([]);
     }
     wasUploadModalOpenRef.current = showSharedPhotoUploadModal;
-  }, [showSharedPhotoUploadModal, uploadableLocalPhotos]);
+    return () => {
+      aiRuntimeFlags.priorityModalGalleryOpen = false;
+    };
+  }, [showSharedPhotoUploadModal]);
 
   return (
     <>
@@ -220,7 +225,18 @@ export const FreePhotoShareOverlays: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex-1 overflow-y-auto pr-1">
+            <div
+              className="flex-1 overflow-y-auto pr-1"
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                if (
+                  visibleUploadCount < uploadableLocalPhotos.length &&
+                  el.scrollTop + el.clientHeight >= el.scrollHeight - 220
+                ) {
+                  setVisibleUploadCount((c) => Math.min(uploadableLocalPhotos.length, c + 24));
+                }
+              }}
+            >
               {uploadableLocalPhotos.length === 0 ? (
                 <div className="py-12 px-4 rounded-2xl bg-zinc-900/70 border border-white/10 flex flex-col items-center justify-center text-center gap-3">
                   <span className="text-3xl">📂</span>
@@ -258,7 +274,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
               ) : (
                 <div className="flex flex-col gap-3">
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
-                    {uploadableLocalPhotos.slice(0, visibleUploadCount).map((p) => {
+                    {uploadableLocalPhotos.slice(0, visibleUploadCount).map((p, idx) => {
                       const checked = selectedSharedUploadSet.has(p.id);
                       return (
                         <button
@@ -279,7 +295,8 @@ export const FreePhotoShareOverlays: React.FC = () => {
                             src={p.thumbUrl}
                             alt={p.name}
                             crossOrigin={p.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
-                            loading="lazy"
+                            loading={idx < 18 ? 'eager' : 'lazy'}
+                            fetchPriority={idx < 12 ? 'high' : 'auto'}
                             decoding="async"
                             onError={(e) => {
                               const img = e.currentTarget;
@@ -310,10 +327,10 @@ export const FreePhotoShareOverlays: React.FC = () => {
                   {uploadableLocalPhotos.length > visibleUploadCount && (
                     <button
                       type="button"
-                      onClick={() => setVisibleUploadCount((c) => c + 48)}
+                      onClick={() => setVisibleUploadCount((c) => Math.min(uploadableLocalPhotos.length, c + 24))}
                       className="w-full py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-teal-300 font-label-sm text-[12px] font-bold cursor-pointer"
                     >
-                      ➕ 사진 48장 더 보기 (남은 {uploadableLocalPhotos.length - visibleUploadCount}장)
+                      ➕ 사진 더 보기 (남은 {uploadableLocalPhotos.length - visibleUploadCount}장)
                     </button>
                   )}
                 </div>
@@ -338,7 +355,9 @@ export const FreePhotoShareOverlays: React.FC = () => {
                   onClick={() => addLocalPhotosToSharedRoom(selectedSharedUploadIds)}
                   className="px-5 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] disabled:opacity-40 text-zinc-950 font-label-md text-[13px] font-black shadow-lg shadow-teal-500/25 cursor-pointer"
                 >
-                  📸 선택한 {selectedSharedUploadIds.length}장 가족방에 올리기
+                  {selectedSharedUploadIds.length > 0
+                    ? `📸 선택한 ${selectedSharedUploadIds.length}장 공유방에 올리기`
+                    : '📸 올릴 사진을 클릭해 선택해 주세요'}
                 </button>
               </div>
             </div>

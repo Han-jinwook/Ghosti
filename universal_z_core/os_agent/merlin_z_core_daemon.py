@@ -55,7 +55,7 @@ import plugin_aggrofilter  # noqa: E402
 import ghosti_setup_parity  # noqa: E402
 import plugin_ghosti_superpowers  # noqa: E402
 
-CORE_VERSION = "2.3.21"
+CORE_VERSION = "2.3.22"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -188,6 +188,8 @@ def remove_win32_tray_icon() -> None:
 
 
 class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
+    protocol_version = "HTTP/1.1"
+
     def log_message(self, format: str, *args: Any) -> None:
         return
 
@@ -316,6 +318,7 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 if start >= total_len:
                     self.send_response(416)
                     self.send_header("Content-Range", f"bytes */{total_len}")
+                    self.send_header("Content-Length", "0")
                     self._write_cors_headers(expose_range=True)
                     self.end_headers()
                     return
@@ -418,6 +421,8 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self.send_response(200)
             self.send_header("Content-Type", "video/mp4")
             self.send_header("Cache-Control", "no-store")
+            self.send_header("Connection", "close")
+            self.close_connection = True
             self._write_cors_headers(expose_range=False)
             self.end_headers()
             if proc.stdout:
@@ -449,9 +454,11 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         trusted, _ = self._check_origin_and_fetch_site()
         if not trusted:
             self.send_response(403)
+            self.send_header("Content-Length", "0")
             self.end_headers()
             return
         self.send_response(200)
+        self.send_header("Content-Length", "0")
         self._write_cors_headers(expose_range=True)
         self.end_headers()
 
