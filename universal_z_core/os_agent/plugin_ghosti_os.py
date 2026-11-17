@@ -42,7 +42,7 @@ FILE_ATTRIBUTE_NORMAL = 0x80
 PLUGIN_METADATA = {
     "pluginId": "ghosti_os",
     "pluginName": "Ghosti & 3-Monsters OS + RestorePoint + RecycleBin Omni-Tracker Plugin",
-    "version": "2.3.18",
+    "version": "2.3.19",
     "type": "BUILTIN_SOFTWARE_PLUGIN",
     "port": 5199,
     "capabilities": [
@@ -569,7 +569,7 @@ def scan_g_drive_google_docs_and_sheets(query: str = "") -> Dict[str, Any]:
       2) .gsheet / .gdoc 202바이트 JSON 메타데이터({"doc_id": "...", "url": "..."}) 파싱
       3) 백신 Infostealer 오진 방지를 위해 브라우저 세션 탈취를 엄금하며, 기본 '파일명 색인 + 1초 열기' 제공 및 본문 검색은 공식 OAuth 연동
       4) 계정/비밀번호(ID/PW) 행 조회 시:
-         - 어깨너머 노출 방지를 위해 화면에서는 비밀번호를 기본 마스킹(••••••••) 처리하고 [👁️ 보기] 클릭 시에만 원문을 노출!
+         - 내 PC 안의 내 정보를 본인이 직접 열람하는 것이므로 비밀번호·계좌·주민번호를 별표(••••)로 가리지 않고 원문 그대로 즉시 노출!
          - ID 텍스트 옆(📋)과 비밀번호 텍스트 옆(📋) 모두 인라인 복사 이모지 제공!
          - 단, TTS 음성으로는 비밀번호를 절대 소리 내어 읽지 않으며 외부 AI 바톤터치 대상에서 제외!
     """

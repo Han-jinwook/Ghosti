@@ -1041,45 +1041,17 @@ export function renderHighlightedDocText(
   );
 }
 
-export function maskSensitiveDocText(text: string, forVoice = false): string {
-  if (!text) return '';
-  const pwMask = forVoice ? '비공개 마스킹됨' : '••••••••';
-  const rrnMask = forVoice ? '$1 주민번호 비공개' : '$1-•••••••';
-  const rrnFullMask = forVoice ? '$1 주민번호 비공개 마스킹됨' : '$1••••••-•••••••';
-  const acctMask = forVoice ? '$1 계좌번호 비공개 마스킹됨' : '$1$2-••••-••••';
-  const bankAcctMask = forVoice ? '$1$2 계좌번호 비공개 마스킹됨' : '$1$2-••••-••••';
-  const multiSegAcctMask = forVoice ? '$1 계좌번호 비공개 마스킹됨' : '$1-••••-••••';
-
-  return text
-    .replace(
-      /((?:비밀번호|패스워드|비번|password|pw|pin|암호)\s*[:=]?\s*)([^\s,|\n)]+)/gi,
-      `$1${pwMask}`
-    )
-    .replace(
-      /((?:주민등록번호|주민번호)\s*[:=]?\s*)(\d{6}\s*-\s*[1-4][0-9*\s]{4,8}|\d{13})/gi,
-      rrnFullMask
-    )
-    .replace(
-      /(?<![0-9])(\d{6})\s*-\s*([1-4][0-9*]{2,6}(?:\s*[0-9*]{1,4})?)(?![0-9])/g,
-      rrnMask
-    )
-    .replace(
-      /((?:국세계좌|지방세계좌|가상계좌|계좌번호|입금계좌|환불계좌|급여계좌|납부계좌|계좌)\s*[:=]?\s*(?:[가-힣A-Za-z]{2,10}(?:은행|뱅크|증권|금고|신협|우체국)?\s+)?)(\d{2,6})(?:(?:\s*-\s*\d+(?:[ \t]+\d+)*(?=\s*-))*\s*-\s*\d{1,12}|\d{5,12})/gi,
-      acctMask
-    )
-    .replace(
-      /(^|[^가-힣A-Za-z0-9])((?:국민|국미|신한|신하|우리|하나|농협|농현|기업|카카오|토스|케이|새마을|우체국|우체|수협|신협|산업|외환|경남|광주|대구|부산|전북|제주|씨티|아이엠|SC제일|SC|IBK|KB|NH|SH|KDB|iM)(?:은행|뱅크|중앙회|금고|증권)?\s*[:=]?\s*\d{2,6})(?:(?:\s*-\s*\d+(?:[ \t]+\d+)*(?=\s*-))*\s*-\s*\d{1,12}|\d{5,12})/gi,
-      bankAcctMask
-    )
-    .replace(
-      /(?<![0-9-])(\d{2,6})(?:\s*-\s*\d+(?:[ \t]+\d+)*){2,}\s*-\s*\d{1,12}(?![0-9-])/g,
-      multiSegAcctMask
-    );
+/**
+ * [멀린님 확정 정책 — 내 PC 로컬 문서·사진·여권 원본 즉시 표시 (마스킹 미적용)]:
+ * - 내 PC 안의 내 파일(계좌번호·주민등록번호·비밀번호 등)을 본인이 빠르게 확인·복사하기 위해 검색하는 것이므로,
+ *   화면과 미리보기에서 별표(••••) 마스킹으로 가리지 않고 원본 그대로 즉시 표시합니다.
+ */
+export function maskSensitiveDocText(text: string, _forVoice = false): string {
+  return text || '';
 }
 
-export function hasSensitiveDocInfo(text: string): boolean {
-  if (!text) return false;
-  return maskSensitiveDocText(text) !== text;
+export function hasSensitiveDocInfo(_text: string): boolean {
+  return false;
 }
 
 export function formatQuickKoreanLabelForFile(
@@ -1151,11 +1123,6 @@ export const LocalDocPreviewModal: React.FC = () => {
     hasExecutedUserSearch,
   } = useSaySeeStore();
   const [, setVoiceTick] = useState(0);
-  const [revealDocPasswords, setRevealDocPasswords] = useState(false);
-
-  useEffect(() => {
-    setRevealDocPasswords(false);
-  }, [selectedDocModal?.id]);
 
   useEffect(() => {
     return subscribeGhostiVoicePrefs(() => {
@@ -1167,11 +1134,7 @@ export const LocalDocPreviewModal: React.FC = () => {
 
   const effectiveQuery = hasExecutedUserSearch ? activeQuery : '';
   const isSpeakingNow = getIsTtsSpeaking();
-  const maskedDocText = maskSensitiveDocText(selectedDocModal.extractedText, false);
-  const safeVoiceBody = revealDocPasswords
-    ? selectedDocModal.extractedText
-    : maskSensitiveDocText(selectedDocModal.extractedText, true);
-  const fallbackDocVoiceText = `${selectedDocModal.title}. ${safeVoiceBody}`;
+  const fallbackDocVoiceText = `${selectedDocModal.title}. ${selectedDocModal.extractedText}`;
 
   const handleCloseModal = () => {
     stopSetupMonsterTts();
@@ -1252,24 +1215,10 @@ export const LocalDocPreviewModal: React.FC = () => {
             <span className="font-label-mono text-[11px] text-primary-container font-bold">
               🔍 로컬 문서 본문 미리보기 (검색어 노란색 하이라이트 • 1초 복사 지원)
             </span>
-            <div className="flex items-center gap-1.5">
-              {(hasSensitiveDocInfo(`${selectedDocModal.title} ${selectedDocModal.extractedText}`) ||
-                /(비밀번호|패스워드|password|계정|비번|암호|주민등록번호|주민번호|계좌)/i.test(
-                  `${selectedDocModal.title} ${selectedDocModal.extractedText}`
-                )) && (
-                <button
-                  type="button"
-                  onClick={() => setRevealDocPasswords((v) => !v)}
-                  className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/50 text-amber-200 font-label-sm text-[11.5px] font-extrabold shrink-0 cursor-pointer"
-                >
-                  {revealDocPasswords ? '🙈 개인정보·비번 숨기기' : '👁️ 보기'}
-                </button>
-              )}
-            </div>
           </div>
           <p className="font-body-md text-[13.5px] sm:text-[14px] text-on-surface leading-relaxed whitespace-pre-wrap break-words">
             {renderHighlightedDocText(
-              revealDocPasswords ? selectedDocModal.extractedText : maskedDocText,
+              selectedDocModal.extractedText,
               effectiveQuery,
               selectedDocModal.keywords.slice(0, 4)
             )}

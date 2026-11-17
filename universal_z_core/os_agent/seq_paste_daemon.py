@@ -163,6 +163,8 @@ u32.IsWindowVisible.argtypes = [wintypes.HWND]
 u32.IsWindowVisible.restype = wintypes.BOOL
 u32.EnumChildWindows.argtypes = [wintypes.HWND, ctypes.c_void_p, wintypes.LPARAM]
 u32.EnumChildWindows.restype = wintypes.BOOL
+u32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
+u32.FindWindowW.restype = wintypes.HWND
 u32.FindWindowExW.argtypes = [wintypes.HWND, wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR]
 u32.FindWindowExW.restype = wintypes.HWND
 u32.GetWindowThreadProcessId.argtypes = [wintypes.HWND, ctypes.POINTER(wintypes.DWORD)]
@@ -699,10 +701,23 @@ def set_ime_language(target_korean: bool) -> None:
             proc_low = _get_process_name_from_hwnd(hwnd).lower()
             cls_low = _get_win_class_only(hwnd).lower()
             is_hwp = ("hwp" in proc_low) or ("hword" in proc_low) or ("hnc" in cls_low)
-            if is_hwp:
-                u32.keybd_event(VK_HANGUL, hangul_sc, 0, 0)
-                time.sleep(0.015)
-                u32.keybd_event(VK_HANGUL, hangul_sc, KEYEVENTF_KEYUP, 0)
+            is_tsf_browser = proc_low in (
+                "chrome.exe",
+                "msedge.exe",
+                "whale.exe",
+                "brave.exe",
+                "firefox.exe",
+                "opera.exe",
+                "vivaldi.exe",
+                "arc.exe",
+                "iexplore.exe",
+            )
+            if is_hwp or is_tsf_browser:
+                before_tsf_kor = get_ime_is_korean(hwnd)
+                if is_hwp or (before_tsf_kor != target_korean):
+                    u32.keybd_event(VK_HANGUL, hangul_sc, 0, 0)
+                    time.sleep(0.015)
+                    u32.keybd_event(VK_HANGUL, hangul_sc, KEYEVENTF_KEYUP, 0)
                 return
             before_kor = get_ime_is_korean(hwnd)
             focus_h = _get_focused_control_hwnd(hwnd)
@@ -6060,7 +6075,17 @@ AUTOCORRECT_EXCLUDE_PROCESSES: set[str] = {
     "pycharm64.exe",
     "idea64.exe",
     "webstorm64.exe",
-    # 5. 웹 브라우저 및 Chromium/Electron TSF 리치 에디터 (노션·구글독스·웹 입력창 IME 조합 및 백스페이스 충돌 원천 차단)
+    # 5. Electron TSF 리치 에디터 데스크톱 앱 (웹 브라우저는 카페 댓글·글쓰기 등 실사용 영타➔한글 자동변환을 위해 허용!)
+    "notion.exe",
+    "obsidian.exe",
+    "slack.exe",
+    "discord.exe",
+    "teams.exe",
+    "ms-teams.exe",
+    "figma.exe",
+}
+
+_BROWSER_AUTO_TYPO_PROCS: tuple[str, ...] = (
     "chrome.exe",
     "msedge.exe",
     "whale.exe",
@@ -6070,14 +6095,7 @@ AUTOCORRECT_EXCLUDE_PROCESSES: set[str] = {
     "vivaldi.exe",
     "arc.exe",
     "iexplore.exe",
-    "notion.exe",
-    "obsidian.exe",
-    "slack.exe",
-    "discord.exe",
-    "teams.exe",
-    "ms-teams.exe",
-    "figma.exe",
-}
+)
 
 AUTOCORRECT_EXCLUDE_CLASS_KEYWORDS: tuple[str, ...] = (
     "hwp",
@@ -6172,7 +6190,10 @@ def should_skip_auto_typo(hwnd: int) -> bool:
                 return True
             if any(kw in cls_lower for kw in AUTOCORRECT_EXCLUDE_CLASS_KEYWORDS):
                 return True
-            if any(cls_lower.startswith(pfx) for pfx in WEB_TSF_NON_EDIT_CLASS_PREFIXES):
+            if (
+                any(cls_lower.startswith(pfx) for pfx in WEB_TSF_NON_EDIT_CLASS_PREFIXES)
+                and proc_lower not in _BROWSER_AUTO_TYPO_PROCS
+            ):
                 return True
 
         proc_root, cls_root, _ = get_window_process_and_class(root_h)
@@ -6202,7 +6223,11 @@ def should_skip_auto_typo(hwnd: int) -> bool:
             if not focus_cls or focus_cls in ("RICHEDIT50W", "Edit", "EVA_ChildWindow", "EVA_Window_Dblclk", "EVA_Window"):
                 return False
 
-        # 그 외 모든 프로그램(엑셀·워드·한글 등 자체 오토코렉트 보유 앱 및 웹/TSF 캔버스)은 실시간 자동성형 100% 차단
+        # [허용 4] 웹 브라우저(크롬·엣지·웨일·브레이브·파이어폭스 등 — 카페 댓글·글쓰기 등 웹 입력창 영타➔한글 자동변환)
+        if proc_root_low in _BROWSER_AUTO_TYPO_PROCS:
+            return False
+
+        # 그 외 모든 프로그램(엑셀·워드·한글 등 자체 오토코렉트 보유 앱)은 실시간 자동성형 100% 차단
         return True
     except Exception:
         return True
@@ -7370,6 +7395,7 @@ def main() -> None:
     was_sub_key_down: dict[int, bool] = {}
     last_auto_morph_state: dict[str, object] = {"active": False}
     input_fkeys_armed: bool = False
+    browser_url_bar_active: bool = False
     live_edit_prev_hwnd: int = 0
     live_edit_prev_line: str | None = None
     live_edit_prev_line_start: int = -1
@@ -7401,8 +7427,11 @@ def main() -> None:
                 u32.UnregisterHotKey(None, 500 + num)
             fg_chk_f = u32.GetForegroundWindow()
             keep_f1_f6 = bool(fg_chk_f and not should_skip_auto_typo(fg_chk_f))
+            is_br_chk = _get_process_name_from_hwnd(fg_chk_f).lower() in _BROWSER_AUTO_TYPO_PROCS if fg_chk_f else False
             for fnum in range(7 if keep_f1_f6 else 1, 11):
                 u32.UnregisterHotKey(None, 300 + fnum)
+            if keep_f1_f6 and is_br_chk:
+                u32.UnregisterHotKey(None, 305)
             input_fkeys_armed = keep_f1_f6
             menu_armed = False
 
@@ -8116,6 +8145,15 @@ def main() -> None:
                     last_any_key_ts = now
                 was_key_down[VK_HANGUL] = hangul_down
 
+                # 브라우저 주소창 포커스 단축키(Ctrl+L / Alt+D / F6) 감지 시 주소창 자동완성 충돌 방지를 위해 본문 클릭·이동 전까지 자동변환 일시 홀드
+                l_key_down = (u32.GetAsyncKeyState(0x4C) & 0x8000) != 0
+                d_key_down = (u32.GetAsyncKeyState(0x44) & 0x8000) != 0
+                f6_key_down = (u32.GetAsyncKeyState(0x75) & 0x8000) != 0
+                if (ctrl_down and l_key_down) or (alt_down and d_key_down) or f6_key_down:
+                    browser_url_bar_active = True
+                    typed_ascii_buf.clear()
+                    pending_first_typo = None
+
                 # 마우스 클릭이나 방향키·편집키(Left/Up/Right/Down/Home/End/Del/Tab/Esc) 입력 시에는 타이핑 버퍼를 즉시 초기화하여 앞 글자 찌꺼기 현상 원천 차단!
                 a_key_down = (u32.GetAsyncKeyState(0x41) & 0x8000) != 0
                 if ctrl_down and not alt_down and not shift_down and a_key_down and not was_key_down.get(0x9941, False):
@@ -8124,6 +8162,8 @@ def main() -> None:
                 for nav_vk in (0x01, 0x02, 0x09, 0x1B, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2E):
                     nav_down = (u32.GetAsyncKeyState(nav_vk) & 0x8000) != 0
                     if nav_down and not was_key_down.get(nav_vk, False):
+                        if nav_vk in (0x01, 0x02, 0x09, 0x1B):
+                            browser_url_bar_active = False
                         if shift_down and nav_vk in (0x23, 0x24, 0x25, 0x26, 0x27, 0x28):
                             last_drag_select_ts = now
                         elif nav_vk == 0x01 and not is_dbl_click_select:
@@ -8340,10 +8380,16 @@ def main() -> None:
                                                 last_alpha_type_ts = 0.0
                                                 complete_feature_action_success("auto_typo_morph_2words")
                             else:
-                                # [엑셀 셀 편집(EXCEL6)·카톡 채팅창 등 검증된 비-Edit 입력칸에서 1.0초 멈춤 자동 성형]
+                                # [카톡 채팅창·웹 브라우저(카페 댓글·글쓰기 등) 비-Edit 입력칸에서 1.0초 멈춤 영타➔한글 자동 성형]
                                 raw_idle_str = raw_idle_buf_chk
+                                proc_idle_low = _get_process_name_from_hwnd(hwnd_idle).lower()
+                                is_br_idle = proc_idle_low in _BROWSER_AUTO_TYPO_PROCS
                                 ime_kor_id = get_ime_is_korean(hwnd_idle)
-                                if not ime_kor_id and re.search(r"[A-Za-z]{2,}", raw_idle_str):
+                                if (
+                                    not (is_br_idle and browser_url_bar_active)
+                                    and not ime_kor_id
+                                    and re.search(r"[A-Za-z]{2,}", raw_idle_str)
+                                ):
                                     conv_id, dir_id = morph_korean_english_text_with_direction(raw_idle_str)
                                     if dir_id == "KO" and conv_id != raw_idle_str and re.search(r"[가-힣]", conv_id):
                                         eng_len_id = sum(
@@ -8453,13 +8499,20 @@ def main() -> None:
                                 typed_as_eng = bool(raw_buf_str) and cur_stripped.endswith(raw_buf_str)
                                 typed_as_kor = bool(raw_buf_str) and not typed_as_eng
                         else:
-                            if _is_protected_account_or_email_token(raw_buf_str) or raw_buf_str.lstrip().startswith("="):
+                            proc_fg_low = _get_process_name_from_hwnd(hwnd_fg).lower()
+                            is_br_fg = proc_fg_low in _BROWSER_AUTO_TYPO_PROCS
+                            if (
+                                (is_br_fg and browser_url_bar_active)
+                                or _is_protected_account_or_email_token(raw_buf_str)
+                                or raw_buf_str.lstrip().startswith("=")
+                            ):
                                 typed_as_eng = False
                                 typed_as_kor = False
                             else:
                                 ime_kor = get_ime_is_korean(hwnd_fg)
                                 typed_as_eng = not ime_kor
-                                typed_as_kor = ime_kor
+                                # 웹 브라우저(카페 댓글·글쓰기 등)에서는 1타=1글자가 보장되는 '영타➔한글'만 수행하고 조합 글자 수가 어긋나는 역방향(한➔영)은 제외
+                                typed_as_kor = ime_kor and (not is_br_fg)
 
                         curr_typo: dict | None = None
                         if typed_as_eng and re.search(r"[A-Za-z]{2,}", raw_buf_str):
@@ -8641,7 +8694,11 @@ def main() -> None:
                     allow_live_input = bool(hwnd_live and not should_skip_auto_typo(hwnd_live))
                     if not menu_armed:
                         if allow_live_input and not input_fkeys_armed:
+                            is_br_live = _get_process_name_from_hwnd(hwnd_live).lower() in _BROWSER_AUTO_TYPO_PROCS if hwnd_live else False
                             for fnum_i in range(1, 7):
+                                if is_br_live and fnum_i == 5:
+                                    # 웹 브라우저에서 F5 새로고침 키는 가로채지 않고 브라우저 순정 새로고침으로 보존
+                                    continue
                                 u32.RegisterHotKey(None, 300 + fnum_i, MOD_NOREPEAT, VK_F1 + fnum_i - 1)
                             input_fkeys_armed = True
                         elif not allow_live_input and input_fkeys_armed:
