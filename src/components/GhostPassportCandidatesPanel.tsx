@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import {
   loadGhostSecretaryState,
@@ -41,9 +41,19 @@ export const GhostPassportCandidatesPanel: React.FC = () => {
   const merlinAuth = useSaySeeStore((s) => s.merlinAuth);
   const [step, setStep] = useState(() => loadGhostSecretaryState().passportStep);
   const [isCloudSyncEnabled, setIsCloudSyncEnabled] = useState<boolean>(() => isPassportCloudSyncOptedIn());
+  const [revealTick, setRevealTick] = useState(0);
+  const [isHighlighting, setIsHighlighting] = useState(false);
+  const sectionRef = useRef<HTMLElement | null>(null);
+  const isVisible = step === 'naming' || step === 'ask_hint';
 
   useEffect(() => {
-    const sync = () => setStep(loadGhostSecretaryState().passportStep);
+    const sync = () => {
+      const nextStep = loadGhostSecretaryState().passportStep;
+      setStep(nextStep);
+      if (nextStep === 'naming' || nextStep === 'ask_hint') {
+        setRevealTick((n) => n + 1);
+      }
+    };
     const onOptInChange = () => setIsCloudSyncEnabled(isPassportCloudSyncOptedIn());
     window.addEventListener('ghosti_ghost_secretary_state_updated', sync);
     window.addEventListener('ghosti_passport_sync_opt_in_changed', onOptInChange);
@@ -53,9 +63,22 @@ export const GhostPassportCandidatesPanel: React.FC = () => {
     };
   }, []);
 
+  useEffect(() => {
+    if (!isVisible) return;
+    setIsHighlighting(true);
+    const raf = requestAnimationFrame(() => {
+      sectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    });
+    const timer = window.setTimeout(() => setIsHighlighting(false), 2400);
+    return () => {
+      cancelAnimationFrame(raf);
+      window.clearTimeout(timer);
+    };
+  }, [isVisible, revealTick]);
+
   const candidates = useMemo(() => rankPassportCandidates(faceClusters || []), [faceClusters]);
   const passportBook = useMemo(() => loadGhostPassportBook(), [step, faceClusters]);
-  if (step !== 'naming' && step !== 'ask_hint') return null;
+  if (!isVisible) return null;
 
   const handleClosePanel = () => {
     const cur = loadGhostSecretaryState();
@@ -85,7 +108,25 @@ export const GhostPassportCandidatesPanel: React.FC = () => {
   };
 
   return (
-    <section className="p-4 sm:p-5 rounded-2xl bg-[#18181B] border-2 border-amber-400/70 shadow-md flex flex-col gap-3">
+    <section
+      ref={sectionRef}
+      key={revealTick}
+      style={{
+        animation: 'passportCardReveal 0.48s cubic-bezier(0.22, 1, 0.36, 1)',
+      }}
+      className={`p-4 sm:p-5 rounded-2xl bg-[#18181B] border-2 border-amber-400/80 flex flex-col gap-3 transition-all duration-500 ${
+        isHighlighting
+          ? 'ring-4 ring-amber-400/55 shadow-[0_0_32px_rgba(251,191,36,0.42)]'
+          : 'shadow-md'
+      }`}
+    >
+      <style>{`
+        @keyframes passportCardReveal {
+          0% { opacity: 0; transform: translateY(-14px) scale(0.96); }
+          65% { opacity: 1; transform: translateY(3px) scale(1.015); }
+          100% { opacity: 1; transform: translateY(0) scale(1); }
+        }
+      `}</style>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex items-center gap-2 flex-wrap">
           <h2 className="text-[15.5px] sm:text-[16.5px] font-extrabold text-white flex items-center gap-1.5">
