@@ -4,6 +4,10 @@ import {
   type SilentIndexingBrakeSnapshot,
 } from '../services/silentIndexingBrake';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import {
+  isSharedPhotoLounge,
+  resolveLoungePhotoCorpus,
+} from '../store/slices/storeSharedRefs';
 
 interface SilentIndexingStatusBarProps {
   variant?: 'search-bar' | 'lounge-top';
@@ -23,6 +27,7 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
   );
   const {
     activeLoungeType,
+    activeFamilyRoom,
     localDocuments,
     photos,
     sharedRoomHostPhotos,
@@ -38,15 +43,18 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
 
   const isTurbo = snap.speedMode === 'turbo';
   const guard = snap.hardwareGuard;
+  const sharedMode = isSharedPhotoLounge(activeLoungeType);
 
   const activePhotos = useMemo(() => {
-    const sharedCorpus = [...sharedRoomAddedPhotos, ...sharedRoomHostPhotos];
-    const sourcePhotos =
-      (activeLoungeType === 'family' || activeLoungeType === 'club') && sharedCorpus.length > 0
-        ? sharedCorpus
-        : photos;
+    const sourcePhotos = resolveLoungePhotoCorpus({
+      activeLoungeType,
+      activeFamilyRoom,
+      photos,
+      sharedRoomHostPhotos,
+      sharedRoomAddedPhotos,
+    });
     return sourcePhotos.filter((p) => !p.quarantined);
-  }, [activeLoungeType, photos, sharedRoomAddedPhotos, sharedRoomHostPhotos]);
+  }, [activeLoungeType, activeFamilyRoom, photos, sharedRoomAddedPhotos, sharedRoomHostPhotos]);
   const gallerySceneCount = useMemo(
     () =>
       activePhotos.filter(
@@ -60,17 +68,17 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
     [activePhotos]
   );
   const vaultPhotoCount = useMemo(
-    () => activePhotos.filter((p) => p.isVaultDocument).length,
-    [activePhotos]
+    () => (sharedMode ? 0 : activePhotos.filter((p) => p.isVaultDocument).length),
+    [sharedMode, activePhotos]
   );
-  const totalIndexedDocs = localDocuments.length + vaultPhotoCount;
-  const totalVideoCount = videoSceneItems.length;
+  const totalIndexedDocs = (sharedMode ? 0 : localDocuments.length) + vaultPhotoCount;
+  const totalVideoCount = sharedMode ? 0 : videoSceneItems.length;
   const totalReadyCount = gallerySceneCount + totalVideoCount + totalIndexedDocs;
 
-  // 내 PC에서 방금 선행 분석된 최근 문서 1개 + 최근 사진 1개 추출 (무박스 1줄 인라인 브리핑용)
+  // 내 PC에서 방금 선행 분석된 최근 문서 1개 + 최근 사진 1개 추출 (무박스 1줄 인라인 브리핑용 — 공유방에서는 해당 방 사진만 노출)
   const recentInlineFiles = useMemo(() => {
     const items: { label: string; query: string; icon: string }[] = [];
-    if (localDocuments.length > 0) {
+    if (!sharedMode && localDocuments.length > 0) {
       const topDoc = localDocuments[0];
       const cleanName = topDoc.fileName || topDoc.title;
       const shortQuery = cleanName.replace(/\.[^.]+$/, '').replace(/[_-]+/g, ' ').trim();
@@ -80,7 +88,6 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
         icon: '📄',
       });
     }
-    const activePhotos = photos.filter((p) => !p.quarantined);
     if (activePhotos.length > 0) {
       const topPhoto = activePhotos[0];
       const tagKeyword = topPhoto.tags?.[0]?.replace(/^#/, '') || topPhoto.name.replace(/\.[^.]+$/, '');
@@ -91,7 +98,7 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
       });
     }
     return items.slice(0, 2);
-  }, [localDocuments, photos]);
+  }, [sharedMode, localDocuments, activePhotos]);
 
   const showPriorityJumpToast =
     searchSpace !== 'video' &&

@@ -118,9 +118,11 @@ import {
   deriveLoungeProperNounTokens,
   getActivePersonaForCluster,
   isMobileOrStoreRuntime,
+  isSharedPhotoLounge,
   quarantineFailureToast,
   quarantineResultNote,
   requestQuarantineOp,
+  resolveLoungePhotoCorpus,
   restoreAllExcludedCustomFaceRegistrations,
   saveCustomFaceRegistration,
   storeSharedRefs,
@@ -416,21 +418,27 @@ export const createAssistantOnboardingSlice: StateCreator<
       enrichedPhotos.filter((p) => p.trashCategory && !p.quarantined).map((p) => p.id)
     );
 
-    const initialVaultPhotos = enrichedPhotos
-      .filter((p) => !p.quarantined && p.isVaultDocument)
-      .map((photo) => ({
-        photo,
-        score: 0.96,
-        matchPercentage: 98,
-        matchedBy: 'text-direct' as const,
-      }));
     const activeLoungeNow = get().activeLoungeType;
+    const activeFamilyRoomNow = get().activeFamilyRoom;
+    const sharedModeNow = isSharedPhotoLounge(activeLoungeNow);
     const addedSharedNow = get().sharedRoomAddedPhotos;
-    const effectiveSharedCorpus = [...addedSharedNow, ...hostSharedPhotos];
-    const gallerySourceCorpus =
-      (activeLoungeNow === 'family' || activeLoungeNow === 'club') && effectiveSharedCorpus.length > 0
-        ? effectiveSharedCorpus
-        : enrichedPhotos;
+    const gallerySourceCorpus = resolveLoungePhotoCorpus({
+      activeLoungeType: activeLoungeNow,
+      activeFamilyRoom: activeFamilyRoomNow,
+      photos: enrichedPhotos,
+      sharedRoomHostPhotos: hostSharedPhotos,
+      sharedRoomAddedPhotos: addedSharedNow,
+    });
+    const initialVaultPhotos = sharedModeNow
+      ? []
+      : enrichedPhotos
+          .filter((p) => !p.quarantined && p.isVaultDocument)
+          .map((photo) => ({
+            photo,
+            score: 0.96,
+            matchPercentage: 98,
+            matchedBy: 'text-direct' as const,
+          }));
     const initialGalleryPhotos = gallerySourceCorpus
       .filter(
         (p) =>
@@ -447,7 +455,9 @@ export const createAssistantOnboardingSlice: StateCreator<
         matchPercentage: 97,
         matchedBy: 'text-direct' as const,
       }));
-    const totalFrames = indexedVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
+    const effectiveInitialDocs = sharedModeNow ? [] : indexedDocs;
+    const effectiveInitialVideos = sharedModeNow ? [] : indexedVideos;
+    const totalFrames = effectiveInitialVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
 
     const currentSearchSpace = get().searchSpace;
     const currentHasUserSelectedSearchTab = get().hasUserSelectedSearchTab;
@@ -498,10 +508,10 @@ export const createAssistantOnboardingSlice: StateCreator<
         sharedRoomHostPhotos: hostSharedPhotos,
         duplicateGroups: dataset.duplicateGroups,
         localDocuments: indexedDocs,
-        matchedLocalDocs: indexedDocs,
+        matchedLocalDocs: effectiveInitialDocs,
         matchedVaultPhotos: initialVaultPhotos,
         videoSceneItems: indexedVideos,
-        matchedVideoScenes: indexedVideos,
+        matchedVideoScenes: effectiveInitialVideos,
         faceClusters: autoMultiClusters,
         latestCorpusYear: faceData.latestCorpusYear,
         onboardingProgress: {

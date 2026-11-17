@@ -269,7 +269,11 @@ export const App: React.FC = () => {
       const urlRoom = normalizeFamilyRoomParam(params.get('room') || inviteVal);
       const urlView = params.get('view') as 'showroom' | 'workspace' | null;
 
-      const defaultInviteLounge: LoungeType = inviteVal.startsWith('club') ? 'club' : 'family';
+      const defaultInviteLounge: LoungeType = inviteVal.startsWith('club')
+        ? 'club'
+        : inviteVal.startsWith('student') || inviteVal.startsWith('alumni')
+        ? 'student'
+        : 'family';
 
       const targetLounge: LoungeType =
         savedNav?.lounge ||
@@ -306,7 +310,7 @@ export const App: React.FC = () => {
         setViewMode(targetView);
       }
       useSaySeeStore.setState({
-        activeLoungeType: targetLounge === 'student' ? 'club' : targetLounge,
+        activeLoungeType: targetLounge,
         desktopTab: targetDesktopTab,
         mobileTab: targetMobileTab,
         activeFamilyRoom: targetRoom,

@@ -118,9 +118,11 @@ import {
   deriveLoungeProperNounTokens,
   getActivePersonaForCluster,
   isMobileOrStoreRuntime,
+  isSharedPhotoLounge,
   quarantineFailureToast,
   quarantineResultNote,
   requestQuarantineOp,
+  resolveLoungePhotoCorpus,
   restoreAllExcludedCustomFaceRegistrations,
   saveCustomFaceRegistration,
   storeSharedRefs,
@@ -916,14 +918,15 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       set({ guestJoinWallReason: '📸 이 방에 내 사진·영상 같이 올리기' });
       return;
     }
-    const targetLounge: LoungeType =
-      state.activeLoungeType === 'family' || state.activeLoungeType === 'club'
-        ? state.activeLoungeType
-        : 'family';
+    const targetLounge: LoungeType = isSharedPhotoLounge(state.activeLoungeType)
+      ? state.activeLoungeType
+      : 'family';
     const roomTitle =
       targetLounge === 'family'
         ? `${state.activeFamilyRoom} 패밀리 앨범`
-        : `${state.alumniSchoolName} 모임 앨범`;
+        : targetLounge === 'club'
+        ? '동호회·모임 앨범'
+        : `${state.alumniSchoolName} 동창회 앨범`;
 
     // 모바일 환경에서는 바로 모바일 사진 피커 안내 또는 공유 업로드 모달 오픈
     if (isMobileOrStoreRuntime()) {
@@ -972,10 +975,18 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         /* ignore */
       }
     }
-    const existingNames = new Set([
-      ...state.sharedRoomAddedPhotos.map((p) => p.name),
-      ...state.sharedRoomHostPhotos.map((p) => p.name),
-    ]);
+    const targetLounge: LoungeType = isSharedPhotoLounge(state.activeLoungeType)
+      ? state.activeLoungeType
+      : 'family';
+    const targetFamilyRoom: FamilyRoomId = state.activeFamilyRoom || '우리집';
+    const currentRoomCorpus = resolveLoungePhotoCorpus({
+      activeLoungeType: targetLounge,
+      activeFamilyRoom: targetFamilyRoom,
+      photos: state.photos,
+      sharedRoomHostPhotos: state.sharedRoomHostPhotos,
+      sharedRoomAddedPhotos: state.sharedRoomAddedPhotos,
+    });
+    const existingNames = new Set(currentRoomCorpus.map((p) => p.name));
     const nowIso = new Date().toISOString();
     const picked = state.photos
       .filter((p) => idSet.has(p.id) && !existingNames.has(p.name))
@@ -984,6 +995,8 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         id: `shared_added_${Date.now()}_${p.id}`,
         uploaderLabel: `${uploaderNick} 추가`,
         sharedAddedAt: nowIso,
+        sharedLoungeType: targetLounge,
+        sharedFamilyRoom: targetFamilyRoom,
       }));
 
     if (picked.length === 0) {
@@ -1003,7 +1016,13 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       }
     }
 
-    const mergedShared = [...nextAdded, ...state.sharedRoomHostPhotos];
+    const mergedShared = resolveLoungePhotoCorpus({
+      activeLoungeType: targetLounge,
+      activeFamilyRoom: targetFamilyRoom,
+      photos: state.photos,
+      sharedRoomHostPhotos: state.sharedRoomHostPhotos,
+      sharedRoomAddedPhotos: nextAdded,
+    });
     const nextResults: SearchResultItem[] = mergedShared
       .filter(
         (p) =>
@@ -1021,15 +1040,22 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         matchedBy: 'text-direct' as const,
       }));
 
+    const roomLabel =
+      targetLounge === 'family'
+        ? `${targetFamilyRoom} 패밀리 앨범`
+        : targetLounge === 'club'
+        ? '동호회·모임 앨범'
+        : '동창회 앨범';
+
     set({
       sharedRoomAddedPhotos: nextAdded,
       showSharedPhotoUploadModal: false,
       searchSpace: 'gallery',
       hasExecutedUserSearch: false,
-      activeQuery: `우리집 패밀리 공유 앨범 (${nextResults.length}장 · 방금 ${picked.length}장 추가됨)`,
-      matchedTags: [`#${uploaderNick}사진추가`, '#가족공유앨범', '#초경량섀도우공유'],
+      activeQuery: `${roomLabel} (${nextResults.length}장 · 방금 ${picked.length}장 추가됨)`,
+      matchedTags: [`#${uploaderNick}사진추가`, '#공유앨범', '#초경량섀도우공유'],
       searchResults: nextResults,
-      lastQuarantineToast: `🎉 내 컴퓨터에서 고른 사진 ${picked.length}장을 『${state.activeFamilyRoom} 패밀리 앨범』에 깔끔하게 추가했습니다!`,
+      lastQuarantineToast: `🎉 내 컴퓨터에서 고른 사진 ${picked.length}장을 『${roomLabel}』에 깔끔하게 추가했습니다!`,
     });
   },
 
@@ -1037,7 +1063,13 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     const pending = get().pendingReturnShareRoom;
     const targetLounge: LoungeType = pending?.loungeType || 'family';
     const targetRoom: FamilyRoomId = pending?.familyRoom || get().activeFamilyRoom || '우리집';
-    const roomTitle = pending?.roomTitle || `${targetRoom} 패밀리 앨범`;
+    const roomTitle =
+      pending?.roomTitle ||
+      (targetLounge === 'family'
+        ? `${targetRoom} 패밀리 앨범`
+        : targetLounge === 'club'
+        ? '동호회·모임 앨범'
+        : '동창회 앨범');
 
     if (zCoreBridge.isConnected) {
       await get().initApp(true);
@@ -1050,7 +1082,13 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     }
 
     const st = get();
-    const mergedShared = [...st.sharedRoomAddedPhotos, ...st.sharedRoomHostPhotos];
+    const mergedShared = resolveLoungePhotoCorpus({
+      activeLoungeType: targetLounge,
+      activeFamilyRoom: targetRoom,
+      photos: st.photos,
+      sharedRoomHostPhotos: st.sharedRoomHostPhotos,
+      sharedRoomAddedPhotos: st.sharedRoomAddedPhotos,
+    });
     const sharedGalleryResults: SearchResultItem[] = mergedShared
       .filter(
         (p) =>
@@ -1076,14 +1114,13 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       pendingReturnShareRoom: null,
       isInvitedMemberSession: true,
       showSharedPhotoUploadModal: zCoreBridge.isConnected,
-      ...(sharedGalleryResults.length > 0
-        ? {
-            searchSpace: 'gallery' as const,
-            hasExecutedUserSearch: false,
-            activeQuery: `${roomTitle} (${sharedGalleryResults.length}장)`,
-            searchResults: sharedGalleryResults,
-          }
-        : {}),
+      searchSpace: 'gallery',
+      hasExecutedUserSearch: false,
+      activeQuery: `${roomTitle} (${sharedGalleryResults.length}장)`,
+      matchedVideoScenes: [],
+      matchedLocalDocs: [],
+      matchedVaultPhotos: [],
+      searchResults: sharedGalleryResults,
       lastQuarantineToast: zCoreBridge.isConnected
         ? `📸 『${roomTitle}』으로 돌아왔어요! 방금 점검·색인한 내 컴퓨터 사진을 골라 올려보세요.`
         : `🏠 『${roomTitle}』으로 돌아왔습니다.`,
@@ -1091,9 +1128,47 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
   },
 
   setActiveFamilyRoom: (activeFamilyRoom) => {
-    set({
-      activeFamilyRoom,
-      lastQuarantineToast: `🏠 패밀리 라운지 [${activeFamilyRoom}] 독립 보안 룸으로 전환되었습니다.`,
+    set((state) => {
+      if (state.activeLoungeType !== 'family') {
+        return {
+          activeFamilyRoom,
+          lastQuarantineToast: `🏠 패밀리 라운지 [${activeFamilyRoom}] 독립 보안 룸으로 전환되었습니다.`,
+        };
+      }
+      const nextCorpus = resolveLoungePhotoCorpus({
+        activeLoungeType: 'family',
+        activeFamilyRoom,
+        photos: state.photos,
+        sharedRoomHostPhotos: state.sharedRoomHostPhotos,
+        sharedRoomAddedPhotos: state.sharedRoomAddedPhotos,
+      });
+      const nextResults: SearchResultItem[] = nextCorpus
+        .filter(
+          (p) =>
+            !p.quarantined &&
+            !p.isVaultDocument &&
+            p.trashCategory !== 'blurry' &&
+            p.trashCategory !== 'screenshot' &&
+            p.trashCategory !== 'memo' &&
+            p.trashCategory !== 'duplicate'
+        )
+        .map((photo) => ({
+          photo,
+          score: 0.95,
+          matchPercentage: 97,
+          matchedBy: 'text-direct' as const,
+        }));
+      return {
+        activeFamilyRoom,
+        hasExecutedUserSearch: false,
+        searchSpace: 'gallery',
+        searchResults: nextResults,
+        matchedVideoScenes: [],
+        matchedLocalDocs: [],
+        matchedVaultPhotos: [],
+        activeQuery: `${activeFamilyRoom} 패밀리 앨범 (${nextResults.length}장)`,
+        lastQuarantineToast: `🏠 패밀리 라운지 [${activeFamilyRoom}] 독립 보안 룸으로 전환되었습니다.`,
+      };
     });
     if (typeof window !== 'undefined') {
       window.scrollTo({ top: 0, left: 0, behavior: 'auto' });

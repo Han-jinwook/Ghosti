@@ -865,6 +865,21 @@ export const MobileAppView: React.FC = () => {
                       );
                     })}
                   </div>
+                ) : !hasExecutedUserSearch &&
+                  (activeLoungeType === 'family' ||
+                    activeLoungeType === 'club' ||
+                    activeLoungeType === 'student') ? (
+                  <div className="py-12 px-4 rounded-2xl bg-[#18181B] border border-white/10 text-center flex flex-col items-center gap-2.5">
+                    <span className="material-symbols-outlined text-zinc-500 text-[34px]">
+                      photo_library
+                    </span>
+                    <p className="font-headline-sm text-[14px] text-white font-bold">
+                      아직 이 {activeLoungeType === 'club' ? '동호회·모임' : activeLoungeType === 'student' ? '동창회' : '가족'} 공유방에는 올라온 사진이 없습니다 (0장)
+                    </p>
+                    <p className="font-body-sm text-[11.5px] text-zinc-400">
+                      가족방·동호회방·동창회방 사진첩은 서로 섞이지 않게 안전하게 분리되어 있습니다.
+                    </p>
+                  </div>
                 ) : (
                   <div className="py-12 px-4 rounded-2xl bg-[#18181B] border border-white/10 text-center flex flex-col items-center gap-2">
                     <span className="material-symbols-outlined text-zinc-500 text-[34px]">

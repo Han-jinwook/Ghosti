@@ -76,8 +76,13 @@ export function useIsSecretaryFirstBrowseGuardActive(): boolean {
   if (connected) return false;
   if (layout === 'mobile' || isStoreAppMode || isMobileVoiceEnvironment()) return false;
   if (isGuestPreviewMode) return false;
-  // 초대 링크로 1초 합류한 멤버가 공유 사진방(가족방/모임방)을 열람·검색할 때는 통과의례 가드 면제 (단, '내 사진도 추가하기' 클릭 시에만 귀신비서 우회 안내)
-  if ((activeLoungeType === 'family' || activeLoungeType === 'club') && isInvitedMemberSession) {
+  // 초대 링크로 1초 합류한 멤버가 공유 사진방(가족방/동호회/동창회)을 열람·검색할 때는 통과의례 가드 면제 (단, '내 사진도 추가하기' 클릭 시에만 귀신비서 우회 안내)
+  if (
+    (activeLoungeType === 'family' ||
+      activeLoungeType === 'club' ||
+      activeLoungeType === 'student') &&
+    isInvitedMemberSession
+  ) {
     return false;
   }
 

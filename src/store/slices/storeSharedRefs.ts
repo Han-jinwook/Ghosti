@@ -5,6 +5,7 @@ import type {
   FamilyRoomId,
   LoungeType,
   PersonTimelineBucketInfo,
+  PhotoItem,
   RoomPersonaMap,
   YearlyFaceBestCut,
 } from '../../types/saysee';
@@ -18,6 +19,85 @@ export const storeSharedRefs = {
   cancelOnboardingFlag: false,
   latestRunTextQuerySeq: 0,
 };
+
+export function isSharedPhotoLounge(loungeType: LoungeType): boolean {
+  return loungeType === 'family' || loungeType === 'club' || loungeType === 'student';
+}
+
+export function resolveInvitedHostLoungeAndRoom(): {
+  hostLounge: LoungeType;
+  hostFamilyRoom: FamilyRoomId;
+} {
+  if (typeof window === 'undefined') {
+    return { hostLounge: 'family', hostFamilyRoom: '우리집' };
+  }
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const inviteVal = (params.get('invite') || '').trim().toLowerCase();
+    const roomVal = (params.get('room') || inviteVal).trim().toLowerCase();
+    if (inviteVal.startsWith('club')) {
+      return { hostLounge: 'club', hostFamilyRoom: '우리집' };
+    }
+    if (inviteVal.startsWith('student') || inviteVal.startsWith('alumni')) {
+      return { hostLounge: 'student', hostFamilyRoom: '우리집' };
+    }
+    const hostFamilyRoom: FamilyRoomId =
+      roomVal.includes('parent') || roomVal.includes('본가') || roomVal.includes('친가')
+        ? '본가(친가)'
+        : roomVal.includes('inlaw') || roomVal.includes('처가') || roomVal.includes('친정')
+        ? '처가(친정)'
+        : '우리집';
+    return { hostLounge: 'family', hostFamilyRoom };
+  } catch {
+    return { hostLounge: 'family', hostFamilyRoom: '우리집' };
+  }
+}
+
+/**
+ * [라운지별 사진첩 완전 분리 SSOT]
+ * - 'family': 초대받은 해당 가족방(예: 우리집)의 호스트 공유 사진 + 해당 가족방에 추가한 사진만 반환 (본가/처가 및 내 로컬 PC와 엄격 분리)
+ * - 'club' (동호회·모임) / 'student' (동창회): 각 방에 직접 추가된 사진만 반환 (가족방 36장이나 내 로컬 PC/샘플 사진이 절대 새어 나오지 않고 미참여 시 0장 유지)
+ * - 'personal' / 'work': 내 기기 사진만 반환 (공유방 호스트 사진 제외)
+ */
+export function resolveLoungePhotoCorpus(args: {
+  activeLoungeType: LoungeType;
+  activeFamilyRoom: FamilyRoomId;
+  photos: PhotoItem[];
+  sharedRoomHostPhotos: PhotoItem[];
+  sharedRoomAddedPhotos: PhotoItem[];
+}): PhotoItem[] {
+  const {
+    activeLoungeType,
+    activeFamilyRoom,
+    photos,
+    sharedRoomHostPhotos,
+    sharedRoomAddedPhotos,
+  } = args;
+
+  if (activeLoungeType === 'family') {
+    const { hostLounge, hostFamilyRoom } = resolveInvitedHostLoungeAndRoom();
+    const addedForFamily = sharedRoomAddedPhotos.filter(
+      (p) =>
+        (p.sharedLoungeType ?? 'family') === 'family' &&
+        (p.sharedFamilyRoom ?? '우리집') === activeFamilyRoom
+    );
+    const hostForFamily =
+      hostLounge === 'family' && activeFamilyRoom === hostFamilyRoom
+        ? sharedRoomHostPhotos
+        : [];
+    return [...addedForFamily, ...hostForFamily];
+  }
+
+  if (activeLoungeType === 'club' || activeLoungeType === 'student') {
+    return sharedRoomAddedPhotos.filter((p) => p.sharedLoungeType === activeLoungeType);
+  }
+
+  return photos.filter(
+    (p) =>
+      !String(p.id || '').startsWith('shared_host_') &&
+      !String(p.thumbUrl || '').startsWith('/shared_family_host_thumbs/')
+  );
+}
 
 export const voiceSession = new HybridVoiceSession();
 

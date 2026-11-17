@@ -5,6 +5,7 @@ import {
   type P2PHybridConnectionDiagnostics,
 } from '../../services/p2pHybridBridge';
 import { getActivePersonaForCluster, useSaySeeStore } from '../../store/useSaySeeStore';
+import { resolveLoungePhotoCorpus } from '../../store/slices/storeSharedRefs';
 import type { ClubSizeTier, FamilyRoomId, LoungeType, PricingPlanId } from '../../types/saysee';
 import { FaceMemberInlineBar } from '../../components/FaceMemberRegistryModal';
 import { PcMasterQuickSendPanel } from '../../components/PricingModal';
@@ -1678,6 +1679,8 @@ export const LoungeFeedContextBanner: React.FC = () => {
     faceClusters,
     runTextQuery,
     photos,
+    sharedRoomHostPhotos,
+    sharedRoomAddedPhotos,
     setShowFaceRegistryModal,
     setDoorplatePickerClusterId,
     setDesktopTab,
@@ -1863,7 +1866,17 @@ export const LoungeFeedContextBanner: React.FC = () => {
     );
   };
 
-  const namedClusters = faceClusters.filter((c) => !c.excludedAsPasserby && c.registeredName);
+  const currentRoomPhotos = resolveLoungePhotoCorpus({
+    activeLoungeType,
+    activeFamilyRoom,
+    photos,
+    sharedRoomHostPhotos,
+    sharedRoomAddedPhotos,
+  });
+  const namedClusters =
+    currentRoomPhotos.length > 0
+      ? faceClusters.filter((c) => !c.excludedAsPasserby && c.registeredName)
+      : [];
   const FAMILY_ROOMS: FamilyRoomId[] = ['우리집', '본가(친가)', '처가(친정)'];
 
   if (activeLoungeType === 'personal') {
@@ -2195,6 +2208,8 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
     setActiveLoungeType,
     activeFamilyRoom,
     photos,
+    sharedRoomHostPhotos,
+    sharedRoomAddedPhotos,
     videoSceneItems,
     gpuHelper24hActive,
     activateGpuHelper24h,
@@ -2252,7 +2267,14 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
   const hostCleanupQueue = swarmFaceCandidates.filter((c) => !c.applied);
   const pendingAnalogProposals = analogYearProposals.filter((p) => !p.approvedByHost);
 
-  const basePhotos = photos
+  const scopedWaitingPhotos = resolveLoungePhotoCorpus({
+    activeLoungeType,
+    activeFamilyRoom,
+    photos,
+    sharedRoomHostPhotos,
+    sharedRoomAddedPhotos,
+  });
+  const basePhotos = scopedWaitingPhotos
     .filter((p) => !p.quarantined && !deletedLoungePhotoIds.includes(p.id));
   const queuePhotos = basePhotos.slice(0, Math.max(0, 8 - deletedLoungePhotoIds.length));
 

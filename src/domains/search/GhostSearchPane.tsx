@@ -504,8 +504,10 @@ export const GhostSearchPane: React.FC<{
                     </h2>
                     <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-medium">
                       총 {searchResults.length}장
-                      {(activeLoungeType === 'family' || activeLoungeType === 'club')
-                        ? ' · 공유방 전용 (내 PC와 분리)'
+                      {(activeLoungeType === 'family' ||
+                        activeLoungeType === 'club' ||
+                        activeLoungeType === 'student')
+                        ? ' · 공유방 전용 (타 공유방·내 PC와 분리)'
                         : ''}
                       {groupBurstsInSearch && collapsedBurstCount > 0
                         ? ' · 연사 묶음 1세트 포함'
@@ -566,7 +568,10 @@ export const GhostSearchPane: React.FC<{
                               <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-zinc-950/85 backdrop-blur-md border border-white/15 text-primary-container font-label-sm text-[10.5px] font-bold flex items-center gap-1">
                                 <span>❐ {group.burstCount}장 연사</span>
                               </div>
-                            ) : item.photo.uploaderLabel && (activeLoungeType === 'family' || activeLoungeType === 'club') ? (
+                            ) : item.photo.uploaderLabel &&
+                              (activeLoungeType === 'family' ||
+                                activeLoungeType === 'club' ||
+                                activeLoungeType === 'student') ? (
                               <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-zinc-950/85 backdrop-blur-md border border-teal-400/40 text-teal-300 font-label-sm text-[10.5px] font-bold flex items-center gap-1">
                                 <span>
                                   {/^[👑📸]/.test(item.photo.uploaderLabel)
@@ -627,6 +632,28 @@ export const GhostSearchPane: React.FC<{
                         </article>
                       );
                     })}
+                  </div>
+                ) : !hasExecutedUserSearch &&
+                  (activeLoungeType === 'family' ||
+                    activeLoungeType === 'club' ||
+                    activeLoungeType === 'student') ? (
+                  <div className="py-14 px-6 rounded-2xl bg-[#18181B] border border-white/10 text-center flex flex-col items-center gap-3">
+                    <span className="material-symbols-outlined text-zinc-500 text-[38px]">
+                      photo_library
+                    </span>
+                    <p className="font-headline-sm text-[15.5px] text-white font-bold">
+                      아직 이 {activeLoungeType === 'club' ? '동호회·모임' : activeLoungeType === 'student' ? '동창회' : `${activeFamilyRoom} 가족`} 공유방에는 올라온 사진이 없습니다 (0장)
+                    </p>
+                    <p className="font-body-sm text-[12.5px] text-zinc-400 max-w-lg">
+                      가족방·동호회방·동창회방 및 내 기기 사진첩은 서로 섞이지 않도록 안전하게 분리되어 있습니다. 초대받은 방 링크로 입장하거나 새 사진을 추가해 보세요.
+                    </p>
+                    <button
+                      type="button"
+                      onClick={() => useSaySeeStore.getState().requestAddMyPhotosToSharedRoom()}
+                      className="mt-1 px-4 py-2 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[12.5px] font-black cursor-pointer"
+                    >
+                      📸 이 방에 내 사진 추가하기
+                    </button>
                   </div>
                 ) : (
                   <div className="py-14 rounded-2xl bg-[#18181B] border border-white/10 text-center flex flex-col items-center gap-2">

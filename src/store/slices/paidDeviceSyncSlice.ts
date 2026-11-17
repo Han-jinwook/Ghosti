@@ -117,9 +117,11 @@ import {
   deriveLoungeProperNounTokens,
   getActivePersonaForCluster,
   isMobileOrStoreRuntime,
+  isSharedPhotoLounge,
   quarantineFailureToast,
   quarantineResultNote,
   requestQuarantineOp,
+  resolveLoungePhotoCorpus,
   restoreAllExcludedCustomFaceRegistrations,
   saveCustomFaceRegistration,
   storeSharedRefs,
@@ -271,11 +273,14 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
       const activeLoungeType: LoungeType = requestedLoungeType;
       const isTargetLoungeSubscribed = Boolean(state.subscribedLounges[activeLoungeType]);
       const isSwitchingLounge = state.activeLoungeType !== activeLoungeType;
-      const sharedCorpus = [...state.sharedRoomAddedPhotos, ...state.sharedRoomHostPhotos];
-      const nextCorpus =
-        (activeLoungeType === 'family' || activeLoungeType === 'club') && sharedCorpus.length > 0
-          ? sharedCorpus
-          : state.photos;
+      const sharedMode = isSharedPhotoLounge(activeLoungeType);
+      const nextCorpus = resolveLoungePhotoCorpus({
+        activeLoungeType,
+        activeFamilyRoom: state.activeFamilyRoom,
+        photos: state.photos,
+        sharedRoomHostPhotos: state.sharedRoomHostPhotos,
+        sharedRoomAddedPhotos: state.sharedRoomAddedPhotos,
+      });
       const refreshedGalleryResults: SearchResultItem[] = nextCorpus
         .filter(
           (p) =>
@@ -292,14 +297,16 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
           matchPercentage: 97,
           matchedBy: 'text-direct' as const,
         }));
-      const vaultPhotos: SearchResultItem[] = state.photos
-        .filter((p) => !p.quarantined && p.isVaultDocument)
-        .map((photo) => ({
-          photo,
-          score: 0.96,
-          matchPercentage: 98,
-          matchedBy: 'text-direct' as const,
-        }));
+      const vaultPhotos: SearchResultItem[] = sharedMode
+        ? []
+        : state.photos
+            .filter((p) => !p.quarantined && p.isVaultDocument)
+            .map((photo) => ({
+              photo,
+              score: 0.96,
+              matchPercentage: 98,
+              matchedBy: 'text-direct' as const,
+            }));
       return {
         activeLoungeType,
         activePricingPlan: state.subscribedLounges[activeLoungeType] ?? 'free_trial',
@@ -308,20 +315,24 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
               hasExecutedUserSearch: false,
               searchSpace: 'gallery' as const,
               searchResults: refreshedGalleryResults,
-              matchedVideoScenes: state.videoSceneItems,
-              matchedLocalDocs: state.localDocuments,
+              matchedVideoScenes: sharedMode ? [] : state.videoSceneItems,
+              matchedLocalDocs: sharedMode ? [] : state.localDocuments,
               matchedVaultPhotos: vaultPhotos,
               activeQuery:
                 activeLoungeType === 'family'
                   ? `${state.activeFamilyRoom} 패밀리 앨범 (${refreshedGalleryResults.length}장)`
+                  : activeLoungeType === 'club'
+                  ? `동호회·모임 앨범 (${refreshedGalleryResults.length}장)`
+                  : activeLoungeType === 'student'
+                  ? `동창회 앨범 (${refreshedGalleryResults.length}장)`
                   : `전체 갤러리 사진 (${refreshedGalleryResults.length}장)`,
             }
           : {}),
-        // 내 기기(personal) 진입 시 1관문인 '귀신비서(trash)'가 기본 노출되며, 가족/모임방 전환 시 갤러리('dashboard')가 기본 노출
+        // 내 기기(personal) 진입 시 1관문인 '귀신비서(trash)'가 기본 노출되며, 가족/모임/동창회방 전환 시 갤러리('dashboard')가 기본 노출
         desktopTab:
           isSwitchingLounge && activeLoungeType === 'personal'
             ? 'trash'
-            : isSwitchingLounge && (activeLoungeType === 'family' || activeLoungeType === 'club')
+            : isSwitchingLounge && sharedMode
             ? 'dashboard'
             : isTargetLoungeSubscribed && state.desktopTab === 'trial'
             ? 'dashboard'
@@ -329,7 +340,7 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
         mobileTab:
           isSwitchingLounge && activeLoungeType === 'personal'
             ? 'trash'
-            : isSwitchingLounge && (activeLoungeType === 'family' || activeLoungeType === 'club')
+            : isSwitchingLounge && sharedMode
             ? 'search'
             : isTargetLoungeSubscribed && state.mobileTab === 'trial'
             ? 'search'

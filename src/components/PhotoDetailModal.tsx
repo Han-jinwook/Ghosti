@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import { resolveLoungePhotoCorpus } from '../store/slices/storeSharedRefs';
 import { cosineSimilarity } from '../services/aiEngine';
 import { dispatchGhostCastLiveCommand } from './GhostCastAndLiveSystem';
 import type { PhotoItem } from '../types/saysee';
@@ -176,17 +177,20 @@ export const PhotoDetailModal: React.FC = () => {
     isGuestPreviewMode,
     triggerGuestJoinWall,
     activeLoungeType,
+    activeFamilyRoom,
     sharedRoomHostPhotos,
     sharedRoomAddedPhotos,
   } = useSaySeeStore();
 
   const scopedPhotos = useMemo(() => {
-    const sharedCorpus = [...sharedRoomAddedPhotos, ...sharedRoomHostPhotos];
-    if ((activeLoungeType === 'family' || activeLoungeType === 'club') && sharedCorpus.length > 0) {
-      return sharedCorpus;
-    }
-    return photos;
-  }, [activeLoungeType, photos, sharedRoomAddedPhotos, sharedRoomHostPhotos]);
+    return resolveLoungePhotoCorpus({
+      activeLoungeType,
+      activeFamilyRoom,
+      photos,
+      sharedRoomHostPhotos,
+      sharedRoomAddedPhotos,
+    });
+  }, [activeLoungeType, activeFamilyRoom, photos, sharedRoomAddedPhotos, sharedRoomHostPhotos]);
 
   const [activeTab, setActiveTab] = useState<ContextTab>('same-day');
   const [drillQuery, setDrillQuery] = useState('');

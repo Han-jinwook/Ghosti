@@ -428,6 +428,10 @@ export interface PhotoItem {
   uploaderLabel?: string;
   /** 공유방에 추가된 시각 ISO */
   sharedAddedAt?: string;
+  /** 공유방 소속 라운지 구분 ('family' | 'club' | 'student') */
+  sharedLoungeType?: LoungeType;
+  /** 가족방 소속 세부 룸 구분 ('우리집' | '본가(친가)' | '처가(친정)') */
+  sharedFamilyRoom?: FamilyRoomId;
   /** PoC 550장 실측 쿼리별 사전 매칭 점수 맵 (presetId -> score) */
   presetScores?: Record<string, number>;
 }

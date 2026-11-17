@@ -1,5 +1,9 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import {
+  isSharedPhotoLounge,
+  resolveLoungePhotoCorpus,
+} from '../store/slices/storeSharedRefs';
 import { FaceMemberInlineBar } from './FaceMemberRegistryModal';
 import { ensureLoginAndZCoreReady, requestConnectMyComputer, zCoreBridge } from '../services/zCoreBridge';
 import { SilentIndexingStatusBar } from './SilentIndexingStatusBar';
@@ -16,6 +20,7 @@ export const VoiceHeroStage: React.FC = () => {
   const {
     layout,
     activeLoungeType,
+    activeFamilyRoom,
     photos,
     sharedRoomHostPhotos,
     sharedRoomAddedPhotos,
@@ -57,14 +62,26 @@ export const VoiceHeroStage: React.FC = () => {
     return zCoreBridge.subscribe((connected) => setIsZCoreConnected(connected));
   }, []);
 
+  const sharedMode = isSharedPhotoLounge(activeLoungeType);
+  const scopedLocalDocuments = useMemo(
+    () => (sharedMode ? [] : localDocuments),
+    [sharedMode, localDocuments]
+  );
+  const scopedVideoSceneItems = useMemo(
+    () => (sharedMode ? [] : videoSceneItems),
+    [sharedMode, videoSceneItems]
+  );
+
   const activePhotos = useMemo(() => {
-    const sharedCorpus = [...sharedRoomAddedPhotos, ...sharedRoomHostPhotos];
-    const sourcePhotos =
-      (activeLoungeType === 'family' || activeLoungeType === 'club') && sharedCorpus.length > 0
-        ? sharedCorpus
-        : photos;
+    const sourcePhotos = resolveLoungePhotoCorpus({
+      activeLoungeType,
+      activeFamilyRoom,
+      photos,
+      sharedRoomHostPhotos,
+      sharedRoomAddedPhotos,
+    });
     return sourcePhotos.filter((p) => !p.quarantined);
-  }, [activeLoungeType, photos, sharedRoomAddedPhotos, sharedRoomHostPhotos]);
+  }, [activeLoungeType, activeFamilyRoom, photos, sharedRoomAddedPhotos, sharedRoomHostPhotos]);
   const gallerySceneCount = useMemo(
     () =>
       activePhotos.filter(
@@ -78,31 +95,31 @@ export const VoiceHeroStage: React.FC = () => {
     [activePhotos]
   );
   const vaultPhotoCount = useMemo(
-    () => activePhotos.filter((p) => p.isVaultDocument).length,
-    [activePhotos]
+    () => (sharedMode ? 0 : activePhotos.filter((p) => p.isVaultDocument).length),
+    [sharedMode, activePhotos]
   );
-  const totalIndexedDocs = localDocuments.length + vaultPhotoCount;
-  const matchedTotalDocsCount = matchedLocalDocs.length + matchedVaultPhotos.length;
+  const totalIndexedDocs = scopedLocalDocuments.length + vaultPhotoCount;
+  const matchedTotalDocsCount = sharedMode ? 0 : matchedLocalDocs.length + matchedVaultPhotos.length;
   const totalDissectedSegments = useMemo(
-    () => videoSceneItems.reduce((acc, v) => acc + v.timelineFrames.length, 0),
-    [videoSceneItems]
+    () => scopedVideoSceneItems.reduce((acc, v) => acc + v.timelineFrames.length, 0),
+    [scopedVideoSceneItems]
   );
 
   // 100% 엔진 색인 데이터 기반 동적 서류 힌트 생성 (컬러 이모지 제거)
   const dynamicDocHints = useMemo(() => {
-    return localDocuments.slice(0, 4).map((doc) => ({
+    return scopedLocalDocuments.slice(0, 4).map((doc) => ({
       id: `hint_doc_${doc.id}`,
       label: doc.title,
       query: doc.title,
       meta: `${doc.ext} 문서 • ${doc.date} (${doc.deviceSource})`,
     }));
-  }, [localDocuments]);
+  }, [scopedLocalDocuments]);
 
   // 100% 엔진 색인 데이터 기반 동영상 초(Sec) 단위 사물·장면 칩 생성 (컬러 이모지 제거)
   const dynamicMicroObjectChips = useMemo(() => {
     const chips: Array<{ label: string; query: string; videoId: string; seekSec: number }> = [];
     const seenQueries = new Set<string>();
-    for (const vid of videoSceneItems) {
+    for (const vid of scopedVideoSceneItems) {
       const candidateFrames = [
         vid.timelineFrames.find((f) => f.timeSec === vid.matchedSeekSec),
         ...vid.timelineFrames,
@@ -328,7 +345,7 @@ export const VoiceHeroStage: React.FC = () => {
               >
                 {hasExecutedUserSearch
                   ? `(${matchedVideoScenes.length})`
-                  : `${videoSceneItems.length}`}
+                  : `${scopedVideoSceneItems.length}`}
               </span>
             </button>
 

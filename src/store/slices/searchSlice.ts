@@ -118,9 +118,11 @@ import {
   deriveLoungeProperNounTokens,
   getActivePersonaForCluster,
   isMobileOrStoreRuntime,
+  isSharedPhotoLounge,
   quarantineFailureToast,
   quarantineResultNote,
   requestQuarantineOp,
+  resolveLoungePhotoCorpus,
   restoreAllExcludedCustomFaceRegistrations,
   saveCustomFaceRegistration,
   storeSharedRefs,
@@ -265,7 +267,10 @@ export const createSearchSlice: StateCreator<
     })),
 
   setSearchSpace: (searchSpace) => {
-    const { hasExecutedUserSearch, photos, videoSceneItems, localDocuments } = get();
+    const stateNow = get();
+    const { hasExecutedUserSearch, photos, videoSceneItems, localDocuments, activeLoungeType } =
+      stateNow;
+    const sharedMode = isSharedPhotoLounge(activeLoungeType);
     // 이미 검색을 실행한 상태라면 검색어와 3개 탭의 매칭 결과(배지 숫자 및 목록)를 그대로 유지한 채 선택한 탭만 즉시 열어줌
     if (hasExecutedUserSearch) {
       set({
@@ -277,46 +282,43 @@ export const createSearchSlice: StateCreator<
 
     // 아직 첫 검색 전인 상태에서 탭을 눌러 둘러보는 경우
     if (searchSpace === 'video') {
-      const totalFrames = videoSceneItems.reduce((a, v) => a + v.timelineFrames.length, 0);
+      const scopedVideos = sharedMode ? [] : videoSceneItems;
+      const totalFrames = scopedVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
       set({
         searchSpace: 'video',
         hasUserSelectedSearchTab: true,
-        activeQuery: `동영상 ${videoSceneItems.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`,
+        activeQuery: `동영상 ${scopedVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`,
         matchedTags: ['#동영상전구간해부', '#타임라인점프재생', '#자율비전인덱싱'],
-        matchedVideoScenes: videoSceneItems,
+        matchedVideoScenes: scopedVideos,
       });
     } else if (searchSpace === 'vault') {
-      const vaultPhotos = photos
-        .filter((p) => !p.quarantined && p.isVaultDocument)
-        .map((photo) => ({
-          photo,
-          score: 0.96,
-          matchPercentage: 98,
-          matchedBy: 'text-direct' as const,
-        }));
+      const scopedDocs = sharedMode ? [] : localDocuments;
+      const vaultPhotos = sharedMode
+        ? []
+        : photos
+            .filter((p) => !p.quarantined && p.isVaultDocument)
+            .map((photo) => ({
+              photo,
+              score: 0.96,
+              matchPercentage: 98,
+              matchedBy: 'text-direct' as const,
+            }));
       set({
         searchSpace: 'vault',
         hasUserSelectedSearchTab: true,
-        activeQuery: `최근 서류 ${localDocuments.length + vaultPhotos.length}건 통합 (로컬 문서 ${localDocuments.length}건 + 촬영 서류 ${vaultPhotos.length}장)`,
+        activeQuery: `최근 서류 ${scopedDocs.length + vaultPhotos.length}건 통합 (로컬 문서 ${scopedDocs.length}건 + 촬영 서류 ${vaultPhotos.length}장)`,
         matchedTags: ['#스마트서류함', '#문서·설명서', '#문서·신분증', '#PDF통합검색'],
         matchedVaultPhotos: vaultPhotos,
-        matchedLocalDocs: localDocuments,
+        matchedLocalDocs: scopedDocs,
       });
     } else {
-      const stateNow = get();
-      const sharedCorpus = [
-        ...stateNow.sharedRoomAddedPhotos,
-        ...stateNow.sharedRoomHostPhotos,
-      ];
-      const sourcePhotos =
-        (stateNow.activeLoungeType === 'family' || stateNow.activeLoungeType === 'club') &&
-        sharedCorpus.length > 0
-          ? sharedCorpus
-          : photos.filter(
-              (p) =>
-                !String(p.id || '').startsWith('shared_host_') &&
-                !String(p.thumbUrl || '').startsWith('/shared_family_host_thumbs/')
-            );
+      const sourcePhotos = resolveLoungePhotoCorpus({
+        activeLoungeType: stateNow.activeLoungeType,
+        activeFamilyRoom: stateNow.activeFamilyRoom,
+        photos,
+        sharedRoomHostPhotos: stateNow.sharedRoomHostPhotos,
+        sharedRoomAddedPhotos: stateNow.sharedRoomAddedPhotos,
+      });
       const galleryPhotos = sourcePhotos
         .filter(
           (p) =>
@@ -339,6 +341,10 @@ export const createSearchSlice: StateCreator<
         activeQuery:
           stateNow.activeLoungeType === 'family'
             ? `${stateNow.activeFamilyRoom} 패밀리 앨범 (${galleryPhotos.length}장)`
+            : stateNow.activeLoungeType === 'club'
+            ? `동호회·모임 앨범 (${galleryPhotos.length}장)`
+            : stateNow.activeLoungeType === 'student'
+            ? `동창회 앨범 (${galleryPhotos.length}장)`
             : `전체 갤러리 사진 (${galleryPhotos.length}장)`,
         matchedTags: ['#전체갤러리', '#자율얼굴검출', '#768차원벡터검색'],
         searchResults: galleryPhotos,
@@ -357,23 +363,26 @@ export const createSearchSlice: StateCreator<
       sharedRoomAddedPhotos,
       sharedRoomHostPhotos,
     } = get();
-    const sharedCorpus = [...sharedRoomAddedPhotos, ...sharedRoomHostPhotos];
-    const sourcePhotos =
-      (activeLoungeType === 'family' || activeLoungeType === 'club') && sharedCorpus.length > 0
-        ? sharedCorpus
-        : photos.filter(
-            (p) =>
-              !String(p.id || '').startsWith('shared_host_') &&
-              !String(p.thumbUrl || '').startsWith('/shared_family_host_thumbs/')
-          );
-    const vaultPhotos = photos
-      .filter((p) => !p.quarantined && p.isVaultDocument)
-      .map((photo) => ({
-        photo,
-        score: 0.96,
-        matchPercentage: 98,
-        matchedBy: 'text-direct' as const,
-      }));
+    const sharedMode = isSharedPhotoLounge(activeLoungeType);
+    const sourcePhotos = resolveLoungePhotoCorpus({
+      activeLoungeType,
+      activeFamilyRoom,
+      photos,
+      sharedRoomHostPhotos,
+      sharedRoomAddedPhotos,
+    });
+    const scopedDocs = sharedMode ? [] : localDocuments;
+    const scopedVideos = sharedMode ? [] : videoSceneItems;
+    const vaultPhotos = sharedMode
+      ? []
+      : photos
+          .filter((p) => !p.quarantined && p.isVaultDocument)
+          .map((photo) => ({
+            photo,
+            score: 0.96,
+            matchPercentage: 98,
+            matchedBy: 'text-direct' as const,
+          }));
     const galleryPhotos = sourcePhotos
       .filter(
         (p) =>
@@ -390,7 +399,7 @@ export const createSearchSlice: StateCreator<
         matchPercentage: 97,
         matchedBy: 'text-direct' as const,
       }));
-    const totalFrames = videoSceneItems.reduce((a, v) => a + v.timelineFrames.length, 0);
+    const totalFrames = scopedVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
 
     set({
       searchSpace,
@@ -398,14 +407,18 @@ export const createSearchSlice: StateCreator<
       hasUserSelectedSearchTab: true,
       activeQuery:
         searchSpace === 'video'
-          ? `동영상 ${videoSceneItems.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`
+          ? `동영상 ${scopedVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`
           : searchSpace === 'vault'
-          ? `최근 서류 ${localDocuments.length + vaultPhotos.length}건 통합 (로컬 문서 ${localDocuments.length}건 + 촬영 서류 ${vaultPhotos.length}장)`
+          ? `최근 서류 ${scopedDocs.length + vaultPhotos.length}건 통합 (로컬 문서 ${scopedDocs.length}건 + 촬영 서류 ${vaultPhotos.length}장)`
           : activeLoungeType === 'family'
           ? `${activeFamilyRoom} 패밀리 앨범 (${galleryPhotos.length}장)`
+          : activeLoungeType === 'club'
+          ? `동호회·모임 앨범 (${galleryPhotos.length}장)`
+          : activeLoungeType === 'student'
+          ? `동창회 앨범 (${galleryPhotos.length}장)`
           : `전체 갤러리 사진 (${galleryPhotos.length}장)`,
-      matchedVideoScenes: videoSceneItems,
-      matchedLocalDocs: localDocuments,
+      matchedVideoScenes: scopedVideos,
+      matchedLocalDocs: scopedDocs,
       matchedVaultPhotos: vaultPhotos,
       searchResults: galleryPhotos,
     });
@@ -781,17 +794,16 @@ export const createSearchSlice: StateCreator<
     }
     cleanedSearchQuery = cleanedSearchQuery.replace(/\s+/g, ' ').trim();
 
-    // 가족/모임 공유방에서는 공유방 전용 코퍼스(호스트 36장 섀도우 + 멤버가 추가한 로컬 사진)를 우선 검색하고, 업무 공유(work)에서는 여권 인물 태그를 제외
+    // 가족/동호회/동창회 공유방에서는 해당 방 전용 사진 코퍼스만 검색하고(타 방/내 로컬 PC 사진·문서·동영상 누출 차단), 업무 공유(work)에서는 여권 인물 태그를 제외
     const stateNow = get();
-    const sharedCorpusForSearch = [
-      ...stateNow.sharedRoomAddedPhotos,
-      ...stateNow.sharedRoomHostPhotos,
-    ];
-    const basePhotosForSearch =
-      (activeLoungeType === 'family' || activeLoungeType === 'club') &&
-      sharedCorpusForSearch.length > 0
-        ? sharedCorpusForSearch
-        : photos;
+    const sharedMode = isSharedPhotoLounge(activeLoungeType);
+    const basePhotosForSearch = resolveLoungePhotoCorpus({
+      activeLoungeType,
+      activeFamilyRoom: stateNow.activeFamilyRoom,
+      photos,
+      sharedRoomHostPhotos: stateNow.sharedRoomHostPhotos,
+      sharedRoomAddedPhotos: stateNow.sharedRoomAddedPhotos,
+    });
     const photosForSearch = isWorkLounge
       ? basePhotosForSearch.map((p) => ({
           ...p,
@@ -807,7 +819,7 @@ export const createSearchSlice: StateCreator<
 
     // [통합 3-Track 고속 검색] 사진·문서 매칭을 즉시 수행한 뒤, 일치 사진 세션 정보를 결합해 동영상을 무블로킹(0.1초) 평가
     const [docMatches, photoSearchOut] = await Promise.all([
-      isExplicitPhotoOnlyQuery
+      isExplicitPhotoOnlyQuery || sharedMode
         ? Promise.resolve([])
         : searchLocalDocumentFilesAsync(cleanedSearchQuery || query, localDocuments),
       cleanedSearchQuery
@@ -816,14 +828,15 @@ export const createSearchSlice: StateCreator<
     ]);
     if (reqSeq !== storeSharedRefs.latestRunTextQuerySeq) return;
 
-    const videoMatches = isExplicitPhotoOnlyQuery
-      ? []
-      : await searchVideoSceneItemsAsync(
-          cleanedSearchQuery || query,
-          videoSceneItems,
-          photosForSearch,
-          photoSearchOut.results
-        );
+    const videoMatches =
+      isExplicitPhotoOnlyQuery || sharedMode
+        ? []
+        : await searchVideoSceneItemsAsync(
+            cleanedSearchQuery || query,
+            videoSceneItems,
+            photosForSearch,
+            photoSearchOut.results
+          );
     if (reqSeq !== storeSharedRefs.latestRunTextQuerySeq) return;
 
     let { results } = photoSearchOut;

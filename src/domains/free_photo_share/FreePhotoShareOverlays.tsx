@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
+import { resolveLoungePhotoCorpus } from '../../store/slices/storeSharedRefs';
 import { jumpToGhostSecretary } from '../../components/GhostSecretaryFirstGuard';
 
 export const FreePhotoShareOverlays: React.FC = () => {
@@ -31,11 +32,22 @@ export const FreePhotoShareOverlays: React.FC = () => {
     [selectedSharedUploadIds]
   );
 
+  const activeSharedRoomTitle =
+    activeLoungeType === 'club'
+      ? '동호회·모임 앨범'
+      : activeLoungeType === 'student'
+      ? '동창회 앨범'
+      : `${activeFamilyRoom} 패밀리 앨범`;
+
   const uploadableLocalPhotos = useMemo(() => {
-    const existingSharedNames = new Set([
-      ...sharedRoomHostPhotos.map((p) => p.name),
-      ...sharedRoomAddedPhotos.map((p) => p.name),
-    ]);
+    const currentRoomCorpus = resolveLoungePhotoCorpus({
+      activeLoungeType,
+      activeFamilyRoom,
+      photos,
+      sharedRoomHostPhotos,
+      sharedRoomAddedPhotos,
+    });
+    const existingSharedNames = new Set(currentRoomCorpus.map((p) => p.name));
     return photos.filter(
       (p) =>
         !p.quarantined &&
@@ -44,7 +56,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
         !existingSharedNames.has(p.name) &&
         !/^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(p.name)
     );
-  }, [photos, sharedRoomHostPhotos, sharedRoomAddedPhotos]);
+  }, [activeLoungeType, activeFamilyRoom, photos, sharedRoomHostPhotos, sharedRoomAddedPhotos]);
 
   useEffect(() => {
     if (showSharedPhotoUploadModal && !wasUploadModalOpenRef.current) {
@@ -157,7 +169,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
                   </span>
                 </div>
                 <h3 className="font-headline-sm text-[18px] md:text-[20px] text-white font-black">
-                  『{activeFamilyRoom} 패밀리 앨범』에 추가할 내 컴퓨터 사진을 선택해 주세요
+                  『{activeSharedRoomTitle}』에 추가할 내 컴퓨터 사진을 선택해 주세요
                 </h3>
                 <p className="text-[12px] text-zinc-300">
                   중복·흔들린 사진과 신분증 서류는 자동으로 걸러낸 깔끔한 새 사진 <strong>{uploadableLocalPhotos.length}장</strong>이 준비되어 있습니다.
@@ -197,7 +209,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
                     pendingReturnShareRoom: {
                       loungeType: activeLoungeType,
                       familyRoom: activeFamilyRoom,
-                      roomTitle: `${activeFamilyRoom} 패밀리 앨범`,
+                      roomTitle: activeSharedRoomTitle,
                     },
                   });
                   jumpToGhostSecretary();
