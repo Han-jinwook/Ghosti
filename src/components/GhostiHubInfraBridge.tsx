@@ -415,7 +415,7 @@ const GhostiHubGlobalModals: React.FC = () => {
       )}
 
       {/* 5. 1초 미니 오류·불편 즉시 신고 모달 & 전역 토스트 */}
-      <HubBugReporter appId="Ghosti" appVersion="v1.0.6" />
+      <HubBugReporter appId="Ghosti" appVersion="v1.0.7" />
       <HubNotifier />
     </>
   );
