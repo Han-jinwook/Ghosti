@@ -659,29 +659,43 @@ const TrialRewardCard: React.FC = () => {
         setChoice('trial');
         try {
           localStorage.setItem(DOJO_TRIAL_CHOICE_STORAGE_KEY, 'trial');
+          window.dispatchEvent(new CustomEvent('ghosti_dojo_trial_choice_updated'));
         } catch {
           /* ignore */
         }
       } else if (st.trial_status === 'EXPIRED_LOCKED' || st.trial_status === 'EXPIRED') {
         setChoice('expired');
-      } else if (st.trial_opt_in_status === 'DEFERRED') {
-        setChoice('later');
+      } else {
+        setChoice(st.trial_opt_in_status === 'DEFERRED' ? 'later' : 'none');
+        try {
+          localStorage.setItem(
+            DOJO_TRIAL_CHOICE_STORAGE_KEY,
+            st.trial_opt_in_status === 'DEFERRED' ? 'later' : 'none'
+          );
+          window.dispatchEvent(new CustomEvent('ghosti_dojo_trial_choice_updated'));
+        } catch {
+          /* ignore */
+        }
       }
     };
     void syncFromBackend();
+    const pollId = window.setInterval(() => {
+      if (zCoreBridge.isConnected) void syncFromBackend();
+    }, 2000);
     const unsub = zCoreBridge.subscribe((connected) => {
       if (connected) void syncFromBackend();
     });
     const syncChoice = () => {
       try {
         const saved = localStorage.getItem(DOJO_TRIAL_CHOICE_STORAGE_KEY);
-        if (saved === 'trial' || saved === 'later') setChoice(saved);
+        if (saved === 'trial' || saved === 'later' || saved === 'none') setChoice(saved);
       } catch {
         /* ignore */
       }
     };
     window.addEventListener('ghosti_dojo_trial_choice_updated', syncChoice);
     return () => {
+      window.clearInterval(pollId);
       unsub();
       window.removeEventListener('ghosti_dojo_trial_choice_updated', syncChoice);
     };
@@ -734,7 +748,7 @@ const TrialRewardCard: React.FC = () => {
               ? '🔒 30일 무료체험 종료됨 (무료 기본기는 평생 0원)'
               : '🚀 네! 오늘부터 30일 무제한 초능력 체험 시작하기'}
         </button>
-        {choice !== 'trial' && choice !== 'expired' && (
+        {choice !== 'expired' && (
           <button
             type="button"
             className={`px-4 py-2.5 rounded-xl border text-[13px] font-bold cursor-pointer transition-all ${
@@ -751,13 +765,15 @@ const TrialRewardCard: React.FC = () => {
                 /* ignore */
               }
               playBabyGhostChime('typo');
-              const st = await startSuperpowerTrialAction(accountId, isSubscribed, false);
+              const st = await startSuperpowerTrialAction(accountId, false, false);
               setStatus(st);
             }}
           >
             {choice === 'later'
               ? '✓ 평생 무료 기본기부터 쓰는 중 (언제든 왼쪽 버튼으로 30일 체험 시작 가능)'
-              : '나중에 필요할 때 시작할게요 (평생 무료 기본기부터 쓰기)'}
+              : choice === 'trial'
+                ? '🔄 나중에 시작할게요 (30일 체험 미시작 상태로 전환)'
+                : '나중에 필요할 때 시작할게요 (평생 무료 기본기부터 쓰기)'}
           </button>
         )}
       </div>
@@ -1059,19 +1075,49 @@ export interface GhostSuperpowerDojoProps {
 }
 
 export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ variant = 'full' }) => {
+  const { merlinAuth, activePricingPlan, subscribedLounges } = useSaySeeStore();
+  const accountId = merlinAuth?.email || merlinAuth?.userId || 'local_user';
+  const isSubscribed = activePricingPlan !== 'free_trial' || Object.values(subscribedLounges).some(Boolean);
   const [progress, setProgress] = useState<DojoProgress>(() => loadDojoProgress());
   const [activeBasic, setActiveBasic] = useState<BasicStepId>(() => {
     const p = loadDojoProgress();
     return BASIC_STEPS.find((s) => !p.basics[s.id])?.id ?? 'b1';
   });
   const [activeFreeCore, setActiveFreeCore] = useState<'typo' | 'seq' | 'iron'>('typo');
-  const [activeDojo, setActiveDojo] = useState<DojoItemId | null>(5);
+  const [trialStarted, setTrialStarted] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(DOJO_TRIAL_CHOICE_STORAGE_KEY) === 'trial';
+    } catch {
+      return false;
+    }
+  });
+  const [activeDojo, setActiveDojo] = useState<DojoItemId | null>(() => {
+    try {
+      return localStorage.getItem(DOJO_TRIAL_CHOICE_STORAGE_KEY) === 'trial' ? 5 : null;
+    } catch {
+      return null;
+    }
+  });
+  const [pendingOptInDojoId, setPendingOptInDojoId] = useState<DojoItemId | null>(null);
   const [sandboxKey, setSandboxKey] = useState(0);
 
   useEffect(() => {
     const sync = () => setProgress(loadDojoProgress());
+    const syncTrial = () => {
+      try {
+        const started = localStorage.getItem(DOJO_TRIAL_CHOICE_STORAGE_KEY) === 'trial';
+        setTrialStarted(started);
+        if (!started) setActiveDojo(null);
+      } catch {
+        /* ignore */
+      }
+    };
     window.addEventListener('ghosti_dojo_progress_updated', sync);
-    return () => window.removeEventListener('ghosti_dojo_progress_updated', sync);
+    window.addEventListener('ghosti_dojo_trial_choice_updated', syncTrial);
+    return () => {
+      window.removeEventListener('ghosti_dojo_progress_updated', sync);
+      window.removeEventListener('ghosti_dojo_trial_choice_updated', syncTrial);
+    };
   }, []);
 
   const markBasic = (id: BasicStepId) => {
@@ -1092,7 +1138,10 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
     []
   );
   const ActiveDojoSandbox = activeDojo ? DOJO_SANDBOXES[activeDojo] : null;
-  const activeDojoMeta = paidDojoItems.find((d) => d.id === activeDojo) ?? paidDojoItems[0];
+  const activeDojoMeta = activeDojo ? paidDojoItems.find((d) => d.id === activeDojo) ?? null : null;
+  const pendingOptInMeta = pendingOptInDojoId
+    ? paidDojoItems.find((d) => d.id === pendingOptInDojoId) ?? null
+    : null;
 
   if (variant === 'basics') {
     return (
@@ -1247,11 +1296,15 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
                 key={d.id}
                 type="button"
                 onClick={() => {
+                  if (!trialStarted && !isSubscribed) {
+                    setPendingOptInDojoId(d.id);
+                    return;
+                  }
                   setActiveDojo(d.id);
                   setSandboxKey((k) => k + 1);
                 }}
                 className={`flex items-center gap-2 px-2.5 py-2 rounded-xl text-left text-[12px] font-bold border cursor-pointer ${
-                  activeDojoMeta?.id === d.id
+                  trialStarted && activeDojoMeta?.id === d.id
                     ? 'border-amber-400 bg-amber-400/10 text-white'
                     : 'border-white/10 text-zinc-300 hover:bg-white/5'
                 }`}
@@ -1262,7 +1315,60 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
               </button>
             ))}
           </div>
-          {ActiveDojoSandbox && activeDojoMeta && (
+          {pendingOptInMeta && (
+            <div className="p-4 rounded-2xl bg-zinc-950 border-2 border-amber-400 shadow-2xl flex flex-col gap-3">
+              <div className="text-[14.5px] font-extrabold text-amber-300 flex items-center gap-2">
+                <span>🎁 [{pendingOptInMeta.title}] — 30일 무료체험을 지금 시작할까요?</span>
+              </div>
+              <p className="text-[12.5px] text-zinc-200 leading-relaxed">
+                유료 티어(🔒) 도구는 몰래 차감되지 않으며, 동의하실 때만 오늘부터 <strong>30일 무제한 무료체험(D-30)</strong>이 시작됩니다. (카드 등록 0% · 만료 후에도 무료 기본기는 평생 0원)
+              </p>
+              <div className="flex flex-wrap items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const targetId = pendingOptInDojoId;
+                    setPendingOptInDojoId(null);
+                    setTrialStarted(true);
+                    try {
+                      localStorage.setItem(DOJO_TRIAL_CHOICE_STORAGE_KEY, 'trial');
+                      window.dispatchEvent(new CustomEvent('ghosti_dojo_trial_choice_updated'));
+                    } catch {
+                      /* ignore */
+                    }
+                    playBabyGhostChime('summon');
+                    await startSuperpowerTrialAction(accountId, isSubscribed, true);
+                    if (targetId) {
+                      setActiveDojo(targetId);
+                      setSandboxKey((k) => k + 1);
+                    }
+                  }}
+                  className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[12.5px] font-black cursor-pointer shadow-sm"
+                >
+                  예, 지금 30일 무료체험 시작하기
+                </button>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    setPendingOptInDojoId(null);
+                    setTrialStarted(false);
+                    setActiveDojo(null);
+                    try {
+                      localStorage.setItem(DOJO_TRIAL_CHOICE_STORAGE_KEY, 'later');
+                      window.dispatchEvent(new CustomEvent('ghosti_dojo_trial_choice_updated'));
+                    } catch {
+                      /* ignore */
+                    }
+                    await startSuperpowerTrialAction(accountId, false, false);
+                  }}
+                  className="px-4 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/20 text-zinc-200 text-[12.5px] font-bold cursor-pointer"
+                >
+                  아니오 (미시작 상태 유지)
+                </button>
+              </div>
+            </div>
+          )}
+          {trialStarted && ActiveDojoSandbox && activeDojoMeta && (
             <div className="flex flex-col gap-2 p-3.5 rounded-xl bg-zinc-950/80 border border-white/10">
               <div className="text-[12.5px] text-zinc-300 font-bold">
                 {activeDojoMeta.icon} {activeDojoMeta.mission}

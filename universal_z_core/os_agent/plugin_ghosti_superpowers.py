@@ -332,12 +332,14 @@ def start_superpower_trial(body: Dict[str, Any] | None = None) -> Dict[str, Any]
     agreed = True if "agreed" not in data else bool(data.get("agreed"))
 
     opt_res = spd.opt_in_30d_unlimited_superpower_trial(agreed=agreed, account_id=account_id)
-    if is_subscribed:
+    if agreed and is_subscribed:
         ledger = _load_trial_ledger()
         hwid = get_machine_hwid()
         m_entry = ledger.setdefault("machines", {}).setdefault(hwid, {"machineHwid": hwid})
         m_entry["isSubscribed"] = True
         _save_trial_ledger(ledger)
+    elif not agreed:
+        is_subscribed = False
 
     ensure_superpower_daemon_running()
     status = get_superpower_status({"accountId": account_id, "isSubscribed": is_subscribed})

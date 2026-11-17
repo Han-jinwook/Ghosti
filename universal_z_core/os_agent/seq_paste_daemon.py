@@ -1718,8 +1718,14 @@ def opt_in_30d_unlimited_superpower_trial(agreed: bool = True, account_id: str =
             m_info["startedAtTs"] = existing_ts
         m_info["trialOptInStatus"] = "ACTIVE_30D"
     else:
-        if existing_ts <= 0.0:
-            m_info["trialOptInStatus"] = "DEFERRED"
+        m_info["isSubscribed"] = False
+        m_info["trialOptInTs"] = 0.0
+        m_info["startedAtTs"] = 0.0
+        m_info.pop("trialOptInAt", None)
+        m_info.pop("trialExpiresAt", None)
+        m_info.pop("startedAt", None)
+        m_info.pop("expiresAt", None)
+        m_info["trialOptInStatus"] = "DEFERRED"
     ledger_path.write_text(json.dumps(ledger, ensure_ascii=False, indent=2), encoding="utf-8")
     summary = get_trial_badge_summary()
     return {
@@ -1739,20 +1745,22 @@ def _prompt_opt_in_trial_tk(feature_label: str = "고급 초능력") -> bool:
     if os.environ.get("GHOSTI_HEADLESS_TEST") == "1":
         return False
     try:
+        u32.MessageBoxW.argtypes = [wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.UINT]
+        u32.MessageBoxW.restype = ctypes.c_int
         msg_body = (
             f"🎁 [{feature_label}] 기능은 유료 티어 초능력입니다.\n"
-            f"오늘부터 30일 무제한 무료체험을 시작할까요?\n\n"
+            f"오늘부터 30일 무제한 무료체험을 지금 시작할까요?\n\n"
             f"• 카드 등록 0% · 자동 결제 0%로 30일간 횟수 제한 없이 무제한 이용\n"
             f"• 30일이 지나면 유료 도구만 조용히 잠기며(🔒),\n"
             f"  무료 기본기(자동 한영·순차복붙·[1]다림질·상용구·압축)는 평생 0원입니다.\n\n"
             f"[예(Y)] 지금 30일 무료체험 시작   /   [아니요(N)] 나중에 시작"
         )
-        # MB_YESNO (0x04) | MB_ICONINFORMATION (0x40) | MB_TOPMOST (0x40000) -> IDYES == 6
+        # MB_YESNO (0x04) | MB_ICONINFORMATION (0x40) | MB_SETFOREGROUND (0x10000) | MB_TOPMOST (0x40000) -> IDYES == 6
         res_mb = u32.MessageBoxW(
             0,
             msg_body,
             "👻 귀신같이 — 30일 무제한 무료체험 시작 확인",
-            0x00000004 | 0x00000040 | 0x00040000,
+            0x00000004 | 0x00000040 | 0x00010000 | 0x00040000,
         )
         return int(res_mb) == 6
     except Exception:
@@ -6054,8 +6062,7 @@ AUTOCORRECT_EXCLUDE_PROCESSES: set[str] = {
     "hshow.exe",
     "hcell.exe",
     "hword.exe",
-    # 2. 글로벌 Microsoft Office / LibreOffice 계열 (자체 한/영 자동 고침 및 AutoCorrect 보유 — 엑셀 포함 전수)
-    "excel.exe",
+    # 2. 글로벌 Microsoft Office / LibreOffice 계열 (워드·파워포인트는 자체 한/영 자동 고침 우선 / 엑셀은 셀 편집 EXCEL6 미변환 시 원자적 1회 교체 허용)
     "winword.exe",
     "powerpnt.exe",
     "soffice.bin",
@@ -6101,7 +6108,6 @@ AUTOCORRECT_EXCLUDE_CLASS_KEYWORDS: tuple[str, ...] = (
     "hwp",
     "hnc_",
     "hncedit",
-    "xlmain",
     "opusapp",
     "_wwg",
     "pptframeclass",
@@ -6227,7 +6233,13 @@ def should_skip_auto_typo(hwnd: int) -> bool:
         if proc_root_low in _BROWSER_AUTO_TYPO_PROCS:
             return False
 
-        # 그 외 모든 프로그램(엑셀·워드·한글 등 자체 오토코렉트 보유 앱)은 실시간 자동성형 100% 차단
+        # [허용 5] 엑셀(excel.exe — 오직 실제 '셀 텍스트 편집 모드(EXCEL6)' 또는 '수식 입력줄(EXCEL<)'일 때만 허용, 시트 그리드 EXCEL7은 100% 차단!)
+        if proc_root_low == "excel.exe" or cls_root == "XLMAIN":
+            if focus_cls in ("EXCEL6", "EXCEL<"):
+                return False
+            return True
+
+        # 그 외 모든 프로그램(워드·한글 등 자체 오토코렉트 보유 앱)은 실시간 자동성형 100% 차단
         return True
     except Exception:
         return True
@@ -7658,8 +7670,9 @@ def main() -> None:
                         return
                     _show_default_ui1_bar(live_clip)
                     return
-            disarm_sub_hotkeys()
-            show_ghost_toast("__UI2_SEARCH__|small|", duration_ms=8000)
+            # 바탕화면·탐색기에서도 1회차 호출(Ctrl+0 / Ctrl+우클릭) 시에는 [창 UI ① 기본 귀신창([1]~[4])]을 먼저 띄우고,
+            # 한 번 더 호출하면 상단 [0-B순위: 연속 재호출 토글]에 의해 [창 UI ② 👻 귀신검색창]으로 즉시 전환됩니다!
+            _show_default_ui1_bar(live_clip)
             return
 
         # [분기 3: 입력창 내부 — 단어 끝 '?' 검색 의도 감지 시 ➔ 귀신검색창 / 일반 커서 및 문장 드래그 ➔ 기본 귀신창([1]~[5] 즉시 사용 보장!)]
@@ -7758,41 +7771,56 @@ def main() -> None:
 
     def _dismiss_native_context_menu_after_rbtn_up(hwnd_target: int | None) -> None:
         """
-        [바탕화면/앱 기본 우클릭 메뉴 즉시 소거 & 검정 먹통 원천 차단]:
-        - explorer.exe 소속 Xaml_WindowedPopupClass나 Progman/WorkerW에 WM_CLOSE를 쏘던 위험 코드를 100% 제거!
-        - 손을 뗀 직후(5ms~180ms) 고전 메뉴(#32768)가 찰나에라도 생성되면 즉시 MN_CANCELMENUS + WM_CLOSE + ESC로 닫습니다.
+        [바탕화면/앱 기본 우클릭 메뉴 즉시 소거 & Ctrl+Esc 시작메뉴 오작동 영구 차단]:
+        - 유저가 Ctrl 키를 누른 채 우클릭을 뗄 때 VK_ESCAPE를 주입하면 윈도우 단축키 'Ctrl + Esc (시작 메뉴 열기)'가 발동되므로
+          VK_ESCAPE 키 이벤트 주입을 영구 금지합니다!
+        - WH_MOUSE_LL 훅이 Ctrl+우클릭(WM_RBUTTONDOWN/UP)을 원천 차단하며, 혹시라도 고전 메뉴(#32768)가 뜬 경우에만
+          키보드 이벤트 없이 MN_CANCELMENUS + WM_CLOSE 메시지로만 조용히 닫습니다.
         """
         def _worker():
-            global _LAST_RBTN_DISMISS_ESC_TS
             try:
                 MN_CANCELMENUS = 0x01E6
                 WM_CLOSE_MSG = 0x0010
-                VK_ESCAPE = 0x1B
-                esc_sc = u32.MapVirtualKeyW(VK_ESCAPE, 0)
-                sent_esc = False
-                for delay_s in (0.005, 0.015, 0.030, 0.055, 0.090, 0.140):
+                for delay_s in (0.005, 0.015, 0.030, 0.055):
                     time.sleep(delay_s)
                     h_menu = u32.FindWindowW("#32768", None)
                     if h_menu and u32.IsWindowVisible(h_menu):
                         u32.PostMessageW(h_menu, MN_CANCELMENUS, 0, 0)
                         u32.PostMessageW(h_menu, WM_CLOSE_MSG, 0, 0)
-                        if not sent_esc:
-                            sent_esc = True
-                            _LAST_RBTN_DISMISS_ESC_TS = time.time()
-                            u32.keybd_event(VK_ESCAPE, esc_sc, 0, 0)
-                            time.sleep(0.006)
-                            u32.keybd_event(VK_ESCAPE, esc_sc, KEYEVENTF_KEYUP, 0)
-                if not sent_esc:
-                    # Win11 Xaml 팝업 메뉴 대응용 안전한 ESC 1회
-                    _LAST_RBTN_DISMISS_ESC_TS = time.time()
-                    u32.keybd_event(VK_ESCAPE, esc_sc, 0, 0)
-                    time.sleep(0.006)
-                    u32.keybd_event(VK_ESCAPE, esc_sc, KEYEVENTF_KEYUP, 0)
                 _toast_queue.put(("__LIFT__", 0))
             except Exception:
                 pass
 
         threading.Thread(target=_worker, daemon=True).start()
+
+    def _ll_mouse_proc(nCode: int, wParam: int, lParam: int) -> int:
+        try:
+            if nCode >= 0:
+                if wParam == WM_RBUTTONDOWN:
+                    ctrl_h = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
+                    alt_h = (u32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0
+                    shift_h = (u32.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0
+                    if ctrl_h and not alt_h and not shift_h:
+                        fg_h = u32.GetForegroundWindow()
+                        if not _should_bypass_rclick_hook(fg_h):
+                            _RBTN_HOLD_STATE["suppress_next_up"] = True
+                            _RBTN_HOLD_STATE["summon_requested"] = True
+                            _RBTN_HOLD_STATE["target_hwnd"] = fg_h
+                            return 1
+                elif wParam == WM_RBUTTONUP:
+                    if _RBTN_HOLD_STATE.get("suppress_next_up"):
+                        _RBTN_HOLD_STATE["suppress_next_up"] = False
+                        return 1
+        except Exception:
+            pass
+        return u32.CallNextHookEx(None, nCode, wParam, lParam)
+
+    _ll_mouse_hook_cb = LowLevelMouseProcType(_ll_mouse_proc)
+    _ll_mouse_hook_handle = None
+    try:
+        _ll_mouse_hook_handle = u32.SetWindowsHookExW(WH_MOUSE_LL, _ll_mouse_hook_cb, None, 0)
+    except Exception:
+        _ll_mouse_hook_handle = None
 
     msg = wintypes.MSG()
     PM_REMOVE = 0x0001
@@ -7884,8 +7912,13 @@ def main() -> None:
                             _execute_superpower_num(c_num, explicit_files=exp_files, force_explicit=force_exp)
                     except Exception:
                         pass
-                # [Zero-Hook 마우스 Ctrl+우클릭 감지 — 귀신호출 2종 단일화]
-                # 오직 Ctrl + 우클릭 시에만 소환하며, 일반 우클릭은 OS 순정 컨텍스트 메뉴를 100% 방해 없이 보장합니다.
+                # [WH_MOUSE_LL 훅 연동 + 폴백 Ctrl+우클릭 감지 — 윈도우 우클릭 메뉴 및 시작메뉴(Ctrl+Esc) 간섭 0%]
+                if _RBTN_HOLD_STATE.get("summon_requested"):
+                    _RBTN_HOLD_STATE["summon_requested"] = False
+                    if (now - last_summon_ts) > 0.25:
+                        last_summon_ts = now
+                        trigger_master_summon(summon_by_rclick=True)
+
                 rbtn_phys_now = (u32.GetAsyncKeyState(0x02) & 0x8000) != 0
                 was_rbtn_phys = was_key_down.get(0x9901, False)
                 ctrl_now_r = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
@@ -8509,10 +8542,14 @@ def main() -> None:
                                 typed_as_eng = False
                                 typed_as_kor = False
                             else:
+                                if proc_fg_low == "excel.exe":
+                                    # 엑셀 자체 '한/영 자동 고침'이 켜져 있다면 스페이스 직후 0.03초 내에 스스로 한글 변환 및 한/영키(True) 전환을 마침.
+                                    # 이미 한글(True)로 바뀌었으면 귀신창은 100% 양보하고, 여전히 영문(False)으로 남아 있을 때만 한 번에 통교체!
+                                    time.sleep(0.03)
                                 ime_kor = get_ime_is_korean(hwnd_fg)
                                 typed_as_eng = not ime_kor
-                                # 웹 브라우저(카페 댓글·글쓰기 등)에서는 1타=1글자가 보장되는 '영타➔한글'만 수행하고 조합 글자 수가 어긋나는 역방향(한➔영)은 제외
-                                typed_as_kor = ime_kor and (not is_br_fg)
+                                # 웹 브라우저 및 엑셀에서는 1타=1글자가 보장되는 '영타➔한글'만 수행하고 역방향(한➔영)은 제외
+                                typed_as_kor = ime_kor and (not is_br_fg) and (proc_fg_low != "excel.exe")
 
                         curr_typo: dict | None = None
                         if typed_as_eng and re.search(r"[A-Za-z]{2,}", raw_buf_str):
