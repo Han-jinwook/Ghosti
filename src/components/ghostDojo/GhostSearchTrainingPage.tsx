@@ -451,7 +451,7 @@ const VirtualMonitorSimulator: React.FC<{
           </div>
 
           {/* 우측 [작게·크게] 2가지 보기 모드 버튼 & 자동 시연 재생/일시정지 컨트롤 */}
-          <div className="flex flex-wrap items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5" data-allow-secretary-jump="true">
             {([
               { id: 'small' as const, label: '작게' },
               { id: 'large' as const, label: '크게(갤러리)' },

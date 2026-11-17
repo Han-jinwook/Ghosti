@@ -147,8 +147,8 @@ const GhostiHubGlobalModals: React.FC = () => {
         hubToken: token,
       });
 
-      // 로그인 확인 시점에 즉시 로컬 Z-코어 헬스체크 및 실물 파일 동기화 수행
-      void zCoreBridge.checkHealth(true).then((alive) => {
+      // 유저가 이미 귀신비서에서 내 컴퓨터 연결에 동의한 세션일 때만 로컬 Z-코어 헬스체크 및 실물 파일 동기화 수행
+      void zCoreBridge.checkHealth(false).then((alive) => {
         if (alive) {
           void useSaySeeStore.getState().initApp(true);
         }

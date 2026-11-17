@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useSaySeeStore, type DesktopTab, type MobileTab } from './store/useSaySeeStore';
 import type { FamilyRoomId, LoungeType } from './types/saysee';
 import { playAppEnterGiggleSound } from './services/babyGhostSound';
-import { zCoreBridge } from './services/zCoreBridge';
+import { hasActiveGhostiLoginSession, zCoreBridge } from './services/zCoreBridge';
 import { DesktopDashboard } from './components/DesktopDashboard';
 import { GhostiLoadingSplash } from './components/GhostiLoadingSplash';
 import { GhostiHubRootProvider } from './components/GhostiHubInfraBridge';
@@ -505,7 +505,9 @@ export const App: React.FC = () => {
       // 타 탭 로컬스토리지 동기화(storage) 때마다 백그라운드에서 'merlinLoggedIn' 이벤트를 발행합니다.
       // 여기서 setViewMode('workspace')를 호출하면 온보딩 페이지를 가만히 보고 있던 유저가 아무것도 누르지 않았는데
       // 본 웹 귀신비서(tab=trash) 페이지로 강제 pushState 이동되므로, 워크스페이스 진입은 오직 명시적 버튼 클릭(handleEnterWorkspace)으로만 전환합니다.
-      void zCoreBridge.checkHealth(true);
+      if (hasActiveGhostiLoginSession()) {
+        void zCoreBridge.checkHealth(false);
+      }
     };
     window.addEventListener('ghosti_navigate_showroom', onGoShowroom);
     window.addEventListener('ghosti_navigate_workspace', onGoWorkspace);
