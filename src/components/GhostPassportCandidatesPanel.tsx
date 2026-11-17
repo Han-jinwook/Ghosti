@@ -90,7 +90,7 @@ export const GhostPassportCandidatesPanel: React.FC = () => {
         <div className="flex items-center gap-2 flex-wrap">
           <h2 className="text-[15.5px] sm:text-[16.5px] font-extrabold text-white flex items-center gap-1.5">
             <span>🛂</span>
-            <span>귀신계 여권 · 인물 사진 이름 등록</span>
+            <span>귀신계 여권 카드 · 인물 사진 이름 등록</span>
           </h2>
           <span className="text-[11.5px] font-bold text-emerald-300 break-keep">
             🔒 기본 100% 내 기기 로컬 전용 보관 (원본 사진 외부 전송 0%)
@@ -113,7 +113,7 @@ export const GhostPassportCandidatesPanel: React.FC = () => {
           <button
             type="button"
             onClick={handleClosePanel}
-            title="여권 안내 접기"
+            title="여권 카드 접기"
             className="px-2.5 py-1 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-400 hover:text-white text-[11.5px] font-bold cursor-pointer"
           >
             접기 ✕
