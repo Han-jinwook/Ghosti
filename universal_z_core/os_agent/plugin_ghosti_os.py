@@ -42,7 +42,7 @@ FILE_ATTRIBUTE_NORMAL = 0x80
 PLUGIN_METADATA = {
     "pluginId": "ghosti_os",
     "pluginName": "Ghosti & 3-Monsters OS + RestorePoint + RecycleBin Omni-Tracker Plugin",
-    "version": "2.3.14",
+    "version": "2.3.16",
     "type": "BUILTIN_SOFTWARE_PLUGIN",
     "port": 5199,
     "capabilities": [

@@ -1407,19 +1407,23 @@ def run_interactive_gui_via_schtasks(task_name: str, tr_command: str) -> bool:
 
 def _sh_open_folder_and_select_file(target_file: Path) -> bool:
     """
-    Win32 공식 Shell API(SHOpenFolderAndSelectItems)로 탐색기를 열고 파일을 선택합니다.
+    Win32 공식 Shell API(SHOpenFolderAndSelectItems, cidl=1 표준 규격)로 탐색기를 열고 해당 파일을 정확히 선택합니다.
     - 파일명·경로에 쉼표(,), 공백, 괄호, 한글(카카오톡 받은 파일·바탕 화면), OneDrive 경로가 있어도 100% 동작하며,
-    - 이미 열려 있는 동일 폴더 탐색기 탭/창이 브라우저 뒤에 가려져 있어도 즉시 해당 항목을 선택하고 활성화합니다.
+    - 이전 다른 폴더 탐색기 창을 잘못 끌어오지 않고 정확히 target_file이 담긴 폴더만 열고 해당 파일을 포커스합니다.
     """
     if os.name != "nt":
         return False
     try:
-        resolved_str = str(target_file.resolve())
+        resolved = target_file.resolve()
+        parent_str = str(resolved.parent)
+        file_str = str(resolved)
         ole32 = ctypes.windll.ole32
         shell32 = ctypes.windll.shell32
         ole32.CoInitialize(None)
         shell32.ILCreateFromPathW.argtypes = [wintypes.LPCWSTR]
         shell32.ILCreateFromPathW.restype = ctypes.c_void_p
+        shell32.ILFindLastID.argtypes = [ctypes.c_void_p]
+        shell32.ILFindLastID.restype = ctypes.c_void_p
         shell32.SHOpenFolderAndSelectItems.argtypes = [
             ctypes.c_void_p,
             wintypes.UINT,
@@ -1430,14 +1434,24 @@ def _sh_open_folder_and_select_file(target_file: Path) -> bool:
         shell32.ILFree.argtypes = [ctypes.c_void_p]
         shell32.ILFree.restype = None
 
-        pidl = shell32.ILCreateFromPathW(resolved_str)
-        if not pidl:
+        pidl_folder = shell32.ILCreateFromPathW(parent_str)
+        pidl_file = shell32.ILCreateFromPathW(file_str)
+        if not pidl_folder or not pidl_file:
+            if pidl_folder:
+                shell32.ILFree(pidl_folder)
+            if pidl_file:
+                shell32.ILFree(pidl_file)
             return False
         try:
-            hr = shell32.SHOpenFolderAndSelectItems(pidl, 0, None, 0)
+            pidl_child = shell32.ILFindLastID(pidl_file)
+            if not pidl_child:
+                return False
+            child_arr = (ctypes.c_void_p * 1)(pidl_child)
+            hr = shell32.SHOpenFolderAndSelectItems(pidl_folder, 1, ctypes.byref(child_arr), 0)
             return hr == 0
         finally:
-            shell32.ILFree(pidl)
+            shell32.ILFree(pidl_file)
+            shell32.ILFree(pidl_folder)
     except Exception:
         return False
 
@@ -1679,12 +1693,9 @@ def run_gui_task_runner() -> None:
         folder_titles = get_explorer_folder_title_candidates(target_file.parent) + [target_file.stem, target_file.name]
         for tick in range(35):
             time.sleep(0.05)
-            candidates = find_explorer_windows_on_default_desktop(
-                folder_titles,
-                exclude_hwnds=existing_explorers if tick < 5 else None,
-            )
-            if not candidates and tick >= 12:
-                candidates = find_explorer_windows_on_default_desktop([])
+            candidates = find_explorer_windows_on_default_desktop([], exclude_hwnds=existing_explorers)
+            if not candidates and tick >= 5:
+                candidates = find_explorer_windows_on_default_desktop(folder_titles, exclude_hwnds=None)
             if candidates:
                 bring_window_to_front_immediately(candidates[0]["rawHwnd"])
                 break
@@ -2571,15 +2582,14 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
             viewer_win: Dict[str, Any] = {}
             search_titles = folder_titles + [resolved_p.stem, resolved_p.name]
             stem_kw = resolved_p.stem[:14]
-            for tick in range(24):
-                time.sleep(0.08)
+            for tick in range(28):
+                time.sleep(0.07)
                 if not opened_win:
-                    found = find_explorer_windows_on_default_desktop(
-                        search_titles,
-                        exclude_hwnds=existing_explorers if tick < 4 else None,
-                    )
-                    if not found and tick >= 10:
-                        found = find_explorer_windows_on_default_desktop([])
+                    # 1순위: 방금 새로 열린 탐색기 창(existing_explorers 제외)을 최우선 포착 (이전에 열어둔 다른 폴더 창 오포커스 원천 차단!)
+                    found = find_explorer_windows_on_default_desktop([], exclude_hwnds=existing_explorers)
+                    if not found and tick >= 6:
+                        # 2순위: 이미 같은 폴더(search_titles 일치)가 열려 있어 재사용된 경우에만 해당 폴더 창 포커스
+                        found = find_explorer_windows_on_default_desktop(search_titles, exclude_hwnds=None)
                     if found:
                         opened_win = found[0]
                         try:

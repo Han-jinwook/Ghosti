@@ -229,10 +229,15 @@ export function groupBurstSearchResults(results: SearchResultItem[]): GroupedSea
         (pA.clusterId !== undefined && pA.clusterId === pB.clusterId) ||
         (Boolean(pA.tags[0]) && pA.tags[0] === pB.tags[0]);
 
+      const dirA = pA.fullPath ? pA.fullPath.replace(/[\\/][^\\/]+$/, '').toLowerCase() : '';
+      const dirB = pB.fullPath ? pB.fullPath.replace(/[\\/][^\\/]+$/, '').toLowerCase() : '';
+      const sameParentFolder = !dirA || !dirB || dirA === dirB;
+
       if (
-        sameDupGroup ||
-        (dhashDist <= 8 && dt <= 5 && entry.tsSec > 0) ||
-        (sameSceneCluster && dhashDist <= 12 && dt <= 3 && entry.tsSec > 0)
+        sameParentFolder &&
+        (sameDupGroup ||
+          (dhashDist <= 8 && dt <= 5 && entry.tsSec > 0) ||
+          (sameSceneCluster && dhashDist <= 12 && dt <= 3 && entry.tsSec > 0))
       ) {
         prevCluster.push(entry);
         if (dupId && !dupClusterMap.has(dupId)) {
