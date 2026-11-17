@@ -134,9 +134,9 @@ const MAIN_LOUNGE_MENUS: Array<{
   iconId: LoungeType;
   defaultLounge: LoungeType;
 }> = [
-  { id: 'personal', label: '내 기기', iconId: 'personal', defaultLounge: 'personal' },
-  { id: 'photo_share', label: '사진 공유', iconId: 'family', defaultLounge: 'family' },
-  { id: 'work', label: '업무 공유(S:)', iconId: 'work', defaultLounge: 'work' },
+  { id: 'personal', label: '👻 귀신비서', iconId: 'personal', defaultLounge: 'personal' },
+  { id: 'photo_share', label: '📸 사진 공유', iconId: 'family', defaultLounge: 'family' },
+  { id: 'work', label: '💼 업무 공유(S:)', iconId: 'work', defaultLounge: 'work' },
 ];
 
 const PHOTO_SHARE_GROUPS: Array<{ id: LoungeType; label: string }> = [
@@ -152,34 +152,24 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
   LoungeType,
   Array<{ id: MobileTab; label: string; subcaption?: string; showTrashCount?: boolean }>
 > = {
-  personal: [
-    // [v1.3] 1순위 귀신비서(손보기·여권·채팅) → 2순위 귀신검색(찾기)
-    { id: 'trash', label: '👻 귀신비서', subcaption: '손보기 · 여권 · 채팅', showTrashCount: true },
-    { id: 'search', label: '👻 귀신검색', subcaption: '제목 몰라도 1초 검색' },
-    { id: 'share', label: '👨‍👩‍👧‍👦 공유', subcaption: '가족 · 모임 · 업무 공유' },
-  ],
+  // [2026-11-17 멀린님 확정 — 모바일 3대 영역 일원화]:
+  // 1) '👻 귀신비서(personal)'는 하위 탭으로 쪼개지 않고 단일 화면에서 [비서 대화 + 사진정리 + 1초 검색 + 내 기기 통합]을 원스톱 통합 관리!
+  // 2) '📸 사진 공유'와 '💼 업무 공유(S:)'는 비서 채팅창 없이 순수 앨범/문서 피드·검색 및 초대/설정만 제공!
+  personal: [],
   family: [
-    { id: 'trial', label: '📸 패밀리 공유 시작' },
-    { id: 'search', label: '우리집·본가·처가 피드' },
-    { id: 'trash', label: 'AI 인덱싱 대기실' },
+    { id: 'search', label: '우리집·본가·처가 앨범 피드' },
     { id: 'settings', label: '가족 초대 & 방 설정' },
   ],
   club: [
-    { id: 'trial', label: '⛰️ 동호회·모임 시작' },
-    { id: 'search', label: '모임 피드 & 원본 동기화' },
-    { id: 'trash', label: 'AI 인덱싱 대기실' },
+    { id: 'search', label: '모임 앨범 피드 & 검색' },
     { id: 'settings', label: '모임 관리 & 회원 초대' },
   ],
   student: [
-    { id: 'trial', label: '🎓 동창회 시작' },
-    { id: 'search', label: '동창회 피드 & 원본 동기화' },
-    { id: 'trash', label: 'AI 인덱싱 대기실' },
+    { id: 'search', label: '동창회 앨범 피드 & 검색' },
     { id: 'settings', label: '동창회 관리 & 동기 초대' },
   ],
   work: [
-    { id: 'trial', label: '💼 업무 공유(S:) 시작' },
-    { id: 'search', label: '귀신같이 찾기 & 폴더 트리(S:)' },
-    { id: 'trash', label: 'AI 인덱싱 대기실' },
+    { id: 'search', label: '공용 폴더(S:) 문서 검색' },
     { id: 'settings', label: '팀원 권한 & S: 드라이브' },
   ],
 };
@@ -397,9 +387,13 @@ export const MobileAppView: React.FC = () => {
                   key={menu.id}
                   type="button"
                   onClick={() => {
-                    // 이미 사진 공유(패밀리/동호회·동창회) 안에 있으면 현재 하위 선택 유지
                     if (active) return;
                     setActiveLoungeType(menu.defaultLounge);
+                    if (menu.id === 'personal') {
+                      setMobileTab('trash');
+                    } else {
+                      setMobileTab('search');
+                    }
                   }}
                   className={`px-3 py-1.5 rounded-full font-label-sm text-[12px] flex items-center gap-1 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none ${
                     active
@@ -428,7 +422,10 @@ export const MobileAppView: React.FC = () => {
                     key={group.id}
                     type="button"
                     onClick={() => {
-                      if (!groupActive) setActiveLoungeType(group.id);
+                      if (!groupActive) {
+                        setActiveLoungeType(group.id);
+                        setMobileTab('search');
+                      }
                     }}
                     className={`px-2.5 py-1 rounded-lg border text-[11.5px] shrink-0 whitespace-nowrap transition-all outline-none focus:outline-none ${
                       groupActive
@@ -448,7 +445,8 @@ export const MobileAppView: React.FC = () => {
           )}
         </div>
 
-        {/* 2단 서브메뉴 바: 이모지 없는 깔끔한 언더라인 탭 */}
+        {/* 2단 서브메뉴 바: 사진 공유 / 업무 공유일 때만 노출 (귀신비서는 단일 통합 화면이므로 서브탭 없음) */}
+        {currentSubmenus.length > 0 && (
         <div
           className={`px-3.5 pt-1 border-b flex items-center gap-1 overflow-x-auto no-scrollbar transition-colors ${
             themeMode === 'light'
@@ -458,14 +456,6 @@ export const MobileAppView: React.FC = () => {
         >
           {currentSubmenus.map((sub) => {
             if (sub.id === 'trial' && isCurrentLoungeSubscribed) {
-              return null;
-            }
-            if (
-              activeLoungeType === 'personal' &&
-              sub.id === 'settings' &&
-              isStoreAppMode &&
-              !enableSetupMonster
-            ) {
               return null;
             }
             const isSubActive = mobileTab === sub.id;
@@ -519,20 +509,41 @@ export const MobileAppView: React.FC = () => {
             );
           })}
         </div>
+        )}
       </header>
 
       {/* 서브메뉴 1번: ✨ 1초 진단 & 공유 시작 (정식 구독 시 Auto-Hide) */}
-      {mobileTab === 'trial' && <LoungeView />}
+      {activeLoungeType !== 'personal' && mobileTab === 'trial' && <LoungeView />}
 
-      {/* 서브메뉴 2번: 메인 피드 & 파워 검색 */}
-      {mobileTab === 'search' && (
+      {/* [모바일 통합 1번 영역: 👻 귀신비서 (비서 대화 + 사진 정리 + 1초 검색 + 내 기기 통합 원스톱)] & [공유방 검색 피드] */}
+      {(activeLoungeType === 'personal' || mobileTab === 'search') && (
         <main className="flex-1 w-full px-3.5 pt-3.5 pb-8 flex flex-col gap-4">
-          <LoungeFeedContextBanner />
+          {activeLoungeType !== 'personal' && <LoungeFeedContextBanner />}
 
-          {/* 1층: 검색창 + 3대 카테고리 탭 + 1줄 추천 칩 / 2층: 접이식 브리핑 아코디언 */}
+          {/* 1층: 통합 검색·음성 바 (귀신비서에서는 검색어 입력 시 아래에 즉시 검색 결과가 펼쳐지고, 닫으면 비서·정리 화면 유지) */}
           <VoiceHeroStage />
 
-          {/* 검색 결과 영역 */}
+          {activeLoungeType === 'personal' && hasExecutedUserSearch && Boolean(activeQuery.trim()) && (
+            <div className="flex items-center justify-between px-3 py-2 rounded-xl bg-teal-500/15 border border-teal-400/50 text-teal-200 text-[12px] font-extrabold">
+              <span>🔍 &ldquo;{activeQuery}&rdquo; 통합 검색 결과</span>
+              <button
+                type="button"
+                onClick={() =>
+                  useSaySeeStore.setState({
+                    activeQuery: '',
+                    hasExecutedUserSearch: false,
+                    hasUserSelectedSearchTab: false,
+                  })
+                }
+                className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white border border-white/15 text-[11px] font-black cursor-pointer"
+              >
+                ✕ 검색 닫고 비서 홈으로
+              </button>
+            </div>
+          )}
+
+          {/* 검색 결과 영역 (공유방에서는 상시 노출, 귀신비서에서는 검색 실행 시 인플레이스 노출) */}
+          {(activeLoungeType !== 'personal' || (hasExecutedUserSearch && Boolean(activeQuery.trim()))) && (
           <div id="ghosti-search-results" className="scroll-mt-16">
             {searchSpace === 'video' ? (
               <section className="flex flex-col gap-2.5">
@@ -895,169 +906,113 @@ export const MobileAppView: React.FC = () => {
               </section>
             )}
           </div>
-        </main>
-      )}
+          )}
 
-      {/* 서브메뉴 1번: 개인은 [👻 귀신비서], 사진 공유(패밀리·동호·동창회)는 [⏳ AI 인덱싱 대기실] */}
-      {mobileTab === 'trash' && (
-        <div className="flex-1 w-full px-3 pt-3 pb-10 flex flex-col gap-3">
-          {activeLoungeType === 'personal' ? (
-            <>
+          {/* 모바일 👻 귀신비서 통합 본문: 비서 대화창 + 사진 4대 정리 + 악성 클리너 구출 + 내 기기 통합(PC↔폰) */}
+          {activeLoungeType === 'personal' && (
+            <div className="flex flex-col gap-3">
               <Stage1MinimalCarePreview />
               <MobileCleanerRescueBanner />
-            </>
-          ) : (
-            <LoungeIndexingWaitingRoom />
+
+              {/* 내 기기 통합 (폰↔PC 프라이빗 싱크 & 데스크톱 연동 가이드) 귀신비서 화면 내 통합 */}
+              <section className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden transition-all">
+                <div
+                  onClick={() => setShowPrivateSyncSection((prev) => !prev)}
+                  className="p-4 flex items-center justify-between gap-2 cursor-pointer hover:bg-zinc-900/60 transition-colors"
+                >
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-zinc-400 text-[12px] font-mono select-none">
+                      {showPrivateSyncSection ? '▾' : '▸'}
+                    </span>
+                    <div className="flex flex-col min-w-0">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <h2 className="font-headline-sm text-[14.5px] text-white font-bold">
+                          📱 내 기기 통합 (폰↔PC 프라이빗 싱크)
+                        </h2>
+                        <span className="px-2 py-0.5 rounded-full bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[10.5px] font-bold">
+                          {syncState.privateSyncStrategy === 'mirror' ? '모드 A · 100% 원본 미러링' : '모드 B · 폰 용량 99.4% 절약'}
+                        </span>
+                      </div>
+                      <p className="font-body-sm text-[11.5px] text-zinc-400 truncate mt-0.5">
+                        Wi-Fi + 충전 중 자동 동기화 · 마지막 일치화: {syncState.lastSyncedAt}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={syncState.syncing}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      void triggerSyncNow();
+                    }}
+                    className="px-3 py-1.5 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold shrink-0"
+                  >
+                    {syncState.syncing ? '일치화 중...' : '⚡ 지금 일치시키기'}
+                  </button>
+                </div>
+
+                {showPrivateSyncSection && (
+                  <div className="px-4 pb-4 pt-3 border-t border-white/10 flex flex-col gap-3">
+                    <div
+                      onClick={() => setPrivateSyncStrategy('mirror')}
+                      className={`p-3.5 rounded-xl border cursor-pointer flex flex-col gap-1.5 ${
+                        syncState.privateSyncStrategy === 'mirror'
+                          ? 'bg-zinc-900 border-primary-container'
+                          : 'bg-zinc-950/80 border-white/10'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-headline-sm text-[13.5px] text-white font-bold">
+                          🔄 모드 A. 100% 원본 미러링 모드
+                        </span>
+                        <input
+                          type="radio"
+                          checked={syncState.privateSyncStrategy === 'mirror'}
+                          onChange={() => setPrivateSyncStrategy('mirror')}
+                          className="w-4 h-4 accent-[#00E5FF]"
+                        />
+                      </div>
+                    </div>
+
+                    <div
+                      onClick={() => setPrivateSyncStrategy('shadow')}
+                      className={`p-3.5 rounded-xl border cursor-pointer flex flex-col gap-1.5 ${
+                        syncState.privateSyncStrategy === 'shadow'
+                          ? 'bg-zinc-900 border-primary-container'
+                          : 'bg-zinc-950/80 border-white/10'
+                      }`}
+                    >
+                      <div className="flex items-center justify-between">
+                        <span className="font-headline-sm text-[13.5px] text-white font-bold">
+                          👻 모드 B. 초경량 섀도우 캐시 모드 (권장 · {syncState.packSizeMB}MB)
+                        </span>
+                        <input
+                          type="radio"
+                          checked={syncState.privateSyncStrategy === 'shadow'}
+                          onChange={() => setPrivateSyncStrategy('shadow')}
+                          className="w-4 h-4 accent-[#00E5FF]"
+                        />
+                      </div>
+                    </div>
+
+                    <PcMasterQuickSendPanel compact />
+                  </div>
+                )}
+              </section>
+            </div>
           )}
-        </div>
-      )}
-
-      {/* 서브메뉴 4번: AI 설정몬스터 / 초대 / 인증 & 정식 스토어 설치 가이드 */}
-      {mobileTab === 'settings' && (
-        <main className="flex-1 w-full px-4 pt-4 pb-10 flex flex-col gap-3.5">
-          <LoungeCustomSettingsHeader />
-
-          {/* 노션 스타일 동적 토글 1: 폰↔PC 프라이빗 싱크 & 로컬 폴더 열기 */}
-          <section className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden transition-all">
-            <div
-              onClick={() => setShowPrivateSyncSection((prev) => !prev)}
-              className="p-4 flex items-center justify-between gap-2 cursor-pointer hover:bg-zinc-900/60 transition-colors"
-            >
-              <div className="flex items-center gap-2 min-w-0">
-                <span className="text-zinc-400 text-[12px] font-mono select-none">
-                  {showPrivateSyncSection ? '▾' : '▸'}
-                </span>
-                <div className="flex flex-col min-w-0">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <h2 className="font-headline-sm text-[14.5px] text-white font-bold">
-                      🔄 폰↔PC 프라이빗 싱크 &amp; 로컬 폴더 관리
-                    </h2>
-                    <span className="px-2 py-0.5 rounded-full bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[10.5px] font-bold">
-                      {syncState.privateSyncStrategy === 'mirror' ? '모드 A · 100% 원본 미러링' : '모드 B · 폰 용량 99.4% 절약'}
-                    </span>
-                  </div>
-                  <p className="font-body-sm text-[11.5px] text-zinc-400 truncate mt-0.5">
-                    Wi-Fi + 충전 중 자동 동기화 · 마지막 일치화: {syncState.lastSyncedAt}
-                  </p>
-                </div>
-              </div>
-              <button
-                type="button"
-                disabled={syncState.syncing}
-                onClick={(e) => {
-                  e.stopPropagation();
-                  void triggerSyncNow();
-                }}
-                className="px-3 py-1.5 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold shrink-0"
-              >
-                {syncState.syncing ? '일치화 중...' : '⚡ 지금 일치시키기'}
-              </button>
-            </div>
-
-            {showPrivateSyncSection && (
-              <div className="px-4 pb-4 pt-3 border-t border-white/10 flex flex-col gap-3">
-                <div
-                  onClick={() => setPrivateSyncStrategy('mirror')}
-                  className={`p-3.5 rounded-xl border cursor-pointer flex flex-col gap-1.5 ${
-                    syncState.privateSyncStrategy === 'mirror'
-                      ? 'bg-zinc-900 border-primary-container'
-                      : 'bg-zinc-950/80 border-white/10'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-headline-sm text-[13.5px] text-white font-bold">
-                      🔄 모드 A. 100% 원본 미러링 모드
-                    </span>
-                    <input
-                      type="radio"
-                      checked={syncState.privateSyncStrategy === 'mirror'}
-                      onChange={() => setPrivateSyncStrategy('mirror')}
-                      className="w-4 h-4 accent-[#00E5FF]"
-                    />
-                  </div>
-                </div>
-
-                <div
-                  onClick={() => setPrivateSyncStrategy('shadow')}
-                  className={`p-3.5 rounded-xl border cursor-pointer flex flex-col gap-1.5 ${
-                    syncState.privateSyncStrategy === 'shadow'
-                      ? 'bg-zinc-900 border-primary-container'
-                      : 'bg-zinc-950/80 border-white/10'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="font-headline-sm text-[13.5px] text-white font-bold">
-                      👻 모드 B. 초경량 섀도우 캐시 모드 (권장 · {syncState.packSizeMB}MB)
-                    </span>
-                    <input
-                      type="radio"
-                      checked={syncState.privateSyncStrategy === 'shadow'}
-                      onChange={() => setPrivateSyncStrategy('shadow')}
-                      className="w-4 h-4 accent-[#00E5FF]"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex gap-2 pt-1">
-                  <button
-                    onClick={() => void openLocalFolder('photos')}
-                    className="flex-1 py-2 rounded-xl bg-zinc-950 text-zinc-300 font-label-sm text-[11.5px] font-medium border border-white/10"
-                  >
-                    사진 폴더
-                  </button>
-                  <button
-                    onClick={() => void openLocalFolder('docs')}
-                    className="flex-1 py-2 rounded-xl bg-zinc-950 text-zinc-300 font-label-sm text-[11.5px] font-medium border border-white/10"
-                  >
-                    서류함 폴더
-                  </button>
-                  <button
-                    onClick={() => void openLocalFolder('quarantine')}
-                    className="flex-1 py-2 rounded-xl bg-zinc-950 text-zinc-300 font-label-sm text-[11.5px] font-medium border border-white/10"
-                  >
-                    대기함 열기
-                  </button>
-                </div>
-              </div>
-            )}
-          </section>
-
-          {/* 노션 스타일 동적 토글 2: 데스크톱 연동 가이드 · 탈퇴 데이터 보호 원칙 */}
-          <section className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden transition-all">
-            <div
-              onClick={() => setShowPolicyAndStoreSection((prev) => !prev)}
-              className="p-4 flex items-center justify-between gap-2 cursor-pointer hover:bg-zinc-900/60 transition-colors"
-            >
-              <div className="flex items-center gap-2">
-                <span className="text-zinc-400 text-[12px] font-mono select-none">
-                  {showPolicyAndStoreSection ? '▾' : '▸'}
-                </span>
-                <div className="flex flex-col">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <h2 className="font-headline-sm text-[14.5px] text-white font-bold">
-                      🛡️ 데스크톱 연동 가이드 · 탈퇴 데이터 보호 원칙
-                    </h2>
-                  </div>
-                  <p className="font-body-sm text-[11.5px] text-zinc-400 mt-0.5">
-                    PC 마스터 연동 안내 · 탈퇴 시 썸네일 DB 처리 원칙 · 원본 로컬 보관
-                  </p>
-                </div>
-              </div>
-              <span className="text-[11.5px] font-bold text-zinc-400 shrink-0">
-                {showPolicyAndStoreSection ? '접기 ▴' : '펼치기 ▾'}
-              </span>
-            </div>
-
-            {showPolicyAndStoreSection && (
-              <div className="px-4 pb-4 pt-3 border-t border-white/10 flex flex-col gap-3">
-                <PcMasterQuickSendPanel compact />
-              </div>
-            )}
-          </section>
         </main>
       )}
 
-      {/* 모바일 하단 서브메뉴 바: 선택된 라운지 전용 서브메뉴 연동 */}
+      {/* 공유방(패밀리·동호·동창·업무) 전용 초대/방 설정 탭 */}
+      {activeLoungeType !== 'personal' && mobileTab === 'settings' && (
+        <main className="flex-1 w-full px-4 pt-4 pb-10 flex flex-col gap-3.5">
+          <LoungeCustomSettingsHeader />
+        </main>
+      )}
+
+      {/* 모바일 하단 서브메뉴 바: 서브탭이 존재하는 공유방에서만 노출 (귀신비서 단일 통합 화면에서는 중복 바 미노출) */}
+      {currentSubmenus.length > 0 && (
       <nav className="fixed bottom-0 inset-x-0 max-w-xl mx-auto h-15 bg-[#09090B]/95 backdrop-blur-xl border-t border-white/10 z-50 px-2 flex items-center justify-around">
         {currentSubmenus.map((sub) => {
           if (sub.id === 'trial' && activePricingPlan !== 'free_trial') {
@@ -1099,6 +1054,7 @@ export const MobileAppView: React.FC = () => {
           );
         })}
       </nav>
+      )}
       <MerlinZCoreGuideModal isOpen={showZCoreGuideModal} onClose={() => setShowZCoreGuideModal(false)} themeMode={themeMode} />
     </div>
   );
