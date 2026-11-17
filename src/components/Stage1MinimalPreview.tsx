@@ -1741,9 +1741,11 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     query: string;
   } | null>(null);
   const [zConnected, setZConnected] = useState<boolean>(zCoreBridge.isConnected);
-  const autoSwitchedRealTabRef = React.useRef<boolean>(false);
   const [isCleanupPaused, setIsCleanupPaused] = useState<boolean>(false);
   const [showQuarantineDrawer, setShowQuarantineDrawer] = useState<boolean>(false);
+  const [activeDupSetIdx, setActiveDupSetIdx] = useState<number>(0);
+  const [showAllDupSets, setShowAllDupSets] = useState<boolean>(false);
+  const [skippedGroupIds, setSkippedGroupIds] = useState<Set<string>>(() => new Set());
   const [pausedSnapshot, setPausedSnapshot] = useState<{
     activeTrash: PhotoItem[];
     duplicateGroups: typeof duplicateGroups;
@@ -1753,15 +1755,15 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     setZConnected(zCoreBridge.isConnected);
     return zCoreBridge.subscribe((c) => {
       setZConnected(c);
-      if (!c) {
-        autoSwitchedRealTabRef.current = false;
-      }
     });
   }, []);
 
   const isShowroomSamplePhoto = (name: string): boolean =>
     /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(name);
-  const displayPhotos = zConnected
+  const hasAnyRealUserPhoto = photos.some((p) => !isShowroomSamplePhoto(p.name));
+  const isRealDeviceMode =
+    zConnected || Boolean(isStoreAppMode) || layout === 'mobile' || hasAnyRealUserPhoto;
+  const displayPhotos = isRealDeviceMode
     ? photos.filter((p) => !isShowroomSamplePhoto(p.name))
     : photos;
 
@@ -1824,7 +1826,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
       ? FALLBACK_SAMPLE_TRASH_ITEMS[currentTab]
       : [];
   const isShowingSamplePreview =
-    !zConnected &&
+    !isRealDeviceMode &&
     currentTab !== 'none' &&
     realFilteredCandidates.length === 0 &&
     fallbackSamplesForCurrentTab.length > 0;
@@ -1838,35 +1840,20 @@ export const Stage1MinimalCarePreview: React.FC = () => {
   const photoById = new Map(displayPhotos.map((p) => [p.id, p]));
   const sourceDuplicateGroups =
     isCleanupPaused && pausedSnapshot ? pausedSnapshot.duplicateGroups : duplicateGroups;
-  const activeDuplicateGroups = sourceDuplicateGroups.filter((g) =>
-    g.photoIds.some((id) => {
-      const ph = photoById.get(id);
-      return ph && !ph.quarantined && id !== g.bestPhotoId;
-    })
+  const activeDuplicateGroups = sourceDuplicateGroups.filter(
+    (g) =>
+      !skippedGroupIds.has(g.groupId) &&
+      g.photoIds.some((id) => {
+        const ph = photoById.get(id);
+        return ph && !ph.quarantined && id !== g.bestPhotoId;
+      })
   );
 
-  // 엔진 연결 후 내 PC에 중복·연사(①)는 0장이지만 메모/캡처/흔들림(②~④) 실물 후보가 있는 경우,
-  // 빈 상자 대신 내 진짜 PC 사진 썸네일이 즉시 우측 귀신비서 옆에 펼쳐지도록 1회 자동 전환
   React.useEffect(() => {
-    if (
-      zConnected &&
-      !isCleanupPaused &&
-      !autoSwitchedRealTabRef.current &&
-      currentTab === 'duplicate' &&
-      activeDuplicateGroups.length === 0 &&
-      activeTrash.length > 0
-    ) {
-      autoSwitchedRealTabRef.current = true;
-      setActiveTrashCategoryFilter('all');
+    if (activeDupSetIdx >= activeDuplicateGroups.length && activeDuplicateGroups.length > 0) {
+      setActiveDupSetIdx(0);
     }
-  }, [
-    zConnected,
-    isCleanupPaused,
-    currentTab,
-    activeDuplicateGroups.length,
-    activeTrash.length,
-    setActiveTrashCategoryFilter,
-  ]);
+  }, [activeDupSetIdx, activeDuplicateGroups.length]);
 
   const showDuplicatePickSection = currentTab === 'duplicate';
 
@@ -2019,18 +2006,9 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                       </span>
                     </button>
                   ))}
-                <button
-                  type="button"
-                  disabled={activeTrash.length === 0 || quarantineMoving || isCleanupPaused}
-                  onClick={() => void moveAllTrashToQuarantine()}
-                  className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] font-extrabold flex items-center justify-center gap-1.5 transition-all disabled:opacity-40 cursor-pointer max-w-full shadow-sm"
-                >
-                  <span>
-                    {quarantineMoving
-                      ? '⏳ 휴지통으로 안전 정리 중...'
-                      : `⚡ 원본 남기고 ${activeTrash.length}장 일괄 정리`}
-                  </span>
-                </button>
+                <span className="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5">
+                  <span>🔒 AI 임의 삭제 0% · 실사진 확인 후 [OK] 승인 시에만 정리</span>
+                </span>
               </div>
             </div>
 
@@ -2378,44 +2356,54 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             </div>
           )}
 
-          {/* 3-A. ① 중복 사진 & 연사 묶음 선택 (currentTab === 'duplicate'일 때만 순수하게 표시하여 타 탭 사진 혼입 차단) */}
+          {/* 3-A. ① 중복 사진 & 연사 묶음 1세트씩 순차 확인 및 유저 [OK] 승인 (currentTab === 'duplicate'일 때만 순수 표시) */}
           {showDuplicatePickSection && (
             <div className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
               <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/10 pb-3.5">
-                <div className="flex flex-col gap-0.5">
+                <div className="flex flex-col gap-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <h2 className="font-headline-sm text-[17px] md:text-[18.5px] text-white font-extrabold">
-                      ① 중복 사진 &amp; 연사 묶음 선택
+                      ① 중복 사진 &amp; 연사 묶음 (세트별 실사진 확인 · 유저 OK 승인)
                     </h2>
                     <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[12.5px] font-bold">
-                      {activeDuplicateGroups.length}개 묶음 · 정리 대상 {dupCount}장
+                      {activeDuplicateGroups.length > 0
+                        ? `총 ${activeDuplicateGroups.length}세트 발견 · 버릴 후보 ${dupCount}장`
+                        : '0세트 (깨끗함)'}
                     </span>
                   </div>
-                  <p className="font-body-sm text-[13px] text-zinc-400">
-                    남길 사진 1장을 누른 뒤 우측 [정리] 버튼을 눌러주세요.
-                  </p>
+                  {activeDuplicateGroups.length > 0 ? (
+                    <p className="font-body-sm text-[13px] text-teal-200 font-semibold">
+                      📸 발견된 세트 요약:{' '}
+                      {activeDuplicateGroups
+                        .map((g, idx) => {
+                          const cnt = g.photoIds.filter((id) => {
+                            const ph = photoById.get(id);
+                            return ph && !ph.quarantined;
+                          }).length;
+                          return `${idx + 1}세트(${cnt}장)`;
+                        })
+                        .join(' · ')}{' '}
+                      — 한 세트씩 실사진과 👑 추천 베스트 1장을 확인하시고 [👍 OK]를 눌러 결정해 주세요!
+                    </p>
+                  ) : (
+                    <p className="font-body-sm text-[13px] text-zinc-400">
+                      AI가 마음대로 사진을 지우지 않으며, 실사진을 보여드리고 직접 OK 하실 때만 정리합니다.
+                    </p>
+                  )}
                 </div>
 
                 <div className="flex flex-wrap items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => setActiveTrashCategoryFilter('duplicate')}
-                    style={{
-                      backgroundColor: '#0D9488',
-                      color: '#FFFFFF',
-                      borderColor: '#0D9488',
-                    }}
-                    className="px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-extrabold border transition-all cursor-pointer shadow-xs"
-                  >
-                    ✓ 중복·연사만 보기 ({activeDuplicateGroups.length}묶음)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTrashCategoryFilter('all')}
-                    className="px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-bold border bg-zinc-900 text-zinc-300 hover:text-white border-white/10 transition-all cursor-pointer"
-                  >
-                    전체 후보 보기 ({activeTrash.length}장)
-                  </button>
+                  {activeDuplicateGroups.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => setShowAllDupSets((v) => !v)}
+                      className="px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-extrabold border bg-zinc-900 text-teal-300 hover:text-white border-teal-500/40 transition-all cursor-pointer"
+                    >
+                      {showAllDupSets
+                        ? '🎯 1세트씩 순서대로 보기'
+                        : `📋 전체 ${activeDuplicateGroups.length}세트 한눈에 펼치기`}
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => setActiveTrashCategoryFilter('none')}
@@ -2428,7 +2416,18 @@ export const Stage1MinimalCarePreview: React.FC = () => {
 
               {activeDuplicateGroups.length > 0 ? (
                 <div className="flex flex-col gap-4">
-                  {activeDuplicateGroups.map((group, gIdx) => {
+                  {(showAllDupSets
+                    ? activeDuplicateGroups.map((g, idx) => ({ group: g, gIdx: idx }))
+                    : [
+                        {
+                          group:
+                            activeDuplicateGroups[
+                              Math.min(activeDupSetIdx, activeDuplicateGroups.length - 1)
+                            ],
+                          gIdx: Math.min(activeDupSetIdx, activeDuplicateGroups.length - 1),
+                        },
+                      ]
+                  ).map(({ group, gIdx }) => {
                     const groupPhotos = group.photoIds
                       .map((id) => photoById.get(id))
                       .filter((p): p is NonNullable<typeof p> => Boolean(p && !p.quarantined));
@@ -2437,43 +2436,88 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     const repPhoto = groupPhotos[0];
                     const sceneLabel =
                       repPhoto?.tags.find((t) => !t.includes('연사') && !t.includes('원본')) || '#연사묶음';
-                    const isExactDuplicateGroup = gIdx === 0;
 
                     return (
                       <div
                         key={group.groupId}
-                        className="p-4 rounded-xl bg-zinc-950/70 border border-white/10 flex flex-col gap-3"
+                        className="p-4 sm:p-5 rounded-2xl bg-zinc-950/85 border-2 border-teal-500/40 flex flex-col gap-3.5 shadow-md"
                       >
-                        <div className="flex flex-wrap items-center justify-between gap-2.5">
-                          <div className="flex flex-wrap items-center gap-2">
-                            <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container font-label-sm text-[11px] font-extrabold">
-                              {isExactDuplicateGroup ? '📑 동일 내용 중복' : '📸 연사 묶음 (1장 선택)'}
-                            </span>
-                            <span className="font-headline-sm text-[14.5px] text-white font-bold">
-                              묶음 #{gIdx + 1} ({groupPhotos.length}장)
-                            </span>
-                            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11px] font-medium">
-                              {sceneLabel}
+                        {/* 세트 상단 귀신비서 추천 질문 & 유저 OK / 건너뛰기 결정 바 */}
+                        <div className="p-3.5 rounded-xl bg-teal-950/50 border border-teal-400/40 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                          <div className="flex flex-col gap-1">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <span className="px-2.5 py-0.5 rounded-full bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-black">
+                                세트 {gIdx + 1} / {activeDuplicateGroups.length} (총 {groupPhotos.length}장)
+                              </span>
+                              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11px] font-medium">
+                                {sceneLabel}
+                              </span>
+                            </div>
+                            <p className="text-[13.5px] sm:text-[14px] text-white font-extrabold leading-snug break-keep">
+                              🤖 귀신비서 추천: 이 세트({groupPhotos.length}장)에서 가장 잘 나온{' '}
+                              <span className="text-primary-container">[👑 추천 베스트 1장]</span>만 남기고, 나머지{' '}
+                              <span className="text-amber-300">{redundantCount}장은 버리시겠어요?</span>
+                            </p>
+                            <span className="text-[11.5px] text-zinc-300">
+                              💡 다른 사진을 남기고 싶다면 아래 실사진 중 원하는 사진을 먼저 터치해 👑 베스트 1장을 바꾼 뒤 [OK]를 눌러주세요.
                             </span>
                           </div>
 
-                          <button
-                            disabled={quarantineMoving}
-                            onClick={() =>
-                              void pickBestInDuplicateGroup(group.groupId, group.bestPhotoId, true)
-                            }
-                            className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-primary-container text-zinc-100 hover:text-zinc-950 border border-white/10 font-label-sm text-[11.5px] font-bold transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
-                          >
-                            <span className="material-symbols-outlined text-[15px]">check_circle</span>
-                            <span>
-                              {isExactDuplicateGroup
-                                ? `최고화질 원본 남기고 사본 ${redundantCount}장 정리`
-                                : `선택한 1장 남기고 나머지 ${redundantCount}장 정리`}
-                            </span>
-                          </button>
+                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            {!showAllDupSets && activeDuplicateGroups.length > 1 && (
+                              <div className="flex items-center gap-1 mr-1">
+                                <button
+                                  type="button"
+                                  disabled={gIdx <= 0}
+                                  onClick={() => setActiveDupSetIdx((prev) => Math.max(0, prev - 1))}
+                                  className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 text-[11.5px] font-bold disabled:opacity-40 cursor-pointer"
+                                >
+                                  ◀ 이전 세트
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={gIdx >= activeDuplicateGroups.length - 1}
+                                  onClick={() =>
+                                    setActiveDupSetIdx((prev) =>
+                                      Math.min(activeDuplicateGroups.length - 1, prev + 1)
+                                    )
+                                  }
+                                  className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 text-[11.5px] font-bold disabled:opacity-40 cursor-pointer"
+                                >
+                                  다음 세트 ▶
+                                </button>
+                              </div>
+                            )}
+
+                            <button
+                              type="button"
+                              disabled={quarantineMoving}
+                              onClick={() =>
+                                void pickBestInDuplicateGroup(group.groupId, group.bestPhotoId, true)
+                              }
+                              className="px-4 py-2 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-sm text-[12.5px] font-black shadow-sm transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+                            >
+                              <span>👍 OK! 베스트 1장만 남기고 나머지 {redundantCount}장 버리기</span>
+                            </button>
+
+                            <button
+                              type="button"
+                              disabled={quarantineMoving}
+                              onClick={() => {
+                                setSkippedGroupIds((prev) => {
+                                  const next = new Set(prev);
+                                  next.add(group.groupId);
+                                  return next;
+                                });
+                              }}
+                              className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[12px] font-bold transition-all shrink-0 cursor-pointer"
+                            >
+                              ⏭️ 이 세트는 안 버리고 건너뛰기
+                            </button>
+                          </div>
                         </div>
 
-                        <div className="grid grid-cols-1 min-[380px]:grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
+                        <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3">
                           {groupPhotos.map((ph, idx) => {
                             const isBestOriginal = ph.id === group.bestPhotoId;
                             return (
@@ -2484,29 +2528,35 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                                 }
                                 className={`group/card relative aspect-[4/5] rounded-xl overflow-hidden cursor-pointer transition-all ${
                                   isBestOriginal
-                                    ? 'ring-2 ring-primary-container border border-primary-container'
-                                    : 'border border-white/10 opacity-90 hover:opacity-100 hover:border-white/30'
+                                    ? 'ring-3 ring-primary-container border-2 border-primary-container shadow-lg'
+                                    : 'border border-white/15 opacity-90 hover:opacity-100 hover:border-white/40'
                                 }`}
                               >
                                 <img
                                   src={ph.thumbUrl}
-                                  alt=""
+                                  alt={ph.name}
                                   loading="lazy"
                                   className="w-full h-full object-cover group-hover/card:scale-105 transition-transform duration-300"
                                 />
 
                                 {isBestOriginal ? (
-                                  <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-primary-container text-primary-container font-label-sm text-[11px] font-bold flex items-center gap-1">
+                                  <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-primary-container text-primary-container font-label-sm text-[11px] font-black flex items-center gap-1">
                                     <span className="material-symbols-outlined text-[14px]">
                                       verified_user
                                     </span>
-                                    <span>👑 보존할 1장</span>
+                                    <span>👑 AI 추천 베스트 1장 (보존)</span>
                                   </div>
                                 ) : (
-                                  <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/80 backdrop-blur-md border border-white/15 text-zinc-300 font-label-sm text-[11px] font-medium">
-                                    {`#${idx + 1} · 클릭 시 이 사진 보존`}
+                                  <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/85 backdrop-blur-md border border-amber-400/40 text-amber-200 font-label-sm text-[11px] font-bold">
+                                    {`🗑️ 버릴 후보 #${idx + 1} (터치 시 보존)`}
                                   </div>
                                 )}
+
+                                <div className="absolute inset-x-0 bottom-0 px-2.5 py-1.5 bg-gradient-to-t from-black/90 via-black/60 to-transparent flex items-center justify-between">
+                                  <span className="text-[10.5px] text-zinc-200 font-medium truncate pr-6">
+                                    {ph.name}
+                                  </span>
+                                </div>
 
                                 <button
                                   type="button"
@@ -2514,8 +2564,8 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                                     e.stopPropagation();
                                     setSelectedPhoto(ph, groupPhotos);
                                   }}
-                                  title="크게 비교 보기"
-                                  className="absolute bottom-2.5 right-2.5 w-7 h-7 rounded-full bg-black/75 hover:bg-primary-container text-white hover:text-zinc-950 flex items-center justify-center transition-colors z-10 cursor-pointer"
+                                  title="실사진 크게 비교 보기"
+                                  className="absolute bottom-2 right-2 w-7 h-7 rounded-full bg-black/80 hover:bg-primary-container text-white hover:text-zinc-950 flex items-center justify-center transition-colors z-10 cursor-pointer"
                                 >
                                   <span className="material-symbols-outlined text-[16px]">zoom_in</span>
                                 </button>
@@ -2529,18 +2579,32 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 </div>
               ) : (
                 <div className="p-8 rounded-xl bg-zinc-950/60 border border-white/5 text-center flex flex-col items-center gap-2">
-                  <span className="material-symbols-outlined text-primary-container text-[30px]">
+                  <span className="material-symbols-outlined text-primary-container text-[32px]">
                     verified
                   </span>
-                  <span className="font-headline-sm text-[15px] text-white font-bold">
-                    중복·연사 사진 정리가 모두 완료되었습니다!
+                  <span className="font-headline-sm text-[15.5px] text-white font-extrabold">
+                    ✨ 중복되거나 연속으로 찍힌 사진 묶음이 0세트예요!
                   </span>
+                  <span className="font-body-sm text-[13px] text-zinc-400">
+                    {displayPhotos.length === 0 && (isStoreAppMode || layout === 'mobile')
+                      ? '위쪽 [📱 내 폰 사진 불러와 정리하기] 버튼을 눌러 내 폰 사진을 불러오시면 중복·연사 세트와 흐린 사진을 찾아 보여드려요!'
+                      : '버릴 중복·연사 사진 없이 현재 아주 깨끗한 상태입니다.'}
+                  </span>
+                  {skippedGroupIds.size > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setSkippedGroupIds(new Set())}
+                      className="mt-2 px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-teal-300 text-[12px] font-bold cursor-pointer"
+                    >
+                      🔄 건너뛴 세트({skippedGroupIds.size}개) 다시 보기
+                    </button>
+                  )}
                 </div>
               )}
             </div>
           )}
 
-          {/* 3-B. 탭 ②·③·④ 및 [전체 후보 보기] 개별 선택 그리드 (실제 감지 0장일 때도 예시 샘플 사진 표시) */}
+          {/* 3-B. 탭 ②·③·④ (메모·영수증 / 스크린샷 / 흔들린 사진) 실사진 확인 및 유저 [OK] 승인 그리드 */}
           {currentTab !== 'duplicate' && currentTab !== 'none' && (
             <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
               <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
@@ -2549,10 +2613,12 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     {TRASH_TABS_4.find((t) => t.key === currentTab)?.title ||
                       '📋 전체 정리 후보 사진 (① 중복·연사 + ② 메모·영수증 + ③ 캡처 + ④ 흔들림)'}
                   </h2>
-                  <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-bold">
+                  <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
                     {isShowingSamplePreview
                       ? `예시 샘플 ${filteredCandidates.length}장 (내 기기 감지 0장)`
-                      : `${filteredCandidates.length}장`}
+                      : filteredCandidates.length > 0
+                      ? `발견된 후보 ${filteredCandidates.length}장`
+                      : '0장 (깨끗함)'}
                   </span>
                 </div>
 
@@ -2562,29 +2628,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     onClick={() => setActiveTrashCategoryFilter('duplicate')}
                     className="px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-bold border bg-zinc-900 text-zinc-300 hover:text-white border-white/10 transition-all cursor-pointer"
                   >
-                    중복·연사만 보기 ({activeDuplicateGroups.length}묶음)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setActiveTrashCategoryFilter('all')}
-                    style={
-                      currentTab === 'all'
-                        ? {
-                            backgroundColor: '#0D9488',
-                            color: '#FFFFFF',
-                            borderColor: '#0D9488',
-                          }
-                        : undefined
-                    }
-                    className={`px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-bold border transition-all cursor-pointer ${
-                      currentTab === 'all'
-                        ? 'font-extrabold shadow-xs'
-                        : 'bg-zinc-900 text-zinc-300 hover:text-white border-white/10'
-                    }`}
-                  >
-                    {currentTab === 'all'
-                      ? `✓ 전체 후보 보기 (${activeTrash.length}장)`
-                      : `전체 후보 보기 (${activeTrash.length}장)`}
+                    중복·연사 세트 보기 ({activeDuplicateGroups.length}세트)
                   </button>
                   {!isShowingSamplePreview && realFilteredCandidates.length > 0 && (
                     <>
@@ -2606,9 +2650,9 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                         type="button"
                         disabled={activeSelectedPhotos.length === 0 || quarantineMoving}
                         onClick={() => void moveSelectedToQuarantine()}
-                        className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold disabled:opacity-40 cursor-pointer"
+                        className="px-4 py-1.5 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12.5px] font-black disabled:opacity-40 cursor-pointer shadow-sm"
                       >
-                        선택된 {activeSelectedPhotos.length}장 ({fmtMB(selectedBytes)}) 정리
+                        👍 OK! 선택한 {activeSelectedPhotos.length}장 ({fmtMB(selectedBytes)}) 버리기
                       </button>
                     </>
                   )}
@@ -2621,6 +2665,18 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   </button>
                 </div>
               </div>
+
+              {!isShowingSamplePreview && realFilteredCandidates.length > 0 && (
+                <div className="p-3.5 rounded-xl bg-teal-950/45 border border-teal-400/40 flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[13px] sm:text-[13.5px] text-white font-extrabold break-keep">
+                    {currentTab === 'blurry'
+                      ? `🤖 귀신비서 추천: 흔들리거나 초점이 나간 흐린 사진 ${realFilteredCandidates.length}장이 발견되었어요. 아래 실사진들을 직접 보시고 버리는 것에 동의하시면 우측 [👍 OK! 선택한 ${activeSelectedPhotos.length}장 버리기]를 눌러주세요!`
+                      : currentTab === 'memo'
+                      ? `🤖 귀신비서 추천: 일회성 메모·영수증 사진 ${realFilteredCandidates.length}장이 발견되었어요. 아래 실사진들을 보시고 버릴 사진만 체크해 [👍 OK! 선택한 ${activeSelectedPhotos.length}장 버리기]를 눌러주세요!`
+                      : `🤖 귀신비서 추천: 화면 캡처(스크린샷) 사진 ${realFilteredCandidates.length}장이 발견되었어요. 아래 실사진들을 보시고 버릴 사진만 체크해 [👍 OK! 선택한 ${activeSelectedPhotos.length}장 버리기]를 눌러주세요!`}
+                  </span>
+                </div>
+              )}
 
               {filteredCandidates.length > 0 ? (
                 <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3.5">
@@ -2642,7 +2698,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                         <div className="relative aspect-[4/5] w-full overflow-hidden bg-zinc-950">
                           <img
                             src={photo.thumbUrl}
-                            alt=""
+                            alt={photo.name}
                             loading="lazy"
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
@@ -2662,7 +2718,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                                 e.stopPropagation();
                                 toggleTrashSelection(photo.id);
                               }}
-                              title={isChecked ? '선택 해제' : '정리 대상 선택'}
+                              title={isChecked ? '선택 해제' : '버릴 대상 선택'}
                               className={`absolute top-2 right-2 w-7 h-7 rounded-md flex items-center justify-center transition-colors z-10 cursor-pointer ${
                                 isChecked
                                   ? 'bg-primary-container text-zinc-950 font-bold shadow-sm'
@@ -2679,7 +2735,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                               e.stopPropagation();
                               setSelectedPhoto(photo, filteredCandidates);
                             }}
-                            title="상세 크게 보기"
+                            title="실사진 크게 보기"
                             className="absolute bottom-2.5 right-2.5 w-7 h-7 rounded-full bg-black/75 hover:bg-primary-container text-white hover:text-zinc-950 flex items-center justify-center transition-colors z-10 cursor-pointer"
                           >
                             <span className="material-symbols-outlined text-[15px]">zoom_in</span>
@@ -2691,11 +2747,20 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 </div>
               ) : (
                 <div className="p-8 rounded-xl bg-zinc-950/60 border border-white/5 text-center flex flex-col items-center gap-2">
-                  <span className="material-symbols-outlined text-primary-container text-[30px]">
+                  <span className="material-symbols-outlined text-primary-container text-[32px]">
                     verified
                   </span>
-                  <span className="font-headline-sm text-[15px] text-white font-bold">
-                    현재 이 카테고리에 정리할 사진이 없습니다 (0장)
+                  <span className="font-headline-sm text-[15.5px] text-white font-extrabold">
+                    {currentTab === 'blurry'
+                      ? '✨ 흔들리거나 초점이 나간 흐린 사진이 0장이에요!'
+                      : currentTab === 'memo'
+                      ? '✨ 정리할 일회성 메모·영수증 사진이 0장이에요!'
+                      : currentTab === 'screenshot'
+                      ? '✨ 정리할 화면 캡처(스크린샷) 사진이 0장이에요!'
+                      : '✨ 현재 이 카테고리에 정리할 사진이 없습니다 (0장)'}
+                  </span>
+                  <span className="font-body-sm text-[13px] text-zinc-400">
+                    버릴 사진 없이 현재 아주 깨끗한 상태입니다.
                   </span>
                 </div>
               )}

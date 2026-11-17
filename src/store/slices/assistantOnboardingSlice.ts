@@ -7,7 +7,11 @@ import {
   stopSetupMonsterTts,
   triggerSetupMonsterTtsPrewarm,
 } from '../../services/setupMonsterTts';
-import { analyzeMobilePickedPhotoFiles } from '../../services/mobilePhotoPicker';
+import {
+  analyzeMobilePickedPhotoFiles,
+  auditRealPcPhotosAndCluster,
+  clusterPhotosIntoDuplicateGroups,
+} from '../../services/mobilePhotoPicker';
 import {
   dispatchFileToKakaoRealChatroom,
   extractKeywordSentencesZeroLlm,
@@ -557,6 +561,32 @@ export const createAssistantOnboardingSlice: StateCreator<
       const saveData = typeof navigator !== 'undefined' && (navigator as any).connection?.saveData === true;
       if (!isMobileUA && !saveData && typeof window !== 'undefined') {
         if (zCoreBridge.isConnected) {
+          // 0) 내 PC 실물 사진들의 실제 64-bit dHash 및 2D 라플라시안 선명도(흐린 사진 판별) + 다중 연사 묶음(5장·10장 세트) 즉시 클러스터링
+          window.setTimeout(async () => {
+            try {
+              const currentPhotos = get().photos;
+              const { updatedPhotos, duplicateGroups: realDupGroups } =
+                await auditRealPcPhotosAndCluster(currentPhotos);
+              const nextTrashIds = new Set<string>();
+              updatedPhotos.forEach((p) => {
+                if (p.trashCategory && !p.quarantined) nextTrashIds.add(p.id);
+              });
+              set({
+                photos: updatedPhotos,
+                duplicateGroups: realDupGroups,
+                selectedTrashIds: nextTrashIds,
+                activeTrashCategoryFilter:
+                  realDupGroups.length > 0
+                    ? 'duplicate'
+                    : updatedPhotos.some((p) => p.trashCategory === 'blurry' && !p.quarantined)
+                    ? 'blurry'
+                    : get().activeTrashCategoryFilter,
+              });
+            } catch {
+              /* ignore */
+            }
+          }, 150);
+
           // 첫 화면 썸네일 렌더 직후(0.9초) 동영상 키프레임 및 실사진 비전 벡터를 조용히 고속 인덱싱
           window.setTimeout(() => {
             void startSilentRealMediaVisionIndexing({
@@ -642,32 +672,69 @@ export const createAssistantOnboardingSlice: StateCreator<
   },
 
   importMobileLocalPhotos: async (files) => {
-    const { analyzed, newDupGroups } = await analyzeMobilePickedPhotoFiles(files);
+    const { analyzed } = await analyzeMobilePickedPhotoFiles(files);
     if (analyzed.length === 0) return;
+    const isSample = (name: string) =>
+      /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(name);
+    let summaryDetail = { total: analyzed.length, dupSets: 0, blurry: 0, memoScreen: 0 };
     set((state) => {
-      const nextPhotos = [...analyzed, ...state.photos];
-      const nextDupGroups = [...newDupGroups, ...state.duplicateGroups];
-      const nextTrashIds = new Set(state.selectedTrashIds);
-      analyzed.forEach((p) => {
-        if (p.trashCategory) nextTrashIds.add(p.id);
+      const existingReal = state.photos.filter((p) => !isSample(p.name));
+      const mergedReal = [...analyzed, ...existingReal];
+      const { updatedPhotos, duplicateGroups: nextDupGroups } =
+        clusterPhotosIntoDuplicateGroups(mergedReal);
+      const nextTrashIds = new Set<string>();
+      updatedPhotos.forEach((p) => {
+        if (p.trashCategory && !p.quarantined) nextTrashIds.add(p.id);
       });
-      const addedSearchResults: SearchResultItem[] = analyzed.map((photo) => ({
+      const dupSetsCount = nextDupGroups.length;
+      const blurryCount = updatedPhotos.filter(
+        (p) => p.trashCategory === 'blurry' && !p.quarantined
+      ).length;
+      const memoScreenCount = updatedPhotos.filter(
+        (p) =>
+          (p.trashCategory === 'memo' || p.trashCategory === 'screenshot') && !p.quarantined
+      ).length;
+      summaryDetail = {
+        total: analyzed.length,
+        dupSets: dupSetsCount,
+        blurry: blurryCount,
+        memoScreen: memoScreenCount,
+      };
+      const addedSearchResults: SearchResultItem[] = updatedPhotos.map((photo) => ({
         photo,
         score: 0.99,
         matchPercentage: 99,
         matchedBy: 'text-direct',
       }));
+      const targetTab: TrashCategory =
+        dupSetsCount > 0
+          ? 'duplicate'
+          : blurryCount > 0
+          ? 'blurry'
+          : memoScreenCount > 0
+          ? 'memo'
+          : 'duplicate';
+      const toastMsg =
+        dupSetsCount === 0 && blurryCount === 0 && memoScreenCount === 0
+          ? `✨ 불러온 사진 ${analyzed.length}장을 꼼꼼히 분석했는데 중복·연사(0세트)와 흐린 사진(0장) 없이 모두 깨끗합니다!`
+          : `📸 사진 ${analyzed.length}장 분석 완료! 중복·연사 ${dupSetsCount}세트 · 흐린 사진 ${blurryCount}장 발견 — 아래에서 실사진을 보고 [OK]로 직접 결정해 주세요!`;
       return {
-        photos: nextPhotos,
+        photos: updatedPhotos,
         duplicateGroups: nextDupGroups,
         selectedTrashIds: nextTrashIds,
-        searchResults: [...addedSearchResults, ...state.searchResults],
+        activeTrashCategoryFilter: targetTab,
+        searchResults: addedSearchResults,
         hasExecutedUserSearch: true,
         activeQuery: `📱 방금 불러온 내 폰 사진 (${analyzed.length}장 · 온디바이스 1초 AI 분석 완료)`,
         matchedTags: ['#내폰사진즉시분석', '#온디바이스dHash', '#외부전송0Byte'],
-        lastQuarantineToast: `📱 내 스마트폰 사진 ${analyzed.length}장을 불러와 1초 만에 선명도·중복·캡처 AI 분류를 마쳤습니다! (외부 서버 전송 0 Byte)`,
+        lastQuarantineToast: toastMsg,
       };
     });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(
+        new CustomEvent('ghosti_photo_audit_summary', { detail: summaryDetail })
+      );
+    }
   },
 
   applyAhaRecommendation: async (item: OnboardingAhaItem) => {

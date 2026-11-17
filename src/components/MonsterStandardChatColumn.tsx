@@ -586,11 +586,44 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       ]);
     };
 
+    const onPhotoAuditSummary = (ev: Event) => {
+      const detail = (
+        ev as CustomEvent<{ total?: number; dupSets?: number; blurry?: number; memoScreen?: number }>
+      ).detail;
+      if (!detail) return;
+      const total = Number(detail.total ?? 0);
+      const dupSets = Number(detail.dupSets ?? 0);
+      const blurry = Number(detail.blurry ?? 0);
+      const memoScreen = Number(detail.memoScreen ?? 0);
+      const st = loadGhostSecretaryState();
+      const nickPrefix = st.nickname ? `${st.nickname}님, ` : '';
+      const text =
+        dupSets === 0 && blurry === 0 && memoScreen === 0
+          ? `✨ ${nickPrefix}방금 사진 ${total}장을 꼼꼼히 살펴봤는데요! **중복·연사 사진 묶음도 0세트**이고 **흐린 사진도 0장**으로 버릴 사진 없이 아주 깨끗해요! 👻✨`
+          : `📸 ${nickPrefix}사진 ${total}장 분석이 끝났어요!\n` +
+            `• **중복·연사 묶음**: **${dupSets}세트**\n` +
+            `• **흔들린(흐린) 사진**: **${blurry}장**\n` +
+            (memoScreen > 0 ? `• **메모·캡처 후보**: **${memoScreen}장**\n` : '') +
+            `\n🔒 제가 마음대로 지우지 않아요! 아래(왼쪽) 정리 화면에서 **한 세트씩 실사진과 👑 AI 추천 베스트 1장을 직접 보시고 [👍 OK! 베스트 1장만 남기고 나머지 버리기]** 버튼을 눌러 결정해 주세요!`;
+      setSharedMonsterMessages((prev) => [
+        ...prev,
+        {
+          id: `secretary_photo_audit_${Date.now()}`,
+          role: 'assistant',
+          timestamp: nowTimeKo(),
+          sourceTab: 'trash',
+          text,
+        },
+      ]);
+    };
+
     window.addEventListener('ghosti_defer_photo_cleanup_and_continue', onDeferCleanupAndContinue);
     window.addEventListener('ghosti_sample_pc_step_chat', onSamplePcStepChat);
+    window.addEventListener('ghosti_photo_audit_summary', onPhotoAuditSummary);
     return () => {
       window.removeEventListener('ghosti_defer_photo_cleanup_and_continue', onDeferCleanupAndContinue);
       window.removeEventListener('ghosti_sample_pc_step_chat', onSamplePcStepChat);
+      window.removeEventListener('ghosti_photo_audit_summary', onPhotoAuditSummary);
     };
   }, [sourceTab, isMobileOrStore]);
 
