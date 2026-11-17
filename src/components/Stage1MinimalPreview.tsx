@@ -1060,7 +1060,7 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                 )}
               </div>
             ) : (
-            <div className="flex md:grid md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1">
+            <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4 pb-1">
               {matchedVideoScenes.map((vid) => {
                 const cardThumbUrl = resolveVideoCardThumbUrl(vid);
                 const isWholeClip = (vid.matchedSeekSec ?? 0) <= 0;
@@ -1069,7 +1069,7 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
                 <article
                   key={vid.id}
                   onClick={() => setSelectedVideoModal(vid, vid.matchedSeekSec)}
-                  className="min-w-[85%] sm:min-w-[340px] md:min-w-0 snap-center group rounded-2xl overflow-hidden bg-[#18181B] hover:bg-zinc-900 border border-white/10 hover:border-white/25 flex flex-col cursor-pointer transition-all"
+                  className="min-w-0 group rounded-2xl overflow-hidden bg-[#18181B] hover:bg-zinc-900 border border-white/10 hover:border-white/25 flex flex-col cursor-pointer transition-all"
                 >
                   <div className="relative aspect-video w-full overflow-hidden bg-black">
                     {cardThumbUrl ? (
@@ -1169,7 +1169,7 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
             </div>
 
             {matchedLocalDocs.length > 0 && (
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pb-1">
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5 pb-1">
                 {matchedLocalDocs.map((doc) => (
                   <article
                     key={doc.id}
@@ -1274,8 +1274,8 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
               <div
                 className={
                   groupedResults.length <= 16
-                    ? 'grid grid-cols-2 sm:grid-cols-4 gap-3.5'
-                    : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5'
+                    ? 'grid grid-cols-[repeat(auto-fill,minmax(175px,1fr))] gap-3.5'
+                    : 'grid grid-cols-[repeat(auto-fill,minmax(135px,1fr))] gap-2.5'
                 }
               >
                 {groupedResults.map((group) => {

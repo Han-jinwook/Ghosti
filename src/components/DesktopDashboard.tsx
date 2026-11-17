@@ -82,6 +82,9 @@ export const DesktopDashboard: React.FC = () => {
     }
   });
 
+  const userManuallyResizedRef = React.useRef<boolean>(false);
+  const lastProgrammaticResizeTsRef = React.useRef<number>(0);
+
   const applyStandaloneWindowGeometry = (nextStage: GhostSearchStage, customHeight?: number) => {
     setGhostSearchWindowStage(nextStage);
     try {
@@ -110,6 +113,7 @@ export const DesktopDashboard: React.FC = () => {
         20,
         customHeight
       );
+      lastProgrammaticResizeTsRef.current = Date.now();
       window.resizeTo(rect.width, rect.height);
       window.moveTo(rect.x, rect.y);
     } catch {
@@ -119,31 +123,43 @@ export const DesktopDashboard: React.FC = () => {
 
   useEffect(() => {
     if (!ghostSearchWindowStage || isInsideIframe) return;
+    let rafId = 0;
     const onNativeWindowResize = () => {
-      const w = window.innerWidth || 0;
-      if (w >= 1150) {
-        setGhostSearchWindowStage((prev) => (prev === 'large' ? prev : 'large'));
-        try {
-          const saved = JSON.parse(localStorage.getItem('ghosti_search_game_v1') || '{}');
-          localStorage.setItem(
-            'ghosti_search_game_v1',
-            JSON.stringify({ ...saved, summon: true, medium: true, large: true })
-          );
-        } catch {
-          /* ignore */
-        }
-      } else if (w > 0 && w < 1150) {
-        setGhostSearchWindowStage((prev) =>
-          prev === 'large' ? (w >= 760 ? 'medium' : 'small') : prev
-        );
+      if (Date.now() - lastProgrammaticResizeTsRef.current > 350) {
+        userManuallyResizedRef.current = true;
       }
+      if (rafId) cancelAnimationFrame(rafId);
+      rafId = requestAnimationFrame(() => {
+        const w = window.innerWidth || 0;
+        if (w <= 0) return;
+        const nextStage: GhostSearchStage = w >= 1150 ? 'large' : w >= 760 ? 'medium' : 'small';
+        setGhostSearchWindowStage((prev) => {
+          if (prev === nextStage) return prev;
+          if (nextStage === 'large') {
+            try {
+              const saved = JSON.parse(localStorage.getItem('ghosti_search_game_v1') || '{}');
+              localStorage.setItem(
+                'ghosti_search_game_v1',
+                JSON.stringify({ ...saved, summon: true, medium: true, large: true })
+              );
+            } catch {
+              /* ignore */
+            }
+          }
+          return nextStage;
+        });
+      });
     };
-    window.addEventListener('resize', onNativeWindowResize);
-    return () => window.removeEventListener('resize', onNativeWindowResize);
-  }, [ghostSearchWindowStage, isInsideIframe]);
+    window.addEventListener('resize', onNativeWindowResize, { passive: true });
+    return () => {
+      if (rafId) cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', onNativeWindowResize);
+    };
+  }, [Boolean(ghostSearchWindowStage), isInsideIframe]);
 
   useEffect(() => {
     if (!ghostSearchWindowStage || ghostSearchWindowStage === 'large' || isInsideIframe) return;
+    if (userManuallyResizedRef.current) return;
     const cleanQ =
       hasExecutedUserSearch &&
       activeQuery &&
@@ -154,6 +170,7 @@ export const DesktopDashboard: React.FC = () => {
         : '';
     if (!cleanQ && ghostSearchWindowStage === 'medium') return;
     const timer = window.setTimeout(() => {
+      if (userManuallyResizedRef.current) return;
       const totalMatched =
         searchResults.length +
         matchedLocalDocs.length +
@@ -170,7 +187,6 @@ export const DesktopDashboard: React.FC = () => {
     }, 120);
     return () => window.clearTimeout(timer);
   }, [
-    ghostSearchWindowStage,
     isInsideIframe,
     hasExecutedUserSearch,
     activeQuery,
