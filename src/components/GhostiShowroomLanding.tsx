@@ -1613,51 +1613,54 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               👈 좌측 (5칸): 친근한 『👻 귀신비서』 캐릭터 채팅창 (100% 안전 격리 복제본)
              ----------------------------------------------------------------- */}
           <aside className="lg:col-span-5 flex flex-col rounded-3xl border border-teal-500/35 bg-zinc-950/95 shadow-[0_20px_60px_rgba(0,0,0,0.65)] overflow-hidden">
-            {/* 캐릭터 프로필 비주얼 헤더 */}
+            {/* 캐릭터 프로필 비주얼 헤더 (PC·AOS·iOS 전 기기 말줄임 끊김 0% 2단 반응형 구성) */}
             <div
               data-keep-dark="true"
               style={{
                 background: 'linear-gradient(135deg, #071923 0%, #0D2E33 100%)',
               }}
-              className="px-4 py-3.5 border-b border-teal-400/30 flex items-center justify-between gap-3"
+              className="px-3.5 sm:px-4 py-3 sm:py-3.5 border-b border-teal-400/30 flex flex-col gap-2"
             >
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="relative shrink-0">
-                  <img
-                    src="/gwisinkachi_app_icon_512.png"
-                    alt="귀신비서 프로필"
-                    className="w-12 h-12 rounded-2xl object-cover border-2 border-[#00F0B5] shadow-[0_0_16px_rgba(0,240,181,0.4)] animate-float-slow"
-                  />
-                  <span
-                    style={{ backgroundColor: '#00F0B5' }}
-                    className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-slate-950"
-                  />
-                </div>
-                <div className="min-w-0">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[15px] font-black text-white truncate">👻 귀신비서</span>
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2.5 min-w-0">
+                  <div className="relative shrink-0">
+                    <img
+                      src="/gwisinkachi_app_icon_512.png"
+                      alt="귀신비서 프로필"
+                      className="w-10 h-10 sm:w-11 sm:h-11 rounded-2xl object-cover border-2 border-[#00F0B5] shadow-[0_0_16px_rgba(0,240,181,0.4)] animate-float-slow"
+                    />
+                    <span
+                      style={{ backgroundColor: '#00F0B5' }}
+                      className="absolute -bottom-0.5 -right-0.5 w-3 h-3 sm:w-3.5 sm:h-3.5 rounded-full border-2 border-slate-950"
+                    />
+                  </div>
+                  <div className="flex items-center gap-1.5 flex-wrap min-w-0">
+                    <span className="text-[14.5px] sm:text-[15px] font-black text-white whitespace-nowrap shrink-0">
+                      👻 귀신비서
+                    </span>
                     <span
                       style={{ backgroundColor: 'rgba(0, 240, 181, 0.2)', color: '#5EEAD4' }}
-                      className="px-2 py-0.5 rounded-full text-xs font-black shrink-0"
+                      className="px-2 py-0.5 rounded-full text-[11px] sm:text-xs font-black whitespace-nowrap shrink-0"
                     >
                       평생 무료
                     </span>
                   </div>
-                  <div className="text-[13px] text-teal-200 font-bold truncate mt-0.5">
-                    🛡️ 서버 전송 0% 로컬 실행 · 휴지통 안전 복구
-                  </div>
                 </div>
+
+                <button
+                  type="button"
+                  onClick={() => setCertModalOpen(true)}
+                  data-keep-dark="true"
+                  style={{ backgroundColor: '#FBBF24', color: '#020617' }}
+                  className="px-2.5 sm:px-3 py-1.5 rounded-xl font-black text-[11.5px] sm:text-xs shrink-0 cursor-pointer whitespace-nowrap shadow hover:opacity-90"
+                >
+                  📜 무료 보증서
+                </button>
               </div>
 
-              <button
-                type="button"
-                onClick={() => setCertModalOpen(true)}
-                data-keep-dark="true"
-                style={{ backgroundColor: '#FBBF24', color: '#020617' }}
-                className="px-3 py-1.5 rounded-xl font-black text-xs shrink-0 cursor-pointer whitespace-nowrap shadow hover:opacity-90"
-              >
-                📜 무료 보증서
-              </button>
+              <div className="px-2.5 py-1.5 rounded-xl bg-teal-950/60 border border-teal-400/20 text-[12px] sm:text-[13px] text-teal-200 font-bold leading-snug break-keep">
+                🛡️ 서버 전송 0% 로컬 실행 · 휴지통 안전 복구
+              </div>
             </div>
 
             {/* 대화 스트림 영역 (짧고 경쾌한 메신저 버블) */}
