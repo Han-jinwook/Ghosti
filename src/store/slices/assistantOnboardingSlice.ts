@@ -203,7 +203,7 @@ export interface AssistantOnboardingSlice {
   restoreFromQuarantine: (names: string[]) => Promise<void>;
   undoLastQuarantine: () => Promise<void>;
   dismissUndoBatch: () => void;
-  openLocalFolder: (target: 'quarantine' | 'photos' | 'docs') => Promise<void>;
+  openLocalFolder: (target: 'quarantine' | 'photos' | 'docs' | 'videos', targetPath?: string) => Promise<void>;
   dismissQuarantineToast: () => void;
   showToast: (msg: string) => void;
 
@@ -1174,19 +1174,25 @@ export const createAssistantOnboardingSlice: StateCreator<
 
   dismissUndoBatch: () => set({ lastUndoBatch: null }),
 
-  openLocalFolder: async (target: 'quarantine' | 'photos' | 'docs') => {
+  openLocalFolder: async (target: 'quarantine' | 'photos' | 'docs' | 'videos', targetPath?: string) => {
     try {
+      const cleanTargetPath = (targetPath || '').trim();
       await fetch(getZCoreUrl('/__quarantine/open-folder'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ target }),
+        body: JSON.stringify(cleanTargetPath ? { target, targetPath: cleanTargetPath } : { target }),
       });
+      const fileLabel = cleanTargetPath ? cleanTargetPath.split(/[\\/]/).pop() || cleanTargetPath : '';
       set({
         lastQuarantineToast:
-          target === 'quarantine'
+          cleanTargetPath
+            ? `📂 윈도우 탐색기에서 [${fileLabel}] 실제 원본 위치를 열었습니다.`
+            : target === 'quarantine'
             ? '🗑️ OS 기본 [휴지통] 이동 내역 폴더를 열었습니다.'
             : target === 'docs'
             ? '📂 윈도우 탐색기에서 내 PC 문서 폴더를 열었습니다.'
+            : target === 'videos'
+            ? '📂 윈도우 탐색기에서 내 PC 동영상 폴더를 열었습니다.'
             : '📂 윈도우 탐색기에서 원본 사진 폴더를 열었습니다.',
       });
     } catch {

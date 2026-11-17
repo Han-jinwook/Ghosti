@@ -1385,6 +1385,7 @@ export const VideoScenePreviewModal: React.FC = () => {
     setSelectedVideoModal,
     syncRealVideoDuration,
     openLocalFolder,
+    showToast,
     activeQuery,
     hasExecutedUserSearch,
   } = useSaySeeStore();
@@ -1611,6 +1612,15 @@ export const VideoScenePreviewModal: React.FC = () => {
               원본 파일: {selectedVideoModal.videoFileName} • 촬영일시: {selectedVideoModal.date} • 용량:{' '}
               {selectedVideoModal.sizeMB} MB
             </p>
+            {selectedVideoModal.fullPath ? (
+              <p className="font-label-mono text-[11px] text-teal-400/90 mt-0.5 break-all">
+                📁 실제 PC 위치: {selectedVideoModal.fullPath}
+              </p>
+            ) : !String(selectedVideoModal.videoUrl || '').includes('127.0.0.1:5199') ? (
+              <p className="font-body-sm text-[11.5px] text-amber-400/90 mt-0.5">
+                ℹ️ 체험용 내장 샘플 영상입니다 (내 PC 폴더에는 저장되지 않음 · PC 연결 시 내 컴퓨터 동영상 위치가 표시됩니다)
+              </p>
+            ) : null}
           </div>
 
           <button
@@ -1773,7 +1783,20 @@ export const VideoScenePreviewModal: React.FC = () => {
           </button>
           <button
             type="button"
-            onClick={() => void openLocalFolder('photos')}
+            onClick={() => {
+              if (selectedVideoModal.fullPath) {
+                void openLocalFolder('videos', selectedVideoModal.fullPath);
+                return;
+              }
+              if (!String(selectedVideoModal.videoUrl || '').includes('127.0.0.1:5199')) {
+                showToast(
+                  'ℹ️ 이 영상은 체험용 내장 샘플이라 내 PC 폴더에는 저장되어 있지 않습니다. 내 PC 연결 시 실제 동영상 위치를 바로 열어드립니다.'
+                );
+                return;
+              }
+              void openLocalFolder('videos');
+            }}
+            title={selectedVideoModal.fullPath || '원본 동영상이 있는 내 PC 폴더를 엽니다'}
             className="px-4 py-2.5 rounded-xl bg-primary-container text-on-primary-container font-label-md text-[13px] font-extrabold flex items-center gap-1.5 cursor-pointer"
           >
             <span className="material-symbols-outlined text-[18px]">folder_open</span>

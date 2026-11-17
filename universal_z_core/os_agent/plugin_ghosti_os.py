@@ -3584,6 +3584,7 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 videos.append({
                     "id": f"local_vid_{len(videos) + 1}_{entry.stem[:20]}",
                     "videoFileName": entry.name,
+                    "fullPath": str(resolved),
                     "title": f"{stem} ({d.name})",
                     "keyframePhotoId": entry.name,
                     "thumbUrl": thumb_url,
@@ -3675,10 +3676,22 @@ def handle_quarantine(action: str, payload: Dict[str, Any] | None = None) -> Dic
 
     if act in ("open-folder", "open"):
         target = str(data.get("target") or "photos").strip()
+        target_path = str(data.get("targetPath") or data.get("fullPath") or "").strip()
+        if target_path:
+            tp = Path(target_path)
+            if tp.exists():
+                zos.open_file_location_on_interactive_desktop(tp, mode="open_file_location")
+                return {"ok": True, "opened": str(tp), "selectedFile": tp.is_file()}
         if target == "photos":
             pdir = resolve_active_photo_dir()
             zos.open_file_location_on_interactive_desktop(pdir, mode="open_file_location")
             return {"ok": True, "opened": str(pdir)}
+        elif target == "videos":
+            vdir = safe.known_folder("videos")
+            if not vdir.exists():
+                vdir = Path.home() / "Videos"
+            zos.open_file_location_on_interactive_desktop(vdir, mode="open_file_location")
+            return {"ok": True, "opened": str(vdir)}
         elif target == "docs":
             ddir = safe.known_folder("documents")
             if not ddir.exists():

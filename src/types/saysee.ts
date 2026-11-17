@@ -35,6 +35,7 @@ export interface VideoTimelineFrame {
 export interface VideoSceneItem {
   id: string;
   videoFileName: string;
+  fullPath?: string;
   title: string;
   keyframePhotoId: string;
   thumbUrl: string;
@@ -377,6 +378,7 @@ export interface DuplicateGroup {
 export interface PhotoItem {
   id: string;
   name: string;
+  fullPath?: string;
   size: number;
   date: string;
   mtimeMs: number;

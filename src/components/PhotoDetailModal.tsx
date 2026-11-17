@@ -460,7 +460,25 @@ export const PhotoDetailModal: React.FC = () => {
                 <span>{selectedPhoto.bookmarked ? '즐겨찾기됨' : '즐겨찾기'}</span>
               </button>
               <button
-                onClick={() => void openLocalFolder('photos')}
+                onClick={() => {
+                  if (selectedPhoto.fullPath) {
+                    void openLocalFolder('photos', selectedPhoto.fullPath);
+                    setActionNotice(`📂 실제 PC 원본 위치: ${selectedPhoto.fullPath}`);
+                    return;
+                  }
+                  const isSampleUrl =
+                    selectedPhoto.fullUrl?.startsWith('/sample_photos_301/') ||
+                    selectedPhoto.fullUrl?.startsWith('/poc/');
+                  if (isSampleUrl) {
+                    setActionNotice(
+                      'ℹ️ 이 사진은 체험용 내장 샘플(웹 번들)이라 내 PC 폴더에는 저장되어 있지 않습니다. 내 PC와 연결하시면 실제 컴퓨터 폴더 속 파일을 바로 열어드립니다.'
+                    );
+                    return;
+                  }
+                  void openLocalFolder('photos');
+                  setActionNotice('📂 윈도우 탐색기에서 내 PC 사진 폴더를 열었습니다.');
+                }}
+                title={selectedPhoto.fullPath || '원본 파일이 있는 내 PC 폴더를 엽니다'}
                 className="px-3 py-1.5 rounded-full bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-sm text-label-sm flex items-center gap-1"
               >
                 <span className="material-symbols-outlined text-[16px]">folder_open</span>

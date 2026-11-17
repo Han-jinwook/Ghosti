@@ -893,6 +893,7 @@ export async function loadInitialPhotoDataset(): Promise<{
     return {
       id: f.path,
       name: f.path,
+      fullPath: f.fullPath,
       size: f.size,
       date: canonicalDate,
       mtimeMs: canonicalMtimeMs,

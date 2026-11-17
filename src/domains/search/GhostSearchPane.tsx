@@ -283,7 +283,7 @@ export const GhostSearchPane: React.FC<{
                       </button>
                     )}
                     <button
-                      onClick={() => void openLocalFolder('photos')}
+                      onClick={() => void openLocalFolder('videos', matchedVideoScenes[0]?.fullPath)}
                       className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-label-sm text-[12px] font-medium border border-white/10 flex items-center gap-1.5"
                     >
                       <span className="material-symbols-outlined text-[15px]">folder_open</span>
