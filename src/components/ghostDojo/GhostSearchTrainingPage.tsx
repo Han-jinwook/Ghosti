@@ -43,31 +43,29 @@ export async function openRealGhostSearchWindowViaDaemon(
   const q = (query || '').trim();
 
   // 1순위: 로컬 제트코어 연결 시 주소창·설치아이콘 없는 깔끔한 독립 앱 창(--app)으로 즉시 오픈!
+  // (네트워크 미연결 시 User Activation 만료 전 즉시 window.open 폴백으로 넘어가도록 700ms 타임아웃 + 불필요한 중복 GET 대기 제거)
   try {
     const res = await fetch(getZCoreUrl('/api/superpower/open_search_window'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ stage: daemonStage, query: q, ui_mode: 'web_monitor' }),
-      signal: AbortSignal.timeout(1800),
+      signal: AbortSignal.timeout(700),
     });
     if (res.ok) {
       const data = await res.json().catch(() => ({}));
       if (data && data.ok !== false && data.launched !== false) return true;
+    } else if (res.status === 404 || res.status === 405) {
+      const qs = `stage=${encodeURIComponent(daemonStage)}&ui_mode=web_monitor${q ? `&q=${encodeURIComponent(q)}` : ''}`;
+      const resGet = await fetch(getZCoreUrl(`/__merlin/open-ghost-search?${qs}`), {
+        signal: AbortSignal.timeout(700),
+      });
+      if (resGet.ok) {
+        const dataGet = await resGet.json().catch(() => ({}));
+        if (dataGet?.ok !== false && dataGet?.launched !== false) return true;
+      }
     }
   } catch {
-    // 5199 POST 실패 시 GET 폴백 시도
-  }
-  const qs = `stage=${encodeURIComponent(daemonStage)}&ui_mode=web_monitor${q ? `&q=${encodeURIComponent(q)}` : ''}`;
-  try {
-    const res = await fetch(getZCoreUrl(`/__merlin/open-ghost-search?${qs}`), {
-      signal: AbortSignal.timeout(1500),
-    });
-    if (res.ok) {
-      const data = await res.json().catch(() => ({}));
-      if (data?.ok !== false && data?.launched !== false) return true;
-    }
-  } catch {
-    /* ignore */
+    // 5199 미연결/타임아웃 시 즉시 2순위 브라우저 팝업 폴백으로 진행
   }
 
   // 2순위 폴백: 제트코어 미실행 웹 환경에서는 브라우저 팝업으로 오픈
