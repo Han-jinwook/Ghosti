@@ -813,6 +813,122 @@ def inspect_real_pc_state() -> Dict[str, Any]:
 # ============================================================================
 # 5. [3초 결정론적 포렌식 + 5줄 실물 미리보기 게이트] 오피스/문서 은닉 금고 스캐너
 # ============================================================================
+def extract_xlsx_ordered_rows(zf: zipfile.ZipFile, max_rows: int = 40, max_chars: int = 1500) -> List[str]:
+    """
+    .xlsx 파일에서 sharedStrings.xml 풀 전체를 무작위 덤프하지 않고,
+    workbook.xml 탭 순서 + 첫 번째 보이는 시트부터 실제 행/셀(<row>/<c>) 순서대로 텍스트를 추출합니다.
+    """
+    names = set(zf.namelist())
+    shared_strings: List[str] = []
+    if "xl/sharedStrings.xml" in names:
+        try:
+            ss_root = ET.fromstring(zf.read("xl/sharedStrings.xml"))
+            for si in ss_root.iter():
+                if si.tag.endswith("}si") or si.tag == "si":
+                    parts = [
+                        t.text
+                        for t in si.iter()
+                        if (t.tag.endswith("}t") or t.tag == "t") and t.text
+                    ]
+                    shared_strings.append(re.sub(r"\s+", " ", "".join(parts)).strip())
+        except Exception:
+            shared_strings = []
+
+    rel_map: Dict[str, str] = {}
+    if "xl/_rels/workbook.xml.rels" in names:
+        try:
+            rels_root = ET.fromstring(zf.read("xl/_rels/workbook.xml.rels"))
+            for rel in rels_root.iter():
+                if rel.tag.endswith("}Relationship") or rel.tag == "Relationship":
+                    rid = rel.attrib.get("Id", "")
+                    tgt = rel.attrib.get("Target", "").lstrip("/")
+                    if rid and tgt:
+                        if not tgt.startswith("xl/"):
+                            tgt = f"xl/{tgt}"
+                        rel_map[rid] = tgt
+        except Exception:
+            rel_map = {}
+
+    sheet_entries: List[tuple[str, str]] = []
+    if "xl/workbook.xml" in names:
+        try:
+            wb_root = ET.fromstring(zf.read("xl/workbook.xml"))
+            for sh in wb_root.iter():
+                if sh.tag.endswith("}sheet") or sh.tag == "sheet":
+                    state = (sh.attrib.get("state") or "").lower()
+                    if state in ("hidden", "veryhidden"):
+                        continue
+                    sh_name = sh.attrib.get("name") or ""
+                    rid = ""
+                    for ak, av in sh.attrib.items():
+                        if ak.endswith("}id") or ak == "r:id":
+                            rid = av
+                            break
+                    tgt = rel_map.get(rid, "")
+                    if tgt and tgt in names:
+                        sheet_entries.append((sh_name, tgt))
+        except Exception:
+            sheet_entries = []
+
+    if not sheet_entries:
+        sheet_entries = [
+            ("", n)
+            for n in sorted(n for n in names if n.startswith("xl/worksheets/sheet") and n.endswith(".xml"))
+        ]
+
+    rows_out: List[str] = []
+    total_chars = 0
+    for sh_idx, (sh_name, sh_path) in enumerate(sheet_entries[:3]):
+        try:
+            sh_root = ET.fromstring(zf.read(sh_path))
+        except Exception:
+            continue
+        sh_added = 0
+        for row_el in sh_root.iter():
+            if not (row_el.tag.endswith("}row") or row_el.tag == "row"):
+                continue
+            cell_vals: List[str] = []
+            for c_el in row_el:
+                if not (c_el.tag.endswith("}c") or c_el.tag == "c"):
+                    continue
+                ctype = c_el.attrib.get("t", "")
+                val_txt = ""
+                if ctype == "inlineStr":
+                    val_txt = "".join(
+                        t.text
+                        for t in c_el.iter()
+                        if (t.tag.endswith("}t") or t.tag == "t") and t.text
+                    )
+                else:
+                    v_el = next((ch for ch in c_el if ch.tag.endswith("}v") or ch.tag == "v"), None)
+                    if v_el is not None and v_el.text is not None:
+                        raw_v = v_el.text.strip()
+                        if ctype == "s":
+                            try:
+                                s_idx = int(raw_v)
+                                if 0 <= s_idx < len(shared_strings):
+                                    val_txt = shared_strings[s_idx]
+                            except Exception:
+                                val_txt = ""
+                        else:
+                            val_txt = raw_v
+                val_txt = re.sub(r"\s+", " ", val_txt).strip()
+                if val_txt:
+                    cell_vals.append(val_txt)
+            if cell_vals:
+                if sh_idx > 0 and sh_added == 0 and sh_name:
+                    hdr = f"[시트: {sh_name}]"
+                    rows_out.append(hdr)
+                    total_chars += len(hdr) + 1
+                row_line = " | ".join(cell_vals)
+                rows_out.append(row_line)
+                total_chars += len(row_line) + 1
+                sh_added += 1
+                if len(rows_out) >= max_rows or total_chars >= max_chars:
+                    return rows_out
+    return rows_out
+
+
 def extract_real_5_lines_preview(file_path: Path) -> List[str]:
     """실제 파일 내부에서 사람이 읽을 수 있는 처음 5줄의 텍스트 증거를 추출합니다 (Null 바이트 완전 제거)."""
     ext = file_path.suffix.lower()
@@ -835,12 +951,9 @@ def extract_real_5_lines_preview(file_path: Path) -> List[str]:
 
         if ext == ".xlsx" and zipfile.is_zipfile(file_path):
             with zipfile.ZipFile(file_path, "r") as z:
-                if "xl/sharedStrings.xml" in z.namelist():
-                    xml_bytes = z.read("xl/sharedStrings.xml")
-                    root = ET.fromstring(xml_bytes)
-                    cells = [t.text.strip() for t in root.iter() if t.tag.endswith("}t") and t.text and t.text.strip()]
-                    if cells:
-                        return [f"셀 데이터 {idx+1}: {val}" for idx, val in enumerate(cells[:5])]
+                rows = extract_xlsx_ordered_rows(z, max_rows=10, max_chars=500)
+                if rows:
+                    return rows[:5]
 
         # 일반 텍스트로 읽히는 문서인 경우 텍스트 라인 우선 추출 (XML 태그 및 PDF 헤더 정제)
         raw_bytes = file_path.read_bytes()[:4096]

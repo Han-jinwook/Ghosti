@@ -2005,7 +2005,8 @@ def _extract_doc_text(entry: Path, *, allow_pdf_winrt_ocr: bool = True) -> str:
     cache_sig = ""
     try:
         st_e = entry.stat()
-        cache_sig = f"{entry.resolve()}|{st_e.st_size}|{int(st_e.st_mtime)}|v1"
+        ver_tag = "v2_xlsx" if ext == ".xlsx" else "v1"
+        cache_sig = f"{entry.resolve()}|{st_e.st_size}|{int(st_e.st_mtime)}|{ver_tag}"
         doc_cache = _load_doc_text_cache()
         if cache_sig in doc_cache and doc_cache[cache_sig]:
             return doc_cache[cache_sig]
@@ -2042,21 +2043,8 @@ def _extract_doc_text(entry: Path, *, allow_pdf_winrt_ocr: bool = True) -> str:
                         return text
         if ext == ".xlsx":
             with zipfile.ZipFile(entry, "r") as zf:
-                names = zf.namelist()
-                chunks: List[str] = []
-                if "xl/sharedStrings.xml" in names:
-                    ss_bytes = zf.read("xl/sharedStrings.xml")
-                    ss_text = re.sub(r"<[^>]+>", " ", ss_bytes.decode("utf-8", errors="ignore"))
-                    ss_text = re.sub(r"\s+", " ", ss_text).strip()
-                    if ss_text:
-                        chunks.append(ss_text)
-                for sheet_name in sorted(n for n in names if n.startswith("xl/worksheets/sheet") and n.endswith(".xml"))[:3]:
-                    sh_bytes = zf.read(sheet_name)
-                    sh_text = re.sub(r"<[^>]+>", " ", sh_bytes.decode("utf-8", errors="ignore"))
-                    sh_text = re.sub(r"\s+", " ", sh_text).strip()
-                    if sh_text:
-                        chunks.append(sh_text[:600])
-                joined_xl = " | ".join(chunks).strip()[:1500]
+                rows = zos.extract_xlsx_ordered_rows(zf, max_rows=40, max_chars=1500)
+                joined_xl = "\n".join(rows).strip()[:1500]
                 if joined_xl:
                     if cache_sig:
                         _save_doc_text_cache_entry(cache_sig, joined_xl)
