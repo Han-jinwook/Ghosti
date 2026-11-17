@@ -338,4 +338,23 @@ public class GhostiMobileCarePlugin extends Plugin {
             }
         }
     }
+
+    @PluginMethod
+    public void isFirebaseConfigured(PluginCall call) {
+        boolean configured = false;
+        try {
+            Context ctx = getContext();
+            int resId = ctx.getResources().getIdentifier("google_app_id", "string", ctx.getPackageName());
+            if (resId != 0) {
+                String appId = ctx.getString(resId);
+                configured = (appId != null && !appId.trim().isEmpty());
+            }
+        } catch (Throwable ignored) {
+            configured = false;
+        }
+        JSObject ret = new JSObject();
+        ret.put("ok", true);
+        ret.put("configured", configured);
+        call.resolve(ret);
+    }
 }

@@ -10,7 +10,13 @@
  *   개별 ON/OFF 할 수 있도록 채널을 분리 등록합니다. (iOS는 `thread-id` 그룹으로 서버에서 지정)
  * - 웹(PWA/브라우저) 환경에서는 아무 동작도 하지 않습니다 (네이티브 플러그인 동적 import → 웹 번들 영향 0).
  */
-import { Capacitor } from '@capacitor/core';
+import { Capacitor, registerPlugin } from '@capacitor/core';
+
+interface GhostiMobileCarePushCheckPlugin {
+  isFirebaseConfigured(): Promise<{ ok: boolean; configured: boolean }>;
+}
+
+const GhostiMobileCarePushCheck = registerPlugin<GhostiMobileCarePushCheckPlugin>('GhostiMobileCare');
 
 /** 허용 루트 도메인 (서브도메인 와일드카드 포함) */
 const ALLOWED_ROOT_DOMAINS = ['sundreamer.app'] as const;
@@ -124,6 +130,19 @@ export async function initNativePushRouter(): Promise<void> {
           importance: 3,
           visibility: 1,
         });
+      }
+      // [치명적 크래시 방어]: google-services.json 미탑재 빌드에서 PushNotifications.register() 호출 시
+      // Android 네이티브 FirebaseMessaging.getInstance()가 IllegalStateException으로 앱을 즉시 강제종료하므로 사전 점검!
+      let firebaseReady = false;
+      try {
+        const check = await GhostiMobileCarePushCheck.isFirebaseConfigured();
+        firebaseReady = Boolean(check?.configured);
+      } catch {
+        firebaseReady = false;
+      }
+      if (!firebaseReady) {
+        console.info('[Ghosti Push] Android google-services.json 미설정 — 로컬 알림 채널만 등록하고 FCM register 생략 (튕김 원천 차단)');
+        return;
       }
     }
 
