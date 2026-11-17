@@ -1177,11 +1177,22 @@ export const createAssistantOnboardingSlice: StateCreator<
   openLocalFolder: async (target: 'quarantine' | 'photos' | 'docs' | 'videos', targetPath?: string) => {
     try {
       const cleanTargetPath = (targetPath || '').trim();
-      await fetch(getZCoreUrl('/__quarantine/open-folder'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(cleanTargetPath ? { target, targetPath: cleanTargetPath } : { target }),
-      });
+      if (cleanTargetPath) {
+        const osRes = await executeRealOsAction('open_file_location', cleanTargetPath);
+        if (!osRes?.ok) {
+          await fetch(getZCoreUrl('/__quarantine/open-folder'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ target, targetPath: cleanTargetPath }),
+          });
+        }
+      } else {
+        await fetch(getZCoreUrl('/__quarantine/open-folder'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target }),
+        });
+      }
       const fileLabel = cleanTargetPath ? cleanTargetPath.split(/[\\/]/).pop() || cleanTargetPath : '';
       set({
         lastQuarantineToast:

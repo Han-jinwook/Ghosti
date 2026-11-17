@@ -374,6 +374,16 @@ export const PhotoDetailModal: React.FC = () => {
                     • {(selectedPhoto.size / 1024 / 1024).toFixed(2)} MB • 원본 해상도 100% 보존 (카톡 화질 저하 0%)
                   </span>
                 </div>
+                {selectedPhoto.fullPath ? (
+                  <p className="font-label-mono text-[11px] text-teal-600 dark:text-teal-300 mt-1 break-all">
+                    📁 실제 PC 위치: {selectedPhoto.fullPath}
+                  </p>
+                ) : selectedPhoto.fullUrl?.startsWith('/sample_photos_301/') ||
+                  selectedPhoto.fullUrl?.startsWith('/poc/') ? (
+                  <p className="font-body-sm text-[11.5px] text-amber-600 dark:text-amber-300 mt-1">
+                    ℹ️ 체험용 내장 샘플입니다 (내 PC 폴더에는 저장되지 않음 · PC 연결 시 실제 컴퓨터 폴더 경로가 표시됩니다)
+                  </p>
+                ) : null}
               </div>
             </div>
 
