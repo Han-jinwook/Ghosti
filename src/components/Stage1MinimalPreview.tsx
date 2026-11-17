@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
-import type { PhotoItem, TrashCategory } from '../types/saysee';
+import type { LocalDocumentFile, PhotoItem, TrashCategory, VideoSceneItem } from '../types/saysee';
 import {
   cleanVideoTimestampLabel,
   groupBurstSearchResults,
@@ -498,23 +498,132 @@ function matchesTrashTab(photo: PhotoItem, tabKey: string): boolean {
  * - 2) [❐ 동일 연사 묶어보기 ON] 스위치 버튼 삭제 & "전체 사진 목록 · 총 N장" 단순화 (썸네일 클릭 시 상세 모달에서 연사 나란히 비교 보장)
  * - 3) 문서·영상 목록 상단 TMI 설명 배지("실생활 필수 문서 N건 · 별표 가림 없이...") -> "총 N건" 단순화
  */
-export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = ({
+export const DEMO_SEARCH_SAMPLE_PHOTOS_2: PhotoItem[] = [
+  {
+    id: 'demo_sample_photo_1',
+    name: 'IMG_20250510_1001.jpg',
+    size: 1840000,
+    date: '2025-05-10',
+    mtimeMs: 1746840000000,
+    thumbUrl: '/sample_photos_301/IMG_20250510_1001.jpg',
+    fullUrl: '/sample_photos_301/IMG_20250510_1001.jpg',
+    tags: ['#가족·나들이', '#해변', '#일몰', '#연사베스트컷'],
+    captionKo: '[체험 샘플 1/2] 해변 노을 아래 가족이 함께 웃으며 산책하는 기념 사진입니다.',
+    captionEn: 'Family walking on the beach at sunset.',
+    keywordsKo: ['가족', '해변', '바다', '노을', '산책', '여행'],
+  },
+  {
+    id: 'demo_sample_photo_2',
+    name: 'TRV_20250720_1139.jpg',
+    size: 2150000,
+    date: '2025-07-20',
+    mtimeMs: 1752970000000,
+    thumbUrl: '/sample_photos_301/TRV_20250720_1139.jpg',
+    fullUrl: '/sample_photos_301/TRV_20250720_1139.jpg',
+    tags: ['#여름휴가·바다', '#패러세일링', '#코타키나발루'],
+    captionKo: '[체험 샘플 2/2] 푸른 바다 위에서 패러세일링 낙하산을 타고 하늘을 나는 여름휴가 사진입니다.',
+    captionEn: 'Parasailing over the blue ocean.',
+    keywordsKo: ['패러세일링', '바다', '여름휴가', '여행', '하늘', '보트'],
+  },
+];
+
+export const DEMO_SEARCH_SAMPLE_VIDEOS_2: VideoSceneItem[] = [
+  {
+    id: 'demo_sample_video_1',
+    title: '[체험 샘플 1/2] 코타키나발루 바다 패러세일링 하이라이트.mp4',
+    videoFileName: '20240719_105706.mp4',
+    durationText: '00:18',
+    date: '2025-07-19',
+    matchedTimestamp: '00:12',
+    matchedSeekSec: 12,
+    matchedFrameCaption: '모터보트 뒤에서 낙하산을 타고 바다 위로 떠오르는 하이라이트 장면',
+    sceneDescription: '푸른 바다 위 패러세일링 액티비티 촬영 영상 (샘플)',
+    thumbUrl: '/poc/results/video_frames/20240719_105706_t12.jpg',
+    videoUrl: '',
+    keywords: ['패러세일링', '바다', '보트', '여행', '하늘'],
+    hasScreenOcrText: true,
+    ocrLineCount: 2,
+    ocrFullText: 'KOTA KINABALU PARASAILING TOUR / 2인 탑승 완료',
+    timelineFrames: [
+      {
+        timeSec: 12,
+        timestampLabel: '00:12',
+        sceneCaption: '패러세일링 낙하산 활강 장면',
+        keywords: ['패러세일링', '바다', '보트'],
+        thumbUrl: '/poc/results/video_frames/20240719_105706_t12.jpg',
+      },
+    ],
+  },
+  {
+    id: 'demo_sample_video_2',
+    title: '[체험 샘플 2/2] 팀 주간 회의 화이트보드 매출 목표 브리핑.mp4',
+    videoFileName: '20260918_202442.mp4',
+    durationText: '00:24',
+    date: '2025-09-18',
+    matchedTimestamp: '00:08',
+    matchedSeekSec: 8,
+    matchedFrameCaption: '회의실 화이트보드 판서 및 내년 매출 목표 발표 장면',
+    sceneDescription: '회의실 화이트보드 브리핑 녹화 영상 (샘플)',
+    thumbUrl: '/poc/results/video_frames/20260918_202442_t00.jpg',
+    videoUrl: '',
+    keywords: ['회의실', '화이트보드', '매출', '목표', '발표'],
+    hasScreenOcrText: true,
+    ocrLineCount: 3,
+    ocrFullText: '2026 목표 매출 35억 달성 로드맵 / Q4 핵심 과제',
+    timelineFrames: [
+      {
+        timeSec: 8,
+        timestampLabel: '00:08',
+        sceneCaption: '화이트보드 매출 목표 판서 장면',
+        keywords: ['회의실', '화이트보드', '매출'],
+        thumbUrl: '/poc/results/video_frames/20260918_202442_t00.jpg',
+      },
+    ],
+  },
+];
+
+export const DEMO_SEARCH_SAMPLE_DOCS_2: LocalDocumentFile[] = [
+  {
+    id: 'demo_sample_doc_1',
+    fileName: '2026_표준_사무실임대차계약서_샘플.pdf',
+    title: '[체험 샘플 1/2] 2026 표준 사무실 임대차계약서 (보증금·월세 특약)',
+    ext: 'PDF',
+    categoryBadge: '계약·법무 샘플',
+    date: '2025-08-12',
+    sizeText: '420 KB',
+    deviceSource: '체험판 샘플 문서',
+    extractedText:
+      '제3조(보증금 및 월세) 보증금 금 오천만원정(50,000,000원), 월 차임 금 삼백이십만원정(3,200,000원, 매월 25일 지급)으로 한다.',
+    keywords: ['계약서', '임대차', '보증금', '월세', '특약'],
+  },
+  {
+    id: 'demo_sample_doc_2',
+    fileName: '2026_하반기_거래처_납품단가표_샘플.xlsx',
+    title: '[체험 샘플 2/2] 2026 하반기 거래처별 자재 납품단가표',
+    ext: 'XLSX',
+    categoryBadge: '견적·단가 샘플',
+    date: '2025-09-03',
+    sizeText: '185 KB',
+    deviceSource: '체험판 샘플 문서',
+    extractedText:
+      '품목: 고효율 LED 모듈 A형 | 공급단가: 145,000원(VAT 별도) | 최소 발주수량: 50EA | 담당: 한일건재 김대리',
+    keywords: ['단가표', '견적서', '납품', '한일건재', '엑셀'],
+  },
+];
+
+export const Stage1MinimalSearchPreview: React.FC<{
+  initialQuery?: string;
+  forceSampleOnly?: boolean;
+}> = ({
   initialQuery = '',
+  forceSampleOnly = false,
 }) => {
+  const store = useSaySeeStore();
   const {
     layout,
-    photos,
     searchSpace,
-    hasExecutedUserSearch,
     setSearchSpace,
     resetSearchSpaceToAll,
-    localDocuments,
-    matchedLocalDocs,
-    matchedVaultPhotos,
-    searchResults,
-    videoSceneItems,
-    matchedVideoScenes,
-    activeQuery,
     isListening,
     liveWaveBands,
     interimSttPreview,
@@ -528,11 +637,69 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
     setSelectedDocModal,
     syncRealVideoDuration,
     toggleBookmark,
-    initialized,
     setActiveLoungeType,
     setDesktopTab,
     setMobileTab,
-  } = useSaySeeStore();
+  } = store;
+
+  const [demoQuery, setDemoQuery] = useState<string>('');
+  const [demoExecuted, setDemoExecuted] = useState<boolean>(false);
+
+  const photos = forceSampleOnly ? DEMO_SEARCH_SAMPLE_PHOTOS_2 : store.photos;
+  const videoSceneItems = forceSampleOnly ? DEMO_SEARCH_SAMPLE_VIDEOS_2 : store.videoSceneItems;
+  const localDocuments = forceSampleOnly ? DEMO_SEARCH_SAMPLE_DOCS_2 : store.localDocuments;
+  const initialized = forceSampleOnly ? true : store.initialized;
+  const hasExecutedUserSearch = forceSampleOnly ? demoExecuted : store.hasExecutedUserSearch;
+  const activeQuery = forceSampleOnly ? demoQuery : store.activeQuery;
+  const matchedVaultPhotos = useMemo(
+    () => (forceSampleOnly ? [] : store.matchedVaultPhotos),
+    [forceSampleOnly, store.matchedVaultPhotos]
+  );
+  const searchResults = useMemo(() => {
+    if (!forceSampleOnly) return store.searchResults;
+    const q = demoQuery.trim().toLowerCase();
+    const list = !q
+      ? DEMO_SEARCH_SAMPLE_PHOTOS_2
+      : DEMO_SEARCH_SAMPLE_PHOTOS_2.filter(
+          (p) =>
+            p.name.toLowerCase().includes(q) ||
+            (p.captionKo || '').toLowerCase().includes(q) ||
+            p.tags.some((t) => t.toLowerCase().includes(q)) ||
+            (p.keywordsKo || []).some((k) => k.toLowerCase().includes(q))
+        );
+    return (list.length > 0 ? list : DEMO_SEARCH_SAMPLE_PHOTOS_2).map((photo) => ({
+      photo,
+      score: 0.98,
+      matchPercentage: 98,
+      matchedBy: 'text-direct' as const,
+    }));
+  }, [forceSampleOnly, store.searchResults, demoQuery]);
+  const matchedVideoScenes = useMemo(() => {
+    if (!forceSampleOnly) return store.matchedVideoScenes;
+    const q = demoQuery.trim().toLowerCase();
+    if (!q) return DEMO_SEARCH_SAMPLE_VIDEOS_2;
+    const filtered = DEMO_SEARCH_SAMPLE_VIDEOS_2.filter(
+      (v) =>
+        v.title.toLowerCase().includes(q) ||
+        (v.sceneDescription || '').toLowerCase().includes(q) ||
+        (v.ocrFullText || '').toLowerCase().includes(q) ||
+        v.keywords.some((k: string) => k.toLowerCase().includes(q))
+    );
+    return filtered.length > 0 ? filtered : DEMO_SEARCH_SAMPLE_VIDEOS_2;
+  }, [forceSampleOnly, store.matchedVideoScenes, demoQuery]);
+  const matchedLocalDocs = useMemo(() => {
+    if (!forceSampleOnly) return store.matchedLocalDocs;
+    const q = demoQuery.trim().toLowerCase();
+    if (!q) return DEMO_SEARCH_SAMPLE_DOCS_2;
+    const filtered = DEMO_SEARCH_SAMPLE_DOCS_2.filter(
+      (d) =>
+        d.title.toLowerCase().includes(q) ||
+        d.fileName.toLowerCase().includes(q) ||
+        d.extractedText.toLowerCase().includes(q) ||
+        d.keywords.some((k: string) => k.toLowerCase().includes(q))
+    );
+    return filtered.length > 0 ? filtered : DEMO_SEARCH_SAMPLE_DOCS_2;
+  }, [forceSampleOnly, store.matchedLocalDocs, demoQuery]);
 
   const [textInput, setTextInput] = useState(() => {
     if (initialQuery && initialQuery.trim()) return initialQuery.trim();
@@ -702,7 +869,12 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
     const q = (textInput.trim() || fallbackExample).trim();
     if (!q) return;
     setTextInput(q);
-    await runTextQuery(q);
+    if (forceSampleOnly) {
+      setDemoQuery(q);
+      setDemoExecuted(true);
+    } else {
+      await runTextQuery(q);
+    }
     scrollToResults();
   };
 
@@ -713,7 +885,12 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
     const q = fallbackExample.trim();
     if (!q) return;
     setTextInput(q);
-    await runTextQuery(q);
+    if (forceSampleOnly) {
+      setDemoQuery(q);
+      setDemoExecuted(true);
+    } else {
+      await runTextQuery(q);
+    }
     scrollToResults();
   };
 
@@ -976,8 +1153,14 @@ export const Stage1MinimalSearchPreview: React.FC<{ initialQuery?: string }> = (
               )}
             </div>
 
-            {/* 1-D. 연결 상태 바 */}
-            {isZCoreConnected ? (
+            {/* 1-D. 연결 상태 바 (체험판 검색창일 때는 항상 고정 샘플 안내만 노출) */}
+            {forceSampleOnly ? (
+              <div className="w-full px-4 py-2 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex flex-wrap items-center justify-between gap-2.5 mt-0.5 shadow-sm">
+                <div className="flex flex-wrap items-center gap-2 text-[12px] font-extrabold text-slate-900 dark:text-teal-200">
+                  <span>🧪 체험판 검색창 (샘플 사진 2 · 동영상 2 · 문서 2 고정) — 내 진짜 PC 파일은 귀신비서 연결 후 독립 『👻 귀신검색창(Ctrl+0)』에서 검색됩니다!</span>
+                </div>
+              </div>
+            ) : isZCoreConnected ? (
               <SilentIndexingStatusBar variant="search-bar" className="mt-1" />
             ) : isMobile || isStoreAppMode ? (
               <div className="w-full px-4 py-2.5 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex flex-wrap items-center justify-between gap-3 mt-0.5 shadow-sm">

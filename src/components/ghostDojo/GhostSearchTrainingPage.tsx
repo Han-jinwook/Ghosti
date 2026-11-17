@@ -10,7 +10,12 @@ import {
 } from '../../services/ghostSearchWindowGeometry';
 import { playBabyGhostChime } from '../OnboardingModal';
 import { GhostSuperpowerDojo } from './GhostSuperpowerDojo';
-import { Stage1MinimalSearchPreview } from '../Stage1MinimalPreview';
+import {
+  DEMO_SEARCH_SAMPLE_DOCS_2,
+  DEMO_SEARCH_SAMPLE_PHOTOS_2,
+  DEMO_SEARCH_SAMPLE_VIDEOS_2,
+  Stage1MinimalSearchPreview,
+} from '../Stage1MinimalPreview';
 import { maskSensitiveDocText } from '../PricingModal';
 import { cleanVideoTimestampLabel, resolveVideoCardThumbUrl } from '../../services/aiEngine';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
@@ -612,26 +617,15 @@ const VirtualMonitorSimulator: React.FC<{
                   }}
                 >
                   <div className="flex-1 min-w-0 h-full overflow-y-auto">
-                    <Stage1MinimalSearchPreview initialQuery={initialQuery} />
+                    <Stage1MinimalSearchPreview initialQuery={initialQuery} forceSampleOnly={true} />
                   </div>
                   {(stage === 'small' || stage === 'medium') && (() => {
                     const topPhoto =
-                      searchSpace === 'gallery'
-                        ? searchResults[0]?.photo ||
-                          (!hasExecutedUserSearch ? photos.find((p) => !p.quarantined) : undefined)
-                        : searchSpace === 'vault'
-                        ? matchedVaultPhotos[0]?.photo
-                        : undefined;
+                      searchSpace === 'gallery' ? DEMO_SEARCH_SAMPLE_PHOTOS_2[0] : undefined;
                     const topVideo =
-                      searchSpace === 'video'
-                        ? matchedVideoScenes[0] || (!hasExecutedUserSearch ? videoSceneItems[0] : undefined)
-                        : undefined;
+                      searchSpace === 'video' ? DEMO_SEARCH_SAMPLE_VIDEOS_2[0] : undefined;
                     const topDoc =
-                      searchSpace === 'vault'
-                        ? matchedLocalDocs[0]
-                        : !topPhoto && !topVideo
-                        ? matchedLocalDocs[0]
-                        : undefined;
+                      searchSpace === 'vault' ? DEMO_SEARCH_SAMPLE_DOCS_2[0] : undefined;
                     return (
                       <aside className="w-[330px] shrink-0 h-full border-l border-[#2DD4BF]/40 bg-[#0F172A] p-3.5 flex flex-col gap-2.5 overflow-y-auto">
                         <div className="text-[12.5px] font-extrabold text-[#5EEAD4] flex items-center gap-1.5">
