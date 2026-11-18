@@ -5,7 +5,10 @@ import {
   type P2PHybridConnectionDiagnostics,
 } from '../../services/p2pHybridBridge';
 import { getActivePersonaForCluster, useSaySeeStore } from '../../store/useSaySeeStore';
-import { resolveLoungePhotoCorpus } from '../../store/slices/storeSharedRefs';
+import {
+  resolveInvitedHostLoungeAndRoom,
+  resolveLoungePhotoCorpus,
+} from '../../store/slices/storeSharedRefs';
 import type { ClubSizeTier, FamilyRoomId, LoungeType, PricingPlanId } from '../../types/saysee';
 import { FaceMemberInlineBar } from '../../components/FaceMemberRegistryModal';
 import { PcMasterQuickSendPanel } from '../../components/PricingModal';
@@ -101,7 +104,7 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
       <div className="flex flex-wrap items-center justify-between gap-2 px-1">
         <div className="flex flex-wrap items-center gap-2">
           <span className="font-headline-sm text-[18px] md:text-[20px] text-white font-extrabold tracking-tight">
-            ⛳ {bannerTitle}
+            🎓 {bannerTitle}
           </span>
           <span className="px-2 py-0.5 rounded-full bg-amber-400/15 border border-amber-300/30 text-amber-300 text-[11px] font-bold">
             🏅 총무님 후원 · 전 회원 평생 0원
@@ -2976,16 +2979,16 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   };
 
   const renderRoomCreationAndExitPolicyBox = () => (
-    <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-wrap items-center justify-between gap-2.5">
-      <span className="font-label-sm text-[12px] text-zinc-200 font-bold">
+    <div className="p-3.5 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-wrap items-center justify-between gap-2.5 max-w-full overflow-hidden">
+      <span className="font-label-sm text-[12px] text-zinc-200 font-bold break-keep">
         🛠️ 사진 삭제·숨기기 권한 설정
       </span>
 
-      <div className="flex flex-wrap items-center gap-2 shrink-0">
+      <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto max-w-full">
         <button
           type="button"
           onClick={() => setHostRetainsHidePermission(true)}
-          className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold border cursor-pointer ${
+          className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold border cursor-pointer break-keep text-left ${
             hostRetainsHidePermission
               ? 'bg-primary-container text-zinc-950 border-primary-container'
               : 'bg-zinc-900 text-zinc-300 border-white/15'
@@ -2996,7 +2999,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
         <button
           type="button"
           onClick={() => setHostRetainsHidePermission(false)}
-          className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold border cursor-pointer ${
+          className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold border cursor-pointer break-keep text-left ${
             !hostRetainsHidePermission
               ? 'bg-primary-container text-zinc-950 border-primary-container'
               : 'bg-zinc-900 text-zinc-300 border-white/15'
@@ -3007,6 +3010,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
       </div>
     </div>
   );
+  const { hasActiveInvite } = resolveInvitedHostLoungeAndRoom();
   const [familyMembers, setFamilyMembers] = useState([
     { id: 'm1', name: '진욱 (방장·마스터)', room: '우리집', role: 'HOST' },
     { id: 'm2', name: '은숙 (아내)', room: '우리집', role: 'MEMBER' },
@@ -3020,6 +3024,30 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     { id: 'c3', name: '이프로', badge: '정회원', role: 'MEMBER' },
     { id: 'c4', name: '최회원', badge: '신입회원', role: 'MEMBER' },
   ]);
+  const visibleFamilyMembers = hasActiveInvite
+    ? familyMembers
+    : isLoggedInUser
+    ? [
+        {
+          id: 'me_host',
+          name: `${merlinAuth.email?.split('@')[0] || '나'} (방장)`,
+          room: activeFamilyRoom,
+          role: 'HOST',
+        },
+      ]
+    : [];
+  const visibleClubMembers = hasActiveInvite
+    ? clubMembers
+    : isLoggedInUser
+    ? [
+        {
+          id: 'me_club_host',
+          name: `${merlinAuth.email?.split('@')[0] || '나'} (방장)`,
+          badge: '방장',
+          role: 'HOST',
+        },
+      ]
+    : [];
 
   const copyInviteLink = async () => {
     const inviteCopy =
@@ -3456,35 +3484,41 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
 
           <div className="flex flex-col gap-2">
             <span className="font-label-sm text-[12px] text-zinc-300 font-bold">
-              👨‍👩‍👧‍👦 참여 중인 가족 멤버 ({familyMembers.length}명 · 방장 원터치 강퇴권)
+              👨‍👩‍👧‍👦 참여 중인 가족 멤버 ({visibleFamilyMembers.length}명 · 방장 원터치 강퇴권)
             </span>
-            <div className="flex flex-wrap gap-2">
-              {familyMembers.map((m) => (
-                <div
-                  key={m.id}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-950 border border-white/10 flex items-center gap-2 text-[11.5px]"
-                >
-                  <span className="text-zinc-200 font-bold">{m.name}</span>
-                  <span className="text-zinc-500">({m.room})</span>
-                  {m.role !== 'HOST' && (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setFamilyMembers((prev) => prev.filter((x) => x.id !== m.id))
-                      }
-                      className="text-rose-400 hover:text-rose-300 font-bold ml-1"
-                    >
-                      [강퇴]
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
+            {visibleFamilyMembers.length === 0 ? (
+              <div className="px-3.5 py-2.5 rounded-xl bg-zinc-950 border border-white/10 text-[12px] text-zinc-400 break-keep">
+                아직 참여 중인 가족 멤버가 없습니다. 상단 [💬 가족 무수락 카톡 초대 링크·QR 발급] 버튼으로 가족을 초대하면 여기에 표시됩니다.
+              </div>
+            ) : (
+              <div className="flex flex-wrap gap-2">
+                {visibleFamilyMembers.map((m) => (
+                  <div
+                    key={m.id}
+                    className="px-3 py-1.5 rounded-xl bg-zinc-950 border border-white/10 flex items-center gap-2 text-[11.5px]"
+                  >
+                    <span className="text-zinc-200 font-bold">{m.name}</span>
+                    <span className="text-zinc-500">({m.room})</span>
+                    {m.role !== 'HOST' && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFamilyMembers((prev) => prev.filter((x) => x.id !== m.id))
+                        }
+                        className="text-rose-400 hover:text-rose-300 font-bold ml-1"
+                      >
+                        [강퇴]
+                      </button>
+                    )}
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
         {/* [치트키 4] 자동화 숏폼 '가족 맞춤형 워터마크' 권한 */}
-        <div className="p-4 rounded-xl bg-zinc-950/90 border border-primary-container/35 flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+        <div className="p-4 rounded-xl bg-zinc-950/90 border border-primary-container/35 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 max-w-full overflow-hidden">
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
               <span className="px-2 py-0.5 rounded bg-primary-container/20 text-primary-container font-label-sm text-[10.5px] font-extrabold">
@@ -3499,7 +3533,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             </p>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 shrink-0">
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto max-w-full">
             <input
               type="text"
               value={familyShortsWatermark}
@@ -3688,28 +3722,34 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10">
           <span className="font-label-sm text-[12px] text-zinc-300 font-bold mr-1">
-            참여 동호·동창 회원 ({clubMembers.length}명):
+            참여 동호·동창 회원 ({visibleClubMembers.length}명):
           </span>
-          {clubMembers.map((m) => (
-            <div
-              key={m.id}
-              className="px-3 py-1 rounded-xl bg-zinc-950 border border-white/10 flex items-center gap-2 text-[11.5px]"
-            >
-              <span className="text-zinc-200 font-bold">{m.name}</span>
-              <span className="text-zinc-500">[{m.badge}]</span>
-              {m.role !== 'HOST' && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setClubMembers((prev) => prev.filter((x) => x.id !== m.id))
-                  }
-                  className="text-rose-400 hover:text-rose-300 font-bold"
-                >
-                  [강퇴]
-                </button>
-              )}
-            </div>
-          ))}
+          {visibleClubMembers.length === 0 ? (
+            <span className="text-[12px] text-zinc-400 break-keep">
+              아직 참여 중인 회원이 없습니다. 초대 링크를 공유하면 합류한 회원이 여기에 표시됩니다.
+            </span>
+          ) : (
+            visibleClubMembers.map((m) => (
+              <div
+                key={m.id}
+                className="px-3 py-1 rounded-xl bg-zinc-950 border border-white/10 flex items-center gap-2 text-[11.5px]"
+              >
+                <span className="text-zinc-200 font-bold">{m.name}</span>
+                <span className="text-zinc-500">[{m.badge}]</span>
+                {m.role !== 'HOST' && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setClubMembers((prev) => prev.filter((x) => x.id !== m.id))
+                    }
+                    className="text-rose-400 hover:text-rose-300 font-bold"
+                  >
+                    [강퇴]
+                  </button>
+                )}
+              </div>
+            ))
+          )}
         </div>
 
         {renderRoomCreationAndExitPolicyBox()}

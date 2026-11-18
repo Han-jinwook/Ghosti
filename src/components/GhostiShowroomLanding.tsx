@@ -400,7 +400,7 @@ const WEAPON_META: Record<
     secretaryReply:
       '일일이 돌려보실 필요 없어요~ 👻\n내 기기 안에서만 안전하게 색인해 키워드만 누르면 그 장면(03분 12초)으로 1초 만에 소환하고 화면 속 글자도 찾아드려요!',
     stageTitle: '🎬 파일 이름 몰라도, 열지 않고 1초 소환 (동영상 장면 · 글자)',
-    stageBadge: '축 B · #귀신검색 (내 PC 평생 무료)',
+    stageBadge: '#귀신검색 (내 PC 평생 무료)',
     shortVideoUrl: '/showroom/shorts/ghosti_short_sc552_1793284451.mp4',
   },
   doc: {
@@ -412,7 +412,7 @@ const WEAPON_META: Record<
     secretaryReply:
       '파일 더블클릭하실 필요 없어요! 🔍\n계약서 속 숫자·표, 사진 속 글자, 동영상 속 찾던 장면까지 열지 않고 1초 만에 찾아줍니다~ 👻',
     stageTitle: '📊 파일 이름 몰라도, 열지 않고 1초 소환 (계약서 표 · 사진 글자)',
-    stageBadge: '축 B · #귀신검색 (내 PC 평생 무료)',
+    stageBadge: '#귀신검색 (내 PC 평생 무료)',
     shortVideoUrl: '/showroom/shorts/ghosti_short_sc555_1793284492.mp4',
   },
   clean: {
@@ -424,7 +424,7 @@ const WEAPON_META: Record<
     secretaryReply:
       '걱정 마세요, 마음대로 지우는 건 하나도 없어요! 🔒\n오른쪽 샘플 PC에서 은행 보안프로그램을 안 지우고 재워보고, 언제든 1초 만에 원래대로 돌려보세요~ ✨',
     stageTitle: '👻 느려진 내 PC·폰, 클릭 한 번에 새것처럼',
-    stageBadge: '축 A · #귀신비서 (샘플 체험 · 평생 무료)',
+    stageBadge: '#귀신비서 (샘플 체험 · 평생 무료)',
     shortVideoUrl: '/showroom/shorts/ghosti_short_sc558_261106.mp4',
   },
   share: {
@@ -436,7 +436,7 @@ const WEAPON_META: Record<
     secretaryReply:
       '카톡 30일 만료와 화질 저하 없이 원본 그대로 모을 수 있어요! 📸\n오른쪽에서 샘플 가족방 초대 링크를 눌러 가입 없이 바로 구경해 보세요~',
     stageTitle: '📸 가족·모임 원본 사진, 만료 없이 평생 0원',
-    stageBadge: '축 D · #사진공유 (샘플 체험 · 인원·장수 무제한 0원)',
+    stageBadge: '#사진공유 (샘플 체험 · 인원·장수 무제한 0원)',
     shortVideoUrl: '',
   },
   superpower: {
@@ -448,7 +448,7 @@ const WEAPON_META: Record<
     secretaryReply:
       '하던 일 멈추지 마세요! 창을 오가며 헤매지 않고 영타 자동 변환부터 칸 맞춤 복붙까지 Ctrl+0 하나로 일하던 커서 위에서 1초 만에 끝냅니다~ ⚡',
     stageTitle: '⚡ 하던 일 멈추지 마세요, 쓰던 자리에서 1초면 끝',
-    stageBadge: '축 C · #귀신창 (Ctrl+0 / 보조 Ctrl+우클릭 · 기본기 평생 무료)',
+    stageBadge: '#귀신창 (Ctrl+0 / 보조 Ctrl+우클릭 · 기본기 평생 무료)',
     shortVideoUrl: '/showroom/shorts/ghosti_dkssudgktp_261110.mp4',
   },
 };
