@@ -154,6 +154,8 @@ def sync_internal_z_core_mirrors():
                 os.path.join("os_agent", "plugin_senstalk.py"),
                 os.path.join("os_agent", "seq_paste_daemon.py"),
                 os.path.join("os_agent", "ghost_search_window_ui2.py"),
+                os.path.join("core_power_agent", "seq_paste_daemon.py"),
+                os.path.join("core_power_agent", "ghost_search_window_ui2.py"),
             ):
                 s_p = os.path.join(UZC_DIR, rel_f)
                 d_p = os.path.join(wt_uzc, rel_f)
@@ -162,6 +164,17 @@ def sync_internal_z_core_mirrors():
                         shutil.copy2(s_p, d_p)
                     except Exception:
                         pass
+            ocr_src_dir = os.path.join(UZC_DIR, "os_agent", "models", "ocr")
+            ocr_dst_dir = os.path.join(wt_uzc, "os_agent", "models", "ocr")
+            if os.path.isdir(ocr_src_dir):
+                try:
+                    os.makedirs(ocr_dst_dir, exist_ok=True)
+                    for fn in os.listdir(ocr_src_dir):
+                        fp = os.path.join(ocr_src_dir, fn)
+                        if os.path.isfile(fp):
+                            shutil.copy2(fp, os.path.join(ocr_dst_dir, fn))
+                except Exception:
+                    pass
         # 각 워크트리의 zCoreBridge.ts 및 z_core_version.json도 target_ver로 즉시 통일
         bridge_ts = os.path.join(wt_root, "src", "services", "zCoreBridge.ts")
         if os.path.exists(bridge_ts):

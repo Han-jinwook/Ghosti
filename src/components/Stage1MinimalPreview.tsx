@@ -8,6 +8,7 @@ import {
 } from '../services/aiEngine';
 import { executeRealOsAction } from '../services/setupMonsterEngine';
 import {
+  buildDocPreviewSnippet,
   renderHighlightedDocText,
   maskSensitiveDocText,
   formatQuickKoreanLabelForFile,
@@ -1426,7 +1427,11 @@ export const Stage1MinimalSearchPreview: React.FC<{
 
                       <p className="font-body-sm text-[12px] text-zinc-400 line-clamp-2 leading-relaxed bg-zinc-950/80 p-2.5 rounded-xl border border-white/5">
                         {renderHighlightedDocText(
-                          maskSensitiveDocText(doc.extractedText),
+                          buildDocPreviewSnippet(
+                            maskSensitiveDocText(doc.extractedText),
+                            hasExecutedUserSearch ? activeQuery : '',
+                            240
+                          ),
                           hasExecutedUserSearch ? activeQuery : ''
                         )}
                       </p>

@@ -25,6 +25,7 @@ import sys
 import threading
 import time
 from typing import Any, Dict, List
+import unicodedata
 
 THIS_DIR = Path(__file__).resolve().parent
 if str(THIS_DIR) not in sys.path:
@@ -1346,15 +1347,24 @@ def _load_doc_text_cache() -> Dict[str, str]:
         return _DOC_TEXT_MEM_CACHE
 
 
+DOC_INDEX_MAX_CHARS = 50000
+_DOC_CACHE_SCHEMA_TAG = "v3_sota50k"
+
+
+def _make_doc_cache_sig(entry: Path, st: os.stat_result | None = None) -> str:
+    st_use = st if st is not None else entry.stat()
+    return f"{entry.resolve()}|{st_use.st_size}|{int(st_use.st_mtime)}|{_DOC_CACHE_SCHEMA_TAG}"
+
+
 def _save_doc_text_cache_entry(sig: str, text_val: str) -> None:
     global _DOC_TEXT_MEM_CACHE
     if not text_val:
         return
     with _DOC_TEXT_CACHE_LOCK:
         cache = _DOC_TEXT_MEM_CACHE if _DOC_TEXT_MEM_CACHE is not None else {}
-        cache[sig] = text_val[:2000]
-        if len(cache) > 1500:
-            for old_k in list(cache.keys())[:300]:
+        cache[sig] = text_val[:DOC_INDEX_MAX_CHARS]
+        if len(cache) > 800:
+            for old_k in list(cache.keys())[:200]:
                 if old_k != sig:
                     cache.pop(old_k, None)
         _DOC_TEXT_MEM_CACHE = cache
@@ -1380,12 +1390,11 @@ def _count_meaningful_doc_chars(txt: str) -> int:
     non_sp = re.sub(r"\s+", "", cleaned)
     if not non_sp:
         return 0
-    # 바이너리/폰트 글리프 매핑 깨짐(모지바케: ¢€ž­©Û 등) 차단
     mojibake_cnt = len(re.findall(r"[\u0080-\u024f\ufffd]", non_sp))
     if mojibake_cnt > max(2, int(len(non_sp) * 0.06)):
         return 0
     valid_alnum_ko = len(re.findall(r"[가-힣A-Za-z0-9]", non_sp))
-    if (valid_alnum_ko / len(non_sp)) < 0.55:
+    if (valid_alnum_ko / len(non_sp)) < 0.45:
         return 0
     ko = len(re.findall(r"[가-힣]", cleaned))
     en = len(re.findall(r"[A-Za-z]{2,}", cleaned))
@@ -1393,168 +1402,121 @@ def _count_meaningful_doc_chars(txt: str) -> int:
     return (ko * 3) + (en * 2) + digits
 
 
-def _decode_pdf_literal_bytes(raw_b: bytes) -> str:
-    out = bytearray()
-    i = 0
-    n = len(raw_b)
-    while i < n:
-        ch = raw_b[i]
-        if ch == 0x5C and i + 1 < n:  # backslash
-            nxt = raw_b[i + 1]
-            if nxt in (0x0A, 0x0D):
-                i += 2
-                if nxt == 0x0D and i < n and raw_b[i] == 0x0A:
-                    i += 1
-                continue
-            esc_map = {ord("n"): 10, ord("r"): 13, ord("t"): 9, ord("b"): 8, ord("f"): 12, ord("("): 40, ord(")"): 41, ord("\\"): 92}
-            if nxt in esc_map:
-                out.append(esc_map[nxt])
-                i += 2
-                continue
-            if 0x30 <= nxt <= 0x37:
-                oct_digits = bytes([nxt])
-                j = i + 2
-                while j < min(n, i + 4) and 0x30 <= raw_b[j] <= 0x37:
-                    oct_digits += bytes([raw_b[j]])
-                    j += 1
-                out.append(int(oct_digits, 8) & 0xFF)
-                i = j
-                continue
-            out.append(nxt)
-            i += 2
-        else:
-            out.append(ch)
-            i += 1
-    b = bytes(out)
-    if not b:
+def _run_ppocr_pdf_pages_ocr(
+    entry: Path,
+    max_pages: int = 6,
+    max_chars: int = DOC_INDEX_MAX_CHARS,
+) -> str:
+    """스캔 이미지·커스텀 폰트 PDF의 페이지를 Google PDFium(pypdfium2)으로 고해상도 렌더링 후 PP-OCRv5 Korean(ONNX)으로 정밀 판독합니다."""
+    if not entry.exists():
         return ""
-    if b.startswith(b"\xfe\xff"):
-        return b[2:].decode("utf-16-be", errors="ignore")
-    if b.startswith(b"\xff\xfe"):
-        return b[2:].decode("utf-16-le", errors="ignore")
-    for enc in ("utf-8", "cp949"):
-        try:
-            return b.decode(enc)
-        except Exception:
-            continue
-    ascii_printable = sum(1 for byte_v in b if 32 <= byte_v <= 126 or byte_v in (9, 10, 13))
-    if ascii_printable / len(b) >= 0.85:
-        return b.decode("ascii", errors="ignore")
-    return ""
-
-
-def _decode_pdf_hex_bytes(hex_b: bytes) -> str:
-    cleaned = re.sub(rb"\s+", b"", hex_b)
-    if not cleaned:
-        return ""
-    if len(cleaned) % 2 == 1:
-        cleaned += b"0"
+    tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_pdf_ppocr_"))
     try:
-        b = bytes.fromhex(cleaned.decode("ascii", errors="ignore"))
+        import pypdfium2 as pdfium
+        import ppocr_v5_worker
+
+        pdf = pdfium.PdfDocument(str(entry))
+        try:
+            n_pages = min(len(pdf), max(1, int(max_pages)))
+            png_paths: List[Path] = []
+            for p_idx in range(n_pages):
+                page = pdf[p_idx]
+                try:
+                    w_pt, h_pt = page.get_size()
+                    scale = max(1.6, min(2.6, 1750.0 / max(1.0, max(w_pt, h_pt))))
+                    bmp = page.render(scale=scale)
+                    pil_im = bmp.to_pil()
+                    out_png = tmp_dir / f"p_{p_idx:03d}.png"
+                    pil_im.save(out_png, "PNG")
+                    png_paths.append(out_png)
+                finally:
+                    page.close()
+        finally:
+            pdf.close()
+
+        if not png_paths:
+            return ""
+
+        ocr_res_map = ppocr_v5_worker.invoke_ppocr_subprocess(
+            png_paths,
+            filter_video_ui=False,
+            timeout_sec=max(45.0, len(png_paths) * 14.0),
+        )
+        page_texts: List[str] = []
+        total_len = 0
+        for p_png in png_paths:
+            item = ocr_res_map.get(str(p_png.resolve())) or ocr_res_map.get(p_png.name) or {}
+            rec = _reconstruct_ocr_geometry_and_spots(item)
+            p_txt = str(rec.get("fullText") or item.get("smartText") or "").strip()
+            if p_txt:
+                page_texts.append(p_txt)
+                total_len += len(p_txt) + 2
+                if total_len >= max_chars:
+                    break
+        return "\n\n".join(page_texts).strip()[:max_chars]
     except Exception:
         return ""
-    if not b:
+    finally:
+        shutil.rmtree(tmp_dir, ignore_errors=True)
+
+
+def _extract_pdf_text_sota(
+    entry: Path,
+    *,
+    allow_ocr_fallback: bool = True,
+    max_ocr_pages: int = 6,
+    max_chars: int = DOC_INDEX_MAX_CHARS,
+) -> str:
+    """
+    [정식 SOTA PDF 본문 추출기]
+    1순위: Google PDFium C++ 엔진(pypdfium2)으로 한글 CID/ToUnicode/압축 스트림 전체 페이지를 최대 50,000자까지 고속 추출합니다.
+    2순위: 텍스트 레이어가 없는 스캔 이미지 PDF일 때만 PDFium 렌더링 + PP-OCRv5 Korean(ONNX)으로 자동 폴백합니다.
+    """
+    if not entry.exists():
         return ""
-    if b.startswith(b"\xfe\xff"):
-        return b[2:].decode("utf-16-be", errors="ignore")
-    if len(b) >= 4 and len(b) % 2 == 0:
-        try:
-            u16 = b.decode("utf-16-be")
-            if re.search(r"[가-힣A-Za-z0-9]", u16) and not re.search(r"[\x00-\x08\x0e-\x1f]", u16):
-                return u16
-        except Exception:
-            pass
-    for enc in ("utf-8", "cp949"):
-        try:
-            return b.decode(enc)
-        except Exception:
-            continue
-    return ""
-
-
-def _extract_pdf_streams_text_pure(entry: Path) -> str:
     try:
-        with open(entry, "rb") as fp:
-            raw_pdf = fp.read(2560 * 1024)
-    except Exception:
-        return ""
-    if not raw_pdf:
-        return ""
+        import pypdfium2 as pdfium
 
-    stream_blobs: List[bytes] = []
-    for m in re.finditer(rb"stream(?:\r\n|\n|\r)(.*?)(?:\r\n|\n|\r)?endstream", raw_pdf, re.DOTALL):
-        hdr_lookbehind = raw_pdf[max(0, m.start() - 260) : m.start()]
-        if re.search(rb"/(?:Image|DCTDecode|JPXDecode|CCITTFaxDecode|JBIG2Decode|FontFile\d?|XRef)\b", hdr_lookbehind):
-            continue
-        chunk = m.group(1)
-        if not chunk:
-            continue
-        decompressed = None
-        for wbits in (zlib.MAX_WBITS, -zlib.MAX_WBITS):
-            try:
-                decompressed = zlib.decompress(chunk, wbits)
-                break
-            except Exception:
-                continue
-        stream_blobs.append(decompressed if decompressed is not None else chunk)
-        if len(stream_blobs) >= 45:
-            break
-
-    pieces: List[str] = []
-    for blob in stream_blobs:
-        bt_blocks = re.findall(rb"BT\b(.*?)\bET", blob, re.DOTALL)
-        for tb in bt_blocks[:80]:
-            for m_tok in re.finditer(rb"\((?:\\.|[^\\()])*\)|<([0-9A-Fa-f\s]{4,})>", tb):
-                tok = m_tok.group(0)
-                if tok.startswith(b"(") and tok.endswith(b")"):
-                    s = _decode_pdf_literal_bytes(tok[1:-1])
-                else:
-                    s = _decode_pdf_hex_bytes(m_tok.group(1) or b"")
-                s = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]+", " ", s).strip()
-                if s:
-                    pieces.append(s)
-        if sum(len(x) for x in pieces) >= 2400:
-            break
-
-    joined = re.sub(r"\s+", " ", " ".join(pieces)).strip()
-    joined = _PDF_STRUCT_NOISE_RX.sub(" ", joined)
-    joined = re.sub(r"\s+", " ", joined).strip()
-    if _count_meaningful_doc_chars(joined) >= 12:
-        return joined[:1500]
-
-    # 비표준 초경량 텍스트 PDF 폴백 (단 PDF 구조 키워드 제거 후 실제 의미 텍스트가 있을 때만 반환)
-    head_raw = raw_pdf[:65536]
-    for enc in ("utf-8", "cp949"):
+        pdf = pdfium.PdfDocument(str(entry))
         try:
-            dec = head_raw.decode(enc)
-            dec_clean = re.sub(r"\s+", " ", _PDF_STRUCT_NOISE_RX.sub(" ", dec)).strip()
-            if _count_meaningful_doc_chars(dec_clean) >= 12:
-                return dec_clean[:1500]
-        except Exception:
-            continue
+            n_pages = min(len(pdf), 160)
+            page_chunks: List[str] = []
+            total_len = 0
+            for p_idx in range(n_pages):
+                page = pdf[p_idx]
+                try:
+                    tp = page.get_textpage()
+                    try:
+                        raw_t = tp.get_text_bounded() or ""
+                    finally:
+                        tp.close()
+                finally:
+                    page.close()
+                norm_t = unicodedata.normalize("NFC", raw_t.replace("\r\n", "\n").replace("\r", "\n"))
+                norm_t = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]+", " ", norm_t)
+                norm_t = re.sub(r"[ \t]+", " ", norm_t)
+                norm_t = re.sub(r"\n{3,}", "\n\n", norm_t).strip()
+                if norm_t:
+                    page_chunks.append(norm_t)
+                    total_len += len(norm_t) + 2
+                    if total_len >= max_chars:
+                        break
+        finally:
+            pdf.close()
+
+        joined = "\n\n".join(page_chunks).strip()[:max_chars]
+        if _count_meaningful_doc_chars(joined) >= 16:
+            return joined
+    except Exception:
+        pass
+
+    if allow_ocr_fallback:
+        return _run_ppocr_pdf_pages_ocr(entry, max_pages=max_ocr_pages, max_chars=max_chars)
     return ""
 
 
 def _normalize_winrt_ocr_ligatures(text: str) -> str:
-    if not text:
-        return ""
-    s = text
-    replacements = (
-        ("회원전용 얩", "회원전용 앱"),
-        ("럼그 계산기", "램프 계산기"),
-        ("Safari에서 일기", "Safari에서 열기"),
-        ("우원카페", "우리카페"),
-        ("구카페", "우리카페"),
-        ("실구마자의", "실구매자의"),
-        ("5,000P 학력", "5,000P 혜택"),
-        ("이메일 인즉", "이메일 인증"),
-        ("브라우저로 풀기", "브라우저로 열기"),
-        ("홀 화면에", "홈 화면에"),
-    )
-    for bad, good in replacements:
-        if bad in s:
-            s = s.replace(bad, good)
-    return s
+    return unicodedata.normalize("NFC", text or "")
 
 
 def _prepare_deunderlined_image_if_needed(img_path: Path, tmp_dir: Path) -> Path | None:
@@ -1791,99 +1753,28 @@ def _reconstruct_ocr_geometry_and_spots(ocr_data: Dict[str, Any]) -> Dict[str, A
 
 
 def _run_winrt_image_ocr_raw(img_path: Path) -> Dict[str, Any]:
-    if os.name != "nt" or not img_path.exists():
+    """[SOTA 단일화] 사진·영수증·신분증·표 이미지 OCR을 격리 서브프로세스 기반 PP-OCRv5 Korean(ONNX)으로 수행합니다."""
+    if not img_path.exists():
         return {"width": 0, "height": 0, "lines": []}
-    creationflags = 0x08000000
-    tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_img_ocr_"))
+    tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_img_ppocr_"))
     try:
+        import ppocr_v5_worker
+
         deunderlined_path = _prepare_deunderlined_image_if_needed(img_path, tmp_dir)
-        ps_script = (
-            "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
-            "Add-Type -AssemblyName System.Runtime.WindowsRuntime\n"
-            "$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]\n"
-            "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]\n"
-            "$null = [Windows.Graphics.Imaging.BitmapTransform, Windows.Foundation, ContentType = WindowsRuntime]\n"
-            "$null = [Windows.Graphics.Imaging.BitmapRotation, Windows.Foundation, ContentType = WindowsRuntime]\n"
-            "$null = [Windows.Globalization.Language, Windows.Globalization, ContentType = WindowsRuntime]\n"
-            "$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]\n"
-            "$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]\n"
-            "function Await($WinRtTask, $ResultType) {\n"
-            "    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)\n"
-            "    $netTask = $asTask.Invoke($null, @($WinRtTask))\n"
-            "    $netTask.Wait(-1) | Out-Null\n"
-            "    $netTask.Result\n"
-            "}\n"
-            "function Score-Res($r) {\n"
-            "    if (-not $r) { return 0 }\n"
-            "    $t = ($r.Lines | ForEach-Object { $_.Text }) -join ' '\n"
-            "    if (-not $t) { return 0 }\n"
-            "    $ko = ([regex]::Matches($t, '[가-힣]')).Count\n"
-            "    $en = ([regex]::Matches($t, '[a-zA-Z0-9]')).Count\n"
-            "    $cjk = ([regex]::Matches($t, '[\\u4e00-\\u9fff]')).Count\n"
-            "    return ($ko * 4) + $en - ($cjk * 3)\n"
-            "}\n"
-            "$lang = New-Object Windows.Globalization.Language('ko')\n"
-            "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)\n"
-            "if (-not $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }\n"
-            "$sf = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($args[0])) ([Windows.Storage.StorageFile])\n"
-            "$st = Await ($sf.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])\n"
-            "$dec = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($st)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
-            "$bmp0 = Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
-            "$bestRes = Await ($engine.RecognizeAsync($bmp0)) ([Windows.Media.Ocr.OcrResult])\n"
-            "$bestSc = Score-Res $bestRes\n"
-            "if ($args.Count -ge 2 -and $args[1] -and (Test-Path -LiteralPath $args[1])) {\n"
-            "    $sfU = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($args[1])) ([Windows.Storage.StorageFile])\n"
-            "    $stU = Await ($sfU.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])\n"
-            "    $decU = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stU)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
-            "    $bmpU = Await ($decU.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
-            "    $resU = Await ($engine.RecognizeAsync($bmpU)) ([Windows.Media.Ocr.OcrResult])\n"
-            "    $scU = Score-Res $resU\n"
-            "    if ($scU -gt $bestSc) { $bestSc = $scU; $bestRes = $resU }\n"
-            "    $stU.Dispose()\n"
-            "}\n"
-            "if ($bestSc -lt 18) {\n"
-            "    foreach ($rot in @([Windows.Graphics.Imaging.BitmapRotation]::Clockwise90Degrees, [Windows.Graphics.Imaging.BitmapRotation]::Clockwise270Degrees)) {\n"
-            "        $tf = New-Object Windows.Graphics.Imaging.BitmapTransform\n"
-            "        $tf.Rotation = $rot\n"
-            "        $bmpR = Await ($dec.GetSoftwareBitmapAsync($dec.BitmapPixelFormat, $dec.BitmapAlphaMode, $tf, [Windows.Graphics.Imaging.ExifOrientationMode]::RespectExifOrientation, [Windows.Graphics.Imaging.ColorManagementMode]::DoNotColorManage)) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
-            "        $resR = Await ($engine.RecognizeAsync($bmpR)) ([Windows.Media.Ocr.OcrResult])\n"
-            "        $scR = Score-Res $resR\n"
-            "        if ($scR -gt ($bestSc + 14)) { $bestSc = $scR; $bestRes = $resR }\n"
-            "    }\n"
-            "}\n"
-            "$linesOut = @()\n"
-            "foreach ($ln in $bestRes.Lines) {\n"
-            "    $wordsOut = @()\n"
-            "    foreach ($w in $ln.Words) {\n"
-            "        $rc = $w.BoundingRect\n"
-            "        $wordsOut += @{ t = $w.Text; x = [Math]::Round($rc.X, 1); y = [Math]::Round($rc.Y, 1); w = [Math]::Round($rc.Width, 1); h = [Math]::Round($rc.Height, 1) }\n"
-            "    }\n"
-            "    $linesOut += @{ text = $ln.Text; words = $wordsOut }\n"
-            "}\n"
-            "$pw = $dec.PixelWidth; $ph = $dec.PixelHeight\n"
-            "$st.Dispose()\n"
-            "Write-Output (@{ width = $pw; height = $ph; lines = $linesOut } | ConvertTo-Json -Depth 6 -Compress)\n"
-        )
-        ps_f = tmp_dir / "img_ocr.ps1"
-        ps_f.write_text(ps_script, encoding="utf-8-sig")
-        cmd_args = ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps_f), str(img_path)]
+        targets = [img_path] + ([deunderlined_path] if deunderlined_path is not None else [])
+        res_map = ppocr_v5_worker.invoke_ppocr_subprocess(targets, filter_video_ui=False, timeout_sec=45.0)
+        best = res_map.get(str(img_path.resolve())) or res_map.get(img_path.name) or {"width": 0, "height": 0, "lines": []}
         if deunderlined_path is not None:
-            cmd_args.append(str(deunderlined_path))
-        proc = subprocess.run(
-            cmd_args,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=25,
-            creationflags=creationflags,
-        )
-        raw_out = (proc.stdout or "").strip()
-        if raw_out:
-            last_json_line = raw_out.splitlines()[-1].strip()
-            parsed = json.loads(last_json_line)
-            if isinstance(parsed, dict):
-                return parsed
+            alt = res_map.get(str(deunderlined_path.resolve())) or res_map.get(deunderlined_path.name)
+            if isinstance(alt, dict):
+                t0 = str(best.get("smartText") or "")
+                t1 = str(alt.get("smartText") or "")
+                sc0 = len(re.findall(r"[가-힣]", t0)) * 4 + len(re.findall(r"[A-Za-z0-9]", t0))
+                sc1 = len(re.findall(r"[가-힣]", t1)) * 4 + len(re.findall(r"[A-Za-z0-9]", t1))
+                if sc1 > sc0 + 4:
+                    best = alt
+        if isinstance(best, dict):
+            return best
     except Exception:
         pass
     finally:
@@ -1910,7 +1801,7 @@ def _load_photo_ocr_cache() -> Dict[str, Dict[str, Any]]:
 
 def extract_photo_winrt_ocr(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """
-    [웹 & 네이티브 UI ③ 공통 실물 사진·표 WinRT OCR 엔진 (`/__photos/ocr`, `/api/ghosti/photos/ocr`)]
+    [웹 & 네이티브 UI ③ 공통 실물 사진·표 PP-OCRv5 Korean 엔진 (`/__photos/ocr`, `/api/ghosti/photos/ocr`)]
     - 가짜 영수증 데이터를 100% 배제하고 실제 로컬 이미지(또는 Base64 캡처본)에서
       단어별 바운딩 박스(X,Y,W,H) 기반 엑셀 TSV 표(`tsvTable`)와 핵심 단어칩(`chips`, `spots`)을 추출합니다.
     """
@@ -1929,7 +1820,7 @@ def extract_photo_winrt_ocr(params: Dict[str, Any] | None = None) -> Dict[str, A
                 b64_in = b64_in.split(",", 1)[1]
             raw_img_bytes = base64.b64decode(b64_in)
             digest = hashlib.sha1(raw_img_bytes).hexdigest()[:24]
-            cache_sig = f"b64_{digest}|v4"
+            cache_sig = f"b64_{digest}|v5_ppocr5"
             fd, tmp_name = tempfile.mkstemp(prefix="ghosti_ocr_b64_", suffix=".png")
             os.close(fd)
             temp_b64_file = Path(tmp_name)
@@ -1951,7 +1842,7 @@ def extract_photo_winrt_ocr(params: Dict[str, Any] | None = None) -> Dict[str, A
             if target_path is None or not target_path.exists():
                 return {"ok": False, "error": "IMAGE_NOT_FOUND"}
             st_i = target_path.stat()
-            cache_sig = f"{target_path}|{st_i.st_size}|{int(st_i.st_mtime)}|v4"
+            cache_sig = f"{target_path}|{st_i.st_size}|{int(st_i.st_mtime)}|v5_ppocr5"
 
         cache_map = _load_photo_ocr_cache()
         if not force and cache_sig in cache_map:
@@ -2017,102 +1908,189 @@ def extract_photo_winrt_ocr(params: Dict[str, Any] | None = None) -> Dict[str, A
                 pass
 
 
-def _run_winrt_pdf_first_pages_ocr(entry: Path, max_pages: int = 2) -> str:
-    """텍스트 스트림이 없거나 커스텀 CID 폰트인 스캔 계약서·증빙 PDF의 앞 1~2페이지를 Windows 내장 WinRT PdfDocument + OcrEngine으로 고속 해독합니다."""
-    if os.name != "nt" or not entry.exists():
+def _run_winrt_pdf_first_pages_ocr(entry: Path, max_pages: int = 6) -> str:
+    """스캔 이미지 PDF 폴백: PDFium 렌더링 + PP-OCRv5 Korean으로 앞 페이지들을 정밀 해독합니다."""
+    return _run_ppocr_pdf_pages_ocr(entry, max_pages=max_pages, max_chars=DOC_INDEX_MAX_CHARS)
+
+
+_HWP5_MULTI_WCHAR_CTRLS = frozenset({
+    1, 2, 3, 4, 5, 6, 7, 8, 9,
+    11, 12, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23,
+})
+
+
+def _decode_hwp5_para_text(payload: bytes) -> str:
+    """HWP 5.0 HWPTAG_PARA_TEXT(67) 레코드에서 16바이트 인라인·확장 제어문자를 정확히 건너뛰고 순수 문단·표 셀 텍스트를 복원합니다."""
+    n_u16 = len(payload) // 2
+    if n_u16 <= 0:
         return ""
-    creationflags = 0x08000000
-    tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_pdf_ocr_"))
+    u16_buf = bytearray()
+    i = 0
+    while i < n_u16:
+        ch = struct.unpack_from("<H", payload, i * 2)[0]
+        if ch in _HWP5_MULTI_WCHAR_CTRLS:
+            if ch == 9:  # TAB inline control (8 WCHAR = 16 bytes)
+                u16_buf.extend(b"\t\x00")
+            elif ch in (11, 16, 17):
+                u16_buf.extend(b" \x00")
+            i += 8
+            continue
+        if ch < 32:
+            if ch in (10, 13):
+                u16_buf.extend(b"\n\x00")
+            elif ch == 24:
+                u16_buf.extend(b"-\x00")
+            elif ch in (30, 31):
+                u16_buf.extend(b" \x00")
+            i += 1
+            continue
+        u16_buf.extend(payload[i * 2 : i * 2 + 2])
+        i += 1
+    if not u16_buf:
+        return ""
+    s = bytes(u16_buf).decode("utf-16-le", errors="ignore")
+    s = unicodedata.normalize("NFC", s)
+    s = re.sub(r"[ \t]+", " ", s)
+    return s.strip()
+
+
+def _extract_hwpx_zip_full_text(entry: Path, max_chars: int = DOC_INDEX_MAX_CHARS) -> str:
+    """HWPX(개방형 한글 ZIP/XML) 문서의 전체 Contents/section*.xml을 섹션 번호 순서대로 최대 50,000자까지 추출합니다."""
+    def _sec_sort_key(name: str) -> tuple[int, str]:
+        m = re.search(r"(\d+)", Path(name).stem)
+        return (int(m.group(1)) if m else 9999, name)
+
+    with zipfile.ZipFile(entry, "r") as zf:
+        sec_names = sorted(
+            (n for n in zf.namelist() if n.startswith("Contents/section") and n.endswith(".xml")),
+            key=_sec_sort_key,
+        )
+        sec_chunks: List[str] = []
+        total_len = 0
+        for sec_name in sec_names:
+            sec_bytes = zf.read(sec_name)
+            xml_str = sec_bytes.decode("utf-8", errors="ignore")
+            xml_str = re.sub(r"</(?:hp:p|p|hp:tr|tr)>", "\n", xml_str)
+            xml_str = re.sub(r"</(?:hp:tc|tc)>", "\t", xml_str)
+            sec_text = re.sub(r"<[^>]+>", " ", xml_str)
+            sec_text = unicodedata.normalize("NFC", sec_text)
+            sec_text = re.sub(r"[ \t]+", " ", sec_text)
+            sec_text = re.sub(r"\n{3,}", "\n\n", sec_text).strip()
+            if sec_text:
+                sec_chunks.append(sec_text)
+                total_len += len(sec_text) + 2
+                if total_len >= max_chars:
+                    break
+        return "\n\n".join(sec_chunks).strip()[:max_chars]
+
+
+def _extract_hwp_v5_full_text(entry: Path, max_chars: int = DOC_INDEX_MAX_CHARS) -> str:
+    """
+    [정식 HWP v5 OLE2 본문 전체 추출기]
+    - 구형 PrvText(미리보기 1줄) 정규식 땜빵을 완전 폐기하고,
+      OLE2 `FileHeader` 압축 플래그 + `BodyText/Section*` 전 섹션 zlib 스트림 해제 + `HWPTAG_PARA_TEXT(67)` 레코드 파싱으로
+      문서 끝부분·표 내부 텍스트까지 최대 50,000자를 정밀 복원합니다.
+    """
+    if not entry.exists():
+        return ""
+    if zipfile.is_zipfile(entry):
+        try:
+            return _extract_hwpx_zip_full_text(entry, max_chars=max_chars)
+        except Exception:
+            pass
+
     try:
-        ps_script = (
-            "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
-            "Add-Type -AssemblyName System.Runtime.WindowsRuntime\n"
-            "$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]\n"
-            "$null = [Windows.Data.Pdf.PdfDocument, Windows.Data.Pdf, ContentType = WindowsRuntime]\n"
-            "$null = [Windows.Data.Pdf.PdfPageRenderOptions, Windows.Data.Pdf, ContentType = WindowsRuntime]\n"
-            "$null = [Windows.Storage.Streams.InMemoryRandomAccessStream, Windows.Storage.Streams, ContentType = WindowsRuntime]\n"
-            "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]\n"
-            "$null = [Windows.Globalization.Language, Windows.Globalization, ContentType = WindowsRuntime]\n"
-            "$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]\n"
-            "$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]\n"
-            "$asTaskAction = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncAction' })[0]\n"
-            "function Await($WinRtTask, $ResultType) {\n"
-            "    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)\n"
-            "    $netTask = $asTask.Invoke($null, @($WinRtTask))\n"
-            "    $netTask.Wait(-1) | Out-Null\n"
-            "    $netTask.Result\n"
-            "}\n"
-            "function AwaitAction($WinRtAction) {\n"
-            "    $netTask = $asTaskAction.Invoke($null, @($WinRtAction))\n"
-            "    $netTask.Wait(-1) | Out-Null\n"
-            "}\n"
-            "$lang = New-Object Windows.Globalization.Language('ko')\n"
-            "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)\n"
-            "if (-not $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }\n"
-            "$sf = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($args[0])) ([Windows.Storage.StorageFile])\n"
-            "$pdf = Await ([Windows.Data.Pdf.PdfDocument]::LoadFromFileAsync($sf)) ([Windows.Data.Pdf.PdfDocument])\n"
-            "if ($pdf.IsPasswordProtected) { exit 0 }\n"
-            "$maxP = [Math]::Min([int]$pdf.PageCount, [int]$args[1])\n"
-            "$linesOut = @()\n"
-            "for ($i = 0; $i -lt $maxP; $i++) {\n"
-            "    $page = $pdf.GetPage([uint32]$i)\n"
-            "    $mem = New-Object Windows.Storage.Streams.InMemoryRandomAccessStream\n"
-            "    $opts = New-Object Windows.Data.Pdf.PdfPageRenderOptions\n"
-            "    $opts.DestinationWidth = [uint32]1800\n"
-            "    AwaitAction ($page.RenderToStreamAsync($mem, $opts))\n"
-            "    $mem.Seek(0)\n"
-            "    $dec = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($mem)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
-            "    $bmp = Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
-            "    $res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])\n"
-            "    $yOffset = $i * 4000\n"
-            "    foreach ($ln in $res.Lines) {\n"
-            "        $wordsOut = @()\n"
-            "        foreach ($w in $ln.Words) {\n"
-            "            $rc = $w.BoundingRect\n"
-            "            $wordsOut += @{ t = $w.Text; x = [Math]::Round($rc.X, 1); y = [Math]::Round($rc.Y + $yOffset, 1); w = [Math]::Round($rc.Width, 1); h = [Math]::Round($rc.Height, 1) }\n"
-            "        }\n"
-            "        $linesOut += @{ text = $ln.Text; words = $wordsOut }\n"
-            "    }\n"
-            "    $mem.Dispose()\n"
-            "    $page.Dispose()\n"
-            "}\n"
-            "Write-Output (@{ width = 1800; height = 2400; lines = $linesOut } | ConvertTo-Json -Depth 6 -Compress)\n"
-        )
-        ps_f = tmp_dir / "pdf_ocr.ps1"
-        ps_f.write_text(ps_script, encoding="utf-8-sig")
-        proc = subprocess.run(
-            ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps_f), str(entry), str(max_pages)],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=25,
-            creationflags=creationflags,
-        )
-        raw_out = (proc.stdout or "").strip()
-        if raw_out:
-            parsed = json.loads(raw_out.splitlines()[-1].strip())
-            if isinstance(parsed, dict):
-                rec = _reconstruct_ocr_geometry_and_spots(parsed)
-                return str(rec.get("fullText") or "").strip()[:1500]
+        import olefile
+
+        if olefile.isOleFile(str(entry)):
+            ole = olefile.OleFileIO(str(entry))
+            try:
+                is_compressed = True
+                is_encrypted = False
+                if ole.exists("FileHeader"):
+                    hdr = ole.openstream("FileHeader").read()
+                    if len(hdr) >= 40:
+                        flags = struct.unpack_from("<I", hdr, 36)[0]
+                        is_compressed = bool(flags & 0x01)
+                        is_encrypted = bool(flags & 0x02)
+
+                if not is_encrypted:
+                    sec_streams: List[tuple[int, List[str]]] = []
+                    for stream_path in ole.listdir(streams=True, storages=False):
+                        if len(stream_path) == 2 and stream_path[0] == "BodyText" and stream_path[1].startswith("Section"):
+                            m_idx = re.search(r"(\d+)", stream_path[1])
+                            s_no = int(m_idx.group(1)) if m_idx else 0
+                            sec_streams.append((s_no, stream_path))
+                    sec_streams.sort(key=lambda x: x[0])
+
+                    paragraphs: List[str] = []
+                    total_len = 0
+                    for _, spath in sec_streams:
+                        raw_sec = ole.openstream(spath).read()
+                        if not raw_sec:
+                            continue
+                        if is_compressed:
+                            dec_sec = None
+                            for wb in (-15, zlib.MAX_WBITS):
+                                try:
+                                    dec_sec = zlib.decompress(raw_sec, wb)
+                                    break
+                                except Exception:
+                                    continue
+                            if dec_sec is None:
+                                continue
+                        else:
+                            dec_sec = raw_sec
+
+                        off = 0
+                        n_bytes = len(dec_sec)
+                        while off + 4 <= n_bytes:
+                            rec_hdr = struct.unpack_from("<I", dec_sec, off)[0]
+                            off += 4
+                            tag_id = rec_hdr & 0x3FF
+                            rec_size = (rec_hdr >> 20) & 0xFFF
+                            if rec_size == 0xFFF:
+                                if off + 4 > n_bytes:
+                                    break
+                                rec_size = struct.unpack_from("<I", dec_sec, off)[0]
+                                off += 4
+                            if rec_size < 0 or off + rec_size > n_bytes:
+                                break
+                            if tag_id == 67 and rec_size >= 2:  # HWPTAG_PARA_TEXT
+                                para_s = _decode_hwp5_para_text(dec_sec[off : off + rec_size])
+                                if para_s:
+                                    paragraphs.append(para_s)
+                                    total_len += len(para_s) + 1
+                                    if total_len >= max_chars:
+                                        break
+                            off += rec_size
+                        if total_len >= max_chars:
+                            break
+
+                    if paragraphs:
+                        return "\n".join(paragraphs).strip()[:max_chars]
+
+                # 암호 설정·배포용 문서(ViewText 암호화)인 경우에만 OLE PrvText 스트림 정식 폴백
+                if ole.exists("PrvText"):
+                    prv_raw = ole.openstream("PrvText").read()
+                    prv_txt = unicodedata.normalize("NFC", prv_raw.decode("utf-16-le", errors="ignore"))
+                    prv_txt = re.sub(r"[ \t]+", " ", prv_txt).strip()
+                    if prv_txt:
+                        return prv_txt[:max_chars]
+            finally:
+                ole.close()
     except Exception:
         pass
-    finally:
-        shutil.rmtree(tmp_dir, ignore_errors=True)
-    return ""
 
-
-def _extract_hwp_v5_preview_text(entry: Path) -> str:
-    """한글(.hwp) OLE2 파일 내 PrvText(UTF-16LE 미리보기 스트림) 또는 텍스트 런을 1ms 내에 추출합니다."""
+    # HWPML(XML 텍스트형 .hwp) 폴백
     try:
-        with open(entry, "rb") as fp:
-            raw = fp.read(1536 * 1024)
-        # UTF-16LE 연속 한글/영문/숫자 구문 추출 (PrvText 스트림 포함)
-        u16 = raw.decode("utf-16-le", errors="ignore")
-        runs = re.findall(r"[가-힣A-Za-z0-9][가-힣A-Za-z0-9\s.,:;/()\-_%~]{6,200}", u16)
-        good = [re.sub(r"\s+", " ", r).strip() for r in runs if len(re.findall(r"[가-힣]", r)) >= 3]
-        if good:
-            return " · ".join(dict.fromkeys(good))[:1500]
+        raw_head = entry.read_bytes()[:512 * 1024]
+        if b"<HWPML" in raw_head[:4096] or b"<?xml" in raw_head[:512]:
+            xml_s = raw_head.decode("utf-8", errors="ignore")
+            plain = re.sub(r"<[^>]+>", " ", xml_s)
+            plain = re.sub(r"\s+", " ", plain).strip()
+            if plain:
+                return plain[:max_chars]
     except Exception:
         pass
     return ""
@@ -2125,8 +2103,7 @@ def _extract_doc_text(entry: Path, *, allow_pdf_winrt_ocr: bool = True) -> str:
     cache_sig = ""
     try:
         st_e = entry.stat()
-        ver_tag = "v2_xlsx" if ext == ".xlsx" else "v1"
-        cache_sig = f"{entry.resolve()}|{st_e.st_size}|{int(st_e.st_mtime)}|{ver_tag}"
+        cache_sig = _make_doc_cache_sig(entry, st_e)
         doc_cache = _load_doc_text_cache()
         if cache_sig in doc_cache and doc_cache[cache_sig]:
             return doc_cache[cache_sig]
@@ -2135,91 +2112,112 @@ def _extract_doc_text(entry: Path, *, allow_pdf_winrt_ocr: bool = True) -> str:
 
     try:
         if ext in (".txt", ".md", ".csv"):
-            raw = entry.read_bytes()[:32768]
+            raw = entry.read_bytes()[: 512 * 1024]
             if raw.startswith(b"\xff\xfe"):
-                txt = raw[2:].decode("utf-16-le", errors="ignore").strip()[:1500]
+                txt = raw[2:].decode("utf-16-le", errors="ignore").strip()[:DOC_INDEX_MAX_CHARS]
+                if txt and cache_sig:
+                    _save_doc_text_cache_entry(cache_sig, txt)
+                return txt
+            if raw.startswith(b"\xfe\xff"):
+                txt = raw[2:].decode("utf-16-be", errors="ignore").strip()[:DOC_INDEX_MAX_CHARS]
                 if txt and cache_sig:
                     _save_doc_text_cache_entry(cache_sig, txt)
                 return txt
             for enc in ("utf-8-sig", "utf-8", "cp949", "euc-kr"):
                 try:
-                    txt = raw.decode(enc).strip()[:1500]
+                    txt = raw.decode(enc).strip()[:DOC_INDEX_MAX_CHARS]
                     if txt:
                         if cache_sig:
                             _save_doc_text_cache_entry(cache_sig, txt)
                         return txt
                 except Exception:
                     continue
-            return raw.decode("utf-8", errors="ignore").strip()[:1500]
+            return raw.decode("utf-8", errors="ignore").strip()[:DOC_INDEX_MAX_CHARS]
         if ext == ".docx":
             with zipfile.ZipFile(entry, "r") as zf:
-                if "word/document.xml" in zf.namelist():
-                    xml_bytes = zf.read("word/document.xml")
-                    text = re.sub(r"<[^>]+>", " ", xml_bytes.decode("utf-8", errors="ignore"))
-                    text = re.sub(r"\s+", " ", text).strip()[:1500]
-                    if text:
-                        if cache_sig:
-                            _save_doc_text_cache_entry(cache_sig, text)
-                        return text
+                names = set(zf.namelist())
+                doc_xml_targets = [n for n in ("word/document.xml",) if n in names] + sorted(
+                    n for n in names if (n.startswith("word/header") or n.startswith("word/footer")) and n.endswith(".xml")
+                )
+                parts_docx: List[str] = []
+                for xname in doc_xml_targets:
+                    xml_str = zf.read(xname).decode("utf-8", errors="ignore")
+                    xml_str = re.sub(r"</w:(?:p|tr)>", "\n", xml_str)
+                    xml_str = re.sub(r"</w:tc>", "\t", xml_str)
+                    plain = re.sub(r"<[^>]+>", " ", xml_str)
+                    plain = unicodedata.normalize("NFC", plain)
+                    plain = re.sub(r"[ \t]+", " ", plain)
+                    plain = re.sub(r"\n{3,}", "\n\n", plain).strip()
+                    if plain:
+                        parts_docx.append(plain)
+                text = "\n\n".join(parts_docx).strip()[:DOC_INDEX_MAX_CHARS]
+                if text:
+                    if cache_sig:
+                        _save_doc_text_cache_entry(cache_sig, text)
+                    return text
         if ext == ".xlsx":
             with zipfile.ZipFile(entry, "r") as zf:
-                rows = zos.extract_xlsx_ordered_rows(zf, max_rows=40, max_chars=1500)
-                joined_xl = "\n".join(rows).strip()[:1500]
+                rows = zos.extract_xlsx_ordered_rows(zf, max_rows=1200, max_chars=DOC_INDEX_MAX_CHARS)
+                joined_xl = "\n".join(rows).strip()[:DOC_INDEX_MAX_CHARS]
                 if joined_xl:
                     if cache_sig:
                         _save_doc_text_cache_entry(cache_sig, joined_xl)
                     return joined_xl
         if ext == ".pptx":
+            def _slide_sort_key(name: str) -> tuple[int, str]:
+                m = re.search(r"(\d+)", Path(name).stem)
+                return (int(m.group(1)) if m else 9999, name)
+
             with zipfile.ZipFile(entry, "r") as zf:
                 sl_chunks: List[str] = []
-                for sl_name in sorted(n for n in zf.namelist() if n.startswith("ppt/slides/slide") and n.endswith(".xml"))[:8]:
+                total_ppt = 0
+                slide_names = sorted(
+                    (n for n in zf.namelist() if n.startswith("ppt/slides/slide") and n.endswith(".xml")),
+                    key=_slide_sort_key,
+                )[:80]
+                for sl_name in slide_names:
                     sl_bytes = zf.read(sl_name)
-                    sl_text = re.sub(r"<[^>]+>", " ", sl_bytes.decode("utf-8", errors="ignore"))
-                    sl_text = re.sub(r"\s+", " ", sl_text).strip()
+                    sl_xml = re.sub(r"</a:p>", "\n", sl_bytes.decode("utf-8", errors="ignore"))
+                    sl_text = re.sub(r"<[^>]+>", " ", sl_xml)
+                    sl_text = unicodedata.normalize("NFC", re.sub(r"[ \t]+", " ", sl_text))
+                    sl_text = re.sub(r"\n{2,}", "\n", sl_text).strip()
                     if sl_text:
-                        sl_chunks.append(sl_text[:300])
-                joined_ppt = " | ".join(sl_chunks).strip()[:1500]
+                        sl_chunks.append(sl_text)
+                        total_ppt += len(sl_text) + 3
+                        if total_ppt >= DOC_INDEX_MAX_CHARS:
+                            break
+                joined_ppt = "\n\n".join(sl_chunks).strip()[:DOC_INDEX_MAX_CHARS]
                 if joined_ppt:
                     if cache_sig:
                         _save_doc_text_cache_entry(cache_sig, joined_ppt)
                     return joined_ppt
         if ext == ".hwpx":
-            with zipfile.ZipFile(entry, "r") as zf:
-                sec_chunks: List[str] = []
-                for sec_name in sorted(n for n in zf.namelist() if n.startswith("Contents/section") and n.endswith(".xml"))[:3]:
-                    sec_bytes = zf.read(sec_name)
-                    sec_text = re.sub(r"<[^>]+>", " ", sec_bytes.decode("utf-8", errors="ignore"))
-                    sec_text = re.sub(r"\s+", " ", sec_text).strip()
-                    if sec_text:
-                        sec_chunks.append(sec_text)
-                joined_hwpx = " ".join(sec_chunks).strip()[:1500]
-                if joined_hwpx:
-                    if cache_sig:
-                        _save_doc_text_cache_entry(cache_sig, joined_hwpx)
-                    return joined_hwpx
+            joined_hwpx = _extract_hwpx_zip_full_text(entry, max_chars=DOC_INDEX_MAX_CHARS)
+            if joined_hwpx:
+                if cache_sig:
+                    _save_doc_text_cache_entry(cache_sig, joined_hwpx)
+                return joined_hwpx
         if ext == ".hwp":
-            hwp_txt = _extract_hwp_v5_preview_text(entry)
+            hwp_txt = _extract_hwp_v5_full_text(entry, max_chars=DOC_INDEX_MAX_CHARS)
             if hwp_txt:
                 if cache_sig:
                     _save_doc_text_cache_entry(cache_sig, hwp_txt)
                 return hwp_txt
         if ext == ".pdf":
-            pdf_pure = _extract_pdf_streams_text_pure(entry)
-            if pdf_pure:
+            pdf_txt = _extract_pdf_text_sota(
+                entry,
+                allow_ocr_fallback=allow_pdf_winrt_ocr,
+                max_ocr_pages=6,
+                max_chars=DOC_INDEX_MAX_CHARS,
+            )
+            if pdf_txt:
                 if cache_sig:
-                    _save_doc_text_cache_entry(cache_sig, pdf_pure)
-                return pdf_pure
-            if allow_pdf_winrt_ocr:
-                pdf_ocr = _run_winrt_pdf_first_pages_ocr(entry, max_pages=2)
-                if pdf_ocr:
-                    if cache_sig:
-                        _save_doc_text_cache_entry(cache_sig, pdf_ocr)
-                    return pdf_ocr
-                elif cache_sig:
-                    # 암호 보호·빈 이미지 PDF가 매번 재실행되지 않도록 기본 문구 캐싱
-                    fallback_empty = f"[{entry.parent.name}] 폴더에 보관된 {entry.name} PDF 문서입니다."
-                    _save_doc_text_cache_entry(cache_sig, fallback_empty)
-                    return fallback_empty
+                    _save_doc_text_cache_entry(cache_sig, pdf_txt)
+                return pdf_txt
+            if allow_pdf_winrt_ocr and cache_sig:
+                fallback_empty = f"[{entry.parent.name}] 폴더에 보관된 {entry.name} PDF 문서입니다."
+                _save_doc_text_cache_entry(cache_sig, fallback_empty)
+                return fallback_empty
     except Exception:
         pass
     return f"[{entry.parent.name}] 폴더에 보관된 {entry.name} 로컬 문서 파일입니다. 파일명 및 키워드로 즉시 검색됩니다."
@@ -2293,7 +2291,7 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
             stem = entry.stem.replace("_", " ").replace("-", " ").strip()
             allow_sync_ocr = False
             if ext_low == ".pdf":
-                sig_chk = f"{entry.resolve()}|{st.st_size}|{int(st.st_mtime)}|v1"
+                sig_chk = _make_doc_cache_sig(entry, st)
                 if sig_chk in doc_cache_ref:
                     allow_sync_ocr = True
                 elif sync_pdf_ocr_budget > 0:
@@ -2493,7 +2491,7 @@ _VIDEO_STREAM_INFLIGHT: Dict[str, threading.Event] = {}
 _VIDEO_STREAM_LOCK = threading.Lock()
 _VIDEO_OCR_CACHE_FILE = MERLIN_DIR / "video_scene_ocr_cache_v2.json"
 _VIDEO_OCR_SCHEMA_VER = 10
-_VIDEO_PADDLE_OCR_VER = 20
+_VIDEO_PADDLE_OCR_VER = 21
 _VIDEO_OCR_LOCK = threading.Lock()
 _VIDEO_OCR_BG_RUNNING = False
 _FFMPEG_EXE_CACHE: str | None = ""
@@ -3092,12 +3090,13 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
 
                 for fname, (cache_sig, sec_val) in sorted(job_map.items()):
                     raw_txt = ocr_by_file.get(fname, "")
-                    clean_txt = raw_txt if _is_meaningful_ocr_text(raw_txt) else ""
-                    kws = _enrich_ocr_semantic_keywords(clean_txt)
+                    clean_txt = raw_txt.strip()
+                    kws = _enrich_ocr_semantic_keywords(clean_txt) if clean_txt else []
                     per_vid_meta[cache_sig]["frames"].append({
                         "timeSec": sec_val,
-                        "ocrText": clean_txt[:1200],
+                        "ocrText": clean_txt[:1600],
                         "keywords": kws,
+                        "fromPaddleV5": True,
                     })
 
                 with _VIDEO_OCR_LOCK:
@@ -3111,7 +3110,7 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
                         dedup_lines = _dedupe_ocr_timeline_lines(val["frames"])
                         full_txt = "\n".join(f"[{ln['timestamp']}] {ln['text']}" for ln in dedup_lines)
                         cur_cache[cache_sig] = {
-                            "ocrVer": _VIDEO_OCR_SCHEMA_VER,
+                            "ocrVer": _VIDEO_PADDLE_OCR_VER,
                             "frames": val["frames"],
                             "keywords": list(dict.fromkeys(all_kws))[:50],
                             "lines": dedup_lines,
@@ -3129,102 +3128,46 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
             _VIDEO_OCR_BG_RUNNING = False
 
 
-_PS_FORMAT_TAGGED_LINES_EXPR = (
-    "($res0.Lines | ForEach-Object { "
-    "$w0 = $_.Words | Select-Object -First 1; "
-    "if ($w0) { $r = $w0.BoundingRect; '__POS_' + [int]$r.Y + '_' + [int]$r.X + '_' + [int]$r.Height + '__' + $_.Text } "
-    "else { '__POS_99999_0_14__' + $_.Text } "
-    "}) -join ' ||| '"
-)
-
-
 def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
-    """지정 폴더 내 *.jpg 파일들에 대해 Windows 10/11 내장 WinRT OCR + 90°/270° 가로눕힘 회전 폴백을 일괄 수행합니다."""
+    """[SOTA 단일화] 지정 폴더 내 *.jpg 동영상 프레임들에 대해 PP-OCRv5 Korean(ONNX) 격리 워커로 다단 슬라이드·자막을 일괄 판독합니다."""
     ocr_by_file: Dict[str, str] = {}
-    if os.name != "nt":
+    if not tmp_dir.exists():
         return ocr_by_file
-    creationflags = 0x08000000
-    ps_script = (
-        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
-        "Add-Type -AssemblyName System.Runtime.WindowsRuntime\n"
-        "$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]\n"
-        "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]\n"
-        "$null = [Windows.Graphics.Imaging.BitmapTransform, Windows.Foundation, ContentType = WindowsRuntime]\n"
-        "$null = [Windows.Graphics.Imaging.BitmapRotation, Windows.Foundation, ContentType = WindowsRuntime]\n"
-        "$null = [Windows.Globalization.Language, Windows.Globalization, ContentType = WindowsRuntime]\n"
-        "$null = [Windows.Storage.StorageFile, Windows.Foundation, ContentType = WindowsRuntime]\n"
-        "$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]\n"
-        "function Await($WinRtTask, $ResultType) {\n"
-        "    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)\n"
-        "    $netTask = $asTask.Invoke($null, @($WinRtTask))\n"
-        "    $netTask.Wait(-1) | Out-Null\n"
-        "    $netTask.Result\n"
-        "}\n"
-        "function Score-Text([string]$t) {\n"
-        "    if (-not $t) { return 0 }\n"
-        "    $cleanT = $t -replace '__POS_-?\\d+_-?\\d+_\\d+__', ''\n"
-        "    $ko = ([regex]::Matches($cleanT, '[가-힣]')).Count\n"
-        "    $en = ([regex]::Matches($cleanT, '[a-zA-Z0-9]')).Count\n"
-        "    $cjk = ([regex]::Matches($cleanT, '[\\u4e00-\\u9fff]')).Count\n"
-        "    $sym = ([regex]::Matches($cleanT, '[^가-힣a-zA-Z0-9\\s/.:,\\-?%+~]')).Count\n"
-        "    return ($ko * 4) + $en - ($cjk * 4) - ($sym * 3)\n"
-        "}\n"
-        "$lang = New-Object Windows.Globalization.Language('ko')\n"
-        "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)\n"
-        "if (-not $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }\n"
-        "Get-ChildItem -LiteralPath $args[0] -Filter '*.jpg' | Sort-Object Name | ForEach-Object {\n"
-        "    $f = $_\n"
-        "    try {\n"
-        "        $file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($f.FullName)) ([Windows.Storage.StorageFile])\n"
-        "        $stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])\n"
-        "        $decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
-        "        $bmp0 = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
-        "        $res0 = Await ($engine.RecognizeAsync($bmp0)) ([Windows.Media.Ocr.OcrResult])\n"
-        f"        $bestText = {_PS_FORMAT_TAGGED_LINES_EXPR}\n"
-        "        $bestScore = Score-Text $bestText\n"
-        "        $ko0 = ([regex]::Matches($bestText, '[가-힣]')).Count\n"
-        "        if ($ko0 -lt 5 -and $bestScore -lt 24) {\n"
-        "            foreach ($rot in @([Windows.Graphics.Imaging.BitmapRotation]::Clockwise90Degrees, [Windows.Graphics.Imaging.BitmapRotation]::Clockwise270Degrees)) {\n"
-        "                $tf = New-Object Windows.Graphics.Imaging.BitmapTransform\n"
-        "                $tf.Rotation = $rot\n"
-        "                $bmpR = Await ($decoder.GetSoftwareBitmapAsync($decoder.BitmapPixelFormat, $decoder.BitmapAlphaMode, $tf, [Windows.Graphics.Imaging.ExifOrientationMode]::RespectExifOrientation, [Windows.Graphics.Imaging.ColorManagementMode]::DoNotColorManage)) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
-        "                $resR = Await ($engine.RecognizeAsync($bmpR)) ([Windows.Media.Ocr.OcrResult])\n"
-        f"                $txtR = {_PS_FORMAT_TAGGED_LINES_EXPR.replace('$res0', '$resR')}\n"
-        "                $koR = ([regex]::Matches($txtR, '[가-힣]')).Count\n"
-        "                $scR = Score-Text $txtR\n"
-        "                if ($koR -ge 10 -and $scR -gt ($bestScore + 18)) {\n"
-        "                    $bestScore = $scR\n"
-        "                    $bestText = $txtR\n"
-        "                }\n"
-        "            }\n"
-        "        }\n"
-        "        $stream.Dispose()\n"
-        "        Write-Output \"$($f.Name)`t$bestText\"\n"
-        "    } catch {}\n"
-        "}\n"
-    )
-    ps_file = tmp_dir / "ocr_batch.ps1"
-    ps_file.write_text(ps_script, encoding="utf-8-sig")
-    ocr_proc = subprocess.run(
-        ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps_file), str(tmp_dir)],
-        capture_output=True,
-        text=True,
-        encoding="utf-8",
-        errors="replace",
-        timeout=65,
-        creationflags=creationflags,
-    )
-    for line in ocr_proc.stdout.splitlines():
-        if "\t" in line:
-            fn, txt = line.split("\t", 1)
-            ocr_by_file[fn.strip()] = _clean_video_ocr_display_text(re.sub(r"\s+", " ", txt).strip())
+    jpg_files = sorted(tmp_dir.glob("*.jpg"), key=lambda p: p.name)
+    if not jpg_files:
+        return ocr_by_file
+    try:
+        import ppocr_v5_worker
+
+        batch_size = 14
+        for idx in range(0, len(jpg_files), batch_size):
+            chunk = jpg_files[idx : idx + batch_size]
+            res_map = ppocr_v5_worker.invoke_ppocr_subprocess(
+                chunk,
+                filter_video_ui=True,
+                timeout_sec=max(45.0, len(chunk) * 7.0),
+            )
+            for jf in chunk:
+                item = res_map.get(str(jf.resolve())) or res_map.get(jf.name) or {}
+                smart_t = re.sub(r"\s+", " ", str(item.get("smartText") or "")).strip()
+                ocr_by_file[jf.name] = smart_t
+    except Exception:
+        pass
     return ocr_by_file
 
 
 def _dedupe_ocr_timeline_lines(raw_frames: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
-    """연속 구간에서 동일한 자막·슬라이드 문구가 반복될 때 중복을 제거하고 의미 있는 타임라인 대본만 남깁니다."""
+    """
+    연속 구간에서 동일한 자막·슬라이드 문구가 반복될 때 중복을 제거하고,
+    애니메이션 빌드업(제목 먼저 등장 ➔ 본문 카드 추가 등장) 시에는 앞의 부분 텍스트를 완성형 본문으로 자동 승격(Upgrade Replace)합니다.
+    """
     deduped: List[Dict[str, Any]] = []
     prev_norm = ""
+    prev_bigrams: set[str] = set()
+
+    def _bigrams(s: str) -> set[str]:
+        return {s[i : i + 2] for i in range(len(s) - 1)} if len(s) >= 2 else ({s} if s else set())
+
     for fr in sorted(raw_frames, key=lambda x: int(x.get("timeSec") or 0)):
         raw_s = str(fr.get("ocrText") or "").strip()
         txt = re.sub(r"\s+", " ", raw_s).strip() if fr.get("fromPaddleV5") else _clean_video_ocr_display_text(raw_s)
@@ -3233,9 +3176,31 @@ def _dedupe_ocr_timeline_lines(raw_frames: List[Dict[str, Any]]) -> List[Dict[st
         norm = re.sub(r"[^가-힣a-zA-Z0-9]", "", txt).lower()
         if len(norm) < 4:
             continue
-        if prev_norm and (norm == prev_norm or (len(norm) > 8 and (norm in prev_norm or prev_norm in norm))):
-            continue
+        cur_bigrams = _bigrams(norm)
+
+        if prev_norm and deduped:
+            if norm == prev_norm:
+                continue
+            # 현재 프레임이 직전 완성 프레임의 일부분(페이드아웃 등)이면 직전 완성본 유지
+            if len(norm) >= 5 and norm in prev_norm:
+                continue
+            # 직전 프레임이 제목/초반 일부이고 현재 프레임에 본문 전체가 다 나타난 경우 ➔ 버리지 않고 직전 항목 본문을 완성본으로 승격!
+            if len(prev_norm) >= 5 and prev_norm in norm:
+                deduped[-1]["text"] = txt
+                prev_norm = norm
+                prev_bigrams = cur_bigrams
+                continue
+            if prev_bigrams and cur_bigrams:
+                containment = len(prev_bigrams & cur_bigrams) / float(max(1, min(len(prev_bigrams), len(cur_bigrams))))
+                if containment >= 0.80:
+                    if len(norm) > len(prev_norm) + 4:
+                        deduped[-1]["text"] = txt
+                        prev_norm = norm
+                        prev_bigrams = cur_bigrams
+                    continue
+
         prev_norm = norm
+        prev_bigrams = cur_bigrams
         s_val = int(fr.get("timeSec") or 0)
         ts_str = f"{int(s_val // 60):02d}:{int(s_val % 60):02d}"
         deduped.append({
@@ -3246,11 +3211,95 @@ def _dedupe_ocr_timeline_lines(raw_frames: List[Dict[str, Any]]) -> List[Dict[st
     return deduped
 
 
+def _select_stable_scene_frames(
+    candidates: List[tuple[Path, int]],
+    max_keep: int = 16,
+) -> Dict[str, int]:
+    """
+    [고속 장면 변화(Scene-Change) 선별 & 디졸브 잔상 제거기]
+    1) 2초 간격으로 추출된 전체 프레임의 96x54 초경량 그레이스케일 썸네일을 15ms 내에 비교합니다.
+    2) 변화가 없는 정지 슬라이드 중복 프레임은 OCR 실행 전에 즉시 제거하여 추론 시간을 77초 ➔ 3~4초로 단축합니다.
+    3) 앞뒤 슬라이드가 반투명하게 겹치는 디졸브(Cross-fade) 전환 프레임을 배제하고,
+       각 장면 군집 내에서 글자 윤곽 선명도(Edge Sharpness)가 가장 높은 완성 프레임을 대표로 선별합니다.
+    """
+    if not candidates:
+        return {}
+    try:
+        import numpy as np
+        from PIL import Image
+
+        meta_list: List[Dict[str, Any]] = []
+        for p_jpg, sec_val in candidates:
+            if not p_jpg.exists():
+                continue
+            try:
+                with Image.open(p_jpg) as im:
+                    g = np.asarray(im.convert("L").resize((96, 54), Image.Resampling.BILINEAR), dtype=np.float32)
+                std_v = float(np.std(g))
+                if std_v < 4.5:  # 완전 암전·백색 페이드 화면 제외
+                    p_jpg.unlink(missing_ok=True)
+                    continue
+                sharp = float(np.mean(np.abs(g[:, 1:] - g[:, :-1])) + np.mean(np.abs(g[1:, :] - g[:-1, :])))
+                meta_list.append({"path": p_jpg, "sec": sec_val, "g": g, "sharp": sharp})
+            except Exception:
+                continue
+
+        if not meta_list:
+            return {}
+
+        clusters: List[List[Dict[str, Any]]] = [[meta_list[0]]]
+        diffs: List[float] = [0.0]
+        for idx in range(1, len(meta_list)):
+            cur_m = meta_list[idx]
+            prev_m = clusters[-1][-1]
+            mad = float(np.mean(np.abs(cur_m["g"] - prev_m["g"])))
+            diffs.append(mad)
+            if mad < 4.3:
+                clusters[-1].append(cur_m)
+            else:
+                clusters.append([cur_m])
+
+        selected: List[tuple[Path, int]] = []
+        for c_idx, cl in enumerate(clusters):
+            # 양옆 안정 슬라이드 사이에 낀 1프레임 디졸브(반투명 겹침 흐림 프레임) 배제
+            if len(cl) == 1 and 0 < c_idx < len(clusters) - 1:
+                prev_cl = clusters[c_idx - 1]
+                next_cl = clusters[c_idx + 1]
+                cur_item = cl[0]
+                d_prev = float(np.mean(np.abs(cur_item["g"] - prev_cl[-1]["g"])))
+                d_next = float(np.mean(np.abs(next_cl[0]["g"] - cur_item["g"])))
+                neighbor_sharp = max(prev_cl[-1]["sharp"], next_cl[0]["sharp"])
+                if d_prev > 5.2 and d_next > 5.2 and cur_item["sharp"] < neighbor_sharp * 0.93:
+                    continue
+
+            # 동일 장면 군집 내에서 애니메이션이 모두 끝난 가장 선명한(글자량이 가장 풍부한) 프레임 선택, 타임스탬프는 장면 시작 시각 유지
+            best_item = max(cl, key=lambda x: (x["sharp"], x["sec"]))
+            start_sec = int(cl[0]["sec"])
+            selected.append((best_item["path"], start_sec))
+
+        if len(selected) > max_keep:
+            step_f = len(selected) / float(max_keep)
+            picked_indices = sorted({min(len(selected) - 1, int(round(i * step_f))) for i in range(max_keep)})
+            selected = [selected[i] for i in picked_indices]
+
+        keep_paths = {p.resolve() for p, _ in selected}
+        for m in meta_list:
+            if m["path"].resolve() not in keep_paths:
+                try:
+                    m["path"].unlink(missing_ok=True)
+                except Exception:
+                    pass
+
+        return {p.name: s for p, s in selected}
+    except Exception:
+        return {p.name: s for p, s in candidates[:max_keep] if p.exists()}
+
+
 def ingest_browser_video_ocr_frames(data: Dict[str, Any]) -> Dict[str, Any]:
     """
     [무-FFmpeg 호환 & PP-OCRv5 고정밀 캐시 통합]
     1) precomputedFrames(PP-OCRv5 Korean 판독 결과)가 전달되면 그대로 ocrVer=20 영구 캐싱합니다.
-    2) 원시 JPEG 배열(frames)만 전달되면 WinRT 보조 OCR을 수행합니다.
+    2) 원시 JPEG 배열(frames)만 전달되더라도 동일하게 로컬 PP-OCRv5 Korean 격리 워커로 고정밀 판독 후 ocrVer=20 영구 캐싱합니다.
     """
     vname = str(data.get("videoFileName") or "").strip()
     precomputed_in = data.get("precomputedFrames")
@@ -3351,14 +3400,14 @@ def ingest_browser_video_ocr_frames(data: Dict[str, Any]) -> Dict[str, Any]:
         out_frames: List[Dict[str, Any]] = []
         all_kws: List[str] = []
         for fname, s_val in sorted(sec_by_fname.items()):
-            raw_t = ocr_map.get(fname, "")
-            txt = raw_t if _is_meaningful_ocr_text(raw_t) else ""
-            kws = _enrich_ocr_semantic_keywords(txt)
+            txt = ocr_map.get(fname, "").strip()
+            kws = _enrich_ocr_semantic_keywords(txt) if txt else []
             all_kws.extend(kws)
             out_frames.append({
                 "timeSec": s_val,
-                "ocrText": txt[:1200],
+                "ocrText": txt[:1600],
                 "keywords": kws,
+                "fromPaddleV5": True,
             })
 
         with _VIDEO_OCR_LOCK:
@@ -3367,16 +3416,18 @@ def ingest_browser_video_ocr_frames(data: Dict[str, Any]) -> Dict[str, Any]:
             prev_ver = int(prev_entry.get("ocrVer") or 0)
             prev_frames = prev_entry.get("frames") if isinstance(prev_entry.get("frames"), list) else []
             merged_by_sec: Dict[int, Dict[str, Any]] = {}
-            for pf in prev_frames:
-                p_txt = str(pf.get("ocrText") or "").strip()
-                if _is_meaningful_ocr_text(p_txt):
-                    merged_by_sec[int(pf.get("timeSec") or 0)] = {
-                        "timeSec": int(pf.get("timeSec") or 0),
-                        "ocrText": p_txt,
-                        "keywords": _enrich_ocr_semantic_keywords(p_txt),
-                    }
+            if prev_ver >= _VIDEO_PADDLE_OCR_VER:
+                for pf in prev_frames:
+                    p_txt = str(pf.get("ocrText") or "").strip()
+                    if p_txt:
+                        merged_by_sec[int(pf.get("timeSec") or 0)] = {
+                            "timeSec": int(pf.get("timeSec") or 0),
+                            "ocrText": p_txt,
+                            "keywords": _enrich_ocr_semantic_keywords(p_txt),
+                            "fromPaddleV5": True,
+                        }
             for nf in out_frames:
-                if nf.get("ocrText") and (prev_ver < _VIDEO_OCR_SCHEMA_VER or int(nf.get("timeSec") or 0) not in merged_by_sec):
+                if nf.get("ocrText"):
                     merged_by_sec[int(nf.get("timeSec") or 0)] = nf
             merged_frames = [merged_by_sec[k] for k in sorted(merged_by_sec.keys())]
             merged_lines = _dedupe_ocr_timeline_lines(merged_frames)
@@ -3384,9 +3435,9 @@ def ingest_browser_video_ocr_frames(data: Dict[str, Any]) -> Dict[str, Any]:
             merged_kws: List[str] = []
             for mf in merged_frames:
                 merged_kws.extend(mf.get("keywords") or [])
-            has_meaningful = len(merged_lines) > 0 and sum(len(ln.get("text") or "") for ln in merged_lines) >= 8
+            has_meaningful = len(merged_lines) > 0 and sum(len(ln.get("text") or "") for ln in merged_lines) >= 6
             cur_cache[sig] = {
-                "ocrVer": prev_ver if prev_ver >= _VIDEO_OCR_SCHEMA_VER else (0 if find_ffmpeg_exe() else _VIDEO_OCR_SCHEMA_VER),
+                "ocrVer": _VIDEO_PADDLE_OCR_VER,
                 "videoFileName": vname,
                 "filePath": str(resolved_path) if resolved_path else "",
                 "frames": merged_frames,
@@ -3394,7 +3445,7 @@ def ingest_browser_video_ocr_frames(data: Dict[str, Any]) -> Dict[str, Any]:
                 "lines": merged_lines,
                 "fullText": merged_full_text,
                 "lineCount": len(merged_lines),
-                "isAllBlack": bool(prev_entry.get("isAllBlack")) if prev_ver >= _VIDEO_OCR_SCHEMA_VER else bool(max_jpg_bytes > 0 and max_jpg_bytes < 4200),
+                "isAllBlack": bool(max_jpg_bytes > 0 and max_jpg_bytes < 4200),
             }
             _save_video_ocr_cache(cur_cache)
 
@@ -3414,10 +3465,10 @@ def ingest_browser_video_ocr_frames(data: Dict[str, Any]) -> Dict[str, Any]:
 
 def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
     """
-    [귀신검색창 & 웹 공통 '📝 영상 속 글자 텍스트로 뽑기' 온디맨드 API]
-    1) 이미 충분한 대본(lines)이 캐싱되어 있고 force=False이면 0.01초 즉시 반환
-    2) 미캐싱 시 FFmpeg(설치 시) 또는 Windows 10/11 순정 WinRT MediaClip(무-FFmpeg 폴백)으로
-       영상 구간별 프레임을 추출해 화면 속 자막·발표자료·간판 글자를 텍스트로 일괄 반환합니다.
+    [귀신검색창 & 웹 공통 '📝 영상 속 글자 텍스트로 뽑기' 온디맨드 API (PP-OCRv5 Korean 일원화)]
+    1) 이미 PP-OCRv5(ocrVer >= 20) 대본이 캐싱되어 있고 force=False이면 0.01초 즉시 반환
+    2) 미캐싱 시 FFmpeg(설치 시) 또는 Windows MediaClip 썸네일 디코더로 영상 구간별 JPEG 프레임을 추출하고,
+       PP-OCRv5 Korean(ONNX) 격리 워커로 다단 카드·줄바꿈 자막을 정밀 복원합니다.
     """
     raw_p = str(params.get("p") or params.get("videoFileName") or params.get("filePath") or "").strip()
     force = str(params.get("force") or "").lower() in ("1", "true", "yes")
@@ -3449,8 +3500,7 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
     sig = f"{target_path.name}|{st.st_size}|{int(st.st_mtime)}"
     cache = _load_video_ocr_cache()
     cached = cache.get(sig)
-    min_req_ver = _VIDEO_PADDLE_OCR_VER if only_cached_v5 else _VIDEO_OCR_SCHEMA_VER
-    if cached and not force and int(cached.get("ocrVer") or 0) >= min_req_ver and isinstance(cached.get("frames"), list) and len(cached.get("frames", [])) >= 1:
+    if cached and not force and int(cached.get("ocrVer") or 0) >= _VIDEO_PADDLE_OCR_VER and isinstance(cached.get("frames"), list) and len(cached.get("frames", [])) >= 1:
         lines = _dedupe_ocr_timeline_lines(cached["frames"])
         full_text = "\n".join(f"[{ln['timestamp']}] {ln['text']}" for ln in lines)
         return {
@@ -3481,8 +3531,9 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
         }
 
     dur = max(2.0, _get_fast_video_duration_sec(target_path))
-    step_count = min(14, max(4, int(dur // 4) + 1))
-    sample_secs = sorted({max(0, min(int(dur) - 1, int(round((dur * (i + 0.4)) / step_count)))) for i in range(step_count)})
+    scan_interval = max(1.5, round(dur / 52.0, 2))
+    dense_count = min(32, max(6, int(dur // 2.5) + 1))
+    sample_secs = sorted({max(0, min(int(dur) - 1, int(round((dur * (i + 0.35)) / dense_count)))) for i in range(dense_count)})
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_vid_fullocr_"))
     creationflags = 0x08000000
@@ -3490,81 +3541,109 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
     sec_by_fname: Dict[str, int] = {}
     try:
         if ff:
-            for idx, s_val in enumerate(sample_secs):
-                fname = f"f{idx:03d}_s{s_val:04d}.jpg"
-                out_jpg = tmp_dir / fname
-                try:
-                    subprocess.run(
-                        [
-                            ff, "-y", "-ss", str(s_val), "-i", str(target_path),
-                            "-frames:v", "1", "-q:v", "2", str(out_jpg),
-                        ],
-                        capture_output=True,
-                        timeout=15,
-                        creationflags=creationflags,
-                    )
-                except Exception:
-                    pass
-                if out_jpg.exists():
-                    sec_by_fname[fname] = s_val
-            if return_frames_for_paddle and sec_by_fname:
-                sampled_payload = []
-                for fn_k, s_k in sorted(sec_by_fname.items()):
-                    raw_b = (tmp_dir / fn_k).read_bytes()
-                    sampled_payload.append({
-                        "timeSec": s_k,
-                        "dataUrl": "data:image/jpeg;base64," + base64.b64encode(raw_b).decode("ascii"),
-                    })
-                return {
-                    "ok": True,
-                    "cached": False,
-                    "needsPaddleOcr": True,
-                    "videoFileName": target_path.name,
-                    "sampledFrames": sampled_payload,
-                }
+            raw_candidates: List[tuple[Path, int]] = []
+            try:
+                subprocess.run(
+                    [
+                        ff,
+                        "-hide_banner",
+                        "-loglevel",
+                        "error",
+                        "-y",
+                        "-i",
+                        str(target_path),
+                        "-vf",
+                        f"fps=1/{scan_interval:.2f},scale='min(1600,iw)':-2",
+                        "-frames:v",
+                        "72",
+                        "-q:v",
+                        "2",
+                        str(tmp_dir / "scan_%04d.jpg"),
+                    ],
+                    capture_output=True,
+                    timeout=25,
+                    creationflags=creationflags,
+                )
+            except Exception:
+                pass
+            scanned_files = sorted(tmp_dir.glob("scan_*.jpg"), key=lambda p: p.name)
+            if scanned_files:
+                for idx_s, sf_p in enumerate(scanned_files):
+                    s_est = min(max(0, int(dur) - 1), int(round(idx_s * scan_interval)))
+                    raw_candidates.append((sf_p, s_est))
+            else:
+                for idx, s_val in enumerate(sample_secs):
+                    fname = f"f{idx:03d}_s{s_val:04d}.jpg"
+                    out_jpg = tmp_dir / fname
+                    try:
+                        subprocess.run(
+                            [
+                                ff, "-y", "-ss", str(s_val), "-i", str(target_path),
+                                "-frames:v", "1", "-q:v", "2", str(out_jpg),
+                            ],
+                            capture_output=True,
+                            timeout=12,
+                            creationflags=creationflags,
+                        )
+                    except Exception:
+                        pass
+                    if out_jpg.exists():
+                        raw_candidates.append((out_jpg, s_val))
+            sec_by_fname = _select_stable_scene_frames(raw_candidates, max_keep=18)
         elif os.name == "nt":
-            # [무-FFmpeg 순정 Windows 10/11 폴백]: Windows.Media.Editing.MediaClip으로 프레임 비트맵 직접 추출 & OCR
+            # [무-FFmpeg 순정 Windows 10/11 폴백]: MediaClip으로 프레임 JPEG 파일만 추출 (판독은 100% PP-OCRv5로 일원화!)
             secs_csv = ",".join(str(s) for s in sample_secs)
-            ps_winrt_vid = (
+            ps_extract_frames = (
                 "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
                 "Add-Type -AssemblyName System.Runtime.WindowsRuntime\n"
                 "$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]\n"
+                "$null = [Windows.Storage.StorageFolder, Windows.Storage, ContentType = WindowsRuntime]\n"
                 "$null = [Windows.Media.Editing.MediaClip, Windows.Media.Editing, ContentType = WindowsRuntime]\n"
                 "$null = [Windows.Media.Editing.MediaComposition, Windows.Media.Editing, ContentType = WindowsRuntime]\n"
                 "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]\n"
-                "$null = [Windows.Globalization.Language, Windows.Globalization, ContentType = WindowsRuntime]\n"
-                "$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType = WindowsRuntime]\n"
+                "$null = [Windows.Graphics.Imaging.BitmapEncoder, Windows.Foundation, ContentType = WindowsRuntime]\n"
                 "$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]\n"
+                "$asTaskAction = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncAction' })[0]\n"
                 "function Await($WinRtTask, $ResultType) {\n"
                 "    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)\n"
                 "    $netTask = $asTask.Invoke($null, @($WinRtTask))\n"
                 "    $netTask.Wait(-1) | Out-Null\n"
                 "    $netTask.Result\n"
                 "}\n"
-                "$lang = New-Object Windows.Globalization.Language('ko')\n"
-                "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)\n"
-                "if (-not $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }\n"
+                "function AwaitAction($WinRtAction) {\n"
+                "    $netTask = $asTaskAction.Invoke($null, @($WinRtAction))\n"
+                "    $netTask.Wait(-1) | Out-Null\n"
+                "}\n"
                 "$vfile = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($args[0])) ([Windows.Storage.StorageFile])\n"
+                "$outFolder = Await ([Windows.Storage.StorageFolder]::GetFolderFromPathAsync($args[2])) ([Windows.Storage.StorageFolder])\n"
                 "$clip = Await ([Windows.Media.Editing.MediaClip]::CreateFromFileAsync($vfile)) ([Windows.Media.Editing.MediaClip])\n"
                 "$comp = New-Object Windows.Media.Editing.MediaComposition\n"
-                "$comp.Clips.Add($clip)\n"
+                "[System.Collections.Generic.ICollection[Windows.Media.Editing.MediaClip]].GetMethod('Add').Invoke($comp.Clips, @($clip)) | Out-Null\n"
+                "$idx = 0\n"
                 "foreach ($s in ($args[1] -split ',')) {\n"
                 "    try {\n"
+                "        $sInt = [int][double]$s\n"
+                "        $fname = ('f{0:D3}_s{1:D4}.jpg' -f $idx, $sInt)\n"
                 "        $ts = [TimeSpan]::FromSeconds([double]$s)\n"
                 "        $thumb = Await ($comp.GetThumbnailAsync($ts, 0, 0, [Windows.Media.Editing.VideoFramePrecision]::NearestFrame)) ([Windows.Graphics.Imaging.ImageStream])\n"
                 "        $dec = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($thumb)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
                 "        $bmp = Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
-                "        $res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])\n"
+                "        $outFile = Await ($outFolder.CreateFileAsync($fname, [Windows.Storage.CreationCollisionOption]::ReplaceExisting)) ([Windows.Storage.StorageFile])\n"
+                "        $outSt = Await ($outFile.OpenAsync([Windows.Storage.FileAccessMode]::ReadWrite)) ([Windows.Storage.Streams.IRandomAccessStream])\n"
+                "        $enc = Await ([Windows.Graphics.Imaging.BitmapEncoder]::CreateAsync([Windows.Graphics.Imaging.BitmapEncoder]::JpegEncoderId, $outSt)) ([Windows.Graphics.Imaging.BitmapEncoder])\n"
+                "        $enc.SetSoftwareBitmap($bmp)\n"
+                "        AwaitAction ($enc.FlushAsync())\n"
+                "        $outSt.Dispose()\n"
                 "        $thumb.Dispose()\n"
-                f"        $joined = {_PS_FORMAT_TAGGED_LINES_EXPR.replace('$res0', '$res')}\n"
-                "        Write-Output \"$s`t$joined\"\n"
+                "        Write-Output \"$fname`t$sInt\"\n"
                 "    } catch {}\n"
+                "    $idx++\n"
                 "}\n"
             )
-            ps_f = tmp_dir / "winrt_vid_ocr.ps1"
-            ps_f.write_text(ps_winrt_vid, encoding="utf-8-sig")
+            ps_f = tmp_dir / "extract_frames.ps1"
+            ps_f.write_text(ps_extract_frames, encoding="utf-8-sig")
             proc = subprocess.run(
-                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps_f), str(target_path), secs_csv],
+                ["powershell", "-NoProfile", "-ExecutionPolicy", "Bypass", "-File", str(ps_f), str(target_path), secs_csv, str(tmp_dir)],
                 capture_output=True,
                 text=True,
                 encoding="utf-8",
@@ -3572,66 +3651,50 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
                 timeout=38,
                 creationflags=creationflags,
             )
-            out_frames_winrt: List[Dict[str, Any]] = []
-            all_kws_w: List[str] = []
+            mc_candidates: List[tuple[Path, int]] = []
             for ln in proc.stdout.splitlines():
                 if "\t" in ln:
-                    s_raw, txt_raw = ln.split("\t", 1)
-                    s_int = int(float(s_raw.strip() or "0"))
-                    clean_t = _clean_video_ocr_display_text(re.sub(r"\s+", " ", txt_raw).strip())
-                    kws = _enrich_ocr_semantic_keywords(clean_t)
-                    all_kws_w.extend(kws)
-                    out_frames_winrt.append({
-                        "timeSec": s_int,
-                        "ocrText": clean_t[:1200],
-                        "keywords": kws,
-                    })
-            lines_w = _dedupe_ocr_timeline_lines(out_frames_winrt)
-            full_text_w = "\n".join(f"[{x['timestamp']}] {x['text']}" for x in lines_w)
-            with _VIDEO_OCR_LOCK:
-                cur_cache = _load_video_ocr_cache()
-                cur_cache[sig] = {
-                    "videoFileName": target_path.name,
-                    "filePath": str(target_path),
-                    "frames": out_frames_winrt,
-                    "keywords": list(dict.fromkeys(all_kws_w))[:60],
-                    "lines": lines_w,
-                    "fullText": full_text_w,
-                    "lineCount": len(lines_w),
-                    "isAllBlack": False,
-                }
-                _save_video_ocr_cache(cur_cache)
+                    fn_s, s_raw = ln.split("\t", 1)
+                    cand_jpg = tmp_dir / fn_s.strip()
+                    if cand_jpg.exists():
+                        mc_candidates.append((cand_jpg, int(float(s_raw.strip() or "0"))))
+            sec_by_fname = _select_stable_scene_frames(mc_candidates, max_keep=18)
+
+        if return_frames_for_paddle and sec_by_fname:
+            sampled_payload = []
+            for fn_k, s_k in sorted(sec_by_fname.items()):
+                raw_b = (tmp_dir / fn_k).read_bytes()
+                sampled_payload.append({
+                    "timeSec": s_k,
+                    "dataUrl": "data:image/jpeg;base64," + base64.b64encode(raw_b).decode("ascii"),
+                })
             return {
                 "ok": True,
                 "cached": False,
-                "hasText": len(lines_w) > 0,
+                "needsPaddleOcr": True,
                 "videoFileName": target_path.name,
-                "filePath": str(target_path),
-                "lines": lines_w,
-                "ocrLines": lines_w,
-                "fullText": full_text_w,
-                "lineCount": len(lines_w),
+                "sampledFrames": sampled_payload,
             }
 
         ocr_map = _run_winrt_ocr_on_jpg_dir(tmp_dir) if sec_by_fname else {}
         out_frames_ff: List[Dict[str, Any]] = []
         all_kws_ff: List[str] = []
         for fname, s_val in sorted(sec_by_fname.items()):
-            raw_t = ocr_map.get(fname, "")
-            txt = raw_t if _is_meaningful_ocr_text(raw_t) else ""
-            kws = _enrich_ocr_semantic_keywords(txt)
+            txt = ocr_map.get(fname, "").strip()
+            kws = _enrich_ocr_semantic_keywords(txt) if txt else []
             all_kws_ff.extend(kws)
             out_frames_ff.append({
                 "timeSec": s_val,
-                "ocrText": txt[:1200],
+                "ocrText": txt[:1600],
                 "keywords": kws,
+                "fromPaddleV5": True,
             })
         lines = _dedupe_ocr_timeline_lines(out_frames_ff)
         full_text = "\n".join(f"[{ln['timestamp']}] {ln['text']}" for ln in lines)
         with _VIDEO_OCR_LOCK:
             cur_cache = _load_video_ocr_cache()
             cur_cache[sig] = {
-                "ocrVer": _VIDEO_OCR_SCHEMA_VER,
+                "ocrVer": _VIDEO_PADDLE_OCR_VER,
                 "videoFileName": target_path.name,
                 "filePath": str(target_path),
                 "frames": out_frames_ff,
@@ -3645,6 +3708,7 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
         return {
             "ok": True,
             "cached": False,
+            "ocrVer": _VIDEO_PADDLE_OCR_VER,
             "hasText": len(lines) > 0,
             "videoFileName": target_path.name,
             "filePath": str(target_path),

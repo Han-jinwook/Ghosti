@@ -984,6 +984,53 @@ export const PricingModal: React.FC = () => {
   );
 };
 
+export function buildDocPreviewSnippet(
+  text: string,
+  query: string,
+  maxLen = 240
+): string {
+  if (!text) return '';
+  const clean = text.replace(/\s+/g, ' ').trim();
+  if (!clean) return '';
+  const rawQ = (query || '').trim();
+  const stopSet = new Set([
+    '찾아줘',
+    '보여줘',
+    '사진',
+    '문서',
+    '파일',
+    '서류함',
+    '최근',
+    '서류',
+    '내역',
+    '전체',
+  ]);
+  const tokens = rawQ
+    .replace(/[.,!?'"“”‘’()[\]{}]/g, ' ')
+    .split(/\s+/)
+    .map((t) =>
+      t.replace(/(에서|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|에|와|과|도)$/, '')
+    )
+    .filter((t) => t.length >= 2 && !stopSet.has(t));
+
+  if (tokens.length > 0) {
+    const lowClean = clean.toLowerCase();
+    let bestIdx = -1;
+    for (const tk of tokens) {
+      const idx = lowClean.indexOf(tk.toLowerCase());
+      if (idx >= 0 && (bestIdx < 0 || idx < bestIdx)) {
+        bestIdx = idx;
+      }
+    }
+    if (bestIdx > 90) {
+      const start = Math.max(0, bestIdx - 75);
+      const end = Math.min(clean.length, start + maxLen);
+      return `${start > 0 ? '…' : ''}${clean.slice(start, end).trim()}${end < clean.length ? '…' : ''}`;
+    }
+  }
+  return clean.length > maxLen ? `${clean.slice(0, maxLen).trim()}…` : clean;
+}
+
 export function renderHighlightedDocText(
   text: string,
   query: string,

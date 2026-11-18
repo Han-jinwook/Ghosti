@@ -48,6 +48,14 @@ try:
 except Exception:
     pass
 
+if "--ppocr-worker" in sys.argv:
+    _w_idx = sys.argv.index("--ppocr-worker")
+    if len(sys.argv) > _w_idx + 2:
+        import ppocr_v5_worker
+
+        sys.exit(ppocr_v5_worker.run_worker_cli(sys.argv[_w_idx + 1], sys.argv[_w_idx + 2]))
+    sys.exit(1)
+
 import core_win32 as w32  # noqa: E402
 import plugin_ghosti_os  # noqa: E402
 import plugin_senstalk  # noqa: E402

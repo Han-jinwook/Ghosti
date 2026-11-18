@@ -943,6 +943,7 @@ def complete_bug(
 
 
 def trim_done_cards(keep_count: int = 4) -> int:
+    return 0
     """
     [영구 폐지 — 멀린님 지시 (2026-11-18)]:
     '완료' 컬럼 카드는 테스터들에게 자체 규칙을 정해주었으므로 AI·워커가 절대 손대거나 보관(archived: true)하지 않습니다.

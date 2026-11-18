@@ -85,6 +85,14 @@ async function getPaddleOcrRuntime(): Promise<PaddleOcrRuntime> {
   if (!runtimePromise) {
     runtimePromise = (async () => {
       const ort = await import('onnxruntime-web');
+      try {
+        ort.env.wasm.simd = true;
+        if (typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated) {
+          ort.env.wasm.numThreads = Math.min(4, Math.max(2, navigator.hardwareConcurrency || 2));
+        }
+      } catch {
+        /* ignore env hints */
+      }
       const [detBuf, recBuf, dictText] = await Promise.all([
         fetchBinaryWithCache(DET_MODEL_URLS),
         fetchBinaryWithCache(REC_MODEL_URLS),
@@ -173,8 +181,9 @@ function joinWrappedKoreanLines(upper: string, lower: string): string {
     /^(?:이터|에서|으로|에게|부터|까지|처럼|만큼|보다|라고|하고|하며|하는|하여|에는|에도|은|는|이|가|을|를|의|에|로|와|과|도|만)(?=[가-힣\s.,!?]|$)/.test(
       b
     ) ||
+    /^(?:호|선|숙|율|량|액|금|원|개|건|명)(?=[\s:|.,)/]|$)/.test(b) ||
     /(?:\s|^)[가-힣]$/.test(a) ||
-    /(?:등록번|백은|메뉴개|메뉴 개|소스무|간장양념)$/.test(a)
+    /(?:등록번|전화번|계좌번|우편번|비밀번|백은|메뉴개|메뉴 개)$/.test(a)
   ) {
     return polishKoreanOcrSpacing(`${a}${b}`);
   }
@@ -182,16 +191,25 @@ function joinWrappedKoreanLines(upper: string, lower: string): string {
 }
 
 export function formatOcrBoxesSmart(rawBoxes: PaddleOcrBox[]): string {
-  const watermarkRx = /^(?:a\s*)?notebooklm$|^capcut$|^veo$|^kapwing$/i;
+  const watermarkRx = /notebooklm|^capcut$|^veo$|^kapwing$/i;
   const filtered = rawBoxes
-    .map((b) => ({ ...b, text: polishKoreanOcrSpacing(b.text || '') }))
+    .map((b) => ({
+      ...b,
+      text: polishKoreanOcrSpacing(b.text || '').replace(
+        /^[,.;:•·|\-_~]+\s*(?=[가-힣A-Za-z0-9])/,
+        ''
+      ),
+    }))
     .filter((b) => {
       const t = b.text;
-      if (!t || b.conf < 0.62) return false;
+      if (!t || b.conf < 0.78) return false;
       if (watermarkRx.test(t)) return false;
-      // 동영상 플레이어 10초 이동 아이콘 숫자('10', '0') 및 순수 괄호 노이즈 제거
-      if (/^(?:10|0|00|\(\)|00\(\))$/.test(t)) return false;
+      // 동영상 플레이어 이동·일시정지 아이콘 노이즈 제거
+      if (/^(?:10|0|00|\(\)|00\(\)|\|\||II|lI|Il)$/.test(t)) return false;
       if (t.length === 1 && !/[가-힣]/.test(t)) return false;
+      if (b.conf < 0.88 && (/[가-힣][a-z][가-힣]/.test(t) || /[\u4e00-\u9fff]/.test(t))) {
+        return false;
+      }
       return true;
     });
 
@@ -318,7 +336,7 @@ async function runSingleImageOcrInternal(
 
   // 1) Detection: 저해상도 영상 프레임(예: 525x315)도 8px 소형 글자를 놓치지 않도록 최소 960px 기준으로 DBNet 입력 구성
   const maxSide = Math.max(srcW, srcH);
-  const targetMax = Math.max(960, Math.min(1440, maxSide));
+  const targetMax = Math.max(960, Math.min(1280, maxSide));
   const scale = targetMax / maxSide;
   const detW = Math.max(32, Math.round((srcW * scale) / 32) * 32);
   const detH = Math.max(32, Math.round((srcH * scale) / 32) * 32);
@@ -453,10 +471,8 @@ async function runSingleImageOcrInternal(
     const numCls = Number(logits.dims[2] || 0);
     const data = logits.data as Float32Array;
 
-    let text = '';
+    const charPairs: Array<{ ch: string; sc: number }> = [];
     let prevIdx = 0;
-    let confSum = 0;
-    let confCnt = 0;
 
     for (let t = 0; t < seqLen; t++) {
       let maxV = -1e9;
@@ -470,16 +486,39 @@ async function runSingleImageOcrInternal(
         }
       }
       if (maxI > 0 && maxI !== prevIdx) {
-        text += charDict[maxI] || '';
-        confSum += maxV;
-        confCnt++;
+        const ch = charDict[maxI] || '';
+        if (ch) {
+          charPairs.push({ ch, sc: maxV });
+        }
       }
       prevIdx = maxI;
     }
 
-    const clean = text.normalize('NFC').trim();
-    const avgConf = confCnt > 0 ? confSum / confCnt : 0;
-    if (clean && avgConf >= 0.6) {
+    while (
+      charPairs.length > 0 &&
+      charPairs[0].sc < 0.42 &&
+      !/[가-힣A-Za-z0-9]/.test(charPairs[0].ch)
+    ) {
+      charPairs.shift();
+    }
+    while (
+      charPairs.length > 0 &&
+      charPairs[charPairs.length - 1].sc < 0.42 &&
+      !/[가-힣A-Za-z0-9]/.test(charPairs[charPairs.length - 1].ch)
+    ) {
+      charPairs.pop();
+    }
+
+    const clean = charPairs
+      .map((p) => p.ch)
+      .join('')
+      .normalize('NFC')
+      .trim();
+    const avgConf =
+      charPairs.length > 0
+        ? charPairs.reduce((acc, p) => acc + p.sc, 0) / charPairs.length
+        : 0;
+    if (clean && avgConf >= 0.78) {
       boxes.push({ ...b, conf: avgConf, text: clean });
     }
 

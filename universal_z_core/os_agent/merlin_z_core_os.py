@@ -813,10 +813,10 @@ def inspect_real_pc_state() -> Dict[str, Any]:
 # ============================================================================
 # 5. [3초 결정론적 포렌식 + 5줄 실물 미리보기 게이트] 오피스/문서 은닉 금고 스캐너
 # ============================================================================
-def extract_xlsx_ordered_rows(zf: zipfile.ZipFile, max_rows: int = 40, max_chars: int = 1500) -> List[str]:
+def extract_xlsx_ordered_rows(zf: zipfile.ZipFile, max_rows: int = 1200, max_chars: int = 50000) -> List[str]:
     """
     .xlsx 파일에서 sharedStrings.xml 풀 전체를 무작위 덤프하지 않고,
-    workbook.xml 탭 순서 + 첫 번째 보이는 시트부터 실제 행/셀(<row>/<c>) 순서대로 텍스트를 추출합니다.
+    workbook.xml 탭 순서 + 보이는 전체 시트(최대 12개 시트)의 실제 행/셀(<row>/<c>) 순서대로 최대 50,000자까지 추출합니다.
     """
     names = set(zf.namelist())
     shared_strings: List[str] = []
@@ -878,7 +878,7 @@ def extract_xlsx_ordered_rows(zf: zipfile.ZipFile, max_rows: int = 40, max_chars
 
     rows_out: List[str] = []
     total_chars = 0
-    for sh_idx, (sh_name, sh_path) in enumerate(sheet_entries[:3]):
+    for sh_idx, (sh_name, sh_path) in enumerate(sheet_entries[:12]):
         try:
             sh_root = ET.fromstring(zf.read(sh_path))
         except Exception:

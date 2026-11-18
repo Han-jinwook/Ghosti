@@ -2416,8 +2416,8 @@ def _reconstruct_words_to_tsv_and_text(words: list[dict]) -> tuple[str, str]:
 def _run_ondemand_winrt_image_ocr(img_path: Path | str) -> dict:
     """
     로컬 디스크 사진의 실제 한글/영문/숫자/표를 즉시 추출합니다.
-    1순위: 로컬 5199 Z-코어 `/__photos/ocr` (영구 디스크 캐시 + 회전 보정 + 표 TSV 복원)
-    2순위: 5199 미기동 단독 실행 환경에서도 자체 WinRT OcrEngine(한국어) 폴백으로 100% 무인 작동!
+    1순위: 로컬 5199 Z-코어 `/__photos/ocr` (PP-OCRv5 Korean 영구 캐시 + 회전 보정 + 표 TSV 복원)
+    2순위: 5199 미기동 단독 실행 환경에서도 자체 PP-OCRv5 Korean 격리 워커 서브프로세스로 100% 무인 작동!
     """
     p = Path(str(img_path))
     if not p.exists() or not p.is_file():
@@ -2461,87 +2461,36 @@ def _run_ondemand_winrt_image_ocr(img_path: Path | str) -> dict:
     except Exception:
         pass
 
-    # 2) 내장 WinRT OcrEngine 직접 폴백 (5199 미실행 단독 모드 지원)
-    if sys.platform == "win32":
-        ps1_path: Path | None = None
-        try:
-            ps_code = r"""
-$ErrorActionPreference = 'Stop'
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-Add-Type -AssemblyName System.Runtime.WindowsRuntime
-$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
-    $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
-})[0]
-function Await($WinRtTask, $ResultType) {
-    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)
-    $netTask = $asTask.Invoke($null, @($WinRtTask))
-    $netTask.Wait(-1) | Out-Null
-    $netTask.Result
-}
-$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]
-$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics.Imaging, ContentType = WindowsRuntime]
-$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics.Imaging, ContentType = WindowsRuntime]
-$null = [Windows.Media.Ocr.OcrEngine, Windows.Media.Ocr, ContentType = WindowsRuntime]
-$null = [Windows.Globalization.Language, Windows.Globalization, ContentType = WindowsRuntime]
-$koLang = New-Object Windows.Globalization.Language('ko')
-$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($koLang)
-if ($null -eq $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }
-$file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($env:GHOSTI_OCR_IMG_PATH)) ([Windows.Storage.StorageFile])
-$stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
-$decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
-$bmp = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
-$res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])
-$words = @()
-foreach ($ln in $res.Lines) {
-    foreach ($w in $ln.Words) {
-        $r = $w.BoundingRect
-        $words += @{ t = $w.Text; x = [math]::Round($r.X, 1); y = [math]::Round($r.Y, 1); w = [math]::Round($r.Width, 1); h = [math]::Round($r.Height, 1) }
-    }
-}
-$stream.Dispose()
-@{ ok = $true; words = $words } | ConvertTo-Json -Compress -Depth 5
-"""
-            with tempfile.NamedTemporaryFile("w", suffix=".ps1", delete=False, encoding="utf-8-sig") as tf:
-                tf.write(ps_code)
-                ps1_path = Path(tf.name)
-            env_copy = dict(os.environ)
-            env_copy["GHOSTI_OCR_IMG_PATH"] = str(p.resolve())
-            proc = subprocess.run(
-                ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(ps1_path)],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                env=env_copy,
-                timeout=10.0,
-                creationflags=0x08000000,
-            )
-            raw_out = (proc.stdout or "").strip()
-            if raw_out:
-                j_idx = raw_out.find("{")
-                if j_idx >= 0:
-                    parsed = json.loads(raw_out[j_idx:])
-                    ft, tsv = _reconstruct_words_to_tsv_and_text(parsed.get("words") or [])
-                    alnum = re.sub(r"[^가-힣A-Za-z0-9]", "", ft)
-                    has_t = len(alnum) >= 2
-                    out = {
-                        "ok": True,
-                        "hasText": has_t,
-                        "fullText": ft if has_t else "",
-                        "tsvTable": tsv if has_t else "",
-                        "chips": _extract_word_chips_from_text(ft) if has_t else [],
-                    }
-                    with _ONDEMAND_IMG_OCR_LOCK:
-                        _ONDEMAND_IMG_OCR_MEM_CACHE[sig] = out
-                    return out
-        except Exception:
-            pass
-        finally:
-            if ps1_path is not None:
-                try:
-                    ps1_path.unlink(missing_ok=True)
-                except Exception:
-                    pass
+    # 2) PP-OCRv5 Korean 격리 서브프로세스 직접 폴백 (5199 미실행 단독 모드 지원, 상주 메모리 증가 0 Byte)
+    try:
+        import ppocr_v5_worker
+
+        res_map = ppocr_v5_worker.invoke_ppocr_subprocess([p], filter_video_ui=False, timeout_sec=35.0)
+        item = res_map.get(str(p.resolve())) or res_map.get(p.name) or {}
+        words_flat: list[dict] = []
+        for ln in item.get("lines") or []:
+            if isinstance(ln, dict):
+                for w in ln.get("words") or []:
+                    if isinstance(w, dict) and w.get("t"):
+                        words_flat.append(w)
+        ft, tsv = _reconstruct_words_to_tsv_and_text(words_flat)
+        if not ft:
+            ft = str(item.get("smartText") or "").strip()
+            tsv = ft
+        alnum = re.sub(r"[^가-힣A-Za-z0-9]", "", ft)
+        has_t = len(alnum) >= 2
+        out = {
+            "ok": True,
+            "hasText": has_t,
+            "fullText": ft if has_t else "",
+            "tsvTable": tsv if has_t else "",
+            "chips": _extract_word_chips_from_text(ft) if has_t else [],
+        }
+        with _ONDEMAND_IMG_OCR_LOCK:
+            _ONDEMAND_IMG_OCR_MEM_CACHE[sig] = out
+        return out
+    except Exception:
+        pass
 
     empty_res = {"ok": False, "hasText": False, "fullText": "", "tsvTable": "", "chips": []}
     return empty_res
@@ -5928,104 +5877,70 @@ def superpower_5_merge_or_ai_search(recent_list: list[str], seq_q: list[str], ai
 def superpower_6_screen_ocr(daemon_set_cb) -> None:
     """
     [⑥번 & 제7호 특허 청구항 제7항]
-    화면 캡처 OCR 단어 바운딩 박스의 수직(Y축) 행 군집화 및 수평(X축) 열 간격 탭(\t) 삽입을 통한 엑셀 표(TSV) 기하 복원
+    화면 캡처 PP-OCRv5 Korean 바운딩 박스의 수직(Y축) 행 군집화 및 수평(X축) 열 간격 탭(\t) 삽입을 통한 엑셀 표(TSV) 기하 복원
     """
+    tmp_img = Path(tempfile.gettempdir()) / "ghosti_ocr_temp.png"
     try:
         from PIL import ImageGrab
+        import ppocr_v5_worker
+
         img = ImageGrab.grabclipboard()
         if img is None:
             show_ghost_toast("👻 귀신같이 글자추출 (Win+Shift+S 캡처 후 눌러주세요)")
             return
-        tmp_img = Path(tempfile.gettempdir()) / "ghosti_ocr_temp.png"
         img.save(tmp_img, "PNG")
-        import base64
-        ps_script = f"""
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-Add-Type -AssemblyName System.Runtime.WindowsRuntime
-$null = [Windows.Media.Ocr.OcrEngine, Windows.Foundation, ContentType=WindowsRuntime]
-$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType=WindowsRuntime]
-$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Foundation, ContentType=WindowsRuntime]
-$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType=WindowsRuntime]
-$null = [Windows.Storage.Streams.IRandomAccessStream, Windows.Storage.Streams, ContentType=WindowsRuntime]
-$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {{ $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' }})[0]
-function Await($WinRtTask, $ResultType) {{
-    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)
-    $netTask = $asTask.Invoke($null, @($WinRtTask))
-    $netTask.Wait(-1) | Out-Null
-    $netTask.Result
-}}
-$file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync('{str(tmp_img)}')) ([Windows.Storage.StorageFile])
-$stream = Await ($file.OpenAsync([Windows.Storage.FileAccessMode]::Read)) ([Windows.Storage.Streams.IRandomAccessStream])
-$decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
-$bitmap = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
-$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages()
-$res = Await ($engine.RecognizeAsync($bitmap)) ([Windows.Media.Ocr.OcrResult])
-$stream.Dispose()
-$words = @()
-foreach ($line in $res.Lines) {{
-    foreach ($w in $line.Words) {{
-        $r = $w.BoundingRect
-        $words += [PSCustomObject]@{{t=$w.Text; x=$r.X; y=$r.Y; w=$r.Width; h=$r.Height}}
-    }}
-}}
-$words | ConvertTo-Json -Compress
-"""
-        enc_cmd = base64.b64encode(ps_script.encode("utf-16-le")).decode("ascii")
-        si = subprocess.STARTUPINFO()
-        si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
-        si.wShowWindow = 0
-        out = subprocess.check_output(
-            ["powershell", "-NoProfile", "-WindowStyle", "Hidden", "-EncodedCommand", enc_cmd],
-            encoding="utf-8",
-            errors="ignore",
-            timeout=8,
-            startupinfo=si,
-            creationflags=0x08000000,
-        ).strip()
-        if out:
-            words = json.loads(out)
-            if isinstance(words, dict):
-                words = [words]
-            if words:
-                # Y축 중심점 기준 정렬 후 동일 행 군집화 (행 임계치: 평균 단어 높이의 0.6배)
-                words.sort(key=lambda w: (w["y"] + w["h"] * 0.5, w["x"]))
-                rows: list[list[dict]] = []
-                for w in words:
-                    cy = w["y"] + w["h"] * 0.5
-                    if not rows:
-                        rows.append([w])
+        res_map = ppocr_v5_worker.invoke_ppocr_subprocess([tmp_img], filter_video_ui=False, timeout_sec=35.0)
+        item = res_map.get(str(tmp_img.resolve())) or res_map.get(tmp_img.name) or {}
+        words: list[dict] = []
+        for ln in item.get("lines") or []:
+            if isinstance(ln, dict):
+                for w in ln.get("words") or []:
+                    if isinstance(w, dict) and w.get("t"):
+                        words.append(w)
+        if words:
+            words.sort(key=lambda w: (w["y"] + w["h"] * 0.5, w["x"]))
+            rows: list[list[dict]] = []
+            for w in words:
+                cy = w["y"] + w["h"] * 0.5
+                if not rows:
+                    rows.append([w])
+                else:
+                    prev_row = rows[-1]
+                    prev_cy = sum(pw["y"] + pw["h"] * 0.5 for pw in prev_row) / len(prev_row)
+                    avg_h = max(12.0, sum(pw["h"] for pw in prev_row) / len(prev_row))
+                    if abs(cy - prev_cy) <= avg_h * 0.6:
+                        prev_row.append(w)
                     else:
-                        prev_row = rows[-1]
-                        prev_cy = sum(pw["y"] + pw["h"] * 0.5 for pw in prev_row) / len(prev_row)
-                        avg_h = max(12.0, sum(pw["h"] for pw in prev_row) / len(prev_row))
-                        if abs(cy - prev_cy) <= avg_h * 0.6:
-                            prev_row.append(w)
-                        else:
-                            rows.append([w])
+                        rows.append([w])
 
-                tsv_lines = []
-                is_table = False
-                for r in rows:
-                    r.sort(key=lambda w: w["x"])
-                    line_parts = [r[0]["t"]]
-                    for idx in range(1, len(r)):
-                        prev_w = r[idx - 1]
-                        curr_w = r[idx]
-                        gap = curr_w["x"] - (prev_w["x"] + prev_w["w"])
-                        col_thresh = max(18.0, prev_w["h"] * 1.35)
-                        if gap > col_thresh:
-                            line_parts.append("\t" + curr_w["t"])
-                            is_table = True
-                        else:
-                            line_parts.append(" " + curr_w["t"])
-                    tsv_lines.append("".join(line_parts))
+            tsv_lines = []
+            is_table = False
+            for r in rows:
+                r.sort(key=lambda w: w["x"])
+                line_parts = [r[0]["t"]]
+                for idx in range(1, len(r)):
+                    prev_w = r[idx - 1]
+                    curr_w = r[idx]
+                    gap = curr_w["x"] - (prev_w["x"] + prev_w["w"])
+                    col_thresh = max(18.0, prev_w["h"] * 1.35)
+                    if gap > col_thresh:
+                        line_parts.append("\t" + curr_w["t"])
+                        is_table = True
+                    else:
+                        line_parts.append(" " + curr_w["t"])
+                tsv_lines.append("".join(line_parts))
 
-                final_txt = "\n".join(tsv_lines).strip()
-                daemon_set_cb(final_txt)
-                show_ghost_toast("👻 귀신같이 표(TSV)추출" if is_table else "👻 귀신같이 글자추출")
-                return
+            final_txt = "\n".join(tsv_lines).strip()
+            daemon_set_cb(final_txt)
+            show_ghost_toast("👻 귀신같이 표(TSV)추출" if is_table else "👻 귀신같이 글자추출")
+            return
     except Exception:
         pass
+    finally:
+        try:
+            tmp_img.unlink(missing_ok=True)
+        except Exception:
+            pass
     show_ghost_toast("👻 귀신같이 글자추출")
 
 
@@ -6795,138 +6710,21 @@ def _decode_pdf_literal_for_labeler(raw_lit: bytes) -> str:
 
 
 def _extract_pdf_text_for_labeler(fpath: Path) -> str:
-    chunks: list[str] = []
+    """[SOTA 단일화] 귀신 라벨러용 PDF 텍스트 추출도 Google PDFium(pypdfium2) + PP-OCRv5 Korean으로 정밀 수행합니다."""
     try:
-        raw_pdf = fpath.read_bytes()[: 4 * 1024 * 1024]
-        for m_st in re.finditer(rb"<<(.*?)>>\s*stream\r?\n(.*?)\r?\nendstream", raw_pdf, re.DOTALL):
-            hdr_b, body_b = m_st.group(1), m_st.group(2)
-            if re.search(rb"/(?:Image|DCTDecode|JPXDecode|CCITTFaxDecode|JBIG2Decode|FontFile\d*|Metadata|XRef)\b", hdr_b):
-                continue
-            dec_b = body_b
-            if b"/FlateDecode" in hdr_b:
-                decomp_ok = False
-                for wbits in (zlib.MAX_WBITS, -zlib.MAX_WBITS):
-                    try:
-                        dec_b = zlib.decompress(body_b.strip(b"\r\n"), wbits)
-                        decomp_ok = True
-                        break
-                    except Exception:
-                        pass
-                if not decomp_ok:
-                    continue
-            bt_blocks = re.findall(rb"\bBT\b(.*?)\bET\b", dec_b, re.DOTALL)
-            for blk in bt_blocks[:120]:
-                for hx in re.findall(rb"<([0-9A-Fa-f\s]{4,})>", blk):
-                    clean_hx = re.sub(rb"\s+", b"", hx)
-                    if len(clean_hx) % 2 == 1:
-                        clean_hx += b"0"
-                    try:
-                        hb = bytes.fromhex(clean_hx.decode("ascii"))
-                        if hb.startswith(b"\xfe\xff"):
-                            s_dec = hb[2:].decode("utf-16-be", errors="ignore")
-                        elif len(hb) % 2 == 0 and any(0xAC <= hb[k] <= 0xD7 for k in range(0, len(hb), 2)):
-                            s_dec = hb.decode("utf-16-be", errors="ignore")
-                        else:
-                            s_dec = hb.decode("utf-8", errors="ignore")
-                        if s_dec.strip():
-                            chunks.append(s_dec.strip())
-                    except Exception:
-                        pass
-                for lit_m in re.finditer(rb"\(((?:\\.|[^\\()])+)\)", blk):
-                    s_lit = _decode_pdf_literal_for_labeler(lit_m.group(1)).strip()
-                    if s_lit:
-                        chunks.append(s_lit)
+        import plugin_ghosti_os
+
+        txt = plugin_ghosti_os._extract_pdf_text_sota(
+            fpath,
+            allow_ocr_fallback=True,
+            max_ocr_pages=3,
+            max_chars=12000,
+        )
+        if txt:
+            return txt[:12000]
     except Exception:
         pass
-
-    joined = " ".join(chunks)
-    meaningful_cnt = len(re.findall(r"[가-힣A-Za-z0-9]", joined))
-    if meaningful_cnt >= 6:
-        return joined[:8000]
-
-    # 스캔 이미지 PDF 폴백: WinRT PdfDocument 첫 2페이지 고속 OCR
-    if sys.platform == "win32":
-        ps1_p: Path | None = None
-        try:
-            if fpath.stat().st_size <= 25 * 1024 * 1024:
-                ps_pdf = r"""
-$ErrorActionPreference = 'Stop'
-[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
-Add-Type -AssemblyName System.Runtime.WindowsRuntime
-$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
-    $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1'
-})[0]
-$asTaskAction = ([System.WindowsRuntimeSystemExtensions].GetMethods() | Where-Object {
-    $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncAction'
-})[0]
-function Await($WinRtTask, $ResultType) {
-    $asTask = $asTaskGeneric.MakeGenericMethod($ResultType)
-    $netTask = $asTask.Invoke($null, @($WinRtTask))
-    $netTask.Wait(-1) | Out-Null
-    $netTask.Result
-}
-function AwaitAction($WinRtAction) {
-    $netTask = $asTaskAction.Invoke($null, @($WinRtAction))
-    $netTask.Wait(-1) | Out-Null
-}
-$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]
-$null = [Windows.Data.Pdf.PdfDocument, Windows.Data.Pdf, ContentType = WindowsRuntime]
-$null = [Windows.Data.Pdf.PdfPageRenderOptions, Windows.Data.Pdf, ContentType = WindowsRuntime]
-$null = [Windows.Storage.Streams.InMemoryRandomAccessStream, Windows.Storage.Streams, ContentType = WindowsRuntime]
-$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Graphics.Imaging, ContentType = WindowsRuntime]
-$null = [Windows.Graphics.Imaging.SoftwareBitmap, Windows.Graphics.Imaging, ContentType = WindowsRuntime]
-$null = [Windows.Media.Ocr.OcrEngine, Windows.Media.Ocr, ContentType = WindowsRuntime]
-$null = [Windows.Globalization.Language, Windows.Globalization, ContentType = WindowsRuntime]
-$koLang = New-Object Windows.Globalization.Language('ko')
-$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($koLang)
-if ($null -eq $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }
-$file = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($env:GHOSTI_PDF_OCR_PATH)) ([Windows.Storage.StorageFile])
-$pdf = Await ([Windows.Data.Pdf.PdfDocument]::LoadFromFileAsync($file)) ([Windows.Data.Pdf.PdfDocument])
-$maxP = [Math]::Min([int]$pdf.PageCount, 2)
-$linesOut = @()
-for ($i = 0; $i -lt $maxP; $i++) {
-    $page = $pdf.GetPage([uint32]$i)
-    $stream = New-Object Windows.Storage.Streams.InMemoryRandomAccessStream
-    $opts = New-Object Windows.Data.Pdf.PdfPageRenderOptions
-    $opts.DestinationWidth = [uint32]([Math]::Max(1400, [int]($page.Size.Width * 2.0)))
-    AwaitAction ($page.RenderToStreamAsync($stream, $opts))
-    $stream.Seek(0)
-    $dec = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])
-    $bmp = Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])
-    $res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])
-    if ($res.Text) { $linesOut += $res.Text }
-    $stream.Dispose()
-    $page.Dispose()
-}
-($linesOut -join "`n")
-"""
-                with tempfile.NamedTemporaryFile("w", suffix=".ps1", delete=False, encoding="utf-8-sig") as tf:
-                    tf.write(ps_pdf)
-                    ps1_p = Path(tf.name)
-                env_c = dict(os.environ)
-                env_c["GHOSTI_PDF_OCR_PATH"] = str(fpath.resolve())
-                r_p = subprocess.run(
-                    ["powershell", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", str(ps1_p)],
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="replace",
-                    env=env_c,
-                    timeout=12.0,
-                    creationflags=0x08000000,
-                )
-                ocr_out = (r_p.stdout or "").strip()
-                if ocr_out:
-                    return ocr_out[:8000]
-        except Exception:
-            pass
-        finally:
-            if ps1_p is not None:
-                try:
-                    ps1_p.unlink(missing_ok=True)
-                except Exception:
-                    pass
-    return joined[:8000]
+    return ""
 
 
 def _extract_file_date_and_slug_for_labeler(fpath: Path) -> tuple[str | None, str | None, str, str]:
@@ -7030,12 +6828,9 @@ def _extract_file_date_and_slug_for_labeler(fpath: Path) -> tuple[str | None, st
         doc_text = _extract_pdf_text_for_labeler(fpath)
     elif ext_low == ".hwp":
         try:
-            raw_b = fpath.read_bytes()[:131072]
-            txt_u16 = raw_b.decode("utf-16-le", errors="ignore")
-            txt_cp = raw_b.decode("cp949", errors="ignore")
-            kor_chunks = [w for w in re.findall(r"[가-힣]{2,12}", txt_u16 + " " + txt_cp) if is_valid_korean_word(w)]
-            dates_found = re.findall(r"20[0-3]\d[-./년\s]*[01]?\d[-./월\s]*[0-3]?\d", txt_u16 + " " + txt_cp)
-            doc_text = " ".join(dates_found + kor_chunks)[:8000]
+            import plugin_ghosti_os
+
+            doc_text = plugin_ghosti_os._extract_hwp_v5_full_text(fpath, max_chars=12000)
         except Exception:
             pass
 

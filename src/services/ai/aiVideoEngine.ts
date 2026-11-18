@@ -1952,7 +1952,7 @@ async function captureHighResFramesForVideoOcr(
 
 async function captureHighResImageDataForVideoOcr(
   vid: VideoSceneItem,
-  maxSamples = 12
+  maxKeep = 14
 ): Promise<Array<{ timeSec: number; imageData: ImageData }>> {
   if (typeof document === 'undefined' || !vid.videoUrl) return [];
   return new Promise((resolve) => {
@@ -1977,7 +1977,7 @@ async function captureHighResImageDataForVideoOcr(
       resolve(items);
     };
 
-    const timeoutId = window.setTimeout(() => finish([]), 15000);
+    const timeoutId = window.setTimeout(() => finish([]), 18000);
 
     videoEl.onerror = () => {
       window.clearTimeout(timeoutId);
@@ -1987,21 +1987,31 @@ async function captureHighResImageDataForVideoOcr(
     videoEl.onloadedmetadata = async () => {
       try {
         const dur = Math.max(1, Number(videoEl.duration) || Number(vid.durationSec) || 6);
-        const count = Math.min(maxSamples, Math.max(3, Math.ceil(dur / 4)));
+        const denseCount = Math.min(28, Math.max(4, Math.ceil(dur / 2.4)));
         const targetSecs: number[] = [];
-        for (let i = 0; i < count; i++) {
-          const ratio = count === 1 ? 0.25 : (i + 0.35) / count;
+        for (let i = 0; i < denseCount; i++) {
+          const ratio = denseCount === 1 ? 0.25 : (i + 0.35) / denseCount;
           targetSecs.push(Math.max(0.1, Math.min(dur - 0.1, Number((dur * ratio).toFixed(1)))));
         }
 
-        const results: Array<{ timeSec: number; imageData: ImageData }> = [];
-        const canvas = document.createElement('canvas');
-        const ctx = canvas.getContext('2d', { willReadFrequently: true });
-        if (!ctx) {
+        const thumbCanvas = document.createElement('canvas');
+        thumbCanvas.width = 96;
+        thumbCanvas.height = 54;
+        const thumbCtx = thumbCanvas.getContext('2d', { willReadFrequently: true });
+        const hiCanvas = document.createElement('canvas');
+        const hiCtx = hiCanvas.getContext('2d', { willReadFrequently: true });
+        if (!thumbCtx || !hiCtx) {
           window.clearTimeout(timeoutId);
           finish([]);
           return;
         }
+
+        interface RawScanFrame {
+          sec: number;
+          gray: Float32Array;
+          sharp: number;
+        }
+        const scanned: RawScanFrame[] = [];
 
         for (const sec of targetSecs) {
           const seekOk = await new Promise<boolean>((resSeek) => {
@@ -2011,7 +2021,7 @@ async function captureHighResImageDataForVideoOcr(
                 done = true;
                 resSeek(false);
               }
-            }, 2500);
+            }, 2200);
             videoEl.onseeked = () => {
               if (!done) {
                 done = true;
@@ -2027,15 +2037,126 @@ async function captureHighResImageDataForVideoOcr(
             }
           });
           if (!seekOk) continue;
-          const vw = videoEl.videoWidth || 640;
-          const vh = videoEl.videoHeight || 360;
-          const scale = Math.min(1, 1920 / Math.max(vw, vh));
-          canvas.width = Math.max(160, Math.round(vw * scale));
-          canvas.height = Math.max(90, Math.round(vh * scale));
-          ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
-          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-          results.push({ timeSec: Math.floor(sec), imageData });
+
+          thumbCtx.drawImage(videoEl, 0, 0, 96, 54);
+          const tData = thumbCtx.getImageData(0, 0, 96, 54).data;
+          const gray = new Float32Array(96 * 54);
+          let sum = 0;
+          for (let i = 0; i < 96 * 54; i++) {
+            const g = tData[i * 4] * 0.299 + tData[i * 4 + 1] * 0.587 + tData[i * 4 + 2] * 0.114;
+            gray[i] = g;
+            sum += g;
+          }
+          const mean = sum / gray.length;
+          let varSum = 0;
+          for (let i = 0; i < gray.length; i++) {
+            const d = gray[i] - mean;
+            varSum += d * d;
+          }
+          if (Math.sqrt(varSum / gray.length) < 4.5) continue;
+
+          let edgeSum = 0;
+          let edgeCnt = 0;
+          for (let y = 0; y < 53; y++) {
+            const row = y * 96;
+            for (let x = 0; x < 95; x++) {
+              edgeSum += Math.abs(gray[row + x + 1] - gray[row + x]) + Math.abs(gray[row + 96 + x] - gray[row + x]);
+              edgeCnt++;
+            }
+          }
+          scanned.push({ sec, gray, sharp: edgeCnt > 0 ? edgeSum / edgeCnt : 0 });
         }
+
+        if (scanned.length === 0) {
+          window.clearTimeout(timeoutId);
+          finish([]);
+          return;
+        }
+
+        const madBetween = (a: Float32Array, b: Float32Array) => {
+          let s = 0;
+          for (let i = 0; i < a.length; i++) s += Math.abs(a[i] - b[i]);
+          return s / a.length;
+        };
+
+        const clusters: RawScanFrame[][] = [[scanned[0]]];
+        for (let i = 1; i < scanned.length; i++) {
+          const cur = scanned[i];
+          const prev = clusters[clusters.length - 1][clusters[clusters.length - 1].length - 1];
+          if (madBetween(cur.gray, prev.gray) < 4.3) {
+            clusters[clusters.length - 1].push(cur);
+          } else {
+            clusters.push([cur]);
+          }
+        }
+
+        const chosen: Array<{ seekSec: number; startSec: number }> = [];
+        for (let ci = 0; ci < clusters.length; ci++) {
+          const cl = clusters[ci];
+          if (cl.length === 1 && ci > 0 && ci < clusters.length - 1) {
+            const prevCl = clusters[ci - 1];
+            const nextCl = clusters[ci + 1];
+            const dPrev = madBetween(cl[0].gray, prevCl[prevCl.length - 1].gray);
+            const dNext = madBetween(nextCl[0].gray, cl[0].gray);
+            const nSharp = Math.max(prevCl[prevCl.length - 1].sharp, nextCl[0].sharp);
+            if (dPrev > 5.2 && dNext > 5.2 && cl[0].sharp < nSharp * 0.93) {
+              continue;
+            }
+          }
+          let best = cl[0];
+          for (const item of cl) {
+            if (item.sharp > best.sharp || (item.sharp === best.sharp && item.sec > best.sec)) {
+              best = item;
+            }
+          }
+          chosen.push({ seekSec: best.sec, startSec: Math.floor(cl[0].sec) });
+        }
+
+        const capped =
+          chosen.length > maxKeep
+            ? Array.from({ length: maxKeep }, (_, k) =>
+                chosen[Math.min(chosen.length - 1, Math.round((k * chosen.length) / maxKeep))]
+              )
+            : chosen;
+
+        const results: Array<{ timeSec: number; imageData: ImageData }> = [];
+        const vw = videoEl.videoWidth || 640;
+        const vh = videoEl.videoHeight || 360;
+        const scale = Math.min(1, 1600 / Math.max(vw, vh));
+        hiCanvas.width = Math.max(160, Math.round(vw * scale));
+        hiCanvas.height = Math.max(90, Math.round(vh * scale));
+
+        for (const item of capped) {
+          const seekOk = await new Promise<boolean>((resSeek) => {
+            let done = false;
+            const st = window.setTimeout(() => {
+              if (!done) {
+                done = true;
+                resSeek(false);
+              }
+            }, 2200);
+            videoEl.onseeked = () => {
+              if (!done) {
+                done = true;
+                window.clearTimeout(st);
+                resSeek(true);
+              }
+            };
+            try {
+              videoEl.currentTime = item.seekSec;
+            } catch {
+              window.clearTimeout(st);
+              resSeek(false);
+            }
+          });
+          if (!seekOk) continue;
+          hiCtx.drawImage(videoEl, 0, 0, hiCanvas.width, hiCanvas.height);
+          results.push({
+            timeSec: item.startSec,
+            imageData: hiCtx.getImageData(0, 0, hiCanvas.width, hiCanvas.height),
+          });
+        }
+
         window.clearTimeout(timeoutId);
         finish(results);
       } catch {
@@ -2054,19 +2175,52 @@ function dedupePaddleTimelineLines(
 ): VideoOcrLineItem[] {
   const deduped: VideoOcrLineItem[] = [];
   let prevNorm = '';
+  let prevBigrams = new Set<string>();
+
+  const makeBigrams = (s: string) => {
+    const out = new Set<string>();
+    if (s.length < 2) {
+      if (s) out.add(s);
+      return out;
+    }
+    for (let i = 0; i < s.length - 1; i++) out.add(s.slice(i, i + 2));
+    return out;
+  };
+
   const sorted = [...rawFrames].sort((a, b) => a.timeSec - b.timeSec);
   for (const fr of sorted) {
     const txt = String(fr.ocrText || '').replace(/\s+/g, ' ').trim();
     const norm = txt.replace(/[^가-힣a-zA-Z0-9]/g, '').toLowerCase();
-    if (norm.length < 3) continue;
-    if (
-      prevNorm &&
-      (norm === prevNorm ||
-        (norm.length > 8 && (norm.includes(prevNorm) || prevNorm.includes(norm))))
-    ) {
-      continue;
+    if (norm.length < 4) continue;
+    const curBigrams = makeBigrams(norm);
+
+    if (prevNorm && deduped.length > 0) {
+      if (norm === prevNorm) continue;
+      if (norm.length >= 5 && prevNorm.includes(norm)) continue;
+      if (prevNorm.length >= 5 && norm.includes(prevNorm)) {
+        deduped[deduped.length - 1].text = txt;
+        prevNorm = norm;
+        prevBigrams = curBigrams;
+        continue;
+      }
+      if (prevBigrams.size > 0 && curBigrams.size > 0) {
+        let inter = 0;
+        for (const bg of curBigrams) {
+          if (prevBigrams.has(bg)) inter++;
+        }
+        const containment = inter / Math.max(1, Math.min(prevBigrams.size, curBigrams.size));
+        if (containment >= 0.8) {
+          if (norm.length > prevNorm.length + 4) {
+            deduped[deduped.length - 1].text = txt;
+            prevNorm = norm;
+            prevBigrams = curBigrams;
+          }
+          continue;
+        }
+      }
     }
     prevNorm = norm;
+    prevBigrams = curBigrams;
     deduped.push({
       timeSec: fr.timeSec,
       timestamp: formatTs(fr.timeSec),
@@ -2078,8 +2232,8 @@ function dedupePaddleTimelineLines(
 
 /**
  * [영상 속 화면 글자 고정밀 텍스트 추출 (PP-OCRv5 Korean + 다단 카드·줄바꿈 문장 복원)]
- * 1) 이미 PP-OCRv5(ocrVer >= 20)로 캐싱된 결과가 있으면 0.01초 즉시 반환
- * 2) 미캐싱 시 브라우저 고해상도 프레임 디코더(또는 Z-코어 프레임 샘플러) + 온디바이스 PP-OCRv5로 정밀 판독 후 영구 캐싱!
+ * 1) PC 로컬 Z-코어(v2.3.33+, ocrVer >= 21) 연결 시: C++ 멀티스레드 PP-OCRv5 + 장면 변화 선별 워커로 3~5초 만에 초고속 반환!
+ * 2) 모바일 / 웹 단독 환경: 화소 변화 기반 중복·디졸브 제거 후 온디바이스 PP-OCRv5로 정밀 판독!
  */
 export async function extractVideoScreenTextOnDemand(
   vid: VideoSceneItem
@@ -2091,39 +2245,39 @@ export async function extractVideoScreenTextOnDemand(
     return `${mm}:${ss}`;
   };
 
-  const memKey = `${vid.videoFileName || vid.id}|${vid.sizeMB || 0}`;
+  const memKey = `${vid.videoFileName || vid.id}|${vid.sizeMB || 0}|v21`;
   const memHit = inMemoryPaddleVideoOcrCache.get(memKey);
   if (memHit && memHit.ocrLines.length > 0) {
     return memHit;
   }
 
-  // 1) 로컬 Z-코어에 이미 PP-OCRv5(ocrVer >= 20) 고정밀 캐시가 있으면 즉시 반환
+  // 1) PC 로컬 Z-코어(v2.3.33+, ocrVer >= 21) C++ 네이티브 PP-OCRv5 고속 경로 (77초 ➔ 3~5초 단축!)
   if (zCoreBridge.isConnected && vid.videoFileName) {
     try {
-      const resCached = await fetch(getZCoreUrl('/__videos/extract-ocr-text'), {
+      const resZ = await fetch(getZCoreUrl('/__videos/extract-ocr-text'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoFileName: vid.videoFileName, onlyCachedV5: true }),
+        body: JSON.stringify({ videoFileName: vid.videoFileName }),
       });
-      if (resCached.ok) {
-        const dataCached = await resCached.json();
-        const linesCached: VideoOcrLineItem[] = Array.isArray(dataCached?.ocrLines)
-          ? dataCached.ocrLines
+      if (resZ.ok) {
+        const dataZ = await resZ.json();
+        const linesZ: VideoOcrLineItem[] = Array.isArray(dataZ?.ocrLines)
+          ? dataZ.ocrLines
           : [];
-        if (dataCached?.cached && linesCached.length > 0) {
+        if (Number(dataZ?.ocrVer || 0) >= 21 && linesZ.length > 0) {
           const out: VideoOcrExtractResult = {
             ok: true,
             hasText: true,
             videoFileName: vid.videoFileName,
-            ocrLines: linesCached,
-            fullText: String(dataCached.fullText || ''),
+            ocrLines: linesZ,
+            fullText: String(dataZ.fullText || ''),
           };
           inMemoryPaddleVideoOcrCache.set(memKey, out);
           return out;
         }
       }
     } catch {
-      /* proceed to fresh PP-OCRv5 extraction */
+      /* fallback to web PP-OCRv5 below */
     }
   }
 

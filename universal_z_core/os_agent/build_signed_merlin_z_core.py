@@ -254,6 +254,12 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
     seven_zip_dir = THIS_DIR / "bin" / "7z"
     assets_dir = THIS_DIR / "assets"
     baby_ghost_sounds_dir = THIS_DIR / "baby_ghost_sounds"
+    ocr_models_dir = THIS_DIR / "models" / "ocr"
+    py_root = Path(sys.executable).resolve().parent
+    vc_dll_args: list[str] = []
+    for dll_pat in ("msvcp140*.dll", "vcruntime140*.dll", "concrt140.dll", "vcomp140.dll"):
+        for dll_p in sorted(py_root.glob(dll_pat)):
+            vc_dll_args.extend(["--add-binary", f"{dll_p};."])
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--noconfirm", "--clean", "--onefile",
@@ -270,7 +276,16 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
         *(["--add-data", f"{seven_zip_dir};bin/7z"] if seven_zip_dir.exists() else []),
         *(["--add-data", f"{assets_dir};assets"] if assets_dir.exists() else []),
         *(["--add-data", f"{baby_ghost_sounds_dir};baby_ghost_sounds"] if baby_ghost_sounds_dir.exists() else []),
+        *(["--add-data", f"{ocr_models_dir};models/ocr"] if ocr_models_dir.exists() else []),
+        *vc_dll_args,
+        "--collect-binaries", "onnxruntime",
+        "--collect-all", "pypdfium2_raw",
         "--hidden-import", "plugin_ghosti_os",
+        "--hidden-import", "ppocr_v5_worker",
+        "--hidden-import", "onnxruntime",
+        "--hidden-import", "pypdfium2",
+        "--hidden-import", "olefile",
+        "--hidden-import", "numpy",
         "--hidden-import", "plugin_ghosti_care_suite",
         "--hidden-import", "pyzipper",
         "--hidden-import", "plugin_ghosti_superpowers",
@@ -293,6 +308,7 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
         "--hidden-import", "PIL.Image",
         "--hidden-import", "PIL.ImageDraw",
         "--hidden-import", "PIL.ImageGrab",
+        "--hidden-import", "PIL.ImageOps",
         "--hidden-import", "PIL.ImageTk",
         "--console" if console else "--noconsole",
         str(THIS_DIR / "merlin_z_core_daemon.py"),

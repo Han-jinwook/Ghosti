@@ -98,28 +98,24 @@ class TestGhostSearchEdges(unittest.TestCase):
     def test_05_pdf_flate_and_scanned_ocr_plus_labeler(self):
         with tempfile.TemporaryDirectory() as td:
             td_p = Path(td)
-            # 1) FlateDecode UTF-16BE PDF
-            pdf_flate = td_p / "scan_contract.pdf"
-            ko_str = "표준근로계약서 체결일자 2026-10-20 임금명세"
-            hex_u16 = ("FEFF" + ko_str.encode("utf-16-be").hex().upper()).encode("ascii")
-            comp = zlib.compress(b"BT /F1 12 Tf 72 720 Td <" + hex_u16 + b"> Tj ET")
-            pdf_flate.write_bytes(
-                b"%PDF-1.4\n1 0 obj\n<< /Filter /FlateDecode /Length "
-                + str(len(comp)).encode("ascii")
-                + b" >>\nstream\n"
-                + comp
-                + b"\nendstream\nendobj\nstartxref\n100\n%%EOF\n"
-            )
-            extracted_flate = gos._extract_doc_text(pdf_flate, allow_pdf_winrt_ocr=True)
+            # 1) Scanned Contract PDF (PDFium render + PP-OCRv5 Korean + Ghost Labeler)
+            pdf_contract = td_p / "scan_contract.pdf"
+            im_c = Image.new("RGB", (980, 520), (255, 255, 255))
+            dr_c = ImageDraw.Draw(im_c)
+            dr_c.text((50, 60), "표준근로계약서", fill=(0, 0, 0), font=_ko_font(36))
+            dr_c.text((50, 140), "체결일자: 2026-10-20 | 임금명세", fill=(0, 0, 0), font=_ko_font(28))
+            im_c.save(pdf_contract, "PDF", resolution=150.0)
+
+            extracted_flate = gos._extract_doc_text(pdf_contract, allow_pdf_winrt_ocr=True)
             self.assertIn("표준근로계약서", extracted_flate)
 
-            e1, k1, d1, s1 = spd._extract_file_date_and_slug_for_labeler(pdf_flate)
+            e1, k1, d1, s1 = spd._extract_file_date_and_slug_for_labeler(pdf_contract)
             lbl1 = spd.format_ghost_labeler_filename(
-                pdf_flate.name, s1, exif_yymmdd=e1, kakao_yymmdd=k1, ocr_or_doc_text=d1, prefix_only_if_named=True
+                pdf_contract.name, s1, exif_yymmdd=e1, kakao_yymmdd=k1, ocr_or_doc_text=d1, prefix_only_if_named=True
             )
             self.assertTrue(lbl1["labeled_filename"].startswith("261020_"))
 
-            # 2) Pure Scanned Image PDF
+            # 2) Pure Scanned Image PDF #2
             pdf_img = td_p / "스캔본_01.pdf"
             im_pdf = Image.new("RGB", (880, 520), (255, 255, 255))
             dr_pdf = ImageDraw.Draw(im_pdf)
@@ -130,8 +126,9 @@ class TestGhostSearchEdges(unittest.TestCase):
             extracted_scan = gos._extract_doc_text(pdf_img, allow_pdf_winrt_ocr=True)
             self.assertIn("2026", extracted_scan)
 
-    def test_06_daemon_selftest_v239(self):
-        self.assertEqual(daemon.CORE_VERSION, "2.3.9")
+    def test_06_daemon_selftest_version(self):
+        ver_parts = tuple(int(x) for x in daemon.CORE_VERSION.split("."))
+        self.assertGreaterEqual(ver_parts, (2, 3, 40))
         st = daemon.run_selftest()
         self.assertTrue(st.get("ok"))
         self.assertEqual(st.get("selftest"), "PASSED")

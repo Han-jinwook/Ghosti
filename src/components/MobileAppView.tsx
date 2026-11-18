@@ -24,6 +24,7 @@ import {
 import { SampleSharedRoomExperienceCard } from '../domains/free_photo_share/SampleSharedRoomExperienceCard';
 import {
   PcMasterQuickSendPanel,
+  buildDocPreviewSnippet,
   renderHighlightedDocText,
   maskSensitiveDocText,
 } from './PricingModal';
@@ -755,7 +756,11 @@ export const MobileAppView: React.FC = () => {
                         </h4>
                         <p className="font-body-sm text-[12px] text-zinc-400 line-clamp-2">
                           {renderHighlightedDocText(
-                            maskSensitiveDocText(doc.extractedText),
+                            buildDocPreviewSnippet(
+                              maskSensitiveDocText(doc.extractedText),
+                              hasExecutedUserSearch ? activeQuery : '',
+                              220
+                            ),
                             hasExecutedUserSearch ? activeQuery : ''
                           )}
                         </p>
