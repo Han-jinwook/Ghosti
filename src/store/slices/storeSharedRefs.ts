@@ -187,13 +187,21 @@ export function isMobileOrStoreRuntime(): boolean {
   );
   if (isCap) return true;
   if (new URLSearchParams(window.location.search).get('storeApp') === '1') return true;
-  return /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) || window.innerWidth < 860;
+  const ua = navigator.userAgent || '';
+  const isTouchTabletOrSamsung =
+    /SamsungBrowser|iPad|Tablet|PlayBook|Silk/i.test(ua) ||
+    (navigator.maxTouchPoints > 1 && /Android|Linux x86_64|Macintosh/i.test(ua) && !zCoreBridge.isConnected);
+  return (
+    /Android|iPhone|iPad|iPod|Mobile/i.test(ua) ||
+    isTouchTabletOrSamsung ||
+    window.innerWidth < 860
+  );
 }
 
 /**
  * 뷰포트 및 런타임 기기 기준 레이아웃('mobile' | 'desktop') 판별 SSOT
  * - PC 전용 독립 귀신검색창(?ghostSearchWindow=...)은 창 폭을 좁혀도 항상 'desktop' 유지
- * - Capacitor 스토어 앱, 모바일 브라우저(< 1024px), 또는 좁은 웹 뷰포트(< 860px)는 'mobile' 적용
+ * - Capacitor 스토어 앱, 스마트폰·태블릿(갤럭시 탭 삼성인터넷 등) 브라우저, 또는 좁은 웹 뷰포트(< 860px)는 'mobile' 적용
  */
 export function resolveViewportLayout(): ViewportLayout {
   if (typeof window === 'undefined') return 'desktop';
@@ -204,7 +212,11 @@ export function resolveViewportLayout(): ViewportLayout {
       (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
     );
     if (isCap || params.get('storeApp') === '1') return 'mobile';
-    if (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent) && window.innerWidth < 1024) {
+    const ua = navigator.userAgent || '';
+    const isTouchTabletOrSamsung =
+      /SamsungBrowser|iPad|Tablet|PlayBook|Silk/i.test(ua) ||
+      (navigator.maxTouchPoints > 1 && /Android|Linux x86_64|Macintosh/i.test(ua) && !zCoreBridge.isConnected);
+    if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua) || isTouchTabletOrSamsung) {
       return 'mobile';
     }
     return window.innerWidth < 860 ? 'mobile' : 'desktop';

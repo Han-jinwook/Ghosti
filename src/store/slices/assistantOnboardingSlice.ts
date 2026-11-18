@@ -700,8 +700,23 @@ export const createAssistantOnboardingSlice: StateCreator<
 
       if (newAnalyzed.length === 0 && prevReal.length > 0) {
         skippedAllAsExisting = true;
+        const existingDupCount = state.duplicateGroups.length;
+        const existingBlurryCount = prevReal.filter(
+          (p) => p.trashCategory === 'blurry' && !p.quarantined
+        ).length;
+        const existingMemoScreenCount = prevReal.filter(
+          (p) =>
+            (p.trashCategory === 'memo' || p.trashCategory === 'screenshot') && !p.quarantined
+        ).length;
+        summaryDetail = {
+          total: analyzed.length,
+          dupSets: existingDupCount,
+          blurry: existingBlurryCount,
+          memoScreen: existingMemoScreenCount,
+          remainingOldPhotos: 0,
+        };
         return {
-          lastQuarantineToast: `ℹ️ 이미 업로드되어 있는 사진 ${analyzed.length}장이에요! (중복 추가 없이 기존 목록을 그대로 유지했어요)`,
+          lastQuarantineToast: `ℹ️ 이미 불러온 사진 ${analyzed.length}장이에요! (중복 추가 없이 아래 대화창과 정리 목록에 결과를 다시 안내해 드렸어요)`,
         };
       }
 
@@ -775,16 +790,20 @@ export const createAssistantOnboardingSlice: StateCreator<
           lastQuarantineToast: toastMsg,
         };
       }
+      const isMobilePersonalSecretary =
+        state.layout === 'mobile' && state.activeLoungeType === 'personal';
       return {
         ...baseUpdate,
         searchResults: addedSearchResults,
-        hasExecutedUserSearch: true,
-        activeQuery: `📱 방금 불러온 내 폰 사진 (${updatedPhotos.length}장 · 온디바이스 1초 AI 분석 완료)`,
+        hasExecutedUserSearch: isMobilePersonalSecretary ? state.hasExecutedUserSearch : true,
+        activeQuery: isMobilePersonalSecretary
+          ? state.activeQuery
+          : `📱 방금 불러온 내 폰 사진 (${updatedPhotos.length}장 · 온디바이스 1초 AI 분석 완료)`,
         matchedTags: ['#내폰사진즉시분석', '#온디바이스dHash', '#외부전송0Byte'],
         lastQuarantineToast: toastMsg,
       };
     });
-    if (!skippedAllAsExisting && typeof window !== 'undefined' && !skipSearchResultsUpdate) {
+    if (typeof window !== 'undefined' && !skipSearchResultsUpdate) {
       window.dispatchEvent(
         new CustomEvent('ghosti_photo_audit_summary', { detail: summaryDetail })
       );
