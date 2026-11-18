@@ -1107,12 +1107,20 @@ def move_card_to_column_bottom(page_id: str, target_status: str) -> bool:
         else:
             new_props[SCHEMA.status_prop_name] = {"select": {"name": target_status}}
 
-        if "앱" in props and props["앱"].get("select"):
-            new_props["앱"] = {"select": {"name": props["앱"]["select"]["name"]}}
+        title_plain = extract_plain_text(title_items)
+        if "앱" in props:
+            app_val = (props["앱"].get("select") or {}).get("name") or "귀신같이"
+            new_props["앱"] = {"select": {"name": app_val}}
         if "우선순위" in props and props["우선순위"].get("select"):
             new_props["우선순위"] = {"select": {"name": props["우선순위"]["select"]["name"]}}
-        if "담당" in props and props["담당"].get("select"):
-            new_props["담당"] = {"select": {"name": props["담당"]["select"]["name"]}}
+        if "담당" in props:
+            inferred_track = "UX" if ("[UX]" in title_plain or "🟢" in title_plain) else "로직"
+            track_val = (props["담당"].get("select") or {}).get("name") or inferred_track
+            new_props["담당"] = {"select": {"name": track_val}}
+        if "담당자" in props and props["담당자"].get("people"):
+            people_ids = [{"id": u["id"]} for u in props["담당자"]["people"] if isinstance(u, dict) and u.get("id")]
+            if people_ids:
+                new_props["담당자"] = {"people": people_ids}
 
         raw_blocks = _fetch_page_top_blocks(clean_id)
         cloned_blocks: List[Dict[str, Any]] = []
@@ -1320,6 +1328,57 @@ def create_mission(
     print(f"   • 배치 컬럼: '{resolved_status}'")
     print(f"   • 카드 ID  : {new_page_id}")
     return new_page_id
+
+
+def create_split_retest_card(source_page_id: str, new_title: str, guide_text: str) -> str:
+    """
+    긴 버그/재테스트 카드에서 통과(☑)분을 '완료'로 보내고 남은 미검증 항목만 깔끔한 새 카드로 '재테스트 대기'에 생성합니다.
+    🚨 [필수 가드]: 알바생(테스터)들이 노션 보드에서 '담당(로직/UX)', '담당자(people)', '앱(귀신같이)' 필터로 조회할 때
+    절대 누락·비가시화되지 않도록 원본 카드(source_page_id)의 담당·담당자·앱·우선순위 속성을 100% 자동 상속(및 제목 기반 추론 보강)합니다.
+    """
+    ensure_valid_token()
+    SCHEMA.detect(DATABASE_ID)
+    headers = get_headers()
+    clean_title = new_title.strip()
+    if not clean_title:
+        raise ValueError("새 재테스트 카드 제목(new_title)이 비어 있습니다.")
+
+    src_props: Dict[str, Any] = {}
+    if source_page_id and source_page_id.strip():
+        r_src = requests.get(f"{NOTION_API_BASE}/pages/{source_page_id.strip()}", headers=headers, timeout=15)
+        if r_src.status_code == 200:
+            src_props = r_src.json().get("properties") or {}
+
+    inferred_track = "UX" if ("[UX]" in clean_title or "🟢" in clean_title) else "로직"
+    track_val = ((src_props.get("담당") or {}).get("select") or {}).get("name") or inferred_track
+    app_val = ((src_props.get("앱") or {}).get("select") or {}).get("name") or "귀신같이"
+
+    new_props: Dict[str, Any] = {
+        SCHEMA.title_prop_name: {"title": [{"type": "text", "text": {"content": clean_title}}]},
+        SCHEMA.status_prop_name: (
+            {"status": {"name": STATUS_READY_FOR_QA}}
+            if SCHEMA.status_prop_type == "status"
+            else {"select": {"name": STATUS_READY_FOR_QA}}
+        ),
+        "담당": {"select": {"name": track_val}},
+        "앱": {"select": {"name": app_val}},
+    }
+    if "우선순위" in src_props and src_props["우선순위"].get("select"):
+        new_props["우선순위"] = {"select": {"name": src_props["우선순위"]["select"]["name"]}}
+    if "담당자" in src_props and src_props["담당자"].get("people"):
+        people_ids = [{"id": u["id"]} for u in src_props["담당자"]["people"] if isinstance(u, dict) and u.get("id")]
+        if people_ids:
+            new_props["담당자"] = {"people": people_ids}
+
+    blocks = build_feedback_blocks(guide_text, header_label="🛠️ [AI 수정 완료 및 재테스트 안내]")
+    res = requests.post(
+        f"{NOTION_API_BASE}/pages",
+        headers=headers,
+        json={"parent": {"database_id": DATABASE_ID}, "properties": new_props, "children": blocks},
+        timeout=20,
+    )
+    res.raise_for_status()
+    return res.json().get("id", "")
 
 
 def update_todo_block_text(block_id: str, new_text: str, checked: bool = False) -> bool:
