@@ -1691,7 +1691,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
     triggerGuestJoinWall,
   } = useSaySeeStore();
 
-  const [p2pOriginalSummoned, setP2pOriginalSummoned] = useState(true);
+  const [p2pOriginalSummoned, setP2pOriginalSummoned] = useState(false);
   const [showStorageCheckBanner, setShowStorageCheckBanner] = useState(false);
   const [simulateLowStorage, setSimulateLowStorage] = useState(false);
   const [downloadDirPath, setDownloadDirPath] = useState('D:\\Ghosti\\다운로드_원본');
@@ -1715,13 +1715,21 @@ export const LoungeFeedContextBanner: React.FC = () => {
     setTimeout(() => setClubInviteCopied(false), 2600);
   };
 
+  const activeRoomPhotoCount = resolveLoungePhotoCorpus({
+    activeLoungeType,
+    activeFamilyRoom,
+    photos,
+    sharedRoomHostPhotos,
+    sharedRoomAddedPhotos,
+  }).length;
+
   const renderOriginalAutoSyncControl = () => (
     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0 max-w-full">
-      {/* 동기화 완료 (새로 9장 추가) 작은 풍선 배지 (Wi-Fi + 여유공간 충분할 때만 ON) */}
-      {p2pOriginalSummoned && !simulateLowStorage && (
-        <span className="px-2 sm:px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-label-sm text-[11px] font-extrabold flex items-center gap-1 shadow-xs animate-pulse shrink-0">
-          <span className="sm:hidden">✨ 완료 (+9)</span>
-          <span className="hidden sm:inline">✨ 동기화 완료 (새로 9장 추가)</span>
+      {/* 실제 공유 사진이 있고 사용자가 원본 동기화를 켰을 때만 실제 장수로 표시 (0장 빈 방에서 가짜 9장 추가 표시 금지) */}
+      {p2pOriginalSummoned && !simulateLowStorage && activeRoomPhotoCount > 0 && (
+        <span className="px-2 sm:px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-label-sm text-[11px] font-extrabold flex items-center gap-1 shadow-xs shrink-0">
+          <span className="sm:hidden">✨ 동기화 ({activeRoomPhotoCount}장)</span>
+          <span className="hidden sm:inline">✨ 원본 동기화 완료 ({activeRoomPhotoCount}장)</span>
         </span>
       )}
 

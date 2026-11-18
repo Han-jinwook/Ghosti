@@ -159,7 +159,10 @@ export interface AssistantOnboardingSlice {
   initialized: boolean;
   initializing: boolean;
   initApp: (force?: boolean) => Promise<void>;
-  importMobileLocalPhotos: (files: FileList | File[]) => Promise<void>;
+  importMobileLocalPhotos: (
+    files: FileList | File[],
+    options?: { skipSearchResultsUpdate?: boolean }
+  ) => Promise<void>;
 
   // 100% 로컬 팩트 기반 문장형 추천 칩 (외부 LLM 의존도 0%)
   conceptLexiconCount: number;
@@ -672,7 +675,8 @@ export const createAssistantOnboardingSlice: StateCreator<
     }
   },
 
-  importMobileLocalPhotos: async (files) => {
+  importMobileLocalPhotos: async (files, options) => {
+    const skipSearchResultsUpdate = Boolean(options?.skipSearchResultsUpdate);
     const { analyzed } = await analyzeMobilePickedPhotoFiles(files);
     if (analyzed.length === 0) return;
     const isSample = (name: string) =>
@@ -752,11 +756,17 @@ export const createAssistantOnboardingSlice: StateCreator<
         dupSetsCount === 0 && blurryCount === 0 && memoScreenCount === 0
           ? `✅ 사진 ${analyzed.length}장 분석 완료! 버릴 중복·연사(0세트)나 흐린 사진(0장) 없이 모두 깨끗한 사진이에요.`
           : `📸 사진 ${analyzed.length}장 분석 완료! 중복·연사 ${dupSetsCount}세트 · 흐린 사진 ${blurryCount}장 발견 — 아래에서 실사진을 보고 [OK]로 직접 결정해 주세요!`;
-      return {
+      const baseUpdate = {
         photos: updatedPhotos,
         duplicateGroups: nextDupGroups,
         selectedTrashIds: nextTrashIds,
         activeTrashCategoryFilter: targetTab,
+      };
+      if (skipSearchResultsUpdate) {
+        return baseUpdate;
+      }
+      return {
+        ...baseUpdate,
         searchResults: addedSearchResults,
         hasExecutedUserSearch: true,
         activeQuery: `📱 방금 불러온 내 폰 사진 (${analyzed.length}장 · 온디바이스 1초 AI 분석 완료)`,
@@ -764,7 +774,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         lastQuarantineToast: toastMsg,
       };
     });
-    if (typeof window !== 'undefined') {
+    if (typeof window !== 'undefined' && !skipSearchResultsUpdate) {
       window.dispatchEvent(
         new CustomEvent('ghosti_photo_audit_summary', { detail: summaryDetail })
       );

@@ -172,6 +172,7 @@ export const PhotoDetailModal: React.FC = () => {
     photos,
     duplicateGroups,
     toggleBookmark,
+    removeSharedRoomPhoto,
     openLocalFolder,
     pickBestInBurstPhotos,
     isGuestPreviewMode,

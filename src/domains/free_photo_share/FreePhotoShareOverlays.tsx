@@ -32,6 +32,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
     activeLoungeType === 'family' ? 'family@sundreamer.app' : 'friend@sundreamer.app'
   );
   const [selectedSharedUploadIds, setSelectedSharedUploadIds] = useState<string[]>([]);
+  const [recentPickedNames, setRecentPickedNames] = useState<string[]>([]);
   const [, setThumbCacheTick] = useState(0);
   const scrollWrapRef = useRef<HTMLDivElement | null>(null);
   const [scrollState, setScrollState] = useState({
@@ -62,20 +63,45 @@ export const FreePhotoShareOverlays: React.FC = () => {
       sharedRoomAddedPhotos,
     });
     const existingSharedNames = new Set(currentRoomCorpus.map((p) => p.name));
+    const recentSet = new Set(recentPickedNames);
     return photos.filter(
       (p) =>
         !p.quarantined &&
         !p.isVaultDocument &&
-        !p.trashCategory &&
+        (!p.trashCategory || recentSet.has(p.name)) &&
         !existingSharedNames.has(p.name) &&
         !/^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(p.name)
     );
-  }, [activeLoungeType, activeFamilyRoom, photos, sharedRoomHostPhotos, sharedRoomAddedPhotos]);
+  }, [
+    activeLoungeType,
+    activeFamilyRoom,
+    photos,
+    sharedRoomHostPhotos,
+    sharedRoomAddedPhotos,
+    recentPickedNames,
+  ]);
+
+  const handlePickedFilesForSharedModal = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    const files = Array.from(fileList);
+    const pickedNames = files.map((f) => f.name);
+    setRecentPickedNames((prev) => Array.from(new Set([...prev, ...pickedNames])));
+    await importMobileLocalPhotos(files, { skipSearchResultsUpdate: true });
+    const latestPhotos = useSaySeeStore.getState().photos;
+    const pickedNameSet = new Set(pickedNames);
+    const matchedIds = latestPhotos
+      .filter((p) => !p.quarantined && pickedNameSet.has(p.name))
+      .map((p) => p.id);
+    if (matchedIds.length > 0) {
+      setSelectedSharedUploadIds((prev) => Array.from(new Set([...prev, ...matchedIds])));
+    }
+  };
 
   useEffect(() => {
     aiRuntimeFlags.priorityModalGalleryOpen = showSharedPhotoUploadModal;
     if (showSharedPhotoUploadModal && !wasUploadModalOpenRef.current) {
       setSelectedSharedUploadIds([]);
+      setRecentPickedNames([]);
       setScrollState((prev) => ({ ...prev, scrollTop: 0 }));
       if (scrollWrapRef.current) {
         scrollWrapRef.current.scrollTop = 0;
@@ -332,10 +358,8 @@ export const FreePhotoShareOverlays: React.FC = () => {
                       multiple
                       className="hidden"
                       onChange={(e) => {
-                        if (e.target.files && e.target.files.length > 0) {
-                          void importMobileLocalPhotos(e.target.files);
-                          e.target.value = '';
-                        }
+                        void handlePickedFilesForSharedModal(e.target.files);
+                        e.target.value = '';
                       }}
                     />
                   </label>
@@ -423,10 +447,8 @@ export const FreePhotoShareOverlays: React.FC = () => {
                         multiple
                         className="hidden"
                         onChange={(e) => {
-                          if (e.target.files && e.target.files.length > 0) {
-                            void importMobileLocalPhotos(e.target.files);
-                            e.target.value = '';
-                          }
+                          void handlePickedFilesForSharedModal(e.target.files);
+                          e.target.value = '';
                         }}
                       />
                     </label>

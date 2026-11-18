@@ -185,6 +185,7 @@ export interface FreePhotoShareSlice {
   setShowSharedPhotoUploadModal: (show: boolean) => void;
   requestAddMyPhotosToSharedRoom: () => void;
   addLocalPhotosToSharedRoom: (selectedIds: string[]) => void;
+  removeSharedRoomPhoto: (photoId: string) => void;
   returnToSharedRoomAndOpenUpload: () => Promise<void>;
 
   setActiveFamilyRoom: (room: FamilyRoomId) => void;
@@ -1055,7 +1056,30 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       activeQuery: `${roomLabel} (${nextResults.length}장 · 방금 ${picked.length}장 추가됨)`,
       matchedTags: [`#${uploaderNick}사진추가`, '#공유앨범', '#초경량섀도우공유'],
       searchResults: nextResults,
-      lastQuarantineToast: `🎉 내 컴퓨터에서 고른 사진 ${picked.length}장을 『${roomLabel}』에 깔끔하게 추가했습니다!`,
+      lastQuarantineToast: `🎉 내 기기에서 고른 사진 ${picked.length}장을 『${roomLabel}』에 깔끔하게 추가했습니다!`,
+    });
+  },
+
+  removeSharedRoomPhoto: (photoId) => {
+    if (!photoId) return;
+    const state = get();
+    const nextAdded = state.sharedRoomAddedPhotos.filter((p) => p.id !== photoId);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(
+          'ghosti_shared_family_added_photos_v1',
+          JSON.stringify(nextAdded.slice(0, 200))
+        );
+      } catch {
+        /* ignore quota */
+      }
+    }
+    const nextResults = state.searchResults.filter((item) => item.photo.id !== photoId);
+    set({
+      sharedRoomAddedPhotos: nextAdded,
+      searchResults: nextResults,
+      lastQuarantineToast:
+        '🗑️ 공유방에서 해당 사진을 삭제했습니다. (내 기기 원본 사진은 안전하게 보존됩니다)',
     });
   },
 

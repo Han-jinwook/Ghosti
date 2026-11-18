@@ -223,6 +223,7 @@ export const MobileAppView: React.FC = () => {
     setGroupBurstsInSearch,
     setSelectedPhoto,
     toggleBookmark,
+    removeSharedRoomPhoto,
     openLocalFolder,
     setShowOnboarding,
     activePricingPlan,
@@ -886,6 +887,21 @@ export const MobileAppView: React.FC = () => {
                               <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-zinc-950/85 backdrop-blur-md border border-white/15 text-primary-container font-label-sm text-[10px] font-bold">
                                 ❐ {group.burstCount}장 연사
                               </div>
+                            )}
+
+                            {String(item.photo.id || '').startsWith('shared_added_') && (
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  removeSharedRoomPhoto(item.photo.id);
+                                }}
+                                aria-label="공유방에서 삭제"
+                                title="공유방에서 이 사진 삭제 (내 기기 원본은 보존됩니다)"
+                                className="absolute top-2 left-2 z-10 px-2 py-1 rounded-full bg-rose-600/90 hover:bg-rose-500 text-white text-[10.5px] font-black shadow-md flex items-center gap-0.5 cursor-pointer"
+                              >
+                                🗑️ 삭제
+                              </button>
                             )}
 
                             <button
