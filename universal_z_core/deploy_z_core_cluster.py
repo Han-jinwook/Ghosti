@@ -20,13 +20,67 @@ def log(msg: str):
 UZC_DIR = os.path.dirname(os.path.abspath(__file__))
 
 
+def _ver_tuple(v: str) -> tuple[int, ...]:
+    return tuple(int(x) if x.isdigit() else 0 for x in (v or "").strip().split("."))
+
+
+def _bump_patch_version(v: str) -> str:
+    parts = [int(x) if x.isdigit() else 0 for x in (v or "2.3.29").strip().split(".")]
+    while len(parts) < 3:
+        parts.append(0)
+    parts[-1] += 1
+    return ".".join(str(x) for x in parts)
+
+
 def sync_internal_z_core_mirrors():
     """
-    [2026-11-13 귀신창 완전 인수 SSOT 일원화]
-    D:\\Secretary\\tools\\ 역방향 덮어쓰기를 영구 중단하고, 현재 워크트리의 universal_z_core 마스터(UZC_DIR)에서
-    하위 미러(os_agent, core_power_agent)로 단방향 동기화합니다 (D:\\Ghosti 및 D:\\Ghosti_Sync 워크트리 모두 호환).
+    [2026-11-18 1·2·3귀신 3개 워크트리 버전·소스 무결성 자동 정합화]
+    - 3개 귀신 IDE(D:\\Ghosti, D:\\Ghosti_Search, D:\\Ghosti_Share)가 서로 버전업 사실을 몰라도 절대 하위 버전으로 덮어쓰거나 충돌하지 않도록:
+      1) 3개 워크트리의 merlin_z_core_daemon.py / zCoreBridge.ts / z_core_version.json 중 최고 버전(max_ver)을 자동 채택하고,
+      2) 현재 워크트리의 엔진 소스가 마지막 패키징 이후 변경되었는데 버전이 최고 버전 이하라면 자동으로 max_ver + 1로 승격하며,
+      3) 3개 워크트리의 CORE_VERSION, LATEST_Z_CORE_VERSION, z_core_version.json 및 미러 파일을 100% 동일하게 동기화합니다.
     """
+    import hashlib
+    import re
     import shutil
+
+    worktree_roots = [
+        os.path.dirname(UZC_DIR),
+        r"D:\Ghosti",
+        r"D:\Ghosti_Search",
+        r"D:\Ghosti_Share",
+    ]
+    valid_roots: list[str] = []
+    seen_roots: set[str] = set()
+    for r in worktree_roots:
+        norm_r = os.path.abspath(r).lower()
+        if norm_r not in seen_roots and os.path.isdir(r):
+            seen_roots.add(norm_r)
+            valid_roots.append(os.path.abspath(r))
+
+    # 1) 3개 워크트리 전체에서 현재 가장 높은 버전(max_ver) 스캔
+    max_ver = "2.3.29"
+    for r in valid_roots:
+        d_py = os.path.join(r, "universal_z_core", "os_agent", "merlin_z_core_daemon.py")
+        if os.path.exists(d_py):
+            try:
+                with open(d_py, "r", encoding="utf-8", errors="ignore") as f:
+                    m = re.search(r'CORE_VERSION\s*=\s*["\']([^"\']+)["\']', f.read())
+                    if m and _ver_tuple(m.group(1)) > _ver_tuple(max_ver):
+                        max_ver = m.group(1).strip()
+            except Exception:
+                pass
+        v_json = os.path.join(r, "public", "z_core_version.json")
+        if os.path.exists(v_json):
+            try:
+                with open(v_json, "r", encoding="utf-8", errors="ignore") as f:
+                    vj = str(json.load(f).get("version") or "").strip()
+                    if vj and _ver_tuple(vj) > _ver_tuple(max_ver):
+                        max_ver = vj
+            except Exception:
+                pass
+
+    # 2) 내부 미러(os_agent, core_power_agent) 단방향 복사
     mirrors = [
         os.path.join(UZC_DIR, "os_agent"),
         os.path.join(UZC_DIR, "core_power_agent"),
@@ -44,8 +98,51 @@ def sync_internal_z_core_mirrors():
             except Exception as e:
                 log(f"⚠️ 내부 미러 동기화 경고 ({dst}): {e}")
 
-    # 2·3귀신 git worktree(D:\Ghosti_Search, D:\Ghosti_Share)에 구버전(v2.3.5 등)이 남아 다운그레이드 핑퐁을 유발하지 않도록 마스터 파일 강제 동기화
-    for wt_root in (r"D:\Ghosti_Search", r"D:\Ghosti_Share"):
+    # 3) 소스 해시 스탬프 비교: 소스가 바뀌었는데 버전업을 안 했거나 타 창 버전보다 낮으면 자동으로 max_ver + 1 승격
+    core_files = [
+        os.path.join(UZC_DIR, "os_agent", "merlin_z_core_daemon.py"),
+        os.path.join(UZC_DIR, "seq_paste_daemon.py"),
+        os.path.join(UZC_DIR, "ghost_search_window_ui2.py"),
+    ]
+    h_calc = hashlib.sha256()
+    for cf in core_files:
+        if os.path.exists(cf):
+            try:
+                raw_txt = open(cf, "r", encoding="utf-8", errors="ignore").read()
+                raw_txt = re.sub(r'CORE_VERSION\s*=\s*["\'][^"\']+["\']', 'CORE_VERSION=""', raw_txt)
+                h_calc.update(raw_txt.encode("utf-8"))
+            except Exception:
+                pass
+    src_hash = h_calc.hexdigest()[:16]
+    stamp_file = os.path.join(r"D:\Ghosti\universal_z_core", ".last_packaged_src_hash.json")
+    last_hash = ""
+    last_ver = ""
+    if os.path.exists(stamp_file):
+        try:
+            st_obj = json.loads(open(stamp_file, "r", encoding="utf-8").read())
+            last_hash = str(st_obj.get("srcHash") or "")
+            last_ver = str(st_obj.get("version") or "")
+        except Exception:
+            pass
+
+    cur_local_ver = _read_current_core_version()
+    target_ver = max_ver if _ver_tuple(max_ver) >= _ver_tuple(cur_local_ver) else cur_local_ver
+    if last_hash and src_hash != last_hash and _ver_tuple(target_ver) <= _ver_tuple(last_ver or max_ver):
+        target_ver = _bump_patch_version(max_ver)
+        log(f"🔄 [3귀신 버전 자동 조율] 엔진 소스 변경 감지 ➔ 하위/동일 버전 충돌 방지를 위해 v{target_ver}로 자동 승격합니다!")
+
+    # 4) 현재 워크트리 및 타 워크트리(D:\Ghosti, D:\Ghosti_Search, D:\Ghosti_Share)에 target_ver 및 마스터 파일 일괄 반영
+    daemon_py_cur = os.path.join(UZC_DIR, "os_agent", "merlin_z_core_daemon.py")
+    if os.path.exists(daemon_py_cur):
+        try:
+            txt = open(daemon_py_cur, "r", encoding="utf-8").read()
+            new_txt = re.sub(r'CORE_VERSION\s*=\s*["\'][^"\']+["\']', f'CORE_VERSION = "{target_ver}"', txt)
+            if new_txt != txt:
+                open(daemon_py_cur, "w", encoding="utf-8").write(new_txt)
+        except Exception:
+            pass
+
+    for wt_root in valid_roots:
         wt_uzc = os.path.join(wt_root, "universal_z_core")
         if os.path.isdir(wt_uzc) and os.path.abspath(wt_uzc).lower() != os.path.abspath(UZC_DIR).lower():
             for rel_f in (
@@ -63,6 +160,27 @@ def sync_internal_z_core_mirrors():
                         shutil.copy2(s_p, d_p)
                     except Exception:
                         pass
+        # 각 워크트리의 zCoreBridge.ts 및 z_core_version.json도 target_ver로 즉시 통일
+        bridge_ts = os.path.join(wt_root, "src", "services", "zCoreBridge.ts")
+        if os.path.exists(bridge_ts):
+            try:
+                btxt = open(bridge_ts, "r", encoding="utf-8").read()
+                nbtxt = re.sub(
+                    r"export const LATEST_Z_CORE_VERSION\s*=\s*['\"][^'\"]+['\"];",
+                    f"export const LATEST_Z_CORE_VERSION = '{target_ver}';",
+                    btxt,
+                )
+                if nbtxt != btxt:
+                    open(bridge_ts, "w", encoding="utf-8").write(nbtxt)
+            except Exception:
+                pass
+
+    try:
+        open(stamp_file, "w", encoding="utf-8").write(
+            json.dumps({"version": target_ver, "srcHash": src_hash, "updatedAt": time.strftime("%Y-%m-%d %H:%M:%S")}, indent=2)
+        )
+    except Exception:
+        pass
 
 def update_pc1():
     log("=== [1호기 (로컬)] Z-코어 최신화 및 리로드 시작 ===")
@@ -415,6 +533,10 @@ def update_pc3(core_ver: str):
     _update_remote_exe_node("3호기 (사무실 100.102.43.42)", "100.102.43.42", "chiuk", core_ver)
 
 
+def update_pc5(core_ver: str):
+    _update_remote_exe_node("5호기 (집 100.122.235.63)", "100.122.235.63", "WD", core_ver)
+
+
 def main():
     sync_internal_z_core_mirrors()
     core_ver = ensure_release_zip_and_bridge_synced()
@@ -423,7 +545,26 @@ def main():
     update_pc2(core_ver)
     update_pc3(core_ver)
     update_pc4()
-    log(f"\n🎉 전 클러스터(로컬 · 1호기 · 2호기 · 3호기 · 4호기) 엔진 + 시작프로그램 자동실행 및 웹 패키지(v{core_ver}) 배포가 완료되었습니다!")
+    update_pc5(core_ver)
+    # 빌드된 최신 Merlin_Z_Core.zip 및 z_core_version.json도 2·3귀신 워크트리에 동시 복사
+    import shutil
+    repo_root = os.path.dirname(UZC_DIR)
+    for wt_root in (r"D:\Ghosti", r"D:\Ghosti_Search", r"D:\Ghosti_Share"):
+        if os.path.isdir(wt_root) and os.path.abspath(wt_root).lower() != os.path.abspath(repo_root).lower():
+            for rel_p in (
+                os.path.join("public", "z_core_version.json"),
+                os.path.join("public", "Merlin_Z_Core.zip"),
+                os.path.join("universal_z_core", "os_agent", "dist", "Merlin_Z_Core_Setup.exe"),
+            ):
+                sp = os.path.join(repo_root, rel_p)
+                dp = os.path.join(wt_root, rel_p)
+                if os.path.exists(sp):
+                    try:
+                        os.makedirs(os.path.dirname(dp), exist_ok=True)
+                        shutil.copy2(sp, dp)
+                    except Exception:
+                        pass
+    log(f"\n🎉 전 클러스터(로컬 6호기 · 1호기 · 2호기 · 3호기 · 4호기 · 5호기) 및 1~3귀신 워크트리 통합 동기화(v{core_ver})가 완료되었습니다!")
 
 if __name__ == "__main__":
     main()
