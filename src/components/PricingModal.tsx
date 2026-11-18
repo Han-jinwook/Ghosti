@@ -1697,7 +1697,10 @@ export const VideoScenePreviewModal: React.FC = () => {
             </div>
 
             {ocrLines.length > 0 && (
-              <div className="max-h-44 overflow-y-auto rounded-xl bg-black/70 border border-white/10 p-2.5 flex flex-col gap-1.5">
+              <div
+                data-keep-dark="true"
+                className="max-h-44 overflow-y-auto rounded-xl bg-black/75 border border-white/15 p-2.5 flex flex-col gap-1.5"
+              >
                 {ocrLines.map((ln, idx) => (
                   <button
                     key={`${ln.timestamp}_${idx}`}

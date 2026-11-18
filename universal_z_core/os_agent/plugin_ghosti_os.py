@@ -2492,7 +2492,7 @@ _VIDEO_STREAM_CACHE_DIR = MERLIN_DIR / "video_stream_cache"
 _VIDEO_STREAM_INFLIGHT: Dict[str, threading.Event] = {}
 _VIDEO_STREAM_LOCK = threading.Lock()
 _VIDEO_OCR_CACHE_FILE = MERLIN_DIR / "video_scene_ocr_cache_v2.json"
-_VIDEO_OCR_SCHEMA_VER = 8
+_VIDEO_OCR_SCHEMA_VER = 9
 _VIDEO_OCR_LOCK = threading.Lock()
 _VIDEO_OCR_BG_RUNNING = False
 _FFMPEG_EXE_CACHE: str | None = ""
@@ -2816,6 +2816,7 @@ _VIDEO_OCR_JITTER_CORRECTIONS: List[tuple[re.Pattern[str], str]] = [
     (re.compile(r"급식\s*배를"), "급식 배틀"),
     (re.compile(r"내\s*귀즈"), "내 퀴즈"),
     (re.compile(r"G00이e"), "Google"),
+    (re.compile(r"(?:^|\b)시\s*분석(?=$|\s)"), "AI 분석"),
     (re.compile(r"습습습습습"), "★★★★★"),
 ]
 
@@ -3353,7 +3354,7 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
                 "foreach ($s in ($args[1] -split ',')) {\n"
                 "    try {\n"
                 "        $ts = [TimeSpan]::FromSeconds([double]$s)\n"
-                "        $thumb = Await ($comp.GetThumbnailAsync($ts, 960, 540, [Windows.Media.Editing.VideoFramePrecision]::NearestFrame)) ([Windows.Graphics.Imaging.ImageStream])\n"
+                "        $thumb = Await ($comp.GetThumbnailAsync($ts, 0, 0, [Windows.Media.Editing.VideoFramePrecision]::NearestFrame)) ([Windows.Graphics.Imaging.ImageStream])\n"
                 "        $dec = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($thumb)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
                 "        $bmp = Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
                 "        $res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])\n"
