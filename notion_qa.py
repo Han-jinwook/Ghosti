@@ -621,8 +621,8 @@ def find_inline_target_block_id(
     return None
 
 
-MAX_QA_TODOS_PER_CARD: int = 3
-MAX_QA_TODOS_LOGIC_WALKTHROUGH: int = 5
+MAX_QA_TODOS_PER_CARD: int = 2
+MAX_QA_TODOS_LOGIC_WALKTHROUGH: int = 2
 _BANNED_DUMMY_RULE_PHRASES = (
     "내부 설계 규칙대로 정확하고 안전하게",
     "정상 작동하는지 확인합니다",
