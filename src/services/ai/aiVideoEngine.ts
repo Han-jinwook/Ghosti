@@ -43,6 +43,18 @@ function normalizeSampleVideoFrameUrl(url?: string): string {
   return url;
 }
 
+function normalizeSampleVideoFileUrl(url?: string, fallbackFileName?: string): string {
+  const raw = String(url || '').trim();
+  if (raw.includes('/__photos/file?p=')) {
+    const fn = decodeURIComponent(raw.split('p=').pop() || fallbackFileName || '').trim();
+    return fn ? `/poc/results/videos/${fn}` : '';
+  }
+  if (!raw && fallbackFileName) {
+    return `/poc/results/videos/${fallbackFileName}`;
+  }
+  return raw;
+}
+
 const BUNDLED_SAMPLE_VIDEO_ENHANCEMENTS: Record<
   string,
   {
@@ -181,17 +193,74 @@ const BUNDLED_SAMPLE_VIDEO_ENHANCEMENTS: Record<
 
 export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
   {
+    id: 'vid_showcase_ghosti_scene_jump',
+    videoFileName: 'ghosti_short_sc552_1793284451.mp4',
+    title: '아기 첫 걸음마 장면 & 화면 속 자막 글자 1초 소환 시연 (음성+자막)',
+    keyframePhotoId: 'ghosti_short_sc552_1793284451.mp4',
+    thumbUrl: '/poc/results/video_frames/ghosti_short_sc552_t00.jpg',
+    videoUrl: '/showroom/shorts/ghosti_short_sc552_1793284451.mp4',
+    date: '2026.11.06 14:20',
+    durationText: '00:33',
+    durationSec: 33,
+    matchedSeekSec: 0,
+    matchedTimestamp: '00:00',
+    matchedFrameCaption:
+      '수백 개의 동영상 중 원하는 장면으로 1초 만에 점프하고 화면 속 자막 글자를 텍스트로 바로 뽑아내는 실제 시연 영상입니다.',
+    locationKo: '귀신검색 · 동영상 장면·글자 1초 소환',
+    sceneDescription:
+      '동영상 수백 개를 일일이 돌려보지 않고 아기 첫 걸음마 장면으로 1초 만에 이동하며 화면 속 한글 자막까지 깔끔하게 추출하는 시연 영상입니다.',
+    keywords: [
+      '아기',
+      '걸음마',
+      '첫걸음마',
+      '자막',
+      '글자',
+      '동영상',
+      '장면',
+      '점프',
+      '소환',
+      '귀신검색',
+      '가족',
+      '추억',
+    ],
+    resolution: '1080x1920 (음성 + 화면 한글 자막 수록)',
+    sizeMB: 13.7,
+    hasScreenOcrText: true,
+    timelineFrames: [
+      {
+        frameId: 'vid_sc552_f00',
+        timeSec: 0,
+        timestampText: '00:00',
+        phaseLabel: '오프닝 · 동영상 수백 개 탐색 고민',
+        sceneCaption: '영상이 수백 개인데 일일이 재생해서 탐색바를 넘기다 보면 몇 시간이 훌쩍 날아갑니다.',
+        keywords: ['동영상', '탐색', '아기', '걸음마'],
+        tags: ['#동영상장면검색', '#귀신검색'],
+        thumbUrl: '/poc/results/video_frames/ghosti_short_sc552_t00.jpg',
+      },
+      {
+        frameId: 'vid_sc552_f10',
+        timeSec: 10,
+        timestampText: '00:10',
+        phaseLabel: '아기 첫 걸음마 장면 1초 점프 & 글자 추출',
+        sceneCaption: '아기 걸음마만 입력하면 찾던 장면으로 바로 점프하고 화면 속 글자까지 텍스트로 뽑아냅니다.',
+        keywords: ['아기', '걸음마', '첫걸음마', '글자', '자막', '추출'],
+        tags: ['#1초점프재생', '#화면글자뽑기'],
+        thumbUrl: '/poc/results/video_frames/ghosti_short_sc552_t00.jpg',
+      },
+    ],
+  },
+  {
     id: 'vid_showcase_meeting_sales',
     videoFileName: '20260918_202442.mp4',
     title: '전략 회의실 화이트보드 판서 및 내년 매출 목표 달성 축하 브리핑',
     keyframePhotoId: '20260918_202442.mp4',
     thumbUrl: '/poc/results/video_frames/20260918_202442_t00.jpg',
-    videoUrl: '/__photos/file?p=20260918_202442.mp4',
+    videoUrl: '/poc/results/videos/20260918_202442.mp4',
     date: '2026.09.18 20:24',
-    durationText: '01:30',
-    durationSec: 90,
-    matchedSeekSec: 23,
-    matchedTimestamp: '00:23',
+    durationText: '00:18',
+    durationSec: 18,
+    matchedSeekSec: 8,
+    matchedTimestamp: '00:08',
     matchedFrameCaption:
       '회의실에서 화이트보드에 판서하며 “내년 매출 목표 200% 달성” 전략을 설명하는 핵심 발언 구간입니다. | 💬 음성 대사: “내년 매출 목표는 올해 대비 2배 성장입니다!”',
     locationKo: '본사 비전 회의실 · 세미나홀',
@@ -231,8 +300,9 @@ export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
       '바닷가',
       '걷는',
     ],
-    resolution: '1920x1080 (음성 대사 STT + 비전 타임라인 해부)',
-    sizeMB: 28.4,
+    resolution: '540x960 (음성 대사 STT + 비전 타임라인 해부)',
+    sizeMB: 0.9,
+    hasScreenOcrText: true,
     timelineFrames: [
       {
         frameId: 'vid_showcase_f00',
@@ -247,8 +317,8 @@ export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
       },
       {
         frameId: 'vid_showcase_f12',
-        timeSec: 12,
-        timestampText: '00:12',
+        timeSec: 4,
+        timestampText: '00:04',
         phaseLabel: '골프 스윙 피니시 & 야외 활동',
         sceneCaption:
           '필드 위에서 깔끔한 골프 스윙 피니시 자세를 유지하고 아이가 울면서 웃는 귀여운 순간이 이어집니다. | 💬 음성 대사: “나이스 샷! 골프 스윙 피니시 자세 완벽하네!”',
@@ -258,8 +328,8 @@ export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
       },
       {
         frameId: 'vid_showcase_f23',
-        timeSec: 23,
-        timestampText: '00:23',
+        timeSec: 8,
+        timestampText: '00:08',
         phaseLabel: '회의실 판서 & 매출 목표 대사',
         sceneCaption:
           '회의실에서 화이트보드에 판서하며 “내년 매출 목표” 핵심 수치를 발표하는 브리핑 장면입니다. | 💬 음성 대사: “우리 팀의 내년 매출 목표는 50억 달성입니다!”',
@@ -269,8 +339,8 @@ export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
       },
       {
         frameId: 'vid_showcase_f45',
-        timeSec: 45,
-        timestampText: '00:45',
+        timeSec: 13,
+        timestampText: '00:13',
         phaseLabel: '생일 케이크 & 박수 환호',
         sceneCaption:
           '생일 케이크 촛불을 부는 장면 직후 다 함께 박수 치며 환호하는 순간과 “축하합니다!” 외치는 음성이 선명하게 포착되었습니다. | 💬 음성 대사: “축하합니다! 생일 케이크 촛불 불어보세요, 박수!”',
@@ -800,6 +870,17 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
     }
 
     const merged = new Map<string, VideoSceneItem>();
+    // 쇼케이스 실연 영상(음성+자막 시연 포함)을 먼저 배치하여 모바일·웹 체험 시 첫 카드부터 즉시 생생한 재생과 화면 글자 추출을 경험하도록 구성
+    for (const showcaseVid of BUNDLED_SHOWCASE_VIDEO_ITEMS) {
+      if (!merged.has(showcaseVid.videoFileName)) {
+        merged.set(showcaseVid.videoFileName, {
+          ...showcaseVid,
+          videoUrl: canProbeLocal
+            ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(showcaseVid.videoFileName)}`)
+            : normalizeSampleVideoFileUrl(showcaseVid.videoUrl, showcaseVid.videoFileName),
+        });
+      }
+    }
     for (const v of staticVideoByName.values()) {
       if (v && v.videoFileName) {
           const enh = BUNDLED_SAMPLE_VIDEO_ENHANCEMENTS[v.videoFileName];
@@ -832,20 +913,11 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
             matchedTimestamp: cleanVideoTimestampLabel(v.matchedTimestamp),
             thumbUrl: normalizeSampleVideoFrameUrl(v.thumbUrl),
             timelineFrames: enrichedFrames,
+            hasScreenOcrText: true,
             videoUrl: canProbeLocal
               ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(v.videoFileName)}`)
-              : v.videoUrl || '',
+              : normalizeSampleVideoFileUrl(v.videoUrl, v.videoFileName),
           });
-      }
-    }
-    for (const showcaseVid of BUNDLED_SHOWCASE_VIDEO_ITEMS) {
-      if (!merged.has(showcaseVid.videoFileName)) {
-        merged.set(showcaseVid.videoFileName, {
-          ...showcaseVid,
-          videoUrl: canProbeLocal
-            ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(showcaseVid.videoFileName)}`)
-            : showcaseVid.videoUrl || '',
-        });
       }
     }
     if (zRes.status === 'fulfilled' && zRes.value.ok) {
@@ -2285,6 +2357,7 @@ export async function extractVideoScreenTextOnDemand(
   const isRealVideoSource =
     Boolean(vid.videoUrl) &&
     (vid.videoUrl!.startsWith('blob:') ||
+      vid.videoUrl!.startsWith('/') ||
       vid.videoUrl!.startsWith('http://127.0.0.1') ||
       vid.videoUrl!.startsWith('http://localhost') ||
       Boolean(vid.videoFileName));

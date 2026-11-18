@@ -798,12 +798,23 @@ export const createSearchSlice: StateCreator<
       /(?:사진|셀카|이미지|풍경|인물컷|스냅)/.test(query) &&
       !/문서|서류|파일|계약|영수증|전표|엑셀|시트|글자|동영상|영상/.test(query);
 
+    const isPureBrowseVideoIntent =
+      /^(?:내\s*컴퓨터\s*|내\s*폰\s*|전체\s*|모든\s*|샘플\s*)?(?:동영상|영상)(?:들)?(?:\s*(?:찾아\s*줘|보여\s*줘|열어\s*줘|틀어\s*줘|목록|보기))?[!?.~]*$/i.test(
+        query.trim()
+      );
+    const isPureBrowseDocIntent =
+      /^(?:내\s*컴퓨터\s*|내\s*폰\s*|전체\s*|모든\s*|샘플\s*)?(?:문서|서류)(?:들)?(?:\s*(?:찾아\s*줘|보여\s*줘|열어\s*줘|목록|보기))?[!?.~]*$/i.test(
+        query.trim()
+      );
+
     // [통합 3-Track 고속 검색] 사진·문서 매칭을 즉시 수행한 뒤, 일치 사진 세션 정보를 결합해 동영상을 무블로킹(0.1초) 평가
     const [docMatches, photoSearchOut] = await Promise.all([
       isExplicitPhotoOnlyQuery || sharedMode
         ? Promise.resolve([])
+        : isPureBrowseDocIntent
+        ? Promise.resolve(localDocuments)
         : searchLocalDocumentFilesAsync(cleanedSearchQuery || query, localDocuments),
-      cleanedSearchQuery
+      cleanedSearchQuery && !isPureBrowseVideoIntent && !isPureBrowseDocIntent
         ? executeTextSearch(cleanedSearchQuery, photosForSearch, 'text-direct')
         : Promise.resolve({ results: [], embedMs: 0, searchMs: 0 }),
     ]);
@@ -812,6 +823,12 @@ export const createSearchSlice: StateCreator<
     const videoMatches =
       isExplicitPhotoOnlyQuery || sharedMode
         ? []
+        : isPureBrowseVideoIntent
+        ? videoSceneItems.map((v) => ({
+            ...v,
+            matchedSeekSec: 0,
+            matchedTimestamp: '00:00',
+          }))
         : await searchVideoSceneItemsAsync(
             cleanedSearchQuery || query,
             videoSceneItems,

@@ -1206,22 +1206,13 @@ export const LocalDocPreviewModal: React.FC = () => {
   return (
     <div
       onClick={handleCloseModal}
-      className="fixed inset-0 z-[105] bg-black/80 backdrop-blur-xl flex items-start sm:items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
+      className="fixed inset-0 z-[105] bg-black/80 backdrop-blur-xl flex items-center justify-center px-3 sm:px-4 pt-safe pb-safe"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl max-h-[90dvh] overflow-y-auto rounded-3xl bg-surface-container-low border border-primary-container/50 p-4 sm:p-6 md:p-7 shadow-2xl flex flex-col gap-3.5 sm:gap-4 my-auto"
+        className="w-full max-w-2xl max-h-full sm:max-h-[88dvh] overflow-hidden rounded-3xl bg-surface-container-low border border-primary-container/50 p-4 sm:p-6 md:p-7 shadow-2xl flex flex-col gap-3 sm:gap-4"
       >
-        {selectedDocModal.matchType === 'SIMILAR' && (
-          <div className="px-3.5 py-2.5 rounded-2xl bg-amber-500/15 border border-amber-400/50 text-amber-200 font-label-md text-[12.5px] sm:text-[13px] font-extrabold flex items-center gap-2">
-            <span>
-              {selectedDocModal.similarityNoticeKo ||
-                '💡 검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다!'}
-            </span>
-          </div>
-        )}
-
-        <div className="flex items-start justify-between gap-3 sticky top-0 z-10 bg-surface-container-low/95 backdrop-blur-md pb-2 border-b border-outline-variant/20">
+        <div className="flex items-start justify-between gap-3 shrink-0 pb-2 border-b border-outline-variant/20">
           <div className="flex flex-col gap-1 min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="px-2 py-0.5 rounded-md bg-primary-container text-on-primary-container font-label-mono text-[10.5px] font-black">
@@ -1234,7 +1225,7 @@ export const LocalDocPreviewModal: React.FC = () => {
                 • {selectedDocModal.deviceSource}
               </span>
             </div>
-            <h3 className="font-headline-sm text-[17px] sm:text-[19px] text-on-surface font-extrabold mt-0.5 break-words">
+            <h3 className="font-headline-sm text-[16.5px] sm:text-[19px] text-on-surface font-extrabold mt-0.5 break-words">
               {renderHighlightedDocText(
                 selectedDocModal.title,
                 effectiveQuery,
@@ -1251,38 +1242,49 @@ export const LocalDocPreviewModal: React.FC = () => {
             type="button"
             onClick={handleCloseModal}
             aria-label="닫기"
-            className="w-9 h-9 rounded-full bg-surface-container-highest hover:bg-surface-bright flex items-center justify-center text-on-surface shrink-0 cursor-pointer"
+            className="w-10 h-10 rounded-full bg-surface-container-highest hover:bg-surface-bright border border-outline-variant/40 flex items-center justify-center text-on-surface shrink-0 cursor-pointer shadow-sm"
           >
-            <span className="material-symbols-outlined text-[18px]">close</span>
+            <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
 
-        <div className="p-3.5 sm:p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 flex flex-col gap-2 max-h-[45dvh] overflow-y-auto">
-          <div className="flex items-center justify-between gap-2">
-            <span className="font-label-mono text-[11px] text-primary-container font-bold">
-              🔍 로컬 문서 본문 미리보기 (검색어 노란색 하이라이트 • 1초 복사 지원)
-            </span>
-          </div>
-          <p className="font-body-md text-[13.5px] sm:text-[14px] text-on-surface leading-relaxed whitespace-pre-wrap break-words">
-            {renderHighlightedDocText(
-              selectedDocModal.extractedText,
-              effectiveQuery,
-              selectedDocModal.keywords.slice(0, 4)
-            )}
-          </p>
-          <div className="flex flex-wrap gap-1.5 pt-2">
-            {selectedDocModal.keywords.map((kw) => (
-              <span
-                key={kw}
-                className="px-2.5 py-0.5 rounded-full bg-primary-container/15 text-primary-container font-label-sm text-[11px] font-bold"
-              >
-                #{kw}
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pr-0.5">
+          {selectedDocModal.matchType === 'SIMILAR' && (
+            <div className="px-3.5 py-2.5 rounded-2xl bg-amber-500/15 border border-amber-400/50 text-amber-200 font-label-md text-[12.5px] sm:text-[13px] font-extrabold flex items-center gap-2 shrink-0">
+              <span>
+                {selectedDocModal.similarityNoticeKo ||
+                  '💡 검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다!'}
               </span>
-            ))}
+            </div>
+          )}
+
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 flex flex-col gap-2">
+            <div className="flex items-center justify-between gap-2">
+              <span className="font-label-mono text-[11px] text-primary-container font-bold">
+                🔍 로컬 문서 본문 미리보기 (검색어 노란색 하이라이트 • 1초 복사 지원)
+              </span>
+            </div>
+            <p className="font-body-md text-[13.5px] sm:text-[14px] text-on-surface leading-relaxed whitespace-pre-wrap break-words">
+              {renderHighlightedDocText(
+                selectedDocModal.extractedText,
+                effectiveQuery,
+                selectedDocModal.keywords.slice(0, 4)
+              )}
+            </p>
+            <div className="flex flex-wrap gap-1.5 pt-2">
+              {selectedDocModal.keywords.map((kw) => (
+                <span
+                  key={kw}
+                  className="px-2.5 py-0.5 rounded-full bg-primary-container/15 text-primary-container font-label-sm text-[11px] font-bold"
+                >
+                  #{kw}
+                </span>
+              ))}
+            </div>
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-outline-variant/20 sticky bottom-0 bg-surface-container-low/95 backdrop-blur-md">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-outline-variant/20 shrink-0 bg-surface-container-low">
           {isMobileVoiceEnvironment() && (
             <div className="flex flex-wrap items-center gap-1.5">
               <VoiceActorControlPill fallbackReplayText={fallbackDocVoiceText} compact />
@@ -1395,6 +1397,8 @@ export const VideoScenePreviewModal: React.FC = () => {
   const triedTranscodeFallbackRef = useRef<boolean>(false);
   const [resolvedVideoSrc, setResolvedVideoSrc] = useState<string>('');
   const [videoPlaybackError, setVideoPlaybackError] = useState<boolean>(false);
+  const [isPortraitVideo, setIsPortraitVideo] = useState<boolean>(false);
+  const [isVideoPlaying, setIsVideoPlaying] = useState<boolean>(false);
   const [ocrExtracting, setOcrExtracting] = useState<boolean>(false);
   const [ocrPanelOpen, setOcrPanelOpen] = useState<boolean>(false);
   const [ocrLines, setOcrLines] = useState<VideoOcrLineItem[]>([]);
@@ -1435,6 +1439,8 @@ export const VideoScenePreviewModal: React.FC = () => {
     if (!selectedVideoModal) {
       setResolvedVideoSrc('');
       setVideoPlaybackError(false);
+      setIsPortraitVideo(false);
+      setIsVideoPlaying(false);
       setOcrPanelOpen(false);
       setOcrLines([]);
       setOcrFullText('');
@@ -1442,6 +1448,9 @@ export const VideoScenePreviewModal: React.FC = () => {
       triedTranscodeFallbackRef.current = false;
       return;
     }
+    const resMatch = String(selectedVideoModal.resolution || '').match(/(\d+)\s*[xX×]\s*(\d+)/);
+    setIsPortraitVideo(Boolean(resMatch && Number(resMatch[2]) > Number(resMatch[1])));
+    setIsVideoPlaying(false);
     try {
       const autoVidId = sessionStorage.getItem('ghosti_auto_extract_video_ocr');
       if (autoVidId && autoVidId === selectedVideoModal.id) {
@@ -1581,207 +1590,234 @@ export const VideoScenePreviewModal: React.FC = () => {
   return (
     <div
       onClick={() => setSelectedVideoModal(null)}
-      className="fixed inset-0 z-[105] bg-black/85 backdrop-blur-xl flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
+      className="fixed inset-0 z-[105] bg-black/85 backdrop-blur-xl flex items-center justify-center px-3 sm:px-4 pt-safe pb-safe"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-4xl max-h-[90dvh] overflow-y-auto rounded-3xl bg-surface-container-low border-2 border-primary-container/60 p-4 sm:p-5 md:p-7 shadow-[0_0_64px_rgba(0,229,255,0.25)] flex flex-col gap-3.5 sm:gap-4 my-auto"
+        className="w-full max-w-4xl max-h-full sm:max-h-[90dvh] overflow-hidden rounded-3xl bg-surface-container-low border-2 border-primary-container/60 p-3.5 sm:p-5 md:p-6 shadow-[0_0_64px_rgba(0,229,255,0.25)] flex flex-col gap-3"
       >
-        <div className="flex items-start justify-between gap-3">
+        <div className="flex items-start justify-between gap-2.5 shrink-0 pb-2 border-b border-outline-variant/20">
           <div className="flex flex-col gap-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               {hasExecutedUserSearch && activeQuery && (
-                <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-on-primary-container font-label-mono text-[11px] font-black">
+                <span className="px-2 py-0.5 rounded-md bg-primary-container text-on-primary-container font-label-mono text-[10.5px] font-black">
                   {isWholeClipMatch ? '🎯 전 구간 일치 (00:00~)' : `🎯 ${cleanTs} 장면 포착`}
                 </span>
               )}
-              <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-label-mono text-[11px] font-bold">
-                {selectedVideoModal.resolution} • 전체 길이 {selectedVideoModal.durationText}
+              <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-label-mono text-[10.5px] font-bold">
+                전체 길이 {selectedVideoModal.durationText}
               </span>
-              <span className="font-label-mono text-[11px] text-on-surface-variant">
+              <span className="font-label-mono text-[10.5px] text-on-surface-variant truncate">
                 • 📍 {selectedVideoModal.locationKo}
               </span>
             </div>
-            <h3 className="font-headline-sm text-[18px] md:text-[20px] text-white font-extrabold mt-1">
+            <h3 className="font-headline-sm text-[16px] sm:text-[19px] text-white font-extrabold mt-0.5 leading-snug line-clamp-2">
               {renderHighlightedDocText(
                 selectedVideoModal.title,
                 effectiveQuery,
                 selectedVideoModal.keywords.slice(0, 4)
               )}
             </h3>
-            <p className="font-label-mono text-[11.5px] text-on-surface-variant">
-              원본 파일: {selectedVideoModal.videoFileName} • 촬영일시: {selectedVideoModal.date} • 용량:{' '}
+            <p className="font-label-mono text-[11px] text-on-surface-variant truncate">
+              원본: {selectedVideoModal.videoFileName} • {selectedVideoModal.date} •{' '}
               {selectedVideoModal.sizeMB} MB
             </p>
-            {selectedVideoModal.fullPath ? (
-              <p className="font-label-mono text-[11px] text-teal-400/90 mt-0.5 break-all">
-                📁 실제 PC 위치: {selectedVideoModal.fullPath}
-              </p>
-            ) : !String(selectedVideoModal.videoUrl || '').includes('127.0.0.1:5199') ? (
-              <p className="font-body-sm text-[11.5px] text-amber-400/90 mt-0.5">
-                ℹ️ 체험용 내장 샘플 영상입니다 (내 PC 폴더에는 저장되지 않음 · PC 연결 시 내 컴퓨터 동영상 위치가 표시됩니다)
-              </p>
-            ) : null}
           </div>
 
           <button
             type="button"
             onClick={() => setSelectedVideoModal(null)}
-            className="w-8 h-8 rounded-full bg-surface-container-highest flex items-center justify-center text-on-surface shrink-0 cursor-pointer"
+            aria-label="닫기"
+            className="w-10 h-10 rounded-full bg-surface-container-highest hover:bg-surface-bright border border-outline-variant/40 flex items-center justify-center text-on-surface shrink-0 cursor-pointer shadow-sm"
           >
-            <span className="material-symbols-outlined text-[18px]">close</span>
+            <span className="material-symbols-outlined text-[20px]">close</span>
           </button>
         </div>
 
-        <div className="relative rounded-2xl overflow-hidden bg-black border border-primary-container/40 aspect-video flex items-center justify-center">
-          {resolvedVideoSrc && !videoPlaybackError ? (
-            <video
-              ref={videoRef}
-              src={resolvedVideoSrc}
-              poster={currentFrameThumbUrl}
-              controls
-              playsInline
-              autoPlay
-              preload="auto"
-              onError={() => {
-                if (!trySwitchToTranscodeStream()) {
-                  setVideoPlaybackError(true);
-                }
-              }}
-              onLoadedMetadata={(e) => {
-                const el = e.currentTarget;
-                // Windows 브라우저에서 HEVC(hvc1) 코덱 미지원으로 소리만 나고 화면(videoWidth===0)이 멈추는 현상 즉시 자동 전환!
-                if (el.videoWidth === 0 && trySwitchToTranscodeStream()) {
-                  return;
-                }
-                const realDur = Math.floor(el.duration);
-                if (realDur > 0 && Number.isFinite(realDur) && (!resolvedVideoSrc.includes('/__videos/stream') || !resolvedVideoSrc.includes('&t='))) {
-                  syncRealVideoDuration(selectedVideoModal.id, realDur);
-                }
-                applyPendingSeekOnce(el);
-              }}
-              className="w-full h-full object-contain"
-            />
-          ) : (
-            <img
-              src={currentFrameThumbUrl}
-              alt={selectedVideoModal.title}
-              className="w-full h-full object-contain"
-            />
-          )}
+        <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pr-0.5">
+          <div
+            className={`relative w-full shrink-0 rounded-2xl overflow-hidden bg-black border border-primary-container/40 flex items-center justify-center ${
+              isPortraitVideo
+                ? 'h-[44dvh] min-h-[260px] max-h-[440px] sm:h-[50dvh]'
+                : 'aspect-video min-h-[210px] sm:min-h-[340px]'
+            }`}
+          >
+            {resolvedVideoSrc && !videoPlaybackError ? (
+              <video
+                ref={videoRef}
+                src={resolvedVideoSrc}
+                poster={currentFrameThumbUrl}
+                controls
+                playsInline
+                autoPlay
+                preload="auto"
+                onPlay={() => setIsVideoPlaying(true)}
+                onPause={() => setIsVideoPlaying(false)}
+                onEnded={() => setIsVideoPlaying(false)}
+                onError={() => {
+                  if (!trySwitchToTranscodeStream()) {
+                    setVideoPlaybackError(true);
+                  }
+                }}
+                onLoadedMetadata={(e) => {
+                  const el = e.currentTarget;
+                  // Windows 브라우저에서 HEVC(hvc1) 코덱 미지원으로 소리만 나고 화면(videoWidth===0)이 멈추는 현상 즉시 자동 전환!
+                  if (el.videoWidth === 0 && trySwitchToTranscodeStream()) {
+                    return;
+                  }
+                  if (el.videoWidth > 0 && el.videoHeight > 0) {
+                    setIsPortraitVideo(el.videoHeight > el.videoWidth);
+                  }
+                  const realDur = Math.floor(el.duration);
+                  if (
+                    realDur > 0 &&
+                    Number.isFinite(realDur) &&
+                    (!resolvedVideoSrc.includes('/__videos/stream') || !resolvedVideoSrc.includes('&t='))
+                  ) {
+                    syncRealVideoDuration(selectedVideoModal.id, realDur);
+                  }
+                  applyPendingSeekOnce(el);
+                }}
+                className="w-full h-full object-contain"
+              />
+            ) : (
+              <img
+                src={currentFrameThumbUrl}
+                alt={selectedVideoModal.title}
+                onLoad={(e) => {
+                  const el = e.currentTarget;
+                  if (el.naturalWidth > 0 && el.naturalHeight > 0) {
+                    setIsPortraitVideo(el.naturalHeight > el.naturalWidth);
+                  }
+                }}
+                className="w-full h-full object-contain"
+              />
+            )}
+            {hasExecutedUserSearch && activeQuery && !isVideoPlaying && (
+              <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-primary-container/65 text-primary-container font-label-mono text-[11px] font-black pointer-events-none shadow-md">
+                {isWholeClipMatch ? '🎯 처음부터 바로 재생' : `🎯 ${cleanTs} 장면부터 재생`}
+              </div>
+            )}
+          </div>
+
+          {selectedVideoModal.fullPath ? (
+            <p className="font-label-mono text-[11px] text-teal-400/90 break-all px-0.5">
+              📁 실제 PC 위치: {selectedVideoModal.fullPath}
+            </p>
+          ) : !String(selectedVideoModal.videoUrl || '').startsWith('blob:') &&
+            !String(selectedVideoModal.videoUrl || '').includes('127.0.0.1:5199') ? (
+            <p className="font-body-sm text-[11.5px] text-amber-400/90 px-0.5">
+              ℹ️ 체험용 샘플 영상입니다 (내 컴퓨터 연결 또는 [📱 내 폰 영상 열기]로 실제 내 영상을 재생·추출할 수 있습니다)
+            </p>
+          ) : null}
+
           {hasExecutedUserSearch && activeQuery && (
-            <div className="absolute top-3 left-3 px-3 py-1 rounded-full bg-black/85 border border-primary-container/70 text-primary-container font-label-mono text-[11.5px] font-black pointer-events-none shadow-lg">
-              {isWholeClipMatch ? '🎯 처음부터 바로 재생 (전 구간 일치)' : `🎯 ${cleanTs} 장면부터 바로 재생`}
+            <div className="p-3 rounded-2xl bg-primary-container/10 border border-primary-container/45 flex flex-col gap-1 shrink-0">
+              <span className="font-label-mono text-[11px] text-primary-container font-black">
+                {isWholeClipMatch
+                  ? '🎯 포착 구간 기준 (00:00 처음부터 · 전 구간 일치):'
+                  : `🎯 찾으신 장면 (${cleanTs} 구간 포착):`}
+              </span>
+              <p className="font-body-md text-[13px] sm:text-[13.5px] text-white font-bold leading-relaxed">
+                {renderHighlightedDocText(
+                  selectedVideoModal.matchedFrameCaption,
+                  effectiveQuery,
+                  currentFrameObj?.keywords?.slice(0, 4) ?? []
+                )}
+              </p>
+            </div>
+          )}
+
+          {ocrPanelOpen && (
+            <div className="p-3.5 rounded-2xl bg-zinc-950/95 border border-teal-400/50 flex flex-col gap-2.5 shrink-0">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex items-center gap-2">
+                  <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 font-label-mono text-[11px] font-black">
+                    📝 영상 속 화면 글자 OCR 추출
+                  </span>
+                  <span className="text-[12px] text-zinc-300 font-bold">
+                    {ocrExtracting
+                      ? '화면 프레임 속 자막·문서·칠판 글자를 읽고 있어요...'
+                      : ocrLines.length > 0
+                        ? `총 ${ocrLines.length}구간 텍스트 추출 완료 ${ocrCopied ? '· 📋 클립보드 자동 복사됨!' : ''}`
+                        : '이 영상 구간에서 뚜렷한 화면 글자가 감지되지 않았어요.'}
+                  </span>
+                </div>
+                {ocrFullText && (
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        try {
+                          await navigator.clipboard?.writeText(ocrFullText);
+                          setOcrCopied(true);
+                        } catch {
+                          /* ignore */
+                        }
+                      }}
+                      className="px-3 py-1 rounded-lg bg-teal-400 hover:bg-teal-300 text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer"
+                    >
+                      {ocrCopied ? '✅ 전체 복사됨' : '📋 전체 텍스트 복사'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const blob = new Blob([ocrFullText], { type: 'text/plain;charset=utf-8' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `${selectedVideoModal.title || 'video'}_화면글자추출.txt`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                      className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
+                    >
+                      💾 .txt 저장
+                    </button>
+                  </div>
+                )}
+              </div>
+
+              {ocrLines.length > 0 && (
+                <div
+                  data-keep-dark="true"
+                  className="max-h-44 overflow-y-auto rounded-xl bg-black/75 border border-white/15 p-2.5 flex flex-col gap-1.5"
+                >
+                  {ocrLines.map((ln, idx) => (
+                    <button
+                      key={`${ln.timestamp}_${idx}`}
+                      type="button"
+                      onClick={() => {
+                        if (videoRef.current && Number.isFinite(videoRef.current.duration)) {
+                          videoRef.current.currentTime = Math.min(
+                            ln.timeSec,
+                            Math.max(0, videoRef.current.duration - 0.3)
+                          );
+                          void videoRef.current.play().catch(() => {});
+                        }
+                      }}
+                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/10 flex items-start gap-2 transition cursor-pointer"
+                    >
+                      <span className="px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 font-label-mono text-[11px] font-bold shrink-0">
+                        ▶ {ln.timestamp}
+                      </span>
+                      <span className="text-[12.5px] text-zinc-100 font-medium leading-snug break-all">
+                        {ln.text}
+                      </span>
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           )}
         </div>
 
-        {hasExecutedUserSearch && activeQuery && (
-          <div className="p-3.5 rounded-2xl bg-primary-container/10 border border-primary-container/45 flex flex-col gap-1">
-            <span className="font-label-mono text-[11px] text-primary-container font-black">
-              {isWholeClipMatch
-                ? '🎯 포착 구간 기준 (00:00 처음부터 · 전 구간 일치):'
-                : `🎯 찾으신 장면 (${cleanTs} 구간 포착):`}
-            </span>
-            <p className="font-body-md text-[13.5px] text-white font-bold leading-relaxed">
-              {renderHighlightedDocText(
-                selectedVideoModal.matchedFrameCaption,
-                effectiveQuery,
-                currentFrameObj?.keywords?.slice(0, 4) ?? []
-              )}
-            </p>
-          </div>
-        )}
-
-        {ocrPanelOpen && (
-          <div className="p-4 rounded-2xl bg-zinc-950/95 border border-teal-400/50 flex flex-col gap-2.5">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 font-label-mono text-[11px] font-black">
-                  📝 영상 속 화면 글자 OCR 추출
-                </span>
-                <span className="text-[12px] text-zinc-300 font-bold">
-                  {ocrExtracting
-                    ? '화면 프레임 속 자막·문서·칠판 글자를 읽고 있어요...'
-                    : ocrLines.length > 0
-                      ? `총 ${ocrLines.length}구간 텍스트 추출 완료 ${ocrCopied ? '· 📋 클립보드 자동 복사됨!' : ''}`
-                      : '이 영상 구간에서 뚜렷한 화면 글자가 감지되지 않았어요.'}
-                </span>
-              </div>
-              {ocrFullText && (
-                <div className="flex items-center gap-1.5">
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      try {
-                        await navigator.clipboard?.writeText(ocrFullText);
-                        setOcrCopied(true);
-                      } catch {
-                        /* ignore */
-                      }
-                    }}
-                    className="px-3 py-1 rounded-lg bg-teal-400 hover:bg-teal-300 text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer"
-                  >
-                    {ocrCopied ? '✅ 전체 복사됨' : '📋 전체 텍스트 복사'}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const blob = new Blob([ocrFullText], { type: 'text/plain;charset=utf-8' });
-                      const url = URL.createObjectURL(blob);
-                      const a = document.createElement('a');
-                      a.href = url;
-                      a.download = `${selectedVideoModal.title || 'video'}_화면글자추출.txt`;
-                      a.click();
-                      URL.revokeObjectURL(url);
-                    }}
-                    className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
-                  >
-                    💾 .txt 저장
-                  </button>
-                </div>
-              )}
-            </div>
-
-            {ocrLines.length > 0 && (
-              <div
-                data-keep-dark="true"
-                className="max-h-44 overflow-y-auto rounded-xl bg-black/75 border border-white/15 p-2.5 flex flex-col gap-1.5"
-              >
-                {ocrLines.map((ln, idx) => (
-                  <button
-                    key={`${ln.timestamp}_${idx}`}
-                    type="button"
-                    onClick={() => {
-                      if (videoRef.current && Number.isFinite(videoRef.current.duration)) {
-                        videoRef.current.currentTime = Math.min(
-                          ln.timeSec,
-                          Math.max(0, videoRef.current.duration - 0.3)
-                        );
-                        void videoRef.current.play().catch(() => {});
-                      }
-                    }}
-                    className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/10 flex items-start gap-2 transition cursor-pointer"
-                  >
-                    <span className="px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 font-label-mono text-[11px] font-bold shrink-0">
-                      ▶ {ln.timestamp}
-                    </span>
-                    <span className="text-[12.5px] text-zinc-100 font-medium leading-snug break-all">
-                      {ln.text}
-                    </span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-        )}
-
-        <div className="flex flex-wrap items-center justify-end gap-2.5 pt-1">
+        <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-outline-variant/20 shrink-0">
           <button
             type="button"
             disabled={ocrExtracting}
             onClick={() => void runVideoTextExtraction(selectedVideoModal)}
-            className="px-4 py-2.5 rounded-xl bg-teal-400 hover:bg-teal-300 disabled:opacity-50 text-zinc-950 font-label-md text-[13px] font-black flex items-center gap-1.5 cursor-pointer shadow-md"
+            className="px-3.5 sm:px-4 py-2.5 rounded-xl bg-teal-400 hover:bg-teal-300 disabled:opacity-50 text-zinc-950 font-label-md text-[12.5px] sm:text-[13px] font-black flex items-center gap-1.5 cursor-pointer shadow-md"
           >
             <span>📝 {ocrExtracting ? '글자 뽑는 중...' : '영상 속 글자 텍스트로 뽑기'}</span>
           </button>
@@ -1794,7 +1830,7 @@ export const VideoScenePreviewModal: React.FC = () => {
               }
               if (!String(selectedVideoModal.videoUrl || '').includes('127.0.0.1:5199')) {
                 showToast(
-                  'ℹ️ 이 영상은 체험용 내장 샘플이라 내 PC 폴더에는 저장되어 있지 않습니다. 내 PC 연결 시 실제 동영상 위치를 바로 열어드립니다.'
+                  'ℹ️ 이 영상은 체험용 샘플이라 내 PC 폴더에는 저장되어 있지 않습니다. 내 PC 연결 시 실제 동영상 위치를 바로 열어드립니다.'
                 );
                 return;
               }
@@ -1809,7 +1845,7 @@ export const VideoScenePreviewModal: React.FC = () => {
           <button
             type="button"
             onClick={() => setSelectedVideoModal(null)}
-            className="px-4 py-2.5 rounded-xl bg-surface-container-high text-on-surface font-label-md text-[13px] font-bold cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-surface-container-high text-on-surface font-label-md text-[12.5px] sm:text-[13px] font-bold cursor-pointer"
           >
             닫기
           </button>

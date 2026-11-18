@@ -58,6 +58,14 @@
   scrollbar-width: none;
 }
 
+/* 모달 오버레이(.fixed)에서 p-3 등 유틸리티 클래스가 노치·시계·하단 홈바 Safe-Area 여백을 덮어쓰지 못하도록 최상위 우선순위 보장 */
+.fixed.pt-safe {
+  padding-top: max(calc(env(safe-area-inset-top, 0px) + 14px), 22px);
+}
+.fixed.pb-safe {
+  padding-bottom: max(calc(env(safe-area-inset-bottom, 0px) + 14px), 22px);
+}
+
 @keyframes floatSlow {
   0%,
   100% {

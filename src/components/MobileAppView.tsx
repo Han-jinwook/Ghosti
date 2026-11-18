@@ -5,7 +5,7 @@ import { GhostiTopRightHubAnchor } from './GhostiHubInfraBridge';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
-import type { FamilyRoomId, GpuHelperTierId, LoungeType } from '../types/saysee';
+import type { FamilyRoomId, GpuHelperTierId, LoungeType, VideoSceneItem } from '../types/saysee';
 import {
   cleanVideoTimestampLabel,
   groupBurstSearchResults,
@@ -306,6 +306,141 @@ export const MobileAppView: React.FC = () => {
   const currentSubmenus = MOBILE_LOUNGE_SUBMENUS[activeLoungeType] || MOBILE_LOUNGE_SUBMENUS.personal;
   const isCurrentLoungeSubscribed = Boolean(subscribedLounges[activeLoungeType]);
 
+  const handleImportMobileVideos = async (fileList: FileList) => {
+    const files = Array.from(fileList).filter(
+      (f) => f.type.startsWith('video/') || /\.(mp4|mov|webm|mkv|m4v)$/i.test(f.name)
+    );
+    if (files.length === 0) return;
+
+    const probeVideoMeta = (blobUrl: string) =>
+      new Promise<{ durationSec: number; width: number; height: number; thumbDataUrl: string }>(
+        (resolve) => {
+          const v = document.createElement('video');
+          v.preload = 'auto';
+          v.muted = true;
+          v.playsInline = true;
+          let settled = false;
+          const finish = (res: {
+            durationSec: number;
+            width: number;
+            height: number;
+            thumbDataUrl: string;
+          }) => {
+            if (settled) return;
+            settled = true;
+            clearTimeout(timer);
+            try {
+              v.removeAttribute('src');
+              v.load();
+            } catch {
+              /* ignore */
+            }
+            resolve(res);
+          };
+          const timer = window.setTimeout(() => {
+            finish({ durationSec: 15, width: 1080, height: 1920, thumbDataUrl: '' });
+          }, 2500);
+          v.onloadeddata = () => {
+            const dur =
+              Number.isFinite(v.duration) && v.duration > 0 ? Math.max(1, Math.round(v.duration)) : 15;
+            const w = v.videoWidth || 1080;
+            const h = v.videoHeight || 1920;
+            const seekTo = Math.min(0.6, Math.max(0, (v.duration || 1) * 0.15));
+            const captureNow = () => {
+              let thumb = '';
+              try {
+                const scale = Math.min(1, 540 / Math.max(w, h));
+                const cw = Math.max(64, Math.round(w * scale));
+                const ch = Math.max(64, Math.round(h * scale));
+                const c = document.createElement('canvas');
+                c.width = cw;
+                c.height = ch;
+                const ctx = c.getContext('2d');
+                if (ctx) {
+                  ctx.drawImage(v, 0, 0, cw, ch);
+                  thumb = c.toDataURL('image/jpeg', 0.82);
+                }
+              } catch {
+                /* ignore */
+              }
+              finish({ durationSec: dur, width: w, height: h, thumbDataUrl: thumb });
+            };
+            if (seekTo > 0.05) {
+              v.onseeked = captureNow;
+              try {
+                v.currentTime = seekTo;
+              } catch {
+                captureNow();
+              }
+            } else {
+              captureNow();
+            }
+          };
+          v.onerror = () => finish({ durationSec: 15, width: 1080, height: 1920, thumbDataUrl: '' });
+          v.src = blobUrl;
+        }
+      );
+
+    const newItems: VideoSceneItem[] = [];
+    for (const f of files) {
+      const blobUrl = URL.createObjectURL(f);
+      const meta = await probeVideoMeta(blobUrl);
+      const mm = String(Math.floor(meta.durationSec / 60)).padStart(2, '0');
+      const ss = String(meta.durationSec % 60).padStart(2, '0');
+      const durTxt = `${mm}:${ss}`;
+      const baseTitle = f.name.replace(/\.[^.]+$/, '');
+      const dateStr = new Date(f.lastModified || Date.now()).toLocaleString('ko-KR', {
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+        hour: '2-digit',
+        minute: '2-digit',
+      });
+      newItems.push({
+        id: `mobile_vid_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
+        videoFileName: f.name,
+        title: baseTitle,
+        keyframePhotoId: f.name,
+        thumbUrl: meta.thumbDataUrl,
+        videoUrl: blobUrl,
+        date: dateStr,
+        durationText: durTxt,
+        durationSec: meta.durationSec,
+        matchedSeekSec: 0,
+        matchedTimestamp: '00:00',
+        matchedFrameCaption: `내 스마트폰에서 불러온 동영상 (${f.name})`,
+        locationKo: '📱 내 스마트폰 갤러리',
+        sceneDescription:
+          '내 스마트폰에서 직접 불러온 동영상입니다. 카드를 터치해 재생하거나 [📝 글자 뽑기]로 영상 속 자막·칠판 글자를 바로 추출할 수 있습니다.',
+        keywords: [baseTitle, f.name, '내폰', '스마트폰', '동영상'],
+        resolution: `${meta.width}x${meta.height} (내 스마트폰 동영상)`,
+        sizeMB: Math.max(0.1, Number((f.size / 1048576).toFixed(1))),
+        timelineFrames: [
+          {
+            frameId: `mf_${Date.now()}_0`,
+            timeSec: 0,
+            timestampText: '00:00',
+            phaseLabel: '시작 구간',
+            sceneCaption: `${baseTitle} 시작 장면`,
+            keywords: [baseTitle],
+            tags: ['#내폰동영상'],
+            thumbUrl: meta.thumbDataUrl,
+          },
+        ],
+      });
+    }
+
+    const curAll = useSaySeeStore.getState().videoSceneItems;
+    const nextAll = [...newItems, ...curAll];
+    useSaySeeStore.setState({
+      videoSceneItems: nextAll,
+      matchedVideoScenes: nextAll,
+      searchSpace: 'video',
+      hasUserSelectedSearchTab: true,
+      lastQuarantineToast: `🎬 내 폰 동영상 ${newItems.length}개를 불러왔습니다! 카드를 눌러 재생하거나 [📝 글자 뽑기]를 눌러보세요.`,
+    });
+  };
+
   return (
     <div
       className={`bg-[#09090B] text-zinc-100 font-body-md flex flex-col min-h-screen min-h-dvh max-w-xl mx-auto relative shadow-2xl border-x border-white/10 ${
@@ -572,45 +707,79 @@ export const MobileAppView: React.FC = () => {
           {/* 1층: 통합 검색·음성 바 (업무 공유 S:는 자체 전용 문서 검색창이 있으므로 제외) */}
           {activeLoungeType !== 'work' && <VoiceHeroStage />}
 
-          {activeLoungeType === 'personal' && hasExecutedUserSearch && Boolean(activeQuery.trim()) && (
+          {activeLoungeType === 'personal' &&
+            ((hasExecutedUserSearch && Boolean(activeQuery.trim())) ||
+              searchSpace === 'video' ||
+              searchSpace === 'vault') && (
             <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-teal-500/15 border border-teal-400/50 text-teal-200 text-[12px] font-extrabold">
-              <span className="min-w-0 truncate">🔍 &ldquo;{activeQuery}&rdquo; 통합 검색 결과</span>
+              <span className="min-w-0 truncate">
+                {hasExecutedUserSearch && Boolean(activeQuery.trim())
+                  ? `🔍 “${activeQuery}” 통합 검색 결과`
+                  : searchSpace === 'video'
+                  ? `🎬 동영상 바로보기 (${matchedVideoScenes.length}개)`
+                  : `📁 문서·서류함 바로보기 (${matchedLocalDocs.length + matchedVaultPhotos.length}건)`}
+              </span>
               <button
                 type="button"
-                onClick={() =>
+                onClick={() => {
+                  setSearchSpace('gallery');
                   useSaySeeStore.setState({
                     activeQuery: '',
                     hasExecutedUserSearch: false,
                     hasUserSelectedSearchTab: false,
-                  })
-                }
+                  });
+                }}
                 className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-white border border-white/15 text-[11px] font-black shrink-0 cursor-pointer"
               >
-                ✕ 검색 닫고 비서 홈으로
+                ✕ 닫고 비서 홈으로
               </button>
             </div>
           )}
 
-          {/* 검색 결과 영역 (공유 사진방에서는 상시 노출, 귀신비서에서는 검색 실행 시 인플레이스 노출, 업무 공유는 WorkLoungeB2BHub 단독 노출) */}
+          {/* 검색 결과 영역 (공유 사진방에서는 상시 노출, 귀신비서에서는 검색 실행 시 또는 [동영상]/[문서] 탭 직접 선택 시 즉시 인플레이스 노출) */}
           {activeLoungeType !== 'work' &&
-            (activeLoungeType !== 'personal' || (hasExecutedUserSearch && Boolean(activeQuery.trim()))) && (
+            (activeLoungeType !== 'personal' ||
+              searchSpace === 'video' ||
+              searchSpace === 'vault' ||
+              (hasExecutedUserSearch && Boolean(activeQuery.trim()))) && (
           <div id="ghosti-search-results" className="scroll-mt-16">
             {searchSpace === 'video' ? (
               <section className="flex flex-col gap-2.5">
-                <div className="flex items-center justify-between px-0.5">
+                <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
                   <span className="font-headline-sm text-[14.5px] text-white font-bold">
                     {hasExecutedUserSearch && activeQuery
                       ? `🎬 “${activeQuery}” 장면 검색 결과 (${matchedVideoScenes.length}개)`
-                      : `🎬 전체 동영상 (${matchedVideoScenes.length}개)`}
+                      : zCoreBridge.isConnected
+                      ? `🎬 전체 동영상 (${matchedVideoScenes.length}개)`
+                      : `🎬 동영상 (${matchedVideoScenes.length}개 · 체험 샘플 포함)`}
                   </span>
-                  {matchedVideoScenes.length < videoSceneItems.length && (
-                    <button
-                      onClick={() => resetSearchSpaceToAll('video')}
-                      className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11px] font-bold"
-                    >
-                      🔄 {videoSceneItems.length}개 전체 보기
-                    </button>
-                  )}
+                  <div className="flex items-center gap-1.5">
+                    {!zCoreBridge.isConnected && (
+                      <label className="px-2.5 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/50 text-teal-200 font-label-sm text-[11px] font-extrabold cursor-pointer">
+                        📱 내 폰 영상 열기
+                        <input
+                          type="file"
+                          accept="video/*"
+                          multiple
+                          className="hidden"
+                          onChange={(e) => {
+                            if (e.target.files && e.target.files.length > 0) {
+                              void handleImportMobileVideos(e.target.files);
+                              e.target.value = '';
+                            }
+                          }}
+                        />
+                      </label>
+                    )}
+                    {matchedVideoScenes.length < videoSceneItems.length && (
+                      <button
+                        onClick={() => resetSearchSpaceToAll('video')}
+                        className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11px] font-bold"
+                      >
+                        🔄 {videoSceneItems.length}개 전체 보기
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* [처방 4] 모바일 스크롤 지옥 해방: 세로 나열 대신 좌우 스와이프 카드덱(Horizontal Snap Carousel)! */}
@@ -783,19 +952,11 @@ export const MobileAppView: React.FC = () => {
                               type="button"
                               onClick={(e) => {
                                 e.stopPropagation();
-                                if (isStoreAppMode || !zCoreBridge.isConnected) {
-                                  setSelectedDocModal(doc);
-                                  return;
-                                }
-                                void executeRealOsAction('open_file_search', doc.path || doc.fileName).then((res) => {
-                                  useSaySeeStore.setState({
-                                    lastQuarantineToast: res.summaryKo || `📂 [${doc.fileName}] 문서를 바로 열었습니다.`,
-                                  });
-                                });
+                                setSelectedDocModal(doc);
                               }}
                               className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-400/50 text-amber-300 font-label-sm text-[11px] font-extrabold cursor-pointer"
                             >
-                              {isStoreAppMode || !zCoreBridge.isConnected ? '📖 본문 바로 열기' : '🔍 이 문서 바로 열기'}
+                              📖 본문 바로 열기
                             </button>
                           </div>
                           <span className="text-primary-container text-[11px] font-bold">본문 →</span>
