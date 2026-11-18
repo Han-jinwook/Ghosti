@@ -65,6 +65,11 @@ export const App: React.FC = () => {
   const { ocrModalPhoto, setOcrModalPhoto } = useDashboardNavStore();
 
   // 뷰포트 크기·회전 변경 시 PC ↔ 모바일 레이아웃 실시간 반응형 동기화 (?ghostSearchWindow 제외)
+  const [isLandscapeCompact, setIsLandscapeCompact] = useState<boolean>(() =>
+    typeof window !== 'undefined'
+      ? window.innerWidth > window.innerHeight && window.innerHeight <= 540
+      : false
+  );
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const syncViewportLayout = () => {
@@ -72,6 +77,7 @@ export const App: React.FC = () => {
       if (useSaySeeStore.getState().layout !== next) {
         setLayout(next);
       }
+      setIsLandscapeCompact(window.innerWidth > window.innerHeight && window.innerHeight <= 540);
     };
     syncViewportLayout();
     window.addEventListener('resize', syncViewportLayout, { passive: true });
@@ -868,7 +874,7 @@ export const App: React.FC = () => {
           {lastUndoBatch && (
             <div
               className={`fixed ${
-                layout === 'mobile' && activeLoungeType !== 'personal'
+                layout === 'mobile' && activeLoungeType !== 'personal' && !isLandscapeCompact
                   ? 'bottom-20'
                   : 'bottom-6'
               } mb-safe left-1/2 -translate-x-1/2 z-[115] w-[94%] max-w-2xl px-4 sm:px-5 py-3 sm:py-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/95 via-[#072b35]/95 to-surface-container-highest/95 backdrop-blur-2xl border-2 border-emerald-400 text-white shadow-[0_0_40px_rgba(16,185,129,0.45)] flex flex-wrap items-center justify-between gap-2.5 sm:gap-3`}
@@ -906,7 +912,7 @@ export const App: React.FC = () => {
           {lastQuarantineToast && !lastUndoBatch && (
             <div
               className={`fixed ${
-                layout === 'mobile' && activeLoungeType !== 'personal'
+                layout === 'mobile' && activeLoungeType !== 'personal' && !isLandscapeCompact
                   ? 'bottom-20'
                   : 'bottom-6'
               } mb-safe left-1/2 -translate-x-1/2 z-[110] w-[92vw] max-w-xl px-4 sm:px-5 py-3.5 rounded-2xl bg-white dark:bg-zinc-900 border-2 border-teal-500 text-slate-900 dark:text-zinc-100 font-label-md text-[13px] font-extrabold shadow-[0_12px_32px_rgba(15,23,42,0.32)] flex items-start justify-between gap-2.5`}
@@ -939,9 +945,12 @@ export const App: React.FC = () => {
           aria-label="맨 위로 가기"
           title="맨 위로 가기"
           className={`fixed ${
-            viewMode === 'workspace' && layout === 'mobile' && activeLoungeType !== 'personal'
+            viewMode === 'workspace' &&
+            layout === 'mobile' &&
+            activeLoungeType !== 'personal' &&
+            !isLandscapeCompact
               ? 'bottom-20'
-              : 'bottom-6'
+              : 'bottom-4 sm:bottom-6'
           } mb-safe right-4 sm:right-5 z-[120] w-11 h-11 rounded-full bg-white hover:bg-slate-50 active:scale-95 text-slate-700 border border-slate-200/80 shadow-[0_6px_20px_rgba(15,23,42,0.16)] flex items-center justify-center transition-all cursor-pointer`}
         >
           <svg

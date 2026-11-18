@@ -259,6 +259,25 @@ export const MobileAppView: React.FC = () => {
 
   const [showPrivateSyncSection, setShowPrivateSyncSection] = useState(false);
   const [showPolicyAndStoreSection, setShowPolicyAndStoreSection] = useState(false);
+  const [isLandscapeCompact, setIsLandscapeCompact] = useState<boolean>(() =>
+    typeof window !== 'undefined'
+      ? window.innerWidth > window.innerHeight && window.innerHeight <= 540
+      : false
+  );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const syncLandscape = () => {
+      setIsLandscapeCompact(window.innerWidth > window.innerHeight && window.innerHeight <= 540);
+    };
+    syncLandscape();
+    window.addEventListener('resize', syncLandscape, { passive: true });
+    window.addEventListener('orientationchange', syncLandscape, { passive: true });
+    return () => {
+      window.removeEventListener('resize', syncLandscape);
+      window.removeEventListener('orientationchange', syncLandscape);
+    };
+  }, []);
 
   const myPassportCluster = useMemo(
     () => faceClusters.find((c) => c.clusterId === 'face_member_5') || faceClusters[0],
@@ -443,21 +462,23 @@ export const MobileAppView: React.FC = () => {
 
   return (
     <div
-      className={`bg-[#09090B] text-zinc-100 font-body-md flex flex-col min-h-screen min-h-dvh max-w-xl mx-auto relative shadow-2xl border-x border-white/10 ${
-        currentSubmenus.length > 0 ? 'pb-24' : 'pb-12'
+      className={`bg-[#09090B] text-zinc-100 font-body-md flex flex-col min-h-screen min-h-dvh mx-auto relative shadow-2xl border-x border-white/10 ${
+        isLandscapeCompact
+          ? 'w-full max-w-5xl pb-6'
+          : `max-w-xl ${currentSubmenus.length > 0 ? 'pb-24' : 'pb-12'}`
       }`}
     >
-      {/* 상단 2단 통합 헤더 (뭐먹지? 스타일): 1단(화이트 바 + 흑백 라인 아이콘 메인메뉴 캡슐) + 2단(이모지 없는 언더라인 서브메뉴 탭) */}
+      {/* 상단 통합 헤더: 스마트폰 가로(Landscape) 회전 시 1줄 초슬림 바(42px)로 자동 압축해 본문 가시 영역을 극대화 */}
       <header className="sticky top-0 inset-x-0 z-50 backdrop-blur-xl pt-safe">
-        <div
-          className={`px-3 py-2 flex flex-col gap-2 border-b transition-colors ${
-            themeMode === 'light'
-              ? 'bg-white/95 border-[#EAE8E1]'
-              : 'bg-[#09090B]/95 border-white/10'
-          }`}
-        >
-          <div className="flex items-center justify-between gap-1 flex-nowrap min-w-0">
-            <div className="flex items-center gap-1 shrink-0 min-w-0">
+        {isLandscapeCompact ? (
+          <div
+            className={`px-3 py-1 flex items-center justify-between gap-2 border-b transition-colors ${
+              themeMode === 'light'
+                ? 'bg-white/95 border-[#EAE8E1]'
+                : 'bg-[#09090B]/95 border-white/10'
+            }`}
+          >
+            <div className="flex items-center gap-1 shrink-0">
               <GhostiBrandLogo
                 size="mobile"
                 autoCycle={false}
@@ -472,12 +493,43 @@ export const MobileAppView: React.FC = () => {
                     hasUserSelectedSearchTab: false,
                   });
                 }}
-                className="shrink-0"
+                className="shrink-0 scale-90 origin-left"
               />
             </div>
 
-            {/* 우상단 심플 앵커: 가이드(모바일 웹 전용, 스토어 앱은 Anti-Steering 비노출) + 공유 아이콘 + 프로필(맨 우측) */}
-            <div className="flex items-center gap-1 shrink-0 ml-auto" aria-label="가이드 공유 및 프로필 영역">
+            <nav className="flex items-center justify-center gap-1 flex-1 max-w-md min-w-0">
+              {MAIN_LOUNGE_MENUS.map((menu) => {
+                const active = resolveMainMenuId(activeLoungeType) === menu.id;
+                return (
+                  <button
+                    key={menu.id}
+                    type="button"
+                    onClick={() => {
+                      if (active) return;
+                      setActiveLoungeType(menu.defaultLounge);
+                      if (menu.id === 'personal') {
+                        setMobileTab('trash');
+                      } else {
+                        setMobileTab('search');
+                      }
+                    }}
+                    className={`px-2.5 py-1 rounded-full font-label-sm text-[11.5px] flex items-center justify-center gap-1 transition-all whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
+                      active
+                        ? themeMode === 'light'
+                          ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold shadow-2xs'
+                          : 'bg-zinc-800 text-primary-container font-extrabold'
+                        : themeMode === 'light'
+                        ? 'bg-slate-100/80 text-slate-600 hover:text-slate-900 font-bold'
+                        : 'bg-zinc-900/70 text-zinc-400 hover:text-white font-bold'
+                    }`}
+                  >
+                    <span>{menu.label}</span>
+                  </button>
+                );
+              })}
+            </nav>
+
+            <div className="flex items-center gap-1 shrink-0" aria-label="가이드 공유 및 프로필 영역">
               {!isStoreAppMode && (
                 <button
                   type="button"
@@ -485,7 +537,7 @@ export const MobileAppView: React.FC = () => {
                     window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
                   }}
                   title="공식 온보딩/가이드 페이지로 이동"
-                  className={`px-2 py-1.5 rounded-lg font-bold text-[11px] flex items-center gap-0.5 shrink-0 whitespace-nowrap cursor-pointer ${
+                  className={`px-2 py-1 rounded-lg font-bold text-[11px] flex items-center gap-0.5 shrink-0 whitespace-nowrap cursor-pointer ${
                     themeMode === 'light'
                       ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5'
                       : 'text-zinc-300 hover:text-white hover:bg-white/10'
@@ -504,73 +556,285 @@ export const MobileAppView: React.FC = () => {
                     void navigator.clipboard.writeText(shareText);
                   }
                   useSaySeeStore.setState({
-                    lastQuarantineToast: '💌 [앱 공유 링크 복사됨] "초대받은 가족·회원·직원은 언제나 무료입니다" 안내가 클립보드에 준비되었습니다!',
+                    lastQuarantineToast:
+                      '💌 [앱 공유 링크 복사됨] "초대받은 가족·회원·직원은 언제나 무료입니다" 안내가 클립보드에 준비되었습니다!',
                   });
                 }}
                 title="지인·가족에게 앱 공유하기"
-                className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 cursor-pointer outline-none ${
+                className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 cursor-pointer outline-none ${
                   themeMode === 'light'
                     ? 'text-slate-500 hover:text-slate-800 hover:bg-black/5'
                     : 'text-zinc-300 hover:text-white hover:bg-white/10'
                 }`}
               >
-                <span className="material-symbols-outlined text-[16px]">share</span>
+                <span className="material-symbols-outlined text-[15px]">share</span>
               </button>
               <GhostiTopRightHubAnchor themeMode={themeMode} />
             </div>
           </div>
-
-          {/* 모바일 공식 마스터 슬로건 한 줄 띠 (SSOT v2.3 18자 대표 H1) */}
-          <div
-            className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold text-center truncate ${
-              themeMode === 'light'
-                ? 'bg-teal-50/80 border-teal-200 text-teal-950'
-                : 'bg-zinc-900/80 border-teal-500/20 text-zinc-200'
-            }`}
-            title="내 PC와 모바일에 1초 초능력을 — 광고 0% · 클라우드 월세 0원"
-          >
-            <span className="text-teal-600 dark:text-teal-400">내 PC와 모바일에 1초 초능력을</span>{' '}
-            <span className="opacity-30">|</span>{' '}
-            <span className="text-emerald-600 dark:text-emerald-400">광고 0% · 클라우드 월세 0원</span>
-          </div>
-
-          {/* 1단 메인메뉴 3개 (① 👻 귀신비서 / ② 📸 사진 공유 / ③ 💼 업무 공유(S:)): 균등 3분할 캡슐 */}
-          <nav className="grid grid-cols-3 gap-1">
-            {MAIN_LOUNGE_MENUS.map((menu) => {
-              const active = resolveMainMenuId(activeLoungeType) === menu.id;
-              return (
-                <button
-                  key={menu.id}
-                  type="button"
-                  onClick={() => {
-                    if (active) return;
-                    setActiveLoungeType(menu.defaultLounge);
-                    if (menu.id === 'personal') {
+        ) : (
+          <>
+            <div
+              className={`px-3 py-2 flex flex-col gap-2 border-b transition-colors ${
+                themeMode === 'light'
+                  ? 'bg-white/95 border-[#EAE8E1]'
+                  : 'bg-[#09090B]/95 border-white/10'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-1 flex-nowrap min-w-0">
+                <div className="flex items-center gap-1 shrink-0 min-w-0">
+                  <GhostiBrandLogo
+                    size="mobile"
+                    autoCycle={false}
+                    themeMode={themeMode}
+                    showBadge={false}
+                    subtitle=""
+                    onClick={() => {
+                      setActiveLoungeType('personal');
                       setMobileTab('trash');
-                    } else {
-                      setMobileTab('search');
-                    }
-                  }}
-                  className={`px-1.5 py-2 rounded-full font-label-sm text-[11.5px] flex items-center justify-center gap-1 transition-all whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
-                    active
-                      ? themeMode === 'light'
-                        ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold shadow-2xs'
-                        : 'bg-zinc-800 text-primary-container font-extrabold'
-                      : themeMode === 'light'
-                      ? 'bg-slate-100/80 text-slate-600 hover:text-slate-900 font-bold'
-                      : 'bg-zinc-900/70 text-zinc-400 hover:text-white font-bold'
-                  }`}
-                >
-                  <span>{menu.label}</span>
-                </button>
-              );
-            })}
-          </nav>
+                      useSaySeeStore.setState({
+                        hasExecutedUserSearch: false,
+                        hasUserSelectedSearchTab: false,
+                      });
+                    }}
+                    className="shrink-0"
+                  />
+                </div>
 
-          {/* 사진 공유 하위 선택: 패밀리 ↔ 동호회·모임 ↔ 동창회 + (가족일 때 우리집/본가/처가) */}
-          {resolveMainMenuId(activeLoungeType) === 'photo_share' && (
-            <div className="flex flex-col gap-1.5 -mt-0.5">
-              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                {/* 우상단 심플 앵커: 가이드(모바일 웹 전용, 스토어 앱은 Anti-Steering 비노출) + 공유 아이콘 + 프로필(맨 우측) */}
+                <div className="flex items-center gap-1 shrink-0 ml-auto" aria-label="가이드 공유 및 프로필 영역">
+                  {!isStoreAppMode && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
+                      }}
+                      title="공식 온보딩/가이드 페이지로 이동"
+                      className={`px-2 py-1.5 rounded-lg font-bold text-[11px] flex items-center gap-0.5 shrink-0 whitespace-nowrap cursor-pointer ${
+                        themeMode === 'light'
+                          ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5'
+                          : 'text-zinc-300 hover:text-white hover:bg-white/10'
+                      }`}
+                    >
+                      <span>📖</span>
+                      <span>가이드</span>
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const shareText =
+                        '귀신같이(Ghosti) — 내 PC와 모바일에 1초 초능력을! 광고 0% · 클라우드 월세 0원 평생 무료 (초대받은 가족·회원·직원도 언제나 0원) https://ghosti.sundreamer.app';
+                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
+                        void navigator.clipboard.writeText(shareText);
+                      }
+                      useSaySeeStore.setState({
+                        lastQuarantineToast: '💌 [앱 공유 링크 복사됨] "초대받은 가족·회원·직원은 언제나 무료입니다" 안내가 클립보드에 준비되었습니다!',
+                      });
+                    }}
+                    title="지인·가족에게 앱 공유하기"
+                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 cursor-pointer outline-none ${
+                      themeMode === 'light'
+                        ? 'text-slate-500 hover:text-slate-800 hover:bg-black/5'
+                        : 'text-zinc-300 hover:text-white hover:bg-white/10'
+                    }`}
+                  >
+                    <span className="material-symbols-outlined text-[16px]">share</span>
+                  </button>
+                  <GhostiTopRightHubAnchor themeMode={themeMode} />
+                </div>
+              </div>
+
+              {/* 모바일 공식 마스터 슬로건 한 줄 띠 (SSOT v2.3 18자 대표 H1) */}
+              <div
+                className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold text-center truncate ${
+                  themeMode === 'light'
+                    ? 'bg-teal-50/80 border-teal-200 text-teal-950'
+                    : 'bg-zinc-900/80 border-teal-500/20 text-zinc-200'
+                }`}
+                title="내 PC와 모바일에 1초 초능력을 — 광고 0% · 클라우드 월세 0원"
+              >
+                <span className="text-teal-600 dark:text-teal-400">내 PC와 모바일에 1초 초능력을</span>{' '}
+                <span className="opacity-30">|</span>{' '}
+                <span className="text-emerald-600 dark:text-emerald-400">광고 0% · 클라우드 월세 0원</span>
+              </div>
+
+              {/* 1단 메인메뉴 3개 (① 👻 귀신비서 / ② 📸 사진 공유 / ③ 💼 업무 공유(S:)): 균등 3분할 캡슐 */}
+              <nav className="grid grid-cols-3 gap-1">
+                {MAIN_LOUNGE_MENUS.map((menu) => {
+                  const active = resolveMainMenuId(activeLoungeType) === menu.id;
+                  return (
+                    <button
+                      key={menu.id}
+                      type="button"
+                      onClick={() => {
+                        if (active) return;
+                        setActiveLoungeType(menu.defaultLounge);
+                        if (menu.id === 'personal') {
+                          setMobileTab('trash');
+                        } else {
+                          setMobileTab('search');
+                        }
+                      }}
+                      className={`px-1.5 py-2 rounded-full font-label-sm text-[11.5px] flex items-center justify-center gap-1 transition-all whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
+                        active
+                          ? themeMode === 'light'
+                            ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold shadow-2xs'
+                            : 'bg-zinc-800 text-primary-container font-extrabold'
+                          : themeMode === 'light'
+                          ? 'bg-slate-100/80 text-slate-600 hover:text-slate-900 font-bold'
+                          : 'bg-zinc-900/70 text-zinc-400 hover:text-white font-bold'
+                      }`}
+                    >
+                      <span>{menu.label}</span>
+                    </button>
+                  );
+                })}
+              </nav>
+
+              {/* 사진 공유 하위 선택: 패밀리 ↔ 동호회·모임 ↔ 동창회 + (가족일 때 우리집/본가/처가) */}
+              {resolveMainMenuId(activeLoungeType) === 'photo_share' && (
+                <div className="flex flex-col gap-1.5 -mt-0.5">
+                  <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                    {PHOTO_SHARE_GROUPS.map((group) => {
+                      const groupActive = activeLoungeType === group.id;
+                      return (
+                        <button
+                          key={group.id}
+                          type="button"
+                          onClick={() => {
+                            if (!groupActive) {
+                              setActiveLoungeType(group.id);
+                              setMobileTab('search');
+                            }
+                          }}
+                          className={`px-2.5 py-1.5 rounded-lg border text-[11.5px] shrink-0 whitespace-nowrap transition-all outline-none focus:outline-none cursor-pointer ${
+                            groupActive
+                              ? themeMode === 'light'
+                                ? 'bg-white border-[#0D9488] text-[#0D9488] font-extrabold'
+                                : 'bg-zinc-900 border-primary-container text-primary-container font-extrabold'
+                              : themeMode === 'light'
+                              ? 'bg-transparent border-[#E5E0D5] text-slate-500 hover:text-slate-900 font-bold'
+                              : 'bg-transparent border-white/10 text-zinc-400 hover:text-white font-bold'
+                          }`}
+                        >
+                          {group.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {activeLoungeType === 'family' && (
+                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                      {FAMILY_ROOM_PILLS.map((room) => {
+                        const roomActive = activeFamilyRoom === room.id;
+                        return (
+                          <button
+                            key={room.id}
+                            type="button"
+                            onClick={() => {
+                              setActiveFamilyRoom(room.id);
+                              if (mobileTab !== 'search') setMobileTab('search');
+                            }}
+                            className={`px-2.5 py-1 rounded-full border text-[11px] shrink-0 whitespace-nowrap transition-all cursor-pointer ${
+                              roomActive
+                                ? 'bg-[#0D9488] border-[#0D9488] text-white font-extrabold'
+                                : themeMode === 'light'
+                                ? 'bg-white border-slate-200 text-slate-600 font-bold'
+                                : 'bg-zinc-900 border-white/10 text-zinc-300 font-bold'
+                            }`}
+                          >
+                            {room.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* 2단 서브메뉴 바: 사진 공유 / 업무 공유일 때만 노출 (귀신비서는 단일 통합 화면이므로 서브탭 없음) */}
+            {currentSubmenus.length > 0 && (
+              <div
+                className={`px-3.5 pt-1 border-b flex items-center gap-1 overflow-x-auto no-scrollbar transition-colors ${
+                  themeMode === 'light'
+                    ? 'bg-[#F8F7F4]/95 border-[#E5E0D5]'
+                    : 'bg-[#111114]/95 border-white/10'
+                }`}
+              >
+                {currentSubmenus.map((sub) => {
+                  if (sub.id === 'trial' && isCurrentLoungeSubscribed) {
+                    return null;
+                  }
+                  const isSubActive = mobileTab === sub.id;
+                  return (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => {
+                        if (sub.id === 'share') {
+                          setActiveLoungeType('family');
+                          setMobileTab('search');
+                        } else {
+                          setMobileTab(sub.id);
+                        }
+                      }}
+                      title={sub.subcaption ? `${sub.label} — ${sub.subcaption}` : sub.label}
+                      className={`px-3.5 py-2 rounded-t-xl border-b-[3px] font-label-sm text-[12.5px] flex items-center gap-1 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none ${
+                        isSubActive
+                          ? themeMode === 'light'
+                            ? 'bg-[#EAF8F6] text-[#0D9488] border-[#0D9488] font-extrabold'
+                            : 'bg-primary-container/15 text-primary-container border-primary-container font-extrabold'
+                          : themeMode === 'light'
+                          ? 'border-transparent text-slate-800 hover:text-[#0D9488] font-bold'
+                          : 'border-transparent text-zinc-400 hover:text-white font-bold'
+                      }`}
+                    >
+                      <div className="flex flex-col items-center">
+                        <span>{sub.label}</span>
+                        {sub.subcaption && (
+                          <span className="text-[9px] opacity-60 font-normal">
+                            {sub.subcaption}
+                          </span>
+                        )}
+                      </div>
+                      {sub.showTrashCount && (
+                        <span
+                          className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
+                            isSubActive
+                              ? themeMode === 'light'
+                                ? 'bg-[#0D9488]/15 text-[#0D9488]'
+                                : 'bg-primary-container/20 text-primary-container'
+                              : themeMode === 'light'
+                              ? 'bg-slate-200/80 text-slate-600'
+                              : 'bg-zinc-800 text-zinc-300'
+                          }`}
+                        >
+                          {activeTrashCount}
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </>
+        )}
+      </header>
+
+      {/* 가로(Landscape) 모드 전용 1줄 컴팩트 서브 네비게이션 (고정 해제되어 스크롤 시 자연스럽게 위로 지나감) */}
+      {isLandscapeCompact &&
+        (resolveMainMenuId(activeLoungeType) === 'photo_share' || currentSubmenus.length > 0) && (
+          <div
+            className={`px-3 py-1.5 border-b flex items-center justify-between gap-2 overflow-x-auto no-scrollbar ${
+              themeMode === 'light'
+                ? 'bg-[#F8F7F4] border-[#E5E0D5]'
+                : 'bg-[#111114] border-white/10'
+            }`}
+          >
+            {resolveMainMenuId(activeLoungeType) === 'photo_share' && (
+              <div className="flex items-center gap-1 shrink-0">
                 {PHOTO_SHARE_GROUPS.map((group) => {
                   const groupActive = activeLoungeType === group.id;
                   return (
@@ -583,125 +847,98 @@ export const MobileAppView: React.FC = () => {
                           setMobileTab('search');
                         }
                       }}
-                      className={`px-2.5 py-1.5 rounded-lg border text-[11.5px] shrink-0 whitespace-nowrap transition-all outline-none focus:outline-none cursor-pointer ${
+                      className={`px-2 py-1 rounded-lg border text-[11px] shrink-0 whitespace-nowrap cursor-pointer ${
                         groupActive
                           ? themeMode === 'light'
                             ? 'bg-white border-[#0D9488] text-[#0D9488] font-extrabold'
                             : 'bg-zinc-900 border-primary-container text-primary-container font-extrabold'
                           : themeMode === 'light'
-                          ? 'bg-transparent border-[#E5E0D5] text-slate-500 hover:text-slate-900 font-bold'
-                          : 'bg-transparent border-white/10 text-zinc-400 hover:text-white font-bold'
+                          ? 'bg-transparent border-[#E5E0D5] text-slate-600 font-bold'
+                          : 'bg-transparent border-white/10 text-zinc-400 font-bold'
                       }`}
                     >
                       {group.label}
                     </button>
                   );
                 })}
-              </div>
-
-              {activeLoungeType === 'family' && (
-                <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
-                  {FAMILY_ROOM_PILLS.map((room) => {
-                    const roomActive = activeFamilyRoom === room.id;
-                    return (
-                      <button
-                        key={room.id}
-                        type="button"
-                        onClick={() => {
-                          setActiveFamilyRoom(room.id);
-                          if (mobileTab !== 'search') setMobileTab('search');
-                        }}
-                        className={`px-2.5 py-1 rounded-full border text-[11px] shrink-0 whitespace-nowrap transition-all cursor-pointer ${
-                          roomActive
-                            ? 'bg-[#0D9488] border-[#0D9488] text-white font-extrabold'
-                            : themeMode === 'light'
-                            ? 'bg-white border-slate-200 text-slate-600 font-bold'
-                            : 'bg-zinc-900 border-white/10 text-zinc-300 font-bold'
-                        }`}
-                      >
-                        {room.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              )}
-            </div>
-          )}
-        </div>
-
-        {/* 2단 서브메뉴 바: 사진 공유 / 업무 공유일 때만 노출 (귀신비서는 단일 통합 화면이므로 서브탭 없음) */}
-        {currentSubmenus.length > 0 && (
-        <div
-          className={`px-3.5 pt-1 border-b flex items-center gap-1 overflow-x-auto no-scrollbar transition-colors ${
-            themeMode === 'light'
-              ? 'bg-[#F8F7F4]/95 border-[#E5E0D5]'
-              : 'bg-[#111114]/95 border-white/10'
-          }`}
-        >
-          {currentSubmenus.map((sub) => {
-            if (sub.id === 'trial' && isCurrentLoungeSubscribed) {
-              return null;
-            }
-            const isSubActive = mobileTab === sub.id;
-            return (
-              <button
-                key={sub.id}
-                type="button"
-                onClick={() => {
-                  if (sub.id === 'share') {
-                    setActiveLoungeType('family');
-                    setMobileTab('search');
-                  } else {
-                    setMobileTab(sub.id);
-                  }
-                }}
-                title={sub.subcaption ? `${sub.label} — ${sub.subcaption}` : sub.label}
-                className={`px-3.5 py-2 rounded-t-xl border-b-[3px] font-label-sm text-[12.5px] flex items-center gap-1 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none ${
-                  isSubActive
-                    ? themeMode === 'light'
-                      ? 'bg-[#EAF8F6] text-[#0D9488] border-[#0D9488] font-extrabold'
-                      : 'bg-primary-container/15 text-primary-container border-primary-container font-extrabold'
-                    : themeMode === 'light'
-                    ? 'border-transparent text-slate-800 hover:text-[#0D9488] font-bold'
-                    : 'border-transparent text-zinc-400 hover:text-white font-bold'
-                }`}
-              >
-                <div className="flex flex-col items-center">
-                  <span>{sub.label}</span>
-                  {sub.subcaption && (
-                    <span className="text-[9px] opacity-60 font-normal">
-                      {sub.subcaption}
-                    </span>
-                  )}
-                </div>
-                {sub.showTrashCount && (
-                  <span
-                    className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
-                      isSubActive
-                        ? themeMode === 'light'
-                          ? 'bg-[#0D9488]/15 text-[#0D9488]'
-                          : 'bg-primary-container/20 text-primary-container'
-                        : themeMode === 'light'
-                        ? 'bg-slate-200/80 text-slate-600'
-                        : 'bg-zinc-800 text-zinc-300'
-                    }`}
-                  >
-                    {activeTrashCount}
-                  </span>
+                {activeLoungeType === 'family' && (
+                  <>
+                    <span className="mx-0.5 text-zinc-500/40">|</span>
+                    {FAMILY_ROOM_PILLS.map((room) => {
+                      const roomActive = activeFamilyRoom === room.id;
+                      return (
+                        <button
+                          key={room.id}
+                          type="button"
+                          onClick={() => {
+                            setActiveFamilyRoom(room.id);
+                            if (mobileTab !== 'search') setMobileTab('search');
+                          }}
+                          className={`px-2 py-0.5 rounded-full border text-[10.5px] shrink-0 whitespace-nowrap cursor-pointer ${
+                            roomActive
+                              ? 'bg-[#0D9488] border-[#0D9488] text-white font-extrabold'
+                              : themeMode === 'light'
+                              ? 'bg-white border-slate-200 text-slate-600 font-bold'
+                              : 'bg-zinc-900 border-white/10 text-zinc-300 font-bold'
+                          }`}
+                        >
+                          {room.label}
+                        </button>
+                      );
+                    })}
+                  </>
                 )}
-              </button>
-            );
-          })}
-        </div>
+              </div>
+            )}
+
+            {currentSubmenus.length > 0 && (
+              <div className="flex items-center gap-1 shrink-0 ml-auto">
+                {currentSubmenus.map((sub) => {
+                  if (sub.id === 'trial' && isCurrentLoungeSubscribed) {
+                    return null;
+                  }
+                  const isSubActive = mobileTab === sub.id;
+                  return (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => {
+                        if (sub.id === 'share') {
+                          setActiveLoungeType('family');
+                          setMobileTab('search');
+                        } else {
+                          setMobileTab(sub.id);
+                        }
+                      }}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold shrink-0 whitespace-nowrap cursor-pointer ${
+                        isSubActive
+                          ? themeMode === 'light'
+                            ? 'bg-[#E6F7F5] text-[#0D9488] border border-[#0D9488]/40'
+                            : 'bg-primary-container/20 text-primary-container border border-primary-container/40'
+                          : themeMode === 'light'
+                          ? 'text-slate-600 hover:text-slate-900'
+                          : 'text-zinc-400 hover:text-white'
+                      }`}
+                    >
+                      {sub.label}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         )}
-      </header>
 
       {/* 서브메뉴 1번: ✨ 1초 진단 & 공유 시작 (정식 구독 시 Auto-Hide) */}
       {activeLoungeType !== 'personal' && mobileTab === 'trial' && <LoungeView />}
 
       {/* [모바일 통합 1번 영역: 👻 귀신비서 (비서 대화 + 사진 정리 + 1초 검색 + 내 기기 통합 원스톱)] & [공유방 검색 피드] */}
       {(activeLoungeType === 'personal' || mobileTab === 'search') && (
-        <main className="flex-1 w-full px-3 sm:px-4 pt-3.5 pb-8 flex flex-col gap-4">
+        <main
+          className={`flex-1 w-full px-3 sm:px-4 flex flex-col ${
+            isLandscapeCompact ? 'pt-2 pb-5 gap-2.5' : 'pt-3.5 pb-8 gap-4'
+          }`}
+        >
           {activeLoungeType !== 'personal' && <LoungeFeedContextBanner />}
 
           {/* 1층: 통합 검색·음성 바 (업무 공유 S:는 자체 전용 문서 검색창이 있으므로 제외) */}
@@ -1241,8 +1478,8 @@ export const MobileAppView: React.FC = () => {
         </main>
       )}
 
-      {/* 모바일 하단 서브메뉴 바: 서브탭이 존재하는 공유방에서만 노출 (귀신비서 단일 통합 화면에서는 중복 바 미노출) */}
-      {currentSubmenus.length > 0 && (
+      {/* 모바일 하단 서브메뉴 바: 세로(Portrait) 모드의 공유방에서만 노출 (가로 모드에서는 상단 서브바와 중복되어 본문을 가리지 않도록 숨김) */}
+      {!isLandscapeCompact && currentSubmenus.length > 0 && (
       <nav
         style={{ paddingBottom: 'max(0.35rem, env(safe-area-inset-bottom, 0px))' }}
         className={`fixed bottom-0 inset-x-0 max-w-xl mx-auto min-h-[56px] backdrop-blur-xl border-t z-50 px-2 pt-1.5 flex items-center justify-around transition-colors ${

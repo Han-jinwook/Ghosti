@@ -146,6 +146,24 @@ export const VoiceHeroStage: React.FC = () => {
 
   const isMobile = layout === 'mobile';
   const isMobileOrStore = isMobile || Boolean(isStoreAppMode);
+  const [isLandscapeCompact, setIsLandscapeCompact] = useState<boolean>(() =>
+    typeof window !== 'undefined'
+      ? window.innerWidth > window.innerHeight && window.innerHeight <= 540
+      : false
+  );
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const syncLandscape = () => {
+      setIsLandscapeCompact(window.innerWidth > window.innerHeight && window.innerHeight <= 540);
+    };
+    syncLandscape();
+    window.addEventListener('resize', syncLandscape, { passive: true });
+    window.addEventListener('orientationchange', syncLandscape, { passive: true });
+    return () => {
+      window.removeEventListener('resize', syncLandscape);
+      window.removeEventListener('orientationchange', syncLandscape);
+    };
+  }, []);
   const searchPlaceholderPool = useMemo(
     () =>
       isMobileOrStore
@@ -206,9 +224,9 @@ export const VoiceHeroStage: React.FC = () => {
   );
 
   return (
-    <section className="w-full flex flex-col gap-3">
+    <section className={`w-full flex flex-col ${isLandscapeCompact ? 'gap-1.5' : 'gap-3'}`}>
       {/* ─────────────── 노션형 보더리스(Borderless) 통합 검색 캔버스 블록 ─────────────── */}
-      <div className="w-full flex flex-col gap-3">
+      <div className={`w-full flex flex-col ${isLandscapeCompact ? 'gap-1.5' : 'gap-3'}`}>
         {/* 1-A. 자연어 문장형 통합 검색창 */}
         <form onSubmit={handleTextSubmit} className="w-full flex flex-wrap items-center gap-2">
           <div className="relative w-full sm:flex-1 sm:min-w-[200px] flex items-center">
@@ -225,7 +243,9 @@ export const VoiceHeroStage: React.FC = () => {
               value={textInput}
               onChange={(e) => setTextInput(e.target.value)}
               placeholder={searchPlaceholder}
-              className="w-full h-11 md:h-13 pl-10 pr-24 rounded-2xl bg-[#18181B] border border-white/15 focus:border-primary-container shadow-sm outline-none font-body-md text-[13px] md:text-[14.5px] text-white placeholder:text-zinc-400/75 transition-colors"
+              className={`w-full ${
+                isLandscapeCompact ? 'h-9.5' : 'h-11 md:h-13'
+              } pl-10 pr-24 rounded-2xl bg-[#18181B] border border-white/15 focus:border-primary-container shadow-sm outline-none font-body-md text-[13px] md:text-[14.5px] text-white placeholder:text-zinc-400/75 transition-colors`}
             />
             {textInput && (
               <button
