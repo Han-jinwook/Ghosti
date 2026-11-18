@@ -1,24 +1,37 @@
 package app.sundreamer.ghosti;
 
+import android.Manifest;
+import android.app.Activity;
+import android.app.PendingIntent;
+import android.content.ContentResolver;
+import android.content.ContentUris;
 import android.content.Context;
 import android.content.Intent;
 import android.content.pm.ApplicationInfo;
 import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
+import android.database.Cursor;
 import android.net.Uri;
+import android.os.Build;
+import android.os.Bundle;
+import android.provider.MediaStore;
 import android.provider.Settings;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
+import com.getcapacitor.PermissionState;
 import com.getcapacitor.Plugin;
 import com.getcapacitor.PluginCall;
 import com.getcapacitor.PluginMethod;
 import com.getcapacitor.annotation.CapacitorPlugin;
+import com.getcapacitor.annotation.Permission;
+import com.getcapacitor.annotation.PermissionCallback;
 
 import org.json.JSONArray;
 import org.json.JSONObject;
 
+import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
 import java.util.LinkedHashSet;
@@ -27,7 +40,18 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Set;
 
-@CapacitorPlugin(name = "GhostiMobileCare")
+@CapacitorPlugin(
+    name = "GhostiMobileCare",
+    permissions = {
+        @Permission(
+            alias = "mediaImages",
+            strings = {
+                Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_EXTERNAL_STORAGE
+            }
+        )
+    }
+)
 public class GhostiMobileCarePlugin extends Plugin {
 
     private static final String[] TARGET_BLOAT_PACKAGES = new String[] {
@@ -356,5 +380,204 @@ public class GhostiMobileCarePlugin extends Plugin {
         ret.put("ok", true);
         ret.put("configured", configured);
         call.resolve(ret);
+    }
+
+    /**
+     * [실제 OS 갤러리(삼성 갤러리·구글 포토) 휴지통 이동 및 복원 — MediaStore.createTrashRequest (API 30+)]
+     * - MANAGE_EXTERNAL_STORAGE 없이 스토어 합법 표준인 MediaStore.createTrashRequest를 호출합니다.
+     * - 1차: Android PhotoPicker 파일명(예: 1000008588.jpg)에서 숫자 MediaStore _ID를 직접 추출하여 권한 없이도 URI를 즉시 구성하고,
+     * - 2차: 일반 파일명(예: 20261118_102030.jpg)은 DISPLAY_NAME / SIZE로 MediaStore를 쿼리해 실제 이미지 URI를 매칭합니다.
+     */
+    @PluginMethod
+    public void requestSystemPhotoTrash(PluginCall call) {
+        if (Build.VERSION.SDK_INT < Build.VERSION_CODES.R) {
+            JSObject ret = new JSObject();
+            ret.put("ok", false);
+            ret.put("canceled", false);
+            ret.put("doneIds", new JSArray());
+            ret.put("error", "ANDROID_API_BELOW_30");
+            call.resolve(ret);
+            return;
+        }
+        executeSystemPhotoTrashInternal(call, false);
+    }
+
+    @PermissionCallback
+    private void onMediaImagesPermissionForTrash(PluginCall call) {
+        executeSystemPhotoTrashInternal(call, true);
+    }
+
+    private void executeSystemPhotoTrashInternal(PluginCall call, boolean permissionAlreadyRequested) {
+        String action = call.getString("action", "move");
+        boolean isMoveToTrash = !"restore".equalsIgnoreCase(action);
+        JSArray items = call.getArray("items");
+        if (items == null || items.length() == 0) {
+            JSObject ret = new JSObject();
+            ret.put("ok", false);
+            ret.put("canceled", false);
+            ret.put("doneIds", new JSArray());
+            call.resolve(ret);
+            return;
+        }
+
+        Context ctx = getContext();
+        ContentResolver resolver = ctx.getContentResolver();
+        List<Uri> targetUris = new ArrayList<>();
+        JSArray requestedIds = new JSArray();
+        boolean needsMediaQuery = false;
+
+        try {
+            List<JSONObject> rawList = new ArrayList<>();
+            for (int i = 0; i < items.length(); i++) {
+                JSONObject obj = items.optJSONObject(i);
+                if (obj == null) continue;
+                rawList.add(obj);
+                String id = obj.optString("id", "");
+                String name = obj.optString("name", "");
+                if (!id.isEmpty()) {
+                    requestedIds.put(id);
+                } else if (!name.isEmpty()) {
+                    requestedIds.put(name);
+                }
+                Long pickerMediaId = extractNumericMediaStoreIdFromFileName(name);
+                if (pickerMediaId == null) {
+                    needsMediaQuery = true;
+                }
+            }
+
+            if (needsMediaQuery && !hasMediaReadPermission(ctx) && !permissionAlreadyRequested) {
+                requestPermissionForAlias("mediaImages", call, "onMediaImagesPermissionForTrash");
+                return;
+            }
+
+            Set<Long> seenMediaIds = new LinkedHashSet<>();
+            for (JSONObject obj : rawList) {
+                String name = obj.optString("name", "");
+                long size = obj.optLong("size", -1L);
+                Long mediaId = queryMediaStoreIdForPhoto(resolver, name, size, !isMoveToTrash);
+                if (mediaId == null) {
+                    mediaId = extractNumericMediaStoreIdFromFileName(name);
+                }
+                if (mediaId != null && mediaId > 0 && seenMediaIds.add(mediaId)) {
+                    targetUris.add(ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, mediaId));
+                }
+            }
+        } catch (Exception e) {
+            JSObject ret = new JSObject();
+            ret.put("ok", false);
+            ret.put("canceled", false);
+            ret.put("doneIds", new JSArray());
+            ret.put("error", e.getMessage());
+            call.resolve(ret);
+            return;
+        }
+
+        if (targetUris.isEmpty()) {
+            // MediaStore에서 URI를 찾지 못한 경우(예: 외부 다운로드 임시 파일) 앱 내 보관함 이동은 허용하되 플래그 반환
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("action", isMoveToTrash ? "move" : "restore");
+            ret.put("canceled", false);
+            ret.put("matchedMediaStoreCount", 0);
+            ret.put("doneIds", requestedIds);
+            call.resolve(ret);
+            return;
+        }
+
+        try {
+            PendingIntent pi = MediaStore.createTrashRequest(resolver, targetUris, isMoveToTrash);
+            Activity act = getActivity();
+            if (act instanceof MainActivity) {
+                final int matchedCount = targetUris.size();
+                ((MainActivity) act).launchMediaStoreIntentSender(pi.getIntentSender(), (resultCode, data) -> {
+                    JSObject ret = new JSObject();
+                    boolean approved = (resultCode == Activity.RESULT_OK);
+                    ret.put("ok", approved);
+                    ret.put("action", isMoveToTrash ? "move" : "restore");
+                    ret.put("canceled", !approved);
+                    ret.put("matchedMediaStoreCount", matchedCount);
+                    ret.put("doneIds", approved ? requestedIds : new JSArray());
+                    call.resolve(ret);
+                });
+            } else {
+                JSObject ret = new JSObject();
+                ret.put("ok", true);
+                ret.put("action", isMoveToTrash ? "move" : "restore");
+                ret.put("canceled", false);
+                ret.put("matchedMediaStoreCount", 0);
+                ret.put("doneIds", requestedIds);
+                call.resolve(ret);
+            }
+        } catch (Exception e) {
+            JSObject ret = new JSObject();
+            ret.put("ok", false);
+            ret.put("canceled", false);
+            ret.put("doneIds", new JSArray());
+            ret.put("error", "CREATE_TRASH_REQUEST_FAILED: " + e.getMessage());
+            call.resolve(ret);
+        }
+    }
+
+    private boolean hasMediaReadPermission(Context ctx) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return ctx.checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED;
+        }
+        return ctx.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private Long extractNumericMediaStoreIdFromFileName(String fileName) {
+        if (fileName == null || fileName.isEmpty()) return null;
+        int dot = fileName.lastIndexOf('.');
+        String stem = (dot > 0) ? fileName.substring(0, dot) : fileName;
+        // Android PhotoPicker 파일명 패턴: "1000008588.jpg" 또는 "msf:1000008588"
+        if (stem.startsWith("msf:")) {
+            stem = stem.substring(4);
+        }
+        if (stem.matches("^\\d{4,18}$")) {
+            try {
+                return Long.parseLong(stem);
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
+        return null;
+    }
+
+    private Long queryMediaStoreIdForPhoto(ContentResolver resolver, String fileName, long fileSize, boolean includeTrashed) {
+        try {
+            String[] projection = new String[] {
+                MediaStore.Images.Media._ID,
+                MediaStore.Images.Media.DISPLAY_NAME,
+                MediaStore.Images.Media.SIZE
+            };
+            Bundle queryArgs = new Bundle();
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && includeTrashed) {
+                queryArgs.putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_INCLUDE);
+            }
+            if (fileName != null && !fileName.isEmpty()) {
+                queryArgs.putString(ContentResolver.QUERY_ARG_SQL_SELECTION, MediaStore.Images.Media.DISPLAY_NAME + " = ?");
+                queryArgs.putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, new String[] { fileName });
+                try (Cursor c = resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, queryArgs, null)) {
+                    if (c != null && c.moveToFirst()) {
+                        return c.getLong(0);
+                    }
+                }
+            }
+            if (fileSize > 0) {
+                Bundle sizeArgs = new Bundle();
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && includeTrashed) {
+                    sizeArgs.putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_INCLUDE);
+                }
+                sizeArgs.putString(ContentResolver.QUERY_ARG_SQL_SELECTION, MediaStore.Images.Media.SIZE + " = ?");
+                sizeArgs.putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, new String[] { String.valueOf(fileSize) });
+                try (Cursor c = resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, sizeArgs, null)) {
+                    if (c != null && c.moveToFirst()) {
+                        return c.getLong(0);
+                    }
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        return null;
     }
 }

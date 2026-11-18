@@ -685,7 +685,10 @@ export const createAssistantOnboardingSlice: StateCreator<
       remainingOldPhotos: 0,
     };
     set((state) => {
-      const existingReal = state.photos.filter((p) => !isSample(p.name));
+      const incomingSignatures = new Set(analyzed.map((a) => `${a.name}__${a.size}`));
+      const existingReal = state.photos.filter(
+        (p) => !isSample(p.name) && !incomingSignatures.has(`${p.name}__${p.size}`)
+      );
       const mergedReal = [...analyzed, ...existingReal];
       const { updatedPhotos, duplicateGroups: nextDupGroups } =
         clusterPhotosIntoDuplicateGroups(mergedReal);
@@ -738,7 +741,7 @@ export const createAssistantOnboardingSlice: StateCreator<
           : 'duplicate';
       const toastMsg =
         dupSetsCount === 0 && blurryCount === 0 && memoScreenCount === 0
-          ? `✨ 불러온 사진 ${analyzed.length}장을 꼼꼼히 분석했는데 중복·연사(0세트)와 흐린 사진(0장) 없이 모두 깨끗합니다!`
+          ? `✅ 사진 ${analyzed.length}장 분석 완료! 버릴 중복·연사(0세트)나 흐린 사진(0장) 없이 모두 깨끗한 사진이에요.`
           : `📸 사진 ${analyzed.length}장 분석 완료! 중복·연사 ${dupSetsCount}세트 · 흐린 사진 ${blurryCount}장 발견 — 아래에서 실사진을 보고 [OK]로 직접 결정해 주세요!`;
       return {
         photos: updatedPhotos,

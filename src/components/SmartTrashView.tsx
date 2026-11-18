@@ -461,38 +461,6 @@ export const SmartTrashView: React.FC = () => {
             }}
           />
         )}
-
-        {/* 인라인 1초 되돌리기(Undo) 알림 콜아웃 */}
-        {lastUndoBatch && (
-          <div className="p-3.5 rounded-xl bg-zinc-900 border border-primary-container/60 flex flex-wrap items-center justify-between gap-3">
-            <div className="flex items-center gap-2.5">
-              <span className="material-symbols-outlined text-primary-container text-[20px]">
-                history
-              </span>
-              <span className="font-label-md text-[13px] text-zinc-100 font-semibold">
-                {`방금 정리한 ${lastUndoBatch.count}장 (${fmtMB(lastUndoBatch.savedBytes)})이 정리 보관함(휴지통)으로 안전하게 이동되었습니다.`}
-              </span>
-            </div>
-
-            <div className="flex items-center gap-2">
-              <button
-                type="button"
-                onClick={() => void undoLastQuarantine()}
-                className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold transition-all cursor-pointer"
-              >
-                ↩️ 1초 즉시 되돌리기 (Undo)
-              </button>
-              <button
-                type="button"
-                onClick={dismissUndoBatch}
-                className="p-1 text-zinc-400 hover:text-white cursor-pointer"
-                title="닫기"
-              >
-                <span className="material-symbols-outlined text-[16px]">close</span>
-              </button>
-            </div>
-          </div>
-        )}
       </section>
 
       {/* ─────────────── 2. 노션 토글형 기기 종합건강검진 & 1:1 대화형 컨설팅 (접기/펼치기 동적 반응) ─────────────── */}

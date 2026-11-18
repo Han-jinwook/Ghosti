@@ -1,5 +1,9 @@
 import { getZCoreUrl, zCoreBridge } from '../../services/zCoreBridge';
 import { HybridVoiceSession, OnboardingProgressUpdate } from '../../services/aiEngine';
+import {
+  isCapacitorNativeMobileRuntime,
+  requestNativeSystemPhotoTrash,
+} from '../../services/ghostiMobileCareBridge';
 import type {
   FaceMemberCluster,
   FamilyRoomId,
@@ -161,6 +165,18 @@ export function resolveViewportLayout(): ViewportLayout {
 
 export async function requestQuarantineOp(kind: 'move' | 'restore', names: string[]): Promise<QuarantineOpResult> {
   if (!zCoreBridge.isConnected) {
+    if (isCapacitorNativeMobileRuntime()) {
+      const nativeRes = await requestNativeSystemPhotoTrash(kind, names);
+      if (nativeRes.canceled || !nativeRes.ok) {
+        return {
+          done: [],
+          errors: [{ file: '', error: nativeRes.error || '휴지통 이동이 취소되었습니다.' }],
+          demo: false,
+          offline: false,
+        };
+      }
+      return { done: names, errors: [], demo: false, offline: false };
+    }
     const isMobileEnv = isMobileOrStoreRuntime();
     return { done: names, errors: [], demo: !isMobileEnv, offline: false };
   }

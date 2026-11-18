@@ -1,5 +1,7 @@
 package app.sundreamer.ghosti;
 
+import android.content.Intent;
+import android.content.IntentSender;
 import android.graphics.Color;
 import android.os.Bundle;
 import android.util.Log;
@@ -13,6 +15,30 @@ import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.BridgeActivity;
 
 public class MainActivity extends BridgeActivity {
+    public interface IntentSenderResultCallback {
+        void onResult(int resultCode, Intent data);
+    }
+
+    private static final int REQ_MEDIASTORE_TRASH = 51991;
+    private IntentSenderResultCallback pendingTrashCallback = null;
+
+    public void launchMediaStoreIntentSender(IntentSender sender, IntentSenderResultCallback callback) throws IntentSender.SendIntentException {
+        this.pendingTrashCallback = callback;
+        startIntentSenderForResult(sender, REQ_MEDIASTORE_TRASH, null, 0, 0, 0);
+    }
+
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
+        if (requestCode == REQ_MEDIASTORE_TRASH) {
+            IntentSenderResultCallback cb = this.pendingTrashCallback;
+            this.pendingTrashCallback = null;
+            if (cb != null) {
+                cb.onResult(resultCode, data);
+                return;
+            }
+        }
+        super.onActivityResult(requestCode, resultCode, data);
+    }
     @Override
     public void onCreate(Bundle savedInstanceState) {
         final Thread.UncaughtExceptionHandler prevHandler = Thread.getDefaultUncaughtExceptionHandler();

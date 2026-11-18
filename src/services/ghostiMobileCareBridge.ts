@@ -29,6 +29,22 @@ export interface RemoteBloatCleanerDb {
   packages: RemoteBloatCleanerEntry[];
 }
 
+export interface SystemPhotoTrashTarget {
+  id: string;
+  name: string;
+  size?: number;
+  mtimeMs?: number;
+}
+
+export interface SystemPhotoTrashResult {
+  ok: boolean;
+  action?: 'move' | 'restore';
+  doneIds: string[];
+  matchedMediaStoreCount?: number;
+  canceled?: boolean;
+  error?: string;
+}
+
 export interface GhostiMobileCarePluginInterface {
   scanInstalledBloatCleaners(options?: {
     extraPackages?: string[];
@@ -38,6 +54,10 @@ export interface GhostiMobileCarePluginInterface {
   openPlayStoreSubscriptions(options?: { packageName?: string }): Promise<{ ok: boolean; url: string }>;
   openGoogleAccountPermissions(): Promise<{ ok: boolean; url: string }>;
   openAllInstalledAppsSettings(): Promise<{ ok: boolean }>;
+  requestSystemPhotoTrash(options: {
+    action: 'move' | 'restore';
+    items: SystemPhotoTrashTarget[];
+  }): Promise<SystemPhotoTrashResult>;
 }
 
 const GhostiMobileCareNative = registerPlugin<GhostiMobileCarePluginInterface>('GhostiMobileCare');
@@ -185,4 +205,70 @@ export async function triggerOpenAllInstalledApps(): Promise<void> {
       'noopener,noreferrer'
     );
   }
+}
+
+const mobilePhotoMetaRegistry = new Map<string, SystemPhotoTrashTarget>();
+
+export function registerMobilePickedPhotoMeta(target: SystemPhotoTrashTarget): void {
+  if (target.id) {
+    mobilePhotoMetaRegistry.set(target.id, target);
+  }
+  if (target.name) {
+    mobilePhotoMetaRegistry.set(target.name, target);
+  }
+}
+
+export function isCapacitorNativeMobileRuntime(): boolean {
+  if (typeof window === 'undefined') return false;
+  const cap = (window as unknown as {
+    Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string };
+  }).Capacitor;
+  const plat = cap?.getPlatform?.();
+  return Boolean(cap?.isNativePlatform?.() && (plat === 'android' || plat === 'ios'));
+}
+
+/**
+ * [Android MediaStore.createTrashRequest / iOS PHAssetChangeRequest.deleteAssets 공용 브릿지]
+ * - 네이티브 모바일 앱에서 사진 정리 승인([OK]) 시 OS 공식 확인창을 통해 실제 스마트폰 갤러리/구글 포토 휴지통(30일 보관)으로 이동합니다.
+ * - 유저가 OS 확인창에서 [취소]를 누르면 canceled: true를 반환하여 앱 내 목록도 지우지 않고 그대로 보존합니다.
+ */
+export async function requestNativeSystemPhotoTrash(
+  action: 'move' | 'restore',
+  keys: string[]
+): Promise<SystemPhotoTrashResult> {
+  const items: SystemPhotoTrashTarget[] = keys.map((k) => {
+    const found = mobilePhotoMetaRegistry.get(k);
+    if (found) return found;
+    return { id: k, name: k, size: 0 };
+  });
+
+  if (!isCapacitorNativeMobileRuntime()) {
+    return { ok: true, action, doneIds: keys, matchedMediaStoreCount: 0, canceled: false };
+  }
+
+  try {
+    const res = await GhostiMobileCareNative.requestSystemPhotoTrash({ action, items });
+    if (res && res.canceled) {
+      return {
+        ok: false,
+        action,
+        doneIds: [],
+        matchedMediaStoreCount: res.matchedMediaStoreCount || 0,
+        canceled: true,
+        error: '휴지통 이동을 취소하셨습니다.',
+      };
+    }
+    if (res && res.ok) {
+      return {
+        ok: true,
+        action,
+        doneIds: Array.isArray(res.doneIds) && res.doneIds.length > 0 ? res.doneIds : keys,
+        matchedMediaStoreCount: res.matchedMediaStoreCount || 0,
+        canceled: false,
+      };
+    }
+  } catch {
+    // 구버전 네이티브 래퍼이거나 미지원 기기일 때는 앱 내 정리 보관함 이동으로 안전하게 폴백
+  }
+  return { ok: true, action, doneIds: keys, matchedMediaStoreCount: 0, canceled: false };
 }

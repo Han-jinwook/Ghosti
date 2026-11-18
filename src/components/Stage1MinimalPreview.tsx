@@ -2080,38 +2080,6 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 </span>
               )}
             </div>
-
-            {/* 인라인 1초 되돌리기(Undo) 알림 콜아웃 */}
-            {lastUndoBatch && (
-              <div className="p-3.5 rounded-xl bg-zinc-900 border border-primary-container/60 flex flex-wrap items-center justify-between gap-3">
-                <div className="flex items-center gap-2.5">
-                  <span className="material-symbols-outlined text-primary-container text-[20px]">
-                    history
-                  </span>
-                  <span className="font-label-md text-[13px] text-zinc-100 font-semibold">
-                    {`방금 정리한 ${lastUndoBatch.count}장 (${fmtMB(lastUndoBatch.savedBytes)})이 안전하게 정리되었습니다.`}
-                  </span>
-                </div>
-
-                <div className="flex items-center gap-2">
-                  <button
-                    type="button"
-                    onClick={() => void undoLastQuarantine()}
-                    className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold transition-all cursor-pointer"
-                  >
-                    ↩️ 1초 즉시 되돌리기 (Undo)
-                  </button>
-                  <button
-                    type="button"
-                    onClick={dismissUndoBatch}
-                    className="p-1 text-zinc-400 hover:text-white cursor-pointer"
-                    title="닫기"
-                  >
-                    <span className="material-symbols-outlined text-[16px]">close</span>
-                  </button>
-                </div>
-              </div>
-            )}
           </section>
 
           {/* 1-B. [PC 전용 상단 노출] 🛡️ 귀신비서의 상시 케어 능력 3종 — 모바일에서는 PC 전용 단어 비노출 */}
@@ -2453,15 +2421,11 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                             <p className="text-[13.5px] sm:text-[14px] text-white font-extrabold leading-snug break-keep">
                               🤖 귀신비서 추천: 이 세트({groupPhotos.length}장)에서 가장 잘 나온{' '}
                               <span className="text-primary-container">[👑 추천 베스트 1장]</span>만 남기고, 나머지{' '}
-                              <span className="text-amber-300">
-                                {isStoreAppMode || layout === 'mobile'
-                                  ? `${redundantCount}장은 앱 내 정리 보관함으로 빼둘까요?`
-                                  : `${redundantCount}장은 버리시겠어요?`}
-                              </span>
+                              <span className="text-amber-300">{redundantCount}장은 휴지통으로 이동할까요?</span>
                             </p>
                             <span className="text-[11.5px] text-zinc-300 break-keep">
                               {isStoreAppMode || layout === 'mobile'
-                                ? '🔒 안드로이드·아이폰 보안 정책상 내 폰 갤러리(구글 포토) 원본은 그대로 안전하게 남고, 귀신같이 앱 안의 아래쪽 [↩️ 정리한 사진 복원(정리 보관함)]으로만 분리돼요.'
+                                ? '🗑️ [OK]를 누르면 시스템 확인창을 거쳐 내 폰 갤러리(구글 포토) 실제 휴지통(30일 보관)으로 이동하며, 아래쪽 [↩️ 정리한 사진 복원]에서 언제든 되돌릴 수 있어요.'
                                 : '💡 다른 사진을 남기고 싶다면 아래 실사진 중 원하는 사진을 먼저 터치해 👑 베스트 1장을 바꾼 뒤 [OK]를 눌러주세요.'}
                             </span>
                           </div>
@@ -2500,11 +2464,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                               }
                               className="w-full sm:w-auto max-w-full px-3.5 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-sm text-[12px] sm:text-[12.5px] font-black shadow-sm transition-all flex items-center justify-center gap-1.5 whitespace-normal break-keep text-center leading-snug cursor-pointer"
                             >
-                              <span>
-                                {isStoreAppMode || layout === 'mobile'
-                                  ? `👍 OK! 베스트 1장만 남기고 나머지 ${redundantCount}장 정리 보관함으로 빼기`
-                                  : `👍 OK! 베스트 1장만 남기고 나머지 ${redundantCount}장 버리기`}
-                              </span>
+                              <span>👍 OK! 베스트 1장만 남기고 나머지 {redundantCount}장 휴지통으로 이동</span>
                             </button>
 
                             <button
@@ -2799,72 +2759,101 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             </section>
           )}
 
-          {/* 3-C. 화면 아래쪽 [↩️ 정리한 사진 복원 (앱 내 정리 보관함)] — 중복·연사 세트별 정리 화면보다 아래쪽에 배치 */}
-          {quarantinedPhotos.length > 0 && (
+          {/* 3-C. 화면 아래쪽 [↩️ 정리한 사진 복원 (정리 보관함 / 휴지통 복원)] — 중복·연사 세트별 정리 화면보다 아래쪽에 배치 */}
+          {(quarantinedPhotos.length > 0 || lastUndoBatch) && (
             <section
               id="ghosti-quarantine-restore-section"
-              className="p-4 sm:p-5 rounded-2xl bg-[#18181B] border border-emerald-500/35 shadow-sm flex flex-col gap-2.5"
+              className="p-4 sm:p-5 rounded-2xl bg-[#18181B] border border-emerald-500/35 shadow-sm flex flex-col gap-3"
             >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowQuarantineDrawer((v) => !v)}
-                  className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-100 font-label-sm text-[12.5px] font-bold flex items-center gap-1.5 cursor-pointer"
-                >
-                  <span>↩️ 정리한 사진 복원 ({quarantinedPhotos.length}장)</span>
-                  <span className="text-emerald-300 text-[11px]">
-                    {showQuarantineDrawer ? '접기 ▲' : '펼치기 ▼'}
-                  </span>
-                </button>
-                {showQuarantineDrawer && (
-                  <button
-                    type="button"
-                    disabled={quarantineMoving}
-                    onClick={() =>
-                      void restoreFromQuarantine(quarantinedPhotos.map((p) => p.name))
-                    }
-                    className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer disabled:opacity-40 shadow-xs"
-                  >
-                    ♻️ {quarantinedPhotos.length}장 전체 원위치 복원
-                  </button>
-                )}
-              </div>
+              {lastUndoBatch && (
+                <div className="p-3.5 rounded-xl bg-zinc-900 border border-primary-container/60 flex flex-wrap items-center justify-between gap-3">
+                  <div className="flex items-center gap-2.5">
+                    <span className="material-symbols-outlined text-primary-container text-[20px] shrink-0">
+                      history
+                    </span>
+                    <span className="font-label-md text-[13px] text-zinc-100 font-semibold break-keep">
+                      {`방금 정리한 ${lastUndoBatch.count}장 (${fmtMB(lastUndoBatch.savedBytes)})이 휴지통(정리 보관함)으로 안전하게 이동되었습니다.`}
+                    </span>
+                  </div>
 
-              {(isStoreAppMode || layout === 'mobile') && (
-                <p className="text-[11.5px] text-zinc-400 break-keep leading-relaxed">
-                  🔒 안드로이드·아이폰 보안 정책상 내 폰 갤러리(구글 포토) 원본 사진은 그대로 안전하게 남으며, 방금 정리한 사진은 이곳 앱 내 정리 보관함으로 분리되어 언제든 1초 만에 되돌릴 수 있어요.
-                </p>
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => void undoLastQuarantine()}
+                      className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold transition-all cursor-pointer"
+                    >
+                      ↩️ 1초 즉시 되돌리기 (Undo)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={dismissUndoBatch}
+                      className="p-1 text-zinc-400 hover:text-white cursor-pointer"
+                      title="닫기"
+                    >
+                      <span className="material-symbols-outlined text-[16px]">close</span>
+                    </button>
+                  </div>
+                </div>
               )}
 
-              {showQuarantineDrawer && (
-                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2.5 p-3 rounded-xl bg-zinc-950/80 border border-white/10 max-h-60 overflow-y-auto">
-                  {quarantinedPhotos.map((qp) => (
-                    <div
-                      key={qp.id}
-                      className="p-2 rounded-lg bg-zinc-900/90 border border-white/10 flex items-center justify-between gap-2"
+              {quarantinedPhotos.length > 0 && (
+                <>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowQuarantineDrawer((v) => !v)}
+                      className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-100 font-label-sm text-[12.5px] font-bold flex items-center gap-1.5 cursor-pointer"
                     >
-                      <div className="flex items-center gap-2 min-w-0">
-                        <img
-                          src={qp.thumbUrl}
-                          alt=""
-                          loading="lazy"
-                          className="w-9 h-9 rounded-md object-cover border border-white/10 shrink-0"
-                        />
-                        <span className="text-[11px] text-zinc-300 font-medium truncate">
-                          {qp.name}
-                        </span>
-                      </div>
+                      <span>↩️ 정리한 사진 복원 ({quarantinedPhotos.length}장)</span>
+                      <span className="text-emerald-300 text-[11px]">
+                        {showQuarantineDrawer ? '접기 ▲' : '펼치기 ▼'}
+                      </span>
+                    </button>
+                    {showQuarantineDrawer && (
                       <button
                         type="button"
                         disabled={quarantineMoving}
-                        onClick={() => void restoreFromQuarantine([qp.name])}
-                        className="px-2 py-1 rounded-md bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-zinc-950 border border-emerald-500/40 text-[10.5px] font-extrabold shrink-0 cursor-pointer transition-colors"
+                        onClick={() =>
+                          void restoreFromQuarantine(quarantinedPhotos.map((p) => p.id))
+                        }
+                        className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer disabled:opacity-40 shadow-xs"
                       >
-                        복원
+                        ♻️ {quarantinedPhotos.length}장 전체 원위치 복원
                       </button>
+                    )}
+                  </div>
+
+                  {showQuarantineDrawer && (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 p-3 rounded-xl bg-zinc-950/80 border border-white/10 max-h-64 overflow-y-auto">
+                      {quarantinedPhotos.map((qp) => (
+                        <div
+                          key={qp.id}
+                          className="p-2.5 rounded-lg bg-zinc-900/90 border border-white/10 flex items-center justify-between gap-2.5"
+                        >
+                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                            <img
+                              src={qp.thumbUrl}
+                              alt=""
+                              loading="lazy"
+                              className="w-10 h-10 rounded-md object-cover border border-white/10 shrink-0 bg-zinc-800"
+                            />
+                            <span className="text-[11.5px] text-zinc-200 font-semibold break-all leading-snug">
+                              {qp.name}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            disabled={quarantineMoving}
+                            onClick={() => void restoreFromQuarantine([qp.id])}
+                            className="px-2.5 py-1.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-zinc-950 border border-emerald-500/40 text-[11px] font-extrabold shrink-0 cursor-pointer transition-colors"
+                          >
+                            복원
+                          </button>
+                        </div>
+                      ))}
                     </div>
-                  ))}
-                </div>
+                  )}
+                </>
               )}
             </section>
           )}

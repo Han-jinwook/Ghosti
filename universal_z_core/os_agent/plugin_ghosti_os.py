@@ -2492,7 +2492,7 @@ _VIDEO_STREAM_CACHE_DIR = MERLIN_DIR / "video_stream_cache"
 _VIDEO_STREAM_INFLIGHT: Dict[str, threading.Event] = {}
 _VIDEO_STREAM_LOCK = threading.Lock()
 _VIDEO_OCR_CACHE_FILE = MERLIN_DIR / "video_scene_ocr_cache_v2.json"
-_VIDEO_OCR_SCHEMA_VER = 9
+_VIDEO_OCR_SCHEMA_VER = 10
 _VIDEO_OCR_LOCK = threading.Lock()
 _VIDEO_OCR_BG_RUNNING = False
 _FFMPEG_EXE_CACHE: str | None = ""
@@ -2852,11 +2852,13 @@ def _clean_video_ocr_display_text(raw_txt: str) -> str:
             continue
         if re.search(r"(?:기리김|이니통를|을이랑|영고야시랑|hhi333|강툳꽃|굴정피워|기별\*이|콤지맄이|핫찔12|Bc»BOP|ht1ihi|파•g좀이|경구퓸|^정쟁$)", seg):
             continue
-        # 의미 없는 단독 1글자(C, L, 느, 7 등) 또는 순수 기호 파편 제외
-        if len(seg) <= 1 or re.fullmatch(r"\d{1,2}", seg):
+        # 의미 없는 단독 영문/기호 1글자(C, L, 7 등)는 제외하되, 줄바꿈된 완성형 한글 1글자('침', '장' 등)는 보존
+        if re.fullmatch(r"\d{1,2}", seg):
+            continue
+        if len(seg) <= 1 and not re.fullmatch(r"[가-힣]", seg):
             continue
         alnum = re.sub(r"[^가-힣a-zA-Z0-9]", "", seg)
-        if len(alnum) < 2:
+        if len(alnum) < 2 and not re.fullmatch(r"[가-힣]", alnum):
             continue
         # 회전 휠 내부의 휘어진 글자 조각(한글 1~2자 + 특수문자 다수 조합) 노이즈 제거
         ko_cnt = len(re.findall(r"[가-힣]", seg))
@@ -3022,6 +3024,35 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
             _VIDEO_OCR_BG_RUNNING = False
 
 
+_PS_SORT_OCR_LINES_FN = (
+    "function Join-SortedOcrLines($ocrRes) {\n"
+    "    $items = @()\n"
+    "    foreach ($ln in $ocrRes.Lines) {\n"
+    "        if ($ln.Words.Count -gt 0) {\n"
+    "            $r = $ln.Words[0].BoundingRect\n"
+    "            $items += [PSCustomObject]@{ Y = [double]$r.Y; X = [double]$r.X; H = [double]$r.Height; Text = $ln.Text }\n"
+    "        } else {\n"
+    "            $items += [PSCustomObject]@{ Y = 99999.0; X = 0.0; H = 12.0; Text = $ln.Text }\n"
+    "        }\n"
+    "    }\n"
+    "    if ($items.Count -eq 0) { return '' }\n"
+    "    $sorted = $items | Sort-Object Y, X\n"
+    "    $rows = @(); $curRow = @(); $curY = -1000.0; $curH = 12.0\n"
+    "    foreach ($it in $sorted) {\n"
+    "        if ($curRow.Count -eq 0 -or [Math]::Abs($it.Y - $curY) -le [Math]::Max(8.0, [Math]::Min($curH, $it.H) * 0.6)) {\n"
+    "            $curRow += $it\n"
+    "            if ($curRow.Count -eq 1) { $curY = $it.Y; $curH = $it.H }\n"
+    "        } else {\n"
+    "            $rows += (($curRow | Sort-Object X | ForEach-Object { $_.Text }) -join ' ||| ')\n"
+    "            $curRow = @($it); $curY = $it.Y; $curH = $it.H\n"
+    "        }\n"
+    "    }\n"
+    "    if ($curRow.Count -gt 0) { $rows += (($curRow | Sort-Object X | ForEach-Object { $_.Text }) -join ' ||| ') }\n"
+    "    return ($rows -join ' ||| ')\n"
+    "}\n"
+)
+
+
 def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
     """지정 폴더 내 *.jpg 파일들에 대해 Windows 10/11 내장 WinRT OCR + 90°/270° 가로눕힘 회전 폴백을 일괄 수행합니다."""
     ocr_by_file: Dict[str, str] = {}
@@ -3052,7 +3083,8 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
         "    $sym = ([regex]::Matches($t, '[^가-힣a-zA-Z0-9\\s/.:,\\-?%+~]')).Count\n"
         "    return ($ko * 4) + $en - ($cjk * 4) - ($sym * 3)\n"
         "}\n"
-        "$lang = New-Object Windows.Globalization.Language('ko')\n"
+        + _PS_SORT_OCR_LINES_FN
+        + "$lang = New-Object Windows.Globalization.Language('ko')\n"
         "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)\n"
         "if (-not $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }\n"
         "Get-ChildItem -LiteralPath $args[0] -Filter '*.jpg' | Sort-Object Name | ForEach-Object {\n"
@@ -3063,7 +3095,7 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
         "        $decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
         "        $bmp0 = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
         "        $res0 = Await ($engine.RecognizeAsync($bmp0)) ([Windows.Media.Ocr.OcrResult])\n"
-        "        $bestText = ($res0.Lines | ForEach-Object { $_.Text }) -join ' ||| '\n"
+        "        $bestText = Join-SortedOcrLines $res0\n"
         "        $bestScore = Score-Text $bestText\n"
         "        $ko0 = ([regex]::Matches($bestText, '[가-힣]')).Count\n"
         "        if ($ko0 -lt 5 -and $bestScore -lt 24) {\n"
@@ -3072,7 +3104,7 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
         "                $tf.Rotation = $rot\n"
         "                $bmpR = Await ($decoder.GetSoftwareBitmapAsync($decoder.BitmapPixelFormat, $decoder.BitmapAlphaMode, $tf, [Windows.Graphics.Imaging.ExifOrientationMode]::RespectExifOrientation, [Windows.Graphics.Imaging.ColorManagementMode]::DoNotColorManage)) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
         "                $resR = Await ($engine.RecognizeAsync($bmpR)) ([Windows.Media.Ocr.OcrResult])\n"
-        "                $txtR = ($resR.Lines | ForEach-Object { $_.Text }) -join ' ||| '\n"
+        "                $txtR = Join-SortedOcrLines $resR\n"
         "                $koR = ([regex]::Matches($txtR, '[가-힣]')).Count\n"
         "                $scR = Score-Text $txtR\n"
         "                if ($koR -ge 10 -and $scR -gt ($bestScore + 18)) {\n"
@@ -3344,7 +3376,8 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
                 "    $netTask.Wait(-1) | Out-Null\n"
                 "    $netTask.Result\n"
                 "}\n"
-                "$lang = New-Object Windows.Globalization.Language('ko')\n"
+                + _PS_SORT_OCR_LINES_FN
+                + "$lang = New-Object Windows.Globalization.Language('ko')\n"
                 "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)\n"
                 "if (-not $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }\n"
                 "$vfile = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($args[0])) ([Windows.Storage.StorageFile])\n"
@@ -3359,7 +3392,7 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
                 "        $bmp = Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
                 "        $res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])\n"
                 "        $thumb.Dispose()\n"
-                "        $joined = ($res.Lines | ForEach-Object { $_.Text }) -join ' ||| '\n"
+                "        $joined = Join-SortedOcrLines $res\n"
                 "        Write-Output \"$s`t$joined\"\n"
                 "    } catch {}\n"
                 "}\n"
