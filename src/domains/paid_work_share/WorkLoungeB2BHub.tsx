@@ -212,29 +212,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const [driveTargetPath, setDriveTargetPath] = useState('D:\\Ghosti\\업무공유폴더_S');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
-  const [docs, setDocs] = useState<WorkLoungeDocItem[]>(INITIAL_WORK_DOCS);
-  const [selectedDocId, setSelectedDocId] = useState<string>('work-doc-1');
+  const [docs, setDocs] = useState<WorkLoungeDocItem[]>([]);
+  const [selectedDocId, setSelectedDocId] = useState<string>('');
   const [isSidePeekOpen, setIsSidePeekOpen] = useState<boolean>(false);
   const [showBackupManager, setShowBackupManager] = useState<boolean>(false);
   const [masterWorkPcName, setMasterWorkPcName] = useState<string>('사무실 메인 공용 PC (S: 드라이브)');
   const [backupPcNodes, setBackupPcNodes] = useState<
     Array<{ id: string; name: string; mirrorPath: string; status: string; active: boolean }>
-  >([
-    {
-      id: 'backup-1',
-      name: '대표님 집 데스크탑 (백업 1호)',
-      mirrorPath: 'D:\\Ghosti_업무백업_원본미러',
-      status: '✓ 원본 100% 실시간 동기화됨',
-      active: true,
-    },
-    {
-      id: 'backup-2',
-      name: '정실장 재무회계 PC (백업 2호)',
-      mirrorPath: 'E:\\Ghosti_안전백업_금고',
-      status: '✓ 원본 100% 실시간 동기화됨',
-      active: true,
-    },
-  ]);
+  >([]);
   const [newBackupPcName, setNewBackupPcName] = useState<string>('');
   const [newBackupPcPath, setNewBackupPcPath] = useState<string>('D:\\Ghosti_추가백업_폴더');
   const [nightSleepBannerPhase, setNightSleepBannerPhase] = useState<'hidden' | 'visible' | 'fading'>('hidden');
@@ -253,51 +238,13 @@ export const WorkLoungeB2BHub: React.FC = () => {
   >([
     {
       id: 'm-1',
-      name: '김대표 (방장)',
-      dept: '대표이사 · 마스터 PC',
+      name: '내 계정 (방장)',
+      dept: '마스터 PC 관리자',
       role: 'host',
-      sDriveConnected: true,
-      statusText: 'S:\\ 마스터 연결됨 (방장 1인 결제 · 전체 관리)',
-    },
-    {
-      id: 'm-2',
-      name: '박과장',
-      dept: '공무·계약팀',
-      role: 'editor',
-      sDriveConnected: true,
-      statusText: 'S:\\ 실시간 연결됨 (초대 팀원 평생 0원)',
-    },
-    {
-      id: 'm-3',
-      name: '이팀장',
-      dept: '전략기획팀',
-      role: 'editor',
-      sDriveConnected: true,
-      statusText: 'S:\\ 실시간 연결됨 (초대 팀원 평생 0원)',
-    },
-    {
-      id: 'm-4',
-      name: '정실장',
-      dept: '재무회계팀 (백업 2호)',
-      role: 'editor',
-      sDriveConnected: true,
-      statusText: 'S:\\ 실시간 연결됨 (초대 팀원 평생 0원)',
-    },
-    {
-      id: 'm-5',
-      name: '최대리',
-      dept: '공간기획·설계팀',
-      role: 'editor',
-      sDriveConnected: true,
-      statusText: 'S:\\ 실시간 연결됨 (초대 팀원 평생 0원)',
-    },
-    {
-      id: 'm-6',
-      name: '강사원',
-      dept: '현장감리·외주협업',
-      role: 'viewer',
-      sDriveConnected: true,
-      statusText: 'S:\\ 읽기 전용 연결됨 (초대 팀원 평생 0원)',
+      sDriveConnected: Boolean(zCoreBridge.isConnected),
+      statusText: zCoreBridge.isConnected
+        ? 'S:\\ 마스터 연결됨 (방장 1인 결제 · 전체 관리)'
+        : 'PC Z-코어 연결 시 S:\\ 드라이브가 자동 마운트됩니다',
     },
   ]);
 
@@ -313,12 +260,12 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
   const workPlan = subscribedLounges.work;
   const [folderCounts, setFolderCounts] = useState<Record<string, number>>({
-    all: 7,
-    root: 1,
-    contracts: 2,
-    quotes: 2,
-    tax: 1,
-    site: 2,
+    all: 0,
+    root: 0,
+    contracts: 0,
+    quotes: 0,
+    tax: 0,
+    site: 0,
   });
 
   // 실제 S: 드라이브 폴더 스캔 및 문서 목록 실시간 동기화
@@ -328,7 +275,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
       .then((data: { ok: boolean; files: any[] }) => {
         if (!data?.ok || !Array.isArray(data.files)) return;
         const realFiles = data.files;
-        if (realFiles.length === 0) return;
+        if (realFiles.length === 0) {
+          setFolderCounts({ all: 0, root: 0, contracts: 0, quotes: 0, tax: 0, site: 0 });
+          setDocs([]);
+          return;
+        }
 
         // 실제 파일들을 WorkLoungeDocItem 구조로 매핑
         const mappedRealDocs: WorkLoungeDocItem[] = realFiles.map((rf: any, idx: number) => {
@@ -370,21 +321,18 @@ export const WorkLoungeB2BHub: React.FC = () => {
           };
         });
 
-        // 실제 파일(예: 1줄빛러M.gif 등)을 최상단에 배치하고 기존 표준 업무 문서 템플릿과 병합
-        const combinedDocs = [
-          ...mappedRealDocs,
-          ...INITIAL_WORK_DOCS.filter((initDoc) => !mappedRealDocs.some((r) => r.fileName === initDoc.fileName)),
-        ];
-
-        // 폴더별 카운트 계산
-        const counts: Record<string, number> = { all: combinedDocs.length, root: 0, contracts: 0, quotes: 0, tax: 0, site: 0 };
-        combinedDocs.forEach((d) => {
+        // [실전 전용 철칙]: 번들 목업(INITIAL_WORK_DOCS)을 섞지 않고 오직 실제 S: 드라이브 파일만 표시
+        const counts: Record<string, number> = { all: mappedRealDocs.length, root: 0, contracts: 0, quotes: 0, tax: 0, site: 0 };
+        mappedRealDocs.forEach((d) => {
           if (counts[d.folderId] !== undefined) {
             counts[d.folderId]++;
           }
         });
         setFolderCounts(counts);
-        setDocs(combinedDocs);
+        setDocs(mappedRealDocs);
+        if (mappedRealDocs.length > 0) {
+          setSelectedDocId((prev) => prev || mappedRealDocs[0].id);
+        }
       })
       .catch(() => {});
   };

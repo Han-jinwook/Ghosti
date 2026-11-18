@@ -402,7 +402,13 @@ export const createAssistantOnboardingSlice: StateCreator<
       }
     }
 
-    const enrichedPhotos = dataset.photos.map((p) => {
+    const existingMobilePicked = !zCoreBridge.isConnected
+      ? get().photos.filter((p) => String(p.id || '').startsWith('mobile_local_'))
+      : [];
+    const baseDatasetPhotos =
+      dataset.photos.length > 0 ? dataset.photos : existingMobilePicked;
+
+    const enrichedPhotos = baseDatasetPhotos.map((p) => {
       const extraTags = memberTagsByPhoto.get(p.name);
       if (!extraTags || extraTags.length === 0) return p;
       return {
@@ -607,6 +613,14 @@ export const createAssistantOnboardingSlice: StateCreator<
                   ),
                 }));
               },
+              onPhotoVisionHydrated: (photoId, patch) => {
+                set((state) => ({
+                  photos: state.photos.map((p) => (p.id === photoId ? { ...p, ...patch } : p)),
+                  searchResults: state.searchResults.map((sr) =>
+                    sr.photo.id === photoId ? { ...sr, photo: { ...sr.photo, ...patch } } : sr
+                  ),
+                }));
+              },
             });
           }, 900);
 
@@ -807,6 +821,21 @@ export const createAssistantOnboardingSlice: StateCreator<
       window.dispatchEvent(
         new CustomEvent('ghosti_photo_audit_summary', { detail: summaryDetail })
       );
+    }
+    // [Gemma 2 주력 비전 인덱싱 + 광학/OCR 보조 통합]: 모바일·PC에서 불러온 실사진에 대해 즉시 768D EmbeddingGemma 2 비전 벡터 및 한국어 의미 태그·OCR 결합 가동
+    if (!skippedAllAsExisting) {
+      void startSilentRealMediaVisionIndexing({
+        photos: get().photos,
+        videos: get().videoSceneItems,
+        onPhotoVisionHydrated: (photoId, patch) => {
+          set((state) => ({
+            photos: state.photos.map((p) => (p.id === photoId ? { ...p, ...patch } : p)),
+            searchResults: state.searchResults.map((sr) =>
+              sr.photo.id === photoId ? { ...sr, photo: { ...sr.photo, ...patch } } : sr
+            ),
+          }));
+        },
+      });
     }
   },
 

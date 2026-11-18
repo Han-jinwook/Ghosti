@@ -18,16 +18,16 @@ export function loadSyncState(photoCount: number, totalBytes: number): SyncState
   }
 
   // 장당 약 13KB (WebP 썸네일 10KB + 768차원 양자화 벡터 3KB)
-  const packSizeMB = +Math.max(1.2, (photoCount * 13) / 1024).toFixed(1);
-  const originalSizeGB = +Math.max(0.1, totalBytes / 1024 / 1024 / 1024).toFixed(2);
+  const packSizeMB = photoCount > 0 ? +Math.max(0.1, (photoCount * 13) / 1024).toFixed(1) : 0;
+  const originalSizeGB = totalBytes > 0 ? +Math.max(0.01, totalBytes / 1024 / 1024 / 1024).toFixed(2) : 0;
 
   return {
     mode: saved.mode ?? 'p2p-wifi',
     privateSyncStrategy: saved.privateSyncStrategy ?? 'shadow',
     wifiOnly: saved.wifiOnly ?? true,
     chargingOnly: saved.chargingOnly ?? true,
-    connectedPeer: saved.connectedPeer ?? 'Galaxy S24 Ultra / iPhone 15 Pro (1MB 모바일 에이전트)',
-    lastSyncedAt: saved.lastSyncedAt ?? '방금 전',
+    connectedPeer: saved.connectedPeer ?? '연결된 기기 없음',
+    lastSyncedAt: saved.lastSyncedAt ?? '동기화 기록 없음',
     packSizeMB,
     originalSizeGB,
     syncing: false,

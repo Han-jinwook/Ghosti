@@ -167,7 +167,7 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
   // ─────────────── [4대 라운지 & 24시간 GPU 클라우드 서버 도우미 + 1차 출시용 모바일 클린 모드 & 이중 방어] ───────────────
   telemetry: null,
   merlinAuth: loadMerlinAuth(),
-  syncState: loadSyncState(550, 3230438906),
+  syncState: loadSyncState(0, 0),
   showProModal:
     typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('master') === 'pc' &&

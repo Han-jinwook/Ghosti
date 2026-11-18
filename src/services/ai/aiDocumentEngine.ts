@@ -250,12 +250,10 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
     if (canProbeLocal) {
       return [];
     }
-    return Array.from(staticByFileName.values()).slice(0, 2);
+    // [실전 전용 철칙]: Z-코어 미연결 시에도 번들 샘플 문서(주택임대차계약서·비밀번호관리표 등)를 적재하지 않고 0건 반환
+    return [];
   } catch {
-    if (hasActiveGhostiLoginSession() && zCoreBridge.isConnected) {
-      return [];
-    }
-    return [...GDRIVE_SMART_DOC_ITEMS].slice(0, 2);
+    return [];
   }
 }
 

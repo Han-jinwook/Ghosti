@@ -10,6 +10,7 @@ import {
   cleanVideoTimestampLabel,
   groupBurstSearchResults,
   resolveVideoCardThumbUrl,
+  startSilentRealMediaVisionIndexing,
 } from '../services/aiEngine';
 import { executeRealOsAction } from '../services/setupMonsterEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
@@ -457,6 +458,30 @@ export const MobileAppView: React.FC = () => {
       searchSpace: 'video',
       hasUserSelectedSearchTab: true,
       lastQuarantineToast: `🎬 내 폰 동영상 ${newItems.length}개를 불러왔습니다! 카드를 눌러 재생하거나 [📝 글자 뽑기]를 눌러보세요.`,
+    });
+    void startSilentRealMediaVisionIndexing({
+      photos: useSaySeeStore.getState().photos,
+      videos: nextAll,
+      onVideoThumbHydrated: (videoFileName, thumbUrl) => {
+        useSaySeeStore.setState((st) => ({
+          videoSceneItems: st.videoSceneItems.map((v) =>
+            v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
+          ),
+          matchedVideoScenes: st.matchedVideoScenes.map((v) =>
+            v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
+          ),
+        }));
+      },
+      onVideoOcrHydrated: (videoFileName, ocrMeta) => {
+        useSaySeeStore.setState((st) => ({
+          videoSceneItems: st.videoSceneItems.map((v) =>
+            v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
+          ),
+          matchedVideoScenes: st.matchedVideoScenes.map((v) =>
+            v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
+          ),
+        }));
+      },
     });
   };
 

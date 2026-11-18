@@ -48,6 +48,7 @@ import {
   toRows,
 } from './aiSharedRuntime';
 import { embedSingleLocalVideoIfNeeded } from './aiVideoEngine';
+import { recognizeDataUrlWithPaddleOcr } from './aiPaddleOcrEngine';
 
 export async function fetchAutonomousFaceClusters(): Promise<{
   latestCorpusYear: number;
@@ -336,172 +337,8 @@ export async function loadInitialPhotoDataset(): Promise<{
           semanticByPhoto.set(name, meta as any);
         }
       }
-      const isConnectedSession = hasActiveGhostiLoginSession() && zCoreBridge.isConnected;
-      const curatedSampleFiles = [
-        // 미연결 미리보기용 갤러리 샘플 2장 (1번 해변 가족 노을 3장 연사 묶음 1세트 + 2번 바다 패러세일링 1장 = 갤러리 총 2장)
-        'IMG_20250510_1001.jpg',
-        'IMG_20250510_1002.jpg',
-        'IMG_20250510_1003.jpg',
-        'TRV_20250720_1139.jpg',
-        // AI 클린몬스터 4대 탭 체험용 정예 샘플 (각 2장씩, 갤러리 카운트 제외)
-        'MEMO_202509_1259_주차장_기둥.jpg',
-        'MEMO_202509_1261_택배_상자.jpg',
-        'Screenshot_20250802_1001_쇼핑위시리스트.jpg',
-        'Screenshot_20250802_1002_배달주문내역.jpg',
-        'BLUR_202510_1282_흔들린사진.jpg',
-        'BLUR_202510_1283_흔들린사진.jpg',
-        // 동영상 키프레임 스틸컷 4장 (로그인 및 엔진 연결 시에만 추가)
-        ...(isConnectedSession
-          ? [
-              '20240719_105706_t12.jpg',
-              '20240720_134808_t06.jpg',
-              '20240722_052422_t00.jpg',
-              '20260918_202442_t00.jpg',
-            ]
-          : []),
-      ];
-      semanticByPhoto.set('20240719_105706_t12.jpg', {
-        captionKo:
-          '말레이시아 코타키나발루 푸른 바다와 하늘 위에서 알록달록한 낙하산을 타고 모터보트 위로 하강하는 2인 패러세일링 액티비티 장면입니다.',
-        captionEn: 'Two people parasailing over the ocean in Kota Kinabalu approaching a boat.',
-        keywordsKo: [
-          '코타키나발루',
-          '말레이시아',
-          '패러세일링',
-          '패러세일',
-          '낙하산',
-          '보트',
-          '모터보트',
-          '바다',
-          '해변',
-          '바닷가',
-          '여행',
-          '액티비티',
-          '하늘',
-        ],
-        primaryTag: '#코타키나발루·패러세일링',
-      });
-      semanticByPhoto.set('20240720_134808_t06.jpg', {
-        captionKo:
-          '말레이시아 코타키나발루 리조트 야외 테라스 라탄 소파에 나란히 앉아 손인사하며 기념 촬영하는 남녀 커플 장면입니다.',
-        captionEn: 'Couple posing on a resort outdoor terrace sofa in Kota Kinabalu.',
-        keywordsKo: [
-          '코타키나발루',
-          '말레이시아',
-          '리조트',
-          '테라스',
-          '야외테라스',
-          '기념촬영',
-          '소파',
-          '야자수',
-          '여행',
-          '휴양지',
-          '생일',
-          '케이크',
-          '촛불',
-        ],
-        primaryTag: '#코타키나발루·리조트',
-      });
-      semanticByPhoto.set('20240722_052422_t00.jpg', {
-        captionKo:
-          '비행기 좌석 창문 너머로 구름 위로 떠오르는 붉은 노을빛 일출 햇살과 하늘 풍경을 스마트폰으로 촬영하는 기내 장면입니다.',
-        captionEn: 'Sunrise view through an airplane window above the clouds.',
-        keywordsKo: [
-          '비행기',
-          '항공기',
-          '기내',
-          '창문',
-          '창밖',
-          '일출',
-          '노을',
-          '구름',
-          '하늘',
-          '코타키나발루',
-          '여행',
-        ],
-        primaryTag: '#비행기·창밖일출',
-      });
-      semanticByPhoto.set('20260918_202442_t00.jpg', {
-        captionKo:
-          '회의실에서 화이트보드에 판서하며 내년 매출 목표를 발표하고 박수 치며 환호하는 브리핑 현장 스틸컷입니다.',
-        captionEn: 'Whiteboard presentation in a meeting room discussing next year sales targets.',
-        keywordsKo: [
-          '회의실',
-          '화이트보드',
-          '판서',
-          '내년',
-          '매출',
-          '목표',
-          '박수',
-          '환호',
-          '축하합니다',
-          '골프',
-          '스윙',
-          '피니시',
-        ],
-        primaryTag: '#회의실·브리핑',
-      });
-      semanticByPhoto.set('IMG_20250815_1008.jpg', {
-        captionKo: '식당에서 숙성 생삼겹살 등 외식 식사비를 결제한 영수증 전표 사진입니다.',
-        captionEn: 'Paper restaurant receipt for pork belly meal payment.',
-        keywordsKo: ['영수증', '전표', '삼겹살', '식당', '결제', '카드영수증'],
-        primaryTag: '#주차장·기둥',
-      });
-      semanticByPhoto.set('MEMO_202509_1259_주차장_기둥.jpg', {
-        captionKo: '지하주차장 기둥 번호(B3-C12)를 잊지 않기 위해 일회성으로 찍어둔 주차 위치 메모 사진입니다.',
-        captionEn: 'Temporary parking lot pillar number B3-C12 memo photo.',
-        keywordsKo: ['주차장', '기둥', '주차메모', '지하주차장', '일회성메모'],
-        primaryTag: '#주차장·기둥',
-      });
-      semanticByPhoto.set('MEMO_202509_1261_택배_상자.jpg', {
-        captionKo: '현관 앞에 도착한 택배 상자와 운송장 스티커를 확인용으로 촬영한 일회성 사물 메모 사진입니다.',
-        captionEn: 'Temporary delivery parcel box and shipping label memo photo.',
-        keywordsKo: ['택배', '상자', '운송장', '송장', '일회성메모'],
-        primaryTag: '#택배·상자',
-      });
-      semanticByPhoto.set('BLUR_202510_1282_흔들린사진.jpg', {
-        captionKo: '걸어가며 셔터를 눌러 피사체 전체 초점이 무너지고 심하게 흔들린 오촬영 사진입니다.',
-        captionEn: 'Severely motion-blurred misfired photo.',
-        keywordsKo: ['흔들린사진', '초점이탈', '블러', '오촬영'],
-        primaryTag: '#흔들린사진',
-      });
-      semanticByPhoto.set('BLUR_202510_1283_흔들린사진.jpg', {
-        captionKo: '어두운 실내에서 손떨림으로 인해 윤곽이 심하게 번지고 흐릿하게 찍힌 사진입니다.',
-        captionEn: 'Blurry out-of-focus indoor misfired photo.',
-        keywordsKo: ['흔들린사진', '초점이탈', '블러', '손떨림'],
-        primaryTag: '#흔들린사진',
-      });
-      // [실물 파일 순수성 철칙]: 로컬 Z-코어 엔진이 연결된 상태(isConnectedSession === true)에서는
-      // 샘플 사진(sample_photos_301 / 쇼윈도 예시)을 단 1장도 끼워 넣지 않고 100% 유저의 진짜 PC 사진(fileList)만 유지합니다!
-      if (!isConnectedSession) {
-        const existingNames = new Set(fileList.map((f) => f.path));
-        const bundledEntries = curatedSampleFiles
-          .filter((name) => !existingNames.has(name))
-          .map((name, idx) => {
-            const a = auditByPhoto.get(name);
-            return {
-              path: name,
-              size: a?.size ?? 72000,
-              date: name.includes('20240719')
-                ? '2024-07-19'
-                : name.includes('20240720')
-                ? '2024-07-20'
-                : name.includes('20240722')
-                ? '2024-07-22'
-                : name.includes('20250510')
-                ? '2025-05-10'
-                : name.includes('20250515')
-                ? '2025-05-15'
-                : name.includes('20250610')
-                ? '2025-06-10'
-                : name.includes('20250720')
-                ? '2025-07-20'
-                : '2025-08-15',
-              mtimeMs: a?.ts || Date.now() - idx * 60000,
-            };
-          });
-        fileList = [...bundledEntries, ...fileList];
-      }
+      // [실물 파일 순수성 철칙]: 로컬 Z-코어 연결 여부와 무관하게 본 앱(workspace)에서는
+      // 번들 샘플 사진(sample_photos_301 / 쇼윈도 예시)을 단 1장도 끼워 넣지 않고 100% 실제 사용자 파일(fileList)만 유지합니다!
     }
   } catch {
     /* ignore */
@@ -2127,10 +1964,56 @@ export async function runOnboardingIndexingPipeline(params: {
 // ─────────────────────────────────────────────────────────────────────────────
 
 
+interface Gemma2ConceptProbe {
+  id: string;
+  prompt: string;
+  tag: string;
+  keywordsKo: string[];
+  isDocOrReceipt?: boolean;
+}
+
+const GEMMA2_VISUAL_CONCEPT_PROBES: Gemma2ConceptProbe[] = [
+  { id: 'people', prompt: '사람 얼굴 가족 친구 셀카 인물 사진 portrait people family selfie', tag: '#인물·가족', keywordsKo: ['인물', '사람', '가족', '셀카', '얼굴'] },
+  { id: 'kids', prompt: '귀여운 아기 어린이 아이 모습 cute baby child kid', tag: '#아기·어린이', keywordsKo: ['아기', '어린이', '아이', '육아'] },
+  { id: 'dog', prompt: '귀여운 강아지 반려견 개 털 코 cute dog puppy pet', tag: '#반려견·강아지', keywordsKo: ['강아지', '반려견', '멍멍이', '개', '동물'] },
+  { id: 'cat', prompt: '귀여운 고양이 반려묘 냥이 수염 cute cat kitten pet', tag: '#반려묘·고양이', keywordsKo: ['고양이', '반려묘', '냥이', '동물'] },
+  { id: 'beach', prompt: '푸른 바다 해변 파도 백사장 수평선 blue ocean sea beach waves', tag: '#바다·해변', keywordsKo: ['바다', '해변', '바닷가', '파도', '여행', '물놀이'] },
+  { id: 'nature', prompt: '푸른 산 숲 나무 등산로 자연 풍경 green mountain forest nature trail', tag: '#산·자연풍경', keywordsKo: ['산', '등산', '숲', '나무', '자연', '풍경'] },
+  { id: 'food', prompt: '식탁 위 맛있는 음식 요리 식사 접시 delicious food meal dish on table', tag: '#음식·맛집', keywordsKo: ['음식', '요리', '식사', '맛집', '먹방'] },
+  { id: 'cafe', prompt: '카페 커피 음료 디저트 케이크 빵 cafe coffee dessert cake', tag: '#카페·디저트', keywordsKo: ['카페', '커피', '디저트', '케이크', '음료'] },
+  { id: 'city', prompt: '도심 건물 거리 야경 불빛 실내 인테리어 city building street night view indoor', tag: '#도시·실내외', keywordsKo: ['건물', '거리', '야경', '실내', '풍경'] },
+  { id: 'car', prompt: '자동차 차량 도로 주차장 기둥 번호판 car vehicle road parking lot', tag: '#자동차·주차', keywordsKo: ['자동차', '차량', '주차장', '주차', '도로'] },
+  { id: 'receipt', prompt: '종이 영수증 전표 계산서 금액 결제 내역 paper receipt bill invoice payment', tag: '#영수증·전표', keywordsKo: ['영수증', '전표', '결제', '계산서', '서류'], isDocOrReceipt: true },
+  { id: 'document', prompt: '흰 종이 문서 계약서 증명서 인쇄된 글자 표 printed paper document contract form text', tag: '#문서·서류', keywordsKo: ['문서', '서류', '계약서', '증명서', '글자'], isDocOrReceipt: true },
+  { id: 'screenshot', prompt: '스마트폰 앱 화면 캡처 스크린샷 모바일 인터페이스 mobile app screen capture screenshot UI', tag: '#스크린샷', keywordsKo: ['스크린샷', '캡처', '화면캡처'], isDocOrReceipt: true },
+];
+
+let cachedGemma2ConceptProbeVecs: Map<string, Float32Array> | null = null;
+
+async function ensureGemma2ConceptProbeVecs(): Promise<Map<string, Float32Array>> {
+  if (cachedGemma2ConceptProbeVecs && cachedGemma2ConceptProbeVecs.size > 0) {
+    return cachedGemma2ConceptProbeVecs;
+  }
+  const map = new Map<string, Float32Array>();
+  for (const probe of GEMMA2_VISUAL_CONCEPT_PROBES) {
+    try {
+      const vecs = await encodeMultimodalSearchQueryVecs(probe.prompt, 1200);
+      if (vecs.length > 0 && vecs[0].length === DEFAULT_DIM) {
+        map.set(probe.id, vecs[0]);
+      }
+    } catch {
+      /* ignore individual probe error */
+    }
+  }
+  if (map.size > 0) {
+    cachedGemma2ConceptProbeVecs = map;
+  }
+  return map;
+}
+
 /**
- * [귀신비서 엔진 연결 직후 무소음 백그라운드 실미디어 비전 인덱서]
- * - 1순위: 텍스트 인코더 선행 준비 후 로컬 동영상 키프레임 캐싱
- * - 2순위: 아직 벡터가 없는 내 PC 실사진(최근 90일 우선) 480px 고속 썸네일 기반 768차원 벡터 추출 및 영구 캐싱
+ * [EmbeddingGemma 2 주력 + 광학엔진(dHash/선명도/종횡비) 보조 + PP-OCRv5 글자 보조 단일 통합 파이프라인]
+ * - PC Z-코어 연결 시 및 모바일(Android/iOS) 실사진·실영상 불러오기 시 모두 동일하게 작동합니다.
  */
 export async function startSilentRealMediaVisionIndexing(params: {
   photos: PhotoItem[];
@@ -2140,29 +2023,29 @@ export async function startSilentRealMediaVisionIndexing(params: {
     videoFileName: string,
     ocrMeta: { hasScreenOcrText: boolean; ocrLineCount: number; ocrFullText: string }
   ) => void;
+  onPhotoVisionHydrated?: (photoId: string, patch: Partial<PhotoItem>) => void;
 }): Promise<void> {
   if (aiRuntimeFlags.silentMediaIndexingRunning) return;
-  if (!hasActiveGhostiLoginSession() || !zCoreBridge.isConnected) return;
+  if (params.photos.length === 0 && params.videos.length === 0) return;
 
-  const isMobileUA =
-    typeof navigator !== 'undefined' &&
-    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
   const saveData =
     typeof navigator !== 'undefined' && (navigator as any).connection?.saveData === true;
-  if (isMobileUA || saveData) return;
+  if (saveData) return;
 
   aiRuntimeFlags.silentMediaIndexingRunning = true;
   try {
     await hydrateRealMediaVectorCacheOnce();
     // 텍스트 질의 인코더를 먼저 단독 로드하여 비전 모델과의 대역폭/메모리 경합을 방지
     await ensureTextQueryEncoderLoaded();
+    const conceptVecMap = await ensureGemma2ConceptProbeVecs();
 
     // 1) 동영상 키프레임 무소음 백그라운드 인덱싱
     const localVids = params.videos.filter(
-      (v) => !v.isAllBlack && String(v.id || '').startsWith('local_vid_')
+      (v) =>
+        !v.isAllBlack &&
+        (String(v.id || '').startsWith('local_vid_') || String(v.id || '').startsWith('mobile_vid_'))
     );
     for (let i = 0; i < localVids.length; i++) {
-      if (!zCoreBridge.isConnected) break;
       while (
         aiRuntimeFlags.priorityVideoSearchDepth > 0 ||
         aiRuntimeFlags.activeVideoPlaybackCount > 0 ||
@@ -2180,7 +2063,7 @@ export async function startSilentRealMediaVisionIndexing(params: {
       await new Promise((r) => setTimeout(r, 80));
     }
 
-    // 2) 미색인 실사용 PC 사진 조용한 백그라운드 벡터 인덱싱 (최근 90일 우선, 최대 320장 순차 캐싱)
+    // 2) 미색인 실사용 사진(PC + 모바일 공통) EmbeddingGemma 2 768차원 비전 벡터 + 광학/OCR 보조 통합 인덱싱
     const unindexedPhotos = silentIndexingBrake
       .sortPhotosRecent90DaysFirst(
         params.photos.filter((p) => !p.quarantined && (!p.vec || p.vec.length !== DEFAULT_DIM))
@@ -2188,7 +2071,6 @@ export async function startSilentRealMediaVisionIndexing(params: {
       .slice(0, 320);
 
     for (let i = 0; i < unindexedPhotos.length; i++) {
-      if (!zCoreBridge.isConnected) break;
       while (
         aiRuntimeFlags.priorityVideoSearchDepth > 0 ||
         aiRuntimeFlags.activeVideoPlaybackCount > 0 ||
@@ -2199,34 +2081,96 @@ export async function startSilentRealMediaVisionIndexing(params: {
       await silentIndexingBrake.waitForIndexingSlot(i);
       const item = unindexedPhotos[i];
       const pKey = getPhotoMediaCacheKey(item.name, item.size);
-      const cached = hydratedPhotoVecMap.get(pKey);
-      if (cached && cached.length === DEFAULT_DIM) {
-        item.vec = cached;
-        continue;
+      let vec = hydratedPhotoVecMap.get(pKey) || null;
+      let decodedThumb = item.thumbUrl || item.fullUrl;
+
+      if (!vec || vec.length !== DEFAULT_DIM) {
+        const t0 = performance.now();
+        try {
+          const res = await fetch(item.thumbUrl || item.fullUrl);
+          if (!res.ok) continue;
+          const blob = await res.blob();
+          const decoded = await decodeImageBlobToRawAndThumb(blob);
+          if (!decoded) continue;
+          if (decoded.thumbDataUrl) decodedThumb = decoded.thumbDataUrl;
+          while (aiRuntimeFlags.priorityVideoSearchDepth > 0 || aiRuntimeFlags.activeVideoPlaybackCount > 0) {
+            await new Promise((r) => setTimeout(r, 450));
+          }
+          vec = await embedRawImageWithSharedVision(decoded.rawImg);
+          const inferElapsed = performance.now() - t0;
+          if (vec) {
+            hydratedPhotoVecMap.set(pKey, vec);
+            await persistMediaCacheEntry(pKey, vec);
+            silentIndexingBrake.recordInferenceLatencyMs(inferElapsed);
+          }
+          if (inferElapsed > 300 && silentIndexingBrake.getSnapshot().speedMode !== 'turbo') {
+            await new Promise((r) => setTimeout(r, Math.min(2200, Math.round(inferElapsed * 1.15))));
+          }
+        } catch {
+          /* skip unreadable file */
+        }
       }
-      const t0 = performance.now();
-      try {
-        const res = await fetch(item.thumbUrl || item.fullUrl);
-        if (!res.ok) continue;
-        const blob = await res.blob();
-        const decoded = await decodeImageBlobToRawAndThumb(blob);
-        if (!decoded) continue;
-        while (aiRuntimeFlags.priorityVideoSearchDepth > 0 || aiRuntimeFlags.activeVideoPlaybackCount > 0) {
-          await new Promise((r) => setTimeout(r, 450));
+
+      if (vec && vec.length === DEFAULT_DIM) {
+        item.vec = vec;
+        // [Gemma 2 주력 의미 분류 + 광학 보조 결합]: 768D 비전 벡터와 한국어 시각 개념 앵커 유사도 상위 매칭
+        const rankedConcepts: Array<{ probe: Gemma2ConceptProbe; sim: number }> = [];
+        for (const probe of GEMMA2_VISUAL_CONCEPT_PROBES) {
+          const pVec = conceptVecMap.get(probe.id);
+          if (!pVec) continue;
+          const sim = cosineSimilarity(pVec, vec);
+          rankedConcepts.push({ probe, sim });
         }
-        const vec = await embedRawImageWithSharedVision(decoded.rawImg);
-        const inferElapsed = performance.now() - t0;
-        if (vec) {
-          item.vec = vec;
-          hydratedPhotoVecMap.set(pKey, vec);
-          await persistMediaCacheEntry(pKey, vec);
-          silentIndexingBrake.recordInferenceLatencyMs(inferElapsed);
+        rankedConcepts.sort((a, b) => b.sim - a.sim);
+        const topMatches = rankedConcepts.filter(
+          (rc, idx) => idx === 0 || (idx === 1 && rc.sim >= rankedConcepts[0].sim - 0.025)
+        );
+
+        const mergedTags = new Set<string>(item.tags || []);
+        const mergedKws = new Set<string>(item.keywordsKo || []);
+        const ontoTags = new Set<string>(item.ontologyPrimaryTags || []);
+        let shouldRunOcr = Boolean(
+          item.isVaultDocument || item.trashCategory === 'memo' || item.trashCategory === 'screenshot'
+        );
+
+        for (const m of topMatches) {
+          mergedTags.add(m.probe.tag);
+          ontoTags.add(m.probe.tag.replace(/^#/, ''));
+          for (const kw of m.probe.keywordsKo) mergedKws.add(kw);
+          if (m.probe.isDocOrReceipt) shouldRunOcr = true;
         }
-        if (inferElapsed > 300 && silentIndexingBrake.getSnapshot().speedMode !== 'turbo') {
-          await new Promise((r) => setTimeout(r, Math.min(2200, Math.round(inferElapsed * 1.15))));
+
+        let ocrSnippet = '';
+        if (shouldRunOcr && decodedThumb) {
+          try {
+            const ocrRes = await recognizeDataUrlWithPaddleOcr(decodedThumb);
+            if (ocrRes.text && ocrRes.text.trim().length >= 2) {
+              ocrSnippet = ocrRes.text.trim().slice(0, 240);
+              for (const tk of extractKoStems(ocrSnippet).slice(0, 24)) {
+                if (tk.length >= 2) mergedKws.add(tk);
+              }
+            }
+          } catch {
+            /* OCR 보조 실패 시 비전/광학 결과 유지 */
+          }
         }
-      } catch {
-        /* skip unreadable file */
+
+        const nextCaption = ocrSnippet
+          ? `${item.captionKo || item.name} | 📝 OCR: ${ocrSnippet}`
+          : item.captionKo;
+
+        item.tags = Array.from(mergedTags);
+        item.keywordsKo = Array.from(mergedKws);
+        item.ontologyPrimaryTags = Array.from(ontoTags);
+        if (nextCaption) item.captionKo = nextCaption;
+
+        params.onPhotoVisionHydrated?.(item.id, {
+          vec,
+          tags: item.tags,
+          keywordsKo: item.keywordsKo,
+          ontologyPrimaryTags: item.ontologyPrimaryTags,
+          captionKo: item.captionKo,
+        });
       }
     }
   } finally {
@@ -2235,29 +2179,7 @@ export async function startSilentRealMediaVisionIndexing(params: {
   }
 }
 
-
-let cachedSharedFamilyHostPhotos: PhotoItem[] | null = null;
-
-/**
- * 『🏠 우리집 패밀리 앨범』 공유방 기본 13.4KB 초경량 섀도우 썸네일 매니페스트 로드 (36장 실사진, 내 개인첩과 100% 분리)
- */
 export async function fetchSharedFamilyHostPhotos(): Promise<PhotoItem[]> {
-  if (cachedSharedFamilyHostPhotos && cachedSharedFamilyHostPhotos.length > 0) {
-    return cachedSharedFamilyHostPhotos;
-  }
-  try {
-    const res = await fetch('/shared_family_host_manifest.json', { cache: 'no-cache' });
-    if (!res.ok) return [];
-    const data = await res.json();
-    const rawItems = Array.isArray(data)
-      ? data
-      : Array.isArray((data as { items?: unknown })?.items)
-      ? (data as { items: unknown[] }).items
-      : [];
-    if (rawItems.length === 0) return [];
-    cachedSharedFamilyHostPhotos = rawItems as PhotoItem[];
-    return cachedSharedFamilyHostPhotos;
-  } catch {
-    return [];
-  }
+  // [실전 전용 철칙]: 정적 번들 공유방 매니페스트(shared_family_host_manifest.json 36장) 로드 영구 배제
+  return [];
 }
