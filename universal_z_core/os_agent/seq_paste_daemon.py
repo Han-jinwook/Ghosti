@@ -6104,6 +6104,107 @@ _BROWSER_AUTO_TYPO_PROCS: tuple[str, ...] = (
     "iexplore.exe",
 )
 
+_UIA_ADDR_BAR_CACHE: dict[str, object] = {"uia": None, "get_focused": None, "oleaut32": None}
+
+
+def _is_browser_address_bar_focused() -> bool:
+    """
+    크롬·웨일·엣지 등 브라우저에서 마우스 클릭 또는 단축키로 '주소창(Omnibox)'에 포커스가 있을 때만 True를 반환합니다.
+    (웹페이지 본문 댓글/글쓰기 입력창에는 영향 0%)
+    """
+    if sys.platform != "win32":
+        return False
+    try:
+        import uuid
+
+        if _UIA_ADDR_BAR_CACHE["uia"] is None:
+            ole32 = ctypes.windll.ole32
+            oleaut32 = ctypes.windll.oleaut32
+            try:
+                ole32.CoInitializeEx(None, 2)  # COINIT_APARTMENTTHREADED
+            except Exception:
+                pass
+
+            class _GUID(ctypes.Structure):
+                _fields_ = [
+                    ("Data1", ctypes.c_uint32),
+                    ("Data2", ctypes.c_uint16),
+                    ("Data3", ctypes.c_uint16),
+                    ("Data4", ctypes.c_ubyte * 8),
+                ]
+
+            def _make_guid(s: str) -> _GUID:
+                u = uuid.UUID(s)
+                g = _GUID()
+                g.Data1, g.Data2, g.Data3 = u.time_low, u.time_mid, u.time_hi_version
+                for i, b in enumerate(u.bytes[8:]):
+                    g.Data4[i] = b
+                return g
+
+            clsid = _make_guid("{FF48DBA4-60EF-4201-AA87-54103EEF594E}")
+            iid = _make_guid("{30CBE57D-D9D0-452A-AB13-7AC5AC4825EE}")
+            uia = ctypes.c_void_p()
+            hr = ole32.CoCreateInstance(ctypes.byref(clsid), None, 1, ctypes.byref(iid), ctypes.byref(uia))
+            if hr != 0 or not uia:
+                return False
+            vt = ctypes.cast(ctypes.cast(uia, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
+            _UIA_ADDR_BAR_CACHE["uia"] = uia
+            _UIA_ADDR_BAR_CACHE["get_focused"] = ctypes.WINFUNCTYPE(
+                ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)
+            )(vt[8])
+            _UIA_ADDR_BAR_CACHE["oleaut32"] = oleaut32
+
+        elem = ctypes.c_void_p()
+        hr_f = _UIA_ADDR_BAR_CACHE["get_focused"](_UIA_ADDR_BAR_CACHE["uia"], ctypes.byref(elem))
+        if hr_f != 0 or not elem:
+            return False
+
+        oleaut32 = _UIA_ADDR_BAR_CACHE["oleaut32"]
+        evt = ctypes.cast(ctypes.cast(elem, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
+        try:
+            get_ct = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(ctypes.c_int))(evt[21])
+            get_name = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p))(evt[23])
+            get_cls = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p))(evt[30])
+
+            ct = ctypes.c_int(0)
+            get_ct(elem, ctypes.byref(ct))
+
+            cls_ptr = ctypes.c_void_p()
+            cls_str = ""
+            if get_cls(elem, ctypes.byref(cls_ptr)) == 0 and cls_ptr.value:
+                cls_str = ctypes.wstring_at(cls_ptr.value)
+                oleaut32.SysFreeString(cls_ptr)
+
+            name_ptr = ctypes.c_void_p()
+            name_str = ""
+            if get_name(elem, ctypes.byref(name_ptr)) == 0 and name_ptr.value:
+                name_str = ctypes.wstring_at(name_ptr.value)
+                oleaut32.SysFreeString(name_ptr)
+
+            cls_low = cls_str.lower()
+            name_low = name_str.lower()
+            if "omnibox" in cls_low or "addressbar" in cls_low or "urlbar" in cls_low:
+                return True
+            if ct.value == 50004:  # UIA_EditControlTypeId
+                if any(
+                    kw in name_low
+                    for kw in (
+                        "주소 및 검색창",
+                        "주소창",
+                        "주소 또는 검색어",
+                        "address and search",
+                        "search or enter web address",
+                        "omnibox",
+                    )
+                ):
+                    return True
+            return False
+        finally:
+            rel_fn = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(evt[2])
+            rel_fn(elem)
+    except Exception:
+        return False
+
 AUTOCORRECT_EXCLUDE_CLASS_KEYWORDS: tuple[str, ...] = (
     "hwp",
     "hnc_",
@@ -8419,7 +8520,7 @@ def main() -> None:
                                 is_br_idle = proc_idle_low in _BROWSER_AUTO_TYPO_PROCS
                                 ime_kor_id = get_ime_is_korean(hwnd_idle)
                                 if (
-                                    not (is_br_idle and browser_url_bar_active)
+                                    not (is_br_idle and (browser_url_bar_active or _is_browser_address_bar_focused()))
                                     and not ime_kor_id
                                     and re.search(r"[A-Za-z]{2,}", raw_idle_str)
                                 ):
@@ -8535,7 +8636,7 @@ def main() -> None:
                             proc_fg_low = _get_process_name_from_hwnd(hwnd_fg).lower()
                             is_br_fg = proc_fg_low in _BROWSER_AUTO_TYPO_PROCS
                             if (
-                                (is_br_fg and browser_url_bar_active)
+                                (is_br_fg and (browser_url_bar_active or _is_browser_address_bar_focused()))
                                 or _is_protected_account_or_email_token(raw_buf_str)
                                 or raw_buf_str.lstrip().startswith("=")
                             ):
