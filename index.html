@@ -144,10 +144,24 @@
       href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@20..48,100..700,0..1,-50..200"
       rel="stylesheet"
     />
+    <script>
+      try {
+        if (
+          window.sessionStorage.getItem('ghosti_splash_shown_v1') === '1' ||
+          window.location.search.indexOf('ghostSearchWindow=') !== -1 ||
+          window.location.search.indexOf('tab=search_dojo') !== -1
+        ) {
+          var _gs = document.createElement('style');
+          _gs.textContent = '#ghosti-boot-splash{display:none!important}';
+          document.head.appendChild(_gs);
+        }
+      } catch (e) {}
+    </script>
   </head>
   <body class="bg-surface text-on-surface font-body-md antialiased selection:bg-primary-container selection:text-on-primary-container min-h-screen">
     <div id="root">
       <div
+        id="ghosti-boot-splash"
         style="position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;background:radial-gradient(circle at 50% 46%, #13254b 0%, #0b1331 52%, #070424 100%);"
       >
         <img

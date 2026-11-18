@@ -722,9 +722,21 @@ export const App: React.FC = () => {
         } catch {
           // ignore
         }
-        window.setTimeout(() => {
-          window.location.reload();
-        }, 420);
+        const isNativeCapacitorApp = Boolean(
+          (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+        );
+        if (isNativeCapacitorApp) {
+          // 네이티브 스토어 앱에서는 WebView 전체 리로드(불러온 내 폰 사진 초기화 및 화면 깜빡임 유발) 대신 인앱 상태를 부드럽게 새로고침
+          window.setTimeout(() => {
+            ptrDistRef.current = 0;
+            setIsPtrRefreshing(false);
+            setPtrPullDist(0);
+          }, 520);
+        } else {
+          window.setTimeout(() => {
+            window.location.reload();
+          }, 420);
+        }
       } else {
         ptrDistRef.current = 0;
         setPtrPullDist(0);
