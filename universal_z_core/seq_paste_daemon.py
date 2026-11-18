@@ -7895,8 +7895,8 @@ def main() -> None:
         threading.Thread(target=_worker, daemon=True).start()
 
     def _ll_mouse_proc(nCode: int, wParam: int, lParam: int) -> int:
-        try:
-            if nCode >= 0:
+        if nCode >= 0 and wParam in (WM_RBUTTONDOWN, WM_RBUTTONUP):
+            try:
                 if wParam == WM_RBUTTONDOWN:
                     ctrl_h = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
                     alt_h = (u32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0
@@ -7912,16 +7912,29 @@ def main() -> None:
                     if _RBTN_HOLD_STATE.get("suppress_next_up"):
                         _RBTN_HOLD_STATE["suppress_next_up"] = False
                         return 1
-        except Exception:
-            pass
+            except Exception:
+                pass
         return u32.CallNextHookEx(None, nCode, wParam, lParam)
 
+    # WH_MOUSE_LL 훅은 반드시 sleep/블로킹이 없는 전용 GetMessageW 스레드에서 돌려야 마우스 커서 흔들림·끊김이 0%가 됩니다.
     _ll_mouse_hook_cb = LowLevelMouseProcType(_ll_mouse_proc)
-    _ll_mouse_hook_handle = None
-    try:
-        _ll_mouse_hook_handle = u32.SetWindowsHookExW(WH_MOUSE_LL, _ll_mouse_hook_cb, None, 0)
-    except Exception:
-        _ll_mouse_hook_handle = None
+    _ll_mouse_hook_ready = threading.Event()
+
+    def _dedicated_mouse_hook_worker() -> None:
+        try:
+            _hk = u32.SetWindowsHookExW(WH_MOUSE_LL, _ll_mouse_hook_cb, None, 0)
+            _ll_mouse_hook_ready.set()
+            if not _hk:
+                return
+            _m_msg = wintypes.MSG()
+            while u32.GetMessageW(ctypes.byref(_m_msg), None, 0, 0) > 0:
+                u32.TranslateMessage(ctypes.byref(_m_msg))
+                u32.DispatchMessageW(ctypes.byref(_m_msg))
+        except Exception:
+            _ll_mouse_hook_ready.set()
+
+    threading.Thread(target=_dedicated_mouse_hook_worker, daemon=True).start()
+    _ll_mouse_hook_ready.wait(timeout=1.0)
 
     msg = wintypes.MSG()
     PM_REMOVE = 0x0001
