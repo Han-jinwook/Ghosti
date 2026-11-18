@@ -7,6 +7,11 @@ import { Z_CORE_ZIP_URL, LATEST_Z_CORE_VERSION } from '../services/zCoreBridge';
 import { playBabyGhostChime } from './OnboardingModal';
 import { silencePendingEnterGiggleOnLogoClick } from '../services/babyGhostSound';
 import { GhostSuperpowerDojo } from './ghostDojo/GhostSuperpowerDojo';
+import {
+  SAMPLE_FAMILY_PHOTOS,
+  SAMPLE_FAMILY_GROUPS,
+  SAMPLE_FAMILY_THUMB_BASE,
+} from '../domains/free_photo_share/SampleSharedRoomExperienceCard';
 
 // 특허 출원번호(10-2026-XXXXXXX) 확보 전까지 허위표시 리스크 및 출원 전 공지(신규성 상실) 방지를 위해 false 유지
 export const PATENTS_FILED = false;
@@ -361,35 +366,6 @@ const SAMPLE_PC_PROGRAMS: SamplePcProgram[] = [
 ];
 const SAMPLE_PC_BASE_PCT = 61;
 const SAMPLE_PC_REVIVED_PCT = 93;
-
-// ============================================================================
-// [샘플 체험 B] 📸 사진공유 — 샘플 가족방 들어가 보기 (public/shared_family_host_thumbs 실사진 36장)
-// ============================================================================
-const SAMPLE_FAMILY_PHOTOS: string[] = [
-  '1721441387443.jpg', '1721441536389.jpg', '1721636228992.jpg',
-  '20240719_105510.jpg', '20240719_112207_080.jpg', '20240719_113139_006.jpg', '20240719_114640.jpg',
-  '20240719_125448.jpg', '20240719_182503.jpg', '20240720_111405.jpg', '20240720_114310_073.jpg',
-  '20240720_122940.jpg', '20240720_134949.jpg', '20240720_141110.jpg', '20240720_180506.jpg',
-  '20240720_182145.jpg', '20240720_182931.jpg', '20240720_184012.jpg', '20240720_194823.jpg',
-  '20240720_211702.jpg', '20240721_114134.jpg', '20240721_123014.jpg', '20240721_160251.jpg',
-  '20240721_183234.jpg', '20240721_183540.jpg',
-  '20260525_193249.jpg', '20260525_193442.jpg', '20260613_201138.jpg', '20260815_172840.jpg',
-  '20260815_180439.jpg', '20260829_203811.jpg', '20260924_145618.jpg', '20260926_131113.jpg',
-  '20260926_131159.jpg', '20260926_131225.jpg', '20260926_160221.jpg',
-];
-const SAMPLE_FAMILY_GROUPS: { key: 'summer2024' | 'outing2026'; label: string; photos: string[] }[] = [
-  {
-    key: 'summer2024',
-    label: '📅 2024년 7월 여름 휴양지 여행',
-    photos: SAMPLE_FAMILY_PHOTOS.filter((p) => !p.startsWith('2026')),
-  },
-  {
-    key: 'outing2026',
-    label: '📅 2026년 가족 나들이',
-    photos: SAMPLE_FAMILY_PHOTOS.filter((p) => p.startsWith('2026')),
-  },
-];
-const SAMPLE_FAMILY_THUMB_BASE = '/shared_family_host_thumbs/';
 
 type OnboardingWeaponTab = 'video' | 'doc' | 'clean' | 'share' | 'superpower';
 type FreeOrDevToolbarKey = 'auto' | 'seq' | '1' | 'snip' | 'zip' | 'dev_2' | 'dev_3' | 'dev_5';
@@ -2482,7 +2458,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 {/* ⑤ #사진공유 샘플 체험 — 카톡 만료 공감 → 초대 링크로 샘플 가족방 입장 → 원본 그대로 받기 비교 → 올리기는 앱에서 */}
                 {demoTab === 'share' && (() => {
                   const group = SAMPLE_FAMILY_GROUPS.find((g) => g.key === shareGroupKey) || SAMPLE_FAMILY_GROUPS[0];
-                  const katalkSample = SAMPLE_FAMILY_PHOTOS.slice(9, 12);
+                  const katalkSample = SAMPLE_FAMILY_PHOTOS.slice(0, 3);
                   return (
                     <div
                       data-keep-dark="true"
@@ -2490,7 +2466,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       className="rounded-2xl border border-sky-400/40 p-5 sm:p-6 space-y-4"
                     >
                       <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="text-[13px] font-black text-sky-200">🏠 샘플 가족방 · 우리집 패밀리 앨범 (실제 가족 여행 사진 36장)</div>
+                        <div className="text-[13px] font-black text-sky-200">🏠 샘플 공유방 · 우리집 패밀리 앨범 (AI 샘플 사진 {SAMPLE_FAMILY_PHOTOS.length}장)</div>
                         <span className="text-xs text-zinc-500 font-bold">※ 샘플 화면 체험 (가입 없이 구경)</span>
                       </div>
 
@@ -2575,7 +2551,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                               <div className="text-[13px] font-bold text-sky-100 break-keep">
                                 👇 가입 없이 바로 열렸어요! 마음에 드는 사진을 하나 눌러보세요.
                               </div>
-                              <div className="grid grid-cols-3 sm:grid-cols-6 gap-1.5 max-h-[260px] overflow-y-auto pr-1">
+                              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                                 {group.photos.map((p) => (
                                   <button
                                     key={p}
