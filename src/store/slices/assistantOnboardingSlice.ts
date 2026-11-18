@@ -679,21 +679,33 @@ export const createAssistantOnboardingSlice: StateCreator<
       memoScreen: 0,
       remainingOldPhotos: 0,
     };
+    let skippedAllAsExisting = false;
     set((state) => {
-      const incomingNames = new Set(analyzed.map((a) => a.name));
-      const incomingSignatures = new Set(analyzed.map((a) => `${a.name}__${a.size}`));
-      const incomingDhashSize = new Set(
-        analyzed.filter((a) => a.dhash).map((a) => `${a.dhash}__${a.size}`)
+      const prevReal = state.photos.filter(
+        (p) => !isSample(p.name) && !String(p.thumbUrl || '').startsWith('blob:')
       );
-      const existingReal = state.photos.filter(
-        (p) =>
-          !isSample(p.name) &&
-          !incomingNames.has(p.name) &&
-          !incomingSignatures.has(`${p.name}__${p.size}`) &&
-          !(p.dhash && incomingDhashSize.has(`${p.dhash}__${p.size}`)) &&
-          !String(p.thumbUrl || '').startsWith('blob:')
+      const prevNames = new Set(prevReal.map((p) => p.name));
+      const prevSigs = new Set(prevReal.map((p) => `${p.name}__${p.size}`));
+      const prevDhashSize = new Set(
+        prevReal.filter((p) => p.dhash).map((p) => `${p.dhash}__${p.size}`)
       );
-      const mergedReal = [...analyzed, ...existingReal];
+
+      const newAnalyzed = analyzed.filter(
+        (a) =>
+          !prevNames.has(a.name) &&
+          !prevSigs.has(`${a.name}__${a.size}`) &&
+          !(a.dhash && prevDhashSize.has(`${a.dhash}__${a.size}`))
+      );
+      const alreadyLoadedCount = analyzed.length - newAnalyzed.length;
+
+      if (newAnalyzed.length === 0 && prevReal.length > 0) {
+        skippedAllAsExisting = true;
+        return {
+          lastQuarantineToast: `ℹ️ 이미 업로드되어 있는 사진 ${analyzed.length}장이에요! (중복 추가 없이 기존 목록을 그대로 유지했어요)`,
+        };
+      }
+
+      const mergedReal = [...newAnalyzed, ...prevReal];
       const { updatedPhotos, duplicateGroups: nextDupGroups } =
         clusterPhotosIntoDuplicateGroups(mergedReal);
       const nextTrashIds = new Set<string>();
@@ -723,7 +735,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         mobileRemainingOldPhotos: stepping.remainingOldPhotos,
       });
       summaryDetail = {
-        total: analyzed.length,
+        total: newAnalyzed.length,
         dupSets: dupSetsCount,
         blurry: blurryCount,
         memoScreen: memoScreenCount,
@@ -743,10 +755,14 @@ export const createAssistantOnboardingSlice: StateCreator<
           : memoScreenCount > 0
           ? 'memo'
           : 'duplicate';
+      const skipSuffix =
+        alreadyLoadedCount > 0 ? ` (이미 업로드된 ${alreadyLoadedCount}장은 중복 제외)` : '';
+      const countLabel =
+        alreadyLoadedCount > 0 ? `새 사진 ${newAnalyzed.length}장 추가` : `사진 ${newAnalyzed.length}장`;
       const toastMsg =
         dupSetsCount === 0 && blurryCount === 0 && memoScreenCount === 0
-          ? `✅ 사진 ${analyzed.length}장 분석 완료! 버릴 중복·연사(0세트)나 흐린 사진(0장) 없이 모두 깨끗한 사진이에요.`
-          : `📸 사진 ${analyzed.length}장 분석 완료! 중복·연사 ${dupSetsCount}세트 · 흐린 사진 ${blurryCount}장 발견 — 아래에서 실사진을 보고 [OK]로 직접 결정해 주세요!`;
+          ? `✅ ${countLabel} 분석 완료!${skipSuffix} 버릴 중복·연사(0세트)나 흐린 사진(0장) 없이 모두 깨끗한 사진이에요.`
+          : `📸 ${countLabel} 분석 완료!${skipSuffix} 중복·연사 ${dupSetsCount}세트 · 흐린 사진 ${blurryCount}장 발견 — 아래에서 실사진을 보고 [OK]로 직접 결정해 주세요!`;
       const baseUpdate = {
         photos: updatedPhotos,
         duplicateGroups: nextDupGroups,
@@ -754,18 +770,21 @@ export const createAssistantOnboardingSlice: StateCreator<
         activeTrashCategoryFilter: targetTab,
       };
       if (skipSearchResultsUpdate) {
-        return baseUpdate;
+        return {
+          ...baseUpdate,
+          lastQuarantineToast: toastMsg,
+        };
       }
       return {
         ...baseUpdate,
         searchResults: addedSearchResults,
         hasExecutedUserSearch: true,
-        activeQuery: `📱 방금 불러온 내 폰 사진 (${analyzed.length}장 · 온디바이스 1초 AI 분석 완료)`,
+        activeQuery: `📱 방금 불러온 내 폰 사진 (${updatedPhotos.length}장 · 온디바이스 1초 AI 분석 완료)`,
         matchedTags: ['#내폰사진즉시분석', '#온디바이스dHash', '#외부전송0Byte'],
         lastQuarantineToast: toastMsg,
       };
     });
-    if (typeof window !== 'undefined' && !skipSearchResultsUpdate) {
+    if (!skippedAllAsExisting && typeof window !== 'undefined' && !skipSearchResultsUpdate) {
       window.dispatchEvent(
         new CustomEvent('ghosti_photo_audit_summary', { detail: summaryDetail })
       );
