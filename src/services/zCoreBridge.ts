@@ -168,7 +168,7 @@ class ZCoreBridgeManager {
       const wasConnected = this.isConnected;
       const prevVersion = this.version;
       this.isConnected = true;
-      this.version = data.version || this.version || LATEST_Z_CORE_VERSION;
+      this.version = data.version !== undefined ? (data.version || null) : (this.version ?? null);
       try {
         sessionStorage.setItem('ghosti_one_stop_agreed', '1');
       } catch {
@@ -227,7 +227,9 @@ class ZCoreBridgeManager {
         if (res.ok) {
           const data = await res.json().catch(() => ({}));
           if (data && (data.ok || data.engine_running)) {
-            return markConnected({ version: LATEST_Z_CORE_VERSION });
+            return markConnected({
+              version: typeof data.version === 'string' && data.version.trim() ? data.version.trim() : undefined,
+            });
           }
         }
       } catch {

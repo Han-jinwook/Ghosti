@@ -1747,6 +1747,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     query: string;
   } | null>(null);
   const [zConnected, setZConnected] = useState<boolean>(zCoreBridge.isConnected);
+  const [zVersion, setZVersion] = useState<string | null>(zCoreBridge.version);
   const [isCleanupPaused, setIsCleanupPaused] = useState<boolean>(false);
   const [showQuarantineDrawer, setShowQuarantineDrawer] = useState<boolean>(false);
   const [activeDupSetIdx, setActiveDupSetIdx] = useState<number>(0);
@@ -1759,8 +1760,10 @@ export const Stage1MinimalCarePreview: React.FC = () => {
 
   React.useEffect(() => {
     setZConnected(zCoreBridge.isConnected);
+    setZVersion(zCoreBridge.version);
     return zCoreBridge.subscribe((c) => {
       setZConnected(c);
+      setZVersion(zCoreBridge.version);
     });
   }, []);
 
@@ -1884,7 +1887,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
   const showDuplicatePickSection = currentTab === 'duplicate';
 
   const zCoreOutdated =
-    zConnected && isZCoreOutdated(zCoreBridge.version);
+    zConnected && isZCoreOutdated(zVersion);
 
   return (
     <div

@@ -136,8 +136,15 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     }
 
     if (connectedNow) {
-      if (isZCoreOutdated(zCoreBridge.version)) {
+      const outdatedNow = isZCoreOutdated(zCoreBridge.version);
+      if (outdatedNow) {
         void zCoreBridge.triggerSilentSelfUpdate();
+        if (!isMobileEnv) {
+          // 구버전 실행 중일 때는 모달이 자동으로 닫히거나 indexing으로 넘어가버리지 않도록 수동 다운로드 안내 화면('ready')에 고정
+          setManualCheckHint(null);
+          setStep('ready');
+          return;
+        }
       }
       const alreadyIndexed =
         typeof sessionStorage !== 'undefined' &&
@@ -161,6 +168,12 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
         if (alive) {
           setIsConnected(true);
           setVersion(zCoreBridge.version);
+          if (isZCoreOutdated(zCoreBridge.version) && !isMobileEnv) {
+            void zCoreBridge.triggerSilentSelfUpdate();
+            setManualCheckHint(null);
+            setStep('ready');
+            return;
+          }
           if (isInSecretaryTab) {
             completeQuietConnectInSecretary();
             return;
@@ -181,8 +194,13 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       setIsConnected(conn);
       setVersion(zCoreBridge.version);
       if (conn) {
-        if (isZCoreOutdated(zCoreBridge.version)) {
+        const outdatedNow = isZCoreOutdated(zCoreBridge.version);
+        if (outdatedNow) {
           void zCoreBridge.triggerSilentSelfUpdate();
+          if (!isMobileEnv) {
+            setStep((prev) => (prev === 'intro' || prev === 'waiting_engine' ? 'ready' : prev));
+            return;
+          }
         }
         if (isInSecretaryTab) {
           completeQuietConnectInSecretary();
@@ -355,6 +373,13 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     setIsConnected(ok);
     setVersion(zCoreBridge.version);
     if (ok) {
+      if (isZCoreOutdated(zCoreBridge.version) && !isMobileEnv) {
+        setManualCheckHint(
+          `⚠️ 아직 구버전(v${zCoreBridge.version || '구버전'})이 응답하고 있습니다. 방금 내려받은 최신 Z-코어(v${LATEST_Z_CORE_VERSION}) 압축을 풀고 [Merlin_Z_Core_Setup.exe]를 실행한 뒤 다시 확인해 주세요.`
+        );
+        setStep('ready');
+        return;
+      }
       setManualCheckHint(null);
       if (isInSecretaryTab) {
         completeQuietConnectInSecretary();
@@ -716,20 +741,34 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
           </>
         )}
 
-        {/* ─────────────── [4단계: 이미 연결 & 인덱싱 완료된 상태 (재열람 시)] ─────────────── */}
+        {/* ─────────────── [4단계: 이미 연결 & 인덱싱 완료된 상태 (재열람 시) 및 구버전 수동 업데이트 안내] ─────────────── */}
         {step === 'ready' && (
           <>
             <div className="flex items-start justify-between gap-3 mb-4">
               <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-emerald-500/15 border border-emerald-500/30 flex items-center justify-center shrink-0">
-                  <span className="text-2xl">🟢</span>
+                <div
+                  className={`w-12 h-12 rounded-2xl border flex items-center justify-center shrink-0 ${
+                    isOutdated
+                      ? 'bg-amber-500/15 border-amber-500/40'
+                      : 'bg-emerald-500/15 border-emerald-500/30'
+                  }`}
+                >
+                  <span className="text-2xl">{isOutdated ? '⚠️' : '🟢'}</span>
                 </div>
                 <div>
-                  <span className="inline-block px-2 py-0.5 rounded-full text-[10.5px] font-black bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border border-emerald-400/30 mb-1">
-                    Port {Z_CORE_PORT} · v{version || '?'} {isOutdated ? '구버전 가동 중' : '정상 가동 중'}
+                  <span
+                    className={`inline-block px-2 py-0.5 rounded-full text-[10.5px] font-black border mb-1 ${
+                      isOutdated
+                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-400/40'
+                        : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-400/30'
+                    }`}
+                  >
+                    Port {Z_CORE_PORT} · v{version || '?'} {isOutdated ? `구버전 (최신 v${LATEST_Z_CORE_VERSION} 필요)` : '정상 가동 중'}
                   </span>
                   <h3 className="text-lg font-black tracking-tight">
-                    ⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어) 연결 완료!
+                    {isOutdated
+                      ? `⚠️ Z-코어 구버전 감지 — 최신 버전(v${LATEST_Z_CORE_VERSION}) 수동 업데이트 필요`
+                      : '⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어) 연결 완료!'}
                   </h3>
                 </div>
               </div>
@@ -743,52 +782,108 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
               </button>
             </div>
 
-            <div
-              className={`p-4 rounded-2xl border mb-5 text-xs leading-relaxed ${
-                isLight
-                  ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
-                  : 'bg-emerald-950/35 border-emerald-500/30 text-emerald-100'
-              }`}
-            >
-              내 컴퓨터 실물 사진 <strong>{totalPhotoCount}장</strong>과 로컬 서류함이 웹 화면과 실시간으로
-              연결되어 있습니다. 검색창에 찾고 싶은 사진이나 서류 내용을 입력해 보세요!
-            </div>
-
-            <div className="flex flex-col sm:flex-row items-center gap-2.5">
-              <button
-                type="button"
-                onClick={() => {
-                  hasTriggeredInitRef.current = false;
-                  initPromiseRef.current = null;
-                  setProgress(0);
-                  setStep('indexing');
-                }}
-                className="w-full flex-1 py-3 px-5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-black text-sm text-center shadow-lg shadow-teal-500/25 transition-all cursor-pointer"
-              >
-                🚀 내 PC 전체 인덱싱 시작 ({totalPhotoCount}장 스캔)
-              </button>
-              <button
-                type="button"
-                onClick={finishAndPopOpenPhotos}
-                className={`w-full sm:w-auto py-3 px-4 rounded-2xl font-bold text-xs border transition-all cursor-pointer ${
-                  isLight
-                    ? 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
-                    : 'bg-zinc-900 border-white/15 text-zinc-300 hover:bg-zinc-800'
-                }`}
-              >
-                🖼️ 사진 전체 펼치기
-              </button>
-            </div>
-            {!isOutdated && !isMobileEnv && (
-              <div className="mt-3 text-right">
-                <a
-                  href={Z_CORE_ZIP_URL}
-                  download="Merlin_Z_Core.zip"
-                  className="text-[11px] font-bold text-zinc-400 hover:text-teal-400 underline cursor-pointer"
+            {isOutdated ? (
+              <>
+                <div
+                  className={`p-4 rounded-2xl border mb-4 text-xs leading-relaxed ${
+                    isLight
+                      ? 'bg-amber-50 border-amber-300 text-amber-950'
+                      : 'bg-amber-950/40 border-amber-500/40 text-amber-100'
+                  }`}
                 >
-                  📥 Z-코어 설치파일 다시 받기 (v{LATEST_Z_CORE_VERSION})
-                </a>
-              </div>
+                  <p className="font-extrabold mb-1.5">
+                    현재 PC에 실행 중인 Z-코어(v{version || '구버전'})가 구버전이어서 일부 최신 기능이 동작하지 않을 수 있습니다.
+                  </p>
+                  <p className="opacity-90">
+                    자동 업데이트가 되지 않은 경우 아래 버튼으로 <strong>최신 Z-코어(v{LATEST_Z_CORE_VERSION})</strong>를 직접 내려받아 압축을 풀고{' '}
+                    <strong>Merlin_Z_Core_Setup.exe</strong>를 실행해 주세요.
+                  </p>
+                </div>
+
+                {manualCheckHint && (
+                  <div
+                    className={`mb-4 p-3 rounded-xl border text-xs leading-relaxed ${
+                      isLight
+                        ? 'bg-rose-50 border-rose-200 text-rose-900'
+                        : 'bg-rose-950/40 border-rose-500/30 text-rose-200'
+                    }`}
+                  >
+                    {manualCheckHint}
+                  </div>
+                )}
+
+                <div className="flex flex-col sm:flex-row items-center gap-2.5">
+                  <a
+                    href={Z_CORE_ZIP_URL}
+                    download="Merlin_Z_Core.zip"
+                    className="w-full flex-1 py-3 px-5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-black text-sm text-center shadow-lg shadow-amber-500/25 transition-all no-underline cursor-pointer"
+                  >
+                    ⬇️ 최신 Z-코어 (v{LATEST_Z_CORE_VERSION}) 다운로드
+                  </a>
+                  <button
+                    type="button"
+                    onClick={handleManualCheck}
+                    disabled={isChecking}
+                    className={`w-full sm:w-auto py-3 px-4 rounded-2xl font-bold text-xs border transition-all cursor-pointer ${
+                      isLight
+                        ? 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
+                        : 'bg-zinc-900 border-white/15 text-zinc-200 hover:bg-zinc-800'
+                    }`}
+                  >
+                    {isChecking ? '확인 중...' : '🔄 업데이트 완료 (다시 확인)'}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div
+                  className={`p-4 rounded-2xl border mb-5 text-xs leading-relaxed ${
+                    isLight
+                      ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
+                      : 'bg-emerald-950/35 border-emerald-500/30 text-emerald-100'
+                  }`}
+                >
+                  내 컴퓨터 실물 사진 <strong>{totalPhotoCount}장</strong>과 로컬 서류함이 웹 화면과 실시간으로
+                  연결되어 있습니다. 검색창에 찾고 싶은 사진이나 서류 내용을 입력해 보세요!
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-center gap-2.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      hasTriggeredInitRef.current = false;
+                      initPromiseRef.current = null;
+                      setProgress(0);
+                      setStep('indexing');
+                    }}
+                    className="w-full flex-1 py-3 px-5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-black text-sm text-center shadow-lg shadow-teal-500/25 transition-all cursor-pointer"
+                  >
+                    🚀 내 PC 전체 인덱싱 시작 ({totalPhotoCount}장 스캔)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={finishAndPopOpenPhotos}
+                    className={`w-full sm:w-auto py-3 px-4 rounded-2xl font-bold text-xs border transition-all cursor-pointer ${
+                      isLight
+                        ? 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
+                        : 'bg-zinc-900 border-white/15 text-zinc-300 hover:bg-zinc-800'
+                    }`}
+                  >
+                    🖼️ 사진 전체 펼치기
+                  </button>
+                </div>
+                {!isMobileEnv && (
+                  <div className="mt-3 text-right">
+                    <a
+                      href={Z_CORE_ZIP_URL}
+                      download="Merlin_Z_Core.zip"
+                      className="text-[11px] font-bold text-zinc-400 hover:text-teal-400 underline cursor-pointer"
+                    >
+                      📥 Z-코어 설치파일 다시 받기 (v{LATEST_Z_CORE_VERSION})
+                    </a>
+                  </div>
+                )}
+              </>
             )}
           </>
         )}

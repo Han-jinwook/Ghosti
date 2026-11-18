@@ -152,9 +152,14 @@ export const SmartTrashView: React.FC = () => {
 
   const [isCleanupPaused, setIsCleanupPaused] = useState<boolean>(false);
   const [zConnected, setZConnected] = useState<boolean>(zCoreBridge.isConnected);
+  const [zVersion, setZVersion] = useState<string | null>(zCoreBridge.version);
   React.useEffect(() => {
     setZConnected(zCoreBridge.isConnected);
-    return zCoreBridge.subscribe(setZConnected);
+    setZVersion(zCoreBridge.version);
+    return zCoreBridge.subscribe((c) => {
+      setZConnected(c);
+      setZVersion(zCoreBridge.version);
+    });
   }, []);
 
   React.useEffect(() => {
@@ -225,7 +230,7 @@ export const SmartTrashView: React.FC = () => {
     !isTrashBinTabActive && currentTab === 'duplicate';
 
   const zCoreOutdated =
-    zConnected && isZCoreOutdated(zCoreBridge.version);
+    zConnected && isZCoreOutdated(zVersion);
 
   return (
     <div className="w-full max-w-[1640px] mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col gap-5 pb-24">
