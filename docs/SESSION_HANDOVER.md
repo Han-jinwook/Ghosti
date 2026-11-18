@@ -2,6 +2,28 @@
 
 ---
 
+## 🕒 [2026-11-18 15:25 KST 체크아웃 인계 기록]
+
+- **세션 창 제목**: `1~6호컴Z코어통일완결`
+
+### 1. 이번 세션에서 완료한 핵심 작업 요약 (`1귀신` 본진 전담)
+1. **[1~6호컴 전체 `Merlin_Z_Core v2.3.59` 단일화 · 버전 핑퐁 및 `_MEI` `python312.dll` 크래시 원천 해결 (`71f7f48` · `847b79a` · `4a355a4` · `4eb3fce` · `a74ab38`)]**:
+   - **Z-코어 핑퐁 다운그레이드 루프 및 `NameError` 해결**: `seq_paste_daemon.py` `from typing import Any` 누락 수정, `merlin_z_core_daemon.py` `trigger_silent_self_update`에 `_is_remote_version_newer(target_version, CORE_VERSION)` 및 추출된 `.exe --selftest` 버전 검증 추가.
+   - **4호컴 구버전 잠금 및 PyInstaller `_MEIPASS2` 상속 오염 근본 제거**: 4호컴 전용 레거시 `start_zcore_5199.vbs` 분리 실행 및 미종료 덮어쓰기 실패를 폐지하고, 1~6호컴 전원(`PC1~PC6`) 프로세스 선(先) 종료 후 단일 `%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe` 교체·자동실행(`Run` + `StartMerlinZCore5199` `ONLOGON`)으로 100% 통일. 기동 즉시 및 `updater.bat` 내 `_MEIPASS2`/`_MEIPASS` 환경변수 소거 적용, Z-코어 패치 버전 끝자리 `9` 자동 조율(`2.3.59`) 및 `public/Merlin_Z_Core.zip` 원격 일치 푸시 완료.
+   - **센스톡(`28888`) ↔ Z-코어(`5199`) 완전 분리 확정**: `plugin_senstalk.py` `v6.2` 동기화 후, 멀린님 결정(`SensTalk@af8e2de`)에 따라 센스톡 웹·엔진이 `28888` 단독으로 완전 분리되어 향후 Z-코어에 추가 부하 없이 `귀신같이` QA에만 집중 가능.
+2. **[안드로이드 앱(`v1.0.9 ➔ v1.0.15`) Google Play 내부 테스트 트랙 단일화 및 모바일 버그 6건 전수 완결 (`a4c7bf1` · `2903dc6` · `21be163` · `d94aa76` · `d22da2c` · `4eb3fce`)]**:
+   - **실제 갤러리·구글 포토 휴지통 이동(`MediaStore.createTrashRequest`) 개통**: `GhostiMobileCarePlugin.java` · `MainActivity.java` 네이티브 구현 완료(테스터 통과 확인 완료).
+   - **모바일 UX/로직 6건 근본 처방**: ① 동일 사진 재선택 시 `'ℹ️ 이미 업로드되어 있는 사진 N장이에요!'` 전용 안내문, ② 어두운 사진 위 분석 완료 토스트 100% 불투명 흰색 배경(`bg-white`), ③ 당겨서 새로고침 완료 직후 `index.html` 정적 스플래시 로고 깜빡임 `<head>` 즉시 차단 및 네이티브 인앱 새로고침, ④ 검색창 하단 `[사진 | 동영상 | 문서]` 3등분 좌우 정렬 & 중복 사진 불러오기 박스 제거 & 업무공유 PC 전용 `1,800원` 배지 숨김, ⑤ 사진 분석 완료 말풍선 바로 아래 `[💬 카톡(나에게 보내기)에 PC 실행 링크 넣어두기 / 📋 주소 복사]` 상시 노출, ⑥ 설정방 `[🛂 내 귀신여권]` 클릭 시 모바일/미연결 환경에서도 본인 여권 단독 보관함 즉시 오픈, ⑦ 흔들린 사진 `512px` 경계 첨예도(`Laplacian/Gradient hfRatio`) 판별로 ④번 `[흔들린 사진]` 탭 정확 분류(`AOS v1.0.15` Play 스토어 출시 요청 완료).
+3. **[노션 QA 보드 완료분 분리 체계 & `완료` 자동 삭제 워커 완전 박멸 (`dbb9289` · `5600f92` · `582c4cc` · `369864f`)]**:
+   - **완료 워커 영구 제거**: `trim_done_cards` 전면 비활성화, 1호컴 숨은 스케줄러(`MerlinNotionDoneTrimmer` / `notion_done_trimmer_daemon.pyw`) 및 3호컴 구버전 `doctrine_watcher.py` 프로세스 종료·삭제, 증발했던 `완료` 카드 6건 전원 복구 완료 (`완료` 칸반은 노션 기본 최신 상단 적재 그대로 비간섭 유지).
+   - **코드 가드 2종(`notion_qa.py`)**: GitHub `.apk` 수동 다운로드 링크 기재 원천 차단 가드 + 긴 카드에서 통과(`☑`)분을 `완료`로 분리하고 새 단품 카드를 `재테스트 대기`에 만들 때 원본의 `담당`(`로직`/`UX`)·`앱`(`귀신같이`)·`담당자`(`people`)를 100% 자동 상속하는 `create_split_retest_card()` 탑재 완료.
+
+### 2. 다음 세션 최우선 인계 및 의사결정 대기 사항 (Next Action)
+1. **[체크인 시 루틴]**: 원격 `git pull --rebase` 안심 보고, 세션 창 제목(`1~6호컴Z코어통일완결`) 각인, 우체국·노션 QA 점검 후 실시간 감시병(`python z_core_watcher.py --watch --role 1`, `IsDaemon=true`) 단 1개 기동 (기상 즉시 채팅창 첫 줄 1줄 감지 알림 선행 필수).
+2. **[실전 QA 대응]**: `재테스트 대기` 중인 단품 카드들 및 안드로이드 2탄(`유료결제 유도 클리너 구출`), 모바일 귀신비서 UX 3/3 미션카드 피드백 단품 완결 대응 (`완료` 칸반 순서 임의 조작 금지, 긴 카드는 통과분 `완료` 분리 + `create_split_retest_card`로 깔끔한 새 카드 생성).
+
+---
+
 ## 🕒 [2026-11-18 02:55 KST 체크아웃 인계 기록]
 
 - **세션 창 제목**: `모바일반응형온보딩완결`
