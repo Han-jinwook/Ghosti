@@ -38,75 +38,101 @@ export function ghostSearchWindowUrl(stage: GhostSearchStage, query?: string): s
  * 실제 모니터 위 독립 귀신검색창 팝업을 즉시 띄웁니다.
  */
 let _activeRealGhostSearchPopup: Window | null = null;
+let _openGhostSearchInflight = false;
+let _lastOpenGhostSearchTs = 0;
 
 export async function openRealGhostSearchWindowViaDaemon(
   stage: GhostSearchStage = 'medium',
   query?: string,
 ): Promise<boolean> {
-  const targetStage: GhostSearchStage = stage === 'large' ? 'large' : 'medium';
-  const daemonStage = targetStage === 'large' ? 'gallery' : targetStage;
-  const q = (query || '').trim();
+  const now = Date.now();
+  if (_openGhostSearchInflight || now - _lastOpenGhostSearchTs < 1800) {
+    return true;
+  }
+  _openGhostSearchInflight = true;
+  _lastOpenGhostSearchTs = now;
 
-  // 1순위: 로컬 제트코어 연결 시 주소창·설치아이콘 없는 깔끔한 독립 앱 창(--app)으로 즉시 오픈!
-  // (네트워크 미연결 시 User Activation 만료 전 즉시 window.open 폴백으로 넘어가도록 700ms 타임아웃 + 불필요한 중복 GET 대기 제거)
   try {
-    const res = await fetch(getZCoreUrl('/api/superpower/open_search_window'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ stage: daemonStage, query: q, ui_mode: 'web_monitor' }),
-      signal: AbortSignal.timeout(700),
-    });
-    if (res.ok) {
-      const data = await res.json().catch(() => ({}));
-      if (data && data.ok !== false && data.launched !== false) return true;
-    } else if (res.status === 404 || res.status === 405) {
-      const qs = `stage=${encodeURIComponent(daemonStage)}&ui_mode=web_monitor${q ? `&q=${encodeURIComponent(q)}` : ''}`;
-      const resGet = await fetch(getZCoreUrl(`/__merlin/open-ghost-search?${qs}`), {
-        signal: AbortSignal.timeout(700),
-      });
-      if (resGet.ok) {
-        const dataGet = await resGet.json().catch(() => ({}));
-        if (dataGet?.ok !== false && dataGet?.launched !== false) return true;
-      }
-    }
-  } catch {
-    // 5199 미연결/타임아웃 시 즉시 2순위 브라우저 팝업 폴백으로 진행
-  }
+    const targetStage: GhostSearchStage = stage === 'large' ? 'large' : 'medium';
+    const daemonStage = targetStage === 'large' ? 'gallery' : targetStage;
+    const q = (query || '').trim();
+    const wasZCoreConnected = zCoreBridge.isConnected;
+    const reqStartedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
-  // 2순위 폴백: 제트코어 미실행 웹 환경에서는 브라우저 팝업으로 오픈
-  const targetUrl = ghostSearchWindowUrl(targetStage, query);
-  if (typeof window !== 'undefined') {
+    // 1순위: 로컬 제트코어 연결 시 주소창·설치아이콘 없는 깔끔한 독립 앱 창(--app) 단일 오픈!
+    // ⚠️ 기존 700ms 짧은 타임아웃으로 인해 Z-코어가 이미 chrome.exe --app 창(1번 창)을 띄우는 도중
+    // 브라우저 fetch가 타임아웃되어 아래 window.open 폴백(2번 창)까지 중복 실행되던 레이스 버그를 원천 차단합니다.
     try {
-      const availW = window.screen?.availWidth || DEFAULT_WORK_AREA.right;
-      const availH = window.screen?.availHeight || DEFAULT_WORK_AREA.bottom;
-      const anchorX = Math.max(40, Math.round((availW - 960) / 2));
-      const anchorY = Math.max(40, Math.round((availH - 640) / 2));
-      const rect = computeGhostSearchWindowRect(
-        targetStage,
-        anchorX,
-        anchorY,
-        { left: 0, top: 0, right: availW, bottom: availH },
-        20,
-      );
-      const features = `popup=yes,width=${rect.width},height=${rect.height},left=${rect.x},top=${rect.y},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
-      if (_activeRealGhostSearchPopup && !_activeRealGhostSearchPopup.closed) {
-        _activeRealGhostSearchPopup.location.href = targetUrl;
-        _activeRealGhostSearchPopup.resizeTo(rect.width, rect.height);
-        _activeRealGhostSearchPopup.moveTo(rect.x, rect.y);
-        _activeRealGhostSearchPopup.focus();
+      const res = await fetch(getZCoreUrl('/api/superpower/open_search_window'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage: daemonStage, query: q, ui_mode: 'web_monitor' }),
+        signal: AbortSignal.timeout(wasZCoreConnected ? 4500 : 650),
+      });
+      if (res.ok) {
+        const data = await res.json().catch(() => ({}));
+        if (data && data.ok !== false && data.launched !== false) return true;
+      } else if (res.status === 404 || res.status === 405) {
+        const qs = `stage=${encodeURIComponent(daemonStage)}&ui_mode=web_monitor${q ? `&q=${encodeURIComponent(q)}` : ''}`;
+        const resGet = await fetch(getZCoreUrl(`/__merlin/open-ghost-search?${qs}`), {
+          signal: AbortSignal.timeout(wasZCoreConnected ? 4500 : 650),
+        });
+        if (resGet.ok) {
+          const dataGet = await resGet.json().catch(() => ({}));
+          if (dataGet?.ok !== false && dataGet?.launched !== false) return true;
+        }
+      }
+    } catch (err) {
+      const elapsed =
+        (typeof performance !== 'undefined' ? performance.now() : Date.now()) - reqStartedAt;
+      const errName = (err as { name?: string } | null)?.name || '';
+      // Z-코어가 연결된 상태에서 타임아웃/지연이 발생한 경우 서버는 이미 요청을 수신해 --app 창을 기동 중이므로
+      // 절대 window.open 2차 팝업을 추가로 띄우지 않습니다! (즉각적인 TCP 연결 거부 < 350ms 일 때만 폴백 허용)
+      if (
+        wasZCoreConnected &&
+        (errName === 'TimeoutError' || errName === 'AbortError' || elapsed >= 350)
+      ) {
         return true;
       }
-      const win = window.open(targetUrl, 'ghosti_real_search_window', features);
-      if (win) {
-        _activeRealGhostSearchPopup = win;
-        win.focus();
-        return true;
-      }
-    } catch {
-      /* ignore */
     }
+
+    // 2순위 폴백: 제트코어 미실행 웹 환경에서만 단일 브라우저 팝업으로 오픈
+    const targetUrl = ghostSearchWindowUrl(targetStage, query);
+    if (typeof window !== 'undefined') {
+      try {
+        const availW = window.screen?.availWidth || DEFAULT_WORK_AREA.right;
+        const availH = window.screen?.availHeight || DEFAULT_WORK_AREA.bottom;
+        const anchorX = Math.max(40, Math.round((availW - 960) / 2));
+        const anchorY = Math.max(40, Math.round((availH - 640) / 2));
+        const rect = computeGhostSearchWindowRect(
+          targetStage,
+          anchorX,
+          anchorY,
+          { left: 0, top: 0, right: availW, bottom: availH },
+          20,
+        );
+        const features = `popup=yes,width=${rect.width},height=${rect.height},left=${rect.x},top=${rect.y},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
+        if (_activeRealGhostSearchPopup && !_activeRealGhostSearchPopup.closed) {
+          _activeRealGhostSearchPopup.location.href = targetUrl;
+          _activeRealGhostSearchPopup.resizeTo(rect.width, rect.height);
+          _activeRealGhostSearchPopup.moveTo(rect.x, rect.y);
+          _activeRealGhostSearchPopup.focus();
+          return true;
+        }
+        const win = window.open(targetUrl, 'ghosti_real_search_window', features);
+        if (win) {
+          _activeRealGhostSearchPopup = win;
+          win.focus();
+          return true;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    return false;
+  } finally {
+    _openGhostSearchInflight = false;
   }
-  return false;
 }
 
 /** 귀신비서 채팅이 넘겨준 검색어 (1회 소비) */
@@ -796,6 +822,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
   const [connected, setConnected] = useState(zCoreBridge.isConnected);
   const [pendingQuery] = useState(() => consumePendingGhostSearchQuery());
   const [realPopupToast, setRealPopupToast] = useState<string | null>(null);
+  const [isLaunchingRealWindow, setIsLaunchingRealWindow] = useState(false);
   const monitorSectionRef = useRef<HTMLElement | null>(null);
 
   const markStep = (id: GameStepId) => {
@@ -812,6 +839,9 @@ export const GhostSearchTrainingPage: React.FC = () => {
   };
 
   const triggerRealGhostSearchWindow = async (stage: GhostSearchStage = 'medium', query?: string) => {
+    if (isLaunchingRealWindow) return;
+    setIsLaunchingRealWindow(true);
+    window.setTimeout(() => setIsLaunchingRealWindow(false), 1600);
     playBabyGhostChime('summon');
     if (stage === 'large') {
       markStep('large');
@@ -1033,10 +1063,13 @@ export const GhostSearchTrainingPage: React.FC = () => {
         {connected ? (
           <button
             type="button"
+            disabled={isLaunchingRealWindow}
             onClick={() => void triggerRealGhostSearchWindow('medium', pendingQuery)}
-            className="px-4 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[13px] font-extrabold cursor-pointer"
+            className="px-4 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] disabled:opacity-60 text-zinc-950 text-[13px] font-extrabold cursor-pointer"
           >
-            👻 내 진짜 파일로 귀신검색창 바로 띄우기
+            {isLaunchingRealWindow
+              ? '⏳ 귀신검색창 띄우는 중...'
+              : '👻 내 진짜 파일로 귀신검색창 바로 띄우기'}
           </button>
         ) : (
           <button
