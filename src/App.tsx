@@ -796,6 +796,8 @@ export const App: React.FC = () => {
     <GhostiHubRootProvider>
       {/* 앱 진입 시 0.5초 가벼운 로딩 스플래시 */}
       <GhostiLoadingSplash />
+      {/* [설정방 내 본인 여권 단독 보관함] 쇼룸·워크스페이스·모바일 전 화면 어디서든 상단 설정방 [🛂 내 귀신여권] 클릭 시 즉시 오픈 */}
+      <PassportDoorplateStyleModal />
 
       {/* 모바일(iOS/AOS) 전 화면 공통 상단 당겨서 새로고침(Pull-to-refresh) 플로팅 인디케이터 */}
       {(ptrPullDist > 0 || isPtrRefreshing) && (
@@ -853,9 +855,6 @@ export const App: React.FC = () => {
 
           {/* [라운지 마스터 스펙] 자율 얼굴 추출(Face Crop) & 당해 연도 대표 멤버 등록 & 초대 레이더 시드 모달 */}
           <FaceMemberRegistryModal />
-
-          {/* [귀신같이 여권 연동] 최신 연도 정면 얼굴 자동 문패(Slot 1 Anchor) & 5대 스타일 슬롯 원터치 변경 팝업 */}
-          <PassportDoorplateStyleModal />
 
           {/* [🛠️ 구 설정몬스터 팝업 비활성화 — 1. 👻 귀신비서 채팅 원클릭 칩으로 100% 일원화] 타사 앱 최상단 손가락 화살표 가이드(👆)만 유지 */}
           <SetupFloatingOverlayGuide />

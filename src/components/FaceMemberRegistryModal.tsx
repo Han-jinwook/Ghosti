@@ -1,6 +1,18 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { getActivePersonaForCluster, useSaySeeStore } from '../store/useSaySeeStore';
-import { getZCoreUrl, hasActiveGhostiLoginSession, zCoreBridge } from '../services/zCoreBridge';
+import {
+  getZCoreUrl,
+  hasActiveGhostiLoginSession,
+  requestConnectMyComputer,
+  zCoreBridge,
+} from '../services/zCoreBridge';
+import {
+  loadGhostPassportBook,
+  loadGhostSecretaryState,
+  saveGhostPassportBook,
+  saveGhostSecretaryState,
+  setPassportSelf,
+} from '../services/ghostSecretaryEngine';
 import { jumpToGhostSecretary } from './GhostSecretaryFirstGuard';
 import type { FaceMemberCluster, RoomPersonaMap, YearlyFaceBestCut } from '../types/saysee';
 
@@ -1165,9 +1177,29 @@ export const PassportDoorplateStyleModal: React.FC = () => {
     faceClusters,
     activeLoungeType,
     activeFamilyRoom,
+    layout,
+    isStoreAppMode,
   } = useSaySeeStore();
 
-  if (!doorplatePickerClusterId || activeLoungeType === 'work') return null;
+  const [selfNameInput, setSelfNameInput] = useState<string>('');
+  const [savedSelfName, setSavedSelfName] = useState<string>('');
+
+  useEffect(() => {
+    if (!doorplatePickerClusterId) return;
+    const book = loadGhostPassportBook();
+    const secSt = loadGhostSecretaryState();
+    let storedNick = '';
+    try {
+      storedNick = localStorage.getItem('userNickname') || '';
+    } catch {
+      /* ignore */
+    }
+    const resolved = (book.self?.realName || secSt.nickname || storedNick || '').trim();
+    setSavedSelfName(resolved);
+    setSelfNameInput(resolved);
+  }, [doorplatePickerClusterId]);
+
+  if (!doorplatePickerClusterId) return null;
 
   const namedClusters = faceClusters.filter((c) => !c.excludedAsPasserby && c.registeredName);
   // [멀린님 확정 지시]: 설정방 안의 여권은 타인 목록 없이 오직 '내 여권(본인 내 것만)'만 표시·관리합니다.
@@ -1176,19 +1208,8 @@ export const PassportDoorplateStyleModal: React.FC = () => {
     faceClusters.find((c) => c.clusterId === 'face_member_5') ||
     faceClusters.find((c) => c.clusterId === doorplatePickerClusterId) ||
     namedClusters[0] ||
-    faceClusters[0];
-
-  if (!targetCluster) return null;
-
-  const { activePersona, isRoomCreator, roomLabelKo } = getActivePersonaForCluster(
-    targetCluster,
-    activeLoungeType,
-    activeFamilyRoom
-  );
-  const displayPersona = activePersona || targetCluster.registeredName || '내 프로필';
-  const slots = targetCluster.yearlyBestCuts || [];
-  const activeSlotIdx = targetCluster.activeDoorplateSlotIndex ?? 0;
-  const activeSlot = slots[activeSlotIdx] || slots[0];
+    faceClusters[0] ||
+    null;
 
   const SLOT_TITLES = [
     { num: '①', name: '정면', desc: '당해 연도 최신 기준컷 (기본 자동 장착)' },
@@ -1198,9 +1219,167 @@ export const PassportDoorplateStyleModal: React.FC = () => {
     { num: '⑤', name: '야외', desc: '여행·자연광 감성 베스트컷' },
   ];
 
+  const handleSaveSelfPassportName = (e: React.FormEvent) => {
+    e.preventDefault();
+    const clean = selfNameInput.trim();
+    if (!clean) return;
+    saveGhostPassportBook(setPassportSelf(loadGhostPassportBook(), clean));
+    const secSt = loadGhostSecretaryState();
+    saveGhostSecretaryState({ ...secSt, nickname: clean, awaitingNickname: false });
+    try {
+      localStorage.setItem('userNickname', clean);
+    } catch {
+      /* ignore */
+    }
+    setSavedSelfName(clean);
+    useSaySeeStore.setState({
+      lastQuarantineToast: `🛂 내 귀신여권 이름·별명이 '${clean}'(으)로 안전하게 보관되었습니다!`,
+    });
+  };
+
+  if (!targetCluster) {
+    const isMobileEnv = layout === 'mobile' || Boolean(isStoreAppMode);
+    return (
+      <div
+        className="fixed inset-0 z-[140] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
+        onClick={() => setDoorplatePickerClusterId(null)}
+      >
+        <div
+          className="w-full max-w-lg rounded-3xl bg-[#121318] border border-primary-container/40 text-zinc-100 shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] my-auto"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-white/10 bg-zinc-950/90 flex items-start justify-between gap-3">
+            <div className="flex flex-col gap-0.5 min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="px-2.5 py-0.5 rounded-full bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold shrink-0">
+                  🛂 내 귀신계 여권 (본인 전용)
+                </span>
+                <h2 className="font-headline-sm text-[15.5px] sm:text-[18px] font-extrabold text-white break-keep">
+                  내 여권 단독 보관함 &amp; 자동 문패 설정
+                </h2>
+              </div>
+              <p className="font-body-sm text-[12px] text-zinc-400 break-keep">
+                외부 화면에는 절대 노출되지 않으며, 오직 이 설정방 안에서 본인 여권만 안전하게 관리합니다.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setDoorplatePickerClusterId(null)}
+              className="w-9 h-9 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer shrink-0"
+            >
+              ✕
+            </button>
+          </div>
+
+          <div className="p-4 sm:p-5 overflow-y-auto flex flex-col gap-4">
+            <div className="p-4 rounded-2xl bg-zinc-900/90 border border-primary-container/35 flex flex-col gap-3">
+              <div className="flex items-center gap-3.5">
+                <div className="w-16 h-16 rounded-2xl bg-teal-500/15 border border-teal-400/40 flex items-center justify-center text-3xl shrink-0">
+                  🛂
+                </div>
+                <div className="flex flex-col gap-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="font-headline-sm text-[17px] font-extrabold text-white">
+                      {savedSelfName ? `${savedSelfName}님의 귀신여권` : '내 귀신여권 (이름·별명 미등록)'}
+                    </span>
+                    <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[10.5px] font-bold">
+                      본인 단독 보관
+                    </span>
+                  </div>
+                  <span className="font-body-sm text-[12px] text-zinc-300 break-keep">
+                    내 사진을 찾거나 공유방에 참여할 때 기준이 되는 나만의 온디바이스 여권입니다 (외부 서버 전송 0%).
+                  </span>
+                </div>
+              </div>
+
+              <form onSubmit={handleSaveSelfPassportName} className="flex items-center gap-2 pt-1">
+                <input
+                  type="text"
+                  value={selfNameInput}
+                  onChange={(e) => setSelfNameInput(e.target.value)}
+                  placeholder="내 여권 이름 또는 별명 입력 (예: 해나라)"
+                  maxLength={18}
+                  className="flex-1 h-10 px-3.5 rounded-xl bg-zinc-950 border border-white/15 focus:border-primary-container outline-none text-[13px] text-white placeholder:text-zinc-500"
+                />
+                <button
+                  type="submit"
+                  className="h-10 px-4 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-extrabold text-[12.5px] whitespace-nowrap cursor-pointer shrink-0"
+                >
+                  저장
+                </button>
+              </form>
+            </div>
+
+            <div className="p-3.5 rounded-2xl bg-zinc-950/90 border border-white/10 flex flex-col gap-2.5">
+              <span className="font-label-md text-[12.5px] font-extrabold text-white">
+                🎨 5대 자동 문패 스타일 슬롯 (사진 인식 시 자동 활성화)
+              </span>
+              <div className="grid grid-cols-5 gap-1.5">
+                {SLOT_TITLES.map((meta) => (
+                  <div
+                    key={meta.num}
+                    className="p-2 rounded-xl bg-zinc-900/80 border border-white/10 flex flex-col items-center text-center gap-1"
+                  >
+                    <span className="text-[10.5px] font-extrabold text-primary-container">
+                      {meta.num}
+                    </span>
+                    <span className="text-[11px] font-bold text-zinc-200 break-keep">
+                      {meta.name}
+                    </span>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[11.5px] text-zinc-400 break-keep leading-relaxed">
+                {isMobileEnv
+                  ? '📱 내 스마트폰 사진을 불러오거나 PC와 연동해 내 얼굴 사진이 분석되면, 가장 선명한 정면 사진(① 정면)부터 5가지 스타일 문패를 원터치로 고르실 수 있습니다.'
+                  : '💻 내 컴퓨터 엔진(Z-코어)이 연결되어 사진 속 내 얼굴이 분석되면, 가장 선명한 정면 사진(① 정면)부터 5가지 스타일 문패를 원터치로 고르실 수 있습니다.'}
+              </p>
+              <div className="pt-1 flex justify-end">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setDoorplatePickerClusterId(null);
+                    if (isMobileEnv) {
+                      window.dispatchEvent(new CustomEvent('ghosti_trigger_mobile_photo_picker'));
+                    } else {
+                      requestConnectMyComputer();
+                    }
+                  }}
+                  className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[12px] font-extrabold cursor-pointer"
+                >
+                  {isMobileEnv ? '📱 내 폰 사진 불러오기' : '⚡ 내 컴퓨터 연결 안내'}
+                </button>
+              </div>
+            </div>
+          </div>
+
+          <div className="px-4 sm:px-5 py-3 border-t border-white/10 bg-zinc-950/90 flex items-center justify-end">
+            <button
+              type="button"
+              onClick={() => setDoorplatePickerClusterId(null)}
+              className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12.5px] font-extrabold cursor-pointer"
+            >
+              닫기
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  const { activePersona, isRoomCreator, roomLabelKo } = getActivePersonaForCluster(
+    targetCluster,
+    activeLoungeType,
+    activeFamilyRoom
+  );
+  const displayPersona = savedSelfName || activePersona || targetCluster.registeredName || '내 프로필';
+  const slots = targetCluster.yearlyBestCuts || [];
+  const activeSlotIdx = targetCluster.activeDoorplateSlotIndex ?? 0;
+  const activeSlot = slots[activeSlotIdx] || slots[0];
+
   return (
     <div
-      className="fixed inset-0 z-[130] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
+      className="fixed inset-0 z-[140] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
       onClick={() => setDoorplatePickerClusterId(null)}
     >
       <div

@@ -276,9 +276,7 @@ const GhostiHubGlobalModals: React.FC = () => {
                     const cluster =
                       st.faceClusters.find((c) => c.clusterId === 'face_member_5') ||
                       st.faceClusters[0];
-                    if (cluster) {
-                      st.setDoorplatePickerClusterId(cluster.clusterId);
-                    }
+                    st.setDoorplatePickerClusterId(cluster ? cluster.clusterId : 'self_passport');
                   }}
                   className="px-3 py-1.5 rounded-full bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold shadow-xs transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap"
                   title="설정방 보관 내 귀신계 여권(본인 전용) 확인 및 문패 스타일 관리"
