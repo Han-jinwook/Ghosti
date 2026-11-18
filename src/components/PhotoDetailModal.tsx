@@ -352,7 +352,7 @@ export const PhotoDetailModal: React.FC = () => {
                 </span>
                 <div className="min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                    <h3 className="font-headline-sm text-[16px] sm:text-headline-sm text-on-surface font-bold truncate max-w-full">
+                    <h3 className="font-headline-sm text-[15px] sm:text-headline-sm text-on-surface font-bold break-all leading-snug max-w-full">
                       {selectedPhoto.name}
                     </h3>
                     {hasBurstGroup && (

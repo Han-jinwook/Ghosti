@@ -2466,7 +2466,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                             </span>
                           </div>
 
-                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                          <div className="flex flex-wrap items-center gap-2 w-full lg:w-auto">
                             {!showAllDupSets && activeDuplicateGroups.length > 1 && (
                               <div className="flex items-center gap-1 mr-1">
                                 <button
@@ -2498,7 +2498,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                               onClick={() =>
                                 void pickBestInDuplicateGroup(group.groupId, group.bestPhotoId, true)
                               }
-                              className="px-4 py-2 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-sm text-[12.5px] font-black shadow-sm transition-all flex items-center gap-1.5 shrink-0 cursor-pointer"
+                              className="w-full sm:w-auto max-w-full px-3.5 py-2.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-sm text-[12px] sm:text-[12.5px] font-black shadow-sm transition-all flex items-center justify-center gap-1.5 whitespace-normal break-keep text-center leading-snug cursor-pointer"
                             >
                               <span>
                                 {isStoreAppMode || layout === 'mobile'
@@ -2517,7 +2517,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                                   return next;
                                 });
                               }}
-                              className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[12px] font-bold transition-all shrink-0 cursor-pointer"
+                              className="w-full sm:w-auto px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[12px] font-bold transition-all text-center justify-center cursor-pointer"
                             >
                               ⏭️ 이 세트는 안 버리고 건너뛰기
                             </button>
@@ -2547,15 +2547,12 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                                 />
 
                                 {isBestOriginal ? (
-                                  <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-primary-container text-primary-container font-label-sm text-[11px] font-black flex items-center gap-1">
-                                    <span className="material-symbols-outlined text-[14px]">
-                                      verified_user
-                                    </span>
+                                  <div className="absolute top-2 left-2 right-2 px-2 py-1 rounded-lg bg-zinc-950/90 backdrop-blur-md border border-primary-container text-primary-container font-label-sm text-[10.5px] sm:text-[11px] font-black flex items-center justify-center text-center break-keep leading-tight">
                                     <span>👑 AI 추천 베스트 1장 (보존)</span>
                                   </div>
                                 ) : (
-                                  <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/85 backdrop-blur-md border border-amber-400/40 text-amber-200 font-label-sm text-[11px] font-bold">
-                                    {`🗑️ 버릴 후보 #${idx + 1} (터치 시 보존)`}
+                                  <div className="absolute top-2 left-2 right-2 px-2 py-1 rounded-lg bg-zinc-950/85 backdrop-blur-md border border-amber-400/40 text-amber-200 font-label-sm text-[10.5px] sm:text-[11px] font-bold flex items-center justify-center text-center break-keep leading-tight">
+                                    <span>{`🗑️ 버릴 후보 #${idx + 1} · 터치 시 보존`}</span>
                                   </div>
                                 )}
 

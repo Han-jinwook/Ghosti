@@ -8,12 +8,27 @@ import { playAppEnterGiggleSound } from '../services/babyGhostSound';
  * - 화면 아무 곳이나 클릭 시 즉시 닫힘
  */
 export const GhostiLoadingSplash: React.FC = () => {
-  const isPopupSearchWindow =
-    typeof window !== 'undefined' &&
-    (window.location.search.includes('ghostSearchWindow=') ||
-      window.location.search.includes('tab=search_dojo'));
-  const [dismissed, setDismissed] = useState(isPopupSearchWindow);
-  const [unmounted, setUnmounted] = useState(isPopupSearchWindow);
+  const shouldSkipSplash = (() => {
+    if (typeof window === 'undefined') return false;
+    if (
+      window.location.search.includes('ghostSearchWindow=') ||
+      window.location.search.includes('tab=search_dojo')
+    ) {
+      return true;
+    }
+    try {
+      // 위로 당겨서 새로고침(Pull-to-refresh) 또는 세션 내 재로드 시에는 전체화면 로고 이미지가 다시 뜨지 않도록 차단
+      if (window.sessionStorage.getItem('ghosti_splash_shown_v1') === '1') {
+        return true;
+      }
+      window.sessionStorage.setItem('ghosti_splash_shown_v1', '1');
+    } catch {
+      // ignore storage errors
+    }
+    return false;
+  })();
+  const [dismissed, setDismissed] = useState(shouldSkipSplash);
+  const [unmounted, setUnmounted] = useState(shouldSkipSplash);
 
   useEffect(() => {
     // 0.3초(300ms) 후 순식간에 페이드아웃 진입

@@ -717,9 +717,14 @@ export const App: React.FC = () => {
       if (finalDist >= 50 && !isPtrRefreshing) {
         setIsPtrRefreshing(true);
         setPtrPullDist(58);
+        try {
+          window.sessionStorage.setItem('ghosti_splash_shown_v1', '1');
+        } catch {
+          // ignore
+        }
         window.setTimeout(() => {
           window.location.reload();
-        }, 160);
+        }, 420);
       } else {
         ptrDistRef.current = 0;
         setPtrPullDist(0);
@@ -788,13 +793,18 @@ export const App: React.FC = () => {
           }}
           className="fixed top-0 left-1/2 z-[180] pointer-events-none transition-transform duration-75"
         >
-          <div className="px-4 py-1.5 rounded-full bg-teal-50 border-2 border-teal-500 text-teal-800 text-[12.5px] font-extrabold shadow-[0_8px_24px_rgba(13,148,136,0.32)] flex items-center gap-1.5 whitespace-nowrap">
+          <div className="px-4 py-2 rounded-full bg-white dark:bg-zinc-900 border-2 border-teal-500 text-teal-800 dark:text-teal-200 text-[12.5px] font-extrabold shadow-[0_8px_24px_rgba(13,148,136,0.32)] flex items-center gap-2 whitespace-nowrap">
+            <span
+              className={`inline-block w-4 h-4 rounded-full border-2 border-teal-600 border-t-transparent ${
+                isPtrRefreshing || ptrPullDist >= 50 ? 'animate-spin' : ''
+              }`}
+            />
             <span>
               {isPtrRefreshing
-                ? '🔄 새로고침 중...'
+                ? '새로고침 중...'
                 : ptrPullDist >= 50
-                ? '✨ 손을 떼면 새로고침돼요!'
-                : '⬇️ 아래로 당겨서 새로고침'}
+                ? '손을 떼면 새로고침돼요!'
+                : '아래로 당겨서 새로고침'}
             </span>
           </div>
         </div>
@@ -884,20 +894,18 @@ export const App: React.FC = () => {
             </div>
           )}
 
-          {/* 글로벌 액션 피드백 토스트 (라이트/다크 테마 적응형 고명도 스타일 + 모바일 2줄 허용) */}
-          {lastQuarantineToast && (
+          {/* 글로벌 액션 피드백 토스트 (실행 취소 바 lastUndoBatch가 떠 있을 때는 겹침 방지를 위해 비노출, 글자 잘림 없이 전문 표시) */}
+          {lastQuarantineToast && !lastUndoBatch && (
             <div
               className={`fixed ${
-                lastUndoBatch
-                  ? layout === 'mobile' && activeLoungeType !== 'personal'
-                    ? 'bottom-36'
-                    : 'bottom-24'
-                  : layout === 'mobile' && activeLoungeType !== 'personal'
+                layout === 'mobile' && activeLoungeType !== 'personal'
                   ? 'bottom-20'
-                  : 'bottom-16'
-              } mb-safe left-1/2 -translate-x-1/2 z-[110] px-4 sm:px-5 py-2.5 sm:py-3 rounded-2xl sm:rounded-full bg-white/95 dark:bg-zinc-900/95 backdrop-blur-xl border border-teal-500/40 text-slate-800 dark:text-zinc-100 font-label-md text-[12.5px] sm:text-[13px] font-bold shadow-[0_10px_30px_rgba(13,148,136,0.25)] flex items-center gap-2.5 w-max max-w-[92vw]`}
+                  : 'bottom-6'
+              } mb-safe left-1/2 -translate-x-1/2 z-[110] w-[92vw] max-w-xl px-4 sm:px-5 py-3 rounded-2xl bg-white/98 dark:bg-zinc-900/98 backdrop-blur-xl border-2 border-teal-500/50 text-slate-800 dark:text-zinc-100 font-label-md text-[12.5px] sm:text-[13px] font-bold shadow-[0_10px_30px_rgba(13,148,136,0.28)] flex items-start justify-between gap-2.5`}
             >
-              <span className="line-clamp-2 sm:truncate break-keep">{lastQuarantineToast}</span>
+              <span className="whitespace-normal break-keep leading-snug flex-1">
+                {lastQuarantineToast}
+              </span>
               <button
                 onClick={dismissQuarantineToast}
                 className="text-slate-400 hover:text-slate-700 dark:text-zinc-400 dark:hover:text-white p-1 shrink-0 cursor-pointer"
