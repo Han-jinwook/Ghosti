@@ -894,14 +894,14 @@ export const App: React.FC = () => {
             </div>
           )}
 
-          {/* 글로벌 액션 피드백 토스트 (실행 취소 바 lastUndoBatch가 떠 있을 때는 겹침 방지를 위해 비노출, 글자 잘림 없이 전문 표시) */}
+          {/* 글로벌 액션 피드백 토스트 (100% 불투명 솔리드 배경으로 어두운 사진 위에서도 선명한 가독성 보장) */}
           {lastQuarantineToast && !lastUndoBatch && (
             <div
               className={`fixed ${
                 layout === 'mobile' && activeLoungeType !== 'personal'
                   ? 'bottom-20'
                   : 'bottom-6'
-              } mb-safe left-1/2 -translate-x-1/2 z-[110] w-[92vw] max-w-xl px-4 sm:px-5 py-3 rounded-2xl bg-white/98 dark:bg-zinc-900/98 backdrop-blur-xl border-2 border-teal-500/50 text-slate-800 dark:text-zinc-100 font-label-md text-[12.5px] sm:text-[13px] font-bold shadow-[0_10px_30px_rgba(13,148,136,0.28)] flex items-start justify-between gap-2.5`}
+              } mb-safe left-1/2 -translate-x-1/2 z-[110] w-[92vw] max-w-xl px-4 sm:px-5 py-3.5 rounded-2xl bg-white dark:bg-zinc-900 border-2 border-teal-500 text-slate-900 dark:text-zinc-100 font-label-md text-[13px] font-extrabold shadow-[0_12px_32px_rgba(15,23,42,0.32)] flex items-start justify-between gap-2.5`}
             >
               <span className="whitespace-normal break-keep leading-snug flex-1">
                 {lastQuarantineToast}
