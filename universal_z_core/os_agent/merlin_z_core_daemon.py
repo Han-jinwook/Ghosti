@@ -55,7 +55,7 @@ import plugin_aggrofilter  # noqa: E402
 import ghosti_setup_parity  # noqa: E402
 import plugin_ghosti_superpowers  # noqa: E402
 
-CORE_VERSION = "2.3.28"
+CORE_VERSION = "2.3.29"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -996,7 +996,8 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
         data.get("downloadUrl") or "https://ghosti.sundreamer.app/Merlin_Z_Core.zip"
     ).strip()
 
-    if target_version and target_version == CORE_VERSION:
+    # [핑퐁 다운그레이드 자살 루프 원천 차단]: targetVersion이 없거나 현재 실행 중인 CORE_VERSION보다 엄격히 높지 않으면 절대 종료·교체하지 않음!
+    if not target_version or not _is_remote_version_newer(target_version, CORE_VERSION):
         return {
             "ok": True,
             "status": "ALREADY_UP_TO_DATE",
@@ -1031,9 +1032,14 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
             update_dir.mkdir(parents=True, exist_ok=True)
             zip_path = update_dir / "Merlin_Z_Core_latest.zip"
 
+            sep = "&" if "?" in download_url else "?"
+            bust_url = f"{download_url}{sep}v={target_version}&ts={int(time.time())}"
             req = urllib.request.Request(
-                download_url,
-                headers={"User-Agent": f"Merlin_Z_Core_Updater/{CORE_VERSION}"},
+                bust_url,
+                headers={
+                    "User-Agent": f"Merlin_Z_Core_Updater/{CORE_VERSION}",
+                    "Cache-Control": "no-cache",
+                },
             )
             with urllib.request.urlopen(req, timeout=20) as resp:
                 zip_bytes = resp.read()
@@ -1051,7 +1057,7 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
                 _SELF_UPDATE_IN_PROGRESS = False
                 return
 
-            # [무한 자살 루프 방어]: 다운로드된 ZIP 내 exe가 현재 실행 중인 exe와 바이트 단위로 동일하면 종료·교체를 수행하지 않음
+            # [무한 자살 루프 방어 1]: 다운로드된 ZIP 내 exe가 현재 실행 중인 exe와 바이트 단위로 동일하면 종료·교체를 수행하지 않음
             try:
                 import hashlib
 
@@ -1064,6 +1070,31 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
                     return
             except Exception:
                 pass
+
+            # [무한 자살 & 깨진 바이너리 방어 2]: 교체 전 extracted_exe --selftest를 실행하여
+            # 1) NameError 등 크래시 없이 정상 실행되는지 확인하고,
+            # 2) CDN 캐시로 구버전 ZIP이 내려왔을 때 다운그레이드되지 않도록 실제 내장 버전이 현재 버전보다 높을 때만 교체 허용!
+            try:
+                st_res = subprocess.run(
+                    [str(extracted_exe), "--selftest"],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=12,
+                    creationflags=0x08000000 if sys.platform == "win32" else 0,
+                )
+                if st_res.returncode != 0:
+                    _SELF_UPDATE_IN_PROGRESS = False
+                    return
+                st_json = json.loads(st_res.stdout or "{}")
+                extracted_ver = str((st_json.get("unifiedHealth") or {}).get("version") or "").strip()
+                if not extracted_ver or not _is_remote_version_newer(extracted_ver, CORE_VERSION):
+                    _SELF_UPDATE_IN_PROGRESS = False
+                    return
+            except Exception:
+                _SELF_UPDATE_IN_PROGRESS = False
+                return
 
             # PyInstaller 부모 부트로더(_MEI 정리) 파일 잠금이 해제될 때까지 최대 15초 재시도 후 무소음 교체·재기동
             bat_path = update_dir / "updater.bat"

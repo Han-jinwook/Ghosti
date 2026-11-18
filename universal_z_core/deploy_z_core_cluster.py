@@ -44,6 +44,26 @@ def sync_internal_z_core_mirrors():
             except Exception as e:
                 log(f"⚠️ 내부 미러 동기화 경고 ({dst}): {e}")
 
+    # 2·3귀신 git worktree(D:\Ghosti_Search, D:\Ghosti_Share)에 구버전(v2.3.5 등)이 남아 다운그레이드 핑퐁을 유발하지 않도록 마스터 파일 강제 동기화
+    for wt_root in (r"D:\Ghosti_Search", r"D:\Ghosti_Share"):
+        wt_uzc = os.path.join(wt_root, "universal_z_core")
+        if os.path.isdir(wt_uzc) and os.path.abspath(wt_uzc).lower() != os.path.abspath(UZC_DIR).lower():
+            for rel_f in (
+                "seq_paste_daemon.py",
+                "ghost_search_window_ui2.py",
+                "deploy_z_core_cluster.py",
+                os.path.join("os_agent", "merlin_z_core_daemon.py"),
+                os.path.join("os_agent", "seq_paste_daemon.py"),
+                os.path.join("os_agent", "ghost_search_window_ui2.py"),
+            ):
+                s_p = os.path.join(UZC_DIR, rel_f)
+                d_p = os.path.join(wt_uzc, rel_f)
+                if os.path.exists(s_p) and os.path.isdir(os.path.dirname(d_p)):
+                    try:
+                        shutil.copy2(s_p, d_p)
+                    except Exception:
+                        pass
+
 def update_pc1():
     log("=== [1호기 (로컬)] Z-코어 최신화 및 리로드 시작 ===")
     import shutil
