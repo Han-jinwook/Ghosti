@@ -2,12 +2,12 @@
 
 ---
 
-## 🕒 [2026-11-19 00:35 KST `1·2·3귀신` 공통 인계 기록]
+## 🕒 [2026-11-19 01:18 KST `1·2·3귀신` 공통 인계 기록 (`2귀신` 저녁·심야 완료분 선반영)]
 
 - **세션 창 제목**: `3단호칭통일iOS개통완결`
 
 ### 1. 이번 세션에서 완료한 핵심 작업 요약 (`1·2·3귀신` 전원 필독 공통 규칙 & 완료 내역)
-1. **[전사·노션 QA 3단 공식 호칭 엄격 분리 · 모바일 OS별 영구 규칙 고정 · Apple iOS TestFlight `1.0.16 (16)` 개통 반영 (`5b5fe00`)]**:
+1. **[전사·노션 QA 3단 공식 호칭 엄격 분리 · 모바일 OS별 영구 규칙 고정 · Apple iOS TestFlight `1.0.16 (16)` 및 양대 스토어 5초 무인 동시 출시 워커 개통 반영 (`5b5fe00` · `7963318`)]**:
    - **🏷️ 3단 공식 호칭 고정 (모바일을 ‘엔진’이라 부르는 것 영구 금지)**:
      - ① **`PC 엔진` (`Z코어`)**: `Merlin_Z_Core.exe` (`127.0.0.1:5199`, 현행 `v2.3.59`) — PC 로컬 기능 수정 시 버전업.
      - ② **`웹 화면` (`웹 UI`)**: `https://ghosti.sundreamer.app` — 일반 UI·문구·채팅 라우터·공유방 수정 시 (`git push` 즉시 반영).
@@ -17,10 +17,11 @@
      - **🤖 `안드로이드 앱` 전용**: 유료결제 유도 클리너(`CleanX` 등 100종) 3단 구출 배너 작동.
      - **🍎 `아이폰 앱` 영구 미제공·비노출**: Apple iOS 샌드박스 보안 정책(Guideline 2.5.2)상 클리너 3단 구출은 아이폰에서 영구 비노출이 정상이며, 아이폰에서 채팅창에 클리너/구독 해지를 질문하면 Google Play 링크 대신 **"아이폰(iOS)은 애플 보안 정책상 악성 청소앱이 자동 침투할 수 없으며, 정기구독 확인은 [아이폰 설정 > 내 이름(Apple 계정) > 구독]에서 안전하게 관리하실 수 있습니다"**라고 안내하도록 완결.
      - **💳 양대 `모바일 앱` 내 요금표·결제창 상시 비노출**: 모바일 앱 내부에서는 요금표(`PricingModal`)·결제 버튼을 상시 비노출하며 PC `웹 화면(웹 UI)`이 전담.
-   - **🚀 양대 스토어(Google Play + Apple TestFlight) 5초 즉석 무인 동시 출시 워커 개통 (비서실 대기 병목 0초)**: 차기 `모바일 앱` 배치 버전업(`1.0.17 (17)`) 시 서명 `.aab` 빌드 및 `git push origin main` 직후 **`python D:\Secretary\tools\release_mobile_stores.py --version 1.0.17 --build 17 --notes "v1.0.17 (17): 모바일 QA 수정 반영"`** 1줄만 실행하면 Google Play Android Publisher v3 API(`.aab` 즉시 업로드·출시)와 Apple TestFlight(`ghosti_ios_testflight.yml` 무인 빌드·업로드)가 1:1 버전 라임으로 동시 출시됨 (`--verify-only` 자가 진단 검증 완료: Google Play `16 (1.0.16)` & Apple TestFlight `16 (VALID)`).
-2. **[`AGENTS.md` 21만 줄(280KB) 빈 줄 폭탄 소거 & `"1귀신"` / `"2귀신"` / `"3귀신"` 한마디 입력 = 자동 체크인·인계장 정독 규칙 확립]**:
-   - `AGENTS.md`의 `<!-- [PROJECT_LOCAL_RULES_BELOW] -->` 아래에 쌓여 있던 21만 줄 빈 줄 쓰레기를 제거(`347KB ➔ 56KB`, `406줄`)하여 새 세션 시작 시 하단 로컬 규칙이 `<truncated>` 없이 100% 한 번에 로드되도록 복구.
-   - 새 창에서 `"체크인"` 없이 단지 **`"1귀신"`**, **`"2귀신"`**, **`"3귀신"`**이라고만 입력해도 즉시 **`git pull --rebase --autostash` ➔ `docs/SESSION_HANDOVER.md` 최상단 정독·브리핑 ➔ 해당 `--role 1|2|3` 감시병(`IsDaemon=true`) 단 1개 기동**을 원스톱 수행하도록 명문화.
+   - **🚀 양대 스토어(Google Play + Apple TestFlight) 5초 즉석 무인 동시 출시 워커 개통 (비서실 대기 병목 0초)**: 차기 `모바일 앱` 배치 버전업(`1.0.17 (17)`) 시 서명 `.aab` 빌드 및 `git push origin main` 직후 **`python D:\Secretary\tools\release_mobile_stores.py --version 1.0.17 --build 17 --notes "v1.0.17 (17): 모바일 QA 수정 반영"`** 1줄만 실행하면 Google Play Android Publisher v3 API(`.aab` 즉시 업로드·출시)와 Apple TestFlight(`ghosti_ios_testflight.yml` 무인 빌드·업로드)가 1:1 버전 라임으로 동시 출시됨 (`PyJWT`·`cryptography` 설치 및 `--verify-only` 자가 진단 검증 완료: Google Play `16 (1.0.16)` & Apple TestFlight `16 (VALID)`).
+2. **[전사 22개 앱 `AGENTS.md` 빈 줄 폭탄(`\r\r\n` 수십만 줄) 근본 규명·일괄 청소 · 3중 자가치유 가드(`auto_heal_agents_and_handover_files`) 탑재 · `"1귀신"`/`"2귀신"`/`"3귀신"` 한마디 = 자동 체크인·인계장 정독 규칙 확립 (`96a9b44` · `9085b41` · `7ae45c5`)]**:
+   - `Ghosti` `AGENTS.md`의 21만 줄 빈 줄 쓰레기(`347KB ➔ 56KB`, `427줄`) 및 전사 20개 오염 앱(`studio` 13.8만 줄 ➔ `225줄`, `SensTalk` 9만 줄 ➔ `136줄` 등)의 `courier_agent.py` 줄바꿈 이중 치환 버그를 규명·일괄 청소 완료하여 새 세션 시작 시 하단 로컬 규칙이 `<truncated>` 없이 100% 한 번에 로드되도록 복구.
+   - `z_core_watcher.py` 및 전사 `doctrine_watcher.py` 기동 시마다 `\r\r\n`·연속 빈 줄을 0.01초 만에 자동 정화(Auto-Heal)하고 `650줄` 초과 시 경보를 띄우는 3중 영구 방지 가드 탑재 완료.
+   - 새 창에서 `"체크인"` 없이 단지 **`"1귀신"`**, **`"2귀신"`**, **`"3귀신"`**이라고만 입력해도 즉시 **`git pull --rebase --autostash` ➔ `docs/SESSION_HANDOVER.md` 최상단 정독·브리핑 ➔ 해당 `--role 1|2|3` 감시병(`IsDaemon=true`) 단 1개 기동**을 원스톱 수행하도록 `AGENTS.md`에 명문화.
 3. **[`2귀신` 4대 SOTA 엔진 전면 교체(`c2d0c21`) 및 노션 QA 버그 3건(`f00f319` · `2231fe8` · `d976488`) 전수 해결 & `1귀신` 본 앱 번들 목업 전수 제거·`젬마2+광학+PP-OCRv5` 단일 파이프라인 일원화(`d69400d` · `455baff` · `48e4b8d`)]**:
    - **4대 SOTA 교체**: 사진·스캔PDF·동영상 3대 OCR 경로 `PaddleOCR PP-OCRv5 Korean` 일원화(`ppocr_v5_worker.py` 평시 RAM 0MB, 동영상 장면 변화 선별 `77초 ➔ 3~7초`), `pypdfium2` 정식 PDF 파서, HWP v5 OLE2 `BodyText/Section*` 전 섹션 본문 추출, 전 문서 `50,000자` 전문 색인 & UI 스니펫 분리.
    - **모바일·귀신검색창 버그 해결**: 모바일 동영상 모달 플레이어 찌그러짐 방지(`shrink-0`, 세로형 `44dvh`)·최상위 Safe-Area 보장(`f00f319`), 스마트폰 가로 회전 시 상단 헤더 1줄(`42px`) 압축 및 중복 하단바 숨김(`2231fe8`), PC `귀신검색창` 호출 타임아웃(`700ms➔4500ms`) 이중 팝업 레이스 제거 및 `1.8초` 쿨다운 락 적용(`d976488`).
