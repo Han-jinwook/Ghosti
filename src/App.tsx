@@ -326,10 +326,7 @@ export const App: React.FC = () => {
             ? 'dashboard'
             : useSaySeeStore.getState().desktopTab);
       const targetMobileTab: MobileTab = savedNav?.mobileTab || desktopTabToMobileTab(targetDesktopTab);
-      const targetRoom: FamilyRoomId =
-        normalizeFamilyRoomParam(savedNav?.familyRoom) ||
-        urlRoom ||
-        useSaySeeStore.getState().activeFamilyRoom;
+      const targetRoom: FamilyRoomId = urlRoom || '우리집';
       const isB2bUrl =
         params.get('from') === 'b2b' ||
         /[?&]from=b2b\b/i.test(window.location.href) ||

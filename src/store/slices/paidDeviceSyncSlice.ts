@@ -115,6 +115,7 @@ import {
   buildBidirectionalStickKeywords,
   buildYearEquivalenceTokens,
   deriveLoungeProperNounTokens,
+  filterVisibleGalleryPhotos,
   getActivePersonaForCluster,
   isMobileOrStoreRuntime,
   isSharedPhotoLounge,
@@ -274,29 +275,23 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
       const isTargetLoungeSubscribed = Boolean(state.subscribedLounges[activeLoungeType]);
       const isSwitchingLounge = state.activeLoungeType !== activeLoungeType;
       const sharedMode = isSharedPhotoLounge(activeLoungeType);
+      const nextFamilyRoom: FamilyRoomId =
+        isSwitchingLounge && activeLoungeType === 'family' ? '우리집' : state.activeFamilyRoom || '우리집';
       const nextCorpus = resolveLoungePhotoCorpus({
         activeLoungeType,
-        activeFamilyRoom: state.activeFamilyRoom,
+        activeFamilyRoom: nextFamilyRoom,
         photos: state.photos,
         sharedRoomHostPhotos: state.sharedRoomHostPhotos,
         sharedRoomAddedPhotos: state.sharedRoomAddedPhotos,
       });
-      const refreshedGalleryResults: SearchResultItem[] = nextCorpus
-        .filter(
-          (p) =>
-            !p.quarantined &&
-            !p.isVaultDocument &&
-            p.trashCategory !== 'blurry' &&
-            p.trashCategory !== 'screenshot' &&
-            p.trashCategory !== 'memo' &&
-            p.trashCategory !== 'duplicate'
-        )
-        .map((photo) => ({
+      const refreshedGalleryResults: SearchResultItem[] = filterVisibleGalleryPhotos(nextCorpus).map(
+        (photo) => ({
           photo,
           score: 0.95,
           matchPercentage: 97,
           matchedBy: 'text-direct' as const,
-        }));
+        })
+      );
       const vaultPhotos: SearchResultItem[] = sharedMode
         ? []
         : state.photos
@@ -309,6 +304,7 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
             }));
       return {
         activeLoungeType,
+        activeFamilyRoom: nextFamilyRoom,
         activePricingPlan: state.subscribedLounges[activeLoungeType] ?? 'free_trial',
         ...(isSwitchingLounge
           ? {
@@ -320,7 +316,7 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
               matchedVaultPhotos: vaultPhotos,
               activeQuery:
                 activeLoungeType === 'family'
-                  ? `${state.activeFamilyRoom} 패밀리 앨범 (${refreshedGalleryResults.length}장)`
+                  ? `${nextFamilyRoom} 패밀리 앨범 (${refreshedGalleryResults.length}장)`
                   : activeLoungeType === 'club'
                   ? `동호회·모임 앨범 (${refreshedGalleryResults.length}장)`
                   : activeLoungeType === 'student'

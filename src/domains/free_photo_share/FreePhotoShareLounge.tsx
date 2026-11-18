@@ -2962,6 +2962,18 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     };
   }, []);
 
+  // [가족 초대 & 방 설정] 진입 시 양가 3개 방 중 '우리집'이 기본 선택되어 있도록 보장
+  useEffect(() => {
+    if (activeLoungeType === 'family' && activeFamilyRoom !== '우리집') {
+      const hasUrlRoom =
+        typeof window !== 'undefined' &&
+        new URLSearchParams(window.location.search).has('invite');
+      if (!hasUrlRoom) {
+        setActiveFamilyRoom('우리집');
+      }
+    }
+  }, [activeLoungeType]);
+
   const isLoggedInUser = Boolean(
     merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest'
   );
@@ -3462,23 +3474,26 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-white/10">
           <div className="flex flex-col gap-2">
             <span className="font-label-sm text-[12px] text-zinc-300 font-bold">
-              🏠 양가 3개 방 분리 설정 (현재 선택: {activeFamilyRoom})
+              🏠 양가 3개 방 분리 설정 (현재 선택: {activeFamilyRoom || '우리집'})
             </span>
             <div className="flex flex-wrap gap-2">
-              {FAMILY_ROOMS.map((room) => (
-                <button
-                  key={room}
-                  type="button"
-                  onClick={() => setActiveFamilyRoom(room)}
-                  className={`px-3.5 py-2 rounded-xl font-label-sm text-[12px] font-bold border ${
-                    activeFamilyRoom === room
-                      ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
-                      : 'bg-zinc-950 text-zinc-300 border-white/10'
-                  }`}
-                >
-                  {room}
-                </button>
-              ))}
+              {FAMILY_ROOMS.map((room) => {
+                const isSelectedRoom = (activeFamilyRoom || '우리집') === room;
+                return (
+                  <button
+                    key={room}
+                    type="button"
+                    onClick={() => setActiveFamilyRoom(room)}
+                    className={`px-3.5 py-2 rounded-xl font-label-sm text-[12px] font-bold border cursor-pointer transition-all ${
+                      isSelectedRoom
+                        ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold shadow-xs'
+                        : 'bg-zinc-950 text-zinc-300 border-white/10 hover:bg-zinc-900'
+                    }`}
+                  >
+                    {isSelectedRoom ? `✓ ${room}` : room}
+                  </button>
+                );
+              })}
             </div>
           </div>
 
