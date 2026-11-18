@@ -2813,7 +2813,9 @@ _VIDEO_OCR_JITTER_CORRECTIONS: List[tuple[re.Pattern[str], str]] = [
     (re.compile(r"파[동등]\s*(?:[71/|!]\s*)?(\d)"), r"파동 / \1"),
     (re.compile(r"하[틀늘]호수\s*(?:[71/|!]\s*)?(\d)"), r"하늘호수 / \1"),
     (re.compile(r"배를\s*퀴즈"), "배틀 퀴즈"),
-    (re.compile(r"급식\s*배를"), "급식 배틀"),
+    (re.compile(r"(급식|메뉴|학교간)\s*배를"), r"\1 배틀"),
+    (re.compile(r"메뉴배들"), "메뉴배틀"),
+    (re.compile(r",천드림\s*주식회사"), "썬드림 주식회사"),
     (re.compile(r"내\s*귀즈"), "내 퀴즈"),
     (re.compile(r"G00이e"), "Google"),
     (re.compile(r"(?:^|\b)시\s*분석(?=$|\s)"), "AI 분석"),
@@ -2821,12 +2823,97 @@ _VIDEO_OCR_JITTER_CORRECTIONS: List[tuple[re.Pattern[str], str]] = [
 ]
 
 
+def _sort_ocr_raw_tagged_text(raw_txt: str) -> str:
+    """
+    WinRT OcrLine의 BoundingRect(__POS_Y_X_H__Text) 좌표를 이용해:
+    1) 표·좁은 칸에서 아랫줄로 밀린 완성형 한글 1글자('치커리오이유자소스무' + '침' ➔ '치커리오이유자소스무침')를 원래 단어에 결합하고,
+    2) 화면 위➔아래(행 그룹핑) 및 좌➔우(X좌표) 순서대로 자연스럽게 정렬합니다.
+    """
+    if "__POS_" not in raw_txt:
+        return raw_txt
+    items: List[Dict[str, Any]] = []
+    for chunk in raw_txt.split(" ||| "):
+        chunk_s = chunk.strip()
+        if not chunk_s:
+            continue
+        m = re.match(r"^__POS_(-?\d+)_(-?\d+)_(\d+)__(.*)$", chunk_s)
+        if m:
+            items.append({
+                "y": int(m.group(1)),
+                "x": int(m.group(2)),
+                "h": max(8, int(m.group(3))),
+                "text": m.group(4).strip(),
+            })
+        else:
+            items.append({"y": 99999, "x": 0, "h": 14, "text": chunk_s})
+
+    if not items:
+        return ""
+
+    items.sort(key=lambda it: (it["y"], it["x"]))
+
+    # 1) 표 셀 줄바꿈으로 떨어진 단독 한글 1글자('침', '장' 등)를 직전 줄의 같은 열 단어 끝에 재결합
+    merged_flags = [False] * len(items)
+    for i, cur in enumerate(items):
+        t_cur = cur["text"]
+        if not re.fullmatch(r"[가-힣]", t_cur):
+            continue
+        best_parent_idx = -1
+        best_dy = 999999
+        for j in range(i - 1, -1, -1):
+            if merged_flags[j]:
+                continue
+            prev = items[j]
+            dy = cur["y"] - prev["y"]
+            if dy <= 2:
+                continue
+            if dy > max(48, int(prev["h"] * 2.6)):
+                break
+            t_prev = prev["text"]
+            if len(t_prev) < 3 or not re.search(r"[가-힣]$", t_prev):
+                continue
+            est_w = max(60, len(t_prev) * max(12, int(prev["h"] * 0.95)))
+            if (prev["x"] - 24) <= cur["x"] <= (prev["x"] + est_w + 24):
+                if dy < best_dy:
+                    best_dy = dy
+                    best_parent_idx = j
+        if best_parent_idx >= 0:
+            items[best_parent_idx]["text"] = items[best_parent_idx]["text"] + t_cur
+            merged_flags[i] = True
+
+    active_items = [it for idx, it in enumerate(items) if not merged_flags[idx] and it["text"]]
+    if not active_items:
+        return ""
+
+    # 2) 위➔아래(Y 허용오차 내 동일 행 묶음) ➔ 좌➔우(X 오름차순) 정렬
+    active_items.sort(key=lambda it: (it["y"], it["x"]))
+    rows: List[List[Dict[str, Any]]] = []
+    for it in active_items:
+        if not rows:
+            rows.append([it])
+            continue
+        cur_row = rows[-1]
+        ref_y = sum(x["y"] for x in cur_row) / len(cur_row)
+        ref_h = min(cur_row[0]["h"], it["h"])
+        if abs(it["y"] - ref_y) <= max(10.0, ref_h * 0.62):
+            cur_row.append(it)
+        else:
+            rows.append([it])
+
+    ordered_texts: List[str] = []
+    for r in rows:
+        r.sort(key=lambda it: it["x"])
+        for it in r:
+            ordered_texts.append(it["text"])
+    return " ||| ".join(ordered_texts)
+
+
 def _clean_video_ocr_display_text(raw_txt: str) -> str:
     """
     동영상 화면 OCR에서 줄 내부의 '별명 / 숫자' 슬래시(/)는 그대로 보존하고,
     WinRT OCR이 구분한 줄(Line) 단위로만 서브픽셀 한자/기호 파편(口, 巳, 鸞g龜O딘 등)을 정화합니다.
     """
-    s = str(raw_txt or "").strip()
+    s = _sort_ocr_raw_tagged_text(str(raw_txt or "").strip())
     if not s:
         return ""
     raw_lines = [seg.strip() for seg in re.split(r"\s*(?:\|\|\||·)\s*", s) if seg.strip()]
@@ -2836,19 +2923,34 @@ def _clean_video_ocr_display_text(raw_txt: str) -> str:
             continue
         for rx, repl in _VIDEO_OCR_JITTER_CORRECTIONS:
             seg = rx.sub(repl, seg)
-        # 줄 맨 앞의 깨진 색상칩/체크박스 기호([1, ], [], 「7, |씼, 『舅, C3, K3, 口 등) 제거
+        # 날짜 하이픈이 가운뎃점(2025•10•15)으로 찍힌 경우 먼저 복원 및 끝단 기호 찌꺼기(`•) 제거
+        seg = re.sub(r"(?<=\d)[•·](?=\d)", "-", seg)
+        seg = re.sub(r"[`´•·]+$", "", seg).strip()
+        # 한자 노이즈가 섞인 짧은 파편('*드訃 교' 등)은 한자만 지우면 외계어 조각이 남으므로 통째로 폐기
+        if re.search(r"[\u4e00-\u9fff㈀-㈞]", seg) and len(re.findall(r"[가-힣]", seg)) <= 3:
+            continue
+        # 줄 맨 앞의 깨진 색상칩/체크박스/열린괄호 아이콘 기호([1, ], [], 〈, (, 口 등) 제거
         seg = re.sub(
-            r"^(?:\[[^\]]{0,3}\]?\s*|\]+\s*|\|[가-힣0-9]{1,2}\s*|[〔「『][」』기결舅17]?\s*|[CKL][3å,]?\s+|[口巳臼匕團國爨鸞龜匶Ⅰ|ㆍ•\-]+\s*)+",
+            r"^(?:\[[^\]]{0,3}\]?\s*|\]+\s*|\|[가-힣0-9]{1,2}\s*|[〔「『〈<][」』기결舅17]?\s*|\(\s+(?=[^)]*$)|[CKL][3å,]?\s+|[口巳臼匕團國爨鸞龜匶Ⅰ|ㆍ•\-]+\s*)+",
             "",
             seg,
         ).strip()
+        # 날짜/드롭다운 우측 화살표 아이콘('2025-10-15 수 v', '관심학교 v')이 영문 'v'로 잘못 찍힌 꼬리 정리
+        seg = re.sub(r"(?<=[가-힣0-9])\s+[vV∨ˇ]$", "", seg).strip()
         seg = re.sub(r"[\u4e00-\u9fff㈀-㈞]+", "", seg).strip()
+        # 동그란 아이콘 오인식('00()') 및 일러스트/저대비 깨짐 파편('무』먹1?', '*드 교', '기 드 지') 제거
+        if re.fullmatch(r"[0oO()\[\]{}<>\s]+", seg):
+            continue
+        if re.search(r"[*『』「」〔〕]", seg) and len(re.findall(r"[가-힣]", seg)) <= 2:
+            continue
+        if re.fullmatch(r"[가-힣](?:\s+[가-힣]){1,4}", seg):
+            continue
         # 일반화된 구조 규칙: '닉네임 / 숫자' 목록에서 WinRT OCR이 '/'를 '7','1','!','|' 또는 공백으로 오인한 패턴을 '단어 / 숫자'로 정규화
         seg = re.sub(r"^([가-힣a-zA-Z0-9]{2,15})\s+(?:[71!|,]\s*)?(\d{1,2})$", r"\1 / \2", seg)
         if not seg or _VIDEO_OCR_NOISE_SEGS_RX.match(seg):
             continue
-        # 회전 휠 내부의 휘어진 글자 조각이나 숫자/수식 깨짐 파편 제거
-        if re.fullmatch(r"[\d+\-*=/.:\s]+", seg):
+        # 회전 휠 내부의 휘어진 글자 조각이나 숫자/수식 깨짐 파편 제거 (단, 표 내부 소수점 점수 '5.0', '4.5' 등은 보존)
+        if re.fullmatch(r"[\d+\-*=/.:\s]+", seg) and not re.fullmatch(r"\d{1,3}\.\d{1,2}", seg):
             continue
         if re.search(r"(?:기리김|이니통를|을이랑|영고야시랑|hhi333|강툳꽃|굴정피워|기별\*이|콤지맄이|핫찔12|Bc»BOP|ht1ihi|파•g좀이|경구퓸|^정쟁$)", seg):
             continue
@@ -3024,32 +3126,12 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
             _VIDEO_OCR_BG_RUNNING = False
 
 
-_PS_SORT_OCR_LINES_FN = (
-    "function Join-SortedOcrLines($ocrRes) {\n"
-    "    $items = @()\n"
-    "    foreach ($ln in $ocrRes.Lines) {\n"
-    "        if ($ln.Words.Count -gt 0) {\n"
-    "            $r = $ln.Words[0].BoundingRect\n"
-    "            $items += [PSCustomObject]@{ Y = [double]$r.Y; X = [double]$r.X; H = [double]$r.Height; Text = $ln.Text }\n"
-    "        } else {\n"
-    "            $items += [PSCustomObject]@{ Y = 99999.0; X = 0.0; H = 12.0; Text = $ln.Text }\n"
-    "        }\n"
-    "    }\n"
-    "    if ($items.Count -eq 0) { return '' }\n"
-    "    $sorted = $items | Sort-Object Y, X\n"
-    "    $rows = @(); $curRow = @(); $curY = -1000.0; $curH = 12.0\n"
-    "    foreach ($it in $sorted) {\n"
-    "        if ($curRow.Count -eq 0 -or [Math]::Abs($it.Y - $curY) -le [Math]::Max(8.0, [Math]::Min($curH, $it.H) * 0.6)) {\n"
-    "            $curRow += $it\n"
-    "            if ($curRow.Count -eq 1) { $curY = $it.Y; $curH = $it.H }\n"
-    "        } else {\n"
-    "            $rows += (($curRow | Sort-Object X | ForEach-Object { $_.Text }) -join ' ||| ')\n"
-    "            $curRow = @($it); $curY = $it.Y; $curH = $it.H\n"
-    "        }\n"
-    "    }\n"
-    "    if ($curRow.Count -gt 0) { $rows += (($curRow | Sort-Object X | ForEach-Object { $_.Text }) -join ' ||| ') }\n"
-    "    return ($rows -join ' ||| ')\n"
-    "}\n"
+_PS_FORMAT_TAGGED_LINES_EXPR = (
+    "($res0.Lines | ForEach-Object { "
+    "$w0 = $_.Words | Select-Object -First 1; "
+    "if ($w0) { $r = $w0.BoundingRect; '__POS_' + [int]$r.Y + '_' + [int]$r.X + '_' + [int]$r.Height + '__' + $_.Text } "
+    "else { '__POS_99999_0_14__' + $_.Text } "
+    "}) -join ' ||| '"
 )
 
 
@@ -3077,14 +3159,14 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
         "}\n"
         "function Score-Text([string]$t) {\n"
         "    if (-not $t) { return 0 }\n"
-        "    $ko = ([regex]::Matches($t, '[가-힣]')).Count\n"
-        "    $en = ([regex]::Matches($t, '[a-zA-Z0-9]')).Count\n"
-        "    $cjk = ([regex]::Matches($t, '[\\u4e00-\\u9fff]')).Count\n"
-        "    $sym = ([regex]::Matches($t, '[^가-힣a-zA-Z0-9\\s/.:,\\-?%+~]')).Count\n"
+        "    $cleanT = $t -replace '__POS_-?\\d+_-?\\d+_\\d+__', ''\n"
+        "    $ko = ([regex]::Matches($cleanT, '[가-힣]')).Count\n"
+        "    $en = ([regex]::Matches($cleanT, '[a-zA-Z0-9]')).Count\n"
+        "    $cjk = ([regex]::Matches($cleanT, '[\\u4e00-\\u9fff]')).Count\n"
+        "    $sym = ([regex]::Matches($cleanT, '[^가-힣a-zA-Z0-9\\s/.:,\\-?%+~]')).Count\n"
         "    return ($ko * 4) + $en - ($cjk * 4) - ($sym * 3)\n"
         "}\n"
-        + _PS_SORT_OCR_LINES_FN
-        + "$lang = New-Object Windows.Globalization.Language('ko')\n"
+        "$lang = New-Object Windows.Globalization.Language('ko')\n"
         "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)\n"
         "if (-not $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }\n"
         "Get-ChildItem -LiteralPath $args[0] -Filter '*.jpg' | Sort-Object Name | ForEach-Object {\n"
@@ -3095,7 +3177,7 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
         "        $decoder = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($stream)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
         "        $bmp0 = Await ($decoder.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
         "        $res0 = Await ($engine.RecognizeAsync($bmp0)) ([Windows.Media.Ocr.OcrResult])\n"
-        "        $bestText = Join-SortedOcrLines $res0\n"
+        f"        $bestText = {_PS_FORMAT_TAGGED_LINES_EXPR}\n"
         "        $bestScore = Score-Text $bestText\n"
         "        $ko0 = ([regex]::Matches($bestText, '[가-힣]')).Count\n"
         "        if ($ko0 -lt 5 -and $bestScore -lt 24) {\n"
@@ -3104,7 +3186,7 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
         "                $tf.Rotation = $rot\n"
         "                $bmpR = Await ($decoder.GetSoftwareBitmapAsync($decoder.BitmapPixelFormat, $decoder.BitmapAlphaMode, $tf, [Windows.Graphics.Imaging.ExifOrientationMode]::RespectExifOrientation, [Windows.Graphics.Imaging.ColorManagementMode]::DoNotColorManage)) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
         "                $resR = Await ($engine.RecognizeAsync($bmpR)) ([Windows.Media.Ocr.OcrResult])\n"
-        "                $txtR = Join-SortedOcrLines $resR\n"
+        f"                $txtR = {_PS_FORMAT_TAGGED_LINES_EXPR.replace('$res0', '$resR')}\n"
         "                $koR = ([regex]::Matches($txtR, '[가-힣]')).Count\n"
         "                $scR = Score-Text $txtR\n"
         "                if ($koR -ge 10 -and $scR -gt ($bestScore + 18)) {\n"
@@ -3376,8 +3458,7 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
                 "    $netTask.Wait(-1) | Out-Null\n"
                 "    $netTask.Result\n"
                 "}\n"
-                + _PS_SORT_OCR_LINES_FN
-                + "$lang = New-Object Windows.Globalization.Language('ko')\n"
+                "$lang = New-Object Windows.Globalization.Language('ko')\n"
                 "$engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromLanguage($lang)\n"
                 "if (-not $engine) { $engine = [Windows.Media.Ocr.OcrEngine]::TryCreateFromUserProfileLanguages() }\n"
                 "$vfile = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($args[0])) ([Windows.Storage.StorageFile])\n"
@@ -3392,7 +3473,7 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
                 "        $bmp = Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
                 "        $res = Await ($engine.RecognizeAsync($bmp)) ([Windows.Media.Ocr.OcrResult])\n"
                 "        $thumb.Dispose()\n"
-                "        $joined = Join-SortedOcrLines $res\n"
+                f"        $joined = {_PS_FORMAT_TAGGED_LINES_EXPR.replace('$res0', '$res')}\n"
                 "        Write-Output \"$s`t$joined\"\n"
                 "    } catch {}\n"
                 "}\n"
