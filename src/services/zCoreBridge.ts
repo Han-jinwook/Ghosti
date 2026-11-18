@@ -12,7 +12,7 @@ export const Z_CORE_PORT = 5199;
 export const Z_CORE_ORIGIN = `http://127.0.0.1:${Z_CORE_PORT}`;
 export const Z_CORE_ZIP_URL = '/Merlin_Z_Core.zip';
 /** 현재 배포 중인 최신 Z-코어 버전 (Merlin_Z_Core.zip 안의 Merlin_Z_Core_Setup.exe 버전과 반드시 일치시킬 것 — 불일치 시 self-update 루프 발생) */
-export const LATEST_Z_CORE_VERSION = '2.3.25';
+export const LATEST_Z_CORE_VERSION = '2.3.26';
 
 /**
  * 현재 브라우저 세션이 로그인된 실사용자인지, 아니면 비로그인(크롬 게스트 모드 / 시크릿 창 / 첫 방문자)인지 판별합니다.
@@ -190,24 +190,30 @@ class ZCoreBridgeManager {
       return true;
     };
 
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 4000);
-      const res = await fetch(`${Z_CORE_ORIGIN}/__merlin/health`, {
-        method: 'GET',
-        mode: 'cors',
-        signal: controller.signal,
-      });
-      clearTimeout(timeoutId);
+    for (const healthUrl of [
+      `${Z_CORE_ORIGIN}/__merlin/health`,
+      `http://localhost:${Z_CORE_PORT}/__merlin/health`,
+    ]) {
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 4000);
+        const res = await fetch(healthUrl, {
+          method: 'GET',
+          mode: 'cors',
+          cache: 'no-store',
+          signal: controller.signal,
+        });
+        clearTimeout(timeoutId);
 
-      if (res.ok) {
-        const data: ZCoreHealthResponse = await res.json();
-        if (data.ok) {
-          return markConnected(data);
+        if (res.ok) {
+          const data: ZCoreHealthResponse = await res.json();
+          if (data.ok) {
+            return markConnected(data);
+          }
         }
+      } catch {
+        /* fallback below */
       }
-    } catch {
-      /* fallback below */
     }
 
     // [보조 데몬/구버전 포트 폴백]: 5199 또는 51988의 /api/superpower/status가 살아있으면 이미 Z-코어가 실행 중인 상태로 즉시 인정 (중복 다운로드 원천 방지)

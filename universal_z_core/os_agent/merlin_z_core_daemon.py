@@ -55,7 +55,7 @@ import plugin_aggrofilter  # noqa: E402
 import ghosti_setup_parity  # noqa: E402
 import plugin_ghosti_superpowers  # noqa: E402
 
-CORE_VERSION = "2.3.25"
+CORE_VERSION = "2.3.26"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1149,8 +1149,11 @@ def ensure_port_free(port: int, force_replace: bool = False) -> list[int]:
     my_pid = os.getpid()
 
     # Fast-path: 포트가 이미 비어 있다면 불필요한 HTTP 타임아웃이나 netstat 스캔(6초 지연) 없이 1ms 만에 즉시 반환!
+    # (Windows에서는 SO_EXCLUSIVEADDRUSE를 걸어야 기존 리스너의 포트를 중복 바인딩하는 착시를 방지할 수 있음)
     try:
         with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            if sys.platform == "win32" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
             s.bind(("127.0.0.1", port))
         return []
     except OSError:
@@ -1506,7 +1509,7 @@ def main() -> None:
             if _k32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
                 # 이미 실행 중인 인스턴스가 최신 버전이면 트레이 아이콘을 추가로 만들지 않고 즉시 조용히 종료
                 try:
-                    with urllib.request.urlopen(f"http://127.0.0.1:{args.port}/__merlin/health", timeout=0.8) as resp:
+                    with urllib.request.urlopen(f"http://127.0.0.1:{args.port}/__merlin/health", timeout=1.5) as resp:
                         hdata = json.loads(resp.read().decode("utf-8", errors="replace"))
                         if hdata.get("ok") and hdata.get("version") == CORE_VERSION:
                             os._exit(0)
@@ -1530,9 +1533,17 @@ def main() -> None:
             pass
 
     class ReusableThreadingHTTPServer(ThreadingHTTPServer):
-        allow_reuse_address = True
+        allow_reuse_address = (sys.platform != "win32")
         daemon_threads = True
         request_queue_size = 128
+
+        def server_bind(self) -> None:
+            if sys.platform == "win32" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+                try:
+                    self.socket.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+                except Exception:
+                    pass
+            super().server_bind()
 
     # 1) 포트 5199 HTTP 서버를 가장 먼저 즉시 바인딩하여 웹앱의 '실행했어요 (즉시 확인)' 헬스체크가 0.1초 만에 성공하게 보장
     srv = ReusableThreadingHTTPServer(("127.0.0.1", args.port), MerlinUnifiedHTTPHandler)
