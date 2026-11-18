@@ -326,7 +326,54 @@ def check_notion_new_bugs(seen_bug_ids: Set[str], role: str = "all") -> list:
         return []
 
 
+def auto_heal_agents_and_handover_files() -> None:
+    """
+    [영구 재발 방지 가드 — AGENTS.md & SESSION_HANDOVER.md 빈 줄 폭탄(\r\r\n) 0.01초 자동 자가치유 및 800줄 잘림(<truncated>) 사전 경보]
+    - courier_agent 등의 CRLF 이중 치환으로 인해 <!-- [PROJECT_LOCAL_RULES_BELOW] --> 하단이나 인계장에
+      \r\r\n 또는 2줄 이상 연속 빈 줄이 발생하면 텍스트 손실 0%로 즉시 1줄 간격으로 자동 압축·복구합니다.
+    - AGENTS.md 전체 줄 수가 650줄(시스템 프롬프트 800줄 제한의 80%)을 초과하면 경보를 출력합니다.
+    """
+    candidate_roots = [ROOT_DIR]
+    for extra in (Path(r"D:\Ghosti"), Path(r"D:\Ghosti_Search"), Path(r"D:\Ghosti_Share")):
+        if extra.exists() and extra not in candidate_roots:
+            candidate_roots.append(extra)
+
+    marker = "<!-- [PROJECT_LOCAL_RULES_BELOW] -->"
+    for rdir in candidate_roots:
+        for rel in ("AGENTS.md", "docs/SESSION_HANDOVER.md"):
+            fpath = rdir / rel
+            if not fpath.exists() or not fpath.is_file():
+                continue
+            try:
+                raw_bytes = fpath.read_bytes()
+                has_crcrlf = b"\r\r\n" in raw_bytes
+                text = raw_bytes.decode("utf-8", errors="ignore")
+                norm_text = text.replace("\r\n", "\n").replace("\r", "\n")
+
+                if rel == "AGENTS.md" and marker in norm_text:
+                    head_part, local_part = norm_text.split(marker, 1)
+                    collapsed_local = re.sub(r"\n{3,}", "\n\n", local_part.strip())
+                    healed_text = head_part + marker + "\n\n" + collapsed_local + "\n"
+                else:
+                    healed_text = re.sub(r"\n{3,}", "\n\n", norm_text.strip()) + "\n"
+
+                old_lines = len(text.splitlines())
+                new_lines = len(healed_text.splitlines())
+                if has_crcrlf or old_lines - new_lines >= 5:
+                    fpath.write_bytes(healed_text.encode("utf-8"))
+                    print(
+                        f"🧹 [자동 자가치유] {fpath} 빈 줄 쓰레기 정화 완료 ({old_lines:,}줄 ➔ {new_lines:,}줄)"
+                    )
+                if rel == "AGENTS.md" and new_lines > 650:
+                    print(
+                        f"🚨 [AGENTS.md 줄수 경보] {fpath} 현재 {new_lines}줄 (800줄 초과 시 하단 규칙 <truncated> 잘림 위험!)"
+                    )
+            except Exception:
+                pass
+
+
 def main() -> None:
+    auto_heal_agents_and_handover_files()
     if len(sys.argv) >= 3 and sys.argv[1] == "--set-title":
         custom_title = " ".join(sys.argv[2:])
         applied = sync_antigravity_session_title(custom_title)
