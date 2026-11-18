@@ -420,8 +420,8 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
    - **🤖 `안드로이드 앱` 전용 기능**: 악성·유료결제 유도 클리너(`CleanX` 등 100종) 3단 구출 배너(`MobileCleanerRescueBanner.tsx`) 및 삭제 인텐트.
    - **🍎 `아이폰 앱` (iOS) 영구 미제공·비노출**: Apple iOS 샌드박스 보안 정책 및 Guideline 2.5.2에 따라 클리너 3단 구출 배너는 아이폰에서 영구 비노출하는 것이 정상 규칙이며, 아이폰 유저가 채팅창(`monsterChatRouter.ts`)에 클리너/구독 해지를 질문하면 Google Play 링크 대신 **"아이폰(iOS)은 애플 보안 정책상 악성 청소앱이 자동 침투할 수 없으며, 정기구독 확인은 [아이폰 설정 > 내 이름(Apple 계정) > 구독]에서 안전하게 관리하실 수 있습니다"**라고 안내합니다.
    - **💳 양대 모바일 앱 내 요금표·결제창 상시 비노출**: 모바일 앱 내부에서는 요금표(`PricingModal`)·결제 유도 버튼을 상시 비노출하며 PC `웹 화면(웹 UI)`이 전담합니다.
-3. **🚀 `Ghosti` 즉석 iOS TestFlight 무인 빌드·업로드 발사 원라이너 (비서실 대기 병목 0초)**:
-   - 모바일 앱 배치 버전업(예: `1.0.17`, 빌드 `17`) 시 `git push origin main` 직후 6호컴에서 아래 명령을 실행하면 GitHub Actions(`macos-26` + `Xcode 26.6`, `ghosti_ios_testflight.yml`)가 3~4분 내 Apple TestFlight에 무인 업로드합니다 (`version_name`과 `build_number`를 안드로이드와 1:1 동일 번호로 입력):
+3. **🚀 `Ghosti` 양대 스토어(Google Play + Apple TestFlight) 5초 즉석 무인 동시 출시 명령어 (비서실 대기 병목 0초)**:
+   - 모바일 앱 배치 버전업(예: `1.0.17`, 빌드 `17`) 시 6호컴에서 `npm.cmd run build && npx cap sync android` 및 서명 `.aab` (`D:\Ghosti\android\app\build\outputs\bundle\release\app-release.aab`) 빌드 + `git push origin main`을 마친 직후, 비서실 공문 요청 없이 **아래 명령어 1줄만 실행**하면 Google Play 내부 테스트 트랙(`.aab` 즉시 업로드·출시)과 Apple TestFlight(`.ipa` GitHub Actions `macos-26` + `Xcode 26.6` 자동 빌드·업로드)가 1:1 동일 버전 라임으로 동시 출시됩니다 (사전 연결 점검: `--verify-only`):
      ```powershell
-     python -c "import subprocess,requests; p=subprocess.run(['git','credential','fill'],input='protocol=https\nhost=github.com\n\n',text=True,capture_output=True); t=dict(l.split('=',1) for l in p.stdout.splitlines() if '=' in l)['password']; r=requests.post('https://api.github.com/repos/Han-jinwook/Secretary/actions/workflows/ghosti_ios_testflight.yml/dispatches',headers={'Authorization':f'token {t}','Accept':'application/vnd.github+json'},json={'ref':'main','inputs':{'version_name':'1.0.17','build_number':'17'}}); print('iOS TestFlight Trigger:',r.status_code)"
+     python D:\Secretary\tools\release_mobile_stores.py --version 1.0.17 --build 17 --notes "v1.0.17 (17): 모바일 QA 수정 반영"
      ```

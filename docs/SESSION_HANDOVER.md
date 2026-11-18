@@ -17,7 +17,7 @@
      - **🤖 `안드로이드 앱` 전용**: 유료결제 유도 클리너(`CleanX` 등 100종) 3단 구출 배너 작동.
      - **🍎 `아이폰 앱` 영구 미제공·비노출**: Apple iOS 샌드박스 보안 정책(Guideline 2.5.2)상 클리너 3단 구출은 아이폰에서 영구 비노출이 정상이며, 아이폰에서 채팅창에 클리너/구독 해지를 질문하면 Google Play 링크 대신 **"아이폰(iOS)은 애플 보안 정책상 악성 청소앱이 자동 침투할 수 없으며, 정기구독 확인은 [아이폰 설정 > 내 이름(Apple 계정) > 구독]에서 안전하게 관리하실 수 있습니다"**라고 안내하도록 완결.
      - **💳 양대 `모바일 앱` 내 요금표·결제창 상시 비노출**: 모바일 앱 내부에서는 요금표(`PricingModal`)·결제 버튼을 상시 비노출하며 PC `웹 화면(웹 UI)`이 전담.
-   - **🚀 iOS TestFlight 즉석 무인 빌드 트리거 (6호컴 원라이너)**: 차기 `모바일 앱` 배치 버전업(`1.0.17 (17)`) 시 `git push origin main` 직후 `AGENTS.md` 최하단의 `ghosti_ios_testflight.yml` workflow dispatch 원라이너를 실행하면 3~4분 내 TestFlight에 자동 업로드됨.
+   - **🚀 양대 스토어(Google Play + Apple TestFlight) 5초 즉석 무인 동시 출시 워커 개통 (비서실 대기 병목 0초)**: 차기 `모바일 앱` 배치 버전업(`1.0.17 (17)`) 시 서명 `.aab` 빌드 및 `git push origin main` 직후 **`python D:\Secretary\tools\release_mobile_stores.py --version 1.0.17 --build 17 --notes "v1.0.17 (17): 모바일 QA 수정 반영"`** 1줄만 실행하면 Google Play Android Publisher v3 API(`.aab` 즉시 업로드·출시)와 Apple TestFlight(`ghosti_ios_testflight.yml` 무인 빌드·업로드)가 1:1 버전 라임으로 동시 출시됨 (`--verify-only` 자가 진단 검증 완료: Google Play `16 (1.0.16)` & Apple TestFlight `16 (VALID)`).
 2. **[`AGENTS.md` 21만 줄(280KB) 빈 줄 폭탄 소거 & `"1귀신"` / `"2귀신"` / `"3귀신"` 한마디 입력 = 자동 체크인·인계장 정독 규칙 확립]**:
    - `AGENTS.md`의 `<!-- [PROJECT_LOCAL_RULES_BELOW] -->` 아래에 쌓여 있던 21만 줄 빈 줄 쓰레기를 제거(`347KB ➔ 56KB`, `406줄`)하여 새 세션 시작 시 하단 로컬 규칙이 `<truncated>` 없이 100% 한 번에 로드되도록 복구.
    - 새 창에서 `"체크인"` 없이 단지 **`"1귀신"`**, **`"2귀신"`**, **`"3귀신"`**이라고만 입력해도 즉시 **`git pull --rebase --autostash` ➔ `docs/SESSION_HANDOVER.md` 최상단 정독·브리핑 ➔ 해당 `--role 1|2|3` 감시병(`IsDaemon=true`) 단 1개 기동**을 원스톱 수행하도록 명문화.
