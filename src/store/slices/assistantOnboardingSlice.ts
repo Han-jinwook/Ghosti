@@ -126,6 +126,7 @@ import {
   quarantineFailureToast,
   quarantineResultNote,
   requestQuarantineOp,
+  filterVisibleGalleryPhotos,
   resolveLoungePhotoCorpus,
   resolveViewportLayout,
   restoreAllExcludedCustomFaceRegistrations,
@@ -447,22 +448,12 @@ export const createAssistantOnboardingSlice: StateCreator<
             matchPercentage: 98,
             matchedBy: 'text-direct' as const,
           }));
-    const initialGalleryPhotos = gallerySourceCorpus
-      .filter(
-        (p) =>
-          !p.quarantined &&
-          !p.isVaultDocument &&
-          p.trashCategory !== 'blurry' &&
-          p.trashCategory !== 'screenshot' &&
-          p.trashCategory !== 'memo' &&
-          p.trashCategory !== 'duplicate'
-      )
-      .map((photo) => ({
-        photo,
-        score: 0.95,
-        matchPercentage: 97,
-        matchedBy: 'text-direct' as const,
-      }));
+    const initialGalleryPhotos = filterVisibleGalleryPhotos(gallerySourceCorpus).map((photo) => ({
+      photo,
+      score: 0.95,
+      matchPercentage: 97,
+      matchedBy: 'text-direct' as const,
+    }));
     const effectiveInitialDocs = sharedModeNow ? [] : indexedDocs;
     const effectiveInitialVideos = sharedModeNow ? [] : indexedVideos;
     const totalFrames = effectiveInitialVideos.reduce((a, v) => a + v.timelineFrames.length, 0);

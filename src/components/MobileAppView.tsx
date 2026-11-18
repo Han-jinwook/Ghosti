@@ -280,8 +280,13 @@ export const MobileAppView: React.FC = () => {
   );
 
   // 검색 결과에서 dHash/연속촬영 기준 동일 연사 그룹을 1장으로 겹쳐서 [❐ N장 연사] 배지로 묶기
+  // (단, 가족·동호회·동창회 공유방에서는 사용자가 올린 사진이 1장으로 합쳐져 숨겨지지 않도록 개별 표시)
   const groupedResults = useMemo(() => {
-    if (!groupBurstsInSearch || searchSpace === 'vault') {
+    const isSharedLounge =
+      activeLoungeType === 'family' ||
+      activeLoungeType === 'club' ||
+      activeLoungeType === 'student';
+    if (!groupBurstsInSearch || searchSpace === 'vault' || isSharedLounge) {
       return searchResults.map((item) => ({
         representative: item,
         burstPhotos: [item.photo],
@@ -289,7 +294,7 @@ export const MobileAppView: React.FC = () => {
       }));
     }
     return groupBurstSearchResults(searchResults);
-  }, [searchResults, groupBurstsInSearch, searchSpace]);
+  }, [searchResults, groupBurstsInSearch, searchSpace, activeLoungeType]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -898,7 +903,7 @@ export const MobileAppView: React.FC = () => {
                                 }}
                                 aria-label="공유방에서 삭제"
                                 title="공유방에서 이 사진 삭제 (내 기기 원본은 보존됩니다)"
-                                className="absolute top-2 left-2 z-10 px-2 py-1 rounded-full bg-rose-600/90 hover:bg-rose-500 text-white text-[10.5px] font-black shadow-md flex items-center gap-0.5 cursor-pointer"
+                                className="absolute top-2 right-11 z-20 px-2 py-1 rounded-full bg-rose-600/95 hover:bg-rose-500 text-white text-[10.5px] font-black shadow-md flex items-center gap-0.5 cursor-pointer"
                               >
                                 🗑️ 삭제
                               </button>

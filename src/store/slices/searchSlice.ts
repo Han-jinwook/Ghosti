@@ -122,6 +122,7 @@ import {
   quarantineFailureToast,
   quarantineResultNote,
   requestQuarantineOp,
+  filterVisibleGalleryPhotos,
   resolveLoungePhotoCorpus,
   restoreAllExcludedCustomFaceRegistrations,
   saveCustomFaceRegistration,
@@ -319,22 +320,12 @@ export const createSearchSlice: StateCreator<
         sharedRoomHostPhotos: stateNow.sharedRoomHostPhotos,
         sharedRoomAddedPhotos: stateNow.sharedRoomAddedPhotos,
       });
-      const galleryPhotos = sourcePhotos
-        .filter(
-          (p) =>
-            !p.quarantined &&
-            !p.isVaultDocument &&
-            p.trashCategory !== 'blurry' &&
-            p.trashCategory !== 'screenshot' &&
-            p.trashCategory !== 'memo' &&
-            p.trashCategory !== 'duplicate'
-        )
-        .map((photo) => ({
-          photo,
-          score: 0.95,
-          matchPercentage: 97,
-          matchedBy: 'text-direct' as const,
-        }));
+      const galleryPhotos = filterVisibleGalleryPhotos(sourcePhotos).map((photo) => ({
+        photo,
+        score: 0.95,
+        matchPercentage: 97,
+        matchedBy: 'text-direct' as const,
+      }));
       set({
         searchSpace: 'gallery',
         hasUserSelectedSearchTab: true,
@@ -383,22 +374,12 @@ export const createSearchSlice: StateCreator<
             matchPercentage: 98,
             matchedBy: 'text-direct' as const,
           }));
-    const galleryPhotos = sourcePhotos
-      .filter(
-        (p) =>
-          !p.quarantined &&
-          !p.isVaultDocument &&
-          p.trashCategory !== 'blurry' &&
-          p.trashCategory !== 'screenshot' &&
-          p.trashCategory !== 'memo' &&
-          p.trashCategory !== 'duplicate'
-      )
-      .map((photo) => ({
-        photo,
-        score: 0.95,
-        matchPercentage: 97,
-        matchedBy: 'text-direct' as const,
-      }));
+    const galleryPhotos = filterVisibleGalleryPhotos(sourcePhotos).map((photo) => ({
+      photo,
+      score: 0.95,
+      matchPercentage: 97,
+      matchedBy: 'text-direct' as const,
+    }));
     const totalFrames = scopedVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
 
     set({

@@ -122,6 +122,8 @@ import {
   quarantineFailureToast,
   quarantineResultNote,
   requestQuarantineOp,
+  filterVisibleGalleryPhotos,
+  persistSharedRoomAddedPhotos,
   resolveLoungePhotoCorpus,
   restoreAllExcludedCustomFaceRegistrations,
   saveCustomFaceRegistration,
@@ -987,13 +989,24 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       sharedRoomHostPhotos: state.sharedRoomHostPhotos,
       sharedRoomAddedPhotos: state.sharedRoomAddedPhotos,
     });
-    const existingNames = new Set(currentRoomCorpus.map((p) => p.name));
+    const existingNameSizes = new Set(currentRoomCorpus.map((p) => `${p.name}__${p.size}`));
+    const existingDhashSizes = new Set(
+      currentRoomCorpus.filter((p) => p.dhash).map((p) => `${p.dhash}__${p.size}`)
+    );
     const nowIso = new Date().toISOString();
+    const nowMs = Date.now();
     const picked = state.photos
-      .filter((p) => idSet.has(p.id) && !existingNames.has(p.name))
-      .map((p) => ({
+      .filter((p) => {
+        if (!idSet.has(p.id)) return false;
+        if (existingNameSizes.has(`${p.name}__${p.size}`)) return false;
+        if (p.dhash && existingDhashSizes.has(`${p.dhash}__${p.size}`)) return false;
+        return true;
+      })
+      .map((p, idx) => ({
         ...p,
-        id: `shared_added_${Date.now()}_${p.id}`,
+        id: `shared_added_${nowMs}_${idx}_${p.id}`,
+        trashCategory: undefined,
+        isVaultDocument: false,
         uploaderLabel: `${uploaderNick} 추가`,
         sharedAddedAt: nowIso,
         sharedLoungeType: targetLounge,
@@ -1009,13 +1022,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     }
 
     const nextAdded = [...picked, ...state.sharedRoomAddedPhotos];
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('ghosti_shared_family_added_photos_v1', JSON.stringify(nextAdded.slice(0, 200)));
-      } catch {
-        /* ignore quota */
-      }
-    }
+    persistSharedRoomAddedPhotos(nextAdded);
 
     const mergedShared = resolveLoungePhotoCorpus({
       activeLoungeType: targetLounge,
@@ -1024,22 +1031,12 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       sharedRoomHostPhotos: state.sharedRoomHostPhotos,
       sharedRoomAddedPhotos: nextAdded,
     });
-    const nextResults: SearchResultItem[] = mergedShared
-      .filter(
-        (p) =>
-          !p.quarantined &&
-          !p.isVaultDocument &&
-          p.trashCategory !== 'blurry' &&
-          p.trashCategory !== 'screenshot' &&
-          p.trashCategory !== 'memo' &&
-          p.trashCategory !== 'duplicate'
-      )
-      .map((photo) => ({
-        photo,
-        score: 0.99,
-        matchPercentage: 99,
-        matchedBy: 'text-direct' as const,
-      }));
+    const nextResults: SearchResultItem[] = filterVisibleGalleryPhotos(mergedShared).map((photo) => ({
+      photo,
+      score: 0.99,
+      matchPercentage: 99,
+      matchedBy: 'text-direct' as const,
+    }));
 
     const roomLabel =
       targetLounge === 'family'
@@ -1064,16 +1061,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     if (!photoId) return;
     const state = get();
     const nextAdded = state.sharedRoomAddedPhotos.filter((p) => p.id !== photoId);
-    if (typeof window !== 'undefined') {
-      try {
-        localStorage.setItem(
-          'ghosti_shared_family_added_photos_v1',
-          JSON.stringify(nextAdded.slice(0, 200))
-        );
-      } catch {
-        /* ignore quota */
-      }
-    }
+    persistSharedRoomAddedPhotos(nextAdded);
     const nextResults = state.searchResults.filter((item) => item.photo.id !== photoId);
     set({
       sharedRoomAddedPhotos: nextAdded,
@@ -1116,22 +1104,14 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       sharedRoomHostPhotos: st.sharedRoomHostPhotos,
       sharedRoomAddedPhotos: st.sharedRoomAddedPhotos,
     });
-    const sharedGalleryResults: SearchResultItem[] = mergedShared
-      .filter(
-        (p) =>
-          !p.quarantined &&
-          !p.isVaultDocument &&
-          p.trashCategory !== 'blurry' &&
-          p.trashCategory !== 'screenshot' &&
-          p.trashCategory !== 'memo' &&
-          p.trashCategory !== 'duplicate'
-      )
-      .map((photo) => ({
+    const sharedGalleryResults: SearchResultItem[] = filterVisibleGalleryPhotos(mergedShared).map(
+      (photo) => ({
         photo,
         score: 0.96,
         matchPercentage: 98,
         matchedBy: 'text-direct' as const,
-      }));
+      })
+    );
 
     set({
       activeLoungeType: targetLounge,
@@ -1169,22 +1149,12 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         sharedRoomHostPhotos: state.sharedRoomHostPhotos,
         sharedRoomAddedPhotos: state.sharedRoomAddedPhotos,
       });
-      const nextResults: SearchResultItem[] = nextCorpus
-        .filter(
-          (p) =>
-            !p.quarantined &&
-            !p.isVaultDocument &&
-            p.trashCategory !== 'blurry' &&
-            p.trashCategory !== 'screenshot' &&
-            p.trashCategory !== 'memo' &&
-            p.trashCategory !== 'duplicate'
-        )
-        .map((photo) => ({
-          photo,
-          score: 0.95,
-          matchPercentage: 97,
-          matchedBy: 'text-direct' as const,
-        }));
+      const nextResults: SearchResultItem[] = filterVisibleGalleryPhotos(nextCorpus).map((photo) => ({
+        photo,
+        score: 0.95,
+        matchPercentage: 97,
+        matchedBy: 'text-direct' as const,
+      }));
       return {
         activeFamilyRoom,
         hasExecutedUserSearch: false,

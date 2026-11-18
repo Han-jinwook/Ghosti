@@ -62,14 +62,18 @@ export const FreePhotoShareOverlays: React.FC = () => {
       sharedRoomHostPhotos,
       sharedRoomAddedPhotos,
     });
-    const existingSharedNames = new Set(currentRoomCorpus.map((p) => p.name));
+    const existingSharedNameSizes = new Set(currentRoomCorpus.map((p) => `${p.name}__${p.size}`));
+    const existingDhashSizes = new Set(
+      currentRoomCorpus.filter((p) => p.dhash).map((p) => `${p.dhash}__${p.size}`)
+    );
     const recentSet = new Set(recentPickedNames);
     return photos.filter(
       (p) =>
         !p.quarantined &&
         !p.isVaultDocument &&
         (!p.trashCategory || recentSet.has(p.name)) &&
-        !existingSharedNames.has(p.name) &&
+        !existingSharedNameSizes.has(`${p.name}__${p.size}`) &&
+        !(p.dhash && existingDhashSizes.has(`${p.dhash}__${p.size}`)) &&
         !/^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(p.name)
     );
   }, [

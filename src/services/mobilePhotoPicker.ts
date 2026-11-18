@@ -393,30 +393,36 @@ export async function analyzeMobilePickedPhotoFiles(
           dt.getDate()
         ).padStart(2, '0')}`;
 
-        // [모바일 미리보기·정리 보관함 썸네일 엑박 원천 차단]:
-        // Android WebView에서 다음 <input type="file"> 호출 시 이전 blob: URL 권한이 해제되어 깨지지 않도록 480px JPEG Data URL 영구 생성
+        // [모바일 미리보기·공유방 영구 저장 최적화]:
+        // 480px JPEG 썸네일 + 최대 1280px 경량 fullUrl DataURL을 생성해 수 MB 원본으로 인한 localStorage Quota 초과를 방지합니다.
         let persistentThumbUrl = fallbackDataUrl || objUrl;
+        let persistentFullUrl = fallbackDataUrl || objUrl;
         try {
-          const maxDim = 480;
-          const scale =
-            img.width > 0 && img.height > 0
-              ? Math.min(1, maxDim / Math.max(img.width, img.height))
-              : 1;
-          const tw = Math.max(1, Math.round((img.width || 360) * scale));
-          const th = Math.max(1, Math.round((img.height || 360) * scale));
-          const thumbCanvas = document.createElement('canvas');
-          thumbCanvas.width = tw;
-          thumbCanvas.height = th;
-          const tCtx = thumbCanvas.getContext('2d');
-          if (tCtx) {
-            tCtx.drawImage(img, 0, 0, tw, th);
-            const dataUrl = thumbCanvas.toDataURL('image/jpeg', 0.84);
-            if (dataUrl && dataUrl.startsWith('data:image/')) {
-              persistentThumbUrl = dataUrl;
-            }
+          const renderResizedJpeg = (maxDim: number, quality: number): string => {
+            const scale =
+              img.width > 0 && img.height > 0
+                ? Math.min(1, maxDim / Math.max(img.width, img.height))
+                : 1;
+            const tw = Math.max(1, Math.round((img.width || 360) * scale));
+            const th = Math.max(1, Math.round((img.height || 360) * scale));
+            const canvas = document.createElement('canvas');
+            canvas.width = tw;
+            canvas.height = th;
+            const ctx = canvas.getContext('2d');
+            if (!ctx) return '';
+            ctx.drawImage(img, 0, 0, tw, th);
+            const url = canvas.toDataURL('image/jpeg', quality);
+            return url && url.startsWith('data:image/') ? url : '';
+          };
+          const thumbData = renderResizedJpeg(480, 0.84);
+          if (thumbData) persistentThumbUrl = thumbData;
+          if (fallbackDataUrl.length > 220_000) {
+            const fullData = renderResizedJpeg(1280, 0.82);
+            if (fullData) persistentFullUrl = fullData;
           }
         } catch {
           persistentThumbUrl = fallbackDataUrl || objUrl;
+          persistentFullUrl = fallbackDataUrl || persistentThumbUrl;
         }
 
         const photoName = file.name || `내폰사진_${index + 1}.jpg`;
@@ -436,7 +442,7 @@ export async function analyzeMobilePickedPhotoFiles(
           date: dateStr,
           mtimeMs: photoMtime,
           thumbUrl: persistentThumbUrl,
-          fullUrl: fallbackDataUrl || persistentThumbUrl,
+          fullUrl: persistentFullUrl || persistentThumbUrl,
           tags,
           locationKo: '내 스마트폰 갤러리 (온디바이스 분석)',
           captionKo: `${file.name} (${img.width}x${img.height} · 선명도 ${sharpness.toLocaleString()}점 · 외부 전송 0 Byte)`,

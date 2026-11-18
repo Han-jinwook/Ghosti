@@ -121,6 +121,56 @@ export function resolveLoungePhotoCorpus(args: {
   );
 }
 
+/**
+ * 갤러리/공유방 목록에 표시 가능한 사진만 필터링합니다.
+ * 사용자가 공유방에 직접 올린 사진(shared_added_)·호스트 공유 사진(shared_host_)은
+ * trashCategory/isVaultDocument 분류로 숨기지 않고 항상 표시합니다.
+ */
+export function filterVisibleGalleryPhotos(items: PhotoItem[]): PhotoItem[] {
+  return items.filter((p) => {
+    if (p.quarantined) return false;
+    const pid = String(p.id || '');
+    if (pid.startsWith('shared_added_') || pid.startsWith('shared_host_')) {
+      return true;
+    }
+    return (
+      !p.isVaultDocument &&
+      p.trashCategory !== 'blurry' &&
+      p.trashCategory !== 'screenshot' &&
+      p.trashCategory !== 'memo' &&
+      p.trashCategory !== 'duplicate'
+    );
+  });
+}
+
+/**
+ * 공유방 추가 사진을 localStorage 5MB 용량 한도를 넘기지 않도록 안전하게 영구 저장합니다.
+ * 수 MB짜리 원본 data: URL이 들어 있으면 경량 thumbUrl로 대체해 QuotaExceededError를 방지합니다.
+ */
+export function persistSharedRoomAddedPhotos(items: PhotoItem[]): void {
+  if (typeof window === 'undefined') return;
+  const compactItems = items.slice(0, 200).map((item) => {
+    const thumb = String(item.thumbUrl || '');
+    const full = String(item.fullUrl || '');
+    const safeFull =
+      full.startsWith('data:') && full.length > 220_000 && thumb ? thumb : item.fullUrl;
+    return {
+      ...item,
+      fullUrl: safeFull,
+    };
+  });
+  for (let limit = compactItems.length; limit >= 0; limit = Math.floor(limit * 0.7)) {
+    try {
+      const slice = limit === 0 ? [] : compactItems.slice(0, limit);
+      localStorage.setItem('ghosti_shared_family_added_photos_v1', JSON.stringify(slice));
+      return;
+    } catch {
+      if (limit === 0) return;
+      if (limit === 1) limit = 0;
+    }
+  }
+}
+
 export const voiceSession = new HybridVoiceSession();
 
 export type QuarantineOpResult = {

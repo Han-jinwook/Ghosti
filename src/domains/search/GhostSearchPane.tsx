@@ -69,6 +69,17 @@ export const GhostSearchPane: React.FC<{
   const showCanvasResults = true;
 
   const groupedResults = useMemo(() => {
+    const isSharedLounge =
+      activeLoungeType === 'family' ||
+      activeLoungeType === 'club' ||
+      activeLoungeType === 'student';
+    if (isSharedLounge) {
+      return searchResults.map((item) => ({
+        representative: item,
+        burstPhotos: [item.photo],
+        burstCount: 1,
+      }));
+    }
     const orderedGroups = groupBurstSearchResults(searchResults);
     if (!groupBurstsInSearch || searchSpace === 'vault') {
       return orderedGroups.flatMap((g) =>
@@ -592,7 +603,7 @@ export const GhostSearchPane: React.FC<{
                                 }}
                                 aria-label="공유방에서 삭제"
                                 title="공유방에서 이 사진 삭제 (내 기기 원본은 보존됩니다)"
-                                className="absolute top-2.5 left-2.5 z-10 px-2.5 py-1 rounded-full bg-rose-600/90 hover:bg-rose-500 text-white text-[11px] font-black shadow-md flex items-center gap-1 cursor-pointer"
+                                className="absolute top-2.5 right-12 z-20 px-2.5 py-1 rounded-full bg-rose-600/95 hover:bg-rose-500 text-white text-[11px] font-black shadow-md flex items-center gap-1 cursor-pointer"
                               >
                                 🗑️ 삭제
                               </button>
