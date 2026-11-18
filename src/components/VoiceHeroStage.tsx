@@ -210,8 +210,8 @@ export const VoiceHeroStage: React.FC = () => {
       {/* ─────────────── 노션형 보더리스(Borderless) 통합 검색 캔버스 블록 ─────────────── */}
       <div className="w-full flex flex-col gap-3">
         {/* 1-A. 자연어 문장형 통합 검색창 */}
-        <form onSubmit={handleTextSubmit} className="w-full flex flex-wrap items-center gap-1.5 sm:gap-2">
-          <div className="relative flex-1 min-w-[200px] flex items-center">
+        <form onSubmit={handleTextSubmit} className="w-full flex flex-wrap items-center gap-2">
+          <div className="relative w-full sm:flex-1 sm:min-w-[200px] flex items-center">
             <span className="material-symbols-outlined text-[20px] absolute left-3.5 pointer-events-none text-zinc-400">
               {searchSpace === 'vault'
                 ? 'folder_managed'
@@ -246,7 +246,7 @@ export const VoiceHeroStage: React.FC = () => {
           </div>
 
           {(isMobileVoiceEnvironment() || Boolean(isStoreAppMode)) && (
-            <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+            <div className="w-full sm:w-auto flex items-center justify-between sm:justify-end gap-2 shrink-0 sm:ml-auto">
               {/* PC는 채팅/키보드 검색 올인, 실제 모바일 기기에서만 마이크 [말하기] 버튼 노출 */}
               <button
                 type="button"
@@ -255,7 +255,7 @@ export const VoiceHeroStage: React.FC = () => {
                   void toggleMicRecording();
                 }}
                 title="모바일 마이크로 말해서 검색·낭독·손보기"
-                className={`h-10 px-3 rounded-2xl border flex items-center gap-1 font-label-md text-[12px] font-bold shrink-0 whitespace-nowrap transition-all cursor-pointer ${
+                className={`h-10 px-3.5 flex-1 sm:flex-initial justify-center rounded-2xl border flex items-center gap-1.5 font-label-md text-[12px] font-bold shrink-0 whitespace-nowrap transition-all cursor-pointer ${
                   isListening
                     ? 'bg-primary-container text-zinc-950 border-primary-container animate-pulse'
                     : 'bg-[#18181B] hover:bg-zinc-800 text-zinc-200 border-white/15'
@@ -299,13 +299,13 @@ export const VoiceHeroStage: React.FC = () => {
           </div>
         )}
 
-        {/* 1-B. 3대 카테고리 스위칭 캡슐 탭: [사진] | [동영상] | [문서] (이모지 없이 깔끔한 캡슐 디자인) */}
+        {/* 1-B. 3대 카테고리 스위칭 캡슐 탭: [사진] | [동영상] | [문서] (모바일은 검색창 좌우 폭에 맞춰 3등분 균등 정렬) */}
         <div className="flex flex-wrap items-center justify-between gap-2 pb-0.5">
-          <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar max-w-full">
+          <div className="grid grid-cols-3 w-full sm:w-auto sm:flex items-center gap-2 max-w-full">
             <button
               type="button"
               onClick={() => setSearchSpace('gallery')}
-              className={`px-4 py-2 rounded-full font-label-md text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
+              className={`px-3 sm:px-4 py-2 rounded-full font-label-md text-[13px] font-bold flex items-center justify-center gap-1.5 transition-all border shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
                 searchSpace === 'gallery'
                   ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
                   : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
@@ -328,7 +328,7 @@ export const VoiceHeroStage: React.FC = () => {
             <button
               type="button"
               onClick={() => setSearchSpace('video')}
-              className={`px-4 py-2 rounded-full font-label-md text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
+              className={`px-3 sm:px-4 py-2 rounded-full font-label-md text-[13px] font-bold flex items-center justify-center gap-1.5 transition-all border shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
                 searchSpace === 'video'
                   ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
                   : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
@@ -353,7 +353,7 @@ export const VoiceHeroStage: React.FC = () => {
             <button
               type="button"
               onClick={() => setSearchSpace('vault')}
-              className={`px-4 py-2 rounded-full font-label-md text-[13px] font-bold flex items-center gap-1.5 transition-all border shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
+              className={`px-3 sm:px-4 py-2 rounded-full font-label-md text-[13px] font-bold flex items-center justify-center gap-1.5 transition-all border shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
                 searchSpace === 'vault'
                   ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
                   : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
@@ -408,13 +408,14 @@ export const VoiceHeroStage: React.FC = () => {
           </div>
         </div>
 
-        {/* 1-D. Z-코어 연결 시 무소음 인덱싱 상태 바 / 미연결 시 [⚡ 내 컴퓨터 1초 연결하기] 1줄 안내 바 (공유방·업무방에서는 전용 추가 버튼과 혼동 방지를 위해 비노출) */}
+        {/* 1-D. Z-코어 연결 시 무소음 인덱싱 상태 바 / 미연결 시 [⚡ 내 컴퓨터 1초 연결하기] 1줄 안내 바 (공유방·업무방 및 이미 하단에 사진 정리 섹션이 통합된 모바일 귀신비서 홈에서는 중복 노출 차단) */}
         {isZCoreConnected ? (
           <SilentIndexingStatusBar variant="search-bar" className="mt-1" />
         ) : activeLoungeType === 'family' ||
           activeLoungeType === 'club' ||
           activeLoungeType === 'student' ||
-          activeLoungeType === 'work' ? null : isMobile || isStoreAppMode ? (
+          activeLoungeType === 'work' ||
+          (isMobile && activeLoungeType === 'personal') ? null : isMobile || isStoreAppMode ? (
           <div className="w-full px-4 py-2.5 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex flex-wrap items-center justify-between gap-3 mt-0.5 shadow-sm">
             <input
               ref={mobilePhotoInputRef}

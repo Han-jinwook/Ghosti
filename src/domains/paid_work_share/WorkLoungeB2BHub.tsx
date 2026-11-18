@@ -205,8 +205,9 @@ const INITIAL_WORK_DOCS: WorkLoungeDocItem[] = [
 
 
 export const WorkLoungeB2BHub: React.FC = () => {
-  const { isStoreAppMode, setShowProModal, activatePricingPlan, subscribedLounges, faceClusters } =
+  const { layout, isStoreAppMode, setShowProModal, activatePricingPlan, subscribedLounges, faceClusters } =
     useSaySeeStore();
+  const isMobileOrStore = layout === 'mobile' || Boolean(isStoreAppMode) || isMobileOrStoreRuntime();
   const [viewMode, setViewMode] = useState<'semantic' | 'explorer'>('semantic');
   const [driveTargetPath, setDriveTargetPath] = useState('D:\\Ghosti\\업무공유폴더_S');
   const [searchQuery, setSearchQuery] = useState('');
@@ -519,33 +520,30 @@ export const WorkLoungeB2BHub: React.FC = () => {
               <span>🛡️ 공용 S: PC 1대 + 백업 PC ({backupPcNodes.filter((b) => b.active).length}대 가동 중)</span>
               <span>{showBackupManager ? '▴' : '▾'}</span>
             </button>
-            <button
-              type="button"
-              onClick={triggerNightSleepMode}
-              className="px-3 py-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-400/45 text-indigo-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1"
-              title="바탕화면 단축아이콘과 동일: 퇴근·취침 시 모니터 즉시 OFF + 15W 초절전 대기 + 메모리 유휴 캐시 정리"
-            >
-              <span>🌙 퇴근·야간 초절전 모드 (월 1,800원)</span>
-            </button>
-            <span className="px-2.5 py-1 rounded-xl bg-zinc-900 border border-amber-400/30 text-[11px] text-amber-200 font-bold">
-              🛡️ 마스터 PC 기본 [휴지통] 직행 + 백업 PC 1·2호 랜섬웨어 서킷 브레이커
-            </span>
+            {!isMobileOrStore && (
+              <>
+                <button
+                  type="button"
+                  onClick={triggerNightSleepMode}
+                  className="px-3 py-1 rounded-xl bg-indigo-500/20 hover:bg-indigo-500/30 border border-indigo-400/45 text-indigo-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1"
+                  title="바탕화면 단축아이콘과 동일: 퇴근·취침 시 모니터 즉시 OFF + 15W 초절전 대기 + 메모리 유휴 캐시 정리"
+                >
+                  <span>🌙 퇴근·야간 15W 초절전 모드</span>
+                </button>
+                <span className="px-2.5 py-1 rounded-xl bg-zinc-900 border border-amber-400/30 text-[11px] text-amber-200 font-bold">
+                  🛡️ 마스터 PC 기본 [휴지통] 직행 + 백업 PC 1·2호 랜섬웨어 서킷 브레이커
+                </span>
+              </>
+            )}
           </div>
         </div>
 
         {/* ⚡ 호스트(방장) PC 전용: 사무실 연결 PC 삼체(Three-Body) 실시간 관제 목록 & 마스터/개별 ON·OFF 제어 */}
-        <div className="hidden md:block">
-          <HostThreeBodyControlPanel contextMode="work" />
-        </div>
-        <details className="md:hidden rounded-2xl bg-zinc-950/90 border border-cyan-400/35 px-3.5 py-2.5">
-          <summary className="cursor-pointer list-none flex items-center justify-between gap-2 text-[12px] font-extrabold text-cyan-200">
-            <span>⚡ 호스트 PC 삼체 관제 센터 펼치기</span>
-            <span className="text-cyan-400 text-[11px] shrink-0">▾</span>
-          </summary>
-          <div className="pt-3">
+        {!isMobileOrStore && (
+          <div className="hidden md:block">
             <HostThreeBodyControlPanel contextMode="work" />
           </div>
-        </details>
+        )}
 
         {/* 🌙 퇴근·취침 시 실행되는 야간 초절전 모드 페이드아웃 안내 메시지 */}
         {nightSleepBannerPhase !== 'hidden' && (
@@ -710,11 +708,19 @@ export const WorkLoungeB2BHub: React.FC = () => {
                   👥 [팀원 권한 &amp; S: 드라이브 연결] 멤버별 권한 설정 화면
                 </span>
                 <span className="text-[12px] text-zinc-300">
-                  📢 <strong className="text-emerald-300">방장 1명만 구독하면 초대받은 가족·모임원·팀원은 평생 0원(무료)</strong>으로 윈도우 S: 드라이브에 직결되며, 멤버별로 편집·읽기 전용·숨기기 권한을 즉시 변경할 수 있습니다.
+                  {isStoreAppMode ? (
+                    <>
+                      📢 <strong className="text-emerald-300">방장이 연결한 사무실 공용 폴더(S: 드라이브)</strong>에 초대받은 팀원은 별도 설정 없이 바로 연결되며, 멤버별로 편집·읽기 전용·숨기기 권한을 즉시 변경할 수 있습니다.
+                    </>
+                  ) : (
+                    <>
+                      📢 <strong className="text-emerald-300">방장 1명만 구독하면 초대받은 가족·모임원·팀원은 평생 0원(무료)</strong>으로 윈도우 S: 드라이브에 직결되며, 멤버별로 편집·읽기 전용·숨기기 권한을 즉시 변경할 수 있습니다.
+                    </>
+                  )}
                 </span>
               </div>
               <span className="px-2.5 py-1 rounded-lg bg-cyan-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                ✓ 팀원 6명 S:\ 연결됨 (초대 팀원 전원 0원)
+                {isStoreAppMode ? '✓ 팀원 6명 S:\\ 연결됨' : '✓ 팀원 6명 S:\\ 연결됨 (초대 팀원 전원 0원)'}
               </span>
             </div>
 
@@ -733,13 +739,22 @@ export const WorkLoungeB2BHub: React.FC = () => {
                       <span className="text-[11px] text-zinc-400 truncate">{member.dept}</span>
                     </div>
                     <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 text-[10.5px] font-extrabold shrink-0">
-                      {member.role === 'host' ? '방장 (구독 호스트)' : '팀원 0원 (평생 무료)'}
+                      {member.role === 'host'
+                        ? isStoreAppMode
+                          ? '방장 (마스터 호스트)'
+                          : '방장 (구독 호스트)'
+                        : isStoreAppMode
+                        ? '연결된 팀원'
+                        : '팀원 0원 (평생 무료)'}
                     </span>
                   </div>
 
                   <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-white/10">
                     <span className="text-[10.5px] text-cyan-300 font-bold truncate min-w-0">
-                      🔗 {member.statusText}
+                      🔗{' '}
+                      {isStoreAppMode && member.role === 'host'
+                        ? 'S:\\ 마스터 연결됨 (전체 관리 권한)'
+                        : member.statusText}
                     </span>
                     {member.role === 'host' ? (
                       <span className="px-2 py-1 rounded-lg bg-amber-400/20 border border-amber-400/40 text-amber-200 text-[10.5px] font-extrabold shrink-0">
