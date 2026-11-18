@@ -1,7 +1,7 @@
 /**
- * Version: v1.5.2
+ * Version: v1.5.3
  * Last Updated: 2026-11-18
- * Description: 모바일(iOS Safari Apple Pay 팝업 차단 원천 방지) KCP 모바일 전용 게이트웨이(smpay) 현재 창 이동 지원 및 네이버페이 naverpay_direct='B' 브릿지 호출
+ * Description: 모바일 KCP 게이트웨이(smpay) 현재 창 이동 후 브라우저 뒤로가기(BFCache 복원) 시 결제 버튼 상태 자동 초기화(pageshow) 추가
  */
 import { useState, useCallback, useEffect } from 'react';
 import { requestKcpPayment, HubPayMethodType } from './wallet';
@@ -38,6 +38,18 @@ export function useHubPayment() {
       script.async = true;
       document.head.appendChild(script);
     }
+
+    // 🔄 모바일(iOS Safari 등)에서 결제창 이동 후 뒤로가기(BFCache 복원) 시 '결제 준비 중' 상태 고정 원천 방지
+    const resetPendingOnReturn = () => {
+      if (document.visibilityState === 'hidden') return;
+      setStatus((prev) => (prev === 'preparing' || prev === 'pending' ? 'idle' : prev));
+    };
+    window.addEventListener('pageshow', resetPendingOnReturn);
+    document.addEventListener('visibilitychange', resetPendingOnReturn);
+    return () => {
+      window.removeEventListener('pageshow', resetPendingOnReturn);
+      document.removeEventListener('visibilitychange', resetPendingOnReturn);
+    };
   }, []);
 
   /**
@@ -135,7 +147,10 @@ export function useHubPayment() {
         });
 
         mobileForm.submit();
-        return;
+        setTimeout(() => {
+          setStatus((prev) => (prev === 'preparing' || prev === 'pending' ? 'idle' : prev));
+        }, 1500);
+        return true;
       }
 
       // 2. KCP 표준결제 JS 스크립트 동적 로드 (site_cd에 맞춰 테스트/운영 분기)
