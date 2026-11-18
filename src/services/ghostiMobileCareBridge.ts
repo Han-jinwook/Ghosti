@@ -99,8 +99,26 @@ export function isCapacitorAndroidRuntime(): boolean {
   return Boolean(cap?.isNativePlatform?.() && cap?.getPlatform?.() === 'android');
 }
 
+export function isCapacitorIosRuntime(): boolean {
+  if (typeof window === 'undefined') return false;
+  const cap = (window as unknown as {
+    Capacitor?: { isNativePlatform?: () => boolean; getPlatform?: () => string };
+  }).Capacitor;
+  return Boolean(cap?.isNativePlatform?.() && cap?.getPlatform?.() === 'ios');
+}
+
+export function isIosMobileBrowserOrApp(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  if (isCapacitorIosRuntime()) return true;
+  const ua = navigator.userAgent || '';
+  if (/iPhone|iPad|iPod/i.test(ua)) return true;
+  if (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1) return true;
+  return false;
+}
+
 export function isAndroidMobileBrowserOrApp(): boolean {
   if (typeof navigator === 'undefined') return false;
+  if (isIosMobileBrowserOrApp()) return false;
   return isCapacitorAndroidRuntime() || /Android/i.test(navigator.userAgent || '');
 }
 
@@ -141,6 +159,7 @@ export async function scanMobileBloatCleaners(): Promise<ScanBloatCleanersResult
 }
 
 export async function triggerMobileCleanerUninstall(packageName: string = 'com.xstudios.cleanx'): Promise<void> {
+  if (isIosMobileBrowserOrApp()) return;
   if (isCapacitorAndroidRuntime()) {
     try {
       await GhostiMobileCareNative.openAppUninstallScreen({ packageName });
@@ -159,6 +178,7 @@ export async function triggerMobileCleanerUninstall(packageName: string = 'com.x
 }
 
 export async function triggerOpenPlaySubscriptions(packageName: string = 'com.xstudios.cleanx'): Promise<void> {
+  if (isIosMobileBrowserOrApp()) return;
   if (isCapacitorAndroidRuntime()) {
     try {
       await GhostiMobileCareNative.openPlayStoreSubscriptions({ packageName });
@@ -176,6 +196,7 @@ export async function triggerOpenPlaySubscriptions(packageName: string = 'com.xs
 }
 
 export async function triggerOpenGoogleAccountPermissions(): Promise<void> {
+  if (isIosMobileBrowserOrApp()) return;
   if (isCapacitorAndroidRuntime()) {
     try {
       await GhostiMobileCareNative.openGoogleAccountPermissions();
@@ -190,6 +211,7 @@ export async function triggerOpenGoogleAccountPermissions(): Promise<void> {
 }
 
 export async function triggerOpenAllInstalledApps(): Promise<void> {
+  if (isIosMobileBrowserOrApp()) return;
   if (isCapacitorAndroidRuntime()) {
     try {
       await GhostiMobileCareNative.openAllInstalledAppsSettings();

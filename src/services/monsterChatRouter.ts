@@ -14,6 +14,7 @@ import {
 } from './voiceSearchAndAiBatonEngine';
 import { getZCoreUrl, zCoreBridge } from './zCoreBridge';
 import {
+  isIosMobileBrowserOrApp,
   scanMobileBloatCleaners,
   triggerMobileCleanerUninstall,
   triggerOpenGoogleAccountPermissions,
@@ -730,6 +731,9 @@ export async function callMonsterLowCostLlmJson(params: {
     '',
     pcContextText,
     isSpecOrPerformanceQuery(query) ? MONTHLY_PC_SPEC_BENCHMARK.compactRuleText : '',
+    isIosMobileBrowserOrApp()
+      ? '[🍎 iOS 전용 필수 규칙]: 현재 접속 기기는 아이폰/아이패드(iOS)입니다. Google Play·CleanX 등 안드로이드 전용 클리너 삭제 안내나 유료 요금제 안내를 절대 하지 말고, 클리너·청소앱·구독 해지를 물어보면 "아이폰(iOS)은 애플 보안 정책상 악성 청소앱이 자동 침투할 수 없으며, 정기구독 확인은 [아이폰 설정 > 내 이름(Apple 계정) > 구독]에서 안전하게 관리하실 수 있습니다"라고 안내하세요.'
+      : '',
     '',
     historyBlock ? `[최근 대화 맥락]\n${historyBlock}\n` : '',
     `[현재 유저 입력 (${sourceTab === 'trash' ? '🧹 치우기 탭' : '⚙️ 고치기 탭'})]`,
@@ -2382,6 +2386,7 @@ function handleGhostiInfoDeskIfMatched(
     Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
   const isStoreCleanMode =
     isCapacitorNative ||
+    Boolean(useSaySeeStore.getState().isStoreAppMode) ||
     (typeof window !== 'undefined' && new URLSearchParams(window.location.search).get('storeApp') === '1');
   const isMobileViewportRuntime =
     isStoreCleanMode ||
@@ -2548,8 +2553,32 @@ export async function processUnifiedMonsterChatQuery(params: {
     if (ttsEnabled) void speakWithHyunsuOrSunhi(text, 'hyunsu_briefing');
   };
 
-  // 0-00) [모바일 유료결제 유도 클리너(CleanX 등) 3단 원터치 구출 라우터]
-  if (/(cleanx|클린\s*x|클린엑스|유료\s*청소\s*앱|이상한\s*청소\s*앱|주간\s*결제.*?청소)/i.test(clean)) {
+  // 0-00) [모바일 유료결제 유도 클리너(CleanX 등) 3단 원터치 구출(🤖 Android 전용) & 🍎 iOS 맞춤 안내 라우터]
+  const isCleanerTrapQuery =
+    /(cleanx|클린\s*x|클린엑스|악성\s*(청소\s*앱|클리너)|유료\s*(청소\s*앱|클리너)|이상한\s*(청소\s*앱|클리너)|청소\s*앱\s*(삭제|제거|구독|해지|결제|점검|스캔)|클리너\s*(앱|삭제|제거|구독|해지|결제|구출|점검|스캔)|주간\s*(자동\s*)?결제.*?(청소|클리너|해지))/i.test(
+      clean
+    );
+  const isIosSubscriptionManageQuery =
+    isIosMobileBrowserOrApp() &&
+    /(구독\s*(해지|취소|확인|관리|어디서|어떻게)|정기\s*(구독|결제)\s*(해지|취소|확인|관리|어디서|어떻게)|(자동|주간)\s*결제\s*(해지|취소|확인|관리))/i.test(
+      clean
+    );
+
+  if (isIosMobileBrowserOrApp() && (isCleanerTrapQuery || isIosSubscriptionManageQuery)) {
+    const iosSafeGuideText =
+      '🍎 **아이폰(iOS)은 애플 보안 정책상 악성 청소앱이 자동 침투할 수 없으며, 정기구독 확인은 [아이폰 설정 > 내 이름(Apple 계정) > 구독]에서 안전하게 관리하실 수 있습니다.**';
+    speak(
+      '아이폰은 애플 보안 정책상 악성 청소앱이 자동 침투할 수 없으며, 정기구독 확인은 아이폰 설정의 내 이름, 애플 계정, 구독에서 안전하게 관리하실 수 있습니다.'
+    );
+    return reply(sourceTab, iosSafeGuideText, {
+      followUpSuggestions: [
+        '📱 내 폰 사진 불러와 1분 정리 시작할래',
+        '🔍 맨 위 검색창으로 바로 찾아볼래',
+      ],
+    });
+  }
+
+  if (isCleanerTrapQuery) {
     const scanRes = await scanMobileBloatCleaners();
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('ghosti_trigger_mobile_cleaner_scan'));
