@@ -408,10 +408,13 @@ export const VoiceHeroStage: React.FC = () => {
           </div>
         </div>
 
-        {/* 1-D. Z-코어 연결 시 무소음 인덱싱 상태 바 / 미연결 시 [⚡ 내 컴퓨터 1초 연결하기] 1줄 안내 바 */}
+        {/* 1-D. Z-코어 연결 시 무소음 인덱싱 상태 바 / 미연결 시 [⚡ 내 컴퓨터 1초 연결하기] 1줄 안내 바 (공유방·업무방에서는 전용 추가 버튼과 혼동 방지를 위해 비노출) */}
         {isZCoreConnected ? (
           <SilentIndexingStatusBar variant="search-bar" className="mt-1" />
-        ) : isMobile || isStoreAppMode ? (
+        ) : activeLoungeType === 'family' ||
+          activeLoungeType === 'club' ||
+          activeLoungeType === 'student' ||
+          activeLoungeType === 'work' ? null : isMobile || isStoreAppMode ? (
           <div className="w-full px-4 py-2.5 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex flex-wrap items-center justify-between gap-3 mt-0.5 shadow-sm">
             <input
               ref={mobilePhotoInputRef}
