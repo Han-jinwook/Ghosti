@@ -709,6 +709,11 @@ def build_feedback_blocks(
        (테스터가 수동으로 취소선을 긋지 않고 체크박스 클릭 한 번으로 완료 표시 가능)
     """
     ts = timestamp_str or datetime.now().strftime("%Y-%m-%d %H:%M")
+    if re.search(r"github\.com/[^\s)]+\.apk", guide_text, re.IGNORECASE):
+        raise ValueError(
+            "❌ [전사 공지 위반] 노션 QA 카드에 GitHub .apk 직접 다운로드 링크 기재 영구 금지! "
+            "반드시 비서(Secretary)에게 .aab 스토어 출시를 요청하고 Google Play 내부 테스트 기준으로만 안내하세요."
+        )
     raw_lines = [ln.rstrip() for ln in guide_text.replace("\\n", "\n").splitlines()]
 
     # 이미 guide_text 첫 줄에 중복 헤더가 들어있는 경우 제거
