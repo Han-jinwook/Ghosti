@@ -85,12 +85,18 @@ def update_pc1():
     pyw_exe = os.path.join(os.path.dirname(py_exe), "pythonw.exe")
     runner = pyw_exe if os.path.exists(pyw_exe) else py_exe
 
-    # 1) 자동실행 등록
+    # 1) 자동실행 등록 (구버전 MerlinSeqPaste 제거 + 최신 Merlin_Z_Core_Setup.exe 복사 및 Run 레지스트리 등록)
     try:
+        local_exe_src = os.path.join(UZC_DIR, "os_agent", "dist", "Merlin_Z_Core_Setup.exe")
+        local_install_dir = os.path.expandvars(r"%LOCALAPPDATA%\Programs\MerlinFamily")
+        if os.path.exists(local_exe_src):
+            os.makedirs(local_install_dir, exist_ok=True)
+            shutil.copy2(local_exe_src, os.path.join(local_install_dir, "Merlin_Z_Core_Setup.exe"))
+        subprocess.run(["reg", "delete", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "/v", "MerlinSeqPaste", "/f"], capture_output=True, timeout=5)
         subprocess.run([runner, script, "--enable-autostart"], capture_output=True, timeout=5)
-        log("1호기: 시작프로그램 레지스트리(MerlinZCoreDaemon) 등록 완료")
+        log("로컬 PC: 시작프로그램 레지스트리(MerlinZCoreDaemon) 및 영구 실행파일 최신화 완료")
     except Exception as e:
-        log(f"1호기 시작프로그램 등록 경고: {e}")
+        log(f"로컬 시작프로그램 등록 경고: {e}")
 
     # 2) 데몬 교체 기동 (Z-코어 5199 + 귀신창 51988) - WMI Win32_Process.Create로 부모 프로세스 Job Object 종료 영향 원천 차단
     try:
@@ -198,12 +204,23 @@ def update_pc4():
                 ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", *snd_files, "USER@100.114.100.24:C:/MerlinTools/baby_ghost_sounds/"],
                 capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=20,
             )
-    log("✅ 4호기 SCP 전송 완료 (universal_z_core + C:/MerlinTools/seq_paste_daemon.py + assets + baby_ghost_sounds)")
+    # 1-B) 4호기 자동실행 경로(Merlin_Z_Core_Setup.exe)도 최신 빌드로 동시 동기화 (부팅 시 구버전 실행 원천 차단)
+    exe_path = os.path.join(UZC_DIR, "os_agent", "dist", "Merlin_Z_Core_Setup.exe")
+    if os.path.exists(exe_path):
+        subprocess.run(
+            [
+                "scp", "-i", key_path, "-o", "StrictHostKeyChecking=no",
+                exe_path,
+                "USER@100.114.100.24:C:/Users/USER/AppData/Local/Programs/MerlinFamily/Merlin_Z_Core_Setup.exe",
+            ],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=90,
+        )
+    log("✅ 4호기 SCP 전송 완료 (universal_z_core + Merlin_Z_Core_Setup.exe + seq_paste_daemon.py + assets)")
 
     # 2) 4호기 기존 5199/51988 프로세스 우아한 종료 + LISTENING 잔존 프로세스 강제 종료
     shutdown_cmd = [
         "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "USER@100.114.100.24",
-        'curl.exe -s --max-time 2 -X POST -d "{}" http://127.0.0.1:5199/__merlin/shutdown & curl.exe -s --max-time 2 http://127.0.0.1:51988/__merlin/shutdown'
+        'curl.exe -s --max-time 2 -X POST -d "{}" http://127.0.0.1:5199/__merlin/shutdown & curl.exe -s --max-time 2 http://127.0.0.1:51988/__merlin/shutdown & taskkill /F /IM Merlin_Z_Core_Setup.exe >NUL 2>&1'
     ]
     try:
         subprocess.run(shutdown_cmd, capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=5)
@@ -220,7 +237,19 @@ def update_pc4():
     except Exception:
         pass
 
-    # 3) 4호기 스케줄러를 통한 무간섭 GUI 세션 기동 (5199 + 51988)
+    # 3) 4호기 시작프로그램(Run 레지스트리) 및 ONLOGON 스케줄러 자동실행 최신화 후 즉시 기동 (5199 + 51988)
+    autostart_pc4_ps = (
+        'powershell -NoProfile -Command "'
+        "Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'MerlinSeqPaste' -ErrorAction SilentlyContinue; "
+        "Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'MerlinZCoreDaemon' -Value '\\\"C:\\Users\\USER\\AppData\\Local\\Programs\\MerlinFamily\\Merlin_Z_Core_Setup.exe\\\"'; "
+        'schtasks /create /tn StartMerlinZCore5199 /tr \'wscript.exe \\"C:\\MerlinTools\\start_zcore_5199.vbs\\"\' /sc onlogon /it /f | Out-Null; '
+        'schtasks /create /tn MerlinSeqPasteStart /tr \'C:\\Users\\USER\\AppData\\Local\\Programs\\Python\\Python311\\pythonw.exe C:\\MerlinTools\\seq_paste_daemon.py\' /sc onlogon /it /f | Out-Null'
+        '"'
+    )
+    subprocess.run(
+        ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "USER@100.114.100.24", autostart_pc4_ps],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
+    )
     for task_name in ("StartMerlinZCore5199", "MerlinSeqPasteStart"):
         run_task_cmd = [
             "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "USER@100.114.100.24",
@@ -288,62 +317,93 @@ def ensure_release_zip_and_bridge_synced() -> str:
     return core_ver
 
 
-def update_pc2(core_ver: str):
-    log("\n=== [2호기 (사무실 100.88.230.16)] Z-코어 무소음 자동 업데이트 시작 ===")
+def _update_remote_exe_node(label: str, host: str, remote_user: str, core_ver: str):
+    log(f"\n=== [{label} ({remote_user}@{host})] Z-코어 + 자동실행(Run/ONLOGON) 무소음 업데이트 시작 ===")
     key_path = _resolve_ssh_key()
     exe_path = os.path.join(UZC_DIR, "os_agent", "dist", "Merlin_Z_Core_Setup.exe")
     if not os.path.exists(key_path) or not os.path.exists(exe_path):
-        log("⚠️ 2호기 배포 건너뜀 (SSH 키 또는 Merlin_Z_Core_Setup.exe 없음)")
+        log(f"⚠️ {label} 배포 건너뜀 (SSH 키 또는 Merlin_Z_Core_Setup.exe 없음)")
         return
 
-    # 1) 기존 2호기 5199 데몬 우아한 종료 및 프로세스 정리
-    subprocess.run(
-        [
-            "ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "sun-multi@100.88.230.16",
-            'curl.exe -s --max-time 2 -H Origin:https://ghosti.sundreamer.app http://127.0.0.1:5199/__merlin/shutdown & taskkill /F /IM Merlin_Z_Core_Setup.exe >NUL 2>&1'
-        ],
-        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
+    ssh_target = f"{remote_user}@{host}"
+    remote_exe_win = f"C:\\Users\\{remote_user}\\AppData\\Local\\Programs\\MerlinFamily\\Merlin_Z_Core_Setup.exe"
+    remote_exe_scp = f"C:/Users/{remote_user}/AppData/Local/Programs/MerlinFamily/Merlin_Z_Core_Setup.exe"
+
+    # 1) 기존 5199 / 51988 데몬 및 구버전 seq_paste_daemon.py / Merlin_Z_Core_Setup.exe 종료
+    stop_ps = (
+        'powershell -NoProfile -Command "'
+        'curl.exe -s --max-time 2 -H Origin:https://ghosti.sundreamer.app http://127.0.0.1:5199/__merlin/shutdown | Out-Null; '
+        'curl.exe -s --max-time 2 http://127.0.0.1:51988/__merlin/shutdown | Out-Null; '
+        'taskkill /F /IM Merlin_Z_Core_Setup.exe 2>$null | Out-Null; '
+        '$p = Get-NetTCPConnection -LocalPort 5199,51988 -State Listen -ErrorAction SilentlyContinue; '
+        'if ($p) { foreach ($item in $p) { if ($item.OwningProcess -gt 0) { Stop-Process -Id $item.OwningProcess -Force -ErrorAction SilentlyContinue } } }; '
+        f"New-Item -ItemType Directory -Force -Path 'C:\\Users\\{remote_user}\\AppData\\Local\\Programs\\MerlinFamily' | Out-Null"
+        '"'
     )
-    time.sleep(1.5)
+    subprocess.run(
+        ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5", ssh_target, stop_ps],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=12,
+    )
+    time.sleep(1.0)
 
     # 2) 최신 Merlin_Z_Core_Setup.exe 전송
-    remote_exe = "C:/Users/sun-multi/AppData/Local/Programs/MerlinFamily/Merlin_Z_Core_Setup.exe"
     scp_res = subprocess.run(
-        ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", exe_path, f"sun-multi@100.88.230.16:{remote_exe}"],
+        ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", exe_path, f"{ssh_target}:{remote_exe_scp}"],
         capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=90,
     )
     if scp_res.returncode != 0:
-        log(f"⚠️ 2호기 SCP 실패: {scp_res.stderr}")
+        log(f"⚠️ {label} SCP 실패: {scp_res.stderr}")
         return
 
-    # 3) 2호기 인터랙티브 세션(Session 1) 스케줄러 등록 및 즉시 기동
-    start_cmd = (
-        'schtasks /create /tn StartMerlinZCore5199 /tr "\\"C:\\Users\\sun-multi\\AppData\\Local\\Programs\\MerlinFamily\\Merlin_Z_Core_Setup.exe\\" --replace" /sc onlogon /it /f >NUL 2>&1 '
-        '&& schtasks /run /tn StartMerlinZCore5199 >NUL 2>&1'
+    # 3) 구버전 MerlinSeqPaste(Secretary) 레지스트리 제거 + 최신 MerlinZCoreDaemon(Run) & StartMerlinZCore5199(ONLOGON) 동시 등록 및 즉시 기동
+    start_ps = (
+        'powershell -NoProfile -Command "'
+        "Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'MerlinSeqPaste' -ErrorAction SilentlyContinue; "
+        f"Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'MerlinZCoreDaemon' -Value '\\\"{remote_exe_win}\\\"'; "
+        f"schtasks /create /tn StartMerlinZCore5199 /tr '\\\"{remote_exe_win}\\\" --replace' /sc onlogon /it /f | Out-Null; "
+        'schtasks /run /tn StartMerlinZCore5199 | Out-Null'
+        '"'
     )
     subprocess.run(
-        ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "sun-multi@100.88.230.16", start_cmd],
+        ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", ssh_target, start_ps],
         capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=15,
     )
     for _ in range(10):
         time.sleep(1.5)
         chk = subprocess.run(
-            ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "sun-multi@100.88.230.16", "curl.exe -s http://127.0.0.1:5199/__merlin/health"],
+            ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", ssh_target, "curl.exe -s http://127.0.0.1:5199/__merlin/health"],
             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
         )
         if chk.returncode == 0 and f'"{core_ver}"' in chk.stdout:
-            log(f"✅ 2호기 Z-코어 v{core_ver} 무소음 자동 교체 및 기동 확인 성공!")
+            log(f"✅ {label} Z-코어 v{core_ver} + 자동실행(Run & ONLOGON) 동기화 및 기동 확인 성공!")
             return
-    log("⚠️ 2호기 헬스체크 대기 초과")
+    log(f"⚠️ {label} 헬스체크 대기 초과")
+
+
+def update_pc1_remote(core_ver: str):
+    # 현재 로컬 PC가 office-merlin(DESKTOP-TRRSPRP)이 아닐 때 원격 1호기도 함께 업데이트
+    if os.environ.get("COMPUTERNAME", "").upper() == "DESKTOP-TRRSPRP":
+        return
+    _update_remote_exe_node("1호기 (사무실 100.86.161.8)", "100.86.161.8", "chichi", core_ver)
+
+
+def update_pc2(core_ver: str):
+    _update_remote_exe_node("2호기 (사무실 100.88.230.16)", "100.88.230.16", "sun-multi", core_ver)
+
+
+def update_pc3(core_ver: str):
+    _update_remote_exe_node("3호기 (사무실 100.102.43.42)", "100.102.43.42", "chiuk", core_ver)
 
 
 def main():
     sync_internal_z_core_mirrors()
     core_ver = ensure_release_zip_and_bridge_synced()
     update_pc1()
+    update_pc1_remote(core_ver)
     update_pc2(core_ver)
+    update_pc3(core_ver)
     update_pc4()
-    log(f"\n🎉 1호기 · 2호기 · 4호기 및 웹 자동 업데이트 패키지(v{core_ver}) 클러스터 배포가 완료되었습니다!")
+    log(f"\n🎉 전 클러스터(로컬 · 1호기 · 2호기 · 3호기 · 4호기) 엔진 + 시작프로그램 자동실행 및 웹 패키지(v{core_ver}) 배포가 완료되었습니다!")
 
 if __name__ == "__main__":
     main()

@@ -200,24 +200,41 @@ def scan_post_office_files(role: str = "all") -> Dict[str, str]:
         for p in sorted(POST_OFFICE_DIR.glob("*.md")):
             if p.name.lower() in ("readme.md", ".gitkeep") or p.name.startswith("(읽음)"):
                 continue
-            explicit_r2 = "2귀신" in p.name and "1귀신" not in p.name
-            explicit_r3 = "3귀신" in p.name and "1귀신" not in p.name
+            prefix = p.name.split("_", 1)[0].strip("[]").lower()
+            parts = p.name.split("_")
+            sender = parts[1].strip("[]").lower() if len(parts) > 1 else ""
+            if sender == "ghosti" or prefix not in ("ghosti", "all"):
+                continue
+            head_text = ""
+            if prefix == "ghosti":
+                try:
+                    head_text = p.read_text(encoding="utf-8", errors="ignore")[:500]
+                except Exception:
+                    head_text = ""
+            recipient_line = ""
+            for line in head_text.splitlines()[:10]:
+                if "받는이" in line or "수신" in line:
+                    recipient_line += " " + line
+            explicit_r2 = (
+                ("2귀신" in p.name or "2호담당" in p.name or "2귀신" in recipient_line or "2호담당" in recipient_line)
+                and "1귀신" not in p.name
+                and "1호담당" not in recipient_line
+            )
+            explicit_r3 = (
+                ("3귀신" in p.name or "3호담당" in p.name or "3귀신" in recipient_line or "3호담당" in recipient_line)
+                and "1귀신" not in p.name
+                and "1호담당" not in recipient_line
+            )
             if explicit_r2 and role != "all" and "2" not in (role or ""):
                 continue
             if explicit_r3 and role != "all" and "3" not in (role or ""):
                 continue
             if not is_primary and not explicit_r2 and not explicit_r3:
                 continue
-            prefix = p.name.split("_", 1)[0].strip("[]").lower()
-            parts = p.name.split("_")
-            sender = parts[1].strip("[]").lower() if len(parts) > 1 else ""
-            if sender == "ghosti":
-                continue
             if prefix == "all":
                 if (receipts_dir / f"{p.stem}.Ghosti.read").exists() or (receipts_dir / f"{p.name}.Ghosti.read").exists():
                     continue
-            if prefix in ("ghosti", "all"):
-                result[p.name] = file_md5(p)
+            result[p.name] = file_md5(p)
         return result
     except Exception:
         return {}
