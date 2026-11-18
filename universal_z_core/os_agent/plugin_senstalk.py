@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-[내장 소프트웨어 플러그인 2] plugin_senstalk.py (v6.1 — sensebot.py v6.1 100% 무손실 동기화판)
+[내장 소프트웨어 플러그인 2] plugin_senstalk.py (v6.2 — sensebot.py v6.2 100% 무손실 동기화판)
 - 센스톡(SensTalk) 6대 메신저(카카오톡·라인·텔레그램·왓츠앱·위챗) 엔터 1회 연속 발송 엔진
 - autoSkipAmbiguous(동명이인·미발견 자동 패스), IS_TEST_MODE 초기화, 다중 배치 검색·장전·연속 발송 완전 동기화
 - 귀신같이 단일 표준 포트(127.0.0.1:5199)의 Merlin_Z_Core 내부에서 직결 작동합니다.
@@ -51,8 +51,8 @@ except ImportError:
     win32clipboard = None
     win32con = None
 
-SENSEBOT_VERSION = "6.1"
-SENSEBOT_BUILD = "20261118_v61_zcore5199_sync"
+SENSEBOT_VERSION = "6.2"
+SENSEBOT_BUILD = "20261118_v62_kakao_window_missing_guard_1"
 GLOBAL_TRAY_ICON = None
 _EARLY_USER_ENTER_DETECTED = False
 _LOADED_RE_HWND = None
@@ -69,7 +69,7 @@ _CACHED_TODAY_COUNT = 0
 
 PLUGIN_METADATA = {
     "pluginId": "senstalk",
-    "pluginName": "SensTalk 6-Messenger Full Native Dispatch Engine (sensebot v6.1)",
+    "pluginName": "SensTalk 6-Messenger Full Native Dispatch Engine (sensebot v6.2)",
     "version": SENSEBOT_VERSION,
     "type": "BUILTIN_SOFTWARE_PLUGIN",
     "port": 5199,
@@ -80,7 +80,6 @@ PLUGIN_METADATA = {
 _LISTENERS_STARTED = False
 _LISTENERS_LOCK = threading.Lock()
 
-# ==========================================
 # 1. 64비트 Windows Win32 API 선언
 # ==========================================
 user32 = ctypes.windll.user32
@@ -449,6 +448,7 @@ def find_kakaotalk_window(use_cache: bool = True):
     return found
 
 _LAST_KAKAO_NOTFOUND_KW = ""
+_LAST_OPEN_FAIL_REASON = ""  # "" | "kakao_window_missing" | "ambiguous" | "not_found" (대화방 열기 실패 사유 SSOT)
 _U32_DPI = None
 try:
     _U32_DPI = ctypes.WinDLL("user32")
@@ -2628,6 +2628,8 @@ def _try_search_friend_chat(
 
     if result_count == 2 and not is_phone_query:
         if SYNCED_STATE.get("autoSkipAmbiguous"):
+            global _LAST_OPEN_FAIL_REASON
+            _LAST_OPEN_FAIL_REASON = "ambiguous"
             print(f"⏩ [동명이인 자동 패스 모드] '{clean_kw}' 검색 결과 복수(2명+) 감지 -> 대기 없이 다음 후보/자동 패스 진행!")
             _reset_kakao_friend_search_ui(kakao_hwnd)
             return None
@@ -2758,8 +2760,9 @@ def open_or_focus_chat_window(
     target_name = (target_name or "").strip()
     fallback_nickname = (fallback_nickname or "").strip()
     phone = (phone or "").strip()
-    global _LAST_KAKAO_NOTFOUND_KW
+    global _LAST_KAKAO_NOTFOUND_KW, _LAST_OPEN_FAIL_REASON
     _LAST_KAKAO_NOTFOUND_KW = ""
+    _LAST_OPEN_FAIL_REASON = ""
 
     if '/' in target_name:
         primary_query = target_name.split('/')[0].strip()[:20]
@@ -2841,6 +2844,9 @@ def open_or_focus_chat_window(
     # 2. 카카오톡 메인창 탐색 및 활성화
     kakao_hwnd = find_kakaotalk_window()
     if not kakao_hwnd:
+        # ⚠️ 카톡 메인 창 자체를 못 찾은 것은 '수신자 미발견'이 아니라 '엔진-카톡 연결 실패'이므로 자동 패스 대상이 아님!
+        _LAST_OPEN_FAIL_REASON = "kakao_window_missing"
+        print("⚠️ [카카오톡 메인 창 미발견] 실행 중인 PC 카카오톡 메인 창(친구 목록)을 찾지 못했습니다.")
         return None, False
 
     # 3. 1차 시도: 20자 규격 이름으로 검색
@@ -2888,6 +2894,8 @@ def open_or_focus_chat_window(
             return chat_hwnd, False
 
     print(f"[카카오톡 친구 검색] 최종 검색 실패: '{primary_query}'" + (f" (폴백: {fallback_candidates}, 번호: {phone_candidates})" if (fallback_candidates or phone_candidates) else ""))
+    if _LAST_OPEN_FAIL_REASON != "ambiguous":
+        _LAST_OPEN_FAIL_REASON = "not_found"
     if SYNCED_STATE.get("autoSkipAmbiguous"):
         _reset_kakao_friend_search_ui(kakao_hwnd)
         set_clipboard_text("")
@@ -3109,6 +3117,11 @@ def execute_dispatch(target_name: str, message: str = "", mode: str = "classic",
             return {
                 "status": "kakao_logged_out",
                 "message": "⚠️ 카카오톡이 로그아웃(또는 잠금) 상태입니다. PC 카카오톡에 먼저 로그인한 뒤 다시 발송을 시작해주세요!"
+            }
+        if channel == "kakao" and _LAST_OPEN_FAIL_REASON == "kakao_window_missing":
+            return {
+                "status": "kakao_window_missing",
+                "message": "⚠️ 발송 엔진이 PC 카카오톡 메인 창을 찾지 못했습니다. 작업표시줄 트레이의 카카오톡 아이콘을 눌러 친구 목록 창을 연 뒤 다시 시도해주세요!"
             }
         return {
             "status": "not_found",
@@ -3837,8 +3850,11 @@ def load_and_dispatch_next(expected_seq_id: int = None):
         if not chat_hwnd:
             ch_kr = "카카오톡" if channel == "kakao" else ("텔레그램" if channel == "telegram" else channel.upper())
             is_locked_out = (channel == "kakao" and is_kakao_locked_or_logged_out())
-            if not is_locked_out and SYNCED_STATE.get("autoSkipAmbiguous"):
-                print(f"⏩ [자동 패스 모드] '{name}' 님 (동명이인/미발견) 자동 패스 처리 후 다음 대기자로 즉시 이동합니다!")
+            fail_reason = _LAST_OPEN_FAIL_REASON if channel == "kakao" else "not_found"
+            is_kakao_window_missing = (channel == "kakao" and not is_locked_out and fail_reason == "kakao_window_missing")
+            if not is_locked_out and not is_kakao_window_missing and SYNCED_STATE.get("autoSkipAmbiguous"):
+                skip_reason = "ambiguous" if fail_reason == "ambiguous" else "not_found"
+                print(f"⏩ [자동 패스 모드] '{name}' 님 ({'동명이인' if skip_reason == 'ambiguous' else '미발견'}) 자동 패스 처리 후 다음 대기자로 즉시 이동합니다!")
                 with STATE_LOCK:
                     if my_seq_id != _DISPATCH_SEQ_ID:
                         return False
@@ -3863,6 +3879,7 @@ def load_and_dispatch_next(expected_seq_id: int = None):
                         "type": "auto_skipped",
                         "id": target_rec.get("id") if isinstance(target_rec, dict) else None,
                         "name": name,
+                        "skipReason": skip_reason,
                         "skippedIndex": target_idx,
                         "nextIndex": SYNCED_STATE.get("currentIndex", 0),
                         "timestamp": time.time(),
@@ -3872,6 +3889,10 @@ def load_and_dispatch_next(expected_seq_id: int = None):
             if is_locked_out:
                 nf_reason = "kakao_logged_out"
                 nf_msg = "⚠️ 카카오톡이 로그아웃(또는 잠금) 상태입니다. PC 카카오톡에 먼저 로그인한 뒤 다시 발송을 시작해주세요!"
+                print(f"⚠️ {nf_msg}")
+            elif is_kakao_window_missing:
+                nf_reason = "kakao_window_missing"
+                nf_msg = "⚠️ 발송 엔진이 PC 카카오톡 메인 창을 찾지 못했습니다. 작업표시줄 트레이의 카카오톡 아이콘을 눌러 친구 목록 창을 연 뒤 다시 시작해주세요!"
                 print(f"⚠️ {nf_msg}")
             else:
                 nf_reason = "not_found"
@@ -3897,10 +3918,10 @@ def load_and_dispatch_next(expected_seq_id: int = None):
                     "targetIndex": target_idx,
                     "name": name,
                     "message": nf_msg,
-                    "searchKeyword": "" if is_locked_out else (_LAST_KAKAO_NOTFOUND_KW if channel == "kakao" else ""),
+                    "searchKeyword": "" if (is_locked_out or is_kakao_window_missing) else (_LAST_KAKAO_NOTFOUND_KW if channel == "kakao" else ""),
                     "timestamp": time.time()
                 }
-            if channel == "kakao" and not is_locked_out:
+            if channel == "kakao" and not is_locked_out and not is_kakao_window_missing:
                 kakao_h_watch = find_kakaotalk_window()
                 threading.Thread(
                     target=_watch_manual_chat_open_after_not_found,
@@ -4313,7 +4334,7 @@ def hotkey_listener_thread():
 
 
 # ==========================================
-# 7. On-Demand 리스너 기동 & Z-Core 단일 포트(5199) 라우터 브릿지 (v6.1)
+# 7. On-Demand 리스너 기동 & Z-Core 단일 포트(5199) 라우터 브릿지 (v6.2)
 # ==========================================
 def ensure_listeners_started() -> None:
     """/start, /skip, /complete_current, /dispatch 호출 시에만 [Enter] 감지 및 [F8] 핫키 스레드를 On-Demand 기동"""
