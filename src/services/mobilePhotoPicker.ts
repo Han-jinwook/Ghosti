@@ -4,6 +4,7 @@ import { registerMobilePickedPhotoMeta } from './ghostiMobileCareBridge';
 interface OpticalSignatureMeta {
   dhash: string;
   sharpness: number;
+  isMotionOrFocusBlurred: boolean;
   aspect: number;
   whitePct: number;
   rgbGrid: Uint8Array; // 8x8x3 = 192 bytes
@@ -68,6 +69,7 @@ function computeRgbGridDifference(
 export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalSignatureMeta {
   let dhash = '';
   let sharpness = 12000;
+  let isMotionOrFocusBlurred = false;
   let whitePct = 0;
   const rgbGrid = new Uint8Array(192);
   const aspect = img.width > 0 ? img.height / img.width : 1;
@@ -120,9 +122,14 @@ export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalS
       whitePct = (whiteCells / 64) * 100;
     }
 
-    // 3) 128x128 2D 라플라시안(Laplacian) 고주파 엣지 분산 기반 실제 선명도 측정 (흔들린 사진 정밀 판별)
-    const W = 128;
-    const H = 128;
+    // 3) 최대 512px 해상도 보존 기반 [2차 미분(Laplacian) / 1차 경사도(Gradient) 경계 첨예도 비율(hfRatio) + 상위 2% 첨두치(p98Lap)] 측정
+    //    - 기존 128x128 과축소 시 6~10px 손떨림 블러가 1px로 뭉개져 선명한 사진으로 오판되던 근본 원인을 해결합니다.
+    //    - 어두운 사진·보케 배경은 경계선에서의 hfRatio(>= 1.18)가 높아 보호되고, 실제 손떨림·초점 이탈 사진은 경계가 완만한 램프로 퍼져 hfRatio(< 1.06)가 급락합니다.
+    const maxEvalDim = 512;
+    const evalScale =
+      img.width > 0 && img.height > 0 ? Math.min(1, maxEvalDim / Math.max(img.width, img.height)) : 1;
+    const W = Math.max(64, Math.round((img.width || 256) * evalScale));
+    const H = Math.max(64, Math.round((img.height || 256) * evalScale));
     const lapCanvas = document.createElement('canvas');
     lapCanvas.width = W;
     lapCanvas.height = H;
@@ -138,29 +145,69 @@ export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalS
       let lapSum = 0;
       let lapSqSum = 0;
       let count = 0;
+      let edgeLapSum = 0;
+      let edgeGradSum = 0;
+      let edgeCount = 0;
+      const hist = new Uint32Array(256);
+
       for (let y = 1; y < H - 1; y++) {
+        const rowOff = y * W;
         for (let x = 1; x < W - 1; x++) {
-          const c = gray[y * W + x] * 4;
-          const top = gray[(y - 1) * W + x];
-          const bot = gray[(y + 1) * W + x];
-          const left = gray[y * W + (x - 1)];
-          const right = gray[y * W + (x + 1)];
+          const centerIdx = rowOff + x;
+          const c = gray[centerIdx] * 4;
+          const top = gray[centerIdx - W];
+          const bot = gray[centerIdx + W];
+          const left = gray[centerIdx - 1];
+          const right = gray[centerIdx + 1];
           const lap = Math.abs(c - top - bot - left - right);
           lapSum += lap;
           lapSqSum += lap * lap;
           count++;
+
+          const bin = lap >= 255 ? 255 : lap | 0;
+          hist[bin]++;
+
+          const gx = Math.abs(right - left) * 0.5;
+          const gy = Math.abs(bot - top) * 0.5;
+          const grad = Math.hypot(gx, gy);
+          if (grad > 8.0) {
+            edgeLapSum += lap;
+            edgeGradSum += grad;
+            edgeCount++;
+          }
         }
       }
       if (count > 0) {
         const mean = lapSum / count;
         const variance = Math.max(0, lapSqSum / count - mean * mean);
-        sharpness = Math.round(variance * 18 + mean * 95);
+        const hfRatio = edgeCount >= 30 ? edgeLapSum / (edgeGradSum + 1e-5) : 0.5;
+
+        // 256-bin 히스토그램으로 98퍼센타일 라플라시안 첨두치 O(1) 산출
+        const targetRank = Math.floor(count * 0.98);
+        let acc = 0;
+        let p98Lap = 0;
+        for (let b = 0; b < 256; b++) {
+          acc += hist[b];
+          if (acc >= targetRank) {
+            p98Lap = b;
+            break;
+          }
+        }
+
+        const isCleanWhiteDoc = whitePct >= 62 && hfRatio >= 1.15;
+        const rawScore = Math.round(variance * 18.0 * Math.max(0.22, hfRatio - 0.55));
+        isMotionOrFocusBlurred =
+          !isCleanWhiteDoc &&
+          ((hfRatio < 1.08 && p98Lap < 60) ||
+            (variance < 95 && hfRatio < 1.15) ||
+            rawScore < 1800);
+        sharpness = isMotionOrFocusBlurred ? Math.min(2800, Math.max(120, rawScore)) : Math.max(3600, rawScore);
       }
     }
   } catch {
     dhash = '';
   }
-  return { dhash, sharpness, aspect, whitePct, rgbGrid };
+  return { dhash, sharpness, isMotionOrFocusBlurred, aspect, whitePct, rgbGrid };
 }
 
 /**
@@ -370,8 +417,10 @@ export async function analyzeMobilePickedPhotoFiles(
         const isBlurry =
           !isScreenshot &&
           !isReceiptOrDoc &&
-          meta.whitePct < 50 &&
-          (sharpness < 3200 || lowerName.includes('blur') || lowerName.includes('흔들'));
+          (meta.isMotionOrFocusBlurred ||
+            sharpness < 3200 ||
+            lowerName.includes('blur') ||
+            lowerName.includes('흔들'));
 
         let trashCategory: TrashCategory | undefined = undefined;
         const tags: string[] = ['#내폰사진', '#온디바이스AI분류'];

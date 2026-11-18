@@ -27,6 +27,9 @@ import json
 import os
 from pathlib import Path
 from typing import Any
+
+for _pyi_env_key in ("_MEIPASS2", "_MEIPASS"):
+    os.environ.pop(_pyi_env_key, None)
 import queue
 import re
 import socket

@@ -32,6 +32,11 @@ import urllib.parse
 import urllib.request
 from typing import Any, Dict
 
+# [PyInstaller C-Bootloader 상속 오염 원천 차단]:
+# 부모 .exe 종료 후 삭제된 _MEIxxxx\python312.dll 참조 팝업 크래시를 막기 위해 기동 즉시 환경변수에서 _MEIPASS2 / _MEIPASS 소거
+for _pyi_env_key in ("_MEIPASS2", "_MEIPASS"):
+    os.environ.pop(_pyi_env_key, None)
+
 THIS_DIR = Path(__file__).resolve().parent
 if str(THIS_DIR) not in sys.path:
     sys.path.insert(0, str(THIS_DIR))
@@ -63,7 +68,7 @@ import plugin_aggrofilter  # noqa: E402
 import ghosti_setup_parity  # noqa: E402
 import plugin_ghosti_superpowers  # noqa: E402
 
-CORE_VERSION = "2.3.39"
+CORE_VERSION = "2.3.49"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1082,6 +1087,9 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
             # [무한 자살 & 깨진 바이너리 방어 2]: 교체 전 extracted_exe --selftest를 실행하여
             # 1) NameError 등 크래시 없이 정상 실행되는지 확인하고,
             # 2) CDN 캐시로 구버전 ZIP이 내려왔을 때 다운그레이드되지 않도록 실제 내장 버전이 현재 버전보다 높을 때만 교체 허용!
+            clean_child_env = {
+                k: v for k, v in os.environ.items() if k not in ("_MEIPASS2", "_MEIPASS")
+            }
             try:
                 st_res = subprocess.run(
                     [str(extracted_exe), "--selftest"],
@@ -1090,6 +1098,7 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
                     encoding="utf-8",
                     errors="replace",
                     timeout=12,
+                    env=clean_child_env,
                     creationflags=0x08000000 if sys.platform == "win32" else 0,
                 )
                 if st_res.returncode != 0:
@@ -1109,6 +1118,8 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
             bat_content = (
                 "@echo off\r\n"
                 "setlocal\r\n"
+                'set "_MEIPASS2="\r\n'
+                'set "_MEIPASS="\r\n'
                 "timeout /t 2 /nobreak > NUL\r\n"
                 "for /L %%i in (1,1,15) do (\r\n"
                 f'  copy /y "{extracted_exe}" "{current_exe}" > NUL 2>&1 && goto :LAUNCH\r\n'
@@ -1122,6 +1133,7 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
             bat_path.write_text(bat_content, encoding="mbcs", errors="replace")
             subprocess.Popen(
                 ["cmd.exe", "/c", str(bat_path)],
+                env=clean_child_env,
                 creationflags=0x08000000 if sys.platform == "win32" else 0,
                 close_fds=True,
             )
