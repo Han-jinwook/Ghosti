@@ -316,13 +316,37 @@ export function clusterPhotosIntoDuplicateGroups(
 export async function analyzeMobilePickedPhotoFiles(
   files: FileList | File[]
 ): Promise<{ analyzed: PhotoItem[]; newDupGroups: DuplicateGroup[] }> {
-  const fileArr = Array.from(files || []).filter((f) => f && f.type.startsWith('image/'));
-  if (fileArr.length === 0) return { analyzed: [], newDupGroups: [] };
+  const rawArr = Array.from(files || []).filter((f) => f && f.type.startsWith('image/'));
+  if (rawArr.length === 0) return { analyzed: [], newDupGroups: [] };
+
+  // 동일 배치 내 같은 파일명 중복 선택 원천 제거
+  const seenNamesInBatch = new Set<string>();
+  const fileArr: File[] = [];
+  for (const f of rawArr) {
+    const key = `${f.name}__${f.size}`;
+    if (seenNamesInBatch.has(key) || seenNamesInBatch.has(f.name)) continue;
+    seenNamesInBatch.add(key);
+    seenNamesInBatch.add(f.name);
+    fileArr.push(f);
+  }
+
+  const readFileAsDataUrl = (file: File): Promise<string> =>
+    new Promise((res) => {
+      try {
+        const reader = new FileReader();
+        reader.onload = () => res(typeof reader.result === 'string' ? reader.result : '');
+        reader.onerror = () => res('');
+        reader.readAsDataURL(file);
+      } catch {
+        res('');
+      }
+    });
 
   const batchTs = Date.now();
-  const analyzeSingle = (file: File, index: number): Promise<PhotoItem> => {
+  const analyzeSingle = async (file: File, index: number): Promise<PhotoItem> => {
+    const fallbackDataUrl = await readFileAsDataUrl(file);
+    const objUrl = fallbackDataUrl || URL.createObjectURL(file);
     return new Promise((resolve) => {
-      const objUrl = URL.createObjectURL(file);
       const img = new Image();
       img.onload = () => {
         const meta = computeOpticalDhashAndSharpness(img);
@@ -369,30 +393,30 @@ export async function analyzeMobilePickedPhotoFiles(
           dt.getDate()
         ).padStart(2, '0')}`;
 
-        // [모바일 정리 보관함 썸네일 엑박 원천 차단]:
-        // Android WebView에서 File 객체가 GC된 후에도 복원 보관함/리스트 썸네일이 깨지지 않도록 360px JPEG Data URL 생성
-        let persistentThumbUrl = objUrl;
+        // [모바일 미리보기·정리 보관함 썸네일 엑박 원천 차단]:
+        // Android WebView에서 다음 <input type="file"> 호출 시 이전 blob: URL 권한이 해제되어 깨지지 않도록 480px JPEG Data URL 영구 생성
+        let persistentThumbUrl = fallbackDataUrl || objUrl;
         try {
-          const maxDim = 360;
+          const maxDim = 480;
           const scale =
             img.width > 0 && img.height > 0
               ? Math.min(1, maxDim / Math.max(img.width, img.height))
               : 1;
-          const tw = Math.max(1, Math.round((img.width || 320) * scale));
-          const th = Math.max(1, Math.round((img.height || 320) * scale));
+          const tw = Math.max(1, Math.round((img.width || 360) * scale));
+          const th = Math.max(1, Math.round((img.height || 360) * scale));
           const thumbCanvas = document.createElement('canvas');
           thumbCanvas.width = tw;
           thumbCanvas.height = th;
           const tCtx = thumbCanvas.getContext('2d');
           if (tCtx) {
             tCtx.drawImage(img, 0, 0, tw, th);
-            const dataUrl = thumbCanvas.toDataURL('image/jpeg', 0.82);
+            const dataUrl = thumbCanvas.toDataURL('image/jpeg', 0.84);
             if (dataUrl && dataUrl.startsWith('data:image/')) {
               persistentThumbUrl = dataUrl;
             }
           }
         } catch {
-          persistentThumbUrl = objUrl;
+          persistentThumbUrl = fallbackDataUrl || objUrl;
         }
 
         const photoName = file.name || `내폰사진_${index + 1}.jpg`;
@@ -412,7 +436,7 @@ export async function analyzeMobilePickedPhotoFiles(
           date: dateStr,
           mtimeMs: photoMtime,
           thumbUrl: persistentThumbUrl,
-          fullUrl: persistentThumbUrl,
+          fullUrl: fallbackDataUrl || persistentThumbUrl,
           tags,
           locationKo: '내 스마트폰 갤러리 (온디바이스 분석)',
           captionKo: `${file.name} (${img.width}x${img.height} · 선명도 ${sharpness.toLocaleString()}점 · 외부 전송 0 Byte)`,
@@ -432,14 +456,24 @@ export async function analyzeMobilePickedPhotoFiles(
         });
       };
       img.onerror = () => {
+        const itemId = `mobile_local_${batchTs}_${index}`;
+        const photoName = file.name || `내폰사진_${index + 1}.jpg`;
+        const photoSize = file.size || 1500000;
+        const photoMtime = file.lastModified || batchTs + index * 500;
+        registerMobilePickedPhotoMeta({
+          id: itemId,
+          name: photoName,
+          size: photoSize,
+          mtimeMs: photoMtime,
+        });
         resolve({
-          id: `mobile_local_${batchTs}_${index}`,
-          name: file.name || `내폰사진_${index + 1}.jpg`,
-          size: file.size || 1500000,
-          date: '2026.11.17',
-          mtimeMs: file.lastModified || batchTs + index * 500,
-          thumbUrl: objUrl,
-          fullUrl: objUrl,
+          id: itemId,
+          name: photoName,
+          size: photoSize,
+          date: '2026.11.18',
+          mtimeMs: photoMtime,
+          thumbUrl: fallbackDataUrl || objUrl,
+          fullUrl: fallbackDataUrl || objUrl,
           tags: ['#내폰사진', '#온디바이스AI분류'],
           locationKo: '내 스마트폰 갤러리',
           captionKo: `${file.name} (내 스마트폰 직접 불러오기)`,
@@ -452,7 +486,14 @@ export async function analyzeMobilePickedPhotoFiles(
     });
   };
 
-  const rawAnalyzed = await Promise.all(fileArr.map((f, idx) => analyzeSingle(f, idx)));
+  // Android WebView 동시 ContentProvider 스트림 제한으로 인한 이미지 깨짐 방지를 위해 4개씩 순차 배치 디코딩
+  const rawAnalyzed: PhotoItem[] = [];
+  const BATCH_SIZE = 4;
+  for (let i = 0; i < fileArr.length; i += BATCH_SIZE) {
+    const chunk = fileArr.slice(i, i + BATCH_SIZE);
+    const chunkRes = await Promise.all(chunk.map((f, idx) => analyzeSingle(f, i + idx)));
+    rawAnalyzed.push(...chunkRes);
+  }
   const { updatedPhotos, duplicateGroups } = clusterPhotosIntoDuplicateGroups(rawAnalyzed);
   return { analyzed: updatedPhotos, newDupGroups: duplicateGroups };
 }

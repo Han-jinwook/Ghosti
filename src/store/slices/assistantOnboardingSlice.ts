@@ -685,9 +685,18 @@ export const createAssistantOnboardingSlice: StateCreator<
       remainingOldPhotos: 0,
     };
     set((state) => {
+      const incomingNames = new Set(analyzed.map((a) => a.name));
       const incomingSignatures = new Set(analyzed.map((a) => `${a.name}__${a.size}`));
+      const incomingDhashSize = new Set(
+        analyzed.filter((a) => a.dhash).map((a) => `${a.dhash}__${a.size}`)
+      );
       const existingReal = state.photos.filter(
-        (p) => !isSample(p.name) && !incomingSignatures.has(`${p.name}__${p.size}`)
+        (p) =>
+          !isSample(p.name) &&
+          !incomingNames.has(p.name) &&
+          !incomingSignatures.has(`${p.name}__${p.size}`) &&
+          !(p.dhash && incomingDhashSize.has(`${p.dhash}__${p.size}`)) &&
+          !String(p.thumbUrl || '').startsWith('blob:')
       );
       const mergedReal = [...analyzed, ...existingReal];
       const { updatedPhotos, duplicateGroups: nextDupGroups } =
