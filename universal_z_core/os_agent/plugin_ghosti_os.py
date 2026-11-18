@@ -2493,6 +2493,7 @@ _VIDEO_STREAM_INFLIGHT: Dict[str, threading.Event] = {}
 _VIDEO_STREAM_LOCK = threading.Lock()
 _VIDEO_OCR_CACHE_FILE = MERLIN_DIR / "video_scene_ocr_cache_v2.json"
 _VIDEO_OCR_SCHEMA_VER = 10
+_VIDEO_PADDLE_OCR_VER = 20
 _VIDEO_OCR_LOCK = threading.Lock()
 _VIDEO_OCR_BG_RUNNING = False
 _FFMPEG_EXE_CACHE: str | None = ""
@@ -3102,6 +3103,8 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
                 with _VIDEO_OCR_LOCK:
                     cur_cache = _load_video_ocr_cache()
                     for cache_sig, val in per_vid_meta.items():
+                        if int((cur_cache.get(cache_sig) or {}).get("ocrVer") or 0) >= _VIDEO_PADDLE_OCR_VER:
+                            continue
                         all_kws: List[str] = []
                         for fr in val["frames"]:
                             all_kws.extend(fr.get("keywords") or [])
@@ -3223,8 +3226,9 @@ def _dedupe_ocr_timeline_lines(raw_frames: List[Dict[str, Any]]) -> List[Dict[st
     deduped: List[Dict[str, Any]] = []
     prev_norm = ""
     for fr in sorted(raw_frames, key=lambda x: int(x.get("timeSec") or 0)):
-        txt = _clean_video_ocr_display_text(str(fr.get("ocrText") or "").strip())
-        if not _is_meaningful_ocr_text(txt):
+        raw_s = str(fr.get("ocrText") or "").strip()
+        txt = re.sub(r"\s+", " ", raw_s).strip() if fr.get("fromPaddleV5") else _clean_video_ocr_display_text(raw_s)
+        if not txt or (not fr.get("fromPaddleV5") and not _is_meaningful_ocr_text(txt)):
             continue
         norm = re.sub(r"[^가-힣a-zA-Z0-9]", "", txt).lower()
         if len(norm) < 4:
@@ -3244,12 +3248,14 @@ def _dedupe_ocr_timeline_lines(raw_frames: List[Dict[str, Any]]) -> List[Dict[st
 
 def ingest_browser_video_ocr_frames(data: Dict[str, Any]) -> Dict[str, Any]:
     """
-    [무-FFmpeg 호환] 브라우저 HTML5 <video> + <canvas>가 추출한 키프레임 JPEG Base64 배열을 받아
-    Windows 내장 WinRT OCR을 수행하고 video_scene_ocr_cache_v2.json에 영구 캐싱합니다.
+    [무-FFmpeg 호환 & PP-OCRv5 고정밀 캐시 통합]
+    1) precomputedFrames(PP-OCRv5 Korean 판독 결과)가 전달되면 그대로 ocrVer=20 영구 캐싱합니다.
+    2) 원시 JPEG 배열(frames)만 전달되면 WinRT 보조 OCR을 수행합니다.
     """
     vname = str(data.get("videoFileName") or "").strip()
+    precomputed_in = data.get("precomputedFrames")
     frames_in = data.get("frames") or []
-    if not vname or not isinstance(frames_in, list) or not frames_in:
+    if not vname or (not isinstance(precomputed_in, list) and (not isinstance(frames_in, list) or not frames_in)):
         return {"ok": False, "error": "EMPTY_FRAMES"}
 
     resolved_path = _PHOTO_PATH_INDEX.get(vname)
@@ -3270,6 +3276,50 @@ def ingest_browser_video_ocr_frames(data: Dict[str, Any]) -> Dict[str, Any]:
         sz = int(data.get("size") or 0)
         mt = int(float(data.get("mtimeMs") or 0) / 1000) if data.get("mtimeMs") else 0
         sig = f"{vname}|{sz}|{mt}"
+
+    if isinstance(precomputed_in, list) and len(precomputed_in) > 0:
+        paddle_frames: List[Dict[str, Any]] = []
+        paddle_kws: List[str] = []
+        for item in precomputed_in[:30]:
+            if not isinstance(item, dict):
+                continue
+            s_val = max(0, int(round(float(item.get("timeSec") or 0))))
+            p_txt = re.sub(r"\s+", " ", str(item.get("ocrText") or "").strip())[:1600]
+            kws = _enrich_ocr_semantic_keywords(p_txt) if p_txt else []
+            paddle_kws.extend(kws)
+            paddle_frames.append({
+                "timeSec": s_val,
+                "ocrText": p_txt,
+                "keywords": kws,
+                "fromPaddleV5": True,
+            })
+        dedup_lines = _dedupe_ocr_timeline_lines(paddle_frames)
+        full_txt = "\n".join(f"[{ln['timestamp']}] {ln['text']}" for ln in dedup_lines)
+        has_txt = len(dedup_lines) > 0
+        with _VIDEO_OCR_LOCK:
+            cur_cache = _load_video_ocr_cache()
+            cur_cache[sig] = {
+                "ocrVer": _VIDEO_PADDLE_OCR_VER,
+                "videoFileName": vname,
+                "filePath": str(resolved_path) if resolved_path else "",
+                "frames": paddle_frames,
+                "keywords": list(dict.fromkeys(paddle_kws))[:60],
+                "lines": dedup_lines,
+                "fullText": full_txt,
+                "lineCount": len(dedup_lines),
+                "isAllBlack": False,
+            }
+            _save_video_ocr_cache(cur_cache)
+        return {
+            "ok": True,
+            "videoFileName": vname,
+            "lines": dedup_lines,
+            "ocrLines": dedup_lines,
+            "fullText": full_txt,
+            "lineCount": len(dedup_lines),
+            "hasText": has_txt,
+            "hasRichText": has_txt,
+        }
 
     tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_browser_vid_ocr_"))
     try:
@@ -3371,6 +3421,8 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
     """
     raw_p = str(params.get("p") or params.get("videoFileName") or params.get("filePath") or "").strip()
     force = str(params.get("force") or "").lower() in ("1", "true", "yes")
+    only_cached_v5 = str(params.get("onlyCachedV5") or "").lower() in ("1", "true", "yes")
+    return_frames_for_paddle = str(params.get("returnFramesForPaddle") or "").lower() in ("1", "true", "yes")
     if not raw_p:
         return {"ok": False, "error": "MISSING_VIDEO_TARGET"}
 
@@ -3397,12 +3449,14 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
     sig = f"{target_path.name}|{st.st_size}|{int(st.st_mtime)}"
     cache = _load_video_ocr_cache()
     cached = cache.get(sig)
-    if cached and not force and int(cached.get("ocrVer") or 0) >= _VIDEO_OCR_SCHEMA_VER and isinstance(cached.get("frames"), list) and len(cached.get("frames", [])) >= 3:
+    min_req_ver = _VIDEO_PADDLE_OCR_VER if only_cached_v5 else _VIDEO_OCR_SCHEMA_VER
+    if cached and not force and int(cached.get("ocrVer") or 0) >= min_req_ver and isinstance(cached.get("frames"), list) and len(cached.get("frames", [])) >= 1:
         lines = _dedupe_ocr_timeline_lines(cached["frames"])
         full_text = "\n".join(f"[{ln['timestamp']}] {ln['text']}" for ln in lines)
         return {
             "ok": True,
             "cached": True,
+            "ocrVer": int(cached.get("ocrVer") or 0),
             "hasText": len(lines) > 0,
             "videoFileName": target_path.name,
             "filePath": str(target_path),
@@ -3410,6 +3464,20 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
             "ocrLines": lines,
             "fullText": full_text,
             "lineCount": len(lines),
+        }
+
+    if only_cached_v5 and not return_frames_for_paddle:
+        return {
+            "ok": True,
+            "cached": False,
+            "needsPaddleOcr": True,
+            "hasText": False,
+            "videoFileName": target_path.name,
+            "filePath": str(target_path),
+            "lines": [],
+            "ocrLines": [],
+            "fullText": "",
+            "lineCount": 0,
         }
 
     dur = max(2.0, _get_fast_video_duration_sec(target_path))
@@ -3439,6 +3507,21 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
                     pass
                 if out_jpg.exists():
                     sec_by_fname[fname] = s_val
+            if return_frames_for_paddle and sec_by_fname:
+                sampled_payload = []
+                for fn_k, s_k in sorted(sec_by_fname.items()):
+                    raw_b = (tmp_dir / fn_k).read_bytes()
+                    sampled_payload.append({
+                        "timeSec": s_k,
+                        "dataUrl": "data:image/jpeg;base64," + base64.b64encode(raw_b).decode("ascii"),
+                    })
+                return {
+                    "ok": True,
+                    "cached": False,
+                    "needsPaddleOcr": True,
+                    "videoFileName": target_path.name,
+                    "sampledFrames": sampled_payload,
+                }
         elif os.name == "nt":
             # [무-FFmpeg 순정 Windows 10/11 폴백]: Windows.Media.Editing.MediaClip으로 프레임 비트맵 직접 추출 & OCR
             secs_csv = ",".join(str(s) for s in sample_secs)

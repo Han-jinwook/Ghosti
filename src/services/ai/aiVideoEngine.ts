@@ -3,6 +3,10 @@ import { getZCoreUrl, zCoreBridge, hasActiveGhostiLoginSession } from '../zCoreB
 import { silentIndexingBrake } from '../silentIndexingBrake';
 import type { LocalDocumentFile, PhotoItem, SearchResultItem, VideoSceneItem } from '../../types/saysee';
 import {
+  recognizeImageDataWithPaddleOcr,
+  recognizeDataUrlWithPaddleOcr,
+} from './aiPaddleOcrEngine';
+import {
   DEFAULT_DIM,
   DecodedKeyframeImage,
   aiRuntimeFlags,
@@ -1946,11 +1950,136 @@ async function captureHighResFramesForVideoOcr(
   });
 }
 
+async function captureHighResImageDataForVideoOcr(
+  vid: VideoSceneItem,
+  maxSamples = 12
+): Promise<Array<{ timeSec: number; imageData: ImageData }>> {
+  if (typeof document === 'undefined' || !vid.videoUrl) return [];
+  return new Promise((resolve) => {
+    const videoEl = document.createElement('video');
+    videoEl.crossOrigin = 'anonymous';
+    videoEl.muted = true;
+    videoEl.playsInline = true;
+    videoEl.preload = 'auto';
+    videoEl.src = vid.videoUrl;
+
+    let settled = false;
+    const finish = (items: Array<{ timeSec: number; imageData: ImageData }>) => {
+      if (settled) return;
+      settled = true;
+      try {
+        videoEl.pause();
+        videoEl.removeAttribute('src');
+        videoEl.load();
+      } catch {
+        /* ignore */
+      }
+      resolve(items);
+    };
+
+    const timeoutId = window.setTimeout(() => finish([]), 15000);
+
+    videoEl.onerror = () => {
+      window.clearTimeout(timeoutId);
+      finish([]);
+    };
+
+    videoEl.onloadedmetadata = async () => {
+      try {
+        const dur = Math.max(1, Number(videoEl.duration) || Number(vid.durationSec) || 6);
+        const count = Math.min(maxSamples, Math.max(3, Math.ceil(dur / 4)));
+        const targetSecs: number[] = [];
+        for (let i = 0; i < count; i++) {
+          const ratio = count === 1 ? 0.25 : (i + 0.35) / count;
+          targetSecs.push(Math.max(0.1, Math.min(dur - 0.1, Number((dur * ratio).toFixed(1)))));
+        }
+
+        const results: Array<{ timeSec: number; imageData: ImageData }> = [];
+        const canvas = document.createElement('canvas');
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) {
+          window.clearTimeout(timeoutId);
+          finish([]);
+          return;
+        }
+
+        for (const sec of targetSecs) {
+          const seekOk = await new Promise<boolean>((resSeek) => {
+            let done = false;
+            const st = window.setTimeout(() => {
+              if (!done) {
+                done = true;
+                resSeek(false);
+              }
+            }, 2500);
+            videoEl.onseeked = () => {
+              if (!done) {
+                done = true;
+                window.clearTimeout(st);
+                resSeek(true);
+              }
+            };
+            try {
+              videoEl.currentTime = sec;
+            } catch {
+              window.clearTimeout(st);
+              resSeek(false);
+            }
+          });
+          if (!seekOk) continue;
+          const vw = videoEl.videoWidth || 640;
+          const vh = videoEl.videoHeight || 360;
+          const scale = Math.min(1, 1920 / Math.max(vw, vh));
+          canvas.width = Math.max(160, Math.round(vw * scale));
+          canvas.height = Math.max(90, Math.round(vh * scale));
+          ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
+          const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+          results.push({ timeSec: Math.floor(sec), imageData });
+        }
+        window.clearTimeout(timeoutId);
+        finish(results);
+      } catch {
+        window.clearTimeout(timeoutId);
+        finish([]);
+      }
+    };
+  });
+}
+
+const inMemoryPaddleVideoOcrCache = new Map<string, VideoOcrExtractResult>();
+
+function dedupePaddleTimelineLines(
+  rawFrames: Array<{ timeSec: number; ocrText: string }>,
+  formatTs: (sec: number) => string
+): VideoOcrLineItem[] {
+  const deduped: VideoOcrLineItem[] = [];
+  let prevNorm = '';
+  const sorted = [...rawFrames].sort((a, b) => a.timeSec - b.timeSec);
+  for (const fr of sorted) {
+    const txt = String(fr.ocrText || '').replace(/\s+/g, ' ').trim();
+    const norm = txt.replace(/[^가-힣a-zA-Z0-9]/g, '').toLowerCase();
+    if (norm.length < 3) continue;
+    if (
+      prevNorm &&
+      (norm === prevNorm ||
+        (norm.length > 8 && (norm.includes(prevNorm) || prevNorm.includes(norm))))
+    ) {
+      continue;
+    }
+    prevNorm = norm;
+    deduped.push({
+      timeSec: fr.timeSec,
+      timestamp: formatTs(fr.timeSec),
+      text: txt,
+    });
+  }
+  return deduped;
+}
+
 /**
- * [영상 속 화면 글자 1초 텍스트 추출]
- * 1) 로컬 Z-코어 연결 시: 먼저 캐시/백엔드 WinRT 추출(/__videos/extract-ocr-text)을 조회하고,
- *    아직 프레임 추출 전이면 브라우저 디코더로 최대 10개 프레임을 샘플링해 /__videos/ocr-frames 로 즉시 WinRT 판독!
- * 2) 오프라인/구경용 쇼케이스 영상일 시: 타임라인 캡션·장면 설명 텍스트를 깔끔하게 정리해 반환.
+ * [영상 속 화면 글자 고정밀 텍스트 추출 (PP-OCRv5 Korean + 다단 카드·줄바꿈 문장 복원)]
+ * 1) 이미 PP-OCRv5(ocrVer >= 20)로 캐싱된 결과가 있으면 0.01초 즉시 반환
+ * 2) 미캐싱 시 브라우저 고해상도 프레임 디코더(또는 Z-코어 프레임 샘플러) + 온디바이스 PP-OCRv5로 정밀 판독 후 영구 캐싱!
  */
 export async function extractVideoScreenTextOnDemand(
   vid: VideoSceneItem
@@ -1962,61 +2091,118 @@ export async function extractVideoScreenTextOnDemand(
     return `${mm}:${ss}`;
   };
 
+  const memKey = `${vid.videoFileName || vid.id}|${vid.sizeMB || 0}`;
+  const memHit = inMemoryPaddleVideoOcrCache.get(memKey);
+  if (memHit && memHit.ocrLines.length > 0) {
+    return memHit;
+  }
+
+  // 1) 로컬 Z-코어에 이미 PP-OCRv5(ocrVer >= 20) 고정밀 캐시가 있으면 즉시 반환
   if (zCoreBridge.isConnected && vid.videoFileName) {
     try {
-      const res1 = await fetch(getZCoreUrl('/__videos/extract-ocr-text'), {
+      const resCached = await fetch(getZCoreUrl('/__videos/extract-ocr-text'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ videoFileName: vid.videoFileName }),
+        body: JSON.stringify({ videoFileName: vid.videoFileName, onlyCachedV5: true }),
       });
-      if (res1.ok) {
-        const data1 = await res1.json();
-        const lines1: VideoOcrLineItem[] = Array.isArray(data1?.ocrLines)
-          ? data1.ocrLines
-          : Array.isArray(data1?.lines)
-          ? data1.lines
+      if (resCached.ok) {
+        const dataCached = await resCached.json();
+        const linesCached: VideoOcrLineItem[] = Array.isArray(dataCached?.ocrLines)
+          ? dataCached.ocrLines
           : [];
-        if ((data1?.hasText || lines1.length > 0) && lines1.length > 0) {
-          return {
+        if (dataCached?.cached && linesCached.length > 0) {
+          const out: VideoOcrExtractResult = {
             ok: true,
             hasText: true,
             videoFileName: vid.videoFileName,
-            ocrLines: lines1,
-            fullText: String(data1.fullText || ''),
+            ocrLines: linesCached,
+            fullText: String(dataCached.fullText || ''),
           };
+          inMemoryPaddleVideoOcrCache.set(memKey, out);
+          return out;
         }
       }
     } catch {
-      /* fall through to browser frame sampling */
+      /* proceed to fresh PP-OCRv5 extraction */
     }
+  }
 
-    const sampled = await captureHighResFramesForVideoOcr(vid, 10);
-    if (sampled.length > 0) {
-      try {
-        const res2 = await fetch(getZCoreUrl('/__videos/ocr-frames'), {
+  // 2) 브라우저 <video> 무손실 ImageData 샘플링 + PP-OCRv5 Korean 정밀 판독 (PC & 모바일 공통)
+  const isRealVideoSource =
+    Boolean(vid.videoUrl) &&
+    (vid.videoUrl!.startsWith('blob:') ||
+      vid.videoUrl!.startsWith('http://127.0.0.1') ||
+      vid.videoUrl!.startsWith('http://localhost') ||
+      Boolean(vid.videoFileName));
+
+  if (isRealVideoSource) {
+    try {
+      const rawPaddleFrames: Array<{ timeSec: number; ocrText: string }> = [];
+      const sampledImgData = await captureHighResImageDataForVideoOcr(vid, 12);
+
+      if (sampledImgData.length > 0) {
+        for (const item of sampledImgData) {
+          const ocrRes = await recognizeImageDataWithPaddleOcr(item.imageData);
+          if (ocrRes.text) {
+            rawPaddleFrames.push({ timeSec: item.timeSec, ocrText: ocrRes.text });
+          }
+        }
+      } else if (zCoreBridge.isConnected && vid.videoFileName) {
+        // 특수 코덱으로 브라우저 <video> 직접 디코딩이 불가한 경우 Z-코어가 뽑아준 프레임에 PP-OCRv5 수행
+        const resFrames = await fetch(getZCoreUrl('/__videos/extract-ocr-text'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             videoFileName: vid.videoFileName,
-            durationSec: vid.durationSec,
-            frames: sampled,
+            onlyCachedV5: true,
+            returnFramesForPaddle: true,
           }),
         });
-        if (res2.ok) {
-          const data2 = await res2.json();
-          const lines: VideoOcrLineItem[] = Array.isArray(data2?.ocrLines) ? data2.ocrLines : [];
-          const fullText = String(data2?.fullText || '').trim();
-          return {
-            ok: true,
-            hasText: Boolean(data2?.hasText && lines.length > 0),
-            videoFileName: vid.videoFileName,
-            ocrLines: lines,
-            fullText,
-          };
+        if (resFrames.ok) {
+          const df = await resFrames.json();
+          const sFrames: Array<{ timeSec: number; dataUrl: string }> = Array.isArray(df?.sampledFrames)
+            ? df.sampledFrames
+            : [];
+          for (const sf of sFrames) {
+            const ocrRes = await recognizeDataUrlWithPaddleOcr(sf.dataUrl);
+            if (ocrRes.text) {
+              rawPaddleFrames.push({ timeSec: Number(sf.timeSec || 0), ocrText: ocrRes.text });
+            }
+          }
         }
-      } catch {
-        /* fall through */
       }
+
+      if (rawPaddleFrames.length > 0) {
+        const lines = dedupePaddleTimelineLines(rawPaddleFrames, formatTs);
+        const fullText = lines.map((l) => `[${l.timestamp}] ${l.text}`).join('\n');
+        const resultObj: VideoOcrExtractResult = {
+          ok: true,
+          hasText: lines.length > 0,
+          videoFileName: vid.videoFileName,
+          ocrLines: lines,
+          fullText,
+        };
+        if (lines.length > 0) {
+          inMemoryPaddleVideoOcrCache.set(memKey, resultObj);
+        }
+
+        // 로컬 Z-코어 연결 시 PP-OCRv5 결과를 영구 캐시(ocrVer=20)로 비동기 저장
+        if (zCoreBridge.isConnected && vid.videoFileName && lines.length > 0) {
+          void fetch(getZCoreUrl('/__videos/ocr-frames'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              videoFileName: vid.videoFileName,
+              durationSec: vid.durationSec,
+              precomputedFrames: rawPaddleFrames,
+            }),
+          }).catch(() => {});
+        }
+
+        return resultObj;
+      }
+    } catch (err) {
+      console.warn('[PP-OCRv5 Video OCR] fallback due to error:', err);
     }
   }
 
