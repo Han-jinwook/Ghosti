@@ -1,7 +1,7 @@
 /**
- * Version: v1.7.0
- * Last Updated: 2026-11-03
- * Description: 귀신코인(Ghost Coin) 브랜드 개편, KCP 간편결제 다이렉트 플래그(카카오페이/네이버페이/토스페이/삼성월렛/애플페이) 지원 및 패밀리 통합 선물하기 API 연동
+ * Version: v1.7.1
+ * Last Updated: 2026-11-18
+ * Description: 귀신코인(Ghost Coin) 브랜드 개편, KCP 간편결제 다이렉트 플래그 및 모바일(iOS Safari Apple Pay 팝업 차단 방지) 전용 게이트웨이 지원
  */
 import { hubFetch } from '../CoreLogic/client';
 import { getConfig } from '../CoreLogic/config';
@@ -239,13 +239,14 @@ export async function requestKcpPayment(params: {
   payMethodType: HubPayMethodType;
   returnUrl: string;
   productName?: string;
-}): Promise<{ success: boolean; paymentData?: any; error?: string }> {
+}): Promise<{ success: boolean; isMobile?: boolean; paymentData?: any; error?: string }> {
   try {
     const config = getConfig();
     const appId = config.appId;
     if (!appId) {
       return { success: false, error: 'App ID가 설정되지 않았습니다. configureMerlinHub({ appId: "..." })를 호출해 주세요.' };
     }
+    const isMobile = typeof navigator !== 'undefined' && /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
     const { ok, data } = await hubFetch<any>('/api/payment/prepare', {
       method: 'POST',
       body: JSON.stringify({
@@ -254,11 +255,12 @@ export async function requestKcpPayment(params: {
         pay_method_type: params.payMethodType,
         app_id: appId,
         return_url: params.returnUrl,
-        product_name: params.productName
+        product_name: params.productName,
+        is_mobile: isMobile
       }),
     });
     if (!ok) return { success: false, error: data?.message || '결제 준비 실패' };
-    return { success: true, paymentData: data.payment_data };
+    return { success: true, isMobile: !!data.is_mobile, paymentData: data.payment_data };
   } catch (err) {
     console.error('[MerlinHub] requestKcpPayment error:', err);
     return { success: false, error: '허브 서버 연결 실패' };

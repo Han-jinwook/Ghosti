@@ -1,7 +1,7 @@
 /**
- * Version: v1.5.1
- * Last Updated: 2026-11-17
- * Description: KCP 간편결제 다이렉트 플래그 히든 폼 주입 (네이버페이 naverpay_direct='B' 브릿지 호출로 머니/포인트 및 카드 선택 동시 지원)
+ * Version: v1.5.2
+ * Last Updated: 2026-11-18
+ * Description: 모바일(iOS Safari Apple Pay 팝업 차단 원천 방지) KCP 모바일 전용 게이트웨이(smpay) 현재 창 이동 지원 및 네이버페이 naverpay_direct='B' 브릿지 호출
  */
 import { useState, useCallback, useEffect } from 'react';
 import { requestKcpPayment, HubPayMethodType } from './wallet';
@@ -72,6 +72,71 @@ export function useHubPayment() {
 
       const orderData = res.paymentData;
       const siteCd = orderData.site_cd || '';
+
+      // 📱 스마트폰/모바일 환경 (iOS Safari Apple Pay 등 팝업 차단 원천 방지):
+      //    KCP 모바일 전용 게이트웨이(smpay)로 현재 창(_self) POST 이동하여 팝업 없이 즉시 결제 진행
+      if (res.isMobile && orderData.PayUrl) {
+        setStatus('pending');
+        const payUrl = String(orderData.PayUrl);
+        const targetAction = `${payUrl.substring(0, payUrl.lastIndexOf('/'))}/jsp/encodingFilter/encodingFilter.jsp`;
+
+        const mobileFormId = 'merlin_kcp_mobile_form_' + Date.now();
+        const mobileForm = document.createElement('form');
+        mobileForm.id = mobileFormId;
+        mobileForm.name = 'order_info';
+        mobileForm.method = 'POST';
+        mobileForm.action = targetAction;
+        mobileForm.acceptCharset = 'UTF-8';
+        mobileForm.style.display = 'none';
+        document.body.appendChild(mobileForm);
+
+        const mobileFields: Record<string, string> = {
+          site_cd: siteCd,
+          ordr_idxx: orderData.ordr_idxx || '',
+          good_mny: String(orderData.good_mny || ''),
+          good_name: orderData.good_name || '',
+          buyr_name: orderData.buyr_name || '',
+          buyr_mail: orderData.buyr_mail || '',
+          site_name: orderData.site_name || '3몬스터(귀신코인)',
+          shop_name: orderData.shop_name || '3몬스터(귀신코인)',
+          pay_method: orderData.pay_method || 'CARD',
+          currency: '410',
+          quotaopt: '3',
+          approval_key: orderData.approval_key || '',
+          PayUrl: payUrl,
+          Ret_URL: orderData.Ret_URL || `${config.hubUrl}/api/payment/callback`,
+          param_opt_1: orderData.param_opt_1 || returnUrl,
+          encoding_trans: 'UTF-8',
+        };
+
+        const directFlags: Array<[HubPayMethodType, string, string]> = [
+          ['kakaopay', 'kakaopay_direct', 'Y'],
+          ['naverpay', 'naverpay_direct', 'B'],
+          ['tosspay', 'tosspay_direct', 'Y'],
+          ['sspay', 'sspay_direct', 'Y'],
+          ['applepay', 'applepay_direct', 'Y'],
+          ['payco', 'payco_direct', 'Y'],
+        ];
+        for (const [methodKey, fieldName, defaultFlagVal] of directFlags) {
+          const serverVal = orderData[fieldName];
+          if (serverVal === 'Y' || serverVal === 'B') {
+            mobileFields[fieldName] = serverVal;
+          } else if (params.payMethodType === methodKey) {
+            mobileFields[fieldName] = defaultFlagVal;
+          }
+        }
+
+        Object.entries(mobileFields).forEach(([name, value]) => {
+          const input = document.createElement('input');
+          input.type = 'hidden';
+          input.name = name;
+          input.value = value;
+          mobileForm.appendChild(input);
+        });
+
+        mobileForm.submit();
+        return;
+      }
 
       // 2. KCP 표준결제 JS 스크립트 동적 로드 (site_cd에 맞춰 테스트/운영 분기)
       const isTest = siteCd.startsWith('T');

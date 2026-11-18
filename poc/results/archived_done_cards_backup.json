@@ -1,5 +1,5 @@
 {
-  "updated_at": "2026-11-12T12:54:07.887012",
+  "updated_at": "2026-11-18T10:39:24.915888",
   "cards": [
     {
       "page_id": "403f9ffd-2c1d-8112-b8a7-dad38dfe09df",
@@ -1098,6 +1098,62 @@
       "last_edited_time": "2026-11-12T01:08:00.000Z",
       "url": "https://app.notion.com/p/415f9ffd2c1d80b5894df4324834a83e",
       "archived_at": "2026-11-12T12:54:07.886822"
+    },
+    {
+      "page_id": "417f9ffd-2c1d-800b-ad2e-e02e66a54a34",
+      "title": "🟣 [1귀신] [로직] 귀신비서 답변 오류 및 아이콘 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-18T00:07:00.000Z",
+      "url": "https://app.notion.com/p/1-417f9ffd2c1d800bad2ee02e66a54a34",
+      "archived_at": "2026-11-18T09:07:37.056416"
+    },
+    {
+      "page_id": "41bf9ffd-2c1d-804c-801e-f3470d9857fe",
+      "title": "🟣 [1귀신] [로직] 중복 사진 & 연사 묶음 세트별 사진 오차",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-18T00:13:00.000Z",
+      "url": "https://app.notion.com/p/1-41bf9ffd2c1d804c801ef3470d9857fe",
+      "archived_at": "2026-11-18T09:13:22.296935"
+    },
+    {
+      "page_id": "41bf9ffd-2c1d-8056-b271-f1362aaf5f50",
+      "title": "🟣 [3귀신] [로직] 귀신비서 글자끊김 현상",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-18T00:14:00.000Z",
+      "url": "https://app.notion.com/p/3-41bf9ffd2c1d8056b271f1362aaf5f50",
+      "archived_at": "2026-11-18T09:14:43.951418"
+    },
+    {
+      "page_id": "41bf9ffd-2c1d-8080-aaf2-ec0e7a161cba",
+      "title": "🟣 [1귀신] [로직] 귀신검색창 반응형 버그",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-18T00:16:00.000Z",
+      "url": "https://app.notion.com/p/1-41bf9ffd2c1d8080aaf2ec0e7a161cba",
+      "archived_at": "2026-11-18T09:16:04.454525"
+    },
+    {
+      "page_id": "417f9ffd-2c1d-8134-b0c3-ea438c9c3651",
+      "title": "🟢 [3귀신] [UX] 📱 [안드로이드 앱 2탄] 모바일 AI 내용·음성 검색 · 가족 사진 공유방 · 프로필 메뉴 점검",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-18T00:18:00.000Z",
+      "url": "https://app.notion.com/p/3-UX-2-AI-417f9ffd2c1d8134b0c3ea438c9c3651",
+      "archived_at": "2026-11-18T09:18:38.906249"
+    },
+    {
+      "page_id": "41cf9ffd-2c1d-8040-bd3e-fe0cc986a225",
+      "title": "🟢 [2귀신] [UX]제트코어 업데이트 안내 관련",
+      "app": "",
+      "last_edited_time": "2026-11-18T00:20:00.000Z",
+      "url": "https://app.notion.com/p/2-UX-41cf9ffd2c1d8040bd3efe0cc986a225",
+      "archived_at": "2026-11-18T09:20:54.391270"
+    },
+    {
+      "page_id": "417f9ffd-2c1d-8155-9925-f1a982a667f4",
+      "title": "🟢 [3귀신] [UX] 사진공유 ② 내 사진 방에 추가 & 원클릭 업로드",
+      "app": "귀신같이",
+      "last_edited_time": "2026-11-18T01:29:00.000Z",
+      "url": "https://app.notion.com/p/3-UX-417f9ffd2c1d81559925f1a982a667f4",
+      "archived_at": "2026-11-18T10:39:24.915741"
     }
   ]
 }
