@@ -489,6 +489,12 @@ def main() -> None:
                     "\n👉 [AI 에이전트 지시] 수신 공문이 [즉시실행]이면 지체 없이 Ghosti에 접목·완결 후 답변 메일을 발송하세요!"
                 )
                 print("📮" * 24, flush=True)
+                concurrent_bugs = check_notion_new_bugs(set(), role=active_role)
+                if concurrent_bugs:
+                    import notion_qa
+                    if not notion_qa.query_bugs_raw(notion_qa.STATUS_FIXING, role=active_role):
+                        notion_qa.mark_fixing(concurrent_bugs[0]["page_id"])
+                        print(f"\n🚨 [동시 감지 버그 선(先) 이동 완료] {concurrent_bugs[0]['title']} ({concurrent_bugs[0]['page_id']}) ➔ '버그 수정중'", flush=True)
                 return
 
         tick += 1

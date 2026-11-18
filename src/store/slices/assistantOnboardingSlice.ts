@@ -716,7 +716,7 @@ export const createAssistantOnboardingSlice: StateCreator<
           remainingOldPhotos: 0,
         };
         return {
-          lastQuarantineToast: `ℹ️ 이미 불러온 사진 ${analyzed.length}장이에요! (중복 추가 없이 아래 대화창과 정리 목록에 결과를 다시 안내해 드렸어요)`,
+          lastQuarantineToast: `ℹ️ 이미 업로드되어 있는 사진 ${analyzed.length}장이에요! (중복 추가 없이 기존 목록을 그대로 유지했어요)`,
         };
       }
 

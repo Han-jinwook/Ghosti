@@ -101,6 +101,7 @@ def sync_internal_z_core_mirrors():
     # 3) 소스 해시 스탬프 비교: 소스가 바뀌었는데 버전업을 안 했거나 타 창 버전보다 낮으면 자동으로 max_ver + 1 승격
     core_files = [
         os.path.join(UZC_DIR, "os_agent", "merlin_z_core_daemon.py"),
+        os.path.join(UZC_DIR, "os_agent", "plugin_senstalk.py"),
         os.path.join(UZC_DIR, "seq_paste_daemon.py"),
         os.path.join(UZC_DIR, "ghost_search_window_ui2.py"),
     ]
@@ -150,6 +151,7 @@ def sync_internal_z_core_mirrors():
                 "ghost_search_window_ui2.py",
                 "deploy_z_core_cluster.py",
                 os.path.join("os_agent", "merlin_z_core_daemon.py"),
+                os.path.join("os_agent", "plugin_senstalk.py"),
                 os.path.join("os_agent", "seq_paste_daemon.py"),
                 os.path.join("os_agent", "ghost_search_window_ui2.py"),
             ):

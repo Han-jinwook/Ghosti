@@ -617,13 +617,30 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             (memoScreen > 0 ? `• **메모·캡처 후보**: **${memoScreen}장**\n` : '') +
             `\n🔒 제가 마음대로 지우지 않아요! ${paneLabel} **한 세트씩 실사진과 👑 AI 추천 베스트 1장을 직접 보시고 [👍 OK! 베스트 1장만 남기고 나머지 버리기]** 버튼을 눌러 결정해 주세요!`;
 
+      const storeNow = useSaySeeStore.getState();
+      const allowPcBridge =
+        isMobileOrStore && (!storeNow.isStoreAppMode || storeNow.enablePcGuideShareButton);
+      const pcBridgeTail = allowPcBridge
+        ? `\n\n💻 집이나 회사 PC에서도 내 파일·사진을 1초 만에 찾으실 수 있게, 아래 버튼으로 카톡(나에게 보내기)에 PC 실행 링크를 미리 넣어두세요!`
+        : '';
+
+      for (const prevMsg of getSharedMonsterChatState().messages) {
+        if (prevMsg.role !== 'user') {
+          completedSecretaryAnimIds.add(prevMsg.id);
+        }
+      }
+
+      const auditMsgId = `secretary_photo_audit_${Date.now()}`;
+      completedSecretaryAnimIds.add(auditMsgId);
+
       const nextBubbles: MonsterChatMessage[] = [
         {
-          id: `secretary_photo_audit_${Date.now()}`,
+          id: auditMsgId,
           role: 'assistant',
           timestamp: nowTimeKo(),
           sourceTab: 'trash',
-          text,
+          text: `${text}${pcBridgeTail}`,
+          showMobileToPcBridgeButton: allowPcBridge,
           followUpSuggestions: isMobileOrStore
             ? ['🔍 맨 위 검색창으로 방금 불러온 사진 찾아볼래']
             : undefined,
@@ -636,8 +653,10 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           remainingOldPhotos
         );
         if (choicePrompt) {
+          const remId = `secretary_mobile_remaining_audit_${Date.now() + 1}`;
+          completedSecretaryAnimIds.add(remId);
           nextBubbles.push({
-            id: `secretary_mobile_remaining_audit_${Date.now() + 1}`,
+            id: remId,
             role: 'assistant',
             timestamp: nowTimeKo(),
             sourceTab: 'trash',
@@ -647,32 +666,11 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         }
       }
 
-      if (isMobileOrStore) {
-        const storeNow = useSaySeeStore.getState();
-        const allowPcBridge = !storeNow.isStoreAppMode || storeNow.enablePcGuideShareButton;
-        let alreadyShownBridge = false;
-        try {
-          alreadyShownBridge = sessionStorage.getItem('ghosti_mobile_pc_bridge_shown') === '1';
-          if (allowPcBridge && !alreadyShownBridge) {
-            sessionStorage.setItem('ghosti_mobile_pc_bridge_shown', '1');
-          }
-        } catch {
-          /* ignore */
-        }
-        if (allowPcBridge && !alreadyShownBridge) {
-          const pcBridge = buildMobileToPcBridgePrompt(st.nickname);
-          nextBubbles.push({
-            id: `secretary_mobile_pc_bridge_audit_${Date.now() + 2}`,
-            role: 'assistant',
-            timestamp: nowTimeKo(),
-            sourceTab: 'trash',
-            text: pcBridge.text,
-            showMobileToPcBridgeButton: true,
-          });
-        }
-      }
-
       setSharedMonsterMessages((prev) => [...prev, ...nextBubbles]);
+      window.setTimeout(() => {
+        const el = scrollContainerRef.current;
+        if (el) el.scrollTop = el.scrollHeight;
+      }, 60);
     };
 
     window.addEventListener('ghosti_defer_photo_cleanup_and_continue', onDeferCleanupAndContinue);
