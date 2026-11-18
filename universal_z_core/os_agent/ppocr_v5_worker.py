@@ -483,6 +483,8 @@ def invoke_ppocr_subprocess(
             cmd = [sys.executable, str(THIS_DIR / "merlin_z_core_daemon.py"), "--ppocr-worker", str(req_file), str(res_file)]
 
         creationflags = 0x08000000 if os.name == "nt" else 0
+        clean_env = {k: v for k, v in os.environ.items() if k not in ("_MEIPASS2", "_MEIPASS")}
+        clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
         subprocess.run(
             cmd,
             capture_output=True,
@@ -490,6 +492,7 @@ def invoke_ppocr_subprocess(
             encoding="utf-8",
             errors="replace",
             timeout=timeout_sec,
+            env=clean_env,
             creationflags=creationflags,
         )
         if res_file.exists():

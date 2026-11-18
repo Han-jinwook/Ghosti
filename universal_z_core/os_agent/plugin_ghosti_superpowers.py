@@ -62,8 +62,11 @@ def ensure_superpower_daemon_running() -> bool:
             import core_win32 as _cw32
 
             target_exe = _cw32.ensure_persistent_frozen_install()
+            clean_env = {k: v for k, v in os.environ.items() if k not in ("_MEIPASS2", "_MEIPASS")}
+            clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
             subprocess.Popen(
                 [target_exe, "--seq-paste-daemon"],
+                env=clean_env,
                 creationflags=0x08000000 | 0x00000008,  # CREATE_NO_WINDOW | DETACHED_PROCESS
                 close_fds=True,
             )

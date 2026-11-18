@@ -310,15 +310,39 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
         "--hidden-import", "PIL.ImageGrab",
         "--hidden-import", "PIL.ImageOps",
         "--hidden-import", "PIL.ImageTk",
-        "--console" if console else "--noconsole",
+        "--console",
         str(THIS_DIR / "merlin_z_core_daemon.py"),
     ]
     res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
     exe = DIST_DIR / "Merlin_Z_Core_Setup.exe"
+    subsystem_patched = False
+    if res.returncode == 0 and exe.exists() and not console:
+        # [근본 처방]: PyInstaller runw.exe(--noconsole) 부트로더 내부에 하드코딩된
+        # MessageBoxW("Failed to remove temporary directory: ...\_MEIxxxx") 팝업을 원천 제거하기 위해,
+        # MessageBoxW 호출이 0건인 run.exe(--console) 부트로더로 패키징한 뒤 PE OptionalHeader.Subsystem만
+        # IMAGE_SUBSYSTEM_WINDOWS_GUI(2)로 전환하여 콘솔 창 0% + 부트로더 Warning 팝업 0%를 동시에 달성합니다.
+        try:
+            import struct
+
+            with open(exe, "r+b") as f:
+                f.seek(0x3C)
+                pe_offset = struct.unpack("<I", f.read(4))[0]
+                f.seek(pe_offset)
+                if f.read(4) == b"PE\x00\x00":
+                    subsys_offset = pe_offset + 4 + 20 + 68
+                    f.seek(subsys_offset)
+                    cur_subsys = struct.unpack("<H", f.read(2))[0]
+                    if cur_subsys == 3:  # IMAGE_SUBSYSTEM_WINDOWS_CUI -> WINDOWS_GUI(2)
+                        f.seek(subsys_offset)
+                        f.write(struct.pack("<H", 2))
+                        subsystem_patched = True
+        except Exception:
+            pass
     return {
         "built": res.returncode == 0 and exe.exists(),
         "returncode": res.returncode,
         "exe": str(exe),
+        "subsystemGuiPatched": subsystem_patched,
         "sizeMB": round(exe.stat().st_size / 1024 / 1024, 1) if exe.exists() else 0,
         "stderrTail": res.stderr.strip().splitlines()[-6:],
     }

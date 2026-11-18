@@ -33,9 +33,48 @@ import urllib.request
 from typing import Any, Dict
 
 # [PyInstaller C-Bootloader 상속 오염 원천 차단]:
-# 부모 .exe 종료 후 삭제된 _MEIxxxx\python312.dll 참조 팝업 크래시를 막기 위해 기동 즉시 환경변수에서 _MEIPASS2 / _MEIPASS 소거
+# 부모 .exe 종료 후 삭제된 _MEIxxxx\python312.dll 참조 팝업 크래시 및 종료 시 _MEI 삭제 실패 Warning 팝업을 막기 위해
+# 기동 즉시 환경변수에서 _MEIPASS2 / _MEIPASS 소거 + PYINSTALLER_RESET_ENVIRONMENT=1 강제 설정
 for _pyi_env_key in ("_MEIPASS2", "_MEIPASS"):
     os.environ.pop(_pyi_env_key, None)
+os.environ["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+
+
+def cleanup_stale_mei_runtime_dirs() -> int:
+    """
+    기동 시점(startup)에 %LOCALAPPDATA%\\Merlin\\zcore_rt\\ 내 현재 실행 중인 프로세스들의 _MEI 폴더를 제외한
+    과거 고아 _MEI* 임시 폴더들을 조용히 청소합니다 (잠긴 파일은 ignore_errors=True로 무소음 통과).
+    """
+    cleaned = 0
+    try:
+        import shutil
+
+        local_app = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+        rt_dir = Path(local_app) / "Merlin" / "zcore_rt"
+        if not rt_dir.is_dir():
+            return 0
+        cur_mei = Path(getattr(sys, "_MEIPASS", "")).resolve() if getattr(sys, "_MEIPASS", None) else None
+        now_ts = time.time()
+        for item in rt_dir.iterdir():
+            if not item.is_dir() or not item.name.startswith("_MEI"):
+                continue
+            try:
+                if cur_mei and item.resolve() == cur_mei:
+                    continue
+                # 방금 생성된 형제 프로세스(--seq-paste-daemon 등)의 _MEI 폴더 보호를 위해 120초 이상 경과하고 잠기지 않은 폴더만 삭제 시도
+                try:
+                    if (now_ts - item.stat().st_mtime) < 120.0:
+                        continue
+                except Exception:
+                    pass
+                shutil.rmtree(item, ignore_errors=True)
+                if not item.exists():
+                    cleaned += 1
+            except Exception:
+                pass
+    except Exception:
+        pass
+    return cleaned
 
 THIS_DIR = Path(__file__).resolve().parent
 if str(THIS_DIR) not in sys.path:
@@ -68,7 +107,7 @@ import plugin_aggrofilter  # noqa: E402
 import ghosti_setup_parity  # noqa: E402
 import plugin_ghosti_superpowers  # noqa: E402
 
-CORE_VERSION = "2.3.59"
+CORE_VERSION = "2.3.69"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1603,6 +1642,10 @@ def main() -> None:
     start_win32_tray_icon(args.port, replaced_pids=replaced_pids)
 
     def _start_auxiliary_watchers() -> None:
+        try:
+            cleanup_stale_mei_runtime_dirs()
+        except Exception:
+            pass
         if getattr(sys, "frozen", False):
             try:
                 w32.ensure_persistent_frozen_install()
