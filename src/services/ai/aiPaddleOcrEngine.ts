@@ -691,16 +691,36 @@ async function runSingleImageOcrInternal(
       charPairs.pop();
     }
 
-    // 이모지·아이콘(👑 등)이 단일 저신뢰 영문/기호(W, M 등)로 오독된 구간을 공백으로 치환
-    for (let ci = 0; ci < charPairs.length; ci++) {
+    // 이모지·아이콘(👑 등)이 단일 또는 연속 저신뢰 영문/기호(W, WMW, NOW 등)로 오독된 구간을 연속 신뢰도로 판별해 공백 치환
+    let ci = 0;
+    while (ci < charPairs.length) {
       const cp = charPairs[ci];
-      if (cp.ch !== ' ' && !/[가-힣0-9]/.test(cp.ch) && cp.sc < 0.82) {
-        const prevCh = ci > 0 ? charPairs[ci - 1].ch : '';
-        const nextCh = ci + 1 < charPairs.length ? charPairs[ci + 1].ch : '';
-        if (!/[A-Za-z]/.test(prevCh) && !/[A-Za-z]/.test(nextCh)) {
+      if (cp.ch !== ' ' && !/[가-힣0-9]/.test(cp.ch)) {
+        if (/[A-Za-z]/.test(cp.ch)) {
+          let cj = ci + 1;
+          while (cj < charPairs.length && /[A-Za-z]/.test(charPairs[cj].ch)) {
+            cj++;
+          }
+          const runLen = cj - ci;
+          let sumSc = 0;
+          let maxSc = 0;
+          for (let k = ci; k < cj; k++) {
+            sumSc += charPairs[k].sc;
+            if (charPairs[k].sc > maxSc) maxSc = charPairs[k].sc;
+          }
+          const meanSc = sumSc / runLen;
+          if ((runLen === 1 && meanSc < 0.84) || (runLen <= 6 && meanSc < 0.78 && maxSc < 0.88)) {
+            for (let k = ci; k < cj; k++) {
+              charPairs[k] = { ch: ' ', sc: charPairs[k].sc };
+            }
+          }
+          ci = cj;
+          continue;
+        } else if (cp.sc < 0.82) {
           charPairs[ci] = { ch: ' ', sc: cp.sc };
         }
       }
+      ci++;
     }
 
     const clean = polishKoreanOcrSpacing(charPairs.map((p) => p.ch).join(''));

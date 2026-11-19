@@ -598,16 +598,29 @@ def run_worker_cli(req_path: str, res_path: str) -> int:
                 char_pairs.pop()
 
             if filter_video_ui and char_pairs:
-                cleaned_pairs: List[tuple[str, float]] = []
-                n_cp = len(char_pairs)
-                for idx_cp, (ch_c, sc_c) in enumerate(char_pairs):
-                    if ch_c != " " and not re.match(r"[가-힣0-9]", ch_c) and sc_c < 0.82:
-                        prev_c = char_pairs[idx_cp - 1][0] if idx_cp > 0 else ""
-                        next_c = char_pairs[idx_cp + 1][0] if idx_cp + 1 < n_cp else ""
-                        if not (re.match(r"[A-Za-z]", prev_c) or re.match(r"[A-Za-z]", next_c)):
-                            cleaned_pairs.append((" ", sc_c))
+                cleaned_pairs = list(char_pairs)
+                n_cp = len(cleaned_pairs)
+                idx_cp = 0
+                while idx_cp < n_cp:
+                    ch_c, sc_c = cleaned_pairs[idx_cp]
+                    if ch_c != " " and not re.match(r"[가-힣0-9]", ch_c):
+                        if re.match(r"[A-Za-z]", ch_c):
+                            j_cp = idx_cp + 1
+                            while j_cp < n_cp and re.match(r"[A-Za-z]", cleaned_pairs[j_cp][0]):
+                                j_cp += 1
+                            run_len = j_cp - idx_cp
+                            run_scores = [cleaned_pairs[k][1] for k in range(idx_cp, j_cp)]
+                            run_mean = sum(run_scores) / run_len
+                            run_max = max(run_scores)
+                            # 이모지·아이콘(👑 등)이 연속 저신뢰 영문 조각(W, WMW, NOW, AIPLO 등)으로 오독된 구간을 연속 구간 신뢰도로 판별해 공백 치환
+                            if (run_len == 1 and run_mean < 0.84) or (run_len <= 6 and run_mean < 0.78 and run_max < 0.88):
+                                for k in range(idx_cp, j_cp):
+                                    cleaned_pairs[k] = (" ", cleaned_pairs[k][1])
+                            idx_cp = j_cp
                             continue
-                    cleaned_pairs.append((ch_c, sc_c))
+                        elif sc_c < 0.82:
+                            cleaned_pairs[idx_cp] = (" ", sc_c)
+                    idx_cp += 1
                 char_pairs = cleaned_pairs
 
             txt = polish_korean_ocr_spacing("".join(ch for ch, _ in char_pairs))
