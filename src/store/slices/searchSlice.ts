@@ -851,6 +851,8 @@ export const createSearchSlice: StateCreator<
         query.trim()
       );
 
+    const encoderReadyBeforeQuery = isTextQueryEncoderReady();
+
     // [통합 3-Track 고속 검색] 사진·문서 매칭을 즉시 수행한 뒤, 일치 사진 세션 정보를 결합해 동영상을 무블로킹(0.1초) 평가
     const [docMatches, photoSearchOut] = await Promise.all([
       isExplicitPhotoOnlyQuery || sharedMode
@@ -1105,49 +1107,74 @@ export const createSearchSlice: StateCreator<
           : null,
     });
 
-    // [무블로킹 2단계 백그라운드 보강]: 첫 검색 결과는 0.1초 만에 즉시 표시한 뒤,
-    // 아직 비전 벡터가 준비되지 않은 동영상이 있으면 백그라운드에서 조용히 키프레임을 보강하여 결과 목록을 매끄럽게 갱신 (내 기기 전용)
-    if (
-      !sharedMode &&
+    // [무블로킹 2단계 백그라운드 보강]: 첫 검색 결과는 즉시 표시한 뒤,
+    // 쿼리 인코더 콜드스타트 직후(PC·모바일 공통) 또는 미임베딩 로컬 동영상이 있을 때 백그라운드 보강 후 결과를 매끄럽게 갱신
+    const needsVideoKeyframeWarmup =
       !isExplicitPhotoOnlyQuery &&
       zCoreBridge.isConnected &&
-      (!isTextQueryEncoderReady() || hasUnindexedLocalVideos(videoSceneItems))
-    ) {
+      hasUnindexedLocalVideos(videoSceneItems);
+    if (!sharedMode && (!encoderReadyBeforeQuery || needsVideoKeyframeWarmup)) {
       void (async () => {
         await ensureTextQueryEncoderLoaded();
         if (reqSeq !== storeSharedRefs.latestRunTextQuerySeq) return;
-        const prioritized = [
-          ...videoMatches,
-          ...videoSceneItems.filter((v) => !videoMatches.some((m) => m.id === v.id)),
-        ];
-        await ensureVideoKeyframesEmbeddedForSearch(
-          prioritized,
-          48,
-          () => reqSeq !== storeSharedRefs.latestRunTextQuerySeq
-        );
-        if (reqSeq !== storeSharedRefs.latestRunTextQuerySeq) return;
+        if (needsVideoKeyframeWarmup) {
+          const prioritized = [
+            ...videoMatches,
+            ...videoSceneItems.filter((v) => !videoMatches.some((m) => m.id === v.id)),
+          ];
+          await ensureVideoKeyframesEmbeddedForSearch(
+            prioritized,
+            48,
+            () => reqSeq !== storeSharedRefs.latestRunTextQuerySeq
+          );
+          if (reqSeq !== storeSharedRefs.latestRunTextQuerySeq) return;
+        }
         const cur = get();
         if (!cur.hasExecutedUserSearch || cur.activeQuery !== query) return;
-        const refreshedPhotoOut = cleanedSearchQuery
-          ? await executeTextSearch(cleanedSearchQuery, photosForSearch, 'text-direct')
-          : photoSearchOut;
+        const latestRawPhotos = resolveLoungePhotoCorpus({
+          activeLoungeType: cur.activeLoungeType,
+          activeFamilyRoom: cur.activeFamilyRoom,
+          photos: cur.photos,
+          sharedRoomHostPhotos: cur.sharedRoomHostPhotos,
+          sharedRoomAddedPhotos: cur.sharedRoomAddedPhotos,
+        });
+        const latestPersonalPhotos = isolatePersonalPhotos(latestRawPhotos);
+        const latestPhotosForSearch = isWorkLounge
+          ? latestPersonalPhotos.map((p) => ({
+              ...p,
+              tags: p.tags.filter((t) => !passportTagSet.has(t)),
+            }))
+          : latestPersonalPhotos;
+
+        const refreshedPhotoOut =
+          cleanedSearchQuery && !isPureBrowseVideoIntent && !isPureBrowseDocIntent
+            ? await executeTextSearch(cleanedSearchQuery, latestPhotosForSearch, 'text-direct')
+            : photoSearchOut;
         if (reqSeq !== storeSharedRefs.latestRunTextQuerySeq) return;
-        const refreshedVideos = await searchVideoSceneItemsAsync(
-          cleanedSearchQuery || query,
-          cur.videoSceneItems,
-          photosForSearch,
-          refreshedPhotoOut.results
-        );
+        const refreshedVideos =
+          isExplicitPhotoOnlyQuery || isPureBrowseDocIntent
+            ? videoMatches
+            : await searchVideoSceneItemsAsync(
+                cleanedSearchQuery || query,
+                cur.videoSceneItems,
+                latestPhotosForSearch,
+                refreshedPhotoOut.results
+              );
         if (reqSeq !== storeSharedRefs.latestRunTextQuerySeq) return;
         const latest = get();
         if (!latest.hasExecutedUserSearch || latest.activeQuery !== query) return;
         set({
           matchedVideoScenes: refreshedVideos,
-          ...(refreshedPhotoOut.results.length > 0 && !isTimeRangeOrAlumniQuery
+          ...(!isTimeRangeOrAlumniQuery
             ? { searchResults: refreshedPhotoOut.results }
             : {}),
           ...(isExplicitVideoIntent && refreshedVideos.length > 0
             ? { searchSpace: 'video' }
+            : !hasUserSelectedSearchTab &&
+              !isExplicitVideoIntent &&
+              !isExplicitDocIntent &&
+              refreshedPhotoOut.results.length > 0
+            ? { searchSpace: 'gallery' }
             : {}),
         });
       })();

@@ -29,12 +29,14 @@ import {
   acquireSharedVisionEncoder,
   aiRuntimeFlags,
   bumpSharedVisionIdleDispose,
+  computeFrameHubnessScore,
   cosineSimilarity,
   decodeImageBlobToRawAndThumb,
   disposeSharedVisionEncoderNow,
   embedRawImageWithSharedVision,
   enableOpfsCache,
   encodeMultimodalSearchQueryVecs,
+  ensureHubnessReferenceVecsLoaded,
   ensureTextQueryEncoderLoaded,
   extractKoStems,
   getOptimalEmbeddingDtype,
@@ -58,6 +60,10 @@ import {
   recognizeDataUrlWithPaddleOcr,
   releasePaddleOcrRuntime,
 } from './aiPaddleOcrEngine';
+import {
+  extractMeaningfulUserMediaTokens,
+  getOpticalSigForPhoto,
+} from '../mobilePhotoPicker';
 
 export async function fetchAutonomousFaceClusters(): Promise<{
   latestCorpusYear: number;
@@ -302,8 +308,18 @@ export async function loadInitialPhotoDataset(): Promise<{
   quarantinedCount: number;
   quarantinedBytes: number;
 }> {
-  let fileList: { path: string; size: number; date: string; mtimeMs: number }[] = [];
-  let quarantinedList: { path: string; size: number; date: string; mtimeMs: number }[] = [];
+  type LocalPhotoEntry = {
+    path: string;
+    originalName?: string;
+    fullPath?: string;
+    folderName?: string;
+    deviceSource?: string;
+    size: number;
+    date: string;
+    mtimeMs: number;
+  };
+  let fileList: LocalPhotoEntry[] = [];
+  let quarantinedList: LocalPhotoEntry[] = [];
   const auditByPhoto = new Map<string, PhysicalAuditRecord>();
 
   try {
@@ -546,7 +562,8 @@ export async function loadInitialPhotoDataset(): Promise<{
     const semMeta = semanticByPhoto.get(f.path) as any;
     const pTag = String(semMeta?.primaryTag ?? '');
 
-    // [스펙 1 핵심] #문서·설명서, #문서·신분증은 쓰레기가 아니라 [📁 스마트 서류함] 영구 정보 자산으로 격상!
+    // [스펙 1 핵심] #문서·설명서, #문서·신분증 및 실물 촬영 서류 파일명(세금계산서·사업자등록증·계약서 등)은 [📁 스마트 서류함] 영구 정보 자산으로 격상!
+    const rawCheckName = `${f.originalName || f.path} ${f.folderName || ''}`.toLowerCase();
     if (pTag === '#문서·설명서') {
       vaultDocByPhoto.set(f.path, '📑 조립 설명서 · 매뉴얼 (촬영 서류)');
       tagsByPhoto.set(f.path, new Set(['#문서·설명서', '#스마트서류함']));
@@ -559,6 +576,17 @@ export async function loadInitialPhotoDataset(): Promise<{
       scoresByPhoto.get(f.path)!['document_ko'] = 0.85;
       continue;
     }
+    if (
+      !pTag &&
+      /(?:세금계산서|사업자등록증|계약서|견적서|주민등록|운전면허|신분증|여권|등본|초본|증명서|청구서|명세서)/.test(
+        rawCheckName
+      )
+    ) {
+      vaultDocByPhoto.set(f.path, '📄 촬영 서류 · 증빙 사본');
+      tagsByPhoto.set(f.path, new Set(['#문서·설명서', '#스마트서류함']));
+      scoresByPhoto.get(f.path)!['document_ko'] = 0.85;
+      continue;
+    }
 
     // 일회성 메모(주차기둥, 택배상자 등) 및 스크린샷은 문서함을 오염시키지 않고 AI 클린몬스터에서만 전담 처리
 
@@ -566,11 +594,15 @@ export async function loadInitialPhotoDataset(): Promise<{
 
     const audit = auditByPhoto.get(f.path);
     const sem = scoresByPhoto.get(f.path) ?? {};
+    const semCap = String(semMeta?.captionKo ?? '');
 
-    // A) 탭 ③: 스크린샷 (시맨틱 #스크린샷 OR 무EXIF 모바일 화면비 + 고주파 UI 엣지)
+    // A) 탭 ③: 스크린샷 (시맨틱 #스크린샷 OR 캡처 파일명/폴더명 OR 무EXIF 모바일 화면비 + 고주파 UI 엣지)
     const isScreenshot =
       pTag === '#스크린샷' ||
-      /^(screenshot|capture|screen_|캡처)/i.test(f.path) ||
+      /(?:^|[_\-\s])(screenshot|capture|screen_|화면\s*캡처|화면캡처|스크린샷|캡처|녹화_|ocam)/i.test(
+        f.originalName || f.path
+      ) ||
+      /^(?:앱오류|ocam|스크린샷|화면캡처|화면\s*캡처)$/i.test(f.folderName || '') ||
       (!!audit && !audit.hasExif && audit.aspect >= 1.95 && audit.aspect <= 2.35 && audit.edgeDensity > 40);
 
     if (isScreenshot) {
@@ -581,11 +613,12 @@ export async function loadInitialPhotoDataset(): Promise<{
       continue;
     }
 
-    // B) 탭 ④: 심한 흔들림 · 오촬영 (8방향 3x3 그리드 라플라시안 전체 붕괴 OR #흔들린사진, 단 수중/해변 촬영 제외)
+    // B) 탭 ④: 심한 흔들림 · 오촬영 (8방향 3x3 그리드 라플라시안 전체 붕괴 OR #흔들린사진/손상 오촬영, 단 수중/해변 촬영 제외)
     const blurSem = sem['blurry_en'] ?? 0;
     const isBlurryMisfire =
       pTag === '#흔들린사진' ||
       /^blur_2025/i.test(f.path) ||
+      /오촬영\s*이미지|파일\s*일부가\s*손상/.test(semCap) ||
       (!!audit &&
         pTag !== '#해변·물놀이' &&
         audit.wmRatio < 1.0 &&
@@ -645,15 +678,7 @@ export async function loadInitialPhotoDataset(): Promise<{
   }
 
   const buildPhotoItem = (
-    f: {
-      path: string;
-      size: number;
-      date: string;
-      mtimeMs: number;
-      folderName?: string;
-      deviceSource?: string;
-      fullPath?: string;
-    },
+    f: LocalPhotoEntry,
     isQuarantined: boolean
   ): PhotoItem => {
     const tagSet = new Set<string>();
@@ -676,7 +701,7 @@ export async function loadInitialPhotoDataset(): Promise<{
     const folderTokens: string[] = [];
     if (
       f.folderName &&
-      !/^(test_photos|sample_photos_301|ghosti_test_corpus|pictures|photos|desktop|downloads|\d{2}_.+)$/i.test(
+      !/^(test_photos|sample_photos_301|ghosti_test_corpus|pictures|photos|desktop|downloads|documents|ocam|앱오류|\d{2}_.+)$/i.test(
         f.folderName
       )
     ) {
@@ -691,14 +716,12 @@ export async function loadInitialPhotoDataset(): Promise<{
         }
       }
     }
+    const fileMeaningfulTokens = extractMeaningfulUserMediaTokens(f.originalName || f.path);
     if (f.deviceSource && f.deviceSource.includes('드라이브')) {
       tagSet.add(`#${f.deviceSource.split(' ')[0]}`);
     }
     if (tagSet.size === 0) {
-      if (f.date.startsWith('2024.07') || f.date.startsWith('2024-07')) tagSet.add('#여름휴가·추억');
-      else if (f.date.startsWith('2026.09') || f.date.startsWith('2026-09')) tagSet.add('#가을나들이');
-      else if (f.date.startsWith('2026.10') || f.date.startsWith('2026-10')) tagSet.add('#일상스냅');
-      else tagSet.add('#가족앨범');
+      tagSet.add('#내기기사진');
     }
     const trash = trashByPhoto.get(f.path);
     const dupInfo = dupGroupByPhoto.get(f.path);
@@ -706,13 +729,14 @@ export async function loadInitialPhotoDataset(): Promise<{
     const vaultLabel = vaultDocByPhoto.get(f.path);
     const locParam = isQuarantined ? '&loc=quarantine' : '';
     const fpParam = f.fullPath ? `&fp=${encodeURIComponent(f.fullPath)}` : '';
-    // 미연결 신입 유저용 체험 샘플 파일은 정적 번들(/sample_photos_301/)에서 100% 깨짐 없이 즉시 렌더링합니다.
-    const isBundledSampleFile = /^(IMG_2025|PET_2025|TRV_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(
-      f.path
-    );
-    const isVideoFrameStillFile = /^(20240719_105706_|20240720_134808_|20240722_052422_|20260918_202442_).*\.jpg$/i.test(
-      f.path
-    );
+    const hasRealLocalFile = Boolean(zCoreBridge.isConnected && f.fullPath);
+    // 미연결 체험 샘플 파일만 정적 번들에서 서빙하고, Z-코어 연결 시 실물 파일(f.fullPath)은 100% 실제 로컬 경로에서 서빙합니다.
+    const isBundledSampleFile =
+      !hasRealLocalFile &&
+      /^(IMG_2025|PET_2025|TRV_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(f.path);
+    const isVideoFrameStillFile =
+      !hasRealLocalFile &&
+      /^(20240719_105706_|20240720_134808_|20240722_052422_|20260918_202442_).*\.jpg$/i.test(f.path);
     const fullUrl = isBundledSampleFile
       ? `/sample_photos_301/${encodeURIComponent(f.path)}`
       : isVideoFrameStillFile
@@ -752,11 +776,11 @@ export async function loadInitialPhotoDataset(): Promise<{
           : cachedRealPhotoVec,
       clusterId: semMeta?.clusterId,
       locationKo: semMeta?.locationKo || (folderTokens.length > 0 ? folderTokens.join(' · ') : f.deviceSource),
-      captionKo:
-        semMeta?.captionKo ||
-        (folderTokens.length > 0 ? `[${folderTokens.join(' ')}] 폴더의 ${f.path} 사진` : undefined),
+      captionKo: semMeta?.captionKo || undefined,
       captionEn: semMeta?.captionEn,
-      keywordsKo: Array.from(new Set([...(semMeta?.keywordsKo ?? []), ...folderTokens])),
+      keywordsKo: Array.from(
+        new Set([...(semMeta?.keywordsKo ?? []), ...folderTokens, ...fileMeaningfulTokens])
+      ),
       ontologyPrimaryTags: semMeta?.ontologyPrimaryTags,
       ontologyCaptionTags: semMeta?.ontologyCaptionTags,
       isVaultDocument: Boolean(vaultLabel),
@@ -865,8 +889,48 @@ async function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
+const KO_PHOTO_SYNONYM_GROUPS: readonly (readonly string[])[] = [
+  ['아이', '어린이', '아기', '유아', '꼬마', '자녀', '아들', '딸', '남매'],
+  ['강아지', '반려견', '멍멍이'],
+  ['고양이', '반려묘', '냥이', '길냥이'],
+  ['바다', '해변', '바닷가', '해수욕장', '백사장', '모래사장', '해안', '해안가'],
+  ['노을', '석양', '일몰', '해질녘', '황혼'],
+  ['일출', '해돋이', '여명'],
+  ['웃는', '웃고', '미소', '웃음', '활짝', '해맑게', '해맑은', '환하게'],
+  ['가족', '식구', '대가족', '부모님'],
+  ['단체', '모임', '일행', '여럿'],
+  ['셀카', '독사진', '단독'],
+  ['산', '등산', '산행', '트레킹', '등산로', '정상석'],
+  ['음식', '요리', '식사', '맛집', '식도락', '상차림', '먹방'],
+  ['카페', '커피', '라떼', '아메리카노', '디저트'],
+  ['케이크', '생일', '촛불'],
+  ['스키', '스키장', '스노우보드', '슬로프', '보딩', '설원'],
+  ['캠핑', '캠핑장', '글램핑', '텐트', '타프', '오토캠핑', '불멍'],
+  ['수영장', '풀장', '인피니티풀', '패밀리풀', '선베드'],
+  ['영수증', '전표', '결제내역', '카드전표'],
+  ['세금계산서', '계산서'],
+  ['문서', '서류', '계약서', '증명서', '등본', '공문'],
+  ['신분증', '여권', '주민등록증', '운전면허증', '명함'],
+  ['스크린샷', '화면캡처', '캡처'],
+];
+
+const PHOTO_BOILERPLATE_TAG_RX =
+  /원본보존|연사|중복|내폰사진|내기기사진|자동인덱싱|온디바이스ai분류|선명한베스트컷|베스트컷|일상스냅|가족앨범/i;
+const PHOTO_BOILERPLATE_LOC_RX =
+  /^(?:내\s*스마트폰.*|스마트폰\s*다운로드|스마트폰\s*사진첩.*|pc\s*로컬\s*폴더|camera|dcim|recents|all\s*photos|camera\s*roll|downloads?|pictures|photos|desktop|documents)$/i;
+
+function expandKoPhotoTokenVariants(token: string): string[] {
+  const variants = new Set<string>([token]);
+  for (const grp of KO_PHOTO_SYNONYM_GROUPS) {
+    if (grp.includes(token)) {
+      for (const w of grp) variants.add(w);
+    }
+  }
+  return Array.from(variants);
+}
+
 /**
- * 텍스트 쿼리 검색 (550장 전체 768차원 EmbeddingGemma 2 벡터 + 시맨틱 하이브리드 검색)
+ * 텍스트 쿼리 검색 (768차원 EmbeddingGemma 2 CSLS 허브니스 보정 비전 벡터 + 정밀 한국어 시맨틱 하이브리드 검색)
  */
 export async function executeTextSearch(
   query: string,
@@ -895,7 +959,10 @@ export async function executeTextSearch(
   silentIndexingBrake.prioritizeArchiveFilesForQuery(qRaw, activePhotos);
 
   // 쓰레기/문서 전용 검색어인지 판별 (일반 풍경/인물 검색 시 흔들린 사진·스크린샷·주차장메모 혼입 원천 차단)
-  const isTrashOrDocQuery = /흔들린|흐릿|초점|블러|스크린샷|캡처|화면|주차장|기둥|택배|상자|현수막|영수증|전표|문서|서류|설명서|매뉴얼|신분증|여권|학생증|계약|견적|세금계산서|계산서|보험|증권|청구서|명세서|고지서|증명서|등본|탑승권|결제|주문/.test(qLower);
+  const isTrashOrDocQuery =
+    /흔들린|흐릿|초점|블러|스크린샷|화면\s*캡처|화면캡처|캡처|화면|로그인|앱|오류|게임|주차장|기둥|택배|상자|현수막|영수증|전표|문서|서류|설명서|매뉴얼|신분증|여권|학생증|명함|계약|견적|세금계산서|계산서|사업자등록증|보험|증권|청구서|명세서|고지서|증명서|등본|탑승권|결제|주문|화이트보드|칠판|회의/.test(
+      qLower
+    );
   const isGroupQuery = /단체|단체사진|모임|여럿|일행|가족|친구들|동료들|아이들|어린이들/.test(qLower);
   const isSoloQuery = /독사진|단독|1명|혼자|셀카|프로필/.test(qLower);
   const isSmileQuery = /웃는|웃고|미소|웃음|환하게|해맑|활짝|smile/.test(qLower);
@@ -922,82 +989,182 @@ export async function executeTextSearch(
   const isCatQuery = /고양이|반려묘|냥이|치즈고양이|cat|kitten/.test(qLower);
 
   const SOFT_WORDS = new Set([
-    '사진', '모습', '장면', '찾아줘', '보여줘', '검색', '있나', '있어', '찍은', '찍힌', '나온',
-    '있는', '보이는', '에서', '으로', '에게', '하고', '이랑', '랑', '위', '안', '속', '때', '날',
+    '사진', '사진들', '사진만', '이미지', '모습', '장면', '찾아줘', '찾아', '보여줘', '보여', '검색', '검색해줘',
+    '모아서', '모아줘', '골라줘', '해줘', '있나', '있어', '찍은', '찍힌', '찍어둔', '나온', '나오는', '적힌', '적혀',
+    '있는', '보이는', '에서', '으로', '에게', '하고', '이랑', '랑', '위', '안', '속', '때', '날', '만', '다',
     '우리', '내', '제', '같이', '함께', '많은', '예쁜', '멋진', '맛있는', '시원한', '따뜻한',
-    '즐거운', '신나는', '행복한', '귀여운', '큰', '작은', '좋은', '맑은', '푸른', '넓은',
-    '뛰노는', '뛰는', '달리는', '노는', '앉아', '서있는', '걸어가는', '보는', '먹는', '마시는',
+    '즐거운', '신나는', '행복한', '귀여운', '큰', '작은', '좋은', '맑은', '푸른', '넓은', '활짝', '환하게', '해맑게',
+    '뛰노는', '뛰어노는', '뛰는', '달리는', '노는', '앉아', '앉은', '서있는', '걸어가는', '걷는', '보는', '먹는', '마시는',
+    '끼고', '낀', '쓰고', '쓴', '착용하고', '착용한', '입고', '입은', '타고', '타는', '불고', '부는', '들고', '든',
   ]);
 
   const KEEP_NOUNS = new Set([
-    '바닷가', '창가', '길가', '물가', '휴가', '아이', '어린이', '고양이', '멍멍이', '물놀이', '나들이',
-    '목걸이', '귀걸이', '종로', '을지로', '다리', '나무다리', '구름다리', '선풍기', '비행기', '세탁기',
-    '웃는', '미소', '웃음', '단체', '가족', '해변', '바다', '강아지', '오후', '노을',
+    '바닷가', '창가', '길가', '물가', '휴가', '아이', '어린이', '고양이', '멍멍이', '길냥이', '호랑이', '부엉이', '원숭이', '거북이', '떡볶이',
+    '물놀이', '나들이', '목걸이', '귀걸이', '종로', '을지로', '다리', '나무다리', '구름다리', '선풍기', '비행기', '세탁기',
+    '웃는', '웃고', '미소', '웃음', '단체', '가족', '해변', '바다', '강아지', '오후', '노을',
+    '독사진', '증명사진', '여권사진', '선글라스', '세금계산서', '사업자등록증',
   ]);
 
   const stripParticle = (w: string): string => {
     if (KEEP_NOUNS.has(w) || SOFT_WORDS.has(w)) return w;
-    const m2 = w.replace(/(에서|으로|이랑|하고|부터|까지|처럼|보다|있는|찍은|들을)$/, '');
-    if (m2 !== w && m2.length >= 2) return m2;
-    if (w.length >= 3) {
-      const m1 = w.replace(/(들|의|을|를|은|는|이|가|에|와|과|도)$/, '');
-      if (m1.length >= 2) return m1;
+    let cur = w;
+    const m2 = cur.replace(/(에서부터|으로부터|에서|으로|이랑|하고|부터|까지|처럼|보다|있는|찍은|들을|만은|만을)$/, '');
+    if (m2 !== cur && m2.length >= 2) cur = m2;
+    else if (cur.length >= 3) {
+      const m1 = cur.replace(/(들|의|을|를|은|는|이|가|에|와|과|도|만)$/, '');
+      if (m1.length >= 2) cur = m1;
     }
-    return w;
+    if (cur.length >= 4 && cur.endsWith('사진') && !KEEP_NOUNS.has(cur)) {
+      const stem = cur.slice(0, -2);
+      if (stem.length >= 2) cur = stem;
+    }
+    return cur;
   };
 
   const cleaned = qLower.replace(/[?!.,"'“”‘’()#]/g, ' ');
-  const allWords = cleaned
+  const rawSplitWords = cleaned
     .split(/\s+/)
     .map((t) => stripParticle(t.trim()))
     .filter((t) => t.length >= 1);
 
-  const hardTokens = allWords.filter((t) => !SOFT_WORDS.has(t));
-  const softTokens = allWords.filter(
-    (t) => SOFT_WORDS.has(t) && !['사진', '모습', '장면', '있는', '찍은', '찾아줘', '보여줘'].includes(t)
+  const allWords: string[] = [];
+  for (const w of rawSplitWords) {
+    if (w === '웃고') {
+      allWords.push('웃는');
+    } else if (w === '여름휴가') {
+      allWords.push('여름', '휴가');
+    } else if (w === '생일케이크') {
+      allWords.push('생일', '케이크');
+    } else {
+      allWords.push(w);
+    }
+  }
+
+  const hardTokens = Array.from(new Set(allWords.filter((t) => !SOFT_WORDS.has(t))));
+  const softTokens = Array.from(
+    new Set(
+      allWords.filter(
+        (t) =>
+          SOFT_WORDS.has(t) &&
+          !['사진', '사진들', '사진만', '이미지', '모습', '장면', '있는', '찍은', '찾아줘', '보여줘', '모아서', '모아줘'].includes(t)
+      )
+    )
   );
   const activeTokens = hardTokens.length > 0 ? hardTokens : softTokens;
   const compoundQuery = activeTokens.join('');
 
   let queryVecs: Float32Array[] = [];
+  let hubRefVecs: Float32Array[] = [];
   if (activePhotos.some((p) => p.vec && p.vec.length === DEFAULT_DIM)) {
-    queryVecs = await encodeMultimodalSearchQueryVecs(qRaw, 1400);
+    [queryVecs, hubRefVecs] = await Promise.all([
+      encodeMultimodalSearchQueryVecs(qRaw, 4200),
+      ensureHubnessReferenceVecsLoaded(),
+    ]);
   }
   const embedMs = +(performance.now() - t0).toFixed(1);
   const s0 = performance.now();
 
-  // 벡터 유사도 사전 계산 → 질의별 중앙값(median) 대비 분리도 & 상위 유사도 기준으로 의미상 가까운 실사진 통과
+  // [2중 공간 분리 & CSLS 평균 중심 허브니스 보정]:
+  // 1) 정적 캡션 텍스트 벡터(staticCaptionedPhotoIds: Text↔Text 공간, 0.62~0.80)와
+  // 2) 실사진 픽셀 비전 벡터(!staticCaptionedPhotoIds: Text↔Vision 공간, 0.52~0.75)를
+  //    각자의 분포에서 독립 보정하여, 앱 UI 캡처·문서 이미지의 멀티모달 허브 편향 및 이종 공간 임계치 왜곡을 원천 차단합니다.
   const vecSimById = new Map<string, number>();
-  const allPhotoVecSims: number[] = [];
-  let topVecSim = 0;
+  const staticVecSims: number[] = [];
+  let topStaticSim = 0;
+
+  interface RawVisionEval {
+    id: string;
+    rawSim: number;
+    hub: number;
+    isWhiteSheetUi: boolean;
+  }
+  const rawVisionEvals: RawVisionEval[] = [];
+
   if (queryVecs.length > 0) {
     for (const p of activePhotos) {
-      if (p.vec && p.vec.length === DEFAULT_DIM) {
-        let bestS = -1;
-        for (const qv of queryVecs) {
-          const s = cosineSimilarity(qv, p.vec);
-          if (s > bestS) bestS = s;
-        }
-        if (bestS > 0) {
-          vecSimById.set(p.id, bestS);
-          allPhotoVecSims.push(bestS);
-          if (bestS > topVecSim) topVecSim = bestS;
-        }
+      if (!p.vec || p.vec.length !== DEFAULT_DIM) continue;
+      const isExcludedTrashForNormalQuery =
+        !isTrashOrDocQuery &&
+        (p.trashCategory === 'blurry' ||
+          p.trashCategory === 'screenshot' ||
+          p.trashCategory === 'memo' ||
+          p.isVaultDocument);
+      if (isExcludedTrashForNormalQuery) continue;
+
+      let bestS = -1;
+      for (const qv of queryVecs) {
+        const s = cosineSimilarity(qv, p.vec);
+        if (s > bestS) bestS = s;
+      }
+      if (bestS <= 0) continue;
+
+      const isStaticCap = staticCaptionedPhotoIds.has(p.id);
+      if (isStaticCap) {
+        vecSimById.set(p.id, bestS);
+        staticVecSims.push(bestS);
+        if (bestS > topStaticSim) topStaticSim = bestS;
+      } else {
+        const pKey = getPhotoMediaCacheKey(p.name, p.size);
+        const hub = computeFrameHubnessScore(pKey, p.vec, hubRefVecs);
+        const optSig = getOpticalSigForPhoto(p.id);
+        const isWhiteSheetUi = Boolean(optSig && optSig.whitePct >= 62);
+        rawVisionEvals.push({ id: p.id, rawSim: bestS, hub, isWhiteSheetUi });
       }
     }
   }
-  allPhotoVecSims.sort((a, b) => b - a);
-  const medianVecSim =
-    allPhotoVecSims.length > 0 ? allPhotoVecSims[Math.floor(allPhotoVecSims.length * 0.5)] : 0;
-  const hasPhotoVecSeparation =
-    allPhotoVecSims.length >= 8
-      ? topVecSim >= 0.625 && topVecSim - medianVecSim >= 0.022
-      : topVecSim >= 0.65;
-  const vecAdmitThreshold = !hasPhotoVecSeparation
+
+  staticVecSims.sort((a, b) => b - a);
+  const medStaticSim =
+    staticVecSims.length > 0 ? staticVecSims[Math.floor(staticVecSims.length * 0.5)] : 0;
+  const hasStaticVecSep =
+    staticVecSims.length >= 8
+      ? topStaticSim >= 0.705 && topStaticSim - medStaticSim >= 0.052
+      : staticVecSims.length >= 1
+      ? topStaticSim >= 0.725
+      : false;
+  const staticAdmitThreshold = !hasStaticVecSep
     ? 1.01
-    : allPhotoVecSims.length >= 8
-    ? Math.max(0.625, topVecSim - 0.045, medianVecSim + 0.024)
-    : Math.max(0.648, topVecSim - 0.045);
+    : staticVecSims.length >= 8
+    ? Math.max(0.695, topStaticSim - 0.042, medStaticSim + 0.048)
+    : Math.max(0.715, topStaticSim - 0.035);
+
+  const validHubs = rawVisionEvals.filter((e) => e.hub > 0).map((e) => e.hub);
+  const meanVisionHub =
+    validHubs.length > 0 ? validHubs.reduce((acc, v) => acc + v, 0) / validHubs.length : 0;
+
+  const visionSims: number[] = [];
+  let topVisionSim = 0;
+  let topVisionRawSim = 0;
+  for (const ev of rawVisionEvals) {
+    let adj = ev.rawSim;
+    if (meanVisionHub > 0 && ev.hub > 0) {
+      adj -= 0.9 * (ev.hub - meanVisionHub);
+    }
+    if (!isTrashOrDocQuery && ev.isWhiteSheetUi) {
+      adj -= 0.035;
+    }
+    vecSimById.set(ev.id, adj);
+    visionSims.push(adj);
+    if (adj > topVisionSim) topVisionSim = adj;
+    if (ev.rawSim > topVisionRawSim) topVisionRawSim = ev.rawSim;
+  }
+  visionSims.sort((a, b) => b - a);
+  const medVisionSim =
+    visionSims.length > 0 ? visionSims[Math.floor(visionSims.length * 0.5)] : 0;
+  const minVisionSim = visionSims.length > 0 ? visionSims[visionSims.length - 1] : 0;
+  const hasVisionVecSep =
+    visionSims.length >= 6
+      ? topVisionSim >= 0.656 && topVisionSim - medVisionSim >= 0.038
+      : visionSims.length >= 3
+      ? topVisionSim >= 0.665 && topVisionSim - minVisionSim >= 0.035
+      : visionSims.length >= 1
+      ? topVisionSim >= 0.68 && topVisionRawSim >= 0.665
+      : false;
+  const visionAdmitThreshold = !hasVisionVecSep
+    ? 1.01
+    : visionSims.length >= 6
+    ? Math.max(0.65, topVisionSim - 0.036, medVisionSim + 0.035)
+    : Math.max(0.662, topVisionSim - 0.032);
 
   const scored: {
     photo: PhotoItem;
@@ -1005,7 +1172,13 @@ export async function executeTextSearch(
     tagHits: number;
     totalHits: number;
     compoundHit: boolean;
+    passesVecGate: boolean;
   }[] = [];
+
+  const tokenVariantMap = new Map<string, string[]>();
+  for (const tk of activeTokens) {
+    tokenVariantMap.set(tk, expandKoPhotoTokenVariants(tk));
+  }
 
   for (const photo of activePhotos) {
     // 1) 일반 검색 시 흔들린 사진·스크린샷·일회성 메모 제외
@@ -1019,20 +1192,30 @@ export async function executeTextSearch(
       continue;
     }
 
-    const cap = (photo.captionKo || '').toLowerCase();
+    const rawCap = photo.captionKo || '';
+    const cap = /\(\d+x\d+\s*·\s*선명도/.test(rawCap) ? '' : rawCap.toLowerCase();
     const capEn = (photo.captionEn || '').toLowerCase();
-    const hasStaticVisualCaption = staticCaptionedPhotoIds.has(photo.id) && Boolean(cap);
-    const kws = (photo.keywordsKo ?? []).map((k) => k.toLowerCase());
-    const ontoPrimary = (photo.ontologyPrimaryTags ?? []).map((k) => k.toLowerCase());
+    const isStaticCapPhoto = staticCaptionedPhotoIds.has(photo.id);
+    const hasStaticVisualCaption = isStaticCapPhoto && Boolean(cap);
+    const kws = (photo.keywordsKo ?? [])
+      .filter((k) => k && !PHOTO_BOILERPLATE_TAG_RX.test(k) && k !== '내폰' && k !== '갤러리' && k !== '사진')
+      .map((k) => k.toLowerCase());
+    const ontoPrimary = (photo.ontologyPrimaryTags ?? [])
+      .filter((k) => k && !PHOTO_BOILERPLATE_TAG_RX.test(k))
+      .map((k) => k.toLowerCase());
     const ontoCaption = (photo.ontologyCaptionTags ?? []).map((k) => k.toLowerCase());
     const cleanTags = photo.tags
-      .filter((t) => !t.includes('원본보존') && !t.includes('연사·중복'))
+      .filter((t) => !PHOTO_BOILERPLATE_TAG_RX.test(t))
       .map((t) => t.toLowerCase());
+    const cleanLoc =
+      photo.locationKo && !PHOTO_BOILERPLATE_LOC_RX.test(photo.locationKo.trim())
+        ? photo.locationKo
+        : '';
 
-    const tagAndKwText = `${cleanTags.join(' ')} ${kws.join(' ')} ${ontoPrimary.join(' ')} ${photo.locationKo || ''} ${photo.vaultCategoryLabel || ''}`.toLowerCase();
+    const tagAndKwText = `${cleanTags.join(' ')} ${kws.join(' ')} ${ontoPrimary.join(' ')} ${cleanLoc} ${photo.vaultCategoryLabel || ''}`.toLowerCase();
     const fullText = `${tagAndKwText} ${cap} ${capEn}`.toLowerCase();
 
-    // 2) 시맨틱 가드레일 (정적 AI 시각 캡션이 사전 생성된 샘플 사진에만 적용 — 캡션 미생성 실사용 PC 사진은 768차원 비전 벡터로 정직하게 판정!)
+    // 2) 시맨틱 가드레일 (정적 AI 시각 캡션이 사전 생성된 코퍼스 사진에만 적용 — 캡션 미생성 실사진은 CSLS 보정 768차원 비전 벡터로 판정)
     if (isGroupQuery && hasStaticVisualCaption) {
       const hasSoloWord =
         cap.includes('1명') ||
@@ -1047,13 +1230,17 @@ export async function executeTextSearch(
       const hasGroupWord =
         tagAndKwText.includes('단체') ||
         tagAndKwText.includes('모임') ||
+        tagAndKwText.includes('가족') ||
         cap.includes('단체') ||
         cap.includes('대가족') ||
         cap.includes('식구') ||
+        cap.includes('가족') ||
+        cap.includes('부모님') ||
         cap.includes('친구들이') ||
         cap.includes('동료들이') ||
         cap.includes('어린이들이') ||
-        cap.includes('남매');
+        cap.includes('남매') ||
+        (/선글라스/.test(qLower) && /(?:남녀|두\s*사람|부부|커플|일행)/.test(cap));
       if (hasSoloWord || !hasGroupWord) {
         continue;
       }
@@ -1084,7 +1271,9 @@ export async function executeTextSearch(
         cap.includes('웃고') ||
         cap.includes('미소') ||
         cap.includes('환하게') ||
-        cap.includes('해맑게');
+        cap.includes('해맑게') ||
+        cap.includes('즐거운 표정') ||
+        cap.includes('밝은 표정');
       if (isNegativeSmile || !hasSmileWord) {
         continue;
       }
@@ -1098,8 +1287,8 @@ export async function executeTextSearch(
 
     if (isBeachQuery && hasStaticVisualCaption) {
       const hasVisibleSeaInCaption =
-        /바다|해변|바닷가|바닷물|파도|백사장|모래사장|수평선/.test(cap) &&
-        !/정자 그늘|잔디밭|나무 그늘|전망대|야자수 나무에 기대어|요트 위 테이블|기둥에 기댄|요트 난간에 기댄|섬을 배경으로 손가락 브이|수중 헬멧|잠수 헬멧|씨워커/.test(
+        /바다|해변|바닷가|바닷물|파도|백사장|모래사장|수평선|해수욕장/.test(cap) &&
+        !/정자 그늘|잔디밭|나무 그늘|야자수 나무에 기대어|요트 위 테이블|기둥에 기댄|요트 난간에 기댄|수중 헬멧|잠수 헬멧|씨워커/.test(
           cap
         );
       if (!hasVisibleSeaInCaption) continue;
@@ -1168,7 +1357,7 @@ export async function executeTextSearch(
       if (!hasCatWord) continue;
     }
 
-    // 3) 온톨로지 태그 + 한국어 어간(Stem) 매칭
+    // 3) 온톨로지 태그 + 한국어 동의어·어간(Stem) 정밀 매칭
     const primarySet = new Set([...kws, ...ontoPrimary]);
     const captionSet = new Set(ontoCaption);
     const tagStems = extractKoStems(tagAndKwText);
@@ -1196,19 +1385,28 @@ export async function executeTextSearch(
     }
 
     for (const tk of activeTokens) {
-      if (primarySet.has(tk) || matchKoTokenInStems(tk, tagStems, tagAndKwText)) {
+      const variants = tokenVariantMap.get(tk) || [tk];
+      const hitPrimary = variants.some(
+        (v) => primarySet.has(v) || matchKoTokenInStems(v, tagStems, tagAndKwText)
+      );
+      if (hitPrimary) {
         tagHits += 1;
         totalHits += 1;
         lexicalScore += 0.36;
-      } else if (captionSet.has(tk) || matchKoTokenInStems(tk, fullStems, fullText)) {
-        totalHits += 1;
-        lexicalScore += 0.2;
+      } else {
+        const hitFull = variants.some(
+          (v) => captionSet.has(v) || matchKoTokenInStems(v, fullStems, fullText)
+        );
+        if (hitFull) {
+          totalHits += 1;
+          lexicalScore += 0.22;
+        }
       }
     }
 
     for (const st of softTokens) {
       if (st.length >= 2 && fullText.includes(st)) {
-        lexicalScore += 0.08;
+        lexicalScore += 0.06;
       }
     }
 
@@ -1218,37 +1416,59 @@ export async function executeTextSearch(
     }
 
     const realVecSim = vecSimById.get(photo.id);
+    const vecThresholdForPhoto = isStaticCapPhoto ? staticAdmitThreshold : visionAdmitThreshold;
+    const passesVecGate = realVecSim !== undefined && realVecSim >= vecThresholdForPhoto;
     const vecSim = realVecSim ?? 0.64;
 
-    if (totalHits > 0 || compoundHit || (realVecSim !== undefined && realVecSim >= vecAdmitThreshold)) {
-      const totalScore = +(vecSim + Math.min(0.95, lexicalScore)).toFixed(4);
+    if (totalHits > 0 || compoundHit || passesVecGate) {
+      const vecBonus = passesVecGate ? 0.08 : 0;
+      const totalScore = +(vecSim + vecBonus + Math.min(0.95, lexicalScore)).toFixed(4);
       scored.push({
         photo,
         score: totalScore,
         tagHits,
         totalHits,
         compoundHit,
+        passesVecGate,
       });
     }
   }
 
   const reqCount = activeTokens.length;
-  const strictTag = scored.filter((x) => reqCount > 0 && (x.tagHits >= reqCount || x.compoundHit));
-  const strictAll = scored.filter((x) => reqCount > 0 && (x.totalHits >= reqCount || x.compoundHit));
-  const partialTag = scored.filter((x) => x.tagHits >= Math.max(1, reqCount - 1));
+  let finalMatches: typeof scored;
 
-  let finalMatches =
-    strictTag.length > 0
-      ? strictTag
-      : strictAll.length > 0
-      ? strictAll
-      : partialTag.length > 0
-      ? partialTag
-      : scored;
+  if (reqCount <= 1) {
+    // 단일 개념 질의: 정확한 어휘 일치 사진과 CSLS 보정 비전 벡터 통과 실사진을 모두 누락 없이 통합 랭킹!
+    finalMatches = scored;
+  } else {
+    // 다중 조건 질의(예: '바닷가 아이', '선글라스 웃는 가족'):
+    // 1개 단어만 걸린 무관한 사진(예: 아이 없는 성인 보트 사진 47장)이 쏟아지지 않도록
+    // 전 조건 어휘 충족(fullConjunction) 또는 의미 벡터 게이트를 통과한 사진만 엄격히 채택!
+    const fullConjunction = scored.filter(
+      (x) => x.totalHits >= reqCount || x.compoundHit
+    );
+    const vecVerifiedMulti = scored.filter(
+      (x) =>
+        x.passesVecGate &&
+        (x.totalHits >= reqCount - 1 || !staticCaptionedPhotoIds.has(x.photo.id))
+    );
+    if (fullConjunction.length > 0 || vecVerifiedMulti.length > 0) {
+      const mergedMap = new Map<string, (typeof scored)[number]>();
+      for (const item of [...fullConjunction, ...vecVerifiedMulti]) {
+        if (!mergedMap.has(item.photo.id)) {
+          mergedMap.set(item.photo.id, item);
+        }
+      }
+      finalMatches = Array.from(mergedMap.values());
+    } else {
+      finalMatches = [];
+    }
+  }
 
   finalMatches.sort((a, b) => {
-    if (b.tagHits !== a.tagHits) return b.tagHits - a.tagHits;
     if (b.totalHits !== a.totalHits) return b.totalHits - a.totalHits;
+    if (b.tagHits !== a.tagHits) return b.tagHits - a.tagHits;
+    if (b.passesVecGate !== a.passesVecGate) return b.passesVecGate ? 1 : -1;
     return b.score - a.score;
   });
 
@@ -1982,18 +2202,23 @@ interface Gemma2ConceptProbe {
 }
 
 const GEMMA2_VISUAL_CONCEPT_PROBES: Gemma2ConceptProbe[] = [
-  { id: 'people', prompt: '사람 얼굴 가족 친구 셀카 인물 사진 portrait people family selfie', tag: '#인물·가족', keywordsKo: ['인물', '사람', '가족', '셀카', '얼굴'] },
+  { id: 'solo_portrait', prompt: '한 사람 단독 셀카 인물 얼굴 클로즈업 close-up solo portrait selfie of one person', tag: '#인물·셀카', keywordsKo: ['인물', '사람', '셀카', '독사진', '얼굴'] },
+  { id: 'family_group', prompt: '여러 사람 가족 친구 단체 모임 함께 찍은 사진 group photo of family friends smiling together', tag: '#가족·단체', keywordsKo: ['가족', '단체', '모임', '사람들', '일행'] },
   { id: 'kids', prompt: '귀여운 아기 어린이 아이 모습 cute baby child kid', tag: '#아기·어린이', keywordsKo: ['아기', '어린이', '아이', '육아'] },
-  { id: 'dog', prompt: '귀여운 강아지 반려견 개 털 코 cute dog puppy pet', tag: '#반려견·강아지', keywordsKo: ['강아지', '반려견', '멍멍이', '개', '동물'] },
-  { id: 'cat', prompt: '귀여운 고양이 반려묘 냥이 수염 cute cat kitten pet', tag: '#반려묘·고양이', keywordsKo: ['고양이', '반려묘', '냥이', '동물'] },
-  { id: 'beach', prompt: '푸른 바다 해변 파도 백사장 수평선 blue ocean sea beach waves', tag: '#바다·해변', keywordsKo: ['바다', '해변', '바닷가', '파도', '여행', '물놀이'] },
-  { id: 'nature', prompt: '푸른 산 숲 나무 등산로 자연 풍경 green mountain forest nature trail', tag: '#산·자연풍경', keywordsKo: ['산', '등산', '숲', '나무', '자연', '풍경'] },
-  { id: 'food', prompt: '식탁 위 맛있는 음식 요리 식사 접시 delicious food meal dish on table', tag: '#음식·맛집', keywordsKo: ['음식', '요리', '식사', '맛집', '먹방'] },
-  { id: 'cafe', prompt: '카페 커피 음료 디저트 케이크 빵 cafe coffee dessert cake', tag: '#카페·디저트', keywordsKo: ['카페', '커피', '디저트', '케이크', '음료'] },
-  { id: 'city', prompt: '도심 건물 거리 야경 불빛 실내 인테리어 city building street night view indoor', tag: '#도시·실내외', keywordsKo: ['건물', '거리', '야경', '실내', '풍경'] },
+  { id: 'dog', prompt: '귀여운 강아지 반려견 개 털 코 cute dog puppy pet', tag: '#반려견·강아지', keywordsKo: ['강아지', '반려견', '멍멍이'] },
+  { id: 'cat', prompt: '귀여운 고양이 반려묘 냥이 수염 cute cat kitten pet', tag: '#반려묘·고양이', keywordsKo: ['고양이', '반려묘', '냥이'] },
+  { id: 'beach', prompt: '푸른 바다 해변 파도 백사장 수평선 blue ocean sea sandy beach waves', tag: '#바다·해변', keywordsKo: ['바다', '해변', '바닷가', '파도', '물놀이'] },
+  { id: 'mountain', prompt: '산 정상 바위 등산로 산행 트레킹 mountain peak hiking trail rocky summit', tag: '#산·등산', keywordsKo: ['산', '등산', '산행', '트레킹'] },
+  { id: 'park_flower', prompt: '푸른 공원 나무 잔디밭 활짝 핀 꽃 산책로 green park lawn trees blooming flowers garden', tag: '#공원·꽃·자연', keywordsKo: ['공원', '산책', '숲', '나무', '꽃', '자연'] },
+  { id: 'ski_snow', prompt: '겨울 눈 덮인 스키장 슬로프 스노우보드 설경 snowy ski slope snowboarding winter snow', tag: '#스키·겨울설경', keywordsKo: ['스키장', '스키', '스노우보드', '눈', '겨울'] },
+  { id: 'camping', prompt: '야외 캠핑장 텐트 타프 모닥불 outdoor camping tent tarp campfire', tag: '#캠핑·텐트', keywordsKo: ['캠핑', '캠핑장', '텐트', '불멍'] },
+  { id: 'food', prompt: '식탁 위 맛있는 음식 요리 식사 접시 delicious food meal dish on dining table', tag: '#음식·맛집', keywordsKo: ['음식', '요리', '식사', '맛집', '먹방'] },
+  { id: 'cafe', prompt: '카페 커피 잔 라떼 디저트 케이크 빵 cafe coffee cup dessert cake pastry', tag: '#카페·디저트', keywordsKo: ['카페', '커피', '디저트', '케이크', '음료'] },
+  { id: 'night_city', prompt: '어두운 밤 화려한 도시 건물 불빛 야경 city night view illuminated buildings neon lights', tag: '#도시·야경', keywordsKo: ['야경', '밤거리', '밤'] },
+  { id: 'urban_building', prompt: '낮 도심 거리 건물 외관 건축물 daytime city street buildings architecture', tag: '#건물·거리', keywordsKo: ['건물', '거리', '도시'] },
   { id: 'car', prompt: '자동차 차량 도로 주차장 기둥 번호판 car vehicle road parking lot', tag: '#자동차·주차', keywordsKo: ['자동차', '차량', '주차장', '주차', '도로'] },
   { id: 'receipt', prompt: '종이 영수증 전표 계산서 금액 결제 내역 paper receipt bill invoice payment', tag: '#영수증·전표', keywordsKo: ['영수증', '전표', '결제', '계산서', '서류'], isDocOrReceipt: true },
-  { id: 'document', prompt: '흰 종이 문서 계약서 증명서 인쇄된 글자 표 printed paper document contract form text', tag: '#문서·서류', keywordsKo: ['문서', '서류', '계약서', '증명서', '글자'], isDocOrReceipt: true },
+  { id: 'document', prompt: '흰 종이 문서 세금계산서 계약서 증명서 인쇄된 글자 표 printed paper document tax invoice contract form text', tag: '#문서·서류', keywordsKo: ['문서', '서류', '계약서', '세금계산서', '증명서', '글자'], isDocOrReceipt: true },
   { id: 'screenshot', prompt: '스마트폰 앱 화면 캡처 스크린샷 모바일 인터페이스 mobile app screen capture screenshot UI', tag: '#스크린샷', keywordsKo: ['스크린샷', '캡처', '화면캡처'], isDocOrReceipt: true },
 ];
 
@@ -2054,7 +2279,7 @@ async function ensureGemma2ConceptProbeVecs(isMobileEnv = false): Promise<Map<st
       if (!canContinue) break;
     }
     try {
-      const vecs = await encodeMultimodalSearchQueryVecs(probe.prompt, 1200);
+      const vecs = await encodeMultimodalSearchQueryVecs(probe.prompt, 3200);
       if (vecs.length > 0 && vecs[0].length === DEFAULT_DIM) {
         map.set(probe.id, vecs[0]);
       }
@@ -2062,7 +2287,7 @@ async function ensureGemma2ConceptProbeVecs(isMobileEnv = false): Promise<Map<st
       /* ignore individual probe error */
     }
     if (isMobileEnv) {
-      await new Promise((r) => setTimeout(r, 40));
+      await new Promise((r) => setTimeout(r, 25));
     }
   }
   if (map.size > 0) {
@@ -2110,100 +2335,25 @@ export async function startSilentRealMediaVisionIndexing(params: {
   try {
     await hydrateRealMediaVectorCacheOnce();
 
-    // 0) [모바일 초고속 화면 글자 선(先) 인덱싱 & 2중 WASM 피크 원천 차단]:
-    //    350MB 거대 비전 모델(sharedVisionModel)을 로드하기 전에, 앱 번들에 내장된 경량 PP-OCRv5(16MB)만으로
-    //    최근 모바일 동영상 최대 2개의 화면 글자(ocrLines)를 유휴 시점에 먼저 추출한 뒤 PP-OCRv5 WASM 세션을 즉시 반환(release)합니다.
-    if (isMobileEnv) {
-      await new Promise((r) => setTimeout(r, 1200));
-      const mobileVidsForOcr = params.videos
-        .filter(
-          (v) =>
-            !v.isAllBlack &&
-            String(v.id || '').startsWith('mobile_vid_') &&
-            !v.ocrFullText &&
-            (!Array.isArray(v.ocrLines) || v.ocrLines.length === 0)
-        )
-        .slice(0, 6);
-      if (mobileVidsForOcr.length > 0) {
-        for (const mVid of mobileVidsForOcr) {
-          const canContinue = await waitForMobileUserIdleIfNeeded(true);
-          if (!canContinue) break;
-          try {
-            while (aiRuntimeFlags.activeVideoPlaybackCount > 0) {
-              await new Promise((r) => setTimeout(r, 400));
-            }
-            const ocrOut = await extractVideoScreenTextOnDemand(mVid);
-            if (ocrOut.ocrLines && ocrOut.ocrLines.length > 0) {
-              mVid.hasScreenOcrText = true;
-              mVid.ocrLineCount = ocrOut.ocrLines.length;
-              mVid.ocrLines = ocrOut.ocrLines;
-              mVid.ocrFullText = ocrOut.fullText;
-              params.onVideoOcrHydrated?.(mVid.videoFileName, {
-                hasScreenOcrText: true,
-                ocrLineCount: ocrOut.ocrLines.length,
-                ocrLines: ocrOut.ocrLines,
-                ocrFullText: ocrOut.fullText,
-              });
-            } else {
-              mVid.ocrLines = [];
-            }
-          } catch {
-            /* ignore single video OCR prewarm error */
-          }
-          await new Promise((r) => setTimeout(r, 280));
-        }
-        await releasePaddleOcrRuntime();
-        await new Promise((r) => setTimeout(r, 350));
-      }
-    }
-
     if (!(await waitForMobileUserIdleIfNeeded(isMobileEnv))) {
       return;
     }
 
-    // [모바일 ANR & OOM 원천 차단]:
-    // 모바일은 q4 단일 스레드 WASM만 사용하고, 사용자 터치/스크롤 중에는 추론을 즉시 양보하며 백그라운드 전환 시 즉시 해제합니다.
+    // [모바일 ANR & OOM 원천 차단 + 실사진 최우선 인덱싱]:
+    // 모바일은 q4 단일 스레드 WASM만 사용하며, 사진 의미 검색이 즉시 작동하도록 미색인 사진(최대 120장)의 768D 비전 벡터를
+    // 다중 동영상 OCR보다 먼저 추출한 뒤 비전 모델을 해제하고 경량 PP-OCRv5(Pass 2)로 넘어가 2중 WASM 피크를 원천 차단합니다!
     await acquireSharedVisionEncoder();
     if (!(await waitForMobileUserIdleIfNeeded(isMobileEnv))) {
       return;
     }
     const conceptVecMap = await ensureGemma2ConceptProbeVecs(isMobileEnv);
 
-    // 1) 동영상 키프레임 무소음 백그라운드 인덱싱
-    const localVids = params.videos
-      .filter(
-        (v) =>
-          !v.isAllBlack &&
-          (String(v.id || '').startsWith('local_vid_') || String(v.id || '').startsWith('mobile_vid_'))
-      )
-      .slice(0, isMobileEnv ? 2 : params.videos.length);
-    for (let i = 0; i < localVids.length; i++) {
-      if (!(await waitForMobileUserIdleIfNeeded(isMobileEnv))) {
-        return;
-      }
-      while (
-        aiRuntimeFlags.priorityVideoSearchDepth > 0 ||
-        aiRuntimeFlags.activeVideoPlaybackCount > 0 ||
-        aiRuntimeFlags.priorityModalGalleryOpen
-      ) {
-        await new Promise((r) => setTimeout(r, 350));
-      }
-      await silentIndexingBrake.waitForIndexingSlot(i);
-      await embedSingleLocalVideoIfNeeded(
-        localVids[i],
-        2,
-        params.onVideoThumbHydrated,
-        params.onVideoOcrHydrated
-      );
-      await new Promise((r) => setTimeout(r, isMobileEnv ? 420 : 80));
-    }
-
-    // 2) 미색인 실사용 사진(PC + 모바일 공통) EmbeddingGemma 2 768차원 비전 벡터 통합 인덱싱 (Pass 1)
+    // 1) 미색인 실사용 사진(PC + 모바일 공통) EmbeddingGemma 2 768차원 비전 벡터 최우선 인덱싱 (Pass 1)
     const unindexedPhotos = silentIndexingBrake
       .sortPhotosRecent90DaysFirst(
         params.photos.filter((p) => !p.quarantined && (!p.vec || p.vec.length !== DEFAULT_DIM))
       )
-      .slice(0, isMobileEnv ? 24 : 320);
+      .slice(0, isMobileEnv ? 120 : 360);
 
     const pendingOcrQueue: Array<{ item: PhotoItem; thumb: string }> = [];
 
@@ -2248,7 +2398,7 @@ export async function startSilentRealMediaVisionIndexing(params: {
           }
           if (isMobileEnv) {
             await new Promise((r) =>
-              setTimeout(r, Math.max(450, Math.min(1800, Math.round(inferElapsed * 1.1))))
+              setTimeout(r, Math.max(260, Math.min(1200, Math.round(inferElapsed * 0.85))))
             );
           } else if (inferElapsed > 300 && silentIndexingBrake.getSnapshot().speedMode !== 'turbo') {
             await new Promise((r) => setTimeout(r, Math.min(2200, Math.round(inferElapsed * 1.15))));
@@ -2260,7 +2410,8 @@ export async function startSilentRealMediaVisionIndexing(params: {
 
       if (vec && vec.length === DEFAULT_DIM) {
         item.vec = vec;
-        // [Gemma 2 주력 의미 분류 + 광학 보조 결합]: 768D 비전 벡터와 한국어 시각 개념 앵커 유사도 상위 매칭
+        // [Gemma 2 중앙값 마진 보정 의미 분류]: 모든 프롬프트에 유사도가 높은 UI/문서 허브 이미지가
+        // 엉뚱한 풍경·음식·가족 태그를 강제로 받지 않도록, 이미지별 중앙값 대비 분리도(>= 0.052) 및 최소 임계치(>= 0.655) 통과 항목만 부착!
         const rankedConcepts: Array<{ probe: Gemma2ConceptProbe; sim: number }> = [];
         for (const probe of GEMMA2_VISUAL_CONCEPT_PROBES) {
           const pVec = conceptVecMap.get(probe.id);
@@ -2269,15 +2420,33 @@ export async function startSilentRealMediaVisionIndexing(params: {
           rankedConcepts.push({ probe, sim });
         }
         rankedConcepts.sort((a, b) => b.sim - a.sim);
-        const topMatches = rankedConcepts.filter(
-          (rc, idx) => idx === 0 || (idx === 1 && rc.sim >= rankedConcepts[0].sim - 0.025)
+        const medProbeSim =
+          rankedConcepts.length > 0
+            ? rankedConcepts[Math.floor(rankedConcepts.length * 0.5)].sim
+            : 0;
+        const isTrashOrVaultItem = Boolean(
+          item.isVaultDocument ||
+            item.trashCategory === 'screenshot' ||
+            item.trashCategory === 'memo' ||
+            item.trashCategory === 'blurry'
         );
+        const topMatches = rankedConcepts.filter((rc, idx) => {
+          if (idx > 1) return false;
+          if (isTrashOrVaultItem && !rc.probe.isDocOrReceipt) return false;
+          if (rc.sim < 0.655 || rc.sim - medProbeSim < 0.052) return false;
+          if (idx === 1 && rc.sim < rankedConcepts[0].sim - 0.018) return false;
+          return true;
+        });
 
         const mergedTags = new Set<string>(item.tags || []);
         const mergedKws = new Set<string>(item.keywordsKo || []);
         const ontoTags = new Set<string>(item.ontologyPrimaryTags || []);
+        const optSig = getOpticalSigForPhoto(item.id);
         let shouldRunOcr = Boolean(
-          item.isVaultDocument || item.trashCategory === 'memo' || item.trashCategory === 'screenshot'
+          item.isVaultDocument ||
+            item.trashCategory === 'memo' ||
+            item.trashCategory === 'screenshot' ||
+            (optSig && optSig.whitePct >= 52)
         );
 
         for (const m of topMatches) {
@@ -2304,14 +2473,56 @@ export async function startSilentRealMediaVisionIndexing(params: {
       }
     }
 
-    // 3) Pass 2 (서류·영수증·스크린샷 PP-OCRv5 보조 추출):
+    // 2) 동영상 키프레임 비전 임베딩 (비전 모델이 마운트된 상태에서 연속 처리)
+    const localVids = params.videos
+      .filter(
+        (v) =>
+          !v.isAllBlack &&
+          (String(v.id || '').startsWith('local_vid_') || String(v.id || '').startsWith('mobile_vid_'))
+      )
+      .slice(0, isMobileEnv ? 3 : params.videos.length);
+    for (let i = 0; i < localVids.length; i++) {
+      if (!(await waitForMobileUserIdleIfNeeded(isMobileEnv))) {
+        return;
+      }
+      while (
+        aiRuntimeFlags.priorityVideoSearchDepth > 0 ||
+        aiRuntimeFlags.activeVideoPlaybackCount > 0 ||
+        aiRuntimeFlags.priorityModalGalleryOpen
+      ) {
+        await new Promise((r) => setTimeout(r, 350));
+      }
+      await silentIndexingBrake.waitForIndexingSlot(i);
+      await embedSingleLocalVideoIfNeeded(
+        localVids[i],
+        2,
+        params.onVideoThumbHydrated,
+        params.onVideoOcrHydrated
+      );
+      await new Promise((r) => setTimeout(r, isMobileEnv ? 380 : 80));
+    }
+
+    // 3) Pass 2 (서류·영수증·스크린샷·백색문서 PP-OCRv5 보조 추출 + 모바일 잔여 동영상 화면글자 추출):
     //    모바일에서는 거대 비전 모델(sharedVisionModel)을 먼저 해제한 뒤 경량 OCR 세션을 실행해 2중 WASM 피크를 원천 차단합니다!
-    if (pendingOcrQueue.length > 0) {
+    const mobileVidsForOcr = isMobileEnv
+      ? params.videos
+          .filter(
+            (v) =>
+              !v.isAllBlack &&
+              String(v.id || '').startsWith('mobile_vid_') &&
+              !v.ocrFullText &&
+              (!Array.isArray(v.ocrLines) || v.ocrLines.length === 0)
+          )
+          .slice(0, 6)
+      : [];
+
+    if (pendingOcrQueue.length > 0 || mobileVidsForOcr.length > 0) {
       if (isMobileEnv) {
         await disposeSharedVisionEncoderNow();
         await new Promise((r) => setTimeout(r, 150));
       }
       for (const ocrJob of pendingOcrQueue) {
+        if (isMobileEnv && !(await waitForMobileUserIdleIfNeeded(true))) break;
         try {
           const ocrRes = await recognizeDataUrlWithPaddleOcr(ocrJob.thumb);
           if (ocrRes.text && ocrRes.text.trim().length >= 2) {
@@ -2320,7 +2531,9 @@ export async function startSilentRealMediaVisionIndexing(params: {
             for (const tk of extractKoStems(ocrSnippet).slice(0, 24)) {
               if (tk.length >= 2) mergedKws.add(tk);
             }
-            const nextCaption = `${ocrJob.item.captionKo || ocrJob.item.name} | 📝 OCR: ${ocrSnippet}`;
+            const nextCaption = ocrJob.item.captionKo
+              ? `${ocrJob.item.captionKo} | 📝 OCR: ${ocrSnippet}`
+              : `📝 OCR: ${ocrSnippet}`;
             ocrJob.item.keywordsKo = Array.from(mergedKws);
             ocrJob.item.captionKo = nextCaption;
             params.onPhotoVisionHydrated?.(ocrJob.item.id, {
@@ -2335,11 +2548,45 @@ export async function startSilentRealMediaVisionIndexing(params: {
           await new Promise((r) => setTimeout(r, 60));
         }
       }
+
+      for (const mVid of mobileVidsForOcr) {
+        if (!(await waitForMobileUserIdleIfNeeded(true))) break;
+        try {
+          while (aiRuntimeFlags.activeVideoPlaybackCount > 0) {
+            await new Promise((r) => setTimeout(r, 400));
+          }
+          const ocrOut = await extractVideoScreenTextOnDemand(mVid);
+          if (ocrOut.ocrLines && ocrOut.ocrLines.length > 0) {
+            mVid.hasScreenOcrText = true;
+            mVid.ocrLineCount = ocrOut.ocrLines.length;
+            mVid.ocrLines = ocrOut.ocrLines;
+            mVid.ocrFullText = ocrOut.fullText;
+            params.onVideoOcrHydrated?.(mVid.videoFileName, {
+              hasScreenOcrText: true,
+              ocrLineCount: ocrOut.ocrLines.length,
+              ocrLines: ocrOut.ocrLines,
+              ocrFullText: ocrOut.fullText,
+            });
+          } else {
+            mVid.ocrLines = [];
+          }
+        } catch {
+          /* ignore single video OCR prewarm error */
+        }
+        await new Promise((r) => setTimeout(r, 240));
+      }
+
+      if (isMobileEnv) {
+        await releasePaddleOcrRuntime();
+      }
     }
   } finally {
     aiRuntimeFlags.silentMediaIndexingRunning = false;
     if (isMobileEnv) {
-      void disposeSharedVisionEncoderNow();
+      await disposeSharedVisionEncoderNow();
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
+        void ensureTextQueryEncoderLoaded();
+      }
     } else {
       bumpSharedVisionIdleDispose(15000);
     }

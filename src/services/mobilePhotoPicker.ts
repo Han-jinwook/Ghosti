@@ -17,6 +17,41 @@ interface OpticalSignatureMeta {
 
 const opticalSigByPhotoId = new Map<string, OpticalSignatureMeta>();
 
+export function getOpticalSigForPhoto(photoId: string): OpticalSignatureMeta | undefined {
+  return opticalSigByPhotoId.get(photoId);
+}
+
+const GENERIC_CAMERA_OR_BUCKET_RX =
+  /^(?:img|dsc|pxl|sam|pic|mov|vid|mvi|dji|gopr|photo|image|externalfile|kakaotalk|screenshot|screen|capture|camera|dcim|recents|all\s*photos|camera\s*roll|pictures|photos|downloads?|documents?|desktop|내폰|갤러리|사진|폴더|복사본|copy)$/i;
+
+export function extractMeaningfulUserMediaTokens(rawName?: string, bucket?: string): string[] {
+  const out = new Set<string>();
+  const pushClean = (src?: string) => {
+    if (!src) return;
+    const base = src
+      .replace(/\.[^.]+$/, '')
+      .replace(/__[a-zA-Z0-9가-힣_-]+_[0-9a-f]{6}$/i, '');
+    const parts = base
+      .replace(/(?:19|20)\d{6}[_-]?\d{0,6}/g, ' ')
+      .replace(/\b\d+\b/g, ' ')
+      .split(/[\s_\-.,()[\]{}+&]+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+    for (const tk of parts) {
+      if (tk.length < 2) continue;
+      if (/^[0-9a-f-]+$/i.test(tk) && !/[가-힣]/.test(tk) && tk.length >= 6) continue;
+      if (GENERIC_CAMERA_OR_BUCKET_RX.test(tk)) continue;
+      if (/^(?:img|dsc|pxl|sam|photo|screenshot|capture)\d*$/i.test(tk)) continue;
+      out.add(tk);
+    }
+  };
+  pushClean(rawName);
+  if (bucket && !GENERIC_CAMERA_OR_BUCKET_RX.test(bucket.trim())) {
+    pushClean(bucket);
+  }
+  return Array.from(out);
+}
+
 /**
  * 두 64-bit dHash (16자리 hex) 간의 해밍 거리(0~64)를 계산합니다.
  */
@@ -404,18 +439,28 @@ export async function analyzeMobilePickedPhotoFiles(
         opticalSigByPhotoId.set(itemId, meta);
 
         const lowerName = file.name.toLowerCase();
-        const isScreenshot =
-          lowerName.includes('screenshot') ||
-          lowerName.includes('스크린샷') ||
-          lowerName.includes('캡처') ||
-          (img.width > 0 && img.height / img.width > 1.98);
+        const aspectRatio = img.width > 0 ? img.height / img.width : meta.aspect;
         const isReceiptOrDoc =
           lowerName.includes('receipt') ||
           lowerName.includes('영수증') ||
+          lowerName.includes('세금계산서') ||
+          lowerName.includes('사업자등록증') ||
+          lowerName.includes('신분증') ||
+          lowerName.includes('여권') ||
           lowerName.includes('계약서') ||
           lowerName.includes('문서') ||
           lowerName.includes('명함') ||
           lowerName.includes('memo');
+        const isScreenshot =
+          !isReceiptOrDoc &&
+          (lowerName.includes('screenshot') ||
+            lowerName.includes('스크린샷') ||
+            lowerName.includes('화면 캡처') ||
+            lowerName.includes('화면캡처') ||
+            lowerName.includes('캡처') ||
+            aspectRatio > 1.98 ||
+            aspectRatio <= 0.51 ||
+            (meta.whitePct >= 74 && /\.png$/i.test(lowerName)));
         const isBlurry =
           !isScreenshot &&
           !isReceiptOrDoc &&
@@ -489,6 +534,7 @@ export async function analyzeMobilePickedPhotoFiles(
           mtimeMs: photoMtime,
         });
 
+        const meaningfulTokens = extractMeaningfulUserMediaTokens(file.name);
         resolve({
           id: itemId,
           name: photoName,
@@ -499,12 +545,10 @@ export async function analyzeMobilePickedPhotoFiles(
           fullUrl: persistentFullUrl || persistentThumbUrl,
           tags,
           locationKo: '내 스마트폰 갤러리 (온디바이스 분석)',
-          captionKo: `${file.name} (${img.width}x${img.height} · 선명도 ${sharpness.toLocaleString()}점 · 외부 전송 0 Byte)`,
+          captionKo: undefined,
           keywordsKo: [
-            file.name.replace(/\.[^.]+$/, ''),
-            '내폰',
-            '갤러리',
-            isScreenshot ? '스크린샷' : isReceiptOrDoc ? '영수증' : isBlurry ? '흔들린사진' : '사진',
+            ...meaningfulTokens,
+            ...(isScreenshot ? ['스크린샷', '화면캡처'] : isReceiptOrDoc ? ['영수증', '서류'] : isBlurry ? ['흔들린사진'] : []),
           ],
           isVaultDocument: isReceiptOrDoc,
           vaultCategoryLabel: isReceiptOrDoc ? '스마트폰 촬영 영수증·서류' : undefined,
@@ -541,8 +585,8 @@ export async function analyzeMobilePickedPhotoFiles(
           fullUrl: '',
           tags: ['#내폰사진', '#온디바이스AI분류'],
           locationKo: '내 스마트폰 갤러리',
-          captionKo: `${file.name} (내 스마트폰 갤러리)`,
-          keywordsKo: [file.name.replace(/\.[^.]+$/, ''), '내폰', '사진'],
+          captionKo: undefined,
+          keywordsKo: extractMeaningfulUserMediaTokens(file.name),
           opticalSharpness: 12000,
           quarantined: false,
         });
@@ -581,23 +625,34 @@ export async function auditRealPcPhotosAndCluster(
     return { updatedPhotos: photos, duplicateGroups: [] };
   }
 
-  const targetSlice = realCandidates.slice(0, 200);
+  const targetSlice = realCandidates.slice(0, 800);
   const BATCH = 8;
 
   const applyMetaToPhoto = (p: PhotoItem, meta: OpticalSignatureMeta) => {
     opticalSigByPhotoId.set(p.id, meta);
     p.dhash = meta.dhash;
     p.opticalSharpness = meta.sharpness;
-    if (
-      !p.trashCategory &&
-      meta.whitePct < 50 &&
-      meta.sharpness < 3200 &&
-      !(meta.aspect >= 1.95 && meta.aspect <= 2.35)
-    ) {
-      p.trashCategory = 'blurry';
-      p.trashConfidence = 0.95;
-      if (!p.tags.includes('#초점이탈·심한흔들림')) {
-        p.tags = ['#초점이탈·심한흔들림', ...p.tags];
+    if (!p.trashCategory && !p.isVaultDocument) {
+      const isPhoneOrDesktopUiCapture =
+        meta.aspect >= 1.96 ||
+        meta.aspect <= 0.51 ||
+        (meta.whitePct >= 74 && /\.png$/i.test(p.name));
+      if (isPhoneOrDesktopUiCapture) {
+        p.trashCategory = 'screenshot';
+        p.trashConfidence = 0.96;
+        if (!p.tags.some((t) => t.includes('스크린샷'))) {
+          p.tags = ['#스크린샷·화면캡처', ...p.tags];
+        }
+      } else if (
+        meta.whitePct < 50 &&
+        meta.sharpness < 3200 &&
+        !(meta.aspect >= 1.95 && meta.aspect <= 2.35)
+      ) {
+        p.trashCategory = 'blurry';
+        p.trashConfidence = 0.95;
+        if (!p.tags.includes('#초점이탈·심한흔들림')) {
+          p.tags = ['#초점이탈·심한흔들림', ...p.tags];
+        }
       }
     }
   };
@@ -665,6 +720,10 @@ export async function analyzeNativeGalleryPhotoBatch(
         const isReceiptOrDoc =
           lowerName.includes('receipt') ||
           lowerName.includes('영수증') ||
+          lowerName.includes('세금계산서') ||
+          lowerName.includes('사업자등록증') ||
+          lowerName.includes('신분증') ||
+          lowerName.includes('여권') ||
           lowerName.includes('계약서') ||
           lowerName.includes('문서') ||
           lowerName.includes('명함') ||
@@ -678,11 +737,16 @@ export async function analyzeNativeGalleryPhotoBatch(
           sharpness < 2600;
         const isScreenshot =
           !isSevereNonScreenBlur &&
+          !isReceiptOrDoc &&
           (Boolean(item.isScreenshot) ||
             lowerName.includes('screenshot') ||
             lowerName.includes('스크린샷') ||
+            lowerName.includes('화면 캡처') ||
+            lowerName.includes('화면캡처') ||
             lowerName.includes('캡처') ||
-            aspectRatio > 1.98);
+            aspectRatio > 1.98 ||
+            aspectRatio <= 0.51 ||
+            (meta.whitePct >= 74 && /\.png$/i.test(lowerName)));
         const isBlurry =
           !isScreenshot &&
           !isReceiptOrDoc &&
@@ -719,6 +783,7 @@ export async function analyzeNativeGalleryPhotoBatch(
           mtimeMs: item.mtimeMs || Date.now(),
         });
 
+        const meaningfulTokens = extractMeaningfulUserMediaTokens(item.name, item.bucket);
         resolve({
           id: itemId,
           name: item.name,
@@ -729,11 +794,10 @@ export async function analyzeNativeGalleryPhotoBatch(
           fullUrl: item.thumbDataUrl,
           tags,
           locationKo: item.bucket || '내 스마트폰 사진첩 (자동 인덱싱)',
-          captionKo: `${item.name} (${origW}x${origH} · 선명도 ${sharpness.toLocaleString()}점)`,
+          captionKo: undefined,
           keywordsKo: [
-            (item.name || '').replace(/\.[^.]+$/, ''),
-            ...(item.bucket ? [item.bucket] : []),
-            isScreenshot ? '스크린샷' : isReceiptOrDoc ? '영수증' : isBlurry ? '흔들린사진' : '사진',
+            ...meaningfulTokens,
+            ...(isScreenshot ? ['스크린샷', '화면캡처'] : isReceiptOrDoc ? ['영수증', '서류'] : isBlurry ? ['흔들린사진'] : []),
           ],
           isVaultDocument: isReceiptOrDoc,
           vaultCategoryLabel: isReceiptOrDoc ? '스마트폰 촬영 영수증·서류' : undefined,
@@ -812,7 +876,7 @@ export function convertNativeGalleryVideos(nativeVideos: NativeGalleryVideoMeta[
 
 const MOBILE_GALLERY_IDB_NAME = 'ghosti_mobile_gallery_cache_v1';
 const MOBILE_GALLERY_STORE = 'snapshot';
-const MOBILE_GALLERY_CACHE_SCHEMA_VER = 3;
+const MOBILE_GALLERY_CACHE_SCHEMA_VER = 4;
 
 interface SerializedOpticalSig {
   dhash: string;

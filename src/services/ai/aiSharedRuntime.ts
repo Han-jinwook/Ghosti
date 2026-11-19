@@ -62,7 +62,8 @@ export function notifyVideoPlaybackStop(): void {
 }
 
 const KEEP_STEM_WORDS = new Set([
-  '아이', '어린이', '바닷가', '창가', '물가', '길가', '목걸이', '귀걸이', '물놀이', '나들이', '비행기', '종로', '을지로',
+  '아이', '어린이', '고양이', '멍멍이', '길냥이', '호랑이', '부엉이', '원숭이', '거북이', '떡볶이',
+  '바닷가', '창가', '물가', '길가', '목걸이', '귀걸이', '물놀이', '나들이', '비행기', '종로', '을지로',
 ]);
 const KO_PARTICLE_RX =
   /(?:들)?(?:에서부터|으로부터|에게서|에서|에게|으로|이랑|하고|부터|까지|처럼|보다|마다|대로|밖에|마저|조차|이나|이란|이고|이며|하는|있는|없는|되는|했던|하던|해서|하며|된|한|할|님|씨|이|가|은|는|을|를|의|에|로|와|과|랑|도|만|나|란|다)$/;
@@ -776,6 +777,8 @@ const HUBNESS_REFERENCE_PROMPTS: string[] = [
   '어두운 밤거리 가로등과 건물 네온 불빛',
   '운동장 트랙과 야외 스포츠 시설',
   '선반 위 생활용품과 작은 소품 물건들',
+  '스마트폰 모바일 앱 화면 캡처 텍스트 버튼 인터페이스',
+  '흰 배경 디지털 웹 대시보드 표 메뉴 아이콘 화면',
 ];
 
 let cachedHubnessRefVecs: Float32Array[] | null = null;
@@ -793,7 +796,7 @@ export async function ensureHubnessReferenceVecsLoaded(): Promise<Float32Array[]
       if (!isTextQueryEncoderReady()) {
         const ok = await Promise.race([
           ensureTextQueryEncoderLoaded(),
-          new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 1200)),
+          new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 3500)),
         ]);
         if (!ok && !isTextQueryEncoderReady()) return [];
       }
@@ -813,7 +816,7 @@ export async function ensureHubnessReferenceVecsLoaded(): Promise<Float32Array[]
           const out = await qModel(inputs);
           return toRows(out.sentence_embedding).map((r) => normalizeVector(r, DEFAULT_DIM));
         })(),
-        new Promise<Float32Array[]>((resolve) => setTimeout(() => resolve([]), 1200)),
+        new Promise<Float32Array[]>((resolve) => setTimeout(() => resolve([]), 3500)),
       ]);
       if (rows.length > 0) {
         cachedHubnessRefVecs = rows;
@@ -854,33 +857,55 @@ export function computeFrameHubnessScore(
 const VISUAL_QUERY_CONCEPT_EXPANSIONS: Array<[RegExp, string]> = [
   [/석양|노을|일몰|해질녘|황혼/, '붉은 석양 노을 일몰 주황빛 하늘 수평선 구름 해질녘 golden orange sunset twilight sky horizon clouds'],
   [/일출|해돋이|여명/, '아침 일출 해돋이 붉은 태양 수평선 sunrise morning sun over horizon sky'],
-  [/비행기|항공기|기내|창밖\s*하늘/, '비행기 창문 밖 하늘 구름 항공기 날개 view from airplane window clouds sky wing'],
+  [/비행기|항공기|기내|공항|창밖\s*하늘/, '비행기 창문 밖 하늘 구름 항공기 날개 공항 view from airplane window clouds sky wing airport'],
   [/동굴|암석|종유석|석회동굴/, '어두운 자연 동굴 암석 바위 종유석 dark natural cave rock formation cavern'],
   [/패러세일링|패러세일|낙하산\s*보트|해양\s*낙하산|낙하산/, '바다 하늘 무지개 낙하산 모터보트 패러세일링 parasailing colorful parachute flying in sky over blue ocean boat'],
-  [/모터보트|보트|요트|쾌속정/, '푸른 바다 위 달리는 모터보트 하얀 물보라 요트 motorboat speedboat white wake on blue sea'],
-  [/씨워커|스노클링|스쿠버|바닷속|수중/, '바닷속 수중 잠수 스노클링 산호 물고기 underwater snorkeling scuba diving coral fish'],
+  [/모터보트|보트|요트|쾌속정|배/, '푸른 바다 위 달리는 모터보트 하얀 물보라 요트 motorboat speedboat yacht white wake on blue sea'],
+  [/씨워커|스노클링|스쿠버|바닷속|수중|잠수/, '바닷속 수중 잠수 스노클링 산호 물고기 underwater snorkeling scuba diving coral fish'],
   [/서핑|패들보드|카약|래프팅/, '바다 파도 서핑 보드 수상레저 surfing paddleboard kayak on water'],
-  [/바다|해변|바닷가|해수욕장|백사장|파도/, '푸른 바다 해변 파도 백사장 수평선 blue ocean sea beach waves coastline'],
+  [/바다|해변|바닷가|해수욕장|백사장|모래사장|파도/, '푸른 바다 해변 파도 백사장 수평선 blue ocean sea sandy beach waves coastline'],
+  [/수영장|풀장|물놀이|선베드|인피니티풀/, '야외 수영장 에메랄드빛 물 선베드 물놀이 swimming pool clear blue water sunbed resort'],
   [/야자수|리조트|휴양지|열대/, '열대 휴양지 야자수 나무 초록 잎 리조트 tropical palm trees green leaves resort'],
+  [/가족|식구|대가족|부모님/, '가족 부모님 아이 식구들이 함께 모여 찍은 따뜻한 인물 사진 happy family parents and children together portrait'],
+  [/단체|모임|일행|친구들|동료들|사람들/, '여러 사람 친구 동료들이 함께 모여 서거나 앉아 있는 단체 사진 group photo of many people friends smiling together'],
+  [/커플|연인|부부|둘이/, '남녀 커플 부부 두 사람이 다정하게 함께 찍은 사진 couple man and woman standing together smiling'],
+  [/셀카|독사진|단독|프로필/, '한 사람 단독 인물 클로즈업 셀카 포트레이트 close-up solo portrait selfie of one person'],
+  [/아기|어린이|아이|유아|꼬마|자녀/, '귀여운 아기 어린이 아이 모습 cute young child kid baby playing'],
+  [/선글라스|썬글라스/, '선글라스를 착용한 사람 얼굴 person wearing dark sunglasses outdoors'],
+  [/웃는|웃고|미소|웃음|활짝|해맑/, '활짝 웃는 밝은 미소 행복한 표정 인물 person smiling happily bright grin'],
+  [/꽃|벚꽃|장미|튤립|화단|꽃밭/, '활짝 핀 아름다운 꽃 벚꽃 꽃잎 정원 blooming colorful flowers cherry blossoms petals garden'],
+  [/공원|산책|숲|나무|잔디|나무다리/, '푸른 공원 초록 나무 잔디밭 산책로 자연 풍경 green park trees lawn walking trail nature'],
+  [/하늘|구름|맑은\s*날/, '푸른 하늘과 하얀 뭉게구름 맑은 날씨 clear blue sky fluffy white clouds sunny day'],
+  [/야경|밤거리|밤하늘|불빛|네온/, '어두운 밤 화려한 도시 건물 불빛 야경 city night view illuminated buildings street lights'],
+  [/건물|도시|거리|골목/, '도심 거리 건축물 건물 외관 풍경 urban city street buildings architecture'],
+  [/자동차|차량|운전|드라이브|주차장|기둥/, '자동차 차량 도로 주차장 기둥 번호판 car vehicle road parking lot pillar'],
   [/룰렛|돌림판|원판\s*추첨/, '컬러 원형 룰렛 돌림판 추첨 이벤트 화면 colorful spinning roulette wheel game screen'],
   [/급식|식단표|메뉴\s*배틀/, '학교 급식 메뉴 배틀 식단표 스마트폰 앱 화면 school lunch menu battle mobile app screen'],
   [/리얼픽|투표|밸런스\s*게임/, '리얼픽 투표 선택 스마트폰 앱 화면 mobile poll voting app screen'],
-  [/스마트폰|휴대폰|화면\s*녹화|앱\s*화면/, '스마트폰 모바일 앱 인터페이스 화면 녹화 smartphone mobile app UI screen recording'],
+  [/스크린샷|화면\s*캡처|화면캡처|캡처|화면\s*녹화|앱\s*화면/, '스마트폰 모바일 앱 컴퓨터 화면 캡처 스크린샷 인터페이스 screenshot mobile app UI screen capture'],
+  [/영수증|전표|결제\s*내역|카드\s*전표/, '종이 영수증 카드 결제 전표 금액 인쇄 내역 paper receipt payment slip printed numbers'],
+  [/세금계산서|계산서|계약서|문서|서류|증명서|등본|공문/, '흰 종이 문서 세금계산서 계약서 표 인쇄된 글자 printed white paper document tax invoice contract form table'],
+  [/신분증|여권|주민등록증|운전면허증|명함/, '신분증 여권 증명사진 카드 명함 인적사항 ID card passport business card'],
+  [/화이트보드|칠판|회의|판서|필기/, '화이트보드 칠판 손글씨 회의 메모 다이어그램 whiteboard chalkboard handwritten meeting notes'],
   [/호랑이|백호|맹수/, '호랑이 줄무늬 야생 동물 얼굴 클로즈업 tiger wild cat stripes animal closeup'],
-  [/부엉이|올빼미/, '부엉이 올빼미 큰 눈 깃털 새 owl bird feathers large eyes'],
+  [/부엉이|올빼미|새|조류|앵무새|갈매기/, '새 조류 깃털 부엉이 날개 bird feathers wings avian wildlife'],
   [/늑대|여우/, '야생 늑대 여우 털 동물 얼굴 wolf fox furry wild animal'],
-  [/강아지|반려견|멍멍이|시바견/, '귀여운 강아지 반려견 개 털 코 cute dog puppy pet'],
-  [/고양이|반려묘|냥이/, '귀여운 고양이 반려묘 털 수염 cute cat kitten pet'],
+  [/강아지|반려견|멍멍이|시바견|비글|푸들|말티즈/, '귀여운 강아지 반려견 개 털 코 cute dog puppy pet'],
+  [/고양이|반려묘|냥이|길냥이/, '귀여운 고양이 반려묘 털 수염 cute cat kitten pet'],
   [/토끼/, '귀여운 토끼 긴 귀 털 동물 cute rabbit bunny long ears'],
   [/햄스터|다람쥐|기니피그/, '작고 귀여운 햄스터 다람쥐 설치류 동물 cute small hamster squirrel rodent'],
   [/동물/, '귀여운 동물 강아지 고양이 야생동물 cute animal pet wildlife'],
   [/올리브|오일|유리병/, '투명 유리병 노란 올리브 오일 액체 glass bottle golden olive oil liquid'],
   [/먹방|숟가락|한입/, '사람이 숟가락으로 음식을 먹는 모습 person eating food with spoon'],
   [/생일|케이크|촛불/, '생일 파티 케이크 촛불 축하 birthday cake with lit candles celebration'],
-  [/캠핑|글램핑|불멍|텐트/, '야외 캠핑장 텐트 타프 모닥불 outdoor camping tent campfire'],
-  [/등산|산행|트레킹|정상석/, '산 정상 등산로 숲길 바위 mountain hiking trail peak'],
-  [/스키|스노우보드|설원|슬로프/, '겨울 눈 덮인 스키장 슬로프 스노우보드 snowy ski slope snowboarding'],
-  [/음식|식사|맛집|요리|삼겹살|바비큐/, '식탁 위 맛있는 음식 요리 식사 delicious food dishes on dining table'],
+  [/카페|커피|라떼|아메리카노|디저트|빵|음료/, '카페 테이블 커피 잔 라떼아트 디저트 베이커리 cafe coffee cup latte art dessert pastry'],
+  [/맥주|와인|소주|술|건배|안주/, '테이블 위 맥주잔 와인잔 음료 건배 안주 beer glass wine drink toast on table'],
+  [/캠핑|글램핑|불멍|텐트|타프/, '야외 캠핑장 텐트 타프 모닥불 outdoor camping tent tarp campfire'],
+  [/등산|산행|트레킹|정상석|산\s*정상/, '산 정상 등산로 숲길 바위 풍경 mountain peak hiking trail forest rocks'],
+  [/스키|스노우보드|설원|슬로프|보딩|눈\s*오는/, '겨울 눈 덮인 스키장 슬로프 스노우보드 설경 snowy ski slope snowboarding winter snow'],
+  [/고기|삼겹살|스테이크|바비큐|갈비/, '구운 고기 스테이크 삼겹살 바비큐 요리 접시 grilled meat steak pork belly barbecue dish'],
+  [/피자|파스타|치킨|햄버거|초밥|국밥|짬뽕|라면/, '식탁 위 피자 파스타 국물 요리 맛있는 식사 delicious pizza pasta soup dish meal on table'],
+  [/음식|식사|맛집|요리|밥|상차림/, '식탁 위 접시에 차려진 맛있는 음식 요리 식사 delicious food dishes meal on dining table'],
 ];
 
 let cachedEncodedQueryVecs = new Map<string, Float32Array[]>();
@@ -898,7 +923,7 @@ export async function encodeMultimodalSearchQueryVecs(
   if (inflight) return inflight;
 
   const task = (async (): Promise<Float32Array[]> => {
-    const waitMs = typeof maxWaitMs === 'number' && maxWaitMs > 0 ? Math.min(maxWaitMs, 1500) : 1500;
+    const waitMs = typeof maxWaitMs === 'number' && maxWaitMs > 0 ? Math.min(maxWaitMs, 5500) : 3800;
     if (!isTextQueryEncoderReady()) {
       const loadPromise = ensureTextQueryEncoderLoaded();
       const readyInTime = await Promise.race([
@@ -919,14 +944,18 @@ export async function encodeMultimodalSearchQueryVecs(
     if (!qModel || !qTok) return [];
 
     const coreQ = q
-      .replace(/(동영상|영상|비디오|클립|사진|이미지|장면|모습|구간|부분|찾아줘|찾아|보여줘|보여|검색해줘|검색)/g, ' ')
+      .replace(
+        /(동영상들?|영상들?|비디오|클립|사진만|사진들|사진|이미지|장면|모습|구간|부분|모아서|모아줘|골라줘|찾아줘|찾아|보여줘|보여|검색해줘|검색|찍어둔|찍은|나온|있는|해줘)/g,
+        ' '
+      )
       .replace(/\s+/g, ' ')
       .trim();
 
-    const promptSet = new Set<string>([QUERY_PREFIX + q]);
-    if (coreQ.length >= 2 && coreQ !== q) {
+    const promptSet = new Set<string>();
+    if (coreQ.length >= 1) {
       promptSet.add(QUERY_PREFIX + coreQ);
     }
+    promptSet.add(QUERY_PREFIX + q);
     if (/[,/·]/.test(coreQ || q)) {
       const subTerms = (coreQ || q)
         .split(/[,/·]+/)
@@ -944,7 +973,7 @@ export async function encodeMultimodalSearchQueryVecs(
       if (rx.test(qLow) || rx.test(q.toLowerCase())) {
         promptSet.add(`${QUERY_PREFIX}${coreQ || q} ${visualDesc}`);
         matchedExpansions += 1;
-        if (matchedExpansions >= 2) break;
+        if (matchedExpansions >= 3) break;
       }
     }
 
@@ -958,7 +987,7 @@ export async function encodeMultimodalSearchQueryVecs(
       })();
       const encoded = await Promise.race([
         inferPromise,
-        new Promise<Float32Array[]>((resolve) => setTimeout(() => resolve([]), 1500)),
+        new Promise<Float32Array[]>((resolve) => setTimeout(() => resolve([]), 4000)),
       ]);
       if (encoded.length > 0) {
         cachedEncodedQueryVecs.set(q, encoded);
@@ -1041,8 +1070,8 @@ export async function acquireSharedVisionEncoder(): Promise<boolean> {
 
   sharedVisionLoadPromise = (async () => {
     try {
-      // [모바일 OOM 방지]: sharedVisionModel은 텍스트+비전을 모두 포함하므로 기존 단독 textQueryModel이 메모리에 있으면 먼저 해제!
-      if (textQueryModel) {
+      // [모바일 OOM 방지]: 모바일 기기에서만 단독 textQueryModel을 먼저 해제하고, 데스크톱에서는 상시 0.01초 응답을 위해 유지합니다.
+      if (textQueryModel && isMobileDeviceRuntime()) {
         const oldTextModel = textQueryModel;
         textQueryModel = null;
         await Promise.resolve(oldTextModel.dispose?.()).catch(() => {});
