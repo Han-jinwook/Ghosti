@@ -83,7 +83,12 @@ export interface GhostiMobileCarePluginInterface {
     extraPackages?: string[];
     customRiskMap?: Record<string, string>;
   }): Promise<ScanBloatCleanersResult>;
-  openAppUninstallScreen(options: { packageName: string }): Promise<{ ok: boolean; packageName: string; mode: string }>;
+  openAppUninstallScreen(options: { packageName: string }): Promise<{
+    ok: boolean;
+    installed?: boolean;
+    packageName: string;
+    mode: string;
+  }>;
   openPlayStoreSubscriptions(options?: { packageName?: string }): Promise<{ ok: boolean; url: string }>;
   openGoogleAccountPermissions(): Promise<{ ok: boolean; url: string }>;
   openAllInstalledAppsSettings(): Promise<{ ok: boolean }>;
@@ -202,38 +207,41 @@ export async function scanMobileBloatCleaners(): Promise<ScanBloatCleanersResult
   };
 }
 
-export async function triggerMobileCleanerUninstall(packageName: string = 'com.xstudios.cleanx'): Promise<void> {
-  if (isIosMobileBrowserOrApp()) return;
+export async function triggerMobileCleanerUninstall(packageName: string): Promise<boolean> {
+  if (isIosMobileBrowserOrApp() || !packageName?.trim()) return false;
   if (isCapacitorAndroidRuntime()) {
     try {
-      await GhostiMobileCareNative.openAppUninstallScreen({ packageName });
-      return;
+      const res = await GhostiMobileCareNative.openAppUninstallScreen({ packageName: packageName.trim() });
+      return Boolean(res?.ok && res?.installed !== false);
     } catch {
-      /* fallback below */
+      return false;
     }
   }
   if (typeof window !== 'undefined') {
     window.open(
-      `https://play.google.com/store/apps/details?id=${encodeURIComponent(packageName)}`,
+      `https://play.google.com/store/apps/details?id=${encodeURIComponent(packageName.trim())}`,
       '_blank',
       'noopener,noreferrer'
     );
+    return true;
   }
+  return false;
 }
 
-export async function triggerOpenPlaySubscriptions(packageName: string = 'com.xstudios.cleanx'): Promise<void> {
+export async function triggerOpenPlaySubscriptions(packageName: string = ''): Promise<void> {
   if (isIosMobileBrowserOrApp()) return;
   if (isCapacitorAndroidRuntime()) {
     try {
-      await GhostiMobileCareNative.openPlayStoreSubscriptions({ packageName });
+      await GhostiMobileCareNative.openPlayStoreSubscriptions({ packageName: packageName.trim() });
       return;
     } catch {
       /* fallback below */
     }
   }
   if (typeof window !== 'undefined') {
-    const url = packageName
-      ? `https://play.google.com/store/account/subscriptions?package=${encodeURIComponent(packageName)}`
+    const trimmed = packageName.trim();
+    const url = trimmed
+      ? `https://play.google.com/store/account/subscriptions?package=${encodeURIComponent(trimmed)}`
       : 'https://play.google.com/store/account/subscriptions';
     window.open(url, '_blank', 'noopener,noreferrer');
   }
@@ -266,7 +274,7 @@ export async function triggerOpenAllInstalledApps(): Promise<void> {
   }
   if (typeof window !== 'undefined') {
     window.open(
-      'https://play.google.com/store/apps/details?id=com.xstudios.cleanx',
+      'https://play.google.com/store/apps?hl=ko',
       '_blank',
       'noopener,noreferrer'
     );

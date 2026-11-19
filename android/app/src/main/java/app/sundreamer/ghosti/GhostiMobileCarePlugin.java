@@ -75,15 +75,103 @@ import java.util.Set;
 public class GhostiMobileCarePlugin extends Plugin {
 
     private static final String[] TARGET_BLOAT_PACKAGES = new String[] {
-        // 1순위: CleanX (TapSuite) 및 변종 주간구독 유도 클리너 패밀리
+        // 1순위: CleanX (TapSuite / XStudios / Otto / CleanX MAX / 클린엑스) 및 실존 변종 주간구독 유도 클리너 패밀리
         "com.xstudios.cleanx",
+        "com.xstudios.fastscan",
         "com.tapsuite.cleanx",
+        "com.otto.clean",
+        "com.cleanx.app",
+        "com.cleanxmax",
+        "com.storage.androidcleaner.phonecleaner",
+        "com.fc.ai.storage.clean.storageclean.optimize",
+        "com.innovatedevx.cleanax.phone.storage.cleaner",
+        "com.baloota.xcleaner",
+        "com.ndsoftware.xcleaner",
+        "com.cleanlyx.cleaner",
+        "com.nirvanayazilim.cleanpex",
+        "com.heartsnet.tidyx.gp",
         "com.cleanx.storage.cleaner",
         "com.cleanx.phone.cleaner",
         "com.storage.cleaner.cleanx",
         "com.smart.cleaner.cleanx",
 
         // 2순위: 주간/월간 고액 자동결제 유도(Fleeceware) 및 광고폭탄 폰 클리너·부스터 대표 패키지
+        "com.cleanerguru.app",
+        "com.cleaner.guru.storage.clean",
+        "com.ai.photo.cleaner",
+        "com.ai.phone.cleaner",
+        "com.ai.photo.cleaner.swipe",
+        "com.ai.cleaner.storage.master",
+        "com.aicleaner.phone.storagecleanup",
+        "com.aicleaner.clean.cleanstorage.ai",
+        "com.aicleaner.cleanstorage.cleanduplicate.app",
+        "com.clean.ai.cleanduplicated.cleanstorage",
+        "com.cleaner.phone.junk.files",
+        "com.phone.cleaner.clean.junk.storage.cache",
+        "com.phone.cleaner.junkfiles.cleanduplicated.storagecleaner",
+        "com.phonecleaner.storagecleaner.junkcleaner.cleanphone",
+        "com.phonecleaner.junkcleaner.virusscan.antivirus.viruscleaner",
+        "com.phonecleaner.aicleaner.storage.swipephoto",
+        "com.phonecleaner.smartclean.storagecleaner.app",
+        "com.storage.androidcleaner",
+        "com.storage.androidcleaner.junkfiles.storagecleaner",
+        "com.storage.android.cleaner",
+        "com.storage.clean.nietsnie",
+        "com.storage.cleaner.markcon",
+        "cleaner.clean.booster",
+        "cleaner.cleanup.phone.clean.storage",
+        "cleaner.clean.master.clear.phone.lite",
+        "antivirus.virus.cleaner.clean.vpn.booster",
+        "biz.cloudex.android.cleaner",
+        "co.appnation.phonecleaner",
+        "com.anysoft.zerocleaner",
+        "com.express.phone.cleaner",
+        "com.fluxclean.ai",
+        "com.hyperclean.ai",
+        "com.freespace.cleanup",
+        "com.neo.cleaner.storage.ai",
+        "com.cleanmaster.phonejunkcleaner",
+        "com.pixsterstudio.cleaner",
+        "com.spaceup.cleaner",
+        "com.apperslab.spacecleaner",
+        "com.coreclean.storage.ram.booster",
+        "com.totalcleaner.android",
+        "ai.junk.cleaner",
+        "ai.storage.cleaner.app",
+        "app.quiet.cleanmanager",
+        "app.quiet.storagecleaner",
+        "com.canopas.cleanai",
+        "com.cleanerapp.storagecleaner.duplicate.remover.spacecleaner.naut",
+        "com.cleanspace.storage.cleaner.duplicatecleaner.filecleaner.saf",
+        "com.cleansweep.storage_cleaner",
+        "com.es.all.cleaner",
+        "com.levelpulse.phonedeepcleaner",
+        "com.rvappstudios.phone.storage.cleaner.disk.space.cleanup.duplicate.remover",
+        "com.sc.phonecleaner.storagecleaner",
+        "com.stormygrowth.cleangenie",
+        "com.tidyspace.app",
+        "com.ushareit.cleanit",
+        "com.utilityhub.aicleaner",
+        "ee.simplesoft.junkcleaner",
+        "myfiles.filemanager.fileexplorer.cleaner",
+        "storage.phone.cleaner.smart",
+        "com.baxolino.bcleaner",
+        "com.mna.cleaner.junk.phonecleaner.app",
+        "com.xtraszone.smartclean",
+        "easy.cleaner.app",
+        "phone.clean.master.battery.antivirus.ora",
+        "phonecleaner.junkfiles.appmanager.duplicatefileremover.applock",
+        "smart.cleaner.clean.master.booster.free",
+        "smarttool.phonecleaner.phoneoptimizer",
+        "com.bulkar.safecleaning",
+        "com.cleanerwl04.app",
+        "com.luminousbyte.cleaner.storage.ai",
+        "com.pivotmasterapps.phonecleaner",
+        "com.procleaner.photovideoduplicatecleaner",
+        "com.smartclean.storage.junk.aicleaner",
+        "com.tranvision.ai.cleaner",
+        "com.wapspin.SmartCleaner",
+        "phone.cleaner.storage.mh",
         "com.fancyclean.security.antivirus",
         "com.fancyclean.booster",
         "com.fancybattery.cleaner.security",
@@ -117,11 +205,8 @@ public class GhostiMobileCarePlugin extends Plugin {
         "com.storage.analyzer.cleaner",
         "com.duplicate.photo.remover.cleaner",
         "com.photo.cleaner.duplicate.finder",
-        "com.ai.cleaner.storage.master",
-        "com.ai.photo.cleaner.swipe",
         "com.swipe.photo.cleaner",
         "com.cleanup.phone.storage.cleaner",
-        "com.cleaner.guru.storage.clean",
         "com.smartcleaner.storage.clean",
         "com.phonecleaner.smart.boost",
         "com.junkcleaner.phone.cooler",
@@ -172,28 +257,88 @@ public class GhostiMobileCarePlugin extends Plugin {
         "com.korea.phonecleaner"
     };
 
+    private static final String[] SAFE_ALLOWLIST_PREFIXES = new String[] {
+        "app.sundreamer.",
+        "com.android.",
+        "com.google.android.",
+        "com.sec.android.",
+        "com.samsung.",
+        "com.ahnlab.",
+        "com.estsoft.",
+        "com.kakao.",
+        "com.nhn.",
+        "com.naver.",
+        "com.microsoft.",
+        "com.adobe.",
+        "com.canva."
+    };
+
     private static final String[] STORAGE_CLEANER_INTENT_ACTIONS = new String[] {
         "android.os.storage.action.CLEAR_APP_CACHE",
         "android.os.storage.action.MANAGE_STORAGE",
         "android.intent.action.MANAGE_PACKAGE_STORAGE"
     };
 
+    private boolean isSafeAllowlistedPackage(String pkg) {
+        if (pkg == null || pkg.isEmpty()) return true;
+        for (String prefix : SAFE_ALLOWLIST_PREFIXES) {
+            if (pkg.startsWith(prefix)) return true;
+        }
+        return false;
+    }
+
     private boolean isSuspiciousCleanerKeyword(String pkgOrLabel) {
         if (pkgOrLabel == null) return false;
         String low = pkgOrLabel.toLowerCase(Locale.ROOT);
-        return low.contains("clean")
-            || low.contains("boost")
+        return low.contains("cleanx")
+            || low.contains("clean x")
+            || low.contains("클린x")
+            || low.contains("클린엑스")
+            || low.contains("cleaner")
+            || low.contains("storageclean")
+            || low.contains("phoneclean")
             || low.contains("junk")
+            || low.contains("booster")
             || low.contains("cooler")
             || low.contains("optimizer")
             || low.contains("클리너")
-            || low.contains("청소")
+            || low.contains("폰청소")
             || low.contains("부스터");
+    }
+
+    private void collectSuspiciousResolvedPackages(PackageManager pm, Intent queryIntent, Set<String> candidatePackages) {
+        try {
+            List<ResolveInfo> resolved = pm.queryIntentActivities(queryIntent, 0);
+            if (resolved == null) return;
+            for (ResolveInfo ri : resolved) {
+                if (ri.activityInfo == null || ri.activityInfo.packageName == null) continue;
+                String foundPkg = ri.activityInfo.packageName;
+                ApplicationInfo ai = ri.activityInfo.applicationInfo;
+                boolean isSystemApp = ai != null && ((ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0
+                    || (ai.flags & ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0);
+                if (isSystemApp || isSafeAllowlistedPackage(foundPkg)) {
+                    continue;
+                }
+                String label = ai != null ? String.valueOf(pm.getApplicationLabel(ai)) : foundPkg;
+                if (isSuspiciousCleanerKeyword(foundPkg) || isSuspiciousCleanerKeyword(label)) {
+                    candidatePackages.add(foundPkg);
+                }
+            }
+        } catch (Throwable ignored) {
+        }
     }
 
     @PluginMethod
     public void scanInstalledBloatCleaners(PluginCall call) {
         Context context = getContext();
+        if (context == null) {
+            JSObject emptyRet = new JSObject();
+            emptyRet.put("ok", false);
+            emptyRet.put("scannedCount", TARGET_BLOAT_PACKAGES.length);
+            emptyRet.put("detected", new JSArray());
+            call.resolve(emptyRet);
+            return;
+        }
         PackageManager pm = context.getPackageManager();
         Set<String> candidatePackages = new LinkedHashSet<>(Arrays.asList(TARGET_BLOAT_PACKAGES));
         Map<String, String> customRiskByPkg = new HashMap<>();
@@ -204,7 +349,7 @@ public class GhostiMobileCarePlugin extends Plugin {
             if (extraPackages != null) {
                 for (int i = 0; i < extraPackages.length(); i++) {
                     String extraPkg = extraPackages.optString(i, "").trim();
-                    if (!extraPkg.isEmpty()) {
+                    if (!extraPkg.isEmpty() && !isSafeAllowlistedPackage(extraPkg)) {
                         candidatePackages.add(extraPkg);
                     }
                 }
@@ -222,51 +367,44 @@ public class GhostiMobileCarePlugin extends Plugin {
                     }
                 }
             }
-        } catch (Exception ignored) {
+        } catch (Throwable ignored) {
         }
 
-        // 2) <queries>의 <intent> 시그니처를 통해 노출된 신종 서드파티 클리너 패키지 자동 포착
+        // 2) <queries>의 합법 <intent> 시그니처를 통해 노출된 신종 서드파티 클리너 패키지 자동 포착
         for (String action : STORAGE_CLEANER_INTENT_ACTIONS) {
-            try {
-                Intent queryIntent = new Intent(action);
-                List<ResolveInfo> resolved = pm.queryIntentActivities(queryIntent, 0);
-                if (resolved != null) {
-                    for (ResolveInfo ri : resolved) {
-                        if (ri.activityInfo == null || ri.activityInfo.packageName == null) continue;
-                        String foundPkg = ri.activityInfo.packageName;
-                        ApplicationInfo ai = ri.activityInfo.applicationInfo;
-                        boolean isSystemApp = ai != null && ((ai.flags & ApplicationInfo.FLAG_SYSTEM) != 0
-                            || (ai.flags & ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0);
-                        if (isSystemApp || foundPkg.startsWith("app.sundreamer.") || foundPkg.startsWith("com.android.") || foundPkg.startsWith("com.google.android.")) {
-                            continue;
-                        }
-                        String label = ai != null ? String.valueOf(pm.getApplicationLabel(ai)) : foundPkg;
-                        if (isSuspiciousCleanerKeyword(foundPkg) || isSuspiciousCleanerKeyword(label)) {
-                            candidatePackages.add(foundPkg);
-                        }
-                    }
-                }
-            } catch (Exception ignored) {
-            }
+            collectSuspiciousResolvedPackages(pm, new Intent(action), candidatePackages);
         }
+        Intent shareImgIntent = new Intent(Intent.ACTION_SEND);
+        shareImgIntent.setType("image/*");
+        collectSuspiciousResolvedPackages(pm, shareImgIntent, candidatePackages);
 
         JSArray detected = new JSArray();
         for (String pkg : candidatePackages) {
+            if (isSafeAllowlistedPackage(pkg)) continue;
             try {
                 PackageInfo info = pm.getPackageInfo(pkg, 0);
                 if (info != null) {
                     ApplicationInfo appInfo = info.applicationInfo;
+                    boolean isSystemApp = appInfo != null && ((appInfo.flags & ApplicationInfo.FLAG_SYSTEM) != 0
+                        || (appInfo.flags & ApplicationInfo.FLAG_UPDATED_SYSTEM_APP) != 0);
+                    if (isSystemApp) continue;
+
                     String appLabel = appInfo != null ? String.valueOf(pm.getApplicationLabel(appInfo)) : pkg;
-                    boolean isCleanX = pkg.toLowerCase(Locale.ROOT).contains("cleanx");
+                    String combinedLower = (pkg + " " + appLabel).toLowerCase(Locale.ROOT);
+                    boolean isCleanX = combinedLower.contains("cleanx")
+                        || combinedLower.contains("clean x")
+                        || combinedLower.contains("클린x")
+                        || combinedLower.contains("클린엑스");
                     boolean isSubTrap = isCleanX
-                        || pkg.contains("guru")
-                        || pkg.contains("swipe")
-                        || pkg.contains("ai.cleaner");
+                        || combinedLower.contains("guru")
+                        || combinedLower.contains("swipe")
+                        || combinedLower.contains("ai.cleaner")
+                        || combinedLower.contains("aicleaner");
                     String customRisk = customRiskByPkg.get(pkg);
                     String riskSummary = (customRisk != null && !customRisk.isEmpty())
                         ? customRisk
                         : isCleanX
-                        ? "🚨 [구독함정·권한침투] 3일 무료체험 후 주 13,000원(월 52,000원) 자동결제 유도 및 Google 계정 데이터 접근 권한 위험"
+                        ? "🚨 [구독함정·권한침투] 무료체험 후 주 13,000원(월 52,000원) 자동결제 유도 및 Google 계정 데이터 접근 권한 위험"
                         : "⚠️ [애드웨어·구독함정] 불필요한 광고 팝업·백그라운드 배터리 소모 및 유료 구독 유도 위험 청소앱";
 
                     JSObject item = new JSObject();
@@ -279,7 +417,7 @@ public class GhostiMobileCarePlugin extends Plugin {
                 }
             } catch (PackageManager.NameNotFoundException ignored) {
                 // 미설치 패키지 무시
-            } catch (Exception ignored) {
+            } catch (Throwable ignored) {
             }
         }
 
@@ -290,97 +428,118 @@ public class GhostiMobileCarePlugin extends Plugin {
         call.resolve(ret);
     }
 
+    private void launchExternalIntentSafely(Intent primary, Intent fallback, PluginCall call, JSObject successPayload, String errPrefix) {
+        Activity act = getActivity();
+        Context ctx = act != null ? act : getContext();
+        if (ctx == null) {
+            call.reject(errPrefix + ": NO_CONTEXT");
+            return;
+        }
+        Runnable task = () -> {
+            try {
+                if (!(ctx instanceof Activity)) {
+                    primary.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                }
+                ctx.startActivity(primary);
+                call.resolve(successPayload);
+            } catch (Throwable e) {
+                if (fallback != null) {
+                    try {
+                        if (!(ctx instanceof Activity)) {
+                            fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                        }
+                        ctx.startActivity(fallback);
+                        call.resolve(successPayload);
+                        return;
+                    } catch (Throwable ex) {
+                        call.reject(errPrefix + ": " + ex.getMessage());
+                        return;
+                    }
+                }
+                call.reject(errPrefix + ": " + e.getMessage());
+            }
+        };
+        if (act != null) {
+            act.runOnUiThread(task);
+        } else {
+            task.run();
+        }
+    }
+
     @PluginMethod
     public void openAppUninstallScreen(PluginCall call) {
-        String pkg = call.getString("packageName", "com.xstudios.cleanx");
+        String pkg = call.getString("packageName", "");
         Context context = getContext();
-        try {
-            Intent detailsIntent = new Intent(
-                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
-                Uri.parse("package:" + pkg)
-            );
-            detailsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            context.startActivity(detailsIntent);
+        if (context == null || pkg == null || pkg.trim().isEmpty()) {
             JSObject ret = new JSObject();
-            ret.put("ok", true);
-            ret.put("packageName", pkg);
-            ret.put("mode", "app_details");
+            ret.put("ok", false);
+            ret.put("installed", false);
+            ret.put("packageName", pkg != null ? pkg : "");
+            ret.put("mode", "empty_package");
             call.resolve(ret);
-        } catch (Exception e) {
-            try {
-                Intent delIntent = new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + pkg));
-                delIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                context.startActivity(delIntent);
-                JSObject ret = new JSObject();
-                ret.put("ok", true);
-                ret.put("packageName", pkg);
-                ret.put("mode", "action_delete");
-                call.resolve(ret);
-            } catch (Exception ex) {
-                call.reject("UNINSTALL_SCREEN_FAILED: " + ex.getMessage());
-            }
+            return;
         }
+        String cleanPkg = pkg.trim();
+        boolean installed = false;
+        try {
+            installed = (context.getPackageManager().getPackageInfo(cleanPkg, 0) != null);
+        } catch (Throwable ignored) {
+            installed = false;
+        }
+        // 미설치 패키지에 대해 ACTION_APPLICATION_DETAILS_SETTINGS를 호출하면 일부 삼성 One UI에서 설정 앱 오류 팝업이 뜨므로 사전 차단
+        if (!installed) {
+            JSObject ret = new JSObject();
+            ret.put("ok", false);
+            ret.put("installed", false);
+            ret.put("packageName", cleanPkg);
+            ret.put("mode", "not_installed");
+            call.resolve(ret);
+            return;
+        }
+
+        Intent detailsIntent = new Intent(
+            Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+            Uri.parse("package:" + cleanPkg)
+        );
+        Intent delIntent = new Intent(Intent.ACTION_DELETE, Uri.parse("package:" + cleanPkg));
+        JSObject ret = new JSObject();
+        ret.put("ok", true);
+        ret.put("installed", true);
+        ret.put("packageName", cleanPkg);
+        ret.put("mode", "app_details");
+        launchExternalIntentSafely(detailsIntent, delIntent, call, ret, "UNINSTALL_SCREEN_FAILED");
     }
 
     @PluginMethod
     public void openPlayStoreSubscriptions(PluginCall call) {
         String pkg = call.getString("packageName", "");
-        Context context = getContext();
         String url = (pkg != null && !pkg.trim().isEmpty())
             ? "https://play.google.com/store/account/subscriptions?package=" + Uri.encode(pkg.trim())
             : "https://play.google.com/store/account/subscriptions";
-        try {
-            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            context.startActivity(intent);
-            JSObject ret = new JSObject();
-            ret.put("ok", true);
-            ret.put("url", url);
-            call.resolve(ret);
-        } catch (Exception e) {
-            call.reject("OPEN_SUBSCRIPTIONS_FAILED: " + e.getMessage());
-        }
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        JSObject ret = new JSObject();
+        ret.put("ok", true);
+        ret.put("url", url);
+        launchExternalIntentSafely(intent, null, call, ret, "OPEN_SUBSCRIPTIONS_FAILED");
     }
 
     @PluginMethod
     public void openGoogleAccountPermissions(PluginCall call) {
-        Context context = getContext();
         String url = "https://myaccount.google.com/permissions";
-        try {
-            Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            context.startActivity(intent);
-            JSObject ret = new JSObject();
-            ret.put("ok", true);
-            ret.put("url", url);
-            call.resolve(ret);
-        } catch (Exception e) {
-            call.reject("OPEN_GOOGLE_PERMISSIONS_FAILED: " + e.getMessage());
-        }
+        Intent intent = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        JSObject ret = new JSObject();
+        ret.put("ok", true);
+        ret.put("url", url);
+        launchExternalIntentSafely(intent, null, call, ret, "OPEN_GOOGLE_PERMISSIONS_FAILED");
     }
 
     @PluginMethod
     public void openAllInstalledAppsSettings(PluginCall call) {
-        Context context = getContext();
-        try {
-            Intent intent = new Intent(Settings.ACTION_MANAGE_ALL_APPLICATIONS_SETTINGS);
-            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-            context.startActivity(intent);
-            JSObject ret = new JSObject();
-            ret.put("ok", true);
-            call.resolve(ret);
-        } catch (Exception e) {
-            try {
-                Intent fallback = new Intent(Settings.ACTION_APPLICATION_SETTINGS);
-                fallback.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-                context.startActivity(fallback);
-                JSObject ret = new JSObject();
-                ret.put("ok", true);
-                call.resolve(ret);
-            } catch (Exception ex) {
-                call.reject("OPEN_ALL_APPS_FAILED: " + ex.getMessage());
-            }
-        }
+        Intent primary = new Intent(Settings.ACTION_MANAGE_ALL_APPLICATIONS_SETTINGS);
+        Intent fallback = new Intent(Settings.ACTION_APPLICATION_SETTINGS);
+        JSObject ret = new JSObject();
+        ret.put("ok", true);
+        launchExternalIntentSafely(primary, fallback, call, ret, "OPEN_ALL_APPS_FAILED");
     }
 
     @PluginMethod
@@ -666,8 +825,8 @@ public class GhostiMobileCarePlugin extends Plugin {
 
     private void executeGalleryMediaScanAsync(final PluginCall call) {
         final int offset = Math.max(0, call.getInt("offset", 0));
-        final int limit = Math.min(120, Math.max(1, call.getInt("limit", 60)));
-        final int thumbMaxDim = Math.min(640, Math.max(240, call.getInt("thumbMaxDim", 448)));
+        final int limit = Math.min(100, Math.max(1, call.getInt("limit", 60)));
+        final int thumbMaxDim = Math.min(480, Math.max(240, call.getInt("thumbMaxDim", 360)));
         final boolean includeVideos = call.getBoolean("includeVideos", offset == 0);
         final Context appCtx = getContext().getApplicationContext();
 

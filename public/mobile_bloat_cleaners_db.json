@@ -1,6 +1,6 @@
 {
-  "dbVersion": "2026.11.17.1",
-  "updatedAt": "2026-11-17T11:50:00+09:00",
+  "dbVersion": "2026.11.19.1",
+  "updatedAt": "2026-11-19T13:35:00+09:00",
   "description": "귀신같이(Ghosti) 모바일 귀신비서 — 유료결제 유도 악성 청소앱(Fleeceware·구독함정·애드웨어·계정권한 침투) 실시간 원격 탐지 DB (스토어 재심사 없이 git push로 즉시 갱신)",
   "packages": [
     {
@@ -11,11 +11,74 @@
       "riskSummaryKo": "🚨 [구독함정·권한침투] 3일 무료체험 후 주 13,000원(월 52,000원) 자동결제 유도 및 Google 계정 데이터 접근 권한 요구"
     },
     {
+      "packageName": "com.otto.clean",
+      "appNameHint": "CleanX: Cleaner & Storage Tool",
+      "category": "fleeceware_oauth_risk",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "🚨 [구독함정·권한침투] 무료체험 후 주간 고액 자동결제 유도 및 저장공간·계정 권한 요구 위험"
+    },
+    {
+      "packageName": "com.cleanx.app",
+      "appNameHint": "CleanX – 저장공간 관리",
+      "category": "fleeceware_oauth_risk",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "🚨 [구독함정·권한침투] 무료체험 후 주간 자동결제 유도 및 불필요한 권한 요구 위험"
+    },
+    {
+      "packageName": "com.cleanxmax",
+      "appNameHint": "CleanX MAX",
+      "category": "fleeceware_subscription",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "🚨 [구독함정] 무료체험 후 주간/월간 자동결제 유도형 저장공간 클리너"
+    },
+    {
+      "packageName": "com.storage.androidcleaner.phonecleaner",
+      "appNameHint": "휴대폰 저장공간 클리너: 클린엑스 (CleanX)",
+      "category": "fleeceware_subscription",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "🚨 [구독함정] 무료체험 후 주간 자동결제 유도형 클린엑스(CleanX) 클리너"
+    },
+    {
+      "packageName": "com.fc.ai.storage.clean.storageclean.optimize",
+      "appNameHint": "CleanX: AI Storage Optimizer",
+      "category": "fleeceware_subscription",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "🚨 [구독함정] AI 저장공간 최적화를 내세운 주간 자동결제 유도형 클리너"
+    },
+    {
+      "packageName": "com.innovatedevx.cleanax.phone.storage.cleaner",
+      "appNameHint": "CleanAX: Phone Storage Cleaner",
+      "category": "fleeceware_subscription",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "🚨 [구독함정] 유사 이름(CleanAX)을 사용한 자동결제·광고 유도 클리너"
+    },
+    {
+      "packageName": "com.xstudios.fastscan",
+      "appNameHint": "FastScan (TapSuite)",
+      "category": "fleeceware_oauth_risk",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "🚨 [구독함정] TapSuite 계열 주간 고액 자동결제 유도 유틸리티"
+    },
+    {
       "packageName": "com.tapsuite.cleanx",
-      "appNameHint": "CleanX Variant",
+      "appNameHint": "CleanX Variant (TapSuite)",
       "category": "fleeceware_oauth_risk",
       "isSubscriptionTrap": true,
       "riskSummaryKo": "🚨 [구독함정·권한침투] 주간 고액 자동결제 유도 및 Google 계정 권한 요구 위험"
+    },
+    {
+      "packageName": "com.baloota.xcleaner",
+      "appNameHint": "전화 클리너 - X Cleaner",
+      "category": "adware_booster",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "⚠️ [구독함정·애드웨어] 전면 광고 팝업 및 유료 구독 유도형 클리너"
+    },
+    {
+      "packageName": "com.ndsoftware.xcleaner",
+      "appNameHint": "XCleaner",
+      "category": "adware_booster",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "⚠️ [구독함정·애드웨어] 유료 구독 유도 및 불필요한 광고 노출 클리너"
     },
     {
       "packageName": "com.cleanx.storage.cleaner",
@@ -32,8 +95,15 @@
       "riskSummaryKo": "🚨 [구독함정] 무료체험 후 주간/월간 고액 자동결제 유도 클리너"
     },
     {
-      "packageName": "com.cleaner.guru.storage.clean",
+      "packageName": "com.cleanerguru.app",
       "appNameHint": "Cleaner Guru",
+      "category": "fleeceware_subscription",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "🚨 [구독함정] 주간 고액 정기결제 유도형 사진·저장공간 클리너"
+    },
+    {
+      "packageName": "com.cleaner.guru.storage.clean",
+      "appNameHint": "Cleaner Guru Storage Clean",
       "category": "fleeceware_subscription",
       "isSubscriptionTrap": true,
       "riskSummaryKo": "🚨 [구독함정] 주간 고액 정기결제 유도형 사진·저장공간 클리너"
@@ -51,6 +121,13 @@
       "category": "fleeceware_subscription",
       "isSubscriptionTrap": true,
       "riskSummaryKo": "🚨 [구독함정] 무료체험 후 주간 정기결제 유도형 클리너"
+    },
+    {
+      "packageName": "com.aicleaner.phone.storagecleanup",
+      "appNameHint": "AI Cleaner: Storage Cleanup",
+      "category": "fleeceware_subscription",
+      "isSubscriptionTrap": true,
+      "riskSummaryKo": "🚨 [구독함정] 무료체험 후 주간 정기결제 유도형 AI 클리너"
     },
     {
       "packageName": "com.fancyclean.security.antivirus",

@@ -2584,27 +2584,33 @@ export async function processUnifiedMonsterChatQuery(params: {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('ghosti_trigger_mobile_cleaner_scan'));
     }
-    if (/(삭제|지워|제거)/i.test(clean)) {
-      const targetPkg = scanRes.detected[0]?.packageName || 'com.xstudios.cleanx';
-      void triggerMobileCleanerUninstall(targetPkg);
+    const hasDetectedCleaner = scanRes.detected.length > 0;
+    if (hasDetectedCleaner && /(삭제|지워|제거)/i.test(clean)) {
+      void triggerMobileCleanerUninstall(scanRes.detected[0].packageName);
     } else if (/(구독|정기\s*결제|해지)/i.test(clean)) {
-      const targetPkg = scanRes.detected[0]?.packageName || 'com.xstudios.cleanx';
-      void triggerOpenPlaySubscriptions(targetPkg);
+      void triggerOpenPlaySubscriptions(scanRes.detected[0]?.packageName || '');
     } else if (/(구글\s*권한|계정\s*권한|액세스)/i.test(clean)) {
       void triggerOpenGoogleAccountPermissions();
     }
-    const foundNames =
-      scanRes.detected.length > 0
-        ? scanRes.detected.map((d) => `${d.appName}(${d.packageName})`).join(', ')
-        : 'CleanX(com.xstudios.cleanx)';
-    const msgText =
-      scanRes.detected.length > 0
-        ? `🚨 휴대폰에서 유료결제 유도 클리너 **[${foundNames}]**가 감지되었어요!\n앱만 지워서는 주 13,000원 자동결제와 구글 계정 데이터 접근 권한이 그대로 남을 수 있으니, 상단 구출 카드의 **① [🗑️ 앱 즉시 삭제] · ② [💳 주간 정기결제 해지 확인] · ③ [🔒 구글 계정 데이터 권한 끊기]** 3단계를 꼭 순서대로 눌러주세요! 👻🛡️`
-        : `🛡️ **${foundNames}** 등 주간 자동결제 유도 청소앱 구출 화면을 준비했어요!\n상단의 **① [🗑️ CleanX 앱 삭제 화면 열기] · ② [💳 Play 정기구독 해지 확인] · ③ [🔒 구글 계정 연결 권한 끊기] · ④ [📋 내 폰 전체 설치 앱 목록 열기]** 버튼으로 원터치 점검하실 수 있어요! 👻✨`;
-    speak('유료결제 유도 청소앱 삭제와 정기결제 해지, 구글 계정 권한 해제 화면을 바로 준비했어요.');
-    return reply(sourceTab, msgText, {
+
+    if (hasDetectedCleaner) {
+      const foundNames = scanRes.detected
+        .map((d) => `${d.appName}(${d.packageName})`)
+        .join(', ');
+      const detectedMsg = `🚨 휴대폰에서 유료결제 유도 클리너 **[${foundNames}]**가 감지되었어요!\n앱만 지워서는 주 13,000원 자동결제와 구글 계정 데이터 접근 권한이 그대로 남을 수 있으니, 맨 위 구출 카드의 **① [🗑️ 앱 즉시 삭제] · ② [💳 주간 정기결제 해지 확인] · ③ [🔒 구글 계정 데이터 권한 끊기]** 3단계를 꼭 순서대로 눌러주세요! 👻🛡️`;
+      speak('휴대폰에서 유료결제 유도 청소앱이 감지되었어요. 상단 카드의 삭제, 정기결제 해지, 구글 계정 권한 끊기 세 단계를 순서대로 진행해 주세요.');
+      return reply(sourceTab, detectedMsg, {
+        followUpSuggestions: [
+          '구글 플레이 정기결제 해지 확인해줘',
+          '구글 계정 데이터 접근 권한 끊어줘',
+        ],
+      });
+    }
+
+    const cleanMsg = `✅ 방금 휴대폰을 실시간 스캔했는데 **설치된 유료결제 유도 청소앱(CleanX 등)이 감지되지 않았어요!** (이미 삭제되었거나 설치되어 있지 않습니다)\n혹시 앱을 지운 뒤에도 자동결제나 계정 권한이 남아 있는지 확인하시려면, 상단 점검 카드의 **① [💳 Play 정기구독 해지 확인] · ② [🔒 구글 계정 연결 권한 끊기] · ③ [📋 내 폰 전체 설치 앱 목록 열기]** 3개 버튼을 눌러 점검해 보세요! 👻✨`;
+    speak('방금 휴대폰을 실시간 스캔했는데 유료결제 유도 청소앱이 감지되지 않았어요. 정기구독 해지나 구글 계정 권한을 확인하시려면 상단 카드의 버튼을 눌러보세요.');
+    return reply(sourceTab, cleanMsg, {
       followUpSuggestions: [
-        '클린X 지금 바로 삭제해줘',
         '구글 플레이 정기결제 해지 확인해줘',
         '구글 계정 데이터 접근 권한 끊어줘',
       ],

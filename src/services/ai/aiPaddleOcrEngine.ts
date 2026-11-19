@@ -87,7 +87,13 @@ async function getPaddleOcrRuntime(): Promise<PaddleOcrRuntime> {
       const ort = await import('onnxruntime-web');
       try {
         ort.env.wasm.simd = true;
-        if (typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated) {
+        const isMobileUa =
+          typeof navigator !== 'undefined' &&
+          (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') ||
+            (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1));
+        if (isMobileUa) {
+          ort.env.wasm.numThreads = 1;
+        } else if (typeof crossOriginIsolated !== 'undefined' && crossOriginIsolated) {
           ort.env.wasm.numThreads = Math.min(4, Math.max(2, navigator.hardwareConcurrency || 2));
         }
       } catch {
@@ -545,6 +551,28 @@ export function recognizeImageDataWithPaddleOcr(
   return job;
 }
 
+/**
+ * 모바일(Android/iOS)에서 초기 동영상 OCR 선추출 직후 대형 비전 모델(350MB)을 올리기 전
+ * PP-OCRv5 WASM 세션을 즉시 반환하여 2중 WASM 피크(WebView 렌더러 OOM 강제종료)를 원천 차단합니다.
+ * 이후 사용자가 온디맨드 OCR을 호출하면 CacheStorage에서 0.1초 만에 자동 재로딩됩니다.
+ */
+export function releasePaddleOcrRuntime(): Promise<void> {
+  const job = inferenceChain.then(async () => {
+    const activePromise = runtimePromise;
+    runtimePromise = null;
+    if (!activePromise) return;
+    try {
+      const rt = await activePromise;
+      await rt.detSession.release();
+      await rt.recSession.release();
+    } catch {
+      /* ignore release error */
+    }
+  });
+  inferenceChain = job.catch(() => undefined);
+  return job;
+}
+
 export async function recognizeDataUrlWithPaddleOcr(
   dataUrl: string
 ): Promise<{ text: string; boxes: PaddleOcrBox[] }> {
@@ -553,25 +581,31 @@ export async function recognizeDataUrlWithPaddleOcr(
     const img = new Image();
     img.crossOrigin = 'anonymous';
     img.onload = async () => {
+      const canvas = document.createElement('canvas');
       try {
         const w = img.naturalWidth || img.width;
         const h = img.naturalHeight || img.height;
         const scale = Math.min(1, 1920 / Math.max(w, h));
         const cw = Math.max(32, Math.round(w * scale));
         const ch = Math.max(32, Math.round(h * scale));
-        const canvas = document.createElement('canvas');
         canvas.width = cw;
         canvas.height = ch;
         const ctx = canvas.getContext('2d', { willReadFrequently: true });
         if (!ctx) {
+          canvas.width = 0;
+          canvas.height = 0;
           resolve({ text: '', boxes: [] });
           return;
         }
         ctx.drawImage(img, 0, 0, cw, ch);
         const imgData = ctx.getImageData(0, 0, cw, ch);
+        canvas.width = 0;
+        canvas.height = 0;
         const res = await recognizeImageDataWithPaddleOcr(imgData);
         resolve(res);
       } catch {
+        canvas.width = 0;
+        canvas.height = 0;
         resolve({ text: '', boxes: [] });
       }
     };

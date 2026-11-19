@@ -396,6 +396,8 @@ html.theme-warm-light .text-teal-100:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-teal-200:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-teal-300:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-teal-400:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-\[\#5EEAD4\]:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-\[\#2DD4BF\]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-\[\#00F0B5\]:not([data-keep-dark="true"] *) {
   color: #0F766E !important;
 }

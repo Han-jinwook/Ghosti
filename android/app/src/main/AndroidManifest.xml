@@ -69,15 +69,103 @@
 
     <!-- [Ghosti 귀신비서] 유료결제 유도(Fleeceware)·광고폭탄 클리너/부스터 합법 타겟 스캔 (<queries>) -->
     <queries>
-        <!-- 1순위: CleanX (TapSuite) 및 변종 주간구독 유도 클리너 패밀리 -->
+        <!-- 1순위: CleanX (TapSuite / XStudios / Otto / CleanX MAX / 클린엑스) 및 실존 변종 주간구독 유도 클리너 패밀리 -->
         <package android:name="com.xstudios.cleanx" />
+        <package android:name="com.xstudios.fastscan" />
         <package android:name="com.tapsuite.cleanx" />
+        <package android:name="com.otto.clean" />
+        <package android:name="com.cleanx.app" />
+        <package android:name="com.cleanxmax" />
+        <package android:name="com.storage.androidcleaner.phonecleaner" />
+        <package android:name="com.fc.ai.storage.clean.storageclean.optimize" />
+        <package android:name="com.innovatedevx.cleanax.phone.storage.cleaner" />
+        <package android:name="com.baloota.xcleaner" />
+        <package android:name="com.ndsoftware.xcleaner" />
+        <package android:name="com.cleanlyx.cleaner" />
+        <package android:name="com.nirvanayazilim.cleanpex" />
+        <package android:name="com.heartsnet.tidyx.gp" />
         <package android:name="com.cleanx.storage.cleaner" />
         <package android:name="com.cleanx.phone.cleaner" />
         <package android:name="com.storage.cleaner.cleanx" />
         <package android:name="com.smart.cleaner.cleanx" />
 
         <!-- 2순위: 주간/월간 고액 자동결제 유도(Fleeceware) 및 광고폭탄 폰 클리너·부스터 대표 패키지 총망라 -->
+        <package android:name="com.cleanerguru.app" />
+        <package android:name="com.cleaner.guru.storage.clean" />
+        <package android:name="com.ai.photo.cleaner" />
+        <package android:name="com.ai.phone.cleaner" />
+        <package android:name="com.ai.photo.cleaner.swipe" />
+        <package android:name="com.ai.cleaner.storage.master" />
+        <package android:name="com.aicleaner.phone.storagecleanup" />
+        <package android:name="com.aicleaner.clean.cleanstorage.ai" />
+        <package android:name="com.aicleaner.cleanstorage.cleanduplicate.app" />
+        <package android:name="com.clean.ai.cleanduplicated.cleanstorage" />
+        <package android:name="com.cleaner.phone.junk.files" />
+        <package android:name="com.phone.cleaner.clean.junk.storage.cache" />
+        <package android:name="com.phone.cleaner.junkfiles.cleanduplicated.storagecleaner" />
+        <package android:name="com.phonecleaner.storagecleaner.junkcleaner.cleanphone" />
+        <package android:name="com.phonecleaner.junkcleaner.virusscan.antivirus.viruscleaner" />
+        <package android:name="com.phonecleaner.aicleaner.storage.swipephoto" />
+        <package android:name="com.phonecleaner.smartclean.storagecleaner.app" />
+        <package android:name="com.storage.androidcleaner" />
+        <package android:name="com.storage.androidcleaner.junkfiles.storagecleaner" />
+        <package android:name="com.storage.android.cleaner" />
+        <package android:name="com.storage.clean.nietsnie" />
+        <package android:name="com.storage.cleaner.markcon" />
+        <package android:name="cleaner.clean.booster" />
+        <package android:name="cleaner.cleanup.phone.clean.storage" />
+        <package android:name="cleaner.clean.master.clear.phone.lite" />
+        <package android:name="antivirus.virus.cleaner.clean.vpn.booster" />
+        <package android:name="biz.cloudex.android.cleaner" />
+        <package android:name="co.appnation.phonecleaner" />
+        <package android:name="com.anysoft.zerocleaner" />
+        <package android:name="com.express.phone.cleaner" />
+        <package android:name="com.fluxclean.ai" />
+        <package android:name="com.hyperclean.ai" />
+        <package android:name="com.freespace.cleanup" />
+        <package android:name="com.neo.cleaner.storage.ai" />
+        <package android:name="com.cleanmaster.phonejunkcleaner" />
+        <package android:name="com.pixsterstudio.cleaner" />
+        <package android:name="com.spaceup.cleaner" />
+        <package android:name="com.apperslab.spacecleaner" />
+        <package android:name="com.coreclean.storage.ram.booster" />
+        <package android:name="com.totalcleaner.android" />
+        <package android:name="ai.junk.cleaner" />
+        <package android:name="ai.storage.cleaner.app" />
+        <package android:name="app.quiet.cleanmanager" />
+        <package android:name="app.quiet.storagecleaner" />
+        <package android:name="com.canopas.cleanai" />
+        <package android:name="com.cleanerapp.storagecleaner.duplicate.remover.spacecleaner.naut" />
+        <package android:name="com.cleanspace.storage.cleaner.duplicatecleaner.filecleaner.saf" />
+        <package android:name="com.cleansweep.storage_cleaner" />
+        <package android:name="com.es.all.cleaner" />
+        <package android:name="com.levelpulse.phonedeepcleaner" />
+        <package android:name="com.rvappstudios.phone.storage.cleaner.disk.space.cleanup.duplicate.remover" />
+        <package android:name="com.sc.phonecleaner.storagecleaner" />
+        <package android:name="com.stormygrowth.cleangenie" />
+        <package android:name="com.tidyspace.app" />
+        <package android:name="com.ushareit.cleanit" />
+        <package android:name="com.utilityhub.aicleaner" />
+        <package android:name="ee.simplesoft.junkcleaner" />
+        <package android:name="myfiles.filemanager.fileexplorer.cleaner" />
+        <package android:name="storage.phone.cleaner.smart" />
+        <package android:name="com.baxolino.bcleaner" />
+        <package android:name="com.mna.cleaner.junk.phonecleaner.app" />
+        <package android:name="com.xtraszone.smartclean" />
+        <package android:name="easy.cleaner.app" />
+        <package android:name="phone.clean.master.battery.antivirus.ora" />
+        <package android:name="phonecleaner.junkfiles.appmanager.duplicatefileremover.applock" />
+        <package android:name="smart.cleaner.clean.master.booster.free" />
+        <package android:name="smarttool.phonecleaner.phoneoptimizer" />
+        <package android:name="com.bulkar.safecleaning" />
+        <package android:name="com.cleanerwl04.app" />
+        <package android:name="com.luminousbyte.cleaner.storage.ai" />
+        <package android:name="com.pivotmasterapps.phonecleaner" />
+        <package android:name="com.procleaner.photovideoduplicatecleaner" />
+        <package android:name="com.smartclean.storage.junk.aicleaner" />
+        <package android:name="com.tranvision.ai.cleaner" />
+        <package android:name="com.wapspin.SmartCleaner" />
+        <package android:name="phone.cleaner.storage.mh" />
         <package android:name="com.fancyclean.security.antivirus" />
         <package android:name="com.fancyclean.booster" />
         <package android:name="com.fancybattery.cleaner.security" />
@@ -111,11 +199,8 @@
         <package android:name="com.storage.analyzer.cleaner" />
         <package android:name="com.duplicate.photo.remover.cleaner" />
         <package android:name="com.photo.cleaner.duplicate.finder" />
-        <package android:name="com.ai.cleaner.storage.master" />
-        <package android:name="com.ai.photo.cleaner.swipe" />
         <package android:name="com.swipe.photo.cleaner" />
         <package android:name="com.cleanup.phone.storage.cleaner" />
-        <package android:name="com.cleaner.guru.storage.clean" />
         <package android:name="com.smartcleaner.storage.clean" />
         <package android:name="com.phonecleaner.smart.boost" />
         <package android:name="com.junkcleaner.phone.cooler" />
@@ -165,7 +250,7 @@
         <package android:name="kr.co.smartcleaner" />
         <package android:name="com.korea.phonecleaner" />
 
-        <!-- 3순위: 향후 출시될 미등록 신종 클리너·저장공간 관리 앱 자동 포착용 합법 인텐트 시그니처 -->
+        <!-- 3순위: 향후 출시될 미등록 신종 클리너·저장공간/사진 정리 앱 자동 포착용 합법 인텐트 시그니처 -->
         <intent>
             <action android:name="android.os.storage.action.CLEAR_APP_CACHE" />
         </intent>
@@ -174,6 +259,10 @@
         </intent>
         <intent>
             <action android:name="android.intent.action.MANAGE_PACKAGE_STORAGE" />
+        </intent>
+        <intent>
+            <action android:name="android.intent.action.SEND" />
+            <data android:mimeType="image/*" />
         </intent>
     </queries>
 </manifest>

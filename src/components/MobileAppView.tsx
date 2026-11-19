@@ -929,6 +929,9 @@ export const MobileAppView: React.FC = () => {
         >
           {activeLoungeType !== 'personal' && <LoungeFeedContextBanner />}
 
+          {/* [안드로이드 전용 악성 유료클리너(CleanX 등) 3단 구출 배너]: 미감지 평시에는 null(0px), 감지 시 또는 채팅 요청 시 최상단에 즉시 노출 */}
+          {activeLoungeType === 'personal' && <MobileCleanerRescueBanner />}
+
           {/* [기획서 제1원칙 정합화]: 모바일 [① 👻 귀신비서] 탭은 1관문인 '👻 귀신비서 대화창 + 사진 4대 탭 정리'가 최상단(1층)에 먼저 나오고, 그 아래(2층)에 통합 검색창(VoiceHeroStage)이 이어짐! */}
           {activeLoungeType === 'personal' && <Stage1MinimalCarePreview />}
 
@@ -1386,11 +1389,9 @@ export const MobileAppView: React.FC = () => {
           </div>
           )}
 
-          {/* 모바일 👻 귀신비서 하단 확장: 악성 클리너 구출(안드로이드 전용) + 내 기기 통합(PC↔폰) */}
+          {/* 모바일 👻 귀신비서 하단 확장: 내 기기 통합(PC↔폰) */}
           {activeLoungeType === 'personal' && (
             <div className="flex flex-col gap-3">
-              <MobileCleanerRescueBanner />
-
               {/* 내 기기 통합 (폰↔PC 프라이빗 싱크 & 데스크톱 연동 가이드) 귀신비서 화면 내 통합 */}
               {(() => {
                 const isLoggedInUser = Boolean(

@@ -54,7 +54,10 @@ import {
   extractVideoScreenTextOnDemand,
   type VideoOcrLineItem,
 } from './aiVideoEngine';
-import { recognizeDataUrlWithPaddleOcr } from './aiPaddleOcrEngine';
+import {
+  recognizeDataUrlWithPaddleOcr,
+  releasePaddleOcrRuntime,
+} from './aiPaddleOcrEngine';
 
 export async function fetchAutonomousFaceClusters(): Promise<{
   latestCorpusYear: number;
@@ -2054,7 +2057,8 @@ export async function startSilentRealMediaVisionIndexing(params: {
 
     // 0) [모바일 초고속 화면 글자 선(先) 인덱싱 & 2중 WASM 피크 원천 차단]:
     //    350MB 거대 비전 모델(sharedVisionModel)을 로드하기 전에, 앱 번들에 내장된 경량 PP-OCRv5(16MB)만으로
-    //    모바일 갤러리 동영상들의 화면 글자(ocrLines)를 2~4초 내에 먼저 추출해 즉시 검색·열람 가능하게 만듭니다.
+    //    최근 모바일 동영상 최대 3개의 화면 글자(ocrLines)를 먼저 추출한 뒤 PP-OCRv5 WASM 세션을 즉시 반환(release)하여
+    //    안드로이드·아이폰 WebView 렌더러 2중 WASM OOM 강제종료를 100% 차단합니다 (나머지 영상은 검색/열람 시 즉시 추출).
     if (isMobileEnv) {
       const mobileVidsForOcr = params.videos
         .filter(
@@ -2064,31 +2068,35 @@ export async function startSilentRealMediaVisionIndexing(params: {
             !v.ocrFullText &&
             (!Array.isArray(v.ocrLines) || v.ocrLines.length === 0)
         )
-        .slice(0, 12);
-      for (const mVid of mobileVidsForOcr) {
-        try {
-          while (aiRuntimeFlags.activeVideoPlaybackCount > 0) {
-            await new Promise((r) => setTimeout(r, 400));
+        .slice(0, 3);
+      if (mobileVidsForOcr.length > 0) {
+        for (const mVid of mobileVidsForOcr) {
+          try {
+            while (aiRuntimeFlags.activeVideoPlaybackCount > 0) {
+              await new Promise((r) => setTimeout(r, 400));
+            }
+            const ocrOut = await extractVideoScreenTextOnDemand(mVid);
+            if (ocrOut.ocrLines && ocrOut.ocrLines.length > 0) {
+              mVid.hasScreenOcrText = true;
+              mVid.ocrLineCount = ocrOut.ocrLines.length;
+              mVid.ocrLines = ocrOut.ocrLines;
+              mVid.ocrFullText = ocrOut.fullText;
+              params.onVideoOcrHydrated?.(mVid.videoFileName, {
+                hasScreenOcrText: true,
+                ocrLineCount: ocrOut.ocrLines.length,
+                ocrLines: ocrOut.ocrLines,
+                ocrFullText: ocrOut.fullText,
+              });
+            } else {
+              mVid.ocrLines = [];
+            }
+          } catch {
+            /* ignore single video OCR prewarm error */
           }
-          const ocrOut = await extractVideoScreenTextOnDemand(mVid);
-          if (ocrOut.ocrLines && ocrOut.ocrLines.length > 0) {
-            mVid.hasScreenOcrText = true;
-            mVid.ocrLineCount = ocrOut.ocrLines.length;
-            mVid.ocrLines = ocrOut.ocrLines;
-            mVid.ocrFullText = ocrOut.fullText;
-            params.onVideoOcrHydrated?.(mVid.videoFileName, {
-              hasScreenOcrText: true,
-              ocrLineCount: ocrOut.ocrLines.length,
-              ocrLines: ocrOut.ocrLines,
-              ocrFullText: ocrOut.fullText,
-            });
-          } else {
-            mVid.ocrLines = [];
-          }
-        } catch {
-          /* ignore single video OCR prewarm error */
+          await new Promise((r) => setTimeout(r, 120));
         }
-        await new Promise((r) => setTimeout(r, 60));
+        await releasePaddleOcrRuntime();
+        await new Promise((r) => setTimeout(r, 250));
       }
     }
 

@@ -7,11 +7,14 @@ import android.content.IntentSender;
 import android.graphics.Color;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Looper;
 import android.os.ParcelFileDescriptor;
+import android.os.SystemClock;
 import android.provider.MediaStore;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
+import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
@@ -34,6 +37,7 @@ public class MainActivity extends BridgeActivity {
     }
 
     private static final int REQ_MEDIASTORE_TRASH = 51991;
+    private static volatile long lastRendererRecoveryAtMs = 0L;
     private IntentSenderResultCallback pendingTrashCallback = null;
 
     public void launchMediaStoreIntentSender(IntentSender sender, IntentSenderResultCallback callback) throws IntentSender.SendIntentException {
@@ -58,9 +62,11 @@ public class MainActivity extends BridgeActivity {
         final Thread.UncaughtExceptionHandler prevHandler = Thread.getDefaultUncaughtExceptionHandler();
         Thread.setDefaultUncaughtExceptionHandler((thread, throwable) -> {
             String msg = throwable != null && throwable.getMessage() != null ? throwable.getMessage() : "";
-            if (throwable instanceof IllegalStateException
+            boolean isMainThread = (thread == Looper.getMainLooper().getThread());
+            if (!isMainThread
+                && throwable instanceof IllegalStateException
                 && (msg.contains("FirebaseApp") || msg.contains("FirebaseInitProvider"))) {
-                Log.w("GhostiMainActivity", "Suppressed uninitialized FirebaseApp exception on thread " + thread.getName() + ": " + msg);
+                Log.w("GhostiMainActivity", "Suppressed background uninitialized FirebaseApp exception on thread " + thread.getName() + ": " + msg);
                 return;
             }
             if (prevHandler != null) {
@@ -71,10 +77,10 @@ public class MainActivity extends BridgeActivity {
         super.onCreate(savedInstanceState);
         captureIncomingDeepLinkIntent(getIntent());
 
-        // [스마트폰 카메라/갤러리 동영상 무복사 64-bit HTTP 206 Range 스트리밍 브릿지]:
-        // Capacitor 기본 WebViewLocalServer는 content:// 요청 시 FileChannel.position(seek)을 누락하여
-        // 파일 끝에 moov 인덱스가 있는 스마트폰 촬영 영상 재생이 실패하므로, /__ghosti_media_video/{id}.mp4 경로를
-        // ParcelFileDescriptor 직접 탐색(64-bit Range 206)으로 즉시 송출합니다.
+        // [스마트폰 카메라/갤러리 동영상 무복사 64-bit HTTP 206 Range 스트리밍 브릿지 & WebView 렌더러 강제종료 방어]:
+        // 1) Capacitor 기본 WebViewLocalServer는 content:// 요청 시 FileChannel.position(seek)을 누락하므로 64-bit Range 206 송출.
+        // 2) BridgeWebViewClient.onRenderProcessGone 기본값(false)은 저사양 기기 WASM/미디어 메모리 회수 시 OS 전체 앱을 강제종료시키므로,
+        //    true를 반환해 프로세스 크래시를 원천 차단하고 15초 쿨다운 가드 하에 즉시 안전 복구(recreate)합니다.
         if (this.bridge != null && this.bridge.getWebView() != null) {
             try {
                 // 안드로이드 OS 시스템 글꼴 크기 확대(115~140%)로 인해 좁은 모바일 입력창 안내문구·버튼이 깨지는 현상 차단
@@ -94,6 +100,25 @@ public class MainActivity extends BridgeActivity {
                         }
                     }
                     return super.shouldInterceptRequest(view, request);
+                }
+
+                @Override
+                public boolean onRenderProcessGone(WebView view, RenderProcessGoneDetail detail) {
+                    boolean crashed = detail != null && detail.didCrash();
+                    Log.w("GhostiMainActivity", "WebView renderer gone (didCrash=" + crashed + ") — recovering without host force-close.");
+                    long now = SystemClock.elapsedRealtime();
+                    if (now - lastRendererRecoveryAtMs > 15000L) {
+                        lastRendererRecoveryAtMs = now;
+                        runOnUiThread(() -> {
+                            try {
+                                if (!isFinishing() && !isDestroyed()) {
+                                    recreate();
+                                }
+                            } catch (Throwable ignored) {
+                            }
+                        });
+                    }
+                    return true;
                 }
             });
         }
