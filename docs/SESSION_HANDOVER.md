@@ -2,6 +2,27 @@
 
 ---
 
+## 🕒 [2026-11-19 16:10 KST `2귀신` 체크아웃 인계 기록 (`발견된 버그` 0건 전수 완결)]
+
+- **세션 창 제목**: `2귀신버그0건Z코어2479완결`
+
+### 1. 이번 세션에서 완료한 핵심 작업 요약 (`2귀신` 검색·귀신창 전담 + `1귀신` 보안 긴급조치 지원)
+1. **[`🎯 귀신검색` 사진·동영상 AI 검색 & 고정밀 `PP-OCRv5` 한글/아이콘 판독 & 양대 모바일 스토어 `v1.0.37~1.0.38` 출시 완결 (`af01028` · `17ea202` · `d3fa22e` · `85262f8`)]**:
+   - **사진 의미검색 2중 공간 CSLS 허브니스 디바이어싱 & 다중조건 교집합 (`af01028`, `Mobile v1.0.37`)**: 임의 기본 태그 혼입을 제거하고 CSLS(Cross-domain Similarity Local Scaling) 허브니스 보정·동의어 정규화·다중 조건 교집합 게이트를 적용해 사진 검색 정확도 대폭 향상 (`41cf9ffd-2c1d-81e3-a8b1-d8439b34417b` `재테스트 대기`).
+   - **PC/웹 동영상 `PP-OCRv5` 소형 3단 한글(`'틀'`·`'당'`) 찌그러짐 & 아이콘 영문 오독(`👑 ➔ WMW/NOW`) 근본 해결 (`17ea202` · `d3fa22e`, `Z-Core v2.4.49`, `ocrVer=27`)**: 사선 텍스트 박스 중심선 최소자승 기울기 보정(Deskew), 수직 실제 글자 높이(`true_h`) 기준 `pad_v` 상한 고정, `320px` 2D Laplacian 선명도 프레임 선별, 연속 영문 런 평균/최대 CTC 신뢰도 게이트를 적용하고 4호기(`100.114.100.24`) 실영상 라이브 검증 후 반영 (`41df9ffd-2c1d-81b3-95c8-f7515216ce73` `재테스트 대기`).
+   - **모바일 앱(`v1.0.38 (38)`) 촬영 동영상 재생 오류 & 화면 글자 미추출 동시 해결 (`85262f8`, Google Play + TestFlight 동시 출시)**: Android Scoped Storage `RedactingFileDescriptor` 후미 `moov` 탐색(`ESPIPE`) 실패를 로컬 시크 가능 캐시 실체화 + `Blob` URL 통합 + `MediaCodec("video/avc")` / `AVAssetExportSession` 하드웨어 H.264 자동 폴백으로 해결하고, `aiPaddleOcrEngine.ts`를 `onnxruntime-web/webgpu`(`asyncify.wasm` 단일 공유)로 통일해 모바일 WASM 누락(`28MB` 절감 포함)을 100% 해소 (`41df9ffd-2c1d-81ce-b573-c0785c419ad7` `재테스트 대기`).
+2. **[`⚡ 귀신창` & `👻 귀신검색창` 노션 QA 3건 전수 근본 해결 및 1~6호기 `Z-Core v2.4.59 ~ v2.4.79` 클러스터 배포 완결 (`772355c` · `20f2627` · `67e6e8c`)]**:
+   - **무소환 연속 `Ctrl+C` 자동 순차 장전(`1➔2➔3`) & `[1]` 다림질 빈 줄 즉시 사출 (`772355c`, `Z-Core v2.4.59`)**: `Ctrl+0` 소환 없이도 단줄 텍스트 2개 이상 연속 복사 시 1번 항목 자동 장전, 문서 에디터(`notepad`·`winword`·`hwp`) 창 제목 간섭 배제 정순서 보장, 데몬 자체 키 주입 면역(`_SELF_CLIP_COMBO_UNTIL`), `[1] 🧹서식·줄바꿈` 빈 줄 즉시 사출 적용 (`41df9ffd-2c1d-811f-8fdd-cac308b35438` `재테스트 대기`).
+   - **`[👻 내 진짜 파일로 귀신검색창 바로 띄우기]` OS HWND 싱글톤 중복 창 원천 차단 & 상단 `[⤡ 작게]`·`[⤢ 크게(갤러리)]` 전환 (`20f2627`, `Z-Core v2.4.69`)**: `_ACTIVE_POPUP_HWND`(`active_ghost_search_popup.json`) + `👻 귀신검색창` 전용 창 제목(`index.html`·`DesktopDashboard.tsx`) + `BroadcastChannel` 3중 싱글톤으로 열려 있는 동안 재클릭 시 중복 생성 없이 기존 창 1개만 최상단 전면(`AttachThreadInput`)으로 올리고, 60fps 자유 리사이즈를 방해하지 않는 Win32 `SetWindowPos`(`resize_existing`) 크기 전환 버튼 탑재 (`41df9ffd-2c1d-8156-994c-e5e4e171cb7d` `재테스트 대기`).
+   - **`귀신창 실행 안됨`(`Ctrl+0`·`Ctrl+우클릭` 돌연 먹통) 4대 근본 원인 전수 차단 (`67e6e8c`, `Z-Core v2.4.79`)**: ① 외부 응답 없음 창에 블로킹되던 `SendMessageW`를 `SendMessageTimeoutW`(`120ms`, `SMTO_ABORTIFHUNG`)로 전면 교체, ② 실행 중인 형제 `--seq-paste-daemon`의 `_MEI*` 폴더 DLL 잠금 보호(`_is_mei_dir_in_use`), ③ 포트 `51988` 메인·UI 이중 박동(`__PING__` ➔ `PONG`) 기반 8초 자동 부활 워치독(`start_superpower_daemon_watchdog`), ④ 원격 클러스터 배포 시 `LogonType Interactive` 강제(Session 0 오기동 영구 제거, 4·5호기 인터랙티브 세션 `PONG` 라이브 검증 완료) (`41df9ffd-2c1d-802c-9e0c-d9343be916e1` `재테스트 대기`).
+3. **[보안 스캐너(`GitGuardian`) Supabase 하드코딩 키 경보 조치 지원]**: `supabaseClient.ts` 내 하드코딩 JWT 문자열 제거 및 환경변수 분리 완료.
+
+### 2. 다음 세션 최우선 인계 및 의사결정 대기 사항 (Next Action)
+1. **[창별 한마디 체크인 루틴]**: 새 창에서 `"2귀신"`(또는 `"체크인"`) 입력 시 `git pull --rebase --autostash` ➔ 본 인계장 최상단 브리핑 ➔ 담당 감시병(`python d:\Ghosti\z_core_watcher.py --watch --role 2`, `IsDaemon=true`) 단 1개 기동.
+2. **[실전 QA 상태]**: 현재 노션 보드 `발견된 버그` **전사 0건** (`2귀신` 7건 모두 수정·배포 완료 후 `재테스트 대기` 상태). 테스터(해나라님·달나라님) 재검증 결과 추가 피드백 유입 시 `1카드 = 1턴 = 즉시 보고` 원칙으로 단품 대응.
+
+---
+
 ## 🕒 [2026-11-19 01:20 KST `1·2·3귀신` 공통 체크아웃 인계 기록]
 
 - **세션 창 제목**: `목업0건1217출시확정`
