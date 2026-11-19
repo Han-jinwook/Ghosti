@@ -1,6 +1,7 @@
 import type { DuplicateGroup, PhotoItem, TrashCategory, VideoSceneItem } from '../types/saysee';
 import {
   registerMobilePickedPhotoMeta,
+  resolveAndroidDirectVideoStreamUrl,
   type NativeGalleryPhotoMeta,
   type NativeGalleryVideoMeta,
 } from './ghostiMobileCareBridge';
@@ -760,7 +761,7 @@ export function convertNativeGalleryVideos(nativeVideos: NativeGalleryVideoMeta[
       title: stem,
       keyframePhotoId: v.id,
       thumbUrl: v.thumbDataUrl || '',
-      videoUrl: '',
+      videoUrl: resolveAndroidDirectVideoStreamUrl(v.id),
       date: dateStr,
       durationText: `${mm}:${ss}`,
       durationSec: dur,
@@ -831,9 +832,16 @@ export async function loadCachedMobileGalleryIndex(): Promise<{
               mtimeMs: p.mtimeMs,
             });
           }
+          const hydratedVideos = Array.isArray(val.videos)
+            ? val.videos.map((v) =>
+                !v.videoUrl && String(v.id || '').startsWith('mobile_vid_')
+                  ? { ...v, videoUrl: resolveAndroidDirectVideoStreamUrl(v.id) }
+                  : v
+              )
+            : [];
           resolve({
             photos: val.photos,
-            videos: Array.isArray(val.videos) ? val.videos : [],
+            videos: hydratedVideos,
           });
           return;
         }

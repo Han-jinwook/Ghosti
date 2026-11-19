@@ -93,6 +93,7 @@ export interface GhostiMobileCarePluginInterface {
     includeVideos?: boolean;
     promptPermission?: boolean;
   }): Promise<ScanDeviceGalleryResult>;
+  resolveVideoPlaybackUrl(options: { id: string }): Promise<{ ok: boolean; fileUrl: string }>;
   requestSystemPhotoTrash(options: {
     action: 'move' | 'restore';
     items: SystemPhotoTrashTarget[];
@@ -387,4 +388,44 @@ export async function openNativeAppPermissionSettings(): Promise<void> {
   } catch {
     /* ignore */
   }
+}
+
+const resolvedIosVideoUrlCache = new Map<string, string>();
+
+export function resolveAndroidDirectVideoStreamUrl(videoId: string): string {
+  if (!isCapacitorAndroidRuntime()) return '';
+  const m = String(videoId || '').match(/^mobile_vid_(\d+)$/);
+  if (!m) return '';
+  const origin =
+    typeof window !== 'undefined' && window.location?.origin
+      ? window.location.origin
+      : 'https://localhost';
+  return `${origin}/__ghosti_media_video/${m[1]}.mp4`;
+}
+
+export async function resolveNativeMobileVideoPlaybackUrl(videoId: string): Promise<string> {
+  if (!videoId) return '';
+  const androidDirect = resolveAndroidDirectVideoStreamUrl(videoId);
+  if (androidDirect) return androidDirect;
+
+  if (!isCapacitorIosRuntime()) return '';
+  const cached = resolvedIosVideoUrlCache.get(videoId);
+  if (cached) return cached;
+
+  try {
+    const res = await GhostiMobileCareNative.resolveVideoPlaybackUrl({ id: videoId });
+    if (res?.ok && res.fileUrl) {
+      const cap = (window as unknown as {
+        Capacitor?: { convertFileSrc?: (path: string) => string };
+      }).Capacitor;
+      const converted = cap?.convertFileSrc ? cap.convertFileSrc(res.fileUrl) : res.fileUrl;
+      if (converted) {
+        resolvedIosVideoUrlCache.set(videoId, converted);
+        return converted;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return '';
 }

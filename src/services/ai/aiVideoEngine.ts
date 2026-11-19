@@ -1,5 +1,6 @@
 import { RawImage } from '@huggingface/transformers';
 import { getZCoreUrl, zCoreBridge, hasActiveGhostiLoginSession } from '../zCoreBridge';
+import { resolveNativeMobileVideoPlaybackUrl } from '../ghostiMobileCareBridge';
 import { silentIndexingBrake } from '../silentIndexingBrake';
 import type { LocalDocumentFile, PhotoItem, SearchResultItem, VideoSceneItem } from '../../types/saysee';
 import {
@@ -1507,16 +1508,23 @@ async function captureLocalVideoKeyframesUniversal(
     }
   }
 
-  // 2차 범용 경로: HTML5 <video> + Canvas (ffmpeg 미설치 PC 완벽 호환)
+  // 2차 범용 경로: HTML5 <video> + Canvas (ffmpeg 미설치 PC 및 Android/iOS 네이티브 모바일 앱 호환)
   if (typeof document === 'undefined') return results;
-  const streamSrc =
-    vid.videoUrl || getZCoreUrl(`/__photos/file?p=${encodeURIComponent(vid.videoFileName)}`);
+  let streamSrc = vid.videoUrl || '';
+  if (!streamSrc && String(vid.id || '').startsWith('mobile_vid_')) {
+    streamSrc = await resolveNativeMobileVideoPlaybackUrl(vid.id);
+  }
+  if (!streamSrc && zCoreBridge.isConnected && vid.videoFileName) {
+    streamSrc = getZCoreUrl(`/__photos/file?p=${encodeURIComponent(vid.videoFileName)}`);
+  }
   if (!streamSrc) return results;
 
   const videoEl = document.createElement('video');
   videoEl.muted = true;
   videoEl.playsInline = true;
-  videoEl.crossOrigin = 'anonymous';
+  if (streamSrc.includes('127.0.0.1:')) {
+    videoEl.crossOrigin = 'anonymous';
+  }
   videoEl.preload = 'auto';
 
   try {
@@ -1659,9 +1667,11 @@ export async function embedSingleLocalVideoIfNeeded(
     !normVid.ocrFullText &&
     (!Array.isArray(normVid.ocrLines) || normVid.ocrLines.length === 0);
 
+  const isMobileNativeVid = String(normVid.id || '').startsWith('mobile_vid_');
+
   if (missingSecs.length === 0) {
     if (needsOcrPrewarm) {
-      void (async () => {
+      const runPrewarm = async () => {
         try {
           const ocrOut = await extractVideoScreenTextOnDemand(normVid);
           if (ocrOut.ocrLines && ocrOut.ocrLines.length > 0) {
@@ -1675,7 +1685,12 @@ export async function embedSingleLocalVideoIfNeeded(
         } catch {
           /* ignore background prewarm failure */
         }
-      })();
+      };
+      if (isMobileNativeVid) {
+        await runPrewarm();
+      } else {
+        void runPrewarm();
+      }
     }
     return false;
   }
@@ -1683,9 +1698,9 @@ export async function embedSingleLocalVideoIfNeeded(
   const decodedFrames = await captureLocalVideoKeyframesUniversal(normVid, missingSecs);
   if (decodedFrames.length === 0) return false;
 
-  // 백그라운드 인덱싱 시점 사전 OCR 프리워밍 (영상 클릭 시 로딩 0초로 하단 즉시 노출 보장)
+  // 백그라운드 인덱싱 시점 사전 OCR 프리워밍 (영상 클릭 시 로딩 0초로 하단 즉시 노출 보장 · 모바일은 메모리 피크 방지를 위해 순차 실행)
   if (needsOcrPrewarm) {
-    void (async () => {
+    const runFullPrewarm = async () => {
       try {
         while (aiRuntimeFlags.activeVideoPlaybackCount > 0) {
           await new Promise((r) => setTimeout(r, 500));
@@ -1729,7 +1744,12 @@ export async function embedSingleLocalVideoIfNeeded(
       } catch {
         /* ignore optional OCR frame error */
       }
-    })();
+    };
+    if (isMobileNativeVid) {
+      await runFullPrewarm();
+    } else {
+      void runFullPrewarm();
+    }
   }
 
   let updatedAny = false;
@@ -1940,14 +1960,21 @@ async function captureHighResImageDataForVideoOcr(
   vid: VideoSceneItem,
   maxKeep = 14
 ): Promise<Array<{ timeSec: number; imageData: ImageData }>> {
-  if (typeof document === 'undefined' || !vid.videoUrl) return [];
+  if (typeof document === 'undefined') return [];
+  let srcUrl = vid.videoUrl || '';
+  if (!srcUrl && String(vid.id || '').startsWith('mobile_vid_')) {
+    srcUrl = await resolveNativeMobileVideoPlaybackUrl(vid.id);
+  }
+  if (!srcUrl) return [];
   return new Promise((resolve) => {
     const videoEl = document.createElement('video');
-    videoEl.crossOrigin = 'anonymous';
+    if (srcUrl.includes('127.0.0.1:')) {
+      videoEl.crossOrigin = 'anonymous';
+    }
     videoEl.muted = true;
     videoEl.playsInline = true;
     videoEl.preload = 'auto';
-    videoEl.src = vid.videoUrl;
+    videoEl.src = srcUrl;
 
     let settled = false;
     const finish = (items: Array<{ timeSec: number; imageData: ImageData }>) => {
@@ -2284,18 +2311,22 @@ export async function extractVideoScreenTextOnDemand(
   }
 
   // 2) 브라우저 <video> 무손실 ImageData 샘플링 + PP-OCRv5 Korean 정밀 판독 (PC & 모바일 공통)
+  const isMobileVid = String(vid.id || '').startsWith('mobile_vid_');
   const isRealVideoSource =
-    Boolean(vid.videoUrl) &&
-    (vid.videoUrl!.startsWith('blob:') ||
-      vid.videoUrl!.startsWith('/') ||
-      vid.videoUrl!.startsWith('http://127.0.0.1') ||
-      vid.videoUrl!.startsWith('http://localhost') ||
-      Boolean(vid.videoFileName));
+    isMobileVid ||
+    (Boolean(vid.videoUrl) &&
+      (vid.videoUrl!.startsWith('blob:') ||
+        vid.videoUrl!.startsWith('/') ||
+        vid.videoUrl!.startsWith('http://127.0.0.1') ||
+        vid.videoUrl!.startsWith('http://localhost') ||
+        vid.videoUrl!.startsWith('https://localhost') ||
+        vid.videoUrl!.startsWith('capacitor://localhost') ||
+        Boolean(vid.videoFileName)));
 
   if (isRealVideoSource) {
     try {
       const rawPaddleFrames: Array<{ timeSec: number; ocrText: string }> = [];
-      const sampledImgData = await captureHighResImageDataForVideoOcr(vid, 12);
+      const sampledImgData = await captureHighResImageDataForVideoOcr(vid, isMobileVid ? 6 : 12);
 
       if (sampledImgData.length > 0) {
         for (const item of sampledImgData) {

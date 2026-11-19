@@ -833,7 +833,7 @@ export const MobileAppView: React.FC = () => {
                 {hasExecutedUserSearch && Boolean(activeQuery.trim())
                   ? `🔍 “${activeQuery}” 통합 검색 결과`
                   : searchSpace === 'video'
-                  ? `🎬 동영상 바로보기 (${matchedVideoScenes.length}개)`
+                  ? `🎬 동영상 바로보기 (${matchedVideoScenes.length || videoSceneItems.length}개)`
                   : `📁 문서·서류함 바로보기 (${matchedLocalDocs.length + matchedVaultPhotos.length}건)`}
               </span>
               <button
@@ -860,16 +860,21 @@ export const MobileAppView: React.FC = () => {
               searchSpace === 'vault' ||
               (hasExecutedUserSearch && Boolean(activeQuery.trim()))) && (
           <div id="ghosti-search-results" className="scroll-mt-16">
-            {searchSpace === 'video' ? (
+            {searchSpace === 'video' ? (() => {
+              const displayVideos =
+                !hasExecutedUserSearch && matchedVideoScenes.length === 0
+                  ? videoSceneItems
+                  : matchedVideoScenes;
+              return (
               <section className="flex flex-col gap-2.5">
                 <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
                   <span className="font-headline-sm text-[14.5px] text-white font-bold">
                     {hasExecutedUserSearch && activeQuery
-                      ? `🎬 “${activeQuery}” 장면 검색 결과 (${matchedVideoScenes.length}개)`
-                      : `🎬 전체 동영상 (${matchedVideoScenes.length}개)`}
+                      ? `🎬 “${activeQuery}” 장면 검색 결과 (${displayVideos.length}개)`
+                      : `🎬 전체 동영상 (${displayVideos.length}개)`}
                   </span>
                   <div className="flex items-center gap-1.5">
-                    {matchedVideoScenes.length < videoSceneItems.length && (
+                    {displayVideos.length < videoSceneItems.length && (
                       <button
                         onClick={() => resetSearchSpaceToAll('video')}
                         className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[11px] font-bold"
@@ -880,9 +885,16 @@ export const MobileAppView: React.FC = () => {
                   </div>
                 </div>
 
-                {/* [처방 4] 모바일 스크롤 지옥 해방: 세로 나열 대신 좌우 스와이프 카드덱(Horizontal Snap Carousel)! */}
+                {displayVideos.length === 0 ? (
+                  <div className="p-4 rounded-2xl bg-zinc-900/80 border border-white/10 text-zinc-300 text-[12.5px] leading-relaxed">
+                    {hasExecutedUserSearch && activeQuery
+                      ? `“${activeQuery}”와 일치하는 동영상 장면이 없습니다.`
+                      : '🎬 내 스마트폰 갤러리에 저장된 동영상이 아직 없어요. 카메라로 영상을 촬영하거나 갤러리에 영상을 저장하면 자동으로 인덱싱되어 이곳에 표시됩니다.'}
+                  </div>
+                ) : (
+                /* [처방 4] 모바일 스크롤 지옥 해방: 세로 나열 대신 좌우 스와이프 카드덱(Horizontal Snap Carousel)! */
                 <div className="flex overflow-x-auto snap-x snap-mandatory gap-3 pb-2 no-scrollbar">
-                  {matchedVideoScenes.map((vid) => {
+                  {displayVideos.map((vid) => {
                     const cardThumbUrl = resolveVideoCardThumbUrl(vid);
                     const isWholeClip = (vid.matchedSeekSec ?? 0) <= 0;
                     const cleanTs = cleanVideoTimestampLabel(vid.matchedTimestamp);
@@ -891,7 +903,7 @@ export const MobileAppView: React.FC = () => {
                       key={vid.id}
                       onClick={() => setSelectedVideoModal(vid, vid.matchedSeekSec)}
                       className={`${
-                        matchedVideoScenes.length === 1 ? 'w-full' : 'min-w-[86%]'
+                        displayVideos.length === 1 ? 'w-full' : 'min-w-[86%]'
                       } snap-center rounded-2xl overflow-hidden bg-[#18181B] border border-white/10 flex flex-col cursor-pointer shrink-0`}
                     >
                       <div className="relative aspect-video w-full bg-black">
@@ -960,8 +972,10 @@ export const MobileAppView: React.FC = () => {
                     );
                   })}
                 </div>
+                )}
               </section>
-            ) : searchSpace === 'vault' ? (
+              );
+            })() : searchSpace === 'vault' ? (
               <section className="flex flex-col gap-3.5">
                 <div className="flex items-center justify-between px-0.5">
                   <span className="font-headline-sm text-[14.5px] text-white font-bold">

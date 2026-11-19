@@ -1,6 +1,7 @@
 import UIKit
 import Capacitor
 import Photos
+import AVFoundation
 
 @objc(GhostiBridgeViewController)
 class GhostiBridgeViewController: CAPBridgeViewController {
@@ -16,6 +17,7 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
     public let jsName = "GhostiMobileCare"
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "scanDeviceGalleryMedia", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "resolveVideoPlaybackUrl", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "requestSystemPhotoTrash", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openAppPermissionSettings", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "scanInstalledBloatCleaners", returnType: CAPPluginReturnPromise)
@@ -187,6 +189,80 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
                 "photos": photosList,
                 "videos": videosList
             ])
+        }
+    }
+
+    @objc func resolveVideoPlaybackUrl(_ call: CAPPluginCall) {
+        let rawId = call.getString("id") ?? ""
+        let localId = rawId.hasPrefix("mobile_vid_")
+            ? String(rawId.dropFirst("mobile_vid_".count))
+            : rawId
+        if localId.isEmpty {
+            call.resolve(["ok": false, "fileUrl": ""])
+            return
+        }
+
+        let fetched = PHAsset.fetchAssets(withLocalIdentifiers: [localId], options: nil)
+        guard let asset = fetched.firstObject else {
+            call.resolve(["ok": false, "fileUrl": ""])
+            return
+        }
+
+        let safeStem = localId
+            .replacingOccurrences(of: "/", with: "_")
+            .replacingOccurrences(of: ":", with: "_")
+        let fm = FileManager.default
+        let tmpDir = fm.temporaryDirectory
+
+        for ext in ["mp4", "mov", "m4v"] {
+            let existing = tmpDir.appendingPathComponent("ghosti_vid_\(safeStem).\(ext)")
+            if fm.fileExists(atPath: existing.path) {
+                call.resolve(["ok": true, "fileUrl": existing.absoluteString])
+                return
+            }
+        }
+
+        let vOpts = PHVideoRequestOptions()
+        vOpts.isNetworkAccessAllowed = true
+        vOpts.deliveryMode = .highQualityFormat
+
+        PHImageManager.default().requestAVAsset(forVideo: asset, options: vOpts) { avAsset, _, _ in
+            if let urlAsset = avAsset as? AVURLAsset {
+                let srcUrl = urlAsset.url
+                let ext = srcUrl.pathExtension.isEmpty ? "mov" : srcUrl.pathExtension.lowercased()
+                let dstUrl = tmpDir.appendingPathComponent("ghosti_vid_\(safeStem).\(ext)")
+                if !fm.fileExists(atPath: dstUrl.path) {
+                    do {
+                        try fm.linkItem(at: srcUrl, to: dstUrl)
+                    } catch {
+                        do {
+                            try fm.copyItem(at: srcUrl, to: dstUrl)
+                        } catch {
+                            call.resolve(["ok": false, "fileUrl": ""])
+                            return
+                        }
+                    }
+                }
+                call.resolve(["ok": true, "fileUrl": dstUrl.absoluteString])
+                return
+            }
+
+            guard let compAsset = avAsset,
+                  let exporter = AVAssetExportSession(asset: compAsset, presetName: AVAssetExportPresetMediumQuality) else {
+                call.resolve(["ok": false, "fileUrl": ""])
+                return
+            }
+            let outUrl = tmpDir.appendingPathComponent("ghosti_vid_\(safeStem).mp4")
+            try? fm.removeItem(at: outUrl)
+            exporter.outputURL = outUrl
+            exporter.outputFileType = .mp4
+            exporter.exportAsynchronously {
+                if exporter.status == .completed {
+                    call.resolve(["ok": true, "fileUrl": outUrl.absoluteString])
+                } else {
+                    call.resolve(["ok": false, "fileUrl": ""])
+                }
+            }
         }
     }
 

@@ -706,9 +706,9 @@ export const createAssistantOnboardingSlice: StateCreator<
     const maxTargetCount = options?.maxTargetCount ?? 240;
 
     // 1) 재실행/새로고침 시 0장 깜빡임 방지: IndexedDB 영구 캐시 즉시 복원
-    if (get().photos.length === 0) {
+    if (get().photos.length === 0 && get().videoSceneItems.length === 0) {
       const cached = await loadCachedMobileGalleryIndex();
-      if (cached && cached.photos.length > 0) {
+      if (cached && (cached.photos.length > 0 || cached.videos.length > 0)) {
         const { updatedPhotos, duplicateGroups: cachedDupGroups } =
           clusterPhotosIntoDuplicateGroups(cached.photos);
         const cachedTrashIds = new Set<string>();
@@ -803,9 +803,17 @@ export const createAssistantOnboardingSlice: StateCreator<
                 matchedBy: 'text-direct',
               }));
 
-            const existingVidIds = new Set(state.videoSceneItems.map((v) => v.id));
+            const freshVidById = new Map(convertedVideos.map((v) => [v.id, v]));
+            const upgradedExistingVids = state.videoSceneItems.map((v) => {
+              const fresh = freshVidById.get(v.id);
+              if (fresh && !v.videoUrl && fresh.videoUrl) {
+                return { ...v, videoUrl: fresh.videoUrl, thumbUrl: v.thumbUrl || fresh.thumbUrl };
+              }
+              return v;
+            });
+            const existingVidIds = new Set(upgradedExistingVids.map((v) => v.id));
             const nextVids = [
-              ...state.videoSceneItems,
+              ...upgradedExistingVids,
               ...convertedVideos.filter((v) => !existingVidIds.has(v.id)),
             ];
 
@@ -881,6 +889,44 @@ export const createAssistantOnboardingSlice: StateCreator<
         void startSilentRealMediaVisionIndexing({
           photos: get().photos,
           videos: get().videoSceneItems,
+          onVideoThumbHydrated: (videoFileName, thumbUrl) => {
+            set((state) => ({
+              videoSceneItems: state.videoSceneItems.map((v) =>
+                v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
+              ),
+              matchedVideoScenes: state.matchedVideoScenes.map((v) =>
+                v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
+              ),
+            }));
+          },
+          onVideoOcrHydrated: (videoFileName, ocrMeta) => {
+            const extraTokens = String(ocrMeta.ocrFullText || '')
+              .replace(/\[\d{2}:\d{2}\]/g, ' ')
+              .split(/\s+/)
+              .map((t) => t.trim())
+              .filter((t) => t.length >= 2)
+              .slice(0, 40);
+            set((state) => ({
+              videoSceneItems: state.videoSceneItems.map((v) =>
+                v.videoFileName === videoFileName
+                  ? {
+                      ...v,
+                      ...ocrMeta,
+                      keywords: Array.from(new Set([...(v.keywords || []), ...extraTokens])),
+                    }
+                  : v
+              ),
+              matchedVideoScenes: state.matchedVideoScenes.map((v) =>
+                v.videoFileName === videoFileName
+                  ? {
+                      ...v,
+                      ...ocrMeta,
+                      keywords: Array.from(new Set([...(v.keywords || []), ...extraTokens])),
+                    }
+                  : v
+              ),
+            }));
+          },
           onPhotoVisionHydrated: (photoId, patch) => {
             set((state) => ({
               photos: state.photos.map((p) => (p.id === photoId ? { ...p, ...patch } : p)),

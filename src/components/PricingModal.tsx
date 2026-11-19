@@ -14,6 +14,7 @@ import {
 } from '../services/setupMonsterTts';
 import { VoiceActorControlPill } from './VoiceActorControlPill';
 import { triggerUserFavoriteAiLiveVoiceBatonTouch } from '../services/voiceSearchAndAiBatonEngine';
+import { resolveNativeMobileVideoPlaybackUrl } from '../services/ghostiMobileCareBridge';
 import {
   cleanVideoTimestampLabel,
   extractVideoScreenTextOnDemand,
@@ -1553,7 +1554,23 @@ export const VideoScenePreviewModal: React.FC = () => {
       (selectedVideoModal.sizeMB || 20) <= 55;
 
     if (!isShortLocalClip) {
-      setResolvedVideoSrc(baseStreamUrl);
+      if (!baseStreamUrl && String(selectedVideoModal.id || '').startsWith('mobile_vid_')) {
+        setResolvedVideoSrc('');
+        void resolveNativeMobileVideoPlaybackUrl(selectedVideoModal.id).then((nativeUrl) => {
+          if (ocrCancelled || !nativeUrl) return;
+          setResolvedVideoSrc(nativeUrl);
+          useSaySeeStore.setState((st) => ({
+            videoSceneItems: st.videoSceneItems.map((v) =>
+              v.id === selectedVideoModal.id ? { ...v, videoUrl: nativeUrl } : v
+            ),
+            matchedVideoScenes: st.matchedVideoScenes.map((v) =>
+              v.id === selectedVideoModal.id ? { ...v, videoUrl: nativeUrl } : v
+            ),
+          }));
+        });
+      } else {
+        setResolvedVideoSrc(baseStreamUrl);
+      }
       return () => {
         ocrCancelled = true;
       };
