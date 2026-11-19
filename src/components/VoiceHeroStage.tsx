@@ -148,13 +148,13 @@ export const VoiceHeroStage: React.FC = () => {
   const isMobileOrStore = isMobile || Boolean(isStoreAppMode);
   const [isLandscapeCompact, setIsLandscapeCompact] = useState<boolean>(() =>
     typeof window !== 'undefined'
-      ? window.innerWidth > window.innerHeight && window.innerHeight <= 540
+      ? window.innerWidth > window.innerHeight && window.innerHeight <= 620
       : false
   );
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const syncLandscape = () => {
-      setIsLandscapeCompact(window.innerWidth > window.innerHeight && window.innerHeight <= 540);
+      setIsLandscapeCompact(window.innerWidth > window.innerHeight && window.innerHeight <= 620);
     };
     syncLandscape();
     window.addEventListener('resize', syncLandscape, { passive: true });

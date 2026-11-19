@@ -262,14 +262,14 @@ export const MobileAppView: React.FC = () => {
   const [showPolicyAndStoreSection, setShowPolicyAndStoreSection] = useState(false);
   const [isLandscapeCompact, setIsLandscapeCompact] = useState<boolean>(() =>
     typeof window !== 'undefined'
-      ? window.innerWidth > window.innerHeight && window.innerHeight <= 540
+      ? window.innerWidth > window.innerHeight && window.innerHeight <= 620
       : false
   );
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const syncLandscape = () => {
-      setIsLandscapeCompact(window.innerWidth > window.innerHeight && window.innerHeight <= 540);
+      setIsLandscapeCompact(window.innerWidth > window.innerHeight && window.innerHeight <= 620);
     };
     syncLandscape();
     window.addEventListener('resize', syncLandscape, { passive: true });
@@ -494,10 +494,10 @@ export const MobileAppView: React.FC = () => {
       }`}
     >
       {/* 상단 통합 헤더: 스마트폰 가로(Landscape) 회전 시 1줄 초슬림 바(42px)로 자동 압축해 본문 가시 영역을 극대화 */}
-      <header className="sticky top-0 inset-x-0 z-50 backdrop-blur-xl pt-safe">
+      <header className="sticky top-0 inset-x-0 z-50 backdrop-blur-xl pt-safe pl-safe pr-safe">
         {isLandscapeCompact ? (
           <div
-            className={`px-3 py-1 flex items-center justify-between gap-2 border-b transition-colors ${
+            className={`px-safe py-1 flex items-center justify-between gap-2 border-b transition-colors ${
               themeMode === 'light'
                 ? 'bg-white/95 border-[#EAE8E1]'
                 : 'bg-[#09090B]/95 border-white/10'
@@ -717,7 +717,7 @@ export const MobileAppView: React.FC = () => {
                 })}
               </nav>
 
-              {/* 사진 공유 하위 선택: 패밀리 ↔ 동호회·모임 ↔ 동창회 + (가족일 때 우리집/본가/처가) */}
+              {/* 사진 공유 하위 선택: 패밀리 ↔ 동호회·모임 ↔ 동창회 + (가족일 때 우리집/본가/처가 하위 계층 박스 명시) */}
               {resolveMainMenuId(activeLoungeType) === 'photo_share' && (
                 <div className="flex flex-col gap-1.5 -mt-0.5">
                   <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
@@ -750,7 +750,16 @@ export const MobileAppView: React.FC = () => {
                   </div>
 
                   {activeLoungeType === 'family' && (
-                    <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
+                    <div
+                      className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1.5 overflow-x-auto no-scrollbar ${
+                        themeMode === 'light'
+                          ? 'bg-teal-50/70 border-teal-200/80'
+                          : 'bg-teal-950/35 border-teal-500/30'
+                      }`}
+                    >
+                      <span className="text-[11px] font-extrabold text-[#0D9488] dark:text-teal-300 shrink-0 whitespace-nowrap">
+                        ↳ 가족방:
+                      </span>
                       {FAMILY_ROOM_PILLS.map((room) => {
                         const roomActive = activeFamilyRoom === room.id;
                         return (
@@ -852,7 +861,7 @@ export const MobileAppView: React.FC = () => {
       {isLandscapeCompact &&
         (resolveMainMenuId(activeLoungeType) === 'photo_share' || currentSubmenus.length > 0) && (
           <div
-            className={`px-3 py-1.5 border-b flex items-center justify-between gap-2 overflow-x-auto no-scrollbar ${
+            className={`px-safe py-1.5 border-b flex items-center justify-between gap-2 overflow-x-auto no-scrollbar ${
               themeMode === 'light'
                 ? 'bg-[#F8F7F4] border-[#E5E0D5]'
                 : 'bg-[#111114] border-white/10'
@@ -887,8 +896,10 @@ export const MobileAppView: React.FC = () => {
                   );
                 })}
                 {activeLoungeType === 'family' && (
-                  <>
-                    <span className="mx-0.5 text-zinc-500/40">|</span>
+                  <div className="flex items-center gap-1 ml-1 pl-2 border-l border-teal-500/40">
+                    <span className="text-[10.5px] font-extrabold text-[#0D9488] dark:text-teal-300 shrink-0 whitespace-nowrap">
+                      ↳ 가족방:
+                    </span>
                     {FAMILY_ROOM_PILLS.map((room) => {
                       const roomActive = activeFamilyRoom === room.id;
                       return (
@@ -911,7 +922,7 @@ export const MobileAppView: React.FC = () => {
                         </button>
                       );
                     })}
-                  </>
+                  </div>
                 )}
               </div>
             )}
@@ -960,7 +971,7 @@ export const MobileAppView: React.FC = () => {
       {/* [모바일 통합 1번 영역: 👻 귀신비서 (비서 대화 + 사진 정리 + 1초 검색 + 내 기기 통합 원스톱)] & [공유방 검색 피드] */}
       {(activeLoungeType === 'personal' || mobileTab === 'search') && (
         <main
-          className={`flex-1 w-full px-3 sm:px-4 flex flex-col ${
+          className={`flex-1 w-full px-safe sm:px-4 flex flex-col ${
             isLandscapeCompact ? 'pt-2 pb-5 gap-2.5' : 'pt-3.5 pb-8 gap-4'
           }`}
         >
@@ -1485,7 +1496,7 @@ export const MobileAppView: React.FC = () => {
 
       {/* 공유방(패밀리·동호·동창·업무) 전용 초대/방 설정 탭 */}
       {activeLoungeType !== 'personal' && mobileTab === 'settings' && (
-        <main className="flex-1 w-full px-4 pt-4 pb-10 flex flex-col gap-3.5">
+        <main className="flex-1 w-full px-safe pt-4 pb-10 flex flex-col gap-3.5">
           <LoungeCustomSettingsHeader />
         </main>
       )}
