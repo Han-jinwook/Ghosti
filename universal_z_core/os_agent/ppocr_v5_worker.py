@@ -122,7 +122,10 @@ def join_wrapped_korean_lines(upper: str, lower: str) -> str:
 
 
 def format_ocr_boxes_smart(raw_boxes: List[Dict[str, Any]], filter_video_ui: bool = False) -> str:
-    watermark_rx = re.compile(r"notebooklm|^capcut$|^veo$|^kapwing$", re.IGNORECASE)
+    watermark_rx = re.compile(
+        r"notebooklm|^capcut$|^veo$|^kapwing$|^[xyv]?rec[eo]rder$|mobizen|bandicam|gomcam|^ocam$|az\s*screen|^inshot$|kinemaster|vivavideo|filmora",
+        re.IGNORECASE,
+    )
     min_conf = 0.78 if filter_video_ui else 0.72
     filtered: List[Dict[str, Any]] = []
     for b in raw_boxes:

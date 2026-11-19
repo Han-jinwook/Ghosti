@@ -2182,6 +2182,9 @@ async function captureHighResImageDataForVideoOcr(
 
 const inMemoryPaddleVideoOcrCache = new Map<string, VideoOcrExtractResult>();
 
+const RECORDER_WATERMARK_SEG_RX =
+  /^(?:notebooklm|capcut|veo|kapwing|[xyv]?rec[eo]rder|mobizen|bandicam(?:\.com)?|gomcam|ocam|az\s*screen(?:\s*recorder)?|inshot|kinemaster|vivavideo|filmora)$/i;
+
 function dedupePaddleTimelineLines(
   rawFrames: Array<{ timeSec: number; ocrText: string }>,
   formatTs: (sec: number) => string
@@ -2201,8 +2204,58 @@ function dedupePaddleTimelineLines(
   };
 
   const sorted = [...rawFrames].sort((a, b) => a.timeSec - b.timeSec);
-  for (const fr of sorted) {
-    const txt = String(fr.ocrText || '').replace(/\s+/g, ' ').trim();
+  const segRows = sorted.map((fr) => {
+    const cleaned = String(fr.ocrText || '')
+      .replace(/\s+/g, ' ')
+      .trim()
+      .split(' · ')
+      .map((s) => s.trim())
+      .filter((s) => s && !RECORDER_WATERMARK_SEG_RX.test(s));
+    return { timeSec: fr.timeSec, segs: cleaned };
+  });
+
+  if (segRows.length >= 3) {
+    const tailCands: Array<{ idx: number; bg: Set<string> }> = [];
+    segRows.forEach((row, idx) => {
+      if (row.segs.length >= 2) {
+        const tail = row.segs[row.segs.length - 1];
+        if (
+          tail.length >= 3 &&
+          tail.length <= 20 &&
+          /^[A-Za-z0-9._\- ]+$/.test(tail) &&
+          /[A-Za-z]{3,}/.test(tail)
+        ) {
+          tailCands.push({ idx, bg: makeBigrams(tail.toLowerCase().replace(/[^a-z0-9]/g, '')) });
+        }
+      }
+    });
+    const dropIndices = new Set<number>();
+    for (const candA of tailCands) {
+      if (candA.bg.size === 0) continue;
+      let simCount = 0;
+      for (const candB of tailCands) {
+        if (candB.bg.size === 0) continue;
+        let inter = 0;
+        for (const g of candA.bg) {
+          if (candB.bg.has(g)) inter++;
+        }
+        if (inter / Math.max(1, Math.min(candA.bg.size, candB.bg.size)) >= 0.72) {
+          simCount++;
+        }
+      }
+      if (simCount >= 3) dropIndices.add(candA.idx);
+    }
+    if (dropIndices.size > 0) {
+      segRows.forEach((row, idx) => {
+        if (dropIndices.has(idx) && row.segs.length >= 2) {
+          row.segs = row.segs.slice(0, -1);
+        }
+      });
+    }
+  }
+
+  for (const fr of segRows) {
+    const txt = fr.segs.join(' · ').trim();
     const norm = txt.replace(/[^가-힣a-zA-Z0-9]/g, '').toLowerCase();
     if (norm.length < 4) continue;
     const curBigrams = makeBigrams(norm);

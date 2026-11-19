@@ -2491,7 +2491,7 @@ _VIDEO_STREAM_INFLIGHT: Dict[str, threading.Event] = {}
 _VIDEO_STREAM_LOCK = threading.Lock()
 _VIDEO_OCR_CACHE_FILE = MERLIN_DIR / "video_scene_ocr_cache_v2.json"
 _VIDEO_OCR_SCHEMA_VER = 10
-_VIDEO_PADDLE_OCR_VER = 21
+_VIDEO_PADDLE_OCR_VER = 22
 _VIDEO_OCR_LOCK = threading.Lock()
 _VIDEO_OCR_BG_RUNNING = False
 _FFMPEG_EXE_CACHE: str | None = ""
@@ -3156,9 +3156,24 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
     return ocr_by_file
 
 
+_RECORDER_WATERMARK_SEG_RX = re.compile(
+    r"^(?:notebooklm|capcut|veo|kapwing|[xyv]?rec[eo]rder|mobizen|bandicam(?:\.com)?|gomcam|ocam|az\s*screen(?:\s*recorder)?|inshot|kinemaster|vivavideo|filmora)$",
+    re.IGNORECASE,
+)
+
+
+def _strip_video_watermark_segments(text: str) -> str:
+    if not text:
+        return ""
+    segs = [seg.strip() for seg in text.split(" · ") if seg.strip()]
+    kept = [seg for seg in segs if not _RECORDER_WATERMARK_SEG_RX.fullmatch(seg)]
+    return " · ".join(kept)
+
+
 def _dedupe_ocr_timeline_lines(raw_frames: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
     """
     연속 구간에서 동일한 자막·슬라이드 문구가 반복될 때 중복을 제거하고,
+    화면 녹화·편집 앱 우하단 고정 워터마크(XRecorder/XRecerder/YRecerder, Bandicam, Mobizen 등 및 3프레임 이상 반복 영문 코너 배지)를 제거하며,
     애니메이션 빌드업(제목 먼저 등장 ➔ 본문 카드 추가 등장) 시에는 앞의 부분 텍스트를 완성형 본문으로 자동 승격(Upgrade Replace)합니다.
     """
     deduped: List[Dict[str, Any]] = []
@@ -3168,9 +3183,43 @@ def _dedupe_ocr_timeline_lines(raw_frames: List[Dict[str, Any]]) -> List[Dict[st
     def _bigrams(s: str) -> set[str]:
         return {s[i : i + 2] for i in range(len(s) - 1)} if len(s) >= 2 else ({s} if s else set())
 
+    # 사전 패스: 3개 이상의 서로 다른 구간 우하단 끝에 고정 박혀 반복되는 영문 워터마크 배지 자동 탐지
+    frame_seg_lists: List[tuple[int, Dict[str, Any], List[str]]] = []
     for fr in sorted(raw_frames, key=lambda x: int(x.get("timeSec") or 0)):
         raw_s = str(fr.get("ocrText") or "").strip()
-        txt = re.sub(r"\s+", " ", raw_s).strip() if fr.get("fromPaddleV5") else _clean_video_ocr_display_text(raw_s)
+        txt0 = re.sub(r"\s+", " ", raw_s).strip() if fr.get("fromPaddleV5") else _clean_video_ocr_display_text(raw_s)
+        txt0 = _strip_video_watermark_segments(txt0)
+        segs = [sg.strip() for sg in txt0.split(" · ") if sg.strip()]
+        frame_seg_lists.append((int(fr.get("timeSec") or 0), fr, segs))
+
+    if len(frame_seg_lists) >= 3:
+        tail_cands: List[tuple[int, set[str]]] = []
+        for idx_f, (_ts, _fr, segs) in enumerate(frame_seg_lists):
+            if len(segs) >= 2:
+                tail = segs[-1]
+                if 3 <= len(tail) <= 20 and re.fullmatch(r"[A-Za-z0-9._\- ]+", tail) and re.search(r"[A-Za-z]{3,}", tail):
+                    tail_cands.append((idx_f, _bigrams(re.sub(r"[^a-z0-9]", "", tail.lower()))))
+        drop_tail_indices: set[int] = set()
+        for idx_a, bg_a in tail_cands:
+            if not bg_a:
+                continue
+            sim_cnt = 0
+            for _idx_b, bg_b in tail_cands:
+                if not bg_b:
+                    continue
+                ov = len(bg_a & bg_b) / float(max(1, min(len(bg_a), len(bg_b))))
+                if ov >= 0.72:
+                    sim_cnt += 1
+            if sim_cnt >= 3:
+                drop_tail_indices.add(idx_a)
+        if drop_tail_indices:
+            frame_seg_lists = [
+                (ts_v, fr_v, segs[:-1] if i_f in drop_tail_indices and len(segs) >= 2 else segs)
+                for i_f, (ts_v, fr_v, segs) in enumerate(frame_seg_lists)
+            ]
+
+    for s_val, fr, segs in frame_seg_lists:
+        txt = " · ".join(segs).strip()
         if not txt or (not fr.get("fromPaddleV5") and not _is_meaningful_ocr_text(txt)):
             continue
         norm = re.sub(r"[^가-힣a-zA-Z0-9]", "", txt).lower()

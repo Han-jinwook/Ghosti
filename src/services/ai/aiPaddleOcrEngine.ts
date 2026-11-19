@@ -191,7 +191,8 @@ function joinWrappedKoreanLines(upper: string, lower: string): string {
 }
 
 export function formatOcrBoxesSmart(rawBoxes: PaddleOcrBox[]): string {
-  const watermarkRx = /notebooklm|^capcut$|^veo$|^kapwing$/i;
+  const watermarkRx =
+    /notebooklm|^capcut$|^veo$|^kapwing$|^[xyv]?rec[eo]rder$|mobizen|bandicam|gomcam|^ocam$|az\s*screen|^inshot$|kinemaster|vivavideo|filmora/i;
   const filtered = rawBoxes
     .map((b) => ({
       ...b,
