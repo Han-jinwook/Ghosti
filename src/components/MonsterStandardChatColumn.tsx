@@ -312,6 +312,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
   const [, setTick] = useState(0);
   const [inputText, setInputText] = useState('');
   const [isMicListening, setIsMicListening] = useState(false);
+  const [isChatInputFocused, setIsChatInputFocused] = useState(false);
   const speechRecRef = useRef<any>(null);
   const mediaRecRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
@@ -1566,7 +1567,13 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     activePlaceholderPool[0];
 
   return (
-    <aside className="flex flex-col h-[min(66dvh,540px)] sm:h-[calc(100dvh-155px)] min-h-[360px] sm:min-h-[580px] max-h-[840px] rounded-2xl border-2 border-teal-500/55 dark:border-teal-400/45 bg-[#E6F1EF] dark:bg-[#0B161C] shadow-[0_12px_36px_rgba(13,148,136,0.18)] overflow-hidden">
+    <aside
+      className={`flex flex-col ${
+        isMobileOrStore && isChatInputFocused
+          ? 'h-[min(46dvh,290px)] min-h-[220px]'
+          : 'h-[min(64dvh,520px)] min-h-[340px]'
+      } sm:h-[calc(100dvh-155px)] sm:min-h-[580px] max-h-[840px] rounded-2xl border-2 border-teal-500/55 dark:border-teal-400/45 bg-[#E6F1EF] dark:bg-[#0B161C] shadow-[0_12px_36px_rgba(13,148,136,0.18)] overflow-hidden transition-[height] duration-150`}
+    >
       {/* 0. 카톡 채팅방 스타일 전용 상단 타이틀 바 (PC·모바일 메인 화면과 뚜렷한 시각적 구분) */}
       <div
         title={careScheduleSummary}
@@ -1593,7 +1600,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         </span>
       </div>
 
-      {/* 1. 상단 원클릭 바로가기 바: PC는 [🕰️ 복원 기록]+[🏠 체험관], 모바일은 수동 불러오기 없이 성우 토글만 깔끔 배치 */}
+      {/* 1. 상단 원클릭 바로가기 바: PC는 [🕰️ 복원 기록]+[🏠 체험관], 모바일은 수동 불러오기 없이 성우 토글만 깔끔 배치 (모바일 키보드 타이핑 중에는 대화 공간 확보를 위해 잠시 접음) */}
+      {!(isMobileOrStore && isChatInputFocused) && (
       <div className="px-3 py-2 bg-white/90 dark:bg-[#10212B] border-b border-teal-600/20 dark:border-teal-400/20 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 text-[12px] text-emerald-950 dark:text-emerald-200">
         <div className="flex items-center gap-1 min-w-0">
           <span className="shrink-0 font-bold">🛡️</span>
@@ -1629,6 +1637,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           {isMobileOrStore && <VoiceActorControlPill compact />}
         </div>
       </div>
+      )}
 
       {/* 2. 본문 대화 스트림 (카톡 채팅방 스타일 전용 배경색 & 또렷한 말풍선 대비) */}
       <div
@@ -1928,6 +1937,19 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             type="text"
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
+            onFocus={() => {
+              setIsChatInputFocused(true);
+              if (isMobileOrStore) {
+                window.setTimeout(() => {
+                  if (scrollContainerRef.current) {
+                    scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+                  }
+                }, 80);
+              }
+            }}
+            onBlur={() => {
+              window.setTimeout(() => setIsChatInputFocused(false), 120);
+            }}
             placeholder={
               isMicListening
                 ? '🎙️ 듣고 있습니다...'
@@ -1944,7 +1966,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               onClick={toggleChatMicRecording}
               disabled={busy}
               title="모바일 음성으로 말하기 (음성 입력 시에만 성우 음성으로 응답합니다)"
-              className={`px-2 sm:px-3 py-2.5 rounded-xl text-[12px] sm:text-[13px] font-extrabold flex items-center gap-1 transition shrink-0 cursor-pointer border ${
+              className={`px-2 sm:px-3 py-2.5 rounded-xl text-[11.5px] sm:text-[13px] font-extrabold flex items-center gap-1 transition shrink-0 cursor-pointer border ${
                 isMicListening
                   ? 'bg-rose-600 text-white border-rose-500 animate-pulse'
                   : 'bg-white hover:bg-emerald-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-emerald-700 dark:text-emerald-300 border-emerald-400/60 dark:border-emerald-500/40'
@@ -1958,10 +1980,12 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             type="submit"
             disabled={busy || !inputText.trim()}
             aria-label="전송"
-            className="px-2.5 sm:px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-[12px] sm:text-[13px] font-extrabold flex items-center gap-1 transition shrink-0 cursor-pointer"
+            className={`${
+              isMobileOrStore && !inputText.trim() ? 'px-2.5' : 'px-2.5 sm:px-3.5'
+            } py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-[12px] sm:text-[13px] font-extrabold flex items-center justify-center gap-1 transition shrink-0 cursor-pointer`}
           >
             <Send className="w-4 h-4 shrink-0" />
-            <span className="shrink-0">전송</span>
+            {(!isMobileOrStore || Boolean(inputText.trim())) && <span className="shrink-0">전송</span>}
           </button>
         </form>
       </div>

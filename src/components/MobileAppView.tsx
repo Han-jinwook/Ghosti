@@ -268,11 +268,107 @@ export const MobileAppView: React.FC = () => {
 
   const [showPrivateSyncSection, setShowPrivateSyncSection] = useState(false);
   const [showPolicyAndStoreSection, setShowPolicyAndStoreSection] = useState(false);
+  const [isMobileKeyboardOpen, setIsMobileKeyboardOpen] = useState(false);
+  const [iosKeyboardInsetPx, setIosKeyboardInsetPx] = useState(0);
   const [isLandscapeCompact, setIsLandscapeCompact] = useState<boolean>(() =>
     typeof window !== 'undefined'
       ? window.innerWidth > window.innerHeight && window.innerHeight <= 620
       : false
   );
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    let latestIosKb = 0;
+
+    const ensureFocusedInputVisibleAboveKeyboard = (kbHeightOverride?: number) => {
+      const active = document.activeElement as HTMLElement | null;
+      if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA')) return;
+      const kbH = typeof kbHeightOverride === 'number' ? kbHeightOverride : latestIosKb;
+      const vv = window.visualViewport;
+      const visibleBottom =
+        kbH > 60
+          ? window.innerHeight - kbH
+          : vv
+          ? vv.offsetTop + vv.height
+          : window.innerHeight;
+      const rect = active.getBoundingClientRect();
+      // 입력칸이 키보드에 가려진 경우에만 가려진 높이만큼만 부드럽게 올려 대화창 본문과 입력칸이 동시에 보이게 유지
+      if (rect.bottom > visibleBottom - 14) {
+        const delta = rect.bottom - (visibleBottom - 18);
+        window.scrollBy({ top: delta, behavior: 'smooth' });
+      } else if (active.id === 'ghosti-secretary-chat-input') {
+        const chatAside = active.closest('aside');
+        const headerEl = document.querySelector('header');
+        const headerBottom = headerEl ? headerEl.getBoundingClientRect().bottom : 88;
+        if (chatAside) {
+          const asideRect = chatAside.getBoundingClientRect();
+          if (asideRect.top < headerBottom && rect.bottom < visibleBottom - 24) {
+            const pullBack = Math.min(headerBottom - asideRect.top, visibleBottom - 20 - rect.bottom);
+            if (pullBack > 8) {
+              window.scrollBy({ top: -pullBack, behavior: 'auto' });
+            }
+          }
+        }
+      }
+    };
+
+    const onNativeKb = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ open?: boolean; height?: number; platform?: string }>).detail;
+      const open = Boolean(detail?.open);
+      setIsMobileKeyboardOpen(open);
+      if (detail?.platform === 'ios') {
+        latestIosKb = open ? Math.max(0, Number(detail?.height || 0)) : 0;
+        setIosKeyboardInsetPx(latestIosKb);
+      }
+      if (open) {
+        window.setTimeout(() => ensureFocusedInputVisibleAboveKeyboard(latestIosKb), 60);
+        window.setTimeout(() => ensureFocusedInputVisibleAboveKeyboard(latestIosKb), 260);
+      }
+    };
+
+    const onVvResize = () => {
+      const vv = window.visualViewport;
+      if (!vv) return;
+      const shrunk = window.innerHeight - vv.height > 120;
+      const active = document.activeElement as HTMLElement | null;
+      const isEditing = Boolean(active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA'));
+      if (shrunk && isEditing) {
+        setIsMobileKeyboardOpen(true);
+        window.setTimeout(() => ensureFocusedInputVisibleAboveKeyboard(latestIosKb), 40);
+      } else if (!shrunk && latestIosKb === 0) {
+        setIsMobileKeyboardOpen(false);
+      }
+    };
+
+    const onFocusIn = (e: FocusEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+        window.setTimeout(() => ensureFocusedInputVisibleAboveKeyboard(latestIosKb), 120);
+        window.setTimeout(() => ensureFocusedInputVisibleAboveKeyboard(latestIosKb), 320);
+      }
+    };
+    const onFocusOut = () => {
+      window.setTimeout(() => {
+        const active = document.activeElement as HTMLElement | null;
+        if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA')) {
+          setIsMobileKeyboardOpen(false);
+          setIosKeyboardInsetPx(0);
+          latestIosKb = 0;
+        }
+      }, 150);
+    };
+
+    window.addEventListener('ghostiKeyboardState', onNativeKb);
+    window.visualViewport?.addEventListener('resize', onVvResize);
+    window.addEventListener('focusin', onFocusIn);
+    window.addEventListener('focusout', onFocusOut);
+    return () => {
+      window.removeEventListener('ghostiKeyboardState', onNativeKb);
+      window.visualViewport?.removeEventListener('resize', onVvResize);
+      window.removeEventListener('focusin', onFocusIn);
+      window.removeEventListener('focusout', onFocusOut);
+    };
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -336,22 +432,29 @@ export const MobileAppView: React.FC = () => {
 
   return (
     <div
-      className={`bg-[#09090B] text-zinc-100 font-body-md flex flex-col min-h-screen min-h-dvh mx-auto relative shadow-2xl border-x border-white/10 ${
+      style={
+        iosKeyboardInsetPx > 60
+          ? { paddingBottom: `${iosKeyboardInsetPx + 28}px` }
+          : undefined
+      }
+      className={`${
+        themeMode === 'light' ? 'bg-[#F8F7F4] text-slate-900' : 'bg-[#09090B] text-zinc-100'
+      } font-body-md flex flex-col min-h-screen min-h-dvh mx-auto relative shadow-2xl border-x border-white/10 ${
         isLandscapeCompact
           ? 'w-full max-w-5xl pb-6'
           : `max-w-xl ${currentSubmenus.length > 0 ? 'pb-24' : 'pb-12'}`
       }`}
     >
-      {/* 상단 통합 헤더: 스마트폰 가로(Landscape) 회전 시 1줄 초슬림 바(42px)로 자동 압축해 본문 가시 영역을 극대화 */}
-      <header className="sticky top-0 inset-x-0 z-50 backdrop-blur-xl pt-safe">
+      {/* 상단 통합 헤더: 상태바(pt-safe) 영역부터 네비게이션 바까지 단일 불투명 배경으로 일체화하여 iOS 다이나믹 아일랜드·상태바 경계 이질감 원천 제거 */}
+      <header
+        className={`sticky top-0 inset-x-0 z-50 pt-safe border-b transition-colors ${
+          themeMode === 'light'
+            ? 'bg-white border-[#EAE8E1]'
+            : 'bg-[#09090B] border-white/10'
+        }`}
+      >
         {isLandscapeCompact ? (
-          <div
-            className={`px-safe py-1 flex items-center justify-between gap-2 border-b transition-colors ${
-              themeMode === 'light'
-                ? 'bg-white/95 border-[#EAE8E1]'
-                : 'bg-[#09090B]/95 border-white/10'
-            }`}
-          >
+          <div className="px-safe py-1 flex items-center justify-between gap-2">
             <div className="flex items-center gap-1 shrink-0">
               <GhostiBrandLogo
                 size="mobile"
@@ -448,13 +551,7 @@ export const MobileAppView: React.FC = () => {
           </div>
         ) : (
           <>
-            <div
-              className={`px-safe py-2 flex flex-col gap-2 border-b transition-colors ${
-                themeMode === 'light'
-                  ? 'bg-white/95 border-[#EAE8E1]'
-                  : 'bg-[#09090B]/95 border-white/10'
-              }`}
-            >
+            <div className="px-safe py-2 flex flex-col gap-2">
               <div className="flex items-center justify-between gap-1 flex-nowrap min-w-0">
                 <div className="flex items-center gap-1 shrink-0 min-w-0">
                   <GhostiBrandLogo
@@ -519,19 +616,21 @@ export const MobileAppView: React.FC = () => {
                 </div>
               </div>
 
-              {/* 모바일 공식 마스터 슬로건 한 줄 띠 (SSOT v2.3 18자 대표 H1) */}
-              <div
-                className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold text-center truncate ${
-                  themeMode === 'light'
-                    ? 'bg-teal-50/80 border-teal-200 text-teal-950'
-                    : 'bg-zinc-900/80 border-teal-500/20 text-zinc-200'
-                }`}
-                title="내 PC와 모바일에 1초 초능력을 — 광고 0% · 클라우드 월세 0원"
-              >
-                <span className="text-teal-600 dark:text-teal-400">내 PC와 모바일에 1초 초능력을</span>{' '}
-                <span className="opacity-30">|</span>{' '}
-                <span className="text-emerald-600 dark:text-emerald-400">광고 0% · 클라우드 월세 0원</span>
-              </div>
+              {/* 모바일 공식 마스터 슬로건 한 줄 띠 (키보드 입력 중에는 대화창 가시 영역 확보를 위해 자동 접힘) */}
+              {!isMobileKeyboardOpen && (
+                <div
+                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold text-center truncate ${
+                    themeMode === 'light'
+                      ? 'bg-teal-50/80 border-teal-200 text-teal-950'
+                      : 'bg-zinc-900/80 border-teal-500/20 text-zinc-200'
+                  }`}
+                  title="내 PC와 모바일에 1초 초능력을 — 광고 0% · 클라우드 월세 0원"
+                >
+                  <span className="text-teal-600 dark:text-teal-400">내 PC와 모바일에 1초 초능력을</span>{' '}
+                  <span className="opacity-30">|</span>{' '}
+                  <span className="text-emerald-600 dark:text-emerald-400">광고 0% · 클라우드 월세 0원</span>
+                </div>
+              )}
 
               {/* 1단 메인메뉴 3개 (① 👻 귀신비서 / ② 📸 사진 공유 / ③ 💼 업무 공유(S:)): 균등 3분할 캡슐 */}
               <nav className="grid grid-cols-3 gap-1">

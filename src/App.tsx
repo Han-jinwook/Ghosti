@@ -789,8 +789,9 @@ export const App: React.FC = () => {
     };
   }, [hasAnyModalOpen, isPtrRefreshing]);
 
-  // 모바일 및 데스크톱 전 페이지 공통 '맨 위로 가기 (Scroll to Top)' 플로팅 버튼 노출 상태
+  // 모바일 및 데스크톱 전 페이지 공통 '맨 위로 가기 (Scroll to Top)' 플로팅 버튼 노출 상태 (모바일 키보드 입력 포커스 중에는 가림 방지를 위해 자동 숨김)
   const [showScrollTopBtn, setShowScrollTopBtn] = useState(false);
+  const [isMobileInputFocused, setIsMobileInputFocused] = useState(false);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -802,9 +803,35 @@ export const App: React.FC = () => {
         0;
       setShowScrollTopBtn(y > 160);
     };
+    const onFocusIn = (e: FocusEvent) => {
+      const el = e.target as HTMLElement | null;
+      if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
+        setIsMobileInputFocused(true);
+      }
+    };
+    const onFocusOut = () => {
+      window.setTimeout(() => {
+        const active = document.activeElement as HTMLElement | null;
+        setIsMobileInputFocused(Boolean(active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA')));
+      }, 120);
+    };
+    const onNativeKb = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ open?: boolean }>).detail;
+      if (typeof detail?.open === 'boolean') {
+        setIsMobileInputFocused(detail.open);
+      }
+    };
     window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('focusin', onFocusIn);
+    window.addEventListener('focusout', onFocusOut);
+    window.addEventListener('ghostiKeyboardState', onNativeKb);
     handleScroll();
-    return () => window.removeEventListener('scroll', handleScroll);
+    return () => {
+      window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('focusin', onFocusIn);
+      window.removeEventListener('focusout', onFocusOut);
+      window.removeEventListener('ghostiKeyboardState', onNativeKb);
+    };
   }, []);
 
   const handleScrollToTop = () => {
@@ -963,7 +990,7 @@ export const App: React.FC = () => {
       </div>
 
       {/* 모든 페이지(쇼룸 대문, 모바일, 데스크톱 전 메뉴) 공통 맨 위로 가기 플로팅 버튼 */}
-      {showScrollTopBtn && (
+      {showScrollTopBtn && !(layout === 'mobile' && isMobileInputFocused) && (
         <button
           type="button"
           onClick={handleScrollToTop}

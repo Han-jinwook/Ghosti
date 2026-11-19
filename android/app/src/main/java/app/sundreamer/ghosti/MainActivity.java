@@ -76,6 +76,11 @@ public class MainActivity extends BridgeActivity {
         // 파일 끝에 moov 인덱스가 있는 스마트폰 촬영 영상 재생이 실패하므로, /__ghosti_media_video/{id}.mp4 경로를
         // ParcelFileDescriptor 직접 탐색(64-bit Range 206)으로 즉시 송출합니다.
         if (this.bridge != null && this.bridge.getWebView() != null) {
+            try {
+                // 안드로이드 OS 시스템 글꼴 크기 확대(115~140%)로 인해 좁은 모바일 입력창 안내문구·버튼이 깨지는 현상 차단
+                this.bridge.getWebView().getSettings().setTextZoom(100);
+            } catch (Throwable ignored) {
+            }
             this.bridge.setWebViewClient(new BridgeWebViewClient(this.bridge) {
                 @Override
                 public WebResourceResponse shouldInterceptRequest(WebView view, WebResourceRequest request) {
@@ -93,11 +98,13 @@ public class MainActivity extends BridgeActivity {
             });
         }
 
-        // [Android 15/16 Edge-to-Edge Safe Area & 상태바 시계/배터리 가시성 보장]:
-        // 기본 웜 라이트 배경(#F8F7F4)과 어두운 상태바 아이콘(LightStatusBars=true)을 일치시켜 검정 배경에 시계·배터리가 묻히지 않게 보장
+        // [Android 15/16 Edge-to-Edge & 소프트 키보드(IME) 빈 여백 0px 단일 제어]:
+        // Capacitor 내장 SystemBars 이중 패딩을 비활성화하고(insetsHandling='disable'),
+        // 본 단일 리스너에서만 상태바·컷아웃·키보드(IME) 높이를 정확히 1회 반영한 뒤 하위 WebView에는 Insets.NONE을 전달하여
+        // 삼성 키보드 위 하얀 빈칸(이중 차감) 및 adjustPan 상단 대화 밀림 현상을 원천 차단합니다.
         Window window = getWindow();
         if (window != null) {
-            window.setStatusBarColor(Color.parseColor("#F8F7F4"));
+            window.setStatusBarColor(Color.WHITE);
             window.setNavigationBarColor(Color.parseColor("#F8F7F4"));
             WindowInsetsControllerCompat controller = WindowCompat.getInsetsController(window, window.getDecorView());
             if (controller != null) {
@@ -107,13 +114,35 @@ public class MainActivity extends BridgeActivity {
         }
         View contentView = findViewById(android.R.id.content);
         if (contentView != null) {
-            contentView.setBackgroundColor(Color.parseColor("#F8F7F4"));
+            contentView.setBackgroundColor(Color.WHITE);
+            final boolean[] lastImeOpen = new boolean[] { false };
             ViewCompat.setOnApplyWindowInsetsListener(contentView, (v, windowInsets) -> {
-                Insets insets = windowInsets.getInsets(
+                Insets sysInsets = windowInsets.getInsets(
                     WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout()
                 );
-                v.setPadding(insets.left, insets.top, insets.right, insets.bottom);
-                return WindowInsetsCompat.CONSUMED;
+                Insets imeInsets = windowInsets.getInsets(WindowInsetsCompat.Type.ime());
+                boolean imeVisible = windowInsets.isVisible(WindowInsetsCompat.Type.ime()) && imeInsets.bottom > sysInsets.bottom;
+                int bottomPad = imeVisible ? imeInsets.bottom : sysInsets.bottom;
+                v.setPadding(sysInsets.left, sysInsets.top, sysInsets.right, bottomPad);
+
+                if (lastImeOpen[0] != imeVisible && this.bridge != null && this.bridge.getWebView() != null) {
+                    lastImeOpen[0] = imeVisible;
+                    final boolean openNow = imeVisible;
+                    this.bridge.getWebView().post(() -> {
+                        try {
+                            this.bridge.getWebView().evaluateJavascript(
+                                "window.dispatchEvent(new CustomEvent('ghostiKeyboardState', { detail: { open: " + openNow + ", height: 0, platform: 'android' } }));",
+                                null
+                            );
+                        } catch (Throwable ignored) {
+                        }
+                    });
+                }
+
+                return new WindowInsetsCompat.Builder(windowInsets)
+                    .setInsets(WindowInsetsCompat.Type.systemBars() | WindowInsetsCompat.Type.displayCutout(), Insets.NONE)
+                    .setInsets(WindowInsetsCompat.Type.ime(), Insets.NONE)
+                    .build();
             });
             ViewCompat.requestApplyInsets(contentView);
         }

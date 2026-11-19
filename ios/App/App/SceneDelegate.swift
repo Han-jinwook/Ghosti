@@ -7,9 +7,63 @@ import AVFoundation
 
 @objc(GhostiBridgeViewController)
 class GhostiBridgeViewController: CAPBridgeViewController {
+    override open var preferredStatusBarStyle: UIStatusBarStyle {
+        return .darkContent
+    }
+
     override open func capacitorDidLoad() {
         super.capacitorDidLoad()
         bridge?.registerPluginInstance(GhostiMobileCarePlugin())
+        view.backgroundColor = UIColor.white
+        webView?.isOpaque = true
+        webView?.backgroundColor = UIColor.white
+        webView?.scrollView.backgroundColor = UIColor.white
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleIosKeyboardFrameChange(_:)),
+            name: UIResponder.keyboardWillChangeFrameNotification,
+            object: nil
+        )
+        NotificationCenter.default.addObserver(
+            self,
+            selector: #selector(handleIosKeyboardWillHide(_:)),
+            name: UIResponder.keyboardWillHideNotification,
+            object: nil
+        )
+    }
+
+    deinit {
+        NotificationCenter.default.removeObserver(self)
+    }
+
+    @objc private func handleIosKeyboardFrameChange(_ notification: Notification) {
+        guard isViewLoaded,
+              let userInfo = notification.userInfo,
+              let endVal = userInfo[UIResponder.keyboardFrameEndUserInfoKey] as? NSValue else {
+            return
+        }
+        let kbEndInView = view.convert(endVal.cgRectValue, from: nil)
+        let overlap = max(0, Int(ceil(view.bounds.height - kbEndInView.origin.y)))
+        let isOpen = overlap > 60
+        let js = """
+        (function(){
+          var r = document.documentElement;
+          if (r) r.style.setProperty('--ghosti-kb-inset', '\(overlap)px');
+          window.dispatchEvent(new CustomEvent('ghostiKeyboardState', { detail: { open: \(isOpen ? "true" : "false"), height: \(overlap), platform: 'ios' } }));
+        })();
+        """
+        webView?.evaluateJavaScript(js, completionHandler: nil)
+    }
+
+    @objc private func handleIosKeyboardWillHide(_ notification: Notification) {
+        let js = """
+        (function(){
+          var r = document.documentElement;
+          if (r) r.style.setProperty('--ghosti-kb-inset', '0px');
+          window.dispatchEvent(new CustomEvent('ghostiKeyboardState', { detail: { open: false, height: 0, platform: 'ios' } }));
+        })();
+        """
+        webView?.evaluateJavaScript(js, completionHandler: nil)
     }
 
     override open func viewDidAppear(_ animated: Bool) {
