@@ -776,28 +776,44 @@ def build_feedback_blocks(
             context_name="재테스트 안내(build_feedback_blocks)",
         )
 
-    header_rich_text: List[Dict[str, Any]] = [
-        {
-            "type": "text",
-            "text": {"content": f"{header_label} ({ts})" + ("\n" if intro_lines else "")},
-            "annotations": {"bold": True, "color": header_color},
-        }
-    ]
-    if intro_lines:
-        header_rich_text.append(
-            {
-                "type": "text",
-                "text": {"content": "\n".join(intro_lines)[:1850]},
-            }
-        )
-
     blocks.append(
         {
             "object": "block",
             "type": "paragraph",
-            "paragraph": {"rich_text": header_rich_text},
+            "paragraph": {
+                "rich_text": [
+                    {
+                        "type": "text",
+                        "text": {"content": f"{header_label} ({ts})"},
+                        "annotations": {"bold": True, "color": header_color},
+                    }
+                ]
+            },
         }
     )
+
+    if intro_lines:
+        intro_joined = "\n".join(intro_lines)[:1850]
+        is_new_policy = ("신규 변경 규칙" in intro_joined) or ("바뀐 정책" in intro_joined) or ("변경 정책" in intro_joined)
+        callout_emoji = "📢" if is_new_policy else "📌"
+        callout_color = "yellow_background" if is_new_policy else "blue_background"
+        display_intro = re.sub(r"^[📌📢]\s*", "", intro_joined).strip()
+        blocks.append(
+            {
+                "object": "block",
+                "type": "callout",
+                "callout": {
+                    "icon": {"type": "emoji", "emoji": callout_emoji},
+                    "color": callout_color,
+                    "rich_text": [
+                        {
+                            "type": "text",
+                            "text": {"content": display_intro[:1900]},
+                        }
+                    ],
+                },
+            }
+        )
 
     if checklist_heading_text:
         blocks.append(
@@ -1251,18 +1267,22 @@ def create_mission(
         max_todos=allowed_max_todos,
     )
     summary_body = "\n".join(summary_lines)
+    is_new_policy_mission = ("신규 변경 규칙" in summary_body) or ("바뀐 정책" in summary_body) or ("변경 정책" in summary_body)
+    mission_callout_emoji = "📢" if is_new_policy_mission else "📌"
+    mission_callout_color = "yellow_background" if is_new_policy_mission else "blue_background"
+    clean_summary_body = re.sub(r"^[📌📢]\s*", "", summary_body).strip()
 
     children_blocks: List[Dict[str, Any]] = [
         {
             "object": "block",
             "type": "callout",
             "callout": {
-                "icon": {"type": "emoji", "emoji": "📌"},
-                "color": "blue_background",
+                "icon": {"type": "emoji", "emoji": mission_callout_emoji},
+                "color": mission_callout_color,
                 "rich_text": [
                     {
                         "type": "text",
-                        "text": {"content": summary_body[:1950]},
+                        "text": {"content": clean_summary_body[:1950]},
                     }
                 ],
             },
