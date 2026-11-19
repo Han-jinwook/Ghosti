@@ -35,6 +35,7 @@ import {
   tableToTsv,
   loadDojoProgress,
   saveDojoProgress,
+  resetDojoProgress,
   countBasicsDone,
   countDojoDone,
   isAllDojoDone,
@@ -139,10 +140,10 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
       {summoned && (
         <div className={`${boxCls} border-[#2DD4BF]/60 flex flex-col gap-1.5`}>
           <div className="text-[12px] font-extrabold text-[#2DD4BF]">👻 기본 귀신창 (한영·띄어쓰기 자동 성형 · 평소 복붙 원문 보존 · Wave 1 정예 구성)</div>
-          <div className="flex flex-wrap gap-1.5 text-[11.5px] text-[#5EEAD4] font-bold">
-            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[Ctrl+V] 순차붙여넣기</span>
-            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[1] 🧹서식·줄바꿈 다림질</span>
-            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-[#5EEAD4]/40">[2] 📄스샷·PDF변환🔒</span>
+          <div className="flex flex-wrap gap-1.5 text-[11.5px] text-[#0F766E] dark:text-[#5EEAD4] font-bold">
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-teal-600/35 dark:border-[#5EEAD4]/40">[Ctrl+V] 순차붙여넣기</span>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-teal-600/35 dark:border-[#5EEAD4]/40">[1] 🧹서식·줄바꿈 다림질</span>
+            <span className="px-2 py-0.5 rounded bg-zinc-900 border border-teal-600/35 dark:border-[#5EEAD4]/40">[2] 📄스샷·PDF변환🔒</span>
           </div>
           <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11.5px] text-[#E2E8F0]">
             <div className="flex flex-wrap gap-1.5">
@@ -237,17 +238,41 @@ const Basic3: React.FC<{ onDone: () => void }> = ({ onDone }) => {
 /* ─────────────────────────────────────────────────────────────
  * 2단계: 초능력 9종 도장깨기 샌드박스 (B4)
  * ───────────────────────────────────────────────────────────── */
+const DOJO_SANDBOX_TITLE_MARKER = '\u2063';
+
 const Dojo1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const [text, setText] = useState('');
   const idleTimerRef = useRef<number>(0);
+  const dotRollbackRef = useRef<{ rawFull: string; convertedFull: string } | null>(null);
+
+  const setSandboxTitleGuard = useCallback((focused: boolean) => {
+    if (typeof document === 'undefined') return;
+    const base = document.title.replaceAll(DOJO_SANDBOX_TITLE_MARKER, '');
+    document.title = focused ? `${base}${DOJO_SANDBOX_TITLE_MARKER}` : base;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      window.clearTimeout(idleTimerRef.current);
+      setSandboxTitleGuard(false);
+    };
+  }, [setSandboxTitleGuard]);
 
   const applyTypoMorph = useCallback(
-    (rawVal: string, appendSpace: boolean) => {
-      const trimmed = rawVal.trim();
-      if (!trimmed || !/[A-Za-z]/.test(trimmed)) return false;
-      const converted = simulateSuperpowerLocal('typo', trimmed);
-      if (converted !== trimmed && /[가-힣]/.test(converted)) {
-        setText(appendSpace ? `${converted} ` : converted);
+    (rawVal: string, appendSuffix = '') => {
+      const leadSpace = rawVal.match(/^\s*/)?.[0] ?? '';
+      const trailSpace = rawVal.match(/\s*$/)?.[0] ?? '';
+      const core = rawVal.trim();
+      if (!core || !/[A-Za-z]{2,}/.test(core)) return false;
+      const convertedCore = simulateSuperpowerLocal('typo', core);
+      if (convertedCore !== core && /[가-힣]/.test(convertedCore)) {
+        const nextVal = `${leadSpace}${convertedCore}${appendSuffix || trailSpace}`;
+        if (rawVal.endsWith('.') && !appendSuffix) {
+          dotRollbackRef.current = { rawFull: rawVal, convertedFull: nextVal };
+        } else {
+          dotRollbackRef.current = null;
+        }
+        setText(nextVal);
         playBabyGhostChime('typo');
         onDone();
         return true;
@@ -260,10 +285,13 @@ const Dojo1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   useEffect(() => {
     window.clearTimeout(idleTimerRef.current);
     const trimmed = text.trim();
-    if (!trimmed || !/[A-Za-z]{4,}/.test(trimmed)) return;
+    if (!trimmed || !/[A-Za-z]{2,}/.test(trimmed)) return;
+    const endsWithSentencePunct = /[A-Za-z]{2,}[.,~]$/.test(trimmed);
+    if (!endsWithSentencePunct && !/[A-Za-z]{4,}/.test(trimmed)) return;
+    const delayMs = endsWithSentencePunct ? 380 : 850;
     idleTimerRef.current = window.setTimeout(() => {
-      applyTypoMorph(trimmed, false);
-    }, 1000);
+      applyTypoMorph(text, '');
+    }, delayMs);
     return () => window.clearTimeout(idleTimerRef.current);
   }, [text, applyTypoMorph]);
 
@@ -272,11 +300,40 @@ const Dojo1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
       <div className="flex gap-2">
         <input
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          spellCheck={false}
+          autoComplete="off"
+          autoCorrect="off"
+          onFocus={() => setSandboxTitleGuard(true)}
+          onBlur={() => setSandboxTitleGuard(false)}
+          onChange={(e) => {
+            const nextVal = e.target.value;
+            const rb = dotRollbackRef.current;
+            if (
+              rb &&
+              nextVal.length === rb.convertedFull.length + 1 &&
+              nextVal.startsWith(rb.convertedFull) &&
+              /[A-Za-z]/.test(nextVal[nextVal.length - 1])
+            ) {
+              dotRollbackRef.current = null;
+              setText(rb.rawFull + nextVal[nextVal.length - 1]);
+              return;
+            }
+            dotRollbackRef.current = null;
+            setText(nextVal);
+          }}
           onKeyDown={(e) => {
-            if ((e.key === ' ' || e.key === 'Enter') && /[A-Za-z]/.test(text)) {
-              if (applyTypoMorph(text, e.key === ' ')) {
+            if ((e.key === ' ' || e.key === 'Enter') && /[A-Za-z]{2,}/.test(text)) {
+              if (applyTypoMorph(text, e.key === ' ' ? ' ' : '')) {
                 e.preventDefault();
+              }
+              return;
+            }
+            if ((e.key === '?' || e.key === '!') && /[A-Za-z]{2,}$/.test(text)) {
+              const lastTok = text.trim().split(/\s+/).pop() || '';
+              if (!lastTok.includes('@') && !lastTok.includes('://') && !/^www\./i.test(lastTok)) {
+                if (applyTypoMorph(text, e.key)) {
+                  e.preventDefault();
+                }
               }
             }
           }}
@@ -288,7 +345,7 @@ const Dojo1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
         </button>
       </div>
       <div className="text-[11.5px] text-zinc-400">
-        💡 실전 안내: <strong className="text-zinc-200">메모장·카카오톡·엑셀 셀 편집</strong>에서는 스페이스바 또는 1초 정지 시 실시간 자동변환되며, <strong className="text-zinc-200">크롬·노션·한글(HWP)</strong> 등 웹/문서창은 자소 꼬임 방지를 위해 <strong className="text-teal-300">Ctrl+0 ➔ [1]</strong>로 안전하게 변환됩니다.
+        💡 실전 안내: <strong className="text-zinc-200">메모장·카카오톡·엑셀 셀 편집</strong>에서는 스페이스바·문장부호(. ? !) 또는 1초 정지 시 실시간 자동변환되며, <strong className="text-zinc-200">크롬·노션·한글(HWP)</strong> 등 웹/문서창은 자소 꼬임 방지를 위해 <strong className="text-teal-300">Ctrl+0 ➔ [1]</strong>로 안전하게 변환됩니다.
       </div>
     </div>
   );
@@ -651,28 +708,30 @@ const TrialRewardCard: React.FC = () => {
     return 'none';
   });
 
+  const lastBackendSigRef = useRef<string>('');
+
   useEffect(() => {
     const syncFromBackend = async () => {
       const st = await fetchSuperpowerStatus(accountId, isSubscribed);
+      const sig = `${st.trial_status}|${st.trial_opt_in_status || ''}|${st.trial_days_left}|${st.is_subscribed}`;
+      if (sig === lastBackendSigRef.current) return;
+      lastBackendSigRef.current = sig;
       setStatus(st);
-      if (st.trial_status === 'ACTIVE_30D' || st.trial_status === 'SUBSCRIBED') {
-        setChoice('trial');
+      const nextChoice =
+        st.trial_status === 'ACTIVE_30D' || st.trial_status === 'SUBSCRIBED'
+          ? 'trial'
+          : st.trial_status === 'EXPIRED_LOCKED' || st.trial_status === 'EXPIRED'
+            ? 'expired'
+            : st.trial_opt_in_status === 'DEFERRED'
+              ? 'later'
+              : 'none';
+      setChoice(nextChoice);
+      if (nextChoice !== 'expired') {
         try {
-          localStorage.setItem(DOJO_TRIAL_CHOICE_STORAGE_KEY, 'trial');
-          window.dispatchEvent(new CustomEvent('ghosti_dojo_trial_choice_updated'));
-        } catch {
-          /* ignore */
-        }
-      } else if (st.trial_status === 'EXPIRED_LOCKED' || st.trial_status === 'EXPIRED') {
-        setChoice('expired');
-      } else {
-        setChoice(st.trial_opt_in_status === 'DEFERRED' ? 'later' : 'none');
-        try {
-          localStorage.setItem(
-            DOJO_TRIAL_CHOICE_STORAGE_KEY,
-            st.trial_opt_in_status === 'DEFERRED' ? 'later' : 'none'
-          );
-          window.dispatchEvent(new CustomEvent('ghosti_dojo_trial_choice_updated'));
+          if (localStorage.getItem(DOJO_TRIAL_CHOICE_STORAGE_KEY) !== nextChoice) {
+            localStorage.setItem(DOJO_TRIAL_CHOICE_STORAGE_KEY, nextChoice);
+            window.dispatchEvent(new CustomEvent('ghosti_dojo_trial_choice_updated'));
+          }
         } catch {
           /* ignore */
         }
@@ -681,7 +740,7 @@ const TrialRewardCard: React.FC = () => {
     void syncFromBackend();
     const pollId = window.setInterval(() => {
       if (zCoreBridge.isConnected) void syncFromBackend();
-    }, 2000);
+    }, 10000);
     const unsub = zCoreBridge.subscribe((connected) => {
       if (connected) void syncFromBackend();
     });
@@ -988,7 +1047,7 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
           >
             <div className="flex items-center justify-between gap-2">
               <div className="flex items-center gap-2 min-w-0 flex-1">
-                <span className="px-2 py-0.5 rounded-lg bg-[#2DD4BF]/20 border border-[#2DD4BF]/50 text-[#5EEAD4] font-mono text-[11.5px] font-black shrink-0">
+                <span className="px-2 py-0.5 rounded-lg bg-[#2DD4BF]/20 border border-[#2DD4BF]/50 text-[#0F766E] dark:text-[#5EEAD4] font-mono text-[11.5px] font-black shrink-0">
                   {item.slot}
                 </span>
                 <input
@@ -1037,7 +1096,7 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
       {clipPqlToastVisible && !isStoreAppMode && (
         <div className="px-3.5 py-2.5 rounded-xl bg-teal-950/50 border border-teal-400/40 flex flex-wrap items-center justify-between gap-2 text-[12px]">
           <span className="text-teal-100 font-bold">
-            💡 방금 복사한 내용, 내 스마트폰에서도 바로 붙여넣을 수 있어요 (<strong className="text-[#5EEAD4]">내 기기 통합</strong> 30일 무료체험)
+            💡 방금 복사한 내용, 내 스마트폰에서도 바로 붙여넣을 수 있어요 (<strong className="text-[#0F766E] dark:text-[#5EEAD4]">내 기기 통합</strong> 30일 무료체험)
           </span>
           <div className="flex items-center gap-1.5 shrink-0">
             <button
@@ -1185,13 +1244,35 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
             <h3 className="text-[16px] font-extrabold text-white">
               ⚡ 하던 일 멈추지 마세요, 쓰던 자리에서 1초면 끝 (평생 무료 핵심 3종)
             </h3>
-            <p className="text-[12.5px] text-zinc-400 mt-0.5">
-              어느 창에서든 <strong className="text-[#5EEAD4]">Ctrl + 0</strong> (보조: <strong className="text-[#5EEAD4]">Ctrl + 우클릭</strong>) 하나로 부르면 일하던 커서 위에서 바로 작동합니다.
+            <p className="text-[12.5px] text-zinc-400 mt-1 leading-relaxed">
+              어느 창에서든{' '}
+              <kbd className="inline-flex items-center px-2 py-0.5 mx-0.5 rounded-md bg-[#EEF2FF] text-[#1E3A8A] border border-[#4F46E5]/35 dark:bg-indigo-500/25 dark:text-indigo-100 dark:border-indigo-300/45 font-extrabold text-[12px] shadow-2xs">
+                Ctrl + 0
+              </kbd>{' '}
+              (보조:{' '}
+              <kbd className="inline-flex items-center px-2 py-0.5 mx-0.5 rounded-md bg-[#ECFDF5] text-[#065F46] border border-[#059669]/40 dark:bg-emerald-500/20 dark:text-emerald-100 dark:border-emerald-300/45 font-extrabold text-[12px] shadow-2xs">
+                Ctrl + 우클릭
+              </kbd>
+              ) 하나로 부르면 일하던 커서 위에서 바로 작동합니다.
             </p>
           </div>
-          <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 text-[11.5px] font-black shrink-0">
-            평생 0원 무제한
-          </span>
+          <div className="flex items-center gap-2 shrink-0">
+            {Boolean(progress.dojo[1] || progress.dojo[2] || progress.dojo[3] || progress.dojo[4]) && (
+              <button
+                type="button"
+                onClick={() => {
+                  setProgress(resetDojoProgress());
+                  setSandboxKey((k) => k + 1);
+                }}
+                className="px-2.5 py-1 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 text-[11.5px] font-bold cursor-pointer transition"
+              >
+                ↺ 도장 초기화
+              </button>
+            )}
+            <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 text-[11.5px] font-black shrink-0">
+              평생 0원 무제한
+            </span>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">

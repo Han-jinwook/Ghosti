@@ -173,7 +173,7 @@ export const BASIC3_TARGET_CHIP = '사업자번호: 123-45-67890';
 export const BASIC3_CHIPS = ['상호: 썬드림카페', BASIC3_TARGET_CHIP, '합계: 48,000원', '2026-11-07 14:22'];
 
 // ─────────────────────────────────────────────────────────────
-// 진행도 (도장) 저장 — 언제든 다시 들어와 이어서/골라서 연습
+// 진행도 (도장) 저장 — 현재 세션(탭 전환) 동안은 유지하고, 페이지 새로고침(F5) 시 깔끔하게 초기화
 // ─────────────────────────────────────────────────────────────
 
 export const DOJO_PROGRESS_STORAGE_KEY = 'ghosti_dojo_progress_v1';
@@ -186,24 +186,51 @@ export interface DojoProgress {
 
 export const EMPTY_DOJO_PROGRESS: DojoProgress = { basics: {}, dojo: {} };
 
-export function loadDojoProgress(): DojoProgress {
-  try {
-    const raw = typeof localStorage !== 'undefined' ? localStorage.getItem(DOJO_PROGRESS_STORAGE_KEY) : null;
-    if (!raw) return { basics: {}, dojo: {} };
-    const parsed = JSON.parse(raw) as Partial<DojoProgress>;
-    return { basics: { ...(parsed.basics || {}) }, dojo: { ...(parsed.dojo || {}) } };
-  } catch {
-    return { basics: {}, dojo: {} };
+let sessionDojoProgress: DojoProgress = { basics: {}, dojo: {} };
+
+// 과거 localStorage에 영구 저장되어 새로고침 후에도 도장(✓)이 지워지지 않던 잔존 데이터 일괄 정리
+try {
+  if (typeof localStorage !== 'undefined') {
+    localStorage.removeItem(DOJO_PROGRESS_STORAGE_KEY);
   }
+} catch {
+  /* ignore */
+}
+
+export function loadDojoProgress(): DojoProgress {
+  return {
+    basics: { ...sessionDojoProgress.basics },
+    dojo: { ...sessionDojoProgress.dojo },
+  };
 }
 
 export function saveDojoProgress(p: DojoProgress): void {
+  sessionDojoProgress = {
+    basics: { ...(p.basics || {}) },
+    dojo: { ...(p.dojo || {}) },
+  };
   try {
-    localStorage.setItem(DOJO_PROGRESS_STORAGE_KEY, JSON.stringify(p));
-    window.dispatchEvent(new CustomEvent('ghosti_dojo_progress_updated', { detail: p }));
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ghosti_dojo_progress_updated', { detail: loadDojoProgress() }));
+    }
   } catch {
     /* ignore */
   }
+}
+
+export function resetDojoProgress(): DojoProgress {
+  sessionDojoProgress = { basics: {}, dojo: {} };
+  try {
+    if (typeof localStorage !== 'undefined') {
+      localStorage.removeItem(DOJO_PROGRESS_STORAGE_KEY);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ghosti_dojo_progress_updated', { detail: loadDojoProgress() }));
+    }
+  } catch {
+    /* ignore */
+  }
+  return loadDojoProgress();
 }
 
 export function countBasicsDone(p: DojoProgress): number {

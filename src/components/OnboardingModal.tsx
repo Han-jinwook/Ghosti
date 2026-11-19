@@ -107,7 +107,20 @@ const COMPOUND_JUNG: Record<string, string> = {
 const COMPOUND_JONG: Record<string, string> = {
   'ㄱㅅ': 'ㄳ', 'ㄴㅈ': 'ㄵ', 'ㄴㅎ': 'ㄶ', 'ㄹㄱ': 'ㄺ', 'ㄹㅁ': 'ㄻ', 'ㄹㅂ': 'ㄼ', 'ㄹㅅ': 'ㄽ', 'ㄹㅌ': 'ㄾ', 'ㄹㅍ': 'ㄿ', 'ㄹㅎ': 'ㅀ', 'ㅂㅅ': 'ㅄ',
 };
-const COMMON_ENG_ALLOW = new Set(['iphone', 'youtube', 'google', 'naver', 'kakao', 'excel', 'office', 'windows', 'ghost', 'ghosti', 'hello', 'world', 'test', 'ghdrlfehd', 'myid']);
+const COMMON_ENG_ALLOW = new Set([
+  'iphone', 'youtube', 'google', 'naver', 'kakao', 'excel', 'office', 'windows',
+  'ghost', 'ghosti', 'hello', 'world', 'test', 'ghdrlfehd', 'myid',
+  'apple', 'chrome', 'notion', 'slack', 'zoom', 'email', 'admin', 'login', 'http', 'https',
+]);
+const DIGIT_UNIT_ALLOW = new Set(['gb', 'mb', 'kb', 'tb', 'km', 'cm', 'mm', 'kg', 'ml', 'hz', 'px', 'am', 'pm']);
+
+function isProtectedTokenLocal(tok: string): boolean {
+  const s = tok.trim();
+  if (!s) return false;
+  if (s.includes('@') || s.includes('://') || /^www\./i.test(s) || s.startsWith('=')) return true;
+  if (/[A-Za-z0-9-]+\.(?:com|net|org|kr|co|io|app|dev|ai|edu|gov|me|biz|info)\b/i.test(s)) return true;
+  return false;
+}
 
 function engWordToKorLocal(word: string): string {
   if (COMMON_ENG_ALLOW.has(word.toLowerCase())) return word;
@@ -179,16 +192,24 @@ export function simulateSuperpowerLocal(mode: 'typo' | 'number9' | 'extract8' | 
   const s = text.trim();
   if (!s) return '';
   if (mode === 'typo') {
-    const morphed = s
+    return s
       .split(/(\s+)/)
       .map((tok) => {
-        if (tok.includes('@') || tok.includes('://') || /^www\./i.test(tok) || /\.(?:com|net|org|kr|co|io|app)$/i.test(tok)) {
+        if (!tok || /^\s+$/.test(tok) || isProtectedTokenLocal(tok)) {
           return tok;
         }
-        return /^[A-Za-z]+$/.test(tok) ? engWordToKorLocal(tok) : tok;
+        const replaced = tok.replace(/[A-Za-z]{2,}/g, (seg, offset: number, fullTok: string) => {
+          if (COMMON_ENG_ALLOW.has(seg.toLowerCase())) return seg;
+          if (offset > 0 && /\d/.test(fullTok[offset - 1]) && DIGIT_UNIT_ALLOW.has(seg.toLowerCase())) {
+            const afterIdx = offset + seg.length;
+            if (afterIdx >= fullTok.length || !/[A-Za-z]/.test(fullTok[afterIdx])) return seg;
+          }
+          const kor = engWordToKorLocal(seg);
+          return /[가-힣]/.test(kor) ? kor : seg;
+        });
+        return replaced !== tok ? spaceKorSimpleLocal(replaced) : tok;
       })
       .join('');
-    return spaceKorSimpleLocal(morphed);
   }
   if (mode === 'hyphen7') {
     if (/^\d{2,4}-\d{3,4}-\d{4}$/.test(s)) return s.replace(/\D/g, '');

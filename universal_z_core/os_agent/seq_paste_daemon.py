@@ -6101,106 +6101,42 @@ _BROWSER_AUTO_TYPO_PROCS: tuple[str, ...] = (
     "iexplore.exe",
 )
 
-_UIA_ADDR_BAR_CACHE: dict[str, object] = {"uia": None, "get_focused": None, "oleaut32": None}
+_BROWSER_URL_BAR_STATE: dict[str, bool] = {"active": False}
+
+
+def _update_browser_url_bar_on_click(fg_hwnd: int) -> bool:
+    """
+    크롬·웨일·엣지 등 브라우저에서 UIAutomation(IUIAutomation::GetFocusedElement) 크로스프로세스 COM 호출 시
+    크로미움 전체 AXTree 직렬화로 인해 메인 스레드가 일시 정지(버벅임)하는 현상을 원천 제거하기 위해,
+    0.002ms 순수 Win32 창 상단 좌표(탭·주소창 헤더 영역 <= 118px) 판정으로 주소창 포커스 여부를 즉시 갱신합니다.
+    """
+    if sys.platform != "win32" or not fg_hwnd:
+        _BROWSER_URL_BAR_STATE["active"] = False
+        return False
+    try:
+        proc_low = _get_process_name_from_hwnd(fg_hwnd).lower()
+        if proc_low not in _BROWSER_AUTO_TYPO_PROCS:
+            _BROWSER_URL_BAR_STATE["active"] = False
+            return False
+        pt = wintypes.POINT()
+        rc = wintypes.RECT()
+        if u32.GetCursorPos(ctypes.byref(pt)) and u32.GetWindowRect(fg_hwnd, ctypes.byref(rc)):
+            rel_y = int(pt.y) - int(rc.top)
+            is_top_chrome = 0 <= rel_y <= 118
+            _BROWSER_URL_BAR_STATE["active"] = is_top_chrome
+            return is_top_chrome
+    except Exception:
+        pass
+    _BROWSER_URL_BAR_STATE["active"] = False
+    return False
 
 
 def _is_browser_address_bar_focused() -> bool:
     """
-    크롬·웨일·엣지 등 브라우저에서 마우스 클릭 또는 단축키로 '주소창(Omnibox)'에 포커스가 있을 때만 True를 반환합니다.
-    (웹페이지 본문 댓글/글쓰기 입력창에는 영향 0%)
+    단축키(Ctrl+L / Alt+D / F6 / Ctrl+T / Ctrl+N) 및 마우스 상단 헤더 클릭 상태를 기반으로
+    COM/UIAutomation 블로킹 0%로 주소창 포커스 여부를 즉시 반환합니다.
     """
-    if sys.platform != "win32":
-        return False
-    try:
-        import uuid
-
-        if _UIA_ADDR_BAR_CACHE["uia"] is None:
-            ole32 = ctypes.windll.ole32
-            oleaut32 = ctypes.windll.oleaut32
-            try:
-                ole32.CoInitializeEx(None, 2)  # COINIT_APARTMENTTHREADED
-            except Exception:
-                pass
-
-            class _GUID(ctypes.Structure):
-                _fields_ = [
-                    ("Data1", ctypes.c_uint32),
-                    ("Data2", ctypes.c_uint16),
-                    ("Data3", ctypes.c_uint16),
-                    ("Data4", ctypes.c_ubyte * 8),
-                ]
-
-            def _make_guid(s: str) -> _GUID:
-                u = uuid.UUID(s)
-                g = _GUID()
-                g.Data1, g.Data2, g.Data3 = u.time_low, u.time_mid, u.time_hi_version
-                for i, b in enumerate(u.bytes[8:]):
-                    g.Data4[i] = b
-                return g
-
-            clsid = _make_guid("{FF48DBA4-60EF-4201-AA87-54103EEF594E}")
-            iid = _make_guid("{30CBE57D-D9D0-452A-AB13-7AC5AC4825EE}")
-            uia = ctypes.c_void_p()
-            hr = ole32.CoCreateInstance(ctypes.byref(clsid), None, 1, ctypes.byref(iid), ctypes.byref(uia))
-            if hr != 0 or not uia:
-                return False
-            vt = ctypes.cast(ctypes.cast(uia, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
-            _UIA_ADDR_BAR_CACHE["uia"] = uia
-            _UIA_ADDR_BAR_CACHE["get_focused"] = ctypes.WINFUNCTYPE(
-                ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p)
-            )(vt[8])
-            _UIA_ADDR_BAR_CACHE["oleaut32"] = oleaut32
-
-        elem = ctypes.c_void_p()
-        hr_f = _UIA_ADDR_BAR_CACHE["get_focused"](_UIA_ADDR_BAR_CACHE["uia"], ctypes.byref(elem))
-        if hr_f != 0 or not elem:
-            return False
-
-        oleaut32 = _UIA_ADDR_BAR_CACHE["oleaut32"]
-        evt = ctypes.cast(ctypes.cast(elem, ctypes.POINTER(ctypes.c_void_p))[0], ctypes.POINTER(ctypes.c_void_p))
-        try:
-            get_ct = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(ctypes.c_int))(evt[21])
-            get_name = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p))(evt[23])
-            get_cls = ctypes.WINFUNCTYPE(ctypes.c_long, ctypes.c_void_p, ctypes.POINTER(ctypes.c_void_p))(evt[30])
-
-            ct = ctypes.c_int(0)
-            get_ct(elem, ctypes.byref(ct))
-
-            cls_ptr = ctypes.c_void_p()
-            cls_str = ""
-            if get_cls(elem, ctypes.byref(cls_ptr)) == 0 and cls_ptr.value:
-                cls_str = ctypes.wstring_at(cls_ptr.value)
-                oleaut32.SysFreeString(cls_ptr)
-
-            name_ptr = ctypes.c_void_p()
-            name_str = ""
-            if get_name(elem, ctypes.byref(name_ptr)) == 0 and name_ptr.value:
-                name_str = ctypes.wstring_at(name_ptr.value)
-                oleaut32.SysFreeString(name_ptr)
-
-            cls_low = cls_str.lower()
-            name_low = name_str.lower()
-            if "omnibox" in cls_low or "addressbar" in cls_low or "urlbar" in cls_low:
-                return True
-            if ct.value == 50004:  # UIA_EditControlTypeId
-                if any(
-                    kw in name_low
-                    for kw in (
-                        "주소 및 검색창",
-                        "주소창",
-                        "주소 또는 검색어",
-                        "address and search",
-                        "search or enter web address",
-                        "omnibox",
-                    )
-                ):
-                    return True
-            return False
-        finally:
-            rel_fn = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)(evt[2])
-            rel_fn(elem)
-    except Exception:
-        return False
+    return bool(_BROWSER_URL_BAR_STATE.get("active", False))
 
 AUTOCORRECT_EXCLUDE_CLASS_KEYWORDS: tuple[str, ...] = (
     "hwp",
@@ -6272,6 +6208,9 @@ def should_skip_auto_typo(hwnd: int) -> bool:
             if not target_h:
                 continue
             proc_name, win_cls, win_title_chk = get_window_process_and_class(target_h)
+            if win_title_chk and "\u2063" in win_title_chk:
+                # 웹 [⚡ 귀신창] 수련장 입력칸 포커스 중에는 웹 자체 즉시 변환 엔진과 OS 데몬이 이중 개입하지 않도록 100% 양보
+                return True
             if win_title_chk:
                 try:
                     import sys as _sys_c
@@ -8169,12 +8108,15 @@ def main() -> None:
                     last_any_key_ts = now
                 was_key_down[VK_HANGUL] = hangul_down
 
-                # 브라우저 주소창 포커스 단축키(Ctrl+L / Alt+D / F6) 감지 시 주소창 자동완성 충돌 방지를 위해 본문 클릭·이동 전까지 자동변환 일시 홀드
+                # 브라우저 주소창 포커스 단축키(Ctrl+L / Alt+D / F6 / Ctrl+T / Ctrl+N) 감지 시 주소창 자동완성 충돌 방지를 위해 본문 클릭·이동 전까지 자동변환 일시 홀드
                 l_key_down = (u32.GetAsyncKeyState(0x4C) & 0x8000) != 0
                 d_key_down = (u32.GetAsyncKeyState(0x44) & 0x8000) != 0
+                t_key_down = (u32.GetAsyncKeyState(0x54) & 0x8000) != 0
+                n_key_down = (u32.GetAsyncKeyState(0x4E) & 0x8000) != 0
                 f6_key_down = (u32.GetAsyncKeyState(0x75) & 0x8000) != 0
-                if (ctrl_down and l_key_down) or (alt_down and d_key_down) or f6_key_down:
+                if (ctrl_down and (l_key_down or t_key_down or n_key_down)) or (alt_down and d_key_down) or f6_key_down:
                     browser_url_bar_active = True
+                    _BROWSER_URL_BAR_STATE["active"] = True
                     typed_ascii_buf.clear()
                     pending_first_typo = None
 
@@ -8186,8 +8128,11 @@ def main() -> None:
                 for nav_vk in (0x01, 0x02, 0x09, 0x1B, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2E):
                     nav_down = (u32.GetAsyncKeyState(nav_vk) & 0x8000) != 0
                     if nav_down and not was_key_down.get(nav_vk, False):
-                        if nav_vk in (0x01, 0x02, 0x09, 0x1B):
+                        if nav_vk == 0x01:
+                            browser_url_bar_active = _update_browser_url_bar_on_click(u32.GetForegroundWindow())
+                        elif nav_vk in (0x02, 0x09, 0x1B):
                             browser_url_bar_active = False
+                            _BROWSER_URL_BAR_STATE["active"] = False
                         if shift_down and nav_vk in (0x23, 0x24, 0x25, 0x26, 0x27, 0x28):
                             last_drag_select_ts = now
                         elif nav_vk == 0x01 and not is_dbl_click_select:
@@ -8278,8 +8223,13 @@ def main() -> None:
                                 last_auto_morph_state["active"] = False
                                 if not shift_down:
                                     typed_ascii_buf.append(chr(d_vk))
+                                    if any(c.isalpha() for c in typed_ascii_buf):
+                                        last_alpha_type_ts = now
                                 elif d_vk in _SHIFT_DIGIT_MAP:
-                                    typed_ascii_buf.append(_SHIFT_DIGIT_MAP[d_vk])
+                                    sym_d = _SHIFT_DIGIT_MAP[d_vk]
+                                    typed_ascii_buf.append(sym_d)
+                                    if sym_d == "!" and any(c.isalpha() for c in typed_ascii_buf):
+                                        last_alpha_type_ts = now
                         was_key_down[d_vk] = d_down
 
                     for nd_vk in range(0x60, 0x6A):  # 넘패드 숫자키 0 ~ 9
@@ -8317,7 +8267,10 @@ def main() -> None:
                             if p_vk == 0xBD and shift_down:
                                 pending_first_typo = None
                             if typed_ascii_buf:
-                                typed_ascii_buf.append(sh_ch if shift_down else norm_ch)
+                                p_ch = sh_ch if shift_down else norm_ch
+                                typed_ascii_buf.append(p_ch)
+                                if p_ch in (".", ",", "?", "~", ";", ":") and any(c.isalpha() for c in typed_ascii_buf):
+                                    last_alpha_type_ts = now
                         was_key_down[p_vk] = p_down
 
                     back_down = (u32.GetAsyncKeyState(VK_BACK) & 0x8000) != 0
