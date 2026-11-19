@@ -876,7 +876,7 @@ export function convertNativeGalleryVideos(nativeVideos: NativeGalleryVideoMeta[
 
 const MOBILE_GALLERY_IDB_NAME = 'ghosti_mobile_gallery_cache_v1';
 const MOBILE_GALLERY_STORE = 'snapshot';
-const MOBILE_GALLERY_CACHE_SCHEMA_VER = 4;
+const MOBILE_GALLERY_CACHE_SCHEMA_VER = 5;
 
 interface SerializedOpticalSig {
   dhash: string;
@@ -969,11 +969,15 @@ export async function loadCachedMobileGalleryIndex(): Promise<{
           });
         }
         const hydratedVideos = Array.isArray(val.videos)
-          ? val.videos.map((v) =>
-              !v.videoUrl && String(v.id || '').startsWith('mobile_vid_')
-                ? { ...v, videoUrl: resolveAndroidDirectVideoStreamUrl(v.id) }
-                : v
-            )
+          ? val.videos.map((v) => {
+              if (String(v.id || '').startsWith('mobile_vid_')) {
+                const directUrl = resolveAndroidDirectVideoStreamUrl(v.id);
+                if (directUrl) {
+                  return { ...v, videoUrl: directUrl };
+                }
+              }
+              return v;
+            })
           : [];
         resolve({
           photos: val.photos,

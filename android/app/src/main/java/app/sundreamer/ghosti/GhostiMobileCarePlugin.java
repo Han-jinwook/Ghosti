@@ -13,7 +13,13 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.media.Image;
+import android.media.MediaCodec;
+import android.media.MediaCodecInfo;
+import android.media.MediaExtractor;
+import android.media.MediaFormat;
 import android.media.MediaMetadataRetriever;
+import android.media.MediaMuxer;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -23,6 +29,8 @@ import android.util.Base64;
 import android.util.Size;
 
 import java.io.ByteArrayOutputStream;
+import java.io.File;
+import java.nio.ByteBuffer;
 
 import com.android.installreferrer.api.InstallReferrerClient;
 import com.android.installreferrer.api.InstallReferrerStateListener;
@@ -1085,20 +1093,317 @@ public class GhostiMobileCarePlugin extends Plugin {
         return null;
     }
 
+    private static final Object H264_TRANSCODE_LOCK = new Object();
+
+    private static void writeBitmapToYuv420Image(int[] argb, int width, int height, Image image) {
+        Image.Plane[] planes = image.getPlanes();
+        ByteBuffer yBuf = planes[0].getBuffer();
+        ByteBuffer uBuf = planes[1].getBuffer();
+        ByteBuffer vBuf = planes[2].getBuffer();
+        int yRowStride = planes[0].getRowStride();
+        int yPixelStride = planes[0].getPixelStride();
+        int uRowStride = planes[1].getRowStride();
+        int uPixelStride = planes[1].getPixelStride();
+        int vRowStride = planes[2].getRowStride();
+        int vPixelStride = planes[2].getPixelStride();
+        int yCap = yBuf.capacity();
+        int uCap = uBuf.capacity();
+        int vCap = vBuf.capacity();
+
+        for (int j = 0; j < height; j++) {
+            int rowOff = j * width;
+            int yLine = j * yRowStride;
+            int uvLineU = (j >> 1) * uRowStride;
+            int uvLineV = (j >> 1) * vRowStride;
+            boolean evenRow = (j & 1) == 0;
+            for (int i = 0; i < width; i++) {
+                int c = argb[rowOff + i];
+                int r = (c >> 16) & 0xff;
+                int g = (c >> 8) & 0xff;
+                int b = c & 0xff;
+                int y = ((66 * r + 129 * g + 25 * b + 128) >> 8) + 16;
+                int yPos = yLine + i * yPixelStride;
+                if (yPos >= 0 && yPos < yCap) {
+                    yBuf.put(yPos, (byte) Math.max(0, Math.min(255, y)));
+                }
+                if (evenRow && (i & 1) == 0) {
+                    int u = ((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128;
+                    int v = ((112 * r - 94 * g - 18 * b + 128) >> 8) + 128;
+                    int uvIdx = i >> 1;
+                    int uPos = uvLineU + uvIdx * uPixelStride;
+                    int vPos = uvLineV + uvIdx * vPixelStride;
+                    if (uPos >= 0 && uPos < uCap) {
+                        uBuf.put(uPos, (byte) Math.max(0, Math.min(255, u)));
+                    }
+                    if (vPos >= 0 && vPos < vCap) {
+                        vBuf.put(vPos, (byte) Math.max(0, Math.min(255, v)));
+                    }
+                }
+            }
+        }
+    }
+
+    private File ensurePlayableH264Mp4(Context appCtx, long mediaId) {
+        synchronized (H264_TRANSCODE_LOCK) {
+            File cacheRoot = new File(appCtx.getCacheDir(), "ghosti_vid_stream");
+            if (!cacheRoot.exists()) {
+                cacheRoot.mkdirs();
+            }
+            File outFile = new File(cacheRoot, "vid_h264_" + mediaId + ".mp4");
+            if (outFile.exists() && outFile.length() > 4096L) {
+                outFile.setLastModified(System.currentTimeMillis());
+                return outFile;
+            }
+            File tmpFile = new File(cacheRoot, "vid_h264_" + mediaId + "_" + System.nanoTime() + ".tmp");
+            Uri videoUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, mediaId);
+
+            MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+            MediaCodec encoder = null;
+            MediaMuxer muxer = null;
+            MediaExtractor audioEx = null;
+            boolean muxerStarted = false;
+            try {
+                retriever.setDataSource(appCtx, videoUri);
+                String durStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+                long durMs = 4000L;
+                if (durStr != null && !durStr.trim().isEmpty()) {
+                    try {
+                        durMs = Math.max(500L, Math.min(60000L, Long.parseLong(durStr.trim())));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+                Bitmap probe = retriever.getFrameAtTime(0L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+                if (probe == null) {
+                    probe = retriever.getFrameAtTime(100000L, MediaMetadataRetriever.OPTION_CLOSEST);
+                }
+                if (probe == null) {
+                    return null;
+                }
+                int srcW = probe.getWidth();
+                int srcH = probe.getHeight();
+                probe.recycle();
+
+                float scale = Math.min(1.0f, 720.0f / (float) Math.max(srcW, srcH));
+                int outW = Math.max(160, (Math.round(srcW * scale) / 16) * 16);
+                int outH = Math.max(160, (Math.round(srcH * scale) / 16) * 16);
+                int fps = 15;
+                int totalFrames = Math.max(2, (int) Math.min(900L, (durMs * (long) fps) / 1000L));
+
+                MediaFormat vFmt = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, outW, outH);
+                vFmt.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible);
+                vFmt.setInteger(MediaFormat.KEY_BIT_RATE, 2000000);
+                vFmt.setInteger(MediaFormat.KEY_FRAME_RATE, fps);
+                vFmt.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
+
+                encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
+                encoder.configure(vFmt, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
+                encoder.start();
+
+                muxer = new MediaMuxer(tmpFile.getAbsolutePath(), MediaMuxer.OutputFormat.MUXER_OUTPUT_MPEG_4);
+
+                int srcAudioTrack = -1;
+                MediaFormat srcAudioFmt = null;
+                try {
+                    audioEx = new MediaExtractor();
+                    audioEx.setDataSource(appCtx, videoUri, (Map<String, String>) null);
+                    for (int ti = 0; ti < audioEx.getTrackCount(); ti++) {
+                        MediaFormat tf = audioEx.getTrackFormat(ti);
+                        String tm = tf.getString(MediaFormat.KEY_MIME);
+                        if (tm != null && tm.startsWith("audio/mp4a")) {
+                            srcAudioTrack = ti;
+                            srcAudioFmt = tf;
+                            break;
+                        }
+                    }
+                } catch (Throwable ignored) {
+                    srcAudioTrack = -1;
+                    srcAudioFmt = null;
+                }
+
+                int muxVideoTrack = -1;
+                int muxAudioTrack = -1;
+                int[] argbBuf = new int[outW * outH];
+                MediaCodec.BufferInfo bufInfo = new MediaCodec.BufferInfo();
+                boolean inputDone = false;
+                boolean outputDone = false;
+                int frameIdx = 0;
+
+                while (!outputDone) {
+                    if (!inputDone) {
+                        int inIdx = encoder.dequeueInputBuffer(10000L);
+                        if (inIdx >= 0) {
+                            if (frameIdx >= totalFrames) {
+                                long endPtsUs = ((long) frameIdx * 1000000L) / (long) fps;
+                                encoder.queueInputBuffer(inIdx, 0, 0, endPtsUs, MediaCodec.BUFFER_FLAG_END_OF_STREAM);
+                                inputDone = true;
+                            } else {
+                                long ptsUs = ((long) frameIdx * 1000000L) / (long) fps;
+                                Bitmap rawBmp = null;
+                                Bitmap exactBmp = null;
+                                try {
+                                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                                        rawBmp = retriever.getScaledFrameAtTime(ptsUs, MediaMetadataRetriever.OPTION_CLOSEST, outW, outH);
+                                    }
+                                    if (rawBmp == null) {
+                                        rawBmp = retriever.getFrameAtTime(ptsUs, MediaMetadataRetriever.OPTION_CLOSEST);
+                                    }
+                                    if (rawBmp != null) {
+                                        if (rawBmp.getWidth() != outW || rawBmp.getHeight() != outH || rawBmp.getConfig() != Bitmap.Config.ARGB_8888) {
+                                            Bitmap scaled = Bitmap.createScaledBitmap(rawBmp, outW, outH, true);
+                                            exactBmp = scaled.getConfig() == Bitmap.Config.ARGB_8888
+                                                ? scaled
+                                                : scaled.copy(Bitmap.Config.ARGB_8888, false);
+                                            if (exactBmp != scaled) scaled.recycle();
+                                        } else {
+                                            exactBmp = rawBmp;
+                                        }
+                                        exactBmp.getPixels(argbBuf, 0, outW, 0, 0, outW, outH);
+                                    }
+                                } catch (Throwable ignored) {
+                                } finally {
+                                    if (exactBmp != null && exactBmp != rawBmp && !exactBmp.isRecycled()) {
+                                        exactBmp.recycle();
+                                    }
+                                    if (rawBmp != null && !rawBmp.isRecycled()) {
+                                        rawBmp.recycle();
+                                    }
+                                }
+
+                                Image inImg = encoder.getInputImage(inIdx);
+                                ByteBuffer inBuf = encoder.getInputBuffer(inIdx);
+                                if (inImg != null && inBuf != null) {
+                                    writeBitmapToYuv420Image(argbBuf, outW, outH, inImg);
+                                    encoder.queueInputBuffer(inIdx, 0, inBuf.capacity(), ptsUs, 0);
+                                } else {
+                                    encoder.queueInputBuffer(inIdx, 0, 0, ptsUs, 0);
+                                }
+                                frameIdx++;
+                            }
+                        }
+                    }
+
+                    int outStatus = encoder.dequeueOutputBuffer(bufInfo, 10000L);
+                    if (outStatus == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED) {
+                        muxVideoTrack = muxer.addTrack(encoder.getOutputFormat());
+                        if (srcAudioTrack >= 0 && srcAudioFmt != null) {
+                            try {
+                                muxAudioTrack = muxer.addTrack(srcAudioFmt);
+                            } catch (Throwable ignored) {
+                                muxAudioTrack = -1;
+                            }
+                        }
+                        muxer.start();
+                        muxerStarted = true;
+                    } else if (outStatus >= 0) {
+                        ByteBuffer encodedData = encoder.getOutputBuffer(outStatus);
+                        if (encodedData != null && (bufInfo.flags & MediaCodec.BUFFER_FLAG_CODEC_CONFIG) == 0 && bufInfo.size > 0 && muxerStarted) {
+                            encodedData.position(bufInfo.offset);
+                            encodedData.limit(bufInfo.offset + bufInfo.size);
+                            muxer.writeSampleData(muxVideoTrack, encodedData, bufInfo);
+                        }
+                        if ((bufInfo.flags & MediaCodec.BUFFER_FLAG_END_OF_STREAM) != 0) {
+                            outputDone = true;
+                        }
+                        encoder.releaseOutputBuffer(outStatus, false);
+                    }
+                }
+
+                if (muxerStarted && muxAudioTrack >= 0 && audioEx != null && srcAudioTrack >= 0) {
+                    try {
+                        audioEx.selectTrack(srcAudioTrack);
+                        ByteBuffer aBuf = ByteBuffer.allocate(65536);
+                        MediaCodec.BufferInfo aInfo = new MediaCodec.BufferInfo();
+                        long maxPtsUs = durMs * 1000L;
+                        while (true) {
+                            int sz = audioEx.readSampleData(aBuf, 0);
+                            if (sz < 0) break;
+                            long sTime = audioEx.getSampleTime();
+                            if (sTime > maxPtsUs) break;
+                            aInfo.offset = 0;
+                            aInfo.size = sz;
+                            aInfo.presentationTimeUs = Math.max(0L, sTime);
+                            aInfo.flags = audioEx.getSampleFlags();
+                            muxer.writeSampleData(muxAudioTrack, aBuf, aInfo);
+                            audioEx.advance();
+                        }
+                    } catch (Throwable ignored) {
+                    }
+                }
+
+                if (muxerStarted) {
+                    muxer.stop();
+                    muxerStarted = false;
+                }
+                if (tmpFile.exists() && tmpFile.length() > 4096L) {
+                    if (outFile.exists()) outFile.delete();
+                    if (tmpFile.renameTo(outFile)) {
+                        return outFile;
+                    }
+                    return tmpFile;
+                }
+            } catch (Throwable ignored) {
+            } finally {
+                try { retriever.release(); } catch (Throwable ignored) {}
+                if (audioEx != null) {
+                    try { audioEx.release(); } catch (Throwable ignored) {}
+                }
+                if (encoder != null) {
+                    try { encoder.stop(); } catch (Throwable ignored) {}
+                    try { encoder.release(); } catch (Throwable ignored) {}
+                }
+                if (muxer != null) {
+                    if (muxerStarted) {
+                        try { muxer.stop(); } catch (Throwable ignored) {}
+                    }
+                    try { muxer.release(); } catch (Throwable ignored) {}
+                }
+                if (tmpFile.exists() && !tmpFile.equals(outFile)) {
+                    try { tmpFile.delete(); } catch (Throwable ignored) {}
+                }
+            }
+            return null;
+        }
+    }
+
     @PluginMethod
     public void resolveVideoPlaybackUrl(PluginCall call) {
+        Context ctx = getContext();
         String rawId = call.getString("id", "");
-        String digits = rawId != null ? rawId.replaceAll("[^0-9]", "") : "";
-        JSObject ret = new JSObject();
-        if (digits.isEmpty()) {
+        boolean forceTranscode = call.getBoolean("forceTranscode", false);
+        final String digits = rawId != null ? rawId.replaceAll("[^0-9]", "") : "";
+        if (digits.isEmpty() || ctx == null) {
+            JSObject ret = new JSObject();
             ret.put("ok", false);
             ret.put("fileUrl", "");
             call.resolve(ret);
             return;
         }
-        ret.put("ok", true);
-        ret.put("fileUrl", "https://localhost/__ghosti_media_video/" + digits + ".mp4");
-        call.resolve(ret);
+        if (!forceTranscode) {
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("fileUrl", "https://localhost/__ghosti_media_video/" + digits + ".mp4");
+            call.resolve(ret);
+            return;
+        }
+        final Context appCtx = ctx.getApplicationContext();
+        new Thread(() -> {
+            JSObject ret = new JSObject();
+            try {
+                long mediaId = Long.parseLong(digits);
+                File h264 = ensurePlayableH264Mp4(appCtx, mediaId);
+                if (h264 != null && h264.exists() && h264.length() > 4096L) {
+                    ret.put("ok", true);
+                    ret.put("fileUrl", "https://localhost/__ghosti_media_video/h264_" + digits + ".mp4");
+                } else {
+                    ret.put("ok", false);
+                    ret.put("fileUrl", "");
+                }
+            } catch (Throwable ignored) {
+                ret.put("ok", false);
+                ret.put("fileUrl", "");
+            }
+            call.resolve(ret);
+        }, "GhostiVidH264").start();
     }
 
     @PluginMethod

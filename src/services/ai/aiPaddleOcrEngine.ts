@@ -32,9 +32,9 @@ const DICT_URLS = [
 ];
 
 interface PaddleOcrRuntime {
-  ort: typeof import('onnxruntime-web');
-  detSession: import('onnxruntime-web').InferenceSession;
-  recSession: import('onnxruntime-web').InferenceSession;
+  ort: typeof import('onnxruntime-web/webgpu');
+  detSession: import('onnxruntime-web/webgpu').InferenceSession;
+  recSession: import('onnxruntime-web/webgpu').InferenceSession;
   charDict: string[];
 }
 
@@ -84,9 +84,19 @@ async function fetchTextWithCache(urls: string[]): Promise<string> {
 async function getPaddleOcrRuntime(): Promise<PaddleOcrRuntime> {
   if (!runtimePromise) {
     runtimePromise = (async () => {
-      const ort = await import('onnxruntime-web');
+      // @huggingface/transformers와 동일한 단일 WASM 런타임(ort.webgpu.bundle -> asyncify.wasm)을 공유하여
+      // 모바일 번들 JSEP WASM 누락 404 및 이중 28MB WASM 메모리 점유를 원천 차단합니다.
+      const ort = await import('onnxruntime-web/webgpu');
       try {
         ort.env.wasm.simd = true;
+        // 번들 내부에 이미 포함된 /assets/ort-wasm-simd-threaded.asyncify-*.wasm 로컬 파일을 최우선 사용하여
+        // 모바일/오프라인 환경에서도 외부 jsdelivr 27MB 재다운로드 없이 0.02초 만에 즉시 기동합니다.
+        if (ort.env.wasm.wasmPaths && typeof ort.env.wasm.wasmPaths === 'object') {
+          const wp = ort.env.wasm.wasmPaths as { wasm?: string };
+          if (typeof wp.wasm === 'string' && wp.wasm.includes('cdn.jsdelivr.net')) {
+            ort.env.wasm.wasmPaths = undefined;
+          }
+        }
         const isMobileUa =
           typeof navigator !== 'undefined' &&
           (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') ||
@@ -112,7 +122,7 @@ async function getPaddleOcrRuntime(): Promise<PaddleOcrRuntime> {
       // CTC index 0: blank, 1..N: dictionary chars, N+1: space (' ')
       const charDict = ['', ...rawLines, ' '];
 
-      const sessionOpts: import('onnxruntime-web').InferenceSession.SessionOptions = {
+      const sessionOpts: import('onnxruntime-web/webgpu').InferenceSession.SessionOptions = {
         executionProviders: ['wasm'],
         graphOptimizationLevel: 'all',
       };

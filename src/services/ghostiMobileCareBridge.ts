@@ -101,7 +101,10 @@ export interface GhostiMobileCarePluginInterface {
     promptPermission?: boolean;
     forceExpandSelected?: boolean;
   }): Promise<ScanDeviceGalleryResult>;
-  resolveVideoPlaybackUrl(options: { id: string }): Promise<{ ok: boolean; fileUrl: string }>;
+  resolveVideoPlaybackUrl(options: {
+    id: string;
+    forceTranscode?: boolean;
+  }): Promise<{ ok: boolean; fileUrl: string }>;
   extractVideoKeyframes(options: {
     id: string;
     maxFrames?: number;
@@ -424,7 +427,22 @@ export async function syncNativeMobileThemeMode(isDark: boolean): Promise<void> 
   }
 }
 
-const resolvedIosVideoUrlCache = new Map<string, string>();
+const resolvedMobileVideoUrlCache = new Map<string, string>();
+
+function cacheMobileBlobUrl(cacheKey: string, url: string): string {
+  if (resolvedMobileVideoUrlCache.size >= 6 && !resolvedMobileVideoUrlCache.has(cacheKey)) {
+    const oldestKey = resolvedMobileVideoUrlCache.keys().next().value;
+    if (oldestKey) {
+      const oldUrl = resolvedMobileVideoUrlCache.get(oldestKey);
+      if (oldUrl && oldUrl.startsWith('blob:')) {
+        URL.revokeObjectURL(oldUrl);
+      }
+      resolvedMobileVideoUrlCache.delete(oldestKey);
+    }
+  }
+  resolvedMobileVideoUrlCache.set(cacheKey, url);
+  return url;
+}
 
 export function resolveAndroidDirectVideoStreamUrl(videoId: string): string {
   if (!isCapacitorAndroidRuntime()) return '';
@@ -437,25 +455,76 @@ export function resolveAndroidDirectVideoStreamUrl(videoId: string): string {
   return `${origin}/__ghosti_media_video/${m[1]}.mp4`;
 }
 
-export async function resolveNativeMobileVideoPlaybackUrl(videoId: string): Promise<string> {
+export async function resolveNativeMobileVideoPlaybackUrl(
+  videoId: string,
+  options?: { forceTranscode?: boolean; sizeMB?: number }
+): Promise<string> {
   if (!videoId) return '';
-  const androidDirect = resolveAndroidDirectVideoStreamUrl(videoId);
-  if (androidDirect) return androidDirect;
+  const forceTranscode = Boolean(options?.forceTranscode);
+  const sizeMB = Number(options?.sizeMB || 15);
+  const cacheKey = `${videoId}${forceTranscode ? '::h264' : ''}`;
+
+  if (forceTranscode) {
+    const prevRaw = resolvedMobileVideoUrlCache.get(videoId);
+    if (prevRaw && prevRaw.startsWith('blob:')) {
+      URL.revokeObjectURL(prevRaw);
+    }
+    resolvedMobileVideoUrlCache.delete(videoId);
+  } else {
+    const cached = resolvedMobileVideoUrlCache.get(cacheKey);
+    if (cached) return cached;
+  }
+
+  if (isCapacitorAndroidRuntime()) {
+    let streamUrl = resolveAndroidDirectVideoStreamUrl(videoId);
+    if (forceTranscode) {
+      try {
+        const res = await GhostiMobileCareNative.resolveVideoPlaybackUrl({
+          id: videoId,
+          forceTranscode: true,
+        });
+        if (res?.ok && res.fileUrl) {
+          streamUrl = res.fileUrl;
+        } else {
+          return '';
+        }
+      } catch {
+        return '';
+      }
+    }
+    if (!streamUrl) return '';
+    // 90MB 이하 모바일 촬영 클립은 로컬 스트림을 Blob URL로 변환해 Android System WebView의
+    // shouldInterceptRequest <video> 멀티 Range 디먹서 버그(후미 moov 파싱 실패)를 100% 원천 차단합니다.
+    if (sizeMB <= 90) {
+      try {
+        const resp = await fetch(streamUrl);
+        if (resp.ok) {
+          const rawBlob = await resp.blob();
+          if (rawBlob.size > 1024) {
+            const videoBlob = new Blob([rawBlob], { type: 'video/mp4' });
+            return cacheMobileBlobUrl(cacheKey, URL.createObjectURL(videoBlob));
+          }
+        }
+      } catch {
+        /* fallback to seekable local file stream url */
+      }
+    }
+    return cacheMobileBlobUrl(cacheKey, streamUrl);
+  }
 
   if (!isCapacitorIosRuntime()) return '';
-  const cached = resolvedIosVideoUrlCache.get(videoId);
-  if (cached) return cached;
 
   try {
-    const res = await GhostiMobileCareNative.resolveVideoPlaybackUrl({ id: videoId });
+    const res = await GhostiMobileCareNative.resolveVideoPlaybackUrl({
+      id: videoId,
+      forceTranscode,
+    });
     if (res?.ok && res.fileUrl) {
       const cap = (window as unknown as {
         Capacitor?: { convertFileSrc?: (path: string) => string };
       }).Capacitor;
       const converted = cap?.convertFileSrc ? cap.convertFileSrc(res.fileUrl) : res.fileUrl;
       if (converted) {
-        // iOS WKWebView GPUProcess는 커스텀 스킴(capacitor://localhost/_capacitor_file_) <video> 직접 스트리밍을 차단하므로
-        // WKURLSchemeHandler를 지원하는 fetch()로 읽어 표준 blob: URL로 변환해 100% 즉시 네이티브 재생을 보장합니다.
         try {
           const resp = await fetch(converted);
           if (resp.ok) {
@@ -465,26 +534,13 @@ export async function resolveNativeMobileVideoPlaybackUrl(videoId: string): Prom
                 rawBlob.type && rawBlob.type.startsWith('video/')
                   ? rawBlob
                   : new Blob([rawBlob], { type: 'video/mp4' });
-              if (resolvedIosVideoUrlCache.size >= 6) {
-                const oldestKey = resolvedIosVideoUrlCache.keys().next().value;
-                if (oldestKey) {
-                  const oldUrl = resolvedIosVideoUrlCache.get(oldestKey);
-                  if (oldUrl && oldUrl.startsWith('blob:')) {
-                    URL.revokeObjectURL(oldUrl);
-                  }
-                  resolvedIosVideoUrlCache.delete(oldestKey);
-                }
-              }
-              const blobUrl = URL.createObjectURL(videoBlob);
-              resolvedIosVideoUrlCache.set(videoId, blobUrl);
-              return blobUrl;
+              return cacheMobileBlobUrl(cacheKey, URL.createObjectURL(videoBlob));
             }
           }
         } catch {
           /* fallback to converted scheme url */
         }
-        resolvedIosVideoUrlCache.set(videoId, converted);
-        return converted;
+        return cacheMobileBlobUrl(cacheKey, converted);
       }
     }
   } catch {

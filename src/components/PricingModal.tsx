@@ -1566,10 +1566,12 @@ export const VideoScenePreviewModal: React.FC = () => {
       (selectedVideoModal.sizeMB || 20) <= 55;
 
     if (!isShortLocalClip) {
-      if (!baseStreamUrl && String(selectedVideoModal.id || '').startsWith('mobile_vid_')) {
+      if (String(selectedVideoModal.id || '').startsWith('mobile_vid_') && !baseStreamUrl.startsWith('blob:')) {
         setResolvedVideoSrc('');
         setIsResolvingVideo(true);
-        void resolveNativeMobileVideoPlaybackUrl(selectedVideoModal.id)
+        void resolveNativeMobileVideoPlaybackUrl(selectedVideoModal.id, {
+          sizeMB: selectedVideoModal.sizeMB,
+        })
           .then((nativeUrl) => {
             if (ocrCancelled) return;
             setIsResolvingVideo(false);
@@ -1578,14 +1580,6 @@ export const VideoScenePreviewModal: React.FC = () => {
               return;
             }
             setResolvedVideoSrc(nativeUrl);
-            useSaySeeStore.setState((st) => ({
-              videoSceneItems: st.videoSceneItems.map((v) =>
-                v.id === selectedVideoModal.id ? { ...v, videoUrl: nativeUrl } : v
-              ),
-              matchedVideoScenes: st.matchedVideoScenes.map((v) =>
-                v.id === selectedVideoModal.id ? { ...v, videoUrl: nativeUrl } : v
-              ),
-            }));
           })
           .catch(() => {
             if (!ocrCancelled) {
@@ -1668,6 +1662,32 @@ export const VideoScenePreviewModal: React.FC = () => {
 
   const trySwitchToTranscodeStream = (): boolean => {
     if (triedTranscodeFallbackRef.current) return false;
+    const modalId = String(selectedVideoModal.id || '');
+    if (modalId.startsWith('mobile_vid_')) {
+      triedTranscodeFallbackRef.current = true;
+      const seekTarget = hasExecutedUserSearch && activeQuery ? (selectedVideoModal.matchedSeekSec ?? 0) : 0;
+      pendingSeekSecRef.current = seekTarget;
+      setVideoPlaybackError(false);
+      setIsResolvingVideo(true);
+      setResolvedVideoSrc('');
+      void resolveNativeMobileVideoPlaybackUrl(modalId, {
+        forceTranscode: true,
+        sizeMB: selectedVideoModal.sizeMB,
+      })
+        .then((h264Url) => {
+          setIsResolvingVideo(false);
+          if (h264Url) {
+            setResolvedVideoSrc(h264Url);
+          } else {
+            setVideoPlaybackError(true);
+          }
+        })
+        .catch(() => {
+          setIsResolvingVideo(false);
+          setVideoPlaybackError(true);
+        });
+      return true;
+    }
     const rawUrl = selectedVideoModal.videoUrl || '';
     if (!rawUrl.includes('127.0.0.1:5199') || !selectedVideoModal.videoFileName) return false;
     triedTranscodeFallbackRef.current = true;

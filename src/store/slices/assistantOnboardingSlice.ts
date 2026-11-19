@@ -912,8 +912,18 @@ export const createAssistantOnboardingSlice: StateCreator<
             };
           });
 
-          if (newlyDiscoveredVids.length > 0) {
-            const vidsToQuickOcr = newlyDiscoveredVids.slice(0, 3);
+          const vidsMissingOcr = [
+            ...newlyDiscoveredVids,
+            ...get().videoSceneItems.filter(
+              (v) =>
+                !newlyDiscoveredVids.some((nv) => nv.id === v.id) &&
+                String(v.id || '').startsWith('mobile_vid_') &&
+                !v.ocrFullText &&
+                (!Array.isArray(v.ocrLines) || v.ocrLines.length === 0)
+            ),
+          ];
+          if (vidsMissingOcr.length > 0) {
+            const vidsToQuickOcr = vidsMissingOcr.slice(0, 4);
             void (async () => {
               for (const nVid of vidsToQuickOcr) {
                 try {

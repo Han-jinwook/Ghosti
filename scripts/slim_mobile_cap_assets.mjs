@@ -41,11 +41,20 @@ for (const pubDir of MOBILE_PUBLIC_TARGETS) {
     }
   }
 
-  // 모바일은 WebGPU(JSEP) 대신 순수 WASM 런타임만 사용하므로 중복 27MB JSEP WASM 제거
+  // 실제 빌드된 JS 번들에서 참조하지 않는 미사용 중복 JSEP WASM만 안전하게 제거 (참조 중인 WASM 삭제 시 OCR/비전 404 발생 원천 방지)
   const assetsDir = path.join(pubDir, 'assets');
   if (fs.existsSync(assetsDir)) {
+    const jsContents = fs
+      .readdirSync(assetsDir)
+      .filter((f) => f.endsWith('.js') || f.endsWith('.mjs'))
+      .map((f) => fs.readFileSync(path.join(assetsDir, f), 'utf8'))
+      .join('\n');
     for (const file of fs.readdirSync(assetsDir)) {
-      if (file.startsWith('ort-wasm-simd-threaded.jsep') && file.endsWith('.wasm')) {
+      if (
+        file.startsWith('ort-wasm-simd-threaded.jsep') &&
+        file.endsWith('.wasm') &&
+        !jsContents.includes(file)
+      ) {
         const fullWasm = path.join(assetsDir, file);
         totalSavedBytes += getPathSize(fullWasm);
         fs.rmSync(fullWasm, { force: true });

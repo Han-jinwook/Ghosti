@@ -398,6 +398,7 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func resolveVideoPlaybackUrl(_ call: CAPPluginCall) {
         let rawId = call.getString("id") ?? ""
+        let forceTranscode = call.getBool("forceTranscode") ?? false
         let localId = rawId.hasPrefix("mobile_vid_")
             ? String(rawId.dropFirst("mobile_vid_".count))
             : rawId
@@ -418,7 +419,8 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         let fm = FileManager.default
         let tmpDir = fm.temporaryDirectory
 
-        let outUrl = tmpDir.appendingPathComponent("ghosti_vid_\(safeStem).mp4")
+        let filePrefix = forceTranscode ? "ghosti_vid_h264_" : "ghosti_vid_"
+        let outUrl = tmpDir.appendingPathComponent("\(filePrefix)\(safeStem).mp4")
         if let attrs = try? fm.attributesOfItem(atPath: outUrl.path),
            let sz = attrs[.size] as? NSNumber,
            sz.int64Value > 4096 {
@@ -436,7 +438,8 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
 
-            if let urlAsset = compAsset as? AVURLAsset,
+            if !forceTranscode,
+               let urlAsset = compAsset as? AVURLAsset,
                urlAsset.url.pathExtension.lowercased() == "mp4" {
                 try? fm.removeItem(at: outUrl)
                 if (try? fm.copyItem(at: urlAsset.url, to: outUrl)) != nil,

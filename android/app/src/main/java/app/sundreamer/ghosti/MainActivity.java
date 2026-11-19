@@ -270,6 +270,7 @@ public class MainActivity extends BridgeActivity {
     private WebResourceResponse serveMediaStoreVideoRange(WebResourceRequest request, String path) {
         try {
             String tail = path.substring("/__ghosti_media_video/".length());
+            boolean preferH264 = tail.startsWith("h264_");
             String digits = tail.replaceAll("[^0-9]", "");
             if (digits.isEmpty()) {
                 return null;
@@ -277,44 +278,62 @@ public class MainActivity extends BridgeActivity {
             long mediaId = Long.parseLong(digits);
             Uri videoUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, mediaId);
             ContentResolver resolver = getContentResolver();
-            String mimeType = resolver.getType(videoUri);
-            if (mimeType == null || mimeType.trim().isEmpty()) {
-                mimeType = "video/mp4";
-            }
+            String rawMime = resolver.getType(videoUri);
+            String mimeType = (rawMime != null && rawMime.toLowerCase().contains("webm"))
+                ? "video/webm"
+                : "video/mp4";
+
+            File cacheRoot = new File(getCacheDir(), "ghosti_vid_stream");
+            File h264Cached = new File(cacheRoot, "vid_h264_" + mediaId + ".mp4");
 
             FileInputStream fis = null;
             long totalSize = -1L;
-            ParcelFileDescriptor pfd = null;
-            try {
-                pfd = resolver.openFileDescriptor(videoUri, "r");
-                if (pfd != null) {
-                    long statSz = pfd.getStatSize();
-                    if (statSz > 0L) {
-                        ParcelFileDescriptor.AutoCloseInputStream directIn = new ParcelFileDescriptor.AutoCloseInputStream(pfd);
-                        directIn.getChannel().position(0L);
-                        fis = directIn;
-                        totalSize = statSz;
-                        pfd = null;
+
+            if (h264Cached.exists() && h264Cached.length() > 4096L) {
+                h264Cached.setLastModified(System.currentTimeMillis());
+                fis = new FileInputStream(h264Cached);
+                totalSize = h264Cached.length();
+                mimeType = "video/mp4";
+            } else if (!preferH264) {
+                ParcelFileDescriptor pfd = null;
+                try {
+                    pfd = resolver.openFileDescriptor(videoUri, "r");
+                    if (pfd != null) {
+                        long statSz = pfd.getStatSize();
+                        // 180MB 이하 일반 촬영 영상은 Scoped Storage GPS Redaction 파이프(position(0)만 통과 후 후미 moov 탐색 시 ESPIPE 실패)를
+                        // 원천 우회하기 위해 항상 로컬 파일 캐시(ghosti_vid_stream)로 실체화하여 100% 무결한 임의 탐색을 보장합니다.
+                        if (statSz > 188743680L) {
+                            ParcelFileDescriptor.AutoCloseInputStream directIn = new ParcelFileDescriptor.AutoCloseInputStream(pfd);
+                            pfd = null;
+                            directIn.getChannel().position(statSz - 64L);
+                            int probeByte = directIn.read();
+                            if (probeByte >= 0) {
+                                directIn.getChannel().position(0L);
+                                fis = directIn;
+                                totalSize = statSz;
+                            } else {
+                                directIn.close();
+                            }
+                        }
                     }
-                }
-            } catch (Throwable seekErr) {
-                if (fis != null) {
-                    try {
-                        fis.close();
-                    } catch (Throwable ignored) {
+                } catch (Throwable seekErr) {
+                    if (fis != null) {
+                        try {
+                            fis.close();
+                        } catch (Throwable ignored) {
+                        }
+                        fis = null;
                     }
-                    fis = null;
-                }
-            } finally {
-                if (pfd != null) {
-                    try {
-                        pfd.close();
-                    } catch (Throwable ignored) {
+                } finally {
+                    if (pfd != null) {
+                        try {
+                            pfd.close();
+                        } catch (Throwable ignored) {
+                        }
                     }
                 }
             }
 
-            // Android 11~16 Scoped Storage Redaction Pipe(statSize == -1 또는 ESPIPE Illegal seek) 폴백: 로컬 캐시 파일로 즉시 206 Range 보장
             if (fis == null || totalSize <= 0L) {
                 File cached = materializeSeekableVideoCache(resolver, videoUri, mediaId);
                 if (cached == null || !cached.exists() || cached.length() <= 0L) {

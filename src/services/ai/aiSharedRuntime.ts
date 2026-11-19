@@ -230,6 +230,10 @@ try {
   ) {
     if ((env as any).backends?.onnx?.wasm) {
       (env as any).backends.onnx.wasm.numThreads = 1;
+      const wp = (env as any).backends.onnx.wasm.wasmPaths;
+      if (wp && typeof wp === 'object' && typeof wp.wasm === 'string' && wp.wasm.includes('cdn.jsdelivr.net')) {
+        (env as any).backends.onnx.wasm.wasmPaths = undefined;
+      }
     }
   }
 } catch {
