@@ -1397,9 +1397,11 @@ export const VideoScenePreviewModal: React.FC = () => {
   const pendingSeekSecRef = useRef<number | null>(null);
   const triedTranscodeFallbackRef = useRef<boolean>(false);
   const [resolvedVideoSrc, setResolvedVideoSrc] = useState<string>('');
+  const [isResolvingVideo, setIsResolvingVideo] = useState<boolean>(false);
   const [videoPlaybackError, setVideoPlaybackError] = useState<boolean>(false);
   const [isPortraitVideo, setIsPortraitVideo] = useState<boolean>(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState<boolean>(false);
+  const [isOcrExtracting, setIsOcrExtracting] = useState<boolean>(false);
   const [ocrLines, setOcrLines] = useState<VideoOcrLineItem[]>([]);
   const [ocrFullText, setOcrFullText] = useState<string>('');
   const [ocrCopied, setOcrCopied] = useState<boolean>(false);
@@ -1439,12 +1441,14 @@ export const VideoScenePreviewModal: React.FC = () => {
       }
     }
 
-    if (lines.length === 0 && Array.isArray(targetVid.timelineFrames)) {
+    const isMobileNativeItem = String(targetVid.id || '').startsWith('mobile_vid_');
+    if (!isMobileNativeItem && lines.length === 0 && Array.isArray(targetVid.timelineFrames)) {
       for (const f of targetVid.timelineFrames) {
         const cap = String(f.sceneCaption || '').trim();
         if (
           !cap ||
           /\s장면\s*\(\d{2}:\d{2}\)$/.test(cap) ||
+          /시작\s*장면$/.test(cap) ||
           /구간\s*\(\d{2}:\d{2}\s*\/\s*총\s*\d{2}:\d{2}\)$/.test(cap) ||
           seen.has(cap)
         ) {
@@ -1474,9 +1478,11 @@ export const VideoScenePreviewModal: React.FC = () => {
   useEffect(() => {
     if (!selectedVideoModal) {
       setResolvedVideoSrc('');
+      setIsResolvingVideo(false);
       setVideoPlaybackError(false);
       setIsPortraitVideo(false);
       setIsVideoPlaying(false);
+      setIsOcrExtracting(false);
       setOcrLines([]);
       setOcrFullText('');
       setOcrCopied(false);
@@ -1493,8 +1499,9 @@ export const VideoScenePreviewModal: React.FC = () => {
     setOcrLines(instant.lines);
     setOcrFullText(instant.fullText);
 
-    // 2) 만약 백그라운드 인덱싱이 아직 덜 끝난 영상이 있다면 스피너/로딩 문구 없이 무소음으로 정밀 OCR 결과를 받아 즉시 보강
+    // 2) 백그라운드 인덱싱이 아직 덜 끝난 영상은 정밀 OCR 결과를 받아 즉시 보강
     let ocrCancelled = false;
+    setIsOcrExtracting(instant.lines.length === 0);
     void (async () => {
       try {
         const res = await extractVideoScreenTextOnDemand(selectedVideoModal);
@@ -1530,6 +1537,10 @@ export const VideoScenePreviewModal: React.FC = () => {
         }
       } catch {
         /* ignore background OCR hydrate error */
+      } finally {
+        if (!ocrCancelled) {
+          setIsOcrExtracting(false);
+        }
       }
     })();
     const rawUrl = selectedVideoModal.videoUrl || '';
@@ -1542,6 +1553,7 @@ export const VideoScenePreviewModal: React.FC = () => {
 
     const cachedBlob = videoBlobUrlCache.get(baseStreamUrl) || videoBlobUrlCache.get(rawUrl);
     if (cachedBlob) {
+      setIsResolvingVideo(false);
       setResolvedVideoSrc(cachedBlob);
       return () => {
         ocrCancelled = true;
@@ -1556,19 +1568,33 @@ export const VideoScenePreviewModal: React.FC = () => {
     if (!isShortLocalClip) {
       if (!baseStreamUrl && String(selectedVideoModal.id || '').startsWith('mobile_vid_')) {
         setResolvedVideoSrc('');
-        void resolveNativeMobileVideoPlaybackUrl(selectedVideoModal.id).then((nativeUrl) => {
-          if (ocrCancelled || !nativeUrl) return;
-          setResolvedVideoSrc(nativeUrl);
-          useSaySeeStore.setState((st) => ({
-            videoSceneItems: st.videoSceneItems.map((v) =>
-              v.id === selectedVideoModal.id ? { ...v, videoUrl: nativeUrl } : v
-            ),
-            matchedVideoScenes: st.matchedVideoScenes.map((v) =>
-              v.id === selectedVideoModal.id ? { ...v, videoUrl: nativeUrl } : v
-            ),
-          }));
-        });
+        setIsResolvingVideo(true);
+        void resolveNativeMobileVideoPlaybackUrl(selectedVideoModal.id)
+          .then((nativeUrl) => {
+            if (ocrCancelled) return;
+            setIsResolvingVideo(false);
+            if (!nativeUrl) {
+              setVideoPlaybackError(true);
+              return;
+            }
+            setResolvedVideoSrc(nativeUrl);
+            useSaySeeStore.setState((st) => ({
+              videoSceneItems: st.videoSceneItems.map((v) =>
+                v.id === selectedVideoModal.id ? { ...v, videoUrl: nativeUrl } : v
+              ),
+              matchedVideoScenes: st.matchedVideoScenes.map((v) =>
+                v.id === selectedVideoModal.id ? { ...v, videoUrl: nativeUrl } : v
+              ),
+            }));
+          })
+          .catch(() => {
+            if (!ocrCancelled) {
+              setIsResolvingVideo(false);
+              setVideoPlaybackError(true);
+            }
+          });
       } else {
+        setIsResolvingVideo(false);
         setResolvedVideoSrc(baseStreamUrl);
       }
       return () => {
@@ -1731,55 +1757,82 @@ export const VideoScenePreviewModal: React.FC = () => {
             }`}
           >
             {resolvedVideoSrc && !videoPlaybackError ? (
-              <video
-                ref={videoRef}
-                src={resolvedVideoSrc}
-                poster={currentFrameThumbUrl}
-                controls
-                playsInline
-                autoPlay
-                preload="auto"
-                onPlay={() => setIsVideoPlaying(true)}
-                onPause={() => setIsVideoPlaying(false)}
-                onEnded={() => setIsVideoPlaying(false)}
-                onError={() => {
-                  if (!trySwitchToTranscodeStream()) {
-                    setVideoPlaybackError(true);
-                  }
-                }}
-                onLoadedMetadata={(e) => {
-                  const el = e.currentTarget;
-                  // Windows 브라우저에서 HEVC(hvc1) 코덱 미지원으로 소리만 나고 화면(videoWidth===0)이 멈추는 현상 즉시 자동 전환!
-                  if (el.videoWidth === 0 && trySwitchToTranscodeStream()) {
-                    return;
-                  }
-                  if (el.videoWidth > 0 && el.videoHeight > 0) {
-                    setIsPortraitVideo(el.videoHeight > el.videoWidth);
-                  }
-                  const realDur = Math.floor(el.duration);
-                  if (
-                    realDur > 0 &&
-                    Number.isFinite(realDur) &&
-                    (!resolvedVideoSrc.includes('/__videos/stream') || !resolvedVideoSrc.includes('&t='))
-                  ) {
-                    syncRealVideoDuration(selectedVideoModal.id, realDur);
-                  }
-                  applyPendingSeekOnce(el);
-                }}
-                className="w-full h-full object-contain"
-              />
+              <>
+                <video
+                  ref={videoRef}
+                  src={resolvedVideoSrc}
+                  poster={currentFrameThumbUrl}
+                  controls
+                  playsInline
+                  autoPlay
+                  preload="auto"
+                  onPlay={() => setIsVideoPlaying(true)}
+                  onPause={() => setIsVideoPlaying(false)}
+                  onEnded={() => setIsVideoPlaying(false)}
+                  onError={() => {
+                    if (!trySwitchToTranscodeStream()) {
+                      setVideoPlaybackError(true);
+                    }
+                  }}
+                  onLoadedMetadata={(e) => {
+                    const el = e.currentTarget;
+                    // Windows 브라우저에서 HEVC(hvc1) 코덱 미지원으로 소리만 나고 화면(videoWidth===0)이 멈추는 현상 즉시 자동 전환!
+                    if (el.videoWidth === 0 && trySwitchToTranscodeStream()) {
+                      return;
+                    }
+                    if (el.videoWidth > 0 && el.videoHeight > 0) {
+                      setIsPortraitVideo(el.videoHeight > el.videoWidth);
+                    }
+                    const realDur = Math.floor(el.duration);
+                    if (
+                      realDur > 0 &&
+                      Number.isFinite(realDur) &&
+                      (!resolvedVideoSrc.includes('/__videos/stream') || !resolvedVideoSrc.includes('&t='))
+                    ) {
+                      syncRealVideoDuration(selectedVideoModal.id, realDur);
+                    }
+                    applyPendingSeekOnce(el);
+                  }}
+                  className="w-full h-full object-contain"
+                />
+                {!isVideoPlaying && (
+                  <button
+                    type="button"
+                    aria-label="영상 재생"
+                    onClick={() => {
+                      if (videoRef.current) {
+                        void videoRef.current.play().catch(() => {});
+                      }
+                    }}
+                    className="absolute inset-0 m-auto w-16 h-16 rounded-full bg-black/75 hover:bg-black/85 border-2 border-white/85 text-white flex items-center justify-center shadow-2xl cursor-pointer transition-transform active:scale-95"
+                  >
+                    <span className="material-symbols-outlined text-[34px]">play_arrow</span>
+                  </button>
+                )}
+              </>
             ) : (
-              <img
-                src={currentFrameThumbUrl}
-                alt={selectedVideoModal.title}
-                onLoad={(e) => {
-                  const el = e.currentTarget;
-                  if (el.naturalWidth > 0 && el.naturalHeight > 0) {
-                    setIsPortraitVideo(el.naturalHeight > el.naturalWidth);
-                  }
-                }}
-                className="w-full h-full object-contain"
-              />
+              <div className="relative w-full h-full flex items-center justify-center">
+                {currentFrameThumbUrl ? (
+                  <img
+                    src={currentFrameThumbUrl}
+                    alt={selectedVideoModal.title}
+                    onLoad={(e) => {
+                      const el = e.currentTarget;
+                      if (el.naturalWidth > 0 && el.naturalHeight > 0) {
+                        setIsPortraitVideo(el.naturalHeight > el.naturalWidth);
+                      }
+                    }}
+                    className="w-full h-full object-contain"
+                  />
+                ) : null}
+                <div className="absolute inset-0 bg-black/45 flex flex-col items-center justify-center gap-2 px-4 text-center">
+                  <span className="px-3.5 py-1.5 rounded-full bg-black/85 border border-white/25 text-white text-[12.5px] font-extrabold shadow-lg">
+                    {isResolvingVideo
+                      ? '🎬 스마트폰 원본 동영상을 불러오는 중...'
+                      : '⚠️ 이 영상 형식을 재생할 수 없습니다'}
+                  </span>
+                </div>
+              </div>
             )}
             {hasExecutedUserSearch && activeQuery && !isVideoPlaying && (
               <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-primary-container/65 text-primary-container font-label-mono text-[11px] font-black pointer-events-none shadow-md">
@@ -1792,7 +1845,8 @@ export const VideoScenePreviewModal: React.FC = () => {
             <p className="font-label-mono text-[11px] text-teal-400/90 break-all px-0.5">
               📁 실제 PC 위치: {selectedVideoModal.fullPath}
             </p>
-          ) : !String(selectedVideoModal.videoUrl || '').startsWith('blob:') &&
+          ) : !String(selectedVideoModal.id || '').startsWith('mobile_vid_') &&
+            !String(selectedVideoModal.videoUrl || '').startsWith('blob:') &&
             !String(selectedVideoModal.videoUrl || '').includes('127.0.0.1:5199') ? (
             <p className="font-body-sm text-[11.5px] text-amber-400/90 px-0.5">
               ℹ️ 체험용 샘플 영상입니다 (PC 엔진 연결 또는 모바일 스토어 정식 앱 자동 인덱싱 후 내 실제 영상을 재생·추출할 수 있습니다)
@@ -1813,6 +1867,18 @@ export const VideoScenePreviewModal: React.FC = () => {
                   currentFrameObj?.keywords?.slice(0, 4) ?? []
                 )}
               </p>
+            </div>
+          )}
+
+          {ocrLines.length === 0 && isOcrExtracting && (
+            <div className="px-3.5 py-2.5 rounded-2xl bg-zinc-950/90 border border-teal-400/35 text-teal-200 font-body-sm text-[12px] font-bold shrink-0">
+              🔍 영상 화면 속 한글 문장을 읽고 있습니다...
+            </div>
+          )}
+
+          {ocrLines.length === 0 && !isOcrExtracting && String(selectedVideoModal.id || '').startsWith('mobile_vid_') && (
+            <div className="px-3.5 py-2.5 rounded-2xl bg-zinc-950/80 border border-white/15 text-zinc-400 font-body-sm text-[12px] shrink-0">
+              ℹ️ 이 영상에서는 화면 속 글자가 감지되지 않았습니다.
             </div>
           )}
 

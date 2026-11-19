@@ -13,6 +13,7 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.media.MediaMetadataRetriever;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -1082,6 +1083,115 @@ public class GhostiMobileCarePlugin extends Plugin {
         } catch (Throwable ignored) {
         }
         return null;
+    }
+
+    @PluginMethod
+    public void resolveVideoPlaybackUrl(PluginCall call) {
+        String rawId = call.getString("id", "");
+        String digits = rawId != null ? rawId.replaceAll("[^0-9]", "") : "";
+        JSObject ret = new JSObject();
+        if (digits.isEmpty()) {
+            ret.put("ok", false);
+            ret.put("fileUrl", "");
+            call.resolve(ret);
+            return;
+        }
+        ret.put("ok", true);
+        ret.put("fileUrl", "https://localhost/__ghosti_media_video/" + digits + ".mp4");
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void extractVideoKeyframes(PluginCall call) {
+        Context ctx = getContext();
+        String rawId = call.getString("id", "");
+        final int maxFrames = Math.max(1, Math.min(10, call.getInt("maxFrames", 6)));
+        final String digits = rawId != null ? rawId.replaceAll("[^0-9]", "") : "";
+        if (ctx == null || digits.isEmpty()) {
+            JSObject empty = new JSObject();
+            empty.put("ok", false);
+            empty.put("frames", new JSArray());
+            call.resolve(empty);
+            return;
+        }
+        final Context appCtx = ctx.getApplicationContext();
+        new Thread(() -> {
+            JSArray framesArr = new JSArray();
+            MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+            try {
+                long mediaId = Long.parseLong(digits);
+                Uri videoUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, mediaId);
+                retriever.setDataSource(appCtx, videoUri);
+                String durStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+                long durMs = 3000L;
+                if (durStr != null && !durStr.trim().isEmpty()) {
+                    try {
+                        durMs = Math.max(500L, Long.parseLong(durStr.trim()));
+                    } catch (NumberFormatException ignored) {
+                    }
+                }
+                int count = durMs <= 2200L ? 2 : (durMs <= 6000L ? Math.min(4, maxFrames) : maxFrames);
+                int optMode = durMs <= 12000L
+                    ? MediaMetadataRetriever.OPTION_CLOSEST
+                    : MediaMetadataRetriever.OPTION_CLOSEST_SYNC;
+
+                for (int i = 0; i < count; i++) {
+                    double ratio = count == 1 ? 0.3 : (i + 0.35) / (double) count;
+                    long sampleMs = Math.max(100L, Math.min(durMs - 100L, Math.round(durMs * ratio)));
+                    Bitmap frame = null;
+                    Bitmap scaled = null;
+                    try {
+                        frame = retriever.getFrameAtTime(sampleMs * 1000L, optMode);
+                        if (frame == null && optMode != MediaMetadataRetriever.OPTION_CLOSEST_SYNC) {
+                            frame = retriever.getFrameAtTime(sampleMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+                        }
+                        if (frame == null) continue;
+                        int w = frame.getWidth();
+                        int h = frame.getHeight();
+                        int maxSide = Math.max(w, h);
+                        Bitmap targetBmp = frame;
+                        if (maxSide > 1280) {
+                            float scale = 1280.0f / (float) maxSide;
+                            int nw = Math.max(64, Math.round(w * scale));
+                            int nh = Math.max(64, Math.round(h * scale));
+                            scaled = Bitmap.createScaledBitmap(frame, nw, nh, true);
+                            targetBmp = scaled;
+                        }
+                        ByteArrayOutputStream baos = new ByteArrayOutputStream(65536);
+                        targetBmp.compress(Bitmap.CompressFormat.JPEG, 82, baos);
+                        String dataUrl = "data:image/jpeg;base64," + Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
+                        JSObject fObj = new JSObject();
+                        fObj.put("timeSec", Math.max(0, (int) Math.round(sampleMs / 1000.0)));
+                        fObj.put("dataUrl", dataUrl);
+                        framesArr.put(fObj);
+                    } catch (Throwable ignored) {
+                    } finally {
+                        if (scaled != null && scaled != frame && !scaled.isRecycled()) {
+                            try {
+                                scaled.recycle();
+                            } catch (Throwable ignored) {
+                            }
+                        }
+                        if (frame != null && !frame.isRecycled()) {
+                            try {
+                                frame.recycle();
+                            } catch (Throwable ignored) {
+                            }
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {
+            } finally {
+                try {
+                    retriever.release();
+                } catch (Throwable ignored) {
+                }
+            }
+            JSObject ret = new JSObject();
+            ret.put("ok", framesArr.length() > 0);
+            ret.put("frames", framesArr);
+            call.resolve(ret);
+        }, "GhostiVidFrames").start();
     }
 
     @PluginMethod

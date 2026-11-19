@@ -102,6 +102,10 @@ export interface GhostiMobileCarePluginInterface {
     forceExpandSelected?: boolean;
   }): Promise<ScanDeviceGalleryResult>;
   resolveVideoPlaybackUrl(options: { id: string }): Promise<{ ok: boolean; fileUrl: string }>;
+  extractVideoKeyframes(options: {
+    id: string;
+    maxFrames?: number;
+  }): Promise<{ ok: boolean; frames: Array<{ timeSec: number; dataUrl: string }> }>;
   requestSystemPhotoTrash(options: {
     action: 'move' | 'restore';
     items: SystemPhotoTrashTarget[];
@@ -450,6 +454,35 @@ export async function resolveNativeMobileVideoPlaybackUrl(videoId: string): Prom
       }).Capacitor;
       const converted = cap?.convertFileSrc ? cap.convertFileSrc(res.fileUrl) : res.fileUrl;
       if (converted) {
+        // iOS WKWebView GPUProcess는 커스텀 스킴(capacitor://localhost/_capacitor_file_) <video> 직접 스트리밍을 차단하므로
+        // WKURLSchemeHandler를 지원하는 fetch()로 읽어 표준 blob: URL로 변환해 100% 즉시 네이티브 재생을 보장합니다.
+        try {
+          const resp = await fetch(converted);
+          if (resp.ok) {
+            const rawBlob = await resp.blob();
+            if (rawBlob.size > 1024) {
+              const videoBlob =
+                rawBlob.type && rawBlob.type.startsWith('video/')
+                  ? rawBlob
+                  : new Blob([rawBlob], { type: 'video/mp4' });
+              if (resolvedIosVideoUrlCache.size >= 6) {
+                const oldestKey = resolvedIosVideoUrlCache.keys().next().value;
+                if (oldestKey) {
+                  const oldUrl = resolvedIosVideoUrlCache.get(oldestKey);
+                  if (oldUrl && oldUrl.startsWith('blob:')) {
+                    URL.revokeObjectURL(oldUrl);
+                  }
+                  resolvedIosVideoUrlCache.delete(oldestKey);
+                }
+              }
+              const blobUrl = URL.createObjectURL(videoBlob);
+              resolvedIosVideoUrlCache.set(videoId, blobUrl);
+              return blobUrl;
+            }
+          }
+        } catch {
+          /* fallback to converted scheme url */
+        }
         resolvedIosVideoUrlCache.set(videoId, converted);
         return converted;
       }
@@ -458,6 +491,27 @@ export async function resolveNativeMobileVideoPlaybackUrl(videoId: string): Prom
     /* ignore */
   }
   return '';
+}
+
+export async function extractNativeMobileVideoKeyframes(
+  videoId: string,
+  maxFrames = 6
+): Promise<Array<{ timeSec: number; dataUrl: string }>> {
+  if (!videoId || !isCapacitorNativeMobileRuntime()) return [];
+  try {
+    const res = await GhostiMobileCareNative.extractVideoKeyframes({
+      id: videoId,
+      maxFrames,
+    });
+    if (res?.ok && Array.isArray(res.frames)) {
+      return res.frames.filter(
+        (f) => f && typeof f.dataUrl === 'string' && f.dataUrl.startsWith('data:image/')
+      );
+    }
+  } catch {
+    /* 구버전 네이티브 플러그인 폴백 */
+  }
+  return [];
 }
 
 export async function consumeNativePendingDeepLink(): Promise<{

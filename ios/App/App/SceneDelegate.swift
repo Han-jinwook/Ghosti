@@ -157,6 +157,7 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
     public let pluginMethods: [CAPPluginMethod] = [
         CAPPluginMethod(name: "scanDeviceGalleryMedia", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "resolveVideoPlaybackUrl", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "extractVideoKeyframes", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "requestSystemPhotoTrash", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openAppPermissionSettings", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "scanInstalledBloatCleaners", returnType: CAPPluginReturnPromise),
@@ -402,12 +403,12 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         let fm = FileManager.default
         let tmpDir = fm.temporaryDirectory
 
-        for ext in ["mp4", "mov", "m4v"] {
-            let existing = tmpDir.appendingPathComponent("ghosti_vid_\(safeStem).\(ext)")
-            if fm.fileExists(atPath: existing.path) {
-                call.resolve(["ok": true, "fileUrl": existing.absoluteString])
-                return
-            }
+        let outUrl = tmpDir.appendingPathComponent("ghosti_vid_\(safeStem).mp4")
+        if let attrs = try? fm.attributesOfItem(atPath: outUrl.path),
+           let sz = attrs[.size] as? NSNumber,
+           sz.int64Value > 4096 {
+            call.resolve(["ok": true, "fileUrl": outUrl.path])
+            return
         }
 
         let vOpts = PHVideoRequestOptions()
@@ -415,41 +416,100 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         vOpts.deliveryMode = .highQualityFormat
 
         PHImageManager.default().requestAVAsset(forVideo: asset, options: vOpts) { avAsset, _, _ in
-            if let urlAsset = avAsset as? AVURLAsset {
-                let srcUrl = urlAsset.url
-                let ext = srcUrl.pathExtension.isEmpty ? "mov" : srcUrl.pathExtension.lowercased()
-                let dstUrl = tmpDir.appendingPathComponent("ghosti_vid_\(safeStem).\(ext)")
-                if !fm.fileExists(atPath: dstUrl.path) {
-                    do {
-                        try fm.linkItem(at: srcUrl, to: dstUrl)
-                    } catch {
-                        do {
-                            try fm.copyItem(at: srcUrl, to: dstUrl)
-                        } catch {
-                            call.resolve(["ok": false, "fileUrl": ""])
-                            return
-                        }
-                    }
-                }
-                call.resolve(["ok": true, "fileUrl": dstUrl.absoluteString])
-                return
-            }
-
-            guard let compAsset = avAsset,
-                  let exporter = AVAssetExportSession(asset: compAsset, presetName: AVAssetExportPresetMediumQuality) else {
+            guard let compAsset = avAsset else {
                 call.resolve(["ok": false, "fileUrl": ""])
                 return
             }
-            let outUrl = tmpDir.appendingPathComponent("ghosti_vid_\(safeStem).mp4")
+
+            if let urlAsset = compAsset as? AVURLAsset,
+               urlAsset.url.pathExtension.lowercased() == "mp4" {
+                try? fm.removeItem(at: outUrl)
+                if (try? fm.copyItem(at: urlAsset.url, to: outUrl)) != nil,
+                   let attrs = try? fm.attributesOfItem(atPath: outUrl.path),
+                   let sz = attrs[.size] as? NSNumber,
+                   sz.int64Value > 4096 {
+                    call.resolve(["ok": true, "fileUrl": outUrl.path])
+                    return
+                }
+            }
+
+            // iOS 샌드박스 외부(/var/mobile/Media/DCIM) 파일 및 HEVC(.MOV) 영상을 AVFoundation 권한 토큰으로 안전하게 H.264 Faststart MP4로 추출
+            let preset = AVAssetExportSession.exportPresets(compatibleWith: compAsset).contains(AVAssetExportPreset1280x720)
+                ? AVAssetExportPreset1280x720
+                : AVAssetExportPresetMediumQuality
+            guard let exporter = AVAssetExportSession(asset: compAsset, presetName: preset) else {
+                call.resolve(["ok": false, "fileUrl": ""])
+                return
+            }
             try? fm.removeItem(at: outUrl)
             exporter.outputURL = outUrl
             exporter.outputFileType = .mp4
+            exporter.shouldOptimizeForNetworkUse = true
             exporter.exportAsynchronously {
-                if exporter.status == .completed {
-                    call.resolve(["ok": true, "fileUrl": outUrl.absoluteString])
+                if exporter.status == .completed, fm.fileExists(atPath: outUrl.path) {
+                    call.resolve(["ok": true, "fileUrl": outUrl.path])
                 } else {
                     call.resolve(["ok": false, "fileUrl": ""])
                 }
+            }
+        }
+    }
+
+    @objc func extractVideoKeyframes(_ call: CAPPluginCall) {
+        let rawId = call.getString("id") ?? ""
+        let maxFrames = max(1, min(10, call.getInt("maxFrames") ?? 6))
+        let localId = rawId.hasPrefix("mobile_vid_")
+            ? String(rawId.dropFirst("mobile_vid_".count))
+            : rawId
+        if localId.isEmpty {
+            call.resolve(["ok": false, "frames": []])
+            return
+        }
+
+        let fetched = PHAsset.fetchAssets(withLocalIdentifiers: [localId], options: nil)
+        guard let asset = fetched.firstObject else {
+            call.resolve(["ok": false, "frames": []])
+            return
+        }
+
+        let vOpts = PHVideoRequestOptions()
+        vOpts.isNetworkAccessAllowed = true
+        vOpts.deliveryMode = .highQualityFormat
+
+        PHImageManager.default().requestAVAsset(forVideo: asset, options: vOpts) { avAsset, _, _ in
+            guard let compAsset = avAsset else {
+                call.resolve(["ok": false, "frames": []])
+                return
+            }
+            DispatchQueue.global(qos: .userInitiated).async {
+                let durSec = max(0.8, CMTimeGetSeconds(compAsset.duration))
+                let count = durSec <= 2.2 ? 2 : (durSec <= 6.0 ? min(4, maxFrames) : maxFrames)
+                let generator = AVAssetImageGenerator(asset: compAsset)
+                generator.appliesPreferredTrackTransform = true
+                generator.maximumSize = CGSize(width: 1280, height: 1280)
+                let tol = CMTime(seconds: durSec <= 12.0 ? 0.15 : 0.35, preferredTimescale: 600)
+                generator.requestedTimeToleranceBefore = tol
+                generator.requestedTimeToleranceAfter = tol
+
+                var framesList: [[String: Any]] = []
+                for i in 0..<count {
+                    let ratio = count == 1 ? 0.3 : (Double(i) + 0.35) / Double(count)
+                    let tSec = max(0.05, min(durSec - 0.05, durSec * ratio))
+                    let cmTime = CMTime(seconds: tSec, preferredTimescale: 600)
+                    if let cgImg = try? generator.copyCGImage(at: cmTime, actualTime: nil) {
+                        let uiImg = UIImage(cgImage: cgImg)
+                        if let jpeg = uiImg.jpegData(compressionQuality: 0.82) {
+                            framesList.append([
+                                "timeSec": Int(round(tSec)),
+                                "dataUrl": "data:image/jpeg;base64," + jpeg.base64EncodedString()
+                            ])
+                        }
+                    }
+                }
+                call.resolve([
+                    "ok": !framesList.isEmpty,
+                    "frames": framesList
+                ])
             }
         }
     }

@@ -25,9 +25,14 @@ import androidx.core.view.WindowInsetsCompat;
 import androidx.core.view.WindowInsetsControllerCompat;
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.BridgeWebViewClient;
+import java.io.File;
+import java.io.FileInputStream;
+import java.io.FileOutputStream;
 import java.io.FilterInputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Arrays;
+import java.util.Comparator;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -211,6 +216,57 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    private File materializeSeekableVideoCache(ContentResolver resolver, Uri videoUri, long mediaId) {
+        try {
+            File cacheRoot = new File(getCacheDir(), "ghosti_vid_stream");
+            if (!cacheRoot.exists()) {
+                cacheRoot.mkdirs();
+            }
+            File target = new File(cacheRoot, "vid_" + mediaId + ".mp4");
+            if (target.exists() && target.length() > 4096L) {
+                target.setLastModified(System.currentTimeMillis());
+                return target;
+            }
+            File[] existing = cacheRoot.listFiles();
+            if (existing != null && existing.length >= 6) {
+                Arrays.sort(existing, Comparator.comparingLong(File::lastModified));
+                for (int i = 0; i <= existing.length - 6; i++) {
+                    try {
+                        existing[i].delete();
+                    } catch (Throwable ignored) {
+                    }
+                }
+            }
+            File tmp = new File(cacheRoot, "vid_" + mediaId + "_" + System.nanoTime() + ".tmp");
+            try (InputStream in = resolver.openInputStream(videoUri);
+                 FileOutputStream out = new FileOutputStream(tmp)) {
+                if (in == null) {
+                    return null;
+                }
+                byte[] buf = new byte[65536];
+                int n;
+                while ((n = in.read(buf)) > 0) {
+                    out.write(buf, 0, n);
+                }
+                out.flush();
+            }
+            if (tmp.exists() && tmp.length() > 1024L) {
+                if (target.exists()) {
+                    target.delete();
+                }
+                if (tmp.renameTo(target)) {
+                    return target;
+                }
+                return tmp;
+            } else if (tmp.exists()) {
+                tmp.delete();
+            }
+        } catch (Throwable t) {
+            Log.w("GhostiMainActivity", "materializeSeekableVideoCache failed: " + t.getMessage());
+        }
+        return null;
+    }
+
     private WebResourceResponse serveMediaStoreVideoRange(WebResourceRequest request, String path) {
         try {
             String tail = path.substring("/__ghosti_media_video/".length());
@@ -226,16 +282,46 @@ public class MainActivity extends BridgeActivity {
                 mimeType = "video/mp4";
             }
 
-            ParcelFileDescriptor pfd = resolver.openFileDescriptor(videoUri, "r");
-            if (pfd == null) {
-                return null;
+            FileInputStream fis = null;
+            long totalSize = -1L;
+            ParcelFileDescriptor pfd = null;
+            try {
+                pfd = resolver.openFileDescriptor(videoUri, "r");
+                if (pfd != null) {
+                    long statSz = pfd.getStatSize();
+                    if (statSz > 0L) {
+                        ParcelFileDescriptor.AutoCloseInputStream directIn = new ParcelFileDescriptor.AutoCloseInputStream(pfd);
+                        directIn.getChannel().position(0L);
+                        fis = directIn;
+                        totalSize = statSz;
+                        pfd = null;
+                    }
+                }
+            } catch (Throwable seekErr) {
+                if (fis != null) {
+                    try {
+                        fis.close();
+                    } catch (Throwable ignored) {
+                    }
+                    fis = null;
+                }
+            } finally {
+                if (pfd != null) {
+                    try {
+                        pfd.close();
+                    } catch (Throwable ignored) {
+                    }
+                }
             }
-            long totalSize = pfd.getStatSize();
-            if (totalSize <= 0) {
-                ParcelFileDescriptor.AutoCloseInputStream rawIn = new ParcelFileDescriptor.AutoCloseInputStream(pfd);
-                Map<String, String> basicHeaders = new HashMap<>();
-                basicHeaders.put("Access-Control-Allow-Origin", "*");
-                return new WebResourceResponse(mimeType, null, 200, "OK", basicHeaders, rawIn);
+
+            // Android 11~16 Scoped Storage Redaction Pipe(statSize == -1 또는 ESPIPE Illegal seek) 폴백: 로컬 캐시 파일로 즉시 206 Range 보장
+            if (fis == null || totalSize <= 0L) {
+                File cached = materializeSeekableVideoCache(resolver, videoUri, mediaId);
+                if (cached == null || !cached.exists() || cached.length() <= 0L) {
+                    return null;
+                }
+                fis = new FileInputStream(cached);
+                totalSize = cached.length();
             }
 
             Map<String, String> reqHeaders = request.getRequestHeaders();
@@ -249,7 +335,6 @@ public class MainActivity extends BridgeActivity {
                 }
             }
 
-            ParcelFileDescriptor.AutoCloseInputStream fis = new ParcelFileDescriptor.AutoCloseInputStream(pfd);
             Map<String, String> respHeaders = new HashMap<>();
             respHeaders.put("Accept-Ranges", "bytes");
             respHeaders.put("Access-Control-Allow-Origin", "*");

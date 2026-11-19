@@ -1114,11 +1114,15 @@ export const MobileAppView: React.FC = () => {
                         <h4 className="font-headline-sm text-[14px] text-white font-bold truncate">
                           {vid.title}
                         </h4>
-                        {hasExecutedUserSearch && activeQuery && (
+                        {hasExecutedUserSearch && activeQuery ? (
                           <p className="font-body-sm text-[11.5px] text-zinc-200 bg-zinc-950/80 border border-primary-container/30 rounded-lg p-2 line-clamp-2">
                             {vid.matchedFrameCaption}
                           </p>
-                        )}
+                        ) : Array.isArray(vid.ocrLines) && vid.ocrLines.length > 0 ? (
+                          <p className="font-body-sm text-[11.5px] text-zinc-200 bg-zinc-950/80 border border-teal-400/35 rounded-lg p-2 line-clamp-2">
+                            📝 {vid.ocrLines.map((l) => l.text).join(' · ')}
+                          </p>
+                        ) : null}
                         <div className="font-label-mono text-[10.5px] text-zinc-400 pt-0.5 flex items-center justify-between gap-2">
                           <span className="truncate">📍 {vid.locationKo}</span>
                           <div className="flex items-center gap-1.5 shrink-0">

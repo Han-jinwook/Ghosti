@@ -1,6 +1,9 @@
 import { RawImage } from '@huggingface/transformers';
 import { getZCoreUrl, zCoreBridge, hasActiveGhostiLoginSession } from '../zCoreBridge';
-import { resolveNativeMobileVideoPlaybackUrl } from '../ghostiMobileCareBridge';
+import {
+  extractNativeMobileVideoKeyframes,
+  resolveNativeMobileVideoPlaybackUrl,
+} from '../ghostiMobileCareBridge';
 import { silentIndexingBrake } from '../silentIndexingBrake';
 import type { LocalDocumentFile, PhotoItem, SearchResultItem, VideoSceneItem } from '../../types/saysee';
 import {
@@ -2379,35 +2382,55 @@ export async function extractVideoScreenTextOnDemand(
   if (isRealVideoSource) {
     try {
       const rawPaddleFrames: Array<{ timeSec: number; ocrText: string }> = [];
-      const sampledImgData = await captureHighResImageDataForVideoOcr(vid, isMobileVid ? 6 : 12);
 
-      if (sampledImgData.length > 0) {
-        for (const item of sampledImgData) {
-          const ocrRes = await recognizeImageDataWithPaddleOcr(item.imageData);
-          if (ocrRes.text) {
-            rawPaddleFrames.push({ timeSec: item.timeSec, ocrText: ocrRes.text });
+      // 2-A) 모바일 네이티브 앱(iOS AVAssetImageGenerator / Android MediaMetadataRetriever) 직접 키프레임 추출 경로 (WKWebView/ScopedStorage <video> 디코더 제약 0%)
+      if (isMobileVid) {
+        const nativeFrames = await extractNativeMobileVideoKeyframes(vid.id, 6);
+        if (nativeFrames.length > 0) {
+          let prevDataSig = '';
+          for (const nf of nativeFrames) {
+            const sig = nf.dataUrl.slice(-180);
+            if (sig && sig === prevDataSig) continue;
+            prevDataSig = sig;
+            const ocrRes = await recognizeDataUrlWithPaddleOcr(nf.dataUrl);
+            if (ocrRes.text) {
+              rawPaddleFrames.push({ timeSec: Number(nf.timeSec || 0), ocrText: ocrRes.text });
+            }
           }
         }
-      } else if (zCoreBridge.isConnected && vid.videoFileName) {
-        // 특수 코덱으로 브라우저 <video> 직접 디코딩이 불가한 경우 Z-코어가 뽑아준 프레임에 PP-OCRv5 수행
-        const resFrames = await fetch(getZCoreUrl('/__videos/extract-ocr-text'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            videoFileName: vid.videoFileName,
-            onlyCachedV5: true,
-            returnFramesForPaddle: true,
-          }),
-        });
-        if (resFrames.ok) {
-          const df = await resFrames.json();
-          const sFrames: Array<{ timeSec: number; dataUrl: string }> = Array.isArray(df?.sampledFrames)
-            ? df.sampledFrames
-            : [];
-          for (const sf of sFrames) {
-            const ocrRes = await recognizeDataUrlWithPaddleOcr(sf.dataUrl);
+      }
+
+      if (rawPaddleFrames.length === 0) {
+        const sampledImgData = await captureHighResImageDataForVideoOcr(vid, isMobileVid ? 6 : 12);
+
+        if (sampledImgData.length > 0) {
+          for (const item of sampledImgData) {
+            const ocrRes = await recognizeImageDataWithPaddleOcr(item.imageData);
             if (ocrRes.text) {
-              rawPaddleFrames.push({ timeSec: Number(sf.timeSec || 0), ocrText: ocrRes.text });
+              rawPaddleFrames.push({ timeSec: item.timeSec, ocrText: ocrRes.text });
+            }
+          }
+        } else if (zCoreBridge.isConnected && vid.videoFileName) {
+          // 특수 코덱으로 브라우저 <video> 직접 디코딩이 불가한 경우 Z-코어가 뽑아준 프레임에 PP-OCRv5 수행
+          const resFrames = await fetch(getZCoreUrl('/__videos/extract-ocr-text'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              videoFileName: vid.videoFileName,
+              onlyCachedV5: true,
+              returnFramesForPaddle: true,
+            }),
+          });
+          if (resFrames.ok) {
+            const df = await resFrames.json();
+            const sFrames: Array<{ timeSec: number; dataUrl: string }> = Array.isArray(df?.sampledFrames)
+              ? df.sampledFrames
+              : [];
+            for (const sf of sFrames) {
+              const ocrRes = await recognizeDataUrlWithPaddleOcr(sf.dataUrl);
+              if (ocrRes.text) {
+                rawPaddleFrames.push({ timeSec: Number(sf.timeSec || 0), ocrText: ocrRes.text });
+              }
             }
           }
         }
@@ -2464,10 +2487,17 @@ export async function extractVideoScreenTextOnDemand(
       }
     }
   }
-  if (fallbackLines.length === 0 && Array.isArray(vid.timelineFrames)) {
+  if (!isMobileVid && fallbackLines.length === 0 && Array.isArray(vid.timelineFrames)) {
     for (const f of vid.timelineFrames) {
       const cap = String(f.sceneCaption || '').trim();
-      if (!cap || /\s장면\s*\(\d{2}:\d{2}\)$/.test(cap) || seen.has(cap)) continue;
+      if (
+        !cap ||
+        /\s장면\s*\(\d{2}:\d{2}\)$/.test(cap) ||
+        /시작\s*장면$/.test(cap) ||
+        seen.has(cap)
+      ) {
+        continue;
+      }
       seen.add(cap);
       fallbackLines.push({
         timeSec: f.timeSec || 0,

@@ -20,6 +20,7 @@ import {
   isCapacitorNativeMobileRuntime,
   scanNativeDeviceGalleryMedia,
 } from '../../services/ghostiMobileCareBridge';
+import { extractVideoScreenTextOnDemand } from '../../services/ai/aiVideoEngine';
 import {
   dispatchFileToKakaoRealChatroom,
   extractKeywordSentencesZeroLlm,
@@ -847,6 +848,7 @@ export const createAssistantOnboardingSlice: StateCreator<
             ? convertNativeGalleryVideos(res.videos)
             : [];
 
+        let newlyDiscoveredVids: VideoSceneItem[] = [];
         if (analyzedBatch.length > 0 || convertedVideos.length > 0) {
           newlyAddedTotal += analyzedBatch.length;
           set((state) => {
@@ -875,10 +877,9 @@ export const createAssistantOnboardingSlice: StateCreator<
               return v;
             });
             const existingVidIds = new Set(upgradedExistingVids.map((v) => v.id));
-            const nextVids = [
-              ...upgradedExistingVids,
-              ...convertedVideos.filter((v) => !existingVidIds.has(v.id)),
-            ];
+            newlyDiscoveredVids = convertedVideos.filter((v) => !existingVidIds.has(v.id));
+            // 새로 촬영하거나 텔레그램 등에서 저장한 최신 영상이 항상 맨 앞(0번 카드)에 나타나도록 선두 배치!
+            const nextVids = [...newlyDiscoveredVids, ...upgradedExistingVids];
 
             const targetTab =
               nextDupGroups.length > 0
@@ -910,6 +911,54 @@ export const createAssistantOnboardingSlice: StateCreator<
                   : nextVids,
             };
           });
+
+          if (newlyDiscoveredVids.length > 0) {
+            const vidsToQuickOcr = newlyDiscoveredVids.slice(0, 3);
+            void (async () => {
+              for (const nVid of vidsToQuickOcr) {
+                try {
+                  const ocrOut = await extractVideoScreenTextOnDemand(nVid);
+                  if (ocrOut.ocrLines && ocrOut.ocrLines.length > 0) {
+                    const extraTokens = String(ocrOut.fullText || '')
+                      .replace(/\[\d{2}:\d{2}\]/g, ' ')
+                      .split(/\s+/)
+                      .map((t) => t.trim())
+                      .filter((t) => t.length >= 2)
+                      .slice(0, 40);
+                    set((state) => ({
+                      videoSceneItems: state.videoSceneItems.map((v) =>
+                        v.id === nVid.id
+                          ? {
+                              ...v,
+                              hasScreenOcrText: true,
+                              ocrLineCount: ocrOut.ocrLines.length,
+                              ocrLines: ocrOut.ocrLines,
+                              ocrFullText: ocrOut.fullText || '',
+                              keywords: Array.from(new Set([...(v.keywords || []), ...extraTokens])),
+                            }
+                          : v
+                      ),
+                      matchedVideoScenes: state.matchedVideoScenes.map((v) =>
+                        v.id === nVid.id
+                          ? {
+                              ...v,
+                              hasScreenOcrText: true,
+                              ocrLineCount: ocrOut.ocrLines.length,
+                              ocrLines: ocrOut.ocrLines,
+                              ocrFullText: ocrOut.fullText || '',
+                              keywords: Array.from(new Set([...(v.keywords || []), ...extraTokens])),
+                            }
+                          : v
+                      ),
+                    }));
+                    void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
+                  }
+                } catch {
+                  /* ignore background quick OCR error */
+                }
+              }
+            })();
+          }
         }
 
         if (

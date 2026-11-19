@@ -800,7 +800,7 @@ export function convertNativeGalleryVideos(nativeVideos: NativeGalleryVideoMeta[
           timeSec: 0,
           timestampText: '00:00',
           phaseLabel: '시작 구간',
-          sceneCaption: `${stem} 시작 장면`,
+          sceneCaption: '',
           keywords: [stem],
           tags: ['#내폰동영상'],
           thumbUrl: v.thumbDataUrl || '',
@@ -812,7 +812,7 @@ export function convertNativeGalleryVideos(nativeVideos: NativeGalleryVideoMeta[
 
 const MOBILE_GALLERY_IDB_NAME = 'ghosti_mobile_gallery_cache_v1';
 const MOBILE_GALLERY_STORE = 'snapshot';
-const MOBILE_GALLERY_CACHE_SCHEMA_VER = 2;
+const MOBILE_GALLERY_CACHE_SCHEMA_VER = 3;
 
 interface SerializedOpticalSig {
   dhash: string;

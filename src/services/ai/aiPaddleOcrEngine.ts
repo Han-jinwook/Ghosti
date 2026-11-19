@@ -167,11 +167,18 @@ function resizeBilinearRGBA(
 
 function polishKoreanOcrSpacing(text: string): string {
   let s = text.normalize('NFC').replace(/\s+/g, ' ').trim();
+  // 아이콘·배지 오인식 정제 (| 뒤 왕관 아이콘 👑 -> W/M/V, 요일 뒤 체크 화살표 V/√, 중복 Kcal 단위 등)
+  s = s.replace(/(?<=\|)\s*[WMV]\s*(?=[가-힣]{2,})/g, ' ');
+  s = s.replace(/^(?:[GH])\s*(?=(?:로그인|퀴즈)$)/g, '');
+  s = s.replace(/(?<=[월화수목금토일])\s*[Vv√✓]+(?=\s|$)/g, '');
+  s = s.replace(/\b(ChatGPT)\s*[vV√✓]+\b/gi, '$1');
+  s = s.replace(/\bKcal\s*kcal\b/gi, 'Kcal');
+  s = s.replace(/\s*[©®]+(?=\s|$)/g, '');
   // 조사('을','를') 뒤 한글 용언이 공백 없이 붙은 경우('급식의 질을높이는' -> '급식의 질을 높이는') 자연스럽게 분리
   s = s.replace(/([가-힣]{1,6}[을를])(?=(?:높이|줄이|넓히|바꾸|만들|키우|살리|지키|열어|찾아)[가-힣])/g, '$1 ');
   // '&' 기호 양옆 간격 정돈 ('예산절감&질' -> '예산 절감 & 질' / '예산절감 & 질')
   s = s.replace(/([가-힣A-Za-z0-9])\s*&\s*([가-힣A-Za-z0-9])/g, '$1 & $2');
-  return s;
+  return s.replace(/\s+/g, ' ').trim();
 }
 
 function joinWrappedKoreanLines(upper: string, lower: string): string {
@@ -179,17 +186,18 @@ function joinWrappedKoreanLines(upper: string, lower: string): string {
   const b = lower.trim();
   if (!a) return b;
   if (!b) return a;
+  if (a.endsWith('/') && /^\d{1,3}(?:명|개|건)?$/.test(b)) return `${a}${b}`;
   if (/^[|/]/.test(b) || /[|/]$/.test(a)) return `${a} ${b}`;
 
-  // 아랫줄이 단독 1글자 한글('선','숙','침','장','호')이거나 조사/어미 조각으로 시작할 때, 또는 윗줄이 1글자 조각으로 끝날 때 무공백 직결 결합
+  // 아랫줄이 단독 1글자 한글('선','숙','침','장','호','주','차','록')이거나 조사/어미 조각으로 시작할 때, 또는 윗줄이 1글자 조각으로 끝날 때 무공백 직결 결합
   if (
     /^[가-힣]$/.test(b) ||
     /^(?:이터|에서|으로|에게|부터|까지|처럼|만큼|보다|라고|하고|하며|하는|하여|에는|에도|은|는|이|가|을|를|의|에|로|와|과|도|만)(?=[가-힣\s.,!?]|$)/.test(
       b
     ) ||
-    /^(?:호|선|숙|율|량|액|금|원|개|건|명)(?=[\s:|.,)/]|$)/.test(b) ||
+    /^(?:호|선|숙|율|량|액|금|원|개|건|명|주|차|록)(?=[\s:|.,)/]|$)/.test(b) ||
     (/(\s|^)[가-힣]$/.test(a) && !/&\s*[가-힣]$/.test(a)) ||
-    /(?:등록번|전화번|계좌번|우편번|비밀번|백은|메뉴개|메뉴 개)$/.test(a)
+    /(?:등록번|전화번|계좌번|우편번|비밀번|백은|메뉴개|메뉴 개|\d+\s*월\s*\d+)$/.test(a)
   ) {
     return polishKoreanOcrSpacing(`${a}${b}`);
   }
@@ -501,30 +509,29 @@ async function runSingleImageOcrInternal(
       prevIdx = maxI;
     }
 
-    while (
-      charPairs.length > 0 &&
-      charPairs[0].sc < 0.42 &&
-      !/[가-힣A-Za-z0-9]/.test(charPairs[0].ch)
-    ) {
+    while (charPairs.length > 0 && charPairs[0].sc < 0.56) {
       charPairs.shift();
     }
-    while (
-      charPairs.length > 0 &&
-      charPairs[charPairs.length - 1].sc < 0.42 &&
-      !/[가-힣A-Za-z0-9]/.test(charPairs[charPairs.length - 1].ch)
-    ) {
+    while (charPairs.length > 0 && charPairs[charPairs.length - 1].sc < 0.56) {
       charPairs.pop();
     }
 
-    const clean = charPairs
-      .map((p) => p.ch)
-      .join('')
-      .normalize('NFC')
-      .trim();
+    // 이모지·아이콘(👑 등)이 단일 저신뢰 영문/기호(W, M 등)로 오독된 구간을 공백으로 치환
+    for (let ci = 0; ci < charPairs.length; ci++) {
+      const cp = charPairs[ci];
+      if (cp.ch !== ' ' && !/[가-힣0-9]/.test(cp.ch) && cp.sc < 0.82) {
+        const prevCh = ci > 0 ? charPairs[ci - 1].ch : '';
+        const nextCh = ci + 1 < charPairs.length ? charPairs[ci + 1].ch : '';
+        if (!/[A-Za-z]/.test(prevCh) && !/[A-Za-z]/.test(nextCh)) {
+          charPairs[ci] = { ch: ' ', sc: cp.sc };
+        }
+      }
+    }
+
+    const clean = polishKoreanOcrSpacing(charPairs.map((p) => p.ch).join(''));
+    const scored = charPairs.filter((p) => p.ch !== ' ');
     const avgConf =
-      charPairs.length > 0
-        ? charPairs.reduce((acc, p) => acc + p.sc, 0) / charPairs.length
-        : 0;
+      scored.length > 0 ? scored.reduce((acc, p) => acc + p.sc, 0) / scored.length : 0;
     if (clean && avgConf >= 0.78) {
       boxes.push({ ...b, conf: avgConf, text: clean });
     }

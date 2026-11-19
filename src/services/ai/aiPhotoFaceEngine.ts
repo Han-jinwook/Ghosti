@@ -2123,7 +2123,7 @@ export async function startSilentRealMediaVisionIndexing(params: {
             !v.ocrFullText &&
             (!Array.isArray(v.ocrLines) || v.ocrLines.length === 0)
         )
-        .slice(0, 2);
+        .slice(0, 6);
       if (mobileVidsForOcr.length > 0) {
         for (const mVid of mobileVidsForOcr) {
           const canContinue = await waitForMobileUserIdleIfNeeded(true);
