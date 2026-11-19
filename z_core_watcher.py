@@ -476,9 +476,9 @@ def main() -> None:
             break
 
     print(
-        f"👀 [{ROOT_DIR.name} 무토큰 3중 감시병 가동 ({role_badge})] ({interval_sec}초 주기 | AI 토큰 소모 0)\n"
+        f"👀 [{ROOT_DIR.name} 무토큰 감시병 가동 ({role_badge})] ({interval_sec}초 주기 | AI 토큰 소모 0)\n"
         f"   1) 전사 중앙 우체국: {POST_OFFICE_DIR}\n"
-        f"   2) 비서 전사 코딩강령 이식: {DOCTRINE_FILE.name}\n"
+        f"   2) 비서 전사 코딩강령 무소음 해시 갱신(Silent Sync): {DOCTRINE_FILE.name}\n"
         f"   3) 노션 QA 칸반 보드: '발견된 버그' ({role_badge}) 컬럼",
         flush=True,
     )
@@ -562,18 +562,8 @@ def main() -> None:
                     pass
             current_doctrine_hash = file_md5(DOCTRINE_FILE)
             if current_doctrine_hash and current_doctrine_hash != baseline_doctrine_hash:
-                print("\n" + "📜" * 24)
-                print(
-                    "🔔 [전사 코딩강령 외부 이식 자동 감지!] 비서(Secretary)로부터 'docs/멀린코딩강령_v20261020.md' 업데이트가 이식되었습니다!"
-                )
-                tail_lines = DOCTRINE_FILE.read_text(encoding="utf-8", errors="replace").splitlines()[-35:]
-                print("\n📌 [최신 강령 하단 변경 내역 미리보기]")
-                print("\n".join(tail_lines))
-                print(
-                    "\n👉 [AI 에이전트 지시] 업데이트된 강령을 즉시 숙지하고 멀린님께 변경 요약을 보고하세요!"
-                )
-                print("📜" * 24, flush=True)
-                return
+                # [Silent Sync] 전사 코딩강령 해시 변경 시 강제 기상 폐지 -> 무소음 해시 갱신만 수행
+                baseline_doctrine_hash = current_doctrine_hash
 
         new_bugs = check_notion_new_bugs(seen_bug_ids, role=active_role)
         if new_bugs:
