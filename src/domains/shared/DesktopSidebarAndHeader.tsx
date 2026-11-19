@@ -16,7 +16,7 @@ import {
   useDashboardNavStore,
 } from './dashboardNavState';
 import { readCurrentInviteDisplayMeta } from '../../services/shareInviteDeepLinkBridge';
-import { hasActiveGhostiLoginSession } from '../../services/zCoreBridge';
+import { hasAuthenticatedHubAccountSession } from '../../services/supabaseClient';
 
 const FAMILY_ROOMS: FamilyRoomId[] = ['우리집', '본가(친가)', '처가(친정)'];
 
@@ -1240,7 +1240,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                       ? '로그인·설치 없이 공유 사진방을 자유롭게 구경하고 검색해 보세요! 내 사진 올리기·원본 일괄 저장·새 사진 알림 클릭 시 합류 창이 열립니다.'
                       : '상대방이 카톡 초대 링크를 눌렀을 때 설치·가입 없이 1초 만에 열리는 공유방 구경 화면을 미리 확인합니다.'}
                   </span>
-                  {isGuestPreviewMode && !inviteMeta.hasExplicitUrlInvite && hasActiveGhostiLoginSession() && (
+                  {isGuestPreviewMode && !inviteMeta.hasExplicitUrlInvite && hasAuthenticatedHubAccountSession() && (
                     <button
                       type="button"
                       onClick={() => setIsGuestPreviewMode(false)}

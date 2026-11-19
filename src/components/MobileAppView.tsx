@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { zCoreBridge, isZCoreOutdated } from '../services/zCoreBridge';
+import { hasAuthenticatedHubAccountSession } from '../services/supabaseClient';
 import { useSaySeeStore, getActivePersonaForCluster, type MobileTab } from '../store/useSaySeeStore';
 import { GhostiTopRightHubAnchor } from './GhostiHubInfraBridge';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
@@ -1328,7 +1329,9 @@ export const MobileAppView: React.FC = () => {
                               </div>
                             )}
 
-                            {String(item.photo.id || '').startsWith('shared_added_') && (
+                            {(String(item.photo.id || '').startsWith('shared_sb_') ||
+                              String(item.photo.id || '').startsWith('shared_added_')) &&
+                              hasAuthenticatedHubAccountSession() && (
                               <button
                                 type="button"
                                 onClick={(e) => {

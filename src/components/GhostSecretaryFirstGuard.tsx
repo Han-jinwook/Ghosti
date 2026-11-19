@@ -76,11 +76,12 @@ export function useIsSecretaryFirstBrowseGuardActive(): boolean {
   if (connected) return false;
   if (layout === 'mobile' || isStoreAppMode || isMobileVoiceEnvironment()) return false;
   if (isGuestPreviewMode) return false;
-  // 초대 링크로 1초 합류한 멤버가 공유 사진방(가족방/동호회/동창회)을 열람·검색할 때는 통과의례 가드 면제 (단, '내 사진도 추가하기' 클릭 시에만 귀신비서 우회 안내)
+  // 공유 사진방(가족방/동호회/동창회)은 방식 A(Supabase 13KB WebP 썸네일 동기화 + PC 파일 탐색기 직접 업로드 + 초대 링크 열람)로
+  // 로컬 Z-코어 미연결 상태에서도 열람·검색·초대 링크 입장·로그인 후 사진 추가가 즉시 작동하므로 귀신비서 선행 가드에서 면제
   if (
-    (activeLoungeType === 'family' ||
-      activeLoungeType === 'club' ||
-      activeLoungeType === 'student') &&
+    activeLoungeType === 'family' ||
+    activeLoungeType === 'club' ||
+    activeLoungeType === 'student' ||
     isInvitedMemberSession
   ) {
     return false;
@@ -88,7 +89,12 @@ export function useIsSecretaryFirstBrowseGuardActive(): boolean {
 
   if (typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search);
-    if (params.get('preview') === 'guest' || params.get('ghostSearchWindow')) {
+    if (
+      params.get('preview') === 'guest' ||
+      params.has('invite') ||
+      params.has('token') ||
+      params.get('ghostSearchWindow')
+    ) {
       return false;
     }
   }

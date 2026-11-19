@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
+import { hasAuthenticatedHubAccountSession } from '../../services/supabaseClient';
 import {
   cleanVideoTimestampLabel,
   groupBurstSearchResults,
@@ -96,7 +97,7 @@ export const GhostSearchPane: React.FC<{
       );
     }
     return orderedGroups;
-  }, [searchResults, groupBurstsInSearch, searchSpace, hasExecutedUserSearch]);
+  }, [searchResults, groupBurstsInSearch, searchSpace, hasExecutedUserSearch, activeLoungeType]);
 
   const collapsedBurstCount = searchResults.length - groupedResults.length;
 
@@ -579,7 +580,9 @@ export const GhostSearchPane: React.FC<{
                               </div>
                             ) : null}
 
-                            {String(item.photo.id || '').startsWith('shared_added_') && (
+                            {(String(item.photo.id || '').startsWith('shared_sb_') ||
+                              String(item.photo.id || '').startsWith('shared_added_')) &&
+                              hasAuthenticatedHubAccountSession() && (
                               <button
                                 type="button"
                                 onClick={(e) => {

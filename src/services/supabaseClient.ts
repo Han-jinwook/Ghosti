@@ -121,6 +121,54 @@ export function getGhostiSupabaseAccessToken(): string | null {
 }
 
 /**
+ * 로컬 Z-코어(LNA) 동의 플래그(`ghosti_secretary_engine_agreed`)와 분리된
+ * 실제 멀린 허브·Supabase 계정 로그인 세션 보유 여부 단일 판별 함수.
+ * - 로그인 시: `merlin_session_token` 또는 유효한 `ghosti_supabase_access_token` 존재 ➔ true
+ * - 로그아웃 / 시크릿 창 / 비로그인 초대링크 구경 시: 둘 다 없음 ➔ false
+ */
+export function hasAuthenticatedHubAccountSession(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    const hubToken = (localStorage.getItem('merlin_session_token') || '').trim();
+    if (hubToken) return true;
+    return Boolean(getGhostiSupabaseAccessToken());
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * `hub-supabase-bridge`가 서명한 단기 JWT 내부의 정식 클레임(`sub` = public.users.id, `email`)을 추출합니다.
+ * RLS 정책(`lower(uploader_email) = public.ghosti_current_email()`) 및 `users(id)` FK와 100% 일치시킵니다.
+ */
+export function readGhostiAuthedJwtClaims(): { sub: string; email: string } | null {
+  const token = getGhostiSupabaseAccessToken();
+  if (!token) return null;
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return null;
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const padded = base64 + '='.repeat((4 - (base64.length % 4)) % 4);
+    const jsonStr =
+      typeof atob === 'function'
+        ? decodeURIComponent(
+            Array.from(atob(padded))
+              .map((c) => `%${c.charCodeAt(0).toString(16).padStart(2, '0')}`)
+              .join('')
+          )
+        : '';
+    if (!jsonStr) return null;
+    const parsed = JSON.parse(jsonStr) as { sub?: string; email?: string };
+    const email = (parsed.email || '').trim().toLowerCase();
+    const sub = (parsed.sub || '').trim();
+    if (!email) return null;
+    return { sub, email };
+  } catch {
+    return null;
+  }
+}
+
+/**
  * RLS 보호 테이블(라운지 방·공유 사진·기기·페어링 코드·여권 등)용 클라이언트.
  * - 브릿지 단기 토큰이 있으면 그 토큰을 Authorization 헤더로 실은 클라이언트를 반환 (auth.jwt() ->> 'email' 판별 가능)
  * - 토큰이 없거나 만료되면 null (호출부에서 ensureGhostiAuthedSupabaseClient 또는 syncHubUserToLocalSupabase 재호출)

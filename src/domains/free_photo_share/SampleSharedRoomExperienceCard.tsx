@@ -54,7 +54,7 @@ export const SampleSharedRoomExperienceCard: React.FC<{
   };
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" data-allow-secretary-jump="true">
       <div className="py-7 px-5 rounded-2xl bg-[#18181B] border border-white/10 text-center flex flex-col items-center gap-2.5">
         <span className="px-3 py-1 rounded-full bg-zinc-900 border border-white/15 text-[11.5px] font-bold text-zinc-300">
           현재 내 {roomTypeKo} 공유방 사진 · 0장 (빈 방)

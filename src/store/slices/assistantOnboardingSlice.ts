@@ -530,47 +530,75 @@ export const createAssistantOnboardingSlice: StateCreator<
         initializing: false,
       });
     } else {
-      set({
-        photos: enrichedPhotos,
-        sharedRoomHostPhotos: hostSharedPhotos,
-        duplicateGroups: dataset.duplicateGroups,
-        localDocuments: indexedDocs,
-        matchedLocalDocs: effectiveInitialDocs,
-        matchedVaultPhotos: initialVaultPhotos,
-        videoSceneItems: baseDatasetVideos,
-        matchedVideoScenes: effectiveInitialVideos,
-        faceClusters: autoMultiClusters,
-        latestCorpusYear: faceData.latestCorpusYear,
-        onboardingProgress: {
-          ...INITIAL_ONBOARDING_PROGRESS,
-          currentPhotoThumb: fallbackThumb,
-        },
-        telemetry: telemetry ? { ...telemetry, lastQueryMs: 0.4 } : null,
-        syncState,
-        sentenceChips: localChips,
-        onboardingAhaItems: localAhaItems,
-        // 유저가 이미 동영상이나 문서 탭을 클릭해 탐색 중이거나 검색한 경우, 백그라운드 재인덱싱/Z코어 재연결 시 사진(gallery) 탭으로 강제 롤백되는 현상을 원천 방지
-        searchSpace: currentHasUserSelectedSearchTab ? currentSearchSpace : 'gallery',
-        hasExecutedUserSearch: currentHasExecutedUserSearch,
-        hasUserSelectedSearchTab: currentHasUserSelectedSearchTab,
-        activeQuery: currentHasExecutedUserSearch
-          ? get().activeQuery
-          : currentSearchSpace === 'video' && currentHasUserSelectedSearchTab
-          ? `동영상 ${indexedVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`
-          : currentSearchSpace === 'vault' && currentHasUserSelectedSearchTab
-          ? `최근 서류 ${indexedDocs.length + initialVaultPhotos.length}건 통합 (로컬 문서 ${indexedDocs.length}건 + 촬영 서류 ${initialVaultPhotos.length}장)`
-          : `전체 갤러리 사진 (${initialGalleryPhotos.length}장)`,
-        matchedTags: currentHasExecutedUserSearch
-          ? get().matchedTags
-          : currentSearchSpace === 'video' && currentHasUserSelectedSearchTab
-          ? ['#동영상전구간해부', '#타임라인점프재생', '#자율비전인덱싱']
-          : currentSearchSpace === 'vault' && currentHasUserSelectedSearchTab
-          ? ['#스마트서류함', '#문서·설명서', '#문서·신분증', '#PDF통합검색']
-          : ['#전체갤러리', '#자율얼굴검출', '#768차원벡터검색'],
-        searchResults: initialGalleryPhotos,
-        selectedTrashIds: trashIds,
-        initialized: true,
-        initializing: false,
+      set((latestState) => {
+        const latestLounge = latestState.activeLoungeType;
+        const latestFamilyRoom = latestState.activeFamilyRoom;
+        const latestSharedMode = isSharedPhotoLounge(latestLounge);
+        const latestCorpus = resolveLoungePhotoCorpus({
+          activeLoungeType: latestLounge,
+          activeFamilyRoom: latestFamilyRoom,
+          photos: enrichedPhotos,
+          sharedRoomHostPhotos: hostSharedPhotos,
+          sharedRoomAddedPhotos: latestState.sharedRoomAddedPhotos,
+        });
+        const latestGalleryResults = filterVisibleGalleryPhotos(latestCorpus).map((photo) => ({
+          photo,
+          score: 0.95,
+          matchPercentage: 97,
+          matchedBy: 'text-direct' as const,
+        }));
+        const preserveExistingSharedResults =
+          latestSharedMode &&
+          latestGalleryResults.length === 0 &&
+          latestState.searchResults.length > 0 &&
+          latestState.searchResults.every((sr) => String(sr.photo.id || '').startsWith('shared_'));
+
+        return {
+          photos: enrichedPhotos,
+          sharedRoomHostPhotos: hostSharedPhotos,
+          duplicateGroups: dataset.duplicateGroups,
+          localDocuments: indexedDocs,
+          matchedLocalDocs: latestSharedMode ? [] : effectiveInitialDocs,
+          matchedVaultPhotos: latestSharedMode ? [] : initialVaultPhotos,
+          videoSceneItems: baseDatasetVideos,
+          matchedVideoScenes: latestSharedMode ? [] : effectiveInitialVideos,
+          faceClusters: autoMultiClusters,
+          latestCorpusYear: faceData.latestCorpusYear,
+          onboardingProgress: {
+            ...INITIAL_ONBOARDING_PROGRESS,
+            currentPhotoThumb: fallbackThumb,
+          },
+          telemetry: telemetry ? { ...telemetry, lastQueryMs: 0.4 } : null,
+          syncState,
+          sentenceChips: localChips,
+          onboardingAhaItems: localAhaItems,
+          // 유저가 이미 동영상이나 문서 탭을 클릭해 탐색 중이거나 검색한 경우, 백그라운드 재인덱싱/Z코어 재연결 시 사진(gallery) 탭으로 강제 롤백되는 현상을 원천 방지
+          searchSpace: currentHasUserSelectedSearchTab ? currentSearchSpace : 'gallery',
+          hasExecutedUserSearch: currentHasExecutedUserSearch,
+          hasUserSelectedSearchTab: currentHasUserSelectedSearchTab,
+          activeQuery: currentHasExecutedUserSearch
+            ? latestState.activeQuery
+            : latestSharedMode
+            ? latestState.activeQuery || `공유 앨범 (${latestGalleryResults.length}장)`
+            : currentSearchSpace === 'video' && currentHasUserSelectedSearchTab
+            ? `동영상 ${indexedVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`
+            : currentSearchSpace === 'vault' && currentHasUserSelectedSearchTab
+            ? `최근 서류 ${indexedDocs.length + initialVaultPhotos.length}건 통합 (로컬 문서 ${indexedDocs.length}건 + 촬영 서류 ${initialVaultPhotos.length}장)`
+            : `전체 갤러리 사진 (${latestGalleryResults.length}장)`,
+          matchedTags: currentHasExecutedUserSearch
+            ? latestState.matchedTags
+            : currentSearchSpace === 'video' && currentHasUserSelectedSearchTab
+            ? ['#동영상전구간해부', '#타임라인점프재생', '#자율비전인덱싱']
+            : currentSearchSpace === 'vault' && currentHasUserSelectedSearchTab
+            ? ['#스마트서류함', '#문서·설명서', '#문서·신분증', '#PDF통합검색']
+            : ['#전체갤러리', '#자율얼굴검출', '#768차원벡터검색'],
+          searchResults: preserveExistingSharedResults
+            ? latestState.searchResults
+            : latestGalleryResults,
+          selectedTrashIds: trashIds,
+          initialized: true,
+          initializing: false,
+        };
       });
     }
 
@@ -735,24 +763,31 @@ export const createAssistantOnboardingSlice: StateCreator<
             matchPercentage: 99,
             matchedBy: 'text-direct',
           }));
-        set((state) => ({
-          photos: updatedPhotos,
-          duplicateGroups: cachedDupGroups,
-          selectedTrashIds: cachedTrashIds,
-          searchResults: state.hasExecutedUserSearch ? state.searchResults : cachedSearchResults,
-          videoSceneItems:
-            state.videoSceneItems.length > 0
-              ? state.videoSceneItems
-              : cached.videos.length > 0
-              ? cached.videos
-              : state.videoSceneItems,
-          matchedVideoScenes:
-            state.videoSceneItems.length === 0 &&
-            cached.videos.length > 0 &&
-            !state.hasExecutedUserSearch
-              ? cached.videos
-              : state.matchedVideoScenes,
-        }));
+        set((state) => {
+          const inSharedLounge = isSharedPhotoLounge(state.activeLoungeType);
+          return {
+            photos: updatedPhotos,
+            duplicateGroups: cachedDupGroups,
+            selectedTrashIds: cachedTrashIds,
+            searchResults:
+              inSharedLounge || state.hasExecutedUserSearch
+                ? state.searchResults
+                : cachedSearchResults,
+            videoSceneItems:
+              state.videoSceneItems.length > 0
+                ? state.videoSceneItems
+                : cached.videos.length > 0
+                ? cached.videos
+                : state.videoSceneItems,
+            matchedVideoScenes:
+              !inSharedLounge &&
+              state.videoSceneItems.length === 0 &&
+              cached.videos.length > 0 &&
+              !state.hasExecutedUserSearch
+                ? cached.videos
+                : state.matchedVideoScenes,
+          };
+        });
       }
     }
 
@@ -858,14 +893,21 @@ export const createAssistantOnboardingSlice: StateCreator<
                 ? 'memo'
                 : state.activeTrashCategoryFilter;
 
+            const inSharedLounge = isSharedPhotoLounge(state.activeLoungeType);
             return {
               photos: updatedPhotos,
               duplicateGroups: nextDupGroups,
               selectedTrashIds: nextTrashIds,
               activeTrashCategoryFilter: targetTab,
-              searchResults: state.hasExecutedUserSearch ? state.searchResults : nextSearchResults,
+              searchResults:
+                inSharedLounge || state.hasExecutedUserSearch
+                  ? state.searchResults
+                  : nextSearchResults,
               videoSceneItems: nextVids,
-              matchedVideoScenes: state.hasExecutedUserSearch ? state.matchedVideoScenes : nextVids,
+              matchedVideoScenes:
+                inSharedLounge || state.hasExecutedUserSearch
+                  ? state.matchedVideoScenes
+                  : nextVids,
             };
           });
         }
@@ -1097,7 +1139,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         selectedTrashIds: nextTrashIds,
         activeTrashCategoryFilter: targetTab,
       };
-      if (skipSearchResultsUpdate) {
+      if (skipSearchResultsUpdate || isSharedPhotoLounge(state.activeLoungeType)) {
         return {
           ...baseUpdate,
           lastQuarantineToast: toastMsg,

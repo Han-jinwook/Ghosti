@@ -2,9 +2,11 @@ import type { FamilyRoomId, LoungeType, PhotoItem } from '../types/saysee';
 import {
   ensureGhostiAuthedSupabaseClient,
   ensureGhostiPublicSupabaseClient,
+  hasAuthenticatedHubAccountSession,
+  readGhostiAuthedJwtClaims,
   supabase,
 } from './supabaseClient';
-import { hasActiveGhostiLoginSession } from './zCoreBridge';
+import { getZCoreUrl } from './zCoreBridge';
 
 interface EnsureRoomRpcResponse {
   ok?: boolean;
@@ -85,16 +87,83 @@ export function mapDbRoomToUiLounge(
   return { loungeType: 'family', familyRoom: fam };
 }
 
+const localPreviewDataUrlCache = new Map<string, string>();
+
+export function registerLocalPhotoPreviewDataUrl(photoId: string, dataUrl: string): void {
+  if (!photoId || !dataUrl || !dataUrl.startsWith('data:image/')) return;
+  localPreviewDataUrlCache.set(photoId, dataUrl);
+}
+
+async function resolveReadableImageSourceUrl(photo: PhotoItem): Promise<string> {
+  const cached = localPreviewDataUrlCache.get(photo.id);
+  if (cached && cached.startsWith('data:image/')) {
+    return cached;
+  }
+  const rawSrc = String(photo.thumbUrl || photo.fullUrl || '').trim();
+  if (!rawSrc) return '';
+  if (rawSrc.startsWith('data:image/')) return rawSrc;
+
+  if (rawSrc.startsWith('http://127.0.0.1')) {
+    try {
+      const batchRes = await fetch(getZCoreUrl('/__photos/thumbs-batch'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          items: [
+            {
+              id: photo.id,
+              path: photo.name,
+              fullPath: photo.fullPath || '',
+            },
+          ],
+        }),
+      });
+      if (batchRes.ok) {
+        const json = (await batchRes.json()) as { thumbs?: Record<string, string> };
+        const dataUrl = json?.thumbs?.[photo.id];
+        if (dataUrl && dataUrl.startsWith('data:image/')) {
+          localPreviewDataUrlCache.set(photo.id, dataUrl);
+          return dataUrl;
+        }
+      }
+    } catch {
+      /* fallback to fetch blob below */
+    }
+  }
+
+  try {
+    const resp = await fetch(rawSrc);
+    if (resp.ok) {
+      const blob = await resp.blob();
+      const asDataUrl = await new Promise<string>((resolve) => {
+        const reader = new FileReader();
+        reader.onloadend = () =>
+          resolve(typeof reader.result === 'string' ? reader.result : '');
+        reader.onerror = () => resolve('');
+        reader.readAsDataURL(blob);
+      });
+      if (asDataUrl.startsWith('data:image/')) {
+        return asDataUrl;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return rawSrc;
+}
+
 /**
  * 선택한 사진(data:, blob:, http://127.0.0.1:5199 등)을 『방식 A』 표준인
- * 약 13KB 초경량 WebP 썸네일 Data URL로 압축합니다. (5~20MB 원본은 절대 업로드하지 않음)
+ * 약 13KB 초경량 WebP 썸네일 Data URL로 압축합니다.
+ * - 5~20MB 원본은 절대 업로드하지 않으며, 타 기기에서 깨지는 로컬/블롭 주소(`127.0.0.1`, `blob:`)가
+ *   그대로 저장되지 않도록 반드시 `data:image/...` 포맷만 반환합니다.
  */
 export async function compressPhotoTo13KbWebpDataUrl(photo: PhotoItem): Promise<{
   thumbWebpUrl: string;
   widthPx: number;
   heightPx: number;
 }> {
-  const srcUrl = String(photo.thumbUrl || photo.fullUrl || '').trim();
+  const srcUrl = await resolveReadableImageSourceUrl(photo);
   if (!srcUrl) {
     return { thumbWebpUrl: '', widthPx: 0, heightPx: 0 };
   }
@@ -102,12 +171,16 @@ export async function compressPhotoTo13KbWebpDataUrl(photo: PhotoItem): Promise<
     return { thumbWebpUrl: srcUrl, widthPx: 420, heightPx: 420 };
   }
   if (typeof document === 'undefined' || typeof Image === 'undefined') {
-    return { thumbWebpUrl: srcUrl, widthPx: 420, heightPx: 420 };
+    return srcUrl.startsWith('data:image/')
+      ? { thumbWebpUrl: srcUrl, widthPx: 420, heightPx: 420 }
+      : { thumbWebpUrl: '', widthPx: 0, heightPx: 0 };
   }
 
   return new Promise((resolve) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    if (!srcUrl.startsWith('data:')) {
+      img.crossOrigin = 'anonymous';
+    }
     img.onload = () => {
       try {
         const natW = img.naturalWidth || img.width || 420;
@@ -122,7 +195,11 @@ export async function compressPhotoTo13KbWebpDataUrl(photo: PhotoItem): Promise<
         canvas.height = targetH;
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          resolve({ thumbWebpUrl: srcUrl, widthPx: natW, heightPx: natH });
+          resolve(
+            srcUrl.startsWith('data:image/')
+              ? { thumbWebpUrl: srcUrl, widthPx: natW, heightPx: natH }
+              : { thumbWebpUrl: '', widthPx: 0, heightPx: 0 }
+          );
           return;
         }
         ctx.drawImage(img, 0, 0, targetW, targetH);
@@ -145,16 +222,24 @@ export async function compressPhotoTo13KbWebpDataUrl(photo: PhotoItem): Promise<
           }
         }
         resolve({
-          thumbWebpUrl: encoded,
+          thumbWebpUrl: encoded.startsWith('data:image/') ? encoded : '',
           widthPx: natW,
           heightPx: natH,
         });
       } catch {
-        resolve({ thumbWebpUrl: srcUrl, widthPx: 420, heightPx: 420 });
+        resolve(
+          srcUrl.startsWith('data:image/')
+            ? { thumbWebpUrl: srcUrl, widthPx: 420, heightPx: 420 }
+            : { thumbWebpUrl: '', widthPx: 0, heightPx: 0 }
+        );
       }
     };
     img.onerror = () => {
-      resolve({ thumbWebpUrl: srcUrl, widthPx: 420, heightPx: 420 });
+      resolve(
+        srcUrl.startsWith('data:image/')
+          ? { thumbWebpUrl: srcUrl, widthPx: 420, heightPx: 420 }
+          : { thumbWebpUrl: '', widthPx: 0, heightPx: 0 }
+      );
     };
     img.src = srcUrl;
   });
@@ -202,24 +287,37 @@ function dtoToPhotoItem(
   };
 }
 
+function resolveCurrentAuthedEmail(): string {
+  const jwtEmail = readGhostiAuthedJwtClaims()?.email;
+  if (jwtEmail) return jwtEmail;
+  if (typeof window === 'undefined') return '';
+  try {
+    return (
+      localStorage.getItem('ghosti_hub_user_email') ||
+      localStorage.getItem('userEmail') ||
+      ''
+    )
+      .trim()
+      .toLowerCase();
+  } catch {
+    return '';
+  }
+}
+
 export async function ensureMyRoomAndInviteToken(opts: {
   loungeType: LoungeType;
   familyRoom: FamilyRoomId;
   roomTitle: string;
   masterNickname: string;
 }): Promise<{ ok: boolean; roomId?: string; inviteToken?: string; error?: string }> {
-  if (!hasActiveGhostiLoginSession()) {
+  if (!hasAuthenticatedHubAccountSession()) {
     return { ok: false, error: 'AUTH_REQUIRED' };
   }
   const authed = await ensureGhostiAuthedSupabaseClient();
   if (!authed) {
     return { ok: false, error: 'SUPABASE_AUTH_FAILED' };
   }
-  const email = (
-    (typeof window !== 'undefined' ? localStorage.getItem('ghosti_hub_user_email') : '') || ''
-  )
-    .trim()
-    .toLowerCase();
+  const email = resolveCurrentAuthedEmail();
   const { dbLoungeType, dbSubType } = mapUiLoungeToDbRoom(opts.loungeType, opts.familyRoom);
   const cacheKey = `${email}:${dbLoungeType}:${dbSubType}`;
   const cached = roomTokenCache.get(cacheKey);
@@ -300,7 +398,7 @@ export async function acceptRoomInviteAsLoggedInMember(
   nickname: string
 ): Promise<{ ok: boolean; roomId?: string }> {
   const cleanToken = (inviteToken || '').trim();
-  if (!cleanToken || !hasActiveGhostiLoginSession()) {
+  if (!cleanToken || !hasAuthenticatedHubAccountSession()) {
     return { ok: false };
   }
   const authed = await ensureGhostiAuthedSupabaseClient();
@@ -330,7 +428,7 @@ export async function fetchScopedSharedRoomPhotos(opts: {
   photos: PhotoItem[];
 }> {
   const cleanInviteToken = (opts.inviteToken || '').trim();
-  const isLoggedIn = hasActiveGhostiLoginSession();
+  const isLoggedIn = hasAuthenticatedHubAccountSession();
 
   // 1. 초대 토큰(?token=...)으로 접속한 경우: 해당 토큰의 방과 현재 보고 있는 탭이 일치할 때만 그 방 사진을 노출!
   if (cleanInviteToken) {
@@ -370,11 +468,7 @@ export async function fetchScopedSharedRoomPhotos(opts: {
   if (!authed) {
     return { roomId: null, inviteToken: null, photos: [] };
   }
-  const currentEmail = (
-    (typeof window !== 'undefined' ? localStorage.getItem('ghosti_hub_user_email') : '') || ''
-  )
-    .trim()
-    .toLowerCase();
+  const currentEmail = resolveCurrentAuthedEmail();
 
   const ensured = await ensureMyRoomAndInviteToken({
     loungeType: opts.loungeType,
@@ -444,7 +538,7 @@ export async function uploadPhotosToSupabaseSharedRoom(opts: {
   uploaderNickname: string;
   photos: PhotoItem[];
 }): Promise<{ ok: boolean; uploadedPhotos: PhotoItem[]; error?: string }> {
-  if (!hasActiveGhostiLoginSession()) {
+  if (!hasAuthenticatedHubAccountSession()) {
     return { ok: false, uploadedPhotos: [], error: 'AUTH_REQUIRED' };
   }
   const authed = await ensureGhostiAuthedSupabaseClient();
@@ -452,12 +546,16 @@ export async function uploadPhotosToSupabaseSharedRoom(opts: {
     return { ok: false, uploadedPhotos: [], error: 'SUPABASE_AUTH_FAILED' };
   }
 
-  const cleanEmail = opts.uploaderEmail.trim().toLowerCase();
+  const jwtClaims = readGhostiAuthedJwtClaims();
+  const cleanEmail = (jwtClaims?.email || opts.uploaderEmail || resolveCurrentAuthedEmail())
+    .trim()
+    .toLowerCase();
+  if (!cleanEmail) {
+    return { ok: false, uploadedPhotos: [], error: 'MISSING_UPLOADER_EMAIL' };
+  }
   const cleanNick = opts.uploaderNickname.trim() || cleanEmail.split('@')[0] || '멤버';
   const validUuid =
-    opts.uploaderUserId && /^[0-9a-f-]{36}$/i.test(opts.uploaderUserId)
-      ? opts.uploaderUserId
-      : null;
+    jwtClaims?.sub && /^[0-9a-f-]{36}$/i.test(jwtClaims.sub) ? jwtClaims.sub : null;
 
   const rowsToInsert: Array<Record<string, unknown>> = [];
   for (const p of opts.photos) {
@@ -535,7 +633,7 @@ export async function uploadPhotosToSupabaseSharedRoom(opts: {
 }
 
 export async function deleteSupabaseSharedRoomPhoto(photoItemId: string): Promise<boolean> {
-  if (!hasActiveGhostiLoginSession()) return false;
+  if (!hasAuthenticatedHubAccountSession()) return false;
   const authed = await ensureGhostiAuthedSupabaseClient();
   if (!authed) return false;
   const rawUuid = photoItemId.startsWith('shared_sb_')

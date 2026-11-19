@@ -21,6 +21,7 @@ import {
   buildShareRoomNativeSchemeUrl,
   readCurrentInviteDisplayMeta,
 } from '../../services/shareInviteDeepLinkBridge';
+import { registerLocalPhotoPreviewDataUrl } from '../../services/sharedPhotoRoomSupabase';
 
 const PERSISTENT_BATCH_THUMB_CACHE = new Map<string, string>();
 const INFLIGHT_BATCH_THUMB_IDS = new Set<string>();
@@ -107,13 +108,22 @@ export const FreePhotoShareOverlays: React.FC = () => {
     if (!fileList || fileList.length === 0) return;
     const files = Array.from(fileList);
     const pickedNames = files.map((f) => f.name);
-    setRecentPickedNames((prev) => Array.from(new Set([...prev, ...pickedNames])));
+    const pickedNameSizes = new Set(files.map((f) => `${f.name}__${f.size}`));
+    const pickedSizes = new Set(files.map((f) => f.size).filter((sz) => sz > 0));
     await importMobileLocalPhotos(files, { skipSearchResultsUpdate: true });
     const latestPhotos = useSaySeeStore.getState().photos;
     const pickedNameSet = new Set(pickedNames);
-    const matchedIds = latestPhotos
-      .filter((p) => !p.quarantined && pickedNameSet.has(p.name))
-      .map((p) => p.id);
+    let matched = latestPhotos.filter(
+      (p) =>
+        !p.quarantined &&
+        (pickedNameSet.has(p.name) || pickedNameSizes.has(`${p.name}__${p.size}`))
+    );
+    if (matched.length === 0 && pickedSizes.size > 0) {
+      matched = latestPhotos.filter((p) => !p.quarantined && pickedSizes.has(p.size));
+    }
+    const matchedNames = matched.map((p) => p.name);
+    setRecentPickedNames((prev) => Array.from(new Set([...prev, ...pickedNames, ...matchedNames])));
+    const matchedIds = matched.map((p) => p.id);
     if (matchedIds.length > 0) {
       setSelectedSharedUploadIds((prev) => Array.from(new Set([...prev, ...matchedIds])));
     }
@@ -232,6 +242,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
             INFLIGHT_BATCH_THUMB_IDS.delete(b.id);
             if (thumbsObj[b.id]) {
               PERSISTENT_BATCH_THUMB_CACHE.set(b.id, thumbsObj[b.id]);
+              registerLocalPhotoPreviewDataUrl(b.id, thumbsObj[b.id]);
               added += 1;
             }
           }
@@ -251,10 +262,10 @@ export const FreePhotoShareOverlays: React.FC = () => {
     };
   }, [showSharedPhotoUploadModal, startIndex, endIndex, uploadableLocalPhotos]);
 
-  // [사진 공유방 모바일 초대링크 3단계 황금 흐름 — Step 1 자동 라우팅 & Step 3 Deferred Deep Link 소비]:
+  // [사진 공유방 모바일 초대링크 3단계 황금 흐름 — Step 1 OS App Links/Universal Links & Step 2 1초 웹 구경 & Step 3 Deferred Deep Link 소비]:
   // 1) 네이티브 모바일 앱(안드로이드·아이폰): 앱 실행 시 대기 중인 딥링크(ghosti:// / App Links / Play InstallReferrer)를 즉시 읽어 해당 공유방으로 0.1초 직행
-  // 2) 안드로이드 모바일 웹(카톡 인앱·크롬): 초대 링크 첫 진입 시 intent:// + S.browser_fallback_url 로 설치 여부를 안전 확인하여
-  //    설치된 폰은 네이티브 앱 해당 공유방으로 직행하고, 미설치 폰은 스토어 납치 없이 1초 웹 구경 화면에 그대로 머무름
+  // 2) 웹/인앱 브라우저(PC·안드로이드 카톡 인앱·아이폰): 페이지 로드 중 무클릭 intent:// 강제 리다이렉트(카톡 인앱 ERR_UNKNOWN_URL_SCHEME 및 RPC fetch 취소 유발) 없이
+  //    즉시 공유방 사진 RPC를 호출해 0.3초 만에 사진을 화면에 띄우며, 상단 [설치된 앱으로 열기] 클릭 시 안전하게 네이티브 앱으로 전환합니다.
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
@@ -281,18 +292,6 @@ export const FreePhotoShareOverlays: React.FC = () => {
       const params = new URLSearchParams(window.location.search);
       if (params.has('invite') || params.has('token')) {
         void applyShareInviteDeepLink(window.location.href, { fromNativeApp: false });
-      }
-      if (
-        isAndroidMobileBrowserOrApp() &&
-        (params.has('invite') || params.has('token')) &&
-        !params.has('app_checked') &&
-        sessionStorage.getItem('ghosti_android_intent_probed') !== '1'
-      ) {
-        const safeIntentUrl = buildAndroidSafeAppProbeIntentUrl(window.location.href);
-        if (safeIntentUrl) {
-          sessionStorage.setItem('ghosti_android_intent_probed', '1');
-          window.location.replace(safeIntentUrl);
-        }
       }
     } catch {
       /* ignore */
@@ -362,6 +361,13 @@ export const FreePhotoShareOverlays: React.FC = () => {
 
   const handleOpenInstalledNativeAppDirect = () => {
     const targetLounge = isSharedPhotoLounge(activeLoungeType) ? activeLoungeType : 'family';
+    if (isAndroidMobileBrowserOrApp()) {
+      const safeIntentUrl = buildAndroidSafeAppProbeIntentUrl(window.location.href);
+      if (safeIntentUrl) {
+        window.location.href = safeIntentUrl;
+        return;
+      }
+    }
     const schemeUrl = buildShareRoomNativeSchemeUrl({
       loungeType: targetLounge,
       familyRoom: activeFamilyRoom,
@@ -567,21 +573,19 @@ export const FreePhotoShareOverlays: React.FC = () => {
 
             <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/10">
               <div className="flex flex-wrap items-center gap-2">
-                {isMobileEnv && (
-                  <label className="px-3 py-1.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer">
-                    📱 내 폰 갤러리에서 사진 고르기
-                    <input
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => {
-                        void handlePickedFilesForSharedModal(e.target.files);
-                        e.target.value = '';
-                      }}
-                    />
-                  </label>
-                )}
+                <label className="px-3 py-1.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer">
+                  {isMobileEnv ? '📱 내 폰 갤러리에서 사진 고르기' : '📂 파일 탐색기에서 직접 사진 고르기'}
+                  <input
+                    type="file"
+                    accept="image/*"
+                    multiple
+                    className="hidden"
+                    onChange={(e) => {
+                      void handlePickedFilesForSharedModal(e.target.files);
+                      e.target.value = '';
+                    }}
+                  />
+                </label>
                 <button
                   type="button"
                   onClick={() => setSelectedSharedUploadIds(uploadableLocalPhotos.map((p) => p.id))}

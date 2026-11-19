@@ -15,9 +15,14 @@ import { PcMasterQuickSendPanel } from '../../components/PricingModal';
 import { GhostiBrandLogo } from '../../components/GhostiBrandLogo';
 import { GhostCastLiveToolbar } from '../../components/GhostCastAndLiveSystem';
 import { SilentIndexingStatusBar } from '../../components/SilentIndexingStatusBar';
-import { hasActiveGhostiLoginSession, zCoreBridge } from '../../services/zCoreBridge';
-import { isCapacitorNativeMobileRuntime } from '../../services/ghostiMobileCareBridge';
+import { zCoreBridge } from '../../services/zCoreBridge';
+import { hasAuthenticatedHubAccountSession } from '../../services/supabaseClient';
 import {
+  isAndroidMobileBrowserOrApp,
+  isCapacitorNativeMobileRuntime,
+} from '../../services/ghostiMobileCareBridge';
+import {
+  buildAndroidSafeAppProbeIntentUrl,
   buildShareRoomInviteHttpsUrl,
   buildShareRoomNativeSchemeUrl,
   readCurrentInviteDisplayMeta,
@@ -33,7 +38,7 @@ async function issueAuthenticatedInviteHttpsUrl(opts: {
   defaultHostLabel: string;
   roomTitle?: string;
 }): Promise<string | null> {
-  if (!hasActiveGhostiLoginSession()) {
+  if (!hasAuthenticatedHubAccountSession()) {
     useSaySeeStore
       .getState()
       .showToast('🔒 내 공유방 초대 링크를 발급하려면 먼저 이메일 로그인(10초 인증)을 완료해 주세요!');
@@ -2004,6 +2009,13 @@ export const LoungeFeedContextBanner: React.FC = () => {
           <button
             type="button"
             onClick={() => {
+              if (isAndroidMobileBrowserOrApp()) {
+                const safeIntentUrl = buildAndroidSafeAppProbeIntentUrl(window.location.href);
+                if (safeIntentUrl) {
+                  window.location.href = safeIntentUrl;
+                  return;
+                }
+              }
               window.location.href = buildShareRoomNativeSchemeUrl({
                 loungeType: activeLoungeType,
                 familyRoom: activeFamilyRoom,
@@ -2018,7 +2030,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
           </button>
         )}
 
-        {isGuestPreviewMode && !inviteMeta.hasExplicitUrlInvite && hasActiveGhostiLoginSession() && (
+        {isGuestPreviewMode && !inviteMeta.hasExplicitUrlInvite && hasAuthenticatedHubAccountSession() && (
           <button
             type="button"
             onClick={() => setIsGuestPreviewMode(false)}
@@ -2257,10 +2269,44 @@ export const LoungeFeedContextBanner: React.FC = () => {
           </div>
         )}
 
-        {/* 하단 1줄: 모임 인물 빠른 검색 + 각자의 페이지 [원본 자동 동기화] 버튼 & (새로 9장 추가) 풍선 */}
+        {/* 하단 1줄: 모임 인물 빠른 검색 + 사진 추가·초대 링크 복사 */}
         <div className="px-1 py-1 flex flex-wrap items-center justify-between gap-2.5">
-          {renderMemberPersonaPills('회원별 사진 찾기:')}
-          {renderOriginalAutoSyncControl()}
+          <div className="flex flex-wrap items-center gap-2">
+            {renderMemberPersonaPills('회원별 사진 찾기:')}
+            {renderOriginalAutoSyncControl()}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={() => useSaySeeStore.getState().requestAddMyPhotosToSharedRoom()}
+              className="px-3.5 py-2 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[12px] font-black shadow-md shadow-teal-500/20 flex items-center gap-1.5 cursor-pointer transition-all"
+            >
+              <span>📸 내 사진도 이 방에 추가하기</span>
+            </button>
+            <button
+              type="button"
+              onClick={async () => {
+                const inviteUrl = await issueAuthenticatedInviteHttpsUrl({
+                  loungeType: 'club',
+                  familyRoom: '우리집',
+                  defaultHostLabel: '모임방장',
+                  roomTitle: `⛰️ ${clubBannerTitle}`,
+                });
+                if (!inviteUrl) return;
+                try {
+                  await navigator.clipboard?.writeText(inviteUrl);
+                } catch {
+                  /* ignore */
+                }
+                useSaySeeStore
+                  .getState()
+                  .showToast(`💌 『${clubBannerTitle}』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.`);
+              }}
+              className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-400/50 text-amber-300 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 cursor-pointer transition-all"
+            >
+              <span>💌 모임방 초대 링크 복사</span>
+            </button>
+          </div>
         </div>
 
         <GhostCastLiveToolbar loungeLabel="⛰️ 동호회·모임 사진 공유방" />
@@ -2287,8 +2333,42 @@ export const LoungeFeedContextBanner: React.FC = () => {
       />
 
       <div className="px-1 py-1 flex flex-wrap items-center justify-between gap-2.5">
-        {renderMemberPersonaPills('동창 이름 검색:')}
-        {renderOriginalAutoSyncControl()}
+        <div className="flex flex-wrap items-center gap-2">
+          {renderMemberPersonaPills('동창 이름 검색:')}
+          {renderOriginalAutoSyncControl()}
+        </div>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => useSaySeeStore.getState().requestAddMyPhotosToSharedRoom()}
+            className="px-3.5 py-2 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[12px] font-black shadow-md shadow-teal-500/20 flex items-center gap-1.5 cursor-pointer transition-all"
+          >
+            <span>📸 내 사진도 이 방에 추가하기</span>
+          </button>
+          <button
+            type="button"
+            onClick={async () => {
+              const inviteUrl = await issueAuthenticatedInviteHttpsUrl({
+                loungeType: 'student',
+                familyRoom: '우리집',
+                defaultHostLabel: '동기회장',
+                roomTitle: '🎓 동창회 사진방',
+              });
+              if (!inviteUrl) return;
+              try {
+                await navigator.clipboard?.writeText(inviteUrl);
+              } catch {
+                /* ignore */
+              }
+              useSaySeeStore
+                .getState()
+                .showToast('💌 『동창회 사진방』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.');
+            }}
+            className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-400/50 text-amber-300 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 cursor-pointer transition-all"
+          >
+            <span>💌 동창회 초대 링크 복사</span>
+          </button>
+        </div>
       </div>
 
       <GhostCastLiveToolbar loungeLabel="🎓 동창회 사진 공유방" />
@@ -4017,21 +4097,20 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               ? '✓ 학생증 로컬 OCR 0.1초 인증됨'
               : '🪪 학생증 로컬 OCR 0.1초 인증하기'}
           </button>
-          {isStoreAppMode ? (
+          <button
+            type="button"
+            onClick={copyInviteLink}
+            className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer"
+          >
+            {inviteCopied ? '✓ 동창회 초대 링크 복사됨!' : '💌 동창회 무가입 1초 초대 링크 복사'}
+          </button>
+          {isStoreAppMode && (
             <button
               type="button"
               onClick={() => setShowProModal(true)}
-              className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold"
+              className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold cursor-pointer"
             >
               💻 내 PC 연동 시작 가이드 보내기
-            </button>
-          ) : (
-            <button
-              type="button"
-              onClick={copyInviteLink}
-              className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer"
-            >
-              {inviteCopied ? '✓ 동창회 초대 링크 복사됨!' : '💌 동창회 무가입 1초 초대 링크 복사'}
             </button>
           )}
         </div>

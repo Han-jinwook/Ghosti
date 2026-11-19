@@ -1,10 +1,13 @@
 import type { StateCreator } from 'zustand';
 import {
   getZCoreUrl,
-  hasActiveGhostiLoginSession,
   zCoreBridge,
   ensureLoginAndZCoreReady,
 } from '../../services/zCoreBridge';
+import {
+  hasAuthenticatedHubAccountSession,
+  readGhostiAuthedJwtClaims,
+} from '../../services/supabaseClient';
 import { submitExternalMonsterChatQuery } from '../../services/monsterChatRouter';
 import {
   isMobileVoiceEnvironment,
@@ -28,6 +31,9 @@ import {
   fetchScopedSharedRoomPhotos,
   uploadPhotosToSupabaseSharedRoom,
 } from '../../services/sharedPhotoRoomSupabase';
+
+let sharedRoomSyncSeq = 0;
+let lastDeepLinkHydratedAt = 0;
 import {
   dispatchFileToKakaoRealChatroom,
   extractKeywordSentencesZeroLlm,
@@ -847,11 +853,11 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     (new URLSearchParams(window.location.search).has('invite') ||
       new URLSearchParams(window.location.search).has('token') ||
       new URLSearchParams(window.location.search).get('preview') === 'guest') &&
-    !hasActiveGhostiLoginSession(),
+    !hasAuthenticatedHubAccountSession(),
   guestJoinWallReason: null,
   isInvitedMemberSession:
     typeof window !== 'undefined' &&
-    hasActiveGhostiLoginSession() &&
+    hasAuthenticatedHubAccountSession() &&
     Boolean(
       (() => {
         try {
@@ -920,7 +926,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
   },
 
   setShowSharedPhotoUploadModal: (showSharedPhotoUploadModal) => {
-    if (showSharedPhotoUploadModal && !hasActiveGhostiLoginSession()) {
+    if (showSharedPhotoUploadModal && !hasAuthenticatedHubAccountSession()) {
       set({
         showSharedPhotoUploadModal: false,
         lastQuarantineToast:
@@ -941,7 +947,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       return;
     }
     // [절대 철칙] 비로그인 상태에서는 어떤 경로로도 공유방 사진 업로드 절대 불가 (정식 로그인 모달 호출)
-    if (!hasActiveGhostiLoginSession()) {
+    if (!hasAuthenticatedHubAccountSession()) {
       set({
         showSharedPhotoUploadModal: false,
         lastQuarantineToast:
@@ -952,48 +958,13 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       }
       return;
     }
-    const targetLounge: LoungeType = isSharedPhotoLounge(state.activeLoungeType)
-      ? state.activeLoungeType
-      : 'family';
-    const roomTitle =
-      targetLounge === 'family'
-        ? `${state.activeFamilyRoom} 패밀리 앨범`
-        : targetLounge === 'club'
-        ? '동호회·모임 앨범'
-        : `${state.alumniSchoolName} 동창회 앨범`;
-
-    if (isMobileOrStoreRuntime()) {
-      set({ showSharedPhotoUploadModal: true });
-      return;
-    }
-
-    if (!zCoreBridge.isConnected) {
-      set({
-        pendingReturnShareRoom: {
-          loungeType: targetLounge,
-          familyRoom: state.activeFamilyRoom,
-          roomTitle,
-        },
-      });
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(
-          new CustomEvent('openGhostSecretaryFirstModal', {
-            detail: {
-              context: 'shared_room_upload',
-              roomTitle,
-            },
-          })
-        );
-      }
-      return;
-    }
-
+    // 로그인된 사용자는 PC(Z코어 연결 유무 무관, 탐색기 직접 선택 지원) 및 모바일 앱 어디서든 즉시 사진 올리기 모달 오픈
     set({ showSharedPhotoUploadModal: true });
   },
 
   addLocalPhotosToSharedRoom: (selectedIds) => {
     if (!selectedIds || selectedIds.length === 0) return;
-    if (!hasActiveGhostiLoginSession()) {
+    if (!hasAuthenticatedHubAccountSession()) {
       set({
         showSharedPhotoUploadModal: false,
         lastQuarantineToast:
@@ -1007,13 +978,19 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
 
     const idSet = new Set(selectedIds);
     const state = get();
+    const jwtClaims = readGhostiAuthedJwtClaims();
     let uploaderNick = '가족멤버';
-    let uploaderEmail = state.merlinAuth.email || '';
-    let uploaderUserId = state.merlinAuth.userId || '';
+    let uploaderEmail = jwtClaims?.email || state.merlinAuth.email || '';
+    let uploaderUserId = jwtClaims?.sub || state.merlinAuth.userId || '';
     if (typeof window !== 'undefined') {
       try {
         uploaderEmail =
-          uploaderEmail || (localStorage.getItem('ghosti_hub_user_email') || '').trim();
+          uploaderEmail ||
+          (
+            localStorage.getItem('ghosti_hub_user_email') ||
+            localStorage.getItem('userEmail') ||
+            ''
+          ).trim();
         uploaderUserId =
           uploaderUserId || (localStorage.getItem('ghosti_hub_user_id') || '').trim();
         uploaderNick =
@@ -1247,8 +1224,9 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     if (!parsed) {
       return false;
     }
+    const reqSeq = ++sharedRoomSyncSeq;
     const isNative = Boolean(opts?.fromNativeApp || isCapacitorNativeMobileRuntime());
-    const isLoggedIn = hasActiveGhostiLoginSession();
+    const isLoggedIn = hasAuthenticatedHubAccountSession();
     persistInviteContextMeta(parsed, isNative);
 
     if (parsed.nicknameHint && typeof window !== 'undefined') {
@@ -1300,6 +1278,11 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       }
     }
 
+    if (reqSeq !== sharedRoomSyncSeq) {
+      return true;
+    }
+    lastDeepLinkHydratedAt = Date.now();
+
     const st = get();
     const nextAdded =
       parsed.inviteToken && !isLoggedIn
@@ -1349,7 +1332,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       matchedVaultPhotos: [],
       searchResults: sharedGalleryResults,
       lastQuarantineToast: isNative
-        ? `💌 ${resolvedHostName}님이 초대한 『${resolvedRoomTitle}』에 바로 입장했습니다!`
+        ? `💌 ${resolvedHostName}님이 초대한 『${resolvedRoomTitle}』(${sharedGalleryResults.length}장)에 바로 입장했습니다!`
         : `💌 ${resolvedHostName}님이 초대한 『${resolvedRoomTitle}』(${sharedGalleryResults.length}장)을 열었습니다.`,
     });
     return true;
@@ -1360,6 +1343,10 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     if (!isSharedPhotoLounge(stBefore.activeLoungeType)) {
       return;
     }
+    if (!opts?.forceInviteToken && Date.now() - lastDeepLinkHydratedAt < 1200) {
+      return;
+    }
+    const reqSeq = ++sharedRoomSyncSeq;
     const targetLounge = stBefore.activeLoungeType;
     const targetFamilyRoom = stBefore.activeFamilyRoom || '우리집';
     const inviteToken = (opts?.forceInviteToken ?? readActiveInviteToken()).trim();
@@ -1378,8 +1365,12 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       inviteToken: inviteToken || undefined,
     });
 
+    if (reqSeq !== sharedRoomSyncSeq) {
+      return;
+    }
+
     const stNow = get();
-    const isLoggedIn = hasActiveGhostiLoginSession();
+    const isLoggedIn = hasAuthenticatedHubAccountSession();
     const nextAdded = !isLoggedIn
       ? res.photos
       : [

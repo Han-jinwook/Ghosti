@@ -1,4 +1,8 @@
-import { getZCoreUrl, hasActiveGhostiLoginSession, zCoreBridge } from '../../services/zCoreBridge';
+import { getZCoreUrl, zCoreBridge } from '../../services/zCoreBridge';
+import {
+  hasAuthenticatedHubAccountSession,
+  readGhostiAuthedJwtClaims,
+} from '../../services/supabaseClient';
 import { readActiveInviteToken } from '../../services/shareInviteDeepLinkBridge';
 import { HybridVoiceSession, OnboardingProgressUpdate } from '../../services/aiEngine';
 import {
@@ -117,7 +121,7 @@ export function resolveLoungePhotoCorpus(args: {
   } = args;
 
   if (activeLoungeType === 'family' || activeLoungeType === 'club' || activeLoungeType === 'student') {
-    const isLoggedIn = hasActiveGhostiLoginSession();
+    const isLoggedIn = hasAuthenticatedHubAccountSession();
     const activeInviteToken = readActiveInviteToken();
     const { hasActiveInvite, hostLounge, hostFamilyRoom } = resolveInvitedHostLoungeAndRoom();
 
@@ -127,7 +131,14 @@ export function resolveLoungePhotoCorpus(args: {
 
     const currentEmail =
       isLoggedIn && typeof window !== 'undefined'
-        ? (localStorage.getItem('ghosti_hub_user_email') || '').trim().toLowerCase()
+        ? (
+            readGhostiAuthedJwtClaims()?.email ||
+            localStorage.getItem('ghosti_hub_user_email') ||
+            localStorage.getItem('userEmail') ||
+            ''
+          )
+            .trim()
+            .toLowerCase()
         : '';
 
     const scopedAdded = sharedRoomAddedPhotos.filter((p) => {
