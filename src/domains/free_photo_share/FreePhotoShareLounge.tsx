@@ -1691,7 +1691,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
     clubFeedTrack,
     setClubFeedTrack,
     isGuestPreviewMode,
+    setIsGuestPreviewMode,
     triggerGuestJoinWall,
+    themeMode,
   } = useSaySeeStore();
 
   const [p2pOriginalSummoned, setP2pOriginalSummoned] = useState(false);
@@ -1899,6 +1901,58 @@ export const LoungeFeedContextBanner: React.FC = () => {
     return null;
   };
 
+  const renderMobileGuestPreviewBanner = () => (
+    <div
+      className={`md:hidden px-3 py-2 rounded-2xl border flex flex-col gap-2 transition-all ${
+        isGuestPreviewMode
+          ? 'bg-gradient-to-r from-amber-500/15 via-emerald-500/10 to-zinc-900 border-amber-400/50'
+          : themeMode === 'light'
+          ? 'bg-slate-50 border-slate-200/90'
+          : 'bg-zinc-900/70 border-white/10'
+      }`}
+    >
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <button
+          type="button"
+          onClick={() => setIsGuestPreviewMode(!isGuestPreviewMode)}
+          className={`px-2.5 py-1 rounded-lg font-label-sm text-[11px] font-extrabold cursor-pointer transition-all ${
+            isGuestPreviewMode
+              ? 'bg-[#FEE500] text-[#191919] shadow-xs'
+              : 'bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-amber-400/30'
+          }`}
+        >
+          {isGuestPreviewMode
+            ? '💬 카톡 무가입 1초 프리뷰 모드 ON (13KB 썸네일 구경 중)'
+            : '💬 카톡 단톡방 무가입 1초 프리뷰 체험하기'}
+        </button>
+      </div>
+      <span className="text-[11px] text-zinc-300 leading-snug break-keep">
+        {isGuestPreviewMode
+          ? '로그인 없이 0.5초 만에 사진을 구경 중입니다! 아래 행동 클릭 시 별명·이메일 1초 합류 창이 열립니다.'
+          : '단톡방 초대 링크 터치 시 로그인 창 없이 사진 바둑판을 먼저 보여주는 무가입 프리뷰 퍼널입니다.'}
+      </span>
+      {isGuestPreviewMode && (
+        <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
+          {[
+            { label: '🎯 내 얼굴 사진 1초 찾기', reason: '🎯 내 얼굴이 나온 사진만 1초 만에 다 찾기' },
+            { label: '📥 고화질 원본(5MB) 저장', reason: '📥 이 사진 고화질 원본(5MB) 내 기기에 저장하기' },
+            { label: '❤️ 하트 / 💬 댓글 달기', reason: '❤️ 하트 누르기 / 💬 댓글("와 이 사진 대박!") 달기' },
+            { label: '📸 내 사진 같이 올리기', reason: '📸 이 방에 내 사진·영상 같이 올리기' },
+          ].map((trig) => (
+            <button
+              key={trig.label}
+              type="button"
+              onClick={() => triggerGuestJoinWall(trig.reason)}
+              className="px-2 py-1 rounded-lg bg-zinc-950/90 hover:bg-zinc-800 border border-amber-400/40 text-amber-200 text-[10.5px] font-bold cursor-pointer"
+            >
+              {trig.label}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+
   if (activeLoungeType === 'family') {
     const inviteUrl = `https://ghosti.sundreamer.app/?invite=${
       activeFamilyRoom === '본가(친가)'
@@ -1909,6 +1963,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
     }&preview=guest`;
     return (
       <div className="flex flex-col gap-2.5">
+        {renderMobileGuestPreviewBanner()}
         <div className="px-1 py-1 flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2">
             {renderMemberPersonaPills(`[${activeFamilyRoom}] 인물:`)}
@@ -1950,6 +2005,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
     const isForestTheme = clubBannerBgTheme === 'forest';
     return (
       <div className="flex flex-col gap-2.5">
+        {renderMobileGuestPreviewBanner()}
         {/* 동호회·모임 전용 헤더 바 (동창회와 동일한 간판·초대장 열기/접기 및 후원 문구 통일) */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -2116,6 +2172,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
   // student ('🎓 동창회 (사진 공유)')
   return (
     <div className="flex flex-col gap-2.5">
+      {renderMobileGuestPreviewBanner()}
       <AlumniRetroBannerAndTwoTrackBar
         onOpenWaitingRoom={() => {
           setDesktopTab('trash');
@@ -3062,8 +3119,17 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     : [];
 
   const copyInviteLink = async () => {
-    const inviteCopy =
-      '[귀신같이 라운지 초대장] 내 PC와 모바일에 1초 초능력을! 가족·모임 원본 사진은 만료 없이 평생 0원이며, 초대받은 가족·회원·직원은 언제나 무료입니다. https://ghosti.sundreamer.app';
+    const inviteParam =
+      activeLoungeType === 'family'
+        ? activeFamilyRoom === '본가(친가)'
+          ? 'family_parents'
+          : activeFamilyRoom === '처가(친정)'
+          ? 'family_inlaws'
+          : 'family_home'
+        : activeLoungeType === 'student'
+        ? 'student'
+        : 'club';
+    const inviteCopy = `[귀신같이 라운지 초대장] 내 PC와 모바일에 1초 초능력을! 가족·모임 원본 사진은 만료 없이 평생 0원이며, 초대받은 가족·회원·직원은 언제나 무료입니다. https://ghosti.sundreamer.app/?invite=${inviteParam}&preview=guest`;
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(inviteCopy);
