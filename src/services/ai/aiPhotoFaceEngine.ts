@@ -1998,13 +1998,61 @@ const GEMMA2_VISUAL_CONCEPT_PROBES: Gemma2ConceptProbe[] = [
 ];
 
 let cachedGemma2ConceptProbeVecs: Map<string, Float32Array> | null = null;
+let lastMobileUserTouchAtMs = 0;
+let mobileTouchTrackerBound = false;
 
-async function ensureGemma2ConceptProbeVecs(): Promise<Map<string, Float32Array>> {
+function ensureMobileLifecycleAndTouchGuardBound(): void {
+  if (mobileTouchTrackerBound || typeof window === 'undefined') return;
+  mobileTouchTrackerBound = true;
+  const markTouch = () => {
+    lastMobileUserTouchAtMs = Date.now();
+  };
+  window.addEventListener('touchstart', markTouch, { passive: true });
+  window.addEventListener('touchmove', markTouch, { passive: true });
+  window.addEventListener('pointerdown', markTouch, { passive: true });
+  window.addEventListener('keydown', markTouch, { passive: true });
+
+  // 앱을 닫거나 홈 화면으로 내리는 즉시 거대 WASM 메모리를 0.05초 내에 반환하여 스마트폰 백그라운드 멈춤 원천 차단
+  const releaseOnBackground = () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      void disposeSharedVisionEncoderNow();
+      void releasePaddleOcrRuntime();
+    }
+  };
+  if (typeof document !== 'undefined') {
+    document.addEventListener('visibilitychange', releaseOnBackground);
+  }
+  window.addEventListener('pagehide', () => {
+    void disposeSharedVisionEncoderNow();
+    void releasePaddleOcrRuntime();
+  });
+}
+
+async function waitForMobileUserIdleIfNeeded(isMobileEnv: boolean): Promise<boolean> {
+  if (!isMobileEnv) return true;
+  if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+    return false;
+  }
+  while (Date.now() - lastMobileUserTouchAtMs < 2500) {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      return false;
+    }
+    await new Promise((r) => setTimeout(r, 380));
+  }
+  return true;
+}
+
+async function ensureGemma2ConceptProbeVecs(isMobileEnv = false): Promise<Map<string, Float32Array>> {
   if (cachedGemma2ConceptProbeVecs && cachedGemma2ConceptProbeVecs.size > 0) {
     return cachedGemma2ConceptProbeVecs;
   }
   const map = new Map<string, Float32Array>();
-  for (const probe of GEMMA2_VISUAL_CONCEPT_PROBES) {
+  for (let idx = 0; idx < GEMMA2_VISUAL_CONCEPT_PROBES.length; idx++) {
+    const probe = GEMMA2_VISUAL_CONCEPT_PROBES[idx];
+    if (isMobileEnv) {
+      const canContinue = await waitForMobileUserIdleIfNeeded(true);
+      if (!canContinue) break;
+    }
     try {
       const vecs = await encodeMultimodalSearchQueryVecs(probe.prompt, 1200);
       if (vecs.length > 0 && vecs[0].length === DEFAULT_DIM) {
@@ -2012,6 +2060,9 @@ async function ensureGemma2ConceptProbeVecs(): Promise<Map<string, Float32Array>
       }
     } catch {
       /* ignore individual probe error */
+    }
+    if (isMobileEnv) {
+      await new Promise((r) => setTimeout(r, 40));
     }
   }
   if (map.size > 0) {
@@ -2051,15 +2102,19 @@ export async function startSilentRealMediaVisionIndexing(params: {
     (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') ||
       (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1));
 
+  if (isMobileEnv) {
+    ensureMobileLifecycleAndTouchGuardBound();
+  }
+
   aiRuntimeFlags.silentMediaIndexingRunning = true;
   try {
     await hydrateRealMediaVectorCacheOnce();
 
     // 0) [모바일 초고속 화면 글자 선(先) 인덱싱 & 2중 WASM 피크 원천 차단]:
     //    350MB 거대 비전 모델(sharedVisionModel)을 로드하기 전에, 앱 번들에 내장된 경량 PP-OCRv5(16MB)만으로
-    //    최근 모바일 동영상 최대 3개의 화면 글자(ocrLines)를 먼저 추출한 뒤 PP-OCRv5 WASM 세션을 즉시 반환(release)하여
-    //    안드로이드·아이폰 WebView 렌더러 2중 WASM OOM 강제종료를 100% 차단합니다 (나머지 영상은 검색/열람 시 즉시 추출).
+    //    최근 모바일 동영상 최대 2개의 화면 글자(ocrLines)를 유휴 시점에 먼저 추출한 뒤 PP-OCRv5 WASM 세션을 즉시 반환(release)합니다.
     if (isMobileEnv) {
+      await new Promise((r) => setTimeout(r, 1200));
       const mobileVidsForOcr = params.videos
         .filter(
           (v) =>
@@ -2068,9 +2123,11 @@ export async function startSilentRealMediaVisionIndexing(params: {
             !v.ocrFullText &&
             (!Array.isArray(v.ocrLines) || v.ocrLines.length === 0)
         )
-        .slice(0, 3);
+        .slice(0, 2);
       if (mobileVidsForOcr.length > 0) {
         for (const mVid of mobileVidsForOcr) {
+          const canContinue = await waitForMobileUserIdleIfNeeded(true);
+          if (!canContinue) break;
           try {
             while (aiRuntimeFlags.activeVideoPlaybackCount > 0) {
               await new Promise((r) => setTimeout(r, 400));
@@ -2093,26 +2150,37 @@ export async function startSilentRealMediaVisionIndexing(params: {
           } catch {
             /* ignore single video OCR prewarm error */
           }
-          await new Promise((r) => setTimeout(r, 120));
+          await new Promise((r) => setTimeout(r, 280));
         }
         await releasePaddleOcrRuntime();
-        await new Promise((r) => setTimeout(r, 250));
+        await new Promise((r) => setTimeout(r, 350));
       }
     }
 
-    // [iOS WKWebView Jetsam OOM 원천 차단]:
-    // 단독 textQueryModel(~170MB)과 sharedVisionModel(~350MB) 2벌이 동시에 메모리에 올라가면 iOS WebView가 강제 리로드되므로,
-    // 텍스트+비전을 모두 내장한 sharedVisionModel 단 1벌만 로드하여 개념 앵커와 이미지 추론을 함께 처리합니다.
+    if (!(await waitForMobileUserIdleIfNeeded(isMobileEnv))) {
+      return;
+    }
+
+    // [모바일 ANR & OOM 원천 차단]:
+    // 모바일은 q4 단일 스레드 WASM만 사용하고, 사용자 터치/스크롤 중에는 추론을 즉시 양보하며 백그라운드 전환 시 즉시 해제합니다.
     await acquireSharedVisionEncoder();
-    const conceptVecMap = await ensureGemma2ConceptProbeVecs();
+    if (!(await waitForMobileUserIdleIfNeeded(isMobileEnv))) {
+      return;
+    }
+    const conceptVecMap = await ensureGemma2ConceptProbeVecs(isMobileEnv);
 
     // 1) 동영상 키프레임 무소음 백그라운드 인덱싱
-    const localVids = params.videos.filter(
-      (v) =>
-        !v.isAllBlack &&
-        (String(v.id || '').startsWith('local_vid_') || String(v.id || '').startsWith('mobile_vid_'))
-    );
+    const localVids = params.videos
+      .filter(
+        (v) =>
+          !v.isAllBlack &&
+          (String(v.id || '').startsWith('local_vid_') || String(v.id || '').startsWith('mobile_vid_'))
+      )
+      .slice(0, isMobileEnv ? 2 : params.videos.length);
     for (let i = 0; i < localVids.length; i++) {
+      if (!(await waitForMobileUserIdleIfNeeded(isMobileEnv))) {
+        return;
+      }
       while (
         aiRuntimeFlags.priorityVideoSearchDepth > 0 ||
         aiRuntimeFlags.activeVideoPlaybackCount > 0 ||
@@ -2127,7 +2195,7 @@ export async function startSilentRealMediaVisionIndexing(params: {
         params.onVideoThumbHydrated,
         params.onVideoOcrHydrated
       );
-      await new Promise((r) => setTimeout(r, 80));
+      await new Promise((r) => setTimeout(r, isMobileEnv ? 420 : 80));
     }
 
     // 2) 미색인 실사용 사진(PC + 모바일 공통) EmbeddingGemma 2 768차원 비전 벡터 통합 인덱싱 (Pass 1)
@@ -2135,11 +2203,14 @@ export async function startSilentRealMediaVisionIndexing(params: {
       .sortPhotosRecent90DaysFirst(
         params.photos.filter((p) => !p.quarantined && (!p.vec || p.vec.length !== DEFAULT_DIM))
       )
-      .slice(0, isMobileEnv ? 160 : 320);
+      .slice(0, isMobileEnv ? 24 : 320);
 
     const pendingOcrQueue: Array<{ item: PhotoItem; thumb: string }> = [];
 
     for (let i = 0; i < unindexedPhotos.length; i++) {
+      if (!(await waitForMobileUserIdleIfNeeded(isMobileEnv))) {
+        return;
+      }
       while (
         aiRuntimeFlags.priorityVideoSearchDepth > 0 ||
         aiRuntimeFlags.activeVideoPlaybackCount > 0 ||
@@ -2162,6 +2233,9 @@ export async function startSilentRealMediaVisionIndexing(params: {
           const decoded = await decodeImageBlobToRawAndThumb(blob);
           if (!decoded) continue;
           if (decoded.thumbDataUrl) decodedThumb = decoded.thumbDataUrl;
+          if (!(await waitForMobileUserIdleIfNeeded(isMobileEnv))) {
+            return;
+          }
           while (aiRuntimeFlags.priorityVideoSearchDepth > 0 || aiRuntimeFlags.activeVideoPlaybackCount > 0) {
             await new Promise((r) => setTimeout(r, 450));
           }
@@ -2173,7 +2247,9 @@ export async function startSilentRealMediaVisionIndexing(params: {
             silentIndexingBrake.recordInferenceLatencyMs(inferElapsed);
           }
           if (isMobileEnv) {
-            await new Promise((r) => setTimeout(r, 90));
+            await new Promise((r) =>
+              setTimeout(r, Math.max(450, Math.min(1800, Math.round(inferElapsed * 1.1))))
+            );
           } else if (inferElapsed > 300 && silentIndexingBrake.getSnapshot().speedMode !== 'turbo') {
             await new Promise((r) => setTimeout(r, Math.min(2200, Math.round(inferElapsed * 1.15))));
           }

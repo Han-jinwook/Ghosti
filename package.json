@@ -8,7 +8,8 @@
     "dev": "vite",
     "build": "tsc --noEmit && vite build",
     "preview": "vite preview",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "capacitor:copy:after": "node scripts/slim_mobile_cap_assets.mjs"
   },
   "dependencies": {
     "@capacitor/android": "^8.5.3",

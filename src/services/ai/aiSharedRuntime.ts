@@ -249,39 +249,29 @@ export const FALLBACK_LOCAL_ZCORE_HOST = 'http://127.0.0.1:5199/__models/';
 /**
  * [기기 사양별 정밀도(Dtype) 자동 분기 정책]
  * 1) PC 데스크톱: 무조건 전부 8비트('q8')로 100% 통일 (원본 99.2% 실력 복원, 5~8초 컷)
- * 2) 고사양 모바일(RAM 8GB+ 및 WebGPU 지원): 8비트('q8') 분기 탑재
- * 3) 일반/보급형 모바일(RAM 4~6GB 이하): 4비트('q4') 안전 기본 탑재 (Safari 탭 메모리 보호)
+ * 2) 모바일(Android / iOS 전체): OS GPU/ZRAM 스왑 고갈 및 ANR 원천 차단을 위해 경량 4비트('q4') 단일 고정
  */
+export function isMobileDeviceRuntime(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua)) return true;
+  if (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1) return true;
+  if (typeof window !== 'undefined') {
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    if (cap?.isNativePlatform?.()) return true;
+  }
+  return false;
+}
+
 export function getOptimalEmbeddingDtype(): 'q8' | 'q4' {
   if (typeof window === 'undefined') return 'q8';
 
-  const isMobileUA =
-    typeof navigator !== 'undefined' &&
-    /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
-  const isMobileWidth = window.innerWidth < 860;
-  const isMobile = isMobileUA || isMobileWidth;
-
-  // 1) PC 데스크톱은 사양 불문 무조건 8비트(q8) 100% 통일
-  if (!isMobile) {
-    return 'q8';
+  if (isMobileDeviceRuntime() || window.innerWidth < 860) {
+    return 'q4';
   }
 
-  // 2) 모바일 환경: 고사양(RAM 8GB+ 및 WebGPU 지원) 여부 감지
-  try {
-    const mem = (navigator as unknown as { deviceMemory?: number }).deviceMemory ?? 4;
-    const cores = navigator.hardwareConcurrency ?? 4;
-    const hasWebGpu = Boolean((navigator as unknown as { gpu?: unknown }).gpu);
-
-    // 램 8GB 이상 + 옥타코어 + WebGPU 지원 플래그십 모바일은 8비트(q8) 가동
-    if (mem >= 8 && cores >= 8 && hasWebGpu) {
-      return 'q8';
-    }
-  } catch {
-    /* fallback to safe q4 */
-  }
-
-  // 3) 일반/보급형 모바일은 탭 크래시 방지를 위해 4비트(q4) 안전 탑재
-  return 'q4';
+  // PC 데스크톱은 사양 불문 무조건 8비트(q8) 100% 통일
+  return 'q8';
 }
 
 /**
@@ -529,8 +519,10 @@ export function isIosDeviceRuntime(): boolean {
 
 async function detectUsableWebGpu(): Promise<boolean> {
   if (typeof navigator === 'undefined' || !('gpu' in navigator)) return false;
-  // [iOS WKWebView Jetsam OOM 원천 차단]: iOS WebContent 프로세스는 Metal WebGPU + WASM 이중 버퍼 할당 시 1.3GB 한도를 초과해 리로드되므로 단일 스레드 WASM q4로 안전 고정
-  if (isIosDeviceRuntime()) return false;
+  // [모바일(Android CrGpuMain ANR & DMA-BUF 스왑 고갈 / iOS WKWebView Jetsam OOM) 원천 차단]:
+  // 스마트폰 WebView에서 수백 개 WGSL 셰이더 컴파일 및 거대 GPU DMA-BUF 할당 시 시스템 UI까지 멈추므로
+  // 모바일은 Android·iOS 모두 단일 스레드 WASM q4 모드로 안전 고정하고 WebGPU는 데스크톱 전용으로 가동합니다.
+  if (isMobileDeviceRuntime()) return false;
   if (!cachedUsableWebGpuPromise) {
     cachedUsableWebGpuPromise = (async () => {
       try {
@@ -627,10 +619,11 @@ export async function ensureSearchEngineLoaded(
       config.vision_config = null;
 
       const files = new Map<string, { loaded: number; total: number }>();
+      const canUseGpuForSearch = await detectUsableWebGpu();
       searchModel = await loadWithR2Fallback(() =>
         AutoModel.from_pretrained(MODEL_ID, {
           config,
-          device: 'webgpu',
+          device: canUseGpuForSearch ? 'webgpu' : 'wasm',
           dtype: {
             model: targetDtype,
             audio_encoder: targetDtype,
@@ -1156,6 +1149,8 @@ export async function decodeImageBlobToRawAndThumb(blob: Blob): Promise<{ rawImg
     bmp.close();
     const rawImg = new RawImage(new Uint8ClampedArray(imgData.buffer), w, h, 4).rgb();
     const thumbDataUrl = canvasToJpegDataUrl(canvas);
+    canvas.width = 0;
+    canvas.height = 0;
     return { rawImg, thumbDataUrl };
   } catch {
     return null;
@@ -1170,6 +1165,10 @@ let _staticCorpusCachePromise: Promise<{
 
 export function getStaticCorpusCached(): Promise<{ pocJson: any; auditJson: any; semJson: any }> {
   if (typeof window !== 'undefined') {
+    const cap = (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor;
+    if (cap?.isNativePlatform?.()) {
+      return Promise.resolve({ pocJson: null, auditJson: null, semJson: null });
+    }
     try {
       const parentCache =
         window.parent && window.parent !== window
