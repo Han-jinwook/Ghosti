@@ -182,7 +182,7 @@ function joinWrappedKoreanLines(upper: string, lower: string): string {
       b
     ) ||
     /^(?:호|선|숙|율|량|액|금|원|개|건|명)(?=[\s:|.,)/]|$)/.test(b) ||
-    /(?:\s|^)[가-힣]$/.test(a) ||
+    (/(\s|^)[가-힣]$/.test(a) && !/&\s*[가-힣]$/.test(a)) ||
     /(?:등록번|전화번|계좌번|우편번|비밀번|백은|메뉴개|메뉴 개)$/.test(a)
   ) {
     return polishKoreanOcrSpacing(`${a}${b}`);
@@ -241,7 +241,7 @@ export function formatOcrBoxesSmart(rawBoxes: PaddleOcrBox[]): string {
         const centeredSingleChar =
           /^[가-힣]$/.test(cand.text) && cand.x0 >= cur.x0 - 18 && cand.x1 <= cur.x1 + 18;
         const sameFontScale =
-          Math.abs(cand.h - cur.lineH) <= Math.max(5, Math.min(cand.h, cur.lineH) * 0.36);
+          Math.abs(cand.h - cur.lineH) <= Math.max(3, Math.min(cand.h, cur.lineH) * 0.28);
         const notEndedSentence = !/[.!?]$/.test(cur.text);
 
         if ((sameLeftEdge || centeredSingleChar) && sameFontScale && notEndedSentence) {

@@ -114,7 +114,7 @@ def join_wrapped_korean_lines(upper: str, lower: str) -> str:
             b,
         )
         or re.match(r"^(?:호|선|숙|율|량|액|금|원|개|건|명)(?=[\s:|.,)/]|$)", b)
-        or re.search(r"(?:\s|^)[가-힣]$", a)
+        or (re.search(r"(?:\s|^)[가-힣]$", a) and not re.search(r"&\s*[가-힣]$", a))
         or re.search(r"(?:등록번|전화번|계좌번|우편번|비밀번|백은|메뉴개|메뉴 개)$", a)
     ):
         return polish_korean_ocr_spacing(f"{a}{b}")
@@ -185,7 +185,7 @@ def format_ocr_boxes_smart(raw_boxes: List[Dict[str, Any]], filter_video_ui: boo
                     and cand["x0"] >= cur["x0"] - 18
                     and cand["x1"] <= cur["x1"] + 18
                 )
-                same_scale = abs(cand["h"] - cur["lineH"]) <= max(5, min(cand["h"], cur["lineH"]) * 0.36)
+                same_scale = abs(cand["h"] - cur["lineH"]) <= max(3, min(cand["h"], cur["lineH"]) * 0.28)
                 not_ended = not bool(re.search(r"[.!?]$", cur["text"]))
                 if (same_left or centered_1char) and same_scale and not_ended:
                     cur["text"] = join_wrapped_korean_lines(cur["text"], cand["text"])

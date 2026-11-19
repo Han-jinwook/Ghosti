@@ -2490,8 +2490,8 @@ _VIDEO_STREAM_CACHE_DIR = MERLIN_DIR / "video_stream_cache"
 _VIDEO_STREAM_INFLIGHT: Dict[str, threading.Event] = {}
 _VIDEO_STREAM_LOCK = threading.Lock()
 _VIDEO_OCR_CACHE_FILE = MERLIN_DIR / "video_scene_ocr_cache_v2.json"
-_VIDEO_OCR_SCHEMA_VER = 10
-_VIDEO_PADDLE_OCR_VER = 22
+_VIDEO_OCR_SCHEMA_VER = 23
+_VIDEO_PADDLE_OCR_VER = 23
 _VIDEO_OCR_LOCK = threading.Lock()
 _VIDEO_OCR_BG_RUNNING = False
 _FFMPEG_EXE_CACHE: str | None = ""
@@ -2746,7 +2746,15 @@ def _load_video_ocr_cache() -> Dict[str, Any]:
         if _VIDEO_OCR_CACHE_FILE.exists():
             raw = json.loads(_VIDEO_OCR_CACHE_FILE.read_text(encoding="utf-8"))
             if isinstance(raw, dict):
-                return raw
+                # 폐기된 구형 Windows.Media.Ocr(ocrVer < 20) 외계어 캐시 항목은 로드 즉시 영구 소거!
+                purged = {
+                    k: v
+                    for k, v in raw.items()
+                    if isinstance(v, dict) and int(v.get("ocrVer") or 0) >= 20
+                }
+                if len(purged) != len(raw):
+                    _save_video_ocr_cache(purged)
+                return purged
     except Exception:
         pass
     return {}
@@ -3045,12 +3053,24 @@ def _select_video_ocr_sample_secs(dur_sec: float) -> List[int]:
 
 
 def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
-    """미인덱싱 로컬 동영상 전수를 청크 단위로 순회하며 90°/270° 회전 보정 포함 WinRT OCR로 영구 인덱싱합니다."""
+    """미인덱싱 로컬 동영상 전수를 청크 단위로 순회하며 PP-OCRv5 Korean(무-FFmpeg MediaClip 폴백 포함)으로 영구 인덱싱합니다."""
     global _VIDEO_OCR_BG_RUNNING
-    ff = find_ffmpeg_exe()
-    if not ff or os.name != "nt" or not video_entries:
+    if os.name != "nt" or not video_entries:
         with _VIDEO_OCR_LOCK:
             _VIDEO_OCR_BG_RUNNING = False
+        return
+    ff = find_ffmpeg_exe()
+    if not ff:
+        try:
+            for _sig, vpath, _dur_sec in video_entries[:30]:
+                try:
+                    extract_full_video_ocr_text({"videoFileName": vpath.name, "filePath": str(vpath)})
+                except Exception:
+                    pass
+                time.sleep(0.15)
+        finally:
+            with _VIDEO_OCR_LOCK:
+                _VIDEO_OCR_BG_RUNNING = False
         return
 
     creationflags = 0x08004000 if os.name == "nt" else 0
@@ -3820,8 +3840,7 @@ def get_teleport_ocr_vanguard(params: Dict[str, Any] | None = None) -> Dict[str,
 def ensure_local_videos_ocr_indexed(sync_wait_sec: float = 0.0) -> None:
     """검색 요청 시 아직 OCR 캐시가 없는 동영상들을 백그라운드(또는 짧은 동기 대기)로 인덱싱합니다."""
     global _VIDEO_OCR_BG_RUNNING
-    ff = find_ffmpeg_exe()
-    if not ff or os.name != "nt":
+    if os.name != "nt":
         return
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
     cache = _load_video_ocr_cache()
@@ -3926,9 +3945,10 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
 
                 sig = f"{entry.name}|{st.st_size}|{int(st.st_mtime)}"
                 cached_ocr = ocr_cache.get(sig)
+                cached_ver = int((cached_ocr or {}).get("ocrVer") or 0)
                 if (
-                    (cached_ocr is None or int((cached_ocr or {}).get("ocrVer") or 0) < _VIDEO_OCR_SCHEMA_VER)
-                    and ff
+                    (cached_ocr is None or cached_ver < _VIDEO_PADDLE_OCR_VER)
+                    and os.name == "nt"
                     and not _is_cloud_virtual_or_unpinned_file(resolved)
                 ):
                     missing_for_bg.append((sig, resolved, real_dur_sec))
@@ -3938,14 +3958,17 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 ocr_lines_cached = []
                 ocr_full_cached = ""
                 valid_ocr_frames: List[Dict[str, Any]] = []
-                if cached_ocr and isinstance(cached_ocr.get("frames"), list):
+                if cached_ocr and cached_ver >= 20 and isinstance(cached_ocr.get("frames"), list):
                     for ofr in cached_ocr["frames"]:
-                        raw_ot = _clean_video_ocr_display_text(str(ofr.get("ocrText") or "").strip())
-                        if _is_meaningful_ocr_text(raw_ot):
+                        is_p5 = bool(ofr.get("fromPaddleV5")) or cached_ver >= 20
+                        raw_str = str(ofr.get("ocrText") or "").strip()
+                        raw_ot = re.sub(r"\s+", " ", raw_str).strip() if is_p5 else _clean_video_ocr_display_text(raw_str)
+                        if raw_ot and (is_p5 or _is_meaningful_ocr_text(raw_ot)):
                             valid_ocr_frames.append({
                                 "timeSec": int(ofr.get("timeSec") or 0),
                                 "ocrText": raw_ot,
                                 "keywords": _enrich_ocr_semantic_keywords(raw_ot),
+                                "fromPaddleV5": is_p5,
                             })
                     ocr_lines_cached = _dedupe_ocr_timeline_lines(valid_ocr_frames)
                     ocr_full_cached = "\n".join(
