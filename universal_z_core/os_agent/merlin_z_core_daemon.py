@@ -126,8 +126,9 @@ import plugin_senstalk  # noqa: E402
 import plugin_aggrofilter  # noqa: E402
 import ghosti_setup_parity  # noqa: E402
 import plugin_ghosti_superpowers  # noqa: E402
+from plugins import plugin_paid_work_sdrive  # noqa: E402
 
-CORE_VERSION = "2.4.79"
+CORE_VERSION = "2.4.89"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -137,6 +138,7 @@ TRAY_LOGO_PNG = (_BUNDLE_DIR / "logo-symbol.png") if (_BUNDLE_DIR / "logo-symbol
 def get_unified_health() -> Dict[str, Any]:
     builtin_plugins: Dict[str, Any] = {
         "ghosti_os": plugin_ghosti_os.PLUGIN_METADATA,
+        "paid_work_sdrive": plugin_paid_work_sdrive.PLUGIN_METADATA,
         "senstalk": plugin_senstalk.PLUGIN_METADATA,
         "aggrofilter": plugin_aggrofilter.PLUGIN_METADATA,
     }
@@ -631,6 +633,36 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_ghosti_os.list_local_docs(qp))
             return
 
+        # [3귀신 업무 공유(S: 드라이브) 네이티브 마운트 · 실시간 파일/잠금(~$) 스캔 · 원본 다운로드 API]
+        if path in ("/__work/s-drive", "/api/work/s-drive"):
+            self._send_json(plugin_paid_work_sdrive.inspect_s_drive_status(str(qp.get("driveLetter") or "S:")))
+            return
+
+        if path in ("/__work/files", "/api/work/files"):
+            self._send_json(plugin_paid_work_sdrive.list_work_files(qp))
+            return
+
+        if path in ("/__work/file-sync-payload", "/api/work/file-sync-payload"):
+            self._send_json(plugin_paid_work_sdrive.get_single_work_file_sync_payload(qp))
+            return
+
+        if path in ("/__work/download", "/api/work/download"):
+            f_path, mime, status = plugin_paid_work_sdrive.resolve_work_download_file(qp)
+            if f_path is not None and status == 200:
+                data_bytes = f_path.read_bytes()
+                encoded_name = urllib.parse.quote(f_path.name)
+                disp = "inline" if str(qp.get("inline") or "") in ("1", "true") else "attachment"
+                self.send_response(200)
+                self.send_header("Content-Type", mime)
+                self.send_header("Content-Length", str(len(data_bytes)))
+                self.send_header("Content-Disposition", f"{disp}; filename*=UTF-8''{encoded_name}")
+                self._write_cors_headers(expose_range=False)
+                self.end_headers()
+                self.wfile.write(data_bytes)
+            else:
+                self._send_json({"ok": False, "error": "WORK_FILE_NOT_FOUND"}, status=status)
+            return
+
         if path in ("/__videos/list", "/__videos/index", "/api/ghosti/videos/list"):
             self._send_json(plugin_ghosti_os.list_local_videos(qp))
             return
@@ -943,6 +975,23 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path in ("/__docs/search", "/api/ghosti/docs/search"):
             self._send_json(ghosti_setup_parity.docs_search(body))
+            return
+
+        # [3귀신 업무 공유(S: 드라이브) 마운트/해제 · 파일 업로드 · 방장↔팀원 실시간 동기화 · 숨기기 API]
+        if path in ("/__work/s-drive", "/api/work/s-drive"):
+            self._send_json(plugin_paid_work_sdrive.mount_or_unmount_s_drive(body))
+            return
+
+        if path in ("/__work/upload", "/api/work/upload"):
+            self._send_json(plugin_paid_work_sdrive.write_uploaded_work_file(body))
+            return
+
+        if path in ("/__work/pull-sync", "/api/work/pull-sync"):
+            self._send_json(plugin_paid_work_sdrive.pull_sync_work_files(body))
+            return
+
+        if path in ("/__work/toggle-hide", "/api/work/toggle-hide"):
+            self._send_json(plugin_paid_work_sdrive.toggle_hide_work_file(body))
             return
 
         if path in ("/__videos/search", "/api/ghosti/videos/search"):

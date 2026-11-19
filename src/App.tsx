@@ -164,7 +164,8 @@ export const App: React.FC = () => {
         Boolean(params.get('ghostSearchWindow')) ||
         params.get('preview') === 'legacy' ||
         params.get('preview') === 'guest' ||
-        params.has('invite')
+        params.has('invite') ||
+        params.has('workRoom')
       ) {
         return true;
       }
@@ -205,7 +206,8 @@ export const App: React.FC = () => {
         Boolean(params.get('ghostSearchWindow')) ||
         params.get('preview') === 'legacy' ||
         params.get('preview') === 'guest' ||
-        params.has('invite')
+        params.has('invite') ||
+        params.has('workRoom')
       ) {
         return 'workspace';
       }
@@ -271,9 +273,18 @@ export const App: React.FC = () => {
         }
         // 정식 로그인 세션에서 토큰 없는 구형 ?invite=... 또는 ?preview=guest가 URL에 잔류해 새로고침 시 내 방을 가리는 현상 방지
         const hasRealInviteToken = Boolean((params.get('token') || '').trim());
+        const hasWorkRoomInvite = Boolean((params.get('workRoom') || '').trim());
+        if (nav.lounge !== 'work' && hasWorkRoomInvite) {
+          params.delete('workRoom');
+          params.delete('host');
+          params.delete('title');
+          if (!params.has('invite')) {
+            params.delete('token');
+          }
+        }
         if (
           nav.lounge === 'personal' ||
-          nav.lounge === 'work' ||
+          (nav.lounge === 'work' && !hasWorkRoomInvite) ||
           (hasAuthenticatedHubAccountSession() && !hasRealInviteToken)
         ) {
           params.delete('invite');
@@ -317,13 +328,16 @@ export const App: React.FC = () => {
       const savedNav = window.history.state?.ghostiNav;
       const params = new URLSearchParams(window.location.search);
       const hasInviteLink = params.has('invite');
+      const hasWorkRoomLink = params.has('workRoom');
       const inviteVal = params.get('invite') || '';
       const urlLounge = params.get('lounge') as LoungeType | null;
       const urlTab = params.get('tab') as DesktopTab | null;
       const urlRoom = normalizeFamilyRoomParam(params.get('room') || inviteVal);
       const urlView = params.get('view') as 'showroom' | 'workspace' | null;
 
-      const defaultInviteLounge: LoungeType = inviteVal.startsWith('club')
+      const defaultInviteLounge: LoungeType = hasWorkRoomLink
+        ? 'work'
+        : inviteVal.startsWith('club')
         ? 'club'
         : inviteVal.startsWith('student') || inviteVal.startsWith('alumni')
         ? 'student'
@@ -333,7 +347,7 @@ export const App: React.FC = () => {
         savedNav?.lounge ||
         (urlLounge && ['personal', 'family', 'club', 'student', 'work'].includes(urlLounge)
           ? urlLounge
-          : hasInviteLink
+          : hasInviteLink || hasWorkRoomLink
             ? defaultInviteLounge
             : useSaySeeStore.getState().activeLoungeType);
       const targetDesktopTab: DesktopTab =
@@ -341,7 +355,7 @@ export const App: React.FC = () => {
         (urlTab &&
         ['trial', 'dashboard', 'trash', 'share', 'settings', 'sync', 'superpower_dojo', 'search_dojo'].includes(urlTab)
           ? urlTab
-          : hasInviteLink
+          : hasInviteLink || hasWorkRoomLink
             ? 'dashboard'
             : useSaySeeStore.getState().desktopTab);
       const targetMobileTab: MobileTab = savedNav?.mobileTab || desktopTabToMobileTab(targetDesktopTab);
@@ -369,6 +383,7 @@ export const App: React.FC = () => {
           urlLounge ||
           urlTab ||
           hasInviteLink ||
+          hasWorkRoomLink ||
           params.get('dev') === 'true' ||
           canAutoBypassToWorkspace
       );

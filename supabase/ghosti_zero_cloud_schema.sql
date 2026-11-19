@@ -1105,3 +1105,166 @@ end;
 $$;
 
 grant execute on function public.ghosti_get_guest_preview_room(text) to anon, authenticated, service_role;
+
+-- ============================================================================
+-- 13. [업무 공유 S: 드라이브 — 방장↔팀원(?workRoom=...) 24시간 웹 미리보기 · 실시간 열람 잠금(~$) · 경량 문서 동기화 정식 테이블]
+--     (전사 강령 제18조 준수: 기존 사진 테이블 기생 금지 · 정식 도메인 컬럼 정규화 분리)
+-- ============================================================================
+create table if not exists public.ghosti_room_work_files (
+  id uuid primary key default gen_random_uuid(),
+  room_id text not null references public.ghosti_lounge_rooms(room_id) on delete cascade,
+  rel_path text not null,
+  folder_id text not null default 'root',
+  folder_path text not null default 'S:\',
+  file_name text not null,
+  file_ext text not null default 'FILE',
+  byte_size bigint not null default 0,
+  sha256_hex text not null default '',
+  uploader_email text not null,
+  uploader_nickname text not null,
+  summary_title text not null default '',
+  matched_snippet text not null default '',
+  full_text_preview text not null default '',
+  table_headers text[] not null default '{}',
+  table_rows_json jsonb not null default '[]'::jsonb,
+  is_image boolean not null default false,
+  thumb_webp_url text,
+  inline_sync_base64 text,
+  locked_by_email text,
+  locked_by_nickname text,
+  locked_at timestamptz,
+  is_hidden_by_master boolean not null default false,
+  file_mtime timestamptz not null default now(),
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  unique (room_id, rel_path)
+);
+
+create index if not exists idx_ghosti_room_work_files_room_mtime
+  on public.ghosti_room_work_files (room_id, file_mtime desc)
+  where is_hidden_by_master = false;
+
+drop trigger if exists trg_ghosti_room_work_files_touch on public.ghosti_room_work_files;
+create trigger trg_ghosti_room_work_files_touch
+  before update on public.ghosti_room_work_files
+  for each row execute function public.ghosti_touch_updated_at();
+
+alter table public.ghosti_room_work_files enable row level security;
+
+drop policy if exists ghosti_room_work_files_member_select on public.ghosti_room_work_files;
+create policy ghosti_room_work_files_member_select on public.ghosti_room_work_files
+  for select using (
+    is_hidden_by_master = false
+    and public.ghosti_is_room_member(room_id)
+  );
+
+drop policy if exists ghosti_room_work_files_member_insert on public.ghosti_room_work_files;
+create policy ghosti_room_work_files_member_insert on public.ghosti_room_work_files
+  for insert with check (
+    public.ghosti_is_room_member(room_id)
+    and lower(uploader_email) = public.ghosti_current_email()
+  );
+
+drop policy if exists ghosti_room_work_files_member_update on public.ghosti_room_work_files;
+create policy ghosti_room_work_files_member_update on public.ghosti_room_work_files
+  for update using (
+    public.ghosti_is_room_member(room_id)
+  );
+
+drop policy if exists ghosti_room_work_files_owner_or_admin_delete on public.ghosti_room_work_files;
+create policy ghosti_room_work_files_owner_or_admin_delete on public.ghosti_room_work_files
+  for delete using (
+    public.ghosti_is_room_admin(room_id)
+    or lower(uploader_email) = public.ghosti_current_email()
+  );
+
+grant select, insert, update, delete on table public.ghosti_room_work_files to authenticated, service_role;
+
+-- [업무 공유방(?workRoom=...&token=...) 초대 링크 열람 및 Z-코어 설치 전 웹 미리보기·실시간 잠금 조회 RPC]
+create or replace function public.ghosti_get_work_room_preview(p_invite_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room_id text;
+  v_host_nick text;
+  v_room record;
+  v_files jsonb;
+begin
+  select i.room_id into v_room_id
+    from public.ghosti_room_invites i
+   where i.token = trim(coalesce(p_invite_token, ''))
+     and i.revoked_at is null
+     and i.expires_at > now()
+   limit 1;
+
+  if v_room_id is null then
+    return jsonb_build_object('ok', false, 'reason', 'INVALID_OR_EXPIRED_INVITE');
+  end if;
+
+  select r.room_id, r.lounge_type, r.room_title
+    into v_room
+    from public.ghosti_lounge_rooms r
+   where r.room_id = v_room_id
+     and r.lounge_type = 'work';
+
+  if not found then
+    return jsonb_build_object('ok', false, 'reason', 'WORK_ROOM_NOT_FOUND');
+  end if;
+
+  select m.room_persona_nickname into v_host_nick
+    from public.ghosti_lounge_members m
+   where m.room_id = v_room_id and m.role = 'master'
+   limit 1;
+
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'id', f.id,
+        'roomId', f.room_id,
+        'relPath', f.rel_path,
+        'folderId', f.folder_id,
+        'folderPath', f.folder_path,
+        'fileName', f.file_name,
+        'ext', f.file_ext,
+        'byteSize', f.byte_size,
+        'sha256', f.sha256_hex,
+        'uploaderNickname', f.uploader_nickname,
+        'summaryTitle', f.summary_title,
+        'matchedSnippet', f.matched_snippet,
+        'fullTextPreview', f.full_text_preview,
+        'tableHeaders', f.table_headers,
+        'tableRows', f.table_rows_json,
+        'isImage', f.is_image,
+        'imageBase64', f.thumb_webp_url,
+        'inlineSyncBase64', f.inline_sync_base64,
+        'lockedBy', case
+          when f.locked_at is not null and f.locked_at >= (now() - interval '3 minutes')
+          then f.locked_by_nickname
+          else null
+        end,
+        'fileMtime', f.file_mtime
+      ) order by f.file_mtime desc
+    ),
+    '[]'::jsonb
+  )
+    into v_files
+    from public.ghosti_room_work_files f
+   where f.room_id = v_room_id
+     and f.is_hidden_by_master = false;
+
+  return jsonb_build_object(
+    'ok', true,
+    'room', jsonb_build_object(
+      'roomId', v_room.room_id,
+      'roomTitle', v_room.room_title,
+      'hostNickname', coalesce(v_host_nick, '방장')
+    ),
+    'files', v_files
+  );
+end;
+$$;
+
+grant execute on function public.ghosti_get_work_room_preview(text) to anon, authenticated, service_role;

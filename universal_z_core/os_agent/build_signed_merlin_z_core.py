@@ -281,6 +281,8 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
         "--collect-binaries", "onnxruntime",
         "--collect-all", "pypdfium2_raw",
         "--hidden-import", "plugin_ghosti_os",
+        "--hidden-import", "plugins.plugin_paid_work_sdrive",
+        "--hidden-import", "plugins.plugin_paid_sync_ghostwin",
         "--hidden-import", "ppocr_v5_worker",
         "--hidden-import", "onnxruntime",
         "--hidden-import", "pypdfium2",

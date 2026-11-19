@@ -2621,6 +2621,22 @@ def _resolve_win_known_folder_safe(guid_str: str) -> Path | None:
 def _get_known_user_folders_for_search() -> list[Path]:
     home = Path.home()
     raw_cands: list[Path] = []
+    # [0순위: 업무 공유 S: 드라이브 직결] S:\ 마운트 경로 및 업무공유폴더_S를 최우선 스캔 루트에 편입
+    try:
+        if Path("S:\\").exists():
+            raw_cands.append(Path("S:\\"))
+        local_app = Path(os.environ.get("LOCALAPPDATA") or (home / "AppData" / "Local"))
+        s_cfg_p = local_app / "Merlin" / "work_sdrive_config.json"
+        if s_cfg_p.exists():
+            s_cfg = json.loads(s_cfg_p.read_text(encoding="utf-8", errors="ignore"))
+            if isinstance(s_cfg, dict) and s_cfg.get("targetDir"):
+                raw_cands.append(Path(str(s_cfg["targetDir"])))
+        raw_cands.append(local_app / "Merlin" / "업무공유폴더_S")
+        repo_work_cand = Path(__file__).resolve().parent.parent / "업무공유폴더_S"
+        if repo_work_cand.exists():
+            raw_cands.append(repo_work_cand)
+    except Exception:
+        pass
     # Win32 KnownFolders: Desktop, Downloads, Documents, Pictures, Videos
     for guid_s in (
         "{B4BFCC3A-DB2C-424C-B029-7FE99A87C641}",
@@ -2719,6 +2735,17 @@ def _get_lightweight_local_files() -> list[dict]:
 
     by_kind: dict[str, list[dict]] = {"doc": [], "image": [], "video": []}
     seen_files: set[str] = set()
+    doc_body_cache: dict[str, str] = {}
+    try:
+        local_app_c = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+        doc_cache_p = local_app_c / "Merlin" / "doc_text_cache_v1.json"
+        if doc_cache_p.exists():
+            raw_dc = json.loads(doc_cache_p.read_text(encoding="utf-8", errors="ignore"))
+            if isinstance(raw_dc, dict):
+                doc_body_cache = raw_dc
+    except Exception:
+        doc_body_cache = {}
+
     for fd in scan_dirs:
         try:
             with os.scandir(fd) as it:
@@ -2727,7 +2754,12 @@ def _get_lightweight_local_files() -> list[dict]:
                         if not entry.is_file():
                             continue
                         name = entry.name
-                        if name.startswith((".", "~$")):
+                        name_low = name.lower()
+                        if (
+                            name.startswith((".", "~$", ".~lock."))
+                            or name_low in ("desktop.ini", "thumbs.db")
+                            or name_low.endswith((".lck", ".tmp", ".ghosti_sync_tmp"))
+                        ):
                             continue
                         ext = Path(name).suffix.lower()
                         if ext in doc_exts:
@@ -2738,16 +2770,40 @@ def _get_lightweight_local_files() -> list[dict]:
                             fkind = "video"
                         else:
                             continue
-                        norm_fp = os.path.normcase(os.path.abspath(entry.path))
+                        try:
+                            resolved_entry = Path(entry.path).resolve()
+                            norm_fp = os.path.normcase(str(resolved_entry))
+                        except Exception:
+                            resolved_entry = Path(entry.path)
+                            norm_fp = os.path.normcase(os.path.abspath(entry.path))
                         if norm_fp in seen_files:
                             continue
                         seen_files.add(norm_fp)
                         st = entry.stat()
+                        fd_str_low = str(fd).lower()
+                        is_s_drive_item = fd_str_low.startswith("s:") or "업무공유폴더_s" in fd_str_low
+                        fd_badge = f"💼S:\\{fd.name}" if (is_s_drive_item and fd.name and fd.name.lower() != "업무공유폴더_s") else ("💼S:" if is_s_drive_item else fd.name)
+                        body_snip = ""
+                        if fkind == "doc":
+                            sig_v3 = f"{resolved_entry}|{st.st_size}|{int(st.st_mtime)}|v3_sota50k"
+                            cached_txt = doc_body_cache.get(sig_v3) or ""
+                            if cached_txt:
+                                body_snip = re.sub(r"\s+", " ", str(cached_txt)).strip()[:1600]
+                            elif ext in (".txt", ".csv", ".md") and st.st_size <= 262144:
+                                try:
+                                    raw_b = Path(entry.path).read_bytes()[:65536]
+                                    try:
+                                        body_snip = re.sub(r"\s+", " ", raw_b.decode("utf-8-sig")).strip()[:1200]
+                                    except UnicodeDecodeError:
+                                        body_snip = re.sub(r"\s+", " ", raw_b.decode("cp949", errors="ignore")).strip()[:1200]
+                                except Exception:
+                                    body_snip = ""
+                        disp_text = f"[{fd_badge}] {name}" + (f" — {body_snip}" if body_snip else "")
                         by_kind[fkind].append({
                             "kind": fkind,
                             "file_path": entry.path,
                             "img_path": entry.path if fkind == "image" else "",
-                            "text": f"[{fd.name}] {name}",
+                            "text": disp_text,
                             "ts": st.st_mtime,
                             "_name": name[:120],
                         })
@@ -8000,9 +8056,9 @@ def main() -> None:
                         return
                     _show_default_ui1_bar(live_clip)
                     return
-            # 바탕화면·탐색기에서도 1회차 호출(Ctrl+0 / Ctrl+우클릭) 시에는 [창 UI ① 기본 귀신창([1]~[4])]을 먼저 띄우고,
-            # 한 번 더 호출하면 상단 [0-B순위: 연속 재호출 토글]에 의해 [창 UI ② 👻 귀신검색창]으로 즉시 전환됩니다!
-            _show_default_ui1_bar(live_clip)
+            # [확정 원안 (안 A) 준수]: 파일 선택을 해제한 탐색기(S: 드라이브 등) 빈 공간이나 빈 바탕화면에서 호출 시 ➔ 1회 호출만으로 [창 UI ② 👻 귀신검색창(소형)] 100% 직행!
+            disarm_sub_hotkeys()
+            show_ghost_toast("__UI2_SEARCH__|small|", duration_ms=8000)
             return
 
         # [분기 3: 입력창 내부 — 단어 끝 '?' 검색 의도 감지 시 ➔ 귀신검색창 / 일반 커서 및 문장 드래그 ➔ 기본 귀신창([1]~[5] 즉시 사용 보장!)]

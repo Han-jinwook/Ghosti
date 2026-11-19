@@ -82,6 +82,7 @@ export function useIsSecretaryFirstBrowseGuardActive(): boolean {
     activeLoungeType === 'family' ||
     activeLoungeType === 'club' ||
     activeLoungeType === 'student' ||
+    activeLoungeType === 'work' ||
     isInvitedMemberSession
   ) {
     return false;
@@ -92,6 +93,7 @@ export function useIsSecretaryFirstBrowseGuardActive(): boolean {
     if (
       params.get('preview') === 'guest' ||
       params.has('invite') ||
+      params.has('workRoom') ||
       params.has('token') ||
       params.get('ghostSearchWindow')
     ) {

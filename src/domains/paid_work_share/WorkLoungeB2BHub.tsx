@@ -1,33 +1,27 @@
-import React, { useEffect, useState } from 'react';
-import {
-  buildWindowsNativeWebDavMountCommand,
-  verifyHybridP2PBridgeConnection,
-  type P2PHybridConnectionDiagnostics,
-} from '../../services/p2pHybridBridge';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { verifyHybridP2PBridgeConnection } from '../../services/p2pHybridBridge';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
 import { isMobileOrStoreRuntime } from '../../store/slices/storeSharedRefs';
+import { hasAuthenticatedHubAccountSession } from '../../services/supabaseClient';
 import { zCoreBridge } from '../../services/zCoreBridge';
+import {
+  connectWorkRoomRealtimeChannel,
+  downloadWorkFileOriginal,
+  ensureMyWorkRoomAndInvite,
+  fetchLocalWorkFilesNative,
+  fetchWorkRoomCloudPreview,
+  mountWorkSDriveNative,
+  openGhostSearchForWorkSDrive,
+  pullSyncRemoteWorkFilesToLocalSDrive,
+  readActiveWorkRoomInviteMeta,
+  readCachedMyWorkRoomMeta,
+  toggleHideWorkFileNative,
+  uploadWorkFileToNativeSDrive,
+  upsertWorkFilesToSupabase,
+  type WorkLoungeDocDto,
+  type WorkRoomPresenceMember,
+} from '../../services/workRoomSyncService';
 import { HostThreeBodyControlPanel, PLAN_BADGE_LABELS } from '../shared/loungeHelpers';
-
-interface WorkLoungeDocItem {
-  id: string;
-  folderId: string;
-  folderPath: string;
-  fileName: string;
-  ext: string;
-  sizeLabel: string;
-  updatedAt: string;
-  author: string;
-  lockedBy: string | null;
-  cacheSizeLabel: string;
-  summaryTitle: string;
-  matchedSnippet: string;
-  tableHeaders: string[];
-  tableRows: string[][];
-  fullTextPreview: string;
-  isImage?: boolean;
-  imageBase64?: string;
-}
 
 const WORK_LOUNGE_FOLDERS = [
   { id: 'all', name: 'S:\\ (업무 드라이브 전체)', count: 0, path: 'S:\\' },
@@ -38,181 +32,29 @@ const WORK_LOUNGE_FOLDERS = [
   { id: 'site', name: '04_현장시공_도면_미디어', count: 0, path: 'S:\\04_현장시공_도면_미디어' },
 ];
 
-const INITIAL_WORK_DOCS: WorkLoungeDocItem[] = [
-  {
-    id: 'work-doc-1',
-    folderId: 'quotes',
-    folderPath: 'S:\\02_견적서_단가표_엑셀',
-    fileName: '2026_상반기_을지로현장_실내건축_표준단가표_v4.xlsx',
-    ext: 'XLSX',
-    sizeLabel: '4.8 MB',
-    updatedAt: '방금 전 (14:22)',
-    author: '박과장 (공무팀)',
-    lockedBy: '박과장',
-    cacheSizeLabel: '29.4 KB 선행 캐싱됨',
-    summaryTitle: '[엑셀 시트 1~3 통합 내용 요약] 을지로 오피스 리모델링 철거·목공·전기 공정별 일위대가 및 협력사 네고 단가표',
-    matchedSnippet:
-      '표(Sheet2_철거단가) C14셀: "야간 방음 가설벽 설치 및 폐기물 반출 일식 — 단가 4,850,000원 (부자재 포함, 안전관리비 8% 별도)"',
-    tableHeaders: ['공종 코드', '세부 내역 (규격)', '단위', '2026 표준 단가', '비고 / 협력사'],
-    tableRows: [
-      ['DEM-101', '야간 방음 가설벽 설치 및 철거 반출', '일식', '4,850,000원', '성수건업 (야간 할증 포함)'],
-      ['CAR-204', '친환경 방염 석고보드 2P 시공 (9.5T)', '㎡', '38,500원', 'KCC 방염 인증필'],
-      ['ELC-309', '회의실 라인조명 매립 타공 및 배선', 'M', '64,000원', 'SMPS 안정기 별도'],
-      ['TOT-999', '총 직접공사비 합계 (VAT 별도)', '식', '68,420,000원', '대표님 결재 완료 (10% 네고 반영)'],
-    ],
-    fullTextPreview:
-      '1. 현장명: 을지로 3가 프라임타워 8층 오피스 인테리어 공사\n2. 발주처: (주)메타솔루션파트너스 / 담당: 이팀장\n3. 핵심 특기사항: 주간 소음 민원으로 인해 철거 및 폐기물 반출은 금요일 22:00 ~ 일요일 18:00 야간 집중 공정으로 진행함. 단가표 Sheet 2의 C14~F18 구간에 협력사 네고 단가(-7.5%)가 최종 반영되어 있음.',
-  },
-  {
-    id: 'work-doc-2',
-    folderId: 'contracts',
-    folderPath: 'S:\\01_계약서_법무문서',
-    fileName: '2026_외주개발_및_유지보수_표준도급계약서_최종.docx',
-    ext: 'DOCX',
-    sizeLabel: '2.1 MB',
-    updatedAt: '오늘 11:40',
-    author: '이팀장 (전략기획)',
-    lockedBy: '이팀장',
-    cacheSizeLabel: '28.1 KB 선행 캐싱됨',
-    summaryTitle: '[계약서 본문 + 별첨 과업지시서 내용 요약] 제14조 지체상금(1일 0.15%) 및 제19조 지식재산권 공동귀속 특약 조항',
-    matchedSnippet:
-      '본문 제14조(지체상금 및 위약금) 제2항: "을이 정당한 사유 없이 납기를 지연할 경우 매 지체일수당 계약금액의 1,000분의 1.5(0.15%)를 공제하며, 최대 한도는 총 계약금액의 10%로 한다."',
-    tableHeaders: ['조항', '핵심 규정 항목', '적용 기준 / 비율', '법무 검토 의견'],
-    tableRows: [
-      ['제4조 (대금지급)', '선금 30% / 중도금 40% / 잔금 30%', '검수 완료 후 7영업일 이내 현금', '적정 (표준하도급 준수)'],
-      ['제14조 (지체상금)', '납기 지연 시 일할 위약금', '1일당 0.15% (상한 10%)', '특약 반영 완료'],
-      ['제19조 (지재권)', '산출물 원본 소스코드 및 특허권', '갑·을 공동 소유 (제3자 라이선스 제한)', '대표님 확인 필'],
-    ],
-    fullTextPreview:
-      '제1조(목적) 본 계약은 갑이 위탁하는 클라우드 대체형 로컬 P2P 문서 검색 인프라 구축 과업을 을이 수행함에 있어 필요한 권리·의무를 규정한다.\n제14조(지체상금) 납기 지연 시 일 0.15%를 적용하되, 갑의 요구사항 변경으로 인한 일정 연장은 지체일수에서 제외한다.\n제21조(하자보수) 무상 하자보수 기간은 최종 검수 완료일로부터 12개월로 한다.',
-  },
-  {
-    id: 'work-doc-3',
-    folderId: 'tax',
-    folderPath: 'S:\\03_세금계산서_회계증빙',
-    fileName: '2026_3분기_거래처별_미수금_및_세금계산서_정산원장.xlsx',
-    ext: 'XLSX',
-    sizeLabel: '6.4 MB',
-    updatedAt: '어제 18:15',
-    author: '정실장 (재무회계)',
-    lockedBy: null,
-    cacheSizeLabel: '30.0 KB 선행 캐싱됨',
-    summaryTitle: '[회계원장 시트 내용 요약] 3분기 전자세금계산서 발행분 18건 중 미수금 2건(한빛테크·청담디자인) 입금 독촉 일정',
-    matchedSnippet:
-      '표(3Q_미수금현황) 행 8~9: "(주)한빛테크 잔금 13,200,000원 (세금계산서 09/25 발행, 입금약정일 10/25) · 청담디자인스튜디오 5,500,000원 (10/20 입금예정)"',
-    tableHeaders: ['거래처명', '품목 / 프로젝트', '공급가액 (VAT포함)', '계산서 발행일', '수금 상태'],
-    tableRows: [
-      ['(주)한빛테크', '본사 서버랙 및 내부망 구축 잔금', '13,200,000원', '2026-09-25', '미수 (10/25 입금약정)'],
-      ['청담디자인스튜디오', '브랜드 쇼룸 영상 납품 중도금', '5,500,000원', '2026-09-30', '미수 (10/20 입금예정)'],
-      ['성동메디컬의원', '원내 안내 키오스크 납품 완납', '24,200,000원', '2026-09-12', '수금완료 (09/18)'],
-    ],
-    fullTextPreview:
-      '■ 2026년 3분기 매출 세금계산서 총괄: 총 발행액 1억 8,450만 원 중 수금 완료 1억 6,580만 원 (수금률 89.8%).\n■ 미수 거래처 조치 내역: 한빛테크 재무팀 김차장 통화 완료(10월 25일 정기결제일 전액 입금 확정), 청담디자인스튜디오는 금주 금요일 오전 입금 예정.',
-  },
-  {
-    id: 'work-doc-4',
-    folderId: 'contracts',
-    folderPath: 'S:\\01_계약서_법무문서',
-    fileName: '2026_신규입사자_표준근로계약서_및_비밀유지서약서(NDA).hwp',
-    ext: 'HWP',
-    sizeLabel: '1.4 MB',
-    updatedAt: '2026-10-16',
-    author: '정실장 (인사총무)',
-    lockedBy: null,
-    cacheSizeLabel: '26.8 KB 선행 캐싱됨',
-    summaryTitle: '[한글(HWP) 본문 내용 요약] 포괄산정 연장근로수당 기준, 식대 비과세 20만 원 항목 및 영업비밀 보호 특약',
-    matchedSnippet:
-      '제6조(임금의 구성항목) 표2: "기본급 및 직무수당 외 식대 월 200,000원(비과세)을 별도 지급하며, 퇴직금 산정 기준은 근로기준법 제34조를 따른다."',
-    tableHeaders: ['급여 항목', '산정 기준', '과세 여부', '지급일'],
-    tableRows: [
-      ['기본급', '주 40시간 (월 209시간 기준)', '과세', '매월 25일'],
-      ['식대 보조비', '월 고정 지급 (200,000원)', '비과세 한도 적용', '매월 25일'],
-      ['자가운전보조금', '외근직 차량 업무 사용 시 (200,000원)', '비과세 요건 충족 시', '매월 25일'],
-    ],
-    fullTextPreview:
-      '본 근로계약서는 2026년 개정 노동관계법령을 준수하여 작성되었으며, 부속 서류인 [별첨1] 영업비밀 및 고객DB 보호 서약서(NDA)에 서명함으로써 효력이 발생한다.',
-  },
-  {
-    id: 'work-doc-5',
-    folderId: 'quotes',
-    folderPath: 'S:\\02_견적서_단가표_엑셀',
-    fileName: '성수동_팝업스토어_집기제작_비교견적서_3개사비교.pdf',
-    ext: 'PDF',
-    sizeLabel: '8.7 MB',
-    updatedAt: '2026-10-15',
-    author: '최대리 (공간기획)',
-    lockedBy: null,
-    cacheSizeLabel: '29.9 KB 선행 캐싱됨',
-    summaryTitle: '[스캔 PDF OCR + 표 내용 요약] A사(다온팩토리) vs B사(성수목공) vs C사(아크릴랩) 쇼케이스 제작 단가 및 납기 비교표',
-    matchedSnippet:
-      '비교표 4행: "B사(성수목공) — SUS 헤어라인 쇼케이스 + LED 간접조명 일체형 1,280만 원 (납기 10일, 무상 A/S 1년) ★최종 선정 추천"',
-    tableHeaders: ['비교 항목', 'A사 (다온팩토리)', 'B사 (성수목공 ★추천)', 'C사 (아크릴랩)'],
-    tableRows: [
-      ['총 견적금액 (VAT별도)', '14,500,000원', '12,800,000원 (최저가)', '15,200,000원'],
-      ['제작 및 설치 납기', '발주 후 14일', '발주 후 10일 (야간설치 포함)', '발주 후 12일'],
-      ['특장점 / 비고', '도장 마감 우수', '성수동 인근 공장으로 즉시 대응 가능', '특수 아크릴 가공 포함'],
-    ],
-    fullTextPreview:
-      '성수동 연무장길 팝업스토어 메인 디스플레이 집기 제작을 위해 3개 협력사로부터 입수한 견적서 스캔본을 AI OCR 및 표 구조 추출로 통합 비교함. B사(성수목공)가 단가(-170만 원 절감) 및 현장 긴급 대응력 면에서 가장 우수함.',
-  },
-  {
-    id: 'work-doc-6',
-    folderId: 'site',
-    folderPath: 'S:\\04_현장시공_도면_미디어',
-    fileName: '성수동_쇼룸_천장배선_및_분전반_시공도면_현장검수본.dwg',
-    ext: 'DWG',
-    sizeLabel: '18.2 MB',
-    updatedAt: '2026-10-14',
-    author: '강사원 (현장감리)',
-    lockedBy: null,
-    cacheSizeLabel: '27.5 KB 선행 캐싱됨',
-    summaryTitle: '[도면 주기(Note) & 레이어 텍스트 내용 요약] 메인 분전반(MCCB 100A) 증설 위치 및 에스프레소 머신 전용 단독 회로(30A) 배선 지시',
-    matchedSnippet:
-      '도면 우측 하단 특기시방 주기(Note #4): "바리스타 바(Bar) 하부 에스프레소 머신(7.2kW) 및 제빙기는 반드시 30A 누전차단기 단독 회로로 직결 시공할 것 (타 콘센트 분기 절대 금지)"',
-    tableHeaders: ['회로 번호', '부하 명칭', '차단기 용량', '전선 규격 / 배관'],
-    tableRows: [
-      ['M-01 (Main)', '쇼룸 통합 주분전반 메인', 'MCCB 4P 100A', 'F-CV 35sq / 강제전선관'],
-      ['P-04 (단독)', '에스프레소 머신 (7.2kW 전용)', 'ELCB 2P 30A (감도 30mA)', 'HIV 6.0sq 단독 직결'],
-      ['L-02 (조명)', '매장 메인 트랙조명 & 간판', 'ELCB 2P 20A', 'HIV 2.5sq / CD관 매립'],
-    ],
-    fullTextPreview:
-      '현장 감리 메모: 기존 건물 분전반 용량이 50A로 부족하여 한전 승압 신청 완료(100A). 바리스타존 커피머신 가동 시 차단기 트립 방지를 위해 P-04 단독 회로를 천장 트레이 경유하여 바 하부 점검구로 인출 완료함.',
-  },
-  {
-    id: 'work-doc-7',
-    folderId: 'site',
-    folderPath: 'S:\\04_현장시공_도면_미디어',
-    fileName: '성수동_쇼룸_분전반_30A단독차단기_시공완료_현장사진.jpg',
-    ext: 'JPG',
-    sizeLabel: '3.6 MB',
-    updatedAt: '2026-10-14',
-    author: '강사원 (현장감리)',
-    lockedBy: null,
-    cacheSizeLabel: '18.2 KB 시각 분석 캐싱됨',
-    summaryTitle: '[현장 시공 사진 AI 시각·OCR 분석] 분전반 내부 ELCB 30A 단독 차단기 라벨(P-04 에스프레소 전용) 및 접지선 결선 상태 검수 사진',
-    matchedSnippet:
-      '사진 시각·라벨 OCR 분석: "분전반 우측 하단 P-04 에스프레소 머신 전용 ELCB 2P 30A 누전차단기 장착 및 녹색 접지선(HIV 6.0sq) 직결 시공 확인 완료 (※ 업무방: 인물 여권 미발동 · 현장 사물/라벨만 분석)"',
-    tableHeaders: ['분석 항목', 'AI 시각·OCR 판독 결과', '검수 상태'],
-    tableRows: [
-      ['차단기 명판 OCR', 'ELCB 2P 30A (정격감도전류 30mA) · P-04 에스프레소 전용', '도면 일치 (정상)'],
-      ['배선 및 접지 시각 분석', 'HIV 6.0sq 흑·적·녹 3선 압착단자 체결 완료', '합격'],
-      ['인물 여권 보호 정책', '업무 공유방 내 인물 얼굴 여권 미발동 (검색 대상 제외)', '적용됨'],
-    ],
-    fullTextPreview:
-      '업무 공유방 사진 분석 리포트: 현장 시공 사진, 자재 명판, 영수증·증빙 사진의 사물 및 텍스트(OCR)는 100% 시각 분석되어 검색되지만, 귀신같이 인물 여권(얼굴 클러스터링·인물 바구니)은 업무 프라이버시 원칙에 따라 발동하지 않으며 검색 대상에서도 제외됩니다.',
-  },
-];
-
-
 export const WorkLoungeB2BHub: React.FC = () => {
-  const { layout, isStoreAppMode, setShowProModal, activatePricingPlan, subscribedLounges, faceClusters } =
-    useSaySeeStore();
+  const {
+    layout,
+    isStoreAppMode,
+    setShowProModal,
+    activatePricingPlan,
+    subscribedLounges,
+    faceClusters,
+    merlinAuth,
+    showToast,
+  } = useSaySeeStore();
   const isMobileOrStore = layout === 'mobile' || Boolean(isStoreAppMode) || isMobileOrStoreRuntime();
+
+  const [isZCoreConnected, setIsZCoreConnected] = useState<boolean>(zCoreBridge.isConnected);
+  const [sDriveMounted, setSDriveMounted] = useState<boolean>(false);
   const [viewMode, setViewMode] = useState<'semantic' | 'explorer'>('semantic');
-  const [driveTargetPath, setDriveTargetPath] = useState('D:\\Ghosti\\업무공유폴더_S');
+  const [driveTargetPath, setDriveTargetPath] = useState('S:\\ (내 PC 업무공유폴더_S)');
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedFolderId, setSelectedFolderId] = useState<string>('all');
-  const [docs, setDocs] = useState<WorkLoungeDocItem[]>([]);
+  const [localDocs, setLocalDocs] = useState<WorkLoungeDocDto[]>([]);
+  const [remoteDocs, setRemoteDocs] = useState<WorkLoungeDocDto[]>([]);
+  const [remoteLocksByRelPath, setRemoteLocksByRelPath] = useState<Record<string, string | null>>({});
+  const [simulatedLocksByDocId, setSimulatedLocksByDocId] = useState<Record<string, string | null>>({});
   const [selectedDocId, setSelectedDocId] = useState<string>('');
   const [isSidePeekOpen, setIsSidePeekOpen] = useState<boolean>(false);
   const [showBackupManager, setShowBackupManager] = useState<boolean>(false);
@@ -226,27 +68,46 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const [showMemberPermissions, setShowMemberPermissions] = useState<boolean>(() => !isMobileOrStoreRuntime());
   const [hiddenDocIds, setHiddenDocIds] = useState<string[]>([]);
   const [docActionNotice, setDocActionNotice] = useState<string | null>(null);
-  const [teamMembers, setTeamMembers] = useState<
-    Array<{
-      id: string;
-      name: string;
-      dept: string;
-      role: 'host' | 'editor' | 'viewer';
-      sDriveConnected: boolean;
-      statusText: string;
-    }>
-  >([
-    {
-      id: 'm-1',
-      name: '내 계정 (방장)',
-      dept: '마스터 PC 관리자',
-      role: 'host',
-      sDriveConnected: Boolean(zCoreBridge.isConnected),
-      statusText: zCoreBridge.isConnected
-        ? 'S:\\ 마스터 연결됨 (방장 1인 결제 · 전체 관리)'
-        : 'PC Z-코어 연결 시 S:\\ 드라이브가 자동 마운트됩니다',
-    },
-  ]);
+  const [inviteCopied, setInviteCopied] = useState<boolean>(false);
+  const [uploadingFiles, setUploadingFiles] = useState<boolean>(false);
+  const [lastSyncedToLocalCount, setLastSyncedToLocalCount] = useState<number>(0);
+  const [presencePeers, setPresencePeers] = useState<WorkRoomPresenceMember[]>([]);
+  const [activeWorkRoomId, setActiveWorkRoomId] = useState<string>(() => {
+    const inv = readActiveWorkRoomInviteMeta();
+    if (inv.hasWorkInvite && inv.roomId) return inv.roomId;
+    return readCachedMyWorkRoomMeta()?.roomId || '';
+  });
+
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const localDocsRef = useRef<WorkLoungeDocDto[]>([]);
+  const prevLockSignatureRef = useRef<string>('');
+  const prevCloudUpsertSigRef = useRef<string>('');
+  const realtimeRef = useRef<ReturnType<typeof connectWorkRoomRealtimeChannel> | null>(null);
+
+  const inviteMeta = useMemo(() => readActiveWorkRoomInviteMeta(), [activeWorkRoomId]);
+  const actorNickname = useMemo(() => {
+    if (typeof window !== 'undefined') {
+      const savedNick = (localStorage.getItem('ghosti_hub_user_nickname') || '').trim();
+      if (savedNick) return savedNick;
+    }
+    if (merlinAuth?.email) return merlinAuth.email.split('@')[0];
+    return inviteMeta.hasWorkInvite ? '초대 팀원' : '방장(나)';
+  }, [merlinAuth?.email, inviteMeta.hasWorkInvite]);
+
+  const peerIdRef = useRef<string>(
+    `peer_${Math.random().toString(36).slice(2, 10)}`
+  );
+
+  const [roleOverrides, setRoleOverrides] = useState<Record<string, 'editor' | 'viewer'>>({});
+
+  useEffect(() => {
+    setIsZCoreConnected(zCoreBridge.isConnected);
+    const unsub = zCoreBridge.subscribe((conn) => setIsZCoreConnected(conn));
+    void zCoreBridge.checkHealth();
+    return () => {
+      unsub();
+    };
+  }, []);
 
   const triggerNightSleepMode = () => {
     setNightSleepBannerPhase('visible');
@@ -258,113 +119,230 @@ export const WorkLoungeB2BHub: React.FC = () => {
     }, 3800);
   };
 
-  const workPlan = subscribedLounges.work;
-  const [folderCounts, setFolderCounts] = useState<Record<string, number>>({
-    all: 0,
-    root: 0,
-    contracts: 0,
-    quotes: 0,
-    tax: 0,
-    site: 0,
-  });
-
-  // 실제 S: 드라이브 폴더 스캔 및 문서 목록 실시간 동기화
-  const syncRealWorkFiles = () => {
-    fetch('/__work/files')
-      .then((r) => r.json())
-      .then((data: { ok: boolean; files: any[] }) => {
-        if (!data?.ok || !Array.isArray(data.files)) return;
-        const realFiles = data.files;
-        if (realFiles.length === 0) {
-          setFolderCounts({ all: 0, root: 0, contracts: 0, quotes: 0, tax: 0, site: 0 });
-          setDocs([]);
-          return;
-        }
-
-        // 실제 파일들을 WorkLoungeDocItem 구조로 매핑
-        const mappedRealDocs: WorkLoungeDocItem[] = realFiles.map((rf: any, idx: number) => {
-          const isGifOrImg = rf.isImage;
-          const defaultSnippet = isGifOrImg
-            ? `이미지/미디어 파일: ${rf.name} (${rf.sizeFormatted}) — 실시간 미리보기 가능`
-            : rf.previewText
-            ? rf.previewText.slice(0, 160).replace(/\n/g, ' ')
-            : `S: 드라이브 보관 파일 — ${rf.relPath}`;
-
-          return {
-            id: `real-file-${idx}-${rf.name}`,
-            folderId: rf.folderId || 'root',
-            folderPath: rf.folderPath || 'S:\\',
-            fileName: rf.name,
-            ext: rf.ext || 'FILE',
-            sizeLabel: rf.sizeFormatted || '0 KB',
-            updatedAt: rf.mtimeFormatted || '최근',
-            author: '멀린님 (로컬)',
-            lockedBy: null,
-            cacheSizeLabel: '실시간 로컬 동기화',
-            summaryTitle: isGifOrImg
-              ? `[이미지 파일 미리보기] ${rf.name}`
-              : `[문서 미리보기] ${rf.name}`,
-            matchedSnippet: defaultSnippet,
-            tableHeaders: rf.tableHeaders && rf.tableHeaders.length > 0 ? rf.tableHeaders : ['속성', '상세 정보'],
-            tableRows:
-              rf.tableRows && rf.tableRows.length > 0
-                ? rf.tableRows
-                : [
-                    ['파일명', rf.name],
-                    ['위치', rf.folderPath],
-                    ['용량', rf.sizeFormatted],
-                    ['최근 수정일', rf.mtimeFormatted],
-                  ],
-            fullTextPreview: rf.previewText || (isGifOrImg ? `[이미지 미리보기 지원] ${rf.name}` : `S: 드라이브 로컬 원본 파일입니다.`),
-            isImage: rf.isImage,
-            imageBase64: rf.imageBase64,
-          };
-        });
-
-        // [실전 전용 철칙]: 번들 목업(INITIAL_WORK_DOCS)을 섞지 않고 오직 실제 S: 드라이브 파일만 표시
-        const counts: Record<string, number> = { all: mappedRealDocs.length, root: 0, contracts: 0, quotes: 0, tax: 0, site: 0 };
-        mappedRealDocs.forEach((d) => {
-          if (counts[d.folderId] !== undefined) {
-            counts[d.folderId]++;
-          }
-        });
-        setFolderCounts(counts);
-        setDocs(mappedRealDocs);
-        if (mappedRealDocs.length > 0) {
-          setSelectedDocId((prev) => prev || mappedRealDocs[0].id);
-        }
-      })
-      .catch(() => {});
+  const openZCoreConnectModal = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
+    }
   };
 
-  // 라운지 진입 시 100% 무인 자동으로 연결 개통 및 윈도우 S: 드라이브 자동 연결 + 파일 스캔
+  const openLoginModal = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('openLoginModal'));
+    }
+  };
+
+  const syncRealWorkFiles = useCallback(async () => {
+    const res = await fetchLocalWorkFilesNative({
+      includeSyncBase64: Boolean(activeWorkRoomId),
+      author: actorNickname,
+    });
+    if (!res.ok) return;
+    setSDriveMounted(res.mounted);
+    if (res.targetDir) {
+      setDriveTargetPath(res.targetDir);
+    }
+    localDocsRef.current = res.docs;
+    setLocalDocs(res.docs);
+
+    const lockMap: Record<string, string | null> = {};
+    for (const d of res.docs) {
+      if (d.lockedBy) lockMap[d.relPath] = d.lockedBy;
+    }
+    const lockSig = JSON.stringify(lockMap);
+    if (lockSig !== prevLockSignatureRef.current) {
+      prevLockSignatureRef.current = lockSig;
+      realtimeRef.current?.broadcastLocks(lockMap);
+    }
+
+    if (activeWorkRoomId && res.docs.length > 0) {
+      const cloudSig = res.docs
+        .map((d) => `${d.relPath}:${d.sha256}:${d.lockedBy || ''}`)
+        .join('|');
+      if (cloudSig !== prevCloudUpsertSigRef.current) {
+        prevCloudUpsertSigRef.current = cloudSig;
+        realtimeRef.current?.broadcastSnapshot(res.docs);
+        void upsertWorkFilesToSupabase({
+          roomId: activeWorkRoomId,
+          docs: res.docs,
+          actorNickname,
+        });
+      }
+    }
+  }, [activeWorkRoomId, actorNickname]);
+
+  // Z-코어 연결 시 S: 드라이브 무인 마운트 + 3초 주기 파일·오피스 잠금(~$) 실시간 감시
   useEffect(() => {
     void verifyHybridP2PBridgeConnection({
-      roomId: 'lounge-work-b2b',
+      roomId: activeWorkRoomId || 'lounge-work-b2b',
       simulateSymmetricNatBlock: false,
     });
 
-    if (!isMobileOrStoreRuntime()) {
-      void fetch('/__work/s-drive', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ action: 'mount', openExplorer: false }),
-      })
-        .then((r) => r.json())
-        .then((data: { targetDir?: string }) => {
-          if (data?.targetDir) setDriveTargetPath(data.targetDir);
-        })
-        .catch(() => {});
+    if (isMobileOrStore) return undefined;
 
-      syncRealWorkFiles();
-      const interval = setInterval(syncRealWorkFiles, 4000);
-      return () => clearInterval(interval);
+    if (isZCoreConnected || window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+      void mountWorkSDriveNative({ action: 'mount', openExplorer: false }).then((mRes) => {
+        if (mRes.ok) {
+          setSDriveMounted(Boolean(mRes.mounted));
+          if (mRes.targetDir) setDriveTargetPath(mRes.targetDir);
+        }
+        void syncRealWorkFiles();
+      });
+
+      const interval = window.setInterval(() => {
+        void syncRealWorkFiles();
+      }, 3000);
+      return () => window.clearInterval(interval);
     }
     return undefined;
-  }, []);
+  }, [isZCoreConnected, isMobileOrStore, activeWorkRoomId, syncRealWorkFiles]);
+
+  // 로그인한 방장이 업무방 진입 시 내 고유 업무방 ID 자동 확보
+  useEffect(() => {
+    if (inviteMeta.hasWorkInvite || activeWorkRoomId || !hasAuthenticatedHubAccountSession()) return;
+    void ensureMyWorkRoomAndInvite({
+      roomTitle: '💼 우리팀 업무 공유방 (S:)',
+      hostNickname: actorNickname,
+    }).then((ensured) => {
+      if (ensured.ok && ensured.roomId) {
+        setActiveWorkRoomId(ensured.roomId);
+      }
+    });
+  }, [inviteMeta.hasWorkInvite, activeWorkRoomId, actorNickname]);
+
+  // ?workRoom=...&token=... 초대 링크 접속 시: Z-코어 설치 전에도 즉시 클라우드 24시간 웹 미리보기 로드
+  useEffect(() => {
+    if (!inviteMeta.hasWorkInvite || !inviteMeta.inviteToken) return;
+    void fetchWorkRoomCloudPreview(inviteMeta.inviteToken).then((res) => {
+      if (res.ok && res.docs.length > 0) {
+        setRemoteDocs(res.docs);
+      }
+    });
+  }, [inviteMeta.hasWorkInvite, inviteMeta.inviteToken]);
+
+  // 방장 ↔ 팀원 실시간 파일·잠금(~$) 동기화 채널 연결
+  useEffect(() => {
+    if (!activeWorkRoomId) return undefined;
+    const handle = connectWorkRoomRealtimeChannel({
+      roomId: activeWorkRoomId,
+      peerId: peerIdRef.current,
+      nickname: actorNickname,
+      role: inviteMeta.hasWorkInvite ? 'editor' : 'host',
+      getLocalDocs: () => localDocsRef.current,
+      onRemoteSnapshot: (incomingDocs) => {
+        setRemoteDocs(incomingDocs);
+      },
+      onRemoteLockMap: (locks) => {
+        setRemoteLocksByRelPath(locks);
+      },
+      onPresenceMembers: (members) => {
+        setPresencePeers(members);
+      },
+    });
+    realtimeRef.current = handle;
+    return () => {
+      handle.dispose();
+      realtimeRef.current = null;
+    };
+  }, [activeWorkRoomId, actorNickname, inviteMeta.hasWorkInvite]);
+
+  // 팀원 PC에서 Z-코어가 켜지는 즉시 원격 공유 업무파일들을 내 S:\ 탐색기로 자동 동기화
+  useEffect(() => {
+    if (!isZCoreConnected || remoteDocs.length === 0) return;
+    const missingBinaryPaths = remoteDocs
+      .filter((rd) => !rd.inlineSyncBase64 && !localDocs.some((ld) => ld.relPath === rd.relPath))
+      .map((rd) => rd.relPath);
+    for (const rel of missingBinaryPaths.slice(0, 10)) {
+      realtimeRef.current?.requestBinaryFile(rel);
+    }
+
+    void pullSyncRemoteWorkFilesToLocalSDrive(remoteDocs).then((pulled) => {
+      if (pulled.ok && pulled.syncedCount > 0) {
+        setLastSyncedToLocalCount((prev) => prev + pulled.syncedCount);
+        showToast(`⚡ 공유 업무 문서 ${pulled.syncedCount}건이 내 컴퓨터 [S:\\ 드라이브]로 자동 동기화되었습니다!`);
+        void syncRealWorkFiles();
+      }
+    });
+  }, [isZCoreConnected, remoteDocs, localDocs, showToast, syncRealWorkFiles]);
+
+  // 로컬 S:\ 파일 + 원격(?workRoom) 파일 통합 및 실시간 잠금(~$) 상태 병합
+  const docs = useMemo<WorkLoungeDocDto[]>(() => {
+    const byRel = new Map<string, WorkLoungeDocDto>();
+    for (const rd of remoteDocs) {
+      byRel.set(rd.relPath, rd);
+    }
+    for (const ld of localDocs) {
+      const prev = byRel.get(ld.relPath);
+      byRel.set(ld.relPath, {
+        ...ld,
+        author: ld.author || prev?.author || actorNickname,
+        lockedBy: ld.lockedBy || remoteLocksByRelPath[ld.relPath] || prev?.lockedBy || null,
+      });
+    }
+    return Array.from(byRel.values()).map((d) => ({
+      ...d,
+      lockedBy:
+        simulatedLocksByDocId[d.id] !== undefined
+          ? simulatedLocksByDocId[d.id]
+          : d.lockedBy || remoteLocksByRelPath[d.relPath] || null,
+    }));
+  }, [localDocs, remoteDocs, remoteLocksByRelPath, simulatedLocksByDocId, actorNickname]);
+
+  const folderCounts = useMemo(() => {
+    const visible = docs.filter((d) => !hiddenDocIds.includes(d.id));
+    const counts: Record<string, number> = {
+      all: visible.length,
+      root: 0,
+      contracts: 0,
+      quotes: 0,
+      tax: 0,
+      site: 0,
+    };
+    for (const d of visible) {
+      if (counts[d.folderId] !== undefined) {
+        counts[d.folderId] += 1;
+      }
+    }
+    return counts;
+  }, [docs, hiddenDocIds]);
+
+  const teamMembers = useMemo(() => {
+    const baseHost = {
+      id: 'm-self',
+      name: inviteMeta.hasWorkInvite
+        ? `${inviteMeta.hostNickname} (방장)`
+        : `${actorNickname} (방장)`,
+      dept: inviteMeta.hasWorkInvite ? '공유 업무방 마스터' : '마스터 PC 관리자',
+      role: 'host' as const,
+      sDriveConnected: inviteMeta.hasWorkInvite ? true : isZCoreConnected,
+      statusText:
+        !inviteMeta.hasWorkInvite && !isZCoreConnected
+          ? 'PC 엔진(Z코어) 연결 시 S:\\ 드라이브가 자동 마운트됩니다'
+          : 'S:\\ 마스터 연결됨 (방장 1인 결제 · 전체 관리)',
+    };
+    const extraPeers = presencePeers
+      .filter((p) => p.peerId !== peerIdRef.current || inviteMeta.hasWorkInvite)
+      .map((p) => {
+        const assignedRole = roleOverrides[p.peerId] || (p.role === 'host' ? 'editor' : p.role);
+        return {
+          id: p.peerId,
+          name: p.peerId === peerIdRef.current ? `${p.nickname} (나)` : p.nickname,
+          dept: p.sDriveConnected ? '탐색기 S:\\ 실시간 연결' : '웹 미리보기 접속 중',
+          role: assignedRole,
+          sDriveConnected: p.sDriveConnected,
+          statusText: p.sDriveConnected
+            ? assignedRole === 'editor'
+              ? 'S:\\ 실시간 동기화됨 (초대 팀원 평생 0원)'
+              : 'S:\\ 읽기 전용 연결됨 (초대 팀원 평생 0원)'
+            : '웹 미리보기 열람 중 (Z코어 연결 시 S:\\ 즉시 동기화)',
+        };
+      });
+    return [baseHost, ...extraPeers];
+  }, [inviteMeta, actorNickname, isZCoreConnected, presencePeers, roleOverrides]);
+
+  const workPlan = subscribedLounges.work;
 
   // 업무 공유(work)에서는 귀신같이 인물 여권(얼굴 클러스터링·인물 별명)이 발동하지 않으며 검색 대상에서도 제외됨
-  const passportPersonTokens = React.useMemo(() => {
+  const passportPersonTokens = useMemo(() => {
     const s = new Set<string>();
     for (const fc of faceClusters) {
       if (fc.registeredName?.trim()) s.add(fc.registeredName.trim().toLowerCase());
@@ -380,43 +358,127 @@ export const WorkLoungeB2BHub: React.FC = () => {
     return s;
   }, [faceClusters]);
 
-  // 어절(단어) 단위 스마트 매칭: "지체상금 0.15%" 클릭 시 "지체상금(1일 0.15%)"도 100% 매칭 (단, 여권 인물명은 검색 제외)
-  const filteredDocs = docs.filter((doc) => {
-    const folderMatch =
-      viewMode === 'semantic'
-        ? true
-        : selectedFolderId === 'all' || doc.folderId === selectedFolderId;
-    if (!folderMatch) return false;
-    const q = searchQuery.trim().toLowerCase();
-    if (!q) return true;
-    const rawTokens = q.split(/\s+/).filter(Boolean);
-    const nonPassportTokens = rawTokens.filter((tk) => !passportPersonTokens.has(tk));
-    if (nonPassportTokens.length === 0) return false;
-    const combinedText = [
-      doc.fileName,
-      doc.summaryTitle,
-      doc.matchedSnippet,
-      doc.fullTextPreview,
-      ...doc.tableRows.flat(),
-    ]
-      .join(' ')
-      .toLowerCase();
-    return nonPassportTokens.every((token) => combinedText.includes(token));
-  });
+  const filteredDocs = useMemo(() => {
+    return docs.filter((doc) => {
+      if (hiddenDocIds.includes(doc.id)) return false;
+      const folderMatch =
+        viewMode === 'semantic'
+          ? true
+          : selectedFolderId === 'all' || doc.folderId === selectedFolderId;
+      if (!folderMatch) return false;
+      const q = searchQuery.trim().toLowerCase();
+      if (!q) return true;
+      const rawTokens = q.split(/\s+/).filter(Boolean);
+      const nonPassportTokens = rawTokens.filter((tk) => !passportPersonTokens.has(tk));
+      if (nonPassportTokens.length === 0) return false;
+      const combinedText = [
+        doc.fileName,
+        doc.summaryTitle,
+        doc.matchedSnippet,
+        doc.fullTextPreview,
+        ...doc.tableHeaders,
+        ...doc.tableRows.flat(),
+      ]
+        .join(' ')
+        .toLowerCase();
+      return nonPassportTokens.every((token) => combinedText.includes(token));
+    });
+  }, [docs, hiddenDocIds, viewMode, selectedFolderId, searchQuery, passportPersonTokens]);
 
-  // 검색 결과(filteredDocs) 중에서 우선 선택하여 좌측 리스트와 우측 프리뷰가 항상 100% 동기화되도록 보장
   const selectedDoc =
     filteredDocs.find((d) => d.id === selectedDocId) || filteredDocs[0] || docs[0];
 
   const handleToggleLockSimulation = (docId: string, e?: React.MouseEvent) => {
     if (e) e.stopPropagation();
-    setDocs((prev) =>
-      prev.map((d) => {
-        if (d.id !== docId) return d;
-        const nextLock = d.lockedBy ? null : '김대표(나)';
-        return { ...d, lockedBy: nextLock };
-      })
+    setSimulatedLocksByDocId((prev) => {
+      const cur = prev[docId];
+      return {
+        ...prev,
+        [docId]: cur ? null : `${actorNickname}(나)`,
+      };
+    });
+  };
+
+  const handleCopyWorkInviteLink = async () => {
+    if (!hasAuthenticatedHubAccountSession()) {
+      showToast('🔒 팀원 초대 링크를 발급하려면 먼저 이메일 로그인(10초 인증)을 완료해 주세요!');
+      openLoginModal();
+      return;
+    }
+    const ensured = await ensureMyWorkRoomAndInvite({
+      roomTitle: '💼 우리팀 업무 공유방 (S:)',
+      hostNickname: actorNickname,
+    });
+    if (!ensured.ok || !ensured.inviteUrl || !ensured.roomId) {
+      showToast('⚠️ 업무방 초대 링크 발급 중 일시적 오류가 발생했습니다. 다시 눌러주세요.');
+      return;
+    }
+    setActiveWorkRoomId(ensured.roomId);
+    if (localDocsRef.current.length > 0) {
+      void upsertWorkFilesToSupabase({
+        roomId: ensured.roomId,
+        docs: localDocsRef.current,
+        actorNickname,
+      });
+    }
+    try {
+      await navigator.clipboard?.writeText(ensured.inviteUrl);
+    } catch {
+      /* ignore */
+    }
+    setInviteCopied(true);
+    window.setTimeout(() => setInviteCopied(false), 2800);
+    showToast(
+      '💌 업무 공유방(S:) 초대 링크가 복사되었습니다! 팀원이 클릭하면 엔진 설치 전에는 웹 미리보기가 즉시 보이고, Z코어 연결 즉시 S:\\ 탐색기로 동기화됩니다.'
     );
+  };
+
+  const handleOpenGhostSearchWindow = async () => {
+    if (!isZCoreConnected) {
+      showToast('⚡ PC 엔진(Z코어)을 연결하면 S: 드라이브 계약서·단가표 본문을 열지 않고 0.1초 만에 귀신검색창으로 소환합니다!');
+      openZCoreConnectModal();
+      return;
+    }
+    const opened = await openGhostSearchForWorkSDrive(searchQuery);
+    if (opened) {
+      showToast('👻 S: 드라이브 문서·사진 본문이 직결된 [귀신검색창]을 화면 맨 앞에 띄웠습니다!');
+    }
+  };
+
+  const handleOpenSDriveExplorer = async () => {
+    if (!isZCoreConnected) {
+      openZCoreConnectModal();
+      return;
+    }
+    const res = await mountWorkSDriveNative({ action: 'mount', openExplorer: true });
+    if (res.ok) {
+      setSDriveMounted(Boolean(res.mounted));
+      showToast('📂 윈도우 탐색기 [업무 드라이브 (S:\\)] 폴더를 열었습니다!');
+    }
+  };
+
+  const handleUploadFiles = async (fileList: FileList | null) => {
+    if (!fileList || fileList.length === 0) return;
+    if (!isZCoreConnected && window.location.hostname !== 'localhost' && window.location.hostname !== '127.0.0.1') {
+      showToast('⚡ 업무 원본 파일을 S:\\ 드라이브에 넣으려면 먼저 PC 엔진(Z코어)을 연결해 주세요!');
+      openZCoreConnectModal();
+      return;
+    }
+    setUploadingFiles(true);
+    let okCount = 0;
+    for (const file of Array.from(fileList)) {
+      const uploaded = await uploadWorkFileToNativeSDrive({
+        file,
+        folderId: selectedFolderId,
+        author: actorNickname,
+      });
+      if (uploaded.ok) okCount += 1;
+    }
+    setUploadingFiles(false);
+    if (okCount > 0) {
+      showToast(`✅ 업무 파일 ${okCount}건이 S:\\ 드라이브 및 팀원 공유 목록에 즉시 반영되었습니다!`);
+      await syncRealWorkFiles();
+    }
   };
 
   const QUICK_WORK_QUERIES = [
@@ -429,8 +491,71 @@ export const WorkLoungeB2BHub: React.FC = () => {
   ];
 
   return (
-    <section className="flex flex-col gap-5">
-      {/* 1. 노션형 보더리스(Borderless) 업무 도화지 헤더 + 검색창 + 폴더 필터 칩 */}
+    <section
+      onDragOver={(e) => {
+        if (!isMobileOrStore) e.preventDefault();
+      }}
+      onDrop={(e) => {
+        if (isMobileOrStore) return;
+        if (e.dataTransfer?.files && e.dataTransfer.files.length > 0) {
+          e.preventDefault();
+          void handleUploadFiles(e.dataTransfer.files);
+        }
+      }}
+      className="flex flex-col gap-5"
+    >
+      <input
+        ref={fileInputRef}
+        type="file"
+        multiple
+        className="hidden"
+        onChange={(e) => {
+          void handleUploadFiles(e.target.files);
+          e.target.value = '';
+        }}
+      />
+
+      {/* 초대 링크(?workRoom=...) 진입 시: 엔진 설치 전 웹 미리보기 & 엔진 설치 즉시 S:\ 동기화 안내 배너 */}
+      {inviteMeta.hasWorkInvite && (
+        <div className="p-4 rounded-2xl bg-gradient-to-r from-cyan-950/85 via-zinc-950 to-emerald-950/75 border border-cyan-400/50 flex flex-wrap items-center justify-between gap-3 shadow-md">
+          <div className="flex flex-col gap-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="px-2.5 py-0.5 rounded-lg bg-cyan-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
+                💼 {inviteMeta.hostNickname}님이 초대한 [{inviteMeta.roomTitle}]
+              </span>
+              <span className="text-[11.5px] text-emerald-300 font-bold">
+                {isZCoreConnected
+                  ? `✓ 내 PC 엔진(Z코어) 연결됨 · 윈도우 탐색기 S:\\ 실시간 동기화 가동 중${lastSyncedToLocalCount > 0 ? ` (+${lastSyncedToLocalCount}건 동기화됨)` : ''}`
+                  : '👀 PC 엔진 설치 전 — 웹 미리보기 & 실시간 열람 잠금(🔒) 확인 가능'}
+              </span>
+            </div>
+            <p className="text-[12px] text-zinc-300 break-keep">
+              {isZCoreConnected
+                ? '방장과 팀원이 올린 업무 파일이 내 컴퓨터 [탐색기 S:\\] 폴더로 자동 동기화되며, 바탕화면·탐색기 빈 공간에서 Ctrl+0 한 번이면 귀신검색창으로 0.1초 본문 검색이 가능합니다.'
+                : '지금 바로 브라우저에서 공유 문서·표 미리보기와 누가 수정 중(🔒)인지 확인할 수 있으며, 우측 버튼으로 PC 엔진(Z코어)을 켜는 즉시 내 윈도우 [탐색기 S:\\]로 실제 파일이 동기화됩니다.'}
+            </p>
+          </div>
+          {!isMobileOrStore && (
+            <button
+              type="button"
+              onClick={() => {
+                if (isZCoreConnected) {
+                  void handleOpenSDriveExplorer();
+                } else {
+                  openZCoreConnectModal();
+                }
+              }}
+              className="px-3.5 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-label-sm text-[12px] font-black cursor-pointer shrink-0 shadow-sm"
+            >
+              {isZCoreConnected
+                ? '📂 동기화된 내 탐색기 S:\\ 바로 열기'
+                : '⚡ PC 엔진(Z코어) 켜고 내 탐색기 S:\\로 동기화'}
+            </button>
+          )}
+        </div>
+      )}
+
+      {/* 1. 노션형 보더리스(Borderless) 업무 도화지 헤더 + 귀신검색창 직결 + 검색창 + 폴더 필터 칩 */}
       <div className="flex flex-col gap-3.5">
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <div className="flex flex-wrap items-center gap-2.5">
@@ -444,18 +569,26 @@ export const WorkLoungeB2BHub: React.FC = () => {
             )}
             <span
               className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[11.5px] font-bold ${
-                zCoreBridge.isConnected
+                isZCoreConnected
                   ? 'bg-emerald-500/10 border-emerald-400/25 text-emerald-300'
+                  : inviteMeta.hasWorkInvite && docs.length > 0
+                  ? 'bg-cyan-500/15 border-cyan-400/35 text-cyan-200'
                   : 'bg-zinc-900 border-white/15 text-zinc-300'
               }`}
             >
               <span
                 className={`w-1.5 h-1.5 rounded-full ${
-                  zCoreBridge.isConnected ? 'bg-emerald-400' : 'bg-zinc-500'
+                  isZCoreConnected
+                    ? 'bg-emerald-400'
+                    : inviteMeta.hasWorkInvite && docs.length > 0
+                    ? 'bg-cyan-400'
+                    : 'bg-zinc-500'
                 }`}
               />
-              {zCoreBridge.isConnected
-                ? `사무실 PC 연결됨 · 팀원 ${teamMembers.length}명`
+              {isZCoreConnected
+                ? `${sDriveMounted ? 'S:\\ 마운트 완료' : '사무실 PC 연결됨'} · 팀원 ${teamMembers.length}명 · ${docs.length}건`
+                : inviteMeta.hasWorkInvite
+                ? `웹 미리보기 연결됨 · ${docs.length}건`
                 : '연결된 사무실 PC 없음 · 0건'}
             </span>
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-400/25 text-[11px] text-cyan-300 font-bold">
@@ -464,6 +597,46 @@ export const WorkLoungeB2BHub: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            {!isMobileOrStore && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => void handleOpenGhostSearchWindow()}
+                  className="px-3.5 py-1.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[12px] font-black cursor-pointer flex items-center gap-1.5 shadow-sm transition-all"
+                  title="탐색기로 찾지 말고 독립 귀신검색창을 띄워 S: 드라이브 계약서·단가표·한글(HWP) 본문을 열지 않고 0.1초 만에 소환합니다 (바탕화면·탐색기 빈 공간 Ctrl+0 1회와 동일)"
+                >
+                  <span>👻 귀신검색창으로 S: 문서 1초 검색</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleOpenSDriveExplorer()}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-cyan-400/45 text-cyan-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1"
+                >
+                  <span>📂 탐색기 S:\ 열기</span>
+                </button>
+                <button
+                  type="button"
+                  disabled={uploadingFiles}
+                  onClick={() => fileInputRef.current?.click()}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-100 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1 disabled:opacity-50"
+                >
+                  <span>{uploadingFiles ? '⏳ 업로드 중...' : '📤 업무 파일 추가'}</span>
+                </button>
+              </>
+            )}
+
+            <button
+              type="button"
+              onClick={() => void handleCopyWorkInviteLink()}
+              className={`px-3 py-1.5 rounded-xl border font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1 transition-all ${
+                inviteCopied
+                  ? 'bg-emerald-400 text-zinc-950 border-emerald-300'
+                  : 'bg-zinc-900 hover:bg-zinc-800 border-amber-400/50 text-amber-300'
+              }`}
+            >
+              <span>{inviteCopied ? '✓ 업무방 초대 링크 복사됨!' : '💌 팀원 초대 링크 복사'}</span>
+            </button>
+
             <button
               type="button"
               onClick={() => setShowMemberPermissions((v) => !v)}
@@ -517,7 +690,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 🌙 Ghosti 초절전·무소음 야간모드가 가동되었습니다 — 편히 퇴근·취침하세요!
               </span>
               <span className="text-[12px] text-zinc-300">
-                ✓ 램(RAM) 유휴 캐시 정리 완료 · ✓ CPU 15W 초저전력 대기 전환(한 달 전기요금 약 1,800원) · <strong className="text-amber-300">이 안내 메시지는 서서히 사라진 뒤 모니터 전원이 꺼집니다...</strong>
+                ✓ 램(RAM) 유휴 캐시 정리 완료 · ✓ CPU 15W 초저전력 대기 전환(한 달 전기요금 약 1,800원) ·{' '}
+                <strong className="text-amber-300">
+                  이 안내 메시지는 서서히 사라진 뒤 모니터 전원이 꺼집니다...
+                </strong>
               </span>
             </div>
             <span className="px-3 py-1 rounded-full bg-indigo-500/30 border border-indigo-300/50 text-indigo-100 font-mono text-[11px] font-bold">
@@ -535,7 +711,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
                   🛡️ 클라우드 불신 제로! 공용 업무 PC(S: 드라이브 1대) + 백업 PC 1·2호 실시간 미러링 &amp; 랜섬웨어 서킷 브레이커
                 </span>
                 <span className="text-[12px] text-zinc-300">
-                  구글 드라이브·네이버 MYBOX 동기화 폴더 위에 그대로 중첩 지정해도 충돌 없는 <code className="text-emerald-300">%LOCALAPPDATA%\Merlin\</code> 외부 격리(Zero-Footprint) 구조이며, 1분 내 30개 이상 대량 삭제·미끼 파일 변조 감지 시 <strong>백업 PC 1·2호 미러링을 0.01초 만에 즉시 차단</strong>해 랜섬웨어를 완벽 방어합니다.
+                  구글 드라이브·네이버 MYBOX 동기화 폴더 위에 그대로 중첩 지정해도 충돌 없는{' '}
+                  <code className="text-emerald-300">%LOCALAPPDATA%\Merlin\</code> 외부 격리(Zero-Footprint) 구조이며, 1분 내 30개 이상 대량 삭제·미끼 파일 변조 감지 시{' '}
+                  <strong>백업 PC 1·2호 미러링을 0.01초 만에 즉시 차단</strong>해 랜섬웨어를 완벽 방어합니다.
                 </span>
               </div>
               <span className="px-2.5 py-1 rounded-lg bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
@@ -564,7 +742,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                     onClick={() =>
                       setMasterWorkPcName((prev) =>
                         prev.includes('사무실')
-                          ? '대표님 메인 워크스테이션 (S: 드라이브)'
+                          ? '메인 워크스테이션 (S: 드라이브)'
                           : '사무실 메인 공용 PC (S: 드라이브)'
                       )
                     }
@@ -659,7 +837,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
           </div>
         )}
 
-        {/* 👥 팀원 권한 & S: 드라이브 연결 설정 화면 (멤버별 읽기/편집/방장 권한 및 0원 무료 연결 상태) */}
+        {/* 👥 팀원 권한 & S: 드라이브 연결 설정 화면 */}
         {showMemberPermissions && (
           <div className="p-4 rounded-2xl bg-[#18181B] border border-cyan-400/45 flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
@@ -674,13 +852,13 @@ export const WorkLoungeB2BHub: React.FC = () => {
                     </>
                   ) : (
                     <>
-                      📢 <strong className="text-emerald-300">방장 1명만 구독하면 초대받은 가족·모임원·팀원은 평생 0원(무료)</strong>으로 윈도우 S: 드라이브에 직결되며, 멤버별로 편집·읽기 전용·숨기기 권한을 즉시 변경할 수 있습니다.
+                      📢 <strong className="text-emerald-300">방장 1명만 구독하면 초대받은 팀원은 평생 0원(무료)</strong>으로 윈도우 S: 드라이브에 직결되며, 엑셀·한글 열람 시 <code className="text-amber-300">~$</code> 잠금이 전 직원 화면에 실시간 표시됩니다.
                     </>
                   )}
                 </span>
               </div>
               <span className="px-2.5 py-1 rounded-lg bg-cyan-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                {zCoreBridge.isConnected
+                {isZCoreConnected
                   ? `✓ 팀원 ${teamMembers.length}명 S:\\ 연결됨`
                   : '연결된 사무실 PC 대기 중'}
               </span>
@@ -727,20 +905,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                         value={member.role}
                         onChange={(e) => {
                           const nextRole = e.target.value as 'editor' | 'viewer';
-                          setTeamMembers((prev) =>
-                            prev.map((m) =>
-                              m.id === member.id
-                                ? {
-                                    ...m,
-                                    role: nextRole,
-                                    statusText:
-                                      nextRole === 'editor'
-                                        ? 'S:\\ 실시간 연결됨 (초대 팀원 평생 0원)'
-                                        : 'S:\\ 읽기 전용 연결됨 (초대 팀원 평생 0원)',
-                                  }
-                                : m
-                            )
-                          );
+                          setRoleOverrides((prev) => ({ ...prev, [member.id]: nextRole }));
                         }}
                         className="px-2 py-1 rounded-lg bg-zinc-900 border border-cyan-400/40 text-white text-[11px] font-bold shrink-0 cursor-pointer"
                       >
@@ -755,7 +920,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
           </div>
         )}
 
-        {/* 노션형 깔끔한 검색창 + 예시 검색어 칩 */}
+        {/* 노션형 깔끔한 검색창 + 귀신검색창 연동 안내 + 폴더 필터 알약 */}
         <div className="flex flex-col gap-2">
           <div className="flex items-center gap-2 bg-[#18181B] border border-white/15 focus-within:border-primary-container rounded-2xl px-4 py-2.5 shadow-sm transition-colors">
             <span className="text-zinc-400 text-sm">🔍</span>
@@ -766,10 +931,16 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 setSearchQuery(e.target.value);
                 if (e.target.value.trim()) setIsSidePeekOpen(true);
               }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && e.ctrlKey && !isMobileOrStore) {
+                  e.preventDefault();
+                  void handleOpenGhostSearchWindow();
+                }
+              }}
               placeholder={
-                isMobileOrStoreRuntime()
+                isMobileOrStore
                   ? '계약서 조항, 단가표 숫자, 시공 사진 검색'
-                  : '계약서 조항, 엑셀 단가표 숫자, 현장 시공 사진(차단기·배선·자재 라벨), 파일명 검색... (인물 여권 제외)'
+                  : '계약서 조항, 엑셀 단가표 숫자, 한글(HWP), 현장 시공 사진 검색... (인물 여권 제외 · 바탕화면/S: 탐색기 빈 곳 Ctrl+0 1회로도 즉시 검색)'
               }
               className="w-full bg-transparent text-white placeholder-zinc-500 font-body-sm text-[13.5px] focus:outline-none"
             />
@@ -784,7 +955,6 @@ export const WorkLoungeB2BHub: React.FC = () => {
             )}
           </div>
 
-          {/* 1줄 폴더 필터 알약 + 예시 검색어 */}
           <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
             <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
               {WORK_LOUNGE_FOLDERS.map((folder) => {
@@ -807,7 +977,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
                     }`}
                   >
                     <span>
-                      {folder.id === 'all' ? '💽 전체' : folder.id === 'root' ? '📄 S:\\ 최상단' : `📁 ${folder.name.replace(/^\d+_/, '')}`}
+                      {folder.id === 'all'
+                        ? '💽 전체'
+                        : folder.id === 'root'
+                        ? '📄 S:\\ 최상단'
+                        : `📁 ${folder.name.replace(/^\d+_/, '')}`}
                     </span>
                     <span
                       className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
@@ -821,161 +995,199 @@ export const WorkLoungeB2BHub: React.FC = () => {
               })}
             </div>
 
-              {docs.length > 0 && (
-                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-slate-500 dark:text-zinc-400">
-                  <span>빠른 검색:</span>
-                  {QUICK_WORK_QUERIES.map((q) => (
-                    <button
-                      key={q}
-                      type="button"
-                      onClick={() => {
-                        const nextQ = searchQuery === q ? '' : q;
-                        setSearchQuery(nextQ);
-                        if (nextQ) {
-                          setViewMode('semantic');
-                          const tokens = nextQ.toLowerCase().split(/\s+/).filter(Boolean);
-                          const matched = docs.find((d) => {
-                            const text = [
-                              d.fileName,
-                              d.summaryTitle,
-                              d.matchedSnippet,
-                              d.fullTextPreview,
-                              ...d.tableRows.flat(),
-                            ]
-                              .join(' ')
-                              .toLowerCase();
-                            return tokens.every((t) => text.includes(t));
-                          });
-                          if (matched) {
-                            setSelectedDocId(matched.id);
-                            setIsSidePeekOpen(true);
-                          }
+            {docs.length > 0 && (
+              <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-slate-500 dark:text-zinc-400">
+                <span>빠른 검색:</span>
+                {QUICK_WORK_QUERIES.map((q) => (
+                  <button
+                    key={q}
+                    type="button"
+                    onClick={() => {
+                      const nextQ = searchQuery === q ? '' : q;
+                      setSearchQuery(nextQ);
+                      if (nextQ) {
+                        setViewMode('semantic');
+                        const tokens = nextQ.toLowerCase().split(/\s+/).filter(Boolean);
+                        const matched = docs.find((d) => {
+                          const text = [
+                            d.fileName,
+                            d.summaryTitle,
+                            d.matchedSnippet,
+                            d.fullTextPreview,
+                            ...d.tableRows.flat(),
+                          ]
+                            .join(' ')
+                            .toLowerCase();
+                          return tokens.every((t) => text.includes(t));
+                        });
+                        if (matched) {
+                          setSelectedDocId(matched.id);
+                          setIsSidePeekOpen(true);
                         }
-                      }}
-                      className={`underline cursor-pointer transition-colors ${
-                        searchQuery === q
-                          ? 'text-teal-600 dark:text-cyan-300 font-extrabold'
-                          : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200'
-                      }`}
-                    >
-                      {q}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </div>
+                      }
+                    }}
+                    className={`underline cursor-pointer transition-colors ${
+                      searchQuery === q
+                        ? 'text-teal-600 dark:text-cyan-300 font-extrabold'
+                        : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200'
+                    }`}
+                  >
+                    {q}
+                  </button>
+                ))}
+              </div>
+            )}
           </div>
         </div>
+      </div>
 
       {/* 2. 노션 데이터베이스형 깔끔한 리스트 + 파일 클릭 시 우측에서 열리는 Side Peek 프리뷰 */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
         <div className={`${isSidePeekOpen ? 'xl:col-span-7' : 'xl:col-span-12'} flex flex-col transition-all`}>
           <div className="rounded-2xl bg-white dark:bg-[#18181B] border border-slate-200 dark:border-white/10 shadow-sm overflow-hidden">
-            {/* 테이블 헤더 */}
             <div className="px-4 py-2.5 bg-slate-50 dark:bg-zinc-950/70 border-b border-slate-200 dark:border-white/10 flex flex-wrap items-center justify-between gap-1.5 text-[11.5px] text-slate-600 dark:text-zinc-400 font-bold">
               <span className="break-keep">
                 문서 및 미디어 ({filteredDocs.length}건) · 항목을 클릭하면{' '}
                 <span className="xl:hidden">아래에 상세 표·미리보기가 열립니다</span>
                 <span className="hidden xl:inline">우측에 상세 표·미리보기가 열립니다</span>
               </span>
-              {isSidePeekOpen && (
-                <button
-                  type="button"
-                  onClick={() => setIsSidePeekOpen(false)}
-                  className="text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white text-[11px] font-bold shrink-0 cursor-pointer"
-                >
-                  <span className="xl:hidden">미리보기 닫기 ✕</span>
-                  <span className="hidden xl:inline">우측 미리보기 닫기 ✕</span>
-                </button>
-              )}
+              <div className="flex items-center gap-2">
+                {hiddenDocIds.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setHiddenDocIds([])}
+                    className="text-amber-500 hover:text-amber-400 text-[11px] font-bold cursor-pointer"
+                  >
+                    👁️ 숨긴 파일 {hiddenDocIds.length}건 다시 표시
+                  </button>
+                )}
+                {isSidePeekOpen && (
+                  <button
+                    type="button"
+                    onClick={() => setIsSidePeekOpen(false)}
+                    className="text-slate-500 hover:text-slate-800 dark:text-zinc-400 dark:hover:text-white text-[11px] font-bold shrink-0 cursor-pointer"
+                  >
+                    <span className="xl:hidden">미리보기 닫기 ✕</span>
+                    <span className="hidden xl:inline">우측 미리보기 닫기 ✕</span>
+                  </button>
+                )}
+              </div>
             </div>
 
-            {/* 노션 데이터베이스 행(Row) 리스트 */}
             {filteredDocs.length === 0 ? (
-              <div className="px-4 py-10 text-center flex flex-col items-center gap-2">
+              <div className="px-4 py-10 text-center flex flex-col items-center gap-2.5">
                 <span className="text-[28px]">📂</span>
                 <p className="font-headline-sm text-[14px] text-slate-700 dark:text-zinc-200 font-bold break-keep">
                   아직 연결된 공용 업무 문서가 없습니다 (0건)
                 </p>
-                <p className="font-body-sm text-[12px] text-slate-500 dark:text-zinc-400 break-keep max-w-md">
-                  사무실 메인 PC에서 공용 폴더(S: 드라이브)를 연결하고 실제 업무 문서·현장 사진을 넣으면 여기에 실시간으로 표시됩니다.
+                <p className="font-body-sm text-[12px] text-slate-500 dark:text-zinc-400 break-keep max-w-lg">
+                  사무실 메인 PC에서 공용 폴더(S: 드라이브)에 실제 업무 문서·현장 사진을 넣거나 위 [📤 업무 파일 추가]로 올리면 실시간 표시되며, [👻 귀신검색창]에서 열지 않고 0.1초 만에 본문을 소환할 수 있습니다.
                 </p>
+                {!isMobileOrStore && (
+                  <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+                    {isZCoreConnected ? (
+                      <>
+                        <button
+                          type="button"
+                          onClick={() => fileInputRef.current?.click()}
+                          className="px-3.5 py-2 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[12px] font-black cursor-pointer"
+                        >
+                          📤 S:\ 드라이브에 첫 업무 파일 올리기
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => void handleOpenSDriveExplorer()}
+                          className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold cursor-pointer"
+                        >
+                          📂 윈도우 탐색기 S:\ 폴더 열기
+                        </button>
+                      </>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={openZCoreConnectModal}
+                        className="px-4 py-2 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[12px] font-black cursor-pointer"
+                      >
+                        ⚡ PC 엔진(Z코어) 연결하고 S:\ 드라이브 바로 만들기
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             ) : (
               <div className="flex flex-col divide-y divide-slate-100 dark:divide-white/8">
-              {filteredDocs.map((doc) => {
-                const isSelected = isSidePeekOpen && doc.id === selectedDoc.id;
-                return (
-                  <div
-                    key={doc.id}
-                    onClick={() => {
-                      if (isSelected) {
-                        setIsSidePeekOpen(false);
-                      } else {
-                        setSelectedDocId(doc.id);
-                        setIsSidePeekOpen(true);
-                      }
-                    }}
-                    className={`px-4 py-3 flex flex-col gap-1.5 cursor-pointer transition-colors ${
-                      isSelected
-                        ? 'bg-teal-50/80 dark:bg-cyan-950/35'
-                        : 'hover:bg-slate-50 dark:hover:bg-zinc-900/70'
-                    }`}
-                  >
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                        <span
-                          className={`px-2 py-0.5 rounded font-label-sm text-[10px] font-extrabold shrink-0 ${
-                            doc.ext === 'XLSX' || doc.ext === 'CSV'
-                              ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
-                              : doc.ext === 'DOCX' || doc.ext === 'HWP' || doc.ext === 'TXT'
-                              ? 'bg-blue-500/20 text-blue-300 border border-blue-400/40'
-                              : doc.ext === 'PDF'
-                              ? 'bg-rose-500/20 text-rose-300 border border-rose-400/40'
-                              : 'bg-amber-500/20 text-amber-300 border border-amber-400/40'
-                          }`}
-                        >
-                          {doc.ext}
-                        </span>
-                        <span className="font-label-md text-[13.5px] text-slate-900 dark:text-white font-bold truncate">
-                          {doc.fileName}
-                        </span>
-                        <span className="hidden md:inline text-[11.5px] text-slate-500 dark:text-zinc-400 truncate">
-                          · {doc.summaryTitle.replace(/\[.*?\]\s*/g, '')}
-                        </span>
+                {filteredDocs.map((doc) => {
+                  const isSelected = isSidePeekOpen && selectedDoc && doc.id === selectedDoc.id;
+                  return (
+                    <div
+                      key={doc.id}
+                      onClick={() => {
+                        if (isSelected) {
+                          setIsSidePeekOpen(false);
+                        } else {
+                          setSelectedDocId(doc.id);
+                          setIsSidePeekOpen(true);
+                        }
+                      }}
+                      className={`px-4 py-3 flex flex-col gap-1.5 cursor-pointer transition-colors ${
+                        isSelected
+                          ? 'bg-teal-50/80 dark:bg-cyan-950/35'
+                          : 'hover:bg-slate-50 dark:hover:bg-zinc-900/70'
+                      }`}
+                    >
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                          <span
+                            className={`px-2 py-0.5 rounded font-label-sm text-[10px] font-extrabold shrink-0 ${
+                              doc.ext === 'XLSX' || doc.ext === 'XLS' || doc.ext === 'CSV'
+                                ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-400/40'
+                                : doc.ext === 'DOCX' || doc.ext === 'DOC' || doc.ext === 'HWP' || doc.ext === 'HWPX' || doc.ext === 'TXT'
+                                ? 'bg-blue-500/20 text-blue-300 border border-blue-400/40'
+                                : doc.ext === 'PDF'
+                                ? 'bg-rose-500/20 text-rose-300 border border-rose-400/40'
+                                : 'bg-amber-500/20 text-amber-300 border border-amber-400/40'
+                            }`}
+                          >
+                            {doc.ext}
+                          </span>
+                          <span className="font-label-md text-[13.5px] text-slate-900 dark:text-white font-bold truncate">
+                            {doc.fileName}
+                          </span>
+                          <span className="hidden md:inline text-[11.5px] text-slate-500 dark:text-zinc-400 truncate">
+                            · {doc.summaryTitle.replace(/\[.*?\]\s*/g, '')}
+                          </span>
+                        </div>
+
+                        <div className="flex items-center gap-2.5 shrink-0">
+                          <span className="hidden sm:inline text-[11px] text-slate-500 dark:text-zinc-400">
+                            {doc.folderPath} · {doc.sizeLabel} · {doc.updatedAt}
+                          </span>
+                          {doc.lockedBy ? (
+                            <span className="px-2.5 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/60 text-amber-200 font-label-sm text-[10.5px] font-extrabold">
+                              🔒 {doc.lockedBy} 수정 중
+                            </span>
+                          ) : (
+                            <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-label-sm text-[10.5px] font-bold">
+                              🔓 수정 가능
+                            </span>
+                          )}
+                        </div>
                       </div>
 
-                      <div className="flex items-center gap-2.5 shrink-0">
-                        <span className="hidden sm:inline text-[11px] text-slate-500 dark:text-zinc-400">
-                          {doc.folderPath} · {doc.sizeLabel} · {doc.updatedAt}
-                        </span>
-                        {doc.lockedBy ? (
-                          <span className="px-2.5 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/60 text-amber-200 font-label-sm text-[10.5px] font-extrabold">
-                            🔒 {doc.lockedBy} 수정 중
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-label-sm text-[10.5px] font-bold">
-                            🔓 수정 가능
-                          </span>
-                        )}
-                      </div>
+                      {searchQuery.trim() && (
+                        <div className="pl-11 text-[12px] text-cyan-200 truncate">
+                          📌 {doc.matchedSnippet}
+                        </div>
+                      )}
                     </div>
-
-                    {/* 검색어가 입력되었을 때만 해당 행 아래에 매칭된 핵심 스니펫 1줄 표시 */}
-                    {searchQuery.trim() && (
-                      <div className="pl-11 text-[12px] text-cyan-200 truncate">
-                        📌 {doc.matchedSnippet}
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+                  );
+                })}
               </div>
             )}
           </div>
         </div>
 
-        {/* 우측 Side Peek 패널: 문서를 클릭했을 때만 우측에서 스르륵 열림 */}
+        {/* 우측 Side Peek 패널 */}
         {isSidePeekOpen && selectedDoc && (
           <div className="xl:col-span-5 p-4 md:p-5 rounded-2xl bg-[#18181B] border border-cyan-400/40 shadow-xl flex flex-col gap-3.5 xl:sticky xl:top-16">
             <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 border-b border-white/10">
@@ -1013,28 +1225,26 @@ export const WorkLoungeB2BHub: React.FC = () => {
                       🔒 현재 [{selectedDoc.lockedBy}]님이 사용 중입니다. 읽기 모드로 열립니다.
                     </span>
                     <span className="font-body-sm text-[11px] text-zinc-300">
-                      (윈도우 탐색기 S: 드라이브에서 열 때는 엑셀·오피스 기본 읽기 전용 규칙대로 자동 작동하며, 사본 저장은 파일 내에서 각자 처리합니다.)
+                      (윈도우 탐색기 S: 드라이브에서 엑셀·한글 파일이 열려 있으면 ~$ 잠금을 실시간 감지하여 중복 덮어쓰기를 자동 방지합니다.)
                     </span>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => handleToggleLockSimulation(selectedDoc.id)}
-                    className="px-2 py-1 rounded-lg bg-zinc-950/80 hover:bg-zinc-900 border border-white/15 text-zinc-400 hover:text-white font-label-sm text-[10.5px] font-bold shrink-0 cursor-pointer"
-                  >
-                    잠금 시뮬레이션 해제
-                  </button>
+                  {simulatedLocksByDocId[selectedDoc.id] && (
+                    <button
+                      type="button"
+                      onClick={() => handleToggleLockSimulation(selectedDoc.id)}
+                      className="px-2 py-1 rounded-lg bg-zinc-950/80 hover:bg-zinc-900 border border-white/15 text-zinc-400 hover:text-white font-label-sm text-[10.5px] font-bold shrink-0 cursor-pointer"
+                    >
+                      시뮬레이션 해제
+                    </button>
+                  )}
                 </div>
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() =>
-                      window.alert(
-                        `현재 [${selectedDoc.lockedBy}]님이 사용 중이므로 [${selectedDoc.fileName}] 문서를 읽기 모드로 열었습니다.`
-                      )
-                    }
+                    onClick={() => void downloadWorkFileOriginal(selectedDoc)}
                     className="w-full py-1.5 px-3 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer text-center"
                   >
-                    👁️ 읽기 모드로 열기
+                    👁️ 읽기 전용 사본 다운로드
                   </button>
                 </div>
               </div>
@@ -1053,7 +1263,6 @@ export const WorkLoungeB2BHub: React.FC = () => {
               </div>
             )}
 
-            {/* 이미지 미리보기 (GIF / PNG / JPG 등 미디어 파일 지원) */}
             {selectedDoc.isImage && selectedDoc.imageBase64 && (
               <div className="p-3 rounded-xl bg-zinc-950 border border-cyan-400/30 flex flex-col gap-2">
                 <div className="flex items-center justify-between">
@@ -1074,7 +1283,6 @@ export const WorkLoungeB2BHub: React.FC = () => {
               </div>
             )}
 
-            {/* 표 핵심 데이터 */}
             <div className="flex flex-col gap-1.5">
               <span className="font-label-sm text-[11.5px] text-zinc-300 font-extrabold">
                 📊 표 핵심 내용
@@ -1083,9 +1291,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-zinc-900 border-b border-white/10">
-                      {selectedDoc.tableHeaders.map((h) => (
+                      {selectedDoc.tableHeaders.map((h, hIdx) => (
                         <th
-                          key={h}
+                          key={`${h}-${hIdx}`}
                           className="px-2.5 py-2 font-label-sm text-[11px] text-cyan-300 font-extrabold whitespace-nowrap"
                         >
                           {h}
@@ -1111,8 +1319,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
               </div>
             </div>
 
-            {/* 본문 요약 */}
-            <div className="p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-1">
+            <div className="p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col gap-1 max-h-56 overflow-y-auto">
               <span className="font-label-sm text-[11px] text-emerald-300 font-extrabold">
                 📄 본문 주요 내용
               </span>
@@ -1121,15 +1328,17 @@ export const WorkLoungeB2BHub: React.FC = () => {
               </p>
             </div>
 
-            {/* 원본 다운로드 / 방장 숨기기(실수 삭제 방지) / 본인 업로드 파일 관리 버튼 바 */}
             <div className="flex flex-wrap items-center gap-2 pt-1">
               <button
                 type="button"
-                onClick={() =>
+                onClick={async () => {
+                  const ok = await downloadWorkFileOriginal(selectedDoc);
                   setDocActionNotice(
-                    `⬇️ '${selectedDoc.fileName}' 원본 파일(${selectedDoc.sizeLabel}) 무손실 다운로드가 시작되었습니다!`
-                  )
-                }
+                    ok
+                      ? `⬇️ '${selectedDoc.fileName}' 원본 파일(${selectedDoc.sizeLabel}) 다운로드가 시작되었습니다!`
+                      : `⚠️ 원본 파일을 받으려면 방장 PC 연결 상태이거나 PC 엔진(Z코어) 동기화가 필요합니다.`
+                  );
+                }}
                 className="px-3 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1"
               >
                 <span>⬇️ 원본 파일 다운로드</span>
@@ -1143,6 +1352,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                       ? prev.filter((id) => id !== selectedDoc.id)
                       : [...prev, selectedDoc.id]
                   );
+                  void toggleHideWorkFileNative(selectedDoc.relPath);
                   setDocActionNotice(
                     isCurrentlyHidden
                       ? `👁️ '${selectedDoc.fileName}' 파일의 숨김을 해제하여 공유 목록에 다시 표시합니다.`
@@ -1218,4 +1428,3 @@ export const WorkLoungeB2BHub: React.FC = () => {
     </section>
   );
 };
-

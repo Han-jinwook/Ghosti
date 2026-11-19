@@ -705,6 +705,7 @@ _ALLOW_CORPUS_DIRS = {
     "test_docs",
     "ghosti_test_corpus",
     "sample_photos_301",
+    "업무공유폴더_s",
 }
 _CUSTOM_SCAN_ROOTS_FILE = LOCAL_APPDATA / "Merlin" / "ghosti_custom_scan_roots.json"
 
@@ -781,8 +782,18 @@ def _get_user_scan_roots(extra_path: str = "") -> List[Path]:
     kf_down = safe.known_folder("downloads")
 
     # [정본 원칙] 엔진 설치 시 가짜 샘플 사진을 절대 스캔·포함하지 않고 오직 실제 유저의 문서·사진·영상 폴더만 스캔!
-    # (0순위: 사용자 지정 폴더 ➔ 1순위: Windows Known Folders(OneDrive 리디렉션 포함) + 사진·동영상·문서·카톡 받은 파일 ➔ 2순위: 바탕화면·다운로드)
+    # (0순위: S: 업무 공유 드라이브 & 사용자 지정 폴더 ➔ 1순위: Windows Known Folders(OneDrive 리디렉션 포함) + 사진·동영상·문서·카톡 받은 파일 ➔ 2순위: 바탕화면·다운로드)
+    work_roots: List[Path] = []
+    try:
+        if Path("S:\\").exists():
+            work_roots.append(Path("S:\\"))
+        wv = zos.get_shared_work_vault_dir()
+        if wv.exists():
+            work_roots.append(wv)
+    except Exception:
+        pass
     candidates: List[Path] = [
+        *work_roots,
         *_load_custom_scan_roots(),
         kf_pics,
         kf_vids,
@@ -888,6 +899,8 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
 
 def _detect_folder_label(p: Path) -> str:
     s = str(p).lower()
+    if s.startswith("s:") or "업무공유폴더_s" in s:
+        return "💼 S: 업무 공유 드라이브"
     if "mybox" in s or "마이박스" in s:
         return "네이버 마이박스"
     if "내 드라이브" in s or "my drive" in s or s.startswith("g:"):
