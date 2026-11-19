@@ -800,12 +800,26 @@ def open_ghost_search_window_api(params: Dict[str, Any] | None = None) -> Dict[s
     anchor_y = data.get("anchor_y") or data.get("y")
     ax = int(anchor_x) if anchor_x is not None and str(anchor_x).lstrip("-").isdigit() else None
     ay = int(anchor_y) if anchor_y is not None and str(anchor_y).lstrip("-").isdigit() else None
+    focus_only = bool(data.get("focus_only"))
+    resize_existing = bool(data.get("resize_existing"))
 
-    res = spd._open_ghost_search_window_popup(stage=stage, query=query, anchor_x=ax, anchor_y=ay)
+    res = spd._open_ghost_search_window_popup(
+        stage=stage,
+        query=query,
+        anchor_x=ax,
+        anchor_y=ay,
+        focus_only=focus_only,
+        resize_existing=resize_existing,
+    )
+    reused = bool(res.get("reused") or res.get("deduped"))
     return {
         "ok": True,
         **res,
-        "message": "👻 내 진짜 PC 사진·서류·여권이 연동된 리얼 귀신검색창을 화면에 즉시 띄웠습니다!",
+        "message": (
+            "👻 이미 열려 있는 귀신검색창을 화면 맨 앞으로 불러왔습니다!"
+            if reused and not resize_existing
+            else "👻 내 진짜 PC 사진·서류·여권이 연동된 리얼 귀신검색창을 화면에 즉시 띄웠습니다!"
+        ),
     }
 
 

@@ -1995,78 +1995,283 @@ def build_ghost_search_window_url(stage: str = "small", query: str = "", base_ur
     return url
 
 
-def _bring_ghost_search_app_window_to_front(expected_w: int, expected_h: int) -> None:
+_LAST_POPUP_OPEN_TS = 0.0
+_LAST_POPUP_OPEN_RECT: dict | None = None
+_ACTIVE_POPUP_HWND: int = 0
+_POPUP_LAUNCHING_UNTIL: float = 0.0
+_POPUP_OPEN_LOCK = threading.Lock()
+_ACTIVE_POPUP_STATE_FILE = TELEMETRY_FILE.parent / "active_ghost_search_popup.json"
+
+
+def _get_hwnd_class_and_title(hwnd: int) -> tuple[str, str]:
+    if sys.platform != "win32" or hwnd <= 0:
+        return "", ""
+    hw = wintypes.HWND(hwnd)
+    if not u32.IsWindow(hw):
+        return "", ""
+    cbuf = ctypes.create_unicode_buffer(128)
+    u32.GetClassNameW(hw, cbuf, 127)
+    cls_name = (cbuf.value or "").strip()
+    tlen = u32.GetWindowTextLengthW(hw)
+    title = ""
+    if 0 < tlen <= 512:
+        tbuf = ctypes.create_unicode_buffer(tlen + 2)
+        u32.GetWindowTextW(hw, tbuf, tlen + 1)
+        title = (tbuf.value or "").strip()
+    return cls_name, title
+
+
+def _load_saved_popup_hwnd() -> int:
+    global _ACTIVE_POPUP_HWND
+    if _ACTIVE_POPUP_HWND > 0:
+        return _ACTIVE_POPUP_HWND
+    try:
+        if _ACTIVE_POPUP_STATE_FILE.exists():
+            raw = json.loads(_ACTIVE_POPUP_STATE_FILE.read_text(encoding="utf-8"))
+            h = int(raw.get("hwnd") or 0)
+            if h > 0:
+                _ACTIVE_POPUP_HWND = h
+                return h
+    except Exception:
+        pass
+    return 0
+
+
+def _save_active_popup_hwnd(hwnd: int) -> None:
+    global _ACTIVE_POPUP_HWND
+    _ACTIVE_POPUP_HWND = max(0, int(hwnd))
+    try:
+        _ACTIVE_POPUP_STATE_FILE.parent.mkdir(parents=True, exist_ok=True)
+        if _ACTIVE_POPUP_HWND > 0:
+            _ACTIVE_POPUP_STATE_FILE.write_text(
+                json.dumps({"hwnd": _ACTIVE_POPUP_HWND, "updated_at": time.time()}),
+                encoding="utf-8",
+            )
+        elif _ACTIVE_POPUP_STATE_FILE.exists():
+            _ACTIVE_POPUP_STATE_FILE.unlink(missing_ok=True)
+    except Exception:
+        pass
+
+
+def _is_valid_browser_top_window(hwnd: int) -> bool:
+    if sys.platform != "win32" or hwnd <= 0:
+        return False
+    hw = wintypes.HWND(hwnd)
+    if not u32.IsWindow(hw):
+        return False
+    if not (u32.IsWindowVisible(hw) or u32.IsIconic(hw)):
+        return False
+    if u32.GetWindow(hw, 4):  # GW_OWNER == 4 (드롭다운·툴팁 소유 팝업 제외)
+        return False
+    cls_name, _ = _get_hwnd_class_and_title(hwnd)
+    return cls_name in ("Chrome_WidgetWin_1", "MozillaWindowClass")
+
+
+def _snapshot_visible_browser_hwnds() -> set[int]:
+    if sys.platform != "win32":
+        return set()
+    found: set[int] = set()
+    WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def _cb(hwnd: int, _lp: int) -> bool:
+        if _is_valid_browser_top_window(int(hwnd)):
+            found.add(int(hwnd))
+        return True
+
+    try:
+        u32.EnumWindows(WNDENUMPROC(_cb), 0)
+    except Exception:
+        pass
+    return found
+
+
+def _find_live_ghost_search_popup_hwnds() -> list[int]:
     """
-    [더블클릭 포커스 탈취 방어 & 창 최상단 전면 부각 가드]:
-    웹 화면에서 [👻 내 진짜 파일로 귀신검색창 바로 띄우기]를 더블클릭(빠른 2회 연속 클릭)했을 때,
-    2번째 클릭이 메인 브라우저 창에 포커스를 되돌려 새로 열린 --app 귀신검색창이 메인 브라우저 뒤로 숨어버리는
-    현상을 원천 차단하기 위해 0.15초~1.3초 동안 새로 열린 귀신검색창 HWND를 찾아 최상단 전면(Foreground)으로 끌어올립니다.
+    현재 화면(또는 최소화 상태)에 살아있는 『👻 귀신검색창』 독립 앱 창(--app) HWND 목록을 반환합니다.
+    - 1순위: 데몬이 직접 기동하며 추적한 정확 HWND (_ACTIVE_POPUP_HWND / active_ghost_search_popup.json)
+    - 2순위: 창 제목에 '👻 귀신검색창' 또는 'ghostSearchWindow=' 식별자가 포함된 브라우저 최상위 창
+    """
+    if sys.platform != "win32":
+        return []
+    live: list[int] = []
+    saved_h = _load_saved_popup_hwnd()
+    if saved_h > 0:
+        if _is_valid_browser_top_window(saved_h):
+            live.append(saved_h)
+        else:
+            _save_active_popup_hwnd(0)
+
+    WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
+    def _cb(hwnd: int, _lp: int) -> bool:
+        hi = int(hwnd)
+        if hi in live or not _is_valid_browser_top_window(hi):
+            return True
+        _, title = _get_hwnd_class_and_title(hi)
+        t_low = title.lower()
+        if ("👻 귀신검색창" in title) or ("ghostsearchwindow=" in t_low):
+            live.append(hi)
+        return True
+
+    try:
+        u32.EnumWindows(WNDENUMPROC(_cb), 0)
+    except Exception:
+        pass
+    return live
+
+
+def _focus_hwnd_reliable(hwnd: int) -> bool:
+    """
+    Windows 10/11 백그라운드 프로세스 포커스 잠금(Foreground Lock)을 우회하여
+    이미 열려 있거나 새로 열린 귀신검색창을 메인 브라우저 창 앞으로 확실히 끌어올립니다.
+    - 최대화(IsZoomed) 또는 사용자 수동 리사이즈 크기는 그대로 보존하고, 최소화(IsIconic)일 때만 복원합니다.
+    """
+    if sys.platform != "win32" or hwnd <= 0:
+        return False
+    hw = wintypes.HWND(hwnd)
+    if not u32.IsWindow(hw):
+        return False
+    SW_RESTORE = 9
+    SW_SHOW = 5
+    SWP_NOMOVE = 0x0002
+    SWP_NOSIZE = 0x0001
+    SWP_SHOWWINDOW = 0x0040
+    HWND_TOPMOST = wintypes.HWND(-1)
+    HWND_NOTOPMOST = wintypes.HWND(-2)
+
+    fg_hwnd = u32.GetForegroundWindow()
+    fg_tid = u32.GetWindowThreadProcessId(fg_hwnd, None) if fg_hwnd else 0
+    cur_tid = k32.GetCurrentThreadId()
+    attached = False
+    try:
+        if fg_tid and cur_tid and fg_tid != cur_tid:
+            attached = bool(u32.AttachThreadInput(cur_tid, fg_tid, True))
+        if u32.IsIconic(hw):
+            u32.ShowWindow(hw, SW_RESTORE)
+        else:
+            u32.ShowWindow(hw, SW_SHOW)
+        u32.SetWindowPos(hw, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+        u32.BringWindowToTop(hw)
+        u32.SetForegroundWindow(hw)
+        u32.SetWindowPos(hw, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+        return True
+    except Exception:
+        return False
+    finally:
+        if attached:
+            try:
+                u32.AttachThreadInput(cur_tid, fg_tid, False)
+            except Exception:
+                pass
+
+
+def _capture_and_focus_new_popup_hwnd(
+    pre_hwnds: set[int],
+    caller_fg_hwnd: int,
+    expected_w: int,
+    expected_h: int,
+) -> None:
+    """
+    새로 기동한 --app 귀신검색창의 실제 OS HWND를 포착해 싱글톤으로 등록하고 최상단 전면으로 끌어올립니다.
     """
     if sys.platform != "win32":
         return
 
     def _worker() -> None:
+        global _POPUP_LAUNCHING_UNTIL
         WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-        HWND_TOPMOST = wintypes.HWND(-1)
-        HWND_NOTOPMOST = wintypes.HWND(-2)
-        SWP_NOMOVE = 0x0002
-        SWP_NOSIZE = 0x0001
-        SWP_SHOWWINDOW = 0x0040
-        SW_RESTORE = 9
+        captured_hwnd = 0
 
-        for delay in (0.18, 0.38, 0.65, 1.05):
-            time.sleep(delay)
-            matched_hwnd = 0
-
-            def _enum_cb(hwnd: int, _lparam: int) -> bool:
-                nonlocal matched_hwnd
-                hw = wintypes.HWND(hwnd)
-                if not u32.IsWindowVisible(hw):
+        for step_idx in range(22):
+            time.sleep(0.14 if step_idx < 10 else 0.22)
+            # 이미 타이틀 식별자로 잡히는 창이 있는지 우선 점검
+            by_title = _find_live_ghost_search_popup_hwnds()
+            if by_title:
+                captured_hwnd = by_title[0]
+                if len(by_title) > 1:
+                    for extra_h in by_title[1:]:
+                        try:
+                            u32.PostMessageW(wintypes.HWND(extra_h), 0x0010, 0, 0)
+                        except Exception:
+                            pass
+            else:
+                def _enum_new_cb(hwnd: int, _lp: int) -> bool:
+                    nonlocal captured_hwnd
+                    hi = int(hwnd)
+                    if hi in pre_hwnds or hi == caller_fg_hwnd:
+                        return True
+                    if not _is_valid_browser_top_window(hi):
+                        return True
+                    hw = wintypes.HWND(hi)
+                    rc = wintypes.RECT()
+                    if not u32.GetWindowRect(hw, ctypes.byref(rc)):
+                        return True
+                    w = rc.right - rc.left
+                    h = rc.bottom - rc.top
+                    if w < 380 or h < 240:
+                        return True
+                    _, title = _get_hwnd_class_and_title(hi)
+                    t_low = title.lower()
+                    if (
+                        not title
+                        or any(
+                            k in t_low
+                            for k in (
+                                "귀신검색창",
+                                "ghostsearchwindow",
+                                "귀신같이",
+                                "ghosti",
+                                "sundreamer",
+                                "localhost",
+                                "127.0.0.1",
+                                "untitled",
+                                "제목 없음",
+                            )
+                        )
+                        or (abs(w - expected_w) <= 320 and abs(h - expected_h) <= 320)
+                    ):
+                        captured_hwnd = hi
+                        return False
                     return True
-                rc = wintypes.RECT()
-                if not u32.GetWindowRect(hw, ctypes.byref(rc)):
-                    return True
-                w = rc.right - rc.left
-                h = rc.bottom - rc.top
-                # 소형/중형/갤러리 귀신검색 --app 창 크기 범위 및 타이틀 확인
-                if abs(w - expected_w) <= 120 and abs(h - expected_h) <= 120:
-                    tlen = u32.GetWindowTextLengthW(hw)
-                    if 0 < tlen <= 512:
-                        buf = ctypes.create_unicode_buffer(tlen + 2)
-                        u32.GetWindowTextW(hw, buf, tlen + 1)
-                        title = (buf.value or "").lower()
-                        if any(k in title for k in ("귀신같이", "ghosti", "귀신검색", "localhost", "127.0.0.1")):
-                            matched_hwnd = int(hwnd)
-                            return False
-                return True
 
-            try:
-                u32.EnumWindows(WNDENUMPROC(_enum_cb), 0)
-                if matched_hwnd:
-                    hw_t = wintypes.HWND(matched_hwnd)
-                    u32.ShowWindow(hw_t, SW_RESTORE)
-                    u32.SetWindowPos(hw_t, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
-                    u32.SetForegroundWindow(hw_t)
-                    u32.SetWindowPos(hw_t, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
-            except Exception:
-                pass
+                try:
+                    u32.EnumWindows(WNDENUMPROC(_enum_new_cb), 0)
+                except Exception:
+                    pass
+
+            if captured_hwnd > 0:
+                _save_active_popup_hwnd(captured_hwnd)
+                with _POPUP_OPEN_LOCK:
+                    _POPUP_LAUNCHING_UNTIL = 0.0
+                _focus_hwnd_reliable(captured_hwnd)
+                # 더블클릭 시 메인 브라우저가 잠시 뒤에 포커스를 재탈취하는 현상까지 0.35초 뒤 1회 더 고정
+                time.sleep(0.35)
+                if _is_valid_browser_top_window(captured_hwnd):
+                    _focus_hwnd_reliable(captured_hwnd)
+                return
+
+        with _POPUP_OPEN_LOCK:
+            _POPUP_LAUNCHING_UNTIL = 0.0
 
     threading.Thread(target=_worker, daemon=True).start()
 
 
-_LAST_POPUP_OPEN_TS = 0.0
-_LAST_POPUP_OPEN_RECT: dict | None = None
-_POPUP_OPEN_LOCK = threading.Lock()
-
-
-def _open_ghost_search_window_popup(stage: str = "medium", query: str = "", anchor_x: int | None = None, anchor_y: int | None = None) -> dict:
+def _open_ghost_search_window_popup(
+    stage: str = "medium",
+    query: str = "",
+    anchor_x: int | None = None,
+    anchor_y: int | None = None,
+    focus_only: bool = False,
+    resize_existing: bool = False,
+) -> dict:
     """
-    [웹 『👻 내 진짜 파일로 리얼 귀신검색창 바로 띄우기』 호출 시 모니터 안의 창과 동일한 프레임리스 앱 창 오픈]:
-    웹 수련장·귀신검색 페이지에서 호출 시 모니터 안의 창(`/?dev=true&preview=legacy&ghostSearchWindow=...`)과
-    100% 동일한 화면을 Chrome/Edge 프레임리스 앱 창(`--app`)으로 즉시 띄웁니다.
-    - 더블클릭(빠른 연속 호출) 시 중복 프로세스 기동을 막고 이미 뜬 귀신검색창을 최상단 전면으로 끌어올립니다.
+    [웹 『👻 내 진짜 파일로 리얼 귀신검색창 바로 띄우기』 OS 싱글톤 앱 창 오픈 & 크기 전환]:
+    - 이미 열려 있는 귀신검색창(--app)이 화면(또는 최소화 상태)에 존재하면 시간이 얼마나 지났든
+      절대 중복 창을 새로 띄우지 않고 기존 창 1개만 최상단 전면(Foreground)으로 끌어올립니다.
+    - 창 상단 [⤡ 작게] · [⤢ 크게(갤러리)] 버튼 클릭(resize_existing=True) 시에는 현재 모니터 기준에서
+      기존 창 크기를 즉시 전환합니다.
     """
-    global _LAST_POPUP_OPEN_TS, _LAST_POPUP_OPEN_RECT
+    global _LAST_POPUP_OPEN_TS, _LAST_POPUP_OPEN_RECT, _POPUP_LAUNCHING_UNTIL
     pt = wintypes.POINT()
     if anchor_x is None or anchor_y is None:
         u32.GetCursorPos(ctypes.byref(pt))
@@ -2082,11 +2287,86 @@ def _open_ghost_search_window_popup(stage: str = "medium", query: str = "", anch
 
     now_ts = time.time()
     with _POPUP_OPEN_LOCK:
-        if (now_ts - _LAST_POPUP_OPEN_TS) < 1.8 and _LAST_POPUP_OPEN_RECT is not None:
-            _bring_ghost_search_app_window_to_front(int(rect["width"]), int(rect["height"]))
-            return {"mode": "web_monitor_app", "url": target_url, "rect": rect, "launched": True, "deduped": True}
+        live_hwnds = _find_live_ghost_search_popup_hwnds()
+        if len(live_hwnds) > 1:
+            for extra_h in live_hwnds[1:]:
+                try:
+                    u32.PostMessageW(wintypes.HWND(extra_h), 0x0010, 0, 0)
+                except Exception:
+                    pass
+            live_hwnds = live_hwnds[:1]
+
+        if live_hwnds:
+            primary_hwnd = live_hwnds[0]
+            _save_active_popup_hwnd(primary_hwnd)
+            if resize_existing and sys.platform == "win32":
+                hw = wintypes.HWND(primary_hwnd)
+                cur_rc = wintypes.RECT()
+                if u32.IsIconic(hw) or u32.IsZoomed(hw):
+                    u32.ShowWindow(hw, 9)  # SW_RESTORE
+                if u32.GetWindowRect(hw, ctypes.byref(cur_rc)):
+                    cx = (cur_rc.left + cur_rc.right) // 2
+                    cy = (cur_rc.top + cur_rc.bottom) // 2
+                    win_wa = _get_monitor_workarea_for_point(cx, cy)
+                    new_rect = compute_ghost_search_window_3stage_rect(
+                        norm_in, cur_rc.left, cur_rc.top, work_area=win_wa, custom_height=custom_h
+                    )
+                else:
+                    new_rect = rect
+                u32.SetWindowPos(
+                    hw,
+                    wintypes.HWND(0),
+                    int(new_rect["x"]),
+                    int(new_rect["y"]),
+                    int(new_rect["width"]),
+                    int(new_rect["height"]),
+                    0x0004 | 0x0040,  # SWP_NOZORDER | SWP_SHOWWINDOW
+                )
+                _focus_hwnd_reliable(primary_hwnd)
+                record_feature_telemetry(f"ghost_search_window_{new_rect['stage']}")
+                return {
+                    "mode": "web_monitor_app",
+                    "url": target_url,
+                    "rect": new_rect,
+                    "launched": True,
+                    "reused": True,
+                    "resized": True,
+                }
+
+            _focus_hwnd_reliable(primary_hwnd)
+            return {
+                "mode": "web_monitor_app",
+                "url": target_url,
+                "rect": rect,
+                "launched": True,
+                "reused": True,
+                "deduped": True,
+            }
+
+        if focus_only or resize_existing:
+            return {
+                "mode": "web_monitor_app",
+                "url": target_url,
+                "rect": rect,
+                "launched": False,
+                "reused": False,
+            }
+
+        if now_ts < _POPUP_LAUNCHING_UNTIL or ((now_ts - _LAST_POPUP_OPEN_TS) < 1.8 and _LAST_POPUP_OPEN_RECT is not None):
+            return {
+                "mode": "web_monitor_app",
+                "url": target_url,
+                "rect": rect,
+                "launched": True,
+                "reused": True,
+                "deduped": True,
+            }
+
+        pre_hwnds = _snapshot_visible_browser_hwnds()
+        caller_fg_hwnd = int(u32.GetForegroundWindow() or 0) if sys.platform == "win32" else 0
         _LAST_POPUP_OPEN_TS = now_ts
         _LAST_POPUP_OPEN_RECT = rect
+        _POPUP_LAUNCHING_UNTIL = now_ts + 3.8
 
     record_feature_telemetry(f"ghost_search_window_{rect['stage']}")
 
@@ -2122,8 +2402,13 @@ def _open_ghost_search_window_popup(stage: str = "medium", query: str = "", anch
         except Exception:
             pass
     if launched:
-        _bring_ghost_search_app_window_to_front(int(rect["width"]), int(rect["height"]))
-    return {"mode": "web_monitor_app", "url": target_url, "rect": rect, "launched": launched}
+        _capture_and_focus_new_popup_hwnd(
+            pre_hwnds, caller_fg_hwnd, int(rect["width"]), int(rect["height"])
+        )
+    else:
+        with _POPUP_OPEN_LOCK:
+            _POPUP_LAUNCHING_UNTIL = 0.0
+    return {"mode": "web_monitor_app", "url": target_url, "rect": rect, "launched": launched, "reused": False}
 
 
 def _open_ghosti_web() -> None:

@@ -40,11 +40,25 @@ export function ghostSearchWindowUrl(stage: GhostSearchStage, query?: string): s
 let _activeRealGhostSearchPopup: Window | null = null;
 let _openGhostSearchInflight = false;
 let _lastOpenGhostSearchTs = 0;
+let _lastGhostSearchWasReused = false;
+
+function broadcastFocusToOpenGhostSearchWindow(query?: string): void {
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel('ghosti_search_window_singleton_v1');
+      bc.postMessage({ type: 'FOCUS_AND_QUERY', query: (query || '').trim() });
+      bc.close();
+    }
+  } catch {
+    /* ignore */
+  }
+}
 
 export function bringRealGhostSearchPopupToFront(
   stage: GhostSearchStage = 'medium',
   query?: string,
 ): void {
+  broadcastFocusToOpenGhostSearchWindow(query);
   try {
     if (_activeRealGhostSearchPopup && !_activeRealGhostSearchPopup.closed) {
       _activeRealGhostSearchPopup.focus();
@@ -70,12 +84,15 @@ export async function openRealGhostSearchWindowViaDaemon(
   query?: string,
 ): Promise<boolean> {
   const now = Date.now();
-  if (_openGhostSearchInflight || now - _lastOpenGhostSearchTs < 1800) {
+  broadcastFocusToOpenGhostSearchWindow(query);
+  if (_openGhostSearchInflight || now - _lastOpenGhostSearchTs < 900) {
+    _lastGhostSearchWasReused = true;
     bringRealGhostSearchPopupToFront(stage, query);
     return true;
   }
   _openGhostSearchInflight = true;
   _lastOpenGhostSearchTs = now;
+  _lastGhostSearchWasReused = false;
 
   try {
     const targetStage: GhostSearchStage = stage === 'large' ? 'large' : 'medium';
@@ -85,8 +102,7 @@ export async function openRealGhostSearchWindowViaDaemon(
     const reqStartedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
     // 1순위: 로컬 제트코어 연결 시 주소창·설치아이콘 없는 깔끔한 독립 앱 창(--app) 단일 오픈!
-    // ⚠️ 기존 700ms 짧은 타임아웃으로 인해 Z-코어가 이미 chrome.exe --app 창(1번 창)을 띄우는 도중
-    // 브라우저 fetch가 타임아웃되어 아래 window.open 폴백(2번 창)까지 중복 실행되던 레이스 버그를 원천 차단합니다.
+    // (이미 귀신검색창이 열려 있으면 데몬이 중복 기동 없이 기존 HWND만 화면 최상단 전면으로 끌어올립니다)
     try {
       const res = await fetch(getZCoreUrl('/api/superpower/open_search_window'), {
         method: 'POST',
@@ -96,7 +112,10 @@ export async function openRealGhostSearchWindowViaDaemon(
       });
       if (res.ok) {
         const data = await res.json().catch(() => ({}));
-        if (data && data.ok !== false && data.launched !== false) return true;
+        if (data && data.ok !== false && data.launched !== false) {
+          _lastGhostSearchWasReused = Boolean(data.reused || data.deduped);
+          return true;
+        }
       } else if (res.status === 404 || res.status === 405) {
         const qs = `stage=${encodeURIComponent(daemonStage)}&ui_mode=web_monitor${q ? `&q=${encodeURIComponent(q)}` : ''}`;
         const resGet = await fetch(getZCoreUrl(`/__merlin/open-ghost-search?${qs}`), {
@@ -104,15 +123,16 @@ export async function openRealGhostSearchWindowViaDaemon(
         });
         if (resGet.ok) {
           const dataGet = await resGet.json().catch(() => ({}));
-          if (dataGet?.ok !== false && dataGet?.launched !== false) return true;
+          if (dataGet?.ok !== false && dataGet?.launched !== false) {
+            _lastGhostSearchWasReused = Boolean(dataGet.reused || dataGet.deduped);
+            return true;
+          }
         }
       }
     } catch (err) {
       const elapsed =
         (typeof performance !== 'undefined' ? performance.now() : Date.now()) - reqStartedAt;
       const errName = (err as { name?: string } | null)?.name || '';
-      // Z-코어가 연결된 상태에서 타임아웃/지연이 발생한 경우 서버는 이미 요청을 수신해 --app 창을 기동 중이므로
-      // 절대 window.open 2차 팝업을 추가로 띄우지 않습니다! (즉각적인 TCP 연결 거부 < 350ms 일 때만 폴백 허용)
       if (
         wasZCoreConnected &&
         (errName === 'TimeoutError' || errName === 'AbortError' || elapsed >= 350)
@@ -138,9 +158,10 @@ export async function openRealGhostSearchWindowViaDaemon(
         );
         const features = `popup=yes,width=${rect.width},height=${rect.height},left=${rect.x},top=${rect.y},menubar=no,toolbar=no,location=no,status=no,resizable=yes,scrollbars=yes`;
         if (_activeRealGhostSearchPopup && !_activeRealGhostSearchPopup.closed) {
-          _activeRealGhostSearchPopup.location.href = targetUrl;
-          _activeRealGhostSearchPopup.resizeTo(rect.width, rect.height);
-          _activeRealGhostSearchPopup.moveTo(rect.x, rect.y);
+          _lastGhostSearchWasReused = true;
+          if (q) {
+            _activeRealGhostSearchPopup.location.href = targetUrl;
+          }
           _activeRealGhostSearchPopup.focus();
           return true;
         }
@@ -875,8 +896,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
     window.setTimeout(() => {
       isLaunchingRef.current = false;
       setIsLaunchingRealWindow(false);
-    }, 1800);
-    playBabyGhostChime('summon');
+    }, 600);
     if (stage === 'large') {
       markStep('large');
     } else {
@@ -890,10 +910,15 @@ export const GhostSearchTrainingPage: React.FC = () => {
     }
     const ok = await openRealGhostSearchWindowViaDaemon(stage, query ?? pendingQuery);
     if (ok) {
+      if (!_lastGhostSearchWasReused) {
+        playBabyGhostChime('summon');
+      }
       setRealPopupToast(
-        `👻 내 진짜 PC 파일·사진·여권이 연동된 귀신검색창(${GHOST_SEARCH_STAGE_LABELS[stage]})을 모니터에 바로 띄웠습니다!`,
+        _lastGhostSearchWasReused
+          ? '👻 이미 열려 있는 귀신검색창을 화면 맨 앞으로 불러왔습니다!'
+          : `👻 내 진짜 PC 파일·사진·여권이 연동된 귀신검색창(${GHOST_SEARCH_STAGE_LABELS[stage]})을 모니터에 바로 띄웠습니다!`,
       );
-      setTimeout(() => setRealPopupToast(null), 5000);
+      setTimeout(() => setRealPopupToast(null), 4000);
     } else {
       monitorSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
     }
