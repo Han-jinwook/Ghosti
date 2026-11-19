@@ -36,43 +36,115 @@ TRIAL_LEDGER_FILE = MERLIN_DIR / "superpower_trial_ledger.json"
 USER_SNIPPETS_FILE = spd.USER_SNIPPETS_APPDATA
 
 _DAEMON_THREAD_STARTED = False
+_DAEMON_WATCHDOG_STARTED = False
 _DAEMON_LOCK = threading.Lock()
+
+
+def shutdown_superpower_daemon_for_update() -> None:
+    """무소음 자가 업데이트(updater.bat) 전에 포트 51988 귀신창 데몬을 깔끔히 종료해 .exe 파일 잠금을 즉시 해제합니다."""
+    if os.name != "nt":
+        return
+    try:
+        import socket
+
+        with socket.create_connection(("127.0.0.1", 51988), timeout=0.45) as conn:
+            conn.sendall(b"__REPLACE__")
+    except Exception:
+        pass
 
 
 def ensure_superpower_daemon_running() -> bool:
     """
-    [프로세스 완전 분리 모드 (멀린님 지시 반영)]
+    [프로세스 완전 분리 모드 + PING/PONG 활성 검증 (Z-Core v2.4.79)]
     - 귀신창 데몬(seq_paste_daemon, 포트 51988)은 메인 Z-코어(5199)와 반드시 별도 프로세스로 분리합니다.
-    - 이미 51988 포트가 실행 중이면(사내 개발기 스케줄러 등) 건드리지 않고 즉시 True를 반환합니다.
-    - 순수 Z-코어(.exe)만 설치한 일반 유저/테스터 PC에서 51988이 미실행 상태면,
-      내장 스레드가 아닌 '독립 자식 프로세스(--seq-paste-daemon)'로 분리 기동하여 Ctrl+0·Ctrl+우클릭을 즉시 활성화합니다.
+    - 51988 포트가 열려 있고 __PING__ -> PONG(메인 루프·UI 루프 정상 박동) 응답이 오면 즉시 True를 반환합니다.
+    - 미실행이거나 응답 없음으로 종료된 경우 독립 자식 프로세스(--seq-paste-daemon)로 즉시 재기동하여
+      Ctrl+0 · Ctrl+우클릭이 언제나 끊김 없이 작동하도록 보장합니다.
     """
     if os.name != "nt":
         return True
     try:
         import socket
 
-        with socket.create_connection(("127.0.0.1", 51988), timeout=0.35):
-            return True
+        with socket.create_connection(("127.0.0.1", 51988), timeout=0.6) as conn:
+            conn.settimeout(0.8)
+            conn.sendall(b"__PING__")
+            reply = conn.recv(64)
+            if b"PONG" in reply:
+                return True
     except Exception:
         pass
 
-    if getattr(sys, "frozen", False):
+    with _DAEMON_LOCK:
+        # 재확인 (동시 호출 중복 스폰 방지)
         try:
-            import core_win32 as _cw32
+            import socket
 
-            target_exe = _cw32.ensure_persistent_frozen_install()
-            clean_env = {k: v for k, v in os.environ.items() if k not in ("_MEIPASS2", "_MEIPASS")}
-            clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
-            subprocess.Popen(
-                [target_exe, "--seq-paste-daemon"],
-                env=clean_env,
-                creationflags=0x08000000 | 0x00000008,  # CREATE_NO_WINDOW | DETACHED_PROCESS
-                close_fds=True,
-            )
+            with socket.create_connection(("127.0.0.1", 51988), timeout=0.35) as conn2:
+                conn2.settimeout(0.5)
+                conn2.sendall(b"__PING__")
+                if b"PONG" in conn2.recv(64):
+                    return True
         except Exception:
             pass
+
+        clean_env = {k: v for k, v in os.environ.items() if k not in ("_MEIPASS2", "_MEIPASS")}
+        clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+        if getattr(sys, "frozen", False):
+            try:
+                import core_win32 as _cw32
+
+                target_exe = _cw32.ensure_persistent_frozen_install()
+                subprocess.Popen(
+                    [target_exe, "--seq-paste-daemon"],
+                    env=clean_env,
+                    creationflags=0x08000000 | 0x00000008,  # CREATE_NO_WINDOW | DETACHED_PROCESS
+                    close_fds=True,
+                )
+            except Exception:
+                pass
+        else:
+            try:
+                spd_script = THIS_DIR.parent / "seq_paste_daemon.py"
+                if not spd_script.exists():
+                    spd_script = THIS_DIR / "seq_paste_daemon.py"
+                if spd_script.exists():
+                    pyw = Path(sys.executable).with_name("pythonw.exe")
+                    runner = str(pyw if pyw.exists() else Path(sys.executable))
+                    subprocess.Popen(
+                        [runner, str(spd_script)],
+                        env=clean_env,
+                        creationflags=0x08000000 | 0x00000008,
+                        close_fds=True,
+                    )
+            except Exception:
+                pass
     return True
+
+
+def start_superpower_daemon_watchdog(is_updating_fn=None) -> None:
+    """8초 주기로 귀신창 데몬(51988) 생존·응답성을 감시하여 예기치 못한 종료·프리징 시 자동 부활시킵니다."""
+    global _DAEMON_WATCHDOG_STARTED
+    if os.name != "nt":
+        return
+    with _DAEMON_LOCK:
+        if _DAEMON_WATCHDOG_STARTED:
+            return
+        _DAEMON_WATCHDOG_STARTED = True
+
+    def _watch_loop() -> None:
+        time.sleep(6.0)
+        while True:
+            try:
+                if callable(is_updating_fn) and is_updating_fn():
+                    time.sleep(4.0)
+                    continue
+                ensure_superpower_daemon_running()
+            except Exception:
+                pass
+            time.sleep(8.0)
+
+    threading.Thread(target=_watch_loop, daemon=True).start()
 
 
 def get_machine_hwid() -> str:

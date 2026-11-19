@@ -260,6 +260,39 @@ _RBTN_HOLD_STATE: dict = {
     "target_hwnd": None,
 }
 _LAST_RBTN_DISMISS_ESC_TS: float = 0.0
+_MAIN_LOOP_HEARTBEAT_TS: float = time.time()
+_UI_LOOP_HEARTBEAT_TS: float = time.time()
+
+
+def _send_msg_timeout_val(
+    hwnd: int,
+    msg: int,
+    wparam: int = 0,
+    lparam: int = 0,
+    timeout_ms: int = 120,
+) -> tuple[bool, int]:
+    """
+    타 프로세스 창이 일시 응답 없음(Hung/Modal Block) 상태일 때도 메인 단축키·우클릭 루프가 절대 멈추지 않도록
+    SendMessageW 대신 SMTO_ABORTIFHUNG(0x0002) 타임아웃 호출만 수행합니다.
+    """
+    if sys.platform != "win32" or not hwnd:
+        return False, 0
+    try:
+        out_res = ctypes.c_size_t(0)
+        ok = u32.SendMessageTimeoutW(
+            wintypes.HWND(hwnd),
+            msg,
+            wintypes.WPARAM(wparam),
+            wintypes.LPARAM(lparam),
+            0x0002,  # SMTO_ABORTIFHUNG
+            timeout_ms,
+            ctypes.byref(out_res),
+        )
+        if ok:
+            return True, int(out_res.value)
+    except Exception:
+        pass
+    return False, 0
 
 
 # =====================================================================
@@ -611,16 +644,29 @@ def extract_non_destructive_caret_lookbehind(fg_hwnd: int | None = None, max_wor
         if focus_h:
             s_pos = wintypes.DWORD(0)
             e_pos = wintypes.DWORD(0)
-            u32.SendMessageW(focus_h, EM_GETSEL, ctypes.byref(s_pos), ctypes.byref(e_pos))
-            t_len = u32.SendMessageW(focus_h, WM_GETTEXTLENGTH, 0, 0)
-            if 0 < t_len < 32768:
+            ok_sel, _ = _send_msg_timeout_val(
+                focus_h,
+                EM_GETSEL,
+                ctypes.addressof(s_pos),
+                ctypes.addressof(e_pos),
+                timeout_ms=100,
+            )
+            ok_len, t_len = _send_msg_timeout_val(focus_h, WM_GETTEXTLENGTH, 0, 0, timeout_ms=100)
+            if ok_sel and ok_len and 0 < t_len < 32768:
                 buf = ctypes.create_unicode_buffer(t_len + 2)
-                u32.SendMessageW(focus_h, WM_GETTEXT, t_len + 1, ctypes.cast(buf, wintypes.LPARAM))
-                caret_idx = e_pos.value if e_pos.value <= len(buf.value) else len(buf.value)
-                before_caret = buf.value[:caret_idx].splitlines()[-1].strip() if caret_idx > 0 else ""
-                if before_caret:
-                    tokens = [t for t in re.split(r"\s+", before_caret) if t]
-                    return " ".join(tokens[-max_words:]).rstrip("?")
+                ok_txt, _ = _send_msg_timeout_val(
+                    focus_h,
+                    WM_GETTEXT,
+                    t_len + 1,
+                    ctypes.addressof(buf),
+                    timeout_ms=120,
+                )
+                if ok_txt:
+                    caret_idx = e_pos.value if e_pos.value <= len(buf.value) else len(buf.value)
+                    before_caret = buf.value[:caret_idx].splitlines()[-1].strip() if caret_idx > 0 else ""
+                    if before_caret:
+                        tokens = [t for t in re.split(r"\s+", before_caret) if t]
+                        return " ".join(tokens[-max_words:]).rstrip("?")
     except Exception:
         pass
     return ""
@@ -664,8 +710,8 @@ def get_ime_is_korean(fg_hwnd: int | None = None) -> bool:
             seen_h.add(h_cand)
             hime = imm32.ImmGetDefaultIMEWnd(h_cand)
             if hime:
-                mode = u32.SendMessageW(hime, WM_IME_CONTROL, IMC_GETCONVERSIONMODE, 0)
-                if (mode & IME_CMODE_NATIVE) != 0:
+                ok_m, mode = _send_msg_timeout_val(hime, WM_IME_CONTROL, IMC_GETCONVERSIONMODE, 0, timeout_ms=90)
+                if ok_m and (mode & IME_CMODE_NATIVE) != 0:
                     return True
     return False
 
@@ -731,11 +777,12 @@ def set_ime_language(target_korean: bool) -> None:
                     continue
                 hime = imm32.ImmGetDefaultIMEWnd(h_cand)
                 if hime:
-                    curr_mode = u32.SendMessageW(hime, WM_IME_CONTROL, IMC_GETCONVERSIONMODE, 0)
-                    is_kor = (curr_mode & IME_CMODE_NATIVE) != 0
-                    if is_kor != target_korean:
-                        new_mode = (curr_mode | IME_CMODE_NATIVE) if target_korean else (curr_mode & ~IME_CMODE_NATIVE)
-                        u32.SendMessageW(hime, WM_IME_CONTROL, IMC_SETCONVERSIONMODE, new_mode)
+                    ok_cm, curr_mode = _send_msg_timeout_val(hime, WM_IME_CONTROL, IMC_GETCONVERSIONMODE, 0, timeout_ms=90)
+                    if ok_cm:
+                        is_kor = (curr_mode & IME_CMODE_NATIVE) != 0
+                        if is_kor != target_korean:
+                            new_mode = (curr_mode | IME_CMODE_NATIVE) if target_korean else (curr_mode & ~IME_CMODE_NATIVE)
+                            _send_msg_timeout_val(hime, WM_IME_CONTROL, IMC_SETCONVERSIONMODE, new_mode, timeout_ms=90)
             after_kor = get_ime_is_korean(hwnd)
             if after_kor == target_korean:
                 return
@@ -3664,8 +3711,15 @@ def _toast_worker() -> None:
         _apply_win_topmost(win, x, y, rw, rh, activate=False)
 
     def _poll_queue() -> None:
-        global _CURRENT_OPEN_UI_MODE
+        global _CURRENT_OPEN_UI_MODE, _UI_LOOP_HEARTBEAT_TS
+        _UI_LOOP_HEARTBEAT_TS = time.time()
         try:
+            if current_win[0] is not None:
+                try:
+                    if not current_win[0].winfo_exists():
+                        _close_win()
+                except Exception:
+                    _close_win()
             lbtn_down = (u32.GetAsyncKeyState(0x01) & 0x8000) != 0
             rbtn_down = (u32.GetAsyncKeyState(0x02) & 0x8000) != 0
             ctrl_held = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
@@ -4259,13 +4313,51 @@ def acquire_single_instance() -> socket.socket | None:
             def _shutdown_listener(srv_sock: socket.socket) -> None:
                 while True:
                     try:
+                        if srv_sock.fileno() == -1:
+                            break
                         conn, _ = srv_sock.accept()
-                        data = conn.recv(512)
-                        conn.close()
-                        if b"__REPLACE__" in data:
-                            srv_sock.close()
+                    except Exception:
+                        if srv_sock.fileno() == -1:
+                            break
+                        time.sleep(0.1)
+                        continue
+                    try:
+                        conn.settimeout(1.0)
+                        try:
+                            data = conn.recv(512)
+                        except Exception:
+                            data = b""
+                        if b"__PING__" in data:
+                            now_p = time.time()
+                            healthy = (now_p - _MAIN_LOOP_HEARTBEAT_TS) < 15.0 and (now_p - _UI_LOOP_HEARTBEAT_TS) < 15.0
+                            if healthy:
+                                try:
+                                    conn.sendall(b"PONG")
+                                except Exception:
+                                    pass
+                                conn.close()
+                            else:
+                                try:
+                                    conn.close()
+                                    srv_sock.close()
+                                except Exception:
+                                    pass
+                                os._exit(1)
+                            continue
+                        if b"__REPLACE__" in data or b"/__merlin/shutdown" in data:
+                            if b"HTTP/" in data:
+                                try:
+                                    conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK")
+                                except Exception:
+                                    pass
+                            try:
+                                conn.close()
+                                srv_sock.close()
+                            except Exception:
+                                pass
                             os._exit(0)
-                        elif data.startswith(b"__OPEN_UI2__|"):
+                        conn.close()
+                        if data.startswith(b"__OPEN_UI2__|"):
                             try:
                                 dec = data.decode("utf-8", errors="ignore").strip()
                                 parts = dec.split("|", 2)
@@ -4277,7 +4369,10 @@ def acquire_single_instance() -> socket.socket | None:
                             except Exception:
                                 pass
                     except Exception:
-                        break
+                        try:
+                            conn.close()
+                        except Exception:
+                            pass
 
             threading.Thread(target=_shutdown_listener, args=(s,), daemon=True).start()
             return s
@@ -8075,7 +8170,35 @@ def main() -> None:
     WM_QUIT_MSG = 0x0012
     # [절대 금기]: 데몬 기동·재기동 시 유저가 호출하지 않았는데 귀신창이 혼자 튀어나오는 현상 영구 차단!
     pending_init_show_ts: float = 0.0
+    global _MAIN_LOOP_HEARTBEAT_TS
+    _MAIN_LOOP_HEARTBEAT_TS = time.time()
+
+    def _self_hang_watchdog() -> None:
+        while True:
+            time.sleep(6.0)
+            try:
+                now_w = time.time()
+                if (now_w - _MAIN_LOOP_HEARTBEAT_TS) > 18.0:
+                    try:
+                        if getattr(sys, "frozen", False):
+                            clean_env = {k: v for k, v in os.environ.items() if k not in ("_MEIPASS2", "_MEIPASS")}
+                            clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+                            subprocess.Popen(
+                                [sys.executable, "--seq-paste-daemon"],
+                                env=clean_env,
+                                creationflags=0x08000000 | 0x00000008,
+                                close_fds=True,
+                            )
+                    except Exception:
+                        pass
+                    os._exit(1)
+            except Exception:
+                pass
+
+    threading.Thread(target=_self_hang_watchdog, daemon=True).start()
+
     while True:
+        _MAIN_LOOP_HEARTBEAT_TS = time.time()
         had_hotkey = False
         while u32.PeekMessageW(ctypes.byref(msg), None, 0, 0, PM_REMOVE) != 0:
             if msg.message == WM_QUIT_MSG:
@@ -8127,6 +8250,7 @@ def main() -> None:
                 if (now - last_hotkey_rebind_ts) > 15.0:
                     last_hotkey_rebind_ts = now
                     try:
+                        lock_sock = _ensure_single_instance_socket_alive(lock_sock)
                         _ensure_toast_worker()
                         u32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_NOREPEAT, VK_0)
                         u32.RegisterHotKey(None, 2, MOD_CONTROL | MOD_NOREPEAT, VK_NUMPAD0)

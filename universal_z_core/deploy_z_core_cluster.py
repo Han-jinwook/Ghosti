@@ -424,7 +424,8 @@ New-Item -ItemType Directory -Force -Path 'C:\\Users\\{remote_user}\\AppData\\Lo
         log(f"❌ {label} SCP 실패: {scp_res.stderr}")
         return
 
-    # 3) EncodedCommand로 깨짐 없이 Run 레지스트리 + ONLOGON 스케줄러(StartMerlinZCore5199) 등록 및 클린 환경(_MEIPASS2 제거) 즉시 기동
+    # 3) EncodedCommand로 깨짐 없이 Run 레지스트리 + 인터랙티브 세션(LogonType Interactive) ONLOGON 스케줄러 등록 및 즉시 기동
+    # ⚠️ 절대 SSH Session 0에서 Start-Process로 직접 띄우지 않습니다! (Session 0 격리로 Ctrl+0·Ctrl+우클릭·귀신창이 데스크톱에 보이지 않게 되는 현상 원천 차단)
     start_ps = f"""
 [Environment]::SetEnvironmentVariable('_MEIPASS2', $null, 'Process')
 [Environment]::SetEnvironmentVariable('_MEIPASS', $null, 'Process')
@@ -433,32 +434,50 @@ Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\
 Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'MerlinZCoreDaemon' -Value "`"$exe`""
 $act = New-ScheduledTaskAction -Execute $exe -Argument '--replace'
 $trg = New-ScheduledTaskTrigger -AtLogOn -User '{remote_user}'
+$prn = New-ScheduledTaskPrincipal -UserId '{remote_user}' -LogonType Interactive -RunLevel Limited
 $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero)
-Register-ScheduledTask -TaskName 'StartMerlinZCore5199' -Action $act -Trigger $trg -Settings $set -Force | Out-Null
+Register-ScheduledTask -TaskName 'StartMerlinZCore5199' -Action $act -Trigger $trg -Principal $prn -Settings $set -Force | Out-Null
 Start-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContinue
 """
     try:
         _run_remote_ps_encoded(ssh_target, key_path, start_ps, timeout_sec=35)
     except Exception as e:
         log(f"⚠️ {label} start 단계 경고: {e}")
-    for attempt in range(10):
+    for attempt in range(18):
         time.sleep(1.5)
         try:
             chk = subprocess.run(
-                ["ssh", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-o", "ConnectTimeout=5", ssh_target, "curl.exe -s --max-time 3 http://127.0.0.1:5199/__merlin/health"],
-                capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=10,
+                [
+                    "ssh",
+                    "-i",
+                    key_path,
+                    "-o",
+                    "StrictHostKeyChecking=no",
+                    "-o",
+                    "ConnectTimeout=5",
+                    ssh_target,
+                    "powershell -NoProfile -Command \"$h = curl.exe -s --max-time 3 http://127.0.0.1:5199/__merlin/health; $p = @(Get-NetTCPConnection -LocalPort 51988 -State Listen -ErrorAction SilentlyContinue); Write-Output ($h + '|51988=' + $p.Count)\"",
+                ],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+                timeout=12,
             )
-            if chk.returncode == 0 and f'"{core_ver}"' in chk.stdout:
+            if chk.returncode == 0 and f'"{core_ver}"' in chk.stdout and "|51988=1" in chk.stdout:
+                log(f"✅ {label} Z-코어 v{core_ver} + 귀신창(51988) 인터랙티브 세션 동기화 및 기동 확인 성공!")
+                return
+            if chk.returncode == 0 and f'"{core_ver}"' in chk.stdout and attempt >= 6:
                 log(f"✅ {label} Z-코어 v{core_ver} + 자동실행(Run & ONLOGON) 동기화 및 기동 확인 성공!")
                 return
         except Exception:
             pass
-        if attempt == 3:
-            # 인터랙티브 세션이 없을 때 폴백 직접 기동
+        if attempt == 8:
+            # 66MB 단일 실행파일 압축해제 지연 시에도 반드시 인터랙티브 예약작업으로만 재트리거 (Session 0 직접 기동 영구 금지)
             _run_remote_ps_encoded(
                 ssh_target,
                 key_path,
-                f"[Environment]::SetEnvironmentVariable('_MEIPASS2', $null, 'Process'); Start-Process -FilePath '{remote_exe_win}' -ArgumentList '--replace' -WindowStyle Hidden",
+                "Start-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContinue",
                 timeout_sec=12,
             )
     log(f"⚠️ {label} 헬스체크 대기 초과")

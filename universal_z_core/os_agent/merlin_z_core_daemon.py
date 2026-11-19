@@ -40,10 +40,29 @@ for _pyi_env_key in ("_MEIPASS2", "_MEIPASS"):
 os.environ["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
 
 
+def _is_mei_dir_in_use(mei_dir: Path) -> bool:
+    """
+    형제 프로세스(--seq-paste-daemon 등)가 해당 _MEI 폴더의 DLL/PYD를 메모리에 매핑해 실행 중인지 판별합니다.
+    단 1개라도 잠겨 있으면 폴더 내부의 비잠금 파일(.tcl/.tk/.py/.png/.wav)을 절대 삭제하지 않도록 보호합니다!
+    """
+    try:
+        for probe in mei_dir.iterdir():
+            if probe.is_file() and probe.suffix.lower() in (".dll", ".pyd"):
+                try:
+                    os.rename(probe, probe)
+                except PermissionError:
+                    return True
+                except OSError:
+                    return True
+    except Exception:
+        return True
+    return False
+
+
 def cleanup_stale_mei_runtime_dirs() -> int:
     """
     기동 시점(startup)에 %LOCALAPPDATA%\\Merlin\\zcore_rt\\ 내 현재 실행 중인 프로세스들의 _MEI 폴더를 제외한
-    과거 고아 _MEI* 임시 폴더들을 조용히 청소합니다 (잠긴 파일은 ignore_errors=True로 무소음 통과).
+    과거 고아 _MEI* 임시 폴더들만 안전하게 청소합니다 (실행 중인 형제 프로세스 폴더는 100% 원형 보존).
     """
     cleaned = 0
     try:
@@ -61,12 +80,13 @@ def cleanup_stale_mei_runtime_dirs() -> int:
             try:
                 if cur_mei and item.resolve() == cur_mei:
                     continue
-                # 방금 생성된 형제 프로세스(--seq-paste-daemon 등)의 _MEI 폴더 보호를 위해 120초 이상 경과하고 잠기지 않은 폴더만 삭제 시도
                 try:
-                    if (now_ts - item.stat().st_mtime) < 120.0:
+                    if (now_ts - item.stat().st_mtime) < 180.0:
                         continue
                 except Exception:
                     pass
+                if _is_mei_dir_in_use(item):
+                    continue
                 shutil.rmtree(item, ignore_errors=True)
                 if not item.exists():
                     cleaned += 1
@@ -107,7 +127,7 @@ import plugin_aggrofilter  # noqa: E402
 import ghosti_setup_parity  # noqa: E402
 import plugin_ghosti_superpowers  # noqa: E402
 
-CORE_VERSION = "2.4.69"
+CORE_VERSION = "2.4.79"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1170,6 +1190,10 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
                 'del "%~f0"\r\n'
             )
             bat_path.write_text(bat_content, encoding="mbcs", errors="replace")
+            try:
+                plugin_ghosti_superpowers.shutdown_superpower_daemon_for_update()
+            except Exception:
+                pass
             subprocess.Popen(
                 ["cmd.exe", "/c", str(bat_path)],
                 env=clean_child_env,
@@ -1655,6 +1679,7 @@ def main() -> None:
                 pass
         try:
             plugin_ghosti_superpowers.ensure_superpower_daemon_running()
+            plugin_ghosti_superpowers.start_superpower_daemon_watchdog(lambda: _SELF_UPDATE_IN_PROGRESS)
         except Exception:
             pass
         try:
