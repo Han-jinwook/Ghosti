@@ -271,7 +271,6 @@ export const MobileAppView: React.FC = () => {
   const [showPrivateSyncSection, setShowPrivateSyncSection] = useState(false);
   const [showPolicyAndStoreSection, setShowPolicyAndStoreSection] = useState(false);
   const [isMobileKeyboardOpen, setIsMobileKeyboardOpen] = useState(false);
-  const [iosKeyboardInsetPx, setIosKeyboardInsetPx] = useState(0);
   const [isLandscapeCompact, setIsLandscapeCompact] = useState<boolean>(() =>
     typeof window !== 'undefined'
       ? window.innerWidth > window.innerHeight && window.innerHeight <= 620
@@ -336,7 +335,6 @@ export const MobileAppView: React.FC = () => {
       setIsMobileKeyboardOpen(open);
       if (detail?.platform === 'ios') {
         latestIosKb = open ? Math.max(0, Number(detail?.height || 0)) : 0;
-        setIosKeyboardInsetPx(latestIosKb);
       }
       if (open) {
         window.setTimeout(() => ensureFocusedInputVisibleAboveKeyboard(latestIosKb), 60);
@@ -370,7 +368,6 @@ export const MobileAppView: React.FC = () => {
         const active = document.activeElement as HTMLElement | null;
         if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA')) {
           setIsMobileKeyboardOpen(false);
-          setIosKeyboardInsetPx(0);
           latestIosKb = 0;
         }
       }, 150);
@@ -450,17 +447,12 @@ export const MobileAppView: React.FC = () => {
 
   return (
     <div
-      style={
-        iosKeyboardInsetPx > 60
-          ? { paddingBottom: `${iosKeyboardInsetPx + 28}px` }
-          : undefined
-      }
       className={`${
         themeMode === 'light' ? 'bg-[#F8F7F4] text-slate-900' : 'bg-[#09090B] text-zinc-100'
       } font-body-md flex flex-col min-h-screen min-h-dvh mx-auto relative shadow-2xl border-x border-white/10 ${
         isLandscapeCompact
           ? 'w-full max-w-5xl pb-6'
-          : `max-w-xl ${currentSubmenus.length > 0 ? 'pb-24' : 'pb-12'}`
+          : `max-w-xl ${currentSubmenus.length > 0 ? 'pb-24' : 'pb-8'}`
       }`}
     >
       {/* 상단 통합 헤더: 상태바(pt-safe) 영역부터 네비게이션 바까지 단일 불투명 배경으로 일체화하여 iOS 다이나믹 아일랜드·상태바 경계 이질감 원천 제거 */}
