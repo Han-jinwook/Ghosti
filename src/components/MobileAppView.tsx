@@ -335,7 +335,7 @@ export const MobileAppView: React.FC = () => {
       }`}
     >
       {/* 상단 통합 헤더: 스마트폰 가로(Landscape) 회전 시 1줄 초슬림 바(42px)로 자동 압축해 본문 가시 영역을 극대화 */}
-      <header className="sticky top-0 inset-x-0 z-50 backdrop-blur-xl pt-safe pl-safe pr-safe">
+      <header className="sticky top-0 inset-x-0 z-50 backdrop-blur-xl pt-safe">
         {isLandscapeCompact ? (
           <div
             className={`px-safe py-1 flex items-center justify-between gap-2 border-b transition-colors ${
@@ -441,7 +441,7 @@ export const MobileAppView: React.FC = () => {
         ) : (
           <>
             <div
-              className={`px-3 py-2 flex flex-col gap-2 border-b transition-colors ${
+              className={`px-safe py-2 flex flex-col gap-2 border-b transition-colors ${
                 themeMode === 'light'
                   ? 'bg-white/95 border-[#EAE8E1]'
                   : 'bg-[#09090B]/95 border-white/10'
@@ -807,12 +807,16 @@ export const MobileAppView: React.FC = () => {
         )}
 
       {/* 서브메뉴 1번: ✨ 1초 진단 & 공유 시작 (정식 구독 시 Auto-Hide) */}
-      {activeLoungeType !== 'personal' && mobileTab === 'trial' && <LoungeView />}
+      {activeLoungeType !== 'personal' && mobileTab === 'trial' && (
+        <div className="w-full px-safe">
+          <LoungeView />
+        </div>
+      )}
 
       {/* [모바일 통합 1번 영역: 👻 귀신비서 (비서 대화 + 사진 정리 + 1초 검색 + 내 기기 통합 원스톱)] & [공유방 검색 피드] */}
       {(activeLoungeType === 'personal' || mobileTab === 'search') && (
         <main
-          className={`flex-1 w-full px-safe sm:px-4 flex flex-col ${
+          className={`flex-1 w-full px-safe flex flex-col ${
             isLandscapeCompact ? 'pt-2 pb-5 gap-2.5' : 'pt-3.5 pb-8 gap-4'
           }`}
         >

@@ -1,4 +1,5 @@
 import UIKit
+import WebKit
 import Capacitor
 import Photos
 import AVFoundation
@@ -8,6 +9,53 @@ class GhostiBridgeViewController: CAPBridgeViewController {
     override open func capacitorDidLoad() {
         super.capacitorDidLoad()
         bridge?.registerPluginInstance(GhostiMobileCarePlugin())
+    }
+
+    override open func viewDidAppear(_ animated: Bool) {
+        super.viewDidAppear(animated)
+        syncHardwareSafeAreaCssVars()
+        DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
+            self?.syncHardwareSafeAreaCssVars()
+        }
+    }
+
+    override open func viewSafeAreaInsetsDidChange() {
+        super.viewSafeAreaInsetsDidChange()
+        syncHardwareSafeAreaCssVars()
+    }
+
+    override open func viewDidLayoutSubviews() {
+        super.viewDidLayoutSubviews()
+        syncHardwareSafeAreaCssVars()
+    }
+
+    override open func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
+        super.viewWillTransition(to: size, with: coordinator)
+        coordinator.animate(alongsideTransition: { [weak self] _ in
+            self?.syncHardwareSafeAreaCssVars()
+        }, completion: { [weak self] _ in
+            self?.syncHardwareSafeAreaCssVars()
+        })
+    }
+
+    private func syncHardwareSafeAreaCssVars() {
+        guard isViewLoaded else { return }
+        let insets = view.safeAreaInsets
+        let top = Int(ceil(insets.top))
+        let bottom = Int(ceil(insets.bottom))
+        let left = Int(ceil(insets.left))
+        let right = Int(ceil(insets.right))
+        let js = """
+        (function(){
+          var r = document.documentElement;
+          if (!r) return;
+          r.style.setProperty('--ghosti-safe-top', '\(top)px');
+          r.style.setProperty('--ghosti-safe-bottom', '\(bottom)px');
+          r.style.setProperty('--ghosti-safe-left', '\(left)px');
+          r.style.setProperty('--ghosti-safe-right', '\(right)px');
+        })();
+        """
+        webView?.evaluateJavaScript(js, completionHandler: nil)
     }
 }
 

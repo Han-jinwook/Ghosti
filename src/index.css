@@ -30,26 +30,6 @@
     color: #e3e1e9;
   }
 
-  .pb-safe {
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-  .pt-safe {
-    padding-top: env(safe-area-inset-top, 0px);
-  }
-  .pl-safe {
-    padding-left: env(safe-area-inset-left, 0px);
-  }
-  .pr-safe {
-    padding-right: env(safe-area-inset-right, 0px);
-  }
-  .px-safe {
-    padding-left: max(0.75rem, env(safe-area-inset-left, 0px));
-    padding-right: max(0.75rem, env(safe-area-inset-right, 0px));
-  }
-  .mb-safe {
-    margin-bottom: env(safe-area-inset-bottom, 0px);
-  }
-
   /* 모바일(iOS Safari / WKWebView / 인앱) 입력창 포커스 시 자동 화면 확대(Auto-Zoom) 원천 차단 + placeholder 잘림 방지 */
   @media (max-width: 767px) {
     input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
@@ -67,6 +47,62 @@
   }
 }
 
+/* [iOS WKWebView / Dynamic Island 가로 회전 노치 보호]:
+   1) Capacitor WKWebView(contentInset=.never)에서 env(safe-area-inset-left)가 0px로 보고되는 현상을
+      GhostiBridgeViewController 하드웨어 주입 변수(--ghosti-safe-*) 및 iOS WebKit 가로 모드 최소 안전 여백(64px)으로 2중 방어합니다.
+   2) @layer base 바깥에 선언하고 !important를 부여하여 sm:px-4 등 Tailwind 유틸리티가 Safe-Area 여백을 덮어쓰지 못하게 합니다. */
+:root {
+  --ghosti-safe-top: 0px;
+  --ghosti-safe-bottom: 0px;
+  --ghosti-safe-left: 0px;
+  --ghosti-safe-right: 0px;
+  --ghosti-ios-landscape-min-x: 0px;
+}
+
+@supports (-webkit-touch-callout: none) {
+  @media (orientation: landscape) and (max-height: 620px) {
+    :root {
+      --ghosti-ios-landscape-min-x: 64px;
+    }
+  }
+}
+
+.pb-safe {
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), var(--ghosti-safe-bottom, 0px)) !important;
+}
+.pt-safe {
+  padding-top: max(env(safe-area-inset-top, 0px), var(--ghosti-safe-top, 0px)) !important;
+}
+.pl-safe {
+  padding-left: max(
+    env(safe-area-inset-left, 0px),
+    var(--ghosti-safe-left, 0px),
+    var(--ghosti-ios-landscape-min-x, 0px)
+  ) !important;
+}
+.pr-safe {
+  padding-right: max(
+    env(safe-area-inset-right, 0px),
+    var(--ghosti-safe-right, 0px),
+    var(--ghosti-ios-landscape-min-x, 0px)
+  ) !important;
+}
+.px-safe {
+  padding-left: max(
+    0.875rem,
+    calc(max(env(safe-area-inset-left, 0px), var(--ghosti-safe-left, 0px)) + 8px),
+    var(--ghosti-ios-landscape-min-x, 0px)
+  ) !important;
+  padding-right: max(
+    0.875rem,
+    calc(max(env(safe-area-inset-right, 0px), var(--ghosti-safe-right, 0px)) + 8px),
+    var(--ghosti-ios-landscape-min-x, 0px)
+  ) !important;
+}
+.mb-safe {
+  margin-bottom: max(env(safe-area-inset-bottom, 0px), var(--ghosti-safe-bottom, 0px)) !important;
+}
+
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -75,12 +111,22 @@
   scrollbar-width: none;
 }
 
-/* 모달 오버레이(.fixed)에서 p-3 등 유틸리티 클래스가 노치·시계·하단 홈바 Safe-Area 여백을 덮어쓰지 못하도록 최상위 우선순위 보장 */
+/* 모달 오버레이(.fixed)에서 p-3 등 유틸리티 클래스가 노치·시계·하단 홈바·가로 다이나믹 아일랜드 Safe-Area 여백을 덮어쓰지 못하도록 최상위 우선순위 보장 */
 .fixed.pt-safe {
-  padding-top: max(calc(env(safe-area-inset-top, 0px) + 14px), 22px);
+  padding-top: max(calc(max(env(safe-area-inset-top, 0px), var(--ghosti-safe-top, 0px)) + 14px), 22px) !important;
+  padding-left: max(
+    0.75rem,
+    calc(max(env(safe-area-inset-left, 0px), var(--ghosti-safe-left, 0px)) + 8px),
+    var(--ghosti-ios-landscape-min-x, 0px)
+  ) !important;
+  padding-right: max(
+    0.75rem,
+    calc(max(env(safe-area-inset-right, 0px), var(--ghosti-safe-right, 0px)) + 8px),
+    var(--ghosti-ios-landscape-min-x, 0px)
+  ) !important;
 }
 .fixed.pb-safe {
-  padding-bottom: max(calc(env(safe-area-inset-bottom, 0px) + 14px), 22px);
+  padding-bottom: max(calc(max(env(safe-area-inset-bottom, 0px), var(--ghosti-safe-bottom, 0px)) + 14px), 22px) !important;
 }
 
 @keyframes floatSlow {
