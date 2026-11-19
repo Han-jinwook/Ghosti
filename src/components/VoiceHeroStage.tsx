@@ -291,8 +291,8 @@ export const VoiceHeroStage: React.FC = () => {
                 <span>{isListening ? '듣는 중' : '말하기'}</span>
               </button>
 
-              {/* 음성 아이콘 하나에 재생/중단 토글 + [남 | 여] 성우 선택이 통합된 트렌디 컨트롤 캡슐 */}
-              <VoiceActorControlPill />
+              {/* 음성 아이콘 하나에 재생/중단 토글 + [남 | 여] 성우 선택이 통합된 트렌디 컨트롤 캡슐 (모바일 귀신비서 탭은 상단 대화창 헤더에 이미 있으므로 중복 노출 차단) */}
+              {!(isMobile && activeLoungeType === 'personal') && <VoiceActorControlPill />}
             </div>
           )}
         </form>

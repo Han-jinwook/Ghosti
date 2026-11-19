@@ -2650,13 +2650,13 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     }, 80);
                   });
                 } else {
-                  window.scrollTo({ top: 0, left: 0, behavior: 'smooth' });
                   window.setTimeout(() => {
                     const searchInput = document.getElementById(
                       'ghosti-voice-hero-search-input'
                     ) as HTMLInputElement | null;
+                    searchInput?.scrollIntoView({ behavior: 'smooth', block: 'center' });
                     searchInput?.focus();
-                  }, 180);
+                  }, 120);
                 }
                 return;
               }
