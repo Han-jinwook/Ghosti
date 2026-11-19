@@ -4182,12 +4182,18 @@ def release_all_modifiers() -> None:
             u32.keybd_event(mod_vk, sc, KEYEVENTF_KEYUP, 0)
 
 
+_SELF_CLIP_COMBO_UNTIL: float = 0.0
+
+
 def tap_key_combo(modifiers: list[int], vk: int) -> None:
     """
     [Win10/Win11 NumLock ON 환경 100% 호환 키 사출]
     - VK_HOME(0x24), VK_END(0x23), 방향키 등은 반드시 KEYEVENTF_EXTENDEDKEY(0x0001) 플래그를 포함해야
       NumLock이 켜진 상태에서 Shift+Home이 Numpad 7(비선택 이동)로 오작동하지 않고 줄 전체를 정확히 블록 선택합니다!
     """
+    global _SELF_CLIP_COMBO_UNTIL
+    if VK_CONTROL in modifiers and vk in (VK_C, VK_V, VK_Z):
+        _SELF_CLIP_COMBO_UNTIL = time.time() + 0.35
     ext_flag = KEYEVENTF_EXTENDEDKEY if vk in _EXTENDED_VKS else 0
     vk_sc = u32.MapVirtualKeyW(vk, 0)
     for mod in modifiers:
@@ -5851,10 +5857,34 @@ def superpower_1_clean_and_iron_lines(
                 except Exception:
                     pass
 
-    # 3) 클립보드 복사(Ctrl+C) 텍스트의 HTML/RTF 서식 세탁 + 줄바꿈 다림질 장전 (Ctrl+V 한 번으로 깔끔히 붙여넣기!)
+    # 3) 클립보드 복사(Ctrl+C) 텍스트의 HTML/RTF 서식 세탁 + 줄바꿈 다림질 장전 및 빈 줄 커서 시 즉시 사출
     if clip_txt and clip_txt.strip():
         out_clip = clean_and_iron_text(clip_txt)
         out_clip_win = out_clip.replace("\r\n", "\n").replace("\r", "\n").replace("\n", "\r\n")
+        if ed_target:
+            try:
+                cur_ln_chk = _get_edit_control_current_line(ed_target) or ""
+                if not cur_ln_chk.strip():
+                    full_before_ins, _, is_rich_ins = _get_edit_full_text_and_index_str(ed_target)
+                    ins_str = out_clip if is_rich_ins else out_clip_win
+                    rbuf_ins = ctypes.create_unicode_buffer(ins_str)
+                    u32.SendMessageW(ed_target, EM_REPLACESEL, 1, ctypes.addressof(rbuf_ins))
+                    full_after_ins, _, _ = _get_edit_full_text_and_index_str(ed_target)
+                    root_ins = u32.GetAncestor(ed_target, 2) or ed_target
+                    arm_undo_snapshot(
+                        root_ins,
+                        ed_target,
+                        clip_txt,
+                        ins_str,
+                        mode="edit_replace",
+                        full_doc_before=full_before_ins,
+                        full_doc_after=full_after_ins,
+                    )
+                    daemon_set_cb(out_clip_win)
+                    show_ghost_toast("👻 귀신같이 [1] 서식·줄바꿈 다림질 완료 (Ctrl+Z 원복)")
+                    return True
+            except Exception:
+                pass
         arm_undo_snapshot(_LAST_TARGET_HWND, ed_target, clip_txt, out_clip_win, mode="pre_iron")
         daemon_set_cb(out_clip_win)
         show_ghost_toast("👻 귀신같이 [1] 서식·줄바꿈 다림질 완료 (Ctrl+V로 붙여넣기)")
@@ -7528,12 +7558,15 @@ def main() -> None:
             _capture_target_hwnd()
         play_baby_ghost_sound(mode="summon")
         record_feature_telemetry("ctrl0_summon_bar")
+        already_armed_seq = bool(seq_mode and len(seq_queue) >= 2 and not pasting_started)
         seq_mode = True
         pasting_started = False
-        copied_after_trigger = False
+        copied_after_trigger = already_armed_seq
 
         live_clip = get_clipboard_text()
-        if live_clip:
+        if already_armed_seq and recent_unpasted:
+            last_summon_raw_clip = recent_unpasted[-1]
+        elif live_clip:
             last_summon_raw_clip = live_clip
             if not recent_unpasted:
                 recent_unpasted.append(live_clip)
@@ -7982,7 +8015,11 @@ def main() -> None:
                     last_seq_num = curr_seq
                     copied = get_clipboard_text()
                     if copied:
-                        if (copied == last_self_text and now < self_set_until) or (menu_armed and (now - last_summon_ts) < 1.5):
+                        if (
+                            (copied == last_self_text and now < self_set_until)
+                            or now < _SELF_CLIP_COMBO_UNTIL
+                            or (menu_armed and (now - last_summon_ts) < 1.5)
+                        ):
                             pass
                         else:
                             last_self_text = None
@@ -7990,28 +8027,60 @@ def main() -> None:
                             disarm_sub_hotkeys()
                             record_ai_history(copied)
 
-                            if seq_mode:
-                                if pasting_started:
-                                    seq_mode = False
-                                    pasting_started = False
-                                    copied_after_trigger = False
-                                    seq_queue.clear()
-                                    recent_unpasted = [copied]
-                                    last_copy_ts = now
-                                else:
-                                    if not copied_after_trigger:
-                                        seq_queue.clear()
-                                        copied_after_trigger = True
-                                    if not seq_queue or seq_queue[-1] != copied:
-                                        seq_queue.append(copied)
-                                    if len(seq_queue) >= 2:
-                                        daemon_set_clipboard(seq_queue[0])
+                            fg_cp = u32.GetForegroundWindow()
+                            fg_cp_proc = _get_process_name_from_hwnd(fg_cp).lower() if fg_cp else ""
+                            has_xl_fmt = has_excel_clipboard_format()
+                            is_multiline_plain = ("\n" in copied.strip()) and not has_xl_fmt
+                            is_excel_or_formula = (
+                                fg_cp_proc == "excel.exe"
+                                or has_xl_fmt
+                                or copied.lstrip().startswith("=")
+                            )
+                            seq_burst_expired = last_copy_ts > 0 and (now - last_copy_ts) > 90.0
+
+                            if is_multiline_plain or is_excel_or_formula:
+                                # 다중 줄 문장([1] 다림질 대상·노션 블록) 및 엑셀 셀/수식 복사는 원본 클립보드 서식·점선 테두리를 100% 보존
+                                seq_mode = False
+                                pasting_started = False
+                                copied_after_trigger = False
+                                seq_queue.clear()
+                                recent_unpasted = [copied]
+                                last_copy_ts = now
+                            elif pasting_started or seq_burst_expired:
+                                seq_mode = False
+                                pasting_started = False
+                                copied_after_trigger = False
+                                seq_queue.clear()
+                                recent_unpasted = [copied]
+                                last_copy_ts = now
                             else:
-                                if last_copy_ts > 0 and (now - last_copy_ts) > AUTO_CLEAN_SECONDS:
-                                    recent_unpasted.clear()
                                 if not recent_unpasted or recent_unpasted[-1] != copied:
                                     recent_unpasted.append(copied)
                                 last_copy_ts = now
+
+                                if seq_mode:
+                                    if not copied_after_trigger:
+                                        seq_queue = list(recent_unpasted)
+                                        copied_after_trigger = True
+                                    elif not seq_queue or seq_queue[-1] != copied:
+                                        seq_queue.append(copied)
+                                    if len(seq_queue) >= 2:
+                                        daemon_set_clipboard(seq_queue[0])
+                                        show_ghost_toast(
+                                            f"👻 순차복붙 {len(seq_queue)}개 장전 (Ctrl+V 연타 ➔ 1번부터 입력)",
+                                            duration_ms=1900,
+                                        )
+                                elif len(recent_unpasted) >= 2 and all("\n" not in it.strip() for it in recent_unpasted):
+                                    # [무소환 자동 순차 복붙]: 붙여넣기 없이 2개 이상 연속 Ctrl+C 복사 시 1번 항목부터 자동 장전!
+                                    seq_mode = True
+                                    pasting_started = False
+                                    copied_after_trigger = True
+                                    seq_queue = list(recent_unpasted)
+                                    daemon_set_clipboard(seq_queue[0])
+                                    show_ghost_toast(
+                                        f"👻 순차복붙 {len(seq_queue)}개 장전 (Ctrl+V 연타 ➔ 1번부터 입력)",
+                                        duration_ms=1900,
+                                    )
                     else:
                         # 유저의 직접 파일 복사(CF_HDROP) 시각 기록 (데몬 자체 라벨러 CF_HDROP 재주입은 _SELF_HDROP_UNTIL로 제외)
                         if now >= _SELF_HDROP_UNTIL and get_clipboard_hdrop_files():
@@ -8791,7 +8860,7 @@ def main() -> None:
                     if ctrl_down:
                         pending_first_typo = None
 
-                if ctrl_v_now and not was_ctrl_v_down:
+                if ctrl_v_now and not was_ctrl_v_down and now >= _SELF_CLIP_COMBO_UNTIL:
                     last_paste_ts = now
                     typed_ascii_buf.clear()
                     pending_first_typo = None
@@ -8799,25 +8868,39 @@ def main() -> None:
                     disarm_sub_hotkeys()
                     if seq_mode and seq_queue:
                         pasting_started = True
-                        time.sleep(0.14)
+                        time.sleep(0.08)
                         seq_queue.pop(0)
                         if seq_queue:
-                            # 다음 사출할 항목을 현재 창/입력칸 문맥(AI_ENGINE)으로 비순차 최적 선별하여 미리 장전!
-                            ctx = get_focused_field_context()
-                            best_idx, is_smart_matched = select_best_matching_item_index(seq_queue, ctx)
-                            if best_idx != 0:
-                                matched_item = seq_queue.pop(best_idx)
-                                seq_queue.insert(0, matched_item)
+                            fg_pv = u32.GetForegroundWindow()
+                            fg_pv_proc = _get_process_name_from_hwnd(fg_pv).lower() if fg_pv else ""
+                            is_plain_doc_editor = fg_pv_proc in ("notepad.exe", "wordpad.exe", "winword.exe", "hwp.exe")
+                            is_smart_matched = False
+                            if not is_plain_doc_editor:
+                                ctx = get_focused_field_context()
+                                best_idx, is_smart_matched = select_best_matching_item_index(seq_queue, ctx)
+                                if best_idx != 0:
+                                    matched_item = seq_queue.pop(best_idx)
+                                    seq_queue.insert(0, matched_item)
                             daemon_set_clipboard(seq_queue[0])
                             if is_smart_matched:
-                                show_ghost_toast(f"👻 귀신같이 AI칸맞춤 대기 ({seq_queue[0][:12]})")
+                                show_ghost_toast(f"👻 귀신같이 AI칸맞춤 대기 ({seq_queue[0][:12]})", duration_ms=1600)
+                            else:
+                                show_ghost_toast(
+                                    f"👻 순차복붙 다음 대기 ({len(seq_queue)}개 남음: {seq_queue[0][:14]})",
+                                    duration_ms=1500,
+                                )
                         else:
                             seq_mode = False
                             pasting_started = False
                             copied_after_trigger = False
                             recent_unpasted.clear()
                             complete_feature_action_success("feat_1_seq_paste")
-                            show_ghost_toast("👻 귀신같이 순차붙여넣기")
+                            show_ghost_toast("👻 귀신같이 순차붙여넣기 완료!", duration_ms=1600)
+                        # sleep 동안 V 키를 이미 뗀 빠른 연타 입력을 놓치지 않도록 현재 물리 키 상태를 재갱신
+                        ctrl_v_now = (
+                            ((u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0)
+                            and ((u32.GetAsyncKeyState(VK_V) & 0x8000) != 0)
+                        )
                     else:
                         recent_unpasted.clear()
 
