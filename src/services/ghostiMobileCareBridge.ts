@@ -70,6 +70,8 @@ export interface NativeGalleryVideoMeta {
 export interface ScanDeviceGalleryResult {
   ok: boolean;
   permissionGranted: boolean;
+  limitedAccess?: boolean;
+  videoPermissionGranted?: boolean;
   offset?: number;
   totalPhotoCount: number;
   photos: NativeGalleryPhotoMeta[];
@@ -92,6 +94,7 @@ export interface GhostiMobileCarePluginInterface {
     thumbMaxDim?: number;
     includeVideos?: boolean;
     promptPermission?: boolean;
+    forceExpandSelected?: boolean;
   }): Promise<ScanDeviceGalleryResult>;
   resolveVideoPlaybackUrl(options: { id: string }): Promise<{ ok: boolean; fileUrl: string }>;
   requestSystemPhotoTrash(options: {
@@ -342,11 +345,14 @@ export async function scanNativeDeviceGalleryMedia(options?: {
   thumbMaxDim?: number;
   includeVideos?: boolean;
   promptPermission?: boolean;
+  forceExpandSelected?: boolean;
 }): Promise<ScanDeviceGalleryResult> {
   if (!isCapacitorNativeMobileRuntime()) {
     return {
       ok: false,
       permissionGranted: false,
+      limitedAccess: false,
+      videoPermissionGranted: false,
       totalPhotoCount: 0,
       photos: [],
       videos: [],
@@ -359,11 +365,14 @@ export async function scanNativeDeviceGalleryMedia(options?: {
       thumbMaxDim: options?.thumbMaxDim ?? 448,
       includeVideos: options?.includeVideos ?? (options?.offset ?? 0) === 0,
       promptPermission: options?.promptPermission ?? true,
+      forceExpandSelected: options?.forceExpandSelected ?? false,
     });
     if (res && typeof res.ok === 'boolean') {
       return {
         ok: res.ok,
         permissionGranted: Boolean(res.permissionGranted),
+        limitedAccess: Boolean(res.limitedAccess),
+        videoPermissionGranted: res.videoPermissionGranted !== false && Boolean(res.permissionGranted),
         offset: res.offset ?? options?.offset ?? 0,
         totalPhotoCount: Number(res.totalPhotoCount || 0),
         photos: Array.isArray(res.photos) ? res.photos : [],
@@ -376,6 +385,8 @@ export async function scanNativeDeviceGalleryMedia(options?: {
   return {
     ok: false,
     permissionGranted: false,
+    limitedAccess: false,
+    videoPermissionGranted: false,
     totalPhotoCount: 0,
     photos: [],
     videos: [],

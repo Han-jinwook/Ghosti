@@ -16,6 +16,10 @@ import { VoiceHeroStage } from './VoiceHeroStage';
 import { Stage1MinimalCarePreview } from './Stage1MinimalPreview';
 import { MobileCleanerRescueBanner } from './MobileCleanerRescueBanner';
 import {
+  isCapacitorNativeMobileRuntime,
+  openNativeAppPermissionSettings,
+} from '../services/ghostiMobileCareBridge';
+import {
   LoungeCustomSettingsHeader,
   LoungeFeedContextBanner,
   LoungeIndexingWaitingRoom,
@@ -256,6 +260,10 @@ export const MobileAppView: React.FC = () => {
     activeFamilyRoom,
     setActiveFamilyRoom,
     setDoorplatePickerClusterId,
+    mobileGalleryScanning,
+    mobileGalleryPermissionDenied,
+    mobileGalleryLimitedAccess,
+    syncMobileNativeGalleryAuto,
   } = useSaySeeStore();
 
   const [showPrivateSyncSection, setShowPrivateSyncSection] = useState(false);
@@ -878,6 +886,11 @@ export const MobileAppView: React.FC = () => {
                       : `🎬 전체 동영상 (${displayVideos.length}개)`}
                   </span>
                   <div className="flex items-center gap-1.5">
+                    {isCapacitorNativeMobileRuntime() && mobileGalleryScanning && (
+                      <span className="px-2.5 py-1 rounded-lg bg-teal-500/15 border border-teal-400/40 text-teal-300 font-label-sm text-[11px] font-extrabold">
+                        🔄 동영상·글자 자동 인덱싱 중...
+                      </span>
+                    )}
                     {displayVideos.length < videoSceneItems.length && (
                       <button
                         onClick={() => resetSearchSpaceToAll('video')}
@@ -890,10 +903,45 @@ export const MobileAppView: React.FC = () => {
                 </div>
 
                 {displayVideos.length === 0 ? (
-                  <div className="p-4 rounded-2xl bg-zinc-900/80 border border-white/10 text-zinc-300 text-[12.5px] leading-relaxed">
-                    {hasExecutedUserSearch && activeQuery
-                      ? `“${activeQuery}”와 일치하는 동영상 장면이 없습니다.`
-                      : '🎬 내 스마트폰 갤러리에 저장된 동영상이 아직 없어요. 카메라로 영상을 촬영하거나 갤러리에 영상을 저장하면 자동으로 인덱싱되어 이곳에 표시됩니다.'}
+                  <div className="p-4 rounded-2xl bg-zinc-900/80 border border-white/10 text-zinc-300 text-[12.5px] leading-relaxed flex flex-col gap-2.5">
+                    <span>
+                      {hasExecutedUserSearch && activeQuery
+                        ? `“${activeQuery}”와 일치하는 동영상 장면이 없습니다.`
+                        : mobileGalleryScanning
+                        ? '🔄 내 스마트폰 갤러리에 있는 동영상과 화면 속 글자를 자동으로 인덱싱하고 있습니다. 잠시만 기다려 주세요...'
+                        : mobileGalleryPermissionDenied
+                        ? '📱 스마트폰 사진·동영상 접근 권한이 허용되지 않아 갤러리 영상을 읽지 못했습니다. 권한 설정에서 [사진 및 동영상 → 모두 허용]을 켜고 앱으로 돌아오시면 자동으로 인덱싱됩니다.'
+                        : mobileGalleryLimitedAccess
+                        ? '📱 현재 스마트폰 권한이 [선택한 사진만 허용(제한된 접근)]으로 설정되어 있어 동영상이 아직 포함되지 않았습니다. 아래 버튼으로 동영상을 추가 선택하거나 [모두 허용]으로 변경하면 자동으로 인덱싱됩니다.'
+                        : '🎬 내 스마트폰 갤러리에 저장된 동영상이 아직 없어요. 카메라로 영상을 촬영하거나 메신저에서 영상을 갤러리에 저장한 뒤 돌아오시면 자동으로 인덱싱되어 이곳에 표시됩니다.'}
+                    </span>
+                    {isCapacitorNativeMobileRuntime() &&
+                      !mobileGalleryScanning &&
+                      (mobileGalleryPermissionDenied || mobileGalleryLimitedAccess) && (
+                        <div className="flex flex-wrap items-center gap-2 pt-0.5">
+                          {mobileGalleryLimitedAccess && (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void syncMobileNativeGalleryAuto({
+                                  promptPermission: true,
+                                  forceExpandSelected: true,
+                                })
+                              }
+                              className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[12px] font-extrabold cursor-pointer"
+                            >
+                              🔓 동영상 추가 선택하기
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => void openNativeAppPermissionSettings()}
+                            className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-[12px] font-extrabold cursor-pointer"
+                          >
+                            ⚙️ 설정에서 사진·동영상 모두 허용하기
+                          </button>
+                        </div>
+                      )}
                   </div>
                 ) : (
                 /* [처방 4] 모바일 스크롤 지옥 해방: 세로 나열 대신 좌우 스와이프 카드덱(Horizontal Snap Carousel)! */

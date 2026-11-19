@@ -49,7 +49,11 @@ import {
   staticCaptionedPhotoIds,
   toRows,
 } from './aiSharedRuntime';
-import { embedSingleLocalVideoIfNeeded } from './aiVideoEngine';
+import {
+  embedSingleLocalVideoIfNeeded,
+  extractVideoScreenTextOnDemand,
+  type VideoOcrLineItem,
+} from './aiVideoEngine';
 import { recognizeDataUrlWithPaddleOcr } from './aiPaddleOcrEngine';
 
 export async function fetchAutonomousFaceClusters(): Promise<{
@@ -2023,7 +2027,12 @@ export async function startSilentRealMediaVisionIndexing(params: {
   onVideoThumbHydrated?: (videoFileName: string, thumbUrl: string) => void;
   onVideoOcrHydrated?: (
     videoFileName: string,
-    ocrMeta: { hasScreenOcrText: boolean; ocrLineCount: number; ocrFullText: string }
+    ocrMeta: {
+      hasScreenOcrText: boolean;
+      ocrLineCount: number;
+      ocrLines?: VideoOcrLineItem[];
+      ocrFullText: string;
+    }
   ) => void;
   onPhotoVisionHydrated?: (photoId: string, patch: Partial<PhotoItem>) => void;
 }): Promise<void> {
@@ -2042,6 +2051,47 @@ export async function startSilentRealMediaVisionIndexing(params: {
   aiRuntimeFlags.silentMediaIndexingRunning = true;
   try {
     await hydrateRealMediaVectorCacheOnce();
+
+    // 0) [모바일 초고속 화면 글자 선(先) 인덱싱 & 2중 WASM 피크 원천 차단]:
+    //    350MB 거대 비전 모델(sharedVisionModel)을 로드하기 전에, 앱 번들에 내장된 경량 PP-OCRv5(16MB)만으로
+    //    모바일 갤러리 동영상들의 화면 글자(ocrLines)를 2~4초 내에 먼저 추출해 즉시 검색·열람 가능하게 만듭니다.
+    if (isMobileEnv) {
+      const mobileVidsForOcr = params.videos
+        .filter(
+          (v) =>
+            !v.isAllBlack &&
+            String(v.id || '').startsWith('mobile_vid_') &&
+            !v.ocrFullText &&
+            (!Array.isArray(v.ocrLines) || v.ocrLines.length === 0)
+        )
+        .slice(0, 12);
+      for (const mVid of mobileVidsForOcr) {
+        try {
+          while (aiRuntimeFlags.activeVideoPlaybackCount > 0) {
+            await new Promise((r) => setTimeout(r, 400));
+          }
+          const ocrOut = await extractVideoScreenTextOnDemand(mVid);
+          if (ocrOut.ocrLines && ocrOut.ocrLines.length > 0) {
+            mVid.hasScreenOcrText = true;
+            mVid.ocrLineCount = ocrOut.ocrLines.length;
+            mVid.ocrLines = ocrOut.ocrLines;
+            mVid.ocrFullText = ocrOut.fullText;
+            params.onVideoOcrHydrated?.(mVid.videoFileName, {
+              hasScreenOcrText: true,
+              ocrLineCount: ocrOut.ocrLines.length,
+              ocrLines: ocrOut.ocrLines,
+              ocrFullText: ocrOut.fullText,
+            });
+          } else {
+            mVid.ocrLines = [];
+          }
+        } catch {
+          /* ignore single video OCR prewarm error */
+        }
+        await new Promise((r) => setTimeout(r, 60));
+      }
+    }
+
     // [iOS WKWebView Jetsam OOM 원천 차단]:
     // 단독 textQueryModel(~170MB)과 sharedVisionModel(~350MB) 2벌이 동시에 메모리에 올라가면 iOS WebView가 강제 리로드되므로,
     // 텍스트+비전을 모두 내장한 sharedVisionModel 단 1벌만 로드하여 개념 앵커와 이미지 추론을 함께 처리합니다.

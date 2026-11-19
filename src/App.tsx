@@ -610,7 +610,31 @@ export const App: React.FC = () => {
       void initApp(true);
     };
     window.addEventListener('zCoreConnected', handleZCoreConnected);
-    return () => window.removeEventListener('zCoreConnected', handleZCoreConnected);
+
+    // [모바일 앱 백그라운드 복귀 자동 인덱싱]:
+    // 카메라 촬영·텔레그램/카톡 영상 저장·OS 권한 설정 허용 직후 앱으로 돌아오면 수동 버튼 없이 자동으로 갤러리를 재스캔합니다.
+    let lastResumeSyncAt = 0;
+    const handleMobileForegroundResume = () => {
+      const isNative = Boolean(
+        (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+      );
+      if (!isNative) return;
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+      const now = Date.now();
+      if (now - lastResumeSyncAt < 1500) return;
+      lastResumeSyncAt = now;
+      window.setTimeout(() => {
+        void useSaySeeStore.getState().syncMobileNativeGalleryAuto({ promptPermission: false });
+      }, 220);
+    };
+    document.addEventListener('visibilitychange', handleMobileForegroundResume);
+    window.addEventListener('focus', handleMobileForegroundResume);
+
+    return () => {
+      window.removeEventListener('zCoreConnected', handleZCoreConnected);
+      document.removeEventListener('visibilitychange', handleMobileForegroundResume);
+      window.removeEventListener('focus', handleMobileForegroundResume);
+    };
   }, [initApp]);
 
   // 모바일(iOS Safari/Chrome/인앱 · Android Chrome/삼성인터넷/인앱 · PWA) 전 화면 공통 Pull-to-refresh 핸들러
@@ -729,12 +753,13 @@ export const App: React.FC = () => {
           (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
         );
         if (isNativeCapacitorApp) {
-          // 네이티브 스토어 앱에서는 WebView 전체 리로드(불러온 내 폰 사진 초기화 및 화면 깜빡임 유발) 대신 인앱 상태를 부드럽게 새로고침
+          // 네이티브 스토어 앱에서 화면을 아래로 당기면 WebView 리로드 없이 즉시 스마트폰 갤러리(사진·동영상) 자동 인덱싱 수행
+          void useSaySeeStore.getState().syncMobileNativeGalleryAuto({ promptPermission: true });
           window.setTimeout(() => {
             ptrDistRef.current = 0;
             setIsPtrRefreshing(false);
             setPtrPullDist(0);
-          }, 520);
+          }, 620);
         } else {
           window.setTimeout(() => {
             window.location.reload();

@@ -350,6 +350,15 @@ export const VoiceHeroStage: React.FC = () => {
               type="button"
               onClick={() => {
                 setSearchSpace('video');
+                if (
+                  typeof window !== 'undefined' &&
+                  Boolean(
+                    (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } })
+                      .Capacitor?.isNativePlatform?.()
+                  )
+                ) {
+                  void syncMobileNativeGalleryAuto({ promptPermission: true });
+                }
                 scrollToResults();
               }}
               className={`px-3 sm:px-4 py-2 rounded-full font-label-md text-[13px] font-bold flex items-center justify-center gap-1.5 transition-all border shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${

@@ -2297,7 +2297,11 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   </span>
                   <span className="font-headline-sm text-[15px] sm:text-[15.5px] text-white font-extrabold break-keep">
                     {displayPhotos.length === 0 && (isStoreAppMode || layout === 'mobile')
-                      ? '📱 아직 내 폰 사진을 불러오지 않았어요!'
+                      ? mobileGalleryScanning
+                        ? '🔄 내 폰 사진·동영상 자동 인덱싱 중이에요!'
+                        : mobileGalleryPermissionDenied
+                        ? '⚙️ 스마트폰 사진·동영상 접근 권한 허용이 필요해요!'
+                        : '✨ 내 스마트폰 사진첩에 정리할 사진이 없어요!'
                       : '✨ 중복되거나 연속으로 찍힌 사진 묶음이 0세트예요!'}
                   </span>
                   <span className="font-body-sm text-[12.5px] sm:text-[13px] text-zinc-400 break-keep">

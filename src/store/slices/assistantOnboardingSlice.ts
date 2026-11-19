@@ -169,10 +169,12 @@ export interface AssistantOnboardingSlice {
   initializing: boolean;
   mobileGalleryScanning: boolean;
   mobileGalleryPermissionDenied: boolean;
+  mobileGalleryLimitedAccess: boolean;
   initApp: (force?: boolean) => Promise<void>;
   syncMobileNativeGalleryAuto: (options?: {
     promptPermission?: boolean;
     maxTargetCount?: number;
+    forceExpandSelected?: boolean;
   }) => Promise<void>;
   importMobileLocalPhotos: (
     files: FileList | File[],
@@ -304,6 +306,8 @@ export interface AssistantOnboardingSlice {
   closeSetupOverlayGuide: () => void;
 }
 
+let pendingMobileGalleryResync = false;
+
 export const createAssistantOnboardingSlice: StateCreator<
   SaySeeStore,
   [],
@@ -371,6 +375,7 @@ export const createAssistantOnboardingSlice: StateCreator<
   initializing: false,
   mobileGalleryScanning: false,
   mobileGalleryPermissionDenied: false,
+  mobileGalleryLimitedAccess: false,
 
   conceptLexiconCount: TOTAL_CONCEPT_ANCHOR_COUNT,
   sentenceChips: [],
@@ -419,8 +424,11 @@ export const createAssistantOnboardingSlice: StateCreator<
     }
 
     const existingMobilePicked = !zCoreBridge.isConnected ? get().photos : [];
+    const existingMobileVideos = !zCoreBridge.isConnected ? get().videoSceneItems : [];
     const baseDatasetPhotos =
       dataset.photos.length > 0 ? dataset.photos : existingMobilePicked;
+    const baseDatasetVideos =
+      indexedVideos.length > 0 ? indexedVideos : existingMobileVideos;
 
     const enrichedPhotos = baseDatasetPhotos.map((p) => {
       const extraTags = memberTagsByPhoto.get(p.name);
@@ -475,7 +483,7 @@ export const createAssistantOnboardingSlice: StateCreator<
       matchedBy: 'text-direct' as const,
     }));
     const effectiveInitialDocs = sharedModeNow ? [] : indexedDocs;
-    const effectiveInitialVideos = sharedModeNow ? [] : indexedVideos;
+    const effectiveInitialVideos = sharedModeNow ? [] : baseDatasetVideos;
     const totalFrames = effectiveInitialVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
 
     const currentSearchSpace = get().searchSpace;
@@ -503,7 +511,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         sharedRoomHostPhotos: hostSharedPhotos,
         duplicateGroups: dataset.duplicateGroups,
         localDocuments: indexedDocs,
-        videoSceneItems: indexedVideos,
+        videoSceneItems: baseDatasetVideos,
         faceClusters: autoMultiClusters,
         latestCorpusYear: faceData.latestCorpusYear,
         onboardingProgress: {
@@ -529,7 +537,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         localDocuments: indexedDocs,
         matchedLocalDocs: effectiveInitialDocs,
         matchedVaultPhotos: initialVaultPhotos,
-        videoSceneItems: indexedVideos,
+        videoSceneItems: baseDatasetVideos,
         matchedVideoScenes: effectiveInitialVideos,
         faceClusters: autoMultiClusters,
         latestCorpusYear: faceData.latestCorpusYear,
@@ -688,7 +696,8 @@ export const createAssistantOnboardingSlice: StateCreator<
             void ensureTextQueryEncoderLoaded();
           }, 4000);
         }
-      } else if (!zCoreBridge.isConnected && typeof window !== 'undefined') {
+      }
+      if (isCapacitorNativeMobileRuntime() && !zCoreBridge.isConnected && typeof window !== 'undefined') {
         // [모바일 앱 수동 불러오기 전면 폐지 ➔ 자동 갤러리 인덱싱 개통]:
         // 앱 기동 즉시 IndexedDB 영구 색인본을 0.05초 만에 복원하고, Android MediaStore / iOS PhotoKit 네이티브 갤러리 자동 스캔을 수행합니다.
         window.setTimeout(() => {
@@ -704,13 +713,16 @@ export const createAssistantOnboardingSlice: StateCreator<
     if (zCoreBridge.isConnected) return;
     const promptPermission = options?.promptPermission ?? true;
     const maxTargetCount = options?.maxTargetCount ?? 240;
+    const forceExpandSelected = Boolean(options?.forceExpandSelected);
 
     // 1) 재실행/새로고침 시 0장 깜빡임 방지: IndexedDB 영구 캐시 즉시 복원
-    if (get().photos.length === 0 && get().videoSceneItems.length === 0) {
+    if (get().photos.length === 0 || get().videoSceneItems.length === 0) {
       const cached = await loadCachedMobileGalleryIndex();
       if (cached && (cached.photos.length > 0 || cached.videos.length > 0)) {
         const { updatedPhotos, duplicateGroups: cachedDupGroups } =
-          clusterPhotosIntoDuplicateGroups(cached.photos);
+          clusterPhotosIntoDuplicateGroups(
+            get().photos.length > 0 ? get().photos : cached.photos
+          );
         const cachedTrashIds = new Set<string>();
         updatedPhotos.forEach((p) => {
           if (p.trashCategory && !p.quarantined) cachedTrashIds.add(p.id);
@@ -728,16 +740,27 @@ export const createAssistantOnboardingSlice: StateCreator<
           duplicateGroups: cachedDupGroups,
           selectedTrashIds: cachedTrashIds,
           searchResults: state.hasExecutedUserSearch ? state.searchResults : cachedSearchResults,
-          videoSceneItems: cached.videos.length > 0 ? cached.videos : state.videoSceneItems,
+          videoSceneItems:
+            state.videoSceneItems.length > 0
+              ? state.videoSceneItems
+              : cached.videos.length > 0
+              ? cached.videos
+              : state.videoSceneItems,
           matchedVideoScenes:
-            cached.videos.length > 0 && !state.hasExecutedUserSearch
+            state.videoSceneItems.length === 0 &&
+            cached.videos.length > 0 &&
+            !state.hasExecutedUserSearch
               ? cached.videos
               : state.matchedVideoScenes,
         }));
       }
     }
 
-    if (!isCapacitorNativeMobileRuntime() || get().mobileGalleryScanning) {
+    if (!isCapacitorNativeMobileRuntime()) {
+      return;
+    }
+    if (get().mobileGalleryScanning) {
+      pendingMobileGalleryResync = true;
       return;
     }
 
@@ -754,17 +777,22 @@ export const createAssistantOnboardingSlice: StateCreator<
           thumbMaxDim: 448,
           includeVideos: offset === 0,
           promptPermission: offset === 0 ? promptPermission : false,
+          forceExpandSelected: offset === 0 ? forceExpandSelected : false,
         });
 
         if (!res.permissionGranted) {
           set({
             mobileGalleryScanning: false,
             mobileGalleryPermissionDenied: true,
+            mobileGalleryLimitedAccess: false,
           });
           return;
         }
 
-        set({ mobileGalleryPermissionDenied: false });
+        set({
+          mobileGalleryPermissionDenied: false,
+          mobileGalleryLimitedAccess: Boolean(res.limitedAccess),
+        });
         if (res.totalPhotoCount > 0) {
           totalGalleryPhotos = res.totalPhotoCount;
         }
@@ -926,6 +954,7 @@ export const createAssistantOnboardingSlice: StateCreator<
                   : v
               ),
             }));
+            void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
           },
           onPhotoVisionHydrated: (photoId, patch) => {
             set((state) => ({
@@ -941,6 +970,12 @@ export const createAssistantOnboardingSlice: StateCreator<
       }
     } finally {
       set({ mobileGalleryScanning: false });
+      if (pendingMobileGalleryResync) {
+        pendingMobileGalleryResync = false;
+        window.setTimeout(() => {
+          void get().syncMobileNativeGalleryAuto({ promptPermission: false });
+        }, 180);
+      }
     }
   },
 

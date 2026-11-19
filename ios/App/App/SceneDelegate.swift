@@ -2,6 +2,7 @@ import UIKit
 import WebKit
 import Capacitor
 import Photos
+import PhotosUI
 import AVFoundation
 
 @objc(GhostiBridgeViewController)
@@ -115,21 +116,43 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         let thumbMaxDim = min(640, max(240, call.getInt("thumbMaxDim") ?? 448))
         let includeVideos = call.getBool("includeVideos") ?? (offset == 0)
         let promptPerm = call.getBool("promptPermission") ?? true
+        let forceExpandSelected = call.getBool("forceExpandSelected") ?? false
 
         let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
+        if #available(iOS 14, *), status == .limited, forceExpandSelected {
+            DispatchQueue.main.async {
+                if let vc = self.bridge?.viewController {
+                    PHPhotoLibrary.shared().presentLimitedLibraryPicker(from: vc)
+                }
+                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+                    self.runPhotoKitScan(call: call, offset: offset, limit: limit, thumbMaxDim: thumbMaxDim, includeVideos: includeVideos, isLimited: true)
+                }
+            }
+            return
+        }
         if hasPhotoAccess(status) {
-            runPhotoKitScan(call: call, offset: offset, limit: limit, thumbMaxDim: thumbMaxDim, includeVideos: includeVideos)
+            let isLim: Bool = {
+                if #available(iOS 14, *) { return status == .limited }
+                return false
+            }()
+            runPhotoKitScan(call: call, offset: offset, limit: limit, thumbMaxDim: thumbMaxDim, includeVideos: includeVideos, isLimited: isLim)
             return
         }
 
         if status == .notDetermined && promptPerm {
             PHPhotoLibrary.requestAuthorization(for: .readWrite) { newStatus in
                 if self.hasPhotoAccess(newStatus) {
-                    self.runPhotoKitScan(call: call, offset: offset, limit: limit, thumbMaxDim: thumbMaxDim, includeVideos: includeVideos)
+                    let isLim: Bool = {
+                        if #available(iOS 14, *) { return newStatus == .limited }
+                        return false
+                    }()
+                    self.runPhotoKitScan(call: call, offset: offset, limit: limit, thumbMaxDim: thumbMaxDim, includeVideos: includeVideos, isLimited: isLim)
                 } else {
                     call.resolve([
                         "ok": false,
                         "permissionGranted": false,
+                        "limitedAccess": false,
+                        "videoPermissionGranted": false,
                         "photos": [],
                         "videos": [],
                         "totalPhotoCount": 0
@@ -142,13 +165,15 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         call.resolve([
             "ok": false,
             "permissionGranted": false,
+            "limitedAccess": false,
+            "videoPermissionGranted": false,
             "photos": [],
             "videos": [],
             "totalPhotoCount": 0
         ])
     }
 
-    private func runPhotoKitScan(call: CAPPluginCall, offset: Int, limit: Int, thumbMaxDim: Int, includeVideos: Bool) {
+    private func runPhotoKitScan(call: CAPPluginCall, offset: Int, limit: Int, thumbMaxDim: Int, includeVideos: Bool, isLimited: Bool = false) {
         DispatchQueue.global(qos: .userInitiated).async {
             let fetchOpts = PHFetchOptions()
             fetchOpts.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
@@ -210,7 +235,7 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
             var videosList: [[String: Any]] = []
             if includeVideos {
                 let vidAssets = PHAsset.fetchAssets(with: .video, options: fetchOpts)
-                let vEnd = min(vidAssets.count, 20)
+                let vEnd = min(vidAssets.count, 40)
                 for vIdx in 0..<vEnd {
                     autoreleasepool {
                         let vAsset = vidAssets.object(at: vIdx)
@@ -246,6 +271,8 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
             call.resolve([
                 "ok": true,
                 "permissionGranted": true,
+                "limitedAccess": isLimited,
+                "videoPermissionGranted": true,
                 "offset": offset,
                 "totalPhotoCount": totalPhotoCount,
                 "photos": photosList,

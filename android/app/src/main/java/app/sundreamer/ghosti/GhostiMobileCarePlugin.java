@@ -59,6 +59,12 @@ import java.util.Set;
             }
         ),
         @Permission(
+            alias = "mediaSelected",
+            strings = {
+                Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED
+            }
+        ),
+        @Permission(
             alias = "mediaLegacy",
             strings = {
                 Manifest.permission.READ_EXTERNAL_STORAGE
@@ -540,7 +546,7 @@ public class GhostiMobileCarePlugin extends Plugin {
         }
     }
 
-    private boolean hasMediaReadPermission(Context ctx) {
+    private boolean hasImageReadPermission(Context ctx) {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
             return ctx.checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
                 || ctx.checkSelfPermission(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) == PackageManager.PERMISSION_GRANTED;
@@ -549,6 +555,47 @@ public class GhostiMobileCarePlugin extends Plugin {
             return ctx.checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED;
         }
         return ctx.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean hasVideoReadPermission(Context ctx) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            return ctx.checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED
+                || ctx.checkSelfPermission(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) == PackageManager.PERMISSION_GRANTED;
+        }
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return ctx.checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED;
+        }
+        return ctx.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean hasFullPhotoAndVideoPermission(Context ctx) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            return ctx.checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
+                && ctx.checkSelfPermission(Manifest.permission.READ_MEDIA_VIDEO) == PackageManager.PERMISSION_GRANTED;
+        }
+        return ctx.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
+    }
+
+    private boolean isLimitedVisualPermissionOnly(Context ctx) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            return !hasFullPhotoAndVideoPermission(ctx)
+                && ctx.checkSelfPermission(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) == PackageManager.PERMISSION_GRANTED;
+        }
+        return false;
+    }
+
+    private boolean hasMediaReadPermission(Context ctx) {
+        return hasImageReadPermission(ctx) || hasVideoReadPermission(ctx);
+    }
+
+    private void requestGalleryPermissionsUnified(PluginCall call, String callbackName) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            requestPermissionForAliases(new String[] { "mediaModern", "mediaSelected" }, call, callbackName);
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            requestPermissionForAlias("mediaModern", call, callbackName);
+        } else {
+            requestPermissionForAlias("mediaLegacy", call, callbackName);
+        }
     }
 
     @PluginMethod
@@ -573,15 +620,23 @@ public class GhostiMobileCarePlugin extends Plugin {
     public void scanDeviceGalleryMedia(PluginCall call) {
         Context ctx = getContext();
         boolean promptPerm = call.getBoolean("promptPermission", true);
-        if (!hasMediaReadPermission(ctx)) {
-            if (promptPerm) {
-                String alias = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ? "mediaModern" : "mediaLegacy";
-                requestPermissionForAlias(alias, call, "onMediaPermissionForGalleryScan");
-                return;
-            }
+        boolean forceExpandSelected = call.getBoolean("forceExpandSelected", false);
+        int offset = Math.max(0, call.getInt("offset", 0));
+        boolean includeVideos = call.getBoolean("includeVideos", offset == 0);
+
+        boolean anyPerm = hasMediaReadPermission(ctx);
+        boolean missingVideoUpgradePerm = includeVideos && !hasVideoReadPermission(ctx);
+
+        if ((!anyPerm || missingVideoUpgradePerm || forceExpandSelected) && promptPerm) {
+            requestGalleryPermissionsUnified(call, "onMediaPermissionForGalleryScan");
+            return;
+        }
+        if (!anyPerm) {
             JSObject ret = new JSObject();
             ret.put("ok", false);
             ret.put("permissionGranted", false);
+            ret.put("limitedAccess", false);
+            ret.put("videoPermissionGranted", false);
             ret.put("photos", new JSArray());
             ret.put("videos", new JSArray());
             ret.put("totalPhotoCount", 0);
@@ -598,6 +653,8 @@ public class GhostiMobileCarePlugin extends Plugin {
             JSObject ret = new JSObject();
             ret.put("ok", false);
             ret.put("permissionGranted", false);
+            ret.put("limitedAccess", false);
+            ret.put("videoPermissionGranted", false);
             ret.put("photos", new JSArray());
             ret.put("videos", new JSArray());
             ret.put("totalPhotoCount", 0);
@@ -670,41 +727,47 @@ public class GhostiMobileCarePlugin extends Plugin {
                     int fetched = 0;
                     while (imgCursor != null && imgCursor.moveToNext() && fetched < limit) {
                         fetched++;
-                        long id = imgCursor.getLong(0);
-                        String name = imgCursor.getString(1);
-                        long size = imgCursor.getLong(2);
-                        long dateTaken = imgCursor.getLong(3);
-                        long dateModSec = imgCursor.getLong(4);
-                        int width = imgCursor.getInt(5);
-                        int height = imgCursor.getInt(6);
-                        String bucket = imgCursor.getString(7);
+                        try {
+                            long id = imgCursor.getLong(0);
+                            String name = imgCursor.getString(1);
+                            long size = imgCursor.getLong(2);
+                            long dateTaken = imgCursor.getLong(3);
+                            long dateModSec = imgCursor.getLong(4);
+                            int width = imgCursor.getInt(5);
+                            int height = imgCursor.getInt(6);
+                            String bucket = imgCursor.getString(7);
 
-                        long mtimeMs = dateTaken > 100000000000L ? dateTaken : (dateModSec * 1000L);
-                        Uri imgUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
-                        String thumbDataUrl = encodeThumbnailDataUrl(resolver, imgUri, id, false, thumbMaxDim, 78);
-                        if (thumbDataUrl == null || thumbDataUrl.isEmpty()) continue;
+                            long mtimeMs = dateTaken > 100000000000L ? dateTaken : (dateModSec * 1000L);
+                            Uri imgUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
+                            String thumbDataUrl = encodeThumbnailDataUrl(resolver, imgUri, id, false, thumbMaxDim, 78);
+                            if (thumbDataUrl == null || thumbDataUrl.isEmpty()) continue;
 
-                        boolean isScreen = (bucket != null && (bucket.toLowerCase(Locale.ROOT).contains("screenshot") || bucket.contains("스크린샷") || bucket.contains("캡처")))
-                            || (name != null && (name.toLowerCase(Locale.ROOT).contains("screenshot") || name.contains("스크린샷")));
+                            boolean isScreen = (bucket != null && (bucket.toLowerCase(Locale.ROOT).contains("screenshot") || bucket.contains("스크린샷") || bucket.contains("캡처")))
+                                || (name != null && (name.toLowerCase(Locale.ROOT).contains("screenshot") || name.contains("스크린샷")));
 
-                        JSObject pObj = new JSObject();
-                        pObj.put("id", "ms_img_" + id);
-                        pObj.put("name", (name != null && !name.isEmpty()) ? name : ("IMG_" + id + ".jpg"));
-                        pObj.put("size", size);
-                        pObj.put("mtimeMs", mtimeMs);
-                        pObj.put("width", width);
-                        pObj.put("height", height);
-                        pObj.put("bucket", bucket != null ? bucket : "");
-                        pObj.put("isScreenshot", isScreen);
-                        pObj.put("thumbDataUrl", thumbDataUrl);
-                        photosArr.put(pObj);
+                            JSObject pObj = new JSObject();
+                            pObj.put("id", "ms_img_" + id);
+                            pObj.put("name", (name != null && !name.isEmpty()) ? name : ("IMG_" + id + ".jpg"));
+                            pObj.put("size", size);
+                            pObj.put("mtimeMs", mtimeMs);
+                            pObj.put("width", width);
+                            pObj.put("height", height);
+                            pObj.put("bucket", bucket != null ? bucket : "");
+                            pObj.put("isScreenshot", isScreen);
+                            pObj.put("thumbDataUrl", thumbDataUrl);
+                            photosArr.put(pObj);
+                        } catch (Throwable ignored) {
+                        }
                     }
                 } finally {
                     if (imgCursor != null) imgCursor.close();
                 }
+            } catch (Throwable ignored) {
+            }
 
-                // 3) 첫 페이지(offset == 0) 호출 시 최근 동영상 최대 20개 자동 조회
-                if (includeVideos) {
+            // 3) 첫 페이지(offset == 0) 호출 시 최근 동영상 최대 40개 독립 안전 조회
+            if (includeVideos && hasVideoReadPermission(appCtx)) {
+                try {
                     String[] vidProj = new String[] {
                         MediaStore.Video.Media._ID,
                         MediaStore.Video.Media.DISPLAY_NAME,
@@ -719,7 +782,7 @@ public class GhostiMobileCarePlugin extends Plugin {
                             Bundle vArgs = new Bundle();
                             vArgs.putStringArray(ContentResolver.QUERY_ARG_SORT_COLUMNS, new String[] { MediaStore.Video.Media.DATE_MODIFIED });
                             vArgs.putInt(ContentResolver.QUERY_ARG_SORT_DIRECTION, ContentResolver.QUERY_SORT_DIRECTION_DESCENDING);
-                            vArgs.putInt(ContentResolver.QUERY_ARG_LIMIT, 20);
+                            vArgs.putInt(ContentResolver.QUERY_ARG_LIMIT, 40);
                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                                 vArgs.putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_EXCLUDE);
                             }
@@ -728,38 +791,43 @@ public class GhostiMobileCarePlugin extends Plugin {
                             vidCursor = resolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, vidProj, null, null, MediaStore.Video.Media.DATE_MODIFIED + " DESC");
                         }
                         int vCount = 0;
-                        while (vidCursor != null && vidCursor.moveToNext() && vCount < 20) {
+                        while (vidCursor != null && vidCursor.moveToNext() && vCount < 40) {
                             vCount++;
-                            long vid = vidCursor.getLong(0);
-                            String vName = vidCursor.getString(1);
-                            long vSize = vidCursor.getLong(2);
-                            long durationMs = vidCursor.getLong(3);
-                            long vModSec = vidCursor.getLong(4);
-                            String vBucket = vidCursor.getString(5);
+                            try {
+                                long vid = vidCursor.getLong(0);
+                                String vName = vidCursor.getString(1);
+                                long vSize = vidCursor.getLong(2);
+                                long durationMs = vidCursor.getLong(3);
+                                long vModSec = vidCursor.getLong(4);
+                                String vBucket = vidCursor.getString(5);
 
-                            Uri vUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, vid);
-                            String vThumb = encodeThumbnailDataUrl(resolver, vUri, vid, true, 480, 76);
+                                Uri vUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, vid);
+                                String vThumb = encodeThumbnailDataUrl(resolver, vUri, vid, true, 480, 76);
 
-                            JSObject vObj = new JSObject();
-                            vObj.put("id", "mobile_vid_" + vid);
-                            vObj.put("name", (vName != null && !vName.isEmpty()) ? vName : ("VID_" + vid + ".mp4"));
-                            vObj.put("size", vSize);
-                            vObj.put("durationSec", Math.max(1, Math.round(durationMs / 1000.0f)));
-                            vObj.put("mtimeMs", vModSec * 1000L);
-                            vObj.put("bucket", vBucket != null ? vBucket : "");
-                            vObj.put("thumbDataUrl", vThumb != null ? vThumb : "");
-                            videosArr.put(vObj);
+                                JSObject vObj = new JSObject();
+                                vObj.put("id", "mobile_vid_" + vid);
+                                vObj.put("name", (vName != null && !vName.isEmpty()) ? vName : ("VID_" + vid + ".mp4"));
+                                vObj.put("size", vSize);
+                                vObj.put("durationSec", Math.max(1, Math.round(durationMs / 1000.0f)));
+                                vObj.put("mtimeMs", vModSec * 1000L);
+                                vObj.put("bucket", vBucket != null ? vBucket : "");
+                                vObj.put("thumbDataUrl", vThumb != null ? vThumb : "");
+                                videosArr.put(vObj);
+                            } catch (Throwable ignored) {
+                            }
                         }
                     } finally {
                         if (vidCursor != null) vidCursor.close();
                     }
+                } catch (Throwable ignored) {
                 }
-            } catch (Throwable ignored) {
             }
 
             JSObject ret = new JSObject();
             ret.put("ok", true);
             ret.put("permissionGranted", true);
+            ret.put("limitedAccess", isLimitedVisualPermissionOnly(appCtx));
+            ret.put("videoPermissionGranted", hasVideoReadPermission(appCtx));
             ret.put("offset", offset);
             ret.put("totalPhotoCount", totalPhotoCount);
             ret.put("photos", photosArr);
