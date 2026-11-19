@@ -1,5 +1,9 @@
 import type { FamilyRoomId, LoungeType, PhotoItem } from '../types/saysee';
-import { ensureGhostiAuthedSupabaseClient, supabase } from './supabaseClient';
+import {
+  ensureGhostiAuthedSupabaseClient,
+  ensureGhostiPublicSupabaseClient,
+  supabase,
+} from './supabaseClient';
 import { hasActiveGhostiLoginSession } from './zCoreBridge';
 
 interface EnsureRoomRpcResponse {
@@ -260,10 +264,11 @@ export async function fetchGuestPreviewRoomByToken(inviteToken: string): Promise
   photos: PhotoItem[];
 }> {
   const cleanToken = (inviteToken || '').trim();
-  if (!cleanToken || !supabase) {
+  const pubClient = supabase || (await ensureGhostiPublicSupabaseClient());
+  if (!cleanToken || !pubClient) {
     return { ok: false, reason: 'MISSING_TOKEN', photos: [] };
   }
-  const { data, error } = await supabase.rpc('ghosti_get_guest_preview_room', {
+  const { data, error } = await pubClient.rpc('ghosti_get_guest_preview_room', {
     p_invite_token: cleanToken,
   });
   if (error || !data) {

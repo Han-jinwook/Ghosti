@@ -18,10 +18,20 @@ const HUB_CLIENT_ID = process.env.MERLIN_HUB_CLIENT_ID || 'APP-01';
 const HUB_CLIENT_SECRET = process.env.MERLIN_HUB_CLIENT_SECRET || 'merlin-family-secret-key-2026';
 const TOKEN_TTL_SEC = 60 * 60;
 
+const CORS_HEADERS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+};
+
 const json = (status, body) =>
   new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json; charset=utf-8', 'Cache-Control': 'no-store' },
+    headers: {
+      ...CORS_HEADERS,
+      'Content-Type': 'application/json; charset=utf-8',
+      'Cache-Control': 'no-store',
+    },
   });
 
 const b64url = (input) =>
@@ -53,12 +63,54 @@ function signSupabaseJwt({ userId, email }, secret) {
   return { token: `${header}.${payload}.${sig}`, expiresAt: (now + TOKEN_TTL_SEC) * 1000 };
 }
 
+function signAnonPublishableJwt(supabaseUrl, secret) {
+  let ref = '';
+  try {
+    ref = new URL(supabaseUrl).hostname.split('.')[0] || '';
+  } catch {
+    ref = '';
+  }
+  const now = Math.floor(Date.now() / 1000);
+  const header = b64url({ alg: 'HS256', typ: 'JWT' });
+  const payload = b64url({
+    iss: 'supabase',
+    ...(ref ? { ref } : {}),
+    role: 'anon',
+    iat: now,
+    exp: now + 365 * 24 * 3600,
+  });
+  const sig = crypto
+    .createHmac('sha256', secret)
+    .update(`${header}.${payload}`)
+    .digest('base64')
+    .replace(/=+$/, '')
+    .replace(/\+/g, '-')
+    .replace(/\//g, '_');
+  return `${header}.${payload}.${sig}`;
+}
+
 export default async (req) => {
-  if (req.method !== 'POST') return json(405, { ok: false, reason: 'POST only' });
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: CORS_HEADERS });
+  }
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
   const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const jwtSecret = process.env.SUPABASE_JWT_SECRET;
+  const publicAnonKey =
+    process.env.VITE_SUPABASE_ANON_KEY ||
+    process.env.SUPABASE_ANON_KEY ||
+    (supabaseUrl && jwtSecret ? signAnonPublishableJwt(supabaseUrl, jwtSecret) : '');
+
+  if (req.method === 'GET') {
+    if (!supabaseUrl || !publicAnonKey) {
+      return json(500, { ok: false, reason: '공개 클라이언트 설정 미준비' });
+    }
+    return json(200, { ok: true, supabaseUrl, supabaseAnonKey: publicAnonKey });
+  }
+
+  if (req.method !== 'POST') return json(405, { ok: false, reason: 'GET or POST only' });
+
   if (!supabaseUrl || !serviceKey || !jwtSecret) {
     return json(500, { ok: false, reason: '서버 환경변수 미설정 (VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_JWT_SECRET)' });
   }
@@ -154,5 +206,13 @@ export default async (req) => {
 
   // ③ 단기 Supabase 토큰 발급
   const { token, expiresAt } = signSupabaseJwt({ userId, email }, jwtSecret);
-  return json(200, { ok: true, userId, email, supabaseAccessToken: token, expiresAt });
+  return json(200, {
+    ok: true,
+    userId,
+    email,
+    supabaseUrl,
+    supabaseAnonKey: publicAnonKey,
+    supabaseAccessToken: token,
+    expiresAt,
+  });
 };

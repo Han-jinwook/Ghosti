@@ -1,22 +1,42 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 /**
- * Ghosti 전용 단독 Supabase 공개 클라이언트 URL 및 Publishable Anon Key (RLS 강제 적용).
- * - Netlify 웹 빌드뿐만 아니라 GitHub Actions iOS TestFlight / 로컬 빌드에서도 누락 없이 동일하게 연결되도록 기본값을 보장합니다.
+ * Ghosti 전용 단독 Supabase 공개 클라이언트 (RLS 강제 적용 · 코드 내 JWT 리터럴 0건 원칙).
+ * - 1순위: 빌드 환경변수(VITE_SUPABASE_URL / VITE_SUPABASE_ANON_KEY — Netlify 및 로컬 .env.local)
+ * - 2순위: 환경변수 미주입 CI 빌드(iOS TestFlight 등) 시 브릿지 엔드포인트(GET /.netlify/functions/hub-supabase-bridge)에서
+ *          런타임 자동 수신 후 localStorage에 캐싱하여 GitGuardian JWT 오탐 0건과 전 기기 무중단 연결을 동시에 보장합니다.
  * - 마스터 키(service_role)는 절대 클라이언트에 포함하지 않으며 오직 서버 함수(hub-supabase-bridge)에만 존재합니다.
  */
 const DEFAULT_GHOSTI_SUPABASE_URL = 'https://dlfoessbfuuhsvrseosz.supabase.co';
-const DEFAULT_GHOSTI_SUPABASE_ANON_KEY =
-  'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImRsZm9lc3NiZnV1aHN2cnNlb3N6Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3OTI5OTQxMTMsImV4cCI6MjEwODU3MDExM30.53ffT6hG-Ss6PDfyCGGt53t-3faWE__6NSRDnhT24aM';
+const CACHED_PUBLIC_URL_KEY = 'ghosti_public_sb_url';
+const CACHED_PUBLIC_ANON_KEY = 'ghosti_public_sb_anon_key';
 
-const supabaseUrl = (import.meta.env.VITE_SUPABASE_URL || DEFAULT_GHOSTI_SUPABASE_URL).trim();
-const supabaseAnonKey = (
-  import.meta.env.VITE_SUPABASE_ANON_KEY || DEFAULT_GHOSTI_SUPABASE_ANON_KEY
-).trim();
+function readInitialSupabaseConfig(): { url: string; anonKey: string } {
+  const envUrl = (import.meta.env.VITE_SUPABASE_URL || '').trim();
+  const envAnon = (import.meta.env.VITE_SUPABASE_ANON_KEY || '').trim();
+  if (envAnon) {
+    return { url: envUrl || DEFAULT_GHOSTI_SUPABASE_URL, anonKey: envAnon };
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      const cachedUrl = (localStorage.getItem(CACHED_PUBLIC_URL_KEY) || '').trim();
+      const cachedAnon = (localStorage.getItem(CACHED_PUBLIC_ANON_KEY) || '').trim();
+      if (cachedAnon) {
+        return { url: envUrl || cachedUrl || DEFAULT_GHOSTI_SUPABASE_URL, anonKey: cachedAnon };
+      }
+    } catch {
+      /* ignore storage access error */
+    }
+  }
+  return { url: envUrl || DEFAULT_GHOSTI_SUPABASE_URL, anonKey: '' };
+}
 
-export const supabase =
-  supabaseUrl && supabaseAnonKey
-    ? createClient(supabaseUrl, supabaseAnonKey, {
+let activeSupabaseUrl = readInitialSupabaseConfig().url;
+let activeSupabaseAnonKey = readInitialSupabaseConfig().anonKey;
+
+export let supabase: SupabaseClient | null =
+  activeSupabaseUrl && activeSupabaseAnonKey
+    ? createClient(activeSupabaseUrl, activeSupabaseAnonKey, {
         realtime: {
           params: {
             eventsPerSecond: 10,
@@ -24,6 +44,65 @@ export const supabase =
         },
       })
     : null;
+
+let inflightPublicConfigPromise: Promise<SupabaseClient | null> | null = null;
+
+function applyRuntimePublicConfig(url?: string, anonKey?: string): void {
+  const cleanAnon = (anonKey || '').trim();
+  const cleanUrl = (url || activeSupabaseUrl || DEFAULT_GHOSTI_SUPABASE_URL).trim();
+  if (!cleanAnon || !cleanUrl) return;
+  if (cleanAnon === activeSupabaseAnonKey && supabase) return;
+  activeSupabaseUrl = cleanUrl;
+  activeSupabaseAnonKey = cleanAnon;
+  supabase = createClient(activeSupabaseUrl, activeSupabaseAnonKey, {
+    realtime: {
+      params: {
+        eventsPerSecond: 10,
+      },
+    },
+  });
+  authedClient = null;
+  authedClientToken = '';
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(CACHED_PUBLIC_URL_KEY, cleanUrl);
+      localStorage.setItem(CACHED_PUBLIC_ANON_KEY, cleanAnon);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+export async function ensureGhostiPublicSupabaseClient(): Promise<SupabaseClient | null> {
+  if (supabase) return supabase;
+  if (typeof window === 'undefined') return null;
+  if (inflightPublicConfigPromise) return inflightPublicConfigPromise;
+
+  inflightPublicConfigPromise = (async () => {
+    try {
+      const res = await fetch(resolveHubSupabaseBridgeEndpoint(), { method: 'GET' });
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        supabaseUrl?: string;
+        supabaseAnonKey?: string;
+      };
+      if (res.ok && data?.ok && data.supabaseAnonKey) {
+        applyRuntimePublicConfig(data.supabaseUrl, data.supabaseAnonKey);
+      }
+    } catch {
+      /* offline fallback */
+    } finally {
+      inflightPublicConfigPromise = null;
+    }
+    return supabase;
+  })();
+
+  return inflightPublicConfigPromise;
+}
+
+if (typeof window !== 'undefined' && !supabase) {
+  void ensureGhostiPublicSupabaseClient();
+}
 
 /** 브릿지가 발급한 단기(1시간) Supabase 토큰 보관 키 */
 const GHOSTI_SB_TOKEN_KEY = 'ghosti_supabase_access_token';
@@ -47,11 +126,11 @@ export function getGhostiSupabaseAccessToken(): string | null {
  * - 토큰이 없거나 만료되면 null (호출부에서 ensureGhostiAuthedSupabaseClient 또는 syncHubUserToLocalSupabase 재호출)
  */
 export function getGhostiAuthedSupabase(): SupabaseClient | null {
-  if (!supabaseUrl || !supabaseAnonKey) return null;
+  if (!activeSupabaseUrl || !activeSupabaseAnonKey) return null;
   const token = getGhostiSupabaseAccessToken();
   if (!token) return null;
   if (authedClient && authedClientToken === token) return authedClient;
-  authedClient = createClient(supabaseUrl, supabaseAnonKey, {
+  authedClient = createClient(activeSupabaseUrl, activeSupabaseAnonKey, {
     global: { headers: { Authorization: `Bearer ${token}` } },
     auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
     realtime: { params: { eventsPerSecond: 10 } },
@@ -152,6 +231,12 @@ export async function syncHubUserToLocalSupabase(params: {
     }
 
     if (typeof window !== 'undefined') {
+      if (typeof data.supabaseAnonKey === 'string' && data.supabaseAnonKey) {
+        applyRuntimePublicConfig(
+          typeof data.supabaseUrl === 'string' ? data.supabaseUrl : undefined,
+          data.supabaseAnonKey
+        );
+      }
       localStorage.setItem(GHOSTI_SB_TOKEN_KEY, data.supabaseAccessToken);
       localStorage.setItem(GHOSTI_SB_TOKEN_EXP_KEY, String(data.expiresAt || 0));
       window.dispatchEvent(
