@@ -206,7 +206,7 @@ function joinWrappedKoreanLines(upper: string, lower: string): string {
 
 export function formatOcrBoxesSmart(rawBoxes: PaddleOcrBox[]): string {
   const watermarkRx =
-    /notebooklm|^capcut$|^veo$|^kapwing$|^[xyv]?rec[eo]rder$|mobizen|bandicam|gomcam|^ocam$|az\s*screen|^inshot$|kinemaster|vivavideo|filmora/i;
+    /notebooklm|^capcut$|^veo$|^kapwing$|^[xyv]?rec[eo@0]rder$|mobizen|bandicam|gomcam|^ocam$|az\s*screen|^inshot$|kinemaster|vivavideo|filmora/i;
   const filtered = rawBoxes
     .map((b) => ({
       ...b,
@@ -384,7 +384,24 @@ async function runSingleImageOcrInternal(
   const q = new Int32Array(plane);
   const thresh = 0.3;
   const boxThresh = 0.52;
-  const candidateBoxes: Array<{ x0: number; y0: number; x1: number; y1: number; w: number; h: number }> = [];
+  const sxScale = srcW / detW;
+  const syScale = srcH / detH;
+  const candidateBoxes: Array<{
+    x0: number;
+    y0: number;
+    x1: number;
+    y1: number;
+    w: number;
+    h: number;
+    cx: number;
+    cy: number;
+    u0: number;
+    u1: number;
+    v0: number;
+    v1: number;
+    cos: number;
+    sin: number;
+  }> = [];
 
   for (let y = 0; y < detH; y++) {
     for (let x = 0; x < detW; x++) {
@@ -399,7 +416,9 @@ async function runSingleImageOcrInternal(
         minY = y,
         maxY = y;
       let scoreSum = 0,
-        count = 0;
+        count = 0,
+        sumX = 0,
+        sumY = 0;
 
       while (head < tail) {
         const cur = q[head++];
@@ -407,6 +426,8 @@ async function runSingleImageOcrInternal(
         const cx = cur - cy * detW;
         scoreSum += prob[cur];
         count++;
+        sumX += cx;
+        sumY += cy;
         if (cx < minX) minX = cx;
         if (cx > maxX) maxX = cx;
         if (cy < minY) minY = cy;
@@ -434,22 +455,120 @@ async function runSingleImageOcrInternal(
       const bh = maxY - minY + 1;
       if (count < 8 || bh < 4 || bw < 5 || scoreSum / count < boxThresh) continue;
 
-      const area = bw * bh;
-      const perim = 2 * (bw + bh);
-      const padX = Math.round((area * 1.65) / perim) + 2;
-      const padY = Math.round((area * 1.6) / perim) + 1;
+      const cxM = (sumX / count) * sxScale;
+      const cyM = (sumY / count) * syScale;
+      const bwSrc = bw * sxScale;
+      const bhSrc = bh * syScale;
 
-      const x0 = Math.max(0, Math.floor(((minX - padX) / detW) * srcW));
-      const y0 = Math.max(0, Math.floor(((minY - padY) / detH) * srcH));
-      const x1 = Math.min(srcW, Math.ceil(((maxX + padX) / detW) * srcW));
-      const y1 = Math.min(srcH, Math.ceil(((maxY + padY) / detH) * srcH));
-      if (x1 - x0 >= 4 && y1 - y0 >= 4) {
-        candidateBoxes.push({ x0, y0, x1, y1, w: x1 - x0, h: y1 - y0 });
+      let angleRad = 0;
+      if (bwSrc >= bhSrc * 3.2 && count >= 40) {
+        let varX = 0;
+        let covXY = 0;
+        for (let k = 0; k < tail; k++) {
+          const cur = q[k];
+          const py = ((cur / detW) | 0) * syScale - cyM;
+          const px = (cur % detW) * sxScale - cxM;
+          varX += px * px;
+          covXY += px * py;
+        }
+        const slope = Math.max(-0.22, Math.min(0.22, covXY / Math.max(1e-6, varX)));
+        if (Math.abs(slope) >= 0.006) {
+          angleRad = Math.atan(slope);
+        }
+      }
+
+      const cosA = Math.cos(angleRad);
+      const sinA = Math.sin(angleRad);
+      let uMin = 1e9,
+        uMax = -1e9,
+        vMin = 1e9,
+        vMax = -1e9;
+      for (let k = 0; k < tail; k++) {
+        const cur = q[k];
+        const dy = ((cur / detW) | 0) * syScale - cyM;
+        const dx = (cur % detW) * sxScale - cxM;
+        const u = dx * cosA + dy * sinA;
+        const v = -dx * sinA + dy * cosA;
+        if (u < uMin) uMin = u;
+        if (u > uMax) uMax = u;
+        if (v < vMin) vMin = v;
+        if (v > vMax) vMax = v;
+      }
+
+      const trueW = Math.max(4, uMax - uMin + sxScale);
+      const trueH = Math.max(4, vMax - vMin + syScale);
+      const dRaw = (trueW * trueH * 1.55) / (2 * (trueW + trueH));
+      const padU = Math.min(trueH * 0.82, dRaw * 1.15) + 2.5;
+      const padV = Math.min(trueH * 0.42, dRaw * 0.72) + 2.0;
+
+      let u0 = uMin - padU;
+      let u1 = uMax + padU;
+      let v0 = vMin - padV;
+      let v1 = vMax + padV;
+      if (cosA > 0.5) {
+        u0 = Math.max(u0, -cxM / cosA);
+        u1 = Math.min(u1, (srcW - cxM) / cosA);
+        v0 = Math.max(v0, -cyM / cosA);
+        v1 = Math.min(v1, (srcH - cyM) / cosA);
+      }
+
+      const x0 = Math.max(0, Math.floor(cxM + u0 * cosA));
+      const x1 = Math.min(srcW, Math.ceil(cxM + u1 * cosA));
+      const boxHEst = Math.max(4, Math.round(v1 - v0));
+      const y0 = Math.max(0, Math.round(cyM - boxHEst * 0.5));
+      const y1 = Math.min(srcH, y0 + boxHEst);
+      if (x1 - x0 >= 6 && y1 - y0 >= 4) {
+        candidateBoxes.push({
+          x0,
+          y0,
+          x1,
+          y1,
+          w: x1 - x0,
+          h: y1 - y0,
+          cx: cxM,
+          cy: cyM,
+          u0,
+          u1,
+          v0,
+          v1,
+          cos: cosA,
+          sin: sinA,
+        });
       }
     }
   }
 
-  if (candidateBoxes.length === 0) {
+  candidateBoxes.sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0);
+  for (let i = 0; i < candidateBoxes.length; i++) {
+    for (let j = i + 1; j < candidateBoxes.length; j++) {
+      const bi = candidateBoxes[i];
+      const bj = candidateBoxes[j];
+      const hi = bi.y1 - bi.y0;
+      const hj = bj.y1 - bj.y0;
+      if (bj.y0 > bi.y1) break;
+      const yOv = Math.min(bi.y1, bj.y1) - Math.max(bi.y0, bj.y0);
+      if (yOv >= 0.55 * Math.min(hi, hj)) {
+        const [leftB, rightB] = bi.x0 <= bj.x0 ? [bi, bj] : [bj, bi];
+        const xOv = leftB.x1 - rightB.x0;
+        if (xOv > 0 && xOv <= Math.max(42, Math.floor(Math.min(hi, hj) * 0.95)) && rightB.x1 > leftB.x1 + 8) {
+          const halfOv = xOv * 0.5;
+          const midX = (leftB.x1 + rightB.x0) >> 1;
+          leftB.u1 -= halfOv;
+          rightB.u0 += halfOv;
+          leftB.x1 = midX;
+          leftB.w = leftB.x1 - leftB.x0;
+          rightB.x0 = midX;
+          rightB.w = rightB.x1 - rightB.x0;
+        }
+      }
+    }
+  }
+
+  const validBoxes = candidateBoxes.filter(
+    (b) => b.x1 - b.x0 >= 6 && b.u1 - b.u0 >= 6 && b.v1 - b.v0 >= 4
+  );
+
+  if (validBoxes.length === 0) {
     return { text: '', boxes: [] };
   }
 
@@ -458,24 +577,80 @@ async function runSingleImageOcrInternal(
   const recInName = recSession.inputNames[0];
   const recOutName = recSession.outputNames[0];
 
-  for (let bi = 0; bi < candidateBoxes.length; bi++) {
-    const b = candidateBoxes[bi];
-    const crop = new Uint8Array(b.w * b.h * 4);
-    for (let cy = 0; cy < b.h; cy++) {
-      const srcOff = ((b.y0 + cy) * srcW + b.x0) * 4;
-      crop.set(rgba.subarray(srcOff, srcOff + b.w * 4), cy * b.w * 4);
+  for (let bi = 0; bi < validBoxes.length; bi++) {
+    const b = validBoxes[bi];
+    const outW = Math.max(8, Math.round(b.u1 - b.u0));
+    const outH = Math.max(8, Math.round(b.v1 - b.v0));
+    const recH = 48;
+    const recW = Math.max(48, Math.min(1600, Math.round(outW * (recH / outH))));
+    const resized = new Uint8Array(recW * recH * 4);
+    const uSpan = b.u1 - b.u0;
+    const vSpan = b.v1 - b.v0;
+
+    for (let oy = 0; oy < recH; oy++) {
+      const vCur = b.v0 + ((oy + 0.5) / recH) * vSpan;
+      for (let ox = 0; ox < recW; ox++) {
+        const uCur = b.u0 + ((ox + 0.5) / recW) * uSpan;
+        const sxF = Math.max(0, Math.min(srcW - 1.001, b.cx + uCur * b.cos - vCur * b.sin));
+        const syF = Math.max(0, Math.min(srcH - 1.001, b.cy + uCur * b.sin + vCur * b.cos));
+        const ix0 = sxF | 0;
+        const iy0 = syF | 0;
+        const ix1 = Math.min(srcW - 1, ix0 + 1);
+        const iy1 = Math.min(srcH - 1, iy0 + 1);
+        const wx = sxF - ix0;
+        const wy = syF - iy0;
+        const p00 = (iy0 * srcW + ix0) * 4;
+        const p10 = (iy0 * srcW + ix1) * 4;
+        const p01 = (iy1 * srcW + ix0) * 4;
+        const p11 = (iy1 * srcW + ix1) * 4;
+        const di = (oy * recW + ox) * 4;
+        for (let c = 0; c < 3; c++) {
+          const top = rgba[p00 + c] * (1 - wx) + rgba[p10 + c] * wx;
+          const bot = rgba[p01 + c] * (1 - wx) + rgba[p11 + c] * wx;
+          resized[di + c] = Math.round(top * (1 - wy) + bot * wy);
+        }
+        resized[di + 3] = 255;
+      }
     }
 
-    const recH = 48;
-    const recW = Math.max(48, Math.min(1600, Math.round(b.w * (recH / b.h))));
-    const resized = resizeBilinearRGBA(crop, b.w, b.h, recW, recH);
     const rPlane = recH * recW;
     const recInput = new Float32Array(3 * rPlane);
+    const shAmt = outH < 34 ? 0.5 : outH < 46 ? 0.35 : 0;
 
-    for (let i = 0; i < rPlane; i++) {
-      recInput[i] = (resized[i * 4 + 2] / 255 - 0.5) / 0.5;
-      recInput[rPlane + i] = (resized[i * 4 + 1] / 255 - 0.5) / 0.5;
-      recInput[rPlane * 2 + i] = (resized[i * 4] / 255 - 0.5) / 0.5;
+    if (shAmt > 0) {
+      for (let oy = 0; oy < recH; oy++) {
+        const ym = oy > 0 ? oy - 1 : 0;
+        const yp = oy + 1 < recH ? oy + 1 : recH - 1;
+        for (let ox = 0; ox < recW; ox++) {
+          const xm = ox > 0 ? ox - 1 : 0;
+          const xp = ox + 1 < recW ? ox + 1 : recW - 1;
+          const idx = oy * recW + ox;
+          const cOff = idx * 4;
+          const lOff = (oy * recW + xm) * 4;
+          const rOff = (oy * recW + xp) * 4;
+          const uOff = (ym * recW + ox) * 4;
+          const dOff = (yp * recW + ox) * 4;
+          for (let ch = 0; ch < 3; ch++) {
+            const center = resized[cOff + ch];
+            const blur =
+              (center * 4 +
+                resized[lOff + ch] +
+                resized[rOff + ch] +
+                resized[uOff + ch] +
+                resized[dOff + ch]) *
+              0.125;
+            const sharpV = Math.max(0, Math.min(255, center + shAmt * (center - blur)));
+            const bgrPlane = 2 - ch;
+            recInput[bgrPlane * rPlane + idx] = (sharpV / 255 - 0.5) / 0.5;
+          }
+        }
+      }
+    } else {
+      for (let i = 0; i < rPlane; i++) {
+        recInput[i] = (resized[i * 4 + 2] / 255 - 0.5) / 0.5;
+        recInput[rPlane + i] = (resized[i * 4 + 1] / 255 - 0.5) / 0.5;
+        recInput[rPlane * 2 + i] = (resized[i * 4] / 255 - 0.5) / 0.5;
+      }
     }
 
     const rOut = await recSession.run({

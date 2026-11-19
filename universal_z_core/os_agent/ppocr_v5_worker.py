@@ -140,7 +140,7 @@ def format_ocr_boxes_smart(
     img_width: int = 0,
 ) -> str:
     watermark_rx = re.compile(
-        r"notebooklm|^capcut$|^veo$|^kapwing$|^[xyv]?rec[eo]rder$|mobizen|bandicam|gomcam|^ocam$|az\s*screen|^inshot$|kinemaster|vivavideo|filmora",
+        r"notebooklm|^capcut$|^veo$|^kapwing$|^[xyv]?rec[eo@0]rder$|mobizen|bandicam|gomcam|^ocam$|az\s*screen|^inshot$|kinemaster|vivavideo|filmora",
         re.IGNORECASE,
     )
     kbd_token_rx = re.compile(
@@ -349,7 +349,7 @@ def run_worker_cli(req_path: str, res_path: str) -> int:
     """격리 자식 프로세스 진입점: ONNX 모델을 로드해 요청된 이미지들을 일괄 추론하고 즉시 프로세스를 종료합니다."""
     import numpy as np
     import onnxruntime as ort
-    from PIL import Image, ImageOps
+    from PIL import Image, ImageFilter, ImageOps
 
     payload = json.loads(Path(req_path).read_text(encoding="utf-8"))
     image_paths: List[str] = payload.get("images") or []
@@ -382,7 +382,10 @@ def run_worker_cli(req_path: str, res_path: str) -> int:
             return {"width": src_w, "height": src_h, "boxes": [], "lines": [], "smartText": ""}
 
         max_side = max(src_w, src_h)
-        cap_side = 1280 if filter_video_ui else 1600
+        if filter_video_ui:
+            cap_side = 1440 if src_h >= src_w * 1.35 else 1280
+        else:
+            cap_side = 1600
         target_max = max(960, min(cap_side, max_side))
         scale = target_max / float(max_side)
         det_w = max(32, int(round((src_w * scale) / 32.0)) * 32)
@@ -398,21 +401,25 @@ def run_worker_cli(req_path: str, res_path: str) -> int:
         mask = prob > 0.30
         visited = np.zeros((det_h, det_w), dtype=np.uint8)
         ys, xs = np.nonzero(mask)
+        sx = src_w / float(det_w)
+        sy = src_h / float(det_h)
 
-        cand_boxes: List[tuple[int, int, int, int]] = []
+        cand_items: List[Dict[str, Any]] = []
         for start_y, start_x in zip(ys.tolist(), xs.tolist()):
             if visited[start_y, start_x]:
                 continue
             visited[start_y, start_x] = 1
             dq = deque([(start_y, start_x)])
+            pts_x: List[int] = []
+            pts_y: List[int] = []
             min_x = max_x = start_x
             min_y = max_y = start_y
             score_sum = 0.0
-            cnt = 0
             while dq:
                 cy, cx = dq.popleft()
+                pts_x.append(cx)
+                pts_y.append(cy)
                 score_sum += float(prob[cy, cx])
-                cnt += 1
                 if cx < min_x:
                     min_x = cx
                 if cx > max_x:
@@ -434,54 +441,138 @@ def run_worker_cli(req_path: str, res_path: str) -> int:
                     visited[cy + 1, cx] = 1
                     dq.append((cy + 1, cx))
 
-            bw = max_x - min_x + 1
-            bh = max_y - min_y + 1
-            if cnt < 8 or bh < 4 or bw < 5 or (score_sum / cnt) < 0.52:
+            cnt = len(pts_x)
+            bw_det = max_x - min_x + 1
+            bh_det = max_y - min_y + 1
+            if cnt < 8 or bh_det < 4 or bw_det < 5 or (score_sum / cnt) < 0.52:
                 continue
-            area = bw * bh
-            perim = 2 * (bw + bh)
-            pad_x = int(round((area * 1.65) / perim)) + 2
-            pad_y = int(round((area * 1.60) / perim)) + 1
-            x0 = max(0, int(math.floor(((min_x - pad_x) / det_w) * src_w)))
-            y0 = max(0, int(math.floor(((min_y - pad_y) / det_h) * src_h)))
-            x1 = min(src_w, int(math.ceil(((max_x + pad_x) / det_w) * src_w)))
-            y1 = min(src_h, int(math.ceil(((max_y + pad_y) / det_h) * src_h)))
-            if (x1 - x0) >= 4 and (y1 - y0) >= 4:
-                cand_boxes.append((x0, y0, x1, y1))
 
-        cand_boxes.sort(key=lambda b: (b[1], b[0]))
-        # 동일 행에서 pad_x 확장으로 인해 인접 박스가 옆 박스의 첫 글자/이모지(👑 등)를 침범하는 중복 현상 방지
-        mut_boxes = [list(b) for b in cand_boxes]
-        for i_b in range(len(mut_boxes)):
-            for j_b in range(i_b + 1, len(mut_boxes)):
-                bi = mut_boxes[i_b]
-                bj = mut_boxes[j_b]
-                hi = bi[3] - bi[1]
-                hj = bj[3] - bj[1]
-                if bj[1] > bi[3]:
+            px = np.asarray(pts_x, dtype=np.float32) * sx
+            py = np.asarray(pts_y, dtype=np.float32) * sy
+            cx_m = float(px.mean())
+            cy_m = float(py.mean())
+            dx = px - cx_m
+            dy = py - cy_m
+            bw_src = float(px.max() - px.min()) + sx
+            bh_src = float(py.max() - py.min()) + sy
+
+            # 긴 문장(가로 >= 세로 * 3.2)의 중심선 기울기를 최소제곱법으로 추정하여 손떨림·사선 촬영 기울어짐을 수평 보정
+            angle_rad = 0.0
+            if bw_src >= bh_src * 3.2 and cnt >= 40:
+                var_x = float(np.dot(dx, dx))
+                slope = float(np.dot(dx, dy) / max(1e-6, var_x))
+                slope = max(-0.22, min(0.22, slope))
+                if abs(slope) >= 0.006:
+                    angle_rad = math.atan(slope)
+
+            cos_a = math.cos(angle_rad)
+            sin_a = math.sin(angle_rad)
+            u = dx * cos_a + dy * sin_a
+            v = -dx * sin_a + dy * cos_a
+            u_min = float(u.min())
+            u_max = float(u.max())
+            v_min = float(v.min())
+            v_max = float(v.max())
+            true_w = max(4.0, u_max - u_min + sx)
+            true_h = max(4.0, v_max - v_min + sy)
+
+            # 기울어진 외접 사각형이 아닌 실제 수직 글자 높이(true_h) 기준으로 상하 여백(pad_v)을 정밀 제한하여
+            # 48px Rec 입력 내부에서 '틀(ㅌ+ㅡ+ㄹ)' 등 3단 모음/받침 한글의 세로 획 해상도가 축소·뭉개지는 현상을 원천 차단
+            d_raw = (true_w * true_h * 1.55) / (2.0 * (true_w + true_h))
+            pad_u = min(true_h * 0.82, d_raw * 1.15) + 2.5
+            pad_v = min(true_h * 0.42, d_raw * 0.72) + 2.0
+
+            u0 = u_min - pad_u
+            u1 = u_max + pad_u
+            v0 = v_min - pad_v
+            v1 = v_max + pad_v
+            if cos_a > 0.5:
+                u0 = max(u0, (0.0 - cx_m) / cos_a)
+                u1 = min(u1, (src_w - cx_m) / cos_a)
+                v0 = max(v0, (0.0 - cy_m) / cos_a)
+                v1 = min(v1, (src_h - cy_m) / cos_a)
+
+            x0 = max(0, int(math.floor(cx_m + u0 * cos_a)))
+            x1 = min(src_w, int(math.ceil(cx_m + u1 * cos_a)))
+            box_h_est = max(4, int(round(v1 - v0)))
+            y0 = max(0, int(round(cy_m - box_h_est * 0.5)))
+            y1 = min(src_h, y0 + box_h_est)
+            if (x1 - x0) >= 6 and (y1 - y0) >= 4:
+                cand_items.append({
+                    "x0": x0, "y0": y0, "x1": x1, "y1": y1,
+                    "cx": cx_m, "cy": cy_m,
+                    "u0": u0, "u1": u1, "v0": v0, "v1": v1,
+                    "angle": angle_rad, "cos": cos_a, "sin": sin_a,
+                })
+
+        cand_items.sort(key=lambda b: (b["y0"], b["x0"]))
+        # 동일 행에서 pad_u 확장으로 인해 인접 박스가 옆 박스의 첫 글자/이모지(👑 등)를 침범하는 중복 현상 방지
+        for i_b in range(len(cand_items)):
+            for j_b in range(i_b + 1, len(cand_items)):
+                bi = cand_items[i_b]
+                bj = cand_items[j_b]
+                hi = bi["y1"] - bi["y0"]
+                hj = bj["y1"] - bj["y0"]
+                if bj["y0"] > bi["y1"]:
                     break
-                y_ov = min(bi[3], bj[3]) - max(bi[1], bj[1])
+                y_ov = min(bi["y1"], bj["y1"]) - max(bi["y0"], bj["y0"])
                 if y_ov >= 0.55 * min(hi, hj):
-                    left_b, right_b = (bi, bj) if bi[0] <= bj[0] else (bj, bi)
-                    x_ov = left_b[2] - right_b[0]
-                    if 0 < x_ov <= max(42, int(min(hi, hj) * 0.95)) and right_b[2] > left_b[2] + 8:
-                        mid_x = (left_b[2] + right_b[0]) // 2
-                        left_b[2] = mid_x
-                        right_b[0] = mid_x
-        cand_boxes = [(b[0], b[1], b[2], b[3]) for b in mut_boxes if (b[2] - b[0]) >= 6 and (b[3] - b[1]) >= 4]
+                    left_b, right_b = (bi, bj) if bi["x0"] <= bj["x0"] else (bj, bi)
+                    x_ov = left_b["x1"] - right_b["x0"]
+                    if 0 < x_ov <= max(42, int(min(hi, hj) * 0.95)) and right_b["x1"] > left_b["x1"] + 8:
+                        half_ov = x_ov * 0.5
+                        mid_x = (left_b["x1"] + right_b["x0"]) // 2
+                        left_b["u1"] -= half_ov
+                        right_b["u0"] += half_ov
+                        left_b["x1"] = mid_x
+                        right_b["x0"] = mid_x
+
+        cand_items = [
+            b for b in cand_items
+            if (b["x1"] - b["x0"]) >= 6 and (b["u1"] - b["u0"]) >= 6.0 and (b["v1"] - b["v0"]) >= 4.0
+        ]
 
         boxes_out: List[Dict[str, Any]] = []
         lines_out: List[Dict[str, Any]] = []
 
-        for (x0, y0, x1, y1) in cand_boxes:
+        for item in cand_items:
+            x0, y0, x1, y1 = item["x0"], item["y0"], item["x1"], item["y1"]
             bw = x1 - x0
             bh = y1 - y0
-            crop_im = im_rgb.crop((x0, y0, x1, y1))
+            if abs(item["angle"]) >= 0.006:
+                out_w = max(8, int(round(item["u1"] - item["u0"])))
+                out_h = max(8, int(round(item["v1"] - item["v0"])))
+                cos_a, sin_a = item["cos"], item["sin"]
+                u0_i, v0_i = item["u0"], item["v0"]
+                cx_i, cy_i = item["cx"], item["cy"]
+                aff = (
+                    cos_a, -sin_a, cx_i + u0_i * cos_a - v0_i * sin_a,
+                    sin_a, cos_a, cy_i + u0_i * sin_a + v0_i * cos_a,
+                )
+                crop_im = im_rgb.transform((out_w, out_h), Image.Transform.AFFINE, aff, resample=Image.Resampling.BICUBIC)
+            else:
+                cx0 = max(0, min(src_w - 4, int(math.floor(item["cx"] + item["u0"]))))
+                cy0 = max(0, min(src_h - 4, int(math.floor(item["cy"] + item["v0"]))))
+                cx1 = max(cx0 + 4, min(src_w, int(math.ceil(item["cx"] + item["u1"]))))
+                cy1 = max(cy0 + 4, min(src_h, int(math.ceil(item["cy"] + item["v1"]))))
+                crop_im = im_rgb.crop((cx0, cy0, cx1, cy1))
+                out_w, out_h = crop_im.size
+                x0, y0, x1, y1 = cx0, cy0, cx1, cy1
+                bw, bh = out_w, out_h
+
             rec_h = 48
-            rec_w = max(48, min(1600, int(round(bw * (rec_h / float(bh))))))
-            resample_mode = Image.Resampling.BICUBIC if bh < 36 else Image.Resampling.BILINEAR
+            rec_w = max(48, min(1600, int(round(out_w * (rec_h / float(max(1, out_h)))))))
+            resample_mode = Image.Resampling.LANCZOS if out_h < 56 else Image.Resampling.BILINEAR
             resized = crop_im.resize((rec_w, rec_h), resample_mode)
-            r_arr = (np.asarray(resized, dtype=np.float32)[:, :, ::-1] / 255.0 - 0.5) / 0.5
+            if out_h < 46:
+                sh_amt = 0.50 if out_h < 34 else 0.35
+                blur_im = resized.filter(ImageFilter.GaussianBlur(radius=0.95))
+                arr_f = np.asarray(resized, dtype=np.float32)
+                blur_f = np.asarray(blur_im, dtype=np.float32)
+                rgb_clean = np.clip(arr_f + sh_amt * (arr_f - blur_f), 0.0, 255.0)
+                r_arr = (rgb_clean[:, :, ::-1] / 255.0 - 0.5) / 0.5
+            else:
+                r_arr = (np.asarray(resized, dtype=np.float32)[:, :, ::-1] / 255.0 - 0.5) / 0.5
             r_tensor = np.transpose(r_arr, (2, 0, 1))[np.newaxis, :, :, :]
 
             logits = rec_sess.run([rec_out_name], {rec_in_name: r_tensor})[0][0]

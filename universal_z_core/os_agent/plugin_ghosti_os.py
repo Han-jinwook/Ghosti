@@ -2490,8 +2490,8 @@ _VIDEO_STREAM_CACHE_DIR = MERLIN_DIR / "video_stream_cache"
 _VIDEO_STREAM_INFLIGHT: Dict[str, threading.Event] = {}
 _VIDEO_STREAM_LOCK = threading.Lock()
 _VIDEO_OCR_CACHE_FILE = MERLIN_DIR / "video_scene_ocr_cache_v2.json"
-_VIDEO_OCR_SCHEMA_VER = 25
-_VIDEO_PADDLE_OCR_VER = 25
+_VIDEO_OCR_SCHEMA_VER = 26
+_VIDEO_PADDLE_OCR_VER = 26
 _VIDEO_OCR_LOCK = threading.Lock()
 _VIDEO_OCR_BG_RUNNING = False
 _FFMPEG_EXE_CACHE: str | None = ""
@@ -3108,7 +3108,7 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
 
 
 _RECORDER_WATERMARK_SEG_RX = re.compile(
-    r"^(?:notebooklm|capcut|veo|kapwing|[xyv]?rec[eo]rder|mobizen|bandicam(?:\.com)?|gomcam|ocam|az\s*screen(?:\s*recorder)?|inshot|kinemaster|vivavideo|filmora)$",
+    r"^(?:notebooklm|capcut|veo|kapwing|[xyv]?rec[eo@0]rder|mobizen|bandicam(?:\.com)?|gomcam|ocam|az\s*screen(?:\s*recorder)?|inshot|kinemaster|vivavideo|filmora)$",
     re.IGNORECASE,
 )
 
@@ -3205,13 +3205,19 @@ def _dedupe_ocr_timeline_lines(raw_frames: List[Dict[str, Any]]) -> List[Dict[st
                 continue
             if prev_bigrams and cur_bigrams:
                 containment = len(prev_bigrams & cur_bigrams) / float(max(1, min(len(prev_bigrams), len(cur_bigrams))))
+                dt_prev = s_int - int(deduped[-1].get("timeSec") or 0)
                 is_fast_scroll_settle = (
-                    (s_int - int(deduped[-1].get("timeSec") or 0)) <= 4
+                    dt_prev <= 4
                     and len(norm) >= int(len(prev_norm) * 2.5)
                     and containment >= 0.36
                 )
-                if containment >= 0.80 or is_fast_scroll_settle:
-                    if len(norm) > len(prev_norm) + 4:
+                is_shake_settle = (
+                    dt_prev <= 6
+                    and containment >= 0.68
+                    and len(norm) >= len(prev_norm)
+                )
+                if containment >= 0.80 or is_fast_scroll_settle or is_shake_settle:
+                    if is_shake_settle or len(norm) > len(prev_norm) + 4:
                         deduped[-1]["text"] = txt
                         deduped[-1]["timeSec"] = s_int
                         deduped[-1]["timestamp"] = ts_str
@@ -3252,12 +3258,22 @@ def _select_stable_scene_frames(
                 continue
             try:
                 with Image.open(p_jpg) as im:
-                    g = np.asarray(im.convert("L").resize((96, 54), Image.Resampling.BILINEAR), dtype=np.float32)
+                    im_l = im.convert("L")
+                    iw, ih = im_l.size
+                    g = np.asarray(im_l.resize((96, 54), Image.Resampling.BILINEAR), dtype=np.float32)
+                    short_side = max(1, min(iw, ih))
+                    sc_s = min(1.0, 320.0 / float(short_side))
+                    sw_s = max(32, int(round(iw * sc_s)))
+                    sh_s = max(32, int(round(ih * sc_s)))
+                    gs = np.asarray(im_l.resize((sw_s, sh_s), Image.Resampling.BILINEAR), dtype=np.float32)
                 std_v = float(np.std(g))
                 if std_v < 4.5:  # 완전 암전·백색 페이드 화면 제외
                     p_jpg.unlink(missing_ok=True)
                     continue
-                sharp = float(np.mean(np.abs(g[:, 1:] - g[:, :-1])) + np.mean(np.abs(g[1:, :] - g[:-1, :])))
+                # 320px 단변 기준 2차 미분(Laplacian) 고주파 에너지로 스크롤·손떨림 이중 잔상 프레임을 배제하고 정지 완성 프레임을 선별
+                lap_x = np.abs(2.0 * gs[:, 1:-1] - gs[:, :-2] - gs[:, 2:])
+                lap_y = np.abs(2.0 * gs[1:-1, :] - gs[:-2, :] - gs[2:, :])
+                sharp = float(np.mean(lap_x) + np.mean(lap_y))
                 meta_list.append({"path": p_jpg, "sec": sec_val, "g": g, "sharp": sharp})
             except Exception:
                 continue
@@ -3563,24 +3579,24 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
     try:
         if ff:
             raw_candidates: List[tuple[Path, int]] = []
+            start_off = 0.35 if dur >= 3.0 else 0.0
             try:
+                ff_cmd = [ff, "-hide_banner", "-loglevel", "error", "-y"]
+                if start_off > 0:
+                    ff_cmd.extend(["-ss", f"{start_off:.2f}"])
+                ff_cmd.extend([
+                    "-i",
+                    str(target_path),
+                    "-vf",
+                    f"fps=1/{scan_interval:.2f},scale='min(1600,iw)':-2",
+                    "-frames:v",
+                    "72",
+                    "-q:v",
+                    "2",
+                    str(tmp_dir / "scan_%04d.jpg"),
+                ])
                 subprocess.run(
-                    [
-                        ff,
-                        "-hide_banner",
-                        "-loglevel",
-                        "error",
-                        "-y",
-                        "-i",
-                        str(target_path),
-                        "-vf",
-                        f"fps=1/{scan_interval:.2f},scale='min(1600,iw)':-2",
-                        "-frames:v",
-                        "72",
-                        "-q:v",
-                        "2",
-                        str(tmp_dir / "scan_%04d.jpg"),
-                    ],
+                    ff_cmd,
                     capture_output=True,
                     timeout=25,
                     creationflags=creationflags,
@@ -3590,7 +3606,7 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
             scanned_files = sorted(tmp_dir.glob("scan_*.jpg"), key=lambda p: p.name)
             if scanned_files:
                 for idx_s, sf_p in enumerate(scanned_files):
-                    s_est = min(max(0, int(dur) - 1), int(round(idx_s * scan_interval)))
+                    s_est = min(max(0, int(dur) - 1), int(round(start_off + idx_s * scan_interval)))
                     raw_candidates.append((sf_p, s_est))
             else:
                 for idx, s_val in enumerate(sample_secs):
