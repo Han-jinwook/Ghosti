@@ -19,6 +19,8 @@ import {
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { zCoreBridge } from '../services/zCoreBridge';
 import { syncHubUserToLocalSupabase, clearGhostiSupabaseSession } from '../services/supabaseClient';
+import { clearCachedSharedRoomTokens } from '../services/sharedPhotoRoomSupabase';
+import { readActiveInviteToken } from '../services/shareInviteDeepLinkBridge';
 import {
   isInvalidNicknameCandidate,
   loadGhostPassportBook,
@@ -181,19 +183,40 @@ const GhostiHubGlobalModals: React.FC = () => {
         }
       });
     } else if (!isLoggedIn) {
-      // 로그아웃(로그인 → 게스트 전환) 시에만 귀신같이 Supabase 단기 토큰 폐기 (최초 세션 복원 대기 중 오삭제 방지)
-      if (wasLoggedInRef.current) clearGhostiSupabaseSession();
-      // 비로그인 게스트 상태에서는 코인 오표시(5,200C 등) 및 기기 허위 연결 표시 원천 차단
-      useSaySeeStore.setState((state) => ({
-        pcAgentPairedMobile: false,
-        merlinAuth: {
-          ...state.merlinAuth,
-          token: '',
-          userId: 'guest',
-          email: '',
-          coinBalance: 0,
-        },
-      }));
+      // 로그아웃(로그인 → 게스트 전환) 시 귀신같이 Supabase 단기 토큰 및 공유방 메모리 캐시 즉시 폐기 (타 계정 사진 노출 0%)
+      if (wasLoggedInRef.current) {
+        clearGhostiSupabaseSession();
+        clearCachedSharedRoomTokens();
+      }
+      const hasUrlInviteToken = Boolean(readActiveInviteToken());
+      useSaySeeStore.setState((state) => {
+        const isInSharedLounge =
+          state.activeLoungeType === 'family' ||
+          state.activeLoungeType === 'club' ||
+          state.activeLoungeType === 'student';
+        return {
+          pcAgentPairedMobile: false,
+          showSharedPhotoUploadModal: false,
+          isInvitedMemberSession: false,
+          ...(wasLoggedInRef.current && !hasUrlInviteToken
+            ? {
+                sharedRoomAddedPhotos: [],
+                sharedRoomHostPhotos: [],
+                ...(isInSharedLounge ? { searchResults: [] } : {}),
+              }
+            : {}),
+          merlinAuth: {
+            ...state.merlinAuth,
+            token: '',
+            userId: 'guest',
+            email: '',
+            coinBalance: 0,
+          },
+        };
+      });
+      if (wasLoggedInRef.current && hasUrlInviteToken) {
+        void useSaySeeStore.getState().syncActiveSharedRoomFromSupabase();
+      }
     }
     wasLoggedInRef.current = isLoggedIn;
   }, [isLoggedIn, user?.id, user?.email, user?.nickname, balance]);

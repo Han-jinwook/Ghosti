@@ -3,6 +3,7 @@ import { OFFICIAL_LAUNCH_LIVE } from '../components/GhostiShowroomLanding';
 
 export interface ParsedShareInvite {
   inviteCode: string;
+  inviteToken?: string;
   loungeType: LoungeType;
   familyRoom: FamilyRoomId;
   hostName: string;
@@ -11,6 +12,7 @@ export interface ParsedShareInvite {
 }
 
 const INVITE_SESSION_KEY = 'ghosti_active_invite_room';
+const INVITE_TOKEN_KEY = 'ghosti_active_invite_token';
 const INVITE_HOST_KEY = 'ghosti_active_invite_host';
 const INVITE_TITLE_KEY = 'ghosti_active_invite_title';
 const JOINED_NATIVE_INVITE_KEY = 'ghosti_joined_invite_room_v1';
@@ -52,8 +54,8 @@ export function normalizeInviteFamilyRoom(raw: string | null | undefined): Famil
 }
 
 /**
- * 웹 초대 URL(`https://ghosti.sundreamer.app/?invite=...`), 네이티브 딥링크(`ghosti://invite?...`),
- * Google Play Install Referrer(`invite=family_home&...`), 또는 클립보드 초대 토큰(`GHOSTI_INVITE_V1:...`)을
+ * 웹 초대 URL(`https://ghosti.sundreamer.app/?invite=...&token=...`), 네이티브 딥링크(`ghosti://invite?...`),
+ * Google Play Install Referrer(`invite=family_home&token=...`), 또는 클립보드 초대 토큰(`GHOSTI_INVITE_V1:...`)을
  * 단일 구조체로 파싱합니다.
  */
 export function parseShareInviteInput(rawInput: string | null | undefined): ParsedShareInvite | null {
@@ -61,7 +63,6 @@ export function parseShareInviteInput(rawInput: string | null | undefined): Pars
   let text = rawInput.trim();
   if (!text) return null;
 
-  // 카톡 초대 메시지 전체 텍스트 중에서 URL 또는 GHOSTI_INVITE_V1 토큰만 추출 지원
   const tokenMatch = text.match(/GHOSTI_INVITE_V1:([A-Za-z0-9+/=%._?&=-]+)/i);
   if (tokenMatch) {
     try {
@@ -84,7 +85,7 @@ export function parseShareInviteInput(rawInput: string | null | undefined): Pars
         : text;
       const parsedUrl = new URL(normalizedForUrl);
       params = parsedUrl.searchParams;
-    } else if (text.includes('invite=')) {
+    } else if (text.includes('invite=') || text.includes('token=')) {
       params = new URLSearchParams(text.startsWith('?') ? text.slice(1) : text);
     }
   } catch {
@@ -96,9 +97,10 @@ export function parseShareInviteInput(rawInput: string | null | undefined): Pars
 
   if (!params) return null;
   const inviteRaw = (params.get('invite') || '').trim();
-  if (!inviteRaw) return null;
+  const inviteToken = (params.get('token') || '').trim() || undefined;
+  if (!inviteRaw && !inviteToken) return null;
 
-  const lowerInvite = inviteRaw.toLowerCase();
+  const lowerInvite = (inviteRaw || 'family_home').toLowerCase();
   const loungeType: LoungeType = lowerInvite.startsWith('club')
     ? 'club'
     : lowerInvite.startsWith('student') || lowerInvite.startsWith('alumni')
@@ -121,6 +123,7 @@ export function parseShareInviteInput(rawInput: string | null | undefined): Pars
 
   return {
     inviteCode,
+    inviteToken,
     loungeType,
     familyRoom,
     hostName,
@@ -135,11 +138,15 @@ export function persistInviteContextMeta(parsed: ParsedShareInvite, isNativeJoin
     sessionStorage.setItem(INVITE_SESSION_KEY, parsed.inviteCode);
     sessionStorage.setItem(INVITE_HOST_KEY, parsed.hostName);
     sessionStorage.setItem(INVITE_TITLE_KEY, parsed.roomTitle);
+    if (parsed.inviteToken) {
+      sessionStorage.setItem(INVITE_TOKEN_KEY, parsed.inviteToken);
+    }
     if (isNativeJoined) {
       localStorage.setItem(
         JOINED_NATIVE_INVITE_KEY,
         JSON.stringify({
           inviteCode: parsed.inviteCode,
+          inviteToken: parsed.inviteToken || '',
           loungeType: parsed.loungeType,
           familyRoom: parsed.familyRoom,
           hostName: parsed.hostName,
@@ -153,11 +160,47 @@ export function persistInviteContextMeta(parsed: ParsedShareInvite, isNativeJoin
   }
 }
 
+export function clearStoredInviteSession(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem(INVITE_SESSION_KEY);
+    sessionStorage.removeItem(INVITE_TOKEN_KEY);
+    sessionStorage.removeItem(INVITE_HOST_KEY);
+    sessionStorage.removeItem(INVITE_TITLE_KEY);
+    localStorage.removeItem(JOINED_NATIVE_INVITE_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function readActiveInviteToken(): string {
+  if (typeof window === 'undefined') return '';
+  try {
+    const params = new URLSearchParams(window.location.search);
+    const urlTok = (params.get('token') || '').trim();
+    if (urlTok) {
+      sessionStorage.setItem(INVITE_TOKEN_KEY, urlTok);
+      return urlTok;
+    }
+    const ssTok = (sessionStorage.getItem(INVITE_TOKEN_KEY) || '').trim();
+    if (ssTok) return ssTok;
+    const rawJoined = localStorage.getItem(JOINED_NATIVE_INVITE_KEY);
+    if (rawJoined) {
+      const joined = JSON.parse(rawJoined) as { inviteToken?: string };
+      if (joined?.inviteToken) return joined.inviteToken.trim();
+    }
+  } catch {
+    /* ignore */
+  }
+  return '';
+}
+
 export function readCurrentInviteDisplayMeta(
   fallbackLounge: LoungeType,
   fallbackFamilyRoom: FamilyRoomId
 ): {
   inviteCode: string;
+  inviteToken: string;
   hostName: string;
   roomTitle: string;
   hasExplicitUrlInvite: boolean;
@@ -167,6 +210,7 @@ export function readCurrentInviteDisplayMeta(
   if (typeof window === 'undefined') {
     return {
       inviteCode: defaultCode,
+      inviteToken: '',
       hostName: '방장',
       roomTitle: defaultTitle,
       hasExplicitUrlInvite: false,
@@ -178,6 +222,7 @@ export function readCurrentInviteDisplayMeta(
       persistInviteContextMeta(fromUrl, false);
       return {
         inviteCode: fromUrl.inviteCode,
+        inviteToken: fromUrl.inviteToken || readActiveInviteToken(),
         hostName: fromUrl.hostName,
         roomTitle: fromUrl.roomTitle,
         hasExplicitUrlInvite: true,
@@ -186,9 +231,11 @@ export function readCurrentInviteDisplayMeta(
     const storedHost = (sessionStorage.getItem(INVITE_HOST_KEY) || '').trim();
     const storedTitle = (sessionStorage.getItem(INVITE_TITLE_KEY) || '').trim();
     const storedCode = (sessionStorage.getItem(INVITE_SESSION_KEY) || '').trim();
-    if (storedCode) {
+    const storedToken = readActiveInviteToken();
+    if (storedCode || storedToken) {
       return {
-        inviteCode: storedCode,
+        inviteCode: storedCode || defaultCode,
+        inviteToken: storedToken,
         hostName: storedHost || '방장',
         roomTitle: storedTitle || defaultTitle,
         hasExplicitUrlInvite: false,
@@ -197,9 +244,10 @@ export function readCurrentInviteDisplayMeta(
     const rawJoined = localStorage.getItem(JOINED_NATIVE_INVITE_KEY);
     if (rawJoined) {
       const joined = JSON.parse(rawJoined) as Partial<ParsedShareInvite>;
-      if (joined?.inviteCode) {
+      if (joined?.inviteCode || joined?.inviteToken) {
         return {
-          inviteCode: joined.inviteCode,
+          inviteCode: joined.inviteCode || defaultCode,
+          inviteToken: joined.inviteToken || '',
           hostName: joined.hostName || '방장',
           roomTitle: joined.roomTitle || defaultTitle,
           hasExplicitUrlInvite: false,
@@ -211,6 +259,7 @@ export function readCurrentInviteDisplayMeta(
   }
   return {
     inviteCode: defaultCode,
+    inviteToken: '',
     hostName: '방장',
     roomTitle: defaultTitle,
     hasExplicitUrlInvite: false,
@@ -220,6 +269,7 @@ export function readCurrentInviteDisplayMeta(
 export function buildShareRoomInviteHttpsUrl(opts: {
   loungeType: LoungeType;
   familyRoom: FamilyRoomId;
+  inviteToken?: string;
   hostName?: string;
   roomTitle?: string;
 }): string {
@@ -228,6 +278,10 @@ export function buildShareRoomInviteHttpsUrl(opts: {
   params.set('invite', inviteCode);
   if (opts.loungeType === 'family') {
     params.set('room', opts.familyRoom);
+  }
+  const cleanToken = (opts.inviteToken || '').trim();
+  if (cleanToken) {
+    params.set('token', cleanToken);
   }
   const cleanHost = (opts.hostName || '').trim();
   if (cleanHost && cleanHost !== '방장') {
@@ -244,6 +298,7 @@ export function buildShareRoomInviteHttpsUrl(opts: {
 export function buildShareRoomNativeSchemeUrl(opts: {
   loungeType: LoungeType;
   familyRoom: FamilyRoomId;
+  inviteToken?: string;
   hostName?: string;
   roomTitle?: string;
   nicknameHint?: string;
@@ -253,6 +308,9 @@ export function buildShareRoomNativeSchemeUrl(opts: {
   params.set('invite', inviteCode);
   if (opts.loungeType === 'family') {
     params.set('room', opts.familyRoom);
+  }
+  if (opts.inviteToken?.trim()) {
+    params.set('token', opts.inviteToken.trim());
   }
   if (opts.hostName?.trim()) {
     params.set('host', opts.hostName.trim());
@@ -266,11 +324,6 @@ export function buildShareRoomNativeSchemeUrl(opts: {
   return `ghosti://invite?${params.toString()}`;
 }
 
-/**
- * [Step 1 안드로이드 앱 설치자 0.1초 직행 & 미설치자 무납치 폴백]:
- * - 앱이 설치된 안드로이드 폰: `app.sundreamer.ghosti` 앱의 해당 공유방으로 0.1초 직행
- * - 앱이 미설치된 안드로이드 폰: 스토어로 강제 납치하지 않고 `S.browser_fallback_url`(`&app_checked=1`)로 조용히 복귀하여 1초 웹 구경 유지
- */
 export function buildAndroidSafeAppProbeIntentUrl(currentHref: string): string | null {
   const parsed = parseShareInviteInput(currentHref);
   if (!parsed) return null;
@@ -281,6 +334,9 @@ export function buildAndroidSafeAppProbeIntentUrl(currentHref: string): string |
     schemeQuery.set('invite', parsed.inviteCode);
     if (parsed.loungeType === 'family') {
       schemeQuery.set('room', parsed.familyRoom);
+    }
+    if (parsed.inviteToken) {
+      schemeQuery.set('token', parsed.inviteToken);
     }
     if (parsed.hostName) {
       schemeQuery.set('host', parsed.hostName);
@@ -299,6 +355,7 @@ export function buildAndroidSafeAppProbeIntentUrl(currentHref: string): string |
 export function buildDeferredInviteClipboardToken(opts: {
   loungeType: LoungeType;
   familyRoom: FamilyRoomId;
+  inviteToken?: string;
   hostName?: string;
   roomTitle?: string;
   nicknameHint?: string;
@@ -308,6 +365,9 @@ export function buildDeferredInviteClipboardToken(opts: {
   params.set('invite', inviteCode);
   if (opts.loungeType === 'family') {
     params.set('room', opts.familyRoom);
+  }
+  if (opts.inviteToken?.trim()) {
+    params.set('token', opts.inviteToken.trim());
   }
   if (opts.hostName?.trim()) {
     params.set('host', opts.hostName.trim());
@@ -324,6 +384,7 @@ export function buildDeferredInviteClipboardToken(opts: {
 export function buildAndroidPlayStoreInviteUrl(opts: {
   loungeType: LoungeType;
   familyRoom: FamilyRoomId;
+  inviteToken?: string;
   hostName?: string;
   roomTitle?: string;
   nicknameHint?: string;
@@ -333,6 +394,9 @@ export function buildAndroidPlayStoreInviteUrl(opts: {
   refParams.set('invite', inviteCode);
   if (opts.loungeType === 'family') {
     refParams.set('room', opts.familyRoom);
+  }
+  if (opts.inviteToken?.trim()) {
+    refParams.set('token', opts.inviteToken.trim());
   }
   if (opts.hostName?.trim()) {
     refParams.set('host', opts.hostName.trim());

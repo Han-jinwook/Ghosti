@@ -34,6 +34,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
   const triggerGuestJoinWall = useSaySeeStore((s) => s.triggerGuestJoinWall);
   const completeGuestOneSecJoin = useSaySeeStore((s) => s.completeGuestOneSecJoin);
   const applyShareInviteDeepLink = useSaySeeStore((s) => s.applyShareInviteDeepLink);
+  const syncActiveSharedRoomFromSupabase = useSaySeeStore((s) => s.syncActiveSharedRoomFromSupabase);
   const showSharedPhotoUploadModal = useSaySeeStore((s) => s.showSharedPhotoUploadModal);
   const setShowSharedPhotoUploadModal = useSaySeeStore((s) => s.setShowSharedPhotoUploadModal);
   const addLocalPhotosToSharedRoom = useSaySeeStore((s) => s.addLocalPhotosToSharedRoom);
@@ -278,12 +279,12 @@ export const FreePhotoShareOverlays: React.FC = () => {
 
     try {
       const params = new URLSearchParams(window.location.search);
-      if (params.has('invite')) {
+      if (params.has('invite') || params.has('token')) {
         void applyShareInviteDeepLink(window.location.href, { fromNativeApp: false });
       }
       if (
         isAndroidMobileBrowserOrApp() &&
-        params.has('invite') &&
+        (params.has('invite') || params.has('token')) &&
         !params.has('app_checked') &&
         sessionStorage.getItem('ghosti_android_intent_probed') !== '1'
       ) {
@@ -298,6 +299,22 @@ export const FreePhotoShareOverlays: React.FC = () => {
     }
   }, [applyShareInviteDeepLink]);
 
+  // 공유방 탭 전환 또는 로그인 완료(ghostiSupabaseUserSynced) 시 현재 계정·초대토큰 기준의 공유방 사진만 자동 동기화
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (isSharedPhotoLounge(activeLoungeType)) {
+      void syncActiveSharedRoomFromSupabase();
+    }
+    const onUserSynced = () => {
+      useSaySeeStore.setState({ isGuestPreviewMode: false, guestJoinWallReason: null });
+      void useSaySeeStore.getState().syncActiveSharedRoomFromSupabase();
+    };
+    window.addEventListener('ghostiSupabaseUserSynced', onUserSynced);
+    return () => {
+      window.removeEventListener('ghostiSupabaseUserSynced', onUserSynced);
+    };
+  }, [activeLoungeType, activeFamilyRoom, syncActiveSharedRoomFromSupabase]);
+
   const inviteMeta = readCurrentInviteDisplayMeta(
     isSharedPhotoLounge(activeLoungeType) ? activeLoungeType : 'family',
     activeFamilyRoom
@@ -308,6 +325,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
     const deferredToken = buildDeferredInviteClipboardToken({
       loungeType: targetLounge,
       familyRoom: activeFamilyRoom,
+      inviteToken: inviteMeta.inviteToken,
       hostName: inviteMeta.hostName,
       roomTitle: inviteMeta.roomTitle,
       nicknameHint: guestNicknameDraft,
@@ -334,6 +352,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
     const playUrl = buildAndroidPlayStoreInviteUrl({
       loungeType: targetLounge,
       familyRoom: activeFamilyRoom,
+      inviteToken: inviteMeta.inviteToken,
       hostName: inviteMeta.hostName,
       roomTitle: inviteMeta.roomTitle,
       nicknameHint: guestNicknameDraft,
@@ -346,6 +365,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
     const schemeUrl = buildShareRoomNativeSchemeUrl({
       loungeType: targetLounge,
       familyRoom: activeFamilyRoom,
+      inviteToken: inviteMeta.inviteToken,
       hostName: inviteMeta.hostName,
       roomTitle: inviteMeta.roomTitle,
       nicknameHint: guestNicknameDraft,
@@ -470,40 +490,25 @@ export const FreePhotoShareOverlays: React.FC = () => {
                     선택하신 기능: [{guestJoinWallReason}]
                   </div>
                   <h3 className="font-headline-sm text-[18px] text-white font-black leading-snug break-keep">
-                    🔒 외부인 유출 방지 및 고화질 원본 전달을 위해, 이 방에서 쓰실 이름(별명)과 이메일만 입력해 주세요!
+                    🔐 내 사진 업로드 및 고화질 원본 저장은 이메일 로그인 후 바로 이용하실 수 있습니다!
                   </h3>
                   <p className="text-[12px] text-emerald-300 font-bold break-keep">
-                    ✨ 초대받으신 분은 평생 100% 무료입니다. 입력하신 이름·별명으로 『{inviteMeta.roomTitle}』에 바로 합류합니다.
+                    ✨ 초대받으신 분은 평생 100% 무료입니다. 비로그인 상태에서는 방 구경만 가능하며, 10초 이메일 인증 후 『{inviteMeta.roomTitle}』 정식 멤버로 합류됩니다.
                   </p>
                 </div>
 
-                <div className="flex flex-col gap-2.5">
-                  <label className="flex flex-col gap-1">
-                    <span className="text-[11.5px] text-zinc-300 font-bold">
-                      이 방에서 쓰실 이름 또는 별명
-                    </span>
-                    <input
-                      type="text"
-                      value={guestNicknameDraft}
-                      onChange={(e) => setGuestNicknameDraft(e.target.value)}
-                      placeholder="예: 큰삼촌, 박총무"
-                      className="px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-white text-[13px] font-bold outline-none focus:border-amber-400"
-                    />
-                  </label>
-
-                  <label className="flex flex-col gap-1">
-                    <span className="text-[11.5px] text-zinc-300 font-bold">
-                      이메일 주소 (고화질 원본 전달 및 계정 연결용)
-                    </span>
-                    <input
-                      type="email"
-                      value={guestEmailDraft}
-                      onChange={(e) => setGuestEmailDraft(e.target.value)}
-                      placeholder="예: friend@naver.com"
-                      className="px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-white text-[13px] font-bold outline-none focus:border-amber-400"
-                    />
-                  </label>
-                </div>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11.5px] text-zinc-300 font-bold">
+                    이 방에서 쓰실 이름 또는 별명 (선택)
+                  </span>
+                  <input
+                    type="text"
+                    value={guestNicknameDraft}
+                    onChange={(e) => setGuestNicknameDraft(e.target.value)}
+                    placeholder="예: 큰삼촌, 박총무"
+                    className="px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-white text-[13px] font-bold outline-none focus:border-amber-400"
+                  />
+                </label>
 
                 <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
                   <button
@@ -511,7 +516,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
                     onClick={() => completeGuestOneSecJoin(guestNicknameDraft, guestEmailDraft)}
                     className="flex-1 py-3 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[13px] font-black cursor-pointer shadow-md break-keep"
                   >
-                    🚀 PC 웹에서 1초 합류하고 고화질 원본 바로 쓰기 (0원)
+                    🔐 이메일 10초 인증하고 이 방 정식 합류하기 (평생 0원)
                   </button>
                   <button
                     type="button"

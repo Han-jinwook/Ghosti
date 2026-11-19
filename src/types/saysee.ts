@@ -434,6 +434,21 @@ export interface PhotoItem {
   sharedLoungeType?: LoungeType;
   /** 가족방 소속 세부 룸 구분 ('우리집' | '본가(친가)' | '처가(친정)') */
   sharedFamilyRoom?: FamilyRoomId;
+  /** [방식 A] Supabase 정식 공유방 ID (room_id 격리 키) */
+  sharedRoomId?: string;
+  /** [방식 A] 업로더 계정 이메일 (로그인 멤버 조회 시에만 사용, 무가입 프리뷰에서는 비노출) */
+  sharedOwnerEmail?: string;
+  /** [방식 A] Supabase ghosti_room_shared_photos.id (UUID) */
+  sharedSupabasePhotoId?: string;
+  /** [방식 A] 하트 반응 수 */
+  sharedHeartCount?: number;
+  /** [방식 A] 댓글 목록 (무가입 프리뷰 읽기 공개) */
+  sharedComments?: Array<{
+    id: string;
+    authorNickname: string;
+    body: string;
+    createdAt: string;
+  }>;
   /** PoC 550장 실측 쿼리별 사전 매칭 점수 맵 (presetId -> score) */
   presetScores?: Record<string, number>;
 }

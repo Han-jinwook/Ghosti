@@ -927,6 +927,88 @@ drop policy if exists ghosti_room_photo_reactions_own_delete on public.ghosti_ro
 create policy ghosti_room_photo_reactions_own_delete on public.ghosti_room_photo_reactions
   for delete using (lower(reactor_email) = public.ghosti_current_email());
 
+-- [필수] 2026-10-30 이후 Supabase 신규 테이블 Data API 접근 권한 부여
+grant select, insert, update, delete on table public.ghosti_lounge_rooms to authenticated, service_role;
+grant select, insert, update, delete on table public.ghosti_lounge_members to authenticated, service_role;
+grant select, insert, update, delete on table public.ghosti_room_invites to authenticated, service_role;
+grant select, insert, update, delete on table public.ghosti_room_shared_photos to authenticated, service_role;
+grant select, insert, update, delete on table public.ghosti_room_photo_comments to authenticated, service_role;
+grant select, insert, update, delete on table public.ghosti_room_photo_reactions to authenticated, service_role;
+
+-- [방장 전용: 계정별 고유 공유방 + 초대 토큰 원자적 생성·조회 RPC]
+create or replace function public.ghosti_ensure_room_and_invite(
+  p_lounge_type text,
+  p_sub_type text,
+  p_room_title text,
+  p_master_nickname text default '방장'
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_email text := public.ghosti_current_email();
+  v_room_id text;
+  v_token text;
+begin
+  if v_email = '' then
+    raise exception 'GHOSTI_AUTH_REQUIRED';
+  end if;
+
+  select r.room_id into v_room_id
+    from public.ghosti_lounge_rooms r
+   where lower(r.master_email) = v_email
+     and r.lounge_type = p_lounge_type
+     and coalesce(r.sub_type, '') = coalesce(p_sub_type, '')
+   order by r.created_at asc
+   limit 1;
+
+  if v_room_id is null then
+    v_room_id := 'room_' || substr(md5(v_email || ':' || p_lounge_type || ':' || coalesce(p_sub_type, '')), 1, 16);
+    insert into public.ghosti_lounge_rooms (
+      room_id, lounge_type, sub_type, room_title, master_user_id, master_email
+    ) values (
+      v_room_id, p_lounge_type, p_sub_type, coalesce(nullif(p_room_title, ''), '사진 공유방'),
+      coalesce(auth.uid()::text, v_email), v_email
+    )
+    on conflict (room_id) do nothing;
+
+    insert into public.ghosti_lounge_members (room_id, member_email, role, room_persona_nickname)
+    values (v_room_id, v_email, 'master', coalesce(nullif(p_master_nickname, ''), '방장'))
+    on conflict (room_id, member_email) do nothing;
+  end if;
+
+  select i.token into v_token
+    from public.ghosti_room_invites i
+   where i.room_id = v_room_id
+     and i.revoked_at is null
+     and i.expires_at > now()
+     and i.used_count < i.max_uses
+   order by i.created_at desc
+   limit 1;
+
+  if v_token is null then
+    v_token := md5(gen_random_uuid()::text || ':' || clock_timestamp()::text || ':' || v_room_id)
+               || substr(md5(random()::text), 1, 4);
+    insert into public.ghosti_room_invites (
+      token, room_id, created_by_email, default_role, max_uses, expires_at
+    ) values (
+      v_token, v_room_id, v_email, 'member', 500, now() + interval '365 days'
+    );
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'roomId', v_room_id,
+    'inviteToken', v_token
+  );
+end;
+$$;
+
+revoke all on function public.ghosti_ensure_room_and_invite(text, text, text, text) from public, anon;
+grant execute on function public.ghosti_ensure_room_and_invite(text, text, text, text) to authenticated, service_role;
+
 -- [무가입 1초 프리뷰 전용 SECURITY DEFINER 읽기 RPC]
 -- 유효한 초대 토큰(p_invite_token) 보유자(anon 포함)에게만 해당 방(room_id)의 13KB 썸네일·검색 인덱스·인물 문패·댓글/하트(읽기)·친근한 촬영일시를 반환.
 -- 정밀 GPS 좌표(gps_lat, gps_lng), 업로더 이메일, 타 방 사진은 원천 차단됨.
@@ -938,6 +1020,7 @@ set search_path = public
 as $$
 declare
   v_room_id text;
+  v_host_nick text;
   v_room record;
   v_photos jsonb;
 begin
@@ -960,6 +1043,11 @@ begin
   if not found then
     return jsonb_build_object('ok', false, 'reason', 'ROOM_NOT_FOUND');
   end if;
+
+  select m.room_persona_nickname into v_host_nick
+    from public.ghosti_lounge_members m
+   where m.room_id = v_room_id and m.role = 'master'
+   limit 1;
 
   select coalesce(
     jsonb_agg(
@@ -1008,11 +1096,12 @@ begin
       'roomId', v_room.room_id,
       'loungeType', v_room.lounge_type,
       'subType', v_room.sub_type,
-      'roomTitle', v_room.room_title
+      'roomTitle', v_room.room_title,
+      'hostNickname', coalesce(v_host_nick, '방장')
     ),
     'photos', v_photos
   );
 end;
 $$;
 
-grant execute on function public.ghosti_get_guest_preview_room(text) to anon, authenticated;
+grant execute on function public.ghosti_get_guest_preview_room(text) to anon, authenticated, service_role;

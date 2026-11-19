@@ -15,15 +15,62 @@ import { PcMasterQuickSendPanel } from '../../components/PricingModal';
 import { GhostiBrandLogo } from '../../components/GhostiBrandLogo';
 import { GhostCastLiveToolbar } from '../../components/GhostCastAndLiveSystem';
 import { SilentIndexingStatusBar } from '../../components/SilentIndexingStatusBar';
-import { zCoreBridge } from '../../services/zCoreBridge';
+import { hasActiveGhostiLoginSession, zCoreBridge } from '../../services/zCoreBridge';
 import { isCapacitorNativeMobileRuntime } from '../../services/ghostiMobileCareBridge';
 import {
   buildShareRoomInviteHttpsUrl,
   buildShareRoomNativeSchemeUrl,
   readCurrentInviteDisplayMeta,
+  resolveDefaultRoomTitle,
 } from '../../services/shareInviteDeepLinkBridge';
+import { ensureMyRoomAndInviteToken } from '../../services/sharedPhotoRoomSupabase';
 import { LOUNGE_TABS, PLAN_BADGE_LABELS, HostThreeBodyControlPanel } from '../shared/loungeHelpers';
 import { WorkLoungeB2BHub } from '../paid_work_share/WorkLoungeB2BHub';
+
+async function issueAuthenticatedInviteHttpsUrl(opts: {
+  loungeType: LoungeType;
+  familyRoom: FamilyRoomId;
+  defaultHostLabel: string;
+  roomTitle?: string;
+}): Promise<string | null> {
+  if (!hasActiveGhostiLoginSession()) {
+    useSaySeeStore
+      .getState()
+      .showToast('🔒 내 공유방 초대 링크를 발급하려면 먼저 이메일 로그인(10초 인증)을 완료해 주세요!');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('openLoginModal'));
+    }
+    return null;
+  }
+  const st = useSaySeeStore.getState();
+  const hostNick =
+    (typeof window !== 'undefined'
+      ? localStorage.getItem('ghosti_hub_user_nickname') || ''
+      : '') ||
+    (st.merlinAuth.email ? st.merlinAuth.email.split('@')[0] : '') ||
+    opts.defaultHostLabel;
+  const resolvedTitle =
+    opts.roomTitle || resolveDefaultRoomTitle(opts.loungeType, opts.familyRoom);
+  const ensured = await ensureMyRoomAndInviteToken({
+    loungeType: opts.loungeType,
+    familyRoom: opts.familyRoom,
+    roomTitle: resolvedTitle,
+    masterNickname: hostNick,
+  });
+  if (!ensured.ok || !ensured.inviteToken) {
+    useSaySeeStore
+      .getState()
+      .showToast('⚠️ 공유방 초대 토큰 발급 중 일시적 오류가 발생했습니다. 다시 눌러주세요.');
+    return null;
+  }
+  return buildShareRoomInviteHttpsUrl({
+    loungeType: opts.loungeType,
+    familyRoom: opts.familyRoom,
+    inviteToken: ensured.inviteToken,
+    hostName: hostNick,
+    roomTitle: resolvedTitle,
+  });
+}
 
 /**
  * ⛳ 동호회 · 동창회 (사진 공유) (4050 동창회 특화 UX — Warm Light 앨범 프레임 + 1줄 요약 정화 버전)
@@ -58,18 +105,19 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
 
   const cohortShort = String(alumniGradCohortNumber).padStart(2, '0');
   const bannerTitle = `${alumniSchoolName} ${cohortShort}회 동창회`;
-  const studentInviteUrl = buildShareRoomInviteHttpsUrl({
-    loungeType: 'student',
-    familyRoom: '우리집',
-    hostName: '동기회장',
-    roomTitle: `🎓 ${bannerTitle}`,
-  });
-  const inviteHookCopy = `[${bannerTitle}] 네가 몰랐던 ${cohortShort}년 수학여행·졸업식 사진이 올라왔어! 설치·로그인 없이 바로 구경하고 내 사진도 올려봐 (초대받은 동기는 평생 무료)\n👉 ${studentInviteUrl}`;
   const trojanBragCopy = `내가 동호회·동창회 마스터권 끊어서 패밀리 라운지 무료 이용권 3장 받았는데, 선착순으로 줄 테니 쓸 사람?`;
 
   const pendingProposals = analogYearProposals.filter((p) => !p.approvedByHost);
 
   const handleCopyInviteHook = async () => {
+    const studentInviteUrl = await issueAuthenticatedInviteHttpsUrl({
+      loungeType: 'student',
+      familyRoom: '우리집',
+      defaultHostLabel: '동기회장',
+      roomTitle: `🎓 ${bannerTitle}`,
+    });
+    if (!studentInviteUrl) return;
+    const inviteHookCopy = `[${bannerTitle}] 네가 몰랐던 ${cohortShort}년 수학여행·졸업식 사진이 올라왔어! 설치·로그인 없이 바로 구경하고 내 사진도 올려봐 (초대받은 동기는 평생 무료)\n👉 ${studentInviteUrl}`;
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(inviteHookCopy);
@@ -1720,12 +1768,13 @@ export const LoungeFeedContextBanner: React.FC = () => {
   const [clubInviteCopied, setClubInviteCopied] = useState(false);
 
   const handleCopyClubInviteHook = async () => {
-    const clubInviteUrl = buildShareRoomInviteHttpsUrl({
+    const clubInviteUrl = await issueAuthenticatedInviteHttpsUrl({
       loungeType: 'club',
       familyRoom: '우리집',
-      hostName: '모임총무',
+      defaultHostLabel: '모임총무',
       roomTitle: `⛰️ ${clubBannerTitle}`,
     });
+    if (!clubInviteUrl) return;
     const copyTxt = `[${clubBannerTitle}] 이번 모임·라운딩 고화질 원본 사진과 영상이 모두 올라왔습니다! 설치·로그인 없이 바로 구경하세요 (총무님 후원으로 전 회원 평생 0원 무료)\n👉 ${clubInviteUrl}`;
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -1958,6 +2007,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
               window.location.href = buildShareRoomNativeSchemeUrl({
                 loungeType: activeLoungeType,
                 familyRoom: activeFamilyRoom,
+                inviteToken: inviteMeta.inviteToken,
                 hostName: inviteMeta.hostName,
                 roomTitle: inviteMeta.roomTitle,
               });
@@ -1968,7 +2018,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
           </button>
         )}
 
-        {isGuestPreviewMode && !inviteMeta.hasExplicitUrlInvite && (
+        {isGuestPreviewMode && !inviteMeta.hasExplicitUrlInvite && hasActiveGhostiLoginSession() && (
           <button
             type="button"
             onClick={() => setIsGuestPreviewMode(false)}
@@ -2005,17 +2055,6 @@ export const LoungeFeedContextBanner: React.FC = () => {
   );
 
   if (activeLoungeType === 'family') {
-    const inviteUrl = buildShareRoomInviteHttpsUrl({
-      loungeType: 'family',
-      familyRoom: activeFamilyRoom,
-      hostName: '가족방장',
-      roomTitle:
-        activeFamilyRoom === '본가(친가)'
-          ? '🏡 본가(친가) 가족 사진방'
-          : activeFamilyRoom === '처가(친정)'
-            ? '🌸 처가(친정) 가족 사진방'
-            : '🏠 우리집 가족 사진방',
-    });
     return (
       <div className="flex flex-col gap-2.5">
         {renderMobileGuestPreviewBanner()}
@@ -2035,6 +2074,18 @@ export const LoungeFeedContextBanner: React.FC = () => {
             <button
               type="button"
               onClick={async () => {
+                const inviteUrl = await issueAuthenticatedInviteHttpsUrl({
+                  loungeType: 'family',
+                  familyRoom: activeFamilyRoom,
+                  defaultHostLabel: '가족방장',
+                  roomTitle:
+                    activeFamilyRoom === '본가(친가)'
+                      ? '🏡 본가(친가) 가족 사진방'
+                      : activeFamilyRoom === '처가(친정)'
+                        ? '🌸 처가(친정) 가족 사진방'
+                        : '🏠 우리집 가족 사진방',
+                });
+                if (!inviteUrl) return;
                 try {
                   await navigator.clipboard?.writeText(inviteUrl);
                 } catch {
@@ -3176,11 +3227,12 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   const copyInviteLink = async () => {
     const targetLounge: LoungeType =
       activeLoungeType === 'club' || activeLoungeType === 'student' ? activeLoungeType : 'family';
-    const inviteUrl = buildShareRoomInviteHttpsUrl({
+    const inviteUrl = await issueAuthenticatedInviteHttpsUrl({
       loungeType: targetLounge,
       familyRoom: activeFamilyRoom,
-      hostName: targetLounge === 'family' ? '가족방장' : '모임방장',
+      defaultHostLabel: targetLounge === 'family' ? '가족방장' : '모임방장',
     });
+    if (!inviteUrl) return;
     const inviteCopy = `[귀신같이 사진 공유방 초대장] 설치·로그인 없이 1초 만에 우리 공유 사진을 구경하고, 무료 앱에서 내 사진 올리기·고화질 원본 저장·새 사진 알림까지 평생 0원으로 함께해요!\n👉 ${inviteUrl}`;
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {

@@ -1,4 +1,5 @@
-import { getZCoreUrl, zCoreBridge } from '../../services/zCoreBridge';
+import { getZCoreUrl, hasActiveGhostiLoginSession, zCoreBridge } from '../../services/zCoreBridge';
+import { readActiveInviteToken } from '../../services/shareInviteDeepLinkBridge';
 import { HybridVoiceSession, OnboardingProgressUpdate } from '../../services/aiEngine';
 import {
   isCapacitorNativeMobileRuntime,
@@ -115,41 +116,72 @@ export function resolveLoungePhotoCorpus(args: {
     sharedRoomAddedPhotos,
   } = args;
 
-  if (activeLoungeType === 'family') {
+  if (activeLoungeType === 'family' || activeLoungeType === 'club' || activeLoungeType === 'student') {
+    const isLoggedIn = hasActiveGhostiLoginSession();
+    const activeInviteToken = readActiveInviteToken();
     const { hasActiveInvite, hostLounge, hostFamilyRoom } = resolveInvitedHostLoungeAndRoom();
-    const addedForFamily = sharedRoomAddedPhotos.filter(
-      (p) =>
-        (p.sharedLoungeType ?? 'family') === 'family' &&
-        (p.sharedFamilyRoom ?? '우리집') === activeFamilyRoom
-    );
+
+    if (!isLoggedIn && !activeInviteToken) {
+      return [];
+    }
+
+    const currentEmail =
+      isLoggedIn && typeof window !== 'undefined'
+        ? (localStorage.getItem('ghosti_hub_user_email') || '').trim().toLowerCase()
+        : '';
+
+    const scopedAdded = sharedRoomAddedPhotos.filter((p) => {
+      const matchesLounge = (p.sharedLoungeType ?? 'family') === activeLoungeType;
+      if (!matchesLounge) return false;
+      if (activeLoungeType === 'family' && (p.sharedFamilyRoom ?? '우리집') !== activeFamilyRoom) {
+        return false;
+      }
+      if (!isLoggedIn) {
+        const matchesInvitedTab =
+          hasActiveInvite &&
+          hostLounge === activeLoungeType &&
+          (activeLoungeType !== 'family' || hostFamilyRoom === activeFamilyRoom);
+        return Boolean(matchesInvitedTab && p.sharedRoomId && !p.sharedOwnerEmail);
+      }
+      if (p.sharedOwnerEmail && currentEmail && p.sharedOwnerEmail !== currentEmail) {
+        return false;
+      }
+      return true;
+    });
+
     const hostForFamily =
-      hasActiveInvite && hostLounge === 'family' && activeFamilyRoom === hostFamilyRoom
+      activeLoungeType === 'family' &&
+      hasActiveInvite &&
+      hostLounge === 'family' &&
+      activeFamilyRoom === hostFamilyRoom
         ? sharedRoomHostPhotos
         : [];
-    return [...addedForFamily, ...hostForFamily];
-  }
 
-  if (activeLoungeType === 'club' || activeLoungeType === 'student') {
-    return sharedRoomAddedPhotos.filter((p) => p.sharedLoungeType === activeLoungeType);
+    return [...scopedAdded, ...hostForFamily];
   }
 
   return photos.filter(
     (p) =>
       !String(p.id || '').startsWith('shared_host_') &&
+      !String(p.id || '').startsWith('shared_sb_') &&
       !String(p.thumbUrl || '').startsWith('/shared_family_host_thumbs/')
   );
 }
 
 /**
  * 갤러리/공유방 목록에 표시 가능한 사진만 필터링합니다.
- * 사용자가 공유방에 직접 올린 사진(shared_added_)·호스트 공유 사진(shared_host_)은
+ * 공유방 정식 업로드 사진(shared_sb_ / shared_added_)·호스트 공유 사진(shared_host_)은
  * trashCategory/isVaultDocument 분류로 숨기지 않고 항상 표시합니다.
  */
 export function filterVisibleGalleryPhotos(items: PhotoItem[]): PhotoItem[] {
   return items.filter((p) => {
     if (p.quarantined) return false;
     const pid = String(p.id || '');
-    if (pid.startsWith('shared_added_') || pid.startsWith('shared_host_')) {
+    if (
+      pid.startsWith('shared_sb_') ||
+      pid.startsWith('shared_added_') ||
+      pid.startsWith('shared_host_')
+    ) {
       return true;
     }
     return (
@@ -163,30 +195,16 @@ export function filterVisibleGalleryPhotos(items: PhotoItem[]): PhotoItem[] {
 }
 
 /**
- * 공유방 추가 사진을 localStorage 5MB 용량 한도를 넘기지 않도록 안전하게 영구 저장합니다.
- * 수 MB짜리 원본 data: URL이 들어 있으면 경량 thumbUrl로 대체해 QuotaExceededError를 방지합니다.
+ * [방식 A 전환 완료]: 구버전 브라우저 전역 localStorage('ghosti_shared_family_added_photos_v1')는
+ * 로그아웃·타 계정 전환 시 사진 혼입을 유발하므로 영구 폐기·즉시 소거하고, 모든 공유방 사진은
+ * Supabase 정식 테이블(ghosti_room_shared_photos)에서 계정·room_id·invite_token 단위로만 조회합니다.
  */
-export function persistSharedRoomAddedPhotos(items: PhotoItem[]): void {
+export function persistSharedRoomAddedPhotos(_items: PhotoItem[]): void {
   if (typeof window === 'undefined') return;
-  const compactItems = items.slice(0, 200).map((item) => {
-    const thumb = String(item.thumbUrl || '');
-    const full = String(item.fullUrl || '');
-    const safeFull =
-      full.startsWith('data:') && full.length > 220_000 && thumb ? thumb : item.fullUrl;
-    return {
-      ...item,
-      fullUrl: safeFull,
-    };
-  });
-  for (let limit = compactItems.length; limit >= 0; limit = Math.floor(limit * 0.7)) {
-    try {
-      const slice = limit === 0 ? [] : compactItems.slice(0, limit);
-      localStorage.setItem('ghosti_shared_family_added_photos_v1', JSON.stringify(slice));
-      return;
-    } catch {
-      if (limit === 0) return;
-      if (limit === 1) limit = 0;
-    }
+  try {
+    localStorage.removeItem('ghosti_shared_family_added_photos_v1');
+  } catch {
+    /* ignore */
   }
 }
 
