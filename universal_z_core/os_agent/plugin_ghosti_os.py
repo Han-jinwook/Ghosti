@@ -2490,8 +2490,8 @@ _VIDEO_STREAM_CACHE_DIR = MERLIN_DIR / "video_stream_cache"
 _VIDEO_STREAM_INFLIGHT: Dict[str, threading.Event] = {}
 _VIDEO_STREAM_LOCK = threading.Lock()
 _VIDEO_OCR_CACHE_FILE = MERLIN_DIR / "video_scene_ocr_cache_v2.json"
-_VIDEO_OCR_SCHEMA_VER = 23
-_VIDEO_PADDLE_OCR_VER = 23
+_VIDEO_OCR_SCHEMA_VER = 24
+_VIDEO_PADDLE_OCR_VER = 24
 _VIDEO_OCR_LOCK = threading.Lock()
 _VIDEO_OCR_BG_RUNNING = False
 _FFMPEG_EXE_CACHE: str | None = ""
@@ -2746,11 +2746,13 @@ def _load_video_ocr_cache() -> Dict[str, Any]:
         if _VIDEO_OCR_CACHE_FILE.exists():
             raw = json.loads(_VIDEO_OCR_CACHE_FILE.read_text(encoding="utf-8"))
             if isinstance(raw, dict):
-                # 폐기된 구형 Windows.Media.Ocr(ocrVer < 20) 외계어 캐시 항목은 로드 즉시 영구 소거!
+                # 폐기된 구형 Windows.Media.Ocr(ocrVer < 20) 및 동시실행 타임아웃 빈 캐시(ocrVer == 23, lines 비어있음) 즉시 소거!
                 purged = {
                     k: v
                     for k, v in raw.items()
-                    if isinstance(v, dict) and int(v.get("ocrVer") or 0) >= 20
+                    if isinstance(v, dict)
+                    and int(v.get("ocrVer") or 0) >= 20
+                    and not (int(v.get("ocrVer") or 0) == 23 and not v.get("lines"))
                 }
                 if len(purged) != len(raw):
                     _save_video_ocr_cache(purged)
@@ -3074,7 +3076,7 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
         return
 
     creationflags = 0x08004000 if os.name == "nt" else 0
-    chunk_size = 10
+    chunk_size = 2
     try:
         for start_i in range(0, len(video_entries), chunk_size):
             chunk = video_entries[start_i : start_i + chunk_size]
@@ -3084,7 +3086,7 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
                 per_vid_meta: Dict[str, Dict[str, Any]] = {}
                 for idx, (cache_sig, vpath, dur_sec) in enumerate(chunk):
                     secs = _select_video_ocr_sample_secs(dur_sec)
-                    per_vid_meta[cache_sig] = {"frames": [], "maxJpgBytes": 0}
+                    per_vid_meta[cache_sig] = {"frames": [], "maxJpgBytes": 0, "okCount": 0, "reqCount": 0}
                     for s in secs:
                         fname = f"v{idx:03d}_s{s:04d}.jpg"
                         out_jpg = tmp_dir / fname
@@ -3104,11 +3106,14 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
                             sz = out_jpg.stat().st_size
                             if sz > per_vid_meta[cache_sig]["maxJpgBytes"]:
                                 per_vid_meta[cache_sig]["maxJpgBytes"] = sz
+                            per_vid_meta[cache_sig]["reqCount"] += 1
                             job_map[fname] = (cache_sig, s)
 
                 ocr_by_file = _run_winrt_ocr_on_jpg_dir(tmp_dir) if job_map else {}
 
                 for fname, (cache_sig, sec_val) in sorted(job_map.items()):
+                    if fname in ocr_by_file:
+                        per_vid_meta[cache_sig]["okCount"] += 1
                     raw_txt = ocr_by_file.get(fname, "")
                     clean_txt = raw_txt.strip()
                     kws = _enrich_ocr_semantic_keywords(clean_txt) if clean_txt else []
@@ -3122,6 +3127,8 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
                 with _VIDEO_OCR_LOCK:
                     cur_cache = _load_video_ocr_cache()
                     for cache_sig, val in per_vid_meta.items():
+                        if val["reqCount"] > 0 and val["okCount"] == 0:
+                            continue
                         if int((cur_cache.get(cache_sig) or {}).get("ocrVer") or 0) >= _VIDEO_PADDLE_OCR_VER:
                             continue
                         all_kws: List[str] = []
@@ -3141,6 +3148,7 @@ def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
                     _save_video_ocr_cache(cur_cache)
             finally:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
+            time.sleep(0.35)
     except Exception:
         pass
     finally:
@@ -3159,18 +3167,22 @@ def _run_winrt_ocr_on_jpg_dir(tmp_dir: Path) -> Dict[str, str]:
     try:
         import ppocr_v5_worker
 
-        batch_size = 14
+        batch_size = 20
         for idx in range(0, len(jpg_files), batch_size):
             chunk = jpg_files[idx : idx + batch_size]
             res_map = ppocr_v5_worker.invoke_ppocr_subprocess(
                 chunk,
                 filter_video_ui=True,
-                timeout_sec=max(45.0, len(chunk) * 7.0),
+                timeout_sec=max(75.0, len(chunk) * 8.5),
             )
+            if not res_map:
+                continue
             for jf in chunk:
-                item = res_map.get(str(jf.resolve())) or res_map.get(jf.name) or {}
-                smart_t = re.sub(r"\s+", " ", str(item.get("smartText") or "")).strip()
-                ocr_by_file[jf.name] = smart_t
+                full_k = str(jf.resolve())
+                if full_k in res_map or jf.name in res_map:
+                    item = res_map.get(full_k) or res_map.get(jf.name) or {}
+                    smart_t = re.sub(r"\s+", " ", str(item.get("smartText") or "")).strip()
+                    ocr_by_file[jf.name] = smart_t
     except Exception:
         pass
     return ocr_by_file
@@ -3658,7 +3670,7 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
                         pass
                     if out_jpg.exists():
                         raw_candidates.append((out_jpg, s_val))
-            sec_by_fname = _select_stable_scene_frames(raw_candidates, max_keep=18)
+            sec_by_fname = _select_stable_scene_frames(raw_candidates, max_keep=12)
         elif os.name == "nt":
             # [무-FFmpeg 순정 Windows 10/11 폴백]: MediaClip으로 프레임 JPEG 파일만 추출 (판독은 100% PP-OCRv5로 일원화!)
             secs_csv = ",".join(str(s) for s in sample_secs)
@@ -3727,7 +3739,7 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
                     cand_jpg = tmp_dir / fn_s.strip()
                     if cand_jpg.exists():
                         mc_candidates.append((cand_jpg, int(float(s_raw.strip() or "0"))))
-            sec_by_fname = _select_stable_scene_frames(mc_candidates, max_keep=18)
+            sec_by_fname = _select_stable_scene_frames(mc_candidates, max_keep=12)
 
         if return_frames_for_paddle and sec_by_fname:
             sampled_payload = []
@@ -3760,20 +3772,21 @@ def extract_full_video_ocr_text(params: Dict[str, Any]) -> Dict[str, Any]:
             })
         lines = _dedupe_ocr_timeline_lines(out_frames_ff)
         full_text = "\n".join(f"[{ln['timestamp']}] {ln['text']}" for ln in lines)
-        with _VIDEO_OCR_LOCK:
-            cur_cache = _load_video_ocr_cache()
-            cur_cache[sig] = {
-                "ocrVer": _VIDEO_PADDLE_OCR_VER,
-                "videoFileName": target_path.name,
-                "filePath": str(target_path),
-                "frames": out_frames_ff,
-                "keywords": list(dict.fromkeys(all_kws_ff))[:60],
-                "lines": lines,
-                "fullText": full_text,
-                "lineCount": len(lines),
-                "isAllBlack": False,
-            }
-            _save_video_ocr_cache(cur_cache)
+        if not sec_by_fname or len(ocr_map) > 0:
+            with _VIDEO_OCR_LOCK:
+                cur_cache = _load_video_ocr_cache()
+                cur_cache[sig] = {
+                    "ocrVer": _VIDEO_PADDLE_OCR_VER,
+                    "videoFileName": target_path.name,
+                    "filePath": str(target_path),
+                    "frames": out_frames_ff,
+                    "keywords": list(dict.fromkeys(all_kws_ff))[:60],
+                    "lines": lines,
+                    "fullText": full_text,
+                    "lineCount": len(lines),
+                    "isAllBlack": False,
+                }
+                _save_video_ocr_cache(cur_cache)
         return {
             "ok": True,
             "cached": False,

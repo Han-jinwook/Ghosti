@@ -19,9 +19,12 @@ import re
 import subprocess
 import sys
 import tempfile
+import threading
 import unicodedata
 import urllib.request
 from typing import Any, Dict, List
+
+_PPOCR_SUBPROCESS_LOCK = threading.Lock()
 
 THIS_DIR = Path(__file__).resolve().parent
 LOCAL_APPDATA = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local")))
@@ -121,7 +124,7 @@ def join_wrapped_korean_lines(upper: str, lower: str) -> str:
     return polish_korean_ocr_spacing(f"{a} {b}")
 
 
-def format_ocr_boxes_smart(raw_boxes: List[Dict[str, Any]], filter_video_ui: bool = False) -> str:
+def format_ocr_boxes_smart(raw_boxes: List[Dict[str, Any]], filter_video_ui: bool = False, img_height: int = 0) -> str:
     watermark_rx = re.compile(
         r"notebooklm|^capcut$|^veo$|^kapwing$|^[xyv]?rec[eo]rder$|mobizen|bandicam|gomcam|^ocam$|az\s*screen|^inshot$|kinemaster|vivavideo|filmora",
         re.IGNORECASE,
@@ -139,6 +142,9 @@ def format_ocr_boxes_smart(raw_boxes: List[Dict[str, Any]], filter_video_ui: boo
                 continue
             if re.fullmatch(r"(?:10|0|00|\(\)|00\(\)|\|\||II|lI|Il)", t):
                 continue
+            if img_height > 0 and re.fullmatch(r"\d{1,2}:\d{2}(?::\d{2})?", t):
+                if float(b.get("y1") or 0) <= img_height * 0.065 or float(b.get("y0") or 0) >= img_height * 0.88:
+                    continue
             if len(t) == 1 and not re.fullmatch(r"[가-힣]", t):
                 continue
             # 디졸브(화면 전환 잔상)에서 발생하는 저신뢰 영문소문자·한글 뒤섞임 가짜 음절 차단
@@ -185,7 +191,7 @@ def format_ocr_boxes_smart(raw_boxes: List[Dict[str, Any]], filter_video_ui: boo
                     and cand["x0"] >= cur["x0"] - 18
                     and cand["x1"] <= cur["x1"] + 18
                 )
-                same_scale = abs(cand["h"] - cur["lineH"]) <= max(3, min(cand["h"], cur["lineH"]) * 0.28)
+                same_scale = abs(cand["h"] - cur["lineH"]) <= max(4, min(cand["h"], cur["lineH"]) * 0.35)
                 not_ended = not bool(re.search(r"[.!?]$", cur["text"]))
                 if (same_left or centered_1char) and same_scale and not_ended:
                     cur["text"] = join_wrapped_korean_lines(cur["text"], cand["text"])
@@ -287,7 +293,8 @@ def run_worker_cli(req_path: str, res_path: str) -> int:
             return {"width": src_w, "height": src_h, "boxes": [], "lines": [], "smartText": ""}
 
         max_side = max(src_w, src_h)
-        target_max = max(960, min(1600, max_side))
+        cap_side = 1280 if filter_video_ui else 1600
+        target_max = max(960, min(cap_side, max_side))
         scale = target_max / float(max_side)
         det_w = max(32, int(round((src_w * scale) / 32.0)) * 32)
         det_h = max(32, int(round((src_h * scale) / 32.0)) * 32)
@@ -418,7 +425,7 @@ def run_worker_cli(req_path: str, res_path: str) -> int:
 
             lines_out.append({"text": txt, "words": words_list})
 
-        smart_txt = format_ocr_boxes_smart(boxes_out, filter_video_ui=filter_video_ui)
+        smart_txt = format_ocr_boxes_smart(boxes_out, filter_video_ui=filter_video_ui, img_height=src_h)
         return {
             "width": src_w,
             "height": src_h,
@@ -488,16 +495,33 @@ def invoke_ppocr_subprocess(
         creationflags = 0x08000000 if os.name == "nt" else 0
         clean_env = {k: v for k, v in os.environ.items() if k not in ("_MEIPASS2", "_MEIPASS")}
         clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
-        subprocess.run(
-            cmd,
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=timeout_sec,
-            env=clean_env,
-            creationflags=creationflags,
-        )
+        with _PPOCR_SUBPROCESS_LOCK:
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.DEVNULL,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                env=clean_env,
+                creationflags=creationflags,
+            )
+            try:
+                proc.communicate(timeout=timeout_sec)
+            except subprocess.TimeoutExpired:
+                if os.name == "nt":
+                    try:
+                        subprocess.run(
+                            ["taskkill", "/F", "/T", "/PID", str(proc.pid)],
+                            capture_output=True,
+                            timeout=6,
+                            creationflags=creationflags,
+                        )
+                    except Exception:
+                        pass
+                try:
+                    proc.kill()
+                except Exception:
+                    pass
+                return {}
         if res_file.exists():
             data = json.loads(res_file.read_text(encoding="utf-8"))
             if isinstance(data, dict) and isinstance(data.get("results"), dict):
