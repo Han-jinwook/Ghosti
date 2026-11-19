@@ -41,12 +41,37 @@ let _activeRealGhostSearchPopup: Window | null = null;
 let _openGhostSearchInflight = false;
 let _lastOpenGhostSearchTs = 0;
 
+export function bringRealGhostSearchPopupToFront(
+  stage: GhostSearchStage = 'medium',
+  query?: string,
+): void {
+  try {
+    if (_activeRealGhostSearchPopup && !_activeRealGhostSearchPopup.closed) {
+      _activeRealGhostSearchPopup.focus();
+    }
+  } catch {
+    /* ignore */
+  }
+  if (zCoreBridge.isConnected) {
+    const targetStage: GhostSearchStage = stage === 'large' ? 'large' : 'medium';
+    const daemonStage = targetStage === 'large' ? 'gallery' : targetStage;
+    const q = (query || '').trim();
+    void fetch(getZCoreUrl('/api/superpower/open_search_window'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ stage: daemonStage, query: q, ui_mode: 'web_monitor', focus_only: true }),
+      signal: AbortSignal.timeout(1500),
+    }).catch(() => {});
+  }
+}
+
 export async function openRealGhostSearchWindowViaDaemon(
   stage: GhostSearchStage = 'medium',
   query?: string,
 ): Promise<boolean> {
   const now = Date.now();
   if (_openGhostSearchInflight || now - _lastOpenGhostSearchTs < 1800) {
+    bringRealGhostSearchPopupToFront(stage, query);
     return true;
   }
   _openGhostSearchInflight = true;
@@ -825,6 +850,8 @@ export const GhostSearchTrainingPage: React.FC = () => {
   const [isLaunchingRealWindow, setIsLaunchingRealWindow] = useState(false);
   const monitorSectionRef = useRef<HTMLElement | null>(null);
 
+  const isLaunchingRef = useRef(false);
+
   const markStep = (id: GameStepId) => {
     setGame((prev) => {
       if (prev[id]) return prev;
@@ -839,9 +866,16 @@ export const GhostSearchTrainingPage: React.FC = () => {
   };
 
   const triggerRealGhostSearchWindow = async (stage: GhostSearchStage = 'medium', query?: string) => {
-    if (isLaunchingRealWindow) return;
+    if (isLaunchingRef.current || isLaunchingRealWindow) {
+      bringRealGhostSearchPopupToFront(stage, query ?? pendingQuery);
+      return;
+    }
+    isLaunchingRef.current = true;
     setIsLaunchingRealWindow(true);
-    window.setTimeout(() => setIsLaunchingRealWindow(false), 1600);
+    window.setTimeout(() => {
+      isLaunchingRef.current = false;
+      setIsLaunchingRealWindow(false);
+    }, 1800);
     playBabyGhostChime('summon');
     if (stage === 'large') {
       markStep('large');
@@ -1063,9 +1097,15 @@ export const GhostSearchTrainingPage: React.FC = () => {
         {connected ? (
           <button
             type="button"
-            disabled={isLaunchingRealWindow}
+            aria-busy={isLaunchingRealWindow}
             onClick={() => void triggerRealGhostSearchWindow('medium', pendingQuery)}
-            className="px-4 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] disabled:opacity-60 text-zinc-950 text-[13px] font-extrabold cursor-pointer"
+            onDoubleClick={(e) => {
+              e.preventDefault();
+              void triggerRealGhostSearchWindow('medium', pendingQuery);
+            }}
+            className={`px-4 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[13px] font-extrabold cursor-pointer transition-opacity ${
+              isLaunchingRealWindow ? 'opacity-70' : ''
+            }`}
           >
             {isLaunchingRealWindow
               ? '⏳ 귀신검색창 띄우는 중...'

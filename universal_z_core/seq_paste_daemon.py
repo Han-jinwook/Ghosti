@@ -1995,12 +1995,78 @@ def build_ghost_search_window_url(stage: str = "small", query: str = "", base_ur
     return url
 
 
+def _bring_ghost_search_app_window_to_front(expected_w: int, expected_h: int) -> None:
+    """
+    [더블클릭 포커스 탈취 방어 & 창 최상단 전면 부각 가드]:
+    웹 화면에서 [👻 내 진짜 파일로 귀신검색창 바로 띄우기]를 더블클릭(빠른 2회 연속 클릭)했을 때,
+    2번째 클릭이 메인 브라우저 창에 포커스를 되돌려 새로 열린 --app 귀신검색창이 메인 브라우저 뒤로 숨어버리는
+    현상을 원천 차단하기 위해 0.15초~1.3초 동안 새로 열린 귀신검색창 HWND를 찾아 최상단 전면(Foreground)으로 끌어올립니다.
+    """
+    if sys.platform != "win32":
+        return
+
+    def _worker() -> None:
+        WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+        HWND_TOPMOST = wintypes.HWND(-1)
+        HWND_NOTOPMOST = wintypes.HWND(-2)
+        SWP_NOMOVE = 0x0002
+        SWP_NOSIZE = 0x0001
+        SWP_SHOWWINDOW = 0x0040
+        SW_RESTORE = 9
+
+        for delay in (0.18, 0.38, 0.65, 1.05):
+            time.sleep(delay)
+            matched_hwnd = 0
+
+            def _enum_cb(hwnd: int, _lparam: int) -> bool:
+                nonlocal matched_hwnd
+                hw = wintypes.HWND(hwnd)
+                if not u32.IsWindowVisible(hw):
+                    return True
+                rc = wintypes.RECT()
+                if not u32.GetWindowRect(hw, ctypes.byref(rc)):
+                    return True
+                w = rc.right - rc.left
+                h = rc.bottom - rc.top
+                # 소형/중형/갤러리 귀신검색 --app 창 크기 범위 및 타이틀 확인
+                if abs(w - expected_w) <= 120 and abs(h - expected_h) <= 120:
+                    tlen = u32.GetWindowTextLengthW(hw)
+                    if 0 < tlen <= 512:
+                        buf = ctypes.create_unicode_buffer(tlen + 2)
+                        u32.GetWindowTextW(hw, buf, tlen + 1)
+                        title = (buf.value or "").lower()
+                        if any(k in title for k in ("귀신같이", "ghosti", "귀신검색", "localhost", "127.0.0.1")):
+                            matched_hwnd = int(hwnd)
+                            return False
+                return True
+
+            try:
+                u32.EnumWindows(WNDENUMPROC(_enum_cb), 0)
+                if matched_hwnd:
+                    hw_t = wintypes.HWND(matched_hwnd)
+                    u32.ShowWindow(hw_t, SW_RESTORE)
+                    u32.SetWindowPos(hw_t, HWND_TOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+                    u32.SetForegroundWindow(hw_t)
+                    u32.SetWindowPos(hw_t, HWND_NOTOPMOST, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_SHOWWINDOW)
+            except Exception:
+                pass
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+_LAST_POPUP_OPEN_TS = 0.0
+_LAST_POPUP_OPEN_RECT: dict | None = None
+_POPUP_OPEN_LOCK = threading.Lock()
+
+
 def _open_ghost_search_window_popup(stage: str = "medium", query: str = "", anchor_x: int | None = None, anchor_y: int | None = None) -> dict:
     """
     [웹 『👻 내 진짜 파일로 리얼 귀신검색창 바로 띄우기』 호출 시 모니터 안의 창과 동일한 프레임리스 앱 창 오픈]:
     웹 수련장·귀신검색 페이지에서 호출 시 모니터 안의 창(`/?dev=true&preview=legacy&ghostSearchWindow=...`)과
     100% 동일한 화면을 Chrome/Edge 프레임리스 앱 창(`--app`)으로 즉시 띄웁니다.
+    - 더블클릭(빠른 연속 호출) 시 중복 프로세스 기동을 막고 이미 뜬 귀신검색창을 최상단 전면으로 끌어올립니다.
     """
+    global _LAST_POPUP_OPEN_TS, _LAST_POPUP_OPEN_RECT
     pt = wintypes.POINT()
     if anchor_x is None or anchor_y is None:
         u32.GetCursorPos(ctypes.byref(pt))
@@ -2013,6 +2079,15 @@ def _open_ghost_search_window_popup(stage: str = "medium", query: str = "", anch
     custom_h = 340 if norm_in == "small" and not q_clean else None
     rect = compute_ghost_search_window_3stage_rect(norm_in, ax, ay, work_area=work_area, custom_height=custom_h)
     target_url = build_ghost_search_window_url(str(rect["stage"]), query=q_clean)
+
+    now_ts = time.time()
+    with _POPUP_OPEN_LOCK:
+        if (now_ts - _LAST_POPUP_OPEN_TS) < 1.8 and _LAST_POPUP_OPEN_RECT is not None:
+            _bring_ghost_search_app_window_to_front(int(rect["width"]), int(rect["height"]))
+            return {"mode": "web_monitor_app", "url": target_url, "rect": rect, "launched": True, "deduped": True}
+        _LAST_POPUP_OPEN_TS = now_ts
+        _LAST_POPUP_OPEN_RECT = rect
+
     record_feature_telemetry(f"ghost_search_window_{rect['stage']}")
 
     browser_candidates = [
@@ -2046,6 +2121,8 @@ def _open_ghost_search_window_popup(stage: str = "medium", query: str = "", anch
             launched = True
         except Exception:
             pass
+    if launched:
+        _bring_ghost_search_app_window_to_front(int(rect["width"]), int(rect["height"]))
     return {"mode": "web_monitor_app", "url": target_url, "rect": rect, "launched": launched}
 
 
