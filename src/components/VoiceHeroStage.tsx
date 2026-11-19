@@ -145,15 +145,19 @@ export const VoiceHeroStage: React.FC = () => {
 
   const isMobile = layout === 'mobile';
   const isMobileOrStore = isMobile || Boolean(isStoreAppMode);
-  const [isLandscapeCompact, setIsLandscapeCompact] = useState<boolean>(() =>
-    typeof window !== 'undefined'
-      ? window.innerWidth > window.innerHeight && window.innerHeight <= 620
-      : false
-  );
+  const computeIsTrueLandscapeCompact = () => {
+    if (typeof window === 'undefined') return false;
+    const orientType = window.screen?.orientation?.type;
+    const isLandscapeOrient = orientType
+      ? orientType.startsWith('landscape')
+      : window.innerWidth >= 560 && window.innerWidth > window.innerHeight;
+    return isLandscapeOrient && window.innerHeight <= 620;
+  };
+  const [isLandscapeCompact, setIsLandscapeCompact] = useState<boolean>(computeIsTrueLandscapeCompact);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const syncLandscape = () => {
-      setIsLandscapeCompact(window.innerWidth > window.innerHeight && window.innerHeight <= 620);
+      setIsLandscapeCompact(computeIsTrueLandscapeCompact());
     };
     syncLandscape();
     window.addEventListener('resize', syncLandscape, { passive: true });

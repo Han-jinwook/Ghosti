@@ -9,6 +9,8 @@ import AVFoundation
 class GhostiBridgeViewController: CAPBridgeViewController {
     private let topSafeAreaShieldView = UIView()
     private var isDarkThemeActive = false
+    private var lastSyncedSafeKey = ""
+    private var lastKeyboardOverlap = -1
 
     override open var preferredStatusBarStyle: UIStatusBarStyle {
         return isDarkThemeActive ? .lightContent : .darkContent
@@ -79,6 +81,10 @@ class GhostiBridgeViewController: CAPBridgeViewController {
         }
         let kbEndInView = view.convert(endVal.cgRectValue, from: nil)
         let overlap = max(0, Int(ceil(view.bounds.height - kbEndInView.origin.y)))
+        if overlap == lastKeyboardOverlap {
+            return
+        }
+        lastKeyboardOverlap = overlap
         let isOpen = overlap > 60
         let js = """
         (function(){
@@ -91,6 +97,10 @@ class GhostiBridgeViewController: CAPBridgeViewController {
     }
 
     @objc private func handleIosKeyboardWillHide(_ notification: Notification) {
+        if lastKeyboardOverlap == 0 {
+            return
+        }
+        lastKeyboardOverlap = 0
         let js = """
         (function(){
           var r = document.documentElement;
@@ -103,15 +113,15 @@ class GhostiBridgeViewController: CAPBridgeViewController {
 
     override open func viewDidAppear(_ animated: Bool) {
         super.viewDidAppear(animated)
-        syncHardwareSafeAreaCssVars()
+        syncHardwareSafeAreaCssVars(force: true)
         DispatchQueue.main.asyncAfter(deadline: .now() + 0.25) { [weak self] in
-            self?.syncHardwareSafeAreaCssVars()
+            self?.syncHardwareSafeAreaCssVars(force: true)
         }
     }
 
     override open func viewSafeAreaInsetsDidChange() {
         super.viewSafeAreaInsetsDidChange()
-        syncHardwareSafeAreaCssVars()
+        syncHardwareSafeAreaCssVars(force: true)
     }
 
     override open func viewDidLayoutSubviews() {
@@ -123,19 +133,24 @@ class GhostiBridgeViewController: CAPBridgeViewController {
     override open func viewWillTransition(to size: CGSize, with coordinator: UIViewControllerTransitionCoordinator) {
         super.viewWillTransition(to: size, with: coordinator)
         coordinator.animate(alongsideTransition: { [weak self] _ in
-            self?.syncHardwareSafeAreaCssVars()
+            self?.syncHardwareSafeAreaCssVars(force: true)
         }, completion: { [weak self] _ in
-            self?.syncHardwareSafeAreaCssVars()
+            self?.syncHardwareSafeAreaCssVars(force: true)
         })
     }
 
-    private func syncHardwareSafeAreaCssVars() {
+    private func syncHardwareSafeAreaCssVars(force: Bool = false) {
         guard isViewLoaded else { return }
         let insets = view.safeAreaInsets
         let top = Int(ceil(insets.top))
         let bottom = Int(ceil(insets.bottom))
         let left = Int(ceil(insets.left))
         let right = Int(ceil(insets.right))
+        let key = "\(top),\(bottom),\(left),\(right)"
+        if !force && key == lastSyncedSafeKey {
+            return
+        }
+        lastSyncedSafeKey = key
         let js = """
         (function(){
           var r = document.documentElement;

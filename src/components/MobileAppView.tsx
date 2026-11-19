@@ -270,12 +270,16 @@ export const MobileAppView: React.FC = () => {
 
   const [showPrivateSyncSection, setShowPrivateSyncSection] = useState(false);
   const [showPolicyAndStoreSection, setShowPolicyAndStoreSection] = useState(false);
-  const [isMobileKeyboardOpen, setIsMobileKeyboardOpen] = useState(false);
-  const [isLandscapeCompact, setIsLandscapeCompact] = useState<boolean>(() =>
-    typeof window !== 'undefined'
-      ? window.innerWidth > window.innerHeight && window.innerHeight <= 620
-      : false
-  );
+  const computeIsTrueLandscapeCompact = () => {
+    if (typeof window === 'undefined') return false;
+    const orientType = window.screen?.orientation?.type;
+    const isLandscapeOrient = orientType
+      ? orientType.startsWith('landscape')
+      : window.innerWidth >= 560 && window.innerWidth > window.innerHeight;
+    return isLandscapeOrient && window.innerHeight <= 620;
+  };
+
+  const [isLandscapeCompact, setIsLandscapeCompact] = useState<boolean>(computeIsTrueLandscapeCompact);
 
   useEffect(() => {
     void syncNativeMobileThemeMode(themeMode === 'dark');
@@ -284,102 +288,92 @@ export const MobileAppView: React.FC = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     let latestIosKb = 0;
+    let settleTimer: number | undefined;
 
-    const ensureFocusedInputVisibleAboveKeyboard = (kbHeightOverride?: number) => {
+    // [iOS/AOS 키보드 상승 버벅거림 원천 제거]:
+    // 네이티브 키보드가 올라오는 0~350ms 스프링 애니메이션 도중에는 JS scrollBy나 React 리렌더를 일절 개입시키지 않고
+    // OS 하드웨어 스크롤에 100% 맡긴 뒤, 애니메이션 완전 종료 후(380ms 디바운스) 실제로 입력칸이 가려진 예외 케이스만 단 1회 보정합니다.
+    const ensureFocusedInputVisibleAfterSettle = () => {
       const active = document.activeElement as HTMLElement | null;
       if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA')) return;
-      const kbH = typeof kbHeightOverride === 'number' ? kbHeightOverride : latestIosKb;
       const vv = window.visualViewport;
-      const visibleBottom =
-        kbH > 60
-          ? window.innerHeight - kbH
-          : vv
-          ? vv.offsetTop + vv.height
-          : window.innerHeight;
+      const vvOffsetTop = vv ? vv.offsetTop : 0;
+      const vvBottom = vv ? vv.offsetTop + vv.height : window.innerHeight;
+      const kbBottom =
+        latestIosKb > 60 ? vvOffsetTop + (window.innerHeight - latestIosKb) : window.innerHeight;
+      const visibleBottom = Math.min(vvBottom, kbBottom);
       const headerEl = document.querySelector('header');
-      const headerBottom = headerEl ? Math.max(76, headerEl.getBoundingClientRect().bottom) : 88;
+      const headerBottom = headerEl
+        ? Math.max(vvOffsetTop + 76, headerEl.getBoundingClientRect().bottom)
+        : vvOffsetTop + 88;
       const rect = active.getBoundingClientRect();
 
-      // 1) 입력칸이 상단 고정 헤더(Safe-Area 포함) 위로 밀려 올라갔다면 헤더 바로 아래로 복귀
-      if (rect.top < headerBottom + 8) {
-        const pullDown = headerBottom + 12 - rect.top;
-        window.scrollBy({ top: -pullDown, behavior: 'auto' });
+      if (rect.top < headerBottom + 2) {
+        const pullDown = headerBottom + 10 - rect.top;
+        if (pullDown > 8) {
+          window.scrollBy({ top: -pullDown, behavior: 'auto' });
+        }
         return;
       }
 
-      // 2) 입력칸이 키보드에 가려진 경우에만, 상단 헤더를 침범하지 않는 범위 내에서 필요한 만큼만 스크롤
-      if (rect.bottom > visibleBottom - 14) {
-        const maxAllowedScrollUp = Math.max(0, rect.top - (headerBottom + 12));
-        const neededDelta = rect.bottom - (visibleBottom - 18);
+      if (rect.bottom > visibleBottom - 6) {
+        const maxAllowedScrollUp = Math.max(0, rect.top - (headerBottom + 10));
+        const neededDelta = rect.bottom - (visibleBottom - 16);
         const clampedDelta = Math.min(neededDelta, maxAllowedScrollUp);
-        if (clampedDelta > 4) {
-          window.scrollBy({ top: clampedDelta, behavior: 'smooth' });
-        }
-      } else if (active.id === 'ghosti-secretary-chat-input') {
-        const chatAside = active.closest('aside');
-        if (chatAside) {
-          const asideRect = chatAside.getBoundingClientRect();
-          if (asideRect.top < headerBottom && rect.bottom < visibleBottom - 24) {
-            const pullBack = Math.min(headerBottom - asideRect.top, visibleBottom - 20 - rect.bottom);
-            if (pullBack > 8) {
-              window.scrollBy({ top: -pullBack, behavior: 'auto' });
-            }
-          }
+        if (clampedDelta > 10) {
+          window.scrollBy({ top: clampedDelta, behavior: 'auto' });
         }
       }
+    };
+
+    const scheduleSinglePostSettleCheck = (delayMs = 380) => {
+      if (settleTimer !== undefined) {
+        window.clearTimeout(settleTimer);
+      }
+      settleTimer = window.setTimeout(() => {
+        settleTimer = undefined;
+        ensureFocusedInputVisibleAfterSettle();
+      }, delayMs);
     };
 
     const onNativeKb = (ev: Event) => {
       const detail = (ev as CustomEvent<{ open?: boolean; height?: number; platform?: string }>).detail;
       const open = Boolean(detail?.open);
-      setIsMobileKeyboardOpen(open);
       if (detail?.platform === 'ios') {
         latestIosKb = open ? Math.max(0, Number(detail?.height || 0)) : 0;
       }
       if (open) {
-        window.setTimeout(() => ensureFocusedInputVisibleAboveKeyboard(latestIosKb), 60);
-        window.setTimeout(() => ensureFocusedInputVisibleAboveKeyboard(latestIosKb), 260);
-      }
-    };
-
-    const onVvResize = () => {
-      const vv = window.visualViewport;
-      if (!vv) return;
-      const shrunk = window.innerHeight - vv.height > 120;
-      const active = document.activeElement as HTMLElement | null;
-      const isEditing = Boolean(active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA'));
-      if (shrunk && isEditing) {
-        setIsMobileKeyboardOpen(true);
-        window.setTimeout(() => ensureFocusedInputVisibleAboveKeyboard(latestIosKb), 40);
-      } else if (!shrunk && latestIosKb === 0) {
-        setIsMobileKeyboardOpen(false);
+        scheduleSinglePostSettleCheck(380);
+      } else if (settleTimer !== undefined) {
+        window.clearTimeout(settleTimer);
+        settleTimer = undefined;
       }
     };
 
     const onFocusIn = (e: FocusEvent) => {
       const el = e.target as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
-        window.setTimeout(() => ensureFocusedInputVisibleAboveKeyboard(latestIosKb), 120);
-        window.setTimeout(() => ensureFocusedInputVisibleAboveKeyboard(latestIosKb), 320);
+        scheduleSinglePostSettleCheck(380);
       }
     };
+
     const onFocusOut = () => {
       window.setTimeout(() => {
         const active = document.activeElement as HTMLElement | null;
         if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA')) {
-          setIsMobileKeyboardOpen(false);
           latestIosKb = 0;
         }
       }, 150);
     };
 
     window.addEventListener('ghostiKeyboardState', onNativeKb);
-    window.visualViewport?.addEventListener('resize', onVvResize);
     window.addEventListener('focusin', onFocusIn);
     window.addEventListener('focusout', onFocusOut);
     return () => {
+      if (settleTimer !== undefined) {
+        window.clearTimeout(settleTimer);
+      }
       window.removeEventListener('ghostiKeyboardState', onNativeKb);
-      window.visualViewport?.removeEventListener('resize', onVvResize);
       window.removeEventListener('focusin', onFocusIn);
       window.removeEventListener('focusout', onFocusOut);
     };
@@ -388,7 +382,7 @@ export const MobileAppView: React.FC = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const syncLandscape = () => {
-      setIsLandscapeCompact(window.innerWidth > window.innerHeight && window.innerHeight <= 620);
+      setIsLandscapeCompact(computeIsTrueLandscapeCompact());
     };
     syncLandscape();
     window.addEventListener('resize', syncLandscape, { passive: true });
@@ -626,21 +620,19 @@ export const MobileAppView: React.FC = () => {
                 </div>
               </div>
 
-              {/* 모바일 공식 마스터 슬로건 한 줄 띠 (키보드 입력 중에는 대화창 가시 영역 확보를 위해 자동 접힘) */}
-              {!isMobileKeyboardOpen && (
-                <div
-                  className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold text-center truncate ${
-                    themeMode === 'light'
-                      ? 'bg-teal-50/80 border-teal-200 text-teal-950'
-                      : 'bg-zinc-900/80 border-teal-500/20 text-zinc-200'
-                  }`}
-                  title="내 PC와 모바일에 1초 초능력을 — 광고 0% · 클라우드 월세 0원"
-                >
-                  <span className="text-teal-600 dark:text-teal-400">내 PC와 모바일에 1초 초능력을</span>{' '}
-                  <span className="opacity-30">|</span>{' '}
-                  <span className="text-emerald-600 dark:text-emerald-400">광고 0% · 클라우드 월세 0원</span>
-                </div>
-              )}
+              {/* 모바일 공식 마스터 슬로건 한 줄 띠 (고정 헤더 높이 일정 유지로 키보드 상승 시 리플로우 버벅임 원천 차단) */}
+              <div
+                className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold text-center truncate ${
+                  themeMode === 'light'
+                    ? 'bg-teal-50/80 border-teal-200 text-teal-950'
+                    : 'bg-zinc-900/80 border-teal-500/20 text-zinc-200'
+                }`}
+                title="내 PC와 모바일에 1초 초능력을 — 광고 0% · 클라우드 월세 0원"
+              >
+                <span className="text-teal-600 dark:text-teal-400">내 PC와 모바일에 1초 초능력을</span>{' '}
+                <span className="opacity-30">|</span>{' '}
+                <span className="text-emerald-600 dark:text-emerald-400">광고 0% · 클라우드 월세 0원</span>
+              </div>
 
               {/* 1단 메인메뉴 3개 (① 👻 귀신비서 / ② 📸 사진 공유 / ③ 💼 업무 공유(S:)): 균등 3분할 캡슐 */}
               <nav className="grid grid-cols-3 gap-1">
