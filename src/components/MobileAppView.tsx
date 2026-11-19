@@ -431,7 +431,7 @@ export const MobileAppView: React.FC = () => {
         matchedFrameCaption: `내 스마트폰에서 불러온 동영상 (${f.name})`,
         locationKo: '📱 내 스마트폰 갤러리',
         sceneDescription:
-          '내 스마트폰에서 직접 불러온 동영상입니다. 카드를 터치해 재생하거나 [📝 글자 뽑기]로 영상 속 자막·칠판 글자를 바로 추출할 수 있습니다.',
+          '내 스마트폰 동영상입니다. 카드를 터치하면 재생과 함께 영상 속 자막·칠판 글자가 하단에 즉시 표시됩니다.',
         keywords: [baseTitle, f.name, '내폰', '스마트폰', '동영상'],
         resolution: `${meta.width}x${meta.height} (내 스마트폰 동영상)`,
         sizeMB: Math.max(0.1, Number((f.size / 1048576).toFixed(1))),
@@ -457,7 +457,7 @@ export const MobileAppView: React.FC = () => {
       matchedVideoScenes: nextAll,
       searchSpace: 'video',
       hasUserSelectedSearchTab: true,
-      lastQuarantineToast: `🎬 내 폰 동영상 ${newItems.length}개를 불러왔습니다! 카드를 눌러 재생하거나 [📝 글자 뽑기]를 눌러보세요.`,
+      lastQuarantineToast: `🎬 내 폰 동영상 ${newItems.length}개가 인덱싱되었습니다! 카드를 누르면 재생과 함께 추출된 글자가 하단에 바로 표시됩니다.`,
     });
     void startSilentRealMediaVisionIndexing({
       photos: useSaySeeStore.getState().photos,
@@ -1113,21 +1113,6 @@ export const MobileAppView: React.FC = () => {
                         <div className="font-label-mono text-[10.5px] text-zinc-400 pt-0.5 flex items-center justify-between gap-2">
                           <span className="truncate">📍 {vid.locationKo}</span>
                           <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                try {
-                                  sessionStorage.setItem('ghosti_auto_extract_video_ocr', vid.id);
-                                } catch {
-                                  /* ignore */
-                                }
-                                setSelectedVideoModal(vid, vid.matchedSeekSec);
-                              }}
-                              className="px-2 py-0.5 rounded-lg bg-teal-500/20 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/50 font-label-sm text-[10.5px] font-black cursor-pointer"
-                            >
-                              📝 글자 뽑기
-                            </button>
                             <span className="text-primary-container font-bold">
                               {hasExecutedUserSearch && activeQuery
                                 ? isWholeClip

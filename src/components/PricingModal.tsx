@@ -1399,32 +1399,67 @@ export const VideoScenePreviewModal: React.FC = () => {
   const [videoPlaybackError, setVideoPlaybackError] = useState<boolean>(false);
   const [isPortraitVideo, setIsPortraitVideo] = useState<boolean>(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState<boolean>(false);
-  const [ocrExtracting, setOcrExtracting] = useState<boolean>(false);
-  const [ocrPanelOpen, setOcrPanelOpen] = useState<boolean>(false);
   const [ocrLines, setOcrLines] = useState<VideoOcrLineItem[]>([]);
   const [ocrFullText, setOcrFullText] = useState<string>('');
   const [ocrCopied, setOcrCopied] = useState<boolean>(false);
 
-  const runVideoTextExtraction = async (targetVid = selectedVideoModal) => {
-    if (!targetVid) return;
-    setOcrPanelOpen(true);
-    setOcrExtracting(true);
-    setOcrCopied(false);
-    try {
-      const res = await extractVideoScreenTextOnDemand(targetVid);
-      setOcrLines(res.ocrLines || []);
-      setOcrFullText(res.fullText || '');
-      if (res.fullText && navigator.clipboard?.writeText) {
-        try {
-          await navigator.clipboard.writeText(res.fullText);
-          setOcrCopied(true);
-        } catch {
-          /* ignore clipboard permission */
+  const buildInstantPreindexedOcr = (
+    targetVid: NonNullable<typeof selectedVideoModal>
+  ): { lines: VideoOcrLineItem[]; fullText: string } => {
+    const formatTs = (sec: number) => {
+      const s = Math.max(0, Math.floor(sec || 0));
+      const mm = String(Math.floor(s / 60)).padStart(2, '0');
+      const ss = String(s % 60).padStart(2, '0');
+      return `${mm}:${ss}`;
+    };
+
+    if (Array.isArray(targetVid.ocrLines) && targetVid.ocrLines.length > 0) {
+      const lines = targetVid.ocrLines;
+      const fullText =
+        targetVid.ocrFullText ||
+        lines.map((l) => `[${l.timestamp}] ${l.text}`).join('\n');
+      return { lines, fullText };
+    }
+
+    const lines: VideoOcrLineItem[] = [];
+    const seen = new Set<string>();
+    if (targetVid.ocrFullText) {
+      for (const rawLine of targetVid.ocrFullText.split('\n')) {
+        const trimmed = rawLine.trim();
+        if (!trimmed || seen.has(trimmed)) continue;
+        seen.add(trimmed);
+        const m = trimmed.match(/^\[(\d{2}):(\d{2})\]\s*(.+)$/);
+        if (m) {
+          const sec = parseInt(m[1], 10) * 60 + parseInt(m[2], 10);
+          lines.push({ timeSec: sec, timestamp: `${m[1]}:${m[2]}`, text: m[3] });
+        } else {
+          lines.push({ timeSec: 0, timestamp: '00:00', text: trimmed });
         }
       }
-    } finally {
-      setOcrExtracting(false);
     }
+
+    if (lines.length === 0 && Array.isArray(targetVid.timelineFrames)) {
+      for (const f of targetVid.timelineFrames) {
+        const cap = String(f.sceneCaption || '').trim();
+        if (
+          !cap ||
+          /\s장면\s*\(\d{2}:\d{2}\)$/.test(cap) ||
+          /구간\s*\(\d{2}:\d{2}\s*\/\s*총\s*\d{2}:\d{2}\)$/.test(cap) ||
+          seen.has(cap)
+        ) {
+          continue;
+        }
+        seen.add(cap);
+        lines.push({
+          timeSec: f.timeSec || 0,
+          timestamp: f.timestampText || formatTs(f.timeSec || 0),
+          text: cap,
+        });
+      }
+    }
+
+    const fullText = lines.map((l) => `[${l.timestamp}] ${l.text}`).join('\n');
+    return { lines, fullText };
   };
 
   useEffect(() => {
@@ -1441,7 +1476,6 @@ export const VideoScenePreviewModal: React.FC = () => {
       setVideoPlaybackError(false);
       setIsPortraitVideo(false);
       setIsVideoPlaying(false);
-      setOcrPanelOpen(false);
       setOcrLines([]);
       setOcrFullText('');
       setOcrCopied(false);
@@ -1451,20 +1485,52 @@ export const VideoScenePreviewModal: React.FC = () => {
     const resMatch = String(selectedVideoModal.resolution || '').match(/(\d+)\s*[xX×]\s*(\d+)/);
     setIsPortraitVideo(Boolean(resMatch && Number(resMatch[2]) > Number(resMatch[1])));
     setIsVideoPlaying(false);
-    try {
-      const autoVidId = sessionStorage.getItem('ghosti_auto_extract_video_ocr');
-      if (autoVidId && autoVidId === selectedVideoModal.id) {
-        sessionStorage.removeItem('ghosti_auto_extract_video_ocr');
-        void runVideoTextExtraction(selectedVideoModal);
-      } else {
-        setOcrPanelOpen(false);
-        setOcrLines([]);
-        setOcrFullText('');
-        setOcrCopied(false);
+    setOcrCopied(false);
+
+    // 1) 클릭 즉시 0.00초 무로딩으로 기인덱싱된 OCR 텍스트를 하단에 바로 표시
+    const instant = buildInstantPreindexedOcr(selectedVideoModal);
+    setOcrLines(instant.lines);
+    setOcrFullText(instant.fullText);
+
+    // 2) 만약 백그라운드 인덱싱이 아직 덜 끝난 영상이 있다면 스피너/로딩 문구 없이 무소음으로 정밀 OCR 결과를 받아 즉시 보강
+    let ocrCancelled = false;
+    void (async () => {
+      try {
+        const res = await extractVideoScreenTextOnDemand(selectedVideoModal);
+        if (ocrCancelled) return;
+        if (res.ocrLines && res.ocrLines.length > 0) {
+          setOcrLines(res.ocrLines);
+          setOcrFullText(res.fullText || '');
+          // 스토어의 해당 동영상 아이템에도 캐시 주입하여 다음 클릭 시 0.00초 즉시 표시
+          useSaySeeStore.setState((st) => ({
+            videoSceneItems: st.videoSceneItems.map((v) =>
+              v.id === selectedVideoModal.id
+                ? {
+                    ...v,
+                    hasScreenOcrText: true,
+                    ocrLineCount: res.ocrLines.length,
+                    ocrLines: res.ocrLines,
+                    ocrFullText: res.fullText,
+                  }
+                : v
+            ),
+            matchedVideoScenes: st.matchedVideoScenes.map((v) =>
+              v.id === selectedVideoModal.id
+                ? {
+                    ...v,
+                    hasScreenOcrText: true,
+                    ocrLineCount: res.ocrLines.length,
+                    ocrLines: res.ocrLines,
+                    ocrFullText: res.fullText,
+                  }
+                : v
+            ),
+          }));
+        }
+      } catch {
+        /* ignore background OCR hydrate error */
       }
-    } catch {
-      /* ignore */
-    }
+    })();
     const rawUrl = selectedVideoModal.videoUrl || '';
     const baseStreamUrl = rawUrl.replace(/[&?]t=[^&]*/g, '');
     const targetSec = selectedVideoModal.matchedSeekSec ?? 0;
@@ -1476,7 +1542,9 @@ export const VideoScenePreviewModal: React.FC = () => {
     const cachedBlob = videoBlobUrlCache.get(baseStreamUrl) || videoBlobUrlCache.get(rawUrl);
     if (cachedBlob) {
       setResolvedVideoSrc(cachedBlob);
-      return;
+      return () => {
+        ocrCancelled = true;
+      };
     }
 
     const isShortLocalClip =
@@ -1486,7 +1554,9 @@ export const VideoScenePreviewModal: React.FC = () => {
 
     if (!isShortLocalClip) {
       setResolvedVideoSrc(baseStreamUrl);
-      return;
+      return () => {
+        ocrCancelled = true;
+      };
     }
 
     // 45초 이하 로컬 영상(720p Faststart 약 2~6MB)은 0.02초 만에 RAM Blob으로 선적재하여 재생 중 버퍼링·끊김을 0%로 원천 차단합니다.
@@ -1535,6 +1605,7 @@ export const VideoScenePreviewModal: React.FC = () => {
     })();
 
     return () => {
+      ocrCancelled = true;
       cancelled = true;
       window.clearTimeout(fallbackTimer);
       ctrl.abort();
@@ -1728,20 +1799,18 @@ export const VideoScenePreviewModal: React.FC = () => {
             </div>
           )}
 
-          {ocrPanelOpen && (
+          {ocrLines.length > 0 && (
             <div className="p-3.5 rounded-2xl bg-zinc-950/95 border border-teal-400/50 flex flex-col gap-2.5 shrink-0">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
                   <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 font-label-mono text-[11px] font-black">
-                    📝 영상 속 화면 글자 OCR 추출
+                    📝 영상 속 추출된 글자 ({ocrLines.length}구간)
                   </span>
-                  <span className="text-[12px] text-zinc-300 font-bold">
-                    {ocrExtracting
-                      ? '화면 프레임 속 자막·문서·칠판 글자를 읽고 있어요...'
-                      : ocrLines.length > 0
-                        ? `총 ${ocrLines.length}구간 텍스트 추출 완료 ${ocrCopied ? '· 📋 클립보드 자동 복사됨!' : ''}`
-                        : '이 영상 구간에서 뚜렷한 화면 글자가 감지되지 않았어요.'}
-                  </span>
+                  {ocrCopied && (
+                    <span className="text-[12px] text-emerald-300 font-bold">
+                      📋 클립보드 복사 완료!
+                    </span>
+                  )}
                 </div>
                 {ocrFullText && (
                   <div className="flex items-center gap-1.5">
@@ -1778,49 +1847,39 @@ export const VideoScenePreviewModal: React.FC = () => {
                 )}
               </div>
 
-              {ocrLines.length > 0 && (
-                <div
-                  data-keep-dark="true"
-                  className="max-h-44 overflow-y-auto rounded-xl bg-black/75 border border-white/15 p-2.5 flex flex-col gap-1.5"
-                >
-                  {ocrLines.map((ln, idx) => (
-                    <button
-                      key={`${ln.timestamp}_${idx}`}
-                      type="button"
-                      onClick={() => {
-                        if (videoRef.current && Number.isFinite(videoRef.current.duration)) {
-                          videoRef.current.currentTime = Math.min(
-                            ln.timeSec,
-                            Math.max(0, videoRef.current.duration - 0.3)
-                          );
-                          void videoRef.current.play().catch(() => {});
-                        }
-                      }}
-                      className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/10 flex items-start gap-2 transition cursor-pointer"
-                    >
-                      <span className="px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 font-label-mono text-[11px] font-bold shrink-0">
-                        ▶ {ln.timestamp}
-                      </span>
-                      <span className="text-[12.5px] text-zinc-100 font-medium leading-snug break-all">
-                        {ln.text}
-                      </span>
-                    </button>
-                  ))}
-                </div>
-              )}
+              <div
+                data-keep-dark="true"
+                className="max-h-48 overflow-y-auto rounded-xl bg-black/75 border border-white/15 p-2.5 flex flex-col gap-1.5"
+              >
+                {ocrLines.map((ln, idx) => (
+                  <button
+                    key={`${ln.timestamp}_${idx}`}
+                    type="button"
+                    onClick={() => {
+                      if (videoRef.current && Number.isFinite(videoRef.current.duration)) {
+                        videoRef.current.currentTime = Math.min(
+                          ln.timeSec,
+                          Math.max(0, videoRef.current.duration - 0.3)
+                        );
+                        void videoRef.current.play().catch(() => {});
+                      }
+                    }}
+                    className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/10 flex items-start gap-2 transition cursor-pointer"
+                  >
+                    <span className="px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 font-label-mono text-[11px] font-bold shrink-0">
+                      ▶ {ln.timestamp}
+                    </span>
+                    <span className="text-[12.5px] text-zinc-100 font-medium leading-snug break-all">
+                      {ln.text}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
           )}
         </div>
 
         <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-outline-variant/20 shrink-0">
-          <button
-            type="button"
-            disabled={ocrExtracting}
-            onClick={() => void runVideoTextExtraction(selectedVideoModal)}
-            className="px-3.5 sm:px-4 py-2.5 rounded-xl bg-teal-400 hover:bg-teal-300 disabled:opacity-50 text-zinc-950 font-label-md text-[12.5px] sm:text-[13px] font-black flex items-center gap-1.5 cursor-pointer shadow-md"
-          >
-            <span>📝 {ocrExtracting ? '글자 뽑는 중...' : '영상 속 글자 텍스트로 뽑기'}</span>
-          </button>
           <button
             type="button"
             onClick={() => {

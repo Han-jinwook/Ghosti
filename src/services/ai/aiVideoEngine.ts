@@ -1639,7 +1639,12 @@ export async function embedSingleLocalVideoIfNeeded(
   onVideoThumbHydrated?: (videoFileName: string, thumbUrl: string) => void,
   onVideoOcrHydrated?: (
     videoFileName: string,
-    ocrMeta: { hasScreenOcrText: boolean; ocrLineCount: number; ocrFullText: string }
+    ocrMeta: {
+      hasScreenOcrText: boolean;
+      ocrLineCount: number;
+      ocrLines?: VideoOcrLineItem[];
+      ocrFullText: string;
+    }
   ) => void
 ): Promise<boolean> {
   if (!vid.videoFileName || vid.isAllBlack) return false;
@@ -1650,39 +1655,75 @@ export async function embedSingleLocalVideoIfNeeded(
   const baseKey = getVideoMediaBaseKey(normVid);
   const targetSecs = selectTargetFrameSecsForVideo(normVid, maxCheckpoints);
   const missingSecs = targetSecs.filter((s) => !localVideoFrameVecMap.has(getVideoFrameCacheKey(normVid, s)));
-  if (missingSecs.length === 0) return false;
+  const needsOcrPrewarm =
+    !normVid.ocrFullText &&
+    (!Array.isArray(normVid.ocrLines) || normVid.ocrLines.length === 0);
+
+  if (missingSecs.length === 0) {
+    if (needsOcrPrewarm) {
+      void (async () => {
+        try {
+          const ocrOut = await extractVideoScreenTextOnDemand(normVid);
+          if (ocrOut.ocrLines && ocrOut.ocrLines.length > 0) {
+            onVideoOcrHydrated?.(normVid.videoFileName, {
+              hasScreenOcrText: true,
+              ocrLineCount: ocrOut.ocrLines.length,
+              ocrLines: ocrOut.ocrLines,
+              ocrFullText: ocrOut.fullText,
+            });
+          }
+        } catch {
+          /* ignore background prewarm failure */
+        }
+      })();
+    }
+    return false;
+  }
 
   const decodedFrames = await captureLocalVideoKeyframesUniversal(normVid, missingSecs);
   if (decodedFrames.length === 0) return false;
 
-  // FFmpeg 미설치 PC(normVid.thumbUrl 비어 있음)에서만 브라우저 디코딩 JPEG로 WinRT 화면 OCR 보조 전송
-  if (!normVid.thumbUrl && zCoreBridge.isConnected && decodedFrames.some((df) => df.thumbDataUrl)) {
+  // 백그라운드 인덱싱 시점 사전 OCR 프리워밍 (영상 클릭 시 로딩 0초로 하단 즉시 노출 보장)
+  if (needsOcrPrewarm) {
     void (async () => {
       try {
         while (aiRuntimeFlags.activeVideoPlaybackCount > 0) {
           await new Promise((r) => setTimeout(r, 500));
         }
-        const ocrPayloadFrames = decodedFrames
-          .filter((df) => Boolean(df.thumbDataUrl))
-          .map((df) => ({ timeSec: df.timeSec, dataUrl: df.thumbDataUrl }));
-        if (ocrPayloadFrames.length === 0) return;
-        const res = await fetch(getZCoreUrl('/__videos/ocr-frames'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            videoFileName: normVid.videoFileName,
-            durationSec: normVid.durationSec,
-            frames: ocrPayloadFrames,
-          }),
-        });
-        if (res.ok) {
-          const data = await res.json();
-          if (data && (data.hasText || data.hasRichText)) {
-            onVideoOcrHydrated?.(normVid.videoFileName, {
-              hasScreenOcrText: true,
-              ocrLineCount: Number(data.lineCount || (data.ocrLines || []).length || 1),
-              ocrFullText: String(data.fullText || '').trim(),
-            });
+        const ocrOut = await extractVideoScreenTextOnDemand(normVid);
+        if (ocrOut.ocrLines && ocrOut.ocrLines.length > 0) {
+          onVideoOcrHydrated?.(normVid.videoFileName, {
+            hasScreenOcrText: true,
+            ocrLineCount: ocrOut.ocrLines.length,
+            ocrLines: ocrOut.ocrLines,
+            ocrFullText: ocrOut.fullText,
+          });
+          return;
+        }
+        if (!normVid.thumbUrl && zCoreBridge.isConnected && decodedFrames.some((df) => df.thumbDataUrl)) {
+          const ocrPayloadFrames = decodedFrames
+            .filter((df) => Boolean(df.thumbDataUrl))
+            .map((df) => ({ timeSec: df.timeSec, dataUrl: df.thumbDataUrl }));
+          if (ocrPayloadFrames.length === 0) return;
+          const res = await fetch(getZCoreUrl('/__videos/ocr-frames'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              videoFileName: normVid.videoFileName,
+              durationSec: normVid.durationSec,
+              frames: ocrPayloadFrames,
+            }),
+          });
+          if (res.ok) {
+            const data = await res.json();
+            if (data && (data.hasText || data.hasRichText)) {
+              onVideoOcrHydrated?.(normVid.videoFileName, {
+                hasScreenOcrText: true,
+                ocrLineCount: Number(data.lineCount || (data.ocrLines || []).length || 1),
+                ocrLines: Array.isArray(data.ocrLines) ? data.ocrLines : undefined,
+                ocrFullText: String(data.fullText || '').trim(),
+              });
+            }
           }
         }
       } catch {
@@ -2194,6 +2235,22 @@ export async function extractVideoScreenTextOnDemand(
   const memHit = inMemoryPaddleVideoOcrCache.get(memKey);
   if (memHit && memHit.ocrLines.length > 0) {
     return memHit;
+  }
+
+  // 0) 사전 인덱싱 시점(Z-코어 list_local_videos 또는 백그라운드 프리워밍)에 이미 VideoSceneItem에 탑재된 OCR 텍스트가 있으면 0.00초 즉시 반환!
+  if (Array.isArray(vid.ocrLines) && vid.ocrLines.length > 0) {
+    const preFull =
+      vid.ocrFullText ||
+      vid.ocrLines.map((l) => `[${l.timestamp}] ${l.text}`).join('\n');
+    const preOut: VideoOcrExtractResult = {
+      ok: true,
+      hasText: true,
+      videoFileName: vid.videoFileName,
+      ocrLines: vid.ocrLines,
+      fullText: preFull,
+    };
+    inMemoryPaddleVideoOcrCache.set(memKey, preOut);
+    return preOut;
   }
 
   // 1) PC 로컬 Z-코어(v2.3.33+, ocrVer >= 21) C++ 네이티브 PP-OCRv5 고속 경로 (77초 ➔ 3~5초 단축!)

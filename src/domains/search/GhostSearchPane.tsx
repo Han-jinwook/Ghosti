@@ -198,7 +198,7 @@ export const GhostSearchPane: React.FC<{
                 {matchedVideoScenes.length > 0 && (
                   <div className="px-3.5 py-2.5 rounded-xl bg-teal-950/60 border border-teal-400/40 flex flex-wrap items-center justify-between gap-2">
                     <span className="text-[12px] text-teal-200 font-bold">
-                      👻 화면 속 글자(자막·문서·칠판)가 찍힌 영상은 우측 하단 <strong className="text-teal-300">[📝 글자 뽑기]</strong>를 누르면 1초 만에 텍스트로 쏙 뽑아 복사할 수 있어요!
+                      👻 화면 속 글자(자막·문서·칠판)가 찍힌 영상은 <strong className="text-teal-300">동영상 카드를 클릭하면</strong> 하단에 추출된 텍스트가 바로 표시되어 즉시 복사할 수 있어요!
                     </span>
                   </div>
                 )}
@@ -313,21 +313,6 @@ export const GhostSearchPane: React.FC<{
                           <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400">
                             <span>{vid.date}</span>
                             <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  try {
-                                    sessionStorage.setItem('ghosti_auto_extract_video_ocr', vid.id);
-                                  } catch {
-                                    /* ignore */
-                                  }
-                                  setSelectedVideoModal(vid, vid.matchedSeekSec);
-                                }}
-                                className="px-2.5 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/50 font-label-sm text-[11px] font-black transition cursor-pointer"
-                              >
-                                📝 글자 뽑기
-                              </button>
                               <span className="text-primary-container font-bold">
                                 {hasExecutedUserSearch && activeQuery
                                   ? isWholeClip

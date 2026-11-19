@@ -1025,7 +1025,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
             {matchedVideoScenes.length > 0 && (
               <div className="px-3.5 py-2.5 rounded-xl bg-teal-950/60 border border-teal-400/40 flex flex-wrap items-center justify-between gap-2">
                 <span className="text-[12px] text-teal-200 font-bold">
-                  👻 화면 속 글자(자막·문서·칠판)가 찍힌 영상은 우측 하단 <strong className="text-teal-300">[📝 글자 뽑기]</strong>를 누르면 1초 만에 텍스트로 쏙 뽑아 복사할 수 있어요!
+                  👻 화면 속 글자(자막·문서·칠판)가 찍힌 영상은 <strong className="text-teal-300">동영상 카드를 클릭하면</strong> 하단에 추출된 텍스트가 바로 표시되어 즉시 복사할 수 있어요!
                 </span>
               </div>
             )}
@@ -1103,21 +1103,6 @@ export const Stage1MinimalSearchPreview: React.FC<{
                     <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400">
                       <span>{vid.date}</span>
                       <div className="flex items-center gap-2">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            try {
-                              sessionStorage.setItem('ghosti_auto_extract_video_ocr', vid.id);
-                            } catch {
-                              /* ignore */
-                            }
-                            setSelectedVideoModal(vid, vid.matchedSeekSec);
-                          }}
-                          className="px-2.5 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/50 font-label-sm text-[11px] font-black transition cursor-pointer"
-                        >
-                          📝 글자 뽑기
-                        </button>
                         <span className="text-primary-container font-bold">
                           {hasExecutedUserSearch && activeQuery
                             ? isWholeClip
@@ -1437,7 +1422,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
             🔒 귀신검색 유료 티어 안내 (명시적 동의 시 30일 무제한 무료체험 · 만료 시 자동 결제 없이 깔끔 잠금🔒)
           </span>
           <span className="text-[11.5px] text-zinc-400 font-semibold">
-            내 PC 문서·사진·영상 검색 &amp; 동영상 [📝 글자 뽑기]는 평생 무제한 무료
+            내 PC 문서·사진·영상 검색 &amp; 동영상 클릭 시 화면 글자 자동 추출은 평생 무제한 무료
           </span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[12px] text-zinc-200">

@@ -57,6 +57,8 @@ export interface VideoSceneItem {
   hasScreenOcrText?: boolean;
   /** 화면 OCR 추출 텍스트 줄 수 */
   ocrLineCount?: number;
+  /** 화면 OCR 시간대별 구조화 줄 목록 (사전 인덱싱 캐시 직결) */
+  ocrLines?: Array<{ timeSec: number; timestamp: string; text: string }>;
   /** 화면 OCR 통합 텍스트 요약·전문 */
   ocrFullText?: string;
   timelineFrames: VideoTimelineFrame[];

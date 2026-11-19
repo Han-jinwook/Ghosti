@@ -706,29 +706,17 @@ def build_ui2_search_window(
             tip_bar.pack(fill="x", pady=(0, 4))
             tk.Label(
                 tip_bar,
-                text="👻 영상 속 화면 글자 발견! 멈춰 적지 말고 우측 [📝글자뽑기]를 눌러보세요!",
+                text="👻 영상 속 화면 글자 발견! 영상을 클릭하면 하단에 추출된 글자가 바로 표시됩니다!",
                 fg="#5EEAD4",
                 bg="#132A2E",
                 font=("Malgun Gothic", 8, "bold"),
             ).pack(side="left")
-            quick_extract = tk.Label(
-                tip_bar,
-                text="📝 바로 뽑기",
-                fg="#0B1120",
-                bg="#FDE047",
-                padx=5,
-                pady=1,
-                font=("Malgun Gothic", 8, "bold"),
-                cursor="hand2",
-            )
-            quick_extract.pack(side="right")
-            quick_extract.bind("<Button-1>", lambda _e, r=rich_ocr_vid: _open_video_ocr_extractor(r))
         elif flt_now == "video" and any_vid is not None:
             tip_bar = tk.Frame(smart_tip_frame, bg="#132A2E", highlightbackground="#334155", highlightthickness=1, padx=6, pady=3)
             tip_bar.pack(fill="x", pady=(0, 4))
             tk.Label(
                 tip_bar,
-                text="👻 강의·회의·자막 영상은 우측 [📝글자뽑기]로 화면 속 글자만 1초 만에 뽑아 복사할 수 있어요!",
+                text="👻 강의·회의·자막 영상은 클릭하면 화면 속 글자가 하단에 바로 표시되어 즉시 복사할 수 있어요!",
                 fg="#5EEAD4",
                 bg="#132A2E",
                 font=("Malgun Gothic", 8, "bold"),
@@ -857,19 +845,17 @@ def build_ui2_search_window(
                     lambda _e, ip=img_ref_p: toast_queue.put((f"__UI3_OCR__|{ip}", 8000)),
                 )
             elif kind == "video":
-                has_v_ocr = bool(rec.get("video_ocr_full"))
-                vocr_b = tk.Label(
-                    card,
-                    text="✨글자뽑기" if has_v_ocr else "📝글자뽑기",
-                    fg="#0B1120" if has_v_ocr else "#FDE047",
-                    bg="#FDE047" if has_v_ocr else "#0B1120",
-                    padx=5,
-                    pady=1,
-                    font=("Malgun Gothic", 8, "bold"),
-                    cursor="hand2",
-                )
-                vocr_b.pack(side="right", padx=(4, 0))
-                vocr_b.bind("<Button-1>", lambda _e, r=rec: _open_video_ocr_extractor(r))
+                if bool(rec.get("video_ocr_full")):
+                    vocr_b = tk.Label(
+                        card,
+                        text="✨글자감지",
+                        fg="#0B1120",
+                        bg="#FDE047",
+                        padx=5,
+                        pady=1,
+                        font=("Malgun Gothic", 8, "bold"),
+                    )
+                    vocr_b.pack(side="right", padx=(4, 0))
 
             time_l = tk.Label(card, text=rel_t, fg="#64748B", bg=c_bg, font=("Malgun Gothic", 8))
             time_l.pack(side="right", padx=(4, 0))
@@ -885,6 +871,9 @@ def build_ui2_search_window(
             body_l.pack(side="left", fill="x", expand=True)
 
             def _on_pick(_e=None, r=rec, i_row=idx_c):
+                if r.get("kind") == "video" and r.get("video_ocr_full") and st_now != "medium":
+                    _open_video_ocr_extractor(r)
+                    return
                 if st_now == "medium" and st_state["sel_idx"] != i_row:
                     st_state["sel_idx"] = i_row
                     _render_search_results()
@@ -1013,10 +1002,10 @@ def build_ui2_search_window(
                     "<Button-1>",
                     lambda _e, ip=s_fpath: toast_queue.put((f"__UI3_OCR__|{ip}", 8000)),
                 )
-            elif sel_rec.get("kind") == "video":
-                vocr_jump = tk.Label(
+            elif sel_rec.get("kind") == "video" and sel_rec.get("video_ocr_full"):
+                vocr_copy_b = tk.Label(
                     preview_pane,
-                    text="📝 영상 속 화면 글자 전체 뽑아 복사하기",
+                    text="📋 추출된 영상 글자 전체 복사하기",
                     fg="#0B1120",
                     bg="#FDE047",
                     padx=8,
@@ -1024,8 +1013,11 @@ def build_ui2_search_window(
                     font=("Malgun Gothic", 9, "bold"),
                     cursor="hand2",
                 )
-                vocr_jump.pack(fill="x", pady=2)
-                vocr_jump.bind("<Button-1>", lambda _e, r=sel_rec: _open_video_ocr_extractor(r))
+                vocr_copy_b.pack(fill="x", pady=2)
+                vocr_copy_b.bind(
+                    "<Button-1>",
+                    lambda _e, t=str(sel_rec.get("video_ocr_full") or ""): _copy_video_ocr_text(t),
+                )
             if s_fpath and os.path.isfile(s_fpath):
                 lbl_jump = tk.Label(
                     preview_pane,
