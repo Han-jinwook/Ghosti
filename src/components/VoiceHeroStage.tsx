@@ -201,6 +201,9 @@ export const VoiceHeroStage: React.FC = () => {
     unlockMobileAudioOnUserGesture();
     const q = textInput.trim();
     if (!q) return;
+    if (isMobile && typeof document !== 'undefined') {
+      (document.activeElement as HTMLElement | null)?.blur?.();
+    }
     await runTextQuery(q);
     scrollToResults();
   };

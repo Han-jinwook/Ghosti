@@ -887,15 +887,14 @@ export const createSearchSlice: StateCreator<
 
     if (isTimeRangeOrAlumniQuery) {
       if (queryYearTokens.length > 0) {
-        expansionBadges.push(`#연도동치(${queryYearTokens[0]}↔${queryYearTokens[3] || '89년'})`);
+        expansionBadges.push(`#${queryYearTokens[0]}년사진`);
       }
       if (matchedSeasons.size > 0) {
         const seasonNames = Array.from(matchedSeasons).join('·');
-        const triggerTxt = matchedMonthOrEventTokens.join('·') || seasonNames;
-        expansionBadges.push(`#계절↔월확장(${triggerTxt}➔${seasonNames})`);
+        expansionBadges.push(`#${seasonNames}계절사진`);
       }
       if (matchedSchoolNouns.length > 0) {
-        expansionBadges.push(`#${alumniSchoolName}고유명사상속`);
+        expansionBadges.push(`#${alumniSchoolName}`);
       }
 
       // 아날로그 스캔 사진(느슨한 타임라인: '1989년 봄', '1989년 가을' 등) 양방향 매칭 검사
@@ -946,9 +945,9 @@ export const createSearchSlice: StateCreator<
           const reasonTags = [
             `#${effectiveGroup.replace(/\s+/g, '')}`,
             ...(matchedMonthOrEventTokens.length > 0
-              ? [`#${matchedMonthOrEventTokens[0]}↔${effectiveGroup}양방향매칭`]
+              ? [`#${matchedMonthOrEventTokens[0]}사진`]
               : []),
-            ...(matchedSchoolNouns.length > 0 ? [`#${alumniSchoolName}기본상속`] : []),
+            ...(matchedSchoolNouns.length > 0 ? [`#${alumniSchoolName}`] : []),
           ];
           matchedAnalogFiles.set(item.photoFile, { analogItem: item, reasonTags });
         }
@@ -1082,27 +1081,28 @@ export const createSearchSlice: StateCreator<
       void speakWithHyunsuOrSunhi(searchBriefingKo, 'hyunsu_briefing');
     }
 
+    const hasAnyMatchedResult =
+      results.length > 0 ||
+      videoMatches.length > 0 ||
+      docMatches.length > 0 ||
+      vaultPhotoMatches.length > 0;
+
     set({
       searchSpace: targetSpace,
       hasExecutedUserSearch: true,
       activeQuery: query,
-      matchedTags: topTags.length ? topTags : ['#3트랙통합검색', '#768차원벡터매칭'],
+      matchedTags: topTags.length ? topTags : results.length > 0 ? ['#AI내용검색'] : [],
       searchResults: results,
       matchedVaultPhotos: vaultPhotoMatches,
       matchedLocalDocs: docMatches,
       matchedVideoScenes: videoMatches,
       telemetry: telemetry ? { ...telemetry, lastQueryMs: +(embedMs + searchMs).toFixed(1) } : null,
-      ...(isTimeRangeOrAlumniQuery
-        ? {
-            lastQuarantineToast: `⚡ [양방향 시간·고유명사 그물망 매칭 (1초 만에)] "${query}" ➔ ${expansionBadges.join(
-              ' · '
-            )} 규칙으로 느슨한 타임라인 사진을 100% 찾아냈습니다!`,
-          }
-        : fromVoice && isMobileVoiceEnvironment()
-        ? {
-            lastQuarantineToast: `🎙️ [현수 성우 브리핑] ${searchBriefingKo}`,
-          }
-        : {}),
+      lastQuarantineToast:
+        isTimeRangeOrAlumniQuery && results.length > 0
+          ? `🔍 “${query}” 관련 계절·시기 사진 ${results.length}장을 찾았어요!`
+          : fromVoice && isMobileVoiceEnvironment() && hasAnyMatchedResult
+          ? `🎙️ [현수 성우 브리핑] ${searchBriefingKo}`
+          : null,
     });
 
     // [무블로킹 2단계 백그라운드 보강]: 첫 검색 결과는 0.1초 만에 즉시 표시한 뒤,

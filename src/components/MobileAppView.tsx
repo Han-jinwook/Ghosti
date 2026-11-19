@@ -18,6 +18,7 @@ import { MobileCleanerRescueBanner } from './MobileCleanerRescueBanner';
 import {
   isCapacitorNativeMobileRuntime,
   openNativeAppPermissionSettings,
+  syncNativeMobileThemeMode,
 } from '../services/ghostiMobileCareBridge';
 import {
   LoungeCustomSettingsHeader,
@@ -277,6 +278,10 @@ export const MobileAppView: React.FC = () => {
   );
 
   useEffect(() => {
+    void syncNativeMobileThemeMode(themeMode === 'dark');
+  }, [themeMode]);
+
+  useEffect(() => {
     if (typeof window === 'undefined') return;
     let latestIosKb = 0;
 
@@ -291,15 +296,27 @@ export const MobileAppView: React.FC = () => {
           : vv
           ? vv.offsetTop + vv.height
           : window.innerHeight;
+      const headerEl = document.querySelector('header');
+      const headerBottom = headerEl ? Math.max(76, headerEl.getBoundingClientRect().bottom) : 88;
       const rect = active.getBoundingClientRect();
-      // 입력칸이 키보드에 가려진 경우에만 가려진 높이만큼만 부드럽게 올려 대화창 본문과 입력칸이 동시에 보이게 유지
+
+      // 1) 입력칸이 상단 고정 헤더(Safe-Area 포함) 위로 밀려 올라갔다면 헤더 바로 아래로 복귀
+      if (rect.top < headerBottom + 8) {
+        const pullDown = headerBottom + 12 - rect.top;
+        window.scrollBy({ top: -pullDown, behavior: 'auto' });
+        return;
+      }
+
+      // 2) 입력칸이 키보드에 가려진 경우에만, 상단 헤더를 침범하지 않는 범위 내에서 필요한 만큼만 스크롤
       if (rect.bottom > visibleBottom - 14) {
-        const delta = rect.bottom - (visibleBottom - 18);
-        window.scrollBy({ top: delta, behavior: 'smooth' });
+        const maxAllowedScrollUp = Math.max(0, rect.top - (headerBottom + 12));
+        const neededDelta = rect.bottom - (visibleBottom - 18);
+        const clampedDelta = Math.min(neededDelta, maxAllowedScrollUp);
+        if (clampedDelta > 4) {
+          window.scrollBy({ top: clampedDelta, behavior: 'smooth' });
+        }
       } else if (active.id === 'ghosti-secretary-chat-input') {
         const chatAside = active.closest('aside');
-        const headerEl = document.querySelector('header');
-        const headerBottom = headerEl ? headerEl.getBoundingClientRect().bottom : 88;
         if (chatAside) {
           const asideRect = chatAside.getBoundingClientRect();
           if (asideRect.top < headerBottom && rect.bottom < visibleBottom - 24) {
@@ -973,7 +990,7 @@ export const MobileAppView: React.FC = () => {
               searchSpace === 'video' ||
               searchSpace === 'vault' ||
               (hasExecutedUserSearch && Boolean(activeQuery.trim()))) && (
-          <div id="ghosti-search-results" className="scroll-mt-16">
+          <div id="ghosti-search-results" className="scroll-mt-36">
             {searchSpace === 'video' ? (() => {
               const displayVideos =
                 !hasExecutedUserSearch && matchedVideoScenes.length === 0

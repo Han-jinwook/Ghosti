@@ -107,6 +107,7 @@ export interface GhostiMobileCarePluginInterface {
     items: SystemPhotoTrashTarget[];
   }): Promise<SystemPhotoTrashResult>;
   consumePendingDeepLink(): Promise<{ ok: boolean; deepLinkUrl: string; source?: string }>;
+  setNativeThemeMode(options: { dark: boolean }): Promise<{ ok: boolean }>;
 }
 
 const GhostiMobileCareNative = registerPlugin<GhostiMobileCarePluginInterface>('GhostiMobileCare');
@@ -405,6 +406,15 @@ export async function openNativeAppPermissionSettings(): Promise<void> {
   if (!isCapacitorNativeMobileRuntime()) return;
   try {
     await GhostiMobileCareNative.openAppPermissionSettings();
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function syncNativeMobileThemeMode(isDark: boolean): Promise<void> {
+  if (!isCapacitorIosRuntime()) return;
+  try {
+    await GhostiMobileCareNative.setNativeThemeMode({ dark: isDark });
   } catch {
     /* ignore */
   }

@@ -7,8 +7,11 @@ import AVFoundation
 
 @objc(GhostiBridgeViewController)
 class GhostiBridgeViewController: CAPBridgeViewController {
+    private let topSafeAreaShieldView = UIView()
+    private var isDarkThemeActive = false
+
     override open var preferredStatusBarStyle: UIStatusBarStyle {
-        return .darkContent
+        return isDarkThemeActive ? .lightContent : .darkContent
     }
 
     override open func capacitorDidLoad() {
@@ -18,6 +21,22 @@ class GhostiBridgeViewController: CAPBridgeViewController {
         webView?.isOpaque = true
         webView?.backgroundColor = UIColor.white
         webView?.scrollView.backgroundColor = UIColor.white
+
+        // [iOS 다이나믹 아일랜드·상태바 Safe-Area 물리 보호막]:
+        // 키보드 상승이나 빠른 스크롤 시 본문 카드·텍스트가 상단 시계/배터리 영역으로 침범하지 못하도록
+        // 하드웨어 safeAreaLayoutGuide.topAnchor 위쪽을 불투명 네이티브 뷰로 상시 차폐합니다.
+        topSafeAreaShieldView.translatesAutoresizingMaskIntoConstraints = false
+        topSafeAreaShieldView.backgroundColor = UIColor.white
+        topSafeAreaShieldView.isUserInteractionEnabled = false
+        view.addSubview(topSafeAreaShieldView)
+        NSLayoutConstraint.activate([
+            topSafeAreaShieldView.topAnchor.constraint(equalTo: view.topAnchor),
+            topSafeAreaShieldView.leadingAnchor.constraint(equalTo: view.leadingAnchor),
+            topSafeAreaShieldView.trailingAnchor.constraint(equalTo: view.trailingAnchor),
+            topSafeAreaShieldView.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor)
+        ])
+        view.bringSubviewToFront(topSafeAreaShieldView)
+
         NotificationCenter.default.addObserver(
             self,
             selector: #selector(handleIosKeyboardFrameChange(_:)),
@@ -30,6 +49,22 @@ class GhostiBridgeViewController: CAPBridgeViewController {
             name: UIResponder.keyboardWillHideNotification,
             object: nil
         )
+    }
+
+    func applyThemeMode(_ isDark: Bool) {
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else { return }
+            self.isDarkThemeActive = isDark
+            let bg = isDark
+                ? UIColor(red: 9.0 / 255.0, green: 9.0 / 255.0, blue: 11.0 / 255.0, alpha: 1.0)
+                : UIColor.white
+            self.topSafeAreaShieldView.backgroundColor = bg
+            self.view.backgroundColor = bg
+            self.webView?.backgroundColor = bg
+            self.webView?.scrollView.backgroundColor = bg
+            self.view.bringSubviewToFront(self.topSafeAreaShieldView)
+            self.setNeedsStatusBarAppearanceUpdate()
+        }
     }
 
     deinit {
@@ -81,6 +116,7 @@ class GhostiBridgeViewController: CAPBridgeViewController {
 
     override open func viewDidLayoutSubviews() {
         super.viewDidLayoutSubviews()
+        view.bringSubviewToFront(topSafeAreaShieldView)
         syncHardwareSafeAreaCssVars()
     }
 
@@ -124,8 +160,17 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "requestSystemPhotoTrash", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openAppPermissionSettings", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "scanInstalledBloatCleaners", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "consumePendingDeepLink", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "consumePendingDeepLink", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "setNativeThemeMode", returnType: CAPPluginReturnPromise)
     ]
+
+    @objc func setNativeThemeMode(_ call: CAPPluginCall) {
+        let isDark = call.getBool("dark") ?? false
+        if let vc = self.bridge?.viewController as? GhostiBridgeViewController {
+            vc.applyThemeMode(isDark)
+        }
+        call.resolve(["ok": true])
+    }
 
     private func hasPhotoAccess(_ status: PHAuthorizationStatus) -> Bool {
         if #available(iOS 14, *) {

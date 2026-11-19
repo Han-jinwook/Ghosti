@@ -199,14 +199,14 @@ export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalS
           }
         }
 
-        const isCleanWhiteDoc = whitePct >= 62 && hfRatio >= 1.15;
+        const isCleanWhiteDoc = whitePct >= 58 && hfRatio >= 1.15;
         const rawScore = Math.round(variance * 18.0 * Math.max(0.22, hfRatio - 0.55));
         isMotionOrFocusBlurred =
           !isCleanWhiteDoc &&
-          ((hfRatio < 1.08 && p98Lap < 60) ||
-            (variance < 95 && hfRatio < 1.15) ||
-            rawScore < 1800);
-        sharpness = isMotionOrFocusBlurred ? Math.min(2800, Math.max(120, rawScore)) : Math.max(3600, rawScore);
+          ((hfRatio < 1.14 && p98Lap < 72) ||
+            (variance < 135 && hfRatio < 1.20) ||
+            rawScore < 2800);
+        sharpness = Math.max(80, rawScore);
       }
     }
   } catch {
@@ -267,35 +267,45 @@ export function clusterPhotosIntoDuplicateGroups(
       const deltaSecFromFirst = Math.abs((cand.mtimeMs || 0) - (first.mtimeMs || 0)) / 1000;
       const deltaSecFromLast = Math.abs((cand.mtimeMs || 0) - (last.mtimeMs || 0)) / 1000;
 
+      const hasBothRgb =
+        Boolean(firstSig?.rgbGrid && firstSig.rgbGrid.length === 192) &&
+        Boolean(candSig?.rgbGrid && candSig.rgbGrid.length === 192);
       const rgbToFirst = computeRgbGridDifference(firstSig?.rgbGrid, candSig?.rgbGrid);
       const rgbToLast = computeRgbGridDifference(lastSig?.rgbGrid, candSig?.rgbGrid);
       const sameAspect =
-        !firstSig || !candSig || Math.abs(firstSig.aspect - candSig.aspect) <= 0.04;
+        !firstSig || !candSig || Math.abs(firstSig.aspect - candSig.aspect) <= 0.06;
 
-      // 1) 트랙 A: 완전 동일 사진 중복 사본 (해밍거리 <= 2 & 8x8 RGB 색상/밝기 거의 100% 일치)
-      const isExactDuplicateCopy =
-        sameAspect &&
-        distToFirst <= 2 &&
-        rgbToFirst.meanDiff <= 4.5 &&
-        rgbToFirst.maxBlockDiff <= 18;
-
-      // 2) 트랙 B: 실제 카메라 연속 촬영 연사 (백색 문서/스크린샷 페이지가 아닌 실사 촬영본에 한해 허용)
+      // 백색 문서/스크린샷 여부
       const isDocumentOrWhiteSheet =
         (firstSig && firstSig.whitePct >= 45) ||
         (candSig && candSig.whitePct >= 45) ||
         first.trashCategory === 'screenshot' ||
         cand.trashCategory === 'screenshot';
 
+      // 1) 트랙 A: 동일 사진 중복 사본 및 리사이즈/재저장 쌍둥이 사본 (저장 시각과 무관하게 포착)
+      const isExactDuplicateCopy = hasBothRgb
+        ? sameAspect &&
+          ((distToFirst <= 2 &&
+            rgbToFirst.meanDiff <= 5.5 &&
+            rgbToFirst.maxBlockDiff <= 24) ||
+            (!isDocumentOrWhiteSheet &&
+              distToFirst <= 5 &&
+              rgbToFirst.meanDiff <= 9.0 &&
+              rgbToFirst.maxBlockDiff <= 34))
+        : sameAspect && distToFirst <= 2;
+
+      // 2) 트랙 B: 실제 카메라 연속 촬영 연사 (백색 문서/스크린샷 페이지가 아닌 실사 촬영본에 한해 허용)
       const isCameraBurstShot =
         !isDocumentOrWhiteSheet &&
         sameAspect &&
-        deltaSecFromFirst <= 30 &&
-        deltaSecFromLast <= 15 &&
-        distToFirst <= 13 &&
-        distToLast <= 10 &&
-        rgbToFirst.meanDiff <= 18.0 &&
-        rgbToFirst.maxBlockDiff <= 52 &&
-        rgbToLast.meanDiff <= 16.0;
+        deltaSecFromFirst <= 60 &&
+        deltaSecFromLast <= 25 &&
+        distToFirst <= 14 &&
+        distToLast <= 11 &&
+        (!hasBothRgb ||
+          (rgbToFirst.meanDiff <= 19.0 &&
+            rgbToFirst.maxBlockDiff <= 55 &&
+            rgbToLast.meanDiff <= 17.0));
 
       if (isExactDuplicateCopy || isCameraBurstShot) {
         members.push(cand);
@@ -650,12 +660,8 @@ export async function analyzeNativeGalleryPhotoBatch(
         const lowerName = (item.name || '').toLowerCase();
         const origW = item.width || img.width || 0;
         const origH = item.height || img.height || 0;
-        const isScreenshot =
-          Boolean(item.isScreenshot) ||
-          lowerName.includes('screenshot') ||
-          lowerName.includes('스크린샷') ||
-          lowerName.includes('캡처') ||
-          (origW > 0 && origH / origW > 1.98);
+        const aspectRatio = origW > 0 ? origH / origW : meta.aspect;
+        const isTallPhoneScreenAspect = aspectRatio >= 1.75 || aspectRatio <= 0.57;
         const isReceiptOrDoc =
           lowerName.includes('receipt') ||
           lowerName.includes('영수증') ||
@@ -663,10 +669,25 @@ export async function analyzeNativeGalleryPhotoBatch(
           lowerName.includes('문서') ||
           lowerName.includes('명함') ||
           lowerName.includes('memo');
+        // 캡처 후 크롭된 정방형·일반 비율 인물/사물 사진이라도 심한 초점이탈·손떨림 블러이면 스크린샷이 아닌 '흔들림·오촬영'으로 정확히 우선 분류
+        const isSevereNonScreenBlur =
+          !isReceiptOrDoc &&
+          !isTallPhoneScreenAspect &&
+          meta.whitePct < 52 &&
+          meta.isMotionOrFocusBlurred &&
+          sharpness < 2600;
+        const isScreenshot =
+          !isSevereNonScreenBlur &&
+          (Boolean(item.isScreenshot) ||
+            lowerName.includes('screenshot') ||
+            lowerName.includes('스크린샷') ||
+            lowerName.includes('캡처') ||
+            aspectRatio > 1.98);
         const isBlurry =
           !isScreenshot &&
           !isReceiptOrDoc &&
-          (meta.isMotionOrFocusBlurred ||
+          (isSevereNonScreenBlur ||
+            meta.isMotionOrFocusBlurred ||
             sharpness < 3200 ||
             lowerName.includes('blur') ||
             lowerName.includes('흔들'));
@@ -791,6 +812,33 @@ export function convertNativeGalleryVideos(nativeVideos: NativeGalleryVideoMeta[
 
 const MOBILE_GALLERY_IDB_NAME = 'ghosti_mobile_gallery_cache_v1';
 const MOBILE_GALLERY_STORE = 'snapshot';
+const MOBILE_GALLERY_CACHE_SCHEMA_VER = 2;
+
+interface SerializedOpticalSig {
+  dhash: string;
+  sharpness: number;
+  isMotionOrFocusBlurred: boolean;
+  aspect: number;
+  whitePct: number;
+  rgbHex: string;
+}
+
+function encodeRgbGridHex(grid: Uint8Array): string {
+  let out = '';
+  for (let i = 0; i < grid.length; i++) {
+    out += grid[i].toString(16).padStart(2, '0');
+  }
+  return out;
+}
+
+function decodeRgbGridHex(hex: string): Uint8Array {
+  const arr = new Uint8Array(192);
+  if (!hex || hex.length < 384) return arr;
+  for (let i = 0; i < 192; i++) {
+    arr[i] = parseInt(hex.slice(i * 2, i * 2 + 2), 16) || 0;
+  }
+  return arr;
+}
 
 function openMobileGalleryIdb(): Promise<IDBDatabase | null> {
   if (typeof indexedDB === 'undefined') return Promise.resolve(null);
@@ -822,30 +870,51 @@ export async function loadCachedMobileGalleryIndex(): Promise<{
       const tx = db.transaction(MOBILE_GALLERY_STORE, 'readonly');
       const req = tx.objectStore(MOBILE_GALLERY_STORE).get('latest');
       req.onsuccess = () => {
-        const val = req.result as { photos?: PhotoItem[]; videos?: VideoSceneItem[] } | undefined;
-        if (val && Array.isArray(val.photos)) {
-          for (const p of val.photos) {
-            registerMobilePickedPhotoMeta({
-              id: p.id,
-              name: p.name,
-              size: p.size,
-              mtimeMs: p.mtimeMs,
-            });
-          }
-          const hydratedVideos = Array.isArray(val.videos)
-            ? val.videos.map((v) =>
-                !v.videoUrl && String(v.id || '').startsWith('mobile_vid_')
-                  ? { ...v, videoUrl: resolveAndroidDirectVideoStreamUrl(v.id) }
-                  : v
-              )
-            : [];
-          resolve({
-            photos: val.photos,
-            videos: hydratedVideos,
-          });
+        const val = req.result as
+          | {
+              schemaVer?: number;
+              photos?: PhotoItem[];
+              videos?: VideoSceneItem[];
+              opticalSigs?: Record<string, SerializedOpticalSig>;
+            }
+          | undefined;
+        // 구 스키마(v1: 광학 RGB 시그니처 미보존본)는 1회 무효화하여 최신 정밀 중복·연사/흔들림 분류로 재색인
+        if (!val || val.schemaVer !== MOBILE_GALLERY_CACHE_SCHEMA_VER || !Array.isArray(val.photos)) {
+          resolve(null);
           return;
         }
-        resolve(null);
+        if (val.opticalSigs && typeof val.opticalSigs === 'object') {
+          for (const [pid, sig] of Object.entries(val.opticalSigs)) {
+            if (!sig) continue;
+            opticalSigByPhotoId.set(pid, {
+              dhash: sig.dhash || '',
+              sharpness: Number(sig.sharpness || 12000),
+              isMotionOrFocusBlurred: Boolean(sig.isMotionOrFocusBlurred),
+              aspect: Number(sig.aspect || 1),
+              whitePct: Number(sig.whitePct || 0),
+              rgbGrid: decodeRgbGridHex(sig.rgbHex || ''),
+            });
+          }
+        }
+        for (const p of val.photos) {
+          registerMobilePickedPhotoMeta({
+            id: p.id,
+            name: p.name,
+            size: p.size,
+            mtimeMs: p.mtimeMs,
+          });
+        }
+        const hydratedVideos = Array.isArray(val.videos)
+          ? val.videos.map((v) =>
+              !v.videoUrl && String(v.id || '').startsWith('mobile_vid_')
+                ? { ...v, videoUrl: resolveAndroidDirectVideoStreamUrl(v.id) }
+                : v
+            )
+          : [];
+        resolve({
+          photos: val.photos,
+          videos: hydratedVideos,
+        });
       };
       req.onerror = () => resolve(null);
     } catch {
@@ -863,10 +932,30 @@ export async function saveCachedMobileGalleryIndex(
   try {
     const cleanPhotos = photos.slice(0, 600);
     const cleanVideos = videos.slice(0, 40);
+    const opticalSigs: Record<string, SerializedOpticalSig> = {};
+    for (const p of cleanPhotos) {
+      const sig = opticalSigByPhotoId.get(p.id);
+      if (sig) {
+        opticalSigs[p.id] = {
+          dhash: sig.dhash,
+          sharpness: sig.sharpness,
+          isMotionOrFocusBlurred: sig.isMotionOrFocusBlurred,
+          aspect: sig.aspect,
+          whitePct: sig.whitePct,
+          rgbHex: encodeRgbGridHex(sig.rgbGrid),
+        };
+      }
+    }
     await new Promise<void>((resolve) => {
       const tx = db.transaction(MOBILE_GALLERY_STORE, 'readwrite');
       tx.objectStore(MOBILE_GALLERY_STORE).put(
-        { photos: cleanPhotos, videos: cleanVideos, savedAt: Date.now() },
+        {
+          schemaVer: MOBILE_GALLERY_CACHE_SCHEMA_VER,
+          photos: cleanPhotos,
+          videos: cleanVideos,
+          opticalSigs,
+          savedAt: Date.now(),
+        },
         'latest'
       );
       tx.oncomplete = () => resolve();
