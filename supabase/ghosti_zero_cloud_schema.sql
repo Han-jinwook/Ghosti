@@ -1,9 +1,14 @@
 -- ============================================================================
 -- ⚡ 귀신같이 (Ghosti) — Zero-Cloud 초경량 Supabase DB 스키마 (v2.0 · 2026-10-26)
 -- ============================================================================
--- [핵심 아키텍처 & 평생권 수익성 방어 원칙]
--- 1. 원본 사진·동영상·문서 파일 및 수만 장의 768차원 벡터 인덱스는 중앙 DB에 절대 저장하지 않음!
---    (마스터 PC 로컬 디스크 및 멤버 단말 OPFS/IndexedDB에서만 P2P로 직접 동기화 ➔ DB 스토리지 비용 0원)
+-- [핵심 아키텍처 & 평생권 수익성 방어 원칙 — 2026-11-19 『방식 A』 최종 확정 반영]
+-- 1. 무압축 고화질 원본 사진·동영상(5~20MB) 및 업무 문서 원본 파일은 중앙 DB/스토리지에 절대 저장하지 않음!
+--    (원본 파일은 마스터 PC 로컬 디스크 및 멤버 단말에서 WebRTC / Z코어 아웃바운드 터널 P2P 직결로만 동기화 ➔ 원본 클라우드 비용 0원)
+--    단, 『📸 사진 공유방(가족·동호회·동창회)』은 방장이 밤에 PC를 끄거나 폰 화면이 잠겨 있어도 초대받은 가족·회원이 카톡 초대 링크 클릭 즉시
+--    24시간 언제든 0.3~0.8초 만에 전체 사진과 검색·댓글을 열람할 수 있도록 『방식 A — 24시간 무중단 열람형』을 적용함:
+--    ➔ 유저가 공유방에 직접 올린 사진에 한해 『13KB 초경량 WebP 썸네일 + 검색 키워드/인물 문패 인덱스 + 댓글·하트 + 친근한 촬영일·대표 지역명』을
+--      본 Supabase 정식 테이블(ghosti_room_shared_photos 등, 향후 대용량 확장 시 보유 Cloudflare R2 무료 10GB 연동)에 room_id·invite_token 단위로 엄격 격리 보관함!
+--      (1만 장 = 약 130MB 수준으로 무료 1GB 내 약 7.5만 장 수용, R2 10GB 시 75만 장 트래픽 비용 0원)
 -- 2. WebRTC 시그널링(SDP/ICE)은 테이블 INSERT 없이 Supabase Realtime Broadcast(메모리 패스스루)만 사용.
 --    (채널 토픽 규칙: `ghosti:room:<room_id>` / `ghosti:pair:<owner_email>` — 하단 9번 Realtime 인가 정책 참조)
 -- 3. 계정·로그인·코인 지갑은 Ghosti가 따로 만들지 않고 멀린허브OS(os.sundreamer.app) SSO 단일 원장을 따름.
@@ -22,8 +27,10 @@
 --    ③ ghosti_pairing_codes        : PC ↔ 폰 1회용 연결 코드(QR/6자리, 10분 만료)
 --    ④ ghosti_lounge_rooms         : 3대 메뉴(내 기기 / 사진 공유 / 업무 공유) 라운지 방 메타데이터
 --    ⑤ ghosti_lounge_members       : 방별 멤버 권한 & 방별 독립 호칭(room_persona_nickname)
---    ⑥ ghosti_room_invites         : 방 초대 링크 토큰 (만료·사용 횟수 제한)
---    ⑦ ghosti_room_shared_folders  : 방에 공유된 PC 폴더 '포인터'만 기록 (파일 자체·썸네일·벡터 저장 0바이트)
+--    ⑥ ghosti_room_invites         : 방 초대 링크 토큰 (만료·사용 횟수 제한 · 무가입 1초 프리뷰 검증 키)
+--    ⑦ ghosti_room_shared_folders  : 업무방(S:) 등에 공유된 PC 폴더 별칭 포인터 기록 (문서·원본 파일 자체는 P2P 직결)
+--    ⑦-B ghosti_room_shared_photos : [방식 A 확정] 사진 공유방 24시간 무중단 열람용 13KB 초경량 썸네일·검색 인덱스·촬영일시 (원본 미저장, 정밀 GPS는 게스트 비노출)
+--    ⑦-C ghosti_room_photo_comments / reactions : 사진 공유방 댓글 본문 및 하트 반응 (무가입 프리뷰에서 '읽기' 공개, '쓰기'는 정식 합류 멤버만)
 --    ⑧ ghosti_setup_playbooks      : 설정 몬스터 표준 정답 경로 캐시(토큰 0원화) & Multi-LLM 최단 지름길 OTA
 --    ⑨ ghosti_setup_audit_logs     : 설정 몬스터 정산 결과 기록 · 초행길 2회 헤맴 100% 쿨 환불 · 실패 블랙박스 로그
 --       (실제 코인 차감/환불 집행은 멀린허브OS 지갑 API가 수행하고, 여기에는 결과 사본만 남김)
@@ -291,8 +298,8 @@ create index if not exists idx_ghosti_room_invites_room
   on public.ghosti_room_invites (room_id);
 
 -- ----------------------------------------------------------------------------
--- 7. 방에 공유된 PC 폴더 '포인터' (원본·썸네일·벡터 저장 0바이트)
---    - 폰은 이 포인터로 마스터 PC의 bridge_url에 접속해 13KB 썸네일·벡터만 받아감
+-- 7. 방에 공유된 PC 폴더 별칭 포인터 (업무방 S: 등 폴더 단위 연결 메타데이터 · 무압축 원본 파일은 P2P 직결)
+--    - 사진 공유방의 개별 공유 사진 13KB 썸네일·인덱스 24시간 상시 열람은 하단 ghosti_room_shared_photos 테이블이 담당
 -- ----------------------------------------------------------------------------
 create table if not exists public.ghosti_room_shared_folders (
   id uuid primary key default gen_random_uuid(),
@@ -770,3 +777,242 @@ alter table public.unmatched_questions enable row level security;
 drop policy if exists unmatched_questions_insert_own on public.unmatched_questions;
 create policy unmatched_questions_insert_own on public.unmatched_questions
   for insert with check (owner_email is null or lower(owner_email) = public.ghosti_current_email());
+
+-- ============================================================================
+-- 📸 사진 공유방 『방식 A — 24시간 무중단 열람형』 정식 스키마 (2026-11-19 멀린님 최종 확정 · 강령 제18조 정규 컬럼 준수)
+-- ----------------------------------------------------------------------------
+-- 확정 원칙:
+-- 1. 방장이 PC를 끄거나 폰 화면이 잠겨 있어도 카톡 초대 링크(?invite=...&token=...) 클릭 즉시 0.3~0.8초 내에
+--    해당 방(room_id)의 공유 사진 전체 13KB 썸네일·인물 동그란 문패·검색 인덱스·댓글/하트(읽기)·친근한 촬영일/지역명이 100% 열람됨.
+-- 2. 고화질 원본(5~20MB)은 본 테이블에 저장하지 않고 기기 간 P2P 직결([🔄 원본 동기화])로만 전송함.
+-- 3. 계정별·방별 100% 격리: 초대 토큰이 없거나 멤버가 아닌 제3자에게는 타 계정/타 방 사진이 단 1장도 노출되지 않음 (localStorage 전역 공유 금지).
+-- 4. 무가입 프리뷰(ghosti_get_guest_preview_room RPC)에서는 주거지 특정 위험이 있는 정밀 GPS 좌표(gps_lat, gps_lng)와 업로더 이메일을 원천 제외함.
+-- ============================================================================
+
+create table if not exists public.ghosti_room_shared_photos (
+  id uuid primary key default gen_random_uuid(),
+  room_id text not null references public.ghosti_lounge_rooms(room_id) on delete cascade,
+  uploader_user_id uuid references public.users(id) on delete set null,
+  uploader_email text not null,
+  uploader_nickname text not null,
+  dhash_64 text,
+  -- 13KB 초경량 WebP 썸네일 Data URL 또는 보유 Cloudflare R2 썸네일 URL (5MB 고화질 원본 저장 금지)
+  thumb_webp_url text not null,
+  caption_ko text not null default '',
+  keywords_ko text[] not null default '{}',
+  face_person_names text[] not null default '{}',
+  -- 무가입 프리뷰 공개용 친근한 촬영일·대표 지역명 (예: '2024년 8월', '강릉 경포대')
+  shot_date_display text,
+  shot_place_display text,
+  -- 정식 합류 멤버 전용 정밀 좌표 (무가입 프리뷰 RPC에서는 절대 반환하지 않음)
+  gps_lat double precision,
+  gps_lng double precision,
+  width_px integer not null default 0,
+  height_px integer not null default 0,
+  original_byte_size bigint not null default 0,
+  has_original_exif boolean not null default false,
+  is_hidden_by_master boolean not null default false,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now()
+);
+
+create index if not exists idx_ghosti_room_shared_photos_room_created
+  on public.ghosti_room_shared_photos (room_id, created_at desc)
+  where is_hidden_by_master = false;
+
+create index if not exists idx_ghosti_room_shared_photos_room_dhash
+  on public.ghosti_room_shared_photos (room_id, dhash_64)
+  where dhash_64 is not null;
+
+drop trigger if exists trg_ghosti_room_shared_photos_touch on public.ghosti_room_shared_photos;
+create trigger trg_ghosti_room_shared_photos_touch
+  before update on public.ghosti_room_shared_photos
+  for each row execute function public.ghosti_touch_updated_at();
+
+alter table public.ghosti_room_shared_photos enable row level security;
+
+drop policy if exists ghosti_room_shared_photos_member_select on public.ghosti_room_shared_photos;
+create policy ghosti_room_shared_photos_member_select on public.ghosti_room_shared_photos
+  for select using (
+    is_hidden_by_master = false
+    and public.ghosti_is_room_member(room_id)
+  );
+
+drop policy if exists ghosti_room_shared_photos_member_insert on public.ghosti_room_shared_photos;
+create policy ghosti_room_shared_photos_member_insert on public.ghosti_room_shared_photos
+  for insert with check (
+    public.ghosti_is_room_member(room_id)
+    and lower(uploader_email) = public.ghosti_current_email()
+  );
+
+drop policy if exists ghosti_room_shared_photos_owner_or_admin_update on public.ghosti_room_shared_photos;
+create policy ghosti_room_shared_photos_owner_or_admin_update on public.ghosti_room_shared_photos
+  for update using (
+    public.ghosti_is_room_admin(room_id)
+    or (
+      lower(uploader_email) = public.ghosti_current_email()
+      and created_at >= (now() - interval '24 hours')
+    )
+  );
+
+drop policy if exists ghosti_room_shared_photos_owner_24h_delete on public.ghosti_room_shared_photos;
+create policy ghosti_room_shared_photos_owner_24h_delete on public.ghosti_room_shared_photos
+  for delete using (
+    lower(uploader_email) = public.ghosti_current_email()
+    and created_at >= (now() - interval '24 hours')
+  );
+
+create table if not exists public.ghosti_room_photo_comments (
+  id uuid primary key default gen_random_uuid(),
+  room_id text not null references public.ghosti_lounge_rooms(room_id) on delete cascade,
+  photo_id uuid not null references public.ghosti_room_shared_photos(id) on delete cascade,
+  author_user_id uuid references public.users(id) on delete set null,
+  author_email text not null,
+  author_nickname text not null,
+  body text not null check (char_length(body) between 1 and 500),
+  created_at timestamptz not null default now()
+);
+
+create index if not exists idx_ghosti_room_photo_comments_room_photo
+  on public.ghosti_room_photo_comments (room_id, photo_id, created_at asc);
+
+alter table public.ghosti_room_photo_comments enable row level security;
+
+drop policy if exists ghosti_room_photo_comments_member_select on public.ghosti_room_photo_comments;
+create policy ghosti_room_photo_comments_member_select on public.ghosti_room_photo_comments
+  for select using (public.ghosti_is_room_member(room_id));
+
+drop policy if exists ghosti_room_photo_comments_member_insert on public.ghosti_room_photo_comments;
+create policy ghosti_room_photo_comments_member_insert on public.ghosti_room_photo_comments
+  for insert with check (
+    public.ghosti_is_room_member(room_id)
+    and lower(author_email) = public.ghosti_current_email()
+  );
+
+drop policy if exists ghosti_room_photo_comments_author_or_admin_delete on public.ghosti_room_photo_comments;
+create policy ghosti_room_photo_comments_author_or_admin_delete on public.ghosti_room_photo_comments
+  for delete using (
+    lower(author_email) = public.ghosti_current_email()
+    or public.ghosti_is_room_admin(room_id)
+  );
+
+create table if not exists public.ghosti_room_photo_reactions (
+  id uuid primary key default gen_random_uuid(),
+  room_id text not null references public.ghosti_lounge_rooms(room_id) on delete cascade,
+  photo_id uuid not null references public.ghosti_room_shared_photos(id) on delete cascade,
+  reactor_email text not null,
+  reactor_nickname text not null,
+  reaction_type text not null default 'heart' check (reaction_type in ('heart')),
+  created_at timestamptz not null default now(),
+  unique (photo_id, reactor_email, reaction_type)
+);
+
+create index if not exists idx_ghosti_room_photo_reactions_room_photo
+  on public.ghosti_room_photo_reactions (room_id, photo_id);
+
+alter table public.ghosti_room_photo_reactions enable row level security;
+
+drop policy if exists ghosti_room_photo_reactions_member_select on public.ghosti_room_photo_reactions;
+create policy ghosti_room_photo_reactions_member_select on public.ghosti_room_photo_reactions
+  for select using (public.ghosti_is_room_member(room_id));
+
+drop policy if exists ghosti_room_photo_reactions_member_insert on public.ghosti_room_photo_reactions;
+create policy ghosti_room_photo_reactions_member_insert on public.ghosti_room_photo_reactions
+  for insert with check (
+    public.ghosti_is_room_member(room_id)
+    and lower(reactor_email) = public.ghosti_current_email()
+  );
+
+drop policy if exists ghosti_room_photo_reactions_own_delete on public.ghosti_room_photo_reactions;
+create policy ghosti_room_photo_reactions_own_delete on public.ghosti_room_photo_reactions
+  for delete using (lower(reactor_email) = public.ghosti_current_email());
+
+-- [무가입 1초 프리뷰 전용 SECURITY DEFINER 읽기 RPC]
+-- 유효한 초대 토큰(p_invite_token) 보유자(anon 포함)에게만 해당 방(room_id)의 13KB 썸네일·검색 인덱스·인물 문패·댓글/하트(읽기)·친근한 촬영일시를 반환.
+-- 정밀 GPS 좌표(gps_lat, gps_lng), 업로더 이메일, 타 방 사진은 원천 차단됨.
+create or replace function public.ghosti_get_guest_preview_room(p_invite_token text)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_room_id text;
+  v_room record;
+  v_photos jsonb;
+begin
+  select i.room_id into v_room_id
+    from public.ghosti_room_invites i
+   where i.token = trim(coalesce(p_invite_token, ''))
+     and i.revoked_at is null
+     and i.expires_at > now()
+   limit 1;
+
+  if v_room_id is null then
+    return jsonb_build_object('ok', false, 'reason', 'INVALID_OR_EXPIRED_INVITE');
+  end if;
+
+  select r.room_id, r.lounge_type, r.sub_type, r.room_title
+    into v_room
+    from public.ghosti_lounge_rooms r
+   where r.room_id = v_room_id;
+
+  if not found then
+    return jsonb_build_object('ok', false, 'reason', 'ROOM_NOT_FOUND');
+  end if;
+
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'id', p.id,
+        'roomId', p.room_id,
+        'uploaderNickname', p.uploader_nickname,
+        'thumbWebpUrl', p.thumb_webp_url,
+        'captionKo', p.caption_ko,
+        'keywordsKo', p.keywords_ko,
+        'facePersonNames', p.face_person_names,
+        'shotDateDisplay', p.shot_date_display,
+        'shotPlaceDisplay', p.shot_place_display,
+        'widthPx', p.width_px,
+        'heightPx', p.height_px,
+        'createdAt', p.created_at,
+        'heartCount', (
+          select count(*)::int
+            from public.ghosti_room_photo_reactions rx
+           where rx.photo_id = p.id
+        ),
+        'comments', coalesce((
+          select jsonb_agg(
+            jsonb_build_object(
+              'id', c.id,
+              'authorNickname', c.author_nickname,
+              'body', c.body,
+              'createdAt', c.created_at
+            ) order by c.created_at asc
+          )
+            from public.ghosti_room_photo_comments c
+           where c.photo_id = p.id
+        ), '[]'::jsonb)
+      ) order by p.created_at desc
+    ),
+    '[]'::jsonb
+  )
+    into v_photos
+    from public.ghosti_room_shared_photos p
+   where p.room_id = v_room_id
+     and p.is_hidden_by_master = false;
+
+  return jsonb_build_object(
+    'ok', true,
+    'room', jsonb_build_object(
+      'roomId', v_room.room_id,
+      'loungeType', v_room.lounge_type,
+      'subType', v_room.sub_type,
+      'roomTitle', v_room.room_title
+    ),
+    'photos', v_photos
+  );
+end;
+$$;
+
+grant execute on function public.ghosti_get_guest_preview_room(text) to anon, authenticated;
