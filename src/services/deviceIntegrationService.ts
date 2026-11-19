@@ -69,11 +69,28 @@ export interface RemoteMonitorCastPacket {
 
 const THIS_DEVICE_ID_KEY = 'ghosti_this_device_uuid_v1';
 const SEEN_CLIPS_STORAGE_KEY = 'ghosti_seen_clip_hashes_v1';
-const CACHED_RECEIVED_CLIPS_KEY = 'ghosti_received_e2ee_clips_v1';
+const CACHED_RECEIVED_CLIPS_PREFIX = 'ghosti_received_e2ee_clips_v2::';
 
 const seenClipHashes = new Set<string>();
 const uploadedMirrorHashes = new Set<string>();
 const pulledMirrorHashes = new Set<string>();
+
+function resolveScopedClipStorageKey(explicitEmail?: string): string | null {
+  if (typeof window === 'undefined' || !hasAuthenticatedHubAccountSession()) return null;
+  try {
+    const email = (
+      explicitEmail ||
+      localStorage.getItem('ghosti_hub_user_email') ||
+      localStorage.getItem('userEmail') ||
+      ''
+    )
+      .trim()
+      .toLowerCase();
+    return email ? `${CACHED_RECEIVED_CLIPS_PREFIX}${email}` : null;
+  } catch {
+    return null;
+  }
+}
 
 function loadSeenHashesOnce(): void {
   if (seenClipHashes.size > 0 || typeof window === 'undefined') return;
@@ -106,10 +123,14 @@ function rememberSeenClipHash(hash: string): void {
   }
 }
 
-export function loadCachedSyncedClips(): GhostiSyncedClipItem[] {
+export function loadCachedSyncedClips(explicitEmail?: string): GhostiSyncedClipItem[] {
   if (typeof window === 'undefined') return [];
   try {
-    const raw = localStorage.getItem(CACHED_RECEIVED_CLIPS_KEY);
+    // 구형 무격리 전역 키 즉시 소거 (계정 간 클립보드 혼입 방지)
+    localStorage.removeItem('ghosti_received_e2ee_clips_v1');
+    const scopedKey = resolveScopedClipStorageKey(explicitEmail);
+    if (!scopedKey) return [];
+    const raw = localStorage.getItem(scopedKey);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? (parsed as GhostiSyncedClipItem[]).slice(0, 15) : [];
@@ -118,10 +139,12 @@ export function loadCachedSyncedClips(): GhostiSyncedClipItem[] {
   }
 }
 
-function saveCachedSyncedClips(items: GhostiSyncedClipItem[]): void {
+function saveCachedSyncedClips(items: GhostiSyncedClipItem[], explicitEmail?: string): void {
   if (typeof window === 'undefined') return;
   try {
-    localStorage.setItem(CACHED_RECEIVED_CLIPS_KEY, JSON.stringify(items.slice(0, 15)));
+    const scopedKey = resolveScopedClipStorageKey(explicitEmail);
+    if (!scopedKey) return;
+    localStorage.setItem(scopedKey, JSON.stringify(items.slice(0, 15)));
   } catch {
     /* ignore */
   }
@@ -946,13 +969,14 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         const data = (await res.json()) as {
           ok?: boolean;
           text?: string;
+          clipHash?: string;
           sha256?: string;
           isSelfInjected?: boolean;
         };
         if (!data?.ok || !data.text || data.isSelfInjected) return;
         const clean = data.text.trim();
         if (!clean || clean.length > 32000) return;
-        const h = data.sha256 || (await sha256HexBrowser(clean));
+        const h = data.clipHash || data.sha256 || (await sha256HexBrowser(clean));
         if (seenClipHashes.has(h)) return;
         await pushCrossDeviceClipboardText({
           text: clean,

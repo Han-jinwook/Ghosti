@@ -699,8 +699,9 @@ create policy ghosti_realtime_receive on realtime.messages
     realtime.messages.extension = 'broadcast'
     and (
       (realtime.topic() like 'ghosti:room:%'
-        and public.ghosti_is_room_member(substring(realtime.topic() from 11)))
+        and public.ghosti_is_room_member(substring(realtime.topic() from 13)))
       or realtime.topic() = 'ghosti:pair:' || public.ghosti_current_email()
+      or realtime.topic() = 'ghosti:pair:' || substr(encode(sha256(convert_to(public.ghosti_current_email(), 'UTF8')), 'hex'), 1, 24)
     )
   );
 
@@ -711,8 +712,9 @@ create policy ghosti_realtime_send on realtime.messages
     realtime.messages.extension = 'broadcast'
     and (
       (realtime.topic() like 'ghosti:room:%'
-        and public.ghosti_is_room_member(substring(realtime.topic() from 11)))
+        and public.ghosti_is_room_member(substring(realtime.topic() from 13)))
       or realtime.topic() = 'ghosti:pair:' || public.ghosti_current_email()
+      or realtime.topic() = 'ghosti:pair:' || substr(encode(sha256(convert_to(public.ghosti_current_email(), 'UTF8')), 'hex'), 1, 24)
     )
   );
 

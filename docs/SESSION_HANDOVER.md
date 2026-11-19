@@ -2,12 +2,18 @@
 
 ---
 
-## 🕒 [2026-11-20 04:05 KST `3귀신` 인계 및 AI DB 추적 Todo 박제]
+## 🕒 [2026-11-20 05:22 KST `3귀신` 인계 및 AI DB 추적 Todo 박제 (`Z-Core v2.5.19` · `Mobile v1.0.39`)]
 
-- **세션 창 제목**: `사진공유2주TTL·업무S완결`
+- **세션 창 제목**: `3귀신검토보완·QA출제완결`
 
 ### 1. 이번 세션에서 완료한 핵심 작업 요약 (`3귀신` 사진공유·기기통합·업무공유 S: 전담)
-1. **[사진 공유방 『14일(2주) 초대 골든타임 마중물 버퍼(TTL) + 합류 멤버 기기 로컬 영구 금고(`IndexedDB`) + 재초대 1초 자동 재장전(`Re-Seed`)』 즉시 적용 완결]**:
+1. **[`1귀신` 즉시실행 공문(`ed9ef30`) 전수 코드 교차 검토 & 4대 실전 엣지케이스 즉시 보완 (`Z-Core v2.5.19` 전 클러스터 배포) + `[3귀신]` 노션 QA 미션 정비·출제 완결]**:
+   - **결함 보완 ① (`universal_z_core/seq_paste_daemon.py` ➔ `Z-Core v2.5.19`)**: `[2. 순수 개인 모드]`(`S:` 언마운트)에서 독립 `👻 귀신검색창` 로컬 검색기가 여전히 `%LOCALAPPDATA%\Merlin\업무공유폴더_S`를 훑던 누락을 발견하여 `Path("S:\\").exists()`일 때만 스캔하도록 수정, 업무 파일 혼입 `0.00%` 완결 후 `v2.5.19` 서명 빌드 및 `1~6호기` 배포 완료.
+   - **결함 보완 ② (`supabase/ghosti_zero_cloud_schema.sql`)**: Realtime Private Channel RLS 정책에서 `'ghosti:room:'`(12자)을 `from 11`(`'m:room_...'`)로 자르던 오프바이원 버그를 `substring(... from 13)`으로 정정하고, `ghosti:pair:<emailHash>` SHA-256 24자리 해시 토픽 인가 조건을 정합화.
+   - **결함 보완 ③ (`src/services/deviceIntegrationService.ts`)**: E2EE 클립보드 로컬 캐시를 계정 이메일별 스코프 키(`ghosti_received_e2ee_clips_v2::<email>`)로 분리·격리하여 로그아웃/계정 전환 시 클립보드 노출을 차단하고, Z-코어 폴링 시 `data.clipHash` 직접 매칭 반영.
+   - **결함 보완 ④ (`netlify/functions/lib/workAndDeviceBridgeOps.mjs`)**: `work_delete_file` 시 `ghosti-work-vault` 내 더 이상 참조되지 않는 대용량 바이너리 블롭(`${roomId}/blobs/${sha256}`)도 즉시 `DELETE`하여 스토리지 비대화 원천 차단.
+   - **`[3귀신]` 노션 QA 미션카드 정비(2장) 및 신규 실배선 검증 카드 4장 출제 완료**: 기존 미체크 카드 2건(`41df9ffd-2c1d-810d-af9c-ed2dc9bbbe78`, `41cf9ffd-2c1d-8112-9f93-cceeb160689c`)을 최신 화면 버튼명·`v1.0.39 (39)` 기준으로 다듬고, `6. 업무 공유 S:` 실전 연동 2장(`41df9ffd-2c1d-8130-9334-f996d09f2336`, `41df9ffd-2c1d-8147-9f08-c580dd11fb4a`) + `5. 내 기기 통합` 실전 연동 2장(`41df9ffd-2c1d-81a6-9114-c7c1b7d5d044`, `41df9ffd-2c1d-8158-9279-e8347bb59ece`)을 출제 완료.
+2. **[사진 공유방 『14일(2주) 초대 골든타임 마중물 버퍼(TTL) + 합류 멤버 기기 로컬 영구 금고(`IndexedDB`) + 재초대 1초 자동 재장전(`Re-Seed`)』 즉시 적용 완결 (`e10e141`)]**:
    - **`src/services/sharedRoomLocalVault.ts` 신설**: 정식 로그인 합류 멤버 전용 계정·방 격리 로컬 영구 금고(`ghosti_shared_room_local_vault_v1` — `${lowercasedEmail}::${roomId}`) 구축. 비로그인 카톡 게스트는 로컬 `IndexedDB` 읽기/쓰기 `0 Byte`로 창 종료 시 흔적 0건 소멸 보장.
    - **`src/services/sharedPhotoRoomSupabase.ts` & `FreePhotoShareLounge.tsx` & `netlify/functions/hub-supabase-bridge.mjs` & `supabase/ghosti_zero_cloud_schema.sql`**:
      - `SHARED_PHOTO_SEED_BUFFER_TTL_DAYS = 14` 적용: 서버 `ghosti_room_shared_photos`는 초대 후 14일(2주) 동안만 13KB WebP 마중물을 유지하고, 14일 경과분은 서버 브릿지(`hub-supabase-bridge.mjs` `service_role` 무인 청소) · DB RPC(`ghosti_purge_expired_photo_seed_buffer`) · 클라이언트 동기화에서 자동 소거되어 평생 0원 무료 서비스의 서버 DB 비대화를 원천 차단.

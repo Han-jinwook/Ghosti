@@ -69,11 +69,11 @@
 
 ---
 
-## 🧩 [확정 추가] 단일 표준 포트(`127.0.0.1:5199`) 내장 소프트웨어 플러그인 7종 상세 입출력 아키텍처 (`merlin_z_core_daemon.py` v2.5.9)
+## 🧩 [확정 추가] 단일 표준 포트(`127.0.0.1:5199`) 내장 소프트웨어 플러그인 7종 상세 입출력 아키텍처 (`merlin_z_core_daemon.py` v2.5.19)
 
 ### 1. 왜 단일 포트(`5199`) + 내장 소프트웨어 플러그인(`Built-in Software Plugins`)인가?
 - 유저가 귀신같이·센스톡·어그로필터·썬드리머 스튜디오를 쓸 때마다 별도 설치파일을 2중으로 설치하거나 포트를 나누면 방화벽 경고와 포트 충돌이 발생합니다.
-- 따라서 단일 설치파일 **`Merlin_Z_Core_Setup.exe` (`v2.5.9`, 실행 즉시 `%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe` 영구 경로 자동 동기화)** 내부에 소프트웨어 플러그인(`plugin_ghosti_os.py`, `plugin_paid_work_sdrive.py`, `plugin_paid_sync_ghostwin.py`, `plugin_ghosti_care_suite.py`, `plugin_ghosti_superpowers.py`, `plugin_senstalk.py`, `plugin_aggrofilter.py`) 및 `seq_paste_daemon.py`(`--seq-paste-daemon`)를 기본 내장하고, `ThreadingHTTPServer` 멀티스레드 비동기 서버로 **단일 표준 포트 `http://127.0.0.1:5199`**에서 모든 패밀리 앱 요청을 병렬 처리합니다.
+- 따라서 단일 설치파일 **`Merlin_Z_Core_Setup.exe` (`v2.5.19`, 실행 즉시 `%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe` 영구 경로 자동 동기화)** 내부에 소프트웨어 플러그인(`plugin_ghosti_os.py`, `plugin_paid_work_sdrive.py`, `plugin_paid_sync_ghostwin.py`, `plugin_ghosti_care_suite.py`, `plugin_ghosti_superpowers.py`, `plugin_senstalk.py`, `plugin_aggrofilter.py`) 및 `seq_paste_daemon.py`(`--seq-paste-daemon`)를 기본 내장하고, `ThreadingHTTPServer` 멀티스레드 비동기 서버로 **단일 표준 포트 `http://127.0.0.1:5199`**에서 모든 패밀리 앱 요청을 병렬 처리합니다.
 
 ### 2. 표준 라우팅 테이블 및 JSON 입출력 규격 (`merlin_z_core_daemon.py` 직결)
 

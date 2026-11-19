@@ -542,6 +542,7 @@ export async function handleAuthedWorkAndDeviceAction({
     );
     const filesMap = manifest.filesByRelPath || {};
     const tombstones = manifest.deletedTombstones || {};
+    const removedEntry = filesMap[relPath];
     delete filesMap[relPath];
     tombstones[relPath] = {
       deletedAt: new Date().toISOString(),
@@ -553,6 +554,21 @@ export async function handleAuthedWorkAndDeviceAction({
       deletedTombstones: tombstones,
     };
     await writeStorageJson(supabaseUrl, serviceKey, WORK_BUCKET, `${roomId}/index_v1.json`, nextManifest);
+    // 삭제된 대용량 파일의 고아 바이너리 블롭(ghosti-work-vault)도 즉시 제거하여 영구 스토리지 비대화 차단
+    if (removedEntry?.sha256) {
+      const stillReferenced = Object.values(filesMap).some(
+        (f) => f && f.sha256 === removedEntry.sha256
+      );
+      if (!stillReferenced) {
+        const cleanSha = String(removedEntry.sha256).replace(/[^a-fA-F0-9_.-]/g, '').slice(0, 80);
+        if (cleanSha) {
+          await fetch(`${supabaseUrl}/storage/v1/object/${WORK_BUCKET}/${roomId}/blobs/${cleanSha}`, {
+            method: 'DELETE',
+            headers: srvHeaders(serviceKey),
+          }).catch(() => {});
+        }
+      }
+    }
     const { files, deletedTombstones } = formatManifestForClient(nextManifest);
     return { status: 200, body: { ok: true, relPath, files, deletedTombstones } };
   }

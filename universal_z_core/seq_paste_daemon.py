@@ -2715,20 +2715,10 @@ def _resolve_win_known_folder_safe(guid_str: str) -> Path | None:
 def _get_known_user_folders_for_search() -> list[Path]:
     home = Path.home()
     raw_cands: list[Path] = []
-    # [0순위: 업무 공유 S: 드라이브 직결] S:\ 마운트 경로 및 업무공유폴더_S를 최우선 스캔 루트에 편입
+    # [0순위: 업무 공유 S: 드라이브 직결] S:\가 실제 마운트된 업무공유 활성 상태일 때만 편입 ([2. 순수 개인 모드] 전환 시 업무 파일 혼입 0% 보장)
     try:
         if Path("S:\\").exists():
             raw_cands.append(Path("S:\\"))
-        local_app = Path(os.environ.get("LOCALAPPDATA") or (home / "AppData" / "Local"))
-        s_cfg_p = local_app / "Merlin" / "work_sdrive_config.json"
-        if s_cfg_p.exists():
-            s_cfg = json.loads(s_cfg_p.read_text(encoding="utf-8", errors="ignore"))
-            if isinstance(s_cfg, dict) and s_cfg.get("targetDir"):
-                raw_cands.append(Path(str(s_cfg["targetDir"])))
-        raw_cands.append(local_app / "Merlin" / "업무공유폴더_S")
-        repo_work_cand = Path(__file__).resolve().parent.parent / "업무공유폴더_S"
-        if repo_work_cand.exists():
-            raw_cands.append(repo_work_cand)
     except Exception:
         pass
     # Win32 KnownFolders: Desktop, Downloads, Documents, Pictures, Videos
