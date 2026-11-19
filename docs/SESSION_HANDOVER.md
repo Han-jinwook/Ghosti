@@ -2,6 +2,31 @@
 
 ---
 
+## 🕒 [2026-11-20 04:05 KST `3귀신` 인계 및 AI DB 추적 Todo 박제]
+
+- **세션 창 제목**: `사진공유2주TTL·업무S완결`
+
+### 1. 이번 세션에서 완료한 핵심 작업 요약 (`3귀신` 사진공유·기기통합·업무공유 S: 전담)
+1. **[사진 공유방 『14일(2주) 초대 골든타임 마중물 버퍼(TTL) + 합류 멤버 기기 로컬 영구 금고(`IndexedDB`) + 재초대 1초 자동 재장전(`Re-Seed`)』 즉시 적용 완결]**:
+   - **`src/services/sharedRoomLocalVault.ts` 신설**: 정식 로그인 합류 멤버 전용 계정·방 격리 로컬 영구 금고(`ghosti_shared_room_local_vault_v1` — `${lowercasedEmail}::${roomId}`) 구축. 비로그인 카톡 게스트는 로컬 `IndexedDB` 읽기/쓰기 `0 Byte`로 창 종료 시 흔적 0건 소멸 보장.
+   - **`src/services/sharedPhotoRoomSupabase.ts` & `FreePhotoShareLounge.tsx` & `netlify/functions/hub-supabase-bridge.mjs` & `supabase/ghosti_zero_cloud_schema.sql`**:
+     - `SHARED_PHOTO_SEED_BUFFER_TTL_DAYS = 14` 적용: 서버 `ghosti_room_shared_photos`는 초대 후 14일(2주) 동안만 13KB WebP 마중물을 유지하고, 14일 경과분은 서버 브릿지(`hub-supabase-bridge.mjs` `service_role` 무인 청소) · DB RPC(`ghosti_purge_expired_photo_seed_buffer`) · 클라이언트 동기화에서 자동 소거되어 평생 0원 무료 서비스의 서버 DB 비대화를 원천 차단.
+     - 정식 합류 멤버는 서버 마중물이 2주 뒤 소거된 이후에도 본인 기기 `IndexedDB`에서 0.05초 만에 전체 사진을 평생 열람·검색하며, 몇 달 뒤 `[💌 초대 링크 복사]` 클릭 시 `reseedRoomPhotosForInvite`가 빠진 13KB 썸네일을 1초 만에 서버 마중물로 자동 재장전(신규 14일 TTL 부여).
+2. **[`💼 업무 공유 (S: 드라이브)` 네이티브 `Z-Core v2.4.89` 완결 & `Zero-Cloud(서버 DB 점유 0 Byte)` 원안 정합화 (`3570af5` + 후속 정화)]**:
+   - `universal_z_core/os_agent/plugins/plugin_paid_work_sdrive.py` 내장 및 1~6호기 `Z-Core v2.4.89` 배포 완료 (`subst S:` 자동 마운트, `~$` 오피스/한글 `.lck`/Win32 열람 잠금 감지, `S:\`의 `👻 귀신검색창` 0순위 본문 색인 편입, 바탕화면·탐색기 빈 공간 `Ctrl+0` 1회 `👻 귀신검색창` 직행 `안 A` 원안 복원).
+   - 미승인 업무 문서 서버 테이블을 스키마·서비스·컴포넌트에서 100% 제거하고, 원안 그대로 `Realtime Broadcast`(`ghosti:work:<roomId>`) 메모리 직결 + 팀원 기기 로컬 `IndexedDB` `<= 30KB` 미리보기 캐시(`loadCachedWorkRoomPreview` / `cacheWorkRoomPreviewLocally`)로 정합화 완료.
+3. **[노션 QA 미션 추가 & 전사 강령 제19조 박제]**:
+   - `[3귀신] [UX]` 사진공유·기기통합·업무공유 S: 미션 카드 5장(각 2항목) 및 `[2귀신] [UX]` 탐색기·바탕화면 빈 공간 `Ctrl+0` 1회 `👻 귀신검색창` 직행 원안 점검 카드 1장 출제 완료 (※ 2주 TTL 만료 건은 멀린님 지시대로 노션 알바 QA 카드 미출제).
+   - 비서(`Secretary`) 우체국 전달을 통해 전사 강령 제19조에 『기획안 이탈 코딩 시 멀린님 사전 상의 필수』 대원칙 박제 완료(`26f9442`).
+
+### 2. 🚨 [AI 에이전트 직접 DB 추적·실증 필수 Todo (노션 QA 미출제 · 에이전트 전담)]
+- **🚨 [2026-12-03 ~ 2026-12-04 (적용 2주 경과 시점) 필수 실행 Todo]**:
+  - **검증 명령어**: `python tools/check_photo_buffer_ttl.py` (만료 행 즉시 소거 테스트 시 `--purge` 추가)
+  - **합격 기준**: `Netlify Hub-Supabase-Bridge (service_role 전수 집계)` 리포트에서 **14일(2주) 초과 만료 마중물(`expiredOver14dRows`) = `0건`** 실증 확인 후 멀린님께 1줄 결과 보고!
+  - *(수시 점검 가능: 체크인 시 언제든 `python tools/check_photo_buffer_ttl.py`로 현재 방별 마중물 보유 수량 및 최고령 `created_at` 추적 가능)*
+
+---
+
 ## 🕒 [2026-11-19 16:10 KST `2귀신` 체크아웃 인계 기록 (`발견된 버그` 0건 전수 완결)]
 
 - **세션 창 제목**: `2귀신버그0건Z코어2479완결`

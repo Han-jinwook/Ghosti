@@ -3,9 +3,12 @@ import {
   ensureGhostiAuthedSupabaseClient,
   ensureGhostiPublicSupabaseClient,
   hasAuthenticatedHubAccountSession,
-  readGhostiAuthedJwtClaims,
   supabase,
 } from './supabaseClient';
+import {
+  loadLocalWorkRoomDocs,
+  saveLocalWorkRoomDocs,
+} from './sharedRoomLocalVault';
 import { getZCoreUrl, zCoreBridge } from './zCoreBridge';
 
 export interface WorkLoungeDocDto {
@@ -527,91 +530,21 @@ export async function openGhostSearchForWorkSDrive(query?: string): Promise<bool
   }
 }
 
-export async function fetchWorkRoomCloudPreview(inviteToken: string): Promise<{
-  ok: boolean;
-  roomTitle?: string;
-  hostNickname?: string;
-  docs: WorkLoungeDocDto[];
-}> {
-  const cleanToken = (inviteToken || '').trim();
-  if (!cleanToken) return { ok: false, docs: [] };
-  const pubOk = await ensureGhostiPublicSupabaseClient();
-  if (!pubOk || !supabase) return { ok: false, docs: [] };
-  try {
-    const { data, error } = await supabase.rpc('ghosti_get_work_room_preview', {
-      p_invite_token: cleanToken,
-    });
-    if (error || !data) return { ok: false, docs: [] };
-    const payload = data as {
-      ok?: boolean;
-      room?: { roomTitle?: string; hostNickname?: string };
-      files?: Array<Record<string, unknown>>;
-    };
-    if (!payload.ok || !Array.isArray(payload.files)) {
-      return { ok: false, docs: [] };
-    }
-    return {
-      ok: true,
-      roomTitle: payload.room?.roomTitle,
-      hostNickname: payload.room?.hostNickname,
-      docs: payload.files.map((f, idx) => mapRawWorkFileToDto(f, idx)),
-    };
-  } catch {
-    return { ok: false, docs: [] };
-  }
+/**
+ * [업무 공유(S:) 원안 엄수 — Zero-Cloud (서버 DB 점유 0 Byte) 로컬 30KB 미리보기 캐시]
+ * - 업무 공유방 문서·표·본문·바이너리는 Supabase 서버 DB 테이블에 절대 저장하지 않습니다.
+ * - 방장↔팀원 간 실시간 파일·잠금(~$)은 메모리 패스스루(Realtime Broadcast)로만 직결 중계되며,
+ *   대장 PC 오프라인 대비용 30KB 이하 경량 텍스트/표 미리보기만 각 팀원 기기 로컬 IndexedDB에 보관됩니다.
+ */
+export async function loadCachedWorkRoomPreview(roomId: string): Promise<WorkLoungeDocDto[]> {
+  return loadLocalWorkRoomDocs<WorkLoungeDocDto>(roomId);
 }
 
-let workTableMissingFlag = false;
-
-export async function upsertWorkFilesToSupabase(opts: {
-  roomId: string;
-  docs: WorkLoungeDocDto[];
-  actorNickname: string;
-}): Promise<void> {
-  if (workTableMissingFlag || !opts.roomId || opts.docs.length === 0) return;
-  if (!hasAuthenticatedHubAccountSession()) return;
-  const authedOk = await ensureGhostiAuthedSupabaseClient();
-  if (!authedOk || !supabase) return;
-  const claims = readGhostiAuthedJwtClaims();
-  const actorEmail = (claims?.email || '').trim().toLowerCase();
-  if (!actorEmail) return;
-
-  const rows = opts.docs.slice(0, 120).map((d) => ({
-    room_id: opts.roomId,
-    rel_path: d.relPath,
-    folder_id: d.folderId,
-    folder_path: d.folderPath,
-    file_name: d.fileName,
-    file_ext: d.ext,
-    byte_size: d.byteSize,
-    sha256_hex: d.sha256,
-    uploader_email: actorEmail,
-    uploader_nickname: d.author || opts.actorNickname,
-    summary_title: d.summaryTitle,
-    matched_snippet: d.matchedSnippet.slice(0, 400),
-    full_text_preview: d.fullTextPreview.slice(0, 12000),
-    table_headers: d.tableHeaders,
-    table_rows_json: d.tableRows,
-    is_image: Boolean(d.isImage),
-    thumb_webp_url: d.imageBase64 && d.imageBase64.length <= 36000 ? d.imageBase64 : null,
-    inline_sync_base64:
-      d.inlineSyncBase64 && d.inlineSyncBase64.length <= 720000 ? d.inlineSyncBase64 : null,
-    locked_by_email: d.lockedBy ? actorEmail : null,
-    locked_by_nickname: d.lockedBy,
-    locked_at: d.lockedBy ? new Date().toISOString() : null,
-    file_mtime: d.fileMtimeIso,
-  }));
-
-  try {
-    const { error } = await supabase
-      .from('ghosti_room_work_files')
-      .upsert(rows, { onConflict: 'room_id,rel_path' });
-    if (error && (error.code === 'PGRST205' || error.code === '42P01')) {
-      workTableMissingFlag = true;
-    }
-  } catch {
-    /* ignore transient network error */
-  }
+export async function cacheWorkRoomPreviewLocally(
+  roomId: string,
+  docs: WorkLoungeDocDto[]
+): Promise<void> {
+  await saveLocalWorkRoomDocs<WorkLoungeDocDto>(roomId, docs);
 }
 
 export function connectWorkRoomRealtimeChannel(opts: {
@@ -671,7 +604,9 @@ export function connectWorkRoomRealtimeChannel(opts: {
       })
       .on('broadcast', { event: 'WORK_SNAPSHOT' }, ({ payload }) => {
         if (disposed || !payload?.docs || !Array.isArray(payload.docs)) return;
-        opts.onRemoteSnapshot(payload.docs as WorkLoungeDocDto[]);
+        const incomingDocs = payload.docs as WorkLoungeDocDto[];
+        void saveLocalWorkRoomDocs<WorkLoungeDocDto>(opts.roomId, incomingDocs);
+        opts.onRemoteSnapshot(incomingDocs);
       })
       .on('broadcast', { event: 'WORK_LOCK_UPDATE' }, ({ payload }) => {
         if (disposed || !payload?.locks) return;

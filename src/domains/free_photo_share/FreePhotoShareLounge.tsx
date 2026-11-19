@@ -28,7 +28,10 @@ import {
   readCurrentInviteDisplayMeta,
   resolveDefaultRoomTitle,
 } from '../../services/shareInviteDeepLinkBridge';
-import { ensureMyRoomAndInviteToken } from '../../services/sharedPhotoRoomSupabase';
+import {
+  ensureMyRoomAndInviteToken,
+  reseedRoomPhotosForInvite,
+} from '../../services/sharedPhotoRoomSupabase';
 import { LOUNGE_TABS, PLAN_BADGE_LABELS, HostThreeBodyControlPanel } from '../shared/loungeHelpers';
 import { WorkLoungeB2BHub } from '../paid_work_share/WorkLoungeB2BHub';
 
@@ -67,6 +70,27 @@ async function issueAuthenticatedInviteHttpsUrl(opts: {
       .getState()
       .showToast('⚠️ 공유방 초대 토큰 발급 중 일시적 오류가 발생했습니다. 다시 눌러주세요.');
     return null;
+  }
+  // 2주(14일) 경과로 서버 마중물 버퍼가 비워진 뒤 재초대할 때도 1초 만에 로컬 금고(IndexedDB) 썸네일을 자동 재장전(Re-Seed)
+  if (ensured.roomId) {
+    const fallbackRoomPhotos = resolveLoungePhotoCorpus({
+      activeLoungeType: opts.loungeType,
+      activeFamilyRoom: opts.familyRoom,
+      photos: st.photos,
+      sharedRoomHostPhotos: st.sharedRoomHostPhotos,
+      sharedRoomAddedPhotos: st.sharedRoomAddedPhotos,
+    });
+    const reseedJob = reseedRoomPhotosForInvite({
+      roomId: ensured.roomId,
+      loungeType: opts.loungeType,
+      familyRoom: opts.familyRoom,
+      uploaderNickname: hostNick,
+      fallbackPhotos: fallbackRoomPhotos,
+    });
+    await Promise.race([
+      reseedJob,
+      new Promise<void>((resolve) => setTimeout(resolve, 1200)),
+    ]);
   }
   return buildShareRoomInviteHttpsUrl({
     loungeType: opts.loungeType,

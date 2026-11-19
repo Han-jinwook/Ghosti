@@ -6,7 +6,35 @@ import {
   readGhostiAuthedJwtClaims,
   supabase,
 } from './supabaseClient';
+import {
+  loadMemberLocalMultiRoomPhotos,
+  loadMemberLocalRoomPhotos,
+  removeMemberLocalRoomPhotoEverywhere,
+  upsertMemberLocalRoomPhotos,
+} from './sharedRoomLocalVault';
 import { getZCoreUrl } from './zCoreBridge';
+
+/**
+ * [2026-11-20 멀린님 확정 — 사진 공유방 14일(2주) 초대 골든타임 마중물 버퍼(TTL)]
+ * - 서버 DB(ghosti_room_shared_photos)에는 초대 후 14일(2주) 동안만 13KB WebP 마중물 썸네일을 유지하여
+ *   카톡 인앱 무가입 1초 프리뷰를 24시간 무중단 지원하고, 14일 경과분은 자동 만료·소거하여 영구 서버 누적 비용을 0원으로 방어합니다.
+ * - 정식 합류 멤버의 기기에는 로컬 IndexedDB(계정 이메일 + room_id 격리)에 영구 보관되어 2주 뒤에도 0.05초 만에 전체 열람·검색되며,
+ *   몇 달 뒤 다시 [💌 초대 링크 복사]를 누르면 로컬 보관함에서 빠진 13KB 썸네일이 1초 만에 서버 마중물 버퍼로 자동 재장전(Re-Seed)됩니다.
+ */
+export const SHARED_PHOTO_SEED_BUFFER_TTL_DAYS = 14;
+export const SHARED_PHOTO_SEED_BUFFER_TTL_MS =
+  SHARED_PHOTO_SEED_BUFFER_TTL_DAYS * 24 * 60 * 60 * 1000;
+
+export function isWithinSeedBufferTtl(createdAtIso?: string | null): boolean {
+  if (!createdAtIso) return true;
+  const parsedMs = Date.parse(createdAtIso);
+  if (Number.isNaN(parsedMs)) return true;
+  return Date.now() - parsedMs <= SHARED_PHOTO_SEED_BUFFER_TTL_MS;
+}
+
+function buildSeedCutoffIso(): string {
+  return new Date(Date.now() - SHARED_PHOTO_SEED_BUFFER_TTL_MS).toISOString();
+}
 
 interface EnsureRoomRpcResponse {
   ok?: boolean;
@@ -377,7 +405,11 @@ export async function fetchGuestPreviewRoomByToken(inviteToken: string): Promise
     return { ok: false, reason: res.reason || 'INVALID_INVITE', photos: [] };
   }
   const mappedLounge = mapDbRoomToUiLounge(res.room.loungeType, res.room.subType);
-  const items = (res.photos || []).map((row) =>
+  // 14일(2주) 초대 골든타임 마중물 버퍼(TTL) 이내의 유효 행만 카톡 무가입 1초 프리뷰로 노출
+  const activeSeedRows = (res.photos || []).filter((row) =>
+    isWithinSeedBufferTtl(row.createdAt)
+  );
+  const items = activeSeedRows.map((row) =>
     dtoToPhotoItem(row, mappedLounge.loungeType, mappedLounge.familyRoom)
   );
   return {
@@ -391,6 +423,34 @@ export async function fetchGuestPreviewRoomByToken(inviteToken: string): Promise
     },
     photos: items,
   };
+}
+
+async function purgeExpiredSeedPhotosAfterLocalArchive(
+  authed: NonNullable<Awaited<ReturnType<typeof ensureGhostiAuthedSupabaseClient>>>,
+  currentEmail: string,
+  roomIds: string[]
+): Promise<void> {
+  if (!currentEmail || roomIds.length === 0) return;
+  const cutoffIso = buildSeedCutoffIso();
+  try {
+    // 1) DB에 정식 청소 RPC(ghosti_purge_expired_photo_seed_buffer)가 배포된 경우 우선 호출
+    await authed.rpc('ghosti_purge_expired_photo_seed_buffer', {
+      p_room_ids: roomIds,
+    });
+  } catch {
+    /* RPC 미적용 환경은 아래 직접 삭제 쿼리로 즉시 대체 */
+  }
+  try {
+    // 2) 업로더 본인 소유 만료(14일 초과) 마중물 행 즉시 정리
+    await authed
+      .from('ghosti_room_shared_photos')
+      .delete()
+      .in('room_id', roomIds)
+      .eq('uploader_email', currentEmail)
+      .lt('created_at', cutoffIso);
+  } catch {
+    /* ignore transient network error */
+  }
 }
 
 export async function acceptRoomInviteAsLoggedInMember(
@@ -450,6 +510,7 @@ export async function fetchScopedSharedRoomPhotos(opts: {
       }
 
       if (matchesCurrentView) {
+        // 비로그인 게스트: IndexedDB에 단 1 Byte도 남기지 않고 메모리에서만 열람 후 창 닫을 때 0건 소멸 보장
         if (!isLoggedIn) {
           return {
             roomId: previewRes.room.roomId,
@@ -478,16 +539,29 @@ export async function fetchScopedSharedRoomPhotos(opts: {
     return { roomId: null, inviteToken: null, photos: [] };
   }
 
-  // 3. 로그인 상태: 현재 로그인 계정의 자체 방 + 정식 멤버로 합류한 동일 탭 공유방(RLS 검증) 사진을 모두 정식 조회
+  // 3. 로그인 상태: 현재 로그인 계정의 자체 방 + 정식 멤버로 합류한 동일 탭 공유방(RLS 검증) 조회 + 내 기기 로컬 영구 금고(IndexedDB) 동기화
   const authed = await ensureGhostiAuthedSupabaseClient();
+  const currentEmail = resolveCurrentAuthedEmail();
   if (!authed) {
+    if (currentEmail && matchedInvitedRoomMeta?.roomId) {
+      const cached = await upsertMemberLocalRoomPhotos(
+        currentEmail,
+        matchedInvitedRoomMeta.roomId,
+        matchedInvitedRoomPhotos
+      );
+      return {
+        roomId: matchedInvitedRoomMeta.roomId,
+        inviteToken: cleanInviteToken || null,
+        photos: cached,
+      };
+    }
     return {
       roomId: matchedInvitedRoomMeta?.roomId || null,
       inviteToken: cleanInviteToken || null,
       photos: matchedInvitedRoomPhotos,
     };
   }
-  const currentEmail = resolveCurrentAuthedEmail();
+
   const { dbLoungeType, dbSubType } = mapUiLoungeToDbRoom(opts.loungeType, opts.familyRoom);
 
   const ensured = await ensureMyRoomAndInviteToken({
@@ -532,19 +606,32 @@ export async function fetchScopedSharedRoomPhotos(opts: {
     .order('created_at', { ascending: false })
     .limit(200);
 
+  // 오프라인이거나 일시적 네트워크 장애 시에도 합류 멤버는 본인 기기 로컬 금고(IndexedDB)에서 즉시 100% 열람!
   if (error || !Array.isArray(data)) {
+    const localVaultPhotos = currentEmail
+      ? await loadMemberLocalMultiRoomPhotos(currentEmail, accessibleRoomIds)
+      : [];
     return {
       roomId: ensured.roomId || accessibleRoomIds[0],
       inviteToken: ensured.inviteToken || null,
-      photos: matchedInvitedRoomPhotos,
+      photos: localVaultPhotos.length > 0 ? localVaultPhotos : matchedInvitedRoomPhotos,
     };
   }
 
-  const items: PhotoItem[] = data.map((row) =>
-    dtoToPhotoItem(
+  const serverItemsByRoom = new Map<string, PhotoItem[]>();
+  let hasExpiredRowsOnServer = false;
+
+  for (const row of data) {
+    const rId = String(row.room_id || '');
+    if (!rId) continue;
+    const createdStr = String(row.created_at || '');
+    if (!isWithinSeedBufferTtl(createdStr)) {
+      hasExpiredRowsOnServer = true;
+    }
+    const mappedItem = dtoToPhotoItem(
       {
         id: String(row.id),
-        roomId: String(row.room_id),
+        roomId: rId,
         uploaderNickname: String(row.uploader_nickname || '멤버'),
         thumbWebpUrl: String(row.thumb_webp_url || ''),
         captionKo: String(row.caption_ko || ''),
@@ -556,28 +643,60 @@ export async function fetchScopedSharedRoomPhotos(opts: {
         shotPlaceDisplay: (row.shot_place_display as string | null) || null,
         widthPx: Number(row.width_px || 0),
         heightPx: Number(row.height_px || 0),
-        createdAt: String(row.created_at || ''),
+        createdAt: createdStr,
       },
       opts.loungeType,
       opts.familyRoom,
       currentEmail
-    )
-  );
-
-  const seenIds = new Set(items.map((p) => p.id));
-  for (const invPhoto of matchedInvitedRoomPhotos) {
-    if (!seenIds.has(invPhoto.id)) {
-      items.push({ ...invPhoto, sharedOwnerEmail: currentEmail || undefined });
-      seenIds.add(invPhoto.id);
-    }
+    );
+    const list = serverItemsByRoom.get(rId) || [];
+    list.push(mappedItem);
+    serverItemsByRoom.set(rId, list);
   }
 
+  if (matchedInvitedRoomMeta?.roomId && matchedInvitedRoomPhotos.length > 0) {
+    const prevList = serverItemsByRoom.get(matchedInvitedRoomMeta.roomId) || [];
+    const seenIds = new Set(prevList.map((p) => p.id));
+    for (const invPhoto of matchedInvitedRoomPhotos) {
+      if (!seenIds.has(invPhoto.id)) {
+        prevList.push({ ...invPhoto, sharedOwnerEmail: currentEmail || undefined });
+        seenIds.add(invPhoto.id);
+      }
+    }
+    serverItemsByRoom.set(matchedInvitedRoomMeta.roomId, prevList);
+  }
+
+  // 먼저 합류 멤버의 로컬 영구 금고(IndexedDB)에 안전하게 병합 저장한 뒤, 만료된(14일 경과) 서버 마중물 행을 비동기 청소
+  if (currentEmail) {
+    for (const rId of accessibleRoomIds) {
+      const incoming = serverItemsByRoom.get(rId) || [];
+      if (incoming.length > 0) {
+        await upsertMemberLocalRoomPhotos(currentEmail, rId, incoming);
+      }
+    }
+    if (hasExpiredRowsOnServer) {
+      void purgeExpiredSeedPhotosAfterLocalArchive(authed, currentEmail, accessibleRoomIds);
+    }
+    const mergedFromLocalVault = await loadMemberLocalMultiRoomPhotos(
+      currentEmail,
+      accessibleRoomIds
+    );
+    return {
+      roomId: matchedInvitedRoomMeta?.roomId || ensured.roomId || accessibleRoomIds[0],
+      inviteToken: cleanInviteToken || ensured.inviteToken || null,
+      hostNickname: matchedInvitedRoomMeta?.hostNickname,
+      roomTitle: matchedInvitedRoomMeta?.roomTitle,
+      photos: mergedFromLocalVault,
+    };
+  }
+
+  const fallbackMerged = Array.from(serverItemsByRoom.values()).flat();
   return {
     roomId: matchedInvitedRoomMeta?.roomId || ensured.roomId || accessibleRoomIds[0],
     inviteToken: cleanInviteToken || ensured.inviteToken || null,
     hostNickname: matchedInvitedRoomMeta?.hostNickname,
     roomTitle: matchedInvitedRoomMeta?.roomTitle,
-    photos: items,
+    photos: fallbackMerged,
   };
 }
 
@@ -681,11 +800,106 @@ export async function uploadPhotosToSupabaseSharedRoom(opts: {
     )
   );
 
+  await upsertMemberLocalRoomPhotos(cleanEmail, opts.roomId, uploadedPhotos);
+
   return { ok: true, uploadedPhotos };
+}
+
+/**
+ * [재초대 시 1초 자동 재장전(Re-Seed)]
+ * - 14일(2주) 초대 골든타임이 지나 서버 DB(ghosti_room_shared_photos)에서 마중물 썸네일이 자동 소거된 뒤라도,
+ *   방장이나 기존 멤버가 다시 [💌 초대 링크 복사]를 누르면 내 기기 로컬 영구 금고(IndexedDB)에 보관된
+ *   해당 방의 13KB WebP 썸네일 중 서버에 빠져 있는 항목만 골라 1초 만에 마중물 버퍼(신규 14일 TTL)로 재장전합니다.
+ */
+export async function reseedRoomPhotosForInvite(opts: {
+  roomId: string;
+  loungeType: LoungeType;
+  familyRoom: FamilyRoomId;
+  uploaderNickname: string;
+  fallbackPhotos?: PhotoItem[];
+}): Promise<{ ok: boolean; reseededCount: number }> {
+  if (!hasAuthenticatedHubAccountSession() || !opts.roomId) {
+    return { ok: false, reseededCount: 0 };
+  }
+  const authed = await ensureGhostiAuthedSupabaseClient();
+  if (!authed) {
+    return { ok: false, reseededCount: 0 };
+  }
+  const jwtClaims = readGhostiAuthedJwtClaims();
+  const cleanEmail = (jwtClaims?.email || resolveCurrentAuthedEmail()).trim().toLowerCase();
+  if (!cleanEmail) {
+    return { ok: false, reseededCount: 0 };
+  }
+
+  const vaultPhotos = await loadMemberLocalRoomPhotos(cleanEmail, opts.roomId);
+  const candidatePool = [...vaultPhotos, ...(opts.fallbackPhotos || [])];
+  if (candidatePool.length === 0) {
+    return { ok: true, reseededCount: 0 };
+  }
+
+  const cutoffIso = buildSeedCutoffIso();
+  const { data: activeRows } = await authed
+    .from('ghosti_room_shared_photos')
+    .select('id, dhash_64, thumb_webp_url, created_at')
+    .eq('room_id', opts.roomId)
+    .eq('is_hidden_by_master', false)
+    .gte('created_at', cutoffIso)
+    .limit(250);
+
+  const activeIds = new Set<string>();
+  const activeDhashes = new Set<string>();
+  const activeThumbHeads = new Set<string>();
+  if (Array.isArray(activeRows)) {
+    for (const r of activeRows) {
+      if (r?.id) activeIds.add(String(r.id));
+      if (r?.dhash_64) activeDhashes.add(String(r.dhash_64));
+      const th = String(r?.thumb_webp_url || '');
+      if (th) activeThumbHeads.add(`${th.slice(0, 140)}:${th.length}`);
+    }
+  }
+
+  const missingPhotos: PhotoItem[] = [];
+  const seenCandidateHeads = new Set<string>();
+  for (const cand of candidatePool) {
+    const sbId =
+      cand.sharedSupabasePhotoId ||
+      (cand.id.startsWith('shared_sb_') ? cand.id.slice('shared_sb_'.length) : '');
+    if (sbId && activeIds.has(sbId)) continue;
+    if (cand.dhash && activeDhashes.has(String(cand.dhash))) continue;
+    const rawThumb = String(cand.thumbUrl || '');
+    const thumbSig = rawThumb ? `${rawThumb.slice(0, 140)}:${rawThumb.length}` : cand.id;
+    if (rawThumb && activeThumbHeads.has(thumbSig)) continue;
+    if (seenCandidateHeads.has(thumbSig)) continue;
+    seenCandidateHeads.add(thumbSig);
+    missingPhotos.push(cand);
+    if (missingPhotos.length >= 120) break;
+  }
+
+  if (missingPhotos.length === 0) {
+    return { ok: true, reseededCount: 0 };
+  }
+
+  const upRes = await uploadPhotosToSupabaseSharedRoom({
+    roomId: opts.roomId,
+    loungeType: opts.loungeType,
+    familyRoom: opts.familyRoom,
+    uploaderEmail: cleanEmail,
+    uploaderNickname: opts.uploaderNickname || '방장',
+    photos: missingPhotos,
+  });
+
+  return {
+    ok: upRes.ok,
+    reseededCount: upRes.uploadedPhotos.length,
+  };
 }
 
 export async function deleteSupabaseSharedRoomPhoto(photoItemId: string): Promise<boolean> {
   if (!hasAuthenticatedHubAccountSession()) return false;
+  const currentEmail = resolveCurrentAuthedEmail();
+  if (currentEmail) {
+    await removeMemberLocalRoomPhotoEverywhere(currentEmail, photoItemId);
+  }
   const authed = await ensureGhostiAuthedSupabaseClient();
   if (!authed) return false;
   const rawUuid = photoItemId.startsWith('shared_sb_')

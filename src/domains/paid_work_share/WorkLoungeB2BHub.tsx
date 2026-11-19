@@ -5,11 +5,12 @@ import { isMobileOrStoreRuntime } from '../../store/slices/storeSharedRefs';
 import { hasAuthenticatedHubAccountSession } from '../../services/supabaseClient';
 import { zCoreBridge } from '../../services/zCoreBridge';
 import {
+  cacheWorkRoomPreviewLocally,
   connectWorkRoomRealtimeChannel,
   downloadWorkFileOriginal,
   ensureMyWorkRoomAndInvite,
   fetchLocalWorkFilesNative,
-  fetchWorkRoomCloudPreview,
+  loadCachedWorkRoomPreview,
   mountWorkSDriveNative,
   openGhostSearchForWorkSDrive,
   pullSyncRemoteWorkFilesToLocalSDrive,
@@ -17,7 +18,6 @@ import {
   readCachedMyWorkRoomMeta,
   toggleHideWorkFileNative,
   uploadWorkFileToNativeSDrive,
-  upsertWorkFilesToSupabase,
   type WorkLoungeDocDto,
   type WorkRoomPresenceMember,
 } from '../../services/workRoomSyncService';
@@ -161,11 +161,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
       if (cloudSig !== prevCloudUpsertSigRef.current) {
         prevCloudUpsertSigRef.current = cloudSig;
         realtimeRef.current?.broadcastSnapshot(res.docs);
-        void upsertWorkFilesToSupabase({
-          roomId: activeWorkRoomId,
-          docs: res.docs,
-          actorNickname,
-        });
+        void cacheWorkRoomPreviewLocally(activeWorkRoomId, res.docs);
       }
     }
   }, [activeWorkRoomId, actorNickname]);
@@ -209,15 +205,15 @@ export const WorkLoungeB2BHub: React.FC = () => {
     });
   }, [inviteMeta.hasWorkInvite, activeWorkRoomId, actorNickname]);
 
-  // ?workRoom=...&token=... 초대 링크 접속 시: Z-코어 설치 전에도 즉시 클라우드 24시간 웹 미리보기 로드
+  // Zero-Cloud 원안: 서버 DB 점유 0 Byte · 팀원 기기 로컬 IndexedDB 30KB 경량 미리보기 캐시 즉시 복원
   useEffect(() => {
-    if (!inviteMeta.hasWorkInvite || !inviteMeta.inviteToken) return;
-    void fetchWorkRoomCloudPreview(inviteMeta.inviteToken).then((res) => {
-      if (res.ok && res.docs.length > 0) {
-        setRemoteDocs(res.docs);
+    if (!activeWorkRoomId) return;
+    void loadCachedWorkRoomPreview(activeWorkRoomId).then((cachedDocs) => {
+      if (cachedDocs.length > 0) {
+        setRemoteDocs((prev) => (prev.length > 0 ? prev : cachedDocs));
       }
     });
-  }, [inviteMeta.hasWorkInvite, inviteMeta.inviteToken]);
+  }, [activeWorkRoomId]);
 
   // 방장 ↔ 팀원 실시간 파일·잠금(~$) 동기화 채널 연결
   useEffect(() => {
@@ -415,11 +411,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
     }
     setActiveWorkRoomId(ensured.roomId);
     if (localDocsRef.current.length > 0) {
-      void upsertWorkFilesToSupabase({
-        roomId: ensured.roomId,
-        docs: localDocsRef.current,
-        actorNickname,
-      });
+      realtimeRef.current?.broadcastSnapshot(localDocsRef.current);
+      void cacheWorkRoomPreviewLocally(ensured.roomId, localDocsRef.current);
     }
     try {
       await navigator.clipboard?.writeText(ensured.inviteUrl);

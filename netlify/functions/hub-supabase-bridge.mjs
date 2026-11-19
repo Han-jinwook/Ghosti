@@ -17,6 +17,78 @@ const HUB_URL = process.env.MERLIN_HUB_URL || 'https://os.sundreamer.app';
 const HUB_CLIENT_ID = process.env.MERLIN_HUB_CLIENT_ID || 'APP-01';
 const HUB_CLIENT_SECRET = process.env.MERLIN_HUB_CLIENT_SECRET || 'merlin-family-secret-key-2026';
 const TOKEN_TTL_SEC = 60 * 60;
+const PHOTO_SEED_TTL_DAYS = 14;
+const PHOTO_SEED_TTL_MS = PHOTO_SEED_TTL_DAYS * 24 * 60 * 60 * 1000;
+let lastAutoPurgeAtMs = 0;
+
+async function inspectOrPurgePhotoSeedBuffer(supabaseUrl, serviceKey, shouldPurge) {
+  const nowMs = Date.now();
+  const cutoffIso = new Date(nowMs - PHOTO_SEED_TTL_MS).toISOString();
+  const headers = {
+    apikey: serviceKey,
+    Authorization: `Bearer ${serviceKey}`,
+    'Content-Type': 'application/json',
+  };
+
+  let purgedCount = 0;
+  if (shouldPurge) {
+    const delUrl = `${supabaseUrl}/rest/v1/ghosti_room_shared_photos?created_at=lt.${encodeURIComponent(
+      cutoffIso
+    )}&select=id`;
+    const delRes = await fetch(delUrl, {
+      method: 'DELETE',
+      headers: {
+        ...headers,
+        Prefer: 'return=representation',
+      },
+    });
+    if (delRes.ok) {
+      const deletedRows = await delRes.json().catch(() => []);
+      purgedCount = Array.isArray(deletedRows) ? deletedRows.length : 0;
+    }
+  }
+
+  const listUrl = `${supabaseUrl}/rest/v1/ghosti_room_shared_photos?select=room_id,created_at&order=created_at.asc&limit=5000`;
+  const listRes = await fetch(listUrl, { method: 'GET', headers });
+  if (!listRes.ok) {
+    const errText = await listRes.text().catch(() => '');
+    return {
+      ok: false,
+      status: listRes.status,
+      reason: `ghosti_room_shared_photos 조회 실패: ${errText.slice(0, 200)}`,
+    };
+  }
+  const rows = await listRes.json().catch(() => []);
+  const safeRows = Array.isArray(rows) ? rows : [];
+  let activeWithin14dRows = 0;
+  let expiredOver14dRows = 0;
+  const roomSet = new Set();
+
+  for (const r of safeRows) {
+    if (r?.room_id) roomSet.add(String(r.room_id));
+    const ts = Date.parse(String(r?.created_at || ''));
+    if (!Number.isNaN(ts) && ts < nowMs - PHOTO_SEED_TTL_MS) {
+      expiredOver14dRows += 1;
+    } else {
+      activeWithin14dRows += 1;
+    }
+  }
+
+  return {
+    ok: true,
+    ttlDays: PHOTO_SEED_TTL_DAYS,
+    checkedAtUtc: new Date(nowMs).toISOString(),
+    cutoffUtc: cutoffIso,
+    totalRows: safeRows.length,
+    activeWithin14dRows,
+    expiredOver14dRows,
+    purgedCount,
+    distinctRoomCount: roomSet.size,
+    oldestCreatedAt: safeRows.length > 0 ? safeRows[0]?.created_at || null : null,
+    newestCreatedAt:
+      safeRows.length > 0 ? safeRows[safeRows.length - 1]?.created_at || null : null,
+  };
+}
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -103,6 +175,22 @@ export default async (req) => {
     (supabaseUrl && jwtSecret ? signAnonPublishableJwt(supabaseUrl, jwtSecret) : '');
 
   if (req.method === 'GET') {
+    let reqUrl = null;
+    try {
+      reqUrl = new URL(req.url);
+    } catch {
+      reqUrl = null;
+    }
+    const action = reqUrl?.searchParams.get('action') || '';
+    if (action === 'photo_seed_ttl_status') {
+      if (!supabaseUrl || !serviceKey) {
+        return json(500, { ok: false, reason: '서버 환경변수 미설정 (VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)' });
+      }
+      const shouldPurge = reqUrl?.searchParams.get('purge') === '1';
+      const report = await inspectOrPurgePhotoSeedBuffer(supabaseUrl, serviceKey, shouldPurge);
+      return json(report.ok ? 200 : 500, report);
+    }
+
     if (!supabaseUrl || !publicAnonKey) {
       return json(500, { ok: false, reason: '공개 클라이언트 설정 미준비' });
     }
@@ -202,6 +290,12 @@ export default async (req) => {
   if (!up.ok) {
     const detail = await up.text().catch(() => '');
     return json(500, { ok: false, reason: `users Upsert 실패 (HTTP ${up.status})`, detail: detail.slice(0, 300) });
+  }
+
+  // 14일(2주) 경과 마중물 썸네일 행 서버 측 무인 자동 청소 (인스턴스당 10분 스로틀 · 로그인 응답 지연 0ms 방어를 위해 백그라운드 병행)
+  if (Date.now() - lastAutoPurgeAtMs > 10 * 60 * 1000) {
+    lastAutoPurgeAtMs = Date.now();
+    void inspectOrPurgePhotoSeedBuffer(supabaseUrl, serviceKey, true).catch(() => {});
   }
 
   // ③ 단기 Supabase 토큰 발급

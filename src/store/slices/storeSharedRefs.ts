@@ -206,9 +206,9 @@ export function filterVisibleGalleryPhotos(items: PhotoItem[]): PhotoItem[] {
 }
 
 /**
- * [방식 A 전환 완료]: 구버전 브라우저 전역 localStorage('ghosti_shared_family_added_photos_v1')는
- * 로그아웃·타 계정 전환 시 사진 혼입을 유발하므로 영구 폐기·즉시 소거하고, 모든 공유방 사진은
- * Supabase 정식 테이블(ghosti_room_shared_photos)에서 계정·room_id·invite_token 단위로만 조회합니다.
+ * [방식 A + 14일 마중물 버퍼 전환 완료]: 구버전 브라우저 전역 localStorage('ghosti_shared_family_added_photos_v1')는
+ * 로그아웃·타 계정 전환 시 사진 혼입을 유발하므로 영구 폐기·즉시 소거하며, 합류 멤버의 영구 보관 캐시는
+ * sharedRoomLocalVault.ts의 계정+방 격리 IndexedDB('${email}::${roomId}')와 14일 서버 마중물(ghosti_room_shared_photos)로만 관리합니다.
  */
 export function persistSharedRoomAddedPhotos(_items: PhotoItem[]): void {
   if (typeof window === 'undefined') return;

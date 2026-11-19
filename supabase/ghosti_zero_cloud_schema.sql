@@ -299,7 +299,7 @@ create index if not exists idx_ghosti_room_invites_room
 
 -- ----------------------------------------------------------------------------
 -- 7. 방에 공유된 PC 폴더 별칭 포인터 (업무방 S: 등 폴더 단위 연결 메타데이터 · 무압축 원본 파일은 P2P 직결)
---    - 사진 공유방의 개별 공유 사진 13KB 썸네일·인덱스 24시간 상시 열람은 하단 ghosti_room_shared_photos 테이블이 담당
+--    - 사진 공유방의 개별 공유 사진 13KB 썸네일·인덱스 14일(2주) 초대 골든타임 마중물 버퍼는 하단 ghosti_room_shared_photos 테이블이 담당
 -- ----------------------------------------------------------------------------
 create table if not exists public.ghosti_room_shared_folders (
   id uuid primary key default gen_random_uuid(),
@@ -779,14 +779,18 @@ create policy unmatched_questions_insert_own on public.unmatched_questions
   for insert with check (owner_email is null or lower(owner_email) = public.ghosti_current_email());
 
 -- ============================================================================
--- 📸 사진 공유방 『방식 A — 24시간 무중단 열람형』 정식 스키마 (2026-11-19 멀린님 최종 확정 · 강령 제18조 정규 컬럼 준수)
+-- 📸 사진 공유방 『방식 A — 14일(2주) 초대 골든타임 마중물 버퍼(TTL) + 합류 멤버 기기 로컬 영구 금고 + 재초대 1초 재장전』 정식 스키마
+--    (2026-11-20 멀린님 최종 확정 · 강령 제18조 정규 컬럼 준수 · 영구 클라우드 비대화 0원 방어)
 -- ----------------------------------------------------------------------------
 -- 확정 원칙:
--- 1. 방장이 PC를 끄거나 폰 화면이 잠겨 있어도 카톡 초대 링크(?invite=...&token=...) 클릭 즉시 0.3~0.8초 내에
---    해당 방(room_id)의 공유 사진 전체 13KB 썸네일·인물 동그란 문패·검색 인덱스·댓글/하트(읽기)·친근한 촬영일/지역명이 100% 열람됨.
--- 2. 고화질 원본(5~20MB)은 본 테이블에 저장하지 않고 기기 간 P2P 직결([🔄 원본 동기화])로만 전송함.
--- 3. 계정별·방별 100% 격리: 초대 토큰이 없거나 멤버가 아닌 제3자에게는 타 계정/타 방 사진이 단 1장도 노출되지 않음 (localStorage 전역 공유 금지).
--- 4. 무가입 프리뷰(ghosti_get_guest_preview_room RPC)에서는 주거지 특정 위험이 있는 정밀 GPS 좌표(gps_lat, gps_lng)와 업로더 이메일을 원천 제외함.
+-- 1. [초대 골든타임 14일(2주) 마중물 버퍼]: 방장이 PC를 끄거나 폰 화면이 잠겨 있어도 카톡 초대 링크(?invite=...&token=...) 클릭 즉시
+--    0.3~0.8초 내에 해당 방(room_id)의 공유 사진 13KB WebP 썸네일·검색 인덱스·댓글/하트(읽기)·친근한 촬영일/지역명이 100% 열람됨.
+--    단, 본 서버 테이블(ghosti_room_shared_photos)은 초대 마중물로서 14일(2주) 동안만 유지되며 14일 경과분은 서버 브릿지·RPC에서 자동 소거됨.
+-- 2. [합류 멤버 로컬 영구 금고 & 재초대 1초 자동 재장전(Re-Seed)]: 정식 합류한 멤버는 본인 기기 IndexedDB('${email}::${roomId}')에
+--    영구 캐싱하여 서버 14일 소거 이후에도 0.05초 만에 전체 사진을 열람·검색하며, 몇 달 뒤 다시 [💌 초대 링크 복사]를 누르면
+--    로컬 금고의 13KB WebP 썸네일이 본 테이블로 1초 만에 자동 재장전(신규 14일 TTL 부여)됨. (비로그인 게스트는 로컬 흔적 0 Byte)
+-- 3. 고화질 원본(5~20MB)은 본 테이블에 저장하지 않고 기기 간 P2P 직결([🔄 원본 동기화])로만 전송함.
+-- 4. 계정별·방별 100% 격리 및 프라이버시 보호: 무가입 프리뷰(ghosti_get_guest_preview_room RPC)에서는 정밀 GPS 좌표(gps_lat, gps_lng)와 업로더 이메일을 원천 제외함.
 -- ============================================================================
 
 create table if not exists public.ghosti_room_shared_photos (
@@ -796,7 +800,7 @@ create table if not exists public.ghosti_room_shared_photos (
   uploader_email text not null,
   uploader_nickname text not null,
   dhash_64 text,
-  -- 13KB 초경량 WebP 썸네일 Data URL 또는 보유 Cloudflare R2 썸네일 URL (5MB 고화질 원본 저장 금지)
+  -- 13KB 초경량 WebP 썸네일 Data URL (14일 초대 마중물 버퍼 전용 · 5MB 고화질 원본 저장 금지)
   thumb_webp_url text not null,
   caption_ko text not null default '',
   keywords_ko text[] not null default '{}',
@@ -812,13 +816,20 @@ create table if not exists public.ghosti_room_shared_photos (
   original_byte_size bigint not null default 0,
   has_original_exif boolean not null default false,
   is_hidden_by_master boolean not null default false,
+  seed_expires_at timestamptz not null default (now() + interval '14 days'),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
 
+alter table public.ghosti_room_shared_photos
+  add column if not exists seed_expires_at timestamptz not null default (now() + interval '14 days');
+
 create index if not exists idx_ghosti_room_shared_photos_room_created
   on public.ghosti_room_shared_photos (room_id, created_at desc)
   where is_hidden_by_master = false;
+
+create index if not exists idx_ghosti_room_shared_photos_created_ttl
+  on public.ghosti_room_shared_photos (created_at asc);
 
 create index if not exists idx_ghosti_room_shared_photos_room_dhash
   on public.ghosti_room_shared_photos (room_id, dhash_64)
@@ -858,8 +869,14 @@ create policy ghosti_room_shared_photos_owner_or_admin_update on public.ghosti_r
 drop policy if exists ghosti_room_shared_photos_owner_24h_delete on public.ghosti_room_shared_photos;
 create policy ghosti_room_shared_photos_owner_24h_delete on public.ghosti_room_shared_photos
   for delete using (
-    lower(uploader_email) = public.ghosti_current_email()
-    and created_at >= (now() - interval '24 hours')
+    (
+      lower(uploader_email) = public.ghosti_current_email()
+      and created_at >= (now() - interval '24 hours')
+    )
+    or (
+      public.ghosti_is_room_member(room_id)
+      and created_at < (now() - interval '14 days')
+    )
   );
 
 create table if not exists public.ghosti_room_photo_comments (
@@ -935,7 +952,80 @@ grant select, insert, update, delete on table public.ghosti_room_shared_photos t
 grant select, insert, update, delete on table public.ghosti_room_photo_comments to authenticated, service_role;
 grant select, insert, update, delete on table public.ghosti_room_photo_reactions to authenticated, service_role;
 
--- [방장 전용: 계정별 고유 공유방 + 초대 토큰 원자적 생성·조회 RPC]
+-- [14일(2주) 경과 마중물 썸네일 자동 청소 RPC]
+create or replace function public.ghosti_purge_expired_photo_seed_buffer(
+  p_room_ids text[] default null
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_purged integer := 0;
+begin
+  if p_room_ids is null or coalesce(array_length(p_room_ids, 1), 0) = 0 then
+    delete from public.ghosti_room_shared_photos
+     where created_at < (now() - interval '14 days');
+  else
+    delete from public.ghosti_room_shared_photos
+     where room_id = any(p_room_ids)
+       and created_at < (now() - interval '14 days');
+  end if;
+  get diagnostics v_purged = row_count;
+  return jsonb_build_object(
+    'ok', true,
+    'ttlDays', 14,
+    'purgedCount', v_purged
+  );
+end;
+$$;
+
+grant execute on function public.ghosti_purge_expired_photo_seed_buffer(text[]) to anon, authenticated, service_role;
+
+-- [AI 에이전트 DB 추적 실증 전용 무-PII 집계 RPC (이메일·썸네일·방제목 일절 미반환)]
+create or replace function public.ghosti_get_photo_seed_ttl_telemetry()
+returns jsonb
+language plpgsql
+security definer
+set search_path = public
+as $$
+declare
+  v_total integer := 0;
+  v_active integer := 0;
+  v_expired integer := 0;
+  v_rooms integer := 0;
+  v_oldest timestamptz;
+  v_newest timestamptz;
+begin
+  select
+    count(*)::int,
+    count(*) filter (where created_at >= (now() - interval '14 days'))::int,
+    count(*) filter (where created_at < (now() - interval '14 days'))::int,
+    count(distinct room_id)::int,
+    min(created_at),
+    max(created_at)
+    into v_total, v_active, v_expired, v_rooms, v_oldest, v_newest
+    from public.ghosti_room_shared_photos;
+
+  return jsonb_build_object(
+    'ok', true,
+    'ttlDays', 14,
+    'checkedAtUtc', now(),
+    'cutoffUtc', (now() - interval '14 days'),
+    'distinctRoomCount', v_rooms,
+    'totalRows', v_total,
+    'activeWithin14dRows', v_active,
+    'expiredOver14dRows', v_expired,
+    'oldestCreatedAt', v_oldest,
+    'newestCreatedAt', v_newest
+  );
+end;
+$$;
+
+grant execute on function public.ghosti_get_photo_seed_ttl_telemetry() to anon, authenticated, service_role;
+
+-- [방장 전용: 계정별 고유 공유방 + 14일 초대 토큰 원자적 생성·조회 RPC]
 create or replace function public.ghosti_ensure_room_and_invite(
   p_lounge_type text,
   p_sub_type text,
@@ -994,8 +1084,13 @@ begin
     insert into public.ghosti_room_invites (
       token, room_id, created_by_email, default_role, max_uses, expires_at
     ) values (
-      v_token, v_room_id, v_email, 'member', 500, now() + interval '365 days'
+      v_token, v_room_id, v_email, 'member', 500, now() + interval '14 days'
     );
+  else
+    -- 재초대 시 초대장 유효기간도 오늘부터 14일(2주)로 자동 갱신
+    update public.ghosti_room_invites
+       set expires_at = greatest(expires_at, now() + interval '14 days')
+     where token = v_token;
   end if;
 
   return jsonb_build_object(
@@ -1009,8 +1104,8 @@ $$;
 revoke all on function public.ghosti_ensure_room_and_invite(text, text, text, text) from public, anon;
 grant execute on function public.ghosti_ensure_room_and_invite(text, text, text, text) to authenticated, service_role;
 
--- [무가입 1초 프리뷰 전용 SECURITY DEFINER 읽기 RPC]
--- 유효한 초대 토큰(p_invite_token) 보유자(anon 포함)에게만 해당 방(room_id)의 13KB 썸네일·검색 인덱스·인물 문패·댓글/하트(읽기)·친근한 촬영일시를 반환.
+-- [무가입 1초 프리뷰 전용 SECURITY DEFINER 읽기 RPC — 14일(2주) 이내 마중물만 노출 및 만료분 자동 소거]
+-- 유효한 초대 토큰(p_invite_token) 보유자(anon 포함)에게만 해당 방(room_id)의 14일 이내 13KB 썸네일·검색 인덱스·인물 문패·댓글/하트(읽기)·친근한 촬영일시를 반환.
 -- 정밀 GPS 좌표(gps_lat, gps_lng), 업로더 이메일, 타 방 사진은 원천 차단됨.
 create or replace function public.ghosti_get_guest_preview_room(p_invite_token text)
 returns jsonb
@@ -1034,6 +1129,11 @@ begin
   if v_room_id is null then
     return jsonb_build_object('ok', false, 'reason', 'INVALID_OR_EXPIRED_INVITE');
   end if;
+
+  -- 14일(2주) 경과 마중물 행 자동 청소
+  delete from public.ghosti_room_shared_photos
+   where room_id = v_room_id
+     and created_at < (now() - interval '14 days');
 
   select r.room_id, r.lounge_type, r.sub_type, r.room_title
     into v_room
@@ -1088,7 +1188,8 @@ begin
     into v_photos
     from public.ghosti_room_shared_photos p
    where p.room_id = v_room_id
-     and p.is_hidden_by_master = false;
+     and p.is_hidden_by_master = false
+     and p.created_at >= (now() - interval '14 days');
 
   return jsonb_build_object(
     'ok', true,
@@ -1107,164 +1208,10 @@ $$;
 grant execute on function public.ghosti_get_guest_preview_room(text) to anon, authenticated, service_role;
 
 -- ============================================================================
--- 13. [업무 공유 S: 드라이브 — 방장↔팀원(?workRoom=...) 24시간 웹 미리보기 · 실시간 열람 잠금(~$) · 경량 문서 동기화 정식 테이블]
---     (전사 강령 제18조 준수: 기존 사진 테이블 기생 금지 · 정식 도메인 컬럼 정규화 분리)
+-- 💼 [업무 공유 S: 드라이브 — Zero-Cloud (서버 DB 점유 0 Byte) 원안 아키텍처 고수]
+-- ----------------------------------------------------------------------------
+-- 업무 공유방 문서·표·본문·바이너리는 Supabase 서버 DB 테이블에 일절 저장하지 않습니다.
+-- - 방 개설·멤버 초대 메타데이터(~200 Byte): 기존 ghosti_lounge_rooms / ghosti_lounge_members / ghosti_room_invites 재사용
+-- - 실시간 파일·오피스 열람 잠금(~$) 동기화: Supabase Realtime Broadcast 채널(ghosti:work:<roomId>) 메모리 패스스루 직결
+-- - 대장 PC 오프라인 대비 경량(<=30KB) 미리보기 캐시: 각 팀원 기기 로컬 브라우저 IndexedDB(sharedRoomLocalVault.ts)에만 저장
 -- ============================================================================
-create table if not exists public.ghosti_room_work_files (
-  id uuid primary key default gen_random_uuid(),
-  room_id text not null references public.ghosti_lounge_rooms(room_id) on delete cascade,
-  rel_path text not null,
-  folder_id text not null default 'root',
-  folder_path text not null default 'S:\',
-  file_name text not null,
-  file_ext text not null default 'FILE',
-  byte_size bigint not null default 0,
-  sha256_hex text not null default '',
-  uploader_email text not null,
-  uploader_nickname text not null,
-  summary_title text not null default '',
-  matched_snippet text not null default '',
-  full_text_preview text not null default '',
-  table_headers text[] not null default '{}',
-  table_rows_json jsonb not null default '[]'::jsonb,
-  is_image boolean not null default false,
-  thumb_webp_url text,
-  inline_sync_base64 text,
-  locked_by_email text,
-  locked_by_nickname text,
-  locked_at timestamptz,
-  is_hidden_by_master boolean not null default false,
-  file_mtime timestamptz not null default now(),
-  created_at timestamptz not null default now(),
-  updated_at timestamptz not null default now(),
-  unique (room_id, rel_path)
-);
-
-create index if not exists idx_ghosti_room_work_files_room_mtime
-  on public.ghosti_room_work_files (room_id, file_mtime desc)
-  where is_hidden_by_master = false;
-
-drop trigger if exists trg_ghosti_room_work_files_touch on public.ghosti_room_work_files;
-create trigger trg_ghosti_room_work_files_touch
-  before update on public.ghosti_room_work_files
-  for each row execute function public.ghosti_touch_updated_at();
-
-alter table public.ghosti_room_work_files enable row level security;
-
-drop policy if exists ghosti_room_work_files_member_select on public.ghosti_room_work_files;
-create policy ghosti_room_work_files_member_select on public.ghosti_room_work_files
-  for select using (
-    is_hidden_by_master = false
-    and public.ghosti_is_room_member(room_id)
-  );
-
-drop policy if exists ghosti_room_work_files_member_insert on public.ghosti_room_work_files;
-create policy ghosti_room_work_files_member_insert on public.ghosti_room_work_files
-  for insert with check (
-    public.ghosti_is_room_member(room_id)
-    and lower(uploader_email) = public.ghosti_current_email()
-  );
-
-drop policy if exists ghosti_room_work_files_member_update on public.ghosti_room_work_files;
-create policy ghosti_room_work_files_member_update on public.ghosti_room_work_files
-  for update using (
-    public.ghosti_is_room_member(room_id)
-  );
-
-drop policy if exists ghosti_room_work_files_owner_or_admin_delete on public.ghosti_room_work_files;
-create policy ghosti_room_work_files_owner_or_admin_delete on public.ghosti_room_work_files
-  for delete using (
-    public.ghosti_is_room_admin(room_id)
-    or lower(uploader_email) = public.ghosti_current_email()
-  );
-
-grant select, insert, update, delete on table public.ghosti_room_work_files to authenticated, service_role;
-
--- [업무 공유방(?workRoom=...&token=...) 초대 링크 열람 및 Z-코어 설치 전 웹 미리보기·실시간 잠금 조회 RPC]
-create or replace function public.ghosti_get_work_room_preview(p_invite_token text)
-returns jsonb
-language plpgsql
-security definer
-set search_path = public
-as $$
-declare
-  v_room_id text;
-  v_host_nick text;
-  v_room record;
-  v_files jsonb;
-begin
-  select i.room_id into v_room_id
-    from public.ghosti_room_invites i
-   where i.token = trim(coalesce(p_invite_token, ''))
-     and i.revoked_at is null
-     and i.expires_at > now()
-   limit 1;
-
-  if v_room_id is null then
-    return jsonb_build_object('ok', false, 'reason', 'INVALID_OR_EXPIRED_INVITE');
-  end if;
-
-  select r.room_id, r.lounge_type, r.room_title
-    into v_room
-    from public.ghosti_lounge_rooms r
-   where r.room_id = v_room_id
-     and r.lounge_type = 'work';
-
-  if not found then
-    return jsonb_build_object('ok', false, 'reason', 'WORK_ROOM_NOT_FOUND');
-  end if;
-
-  select m.room_persona_nickname into v_host_nick
-    from public.ghosti_lounge_members m
-   where m.room_id = v_room_id and m.role = 'master'
-   limit 1;
-
-  select coalesce(
-    jsonb_agg(
-      jsonb_build_object(
-        'id', f.id,
-        'roomId', f.room_id,
-        'relPath', f.rel_path,
-        'folderId', f.folder_id,
-        'folderPath', f.folder_path,
-        'fileName', f.file_name,
-        'ext', f.file_ext,
-        'byteSize', f.byte_size,
-        'sha256', f.sha256_hex,
-        'uploaderNickname', f.uploader_nickname,
-        'summaryTitle', f.summary_title,
-        'matchedSnippet', f.matched_snippet,
-        'fullTextPreview', f.full_text_preview,
-        'tableHeaders', f.table_headers,
-        'tableRows', f.table_rows_json,
-        'isImage', f.is_image,
-        'imageBase64', f.thumb_webp_url,
-        'inlineSyncBase64', f.inline_sync_base64,
-        'lockedBy', case
-          when f.locked_at is not null and f.locked_at >= (now() - interval '3 minutes')
-          then f.locked_by_nickname
-          else null
-        end,
-        'fileMtime', f.file_mtime
-      ) order by f.file_mtime desc
-    ),
-    '[]'::jsonb
-  )
-    into v_files
-    from public.ghosti_room_work_files f
-   where f.room_id = v_room_id
-     and f.is_hidden_by_master = false;
-
-  return jsonb_build_object(
-    'ok', true,
-    'room', jsonb_build_object(
-      'roomId', v_room.room_id,
-      'roomTitle', v_room.room_title,
-      'hostNickname', coalesce(v_host_nick, '방장')
-    ),
-    'files', v_files
-  );
-end;
-$$;
-
-grant execute on function public.ghosti_get_work_room_preview(text) to anon, authenticated, service_role;
