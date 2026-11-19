@@ -976,87 +976,105 @@ def start_ghosti_browser_entry_sound_watcher() -> None:
             return
         _GHOSTI_BROWSER_WATCHER_STARTED = True
 
+    import ctypes
+    from ctypes import wintypes
+
+    u32 = ctypes.windll.user32
+    k32 = ctypes.windll.kernel32
+    PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+    BROWSER_EXES = ("chrome.exe", "msedge.exe", "whale.exe", "brave.exe", "firefox.exe", "opera.exe")
+    SIGNATURE_MARKERS = (
+        "귀신같이(ghosti) —",
+        "귀신같이 (ghosti) —",
+        "ghosti.sundreamer.app",
+    )
+    _pid_exe_cache: dict[int, tuple[float, str]] = {}
+
+    def _resolve_browser_exe_cached(pid_val: int) -> str:
+        if not pid_val:
+            return ""
+        now_m = time.monotonic()
+        hit = _pid_exe_cache.get(pid_val)
+        if hit is not None and (now_m - hit[0]) < 60.0:
+            return hit[1]
+        exe_name = ""
+        hproc = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid_val)
+        if hproc:
+            try:
+                pbuf = ctypes.create_unicode_buffer(520)
+                psize = wintypes.DWORD(520)
+                if k32.QueryFullProcessImageNameW(hproc, 0, pbuf, ctypes.byref(psize)):
+                    exe_name = os.path.basename(pbuf.value).lower()
+            finally:
+                k32.CloseHandle(hproc)
+        if len(_pid_exe_cache) > 256:
+            _pid_exe_cache.clear()
+        _pid_exe_cache[pid_val] = (now_m, exe_name)
+        return exe_name
+
+    def _inspect_single_hwnd(hwnd: int, seed_only: bool, alive_hwnds: set[int] | None = None) -> bool:
+        if not hwnd:
+            return False
+        hw = wintypes.HWND(hwnd)
+        if not u32.IsWindowVisible(hw):
+            return False
+        tlen = u32.GetWindowTextLengthW(hw)
+        if tlen <= 0 or tlen > 512:
+            return False
+        buf = ctypes.create_unicode_buffer(tlen + 2)
+        u32.GetWindowTextW(hw, buf, tlen + 1)
+        title = (buf.value or "").strip()
+        if not title:
+            return False
+        t_low = title.lower()
+        if not any(m in t_low for m in SIGNATURE_MARKERS):
+            return False
+
+        h_int = int(hwnd)
+        # Ctrl+0 귀신검색 소형/중형 독립 팝업창(폭 <= 1020, 높이 <= 700)은 자체 소환음이 있으므로 제외
+        rect = wintypes.RECT()
+        if u32.GetWindowRect(hw, ctypes.byref(rect)):
+            w = rect.right - rect.left
+            h = rect.bottom - rect.top
+            if 0 < w <= 1020 and 0 < h <= 700:
+                if alive_hwnds is not None:
+                    alive_hwnds.add(h_int)
+                _SEEN_GHOSTI_BROWSER_HWNDS.add(h_int)
+                return False
+
+        pid = wintypes.DWORD(0)
+        u32.GetWindowThreadProcessId(hw, ctypes.byref(pid))
+        exe_name = _resolve_browser_exe_cached(int(pid.value)) if pid.value else ""
+        if exe_name and exe_name not in BROWSER_EXES:
+            return False
+
+        if alive_hwnds is not None:
+            alive_hwnds.add(h_int)
+        _SEEN_GHOSTI_BROWSER_HWNDS.add(h_int)
+
+        zw_match = _ZW_SIGNAL_RE.search(title)
+        if zw_match:
+            sig = zw_match.group(0)
+            if _LAST_ZW_SIGNAL_BY_HWND.get(h_int) != sig:
+                _LAST_ZW_SIGNAL_BY_HWND[h_int] = sig
+                if not seed_only:
+                    return True
+        return False
+
+    WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
+
     def _collect_ghosti_browser_windows(seed_only: bool = False) -> None:
-        import ctypes
-        from ctypes import wintypes
-
-        u32 = ctypes.windll.user32
-        k32 = ctypes.windll.kernel32
-        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-        BROWSER_EXES = ("chrome.exe", "msedge.exe", "whale.exe", "brave.exe", "firefox.exe", "opera.exe")
-        SIGNATURE_MARKERS = (
-            "귀신같이(ghosti) —",
-            "귀신같이 (ghosti) —",
-            "ghosti.sundreamer.app",
-        )
-
         alive_hwnds: set[int] = set()
         newly_entered = False
 
-        WNDENUMPROC = ctypes.WINFUNCTYPE(wintypes.BOOL, wintypes.HWND, wintypes.LPARAM)
-
         def _enum_cb(hwnd: int, _lparam: int) -> bool:
             nonlocal newly_entered
-            hw = wintypes.HWND(hwnd)
-            if not u32.IsWindowVisible(hw):
-                return True
-            tlen = u32.GetWindowTextLengthW(hw)
-            if tlen <= 0 or tlen > 512:
-                return True
-            buf = ctypes.create_unicode_buffer(tlen + 2)
-            u32.GetWindowTextW(hw, buf, tlen + 1)
-            title = (buf.value or "").strip()
-            if not title:
-                return True
-            t_low = title.lower()
-            if not any(m in t_low for m in SIGNATURE_MARKERS):
-                return True
-
-            # Ctrl+0 귀신검색 소형/중형 독립 팝업창(폭 <= 1020, 높이 <= 700)은 자체 소환음이 있으므로 제외
-            rect = wintypes.RECT()
-            if u32.GetWindowRect(hw, ctypes.byref(rect)):
-                w = rect.right - rect.left
-                h = rect.bottom - rect.top
-                if 0 < w <= 1020 and 0 < h <= 700:
-                    alive_hwnds.add(int(hwnd))
-                    _SEEN_GHOSTI_BROWSER_HWNDS.add(int(hwnd))
-                    return True
-
-            pid = wintypes.DWORD(0)
-            u32.GetWindowThreadProcessId(hw, ctypes.byref(pid))
-            exe_name = ""
-            if pid.value:
-                hproc = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
-                if hproc:
-                    try:
-                        pbuf = ctypes.create_unicode_buffer(520)
-                        psize = wintypes.DWORD(520)
-                        if k32.QueryFullProcessImageNameW(hproc, 0, pbuf, ctypes.byref(psize)):
-                            exe_name = os.path.basename(pbuf.value).lower()
-                    finally:
-                        k32.CloseHandle(hproc)
-            if exe_name and exe_name not in BROWSER_EXES:
-                return True
-
-            h_int = int(hwnd)
-            alive_hwnds.add(h_int)
-            _SEEN_GHOSTI_BROWSER_HWNDS.add(h_int)
-
-            # 무가시 제로폭(Zero-Width) 타이틀 시그널 감지:
-            # 브라우저에서 audio.play() 자동재생이 막혔을 때(.catch)만 웹이 document.title에 시그널을 각인하므로,
-            # 오직 이 시그널이 새로 감지되었을 때만 OS 사운드를 재생하여 2회 중복 재생을 100% 원천 차단합니다.
-            zw_match = _ZW_SIGNAL_RE.search(title)
-            if zw_match:
-                sig = zw_match.group(0)
-                if _LAST_ZW_SIGNAL_BY_HWND.get(h_int) != sig:
-                    _LAST_ZW_SIGNAL_BY_HWND[h_int] = sig
-                    if not seed_only:
-                        newly_entered = True
+            if _inspect_single_hwnd(hwnd, seed_only=seed_only, alive_hwnds=alive_hwnds):
+                newly_entered = True
             return True
 
         try:
             u32.EnumWindows(WNDENUMPROC(_enum_cb), 0)
-            # 닫히거나 다른 사이트로 이동한 창 HWND는 목록에서 정리
             stale = [h for h in list(_SEEN_GHOSTI_BROWSER_HWNDS) if h not in alive_hwnds]
             for h in stale:
                 _SEEN_GHOSTI_BROWSER_HWNDS.discard(h)
@@ -1069,9 +1087,21 @@ def start_ghosti_browser_entry_sound_watcher() -> None:
     def _watcher_loop() -> None:
         # 데몬 시작/재기동 시점에 이미 열려 있는 기존 탭에서는 갑자기 소리가 울리지 않도록 초기 시드 등록
         _collect_ghosti_browser_windows(seed_only=True)
+        tick = 0
         while True:
-            time.sleep(0.15)
-            _collect_ghosti_browser_windows(seed_only=False)
+            time.sleep(0.5)
+            tick += 1
+            try:
+                # 평소에는 활성 창(GetForegroundWindow) 단 1개의 제목만 0.01ms 만에 확인하고,
+                # 전체 창 정리(EnumWindows)는 12틱(6초)마다 1회만 경량 실행하여 커널/핸들 부하를 원천 차단합니다.
+                if tick % 12 == 0:
+                    _collect_ghosti_browser_windows(seed_only=False)
+                else:
+                    fg_hwnd = u32.GetForegroundWindow()
+                    if fg_hwnd and _inspect_single_hwnd(int(fg_hwnd), seed_only=False):
+                        play_web_enter_giggle_api({"source": "os_browser_watcher"})
+            except Exception:
+                pass
 
     threading.Thread(target=_watcher_loop, daemon=True).start()
 

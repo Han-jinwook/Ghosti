@@ -181,6 +181,20 @@ u32.SetForegroundWindow.restype = wintypes.BOOL
 u32.SetFocus.argtypes = [wintypes.HWND]
 u32.SetFocus.restype = wintypes.HWND
 k32.GetCurrentThreadId.restype = wintypes.DWORD
+k32.GetCurrentProcess.restype = wintypes.HANDLE
+k32.GetCurrentThread.restype = wintypes.HANDLE
+k32.SetThreadPriority.argtypes = [wintypes.HANDLE, ctypes.c_int]
+k32.SetThreadPriority.restype = wintypes.BOOL
+k32.GetModuleHandleW.argtypes = [wintypes.LPCWSTR]
+k32.GetModuleHandleW.restype = wintypes.HMODULE
+k32.GetProcAddress.argtypes = [wintypes.HMODULE, ctypes.c_char_p]
+k32.GetProcAddress.restype = ctypes.c_void_p
+k32.VirtualAlloc.argtypes = [ctypes.c_void_p, ctypes.c_size_t, wintypes.DWORD, wintypes.DWORD]
+k32.VirtualAlloc.restype = ctypes.c_void_p
+k32.VirtualProtect.argtypes = [ctypes.c_void_p, ctypes.c_size_t, wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
+k32.VirtualProtect.restype = wintypes.BOOL
+k32.FlushInstructionCache.argtypes = [wintypes.HANDLE, ctypes.c_void_p, ctypes.c_size_t]
+k32.FlushInstructionCache.restype = wintypes.BOOL
 k32.OpenProcess.argtypes = [wintypes.DWORD, wintypes.BOOL, wintypes.DWORD]
 k32.OpenProcess.restype = wintypes.HANDLE
 k32.QueryFullProcessImageNameW.argtypes = [wintypes.HANDLE, wintypes.DWORD, wintypes.LPWSTR, ctypes.POINTER(wintypes.DWORD)]
@@ -234,12 +248,64 @@ class MSLLHOOKSTRUCT(ctypes.Structure):
 LowLevelMouseProcType = ctypes.WINFUNCTYPE(
     ctypes.c_ssize_t, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM
 )
-u32.SetWindowsHookExW.argtypes = [ctypes.c_int, LowLevelMouseProcType, wintypes.HINSTANCE, wintypes.DWORD]
+u32.SetWindowsHookExW.argtypes = [ctypes.c_int, ctypes.c_void_p, wintypes.HINSTANCE, wintypes.DWORD]
 u32.SetWindowsHookExW.restype = wintypes.HANDLE
 u32.CallNextHookEx.argtypes = [wintypes.HANDLE, ctypes.c_int, wintypes.WPARAM, wintypes.LPARAM]
 u32.CallNextHookEx.restype = ctypes.c_ssize_t
 u32.UnhookWindowsHookEx.argtypes = [wintypes.HANDLE]
 u32.UnhookWindowsHookEx.restype = wintypes.BOOL
+
+_PINNED_MOUSE_HOOK_REFS: list[Any] = []
+
+
+def _create_x64_rclick_prefilter_stub(py_cb_obj: Any) -> int:
+    """
+    [마우스 이동 Python GIL 진입 0% 보장 — 순수 네이티브 x64 기계어 프리필터 스텁]
+    - WH_MOUSE_LL은 마우스를 1픽셀만 움직여도(WM_MOUSEMOVE=0x0200, 초당 최대 1,000회) 동기로 콜백을 호출하므로,
+      ctypes Python 콜백을 직접 등록하면 다른 스레드가 GIL을 잡는 순간 OS 마우스 커서가 버벅일 수 있습니다.
+    - 이 56바이트 W^X(RW -> RX) 네이티브 트램펄린은 커널 진입 즉시 C/어셈블리 레벨에서:
+      `if (nCode < 0 || (wParam != WM_RBUTTONDOWN && wParam != WM_RBUTTONUP)) return CallNextHookEx(0, nCode, wParam, lParam);`
+      를 0.0001ms(약 2ns) 만에 바로 반환하고, 오직 실제 마우스 우클릭(0x0204/0x0205)일 때만 Python 콜백으로 점프합니다.
+    """
+    if sys.platform != "win32" or ctypes.sizeof(ctypes.c_void_p) != 8:
+        return 0
+    try:
+        h_u32 = k32.GetModuleHandleW("user32.dll")
+        addr_next = k32.GetProcAddress(h_u32, b"CallNextHookEx") if h_u32 else 0
+        addr_py = ctypes.cast(py_cb_obj, ctypes.c_void_p).value or 0
+        if not addr_next or not addr_py:
+            return 0
+        stub_code = (
+            b"\x85\xC9"                          # test ecx, ecx               (nCode < 0 ?)
+            b"\x78\x12"                          # js call_next (+0x12 -> 0x16)
+            b"\x48\x81\xFA\x04\x02\x00\x00"      # cmp rdx, 0x204              (WM_RBUTTONDOWN)
+            b"\x74\x1F"                          # je call_py (+0x1F -> 0x2C)
+            b"\x48\x81\xFA\x05\x02\x00\x00"      # cmp rdx, 0x205              (WM_RBUTTONUP)
+            b"\x74\x16"                          # je call_py (+0x16 -> 0x2C)
+            # call_next (0x16): CallNextHookEx(NULL, nCode, wParam, lParam)
+            b"\x4D\x89\xC1"                      # mov r9, r8
+            b"\x49\x89\xD0"                      # mov r8, rdx
+            b"\x89\xCA"                          # mov edx, ecx
+            b"\x31\xC9"                          # xor ecx, ecx
+            b"\x48\xB8" + struct.pack("<Q", int(addr_next)) +
+            b"\xFF\xE0"                          # jmp rax
+            # call_py (0x2C): py_cb_obj(nCode, wParam, lParam)
+            b"\x48\xB8" + struct.pack("<Q", int(addr_py)) +
+            b"\xFF\xE0"                          # jmp rax
+        )
+        stub_mem = k32.VirtualAlloc(None, 4096, 0x3000, 0x04)
+        if not stub_mem:
+            return 0
+        ctypes.memmove(stub_mem, stub_code, len(stub_code))
+        old_prot = wintypes.DWORD(0)
+        if not k32.VirtualProtect(stub_mem, 4096, 0x20, ctypes.byref(old_prot)):
+            if not k32.VirtualProtect(stub_mem, 4096, 0x40, ctypes.byref(old_prot)):
+                return 0
+        k32.FlushInstructionCache(k32.GetCurrentProcess(), stub_mem, len(stub_code))
+        _PINNED_MOUSE_HOOK_REFS.append((py_cb_obj, stub_mem))
+        return int(stub_mem)
+    except Exception:
+        return 0
 
 u32.PostMessageW.argtypes = [wintypes.HWND, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
 u32.PostMessageW.restype = wintypes.BOOL
@@ -1142,24 +1208,49 @@ DEFAULT_SUPERPOWER_SETTINGS: dict = {
 }
 
 
+_SUPERPOWER_SETTINGS_MEM_CACHE: dict[str, Any] = {
+    "checked_ts": 0.0,
+    "mtime": -1.0,
+    "data": None,
+}
+
+
 def get_superpower_settings() -> dict:
-    cfg = dict(DEFAULT_SUPERPOWER_SETTINGS)
+    now_s = time.monotonic()
+    cached = _SUPERPOWER_SETTINGS_MEM_CACHE.get("data")
+    if cached is not None and (now_s - float(_SUPERPOWER_SETTINGS_MEM_CACHE.get("checked_ts") or 0.0)) < 2.0:
+        return dict(cached)
+
+    _SUPERPOWER_SETTINGS_MEM_CACHE["checked_ts"] = now_s
+    cur_mtime = -1.0
     try:
-        if SUPERPOWER_SETTINGS_FILE.exists():
+        cur_mtime = SUPERPOWER_SETTINGS_FILE.stat().st_mtime
+    except Exception:
+        cur_mtime = -1.0
+
+    if cached is not None and cur_mtime == float(_SUPERPOWER_SETTINGS_MEM_CACHE.get("mtime") or -2.0):
+        return dict(cached)
+
+    cfg = dict(DEFAULT_SUPERPOWER_SETTINGS)
+    if cur_mtime >= 0.0:
+        try:
             loaded = json.loads(SUPERPOWER_SETTINGS_FILE.read_text(encoding="utf-8"))
             if isinstance(loaded, dict):
                 cfg.update(loaded)
-    except Exception:
-        pass
+        except Exception:
+            pass
     days = int(cfg.get("retention_days", 7))
     if days not in (1, 3, 7, 30):
         days = 7
     cfg["retention_days"] = days
     cfg["max_items"] = 1000 if days >= 30 else 300
+    _SUPERPOWER_SETTINGS_MEM_CACHE["mtime"] = cur_mtime
+    _SUPERPOWER_SETTINGS_MEM_CACHE["data"] = dict(cfg)
     return cfg
 
 
 def update_superpower_settings(patch: dict) -> dict:
+    _SUPERPOWER_SETTINGS_MEM_CACHE["checked_ts"] = 0.0
     cfg = get_superpower_settings()
     if "retention_days" in patch and patch["retention_days"] is not None:
         days = int(patch["retention_days"])
@@ -1184,8 +1275,11 @@ def update_superpower_settings(patch: dict) -> dict:
     try:
         _MERLIN_APPDATA.mkdir(parents=True, exist_ok=True)
         SUPERPOWER_SETTINGS_FILE.write_text(json.dumps(cfg, ensure_ascii=False, indent=2), encoding="utf-8")
+        _SUPERPOWER_SETTINGS_MEM_CACHE["mtime"] = SUPERPOWER_SETTINGS_FILE.stat().st_mtime
     except Exception:
         pass
+    _SUPERPOWER_SETTINGS_MEM_CACHE["checked_ts"] = time.monotonic()
+    _SUPERPOWER_SETTINGS_MEM_CACHE["data"] = dict(cfg)
     return cfg
 
 
@@ -6620,8 +6714,40 @@ WEB_TSF_NON_EDIT_CLASS_PREFIXES: tuple[str, ...] = (
 )
 
 
+_PID_EXE_NAME_CACHE: dict[int, tuple[float, str]] = {}
+_SKIP_AUTO_TYPO_CACHE: dict[tuple[int, int, bool], tuple[float, bool, bool]] = {}
+_EDIT_CHILD_LOOKUP_CACHE: dict[tuple[int, int], tuple[float, int]] = {}
+
+
+def _get_exe_name_by_pid_cached(pid_val: int) -> str:
+    if not pid_val:
+        return ""
+    now_m = time.monotonic()
+    hit = _PID_EXE_NAME_CACHE.get(pid_val)
+    if hit is not None and (now_m - hit[0]) < 30.0:
+        return hit[1]
+    proc_name = ""
+    try:
+        PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
+        hproc = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid_val)
+        if hproc:
+            try:
+                buf_len = wintypes.DWORD(512)
+                path_buf = ctypes.create_unicode_buffer(512)
+                if k32.QueryFullProcessImageNameW(hproc, 0, path_buf, ctypes.byref(buf_len)):
+                    proc_name = Path(path_buf.value).name
+            finally:
+                k32.CloseHandle(hproc)
+    except Exception:
+        pass
+    if len(_PID_EXE_NAME_CACHE) > 512:
+        _PID_EXE_NAME_CACHE.clear()
+    _PID_EXE_NAME_CACHE[pid_val] = (now_m, proc_name)
+    return proc_name
+
+
 def get_window_process_and_class(hwnd: int) -> tuple[str, str, str]:
-    """활성 창 핸들(hwnd)로부터 (실행파일명, 윈도우클래스명, 창제목)을 고속 추출"""
+    """활성 창 핸들(hwnd)로부터 (실행파일명, 윈도우클래스명, 창제목)을 고속 추출 (PID -> exe 캐싱으로 OpenProcess 반복 제거)"""
     if not hwnd:
         return "", "", ""
     win_cls, win_title = _get_win_class_and_title(hwnd)
@@ -6630,16 +6756,7 @@ def get_window_process_and_class(hwnd: int) -> tuple[str, str, str]:
         pid = wintypes.DWORD(0)
         u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
         if pid.value:
-            PROCESS_QUERY_LIMITED_INFORMATION = 0x1000
-            hproc = k32.OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, False, pid.value)
-            if hproc:
-                try:
-                    buf_len = wintypes.DWORD(512)
-                    path_buf = ctypes.create_unicode_buffer(512)
-                    if k32.QueryFullProcessImageNameW(hproc, 0, path_buf, ctypes.byref(buf_len)):
-                        proc_name = Path(path_buf.value).name
-                finally:
-                    k32.CloseHandle(hproc)
+            proc_name = _get_exe_name_by_pid_cached(int(pid.value))
     except Exception:
         pass
     return proc_name, win_cls, win_title
@@ -6648,26 +6765,65 @@ def get_window_process_and_class(hwnd: int) -> tuple[str, str, str]:
 def _get_process_name_from_hwnd(hwnd: int | None) -> str:
     if not hwnd:
         return ""
-    proc_name, _, _ = get_window_process_and_class(int(hwnd))
-    return proc_name or ""
+    try:
+        pid = wintypes.DWORD(0)
+        u32.GetWindowThreadProcessId(int(hwnd), ctypes.byref(pid))
+        if pid.value:
+            return _get_exe_name_by_pid_cached(int(pid.value))
+    except Exception:
+        pass
+    return ""
+
+
+def _find_edit_control_child_cached(hwnd_fg: int) -> int:
+    """15ms 루프에서 EnumChildWindows / FindWindowExW 반복 호출을 차단하는 250ms 메모리 캐시 래퍼"""
+    if not hwnd_fg or not u32.IsWindow(hwnd_fg):
+        return 0
+    focus_h = _get_focused_control_hwnd(hwnd_fg)
+    ckey = (int(hwnd_fg), int(focus_h))
+    now_m = time.monotonic()
+    hit = _EDIT_CHILD_LOOKUP_CACHE.get(ckey)
+    if hit is not None and (now_m - hit[0]) < 0.25:
+        cached_ed = hit[1]
+        if cached_ed == 0:
+            return 0
+        if u32.IsWindow(cached_ed) and u32.IsWindowVisible(cached_ed):
+            return cached_ed
+    ed = _find_edit_control_child(hwnd_fg)
+    if len(_EDIT_CHILD_LOOKUP_CACHE) > 256:
+        _EDIT_CHILD_LOOKUP_CACHE.clear()
+    _EDIT_CHILD_LOOKUP_CACHE[ckey] = (now_m, int(ed or 0))
+    return ed
 
 
 def should_skip_auto_typo(hwnd: int) -> bool:
     """
     [타 프로그램 충돌 원천 차단 — 포커스 검증형 입력칸 화이트리스트(Strict Focus-Verified Whitelist)]
     - 블랙리스트 나열 방식만으로는 세상의 수많은 그래픽·영상·CAD·터미널·커스텀 툴 단축키 충돌을 다 막을 수 없으므로,
-      실시간 키보드 개입(Space/0.55초 자동 성형)은 실제 키보드 포커스(GetGUIThreadInfo.hwndFocus)가 검증된 4대 순수 입력칸에서만 작동합니다:
-      1) Win32 표준 Edit / RichEdit 계열 컨트롤 (단, 비밀번호 칸 ES_PASSWORD=0x0020 및 IDE·터미널·탐색기 제외)
-      2) 메모장(notepad.exe — Win10 Edit / Win11 RichEditD2DPT)
-      3) 엑셀(excel.exe) 중 실제 '셀 텍스트 편집 모드(EXCEL6)' 또는 '수식 입력줄 편집(EXCEL<)'일 때만 (시트 그리드 EXCEL7 100% 차단!)
-      4) 카카오톡(kakaotalk.exe) 채팅 입력창(RICHEDIT50W / Edit / EVA_ChildWindow)
-    - 포토샵·프리미어·캡컷·오토캐드·터미널·원격데스크톱·노션·웹브라우저·한글/MS워드·게임 등 그 외 모든 창은 True(100% 무개입)를 반환합니다.
+      실시간 키보드 개입(Space/0.55초 자동 성형)은 실제 키보드 포커스(GetGUIThreadInfo.hwndFocus)가 검증된 순수 입력칸에서만 작동합니다.
+    - 은행 창 선행 기상은 merlin_z_core_daemon.py의 1.5초 워처가 전담하므로 15ms 루프 내 디스크 JSON I/O를 0건으로 유지하며,
+      동일 (hwnd, focus_h) 결과는 250ms 동안 메모리에 캐싱하여 OpenProcess / EnumChildWindows 반복 호출을 원천 차단합니다.
     """
     if not hwnd:
         return True
     try:
-        if not get_superpower_settings().get("auto_typo_enabled", True):
+        auto_enabled = bool(get_superpower_settings().get("auto_typo_enabled", True))
+        if not auto_enabled:
             return True
+
+        focus_h = _get_focused_control_hwnd(hwnd)
+        now_m = time.monotonic()
+        ckey = (int(hwnd), int(focus_h), auto_enabled)
+        hit = _SKIP_AUTO_TYPO_CACHE.get(ckey)
+        if hit is not None and (now_m - hit[0]) < 0.25:
+            skip_res, is_browser_win = hit[1], hit[2]
+            if not skip_res and is_browser_win:
+                # 웹 [⚡ 귀신창] 수련장 입력칸 포커스 시 document.title의 \u2063 마커는 즉시 반영
+                root_fast = u32.GetAncestor(hwnd, 2) or hwnd
+                _, t_fast = _get_win_class_and_title(root_fast)
+                if t_fast and "\u2063" in t_fast:
+                    return True
+            return skip_res
 
         root_h = u32.GetAncestor(hwnd, 2) or hwnd
         for target_h in (hwnd, root_h):
@@ -6677,18 +6833,6 @@ def should_skip_auto_typo(hwnd: int) -> bool:
             if win_title_chk and "\u2063" in win_title_chk:
                 # 웹 [⚡ 귀신창] 수련장 입력칸 포커스 중에는 웹 자체 즉시 변환 엔진과 OS 데몬이 이중 개입하지 않도록 100% 양보
                 return True
-            if win_title_chk:
-                try:
-                    import sys as _sys_c
-
-                    _os_ag = str(Path(__file__).resolve().parent / "os_agent")
-                    if _os_ag not in _sys_c.path and Path(_os_ag).exists():
-                        _sys_c.path.insert(0, _os_ag)
-                    import plugin_ghosti_care_suite as _care_s
-
-                    _care_s.check_window_title_for_prewake(win_title_chk)
-                except Exception:
-                    pass
             proc_lower = (proc_name or "").lower()
             cls_lower = (win_cls or "").lower()
             if (
@@ -6696,53 +6840,60 @@ def should_skip_auto_typo(hwnd: int) -> bool:
                 or proc_lower in _RCLICK_BYPASS_PROCS
                 or proc_lower in ("explorer.exe", "python.exe", "pythonw.exe")
             ):
+                _SKIP_AUTO_TYPO_CACHE[ckey] = (now_m, True, False)
                 return True
             if any(kw in cls_lower for kw in AUTOCORRECT_EXCLUDE_CLASS_KEYWORDS):
+                _SKIP_AUTO_TYPO_CACHE[ckey] = (now_m, True, False)
                 return True
             if (
                 any(cls_lower.startswith(pfx) for pfx in WEB_TSF_NON_EDIT_CLASS_PREFIXES)
                 and proc_lower not in _BROWSER_AUTO_TYPO_PROCS
             ):
+                _SKIP_AUTO_TYPO_CACHE[ckey] = (now_m, True, False)
                 return True
 
         proc_root, cls_root, _ = get_window_process_and_class(root_h)
         proc_root_low = (proc_root or "").lower()
-        cls_root_low = (cls_root or "").lower()
-
-        focus_h = _get_focused_control_hwnd(hwnd)
         focus_cls = _get_win_class_only(focus_h) if focus_h else ""
+        is_browser_root = proc_root_low in _BROWSER_AUTO_TYPO_PROCS
+        if len(_SKIP_AUTO_TYPO_CACHE) > 256:
+            _SKIP_AUTO_TYPO_CACHE.clear()
 
         # [허용 1] 실제 키보드 포커스가 Win32 표준 Edit / RichEdit 컨트롤에 놓인 경우 (비밀번호 칸 제외)
         if focus_h and focus_cls in _NATIVE_EDIT_CLASSES:
-            if u32.GetWindowLongW(focus_h, -16) & 0x0020:
-                return True
-            return False
+            res = bool(u32.GetWindowLongW(focus_h, -16) & 0x0020)
+            _SKIP_AUTO_TYPO_CACHE[ckey] = (now_m, res, is_browser_root)
+            return res
 
         # [허용 2] 메모장(notepad.exe) 및 워드패드(wordpad.exe — RICHEDIT50W)
         if proc_root_low in ("notepad.exe", "wordpad.exe") or cls_root in ("Notepad", "WordPadClass"):
-            ed_np = _find_edit_control_child(root_h)
-            if ed_np and not (u32.GetWindowLongW(ed_np, -16) & 0x0020):
-                return False
-            return True
+            ed_np = _find_edit_control_child_cached(root_h)
+            res = not bool(ed_np and not (u32.GetWindowLongW(ed_np, -16) & 0x0020))
+            _SKIP_AUTO_TYPO_CACHE[ckey] = (now_m, res, False)
+            return res
 
         # [허용 3] 카카오톡 PC 채팅 입력창 (최신 EVA_Window_Dblclk / 무포커스 핸들 포함, 비밀번호 칸 제외)
         if proc_root_low == "kakaotalk.exe":
             if focus_h and (u32.GetWindowLongW(focus_h, -16) & 0x0020):
+                _SKIP_AUTO_TYPO_CACHE[ckey] = (now_m, True, False)
                 return True
             if not focus_cls or focus_cls in ("RICHEDIT50W", "Edit", "EVA_ChildWindow", "EVA_Window_Dblclk", "EVA_Window"):
+                _SKIP_AUTO_TYPO_CACHE[ckey] = (now_m, False, False)
                 return False
 
         # [허용 4] 웹 브라우저(크롬·엣지·웨일·브레이브·파이어폭스 등 — 카페 댓글·글쓰기 등 웹 입력창 영타➔한글 자동변환)
-        if proc_root_low in _BROWSER_AUTO_TYPO_PROCS:
+        if is_browser_root:
+            _SKIP_AUTO_TYPO_CACHE[ckey] = (now_m, False, True)
             return False
 
         # [허용 5] 엑셀(excel.exe — 오직 실제 '셀 텍스트 편집 모드(EXCEL6)' 또는 '수식 입력줄(EXCEL<)'일 때만 허용, 시트 그리드 EXCEL7은 100% 차단!)
         if proc_root_low == "excel.exe" or cls_root == "XLMAIN":
-            if focus_cls in ("EXCEL6", "EXCEL<"):
-                return False
-            return True
+            res = focus_cls not in ("EXCEL6", "EXCEL<")
+            _SKIP_AUTO_TYPO_CACHE[ckey] = (now_m, res, False)
+            return res
 
         # 그 외 모든 프로그램(워드·한글 등 자체 오토코렉트 보유 앱)은 실시간 자동성형 100% 차단
+        _SKIP_AUTO_TYPO_CACHE[ckey] = (now_m, True, False)
         return True
     except Exception:
         return True
@@ -8201,13 +8352,20 @@ def main() -> None:
                 pass
         return u32.CallNextHookEx(None, nCode, wParam, lParam)
 
-    # WH_MOUSE_LL 훅은 반드시 sleep/블로킹이 없는 전용 GetMessageW 스레드에서 돌려야 마우스 커서 흔들림·끊김이 0%가 됩니다.
+    # WH_MOUSE_LL 훅은 순수 네이티브 x64 기계어 프리필터 스텁을 거쳐 WM_MOUSEMOVE(마우스 이동)가 Python GIL에 0회 진입하게 하며,
+    # 실제 우클릭(WM_RBUTTONDOWN/UP)만 THREAD_PRIORITY_HIGHEST 전용 GetMessageW 스레드에서 즉시 처리하여 마우스 끊김을 물리적으로 0%로 차단합니다.
     _ll_mouse_hook_cb = LowLevelMouseProcType(_ll_mouse_proc)
+    _ll_mouse_native_stub_ptr = _create_x64_rclick_prefilter_stub(_ll_mouse_hook_cb)
+    _ll_mouse_hook_fn_ptr = _ll_mouse_native_stub_ptr or (ctypes.cast(_ll_mouse_hook_cb, ctypes.c_void_p).value or 0)
     _ll_mouse_hook_ready = threading.Event()
 
     def _dedicated_mouse_hook_worker() -> None:
         try:
-            _hk = u32.SetWindowsHookExW(WH_MOUSE_LL, _ll_mouse_hook_cb, None, 0)
+            try:
+                k32.SetThreadPriority(k32.GetCurrentThread(), 2)  # THREAD_PRIORITY_HIGHEST
+            except Exception:
+                pass
+            _hk = u32.SetWindowsHookExW(WH_MOUSE_LL, _ll_mouse_hook_fn_ptr, None, 0) if _ll_mouse_hook_fn_ptr else 0
             _ll_mouse_hook_ready.set()
             if not _hk:
                 return
@@ -8224,6 +8382,7 @@ def main() -> None:
     msg = wintypes.MSG()
     PM_REMOVE = 0x0001
     WM_QUIT_MSG = 0x0012
+    last_fs_signal_poll_ts: float = 0.0
     # [절대 금기]: 데몬 기동·재기동 시 유저가 호출하지 않았는데 귀신창이 혼자 튀어나오는 현상 영구 차단!
     pending_init_show_ts: float = 0.0
     global _MAIN_LOOP_HEARTBEAT_TS
@@ -8382,8 +8541,11 @@ def main() -> None:
                 if _PINNED_HWNDS:
                     enforce_pinned_windows()
                 global _CLEAR_ALL_REQUESTED
+                poll_fs_signals_now = (now - last_fs_signal_poll_ts) >= 0.12
+                if poll_fs_signals_now:
+                    last_fs_signal_poll_ts = now
                 sig_triggered = False
-                if CLEAR_SIGNAL_FILE.exists():
+                if poll_fs_signals_now and CLEAR_SIGNAL_FILE.exists():
                     try:
                         sig_ts = float(CLEAR_SIGNAL_FILE.read_text(encoding="utf-8").strip() or "0")
                         if sig_ts > last_clear_sig_ts:
@@ -8405,7 +8567,7 @@ def main() -> None:
                     empty_os_clipboard()
                     last_seq_num = u32.GetClipboardSequenceNumber()
                     close_ghost_toast()
-                if OPEN_UI2_SIGNAL_FILE.exists():
+                if poll_fs_signals_now and OPEN_UI2_SIGNAL_FILE.exists():
                     try:
                         ui2_sig = json.loads(OPEN_UI2_SIGNAL_FILE.read_text(encoding="utf-8"))
                         u2_ts = float(ui2_sig.get("ts") or 0.0)
@@ -8456,8 +8618,8 @@ def main() -> None:
                             or ((u32.GetAsyncKeyState(0x60 + n_check) & 0x8000) != 0)
                         )
 
-                # 1) %LOCALAPPDATA%/Ghosti/data/clipboard_queue.json 에 순차 목록을 장전했는지 확인
-                if QUEUE_FILE.exists():
+                # 1) %LOCALAPPDATA%/Ghosti/data/clipboard_queue.json 에 순차 목록을 장전했는지 확인 (120ms 스로틀로 디스크 stat 과호출 방지)
+                if poll_fs_signals_now and QUEUE_FILE.exists():
                     try:
                         mtime = QUEUE_FILE.stat().st_mtime
                         if mtime > last_queue_mtime:
@@ -9222,7 +9384,7 @@ def main() -> None:
                             input_fkeys_armed = False
 
                     if allow_live_input and (now - last_paste_ts) > 1.5:
-                        ed_live = _find_edit_control_child(hwnd_live)
+                        ed_live = _find_edit_control_child_cached(hwnd_live)
                         if ed_live:
                             b_live = _get_edit_control_current_line_with_bounds(ed_live)
                             if b_live is not None:

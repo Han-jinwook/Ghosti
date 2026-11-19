@@ -116,16 +116,40 @@ def _ensure_care_dir() -> None:
     CARE_DIR.mkdir(parents=True, exist_ok=True)
 
 
+_CARE_SETTINGS_MEM_CACHE: Dict[str, Any] = {
+    "checked_ts": 0.0,
+    "mtime": -1.0,
+    "data": None,
+}
+
+
 def _load_care_settings() -> Dict[str, Any]:
-    _ensure_care_dir()
-    if CARE_SETTINGS_FILE.exists():
+    now_m = time.monotonic()
+    cached = _CARE_SETTINGS_MEM_CACHE.get("data")
+    if cached is not None and (now_m - float(_CARE_SETTINGS_MEM_CACHE.get("checked_ts") or 0.0)) < 5.0:
+        return dict(cached)
+
+    _CARE_SETTINGS_MEM_CACHE["checked_ts"] = now_m
+    cur_mtime = -1.0
+    try:
+        cur_mtime = CARE_SETTINGS_FILE.stat().st_mtime
+    except Exception:
+        cur_mtime = -1.0
+
+    if cached is not None and cur_mtime == float(_CARE_SETTINGS_MEM_CACHE.get("mtime") or -2.0):
+        return dict(cached)
+
+    data_out: Dict[str, Any] = {"bankAutoSleepEnabled": False}
+    if cur_mtime >= 0.0:
         try:
             data = json.loads(CARE_SETTINGS_FILE.read_text(encoding="utf-8"))
             if isinstance(data, dict):
-                return data
+                data_out = data
         except Exception:
             pass
-    return {"bankAutoSleepEnabled": False}
+    _CARE_SETTINGS_MEM_CACHE["mtime"] = cur_mtime
+    _CARE_SETTINGS_MEM_CACHE["data"] = dict(data_out)
+    return data_out
 
 
 def _save_care_settings(settings: Dict[str, Any]) -> None:
@@ -134,8 +158,11 @@ def _save_care_settings(settings: Dict[str, Any]) -> None:
         tmp = CARE_SETTINGS_FILE.with_suffix(".json.tmp")
         tmp.write_text(json.dumps(settings, ensure_ascii=False, indent=2), encoding="utf-8")
         os.replace(tmp, CARE_SETTINGS_FILE)
+        _CARE_SETTINGS_MEM_CACHE["mtime"] = CARE_SETTINGS_FILE.stat().st_mtime
     except Exception:
         pass
+    _CARE_SETTINGS_MEM_CACHE["checked_ts"] = time.monotonic()
+    _CARE_SETTINGS_MEM_CACHE["data"] = dict(settings)
 
 
 def _is_bank_auto_sleep_enabled() -> bool:
@@ -314,10 +341,21 @@ def is_running_as_admin() -> bool:
         return False
 
 
+_HELPER_TASK_REGISTERED_CACHE: Dict[str, Any] = {
+    "checked_ts": 0.0,
+    "value": None,
+}
+
+
 def is_security_care_helper_task_registered() -> bool:
-    """작업 스케줄러에 최고권한 헬퍼(GhostiSecurityCareHelper)가 등록되어 있고 실행 대상이 유효한지 확인합니다."""
+    """작업 스케줄러에 최고권한 헬퍼(GhostiSecurityCareHelper)가 등록되어 있고 실행 대상이 유효한지 확인합니다 (60초 캐시로 schtasks 프로세스 폭주 차단)."""
     if sys.platform != "win32":
         return False
+    now_m = time.monotonic()
+    cached_val = _HELPER_TASK_REGISTERED_CACHE.get("value")
+    if cached_val is not None and (now_m - float(_HELPER_TASK_REGISTERED_CACHE.get("checked_ts") or 0.0)) < 60.0:
+        return bool(cached_val)
+    res_val = False
     try:
         r = subprocess.run(
             ["schtasks", "/query", "/tn", SECURITY_CARE_HELPER_TASK_NAME, "/v", "/fo", "LIST"],
@@ -328,17 +366,15 @@ def is_security_care_helper_task_registered() -> bool:
             timeout=2.5,
             creationflags=CREATE_NO_WINDOW,
         )
-        if r.returncode != 0:
-            return False
-        # 과거 구버전(.exe + _MEIPASS .py 혼합)으로 잘못 등록된 태스크면 재등록 유도
-        out = r.stdout or ""
-        if "_MEIPASS" in out or "zcore_rt" in out:
-            return False
-        if getattr(sys, "frozen", False) and ".py" in out:
-            return False
-        return True
+        if r.returncode == 0:
+            out = r.stdout or ""
+            if "_MEIPASS" not in out and "zcore_rt" not in out and not (getattr(sys, "frozen", False) and ".py" in out):
+                res_val = True
     except Exception:
-        return False
+        res_val = False
+    _HELPER_TASK_REGISTERED_CACHE["checked_ts"] = now_m
+    _HELPER_TASK_REGISTERED_CACHE["value"] = res_val
+    return res_val
 
 
 def _register_security_care_helper_task_as_admin() -> bool:
@@ -367,7 +403,10 @@ def _register_security_care_helper_task_as_admin() -> bool:
             timeout=3.5,
             creationflags=CREATE_NO_WINDOW,
         )
-        return r.returncode == 0
+        ok = r.returncode == 0
+        _HELPER_TASK_REGISTERED_CACHE["checked_ts"] = time.monotonic() if ok else 0.0
+        _HELPER_TASK_REGISTERED_CACHE["value"] = True if ok else None
+        return ok
     except Exception:
         return False
 
@@ -684,7 +723,20 @@ def _process_elevated_helper_queue(install_task_too: bool = False) -> None:
 # ============================================================================
 # 1. 5KB 정적 JSON 화이트리스트 로더 & 주간 무소음 원격 동기화
 # ============================================================================
+_SECURITY_WHITELIST_MEM_CACHE: Dict[str, Any] = {
+    "checked_ts": 0.0,
+    "mtimes": (-1.0, -1.0),
+    "data": None,
+}
+
+
 def load_security_whitelist(allow_remote_sync: bool = False) -> Dict[str, Any]:
+    now_m = time.monotonic()
+    if not allow_remote_sync:
+        cached = _SECURITY_WHITELIST_MEM_CACHE.get("data")
+        if cached is not None and (now_m - float(_SECURITY_WHITELIST_MEM_CACHE.get("checked_ts") or 0.0)) < 60.0:
+            return cached
+
     _ensure_care_dir()
     if allow_remote_sync:
         try:
@@ -702,20 +754,34 @@ def load_security_whitelist(allow_remote_sync: bool = False) -> Dict[str, Any]:
                         json.dumps(parsed, ensure_ascii=False, indent=2),
                         encoding="utf-8",
                     )
+                    _SECURITY_WHITELIST_MEM_CACHE["checked_ts"] = time.monotonic()
+                    _SECURITY_WHITELIST_MEM_CACHE["data"] = parsed
                     return parsed
         except Exception:
             pass
+
+    mt_pair = (
+        WHITELIST_JSON_BUNDLED.stat().st_mtime if WHITELIST_JSON_BUNDLED.exists() else -1.0,
+        WHITELIST_JSON_CACHE.stat().st_mtime if WHITELIST_JSON_CACHE.exists() else -1.0,
+    )
+    cached = _SECURITY_WHITELIST_MEM_CACHE.get("data")
+    if cached is not None and mt_pair == _SECURITY_WHITELIST_MEM_CACHE.get("mtimes"):
+        _SECURITY_WHITELIST_MEM_CACHE["checked_ts"] = now_m
+        return cached
 
     for candidate in (WHITELIST_JSON_BUNDLED, WHITELIST_JSON_CACHE):
         if candidate.exists():
             try:
                 data = json.loads(candidate.read_text(encoding="utf-8"))
                 if isinstance(data, dict) and data.get("web_security_services_whitelist"):
+                    _SECURITY_WHITELIST_MEM_CACHE["checked_ts"] = now_m
+                    _SECURITY_WHITELIST_MEM_CACHE["mtimes"] = mt_pair
+                    _SECURITY_WHITELIST_MEM_CACHE["data"] = data
                     return data
             except Exception:
                 continue
 
-    return {
+    fallback_wl = {
         "version": "2026.11.15.fallback",
         "corporate_drm_never_touch": [
             "maepsbroker", "markany", "fasoo", "softcamp", "v3lite", "alyac", "msmpeng"
@@ -734,6 +800,10 @@ def load_security_whitelist(allow_remote_sync: bool = False) -> Dict[str, Any]:
         "wake_window_title_keywords": ["은행", "뱅크", "홈택스", "정부24", "결제", "본인인증", "공동인증서", "인터넷뱅킹", "카드"],
         "sleep_grace_period_seconds": 900,
     }
+    _SECURITY_WHITELIST_MEM_CACHE["checked_ts"] = now_m
+    _SECURITY_WHITELIST_MEM_CACHE["mtimes"] = mt_pair
+    _SECURITY_WHITELIST_MEM_CACHE["data"] = fallback_wl
+    return fallback_wl
 
 
 # ============================================================================

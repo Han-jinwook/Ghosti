@@ -107,6 +107,8 @@ def sync_internal_z_core_mirrors():
     core_files = [
         os.path.join(UZC_DIR, "os_agent", "merlin_z_core_daemon.py"),
         os.path.join(UZC_DIR, "os_agent", "plugin_ghosti_os.py"),
+        os.path.join(UZC_DIR, "os_agent", "plugin_ghosti_care_suite.py"),
+        os.path.join(UZC_DIR, "os_agent", "plugin_ghosti_superpowers.py"),
         os.path.join(UZC_DIR, "os_agent", "plugins", "plugin_paid_work_sdrive.py"),
         os.path.join(UZC_DIR, "os_agent", "ppocr_v5_worker.py"),
         os.path.join(UZC_DIR, "os_agent", "merlin_z_core_os.py"),
@@ -161,6 +163,8 @@ def sync_internal_z_core_mirrors():
                 "deploy_z_core_cluster.py",
                 os.path.join("os_agent", "merlin_z_core_daemon.py"),
                 os.path.join("os_agent", "plugin_ghosti_os.py"),
+                os.path.join("os_agent", "plugin_ghosti_care_suite.py"),
+                os.path.join("os_agent", "plugin_ghosti_superpowers.py"),
                 os.path.join("os_agent", "plugins", "plugin_paid_work_sdrive.py"),
                 os.path.join("os_agent", "ppocr_v5_worker.py"),
                 os.path.join("os_agent", "merlin_z_core_os.py"),

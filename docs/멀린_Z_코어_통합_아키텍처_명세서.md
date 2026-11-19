@@ -69,11 +69,11 @@
 
 ---
 
-## 🧩 [확정 추가] 단일 표준 포트(`127.0.0.1:5199`) 내장 소프트웨어 플러그인 4종 상세 입출력 아키텍처 (`merlin_z_core_daemon.py` v2.3.9)
+## 🧩 [확정 추가] 단일 표준 포트(`127.0.0.1:5199`) 내장 소프트웨어 플러그인 6종 상세 입출력 아키텍처 (`merlin_z_core_daemon.py` v2.4.99)
 
 ### 1. 왜 단일 포트(`5199`) + 내장 소프트웨어 플러그인(`Built-in Software Plugins`)인가?
 - 유저가 귀신같이·센스톡·어그로필터·썬드리머 스튜디오를 쓸 때마다 별도 설치파일을 2중으로 설치하거나 포트를 나누면 방화벽 경고와 포트 충돌이 발생합니다.
-- 따라서 단일 설치파일 **`Merlin_Z_Core_Setup.exe` (`v2.3.9`, 실행 즉시 `%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe` 영구 경로 자동 동기화)** 내부에 4대 소프트웨어 플러그인(`plugin_ghosti_os.py`, `plugin_ghosti_care_suite.py`, `plugin_senstalk.py`, `plugin_aggrofilter.py`) 및 `seq_paste_daemon.py`(`--seq-paste-daemon`)를 기본 내장하고, `ThreadingHTTPServer` 멀티스레드 비동기 서버로 **단일 표준 포트 `http://127.0.0.1:5199`**에서 모든 패밀리 앱 요청을 병렬 처리합니다.
+- 따라서 단일 설치파일 **`Merlin_Z_Core_Setup.exe` (`v2.4.99`, 실행 즉시 `%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe` 영구 경로 자동 동기화)** 내부에 소프트웨어 플러그인(`plugin_ghosti_os.py`, `plugin_paid_work_sdrive.py`, `plugin_ghosti_care_suite.py`, `plugin_ghosti_superpowers.py`, `plugin_senstalk.py`, `plugin_aggrofilter.py`) 및 `seq_paste_daemon.py`(`--seq-paste-daemon`)를 기본 내장하고, `ThreadingHTTPServer` 멀티스레드 비동기 서버로 **단일 표준 포트 `http://127.0.0.1:5199`**에서 모든 패밀리 앱 요청을 병렬 처리합니다.
 
 ### 2. 표준 라우팅 테이블 및 JSON 입출력 규격 (`merlin_z_core_daemon.py` 직결)
 
@@ -583,13 +583,14 @@ exit
 
 ---
 
-## 🚀 5. 1호기(로컬) & 4호기(`100.114.100.24`) Z-코어 클러스터 자동 배포 (`deploy_z_core_cluster.py`) 및 1ms 포트 바인딩 아키텍처 (2026-11-10 확정)
+## 🚀 5. 1~6호기 전 클러스터 Z-코어(`v2.4.99`) 자동 배포 (`deploy_z_core_cluster.py`) · 1ms 포트 바인딩 · 마우스 이동 GIL 진입 `0%` 아키텍처 (2026-11-20 최신화)
 
 1. **`ensure_port_free()` 1ms 소켓 바인딩 Fast-Path (`merlin_z_core_daemon.py`)**:
    - 포트 `5199`가 이미 비어 있는 상태(최초 설치 또는 정상 종료 직후)에서 불필요한 HTTP 타임아웃(`/__merlin/health`, `/__merlin/shutdown`) 및 `netstat -ano` 전수 스캔으로 인해 기동이 6초 이상 지연되던 문제를 해결하기 위해, `ensure_port_free(port, force_replace)` 진입 즉시 `socket.bind(("127.0.0.1", port))`로 1ms 만에 빈 포트를 판별하고 즉시 HTTP 서버를 바인딩합니다.
    - `--replace` 플래그 전달 시(`force_replace=True`) 동일 `CORE_VERSION`이라도 기존 프로세스를 우아하게 종료하고 최신 코드로 즉시 교체 기동합니다.
-2. **1호기 WMI 독립 프로세스 기동 & 4호기 SSH/SCP 무간섭 리로드 (`universal_z_core/deploy_z_core_cluster.py`)**:
-   - **1호기**: 백그라운드 툴 세션 종료 시 자식 프로세스가 함께 종료(Job Object Kill)되는 현상을 차단하기 위해 `Invoke-WmiMethod -Class Win32_Process -Name Create`로 `merlin_z_core_daemon.py`(`5199`)와 `seq_paste_daemon.py`(`51988`)를 독립 기동합니다.
-   - **4호기 (`100.114.100.24`)**: `~/.ssh/id_ai_master` 키를 동적 탐색하여 `C:/MerlinTools/universal_z_core/` 및 `C:/MerlinTools/seq_paste_daemon.py`를 SCP로 전수 동기화하고, 작업 스케줄러(`StartMerlinZCore5199`, `MerlinSeqPasteStart`)를 트리거하여 테스터(해나라님)의 화면을 방해하지 않고 백그라운드에서 무간섭 리로드 및 `/api/care/status` 헬스체크를 수행합니다.
-3. **35KB 경량 케어스위트 플러그인 (`plugin_ghosti_care_suite.py`, `/api/care/*`)**:
-   - `/api/care/status`, `/api/care/ToggleBankMode`, `/api/care/DeepUninstall` 엔드포인트를 단일 포트 `5199`에 통합하여 은행 보안모듈 동결/해제, Windows Defender(AMSI) 무소음 수호 히스토리, 우클릭 스마트 압축 해제, 어도비급 4단계 딥 언인스톨을 제공합니다.
+2. **1~6호기 전 클러스터 `Merlin_Z_Core_Setup.exe` 단일 바이너리 + `LogonType Interactive` 무간섭 리로드 (`universal_z_core/deploy_z_core_cluster.py`)**:
+   - **로컬 본진(6호기)**: 백그라운드 툴 세션 종료 시 자식 프로세스가 함께 종료(Job Object Kill)되는 현상을 차단하기 위해 `Invoke-WmiMethod -Class Win32_Process -Name Create`로 `merlin_z_core_daemon.py`(`5199`)와 `seq_paste_daemon.py`(`51988`)를 독립 기동합니다.
+   - **원격 1~5호기 (`1호기 100.86.161.8` · `2호기 100.88.230.16` · `3호기 100.102.43.42` · `4호기 100.114.100.24` · `5호기 집 100.122.235.63`)**: `~/.ssh/id_ai_master` 키를 동적 탐색하여 `%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe` 단일 실행파일을 SCP로 전수 동기화하고, `LogonType Interactive` 작업 스케줄러(`StartMerlinZCore5199`) 및 `HKCU\...\Run\MerlinZCoreDaemon`을 통해 Session 0 격리 없이 데스크톱 인터랙티브 세션에서 `5199`와 `51988`을 기동·검증합니다.
+3. **마우스 이동 GIL 진입 `0%` 네이티브 x64 프리필터 스텁 & 백그라운드 디스크/프로세스 I/O 완전 제거 (`Z-Core v2.4.99`)**:
+   - **`seq_paste_daemon.py` (`WH_MOUSE_LL` W^X 네이티브 기계어 트램펄린 & 15ms 루프 무-I/O)**: `VirtualAlloc` + `VirtualProtect(PAGE_EXECUTE_READ)` 기반 56바이트 x64 네이티브 스텁이 `WM_MOUSEMOVE`를 Python GIL 진입 `0회`(0.0001ms 네이티브 `CallNextHookEx` 직행)로 즉시 반환하고 오직 `WM_RBUTTONDOWN`/`WM_RBUTTONUP`만 `THREAD_PRIORITY_HIGHEST` 스레드에서 처리합니다. 15ms 루프 내 중복 `check_window_title_for_prewake` 및 디스크 JSON 읽기를 제거하고 `PID➔exe`(30초)·`should_skip_auto_typo`(250ms)·`_find_edit_control_child`(250ms)·시그널 파일(120ms) 메모리 캐시를 적용했습니다.
+   - **`plugin_ghosti_care_suite.py` & `plugin_ghosti_superpowers.py` 경량화**: `/api/care/*`의 화이트리스트·설정·`schtasks` 권한헬퍼 조회를 메모리 캐시(5~60초 TTL)로 보호하고, 브라우저 진입 효과음 워처(`start_ghosti_browser_entry_sound_watcher`)는 평소 활성 창(`GetForegroundWindow`) 1개의 제목만 0.01ms 만에 검사(전체 창 정리는 6초 주기 + `PID➔exe` 캐시)하여 커널 핸들 부하를 원천 차단합니다.
