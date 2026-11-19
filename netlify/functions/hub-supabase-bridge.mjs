@@ -12,6 +12,11 @@
  * 선택: MERLIN_HUB_URL (기본 https://os.sundreamer.app), MERLIN_HUB_CLIENT_ID, MERLIN_HUB_CLIENT_SECRET
  */
 import crypto from 'node:crypto';
+import {
+  handleAuthedWorkAndDeviceAction,
+  handlePublicWorkPreviewAction,
+  handlePublicWorkSignDownloadAction,
+} from './lib/workAndDeviceBridgeOps.mjs';
 
 const HUB_URL = process.env.MERLIN_HUB_URL || 'https://os.sundreamer.app';
 const HUB_CLIENT_ID = process.env.MERLIN_HUB_CLIENT_ID || 'APP-01';
@@ -191,6 +196,19 @@ export default async (req) => {
       return json(report.ok ? 200 : 500, report);
     }
 
+    if (action === 'work_get_preview') {
+      if (!supabaseUrl || !serviceKey) {
+        return json(500, { ok: false, reason: '서버 환경변수 미설정' });
+      }
+      const inviteToken = reqUrl?.searchParams.get('token') || '';
+      const out = await handlePublicWorkPreviewAction({
+        supabaseUrl,
+        serviceKey,
+        inviteToken,
+      });
+      return json(out.status, out.body);
+    }
+
     if (!supabaseUrl || !publicAnonKey) {
       return json(500, { ok: false, reason: '공개 클라이언트 설정 미준비' });
     }
@@ -203,16 +221,37 @@ export default async (req) => {
     return json(500, { ok: false, reason: '서버 환경변수 미설정 (VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY / SUPABASE_JWT_SECRET)' });
   }
 
-  const auth = req.headers.get('authorization') || '';
-  const hubToken = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
-  if (!hubToken) return json(401, { ok: false, reason: '허브 토큰 없음' });
-
   let body = {};
   try {
     body = await req.json();
   } catch {
     /* body 선택 */
   }
+
+  const reqAction = typeof body?.action === 'string' ? body.action.trim() : '';
+
+  // 비로그인 상태에서도 유효한 초대 토큰(inviteToken)만으로 열람·다운로드 가능한 업무방 24시간 프리뷰
+  if (reqAction === 'work_get_preview') {
+    const out = await handlePublicWorkPreviewAction({
+      supabaseUrl,
+      serviceKey,
+      inviteToken: body?.inviteToken || '',
+    });
+    return json(out.status, out.body);
+  }
+  if (reqAction === 'work_sign_download' && body?.inviteToken) {
+    const out = await handlePublicWorkSignDownloadAction({
+      supabaseUrl,
+      serviceKey,
+      inviteToken: body.inviteToken,
+      sha256: body.sha256 || '',
+    });
+    return json(out.status, out.body);
+  }
+
+  const auth = req.headers.get('authorization') || '';
+  const hubToken = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
+  if (!hubToken) return json(401, { ok: false, reason: '허브 토큰 없음' });
 
   // ① 허브 토큰 서버 검증 (브라우저가 보낸 userId/email은 신뢰하지 않음)
   let hubUser;
@@ -238,6 +277,21 @@ export default async (req) => {
   if (!userId || !email) return json(401, { ok: false, reason: '허브 응답에 userId/email 없음' });
   if (body.userId && String(body.userId).trim() !== userId) {
     return json(403, { ok: false, reason: '요청 userId와 허브 검증 userId 불일치' });
+  }
+
+  if (reqAction) {
+    const opOut = await handleAuthedWorkAndDeviceAction({
+      action: reqAction,
+      body,
+      userId,
+      email,
+      hubNickname: hubUser.nickname || '',
+      supabaseUrl,
+      serviceKey,
+    });
+    if (opOut) {
+      return json(opOut.status, opOut.body);
+    }
   }
 
   // ② service_role Upsert (id = 허브 family_users.id)

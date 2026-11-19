@@ -3,6 +3,7 @@ import { useSaySeeStore } from '../store/useSaySeeStore';
 import { resolveLoungePhotoCorpus } from '../store/slices/storeSharedRefs';
 import { cosineSimilarity } from '../services/aiEngine';
 import { dispatchGhostCastLiveCommand } from './GhostCastAndLiveSystem';
+import { pushTeleportPhotoToPcVanguard } from '../services/deviceIntegrationService';
 import type { PhotoItem } from '../types/saysee';
 
 type ContextTab = 'same-day' | 'similar-visual' | 'drill-down';
@@ -468,6 +469,28 @@ export const PhotoDetailModal: React.FC = () => {
                 title="연결된 내 PC/노트북 모니터에 전체화면 클린 뷰어로 띄우고 내 폰을 무선 리모컨으로 전환합니다 (카톡 알림 유출 0%)"
               >
                 <span className="hidden sm:inline">💻 모니터로 크게 보기</span><span className="sm:hidden">💻 모니터</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const extracted =
+                    selectedPhoto.captionKo ||
+                    (selectedPhoto.keywordsKo || []).join(' · ') ||
+                    (selectedPhoto.tags || []).join(' · ') ||
+                    selectedPhoto.name;
+                  pushTeleportPhotoToPcVanguard({
+                    fileName: selectedPhoto.name,
+                    ocrText: extracted,
+                    summary: `[0.2초 공간이동] ${selectedPhoto.name}`,
+                  });
+                  setActionNotice(
+                    `⚡ '${selectedPhoto.name}' 텍스트·정보가 연결된 내 PC 귀신창(Ctrl+0)으로 0.2초 공간이동 전송되었습니다!`
+                  );
+                }}
+                className="px-3.5 py-1.5 rounded-full bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/60 text-teal-700 dark:text-teal-200 font-label-sm text-label-sm font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
+                title="연결된 내 PC의 귀신창(Ctrl+0) 대기열로 사진 속 글자·정보를 0.2초 만에 전송합니다"
+              >
+                <span className="hidden sm:inline">⚡ PC 귀신창(Ctrl+0) 전송</span><span className="sm:hidden">⚡ PC전송</span>
               </button>
               <button
                 onClick={() => {

@@ -27,6 +27,7 @@ import re
 import subprocess
 import sys
 from typing import Any, Dict, List, Optional, Tuple
+import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
 
@@ -46,6 +47,9 @@ WORK_SDRIVE_ACTIONS = {
     "sdrive-list-files",
     "sdrive-upload-file",
     "sdrive-pull-sync",
+    "sdrive-push-blob",
+    "sdrive-pull-blob",
+    "sdrive-delete-file",
     "sdrive-toggle-hide",
 }
 
@@ -699,11 +703,18 @@ def list_work_files(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 pass
         files_out.append(item)
 
+    cur_rel_set = {str(f["relPath"]) for f in files_out}
+    prev_known_set = set(cfg.get("knownRelPaths") or [])
+    locally_deleted = sorted(prev_known_set - cur_rel_set - hidden_rel_set)
+    if cur_rel_set != prev_known_set:
+        _save_sdrive_config({"knownRelPaths": sorted(cur_rel_set)})
+
     return {
         "ok": True,
         "mounted": os.path.exists("S:\\"),
         "targetDir": str(vault_dir),
         "files": files_out,
+        "locallyDeletedRelPaths": locally_deleted,
     }
 
 
@@ -797,17 +808,78 @@ def write_uploaded_work_file(data: Dict[str, Any] | None = None) -> Dict[str, An
     }
 
 
+def _parse_iso_mtime_sec(raw_iso: Any) -> float:
+    s = str(raw_iso or "").strip()
+    if not s:
+        return 0.0
+    try:
+        if s.endswith("Z"):
+            s = s[:-1] + "+00:00"
+        return datetime.fromisoformat(s).timestamp()
+    except Exception:
+        return 0.0
+
+
+def _move_to_recycle_bin_safe(target: Path) -> bool:
+    if not target.exists():
+        return True
+    if os.name == "nt":
+        try:
+            class SHFILEOPSTRUCTW(ctypes.Structure):
+                _fields_ = [
+                    ("hwnd", ctypes.c_void_p),
+                    ("wFunc", ctypes.c_uint),
+                    ("pFrom", ctypes.c_wchar_p),
+                    ("pTo", ctypes.c_wchar_p),
+                    ("fFlags", ctypes.c_ushort),
+                    ("fAnyOperationsAborted", ctypes.c_int),
+                    ("hNameMappings", ctypes.c_void_p),
+                    ("lpszProgressTitle", ctypes.c_wchar_p),
+                ]
+
+            op = SHFILEOPSTRUCTW()
+            op.hwnd = None
+            op.wFunc = 0x0003  # FO_DELETE
+            op.pFrom = str(target) + "\x00\x00"
+            op.pTo = None
+            op.fFlags = 0x0040 | 0x0010 | 0x0004 | 0x0400  # ALLOWUNDO | NOCONFIRMATION | SILENT | NOERRORUI
+            rc = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op))
+            if rc == 0 and not target.exists():
+                return True
+        except Exception:
+            pass
+    try:
+        target.unlink(missing_ok=True)
+        return True
+    except Exception:
+        return False
+
+
 def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """초대받은 팀원(또는 방장) PC에 Z-코어가 연결되면 원격 공유 업무파일 목록을 S:\\ 로컬 폴더로 무결성 동기화합니다."""
     payload = data or {}
     incoming = payload.get("files")
+    tombstones = payload.get("deletedTombstones") or {}
     if not isinstance(incoming, list):
-        return {"ok": True, "syncedCount": 0, "skippedCount": 0}
+        incoming = []
 
     vault_dir = get_work_vault_dir(ensure_dirs=True)
     mount_or_unmount_s_drive({"action": "mount", "openExplorer": False})
     cfg = _load_sdrive_config()
     up_map = dict(cfg.get("uploaderByRelPath") or {})
+    known_set = set(cfg.get("knownRelPaths") or [])
+
+    removed_by_tombstone = 0
+    if isinstance(tombstones, dict):
+        for t_rel, t_info in tombstones.items():
+            clean_t = str(t_rel or "").strip().replace("\\", "/").lstrip("/")
+            target_t = _safe_resolve_inside_vault(vault_dir, clean_t)
+            if target_t and target_t.is_file() and not detect_file_lock_owner(target_t):
+                del_ts = _parse_iso_mtime_sec(t_info.get("deletedAt") if isinstance(t_info, dict) else "")
+                if del_ts <= 0 or target_t.stat().st_mtime <= del_ts + 2.0:
+                    if _move_to_recycle_bin_safe(target_t):
+                        known_set.discard(clean_t)
+                        removed_by_tombstone += 1
 
     synced = 0
     skipped = 0
@@ -817,8 +889,12 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
         rel_p = str(item.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
         b64_raw = str(item.get("base64Data") or item.get("inlineSyncBase64") or "").strip()
         remote_sha = str(item.get("sha256") or "").strip()
+        remote_mtime = _parse_iso_mtime_sec(item.get("fileMtimeIso") or item.get("fileMtime"))
         uploader = str(item.get("uploaderNickname") or item.get("author") or "").strip()
         if not rel_p or not b64_raw:
+            skipped += 1
+            continue
+        if isinstance(tombstones, dict) and rel_p in tombstones:
             skipped += 1
             continue
 
@@ -831,14 +907,19 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
             if detect_file_lock_owner(target):
                 skipped += 1
                 continue
+            st = target.stat()
             if remote_sha:
-                st = target.stat()
                 local_meta = _extract_rich_preview_cached(target, st)
                 if local_meta.get("sha256") == remote_sha:
                     if uploader and up_map.get(rel_p) != uploader:
                         up_map[rel_p] = uploader
+                    known_set.add(rel_p)
                     skipped += 1
                     continue
+            # [최신본 보호 가드]: 내 로컬 파일 수정시각이 원격보다 2초 이상 더 최신이면 옛날 원격본으로 덮어쓰지 않음!
+            if remote_mtime > 0 and st.st_mtime > remote_mtime + 2.0:
+                skipped += 1
+                continue
 
         if "," in b64_raw and b64_raw.startswith("data:"):
             b64_raw = b64_raw.split(",", 1)[1]
@@ -848,22 +929,136 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
             tmp_p = target.with_name(f".{target.name}.ghosti_sync_tmp")
             tmp_p.write_bytes(raw_bytes)
             os.replace(tmp_p, target)
+            if remote_mtime > 0:
+                try:
+                    os.utime(target, (remote_mtime, remote_mtime))
+                except Exception:
+                    pass
             if uploader:
                 up_map[rel_p] = uploader
+            known_set.add(rel_p)
             synced += 1
         except Exception:
             skipped += 1
 
+    patch_cfg: Dict[str, Any] = {"knownRelPaths": sorted(known_set)}
     if up_map != (cfg.get("uploaderByRelPath") or {}):
-        _save_sdrive_config({"uploaderByRelPath": up_map})
+        patch_cfg["uploaderByRelPath"] = up_map
+    _save_sdrive_config(patch_cfg)
 
     return {
         "ok": True,
         "mounted": os.path.exists("S:\\"),
         "targetDir": str(vault_dir),
         "syncedCount": synced,
+        "removedByTombstoneCount": removed_by_tombstone,
         "skippedCount": skipped,
     }
+
+
+def push_work_blob_to_signed_url(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """512KB 초과 ~ 50MB 대용량 업무 파일(XLSX/PDF/HWP/현장사진)을 브라우저 메모리 거치지 않고 서명 URL로 직접 전송합니다."""
+    payload = data or {}
+    rel_p = str(payload.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
+    signed_url = str(payload.get("signedUploadUrl") or "").strip()
+    if not rel_p or not signed_url.startswith("https://"):
+        return {"ok": False, "error": "INVALID_PUSH_BLOB_ARGS"}
+    vault_dir = get_work_vault_dir(ensure_dirs=False)
+    target = _safe_resolve_inside_vault(vault_dir, rel_p)
+    if target is None or not target.is_file():
+        return {"ok": False, "error": "FILE_NOT_FOUND"}
+    if target.suffix.lower() in _BLOCKED_EXEC_EXTS:
+        return {"ok": False, "error": "BLOCKED_EXECUTABLE_EXTENSION"}
+    st = target.stat()
+    if st.st_size > 50 * 1024 * 1024:
+        return {"ok": False, "error": "EXCEEDS_50MB_LIMIT", "size": st.st_size}
+    try:
+        raw_bytes = target.read_bytes()
+        req = urllib.request.Request(
+            signed_url,
+            data=raw_bytes,
+            headers={"Content-Type": "application/octet-stream"},
+            method="PUT",
+        )
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            ok_up = 200 <= resp.status < 300
+        return {"ok": ok_up, "relPath": rel_p, "size": st.st_size}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+def pull_work_blob_from_signed_url(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """원격 팀원/방장이 공유한 512KB 초과 대용량 업무 파일을 서명 URL에서 내 S:\\ 폴더로 직접 수신합니다."""
+    payload = data or {}
+    rel_p = str(payload.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
+    signed_url = str(payload.get("signedDownloadUrl") or "").strip()
+    remote_sha = str(payload.get("sha256") or "").strip()
+    remote_mtime = _parse_iso_mtime_sec(payload.get("fileMtimeIso") or payload.get("fileMtime"))
+    uploader = str(payload.get("uploaderNickname") or payload.get("author") or "").strip()
+
+    if not rel_p or not signed_url.startswith("https://"):
+        return {"ok": False, "error": "INVALID_PULL_BLOB_ARGS"}
+    vault_dir = get_work_vault_dir(ensure_dirs=True)
+    mount_or_unmount_s_drive({"action": "mount", "openExplorer": False})
+    target = _safe_resolve_inside_vault(vault_dir, rel_p)
+    if target is None or target.suffix.lower() in _BLOCKED_EXEC_EXTS:
+        return {"ok": False, "error": "BLOCKED_OR_INVALID_PATH"}
+
+    if target.exists() and target.is_file():
+        if detect_file_lock_owner(target):
+            return {"ok": False, "error": "FILE_CURRENTLY_LOCKED_OPEN"}
+        st = target.stat()
+        if remote_sha:
+            local_meta = _extract_rich_preview_cached(target, st)
+            if local_meta.get("sha256") == remote_sha:
+                return {"ok": True, "alreadySynced": True, "relPath": rel_p}
+        if remote_mtime > 0 and st.st_mtime > remote_mtime + 2.0:
+            return {"ok": True, "skippedNewerLocal": True, "relPath": rel_p}
+
+    try:
+        req = urllib.request.Request(signed_url, method="GET")
+        with urllib.request.urlopen(req, timeout=45) as resp:
+            raw_bytes = resp.read()
+        target.parent.mkdir(parents=True, exist_ok=True)
+        tmp_p = target.with_name(f".{target.name}.ghosti_sync_tmp")
+        tmp_p.write_bytes(raw_bytes)
+        os.replace(tmp_p, target)
+        if remote_mtime > 0:
+            try:
+                os.utime(target, (remote_mtime, remote_mtime))
+            except Exception:
+                pass
+        cfg = _load_sdrive_config()
+        known_set = set(cfg.get("knownRelPaths") or [])
+        known_set.add(rel_p)
+        up_map = dict(cfg.get("uploaderByRelPath") or {})
+        if uploader:
+            up_map[rel_p] = uploader
+        _save_sdrive_config({"knownRelPaths": sorted(known_set), "uploaderByRelPath": up_map})
+        return {"ok": True, "relPath": rel_p, "size": len(raw_bytes)}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+
+def delete_or_apply_tombstones(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """로컬 S:\\ 업무 파일을 OS 휴지통으로 안전 이동시키고 knownRelPaths에서 제거해 역류(부활)를 차단합니다."""
+    payload = data or {}
+    rel_p = str(payload.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
+    if not rel_p:
+        return {"ok": False, "error": "EMPTY_REL_PATH"}
+    vault_dir = get_work_vault_dir(ensure_dirs=False)
+    target = _safe_resolve_inside_vault(vault_dir, rel_p)
+    if target is None:
+        return {"ok": False, "error": "INVALID_REL_PATH"}
+    if target.exists() and detect_file_lock_owner(target):
+        return {"ok": False, "error": "FILE_CURRENTLY_LOCKED_OPEN"}
+
+    ok_del = _move_to_recycle_bin_safe(target) if target.exists() else True
+    cfg = _load_sdrive_config()
+    known_set = set(cfg.get("knownRelPaths") or [])
+    known_set.discard(rel_p)
+    _save_sdrive_config({"knownRelPaths": sorted(known_set)})
+    return {"ok": ok_del, "relPath": rel_p}
 
 
 def toggle_hide_work_file(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
@@ -912,6 +1107,12 @@ def handle_action(act: str, data: Dict[str, Any]) -> Dict[str, Any] | None:
         return write_uploaded_work_file(data)
     if act == "sdrive-pull-sync":
         return pull_sync_work_files(data)
+    if act == "sdrive-push-blob":
+        return push_work_blob_to_signed_url(data)
+    if act == "sdrive-pull-blob":
+        return pull_work_blob_from_signed_url(data)
+    if act == "sdrive-delete-file":
+        return delete_or_apply_tombstones(data)
     if act == "sdrive-toggle-hide":
         return toggle_hide_work_file(data)
 

@@ -1208,10 +1208,31 @@ $$;
 grant execute on function public.ghosti_get_guest_preview_room(text) to anon, authenticated, service_role;
 
 -- ============================================================================
--- 💼 [업무 공유 S: 드라이브 — Zero-Cloud (서버 DB 점유 0 Byte) 원안 아키텍처 고수]
+-- 💼 [업무 공유 S: 드라이브 & 📱 내 기기 통합 — 정식 SQL 테이블 + 비공개 금고 브릿지 정합화]
 -- ----------------------------------------------------------------------------
--- 업무 공유방 문서·표·본문·바이너리는 Supabase 서버 DB 테이블에 일절 저장하지 않습니다.
--- - 방 개설·멤버 초대 메타데이터(~200 Byte): 기존 ghosti_lounge_rooms / ghosti_lounge_members / ghosti_room_invites 재사용
--- - 실시간 파일·오피스 열람 잠금(~$) 동기화: Supabase Realtime Broadcast 채널(ghosti:work:<roomId>) 메모리 패스스루 직결
--- - 대장 PC 오프라인 대비 경량(<=30KB) 미리보기 캐시: 각 팀원 기기 로컬 브라우저 IndexedDB(sharedRoomLocalVault.ts)에만 저장
+-- 1) 레거시 zeye_* RLS 잔재가 남아 있는 운영 환경에서도 에러(42P01)가 나지 않도록 구 정책 안전 제거:
+do $$
+declare
+  pol record;
+begin
+  for pol in
+    select schemaname, tablename, policyname
+      from pg_policies
+     where schemaname = 'public'
+       and (qual::text ilike '%zeye_%' or with_check::text ilike '%zeye_%')
+  loop
+    execute format('drop policy if exists %I on %I.%I', pol.policyname, pol.schemaname, pol.tablename);
+  end loop;
+end $$;
+
+-- 2) 업무 공유(S: 드라이브) 실시간·비동기 하이브리드 아키텍처:
+--    - 방 개설·팀원 편입(work_accept_invite)·초대 토큰 검증: ghosti_lounge_rooms / ghosti_lounge_members / ghosti_room_invites 정식 SQL 컬럼 직결
+--    - 실시간 파일·오피스 열람 잠금(~$)·삭제 Tombstone 동기화: Realtime 인가 정책(9번)과 일치하는 표준 채널(ghosti:room:<roomId>) 사용
+--    - 방장 PC 퇴근/절전 시 24시간 미리보기 및 512KB 초과 ~ 50MB 대용량 오피스·현장사진 서명 전송:
+--      비공개 금고(ghosti-work-vault) + 서버 검증 브릿지(hub-supabase-bridge.mjs / workAndDeviceBridgeOps.mjs) 경유
+-- 3) 내 기기 통합(PC + 폰 + PC+) 6대 실배선 아키텍처:
+--    - 기기 등록·하트비트·6자리 보안 바인딩: ghosti_devices / ghosti_pairing_codes 정식 SQL 컬럼 직결
+--    - 실시간 양방향 제어(E2EE 클립보드 · 무선 모니터 캐스트 · 0.2초 공간이동): 표준 채널(ghosti:pair:<emailHash>) 사용
+--    - 30일 무제한 체험(D-30) 영속 원장 · AES-256-GCM 24시간 지연 우체통 · 13KB 섀도우/원본 미러 서명 전송:
+--      비공개 금고(ghosti-device-vault) + 서버 검증 브릿지(hub-supabase-bridge.mjs) 경유
 -- ============================================================================

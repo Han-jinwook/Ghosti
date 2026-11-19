@@ -1,5 +1,12 @@
 import React, { useEffect, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import {
+  broadcastRemoteMonitorCast,
+  getThisDeviceIdentity,
+  startDeviceIntegrationRealtimeRuntime,
+  type RemoteMonitorCastPacket,
+} from '../services/deviceIntegrationService';
+import type { PhotoItem, PricingPlanId } from '../types/saysee';
 
 export interface MonitorCastState {
   active: boolean;
@@ -115,13 +122,20 @@ export const GhostCastLiveToolbar: React.FC<{ loungeLabel?: string }> = () => {
  * 🌐 글로벌 『고스트 모니터 캐스트 (무선 리모컨)』 & 『다 같이 보기 (앨범 라이브 싱크)』 통합 오버레이
  */
 export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
-  const { photos, merlinAuth, activeLoungeType, activeFamilyRoom, alumniSchoolName } =
-    useSaySeeStore();
+  const {
+    photos,
+    merlinAuth,
+    activeLoungeType,
+    activeFamilyRoom,
+    alumniSchoolName,
+    setDeviceIntegrationSnapshot,
+  } = useSaySeeStore();
 
   const activePhotos = photos.filter((p) => !p.quarantined);
 
   // 1) 무기 1: 모니터로 크게 보기 & 스마트폰 무선 리모컨 상태
   const [monitorCastOpen, setMonitorCastOpen] = useState(false);
+  const [remoteCastPhotoOverride, setRemoteCastPhotoOverride] = useState<PhotoItem | null>(null);
   const [monitorViewMode, setMonitorViewMode] = useState<
     'split_demo' | 'fullscreen_monitor' | 'phone_remote'
   >('split_demo');
@@ -145,6 +159,97 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     updatedAt: Date.now(),
   });
 
+  const emitRemoteCastPacket = (nextState: MonitorCastState, targetPhoto?: PhotoItem | null) => {
+    const p = targetPhoto || activePhotos[nextState.photoIndex] || activePhotos[0] || null;
+    const thumb =
+      p?.thumbUrl && p.thumbUrl.startsWith('data:image/') && p.thumbUrl.length <= 48000
+        ? p.thumbUrl
+        : p?.thumbUrl && p.thumbUrl.startsWith('https://')
+        ? p.thumbUrl
+        : undefined;
+    broadcastRemoteMonitorCast({
+      ...nextState,
+      senderDevice: getThisDeviceIdentity().displayName,
+      photoId: p?.id,
+      photoTitle: p?.name,
+      photoThumbUrl: thumb,
+    });
+  };
+
+  // [전역 5번 내 기기 통합 실시간 엔진]: 기기 바인딩 하트비트 · E2EE 클립보드(PC Ctrl+C ↔ 폰) · 무선 리모컨 · 0.2초 공간이동 수신
+  useEffect(() => {
+    if (!merlinAuth?.email || !merlinAuth?.userId || merlinAuth.userId === 'guest') {
+      return undefined;
+    }
+    const stopRuntime = startDeviceIntegrationRealtimeRuntime({
+      email: merlinAuth.email,
+      userId: merlinAuth.userId,
+      onDevicesUpdated: ({ devices, pairingCode, entitlement }) => {
+        setDeviceIntegrationSnapshot({ devices, pairingCode, entitlement });
+        if (
+          entitlement?.isPaidUnlimited &&
+          (entitlement.planId === 'personal_sub_3900' ||
+            entitlement.planId === 'personal_year_35000')
+        ) {
+          const cur = useSaySeeStore.getState();
+          if (cur.subscribedLounges.personal !== entitlement.planId) {
+            useSaySeeStore.setState({
+              subscribedLounges: {
+                ...cur.subscribedLounges,
+                personal: entitlement.planId as PricingPlanId,
+              },
+            });
+          }
+        }
+      },
+      onIncomingClip: (clip) => {
+        setDeviceIntegrationSnapshot({ incomingClip: clip });
+        useSaySeeStore.setState({
+          lastQuarantineToast: `📋 [${clip.senderName}]에서 암호화 클립보드가 도착했습니다! 바로 붙여넣기 하세요.`,
+        });
+      },
+      onRemoteMonitorCast: (pkt: RemoteMonitorCastPacket) => {
+        setCastState({
+          active: pkt.active,
+          photoIndex: pkt.photoIndex,
+          zoom: pkt.zoom || 1,
+          rotation: pkt.rotation || 0,
+          isPlaying: Boolean(pkt.isPlaying),
+          updatedAt: pkt.updatedAt || Date.now(),
+          senderDevice: pkt.senderDevice || '내 스마트폰 리모컨',
+        });
+        if (pkt.active) {
+          setMonitorViewMode('fullscreen_monitor');
+          setMonitorCastOpen(true);
+          if (pkt.photoThumbUrl) {
+            setRemoteCastPhotoOverride({
+              id: pkt.photoId || 'remote-cast-photo',
+              name: pkt.photoTitle || '스마트폰 무선 전송 사진',
+              size: 512000,
+              date: '실시간 캐스트',
+              mtimeMs: Date.now(),
+              locationKo: pkt.senderDevice || '내 스마트폰',
+              tags: ['모니터 캐스트'],
+              captionKo: '',
+              thumbUrl: pkt.photoThumbUrl,
+              fullUrl: pkt.photoThumbUrl,
+              bookmarked: false,
+              quarantined: false,
+            });
+          } else {
+            setRemoteCastPhotoOverride(null);
+          }
+        } else {
+          setMonitorCastOpen(false);
+          setRemoteCastPhotoOverride(null);
+        }
+      },
+    });
+    return () => {
+      stopRuntime();
+    };
+  }, [merlinAuth?.email, merlinAuth?.userId, setDeviceIntegrationSnapshot]);
+
   // 슬라이드쇼 자동 재생 타이머 (모니터 캐스트)
   useEffect(() => {
     if (!monitorCastOpen || !castState.isPlaying || activePhotos.length <= 1) return;
@@ -153,6 +258,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
         const nextIdx = (prev.photoIndex + 1) % activePhotos.length;
         const next = { ...prev, photoIndex: nextIdx, updatedAt: Date.now() };
         broadcastCastLiveMessage({ type: 'MONITOR_CAST_UPDATE', state: next });
+        emitRemoteCastPacket(next, activePhotos[nextIdx]);
         return next;
       });
     }, 3200);
@@ -222,6 +328,10 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
           const foundIdx = activePhotos.findIndex((p) => p.id === d.photoId);
           if (foundIdx >= 0) idx = foundIdx;
         }
+        const isMobileClient =
+          typeof navigator !== 'undefined' && /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent);
+        setMonitorViewMode(isMobileClient ? 'phone_remote' : 'split_demo');
+        setRemoteCastPhotoOverride(null);
         const next: MonitorCastState = {
           active: true,
           photoIndex: idx,
@@ -229,16 +339,19 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
           rotation: 0,
           isPlaying: false,
           updatedAt: Date.now(),
-          senderDevice: '내 스마트폰 리모컨',
+          senderDevice: getThisDeviceIdentity().displayName,
         };
         setCastState(next);
         setMonitorCastOpen(true);
         broadcastCastLiveMessage({ type: 'MONITOR_CAST_UPDATE', state: next });
+        emitRemoteCastPacket(next, activePhotos[idx]);
       } else if (d.action === 'CLOSE_MONITOR_CAST') {
         const next: MonitorCastState = { ...castState, active: false, updatedAt: Date.now() };
         setCastState(next);
         setMonitorCastOpen(false);
+        setRemoteCastPhotoOverride(null);
         broadcastCastLiveMessage({ type: 'MONITOR_CAST_UPDATE', state: next });
+        emitRemoteCastPacket(next, null);
       } else if (d.action === 'TOGGLE_PHOTO_SYNC') {
         setPhotoSyncState((prev) => {
           const nextActive = !prev.active;
@@ -264,6 +377,12 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     setCastState((prev) => {
       const next = { ...prev, ...patch, updatedAt: Date.now() };
       broadcastCastLiveMessage({ type: 'MONITOR_CAST_UPDATE', state: next });
+      const nextPhoto =
+        patch.photoIndex !== undefined ? activePhotos[patch.photoIndex] : activePhotos[next.photoIndex];
+      if (patch.photoIndex !== undefined) {
+        setRemoteCastPhotoOverride(null);
+      }
+      emitRemoteCastPacket(next, nextPhoto);
       return next;
     });
   };
@@ -282,7 +401,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
   };
 
   const currentCastPhoto =
-    activePhotos[castState.photoIndex] || activePhotos[0] || null;
+    remoteCastPhotoOverride || activePhotos[castState.photoIndex] || activePhotos[0] || null;
   const currentSyncPhoto =
     activePhotos[photoSyncState.photoIndex] || activePhotos[0] || null;
 

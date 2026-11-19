@@ -69,11 +69,11 @@
 
 ---
 
-## 🧩 [확정 추가] 단일 표준 포트(`127.0.0.1:5199`) 내장 소프트웨어 플러그인 6종 상세 입출력 아키텍처 (`merlin_z_core_daemon.py` v2.4.99)
+## 🧩 [확정 추가] 단일 표준 포트(`127.0.0.1:5199`) 내장 소프트웨어 플러그인 7종 상세 입출력 아키텍처 (`merlin_z_core_daemon.py` v2.5.9)
 
 ### 1. 왜 단일 포트(`5199`) + 내장 소프트웨어 플러그인(`Built-in Software Plugins`)인가?
 - 유저가 귀신같이·센스톡·어그로필터·썬드리머 스튜디오를 쓸 때마다 별도 설치파일을 2중으로 설치하거나 포트를 나누면 방화벽 경고와 포트 충돌이 발생합니다.
-- 따라서 단일 설치파일 **`Merlin_Z_Core_Setup.exe` (`v2.4.99`, 실행 즉시 `%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe` 영구 경로 자동 동기화)** 내부에 소프트웨어 플러그인(`plugin_ghosti_os.py`, `plugin_paid_work_sdrive.py`, `plugin_ghosti_care_suite.py`, `plugin_ghosti_superpowers.py`, `plugin_senstalk.py`, `plugin_aggrofilter.py`) 및 `seq_paste_daemon.py`(`--seq-paste-daemon`)를 기본 내장하고, `ThreadingHTTPServer` 멀티스레드 비동기 서버로 **단일 표준 포트 `http://127.0.0.1:5199`**에서 모든 패밀리 앱 요청을 병렬 처리합니다.
+- 따라서 단일 설치파일 **`Merlin_Z_Core_Setup.exe` (`v2.5.9`, 실행 즉시 `%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe` 영구 경로 자동 동기화)** 내부에 소프트웨어 플러그인(`plugin_ghosti_os.py`, `plugin_paid_work_sdrive.py`, `plugin_paid_sync_ghostwin.py`, `plugin_ghosti_care_suite.py`, `plugin_ghosti_superpowers.py`, `plugin_senstalk.py`, `plugin_aggrofilter.py`) 및 `seq_paste_daemon.py`(`--seq-paste-daemon`)를 기본 내장하고, `ThreadingHTTPServer` 멀티스레드 비동기 서버로 **단일 표준 포트 `http://127.0.0.1:5199`**에서 모든 패밀리 앱 요청을 병렬 처리합니다.
 
 ### 2. 표준 라우팅 테이블 및 JSON 입출력 규격 (`merlin_z_core_daemon.py` 직결)
 
@@ -447,7 +447,7 @@ exit
    - 내 기기(언제나 0원 · 무료 워딩 제거 후 `🧹 클린몬스터 진단` 즉시 실행), 사진 공유(가족·동호회·동창회 인원·장수 무제한 평생 0원), 내 기기 통합 `월 3,900원 (연간 결제 시 39,000원)`, 업무 공유 `S:` 드라이브 요금 체계 반영 완료.
 2. **v2.1 공유방 데이터 흐름 · 동기화 · 권한 · 탈퇴 6대 원칙 확정 ([`LoungeView.tsx`](file:///d:/Ghosti/src/components/LoungeView.tsx), [`docs/기능명세.md`](file:///d:/Ghosti/docs/기능명세.md), [`docs/정책_및_핵심원칙.md`](file:///d:/Ghosti/docs/정책_및_핵심원칙.md)):**
    - **사진방 (`방식 A` + `14일 초대 마중물 버퍼 TTL` 확정):** 구 ‘원본 1초 실시간 소환’ 폐기 ➔ 공유방에 직접 올린 사진의 **`13KB` 초경량 썸네일 · 검색 인덱스 · 인물 문패 · 댓글/하트 · 촬영일시**는 초대 골든타임 **14일(2주) 동안만** `Ghosti 단독 Supabase`(`ghosti_room_shared_photos`)에 마중물 버퍼로 유지 후 자동 소거하고, 정식 합류 멤버의 로컬 영구 금고(`sharedRoomLocalVault.ts` — `${email}::${roomId}` 격리 `IndexedDB` 및 `%LOCALAPPDATA%\Merlin\thumb_db`)에 방별로 영구 캐싱하여 2주 뒤에도 0.05초 만에 열람·검색하며 재초대(`[💌 초대 링크 복사]`) 시 1초 만에 서버 마중물로 자동 재장전(`Re-Seed`)함. 무압축 고화질 원본(`5~20MB`)은 `[🔄 원본 동기화]` P2P 직결로 내 기기에 복제해 100% 자체 해결. `64-bit dHash`는 `EXIF 원본 메타데이터 + 실제 고해상도` 진짜 원본일 때만 자동 교체. 업로드 후 **24시간 내 올린 본인 삭제 + 방장은 올라오는 처음부터 상시 숨기기 권한 보유 여부 방 개설 설정 옵션** 탑재. **탈퇴(자퇴·강퇴 동일) 시 해당 공유방 접근 권한 및 로컬 숨김 썸네일 DB · 공유방 검색 인덱스 · 해당 방 내부 타 멤버 여권 목록만 즉시 자동 삭제**(※ 내 PC의 ‘나 자신의 귀신같이 여권’ 및 ‘내 기기 개인 인덱스’는 100% 보존되며, 기동기화된 로컬 원본 폴더도 자율 관리).
-   - **업무방 (`Zero-Cloud · 서버 DB 점유 0 Byte` 원안 고정):** 여권 미발동(검색 제외) + `공용 PC(S:) 1대 + 백업 PC 1·2호` + `[🌙 야간·퇴근 초절전 모드 (월 1,800원)]` + `Realtime Broadcast`(`ghosti:work:<roomId>`) 메모리 직결 및 팀원 기기 로컬 `IndexedDB` `<= 30KB` 미리보기 캐시 + 웹/앱 검색 열람 시 `"🔒 현재 [OOO]님이 사용 중입니다. 읽기 모드로 열립니다."` 안내.
+   - **업무방 (`24시간 하이브리드 동기화 & 삭제 부활 방지` 확정):** 여권 미발동(검색 제외) + `공용 PC(S:) 1대 + 백업 PC 1·2호` + `[🌙 야간·퇴근 초절전 모드 (월 1,800원)]` + 표준 `Realtime Broadcast`(`ghosti:room:<roomId>`) 및 비공개 서명 전송(`ghosti-work-vault`, 최대 50MB 대용량 오피스·현장사진 서명 스트리밍 `/__work/push-blob`·`/__work/pull-blob` + 삭제 Tombstone `/__work/delete-file` + 최신 `mtime` 보호) + 순수 개인 모드 `S:\` 언마운트 시 업무 폴더 스캔 자동 격리 + 웹/앱 검색 열람 시 `"🔒 현재 [OOO]님이 사용 중입니다. 읽기 모드로 열립니다."` 안내.
    - **OS 기본 `[휴지통]` 일원화 & 랜섬웨어 서킷 브레이커:** `OS 기본 [휴지통]` 폐기 ➔ `OS 기본 [휴지통]`(`+ 1초 실행 취소`) 직행, 1분 30개 대량 삭제 서킷 브레이커 + 미끼 파일(`_000_zeye_guard.docx`).
 3. **AI 모델 가중치 마스터 사본 자체 스토리지(백업 HDD & R2 CDN) 영구 보관 강령 & 이용약관(ToS) 면책 3대 조항(탈퇴 시 썸네일 DB 삭제 조항 포함) 문서화 완료.**
 

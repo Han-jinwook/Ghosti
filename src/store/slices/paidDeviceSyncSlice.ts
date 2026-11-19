@@ -129,6 +129,17 @@ import {
   storeSharedRefs,
   voiceSession,
 } from './storeSharedRefs';
+import {
+  activateDevicePlanPersistent,
+  consumeDevicePairingCode6,
+  executeRealDeviceSyncNow,
+  loadCachedSyncedClips,
+  pushCrossDeviceClipboardText,
+  syncDeviceHeartbeatAndList,
+  type GhostiConnectedDeviceDto,
+  type GhostiDeviceEntitlementView,
+  type GhostiSyncedClipItem,
+} from '../../services/deviceIntegrationService';
 import type { SaySeeStore } from '../useSaySeeStore';
 
 export interface PaidDeviceSyncSlice {
@@ -147,6 +158,20 @@ export interface PaidDeviceSyncSlice {
   lastSentPcLinkChannel: 'email' | 'kakao' | null;
   sendPcMasterUrlToEmail: () => Promise<void>;
   sharePcMasterUrlToKakao: () => Promise<void>;
+
+  connectedDevices: GhostiConnectedDeviceDto[];
+  devicePairingCode6: string | null;
+  deviceEntitlement: GhostiDeviceEntitlementView | null;
+  syncedClipboardItems: GhostiSyncedClipItem[];
+  refreshDeviceIntegrationState: (explicitTrialOptIn?: boolean) => Promise<void>;
+  pairWithSixDigitCode: (code: string) => Promise<boolean>;
+  sendTextToPairedClipboard: (text: string) => Promise<boolean>;
+  setDeviceIntegrationSnapshot: (payload: {
+    devices?: GhostiConnectedDeviceDto[];
+    pairingCode?: string | null;
+    entitlement?: GhostiDeviceEntitlementView | null;
+    incomingClip?: GhostiSyncedClipItem;
+  }) => void;
 
   setShowProModal: (show: boolean) => void;
   setActiveLoungeType: (lounge: LoungeType) => void;
@@ -169,6 +194,10 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
   telemetry: null,
   merlinAuth: loadMerlinAuth(),
   syncState: loadSyncState(0, 0),
+  connectedDevices: [],
+  devicePairingCode6: null,
+  deviceEntitlement: null,
+  syncedClipboardItems: loadCachedSyncedClips(),
   showProModal:
     typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('master') === 'pc' &&
@@ -435,6 +464,14 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
         [nextLoungeType]: isPaidSubscription ? planId : null,
       };
 
+      if (planId.startsWith('personal_')) {
+        void activateDevicePlanPersistent(planId).then((ent) => {
+          if (ent) {
+            set({ deviceEntitlement: ent });
+          }
+        });
+      }
+
       return {
         activePricingPlan: planId,
         subscribedLounges: nextSubscribedLounges,
@@ -451,6 +488,95 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
         lastQuarantineToast: isPaidSubscription
           ? `🎉 [${labelMap[planId]}] 활성화 완료! (현재 라운지의 [✨ 공유 시작] 탭만 자동 숨김 처리되며, 다른 라운지는 별도로 작동합니다)`
           : `✨ 현재 라운지가 [기본 안내 모드]로 전환되어 상단 서브메뉴 1번 자리에 [✨ 공유 시작] 탭이 다시 표시됩니다.`,
+      };
+    });
+  },
+
+  refreshDeviceIntegrationState: async (explicitTrialOptIn?: boolean) => {
+    const hb = await syncDeviceHeartbeatAndList({ explicitTrialOptIn });
+    if (!hb.ok) return;
+    const hasMobilePeer = hb.devices.some((d) => d.device_kind === 'mobile');
+    const hasMultiDevices = hb.devices.length >= 2;
+    set((state) => ({
+      connectedDevices: hb.devices,
+      devicePairingCode6: hb.pairingCode ?? state.devicePairingCode6,
+      deviceEntitlement: hb.entitlement ?? state.deviceEntitlement,
+      pcAgentPairedMobile: hasMobilePeer || hasMultiDevices || state.pcAgentPairedMobile,
+      ...(explicitTrialOptIn && hb.entitlement?.trialActive
+        ? {
+            lastQuarantineToast: `🎁 [30일 무제한 무료체험 시작 (D-${hb.entitlement.trialDaysLeft})] 카드 등록·자동 결제 0%로 내 모든 PC·스마트폰이 직결되었습니다!`,
+          }
+        : {}),
+    }));
+  },
+
+  pairWithSixDigitCode: async (code: string) => {
+    const res = await consumeDevicePairingCode6(code);
+    if (!res.ok) {
+      set({
+        lastQuarantineToast:
+          res.reason === 'AUTH_REQUIRED'
+            ? '🔑 먼저 PC와 동일한 이메일로 1초 로그인해 주세요!'
+            : '⚠️ 6자리 연결 번호가 만료되었거나 일치하지 않습니다. PC 화면의 최신 번호를 확인해 주세요.',
+      });
+      return false;
+    }
+    set({
+      connectedDevices: res.devices,
+      deviceEntitlement: res.entitlement,
+      pcAgentPairedMobile: true,
+      lastQuarantineToast: `🎉 내 PC ↔ 스마트폰 6자리 보안 바인딩 완료! (${res.devices.length}대 연결됨 · 30일 무제한 무료체험 가동)`,
+    });
+    return true;
+  },
+
+  sendTextToPairedClipboard: async (text: string) => {
+    const { merlinAuth } = get();
+    if (!merlinAuth?.email || !merlinAuth.userId || merlinAuth.userId === 'guest') {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('openLoginModal'));
+      }
+      return false;
+    }
+    const pushed = await pushCrossDeviceClipboardText({
+      text,
+      email: merlinAuth.email,
+      userId: merlinAuth.userId,
+    });
+    if (!pushed.ok) return false;
+    if (pushed.item) {
+      set((state) => ({
+        syncedClipboardItems: [
+          pushed.item!,
+          ...state.syncedClipboardItems.filter((c) => c.clipHash !== pushed.item!.clipHash),
+        ].slice(0, 15),
+        lastQuarantineToast:
+          '📋 종단간 암호화(AES-256-GCM) 클립보드 전송 완료! 연결된 내 기기에서 바로 붙여넣기 하세요.',
+      }));
+    }
+    return true;
+  },
+
+  setDeviceIntegrationSnapshot: (payload) => {
+    set((state) => {
+      const nextDevices = payload.devices ?? state.connectedDevices;
+      const hasMobile = nextDevices.some((d) => d.device_kind === 'mobile');
+      const nextClips = payload.incomingClip
+        ? [
+            payload.incomingClip,
+            ...state.syncedClipboardItems.filter(
+              (c) => c.clipHash !== payload.incomingClip!.clipHash
+            ),
+          ].slice(0, 15)
+        : state.syncedClipboardItems;
+      return {
+        connectedDevices: nextDevices,
+        devicePairingCode6:
+          payload.pairingCode !== undefined ? payload.pairingCode : state.devicePairingCode6,
+        deviceEntitlement:
+          payload.entitlement !== undefined ? payload.entitlement : state.deviceEntitlement,
+        pcAgentPairedMobile: hasMobile || nextDevices.length >= 2 || state.pcAgentPairedMobile,
+        syncedClipboardItems: nextClips,
       };
     });
   },
@@ -499,7 +625,7 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
   },
 
   triggerSyncNow: async () => {
-    const { merlinAuth, pcAgentPairedMobile } = get();
+    const { merlinAuth } = get();
     const isLoggedInUser = Boolean(
       merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest'
     );
@@ -513,9 +639,17 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
       });
       return;
     }
+
+    set((state) => ({ syncState: { ...state.syncState, syncing: true } }));
+
+    // 1) 실제 등록 기기 목록(ghosti_devices) 실시간 확인 및 2대 이상 연결 시 30일 체험 자동 반영
+    const hb = await syncDeviceHeartbeatAndList({ explicitTrialOptIn: true });
+    const liveDeviceCount = hb.ok ? hb.devices.length : get().connectedDevices.length;
     const isZCoreConnected = zCoreBridge.isConnected;
-    if (!isZCoreConnected && !pcAgentPairedMobile) {
+    if (!isZCoreConnected && liveDeviceCount < 2 && !get().pcAgentPairedMobile) {
       set((state) => ({
+        connectedDevices: hb.ok ? hb.devices : state.connectedDevices,
+        deviceEntitlement: hb.entitlement ?? state.deviceEntitlement,
         syncState: {
           ...state.syncState,
           syncing: false,
@@ -523,24 +657,50 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
           lastSyncedAt: '연결된 내 PC 없음 (대기 중)',
         },
         lastQuarantineToast:
-          '💻 아직 같은 이메일로 연결된 내 PC가 없습니다! 내 PC에서도 『귀신같이』에 동일한 이메일로 로그인하면 폰과 PC가 즉시 연결됩니다.',
+          '💻 아직 같은 이메일로 연결된 다른 내 기기가 없습니다! 내 PC 또는 스마트폰에서도 동일한 이메일로 로그인하면 즉시 직결됩니다.',
       }));
       return;
     }
 
-    set((state) => ({ syncState: { ...state.syncState, syncing: true } }));
-    await new Promise((r) => setTimeout(r, 900));
-    set((state) => ({
-      syncState: {
-        ...state.syncState,
-        syncing: false,
-        lastSyncedAt: '방금 전 (폰↔PC 일치화 완료)',
-      },
-      lastQuarantineToast:
-        state.syncState.privateSyncStrategy === 'shadow'
-          ? '⚡ [폰 용량 절약 일치화 완료] 원본은 내 PC에 안전하게 보관하고 폰에는 초경량 미리보기(장당 13KB)만 남겨, 집 PC가 꺼져 있어도 밖에서 1초 만에 찾아볼 수 있습니다!'
-          : '💾 [폰·PC 양쪽 원본 보관 일치화 완료] 클라우드 없이 폰과 내 PC 양쪽 기기의 원본 사진·서류가 100% 똑같이 일치되었습니다!',
-    }));
+    // 2) 실제 13KB 섀도우 카탈로그 병합 + (양쪽 원본 보관 모드 시) 원본 서명 미러링 실행
+    const curState = get();
+    const syncRes = await executeRealDeviceSyncNow({
+      strategy: curState.syncState.privateSyncStrategy,
+      photos: curState.photos,
+      localDocuments: curState.localDocuments,
+    });
+
+    set((state) => {
+      const mergedPhotos =
+        syncRes.remotePhotosToMerge.length > 0
+          ? [...syncRes.remotePhotosToMerge, ...state.photos]
+          : state.photos;
+      const peerNames = (hb.ok ? hb.devices : state.connectedDevices)
+        .map((d) => d.display_name)
+        .join(' · ');
+
+      return {
+        photos: mergedPhotos,
+        connectedDevices: hb.ok ? hb.devices : state.connectedDevices,
+        devicePairingCode6: hb.pairingCode ?? state.devicePairingCode6,
+        deviceEntitlement: hb.entitlement ?? state.deviceEntitlement,
+        pcAgentPairedMobile:
+          liveDeviceCount >= 2 ||
+          (hb.ok && hb.devices.some((d) => d.device_kind === 'mobile')) ||
+          state.pcAgentPairedMobile,
+        syncState: {
+          ...state.syncState,
+          syncing: false,
+          packSizeMB: syncRes.packSizeMB || state.syncState.packSizeMB,
+          connectedPeer: peerNames || state.syncState.connectedPeer,
+          lastSyncedAt: `방금 전 (항목 ${syncRes.mergedCatalog.length}건 일치화 완료)`,
+        },
+        lastQuarantineToast:
+          state.syncState.privateSyncStrategy === 'shadow'
+            ? `⚡ [폰 용량 절약 일치화 완료] 총 ${syncRes.mergedCatalog.length}건의 13KB 초경량 미리보기(${syncRes.packSizeMB}MB)가 내 기기 간 동기화되어 집 PC가 꺼져 있어도 밖에서 1초 검색이 가능합니다!`
+            : `💾 [폰·PC 양쪽 원본 보관 일치화 완료] 총 ${syncRes.mergedCatalog.length}건 카탈로그 및 원본 파일(업로드 ${syncRes.mirroredUploadCount}건 · PC 백업 수신 ${syncRes.mirroredPullCount}건)이 일치되었습니다!`,
+      };
+    });
   },
 
   ghostWinDaemonConnected: false,

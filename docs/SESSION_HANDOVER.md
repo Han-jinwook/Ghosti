@@ -14,7 +14,7 @@
      - 정식 합류 멤버는 서버 마중물이 2주 뒤 소거된 이후에도 본인 기기 `IndexedDB`에서 0.05초 만에 전체 사진을 평생 열람·검색하며, 몇 달 뒤 `[💌 초대 링크 복사]` 클릭 시 `reseedRoomPhotosForInvite`가 빠진 13KB 썸네일을 1초 만에 서버 마중물로 자동 재장전(신규 14일 TTL 부여).
 2. **[`💼 업무 공유 (S: 드라이브)` 네이티브 `Z-Core v2.4.89` 완결 & `Zero-Cloud(서버 DB 점유 0 Byte)` 원안 정합화 (`3570af5` + 후속 정화)]**:
    - `universal_z_core/os_agent/plugins/plugin_paid_work_sdrive.py` 내장 및 1~6호기 `Z-Core v2.4.89` 배포 완료 (`subst S:` 자동 마운트, `~$` 오피스/한글 `.lck`/Win32 열람 잠금 감지, `S:\`의 `👻 귀신검색창` 0순위 본문 색인 편입, 바탕화면·탐색기 빈 공간 `Ctrl+0` 1회 `👻 귀신검색창` 직행 `안 A` 원안 복원).
-   - 미승인 업무 문서 서버 테이블을 스키마·서비스·컴포넌트에서 100% 제거하고, 원안 그대로 `Realtime Broadcast`(`ghosti:work:<roomId>`) 메모리 직결 + 팀원 기기 로컬 `IndexedDB` `<= 30KB` 미리보기 캐시(`loadCachedWorkRoomPreview` / `cacheWorkRoomPreviewLocally`)로 정합화 완료.
+   - 미승인 업무 문서 서버 테이블을 스키마·서비스·컴포넌트에서 100% 제거하고, 표준 `Realtime Broadcast`(`ghosti:room:<roomId>`) 직결 + 비공개 서명 브릿지(`ghosti-work-vault`, 최대 50MB 대용량 및 삭제 Tombstone·최신 `mtime` 보호) + 로컬 캐시(`loadCachedWorkRoomPreview` / `cacheWorkRoomPreviewLocally`)로 정합화 완료.
 3. **[노션 QA 미션 추가 & 전사 강령 제19조 박제]**:
    - `[3귀신] [UX]` 사진공유·기기통합·업무공유 S: 미션 카드 5장(각 2항목) 및 `[2귀신] [UX]` 탐색기·바탕화면 빈 공간 `Ctrl+0` 1회 `👻 귀신검색창` 직행 원안 점검 카드 1장 출제 완료 (※ 2주 TTL 만료 건은 멀린님 지시대로 노션 알바 QA 카드 미출제).
    - 비서(`Secretary`) 우체국 전달을 통해 전사 강령 제19조에 『기획안 이탈 코딩 시 멀린님 사전 상의 필수』 대원칙 박제 완료(`26f9442`).

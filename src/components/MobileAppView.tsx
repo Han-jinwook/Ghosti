@@ -34,6 +34,7 @@ import {
   renderHighlightedDocText,
   maskSensitiveDocText,
 } from './PricingModal';
+import { CrossDeviceClipboardAndPairingBar } from '../domains/paid_device_sync/CrossDeviceClipboardAndPairingBar';
 
 const MainLoungeMonoIcon: React.FC<{ id: LoungeType; className?: string }> = ({
   id,
@@ -243,6 +244,8 @@ export const MobileAppView: React.FC = () => {
     setPrivateSyncStrategy,
     triggerSyncNow,
     pcAgentPairedMobile,
+    connectedDevices,
+    syncedClipboardItems,
     themeMode,
     toggleThemeMode,
     merlinAuth,
@@ -1406,12 +1409,15 @@ export const MobileAppView: React.FC = () => {
                   merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest'
                 );
                 const isPeerConnected =
-                  isLoggedInUser && (zCoreBridge.isConnected || Boolean(pcAgentPairedMobile));
+                  isLoggedInUser &&
+                  (zCoreBridge.isConnected ||
+                    Boolean(pcAgentPairedMobile) ||
+                    connectedDevices.length >= 2);
                 const syncStatusLine = !isLoggedInUser
                   ? '🔒 아직 로그인되지 않음 — 같은 이메일로 로그인하면 내 PC와 연결됩니다 (0GB)'
                   : !isPeerConnected
-                  ? '💻 연결된 내 PC 없음 (0GB) — 내 PC에서도 같은 이메일로 로그인해 주세요'
-                  : `Wi-Fi + 충전 중 자동 동기화 · 마지막 일치화: ${syncState.lastSyncedAt}`;
+                  ? '💻 연결된 내 PC 없음 (0GB) — 내 PC에서도 같은 이메일로 로그인하거나 6자리 번호로 연결해 주세요'
+                  : `내 기기 ${Math.max(2, connectedDevices.length)}대 직결 · 마지막 일치화: ${syncState.lastSyncedAt}`;
                 return (
                   <section className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden transition-all">
                     <div
@@ -1434,6 +1440,11 @@ export const MobileAppView: React.FC = () => {
                                 ? '양쪽 원본 보관'
                                 : '폰 용량 99.4% 절약'}
                             </span>
+                            {isLoggedInUser && syncedClipboardItems.length > 0 && (
+                              <span className="px-2 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 font-label-sm text-[10.5px] font-extrabold whitespace-nowrap">
+                                📋 암호화 클립보드 {syncedClipboardItems.length}건
+                              </span>
+                            )}
                           </div>
                           <p className="font-body-sm text-[11.5px] text-zinc-400 break-keep mt-0.5">
                             {syncStatusLine}
@@ -1459,6 +1470,8 @@ export const MobileAppView: React.FC = () => {
 
                     {showPrivateSyncSection && (
                       <div className="px-4 pb-4 pt-3 border-t border-white/10 flex flex-col gap-3">
+                        <CrossDeviceClipboardAndPairingBar compact />
+
                         <div
                           onClick={() => setPrivateSyncStrategy('shadow')}
                           className={`p-3.5 rounded-xl border cursor-pointer flex flex-col gap-1.5 ${

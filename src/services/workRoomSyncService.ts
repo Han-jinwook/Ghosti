@@ -1,14 +1,11 @@
 import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
+  callGhostiServerBridge,
   ensureGhostiAuthedSupabaseClient,
   ensureGhostiPublicSupabaseClient,
   hasAuthenticatedHubAccountSession,
   supabase,
 } from './supabaseClient';
-import {
-  loadLocalWorkRoomDocs,
-  saveLocalWorkRoomDocs,
-} from './sharedRoomLocalVault';
 import { getZCoreUrl, zCoreBridge } from './zCoreBridge';
 
 export interface WorkLoungeDocDto {
@@ -34,6 +31,7 @@ export interface WorkLoungeDocDto {
   isImage?: boolean;
   imageBase64?: string;
   inlineSyncBase64?: string;
+  hasCloudBlob?: boolean;
 }
 
 export interface WorkRoomInviteMeta {
@@ -52,8 +50,11 @@ export interface WorkRoomPresenceMember {
   onlineAt: string;
 }
 
+export type WorkDeletedTombstoneMap = Record<string, { deletedAt: string; deletedBy?: string }>;
+
 const WORK_INVITE_SESSION_KEY = 'ghosti_active_work_room_invite_v1';
 const MY_WORK_ROOM_CACHE_KEY = 'ghosti_my_work_room_meta_v1';
+const uploadedCloudBlobKeys = new Set<string>();
 
 function formatBytesLabel(bytes: number): string {
   if (!bytes || bytes <= 0) return '0.1 KB';
@@ -153,36 +154,27 @@ export async function ensureMyWorkRoomAndInvite(opts: {
   if (!hasAuthenticatedHubAccountSession()) {
     return { ok: false, reason: 'AUTH_REQUIRED' };
   }
-  const authedOk = await ensureGhostiAuthedSupabaseClient();
-  if (!authedOk || !supabase) {
-    return { ok: false, reason: 'SUPABASE_AUTH_BRIDGE_FAILED' };
-  }
-
   const roomTitle = (opts.roomTitle || '💼 우리팀 업무 공유방 (S:)').trim();
   const hostNickname = (opts.hostNickname || '방장').trim();
 
-  const { data, error } = await supabase.rpc('ghosti_ensure_room_and_invite', {
-    p_lounge_type: 'work',
-    p_sub_type: null,
-    p_room_title: roomTitle,
-    p_master_nickname: hostNickname,
+  const bridgeRes = await callGhostiServerBridge<{
+    roomId?: string;
+    inviteToken?: string;
+  }>('work_ensure_room', {
+    roomTitle,
+    hostNickname,
   });
 
-  if (error || !data) {
-    return { ok: false, reason: error?.message || 'RPC_FAILED' };
-  }
-
-  const rpcRes = data as { ok?: boolean; roomId?: string; inviteToken?: string };
-  if (!rpcRes.ok || !rpcRes.roomId || !rpcRes.inviteToken) {
-    return { ok: false, reason: 'INVALID_RPC_PAYLOAD' };
+  if (!bridgeRes.ok || !bridgeRes.roomId || !bridgeRes.inviteToken) {
+    return { ok: false, reason: bridgeRes.reason || 'BRIDGE_ENSURE_ROOM_FAILED' };
   }
 
   try {
     localStorage.setItem(
       MY_WORK_ROOM_CACHE_KEY,
       JSON.stringify({
-        roomId: rpcRes.roomId,
-        inviteToken: rpcRes.inviteToken,
+        roomId: bridgeRes.roomId,
+        inviteToken: bridgeRes.inviteToken,
         roomTitle,
         hostNickname,
       })
@@ -198,17 +190,52 @@ export async function ensureMyWorkRoomAndInvite(opts: {
   const qs = new URLSearchParams({
     lounge: 'work',
     tab: 'dashboard',
-    workRoom: rpcRes.roomId,
-    token: rpcRes.inviteToken,
+    workRoom: bridgeRes.roomId,
+    token: bridgeRes.inviteToken,
     host: hostNickname,
     title: roomTitle,
   });
 
   return {
     ok: true,
-    roomId: rpcRes.roomId,
-    inviteToken: rpcRes.inviteToken,
+    roomId: bridgeRes.roomId,
+    inviteToken: bridgeRes.inviteToken,
     inviteUrl: `${origin}/?${qs.toString()}`,
+  };
+}
+
+/**
+ * 초대받은 팀원(?workRoom=...&token=...)이 로그인 완료 시 정식 DB 멤버(ghosti_lounge_members)로 자동 편입합니다.
+ */
+export async function acceptWorkRoomInvite(opts: {
+  inviteToken: string;
+  nickname: string;
+}): Promise<{
+  ok: boolean;
+  roomId?: string;
+  roomTitle?: string;
+  hostNickname?: string;
+  role?: 'host' | 'editor';
+}> {
+  const cleanTok = (opts.inviteToken || '').trim();
+  if (!cleanTok || !hasAuthenticatedHubAccountSession()) {
+    return { ok: false };
+  }
+  const res = await callGhostiServerBridge<{
+    roomId?: string;
+    roomTitle?: string;
+    hostNickname?: string;
+    role?: 'host' | 'editor';
+  }>('work_accept_invite', {
+    inviteToken: cleanTok,
+    nickname: (opts.nickname || '팀원').trim(),
+  });
+  return {
+    ok: Boolean(res.ok && res.roomId),
+    roomId: res.roomId,
+    roomTitle: res.roomTitle,
+    hostNickname: res.hostNickname,
+    role: res.role,
   };
 }
 
@@ -278,11 +305,11 @@ export async function mountWorkSDriveNative(opts?: {
 
 export function mapRawWorkFileToDto(rf: Record<string, unknown>, idx: number): WorkLoungeDocDto {
   const name = String(rf.name || rf.fileName || `업무파일_${idx + 1}`);
-  const relPath = String(rf.relPath || name).replace(/\\/g, '/');
+  const relPath = String(rf.relPath || name).replace(/\\/g, '/').replace(/^\/+/, '');
   const ext = String(rf.ext || name.split('.').pop() || 'FILE').toUpperCase();
   const byteSize = Number(rf.size ?? rf.byteSize ?? 0);
-  const sizeLabel = String(rf.sizeFormatted || formatBytesLabel(byteSize));
-  const mtimeIso = String(rf.mtime || rf.fileMtime || new Date().toISOString());
+  const sizeLabel = String(rf.sizeFormatted || rf.sizeLabel || formatBytesLabel(byteSize));
+  const mtimeIso = String(rf.mtime || rf.fileMtimeIso || rf.fileMtime || new Date().toISOString());
   const updatedAt = String(rf.mtimeFormatted || formatMtimeKo(mtimeIso));
   const folderId = String(rf.folderId || 'root');
   const folderPath = String(rf.folderPath || 'S:\\');
@@ -340,6 +367,7 @@ export function mapRawWorkFileToDto(rf: Record<string, unknown>, idx: number): W
       : rf.inlineSyncBase64
       ? String(rf.inlineSyncBase64)
       : undefined,
+    hasCloudBlob: Boolean(rf.hasCloudBlob),
   };
 }
 
@@ -351,10 +379,11 @@ export async function fetchLocalWorkFilesNative(opts?: {
   mounted: boolean;
   targetDir?: string;
   docs: WorkLoungeDocDto[];
+  locallyDeletedRelPaths: string[];
 }> {
   const base = resolveWorkApiUrl('/__work/files');
   if (!base) {
-    return { ok: false, mounted: false, docs: [] };
+    return { ok: false, mounted: false, docs: [], locallyDeletedRelPaths: [] };
   }
   try {
     const qs = new URLSearchParams();
@@ -362,24 +391,28 @@ export async function fetchLocalWorkFilesNative(opts?: {
     if (opts?.author) qs.set('author', opts.author);
     const fullUrl = qs.toString() ? `${base}?${qs.toString()}` : base;
     const res = await fetch(fullUrl);
-    if (!res.ok) return { ok: false, mounted: false, docs: [] };
+    if (!res.ok) return { ok: false, mounted: false, docs: [], locallyDeletedRelPaths: [] };
     const data = (await res.json()) as {
       ok?: boolean;
       mounted?: boolean;
       targetDir?: string;
       files?: Array<Record<string, unknown>>;
+      locallyDeletedRelPaths?: string[];
     };
     if (!data?.ok || !Array.isArray(data.files)) {
-      return { ok: false, mounted: false, docs: [] };
+      return { ok: false, mounted: false, docs: [], locallyDeletedRelPaths: [] };
     }
     return {
       ok: true,
       mounted: Boolean(data.mounted),
       targetDir: data.targetDir,
       docs: data.files.map((rf, i) => mapRawWorkFileToDto(rf, i)),
+      locallyDeletedRelPaths: Array.isArray(data.locallyDeletedRelPaths)
+        ? data.locallyDeletedRelPaths
+        : [],
     };
   } catch {
-    return { ok: false, mounted: false, docs: [] };
+    return { ok: false, mounted: false, docs: [], locallyDeletedRelPaths: [] };
   }
 }
 
@@ -418,38 +451,165 @@ export async function uploadWorkFileToNativeSDrive(opts: {
   }
 }
 
-export async function pullSyncRemoteWorkFilesToLocalSDrive(
-  remoteDocs: WorkLoungeDocDto[]
-): Promise<{ ok: boolean; syncedCount: number }> {
-  if (!zCoreBridge.isConnected || remoteDocs.length === 0) {
-    return { ok: false, syncedCount: 0 };
+/**
+ * 512KB 초과 ~ 50MB 대용량 로컬 S:\ 파일들을 서명 업로드 URL을 통해 클라우드 금고에 자동 업로드합니다.
+ */
+async function pushLargeWorkBlobsIfNeeded(roomId: string, docs: WorkLoungeDocDto[]): Promise<boolean> {
+  if (!zCoreBridge.isConnected || !roomId || !hasAuthenticatedHubAccountSession()) {
+    return false;
   }
-  const syncable = remoteDocs
-    .filter((d) => Boolean(d.inlineSyncBase64))
+  let uploadedAny = false;
+  for (const d of docs) {
+    if (d.inlineSyncBase64 || d.byteSize <= 512 * 1024 || d.byteSize > 50 * 1024 * 1024 || !d.sha256) {
+      continue;
+    }
+    const cacheKey = `${roomId}::${d.sha256}`;
+    if (uploadedCloudBlobKeys.has(cacheKey)) continue;
+
+    const signRes = await callGhostiServerBridge<{
+      alreadyUploaded?: boolean;
+      signedUploadUrl?: string;
+    }>('work_sign_upload', {
+      roomId,
+      sha256: d.sha256,
+      relPath: d.relPath,
+    });
+
+    if (!signRes.ok) continue;
+    if (signRes.alreadyUploaded) {
+      uploadedCloudBlobKeys.add(cacheKey);
+      continue;
+    }
+    if (!signRes.signedUploadUrl) continue;
+
+    try {
+      const pushRes = await fetch(getZCoreUrl('/__work/push-blob'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          relPath: d.relPath,
+          signedUploadUrl: signRes.signedUploadUrl,
+        }),
+      });
+      const pj = (await pushRes.json().catch(() => ({}))) as { ok?: boolean };
+      if (pj.ok) {
+        uploadedCloudBlobKeys.add(cacheKey);
+        uploadedAny = true;
+        await callGhostiServerBridge('work_mark_blob_uploaded', {
+          roomId,
+          relPath: d.relPath,
+        });
+      }
+    } catch {
+      /* retry next cycle */
+    }
+  }
+  return uploadedAny;
+}
+
+export async function pullSyncRemoteWorkFilesToLocalSDrive(
+  remoteDocs: WorkLoungeDocDto[],
+  opts?: {
+    roomId?: string;
+    inviteToken?: string;
+    deletedTombstones?: WorkDeletedTombstoneMap;
+  }
+): Promise<{ ok: boolean; syncedCount: number; removedCount: number }> {
+  if (!zCoreBridge.isConnected) {
+    return { ok: false, syncedCount: 0, removedCount: 0 };
+  }
+  const tombstones = opts?.deletedTombstones || {};
+  const inlineItems = remoteDocs
+    .filter((d) => Boolean(d.inlineSyncBase64) && !tombstones[d.relPath])
     .map((d) => ({
       relPath: d.relPath,
       sha256: d.sha256,
+      fileMtimeIso: d.fileMtimeIso,
       uploaderNickname: d.author,
       base64Data: d.inlineSyncBase64,
     }));
-  if (syncable.length === 0) {
-    return { ok: true, syncedCount: 0 };
+
+  let syncedTotal = 0;
+  let removedTotal = 0;
+
+  if (inlineItems.length > 0 || Object.keys(tombstones).length > 0) {
+    try {
+      const res = await fetch(getZCoreUrl('/__work/pull-sync'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          files: inlineItems,
+          deletedTombstones: tombstones,
+        }),
+      });
+      if (res.ok) {
+        const json = (await res.json()) as {
+          ok?: boolean;
+          syncedCount?: number;
+          removedByTombstoneCount?: number;
+        };
+        syncedTotal += Number(json?.syncedCount || 0);
+        removedTotal += Number(json?.removedByTombstoneCount || 0);
+      }
+    } catch {
+      /* ignore */
+    }
   }
-  try {
-    const res = await fetch(getZCoreUrl('/__work/pull-sync'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ files: syncable }),
-    });
-    if (!res.ok) return { ok: false, syncedCount: 0 };
-    const json = (await res.json()) as { ok?: boolean; syncedCount?: number };
-    return { ok: Boolean(json?.ok), syncedCount: Number(json?.syncedCount || 0) };
-  } catch {
-    return { ok: false, syncedCount: 0 };
+
+  // 512KB 초과 대용량 업무 파일(1~50MB 엑셀·계약서 PDF·현장사진) 서명 다운로드 동기화
+  const roomId = opts?.roomId || '';
+  if (roomId) {
+    const largeDocs = remoteDocs.filter(
+      (d) =>
+        !d.inlineSyncBase64 &&
+        !tombstones[d.relPath] &&
+        Boolean(d.sha256) &&
+        (d.hasCloudBlob || d.byteSize > 512 * 1024)
+    );
+    for (const ld of largeDocs.slice(0, 20)) {
+      const dlSign = await callGhostiServerBridge<{ signedDownloadUrl?: string }>(
+        'work_sign_download',
+        {
+          roomId,
+          sha256: ld.sha256,
+          inviteToken: opts?.inviteToken || '',
+        },
+        { allowAnonymous: Boolean(opts?.inviteToken) }
+      );
+      if (!dlSign.ok || !dlSign.signedDownloadUrl) continue;
+      try {
+        const pr = await fetch(getZCoreUrl('/__work/pull-blob'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            relPath: ld.relPath,
+            signedDownloadUrl: dlSign.signedDownloadUrl,
+            sha256: ld.sha256,
+            fileMtimeIso: ld.fileMtimeIso,
+            uploaderNickname: ld.author,
+          }),
+        });
+        const pj = (await pr.json().catch(() => ({}))) as {
+          ok?: boolean;
+          alreadySynced?: boolean;
+          skippedNewerLocal?: boolean;
+        };
+        if (pj.ok && !pj.alreadySynced && !pj.skippedNewerLocal) {
+          syncedTotal += 1;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
   }
+
+  return { ok: true, syncedCount: syncedTotal, removedCount: removedTotal };
 }
 
-export async function downloadWorkFileOriginal(doc: WorkLoungeDocDto): Promise<boolean> {
+export async function downloadWorkFileOriginal(
+  doc: WorkLoungeDocDto,
+  opts?: { roomId?: string; inviteToken?: string }
+): Promise<boolean> {
   if (zCoreBridge.isConnected) {
     try {
       const res = await fetch(
@@ -469,6 +629,21 @@ export async function downloadWorkFileOriginal(doc: WorkLoungeDocDto): Promise<b
       }
     } catch {
       /* fallback below */
+    }
+  }
+  if (opts?.roomId && doc.sha256) {
+    const dlSign = await callGhostiServerBridge<{ signedDownloadUrl?: string }>(
+      'work_sign_download',
+      {
+        roomId: opts.roomId,
+        sha256: doc.sha256,
+        inviteToken: opts.inviteToken || '',
+      },
+      { allowAnonymous: Boolean(opts.inviteToken) }
+    );
+    if (dlSign.ok && dlSign.signedDownloadUrl) {
+      window.open(dlSign.signedDownloadUrl, '_blank', 'noopener,noreferrer');
+      return true;
     }
   }
   if (doc.inlineSyncBase64) {
@@ -496,6 +671,40 @@ export async function downloadWorkFileOriginal(doc: WorkLoungeDocDto): Promise<b
     }
   }
   return false;
+}
+
+export async function deleteWorkFileShared(opts: {
+  roomId?: string;
+  relPath: string;
+  actorNickname?: string;
+}): Promise<{ ok: boolean; deletedTombstones?: WorkDeletedTombstoneMap }> {
+  const cleanRel = (opts.relPath || '').replace(/\\/g, '/').replace(/^\/+/, '').trim();
+  if (!cleanRel) return { ok: false };
+
+  if (zCoreBridge.isConnected) {
+    try {
+      await fetch(getZCoreUrl('/__work/delete-file'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ relPath: cleanRel }),
+      });
+    } catch {
+      /* ignore */
+    }
+  }
+
+  if (opts.roomId && hasAuthenticatedHubAccountSession()) {
+    const srv = await callGhostiServerBridge<{ deletedTombstones?: WorkDeletedTombstoneMap }>(
+      'work_delete_file',
+      {
+        roomId: opts.roomId,
+        relPath: cleanRel,
+        actorNickname: opts.actorNickname || '팀원',
+      }
+    );
+    return { ok: Boolean(srv.ok), deletedTombstones: srv.deletedTombstones };
+  }
+  return { ok: true };
 }
 
 export async function toggleHideWorkFileNative(relPath: string): Promise<boolean> {
@@ -530,21 +739,121 @@ export async function openGhostSearchForWorkSDrive(query?: string): Promise<bool
   }
 }
 
-/**
- * [업무 공유(S:) 원안 엄수 — Zero-Cloud (서버 DB 점유 0 Byte) 로컬 30KB 미리보기 캐시]
- * - 업무 공유방 문서·표·본문·바이너리는 Supabase 서버 DB 테이블에 절대 저장하지 않습니다.
- * - 방장↔팀원 간 실시간 파일·잠금(~$)은 메모리 패스스루(Realtime Broadcast)로만 직결 중계되며,
- *   대장 PC 오프라인 대비용 30KB 이하 경량 텍스트/표 미리보기만 각 팀원 기기 로컬 IndexedDB에 보관됩니다.
- */
-export async function loadCachedWorkRoomPreview(roomId: string): Promise<WorkLoungeDocDto[]> {
-  return loadLocalWorkRoomDocs<WorkLoungeDocDto>(roomId);
-}
+const LOCAL_WORK_PREVIEW_PREFIX = 'ghosti_work_preview_cache_v2::';
 
 export async function cacheWorkRoomPreviewLocally(
   roomId: string,
   docs: WorkLoungeDocDto[]
 ): Promise<void> {
-  await saveLocalWorkRoomDocs<WorkLoungeDocDto>(roomId, docs);
+  if (typeof window === 'undefined' || !roomId) return;
+  try {
+    const slim = docs.slice(0, 60).map((d) => ({
+      ...d,
+      inlineSyncBase64: undefined,
+      imageBase64: d.imageBase64 && d.imageBase64.length <= 45_000 ? d.imageBase64 : undefined,
+    }));
+    localStorage.setItem(`${LOCAL_WORK_PREVIEW_PREFIX}${roomId}`, JSON.stringify(slim));
+  } catch {
+    /* ignore quota */
+  }
+}
+
+export async function loadCachedWorkRoomPreview(roomId: string): Promise<WorkLoungeDocDto[]> {
+  if (typeof window === 'undefined' || !roomId) return [];
+  try {
+    const raw = localStorage.getItem(`${LOCAL_WORK_PREVIEW_PREFIX}${roomId}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? (parsed as WorkLoungeDocDto[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+export async function fetchWorkRoomCloudPreview(inviteToken: string): Promise<{
+  ok: boolean;
+  roomTitle?: string;
+  hostNickname?: string;
+  docs: WorkLoungeDocDto[];
+  deletedTombstones: WorkDeletedTombstoneMap;
+}> {
+  const cleanToken = (inviteToken || '').trim();
+  if (!cleanToken) return { ok: false, docs: [], deletedTombstones: {} };
+  const res = await callGhostiServerBridge<{
+    room?: { roomTitle?: string; hostNickname?: string };
+    files?: Array<Record<string, unknown>>;
+    deletedTombstones?: WorkDeletedTombstoneMap;
+  }>('work_get_preview', { inviteToken: cleanToken }, { allowAnonymous: true });
+
+  if (!res.ok || !Array.isArray(res.files)) {
+    return { ok: false, docs: [], deletedTombstones: {} };
+  }
+  return {
+    ok: true,
+    roomTitle: res.room?.roomTitle,
+    hostNickname: res.room?.hostNickname,
+    docs: res.files.map((f, idx) => mapRawWorkFileToDto(f, idx)),
+    deletedTombstones: res.deletedTombstones || {},
+  };
+}
+
+export async function fetchWorkRoomAuthedState(
+  roomId: string,
+  inviteToken?: string
+): Promise<{
+  ok: boolean;
+  docs: WorkLoungeDocDto[];
+  deletedTombstones: WorkDeletedTombstoneMap;
+}> {
+  if (!roomId || !hasAuthenticatedHubAccountSession()) {
+    return { ok: false, docs: [], deletedTombstones: {} };
+  }
+  const res = await callGhostiServerBridge<{
+    files?: Array<Record<string, unknown>>;
+    deletedTombstones?: WorkDeletedTombstoneMap;
+  }>('work_get_room_state', { roomId, inviteToken: inviteToken || '' });
+
+  if (!res.ok || !Array.isArray(res.files)) {
+    return { ok: false, docs: [], deletedTombstones: {} };
+  }
+  return {
+    ok: true,
+    docs: res.files.map((f, idx) => mapRawWorkFileToDto(f, idx)),
+    deletedTombstones: res.deletedTombstones || {},
+  };
+}
+
+export async function upsertWorkFilesToSupabase(opts: {
+  roomId: string;
+  docs: WorkLoungeDocDto[];
+  actorNickname: string;
+}): Promise<{
+  ok: boolean;
+  mergedDocs?: WorkLoungeDocDto[];
+  deletedTombstones?: WorkDeletedTombstoneMap;
+  uploadedLargeBlob?: boolean;
+}> {
+  if (!opts.roomId || opts.docs.length === 0 || !hasAuthenticatedHubAccountSession()) {
+    return { ok: false };
+  }
+  const res = await callGhostiServerBridge<{
+    files?: Array<Record<string, unknown>>;
+    deletedTombstones?: WorkDeletedTombstoneMap;
+  }>('work_upsert_files', {
+    roomId: opts.roomId,
+    actorNickname: opts.actorNickname,
+    docs: opts.docs.slice(0, 120),
+  });
+
+  const uploadedLargeBlob = await pushLargeWorkBlobsIfNeeded(opts.roomId, opts.docs);
+  return {
+    ok: Boolean(res.ok),
+    mergedDocs: Array.isArray(res.files)
+      ? res.files.map((f, idx) => mapRawWorkFileToDto(f, idx))
+      : undefined,
+    deletedTombstones: res.deletedTombstones,
+    uploadedLargeBlob,
+  };
 }
 
 export function connectWorkRoomRealtimeChannel(opts: {
@@ -554,16 +863,28 @@ export function connectWorkRoomRealtimeChannel(opts: {
   role: 'host' | 'editor' | 'viewer';
   getLocalDocs: () => WorkLoungeDocDto[];
   onRemoteSnapshot: (docs: WorkLoungeDocDto[]) => void;
+  onRemoteFileDeleted: (relPath: string, deletedAt: string) => void;
   onRemoteLockMap: (locksByRelPath: Record<string, string | null>) => void;
   onPresenceMembers: (members: WorkRoomPresenceMember[]) => void;
 }): {
   broadcastSnapshot: (docs: WorkLoungeDocDto[]) => void;
+  broadcastFileDeleted: (relPath: string, deletedAt: string) => void;
   broadcastLocks: (locksByRelPath: Record<string, string | null>) => void;
-  requestBinaryFile: (relPath: string) => void;
   dispose: () => void;
 } {
   let channel: RealtimeChannel | null = null;
   let disposed = false;
+
+  const stripHeavyPayload = (docs: WorkLoungeDocDto[]) =>
+    docs.slice(0, 80).map((d) => ({
+      ...d,
+      // Realtime WebSocket 프레임 한도 보호: 120KB 초과 Base64는 제외하고 서명 다운로드(hasCloudBlob)로 안전 수신
+      inlineSyncBase64:
+        d.inlineSyncBase64 && d.inlineSyncBase64.length <= 120_000
+          ? d.inlineSyncBase64
+          : undefined,
+      hasCloudBlob: Boolean(d.hasCloudBlob || d.byteSize > 512 * 1024),
+    }));
 
   const start = async () => {
     const ok = hasAuthenticatedHubAccountSession()
@@ -572,7 +893,7 @@ export function connectWorkRoomRealtimeChannel(opts: {
     if (!ok || disposed || !supabase) return;
     const sbClient = supabase;
 
-    channel = sbClient.channel(`ghosti:work:${opts.roomId}`, {
+    channel = sbClient.channel(`ghosti:room:${opts.roomId}`, {
       config: {
         broadcast: { self: false },
         presence: { key: opts.peerId },
@@ -598,78 +919,24 @@ export function connectWorkRoomRealtimeChannel(opts: {
           void channel.send({
             type: 'broadcast',
             event: 'WORK_SNAPSHOT',
-            payload: { sender: opts.peerId, docs: curDocs.slice(0, 80) },
+            payload: { sender: opts.peerId, docs: stripHeavyPayload(curDocs) },
           });
         }
       })
       .on('broadcast', { event: 'WORK_SNAPSHOT' }, ({ payload }) => {
         if (disposed || !payload?.docs || !Array.isArray(payload.docs)) return;
-        const incomingDocs = payload.docs as WorkLoungeDocDto[];
-        void saveLocalWorkRoomDocs<WorkLoungeDocDto>(opts.roomId, incomingDocs);
-        opts.onRemoteSnapshot(incomingDocs);
+        opts.onRemoteSnapshot(payload.docs as WorkLoungeDocDto[]);
+      })
+      .on('broadcast', { event: 'WORK_FILE_DELETED' }, ({ payload }) => {
+        if (disposed || !payload?.relPath) return;
+        opts.onRemoteFileDeleted(
+          String(payload.relPath),
+          String(payload.deletedAt || new Date().toISOString())
+        );
       })
       .on('broadcast', { event: 'WORK_LOCK_UPDATE' }, ({ payload }) => {
         if (disposed || !payload?.locks) return;
         opts.onRemoteLockMap(payload.locks as Record<string, string | null>);
-      })
-      .on('broadcast', { event: 'REQUEST_FILE_BINARY' }, async ({ payload }) => {
-        if (!channel || disposed || !zCoreBridge.isConnected) return;
-        const relPath = String(payload?.relPath || '').trim();
-        if (!relPath) return;
-        try {
-          const r = await fetch(
-            getZCoreUrl(`/__work/file-sync-payload?relPath=${encodeURIComponent(relPath)}`)
-          );
-          if (!r.ok) return;
-          const filePayload = (await r.json()) as {
-            ok?: boolean;
-            relPath?: string;
-            base64Data?: string;
-          };
-          if (filePayload?.ok && filePayload.base64Data && channel) {
-            void channel.send({
-              type: 'broadcast',
-              event: 'RESPONSE_FILE_BINARY',
-              payload: {
-                relPath: filePayload.relPath || relPath,
-                base64Data: filePayload.base64Data,
-                author: opts.nickname,
-              },
-            });
-          }
-        } catch {
-          /* ignore */
-        }
-      })
-      .on('broadcast', { event: 'RESPONSE_FILE_BINARY' }, async ({ payload }) => {
-        if (disposed || !zCoreBridge.isConnected) return;
-        const relPath = String(payload?.relPath || '').trim();
-        const base64Data = String(payload?.base64Data || '').trim();
-        if (!relPath || !base64Data) return;
-        await pullSyncRemoteWorkFilesToLocalSDrive([
-          {
-            id: `sync-${relPath}`,
-            relPath,
-            folderId: 'root',
-            folderPath: 'S:\\',
-            fileName: relPath.split('/').pop() || relPath,
-            ext: 'FILE',
-            byteSize: 0,
-            sizeLabel: '',
-            updatedAt: '',
-            fileMtimeIso: new Date().toISOString(),
-            author: String(payload?.author || '방장'),
-            lockedBy: null,
-            sha256: '',
-            cacheSizeLabel: '',
-            summaryTitle: '',
-            matchedSnippet: '',
-            tableHeaders: [],
-            tableRows: [],
-            fullTextPreview: '',
-            inlineSyncBase64: base64Data,
-          },
-        ]);
       })
       .subscribe(async (status) => {
         if (status !== 'SUBSCRIBED' || !channel || disposed) return;
@@ -690,7 +957,7 @@ export function connectWorkRoomRealtimeChannel(opts: {
           void channel.send({
             type: 'broadcast',
             event: 'WORK_SNAPSHOT',
-            payload: { sender: opts.peerId, docs: curDocs.slice(0, 80) },
+            payload: { sender: opts.peerId, docs: stripHeavyPayload(curDocs) },
           });
         }
       });
@@ -704,7 +971,15 @@ export function connectWorkRoomRealtimeChannel(opts: {
       void channel.send({
         type: 'broadcast',
         event: 'WORK_SNAPSHOT',
-        payload: { sender: opts.peerId, docs: docs.slice(0, 80) },
+        payload: { sender: opts.peerId, docs: stripHeavyPayload(docs) },
+      });
+    },
+    broadcastFileDeleted: (relPath: string, deletedAt: string) => {
+      if (!channel || disposed) return;
+      void channel.send({
+        type: 'broadcast',
+        event: 'WORK_FILE_DELETED',
+        payload: { sender: opts.peerId, relPath, deletedAt },
       });
     },
     broadcastLocks: (locksByRelPath: Record<string, string | null>) => {
@@ -713,14 +988,6 @@ export function connectWorkRoomRealtimeChannel(opts: {
         type: 'broadcast',
         event: 'WORK_LOCK_UPDATE',
         payload: { sender: opts.peerId, locks: locksByRelPath },
-      });
-    },
-    requestBinaryFile: (relPath: string) => {
-      if (!channel || disposed) return;
-      void channel.send({
-        type: 'broadcast',
-        event: 'REQUEST_FILE_BINARY',
-        payload: { requester: opts.peerId, relPath },
       });
     },
     dispose: () => {

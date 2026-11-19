@@ -127,8 +127,9 @@ import plugin_aggrofilter  # noqa: E402
 import ghosti_setup_parity  # noqa: E402
 import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
+from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.4.99"
+CORE_VERSION = "2.5.9"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -663,6 +664,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 self._send_json({"ok": False, "error": "WORK_FILE_NOT_FOUND"}, status=status)
             return
 
+        if path in ("/__sync/clipboard", "/api/sync/clipboard"):
+            self._send_json(plugin_paid_sync_ghostwin.get_os_clipboard_text())
+            return
+
         if path in ("/__videos/list", "/__videos/index", "/api/ghosti/videos/list"):
             self._send_json(plugin_ghosti_os.list_local_videos(qp))
             return
@@ -990,8 +995,29 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_paid_work_sdrive.pull_sync_work_files(body))
             return
 
+        if path in ("/__work/push-blob", "/api/work/push-blob"):
+            self._send_json(plugin_paid_work_sdrive.push_work_blob_to_signed_url(body))
+            return
+
+        if path in ("/__work/pull-blob", "/api/work/pull-blob"):
+            self._send_json(plugin_paid_work_sdrive.pull_work_blob_from_signed_url(body))
+            return
+
+        if path in ("/__work/delete-file", "/api/work/delete-file"):
+            self._send_json(plugin_paid_work_sdrive.delete_or_apply_tombstones(body))
+            return
+
         if path in ("/__work/toggle-hide", "/api/work/toggle-hide"):
             self._send_json(plugin_paid_work_sdrive.toggle_hide_work_file(body))
+            return
+
+        # [5. 내 기기 통합 네이티브 클립보드 주입 & 원본 미러링 저장 API]
+        if path in ("/__sync/clipboard", "/api/sync/clipboard"):
+            self._send_json(plugin_paid_sync_ghostwin.set_os_clipboard_text(body))
+            return
+
+        if path in ("/__sync/mirror-pull", "/api/sync/mirror-pull"):
+            self._send_json(plugin_paid_sync_ghostwin.save_mirrored_device_file(body))
             return
 
         if path in ("/__videos/search", "/api/ghosti/videos/search"):

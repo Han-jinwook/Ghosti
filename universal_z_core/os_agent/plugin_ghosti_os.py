@@ -785,11 +785,9 @@ def _get_user_scan_roots(extra_path: str = "") -> List[Path]:
     # (0순위: S: 업무 공유 드라이브 & 사용자 지정 폴더 ➔ 1순위: Windows Known Folders(OneDrive 리디렉션 포함) + 사진·동영상·문서·카톡 받은 파일 ➔ 2순위: 바탕화면·다운로드)
     work_roots: List[Path] = []
     try:
+        # S: 드라이브가 실제 마운트된 업무공유 활성 상태에서만 0순위로 편입 (순수 개인 단독 모드에서는 업무폴더 혼입 0%)
         if Path("S:\\").exists():
             work_roots.append(Path("S:\\"))
-        wv = zos.get_shared_work_vault_dir()
-        if wv.exists():
-            work_roots.append(wv)
     except Exception:
         pass
     candidates: List[Path] = [

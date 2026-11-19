@@ -5,11 +5,15 @@ import { isMobileOrStoreRuntime } from '../../store/slices/storeSharedRefs';
 import { hasAuthenticatedHubAccountSession } from '../../services/supabaseClient';
 import { zCoreBridge } from '../../services/zCoreBridge';
 import {
+  acceptWorkRoomInvite,
   cacheWorkRoomPreviewLocally,
   connectWorkRoomRealtimeChannel,
+  deleteWorkFileShared,
   downloadWorkFileOriginal,
   ensureMyWorkRoomAndInvite,
   fetchLocalWorkFilesNative,
+  fetchWorkRoomAuthedState,
+  fetchWorkRoomCloudPreview,
   loadCachedWorkRoomPreview,
   mountWorkSDriveNative,
   openGhostSearchForWorkSDrive,
@@ -18,6 +22,8 @@ import {
   readCachedMyWorkRoomMeta,
   toggleHideWorkFileNative,
   uploadWorkFileToNativeSDrive,
+  upsertWorkFilesToSupabase,
+  type WorkDeletedTombstoneMap,
   type WorkLoungeDocDto,
   type WorkRoomPresenceMember,
 } from '../../services/workRoomSyncService';
@@ -67,6 +73,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const [nightSleepBannerPhase, setNightSleepBannerPhase] = useState<'hidden' | 'visible' | 'fading'>('hidden');
   const [showMemberPermissions, setShowMemberPermissions] = useState<boolean>(() => !isMobileOrStoreRuntime());
   const [hiddenDocIds, setHiddenDocIds] = useState<string[]>([]);
+  const [deletedTombstones, setDeletedTombstones] = useState<WorkDeletedTombstoneMap>({});
   const [docActionNotice, setDocActionNotice] = useState<string | null>(null);
   const [inviteCopied, setInviteCopied] = useState<boolean>(false);
   const [uploadingFiles, setUploadingFiles] = useState<boolean>(false);
@@ -82,6 +89,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const localDocsRef = useRef<WorkLoungeDocDto[]>([]);
   const prevLockSignatureRef = useRef<string>('');
   const prevCloudUpsertSigRef = useRef<string>('');
+  const acceptedInviteTokenRef = useRef<string>('');
   const realtimeRef = useRef<ReturnType<typeof connectWorkRoomRealtimeChannel> | null>(null);
 
   const inviteMeta = useMemo(() => readActiveWorkRoomInviteMeta(), [activeWorkRoomId]);
@@ -144,6 +152,31 @@ export const WorkLoungeB2BHub: React.FC = () => {
     localDocsRef.current = res.docs;
     setLocalDocs(res.docs);
 
+    // 윈도우 탐색기 S:\에서 직접 삭제된 파일 감지 -> 전 팀원 공유방 Tombstone 전파 (부활 원천 차단)
+    if (res.locallyDeletedRelPaths.length > 0) {
+      const nowIso = new Date().toISOString();
+      setDeletedTombstones((prev) => {
+        const next = { ...prev };
+        for (const rel of res.locallyDeletedRelPaths) {
+          next[rel] = { deletedAt: nowIso, deletedBy: actorNickname };
+        }
+        return next;
+      });
+      setRemoteDocs((prev) =>
+        prev.filter((rd) => !res.locallyDeletedRelPaths.includes(rd.relPath))
+      );
+      for (const rel of res.locallyDeletedRelPaths) {
+        realtimeRef.current?.broadcastFileDeleted(rel, nowIso);
+        if (activeWorkRoomId) {
+          void deleteWorkFileShared({
+            roomId: activeWorkRoomId,
+            relPath: rel,
+            actorNickname,
+          });
+        }
+      }
+    }
+
     const lockMap: Record<string, string | null> = {};
     for (const d of res.docs) {
       if (d.lockedBy) lockMap[d.relPath] = d.lockedBy;
@@ -162,6 +195,23 @@ export const WorkLoungeB2BHub: React.FC = () => {
         prevCloudUpsertSigRef.current = cloudSig;
         realtimeRef.current?.broadcastSnapshot(res.docs);
         void cacheWorkRoomPreviewLocally(activeWorkRoomId, res.docs);
+        void upsertWorkFilesToSupabase({
+          roomId: activeWorkRoomId,
+          docs: res.docs,
+          actorNickname,
+        }).then((upRes) => {
+          if (upRes.deletedTombstones) {
+            setDeletedTombstones((prev) => ({ ...prev, ...upRes.deletedTombstones }));
+          }
+          if (upRes.uploadedLargeBlob) {
+            realtimeRef.current?.broadcastSnapshot(
+              res.docs.map((d) => ({
+                ...d,
+                hasCloudBlob: Boolean(d.hasCloudBlob || d.byteSize > 512 * 1024),
+              }))
+            );
+          }
+        });
       }
     }
   }, [activeWorkRoomId, actorNickname]);
@@ -205,17 +255,75 @@ export const WorkLoungeB2BHub: React.FC = () => {
     });
   }, [inviteMeta.hasWorkInvite, activeWorkRoomId, actorNickname]);
 
-  // Zero-Cloud 원안: 서버 DB 점유 0 Byte · 팀원 기기 로컬 IndexedDB 30KB 경량 미리보기 캐시 즉시 복원
+  // 초대 링크(?workRoom=...&token=...)로 들어온 팀원이 로그인 완료 시 DB 정식 멤버(ghosti_lounge_members)로 자동 편입
   useEffect(() => {
-    if (!activeWorkRoomId) return;
-    void loadCachedWorkRoomPreview(activeWorkRoomId).then((cachedDocs) => {
-      if (cachedDocs.length > 0) {
-        setRemoteDocs((prev) => (prev.length > 0 ? prev : cachedDocs));
+    if (
+      !inviteMeta.hasWorkInvite ||
+      !inviteMeta.inviteToken ||
+      !hasAuthenticatedHubAccountSession() ||
+      acceptedInviteTokenRef.current === inviteMeta.inviteToken
+    ) {
+      return;
+    }
+    acceptedInviteTokenRef.current = inviteMeta.inviteToken;
+    void acceptWorkRoomInvite({
+      inviteToken: inviteMeta.inviteToken,
+      nickname: actorNickname,
+    }).then((accepted) => {
+      if (accepted.ok && accepted.roomId && accepted.roomId !== activeWorkRoomId) {
+        setActiveWorkRoomId(accepted.roomId);
       }
     });
-  }, [activeWorkRoomId]);
+  }, [inviteMeta.hasWorkInvite, inviteMeta.inviteToken, actorNickname, activeWorkRoomId, merlinAuth?.userId]);
 
-  // 방장 ↔ 팀원 실시간 파일·잠금(~$) 동기화 채널 연결
+  // 로컬 즉시 캐시 복원 + 방장 PC 절전/퇴근 시에도 작동하는 24시간 공유방 상태·미리보기 로드
+  useEffect(() => {
+    if (activeWorkRoomId) {
+      void loadCachedWorkRoomPreview(activeWorkRoomId).then((cachedDocs) => {
+        if (cachedDocs.length > 0) {
+          setRemoteDocs((prev) => (prev.length > 0 ? prev : cachedDocs));
+        }
+      });
+    }
+
+    let cancelled = false;
+    const loadRemoteState = async () => {
+      if (activeWorkRoomId && hasAuthenticatedHubAccountSession()) {
+        const authed = await fetchWorkRoomAuthedState(activeWorkRoomId, inviteMeta.inviteToken);
+        if (!cancelled && authed.ok) {
+          setDeletedTombstones((prev) => ({ ...prev, ...authed.deletedTombstones }));
+          if (authed.docs.length > 0) {
+            setRemoteDocs(authed.docs);
+            void cacheWorkRoomPreviewLocally(activeWorkRoomId, authed.docs);
+          }
+          return;
+        }
+      }
+      if (inviteMeta.hasWorkInvite && inviteMeta.inviteToken) {
+        const pub = await fetchWorkRoomCloudPreview(inviteMeta.inviteToken);
+        if (!cancelled && pub.ok) {
+          setDeletedTombstones((prev) => ({ ...prev, ...pub.deletedTombstones }));
+          if (pub.docs.length > 0) {
+            setRemoteDocs(pub.docs);
+            if (activeWorkRoomId) {
+              void cacheWorkRoomPreviewLocally(activeWorkRoomId, pub.docs);
+            }
+          }
+        }
+      }
+    };
+
+    void loadRemoteState();
+    const pollId = window.setInterval(() => {
+      void loadRemoteState();
+    }, 15000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(pollId);
+    };
+  }, [activeWorkRoomId, inviteMeta.hasWorkInvite, inviteMeta.inviteToken, merlinAuth?.userId]);
+
+  // 방장 ↔ 팀원 실시간 파일·잠금(~$)·삭제 Tombstone 동기화 채널 연결
   useEffect(() => {
     if (!activeWorkRoomId) return undefined;
     const handle = connectWorkRoomRealtimeChannel({
@@ -226,6 +334,17 @@ export const WorkLoungeB2BHub: React.FC = () => {
       getLocalDocs: () => localDocsRef.current,
       onRemoteSnapshot: (incomingDocs) => {
         setRemoteDocs(incomingDocs);
+      },
+      onRemoteFileDeleted: (relPath, deletedAt) => {
+        setDeletedTombstones((prev) => ({
+          ...prev,
+          [relPath]: { deletedAt },
+        }));
+        setRemoteDocs((prev) => prev.filter((d) => d.relPath !== relPath));
+        setLocalDocs((prev) => prev.filter((d) => d.relPath !== relPath));
+        if (zCoreBridge.isConnected) {
+          void deleteWorkFileShared({ relPath });
+        }
       },
       onRemoteLockMap: (locks) => {
         setRemoteLocksByRelPath(locks);
@@ -241,36 +360,54 @@ export const WorkLoungeB2BHub: React.FC = () => {
     };
   }, [activeWorkRoomId, actorNickname, inviteMeta.hasWorkInvite]);
 
-  // 팀원 PC에서 Z-코어가 켜지는 즉시 원격 공유 업무파일들을 내 S:\ 탐색기로 자동 동기화
+  // 팀원 PC에서 Z-코어가 켜지는 즉시 원격 공유 업무파일(50MB 대용량 포함) 및 삭제 Tombstone을 내 S:\ 탐색기로 자동 동기화
   useEffect(() => {
-    if (!isZCoreConnected || remoteDocs.length === 0) return;
-    const missingBinaryPaths = remoteDocs
-      .filter((rd) => !rd.inlineSyncBase64 && !localDocs.some((ld) => ld.relPath === rd.relPath))
-      .map((rd) => rd.relPath);
-    for (const rel of missingBinaryPaths.slice(0, 10)) {
-      realtimeRef.current?.requestBinaryFile(rel);
+    if (!isZCoreConnected || (remoteDocs.length === 0 && Object.keys(deletedTombstones).length === 0)) {
+      return;
     }
 
-    void pullSyncRemoteWorkFilesToLocalSDrive(remoteDocs).then((pulled) => {
-      if (pulled.ok && pulled.syncedCount > 0) {
-        setLastSyncedToLocalCount((prev) => prev + pulled.syncedCount);
-        showToast(`⚡ 공유 업무 문서 ${pulled.syncedCount}건이 내 컴퓨터 [S:\\ 드라이브]로 자동 동기화되었습니다!`);
+    void pullSyncRemoteWorkFilesToLocalSDrive(remoteDocs, {
+      roomId: activeWorkRoomId,
+      inviteToken: inviteMeta.inviteToken,
+      deletedTombstones,
+    }).then((pulled) => {
+      if (pulled.ok && (pulled.syncedCount > 0 || pulled.removedCount > 0)) {
+        if (pulled.syncedCount > 0) {
+          setLastSyncedToLocalCount((prev) => prev + pulled.syncedCount);
+          showToast(`⚡ 공유 업무 문서 ${pulled.syncedCount}건이 내 컴퓨터 [S:\\ 드라이브]로 자동 동기화되었습니다!`);
+        }
         void syncRealWorkFiles();
       }
     });
-  }, [isZCoreConnected, remoteDocs, localDocs, showToast, syncRealWorkFiles]);
+  }, [
+    isZCoreConnected,
+    remoteDocs,
+    deletedTombstones,
+    activeWorkRoomId,
+    inviteMeta.inviteToken,
+    showToast,
+    syncRealWorkFiles,
+  ]);
 
-  // 로컬 S:\ 파일 + 원격(?workRoom) 파일 통합 및 실시간 잠금(~$) 상태 병합
+  // 로컬 S:\ 파일 + 원격(?workRoom) 파일 통합 및 삭제 Tombstone · 실시간 잠금(~$) 상태 병합
   const docs = useMemo<WorkLoungeDocDto[]>(() => {
     const byRel = new Map<string, WorkLoungeDocDto>();
     for (const rd of remoteDocs) {
+      if (deletedTombstones[rd.relPath]) continue;
       byRel.set(rd.relPath, rd);
     }
     for (const ld of localDocs) {
+      const tomb = deletedTombstones[ld.relPath];
+      if (tomb?.deletedAt) {
+        const delTs = Date.parse(tomb.deletedAt) || 0;
+        const locTs = Date.parse(ld.fileMtimeIso) || 0;
+        if (delTs >= locTs) continue;
+      }
       const prev = byRel.get(ld.relPath);
       byRel.set(ld.relPath, {
         ...ld,
         author: ld.author || prev?.author || actorNickname,
+        hasCloudBlob: Boolean(ld.hasCloudBlob || prev?.hasCloudBlob),
         lockedBy: ld.lockedBy || remoteLocksByRelPath[ld.relPath] || prev?.lockedBy || null,
       });
     }
@@ -281,7 +418,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
           ? simulatedLocksByDocId[d.id]
           : d.lockedBy || remoteLocksByRelPath[d.relPath] || null,
     }));
-  }, [localDocs, remoteDocs, remoteLocksByRelPath, simulatedLocksByDocId, actorNickname]);
+  }, [localDocs, remoteDocs, deletedTombstones, remoteLocksByRelPath, simulatedLocksByDocId, actorNickname]);
 
   const folderCounts = useMemo(() => {
     const visible = docs.filter((d) => !hiddenDocIds.includes(d.id));
@@ -413,6 +550,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
     if (localDocsRef.current.length > 0) {
       realtimeRef.current?.broadcastSnapshot(localDocsRef.current);
       void cacheWorkRoomPreviewLocally(ensured.roomId, localDocsRef.current);
+      void upsertWorkFilesToSupabase({
+        roomId: ensured.roomId,
+        docs: localDocsRef.current,
+        actorNickname,
+      });
     }
     try {
       await navigator.clipboard?.writeText(ensured.inviteUrl);
@@ -1234,7 +1376,12 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-2">
                   <button
                     type="button"
-                    onClick={() => void downloadWorkFileOriginal(selectedDoc)}
+                    onClick={() =>
+                      void downloadWorkFileOriginal(selectedDoc, {
+                        roomId: activeWorkRoomId,
+                        inviteToken: inviteMeta.inviteToken,
+                      })
+                    }
                     className="w-full py-1.5 px-3 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer text-center"
                   >
                     👁️ 읽기 전용 사본 다운로드
@@ -1325,7 +1472,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
               <button
                 type="button"
                 onClick={async () => {
-                  const ok = await downloadWorkFileOriginal(selectedDoc);
+                  const ok = await downloadWorkFileOriginal(selectedDoc, {
+                    roomId: activeWorkRoomId,
+                    inviteToken: inviteMeta.inviteToken,
+                  });
                   setDocActionNotice(
                     ok
                       ? `⬇️ '${selectedDoc.fileName}' 원본 파일(${selectedDoc.sizeLabel}) 다운로드가 시작되었습니다!`
@@ -1363,6 +1513,32 @@ export const WorkLoungeB2BHub: React.FC = () => {
                     ? '👁️ 숨김 해제'
                     : '🙈 숨기기 (실수 삭제 방지)'}
                 </span>
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const targetRel = selectedDoc.relPath;
+                  const targetName = selectedDoc.fileName;
+                  const nowIso = new Date().toISOString();
+                  setDeletedTombstones((prev) => ({
+                    ...prev,
+                    [targetRel]: { deletedAt: nowIso, deletedBy: actorNickname },
+                  }));
+                  setRemoteDocs((prev) => prev.filter((d) => d.relPath !== targetRel));
+                  setLocalDocs((prev) => prev.filter((d) => d.relPath !== targetRel));
+                  realtimeRef.current?.broadcastFileDeleted(targetRel, nowIso);
+                  await deleteWorkFileShared({
+                    roomId: activeWorkRoomId,
+                    relPath: targetRel,
+                    actorNickname,
+                  });
+                  showToast(
+                    `🗑️ '${targetName}' 파일이 윈도우 [휴지통]으로 안전하게 이동되었으며 팀원 공유 목록에서도 함께 정리되었습니다.`
+                  );
+                }}
+                className="px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-400/50 text-rose-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1"
+              >
+                <span>🗑️ 공유방에서 삭제 (휴지통)</span>
               </button>
               <button
                 type="button"

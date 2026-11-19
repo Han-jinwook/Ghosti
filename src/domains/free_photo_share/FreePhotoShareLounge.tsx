@@ -34,6 +34,8 @@ import {
 } from '../../services/sharedPhotoRoomSupabase';
 import { LOUNGE_TABS, PLAN_BADGE_LABELS, HostThreeBodyControlPanel } from '../shared/loungeHelpers';
 import { WorkLoungeB2BHub } from '../paid_work_share/WorkLoungeB2BHub';
+import { QrCodeSvg } from '../../utils/qrCodeSvg';
+import { CrossDeviceClipboardAndPairingBar } from '../paid_device_sync/CrossDeviceClipboardAndPairingBar';
 
 async function issueAuthenticatedInviteHttpsUrl(opts: {
   loungeType: LoungeType;
@@ -3203,6 +3205,9 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     triggerSyncNow,
     pcAgentPairedMobile,
     setPcAgentPairedMobile,
+    connectedDevices,
+    devicePairingCode6,
+    refreshDeviceIntegrationState,
     merlinAuth,
   } = useSaySeeStore();
 
@@ -3386,6 +3391,14 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
 
   if (activeLoungeType === 'personal') {
     const isShadowMode = syncState.privateSyncStrategy === 'shadow';
+    const mobilePeers = connectedDevices.filter((d) => d.device_kind === 'mobile');
+    const pcPeers = connectedDevices.filter((d) => d.device_kind === 'pc_master');
+    const subPcConnected = isLoggedInUser && pcPeers.length >= 2;
+    const realMobileConnected = isMobileConnected || (isLoggedInUser && mobilePeers.length > 0);
+    const qrConnectUrl = devicePairingCode6
+      ? `https://ghosti.sundreamer.app/?pairCode=${devicePairingCode6}`
+      : 'https://ghosti.sundreamer.app';
+
     return (
       <div className="p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
         {/* [수술 1 & 2 완료] 중복 배지·h1 제목·요금제 버튼 제거 ➔ 핵심 1줄 + 우측 QR 버튼만 유지 */}
@@ -3396,7 +3409,13 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
 
           <button
             type="button"
-            onClick={() => setShowInlineQrPanel((v) => !v)}
+            onClick={() => {
+              const next = !showInlineQrPanel;
+              setShowInlineQrPanel(next);
+              if (next && isLoggedInUser) {
+                void refreshDeviceIntegrationState();
+              }
+            }}
             className={`px-4 py-2 rounded-xl font-label-sm text-[12.5px] font-extrabold cursor-pointer shadow-sm transition-all shrink-0 ${
               showInlineQrPanel
                 ? 'bg-emerald-400 text-zinc-950 ring-2 ring-emerald-300'
@@ -3407,26 +3426,27 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
           </button>
         </div>
 
-        {/* [결함 2 & 수술 7 완료] 인라인 스마트폰 앱 설치 QR + 실제 설치 링크 복사 버튼 */}
+        {/* [실제 카메라 스캔 호환 ISO QR 코드 + 6자리 바인딩 코드] */}
         {showInlineQrPanel && (
           <div className="p-4 rounded-2xl bg-zinc-950 border border-primary-container/50 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
             <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
-              <div className="w-[84px] h-[84px] rounded-xl bg-white p-1.5 shrink-0 flex items-center justify-center shadow-md">
-                <svg viewBox="0 0 64 64" className="w-full h-full">
-                  <rect width="64" height="64" fill="#ffffff" />
-                  <path
-                    fill="#09090B"
-                    d="M4 4h20v20H4V4zm4 4v12h12V8H8zm4 4h4v4h-4v-4zm28-8h20v20H40V4zm4 4v12h12V8H44zm4 4h4v4h-4v-4zM4 40h20v20H4V40zm4 4v12h12V44H8zm4 4h4v4h-4v-4zm16-40h4v8h-4V8zm0 12h8v4h-8v-4zm-24 8h8v4H4v-4zm12 0h16v4H16v-4zm20 0h8v8h-8v-8zm12 4h12v4H48v-4zm-20 8h8v12h-8V40zm12 8h8v12h-8V48zm12 0h8v4h-8v-4zm-4 8h12v4H48v-4z"
-                  />
-                </svg>
+              <div className="w-[92px] h-[92px] rounded-xl bg-white p-1.5 shrink-0 flex items-center justify-center shadow-md">
+                <QrCodeSvg value={qrConnectUrl} />
               </div>
               <div className="flex flex-col gap-1">
                 <span className="text-[13.5px] font-extrabold text-primary-container">
-                  📱 스마트폰 앱 설치 QR 코드 + 같은 이메일로 로그인하면 1초 자동 연결
+                  📱 스마트폰 카메라 스캔용 실제 QR 코드 + 동일 이메일 1초 자동 연결
                 </span>
                 <p className="text-[12.5px] text-zinc-300 leading-relaxed">
-                  ① 스마트폰 카메라로 좌측 QR 코드를 스캔해 <strong className="text-white">『귀신같이』 모바일 앱</strong>을 설치하세요.<br />
-                  ② 앱 실행 후 현재 PC와 동일한 이메일(<strong className="text-emerald-300">{merlinAuth?.email || '내 이메일 계정'}</strong>)로 로그인하면 복잡한 인증번호 입력 없이 1초 만에 자동 연결됩니다.
+                  ① 스마트폰 기본 카메라로 좌측 QR 코드를 비추면 바로 연결 화면이 열립니다.<br />
+                  ② 현재 PC와 동일한 이메일(<strong className="text-emerald-300">{merlinAuth?.email || '내 이메일 계정'}</strong>)로 로그인하거나
+                  {devicePairingCode6 ? (
+                    <>
+                      {' '}보안 번호 <strong className="text-amber-300 font-mono">{devicePairingCode6.slice(0, 3)}-{devicePairingCode6.slice(3, 6)}</strong>을 입력하면 즉시 직결됩니다.
+                    </>
+                  ) : (
+                    ' 로그인하는 즉시 1초 만에 자동 직결됩니다.'
+                  )}
                 </p>
               </div>
             </div>
@@ -3437,7 +3457,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                 onClick={async () => {
                   try {
                     if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                      await navigator.clipboard.writeText('https://ghosti.sundreamer.app');
+                      await navigator.clipboard.writeText(qrConnectUrl);
                     }
                   } catch {}
                   setMobileInstallLinkCopied(true);
@@ -3449,7 +3469,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                     : 'bg-zinc-900 hover:bg-zinc-800 border-primary-container/50 text-primary-container'
                 }`}
               >
-                {mobileInstallLinkCopied ? '✓ 모바일 설치 링크 복사됨!' : '🔗 모바일 설치 링크 복사'}
+                {mobileInstallLinkCopied ? '✓ 모바일 연결 링크 복사됨!' : '🔗 모바일 연결 링크 복사'}
               </button>
               <button
                 type="button"
@@ -3458,19 +3478,19 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                     openLoginModal();
                     return;
                   }
-                  setPcAgentPairedMobile(!pcAgentPairedMobile);
+                  void refreshDeviceIntegrationState();
                 }}
                 className={`px-3.5 py-2 rounded-xl font-label-sm text-[12px] font-extrabold cursor-pointer border transition-all ${
-                  isMobileConnected
+                  realMobileConnected
                     ? 'bg-emerald-500/20 border-emerald-400 text-emerald-300'
                     : 'bg-zinc-900 hover:bg-zinc-800 border-white/15 text-zinc-200'
                 }`}
               >
                 {!isLoggedInUser
                   ? '🔑 먼저 이메일 로그인하기'
-                  : isMobileConnected
-                  ? '● 내 스마트폰 연결됨'
-                  : '○ 연결 상태 확인'}
+                  : realMobileConnected
+                  ? `● 스마트폰 연결됨 (${mobilePeers[0]?.display_name || '내 폰'})`
+                  : '🔄 연결 상태 새로고침'}
               </button>
               <button
                 type="button"
@@ -3529,7 +3549,9 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                   : '미연결'}
               </span>
             </div>
-            <p className="text-[13px] text-white font-bold">내 데스크톱 / 노트북 원본 보관소</p>
+            <p className="text-[13px] text-white font-bold">
+              {pcPeers[0]?.display_name || '내 데스크톱 / 노트북 원본 보관소'}
+            </p>
             <span
               className={`text-[11.5px] ${
                 isMainPcConnected
@@ -3538,7 +3560,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               }`}
             >
               {isMainPcConnected
-                ? '로컬 디스크 원본 100% 직결 탐색'
+                ? '로컬 디스크 원본 100% 직결 탐색 · Ctrl+C 자동 암호화 발신'
                 : isLoggedInUser
                 ? '👉 클릭하여 PC Z-코어 1초 실행 가이드 보기'
                 : '👉 클릭하여 이메일 1초 로그인 후 이 PC 연결하기'}
@@ -3554,7 +3576,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               setShowInlineQrPanel((v) => !v);
             }}
             className={`p-4 rounded-xl bg-zinc-950/80 hover:bg-zinc-900/80 border flex flex-col justify-between gap-2 cursor-pointer transition-all ${
-              isMobileConnected
+              realMobileConnected
                 ? 'border-primary-container/40'
                 : 'border-white/10 hover:border-primary-container/40'
             }`}
@@ -3563,72 +3585,88 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               <span className="text-[12px] font-extrabold text-zinc-200">📱 기기 2 · 내 스마트폰 (갤럭시 / 아이폰)</span>
               <span
                 className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
-                  isMobileConnected
+                  realMobileConnected
                     ? 'bg-emerald-500/20 text-emerald-300'
                     : isLoggedInUser
                     ? 'bg-amber-500/20 text-amber-300'
                     : 'bg-zinc-800 text-zinc-300'
                 }`}
               >
-                {isMobileConnected
+                {realMobileConnected
                   ? '연결됨'
                   : isLoggedInUser
                   ? 'QR 1초 연동 대기'
                   : '미연결'}
               </span>
             </div>
-            <p className="text-[13px] text-white font-bold">폰 사진 자동 백업 &amp; 밖에서 내 PC 검색</p>
+            <p className="text-[13px] text-white font-bold">
+              {mobilePeers[0]?.display_name || '폰 사진 자동 백업 & 밖에서 내 PC 검색'}
+            </p>
             <span className="text-[11.5px] text-primary-container font-bold">
-              {isLoggedInUser
+              {realMobileConnected
+                ? '✓ 실시간 클립보드 · 무선 리모컨 · 13KB 섀도우 검색 직결됨'
+                : isLoggedInUser
                 ? '👉 클릭하여 앱 설치 QR · 이메일 1초 연결 보기'
                 : '👉 클릭하여 먼저 이메일 로그인 후 스마트폰 연결하기'}
             </span>
           </div>
 
-          {/* [수술 5 완료] 기기 3 서브 PC 클릭 시 설치 주소 즉시 복사 및 안내 */}
+          {/* [기기 3 서브 PC] 실제 다중 PC 등록 감지 + 클릭 시 설치 주소 복사 */}
           <div
             onClick={async () => {
               try {
                 if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                  await navigator.clipboard.writeText('https://ghosti.sundreamer.app');
+                  await navigator.clipboard.writeText(qrConnectUrl);
                 }
               } catch {}
               setSubPcLinkCopied(true);
               setTimeout(() => setSubPcLinkCopied(false), 3800);
             }}
-            className="p-4 rounded-xl bg-zinc-950/80 hover:bg-zinc-900/80 border border-white/10 hover:border-emerald-400/40 flex flex-col justify-between gap-2 cursor-pointer transition-all"
+            className={`p-4 rounded-xl bg-zinc-950/80 hover:bg-zinc-900/80 border flex flex-col justify-between gap-2 cursor-pointer transition-all ${
+              subPcConnected
+                ? 'border-emerald-400/45'
+                : 'border-white/10 hover:border-emerald-400/40'
+            }`}
           >
             <div className="flex items-center justify-between">
               <span className="text-[12px] font-extrabold text-zinc-200">🖥️ 기기 3 · 서브 PC (회사 / 집 2호기)</span>
               <span
                 className={`px-2 py-0.5 rounded-full text-[11px] font-extrabold ${
-                  subPcLinkCopied
+                  subPcConnected || subPcLinkCopied
                     ? 'bg-emerald-500/20 text-emerald-300'
                     : 'bg-zinc-800 text-zinc-300'
                 }`}
               >
-                {subPcLinkCopied ? '설치 주소 복사됨 ✓' : '추가 가능'}
+                {subPcLinkCopied
+                  ? '설치 주소 복사됨 ✓'
+                  : subPcConnected
+                  ? `연결됨 (${pcPeers.length}대 PC)`
+                  : '추가 가능'}
               </span>
             </div>
-            <p className="text-[13px] text-white font-bold">집 ↔ 사무실 PC 양방향 AI 내용검색</p>
-            <span className={`text-[11.5px] font-bold ${subPcLinkCopied ? 'text-emerald-300' : 'text-zinc-400'}`}>
+            <p className="text-[13px] text-white font-bold">
+              {pcPeers[1]?.display_name || '집 ↔ 사무실 PC 양방향 AI 내용검색'}
+            </p>
+            <span className={`text-[11.5px] font-bold ${subPcLinkCopied || subPcConnected ? 'text-emerald-300' : 'text-zinc-400'}`}>
               {subPcLinkCopied
-                ? '✅ 서브 PC 설치 주소가 복사되었습니다! 다른 PC에서 접속 후 같은 이메일로 로그인하면 자동 연결됩니다.'
+                ? '✅ 서브 PC 연결 주소가 복사되었습니다! 다른 PC에서 접속 후 같은 이메일로 로그인하면 자동 연결됩니다.'
+                : subPcConnected
+                ? '✓ 다중 PC 실시간 클립보드 · 통합 카탈로그 연결됨'
                 : '👉 클릭 시 서브 PC 설치 주소 복사 (동일 이메일 자동 연결)'}
             </span>
           </div>
         </div>
 
-        {/* [수술 3 완료] 개발자 암호 '모드 A / 모드 B' 용어 삭제 ➔ 직관적 1줄 상태 표시 (비로그인 시 허위 연동 수치 차단) */}
+        {/* 직관적 1줄 동기화 모드 스위처 & 지금 일치시키기 */}
         <div className="px-4 py-3 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
             <span className="text-zinc-200 font-bold">
               {!isLoggedInUser
                 ? '🔒 아직 연결된 기기가 없습니다 — 우측 상단에서 로그인하면 내 PC와 스마트폰이 안전하게 연결됩니다.'
-                : !isMobileConnected
+                : !realMobileConnected && !subPcConnected
                 ? isShadowMode
-                  ? '📱 스마트폰 연결 대기 중 — 연결 시 원본은 PC에 보관하고 스마트폰 용량을 99% 이상 절약합니다.'
-                  : '💾 스마트폰 연결 대기 중 — 연결 시 폰·PC 양쪽에 100% 원본을 동일하게 보관합니다.'
+                  ? '📱 다른 기기 연결 대기 중 — 연결 시 원본은 PC에 보관하고 스마트폰 용량을 99% 이상 절약합니다.'
+                  : '💾 다른 기기 연결 대기 중 — 연결 시 폰·PC 양쪽에 100% 원본을 동일하게 보관합니다.'
                 : isShadowMode
                 ? `⚡ 스마트폰 용량 99.4% 절약 중 (원본은 PC 안전 보관 · 폰 점유 ${syncState.packSizeMB}MB)`
                 : `💾 폰·PC 양쪽 100% 원본 보관 중 (${syncState.originalSizeGB}GB)`}
@@ -3672,7 +3710,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             ) : (
               <button
                 type="button"
-                disabled={syncState.syncing || (!isMainPcConnected && !isMobileConnected)}
+                disabled={syncState.syncing}
                 onClick={() => void triggerSyncNow()}
                 className="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-sm text-[11.5px] font-extrabold cursor-pointer disabled:opacity-50 whitespace-nowrap"
               >
@@ -3681,6 +3719,9 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             )}
           </div>
         </div>
+
+        {/* 실시간 E2EE 클립보드 & 6자리 바인딩 & 30일 체험 상태 바 */}
+        <CrossDeviceClipboardAndPairingBar />
 
         {showQuickSendDrawer && (
           <div className="pt-2 border-t border-white/10">

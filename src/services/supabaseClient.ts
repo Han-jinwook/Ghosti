@@ -189,7 +189,7 @@ export function getGhostiAuthedSupabase(): SupabaseClient | null {
   return authedClient;
 }
 
-function resolveHubSupabaseBridgeEndpoint(): string {
+export function resolveHubSupabaseBridgeEndpoint(): string {
   if (typeof window === 'undefined') return '/.netlify/functions/hub-supabase-bridge';
   const isCapacitorNative = Boolean(
     (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
@@ -200,6 +200,39 @@ function resolveHubSupabaseBridgeEndpoint(): string {
   return isNonProdOrigin
     ? 'https://ghosti.sundreamer.app/.netlify/functions/hub-supabase-bridge'
     : '/.netlify/functions/hub-supabase-bridge';
+}
+
+export async function callGhostiServerBridge<T = Record<string, unknown>>(
+  action: string,
+  payload: Record<string, unknown> = {},
+  opts?: { allowAnonymous?: boolean }
+): Promise<T & { ok?: boolean; reason?: string }> {
+  const endpoint = resolveHubSupabaseBridgeEndpoint();
+  const hubToken =
+    typeof window !== 'undefined'
+      ? (getSessionToken() || localStorage.getItem('merlin_session_token') || '').trim()
+      : '';
+  if (!hubToken && !opts?.allowAnonymous) {
+    return { ok: false, reason: 'HUB_AUTH_REQUIRED' } as T & { ok?: boolean; reason?: string };
+  }
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (hubToken) {
+    headers.Authorization = `Bearer ${hubToken}`;
+  }
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ action, ...payload }),
+    });
+    const json = (await res.json().catch(() => ({ ok: false }))) as T & {
+      ok?: boolean;
+      reason?: string;
+    };
+    return json;
+  } catch (err) {
+    return { ok: false, reason: String(err) } as T & { ok?: boolean; reason?: string };
+  }
 }
 
 /**
