@@ -1,5 +1,7 @@
 import type { FamilyRoomId, LoungeType } from '../types/saysee';
 import { OFFICIAL_LAUNCH_LIVE } from '../components/GhostiShowroomLanding';
+import { hasAuthenticatedHubAccountSession } from './supabaseClient';
+import { isCapacitorNativeMobileRuntime } from './ghostiMobileCareBridge';
 
 export interface ParsedShareInvite {
   inviteCode: string;
@@ -182,12 +184,19 @@ export function readActiveInviteToken(): string {
       sessionStorage.setItem(INVITE_TOKEN_KEY, urlTok);
       return urlTok;
     }
-    const ssTok = (sessionStorage.getItem(INVITE_TOKEN_KEY) || '').trim();
-    if (ssTok) return ssTok;
-    const rawJoined = localStorage.getItem(JOINED_NATIVE_INVITE_KEY);
-    if (rawJoined) {
-      const joined = JSON.parse(rawJoined) as { inviteToken?: string };
-      if (joined?.inviteToken) return joined.inviteToken.trim();
+    const isLoggedIn = hasAuthenticatedHubAccountSession();
+    const isNative = isCapacitorNativeMobileRuntime();
+    // 로그인된 웹 사용자가 일반 공유방 주소(?token 없음)에서 새로고침할 때는 과거 테스트용 sessionStorage 토큰이 내 방을 가리지 않도록 배제
+    if (!isLoggedIn || isNative) {
+      const ssTok = (sessionStorage.getItem(INVITE_TOKEN_KEY) || '').trim();
+      if (ssTok) return ssTok;
+    }
+    if (isNative) {
+      const rawJoined = localStorage.getItem(JOINED_NATIVE_INVITE_KEY);
+      if (rawJoined) {
+        const joined = JSON.parse(rawJoined) as { inviteToken?: string };
+        if (joined?.inviteToken) return joined.inviteToken.trim();
+      }
     }
   } catch {
     /* ignore */

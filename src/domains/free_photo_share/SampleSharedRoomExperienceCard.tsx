@@ -17,6 +17,7 @@ export const SampleSharedRoomExperienceCard: React.FC<{
   loungeType: LoungeType;
   familyRoom: FamilyRoomId;
 }> = ({ loungeType, familyRoom }) => {
+  const isLoadingSharedRoomPhotos = useSaySeeStore((s) => s.isLoadingSharedRoomPhotos);
   const [showInvitePasteBox, setShowInvitePasteBox] = useState(false);
   const [invitePasteDraft, setInvitePasteDraft] = useState('');
 
@@ -26,6 +27,21 @@ export const SampleSharedRoomExperienceCard: React.FC<{
       : loungeType === 'student'
       ? '동창회'
       : `${familyRoom} 가족`;
+
+  if (isLoadingSharedRoomPhotos) {
+    return (
+      <div className="flex flex-col gap-4" data-allow-secretary-jump="true">
+        <div className="py-10 px-5 rounded-2xl bg-[#18181B] border border-white/10 text-center flex flex-col items-center gap-2.5">
+          <span className="px-3 py-1 rounded-full bg-teal-500/15 border border-teal-400/40 text-[12px] font-extrabold text-teal-300">
+            ⏳ {roomTypeKo} 공유방 사진을 불러오는 중입니다...
+          </span>
+          <p className="font-body-sm text-[12.5px] text-zinc-400">
+            안전하게 보관된 공유방 사진 목록을 확인하고 있습니다.
+          </p>
+        </div>
+      </div>
+    );
+  }
 
   const handleOpenReceivedInvite = async () => {
     try {

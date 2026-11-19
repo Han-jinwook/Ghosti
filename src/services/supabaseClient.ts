@@ -1,4 +1,5 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
+import { getSessionToken } from './merlin-hub-sdk/CoreLogic/client';
 
 /**
  * Ghosti 전용 단독 Supabase 공개 클라이언트 (RLS 강제 적용 · 코드 내 JWT 리터럴 0건 원칙).
@@ -129,7 +130,7 @@ export function getGhostiSupabaseAccessToken(): string | null {
 export function hasAuthenticatedHubAccountSession(): boolean {
   if (typeof window === 'undefined') return false;
   try {
-    const hubToken = (localStorage.getItem('merlin_session_token') || '').trim();
+    const hubToken = (getSessionToken() || localStorage.getItem('merlin_session_token') || '').trim();
     if (hubToken) return true;
     return Boolean(getGhostiSupabaseAccessToken());
   } catch {
@@ -229,12 +230,21 @@ export async function syncHubUserToLocalSupabase(params: {
     }
 
     if (!params.forceSync && getGhostiSupabaseAccessToken()) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(
+          new CustomEvent('ghostiSupabaseUserSynced', {
+            detail: { userId: cleanUserId, email: cleanEmail, nickname: params.nickname },
+          })
+        );
+      }
       return { ok: true, syncedUserId: cleanUserId };
     }
 
     const token =
       params.hubToken ||
-      (typeof window !== 'undefined' ? localStorage.getItem('merlin_session_token') : null);
+      (typeof window !== 'undefined'
+        ? getSessionToken() || localStorage.getItem('merlin_session_token')
+        : null);
     if (!token) {
       return { ok: false, error: '허브 로그인 토큰 없음' };
     }
@@ -306,11 +316,14 @@ export async function syncHubUserToLocalSupabase(params: {
  * 비로그인 상태이면 null을 반환합니다.
  */
 export async function ensureGhostiAuthedSupabaseClient(): Promise<SupabaseClient | null> {
+  if (!activeSupabaseAnonKey) {
+    await ensureGhostiPublicSupabaseClient();
+  }
   const existing = getGhostiAuthedSupabase();
   if (existing) return existing;
   if (typeof window === 'undefined') return null;
 
-  const hubToken = (localStorage.getItem('merlin_session_token') || '').trim();
+  const hubToken = (getSessionToken() || localStorage.getItem('merlin_session_token') || '').trim();
   if (!hubToken) return null;
 
   let userId = (localStorage.getItem('ghosti_hub_user_id') || '').trim();
@@ -319,10 +332,10 @@ export async function ensureGhostiAuthedSupabaseClient(): Promise<SupabaseClient
 
   if (!userId || !email) {
     try {
-      const rawUser = localStorage.getItem('merlin_hub_user');
+      const rawUser = localStorage.getItem('merlin_hub_user') || localStorage.getItem('merlin_cached_user');
       if (rawUser) {
-        const parsed = JSON.parse(rawUser) as { id?: string; email?: string; nickname?: string };
-        userId = userId || (parsed.id || '').trim();
+        const parsed = JSON.parse(rawUser) as { id?: string; userId?: string; email?: string; nickname?: string };
+        userId = userId || (parsed.id || parsed.userId || '').trim();
         email = email || (parsed.email || '').trim();
         nickname = nickname || (parsed.nickname || '').trim();
       }
@@ -331,26 +344,44 @@ export async function ensureGhostiAuthedSupabaseClient(): Promise<SupabaseClient
     }
   }
 
+  // userId/email이 아직 로컬에 없더라도 서버 브릿지(hub-supabase-bridge)가 hubToken으로 직접 검증·발급함
   if (!userId || !email) {
     try {
-      const r = await fetch(`https://os.sundreamer.app/api/auth/me?t=${Date.now()}`, {
+      const res = await fetch(resolveHubSupabaseBridgeEndpoint(), {
+        method: 'POST',
         headers: {
+          'Content-Type': 'application/json',
           Authorization: `Bearer ${hubToken}`,
-          'X-App-Id': 'APP-01',
         },
+        body: JSON.stringify({
+          signupSource: 'ghosti_app',
+          launchNotifyOptIn: true,
+        }),
       });
-      if (r.ok) {
-        const me = (await r.json()) as { user?: { id?: string; email?: string; nickname?: string } };
-        userId = userId || (me.user?.id || '').trim();
-        email = email || (me.user?.email || '').trim();
-        nickname = nickname || (me.user?.nickname || '').trim();
+      const data = (await res.json().catch(() => ({}))) as {
+        ok?: boolean;
+        userId?: string;
+        email?: string;
+        supabaseUrl?: string;
+        supabaseAnonKey?: string;
+        supabaseAccessToken?: string;
+        expiresAt?: number;
+      };
+      if (res.ok && data?.ok && data.supabaseAccessToken) {
+        if (data.supabaseAnonKey) {
+          applyRuntimePublicConfig(data.supabaseUrl, data.supabaseAnonKey);
+        }
+        if (data.userId) localStorage.setItem('ghosti_hub_user_id', data.userId);
+        if (data.email) localStorage.setItem('ghosti_hub_user_email', data.email.trim().toLowerCase());
+        localStorage.setItem(GHOSTI_SB_TOKEN_KEY, data.supabaseAccessToken);
+        localStorage.setItem(GHOSTI_SB_TOKEN_EXP_KEY, String(data.expiresAt || 0));
+        return getGhostiAuthedSupabase();
       }
     } catch {
       /* ignore */
     }
+    return null;
   }
-
-  if (!userId || !email) return null;
 
   const synced = await syncHubUserToLocalSupabase({
     userId,

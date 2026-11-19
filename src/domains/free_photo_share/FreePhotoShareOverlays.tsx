@@ -7,6 +7,7 @@ import {
 import { jumpToGhostSecretary } from '../../components/GhostSecretaryFirstGuard';
 import { aiRuntimeFlags } from '../../services/ai/aiSharedRuntime';
 import { getZCoreUrl, zCoreBridge } from '../../services/zCoreBridge';
+import { hasAuthenticatedHubAccountSession } from '../../services/supabaseClient';
 import {
   consumeNativePendingDeepLink,
   isAndroidMobileBrowserOrApp,
@@ -290,7 +291,8 @@ export const FreePhotoShareOverlays: React.FC = () => {
 
     try {
       const params = new URLSearchParams(window.location.search);
-      if (params.has('invite') || params.has('token')) {
+      const hasRealToken = Boolean((params.get('token') || '').trim());
+      if (hasRealToken || (!hasAuthenticatedHubAccountSession() && params.has('invite'))) {
         void applyShareInviteDeepLink(window.location.href, { fromNativeApp: false });
       }
     } catch {

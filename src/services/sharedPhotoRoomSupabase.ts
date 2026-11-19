@@ -431,6 +431,13 @@ export async function fetchScopedSharedRoomPhotos(opts: {
   const isLoggedIn = hasAuthenticatedHubAccountSession();
 
   // 1. 초대 토큰(?token=...)으로 접속한 경우: 해당 토큰의 방과 현재 보고 있는 탭이 일치할 때만 그 방 사진을 노출!
+  let matchedInvitedRoomPhotos: PhotoItem[] = [];
+  let matchedInvitedRoomMeta: {
+    roomId: string;
+    hostNickname?: string;
+    roomTitle?: string;
+  } | null = null;
+
   if (cleanInviteToken) {
     const previewRes = await fetchGuestPreviewRoomByToken(cleanInviteToken);
     if (previewRes.ok && previewRes.room) {
@@ -443,12 +450,20 @@ export async function fetchScopedSharedRoomPhotos(opts: {
       }
 
       if (matchesCurrentView) {
-        return {
+        if (!isLoggedIn) {
+          return {
+            roomId: previewRes.room.roomId,
+            inviteToken: cleanInviteToken,
+            hostNickname: previewRes.room.hostNickname,
+            roomTitle: previewRes.room.roomTitle,
+            photos: previewRes.photos,
+          };
+        }
+        matchedInvitedRoomPhotos = previewRes.photos;
+        matchedInvitedRoomMeta = {
           roomId: previewRes.room.roomId,
-          inviteToken: cleanInviteToken,
           hostNickname: previewRes.room.hostNickname,
           roomTitle: previewRes.room.roomTitle,
-          photos: previewRes.photos,
         };
       }
     }
@@ -463,12 +478,17 @@ export async function fetchScopedSharedRoomPhotos(opts: {
     return { roomId: null, inviteToken: null, photos: [] };
   }
 
-  // 3. 로그인 상태: 현재 로그인 계정의 해당 공유방(room_id) 사진만 정식 조회
+  // 3. 로그인 상태: 현재 로그인 계정의 자체 방 + 정식 멤버로 합류한 동일 탭 공유방(RLS 검증) 사진을 모두 정식 조회
   const authed = await ensureGhostiAuthedSupabaseClient();
   if (!authed) {
-    return { roomId: null, inviteToken: null, photos: [] };
+    return {
+      roomId: matchedInvitedRoomMeta?.roomId || null,
+      inviteToken: cleanInviteToken || null,
+      photos: matchedInvitedRoomPhotos,
+    };
   }
   const currentEmail = resolveCurrentAuthedEmail();
+  const { dbLoungeType, dbSubType } = mapUiLoungeToDbRoom(opts.loungeType, opts.familyRoom);
 
   const ensured = await ensureMyRoomAndInviteToken({
     loungeType: opts.loungeType,
@@ -476,8 +496,30 @@ export async function fetchScopedSharedRoomPhotos(opts: {
     roomTitle: opts.roomTitle,
     masterNickname: opts.nickname || '방장',
   });
-  if (!ensured.ok || !ensured.roomId) {
-    return { roomId: null, inviteToken: null, photos: [] };
+
+  const accessibleRoomIdSet = new Set<string>();
+  if (ensured.ok && ensured.roomId) {
+    accessibleRoomIdSet.add(ensured.roomId);
+  }
+  if (matchedInvitedRoomMeta?.roomId) {
+    accessibleRoomIdSet.add(matchedInvitedRoomMeta.roomId);
+  }
+
+  const { data: memberRoomRows } = await authed
+    .from('ghosti_lounge_rooms')
+    .select('room_id')
+    .eq('lounge_type', dbLoungeType)
+    .eq('sub_type', dbSubType)
+    .limit(20);
+  if (Array.isArray(memberRoomRows)) {
+    for (const r of memberRoomRows) {
+      if (r?.room_id) accessibleRoomIdSet.add(String(r.room_id));
+    }
+  }
+
+  const accessibleRoomIds = Array.from(accessibleRoomIdSet);
+  if (accessibleRoomIds.length === 0) {
+    return { roomId: null, inviteToken: null, photos: matchedInvitedRoomPhotos };
   }
 
   const { data, error } = await authed
@@ -485,16 +527,16 @@ export async function fetchScopedSharedRoomPhotos(opts: {
     .select(
       'id, room_id, uploader_nickname, thumb_webp_url, caption_ko, keywords_ko, face_person_names, shot_date_display, shot_place_display, width_px, height_px, created_at'
     )
-    .eq('room_id', ensured.roomId)
+    .in('room_id', accessibleRoomIds)
     .eq('is_hidden_by_master', false)
     .order('created_at', { ascending: false })
     .limit(200);
 
   if (error || !Array.isArray(data)) {
     return {
-      roomId: ensured.roomId,
+      roomId: ensured.roomId || accessibleRoomIds[0],
       inviteToken: ensured.inviteToken || null,
-      photos: [],
+      photos: matchedInvitedRoomPhotos,
     };
   }
 
@@ -522,9 +564,19 @@ export async function fetchScopedSharedRoomPhotos(opts: {
     )
   );
 
+  const seenIds = new Set(items.map((p) => p.id));
+  for (const invPhoto of matchedInvitedRoomPhotos) {
+    if (!seenIds.has(invPhoto.id)) {
+      items.push({ ...invPhoto, sharedOwnerEmail: currentEmail || undefined });
+      seenIds.add(invPhoto.id);
+    }
+  }
+
   return {
-    roomId: ensured.roomId,
-    inviteToken: ensured.inviteToken || null,
+    roomId: matchedInvitedRoomMeta?.roomId || ensured.roomId || accessibleRoomIds[0],
+    inviteToken: cleanInviteToken || ensured.inviteToken || null,
+    hostNickname: matchedInvitedRoomMeta?.hostNickname,
+    roomTitle: matchedInvitedRoomMeta?.roomTitle,
     photos: items,
   };
 }

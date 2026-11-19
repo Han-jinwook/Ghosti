@@ -202,6 +202,7 @@ export interface FreePhotoShareSlice {
   isInvitedMemberSession: boolean;
   sharedRoomHostPhotos: PhotoItem[];
   sharedRoomAddedPhotos: PhotoItem[];
+  isLoadingSharedRoomPhotos: boolean;
   pendingReturnShareRoom: {
     loungeType: LoungeType;
     familyRoom: FamilyRoomId;
@@ -885,6 +886,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
   })(),
   pendingReturnShareRoom: null,
   showSharedPhotoUploadModal: false,
+  isLoadingSharedRoomPhotos: false,
 
   setIsGuestPreviewMode: (isGuestPreviewMode) =>
     set({
@@ -1248,10 +1250,13 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     let resolvedHostName = parsed.hostName;
     let resolvedRoomTitle = parsed.roomTitle;
     let fetchedPhotos: PhotoItem[] = [];
+    let previewValid = false;
 
     if (parsed.inviteToken) {
+      set({ isLoadingSharedRoomPhotos: true });
       const previewRes = await fetchGuestPreviewRoomByToken(parsed.inviteToken);
       if (previewRes.ok && previewRes.room) {
+        previewValid = true;
         resolvedLounge = previewRes.room.loungeType;
         resolvedFamilyRoom = previewRes.room.familyRoom;
         resolvedHostName = previewRes.room.hostNickname || resolvedHostName;
@@ -1281,7 +1286,27 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     if (reqSeq !== sharedRoomSyncSeq) {
       return true;
     }
-    lastDeepLinkHydratedAt = Date.now();
+
+    // 로그인 상태에서 토큰 없는 구형 ?invite=... 파라미터만 남아 새로고침된 경우:
+    // 내 방 사진을 빈 배열([])로 덮어쓰지 않고 즉시 정식 Supabase 공유방 조회로 위임!
+    if (isLoggedIn && !previewValid) {
+      set({
+        activeLoungeType: resolvedLounge,
+        activeFamilyRoom: resolvedFamilyRoom,
+        desktopTab: 'dashboard',
+        mobileTab: 'search',
+        isGuestPreviewMode: false,
+        guestJoinWallReason: null,
+        searchSpace: 'gallery',
+        hasExecutedUserSearch: false,
+      });
+      await get().syncActiveSharedRoomFromSupabase();
+      return true;
+    }
+
+    if (previewValid) {
+      lastDeepLinkHydratedAt = Date.now();
+    }
 
     const st = get();
     const nextAdded =
@@ -1321,6 +1346,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       desktopTab: 'dashboard',
       mobileTab: 'search',
       sharedRoomAddedPhotos: nextAdded,
+      isLoadingSharedRoomPhotos: false,
       isGuestPreviewMode: isNative ? false : !isLoggedIn,
       isInvitedMemberSession: isLoggedIn,
       guestJoinWallReason: null,
@@ -1350,6 +1376,10 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     const targetLounge = stBefore.activeLoungeType;
     const targetFamilyRoom = stBefore.activeFamilyRoom || '우리집';
     const inviteToken = (opts?.forceInviteToken ?? readActiveInviteToken()).trim();
+    const shouldLoadFromRemote = Boolean(inviteToken || hasAuthenticatedHubAccountSession());
+    if (shouldLoadFromRemote && stBefore.searchResults.length === 0) {
+      set({ isLoadingSharedRoomPhotos: true });
+    }
     const nickname =
       loadGhostSecretaryState().nickname ||
       (typeof window !== 'undefined'
@@ -1357,13 +1387,21 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         : '') ||
       (stBefore.merlinAuth.email ? stBefore.merlinAuth.email.split('@')[0] : '방장');
 
-    const res = await fetchScopedSharedRoomPhotos({
-      loungeType: targetLounge,
-      familyRoom: targetFamilyRoom,
-      roomTitle: resolveDefaultRoomTitle(targetLounge, targetFamilyRoom),
-      nickname,
-      inviteToken: inviteToken || undefined,
-    });
+    let res: Awaited<ReturnType<typeof fetchScopedSharedRoomPhotos>>;
+    try {
+      res = await fetchScopedSharedRoomPhotos({
+        loungeType: targetLounge,
+        familyRoom: targetFamilyRoom,
+        roomTitle: resolveDefaultRoomTitle(targetLounge, targetFamilyRoom),
+        nickname,
+        inviteToken: inviteToken || undefined,
+      });
+    } catch {
+      if (reqSeq === sharedRoomSyncSeq) {
+        set({ isLoadingSharedRoomPhotos: false });
+      }
+      return;
+    }
 
     if (reqSeq !== sharedRoomSyncSeq) {
       return;
@@ -1406,6 +1444,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       );
       set({
         sharedRoomAddedPhotos: nextAdded,
+        isLoadingSharedRoomPhotos: false,
         ...(stNow.hasExecutedUserSearch
           ? {}
           : {
@@ -1413,7 +1452,10 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
             }),
       });
     } else {
-      set({ sharedRoomAddedPhotos: nextAdded });
+      set({
+        sharedRoomAddedPhotos: nextAdded,
+        isLoadingSharedRoomPhotos: false,
+      });
     }
   },
 

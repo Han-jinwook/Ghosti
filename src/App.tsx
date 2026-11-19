@@ -3,6 +3,7 @@ import { useSaySeeStore, type DesktopTab, type MobileTab } from './store/useSayS
 import type { FamilyRoomId, LoungeType } from './types/saysee';
 import { playAppEnterGiggleSound } from './services/babyGhostSound';
 import { hasActiveGhostiLoginSession, zCoreBridge } from './services/zCoreBridge';
+import { hasAuthenticatedHubAccountSession } from './services/supabaseClient';
 import { DesktopDashboard } from './components/DesktopDashboard';
 import { GhostiLoadingSplash } from './components/GhostiLoadingSplash';
 import { GhostiHubRootProvider } from './components/GhostiHubInfraBridge';
@@ -267,6 +268,18 @@ export const App: React.FC = () => {
           params.set('room', nav.familyRoom);
         } else {
           params.delete('room');
+        }
+        // 정식 로그인 세션에서 토큰 없는 구형 ?invite=... 또는 ?preview=guest가 URL에 잔류해 새로고침 시 내 방을 가리는 현상 방지
+        const hasRealInviteToken = Boolean((params.get('token') || '').trim());
+        if (
+          nav.lounge === 'personal' ||
+          nav.lounge === 'work' ||
+          (hasAuthenticatedHubAccountSession() && !hasRealInviteToken)
+        ) {
+          params.delete('invite');
+          if (params.get('preview') === 'guest') {
+            params.delete('preview');
+          }
         }
       }
       const qs = params.toString();
