@@ -96,9 +96,16 @@ def _resolve_model_paths() -> Dict[str, Path]:
 def polish_korean_ocr_spacing(text: str) -> str:
     s = unicodedata.normalize("NFC", text or "")
     s = re.sub(r"\s+", " ", s).strip()
+    # 아이콘·배지 오인식 정제 (| 뒤 왕관 아이콘 👑 -> W/M/V, 요일 뒤 체크/드롭다운 화살표 V/√, 중복 Kcal 단위 등)
+    s = re.sub(r"(?<=\|)\s*[WMV]\s*(?=[가-힣]{2,})", " ", s)
+    s = re.sub(r"^(?:[GH])\s*(?=(?:로그인|퀴즈)$)", "", s)
+    s = re.sub(r"(?<=[월화수목금토일])\s*[Vv√✓]+(?=\s|$)", "", s)
+    s = re.sub(r"(?i)\b(ChatGPT)\s*[vV√✓]+\b", r"\1", s)
+    s = re.sub(r"(?i)\bKcal\s*kcal\b", "Kcal", s)
+    s = re.sub(r"\s*[©®]+(?=\s|$)", "", s)
     s = re.sub(r"([가-힣]{1,6}[을를])(?=(?:높이|줄이|넓히|바꾸|만들|키우|살리|지키|열어|찾아)[가-힣])", r"\1 ", s)
     s = re.sub(r"([가-힣A-Za-z0-9])\s*&\s*([가-힣A-Za-z0-9])", r"\1 & \2", s)
-    return s
+    return re.sub(r"\s+", " ", s).strip()
 
 
 def join_wrapped_korean_lines(upper: str, lower: str) -> str:
@@ -108,6 +115,8 @@ def join_wrapped_korean_lines(upper: str, lower: str) -> str:
         return b
     if not b:
         return a
+    if a.endswith("/") and re.fullmatch(r"\d{1,3}(?:명|개|건)?", b):
+        return f"{a}{b}"
     if re.match(r"^[|/]", b) or re.search(r"[|/]$", a):
         return f"{a} {b}"
     if (
@@ -116,36 +125,92 @@ def join_wrapped_korean_lines(upper: str, lower: str) -> str:
             r"^(?:이터|에서|으로|에게|부터|까지|처럼|만큼|보다|라고|하고|하며|하는|하여|에는|에도|은|는|이|가|을|를|의|에|로|와|과|도|만)(?=[가-힣\s.,!?]|$)",
             b,
         )
-        or re.match(r"^(?:호|선|숙|율|량|액|금|원|개|건|명)(?=[\s:|.,)/]|$)", b)
+        or re.match(r"^(?:호|선|숙|율|량|액|금|원|개|건|명|주|차|록)(?=[\s:|.,)/]|$)", b)
         or (re.search(r"(?:\s|^)[가-힣]$", a) and not re.search(r"&\s*[가-힣]$", a))
-        or re.search(r"(?:등록번|전화번|계좌번|우편번|비밀번|백은|메뉴개|메뉴 개)$", a)
+        or re.search(r"(?:등록번|전화번|계좌번|우편번|비밀번|백은|메뉴개|메뉴 개|\d+\s*월\s*\d+)$", a)
     ):
         return polish_korean_ocr_spacing(f"{a}{b}")
     return polish_korean_ocr_spacing(f"{a} {b}")
 
 
-def format_ocr_boxes_smart(raw_boxes: List[Dict[str, Any]], filter_video_ui: bool = False, img_height: int = 0) -> str:
+def format_ocr_boxes_smart(
+    raw_boxes: List[Dict[str, Any]],
+    filter_video_ui: bool = False,
+    img_height: int = 0,
+    img_width: int = 0,
+) -> str:
     watermark_rx = re.compile(
         r"notebooklm|^capcut$|^veo$|^kapwing$|^[xyv]?rec[eo]rder$|mobizen|bandicam|gomcam|^ocam$|az\s*screen|^inshot$|kinemaster|vivavideo|filmora",
         re.IGNORECASE,
     )
+    kbd_token_rx = re.compile(
+        r"^(?:스페이스|한/?영|완료|이동|검색|123|!#1|!#7|\.,\?!|[ㄱ-ㅎㅏ-ㅣ]{1,3}|TT|CE|L2|7ㅋ)$",
+        re.IGNORECASE,
+    )
+    status_bar_rx = re.compile(
+        r"^(?:SKT|KT|LG\s*U\+|U\+|LTE|5G|\d{1,3}%|\d{1,2}:\d{2})(?:\s.*)?$",
+        re.IGNORECASE,
+    )
+    url_hex_noise_rx = re.compile(r"^[0-9A-Fa-f]{0,2}(?:%[0-9A-Fa-f]{2})+|(?:%[0-9A-Fa-f]{2}){2,}|^[%&]?[0-9A-Fa-f]{2,3}[%'\"`]?$")
+
+    # 하단 모바일 가상 키보드 노출 여부 사전 감지 (하단 35% 영역에 키캡 토큰이 3개 이상 존재할 때)
+    has_bottom_keyboard = False
+    if filter_video_ui and img_height > 0:
+        kbd_hits = sum(
+            1
+            for b in raw_boxes
+            if float(b.get("y0") or 0) >= img_height * 0.65
+            and (
+                kbd_token_rx.match(str(b.get("text") or "").strip())
+                or len(str(b.get("text") or "").strip()) == 1
+            )
+        )
+        has_bottom_keyboard = kbd_hits >= 3
+
     min_conf = 0.78 if filter_video_ui else 0.72
     filtered: List[Dict[str, Any]] = []
     for b in raw_boxes:
         t = polish_korean_ocr_spacing(str(b.get("text") or ""))
-        t = re.sub(r"^[,.;:•·|\-_~]+\s*(?=[가-힣A-Za-z0-9])", "", t).strip()
+        t = re.sub(r"^[,.;:•·|\-_~<>]+\s*(?=[가-힣A-Za-z0-9])", "", t).strip()
+        t = re.sub(r"\s+\|$", "", t).strip()
         conf = float(b.get("conf") or 0.0)
         if not t or conf < min_conf:
             continue
+        x0_v = float(b.get("x0") or 0.0)
+        x1_v = float(b.get("x1") or 0.0)
+        y0_v = float(b.get("y0") or 0.0)
+        y1_v = float(b.get("y1") or 0.0)
+        bw_v = float(b.get("w") or max(1.0, x1_v - x0_v))
+
         if filter_video_ui:
             if watermark_rx.search(t):
                 continue
-            if re.fullmatch(r"(?:10|0|00|\(\)|00\(\)|\|\||II|lI|Il)", t):
-                continue
-            if img_height > 0 and re.fullmatch(r"\d{1,2}:\d{2}(?::\d{2})?", t):
-                if float(b.get("y1") or 0) <= img_height * 0.065 or float(b.get("y0") or 0) >= img_height * 0.88:
+            if url_hex_noise_rx.search(t):
+                t = re.sub(r"[0-9A-Fa-f]{0,2}(?:%[0-9A-Fa-f]{2})+[A-Za-z0-9%]*", "", t).strip()
+                t = re.sub(r"[?&][A-Za-z0-9_]+=\s*$", "", t).strip()
+                if not t or url_hex_noise_rx.search(t):
                     continue
-            if len(t) == 1 and not re.fullmatch(r"[가-힣]", t):
+            if re.fullmatch(r"(?:00|\(\)|00\(\)|\|\||II|lI|Il|#)", t):
+                continue
+            # 상단 모바일 상태바(통신사·시계·배터리) 및 상하단 경계선에 걸려 반쯤 잘린 조각 제거
+            if img_height > 0:
+                if y1_v <= img_height * 0.058 and (status_bar_rx.match(t) or len(re.findall(r"[가-힣]", t)) < 2):
+                    continue
+                if (y0_v <= 8 or y1_v >= img_height - 8) and len(t) <= 3:
+                    continue
+                if re.fullmatch(r"\d{1,2}:\d{2}(?::\d{2})?", t) and (
+                    y1_v <= img_height * 0.065 or y0_v >= img_height * 0.88
+                ):
+                    continue
+                if has_bottom_keyboard and y0_v >= img_height * 0.68 and (
+                    kbd_token_rx.match(t) or len(t) <= 2
+                ):
+                    continue
+            # 좌우 화면 경계(가로 슬라이드 전환·옆 캐러셀 카드 삐져나옴)에 붙어 잘린 좁은 파편 원천 제거
+            if img_width > 0 and (x0_v <= 4 or x1_v >= img_width - 4) and bw_v <= img_width * 0.16:
+                if len(re.findall(r"[가-힣]", t)) <= 3 and not re.search(r"\.[a-z]{2,4}\b", t, re.IGNORECASE):
+                    continue
+            if len(t) == 1 and not (re.fullmatch(r"[가-힣]", t) or (re.fullmatch(r"[0-9]", t) and conf >= 0.80)):
                 continue
             # 디졸브(화면 전환 잔상)에서 발생하는 저신뢰 영문소문자·한글 뒤섞임 가짜 음절 차단
             if conf < 0.88 and (
@@ -165,7 +230,7 @@ def format_ocr_boxes_smart(raw_boxes: List[Dict[str, Any]], filter_video_ui: boo
 
     filtered.sort(key=lambda x: (x["y0"], x["x0"]))
 
-    # Step 1: 같은 좌측 정렬선·같은 글자 크기·인접 줄 간격의 줄바꿈 문장 직결 결합
+    # Step 1: 같은 좌측 정렬선·같은 글자 크기·인접 줄 간격의 줄바꿈 문장(및 0명/ + 0 분수 셀) 직결 결합
     used = [False] * len(filtered)
     blocks: List[Dict[str, Any]] = []
     for i, base_item in enumerate(filtered):
@@ -187,11 +252,12 @@ def format_ocr_boxes_smart(raw_boxes: List[Dict[str, Any]], filter_video_ui: boo
                     break
                 same_left = abs(cand["x0"] - cur["x0"]) <= max(18, cur["lineH"] * 1.15)
                 centered_1char = (
-                    bool(re.fullmatch(r"[가-힣]", cand["text"]))
+                    bool(re.fullmatch(r"[가-힣0-9]", cand["text"]))
                     and cand["x0"] >= cur["x0"] - 18
                     and cand["x1"] <= cur["x1"] + 18
                 )
-                same_scale = abs(cand["h"] - cur["lineH"]) <= max(4, min(cand["h"], cur["lineH"]) * 0.35)
+                slash_denom = cur["text"].endswith("/") and bool(re.fullmatch(r"\d{1,3}", cand["text"])) and centered_1char
+                same_scale = slash_denom or (abs(cand["h"] - cur["lineH"]) <= max(6, min(cand["h"], cur["lineH"]) * 0.45))
                 not_ended = not bool(re.search(r"[.!?]$", cur["text"]))
                 if (same_left or centered_1char) and same_scale and not_ended:
                     cur["text"] = join_wrapped_korean_lines(cur["text"], cand["text"])
@@ -204,6 +270,18 @@ def format_ocr_boxes_smart(raw_boxes: List[Dict[str, Any]], filter_video_ui: boo
                     merged = True
                     break
         blocks.append(cur)
+
+    if filter_video_ui:
+        # 병합되지 않고 홀로 남은 1자리 숫자 제거 + 달력 화면(독립 1~2자리 숫자 셀 8개 이상) 날짜 숫자 홍수 제거
+        pure_small_nums = sum(1 for b in blocks if re.fullmatch(r"\d{1,2}(?:\s+\d{1,2})?", b["text"]))
+        blocks = [
+            b
+            for b in blocks
+            if not re.fullmatch(r"[0-9]", b["text"])
+            and not (pure_small_nums >= 8 and re.fullmatch(r"\d{1,2}(?:\s+\d{1,2})?", b["text"]))
+        ]
+        if not blocks:
+            return ""
 
     # Step 2: 수직 대역 분리 및 다단 카드(2~5열) 좌➔우 · 카드 내부 위➔아래 정렬
     blocks.sort(key=lambda x: (x["y0"], x["x0"]))
@@ -252,6 +330,17 @@ def format_ocr_boxes_smart(raw_boxes: List[Dict[str, Any]], filter_video_ui: boo
             for r in rows:
                 for it in sorted(r["items"], key=lambda x: x["x0"]):
                     out_texts.append(it["text"])
+
+    if filter_video_ui and out_texts:
+        dedup_out: List[str] = []
+        for seg in out_texts:
+            seg = re.sub(r"^(\d+(?:명|개|건))/$", r"\1", seg).strip()
+            if not seg:
+                continue
+            if dedup_out and seg == dedup_out[-1] and len(seg) <= 8:
+                continue
+            dedup_out.append(seg)
+        out_texts = dedup_out
 
     return " · ".join(out_texts)
 
@@ -361,6 +450,26 @@ def run_worker_cli(req_path: str, res_path: str) -> int:
                 cand_boxes.append((x0, y0, x1, y1))
 
         cand_boxes.sort(key=lambda b: (b[1], b[0]))
+        # 동일 행에서 pad_x 확장으로 인해 인접 박스가 옆 박스의 첫 글자/이모지(👑 등)를 침범하는 중복 현상 방지
+        mut_boxes = [list(b) for b in cand_boxes]
+        for i_b in range(len(mut_boxes)):
+            for j_b in range(i_b + 1, len(mut_boxes)):
+                bi = mut_boxes[i_b]
+                bj = mut_boxes[j_b]
+                hi = bi[3] - bi[1]
+                hj = bj[3] - bj[1]
+                if bj[1] > bi[3]:
+                    break
+                y_ov = min(bi[3], bj[3]) - max(bi[1], bj[1])
+                if y_ov >= 0.55 * min(hi, hj):
+                    left_b, right_b = (bi, bj) if bi[0] <= bj[0] else (bj, bi)
+                    x_ov = left_b[2] - right_b[0]
+                    if 0 < x_ov <= max(42, int(min(hi, hj) * 0.95)) and right_b[2] > left_b[2] + 8:
+                        mid_x = (left_b[2] + right_b[0]) // 2
+                        left_b[2] = mid_x
+                        right_b[0] = mid_x
+        cand_boxes = [(b[0], b[1], b[2], b[3]) for b in mut_boxes if (b[2] - b[0]) >= 6 and (b[3] - b[1]) >= 4]
+
         boxes_out: List[Dict[str, Any]] = []
         lines_out: List[Dict[str, Any]] = []
 
@@ -387,13 +496,32 @@ def run_worker_cli(req_path: str, res_path: str) -> int:
                         char_pairs.append((char_dict[idx_val], float(score_val)))
                 prev_i = idx_val
 
-            while char_pairs and char_pairs[0][1] < 0.42 and not re.match(r"[가-힣A-Za-z0-9]", char_pairs[0][0]):
+            edge_min_sc = 0.58 if filter_video_ui else 0.42
+            while char_pairs and char_pairs[0][1] < edge_min_sc:
+                if not filter_video_ui and re.match(r"[가-힣A-Za-z0-9]", char_pairs[0][0]):
+                    break
                 char_pairs.pop(0)
-            while char_pairs and char_pairs[-1][1] < 0.42 and not re.match(r"[가-힣A-Za-z0-9]", char_pairs[-1][0]):
+            while char_pairs and char_pairs[-1][1] < edge_min_sc:
+                if not filter_video_ui and re.match(r"[가-힣A-Za-z0-9]", char_pairs[-1][0]):
+                    break
                 char_pairs.pop()
 
-            txt = unicodedata.normalize("NFC", "".join(ch for ch, _ in char_pairs)).strip()
-            avg_conf = (sum(sc for _, sc in char_pairs) / len(char_pairs)) if char_pairs else 0.0
+            if filter_video_ui and char_pairs:
+                cleaned_pairs: List[tuple[str, float]] = []
+                n_cp = len(char_pairs)
+                for idx_cp, (ch_c, sc_c) in enumerate(char_pairs):
+                    if ch_c != " " and not re.match(r"[가-힣0-9]", ch_c) and sc_c < 0.82:
+                        prev_c = char_pairs[idx_cp - 1][0] if idx_cp > 0 else ""
+                        next_c = char_pairs[idx_cp + 1][0] if idx_cp + 1 < n_cp else ""
+                        if not (re.match(r"[A-Za-z]", prev_c) or re.match(r"[A-Za-z]", next_c)):
+                            cleaned_pairs.append((" ", sc_c))
+                            continue
+                    cleaned_pairs.append((ch_c, sc_c))
+                char_pairs = cleaned_pairs
+
+            txt = polish_korean_ocr_spacing("".join(ch for ch, _ in char_pairs))
+            scored_chars = [sc for ch, sc in char_pairs if ch != " "]
+            avg_conf = (sum(scored_chars) / len(scored_chars)) if scored_chars else 0.0
             min_box_conf = 0.78 if filter_video_ui else 0.72
             if not txt or avg_conf < min_box_conf:
                 continue
@@ -425,7 +553,12 @@ def run_worker_cli(req_path: str, res_path: str) -> int:
 
             lines_out.append({"text": txt, "words": words_list})
 
-        smart_txt = format_ocr_boxes_smart(boxes_out, filter_video_ui=filter_video_ui, img_height=src_h)
+        smart_txt = format_ocr_boxes_smart(
+            boxes_out,
+            filter_video_ui=filter_video_ui,
+            img_height=src_h,
+            img_width=src_w,
+        )
         return {
             "width": src_w,
             "height": src_h,

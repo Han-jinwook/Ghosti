@@ -2490,8 +2490,8 @@ _VIDEO_STREAM_CACHE_DIR = MERLIN_DIR / "video_stream_cache"
 _VIDEO_STREAM_INFLIGHT: Dict[str, threading.Event] = {}
 _VIDEO_STREAM_LOCK = threading.Lock()
 _VIDEO_OCR_CACHE_FILE = MERLIN_DIR / "video_scene_ocr_cache_v2.json"
-_VIDEO_OCR_SCHEMA_VER = 24
-_VIDEO_PADDLE_OCR_VER = 24
+_VIDEO_OCR_SCHEMA_VER = 25
+_VIDEO_PADDLE_OCR_VER = 25
 _VIDEO_OCR_LOCK = threading.Lock()
 _VIDEO_OCR_BG_RUNNING = False
 _FFMPEG_EXE_CACHE: str | None = ""
@@ -2746,13 +2746,12 @@ def _load_video_ocr_cache() -> Dict[str, Any]:
         if _VIDEO_OCR_CACHE_FILE.exists():
             raw = json.loads(_VIDEO_OCR_CACHE_FILE.read_text(encoding="utf-8"))
             if isinstance(raw, dict):
-                # 폐기된 구형 Windows.Media.Ocr(ocrVer < 20) 및 동시실행 타임아웃 빈 캐시(ocrVer == 23, lines 비어있음) 즉시 소거!
+                # 구버전(ocrVer < 25: 화면 전환 슬라이스·왕관 아이콘 W 오인식·4지점 고정 샘플링 캐시 포함) 즉시 소거 후 정밀 재인덱싱!
                 purged = {
                     k: v
                     for k, v in raw.items()
                     if isinstance(v, dict)
-                    and int(v.get("ocrVer") or 0) >= 20
-                    and not (int(v.get("ocrVer") or 0) == 23 and not v.get("lines"))
+                    and int(v.get("ocrVer") or 0) >= _VIDEO_PADDLE_OCR_VER
                 }
                 if len(purged) != len(raw):
                     _save_video_ocr_cache(purged)
@@ -3055,102 +3054,22 @@ def _select_video_ocr_sample_secs(dur_sec: float) -> List[int]:
 
 
 def _run_batch_video_ocr(video_entries: List[tuple[str, Path, float]]) -> None:
-    """미인덱싱 로컬 동영상 전수를 청크 단위로 순회하며 PP-OCRv5 Korean(무-FFmpeg MediaClip 폴백 포함)으로 영구 인덱싱합니다."""
+    """미인덱싱 로컬 동영상 전수를 순회하며 장면 안정화 필터(_select_stable_scene_frames) + PP-OCRv5 Korean으로 정밀 영구 인덱싱합니다."""
     global _VIDEO_OCR_BG_RUNNING
     if os.name != "nt" or not video_entries:
         with _VIDEO_OCR_LOCK:
             _VIDEO_OCR_BG_RUNNING = False
         return
-    ff = find_ffmpeg_exe()
-    if not ff:
-        try:
-            for _sig, vpath, _dur_sec in video_entries[:30]:
-                try:
-                    extract_full_video_ocr_text({"videoFileName": vpath.name, "filePath": str(vpath)})
-                except Exception:
-                    pass
-                time.sleep(0.15)
-        finally:
-            with _VIDEO_OCR_LOCK:
-                _VIDEO_OCR_BG_RUNNING = False
-        return
-
-    creationflags = 0x08004000 if os.name == "nt" else 0
-    chunk_size = 2
     try:
-        for start_i in range(0, len(video_entries), chunk_size):
-            chunk = video_entries[start_i : start_i + chunk_size]
-            tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_vid_ocr_"))
+        for cache_sig, vpath, _dur_sec in video_entries:
             try:
-                job_map: Dict[str, tuple[str, int]] = {}
-                per_vid_meta: Dict[str, Dict[str, Any]] = {}
-                for idx, (cache_sig, vpath, dur_sec) in enumerate(chunk):
-                    secs = _select_video_ocr_sample_secs(dur_sec)
-                    per_vid_meta[cache_sig] = {"frames": [], "maxJpgBytes": 0, "okCount": 0, "reqCount": 0}
-                    for s in secs:
-                        fname = f"v{idx:03d}_s{s:04d}.jpg"
-                        out_jpg = tmp_dir / fname
-                        try:
-                            subprocess.run(
-                                [
-                                    ff, "-y", "-ss", str(s), "-i", str(vpath),
-                                    "-frames:v", "1", "-q:v", "2", str(out_jpg),
-                                ],
-                                capture_output=True,
-                                timeout=15,
-                                creationflags=creationflags,
-                            )
-                        except Exception:
-                            pass
-                        if out_jpg.exists():
-                            sz = out_jpg.stat().st_size
-                            if sz > per_vid_meta[cache_sig]["maxJpgBytes"]:
-                                per_vid_meta[cache_sig]["maxJpgBytes"] = sz
-                            per_vid_meta[cache_sig]["reqCount"] += 1
-                            job_map[fname] = (cache_sig, s)
-
-                ocr_by_file = _run_winrt_ocr_on_jpg_dir(tmp_dir) if job_map else {}
-
-                for fname, (cache_sig, sec_val) in sorted(job_map.items()):
-                    if fname in ocr_by_file:
-                        per_vid_meta[cache_sig]["okCount"] += 1
-                    raw_txt = ocr_by_file.get(fname, "")
-                    clean_txt = raw_txt.strip()
-                    kws = _enrich_ocr_semantic_keywords(clean_txt) if clean_txt else []
-                    per_vid_meta[cache_sig]["frames"].append({
-                        "timeSec": sec_val,
-                        "ocrText": clean_txt[:1600],
-                        "keywords": kws,
-                        "fromPaddleV5": True,
-                    })
-
-                with _VIDEO_OCR_LOCK:
-                    cur_cache = _load_video_ocr_cache()
-                    for cache_sig, val in per_vid_meta.items():
-                        if val["reqCount"] > 0 and val["okCount"] == 0:
-                            continue
-                        if int((cur_cache.get(cache_sig) or {}).get("ocrVer") or 0) >= _VIDEO_PADDLE_OCR_VER:
-                            continue
-                        all_kws: List[str] = []
-                        for fr in val["frames"]:
-                            all_kws.extend(fr.get("keywords") or [])
-                        dedup_lines = _dedupe_ocr_timeline_lines(val["frames"])
-                        full_txt = "\n".join(f"[{ln['timestamp']}] {ln['text']}" for ln in dedup_lines)
-                        cur_cache[cache_sig] = {
-                            "ocrVer": _VIDEO_PADDLE_OCR_VER,
-                            "frames": val["frames"],
-                            "keywords": list(dict.fromkeys(all_kws))[:50],
-                            "lines": dedup_lines,
-                            "fullText": full_txt,
-                            "lineCount": len(dedup_lines),
-                            "isAllBlack": bool(val["maxJpgBytes"] > 0 and val["maxJpgBytes"] < 4200),
-                        }
-                    _save_video_ocr_cache(cur_cache)
-            finally:
-                shutil.rmtree(tmp_dir, ignore_errors=True)
-            time.sleep(0.35)
-    except Exception:
-        pass
+                cur_cache = _load_video_ocr_cache()
+                if int((cur_cache.get(cache_sig) or {}).get("ocrVer") or 0) >= _VIDEO_PADDLE_OCR_VER:
+                    continue
+                extract_full_video_ocr_text({"videoFileName": vpath.name, "filePath": str(vpath)})
+            except Exception:
+                pass
+            time.sleep(0.20)
     finally:
         with _VIDEO_OCR_LOCK:
             _VIDEO_OCR_BG_RUNNING = False
@@ -3254,10 +3173,21 @@ def _dedupe_ocr_timeline_lines(raw_frames: List[Dict[str, Any]]) -> List[Dict[st
         txt = " · ".join(segs).strip()
         if not txt or (not fr.get("fromPaddleV5") and not _is_meaningful_ocr_text(txt)):
             continue
+        # 한글이 전혀 없는 순수 영문/기호 문자열은 유효 도메인·이메일이거나 4글자 이상 정상 영단어 2개 이상일 때만 허용 (야외 영상 MNTAL:-, 440 · Ch 등 오인식 차단)
+        if not re.search(r"[가-힣]", txt):
+            has_domain_or_mail = bool(
+                re.search(r"[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}|\b[A-Za-z0-9-]+\.(?:com|kr|net|org|io|app|ai|edu|gov)\b", txt, re.IGNORECASE)
+            )
+            clean_en_words = re.findall(r"\b[A-Za-z]{4,}\b", txt)
+            has_noise_tail = bool(re.search(r"[:\-_~]{2,}|[:\-]$", txt.strip()))
+            if has_noise_tail or (not has_domain_or_mail and len(clean_en_words) < 2):
+                continue
         norm = re.sub(r"[^가-힣a-zA-Z0-9]", "", txt).lower()
         if len(norm) < 4:
             continue
         cur_bigrams = _bigrams(norm)
+        s_int = int(fr.get("timeSec") or 0)
+        ts_str = f"{int(s_int // 60):02d}:{int(s_int % 60):02d}"
 
         if prev_norm and deduped:
             if norm == prev_norm:
@@ -3265,27 +3195,34 @@ def _dedupe_ocr_timeline_lines(raw_frames: List[Dict[str, Any]]) -> List[Dict[st
             # 현재 프레임이 직전 완성 프레임의 일부분(페이드아웃 등)이면 직전 완성본 유지
             if len(norm) >= 5 and norm in prev_norm:
                 continue
-            # 직전 프레임이 제목/초반 일부이고 현재 프레임에 본문 전체가 다 나타난 경우 ➔ 버리지 않고 직전 항목 본문을 완성본으로 승격!
+            # 직전 프레임이 제목/초반 일부이고 현재 프레임에 본문 전체가 다 나타난 경우 ➔ 직전 항목 본문 및 타임스탬프를 완성 프레임 시각으로 함께 승격!
             if len(prev_norm) >= 5 and prev_norm in norm:
                 deduped[-1]["text"] = txt
+                deduped[-1]["timeSec"] = s_int
+                deduped[-1]["timestamp"] = ts_str
                 prev_norm = norm
                 prev_bigrams = cur_bigrams
                 continue
             if prev_bigrams and cur_bigrams:
                 containment = len(prev_bigrams & cur_bigrams) / float(max(1, min(len(prev_bigrams), len(cur_bigrams))))
-                if containment >= 0.80:
+                is_fast_scroll_settle = (
+                    (s_int - int(deduped[-1].get("timeSec") or 0)) <= 4
+                    and len(norm) >= int(len(prev_norm) * 2.5)
+                    and containment >= 0.36
+                )
+                if containment >= 0.80 or is_fast_scroll_settle:
                     if len(norm) > len(prev_norm) + 4:
                         deduped[-1]["text"] = txt
+                        deduped[-1]["timeSec"] = s_int
+                        deduped[-1]["timestamp"] = ts_str
                         prev_norm = norm
                         prev_bigrams = cur_bigrams
                     continue
 
         prev_norm = norm
         prev_bigrams = cur_bigrams
-        s_val = int(fr.get("timeSec") or 0)
-        ts_str = f"{int(s_val // 60):02d}:{int(s_val % 60):02d}"
         deduped.append({
-            "timeSec": s_val,
+            "timeSec": s_int,
             "timestamp": ts_str,
             "text": txt,
         })
@@ -3342,21 +3279,24 @@ def _select_stable_scene_frames(
 
         selected: List[tuple[Path, int]] = []
         for c_idx, cl in enumerate(clusters):
-            # 양옆 안정 슬라이드 사이에 낀 1프레임 디졸브(반투명 겹침 흐림 프레임) 배제
-            if len(cl) == 1 and 0 < c_idx < len(clusters) - 1:
+            # 양옆 안정 슬라이드 사이에 낀 1프레임 디졸브/가로 슬라이드/스크롤 전환 프레임 배제
+            if len(cl) == 1 and len(clusters) >= 3 and 0 < c_idx < len(clusters) - 1:
                 prev_cl = clusters[c_idx - 1]
                 next_cl = clusters[c_idx + 1]
                 cur_item = cl[0]
                 d_prev = float(np.mean(np.abs(cur_item["g"] - prev_cl[-1]["g"])))
                 d_next = float(np.mean(np.abs(next_cl[0]["g"] - cur_item["g"])))
                 neighbor_sharp = max(prev_cl[-1]["sharp"], next_cl[0]["sharp"])
-                if d_prev > 5.2 and d_next > 5.2 and cur_item["sharp"] < neighbor_sharp * 0.93:
+                if d_prev > 4.2 and d_next > 4.2 and (
+                    len(prev_cl) >= 2
+                    or len(next_cl) >= 2
+                    or cur_item["sharp"] < neighbor_sharp * 0.98
+                ):
                     continue
 
-            # 동일 장면 군집 내에서 애니메이션이 모두 끝난 가장 선명한(글자량이 가장 풍부한) 프레임 선택, 타임스탬프는 장면 시작 시각 유지
+            # 동일 장면 군집 내에서 애니메이션·스크롤이 완료된 가장 선명한 프레임을 선택하고, 해당 프레임의 실제 시각(best_item["sec"])을 기록해 [MM:SS] 클릭 시 화면이 100% 일치하도록 보장
             best_item = max(cl, key=lambda x: (x["sharp"], x["sec"]))
-            start_sec = int(cl[0]["sec"])
-            selected.append((best_item["path"], start_sec))
+            selected.append((best_item["path"], int(best_item["sec"])))
 
         if len(selected) > max_keep:
             step_f = len(selected) / float(max_keep)
