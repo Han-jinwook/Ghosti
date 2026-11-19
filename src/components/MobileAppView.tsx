@@ -237,6 +237,7 @@ export const MobileAppView: React.FC = () => {
     syncState,
     setPrivateSyncStrategy,
     triggerSyncNow,
+    pcAgentPairedMobile,
     themeMode,
     toggleThemeMode,
     merlinAuth,
@@ -1405,90 +1406,118 @@ export const MobileAppView: React.FC = () => {
               <MobileCleanerRescueBanner />
 
               {/* 내 기기 통합 (폰↔PC 프라이빗 싱크 & 데스크톱 연동 가이드) 귀신비서 화면 내 통합 */}
-              <section className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden transition-all">
-                <div
-                  onClick={() => setShowPrivateSyncSection((prev) => !prev)}
-                  className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-2.5 cursor-pointer hover:bg-zinc-900/60 transition-colors"
-                >
-                  <div className="flex items-start sm:items-center gap-2 min-w-0 flex-1">
-                    <span className="text-zinc-400 text-[12px] font-mono select-none mt-0.5 sm:mt-0">
-                      {showPrivateSyncSection ? '▾' : '▸'}
-                    </span>
-                    <div className="flex flex-col min-w-0">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        <h2 className="font-headline-sm text-[14px] sm:text-[14.5px] text-white font-bold break-keep">
-                          📱 내 기기 통합 (폰↔PC 프라이빗 싱크)
-                        </h2>
-                        <span className="px-2 py-0.5 rounded-full bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[10.5px] font-bold whitespace-nowrap">
-                          {syncState.privateSyncStrategy === 'mirror' ? '모드 A · 100% 원본 미러링' : '모드 B · 폰 용량 99.4% 절약'}
-                        </span>
-                      </div>
-                      <p className="font-body-sm text-[11.5px] text-zinc-400 break-keep mt-0.5">
-                        Wi-Fi + 충전 중 자동 동기화 · 마지막 일치화: {syncState.lastSyncedAt}
-                      </p>
-                    </div>
-                  </div>
-                  <button
-                    type="button"
-                    disabled={syncState.syncing}
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      void triggerSyncNow();
-                    }}
-                    className="px-3 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold shrink-0 whitespace-nowrap ml-auto cursor-pointer"
-                  >
-                    {syncState.syncing ? '일치화 중...' : '⚡ 지금 일치시키기'}
-                  </button>
-                </div>
-
-                {showPrivateSyncSection && (
-                  <div className="px-4 pb-4 pt-3 border-t border-white/10 flex flex-col gap-3">
+              {(() => {
+                const isLoggedInUser = Boolean(
+                  merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest'
+                );
+                const isPeerConnected =
+                  isLoggedInUser && (zCoreBridge.isConnected || Boolean(pcAgentPairedMobile));
+                const syncStatusLine = !isLoggedInUser
+                  ? '🔒 아직 로그인되지 않음 — 같은 이메일로 로그인하면 내 PC와 연결됩니다 (0GB)'
+                  : !isPeerConnected
+                  ? '💻 연결된 내 PC 없음 (0GB) — 내 PC에서도 같은 이메일로 로그인해 주세요'
+                  : `Wi-Fi + 충전 중 자동 동기화 · 마지막 일치화: ${syncState.lastSyncedAt}`;
+                return (
+                  <section className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden transition-all">
                     <div
-                      onClick={() => setPrivateSyncStrategy('mirror')}
-                      className={`p-3.5 rounded-xl border cursor-pointer flex flex-col gap-1.5 ${
-                        syncState.privateSyncStrategy === 'mirror'
-                          ? 'bg-zinc-900 border-primary-container'
-                          : 'bg-zinc-950/80 border-white/10'
-                      }`}
+                      onClick={() => setShowPrivateSyncSection((prev) => !prev)}
+                      className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-2.5 cursor-pointer hover:bg-zinc-900/60 transition-colors"
                     >
-                      <div className="flex items-center justify-between">
-                        <span className="font-headline-sm text-[13.5px] text-white font-bold">
-                          🔄 모드 A. 100% 원본 미러링 모드
+                      <div className="flex items-start sm:items-center gap-2 min-w-0 flex-1">
+                        <span className="text-zinc-400 text-[12px] font-mono select-none mt-0.5 sm:mt-0">
+                          {showPrivateSyncSection ? '▾' : '▸'}
                         </span>
-                        <input
-                          type="radio"
-                          checked={syncState.privateSyncStrategy === 'mirror'}
-                          onChange={() => setPrivateSyncStrategy('mirror')}
-                          className="w-4 h-4 accent-[#00E5FF]"
-                        />
+                        <div className="flex flex-col min-w-0">
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <h2 className="font-headline-sm text-[14px] sm:text-[14.5px] text-white font-bold break-keep">
+                              📱 내 기기 통합 (폰↔PC 연결)
+                            </h2>
+                            <span className="px-2 py-0.5 rounded-full bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[10.5px] font-bold whitespace-nowrap">
+                              {!isPeerConnected
+                                ? '연결된 기기 없음 · 0GB'
+                                : syncState.privateSyncStrategy === 'mirror'
+                                ? '양쪽 원본 보관'
+                                : '폰 용량 99.4% 절약'}
+                            </span>
+                          </div>
+                          <p className="font-body-sm text-[11.5px] text-zinc-400 break-keep mt-0.5">
+                            {syncStatusLine}
+                          </p>
+                        </div>
                       </div>
+                      <button
+                        type="button"
+                        disabled={syncState.syncing}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          void triggerSyncNow();
+                        }}
+                        className="px-3 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold shrink-0 whitespace-nowrap ml-auto cursor-pointer"
+                      >
+                        {!isLoggedInUser
+                          ? '🔑 로그인 후 연결'
+                          : syncState.syncing
+                          ? '일치화 중...'
+                          : '⚡ 지금 일치시키기'}
+                      </button>
                     </div>
 
-                    <div
-                      onClick={() => setPrivateSyncStrategy('shadow')}
-                      className={`p-3.5 rounded-xl border cursor-pointer flex flex-col gap-1.5 ${
-                        syncState.privateSyncStrategy === 'shadow'
-                          ? 'bg-zinc-900 border-primary-container'
-                          : 'bg-zinc-950/80 border-white/10'
-                      }`}
-                    >
-                      <div className="flex items-center justify-between">
-                        <span className="font-headline-sm text-[13.5px] text-white font-bold">
-                          👻 모드 B. 초경량 섀도우 캐시 모드 (권장 · {syncState.packSizeMB}MB)
-                        </span>
-                        <input
-                          type="radio"
-                          checked={syncState.privateSyncStrategy === 'shadow'}
-                          onChange={() => setPrivateSyncStrategy('shadow')}
-                          className="w-4 h-4 accent-[#00E5FF]"
-                        />
-                      </div>
-                    </div>
+                    {showPrivateSyncSection && (
+                      <div className="px-4 pb-4 pt-3 border-t border-white/10 flex flex-col gap-3">
+                        <div
+                          onClick={() => setPrivateSyncStrategy('shadow')}
+                          className={`p-3.5 rounded-xl border cursor-pointer flex flex-col gap-1.5 ${
+                            syncState.privateSyncStrategy === 'shadow'
+                              ? 'bg-zinc-900 border-primary-container'
+                              : 'bg-zinc-950/80 border-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-headline-sm text-[13.5px] text-white font-bold">
+                              ⚡ 폰 용량 절약 모드 (권장 · 폰 점유 {syncState.packSizeMB}MB)
+                            </span>
+                            <input
+                              type="radio"
+                              checked={syncState.privateSyncStrategy === 'shadow'}
+                              onChange={() => setPrivateSyncStrategy('shadow')}
+                              className="w-4 h-4 accent-[#00E5FF]"
+                            />
+                          </div>
+                          <p className="text-[11.5px] text-zinc-400 leading-relaxed break-keep">
+                            무거운 원본 사진·문서는 내 PC 하드디스크에 안전하게 보관하고, 내 폰에는 가벼운 미리보기(장당 13KB)만 남겨 폰 용량을 99% 이상 아끼면서 밖에서도 PC 파일을 1초 만에 찾아볼 수 있는 모드입니다.
+                          </p>
+                        </div>
 
-                    <PcMasterQuickSendPanel compact />
-                  </div>
-                )}
-              </section>
+                        <div
+                          onClick={() => setPrivateSyncStrategy('mirror')}
+                          className={`p-3.5 rounded-xl border cursor-pointer flex flex-col gap-1.5 ${
+                            syncState.privateSyncStrategy === 'mirror'
+                              ? 'bg-zinc-900 border-primary-container'
+                              : 'bg-zinc-950/80 border-white/10'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-headline-sm text-[13.5px] text-white font-bold">
+                              💾 폰·PC 양쪽 원본 보관 모드 (100% 똑같이 백업)
+                            </span>
+                            <input
+                              type="radio"
+                              checked={syncState.privateSyncStrategy === 'mirror'}
+                              onChange={() => setPrivateSyncStrategy('mirror')}
+                              className="w-4 h-4 accent-[#00E5FF]"
+                            />
+                          </div>
+                          <p className="text-[11.5px] text-zinc-400 leading-relaxed break-keep">
+                            폰 여유 공간이 넉넉할 때, 내 폰과 내 PC 양쪽에 100% 동일한 원본 파일을 그대로 유지해 이중으로 안전하게 백업하는 모드입니다.
+                          </p>
+                        </div>
+
+                        <PcMasterQuickSendPanel compact />
+                      </div>
+                    )}
+                  </section>
+                );
+              })()}
             </div>
           )}
         </main>

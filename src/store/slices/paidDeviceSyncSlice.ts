@@ -478,12 +478,11 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
       syncState: {
         ...state.syncState,
         privateSyncStrategy,
-        lastSyncedAt: '방금 전 (모드 전환됨)',
       },
       lastQuarantineToast:
         privateSyncStrategy === 'shadow'
-          ? '👻 [초경량 섀도우 캐시 모드] 활성화: 원본은 PC로 이관하고 폰에는 장당 13KB 썸네일+벡터만 남겨 용량을 99.4% 절약합니다!'
-          : '🔄 [100% 원본 미러링 모드] 활성화: 폰과 PC 양쪽에 동일한 무손실 원본 파일을 유지하여 상호 백업 보험을 구축합니다!',
+          ? '⚡ [폰 용량 절약 모드] 선택됨: 무거운 원본 사진·문서는 내 PC에 보관하고, 폰에는 장당 13KB 초경량 미리보기만 남겨 폰 용량을 99.4% 절약합니다!'
+          : '💾 [폰·PC 양쪽 원본 보관 모드] 선택됨: 폰과 내 PC 양쪽에 동일한 100% 원본 파일을 그대로 유지해 이중으로 안전하게 백업합니다!',
     }));
   },
 
@@ -499,6 +498,35 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
   },
 
   triggerSyncNow: async () => {
+    const { merlinAuth, pcAgentPairedMobile } = get();
+    const isLoggedInUser = Boolean(
+      merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest'
+    );
+    if (!isLoggedInUser) {
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('openLoginModal'));
+      }
+      set({
+        lastQuarantineToast:
+          '🔑 아직 로그인된 계정이 없어 연결할 내 PC를 알 수 없어요! 먼저 이메일로 1초 로그인해 주세요.',
+      });
+      return;
+    }
+    const isZCoreConnected = zCoreBridge.isConnected;
+    if (!isZCoreConnected && !pcAgentPairedMobile) {
+      set((state) => ({
+        syncState: {
+          ...state.syncState,
+          syncing: false,
+          connectedPeer: '연결된 기기 없음',
+          lastSyncedAt: '연결된 내 PC 없음 (대기 중)',
+        },
+        lastQuarantineToast:
+          '💻 아직 같은 이메일로 연결된 내 PC가 없습니다! 내 PC에서도 『귀신같이』에 동일한 이메일로 로그인하면 폰과 PC가 즉시 연결됩니다.',
+      }));
+      return;
+    }
+
     set((state) => ({ syncState: { ...state.syncState, syncing: true } }));
     await new Promise((r) => setTimeout(r, 900));
     set((state) => ({
@@ -509,8 +537,8 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
       },
       lastQuarantineToast:
         state.syncState.privateSyncStrategy === 'shadow'
-          ? '👻 [13KB 섀도우 캐시 일치화 완료] 집 PC가 꺼져 있어도 밖에서 내 폰으로 PC 속 10년 치 사진·서류를 1초 만에 열람할 수 있습니다!'
-          : '🔄 [100% 원본 미러링 일치화 완료] 클라우드 없이 폰과 PC 양쪽 기기의 원본 사진·서류가 완벽히 일치되었습니다!',
+          ? '⚡ [폰 용량 절약 일치화 완료] 원본은 내 PC에 안전하게 보관하고 폰에는 초경량 미리보기(장당 13KB)만 남겨, 집 PC가 꺼져 있어도 밖에서 1초 만에 찾아볼 수 있습니다!'
+          : '💾 [폰·PC 양쪽 원본 보관 일치화 완료] 클라우드 없이 폰과 내 PC 양쪽 기기의 원본 사진·서류가 100% 똑같이 일치되었습니다!',
     }));
   },
 

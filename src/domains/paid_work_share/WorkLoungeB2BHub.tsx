@@ -30,12 +30,12 @@ interface WorkLoungeDocItem {
 }
 
 const WORK_LOUNGE_FOLDERS = [
-  { id: 'all', name: 'S:\\ (업무 드라이브 전체)', count: 6, path: 'S:\\' },
-  { id: 'root', name: 'S:\\ 루트 (최상단 파일)', count: 1, path: 'S:\\' },
-  { id: 'contracts', name: '01_계약서_법무문서', count: 2, path: 'S:\\01_계약서_법무문서' },
-  { id: 'quotes', name: '02_견적서_단가표_엑셀', count: 2, path: 'S:\\02_견적서_단가표_엑셀' },
-  { id: 'tax', name: '03_세금계산서_회계증빙', count: 1, path: 'S:\\03_세금계산서_회계증빙' },
-  { id: 'site', name: '04_현장시공_도면_미디어', count: 1, path: 'S:\\04_현장시공_도면_미디어' },
+  { id: 'all', name: 'S:\\ (업무 드라이브 전체)', count: 0, path: 'S:\\' },
+  { id: 'root', name: 'S:\\ 루트 (최상단 파일)', count: 0, path: 'S:\\' },
+  { id: 'contracts', name: '01_계약서_법무문서', count: 0, path: 'S:\\01_계약서_법무문서' },
+  { id: 'quotes', name: '02_견적서_단가표_엑셀', count: 0, path: 'S:\\02_견적서_단가표_엑셀' },
+  { id: 'tax', name: '03_세금계산서_회계증빙', count: 0, path: 'S:\\03_세금계산서_회계증빙' },
+  { id: 'site', name: '04_현장시공_도면_미디어', count: 0, path: 'S:\\04_현장시공_도면_미디어' },
 ];
 
 const INITIAL_WORK_DOCS: WorkLoungeDocItem[] = [
@@ -442,9 +442,21 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 · ✓ {PLAN_BADGE_LABELS[workPlan]}
               </span>
             )}
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/10 border border-emerald-400/25 text-[11.5px] text-emerald-300 font-bold">
-              <span className="w-1.5 h-1.5 rounded-full bg-emerald-400" />
-              사무실 PC 연결됨 · 팀원 6명
+            <span
+              className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[11.5px] font-bold ${
+                zCoreBridge.isConnected
+                  ? 'bg-emerald-500/10 border-emerald-400/25 text-emerald-300'
+                  : 'bg-zinc-900 border-white/15 text-zinc-300'
+              }`}
+            >
+              <span
+                className={`w-1.5 h-1.5 rounded-full ${
+                  zCoreBridge.isConnected ? 'bg-emerald-400' : 'bg-zinc-500'
+                }`}
+              />
+              {zCoreBridge.isConnected
+                ? `사무실 PC 연결됨 · 팀원 ${teamMembers.length}명`
+                : '연결된 사무실 PC 없음 · 0건'}
             </span>
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-400/25 text-[11px] text-cyan-300 font-bold">
               📸 현장·증빙 사진 AI 분석 · 🛂 인물 여권 미발동(검색 제외)
@@ -668,7 +680,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 </span>
               </div>
               <span className="px-2.5 py-1 rounded-lg bg-cyan-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                {isStoreAppMode ? '✓ 팀원 6명 S:\\ 연결됨' : '✓ 팀원 6명 S:\\ 연결됨 (초대 팀원 전원 0원)'}
+                {zCoreBridge.isConnected
+                  ? `✓ 팀원 ${teamMembers.length}명 S:\\ 연결됨`
+                  : '연결된 사무실 PC 대기 중'}
               </span>
             </div>
 
@@ -803,49 +817,51 @@ export const WorkLoungeB2BHub: React.FC = () => {
               })}
             </div>
 
-            <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-slate-500 dark:text-zinc-400">
-              <span>빠른 검색:</span>
-              {QUICK_WORK_QUERIES.map((q) => (
-                <button
-                  key={q}
-                  type="button"
-                  onClick={() => {
-                    const nextQ = searchQuery === q ? '' : q;
-                    setSearchQuery(nextQ);
-                    if (nextQ) {
-                      setViewMode('semantic');
-                      const tokens = nextQ.toLowerCase().split(/\s+/).filter(Boolean);
-                      const matched = docs.find((d) => {
-                        const text = [
-                          d.fileName,
-                          d.summaryTitle,
-                          d.matchedSnippet,
-                          d.fullTextPreview,
-                          ...d.tableRows.flat(),
-                        ]
-                          .join(' ')
-                          .toLowerCase();
-                        return tokens.every((t) => text.includes(t));
-                      });
-                      if (matched) {
-                        setSelectedDocId(matched.id);
-                        setIsSidePeekOpen(true);
-                      }
-                    }
-                  }}
-                  className={`underline cursor-pointer transition-colors ${
-                    searchQuery === q
-                      ? 'text-teal-600 dark:text-cyan-300 font-extrabold'
-                      : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200'
-                  }`}
-                >
-                  {q}
-                </button>
-              ))}
+              {docs.length > 0 && (
+                <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-slate-500 dark:text-zinc-400">
+                  <span>빠른 검색:</span>
+                  {QUICK_WORK_QUERIES.map((q) => (
+                    <button
+                      key={q}
+                      type="button"
+                      onClick={() => {
+                        const nextQ = searchQuery === q ? '' : q;
+                        setSearchQuery(nextQ);
+                        if (nextQ) {
+                          setViewMode('semantic');
+                          const tokens = nextQ.toLowerCase().split(/\s+/).filter(Boolean);
+                          const matched = docs.find((d) => {
+                            const text = [
+                              d.fileName,
+                              d.summaryTitle,
+                              d.matchedSnippet,
+                              d.fullTextPreview,
+                              ...d.tableRows.flat(),
+                            ]
+                              .join(' ')
+                              .toLowerCase();
+                            return tokens.every((t) => text.includes(t));
+                          });
+                          if (matched) {
+                            setSelectedDocId(matched.id);
+                            setIsSidePeekOpen(true);
+                          }
+                        }
+                      }}
+                      className={`underline cursor-pointer transition-colors ${
+                        searchQuery === q
+                          ? 'text-teal-600 dark:text-cyan-300 font-extrabold'
+                          : 'text-slate-600 dark:text-zinc-400 hover:text-slate-900 dark:hover:text-zinc-200'
+                      }`}
+                    >
+                      {q}
+                    </button>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
         </div>
-      </div>
 
       {/* 2. 노션 데이터베이스형 깔끔한 리스트 + 파일 클릭 시 우측에서 열리는 Side Peek 프리뷰 */}
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-start">
@@ -871,7 +887,18 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </div>
 
             {/* 노션 데이터베이스 행(Row) 리스트 */}
-            <div className="flex flex-col divide-y divide-slate-100 dark:divide-white/8">
+            {filteredDocs.length === 0 ? (
+              <div className="px-4 py-10 text-center flex flex-col items-center gap-2">
+                <span className="text-[28px]">📂</span>
+                <p className="font-headline-sm text-[14px] text-slate-700 dark:text-zinc-200 font-bold break-keep">
+                  아직 연결된 공용 업무 문서가 없습니다 (0건)
+                </p>
+                <p className="font-body-sm text-[12px] text-slate-500 dark:text-zinc-400 break-keep max-w-md">
+                  사무실 메인 PC에서 공용 폴더(S: 드라이브)를 연결하고 실제 업무 문서·현장 사진을 넣으면 여기에 실시간으로 표시됩니다.
+                </p>
+              </div>
+            ) : (
+              <div className="flex flex-col divide-y divide-slate-100 dark:divide-white/8">
               {filteredDocs.map((doc) => {
                 const isSelected = isSidePeekOpen && doc.id === selectedDoc.id;
                 return (
@@ -939,7 +966,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
                   </div>
                 );
               })}
-            </div>
+              </div>
+            )}
           </div>
         </div>
 

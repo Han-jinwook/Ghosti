@@ -114,8 +114,8 @@ export const PaidDeviceSyncPane: React.FC = () => {
                 </span>
                 <span className="px-2.5 py-0.5 rounded-full bg-zinc-900 border border-white/10 text-zinc-300 text-[11px] font-bold">
                   {syncState.privateSyncStrategy === 'shadow'
-                    ? `모드 B · 폰 용량 99.4% 절약 (${syncState.packSizeMB}MB)`
-                    : `모드 A · 100% 원본 미러링 (${syncState.originalSizeGB}GB)`}
+                    ? `⚡ 폰 용량 절약 모드 (${syncState.packSizeMB}MB)`
+                    : `💾 양쪽 원본 보관 모드 (${syncState.originalSizeGB}GB)`}
                 </span>
                 <span className="hidden md:inline text-[12px] text-zinc-400">
                   최근 일치화: {syncState.lastSyncedAt}
@@ -144,7 +144,7 @@ export const PaidDeviceSyncPane: React.FC = () => {
             {showPrivateSyncSection && (
               <div className="px-5 pb-5 pt-3 border-t border-white/10 flex flex-col gap-4">
                 <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {/* 모드 A */}
+                  {/* 양쪽 원본 보관 모드 */}
                   <div
                     onClick={() => setPrivateSyncStrategy('mirror')}
                     className={`p-5 rounded-2xl cursor-pointer transition-all flex flex-col justify-between gap-4 border ${
@@ -156,7 +156,7 @@ export const PaidDeviceSyncPane: React.FC = () => {
                     <div className="flex flex-col gap-2.5">
                       <div className="flex items-center justify-between">
                         <span className="px-2.5 py-0.5 rounded bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-semibold">
-                          모드 A · 폰 여유 공간이 넉넉할 때
+                          폰 여유 공간이 넉넉할 때
                         </span>
                         <input
                           type="radio"
@@ -167,7 +167,7 @@ export const PaidDeviceSyncPane: React.FC = () => {
                       </div>
 
                       <h2 className="font-headline-sm text-[17px] text-white font-bold">
-                        🔄 100% 원본 미러링 모드
+                        💾 폰·PC 양쪽 원본 보관 모드
                       </h2>
 
                       <div className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5 font-label-sm text-[12px]">
@@ -177,13 +177,13 @@ export const PaidDeviceSyncPane: React.FC = () => {
                         </div>
                         <div className="flex items-center justify-between">
                           <span className="text-zinc-400">내 스마트폰 점유 용량</span>
-                          <span className="text-zinc-200 font-bold">{syncState.originalSizeGB} GB (1:1 미러링)</span>
+                          <span className="text-zinc-200 font-bold">{syncState.originalSizeGB} GB (1:1 똑같이 보관)</span>
                         </div>
                       </div>
                     </div>
                   </div>
 
-                  {/* 모드 B */}
+                  {/* 폰 용량 절약 모드 */}
                   <div
                     onClick={() => setPrivateSyncStrategy('shadow')}
                     className={`p-5 rounded-2xl cursor-pointer transition-all flex flex-col justify-between gap-4 border ${
@@ -195,7 +195,7 @@ export const PaidDeviceSyncPane: React.FC = () => {
                     <div className="flex flex-col gap-2.5">
                       <div className="flex items-center justify-between">
                         <span className="px-2.5 py-0.5 rounded bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
-                          모드 B · 폰 용량이 부족할 때 (권장)
+                          폰 용량이 부족할 때 (권장)
                         </span>
                         <input
                           type="radio"
@@ -206,7 +206,7 @@ export const PaidDeviceSyncPane: React.FC = () => {
                       </div>
 
                       <h2 className="font-headline-sm text-[17px] text-white font-bold">
-                        ⚡ 스마트폰 용량 절약 모드 (원본은 PC에 안전 보관)
+                        ⚡ 폰 용량 절약 모드 (원본은 PC에 안전 보관)
                       </h2>
 
                       <div className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5 font-label-sm text-[12px]">

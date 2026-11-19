@@ -48,7 +48,6 @@ export function saveSyncPrefs(
         wifiOnly,
         privateSyncStrategy,
         chargingOnly,
-        lastSyncedAt: '방금 전',
       })
     );
   } catch {
