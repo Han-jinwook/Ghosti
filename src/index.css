@@ -50,12 +50,19 @@
     margin-bottom: env(safe-area-inset-bottom, 0px);
   }
 
-  /* 모바일(iOS Safari / WKWebView / 인앱) 입력창 포커스 시 자동 화면 확대(Auto-Zoom) 원천 차단 */
+  /* 모바일(iOS Safari / WKWebView / 인앱) 입력창 포커스 시 자동 화면 확대(Auto-Zoom) 원천 차단 + placeholder 잘림 방지 */
   @media (max-width: 767px) {
     input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
     textarea,
     select {
       font-size: 16px !important;
+      text-overflow: ellipsis;
+    }
+    input::placeholder,
+    textarea::placeholder {
+      font-size: 12.5px !important;
+      letter-spacing: -0.02em;
+      text-overflow: ellipsis;
     }
   }
 }

@@ -766,7 +766,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 setSearchQuery(e.target.value);
                 if (e.target.value.trim()) setIsSidePeekOpen(true);
               }}
-              placeholder="계약서 조항, 엑셀 단가표 숫자, 현장 시공 사진(차단기·배선·자재 라벨), 파일명 검색... (인물 여권 제외)"
+              placeholder={
+                isMobileOrStoreRuntime()
+                  ? '계약서 조항, 단가표 숫자, 시공 사진 검색'
+                  : '계약서 조항, 엑셀 단가표 숫자, 현장 시공 사진(차단기·배선·자재 라벨), 파일명 검색... (인물 여권 제외)'
+              }
               className="w-full bg-transparent text-white placeholder-zinc-500 font-body-sm text-[13.5px] focus:outline-none"
             />
             {searchQuery && (

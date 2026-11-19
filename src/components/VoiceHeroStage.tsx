@@ -244,7 +244,9 @@ export const VoiceHeroStage: React.FC = () => {
               placeholder={searchPlaceholder}
               className={`w-full ${
                 isLandscapeCompact ? 'h-9.5' : 'h-11 md:h-13'
-              } pl-10 pr-24 rounded-2xl bg-[#18181B] border border-white/15 focus:border-primary-container shadow-sm outline-none font-body-md text-[13px] md:text-[14.5px] text-white placeholder:text-zinc-400/75 transition-colors`}
+              } pl-10 ${
+                textInput ? 'pr-24' : 'pr-16'
+              } rounded-2xl bg-[#18181B] border border-white/15 focus:border-primary-container shadow-sm outline-none font-body-md text-[13px] md:text-[14.5px] text-white placeholder:text-zinc-400/75 transition-colors`}
             />
             {textInput && (
               <button
