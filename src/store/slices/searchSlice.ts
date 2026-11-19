@@ -185,6 +185,35 @@ export interface SearchSlice {
 
 }
 
+const RAW_GPS_COORD_PAIR_RX =
+  /(?:gps[_\s]*(?:lat|lng|lon)\s*[:=]\s*[-+]?\d{1,3}\.\d{3,}|[-+]?\b\d{1,2}\.\d{4,}\s*[,/]\s*[-+]?\d{2,3}\.\d{4,}\b)/gi;
+
+function sanitizeSharedPhotoPrivacy(photo: PhotoItem): PhotoItem {
+  const cleanLoc = photo.locationKo
+    ? photo.locationKo.replace(RAW_GPS_COORD_PAIR_RX, '').replace(/\s{2,}/g, ' ').trim()
+    : photo.locationKo;
+  const cleanCap = photo.captionKo
+    ? photo.captionKo.replace(RAW_GPS_COORD_PAIR_RX, '').replace(/\s{2,}/g, ' ').trim()
+    : photo.captionKo;
+  if (cleanLoc === photo.locationKo && cleanCap === photo.captionKo) {
+    return photo;
+  }
+  return {
+    ...photo,
+    locationKo: cleanLoc || '공유 앨범 촬영지',
+    captionKo: cleanCap,
+  };
+}
+
+function isolatePersonalPhotos(items: PhotoItem[]): PhotoItem[] {
+  return items.filter(
+    (p) =>
+      !String(p.id || '').startsWith('shared_host_') &&
+      !String(p.id || '').startsWith('shared_added_') &&
+      !p.sharedLoungeType
+  );
+}
+
 export const createSearchSlice: StateCreator<
   SaySeeStore,
   [],
@@ -313,13 +342,16 @@ export const createSearchSlice: StateCreator<
         matchedLocalDocs: scopedDocs,
       });
     } else {
-      const sourcePhotos = resolveLoungePhotoCorpus({
+      const rawSourcePhotos = resolveLoungePhotoCorpus({
         activeLoungeType: stateNow.activeLoungeType,
         activeFamilyRoom: stateNow.activeFamilyRoom,
         photos,
         sharedRoomHostPhotos: stateNow.sharedRoomHostPhotos,
         sharedRoomAddedPhotos: stateNow.sharedRoomAddedPhotos,
       });
+      const sourcePhotos = sharedMode
+        ? rawSourcePhotos.map(sanitizeSharedPhotoPrivacy)
+        : isolatePersonalPhotos(rawSourcePhotos);
       const galleryPhotos = filterVisibleGalleryPhotos(sourcePhotos).map((photo) => ({
         photo,
         score: 0.95,
@@ -355,13 +387,16 @@ export const createSearchSlice: StateCreator<
       sharedRoomHostPhotos,
     } = get();
     const sharedMode = isSharedPhotoLounge(activeLoungeType);
-    const sourcePhotos = resolveLoungePhotoCorpus({
+    const rawSourcePhotos = resolveLoungePhotoCorpus({
       activeLoungeType,
       activeFamilyRoom,
       photos,
       sharedRoomHostPhotos,
       sharedRoomAddedPhotos,
     });
+    const sourcePhotos = sharedMode
+      ? rawSourcePhotos.map(sanitizeSharedPhotoPrivacy)
+      : isolatePersonalPhotos(rawSourcePhotos);
     const scopedDocs = sharedMode ? [] : localDocuments;
     const scopedVideos = sharedMode ? [] : videoSceneItems;
     const vaultPhotos = sharedMode
@@ -463,8 +498,11 @@ export const createSearchSlice: StateCreator<
       analogYearProposals,
     } = get();
 
-    // [0) 무설정 채팅·검색 직결 드라이브 스캔] "D드라이브는 왜 검색안돼?", "D에 사진있는데 찾아줘", "외장하드 찾아줘", "마이박스 사진 찾아줘"
+    const sharedModeEarly = isSharedPhotoLounge(activeLoungeType);
+
+    // [0) 무설정 채팅·검색 직결 드라이브 스캔] (내 기기/업무 라운지 전용 · 공유방에서는 내 로컬 드라이브 스캔 완전 차단)
     if (
+      !sharedModeEarly &&
       !(/\bs\s*드라이브\b/i.test(query) && /고쳐|오류|끊김|안\s*열려/i.test(query)) &&
       /(?:[c-zC-Z]\s*드라이브|\b[d-zD-Z]\s*에\s*(?:있는\s*)?(?:사진|영상|동영상|문서|파일|폴더)|외장\s*하드|마이박스|mybox)/i.test(
         query
@@ -517,8 +555,8 @@ export const createSearchSlice: StateCreator<
 
     // [양방향 0토큰 통합 음성/텍스트 자동 라우터 (Zero-LLM Bidirectional Voice Toss)]
     // 1) [🎯 찾기]에서 치우기·고치기·복원 의도("중복 사진 치워줘", "글씨 크기 키워줘", "원래대로 돌려줘")를 말하거나 입력하면
-    //    즉시 [✋ 손보기] 탭으로 화면을 전환하고 [✋ 손보기 대화창]에 전달하여 원스톱 실행!
-    if (isMonsterCareIntentFromSearch(query)) {
+    //    즉시 [✋ 손보기] 탭으로 화면을 전환하고 [✋ 손보기 대화창]에 전달하여 원스톱 실행! (내 기기 personal 전용 · 공유방 이탈 차단)
+    if (!sharedModeEarly && activeLoungeType === 'personal' && isMonsterCareIntentFromSearch(query)) {
       set({
         desktopTab: 'trash',
         mobileTab: 'trash',
@@ -529,7 +567,10 @@ export const createSearchSlice: StateCreator<
     }
 
     // 2) [🎯 찾기]에서 카톡 전달 / 문서 수치 즉답("보증금 얼마야?") / 키워드 문장 발췌 / 요약 낭독 / 단골 AI 바톤터치 의도 처리
-    const voiceDocCmd = parseZeroLlmVoiceDocCommand(query);
+    //    (공유 사진방에서는 내 기기 로컬 문서 localDocuments 참조·누출을 100% 원천 차단!)
+    const voiceDocCmd = sharedModeEarly
+      ? { intentType: 'NONE' as const, targetDocKeyword: '', extractKeywords: [], kakaoRecipientName: '' }
+      : parseZeroLlmVoiceDocCommand(query);
     if (voiceDocCmd.intentType === 'KAKAO_REAL_CHATROOM_SEND') {
       const { matchedDoc } = resolveTargetDocAndBuildFactAnswer(
         localDocuments,
@@ -775,16 +816,19 @@ export const createSearchSlice: StateCreator<
     }
     cleanedSearchQuery = cleanedSearchQuery.replace(/\s+/g, ' ').trim();
 
-    // 가족/동호회/동창회 공유방에서는 해당 방 전용 사진 코퍼스만 검색하고(타 방/내 로컬 PC 사진·문서·동영상 누출 차단), 업무 공유(work)에서는 여권 인물 태그를 제외
+    // 가족/동호회/동창회 공유방에서는 해당 방 전용 사진 코퍼스만 검색하고(타 방/내 로컬 PC 사진·문서·동영상 누출 차단 · 정밀 GPS 원문 제거), 업무 공유(work)에서는 여권 인물 태그를 제외
     const stateNow = get();
     const sharedMode = isSharedPhotoLounge(activeLoungeType);
-    const basePhotosForSearch = resolveLoungePhotoCorpus({
+    const rawBasePhotosForSearch = resolveLoungePhotoCorpus({
       activeLoungeType,
       activeFamilyRoom: stateNow.activeFamilyRoom,
       photos,
       sharedRoomHostPhotos: stateNow.sharedRoomHostPhotos,
       sharedRoomAddedPhotos: stateNow.sharedRoomAddedPhotos,
     });
+    const basePhotosForSearch = sharedMode
+      ? rawBasePhotosForSearch.map(sanitizeSharedPhotoPrivacy)
+      : isolatePersonalPhotos(rawBasePhotosForSearch);
     const photosForSearch = isWorkLounge
       ? basePhotosForSearch.map((p) => ({
           ...p,
@@ -916,7 +960,7 @@ export const createSearchSlice: StateCreator<
         const seenIds = new Set<string>();
 
         for (const [fileName, info] of matchedAnalogFiles.entries()) {
-          const foundPhoto = photos.find((p) => !p.quarantined && p.name === fileName);
+          const foundPhoto = photosForSearch.find((p) => !p.quarantined && p.name === fileName);
           if (foundPhoto) {
             seenIds.add(foundPhoto.id);
             const enrichedPhoto: PhotoItem = {
@@ -941,11 +985,13 @@ export const createSearchSlice: StateCreator<
       }
     }
 
-    // 촬영 서류(isVaultDocument) 매칭 계산
+    // 촬영 서류(isVaultDocument) 매칭 계산 (공유 사진방에서는 내 기기 서류함 누출 완전 차단)
     const vaultMap = new Map<string, SearchResultItem>();
-    for (const r of results) {
-      if (r.photo.isVaultDocument) {
-        vaultMap.set(r.photo.id, r);
+    if (!sharedMode) {
+      for (const r of results) {
+        if (r.photo.isVaultDocument) {
+          vaultMap.set(r.photo.id, r);
+        }
       }
     }
     const rawTokens = query
@@ -954,8 +1000,8 @@ export const createSearchSlice: StateCreator<
       .map((t) => t.replace(/(에서|으로|이랑|하고|있는|하는|들을|들|의|을|를|은|는|에|와|과|도)$/, ''))
       .filter((t) => t.length >= 2 && !['서류', '문서', '파일', '사본', '사진', '및'].includes(t));
 
-    if (rawTokens.length > 0) {
-      for (const p of photos) {
+    if (!sharedMode && rawTokens.length > 0) {
+      for (const p of photosForSearch) {
         if (p.quarantined || !p.isVaultDocument || vaultMap.has(p.id)) continue;
         const corpus = `${p.tags.join(' ')} ${p.captionKo ?? ''} ${p.vaultCategoryLabel ?? ''}`.toLowerCase();
         if (rawTokens.some((tk) => corpus.includes(tk))) {
@@ -968,21 +1014,24 @@ export const createSearchSlice: StateCreator<
         }
       }
     }
-    const vaultPhotoMatches = isExplicitPhotoOnlyQuery ? [] : Array.from(vaultMap.values());
+    const vaultPhotoMatches =
+      sharedMode || isExplicitPhotoOnlyQuery ? [] : Array.from(vaultMap.values());
 
     // [규칙 1 & 2: 다중 탭 동시 매칭 시 우선 표시 탭 규칙]
     // 1) 검색어에 '동영상/영상/장면' 또는 '문서/서류/PDF/계약서/엑셀' 등 명시적 매체 키워드가 있으면 해당 탭 우선
     // 2) 매체 지정 없는 일반 단어(예: '패러세일링')이고 여러 탭에 모두 파일이 있을 때는:
     //    사용자가 현재 보고 있는 탭에 결과가 있으면 그 탭을 유지하고, 없으면 좌측 탭 순서대로 [사진 ➔ 동영상 ➔ 문서] 순으로 표시합니다.
     const isExplicitVideoIntent =
+      !sharedMode &&
       !isExplicitPhotoOnlyQuery &&
       /영상|동영상|장면|구간|순간|말하는\s*부분|외치는|화이트보드|판서/.test(query);
     const isExplicitDocIntent =
+      !sharedMode &&
       !isExplicitPhotoOnlyQuery &&
       /문서|서류|파일|계약|견적|영수증|전표|엑셀|시트|한글|워드|피디에프|pdf|xlsx|xls|docx|hwp|txt/i.test(query);
 
     let targetSpace: SearchSpaceMode =
-      isExplicitPhotoOnlyQuery || isTimeRangeOrAlumniQuery
+      sharedMode || isExplicitPhotoOnlyQuery || isTimeRangeOrAlumniQuery
         ? 'gallery'
         : isExplicitVideoIntent && videoMatches.length > 0
         ? 'video'
@@ -1057,8 +1106,9 @@ export const createSearchSlice: StateCreator<
     });
 
     // [무블로킹 2단계 백그라운드 보강]: 첫 검색 결과는 0.1초 만에 즉시 표시한 뒤,
-    // 아직 비전 벡터가 준비되지 않은 동영상이 있으면 백그라운드에서 조용히 키프레임을 보강하여 결과 목록을 매끄럽게 갱신
+    // 아직 비전 벡터가 준비되지 않은 동영상이 있으면 백그라운드에서 조용히 키프레임을 보강하여 결과 목록을 매끄럽게 갱신 (내 기기 전용)
     if (
+      !sharedMode &&
       !isExplicitPhotoOnlyQuery &&
       zCoreBridge.isConnected &&
       (!isTextQueryEncoderReady() || hasUnindexedLocalVideos(videoSceneItems))
@@ -1144,10 +1194,21 @@ export const createSearchSlice: StateCreator<
         get().interimSttPreview ||
         ''
       ).trim();
-      const { results, trace } = await executeZeroSttVoiceSearch({
+      const stNow = get();
+      const sharedNow = isSharedPhotoLounge(stNow.activeLoungeType);
+      const voiceCorpus = sharedNow
+        ? resolveLoungePhotoCorpus({
+            activeLoungeType: stNow.activeLoungeType,
+            activeFamilyRoom: stNow.activeFamilyRoom,
+            photos,
+            sharedRoomHostPhotos: stNow.sharedRoomHostPhotos,
+            sharedRoomAddedPhotos: stNow.sharedRoomAddedPhotos,
+          }).map(sanitizeSharedPhotoPrivacy)
+        : isolatePersonalPhotos(photos);
+      const { trace } = await executeZeroSttVoiceSearch({
         audioBlob,
         backgroundSttTranscript: effectiveStt,
-        photos,
+        photos: voiceCorpus,
         threshold: voiceThreshold,
       });
 
@@ -1238,13 +1299,18 @@ export const createSearchSlice: StateCreator<
   // ─────────────── 사진 상세 & 연사 묶음 탐색 ───────────────
   selectedPhoto: null,
   selectedBurstGroup: null,
-  setSelectedPhoto: (selectedPhoto, selectedBurstGroup = null) =>
+  setSelectedPhoto: (selectedPhoto, selectedBurstGroup = null) => {
+    const sharedMode = isSharedPhotoLounge(get().activeLoungeType);
+    const safePhoto =
+      selectedPhoto && sharedMode ? sanitizeSharedPhotoPrivacy(selectedPhoto) : selectedPhoto;
+    const rawBurst = selectedPhoto ? selectedBurstGroup ?? get().selectedBurstGroup : null;
+    const safeBurst =
+      rawBurst && sharedMode ? rawBurst.map(sanitizeSharedPhotoPrivacy) : rawBurst;
     set({
-      selectedPhoto,
-      selectedBurstGroup: selectedPhoto
-        ? selectedBurstGroup ?? get().selectedBurstGroup
-        : null,
-    }),
+      selectedPhoto: safePhoto,
+      selectedBurstGroup: safeBurst,
+    });
+  },
 
   // ─────────────── [스펙 2] Z몬스터 정리 4대 탭 & 바둑판 Pick & 3중 타임머신 안전망 (Undo) ───────────────
 });
