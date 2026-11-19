@@ -14,6 +14,7 @@ import {
 } from './voiceSearchAndAiBatonEngine';
 import { getZCoreUrl, zCoreBridge } from './zCoreBridge';
 import {
+  isAndroidMobileBrowserOrApp,
   isIosMobileBrowserOrApp,
   scanMobileBloatCleaners,
   triggerMobileCleanerUninstall,
@@ -2555,14 +2556,14 @@ export async function processUnifiedMonsterChatQuery(params: {
 
   // 0-00) [모바일 유료결제 유도 클리너(CleanX 등) 3단 원터치 구출(🤖 Android 전용) & 🍎 iOS 맞춤 안내 라우터]
   const isCleanerTrapQuery =
-    /(cleanx|클린\s*x|클린엑스|악성\s*(청소\s*앱|클리너)|유료\s*(청소\s*앱|클리너)|이상한\s*(청소\s*앱|클리너)|청소\s*앱\s*(삭제|제거|구독|해지|결제|점검|스캔)|클리너\s*(앱|삭제|제거|구독|해지|결제|구출|점검|스캔)|주간\s*(자동\s*)?결제.*?(청소|클리너|해지))/i.test(
+    /(cleanx|클린\s*x|클린엑스|악성\s*(청소\s*앱|클리너)|유료\s*(청소\s*앱|클리너)|이상한\s*(청소\s*앱|클리너)|청소\s*앱\s*(삭제|지워|제거|구독|해지|결제|점검|스캔)|클리너\s*(앱|삭제|지워|제거|구독|해지|결제|구출|점검|스캔)|주간\s*(자동\s*)?결제.*?(청소|클리너|해지))/i.test(
       clean
     );
-  const isIosSubscriptionManageQuery =
-    isIosMobileBrowserOrApp() &&
-    /(구독\s*(해지|취소|확인|관리|어디서|어떻게)|정기\s*(구독|결제)\s*(해지|취소|확인|관리|어디서|어떻게)|(자동|주간)\s*결제\s*(해지|취소|확인|관리))/i.test(
+  const isMobileSubscriptionManageQuery =
+    /(구독\s*(해지|취소|확인|관리|알려|어디서|어디|어떻게|방법)|정기\s*(구독|결제)\s*(해지|취소|확인|관리|알려|어디서|어디|어떻게|방법)|(자동|주간)\s*결제\s*(해지|취소|확인|관리|알려|어디서|어디|어떻게|방법)|해지\s*(알려|어디서|어디|어떻게|방법))/i.test(
       clean
     );
+  const isIosSubscriptionManageQuery = isIosMobileBrowserOrApp() && isMobileSubscriptionManageQuery;
 
   if (isIosMobileBrowserOrApp() && (isCleanerTrapQuery || isIosSubscriptionManageQuery)) {
     const iosSafeGuideText =
@@ -2578,7 +2579,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     });
   }
 
-  if (isCleanerTrapQuery) {
+  if (isCleanerTrapQuery || (isAndroidMobileBrowserOrApp() && isMobileSubscriptionManageQuery)) {
     const scanRes = await scanMobileBloatCleaners();
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('ghosti_trigger_mobile_cleaner_scan'));

@@ -8,6 +8,7 @@
  *  - 대본집에 없는 질문은 unmatched_questions 큐에 적재(주 1회 비서 정기 감사로 대본집 편입)
  */
 import playbookJson from '../data/ghost_secretary_playbook.json';
+import { isAndroidMobileBrowserOrApp, isIosMobileBrowserOrApp } from './ghostiMobileCareBridge';
 
 // ─────────────────────────────────────────────────────────────
 // 대본집 타입 & 로딩
@@ -32,7 +33,7 @@ export const GHOST_SECRETARY_AVATAR_SRC =
 
 /** 손보기·진단·복원·설정 명령 문장 판별 — '부팅 경과 시간 진단해줘', '보안프로그램 정리해줘', '시작프로그램 목록 보여줘' 같은 실행 요청이 FAQ(보안·요금) 키워드에 가로채이지 않도록 보호 */
 const CARE_COMMAND_RE =
-  /(정리|지워|삭제|청소|검진|진단|점검|부팅|재부팅|켜\s*둔|경과|시작\s*프로그램|자동\s*실행|목록|느려|느린|버벅|빨라|고쳐|치워|꺼\s*(?:줘|주세요)|최적화|사양|스펙|상태\s*봐|용량|메모리|램|디스크|백신|디펜더|바이러스|랜섬웨어|복원|복구|되돌려|바탕화면|다운로드|휴지통|실적|보고서|온보딩|문의방|상용구|복사\s*기록|진행해|실행해|적출|언인스톨)/;
+  /(정리|지워|삭제|청소|클리너|cleanx|클린\s*x|클린엑스|구독\s*해지|정기\s*(?:구독|결제)|자동\s*결제|주간\s*결제|검진|진단|점검|부팅|재부팅|켜\s*둔|경과|시작\s*프로그램|자동\s*실행|목록|느려|느린|버벅|빨라|고쳐|치워|꺼\s*(?:줘|주세요)|최적화|사양|스펙|상태\s*봐|용량|메모리|램|디스크|백신|디펜더|바이러스|랜섬웨어|복원|복구|되돌려|바탕화면|다운로드|휴지통|실적|보고서|온보딩|문의방|상용구|복사\s*기록|진행해|실행해|적출|언인스톨|알려\s*(?:줘|주세요)|보여\s*(?:줘|주세요)|찾아\s*(?:줘|주세요))/i;
 
 /** 대본집 부분 문자열 오매칭 방지 (예: '얼마나' 안의 '얼마'가 요금 안내로 튀는 현상, '보안프로그램' 안의 '보안'이 개인정보 FAQ로 튀는 현상 차단) */
 function matchesPlaybookKeyword(text: string, kw: string, scenarioId: string): boolean {
@@ -299,6 +300,22 @@ export function sanitizeNicknameAnswer(raw: string): string {
 const INVALID_NICKNAME_CANDIDATE_RE =
   /^(불러|바꿔|변경|수정|이름|별명|닉네임|호칭|뭐|뭘|무엇|다시|새로|다른|다른걸|다른것|다른거|다른이름|다른별명|다른닉네임|딴거|딴걸|아무거나|그거|이거|저거|누구|나|저|싫어|싫어요|구경|구경만|구경만할래|싫어구경만할래|일단구경|눈으로구경|둘러볼래|안할래|안해|됐어|패스|건너뛰기|몰라|비밀)$|(싫어|구경\s*만|구경\s*부터|눈으로\s*구경|둘러\s*볼|연결\s*안|설치\s*안|안\s*할래)/i;
 
+/** 질문·요청·기능/결제/구독/청소앱 발화나 다어절 문장이 별명으로 오인식·오염되지 않도록 구조적으로 판별 */
+export function isInvalidNicknameCandidate(candidate: string): boolean {
+  const c = candidate.trim();
+  if (!c) return true;
+  if (INVALID_NICKNAME_CANDIDATE_RE.test(c)) return true;
+  if (c.split(/\s+/).length >= 3) return true;
+  if (
+    /[?？]|(알려\s*(?:줘|주세요|줘요|줄래|달라)?|가르쳐|보여\s*(?:줘|주세요|줘요)?|찾아\s*(?:줘|주세요|줘요)?|지워\s*(?:줘|주세요|줘요)?|삭제|제거|정리|해지|취소|환불|구독|정기\s*결제|자동\s*결제|주간\s*결제|결제|요금|무료|유료|얼마|어떻게|어디서|어디에|뭔지|뭐야|뭔가요|청소\s*앱|클리너|cleanx|클린\s*x|클린엑스|복원|복구|진단|점검|실행|연결|설정|권한|도와\s*줘|사용법|방법)/i.test(
+      c
+    )
+  ) {
+    return true;
+  }
+  return false;
+}
+
 /**
  * 별명(호칭) 변경·수정·조회 의도 판별 (무토큰 대본 DB 1단계)
  * - change: 새 별명이 문장 안에 함께 들어있는 경우 ("아냐 으노 말고 은호라고 해", "은숙을 은호로 바꿔줘", "은호로 변경해줘", "내 별명 은호로 수정해줘")
@@ -311,8 +328,8 @@ export function parseNicknameSettingIntent(
 ): { kind: 'change'; newNickname: string } | { kind: 'ask' } | { kind: 'query' } | null {
   const t = raw.trim();
   if (!t || t.length > 50) return null;
-  // 파일·폴더·요일·시간·귀신창·여권 설정 명령과 혼동 방지
-  if (/파일|폴더|사진|문서|여권|\d+\s*번|요일|시간|소리|효과음|라벨러|검진|알림|귀신창|단축키|상용구/.test(t)) return null;
+  // 파일·폴더·요일·시간·귀신창·여권·구독·청소앱 설정/문의 명령과 혼동 방지
+  if (/파일|폴더|사진|문서|여권|\d+\s*번|요일|시간|소리|효과음|라벨러|검진|알림|귀신창|단축키|상용구|구독|해지|결제|환불|청소\s*앱|클리너|cleanx|클린\s*x|클린엑스/i.test(t)) return null;
 
   // 1) 내 이름/별명 조회 ("내 이름이 뭐야?", "내 별명 뭐라고 했지?", "나 누구야?")
   if (
@@ -336,7 +353,7 @@ export function parseNicknameSettingIntent(
   );
   if (malgoMatch) {
     const nick = sanitizeNicknameAnswer(malgoMatch[1]);
-    if (nick && !INVALID_NICKNAME_CANDIDATE_RE.test(nick)) {
+    if (nick && !isInvalidNicknameCandidate(nick)) {
       return { kind: 'change', newNickname: nick };
     }
   }
@@ -347,7 +364,7 @@ export function parseNicknameSettingIntent(
   );
   if (fromToChangeMatch) {
     const nick = sanitizeNicknameAnswer(fromToChangeMatch[2]);
-    if (nick && !INVALID_NICKNAME_CANDIDATE_RE.test(nick)) {
+    if (nick && !isInvalidNicknameCandidate(nick)) {
       return { kind: 'change', newNickname: nick };
     }
   }
@@ -358,7 +375,7 @@ export function parseNicknameSettingIntent(
   );
   if (explicitChangeMatch) {
     const nick = sanitizeNicknameAnswer(explicitChangeMatch[1]);
-    if (nick && !INVALID_NICKNAME_CANDIDATE_RE.test(nick)) {
+    if (nick && !isInvalidNicknameCandidate(nick)) {
       return { kind: 'change', newNickname: nick };
     }
   }
@@ -369,7 +386,7 @@ export function parseNicknameSettingIntent(
   );
   if (directCallMatch) {
     const nick = sanitizeNicknameAnswer(directCallMatch[1]);
-    if (nick && !INVALID_NICKNAME_CANDIDATE_RE.test(nick)) {
+    if (nick && !isInvalidNicknameCandidate(nick)) {
       return { kind: 'change', newNickname: nick };
     }
   }
@@ -382,7 +399,7 @@ export function parseNicknameSettingIntent(
     );
     if (curMatch) {
       const nick = sanitizeNicknameAnswer(curMatch[1]);
-      if (nick && !INVALID_NICKNAME_CANDIDATE_RE.test(nick)) {
+      if (nick && !isInvalidNicknameCandidate(nick)) {
         return { kind: 'change', newNickname: nick };
       }
     }
@@ -444,20 +461,50 @@ let _didClearStalePassportStepOnBoot = false;
 
 export function loadGhostSecretaryState(): GhostSecretaryState {
   const st = readJson<GhostSecretaryState>(GHOST_SECRETARY_STATE_KEY, {});
+  let dirty = false;
   if (!_didClearStalePassportStepOnBoot) {
     _didClearStalePassportStepOnBoot = true;
     if (st.passportStep === 'naming' || st.passportStep === 'ask_hint') {
       delete st.passportStep;
-      writeJson(GHOST_SECRETARY_STATE_KEY, st);
+      dirty = true;
+    }
+  }
+  // 질문·명령 문장(예: '구독 해지 알려줘')이 과거 버그로 별명에 오염된 경우 자동 정화
+  if (st.nickname && isInvalidNicknameCandidate(st.nickname)) {
+    delete st.nickname;
+    dirty = true;
+    try {
+      const storedNick = localStorage.getItem('userNickname');
+      if (storedNick && isInvalidNicknameCandidate(storedNick)) {
+        localStorage.removeItem('userNickname');
+      }
+      const book = loadGhostPassportBook();
+      if (book.self?.nickname && isInvalidNicknameCandidate(book.self.nickname)) {
+        const cleanedSelf = book.self.realName
+          ? { isSelf: true as const, nickname: book.self.realName, realName: book.self.realName }
+          : undefined;
+        saveGhostPassportBook({ ...book, self: cleanedSelf });
+      }
+    } catch {
+      /* ignore */
     }
   }
   if (!st.nickname) {
     try {
       const hubNick = localStorage.getItem('userNickname');
-      if (hubNick && !TEST_ACCOUNT_NICKNAMES.has(hubNick)) st.nickname = hubNick;
+      if (hubNick && !TEST_ACCOUNT_NICKNAMES.has(hubNick) && !isInvalidNicknameCandidate(hubNick)) {
+        st.nickname = hubNick;
+        if (st.awaitingNickname) {
+          st.awaitingNickname = false;
+        }
+        dirty = true;
+      }
     } catch {
       /* ignore */
     }
+  }
+  if (dirty) {
+    writeJson(GHOST_SECRETARY_STATE_KEY, st);
   }
   return st;
 }
@@ -729,6 +776,25 @@ export function resolveGhostSecretaryTurn(
       );
   };
 
+  // ⓪-00 [모바일 유료 유도 청소앱(CleanX) & 정기구독 해지/확인 최우선 분기]
+  // - iOS(아이폰/아이패드): 애플 보안 정책 및 [설정 > 내 이름(Apple 계정) > 구독] 맞춤 안내 즉시 반환 (별명 변경·외부 요금 FAQ 오매칭 원천 차단)
+  // - Android: MonsterChatRouter의 3단 원터치 구출(Play 정기결제 해지·앱 삭제·권한 해제)로 즉시 위임
+  const isCleanerOrSubscriptionManageText =
+    /(cleanx|클린\s*x|클린엑스|악성\s*(?:청소\s*앱|클리너)|유료\s*(?:청소\s*앱|클리너)|이상한\s*(?:청소\s*앱|클리너)|청소\s*앱|클리너|(?:구독|정기\s*구독|정기\s*결제|자동\s*결제|주간\s*결제)\s*(?:해지|취소|확인|관리|알려|어디|어떻게|방법)|해지\s*(?:알려|어디|어떻게|방법))/i.test(
+      text
+    );
+  if (isIosMobileBrowserOrApp() && isCleanerOrSubscriptionManageText) {
+    return {
+      scenarioId: 'ios_safe_cleaner_and_subscription_guide',
+      text: '🍎 **아이폰(iOS)은 애플 보안 정책상 악성 청소앱이 자동 침투할 수 없으며, 정기구독 확인은 [아이폰 설정 > 내 이름(Apple 계정) > 구독]에서 안전하게 관리하실 수 있습니다.**',
+      followUps: ['📱 내 폰 사진 자동 점검 결과 볼래', '🔍 맨 위 검색창으로 바로 찾아볼래'],
+      nextState: st.awaitingNickname ? { ...st, awaitingNickname: false } : st,
+    };
+  }
+  if (isAndroidMobileBrowserOrApp() && isCleanerOrSubscriptionManageText) {
+    return null;
+  }
+
   // ⓪-0 사용자가 직접 '🛂 귀신계 여권' 또는 '인물 사진 이름 등록'을 요청한 경우 설정방 내 본인 여권 보관 원칙 안내!
   if (
     /(귀신계?\s*여권|여권\s*(등록|발급|만들|보여|확인|열어|안내|설정|해\s*볼래|할래)|인물\s*사진\s*이름|얼굴\s*이름\s*(등록|설정|붙이|알려)|사진\s*속\s*(사람|인물|가족)\s*이름)/i.test(
@@ -830,7 +896,7 @@ export function resolveGhostSecretaryTurn(
         nextState: st,
       };
     }
-    if (nick && !INVALID_NICKNAME_CANDIDATE_RE.test(nick)) {
+    if (nick && !isInvalidNicknameCandidate(nick)) {
       const isFirstTime = !st.nickname;
       return {
         scenarioId: isFirstTime ? 'nickname_registered' : 'profile_change_nickname',
@@ -1042,6 +1108,18 @@ export function resolveGhostSecretaryTurn(
       if (sc.id.startsWith('faq_') && CARE_COMMAND_RE.test(text)) continue;
       const kws = extractTextContainsKeywords(sc.trigger);
       if (kws.length && kws.some((k) => matchesPlaybookKeyword(text, k, sc.id))) {
+        if (isIosMobileBrowserOrApp() && (sc.id === 'faq_pricing_free_vs_paid' || sc.id === 'faq_refund_and_cancel')) {
+          const nickPrefix = nickname ? `${nickname}님! ` : '';
+          const iosFaqText =
+            sc.id === 'faq_refund_and_cancel'
+              ? '🍎 **아이폰(iOS)은 애플 보안 정책상 악성 청소앱이 자동 침투할 수 없으며, 정기구독 확인은 [아이폰 설정 > 내 이름(Apple 계정) > 구독]에서 안전하게 관리하실 수 있습니다.**'
+              : `${nickPrefix}아이폰 앱에서 쓰시는 **『👻 귀신비서(내 폰 사진 정리·귀신계 여권)』**, **『👻 귀신검색』**, **『📸 사진 공유』** 기능은 광고 없이 무료로 바로 이용하실 수 있어요! (아이폰 정기구독 확인은 **[아이폰 설정 > 내 이름(Apple 계정) > 구독]**에서 안전하게 관리하실 수 있습니다.)`;
+          return {
+            scenarioId: sc.id,
+            text: iosFaqText,
+            nextState: st,
+          };
+        }
         const isTurnOff = /꺼|끄|해제|중지|안\s*받|안\s*할/.test(text);
         const toggleState = isTurnOff ? 'OFF(해제)' : 'ON(켜짐)';
         let updatedState = st;
@@ -1229,14 +1307,15 @@ export function buildWelcomeTurn(
     const sc = findScenario('ask_nickname_first');
     return { text: sc?.response || '', nextState: { ...st, awaitingNickname: true } };
   }
+  const cleanNextState = st.awaitingNickname ? { ...st, awaitingNickname: false } : st;
   if (isMobileEnv) {
     return {
       text: `${st.nickname}님, 다시 오셨네요! 내 폰 사진 정리, 1초 음성·글자 검색, 귀신계 여권까지 편하게 말씀해 주세요.`,
-      nextState: st,
+      nextState: cleanNextState,
     };
   }
   return {
     text: `${st.nickname}님, 다시 오셨네요! 컴퓨터·휴대폰 손보기, 복원, 귀신계 여권까지 편하게 말씀해 주세요.`,
-    nextState: st,
+    nextState: cleanNextState,
   };
 }

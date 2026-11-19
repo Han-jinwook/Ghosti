@@ -19,6 +19,14 @@ import {
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { zCoreBridge } from '../services/zCoreBridge';
 import { syncHubUserToLocalSupabase, clearGhostiSupabaseSession } from '../services/supabaseClient';
+import {
+  isInvalidNicknameCandidate,
+  loadGhostPassportBook,
+  loadGhostSecretaryState,
+  saveGhostPassportBook,
+  saveGhostSecretaryState,
+  setPassportSelf,
+} from '../services/ghostSecretaryEngine';
 import type { GiftProductItem } from '../services/merlin-hub-sdk/react';
 
 /**
@@ -148,6 +156,23 @@ const GhostiHubGlobalModals: React.FC = () => {
         nickname: user.nickname,
         hubToken: token,
       });
+
+      // 허브 회원 닉네임이 있을 때 귀신비서 별명이 비어 있거나 문장형 오인식 값으로 오염되어 있으면 즉시 정화·복원하고 awaitingNickname 지뢰 해제
+      const cleanHubNick = (user.nickname || '').trim();
+      if (cleanHubNick && !isInvalidNicknameCandidate(cleanHubNick)) {
+        const secSt = loadGhostSecretaryState();
+        if (!secSt.nickname || isInvalidNicknameCandidate(secSt.nickname) || secSt.awaitingNickname) {
+          const healedNick = !secSt.nickname || isInvalidNicknameCandidate(secSt.nickname) ? cleanHubNick : secSt.nickname;
+          saveGhostSecretaryState({ ...secSt, nickname: healedNick, awaitingNickname: false });
+          saveGhostPassportBook(setPassportSelf(loadGhostPassportBook(), healedNick));
+          try {
+            localStorage.setItem('userNickname', healedNick);
+          } catch {
+            /* ignore */
+          }
+          window.dispatchEvent(new CustomEvent('ghosti_jump_to_secretary'));
+        }
+      }
 
       // 유저가 이미 귀신비서에서 내 컴퓨터 연결에 동의한 세션일 때만 로컬 Z-코어 헬스체크 및 실물 파일 동기화 수행
       void zCoreBridge.checkHealth(false).then((alive) => {
