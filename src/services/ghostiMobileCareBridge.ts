@@ -45,6 +45,37 @@ export interface SystemPhotoTrashResult {
   error?: string;
 }
 
+export interface NativeGalleryPhotoMeta {
+  id: string;
+  name: string;
+  size: number;
+  mtimeMs: number;
+  width: number;
+  height: number;
+  bucket?: string;
+  isScreenshot?: boolean;
+  thumbDataUrl: string;
+}
+
+export interface NativeGalleryVideoMeta {
+  id: string;
+  name: string;
+  size: number;
+  durationSec: number;
+  mtimeMs: number;
+  bucket?: string;
+  thumbDataUrl: string;
+}
+
+export interface ScanDeviceGalleryResult {
+  ok: boolean;
+  permissionGranted: boolean;
+  offset?: number;
+  totalPhotoCount: number;
+  photos: NativeGalleryPhotoMeta[];
+  videos: NativeGalleryVideoMeta[];
+}
+
 export interface GhostiMobileCarePluginInterface {
   scanInstalledBloatCleaners(options?: {
     extraPackages?: string[];
@@ -54,6 +85,14 @@ export interface GhostiMobileCarePluginInterface {
   openPlayStoreSubscriptions(options?: { packageName?: string }): Promise<{ ok: boolean; url: string }>;
   openGoogleAccountPermissions(): Promise<{ ok: boolean; url: string }>;
   openAllInstalledAppsSettings(): Promise<{ ok: boolean }>;
+  openAppPermissionSettings(): Promise<{ ok: boolean }>;
+  scanDeviceGalleryMedia(options?: {
+    offset?: number;
+    limit?: number;
+    thumbMaxDim?: number;
+    includeVideos?: boolean;
+    promptPermission?: boolean;
+  }): Promise<ScanDeviceGalleryResult>;
   requestSystemPhotoTrash(options: {
     action: 'move' | 'restore';
     items: SystemPhotoTrashTarget[];
@@ -293,4 +332,59 @@ export async function requestNativeSystemPhotoTrash(
     // 구버전 네이티브 래퍼이거나 미지원 기기일 때는 앱 내 정리 보관함 이동으로 안전하게 폴백
   }
   return { ok: true, action, doneIds: keys, matchedMediaStoreCount: 0, canceled: false };
+}
+
+export async function scanNativeDeviceGalleryMedia(options?: {
+  offset?: number;
+  limit?: number;
+  thumbMaxDim?: number;
+  includeVideos?: boolean;
+  promptPermission?: boolean;
+}): Promise<ScanDeviceGalleryResult> {
+  if (!isCapacitorNativeMobileRuntime()) {
+    return {
+      ok: false,
+      permissionGranted: false,
+      totalPhotoCount: 0,
+      photos: [],
+      videos: [],
+    };
+  }
+  try {
+    const res = await GhostiMobileCareNative.scanDeviceGalleryMedia({
+      offset: options?.offset ?? 0,
+      limit: options?.limit ?? 60,
+      thumbMaxDim: options?.thumbMaxDim ?? 448,
+      includeVideos: options?.includeVideos ?? (options?.offset ?? 0) === 0,
+      promptPermission: options?.promptPermission ?? true,
+    });
+    if (res && typeof res.ok === 'boolean') {
+      return {
+        ok: res.ok,
+        permissionGranted: Boolean(res.permissionGranted),
+        offset: res.offset ?? options?.offset ?? 0,
+        totalPhotoCount: Number(res.totalPhotoCount || 0),
+        photos: Array.isArray(res.photos) ? res.photos : [],
+        videos: Array.isArray(res.videos) ? res.videos : [],
+      };
+    }
+  } catch {
+    /* 구버전 앱 래퍼(v1.0.17 이하) 호환 폴백 */
+  }
+  return {
+    ok: false,
+    permissionGranted: false,
+    totalPhotoCount: 0,
+    photos: [],
+    videos: [],
+  };
+}
+
+export async function openNativeAppPermissionSettings(): Promise<void> {
+  if (!isCapacitorNativeMobileRuntime()) return;
+  try {
+    await GhostiMobileCareNative.openAppPermissionSettings();
+  } catch {
+    /* ignore */
+  }
 }

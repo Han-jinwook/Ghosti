@@ -2418,7 +2418,7 @@ function handleGhostiInfoDeskIfMatched(
         cardKind: 'GHOSTI_INFO_DESK',
         infoDeskPayload: cleanInfoPayload,
         followUpSuggestions: [
-          '📱 내 폰 사진 불러와 1분 정리 시작할래',
+          '📱 내 폰 사진 자동 점검 결과 볼래',
           '🔍 맨 위 검색창으로 바로 찾아볼래',
           '아이디어 건의하고 싶은데 스튜디오에 접수해줘',
         ],
@@ -2448,7 +2448,7 @@ function handleGhostiInfoDeskIfMatched(
         cardKind: 'GHOSTI_INFO_DESK',
         infoDeskPayload: mobileWebPayload,
         followUpSuggestions: [
-          '📱 내 폰 사진 불러와 1분 정리 시작할래',
+          '📱 내 폰 사진 자동 점검 결과 볼래',
           '내 기기 통합 3,900원 요금제 혜택 알려줘',
         ],
       }
@@ -2572,7 +2572,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     );
     return reply(sourceTab, iosSafeGuideText, {
       followUpSuggestions: [
-        '📱 내 폰 사진 불러와 1분 정리 시작할래',
+        '📱 내 폰 사진 자동 점검 결과 볼래',
         '🔍 맨 위 검색창으로 바로 찾아볼래',
       ],
     });

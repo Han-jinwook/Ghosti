@@ -1778,7 +1778,7 @@ export const VideoScenePreviewModal: React.FC = () => {
           ) : !String(selectedVideoModal.videoUrl || '').startsWith('blob:') &&
             !String(selectedVideoModal.videoUrl || '').includes('127.0.0.1:5199') ? (
             <p className="font-body-sm text-[11.5px] text-amber-400/90 px-0.5">
-              ℹ️ 체험용 샘플 영상입니다 (내 컴퓨터 연결 또는 [📱 내 폰 영상 열기]로 실제 내 영상을 재생·추출할 수 있습니다)
+              ℹ️ 체험용 샘플 영상입니다 (PC 엔진 연결 또는 모바일 스토어 정식 앱 자동 인덱싱 후 내 실제 영상을 재생·추출할 수 있습니다)
             </p>
           ) : null}
 

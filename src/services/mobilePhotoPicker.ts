@@ -1,5 +1,9 @@
-import type { DuplicateGroup, PhotoItem, TrashCategory } from '../types/saysee';
-import { registerMobilePickedPhotoMeta } from './ghostiMobileCareBridge';
+import type { DuplicateGroup, PhotoItem, TrashCategory, VideoSceneItem } from '../types/saysee';
+import {
+  registerMobilePickedPhotoMeta,
+  type NativeGalleryPhotoMeta,
+  type NativeGalleryVideoMeta,
+} from './ghostiMobileCareBridge';
 
 interface OpticalSignatureMeta {
   dhash: string;
@@ -377,22 +381,9 @@ export async function analyzeMobilePickedPhotoFiles(
     fileArr.push(f);
   }
 
-  const readFileAsDataUrl = (file: File): Promise<string> =>
-    new Promise((res) => {
-      try {
-        const reader = new FileReader();
-        reader.onload = () => res(typeof reader.result === 'string' ? reader.result : '');
-        reader.onerror = () => res('');
-        reader.readAsDataURL(file);
-      } catch {
-        res('');
-      }
-    });
-
   const batchTs = Date.now();
   const analyzeSingle = async (file: File, index: number): Promise<PhotoItem> => {
-    const fallbackDataUrl = await readFileAsDataUrl(file);
-    const objUrl = fallbackDataUrl || URL.createObjectURL(file);
+    const objUrl = URL.createObjectURL(file);
     return new Promise((resolve) => {
       const img = new Image();
       img.onload = () => {
@@ -442,10 +433,9 @@ export async function analyzeMobilePickedPhotoFiles(
           dt.getDate()
         ).padStart(2, '0')}`;
 
-        // [모바일 미리보기·공유방 영구 저장 최적화]:
-        // 480px JPEG 썸네일 + 최대 1280px 경량 fullUrl DataURL을 생성해 수 MB 원본으로 인한 localStorage Quota 초과를 방지합니다.
-        let persistentThumbUrl = fallbackDataUrl || objUrl;
-        let persistentFullUrl = fallbackDataUrl || objUrl;
+        // [iOS WKWebView Jetsam OOM 방지]: 수십 MB 원본 FileReader Base64 적재를 금지하고 448px/960px 리사이즈 후 즉시 ObjectURL 해제!
+        let persistentThumbUrl = '';
+        let persistentFullUrl = '';
         try {
           const renderResizedJpeg = (maxDim: number, quality: number): string => {
             const scale =
@@ -461,17 +451,21 @@ export async function analyzeMobilePickedPhotoFiles(
             if (!ctx) return '';
             ctx.drawImage(img, 0, 0, tw, th);
             const url = canvas.toDataURL('image/jpeg', quality);
+            canvas.width = 1;
+            canvas.height = 1;
             return url && url.startsWith('data:image/') ? url : '';
           };
-          const thumbData = renderResizedJpeg(480, 0.84);
-          if (thumbData) persistentThumbUrl = thumbData;
-          if (fallbackDataUrl.length > 220_000) {
-            const fullData = renderResizedJpeg(1280, 0.82);
-            if (fullData) persistentFullUrl = fullData;
-          }
+          persistentThumbUrl = renderResizedJpeg(448, 0.8);
+          persistentFullUrl = renderResizedJpeg(960, 0.78) || persistentThumbUrl;
         } catch {
-          persistentThumbUrl = fallbackDataUrl || objUrl;
-          persistentFullUrl = fallbackDataUrl || persistentThumbUrl;
+          persistentThumbUrl = '';
+          persistentFullUrl = '';
+        } finally {
+          try {
+            URL.revokeObjectURL(objUrl);
+          } catch {
+            /* ignore */
+          }
         }
 
         const photoName = file.name || `내폰사진_${index + 1}.jpg`;
@@ -511,6 +505,11 @@ export async function analyzeMobilePickedPhotoFiles(
         });
       };
       img.onerror = () => {
+        try {
+          URL.revokeObjectURL(objUrl);
+        } catch {
+          /* ignore */
+        }
         const itemId = `mobile_local_${batchTs}_${index}`;
         const photoName = file.name || `내폰사진_${index + 1}.jpg`;
         const photoSize = file.size || 1500000;
@@ -527,11 +526,11 @@ export async function analyzeMobilePickedPhotoFiles(
           size: photoSize,
           date: '2026.11.18',
           mtimeMs: photoMtime,
-          thumbUrl: fallbackDataUrl || objUrl,
-          fullUrl: fallbackDataUrl || objUrl,
+          thumbUrl: '',
+          fullUrl: '',
           tags: ['#내폰사진', '#온디바이스AI분류'],
           locationKo: '내 스마트폰 갤러리',
-          captionKo: `${file.name} (내 스마트폰 직접 불러오기)`,
+          captionKo: `${file.name} (내 스마트폰 갤러리)`,
           keywordsKo: [file.name.replace(/\.[^.]+$/, ''), '내폰', '사진'],
           opticalSharpness: 12000,
           quarantined: false,
@@ -624,4 +623,248 @@ export async function auditRealPcPhotosAndCluster(
   }
 
   return clusterPhotosIntoDuplicateGroups(photos.filter((p) => !isSample(p.name)));
+}
+
+/**
+ * [Android MediaStore / iOS PhotoKit 네이티브 갤러리 자동 스캔 항목 분석기]
+ * - 수동 '불러오기' 없이 OS 네이티브 브릿지가 전달한 448px JPEG 썸네일을 6장씩 비동기 청크로 해독합니다.
+ */
+export async function analyzeNativeGalleryPhotoBatch(
+  nativeItems: NativeGalleryPhotoMeta[]
+): Promise<PhotoItem[]> {
+  if (!Array.isArray(nativeItems) || nativeItems.length === 0) return [];
+
+  const analyzeOne = (item: NativeGalleryPhotoMeta): Promise<PhotoItem | null> => {
+    if (!item || !item.thumbDataUrl) return Promise.resolve(null);
+    return new Promise((resolve) => {
+      const img = new Image();
+      const timer = window.setTimeout(() => resolve(null), 3000);
+      img.onload = () => {
+        window.clearTimeout(timer);
+        const meta = computeOpticalDhashAndSharpness(img);
+        const { dhash, sharpness } = meta;
+        const itemId = item.id || `mobile_native_${item.name}_${item.mtimeMs}`;
+        opticalSigByPhotoId.set(itemId, meta);
+
+        const lowerName = (item.name || '').toLowerCase();
+        const origW = item.width || img.width || 0;
+        const origH = item.height || img.height || 0;
+        const isScreenshot =
+          Boolean(item.isScreenshot) ||
+          lowerName.includes('screenshot') ||
+          lowerName.includes('스크린샷') ||
+          lowerName.includes('캡처') ||
+          (origW > 0 && origH / origW > 1.98);
+        const isReceiptOrDoc =
+          lowerName.includes('receipt') ||
+          lowerName.includes('영수증') ||
+          lowerName.includes('계약서') ||
+          lowerName.includes('문서') ||
+          lowerName.includes('명함') ||
+          lowerName.includes('memo');
+        const isBlurry =
+          !isScreenshot &&
+          !isReceiptOrDoc &&
+          (meta.isMotionOrFocusBlurred ||
+            sharpness < 3200 ||
+            lowerName.includes('blur') ||
+            lowerName.includes('흔들'));
+
+        let trashCategory: TrashCategory | undefined = undefined;
+        const tags: string[] = ['#내폰사진', '#자동인덱싱'];
+        if (isScreenshot) {
+          trashCategory = 'screenshot';
+          tags.unshift('#스크린샷·캡처');
+        } else if (isReceiptOrDoc) {
+          trashCategory = 'memo';
+          tags.unshift('#영수증·서류·메모');
+        } else if (isBlurry) {
+          trashCategory = 'blurry';
+          tags.unshift('#흔들림·초점이탈');
+        } else {
+          tags.unshift('#선명한베스트컷');
+        }
+
+        const dt = new Date(item.mtimeMs || Date.now());
+        const dateStr = `${dt.getFullYear()}.${String(dt.getMonth() + 1).padStart(2, '0')}.${String(
+          dt.getDate()
+        ).padStart(2, '0')}`;
+
+        registerMobilePickedPhotoMeta({
+          id: itemId,
+          name: item.name,
+          size: item.size || 0,
+          mtimeMs: item.mtimeMs || Date.now(),
+        });
+
+        resolve({
+          id: itemId,
+          name: item.name,
+          size: item.size || 500000,
+          date: dateStr,
+          mtimeMs: item.mtimeMs || Date.now(),
+          thumbUrl: item.thumbDataUrl,
+          fullUrl: item.thumbDataUrl,
+          tags,
+          locationKo: item.bucket || '내 스마트폰 사진첩 (자동 인덱싱)',
+          captionKo: `${item.name} (${origW}x${origH} · 선명도 ${sharpness.toLocaleString()}점)`,
+          keywordsKo: [
+            (item.name || '').replace(/\.[^.]+$/, ''),
+            ...(item.bucket ? [item.bucket] : []),
+            isScreenshot ? '스크린샷' : isReceiptOrDoc ? '영수증' : isBlurry ? '흔들린사진' : '사진',
+          ],
+          isVaultDocument: isReceiptOrDoc,
+          vaultCategoryLabel: isReceiptOrDoc ? '스마트폰 촬영 영수증·서류' : undefined,
+          trashCategory,
+          trashConfidence: trashCategory ? 0.95 : undefined,
+          opticalSharpness: sharpness,
+          dhash,
+          quarantined: false,
+        });
+      };
+      img.onerror = () => {
+        window.clearTimeout(timer);
+        resolve(null);
+      };
+      img.src = item.thumbDataUrl;
+    });
+  };
+
+  const results: PhotoItem[] = [];
+  const CHUNK = 6;
+  for (let i = 0; i < nativeItems.length; i += CHUNK) {
+    const slice = nativeItems.slice(i, i + CHUNK);
+    const decoded = await Promise.all(slice.map(analyzeOne));
+    for (const d of decoded) {
+      if (d) results.push(d);
+    }
+    await new Promise((r) => setTimeout(r, 12));
+  }
+  return results;
+}
+
+export function convertNativeGalleryVideos(nativeVideos: NativeGalleryVideoMeta[]): VideoSceneItem[] {
+  if (!Array.isArray(nativeVideos) || nativeVideos.length === 0) return [];
+  return nativeVideos.map((v) => {
+    const dur = Math.max(1, Math.round(v.durationSec || 1));
+    const mm = String(Math.floor(dur / 60)).padStart(2, '0');
+    const ss = String(dur % 60).padStart(2, '0');
+    const dt = new Date(v.mtimeMs || Date.now());
+    const dateStr = `${dt.getFullYear()}.${String(dt.getMonth() + 1).padStart(2, '0')}.${String(
+      dt.getDate()
+    ).padStart(2, '0')}`;
+    const stem = (v.name || '동영상').replace(/\.[^.]+$/, '');
+    return {
+      id: v.id,
+      videoFileName: v.name,
+      title: stem,
+      keyframePhotoId: v.id,
+      thumbUrl: v.thumbDataUrl || '',
+      videoUrl: '',
+      date: dateStr,
+      durationText: `${mm}:${ss}`,
+      durationSec: dur,
+      matchedSeekSec: 0,
+      matchedTimestamp: '00:00',
+      matchedFrameCaption: `${stem} (${v.bucket || '스마트폰 동영상'})`,
+      locationKo: v.bucket || '내 스마트폰 동영상',
+      sceneDescription: `${stem} 스마트폰 동영상`,
+      keywords: [stem, ...(v.bucket ? [v.bucket] : []), '동영상'],
+      resolution: 'HD',
+      sizeMB: Math.max(0.5, Number(((v.size || 1500000) / (1024 * 1024)).toFixed(1))),
+      timelineFrames: [
+        {
+          frameId: `nvf_${v.id}_0`,
+          timeSec: 0,
+          timestampText: '00:00',
+          phaseLabel: '시작 구간',
+          sceneCaption: `${stem} 시작 장면`,
+          keywords: [stem],
+          tags: ['#내폰동영상'],
+          thumbUrl: v.thumbDataUrl || '',
+        },
+      ],
+    };
+  });
+}
+
+const MOBILE_GALLERY_IDB_NAME = 'ghosti_mobile_gallery_cache_v1';
+const MOBILE_GALLERY_STORE = 'snapshot';
+
+function openMobileGalleryIdb(): Promise<IDBDatabase | null> {
+  if (typeof indexedDB === 'undefined') return Promise.resolve(null);
+  return new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(MOBILE_GALLERY_IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(MOBILE_GALLERY_STORE)) {
+          db.createObjectStore(MOBILE_GALLERY_STORE);
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+export async function loadCachedMobileGalleryIndex(): Promise<{
+  photos: PhotoItem[];
+  videos: VideoSceneItem[];
+} | null> {
+  const db = await openMobileGalleryIdb();
+  if (!db) return null;
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(MOBILE_GALLERY_STORE, 'readonly');
+      const req = tx.objectStore(MOBILE_GALLERY_STORE).get('latest');
+      req.onsuccess = () => {
+        const val = req.result as { photos?: PhotoItem[]; videos?: VideoSceneItem[] } | undefined;
+        if (val && Array.isArray(val.photos)) {
+          for (const p of val.photos) {
+            registerMobilePickedPhotoMeta({
+              id: p.id,
+              name: p.name,
+              size: p.size,
+              mtimeMs: p.mtimeMs,
+            });
+          }
+          resolve({
+            photos: val.photos,
+            videos: Array.isArray(val.videos) ? val.videos : [],
+          });
+          return;
+        }
+        resolve(null);
+      };
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+export async function saveCachedMobileGalleryIndex(
+  photos: PhotoItem[],
+  videos: VideoSceneItem[]
+): Promise<void> {
+  const db = await openMobileGalleryIdb();
+  if (!db) return;
+  try {
+    const cleanPhotos = photos.slice(0, 600);
+    const cleanVideos = videos.slice(0, 40);
+    await new Promise<void>((resolve) => {
+      const tx = db.transaction(MOBILE_GALLERY_STORE, 'readwrite');
+      tx.objectStore(MOBILE_GALLERY_STORE).put(
+        { photos: cleanPhotos, videos: cleanVideos, savedAt: Date.now() },
+        'latest'
+      );
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    });
+  } catch {
+    /* ignore quota errors */
+  }
 }

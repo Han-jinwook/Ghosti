@@ -26,10 +26,12 @@ import {
   PresetQueryDef,
   THUMB_SIDE,
   VISION_TOKEN_BUDGET,
+  acquireSharedVisionEncoder,
   aiRuntimeFlags,
   bumpSharedVisionIdleDispose,
   cosineSimilarity,
   decodeImageBlobToRawAndThumb,
+  disposeSharedVisionEncoderNow,
   embedRawImageWithSharedVision,
   enableOpfsCache,
   encodeMultimodalSearchQueryVecs,
@@ -2032,11 +2034,18 @@ export async function startSilentRealMediaVisionIndexing(params: {
     typeof navigator !== 'undefined' && (navigator as any).connection?.saveData === true;
   if (saveData) return;
 
+  const isMobileEnv =
+    typeof navigator !== 'undefined' &&
+    (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') ||
+      (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1));
+
   aiRuntimeFlags.silentMediaIndexingRunning = true;
   try {
     await hydrateRealMediaVectorCacheOnce();
-    // 텍스트 질의 인코더를 먼저 단독 로드하여 비전 모델과의 대역폭/메모리 경합을 방지
-    await ensureTextQueryEncoderLoaded();
+    // [iOS WKWebView Jetsam OOM 원천 차단]:
+    // 단독 textQueryModel(~170MB)과 sharedVisionModel(~350MB) 2벌이 동시에 메모리에 올라가면 iOS WebView가 강제 리로드되므로,
+    // 텍스트+비전을 모두 내장한 sharedVisionModel 단 1벌만 로드하여 개념 앵커와 이미지 추론을 함께 처리합니다.
+    await acquireSharedVisionEncoder();
     const conceptVecMap = await ensureGemma2ConceptProbeVecs();
 
     // 1) 동영상 키프레임 무소음 백그라운드 인덱싱
@@ -2063,12 +2072,14 @@ export async function startSilentRealMediaVisionIndexing(params: {
       await new Promise((r) => setTimeout(r, 80));
     }
 
-    // 2) 미색인 실사용 사진(PC + 모바일 공통) EmbeddingGemma 2 768차원 비전 벡터 + 광학/OCR 보조 통합 인덱싱
+    // 2) 미색인 실사용 사진(PC + 모바일 공통) EmbeddingGemma 2 768차원 비전 벡터 통합 인덱싱 (Pass 1)
     const unindexedPhotos = silentIndexingBrake
       .sortPhotosRecent90DaysFirst(
         params.photos.filter((p) => !p.quarantined && (!p.vec || p.vec.length !== DEFAULT_DIM))
       )
-      .slice(0, 320);
+      .slice(0, isMobileEnv ? 160 : 320);
+
+    const pendingOcrQueue: Array<{ item: PhotoItem; thumb: string }> = [];
 
     for (let i = 0; i < unindexedPhotos.length; i++) {
       while (
@@ -2103,7 +2114,9 @@ export async function startSilentRealMediaVisionIndexing(params: {
             await persistMediaCacheEntry(pKey, vec);
             silentIndexingBrake.recordInferenceLatencyMs(inferElapsed);
           }
-          if (inferElapsed > 300 && silentIndexingBrake.getSnapshot().speedMode !== 'turbo') {
+          if (isMobileEnv) {
+            await new Promise((r) => setTimeout(r, 90));
+          } else if (inferElapsed > 300 && silentIndexingBrake.getSnapshot().speedMode !== 'turbo') {
             await new Promise((r) => setTimeout(r, Math.min(2200, Math.round(inferElapsed * 1.15))));
           }
         } catch {
@@ -2140,42 +2153,62 @@ export async function startSilentRealMediaVisionIndexing(params: {
           if (m.probe.isDocOrReceipt) shouldRunOcr = true;
         }
 
-        let ocrSnippet = '';
-        if (shouldRunOcr && decodedThumb) {
-          try {
-            const ocrRes = await recognizeDataUrlWithPaddleOcr(decodedThumb);
-            if (ocrRes.text && ocrRes.text.trim().length >= 2) {
-              ocrSnippet = ocrRes.text.trim().slice(0, 240);
-              for (const tk of extractKoStems(ocrSnippet).slice(0, 24)) {
-                if (tk.length >= 2) mergedKws.add(tk);
-              }
-            }
-          } catch {
-            /* OCR 보조 실패 시 비전/광학 결과 유지 */
-          }
-        }
-
-        const nextCaption = ocrSnippet
-          ? `${item.captionKo || item.name} | 📝 OCR: ${ocrSnippet}`
-          : item.captionKo;
-
         item.tags = Array.from(mergedTags);
         item.keywordsKo = Array.from(mergedKws);
         item.ontologyPrimaryTags = Array.from(ontoTags);
-        if (nextCaption) item.captionKo = nextCaption;
 
         params.onPhotoVisionHydrated?.(item.id, {
           vec,
           tags: item.tags,
           keywordsKo: item.keywordsKo,
           ontologyPrimaryTags: item.ontologyPrimaryTags,
-          captionKo: item.captionKo,
         });
+
+        if (shouldRunOcr && decodedThumb) {
+          pendingOcrQueue.push({ item, thumb: decodedThumb });
+        }
+      }
+    }
+
+    // 3) Pass 2 (서류·영수증·스크린샷 PP-OCRv5 보조 추출):
+    //    모바일에서는 거대 비전 모델(sharedVisionModel)을 먼저 해제한 뒤 경량 OCR 세션을 실행해 2중 WASM 피크를 원천 차단합니다!
+    if (pendingOcrQueue.length > 0) {
+      if (isMobileEnv) {
+        await disposeSharedVisionEncoderNow();
+        await new Promise((r) => setTimeout(r, 150));
+      }
+      for (const ocrJob of pendingOcrQueue) {
+        try {
+          const ocrRes = await recognizeDataUrlWithPaddleOcr(ocrJob.thumb);
+          if (ocrRes.text && ocrRes.text.trim().length >= 2) {
+            const ocrSnippet = ocrRes.text.trim().slice(0, 240);
+            const mergedKws = new Set<string>(ocrJob.item.keywordsKo || []);
+            for (const tk of extractKoStems(ocrSnippet).slice(0, 24)) {
+              if (tk.length >= 2) mergedKws.add(tk);
+            }
+            const nextCaption = `${ocrJob.item.captionKo || ocrJob.item.name} | 📝 OCR: ${ocrSnippet}`;
+            ocrJob.item.keywordsKo = Array.from(mergedKws);
+            ocrJob.item.captionKo = nextCaption;
+            params.onPhotoVisionHydrated?.(ocrJob.item.id, {
+              keywordsKo: ocrJob.item.keywordsKo,
+              captionKo: nextCaption,
+            });
+          }
+        } catch {
+          /* OCR 보조 실패 시 비전/광학 결과 유지 */
+        }
+        if (isMobileEnv) {
+          await new Promise((r) => setTimeout(r, 60));
+        }
       }
     }
   } finally {
     aiRuntimeFlags.silentMediaIndexingRunning = false;
-    bumpSharedVisionIdleDispose(15000);
+    if (isMobileEnv) {
+      void disposeSharedVisionEncoderNow();
+    } else {
+      bumpSharedVisionIdleDispose(15000);
+    }
   }
 }
 

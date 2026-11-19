@@ -221,6 +221,19 @@ export const DECODE_SIDE = 512;
 export const THUMB_SIDE = 240;
 
 env.allowLocalModels = false;
+try {
+  if (
+    typeof navigator !== 'undefined' &&
+    (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') ||
+      (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1))
+  ) {
+    if ((env as any).backends?.onnx?.wasm) {
+      (env as any).backends.onnx.wasm.numThreads = 1;
+    }
+  }
+} catch {
+  /* ignore wasm thread hint */
+}
 
 /**
  * [글로벌 서빙 & 비상 Fallback 2중 안전망]
@@ -506,8 +519,18 @@ let textQueryTokenizer: any = null;
 let textQueryLoading: Promise<boolean> | null = null;
 let cachedUsableWebGpuPromise: Promise<boolean> | null = null;
 
+export function isIosDeviceRuntime(): boolean {
+  if (typeof navigator === 'undefined') return false;
+  const ua = navigator.userAgent || '';
+  if (/iPhone|iPad|iPod/i.test(ua)) return true;
+  if (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1) return true;
+  return false;
+}
+
 async function detectUsableWebGpu(): Promise<boolean> {
   if (typeof navigator === 'undefined' || !('gpu' in navigator)) return false;
+  // [iOS WKWebView Jetsam OOM 원천 차단]: iOS WebContent 프로세스는 Metal WebGPU + WASM 이중 버퍼 할당 시 1.3GB 한도를 초과해 리로드되므로 단일 스레드 WASM q4로 안전 고정
+  if (isIosDeviceRuntime()) return false;
   if (!cachedUsableWebGpuPromise) {
     cachedUsableWebGpuPromise = (async () => {
       try {
@@ -1003,7 +1026,20 @@ export function bumpSharedVisionIdleDispose(ms = 30000): void {
   }, ms);
 }
 
-async function acquireSharedVisionEncoder(): Promise<boolean> {
+export async function disposeSharedVisionEncoderNow(): Promise<void> {
+  if (sharedVisionIdleTimer) {
+    clearTimeout(sharedVisionIdleTimer);
+    sharedVisionIdleTimer = null;
+  }
+  if (sharedVisionModel) {
+    const m = sharedVisionModel;
+    sharedVisionModel = null;
+    sharedVisionProcessor = null;
+    await Promise.resolve(m.dispose?.()).catch(() => {});
+  }
+}
+
+export async function acquireSharedVisionEncoder(): Promise<boolean> {
   if (sharedVisionModel && sharedVisionProcessor) {
     bumpSharedVisionIdleDispose();
     return true;
@@ -1012,6 +1048,13 @@ async function acquireSharedVisionEncoder(): Promise<boolean> {
 
   sharedVisionLoadPromise = (async () => {
     try {
+      // [모바일 OOM 방지]: sharedVisionModel은 텍스트+비전을 모두 포함하므로 기존 단독 textQueryModel이 메모리에 있으면 먼저 해제!
+      if (textQueryModel) {
+        const oldTextModel = textQueryModel;
+        textQueryModel = null;
+        await Promise.resolve(oldTextModel.dispose?.()).catch(() => {});
+        await new Promise((r) => setTimeout(r, 80));
+      }
       enableOpfsCache();
       const targetDtype = getOptimalEmbeddingDtype();
       if (!textQueryTokenizer) {

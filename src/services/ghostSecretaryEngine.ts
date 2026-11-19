@@ -742,7 +742,7 @@ export function resolveGhostSecretaryTurn(
       scenarioId: 'passport_manual_open_guide',
       text: passportGuideText,
       followUps: ctx.isMobileEnv
-        ? ['🔍 맨 위 검색창으로 바로 찾아볼래', '📱 내 폰 사진 불러와 1분 정리 시작할래']
+        ? ['🔍 맨 위 검색창으로 바로 찾아볼래', '📱 내 폰 사진 자동 점검 결과 볼래']
         : ['귀신검색으로 내 파일 찾아볼래', '최근 복원 기록 보여줘'],
       nextState: { ...st, awaitingNickname: false, passportStep: 'done' },
     };

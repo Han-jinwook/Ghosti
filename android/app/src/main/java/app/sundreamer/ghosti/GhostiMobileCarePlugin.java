@@ -12,11 +12,16 @@ import android.content.pm.PackageInfo;
 import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.database.Cursor;
+import android.graphics.Bitmap;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
 import android.provider.MediaStore;
 import android.provider.Settings;
+import android.util.Base64;
+import android.util.Size;
+
+import java.io.ByteArrayOutputStream;
 
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
@@ -44,9 +49,15 @@ import java.util.Set;
     name = "GhostiMobileCare",
     permissions = {
         @Permission(
-            alias = "mediaImages",
+            alias = "mediaModern",
             strings = {
                 Manifest.permission.READ_MEDIA_IMAGES,
+                Manifest.permission.READ_MEDIA_VIDEO
+            }
+        ),
+        @Permission(
+            alias = "mediaLegacy",
+            strings = {
                 Manifest.permission.READ_EXTERNAL_STORAGE
             }
         )
@@ -439,22 +450,30 @@ public class GhostiMobileCarePlugin extends Plugin {
                 } else if (!name.isEmpty()) {
                     requestedIds.put(name);
                 }
-                Long pickerMediaId = extractNumericMediaStoreIdFromFileName(name);
+                Long pickerMediaId = extractNumericMediaStoreIdFromFileName(id);
+                if (pickerMediaId == null) {
+                    pickerMediaId = extractNumericMediaStoreIdFromFileName(name);
+                }
                 if (pickerMediaId == null) {
                     needsMediaQuery = true;
                 }
             }
 
             if (needsMediaQuery && !hasMediaReadPermission(ctx) && !permissionAlreadyRequested) {
-                requestPermissionForAlias("mediaImages", call, "onMediaImagesPermissionForTrash");
+                String alias = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ? "mediaModern" : "mediaLegacy";
+                requestPermissionForAlias(alias, call, "onMediaImagesPermissionForTrash");
                 return;
             }
 
             Set<Long> seenMediaIds = new LinkedHashSet<>();
             for (JSONObject obj : rawList) {
+                String id = obj.optString("id", "");
                 String name = obj.optString("name", "");
                 long size = obj.optLong("size", -1L);
-                Long mediaId = queryMediaStoreIdForPhoto(resolver, name, size, !isMoveToTrash);
+                Long mediaId = extractNumericMediaStoreIdFromFileName(id);
+                if (mediaId == null) {
+                    mediaId = queryMediaStoreIdForPhoto(resolver, name, size, !isMoveToTrash);
+                }
                 if (mediaId == null) {
                     mediaId = extractNumericMediaStoreIdFromFileName(name);
                 }
@@ -519,14 +538,268 @@ public class GhostiMobileCarePlugin extends Plugin {
     }
 
     private boolean hasMediaReadPermission(Context ctx) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.UPSIDE_DOWN_CAKE) {
+            return ctx.checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED
+                || ctx.checkSelfPermission(Manifest.permission.READ_MEDIA_VISUAL_USER_SELECTED) == PackageManager.PERMISSION_GRANTED;
+        }
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             return ctx.checkSelfPermission(Manifest.permission.READ_MEDIA_IMAGES) == PackageManager.PERMISSION_GRANTED;
         }
         return ctx.checkSelfPermission(Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED;
     }
 
+    @PluginMethod
+    public void openAppPermissionSettings(PluginCall call) {
+        Context context = getContext();
+        try {
+            Intent detailsIntent = new Intent(
+                Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                Uri.parse("package:" + context.getPackageName())
+            );
+            detailsIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+            context.startActivity(detailsIntent);
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            call.resolve(ret);
+        } catch (Exception e) {
+            call.reject("OPEN_PERMISSION_SETTINGS_FAILED: " + e.getMessage());
+        }
+    }
+
+    @PluginMethod
+    public void scanDeviceGalleryMedia(PluginCall call) {
+        Context ctx = getContext();
+        boolean promptPerm = call.getBoolean("promptPermission", true);
+        if (!hasMediaReadPermission(ctx)) {
+            if (promptPerm) {
+                String alias = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ? "mediaModern" : "mediaLegacy";
+                requestPermissionForAlias(alias, call, "onMediaPermissionForGalleryScan");
+                return;
+            }
+            JSObject ret = new JSObject();
+            ret.put("ok", false);
+            ret.put("permissionGranted", false);
+            ret.put("photos", new JSArray());
+            ret.put("videos", new JSArray());
+            ret.put("totalPhotoCount", 0);
+            call.resolve(ret);
+            return;
+        }
+        executeGalleryMediaScanAsync(call);
+    }
+
+    @PermissionCallback
+    private void onMediaPermissionForGalleryScan(PluginCall call) {
+        Context ctx = getContext();
+        if (!hasMediaReadPermission(ctx)) {
+            JSObject ret = new JSObject();
+            ret.put("ok", false);
+            ret.put("permissionGranted", false);
+            ret.put("photos", new JSArray());
+            ret.put("videos", new JSArray());
+            ret.put("totalPhotoCount", 0);
+            call.resolve(ret);
+            return;
+        }
+        executeGalleryMediaScanAsync(call);
+    }
+
+    private void executeGalleryMediaScanAsync(final PluginCall call) {
+        final int offset = Math.max(0, call.getInt("offset", 0));
+        final int limit = Math.min(120, Math.max(1, call.getInt("limit", 60)));
+        final int thumbMaxDim = Math.min(640, Math.max(240, call.getInt("thumbMaxDim", 448)));
+        final boolean includeVideos = call.getBoolean("includeVideos", offset == 0);
+        final Context appCtx = getContext().getApplicationContext();
+
+        new Thread(() -> {
+            ContentResolver resolver = appCtx.getContentResolver();
+            JSArray photosArr = new JSArray();
+            JSArray videosArr = new JSArray();
+            int totalPhotoCount = 0;
+
+            try {
+                // 1) 전체 이미지 개수 확인
+                String[] countProj = new String[] { MediaStore.Images.Media._ID };
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                    Bundle cArgs = new Bundle();
+                    cArgs.putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_EXCLUDE);
+                    try (Cursor cc = resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, countProj, cArgs, null)) {
+                        if (cc != null) totalPhotoCount = cc.getCount();
+                    }
+                } else {
+                    try (Cursor cc = resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, countProj, null, null, null)) {
+                        if (cc != null) totalPhotoCount = cc.getCount();
+                    }
+                }
+
+                // 2) 페이지네이션된 최근 사진 슬라이스 조회 + 경량 JPEG 썸네일 추출
+                String[] imgProj = new String[] {
+                    MediaStore.Images.Media._ID,
+                    MediaStore.Images.Media.DISPLAY_NAME,
+                    MediaStore.Images.Media.SIZE,
+                    MediaStore.Images.Media.DATE_TAKEN,
+                    MediaStore.Images.Media.DATE_MODIFIED,
+                    MediaStore.Images.Media.WIDTH,
+                    MediaStore.Images.Media.HEIGHT,
+                    MediaStore.Images.Media.BUCKET_DISPLAY_NAME
+                };
+
+                Cursor imgCursor = null;
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                        Bundle qArgs = new Bundle();
+                        qArgs.putStringArray(ContentResolver.QUERY_ARG_SORT_COLUMNS, new String[] { MediaStore.Images.Media.DATE_MODIFIED });
+                        qArgs.putInt(ContentResolver.QUERY_ARG_SORT_DIRECTION, ContentResolver.QUERY_SORT_DIRECTION_DESCENDING);
+                        qArgs.putInt(ContentResolver.QUERY_ARG_LIMIT, limit);
+                        qArgs.putInt(ContentResolver.QUERY_ARG_OFFSET, offset);
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                            qArgs.putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_EXCLUDE);
+                        }
+                        imgCursor = resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, imgProj, qArgs, null);
+                    } else {
+                        String sortOrder = MediaStore.Images.Media.DATE_MODIFIED + " DESC";
+                        imgCursor = resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, imgProj, null, null, sortOrder);
+                        if (imgCursor != null && offset > 0) {
+                            imgCursor.moveToPosition(offset - 1);
+                        }
+                    }
+
+                    int fetched = 0;
+                    while (imgCursor != null && imgCursor.moveToNext() && fetched < limit) {
+                        fetched++;
+                        long id = imgCursor.getLong(0);
+                        String name = imgCursor.getString(1);
+                        long size = imgCursor.getLong(2);
+                        long dateTaken = imgCursor.getLong(3);
+                        long dateModSec = imgCursor.getLong(4);
+                        int width = imgCursor.getInt(5);
+                        int height = imgCursor.getInt(6);
+                        String bucket = imgCursor.getString(7);
+
+                        long mtimeMs = dateTaken > 100000000000L ? dateTaken : (dateModSec * 1000L);
+                        Uri imgUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
+                        String thumbDataUrl = encodeThumbnailDataUrl(resolver, imgUri, id, false, thumbMaxDim, 78);
+                        if (thumbDataUrl == null || thumbDataUrl.isEmpty()) continue;
+
+                        boolean isScreen = (bucket != null && (bucket.toLowerCase(Locale.ROOT).contains("screenshot") || bucket.contains("스크린샷") || bucket.contains("캡처")))
+                            || (name != null && (name.toLowerCase(Locale.ROOT).contains("screenshot") || name.contains("스크린샷")));
+
+                        JSObject pObj = new JSObject();
+                        pObj.put("id", "ms_img_" + id);
+                        pObj.put("name", (name != null && !name.isEmpty()) ? name : ("IMG_" + id + ".jpg"));
+                        pObj.put("size", size);
+                        pObj.put("mtimeMs", mtimeMs);
+                        pObj.put("width", width);
+                        pObj.put("height", height);
+                        pObj.put("bucket", bucket != null ? bucket : "");
+                        pObj.put("isScreenshot", isScreen);
+                        pObj.put("thumbDataUrl", thumbDataUrl);
+                        photosArr.put(pObj);
+                    }
+                } finally {
+                    if (imgCursor != null) imgCursor.close();
+                }
+
+                // 3) 첫 페이지(offset == 0) 호출 시 최근 동영상 최대 20개 자동 조회
+                if (includeVideos) {
+                    String[] vidProj = new String[] {
+                        MediaStore.Video.Media._ID,
+                        MediaStore.Video.Media.DISPLAY_NAME,
+                        MediaStore.Video.Media.SIZE,
+                        MediaStore.Video.Media.DURATION,
+                        MediaStore.Video.Media.DATE_MODIFIED,
+                        MediaStore.Video.Media.BUCKET_DISPLAY_NAME
+                    };
+                    Cursor vidCursor = null;
+                    try {
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            Bundle vArgs = new Bundle();
+                            vArgs.putStringArray(ContentResolver.QUERY_ARG_SORT_COLUMNS, new String[] { MediaStore.Video.Media.DATE_MODIFIED });
+                            vArgs.putInt(ContentResolver.QUERY_ARG_SORT_DIRECTION, ContentResolver.QUERY_SORT_DIRECTION_DESCENDING);
+                            vArgs.putInt(ContentResolver.QUERY_ARG_LIMIT, 20);
+                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                                vArgs.putInt(MediaStore.QUERY_ARG_MATCH_TRASHED, MediaStore.MATCH_EXCLUDE);
+                            }
+                            vidCursor = resolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, vidProj, vArgs, null);
+                        } else {
+                            vidCursor = resolver.query(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, vidProj, null, null, MediaStore.Video.Media.DATE_MODIFIED + " DESC");
+                        }
+                        int vCount = 0;
+                        while (vidCursor != null && vidCursor.moveToNext() && vCount < 20) {
+                            vCount++;
+                            long vid = vidCursor.getLong(0);
+                            String vName = vidCursor.getString(1);
+                            long vSize = vidCursor.getLong(2);
+                            long durationMs = vidCursor.getLong(3);
+                            long vModSec = vidCursor.getLong(4);
+                            String vBucket = vidCursor.getString(5);
+
+                            Uri vUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, vid);
+                            String vThumb = encodeThumbnailDataUrl(resolver, vUri, vid, true, 480, 76);
+
+                            JSObject vObj = new JSObject();
+                            vObj.put("id", "mobile_vid_" + vid);
+                            vObj.put("name", (vName != null && !vName.isEmpty()) ? vName : ("VID_" + vid + ".mp4"));
+                            vObj.put("size", vSize);
+                            vObj.put("durationSec", Math.max(1, Math.round(durationMs / 1000.0f)));
+                            vObj.put("mtimeMs", vModSec * 1000L);
+                            vObj.put("bucket", vBucket != null ? vBucket : "");
+                            vObj.put("thumbDataUrl", vThumb != null ? vThumb : "");
+                            videosArr.put(vObj);
+                        }
+                    } finally {
+                        if (vidCursor != null) vidCursor.close();
+                    }
+                }
+            } catch (Throwable ignored) {
+            }
+
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("permissionGranted", true);
+            ret.put("offset", offset);
+            ret.put("totalPhotoCount", totalPhotoCount);
+            ret.put("photos", photosArr);
+            ret.put("videos", videosArr);
+            call.resolve(ret);
+        }, "GhostiGalleryScanner").start();
+    }
+
+    private String encodeThumbnailDataUrl(ContentResolver resolver, Uri uri, long mediaId, boolean isVideo, int maxDim, int quality) {
+        Bitmap bmp = null;
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                bmp = resolver.loadThumbnail(uri, new Size(maxDim, maxDim), null);
+            } else if (isVideo) {
+                bmp = MediaStore.Video.Thumbnails.getThumbnail(resolver, mediaId, MediaStore.Video.Thumbnails.MINI_KIND, null);
+            } else {
+                bmp = MediaStore.Images.Thumbnails.getThumbnail(resolver, mediaId, MediaStore.Images.Thumbnails.MINI_KIND, null);
+            }
+            if (bmp == null) return "";
+            ByteArrayOutputStream baos = new ByteArrayOutputStream(24576);
+            bmp.compress(Bitmap.CompressFormat.JPEG, quality, baos);
+            return "data:image/jpeg;base64," + Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
+        } catch (Throwable ignored) {
+            return "";
+        } finally {
+            if (bmp != null && !bmp.isRecycled()) {
+                try {
+                    bmp.recycle();
+                } catch (Throwable ignored) {
+                }
+            }
+        }
+    }
+
     private Long extractNumericMediaStoreIdFromFileName(String fileName) {
         if (fileName == null || fileName.isEmpty()) return null;
+        if (fileName.startsWith("ms_img_")) {
+            try {
+                return Long.parseLong(fileName.substring(7));
+            } catch (NumberFormatException ignored) {
+                return null;
+            }
+        }
         int dot = fileName.lastIndexOf('.');
         String stem = (dot > 0) ? fileName.substring(0, dot) : fileName;
         // Android PhotoPicker 파일명 패턴: "1000008588.jpg" 또는 "msf:1000008588"

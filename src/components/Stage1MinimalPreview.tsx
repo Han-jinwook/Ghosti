@@ -21,6 +21,10 @@ import {
   Z_CORE_ZIP_URL,
 } from '../services/zCoreBridge';
 import { SilentIndexingStatusBar } from './SilentIndexingStatusBar';
+import {
+  isCapacitorNativeMobileRuntime,
+  openNativeAppPermissionSettings,
+} from '../services/ghostiMobileCareBridge';
 import { VoiceActorControlPill } from './VoiceActorControlPill';
 import { isMobileVoiceEnvironment, unlockMobileAudioOnUserGesture } from '../services/setupMonsterTts';
 import {
@@ -942,30 +946,23 @@ export const Stage1MinimalSearchPreview: React.FC<{
               <SilentIndexingStatusBar variant="search-bar" className="mt-1" />
             ) : isMobile || isStoreAppMode ? (
               <div className="w-full px-4 py-2.5 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex flex-wrap items-center justify-between gap-3 mt-0.5 shadow-sm">
-                <input
-                  ref={mobilePhotoInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files.length > 0) {
-                      void importMobileLocalPhotos(e.target.files);
-                      e.target.value = '';
-                    }
-                  }}
-                />
                 <span className="text-[12.5px] font-extrabold text-slate-900 dark:text-white">
-                  📱 내 스마트폰 갤러리 사진을 불러와 선명도·중복·영수증을 1초 만에 정리·검색해 보세요!
+                  📱 스토어 정식 앱을 실행하시면 수동 불러오기 없이 내 스마트폰 사진·영상이 자동으로 정리·검색됩니다!
                 </span>
                 <div className="flex items-center gap-2 shrink-0">
-                  <button
-                    type="button"
-                    onClick={() => mobilePhotoInputRef.current?.click()}
-                    className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs whitespace-nowrap transition-all cursor-pointer shrink-0"
-                  >
-                    📱 내 폰 사진 불러오기
-                  </button>
+                  {isCapacitorNativeMobileRuntime() && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        void useSaySeeStore
+                          .getState()
+                          .syncMobileNativeGalleryAuto({ promptPermission: true })
+                      }
+                      className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs whitespace-nowrap transition-all cursor-pointer shrink-0"
+                    >
+                      🔄 사진첩 자동 동기화
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => requestConnectMyComputer()}
@@ -1487,12 +1484,13 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     setSearchSpace,
     runTextQuery,
     isStoreAppMode,
-    importMobileLocalPhotos,
+    mobileGalleryScanning,
+    mobileGalleryPermissionDenied,
+    syncMobileNativeGalleryAuto,
     pendingReturnShareRoom,
     returnToSharedRoomAndOpenUpload,
   } = useSaySeeStore();
 
-  const trashMobilePhotoInputRef = React.useRef<HTMLInputElement | null>(null);
   const [externalQueryTrigger] = useState<{
     id: number;
     query: string;
@@ -1520,7 +1518,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
 
   React.useEffect(() => {
     const onTriggerMobilePicker = () => {
-      trashMobilePhotoInputRef.current?.click();
+      void useSaySeeStore.getState().syncMobileNativeGalleryAuto({ promptPermission: true });
     };
     const onOpenMobileQuarantine = () => {
       setShowQuarantineDrawer(true);
@@ -1716,26 +1714,18 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   )}
                 </p>
 
-                <input
-                  ref={trashMobilePhotoInputRef}
-                  type="file"
-                  accept="image/*"
-                  multiple
-                  className="hidden"
-                  onChange={(e) => {
-                    if (e.target.files && e.target.files.length > 0) {
-                      void importMobileLocalPhotos(e.target.files);
-                      e.target.value = '';
-                    }
-                  }}
-                />
-                {(isStoreAppMode || layout === 'mobile') && (
+                {isCapacitorNativeMobileRuntime() && mobileGalleryScanning && (
+                  <span className="px-3 py-1.5 rounded-xl bg-teal-500/15 border border-teal-400/40 text-teal-600 dark:text-teal-300 font-label-sm text-[11.5px] font-extrabold whitespace-nowrap">
+                    🔄 내 폰 사진·영상 자동 인덱싱 중...
+                  </span>
+                )}
+                {isCapacitorNativeMobileRuntime() && mobileGalleryPermissionDenied && (
                   <button
                     type="button"
-                    onClick={() => trashMobilePhotoInputRef.current?.click()}
-                    className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-label-sm text-[11.5px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
+                    onClick={() => void openNativeAppPermissionSettings()}
+                    className="px-3 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
                   >
-                    📱 내 폰 사진 불러와 정리하기
+                    ⚙️ 사진 접근 권한 허용하기
                   </button>
                 )}
               </div>
@@ -1823,7 +1813,13 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 displayPhotos.length === 0 &&
                 quarantinedPhotos.length === 0 ? (
                 <span className="text-teal-600 dark:text-teal-300">
-                  📱 아직 불러온 내 폰 사진이 없어요 — 위 [📱 내 폰 사진 불러와 정리하기]를 눌러 중복·연사·흔들린 사진을 1초 만에 골라보세요!
+                  {mobileGalleryScanning
+                    ? '🔄 내 폰 사진첩을 자동으로 훑어 중복·연사·흔들린 사진을 분석하고 있어요...'
+                    : mobileGalleryPermissionDenied
+                    ? '🔒 스마트폰 사진 접근 권한을 허용해 주시면 수동 불러오기 없이 자동으로 정리·검색이 시작돼요!'
+                    : isCapacitorNativeMobileRuntime()
+                    ? '✨ 내 폰 사진첩에 표시할 사진이 아직 0장이에요.'
+                    : '📲 스토어에서 『귀신같이』 정식 앱을 실행하시면 수동 불러오기 없이 내 폰 사진·영상이 자동으로 인덱싱돼요!'}
                 </span>
               ) : (
                 <span className="text-primary-container">
@@ -2306,18 +2302,28 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   </span>
                   <span className="font-body-sm text-[12.5px] sm:text-[13px] text-zinc-400 break-keep">
                     {displayPhotos.length === 0 && (isStoreAppMode || layout === 'mobile')
-                      ? '아래 버튼을 눌러 내 폰 사진을 골라주시면 중복·연사 세트와 흐린 사진을 외부 전송 0%로 1초 만에 찾아 보여드려요!'
+                      ? mobileGalleryScanning
+                        ? '내 폰 사진첩을 자동으로 인덱싱하고 있어요. 잠시만 기다려 주세요!'
+                        : mobileGalleryPermissionDenied
+                        ? '스마트폰 사진 접근 권한을 허용해 주시면 중복·연사 세트와 흐린 사진을 자동으로 골라 보여드려요!'
+                        : '버릴 중복·연사 사진 없이 현재 아주 깨끗한 상태입니다.'
                       : '버릴 중복·연사 사진 없이 현재 아주 깨끗한 상태입니다.'}
                   </span>
-                  {displayPhotos.length === 0 && (isStoreAppMode || layout === 'mobile') && (
-                    <button
-                      type="button"
-                      onClick={() => trashMobilePhotoInputRef.current?.click()}
-                      className="mt-1 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[12.5px] font-extrabold shadow-sm cursor-pointer"
-                    >
-                      📱 내 폰 사진 불러와 정리하기
-                    </button>
-                  )}
+                  {displayPhotos.length === 0 &&
+                    isCapacitorNativeMobileRuntime() &&
+                    !mobileGalleryScanning && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          mobileGalleryPermissionDenied
+                            ? void openNativeAppPermissionSettings()
+                            : void syncMobileNativeGalleryAuto({ promptPermission: true })
+                        }
+                        className="mt-1 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[12.5px] font-extrabold shadow-sm cursor-pointer"
+                      >
+                        {mobileGalleryPermissionDenied ? '⚙️ 사진 접근 권한 허용하기' : '🔄 사진첩 자동 동기화 확인'}
+                      </button>
+                    )}
                   {skippedGroupIds.size > 0 && (
                     <button
                       type="button"
@@ -2493,18 +2499,28 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   </span>
                   <span className="font-body-sm text-[12.5px] sm:text-[13px] text-zinc-400 break-keep">
                     {displayPhotos.length === 0 && (isStoreAppMode || layout === 'mobile')
-                      ? '아래 버튼을 눌러 내 폰 사진을 골라주시면 메모·영수증·캡처·흐린 사진을 외부 전송 0%로 1초 만에 분류해 보여드려요!'
+                      ? mobileGalleryScanning
+                        ? '내 폰 사진첩을 자동으로 인덱싱하고 있어요. 잠시만 기다려 주세요!'
+                        : mobileGalleryPermissionDenied
+                        ? '스마트폰 사진 접근 권한을 허용해 주시면 메모·영수증·캡처·흐린 사진을 자동으로 분류해 보여드려요!'
+                        : '버릴 사진 없이 현재 아주 깨끗한 상태입니다.'
                       : '버릴 사진 없이 현재 아주 깨끗한 상태입니다.'}
                   </span>
-                  {displayPhotos.length === 0 && (isStoreAppMode || layout === 'mobile') && (
-                    <button
-                      type="button"
-                      onClick={() => trashMobilePhotoInputRef.current?.click()}
-                      className="mt-1 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[12.5px] font-extrabold shadow-sm cursor-pointer"
-                    >
-                      📱 내 폰 사진 불러와 정리하기
-                    </button>
-                  )}
+                  {displayPhotos.length === 0 &&
+                    isCapacitorNativeMobileRuntime() &&
+                    !mobileGalleryScanning && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          mobileGalleryPermissionDenied
+                            ? void openNativeAppPermissionSettings()
+                            : void syncMobileNativeGalleryAuto({ promptPermission: true })
+                        }
+                        className="mt-1 px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[12.5px] font-extrabold shadow-sm cursor-pointer"
+                      >
+                        {mobileGalleryPermissionDenied ? '⚙️ 사진 접근 권한 허용하기' : '🔄 사진첩 자동 동기화 확인'}
+                      </button>
+                    )}
                 </div>
               )}
             </section>

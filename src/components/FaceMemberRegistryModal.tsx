@@ -1347,7 +1347,7 @@ export const PassportDoorplateStyleModal: React.FC = () => {
                   }}
                   className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[12px] font-extrabold cursor-pointer"
                 >
-                  {isMobileEnv ? '📱 내 폰 사진 불러오기' : '⚡ 내 컴퓨터 연결 안내'}
+                  {isMobileEnv ? '🔄 사진첩 자동 동기화' : '⚡ 내 컴퓨터 연결 안내'}
                 </button>
               </div>
             </div>

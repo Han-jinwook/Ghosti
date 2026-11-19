@@ -790,13 +790,14 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     }
 
     if (
-      /^(📱\s*)?(내\s*폰\s*사진\s*불러와|폰\s*사진\s*불러와|사진\s*불러와\s*(?:1분\s*)?정리|폰\s*사진\s*정리\s*시작)/i.test(
+      /^(📱\s*)?(내\s*폰\s*사진\s*(?:불러와|자동\s*점검)|폰\s*사진\s*(?:불러와|자동\s*점검)|사진\s*(?:불러와\s*)?(?:1분\s*)?정리|폰\s*사진\s*정리\s*시작)/i.test(
         raw
       )
     ) {
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('ghosti_trigger_mobile_photo_picker'));
-      }
+      void useSaySeeStore.getState().syncMobileNativeGalleryAuto({ promptPermission: true });
+      const curPhotos = useSaySeeStore.getState().photos.filter((p) => !p.quarantined);
+      const curDups = useSaySeeStore.getState().duplicateGroups.length;
+      const curBlurry = curPhotos.filter((p) => p.trashCategory === 'blurry').length;
       setSharedMonsterMessages((prev) => [
         ...prev,
         {
@@ -805,8 +806,9 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           timestamp: nowTimeKo(),
           sourceTab,
           text:
-            '좋아요! 내 폰 사진 선택 창을 열어드렸어요 📸✨\n' +
-            '정리해 보고 싶은 사진들(중복·연사·영수증·캡처 등)을 편하게 골라주시면, **외부 서버 전송 0%**로 내 폰 안에서 1초 만에 분류해 드릴게요! (실제 폰 갤러리 원본은 절대 임의 삭제되지 않으니 안심하세요!)',
+            curPhotos.length > 0
+              ? `지금 내 폰 사진 **${curPhotos.length}장** 자동 인덱싱이 완료되어 있어요! 📸✨\n(중복·연사 **${curDups}세트** · 흔들린 사진 **${curBlurry}장** — 바로 아래 정리 탭에서 눈으로 확인하고 **[OK]**만 눌러주시면 안전하게 정리해 드릴게요!)`
+              : '내 스마트폰 사진첩 자동 인덱싱을 확인하고 있어요 📸✨\n사진 접근 권한만 허용해 주시면 수동으로 불러올 필요 없이 **외부 서버 전송 0%**로 내 폰 안에서 자동 분류·검색됩니다!',
         },
       ]);
       setSharedMonsterBusy(false);
@@ -832,10 +834,10 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           text:
             mobileQuarantined.length > 0
               ? `🕰️ 지금 앱 내 정리 보관함에 **${mobileQuarantined.length}장**의 사진이 안전하게 보관되어 있어요!\n아래 펼쳐드린 **[↩️ 정리한 사진 복원 (${mobileQuarantined.length}장)]** 목록에서 언제든 1초 만에 원래대로 되돌리실 수 있어요 👻✨`
-              : '🕰️ 아직 모바일 정리 보관함으로 옮긴 사진이 **0장**이에요!\n아래에서 **[📱 내 폰 사진 불러와 정리하기]**로 중복·흐린 사진을 골라 정리하시면, 언제든 1초 만에 원래대로 되돌리실 수 있어요 👻✨',
+              : '🕰️ 아직 정리 보관함으로 옮긴 사진이 **0장**이에요!\n아래 사진 정리 탭에서 중복·흐린 사진을 확인 후 **[OK]**로 정리하시면 언제든 1초 만에 되돌리실 수 있어요 👻✨',
           followUpSuggestions:
             mobileQuarantined.length === 0
-              ? ['📱 내 폰 사진 불러와 1분 정리 시작할래']
+              ? ['📱 내 폰 사진 자동 점검 결과 볼래']
               : undefined,
         },
       ]);
@@ -1106,7 +1108,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             text: reading.text,
             followUpSuggestions: isMobileReading
               ? [
-                  '📱 내 폰 사진 불러와 1분 정리 시작할래',
+                  '📱 내 폰 사진 자동 점검 결과 볼래',
                   '🔍 맨 위 검색창으로 바로 찾아볼래',
                 ]
               : needsEngineRite
@@ -1591,7 +1593,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         </span>
       </div>
 
-      {/* 1. 상단 원클릭 바로가기 바: PC는 [🕰️ 복원 기록]+[🏠 체험관], 모바일은 [📱 폰 사진 불러오기] & 성우 토글 (여권은 설정방 내부 보관으로 외부 비노출) */}
+      {/* 1. 상단 원클릭 바로가기 바: PC는 [🕰️ 복원 기록]+[🏠 체험관], 모바일은 수동 불러오기 없이 성우 토글만 깔끔 배치 */}
       <div className="px-3 py-2 bg-white/90 dark:bg-[#10212B] border-b border-teal-600/20 dark:border-teal-400/20 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 text-[12px] text-emerald-950 dark:text-emerald-200">
         <div className="flex items-center gap-1 min-w-0">
           <span className="shrink-0 font-bold">🛡️</span>
@@ -1600,21 +1602,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 max-w-full min-w-0">
-          {isMobileOrStore && !isZCoreLive ? (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() =>
-                window.dispatchEvent(new CustomEvent('ghosti_trigger_mobile_photo_picker'))
-              }
-              title="내 폰 사진을 불러와 중복·연사·흐린 사진을 안전하게 골라냅니다"
-              style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
-              className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
-            >
-              <span>📱</span>
-              <span>폰 사진 불러오기</span>
-            </button>
-          ) : (
+          {!(isMobileOrStore && !isZCoreLive) && (
             <button
               type="button"
               disabled={busy}

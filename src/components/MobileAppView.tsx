@@ -5,12 +5,11 @@ import { GhostiTopRightHubAnchor } from './GhostiHubInfraBridge';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
-import type { FamilyRoomId, GpuHelperTierId, LoungeType, VideoSceneItem } from '../types/saysee';
+import type { FamilyRoomId, GpuHelperTierId, LoungeType } from '../types/saysee';
 import {
   cleanVideoTimestampLabel,
   groupBurstSearchResults,
   resolveVideoCardThumbUrl,
-  startSilentRealMediaVisionIndexing,
 } from '../services/aiEngine';
 import { executeRealOsAction } from '../services/setupMonsterEngine';
 import { VoiceHeroStage } from './VoiceHeroStage';
@@ -326,165 +325,6 @@ export const MobileAppView: React.FC = () => {
 
   const currentSubmenus = MOBILE_LOUNGE_SUBMENUS[activeLoungeType] || MOBILE_LOUNGE_SUBMENUS.personal;
   const isCurrentLoungeSubscribed = Boolean(subscribedLounges[activeLoungeType]);
-
-  const handleImportMobileVideos = async (fileList: FileList) => {
-    const files = Array.from(fileList).filter(
-      (f) => f.type.startsWith('video/') || /\.(mp4|mov|webm|mkv|m4v)$/i.test(f.name)
-    );
-    if (files.length === 0) return;
-
-    const probeVideoMeta = (blobUrl: string) =>
-      new Promise<{ durationSec: number; width: number; height: number; thumbDataUrl: string }>(
-        (resolve) => {
-          const v = document.createElement('video');
-          v.preload = 'auto';
-          v.muted = true;
-          v.playsInline = true;
-          let settled = false;
-          const finish = (res: {
-            durationSec: number;
-            width: number;
-            height: number;
-            thumbDataUrl: string;
-          }) => {
-            if (settled) return;
-            settled = true;
-            clearTimeout(timer);
-            try {
-              v.removeAttribute('src');
-              v.load();
-            } catch {
-              /* ignore */
-            }
-            resolve(res);
-          };
-          const timer = window.setTimeout(() => {
-            finish({ durationSec: 15, width: 1080, height: 1920, thumbDataUrl: '' });
-          }, 2500);
-          v.onloadeddata = () => {
-            const dur =
-              Number.isFinite(v.duration) && v.duration > 0 ? Math.max(1, Math.round(v.duration)) : 15;
-            const w = v.videoWidth || 1080;
-            const h = v.videoHeight || 1920;
-            const seekTo = Math.min(0.6, Math.max(0, (v.duration || 1) * 0.15));
-            const captureNow = () => {
-              let thumb = '';
-              try {
-                const scale = Math.min(1, 540 / Math.max(w, h));
-                const cw = Math.max(64, Math.round(w * scale));
-                const ch = Math.max(64, Math.round(h * scale));
-                const c = document.createElement('canvas');
-                c.width = cw;
-                c.height = ch;
-                const ctx = c.getContext('2d');
-                if (ctx) {
-                  ctx.drawImage(v, 0, 0, cw, ch);
-                  thumb = c.toDataURL('image/jpeg', 0.82);
-                }
-              } catch {
-                /* ignore */
-              }
-              finish({ durationSec: dur, width: w, height: h, thumbDataUrl: thumb });
-            };
-            if (seekTo > 0.05) {
-              v.onseeked = captureNow;
-              try {
-                v.currentTime = seekTo;
-              } catch {
-                captureNow();
-              }
-            } else {
-              captureNow();
-            }
-          };
-          v.onerror = () => finish({ durationSec: 15, width: 1080, height: 1920, thumbDataUrl: '' });
-          v.src = blobUrl;
-        }
-      );
-
-    const newItems: VideoSceneItem[] = [];
-    for (const f of files) {
-      const blobUrl = URL.createObjectURL(f);
-      const meta = await probeVideoMeta(blobUrl);
-      const mm = String(Math.floor(meta.durationSec / 60)).padStart(2, '0');
-      const ss = String(meta.durationSec % 60).padStart(2, '0');
-      const durTxt = `${mm}:${ss}`;
-      const baseTitle = f.name.replace(/\.[^.]+$/, '');
-      const dateStr = new Date(f.lastModified || Date.now()).toLocaleString('ko-KR', {
-        year: 'numeric',
-        month: '2-digit',
-        day: '2-digit',
-        hour: '2-digit',
-        minute: '2-digit',
-      });
-      newItems.push({
-        id: `mobile_vid_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`,
-        videoFileName: f.name,
-        title: baseTitle,
-        keyframePhotoId: f.name,
-        thumbUrl: meta.thumbDataUrl,
-        videoUrl: blobUrl,
-        date: dateStr,
-        durationText: durTxt,
-        durationSec: meta.durationSec,
-        matchedSeekSec: 0,
-        matchedTimestamp: '00:00',
-        matchedFrameCaption: `내 스마트폰에서 불러온 동영상 (${f.name})`,
-        locationKo: '📱 내 스마트폰 갤러리',
-        sceneDescription:
-          '내 스마트폰 동영상입니다. 카드를 터치하면 재생과 함께 영상 속 자막·칠판 글자가 하단에 즉시 표시됩니다.',
-        keywords: [baseTitle, f.name, '내폰', '스마트폰', '동영상'],
-        resolution: `${meta.width}x${meta.height} (내 스마트폰 동영상)`,
-        sizeMB: Math.max(0.1, Number((f.size / 1048576).toFixed(1))),
-        timelineFrames: [
-          {
-            frameId: `mf_${Date.now()}_0`,
-            timeSec: 0,
-            timestampText: '00:00',
-            phaseLabel: '시작 구간',
-            sceneCaption: `${baseTitle} 시작 장면`,
-            keywords: [baseTitle],
-            tags: ['#내폰동영상'],
-            thumbUrl: meta.thumbDataUrl,
-          },
-        ],
-      });
-    }
-
-    const curAll = useSaySeeStore.getState().videoSceneItems;
-    const nextAll = [...newItems, ...curAll];
-    useSaySeeStore.setState({
-      videoSceneItems: nextAll,
-      matchedVideoScenes: nextAll,
-      searchSpace: 'video',
-      hasUserSelectedSearchTab: true,
-      lastQuarantineToast: `🎬 내 폰 동영상 ${newItems.length}개가 인덱싱되었습니다! 카드를 누르면 재생과 함께 추출된 글자가 하단에 바로 표시됩니다.`,
-    });
-    void startSilentRealMediaVisionIndexing({
-      photos: useSaySeeStore.getState().photos,
-      videos: nextAll,
-      onVideoThumbHydrated: (videoFileName, thumbUrl) => {
-        useSaySeeStore.setState((st) => ({
-          videoSceneItems: st.videoSceneItems.map((v) =>
-            v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
-          ),
-          matchedVideoScenes: st.matchedVideoScenes.map((v) =>
-            v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
-          ),
-        }));
-      },
-      onVideoOcrHydrated: (videoFileName, ocrMeta) => {
-        useSaySeeStore.setState((st) => ({
-          videoSceneItems: st.videoSceneItems.map((v) =>
-            v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
-          ),
-          matchedVideoScenes: st.matchedVideoScenes.map((v) =>
-            v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
-          ),
-        }));
-      },
-    });
-  };
 
   return (
     <div
@@ -1026,28 +866,9 @@ export const MobileAppView: React.FC = () => {
                   <span className="font-headline-sm text-[14.5px] text-white font-bold">
                     {hasExecutedUserSearch && activeQuery
                       ? `🎬 “${activeQuery}” 장면 검색 결과 (${matchedVideoScenes.length}개)`
-                      : zCoreBridge.isConnected
-                      ? `🎬 전체 동영상 (${matchedVideoScenes.length}개)`
-                      : `🎬 동영상 (${matchedVideoScenes.length}개 · 체험 샘플 포함)`}
+                      : `🎬 전체 동영상 (${matchedVideoScenes.length}개)`}
                   </span>
                   <div className="flex items-center gap-1.5">
-                    {!zCoreBridge.isConnected && (
-                      <label className="px-2.5 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/50 text-teal-200 font-label-sm text-[11px] font-extrabold cursor-pointer">
-                        📱 내 폰 영상 열기
-                        <input
-                          type="file"
-                          accept="video/*"
-                          multiple
-                          className="hidden"
-                          onChange={(e) => {
-                            if (e.target.files && e.target.files.length > 0) {
-                              void handleImportMobileVideos(e.target.files);
-                              e.target.value = '';
-                            }
-                          }}
-                        />
-                      </label>
-                    )}
                     {matchedVideoScenes.length < videoSceneItems.length && (
                       <button
                         onClick={() => resetSearchSpaceToAll('video')}

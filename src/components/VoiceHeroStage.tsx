@@ -45,7 +45,7 @@ export const VoiceHeroStage: React.FC = () => {
     runTextQuery,
     runBriefingHintChip,
     openLocalFolder,
-    importMobileLocalPhotos,
+    syncMobileNativeGalleryAuto,
     isStoreAppMode,
   } = useSaySeeStore();
 
@@ -55,7 +55,6 @@ export const VoiceHeroStage: React.FC = () => {
     const sp = new URLSearchParams(window.location.search);
     return sp.get('ghostSearchWindow') ? sp.get('q') || '' : '';
   });
-  const mobilePhotoInputRef = React.useRef<HTMLInputElement | null>(null);
   const [isZCoreConnected, setIsZCoreConnected] = useState(zCoreBridge.isConnected);
 
   useEffect(() => {
@@ -437,31 +436,18 @@ export const VoiceHeroStage: React.FC = () => {
           activeLoungeType === 'work' ||
           (isMobile && activeLoungeType === 'personal') ? null : isMobile || isStoreAppMode ? (
           <div className="w-full px-4 py-2.5 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex flex-wrap items-center justify-between gap-3 mt-0.5 shadow-sm">
-            <input
-              ref={mobilePhotoInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files && e.target.files.length > 0) {
-                  void importMobileLocalPhotos(e.target.files);
-                  e.target.value = '';
-                }
-              }}
-            />
             <div className="flex items-center gap-2 text-[12.5px] font-extrabold text-slate-900 dark:text-white">
               <span>
-                📱 내 스마트폰 갤러리 사진을 불러와 선명도·중복·영수증을 1초 만에 정리·검색해 보세요!
+                📱 스토어 정식 앱을 실행하시면 수동 불러오기 없이 내 스마트폰 사진·영상이 자동으로 정리·검색됩니다!
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-2 shrink-0">
               <button
                 type="button"
-                onClick={() => mobilePhotoInputRef.current?.click()}
+                onClick={() => void syncMobileNativeGalleryAuto({ promptPermission: true })}
                 className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs whitespace-nowrap transition-all cursor-pointer shrink-0"
               >
-                📱 내 폰 사진 불러오기
+                🔄 사진첩 자동 동기화
               </button>
               {!isStoreAppMode && (
                 <button

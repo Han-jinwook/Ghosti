@@ -9,9 +9,17 @@ import {
 } from '../../services/setupMonsterTts';
 import {
   analyzeMobilePickedPhotoFiles,
+  analyzeNativeGalleryPhotoBatch,
   auditRealPcPhotosAndCluster,
   clusterPhotosIntoDuplicateGroups,
+  convertNativeGalleryVideos,
+  loadCachedMobileGalleryIndex,
+  saveCachedMobileGalleryIndex,
 } from '../../services/mobilePhotoPicker';
+import {
+  isCapacitorNativeMobileRuntime,
+  scanNativeDeviceGalleryMedia,
+} from '../../services/ghostiMobileCareBridge';
 import {
   dispatchFileToKakaoRealChatroom,
   extractKeywordSentencesZeroLlm,
@@ -159,7 +167,13 @@ export interface AssistantOnboardingSlice {
   duplicateGroups: DuplicateGroup[];
   initialized: boolean;
   initializing: boolean;
+  mobileGalleryScanning: boolean;
+  mobileGalleryPermissionDenied: boolean;
   initApp: (force?: boolean) => Promise<void>;
+  syncMobileNativeGalleryAuto: (options?: {
+    promptPermission?: boolean;
+    maxTargetCount?: number;
+  }) => Promise<void>;
   importMobileLocalPhotos: (
     files: FileList | File[],
     options?: { skipSearchResultsUpdate?: boolean }
@@ -355,6 +369,8 @@ export const createAssistantOnboardingSlice: StateCreator<
   duplicateGroups: [],
   initialized: false,
   initializing: false,
+  mobileGalleryScanning: false,
+  mobileGalleryPermissionDenied: false,
 
   conceptLexiconCount: TOTAL_CONCEPT_ANCHOR_COUNT,
   sentenceChips: [],
@@ -402,9 +418,7 @@ export const createAssistantOnboardingSlice: StateCreator<
       }
     }
 
-    const existingMobilePicked = !zCoreBridge.isConnected
-      ? get().photos.filter((p) => String(p.id || '').startsWith('mobile_local_'))
-      : [];
+    const existingMobilePicked = !zCoreBridge.isConnected ? get().photos : [];
     const baseDatasetPhotos =
       dataset.photos.length > 0 ? dataset.photos : existingMobilePicked;
 
@@ -674,9 +688,213 @@ export const createAssistantOnboardingSlice: StateCreator<
             void ensureTextQueryEncoderLoaded();
           }, 4000);
         }
+      } else if (!zCoreBridge.isConnected && typeof window !== 'undefined') {
+        // [모바일 앱 수동 불러오기 전면 폐지 ➔ 자동 갤러리 인덱싱 개통]:
+        // 앱 기동 즉시 IndexedDB 영구 색인본을 0.05초 만에 복원하고, Android MediaStore / iOS PhotoKit 네이티브 갤러리 자동 스캔을 수행합니다.
+        window.setTimeout(() => {
+          void get().syncMobileNativeGalleryAuto({ promptPermission: true });
+        }, 120);
       }
     } catch {
       /* 키워드 검색으로 계속 동작 */
+    }
+  },
+
+  syncMobileNativeGalleryAuto: async (options) => {
+    if (zCoreBridge.isConnected) return;
+    const promptPermission = options?.promptPermission ?? true;
+    const maxTargetCount = options?.maxTargetCount ?? 240;
+
+    // 1) 재실행/새로고침 시 0장 깜빡임 방지: IndexedDB 영구 캐시 즉시 복원
+    if (get().photos.length === 0) {
+      const cached = await loadCachedMobileGalleryIndex();
+      if (cached && cached.photos.length > 0) {
+        const { updatedPhotos, duplicateGroups: cachedDupGroups } =
+          clusterPhotosIntoDuplicateGroups(cached.photos);
+        const cachedTrashIds = new Set<string>();
+        updatedPhotos.forEach((p) => {
+          if (p.trashCategory && !p.quarantined) cachedTrashIds.add(p.id);
+        });
+        const cachedSearchResults: SearchResultItem[] = updatedPhotos
+          .filter((p) => !p.quarantined && !p.isVaultDocument)
+          .map((photo) => ({
+            photo,
+            score: 0.99,
+            matchPercentage: 99,
+            matchedBy: 'text-direct',
+          }));
+        set((state) => ({
+          photos: updatedPhotos,
+          duplicateGroups: cachedDupGroups,
+          selectedTrashIds: cachedTrashIds,
+          searchResults: state.hasExecutedUserSearch ? state.searchResults : cachedSearchResults,
+          videoSceneItems: cached.videos.length > 0 ? cached.videos : state.videoSceneItems,
+          matchedVideoScenes:
+            cached.videos.length > 0 && !state.hasExecutedUserSearch
+              ? cached.videos
+              : state.matchedVideoScenes,
+        }));
+      }
+    }
+
+    if (!isCapacitorNativeMobileRuntime() || get().mobileGalleryScanning) {
+      return;
+    }
+
+    set({ mobileGalleryScanning: true });
+    let newlyAddedTotal = 0;
+    let totalGalleryPhotos = get().photos.length;
+
+    try {
+      const pageSize = 60;
+      for (let offset = 0; offset < maxTargetCount; offset += pageSize) {
+        const res = await scanNativeDeviceGalleryMedia({
+          offset,
+          limit: pageSize,
+          thumbMaxDim: 448,
+          includeVideos: offset === 0,
+          promptPermission: offset === 0 ? promptPermission : false,
+        });
+
+        if (!res.permissionGranted) {
+          set({
+            mobileGalleryScanning: false,
+            mobileGalleryPermissionDenied: true,
+          });
+          return;
+        }
+
+        set({ mobileGalleryPermissionDenied: false });
+        if (res.totalPhotoCount > 0) {
+          totalGalleryPhotos = res.totalPhotoCount;
+        }
+
+        const curPhotos = get().photos;
+        const seenIds = new Set(curPhotos.map((p) => p.id));
+        const seenNameSize = new Set(curPhotos.map((p) => `${p.name}__${p.size}`));
+
+        const unseenRaw = (res.photos || []).filter(
+          (np) => !seenIds.has(np.id) && !seenNameSize.has(`${np.name}__${np.size}`)
+        );
+
+        const analyzedBatch =
+          unseenRaw.length > 0 ? await analyzeNativeGalleryPhotoBatch(unseenRaw) : [];
+        const convertedVideos =
+          offset === 0 && Array.isArray(res.videos) && res.videos.length > 0
+            ? convertNativeGalleryVideos(res.videos)
+            : [];
+
+        if (analyzedBatch.length > 0 || convertedVideos.length > 0) {
+          newlyAddedTotal += analyzedBatch.length;
+          set((state) => {
+            const mergedPhotos = [...state.photos, ...analyzedBatch];
+            const { updatedPhotos, duplicateGroups: nextDupGroups } =
+              clusterPhotosIntoDuplicateGroups(mergedPhotos);
+            const nextTrashIds = new Set<string>();
+            updatedPhotos.forEach((p) => {
+              if (p.trashCategory && !p.quarantined) nextTrashIds.add(p.id);
+            });
+            const nextSearchResults: SearchResultItem[] = updatedPhotos
+              .filter((p) => !p.quarantined && !p.isVaultDocument)
+              .map((photo) => ({
+                photo,
+                score: 0.99,
+                matchPercentage: 99,
+                matchedBy: 'text-direct',
+              }));
+
+            const existingVidIds = new Set(state.videoSceneItems.map((v) => v.id));
+            const nextVids = [
+              ...state.videoSceneItems,
+              ...convertedVideos.filter((v) => !existingVidIds.has(v.id)),
+            ];
+
+            const targetTab =
+              nextDupGroups.length > 0
+                ? 'duplicate'
+                : updatedPhotos.some((p) => p.trashCategory === 'blurry' && !p.quarantined)
+                ? 'blurry'
+                : updatedPhotos.some(
+                    (p) =>
+                      (p.trashCategory === 'memo' || p.trashCategory === 'screenshot') &&
+                      !p.quarantined
+                  )
+                ? 'memo'
+                : state.activeTrashCategoryFilter;
+
+            return {
+              photos: updatedPhotos,
+              duplicateGroups: nextDupGroups,
+              selectedTrashIds: nextTrashIds,
+              activeTrashCategoryFilter: targetTab,
+              searchResults: state.hasExecutedUserSearch ? state.searchResults : nextSearchResults,
+              videoSceneItems: nextVids,
+              matchedVideoScenes: state.hasExecutedUserSearch ? state.matchedVideoScenes : nextVids,
+            };
+          });
+        }
+
+        if (
+          !res.photos ||
+          res.photos.length < pageSize ||
+          offset + pageSize >= (res.totalPhotoCount || 0)
+        ) {
+          break;
+        }
+        await new Promise((r) => setTimeout(r, 80));
+      }
+
+      const finalPhotos = get().photos;
+      const finalVideos = get().videoSceneItems;
+      void saveCachedMobileGalleryIndex(finalPhotos, finalVideos);
+
+      if (newlyAddedTotal > 0 && typeof window !== 'undefined') {
+        const dupSetsCount = get().duplicateGroups.length;
+        const blurryCount = finalPhotos.filter(
+          (p) => p.trashCategory === 'blurry' && !p.quarantined
+        ).length;
+        const memoScreenCount = finalPhotos.filter(
+          (p) =>
+            (p.trashCategory === 'memo' || p.trashCategory === 'screenshot') && !p.quarantined
+        ).length;
+        const remainingOld = Math.max(0, totalGalleryPhotos - finalPhotos.length);
+        const secSt = loadGhostSecretaryState();
+        saveGhostSecretaryState({
+          ...secSt,
+          mobileSteppingStoneScanned: finalPhotos.length,
+          mobileRemainingOldPhotos: remainingOld,
+        });
+        window.dispatchEvent(
+          new CustomEvent('ghosti_photo_audit_summary', {
+            detail: {
+              total: finalPhotos.length,
+              dupSets: dupSetsCount,
+              blurry: blurryCount,
+              memoScreen: memoScreenCount,
+              remainingOldPhotos: remainingOld,
+            },
+          })
+        );
+      }
+
+      if (finalPhotos.length > 0 || finalVideos.length > 0) {
+        void startSilentRealMediaVisionIndexing({
+          photos: get().photos,
+          videos: get().videoSceneItems,
+          onPhotoVisionHydrated: (photoId, patch) => {
+            set((state) => ({
+              photos: state.photos.map((p) => (p.id === photoId ? { ...p, ...patch } : p)),
+              searchResults: state.searchResults.map((sr) =>
+                sr.photo.id === photoId ? { ...sr, photo: { ...sr.photo, ...patch } } : sr
+              ),
+            }));
+          },
+        }).then(() => {
+          void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
+        });
+      }
+    } finally {
+      set({ mobileGalleryScanning: false });
     }
   },
 
@@ -824,6 +1042,7 @@ export const createAssistantOnboardingSlice: StateCreator<
     }
     // [Gemma 2 주력 비전 인덱싱 + 광학/OCR 보조 통합]: 모바일·PC에서 불러온 실사진에 대해 즉시 768D EmbeddingGemma 2 비전 벡터 및 한국어 의미 태그·OCR 결합 가동
     if (!skippedAllAsExisting) {
+      void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
       void startSilentRealMediaVisionIndexing({
         photos: get().photos,
         videos: get().videoSceneItems,
@@ -835,6 +1054,8 @@ export const createAssistantOnboardingSlice: StateCreator<
             ),
           }));
         },
+      }).then(() => {
+        void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
       });
     }
   },
@@ -1289,6 +1510,9 @@ export const createAssistantOnboardingSlice: StateCreator<
       },
       lastQuarantineToast: `🗑️ 사진 ${movedSet.size}장을 ${moveNote}`,
     }));
+    if (!zCoreBridge.isConnected) {
+      void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
+    }
   },
 
   moveAllTrashToQuarantine: async () => {
@@ -1329,6 +1553,9 @@ export const createAssistantOnboardingSlice: StateCreator<
       quarantineMoving: false,
       lastQuarantineToast: `♻️ 사진 ${restoredSet.size}장을 ${quarantineResultNote('restore', restoreRes)}`,
     }));
+    if (!zCoreBridge.isConnected) {
+      void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
+    }
   },
 
   undoLastQuarantine: async () => {

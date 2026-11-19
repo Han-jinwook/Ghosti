@@ -115,11 +115,10 @@ export const SmartTrashView: React.FC = () => {
     setSearchSpace,
     runTextQuery,
     isStoreAppMode,
-    importMobileLocalPhotos,
+    syncMobileNativeGalleryAuto,
   } = useSaySeeStore();
 
   const [gridColumns, setGridColumns] = useState<3 | 5>(3);
-  const trashMobilePhotoInputRef = React.useRef<HTMLInputElement | null>(null);
   const [showSystemConsult, setShowSystemConsult] = useState<boolean>(false);
   const [showQuarantineDrawer, setShowQuarantineDrawer] = useState<boolean>(true);
   const [isTrashBinTabActive, setIsTrashBinTabActive] = useState<boolean>(false);
@@ -356,26 +355,13 @@ export const SmartTrashView: React.FC = () => {
                 🗓️ 정기검진: {formatScheduleLabelKo(weeklySchedule)} · ⚡ 20% 과부하 감지
               </button>
             )}
-            <input
-              ref={trashMobilePhotoInputRef}
-              type="file"
-              accept="image/*"
-              multiple
-              className="hidden"
-              onChange={(e) => {
-                if (e.target.files && e.target.files.length > 0) {
-                  void importMobileLocalPhotos(e.target.files);
-                  e.target.value = '';
-                }
-              }}
-            />
             {(isStoreAppMode || layout === 'mobile') && (
               <button
                 type="button"
-                onClick={() => trashMobilePhotoInputRef.current?.click()}
+                onClick={() => void syncMobileNativeGalleryAuto({ promptPermission: true })}
                 className="px-3 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-label-sm text-[11.5px] font-extrabold transition-colors cursor-pointer whitespace-nowrap"
               >
-                📱 내 폰 사진 불러와 정리하기
+                🔄 사진첩 자동 동기화
               </button>
             )}
 
