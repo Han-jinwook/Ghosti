@@ -15,6 +15,7 @@ import {
   scrollAppToTop,
   useDashboardNavStore,
 } from './dashboardNavState';
+import { readCurrentInviteDisplayMeta } from '../../services/shareInviteDeepLinkBridge';
 
 const FAMILY_ROOMS: FamilyRoomId[] = ['우리집', '본가(친가)', '처가(친정)'];
 
@@ -1205,61 +1206,72 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
           </div>
         )}
 
-        {/* ─────────────── 💬 카톡 인앱 무가입 1초 프리뷰 (Guest Preview) 샌드박스 & 4대 행동 트리거 바 (패밀리/소모임·동호·동창회 공유방 전용) ─────────────── */}
-        {(activeLoungeType === 'family' || activeLoungeType === 'club' || activeLoungeType === 'student') && (
-          <div className="w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 pt-2">
-            <div
-              className={`px-3.5 py-2.5 rounded-2xl border flex flex-wrap items-center justify-between gap-2.5 transition-all ${
-                isGuestPreviewMode
-                  ? 'bg-gradient-to-r from-amber-500/15 via-emerald-500/10 to-zinc-900 border-amber-400/50'
-                  : themeMode === 'light'
-                  ? 'bg-slate-50 border-slate-200/90'
-                  : 'bg-zinc-900/70 border-white/10'
-              }`}
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                <button
-                  type="button"
-                  onClick={() => setIsGuestPreviewMode(!isGuestPreviewMode)}
-                  className={`px-2.5 py-1 rounded-lg font-label-sm text-[11.5px] font-extrabold cursor-pointer transition-all ${
-                    isGuestPreviewMode
-                      ? 'bg-[#FEE500] text-[#191919] shadow-xs'
-                      : 'bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-amber-400/30'
-                  }`}
-                >
-                  {isGuestPreviewMode
-                    ? '💬 카톡 무가입 1초 프리뷰 모드 ON (13KB 썸네일 구경 중)'
-                    : '💬 카톡 단톡방 무가입 1초 프리뷰 체험하기'}
-                </button>
-                <span className="text-[11.5px] text-zinc-300">
-                  {isGuestPreviewMode
-                    ? '로그인 없이 0.5초 만에 사진 피드·얼굴 문패·0.04초 검색을 구경 중입니다! 아래 4가지 행동 클릭 시 1초 합류 창이 열립니다.'
-                    : '단톡방 초대 링크 터치 시 로그인 창 없이 0.5초 만에 사진 바둑판과 친구 얼굴 아바타를 먼저 보여주는 무가입 프리뷰 퍼널입니다.'}
-                </span>
-              </div>
-
-              {isGuestPreviewMode && (
-                <div className="flex flex-wrap items-center gap-1.5">
-                  {[
-                    { label: '🎯 내 얼굴 사진 1초 찾기', reason: '🎯 내 얼굴이 나온 사진만 1초 만에 다 찾기' },
-                    { label: '📥 고화질 원본(5MB) 저장', reason: '📥 이 사진 고화질 원본(5MB) 내 기기에 저장하기' },
-                    { label: '❤️ 하트 / 💬 댓글 달기', reason: '❤️ 하트 누르기 / 💬 댓글("와 이 사진 대박!") 달기' },
-                    { label: '📸 내 사진 같이 올리기', reason: '📸 이 방에 내 사진·영상 같이 올리기' },
-                  ].map((trig) => (
+        {/* ─────────────── 💌 사진 공유방 카톡 초대 링크 수신 헤더 & 3대 본능 스위치 바 (패밀리/동호회/동창회 공유방 전용) ─────────────── */}
+        {(activeLoungeType === 'family' || activeLoungeType === 'club' || activeLoungeType === 'student') && (() => {
+          const inviteMeta = readCurrentInviteDisplayMeta(activeLoungeType, activeFamilyRoom);
+          return (
+            <div className="w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 pt-2">
+              <div
+                className={`px-3.5 py-2.5 rounded-2xl border flex flex-wrap items-center justify-between gap-2.5 transition-all ${
+                  isGuestPreviewMode
+                    ? 'bg-gradient-to-r from-amber-500/15 via-emerald-500/10 to-zinc-900 border-amber-400/50'
+                    : themeMode === 'light'
+                    ? 'bg-slate-50 border-slate-200/90'
+                    : 'bg-zinc-900/70 border-white/10'
+                }`}
+              >
+                <div className="flex flex-wrap items-center gap-2">
+                  {isGuestPreviewMode ? (
+                    <span className="px-2.5 py-1 rounded-lg bg-[#FEE500] text-[#191919] font-label-sm text-[11.5px] font-extrabold shadow-xs">
+                      💌 {inviteMeta.hostName}님이 초대한 [{inviteMeta.roomTitle}] · 로그인 없이 구경 중
+                    </span>
+                  ) : (
                     <button
-                      key={trig.label}
                       type="button"
-                      onClick={() => triggerGuestJoinWall(trig.reason)}
-                      className="px-2.5 py-1 rounded-lg bg-zinc-950/90 hover:bg-zinc-800 border border-amber-400/40 text-amber-200 text-[11px] font-bold cursor-pointer"
+                      onClick={() => setIsGuestPreviewMode(true)}
+                      className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-amber-400/30 font-label-sm text-[11.5px] font-extrabold cursor-pointer transition-all"
                     >
-                      {trig.label}
+                      👀 카톡 초대 링크 수신 화면 미리보기
                     </button>
-                  ))}
+                  )}
+                  <span className="text-[11.5px] text-zinc-300">
+                    {isGuestPreviewMode
+                      ? '로그인·설치 없이 공유 사진방을 자유롭게 구경하고 검색해 보세요! 내 사진 올리기·원본 일괄 저장·새 사진 알림 클릭 시 합류 창이 열립니다.'
+                      : '상대방이 카톡 초대 링크를 눌렀을 때 설치·가입 없이 1초 만에 열리는 공유방 구경 화면을 미리 확인합니다.'}
+                  </span>
+                  {isGuestPreviewMode && !inviteMeta.hasExplicitUrlInvite && (
+                    <button
+                      type="button"
+                      onClick={() => setIsGuestPreviewMode(false)}
+                      className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-bold cursor-pointer"
+                    >
+                      ↩️ 방장 화면 복귀
+                    </button>
+                  )}
                 </div>
-              )}
+
+                {isGuestPreviewMode && (
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {[
+                      { label: '📸 내 사진도 이 방에 올리기', reason: '📸 내 폰 사진도 이 방에 올리기' },
+                      { label: '💾 고화질 원본 일괄 저장', reason: '💾 고화질 원본 내 폰에 일괄 저장' },
+                      { label: '🔔 새 사진 알림 받기', reason: '🔔 새 사진 올라오면 카톡·푸시 알림 받기' },
+                    ].map((trig) => (
+                      <button
+                        key={trig.label}
+                        type="button"
+                        onClick={() => triggerGuestJoinWall(trig.reason)}
+                        className="px-2.5 py-1 rounded-lg bg-zinc-950/90 hover:bg-zinc-800 border border-amber-400/40 text-amber-200 text-[11px] font-bold cursor-pointer"
+                      >
+                        {trig.label}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </div>
-        )}
+          );
+        })()}
     </>
   );
 };

@@ -81,5 +81,18 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>CFBundleURLTypes</key>
+	<array>
+		<dict>
+			<key>CFBundleTypeRole</key>
+			<string>Editor</string>
+			<key>CFBundleURLName</key>
+			<string>app.sundreamer.ghosti</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>ghosti</string>
+			</array>
+		</dict>
+	</array>
 </dict>
 </plist>

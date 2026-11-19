@@ -290,9 +290,9 @@ export const App: React.FC = () => {
   const normalizeFamilyRoomParam = (raw: string | null | undefined): FamilyRoomId | null => {
     if (!raw) return null;
     const v = raw.trim();
+    if (v === '본가(친가)' || v === 'parents' || v === 'family_parents' || v.includes('본가') || v.includes('친가')) return '본가(친가)';
+    if (v === '처가(친정)' || v === 'inlaws' || v === 'family_inlaws' || v.includes('처가') || v.includes('친정')) return '처가(친정)';
     if (v === '우리집' || v === 'home' || v === 'family_home' || v.startsWith('family')) return '우리집';
-    if (v === '본가(친가)' || v === 'parents' || v === 'family_parents') return '본가(친가)';
-    if (v === '처가(친정)' || v === 'inlaws' || v === 'family_inlaws') return '처가(친정)';
     return null;
   };
 
@@ -379,7 +379,7 @@ export const App: React.FC = () => {
 
       const initialNav = {
         viewMode: targetView,
-        lounge: (targetLounge === 'student' ? 'club' : targetLounge) as LoungeType,
+        lounge: (targetLounge === 'student' && !hasInviteLink ? 'club' : targetLounge) as LoungeType,
         desktopTab: targetDesktopTab,
         mobileTab: targetMobileTab,
         familyRoom: targetRoom,

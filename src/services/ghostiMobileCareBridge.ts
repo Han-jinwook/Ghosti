@@ -98,6 +98,7 @@ export interface GhostiMobileCarePluginInterface {
     action: 'move' | 'restore';
     items: SystemPhotoTrashTarget[];
   }): Promise<SystemPhotoTrashResult>;
+  consumePendingDeepLink(): Promise<{ ok: boolean; deepLinkUrl: string; source?: string }>;
 }
 
 const GhostiMobileCareNative = registerPlugin<GhostiMobileCarePluginInterface>('GhostiMobileCare');
@@ -428,4 +429,27 @@ export async function resolveNativeMobileVideoPlaybackUrl(videoId: string): Prom
     /* ignore */
   }
   return '';
+}
+
+export async function consumeNativePendingDeepLink(): Promise<{
+  ok: boolean;
+  deepLinkUrl: string;
+  source?: string;
+}> {
+  if (!isCapacitorNativeMobileRuntime()) {
+    return { ok: false, deepLinkUrl: '' };
+  }
+  try {
+    const res = await GhostiMobileCareNative.consumePendingDeepLink();
+    if (res && typeof res.deepLinkUrl === 'string') {
+      return {
+        ok: Boolean(res.ok),
+        deepLinkUrl: res.deepLinkUrl.trim(),
+        source: res.source,
+      };
+    }
+  } catch {
+    /* 구버전 네이티브 래퍼 호환 폴백 */
+  }
+  return { ok: false, deepLinkUrl: '' };
 }

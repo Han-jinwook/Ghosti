@@ -22,6 +22,22 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
 
+            <!-- [Ghosti 사진 공유방 0.1초 직행] 커스텀 URL 스킴 (ghosti://invite?...) -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="ghosti" />
+            </intent-filter>
+
+            <!-- [Ghosti 사진 공유방 0.1초 직행] 공식 Android App Links (https://ghosti.sundreamer.app/?invite=...) -->
+            <intent-filter android:autoVerify="true">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="https" android:host="ghosti.sundreamer.app" />
+            </intent-filter>
+
         </activity>
 
         <provider

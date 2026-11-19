@@ -1,9 +1,26 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
-import { resolveLoungePhotoCorpus } from '../../store/slices/storeSharedRefs';
+import {
+  isSharedPhotoLounge,
+  resolveLoungePhotoCorpus,
+} from '../../store/slices/storeSharedRefs';
 import { jumpToGhostSecretary } from '../../components/GhostSecretaryFirstGuard';
 import { aiRuntimeFlags } from '../../services/ai/aiSharedRuntime';
 import { getZCoreUrl, zCoreBridge } from '../../services/zCoreBridge';
+import {
+  consumeNativePendingDeepLink,
+  isAndroidMobileBrowserOrApp,
+  isCapacitorNativeMobileRuntime,
+  isIosMobileBrowserOrApp,
+} from '../../services/ghostiMobileCareBridge';
+import {
+  buildAndroidPlayStoreInviteUrl,
+  buildAndroidSafeAppProbeIntentUrl,
+  buildDeferredInviteClipboardToken,
+  buildIosStoreInviteUrl,
+  buildShareRoomNativeSchemeUrl,
+  readCurrentInviteDisplayMeta,
+} from '../../services/shareInviteDeepLinkBridge';
 
 const PERSISTENT_BATCH_THUMB_CACHE = new Map<string, string>();
 const INFLIGHT_BATCH_THUMB_IDS = new Set<string>();
@@ -12,9 +29,11 @@ export const FreePhotoShareOverlays: React.FC = () => {
   const activeLoungeType = useSaySeeStore((s) => s.activeLoungeType);
   const photos = useSaySeeStore((s) => s.photos);
   const activeFamilyRoom = useSaySeeStore((s) => s.activeFamilyRoom);
+  const isGuestPreviewMode = useSaySeeStore((s) => s.isGuestPreviewMode);
   const guestJoinWallReason = useSaySeeStore((s) => s.guestJoinWallReason);
   const triggerGuestJoinWall = useSaySeeStore((s) => s.triggerGuestJoinWall);
   const completeGuestOneSecJoin = useSaySeeStore((s) => s.completeGuestOneSecJoin);
+  const applyShareInviteDeepLink = useSaySeeStore((s) => s.applyShareInviteDeepLink);
   const showSharedPhotoUploadModal = useSaySeeStore((s) => s.showSharedPhotoUploadModal);
   const setShowSharedPhotoUploadModal = useSaySeeStore((s) => s.setShowSharedPhotoUploadModal);
   const addLocalPhotosToSharedRoom = useSaySeeStore((s) => s.addLocalPhotosToSharedRoom);
@@ -23,14 +42,12 @@ export const FreePhotoShareOverlays: React.FC = () => {
   const importMobileLocalPhotos = useSaySeeStore((s) => s.importMobileLocalPhotos);
   const layout = useSaySeeStore((s) => s.layout);
   const isStoreAppMode = useSaySeeStore((s) => s.isStoreAppMode);
-  const isMobileEnv = layout === 'mobile' || Boolean(isStoreAppMode);
+  const isNativeApp = isCapacitorNativeMobileRuntime();
+  const isMobileEnv = layout === 'mobile' || Boolean(isStoreAppMode) || isNativeApp;
+  const isMobileWebBrowser = isMobileEnv && !isNativeApp;
 
-  const [guestNicknameDraft, setGuestNicknameDraft] = useState(
-    activeLoungeType === 'family' ? '해나라' : '박총무'
-  );
-  const [guestEmailDraft, setGuestEmailDraft] = useState(
-    activeLoungeType === 'family' ? 'family@sundreamer.app' : 'friend@sundreamer.app'
-  );
+  const [guestNicknameDraft, setGuestNicknameDraft] = useState('');
+  const [guestEmailDraft, setGuestEmailDraft] = useState('');
   const [selectedSharedUploadIds, setSelectedSharedUploadIds] = useState<string[]>([]);
   const [recentPickedNames, setRecentPickedNames] = useState<string[]>([]);
   const [, setThumbCacheTick] = useState(0);
@@ -233,12 +250,147 @@ export const FreePhotoShareOverlays: React.FC = () => {
     };
   }, [showSharedPhotoUploadModal, startIndex, endIndex, uploadableLocalPhotos]);
 
+  // [사진 공유방 모바일 초대링크 3단계 황금 흐름 — Step 1 자동 라우팅 & Step 3 Deferred Deep Link 소비]:
+  // 1) 네이티브 모바일 앱(안드로이드·아이폰): 앱 실행 시 대기 중인 딥링크(ghosti:// / App Links / Play InstallReferrer)를 즉시 읽어 해당 공유방으로 0.1초 직행
+  // 2) 안드로이드 모바일 웹(카톡 인앱·크롬): 초대 링크 첫 진입 시 intent:// + S.browser_fallback_url 로 설치 여부를 안전 확인하여
+  //    설치된 폰은 네이티브 앱 해당 공유방으로 직행하고, 미설치 폰은 스토어 납치 없이 1초 웹 구경 화면에 그대로 머무름
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+
+    if (isCapacitorNativeMobileRuntime()) {
+      void consumeNativePendingDeepLink().then((res) => {
+        if (res.ok && res.deepLinkUrl) {
+          void applyShareInviteDeepLink(res.deepLinkUrl, { fromNativeApp: true });
+        }
+      });
+
+      const onLiveDeepLink = (ev: Event) => {
+        const detail = (ev as CustomEvent<{ url?: string }>).detail;
+        if (detail?.url) {
+          void applyShareInviteDeepLink(detail.url, { fromNativeApp: true });
+        }
+      };
+      window.addEventListener('ghostiNativeDeepLink', onLiveDeepLink);
+      return () => {
+        window.removeEventListener('ghostiNativeDeepLink', onLiveDeepLink);
+      };
+    }
+
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('invite')) {
+        void applyShareInviteDeepLink(window.location.href, { fromNativeApp: false });
+      }
+      if (
+        isAndroidMobileBrowserOrApp() &&
+        params.has('invite') &&
+        !params.has('app_checked') &&
+        sessionStorage.getItem('ghosti_android_intent_probed') !== '1'
+      ) {
+        const safeIntentUrl = buildAndroidSafeAppProbeIntentUrl(window.location.href);
+        if (safeIntentUrl) {
+          sessionStorage.setItem('ghosti_android_intent_probed', '1');
+          window.location.replace(safeIntentUrl);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [applyShareInviteDeepLink]);
+
+  const inviteMeta = readCurrentInviteDisplayMeta(
+    isSharedPhotoLounge(activeLoungeType) ? activeLoungeType : 'family',
+    activeFamilyRoom
+  );
+
+  const handleInstallAppAndAutoJoinRoom = async () => {
+    const targetLounge = isSharedPhotoLounge(activeLoungeType) ? activeLoungeType : 'family';
+    const deferredToken = buildDeferredInviteClipboardToken({
+      loungeType: targetLounge,
+      familyRoom: activeFamilyRoom,
+      hostName: inviteMeta.hostName,
+      roomTitle: inviteMeta.roomTitle,
+      nicknameHint: guestNicknameDraft,
+    });
+    try {
+      await navigator.clipboard?.writeText(deferredToken);
+    } catch {
+      /* ignore clipboard error */
+    }
+
+    if (isIosMobileBrowserOrApp()) {
+      const iosUrls = buildIosStoreInviteUrl();
+      window.location.href = iosUrls.primaryUrl;
+      if (iosUrls.fallbackWebUrl && iosUrls.fallbackWebUrl !== iosUrls.primaryUrl) {
+        window.setTimeout(() => {
+          if (document.visibilityState === 'visible') {
+            window.location.href = iosUrls.fallbackWebUrl;
+          }
+        }, 700);
+      }
+      return;
+    }
+
+    const playUrl = buildAndroidPlayStoreInviteUrl({
+      loungeType: targetLounge,
+      familyRoom: activeFamilyRoom,
+      hostName: inviteMeta.hostName,
+      roomTitle: inviteMeta.roomTitle,
+      nicknameHint: guestNicknameDraft,
+    });
+    window.location.href = playUrl;
+  };
+
+  const handleOpenInstalledNativeAppDirect = () => {
+    const targetLounge = isSharedPhotoLounge(activeLoungeType) ? activeLoungeType : 'family';
+    const schemeUrl = buildShareRoomNativeSchemeUrl({
+      loungeType: targetLounge,
+      familyRoom: activeFamilyRoom,
+      hostName: inviteMeta.hostName,
+      roomTitle: inviteMeta.roomTitle,
+      nicknameHint: guestNicknameDraft,
+    });
+    window.location.href = schemeUrl;
+  };
+
   return (
     <>
-      {/* 💬 카톡 인앱 무가입 1초 프리뷰 — Step 3: [1초 합류] 명분 있는 별명(실명) + 이메일 입력 모달 (Auth-Wall) */}
+      {/* 🔔 모바일 웹 구경 중 비간섭 하단 슬림 바 — Step 3: 3대 본능 스위치 (새 사진 알림 / 사진 올리기 / 원본 일괄 저장) */}
+      {isGuestPreviewMode &&
+        isMobileWebBrowser &&
+        isSharedPhotoLounge(activeLoungeType) &&
+        !guestJoinWallReason && (
+          <div className="fixed bottom-3 inset-x-3 z-[95] pointer-events-none flex justify-center pb-safe">
+            <div className="pointer-events-auto w-full max-w-md rounded-2xl bg-zinc-950/95 backdrop-blur-md border border-amber-400/50 px-3 py-2 shadow-[0_8px_30px_rgba(0,0,0,0.45)] flex items-center justify-between gap-1.5">
+              <button
+                type="button"
+                onClick={() => triggerGuestJoinWall('🔔 새 사진 올라오면 카톡·푸시 알림 받기')}
+                className="flex-1 py-1.5 px-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer truncate"
+              >
+                🔔 새 사진 올라오면 알림 받기
+              </button>
+              <button
+                type="button"
+                onClick={() => triggerGuestJoinWall('📸 내 폰 사진도 이 방에 올리기')}
+                className="py-1.5 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-teal-300 font-label-sm text-[11px] font-extrabold cursor-pointer shrink-0"
+              >
+                📸 사진 올리기
+              </button>
+              <button
+                type="button"
+                onClick={() => triggerGuestJoinWall('💾 고화질 원본 내 폰에 일괄 저장')}
+                className="py-1.5 px-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-emerald-300 font-label-sm text-[11px] font-extrabold cursor-pointer shrink-0"
+              >
+                💾 원본 저장
+              </button>
+            </div>
+          </div>
+        )}
+
+      {/* 📱 사진 공유방 3단계 황금 흐름 — Step 3: 모바일 웹 [양대 스토어 무료 앱 설치 & 이 방 자동 입장] / PC 웹 [1초 합류] 모달 */}
       {guestJoinWallReason && (
         <div
-          onClick={() => triggerGuestJoinWall('')}
+          onClick={() => useSaySeeStore.setState({ guestJoinWallReason: null })}
           className="fixed inset-0 z-[110] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
         >
           <div
@@ -247,7 +399,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
           >
             <div className="flex items-center justify-between gap-2">
               <span className="px-2.5 py-1 rounded-full bg-[#FEE500] text-[#191919] font-label-sm text-[11.5px] font-black">
-                💬 카톡 단톡방 1초 합류 (평생 0원)
+                💌 {inviteMeta.hostName}님의 초대장 적용됨 (평생 0원)
               </span>
               <button
                 type="button"
@@ -258,62 +410,119 @@ export const FreePhotoShareOverlays: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex flex-col gap-1.5">
-              <div className="text-[12px] font-extrabold text-amber-300">
-                선택하신 기능: [{guestJoinWallReason}]
-              </div>
-              <h3 className="font-headline-sm text-[18px] text-white font-black leading-snug">
-                🔒 외부인 유출 방지 및 고화질 원본 전달을 위해, 이 방에서 쓰실 별명(실명)과 이메일만 입력해 주세요!
-              </h3>
-              <p className="text-[12px] text-emerald-300 font-bold">
-                ✨ 방장님이 초대하신 분은 앱 설치·결제 없이 평생 100% 무료입니다. (각 방에서 입력한 별명·실명 그대로 표시됩니다)
-              </p>
-            </div>
+            {isMobileWebBrowser ? (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <div className="text-[12px] font-extrabold text-amber-300 break-keep">
+                    선택하신 기능: [{guestJoinWallReason}]
+                  </div>
+                  <h3 className="font-headline-sm text-[18px] text-white font-black leading-snug break-keep">
+                    📱 무료 『귀신같이』 모바일 앱으로 『{inviteMeta.roomTitle}』에 바로 입장하세요!
+                  </h3>
+                  <p className="text-[12px] text-emerald-300 font-bold leading-relaxed break-keep">
+                    ✨ 초대받으신 분은 평생 0원(광고·구독료 없음)입니다. 무료 모바일 앱을 설치하면 보고 계시던 이 공유방으로 자동 입장되어 내 폰 사진 올리기·무압축 원본 일괄 저장·새 사진 알림을 바로 쓰실 수 있습니다.
+                  </p>
+                </div>
 
-            <div className="flex flex-col gap-2.5">
-              <label className="flex flex-col gap-1">
-                <span className="text-[11.5px] text-zinc-300 font-bold">
-                  이 방에서 쓰실 별명 또는 실명 (예: 한민수, 박준호)
-                </span>
-                <input
-                  type="text"
-                  value={guestNicknameDraft}
-                  onChange={(e) => setGuestNicknameDraft(e.target.value)}
-                  placeholder="예: 박총무"
-                  className="px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-white text-[13px] font-bold outline-none focus:border-amber-400"
-                />
-              </label>
+                <label className="flex flex-col gap-1">
+                  <span className="text-[11.5px] text-zinc-300 font-bold">
+                    이 방에서 표시할 내 이름 또는 별명 (선택)
+                  </span>
+                  <input
+                    type="text"
+                    value={guestNicknameDraft}
+                    onChange={(e) => setGuestNicknameDraft(e.target.value)}
+                    placeholder="예: 큰삼촌, 은지엄마, 박총무"
+                    className="px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-white text-[13px] font-bold outline-none focus:border-amber-400"
+                  />
+                </label>
 
-              <label className="flex flex-col gap-1">
-                <span className="text-[11.5px] text-zinc-300 font-bold">
-                  이메일 주소 (고화질 원본 전달 및 내 얼굴 여권 연결용)
-                </span>
-                <input
-                  type="email"
-                  value={guestEmailDraft}
-                  onChange={(e) => setGuestEmailDraft(e.target.value)}
-                  placeholder="예: friend@naver.com"
-                  className="px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-white text-[13px] font-bold outline-none focus:border-amber-400"
-                />
-              </label>
-            </div>
+                <div className="flex flex-col gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => void handleInstallAppAndAutoJoinRoom()}
+                    className="w-full py-3 px-3.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[13px] font-black cursor-pointer shadow-md break-keep"
+                  >
+                    {isIosMobileBrowserOrApp()
+                      ? `🍎 ${buildIosStoreInviteUrl().storeLabelKo}에서 무료 설치하고 이 방 바로 입장`
+                      : '🚀 Google Play에서 무료 앱 설치하고 이 방 바로 입장'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleOpenInstalledNativeAppDirect}
+                    className="w-full py-2.5 px-3.5 rounded-xl bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/50 text-teal-200 font-label-sm text-[12.5px] font-extrabold cursor-pointer break-keep"
+                  >
+                    📱 이미 모바일 앱이 깔려 있어요 ➔ 앱으로 이 방 즉시 열기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => useSaySeeStore.setState({ guestJoinWallReason: null })}
+                    className="w-full py-2 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 text-[12px] font-bold cursor-pointer"
+                  >
+                    계속 웹 화면에서 사진 구경하기
+                  </button>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="flex flex-col gap-1.5">
+                  <div className="text-[12px] font-extrabold text-amber-300 break-keep">
+                    선택하신 기능: [{guestJoinWallReason}]
+                  </div>
+                  <h3 className="font-headline-sm text-[18px] text-white font-black leading-snug break-keep">
+                    🔒 외부인 유출 방지 및 고화질 원본 전달을 위해, 이 방에서 쓰실 이름(별명)과 이메일만 입력해 주세요!
+                  </h3>
+                  <p className="text-[12px] text-emerald-300 font-bold break-keep">
+                    ✨ 초대받으신 분은 평생 100% 무료입니다. 입력하신 이름·별명으로 『{inviteMeta.roomTitle}』에 바로 합류합니다.
+                  </p>
+                </div>
 
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
-              <button
-                type="button"
-                onClick={() => completeGuestOneSecJoin(guestNicknameDraft, guestEmailDraft)}
-                className="flex-1 py-3 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[13px] font-black cursor-pointer shadow-md break-keep"
-              >
-                🚀 1초 합류하고 고화질 원본·댓글 바로 쓰기 (0원)
-              </button>
-              <button
-                type="button"
-                onClick={() => useSaySeeStore.setState({ guestJoinWallReason: null })}
-                className="px-3.5 py-2.5 sm:py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 text-[12px] font-bold cursor-pointer shrink-0"
-              >
-                더 구경하기
-              </button>
-            </div>
+                <div className="flex flex-col gap-2.5">
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[11.5px] text-zinc-300 font-bold">
+                      이 방에서 쓰실 이름 또는 별명
+                    </span>
+                    <input
+                      type="text"
+                      value={guestNicknameDraft}
+                      onChange={(e) => setGuestNicknameDraft(e.target.value)}
+                      placeholder="예: 큰삼촌, 박총무"
+                      className="px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-white text-[13px] font-bold outline-none focus:border-amber-400"
+                    />
+                  </label>
+
+                  <label className="flex flex-col gap-1">
+                    <span className="text-[11.5px] text-zinc-300 font-bold">
+                      이메일 주소 (고화질 원본 전달 및 계정 연결용)
+                    </span>
+                    <input
+                      type="email"
+                      value={guestEmailDraft}
+                      onChange={(e) => setGuestEmailDraft(e.target.value)}
+                      placeholder="예: friend@naver.com"
+                      className="px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-white/15 text-white text-[13px] font-bold outline-none focus:border-amber-400"
+                    />
+                  </label>
+                </div>
+
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 pt-1">
+                  <button
+                    type="button"
+                    onClick={() => completeGuestOneSecJoin(guestNicknameDraft, guestEmailDraft)}
+                    className="flex-1 py-3 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[13px] font-black cursor-pointer shadow-md break-keep"
+                  >
+                    🚀 PC 웹에서 1초 합류하고 고화질 원본 바로 쓰기 (0원)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => useSaySeeStore.setState({ guestJoinWallReason: null })}
+                    className="px-3.5 py-2.5 sm:py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 text-[12px] font-bold cursor-pointer shrink-0"
+                  >
+                    더 구경하기
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}

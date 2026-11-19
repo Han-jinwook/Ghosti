@@ -51,12 +51,31 @@ export function resolveInvitedHostLoungeAndRoom(): {
       storedInvite = urlInvite;
     }
 
-    const effectiveInvite = urlInvite || storedInvite;
+    let effectiveInvite = urlInvite || storedInvite;
+    let roomVal = (params.get('room') || effectiveInvite).trim().toLowerCase();
+
+    if (!effectiveInvite) {
+      try {
+        const joinedRaw = localStorage.getItem('ghosti_joined_invite_room_v1');
+        if (joinedRaw) {
+          const joined = JSON.parse(joinedRaw) as {
+            inviteCode?: string;
+            familyRoom?: string;
+          };
+          if (joined?.inviteCode) {
+            effectiveInvite = String(joined.inviteCode).trim().toLowerCase();
+            roomVal = String(joined.familyRoom || effectiveInvite).trim().toLowerCase();
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
     if (!effectiveInvite) {
       return { hasActiveInvite: false, hostLounge: null, hostFamilyRoom: '우리집' };
     }
 
-    const roomVal = (params.get('room') || effectiveInvite).trim().toLowerCase();
     if (effectiveInvite.startsWith('club')) {
       return { hasActiveInvite: true, hostLounge: 'club', hostFamilyRoom: '우리집' };
     }

@@ -8,6 +8,11 @@ import {
   triggerSetupMonsterTtsPrewarm,
 } from '../../services/setupMonsterTts';
 import { analyzeMobilePickedPhotoFiles } from '../../services/mobilePhotoPicker';
+import { isCapacitorNativeMobileRuntime } from '../../services/ghostiMobileCareBridge';
+import {
+  parseShareInviteInput,
+  persistInviteContextMeta,
+} from '../../services/shareInviteDeepLinkBridge';
 import {
   dispatchFileToKakaoRealChatroom,
   extractKeywordSentencesZeroLlm,
@@ -124,6 +129,7 @@ import {
   requestQuarantineOp,
   filterVisibleGalleryPhotos,
   persistSharedRoomAddedPhotos,
+  resolveInvitedHostLoungeAndRoom,
   resolveLoungePhotoCorpus,
   restoreAllExcludedCustomFaceRegistrations,
   saveCustomFaceRegistration,
@@ -189,6 +195,10 @@ export interface FreePhotoShareSlice {
   addLocalPhotosToSharedRoom: (selectedIds: string[]) => void;
   removeSharedRoomPhoto: (photoId: string) => void;
   returnToSharedRoomAndOpenUpload: () => Promise<void>;
+  applyShareInviteDeepLink: (
+    rawUrlOrToken: string,
+    opts?: { fromNativeApp?: boolean }
+  ) => Promise<boolean>;
 
   setActiveFamilyRoom: (room: FamilyRoomId) => void;
   setClubSizeTier: (tier: ClubSizeTier) => void;
@@ -810,13 +820,14 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     }
   },
 
-  activeFamilyRoom: '우리집',
+  activeFamilyRoom: resolveInvitedHostLoungeAndRoom().hostFamilyRoom,
   clubSizeTier: 'small',
   studentOcrVerified: false,
 
-  // [💬 카톡 인앱 무가입 1초 프리뷰 (Guest Preview) & 공유 사진방 내 사진 추가 플로우 초기 상태 및 액션]
+  // [💬 사진 공유방 모바일 초대링크 3단계 황금 흐름: 미설치 웹 1초 구경 ➔ 3대 본능 스위치 스토어 설치 ➔ 네이티브 앱 해당 공유방 자동 입장]
   isGuestPreviewMode:
     typeof window !== 'undefined' &&
+    !isCapacitorNativeMobileRuntime() &&
     (new URLSearchParams(window.location.search).has('invite') ||
       new URLSearchParams(window.location.search).get('preview') === 'guest') &&
     !Boolean(
@@ -835,6 +846,8 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       (() => {
         try {
           return (
+            isCapacitorNativeMobileRuntime() && Boolean(localStorage.getItem('ghosti_joined_invite_room_v1'))
+          ) || (
             new URLSearchParams(window.location.search).has('invite') &&
             localStorage.getItem('ghosti_invited_member_email')
           );
@@ -863,8 +876,8 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       isGuestPreviewMode,
       guestJoinWallReason: null,
       lastQuarantineToast: isGuestPreviewMode
-        ? '👀 [카톡 인앱 무가입 1초 프리뷰 모드 ON] 로그인 창 없이 13KB 초경량 썸네일 피드 · 얼굴 아바타 · 0.04초 검색을 먼저 체험합니다! (원본 저장·댓글·사진 업로드·내 얼굴 찾기 클릭 시 1초 합류 창 점등)'
-        : '✅ [정식 멤버 모드 전환] 모든 고화질 원본 다운로드 · 댓글 · 사진 업로드 권한이 활성화되었습니다.',
+        ? '💌 [카톡 초대 링크 수신 미리보기 ON] 설치·로그인 없이 공유 사진방을 바로 구경하는 화면입니다. 내 사진 올리기·원본 일괄 저장·새 사진 알림을 누르면 무료 앱 설치 및 자동 입장 안내가 열립니다.'
+        : '✅ [정식 멤버 화면 전환] 내 사진 올리기 · 고화질 원본 저장 · 새 사진 알림이 활성화되었습니다.',
     }),
 
   triggerGuestJoinWall: (reason) =>
@@ -1132,6 +1145,74 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         ? `📸 『${roomTitle}』으로 돌아왔어요! 방금 점검·색인한 내 컴퓨터 사진을 골라 올려보세요.`
         : `🏠 『${roomTitle}』으로 돌아왔습니다.`,
     });
+  },
+
+  applyShareInviteDeepLink: async (rawUrlOrToken, opts) => {
+    const parsed = parseShareInviteInput(rawUrlOrToken);
+    if (!parsed) {
+      return false;
+    }
+    const isNative = Boolean(opts?.fromNativeApp || isCapacitorNativeMobileRuntime());
+    persistInviteContextMeta(parsed, isNative);
+
+    if (parsed.nicknameHint && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('ghosti_invited_member_nickname', parsed.nicknameHint);
+        const prevSec = loadGhostSecretaryState();
+        saveGhostSecretaryState({
+          ...prevSec,
+          nickname: prevSec.nickname || parsed.nicknameHint,
+          awaitingNickname: false,
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+
+    if (parsed.loungeType === 'family' && get().sharedRoomHostPhotos.length === 0) {
+      const hostPhotos = await fetchSharedFamilyHostPhotos();
+      if (hostPhotos.length > 0) {
+        set({ sharedRoomHostPhotos: hostPhotos });
+      }
+    }
+
+    const st = get();
+    const mergedShared = resolveLoungePhotoCorpus({
+      activeLoungeType: parsed.loungeType,
+      activeFamilyRoom: parsed.familyRoom,
+      photos: st.photos,
+      sharedRoomHostPhotos: st.sharedRoomHostPhotos,
+      sharedRoomAddedPhotos: st.sharedRoomAddedPhotos,
+    });
+    const sharedGalleryResults: SearchResultItem[] = filterVisibleGalleryPhotos(mergedShared).map(
+      (photo) => ({
+        photo,
+        score: 0.96,
+        matchPercentage: 98,
+        matchedBy: 'text-direct' as const,
+      })
+    );
+
+    set({
+      activeLoungeType: parsed.loungeType,
+      activeFamilyRoom: parsed.familyRoom,
+      desktopTab: 'dashboard',
+      mobileTab: 'search',
+      isGuestPreviewMode: isNative ? false : st.isGuestPreviewMode,
+      isInvitedMemberSession: isNative ? true : st.isInvitedMemberSession,
+      guestJoinWallReason: null,
+      searchSpace: 'gallery',
+      hasExecutedUserSearch: false,
+      activeQuery: `${parsed.roomTitle} (${sharedGalleryResults.length}장)`,
+      matchedVideoScenes: [],
+      matchedLocalDocs: [],
+      matchedVaultPhotos: [],
+      searchResults: sharedGalleryResults,
+      lastQuarantineToast: isNative
+        ? `💌 ${parsed.hostName}님이 초대한 『${parsed.roomTitle}』에 바로 입장했습니다! 이제 내 사진 올리기·고화질 원본 저장·새 사진 알림을 모두 이용하실 수 있습니다.`
+        : `💌 ${parsed.hostName}님이 초대한 『${parsed.roomTitle}』을(를) 열었습니다.`,
+    });
+    return true;
   },
 
   setActiveFamilyRoom: (activeFamilyRoom) => {

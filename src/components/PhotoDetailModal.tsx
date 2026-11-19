@@ -412,7 +412,7 @@ export const PhotoDetailModal: React.FC = () => {
                 onClick={(e) => {
                   if (isGuestPreviewMode) {
                     e.preventDefault();
-                    triggerGuestJoinWall('📥 이 사진 고화질 원본(5MB) 내 폰에 저장하기');
+                    triggerGuestJoinWall('💾 고화질 원본 내 폰에 일괄 저장');
                     return;
                   }
                   setActionNotice(

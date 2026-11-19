@@ -68,7 +68,8 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "resolveVideoPlaybackUrl", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "requestSystemPhotoTrash", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openAppPermissionSettings", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "scanInstalledBloatCleaners", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "scanInstalledBloatCleaners", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "consumePendingDeepLink", returnType: CAPPluginReturnPromise)
     ]
 
     private func hasPhotoAccess(_ status: PHAuthorizationStatus) -> Bool {
@@ -83,6 +84,19 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
             "ok": true,
             "scannedCount": 0,
             "detected": []
+        ])
+    }
+
+    @objc func consumePendingDeepLink(_ call: CAPPluginCall) {
+        let key = "ghosti_pending_deep_link_url"
+        let urlStr = UserDefaults.standard.string(forKey: key) ?? ""
+        if !urlStr.isEmpty {
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        call.resolve([
+            "ok": true,
+            "deepLinkUrl": urlStr,
+            "source": urlStr.isEmpty ? "none" : "url_scheme"
         ])
     }
 
@@ -373,6 +387,22 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
 class SceneDelegate: UIResponder, UIWindowSceneDelegate {
     var window: UIWindow?
 
+    private func recordAndDispatchIncomingUrl(_ url: URL?) {
+        guard let url = url else { return }
+        let urlStr = url.absoluteString
+        let lower = urlStr.lowercased()
+        guard lower.hasPrefix("ghosti://") || lower.contains("invite=") else { return }
+        UserDefaults.standard.set(urlStr, forKey: "ghosti_pending_deep_link_url")
+        DispatchQueue.main.async { [weak self] in
+            guard let bridgeVC = self?.window?.rootViewController as? GhostiBridgeViewController else { return }
+            if let jsonData = try? JSONSerialization.data(withJSONObject: ["url": urlStr], options: []),
+               let jsonStr = String(data: jsonData, encoding: .utf8) {
+                let js = "window.dispatchEvent(new CustomEvent('ghostiNativeDeepLink', { detail: \(jsonStr) }));"
+                bridgeVC.webView?.evaluateJavaScript(js, completionHandler: nil)
+            }
+        }
+    }
+
     func scene(_ scene: UIScene, willConnectTo session: UISceneSession, options connectionOptions: UIScene.ConnectionOptions) {
         guard let windowScene = scene as? UIWindowScene else { return }
 
@@ -380,14 +410,26 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         window?.rootViewController = GhostiBridgeViewController()
         window?.makeKeyAndVisible()
 
+        if let openUrl = connectionOptions.urlContexts.first?.url {
+            recordAndDispatchIncomingUrl(openUrl)
+        } else if let activityUrl = connectionOptions.userActivities.first?.webpageURL {
+            recordAndDispatchIncomingUrl(activityUrl)
+        }
+
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
     }
 
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
+        if let openUrl = URLContexts.first?.url {
+            recordAndDispatchIncomingUrl(openUrl)
+        }
         SceneDelegateProxy.shared.scene(scene, openURLContexts: URLContexts)
     }
 
     func scene(_ scene: UIScene, continue userActivity: NSUserActivity) {
+        if let webUrl = userActivity.webpageURL {
+            recordAndDispatchIncomingUrl(webUrl)
+        }
         SceneDelegateProxy.shared.scene(scene, continue: userActivity)
     }
 }

@@ -122,6 +122,7 @@ import {
   quarantineFailureToast,
   quarantineResultNote,
   requestQuarantineOp,
+  resolveInvitedHostLoungeAndRoom,
   resolveLoungePhotoCorpus,
   restoreAllExcludedCustomFaceRegistrations,
   saveCustomFaceRegistration,
@@ -182,10 +183,10 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
     student: null,
     work: null,
   },
-  activeLoungeType:
-    typeof window !== 'undefined' && new URLSearchParams(window.location.search).has('invite')
-      ? 'family'
-      : 'personal',
+  activeLoungeType: (() => {
+    const inv = resolveInvitedHostLoungeAndRoom();
+    return inv.hasActiveInvite && inv.hostLounge ? inv.hostLounge : 'personal';
+  })(),
   gpuHelper24hActive: false,
   gpuHelperActiveTier: 'standard_1000',
   gpuHelperRemainingHours: 24,

@@ -69,6 +69,7 @@ public class MainActivity extends BridgeActivity {
         });
         registerPlugin(GhostiMobileCarePlugin.class);
         super.onCreate(savedInstanceState);
+        captureIncomingDeepLinkIntent(getIntent());
 
         // [스마트폰 카메라/갤러리 동영상 무복사 64-bit HTTP 206 Range 스트리밍 브릿지]:
         // Capacitor 기본 WebViewLocalServer는 content:// 요청 시 FileChannel.position(seek)을 누락하여
@@ -115,6 +116,44 @@ public class MainActivity extends BridgeActivity {
                 return WindowInsetsCompat.CONSUMED;
             });
             ViewCompat.requestApplyInsets(contentView);
+        }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        captureIncomingDeepLinkIntent(intent);
+    }
+
+    private void captureIncomingDeepLinkIntent(Intent intent) {
+        if (intent == null) return;
+        Uri data = intent.getData();
+        if (data == null) return;
+        String urlStr = data.toString();
+        if (urlStr == null || urlStr.trim().isEmpty()) return;
+        String lower = urlStr.toLowerCase();
+        if (!lower.startsWith("ghosti://") && !lower.contains("invite=")) {
+            return;
+        }
+        try {
+            getSharedPreferences("ghosti_deep_links", MODE_PRIVATE)
+                .edit()
+                .putString("pending_deep_link_url", urlStr)
+                .apply();
+        } catch (Throwable ignored) {
+        }
+        if (this.bridge != null && this.bridge.getWebView() != null) {
+            final String escaped = org.json.JSONObject.quote(urlStr);
+            this.bridge.getWebView().post(() -> {
+                try {
+                    this.bridge.getWebView().evaluateJavascript(
+                        "window.dispatchEvent(new CustomEvent('ghostiNativeDeepLink', { detail: { url: " + escaped + " } }));",
+                        null
+                    );
+                } catch (Throwable ignored) {
+                }
+            });
         }
     }
 

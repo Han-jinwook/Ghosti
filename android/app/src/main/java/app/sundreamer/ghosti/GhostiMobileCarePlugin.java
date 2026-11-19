@@ -23,6 +23,9 @@ import android.util.Size;
 
 import java.io.ByteArrayOutputStream;
 
+import com.android.installreferrer.api.InstallReferrerClient;
+import com.android.installreferrer.api.InstallReferrerStateListener;
+import com.android.installreferrer.api.ReferrerDetails;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
@@ -852,5 +855,91 @@ public class GhostiMobileCarePlugin extends Plugin {
         } catch (Throwable ignored) {
         }
         return null;
+    }
+
+    @PluginMethod
+    public void consumePendingDeepLink(PluginCall call) {
+        Context ctx = getContext();
+        if (ctx == null) {
+            JSObject empty = new JSObject();
+            empty.put("ok", false);
+            empty.put("deepLinkUrl", "");
+            call.resolve(empty);
+            return;
+        }
+        android.content.SharedPreferences prefs = ctx.getSharedPreferences("ghosti_deep_links", Context.MODE_PRIVATE);
+        String pendingUrl = prefs.getString("pending_deep_link_url", "");
+        if (pendingUrl != null && !pendingUrl.trim().isEmpty()) {
+            prefs.edit().remove("pending_deep_link_url").apply();
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("deepLinkUrl", pendingUrl);
+            ret.put("source", "intent");
+            call.resolve(ret);
+            return;
+        }
+
+        boolean referrerChecked = prefs.getBoolean("install_referrer_checked", false);
+        if (referrerChecked) {
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("deepLinkUrl", "");
+            ret.put("source", "none");
+            call.resolve(ret);
+            return;
+        }
+
+        try {
+            final InstallReferrerClient referrerClient = InstallReferrerClient.newBuilder(ctx).build();
+            referrerClient.startConnection(new InstallReferrerStateListener() {
+                private boolean resolved = false;
+
+                @Override
+                public void onInstallReferrerSetupFinished(int responseCode) {
+                    if (resolved) return;
+                    resolved = true;
+                    String resolvedInviteUrl = "";
+                    try {
+                        prefs.edit().putBoolean("install_referrer_checked", true).apply();
+                        if (responseCode == InstallReferrerClient.InstallReferrerResponse.OK) {
+                            ReferrerDetails details = referrerClient.getInstallReferrer();
+                            String rawRef = details != null ? details.getInstallReferrer() : "";
+                            if (rawRef != null && rawRef.contains("invite=")) {
+                                resolvedInviteUrl = "ghosti://invite?" + rawRef;
+                            }
+                        }
+                    } catch (Throwable ignored) {
+                    } finally {
+                        try {
+                            referrerClient.endConnection();
+                        } catch (Throwable ignored) {
+                        }
+                    }
+                    JSObject ret = new JSObject();
+                    ret.put("ok", true);
+                    ret.put("deepLinkUrl", resolvedInviteUrl);
+                    ret.put("source", resolvedInviteUrl.isEmpty() ? "none" : "install_referrer");
+                    call.resolve(ret);
+                }
+
+                @Override
+                public void onInstallReferrerServiceDisconnected() {
+                    if (resolved) return;
+                    resolved = true;
+                    JSObject ret = new JSObject();
+                    ret.put("ok", true);
+                    ret.put("deepLinkUrl", "");
+                    ret.put("source", "disconnected");
+                    call.resolve(ret);
+                }
+            });
+        } catch (Throwable t) {
+            prefs.edit().putBoolean("install_referrer_checked", true).apply();
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("deepLinkUrl", "");
+            ret.put("source", "error");
+            call.resolve(ret);
+        }
     }
 }

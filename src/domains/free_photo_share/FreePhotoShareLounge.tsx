@@ -16,6 +16,12 @@ import { GhostiBrandLogo } from '../../components/GhostiBrandLogo';
 import { GhostCastLiveToolbar } from '../../components/GhostCastAndLiveSystem';
 import { SilentIndexingStatusBar } from '../../components/SilentIndexingStatusBar';
 import { zCoreBridge } from '../../services/zCoreBridge';
+import { isCapacitorNativeMobileRuntime } from '../../services/ghostiMobileCareBridge';
+import {
+  buildShareRoomInviteHttpsUrl,
+  buildShareRoomNativeSchemeUrl,
+  readCurrentInviteDisplayMeta,
+} from '../../services/shareInviteDeepLinkBridge';
 import { LOUNGE_TABS, PLAN_BADGE_LABELS, HostThreeBodyControlPanel } from '../shared/loungeHelpers';
 import { WorkLoungeB2BHub } from '../paid_work_share/WorkLoungeB2BHub';
 
@@ -52,7 +58,13 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
 
   const cohortShort = String(alumniGradCohortNumber).padStart(2, '0');
   const bannerTitle = `${alumniSchoolName} ${cohortShort}회 동창회`;
-  const inviteHookCopy = `[${bannerTitle}] 네가 몰랐던 ${cohortShort}년 수학여행 네 사진 다 찾았다! (초대받은 가족·회원·직원은 언제나 무료입니다)`;
+  const studentInviteUrl = buildShareRoomInviteHttpsUrl({
+    loungeType: 'student',
+    familyRoom: '우리집',
+    hostName: '동기회장',
+    roomTitle: `🎓 ${bannerTitle}`,
+  });
+  const inviteHookCopy = `[${bannerTitle}] 네가 몰랐던 ${cohortShort}년 수학여행·졸업식 사진이 올라왔어! 설치·로그인 없이 바로 구경하고 내 사진도 올려봐 (초대받은 동기는 평생 무료)\n👉 ${studentInviteUrl}`;
   const trojanBragCopy = `내가 동호회·동창회 마스터권 끊어서 패밀리 라운지 무료 이용권 3장 받았는데, 선착순으로 줄 테니 쓸 사람?`;
 
   const pendingProposals = analogYearProposals.filter((p) => !p.approvedByHost);
@@ -1708,7 +1720,13 @@ export const LoungeFeedContextBanner: React.FC = () => {
   const [clubInviteCopied, setClubInviteCopied] = useState(false);
 
   const handleCopyClubInviteHook = async () => {
-    const copyTxt = `[${clubBannerTitle}] 이번 모임·라운딩 고화질 원본 사진과 영상이 모두 올라왔습니다! (총무님 후원으로 전 회원 평생 0원 무료입니다)`;
+    const clubInviteUrl = buildShareRoomInviteHttpsUrl({
+      loungeType: 'club',
+      familyRoom: '우리집',
+      hostName: '모임총무',
+      roomTitle: `⛰️ ${clubBannerTitle}`,
+    });
+    const copyTxt = `[${clubBannerTitle}] 이번 모임·라운딩 고화질 원본 사진과 영상이 모두 올라왔습니다! 설치·로그인 없이 바로 구경하세요 (총무님 후원으로 전 회원 평생 0원 무료)\n👉 ${clubInviteUrl}`;
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(copyTxt);
@@ -1741,6 +1759,10 @@ export const LoungeFeedContextBanner: React.FC = () => {
       <button
         type="button"
         onClick={() => {
+          if (isGuestPreviewMode) {
+            triggerGuestJoinWall('💾 고화질 원본 내 폰에 일괄 저장');
+            return;
+          }
           setShowStorageCheckBanner(true);
           if (simulateLowStorage) {
             setP2pOriginalSummoned(false);
@@ -1901,9 +1923,12 @@ export const LoungeFeedContextBanner: React.FC = () => {
     return null;
   };
 
+  const inviteMeta = readCurrentInviteDisplayMeta(activeLoungeType, activeFamilyRoom);
+  const isNativeAppRuntime = isCapacitorNativeMobileRuntime();
+
   const renderMobileGuestPreviewBanner = () => (
     <div
-      className={`md:hidden px-3 py-2 rounded-2xl border flex flex-col gap-2 transition-all ${
+      className={`md:hidden px-3.5 py-2.5 rounded-2xl border flex flex-col gap-2 transition-all ${
         isGuestPreviewMode
           ? 'bg-gradient-to-r from-amber-500/15 via-emerald-500/10 to-zinc-900 border-amber-400/50'
           : themeMode === 'light'
@@ -1912,38 +1937,64 @@ export const LoungeFeedContextBanner: React.FC = () => {
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <button
-          type="button"
-          onClick={() => setIsGuestPreviewMode(!isGuestPreviewMode)}
-          className={`px-2.5 py-1 rounded-lg font-label-sm text-[11px] font-extrabold cursor-pointer transition-all ${
-            isGuestPreviewMode
-              ? 'bg-[#FEE500] text-[#191919] shadow-xs'
-              : 'bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-amber-400/30'
-          }`}
-        >
-          {isGuestPreviewMode
-            ? '💬 카톡 무가입 1초 프리뷰 모드 ON (13KB 썸네일 구경 중)'
-            : '💬 카톡 단톡방 무가입 1초 프리뷰 체험하기'}
-        </button>
+        {isGuestPreviewMode ? (
+          <span className="px-2.5 py-1 rounded-lg bg-[#FEE500] text-[#191919] font-label-sm text-[11px] font-extrabold shadow-xs break-keep">
+            💌 {inviteMeta.hostName}님이 초대한 [{inviteMeta.roomTitle}] · 로그인 없이 구경 중
+          </span>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setIsGuestPreviewMode(true)}
+            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-amber-400/30 font-label-sm text-[11px] font-extrabold cursor-pointer transition-all"
+          >
+            👀 카톡 초대 링크 수신 화면 미리보기
+          </button>
+        )}
+
+        {isGuestPreviewMode && !isNativeAppRuntime && (
+          <button
+            type="button"
+            onClick={() => {
+              window.location.href = buildShareRoomNativeSchemeUrl({
+                loungeType: activeLoungeType,
+                familyRoom: activeFamilyRoom,
+                hostName: inviteMeta.hostName,
+                roomTitle: inviteMeta.roomTitle,
+              });
+            }}
+            className="px-2.5 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/50 text-teal-200 font-label-sm text-[10.5px] font-extrabold cursor-pointer shrink-0"
+          >
+            📱 이미 앱이 있다면 앱으로 열기
+          </button>
+        )}
+
+        {isGuestPreviewMode && !inviteMeta.hasExplicitUrlInvite && (
+          <button
+            type="button"
+            onClick={() => setIsGuestPreviewMode(false)}
+            className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10.5px] font-bold cursor-pointer"
+          >
+            ↩️ 방장 화면 복귀
+          </button>
+        )}
       </div>
       <span className="text-[11px] text-zinc-300 leading-snug break-keep">
         {isGuestPreviewMode
-          ? '로그인 없이 0.5초 만에 사진을 구경 중입니다! 아래 행동 클릭 시 별명·이메일 1초 합류 창이 열립니다.'
-          : '단톡방 초대 링크 터치 시 로그인 창 없이 사진 바둑판을 먼저 보여주는 무가입 프리뷰 퍼널입니다.'}
+          ? '설치·가입 없이 공유 사진방을 자유롭게 구경하고 검색해 보세요! 아래 기능을 누르면 무료 모바일 앱 설치 후 이 방으로 자동 입장됩니다.'
+          : '상대방이 카톡 초대 링크를 눌렀을 때 설치·로그인 없이 1초 만에 열리는 공유방 구경 화면을 미리 확인합니다.'}
       </span>
       {isGuestPreviewMode && (
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
           {[
-            { label: '🎯 내 얼굴 사진 1초 찾기', reason: '🎯 내 얼굴이 나온 사진만 1초 만에 다 찾기' },
-            { label: '📥 고화질 원본(5MB) 저장', reason: '📥 이 사진 고화질 원본(5MB) 내 기기에 저장하기' },
-            { label: '❤️ 하트 / 💬 댓글 달기', reason: '❤️ 하트 누르기 / 💬 댓글("와 이 사진 대박!") 달기' },
-            { label: '📸 내 사진 같이 올리기', reason: '📸 이 방에 내 사진·영상 같이 올리기' },
+            { label: '📸 내 폰 사진도 이 방에 올리기', reason: '📸 내 폰 사진도 이 방에 올리기' },
+            { label: '💾 고화질 원본 내 폰에 일괄 저장', reason: '💾 고화질 원본 내 폰에 일괄 저장' },
+            { label: '🔔 새 사진 올라오면 알림 받기', reason: '🔔 새 사진 올라오면 카톡·푸시 알림 받기' },
           ].map((trig) => (
             <button
               key={trig.label}
               type="button"
               onClick={() => triggerGuestJoinWall(trig.reason)}
-              className="px-2 py-1 rounded-lg bg-zinc-950/90 hover:bg-zinc-800 border border-amber-400/40 text-amber-200 text-[10.5px] font-bold cursor-pointer"
+              className="px-2.5 py-1 rounded-lg bg-zinc-950/90 hover:bg-zinc-800 border border-amber-400/40 text-amber-200 text-[10.5px] font-bold cursor-pointer"
             >
               {trig.label}
             </button>
@@ -1954,13 +2005,17 @@ export const LoungeFeedContextBanner: React.FC = () => {
   );
 
   if (activeLoungeType === 'family') {
-    const inviteUrl = `https://ghosti.sundreamer.app/?invite=${
-      activeFamilyRoom === '본가(친가)'
-        ? 'family_parents'
-        : activeFamilyRoom === '처가(친정)'
-          ? 'family_inlaws'
-          : 'family_home'
-    }&preview=guest`;
+    const inviteUrl = buildShareRoomInviteHttpsUrl({
+      loungeType: 'family',
+      familyRoom: activeFamilyRoom,
+      hostName: '가족방장',
+      roomTitle:
+        activeFamilyRoom === '본가(친가)'
+          ? '🏡 본가(친가) 가족 사진방'
+          : activeFamilyRoom === '처가(친정)'
+            ? '🌸 처가(친정) 가족 사진방'
+            : '🏠 우리집 가족 사진방',
+    });
     return (
       <div className="flex flex-col gap-2.5">
         {renderMobileGuestPreviewBanner()}
@@ -1987,7 +2042,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
                 }
                 useSaySeeStore
                   .getState()
-                  .showToast(`💌 『${activeFamilyRoom} 패밀리 앨범』 무가입 1초 초대 링크가 복사되었습니다! (${inviteUrl})`);
+                  .showToast(`💌 『${activeFamilyRoom} 가족 사진방』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.`);
               }}
               className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-400/50 text-amber-300 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 cursor-pointer transition-all"
             >
@@ -3119,17 +3174,14 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     : [];
 
   const copyInviteLink = async () => {
-    const inviteParam =
-      activeLoungeType === 'family'
-        ? activeFamilyRoom === '본가(친가)'
-          ? 'family_parents'
-          : activeFamilyRoom === '처가(친정)'
-          ? 'family_inlaws'
-          : 'family_home'
-        : activeLoungeType === 'student'
-        ? 'student'
-        : 'club';
-    const inviteCopy = `[귀신같이 라운지 초대장] 내 PC와 모바일에 1초 초능력을! 가족·모임 원본 사진은 만료 없이 평생 0원이며, 초대받은 가족·회원·직원은 언제나 무료입니다. https://ghosti.sundreamer.app/?invite=${inviteParam}&preview=guest`;
+    const targetLounge: LoungeType =
+      activeLoungeType === 'club' || activeLoungeType === 'student' ? activeLoungeType : 'family';
+    const inviteUrl = buildShareRoomInviteHttpsUrl({
+      loungeType: targetLounge,
+      familyRoom: activeFamilyRoom,
+      hostName: targetLounge === 'family' ? '가족방장' : '모임방장',
+    });
+    const inviteCopy = `[귀신같이 사진 공유방 초대장] 설치·로그인 없이 1초 만에 우리 공유 사진을 구경하고, 무료 앱에서 내 사진 올리기·고화질 원본 저장·새 사진 알림까지 평생 0원으로 함께해요!\n👉 ${inviteUrl}`;
     try {
       if (typeof navigator !== 'undefined' && navigator.clipboard) {
         await navigator.clipboard.writeText(inviteCopy);
