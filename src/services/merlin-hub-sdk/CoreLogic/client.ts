@@ -1,11 +1,12 @@
 /**
- * Version: v1.2.0
- * Last Updated: 2026-10-24
+ * Version: v1.2.1
+ * Last Updated: 2026-11-20
  * Merlin Hub SDK — HTTP Client
  * - 모든 허브 통신에 CLIENT_ID/SECRET 헤더를 자동 부착
  * - 네트워크 실패 시 지수 백오프 재시도 (최대 3회)
  * - JWT 401 만료 감지 → 자동 세션 클리어 + 이벤트 발행
  * - Local Token Shield: 개별 앱 독립 로그아웃 및 공용 쿠키 자가 치유(Self-Healing)
+ * - v1.2.1: 로그아웃(merlin_logged_out='1') 최우선 판별 및 sessionStorage.clear() 제거(개별 앱 라우팅 상태 보호)
  */
 
 import { getConfig } from './config';
@@ -42,8 +43,42 @@ export const SESSION_LOGGED_OUT_KEY = 'merlin_logged_out';
 
 export function getSessionToken(): string | null {
   if (typeof window === 'undefined') return null;
+
+  // 0. URL 쿼리에 SSO 토큰(?sso_token=... 또는 ?token=...)이 방금 전달되었다면,
+  // 자식 컴포넌트의 useEffect가 부모(HubProvider)의 useEffect보다 먼저 실행되더라도
+  // 과거 localStorage 토큰이 아닌 신규 SSO 토큰을 0순위로 즉시 채택하여 덮어씌움!
+  try {
+    const urlParams = new URLSearchParams(window.location.search);
+    const incomingSso = urlParams.get('sso_token') || urlParams.get('token');
+    if (incomingSso && incomingSso.split('.').length === 3) {
+      const prevLocal = localStorage.getItem(SESSION_TOKEN_KEY);
+      if (prevLocal !== incomingSso) {
+        localStorage.removeItem('merlin_cached_user');
+        localStorage.removeItem('merlin_cached_balance');
+        localStorage.removeItem('userNickname');
+        localStorage.removeItem('userEmail');
+        localStorage.removeItem('userProfileImage');
+        localStorage.removeItem('merlin_user_id');
+      }
+      setSessionToken(incomingSso);
+      return incomingSso;
+    }
+  } catch {}
   
-  // 1. localStorage 우선 확인
+  // 1. 이 앱에서 명시적으로 로그아웃한 상태라면殘류 로컬 토큰이나 공용 쿠키로부터 자동 복원 금지 (게스트 유지 최우선)
+  if (
+    localStorage.getItem(SESSION_LOGGED_OUT_KEY) === '1' ||
+    sessionStorage.getItem(SESSION_LOGGED_OUT_KEY) === '1'
+  ) {
+    try {
+      if (localStorage.getItem(SESSION_TOKEN_KEY)) {
+        localStorage.removeItem(SESSION_TOKEN_KEY);
+      }
+    } catch {}
+    return null;
+  }
+
+  // 2. localStorage 우선 확인
   const localToken = localStorage.getItem(SESSION_TOKEN_KEY);
   if (localToken) {
     // 도메인 쿠키가 유실되었거나 비어있는 경우 유효한 로컬 토큰으로 공용 쿠키 자가 치유(Self-Healing)
@@ -58,11 +93,6 @@ export function getSessionToken(): string | null {
       }
     } catch {}
     return localToken;
-  }
-
-  // 2. 이 앱에서 명시적으로 로그아웃한 상태라면 공용 쿠키로부터 자동 복원 금지 (게스트 유지)
-  if (localStorage.getItem(SESSION_LOGGED_OUT_KEY) === '1') {
-    return null;
   }
 
   // 3. localStorage에 없고 명시적 로그아웃도 아니라면 공용 쿠키(.sundreamer.app) 탐색 (SSO Handoff)
@@ -85,8 +115,26 @@ export function getSessionToken(): string | null {
 export function setSessionToken(token: string) {
   if (typeof window === 'undefined') return;
   try {
+    const prevToken = localStorage.getItem(SESSION_TOKEN_KEY);
+    if (prevToken && prevToken !== token) {
+      try {
+        const p1 = JSON.parse(atob(prevToken.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+        const p2 = JSON.parse(atob(token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/')));
+        if (p1.userId !== p2.userId || p1.email !== p2.email) {
+          localStorage.removeItem('merlin_cached_user');
+          localStorage.removeItem('merlin_cached_balance');
+          localStorage.removeItem('userNickname');
+          localStorage.removeItem('userEmail');
+          localStorage.removeItem('userProfileImage');
+          localStorage.removeItem('merlin_user_id');
+        }
+      } catch {}
+    }
     localStorage.setItem(SESSION_TOKEN_KEY, token);
     localStorage.removeItem(SESSION_LOGGED_OUT_KEY); // 로그인 시 개별 앱 로그아웃 플래그 즉시 해제
+    try {
+      sessionStorage.removeItem(SESSION_LOGGED_OUT_KEY);
+    } catch {}
     const domainPart = getCookieDomain();
     const securePart = window.location.protocol === 'https:' ? '; Secure; SameSite=Lax' : '; SameSite=Lax';
     document.cookie = `${SESSION_TOKEN_KEY}=${encodeURIComponent(token)}; path=/; max-age=${THIRTY_DAYS_SECONDS}${domainPart}${securePart}`;
@@ -101,10 +149,33 @@ export function clearSessionToken(scope: 'local' | 'global' = 'local') {
     localStorage.removeItem(SESSION_TOKEN_KEY);
     localStorage.removeItem('merlin_cached_user');
     localStorage.removeItem('merlin_cached_balance');
+    localStorage.removeItem('merlin_user_id');
+    localStorage.removeItem('merlin_family_uid');
     localStorage.removeItem('userEmail');
     localStorage.removeItem('userNickname');
     localStorage.removeItem('userProfileImage');
-    sessionStorage.clear();
+    // 🚨 sessionStorage.clear()를 호출하면 개별 앱의 워크스페이스/초대방 라우팅 플래그(ghosti_entered_from_showroom 등)까지
+    // 증발하여 온보딩 대문으로 튕기는 사고가 발생하므로, 오직 허브 인증 관련 키만 핀셋 제거합니다.
+    try {
+      sessionStorage.removeItem(SESSION_TOKEN_KEY);
+      sessionStorage.removeItem('merlin_cached_user');
+    } catch {}
+
+    // URL에 SSO용 ?sso_token= 또는 3단 JWT ?token=이 남아 있으면 즉시 주소창에서 제거
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      const rawTok = urlParams.get('token') || '';
+      const hasSsoTok = urlParams.has('sso_token') || (rawTok.startsWith('eyJ') && rawTok.split('.').length === 3);
+      if (hasSsoTok) {
+        urlParams.delete('sso_token');
+        if (rawTok.startsWith('eyJ') && rawTok.split('.').length === 3) {
+          urlParams.delete('token');
+        }
+        const qs = urlParams.toString();
+        const cleanUrl = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash || ''}`;
+        window.history.replaceState(window.history.state || {}, '', cleanUrl);
+      }
+    } catch {}
 
     const expireStr = '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0';
     
@@ -116,9 +187,15 @@ export function clearSessionToken(scope: 'local' | 'global' = 'local') {
       // 로컬 로그아웃: 이 앱에서 명시적으로 로그아웃했음을 기록하여 공용 쿠키로부터 자동 복원을 차단
       // 🚨 타 패밀리 앱의 세션을 보존하기 위해 .sundreamer.app 최상위 공용 쿠키는 절대 삭제하지 않음!
       localStorage.setItem(SESSION_LOGGED_OUT_KEY, '1');
+      try {
+        sessionStorage.setItem(SESSION_LOGGED_OUT_KEY, '1');
+      } catch {}
     } else if (scope === 'global') {
       // 전체 로그아웃: 패밀리 도메인 공용 쿠키까지 완벽 소멸
       localStorage.removeItem(SESSION_LOGGED_OUT_KEY);
+      try {
+        sessionStorage.removeItem(SESSION_LOGGED_OUT_KEY);
+      } catch {}
       const domainPart = getCookieDomain();
       if (domainPart) {
         document.cookie = `${SESSION_TOKEN_KEY}${expireStr}${domainPart}; SameSite=Lax; Secure`;

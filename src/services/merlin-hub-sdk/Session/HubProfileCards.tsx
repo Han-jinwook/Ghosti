@@ -1,7 +1,8 @@
 /**
- * Version: v2.3.6
+ * Version: v2.3.7
  * Last Updated: 2026-11-20
  * Merlin Hub SDK — 프로필/선물함/알림/로그아웃 카드
+ * - v2.3.7: 로그아웃 시 루트('/') 강제 이동 및 sessionStorage.clear()·profileUpdated 역호출 제거로 온보딩 튕김·뒤로가기 세션 부활 원천 차단 (현재 화면 즉시 게스트 전환)
  * - v2.3.6: 프로필 모달 오픈 직후 빠른 [로그아웃] 클릭 시 인플라이트 getProfile() 응답 차단 및 location.replace 단일 리로드 정리
  * - v2.3.5: HubLogoutCard 내 [회원 탈퇴] 버튼 및 안전 2중 확인 모달 탑재 (개별 앱 단독 탈퇴 API + onWithdrawApp 콜백 지원)
  * - v2.3.4: 프로필 정보 창(HubProfileCard) 상단의 중복 배너(내 잔여 코인 / 코인 선물함) 기본 제거 (showCoin = false 기본값 적용)
@@ -14,7 +15,7 @@ import { MerlinHub } from '../index';
 import { withdrawApp } from '../Auth/auth';
 import { HubAvatar } from './HubProfileWidget';
 import { useHub } from '../HubProvider';
-import { compressImage, triggerHaptic } from '../CoreLogic/index';
+import { compressImage, triggerHaptic, clearSessionToken } from '../CoreLogic/index';
 import { HubGiftBoxModal, GiftProductItem } from '../Wallet/HubGiftBoxModal';
 import { getGiftList } from '../Wallet/wallet';
 
@@ -512,26 +513,33 @@ export const HubLogoutCard: React.FC<HubLogoutCardProps> = ({
 
   const clearLocalSessionAndReload = async (runLogoutCallback: boolean = true) => {
     try {
-      const { clearSessionToken } = await import('../CoreLogic/client');
       clearSessionToken('local');
     } catch (e) {}
 
     if (typeof window !== 'undefined') {
-      localStorage.removeItem('merlin_session_token');
-      localStorage.removeItem('merlin_cached_user');
-      localStorage.removeItem('merlin_cached_balance');
-      localStorage.removeItem('merlin_user_id');
-      localStorage.removeItem('merlin_family_uid');
-      localStorage.setItem('merlin_logged_out', '1');
-      sessionStorage.clear();
+      try {
+        localStorage.removeItem('merlin_session_token');
+        localStorage.removeItem('merlin_cached_user');
+        localStorage.removeItem('merlin_cached_balance');
+        localStorage.removeItem('merlin_user_id');
+        localStorage.removeItem('merlin_family_uid');
+        localStorage.removeItem('userEmail');
+        localStorage.removeItem('userNickname');
+        localStorage.removeItem('userProfileImage');
+        localStorage.setItem('merlin_logged_out', '1');
+        sessionStorage.removeItem('merlin_session_token');
+        sessionStorage.removeItem('merlin_cached_user');
+        sessionStorage.setItem('merlin_logged_out', '1');
+      } catch {}
       // 🚨 해당 앱 호스트 쿠키만 소멸시키고, 타 패밀리 앱 세션을 위해 .sundreamer.app 공용 쿠키는 보존
-      document.cookie = 'merlin_session_token=; path=/; max-age=0;';
+      document.cookie = 'merlin_session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0; SameSite=Lax; Secure';
+      document.cookie = 'merlin_session_token=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0;';
+      // 🚨 profileUpdated를 발행하면 HubProvider가 refreshSession()(/api/auth/me)을 다시 호출하므로 절대 발행 금지!
       window.dispatchEvent(new CustomEvent('merlinSessionExpired'));
-      window.dispatchEvent(new Event('profileUpdated'));
+      window.dispatchEvent(new CustomEvent('closeProfileModal'));
       if (runLogoutCallback && onLogout) {
         onLogout();
       }
-      window.location.replace(window.location.origin + '/');
     }
   };
 

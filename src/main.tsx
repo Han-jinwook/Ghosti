@@ -55,10 +55,12 @@ if (typeof window !== 'undefined') {
           curParams.get('view') !== 'showroom';
         if (isFresh && isBareRoot) {
           purgeAllGhostiLocalAuthArtifacts({ clearLogoutLock: true });
+          localStorage.setItem('ghosti_onboarding_completed', 'true');
+          sessionStorage.setItem('ghosti_entered_from_showroom', '1');
           const safeLounge = parsedReturn.lounge === 'personal' ? 'personal' : 'personal';
           const safeTab =
             parsedReturn.tab &&
-            ['trash', 'dashboard', 'sync', 'settings', 'share'].includes(parsedReturn.tab)
+            ['trial', 'trash', 'dashboard', 'sync', 'settings', 'share', 'superpower_dojo', 'search_dojo'].includes(parsedReturn.tab)
               ? parsedReturn.tab
               : 'trash';
           const nextSearch = `?lounge=${encodeURIComponent(safeLounge)}&tab=${encodeURIComponent(safeTab)}`;

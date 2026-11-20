@@ -121,9 +121,11 @@ let authedClientToken = '';
 export function isGhostiExplicitlyLoggedOut(): boolean {
   if (typeof window === 'undefined') return false;
   try {
-    if (localStorage.getItem('merlin_logged_out') === '1') {
-      const hasFreshHubToken = Boolean((localStorage.getItem('merlin_session_token') || '').trim());
-      if (!hasFreshHubToken) return true;
+    if (
+      localStorage.getItem('merlin_logged_out') === '1' ||
+      sessionStorage.getItem('merlin_logged_out') === '1'
+    ) {
+      return true;
     }
     const lockUntil = Number(localStorage.getItem(GHOSTI_LOGOUT_LOCK_UNTIL_KEY) || 0);
     if (lockUntil > 0 && Date.now() <= lockUntil) return true;
@@ -550,7 +552,15 @@ export function purgeAllGhostiLocalAuthArtifacts(opts?: {
     localStorage.removeItem('merlin_family_uid');
     localStorage.removeItem('userEmail');
     localStorage.removeItem('userProfileImage');
+    localStorage.removeItem('ghosti_prelaunch_verified_email');
     localStorage.setItem('merlin_logged_out', '1');
+    try {
+      sessionStorage.removeItem('merlin_session_token');
+      sessionStorage.removeItem('merlin_cached_user');
+      sessionStorage.setItem('merlin_logged_out', '1');
+    } catch {
+      /* ignore */
+    }
     if (opts?.setLogoutLockMs && opts.setLogoutLockMs > 0) {
       localStorage.setItem(GHOSTI_LOGOUT_LOCK_UNTIL_KEY, String(Date.now() + opts.setLogoutLockMs));
     } else if (opts?.clearLogoutLock) {

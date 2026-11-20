@@ -145,12 +145,14 @@ const GhostiHubGlobalModals: React.FC = () => {
 
   const performGhostiCleanLogout = useCallback(() => {
     logoutInProgressRef.current = true;
+    wasLoggedInRef.current = false;
+    lastAuthedEmailRef.current = '';
     setIsProfileOpen(false);
     const curState = useSaySeeStore.getState();
     const hasUrlInviteToken = Boolean(readActiveInviteToken());
     purgeAllGhostiLocalAuthArtifacts({ setLogoutLockMs: 15_000 });
-    // 워크스페이스 내부에서 로그아웃 시 허브 SDK가 루트('/')로 리다이렉트하더라도
-    // 온보딩/쇼룸 대문으로 튕기지 않고 현재 워크스페이스(개인 탭 유지, 공유방은 귀신비서방 복귀)의 게스트 화면에 머무르도록 1회성 복귀 힌트 기록
+    // 워크스페이스 내부에서 로그아웃 시 현재 화면(탭) 그대로 게스트 전환되며,
+    // 새로고침(F5)이나 뒤로가기를 눌러도 온보딩/쇼룸 대문으로 튕기지 않고 게스트 워크스페이스에 정착하도록 라우팅 플래그 보존
     if (typeof window !== 'undefined') {
       try {
         const curParams = new URLSearchParams(window.location.search);
@@ -158,6 +160,7 @@ const GhostiHubGlobalModals: React.FC = () => {
           curParams.get('view') !== 'showroom' &&
           (Boolean(curParams.get('lounge')) ||
             Boolean(curParams.get('tab')) ||
+            curParams.get('dev') === 'true' ||
             curParams.has('invite') ||
             curParams.has('workRoom') ||
             Boolean(
@@ -167,9 +170,11 @@ const GhostiHubGlobalModals: React.FC = () => {
         if (isInWorkspace) {
           const safeTab =
             curState.activeLoungeType === 'personal' &&
-            ['trash', 'dashboard', 'sync', 'settings', 'share'].includes(curState.desktopTab)
+            ['trial', 'trash', 'dashboard', 'sync', 'settings', 'share', 'superpower_dojo', 'search_dojo'].includes(curState.desktopTab)
               ? curState.desktopTab
               : 'trash';
+          localStorage.setItem('ghosti_onboarding_completed', 'true');
+          sessionStorage.setItem('ghosti_entered_from_showroom', '1');
           localStorage.setItem(
             GHOSTI_POST_LOGOUT_WORKSPACE_KEY,
             JSON.stringify({
@@ -178,10 +183,19 @@ const GhostiHubGlobalModals: React.FC = () => {
               ts: Date.now(),
             })
           );
+          if (!curParams.get('lounge') || !curParams.get('tab')) {
+            curParams.set('lounge', 'personal');
+            curParams.set('tab', safeTab);
+            const nextUrl = `${window.location.pathname}?${curParams.toString()}${window.location.hash || ''}`;
+            window.history.replaceState(window.history.state || {}, '', nextUrl);
+          }
         }
       } catch {
         /* ignore storage error */
       }
+      window.setTimeout(() => {
+        logoutInProgressRef.current = false;
+      }, 400);
     }
     clearGhostSecretaryAccountNicknameOnLogout();
     clearCachedSharedRoomTokens();

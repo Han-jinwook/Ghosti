@@ -367,6 +367,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       refreshWelcomeForSecretary();
     };
     window.addEventListener('ghosti_jump_to_secretary', onJumpRefresh);
+    window.addEventListener('merlinSessionExpired', onJumpRefresh);
 
     // [Stage 1: 최초 1회 은행 보안프로그램 속도 저하 브리핑 & 1회성 동의 칩 (한 턴 연타 금지 · 호흡 분리)]
     if (
@@ -478,6 +479,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     });
     return () => {
       window.removeEventListener('ghosti_jump_to_secretary', onJumpRefresh);
+      window.removeEventListener('merlinSessionExpired', onJumpRefresh);
     };
   }, [sourceTab, isMobileOrStore]);
 

@@ -93,6 +93,17 @@ export function HubProvider({ children, appId }: { children: React.ReactNode; ap
 
   const refreshSession = useCallback(async () => {
     try {
+      if (
+        typeof window !== 'undefined' &&
+        (localStorage.getItem('merlin_logged_out') === '1' ||
+          sessionStorage.getItem('merlin_logged_out') === '1')
+      ) {
+        setUser(null);
+        setIsLoggedIn(false);
+        setBalance(null);
+        setIsLoading(false);
+        return;
+      }
       // 캐시가 존재할 때는 UI 깜빡임 방지를 위해 로딩 스켈레톤을 띄우지 않고 백그라운드 갱신합니다.
       setIsLoading(prev => {
         if (typeof window !== 'undefined') {
@@ -103,7 +114,11 @@ export function HubProvider({ children, appId }: { children: React.ReactNode; ap
       const session = await checkSession();
 
       // 🚨 인플라이트 checkSession() 대기 중 로그아웃이 실행된 경우 상태/캐시 복원 즉시 차단
-      if (typeof window !== 'undefined' && localStorage.getItem('merlin_logged_out') === '1') {
+      if (
+        typeof window !== 'undefined' &&
+        (localStorage.getItem('merlin_logged_out') === '1' ||
+          sessionStorage.getItem('merlin_logged_out') === '1')
+      ) {
         setUser(null);
         setIsLoggedIn(false);
         setBalance(null);
@@ -316,12 +331,22 @@ export function HubProvider({ children, appId }: { children: React.ReactNode; ap
     refreshSession();
 
     // 외부 이벤트 대응 (로그인 성공, 세션 만료, 잔액 변동 등)
-    const handleProfileUpdate = () => refreshSession();
+    const handleProfileUpdate = () => {
+      if (
+        typeof window !== 'undefined' &&
+        (localStorage.getItem('merlin_logged_out') === '1' ||
+          sessionStorage.getItem('merlin_logged_out') === '1')
+      ) {
+        return;
+      }
+      refreshSession();
+    };
     const handleCreditsUpdate = () => refreshBalance();
     const handleSessionExpired = () => {
       setUser(null);
       setIsLoggedIn(false);
       setBalance(null);
+      setIsLoading(false);
       clearSessionToken('local');
       localStorage.removeItem('merlin_cached_user');
       localStorage.removeItem('merlin_cached_balance');
@@ -350,6 +375,14 @@ export function HubProvider({ children, appId }: { children: React.ReactNode; ap
     };
 
     const handleStorageChange = (e: StorageEvent) => {
+      if (e.key === 'merlin_logged_out' && e.newValue === '1') {
+        handleSessionExpired();
+        return;
+      }
+      if (e.key === 'merlin_session_token' && !e.newValue) {
+        handleSessionExpired();
+        return;
+      }
       if (e.key === 'merlin_session_token' || e.key === 'merlin_cached_user') {
         refreshSession();
       }
