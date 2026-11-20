@@ -137,16 +137,13 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
     <div className="flex flex-col gap-2">
       <div
         {...handlers}
-        className="select-none h-24 rounded-xl border-2 border-dashed border-[#4F46E5]/45 dark:border-indigo-400/50 bg-zinc-950 flex items-center justify-center gap-3 text-[13px] text-zinc-300 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/50"
+        className="select-none h-24 rounded-xl border-2 border-dashed border-[#2DD4BF]/50 bg-zinc-950 flex items-center justify-center gap-3 text-[13px] text-zinc-300 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/60"
       >
         <HoldRing progress={progress} />
-        <span>
-          여기서 <kbd className={summonKeyBadgeCls}>Ctrl + 0</kbd> 또는{' '}
-          <kbd className={summonKeyBadgeCls}>Ctrl + 우클릭</kbd> (클릭해서 바로 체험)
-        </span>
+        <span>여기서 <strong>Ctrl + 0</strong> 또는 <strong>Ctrl + 우클릭</strong> (클릭해서 바로 체험)</span>
       </div>
       {summoned && (
-        <div className={`${boxCls} border-[#4F46E5]/45 dark:border-indigo-400/50 flex flex-col gap-1.5`}>
+        <div className={`${boxCls} border-[#2DD4BF]/60 flex flex-col gap-1.5`}>
           <div className={`text-[12px] ${highlightTextCls}`}>👻 기본 귀신창 (한영·띄어쓰기 자동 성형 · 평소 복붙 원문 보존 · Wave 1 정예 구성)</div>
           <div className="flex flex-wrap gap-1.5 text-[11.5px] text-[#1E3A8A] dark:text-indigo-100 font-bold">
             <span className={`px-2 py-0.5 rounded ${highlightPillCls}`}>[Ctrl+V] 순차붙여넣기</span>
@@ -159,7 +156,7 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
               <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[4] 📌창고정🔒</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
-              <span className={`px-2 py-0.5 rounded ${highlightPillCls} font-bold`}>[⌨️상용구▾]</span>
+              <span className="px-2 py-0.5 rounded bg-amber-400/20 border border-amber-300/50 text-amber-200 font-bold">[⌨️상용구▾]</span>
               <span className={`px-2 py-0.5 rounded ${highlightPillCls} font-bold`}>[💡꿀팁·기타▾]</span>
             </div>
           </div>
@@ -178,13 +175,13 @@ const Basic2: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   });
   return (
     <div className="flex flex-col gap-2">
-      <div {...handlers} className={`${boxCls} select-none flex items-center gap-3 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#4F46E5]/50`}>
+      <div {...handlers} className={`${boxCls} select-none flex items-center gap-3 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/60`}>
         <span className="text-zinc-500 text-[12px] shrink-0">💬 카톡 입력창</span>
         <span className="flex-1 font-bold">{value}</span>
         <HoldRing progress={progress} size={30} />
       </div>
       {open && value === BASIC2_QUERY && (
-        <div className={`${boxCls} border-[#4F46E5]/45 dark:border-indigo-400/50`}>
+        <div className={`${boxCls} border-[#2DD4BF]/60`}>
           <div className={`text-[12px] ${highlightTextCls} mb-1.5`}>👻 귀신검색창</div>
           <button
             type="button"
@@ -196,7 +193,7 @@ const Basic2: React.FC<{ onDone: () => void }> = ({ onDone }) => {
             className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 cursor-pointer"
           >
             <span>📄 {BASIC2_RESULT.file}</span>
-            <span className={highlightTextCls}>단가 {BASIC2_RESULT.value} ↵</span>
+            <span className="font-extrabold text-amber-300">단가 {BASIC2_RESULT.value} ↵</span>
           </button>
         </div>
       )}
@@ -209,7 +206,7 @@ const Basic3: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const [wrong, setWrong] = useState('');
   return (
     <div className="flex flex-col gap-2">
-      <div className={`${boxCls} border-[#4F46E5]/45 dark:border-indigo-400/50`}>
+      <div className={`${boxCls} border-[#2DD4BF]/60`}>
         <div className={`text-[12px] ${highlightTextCls} mb-1.5`}>📱 방금 찍은 영수증 → 단어칩</div>
         <div className="flex flex-wrap gap-1.5">
           {BASIC3_CHIPS.map((chip) => (
@@ -352,8 +349,8 @@ const Dojo1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
           예제 넣기
         </button>
       </div>
-      <div className="text-[11.5px] text-zinc-400 leading-relaxed">
-        💡 실전 안내: <strong className={highlightTextCls}>메모장·카카오톡·엑셀 셀 편집</strong>에서는 스페이스바·문장부호(. ? !) 또는 1초 정지 시 실시간 자동변환되며, <strong className={highlightTextCls}>크롬·노션·한글(HWP)</strong> 등 웹/문서창은 자소 꼬임 방지를 위해 <kbd className={summonKeyBadgeCls}>Ctrl + 0 ➔ [1]</kbd>로 안전하게 변환됩니다.
+      <div className="text-[11.5px] text-zinc-400">
+        💡 실전 안내: <strong className="text-zinc-200">메모장·카카오톡·엑셀 셀 편집</strong>에서는 스페이스바·문장부호(. ? !) 또는 1초 정지 시 실시간 자동변환되며, <strong className="text-zinc-200">크롬·노션·한글(HWP)</strong> 등 웹/문서창은 자소 꼬임 방지를 위해 <strong className={highlightTextCls}>Ctrl+0 ➔ [1]</strong>로 안전하게 변환됩니다.
       </div>
     </div>
   );
@@ -518,7 +515,7 @@ const Dojo5: React.FC<{ onDone: () => void }> = ({ onDone }) => {
             type="button"
             onClick={() => inject(k)}
             className={`px-2.5 py-1 rounded-lg text-[12px] border cursor-pointer ${
-              used[k] ? `${highlightPillCls} font-bold` : 'border-white/10 bg-zinc-800'
+              used[k] ? 'border-emerald-400 text-emerald-300' : 'border-white/10 bg-zinc-800'
             }`}
           >
             {DOJO5_SNIPPETS[k].label}
@@ -602,7 +599,7 @@ const Dojo7: React.FC<{ onDone: () => void }> = ({ onDone }) => {
               </div>
             ))}
           </div>
-          <div className={`px-2.5 py-1.5 text-[11.5px] ${highlightTextCls} bg-zinc-950`}>✅ 복사됨 — 엑셀에서 Ctrl+V</div>
+          <div className="px-2.5 py-1.5 text-[11.5px] text-emerald-300 bg-zinc-950">✅ 복사됨 — 엑셀에서 Ctrl+V</div>
         </div>
       )}
     </div>
@@ -614,12 +611,12 @@ const Dojo8: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   return (
     <div className="flex flex-col gap-2">
       <div className={`text-[11.5px] ${highlightTextCls}`}>
-        💡 실제 사용법: 『👻 귀신검색창』 유료 티어 기능 — 검색창에서 사진·카톡사진·문서를 골라 <span className={summonKeyBadgeCls}>🏷️ 귀신 라벨러🔒</span> 클릭!
+        💡 실제 사용법: 『👻 귀신검색창』 유료 티어 기능 — 검색창에서 사진·카톡사진·문서를 골라 <span className="underline text-amber-300">[🏷️ 귀신 라벨러🔒]</span> 클릭!
       </div>
       <div className="flex flex-col gap-1">
         {DOJO8_LABELER_SAMPLES.map((s) => (
           <div key={s.before} className={`${boxCls} flex items-center justify-between gap-2`}>
-            <span className={`truncate font-mono text-[12.5px] ${renamed ? highlightTextCls : ''}`}>
+            <span className={`truncate font-mono text-[12.5px] ${renamed ? 'text-emerald-300 font-bold' : ''}`}>
               {renamed ? s.after : s.before}
             </span>
             {renamed && <span className="text-[11px] text-zinc-500 shrink-0">{s.dateRule}</span>}
@@ -782,7 +779,7 @@ const TrialRewardCard: React.FC = () => {
       </div>
       <div className="text-[13px] text-zinc-200 leading-relaxed">
         매일 쓰는 기본 습관기(자동 한영·띄어쓰기 · Ctrl+V 순차붙여넣기 · [1] 서식·줄바꿈 · F1~F6 · ZIP 압축)는 언제나 평생 무제한 무료이며, 수련 완료 보상으로 모든 🔒 유료 티어 기능을 아우르는{' '}
-        <strong className={highlightTextCls}>『모든 귀신 초능력 30일 무제한 무료체험권』</strong>이 도착했습니다! 지금 바로 열어드릴까요?
+        <strong className="text-amber-300">『모든 귀신 초능력 30일 무제한 무료체험권』</strong>이 도착했습니다! 지금 바로 열어드릴까요?
       </div>
       <div className="text-[11.5px] text-zinc-400">
         (※ 카드 등록 없음 · 자동 결제 절대 없음 · 30일 만료 시 🔒 유료 기능만 깔끔하게 잠기며, 이미 내 PC 로컬 폴더에 복사된 사진·파일은 영구 보존됩니다!)
@@ -845,7 +842,7 @@ const TrialRewardCard: React.FC = () => {
         )}
       </div>
       {choice === 'trial' && (
-        <div className={`px-3.5 py-2 rounded-xl ${highlightPillCls} text-[12.5px] font-extrabold`}>
+        <div className="px-3.5 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/50 text-[12.5px] font-extrabold text-emerald-300">
           ✨ 체험중 ({daysLeftBadge}) — 내 PC 귀신창(Ctrl+0)과 웹에서 모든 🔒 유료 티어 초능력을 횟수 제한 없이 무제한으로 사용하실 수 있습니다!
         </div>
       )}
@@ -855,7 +852,7 @@ const TrialRewardCard: React.FC = () => {
         </div>
       )}
       {choice === 'expired' && (
-        <div className={`px-3.5 py-2 rounded-xl ${highlightPillCls} text-[12.5px] font-extrabold`}>
+        <div className="px-3.5 py-2 rounded-xl bg-amber-500/15 border border-amber-400/50 text-[12.5px] font-extrabold text-amber-200">
           🔒 30일 무제한 무료체험이 종료되어 유료 도구만 잠겼습니다. 평생 무료 기본기(자동 한영·순차복붙·[1]다림질·F1~F6·압축)는 앞으로도 영구 0원으로 작동합니다!
         </div>
       )}
@@ -1063,7 +1060,7 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
                   value={item.title}
                   onChange={(e) => updateSlot(idx, 'title', e.target.value)}
                   aria-label={`${item.slot} 상용구 제목`}
-                  className="min-w-0 flex-1 bg-transparent text-[12.5px] font-extrabold text-white focus:outline-none border-b border-transparent focus:border-[#4F46E5]"
+                  className="min-w-0 flex-1 bg-transparent text-[12.5px] font-extrabold text-white focus:outline-none border-b border-transparent focus:border-[#2DD4BF]"
                 />
               </div>
               <div className="flex items-center gap-1.5 shrink-0">
@@ -1077,7 +1074,7 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => handleQuickCopy(item.slot, item.value)}
-                  className={`px-2 py-1 rounded-lg ${highlightPillCls} hover:opacity-90 text-[11px] font-bold cursor-pointer`}
+                  className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-[11px] font-bold text-[#1E3A8A] dark:text-indigo-200 cursor-pointer"
                 >
                   {savedNoticeSlot === item.slot ? '✓ 복사됨' : '복사 테스트'}
                 </button>
@@ -1095,7 +1092,7 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
               }}
               aria-label={`${item.slot} 상용구 내용`}
               placeholder="자주 입력하는 문구를 적어두세요 (비워두고 저장하면 빈 상태 유지)"
-              className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-white/10 focus:border-[#4F46E5] text-[12.5px] text-zinc-200 outline-none"
+              className="w-full px-2.5 py-1.5 rounded-lg bg-zinc-900 border border-white/10 focus:border-[#2DD4BF] text-[12.5px] text-zinc-200 outline-none"
             />
           </div>
         ))}
@@ -1270,7 +1267,7 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
                 ↺ 도장 초기화
               </button>
             )}
-            <span className={`px-2.5 py-1 rounded-full ${highlightPillCls} text-[11.5px] font-black shrink-0`}>
+            <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-500/40 text-emerald-700 dark:text-emerald-300 text-[11.5px] font-black shrink-0">
               평생 0원 무제한
             </span>
           </div>
@@ -1306,7 +1303,7 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
               }}
               className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col gap-1 ${
                 activeFreeCore === tab.key
-                  ? 'border-[#4F46E5]/55 bg-[#EEF2FF]/75 dark:border-indigo-400/60 dark:bg-indigo-500/15 text-white shadow-sm'
+                  ? 'border-[#2DD4BF] bg-[#2DD4BF]/12 text-white shadow-sm'
                   : 'border-white/10 bg-zinc-950/80 text-zinc-300 hover:border-white/25'
               }`}
             >
@@ -1322,7 +1319,7 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
         <div className="pt-2 border-t border-white/10 flex flex-col gap-2.5">
           {activeFreeCore === 'typo' && (
             <>
-              <div className={`text-[12.5px] ${highlightTextCls}`}>
+              <div className="text-[12.5px] text-[#1E3A8A] dark:text-indigo-200 font-bold">
                 ⌨️ 영문으로 잘못 친 뒤 스페이스바를 누르거나 1초만 기다려보세요! (이메일·URL·영문 ID는 자동 보호)
               </div>
               <Dojo1 key={`free_typo_${sandboxKey}`} onDone={() => markDojo(1)} />
@@ -1330,8 +1327,8 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
           )}
           {activeFreeCore === 'seq' && (
             <>
-              <div className={`text-[12.5px] ${highlightTextCls}`}>
-                📋 [3개 연속 복사]를 누른 뒤 이름·전화·주소 칸에서 <kbd className={summonKeyBadgeCls}>Ctrl + V</kbd>를 연타하거나 클릭해 차례대로 꽂아보세요!
+              <div className="text-[12.5px] text-[#1E3A8A] dark:text-indigo-200 font-bold">
+                📋 [3개 연속 복사]를 누른 뒤 이름·전화·주소 칸에서 Ctrl+V를 연타하거나 클릭해 차례대로 꽂아보세요!
               </div>
               <Dojo3 key={`free_seq_${sandboxKey}`} onDone={() => markDojo(3)} />
             </>
@@ -1339,13 +1336,13 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
           {activeFreeCore === 'iron' && (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
               <div className="flex flex-col gap-2">
-                <div className={`text-[12px] ${highlightTextCls}`}>
-                  🧺 PDF 끊어진 줄바꿈 1초 이어붙이기 (<kbd className={summonKeyBadgeCls}>[1]</kbd>번 수동 작동)
+                <div className="text-[12px] text-[#1E3A8A] dark:text-indigo-200 font-bold">
+                  🧺 PDF 끊어진 줄바꿈 1초 이어붙이기 ([1]번 수동 작동)
                 </div>
                 <Dojo2 key={`free_iron_${sandboxKey}`} onDone={() => markDojo(2)} />
               </div>
               <div className="flex flex-col gap-2">
-                <div className={`text-[12px] ${highlightTextCls}`}>
+                <div className="text-[12px] text-[#1E3A8A] dark:text-indigo-200 font-bold">
                   🧼 뉴스 광고·기자 꼬리말 순수 본문 세탁
                 </div>
                 <Dojo4 key={`free_launder_${sandboxKey}`} onDone={() => markDojo(4)} />
@@ -1354,9 +1351,9 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
           )}
         </div>
 
-        <div className="px-3.5 py-2.5 rounded-xl bg-zinc-950/90 border border-[#4F46E5]/30 dark:border-indigo-300/35 flex flex-wrap items-center justify-between gap-2 text-[12px]">
+        <div className="px-3.5 py-2.5 rounded-xl bg-zinc-950/90 border border-[#4F46E5]/25 dark:border-indigo-300/35 flex flex-wrap items-center justify-between gap-2 text-[12px]">
           <span className="text-zinc-300">
-            📦 <strong className={highlightTextCls}>보너스 평생 무료:</strong> 윈도우 탐색기에서 압축파일 <strong className={highlightTextCls}>더블클릭</strong> 또는 <strong className={highlightTextCls}>우클릭 메뉴 딸깍</strong>으로 상업광고 0%·한글 깨짐 없는 1초 압축 풀기·묶기!
+            📦 <strong className={highlightTextCls}>보너스 평생 무료:</strong> 윈도우 탐색기에서 압축파일 <strong>더블클릭</strong> 또는 <strong>우클릭 메뉴 딸깍</strong>으로 상업광고 0%·한글 깨짐 없는 1초 압축 풀기·묶기!
           </span>
           <span className={`${highlightTextCls} shrink-0`}>평생 0원</span>
         </div>
@@ -1367,7 +1364,7 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
 
       {/* 하단 3: 유료 고급 도구 & 30일 무제한 체험 아코디언 접힘 */}
       <details className="rounded-2xl bg-zinc-900/80 border border-white/10 p-4">
-        <summary className="cursor-pointer select-none text-[13.5px] font-extrabold text-[#1E3A8A] hover:text-[#312E81] dark:text-indigo-200 dark:hover:text-indigo-100 flex items-center justify-between gap-2">
+        <summary className="cursor-pointer select-none text-[13.5px] font-extrabold text-amber-300 hover:text-amber-200 flex items-center justify-between gap-2">
           <span>🔒 유료 확장 기술 미리 체험해보기 ([2] 스샷·PDF변환 · [3] 다중합본 · [4] 창고정 · F7~F12 팀 상용구) ▾</span>
           <span className="text-[11.5px] text-zinc-400 font-semibold shrink-0">카드 등록 없는 30일 무료체험</span>
         </summary>
@@ -1387,7 +1384,7 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
                 }}
                 className={`flex items-center gap-2 px-2.5 py-2 rounded-xl text-left text-[12px] font-bold border cursor-pointer ${
                   trialStarted && activeDojoMeta?.id === d.id
-                    ? 'border-[#4F46E5]/55 bg-[#EEF2FF]/75 dark:border-indigo-400/60 dark:bg-indigo-500/15 text-white'
+                    ? 'border-amber-400 bg-amber-400/10 text-white'
                     : 'border-white/10 text-zinc-300 hover:bg-white/5'
                 }`}
               >
@@ -1398,8 +1395,8 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
             ))}
           </div>
           {pendingOptInMeta && (
-            <div className="p-4 rounded-2xl bg-zinc-950 border-2 border-[#4F46E5]/55 dark:border-indigo-400 shadow-2xl flex flex-col gap-3">
-              <div className={`text-[14.5px] ${highlightTextCls} flex items-center gap-2`}>
+            <div className="p-4 rounded-2xl bg-zinc-950 border-2 border-amber-400 shadow-2xl flex flex-col gap-3">
+              <div className="text-[14.5px] font-extrabold text-amber-300 flex items-center gap-2">
                 <span>🎁 [{pendingOptInMeta.title}] — 30일 무료체험을 지금 시작할까요?</span>
               </div>
               <p className="text-[12.5px] text-zinc-200 leading-relaxed">

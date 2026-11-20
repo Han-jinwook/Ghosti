@@ -58,7 +58,7 @@ export const PaidDeviceSyncPane: React.FC = () => {
                   onClick={() => setActiveIntegrationSubTab('superpower')}
                   className={`px-4 py-2 rounded-xl font-label-sm text-[13px] font-extrabold transition-all cursor-pointer ${
                     activeIntegrationSubTab === 'superpower'
-                      ? 'bg-[#EEF2FF] text-[#1E3A8A] border border-[#4F46E5]/45 dark:bg-indigo-500/30 dark:text-indigo-100 dark:border-indigo-300/50 shadow-xs'
+                      ? 'bg-amber-400 text-zinc-950 shadow-xs'
                       : 'text-zinc-400 hover:text-white'
                   }`}
                 >
@@ -74,7 +74,7 @@ export const PaidDeviceSyncPane: React.FC = () => {
               {/* [v2.1 감산] 3. ⚡ 귀신창 전면 = 평생 무료 핵심 3종 즉시 체험 + F1~F6 개인 상용구 등록창 / 유료 고급 시뮬레이터는 하단 아코디언 접힘 */}
               <GhostSuperpowerDojo variant="full" />
               <details className="rounded-2xl bg-zinc-900/70 border border-white/10 p-4">
-                <summary className="cursor-pointer select-none text-[13.5px] font-extrabold text-[#1E3A8A] hover:text-[#312E81] dark:text-indigo-200 dark:hover:text-indigo-100 flex items-center justify-between">
+                <summary className="cursor-pointer select-none text-[13.5px] font-extrabold text-amber-300 hover:text-amber-200 flex items-center justify-between">
                   <span>🔍 현장 소환창(Ctrl+0) 3단 UI &amp; 팀 확장 시뮬레이터 펼쳐보기 ▾</span>
                   <span className="text-[11.5px] text-zinc-400 font-semibold">유료 확장 미리보기</span>
                 </summary>
