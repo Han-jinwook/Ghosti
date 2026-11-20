@@ -220,12 +220,14 @@ def sync_internal_z_core_mirrors():
             except Exception:
                 pass
 
+    src_changed = bool(not last_hash or src_hash != last_hash)
     try:
         open(stamp_file, "w", encoding="utf-8").write(
             json.dumps({"version": target_ver, "srcHash": src_hash, "updatedAt": time.strftime("%Y-%m-%d %H:%M:%S")}, indent=2)
         )
     except Exception:
         pass
+    return src_changed
 
 def update_pc1():
     log("=== [1호기 (로컬)] Z-코어 최신화 및 리로드 시작 ===")
@@ -337,8 +339,8 @@ def _read_current_core_version() -> str:
     return "2.3.23"
 
 
-def ensure_release_zip_and_bridge_synced() -> str:
-    """CORE_VERSION이 변경되었거나 public/z_core_version.json과 다르면 자동으로 exe 재빌드 + Merlin_Z_Core.zip + LATEST_Z_CORE_VERSION을 최신화합니다."""
+def ensure_release_zip_and_bridge_synced(force_rebuild: bool = False) -> str:
+    """CORE_VERSION이 변경되었거나 소스 해시가 바뀌었으면 자동으로 exe 재빌드 + Merlin_Z_Core.zip + LATEST_Z_CORE_VERSION을 최신화합니다."""
     core_ver = _read_current_core_version()
     repo_root = os.path.dirname(UZC_DIR)
     ver_json_path = os.path.join(repo_root, "public", "z_core_version.json")
@@ -351,7 +353,7 @@ def ensure_release_zip_and_bridge_synced() -> str:
         except Exception:
             packaged_ver = ""
 
-    if packaged_ver == core_ver and os.path.exists(zip_path):
+    if not force_rebuild and packaged_ver == core_ver and os.path.exists(zip_path):
         log(f"✅ 배포용 Merlin_Z_Core.zip 및 LATEST_Z_CORE_VERSION 이미 최신 상태 (v{core_ver})")
         return core_ver
 
@@ -551,8 +553,8 @@ def update_pc5(core_ver: str):
 
 
 def main():
-    sync_internal_z_core_mirrors()
-    core_ver = ensure_release_zip_and_bridge_synced()
+    src_changed = bool(sync_internal_z_core_mirrors())
+    core_ver = ensure_release_zip_and_bridge_synced(force_rebuild=src_changed)
     update_pc1()
     update_pc1_remote(core_ver)
     update_pc2(core_ver)

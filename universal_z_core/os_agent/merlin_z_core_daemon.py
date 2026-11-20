@@ -114,9 +114,11 @@ except Exception:
 
 if "--ppocr-worker" in sys.argv:
     _w_idx = sys.argv.index("--ppocr-worker")
-    if len(sys.argv) > _w_idx + 2:
-        import ppocr_v5_worker
+    import ppocr_v5_worker
 
+    if "--daemon-stdio" in sys.argv[_w_idx + 1 :]:
+        sys.exit(ppocr_v5_worker.run_worker_stdio_loop())
+    if len(sys.argv) > _w_idx + 2:
         sys.exit(ppocr_v5_worker.run_worker_cli(sys.argv[_w_idx + 1], sys.argv[_w_idx + 2]))
     sys.exit(1)
 
@@ -159,7 +161,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.6.39"
+CORE_VERSION = "2.6.49"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -596,6 +598,12 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             return
 
         if path in ("/__photos/list", "/api/ghosti/photos/list"):
+            try:
+                import ppocr_v5_worker
+
+                ppocr_v5_worker.prewarm_ppocr_worker_async()
+            except Exception:
+                pass
             self._send_json(plugin_ghosti_os.list_local_photos(qp))
             return
 

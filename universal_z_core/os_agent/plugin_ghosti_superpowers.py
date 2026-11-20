@@ -335,6 +335,12 @@ def _compute_cross_device_trial(cross_ledger: Dict[str, Any], linked_device_coun
 
 
 def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    try:
+        import ppocr_v5_worker
+
+        ppocr_v5_worker.prewarm_ppocr_worker_async()
+    except Exception:
+        pass
     data = params or {}
     account_id = str(data.get("accountId") or "guest_local").strip()
     is_subscribed = str(data.get("isSubscribed") or "false").lower() in ("true", "1", "yes")
@@ -885,6 +891,12 @@ def open_ghost_search_window_api(params: Dict[str, Any] | None = None) -> Dict[s
       Ctrl+0, Ctrl+우클릭, 또는 [👻 내 진짜 파일로 리얼 귀신검색창 바로 띄우기] 호출 시
       가짜 시뮬레이터가 아니라 실제 모니터 위에 프레임리스 독립 팝업(소형 520x380 / 중형 960x640 / 갤러리 1440x900)을 즉시 띄웁니다.
     """
+    try:
+        import ppocr_v5_worker
+
+        ppocr_v5_worker.prewarm_ppocr_worker_async()
+    except Exception:
+        pass
     data = params or {}
     query = str(data.get("query") or data.get("q") or "").strip()
     stage = str(data.get("stage") or ("medium" if query else "small")).strip().lower()
