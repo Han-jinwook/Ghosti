@@ -291,18 +291,15 @@ export const MobileAppView: React.FC = () => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    // [iOS 이중 스크롤 원천 차단]:
-    // iOS WKWebView는 키보드 상승 시 OS가 이미 키보드 스프링 곡선에 맞춰 화면을 1회 자연스럽게 스크롤하므로,
-    // iOS에서 JS가 추가로 window.scrollTo 보정을 수행하면 '자연스러운 스크롤 직후 한 번 더 아래로 점프'하는 이중 스크롤이 발생합니다.
-    // 따라서 JS Cubic-Out 글라이드 보정은 AOS(안드로이드) 전용으로만 구동하고 iOS는 순수 OS 네이티브 스크롤 1회만 수행합니다.
-    if (isIosMobileBrowserOrApp()) return;
+    const isIos = isIosMobileBrowserOrApp();
     let latestIosKb = 0;
     let settleTimer: number | undefined;
     let animRafId: number | undefined;
 
-    // [iOS/AOS 키보드 상승 시 '뚝 끊기는 점프(behavior: auto)' 원천 제거 & 60/120fps 매끄러운 Cubic-Out 단일 글라이드]:
-    // 기존 380ms 지연 후 behavior: 'auto'(0ms 순간이동)로 화면이 뚝 끊기던 현상을 제거하고,
-    // 키보드 상승 곡선과 동기화된 220ms Cubic-Out 이징 애니메이션으로 한 번에 부드럽게 미끄러지듯 이동합니다.
+    // [iOS/AOS 키보드 상승 스크롤 정밀 조율]:
+    // 1) AOS: 키보드 상승 곡선과 동기화된 85ms 시점 220ms Cubic-Out 단일 글라이드로 한 번에 부드럽게 이동합니다.
+    // 2) iOS: 0~330ms 동안은 WKWebView 순수 네이티브 스크롤에 100% 맡겨 정상 노출된 경우 JS 개입 0px(두 번째 점프 원천 차단)을 유지하되,
+    //    페이지 하단 입력칸 등에서 WKWebView가 입력칸을 키보드 뒤로 가린 채 멈춘 예외 상황(rect.bottom > visibleBottom - 6)만 340ms 시점에 180ms로 부드럽게 들어 올립니다.
     const stopActiveGlide = () => {
       if (animRafId !== undefined) {
         window.cancelAnimationFrame(animRafId);
@@ -360,17 +357,17 @@ export const MobileAppView: React.FC = () => {
       if (rect.top < headerBottom + 4) {
         const pullDown = headerBottom + 12 - rect.top;
         if (pullDown > 8) {
-          animateWindowScrollBy(-pullDown, 220);
+          animateWindowScrollBy(-pullDown, isIos ? 180 : 220);
         }
         return;
       }
 
-      if (rect.bottom > visibleBottom - 8) {
+      if (rect.bottom > visibleBottom - 6) {
         const maxAllowedScrollUp = Math.max(0, rect.top - (headerBottom + 12));
-        const neededDelta = rect.bottom - (visibleBottom - 18);
+        const neededDelta = rect.bottom - (visibleBottom - 16);
         const clampedDelta = Math.min(neededDelta, maxAllowedScrollUp);
         if (clampedDelta > 8) {
-          animateWindowScrollBy(clampedDelta, 220);
+          animateWindowScrollBy(clampedDelta, isIos ? 180 : 220);
         }
       }
     };
@@ -392,7 +389,7 @@ export const MobileAppView: React.FC = () => {
         latestIosKb = open ? Math.max(0, Number(detail?.height || 0)) : 0;
       }
       if (open) {
-        scheduleSmoothKeyboardGlide(70);
+        scheduleSmoothKeyboardGlide(isIos ? 340 : 70);
       } else {
         if (settleTimer !== undefined) {
           window.clearTimeout(settleTimer);
@@ -405,7 +402,7 @@ export const MobileAppView: React.FC = () => {
     const onFocusIn = (e: FocusEvent) => {
       const el = e.target as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
-        scheduleSmoothKeyboardGlide(110);
+        scheduleSmoothKeyboardGlide(isIos ? 360 : 110);
       }
     };
 
@@ -495,6 +492,11 @@ export const MobileAppView: React.FC = () => {
 
   return (
     <div
+      style={
+        isIosMobileBrowserOrApp() && !isLandscapeCompact
+          ? { paddingBottom: 'calc(var(--ghosti-kb-inset, 0px) + 28px)' }
+          : undefined
+      }
       className={`${
         themeMode === 'light' ? 'bg-[#F8F7F4] text-slate-900' : 'bg-[#09090B] text-zinc-100'
       } font-body-md flex flex-col min-h-screen min-h-dvh mx-auto relative shadow-2xl border-x border-white/10 ${

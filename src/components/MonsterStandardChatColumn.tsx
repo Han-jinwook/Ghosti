@@ -899,7 +899,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       Boolean(parseNicknameSettingIntent(raw, preStForPlaybook.nickname)) || isStoreLinkIntent(raw);
     const isAnsweringInitialNickname =
       (Boolean(preStForPlaybook.awaitingNickname) || isLastBubbleAskingNickname) &&
-      raw.length <= 18 &&
+      raw.length <= 36 &&
       !/(진단해|점검해|정리해|치워|지워|삭제해|복구해|복원해|손봐|알려\s*줘|보여\s*줘|찾아\s*줘|깨워|재워|구독|해지|결제|청소\s*앱|클리너)/i.test(raw);
     const shouldBypassSecretaryPlaybook =
       !isNickOrStoreSpecial &&
@@ -1574,70 +1574,75 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
 
   return (
     <aside
-      className="flex flex-col h-[440px] sm:h-[calc(100dvh-155px)] sm:min-h-[580px] max-h-[840px] rounded-2xl border-2 border-teal-500/55 dark:border-teal-400/45 bg-[#E6F1EF] dark:bg-[#0B161C] shadow-[0_12px_36px_rgba(13,148,136,0.18)] overflow-hidden"
+      className="flex flex-col h-[545px] min-h-[500px] sm:h-[calc(100dvh-155px)] sm:min-h-[580px] max-h-[840px] rounded-2xl border-2 border-teal-500/55 dark:border-teal-400/45 bg-[#E6F1EF] dark:bg-[#0B161C] shadow-[0_12px_36px_rgba(13,148,136,0.18)] overflow-hidden"
     >
-      {/* 0. 카톡 채팅방 스타일 전용 상단 타이틀 바 (PC·모바일 메인 화면과 뚜렷한 시각적 구분) */}
+      {/* 0. 카톡 채팅방 스타일 전용 상단 타이틀 바 — 모바일에서는 2단 헤더 크롬 높이를 1줄로 슬림화하여 대화 본문 가독 면적을 대폭 확대 */}
       <div
         title={careScheduleSummary}
-        className="px-3.5 py-2.5 bg-gradient-to-r from-[#0F766E] via-[#0D9488] to-[#059669] text-white flex flex-wrap items-center justify-between gap-2 shadow-xs"
+        className="px-3 py-2 bg-gradient-to-r from-[#0F766E] via-[#0D9488] to-[#059669] text-white flex items-center justify-between gap-1.5 shadow-xs"
       >
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-1.5 min-w-0">
           <img
             src={GHOST_SECRETARY_AVATAR_SRC}
             alt=""
             aria-hidden="true"
-            className="w-7 h-7 rounded-full object-cover ring-2 ring-white/80 shadow-xs shrink-0"
+            className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover ring-2 ring-white/80 shadow-xs shrink-0"
           />
-          <span className="text-[14px] font-black tracking-tight whitespace-nowrap">
-            👻 귀신비서 대화창
+          <span className="text-[13px] sm:text-[14px] font-black tracking-tight whitespace-nowrap">
+            👻 귀신비서
           </span>
-          <span className="px-1.5 py-0.5 rounded-full bg-white/20 text-[10.5px] font-extrabold whitespace-nowrap">
-            ● 대화 중
+          <span className="px-1.5 py-0.5 rounded-full bg-white/20 text-[10px] font-extrabold whitespace-nowrap">
+            🛡️ 1초 복원 보장
           </span>
         </div>
-        <span className="text-[11px] font-bold text-teal-50 bg-black/20 px-2 py-0.5 rounded-full whitespace-nowrap">
-          {isMobileOrStore
-            ? '🔒 서버 전송 0% · 폰 안전 정리'
-            : '🗓️ 수요 손 없는 날 · 20% 과부하 자동검진'}
-        </span>
+        <div className="flex items-center gap-1.5 shrink-0">
+          {isMobileOrStore ? (
+            <VoiceActorControlPill compact />
+          ) : (
+            <span className="text-[11px] font-bold text-teal-50 bg-black/20 px-2 py-0.5 rounded-full whitespace-nowrap">
+              🗓️ 수요 손 없는 날 · 20% 과부하 자동검진
+            </span>
+          )}
+        </div>
       </div>
 
-      {/* 1. 상단 원클릭 바로가기 바: PC는 [🕰️ 복원 기록]+[🏠 체험관], 모바일은 수동 불러오기 없이 성우 토글만 깔끔 배치 (포커스 시 높이 리플로우 방지를 위해 상시 고정) */}
-      <div className="px-3 py-2 bg-white/90 dark:bg-[#10212B] border-b border-teal-600/20 dark:border-teal-400/20 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 text-[12px] text-emerald-950 dark:text-emerald-200">
-        <div className="flex items-center gap-1 min-w-0">
-          <span className="shrink-0 font-bold">🛡️</span>
-          <span className="font-bold text-teal-900 dark:text-emerald-300 whitespace-normal break-keep leading-snug">
-            언제든 1초 복원 보장
-          </span>
+      {/* 1. 상단 원클릭 바로가기 바: PC 전용 ([🕰️ 복원 기록]+[🏠 체험관]), 모바일은 상단 1줄 헤더에 통합해 대화 본문 영역을 넓게 확보 */}
+      {(!isMobileOrStore || isZCoreLive) && (
+        <div className="px-3 py-2 bg-white/90 dark:bg-[#10212B] border-b border-teal-600/20 dark:border-teal-400/20 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 text-[12px] text-emerald-950 dark:text-emerald-200">
+          <div className="flex items-center gap-1 min-w-0">
+            <span className="shrink-0 font-bold">🛡️</span>
+            <span className="font-bold text-teal-900 dark:text-emerald-300 whitespace-normal break-keep leading-snug">
+              언제든 1초 복원 보장
+            </span>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5 max-w-full min-w-0">
+            {!(isMobileOrStore && !isZCoreLive) && (
+              <button
+                type="button"
+                disabled={busy}
+                onClick={() => void handleSend('최근 [복원 기록] 보여줘', 'text')}
+                title="최근 손보기·정리 내역 조회 및 원래대로 1초 되돌리기"
+                style={{ backgroundColor: '#F5F3FF', color: '#5B21B6', borderColor: '#8B5CF6' }}
+                className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
+              >
+                <span>🕰️</span>
+                <span>복원 기록</span>
+              </button>
+            )}
+            {!isMobileOrStore && (
+              <button
+                type="button"
+                onClick={() => window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'))}
+                title="온보딩 체험관으로 나가서 구경하기"
+                style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
+                className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
+              >
+                <span>🏠 체험관 ➔</span>
+              </button>
+            )}
+          </div>
         </div>
-        <div className="flex flex-wrap items-center gap-1.5 max-w-full min-w-0">
-          {!(isMobileOrStore && !isZCoreLive) && (
-            <button
-              type="button"
-              disabled={busy}
-              onClick={() => void handleSend('최근 [복원 기록] 보여줘', 'text')}
-              title="최근 손보기·정리 내역 조회 및 원래대로 1초 되돌리기"
-              style={{ backgroundColor: '#F5F3FF', color: '#5B21B6', borderColor: '#8B5CF6' }}
-              className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
-            >
-              <span>🕰️</span>
-              <span>복원 기록</span>
-            </button>
-          )}
-          {!isMobileOrStore && (
-            <button
-              type="button"
-              onClick={() => window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'))}
-              title="온보딩 체험관으로 나가서 구경하기"
-              style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
-              className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
-            >
-              <span>🏠 체험관 ➔</span>
-            </button>
-          )}
-          {isMobileOrStore && <VoiceActorControlPill compact />}
-        </div>
-      </div>
+      )}
 
       {/* 2. 본문 대화 스트림 (카톡 채팅방 스타일 전용 배경색 & 또렷한 말풍선 대비) */}
       <div
