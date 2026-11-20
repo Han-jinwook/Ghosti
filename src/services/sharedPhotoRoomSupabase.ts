@@ -82,13 +82,91 @@ interface GuestPreviewRoomRpcResponse {
   photos?: GuestPreviewPhotoDto[];
 }
 
-const roomTokenCache = new Map<
+const MY_ROOM_TOKEN_SESSION_PREFIX = 'ghosti_my_room_token_v1::';
+
+interface CachedRoomTokenEntry {
+  roomId: string;
+  inviteToken: string;
+  masterNickname?: string;
+  accessibleRoomIds?: string[];
+  cachedAt: number;
+}
+
+const roomTokenCache = new Map<string, CachedRoomTokenEntry>();
+const inflightEnsureRoomMap = new Map<
   string,
-  { roomId: string; inviteToken: string; masterNickname?: string; accessibleRoomIds?: string[] }
+  Promise<{
+    ok: boolean;
+    roomId?: string;
+    inviteToken?: string;
+    masterNickname?: string;
+    accessibleRoomIds?: string[];
+    error?: string;
+  }>
 >();
+
+function saveCachedRoomTokenEntry(cacheKey: string, entry: CachedRoomTokenEntry): void {
+  roomTokenCache.set(cacheKey, entry);
+  if (typeof window !== 'undefined') {
+    try {
+      sessionStorage.setItem(`${MY_ROOM_TOKEN_SESSION_PREFIX}${cacheKey}`, JSON.stringify(entry));
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+function readCachedRoomTokenEntry(cacheKey: string): CachedRoomTokenEntry | null {
+  const mem = roomTokenCache.get(cacheKey);
+  if (mem && Date.now() - mem.cachedAt < 25 * 60 * 1000) {
+    return mem;
+  }
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(`${MY_ROOM_TOKEN_SESSION_PREFIX}${cacheKey}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CachedRoomTokenEntry>;
+    if (
+      parsed?.roomId &&
+      parsed?.inviteToken &&
+      typeof parsed.cachedAt === 'number' &&
+      Date.now() - parsed.cachedAt < 25 * 60 * 1000
+    ) {
+      const restored: CachedRoomTokenEntry = {
+        roomId: parsed.roomId,
+        inviteToken: parsed.inviteToken,
+        masterNickname: parsed.masterNickname,
+        accessibleRoomIds: Array.isArray(parsed.accessibleRoomIds)
+          ? parsed.accessibleRoomIds
+          : undefined,
+        cachedAt: parsed.cachedAt,
+      };
+      roomTokenCache.set(cacheKey, restored);
+      return restored;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
 
 export function clearCachedSharedRoomTokens(): void {
   roomTokenCache.clear();
+  inflightEnsureRoomMap.clear();
+  if (typeof window !== 'undefined') {
+    try {
+      const keysToRemove: string[] = [];
+      for (let i = 0; i < sessionStorage.length; i += 1) {
+        const k = sessionStorage.key(i);
+        if (k && k.startsWith(MY_ROOM_TOKEN_SESSION_PREFIX)) {
+          keysToRemove.push(k);
+        }
+      }
+      keysToRemove.forEach((k) => sessionStorage.removeItem(k));
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 export function mapUiLoungeToDbRoom(
@@ -340,6 +418,23 @@ function resolveCurrentAuthedEmail(): string {
   }
 }
 
+export function getPrewarmedRoomInviteTokenSync(
+  loungeType: LoungeType,
+  familyRoom: FamilyRoomId
+): { roomId: string; inviteToken: string; masterNickname?: string } | null {
+  if (!hasAuthenticatedHubAccountSession()) return null;
+  const email = resolveCurrentAuthedEmail();
+  if (!email) return null;
+  const { dbLoungeType, dbSubType } = mapUiLoungeToDbRoom(loungeType, familyRoom);
+  const cached = readCachedRoomTokenEntry(`${email}:${dbLoungeType}:${dbSubType}`);
+  if (!cached?.roomId || !cached?.inviteToken) return null;
+  return {
+    roomId: cached.roomId,
+    inviteToken: cached.inviteToken,
+    masterNickname: cached.masterNickname,
+  };
+}
+
 export async function ensureMyRoomAndInviteToken(opts: {
   loungeType: LoungeType;
   familyRoom: FamilyRoomId;
@@ -363,9 +458,9 @@ export async function ensureMyRoomAndInviteToken(opts: {
   const email = resolveCurrentAuthedEmail();
   const cleanMasterNick = (opts.masterNickname || '').trim() || '방장';
   const { dbLoungeType, dbSubType } = mapUiLoungeToDbRoom(opts.loungeType, opts.familyRoom);
-  const cacheKey = `${email}:${dbLoungeType}:${dbSubType}:${cleanMasterNick}`;
-  const cached = roomTokenCache.get(cacheKey);
-  if (cached?.roomId && cached?.inviteToken) {
+  const cacheKey = `${email}:${dbLoungeType}:${dbSubType}`;
+  const cached = readCachedRoomTokenEntry(cacheKey);
+  if (cached?.roomId && cached?.inviteToken && Array.isArray(cached.accessibleRoomIds)) {
     return {
       ok: true,
       roomId: cached.roomId,
@@ -375,77 +470,124 @@ export async function ensureMyRoomAndInviteToken(opts: {
     };
   }
 
-  // 1순위: 서버 브릿지(service_role + 허브 계정 실검증)로 방장 별명 최신화 및 합류 공유방 전체 조회
-  const bridgeRes = await callGhostiServerBridge<{
-    roomId?: string;
-    inviteToken?: string;
-    masterNickname?: string;
-    accessibleRoomIds?: string[];
-  }>('photo_resolve_accessible_rooms', {
-    dbLoungeType,
-    dbSubType,
-    roomTitle: opts.roomTitle,
-    masterNickname: cleanMasterNick,
-  });
-
-  if (bridgeRes.ok && bridgeRes.roomId && bridgeRes.inviteToken) {
-    const resolvedNick = (bridgeRes.masterNickname || cleanMasterNick).trim() || '방장';
-    saveVerifiedInviteRoomMeta(bridgeRes.inviteToken, {
-      loungeType: opts.loungeType,
-      familyRoom: opts.familyRoom,
-      hostName: resolvedNick,
-      roomTitle: opts.roomTitle,
-    });
-    roomTokenCache.set(cacheKey, {
-      roomId: bridgeRes.roomId,
-      inviteToken: bridgeRes.inviteToken,
-      masterNickname: resolvedNick,
-      accessibleRoomIds: Array.isArray(bridgeRes.accessibleRoomIds)
-        ? bridgeRes.accessibleRoomIds
-        : [bridgeRes.roomId],
-    });
-    return {
-      ok: true,
-      roomId: bridgeRes.roomId,
-      inviteToken: bridgeRes.inviteToken,
-      masterNickname: resolvedNick,
-      accessibleRoomIds: Array.isArray(bridgeRes.accessibleRoomIds)
-        ? bridgeRes.accessibleRoomIds
-        : [bridgeRes.roomId],
-    };
+  const inflight = inflightEnsureRoomMap.get(cacheKey);
+  if (inflight) {
+    return inflight;
   }
 
-  // 2순위 폴백: 직접 Supabase SECURITY DEFINER RPC 호출
-  const { data, error } = await authed.rpc('ghosti_ensure_room_and_invite', {
-    p_lounge_type: dbLoungeType,
-    p_sub_type: dbSubType,
-    p_room_title: opts.roomTitle,
-    p_master_nickname: cleanMasterNick,
-  });
-  if (error || !data) {
-    return { ok: false, error: error?.message || 'RPC_FAILED' };
-  }
-  const parsed = data as EnsureRoomRpcResponse;
-  if (!parsed.ok || !parsed.roomId || !parsed.inviteToken) {
-    return { ok: false, error: 'INVALID_RPC_RESULT' };
-  }
-  saveVerifiedInviteRoomMeta(parsed.inviteToken, {
-    loungeType: opts.loungeType,
-    familyRoom: opts.familyRoom,
-    hostName: cleanMasterNick,
-    roomTitle: opts.roomTitle,
-  });
-  roomTokenCache.set(cacheKey, {
-    roomId: parsed.roomId,
-    inviteToken: parsed.inviteToken,
-    masterNickname: cleanMasterNick,
-  });
-  return {
-    ok: true,
-    roomId: parsed.roomId,
-    inviteToken: parsed.inviteToken,
-    masterNickname: cleanMasterNick,
-  };
+  const task = (async () => {
+    try {
+      // 1순위: 서버 브릿지(service_role + 허브 계정 실검증)로 5대 공유방 토큰 일괄 예열 + 방장 별명 최신화 및 합류 공유방 전체 조회
+      const bridgeRes = await callGhostiServerBridge<{
+        roomId?: string;
+        inviteToken?: string;
+        masterNickname?: string;
+        accessibleRoomIds?: string[];
+        roomTokensByKey?: Record<
+          string,
+          { roomId: string; inviteToken: string; accessibleRoomIds?: string[] }
+        >;
+      }>('photo_resolve_accessible_rooms', {
+        dbLoungeType,
+        dbSubType,
+        roomTitle: opts.roomTitle,
+        masterNickname: cleanMasterNick,
+      });
+
+      if (bridgeRes.ok && bridgeRes.roomId && bridgeRes.inviteToken) {
+        const resolvedNick = (bridgeRes.masterNickname || cleanMasterNick).trim() || '방장';
+        const nowTs = Date.now();
+
+        if (bridgeRes.roomTokensByKey && typeof bridgeRes.roomTokensByKey === 'object') {
+          for (const [k, entry] of Object.entries(bridgeRes.roomTokensByKey)) {
+            if (!entry?.roomId || !entry?.inviteToken) continue;
+            const sepIdx = k.indexOf(':');
+            const kLt = sepIdx >= 0 ? k.slice(0, sepIdx) : 'family';
+            const kSt = sepIdx >= 0 ? k.slice(sepIdx + 1) : '우리집';
+            const mappedUi = mapDbRoomToUiLounge(kLt, kSt);
+            saveVerifiedInviteRoomMeta(entry.inviteToken, {
+              loungeType: mappedUi.loungeType,
+              familyRoom: mappedUi.familyRoom,
+              hostName: resolvedNick,
+              roomTitle:
+                k === `${dbLoungeType}:${dbSubType}` ? opts.roomTitle : '',
+            });
+            saveCachedRoomTokenEntry(`${email}:${k}`, {
+              roomId: entry.roomId,
+              inviteToken: entry.inviteToken,
+              masterNickname: resolvedNick,
+              accessibleRoomIds: Array.isArray(entry.accessibleRoomIds)
+                ? entry.accessibleRoomIds
+                : [entry.roomId],
+              cachedAt: nowTs,
+            });
+          }
+        }
+
+        saveVerifiedInviteRoomMeta(bridgeRes.inviteToken, {
+          loungeType: opts.loungeType,
+          familyRoom: opts.familyRoom,
+          hostName: resolvedNick,
+          roomTitle: opts.roomTitle,
+        });
+        const resolvedAccessible = Array.isArray(bridgeRes.accessibleRoomIds)
+          ? bridgeRes.accessibleRoomIds
+          : [bridgeRes.roomId];
+        saveCachedRoomTokenEntry(cacheKey, {
+          roomId: bridgeRes.roomId,
+          inviteToken: bridgeRes.inviteToken,
+          masterNickname: resolvedNick,
+          accessibleRoomIds: resolvedAccessible,
+          cachedAt: nowTs,
+        });
+        return {
+          ok: true,
+          roomId: bridgeRes.roomId,
+          inviteToken: bridgeRes.inviteToken,
+          masterNickname: resolvedNick,
+          accessibleRoomIds: resolvedAccessible,
+        };
+      }
+
+      // 2순위 폴백: 직접 Supabase SECURITY DEFINER RPC 호출
+      const { data, error } = await authed.rpc('ghosti_ensure_room_and_invite', {
+        p_lounge_type: dbLoungeType,
+        p_sub_type: dbSubType,
+        p_room_title: opts.roomTitle,
+        p_master_nickname: cleanMasterNick,
+      });
+      if (error || !data) {
+        return { ok: false, error: error?.message || 'RPC_FAILED' };
+      }
+      const parsed = data as EnsureRoomRpcResponse;
+      if (!parsed.ok || !parsed.roomId || !parsed.inviteToken) {
+        return { ok: false, error: 'INVALID_RPC_RESULT' };
+      }
+      saveVerifiedInviteRoomMeta(parsed.inviteToken, {
+        loungeType: opts.loungeType,
+        familyRoom: opts.familyRoom,
+        hostName: cleanMasterNick,
+        roomTitle: opts.roomTitle,
+      });
+      saveCachedRoomTokenEntry(cacheKey, {
+        roomId: parsed.roomId,
+        inviteToken: parsed.inviteToken,
+        masterNickname: cleanMasterNick,
+        cachedAt: Date.now(),
+      });
+      return {
+        ok: true,
+        roomId: parsed.roomId,
+        inviteToken: parsed.inviteToken,
+        masterNickname: cleanMasterNick,
+      };
+    } finally {
+      inflightEnsureRoomMap.delete(cacheKey);
+    }
+  })();
+
+  inflightEnsureRoomMap.set(cacheKey, task);
+  return task;
 }
 
 export async function fetchGuestPreviewRoomByToken(inviteToken: string): Promise<{
@@ -549,6 +691,9 @@ export async function acceptRoomInviteAsLoggedInMember(
     return { ok: false };
   }
   const memberRow = data as { room_id?: string };
+  if (memberRow?.room_id) {
+    clearCachedSharedRoomTokens();
+  }
   return { ok: Boolean(memberRow?.room_id), roomId: memberRow?.room_id };
 }
 

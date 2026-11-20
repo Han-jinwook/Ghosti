@@ -232,6 +232,9 @@ export function persistInviteContextMeta(parsed: ParsedShareInvite, isNativeJoin
     sessionStorage.setItem(INVITE_SESSION_KEY, parsed.inviteCode);
     if (parsed.inviteToken) {
       sessionStorage.setItem(INVITE_TOKEN_KEY, parsed.inviteToken);
+    } else {
+      // 새 초대 링크에 토큰이 없을 때 직전에 열었던 다른 방(예: 본가) 토큰이 sessionStorage에 남아 새 방을 덮어쓰는 현상 차단
+      sessionStorage.removeItem(INVITE_TOKEN_KEY);
     }
     if (isNativeJoined) {
       localStorage.setItem(
@@ -270,7 +273,7 @@ export function clearStoredInviteSession(): void {
  * 직전에 복사했던 다른 방(예: 본가) 링크가 클립보드에 그대로 남는 사고를 원천 차단합니다.
  */
 export async function copyInviteTextReliably(text: string): Promise<boolean> {
-  if (typeof window === 'undefined' || !text) return false;
+  if (typeof window === 'undefined') return false;
   try {
     if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
       await navigator.clipboard.writeText(text);
@@ -278,6 +281,11 @@ export async function copyInviteTextReliably(text: string): Promise<boolean> {
     }
   } catch {
     /* fallback to synchronous execCommand below */
+  }
+  if (!text) return false;
+  // 사용자가 이미 카톡 등 다른 창으로 포커스를 옮긴 상태에서는 숨김 textarea execCommand도 OS 클립보드를 갱신하지 못하므로 정직하게 false 반환
+  if (typeof document !== 'undefined' && typeof document.hasFocus === 'function' && !document.hasFocus()) {
+    return false;
   }
   try {
     if (typeof document !== 'undefined') {
@@ -355,19 +363,39 @@ export function readActiveInviteToken(): string {
       sessionStorage.setItem(INVITE_TOKEN_KEY, urlTok);
       return urlTok;
     }
-    const isLoggedIn = hasAuthenticatedHubAccountSession();
     const isNative = isCapacitorNativeMobileRuntime();
-    // 로그인된 웹 사용자가 일반 공유방 주소(?inviteToken 없음)에서 새로고침할 때는 과거 테스트용 sessionStorage 토큰이 내 방을 가리지 않도록 배제
-    if (!isLoggedIn || isNative) {
-      const ssTok = (sessionStorage.getItem(INVITE_TOKEN_KEY) || '').trim();
-      if (ssTok) return ssTok;
-    }
-    if (isNative) {
-      const rawJoined = localStorage.getItem(JOINED_NATIVE_INVITE_KEY);
-      if (rawJoined) {
-        const joined = JSON.parse(rawJoined) as { inviteToken?: string };
-        if (joined?.inviteToken) return joined.inviteToken.trim();
+    if (!isNative) {
+      const hasUrlInviteContext =
+        params.has('invite') || params.get('preview') === 'guest';
+      if (!hasUrlInviteContext) {
+        // 웹에서 ?invite / ?inviteToken이 전혀 없는 일반 주소(?lounge=family&room=처가, ?lounge=club 등)로 접속했을 때
+        // 이전 세션의 본가 초대 토큰(sessionStorage)이 현재 방을 납치하지 못하도록 즉시 정리
+        sessionStorage.removeItem(INVITE_SESSION_KEY);
+        sessionStorage.removeItem(INVITE_TOKEN_KEY);
+        return '';
       }
+      if (!hasAuthenticatedHubAccountSession()) {
+        const urlInviteCode = (params.get('invite') || '').trim().toLowerCase();
+        const storedInviteCode = (sessionStorage.getItem(INVITE_SESSION_KEY) || '')
+          .trim()
+          .toLowerCase();
+        // URL의 invite 방 코드가 직전 sessionStorage 방 코드와 다르면(예: 본가 ➔ 처가/동호회) 이전 토큰 재사용 금지
+        if (urlInviteCode && storedInviteCode && urlInviteCode !== storedInviteCode) {
+          sessionStorage.removeItem(INVITE_TOKEN_KEY);
+          return '';
+        }
+        const ssTok = (sessionStorage.getItem(INVITE_TOKEN_KEY) || '').trim();
+        if (ssTok) return ssTok;
+      }
+      return '';
+    }
+
+    const ssTok = (sessionStorage.getItem(INVITE_TOKEN_KEY) || '').trim();
+    if (ssTok) return ssTok;
+    const rawJoined = localStorage.getItem(JOINED_NATIVE_INVITE_KEY);
+    if (rawJoined) {
+      const joined = JSON.parse(rawJoined) as { inviteToken?: string };
+      if (joined?.inviteToken) return joined.inviteToken.trim();
     }
   } catch {
     /* ignore */
@@ -503,8 +531,10 @@ export function buildShareRoomInviteHttpsUrl(opts: {
   }
   const cleanToken = (opts.inviteToken || '').trim();
   if (cleanToken) {
-    // 허브 SSO ?token= 충돌 방지 및 방별 DB 방장 별명 단일 진실(SSOT) 보장
+    // 웹에서는 main.tsx 마운트 전 가드가 ?token=을 즉시 정리해 HubProvider SSO 충돌을 원천 차단하고,
+    // App Links / Universal Links로 직행하는 기설치 구버전 모바일 앱(v1.0.41 이하)도 ?token=으로 100% 정확히 해당 방을 열도록 동시 표기
     params.set('inviteToken', cleanToken);
+    params.set('token', cleanToken);
   } else {
     const cleanHost = (opts.hostName || '').trim();
     if (cleanHost && cleanHost !== '방장') {
@@ -534,7 +564,9 @@ export function buildShareRoomNativeSchemeUrl(opts: {
     params.set('room', opts.familyRoom);
   }
   if (opts.inviteToken?.trim()) {
-    params.set('inviteToken', opts.inviteToken.trim());
+    const cleanTok = opts.inviteToken.trim();
+    params.set('inviteToken', cleanTok);
+    params.set('token', cleanTok);
   }
   if (opts.roomTitle?.trim()) {
     params.set('title', opts.roomTitle.trim());
@@ -558,6 +590,7 @@ export function buildAndroidSafeAppProbeIntentUrl(currentHref: string): string |
     }
     if (parsed.inviteToken) {
       schemeQuery.set('inviteToken', parsed.inviteToken);
+      schemeQuery.set('token', parsed.inviteToken);
     }
     if (parsed.roomTitle) {
       schemeQuery.set('title', parsed.roomTitle);
@@ -585,7 +618,9 @@ export function buildDeferredInviteClipboardToken(opts: {
     params.set('room', opts.familyRoom);
   }
   if (opts.inviteToken?.trim()) {
-    params.set('inviteToken', opts.inviteToken.trim());
+    const cleanTok = opts.inviteToken.trim();
+    params.set('inviteToken', cleanTok);
+    params.set('token', cleanTok);
   }
   if (opts.roomTitle?.trim()) {
     params.set('title', opts.roomTitle.trim());
@@ -611,7 +646,9 @@ export function buildAndroidPlayStoreInviteUrl(opts: {
     refParams.set('room', opts.familyRoom);
   }
   if (opts.inviteToken?.trim()) {
-    refParams.set('inviteToken', opts.inviteToken.trim());
+    const cleanTok = opts.inviteToken.trim();
+    refParams.set('inviteToken', cleanTok);
+    refParams.set('token', cleanTok);
   }
   if (opts.nicknameHint?.trim()) {
     refParams.set('nick', opts.nicknameHint.trim());

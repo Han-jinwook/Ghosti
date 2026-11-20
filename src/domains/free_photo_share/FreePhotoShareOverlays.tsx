@@ -269,15 +269,23 @@ export const FreePhotoShareOverlays: React.FC = () => {
   // 1) 네이티브 모바일 앱(안드로이드·아이폰): 앱 실행 시 대기 중인 딥링크(ghosti:// / App Links / Play InstallReferrer)를 즉시 읽어 해당 공유방으로 0.1초 직행
   // 2) 웹/인앱 브라우저(PC·안드로이드 카톡 인앱·아이폰): 페이지 로드 중 무클릭 intent:// 강제 리다이렉트(카톡 인앱 ERR_UNKNOWN_URL_SCHEME 및 RPC fetch 취소 유발) 없이
   //    즉시 공유방 사진 RPC를 호출해 0.3초 만에 사진을 화면에 띄우며, 상단 [설치된 앱으로 열기] 클릭 시 안전하게 네이티브 앱으로 전환합니다.
+  const nativeDeepLinkBootCheckedRef = React.useRef(!isCapacitorNativeMobileRuntime());
+
   useEffect(() => {
     if (typeof window === 'undefined') return;
 
     if (isCapacitorNativeMobileRuntime()) {
-      void consumeNativePendingDeepLink().then((res) => {
-        if (res.ok && res.deepLinkUrl) {
-          void applyShareInviteDeepLink(res.deepLinkUrl, { fromNativeApp: true });
-        }
-      });
+      void consumeNativePendingDeepLink()
+        .then(async (res) => {
+          if (res.ok && res.deepLinkUrl) {
+            await applyShareInviteDeepLink(res.deepLinkUrl, { fromNativeApp: true });
+          } else if (isSharedPhotoLounge(useSaySeeStore.getState().activeLoungeType)) {
+            void useSaySeeStore.getState().syncActiveSharedRoomFromSupabase();
+          }
+        })
+        .finally(() => {
+          nativeDeepLinkBootCheckedRef.current = true;
+        });
 
       const onLiveDeepLink = (ev: Event) => {
         const detail = (ev as CustomEvent<{ url?: string }>).detail;
@@ -293,18 +301,20 @@ export const FreePhotoShareOverlays: React.FC = () => {
 
     try {
       const params = new URLSearchParams(window.location.search);
-      const activeTok = readActiveInviteToken();
-      const hasRealToken = Boolean(
-        (params.get('inviteToken') || params.get('token') || activeTok || '').trim()
-      );
-      if (hasRealToken || (!hasAuthenticatedHubAccountSession() && params.has('invite'))) {
-        const targetHref =
-          (params.has('invite') || params.has('inviteToken') || params.has('token'))
-            ? window.location.href
-            : `https://ghosti.sundreamer.app/?invite=${encodeURIComponent(
-                sessionStorage.getItem('ghosti_active_invite_room') || 'family_home'
-              )}&inviteToken=${encodeURIComponent(activeTok)}&preview=guest`;
-        void applyShareInviteDeepLink(targetHref, { fromNativeApp: false });
+      const urlHasInviteParam =
+        params.has('invite') || params.has('inviteToken') || params.has('token');
+      if (urlHasInviteParam) {
+        const hasRealToken = Boolean(
+          (params.get('inviteToken') || params.get('token') || readActiveInviteToken() || '').trim()
+        );
+        if (hasRealToken || !hasAuthenticatedHubAccountSession()) {
+          void applyShareInviteDeepLink(window.location.href, { fromNativeApp: false });
+        }
+      } else if (params.get('preview') !== 'guest') {
+        // ?invite / ?inviteToken이 전혀 없는 일반 경로(?lounge=family&room=처가, ?lounge=club 등)로 접속했을 때
+        // 이전 세션의 본가 초대 토큰이 현재 페이지를 본가로 강제 리다이렉트하지 않도록 sessionStorage 잔재 즉시 정리
+        sessionStorage.removeItem('ghosti_active_invite_room');
+        sessionStorage.removeItem('ghosti_active_invite_token');
       }
     } catch {
       /* ignore */
@@ -314,7 +324,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
   // 공유방 탭 전환 또는 로그인 완료(ghostiSupabaseUserSynced) 시 현재 계정·초대토큰 기준의 공유방 사진만 자동 동기화
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (isSharedPhotoLounge(activeLoungeType)) {
+    if (isSharedPhotoLounge(activeLoungeType) && nativeDeepLinkBootCheckedRef.current) {
       const params = new URLSearchParams(window.location.search);
       const hasUrlInvite =
         Boolean((params.get('inviteToken') || params.get('token') || '').trim()) ||

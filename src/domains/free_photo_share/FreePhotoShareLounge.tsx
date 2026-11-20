@@ -31,6 +31,7 @@ import {
 } from '../../services/shareInviteDeepLinkBridge';
 import {
   ensureMyRoomAndInviteToken,
+  getPrewarmedRoomInviteTokenSync,
   reseedRoomPhotosForInvite,
 } from '../../services/sharedPhotoRoomSupabase';
 import { resolveAccountScopedNickname } from '../../services/ghostSecretaryEngine';
@@ -39,12 +40,14 @@ import { WorkLoungeB2BHub } from '../paid_work_share/WorkLoungeB2BHub';
 import { QrCodeSvg } from '../../utils/qrCodeSvg';
 import { CrossDeviceClipboardAndPairingBar } from '../paid_device_sync/CrossDeviceClipboardAndPairingBar';
 
-async function issueAuthenticatedInviteHttpsUrl(opts: {
+async function copyAuthenticatedRoomInviteFlow(opts: {
   loungeType: LoungeType;
   familyRoom: FamilyRoomId;
   defaultHostLabel: string;
   roomTitle?: string;
-}): Promise<string | null> {
+  promptLabel: string;
+  formatCopyText?: (inviteUrl: string) => string;
+}): Promise<boolean> {
   if (!hasAuthenticatedHubAccountSession()) {
     useSaySeeStore
       .getState()
@@ -52,7 +55,7 @@ async function issueAuthenticatedInviteHttpsUrl(opts: {
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('openLoginModal'));
     }
-    return null;
+    return false;
   }
   const st = useSaySeeStore.getState();
   const authedEmail =
@@ -61,6 +64,47 @@ async function issueAuthenticatedInviteHttpsUrl(opts: {
   const hostNick = resolveAccountScopedNickname(authedEmail, opts.defaultHostLabel);
   const resolvedTitle =
     opts.roomTitle || resolveDefaultRoomTitle(opts.loungeType, opts.familyRoom);
+
+  // [0.00ms 동기 즉시 복사 경로]: 사진 공유방 진입 시 일괄 예열된 5대 공유방 토큰이 있으면
+  // 클릭 제스처(0ms) 안에서 즉시 해당 방 전용 링크를 클립보드에 기록하여, 사용자가 0.1초 만에 카톡 창으로 전환(Alt+Tab)해 붙여넣어도
+  // 이전 방(예: 본가) 링크가 남는 현상을 0%로 원천 차단합니다.
+  const prewarmed = getPrewarmedRoomInviteTokenSync(opts.loungeType, opts.familyRoom);
+  if (prewarmed?.inviteToken) {
+    const verifiedHostNick = prewarmed.masterNickname || hostNick;
+    const instantUrl = buildShareRoomInviteHttpsUrl({
+      loungeType: opts.loungeType,
+      familyRoom: opts.familyRoom,
+      inviteToken: prewarmed.inviteToken,
+      hostName: verifiedHostNick,
+      roomTitle: resolvedTitle,
+    });
+    const textToCopy = opts.formatCopyText ? opts.formatCopyText(instantUrl) : instantUrl;
+    const copied = await copyInviteTextReliably(textToCopy);
+    if (!copied && typeof window !== 'undefined') {
+      window.prompt(opts.promptLabel, instantUrl);
+    }
+    if (prewarmed.roomId) {
+      void reseedRoomPhotosForInvite({
+        roomId: prewarmed.roomId,
+        loungeType: opts.loungeType,
+        familyRoom: opts.familyRoom,
+        uploaderNickname: verifiedHostNick,
+      });
+    }
+    // 백그라운드에서 만료일(14일) 연장 동기화
+    void ensureMyRoomAndInviteToken({
+      loungeType: opts.loungeType,
+      familyRoom: opts.familyRoom,
+      roomTitle: resolvedTitle,
+      masterNickname: hostNick,
+    });
+    return true;
+  }
+
+  // [최초 로딩 0.2초 내 콜드 클릭 안전망]: 네트워크 대기 중 직전 방(예: 본가) 클립보드 주소가 실수로 붙여넣어지지 않도록
+  // 먼저 클릭 제스처(0ms) 안에서 이전 클립보드를 비운 뒤 새 방 토큰을 받아 복사합니다.
+  void copyInviteTextReliably(' ');
+
   const ensured = await ensureMyRoomAndInviteToken({
     loungeType: opts.loungeType,
     familyRoom: opts.familyRoom,
@@ -71,11 +115,9 @@ async function issueAuthenticatedInviteHttpsUrl(opts: {
     useSaySeeStore
       .getState()
       .showToast('⚠️ 공유방 초대 토큰 발급 중 일시적 오류가 발생했습니다. 다시 눌러주세요.');
-    return null;
+    return false;
   }
   const verifiedHostNick = ensured.masterNickname || hostNick;
-  // 2주(14일) 경과로 서버 마중물 버퍼가 비워진 뒤 재초대할 때도 해당 방(ensured.roomId) 전용 로컬 금고(IndexedDB) 썸네일을 백그라운드에서 즉시 재장전(Re-Seed)
-  // (비동기 대기 중 브라우저 클립보드 복사 제스처가 만료되어 직전 방 링크가 남지 않도록 비차단 병행)
   if (ensured.roomId) {
     void reseedRoomPhotosForInvite({
       roomId: ensured.roomId,
@@ -84,13 +126,19 @@ async function issueAuthenticatedInviteHttpsUrl(opts: {
       uploaderNickname: verifiedHostNick,
     });
   }
-  return buildShareRoomInviteHttpsUrl({
+  const inviteUrl = buildShareRoomInviteHttpsUrl({
     loungeType: opts.loungeType,
     familyRoom: opts.familyRoom,
     inviteToken: ensured.inviteToken,
     hostName: verifiedHostNick,
     roomTitle: resolvedTitle,
   });
+  const textToCopy = opts.formatCopyText ? opts.formatCopyText(inviteUrl) : inviteUrl;
+  const copied = await copyInviteTextReliably(textToCopy);
+  if (!copied && typeof window !== 'undefined') {
+    window.prompt(opts.promptLabel, inviteUrl);
+  }
+  return true;
 }
 
 /**
@@ -131,18 +179,16 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
   const pendingProposals = analogYearProposals.filter((p) => !p.approvedByHost);
 
   const handleCopyInviteHook = async () => {
-    const studentInviteUrl = await issueAuthenticatedInviteHttpsUrl({
+    const ok = await copyAuthenticatedRoomInviteFlow({
       loungeType: 'student',
       familyRoom: '우리집',
       defaultHostLabel: '동기회장',
       roomTitle: `🎓 ${bannerTitle}`,
+      promptLabel: '동창회 초대 링크를 복사해 공유하세요:',
+      formatCopyText: (studentInviteUrl) =>
+        `[${bannerTitle}] 네가 몰랐던 ${cohortShort}년 수학여행·졸업식 사진이 올라왔어! 설치·로그인 없이 바로 구경하고 내 사진도 올려봐 (초대받은 동기는 평생 무료)\n👉 ${studentInviteUrl}`,
     });
-    if (!studentInviteUrl) return;
-    const inviteHookCopy = `[${bannerTitle}] 네가 몰랐던 ${cohortShort}년 수학여행·졸업식 사진이 올라왔어! 설치·로그인 없이 바로 구경하고 내 사진도 올려봐 (초대받은 동기는 평생 무료)\n👉 ${studentInviteUrl}`;
-    const copied = await copyInviteTextReliably(inviteHookCopy);
-    if (!copied && typeof window !== 'undefined') {
-      window.prompt('동창회 초대 링크를 복사해 공유하세요:', studentInviteUrl);
-    }
+    if (!ok) return;
     setInviteCopied(true);
     setTimeout(() => setInviteCopied(false), 2600);
   };
@@ -1786,18 +1832,16 @@ export const LoungeFeedContextBanner: React.FC = () => {
   const [clubInviteCopied, setClubInviteCopied] = useState(false);
 
   const handleCopyClubInviteHook = async () => {
-    const clubInviteUrl = await issueAuthenticatedInviteHttpsUrl({
+    const ok = await copyAuthenticatedRoomInviteFlow({
       loungeType: 'club',
       familyRoom: '우리집',
       defaultHostLabel: '모임총무',
       roomTitle: `⛰️ ${clubBannerTitle}`,
+      promptLabel: '모임방 초대 링크를 복사해 공유하세요:',
+      formatCopyText: (clubInviteUrl) =>
+        `[${clubBannerTitle}] 이번 모임·라운딩 고화질 원본 사진과 영상이 모두 올라왔습니다! 설치·로그인 없이 바로 구경하세요 (총무님 후원으로 전 회원 평생 0원 무료)\n👉 ${clubInviteUrl}`,
     });
-    if (!clubInviteUrl) return;
-    const copyTxt = `[${clubBannerTitle}] 이번 모임·라운딩 고화질 원본 사진과 영상이 모두 올라왔습니다! 설치·로그인 없이 바로 구경하세요 (총무님 후원으로 전 회원 평생 0원 무료)\n👉 ${clubInviteUrl}`;
-    const copied = await copyInviteTextReliably(copyTxt);
-    if (!copied && typeof window !== 'undefined') {
-      window.prompt('모임방 초대 링크를 복사해 공유하세요:', clubInviteUrl);
-    }
+    if (!ok) return;
     setClubInviteCopied(true);
     setTimeout(() => setClubInviteCopied(false), 2600);
   };
@@ -2098,7 +2142,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
             <button
               type="button"
               onClick={async () => {
-                const inviteUrl = await issueAuthenticatedInviteHttpsUrl({
+                const ok = await copyAuthenticatedRoomInviteFlow({
                   loungeType: 'family',
                   familyRoom: activeFamilyRoom,
                   defaultHostLabel: '가족방장',
@@ -2108,12 +2152,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
                       : activeFamilyRoom === '처가(친정)'
                         ? '🌸 처가(친정) 가족 사진방'
                         : '🏠 우리집 가족 사진방',
+                  promptLabel: `『${activeFamilyRoom} 가족 사진방』 초대 링크를 복사해 공유하세요:`,
                 });
-                if (!inviteUrl) return;
-                const copied = await copyInviteTextReliably(inviteUrl);
-                if (!copied && typeof window !== 'undefined') {
-                  window.prompt(`『${activeFamilyRoom} 가족 사진방』 초대 링크를 복사해 공유하세요:`, inviteUrl);
-                }
+                if (!ok) return;
                 useSaySeeStore
                   .getState()
                   .showToast(`💌 『${activeFamilyRoom} 가족 사진방』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.`);
@@ -2297,17 +2338,14 @@ export const LoungeFeedContextBanner: React.FC = () => {
             <button
               type="button"
               onClick={async () => {
-                const inviteUrl = await issueAuthenticatedInviteHttpsUrl({
+                const ok = await copyAuthenticatedRoomInviteFlow({
                   loungeType: 'club',
                   familyRoom: '우리집',
                   defaultHostLabel: '모임방장',
                   roomTitle: `⛰️ ${clubBannerTitle}`,
+                  promptLabel: `『${clubBannerTitle}』 초대 링크를 복사해 공유하세요:`,
                 });
-                if (!inviteUrl) return;
-                const copied = await copyInviteTextReliably(inviteUrl);
-                if (!copied && typeof window !== 'undefined') {
-                  window.prompt(`『${clubBannerTitle}』 초대 링크를 복사해 공유하세요:`, inviteUrl);
-                }
+                if (!ok) return;
                 useSaySeeStore
                   .getState()
                   .showToast(`💌 『${clubBannerTitle}』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.`);
@@ -2358,17 +2396,14 @@ export const LoungeFeedContextBanner: React.FC = () => {
           <button
             type="button"
             onClick={async () => {
-              const inviteUrl = await issueAuthenticatedInviteHttpsUrl({
+              const ok = await copyAuthenticatedRoomInviteFlow({
                 loungeType: 'student',
                 familyRoom: '우리집',
                 defaultHostLabel: '동기회장',
                 roomTitle: '🎓 동창회 사진방',
+                promptLabel: '『동창회 사진방』 초대 링크를 복사해 공유하세요:',
               });
-              if (!inviteUrl) return;
-              const copied = await copyInviteTextReliably(inviteUrl);
-              if (!copied && typeof window !== 'undefined') {
-                window.prompt('『동창회 사진방』 초대 링크를 복사해 공유하세요:', inviteUrl);
-              }
+              if (!ok) return;
               useSaySeeStore
                 .getState()
                 .showToast('💌 『동창회 사진방』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.');
@@ -3319,17 +3354,15 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   const copyInviteLink = async () => {
     const targetLounge: LoungeType =
       activeLoungeType === 'club' || activeLoungeType === 'student' ? activeLoungeType : 'family';
-    const inviteUrl = await issueAuthenticatedInviteHttpsUrl({
+    const ok = await copyAuthenticatedRoomInviteFlow({
       loungeType: targetLounge,
       familyRoom: activeFamilyRoom,
       defaultHostLabel: targetLounge === 'family' ? '가족방장' : '모임방장',
+      promptLabel: '초대 링크를 복사해 공유하세요:',
+      formatCopyText: (inviteUrl) =>
+        `[귀신같이 사진 공유방 초대장] 설치·로그인 없이 1초 만에 우리 공유 사진을 구경하고, 무료 앱에서 내 사진 올리기·고화질 원본 저장·새 사진 알림까지 평생 0원으로 함께해요!\n👉 ${inviteUrl}`,
     });
-    if (!inviteUrl) return;
-    const inviteCopy = `[귀신같이 사진 공유방 초대장] 설치·로그인 없이 1초 만에 우리 공유 사진을 구경하고, 무료 앱에서 내 사진 올리기·고화질 원본 저장·새 사진 알림까지 평생 0원으로 함께해요!\n👉 ${inviteUrl}`;
-    const copied = await copyInviteTextReliably(inviteCopy);
-    if (!copied && typeof window !== 'undefined') {
-      window.prompt('초대 링크를 복사해 공유하세요:', inviteUrl);
-    }
+    if (!ok) return;
     setInviteCopied(true);
     setTimeout(() => setInviteCopied(false), 2500);
   };

@@ -61,12 +61,13 @@ export function resolveInvitedHostLoungeAndRoom(): {
 
     const params = new URLSearchParams(window.location.search);
     const urlInvite = (params.get('invite') || '').trim().toLowerCase();
+    const isNative = isCapacitorNativeMobileRuntime();
     let storedInvite = '';
     try {
       if (urlInvite) {
         sessionStorage.setItem('ghosti_active_invite_room', urlInvite);
         storedInvite = urlInvite;
-      } else {
+      } else if (isNative || params.has('inviteToken') || params.get('preview') === 'guest') {
         storedInvite = (sessionStorage.getItem('ghosti_active_invite_room') || '').trim().toLowerCase();
       }
     } catch {
@@ -84,7 +85,7 @@ export function resolveInvitedHostLoungeAndRoom(): {
       .trim()
       .toLowerCase();
 
-    if (!effectiveInvite) {
+    if (!effectiveInvite && isNative) {
       try {
         const joinedRaw = localStorage.getItem('ghosti_joined_invite_room_v1');
         if (joinedRaw) {

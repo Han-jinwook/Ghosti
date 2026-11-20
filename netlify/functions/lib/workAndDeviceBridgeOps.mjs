@@ -1047,21 +1047,62 @@ export async function handleAuthedWorkAndDeviceAction({
     const effectiveMasterNick =
       sanitizedClientNick || verifiedHubNick || email.split('@')[0] || '방장';
 
-    const existRoomRes = await fetch(
+    // 방장이 사진 공유 메뉴 진입 즉시 5대 표준 방(우리집·본가·처가·동호회·동창회)의 DB 방과 14일 초대 토큰을 한 번에 선행 보장하여,
+    // 방을 빠르게 이동하며 [💌 초대 링크 복사]를 연속 클릭할 때도 비동기 지연(포커스 상실·이전 방 링크 잔류) 없이 0.00ms 동기 복사를 보장합니다.
+    const standardRoomSpecs = [
+      { lt: 'family', st: '우리집', defaultTitle: '🏠 우리집 가족 사진방' },
+      { lt: 'family', st: '본가(친가)', defaultTitle: '🏡 본가(친가) 가족 사진방' },
+      { lt: 'family', st: '처가(친정)', defaultTitle: '🌸 처가(친정) 가족 사진방' },
+      { lt: 'club', st: '동호회', defaultTitle: '⛰️ 동호회·모임 사진방' },
+      { lt: 'club', st: '동창회', defaultTitle: '🎓 동창회 사진방' },
+    ];
+    const requestedKey = `${dbLoungeType}:${dbSubType}`;
+    if (!standardRoomSpecs.some((s) => `${s.lt}:${s.st}` === requestedKey)) {
+      standardRoomSpecs.push({ lt: dbLoungeType, st: dbSubType, defaultTitle: roomTitle });
+    }
+
+    const existRoomsRes = await fetch(
       `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?master_email=eq.${encodeURIComponent(
         email
-      )}&lounge_type=eq.${encodeURIComponent(dbLoungeType)}&sub_type=eq.${encodeURIComponent(
-        dbSubType
-      )}&order=created_at.asc&limit=1`,
+      )}&lounge_type=in.(family,club)&order=created_at.asc&limit=30`,
       { headers: srvHeaders(serviceKey) }
     );
-    const existRoomRows = existRoomRes.ok ? await existRoomRes.json().catch(() => []) : [];
-    let myRoomId =
-      Array.isArray(existRoomRows) && existRoomRows[0]?.room_id
-        ? String(existRoomRows[0].room_id)
-        : '';
+    const existRoomRows = existRoomsRes.ok ? await existRoomsRes.json().catch(() => []) : [];
+    const existingRoomByKey = new Map();
+    if (Array.isArray(existRoomRows)) {
+      for (const r of existRoomRows) {
+        const k = `${String(r?.lounge_type || '')}:${String(r?.sub_type || '')}`;
+        if (r?.room_id && !existingRoomByKey.has(k)) {
+          existingRoomByKey.set(k, String(r.room_id));
+        }
+      }
+    }
 
-    if (!myRoomId) {
+    const missingRoomPayloads = [];
+    const roomIdByKey = new Map();
+    for (const spec of standardRoomSpecs) {
+      const k = `${spec.lt}:${spec.st}`;
+      let rId = existingRoomByKey.get(k) || '';
+      if (!rId) {
+        const md5Hex = crypto
+          .createHash('md5')
+          .update(`${email}:${spec.lt}:${spec.st}`)
+          .digest('hex')
+          .slice(0, 16);
+        rId = `room_${md5Hex}`;
+        missingRoomPayloads.push({
+          room_id: rId,
+          lounge_type: spec.lt,
+          sub_type: spec.st,
+          room_title: k === requestedKey && roomTitle ? roomTitle : spec.defaultTitle,
+          master_user_id: userId,
+          master_email: email,
+        });
+      }
+      roomIdByKey.set(k, rId);
+    }
+
+    if (missingRoomPayloads.length > 0) {
       // public.users FK(master_user_id) 제약이 있는 환경에서도 신규 방 생성이 100% 성공하도록 사용자 행 선행 보장
       await fetch(`${supabaseUrl}/rest/v1/users?on_conflict=id`, {
         method: 'POST',
@@ -1077,26 +1118,13 @@ export async function handleAuthedWorkAndDeviceAction({
         }),
       }).catch(() => {});
 
-      const md5Hex = crypto
-        .createHash('md5')
-        .update(`${email}:${dbLoungeType}:${dbSubType}`)
-        .digest('hex')
-        .slice(0, 16);
-      myRoomId = `room_${md5Hex}`;
       const roomCreateRes = await fetch(`${supabaseUrl}/rest/v1/ghosti_lounge_rooms?on_conflict=room_id`, {
         method: 'POST',
         headers: srvHeaders(serviceKey, {
           'Content-Type': 'application/json',
           Prefer: 'resolution=merge-duplicates,return=minimal',
         }),
-        body: JSON.stringify({
-          room_id: myRoomId,
-          lounge_type: dbLoungeType,
-          sub_type: dbSubType,
-          room_title: roomTitle,
-          master_user_id: userId,
-          master_email: email,
-        }),
+        body: JSON.stringify(missingRoomPayloads),
       });
       if (!roomCreateRes.ok) {
         const errDetail = await roomCreateRes.text().catch(() => '');
@@ -1110,64 +1138,74 @@ export async function handleAuthedWorkAndDeviceAction({
       }
     }
 
-    // 방장 본인의 room_persona_nickname을 항상 최신 계정 별명으로 동기화 (초대 링크 열람 시 100% 일치 보장)
+    const allMyRoomIds = Array.from(new Set(Array.from(roomIdByKey.values())));
+    const masterMemberPayloads = allMyRoomIds.map((rId) => ({
+      room_id: rId,
+      member_email: email,
+      role: 'master',
+      room_persona_nickname: effectiveMasterNick,
+    }));
+
+    // 방장 본인의 room_persona_nickname을 항상 최신 계정 별명으로 일괄 동기화
     await fetch(`${supabaseUrl}/rest/v1/ghosti_lounge_members?on_conflict=room_id,member_email`, {
       method: 'POST',
       headers: srvHeaders(serviceKey, {
         'Content-Type': 'application/json',
         Prefer: 'resolution=merge-duplicates,return=minimal',
       }),
-      body: JSON.stringify({
-        room_id: myRoomId,
-        member_email: email,
-        role: 'master',
-        room_persona_nickname: effectiveMasterNick,
-      }),
+      body: JSON.stringify(masterMemberPayloads),
     });
 
+    const inMyRoomClause = allMyRoomIds.map((id) => `"${id.replace(/"/g, '')}"`).join(',');
     const invRes = await fetch(
-      `${supabaseUrl}/rest/v1/ghosti_room_invites?room_id=eq.${encodeURIComponent(
-        myRoomId
-      )}&revoked_at=is.null&order=created_at.desc&limit=1`,
+      `${supabaseUrl}/rest/v1/ghosti_room_invites?room_id=in.(${encodeURIComponent(
+        inMyRoomClause
+      )})&revoked_at=is.null&order=created_at.desc&limit=50`,
       { headers: srvHeaders(serviceKey) }
     );
     const invRows = invRes.ok ? await invRes.json().catch(() => []) : [];
-    let myInviteToken = '';
-    const nextExpiryIso = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
-    if (
-      Array.isArray(invRows) &&
-      invRows[0]?.token &&
-      Date.parse(invRows[0].expires_at || '') > Date.now() &&
-      Number(invRows[0].used_count || 0) < Number(invRows[0].max_uses || 500)
-    ) {
-      myInviteToken = String(invRows[0].token);
-      await fetch(
-        `${supabaseUrl}/rest/v1/ghosti_room_invites?token=eq.${encodeURIComponent(myInviteToken)}`,
-        {
-          method: 'PATCH',
-          headers: srvHeaders(serviceKey, {
-            'Content-Type': 'application/json',
-            Prefer: 'return=minimal',
-          }),
-          body: JSON.stringify({ expires_at: nextExpiryIso }),
+    const activeTokenByRoomId = new Map();
+    const nowMs = Date.now();
+    if (Array.isArray(invRows)) {
+      for (const row of invRows) {
+        const rId = String(row?.room_id || '');
+        if (
+          rId &&
+          !activeTokenByRoomId.has(rId) &&
+          row?.token &&
+          Date.parse(row.expires_at || '') > nowMs &&
+          Number(row.used_count || 0) < Number(row.max_uses || 500)
+        ) {
+          activeTokenByRoomId.set(rId, String(row.token));
         }
-      ).catch(() => {});
-    } else {
-      myInviteToken = crypto.randomBytes(18).toString('hex');
+      }
+    }
+
+    const nextExpiryIso = new Date(nowMs + 14 * 24 * 60 * 60 * 1000).toISOString();
+    const missingInvites = [];
+    for (const rId of allMyRoomIds) {
+      if (!activeTokenByRoomId.has(rId)) {
+        const newTok = crypto.randomBytes(18).toString('hex');
+        activeTokenByRoomId.set(rId, newTok);
+        missingInvites.push({
+          token: newTok,
+          room_id: rId,
+          created_by_email: email,
+          default_role: 'member',
+          max_uses: 500,
+          expires_at: nextExpiryIso,
+        });
+      }
+    }
+
+    if (missingInvites.length > 0) {
       const invCreateRes = await fetch(`${supabaseUrl}/rest/v1/ghosti_room_invites`, {
         method: 'POST',
         headers: srvHeaders(serviceKey, {
           'Content-Type': 'application/json',
           Prefer: 'return=minimal',
         }),
-        body: JSON.stringify({
-          token: myInviteToken,
-          room_id: myRoomId,
-          created_by_email: email,
-          default_role: 'member',
-          max_uses: 500,
-          expires_at: nextExpiryIso,
-        }),
+        body: JSON.stringify(missingInvites),
       });
       if (!invCreateRes.ok) {
         const errDetail = await invCreateRes.text().catch(() => '');
@@ -1181,8 +1219,37 @@ export async function handleAuthedWorkAndDeviceAction({
       }
     }
 
-    const accessibleSet = new Set([myRoomId]);
+    const myRoomId = roomIdByKey.get(requestedKey) || '';
+    const myInviteToken = activeTokenByRoomId.get(myRoomId) || '';
+    if (myInviteToken && !missingInvites.some((m) => m.token === myInviteToken)) {
+      await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_room_invites?token=eq.${encodeURIComponent(myInviteToken)}`,
+        {
+          method: 'PATCH',
+          headers: srvHeaders(serviceKey, {
+            'Content-Type': 'application/json',
+            Prefer: 'return=minimal',
+          }),
+          body: JSON.stringify({ expires_at: nextExpiryIso }),
+        }
+      ).catch(() => {});
+    }
+
+    const roomTokensByKey = {};
+    for (const [k, rId] of roomIdByKey.entries()) {
+      const tok = activeTokenByRoomId.get(rId) || '';
+      if (rId && tok) {
+        roomTokensByKey[k] = { roomId: rId, inviteToken: tok };
+      }
+    }
+
+    const accessibleByKey = new Map();
+    for (const [k, rId] of roomIdByKey.entries()) {
+      accessibleByKey.set(k, new Set([rId]));
+    }
+    const accessibleSet = accessibleByKey.get(requestedKey) || new Set([myRoomId]);
     try {
+      const myOwnSet = new Set(allMyRoomIds);
       const memRowsRes = await fetch(
         `${supabaseUrl}/rest/v1/ghosti_lounge_members?member_email=eq.${encodeURIComponent(
           email
@@ -1191,16 +1258,14 @@ export async function handleAuthedWorkAndDeviceAction({
       );
       const memRows = memRowsRes.ok ? await memRowsRes.json().catch(() => []) : [];
       const joinedRoomIds = Array.isArray(memRows)
-        ? memRows.map((m) => String(m?.room_id || '')).filter((id) => id && id !== myRoomId)
+        ? memRows.map((m) => String(m?.room_id || '')).filter((id) => id && !myOwnSet.has(id))
         : [];
       if (joinedRoomIds.length > 0) {
         const inClause = joinedRoomIds.map((id) => `"${id.replace(/"/g, '')}"`).join(',');
         const matchRoomsRes = await fetch(
           `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=in.(${encodeURIComponent(
             inClause
-          )})&lounge_type=eq.${encodeURIComponent(dbLoungeType)}&sub_type=eq.${encodeURIComponent(
-            dbSubType
-          )}&select=room_id`,
+          )})&lounge_type=in.(family,club)&select=room_id,lounge_type,sub_type`,
           { headers: srvHeaders(serviceKey) }
         );
         const matchRooms = matchRoomsRes.ok ? await matchRoomsRes.json().catch(() => []) : [];
@@ -1209,8 +1274,15 @@ export async function handleAuthedWorkAndDeviceAction({
           for (const mr of matchRooms) {
             if (mr?.room_id) {
               const rStr = String(mr.room_id);
-              accessibleSet.add(rStr);
-              matchedJoinedIds.push(rStr);
+              const mrKey = `${String(mr.lounge_type || '')}:${String(mr.sub_type || '')}`;
+              if (!accessibleByKey.has(mrKey)) {
+                accessibleByKey.set(mrKey, new Set());
+              }
+              accessibleByKey.get(mrKey).add(rStr);
+              if (mrKey === requestedKey) {
+                accessibleSet.add(rStr);
+                matchedJoinedIds.push(rStr);
+              }
             }
           }
         }
@@ -1256,6 +1328,11 @@ export async function handleAuthedWorkAndDeviceAction({
       /* ignore member room expansion error */
     }
 
+    for (const [k, entry] of Object.entries(roomTokensByKey)) {
+      const setForKey = accessibleByKey.get(k);
+      entry.accessibleRoomIds = setForKey ? Array.from(setForKey) : [entry.roomId];
+    }
+
     return {
       status: 200,
       body: {
@@ -1264,6 +1341,7 @@ export async function handleAuthedWorkAndDeviceAction({
         inviteToken: myInviteToken,
         masterNickname: effectiveMasterNick,
         accessibleRoomIds: Array.from(accessibleSet),
+        roomTokensByKey,
       },
     };
   }
