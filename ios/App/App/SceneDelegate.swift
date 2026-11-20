@@ -237,10 +237,43 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         let status = PHPhotoLibrary.authorizationStatus(for: .readWrite)
         if #available(iOS 14, *), status == .limited, forceExpandSelected {
             DispatchQueue.main.async {
-                if let vc = self.bridge?.viewController {
-                    PHPhotoLibrary.shared().presentLimitedLibraryPicker(from: vc)
+                // [PhotosUI 프레임워크 강제 심볼 앵커링 & 미연결 셀렉터 충돌 원천 차단]:
+                // presentLimitedLibraryPicker는 Photos가 아닌 PhotosUI의 ObjC 카테고리 확장이므로,
+                // 구체 타입 심볼(PHPickerConfiguration)을 참조해 링커 데드스트립을 막고 최상단 VC에서 완료 콜백(iOS 15+)으로 안전 호출합니다.
+                let _ = PHPickerConfiguration.self
+                var presenter: UIViewController? = self.bridge?.viewController
+                while let nextPresented = presenter?.presentedViewController, !nextPresented.isBeingDismissed {
+                    presenter = nextPresented
                 }
-                DispatchQueue.main.asyncAfter(deadline: .now() + 1.2) {
+
+                guard let safePresenter = presenter else {
+                    self.runPhotoKitScan(call: call, offset: offset, limit: limit, thumbMaxDim: thumbMaxDim, includeVideos: includeVideos, isLimited: true)
+                    return
+                }
+
+                let library = PHPhotoLibrary.shared()
+                if #available(iOS 15, *),
+                   library.responds(to: NSSelectorFromString("presentLimitedLibraryPickerFromViewController:completionHandler:")) {
+                    library.presentLimitedLibraryPicker(from: safePresenter) { _ in
+                        let refreshedLim = PHPhotoLibrary.authorizationStatus(for: .readWrite) == .limited
+                        self.runPhotoKitScan(
+                            call: call,
+                            offset: offset,
+                            limit: limit,
+                            thumbMaxDim: thumbMaxDim,
+                            includeVideos: includeVideos,
+                            isLimited: refreshedLim
+                        )
+                    }
+                } else if library.responds(to: NSSelectorFromString("presentLimitedLibraryPickerFromViewController:")) {
+                    library.presentLimitedLibraryPicker(from: safePresenter)
+                    DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                        self.runPhotoKitScan(call: call, offset: offset, limit: limit, thumbMaxDim: thumbMaxDim, includeVideos: includeVideos, isLimited: true)
+                    }
+                } else {
+                    if let settingsUrl = URL(string: UIApplication.openSettingsURLString) {
+                        UIApplication.shared.open(settingsUrl, options: [:], completionHandler: nil)
+                    }
                     self.runPhotoKitScan(call: call, offset: offset, limit: limit, thumbMaxDim: thumbMaxDim, includeVideos: includeVideos, isLimited: true)
                 }
             }
