@@ -1933,10 +1933,11 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             onFocus={() => {
               if (isMobileOrStore) {
                 window.setTimeout(() => {
-                  if (scrollContainerRef.current) {
-                    scrollContainerRef.current.scrollTop = scrollContainerRef.current.scrollHeight;
+                  const el = scrollContainerRef.current;
+                  if (el && el.scrollHeight - el.scrollTop - el.clientHeight > 8) {
+                    el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
                   }
-                }, 360);
+                }, 80);
               }
             }}
             placeholder={

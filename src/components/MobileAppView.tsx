@@ -292,11 +292,51 @@ export const MobileAppView: React.FC = () => {
     if (typeof window === 'undefined') return;
     let latestIosKb = 0;
     let settleTimer: number | undefined;
+    let animRafId: number | undefined;
 
-    // [iOS/AOS 키보드 상승 버벅거림 원천 제거]:
-    // 네이티브 키보드가 올라오는 0~350ms 스프링 애니메이션 도중에는 JS scrollBy나 React 리렌더를 일절 개입시키지 않고
-    // OS 하드웨어 스크롤에 100% 맡긴 뒤, 애니메이션 완전 종료 후(380ms 디바운스) 실제로 입력칸이 가려진 예외 케이스만 단 1회 보정합니다.
-    const ensureFocusedInputVisibleAfterSettle = () => {
+    // [iOS/AOS 키보드 상승 시 '뚝 끊기는 점프(behavior: auto)' 원천 제거 & 60/120fps 매끄러운 Cubic-Out 단일 글라이드]:
+    // 기존 380ms 지연 후 behavior: 'auto'(0ms 순간이동)로 화면이 뚝 끊기던 현상을 제거하고,
+    // 키보드 상승 곡선과 동기화된 220ms Cubic-Out 이징 애니메이션으로 한 번에 부드럽게 미끄러지듯 이동합니다.
+    const stopActiveGlide = () => {
+      if (animRafId !== undefined) {
+        window.cancelAnimationFrame(animRafId);
+        animRafId = undefined;
+      }
+    };
+
+    const animateWindowScrollBy = (deltaY: number, durationMs = 220) => {
+      if (Math.abs(deltaY) < 6) return;
+      stopActiveGlide();
+      const startY =
+        window.scrollY ||
+        document.documentElement.scrollTop ||
+        document.body.scrollTop ||
+        0;
+      const maxScrollY = Math.max(
+        0,
+        document.documentElement.scrollHeight - window.innerHeight
+      );
+      const targetY = Math.max(0, Math.min(maxScrollY, startY + deltaY));
+      const actualDelta = targetY - startY;
+      if (Math.abs(actualDelta) < 4) return;
+
+      const startTime = performance.now();
+      const step = (now: number) => {
+        const elapsed = now - startTime;
+        const t = Math.min(1, elapsed / durationMs);
+        const eased = 1 - Math.pow(1 - t, 3); // Cubic-Out
+        const nextY = startY + actualDelta * eased;
+        window.scrollTo(0, nextY);
+        if (t < 1) {
+          animRafId = window.requestAnimationFrame(step);
+        } else {
+          animRafId = undefined;
+        }
+      };
+      animRafId = window.requestAnimationFrame(step);
+    };
+
+    const ensureFocusedInputVisibleSmoothly = () => {
       const active = document.activeElement as HTMLElement | null;
       if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA')) return;
       const vv = window.visualViewport;
@@ -311,31 +351,31 @@ export const MobileAppView: React.FC = () => {
         : vvOffsetTop + 88;
       const rect = active.getBoundingClientRect();
 
-      if (rect.top < headerBottom + 2) {
-        const pullDown = headerBottom + 10 - rect.top;
+      if (rect.top < headerBottom + 4) {
+        const pullDown = headerBottom + 12 - rect.top;
         if (pullDown > 8) {
-          window.scrollBy({ top: -pullDown, behavior: 'auto' });
+          animateWindowScrollBy(-pullDown, 220);
         }
         return;
       }
 
-      if (rect.bottom > visibleBottom - 6) {
-        const maxAllowedScrollUp = Math.max(0, rect.top - (headerBottom + 10));
-        const neededDelta = rect.bottom - (visibleBottom - 16);
+      if (rect.bottom > visibleBottom - 8) {
+        const maxAllowedScrollUp = Math.max(0, rect.top - (headerBottom + 12));
+        const neededDelta = rect.bottom - (visibleBottom - 18);
         const clampedDelta = Math.min(neededDelta, maxAllowedScrollUp);
-        if (clampedDelta > 10) {
-          window.scrollBy({ top: clampedDelta, behavior: 'auto' });
+        if (clampedDelta > 8) {
+          animateWindowScrollBy(clampedDelta, 220);
         }
       }
     };
 
-    const scheduleSinglePostSettleCheck = (delayMs = 380) => {
+    const scheduleSmoothKeyboardGlide = (delayMs = 85) => {
       if (settleTimer !== undefined) {
         window.clearTimeout(settleTimer);
       }
       settleTimer = window.setTimeout(() => {
         settleTimer = undefined;
-        ensureFocusedInputVisibleAfterSettle();
+        ensureFocusedInputVisibleSmoothly();
       }, delayMs);
     };
 
@@ -346,17 +386,20 @@ export const MobileAppView: React.FC = () => {
         latestIosKb = open ? Math.max(0, Number(detail?.height || 0)) : 0;
       }
       if (open) {
-        scheduleSinglePostSettleCheck(380);
-      } else if (settleTimer !== undefined) {
-        window.clearTimeout(settleTimer);
-        settleTimer = undefined;
+        scheduleSmoothKeyboardGlide(70);
+      } else {
+        if (settleTimer !== undefined) {
+          window.clearTimeout(settleTimer);
+          settleTimer = undefined;
+        }
+        stopActiveGlide();
       }
     };
 
     const onFocusIn = (e: FocusEvent) => {
       const el = e.target as HTMLElement | null;
       if (el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA')) {
-        scheduleSinglePostSettleCheck(380);
+        scheduleSmoothKeyboardGlide(110);
       }
     };
 
@@ -365,8 +408,9 @@ export const MobileAppView: React.FC = () => {
         const active = document.activeElement as HTMLElement | null;
         if (!active || (active.tagName !== 'INPUT' && active.tagName !== 'TEXTAREA')) {
           latestIosKb = 0;
+          stopActiveGlide();
         }
-      }, 150);
+      }, 120);
     };
 
     window.addEventListener('ghostiKeyboardState', onNativeKb);
@@ -376,6 +420,7 @@ export const MobileAppView: React.FC = () => {
       if (settleTimer !== undefined) {
         window.clearTimeout(settleTimer);
       }
+      stopActiveGlide();
       window.removeEventListener('ghostiKeyboardState', onNativeKb);
       window.removeEventListener('focusin', onFocusIn);
       window.removeEventListener('focusout', onFocusOut);
