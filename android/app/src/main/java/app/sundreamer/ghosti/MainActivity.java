@@ -291,7 +291,7 @@ public class MainActivity extends BridgeActivity {
                 : "video/mp4";
 
             File cacheRoot = new File(getCacheDir(), "ghosti_vid_stream");
-            File h264Cached = new File(cacheRoot, "vid_h264_v2_" + mediaId + ".mp4");
+            File h264Cached = new File(cacheRoot, "vid_h264_v3_" + mediaId + ".mp4");
 
             FileInputStream fis = null;
             long totalSize = -1L;

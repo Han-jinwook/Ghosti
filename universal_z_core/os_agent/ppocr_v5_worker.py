@@ -376,16 +376,25 @@ def run_worker_cli(req_path: str, res_path: str) -> int:
     mean = np.array([0.485, 0.456, 0.406], dtype=np.float32).reshape(1, 1, 3)
     std = np.array([0.229, 0.224, 0.225], dtype=np.float32).reshape(1, 1, 3)
 
-    def _infer_pil_image(im_rgb: Image.Image) -> Dict[str, Any]:
+    def _score_ocr_boxes(b_list: List[Dict[str, Any]]) -> float:
+        sc = 0.0
+        for bx in b_list:
+            tx = str(bx.get("text") or "")
+            ko_n = len(re.findall(r"[가-힣]", tx))
+            an_n = len(re.findall(r"[A-Za-z0-9]", tx))
+            sc += float(bx.get("conf") or 0.0) * (ko_n * 2.2 + an_n * 0.8)
+        return sc
+
+    def _infer_pil_image(im_rgb: Image.Image, _allow_roi_zoom: bool = True) -> Dict[str, Any]:
         src_w, src_h = im_rgb.size
         if src_w < 16 or src_h < 16:
             return {"width": src_w, "height": src_h, "boxes": [], "lines": [], "smartText": ""}
 
         max_side = max(src_w, src_h)
         if filter_video_ui:
-            cap_side = 1440 if src_h >= src_w * 1.35 else 1280
+            cap_side = 1792 if src_h >= src_w * 1.35 else 1536
         else:
-            cap_side = 1600
+            cap_side = 1792
         target_max = max(960, min(cap_side, max_side))
         scale = target_max / float(max_side)
         det_w = max(32, int(round((src_w * scale) / 32.0)) * 32)
@@ -453,17 +462,23 @@ def run_worker_cli(req_path: str, res_path: str) -> int:
             cy_m = float(py.mean())
             dx = px - cx_m
             dy = py - cy_m
-            bw_src = float(px.max() - px.min()) + sx
-            bh_src = float(py.max() - py.min()) + sy
 
-            # 긴 문장(가로 >= 세로 * 3.2)의 중심선 기울기를 최소제곱법으로 추정하여 손떨림·사선 촬영 기울어짐을 수평 보정
+            # 2D PCA 주축 고유벡터로 ±30도(0.52 rad) 기울어진 컵·라벨·사선 문장도 회전 불변 true_w/true_h 기준으로 정밀 수평 보정
             angle_rad = 0.0
-            if bw_src >= bh_src * 3.2 and cnt >= 40:
+            if cnt >= 24:
                 var_x = float(np.dot(dx, dx))
-                slope = float(np.dot(dx, dy) / max(1e-6, var_x))
-                slope = max(-0.22, min(0.22, slope))
-                if abs(slope) >= 0.006:
-                    angle_rad = math.atan(slope)
+                var_y = float(np.dot(dy, dy))
+                cov_xy = float(np.dot(dx, dy))
+                theta = 0.5 * math.atan2(2.0 * cov_xy, var_x - var_y)
+                if 0.006 <= abs(theta) <= 0.52:
+                    ct = math.cos(theta)
+                    st = math.sin(theta)
+                    ut = dx * ct + dy * st
+                    vt = -dx * st + dy * ct
+                    tw_t = float(ut.max() - ut.min()) + sx
+                    th_t = max(2.0, float(vt.max() - vt.min()) + sy)
+                    if tw_t >= th_t * 2.1:
+                        angle_rad = theta
 
             cos_a = math.cos(angle_rad)
             sin_a = math.sin(angle_rad)
@@ -486,7 +501,7 @@ def run_worker_cli(req_path: str, res_path: str) -> int:
             u1 = u_max + pad_u
             v0 = v_min - pad_v
             v1 = v_max + pad_v
-            if cos_a > 0.5:
+            if abs(angle_rad) < 0.05 and cos_a > 0.5:
                 u0 = max(u0, (0.0 - cx_m) / cos_a)
                 u1 = min(u1, (src_w - cx_m) / cos_a)
                 v0 = max(v0, (0.0 - cy_m) / cos_a)
@@ -502,11 +517,12 @@ def run_worker_cli(req_path: str, res_path: str) -> int:
                     "x0": x0, "y0": y0, "x1": x1, "y1": y1,
                     "cx": cx_m, "cy": cy_m,
                     "u0": u0, "u1": u1, "v0": v0, "v1": v1,
+                    "true_h": true_h,
                     "angle": angle_rad, "cos": cos_a, "sin": sin_a,
                 })
 
         cand_items.sort(key=lambda b: (b["y0"], b["x0"]))
-        # 동일 행에서 pad_u 확장으로 인해 인접 박스가 옆 박스의 첫 글자/이모지(👑 등)를 침범하는 중복 현상 방지
+        # 동일 기준선(Baseline) 상의 좌우 인접 박스끼리만 pad_u 중복 침범을 다듬고, 위·아래로 쌓인 기울어진 줄은 보존
         for i_b in range(len(cand_items)):
             for j_b in range(i_b + 1, len(cand_items)):
                 bi = cand_items[i_b]
@@ -515,9 +531,11 @@ def run_worker_cli(req_path: str, res_path: str) -> int:
                 hj = bj["y1"] - bj["y0"]
                 if bj["y0"] > bi["y1"]:
                     break
-                y_ov = min(bi["y1"], bj["y1"]) - max(bi["y0"], bj["y0"])
-                if y_ov >= 0.55 * min(hi, hj):
-                    left_b, right_b = (bi, bj) if bi["x0"] <= bj["x0"] else (bj, bi)
+                mean_cos = 0.5 * (bi["cos"] + bj["cos"])
+                mean_sin = 0.5 * (bi["sin"] + bj["sin"])
+                dv_center = abs(-(bj["cx"] - bi["cx"]) * mean_sin + (bj["cy"] - bi["cy"]) * mean_cos)
+                if dv_center <= 0.45 * min(bi["true_h"], bj["true_h"]):
+                    left_b, right_b = (bi, bj) if bi["cx"] <= bj["cx"] else (bj, bi)
                     x_ov = left_b["x1"] - right_b["x0"]
                     if 0 < x_ov <= max(42, int(min(hi, hj) * 0.95)) and right_b["x1"] > left_b["x1"] + 8:
                         half_ov = x_ov * 0.5
@@ -656,6 +674,66 @@ def run_worker_cli(req_path: str, res_path: str) -> int:
                 cur_char_off = pos + len(tok)
 
             lines_out.append({"text": txt, "words": words_list})
+
+        if _allow_roi_zoom and len(cand_items) >= 2:
+            heights = sorted(float(c.get("true_h") or 40.0) for c in cand_items)
+            med_h = heights[len(heights) // 2]
+            pad_r = max(28, int(round(med_h * 1.8)))
+            rx0 = max(0, min(c["x0"] for c in cand_items) - pad_r)
+            ry0 = max(0, min(c["y0"] for c in cand_items) - pad_r)
+            rx1 = min(src_w, max(c["x1"] for c in cand_items) + pad_r)
+            ry1 = min(src_h, max(c["y1"] for c in cand_items) + pad_r)
+            rw, rh = rx1 - rx0, ry1 - ry0
+            roi_ratio = (rw * rh) / float(max(1, src_w * src_h))
+            mean_conf = (
+                sum(float(b["conf"]) for b in boxes_out) / len(boxes_out)
+                if boxes_out
+                else 0.0
+            )
+            if rw >= 96 and rh >= 64 and roi_ratio < 0.45 and (med_h < 34.0 or mean_conf < 0.91):
+                roi_im = im_rgb.crop((rx0, ry0, rx1, ry1))
+                up = max(1.0, min(2.4, 1216.0 / float(max(rw, rh))))
+                if up > 1.12:
+                    roi_im = roi_im.resize(
+                        (int(round(rw * up)), int(round(rh * up))),
+                        Image.Resampling.LANCZOS,
+                    )
+                inv_up = rw / float(roi_im.width)
+                roi_res = _infer_pil_image(roi_im, _allow_roi_zoom=False)
+                roi_boxes = roi_res.get("boxes") or []
+                if _score_ocr_boxes(roi_boxes) > _score_ocr_boxes(boxes_out) * 1.03:
+                    mapped_boxes: List[Dict[str, Any]] = []
+                    mapped_lines: List[Dict[str, Any]] = []
+                    for rb in roi_boxes:
+                        mx0 = int(round(rx0 + rb["x0"] * inv_up))
+                        my0 = int(round(ry0 + rb["y0"] * inv_up))
+                        mx1 = int(round(rx0 + rb["x1"] * inv_up))
+                        my1 = int(round(ry0 + rb["y1"] * inv_up))
+                        mw = max(4, mx1 - mx0)
+                        mh = max(4, int(round(rb["h"] * inv_up)))
+                        mapped_boxes.append({
+                            "x0": mx0, "y0": my0, "x1": mx1, "y1": my1,
+                            "w": mw, "h": mh, "conf": rb["conf"], "text": rb["text"],
+                        })
+                        toks = [tk for tk in str(rb["text"]).split(" ") if tk]
+                        t_chars = max(1, len(str(rb["text"])))
+                        c_off = 0
+                        w_list: List[Dict[str, Any]] = []
+                        for tk in toks:
+                            pos = str(rb["text"]).find(tk, c_off)
+                            if pos < 0:
+                                pos = c_off
+                            w_list.append({
+                                "t": tk,
+                                "x": round(mx0 + (pos / t_chars) * mw, 1),
+                                "y": float(my0),
+                                "w": round(max(4.0, (len(tk) / t_chars) * mw), 1),
+                                "h": float(mh),
+                            })
+                            c_off = pos + len(tk)
+                        mapped_lines.append({"text": rb["text"], "words": w_list})
+                    boxes_out = mapped_boxes
+                    lines_out = mapped_lines
 
         smart_txt = format_ocr_boxes_smart(
             boxes_out,

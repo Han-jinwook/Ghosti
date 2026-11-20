@@ -61,6 +61,8 @@ export interface VideoSceneItem {
   ocrLines?: Array<{ timeSec: number; timestamp: string; text: string }>;
   /** 화면 OCR 통합 텍스트 요약·전문 */
   ocrFullText?: string;
+  /** 모바일 네이티브 샤프니스·PCA 보정 동영상 OCR 스키마 버전 (구버전 캐시 자동 재추출용) */
+  mobileOcrVer?: number;
   timelineFrames: VideoTimelineFrame[];
 }
 

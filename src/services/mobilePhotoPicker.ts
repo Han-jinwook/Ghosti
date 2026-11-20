@@ -1109,6 +1109,7 @@ export function convertNativeGalleryVideos(nativeVideos: NativeGalleryVideoMeta[
 const MOBILE_GALLERY_IDB_NAME = 'ghosti_mobile_gallery_cache_v1';
 const MOBILE_GALLERY_STORE = 'snapshot';
 const MOBILE_GALLERY_CACHE_SCHEMA_VER = 8;
+export const MOBILE_VIDEO_OCR_VER = 30;
 
 interface SerializedOpticalSig {
   dhash: string;
@@ -1203,13 +1204,24 @@ export async function loadCachedMobileGalleryIndex(): Promise<{
         }
         const hydratedVideos = Array.isArray(val.videos)
           ? val.videos.map((v) => {
+              let nextV = v;
               if (String(v.id || '').startsWith('mobile_vid_')) {
                 const directUrl = resolveAndroidDirectVideoStreamUrl(v.id);
                 if (directUrl) {
-                  return { ...v, videoUrl: directUrl };
+                  nextV = { ...nextV, videoUrl: directUrl };
+                }
+                if ((nextV.mobileOcrVer ?? 0) < MOBILE_VIDEO_OCR_VER) {
+                  nextV = {
+                    ...nextV,
+                    hasScreenOcrText: undefined,
+                    ocrLineCount: undefined,
+                    ocrLines: undefined,
+                    ocrFullText: undefined,
+                    mobileOcrVer: undefined,
+                  };
                 }
               }
-              return v;
+              return nextV;
             })
           : [];
         resolve({
@@ -1232,7 +1244,17 @@ export async function saveCachedMobileGalleryIndex(
   if (!db) return;
   try {
     const cleanPhotos = photos.slice(0, 600);
-    const cleanVideos = videos.slice(0, 40);
+    const cleanVideos = videos.slice(0, 40).map((v) => {
+      if (
+        String(v.id || '').startsWith('mobile_vid_') &&
+        Array.isArray(v.ocrLines) &&
+        v.ocrLines.length > 0 &&
+        (v.mobileOcrVer ?? 0) < MOBILE_VIDEO_OCR_VER
+      ) {
+        return { ...v, mobileOcrVer: MOBILE_VIDEO_OCR_VER };
+      }
+      return v;
+    });
     const opticalSigs: Record<string, SerializedOpticalSig> = {};
     for (const p of cleanPhotos) {
       const sig = opticalSigByPhotoId.get(p.id);

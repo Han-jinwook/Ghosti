@@ -557,9 +557,100 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
+    private struct IosVideoFrameCandidate {
+        let timeSec: Int
+        let lumaGrid: [Float]
+        let sharpness: Float
+        let dataUrl: String
+    }
+
+    private func evaluateIosVideoFrame(_ cgImg: CGImage, timeSec: Int) -> IosVideoFrameCandidate? {
+        let w = cgImg.width
+        let h = cgImg.height
+        if w < 32 || h < 32 { return nil }
+
+        let graySpace = CGColorSpaceCreateDeviceGray()
+        let gw = 64
+        let gh = 36
+        var gridBuf = [UInt8](repeating: 0, count: gw * gh)
+        guard let gridCtx = CGContext(
+            data: &gridBuf,
+            width: gw,
+            height: gh,
+            bitsPerComponent: 8,
+            bytesPerRow: gw,
+            space: graySpace,
+            bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else {
+            return nil
+        }
+        gridCtx.interpolationQuality = .medium
+        gridCtx.draw(cgImg, in: CGRect(x: 0, y: 0, width: gw, height: gh))
+
+        var lumaGrid = [Float](repeating: 0, count: gw * gh)
+        var sum = 0.0
+        var sqSum = 0.0
+        for i in 0..<(gw * gh) {
+            let v = Double(gridBuf[i])
+            lumaGrid[i] = Float(v)
+            sum += v
+            sqSum += v * v
+        }
+        let cntD = Double(gw * gh)
+        let mean = sum / cntD
+        let std = sqrt(max(0.0, sqSum / cntD - mean * mean))
+        if std < 4.2 {
+            return nil
+        }
+
+        let shortSide = max(1, min(w, h))
+        let sScale = min(1.0, 240.0 / Double(shortSide))
+        let sw = max(32, Int(round(Double(w) * sScale)))
+        let sh = max(32, Int(round(Double(h) * sScale)))
+        var lapBuf = [UInt8](repeating: 0, count: sw * sh)
+        guard let lapCtx = CGContext(
+            data: &lapBuf,
+            width: sw,
+            height: sh,
+            bitsPerComponent: 8,
+            bytesPerRow: sw,
+            space: graySpace,
+            bitmapInfo: CGImageAlphaInfo.none.rawValue
+        ) else {
+            return nil
+        }
+        lapCtx.interpolationQuality = .medium
+        lapCtx.draw(cgImg, in: CGRect(x: 0, y: 0, width: sw, height: sh))
+
+        var lapAcc: Double = 0.0
+        var lapCnt: Int = 0
+        for y in 1..<(sh - 1) {
+            let rOff = y * sw
+            for x in 1..<(sw - 1) {
+                let idx = rOff + x
+                let c2 = 2 * Int(lapBuf[idx])
+                let lx = abs(c2 - Int(lapBuf[idx - 1]) - Int(lapBuf[idx + 1]))
+                let ly = abs(c2 - Int(lapBuf[idx - sw]) - Int(lapBuf[idx + sw]))
+                lapAcc += Double(lx + ly)
+                lapCnt += 1
+            }
+        }
+        let sharpness = lapCnt > 0 ? Float(lapAcc / Double(lapCnt)) : 0.0
+        let uiImg = UIImage(cgImage: cgImg)
+        guard let jpeg = uiImg.jpegData(compressionQuality: 0.92) else {
+            return nil
+        }
+        return IosVideoFrameCandidate(
+            timeSec: timeSec,
+            lumaGrid: lumaGrid,
+            sharpness: sharpness,
+            dataUrl: "data:image/jpeg;base64," + jpeg.base64EncodedString()
+        )
+    }
+
     @objc func extractVideoKeyframes(_ call: CAPPluginCall) {
         let rawId = call.getString("id") ?? ""
-        let maxFrames = max(1, min(10, call.getInt("maxFrames") ?? 6))
+        let maxFrames = max(1, min(10, call.getInt("maxFrames") ?? 8))
         let localId = rawId.hasPrefix("mobile_vid_")
             ? String(rawId.dropFirst("mobile_vid_".count))
             : rawId
@@ -585,29 +676,69 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
             }
             DispatchQueue.global(qos: .userInitiated).async {
                 let durSec = max(0.8, CMTimeGetSeconds(compAsset.duration))
-                let count = durSec <= 2.2 ? 2 : (durSec <= 6.0 ? min(4, maxFrames) : maxFrames)
+                let candCount = durSec <= 2.4 ? 4 : (durSec <= 7.0 ? 8 : 12)
                 let generator = AVAssetImageGenerator(asset: compAsset)
                 generator.appliesPreferredTrackTransform = true
-                generator.maximumSize = CGSize(width: 1600, height: 1600)
-                let tol = CMTime(seconds: durSec <= 12.0 ? 0.15 : 0.35, preferredTimescale: 600)
+                generator.maximumSize = CGSize(width: 1920, height: 1920)
+                let tol = CMTime(seconds: durSec <= 30.0 ? 0.06 : 0.25, preferredTimescale: 600)
                 generator.requestedTimeToleranceBefore = tol
                 generator.requestedTimeToleranceAfter = tol
 
-                var framesList: [[String: Any]] = []
-                for i in 0..<count {
-                    let ratio = count == 1 ? 0.3 : (Double(i) + 0.35) / Double(count)
-                    let tSec = max(0.05, min(durSec - 0.05, durSec * ratio))
+                var candidates: [IosVideoFrameCandidate] = []
+                for i in 0..<candCount {
+                    let ratio = candCount == 1 ? 0.35 : (0.08 + 0.82 * (Double(i) / Double(candCount - 1)))
+                    let tSec = max(0.08, min(durSec - 0.12, durSec * ratio))
                     let cmTime = CMTime(seconds: tSec, preferredTimescale: 600)
-                    if let cgImg = try? generator.copyCGImage(at: cmTime, actualTime: nil) {
-                        let uiImg = UIImage(cgImage: cgImg)
-                        if let jpeg = uiImg.jpegData(compressionQuality: 0.88) {
-                            framesList.append([
-                                "timeSec": Int(round(tSec)),
-                                "dataUrl": "data:image/jpeg;base64," + jpeg.base64EncodedString()
-                            ])
+                    autoreleasepool {
+                        if let cgImg = try? generator.copyCGImage(at: cmTime, actualTime: nil),
+                           let cand = self.evaluateIosVideoFrame(cgImg, timeSec: max(0, Int(round(tSec)))) {
+                            candidates.append(cand)
                         }
                     }
                 }
+
+                var framesList: [[String: Any]] = []
+                if !candidates.isEmpty {
+                    var clusters: [[IosVideoFrameCandidate]] = [[candidates[0]]]
+                    for idx in 1..<candidates.count {
+                        let cur = candidates[idx]
+                        let prev = clusters[clusters.count - 1].last!
+                        var diffAcc: Float = 0.0
+                        for k in 0..<cur.lumaGrid.count {
+                            diffAcc += abs(cur.lumaGrid[k] - prev.lumaGrid[k])
+                        }
+                        let mad = diffAcc / Float(cur.lumaGrid.count)
+                        if mad < 5.0 {
+                            clusters[clusters.count - 1].append(cur)
+                        } else {
+                            clusters.append([cur])
+                        }
+                    }
+
+                    var selected: [IosVideoFrameCandidate] = clusters.compactMap { cl in
+                        cl.max(by: { $0.sharpness < $1.sharpness })
+                    }
+
+                    if selected.count < min(3, candidates.count) {
+                        let bySharp = candidates.sorted(by: { $0.sharpness > $1.sharpness })
+                        for cand in bySharp {
+                            if selected.count >= min(4, maxFrames) { break }
+                            let tooClose = selected.contains(where: { abs($0.timeSec - cand.timeSec) <= 1 })
+                            if !tooClose {
+                                selected.append(cand)
+                            }
+                        }
+                        selected.sort(by: { $0.timeSec < $1.timeSec })
+                    }
+
+                    for item in selected.prefix(maxFrames) {
+                        framesList.append([
+                            "timeSec": item.timeSec,
+                            "dataUrl": item.dataUrl
+                        ])
+                    }
+                }
+
                 call.resolve([
                     "ok": !framesList.isEmpty,
                     "frames": framesList

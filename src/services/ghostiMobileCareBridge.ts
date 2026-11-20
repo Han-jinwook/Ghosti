@@ -459,6 +459,48 @@ export function resolveAndroidDirectVideoStreamUrl(videoId: string): string {
   return `${origin}/__ghosti_media_video/${m[1]}.mp4`;
 }
 
+function withMobilePromiseTimeout<T>(promise: Promise<T>, ms: number, fallback: T): Promise<T> {
+  return new Promise<T>((resolve) => {
+    let settled = false;
+    const timer = setTimeout(() => {
+      if (!settled) {
+        settled = true;
+        resolve(fallback);
+      }
+    }, ms);
+    promise
+      .then((val) => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          resolve(val);
+        }
+      })
+      .catch(() => {
+        if (!settled) {
+          settled = true;
+          clearTimeout(timer);
+          resolve(fallback);
+        }
+      });
+  });
+}
+
+async function fetchVideoBlobWithTimeout(url: string, timeoutMs: number): Promise<Blob | null> {
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  try {
+    const resp = await fetch(url, ctrl ? { signal: ctrl.signal } : undefined);
+    if (!resp.ok) return null;
+    const rawBlob = await resp.blob();
+    return rawBlob && rawBlob.size > 1024 ? rawBlob : null;
+  } catch {
+    return null;
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function resolveNativeMobileVideoPlaybackUrl(
   videoId: string,
   options?: { forceTranscode?: boolean; sizeMB?: number }
@@ -486,10 +528,14 @@ export async function resolveNativeMobileVideoPlaybackUrl(
         : 'https://localhost';
     let streamUrl = resolveAndroidDirectVideoStreamUrl(videoId);
     try {
-      const res = await GhostiMobileCareNative.resolveVideoPlaybackUrl({
-        id: videoId,
-        forceTranscode,
-      });
+      const res = await withMobilePromiseTimeout(
+        GhostiMobileCareNative.resolveVideoPlaybackUrl({
+          id: videoId,
+          forceTranscode,
+        }),
+        13500,
+        null
+      );
       if (res?.ok && res.fileUrl) {
         streamUrl = res.fileUrl.startsWith('/')
           ? `${origin}${res.fileUrl}`
@@ -504,17 +550,10 @@ export async function resolveNativeMobileVideoPlaybackUrl(
     // 90MB 이하 모바일 촬영 클립은 로컬 스트림을 Blob URL로 변환해 Android System WebView의
     // shouldInterceptRequest <video> 멀티 Range 디먹서 버그(후미 moov 파싱 실패)를 100% 원천 차단합니다.
     if (sizeMB <= 90) {
-      try {
-        const resp = await fetch(streamUrl);
-        if (resp.ok) {
-          const rawBlob = await resp.blob();
-          if (rawBlob.size > 1024) {
-            const videoBlob = new Blob([rawBlob], { type: 'video/mp4' });
-            return cacheMobileBlobUrl(cacheKey, URL.createObjectURL(videoBlob));
-          }
-        }
-      } catch {
-        /* fallback to seekable local file stream url */
+      const rawBlob = await fetchVideoBlobWithTimeout(streamUrl, 11000);
+      if (rawBlob) {
+        const videoBlob = new Blob([rawBlob], { type: 'video/mp4' });
+        return cacheMobileBlobUrl(cacheKey, URL.createObjectURL(videoBlob));
       }
     }
     return cacheMobileBlobUrl(cacheKey, streamUrl);
@@ -523,30 +562,27 @@ export async function resolveNativeMobileVideoPlaybackUrl(
   if (!isCapacitorIosRuntime()) return '';
 
   try {
-    const res = await GhostiMobileCareNative.resolveVideoPlaybackUrl({
-      id: videoId,
-      forceTranscode,
-    });
+    const res = await withMobilePromiseTimeout(
+      GhostiMobileCareNative.resolveVideoPlaybackUrl({
+        id: videoId,
+        forceTranscode,
+      }),
+      13500,
+      null
+    );
     if (res?.ok && res.fileUrl) {
       const cap = (window as unknown as {
         Capacitor?: { convertFileSrc?: (path: string) => string };
       }).Capacitor;
       const converted = cap?.convertFileSrc ? cap.convertFileSrc(res.fileUrl) : res.fileUrl;
       if (converted) {
-        try {
-          const resp = await fetch(converted);
-          if (resp.ok) {
-            const rawBlob = await resp.blob();
-            if (rawBlob.size > 1024) {
-              const videoBlob =
-                rawBlob.type && rawBlob.type.startsWith('video/')
-                  ? rawBlob
-                  : new Blob([rawBlob], { type: 'video/mp4' });
-              return cacheMobileBlobUrl(cacheKey, URL.createObjectURL(videoBlob));
-            }
-          }
-        } catch {
-          /* fallback to converted scheme url */
+        const rawBlob = await fetchVideoBlobWithTimeout(converted, 11000);
+        if (rawBlob) {
+          const videoBlob =
+            rawBlob.type && rawBlob.type.startsWith('video/')
+              ? rawBlob
+              : new Blob([rawBlob], { type: 'video/mp4' });
+          return cacheMobileBlobUrl(cacheKey, URL.createObjectURL(videoBlob));
         }
         return cacheMobileBlobUrl(cacheKey, converted);
       }

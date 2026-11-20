@@ -214,24 +214,164 @@ function joinWrappedKoreanLines(upper: string, lower: string): string {
   return polishKoreanOcrSpacing(`${a} ${b}`);
 }
 
-export function formatOcrBoxesSmart(rawBoxes: PaddleOcrBox[]): string {
+export interface PaddleOcrOptions {
+  filterVideoUi?: boolean;
+}
+
+function cubicWeight(t: number): number {
+  const x = Math.abs(t);
+  if (x <= 1) {
+    return 1.5 * x * x * x - 2.5 * x * x + 1;
+  }
+  if (x < 2) {
+    return -0.5 * x * x * x + 2.5 * x * x - 4 * x + 2;
+  }
+  return 0;
+}
+
+function sampleCatmullRomRGBA(
+  src: Uint8ClampedArray | Uint8Array,
+  srcW: number,
+  srcH: number,
+  sxF: number,
+  syF: number,
+  dst: Uint8Array,
+  di: number
+): void {
+  const ix = Math.floor(sxF);
+  const iy = Math.floor(syF);
+  const fx = sxF - ix;
+  const fy = syF - iy;
+
+  const wx0 = cubicWeight(fx + 1);
+  const wx1 = cubicWeight(fx);
+  const wx2 = cubicWeight(1 - fx);
+  const wx3 = cubicWeight(2 - fx);
+
+  const wy0 = cubicWeight(fy + 1);
+  const wy1 = cubicWeight(fy);
+  const wy2 = cubicWeight(1 - fy);
+  const wy3 = cubicWeight(2 - fy);
+
+  const y0 = Math.max(0, Math.min(srcH - 1, iy - 1)) * srcW;
+  const y1 = Math.max(0, Math.min(srcH - 1, iy)) * srcW;
+  const y2 = Math.max(0, Math.min(srcH - 1, iy + 1)) * srcW;
+  const y3 = Math.max(0, Math.min(srcH - 1, iy + 2)) * srcW;
+
+  const x0 = Math.max(0, Math.min(srcW - 1, ix - 1));
+  const x1 = Math.max(0, Math.min(srcW - 1, ix));
+  const x2 = Math.max(0, Math.min(srcW - 1, ix + 1));
+  const x3 = Math.max(0, Math.min(srcW - 1, ix + 2));
+
+  const p00 = (y0 + x0) * 4, p01 = (y0 + x1) * 4, p02 = (y0 + x2) * 4, p03 = (y0 + x3) * 4;
+  const p10 = (y1 + x0) * 4, p11 = (y1 + x1) * 4, p12 = (y1 + x2) * 4, p13 = (y1 + x3) * 4;
+  const p20 = (y2 + x0) * 4, p21 = (y2 + x1) * 4, p22 = (y2 + x2) * 4, p23 = (y2 + x3) * 4;
+  const p30 = (y3 + x0) * 4, p31 = (y3 + x1) * 4, p32 = (y3 + x2) * 4, p33 = (y3 + x3) * 4;
+
+  for (let c = 0; c < 3; c++) {
+    const r0 = src[p00 + c] * wx0 + src[p01 + c] * wx1 + src[p02 + c] * wx2 + src[p03 + c] * wx3;
+    const r1 = src[p10 + c] * wx0 + src[p11 + c] * wx1 + src[p12 + c] * wx2 + src[p13 + c] * wx3;
+    const r2 = src[p20 + c] * wx0 + src[p21 + c] * wx1 + src[p22 + c] * wx2 + src[p23 + c] * wx3;
+    const r3 = src[p30 + c] * wx0 + src[p31 + c] * wx1 + src[p32 + c] * wx2 + src[p33 + c] * wx3;
+    const val = r0 * wy0 + r1 * wy1 + r2 * wy2 + r3 * wy3;
+    dst[di + c] = val <= 0 ? 0 : val >= 255 ? 255 : Math.round(val);
+  }
+  dst[di + 3] = 255;
+}
+
+function resizeBicubicRGBA(
+  src: Uint8ClampedArray | Uint8Array,
+  sw: number,
+  sh: number,
+  dw: number,
+  dh: number
+): Uint8Array {
+  const dst = new Uint8Array(dw * dh * 4);
+  const xRatio = sw / dw;
+  const yRatio = sh / dh;
+  for (let y = 0; y < dh; y++) {
+    const sy = Math.max(0, Math.min(sh - 1.001, (y + 0.5) * yRatio - 0.5));
+    for (let x = 0; x < dw; x++) {
+      const sx = Math.max(0, Math.min(sw - 1.001, (x + 0.5) * xRatio - 0.5));
+      sampleCatmullRomRGBA(src, sw, sh, sx, sy, dst, (y * dw + x) * 4);
+    }
+  }
+  return dst;
+}
+
+export function formatOcrBoxesSmart(
+  rawBoxes: PaddleOcrBox[],
+  opts?: { filterVideoUi?: boolean; imgHeight?: number; imgWidth?: number }
+): string {
+  const filterVideoUi = Boolean(opts?.filterVideoUi);
+  const imgHeight = Number(opts?.imgHeight || 0);
+  const imgWidth = Number(opts?.imgWidth || 0);
   const watermarkRx =
     /notebooklm|^capcut$|^veo$|^kapwing$|^[xyv]?rec[eo@0]rder$|mobizen|bandicam|gomcam|^ocam$|az\s*screen|^inshot$|kinemaster|vivavideo|filmora/i;
+  const kbdTokenRx =
+    /^(?:스페이스|한\/?영|완료|이동|검색|123|!#1|!#7|\.,\?!|[ㄱ-ㅎㅏ-ㅣ]{1,3}|TT|CE|L2|7ㅋ)$/i;
+  const statusBarRx = /^(?:SKT|KT|LG\s*U\+|U\+|LTE|5G|\d{1,3}%|\d{1,2}:\d{2})(?:\s.*)?$/i;
+  const urlHexNoiseRx =
+    /^[0-9A-Fa-f]{0,2}(?:%[0-9A-Fa-f]{2})+|(?:%[0-9A-Fa-f]{2}){2,}|^[%&]?[0-9A-Fa-f]{2,3}[%'"`]?$/;
+
+  let hasBottomKeyboard = false;
+  if (filterVideoUi && imgHeight > 0) {
+    let kbdHits = 0;
+    for (const b of rawBoxes) {
+      const tr = (b.text || '').trim();
+      if (b.y0 >= imgHeight * 0.65 && (kbdTokenRx.test(tr) || tr.length === 1)) {
+        kbdHits++;
+      }
+    }
+    hasBottomKeyboard = kbdHits >= 3;
+  }
+
   const filtered = rawBoxes
     .map((b) => ({
       ...b,
-      text: polishKoreanOcrSpacing(b.text || '').replace(
-        /^[,.;:•·|\-_~]+\s*(?=[가-힣A-Za-z0-9])/,
-        ''
-      ),
+      text: polishKoreanOcrSpacing(b.text || '')
+        .replace(/^[,.;:•·|\-_~<>]+\s*(?=[가-힣A-Za-z0-9])/, '')
+        .replace(/\s+\|$/, '')
+        .trim(),
     }))
     .filter((b) => {
-      const t = b.text;
-      const minConf = /[가-힣]{2,}/.test(t) ? 0.72 : 0.78;
+      let t = b.text;
+      const minConf = /[가-힣]{2,}/.test(t) ? (filterVideoUi ? 0.74 : 0.72) : 0.78;
       if (!t || b.conf < minConf) return false;
       if (watermarkRx.test(t)) return false;
+      if (filterVideoUi) {
+        if (urlHexNoiseRx.test(t)) {
+          t = t
+            .replace(/[0-9A-Fa-f]{0,2}(?:%[0-9A-Fa-f]{2})+[A-Za-z0-9%]*/g, '')
+            .replace(/[?&][A-Za-z0-9_]+=\s*$/, '')
+            .trim();
+          b.text = t;
+          if (!t || urlHexNoiseRx.test(t)) return false;
+        }
+        if (imgHeight > 0) {
+          const koMatches = t.match(/[가-힣]/g);
+          const koCount = koMatches ? koMatches.length : 0;
+          if (b.y1 <= imgHeight * 0.058 && (statusBarRx.test(t) || koCount < 2)) return false;
+          if ((b.y0 <= 8 || b.y1 >= imgHeight - 8) && t.length <= 3) return false;
+          if (
+            /^\d{1,2}:\d{2}(?::\d{2})?$/.test(t) &&
+            (b.y1 <= imgHeight * 0.065 || b.y0 >= imgHeight * 0.88)
+          ) {
+            return false;
+          }
+          if (hasBottomKeyboard && b.y0 >= imgHeight * 0.68 && (kbdTokenRx.test(t) || t.length <= 2)) {
+            return false;
+          }
+        }
+        if (imgWidth > 0 && (b.x0 <= 4 || b.x1 >= imgWidth - 4) && b.w <= imgWidth * 0.16) {
+          const koMatches = t.match(/[가-힣]/g);
+          if ((koMatches ? koMatches.length : 0) <= 3 && !/\.[a-z]{2,4}\b/i.test(t)) {
+            return false;
+          }
+        }
+      }
       // 동영상 플레이어 이동·일시정지 아이콘 노이즈 제거
-      if (/^(?:10|0|00|\(\)|00\(\)|\|\||II|lI|Il)$/.test(t)) return false;
+      if (/^(?:10|0|00|\(\)|00\(\)|\|\||II|lI|Il|#)$/.test(t)) return false;
       if (t.length === 1 && !/[가-힣]/.test(t)) return false;
       if (b.conf < 0.88 && (/[가-힣][a-z][가-힣]/.test(t) || /[\u4e00-\u9fff]/.test(t))) {
         return false;
@@ -352,17 +492,47 @@ export function formatOcrBoxesSmart(rawBoxes: PaddleOcrBox[]): string {
   return outTexts.join(' · ');
 }
 
-async function runSingleImageOcrInternal(
+interface CandidateRegion {
+  x0: number;
+  y0: number;
+  x1: number;
+  y1: number;
+  w: number;
+  h: number;
+  cx: number;
+  cy: number;
+  u0: number;
+  u1: number;
+  v0: number;
+  v1: number;
+  trueH: number;
+  angle: number;
+  cos: number;
+  sin: number;
+}
+
+function computeOcrBoxesQualityScore(boxes: PaddleOcrBox[]): number {
+  let score = 0;
+  for (const b of boxes) {
+    const koCount = (b.text.match(/[가-힣]/g) || []).length;
+    const alnumCount = (b.text.match(/[A-Za-z0-9]/g) || []).length;
+    score += b.conf * (koCount * 2.2 + alnumCount * 0.8);
+  }
+  return score;
+}
+
+async function runOcrPassOnRgba(
+  rt: PaddleOcrRuntime,
   rgba: Uint8ClampedArray | Uint8Array,
   srcW: number,
-  srcH: number
-): Promise<{ text: string; boxes: PaddleOcrBox[] }> {
-  if (srcW < 16 || srcH < 16) return { text: '', boxes: [] };
-  const { ort, detSession, recSession, charDict } = await getPaddleOcrRuntime();
+  srcH: number,
+  capSide: number
+): Promise<{ candidates: CandidateRegion[]; boxes: PaddleOcrBox[] }> {
+  const { ort, detSession, recSession, charDict } = rt;
 
-  // 1) Detection: 저해상도 영상 프레임(예: 525x315)도 8px 소형 글자를 놓치지 않도록 최소 960px, 고해상도 프레임은 최대 1536px 기준으로 DBNet 입력 구성
+  // 1) Detection: 1080x1920 스마트폰 세로 영상의 소형 컵/라벨 글자도 뭉개지지 않도록 최대 1792px 해상도 보존
   const maxSide = Math.max(srcW, srcH);
-  const targetMax = Math.max(960, Math.min(1536, maxSide));
+  const targetMax = Math.max(960, Math.min(capSide, maxSide));
   const scale = targetMax / maxSide;
   const detW = Math.max(32, Math.round((srcW * scale) / 32) * 32);
   const detH = Math.max(32, Math.round((srcH * scale) / 32) * 32);
@@ -397,22 +567,7 @@ async function runSingleImageOcrInternal(
   const boxThresh = 0.52;
   const sxScale = srcW / detW;
   const syScale = srcH / detH;
-  const candidateBoxes: Array<{
-    x0: number;
-    y0: number;
-    x1: number;
-    y1: number;
-    w: number;
-    h: number;
-    cx: number;
-    cy: number;
-    u0: number;
-    u1: number;
-    v0: number;
-    v1: number;
-    cos: number;
-    sin: number;
-  }> = [];
+  const candidateBoxes: CandidateRegion[] = [];
 
   for (let y = 0; y < detH; y++) {
     for (let x = 0; x < detW; x++) {
@@ -468,23 +623,45 @@ async function runSingleImageOcrInternal(
 
       const cxM = (sumX / count) * sxScale;
       const cyM = (sumY / count) * syScale;
-      const bwSrc = bw * sxScale;
-      const bhSrc = bh * syScale;
 
+      // 2D PCA 주축 고유벡터로 ±30도(0.52 rad) 기울어진 컵·문서 줄도 회전 불변 trueW/trueH 기준으로 정확히 수평 보정
       let angleRad = 0;
-      if (bwSrc >= bhSrc * 3.2 && count >= 40) {
+      if (count >= 24) {
         let varX = 0;
+        let varY = 0;
         let covXY = 0;
         for (let k = 0; k < tail; k++) {
           const cur = q[k];
           const py = ((cur / detW) | 0) * syScale - cyM;
           const px = (cur % detW) * sxScale - cxM;
           varX += px * px;
+          varY += py * py;
           covXY += px * py;
         }
-        const slope = Math.max(-0.22, Math.min(0.22, covXY / Math.max(1e-6, varX)));
-        if (Math.abs(slope) >= 0.006) {
-          angleRad = Math.atan(slope);
+        const theta = 0.5 * Math.atan2(2 * covXY, varX - varY);
+        if (Math.abs(theta) >= 0.006 && Math.abs(theta) <= 0.52) {
+          const ct = Math.cos(theta);
+          const st = Math.sin(theta);
+          let utMin = 1e9,
+            utMax = -1e9,
+            vtMin = 1e9,
+            vtMax = -1e9;
+          for (let k = 0; k < tail; k++) {
+            const cur = q[k];
+            const py = ((cur / detW) | 0) * syScale - cyM;
+            const px = (cur % detW) * sxScale - cxM;
+            const ut = px * ct + py * st;
+            const vt = -px * st + py * ct;
+            if (ut < utMin) utMin = ut;
+            if (ut > utMax) utMax = ut;
+            if (vt < vtMin) vtMin = vt;
+            if (vt > vtMax) vtMax = vt;
+          }
+          const twT = utMax - utMin + sxScale;
+          const thT = Math.max(2, vtMax - vtMin + syScale);
+          if (twT >= thT * 2.1) {
+            angleRad = theta;
+          }
         }
       }
 
@@ -516,7 +693,7 @@ async function runSingleImageOcrInternal(
       let u1 = uMax + padU;
       let v0 = vMin - padV;
       let v1 = vMax + padV;
-      if (cosA > 0.5) {
+      if (Math.abs(angleRad) < 0.05 && cosA > 0.5) {
         u0 = Math.max(u0, -cxM / cosA);
         u1 = Math.min(u1, (srcW - cxM) / cosA);
         v0 = Math.max(v0, -cyM / cosA);
@@ -542,6 +719,8 @@ async function runSingleImageOcrInternal(
           u1,
           v0,
           v1,
+          trueH,
+          angle: angleRad,
           cos: cosA,
           sin: sinA,
         });
@@ -550,6 +729,7 @@ async function runSingleImageOcrInternal(
   }
 
   candidateBoxes.sort((a, b) => a.y0 - b.y0 || a.x0 - b.x0);
+  // 동일 기준선(Baseline) 상의 좌우 인접 박스끼리만 padU 중복 침범을 다듬고, 위·아래로 쌓인 기울어진 줄은 절대 잘라내지 않음
   for (let i = 0; i < candidateBoxes.length; i++) {
     for (let j = i + 1; j < candidateBoxes.length; j++) {
       const bi = candidateBoxes[i];
@@ -557,9 +737,11 @@ async function runSingleImageOcrInternal(
       const hi = bi.y1 - bi.y0;
       const hj = bj.y1 - bj.y0;
       if (bj.y0 > bi.y1) break;
-      const yOv = Math.min(bi.y1, bj.y1) - Math.max(bi.y0, bj.y0);
-      if (yOv >= 0.55 * Math.min(hi, hj)) {
-        const [leftB, rightB] = bi.x0 <= bj.x0 ? [bi, bj] : [bj, bi];
+      const meanCos = 0.5 * (bi.cos + bj.cos);
+      const meanSin = 0.5 * (bi.sin + bj.sin);
+      const dvCenter = Math.abs(-(bj.cx - bi.cx) * meanSin + (bj.cy - bi.cy) * meanCos);
+      if (dvCenter <= 0.45 * Math.min(bi.trueH, bj.trueH)) {
+        const [leftB, rightB] = bi.cx <= bj.cx ? [bi, bj] : [bj, bi];
         const xOv = leftB.x1 - rightB.x0;
         if (xOv > 0 && xOv <= Math.max(42, Math.floor(Math.min(hi, hj) * 0.95)) && rightB.x1 > leftB.x1 + 8) {
           const halfOv = xOv * 0.5;
@@ -580,10 +762,10 @@ async function runSingleImageOcrInternal(
   );
 
   if (validBoxes.length === 0) {
-    return { text: '', boxes: [] };
+    return { candidates: [], boxes: [] };
   }
 
-  // 2) Recognition (PP-OCRv5 Korean, height=48, CTC decoding)
+  // 2) Recognition (PP-OCRv5 Korean, height=48, Catmull-Rom Bicubic + CTC decoding)
   const boxes: PaddleOcrBox[] = [];
   const recInName = recSession.inputNames[0];
   const recOutName = recSession.outputNames[0];
@@ -604,23 +786,7 @@ async function runSingleImageOcrInternal(
         const uCur = b.u0 + ((ox + 0.5) / recW) * uSpan;
         const sxF = Math.max(0, Math.min(srcW - 1.001, b.cx + uCur * b.cos - vCur * b.sin));
         const syF = Math.max(0, Math.min(srcH - 1.001, b.cy + uCur * b.sin + vCur * b.cos));
-        const ix0 = sxF | 0;
-        const iy0 = syF | 0;
-        const ix1 = Math.min(srcW - 1, ix0 + 1);
-        const iy1 = Math.min(srcH - 1, iy0 + 1);
-        const wx = sxF - ix0;
-        const wy = syF - iy0;
-        const p00 = (iy0 * srcW + ix0) * 4;
-        const p10 = (iy0 * srcW + ix1) * 4;
-        const p01 = (iy1 * srcW + ix0) * 4;
-        const p11 = (iy1 * srcW + ix1) * 4;
-        const di = (oy * recW + ox) * 4;
-        for (let c = 0; c < 3; c++) {
-          const top = rgba[p00 + c] * (1 - wx) + rgba[p10 + c] * wx;
-          const bot = rgba[p01 + c] * (1 - wx) + rgba[p11 + c] * wx;
-          resized[di + c] = Math.round(top * (1 - wy) + bot * wy);
-        }
-        resized[di + 3] = 255;
+        sampleCatmullRomRGBA(rgba, srcW, srcH, sxF, syF, resized, (oy * recW + ox) * 4);
       }
     }
 
@@ -702,7 +868,6 @@ async function runSingleImageOcrInternal(
       charPairs.pop();
     }
 
-    // 이모지·아이콘(👑 등)이 단일 또는 연속 저신뢰 영문/기호(W, WMW, NOW 등)로 오독된 구간을 연속 신뢰도로 판별해 공백 치환
     let ci = 0;
     while (ci < charPairs.length) {
       const cp = charPairs[ci];
@@ -740,7 +905,16 @@ async function runSingleImageOcrInternal(
       scored.length > 0 ? scored.reduce((acc, p) => acc + p.sc, 0) / scored.length : 0;
     const minAvgConf = /[가-힣]{2,}/.test(clean) ? 0.72 : 0.78;
     if (clean && avgConf >= minAvgConf) {
-      boxes.push({ ...b, conf: avgConf, text: clean });
+      boxes.push({
+        x0: b.x0,
+        y0: b.y0,
+        x1: b.x1,
+        y1: b.y1,
+        w: b.w,
+        h: outH,
+        conf: avgConf,
+        text: clean,
+      });
     }
 
     if ((bi + 1) % 6 === 0) {
@@ -748,18 +922,109 @@ async function runSingleImageOcrInternal(
     }
   }
 
-  const formatted = formatOcrBoxesSmart(boxes);
-  return { text: formatted, boxes };
+  return { candidates: validBoxes, boxes };
+}
+
+async function runSingleImageOcrInternal(
+  rgba: Uint8ClampedArray | Uint8Array,
+  srcW: number,
+  srcH: number,
+  options?: PaddleOcrOptions
+): Promise<{ text: string; boxes: PaddleOcrBox[] }> {
+  if (srcW < 16 || srcH < 16) return { text: '', boxes: [] };
+  const rt = await getPaddleOcrRuntime();
+
+  const pass1 = await runOcrPassOnRgba(rt, rgba, srcW, srcH, 1792);
+  let bestBoxes = pass1.boxes;
+
+  // 스마트폰 전체 프레임(예: 1080x1920) 안에서 손에 든 컵·약품·영수증 등 국소 소형 글자 영역(면적 < 45%, 줄 높이 < 34px)이
+  // 포착된 경우, 해당 텍스트 군집 ROI만 원본 픽셀에서 도려내 고해상도 재판독하여 줄 뭉개짐과 오탈자를 근본 제거합니다.
+  if (pass1.candidates.length >= 2) {
+    let minX = srcW,
+      minY = srcH,
+      maxX = 0,
+      maxY = 0;
+    const heights: number[] = [];
+    for (const c of pass1.candidates) {
+      if (c.x0 < minX) minX = c.x0;
+      if (c.y0 < minY) minY = c.y0;
+      if (c.x1 > maxX) maxX = c.x1;
+      if (c.y1 > maxY) maxY = c.y1;
+      heights.push(c.trueH);
+    }
+    heights.sort((a, b) => a - b);
+    const medianH = heights[heights.length >> 1] || 40;
+    const pad = Math.max(28, Math.round(medianH * 1.8));
+    const rx0 = Math.max(0, minX - pad);
+    const ry0 = Math.max(0, minY - pad);
+    const rx1 = Math.min(srcW, maxX + pad);
+    const ry1 = Math.min(srcH, maxY + pad);
+    const rw = rx1 - rx0;
+    const rh = ry1 - ry0;
+    const roiAreaRatio = (rw * rh) / Math.max(1, srcW * srcH);
+    const meanConf =
+      pass1.boxes.length > 0
+        ? pass1.boxes.reduce((acc, b) => acc + b.conf, 0) / pass1.boxes.length
+        : 0;
+
+    if (
+      rw >= 96 &&
+      rh >= 64 &&
+      roiAreaRatio < 0.45 &&
+      (medianH < 34 || meanConf < 0.91)
+    ) {
+      const roiRaw = new Uint8Array(rw * rh * 4);
+      for (let y = 0; y < rh; y++) {
+        const srcOff = ((ry0 + y) * srcW + rx0) * 4;
+        roiRaw.set(rgba.subarray(srcOff, srcOff + rw * 4), y * rw * 4);
+      }
+      const upScale = Math.max(1, Math.min(2.4, 1216 / Math.max(rw, rh)));
+      const upW = Math.max(64, Math.round(rw * upScale));
+      const upH = Math.max(64, Math.round(rh * upScale));
+      const roiRgba =
+        upScale > 1.12 ? resizeBicubicRGBA(roiRaw, rw, rh, upW, upH) : roiRaw;
+      const effW = upScale > 1.12 ? upW : rw;
+      const effH = upScale > 1.12 ? upH : rh;
+      const invUp = rw / effW;
+      const pass2 = await runOcrPassOnRgba(rt, roiRgba, effW, effH, 1792);
+      const mappedBoxes: PaddleOcrBox[] = pass2.boxes.map((b) => {
+        const mx0 = Math.round(rx0 + b.x0 * invUp);
+        const my0 = Math.round(ry0 + b.y0 * invUp);
+        const mx1 = Math.round(rx0 + b.x1 * invUp);
+        const my1 = Math.round(ry0 + b.y1 * invUp);
+        return {
+          ...b,
+          x0: mx0,
+          y0: my0,
+          x1: mx1,
+          y1: my1,
+          w: Math.max(4, mx1 - mx0),
+          h: Math.max(4, Math.round(b.h * invUp)),
+        };
+      });
+      if (computeOcrBoxesQualityScore(mappedBoxes) > computeOcrBoxesQualityScore(bestBoxes) * 1.03) {
+        bestBoxes = mappedBoxes;
+      }
+    }
+  }
+
+  const formatted = formatOcrBoxesSmart(bestBoxes, {
+    filterVideoUi: options?.filterVideoUi,
+    imgWidth: srcW,
+    imgHeight: srcH,
+  });
+  return { text: formatted, boxes: bestBoxes };
 }
 
 /**
  * ONNX Runtime Web 단일 세션 동시성 보호 직렬화 큐로 안전하게 이미지 OCR을 수행합니다.
  */
 export function recognizeImageDataWithPaddleOcr(
-  imageData: ImageData
+  imageData: ImageData,
+  options?: PaddleOcrOptions
 ): Promise<{ text: string; boxes: PaddleOcrBox[] }> {
   const job = inferenceChain.then(() =>
-    runSingleImageOcrInternal(imageData.data, imageData.width, imageData.height)
+    runSingleImageOcrInternal(imageData.data, imageData.width, imageData.height, options)
   );
   inferenceChain = job.catch(() => undefined);
   return job;
@@ -788,7 +1053,8 @@ export function releasePaddleOcrRuntime(): Promise<void> {
 }
 
 export async function recognizeDataUrlWithPaddleOcr(
-  dataUrl: string
+  dataUrl: string,
+  options?: PaddleOcrOptions
 ): Promise<{ text: string; boxes: PaddleOcrBox[] }> {
   if (typeof document === 'undefined' || !dataUrl) return { text: '', boxes: [] };
   return new Promise((resolve) => {
@@ -815,7 +1081,7 @@ export async function recognizeDataUrlWithPaddleOcr(
         const imgData = ctx.getImageData(0, 0, cw, ch);
         canvas.width = 0;
         canvas.height = 0;
-        const res = await recognizeImageDataWithPaddleOcr(imgData);
+        const res = await recognizeImageDataWithPaddleOcr(imgData, options);
         resolve(res);
       } catch {
         canvas.width = 0;

@@ -2346,7 +2346,7 @@ export async function extractVideoScreenTextOnDemand(
     return `${mm}:${ss}`;
   };
 
-  const memKey = `${vid.videoFileName || vid.id}|${vid.sizeMB || 0}|v21`;
+  const memKey = `${vid.videoFileName || vid.id}|${vid.sizeMB || 0}|v30`;
   const memHit = inMemoryPaddleVideoOcrCache.get(memKey);
   if (memHit && memHit.ocrLines.length > 0) {
     return memHit;
@@ -2417,14 +2417,14 @@ export async function extractVideoScreenTextOnDemand(
 
       // 2-A) 모바일 네이티브 앱(iOS AVAssetImageGenerator / Android MediaMetadataRetriever) 직접 키프레임 추출 경로 (WKWebView/ScopedStorage <video> 디코더 제약 0%)
       if (isMobileVid) {
-        const nativeFrames = await extractNativeMobileVideoKeyframes(vid.id, 6);
+        const nativeFrames = await extractNativeMobileVideoKeyframes(vid.id, 8);
         if (nativeFrames.length > 0) {
           let prevDataSig = '';
           for (const nf of nativeFrames) {
             const sig = nf.dataUrl.slice(-180);
             if (sig && sig === prevDataSig) continue;
             prevDataSig = sig;
-            const ocrRes = await recognizeDataUrlWithPaddleOcr(nf.dataUrl);
+            const ocrRes = await recognizeDataUrlWithPaddleOcr(nf.dataUrl, { filterVideoUi: true });
             if (ocrRes.text) {
               rawPaddleFrames.push({ timeSec: Number(nf.timeSec || 0), ocrText: ocrRes.text });
             }
@@ -2433,11 +2433,11 @@ export async function extractVideoScreenTextOnDemand(
       }
 
       if (rawPaddleFrames.length === 0) {
-        const sampledImgData = await captureHighResImageDataForVideoOcr(vid, isMobileVid ? 6 : 12);
+        const sampledImgData = await captureHighResImageDataForVideoOcr(vid, isMobileVid ? 8 : 12);
 
         if (sampledImgData.length > 0) {
           for (const item of sampledImgData) {
-            const ocrRes = await recognizeImageDataWithPaddleOcr(item.imageData);
+            const ocrRes = await recognizeImageDataWithPaddleOcr(item.imageData, { filterVideoUi: true });
             if (ocrRes.text) {
               rawPaddleFrames.push({ timeSec: item.timeSec, ocrText: ocrRes.text });
             }
