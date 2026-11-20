@@ -23,6 +23,7 @@ class GhostiBridgeViewController: CAPBridgeViewController {
         webView?.isOpaque = true
         webView?.backgroundColor = UIColor.white
         webView?.scrollView.backgroundColor = UIColor.white
+        webView?.scrollView.keyboardDismissMode = .onDrag
 
         // [iOS 다이나믹 아일랜드·상태바 Safe-Area 물리 보호막]:
         // 키보드 상승이나 빠른 스크롤 시 본문 카드·텍스트가 상단 시계/배터리 영역으로 침범하지 못하도록
@@ -301,7 +302,7 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
             let reqOpts = PHImageRequestOptions()
             reqOpts.isSynchronous = true
             reqOpts.deliveryMode = .highQualityFormat
-            reqOpts.resizeMode = .fast
+            reqOpts.resizeMode = .exact
             reqOpts.isNetworkAccessAllowed = true
 
             var photosList: [[String: Any]] = []
@@ -317,7 +318,7 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
                             contentMode: .aspectFit,
                             options: reqOpts
                         ) { uiImg, _ in
-                            if let img = uiImg, let jpeg = img.jpegData(compressionQuality: 0.76) {
+                            if let img = uiImg, let jpeg = img.jpegData(compressionQuality: 0.78) {
                                 thumbDataUrl = "data:image/jpeg;base64," + jpeg.base64EncodedString()
                             }
                         }
@@ -326,8 +327,10 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
                             return
                         }
 
-                        let fileName = PHAssetResource.assetResources(for: asset).first?.originalFilename ?? "IMG_\(idx + 1).jpg"
-                        let estSize = max(250_000, (asset.pixelWidth * asset.pixelHeight) / 4)
+                        let resItem = PHAssetResource.assetResources(for: asset).first
+                        let fileName = resItem?.originalFilename ?? "IMG_\(idx + 1).jpg"
+                        let realFileSize = (resItem?.value(forKey: "fileSize") as? Int) ?? 0
+                        let estSize = realFileSize > 0 ? realFileSize : (max(250_000, (asset.pixelWidth * asset.pixelHeight) / 4) + (idx % 97))
                         let createdDate = asset.creationDate ?? asset.modificationDate ?? Date()
                         let mtimeMs = Int64(createdDate.timeIntervalSince1970 * 1000.0)
                         let isScreen = asset.mediaSubtypes.contains(.photoScreenshot)

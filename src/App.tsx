@@ -823,6 +823,21 @@ export const App: React.FC = () => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    let kbTouchStart: { x: number; y: number } | null = null;
+
+    const blurFocusedTextControl = () => {
+      const active = document.activeElement as HTMLElement | null;
+      if (
+        active &&
+        (active.tagName === 'INPUT' ||
+          active.tagName === 'TEXTAREA' ||
+          active.isContentEditable)
+      ) {
+        active.blur();
+        setIsMobileInputFocused(false);
+      }
+    };
+
     const handleScroll = () => {
       const y =
         window.scrollY ||
@@ -830,6 +845,42 @@ export const App: React.FC = () => {
         document.body.scrollTop ||
         0;
       setShowScrollTopBtn(y > 160);
+      if (kbTouchStart) {
+        blurFocusedTextControl();
+        kbTouchStart = null;
+      }
+    };
+    const onKbTouchStart = (e: TouchEvent) => {
+      if (e.touches.length !== 1) {
+        kbTouchStart = null;
+        return;
+      }
+      const active = document.activeElement as HTMLElement | null;
+      if (
+        active &&
+        (active.tagName === 'INPUT' ||
+          active.tagName === 'TEXTAREA' ||
+          active.isContentEditable)
+      ) {
+        kbTouchStart = {
+          x: e.touches[0].clientX,
+          y: e.touches[0].clientY,
+        };
+      } else {
+        kbTouchStart = null;
+      }
+    };
+    const onKbTouchMove = (e: TouchEvent) => {
+      if (!kbTouchStart || e.touches.length !== 1) return;
+      const dx = Math.abs(e.touches[0].clientX - kbTouchStart.x);
+      const dy = Math.abs(e.touches[0].clientY - kbTouchStart.y);
+      if (dy > 10 && dy > dx) {
+        blurFocusedTextControl();
+        kbTouchStart = null;
+      }
+    };
+    const onKbTouchEnd = () => {
+      kbTouchStart = null;
     };
     const onFocusIn = (e: FocusEvent) => {
       const el = e.target as HTMLElement | null;
@@ -850,12 +901,20 @@ export const App: React.FC = () => {
       }
     };
     window.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('touchstart', onKbTouchStart, { passive: true });
+    window.addEventListener('touchmove', onKbTouchMove, { passive: true });
+    window.addEventListener('touchend', onKbTouchEnd, { passive: true });
+    window.addEventListener('touchcancel', onKbTouchEnd, { passive: true });
     window.addEventListener('focusin', onFocusIn);
     window.addEventListener('focusout', onFocusOut);
     window.addEventListener('ghostiKeyboardState', onNativeKb);
     handleScroll();
     return () => {
       window.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('touchstart', onKbTouchStart);
+      window.removeEventListener('touchmove', onKbTouchMove);
+      window.removeEventListener('touchend', onKbTouchEnd);
+      window.removeEventListener('touchcancel', onKbTouchEnd);
       window.removeEventListener('focusin', onFocusIn);
       window.removeEventListener('focusout', onFocusOut);
       window.removeEventListener('ghostiKeyboardState', onNativeKb);
@@ -882,13 +941,18 @@ export const App: React.FC = () => {
       {/* [설정방 내 본인 여권 단독 보관함] 쇼룸·워크스페이스·모바일 전 화면 어디서든 상단 설정방 [🛂 내 귀신여권] 클릭 시 즉시 오픈 */}
       <PassportDoorplateStyleModal />
 
-      {/* 모바일(iOS/AOS) 전 화면 공통 상단 당겨서 새로고침(Pull-to-refresh) 플로팅 인디케이터 */}
+      {/* 모바일(iOS/AOS) 전 화면 공통 상단 당겨서 새로고침(Pull-to-refresh) 플로팅 인디케이터 — iOS 상단 상태바(topSafeAreaShieldView) 차폐 영역 아래에 배치하여 상단 잘림 원천 차단 */}
       {(ptrPullDist > 0 || isPtrRefreshing) && (
         <div
           style={{
-            transform: `translate3d(-50%, ${Math.min(72, Math.max(8, ptrPullDist - 12))}px, 0)`,
+            top: 'var(--ghosti-safe-top, env(safe-area-inset-top, 0px))',
+            transform: `translate3d(-50%, ${
+              isPtrRefreshing
+                ? 14
+                : Math.min(56, Math.max(10, Math.round(ptrPullDist * 0.65)))
+            }px, 0)`,
           }}
-          className="fixed top-0 left-1/2 z-[180] pointer-events-none transition-transform duration-75"
+          className="fixed left-1/2 z-[180] pointer-events-none transition-transform duration-75"
         >
           <div className="px-4 py-2 rounded-full bg-white dark:bg-zinc-900 border-2 border-teal-500 text-teal-800 dark:text-teal-200 text-[12.5px] font-extrabold shadow-[0_8px_24px_rgba(13,148,136,0.32)] flex items-center gap-2 whitespace-nowrap">
             <span

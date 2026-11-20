@@ -835,11 +835,11 @@ export const createAssistantOnboardingSlice: StateCreator<
 
         const curPhotos = get().photos;
         const seenIds = new Set(curPhotos.map((p) => p.id));
-        const seenNameSize = new Set(curPhotos.map((p) => `${p.name}__${p.size}`));
 
-        const unseenRaw = (res.photos || []).filter(
-          (np) => !seenIds.has(np.id) && !seenNameSize.has(`${np.name}__${np.size}`)
-        );
+        // [iOS PhotoKit 중복 에셋 누락 원천 차단]:
+        // iOS 사진첩에 저장된 동일 사진 2장은 asset.localIdentifier(np.id)만 다르고 originalFilename과 해상도 기반 estSize가 동일할 수 있으므로,
+        // 네이티브 갤러리 스캔 항목은 반드시 OS 고유 에셋 ID(np.id) 기준으로만 중복 스킵 여부를 판별합니다.
+        const unseenRaw = (res.photos || []).filter((np) => !seenIds.has(np.id));
 
         const analyzedBatch =
           unseenRaw.length > 0 ? await analyzeNativeGalleryPhotoBatch(unseenRaw) : [];

@@ -307,40 +307,47 @@ export function clusterPhotosIntoDuplicateGroups(
         Boolean(candSig?.rgbGrid && candSig.rgbGrid.length === 192);
       const rgbToFirst = computeRgbGridDifference(firstSig?.rgbGrid, candSig?.rgbGrid);
       const rgbToLast = computeRgbGridDifference(lastSig?.rgbGrid, candSig?.rgbGrid);
-      const sameAspect =
-        !firstSig || !candSig || Math.abs(firstSig.aspect - candSig.aspect) <= 0.06;
 
-      // 백색 문서/스크린샷 여부
+      // 백색 문서/서류 페이지 여부 (서로 다른 문서 페이지 (1).png vs (2).png 오병합 방지 전용)
       const isDocumentOrWhiteSheet =
-        (firstSig && firstSig.whitePct >= 45) ||
-        (candSig && candSig.whitePct >= 45) ||
-        first.trashCategory === 'screenshot' ||
-        cand.trashCategory === 'screenshot';
+        Boolean(first.isVaultDocument) ||
+        Boolean(cand.isVaultDocument) ||
+        Boolean(firstSig && firstSig.whitePct >= 55) ||
+        Boolean(candSig && candSig.whitePct >= 55);
 
-      // 1) 트랙 A: 동일 사진 중복 사본 및 리사이즈/재저장 쌍둥이 사본 (저장 시각과 무관하게 포착)
+      // 문서/백색 시트는 화면비 오차 0.05 이내로 엄격 제한, 일반 실사 사진(iOS 캡처 후 미세 크롭 사본 포함)은 0.14까지 허용
+      const aspectLimit = isDocumentOrWhiteSheet ? 0.05 : 0.14;
+      const sameAspect =
+        !firstSig || !candSig || Math.abs(firstSig.aspect - candSig.aspect) <= aspectLimit;
+
+      // 1) 트랙 A: 동일 사진 중복 사본 및 리사이즈/미세 크롭 쌍둥이 사본 (iOS EXIF/저장 시각 차이와 무관하게 포착)
       const isExactDuplicateCopy = hasBothRgb
         ? sameAspect &&
           ((distToFirst <= 2 &&
             rgbToFirst.meanDiff <= 5.5 &&
             rgbToFirst.maxBlockDiff <= 24) ||
             (!isDocumentOrWhiteSheet &&
-              distToFirst <= 5 &&
-              rgbToFirst.meanDiff <= 9.0 &&
-              rgbToFirst.maxBlockDiff <= 34))
-        : sameAspect && distToFirst <= 2;
+              distToFirst <= 13 &&
+              rgbToFirst.meanDiff <= 18.5 &&
+              rgbToFirst.maxBlockDiff <= 56) ||
+            (!isDocumentOrWhiteSheet &&
+              distToLast <= 11 &&
+              rgbToLast.meanDiff <= 17.0 &&
+              rgbToLast.maxBlockDiff <= 52))
+        : sameAspect && (isDocumentOrWhiteSheet ? distToFirst <= 2 : distToFirst <= 10);
 
-      // 2) 트랙 B: 실제 카메라 연속 촬영 연사 (백색 문서/스크린샷 페이지가 아닌 실사 촬영본에 한해 허용)
+      // 2) 트랙 B: 실제 카메라 연속 촬영 연사 (백색 문서 페이지가 아닌 실사 촬영본에 한해 허용)
       const isCameraBurstShot =
         !isDocumentOrWhiteSheet &&
         sameAspect &&
-        deltaSecFromFirst <= 60 &&
-        deltaSecFromLast <= 25 &&
-        distToFirst <= 14 &&
-        distToLast <= 11 &&
+        deltaSecFromFirst <= 120 &&
+        deltaSecFromLast <= 45 &&
+        distToFirst <= 15 &&
+        distToLast <= 12 &&
         (!hasBothRgb ||
-          (rgbToFirst.meanDiff <= 19.0 &&
-            rgbToFirst.maxBlockDiff <= 55 &&
-            rgbToLast.meanDiff <= 17.0));
+          (rgbToFirst.meanDiff <= 20.0 &&
+            rgbToFirst.maxBlockDiff <= 58 &&
+            rgbToLast.meanDiff <= 18.0));
 
       if (isExactDuplicateCopy || isCameraBurstShot) {
         members.push(cand);
@@ -728,16 +735,19 @@ export async function analyzeNativeGalleryPhotoBatch(
           lowerName.includes('문서') ||
           lowerName.includes('명함') ||
           lowerName.includes('memo');
-        // 캡처 후 크롭된 정방형·일반 비율 인물/사물 사진이라도 심한 초점이탈·손떨림 블러이면 스크린샷이 아닌 '흔들림·오촬영'으로 정확히 우선 분류
+        // iOS PhotoKit은 캡처 후 정방형·일반 카메라 비율(4:3, 1:1 등)로 크롭한 실사 인물/풍경 사진에도
+        // photoScreenshot subtype 플래그를 그대로 남기므로, 일반 비율(!isTallPhoneScreenAspect) & 실사 색감(whitePct < 52)이면 일반 사진/블러로 판별합니다.
+        const isCroppedRealPhotoFromCapture =
+          !isTallPhoneScreenAspect && meta.whitePct < 52;
         const isSevereNonScreenBlur =
           !isReceiptOrDoc &&
-          !isTallPhoneScreenAspect &&
-          meta.whitePct < 52 &&
+          isCroppedRealPhotoFromCapture &&
           meta.isMotionOrFocusBlurred &&
           sharpness < 2600;
         const isScreenshot =
           !isSevereNonScreenBlur &&
           !isReceiptOrDoc &&
+          !isCroppedRealPhotoFromCapture &&
           (Boolean(item.isScreenshot) ||
             lowerName.includes('screenshot') ||
             lowerName.includes('스크린샷') ||
@@ -876,7 +886,7 @@ export function convertNativeGalleryVideos(nativeVideos: NativeGalleryVideoMeta[
 
 const MOBILE_GALLERY_IDB_NAME = 'ghosti_mobile_gallery_cache_v1';
 const MOBILE_GALLERY_STORE = 'snapshot';
-const MOBILE_GALLERY_CACHE_SCHEMA_VER = 5;
+const MOBILE_GALLERY_CACHE_SCHEMA_VER = 6;
 
 interface SerializedOpticalSig {
   dhash: string;
