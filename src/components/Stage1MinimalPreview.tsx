@@ -2761,8 +2761,9 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     <div className="flex items-center gap-2">
                       <button
                         type="button"
+                        disabled={quarantineMoving}
                         onClick={() => void undoLastQuarantine()}
-                        className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold transition-all cursor-pointer"
+                        className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold transition-all cursor-pointer disabled:opacity-40"
                       >
                         ↩️ 1초 즉시 되돌리기 (Undo)
                       </button>

@@ -292,6 +292,14 @@ export async function triggerOpenAllInstalledApps(): Promise<void> {
 }
 
 const mobilePhotoMetaRegistry = new Map<string, SystemPhotoTrashTarget>();
+let nativeTrashDialogInFlightCount = 0;
+let lastNativeTrashDialogCompletedAt = 0;
+
+export function isSystemTrashDialogActiveOrCoolingDown(cooldownMs = 5000): boolean {
+  if (nativeTrashDialogInFlightCount > 0) return true;
+  if (lastNativeTrashDialogCompletedAt <= 0) return false;
+  return Date.now() - lastNativeTrashDialogCompletedAt < cooldownMs;
+}
 
 export function registerMobilePickedPhotoMeta(target: SystemPhotoTrashTarget): void {
   if (target.id) {
@@ -330,8 +338,10 @@ export async function requestNativeSystemPhotoTrash(
     return { ok: true, action, doneIds: keys, matchedMediaStoreCount: 0, canceled: false };
   }
 
+  nativeTrashDialogInFlightCount += 1;
   try {
     const res = await GhostiMobileCareNative.requestSystemPhotoTrash({ action, items });
+    lastNativeTrashDialogCompletedAt = Date.now();
     if (res && res.canceled) {
       return {
         ok: false,
@@ -354,7 +364,10 @@ export async function requestNativeSystemPhotoTrash(
       };
     }
   } catch {
+    lastNativeTrashDialogCompletedAt = Date.now();
     // 구버전 네이티브 래퍼이거나 미지원 기기일 때는 앱 내 정리 보관함 이동으로 안전하게 폴백
+  } finally {
+    nativeTrashDialogInFlightCount = Math.max(0, nativeTrashDialogInFlightCount - 1);
   }
   return { ok: true, action, doneIds: keys, matchedMediaStoreCount: 0, canceled: false };
 }

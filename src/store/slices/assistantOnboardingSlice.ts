@@ -20,6 +20,7 @@ import {
 import {
   isCapacitorIosRuntime,
   isCapacitorNativeMobileRuntime,
+  isSystemTrashDialogActiveOrCoolingDown,
   registerMobilePickedPhotoMeta,
   scanNativeDeviceGalleryMedia,
 } from '../../services/ghostiMobileCareBridge';
@@ -317,6 +318,8 @@ export interface AssistantOnboardingSlice {
 }
 
 let pendingMobileGalleryResync = false;
+let quarantineMutationEpoch = 0;
+const recentlyQuarantinedAtById = new Map<string, number>();
 
 function buildQuarantineMoveStatePatch(opts: {
   state: SaySeeStore;
@@ -336,6 +339,10 @@ function buildQuarantineMoveStatePatch(opts: {
     nonIosToast,
     clearSelectedBurstModal,
   } = opts;
+  quarantineMutationEpoch += 1;
+  pendingMobileGalleryResync = false;
+  const moveNow = Date.now();
+  movedSet.forEach((id) => recentlyQuarantinedAtById.set(id, moveNow));
   const isIosNativeApp = !zCoreBridge.isConnected && isCapacitorIosRuntime();
   const prevTrashById = new Map(state.photos.map((p) => [p.id, p.trashCategory]));
   const afterMovePhotos = state.photos.map((p) => {
@@ -491,6 +498,15 @@ export const createAssistantOnboardingSlice: StateCreator<
           return false;
         }
       })();
+
+    // 독립 귀신검색창(?ghostSearchWindow) 첫 기동 시 크롬 --app 프로세스 콜드스타트 중 260ms 헬스체크가 먼저 타임아웃되어
+    // 미연결 빈 상태로 1차 initApp() 후 재연결 2차 initApp(true)가 이중 실행되는 현상을 원천 차단합니다.
+    if (isStandaloneSearchWin && !zCoreBridge.isConnected) {
+      await Promise.race([
+        zCoreBridge.checkHealth(true),
+        new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 1600)),
+      ]);
+    }
 
     const [dataset, telemetry, indexedDocs, indexedVideos, faceData, hostSharedPhotos] = await Promise.all([
       loadInitialPhotoDataset(),
@@ -941,8 +957,20 @@ export const createAssistantOnboardingSlice: StateCreator<
     if (!isCapacitorNativeMobileRuntime()) {
       return;
     }
+    // [모바일 휴지통 OS 확인창 복귀 레이스 원천 차단]:
+    // Android MediaStore.createTrashRequest 확인창이 닫힐 때 발생하는 window focus 이벤트가
+    // 직전 휴지통 이동 상태를 덮어써서 세트가 되살아나는 경쟁 상태(Race Condition)를 원천 차단합니다.
+    if (
+      !promptPermission &&
+      !forceExpandSelected &&
+      (get().quarantineMoving || isSystemTrashDialogActiveOrCoolingDown())
+    ) {
+      return;
+    }
     if (get().mobileGalleryScanning) {
-      pendingMobileGalleryResync = true;
+      if (promptPermission || forceExpandSelected) {
+        pendingMobileGalleryResync = true;
+      }
       return;
     }
 
@@ -951,10 +979,12 @@ export const createAssistantOnboardingSlice: StateCreator<
     let totalGalleryPhotos = get().photos.length;
     const allLiveNativePhotoIds = new Set<string>();
     let scannedFullGallery = false;
+    const scanStartEpoch = quarantineMutationEpoch;
 
     try {
       const pageSize = 60;
       for (let offset = 0; offset < maxTargetCount; offset += pageSize) {
+        const batchStartEpoch = quarantineMutationEpoch;
         const res = await scanNativeDeviceGalleryMedia({
           offset,
           limit: pageSize,
@@ -992,12 +1022,21 @@ export const createAssistantOnboardingSlice: StateCreator<
         const curPhotos = get().photos;
         const seenIds = new Set(curPhotos.map((p) => p.id));
 
-        // [아이폰 『사진 ➔ 최근 삭제된 항목』 / 갤러리 외부 복구 자동 동기화]:
-        // 유저가 OS 사진 앱(FaceID 최근 삭제된 항목 등)에서 사진을 복구하면 동일한 에셋 ID(np.id)가 다시 활성 갤러리에 포함되므로,
-        // 앱 복귀·새로고침·재실행 스캔 시 quarantined=true 상태를 즉시 해제(false)하고 최근 정리 내역에서 제거·재클러스터링합니다.
-        const hasRevivedFromOsTrash = curPhotos.some(
-          (p) => p.quarantined && liveBatchIds.has(p.id)
-        );
+        // [아이폰 『사진 ➔ 최근 삭제된 항목』 / 갤러리 외부 복구 자동 동기화 (인플라이트 휴지통 이동 보호 포함)]:
+        // 스캔 도중 앱 내에서 휴지통 이동/복원이 발생했거나(batchStartEpoch 불일치), 방금 휴지통으로 옮긴 직후(MediaStore 전파 지연 구간)에는
+        // 과거 스냅샷(liveBatchIds)이 quarantined=true를 다시 false로 되살리지 않도록 보호합니다.
+        const reviveGuardMs = isCapacitorIosRuntime() ? 2500 : 12000;
+        const canCheckExternalRevive =
+          !get().quarantineMoving &&
+          quarantineMutationEpoch === batchStartEpoch &&
+          !isSystemTrashDialogActiveOrCoolingDown();
+        const isEligibleExternalRevive = (p: PhotoItem): boolean =>
+          canCheckExternalRevive &&
+          Boolean(p.quarantined) &&
+          liveBatchIds.has(p.id) &&
+          Date.now() - (recentlyQuarantinedAtById.get(p.id) || 0) >= reviveGuardMs;
+
+        const hasRevivedFromOsTrash = curPhotos.some(isEligibleExternalRevive);
 
         // [iOS PhotoKit 중복 에셋 누락 원천 차단]:
         // iOS 사진첩에 저장된 동일 사진 2장은 asset.localIdentifier(np.id)만 다르고 originalFilename과 해상도 기반 estSize가 동일할 수 있으므로,
@@ -1015,10 +1054,23 @@ export const createAssistantOnboardingSlice: StateCreator<
         if (hasRevivedFromOsTrash || analyzedBatch.length > 0 || convertedVideos.length > 0) {
           newlyAddedTotal += analyzedBatch.length;
           set((state) => {
-            const revivedBasePhotos = hasRevivedFromOsTrash
-              ? state.photos.map((p) =>
-                  p.quarantined && liveBatchIds.has(p.id) ? { ...p, quarantined: false } : p
-                )
+            const allowReviveNow =
+              hasRevivedFromOsTrash &&
+              !state.quarantineMoving &&
+              quarantineMutationEpoch === batchStartEpoch &&
+              !isSystemTrashDialogActiveOrCoolingDown();
+            const revivedBasePhotos = allowReviveNow
+              ? state.photos.map((p) => {
+                  if (
+                    p.quarantined &&
+                    liveBatchIds.has(p.id) &&
+                    Date.now() - (recentlyQuarantinedAtById.get(p.id) || 0) >= reviveGuardMs
+                  ) {
+                    recentlyQuarantinedAtById.delete(p.id);
+                    return { ...p, quarantined: false };
+                  }
+                  return p;
+                })
               : state.photos;
             const mergedPhotos = [...revivedBasePhotos, ...analyzedBatch];
             const { updatedPhotos, duplicateGroups: nextDupGroups } =
@@ -1152,7 +1204,12 @@ export const createAssistantOnboardingSlice: StateCreator<
       }
 
       // 전체 갤러리 스캔 완료 시 OS 사진 앱에서 직접 삭제된(quarantined 아닌데 실제 갤러리에 없는) 항목도 정리하여 정합성 100% 유지
-      if (scannedFullGallery && get().photos.some((p) => !p.quarantined && !allLiveNativePhotoIds.has(p.id))) {
+      if (
+        scannedFullGallery &&
+        quarantineMutationEpoch === scanStartEpoch &&
+        !get().quarantineMoving &&
+        get().photos.some((p) => !p.quarantined && !allLiveNativePhotoIds.has(p.id))
+      ) {
         set((state) => {
           const pruned = state.photos.filter((p) => p.quarantined || allLiveNativePhotoIds.has(p.id));
           const { updatedPhotos, duplicateGroups: nextDupGroups } =
@@ -1616,20 +1673,35 @@ export const createAssistantOnboardingSlice: StateCreator<
     keepPhotoId: string,
     quarantineRestImmediately = false
   ) => {
+    if (get().quarantineMoving) return;
     const { duplicateGroups, photos, selectedTrashIds } = get();
     const targetGroup = duplicateGroups.find((g) => g.groupId === groupId);
     if (!targetGroup) return;
 
-    const groupMemberSet = new Set(targetGroup.photoIds);
-    const redundantIds = targetGroup.photoIds.filter((id) => id !== keepPhotoId);
+    const photoMap = new Map(photos.map((p) => [p.id, p]));
+    const activeMembers = targetGroup.photoIds
+      .map((id) => photoMap.get(id))
+      .filter((p): p is PhotoItem => Boolean(p && !p.quarantined));
+
+    // [절대 불변식]: 세트 내 살아있는 사진이 2장 미만이면 절대 휴지통 이동을 실행하지 않아
+    // 세트 내 2장이 모두 휴지통으로 들어가는 사고를 수학적으로 100% 원천 차단합니다!
+    if (activeMembers.length < 2) return;
+
+    const effectiveKeepId = activeMembers.some((p) => p.id === keepPhotoId)
+      ? keepPhotoId
+      : activeMembers[0].id;
+    const activeMemberSet = new Set(activeMembers.map((p) => p.id));
+    const redundantIds = activeMembers
+      .filter((p) => p.id !== effectiveKeepId)
+      .map((p) => p.id);
 
     const updatedGroups = duplicateGroups.map((g) =>
-      g.groupId === groupId ? { ...g, bestPhotoId: keepPhotoId } : g
+      g.groupId === groupId ? { ...g, bestPhotoId: effectiveKeepId } : g
     );
 
     const updatedPhotos = photos.map((p) => {
-      if (!groupMemberSet.has(p.id)) return p;
-      if (p.id === keepPhotoId) {
+      if (!activeMemberSet.has(p.id)) return p;
+      if (p.id === effectiveKeepId) {
         return {
           ...p,
           isBestInDuplicateGroup: true,
@@ -1655,9 +1727,9 @@ export const createAssistantOnboardingSlice: StateCreator<
     });
 
     const nextTrashIds = new Set(selectedTrashIds);
-    nextTrashIds.delete(keepPhotoId);
+    nextTrashIds.delete(effectiveKeepId);
     redundantIds.forEach((id) => {
-      const ph = updatedPhotos.find((p) => p.id === id);
+      const ph = photoMap.get(id);
       if (ph && !ph.quarantined) nextTrashIds.add(id);
     });
 
@@ -1841,9 +1913,16 @@ export const createAssistantOnboardingSlice: StateCreator<
   ) => {
     const cleanNames = names.map((n) => String(n || '').trim()).filter(Boolean);
     if (cleanNames.length === 0) return;
+    quarantineMutationEpoch += 1;
+    pendingMobileGalleryResync = false;
     const restoredSet = new Set<string>(cleanNames);
     const restoredLowerSet = new Set<string>(cleanNames.map((n) => n.toLowerCase()));
     const replacedMap = replacedIds || {};
+    cleanNames.forEach((n) => recentlyQuarantinedAtById.delete(n));
+    Object.entries(replacedMap).forEach(([oldId, newId]) => {
+      recentlyQuarantinedAtById.delete(oldId);
+      if (newId) recentlyQuarantinedAtById.delete(newId);
+    });
     const revTs = Date.now();
 
     set((state) => {
@@ -1953,7 +2032,7 @@ export const createAssistantOnboardingSlice: StateCreator<
   },
 
   restoreFromQuarantine: async (names: string[]) => {
-    if (names.length === 0) return;
+    if (names.length === 0 || get().quarantineMoving) return;
     set({ quarantineMoving: true });
     const restoreRes = await requestQuarantineOp('restore', names);
     if (restoreRes.done.length === 0) {
@@ -1968,6 +2047,7 @@ export const createAssistantOnboardingSlice: StateCreator<
   },
 
   undoLastQuarantine: async () => {
+    if (get().quarantineMoving) return;
     const { lastUndoBatch } = get();
     if (!lastUndoBatch || lastUndoBatch.fileNames.length === 0) return;
     const names = lastUndoBatch.fileNames;

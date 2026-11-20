@@ -467,14 +467,19 @@ export function clusterPhotosIntoDuplicateGroups(
 
     if (members.length >= 2) {
       visited.add(first.id);
-      // 묶음 내 최고 선명도(opticalSharpness) + 파일 크기(해상도) 기준 👑 베스트 1장 선정
+      // 1) 이미 세트 내에서 유저/이전 클러스터링으로 확정된 단일 👑 베스트 1장이 있으면 보존하여
+      //    반복 휴지통 이동·복원이나 백그라운드 재스캔 시 보존 대상(bestPhotoId)이 뒤집히는 현상을 원천 차단합니다.
+      const existingBests = members.filter((m) => m.isBestInDuplicateGroup);
       const ranked = [...members].sort((a, b) => {
         const sDiff = (b.opticalSharpness || 10000) - (a.opticalSharpness || 10000);
         if (Math.abs(sDiff) > 250) return sDiff;
-        return (b.size || 0) - (a.size || 0);
+        const sizeDiff = (b.size || 0) - (a.size || 0);
+        if (sizeDiff !== 0) return sizeDiff;
+        return a.id.localeCompare(b.id);
       });
-      const bestPhoto = ranked[0];
-      const groupId = `dup_set_${first.id}`;
+      const bestPhoto = existingBests.length === 1 ? existingBests[0] : ranked[0];
+      const canonicalMinId = [...members].map((m) => m.id).sort((a, b) => a.localeCompare(b))[0];
+      const groupId = `dup_set_${canonicalMinId}`;
 
       duplicateGroups.push({
         groupId,
