@@ -40,7 +40,13 @@ export function hasActiveGhostiLoginSession(): boolean {
     ) {
       return true;
     }
+    const isLoggedOut = localStorage.getItem('merlin_logged_out') === '1';
+    const logoutLockUntil = Number(localStorage.getItem('ghosti_pending_logout_lock_until') || 0);
+    const hasActiveLogoutLock = logoutLockUntil > 0 && Date.now() <= logoutLockUntil;
     const hubToken = (localStorage.getItem('merlin_session_token') || '').trim();
+    if (hasActiveLogoutLock || (isLoggedOut && !hubToken)) {
+      return false;
+    }
     const hubEmail = (localStorage.getItem('ghosti_hub_user_email') || '').trim();
     if ((hubToken && hubToken.includes('.')) || hubEmail) {
       return true;

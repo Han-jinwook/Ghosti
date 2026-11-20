@@ -1,7 +1,10 @@
 import React, { useEffect, useRef, useState } from 'react';
 import { useHub } from '../services/merlin-hub-sdk/react';
 import { useHubAuth } from '../services/merlin-hub-sdk/Auth/useHubAuth';
-import { syncHubUserToLocalSupabase } from '../services/supabaseClient';
+import {
+  clearGhostiLogoutLock,
+  syncHubUserToLocalSupabase,
+} from '../services/supabaseClient';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { Z_CORE_ZIP_URL, LATEST_Z_CORE_VERSION } from '../services/zCoreBridge';
 import { playBabyGhostChime } from './OnboardingModal';
@@ -1031,6 +1034,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     const cleanEmail = emailInput.trim().toLowerCase();
     const res = await verifyOtp(fullCode, cleanEmail);
     if (res && res.success) {
+      clearGhostiLogoutLock();
       try {
         localStorage.setItem('ghosti_prelaunch_verified_email', cleanEmail);
         localStorage.setItem('userEmail', cleanEmail);

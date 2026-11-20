@@ -109,13 +109,41 @@ if (typeof window !== 'undefined' && !supabase) {
 /** 브릿지가 발급한 단기(1시간) Supabase 토큰 보관 키 */
 const GHOSTI_SB_TOKEN_KEY = 'ghosti_supabase_access_token';
 const GHOSTI_SB_TOKEN_EXP_KEY = 'ghosti_supabase_access_token_exp';
+/** 로그아웃 직후 인플라이트 /api/auth/me(newToken) 응답이 세션을 되살리는 레이스를 막는 단기 1회성 가드 키 */
+export const GHOSTI_LOGOUT_LOCK_UNTIL_KEY = 'ghosti_pending_logout_lock_until';
 
 let authedClient: SupabaseClient | null = null;
 let authedClientToken = '';
 
-/** 브릿지 단기 토큰(만료 전)만 반환 */
+/** 명시적 로그아웃 직후(또는 리로드 대기 중)인지 단일 판별 */
+export function isGhostiExplicitlyLoggedOut(): boolean {
+  if (typeof window === 'undefined') return false;
+  try {
+    if (localStorage.getItem('merlin_logged_out') === '1') {
+      const hasFreshHubToken = Boolean((localStorage.getItem('merlin_session_token') || '').trim());
+      if (!hasFreshHubToken) return true;
+    }
+    const lockUntil = Number(localStorage.getItem(GHOSTI_LOGOUT_LOCK_UNTIL_KEY) || 0);
+    if (lockUntil > 0 && Date.now() <= lockUntil) return true;
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+export function clearGhostiLogoutLock(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem(GHOSTI_LOGOUT_LOCK_UNTIL_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+/** 브릿지 단기 토큰(만료 전 · 비로그아웃 상태)만 반환 */
 export function getGhostiSupabaseAccessToken(): string | null {
   if (typeof window === 'undefined') return null;
+  if (isGhostiExplicitlyLoggedOut()) return null;
   const token = localStorage.getItem(GHOSTI_SB_TOKEN_KEY);
   const exp = Number(localStorage.getItem(GHOSTI_SB_TOKEN_EXP_KEY) || 0);
   if (!token || !exp || Date.now() > exp - 60_000) return null;
@@ -131,6 +159,7 @@ export function getGhostiSupabaseAccessToken(): string | null {
 export function hasAuthenticatedHubAccountSession(): boolean {
   if (typeof window === 'undefined') return false;
   try {
+    if (isGhostiExplicitlyLoggedOut()) return false;
     const hubToken = (getSessionToken() || localStorage.getItem('merlin_session_token') || '').trim();
     if (hubToken && !(!hubToken.includes('.') && /^[a-f0-9]{28,48}$/i.test(hubToken))) {
       return true;
@@ -255,6 +284,9 @@ export async function syncHubUserToLocalSupabase(params: {
   if (!cleanUserId || !cleanEmail) {
     return { ok: false, error: 'Missing userId or email' };
   }
+  if (isGhostiExplicitlyLoggedOut()) {
+    return { ok: false, error: '로그아웃 진행 중' };
+  }
 
   try {
     let accountSwitched = false;
@@ -349,6 +381,10 @@ export async function syncHubUserToLocalSupabase(params: {
     }
 
     if (typeof window !== 'undefined') {
+      // 비동기 브릿지 호출 중 사용자가 로그아웃을 눌렀다면 토큰/계정 키를 절대 되살리지 않음
+      if (isGhostiExplicitlyLoggedOut() || !localStorage.getItem('merlin_session_token')) {
+        return { ok: false, error: '로그아웃으로 동기화 중단' };
+      }
       if (typeof data.supabaseAnonKey === 'string' && data.supabaseAnonKey) {
         applyRuntimePublicConfig(
           typeof data.supabaseUrl === 'string' ? data.supabaseUrl : undefined,
@@ -485,9 +521,43 @@ export function clearGhostiSupabaseSession(): void {
   localStorage.removeItem('ghosti_hub_user_id');
   localStorage.removeItem('ghosti_hub_user_email');
   localStorage.removeItem('ghosti_hub_user_nickname');
+  localStorage.removeItem('ghosti_merlin_mock_token');
+  localStorage.removeItem('merlin_hub_user');
   localStorage.removeItem('userNickname');
   localStorage.removeItem('ghosti_invited_member_nickname');
   localStorage.removeItem('ghosti_joined_invite_room_v1');
   authedClient = null;
   authedClientToken = '';
+}
+
+/**
+ * 로그아웃 시 Ghosti·허브 로컬 인증 흔적 일괄 소거 SSOT (인플라이트 /api/auth/me newToken 부활 레이스 차단 포함).
+ * - 타 패밀리 앱(.sundreamer.app) 공용 쿠키는 보존하고, 현재 호스트 쿠키 및 Ghosti 로컬 토큰만 완전 소거합니다.
+ */
+export function purgeAllGhostiLocalAuthArtifacts(opts?: {
+  setLogoutLockMs?: number;
+  clearLogoutLock?: boolean;
+}): void {
+  if (typeof window === 'undefined') return;
+  try {
+    clearGhostiSupabaseSession();
+    localStorage.removeItem('merlin_session_token');
+    localStorage.removeItem('merlin_cached_user');
+    localStorage.removeItem('merlin_cached_balance');
+    localStorage.removeItem('merlin_user_id');
+    localStorage.removeItem('merlin_family_uid');
+    localStorage.removeItem('userEmail');
+    localStorage.removeItem('userProfileImage');
+    localStorage.setItem('merlin_logged_out', '1');
+    if (opts?.setLogoutLockMs && opts.setLogoutLockMs > 0) {
+      localStorage.setItem(GHOSTI_LOGOUT_LOCK_UNTIL_KEY, String(Date.now() + opts.setLogoutLockMs));
+    } else if (opts?.clearLogoutLock) {
+      localStorage.removeItem(GHOSTI_LOGOUT_LOCK_UNTIL_KEY);
+    }
+    const expire = '=; path=/; expires=Thu, 01 Jan 1970 00:00:00 GMT; max-age=0';
+    document.cookie = `merlin_session_token${expire}; SameSite=Lax; Secure`;
+    document.cookie = `merlin_session_token${expire}`;
+  } catch {
+    /* ignore storage access error */
+  }
 }

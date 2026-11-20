@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X } from 'lucide-react';
 import {
   HubProvider,
@@ -18,7 +18,12 @@ import {
 } from '../services/merlin-hub-sdk/react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { zCoreBridge } from '../services/zCoreBridge';
-import { syncHubUserToLocalSupabase, clearGhostiSupabaseSession } from '../services/supabaseClient';
+import {
+  syncHubUserToLocalSupabase,
+  clearGhostiSupabaseSession,
+  clearGhostiLogoutLock,
+  purgeAllGhostiLocalAuthArtifacts,
+} from '../services/supabaseClient';
 import { clearCachedSharedRoomTokens } from '../services/sharedPhotoRoomSupabase';
 import {
   loadCachedDeviceIntegrationSnapshot,
@@ -135,9 +140,63 @@ const GhostiHubGlobalModals: React.FC = () => {
   const [withdrawingApp, setWithdrawingApp] = useState(false);
   const wasLoggedInRef = useRef(false);
   const lastAuthedEmailRef = useRef('');
+  const logoutInProgressRef = useRef(false);
+
+  const performGhostiCleanLogout = useCallback(() => {
+    logoutInProgressRef.current = true;
+    setIsProfileOpen(false);
+    const hasUrlInviteToken = Boolean(readActiveInviteToken());
+    purgeAllGhostiLocalAuthArtifacts({ setLogoutLockMs: 15_000 });
+    clearGhostSecretaryAccountNicknameOnLogout();
+    clearCachedSharedRoomTokens();
+    if (!hasUrlInviteToken) {
+      clearStoredInviteSession();
+    }
+    useSaySeeStore.setState((state) => {
+      const isInSharedLounge =
+        state.activeLoungeType === 'family' ||
+        state.activeLoungeType === 'club' ||
+        state.activeLoungeType === 'student';
+      return {
+        pcAgentPairedMobile: false,
+        connectedDevices: [],
+        devicePairingCode6: null,
+        deviceEntitlement: null,
+        syncedClipboardItems: [],
+        showSharedPhotoUploadModal: false,
+        isInvitedMemberSession: false,
+        ...(!hasUrlInviteToken
+          ? {
+              sharedRoomAddedPhotos: [],
+              sharedRoomHostPhotos: [],
+              ...(isInSharedLounge ? { searchResults: [] } : {}),
+            }
+          : {}),
+        merlinAuth: {
+          ...state.merlinAuth,
+          token: '',
+          userId: 'guest',
+          email: '',
+          coinBalance: 0,
+        },
+      };
+    });
+    if (typeof window !== 'undefined') {
+      // 언로드 직전 최종 스위프: 프로필 모달이 띄운 인플라이트 /api/auth/me(newToken) 응답이
+      // 리로드 대기 중 세션을 되살려도 페이지 전환 직전에 즉시 재소거합니다.
+      const finalWipe = () => {
+        purgeAllGhostiLocalAuthArtifacts({ setLogoutLockMs: 15_000 });
+      };
+      window.addEventListener('pagehide', finalWipe, { once: true });
+      window.addEventListener('beforeunload', finalWipe, { once: true });
+    }
+  }, []);
 
   // 허브 인증/잔액 변화 시 Ghosti 내부 스토어(merlinAuth) 및 단독 Supabase(`public.users.id = family_users.id`) 자동 동기화
   useEffect(() => {
+    if (logoutInProgressRef.current) {
+      return;
+    }
     const token =
       typeof window !== 'undefined' ? localStorage.getItem('merlin_session_token') || '' : '';
 
@@ -237,8 +296,10 @@ const GhostiHubGlobalModals: React.FC = () => {
       });
     } else if (!isLoggedIn) {
       const hasUrlInviteToken = Boolean(readActiveInviteToken());
+      const isMarkedLoggedOut =
+        typeof window !== 'undefined' && localStorage.getItem('merlin_logged_out') === '1';
       // 로그아웃(로그인 → 게스트 전환) 시 귀신같이 Supabase 단기 토큰·별명·공유방 메모리 캐시 즉시 폐기 (타 계정 사진·별명 노출 0%)
-      if (wasLoggedInRef.current) {
+      if (wasLoggedInRef.current || isMarkedLoggedOut) {
         clearGhostiSupabaseSession();
         clearGhostSecretaryAccountNicknameOnLogout();
         clearCachedSharedRoomTokens();
@@ -292,17 +353,24 @@ const GhostiHubGlobalModals: React.FC = () => {
     const onOpenGiftBox = () => {
       if (!hideCoin) setIsGiftBoxOpen(true);
     };
+    const onHubSessionExpired = () => {
+      clearGhostiSupabaseSession();
+      clearGhostSecretaryAccountNicknameOnLogout();
+      clearCachedSharedRoomTokens();
+    };
 
     window.addEventListener('openLoginModal', onOpenLogin);
     window.addEventListener('openProfileModal', onOpenProfile);
     window.addEventListener('openPurchaseModal', onOpenPurchase);
     window.addEventListener('openGiftBoxModal', onOpenGiftBox);
+    window.addEventListener('merlinSessionExpired', onHubSessionExpired);
 
     return () => {
       window.removeEventListener('openLoginModal', onOpenLogin);
       window.removeEventListener('openProfileModal', onOpenProfile);
       window.removeEventListener('openPurchaseModal', onOpenPurchase);
       window.removeEventListener('openGiftBoxModal', onOpenGiftBox);
+      window.removeEventListener('merlinSessionExpired', onHubSessionExpired);
     };
   }, [hideCoin]);
 
@@ -318,6 +386,8 @@ const GhostiHubGlobalModals: React.FC = () => {
         // 기본값 'coin'이면 첫 방문자에게 "무료 코인 받으세요!" 오안내 + 스토어 심사 리스크 → 'none' 고정
         rewardType="none"
         onSuccess={(email, userId) => {
+          logoutInProgressRef.current = false;
+          clearGhostiLogoutLock();
           setIsLoginOpen(false);
           void refreshSession();
           void refreshBalance();
@@ -418,7 +488,7 @@ const GhostiHubGlobalModals: React.FC = () => {
 
             <HubLogoutCard
               onLogout={() => {
-                setIsProfileOpen(false);
+                performGhostiCleanLogout();
               }}
             />
 
@@ -467,6 +537,7 @@ const GhostiHubGlobalModals: React.FC = () => {
                             /* ignore */
                           }
                           void clearGhostiSupabaseSession();
+                          purgeAllGhostiLocalAuthArtifacts({ setLogoutLockMs: 15_000 });
                           if (typeof window !== 'undefined') {
                             try {
                               localStorage.removeItem('merlin_session_token');
