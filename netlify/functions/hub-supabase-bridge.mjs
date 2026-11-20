@@ -149,14 +149,16 @@ function signAnonPublishableJwt(supabaseUrl, secret) {
   } catch {
     ref = '';
   }
-  const now = Math.floor(Date.now() / 1000);
+  // 고정 iat/exp를 사용하여 호출 시마다 동일한 anon JWT 문자열을 반환 (클라이언트 applyRuntimePublicConfig가 활성 Realtime 채널을 재생성·단절시키는 현상 원천 차단)
+  const fixedIat = 1735689600;
+  const fixedExp = 2051222400;
   const header = b64url({ alg: 'HS256', typ: 'JWT' });
   const payload = b64url({
     iss: 'supabase',
     ...(ref ? { ref } : {}),
     role: 'anon',
-    iat: now,
-    exp: now + 365 * 24 * 3600,
+    iat: fixedIat,
+    exp: fixedExp,
   });
   const sig = crypto
     .createHmac('sha256', secret)

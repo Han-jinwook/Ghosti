@@ -52,7 +52,8 @@ function applyRuntimePublicConfig(url?: string, anonKey?: string): void {
   const cleanAnon = (anonKey || '').trim();
   const cleanUrl = (url || activeSupabaseUrl || DEFAULT_GHOSTI_SUPABASE_URL).trim();
   if (!cleanAnon || !cleanUrl) return;
-  if (cleanAnon === activeSupabaseAnonKey && supabase) return;
+  // 이미 동일 Supabase 프로젝트 URL로 클라이언트가 초기화된 경우 재생성을 생략하여 구독 중인 Realtime WebSocket 채널 단절을 원천 방지
+  if (supabase && activeSupabaseAnonKey && cleanUrl === activeSupabaseUrl) return;
   activeSupabaseUrl = cleanUrl;
   activeSupabaseAnonKey = cleanAnon;
   supabase = createClient(activeSupabaseUrl, activeSupabaseAnonKey, {

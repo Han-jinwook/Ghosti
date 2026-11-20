@@ -202,11 +202,23 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
           }
         }
       },
-      onIncomingClip: (clip) => {
+      onIncomingClip: (clip, meta) => {
         setDeviceIntegrationSnapshot({ incomingClip: clip });
         useSaySeeStore.setState({
-          lastQuarantineToast: `📋 [${clip.senderName}]에서 암호화 클립보드가 도착했습니다! 바로 붙여넣기 하세요.`,
+          lastQuarantineToast: meta?.isLocalAutoCapture
+            ? '📋 PC 복사(Ctrl+C) 텍스트가 연결된 내 기기로 자동 암호화 전송되었습니다!'
+            : `📋 [${clip.senderName}]에서 암호화 클립보드가 도착했습니다! 바로 붙여넣기 하세요.`,
         });
+      },
+      onClipsSynced: (clips) => {
+        const cur = useSaySeeStore.getState().syncedClipboardItems;
+        if (
+          clips.length !== cur.length ||
+          clips[0]?.clipHash !== cur[0]?.clipHash ||
+          clips[0]?.createdAt !== cur[0]?.createdAt
+        ) {
+          setDeviceIntegrationSnapshot({ syncedClips: clips });
+        }
       },
       onRemoteMonitorCast: (pkt: RemoteMonitorCastPacket) => {
         setCastState({

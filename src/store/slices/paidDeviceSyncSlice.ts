@@ -175,6 +175,7 @@ export interface PaidDeviceSyncSlice {
     pairingCode?: string | null;
     entitlement?: GhostiDeviceEntitlementView | null;
     incomingClip?: GhostiSyncedClipItem;
+    syncedClips?: GhostiSyncedClipItem[];
   }) => void;
 
   setShowProModal: (show: boolean) => void;
@@ -608,6 +609,8 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
               (c) => c.clipHash !== payload.incomingClip!.clipHash
             ),
           ].slice(0, 15)
+        : payload.syncedClips
+        ? payload.syncedClips.slice(0, 15)
         : state.syncedClipboardItems;
       return {
         connectedDevices: nextDevices,

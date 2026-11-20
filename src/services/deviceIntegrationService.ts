@@ -542,12 +542,60 @@ let activePairClient: SupabaseClient | null = null;
 let activePairSubscribed = false;
 let activePairTopic = '';
 let activeClipboardPollTimer: number | null = null;
+let activeClipboardWorker: Worker | null = null;
+let lastObservedOsClipHash = '';
+let lastAutoPushedClipHash = '';
+let lastAutoPushedAtMs = 0;
+const recentRemoteInjectedHashes = new Map<string, number>();
+const deliveredRemoteEnvelopeKeys = new Set<string>();
 let pendingDeviceStatePacket: {
   devices?: GhostiConnectedDeviceDto[];
   entitlement?: GhostiDeviceEntitlementView | null;
   senderDeviceId: string;
   updatedAt: number;
 } | null = null;
+let pendingClipBroadcastPacket: {
+  clipHash: string;
+  cipherB64: string;
+  ivB64: string;
+  senderDeviceId: string;
+  senderName: string;
+  createdAt: string;
+} | null = null;
+
+function createUnthrottledIntervalWorker(intervalMs: number, onTick: () => void): {
+  stop: () => void;
+} {
+  if (typeof window !== 'undefined' && typeof Worker !== 'undefined' && typeof Blob !== 'undefined') {
+    try {
+      const code = `const id = setInterval(() => postMessage(1), ${Math.max(250, intervalMs)}); onmessage = (e) => { if (e.data === 'stop') clearInterval(id); };`;
+      const blobUrl = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
+      const worker = new Worker(blobUrl);
+      worker.onmessage = () => onTick();
+      return {
+        stop: () => {
+          try {
+            worker.postMessage('stop');
+            worker.terminate();
+            URL.revokeObjectURL(blobUrl);
+          } catch {
+            /* ignore */
+          }
+        },
+      };
+    } catch {
+      /* fallback to window.setInterval */
+    }
+  }
+  const timerId = typeof window !== 'undefined' ? window.setInterval(onTick, intervalMs) : null;
+  return {
+    stop: () => {
+      if (timerId !== null && typeof window !== 'undefined') {
+        window.clearInterval(timerId);
+      }
+    },
+  };
+}
 
 export function broadcastDeviceIntegrationStateUpdate(payload: {
   devices?: GhostiConnectedDeviceDto[];
@@ -585,6 +633,7 @@ export async function pushCrossDeviceClipboardText(opts: {
   text: string;
   email: string;
   userId: string;
+  isAutoOsCapture?: boolean;
 }): Promise<{ ok: boolean; item?: GhostiSyncedClipItem; skippedDuplicate?: boolean }> {
   const cleanText = (opts.text || '').trim();
   if (!cleanText || !opts.email || !opts.userId || !hasAuthenticatedHubAccountSession()) {
@@ -592,39 +641,35 @@ export async function pushCrossDeviceClipboardText(opts: {
   }
   loadSeenHashesOnce();
   const clipHash = await sha256HexBrowser(cleanText);
-  if (seenClipHashes.has(clipHash)) {
+  const nowMs = Date.now();
+
+  // 타 기기에서 방금 수신해 내 OS 클립보드에 주입한 텍스트는 절대 역전송(Echo-Loop)하지 않음
+  const injectedAt = recentRemoteInjectedHashes.get(clipHash);
+  if (injectedAt && nowMs - injectedAt < 60_000) {
+    lastObservedOsClipHash = clipHash;
     return { ok: true, skippedDuplicate: true };
   }
+
+  // 단일 Ctrl+C 시 copy 이벤트와 백그라운드 워커 폴링이 동시에 감지할 때 1.5초 중복 발송만 방지 (사용자가 재복사한 경우는 정상 전송 허용)
+  if (clipHash === lastAutoPushedClipHash && nowMs - lastAutoPushedAtMs < 1500) {
+    return { ok: true, skippedDuplicate: true };
+  }
+  lastAutoPushedClipHash = clipHash;
+  lastAutoPushedAtMs = nowMs;
+  lastObservedOsClipHash = clipHash;
   rememberSeenClipHash(clipHash);
 
   const ident = getThisDeviceIdentity();
   const encrypted = await encryptClipboardE2ee(cleanText, opts.email, opts.userId);
-  const nowIso = new Date().toISOString();
-
-  // 1) 오프라인 기기를 위한 24시간 지연 E2EE 암호화 우체통 보관 (서버는 평문 열람 0% 불가)
-  await callGhostiServerBridge('device_push_e2ee_clip', {
+  const nowIso = new Date(nowMs).toISOString();
+  const broadcastPayload = {
+    clipHash: encrypted.clipHash,
     cipherB64: encrypted.cipherB64,
     ivB64: encrypted.ivB64,
-    clipHash: encrypted.clipHash,
     senderDeviceId: ident.deviceId,
     senderName: ident.displayName,
-  });
-
-  // 2) 온라인 기기로 0.1초 즉시 Realtime 브로드캐스트
-  if (activePairChannel) {
-    void activePairChannel.send({
-      type: 'broadcast',
-      event: 'E2EE_CLIPBOARD_PUSH',
-      payload: {
-        clipHash: encrypted.clipHash,
-        cipherB64: encrypted.cipherB64,
-        ivB64: encrypted.ivB64,
-        senderDeviceId: ident.deviceId,
-        senderName: ident.displayName,
-        createdAt: nowIso,
-      },
-    });
-  }
+    createdAt: nowIso,
+  };
 
   const item: GhostiSyncedClipItem = {
     clipHash: encrypted.clipHash,
@@ -639,6 +684,36 @@ export async function pushCrossDeviceClipboardText(opts: {
     15
   );
   saveCachedSyncedClips(nextList);
+
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel(DEVICE_SYNC_BROADCAST_CHANNEL);
+      bc.postMessage({ type: 'LOCAL_CLIP_SYNCED', payload: item });
+      bc.close();
+    }
+  } catch {
+    /* ignore */
+  }
+
+  // 1) 온라인 기기로 0.05초 즉시 Realtime 브로드캐스트 (아직 구독 핸드셰이크 중이면 큐에 보관 후 SUBSCRIBED 즉시 발송)
+  const realtimeSendPromise =
+    activePairChannel && activePairSubscribed
+      ? activePairChannel.send({
+          type: 'broadcast',
+          event: 'E2EE_CLIPBOARD_PUSH',
+          payload: broadcastPayload,
+        })
+      : (() => {
+          pendingClipBroadcastPacket = broadcastPayload;
+          return Promise.resolve('queued');
+        })();
+
+  // 2) 오프라인/백그라운드 기기를 위한 24시간 지연 E2EE 암호화 우체통 병렬 보관 (서버 평문 열람 0% 불가)
+  await Promise.all([
+    realtimeSendPromise.catch(() => {}),
+    callGhostiServerBridge('device_push_e2ee_clip', broadcastPayload).catch(() => {}),
+  ]);
+
   return { ok: true, item };
 }
 
@@ -646,9 +721,9 @@ export async function pullDelayedE2eeClipboardMailbox(opts: {
   email: string;
   userId: string;
   injectToOsClipboard?: boolean;
-}): Promise<GhostiSyncedClipItem[]> {
+}): Promise<{ items: GhostiSyncedClipItem[]; newlyDeliveredExternal: GhostiSyncedClipItem | null }> {
   if (!opts.email || !opts.userId || !hasAuthenticatedHubAccountSession()) {
-    return loadCachedSyncedClips();
+    return { items: loadCachedSyncedClips(), newlyDeliveredExternal: null };
   }
   loadSeenHashesOnce();
   const ident = getThisDeviceIdentity();
@@ -664,46 +739,57 @@ export async function pullDelayedE2eeClipboardMailbox(opts: {
   }>('device_pull_e2ee_clips', {});
 
   if (!res.ok || !Array.isArray(res.items)) {
-    return loadCachedSyncedClips();
+    return { items: loadCachedSyncedClips(), newlyDeliveredExternal: null };
   }
 
   const decryptedList: GhostiSyncedClipItem[] = [];
-  let newestExternalPlain: string | null = null;
+  let newestExternalItem: GhostiSyncedClipItem | null = null;
 
   for (const env of res.items) {
     if (!env?.cipherB64 || !env?.ivB64) continue;
     const plain = await decryptClipboardE2ee(env.cipherB64, env.ivB64, opts.email, opts.userId);
     if (!plain) continue;
-    const isFromOtherDevice = env.senderDeviceId && env.senderDeviceId !== ident.deviceId;
-    if (isFromOtherDevice && !seenClipHashes.has(env.clipHash) && !newestExternalPlain) {
-      newestExternalPlain = plain;
-    }
-    rememberSeenClipHash(env.clipHash);
-    decryptedList.push({
+    const isFromOtherDevice = Boolean(env.senderDeviceId && env.senderDeviceId !== ident.deviceId);
+    const itemObj: GhostiSyncedClipItem = {
       clipHash: env.clipHash,
       text: plain,
       senderDeviceId: env.senderDeviceId,
-      senderName: env.senderName || '연결된 내 기기',
+      senderName: isFromOtherDevice
+        ? env.senderName || '연결된 내 기기'
+        : `${env.senderName || ident.displayName} (발신)`,
       createdAt: env.createdAt,
       encryptedE2ee: true,
-    });
+    };
+    const envKey = `${env.senderDeviceId || ''}:${env.clipHash}:${env.createdAt || ''}`;
+    if (isFromOtherDevice && !deliveredRemoteEnvelopeKeys.has(envKey)) {
+      deliveredRemoteEnvelopeKeys.add(envKey);
+      if (!seenClipHashes.has(env.clipHash) && !newestExternalItem) {
+        newestExternalItem = itemObj;
+      }
+    }
+    rememberSeenClipHash(env.clipHash);
+    decryptedList.push(itemObj);
   }
 
-  // PC 엔진 연결 시: 스마트폰에서 잠들기 전 보내둔 최신 클립보드를 OS 클립보드에 자동 주입 (Echo-Loop 방지 해시 각인)
-  if (opts.injectToOsClipboard && newestExternalPlain && zCoreBridge.isConnected) {
+  // PC 엔진 연결 시: 타 기기에서 새로 도착한 최신 클립보드를 OS 클립보드에 1회 자동 주입 (Echo-Loop 원천 차단 해시 각인)
+  if (opts.injectToOsClipboard && newestExternalItem && zCoreBridge.isConnected) {
+    recentRemoteInjectedHashes.set(newestExternalItem.clipHash, Date.now());
+    lastObservedOsClipHash = newestExternalItem.clipHash;
     try {
       await fetch(getZCoreUrl('/__sync/clipboard'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: newestExternalPlain }),
+        body: JSON.stringify({ text: newestExternalItem.text }),
       });
     } catch {
       /* ignore */
     }
   }
 
-  saveCachedSyncedClips(decryptedList);
-  return decryptedList;
+  if (decryptedList.length > 0) {
+    saveCachedSyncedClips(decryptedList);
+  }
+  return { items: decryptedList, newlyDeliveredExternal: newestExternalItem };
 }
 
 export function broadcastRemoteMonitorCast(packet: RemoteMonitorCastPacket): void {
@@ -970,7 +1056,8 @@ export async function executeRealDeviceSyncNow(opts: {
 export function startDeviceIntegrationRealtimeRuntime(opts: {
   email: string;
   userId: string;
-  onIncomingClip: (clip: GhostiSyncedClipItem) => void;
+  onIncomingClip: (clip: GhostiSyncedClipItem, meta?: { isLocalAutoCapture?: boolean }) => void;
+  onClipsSynced?: (clips: GhostiSyncedClipItem[]) => void;
   onRemoteMonitorCast?: (packet: RemoteMonitorCastPacket) => void;
   onDevicesUpdated?: (payload: {
     devices: GhostiConnectedDeviceDto[];
@@ -983,9 +1070,28 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
   const normEmail = (opts.email || '').trim().toLowerCase();
 
   let localBus: BroadcastChannel | null = null;
+  let osClipTicker: { stop: () => void } | null = null;
+  let mobileMailboxTicker: { stop: () => void } | null = null;
+  let checkingOsClip = false;
 
   const cleanup = () => {
     disposed = true;
+    if (osClipTicker) {
+      osClipTicker.stop();
+      osClipTicker = null;
+    }
+    if (mobileMailboxTicker) {
+      mobileMailboxTicker.stop();
+      mobileMailboxTicker = null;
+    }
+    if (activeClipboardWorker) {
+      try {
+        activeClipboardWorker.terminate();
+      } catch {
+        /* ignore */
+      }
+      activeClipboardWorker = null;
+    }
     if (localBus) {
       try {
         localBus.close();
@@ -1052,6 +1158,12 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
                 ? msg.payload.entitlement
                 : loadCachedDeviceIntegrationSnapshot(normEmail)?.entitlement ?? null,
           });
+        } else if (
+          (ev.data as { type?: string })?.type === 'LOCAL_CLIP_SYNCED' &&
+          (ev.data as { payload?: GhostiSyncedClipItem })?.payload
+        ) {
+          const clip = (ev.data as { payload: GhostiSyncedClipItem }).payload;
+          opts.onIncomingClip(clip, { isLocalAutoCapture: true });
         }
       };
     }
@@ -1111,7 +1223,9 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         if (disposed || !payload?.cipherB64 || !payload?.ivB64) return;
         if (payload.senderDeviceId === ident.deviceId) return;
         const hash = String(payload.clipHash || '');
-        if (hash && seenClipHashes.has(hash)) return;
+        const envKey = `${String(payload.senderDeviceId || '')}:${hash}:${String(payload.createdAt || '')}`;
+        if (deliveredRemoteEnvelopeKeys.has(envKey)) return;
+        deliveredRemoteEnvelopeKeys.add(envKey);
 
         const plain = await decryptClipboardE2ee(
           String(payload.cipherB64),
@@ -1120,7 +1234,10 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
           opts.userId
         );
         if (!plain) return;
-        rememberSeenClipHash(hash || (await sha256HexBrowser(plain)));
+        const resolvedHash = hash || (await sha256HexBrowser(plain));
+        rememberSeenClipHash(resolvedHash);
+        recentRemoteInjectedHashes.set(resolvedHash, Date.now());
+        lastObservedOsClipHash = resolvedHash;
 
         if (zCoreBridge.isConnected) {
           try {
@@ -1137,7 +1254,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         }
 
         const clipItem: GhostiSyncedClipItem = {
-          clipHash: hash || (await sha256HexBrowser(plain)),
+          clipHash: resolvedHash,
           text: plain,
           senderDeviceId: String(payload.senderDeviceId || ''),
           senderName: String(payload.senderName || '연결된 내 기기'),
@@ -1149,7 +1266,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
           ...loadCachedSyncedClips().filter((c) => c.clipHash !== clipItem.clipHash),
         ].slice(0, 15);
         saveCachedSyncedClips(nextClips);
-        opts.onIncomingClip(clipItem);
+        opts.onIncomingClip(clipItem, { isLocalAutoCapture: false });
       })
       .on('broadcast', { event: 'MONITOR_CAST_REMOTE' }, ({ payload }) => {
         if (disposed || !payload) return;
@@ -1183,15 +1300,105 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
             payload: pkt,
           });
         }
+        if (activePairSubscribed && pendingClipBroadcastPacket) {
+          const clipPkt = pendingClipBroadcastPacket;
+          pendingClipBroadcastPacket = null;
+          void ch.send({
+            type: 'broadcast',
+            event: 'E2EE_CLIPBOARD_PUSH',
+            payload: clipPkt,
+          });
+        }
       });
 
     activePairChannel = ch;
   };
 
+  const inspectAndPushPcOsClipboard = async (isBaselineOnly = false): Promise<void> => {
+    if (disposed || checkingOsClip || !hasAuthenticatedHubAccountSession()) return;
+    if (ident.deviceKind !== 'pc_master') return;
+    if (!zCoreBridge.isConnected) {
+      const alive = await zCoreBridge.checkHealth(true);
+      if (!alive || disposed) return;
+    }
+    checkingOsClip = true;
+    try {
+      const res = await fetch(getZCoreUrl('/__sync/clipboard'));
+      if (!res.ok) return;
+      const data = (await res.json()) as {
+        ok?: boolean;
+        text?: string;
+        clipHash?: string;
+        sha256?: string;
+        isSelfInjected?: boolean;
+      };
+      if (!data?.ok) return;
+      const clean = (data.text || '').trim();
+      if (!clean || clean.length > 32000) {
+        if (isBaselineOnly) lastObservedOsClipHash = '';
+        return;
+      }
+      const h = data.clipHash || data.sha256 || (await sha256HexBrowser(clean));
+      if (isBaselineOnly) {
+        // 앱 진입 전부터 이미 OS 클립보드에 들어 있던 과거 텍스트는 기준점으로만 기록하고, 진입 이후 새로 Ctrl+C 한 항목만 자동 전송
+        if (!lastObservedOsClipHash) {
+          lastObservedOsClipHash = h;
+        }
+        return;
+      }
+      if (data.isSelfInjected) {
+        lastObservedOsClipHash = h;
+        return;
+      }
+      const injectedAt = recentRemoteInjectedHashes.get(h);
+      if (injectedAt && Date.now() - injectedAt < 60_000) {
+        lastObservedOsClipHash = h;
+        return;
+      }
+      if (h === lastObservedOsClipHash) return;
+      lastObservedOsClipHash = h;
+
+      const pushed = await pushCrossDeviceClipboardText({
+        text: clean,
+        email: normEmail,
+        userId: opts.userId,
+        isAutoOsCapture: true,
+      });
+      if (!disposed && pushed.ok && pushed.item) {
+        opts.onIncomingClip(pushed.item, { isLocalAutoCapture: true });
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      checkingOsClip = false;
+    }
+  };
+
+  const syncRemoteMailboxToUi = async (injectToOs: boolean): Promise<void> => {
+    if (disposed || !hasAuthenticatedHubAccountSession()) return;
+    const pulled = await pullDelayedE2eeClipboardMailbox({
+      email: normEmail,
+      userId: opts.userId,
+      injectToOsClipboard: injectToOs,
+    });
+    if (disposed) return;
+    if (pulled.items.length > 0 && opts.onClipsSynced) {
+      opts.onClipsSynced(pulled.items);
+    }
+    if (pulled.newlyDeliveredExternal) {
+      opts.onIncomingClip(pulled.newlyDeliveredExternal, { isLocalAutoCapture: false });
+    }
+  };
+
   const boot = async () => {
     loadSeenHashesOnce();
 
-    // 실시간 채널 구독을 직렬 대기 없이 0ms 즉시 병렬 착수하여 기기 간 상태 전파 지연을 원천 제거
+    // PC 마스터: 진입 시점 기존 OS 클립보드 해시 기준점 설정 (0ms 로컬 호출)
+    if (ident.deviceKind === 'pc_master') {
+      await inspectAndPushPcOsClipboard(true);
+    }
+
+    // 실시간 채널 구독을 직렬 대기 없이 0ms 즉시 병렬 착수하여 기기 간 상태·클립보드 전파 지연을 원천 제거
     const realtimePromise = setupRealtimeChannel();
 
     // URL에 ?pairCode=XXXXXX가 있으면 낙관적 D-30 반영 + 소비 즉시 UI 및 상대 기기에 전파
@@ -1224,13 +1431,9 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       }
     }
 
-    const [hb, delayed] = await Promise.all([
+    const [hb] = await Promise.all([
       pairedViaUrl ? Promise.resolve(null) : syncDeviceHeartbeatAndList(),
-      pullDelayedE2eeClipboardMailbox({
-        email: normEmail,
-        userId: opts.userId,
-        injectToOsClipboard: true,
-      }),
+      syncRemoteMailboxToUi(true),
       realtimePromise,
     ]);
 
@@ -1242,51 +1445,62 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       });
     }
 
-    if (!disposed && delayed[0] && delayed[0].senderDeviceId !== ident.deviceId) {
-      opts.onIncomingClip(delayed[0]);
+    // PC 마스터: 백그라운드 탭(메모장·노션·카톡 등에서 Ctrl+C 복사 중)에서도 60초 스로틀링 없이 0.8초 내에 감지하는 전용 Web Worker 기동
+    if (ident.deviceKind === 'pc_master') {
+      if (osClipTicker) osClipTicker.stop();
+      osClipTicker = createUnthrottledIntervalWorker(800, () => {
+        void inspectAndPushPcOsClipboard(false);
+      });
     }
 
-    // PC에서 Z코어 연결 시: 2.5초 주기로 윈도우 OS 클립보드(Ctrl+C) 감지 -> 스마트폰·서브PC로 즉시 암호화 전송
-    if (activeClipboardPollTimer !== null) {
-      window.clearInterval(activeClipboardPollTimer);
-    }
-    activeClipboardPollTimer = window.setInterval(async () => {
-      if (disposed || !zCoreBridge.isConnected || !hasAuthenticatedHubAccountSession()) return;
-      try {
-        const res = await fetch(getZCoreUrl('/__sync/clipboard'));
-        if (!res.ok) return;
-        const data = (await res.json()) as {
-          ok?: boolean;
-          text?: string;
-          clipHash?: string;
-          sha256?: string;
-          isSelfInjected?: boolean;
-        };
-        if (!data?.ok || !data.text || data.isSelfInjected) return;
-        const clean = data.text.trim();
-        if (!clean || clean.length > 32000) return;
-        const h = data.clipHash || data.sha256 || (await sha256HexBrowser(clean));
-        if (seenClipHashes.has(h)) return;
-        await pushCrossDeviceClipboardText({
-          text: clean,
-          email: normEmail,
-          userId: opts.userId,
-        });
-      } catch {
-        /* ignore */
-      }
-    }, 2500);
+    // 모바일·서브 기기: 화면 열람 중 Realtime 일시 순단(LTE↔Wi-Fi 전환 등)까지 100% 보완하는 경량 우체통 동기화
+    if (mobileMailboxTicker) mobileMailboxTicker.stop();
+    mobileMailboxTicker = createUnthrottledIntervalWorker(3000, () => {
+      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+      void syncRemoteMailboxToUi(ident.deviceKind === 'pc_master');
+    });
   };
 
   void boot();
 
+  const onBrowserCopy = () => {
+    if (disposed) return;
+    // 브라우저 내부에서 직접 Ctrl+C를 누른 경우 60ms 직후 즉시 감지·암호화 전송
+    window.setTimeout(() => {
+      if (disposed) return;
+      if (ident.deviceKind === 'pc_master') {
+        void inspectAndPushPcOsClipboard(false);
+      } else if (typeof window !== 'undefined' && window.getSelection) {
+        const sel = window.getSelection()?.toString().trim() || '';
+        if (sel && sel.length <= 32000) {
+          void pushCrossDeviceClipboardText({
+            text: sel,
+            email: normEmail,
+            userId: opts.userId,
+            isAutoOsCapture: true,
+          }).then((pushed) => {
+            if (!disposed && pushed.ok && pushed.item) {
+              opts.onIncomingClip(pushed.item, { isLocalAutoCapture: true });
+            }
+          });
+        }
+      }
+    }, 60);
+  };
+
+  const onWindowFocus = () => {
+    if (disposed) return;
+    if (ident.deviceKind === 'pc_master') {
+      void inspectAndPushPcOsClipboard(false);
+    }
+  };
+
   const onVisibility = () => {
     if (document.visibilityState === 'visible' && !disposed) {
-      void pullDelayedE2eeClipboardMailbox({
-        email: normEmail,
-        userId: opts.userId,
-        injectToOsClipboard: true,
-      });
+      if (ident.deviceKind === 'pc_master') {
+        void inspectAndPushPcOsClipboard(false);
+      }
+      void syncRemoteMailboxToUi(true);
       void syncDeviceHeartbeatAndList().then((hb) => {
         if (!disposed && hb.ok && opts.onDevicesUpdated) {
           opts.onDevicesUpdated({
@@ -1300,11 +1514,19 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
   };
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', onVisibility);
+    document.addEventListener('copy', onBrowserCopy);
+  }
+  if (typeof window !== 'undefined') {
+    window.addEventListener('focus', onWindowFocus);
   }
 
   return () => {
     if (typeof document !== 'undefined') {
       document.removeEventListener('visibilitychange', onVisibility);
+      document.removeEventListener('copy', onBrowserCopy);
+    }
+    if (typeof window !== 'undefined') {
+      window.removeEventListener('focus', onWindowFocus);
     }
     cleanup();
   };

@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { zCoreBridge, isZCoreOutdated } from '../services/zCoreBridge';
 import { hasAuthenticatedHubAccountSession } from '../services/supabaseClient';
 import { useSaySeeStore, getActivePersonaForCluster, type MobileTab } from '../store/useSaySeeStore';
@@ -276,6 +276,15 @@ export const MobileAppView: React.FC = () => {
 
   const [showPrivateSyncSection, setShowPrivateSyncSection] = useState(false);
   const [showPolicyAndStoreSection, setShowPolicyAndStoreSection] = useState(false);
+  const prevTopClipHashRef = useRef<string>(syncedClipboardItems[0]?.clipHash || '');
+
+  useEffect(() => {
+    const topHash = syncedClipboardItems[0]?.clipHash || '';
+    if (topHash && topHash !== prevTopClipHashRef.current) {
+      prevTopClipHashRef.current = topHash;
+      setShowPrivateSyncSection(true);
+    }
+  }, [syncedClipboardItems]);
   const computeIsTrueLandscapeCompact = () => {
     if (typeof window === 'undefined') return false;
     const orientType = window.screen?.orientation?.type;
