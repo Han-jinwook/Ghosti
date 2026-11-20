@@ -13,6 +13,10 @@ import android.content.pm.PackageManager;
 import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
+import android.graphics.ImageDecoder;
+import android.graphics.Matrix;
+import android.media.ExifInterface;
 import android.media.Image;
 import android.media.MediaCodec;
 import android.media.MediaCodecInfo;
@@ -30,6 +34,7 @@ import android.util.Size;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.InputStream;
 import java.nio.ByteBuffer;
 
 import com.android.installreferrer.api.InstallReferrerClient;
@@ -835,7 +840,7 @@ public class GhostiMobileCarePlugin extends Plugin {
     private void executeGalleryMediaScanAsync(final PluginCall call) {
         final int offset = Math.max(0, call.getInt("offset", 0));
         final int limit = Math.min(100, Math.max(1, call.getInt("limit", 60)));
-        final int thumbMaxDim = Math.min(480, Math.max(240, call.getInt("thumbMaxDim", 360)));
+        final int thumbMaxDim = Math.min(640, Math.max(240, call.getInt("thumbMaxDim", 512)));
         final boolean includeVideos = call.getBoolean("includeVideos", offset == 0);
         final Context appCtx = getContext().getApplicationContext();
 
@@ -907,7 +912,7 @@ public class GhostiMobileCarePlugin extends Plugin {
 
                             long mtimeMs = dateTaken > 100000000000L ? dateTaken : (dateModSec * 1000L);
                             Uri imgUri = ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, id);
-                            String thumbDataUrl = encodeThumbnailDataUrl(resolver, imgUri, id, false, thumbMaxDim, 78);
+                            String thumbDataUrl = encodeThumbnailDataUrl(resolver, imgUri, id, false, thumbMaxDim, 82);
                             if (thumbDataUrl == null || thumbDataUrl.isEmpty()) continue;
 
                             boolean isScreen = (bucket != null && (bucket.toLowerCase(Locale.ROOT).contains("screenshot") || bucket.contains("스크린샷") || bucket.contains("캡처")))
@@ -1004,15 +1009,112 @@ public class GhostiMobileCarePlugin extends Plugin {
         }, "GhostiGalleryScanner").start();
     }
 
+    /**
+     * [근본 원인 해결: MediaStore.loadThumbnail의 EXIF 320x240 저해상도 썸네일 업스케일링 함정 원천 차단]
+     * - Android MediaProvider의 loadThumbnail()은 카메라 사진 헤더 내 320x240 EXIF 내장 썸네일을 꺼낸 뒤 448~512px로 바이리니어 확대(Upscale)하여
+     *   선명한 정상 사진까지 라플라시안 고주파 경계가 붕괴(hfRatio 1.5 -> 0.72)되는 오분류를 유발합니다.
+     * - 따라서 정지 사진(!isVideo)은 ImageDecoder(API 28+) / BitmapFactory(inSampleSize)로 원본 이미지 스트림에서 직접 정밀 축소 디코딩하며,
+     *   절대 작은 EXIF 썸네일을 확대하지 않습니다.
+     */
+    private Bitmap decodeCrispPhotoStreamBitmap(ContentResolver resolver, Uri uri, final int maxDim) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+            try {
+                ImageDecoder.Source src = ImageDecoder.createSource(resolver, uri);
+                return ImageDecoder.decodeBitmap(src, (decoder, info, source) -> {
+                    decoder.setAllocator(ImageDecoder.ALLOCATOR_SOFTWARE);
+                    Size sz = info.getSize();
+                    int w = sz.getWidth();
+                    int h = sz.getHeight();
+                    int longest = Math.max(w, h);
+                    if (w > 0 && h > 0 && longest > maxDim) {
+                        float scale = (float) maxDim / (float) longest;
+                        decoder.setTargetSize(
+                            Math.max(1, Math.round(w * scale)),
+                            Math.max(1, Math.round(h * scale))
+                        );
+                    }
+                });
+            } catch (Throwable ignored) {
+                // Fallback below
+            }
+        }
+
+        try {
+            BitmapFactory.Options boundsOpts = new BitmapFactory.Options();
+            boundsOpts.inJustDecodeBounds = true;
+            try (InputStream is = resolver.openInputStream(uri)) {
+                if (is == null) return null;
+                BitmapFactory.decodeStream(is, null, boundsOpts);
+            }
+            int outW = boundsOpts.outWidth;
+            int outH = boundsOpts.outHeight;
+            if (outW <= 0 || outH <= 0) return null;
+
+            int inSampleSize = 1;
+            while ((Math.max(outW, outH) / (inSampleSize * 2)) >= maxDim) {
+                inSampleSize *= 2;
+            }
+
+            BitmapFactory.Options decodeOpts = new BitmapFactory.Options();
+            decodeOpts.inSampleSize = inSampleSize;
+            decodeOpts.inPreferredConfig = Bitmap.Config.ARGB_8888;
+            Bitmap decoded;
+            try (InputStream is2 = resolver.openInputStream(uri)) {
+                if (is2 == null) return null;
+                decoded = BitmapFactory.decodeStream(is2, null, decodeOpts);
+            }
+            if (decoded == null) return null;
+
+            int deg = 0;
+            try (InputStream exifStream = resolver.openInputStream(uri)) {
+                if (exifStream != null) {
+                    ExifInterface exif = new ExifInterface(exifStream);
+                    int ori = exif.getAttributeInt(ExifInterface.TAG_ORIENTATION, ExifInterface.ORIENTATION_NORMAL);
+                    if (ori == ExifInterface.ORIENTATION_ROTATE_90) deg = 90;
+                    else if (ori == ExifInterface.ORIENTATION_ROTATE_180) deg = 180;
+                    else if (ori == ExifInterface.ORIENTATION_ROTATE_270) deg = 270;
+                }
+            } catch (Throwable ignored) {
+            }
+
+            int dw = decoded.getWidth();
+            int dh = decoded.getHeight();
+            int longest = Math.max(dw, dh);
+            float scale = longest > maxDim ? ((float) maxDim / (float) longest) : 1.0f;
+            if (deg != 0 || scale < 0.999f) {
+                Matrix m = new Matrix();
+                if (scale < 0.999f) {
+                    m.postScale(scale, scale);
+                }
+                if (deg != 0) {
+                    m.postRotate(deg);
+                }
+                Bitmap transformed = Bitmap.createBitmap(decoded, 0, 0, dw, dh, m, true);
+                if (transformed != decoded) {
+                    decoded.recycle();
+                }
+                return transformed;
+            }
+            return decoded;
+        } catch (Throwable ignored) {
+            return null;
+        }
+    }
+
     private String encodeThumbnailDataUrl(ContentResolver resolver, Uri uri, long mediaId, boolean isVideo, int maxDim, int quality) {
         Bitmap bmp = null;
         try {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                bmp = resolver.loadThumbnail(uri, new Size(maxDim, maxDim), null);
-            } else if (isVideo) {
-                bmp = MediaStore.Video.Thumbnails.getThumbnail(resolver, mediaId, MediaStore.Video.Thumbnails.MINI_KIND, null);
-            } else {
-                bmp = MediaStore.Images.Thumbnails.getThumbnail(resolver, mediaId, MediaStore.Images.Thumbnails.MINI_KIND, null);
+            if (!isVideo) {
+                bmp = decodeCrispPhotoStreamBitmap(resolver, uri, maxDim);
+            }
+            if (bmp == null) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    bmp = resolver.loadThumbnail(uri, new Size(maxDim, maxDim), null);
+                } else if (isVideo) {
+                    bmp = MediaStore.Video.Thumbnails.getThumbnail(resolver, mediaId, MediaStore.Video.Thumbnails.MINI_KIND, null);
+                } else {
+                    bmp = MediaStore.Images.Thumbnails.getThumbnail(resolver, mediaId, MediaStore.Images.Thumbnails.MINI_KIND, null);
+                }
             }
             if (bmp == null) return "";
             ByteArrayOutputStream baos = new ByteArrayOutputStream(24576);

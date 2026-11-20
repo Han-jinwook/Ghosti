@@ -199,8 +199,23 @@ export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalS
       let edgeCount = 0;
       const hist = new Uint32Array(256);
 
+      // [8x8 국소 패치 피사체 선명도 측정 (아웃포커싱·보케·음식 사진 오분류 원천 차단)]:
+      // 인물·사물 클로즈업(예: 피규어 박스·음식 사진)은 배경 70%가 자연 보케로 흐려 전역 평균 hfRatio/variance는 낮아지지만,
+      // 초점이 맞은 전경 피사체 패치들은 국소 라플라시안 분산(patchVar >= 260)과 경계 첨예도(patchHf >= 1.18)가 뚜렷이 높습니다.
+      // 반면 실제 손떨림·전체 초점 이탈 사진은 64개 패치 어디에도 선명한 패치가 존재하지 않습니다(sharpPatchCount === 0).
+      const innerW = Math.max(1, W - 2);
+      const innerH = Math.max(1, H - 2);
+      const pCount = new Uint32Array(64);
+      const pLapSum = new Float64Array(64);
+      const pLapSqSum = new Float64Array(64);
+      const pEdgeCount = new Uint32Array(64);
+      const pEdgeLapSum = new Float64Array(64);
+      const pEdgeGradSum = new Float64Array(64);
+      const pHighLapCount = new Uint32Array(64); // patch 내 lap >= 58 픽셀 수
+
       for (let y = 1; y < H - 1; y++) {
         const rowOff = y * W;
+        const py = Math.min(7, (((y - 1) * 8) / innerH) | 0);
         for (let x = 1; x < W - 1; x++) {
           const centerIdx = rowOff + x;
           const c = gray[centerIdx] * 4;
@@ -224,6 +239,20 @@ export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalS
             edgeGradSum += grad;
             edgeCount++;
           }
+
+          const pxIdx = Math.min(7, (((x - 1) * 8) / innerW) | 0);
+          const pIdx = py * 8 + pxIdx;
+          pCount[pIdx]++;
+          pLapSum[pIdx] += lap;
+          pLapSqSum[pIdx] += lap * lap;
+          if (lap >= 58.0) {
+            pHighLapCount[pIdx]++;
+          }
+          if (grad > 9.0) {
+            pEdgeCount[pIdx]++;
+            pEdgeLapSum[pIdx] += lap;
+            pEdgeGradSum[pIdx] += grad;
+          }
         }
       }
       if (count > 0) {
@@ -243,14 +272,47 @@ export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalS
           }
         }
 
+        let sharpPatchCount = 0;
+        const patchMetrics: Array<{ score: number; pv: number; phf: number }> = [];
+        for (let k = 0; k < 64; k++) {
+          const n = pCount[k];
+          if (n < 16) continue;
+          const pm = pLapSum[k] / n;
+          const pv = Math.max(0, pLapSqSum[k] / n - pm * pm);
+          const phf = pEdgeCount[k] >= 15 ? pEdgeLapSum[k] / (pEdgeGradSum[k] + 1e-5) : 0;
+          const highRatio = pHighLapCount[k] / n; // >= 0.05 means p95 >= 58
+          const pScore = pv * Math.max(0.2, phf - 0.55);
+          patchMetrics.push({ score: pScore, pv, phf });
+          if (pv >= 260 && phf >= 1.18 && highRatio >= 0.05) {
+            sharpPatchCount++;
+          }
+        }
+        patchMetrics.sort((a, b) => b.score - a.score);
+        const topK = patchMetrics.slice(0, 4);
+        const top4PatchScore =
+          topK.length > 0 ? topK.reduce((s, m) => s + m.score, 0) / topK.length : 0;
+        const top4PatchVar =
+          topK.length > 0 ? topK.reduce((s, m) => s + m.pv, 0) / topK.length : 0;
+        const top4PatchHf =
+          topK.length > 0 ? topK.reduce((s, m) => s + m.phf, 0) / topK.length : 0;
+
+        const hasSharpForegroundSubject =
+          sharpPatchCount >= 3 ||
+          (sharpPatchCount >= 2 && top4PatchScore >= 340) ||
+          (top4PatchVar >= 520 && top4PatchHf >= 1.22);
+
         const isCleanWhiteDoc = whitePct >= 58 && hfRatio >= 1.15;
-        const rawScore = Math.round(variance * 18.0 * Math.max(0.22, hfRatio - 0.55));
+        const globalRawScore = Math.round(variance * 18.0 * Math.max(0.22, hfRatio - 0.55));
+        const subjectBoostScore = hasSharpForegroundSubject
+          ? Math.round(Math.max(4500, top4PatchVar * 6.5))
+          : 0;
+        const finalScore = Math.max(globalRawScore, subjectBoostScore);
+
         isMotionOrFocusBlurred =
           !isCleanWhiteDoc &&
-          ((hfRatio < 1.14 && p98Lap < 72) ||
-            (variance < 135 && hfRatio < 1.20) ||
-            rawScore < 2800);
-        sharpness = Math.max(80, rawScore);
+          !hasSharpForegroundSubject &&
+          ((hfRatio < 1.15 && p98Lap < 68) || variance < 165 || globalRawScore < 2600);
+        sharpness = Math.max(80, finalScore);
       }
     }
   } catch {
@@ -297,7 +359,7 @@ export function resolveIntrinsicPhotoTrashCategory(p: PhotoItem): TrashCategory 
   if (
     tags.some((t) => t.includes('흔들림') || t.includes('초점이탈')) ||
     kws.includes('흔들린사진') ||
-    (typeof p.opticalSharpness === 'number' && p.opticalSharpness > 0 && p.opticalSharpness < 3200)
+    (typeof p.opticalSharpness === 'number' && p.opticalSharpness > 0 && p.opticalSharpness < 2600)
   ) {
     return 'blurry';
   }
@@ -534,7 +596,6 @@ export async function analyzeMobilePickedPhotoFiles(
           !isScreenshot &&
           !isReceiptOrDoc &&
           (meta.isMotionOrFocusBlurred ||
-            sharpness < 3200 ||
             lowerName.includes('blur') ||
             lowerName.includes('흔들'));
 
@@ -683,7 +744,7 @@ export async function analyzeMobilePickedPhotoFiles(
  * 오차 없는 정밀 연사·중복 묶음(DuplicateGroup)을 생성합니다.
  */
 const pcOpticalAuditCache = new Map<string, OpticalSignatureMeta>();
-const OPTICAL_AUDIT_IDB_NAME = 'ghosti_optical_audit_v1';
+const OPTICAL_AUDIT_IDB_NAME = 'ghosti_optical_audit_v2';
 const OPTICAL_AUDIT_IDB_STORE = 'optical_sigs';
 let opticalAuditDbPromise: Promise<IDBDatabase | null> | null = null;
 let opticalAuditHydratePromise: Promise<void> | null = null;
@@ -792,7 +853,7 @@ export async function auditRealPcPhotosAndCluster(
         }
       } else if (
         meta.whitePct < 50 &&
-        meta.sharpness < 3200 &&
+        meta.isMotionOrFocusBlurred &&
         !(meta.aspect >= 1.95 && meta.aspect <= 2.35)
       ) {
         p.trashCategory = 'blurry';
@@ -922,7 +983,6 @@ export async function analyzeNativeGalleryPhotoBatch(
           !isReceiptOrDoc &&
           (isSevereNonScreenBlur ||
             meta.isMotionOrFocusBlurred ||
-            sharpness < 3200 ||
             lowerName.includes('blur') ||
             lowerName.includes('흔들'));
 
@@ -1048,7 +1108,7 @@ export function convertNativeGalleryVideos(nativeVideos: NativeGalleryVideoMeta[
 
 const MOBILE_GALLERY_IDB_NAME = 'ghosti_mobile_gallery_cache_v1';
 const MOBILE_GALLERY_STORE = 'snapshot';
-const MOBILE_GALLERY_CACHE_SCHEMA_VER = 7;
+const MOBILE_GALLERY_CACHE_SCHEMA_VER = 8;
 
 interface SerializedOpticalSig {
   dhash: string;

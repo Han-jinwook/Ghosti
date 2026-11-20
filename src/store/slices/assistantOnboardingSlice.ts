@@ -953,7 +953,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         const res = await scanNativeDeviceGalleryMedia({
           offset,
           limit: pageSize,
-          thumbMaxDim: 448,
+          thumbMaxDim: 512,
           includeVideos: offset === 0,
           promptPermission: offset === 0 ? promptPermission : false,
           forceExpandSelected: offset === 0 ? forceExpandSelected : false,

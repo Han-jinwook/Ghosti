@@ -229,7 +229,7 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
     @objc func scanDeviceGalleryMedia(_ call: CAPPluginCall) {
         let offset = max(0, call.getInt("offset") ?? 0)
         let limit = min(120, max(1, call.getInt("limit") ?? 60))
-        let thumbMaxDim = min(640, max(240, call.getInt("thumbMaxDim") ?? 448))
+        let thumbMaxDim = min(640, max(240, call.getInt("thumbMaxDim") ?? 512))
         let includeVideos = call.getBool("includeVideos") ?? (offset == 0)
         let promptPerm = call.getBool("promptPermission") ?? true
         let forceExpandSelected = call.getBool("forceExpandSelected") ?? false
@@ -385,7 +385,7 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
                             contentMode: .aspectFit,
                             options: reqOpts
                         ) { uiImg, _ in
-                            if let img = uiImg, let jpeg = img.jpegData(compressionQuality: 0.78) {
+                            if let img = uiImg, let jpeg = img.jpegData(compressionQuality: 0.82) {
                                 thumbDataUrl = "data:image/jpeg;base64," + jpeg.base64EncodedString()
                             }
                         }
