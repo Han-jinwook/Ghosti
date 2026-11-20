@@ -118,6 +118,7 @@ def sync_internal_z_core_mirrors():
         os.path.join(UZC_DIR, "os_agent", "ppocr_v5_worker.py"),
         os.path.join(UZC_DIR, "os_agent", "merlin_z_core_os.py"),
         os.path.join(UZC_DIR, "os_agent", "ghosti_safe_ops.py"),
+        os.path.join(UZC_DIR, "os_agent", "security_services_whitelist.json"),
         os.path.join(UZC_DIR, "os_agent", "ghosti_setup_parity.py"),
         os.path.join(UZC_DIR, "os_agent", "plugin_senstalk.py"),
         os.path.join(UZC_DIR, "seq_paste_daemon.py"),
@@ -177,6 +178,7 @@ def sync_internal_z_core_mirrors():
                 os.path.join("os_agent", "ppocr_v5_worker.py"),
                 os.path.join("os_agent", "merlin_z_core_os.py"),
                 os.path.join("os_agent", "ghosti_safe_ops.py"),
+                os.path.join("os_agent", "security_services_whitelist.json"),
                 os.path.join("os_agent", "ghosti_setup_parity.py"),
                 os.path.join("os_agent", "build_signed_merlin_z_core.py"),
                 os.path.join("os_agent", "plugin_senstalk.py"),
@@ -417,12 +419,20 @@ Remove-Item -Path 'C:\\MerlinTools\\start_zcore_5199.vbs' -Force -ErrorAction Si
 Start-Sleep -Milliseconds 800
 Remove-Item -Path "$env:LOCALAPPDATA\\Merlin\\zcore_rt\\_MEI*" -Recurse -Force -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path 'C:\\Users\\{remote_user}\\AppData\\Local\\Programs\\MerlinFamily' | Out-Null
+New-Item -ItemType Directory -Force -Path 'C:\\Users\\{remote_user}\\AppData\\Local\\Merlin' | Out-Null
 """
     try:
         _run_remote_ps_encoded(ssh_target, key_path, stop_ps, timeout_sec=35)
     except Exception as e:
         log(f"⚠️ {label} stop 단계 경고(계속 진행): {e}")
     time.sleep(0.8)
+
+    wl_path = os.path.join(UZC_DIR, "os_agent", "security_services_whitelist.json")
+    if os.path.exists(wl_path):
+        subprocess.run(
+            ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", wl_path, f"{ssh_target}:C:/Users/{remote_user}/AppData/Local/Merlin/security_services_whitelist.json"],
+            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
+        )
 
     # 2) 파일 잠금 해제 상태에서 최신 Merlin_Z_Core_Setup.exe 전송 (실패 시 1회 재시도)
     scp_res = subprocess.run(
@@ -440,12 +450,17 @@ New-Item -ItemType Directory -Force -Path 'C:\\Users\\{remote_user}\\AppData\\Lo
         log(f"❌ {label} SCP 실패: {scp_res.stderr}")
         return
 
-    # 3) EncodedCommand로 깨짐 없이 Run 레지스트리 + 인터랙티브 세션(LogonType Interactive) ONLOGON 스케줄러 등록 및 즉시 기동
-    # ⚠️ 절대 SSH Session 0에서 Start-Process로 직접 띄우지 않습니다! (Session 0 격리로 Ctrl+0·Ctrl+우클릭·귀신창이 데스크톱에 보이지 않게 되는 현상 원천 차단)
+    # 3) EncodedCommand로 깨짐 없이 Run 레지스트리 + 모드전환기 캐시 동기화 + 인터랙티브 세션(LogonType Interactive) ONLOGON 스케줄러 등록 및 즉시 기동
+    # ⚠️ 절대 SSH Session 0에서 Start-Process로 직접 띄우지 않습니다!
     start_ps = f"""
 [Environment]::SetEnvironmentVariable('_MEIPASS2', $null, 'Process')
 [Environment]::SetEnvironmentVariable('_MEIPASS', $null, 'Process')
 $exe = '{remote_exe_win}'
+$vaultCacheDir = 'C:\\Users\\{remote_user}\\AppData\\Local\\Merlin_Mode_Vault\\snapshots\\cached_installer'
+if (Test-Path 'C:\\Users\\{remote_user}\\AppData\\Local\\Merlin_Mode_Vault') {{
+    New-Item -ItemType Directory -Force -Path $vaultCacheDir | Out-Null
+    Copy-Item -Path $exe -Destination (Join-Path $vaultCacheDir 'Merlin_Z_Core_Setup.exe') -Force -ErrorAction SilentlyContinue
+}}
 Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'MerlinSeqPaste' -ErrorAction SilentlyContinue
 Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'MerlinZCoreDaemon' -Value "`"$exe`""
 $act = New-ScheduledTaskAction -Execute $exe -Argument '--replace'
@@ -453,6 +468,10 @@ $trg = New-ScheduledTaskTrigger -AtLogOn -User '{remote_user}'
 $prn = New-ScheduledTaskPrincipal -UserId '{remote_user}' -LogonType Interactive -RunLevel Limited
 $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero)
 Register-ScheduledTask -TaskName 'StartMerlinZCore5199' -Action $act -Trigger $trg -Principal $prn -Settings $set -Force | Out-Null
+Unregister-ScheduledTask -TaskName 'Ghosti_SecurityCare_ElevatedHelper' -Confirm:$false -ErrorAction SilentlyContinue
+$hAct = New-ScheduledTaskAction -Execute $exe -Argument '--run-elevated-helper'
+$hPrn = New-ScheduledTaskPrincipal -UserId '{remote_user}' -LogonType Interactive -RunLevel Highest
+Register-ScheduledTask -TaskName 'GhostiSecurityCareHelper' -Action $hAct -Principal $hPrn -Settings $set -Force | Out-Null
 Start-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContinue
 """
     try:

@@ -21,7 +21,11 @@
   "kernel_self_defense_services": [
     "safe_transaction_kernel_guard",
     "astx",
-    "ahnlab safe transaction"
+    "ahnlab safe transaction",
+    "nossvc",
+    "nprotect",
+    "npkcrypt",
+    "nosstarter"
   ],
   "web_security_services_whitelist": [
     {
@@ -33,7 +37,7 @@
     {
       "id": "web_sec_integrator",
       "service_patterns": ["veraport", "vpservice", "wizvera-veraport"],
-      "tray_executables": ["veraport.exe", "vp30.exe", "veraportg3.exe"],
+      "tray_executables": ["veraport.exe", "veraport-x64.exe", "vp30.exe", "veraportg3.exe"],
       "display_name": "미사용 웹 보안 서비스 (통합설치 모듈)"
     },
     {
@@ -57,13 +61,13 @@
     {
       "id": "web_sec_channel",
       "service_patterns": ["inisafe", "crossex", "iniline"],
-      "tray_executables": ["crossexsvc.exe", "iniline.exe", "inisafecrosswebex.exe"],
+      "tray_executables": ["crossexservice.exe", "crossexsvc.exe", "obcrossexservice.exe", "iniline.exe", "inisafecrosswebex.exe"],
       "display_name": "미사용 웹 보안 서비스 (웹 구간 암호화)"
     },
     {
       "id": "web_sec_unicrs",
       "service_patterns": ["crosscert", "unicrs", "ccdaemon"],
-      "tray_executables": ["unicrsv3.exe", "ccdaemon.exe"],
+      "tray_executables": ["unicrsv3.exe", "unicrslocalserver.exe", "ccdaemon.exe"],
       "display_name": "미사용 웹 보안 서비스 (전자인증 데몬)"
     },
     {
@@ -85,16 +89,16 @@
       "display_name": "미사용 웹 보안 서비스 (관공서 인증 모듈)"
     },
     {
-      "id": "web_sec_online_guard",
-      "service_patterns": ["nossvc", "nprotect", "npkcrypt"],
-      "tray_executables": ["nosstarter.npe", "nosiran.exe"],
-      "display_name": "미사용 웹 보안 서비스 (온라인 금융 보호)"
-    },
-    {
       "id": "web_sec_kica",
       "service_patterns": ["signgate", "kcase", "kcaseagent"],
       "tray_executables": ["kcaseagent.exe", "sgagent.exe"],
       "display_name": "미사용 웹 보안 서비스 (정보인증 에이전트)"
+    },
+    {
+      "id": "web_sec_pennyroyal",
+      "service_patterns": ["pennyroyal", "yettiesoft"],
+      "tray_executables": ["pennyroyal.exe"],
+      "display_name": "미사용 웹 보안 서비스 (APS 금융보안 모듈)"
     }
   ],
   "wake_window_title_keywords": [

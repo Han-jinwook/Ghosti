@@ -254,36 +254,49 @@ def scan_user_recycle_bin(
     max_results: int = 2000,
     deadline_sec: float = 10.0,
 ) -> Dict[str, Any]:
-    """현재 사용자 휴지통(모든 고정 디스크)을 해독한다. keywords 중 하나라도 이름/경로에 포함되면 매칭. 10초 정직 컷오프."""
+    """현재 사용자 휴지통(모든 고정 디스크)을 해독한다.
+    NTFS 알파벳($I00...) 순서로 조기 중단(break)하여 며칠 전 파일이 먼저 나오는 현상을 원천 차단하기 위해,
+    반드시 전체 $I 메타파일의 수정 시각(mtime) 최신순으로 먼저 정렬한 뒤 deletedEpoch 최신순으로 상위 항목을 반환한다.
+    """
     t0 = time.perf_counter()
     kws = [k.lower() for k in (keywords or []) if k and k.strip()]
-    found: List[Dict[str, Any]] = []
-    timed_out = False
+    candidate_entries: List[tuple[float, Path]] = []
     for d in user_recycle_dirs():
         try:
             for entry in d.glob("$I*"):
-                if time.perf_counter() - t0 > deadline_sec:
-                    timed_out = True
-                    break
-                meta = parse_recycle_i_file(entry)
-                if not meta or not meta["dataFileExists"]:
+                try:
+                    candidate_entries.append((entry.stat().st_mtime, entry))
+                except Exception:
                     continue
-                if kws:
-                    hay = (meta["originalName"] + " " + meta["originalPath"]).lower()
-                    if not any(k in hay for k in kws):
-                        continue
-                found.append(meta)
-                if len(found) >= max_results:
-                    break
         except PermissionError:
             continue
-        if timed_out or len(found) >= max_results:
+
+    candidate_entries.sort(key=lambda pair: pair[0], reverse=True)
+    scan_cap = max(300, int(max_results) * 10) if not kws else 5000
+
+    found: List[Dict[str, Any]] = []
+    timed_out = False
+    for _, entry in candidate_entries[:scan_cap]:
+        if time.perf_counter() - t0 > deadline_sec:
+            timed_out = True
             break
+        meta = parse_recycle_i_file(entry)
+        if not meta or not meta["dataFileExists"]:
+            continue
+        if kws:
+            hay = (meta["originalName"] + " " + meta["originalPath"]).lower()
+            if not any(k in hay for k in kws):
+                continue
+        found.append(meta)
+
     found.sort(key=lambda x: x.get("deletedEpoch", 0), reverse=True)
+    total_matched = len(found)
+    sliced = found[: max(1, int(max_results))]
     return {
         "ok": True,
-        "items": found,
-        "count": len(found),
+        "items": sliced,
+        "count": len(sliced),
+        "totalCount": total_matched,
         "timedOut": timed_out,
         "elapsedMs": round((time.perf_counter() - t0) * 1000, 1),
         "scopedToCurrentUser": True,

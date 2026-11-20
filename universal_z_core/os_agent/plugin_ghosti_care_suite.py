@@ -44,6 +44,11 @@ import unicodedata
 import uuid
 from typing import Any, Callable, Dict, List, Optional, Tuple
 
+try:
+    import winreg
+except ImportError:
+    winreg = None  # type: ignore
+
 THIS_DIR = Path(__file__).resolve().parent
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 LOCAL_APPDATA = Path(os.environ.get("LOCALAPPDATA", os.path.expanduser("~")))
@@ -528,18 +533,20 @@ def execute_elevated_service_control(
     except Exception:
         pass
 
-    # 1) 이미 작업 스케줄러 최고권한 헬퍼가 등록된 경우 -> UAC 팝업 0회로 즉시 트리거
+    # 1) 이미 작업 스케줄러 최고권한 헬퍼가 등록된 경우 -> UAC 팝업 0회로 즉시 트리거 (PyInstaller 66MB 첫 언패킹 고려 최대 10초 폴링)
     if is_security_care_helper_task_registered():
         if not clean_names:
             return {"ok": True, "processedServices": [], "elevationMethod": "SCHTASKS_ALREADY_READY", "uacPromptShown": False}
+        sch_ok = False
         try:
-            subprocess.run(
+            r_sch = subprocess.run(
                 ["schtasks", "/run", "/tn", SECURITY_CARE_HELPER_TASK_NAME],
                 capture_output=True,
-                timeout=2.5,
+                timeout=3.0,
                 creationflags=CREATE_NO_WINDOW,
             )
-            for _ in range(35):
+            sch_ok = (r_sch.returncode == 0)
+            for _ in range(100):
                 time.sleep(0.1)
                 if ELEVATED_ACTION_QUEUE_FILE.exists():
                     data = json.loads(ELEVATED_ACTION_QUEUE_FILE.read_text(encoding="utf-8"))
@@ -552,7 +559,7 @@ def execute_elevated_service_control(
                         }
         except Exception:
             pass
-        if not allow_uac_prompt:
+        if sch_ok or not allow_uac_prompt:
             return {
                 "ok": False,
                 "processedServices": [],
@@ -642,11 +649,32 @@ def _perform_direct_sc_operations(
                 r = subprocess.run(
                     ["sc", "stop", sname],
                     capture_output=True,
-                    timeout=3.0,
+                    timeout=2.5,
                     creationflags=CREATE_NO_WINDOW,
                 )
                 out_str = r.stdout.decode("oem", errors="ignore") if r.stdout else ""
-                if r.returncode == 0 or "STOP" in out_str or "1062" in out_str:
+                stopped_ok = (r.returncode == 0 or "STOP" in out_str or "1062" in out_str)
+                # NOT_STOPPABLE(1052) 또는 STOP_PENDING 지연 보안 서비스는 sc queryex로 해당 서비스 PID만 정확히 조회해 즉시 종료
+                r_qex = subprocess.run(
+                    ["sc", "queryex", sname],
+                    capture_output=True,
+                    timeout=2.0,
+                    creationflags=CREATE_NO_WINDOW,
+                )
+                qex_str = r_qex.stdout.decode("oem", errors="ignore") if r_qex.stdout else ""
+                if "RUNNING" in qex_str or "STOP_PENDING" in qex_str or not stopped_ok:
+                    m_pid = re.search(r"PID\s*:\s*(\d+)", qex_str, re.IGNORECASE)
+                    svc_pid = int(m_pid.group(1)) if m_pid else 0
+                    if svc_pid > 4:
+                        rk = subprocess.run(
+                            ["taskkill", "/F", "/PID", str(svc_pid)],
+                            capture_output=True,
+                            timeout=2.0,
+                            creationflags=CREATE_NO_WINDOW,
+                        )
+                        if rk.returncode == 0:
+                            stopped_ok = True
+                if stopped_ok or "STOPPED" in qex_str or "1062" in out_str:
                     return sname
             elif mode == "wake":
                 r = subprocess.run(
@@ -786,7 +814,7 @@ def load_security_whitelist(allow_remote_sync: bool = False) -> Dict[str, Any]:
         "corporate_drm_never_touch": [
             "maepsbroker", "markany", "fasoo", "softcamp", "v3lite", "alyac", "msmpeng"
         ],
-        "kernel_self_defense_services": ["ahnlab", "astx", "npkcrypt"],
+        "kernel_self_defense_services": ["ahnlab", "astx", "npkcrypt", "nossvc", "nprotect", "nosstarter"],
         "web_security_services_whitelist": [
             {"id": "anysign", "display_name": "AnySign4PC (한컴위드 전자서명)", "service_patterns": ["anysign"], "tray_executables": ["anysign4pc.exe"]},
             {"id": "touchen_nxkey", "display_name": "TouchEn nxKey (라온시큐어 키보드보안)", "service_patterns": ["touchen", "nxkey"], "tray_executables": ["touchen_nxkey.exe"]},
@@ -794,7 +822,6 @@ def load_security_whitelist(allow_remote_sync: bool = False) -> Dict[str, Any]:
             {"id": "delfino", "display_name": "Delfino (위즈베라 전자서명)", "service_patterns": ["delfino"], "tray_executables": ["delfino.exe"]},
             {"id": "iniline", "display_name": "CrossEX / INISAFE (이니텍 금융보안)", "service_patterns": ["iniline", "crossex", "inisafe"], "tray_executables": ["crossexservice.exe"]},
             {"id": "ipinside", "display_name": "IPinside LWS (인터리젠 단말정보)", "service_patterns": ["ipinside", "i3gproc"], "tray_executables": ["i3gproc.exe"]},
-            {"id": "nprotect", "display_name": "nProtect Online Security (잉카인터넷)", "service_patterns": ["nossvc", "nprotect"], "tray_executables": ["nosstarter.npe"]},
             {"id": "magicline", "display_name": "MagicLine4NX (드림시큐리티)", "service_patterns": ["magicline"], "tray_executables": ["magicline4nx.exe"]},
         ],
         "wake_window_title_keywords": ["은행", "뱅크", "홈택스", "정부24", "결제", "본인인증", "공동인증서", "인터넷뱅킹", "카드"],
@@ -870,6 +897,39 @@ def _load_sleep_snapshot() -> Dict[str, Any]:
         try:
             data = json.loads(SLEEP_SNAPSHOT_FILE.read_text(encoding="utf-8"))
             if isinstance(data, dict):
+                wl_data = load_security_whitelist(allow_remote_sync=False)
+                excl = tuple(
+                    str(s).strip().lower()
+                    for s in list(wl_data.get("corporate_drm_never_touch", []))
+                    + list(wl_data.get("kernel_self_defense_services", []))
+                    if str(s).strip()
+                )
+                wl_tokens: List[str] = []
+                for item in wl_data.get("web_security_services_whitelist", []):
+                    for pat in list(item.get("service_patterns", [])) + list(item.get("tray_executables", [])):
+                        pt = str(pat).strip().lower()
+                        if pt.endswith(".exe"):
+                            pt = pt[:-4]
+                        if pt:
+                            wl_tokens.append(pt)
+                clean_svcs = [
+                    s for s in (data.get("services") or [])
+                    if isinstance(s, dict)
+                    and s.get("serviceName")
+                    and not any(ex in str(s.get("serviceName") or "").lower() for ex in excl)
+                    and any(wt in str(s.get("serviceName") or "").lower() for wt in wl_tokens)
+                ]
+                clean_bridges = []
+                for b in (data.get("userBridgeProcesses") or []):
+                    if not isinstance(b, dict):
+                        continue
+                    comb = f"{b.get('name') or ''} {b.get('exe') or ''} {b.get('startupName') or ''}".lower()
+                    if any(ex in comb for ex in excl) or any(ft in comb for ft in _SAFE_FAMILY_TOKENS):
+                        continue
+                    if any(wt in comb for wt in wl_tokens):
+                        clean_bridges.append(b)
+                data["services"] = clean_svcs
+                data["userBridgeProcesses"] = clean_bridges
                 return data
         except Exception:
             pass
@@ -920,20 +980,21 @@ def get_security_services_status() -> Dict[str, Any]:
             current_disp = ""
             for line in proc.stdout.splitlines():
                 line_s = line.strip()
-                if line_s.startswith("SERVICE_NAME:"):
+                if line_s.startswith("SERVICE_NAME:") or line_s.startswith("서비스 이름:"):
                     current_svc = line_s.split(":", 1)[1].strip()
                     current_disp = current_svc
-                elif line_s.startswith("DISPLAY_NAME:"):
+                elif line_s.startswith("DISPLAY_NAME:") or line_s.startswith("표시 이름:"):
                     current_disp = line_s.split(":", 1)[1].strip()
-                elif line_s.startswith("STATE") and "RUNNING" in line_s and current_svc:
+                elif (line_s.startswith("STATE") or line_s.startswith("상태")) and "RUNNING" in line_s and current_svc:
                     svc_low = current_svc.lower()
                     disp_low = current_disp.lower()
 
+                    if any(sd in svc_low or sd in disp_low for sd in self_defense):
+                        self_defense_detected.append("자가보호 상주 보안 서비스")
+                        current_svc = ""
+                        continue
                     if any(drm in svc_low or drm in disp_low for drm in never_touch):
-                        if any(sd in svc_low or sd in disp_low for sd in self_defense):
-                            self_defense_detected.append("자가보호 상주 보안 서비스")
-                        else:
-                            corporate_drm_protected.append("사내 문서보안(DRM) 서비스")
+                        corporate_drm_protected.append("사내 문서보안(DRM) 서비스")
                         current_svc = ""
                         continue
 
@@ -1069,10 +1130,48 @@ def _split_windows_cmdline(cmd_str: str, fallback_exe: str = "") -> List[str]:
     return [fallback_exe] if fallback_exe else [raw]
 
 
+def _get_win32_session_id(pid: int) -> int:
+    if sys.platform != "win32" or pid <= 4:
+        return 0
+    try:
+        sid = wintypes.DWORD(0)
+        fn = ctypes.windll.kernel32.ProcessIdToSessionId
+        fn.argtypes = [wintypes.DWORD, ctypes.POINTER(wintypes.DWORD)]
+        fn.restype = wintypes.BOOL
+        if fn(wintypes.DWORD(pid), ctypes.byref(sid)):
+            return int(sid.value)
+    except Exception:
+        pass
+    return 0
+
+
+def _is_pid_running(pid: int) -> bool:
+    if sys.platform != "win32" or pid <= 4:
+        return False
+    try:
+        import psutil  # type: ignore
+
+        return bool(psutil.pid_exists(pid))
+    except Exception:
+        try:
+            h = ctypes.windll.kernel32.OpenProcess(0x1000, False, int(pid))
+            if not h:
+                return False
+            try:
+                code = wintypes.DWORD(0)
+                if ctypes.windll.kernel32.GetExitCodeProcess(h, ctypes.byref(code)):
+                    return int(code.value) == 259
+            finally:
+                ctypes.windll.kernel32.CloseHandle(h)
+        except Exception:
+            pass
+    return False
+
+
 def _iter_windows_processes_stdlib() -> List[Dict[str, Any]]:
     """
     psutil이 설치되어 있으면 고속 조회하고, 미설치 환경에서도 PowerShell Win32_Process CIM을 통해
-    실행 인자(CommandLine) 유실 없이 프로세스 목록(pid, name, exe, cmdline, memoryMb)을 반환합니다.
+    실행 인자(CommandLine) 및 세션 ID(SessionId) 유실 없이 프로세스 목록을 반환합니다.
     """
     procs: List[Dict[str, Any]] = []
     if sys.platform != "win32":
@@ -1090,6 +1189,7 @@ def _iter_windows_processes_stdlib() -> List[Dict[str, Any]]:
                 rss_mb = round((getattr(mem_info, "rss", 0) or 0) / (1024 * 1024), 1)
                 procs.append({
                     "pid": pid,
+                    "sessionId": _get_win32_session_id(pid),
                     "name": pname,
                     "exe": pexe,
                     "cmdline": cmdline,
@@ -1104,7 +1204,7 @@ def _iter_windows_processes_stdlib() -> List[Dict[str, Any]]:
     try:
         ps_cmd = (
             "Get-CimInstance Win32_Process -ErrorAction SilentlyContinue | "
-            "Select-Object ProcessId,Name,ExecutablePath,CommandLine,WorkingSetSize | "
+            "Select-Object ProcessId,SessionId,Name,ExecutablePath,CommandLine,WorkingSetSize | "
             "ConvertTo-Json -Compress"
         )
         r = subprocess.run(
@@ -1124,12 +1224,14 @@ def _iter_windows_processes_stdlib() -> List[Dict[str, Any]]:
                 if not isinstance(it, dict):
                     continue
                 pid = int(it.get("ProcessId") or 0)
+                sess_id = int(it.get("SessionId") if it.get("SessionId") is not None else _get_win32_session_id(pid))
                 pname = str(it.get("Name") or "")
                 pexe = str(it.get("ExecutablePath") or "")
                 cmd_str = str(it.get("CommandLine") or "").strip()
                 ws_bytes = int(it.get("WorkingSetSize") or 0)
                 procs.append({
                     "pid": pid,
+                    "sessionId": sess_id,
                     "name": pname,
                     "exe": pexe,
                     "cmdline": _split_windows_cmdline(cmd_str, fallback_exe=pexe),
@@ -1157,53 +1259,61 @@ _SAFE_FAMILY_TOKENS = (
 )
 
 
-def _load_known_security_keywords_map() -> Dict[str, str]:
-    try:
-        import merlin_z_core_os as _mzos
-        raw_map = dict(getattr(_mzos, "KNOWN_SECURITY_PLUGIN_KEYWORDS", {}) or {})
-    except Exception:
-        raw_map = {}
-    raw_map.pop("windowscamera", None)
-    return raw_map
-
-
 def _scan_running_user_security_processes() -> List[Dict[str, Any]]:
-    """현재 유저 세션에서 실제 실행 중인 은행·관공서 보안/상주 모듈 프로세스(cmdline 포함) 실측."""
+    """
+    [단일 SSOT: security_services_whitelist.json 기반 유저 세션(SessionId > 0) 보안 트레이 브릿지 실측]
+    - Session 0 시스템 서비스 프로세스는 sc query/stop으로 전담 처리하고,
+      유저 세션(SessionId > 0)에서 실행 중인 순수 은행·관공서 보안 트레이 모듈만 정확히 수집합니다
+      (애드웨어·한컴업데이터 등 비보안 프로세스 혼입 원천 차단).
+    """
     if sys.platform != "win32":
         return []
     wl_data = load_security_whitelist(allow_remote_sync=False)
+    never_touch_tokens = tuple(
+        str(s).strip().lower()
+        for s in list(wl_data.get("corporate_drm_never_touch", []))
+        + list(wl_data.get("kernel_self_defense_services", []))
+        if str(s).strip()
+    )
     whitelist_items = wl_data.get("web_security_services_whitelist", [])
-    tray_label_map: Dict[str, str] = {}
+    tray_label_map: Dict[str, tuple[str, str]] = {}
+    pattern_label_list: List[tuple[str, str]] = []
     for item in whitelist_items:
-        disp = str(item.get("display_name") or "은행·관공서 웹 보안 모듈")
+        disp = str(item.get("display_name") or "미사용 웹 보안 서비스")
+        gid = str(item.get("id") or "")
         for exe_name in item.get("tray_executables", []):
-            tray_label_map[str(exe_name).lower()] = disp
+            en = str(exe_name).strip().lower()
+            if en:
+                tray_label_map[en] = (gid or en, disp)
+        for pat in item.get("service_patterns", []):
+            pt = str(pat).strip().lower()
+            if len(pt) >= 4:
+                pattern_label_list.append((pt, disp))
 
-    kw_map = _load_known_security_keywords_map()
     found: List[Dict[str, Any]] = []
     for pinfo in _iter_windows_processes_stdlib():
         try:
             pname = str(pinfo.get("name") or "").strip()
             pname_low = pname.lower()
             pid = int(pinfo.get("pid") or 0)
-            if not pname_low or pid <= 4 or pname_low in _PROTECTED_USER_SECURITY_SCAN_EXES:
+            sess_id = int(pinfo.get("sessionId") if pinfo.get("sessionId") is not None else 1)
+            if not pname_low or pid <= 4 or sess_id <= 0 or pname_low in _PROTECTED_USER_SECURITY_SCAN_EXES:
                 continue
             pexe = str(pinfo.get("exe") or "").strip()
             comb_low = f"{pname_low} {pexe.lower()}"
-            if any(tok in comb_low for tok in _SAFE_FAMILY_TOKENS):
+            if any(tok in comb_low for tok in _SAFE_FAMILY_TOKENS) or any(tok in comb_low for tok in never_touch_tokens):
                 continue
 
             stem_low = pname_low[:-4] if pname_low.endswith(".exe") else pname_low
             matched_kw = ""
             matched_label = ""
             if pname_low in tray_label_map:
-                matched_kw = stem_low
-                matched_label = tray_label_map[pname_low]
+                matched_kw, matched_label = tray_label_map[pname_low]
             else:
-                for kw, lbl in kw_map.items():
-                    if len(kw) >= 3 and kw in stem_low:
-                        matched_kw = kw
-                        matched_label = lbl
+                for pt, disp in pattern_label_list:
+                    if pt in stem_low:
+                        matched_kw = pt
+                        matched_label = disp
                         break
             if not matched_kw:
                 continue
@@ -1226,10 +1336,27 @@ def _scan_running_user_security_processes() -> List[Dict[str, Any]]:
 
 
 def _discover_security_autostart_bridges() -> List[Dict[str, Any]]:
-    """HKCU/HKLM Run 레지스트리에 등록된 은행·관공서 보안 모듈의 정확한 시작 명령줄(cmdline)을 조회합니다."""
+    """HKCU/HKLM Run 레지스트리에 등록된 은행·관공서 보안 모듈(security_services_whitelist 기준) 시작 명령줄 조회."""
     if sys.platform != "win32" or winreg is None:
         return []
-    kw_map = _load_known_security_keywords_map()
+    wl_data = load_security_whitelist(allow_remote_sync=False)
+    never_touch_tokens = tuple(
+        str(s).strip().lower()
+        for s in list(wl_data.get("corporate_drm_never_touch", []))
+        + list(wl_data.get("kernel_self_defense_services", []))
+        if str(s).strip()
+    )
+    whitelist_items = wl_data.get("web_security_services_whitelist", [])
+    pat_list: List[tuple[str, str]] = []
+    for item in whitelist_items:
+        disp = str(item.get("display_name") or "미사용 웹 보안 서비스")
+        for pat in list(item.get("service_patterns", [])) + list(item.get("tray_executables", [])):
+            pt = str(pat).strip().lower()
+            if pt.endswith(".exe"):
+                pt = pt[:-4]
+            if len(pt) >= 4:
+                pat_list.append((pt, disp))
+
     out: List[Dict[str, Any]] = []
     seen_exes: set[str] = set()
     run_keys = [
@@ -1254,10 +1381,10 @@ def _discover_security_autostart_bridges() -> List[Dict[str, Any]]:
                         continue
                     matched_kw = ""
                     matched_lbl = ""
-                    for kw, lbl in kw_map.items():
-                        if len(kw) >= 3 and kw in comb_low:
-                            matched_kw = kw
-                            matched_lbl = lbl
+                    for pt, disp in pat_list:
+                        if pt in comb_low:
+                            matched_kw = pt
+                            matched_lbl = disp
                             break
                     if not matched_kw:
                         continue
@@ -1319,9 +1446,12 @@ def get_sleeping_security_state() -> Dict[str, Any]:
     }
 
 
-def capture_and_sleep_user_security_processes(kill_running: bool = True) -> Dict[str, Any]:
+def capture_and_sleep_user_security_processes(
+    kill_running: bool = True,
+    precomputed_procs: Optional[List[Dict[str, Any]]] = None,
+) -> Dict[str, Any]:
     """
-    [단일 SSOT 절전 캡처기]
+    [단일 SSOT 절전 캡처기 — 단일 배치 taskkill로 0.08초 고속 종료]
     - clean_bloatware 및 sleep_security_services 양쪽 모두에서 호출됩니다.
     - 실행 중인 유저 보안 프로세스를 종료하기 전에 정확한 cmdline/exe/label을 SLEEP_SNAPSHOT_FILE에 영구 병합하고,
       HKCU/HKLM Run에 등록된 보안 모듈(예: MagicLine4NX) 명령줄도 함께 보존하여 [보안프로그램 즉시 깨우기] 시 100% 기상시킵니다.
@@ -1344,35 +1474,40 @@ def capture_and_sleep_user_security_processes(kill_running: bool = True) -> Dict
 
     newly_killed: List[Dict[str, Any]] = []
     reclaimed_ram_mb = 0
-    running_procs = _scan_running_user_security_processes()
+    running_procs = precomputed_procs if precomputed_procs is not None else _scan_running_user_security_processes()
+    pids_to_kill = [int(p.get("pid") or 0) for p in running_procs if int(p.get("pid") or 0) > 4]
+    if kill_running and pids_to_kill:
+        try:
+            kill_cmd = ["taskkill", "/F"]
+            for pid_val in pids_to_kill:
+                kill_cmd.extend(["/PID", str(pid_val)])
+            subprocess.run(
+                kill_cmd,
+                capture_output=True,
+                timeout=3.0,
+                creationflags=CREATE_NO_WINDOW,
+            )
+            time.sleep(0.1)
+        except Exception:
+            pass
+
     for pinfo in running_procs:
-        pid = int(pinfo.get("pid") or 0)
+        pid_val = int(pinfo.get("pid") or 0)
+        if kill_running and pid_val > 4 and _is_pid_running(pid_val):
+            continue
         cmdline = list(pinfo.get("cmdline") or [])
-        killed_ok = not kill_running
-        if kill_running and pid > 4:
-            try:
-                r_kill = subprocess.run(
-                    ["taskkill", "/F", "/PID", str(pid)],
-                    capture_output=True,
-                    timeout=2.0,
-                    creationflags=CREATE_NO_WINDOW,
-                )
-                killed_ok = (r_kill.returncode == 0)
-            except Exception:
-                killed_ok = False
-        if killed_ok:
-            reclaimed_ram_mb += max(10, int(round(float(pinfo.get("memoryMb") or 18.0))))
-            entry = {
-                "name": str(pinfo.get("name") or ""),
-                "exe": str(pinfo.get("exe") or (cmdline[0] if cmdline else "")),
-                "cmdline": cmdline,
-                "keyword": str(pinfo.get("keyword") or ""),
-                "label": str(pinfo.get("label") or pinfo.get("name") or ""),
-            }
-            newly_killed.append(entry)
-            b_key = str(cmdline[0] if cmdline else entry["name"]).lower()
-            if b_key:
-                existing_bridge_map[b_key] = entry
+        reclaimed_ram_mb += max(10, int(round(float(pinfo.get("memoryMb") or 18.0))))
+        entry = {
+            "name": str(pinfo.get("name") or ""),
+            "exe": str(pinfo.get("exe") or (cmdline[0] if cmdline else "")),
+            "cmdline": cmdline,
+            "keyword": str(pinfo.get("keyword") or ""),
+            "label": str(pinfo.get("label") or pinfo.get("name") or ""),
+        }
+        newly_killed.append(entry)
+        b_key = str(cmdline[0] if cmdline else entry["name"]).lower()
+        if b_key:
+            existing_bridge_map[b_key] = entry
 
     for auto_b in _discover_security_autostart_bridges():
         auto_cmd = auto_b.get("cmdline") or []
@@ -1481,8 +1616,13 @@ def sleep_security_services(
         cur_snap["services"] = list(existing_svc_map.values())
         _save_sleep_snapshot(cur_snap)
 
-    bridge_sleep_res = capture_and_sleep_user_security_processes(kill_running=True)
+    bridge_sleep_res = capture_and_sleep_user_security_processes(
+        kill_running=True,
+        precomputed_procs=list(status.get("runningUserBridges") or []),
+    )
     newly_killed_bridges = bridge_sleep_res.get("newlyKilled") or []
+    if stopped_services or newly_killed_bridges:
+        time.sleep(0.2)
 
     if explicit_opt_in:
         st_cfg = _load_care_settings()

@@ -2280,45 +2280,79 @@ export const Stage1MinimalCarePreview: React.FC = () => {
           {/* 3-A. ① 중복 사진 & 연사 묶음 1세트씩 순차 확인 및 유저 [OK] 승인 (currentTab === 'duplicate'일 때만 순수 표시) */}
           {showDuplicatePickSection && (
             <div className="p-3.5 sm:p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
-              <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 border-b border-white/10 pb-3.5">
-                <div className="flex flex-col gap-1">
+              <div className="flex flex-col md:flex-row md:items-start justify-between gap-3 border-b border-white/10 pb-3.5">
+                <div className="flex flex-col gap-2 min-w-0 flex-1">
                   <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-headline-sm text-[17px] md:text-[18.5px] text-white font-extrabold">
+                    <h2 className="font-headline-sm text-[17px] md:text-[18.5px] text-white font-extrabold break-keep">
                       ① 중복 사진 &amp; 연사 묶음 (세트별 실사진 확인 · 유저 OK 승인)
                     </h2>
-                    <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[12.5px] font-bold">
+                    <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-primary-container font-label-sm text-[12.5px] font-bold whitespace-nowrap shrink-0">
                       {activeDuplicateGroups.length > 0
                         ? `총 ${activeDuplicateGroups.length}세트 발견 · 버릴 후보 ${dupCount}장`
                         : '0세트 (깨끗함)'}
                     </span>
                   </div>
                   {activeDuplicateGroups.length > 0 ? (
-                    <p className="font-body-sm text-[13px] text-teal-200 font-semibold">
-                      📸 발견된 세트 요약:{' '}
-                      {activeDuplicateGroups
-                        .map((g, idx) => {
+                    <div className="flex flex-col gap-1.5">
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[12px] font-extrabold text-teal-300 whitespace-nowrap mr-0.5">
+                          📸 세트 바로가기:
+                        </span>
+                        {activeDuplicateGroups.slice(0, 6).map((g, idx) => {
                           const cnt = g.photoIds.filter((id) => {
                             const ph = photoById.get(id);
                             return ph && !ph.quarantined;
                           }).length;
-                          return `${idx + 1}세트(${cnt}장)`;
-                        })
-                        .join(' · ')}{' '}
-                      — 한 세트씩 실사진과 👑 추천 베스트 1장을 확인하시고 [👍 OK]를 눌러 결정해 주세요!
-                    </p>
+                          const isCurSet =
+                            !showAllDupSets &&
+                            Math.min(activeDupSetIdx, activeDuplicateGroups.length - 1) === idx;
+                          return (
+                            <button
+                              key={g.groupId}
+                              type="button"
+                              onClick={() => {
+                                setShowAllDupSets(false);
+                                setActiveDupSetIdx(idx);
+                              }}
+                              className={`px-2 py-0.5 rounded-lg border text-[11.5px] font-bold whitespace-nowrap transition cursor-pointer ${
+                                isCurSet
+                                  ? 'bg-primary-container text-zinc-950 border-primary-container font-black'
+                                  : 'bg-zinc-900 hover:bg-zinc-800 text-zinc-200 border-white/15'
+                              }`}
+                            >
+                              {idx + 1}세트 ({cnt}장)
+                            </button>
+                          );
+                        })}
+                        {activeDuplicateGroups.length > 6 && (
+                          <button
+                            type="button"
+                            onClick={() => setShowAllDupSets((v) => !v)}
+                            className="px-2.5 py-0.5 rounded-lg bg-teal-950/70 hover:bg-teal-900/80 border border-teal-400/40 text-teal-200 text-[11.5px] font-extrabold whitespace-nowrap cursor-pointer transition"
+                          >
+                            {showAllDupSets
+                              ? '접기 ▲'
+                              : `+외 ${activeDuplicateGroups.length - 6}세트 더 보기`}
+                          </button>
+                        )}
+                      </div>
+                      <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed break-keep">
+                        한 세트씩 실사진과 <span className="text-primary-container font-bold">👑 추천 베스트 1장</span>을 확인하시고 <span className="text-white font-bold">[👍 OK]</span>를 눌러 정리해 주세요!
+                      </p>
+                    </div>
                   ) : (
-                    <p className="font-body-sm text-[13px] text-zinc-400">
+                    <p className="font-body-sm text-[13px] text-zinc-400 break-keep">
                       AI가 마음대로 사진을 지우지 않으며, 실사진을 보여드리고 직접 OK 하실 때만 정리합니다.
                     </p>
                   )}
                 </div>
 
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap sm:flex-nowrap items-center gap-2 shrink-0 self-start">
                   {activeDuplicateGroups.length > 1 && (
                     <button
                       type="button"
                       onClick={() => setShowAllDupSets((v) => !v)}
-                      className="px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-extrabold border bg-zinc-900 text-teal-300 hover:text-white border-teal-500/40 transition-all cursor-pointer"
+                      className="px-3.5 py-2 rounded-xl font-label-sm text-[12px] font-extrabold border bg-zinc-900 text-teal-300 hover:text-white border-teal-500/40 transition-all cursor-pointer whitespace-nowrap shrink-0"
                     >
                       {showAllDupSets
                         ? '🎯 1세트씩 순서대로 보기'
@@ -2328,7 +2362,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setActiveTrashCategoryFilter('none')}
-                    className="px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-bold border bg-zinc-900 text-zinc-400 hover:text-white border-white/10 transition-all cursor-pointer"
+                    className="px-3.5 py-2 rounded-xl font-label-sm text-[12px] font-bold border bg-zinc-900 text-zinc-400 hover:text-white border-white/10 transition-all cursor-pointer whitespace-nowrap shrink-0"
                   >
                     목록 접기 ▲
                   </button>

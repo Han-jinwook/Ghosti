@@ -2123,7 +2123,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(15000),
     })
       .then((r) => r.json())
       .catch(() => null);
@@ -2132,7 +2132,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: 'secretary_roundtrip_request' }),
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(15000),
     })
       .then((r) => r.json())
       .catch(() => null);
@@ -2182,37 +2182,18 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(15000),
     })
       .then((r) => r.json())
       .catch(() => null);
 
     if (!sleepRes?.ok) {
-      if (zCoreBridge.isConnected && !sleepRes?.uacDeclined) {
-        try {
-          const rawSt = localStorage.getItem('ghosti_ghost_secretary_state_v1');
-          const parsedSt = rawSt ? JSON.parse(rawSt) : {};
-          parsedSt.consents = { ...(parsedSt.consents || {}), bankSecurityAutoSleep: true };
-          parsedSt.bankSleepIntroShownAt = new Date().toISOString();
-          localStorage.setItem('ghosti_ghost_secretary_state_v1', JSON.stringify(parsedSt));
-        } catch {
-          /* ignore */
-        }
-        const fallbackMsg =
-          `🏦 **[은행·관공서 보안절전 설정 완료]**\n` +
-          `지금은 켜져 있는 불필요 은행·관공서 보안프로그램이 **0종**으로 아주 깨끗합니다!\n` +
-          `앞으로 은행이나 홈택스 사이트에 들어가실 때만 자동으로 깨우고, 업무가 끝난 뒤에는 다시 조용히 재워드릴게요!`;
-        speak('은행 보안프로그램 자동 관리 설정을 마쳤습니다.');
-        return reply(sourceTab, fallbackMsg, {
-          followUpSuggestions: [
-            '🏦 보안프로그램 즉시 깨우기',
-            '은행 보안프로그램 상태 확인해줘',
-          ],
-        });
-      }
       const failMsg = sleepRes?.uacDeclined
         ? `⚠️ **[관리자 권한 승인 보류 안내]**\n` +
-          `윈도우 보안 서비스를 안전하게 잠재우려면 최초 1회 관리자 권한 창에서 **[예]**를 눌러주셔야 합니다. 준비되셨을 때 다시 말씀해 주세요!`
+          `윈도우 보안 서비스를 안전하게 잠재우려면 최초 1회 관리자 권한 창에서 **[예]**를 눌러주셔야 합니다. 준비되셨을 때 다시 말씀해 주세요! (이후에는 권한 팝업이 다시 뜨지 않습니다)`
+        : zCoreBridge.isConnected
+        ? `⚠️ **[보안절전 실행 지연 안내]**\n` +
+          `현재 실행 중인 윈도우 보안 서비스 제어 중 권한 확인 또는 응답 지연이 발생했습니다. **[은행 보안프로그램 상태 확인해줘]**로 현재 상태를 확인한 뒤 다시 한 번 눌러주세요!`
         : `🔌 **[내 PC 엔진(멀린 Z-코어) 연결 필요]**\n` +
           `내 PC의 은행·관공서 보안프로그램을 실제로 잠재우려면 **멀린 Z-코어 엔진**이 켜져 있어야 합니다. 엔진을 실행한 뒤 다시 말씀해 주세요!`;
       return reply(sourceTab, failMsg, {
@@ -2448,7 +2429,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: 'secretary_chat_request' }),
-      signal: AbortSignal.timeout(6000),
+      signal: AbortSignal.timeout(15000),
     })
       .then((r) => r.json())
       .catch(() => null);
