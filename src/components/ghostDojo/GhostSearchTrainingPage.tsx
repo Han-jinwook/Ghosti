@@ -201,9 +201,17 @@ function consumePendingGhostSearchQuery(): string {
 
 const GAME_STORAGE_KEY = 'ghosti_search_game_v1';
 type GameStepId = 'summon' | 'medium' | 'large';
-const GAME_STEPS: Array<{ id: GameStepId; label: string }> = [
-  { id: 'summon', label: '① [작게] 모드 소환 (Ctrl + 0)' },
-  { id: 'large', label: '② [⤢ 크게(갤러리)] 모드 전환' },
+const GAME_STEPS: Array<{ id: GameStepId; actionLabel: string; doneLabel: string }> = [
+  {
+    id: 'summon',
+    actionLabel: '👆 ① ⤡ 작게 모드 버튼 눌러보기',
+    doneLabel: '✓ 완료 · ① ⤡ 작게 모드 체험',
+  },
+  {
+    id: 'large',
+    actionLabel: '👆 ② ⤢ 크게(갤러리) 버튼 눌러보기',
+    doneLabel: '✓ 완료 · ② ⤢ 크게(갤러리) 모드 체험',
+  },
 ];
 
 const SIMULATOR_WORK_AREA = { left: 0, top: 0, right: 1120, bottom: 660 };
@@ -515,25 +523,30 @@ const VirtualMonitorSimulator: React.FC<{
             <span className="text-[10px] text-zinc-400 font-bold tracking-wider">CAM</span>
           </div>
 
-          {/* 우측 [작게·크게] 2가지 보기 모드 버튼 & 자동 시연 재생/일시정지 컨트롤 */}
+          {/* 우측 [⤡ 작게 · ⤢ 크게(갤러리)] 실제 귀신검색창과 1:1 동일한 보기 모드 버튼 & 자동 시연 재생/일시정지 컨트롤 */}
           <div className="flex flex-wrap items-center gap-1.5" data-allow-secretary-jump="true">
-            {([
-              { id: 'small' as const, label: '작게' },
-              { id: 'large' as const, label: '크게(갤러리)' },
-            ]).map((btn) => (
-              <button
-                key={btn.id}
-                type="button"
-                onClick={() => selectExplicitStage(btn.id)}
-                className={`px-2.5 py-0.5 rounded-md text-[11px] font-extrabold cursor-pointer transition-all ${
-                  (btn.id === 'large' ? stage === 'large' : stage === 'small' || stage === 'medium')
-                    ? 'bg-[#2DD4BF] text-zinc-950 shadow-sm'
-                    : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-[#2DD4BF]/40'
-                }`}
-              >
-                [{btn.label}]
-              </button>
-            ))}
+            <button
+              type="button"
+              onClick={() => selectExplicitStage('small')}
+              className={`px-2.5 py-0.5 rounded-md text-[11px] font-extrabold transition-colors cursor-pointer ${
+                stage === 'small' || stage === 'medium'
+                  ? 'bg-[#2DD4BF] text-zinc-950'
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-white/10'
+              }`}
+            >
+              ⤡ 작게
+            </button>
+            <button
+              type="button"
+              onClick={() => selectExplicitStage('large')}
+              className={`px-2.5 py-0.5 rounded-md text-[11px] font-extrabold transition-colors cursor-pointer ${
+                stage === 'large'
+                  ? 'bg-[#2DD4BF] text-zinc-950'
+                  : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-white/10'
+              }`}
+            >
+              ⤢ 크게(갤러리)
+            </button>
             <button
               type="button"
               onClick={() => {
@@ -658,15 +671,45 @@ const VirtualMonitorSimulator: React.FC<{
               >
                 <div
                   data-keep-dark="true"
-                  className="h-9 px-3 flex items-center justify-between bg-zinc-900 border-b border-zinc-800 text-white text-[12px] font-bold"
+                  className="h-9 px-3.5 flex items-center justify-between gap-2 bg-zinc-900 border-b border-white/15 text-white text-[12px] font-bold"
                 >
-                  <div className="flex items-center gap-2">
-                    <span className="text-[#2DD4BF] font-extrabold">
-                      👻 체험판 검색창
+                  <div className="flex items-center gap-2 min-w-0">
+                    <span className="text-[#2DD4BF] font-extrabold whitespace-nowrap">
+                      👻 귀신검색창
                     </span>
-                    <span className="px-2 py-0.5 rounded bg-teal-500/20 text-[#5EEAD4] text-[10.5px] font-extrabold">
+                    <span className="px-2 py-0.5 rounded bg-teal-500/20 text-[#5EEAD4] text-[10.5px] font-extrabold truncate">
                       {rect.framelessAppMode ? '🖼️ 전체 갤러리 뷰' : '✨ 검색 결과에 맞춰 자동 크기 조절'}
                     </span>
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        selectExplicitStage('small');
+                      }}
+                      className={`px-2.5 py-0.5 rounded-md text-[11px] font-extrabold transition-colors cursor-pointer ${
+                        stage !== 'large'
+                          ? 'bg-[#2DD4BF] text-zinc-950'
+                          : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-white/10'
+                      }`}
+                    >
+                      ⤡ 작게
+                    </button>
+                    <button
+                      type="button"
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        selectExplicitStage('large');
+                      }}
+                      className={`px-2.5 py-0.5 rounded-md text-[11px] font-extrabold transition-colors cursor-pointer ${
+                        stage === 'large'
+                          ? 'bg-[#2DD4BF] text-zinc-950'
+                          : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-white/10'
+                      }`}
+                    >
+                      ⤢ 크게(갤러리)
+                    </button>
                   </div>
                 </div>
                 <div
@@ -1038,10 +1081,10 @@ export const GhostSearchTrainingPage: React.FC = () => {
           <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl bg-zinc-900/80 border border-teal-400/40">
             <div className="flex flex-col gap-0.5">
               <h2 className="text-[15px] font-extrabold text-zinc-900 dark:text-white flex items-center gap-2">
-                <span>STEP 2 · 귀신검색 2단계 도장판 (🖥️ [작게 · 크게] 실시간 완료 도장)</span>
+                <span>STEP 2 · 귀신검색 2단계 도장판 (🖥️ ⤡ 작게 · ⤢ 크게 실시간 완료 도장)</span>
               </h2>
               <span className="text-[11.5px] text-zinc-400">
-                아래 체험판 검색창 상단 또는 바탕화면 Ctrl+0 귀신검색창 상단의 <strong className="text-teal-300">[작게] · [크게(갤러리)]</strong> 버튼을 누르면 우측 도장판에 <strong className="text-emerald-300">✓ 완료 도장</strong>이 즉시 찍힙니다.
+                아래 체험판 검색창 상단 또는 바탕화면 Ctrl+0 귀신검색창 상단의 <strong className="text-teal-300">⤡ 작게 · ⤢ 크게(갤러리)</strong> 버튼을 누르면 우측 도장판에 <strong className="text-emerald-300">✓ 완료 도장</strong>이 즉시 찍힙니다.
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -1063,14 +1106,13 @@ export const GhostSearchTrainingPage: React.FC = () => {
                       );
                     }
                   }}
-                  className={`px-2.5 py-1 rounded-full text-[11.5px] font-bold border cursor-pointer transition-all ${
+                  className={`px-3 py-1 rounded-full text-[11.5px] font-extrabold border cursor-pointer transition-all ${
                     game[s.id]
-                      ? 'border-emerald-400 text-emerald-600 dark:text-emerald-300 bg-emerald-500/15 shadow-sm'
-                      : 'border-zinc-300 dark:border-white/20 text-zinc-400 hover:border-teal-400/50'
+                      ? 'border-emerald-500 text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 shadow-sm'
+                      : 'border-[#1E3A8A]/45 dark:border-teal-400/50 text-[#1E3A8A] dark:text-[#5EEAD4] bg-[#EEF2FF] dark:bg-teal-500/10 hover:bg-indigo-100'
                   }`}
                 >
-                  {game[s.id] ? '✓ 완료 · ' : '○ 대기 · '}
-                  {s.label}
+                  {game[s.id] ? s.doneLabel : s.actionLabel}
                 </button>
               ))}
               <button
@@ -1084,7 +1126,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
                   }
                 }}
                 className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-white/15 cursor-pointer"
-                title="완료 도장을 초기화하고 [작게·중간·크게] 버튼을 눌러 실시간으로 도장이 찍히는 것을 다시 확인합니다"
+                title="완료 도장을 초기화하고 ⤡ 작게 · ⤢ 크게(갤러리) 버튼을 눌러 실시간으로 도장이 찍히는 것을 다시 확인합니다"
               >
                 🔄 도장 초기화
               </button>
@@ -1151,32 +1193,32 @@ export const GhostSearchTrainingPage: React.FC = () => {
       {/* [메뉴 2 · 👻 귀신검색 하단 고정 소속 설명란] 유료 티어(🔒) 및 부가 기능 안내 */}
       <section
         aria-label="귀신검색 유료 티어 및 부가 기능 안내"
-        className="p-4 sm:p-5 rounded-2xl bg-zinc-950/90 border border-white/10 flex flex-col gap-3"
+        className="p-4 sm:p-5 rounded-2xl bg-slate-100/90 dark:bg-zinc-950/90 border border-slate-300 dark:border-white/10 flex flex-col gap-3 shadow-xs"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-[13.5px] font-extrabold text-teal-300">
+          <span className="text-[13.5px] font-extrabold text-[#1E3A8A] dark:text-teal-300">
             🔒 귀신검색 유료 티어 안내 (명시적 동의 시 30일 무제한 무료체험 · 만료 시 자동 결제 없이 깔끔 잠금🔒)
           </span>
-          <span className="text-[11.5px] text-zinc-400 font-semibold">
+          <span className="text-[11.5px] text-slate-700 dark:text-zinc-300 font-bold">
             내 PC 문서·사진·영상 소환 &amp; 동영상 [📝 글자 뽑기]는 평생 무제한 무료
           </span>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[12px] text-zinc-200">
-          <div className="p-3 rounded-xl bg-zinc-900/80 border border-white/10 flex flex-col gap-1">
-            <span className="font-extrabold text-white">① 📱 내 기기 통합 소환🔒</span>
-            <span className="text-zinc-400 leading-snug">
-              동일 이메일 연결 시 핸드폰 사진·타 PC 파일 검색창 통합 노출 &amp; 폰 촬영 직후 <strong className="text-teal-300">1초 공간이동 (촬영 후 1분간 자동팝업 대기)</strong> · 30일 만료 시 원격 노출만 OFF되며 이미 대장 PC 로컬 폴더에 복사된 원본 파일은 영구 보존
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[12px] text-slate-800 dark:text-zinc-200">
+          <div className="p-3 rounded-xl bg-white dark:bg-zinc-900/80 border border-slate-200 dark:border-white/10 flex flex-col gap-1 shadow-2xs">
+            <span className="font-extrabold text-slate-900 dark:text-white">① 📱 내 기기 통합 소환🔒</span>
+            <span className="text-slate-600 dark:text-zinc-400 leading-snug">
+              동일 이메일 연결 시 핸드폰 사진·타 PC 파일 검색창 통합 노출 &amp; 폰 촬영 직후 <strong className="text-[#1E3A8A] dark:text-teal-300">0.2초 공간이동 (촬영 후 1분간 자동팝업 대기)</strong> · 30일 만료 시 원격 노출만 OFF되며 이미 대장 PC 로컬 폴더에 복사된 원본 파일은 영구 보존
             </span>
           </div>
-          <div className="p-3 rounded-xl bg-zinc-900/80 border border-white/10 flex flex-col gap-1">
-            <span className="font-extrabold text-white">② 📝 사진·표 OCR 창🔒 (창 UI ③ 별도 독립 창)</span>
-            <span className="text-zinc-400 leading-snug">
-              귀신검색창 안에는 사진 목록만 깔끔하게 보이고, 사진에서 <strong className="text-teal-300">[📝 OCR]</strong>을 누르면 별도 독립 <strong className="text-white">사진·OCR 창</strong>이 열려 글자·표·단어칩을 추출
+          <div className="p-3 rounded-xl bg-white dark:bg-zinc-900/80 border border-slate-200 dark:border-white/10 flex flex-col gap-1 shadow-2xs">
+            <span className="font-extrabold text-slate-900 dark:text-white">② 📝 사진·표 OCR 창🔒 (창 UI ③ 별도 독립 창)</span>
+            <span className="text-slate-600 dark:text-zinc-400 leading-snug">
+              귀신검색창 안에는 사진 목록만 깔끔하게 보이고, 사진에서 <strong className="text-[#1E3A8A] dark:text-teal-300">[📝 OCR]</strong>을 누르면 별도 독립 <strong className="text-slate-900 dark:text-white">사진·표 OCR 창</strong>이 열려 글자·표·단어칩을 추출
             </span>
           </div>
-          <div className="p-3 rounded-xl bg-zinc-900/80 border border-white/10 flex flex-col gap-1">
-            <span className="font-extrabold text-white">③ 🏷️ 귀신 라벨러🔒</span>
-            <span className="text-zinc-400 leading-snug">
+          <div className="p-3 rounded-xl bg-white dark:bg-zinc-900/80 border border-slate-200 dark:border-white/10 flex flex-col gap-1 shadow-2xs">
+            <span className="font-extrabold text-slate-900 dark:text-white">③ 🏷️ 귀신 라벨러🔒</span>
+            <span className="text-slate-600 dark:text-zinc-400 leading-snug">
               암호 같은 사진·카톡·문서 파일명을 촬영일·내용 규칙(YYMMDD_내용)으로 일괄 자동 작명
             </span>
           </div>

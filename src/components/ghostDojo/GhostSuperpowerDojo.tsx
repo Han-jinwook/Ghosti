@@ -45,11 +45,14 @@ import {
 } from '../../services/ghostDojoEngine';
 
 /* ─────────────────────────────────────────────────────────────
- * 공용: Ctrl + 0 / Ctrl + 우클릭 (및 수련 박스 클릭) 즉시 소환 훅
+ * 공용: 실제 Ctrl + 0 / Ctrl + 우클릭 전용 소환 훅 (단순 마우스 좌클릭 오완료 원천 차단)
  * ───────────────────────────────────────────────────────────── */
-function useInstantSummonTrigger(onComplete: () => void) {
+function useInstantSummonTrigger(onComplete: () => void, listenWindowShortcut = true) {
   const [progress, setProgress] = useState(0);
+  const [leftClickGuide, setLeftClickGuide] = useState(false);
+
   const triggerNow = useCallback(() => {
+    setLeftClickGuide(false);
     setProgress(1);
     onComplete();
     window.setTimeout(() => {
@@ -57,10 +60,25 @@ function useInstantSummonTrigger(onComplete: () => void) {
     }, 500);
   }, [onComplete]);
 
+  useEffect(() => {
+    if (!listenWindowShortcut) return;
+    const onWinKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey && !e.altKey && !e.shiftKey && (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0')) {
+        const t = e.target as HTMLElement | null;
+        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+        e.preventDefault();
+        triggerNow();
+      }
+    };
+    window.addEventListener('keydown', onWinKeyDown);
+    return () => window.removeEventListener('keydown', onWinKeyDown);
+  }, [triggerNow, listenWindowShortcut]);
+
   const handlers = {
     tabIndex: 0,
-    onClick: () => {
-      triggerNow();
+    onClick: (e: React.MouseEvent<HTMLElement>) => {
+      e.currentTarget.focus();
+      setLeftClickGuide(true);
     },
     onMouseDown: (e: React.MouseEvent) => {
       if (e.button === 2 && e.ctrlKey && !e.altKey && !e.shiftKey) {
@@ -71,6 +89,7 @@ function useInstantSummonTrigger(onComplete: () => void) {
     onKeyDown: (e: React.KeyboardEvent) => {
       if (e.ctrlKey && (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0')) {
         e.preventDefault();
+        e.stopPropagation();
         triggerNow();
       }
     },
@@ -78,7 +97,7 @@ function useInstantSummonTrigger(onComplete: () => void) {
       if (e.ctrlKey) e.preventDefault();
     },
   };
-  return { progress, handlers };
+  return { progress, leftClickGuide, handlers };
 }
 
 const HoldRing: React.FC<{ progress: number; size?: number }> = ({ progress, size = 44 }) => {
@@ -128,23 +147,33 @@ const highlightPillCls =
  * ───────────────────────────────────────────────────────────── */
 const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const [summoned, setSummoned] = useState(false);
-  const { progress, handlers } = useInstantSummonTrigger(() => {
+  const { progress, leftClickGuide, handlers } = useInstantSummonTrigger(() => {
     playBabyGhostChime('summon');
     setSummoned(true);
     onDone();
-  });
+  }, !summoned);
   return (
     <div className="flex flex-col gap-2">
       <div
         {...handlers}
-        className="select-none h-24 rounded-xl border-2 border-dashed border-[#2DD4BF]/50 bg-zinc-950 flex items-center justify-center gap-3 text-[13px] text-zinc-300 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/60"
+        className="select-none min-h-24 px-4 py-3 rounded-xl border-2 border-dashed border-[#2DD4BF]/50 bg-zinc-950 flex flex-col sm:flex-row items-center justify-center gap-3 text-[13px] text-zinc-300 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/60"
       >
         <HoldRing progress={progress} />
-        <span>여기서 <strong>Ctrl + 0</strong> 또는 <strong>Ctrl + 우클릭</strong> (클릭해서 바로 체험)</span>
+        <div className="flex flex-col items-center sm:items-start gap-1 text-center sm:text-left">
+          <span>
+            이 칸 위에서 키보드 <kbd className={summonKeyBadgeCls}>Ctrl + 0</kbd> 또는 마우스{' '}
+            <kbd className={summonKeyBadgeCls}>Ctrl + 우클릭</kbd>을 눌러보세요!
+          </span>
+          {leftClickGuide && !summoned && (
+            <span className="text-[12px] font-extrabold text-amber-600 dark:text-amber-300">
+              👆 칸이 선택되었어요! 이제 일반 좌클릭 대신 키보드 Ctrl + 0 (또는 마우스 Ctrl + 우클릭)을 눌러 소환해 보세요!
+            </span>
+          )}
+        </div>
       </div>
       {summoned && (
         <div className={`${boxCls} border-[#2DD4BF]/60 flex flex-col gap-1.5`}>
-          <div className={`text-[12px] ${highlightTextCls}`}>👻 기본 귀신창 (한영·띄어쓰기 자동 성형 · 평소 복붙 원문 보존 · Wave 1 정예 구성)</div>
+          <div className={`text-[12px] ${highlightTextCls}`}>👻 기본 귀신창 소환 완료! (한영·띄어쓰기 자동 성형 · 평소 복붙 원문 보존)</div>
           <div className="flex flex-wrap gap-1.5 text-[11.5px] text-[#1E3A8A] dark:text-indigo-100 font-bold">
             <span className={`px-2 py-0.5 rounded ${highlightPillCls}`}>[Ctrl+V] 순차붙여넣기</span>
             <span className={`px-2 py-0.5 rounded ${highlightPillCls}`}>[1] 🧹서식·줄바꿈 다림질</span>
@@ -169,20 +198,36 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
 const Basic2: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const [open, setOpen] = useState(false);
   const [value, setValue] = useState(BASIC2_QUERY);
-  const { progress, handlers } = useInstantSummonTrigger(() => {
+  const { progress, leftClickGuide, handlers } = useInstantSummonTrigger(() => {
     playBabyGhostChime('summon');
     setOpen(true);
-  });
+  }, !open);
   return (
     <div className="flex flex-col gap-2">
-      <div {...handlers} className={`${boxCls} select-none flex items-center gap-3 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/60`}>
+      <div className="px-3 py-2 rounded-xl bg-indigo-500/10 border border-indigo-400/30 text-[12px] text-slate-700 dark:text-zinc-200 leading-relaxed">
+        💡 <strong>상황 예시:</strong> 카톡 중 거래처에서 <em>&ldquo;작년 납품 단가가 얼마였죠?&rdquo;</em> 물어봤을 때, 바탕화면 엑셀 파일을 찾아 열 필요 없이 쓰던 입력창 위에서 바로{' '}
+        <kbd className={summonKeyBadgeCls}>Ctrl + 0</kbd> 또는 <kbd className={summonKeyBadgeCls}>Ctrl + 우클릭</kbd>을 누르면 파일 안의 숫자를 1초 만에 찾아 꽂아줍니다!
+      </div>
+      <div
+        {...handlers}
+        className={`${boxCls} select-none flex flex-wrap items-center gap-3 cursor-pointer focus:outline-none focus:ring-2 focus:ring-[#2DD4BF]/60`}
+      >
         <span className="text-zinc-500 text-[12px] shrink-0">💬 카톡 입력창</span>
-        <span className="flex-1 font-bold">{value}</span>
+        <span className="flex-1 font-bold">
+          {value === BASIC2_QUERY ? '단가? (여기서 Ctrl + 0 또는 Ctrl + 우클릭!)' : `납품 단가: ${value}`}
+        </span>
         <HoldRing progress={progress} size={30} />
       </div>
+      {leftClickGuide && !open && (
+        <div className="text-[12px] font-extrabold text-amber-600 dark:text-amber-300 px-1">
+          👆 입력창이 선택되었어요! 이제 키보드 Ctrl + 0 또는 마우스 Ctrl + 우클릭을 눌러 파일 속 단가를 불러보세요!
+        </div>
+      )}
       {open && value === BASIC2_QUERY && (
-        <div className={`${boxCls} border-[#2DD4BF]/60`}>
-          <div className={`text-[12px] ${highlightTextCls} mb-1.5`}>👻 귀신검색창</div>
+        <div className={`${boxCls} border-[#2DD4BF]/60 flex flex-col gap-1.5`}>
+          <div className={`text-[12px] ${highlightTextCls}`}>
+            👻 귀신검색창 — 엑셀 파일을 열지 않고도 본문 속 &ldquo;단가&rdquo;를 즉시 찾았습니다! 아래 결과를 클릭해 보세요:
+          </div>
           <button
             type="button"
             onClick={() => {
@@ -190,11 +235,18 @@ const Basic2: React.FC<{ onDone: () => void }> = ({ onDone }) => {
               playBabyGhostChime('typo');
               onDone();
             }}
-            className="w-full flex items-center justify-between gap-2 px-2.5 py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 cursor-pointer"
+            className="w-full flex items-center justify-between gap-2 px-3 py-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-[#2DD4BF]/40 cursor-pointer transition-colors"
           >
-            <span>📄 {BASIC2_RESULT.file}</span>
-            <span className="font-extrabold text-amber-300">단가 {BASIC2_RESULT.value} ↵</span>
+            <span className="font-semibold">📄 {BASIC2_RESULT.file} (파일 안 열고 본문 추출)</span>
+            <span className="font-extrabold text-[#1E3A8A] dark:text-amber-300 bg-amber-200/80 dark:bg-amber-400/20 px-2.5 py-0.5 rounded-md">
+              👆 단가 {BASIC2_RESULT.value} 카톡창에 바로 넣기 ↵
+            </span>
           </button>
+        </div>
+      )}
+      {value !== BASIC2_QUERY && (
+        <div className="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/50 text-[12.5px] font-extrabold text-emerald-700 dark:text-emerald-300">
+          ✓ 완료! 엑셀 프로그램을 실행하지 않고도 카톡 입력창에 단가({value})가 1초 만에 입력되었습니다!
         </div>
       )}
     </div>
@@ -204,37 +256,119 @@ const Basic2: React.FC<{ onDone: () => void }> = ({ onDone }) => {
 const Basic3: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const [injected, setInjected] = useState('');
   const [wrong, setWrong] = useState('');
+
+  const handlePickBizNumber = () => {
+    setInjected('123-45-67890');
+    setWrong('');
+    void navigator.clipboard?.writeText('123-45-67890').catch(() => {});
+    playBabyGhostChime('typo');
+    onDone();
+  };
+
   return (
-    <div className="flex flex-col gap-2">
-      <div className={`${boxCls} border-[#2DD4BF]/60`}>
-        <div className={`text-[12px] ${highlightTextCls} mb-1.5`}>📱 방금 찍은 영수증 → 단어칩</div>
-        <div className="flex flex-wrap gap-1.5">
-          {BASIC3_CHIPS.map((chip) => (
+    <div className="flex flex-col gap-2.5">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 items-stretch">
+        {/* 좌측: 실제 종이 영수증 촬영 사진 UI (영수증 이미지 위에서 사업자번호 직접 클릭 가능!) */}
+        <div className="md:col-span-5 p-3 rounded-xl bg-slate-200/80 dark:bg-zinc-950 border border-slate-300 dark:border-white/15 flex flex-col items-center justify-center">
+          <div className="text-[11px] font-bold text-slate-600 dark:text-zinc-400 mb-1.5 flex items-center gap-1">
+            <span>📸 방금 찍은 샘플 영수증 사진 (사진 속 번호를 직접 눌러보세요!)</span>
+          </div>
+          <div
+            className="w-full max-w-[270px] bg-[#FFFDF8] text-slate-900 rounded-md shadow-md border border-stone-300 px-3.5 py-3 font-mono text-[11.5px] flex flex-col gap-1.5 relative"
+            style={{ boxShadow: '0 6px 16px rgba(15, 23, 42, 0.14)' }}
+          >
+            <div className="text-center border-b border-dashed border-stone-400 pb-1.5">
+              <div className="font-extrabold text-[13px] tracking-tight text-slate-900">🧾 [영수증] 썬드림카페</div>
+              <div className="text-[10.5px] text-slate-500">서울 강남구 테헤란로 123 · 대표 백은숙</div>
+            </div>
+
             <button
-              key={chip}
               type="button"
-              onClick={() => {
-                if (chip === BASIC3_TARGET_CHIP) {
-                  setInjected(chip.replace(/^사업자번호:\s*/, ''));
-                  setWrong('');
-                  playBabyGhostChime('typo');
-                  onDone();
-                } else {
-                  setWrong(chip);
-                }
-              }}
-              className={`px-2 py-1 rounded-lg text-[12px] cursor-pointer border ${
-                wrong === chip ? 'border-rose-400 bg-rose-500/10' : 'border-white/10 bg-zinc-800 hover:bg-zinc-700'
+              onClick={handlePickBizNumber}
+              title="영수증 사진 속 사업자번호 영역 클릭"
+              className={`w-full text-left px-2 py-1.5 rounded-md border-2 transition-all cursor-pointer flex items-center justify-between gap-1 ${
+                injected
+                  ? 'bg-emerald-100 border-emerald-600 text-emerald-950 font-extrabold'
+                  : 'bg-amber-100/90 hover:bg-amber-200 border-[#1E3A8A] text-[#1E3A8A] font-extrabold animate-pulse'
               }`}
             >
-              {chip}
+              <span>사업자번호: 123-45-67890</span>
+              <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#1E3A8A] text-white font-sans shrink-0">
+                {injected ? '✓ 추출됨' : '👆 콕!'}
+              </span>
             </button>
-          ))}
+
+            <div className="border-y border-dashed border-stone-300 py-1 text-[10.5px] text-slate-700 flex flex-col gap-0.5">
+              <div className="flex justify-between">
+                <span>아메리카노 외 3건</span>
+                <span>48,000원</span>
+              </div>
+              <div className="flex justify-between font-bold text-slate-900">
+                <span>합계 금액 (카드결제)</span>
+                <span>48,000원</span>
+              </div>
+            </div>
+            <div className="flex items-center justify-between text-[10px] text-slate-500">
+              <span>거래일시: 2026-11-07 14:22</span>
+              <span className="tracking-widest font-bold text-slate-400">||| |||| |||</span>
+            </div>
+          </div>
         </div>
-      </div>
-      <div className={boxCls}>
-        <span className="text-zinc-500">사업자번호: </span>
-        <span className="font-bold">{injected || '＿＿＿＿＿＿'}</span>
+
+        {/* 우측: 영수증 사진에서 자동 추출된 단어칩 & 입력 결과 */}
+        <div className="md:col-span-7 flex flex-col justify-between gap-2">
+          <div className={`${boxCls} border-[#2DD4BF]/60 flex-1 flex flex-col justify-center gap-2`}>
+            <div className={`text-[12px] ${highlightTextCls}`}>
+              📱 영수증 사진에서 자동 추출된 단어칩 (왼쪽 영수증 사진의 번호나 아래 칩을 클릭!)
+            </div>
+            <div className="flex flex-wrap gap-1.5">
+              {BASIC3_CHIPS.map((chip) => {
+                const isTarget = chip === BASIC3_TARGET_CHIP;
+                return (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => {
+                      if (isTarget) {
+                        handlePickBizNumber();
+                      } else {
+                        setWrong(chip);
+                      }
+                    }}
+                    className={`px-2.5 py-1.5 rounded-lg text-[12px] font-semibold cursor-pointer border transition-all ${
+                      isTarget && injected
+                        ? 'border-emerald-500 bg-emerald-500/20 font-extrabold'
+                        : isTarget
+                          ? 'border-[#1E3A8A] bg-indigo-500/15 hover:bg-indigo-500/25 font-extrabold'
+                          : wrong === chip
+                            ? 'border-rose-400 bg-rose-500/10'
+                            : 'border-white/10 bg-zinc-800 hover:bg-zinc-700'
+                    }`}
+                  >
+                    {isTarget ? `🎯 ${chip}` : chip}
+                  </button>
+                );
+              })}
+            </div>
+            {wrong && (
+              <div className="text-[11.5px] text-rose-600 dark:text-rose-300 font-bold">
+                💡 미션 목표는 영수증의 [사업자번호: 123-45-67890]이에요! 왼쪽 영수증 사진이나 🎯 칩을 눌러보세요.
+              </div>
+            )}
+          </div>
+
+          <div className={`${boxCls} flex items-center justify-between gap-2`}>
+            <div>
+              <span className="text-zinc-500">세금계산서 사업자번호 입력칸: </span>
+              <span className="font-extrabold text-[14px]">{injected || '＿＿＿＿＿＿＿＿＿＿'}</span>
+            </div>
+            {injected && (
+              <span className="text-[11.5px] font-extrabold text-emerald-600 dark:text-emerald-400 shrink-0">
+                ✓ 0.1초 자동 입력 &amp; 복사 완료!
+              </span>
+            )}
+          </div>
+        </div>
       </div>
     </div>
   );
@@ -1213,7 +1347,24 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
         <section className={panelCls}>
           <div className="flex items-center justify-between gap-2">
             <h3 className="text-[15px] font-extrabold text-white">🥋 1단계 · 애기귀신 소환술 3단 수련</h3>
-            <span className="text-[12px] font-bold text-zinc-400">{basicsDone}/3</span>
+            <div className="flex items-center gap-2">
+              <span className="text-[12px] font-bold text-zinc-400">{basicsDone}/3 완료</span>
+              {basicsDone > 0 && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const resetNext: DojoProgress = { ...progress, basics: {} };
+                    setProgress(resetNext);
+                    saveDojoProgress(resetNext);
+                    setActiveBasic('b1');
+                    setSandboxKey((k) => k + 1);
+                  }}
+                  className="px-2.5 py-0.5 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 text-[11px] font-bold cursor-pointer"
+                >
+                  🔄 3단 수련 초기화
+                </button>
+              )}
+            </div>
           </div>
           <div className="flex flex-wrap gap-1.5">
             {BASIC_STEPS.map((s, i) => (

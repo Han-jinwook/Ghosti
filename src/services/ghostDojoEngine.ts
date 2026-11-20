@@ -27,9 +27,23 @@ export interface DojoItemMeta {
 }
 
 export const BASIC_STEPS: Array<{ id: BasicStepId; title: string; mission: string }> = [
-  { id: 'b1', title: 'Ctrl+0 / Ctrl+우클릭 소환', mission: '아래 칸에서 Ctrl + 0 또는 Ctrl + 우클릭으로 바로 부르세요' },
-  { id: 'b2', title: '단가? 무오픈 소환', mission: '「샘플 견적서?」 위에서 Ctrl + 0 또는 Ctrl + 우클릭 → 단가를 콕' },
-  { id: 'b3', title: '폰 영수증 단어칩', mission: '영수증 사진에서 사업자번호 칩을 콕' },
+  {
+    id: 'b1',
+    title: 'Ctrl+0 / Ctrl+우클릭 소환',
+    mission: '아래 체험 칸 위에서 키보드 Ctrl + 0 또는 마우스 Ctrl + 우클릭을 눌러 애기귀신을 불러보세요!',
+  },
+  {
+    id: 'b2',
+    title: '파일 안 열고 "단가" 바로 찾기',
+    mission:
+      '엑셀·한글 견적서를 일일이 열지 않아도 됩니다! 아래 카톡 입력창 위에서 Ctrl + 0 (또는 Ctrl + 우클릭)을 눌러 파일 속 "단가(145,000원)"를 1초 만에 꽂아 넣어보세요.',
+  },
+  {
+    id: 'b3',
+    title: '영수증 사진 속 글자 콕 찍기',
+    mission:
+      '아래 실제 영수증 사진 위에서 반짝이는 [사업자번호 123-45-67890] 영역(또는 우측 추출 단어칩)을 마우스로 콕 찍어 입력칸에 바로 넣어보세요!',
+  },
 ];
 
 export const DOJO_ITEMS: DojoItemMeta[] = [
