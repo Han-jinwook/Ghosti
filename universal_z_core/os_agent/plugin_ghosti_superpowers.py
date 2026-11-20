@@ -38,12 +38,17 @@ USER_SNIPPETS_FILE = spd.USER_SNIPPETS_APPDATA
 _DAEMON_THREAD_STARTED = False
 _DAEMON_WATCHDOG_STARTED = False
 _DAEMON_LOCK = threading.Lock()
+_LAST_SPAWNED_PROC: subprocess.Popen | None = None
+_LAST_SPAWN_TS: float = 0.0
 
 
 def shutdown_superpower_daemon_for_update() -> None:
     """무소음 자가 업데이트(updater.bat) 전에 포트 51988 귀신창 데몬을 깔끔히 종료해 .exe 파일 잠금을 즉시 해제합니다."""
+    global _LAST_SPAWNED_PROC, _LAST_SPAWN_TS
     if os.name != "nt":
         return
+    _LAST_SPAWNED_PROC = None
+    _LAST_SPAWN_TS = 0.0
     try:
         import socket
 
@@ -55,19 +60,20 @@ def shutdown_superpower_daemon_for_update() -> None:
 
 def ensure_superpower_daemon_running() -> bool:
     """
-    [프로세스 완전 분리 모드 + PING/PONG 활성 검증 (Z-Core v2.4.79)]
+    [프로세스 완전 분리 모드 + PING/PONG 활성 검증 + 66MB 단일 .exe 압축해제 중복 스폰 원천 차단 (Z-Core v2.5.39)]
     - 귀신창 데몬(seq_paste_daemon, 포트 51988)은 메인 Z-코어(5199)와 반드시 별도 프로세스로 분리합니다.
     - 51988 포트가 열려 있고 __PING__ -> PONG(메인 루프·UI 루프 정상 박동) 응답이 오면 즉시 True를 반환합니다.
-    - 미실행이거나 응답 없음으로 종료된 경우 독립 자식 프로세스(--seq-paste-daemon)로 즉시 재기동하여
-      Ctrl+0 · Ctrl+우클릭이 언제나 끊김 없이 작동하도록 보장합니다.
+    - 직전에 기동한 자식 프로세스(_LAST_SPAWNED_PROC)가 아직 살아 있고 PyInstaller _MEI 압축해제 중(45초 유예)이라면
+      8초 워치독이 중복 프로세스를 연쇄 스폰(Fork-Stampede)하지 않도록 즉시 대기 반환합니다!
     """
+    global _LAST_SPAWNED_PROC, _LAST_SPAWN_TS
     if os.name != "nt":
         return True
     try:
         import socket
 
-        with socket.create_connection(("127.0.0.1", 51988), timeout=0.6) as conn:
-            conn.settimeout(0.8)
+        with socket.create_connection(("127.0.0.1", 51988), timeout=1.0) as conn:
+            conn.settimeout(1.2)
             conn.sendall(b"__PING__")
             reply = conn.recv(64)
             if b"PONG" in reply:
@@ -76,12 +82,21 @@ def ensure_superpower_daemon_running() -> bool:
         pass
 
     with _DAEMON_LOCK:
-        # 재확인 (동시 호출 중복 스폰 방지)
+        # 1) 이미 스폰한 자식 프로세스가 아직 살아 있고 부팅/압축해제 유예시간(45초) 이내면 중복 스폰 절대 금지!
+        now_sp = time.time()
+        if (
+            _LAST_SPAWNED_PROC is not None
+            and _LAST_SPAWNED_PROC.poll() is None
+            and (now_sp - _LAST_SPAWN_TS) < 45.0
+        ):
+            return True
+
+        # 2) 포트 51988 재확인 (동시 호출 중복 스폰 방지)
         try:
             import socket
 
-            with socket.create_connection(("127.0.0.1", 51988), timeout=0.35) as conn2:
-                conn2.settimeout(0.5)
+            with socket.create_connection(("127.0.0.1", 51988), timeout=0.6) as conn2:
+                conn2.settimeout(0.8)
                 conn2.sendall(b"__PING__")
                 if b"PONG" in conn2.recv(64):
                     return True
@@ -95,12 +110,13 @@ def ensure_superpower_daemon_running() -> bool:
                 import core_win32 as _cw32
 
                 target_exe = _cw32.ensure_persistent_frozen_install()
-                subprocess.Popen(
+                _LAST_SPAWNED_PROC = subprocess.Popen(
                     [target_exe, "--seq-paste-daemon"],
                     env=clean_env,
                     creationflags=0x08000000 | 0x00000008,  # CREATE_NO_WINDOW | DETACHED_PROCESS
                     close_fds=True,
                 )
+                _LAST_SPAWN_TS = time.time()
             except Exception:
                 pass
         else:
@@ -111,12 +127,13 @@ def ensure_superpower_daemon_running() -> bool:
                 if spd_script.exists():
                     pyw = Path(sys.executable).with_name("pythonw.exe")
                     runner = str(pyw if pyw.exists() else Path(sys.executable))
-                    subprocess.Popen(
+                    _LAST_SPAWNED_PROC = subprocess.Popen(
                         [runner, str(spd_script)],
                         env=clean_env,
                         creationflags=0x08000000 | 0x00000008,
                         close_fds=True,
                     )
+                    _LAST_SPAWN_TS = time.time()
             except Exception:
                 pass
     return True

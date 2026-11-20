@@ -475,19 +475,19 @@ Start-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContin
             if chk.returncode == 0 and f'"{core_ver}"' in chk.stdout and "|51988=1" in chk.stdout:
                 log(f"✅ {label} Z-코어 v{core_ver} + 귀신창(51988) 인터랙티브 세션 동기화 및 기동 확인 성공!")
                 return
-            if chk.returncode == 0 and f'"{core_ver}"' in chk.stdout and attempt >= 6:
+            if chk.returncode == 0 and f'"{core_ver}"' in chk.stdout and attempt >= 11:
                 log(f"✅ {label} Z-코어 v{core_ver} + 자동실행(Run & ONLOGON) 동기화 및 기동 확인 성공!")
                 return
+            if attempt == 10 and f'"{core_ver}"' not in (chk.stdout or ""):
+                # 66MB 단일 실행파일 압축해제 지연 시에도 5199가 아직 미응답일 때만 인터랙티브 예약작업 재트리거 (Session 0 직접 기동 영구 금지)
+                _run_remote_ps_encoded(
+                    ssh_target,
+                    key_path,
+                    "Start-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContinue",
+                    timeout_sec=12,
+                )
         except Exception:
             pass
-        if attempt == 8:
-            # 66MB 단일 실행파일 압축해제 지연 시에도 반드시 인터랙티브 예약작업으로만 재트리거 (Session 0 직접 기동 영구 금지)
-            _run_remote_ps_encoded(
-                ssh_target,
-                key_path,
-                "Start-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContinue",
-                timeout_sec=12,
-            )
     log(f"⚠️ {label} 헬스체크 대기 초과")
 
 

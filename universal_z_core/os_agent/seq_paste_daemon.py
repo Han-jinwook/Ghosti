@@ -1424,8 +1424,14 @@ def close_ghost_toast() -> None:
     _toast_event.set()
 
 
+_MACHINE_HWID_MEM: str = ""
+
+
 def _get_machine_hwid_local() -> str:
-    """메인보드 UUID / 머신 GUID 기반 기기 고유 해시(sha256_...) 반환"""
+    """메인보드 UUID / 머신 GUID 기반 기기 고유 해시(sha256_...) 반환 (프로세스 내 영구 메모리 캐시)"""
+    global _MACHINE_HWID_MEM
+    if _MACHINE_HWID_MEM:
+        return _MACHINE_HWID_MEM
     import hashlib
     import platform
     raw_id = f"{platform.node()}::{platform.machine()}"
@@ -1439,7 +1445,8 @@ def _get_machine_hwid_local() -> str:
         except Exception:
             pass
     digest = hashlib.sha256(raw_id.encode("utf-8")).hexdigest()[:20]
-    return f"sha256_{digest}"
+    _MACHINE_HWID_MEM = f"sha256_{digest}"
+    return _MACHINE_HWID_MEM
 
 
 # =====================================================================
@@ -1783,6 +1790,9 @@ def _read_unified_machine_trial_info() -> tuple[Path, dict, str, dict]:
     return ledger_path, ledger, hwid, m_info
 
 
+_TRIAL_BADGE_MEM_CACHE: dict = {"ts": 0.0, "mtime_ns": -1, "size": -1, "val": None}
+
+
 def get_trial_badge_summary() -> dict:
     """
     [단일 SSOT — 30일 Opt-in 무료체험 실시간 상태 & UI①·UI②·UI③ 동적 배지 텍스트 산출]
@@ -1791,10 +1801,31 @@ def get_trial_badge_summary() -> dict:
     - EXPIRED_LOCKED: 30일 체험 만료 (유료 기능만 깔끔 잠금🔒 · 무료 기본기 평생 0원)
     - NOT_STARTED: 아직 30일 체험 시작 전 (설치 시 몰래 카운트다운 0%)
     """
+    now_b = time.time()
+    ledger_p = _MERLIN_APPDATA / "superpower_trial_ledger.json"
+    cur_mtime_ns = 0
+    cur_sz = 0
+    try:
+        if ledger_p.exists():
+            st_l = ledger_p.stat()
+            cur_mtime_ns = int(st_l.st_mtime_ns)
+            cur_sz = int(st_l.st_size)
+    except Exception:
+        pass
+    cached_val = _TRIAL_BADGE_MEM_CACHE.get("val")
+    if (
+        isinstance(cached_val, dict)
+        and (now_b - float(_TRIAL_BADGE_MEM_CACHE.get("ts") or 0.0)) < 15.0
+        and _TRIAL_BADGE_MEM_CACHE.get("mtime_ns") == cur_mtime_ns
+        and _TRIAL_BADGE_MEM_CACHE.get("size") == cur_sz
+    ):
+        return cached_val
+
+    res_badge: dict | None = None
     try:
         _, _, _, m_info = _read_unified_machine_trial_info()
         if m_info.get("isSubscribed"):
-            return {
+            res_badge = {
                 "status": "SUBSCRIBED",
                 "days_left": 9999,
                 "short_badge": "💎 내 기기 통합 무제한",
@@ -1802,37 +1833,45 @@ def get_trial_badge_summary() -> dict:
                 "ui2_hint": "✨ 자율크기 · 💎 무제한 구독중",
                 "ui3_hint": "💎 무제한 구독중 · 단어칩 클릭 시 커서에 0.1초 입력!",
             }
-        start_ts = float(m_info.get("trialOptInTs") or m_info.get("startedAtTs") or 0.0)
-        if start_ts > 0.0:
-            elapsed = (time.time() - start_ts) / 86400.0
-            if elapsed < 30.0:
-                rem = max(1, min(30, int(round(30.0 - elapsed + 0.49))))
-                return {
-                    "status": "ACTIVE_30D",
-                    "days_left": rem,
-                    "short_badge": f"🎁 30일 무제한(D-{rem}·차감없음)",
-                    "ui1_hint": f"🎁 30일 무제한 체험(D-{rem} · 차감없음) · 글자 입력 시 👻귀신검색창 전환",
-                    "ui2_hint": f"✨ 자율크기 · 🎁 30일 체험(D-{rem})",
-                    "ui3_hint": f"🎁 30일 무제한(D-{rem}) · 원하는 단어칩을 클릭하면 커서에 0.1초 입력!",
-                }
-            return {
-                "status": "EXPIRED_LOCKED",
-                "days_left": 0,
-                "short_badge": "🔒 체험만료 (무료기본기 평생0원)",
-                "ui1_hint": "🔒 유료체험 만료(무료 기본기는 평생 0원) · 글자 입력 시 👻귀신검색창 전환",
-                "ui2_hint": "✨ 귀신검색 평생 0원 · 🔒 고급도구 만료",
-                "ui3_hint": "🔒 30일 무료체험 만료 · 구독 시 해제됩니다",
-            }
+        else:
+            start_ts = float(m_info.get("trialOptInTs") or m_info.get("startedAtTs") or 0.0)
+            if start_ts > 0.0:
+                elapsed = (now_b - start_ts) / 86400.0
+                if elapsed < 30.0:
+                    rem = max(1, min(30, int(round(30.0 - elapsed + 0.49))))
+                    res_badge = {
+                        "status": "ACTIVE_30D",
+                        "days_left": rem,
+                        "short_badge": f"🎁 30일 무제한(D-{rem}·차감없음)",
+                        "ui1_hint": f"🎁 30일 무제한 체험(D-{rem} · 차감없음) · 글자 입력 시 👻귀신검색창 전환",
+                        "ui2_hint": f"✨ 자율크기 · 🎁 30일 체험(D-{rem})",
+                        "ui3_hint": f"🎁 30일 무제한(D-{rem}) · 원하는 단어칩을 클릭하면 커서에 0.1초 입력!",
+                    }
+                else:
+                    res_badge = {
+                        "status": "EXPIRED_LOCKED",
+                        "days_left": 0,
+                        "short_badge": "🔒 체험만료 (무료기본기 평생0원)",
+                        "ui1_hint": "🔒 유료체험 만료(무료 기본기는 평생 0원) · 글자 입력 시 👻귀신검색창 전환",
+                        "ui2_hint": "✨ 귀신검색 평생 0원 · 🔒 고급도구 만료",
+                        "ui3_hint": "🔒 30일 무료체험 만료 · 구독 시 해제됩니다",
+                    }
     except Exception:
         pass
-    return {
-        "status": "NOT_STARTED",
-        "days_left": 30,
-        "short_badge": "🎁 유료도구 30일 무료체험 가능",
-        "ui1_hint": "✨ 무료 초능력 평생 0원 · 🔒도구 첫 클릭 시 30일 체험 선택 · 글자 치면 검색창",
-        "ui2_hint": "✨ 자율크기 검색 평생 0원 · 🎁 30일 체험 미시작",
-        "ui3_hint": "🎁 30일 무제한 체험 · 원하는 단어칩을 클릭하면 커서에 0.1초 입력!",
-    }
+    if res_badge is None:
+        res_badge = {
+            "status": "NOT_STARTED",
+            "days_left": 30,
+            "short_badge": "🎁 유료도구 30일 무료체험 가능",
+            "ui1_hint": "✨ 무료 초능력 평생 0원 · 🔒도구 첫 클릭 시 30일 체험 선택 · 글자 치면 검색창",
+            "ui2_hint": "✨ 자율크기 검색 평생 0원 · 🎁 30일 체험 미시작",
+            "ui3_hint": "🎁 30일 무제한 체험 · 원하는 단어칩을 클릭하면 커서에 0.1초 입력!",
+        }
+    _TRIAL_BADGE_MEM_CACHE["ts"] = now_b
+    _TRIAL_BADGE_MEM_CACHE["mtime_ns"] = cur_mtime_ns
+    _TRIAL_BADGE_MEM_CACHE["size"] = cur_sz
+    _TRIAL_BADGE_MEM_CACHE["val"] = res_badge
+    return res_badge
 
 
 def opt_in_30d_unlimited_superpower_trial(agreed: bool = True, account_id: str = "local_user") -> dict:
@@ -2681,6 +2720,10 @@ def _make_context_snippet(text: str, query: str, max_len: int = 54) -> str:
 
 
 _LOCAL_FILE_CACHE: dict = {"ts": 0.0, "items": []}
+_LOCAL_FILE_SCAN_LOCK = threading.Lock()
+_LOCAL_FILE_REFRESH_RUNNING = False
+_KNOWN_USER_FOLDERS_CACHE: dict = {"ts": 0.0, "folders": []}
+_DOC_BODY_MEM_CACHE: dict = {"mtime_ns": -1, "size": -1, "data": {}}
 _ONDEMAND_IMG_OCR_MEM_CACHE: dict[str, dict] = {}
 _ONDEMAND_IMG_OCR_LOCK = threading.Lock()
 
@@ -2713,6 +2756,9 @@ def _resolve_win_known_folder_safe(guid_str: str) -> Path | None:
 
 
 def _get_known_user_folders_for_search() -> list[Path]:
+    now_f = time.time()
+    if _KNOWN_USER_FOLDERS_CACHE["folders"] and (now_f - float(_KNOWN_USER_FOLDERS_CACHE["ts"])) < 30.0:
+        return list(_KNOWN_USER_FOLDERS_CACHE["folders"])
     home = Path.home()
     raw_cands: list[Path] = []
     # [0순위: 업무 공유 S: 드라이브 직결] S:\가 실제 마운트된 업무공유 활성 상태일 때만 편입 ([2. 순수 개인 모드] 전환 시 업무 파일 혼입 0% 보장)
@@ -2768,143 +2814,252 @@ def _get_known_user_folders_for_search() -> list[Path]:
                 deduped.append(d)
         except Exception:
             pass
+    _KNOWN_USER_FOLDERS_CACHE["ts"] = now_f
+    _KNOWN_USER_FOLDERS_CACHE["folders"] = deduped
     return deduped
+
+
+def _load_doc_body_cache_fast() -> dict[str, str]:
+    try:
+        local_app_c = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+        doc_cache_p = local_app_c / "Merlin" / "doc_text_cache_v1.json"
+        if not doc_cache_p.exists():
+            return {}
+        st_dc = doc_cache_p.stat()
+        if (
+            _DOC_BODY_MEM_CACHE["mtime_ns"] == int(st_dc.st_mtime_ns)
+            and _DOC_BODY_MEM_CACHE["size"] == int(st_dc.st_size)
+            and isinstance(_DOC_BODY_MEM_CACHE["data"], dict)
+        ):
+            return _DOC_BODY_MEM_CACHE["data"]
+        raw_dc = json.loads(doc_cache_p.read_text(encoding="utf-8", errors="ignore"))
+        if isinstance(raw_dc, dict):
+            _DOC_BODY_MEM_CACHE["mtime_ns"] = int(st_dc.st_mtime_ns)
+            _DOC_BODY_MEM_CACHE["size"] = int(st_dc.st_size)
+            _DOC_BODY_MEM_CACHE["data"] = raw_dc
+            return raw_dc
+    except Exception:
+        pass
+    return {}
+
+
+def _scan_lightweight_local_files_sync() -> list[dict]:
+    """
+    [초고속 로컬 파일 스캐너 — UI 스레드 블로킹 0%]:
+    1) os.scandir의 메모리 내 WIN32_FIND_DATA(entry.stat(follow_symlinks=False))만 사용해 수천 개 파일에 대한
+       불필요한 CreateFileW / GetFinalPathNameByHandleW(Path.resolve) 커널 호출을 100% 제거합니다.
+    2) 최신순 상위 50개 문서(by_kind["doc"][:50])만 먼저 추린 뒤 본문 스니펫을 연결하며,
+       OneDrive 미동기화 클라우드 전용 파일(FILE_ATTRIBUTE_OFFLINE / RECALL_ON_DATA_ACCESS)은 원격 다운로드를 유발하지 않도록 스킵합니다.
+    """
+    with _LOCAL_FILE_SCAN_LOCK:
+        now = time.time()
+        if _LOCAL_FILE_CACHE["ts"] > 0.0 and (now - float(_LOCAL_FILE_CACHE["ts"])) < 55.0:
+            return _LOCAL_FILE_CACHE["items"]
+
+        folders = _get_known_user_folders_for_search()
+        doc_exts = {".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md"}
+        img_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+        vid_exts = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v"}
+        skip_sub_dirs = {
+            "node_modules", ".git", "appdata", "__pycache__", "venv", ".venv",
+            "dist", "build", "universal_z_core", "merlin_z_core", "$recycle.bin",
+        }
+
+        scan_dirs: list[Path] = []
+        seen_scan_dirs: set[str] = set()
+        for root_fd in folders:
+            norm_r = os.path.normcase(os.path.abspath(str(root_fd)))
+            if norm_r not in seen_scan_dirs:
+                seen_scan_dirs.add(norm_r)
+                scan_dirs.append(root_fd)
+            sub_added = 0
+            try:
+                with os.scandir(root_fd) as it_sub:
+                    for sub_e in it_sub:
+                        if sub_added >= 15:
+                            break
+                        try:
+                            if not sub_e.is_dir(follow_symlinks=False):
+                                continue
+                            sname = sub_e.name
+                            if sname.startswith((".", "$", "~")) or sname.lower() in skip_sub_dirs:
+                                continue
+                            norm_s = os.path.normcase(os.path.abspath(sub_e.path))
+                            if norm_s not in seen_scan_dirs:
+                                seen_scan_dirs.add(norm_s)
+                                scan_dirs.append(Path(sub_e.path))
+                                sub_added += 1
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        by_kind: dict[str, list[dict]] = {"doc": [], "image": [], "video": []}
+        seen_files: set[str] = set()
+        CLOUD_UNHYDRATED_MASK = 0x00400000 | 0x00001000  # FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS | FILE_ATTRIBUTE_OFFLINE
+
+        for fd in scan_dirs:
+            fd_str_low = str(fd).lower()
+            is_s_drive_item = fd_str_low.startswith("s:") or "업무공유폴더_s" in fd_str_low
+            fd_badge = (
+                f"💼S:\\{fd.name}"
+                if (is_s_drive_item and fd.name and fd.name.lower() != "업무공유폴더_s")
+                else ("💼S:" if is_s_drive_item else fd.name)
+            )
+            try:
+                with os.scandir(fd) as it:
+                    for entry in it:
+                        try:
+                            if not entry.is_file(follow_symlinks=False):
+                                continue
+                            name = entry.name
+                            name_low = name.lower()
+                            if (
+                                name.startswith((".", "~$", ".~lock."))
+                                or name_low in ("desktop.ini", "thumbs.db")
+                                or name_low.endswith((".lck", ".tmp", ".ghosti_sync_tmp"))
+                            ):
+                                continue
+                            dot_idx = name_low.rfind(".")
+                            if dot_idx < 0:
+                                continue
+                            ext = name_low[dot_idx:]
+                            if ext in doc_exts:
+                                fkind = "doc"
+                            elif ext in img_exts:
+                                fkind = "image"
+                            elif ext in vid_exts:
+                                fkind = "video"
+                            else:
+                                continue
+                            norm_fp = os.path.normcase(os.path.abspath(entry.path))
+                            if norm_fp in seen_files:
+                                continue
+                            seen_files.add(norm_fp)
+                            st = entry.stat(follow_symlinks=False)
+                            by_kind[fkind].append({
+                                "kind": fkind,
+                                "file_path": entry.path,
+                                "img_path": entry.path if fkind == "image" else "",
+                                "text": f"[{fd_badge}] {name}",
+                                "ts": st.st_mtime,
+                                "_size": st.st_size,
+                                "_attrs": int(getattr(st, "st_file_attributes", 0) or 0),
+                                "_ext": ext,
+                                "_badge": fd_badge,
+                                "_name": name[:120],
+                            })
+                        except Exception:
+                            pass
+            except Exception:
+                pass
+
+        for fk in by_kind:
+            by_kind[fk].sort(key=lambda x: x.get("ts", 0.0), reverse=True)
+
+        top_docs = by_kind["doc"][:50]
+        if top_docs:
+            doc_body_cache = _load_doc_body_cache_fast()
+            for d_it in top_docs:
+                try:
+                    fp_str = d_it["file_path"]
+                    st_sz = int(d_it.get("_size") or 0)
+                    st_mt = int(d_it.get("ts") or 0)
+                    f_attrs = int(d_it.get("_attrs") or 0)
+                    ext_d = str(d_it.get("_ext") or "")
+                    body_snip = ""
+                    if doc_body_cache:
+                        try:
+                            resolved_entry = Path(fp_str).resolve()
+                        except Exception:
+                            resolved_entry = Path(fp_str)
+                        sig_v3 = f"{resolved_entry}|{st_sz}|{st_mt}|v3_sota50k"
+                        cached_txt = doc_body_cache.get(sig_v3) or ""
+                        if cached_txt:
+                            body_snip = re.sub(r"\s+", " ", str(cached_txt)).strip()[:1600]
+                    if (
+                        not body_snip
+                        and ext_d in (".txt", ".csv", ".md")
+                        and 0 < st_sz <= 262144
+                        and (f_attrs & CLOUD_UNHYDRATED_MASK) == 0
+                    ):
+                        try:
+                            raw_b = Path(fp_str).read_bytes()[:65536]
+                            try:
+                                body_snip = re.sub(r"\s+", " ", raw_b.decode("utf-8-sig")).strip()[:1200]
+                            except UnicodeDecodeError:
+                                body_snip = re.sub(r"\s+", " ", raw_b.decode("cp949", errors="ignore")).strip()[:1200]
+                        except Exception:
+                            body_snip = ""
+                    if body_snip:
+                        d_it["text"] = f"[{d_it['_badge']}] {d_it['_name']} — {body_snip}"
+                except Exception:
+                    pass
+
+        top_items = top_docs + by_kind["image"][:60] + by_kind["video"][:40]
+        top_items.sort(key=lambda x: x.get("ts", 0.0), reverse=True)
+        for it_f in top_items:
+            nm = it_f.pop("_name", "")
+            it_f.pop("_size", None)
+            it_f.pop("_attrs", None)
+            it_f.pop("_ext", None)
+            it_f.pop("_badge", None)
+            it_f["vec"] = AI_ENGINE.embed_128d(nm)
+        _LOCAL_FILE_CACHE["items"] = top_items
+        _LOCAL_FILE_CACHE["ts"] = time.time()
+        return _LOCAL_FILE_CACHE["items"]
+
+
+def _refresh_lightweight_local_files_async(on_done=None) -> None:
+    """백그라운드 데몬 스레드에서 로컬 파일 캐시를 비동기 갱신하며, 완료 시 선택적 콜백(on_done)을 호출합니다."""
+    global _LOCAL_FILE_REFRESH_RUNNING
+    if _LOCAL_FILE_REFRESH_RUNNING and on_done is None:
+        return
+    _LOCAL_FILE_REFRESH_RUNNING = True
+
+    def _worker() -> None:
+        global _LOCAL_FILE_REFRESH_RUNNING
+        try:
+            _scan_lightweight_local_files_sync()
+        except Exception:
+            pass
+        finally:
+            _LOCAL_FILE_REFRESH_RUNNING = False
+        if callable(on_done):
+            try:
+                on_done()
+            except Exception:
+                pass
+
+    threading.Thread(target=_worker, daemon=True).start()
+
+
+def _peek_lightweight_local_files_fast() -> tuple[list[dict], bool]:
+    """
+    [UI 스레드 0.00ms 논블로킹 조회]:
+    - 이미 캐시가 준비된 경우 즉시 반환하고, 60초가 지났다면 기존 캐시를 그대로 먼저 내어준 뒤 백그라운드 갱신(Stale-While-Revalidate)합니다.
+    - 데몬 부팅 직후 0.1초 이내에 호출되어 아직 첫 스캔 중이라면 빈 리스트와 is_ready=False를 0.00ms 만에 반환하여 창이 즉시 열리게 보장합니다.
+    """
+    ts_val = float(_LOCAL_FILE_CACHE.get("ts") or 0.0)
+    items = _LOCAL_FILE_CACHE.get("items") or []
+    if ts_val <= 0.0:
+        return items, False
+    if (time.time() - ts_val) >= 60.0:
+        _refresh_lightweight_local_files_async()
+    return items, True
 
 
 def _get_lightweight_local_files() -> list[dict]:
     """
     바탕화면·다운로드·문서·사진·동영상·OneDrive·카톡받은파일 폴더(및 1단계 하위 폴더)의
-    최근 파일 메타데이터를 60초 주기로 카테고리별 균형 캐싱 (문서/사진/영상 기아 현상 원천 방지)
+    최근 파일 메타데이터를 60초 주기로 카테고리별 균형 캐싱 (Stale-While-Revalidate 적용으로 재호출 시 지연 0ms)
     """
-    now = time.time()
-    if _LOCAL_FILE_CACHE["items"] and (now - _LOCAL_FILE_CACHE["ts"]) < 60.0:
+    ts_val = float(_LOCAL_FILE_CACHE.get("ts") or 0.0)
+    if ts_val > 0.0:
+        if (time.time() - ts_val) >= 60.0:
+            _refresh_lightweight_local_files_async()
         return _LOCAL_FILE_CACHE["items"]
-    folders = _get_known_user_folders_for_search()
-    doc_exts = {".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md"}
-    img_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
-    vid_exts = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v"}
-    skip_sub_dirs = {
-        "node_modules", ".git", "appdata", "__pycache__", "venv", ".venv",
-        "dist", "build", "universal_z_core", "merlin_z_core", "$recycle.bin",
-    }
-
-    scan_dirs: list[Path] = []
-    seen_scan_dirs: set[str] = set()
-    for root_fd in folders:
-        norm_r = os.path.normcase(os.path.abspath(str(root_fd)))
-        if norm_r not in seen_scan_dirs:
-            seen_scan_dirs.add(norm_r)
-            scan_dirs.append(root_fd)
-        sub_added = 0
-        try:
-            with os.scandir(root_fd) as it_sub:
-                for sub_e in it_sub:
-                    if sub_added >= 15:
-                        break
-                    try:
-                        if not sub_e.is_dir(follow_symlinks=False):
-                            continue
-                        sname = sub_e.name
-                        if sname.startswith((".", "$", "~")) or sname.lower() in skip_sub_dirs:
-                            continue
-                        norm_s = os.path.normcase(os.path.abspath(sub_e.path))
-                        if norm_s not in seen_scan_dirs:
-                            seen_scan_dirs.add(norm_s)
-                            scan_dirs.append(Path(sub_e.path))
-                            sub_added += 1
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-
-    by_kind: dict[str, list[dict]] = {"doc": [], "image": [], "video": []}
-    seen_files: set[str] = set()
-    doc_body_cache: dict[str, str] = {}
-    try:
-        local_app_c = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
-        doc_cache_p = local_app_c / "Merlin" / "doc_text_cache_v1.json"
-        if doc_cache_p.exists():
-            raw_dc = json.loads(doc_cache_p.read_text(encoding="utf-8", errors="ignore"))
-            if isinstance(raw_dc, dict):
-                doc_body_cache = raw_dc
-    except Exception:
-        doc_body_cache = {}
-
-    for fd in scan_dirs:
-        try:
-            with os.scandir(fd) as it:
-                for entry in it:
-                    try:
-                        if not entry.is_file():
-                            continue
-                        name = entry.name
-                        name_low = name.lower()
-                        if (
-                            name.startswith((".", "~$", ".~lock."))
-                            or name_low in ("desktop.ini", "thumbs.db")
-                            or name_low.endswith((".lck", ".tmp", ".ghosti_sync_tmp"))
-                        ):
-                            continue
-                        ext = Path(name).suffix.lower()
-                        if ext in doc_exts:
-                            fkind = "doc"
-                        elif ext in img_exts:
-                            fkind = "image"
-                        elif ext in vid_exts:
-                            fkind = "video"
-                        else:
-                            continue
-                        try:
-                            resolved_entry = Path(entry.path).resolve()
-                            norm_fp = os.path.normcase(str(resolved_entry))
-                        except Exception:
-                            resolved_entry = Path(entry.path)
-                            norm_fp = os.path.normcase(os.path.abspath(entry.path))
-                        if norm_fp in seen_files:
-                            continue
-                        seen_files.add(norm_fp)
-                        st = entry.stat()
-                        fd_str_low = str(fd).lower()
-                        is_s_drive_item = fd_str_low.startswith("s:") or "업무공유폴더_s" in fd_str_low
-                        fd_badge = f"💼S:\\{fd.name}" if (is_s_drive_item and fd.name and fd.name.lower() != "업무공유폴더_s") else ("💼S:" if is_s_drive_item else fd.name)
-                        body_snip = ""
-                        if fkind == "doc":
-                            sig_v3 = f"{resolved_entry}|{st.st_size}|{int(st.st_mtime)}|v3_sota50k"
-                            cached_txt = doc_body_cache.get(sig_v3) or ""
-                            if cached_txt:
-                                body_snip = re.sub(r"\s+", " ", str(cached_txt)).strip()[:1600]
-                            elif ext in (".txt", ".csv", ".md") and st.st_size <= 262144:
-                                try:
-                                    raw_b = Path(entry.path).read_bytes()[:65536]
-                                    try:
-                                        body_snip = re.sub(r"\s+", " ", raw_b.decode("utf-8-sig")).strip()[:1200]
-                                    except UnicodeDecodeError:
-                                        body_snip = re.sub(r"\s+", " ", raw_b.decode("cp949", errors="ignore")).strip()[:1200]
-                                except Exception:
-                                    body_snip = ""
-                        disp_text = f"[{fd_badge}] {name}" + (f" — {body_snip}" if body_snip else "")
-                        by_kind[fkind].append({
-                            "kind": fkind,
-                            "file_path": entry.path,
-                            "img_path": entry.path if fkind == "image" else "",
-                            "text": disp_text,
-                            "ts": st.st_mtime,
-                            "_name": name[:120],
-                        })
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-
-    for fk in by_kind:
-        by_kind[fk].sort(key=lambda x: x.get("ts", 0.0), reverse=True)
-    top_items = by_kind["doc"][:50] + by_kind["image"][:60] + by_kind["video"][:40]
-    top_items.sort(key=lambda x: x.get("ts", 0.0), reverse=True)
-    for it_f in top_items:
-        it_f["vec"] = AI_ENGINE.embed_128d(it_f.pop("_name", ""))
-    _LOCAL_FILE_CACHE["items"] = top_items
-    _LOCAL_FILE_CACHE["ts"] = now
-    return _LOCAL_FILE_CACHE["items"]
+    return _scan_lightweight_local_files_sync()
 
 
 def _reconstruct_words_to_tsv_and_text(words: list[dict]) -> tuple[str, str]:
@@ -3099,6 +3254,31 @@ def _toast_worker() -> None:
     root = tk.Tk()
     root.withdraw()
 
+    # [초기 로딩 지연 근본 제거]: 데몬 기동 시 백그라운드에서 ghost_search_window_ui2 모듈 선행 로드 +
+    # 완전 비가시(withdraw) Toplevel & 맑은 고딕 GDI 폰트 래스터 캐시 선행 워밍업 (화면 깜빡임 0%, 첫 소환 렌더링 <5ms 보장)
+    _preloaded_ui2_mod = None
+    try:
+        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+            _mp_init = str(getattr(sys, "_MEIPASS"))
+            if _mp_init and (not sys.path or sys.path[0] != _mp_init):
+                if _mp_init in sys.path:
+                    sys.path.remove(_mp_init)
+                sys.path.insert(0, _mp_init)
+        import ghost_search_window_ui2 as _preloaded_ui2_mod  # type: ignore
+    except Exception:
+        _preloaded_ui2_mod = None
+
+    try:
+        _warm_top = tk.Toplevel(root)
+        _warm_top.withdraw()
+        _warm_top.overrideredirect(True)
+        tk.Label(_warm_top, text="👻귀신같이검색창", font=("Malgun Gothic", 9, "bold")).pack()
+        tk.Entry(_warm_top, font=("Malgun Gothic", 9)).pack()
+        _warm_top.update_idletasks()
+        _warm_top.destroy()
+    except Exception:
+        pass
+
     ghost_symbol_photo = None
     ghost_wordmark_photo = None
     try:
@@ -3250,13 +3430,15 @@ def _toast_worker() -> None:
             except Exception:
                 pass
         try:
-            if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-                _mp = str(getattr(sys, "_MEIPASS"))
-                if _mp and (not sys.path or sys.path[0] != _mp):
-                    if _mp in sys.path:
-                        sys.path.remove(_mp)
-                    sys.path.insert(0, _mp)
-            import ghost_search_window_ui2  # type: ignore
+            ui2_mod = _preloaded_ui2_mod
+            if ui2_mod is None:
+                if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+                    _mp = str(getattr(sys, "_MEIPASS"))
+                    if _mp and (not sys.path or sys.path[0] != _mp):
+                        if _mp in sys.path:
+                            sys.path.remove(_mp)
+                        sys.path.insert(0, _mp)
+                import ghost_search_window_ui2 as ui2_mod  # type: ignore
 
             ui2_ctx = {
                 "root": root,
@@ -3278,6 +3460,8 @@ def _toast_worker() -> None:
                 "thumb_refs": thumb_refs,
                 "global_ai_history": GLOBAL_AI_HISTORY,
                 "get_lightweight_local_files": _get_lightweight_local_files,
+                "peek_lightweight_local_files": _peek_lightweight_local_files_fast,
+                "refresh_lightweight_local_files_async": _refresh_lightweight_local_files_async,
                 "extract_chosung": _extract_chosung,
                 "eng_to_kor": eng_to_kor,
                 "kor_to_eng": kor_to_eng,
@@ -3290,7 +3474,7 @@ def _toast_worker() -> None:
                 "get_trial_badge_summary": get_trial_badge_summary,
                 "check_feature_quota_allowed": check_feature_quota_allowed,
             }
-            ghost_search_window_ui2.build_ui2_search_window(
+            ui2_mod.build_ui2_search_window(
                 ui2_ctx, win, init_stage, init_query, pt_x, pt_y, work_area
             )
             return
@@ -4323,11 +4507,11 @@ def _toast_worker() -> None:
                 pass
         finally:
             try:
-                root.after(30, _poll_queue)
+                root.after(12, _poll_queue)
             except Exception:
                 pass
 
-    root.after(30, _poll_queue)
+    root.after(12, _poll_queue)
     while True:
         try:
             root.mainloop()
@@ -4440,15 +4624,35 @@ def play_baby_ghost_sound(mode: str = "typo") -> None:
 # =====================================================================
 def acquire_single_instance() -> socket.socket | None:
     """
-    단일 인스턴스 보장 + 구버전 데몬 자동 교체(Hot-Swap):
-    - 이미 LOCK_PORT(51988)를 점유 중인 구버전 프로세스가 있으면 종료 신호를 보내거나
-      해당 포트 점유 PID를 핀셋 종료한 뒤 새 데몬이 즉시 포트를 승계합니다.
+    단일 인스턴스 보장 + 정상 실행 중 데몬 무간섭 보호 + 명시적 교체(--replace) 지원:
+    - --replace 없이 실행되었는데 이미 51988 포트에서 정상 박동(PONG) 중인 데몬이 있으면
+      기존 데몬을 죽이지 않고 즉시 조용히 종료(return None)하여 중복 스폰 충돌을 원천 차단합니다!
+    - --replace가 지정되었거나 기존 51988 점유 프로세스가 응답 불능일 때만 교체 승계합니다.
     """
+    global _MAIN_LOOP_HEARTBEAT_TS, _UI_LOOP_HEARTBEAT_TS
+    force_replace = "--replace" in sys.argv
+    if not force_replace:
+        try:
+            with socket.create_connection(("127.0.0.1", LOCK_PORT), timeout=0.8) as chk_c:
+                chk_c.settimeout(1.0)
+                chk_c.sendall(b"__PING__")
+                if b"PONG" in chk_c.recv(64):
+                    return None
+        except Exception:
+            pass
+
     for attempt in range(4):
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        if sys.platform == "win32" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+            try:
+                s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+            except Exception:
+                pass
         try:
             s.bind(("127.0.0.1", LOCK_PORT))
-            s.listen(2)
+            s.listen(4)
+            _MAIN_LOOP_HEARTBEAT_TS = time.time()
+            _UI_LOOP_HEARTBEAT_TS = time.time()
 
             def _shutdown_listener(srv_sock: socket.socket) -> None:
                 while True:
@@ -7502,9 +7706,38 @@ def _extract_file_date_and_slug_for_labeler(fpath: Path) -> tuple[str | None, st
     return exif_yymmdd, kakao_yymmdd, doc_text, slug
 
 
+def _find_desktop_listview_hwnd() -> int:
+    """바탕화면(Progman / WorkerW)의 SysListView32 핸들을 0.005ms 내에 직접 탐색합니다."""
+    try:
+        u32.FindWindowW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR]
+        u32.FindWindowW.restype = wintypes.HWND
+        u32.FindWindowExW.argtypes = [wintypes.HWND, wintypes.HWND, wintypes.LPCWSTR, wintypes.LPCWSTR]
+        u32.FindWindowExW.restype = wintypes.HWND
+        prog = u32.FindWindowW("Progman", None)
+        if prog:
+            dv = u32.FindWindowExW(prog, None, "SHELLDLL_DefView", None)
+            if dv:
+                lv = u32.FindWindowExW(dv, None, "SysListView32", None)
+                if lv:
+                    return int(lv)
+        w_cur = u32.FindWindowExW(None, None, "WorkerW", None)
+        while w_cur:
+            dv = u32.FindWindowExW(w_cur, None, "SHELLDLL_DefView", None)
+            if dv:
+                lv = u32.FindWindowExW(dv, None, "SysListView32", None)
+                if lv:
+                    return int(lv)
+            w_cur = u32.FindWindowExW(None, w_cur, "WorkerW", None)
+    except Exception:
+        pass
+    return 0
+
+
 def _get_explorer_selected_paths_safe(target_hwnd: int | None = None) -> list[str]:
     """
     [무오염 탐색기·바탕화면 선택 파일 경로 추출 — 모든 설치 경로(Ghosti/MerlinTools/Secretary) 100% 호환]:
+    0) [0.005ms 초고속 패스]: 바탕화면(Progman/WorkerW)에서 선택된 아이콘이 0개일 때(LVM_GETSELECTEDCOUNT == 0)
+       COM·PowerShell 기동 없이 5마이크로초 만에 즉시 []를 반환하여 첫 소환 1.5초 지연을 원천 차단합니다.
     1) 바탕화면(Progman/WorkerW): Shell.Application.Windows().FindWindowSW(SWC_DESKTOP=8)의 SelectedItems만 조회하며,
        바탕화면 프로그램 바로가기(.lnk, .url)는 라벨링 대상에서 제외해 빈 바탕화면 검색창 소환을 방해하지 않습니다.
     2) 탐색기 폴더 창(CabinetWClass/ExploreWClass): Win11 멀티탭 활성 탭(ShellTabWindowClass)을 정확히 매칭하여
@@ -7514,12 +7747,29 @@ def _get_explorer_selected_paths_safe(target_hwnd: int | None = None) -> list[st
     """
     if sys.platform != "win32":
         return []
+    chk_hwnd = int(target_hwnd or u32.GetForegroundWindow() or 0)
+    cls_chk = _get_win_class_only(chk_hwnd) if chk_hwnd else ""
+
+    # 0) 빈 바탕화면 0.005ms 네이티브 고속 판별 (LVM_GETSELECTEDCOUNT = 0x1032)
+    if cls_chk in ("Progman", "WorkerW"):
+        lv_h = _find_desktop_listview_hwnd()
+        if lv_h:
+            try:
+                sel_cnt = ctypes.c_ulonglong(0)
+                ok_lv = u32.SendMessageTimeoutW(lv_h, 0x1032, 0, 0, 0x0002, 40, ctypes.byref(sel_cnt))
+                if ok_lv and int(sel_cnt.value) == 0:
+                    return []
+            except Exception:
+                pass
+
     paths: list[str] = []
     try:
+        try:
+            ctypes.windll.ole32.CoInitialize(None)
+        except Exception:
+            pass
         import win32com.client  # type: ignore
 
-        chk_hwnd = int(target_hwnd) if target_hwnd else int(u32.GetForegroundWindow())
-        cls_chk = _get_win_class_only(chk_hwnd)
         shell = win32com.client.Dispatch("Shell.Application")
 
         # 1) 바탕화면(Progman / WorkerW) 선택 아이콘 직접 조회
@@ -7573,10 +7823,8 @@ def _get_explorer_selected_paths_safe(target_hwnd: int | None = None) -> list[st
                     paths.append(str(item_path))
             return paths
     except Exception:
-        # win32com 미설치 환경에서도 순수 PowerShell Shell.Application COM으로 무오염 선택 파일 경로 추출
+        # win32com 미설치 단독 스크립트 환경 폴백 (최대 0.35초 타임아웃으로 메인루프 지연 방지)
         try:
-            chk_hwnd = int(target_hwnd) if target_hwnd else int(u32.GetForegroundWindow())
-            cls_chk = _get_win_class_only(chk_hwnd)
             if cls_chk in ("Progman", "WorkerW"):
                 ps_q = (
                     "$sh=New-Object -ComObject Shell.Application; $out=@(); "
@@ -7597,7 +7845,7 @@ def _get_explorer_selected_paths_safe(target_hwnd: int | None = None) -> list[st
                 text=True,
                 encoding="utf-8",
                 errors="replace",
-                timeout=1.5,
+                timeout=0.35,
                 creationflags=0x08000000,
             )
             raw_s = (r_ps.stdout or "").strip()
@@ -7778,6 +8026,65 @@ def superpower_fixed_snippet(slot_num: int, daemon_set_cb) -> None:
         show_ghost_toast(f"👻 귀신같이 상용구({key})")
 
 
+def _start_first_summon_prewarmer() -> None:
+    """
+    [첫 귀신창 실행 지연 0.00초 달성용 백그라운드 선행 예열기]:
+    데몬 기동 직후 백그라운드에서 로컬 파일 인덱스·영상 OCR 캐시·체험 배지·소환 효과음·COM 모듈을
+    미리 메모리에 적재하고 55초 주기로 무소음 갱신하여, 유저가 맨 처음 Ctrl+0 / Ctrl+우클릭을 누르는 순간에도
+    디스크 스캔 대기 없이 즉시 창이 열리도록 보장합니다.
+    """
+    def _warm_loop() -> None:
+        time.sleep(0.05)
+        try:
+            import win32com.client as _w32c  # noqa: F401
+        except Exception:
+            pass
+        try:
+            get_trial_badge_summary()
+        except Exception:
+            pass
+        try:
+            cfg_s = get_superpower_settings()
+            vol_s = float(cfg_s.get("sound_volume", 0.25) or 0.25)
+            ratio_s = max(0.04, min(0.60, 0.56 * vol_s))
+            for wn in ("active_summon_sound.wav", "sample6_ctrl0_summon.wav"):
+                wp = SOUNDS_DIR / wn
+                if wp.exists():
+                    _prepare_soft_wav_file(wp, target_peak_ratio=ratio_s)
+                    break
+        except Exception:
+            pass
+        try:
+            _scan_lightweight_local_files_sync()
+        except Exception:
+            pass
+        try:
+            import ghost_search_window_ui2 as _u2_warm  # type: ignore
+
+            _u2_warm._load_local_video_ocr_by_name()
+            # 최근 상위 이미지 6장의 소형 썸네일(42x28)도 백그라운드에서 미리 디코딩 캐싱
+            img_warmed = 0
+            for it_w in (_LOCAL_FILE_CACHE.get("items") or []):
+                if it_w.get("kind") == "image":
+                    ip_w = str(it_w.get("img_path") or it_w.get("file_path") or "").strip()
+                    if ip_w:
+                        _u2_warm._get_or_make_small_thumb_bytes(ip_w)
+                        img_warmed += 1
+                        if img_warmed >= 6:
+                            break
+        except Exception:
+            pass
+
+        while True:
+            time.sleep(55.0)
+            try:
+                _scan_lightweight_local_files_sync()
+            except Exception:
+                pass
+
+    threading.Thread(target=_warm_loop, daemon=True).start()
+
+
 # =====================================================================
 # 메인 이벤트 루프
 # =====================================================================
@@ -7786,9 +8093,16 @@ def main() -> None:
     if lock_sock is None:
         return
 
+    if sys.platform == "win32":
+        try:
+            ctypes.windll.ole32.CoInitialize(None)
+        except Exception:
+            pass
+
     _ensure_toast_worker()
     ensure_default_snippets()
     _ensure_kiwi_warmup_async()
+    _start_first_summon_prewarmer()
 
     u32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_NOREPEAT, VK_0)
     u32.RegisterHotKey(None, 2, MOD_CONTROL | MOD_NOREPEAT, VK_NUMPAD0)

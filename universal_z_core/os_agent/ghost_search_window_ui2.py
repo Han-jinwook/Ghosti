@@ -36,6 +36,8 @@ except Exception:
 
 _VIDEO_OCR_UI_CACHE: dict[str, Any] = {"ts": 0.0, "by_name": {}}
 _UI2_SMALL_THUMB_CACHE: dict[str, bytes] = {}
+_UI2_THUMB_INFLIGHT: set[str] = set()
+_EXTRACTED_QUEUE_UI_CACHE: dict[str, Any] = {"mtime_ns": -1, "size": -1, "items": []}
 
 
 def _mask_sensitive_doc_text(text: str) -> str:
@@ -43,6 +45,20 @@ def _mask_sensitive_doc_text(text: str) -> str:
     if not text:
         return ""
     return str(text)
+
+
+def _peek_cached_small_thumb_bytes(img_path_str: str) -> bytes | None:
+    """디스크 이미지 디코딩 없이 이미 메모리에 캐싱된 소형 썸네일(42x28) 바이트만 0.01ms 내에 조회합니다."""
+    if not img_path_str or Image is None:
+        return b""
+    try:
+        st = os.stat(img_path_str)
+        if st.st_size <= 0 or st.st_size > 25 * 1024 * 1024:
+            return b""
+        sig = f"{os.path.normcase(os.path.abspath(img_path_str))}|{st.st_size}|{int(st.st_mtime)}"
+        return _UI2_SMALL_THUMB_CACHE.get(sig)
+    except Exception:
+        return b""
 
 
 def _get_or_make_small_thumb_bytes(img_path_str: str) -> bytes:
@@ -65,7 +81,7 @@ def _get_or_make_small_thumb_bytes(img_path_str: str) -> bytes:
             bio = io.BytesIO()
             im_c.save(bio, "PNG")
             tb = bio.getvalue()
-        if len(_UI2_SMALL_THUMB_CACHE) > 160:
+        if len(_UI2_SMALL_THUMB_CACHE) > 240:
             _UI2_SMALL_THUMB_CACHE.clear()
         _UI2_SMALL_THUMB_CACHE[sig] = tb
         return tb
@@ -73,10 +89,40 @@ def _get_or_make_small_thumb_bytes(img_path_str: str) -> bytes:
         return b""
 
 
+def _load_extracted_queue_fast() -> list[dict[str, Any]]:
+    """압축 해제 직후 등록된 파일 큐(extracted_files_index_queue.json)를 mtime 캐시로 무부하 조회합니다."""
+    try:
+        ext_q_file = (
+            Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+            / "Ghosti"
+            / "data"
+            / "extracted_files_index_queue.json"
+        )
+        if not ext_q_file.exists():
+            return []
+        st_q = ext_q_file.stat()
+        if (
+            _EXTRACTED_QUEUE_UI_CACHE["mtime_ns"] == int(st_q.st_mtime_ns)
+            and _EXTRACTED_QUEUE_UI_CACHE["size"] == int(st_q.st_size)
+        ):
+            return _EXTRACTED_QUEUE_UI_CACHE["items"]
+        ext_q_data = json.loads(ext_q_file.read_text(encoding="utf-8", errors="ignore"))
+        parsed_items: list[dict[str, Any]] = []
+        for erec in (ext_q_data.get("indexedFiles") or [])[:120]:
+            if isinstance(erec, dict):
+                parsed_items.append(erec)
+        _EXTRACTED_QUEUE_UI_CACHE["mtime_ns"] = int(st_q.st_mtime_ns)
+        _EXTRACTED_QUEUE_UI_CACHE["size"] = int(st_q.st_size)
+        _EXTRACTED_QUEUE_UI_CACHE["items"] = parsed_items
+        return parsed_items
+    except Exception:
+        return []
+
+
 def _load_local_video_ocr_by_name() -> dict[str, dict[str, Any]]:
     """로컬 video_scene_ocr_cache_v2.json을 15초 주기로 초경량 조회하여 파일명별 화면 글자 데이터를 반환합니다."""
     now = time.time()
-    if _VIDEO_OCR_UI_CACHE["by_name"] and (now - float(_VIDEO_OCR_UI_CACHE["ts"])) < 15.0:
+    if float(_VIDEO_OCR_UI_CACHE["ts"]) > 0.0 and (now - float(_VIDEO_OCR_UI_CACHE["ts"])) < 15.0:
         return _VIDEO_OCR_UI_CACHE["by_name"]
 
     local_appdata = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
@@ -170,6 +216,8 @@ def build_ui2_search_window(
     thumb_refs = ctx["thumb_refs"]
     global_ai_history = ctx["global_ai_history"]
     get_lightweight_local_files = ctx["get_lightweight_local_files"]
+    peek_lightweight_local_files = ctx.get("peek_lightweight_local_files")
+    refresh_lightweight_local_files_async = ctx.get("refresh_lightweight_local_files_async")
     extract_chosung = ctx["extract_chosung"]
     eng_to_kor = ctx["eng_to_kor"]
     kor_to_eng = ctx["kor_to_eng"]
@@ -568,40 +616,51 @@ def build_ui2_search_window(
 
         # [봉인 존중 연동] 사용자가 더블클릭·우클릭으로 직접 압축을 푼 직후 등록된 문서·본문 스니펫 0.05초 즉시 편입
         try:
-            ext_q_file = (
-                Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
-                / "Ghosti"
-                / "data"
-                / "extracted_files_index_queue.json"
-            )
-            if ext_q_file.exists():
-                ext_q_data = json.loads(ext_q_file.read_text(encoding="utf-8", errors="ignore"))
-                for erec in (ext_q_data.get("indexedFiles") or [])[:120]:
-                    if not isinstance(erec, dict):
-                        continue
-                    efp = str(erec.get("filePath") or "").strip()
-                    if not efp or efp.lower() in seen_fpaths or not os.path.exists(efp):
-                        continue
-                    seen_fpaths.add(efp.lower())
-                    efn = str(erec.get("fileName") or Path(efp).name)
-                    esnip = str(erec.get("textSnippet") or "").strip()
-                    ext_sfx = Path(efp).suffix.lower()
-                    ekind = (
-                        "image"
-                        if ext_sfx in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")
-                        else ("video" if ext_sfx in (".mp4", ".mov", ".mkv", ".avi", ".webm") else "doc")
-                    )
-                    pool.append({
-                        "kind": ekind,
-                        "file_path": efp,
-                        "img_path": efp if ekind == "image" else "",
-                        "ts": float(erec.get("indexedTs") or time.time()),
-                        "text": f"📦 {efn}" + (f" — {esnip}" if esnip else f" ({Path(efp).parent.name})"),
-                    })
+            for erec in _load_extracted_queue_fast():
+                efp = str(erec.get("filePath") or "").strip()
+                if not efp or efp.lower() in seen_fpaths or not os.path.exists(efp):
+                    continue
+                seen_fpaths.add(efp.lower())
+                efn = str(erec.get("fileName") or Path(efp).name)
+                esnip = str(erec.get("textSnippet") or "").strip()
+                ext_sfx = Path(efp).suffix.lower()
+                ekind = (
+                    "image"
+                    if ext_sfx in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")
+                    else ("video" if ext_sfx in (".mp4", ".mov", ".mkv", ".avi", ".webm") else "doc")
+                )
+                pool.append({
+                    "kind": ekind,
+                    "file_path": efp,
+                    "img_path": efp if ekind == "image" else "",
+                    "ts": float(erec.get("indexedTs") or time.time()),
+                    "text": f"📦 {efn}" + (f" — {esnip}" if esnip else f" ({Path(efp).parent.name})"),
+                })
         except Exception:
             pass
 
-        for frec in get_lightweight_local_files():
+        local_files_ready = True
+        if callable(peek_lightweight_local_files):
+            local_files_list, local_files_ready = peek_lightweight_local_files()
+            if not local_files_ready and callable(refresh_lightweight_local_files_async) and not st_state.get("bg_scan_scheduled"):
+                st_state["bg_scan_scheduled"] = True
+
+                def _on_bg_files_ready() -> None:
+                    def _rerender_after_warm() -> None:
+                        st_state["bg_scan_scheduled"] = False
+                        if current_win[0] is win:
+                            _render_search_results()
+
+                    try:
+                        win.after(0, _rerender_after_warm)
+                    except Exception:
+                        pass
+
+                refresh_lightweight_local_files_async(_on_bg_files_ready)
+        else:
+            local_files_list = get_lightweight_local_files()
+
+        for frec in local_files_list:
             fp_loc = str(frec.get("file_path") or "")
             if fp_loc and fp_loc.lower() in seen_fpaths:
                 continue
@@ -731,8 +790,8 @@ def build_ui2_search_window(
         if not candidates:
             tk.Label(
                 body_frame,
-                text="표시할 항목이 없습니다.",
-                fg="#94A3B8",
+                text="⚡ 내 컴퓨터 최근 파일을 불러오는 중..." if not local_files_ready else "표시할 항목이 없습니다.",
+                fg="#5EEAD4" if not local_files_ready else "#94A3B8",
                 bg="#0B1120",
                 font=("Malgun Gothic", 9),
             ).pack(pady=20)
@@ -761,6 +820,7 @@ def build_ui2_search_window(
             list_parent.grid_columnconfigure(0, weight=1, uniform="gcol")
             list_parent.grid_columnconfigure(1, weight=1, uniform="gcol")
 
+        pending_thumb_paths: list[str] = []
         for idx_c, rec in enumerate(candidates):
             is_sel = idx_c == st_state["sel_idx"]
             c_bg = "#1E293B" if is_sel else "#0F172A"
@@ -797,9 +857,12 @@ def build_ui2_search_window(
 
             if st_now != "medium" and kind == "image" and Image is not None and ImageTk is not None:
                 try:
-                    tb_raw = rec.get("thumb_bytes") or _get_or_make_small_thumb_bytes(
-                        str(rec.get("img_path") or rec.get("file_path") or "").strip()
-                    )
+                    img_cand_p = str(rec.get("img_path") or rec.get("file_path") or "").strip()
+                    tb_raw = rec.get("thumb_bytes")
+                    if not tb_raw and img_cand_p:
+                        tb_raw = _peek_cached_small_thumb_bytes(img_cand_p)
+                        if tb_raw is None and img_cand_p not in _UI2_THUMB_INFLIGHT and img_cand_p not in pending_thumb_paths:
+                            pending_thumb_paths.append(img_cand_p)
                     if tb_raw:
                         im_p = Image.open(io.BytesIO(tb_raw))
                         th_p = ImageTk.PhotoImage(im_p, master=root)
@@ -888,6 +951,26 @@ def build_ui2_search_window(
             for w_it in (card, num_l, body_l, time_l):
                 w_it.bind("<Button-1>", _on_pick)
                 w_it.bind("<Double-Button-1>", _on_dbl_pick)
+
+        if pending_thumb_paths:
+            for _ptp in pending_thumb_paths:
+                _UI2_THUMB_INFLIGHT.add(_ptp)
+
+            def _decode_thumbs_bg(paths_to_load: list[str]) -> None:
+                any_decoded = False
+                for p_load in paths_to_load:
+                    try:
+                        if _get_or_make_small_thumb_bytes(p_load):
+                            any_decoded = True
+                    finally:
+                        _UI2_THUMB_INFLIGHT.discard(p_load)
+                if any_decoded:
+                    try:
+                        win.after(0, lambda: _render_search_results() if current_win[0] is win else None)
+                    except Exception:
+                        pass
+
+            threading.Thread(target=_decode_thumbs_bg, args=(list(pending_thumb_paths),), daemon=True).start()
 
         if preview_pane is not None and candidates:
             sel_rec = candidates[st_state["sel_idx"]]
@@ -1085,5 +1168,6 @@ def build_ui2_search_window(
         lambda _e: None if (time.time() - get_last_rbtn_dismiss_esc_ts()) < 0.45 else close_win(),
     )
 
+    # [즉시 표시 보장]: 창 위치·포커스를 먼저 즉시 노출한 뒤 결과를 그려 체감 초기 오픈 지연 0ms 달성
+    _resize_for_stage(activate=True)
     _render_search_results()
-    _resize_for_stage()

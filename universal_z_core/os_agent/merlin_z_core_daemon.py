@@ -120,6 +120,36 @@ if "--ppocr-worker" in sys.argv:
         sys.exit(ppocr_v5_worker.run_worker_cli(sys.argv[_w_idx + 1], sys.argv[_w_idx + 2]))
     sys.exit(1)
 
+# [초고속 서브데몬 직행 분기]: --seq-paste-daemon / 압축 CLI / GUI 러너 실행 시
+# 무거운 서버 플러그인 8종(plugin_ghosti_os, plugin_senstalk, plugin_aggrofilter 등) import를 100% 생략하여 초기 기동 지연을 원천 차단!
+_early_argv = sys.argv[1:]
+if "--seq-paste-daemon" in _early_argv:
+    sys.argv = [sys.argv[0]] + [a for a in _early_argv if a != "--seq-paste-daemon"]
+    import seq_paste_daemon
+
+    seq_paste_daemon.main()
+    sys.exit(0)
+
+_early_care_flags = {
+    "--smart-unzip",
+    "--smart-zip",
+    "--register-menu",
+    "--unregister-menu",
+    "--install-and-run-helper",
+    "--run-elevated-helper",
+}
+if any(a in _early_care_flags or any(a.startswith(f + "=") for f in _early_care_flags) for a in _early_argv):
+    import plugin_ghosti_care_suite
+
+    plugin_ghosti_care_suite.handle_care_cli_args(_early_argv)
+    sys.exit(0)
+
+if "--gui-task-runner" in _early_argv or "gui-task-runner" in _early_argv:
+    import merlin_z_core_os
+
+    merlin_z_core_os.run_gui_task_runner()
+    sys.exit(0)
+
 import core_win32 as w32  # noqa: E402
 import plugin_ghosti_os  # noqa: E402
 import plugin_senstalk  # noqa: E402
@@ -129,7 +159,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.5.19"
+CORE_VERSION = "2.5.39"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1741,20 +1771,25 @@ def main() -> None:
     start_win32_tray_icon(args.port, replaced_pids=replaced_pids)
 
     def _start_auxiliary_watchers() -> None:
-        try:
-            cleanup_stale_mei_runtime_dirs()
-        except Exception:
-            pass
+        # [0순위 기동]: 귀신창 데몬(51988)을 가장 먼저 즉시 기동하여 Z-코어 실행 직후 첫 Ctrl+0 / Ctrl+우클릭 대기시간을 최소화!
         if getattr(sys, "frozen", False):
             try:
                 w32.ensure_persistent_frozen_install()
-                w32.set_autostart_enabled(True)
-                start_periodic_remote_version_watcher()
             except Exception:
                 pass
         try:
             plugin_ghosti_superpowers.ensure_superpower_daemon_running()
             plugin_ghosti_superpowers.start_superpower_daemon_watchdog(lambda: _SELF_UPDATE_IN_PROGRESS)
+        except Exception:
+            pass
+        if getattr(sys, "frozen", False):
+            try:
+                w32.set_autostart_enabled(True)
+                start_periodic_remote_version_watcher()
+            except Exception:
+                pass
+        try:
+            cleanup_stale_mei_runtime_dirs()
         except Exception:
             pass
         try:
