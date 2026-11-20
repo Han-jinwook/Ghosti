@@ -441,7 +441,7 @@ html.theme-warm-light :is(
   .text-\[\#67E8F9\],
   .text-\[\#99F6E4\],
   .text-\[\#A5F3FC\]
-):not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not([data-ghosti-brand-logo="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *):not(.bg-black):not(.bg-black *):not(.bg-black\/50 *):not(.bg-black\/60 *):not(.bg-black\/70 *):not(.bg-black\/75 *):not(.bg-black\/80 *):not(.bg-black\/85 *):not(.bg-black\/90 *):not(.bg-primary-container):not(.bg-primary-container *) {
+):not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not([data-ghosti-brand-logo="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *):not(.bg-black):not([class*="bg-black/"]):not(.bg-primary-container):not(.bg-primary-container *) {
   color: #1E3A8A !important;
 }
 

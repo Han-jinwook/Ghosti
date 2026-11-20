@@ -2272,6 +2272,41 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
     setReloadSeq((s) => s + 1);
   };
 
+  const handleDownloadOriginalPhoto = async () => {
+    const srcUrl = photo.fullUrl || photo.thumbUrl;
+    if (!srcUrl) return;
+    const fileName = photo.name || 'ghosti_photo.png';
+    try {
+      const resp = await fetch(srcUrl);
+      if (resp.ok) {
+        const blob = await resp.blob();
+        const blobUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = blobUrl;
+        a.download = fileName;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.setTimeout(() => URL.revokeObjectURL(blobUrl), 3000);
+        setCopiedNotice(`✅ 원본 사진(${fileName}) 저장 완료!`);
+        useSaySeeStore.setState({
+          lastQuarantineToast: `🖼️ 원본 사진(${fileName}) 저장 완료!`,
+        });
+        return;
+      }
+    } catch {
+      /* fallback below */
+    }
+    const a = document.createElement('a');
+    a.href = srcUrl;
+    a.download = fileName;
+    a.target = '_blank';
+    a.rel = 'noopener noreferrer';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+  };
+
   const handleCopyText = async (val: string, label: string) => {
     if (!val.trim()) return;
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
@@ -2344,13 +2379,13 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
               >
                 🎁 30일 무제한 무료체험 시작하고 바로 글자 뽑기
               </button>
-              <a
-                href={photo.fullUrl || photo.thumbUrl}
-                download={photo.name}
-                className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[12.5px] font-extrabold"
+              <button
+                type="button"
+                onClick={() => void handleDownloadOriginalPhoto()}
+                className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[12.5px] font-extrabold cursor-pointer"
               >
-                🖼️ 원본 사진만 저장
-              </a>
+                🖼️ 원본 사진 그대로 저장
+              </button>
             </div>
           </div>
         ) : gateState === 'expired' ? (
@@ -2370,13 +2405,13 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
               >
                 👑 5번 내 기기 통합 (월 3,900원) 안내 보기
               </button>
-              <a
-                href={photo.fullUrl || photo.thumbUrl}
-                download={photo.name}
-                className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[12.5px] font-extrabold"
+              <button
+                type="button"
+                onClick={() => void handleDownloadOriginalPhoto()}
+                className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[12.5px] font-extrabold cursor-pointer"
               >
-                🖼️ 원본 사진 저장 (무료)
-              </a>
+                🖼️ 원본 사진 그대로 저장 (무료)
+              </button>
             </div>
           </div>
         ) : (
@@ -2392,13 +2427,13 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
               </div>
 
               <div className="flex flex-col gap-2">
-                <a
-                  href={photo.fullUrl || photo.thumbUrl}
-                  download={photo.name}
+                <button
+                  type="button"
+                  onClick={() => void handleDownloadOriginalPhoto()}
                   className="w-full py-2.5 px-3 rounded-xl bg-teal-400 hover:bg-teal-300 text-zinc-950 text-[12.5px] font-black text-center cursor-pointer"
                 >
                   🖼️ 원본 사진 그대로 저장
-                </a>
+                </button>
                 <button
                   type="button"
                   disabled={loading || !ocrResult?.hasText}
