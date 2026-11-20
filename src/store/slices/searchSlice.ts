@@ -159,6 +159,7 @@ export interface SearchSlice {
   syncRealVideoDuration: (videoId: string, realDurationSec: number) => void;
   setTrialScanPermission: (folder: keyof TrialScanPermissions, allowed: boolean) => void;
   runBriefingHintChip: (target: 'doc' | 'video', query: string) => Promise<void>;
+  refreshLiveLocalFilesInSearchWindow: () => Promise<void>;
 
 
   // 음성 & 자연어 문장 검색 상태 + 검색 결과 연사 묶기 ([❐ N장 연사])
@@ -466,6 +467,158 @@ export const createSearchSlice: StateCreator<
           block: 'start',
         });
       }, 60);
+    }
+  },
+
+  refreshLiveLocalFilesInSearchWindow: async () => {
+    if (!zCoreBridge.isConnected) return;
+    const stBefore = get();
+    if (isSharedPhotoLounge(stBefore.activeLoungeType)) return;
+
+    const [freshPhotoDataset, freshVideos, freshDocs] = await Promise.all([
+      loadInitialPhotoDataset(),
+      fetchIndexedVideos(),
+      fetchIndexedDocuments(),
+    ]);
+    const freshPhotos = freshPhotoDataset.photos;
+
+    const cur = get();
+    const existingPhotoByName = new Map<string, PhotoItem>();
+    for (const p of cur.photos) {
+      if (String(p.id || '').startsWith('shared_')) continue;
+      existingPhotoByName.set(p.name, p);
+    }
+
+    const newlyAddedPhotos: PhotoItem[] = [];
+    const mergedPersonalPhotos: PhotoItem[] = freshPhotos.map((fp) => {
+      const prev = existingPhotoByName.get(fp.name);
+      if (!prev) {
+        newlyAddedPhotos.push(fp);
+        return fp;
+      }
+      return {
+        ...fp,
+        id: prev.id,
+        vec: prev.vec || fp.vec,
+        tags: prev.tags?.length ? prev.tags : fp.tags,
+        keywordsKo: prev.keywordsKo?.length ? prev.keywordsKo : fp.keywordsKo,
+        ontologyPrimaryTags: prev.ontologyPrimaryTags ?? fp.ontologyPrimaryTags,
+        ontologyCaptionTags: prev.ontologyCaptionTags ?? fp.ontologyCaptionTags,
+        captionKo: prev.captionKo || fp.captionKo,
+        trashCategory: prev.trashCategory ?? fp.trashCategory,
+        isVaultDocument: prev.isVaultDocument ?? fp.isVaultDocument,
+        vaultCategoryLabel: prev.vaultCategoryLabel ?? fp.vaultCategoryLabel,
+        quarantined: prev.quarantined ?? fp.quarantined,
+        bookmarked: prev.bookmarked ?? fp.bookmarked,
+      };
+    });
+
+    const sharedKeptPhotos = cur.photos.filter(
+      (p) =>
+        String(p.id || '').startsWith('shared_host_') ||
+        String(p.id || '').startsWith('shared_added_') ||
+        Boolean(p.sharedLoungeType)
+    );
+    const nextPhotos = [...mergedPersonalPhotos, ...sharedKeptPhotos];
+
+    const existingVideoByName = new Map<string, VideoSceneItem>();
+    for (const v of cur.videoSceneItems) {
+      if (v.videoFileName) {
+        existingVideoByName.set(v.videoFileName, v);
+      }
+    }
+    const newlyAddedVideos: VideoSceneItem[] = [];
+    const nextVideos: VideoSceneItem[] = freshVideos.map((fv) => {
+      const prevV = existingVideoByName.get(fv.videoFileName);
+      if (!prevV) {
+        newlyAddedVideos.push(fv);
+        return fv;
+      }
+      const hasFreshOcr = Array.isArray(fv.ocrLines) && fv.ocrLines.length > 0;
+      return {
+        ...fv,
+        id: prevV.id,
+        thumbUrl: fv.thumbUrl || prevV.thumbUrl,
+        hasScreenOcrText: hasFreshOcr ? fv.hasScreenOcrText : (prevV.hasScreenOcrText ?? fv.hasScreenOcrText),
+        ocrLineCount: hasFreshOcr ? fv.ocrLineCount : (prevV.ocrLineCount ?? fv.ocrLineCount),
+        ocrLines: hasFreshOcr ? fv.ocrLines : (prevV.ocrLines?.length ? prevV.ocrLines : fv.ocrLines),
+        ocrFullText: hasFreshOcr ? fv.ocrFullText : (prevV.ocrFullText || fv.ocrFullText),
+        keywords: Array.from(new Set([...(fv.keywords || []), ...(prevV.keywords || [])])),
+      };
+    });
+
+    set({
+      photos: nextPhotos,
+      videoSceneItems: nextVideos,
+      localDocuments: freshDocs,
+    });
+
+    const afterSet = get();
+    if (afterSet.hasExecutedUserSearch && afterSet.activeQuery.trim()) {
+      await get().runTextQuery(afterSet.activeQuery);
+    } else {
+      const galleryPhotos = filterVisibleGalleryPhotos(mergedPersonalPhotos).map((photo) => ({
+        photo,
+        score: 0.95,
+        matchPercentage: 97,
+        matchedBy: 'text-direct' as const,
+      }));
+      const vaultPhotos = mergedPersonalPhotos
+        .filter((p) => !p.quarantined && p.isVaultDocument)
+        .map((photo) => ({
+          photo,
+          score: 0.96,
+          matchPercentage: 98,
+          matchedBy: 'text-direct' as const,
+        }));
+      const totalFrames = nextVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
+      set({
+        searchResults: galleryPhotos,
+        matchedVideoScenes: nextVideos,
+        matchedLocalDocs: freshDocs,
+        matchedVaultPhotos: vaultPhotos,
+        activeQuery:
+          afterSet.searchSpace === 'video'
+            ? `동영상 ${nextVideos.length}개 전 구간(총 ${totalFrames}개 타임라인 프레임) 자동 해부`
+            : afterSet.searchSpace === 'vault'
+            ? `최근 서류 ${freshDocs.length + vaultPhotos.length}건 통합 (로컬 문서 ${freshDocs.length}건 + 촬영 서류 ${vaultPhotos.length}장)`
+            : `전체 갤러리 사진 (${galleryPhotos.length}장)`,
+      });
+    }
+
+    if (newlyAddedPhotos.length > 0 || newlyAddedVideos.length > 0) {
+      void startSilentRealMediaVisionIndexing({
+        photos: newlyAddedPhotos,
+        videos: newlyAddedVideos,
+        onPhotoVisionHydrated: (photoId, patch) => {
+          set((s) => ({
+            photos: s.photos.map((p) => (p.id === photoId ? { ...p, ...patch } : p)),
+            searchResults: s.searchResults.map((sr) =>
+              sr.photo.id === photoId ? { ...sr, photo: { ...sr.photo, ...patch } } : sr
+            ),
+          }));
+        },
+        onVideoThumbHydrated: (videoFileName, thumbUrl) => {
+          set((s) => ({
+            videoSceneItems: s.videoSceneItems.map((v) =>
+              v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
+            ),
+            matchedVideoScenes: s.matchedVideoScenes.map((v) =>
+              v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
+            ),
+          }));
+        },
+        onVideoOcrHydrated: (videoFileName, ocrMeta) => {
+          set((s) => ({
+            videoSceneItems: s.videoSceneItems.map((v) =>
+              v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
+            ),
+            matchedVideoScenes: s.matchedVideoScenes.map((v) =>
+              v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
+            ),
+          }));
+        },
+      });
     }
   },
 

@@ -1123,6 +1123,7 @@ def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         if len(files) >= 1500:
             break
 
+    files.sort(key=lambda f: int(f.get("mtimeMs") or 0), reverse=True)
     primary_dir = resolve_active_photo_dir(req_dir)
     if files:
         _trigger_bg_photo_thumb_prewarm([Path(f["fullPath"]) for f in files[:360] if f.get("fullPath")])
@@ -1134,6 +1135,49 @@ def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         "total": len(files),
         "files": files,
         "quarantined": safe.recycled_photo_entries(),
+    }
+
+
+def get_local_watch_signature(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """
+    [열려 있는 귀신검색창 실시간 파일 추가·삭제·변경 감지용 1ms 무핸들 시그니처 (`GET /__zcore/watch-sig`)]:
+    - os.scandir의 WIN32_FIND_DATA(entry.stat(follow_symlinks=False))만으로 커널 핸들 오픈 0회로
+      감시 폴더 내 사진·동영상·문서의 (폴더수, 파일수, 최신수정시각ns, 총용량) 시그니처를 1ms 내에 반환합니다.
+    """
+    scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
+    target_exts = _IMAGE_EXTS | _VIDEO_EXTS | _DOC_EXTS
+    file_count = 0
+    max_mtime_ns = 0
+    size_acc = 0
+    for d in scan_dirs:
+        try:
+            with os.scandir(d) as it:
+                for entry in it:
+                    try:
+                        if not entry.is_file(follow_symlinks=False):
+                            continue
+                        nm = entry.name
+                        if nm.startswith((".", "~$", ".~lock.")):
+                            continue
+                        dot = nm.rfind(".")
+                        if dot < 0 or nm[dot:].lower() not in target_exts:
+                            continue
+                        st = entry.stat(follow_symlinks=False)
+                        file_count += 1
+                        mt_ns = int(getattr(st, "st_mtime_ns", int(st.st_mtime * 1_000_000_000)))
+                        if mt_ns > max_mtime_ns:
+                            max_mtime_ns = mt_ns
+                        size_acc = (size_acc + int(st.st_size)) & 0x7FFFFFFFFFFFFFFF
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+    sig = f"{len(scan_dirs)}:{file_count}:{max_mtime_ns}:{size_acc}"
+    return {
+        "ok": True,
+        "sig": sig,
+        "fileCount": file_count,
+        "folderCount": len(scan_dirs),
     }
 
 
@@ -2284,16 +2328,16 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     ext_badge_map = {
         ".pdf": ("PDF", "📑 PDF 전자문서 · 계약/증빙"),
         ".txt": ("TXT", "📝 텍스트 메모 · 기록"),
-        ".md": ("TXT", "📝 마크다운 문서 · 노트"),
-        ".csv": ("TXT", "📊 CSV 데이터 시트"),
+        ".md": ("MD", "📝 마크다운 문서 · 노트"),
+        ".csv": ("CSV", "📊 CSV 데이터 시트"),
         ".docx": ("DOCX", "📘 워드(DOCX) 보고서 · 서류"),
-        ".doc": ("DOCX", "📘 워드 문서"),
-        ".hwp": ("DOCX", "📗 한글(HWP) 공문 · 서류"),
-        ".hwpx": ("DOCX", "📗 한글(HWPX) 문서"),
-        ".xlsx": ("PDF", "📊 엑셀(XLSX) 장부 · 내역서"),
-        ".xls": ("PDF", "📊 엑셀 시트"),
-        ".pptx": ("PDF", "📙 파워포인트 발표자료"),
-        ".ppt": ("PDF", "📙 파워포인트 발표자료"),
+        ".doc": ("DOC", "📘 워드 문서"),
+        ".hwp": ("HWP", "📗 한글(HWP) 공문 · 서류"),
+        ".hwpx": ("HWPX", "📗 한글(HWPX) 문서"),
+        ".xlsx": ("XLSX", "📊 엑셀(XLSX) 장부 · 내역서"),
+        ".xls": ("XLS", "📊 엑셀 시트"),
+        ".pptx": ("PPTX", "📙 파워포인트 발표자료"),
+        ".ppt": ("PPT", "📙 파워포인트 발표자료"),
     }
 
     for d, entry, st in raw_entries[:300]:
@@ -2313,13 +2357,15 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
             extracted = _extract_doc_text(entry, allow_pdf_winrt_ocr=allow_sync_ocr)
             if ext_low == ".pdf" and not allow_sync_ocr and f"보관된 {entry.name} 로컬 문서" in extracted:
                 pass
-            norm_ext, badge = ext_badge_map.get(ext_low, ("PDF", "📄 로컬 문서 파일"))
+            norm_ext, badge = ext_badge_map.get(ext_low, ("DOC", "📄 로컬 문서 파일"))
             kw_tokens = [w for w in re.split(r"[\s_\-.,()\[\]]+", f"{stem} {d.name} {extracted[:360]}") if len(w) >= 2][:22]
+            resolved_doc_str = str(entry.resolve())
+            doc_hash = hashlib.sha1(resolved_doc_str.lower().encode("utf-8", errors="ignore")).hexdigest()[:8]
             docs.append({
-                "id": f"local_doc_{len(docs) + 1}_{entry.stem[:20]}",
+                "id": f"local_doc_{doc_hash}_{entry.stem[:20]}",
                 "fileName": entry.name,
                 "name": entry.name,
-                "path": str(entry.resolve()),
+                "path": resolved_doc_str,
                 "ext": norm_ext,
                 "title": stem or entry.name,
                 "categoryBadge": badge,
@@ -4003,9 +4049,10 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                         if not tf.get("thumbUrl"):
                             tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, int(tf.get('timeSec') or 0))}"
 
+                vid_hash = hashlib.sha1(norm_vid.encode("utf-8", errors="ignore")).hexdigest()[:8]
                 videos.append({
-                    "id": f"local_vid_{len(videos) + 1}_{entry.stem[:20]}",
-                    "videoFileName": entry.name,
+                    "id": f"local_vid_{vid_hash}_{entry.stem[:20]}",
+                    "videoFileName": video_key,
                     "fullPath": str(resolved),
                     "title": f"{stem} ({d.name})",
                     "keyframePhotoId": entry.name,
@@ -4037,6 +4084,8 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
             pass
         if len(videos) >= 300:
             break
+
+    videos.sort(key=lambda v: int(v.get("mtimeMs") or 0), reverse=True)
 
     videos.sort(key=lambda v: int(v.get("mtimeMs") or 0), reverse=True)
 

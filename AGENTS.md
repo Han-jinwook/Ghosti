@@ -409,7 +409,7 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
 ### 📱 [전사·노션 QA 3단 공식 호칭 엄격 분리 · 모바일 OS별 영구 규칙 · iOS TestFlight 무인 트리거 (2026-11-19 확정)]
 
 1. **🏷️ 전사·노션 QA 3단 공식 호칭 엄격 분리 (모바일을 ‘엔진’이라 부르는 것 영구 금지)**:
-   - **① `PC 엔진` (`Z코어`)**: `Merlin_Z_Core.exe` (`127.0.0.1:5199`, 현행 `v2.5.69`) — PC 로컬 기능(PP-OCRv5, PDFium/HWP 해독, `Ctrl+0` 귀신창, `G:`/`S:` 드라이브, PC 청소) 수정 시 버전업.
+   - **① `PC 엔진` (`Z코어`)**: `Merlin_Z_Core.exe` (`127.0.0.1:5199`, 현행 `v2.5.79`) — PC 로컬 기능(PP-OCRv5, PDFium/HWP 해독, `Ctrl+0` 귀신창, `G:`/`S:` 드라이브, PC 청소) 수정 시 버전업.
    - **② `웹 화면` (`웹 UI`)**: `https://ghosti.sundreamer.app` — 일반 UI 디자인, 문구, 채팅 라우터, 공유방 화면 수정 시 (`git push` 즉시 반영).
    - **③ `모바일 앱` (`안드로이드 앱` / `아이폰 앱`)**: 안드로이드 앱(`.aab`, Google Play) 및 아이폰 앱(`.ipa`, Apple TestFlight · Apple ID `6836307976` · `app.sundreamer.ghosti`) — 양대 스토어 1:1 동일 버전 라임 통일 (현행 `1.0.25 (25)`~, 사소한 UI/로직 수정은 모아서 배치 출시). 노션 카드에 GitHub `.apk` 수동 다운로드 링크 기재 영구 금지.
 2. **📱 안드로이드 앱 vs 🍎 아이폰 앱 영구 확정 스펙 (임시 심사 분기 없음 · QA = 정식 출시 100% 동일 고정, `ghosti-guide.html#sec-menus` 박제)**:

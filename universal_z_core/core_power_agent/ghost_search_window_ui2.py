@@ -218,6 +218,7 @@ def build_ui2_search_window(
     get_lightweight_local_files = ctx["get_lightweight_local_files"]
     peek_lightweight_local_files = ctx.get("peek_lightweight_local_files")
     refresh_lightweight_local_files_async = ctx.get("refresh_lightweight_local_files_async")
+    check_local_files_changed_async = ctx.get("check_local_files_changed_async")
     extract_chosung = ctx["extract_chosung"]
     eng_to_kor = ctx["eng_to_kor"]
     kor_to_eng = ctx["kor_to_eng"]
@@ -1172,3 +1173,30 @@ def build_ui2_search_window(
     # [즉시 표시 보장]: 창 위치·포커스를 먼저 즉시 노출한 뒤 결과를 그려 체감 초기 오픈 지연 0ms 달성
     _resize_for_stage(activate=True)
     _render_search_results()
+
+    # [열려 있는 동안 파일 추가·변경 실시간 자동 반영 (닫혀 있을 때는 타이머 0개로 CPU 0.00%)]
+    if callable(check_local_files_changed_async):
+        def _notify_fs_changed() -> None:
+            def _rerender_if_alive() -> None:
+                try:
+                    if current_win[0] is win and win.winfo_exists():
+                        _VIDEO_OCR_UI_CACHE["ts"] = 0.0
+                        _render_search_results()
+                except Exception:
+                    pass
+            try:
+                win.after(0, _rerender_if_alive)
+            except Exception:
+                pass
+
+        def _poll_open_window_fs_changes() -> None:
+            try:
+                if current_win[0] is not win or not win.winfo_exists():
+                    return
+                check_local_files_changed_async(_notify_fs_changed)
+                win.after(2000, _poll_open_window_fs_changes)
+            except Exception:
+                pass
+
+        win.bind("<FocusIn>", lambda _e: check_local_files_changed_async(_notify_fs_changed), add="+")
+        win.after(400, _poll_open_window_fs_changes)

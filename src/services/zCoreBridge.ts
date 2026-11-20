@@ -12,7 +12,7 @@ export const Z_CORE_PORT = 5199;
 export const Z_CORE_ORIGIN = `http://127.0.0.1:${Z_CORE_PORT}`;
 export const Z_CORE_ZIP_URL = '/Merlin_Z_Core.zip';
 /** 현재 배포 중인 최신 Z-코어 버전 (Merlin_Z_Core.zip 안의 Merlin_Z_Core_Setup.exe 버전과 반드시 일치시킬 것 — 불일치 시 self-update 루프 발생) */
-export const LATEST_Z_CORE_VERSION = '2.5.69';
+export const LATEST_Z_CORE_VERSION = '2.5.79';
 
 /**
  * 현재 브라우저 세션이 로그인된 실사용자인지, 아니면 비로그인(크롬 게스트 모드 / 시크릿 창 / 첫 방문자)인지 판별합니다.
@@ -34,10 +34,18 @@ export function hasActiveGhostiLoginSession(): boolean {
     return true;
   }
   try {
-    return (
+    if (
       sessionStorage.getItem('ghosti_one_stop_agreed') === '1' ||
       localStorage.getItem('ghosti_secretary_engine_agreed') === '1'
-    );
+    ) {
+      return true;
+    }
+    const hubToken = (localStorage.getItem('merlin_session_token') || '').trim();
+    const hubEmail = (localStorage.getItem('ghosti_hub_user_email') || '').trim();
+    if ((hubToken && hubToken.includes('.')) || hubEmail) {
+      return true;
+    }
+    return false;
   } catch {
     return false;
   }
@@ -424,6 +432,10 @@ export function getZCoreUrl(path: string): string {
     cleanPath.startsWith('/__search/') ||
     cleanPath.startsWith('/__quarantine/') ||
     cleanPath.startsWith('/__zcore/') ||
+    cleanPath.startsWith('/__sync/') ||
+    cleanPath.startsWith('/__work/') ||
+    cleanPath.startsWith('/api/sync/') ||
+    cleanPath.startsWith('/api/work/') ||
     cleanPath.startsWith('/api/ghosti/') ||
     cleanPath.startsWith('/api/care/') ||
     cleanPath.startsWith('/api/superpower/') ||

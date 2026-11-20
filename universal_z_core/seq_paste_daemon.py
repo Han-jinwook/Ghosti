@@ -2843,7 +2843,85 @@ def _load_doc_body_cache_fast() -> dict[str, str]:
     return {}
 
 
-def _scan_lightweight_local_files_sync() -> list[dict]:
+def _compute_watched_folders_fast_sig() -> str:
+    """
+    [열려 있는 귀신검색창 실시간 파일 추가·변경 감지용 1ms 무핸들 시그니처]:
+    - os.scandir의 WIN32_FIND_DATA만으로 커널 핸들 오픈 0회로 (폴더수, 파일수, 최신수정시각ns, 용량합)을 반환합니다.
+    """
+    folders = _get_known_user_folders_for_search()
+    target_exts = {
+        ".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md",
+        ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp",
+        ".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v",
+    }
+    skip_sub_dirs = {
+        "node_modules", ".git", "appdata", "__pycache__", "venv", ".venv",
+        "dist", "build", "universal_z_core", "merlin_z_core", "$recycle.bin",
+    }
+    scan_dirs: list[Path] = []
+    seen_scan_dirs: set[str] = set()
+    for root_fd in folders:
+        norm_r = os.path.normcase(os.path.abspath(str(root_fd)))
+        if norm_r not in seen_scan_dirs:
+            seen_scan_dirs.add(norm_r)
+            scan_dirs.append(root_fd)
+        sub_added = 0
+        try:
+            with os.scandir(root_fd) as it_sub:
+                for sub_e in it_sub:
+                    if sub_added >= 15:
+                        break
+                    try:
+                        if not sub_e.is_dir(follow_symlinks=False):
+                            continue
+                        sname = sub_e.name
+                        if sname.startswith((".", "$", "~")) or sname.lower() in skip_sub_dirs:
+                            continue
+                        norm_s = os.path.normcase(os.path.abspath(sub_e.path))
+                        if norm_s not in seen_scan_dirs:
+                            seen_scan_dirs.add(norm_s)
+                            scan_dirs.append(Path(sub_e.path))
+                            sub_added += 1
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    f_cnt = 0
+    max_mt_ns = 0
+    sz_acc = 0
+    for fd in scan_dirs:
+        try:
+            with os.scandir(fd) as it:
+                for entry in it:
+                    try:
+                        if not entry.is_file(follow_symlinks=False):
+                            continue
+                        name = entry.name
+                        name_low = name.lower()
+                        if (
+                            name.startswith((".", "~$", ".~lock."))
+                            or name_low in ("desktop.ini", "thumbs.db")
+                            or name_low.endswith((".lck", ".tmp", ".ghosti_sync_tmp"))
+                        ):
+                            continue
+                        dot_idx = name_low.rfind(".")
+                        if dot_idx < 0 or name_low[dot_idx:] not in target_exts:
+                            continue
+                        st = entry.stat(follow_symlinks=False)
+                        f_cnt += 1
+                        mt_ns = int(getattr(st, "st_mtime_ns", int(st.st_mtime * 1_000_000_000)))
+                        if mt_ns > max_mt_ns:
+                            max_mt_ns = mt_ns
+                        sz_acc = (sz_acc + int(st.st_size)) & 0x7FFFFFFFFFFFFFFF
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+    return f"{len(scan_dirs)}:{f_cnt}:{max_mt_ns}:{sz_acc}"
+
+
+def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
     """
     [초고속 로컬 파일 스캐너 — UI 스레드 블로킹 0%]:
     1) os.scandir의 메모리 내 WIN32_FIND_DATA(entry.stat(follow_symlinks=False))만 사용해 수천 개 파일에 대한
@@ -2853,7 +2931,13 @@ def _scan_lightweight_local_files_sync() -> list[dict]:
     """
     with _LOCAL_FILE_SCAN_LOCK:
         now = time.time()
-        if _LOCAL_FILE_CACHE["ts"] > 0.0 and (now - float(_LOCAL_FILE_CACHE["ts"])) < 55.0:
+        cur_sig = _compute_watched_folders_fast_sig()
+        if (
+            not force
+            and _LOCAL_FILE_CACHE["ts"] > 0.0
+            and (now - float(_LOCAL_FILE_CACHE["ts"])) < 55.0
+            and cur_sig == _LOCAL_FILE_CACHE.get("dir_sig")
+        ):
             return _LOCAL_FILE_CACHE["items"]
 
         folders = _get_known_user_folders_for_search()
@@ -3007,20 +3091,21 @@ def _scan_lightweight_local_files_sync() -> list[dict]:
             it_f["vec"] = AI_ENGINE.embed_128d(nm)
         _LOCAL_FILE_CACHE["items"] = top_items
         _LOCAL_FILE_CACHE["ts"] = time.time()
+        _LOCAL_FILE_CACHE["dir_sig"] = cur_sig
         return _LOCAL_FILE_CACHE["items"]
 
 
-def _refresh_lightweight_local_files_async(on_done=None) -> None:
+def _refresh_lightweight_local_files_async(on_done=None, force: bool = False) -> None:
     """백그라운드 데몬 스레드에서 로컬 파일 캐시를 비동기 갱신하며, 완료 시 선택적 콜백(on_done)을 호출합니다."""
     global _LOCAL_FILE_REFRESH_RUNNING
-    if _LOCAL_FILE_REFRESH_RUNNING and on_done is None:
+    if _LOCAL_FILE_REFRESH_RUNNING and on_done is None and not force:
         return
     _LOCAL_FILE_REFRESH_RUNNING = True
 
     def _worker() -> None:
         global _LOCAL_FILE_REFRESH_RUNNING
         try:
-            _scan_lightweight_local_files_sync()
+            _scan_lightweight_local_files_sync(force=force)
         except Exception:
             pass
         finally:
@@ -3032,6 +3117,22 @@ def _refresh_lightweight_local_files_async(on_done=None) -> None:
                 pass
 
     threading.Thread(target=_worker, daemon=True).start()
+
+
+def _check_local_files_changed_async(on_changed=None) -> None:
+    """열려 있는 귀신검색창에서 1ms 시그니처 변화 감지 시에만 백그라운드 재스캔 후 UI 갱신 콜백을 호출합니다."""
+    def _probe() -> None:
+        try:
+            prev_sig = str(_LOCAL_FILE_CACHE.get("dir_sig") or "")
+            new_sig = _compute_watched_folders_fast_sig()
+            if not prev_sig or new_sig != prev_sig:
+                _scan_lightweight_local_files_sync(force=True)
+                if callable(on_changed):
+                    on_changed()
+        except Exception:
+            pass
+
+    threading.Thread(target=_probe, daemon=True).start()
 
 
 def _peek_lightweight_local_files_fast() -> tuple[list[dict], bool]:
@@ -3462,6 +3563,7 @@ def _toast_worker() -> None:
                 "get_lightweight_local_files": _get_lightweight_local_files,
                 "peek_lightweight_local_files": _peek_lightweight_local_files_fast,
                 "refresh_lightweight_local_files_async": _refresh_lightweight_local_files_async,
+                "check_local_files_changed_async": _check_local_files_changed_async,
                 "extract_chosung": _extract_chosung,
                 "eng_to_kor": eng_to_kor,
                 "kor_to_eng": kor_to_eng,

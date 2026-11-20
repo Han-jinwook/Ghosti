@@ -1,5 +1,6 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
+import { getZCoreUrl, zCoreBridge } from '../../services/zCoreBridge';
 import { hasAuthenticatedHubAccountSession } from '../../services/supabaseClient';
 import {
   cleanVideoTimestampLabel,
@@ -57,9 +58,72 @@ export const GhostSearchPane: React.FC<{
     removeSharedRoomPhoto,
     openLocalFolder,
     hasExecutedUserSearch,
+    refreshLiveLocalFilesInSearchWindow,
   } = useSaySeeStore();
 
   const { setOcrModalPhoto } = useDashboardNavStore();
+  const lastWatchSigRef = useRef<string>('');
+  const watchRefreshInflightRef = useRef<boolean>(false);
+
+  // [귀신검색창 열려 있는 상태에서 파일 추가·삭제·수정 실시간 반영 (1ms 무핸들 시그니처 비교 · 평시 CPU 0.00%)]
+  useEffect(() => {
+    const isSearchSurfaceActive =
+      Boolean(ghostSearchWindowStage) ||
+      (desktopTab === 'dashboard' && activeLoungeType === 'personal');
+    if (!isSearchSurfaceActive || typeof window === 'undefined') return;
+    let cancelled = false;
+
+    const probeWatchSig = async () => {
+      if (
+        cancelled ||
+        watchRefreshInflightRef.current ||
+        !zCoreBridge.isConnected ||
+        (typeof document !== 'undefined' && document.visibilityState === 'hidden')
+      ) {
+        return;
+      }
+      try {
+        const ctrl = new AbortController();
+        const tid = window.setTimeout(() => ctrl.abort(), 1200);
+        const res = await fetch(getZCoreUrl('/__zcore/watch-sig'), {
+          cache: 'no-store',
+          signal: ctrl.signal,
+        }).finally(() => window.clearTimeout(tid));
+        if (!res.ok) return;
+        const data = (await res.json()) as { ok?: boolean; sig?: string };
+        if (!data?.ok || !data.sig) return;
+        if (!lastWatchSigRef.current) {
+          lastWatchSigRef.current = data.sig;
+          return;
+        }
+        if (data.sig !== lastWatchSigRef.current) {
+          lastWatchSigRef.current = data.sig;
+          watchRefreshInflightRef.current = true;
+          try {
+            await refreshLiveLocalFilesInSearchWindow();
+          } finally {
+            watchRefreshInflightRef.current = false;
+          }
+        }
+      } catch {
+        /* ignore transient poll error */
+      }
+    };
+
+    void probeWatchSig();
+    const intervalId = window.setInterval(() => {
+      void probeWatchSig();
+    }, 2200);
+    const onFocus = () => {
+      void probeWatchSig();
+    };
+    window.addEventListener('focus', onFocus);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [ghostSearchWindowStage, desktopTab, activeLoungeType, refreshLiveLocalFilesInSearchWindow]);
 
   const [isStage1MinimalPreview] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
