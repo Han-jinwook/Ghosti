@@ -600,7 +600,41 @@ def get_real_spooler_and_security_status(startup_items: List[Dict[str, str]]) ->
                 pass
 
     # 4) 애드웨어·보안 플러그인 65종 + 비필수 시작프로그램(HKCU/HKLM/WOW6432 Run) + 활성 서비스/스케줄러 즉시 매칭
-    startup_names = [f"{s['name'].lower()} ({s['location']})" for s in startup_items]
+    safe_startup_tokens = (
+        "merlin", "ghosti", "senstalk", "sensebot", "sundream", "nplace", "aggro", "secretary", "tailscale",
+        "kakao", "telegram", "onedrive", "googledrive", "mybox", "dropbox", "securityhealth", "defender",
+        "realtek", "igfx", "nvidia", "nvbackend", "amd", "ati.ace", "clistart", "seagull", "ssdal",
+        "intel", "logi", "razer", "steam", "discord", "slack", "notion", "claude", "cursor",
+        "antigravity", "msedge", "chrome", "whale", "ctfmon", "windows", "figma",
+    )
+    filtered_startup_items = [
+        s for s in startup_items
+        if s.get("name") and not any(tok in f"{s.get('name','')} {s.get('command','')}".lower() for tok in safe_startup_tokens)
+    ]
+
+    sleeping_state: Dict[str, Any] = {"currentlyAwake": True, "sleepingLabels": [], "sleepingKeywords": set(), "sleepingStartupNames": set()}
+    try:
+        import plugin_ghosti_care_suite as _pgcs
+        sleeping_state = _pgcs.get_sleeping_security_state()
+    except Exception:
+        pass
+    sleeping_kws: set[str] = set(sleeping_state.get("sleepingKeywords") or set())
+    sleeping_startups: set[str] = set(sleeping_state.get("sleepingStartupNames") or set())
+    sleeping_labels: List[str] = list(sleeping_state.get("sleepingLabels") or [])
+    is_sleep_mode_active = not bool(sleeping_state.get("currentlyAwake", True))
+
+    cleaned_static_startups: set[str] = set()
+    try:
+        clean_flag_file = MERLIN_DIR / "cleaned_bloatware_state.json"
+        if clean_flag_file.exists():
+            st_obj = json.loads(clean_flag_file.read_text(encoding="utf-8", errors="ignore"))
+            for sn in (st_obj.get("staticStartupNames") or []):
+                if sn:
+                    cleaned_static_startups.add(str(sn).lower())
+    except Exception:
+        pass
+
+    startup_names = [f"{s['name'].lower()} ({s['location']})" for s in filtered_startup_items]
     all_names = set(list(proc_names_set) + startup_names + list(active_service_names) + list(active_task_names))
     seen_kws: set[str] = set()
     for kw, label in KNOWN_SECURITY_PLUGIN_KEYWORDS.items():
@@ -613,6 +647,15 @@ def get_real_spooler_and_security_status(startup_items: List[Dict[str, str]]) ->
                     continue
             seen_kws.add(kw)
             is_running_now = any(kw in pn for pn in proc_names_set)
+            # 이미 절전 수면 중이거나 정리된 정적 자동실행(HKLM Run 등) 항목은 프로세스가 실제 실행 중이 아닐 때 중복 활성 경보에서 제외
+            if not is_running_now and (
+                (is_sleep_mode_active and (kw in sleeping_kws or any(kw in sk for sk in sleeping_kws)))
+                or kw in cleaned_static_startups
+                or any(kw in cs for cs in cleaned_static_startups)
+            ):
+                if label not in sleeping_labels:
+                    sleeping_labels.append(label)
+                continue
             status_tag = "실행중(CPU/메모리 점유)" if is_running_now else "부팅 자동실행/스케줄러 등록"
             detected_security_plugins.append(
                 {
@@ -622,22 +665,19 @@ def get_real_spooler_and_security_status(startup_items: List[Dict[str, str]]) ->
                 }
             )
 
-    safe_startup_tokens = (
-        "merlin", "ghosti", "senstalk", "sensebot", "sundream", "kakao", "telegram",
-        "onedrive", "googledrive", "mybox", "dropbox", "securityhealth", "defender",
-        "realtek", "igfx", "nvidia", "nvbackend", "amd", "ati.ace", "clistart", "seagull", "ssdal",
-        "intel", "logi", "razer", "steam", "discord", "slack", "notion", "claude", "cursor",
-        "antigravity", "msedge", "chrome", "whale", "ctfmon", "windows", "figma",
-    )
-    for s_item in startup_items:
+    for s_item in filtered_startup_items:
         s_name = str(s_item.get("name") or "").strip()
         s_cmd = str(s_item.get("command") or "").strip()
         comb_low = f"{s_name} {s_cmd}".lower()
-        if not s_name or any(tok in comb_low for tok in safe_startup_tokens):
-            continue
         s_key = s_name.lower()
         if s_key not in seen_kws and not any(kw in comb_low for kw in seen_kws):
             seen_kws.add(s_key)
+            is_s_running = any(s_key in pn for pn in proc_names_set)
+            if not is_s_running and (
+                (is_sleep_mode_active and s_key in sleeping_startups)
+                or s_key in cleaned_static_startups
+            ):
+                continue
             detected_security_plugins.append(
                 {
                     "keyword": s_key,
@@ -646,26 +686,14 @@ def get_real_spooler_and_security_status(startup_items: List[Dict[str, str]]) ->
                 }
             )
 
-    # 직전(최근 10분 이내)에 clean_bloatware 처치가 완료된 경우 비관리자 권한으로 남은 HKLM/스케줄러 정적 등록 흔적은 차단 완료 상태로 처리
-    recently_cleaned = False
-    try:
-        clean_flag_file = MERLIN_DIR / "cleaned_bloatware_state.json"
-        if clean_flag_file.exists():
-            st_obj = json.loads(clean_flag_file.read_text(encoding="utf-8", errors="ignore"))
-            if time.time() - float(st_obj.get("cleanedAt") or 0) <= 3.0:
-                recently_cleaned = True
-    except Exception:
-        recently_cleaned = False
-
-    if recently_cleaned:
-        detected_security_plugins = []
-
     return {
         "spoolerServiceStatus": spooler_status,
         "installedPrinters": printers,
         "stuckSpoolQueueFiles": spool_files_count,
         "activeSecurityPluginsCount": len(detected_security_plugins),
         "activeSecurityPlugins": detected_security_plugins,
+        "sleepingSecurityPluginsCount": len(sleeping_labels) if is_sleep_mode_active else 0,
+        "sleepingSecurityPlugins": sleeping_labels if is_sleep_mode_active else [],
         "runningGuiApps": running_gui_apps,
         "cpuLoadPercent": cpu_load_percent,
         "highCpuSuspects": high_cpu_suspects,
@@ -1961,8 +1989,14 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
             if not any("카메라" in wt or "camera" in wt for wt in visible_win_titles):
                 revival_exe_names.append("WindowsCamera.exe")
 
-            # 1-A) PowerShell 다중 실행(20~60초 병목) 전면 제거!
-            #      순수 Python + tasklist(35ms) + sc query(25ms)로 실제 존재하는 항목만 추려 단일 네이티브 배치 1회(0.25초)로 즉시 정리!
+            # 1-A) 종료 전에 은행·관공서 보안 모듈(nosstarter, MagicLine4NX, HncUpdate 등)의 정확한 cmdline을
+            #      단일 SSOT 절전 스냅샷(SLEEP_SNAPSHOT_FILE)에 먼저 기록하여 [보안프로그램 즉시 깨우기] 시 100% 기상 보장!
+            try:
+                import plugin_ghosti_care_suite as _pgcs_clean
+                _pgcs_clean.capture_and_sleep_user_security_processes(kill_running=True)
+            except Exception:
+                pass
+
             kill_keywords = set(KNOWN_SECURITY_PLUGIN_KEYWORDS.keys())
             for sp in (sec_plugins or []):
                 kw = str(sp.get("keyword") or "").strip().lower()
@@ -1973,13 +2007,14 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
             protected_exes = {
                 "chrome.exe", "msedge.exe", "whale.exe", "firefox.exe", "brave.exe",
                 "explorer.exe", "python.exe", "pythonw.exe", "node.exe", "antigravity.exe",
-                "code.exe", "kakaotalk.exe", "telegram.exe", "myboxlauncher_x64_mt.exe",
+                "code.exe", "cursor.exe", "kakaotalk.exe", "telegram.exe", "myboxlauncher_x64_mt.exe",
                 "myboxexplorer_x64_mt.exe", "googledrivefs.exe", "sensetalk_engine.exe",
                 "senstalk_engine.exe", "merlin_z_core.exe", "merlin_z_core_setup.exe",
                 "svchost.exe", "lsass.exe", "csrss.exe", "wininit.exe", "services.exe",
                 "dwm.exe", "sihost.exe", "taskhostw.exe", "ctfmon.exe", "searchindexer.exe",
                 "securityhealthservice.exe", "msmpeng.exe", "conhost.exe", "cmd.exe",
             }
+            safe_family_proc_tokens = ("merlin", "ghosti", "senstalk", "sensebot", "sundream", "nplace", "aggro", "secretary", "tailscale")
             revival_exe_lower = {ex.lower() for ex in revival_exe_names}
             matched_running_exes: set[str] = set()
             try:
@@ -1993,7 +2028,7 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
                         continue
                     exe_name = ln.split('"', 2)[1].strip()
                     exe_low = exe_name.lower()
-                    if not exe_low or exe_low in protected_exes:
+                    if not exe_low or exe_low in protected_exes or any(t in exe_low for t in safe_family_proc_tokens):
                         continue
                     stem_low = exe_low[:-4] if exe_low.endswith(".exe") else exe_low
                     if exe_low in revival_exe_lower or any(len(k) >= 3 and k in stem_low for k in kill_keywords):
@@ -2006,7 +2041,7 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
                 r"(Cache|PCAppStore|TUCTL|yoondisk|Yondisk|CloudTask|StorageService|natservice|natsvc|wizverapmsvc|nosstarter|veraport|crossex|anysign|delfino|magicline|i3g|unicrs|pennyroyal)",
                 re.IGNORECASE,
             )
-            svc_safe_re = re.compile(r"(Merlin|SensTalk|SenseTalk|Tailscale|Spooler|WinDefend|mpssvc|wscsvc)", re.IGNORECASE)
+            svc_safe_re = re.compile(r"(Merlin|SensTalk|SenseTalk|NPlace|Tailscale|Spooler|WinDefend|mpssvc|wscsvc)", re.IGNORECASE)
             try:
                 r_sc = subprocess.run(
                     ["sc", "query", "state=", "all"],
@@ -2031,7 +2066,6 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
                         existing_tasks.append(tn)
                         disabled_tasks_and_services.append(f"스케줄러:{tn}")
                 except OSError:
-                    # 권한 제한(WinError 5)이 걸린 숨김 태스크도 배치에서 비활성화 시도
                     existing_tasks.append(tn)
 
             batch_lines = ["@echo off"]
@@ -2049,20 +2083,22 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
                 clean_bat_path = MERLIN_DIR / "merlin_fast_clean_bloatware.cmd"
                 try:
                     clean_bat_path.write_text("\r\n".join(batch_lines) + "\r\n", encoding="cp949", errors="ignore")
-                    subprocess.Popen(
+                    subprocess.run(
                         ["cmd.exe", "/c", str(clean_bat_path)],
                         stdout=subprocess.DEVNULL,
                         stderr=subprocess.DEVNULL,
+                        timeout=3.5,
                         creationflags=0x08000000,
                     )
                 except Exception:
                     pass
 
         # [2단계: 레지스트리(HKCU\Run, HKLM\Run, HKLM\WOW6432Node\Run) 자동실행 백업 후 제거]
+        static_unremoved_names: List[str] = []
         if os.name == "nt":
             safe_run_tokens = (
-                "merlin", "ghosti", "senstalk", "sensebot", "sundream", "kakao", "telegram",
-                "onedrive", "googledrive", "mybox", "dropbox", "securityhealth", "defender",
+                "merlin", "ghosti", "senstalk", "sensebot", "sundream", "nplace", "aggro", "secretary", "tailscale",
+                "kakao", "telegram", "onedrive", "googledrive", "mybox", "dropbox", "securityhealth", "defender",
                 "realtek", "nvidia", "amd", "ati.ace", "clistart", "seagull", "ssdal",
                 "intel", "logi", "steam", "discord", "slack", "notion", "antigravity",
                 "cursor", "chrome", "msedge", "whale", "figma",
@@ -2077,34 +2113,41 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
                 with winreg.CreateKey(winreg.HKEY_CURRENT_USER, backup_subkey) as bk:
                     for root_hkey, run_subkey, tag in reg_clean_targets:
                         try:
-                            with winreg.OpenKey(root_hkey, run_subkey, 0, winreg.KEY_READ | winreg.KEY_WRITE) as rk:
-                                to_remove: List[tuple[str, str]] = []
+                            with winreg.OpenKey(root_hkey, run_subkey, 0, winreg.KEY_READ) as rk_ro:
+                                candidates_ro: List[tuple[str, str]] = []
                                 idx = 0
                                 while True:
                                     try:
-                                        vname, vval, _ = winreg.EnumValue(rk, idx)
+                                        vname, vval, _ = winreg.EnumValue(rk_ro, idx)
                                         idx += 1
                                         comb = f"{vname} {vval}".lower()
                                         if any(p in comb for p in safe_run_tokens):
                                             continue
-                                        to_remove.append((str(vname), str(vval)))
+                                        candidates_ro.append((str(vname), str(vval)))
                                     except OSError:
                                         break
-                                for vname, vval in to_remove:
-                                    try:
-                                        winreg.SetValueEx(bk, f"{tag}__{vname}", 0, winreg.REG_SZ, vval)
-                                        winreg.DeleteValue(rk, vname)
-                                        disabled_startups.append(vname)
-                                        reg_restore_ops.append({
-                                            "op": "REGISTRY_RUN_RESTORE",
-                                            "name": vname,
-                                            "tag": tag,
-                                            "runSubkey": run_subkey,
-                                            "command": vval,
-                                            "rolledBack": False,
-                                        })
-                                    except OSError:
-                                        pass
+                            if not candidates_ro:
+                                continue
+                            try:
+                                with winreg.OpenKey(root_hkey, run_subkey, 0, winreg.KEY_READ | winreg.KEY_WRITE) as rk_rw:
+                                    for vname, vval in candidates_ro:
+                                        try:
+                                            winreg.SetValueEx(bk, f"{tag}__{vname}", 0, winreg.REG_SZ, vval)
+                                            winreg.DeleteValue(rk_rw, vname)
+                                            disabled_startups.append(vname)
+                                            reg_restore_ops.append({
+                                                "op": "REGISTRY_RUN_RESTORE",
+                                                "name": vname,
+                                                "tag": tag,
+                                                "runSubkey": run_subkey,
+                                                "command": vval,
+                                                "rolledBack": False,
+                                            })
+                                        except OSError:
+                                            static_unremoved_names.append(vname.lower())
+                            except OSError:
+                                for vname, _ in candidates_ro:
+                                    static_unremoved_names.append(vname.lower())
                         except OSError:
                             pass
             except Exception:
@@ -2115,7 +2158,13 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
         try:
             ensure_merlin_dirs()
             (MERLIN_DIR / "cleaned_bloatware_state.json").write_text(
-                json.dumps({"cleanedAt": time.time()}, ensure_ascii=False),
+                json.dumps(
+                    {
+                        "cleanedAt": time.time(),
+                        "staticStartupNames": sorted(set(static_unremoved_names)),
+                    },
+                    ensure_ascii=False,
+                ),
                 encoding="utf-8",
             )
         except Exception:

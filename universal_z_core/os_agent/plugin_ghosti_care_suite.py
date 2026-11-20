@@ -951,8 +951,23 @@ def get_security_services_status() -> Dict[str, Any]:
         except Exception:
             pass
 
-    active_count = len(running_services)
-    estimated_ram_mb = sum(s.get("estimatedRamMb", 45) for s in running_services)
+    active_svc_count = len(running_services)
+    running_user_bridges = _scan_running_user_security_processes()
+    active_labels_dedup: List[str] = []
+    for rs in running_services:
+        lbl = str(rs.get("displayName") or rs.get("serviceName") or "").strip()
+        if lbl and lbl not in active_labels_dedup:
+            active_labels_dedup.append(lbl)
+    for rb in running_user_bridges:
+        lbl = str(rb.get("label") or rb.get("name") or "").strip()
+        if lbl and lbl not in active_labels_dedup:
+            active_labels_dedup.append(lbl)
+
+    active_count = len(active_labels_dedup)
+    estimated_ram_mb = (
+        sum(int(s.get("estimatedRamMb", 45)) for s in running_services)
+        + sum(int(round(float(b.get("memoryMb") or 18.0))) for b in running_user_bridges)
+    )
 
     snap = _load_sleep_snapshot()
     sleeping_services = [
@@ -960,20 +975,31 @@ def get_security_services_status() -> Dict[str, Any]:
         for s in (snap.get("services") or [])
         if isinstance(s, dict) and s.get("serviceName")
     ]
+    sleeping_labels: List[str] = []
+    for s in (snap.get("services") or []):
+        if isinstance(s, dict):
+            sl = str(s.get("displayName") or s.get("serviceName") or "").strip()
+            if sl and sl not in sleeping_labels:
+                sleeping_labels.append(sl)
+    for b in (snap.get("userBridgeProcesses") or []):
+        if isinstance(b, dict):
+            bl = str(b.get("label") or b.get("name") or "").strip()
+            if bl and bl not in sleeping_labels:
+                sleeping_labels.append(bl)
 
     if active_count > 0:
         honest_message = (
-            f"👻 현재 미사용 웹 보안 서비스 {active_count}개(약 {estimated_ram_mb}MB)가 뒤에서 실행 중이에요. "
-            "삭제하지 않고 쿨쿨 잠재울까요? (은행 접속 시 1초 만에 자동 기상합니다)"
+            f"👻 현재 미사용 은행·관공서 보안 모듈 {active_count}종(약 {estimated_ram_mb}MB)이 뒤에서 실행 중이에요. "
+            "삭제하지 않고 쿨쿨 잠재울까요? (은행 접속 시 또는 [보안프로그램 즉시 깨우기] 클릭 시 1초 만에 기상합니다)"
         )
-    elif sleeping_services:
+    elif sleeping_labels and not _CURRENTLY_AWAKE:
         honest_message = (
-            f"👻 현재 은행·관공서 보안 서비스 {len(sleeping_services)}개가 조용히 잠들어 있어요. "
-            "은행 사이트에 들어가시면 자동으로 깨어나고, 원하실 때 1초 만에 원래 설정으로 복구할 수 있어요."
+            f"👻 현재 은행·관공서 보안 모듈 {len(sleeping_labels)}종({', '.join(sleeping_labels[:4])})이 조용히 절전 수면 중이에요. "
+            "은행 사이트에 들어가시거나 [🏦 보안프로그램 즉시 깨우기]를 누르시면 1초 만에 다시 깨어납니다."
         )
     else:
         honest_message = (
-            "👻 오! 현재 켜져 있는 미사용 웹 보안 서비스가 0개로 아주 깨끗합니다! "
+            "👻 오! 현재 켜져 있는 미사용 웹 보안 프로그램이 0개로 아주 깨끗합니다! "
             "앞으로 은행·관공서 다녀오실 때만 알아서 재우고 깨워드릴게요."
         )
 
@@ -983,9 +1009,13 @@ def get_security_services_status() -> Dict[str, Any]:
         "ok": True,
         "featureTitle": "🏦 안 쓰는 은행·관공서 보안프로그램 자동 재우기",
         "activeCount": active_count,
+        "activeServiceCount": active_svc_count,
         "estimatedRamMb": estimated_ram_mb,
         "runningServices": running_services,
+        "runningUserBridges": running_user_bridges,
+        "activeModuleLabels": active_labels_dedup,
         "sleepingServices": sleeping_services,
+        "sleepingModuleLabels": sleeping_labels if not _CURRENTLY_AWAKE else [],
         "autoSleepEnabled": _is_bank_auto_sleep_enabled(),
         "currentlyAwake": _CURRENTLY_AWAKE,
         "selfDefenseGuided": list(dict.fromkeys(self_defense_detected)),
@@ -1111,24 +1141,291 @@ def _iter_windows_processes_stdlib() -> List[Dict[str, Any]]:
     return procs
 
 
+_PROTECTED_USER_SECURITY_SCAN_EXES = {
+    "chrome.exe", "msedge.exe", "whale.exe", "firefox.exe", "brave.exe",
+    "explorer.exe", "python.exe", "pythonw.exe", "node.exe", "antigravity.exe",
+    "code.exe", "cursor.exe", "kakaotalk.exe", "telegram.exe", "myboxlauncher_x64_mt.exe",
+    "myboxexplorer_x64_mt.exe", "googledrivefs.exe", "sensetalk_engine.exe",
+    "senstalk_engine.exe", "merlin_z_core.exe", "merlin_z_core_setup.exe",
+    "svchost.exe", "lsass.exe", "csrss.exe", "wininit.exe", "services.exe",
+    "dwm.exe", "sihost.exe", "taskhostw.exe", "ctfmon.exe", "searchindexer.exe",
+    "securityhealthservice.exe", "msmpeng.exe", "conhost.exe", "cmd.exe", "powershell.exe",
+}
+
+_SAFE_FAMILY_TOKENS = (
+    "merlin", "ghosti", "senstalk", "sensebot", "sundream", "nplace", "aggro", "secretary", "tailscale",
+)
+
+
+def _load_known_security_keywords_map() -> Dict[str, str]:
+    try:
+        import merlin_z_core_os as _mzos
+        raw_map = dict(getattr(_mzos, "KNOWN_SECURITY_PLUGIN_KEYWORDS", {}) or {})
+    except Exception:
+        raw_map = {}
+    raw_map.pop("windowscamera", None)
+    return raw_map
+
+
+def _scan_running_user_security_processes() -> List[Dict[str, Any]]:
+    """현재 유저 세션에서 실제 실행 중인 은행·관공서 보안/상주 모듈 프로세스(cmdline 포함) 실측."""
+    if sys.platform != "win32":
+        return []
+    wl_data = load_security_whitelist(allow_remote_sync=False)
+    whitelist_items = wl_data.get("web_security_services_whitelist", [])
+    tray_label_map: Dict[str, str] = {}
+    for item in whitelist_items:
+        disp = str(item.get("display_name") or "은행·관공서 웹 보안 모듈")
+        for exe_name in item.get("tray_executables", []):
+            tray_label_map[str(exe_name).lower()] = disp
+
+    kw_map = _load_known_security_keywords_map()
+    found: List[Dict[str, Any]] = []
+    for pinfo in _iter_windows_processes_stdlib():
+        try:
+            pname = str(pinfo.get("name") or "").strip()
+            pname_low = pname.lower()
+            pid = int(pinfo.get("pid") or 0)
+            if not pname_low or pid <= 4 or pname_low in _PROTECTED_USER_SECURITY_SCAN_EXES:
+                continue
+            pexe = str(pinfo.get("exe") or "").strip()
+            comb_low = f"{pname_low} {pexe.lower()}"
+            if any(tok in comb_low for tok in _SAFE_FAMILY_TOKENS):
+                continue
+
+            stem_low = pname_low[:-4] if pname_low.endswith(".exe") else pname_low
+            matched_kw = ""
+            matched_label = ""
+            if pname_low in tray_label_map:
+                matched_kw = stem_low
+                matched_label = tray_label_map[pname_low]
+            else:
+                for kw, lbl in kw_map.items():
+                    if len(kw) >= 3 and kw in stem_low:
+                        matched_kw = kw
+                        matched_label = lbl
+                        break
+            if not matched_kw:
+                continue
+
+            cmdline = list(pinfo.get("cmdline") or ([pexe] if pexe else []))
+            if cmdline and pexe and not os.path.isabs(str(cmdline[0])) and os.path.exists(pexe):
+                cmdline[0] = pexe
+            found.append({
+                "pid": pid,
+                "name": pname_low,
+                "exe": pexe or (str(cmdline[0]) if cmdline else ""),
+                "cmdline": cmdline,
+                "keyword": matched_kw,
+                "label": matched_label or pname,
+                "memoryMb": float(pinfo.get("memoryMb") or 18.0),
+            })
+        except Exception:
+            continue
+    return found
+
+
+def _discover_security_autostart_bridges() -> List[Dict[str, Any]]:
+    """HKCU/HKLM Run 레지스트리에 등록된 은행·관공서 보안 모듈의 정확한 시작 명령줄(cmdline)을 조회합니다."""
+    if sys.platform != "win32" or winreg is None:
+        return []
+    kw_map = _load_known_security_keywords_map()
+    out: List[Dict[str, Any]] = []
+    seen_exes: set[str] = set()
+    run_keys = [
+        (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run"),
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Run"),
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run"),
+    ]
+    for root_hkey, subkey in run_keys:
+        try:
+            with winreg.OpenKey(root_hkey, subkey, 0, winreg.KEY_READ) as rk:
+                idx = 0
+                while True:
+                    try:
+                        vname, vval, _ = winreg.EnumValue(rk, idx)
+                        idx += 1
+                    except OSError:
+                        break
+                    s_name = str(vname or "").strip()
+                    s_cmd = str(vval or "").strip()
+                    comb_low = f"{s_name} {s_cmd}".lower()
+                    if not s_name or not s_cmd or any(tok in comb_low for tok in _SAFE_FAMILY_TOKENS):
+                        continue
+                    matched_kw = ""
+                    matched_lbl = ""
+                    for kw, lbl in kw_map.items():
+                        if len(kw) >= 3 and kw in comb_low:
+                            matched_kw = kw
+                            matched_lbl = lbl
+                            break
+                    if not matched_kw:
+                        continue
+                    parts = _split_windows_cmdline(s_cmd)
+                    if not parts or not os.path.isfile(str(parts[0])):
+                        continue
+                    exe_norm = os.path.abspath(str(parts[0])).lower()
+                    if exe_norm in seen_exes:
+                        continue
+                    seen_exes.add(exe_norm)
+                    out.append({
+                        "name": os.path.basename(exe_norm),
+                        "exe": str(parts[0]),
+                        "cmdline": parts,
+                        "keyword": matched_kw,
+                        "label": matched_lbl or s_name,
+                        "startupName": s_name,
+                    })
+        except OSError:
+            continue
+    return out
+
+
+def get_sleeping_security_state() -> Dict[str, Any]:
+    """단일 SSOT: 현재 절전 수면 중인 보안 모듈 라벨·키워드 및 기상 여부를 반환합니다."""
+    snap = _load_sleep_snapshot()
+    labels: List[str] = []
+    keywords: set[str] = set()
+    startup_names: set[str] = set()
+    for s in (snap.get("services") or []):
+        if isinstance(s, dict):
+            sn = str(s.get("serviceName") or "").strip().lower()
+            dl = str(s.get("displayName") or s.get("serviceName") or "").strip()
+            if sn:
+                keywords.add(sn)
+            if dl and dl not in labels:
+                labels.append(dl)
+    for b in (snap.get("userBridgeProcesses") or []):
+        if isinstance(b, dict):
+            kw = str(b.get("keyword") or "").strip().lower()
+            bn = str(b.get("name") or "").strip().lower()
+            sn = str(b.get("startupName") or "").strip().lower()
+            bl = str(b.get("label") or b.get("startupName") or b.get("name") or "").strip()
+            if kw:
+                keywords.add(kw)
+            if bn:
+                keywords.add(bn[:-4] if bn.endswith(".exe") else bn)
+            if sn:
+                startup_names.add(sn)
+                keywords.add(sn)
+            if bl and bl not in labels:
+                labels.append(bl)
+    return {
+        "currentlyAwake": bool(_CURRENTLY_AWAKE),
+        "sleepingLabels": labels if not _CURRENTLY_AWAKE else [],
+        "allManagedLabels": labels,
+        "sleepingKeywords": keywords if not _CURRENTLY_AWAKE else set(),
+        "sleepingStartupNames": startup_names if not _CURRENTLY_AWAKE else set(),
+    }
+
+
+def capture_and_sleep_user_security_processes(kill_running: bool = True) -> Dict[str, Any]:
+    """
+    [단일 SSOT 절전 캡처기]
+    - clean_bloatware 및 sleep_security_services 양쪽 모두에서 호출됩니다.
+    - 실행 중인 유저 보안 프로세스를 종료하기 전에 정확한 cmdline/exe/label을 SLEEP_SNAPSHOT_FILE에 영구 병합하고,
+      HKCU/HKLM Run에 등록된 보안 모듈(예: MagicLine4NX) 명령줄도 함께 보존하여 [보안프로그램 즉시 깨우기] 시 100% 기상시킵니다.
+    """
+    global _CURRENTLY_AWAKE
+    _ensure_care_dir()
+    existing_snap = _load_sleep_snapshot()
+    existing_svc_map: Dict[str, Dict[str, Any]] = {}
+    for s in (existing_snap.get("services") or []):
+        if isinstance(s, dict) and s.get("serviceName"):
+            existing_svc_map[str(s["serviceName"]).lower()] = dict(s)
+
+    existing_bridge_map: Dict[str, Dict[str, Any]] = {}
+    for b in (existing_snap.get("userBridgeProcesses") or []):
+        if isinstance(b, dict):
+            b_cmd = b.get("cmdline") or []
+            b_key = str(b_cmd[0] if b_cmd else b.get("name") or "").lower()
+            if b_key:
+                existing_bridge_map[b_key] = dict(b)
+
+    newly_killed: List[Dict[str, Any]] = []
+    reclaimed_ram_mb = 0
+    running_procs = _scan_running_user_security_processes()
+    for pinfo in running_procs:
+        pid = int(pinfo.get("pid") or 0)
+        cmdline = list(pinfo.get("cmdline") or [])
+        killed_ok = not kill_running
+        if kill_running and pid > 4:
+            try:
+                r_kill = subprocess.run(
+                    ["taskkill", "/F", "/PID", str(pid)],
+                    capture_output=True,
+                    timeout=2.0,
+                    creationflags=CREATE_NO_WINDOW,
+                )
+                killed_ok = (r_kill.returncode == 0)
+            except Exception:
+                killed_ok = False
+        if killed_ok:
+            reclaimed_ram_mb += max(10, int(round(float(pinfo.get("memoryMb") or 18.0))))
+            entry = {
+                "name": str(pinfo.get("name") or ""),
+                "exe": str(pinfo.get("exe") or (cmdline[0] if cmdline else "")),
+                "cmdline": cmdline,
+                "keyword": str(pinfo.get("keyword") or ""),
+                "label": str(pinfo.get("label") or pinfo.get("name") or ""),
+            }
+            newly_killed.append(entry)
+            b_key = str(cmdline[0] if cmdline else entry["name"]).lower()
+            if b_key:
+                existing_bridge_map[b_key] = entry
+
+    for auto_b in _discover_security_autostart_bridges():
+        auto_cmd = auto_b.get("cmdline") or []
+        auto_key = str(auto_cmd[0] if auto_cmd else auto_b.get("name") or "").lower()
+        if auto_key and auto_key not in existing_bridge_map:
+            existing_bridge_map[auto_key] = auto_b
+        elif auto_key and auto_b.get("startupName") and not existing_bridge_map[auto_key].get("startupName"):
+            existing_bridge_map[auto_key]["startupName"] = auto_b["startupName"]
+
+    _CURRENTLY_AWAKE = False
+    if existing_svc_map or existing_bridge_map:
+        _save_sleep_snapshot({
+            "savedAt": datetime.datetime.now().isoformat(),
+            "services": list(existing_svc_map.values()),
+            "userBridgeProcesses": list(existing_bridge_map.values()),
+        })
+
+    stopped_labels: List[str] = []
+    for nk in newly_killed:
+        lbl = str(nk.get("label") or nk.get("name") or "").strip()
+        if lbl and lbl not in stopped_labels:
+            stopped_labels.append(lbl)
+
+    return {
+        "newlyKilled": newly_killed,
+        "stoppedLabels": stopped_labels,
+        "reclaimedRamMb": reclaimed_ram_mb,
+        "totalBridgesManaged": len(existing_bridge_map),
+    }
+
+
+def _refresh_os_inspect_cache_safe() -> None:
+    try:
+        import plugin_ghosti_os as _pgo
+        _pgo._trigger_async_os_inspect_refresh()
+    except Exception:
+        pass
+
+
 def sleep_security_services(
     explicit_opt_in: bool = True,
     allow_uac_prompt: bool = True,
 ) -> Dict[str, Any]:
     """
-    [모듈 A — 스냅샷 누적 보존 & 무허가 자동 재우기/UAC 차단]
+    [모듈 A — 스냅샷 누적 보존 & 서비스 + 유저 보안모듈 통합 절전]
     - 이미 잠든 상태에서 재호출되더라도 기존 스냅샷(SLEEP_SNAPSHOT_FILE)을 절대 빈 배열로 덮어쓰지 않고 병합 보존합니다!
-    - 각 서비스의 원래 시작 유형(auto/delayed-auto/demand)을 기록해 두어 언제든 1초 완전 원복이 가능합니다.
-    - UAC 승인 거절 시 실패를 정직하게 반환하며, 실제 정지되지 않은 서비스를 잠든 것으로 허위 기록하지 않습니다.
+    - 윈도우 보안 서비스뿐 아니라 유저 세션 보안 프로세스(nosstarter, MagicLine4NX, HncUpdate 등)도 함께 절전 기록합니다.
     """
     global _CURRENTLY_AWAKE
     _ensure_care_dir()
     status = get_security_services_status()
     targets: List[Dict[str, Any]] = list(status.get("runningServices", []) or [])
-    wl_data = load_security_whitelist(allow_remote_sync=False)
-    whitelist_items = wl_data.get("web_security_services_whitelist", [])
 
-    # 각 서비스의 원래 시작유형을 절전 전에 미리 조회
     existing_snap = _load_sleep_snapshot()
     existing_svc_map: Dict[str, Dict[str, Any]] = {}
     for s in (existing_snap.get("services") or []):
@@ -1146,83 +1443,46 @@ def sleep_security_services(
             t["originalStartType"] = _query_service_start_type(sname)
 
     target_service_names = [str(t.get("serviceName") or "") for t in targets if t.get("serviceName")]
-    need_helper_setup = explicit_opt_in and not is_security_care_helper_task_registered() and not is_running_as_admin()
+    stopped_services: List[str] = []
+    elevation_method = "USER_SESSION_DIRECT"
 
-    elevation_res = execute_elevated_service_control(
-        "sleep",
-        target_service_names,
-        allow_uac_prompt=allow_uac_prompt,
-        register_helper_even_if_empty=need_helper_setup,
-    )
-    if not elevation_res.get("ok"):
-        return {
-            "ok": False,
-            "uacDeclined": bool(elevation_res.get("uacDeclined")),
-            "stoppedCount": 0,
-            "stoppedServices": [],
-            "reclaimedRamMb": 0,
-            "elevationMethod": elevation_res.get("elevationMethod"),
-            "error": "ELEVATION_REQUIRED_OR_DECLINED",
-            "toastMessage": "⚠️ Windows 관리자 권한(최초 1회) 승인이 취소되어 보안 서비스 절전 설정을 완료하지 못했습니다.",
-        }
+    # 실제 중지할 윈도우 서비스가 있을 때만 권한 헬퍼를 호출 (서비스가 0개일 때 불필요한 UAC 블로킹/타임아웃 원천 차단)
+    if target_service_names:
+        elevation_res = execute_elevated_service_control(
+            "sleep",
+            target_service_names,
+            allow_uac_prompt=allow_uac_prompt,
+            register_helper_even_if_empty=False,
+        )
+        elevation_method = str(elevation_res.get("elevationMethod") or "ELEVATED")
+        if elevation_res.get("ok"):
+            stopped_services = list(elevation_res.get("processedServices") or [])
+        elif not status.get("runningUserBridges"):
+            return {
+                "ok": False,
+                "uacDeclined": bool(elevation_res.get("uacDeclined")),
+                "stoppedCount": 0,
+                "stoppedServices": [],
+                "reclaimedRamMb": 0,
+                "elevationMethod": elevation_method,
+                "error": "ELEVATION_REQUIRED_OR_DECLINED",
+                "toastMessage": "⚠️ Windows 관리자 권한(최초 1회) 승인이 취소되어 보안 서비스 절전 설정을 완료하지 못했습니다.",
+            }
 
-    stopped_services = list(elevation_res.get("processedServices") or [])
     stopped_low = {s.lower() for s in stopped_services}
-
-    # 서비스 절전 승인이 통과된 뒤에만 유저 세션 트레이 브릿지 종료 및 기록
-    tray_exe_set = set()
-    for item in whitelist_items:
-        for exe_name in item.get("tray_executables", []):
-            tray_exe_set.add(exe_name.lower())
-
-    newly_killed_bridges: List[Dict[str, Any]] = []
-    for pinfo in _iter_windows_processes_stdlib():
-        try:
-            pname = (pinfo.get("name") or "").lower()
-            pid = int(pinfo.get("pid") or 0)
-            if pname in tray_exe_set and pid > 4:
-                cmdline = pinfo.get("cmdline") or ([pinfo.get("exe")] if pinfo.get("exe") else [])
-                if cmdline and cmdline[0]:
-                    r_kill = subprocess.run(
-                        ["taskkill", "/F", "/PID", str(pid)],
-                        capture_output=True,
-                        timeout=2.0,
-                        creationflags=CREATE_NO_WINDOW,
-                    )
-                    if r_kill.returncode == 0:
-                        newly_killed_bridges.append({
-                            "name": pname,
-                            "exe": str(cmdline[0]),
-                            "cmdline": cmdline,
-                        })
-        except Exception:
-            continue
-
-    # 기존 스냅샷과 누적 병합 (절대 빈 목록으로 덮어쓰지 않음!)
     for t in targets:
         sname = str(t.get("serviceName") or "")
         if sname and sname.lower() in stopped_low:
             existing_svc_map[sname.lower()] = t
 
-    existing_bridge_map: Dict[str, Dict[str, Any]] = {}
-    for b in (existing_snap.get("userBridgeProcesses") or []):
-        if isinstance(b, dict):
-            b_cmd = b.get("cmdline") or []
-            b_key = str(b_cmd[0] if b_cmd else b.get("name") or "").lower()
-            if b_key:
-                existing_bridge_map[b_key] = b
-    for nb in newly_killed_bridges:
-        nb_cmd = nb.get("cmdline") or []
-        nb_key = str(nb_cmd[0] if nb_cmd else nb.get("name") or "").lower()
-        if nb_key:
-            existing_bridge_map[nb_key] = nb
+    if existing_svc_map:
+        cur_snap = _load_sleep_snapshot()
+        cur_snap["savedAt"] = datetime.datetime.now().isoformat()
+        cur_snap["services"] = list(existing_svc_map.values())
+        _save_sleep_snapshot(cur_snap)
 
-    if existing_svc_map or existing_bridge_map:
-        _save_sleep_snapshot({
-            "savedAt": datetime.datetime.now().isoformat(),
-            "services": list(existing_svc_map.values()),
-            "userBridgeProcesses": list(existing_bridge_map.values()),
-        })
+    bridge_sleep_res = capture_and_sleep_user_security_processes(kill_running=True)
+    newly_killed_bridges = bridge_sleep_res.get("newlyKilled") or []
 
     if explicit_opt_in:
         st_cfg = _load_care_settings()
@@ -1231,11 +1491,28 @@ def sleep_security_services(
         _save_care_settings(st_cfg)
 
     _CURRENTLY_AWAKE = False
+    _refresh_os_inspect_cache_safe()
 
     stopped_targets = [t for t in targets if str(t.get("serviceName") or "").lower() in stopped_low]
-    reclaimed_mb = sum(int(t.get("estimatedRamMb", 45)) for t in stopped_targets)
+    stopped_labels: List[str] = []
+    for st_item in stopped_targets:
+        sl = str(st_item.get("displayName") or st_item.get("serviceName") or "").strip()
+        if sl and sl not in stopped_labels:
+            stopped_labels.append(sl)
+    for bl in (bridge_sleep_res.get("stoppedLabels") or []):
+        if bl and bl not in stopped_labels:
+            stopped_labels.append(bl)
+
+    total_stopped_now = len(stopped_labels) if stopped_labels else (len(stopped_services) + len(newly_killed_bridges))
+    reclaimed_mb = (
+        sum(int(t.get("estimatedRamMb", 45)) for t in stopped_targets)
+        + int(bridge_sleep_res.get("reclaimedRamMb") or 0)
+    )
+    sleep_state = get_sleeping_security_state()
+    sleeping_labels = sleep_state.get("sleepingLabels") or []
+
     metrics = _load_weekly_metrics()
-    if stopped_services or newly_killed_bridges:
+    if total_stopped_now > 0:
         metrics["sleepCountThisWeek"] = int(metrics.get("sleepCountThisWeek", 0)) + 1
         metrics["savedRamMbCumulative"] = int(metrics.get("savedRamMbCumulative", 0)) + reclaimed_mb
         metrics["lastSleepAt"] = datetime.datetime.now().isoformat()
@@ -1243,24 +1520,30 @@ def sleep_security_services(
 
     return {
         "ok": True,
-        "stoppedCount": len(stopped_services),
+        "stoppedCount": total_stopped_now,
         "stoppedServices": stopped_services,
+        "stoppedModuleLabels": stopped_labels,
+        "sleepingModuleLabels": sleeping_labels,
         "savedUserBridgesCount": len(newly_killed_bridges),
-        "totalManagedSleepingCount": len(existing_svc_map),
+        "totalManagedSleepingCount": len(sleeping_labels),
         "reclaimedRamMb": reclaimed_mb,
         "autoSleepEnabled": _is_bank_auto_sleep_enabled(),
-        "elevationMethod": elevation_res.get("elevationMethod"),
+        "elevationMethod": elevation_method,
         "toastMessage": (
-            f"👻 미사용 웹 보안 서비스 {len(stopped_services)}개를 삭제하지 않고 쿨쿨 잠재웠어요! "
-            f"(메모리 {reclaimed_mb}MB 회수 완료 · 다음 은행 접속 시 1초 만에 자동 깨어납니다)"
-            if stopped_services
-            else "👻 현재 추가로 잠재울 미사용 웹 보안 서비스가 없습니다 (이미 쾌적한 상태예요!)."
+            f"👻 미사용 은행·관공서 보안 모듈 {total_stopped_now}종을 삭제하지 않고 쿨쿨 잠재웠어요! "
+            f"(메모리 약 {reclaimed_mb}MB 회수 완료 · [🏦 보안프로그램 즉시 깨우기]로 1초 만에 다시 깨어납니다)"
+            if total_stopped_now > 0
+            else (
+                f"👻 이미 은행·관공서 보안 모듈 {len(sleeping_labels)}종이 절전 수면 중입니다! (추가 실행 중인 모듈 0종)"
+                if sleeping_labels
+                else "👻 현재 추가로 잠재울 미사용 웹 보안 프로그램이 없습니다 (이미 쾌적한 상태예요!)."
+            )
         ),
     }
 
 
 def wake_security_services(reason: str = "manual_button", allow_uac_prompt: bool = True) -> Dict[str, Any]:
-    """2-Layer 누적 스냅샷 기반 최고권한 헬퍼(UAC 0회) sc start + 미실행 유저 브릿지 중복 없이 동반 기상"""
+    """2-Layer 누적 스냅샷 기반 최고권한 헬퍼(UAC 0회) sc start + 미실행 유저 보안모듈 중복 없이 동반 기상"""
     global _LAST_WAKE_TIMESTAMP, _CURRENTLY_AWAKE
     _ensure_care_dir()
 
@@ -1272,6 +1555,15 @@ def wake_security_services(reason: str = "manual_button", allow_uac_prompt: bool
     ]
     bridges_to_wake = [b for b in (snap.get("userBridgeProcesses") or []) if isinstance(b, dict)]
 
+    # 스냅샷이 비어 있더라도(예: 이전 버전에서 종료된 직후 첫 기상 호출) 자동실행 레지스트리 보안 모듈을 자동 보강
+    if not bridges_to_wake:
+        discovered = _discover_security_autostart_bridges()
+        if discovered:
+            bridges_to_wake = discovered
+            snap["savedAt"] = datetime.datetime.now().isoformat()
+            snap["userBridgeProcesses"] = discovered
+            _save_sleep_snapshot(snap)
+
     if not services_to_wake and not bridges_to_wake:
         return {
             "ok": True,
@@ -1279,6 +1571,7 @@ def wake_security_services(reason: str = "manual_button", allow_uac_prompt: bool
             "wokenServicesCount": 0,
             "wokenServices": [],
             "wokenBridgesCount": 0,
+            "wokenModuleLabels": [],
             "wokenCount": 0,
             "elevationMethod": "NONE_SLEEPING",
             "gracePeriodMinutes": 15,
@@ -1286,39 +1579,61 @@ def wake_security_services(reason: str = "manual_button", allow_uac_prompt: bool
         }
 
     is_auto_trigger = reason.startswith("window_title_match:")
-    elevation_res = execute_elevated_service_control(
-        "wake",
-        services_to_wake,
-        allow_uac_prompt=(False if is_auto_trigger else allow_uac_prompt),
-    )
-    if not elevation_res.get("ok") and services_to_wake:
-        return {
-            "ok": False,
-            "reason": reason,
-            "wokenServicesCount": 0,
-            "wokenServices": [],
-            "wokenBridgesCount": 0,
-            "wokenCount": 0,
-            "elevationMethod": elevation_res.get("elevationMethod"),
-            "error": "WAKE_ELEVATION_FAILED",
-            "toastMessage": "⚠️ 권한 승인이 완료되지 않아 잠자던 보안 서비스를 깨우지 못했습니다.",
-        }
+    woken_services: List[str] = []
+    elevation_method = "USER_SESSION_DIRECT"
+    if services_to_wake:
+        elevation_res = execute_elevated_service_control(
+            "wake",
+            services_to_wake,
+            allow_uac_prompt=(False if is_auto_trigger else allow_uac_prompt),
+        )
+        elevation_method = str(elevation_res.get("elevationMethod") or "ELEVATED")
+        if not elevation_res.get("ok") and not bridges_to_wake:
+            return {
+                "ok": False,
+                "reason": reason,
+                "wokenServicesCount": 0,
+                "wokenServices": [],
+                "wokenBridgesCount": 0,
+                "wokenModuleLabels": [],
+                "wokenCount": 0,
+                "elevationMethod": elevation_method,
+                "error": "WAKE_ELEVATION_FAILED",
+                "toastMessage": "⚠️ 권한 승인이 완료되지 않아 잠자던 보안 서비스를 깨우지 못했습니다.",
+            }
+        woken_services = list(elevation_res.get("processedServices") or [])
 
-    woken_services = list(elevation_res.get("processedServices") or [])
-
-    # 이미 실행 중인 트레이 브릿지는 중복 실행하지 않음
     running_proc_names = {(p.get("name") or "").lower() for p in _iter_windows_processes_stdlib()}
     woken_bridges: List[str] = []
+    woken_labels: List[str] = []
+    svc_label_lookup = {
+        str(s.get("serviceName") or "").lower(): str(s.get("displayName") or s.get("serviceName") or "")
+        for s in (snap.get("services") or [])
+        if isinstance(s, dict)
+    }
+    for ws in woken_services:
+        lbl = svc_label_lookup.get(ws.lower(), ws)
+        if lbl and lbl not in woken_labels:
+            woken_labels.append(lbl)
+
     if sys.platform == "win32" and bridges_to_wake:
         for b in bridges_to_wake:
             bname = str(b.get("name") or "").lower()
+            blabel = str(b.get("label") or b.get("startupName") or b.get("name") or "").strip()
             if bname and bname in running_proc_names:
                 continue
             cmdline = b.get("cmdline")
             if isinstance(cmdline, list) and cmdline and os.path.exists(str(cmdline[0])):
                 try:
-                    subprocess.Popen(cmdline, creationflags=CREATE_NO_WINDOW, close_fds=True)
+                    subprocess.Popen(
+                        cmdline,
+                        cwd=os.path.dirname(str(cmdline[0])) or None,
+                        creationflags=CREATE_NO_WINDOW,
+                        close_fds=True,
+                    )
                     woken_bridges.append(b.get("name", str(cmdline[0])))
+                    if blabel and blabel not in woken_labels:
+                        woken_labels.append(blabel)
                     if bname:
                         running_proc_names.add(bname)
                 except Exception:
@@ -1326,8 +1641,11 @@ def wake_security_services(reason: str = "manual_button", allow_uac_prompt: bool
 
     _LAST_WAKE_TIMESTAMP = time.time()
     _CURRENTLY_AWAKE = True
+    if woken_bridges or woken_services:
+        time.sleep(0.35)
+    _refresh_os_inspect_cache_safe()
 
-    total_woken = len(woken_services) + len(woken_bridges)
+    total_woken = len(woken_labels) if woken_labels else (len(woken_services) + len(woken_bridges))
     if total_woken > 0:
         metrics = _load_weekly_metrics()
         metrics["wakeCountThisWeek"] = int(metrics.get("wakeCountThisWeek", 0)) + 1
@@ -1337,7 +1655,7 @@ def wake_security_services(reason: str = "manual_button", allow_uac_prompt: bool
         if is_auto_trigger:
             _notify_tray_balloon(
                 "👻 귀신같이 은행·결제 보안 자동 기상",
-                f"보안 프로그램 {total_woken}개를 1초 만에 깨웠어요! 화면에 설치 안내가 떠 있다면 F5(새로고침)를 한 번 눌러주세요.",
+                f"보안 프로그램 {total_woken}종을 1초 만에 깨웠어요! 화면에 설치 안내가 떠 있다면 F5(새로고침)를 한 번 눌러주세요.",
             )
 
     return {
@@ -1346,12 +1664,13 @@ def wake_security_services(reason: str = "manual_button", allow_uac_prompt: bool
         "wokenServicesCount": len(woken_services),
         "wokenServices": woken_services,
         "wokenBridgesCount": len(woken_bridges),
+        "wokenModuleLabels": woken_labels,
         "wokenCount": total_woken,
         "refreshHintKo": "화면에 보안프로그램 설치 안내가 이미 떠 있다면 브라우저에서 F5(새로고침)를 한 번 눌러주세요!",
-        "elevationMethod": elevation_res.get("elevationMethod"),
+        "elevationMethod": elevation_method,
         "gracePeriodMinutes": 15,
         "toastMessage": (
-            f"👻 은행·관공서 업무를 위해 잠자던 보안 프로그램 {total_woken}개를 1초 만에 깨웠어요! "
+            f"👻 은행·관공서 업무를 위해 잠자던 보안 프로그램 {total_woken}종을 1초 만에 깨웠어요! "
             "(설치 안내가 보이면 F5 새로고침 · 창을 닫고 15분 뒤 다시 잠듭니다)"
         ),
     }

@@ -28,12 +28,16 @@ def _bump_patch_version(v: str) -> str:
     parts = [int(x) if x.isdigit() else 0 for x in (v or "2.3.29").strip().split(".")]
     while len(parts) < 3:
         parts.append(0)
-    # 멀린님 규칙: Z-코어 패치 버전은 항상 끝자리 9로 통일 (29 -> 39 -> 49 -> 59 ...)
+    # 멀린님 규칙: Z-코어 패치 버전은 항상 끝자리 9로 통일 (29 -> 39 -> 49 ... 99 -> 다음 minor.9)
     cur_patch = parts[-1]
     next_nine = (cur_patch // 10) * 10 + 9
     if next_nine <= cur_patch:
         next_nine += 10
-    parts[-1] = next_nine
+    if next_nine >= 100:
+        parts[-2] += 1
+        parts[-1] = 9
+    else:
+        parts[-1] = next_nine
     return ".".join(str(x) for x in parts)
 
 
@@ -113,6 +117,7 @@ def sync_internal_z_core_mirrors():
         os.path.join(UZC_DIR, "os_agent", "plugins", "plugin_paid_sync_ghostwin.py"),
         os.path.join(UZC_DIR, "os_agent", "ppocr_v5_worker.py"),
         os.path.join(UZC_DIR, "os_agent", "merlin_z_core_os.py"),
+        os.path.join(UZC_DIR, "os_agent", "ghosti_safe_ops.py"),
         os.path.join(UZC_DIR, "os_agent", "ghosti_setup_parity.py"),
         os.path.join(UZC_DIR, "os_agent", "plugin_senstalk.py"),
         os.path.join(UZC_DIR, "seq_paste_daemon.py"),
@@ -171,6 +176,7 @@ def sync_internal_z_core_mirrors():
                 os.path.join("os_agent", "plugins", "plugin_paid_sync_ghostwin.py"),
                 os.path.join("os_agent", "ppocr_v5_worker.py"),
                 os.path.join("os_agent", "merlin_z_core_os.py"),
+                os.path.join("os_agent", "ghosti_safe_ops.py"),
                 os.path.join("os_agent", "ghosti_setup_parity.py"),
                 os.path.join("os_agent", "build_signed_merlin_z_core.py"),
                 os.path.join("os_agent", "plugin_senstalk.py"),

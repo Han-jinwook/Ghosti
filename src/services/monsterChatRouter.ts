@@ -839,6 +839,8 @@ export function appendLocalHealthCheckRecord(
 
 const MISSING_FILE_STOPWORDS = new Set([
   '파일', '사진', '이미지', '그림', '문서', '자료', '폴더', '영상', '동영상',
+  '미저장', '미저장문서', '저장', '임시', '임시본', '임시저장', '자동복구', '자동저장',
+  '정리', '정리함', '보관함', '정리보관함', '윈도우', '컴퓨터', '피씨', 'pc', '귀신비서', '귀신', '비서',
   '내', '내가', '제', '제가', '우리', '우리가', '나', '저', '그', '그거', '이거', '저거',
   '어디', '어디갔어', '어디갔지', '어디있어', '어디로', '방금', '방금전', '방금전에', '조금전', '조금전에',
   '아까', '최근', '최근에', '오늘', '어제', '그제', '일전에', '실수로', '모르고', '일부러', '잘못', '테스트용',
@@ -846,11 +848,12 @@ const MISSING_FILE_STOPWORDS = new Set([
   '증발', '증발했어', '지운', '지웠던', '지웠지', '지웠어', '지웠어요', '지워진',
   '삭제', '삭제한', '삭제된', '삭제했어', '삭제했어요', '버린', '버렸던', '버렸어', '버렸어요',
   '날아갔어', '날아간', '넣은', '넣었던', '보낸', '옮긴',
-  '복구', '복구해', '복구해줘', '복구해주세요', '복원', '복원해', '복원해줘', '복원해주세요',
-  '되돌려', '되돌려줘', '되돌려주세요', '원복', '원복해줘', '원래대로', '살려', '살려줘', '구출', '구출해줘',
+  '복구', '복구해', '복구해줘', '복구해주세요', '복구하기', '복원', '복원해', '복원해줘', '복원해주세요', '복원하기',
+  '되돌려', '되돌려줘', '되돌려주세요', '원복', '원복해줘', '원래대로', '살려', '살려줘', '구출', '구출해', '구출해줘', '구출하기',
   '찾아', '찾아줘', '찾아주세요', '찾기', '보여', '보여줘', '보여주세요', '알려', '알려줘', '못', '찾겠어',
   '휴지통', '휴지통에', '휴지통에서', '니가', '너가', '왜', '좀', '다시', '있던', '있었던',
   '바탕화면', '바탕화면에', '바탕화면에서', '내문서', '문서함', '다운로드', '폴더에', '폴더에서', '거', '것',
+  '바로', '즉시', '연속', '원본', '위치', '원위치', '전체', '목록', '실행', '실행해', '실행해줘', '해줘', '해주세요',
 ]);
 
 export function extractCleanMissingFileKeyword(rawQuery: string): string {
@@ -860,11 +863,16 @@ export function extractCleanMissingFileKeyword(rawQuery: string): string {
   for (const t of tokens) {
     const stripped =
       t.length > 2 ? t.replace(/(이|가|을|를|은|는|도|에|에서|으로|로|의|만|랑|이랑)$/, '') : t;
+    const tLow = t.toLowerCase();
+    const sLow = stripped.toLowerCase();
+    if (/^\d+(초|분|시|시간|일|번|회|개|건|장|세트)$/i.test(sLow)) {
+      continue;
+    }
     if (
       stripped &&
       stripped.length >= 2 &&
-      !MISSING_FILE_STOPWORDS.has(t) &&
-      !MISSING_FILE_STOPWORDS.has(stripped) &&
+      !MISSING_FILE_STOPWORDS.has(tLow) &&
+      !MISSING_FILE_STOPWORDS.has(sLow) &&
       !out.includes(stripped)
     ) {
       out.push(stripped);
@@ -1319,6 +1327,8 @@ export async function executeMissingFileRecovery(
       ok: boolean;
       restoreId?: string;
       restoredPath?: string;
+      originalName?: string;
+      sizeBytes?: number;
       renamed?: boolean;
       error?: string;
     }>(
@@ -1334,7 +1344,34 @@ export async function executeMissingFileRecovery(
     const renamedNote = r.data.renamed ? ' (같은 이름 파일이 있어 새 이름으로 복원)' : '';
     const restoreId = r.data.restoreId || '#1';
     const restoredPath = r.data.restoredPath || payload.originalLocation;
-    const msg = `✅ 휴지통에서 [${restoredPath}] 위치로 안전하게 복원했어요${renamedNote}! ([${restoreId} 복원 기록]에 등록 완료)`;
+    const sizeInfo =
+      typeof r.data.sizeBytes === 'number' && r.data.sizeBytes > 0
+        ? ` · 원본 크기 ${formatBytes(r.data.sizeBytes)} 100% 일치`
+        : '';
+    const msg = `✅ 휴지통에서 [${restoredPath}] 위치로 안전하게 복원했어요${renamedNote}${sizeInfo}! ([${restoreId} 복원 기록]에 등록 완료)`;
+
+    // [단일 SSOT 스토어 동기화] 사진 정리 보관함(휴지통)으로 보냈던 사진을 3초 구출로 복원한 경우
+    // 새로고침 없이 즉시 귀신비서 사진 목록에서도 복원(quarantined: false) 상태로 되살린다.
+    try {
+      const leafName = String(restoredPath || '')
+        .split(/[\\/]/)
+        .pop();
+      const candidateNames = Array.from(
+        new Set([payload.fileName, r.data.originalName, leafName].filter(Boolean) as string[])
+      );
+      if (candidateNames.length > 0) {
+        useSaySeeStore
+          .getState()
+          .syncPhotosAfterExternalRestore(
+            candidateNames,
+            undefined,
+            `♻️ '${payload.fileName}' 파일을 원래 폴더 위치로 복원했습니다!`
+          );
+      }
+    } catch {
+      /* ignore store sync error */
+    }
+
     const healthRecord = appendLocalHealthCheckRecord({
       category: '↩️ 복원 기록',
       title: `휴지통 '${payload.fileName}' 원위치 복원`,
@@ -2021,7 +2058,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
   }
 
   // 0-B) 은행·관공서 보안프로그램 현재 상태 조회 ("확인해줘" 발화가 멋대로 절전을 실행하지 않도록 분리)
-  if (/(은행.*?보안\s*프로그램.*?(확인|상태|점검|몇\s*개|보여)|보안\s*프로그램\s*(상태|확인|몇\s*개))/i.test(clean)) {
+  if (/(은행.*?보안\s*(?:프로그램|모듈|앱).*?(확인|상태|점검|몇\s*개|보여)|보안\s*(?:프로그램|모듈|앱)\s*(상태|확인|몇\s*개))/i.test(clean)) {
     const stRes = await fetch(getZCoreUrl('/api/care/security-services/status'))
       .then((r) => r.json())
       .catch(() => null);
@@ -2036,33 +2073,108 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
 
     const activeCnt = Math.max(0, Number(stRes.activeCount ?? 0));
     const ramMb = Math.max(0, Number(stRes.estimatedRamMb ?? 0));
-    const sleepingCnt = Array.isArray(stRes.sleepingServices) ? stRes.sleepingServices.length : 0;
+    const activeLabels: string[] = Array.isArray(stRes.activeModuleLabels) ? stRes.activeModuleLabels : [];
+    const sleepingLabels: string[] = Array.isArray(stRes.sleepingModuleLabels)
+      ? stRes.sleepingModuleLabels
+      : Array.isArray(stRes.sleepingServices)
+      ? stRes.sleepingServices
+      : [];
+    const sleepingCnt = sleepingLabels.length;
+    const detailBlock =
+      activeLabels.length > 0
+        ? `\n• **실행 중인 모듈**: ${activeLabels.join(', ')}`
+        : sleepingLabels.length > 0
+        ? `\n• **절전 수면 중인 모듈**: ${sleepingLabels.join(', ')}`
+        : '';
     const msgKo =
       `🏦 **[내 PC 은행·관공서 보안프로그램 실시간 점검 결과]**\n` +
-      `• **현재 뒤에서 켜져 있는 보안 서비스**: **${activeCnt}개** (점유 메모리 약 ${ramMb}MB)\n` +
-      `• **현재 절전(잠자는 중) 보안 서비스**: **${sleepingCnt}개**\n` +
+      `• **현재 뒤에서 켜져 있는 보안 모듈**: **${activeCnt}종** (점유 메모리 약 ${ramMb}MB)\n` +
+      `• **현재 절전(잠자는 중) 보안 모듈**: **${sleepingCnt}종**${detailBlock}\n` +
       `• **자동 절전·기상 관리**: **${stRes.autoSleepEnabled ? '켜짐 (은행 접속 시 1초 자동 기상)' : '꺼짐'}**\n\n` +
       (stRes.honestBriefing || '');
     speak(
       activeCnt > 0
-        ? `현재 미사용 은행 보안프로그램 ${activeCnt}개가 실행 중입니다. 잠재울까요?`
-        : `현재 뒤에서 켜져 있는 미사용 은행 보안프로그램은 0개입니다.`
+        ? `현재 미사용 은행 보안프로그램 ${activeCnt}종이 실행 중입니다. 잠재울까요?`
+        : `현재 뒤에서 켜져 있는 미사용 은행 보안프로그램은 0종입니다.`
     );
     return reply(sourceTab, msgKo, {
       followUpSuggestions:
         activeCnt > 0
-          ? ['응 은행 보안프로그램 알아서 재우고 깨워줘', '최근 [복원 기록] 보여줘']
+          ? ['⚡ 은행·관공서 보안절전', '최근 [복원 기록] 보여줘']
           : sleepingCnt > 0
-          ? ['지금 은행 업무 볼 거라 보안프로그램 깨워줘', '은행 보안프로그램 원래대로 복구해줘']
+          ? ['🏦 보안프로그램 즉시 깨우기', '은행 보안프로그램 원래대로 복구해줘']
           : ['📊 그동안 모아둔 비서 실적 보고서 보여줘'],
     });
   }
 
-  // 1) 은행·관공서 보안프로그램 자동 재우기/깨우기 동의 (최초 1회 동의 또는 명시적 절전 요청)
-  const isBankSleepConsent =
-    /(알아서\s*재우고\s*깨워|은행.*?보안\s*프로그램.*?(재워|절전|잠재워|자동\s*관리)|보안\s*프로그램.*?(재우고|잠재워|자동\s*절전))/i.test(
+  // 0-C) [연속 왕복 점검 지원] "은행·관공서 보안절전 및 보안프로그램 즉시 깨우기" 동시 입력 시 절전 ➔ 기상 왕복을 1회로 일관 실행
+  const hasSleepCue =
+    /(알아서\s*재우고\s*깨워|보안\s*절전|은행.*?(?:보안\s*(?:프로그램|모듈|앱)?.*?)?(?:재우|재워|절전|잠재우|잠재워|자동\s*관리)|보안\s*(?:프로그램|모듈|앱).*?(?:재우|재워|절전|잠재우|잠재워|자동\s*절전))/i.test(
       clean
-    ) ||
+    );
+  const hasExplicitWakeCue =
+    !/재우고\s*깨워|절전·기상/i.test(clean) &&
+    /(은행\s*업무.*?(?:깨우|깨워)|보안\s*(?:프로그램|모듈|앱|서비스)?\s*(?:즉시\s*)?(?:깨우|깨워|기상|켜)|즉시\s*(?:깨우|깨워)|은행\s*모드\s*(?:켜|즉시)|은행\s*사이트\s*안\s*돼)/i.test(
+      clean
+    );
+
+  if (hasSleepCue && hasExplicitWakeCue) {
+    const sleepRes = await fetch(getZCoreUrl('/api/care/security-services/sleep'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({}),
+      signal: AbortSignal.timeout(6000),
+    })
+      .then((r) => r.json())
+      .catch(() => null);
+
+    const wakeRes = await fetch(getZCoreUrl('/api/care/security-services/wake'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ reason: 'secretary_roundtrip_request' }),
+      signal: AbortSignal.timeout(6000),
+    })
+      .then((r) => r.json())
+      .catch(() => null);
+
+    if (!sleepRes?.ok && !wakeRes?.ok) {
+      return reply(
+        sourceTab,
+        '🔌 **[내 PC 엔진(멀린 Z-코어) 연결 필요]**\n내 PC의 보안프로그램 절전·기상을 실행하려면 **멀린 Z-코어 엔진**이 켜져 있어야 합니다.',
+        { followUpSuggestions: ['은행 보안프로그램 상태 확인해줘'] }
+      );
+    }
+
+    const roundTripLabels: string[] = Array.from(
+      new Set([
+        ...(Array.isArray(sleepRes?.stoppedModuleLabels) ? sleepRes.stoppedModuleLabels : []),
+        ...(Array.isArray(sleepRes?.sleepingModuleLabels) ? sleepRes.sleepingModuleLabels : []),
+        ...(Array.isArray(wakeRes?.wokenModuleLabels) ? wakeRes.wokenModuleLabels : []),
+      ].filter(Boolean))
+    );
+    const wokenCnt = Math.max(0, Number(wakeRes?.wokenCount ?? roundTripLabels.length));
+    const listText =
+      roundTripLabels.length > 0
+        ? `\n\n📋 **절전 ➔ 즉시 기상 검증 완료 모듈 (${roundTripLabels.length}종)**\n` +
+          roundTripLabels.map((l) => `• ${l} (절전 후 즉시 기상 완료)`).join('\n')
+        : '\n\n• 현재 백그라운드 보안 모듈이 0종으로 추가 대상 없이 정상 확인되었습니다.';
+
+    const msgKo =
+      `⚡🏦 **[은행·관공서 보안절전 ➔ 보안프로그램 즉시 깨우기 연속 점검 완료]**\n` +
+      `보안 모듈을 안전하게 절전 기록한 뒤 **${wokenCnt}종**을 멈춤·에러 없이 즉시 재기상시켰습니다!${listText}`;
+    speak('은행 보안프로그램 절전 및 즉시 깨우기 연속 점검을 완료했습니다.');
+    return reply(sourceTab, msgKo, {
+      followUpSuggestions: [
+        '⚡ 은행·관공서 보안절전',
+        '🏦 보안프로그램 즉시 깨우기',
+        '은행 보안프로그램 상태 확인해줘',
+      ],
+    });
+  }
+
+  // 1) 은행·관공서 보안프로그램 자동 재우기/절전 요청
+  const isBankSleepConsent =
+    (hasSleepCue && !hasExplicitWakeCue) ||
     (isSimpleYes && /(은행·관공서\s*보안프로그램.*?깨워드릴까요|삭제하지\s*않고\s*쿨쿨\s*잠재울까요)/.test(lastAssistantText));
 
   if (isBankSleepConsent) {
@@ -2070,14 +2182,13 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({}),
-      signal: AbortSignal.timeout(4500),
+      signal: AbortSignal.timeout(6000),
     })
       .then((r) => r.json())
       .catch(() => null);
 
     if (!sleepRes?.ok) {
       if (zCoreBridge.isConnected && !sleepRes?.uacDeclined) {
-        // 비대화형 세션이나 미설치 환경에서 타임아웃이 나더라도 자동 절전 동의 설정은 정상 완료 처리
         try {
           const rawSt = localStorage.getItem('ghosti_ghost_secretary_state_v1');
           const parsedSt = rawSt ? JSON.parse(rawSt) : {};
@@ -2088,20 +2199,20 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
           /* ignore */
         }
         const fallbackMsg =
-          `🏦 **[은행·관공서 보안프로그램 자동 관리 설정 완료]**\n` +
-          `지금은 켜져 있는 불필요 은행·관공서 보안프로그램이 **0개**로 아주 깨끗합니다!\n` +
-          `앞으로 은행이나 홈택스 사이트에 들어가실 때만 자동으로 깨우고, 업무가 끝난 뒤에는 제가 다시 조용히 재워드릴게요!`;
+          `🏦 **[은행·관공서 보안절전 설정 완료]**\n` +
+          `지금은 켜져 있는 불필요 은행·관공서 보안프로그램이 **0종**으로 아주 깨끗합니다!\n` +
+          `앞으로 은행이나 홈택스 사이트에 들어가실 때만 자동으로 깨우고, 업무가 끝난 뒤에는 다시 조용히 재워드릴게요!`;
         speak('은행 보안프로그램 자동 관리 설정을 마쳤습니다.');
         return reply(sourceTab, fallbackMsg, {
           followUpSuggestions: [
-            '📊 그동안 모아둔 비서 실적 보고서 보여줘',
-            '은행 보안프로그램 원래대로 복구해줘',
+            '🏦 보안프로그램 즉시 깨우기',
+            '은행 보안프로그램 상태 확인해줘',
           ],
         });
       }
       const failMsg = sleepRes?.uacDeclined
         ? `⚠️ **[관리자 권한 승인 보류 안내]**\n` +
-          `윈도우 보안 서비스를 안전하게 잠재우려면 최초 1회 관리자 권한 창에서 **[예]**를 눌러주셔야 합니다. 준비되셨을 때 다시 말씀해 주세요! (이후에는 권한 팝업이 다시 뜨지 않습니다)`
+          `윈도우 보안 서비스를 안전하게 잠재우려면 최초 1회 관리자 권한 창에서 **[예]**를 눌러주셔야 합니다. 준비되셨을 때 다시 말씀해 주세요!`
         : `🔌 **[내 PC 엔진(멀린 Z-코어) 연결 필요]**\n` +
           `내 PC의 은행·관공서 보안프로그램을 실제로 잠재우려면 **멀린 Z-코어 엔진**이 켜져 있어야 합니다. 엔진을 실행한 뒤 다시 말씀해 주세요!`;
       return reply(sourceTab, failMsg, {
@@ -2121,34 +2232,50 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
 
     const stoppedCount = Math.max(0, Number(sleepRes?.stoppedCount ?? 0));
     const reclaimedMb = Math.max(0, Number(sleepRes?.reclaimedRamMb ?? 0));
+    const stoppedLabels: string[] = Array.isArray(sleepRes?.stoppedModuleLabels) ? sleepRes.stoppedModuleLabels : [];
+    const sleepingLabels: string[] = Array.isArray(sleepRes?.sleepingModuleLabels) ? sleepRes.sleepingModuleLabels : [];
+    const displaySleepList = stoppedLabels.length > 0 ? stoppedLabels : sleepingLabels;
+    const sleepListBlock =
+      displaySleepList.length > 0
+        ? `\n\n📋 **절전 수면 관리 중인 보안 모듈 (${displaySleepList.length}종)**\n` +
+          displaySleepList.map((l) => `• ${l} (💤 절전 수면 중)`).join('\n')
+        : '';
+
     const issuedRec = appendLocalHealthCheckRecord({
       category: '⚙️ 고치기',
       title: '안 쓰는 은행·관공서 보안프로그램 자동 재우기(절전) 및 은행 접속 시 자동 기상 설정',
       reclaimedSizeLabel:
-        stoppedCount > 0 ? `메모리 약 ${reclaimedMb}MB 확보` : '상시 자동 절전·기상 관리 설정 완료',
-      cleanedItemCount: stoppedCount,
-      securityPluginsFrozen: stoppedCount,
-      speedUpSummary: '평소엔 잠재워 두고 은행·홈택스 접속 시 1초 만에 자동 기상',
+        stoppedCount > 0 ? `메모리 약 ${reclaimedMb}MB 확보` : '절전 수면 상태 유지 확인',
+      cleanedItemCount: stoppedCount || displaySleepList.length,
+      securityPluginsFrozen: stoppedCount || displaySleepList.length,
+      speedUpSummary: '평소엔 잠재워 두고 은행·홈택스 접속 또는 [보안프로그램 즉시 깨우기] 시 1초 기상',
     });
 
     const msgKo =
       stoppedCount > 0
-        ? `🏦 **[은행·관공서 보안프로그램 자동 관리 설정 완료]**\n` +
-          `지금 뒤에서 메모리를 차지하던 은행·관공서 보안프로그램 **${stoppedCount}개**를 삭제하지 않고 조용히 재워두었습니다! (메모리 약 **${reclaimedMb}MB** 확보 완료)\n` +
-          `앞으로는 평소엔 잠재워 두었다가 **은행이나 홈택스 사이트에 들어가실 때만 1초 만에 자동 기상**시켜 드릴게요! (언제든 *"은행 보안프로그램 원래대로 복구해줘"*라고 하시면 1초 만에 원상복구됩니다)`
-        : `🏦 **[은행·관공서 보안프로그램 자동 관리 설정 완료]**\n` +
-          `지금은 켜져 있는 불필요 은행·관공서 보안프로그램이 **0개**로 아주 깨끗합니다!\n` +
-          `앞으로 은행이나 홈택스 사이트에 들어가실 때만 자동으로 깨우고, 업무가 끝난 뒤에는 제가 다시 조용히 재워드릴게요!`;
+        ? `⚡ **[은행·관공서 보안절전 완료]**\n` +
+          `지금 뒤에서 메모리를 차지하던 은행·관공서 보안프로그램 **${stoppedCount}종**을 삭제하지 않고 조용히 재워두었습니다! (메모리 약 **${reclaimedMb}MB** 확보 완료)\n` +
+          `은행·홈택스 접속 시 자동으로 깨어나며, 아래 **[🏦 보안프로그램 즉시 깨우기]** 버튼으로 언제든 즉시 깨우실 수 있어요!${sleepListBlock}`
+        : sleepingLabels.length > 0
+        ? `⚡ **[은행·관공서 보안절전 상태 유지 확인]**\n` +
+          `현재 추가로 실행 중인 보안프로그램은 **0종**이며, 기존 **${sleepingLabels.length}종**이 변함없이 조용히 절전 수면 중입니다!\n` +
+          `은행 업무가 필요하시면 아래 **[🏦 보안프로그램 즉시 깨우기]** 버튼을 눌러 1초 만에 깨워보세요!${sleepListBlock}`
+        : `⚡ **[은행·관공서 보안절전 설정 완료]**\n` +
+          `지금은 켜져 있는 불필요 은행·관공서 보안프로그램이 **0종**으로 아주 깨끗합니다!\n` +
+          `앞으로 은행이나 홈택스 사이트에 들어가실 때만 자동으로 깨우고, 업무가 끝난 뒤에는 다시 조용히 재워드릴게요!`;
 
     speak(
       stoppedCount > 0
-        ? `은행 보안프로그램 ${stoppedCount}개를 조용히 재워두었습니다. 앞으로는 은행 사이트에 들어가실 때만 자동으로 깨워드리겠습니다.`
-        : '은행 보안프로그램 자동 관리 설정을 마쳤습니다. 앞으로 은행 사이트에 들어가실 때만 깨우고 끝나면 조용히 재워드리겠습니다.'
+        ? `은행 보안프로그램 ${stoppedCount}종을 조용히 재워두었습니다.`
+        : sleepingLabels.length > 0
+        ? `현재 은행 보안프로그램 ${sleepingLabels.length}종이 절전 수면 중입니다.`
+        : '은행 보안프로그램 자동 관리 설정을 마쳤습니다.'
     );
     return reply(sourceTab, msgKo, {
       healthRecordIssued: issuedRec,
       followUpSuggestions: [
-        '📊 그동안 모아둔 비서 실적 보고서 보여줘',
+        '🏦 보안프로그램 즉시 깨우기',
+        '은행 보안프로그램 상태 확인해줘',
         '은행 보안프로그램 원래대로 복구해줘',
       ],
     });
@@ -2316,11 +2443,12 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
   }
 
   // 5) 은행·관공서 업무를 위해 잠자던 보안프로그램 즉시 깨우기
-  if (/(은행\s*업무.*?깨워|은행.*?보안\s*프로그램.*?(깨워|켜)|은행\s*모드\s*(켜|즉시)|은행\s*사이트\s*안\s*돼)/i.test(clean)) {
+  if (hasExplicitWakeCue) {
     const wakeRes = await fetch(getZCoreUrl('/api/care/security-services/wake'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ reason: 'secretary_chat_request' }),
+      signal: AbortSignal.timeout(6000),
     })
       .then((r) => r.json())
       .catch(() => null);
@@ -2333,25 +2461,32 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
       );
     }
 
+    const wokenLabels: string[] = Array.isArray(wakeRes.wokenModuleLabels) ? wakeRes.wokenModuleLabels : [];
     const wokenCnt = Math.max(
       0,
       Number(wakeRes.wokenCount ?? Number(wakeRes.wokenServicesCount ?? 0) + Number(wakeRes.wokenBridgesCount ?? 0))
     );
+    const wokenListBlock =
+      wokenLabels.length > 0
+        ? `\n\n📋 **방금 깨어난 보안 모듈 (${wokenLabels.length}종)**\n` +
+          wokenLabels.map((l) => `• ${l} (현재 실행 중)`).join('\n')
+        : '';
     const msgKo =
       wokenCnt > 0
-        ? `🏦 **[은행·관공서 보안프로그램 ${wokenCnt}개 즉시 기상 완료]**\n` +
-          `잠자고 있던 보안프로그램 **${wokenCnt}개**를 방금 모두 깨워두었습니다!\n` +
-          `💡 **이미 열려 있던 은행·홈택스 화면에 '보안프로그램 설치' 안내가 보이면 키보드 \`F5(새로고침)\`를 한 번 눌러주세요.** 업무를 마치시고 창을 닫으시면 15분 뒤 다시 조용히 재워두겠습니다.`
+        ? `🏦 **[은행·관공서 보안프로그램 ${wokenCnt}종 즉시 기상 완료]**\n` +
+          `잠자고 있던 보안프로그램 **${wokenCnt}종**을 방금 모두 깨워두었습니다!${wokenListBlock}\n\n` +
+          `💡 **이미 열려 있던 은행·홈택스 화면에 '보안프로그램 설치' 안내가 보이면 키보드 \`F5(새로고침)\`를 한 번 눌러주세요.** 업무 후에는 아래 **[⚡ 은행·관공서 보안절전]**으로 다시 재우실 수 있습니다.`
         : `🏦 **[은행·관공서 보안프로그램 대기 확인 완료]**\n` +
-          `현재 잠들어 있는 보안프로그램이 없습니다(모두 정상 대기 중). 이미 열려 있던 은행 창이 인식을 못 한다면 **\`F5(새로고침)\`**를 한 번 눌러보세요!`;
+          `현재 잠들어 있는 보안프로그램이 없습니다(모두 정상 실행·대기 중). 다시 절전하려면 **[⚡ 은행·관공서 보안절전]**을 눌러주세요!`;
 
     speak(
       wokenCnt > 0
-        ? `잠자고 있던 은행 보안프로그램 ${wokenCnt}개를 모두 깨웠습니다. 열려 있던 은행 창에서 에프오 새로고침을 한 번 눌러주세요.`
+        ? `잠자고 있던 은행 보안프로그램 ${wokenCnt}종을 모두 깨웠습니다. 열려 있던 은행 창에서 에프오 새로고침을 한 번 눌러주세요.`
         : '현재 잠들어 있는 보안프로그램이 없으며 모두 정상 대기 중입니다.'
     );
     return reply(sourceTab, msgKo, {
       followUpSuggestions: [
+        '⚡ 은행·관공서 보안절전',
         '은행 보안프로그램 상태 확인해줘',
         '은행 보안프로그램 원래대로 복구해줘',
       ],
@@ -3350,7 +3485,7 @@ export async function processUnifiedMonsterChatQuery(params: {
   // 아래 2) 휴지통($Recycle.Bin)·실종 파일 추적 엔진이 직접 스캔하도록 통과시킵니다!
   const hasExplicitRecycleOrDeletedFileCue =
     !/복원\s*기록|복원\s*지점|히스토리/i.test(clean) &&
-    /지운|지웠|지워진|삭제|버린|버렸|휴지통|사라진|사라졌|없어진|없어졌|날아간|날아갔/i.test(clean);
+    /지운|지웠|지워진|삭제|버린|버렸|휴지통|정리\s*보관함|미저장|구출|사라진|사라졌|없어진|없어졌|날아간|날아갔/i.test(clean);
 
   const isGeneralRestoreRequest =
     !hasExplicitRecycleOrDeletedFileCue &&
@@ -4143,8 +4278,10 @@ export async function processUnifiedMonsterChatQuery(params: {
       ))
   ) {
     const verdictHeader = '100% 정직 판정: 내 PC 5대 은닉 금고와 윈도우 휴지통을 모두 스캔했으나 흔적이 없습니다.';
+    const hasRecycleOrRescueCue = /휴지통|정리\s*보관함|구출|지운|지웠|지워진|삭제|버린|버렸/i.test(clean);
     const isOfficeCrash =
       !isSyntheticMissingTest &&
+      !hasRecycleOrRescueCue &&
       (/저장\s*안\s*하고|작업하던\s*(엑셀|워드|한글|파워포인트)|꺼졌/i.test(clean) ||
         llmDecision?.intent === 'OFFICE_CRASH_RECOVER');
 
@@ -4640,10 +4777,15 @@ export async function processUnifiedMonsterChatQuery(params: {
     }
     const items = r.data.items || [];
     const folderLabel = kind === 'DOWNLOAD_INSTALLERS' ? '다운로드 폴더' : '바탕화면·다운로드 폴더';
+    const minAge = Number(r.data.minAgeDays ?? 0);
     const ruleText =
       kind === 'DOWNLOAD_INSTALLERS'
-        ? `${r.data.minAgeDays ?? 3}일 이상 지난 설치파일(.exe/.msi/.apk)과 받다 만 파일`
-        : `${r.data.minAgeDays ?? 3}일 이상 지난 임시·압축·설치 파일(.tmp/.bak/.log/.zip/.exe 등)`;
+        ? minAge > 0
+          ? `${minAge}일 이상 지난 설치·압축파일(.exe/.msi/.apk/.zip)과 받다 만 파일`
+          : `방치된 설치·압축파일(.exe/.msi/.apk/.zip)과 받다 만 임시파일`
+        : minAge > 0
+        ? `${minAge}일 이상 지난 임시·압축·설치 파일(.tmp/.bak/.log/.zip/.exe 등)`
+        : `바탕화면·다운로드의 임시·압축·설치 파일(.tmp/.bak/.log/.zip/.exe 등)`;
     if (items.length === 0) {
       speak('정리할 후보 파일이 없습니다.');
       return reply(
@@ -4788,6 +4930,7 @@ export async function processUnifiedMonsterChatQuery(params: {
         spoolerAndSecurity?: {
           cpuLoadPercent?: number;
           activeSecurityPlugins?: Array<{ keyword?: string; label?: string; matchedProcessOrService?: string }>;
+          sleepingSecurityPlugins?: string[];
           highCpuSuspects?: Array<{ name?: string; pid?: number; cpuPercent?: number }>;
           browserMemoryBottleneck?: {
             detected?: boolean;
@@ -4806,7 +4949,8 @@ export async function processUnifiedMonsterChatQuery(params: {
       intent: 'PC_SPEC_CONSULTATION',
       zCoreCommand: { endpoint: '/__zcore/pc-spec', action: 'MEASURE_REAL_PC_SPEC' },
       followUpSuggestions: [
-        '지금 바로 애드웨어·보안모듈 강제종료 및 속도 최적화 정리해줘',
+        '⚡ 은행·관공서 보안절전',
+        '🏦 보안프로그램 즉시 깨우기',
         '바탕화면이랑 다운로드 폴더 정리할 파일 있는지 봐줘',
       ],
     };
@@ -4833,25 +4977,14 @@ export async function processUnifiedMonsterChatQuery(params: {
     const secLabels = (osData?.spoolerAndSecurity?.activeSecurityPlugins || [])
       .map((p) => String(p?.label || p?.keyword || '').trim())
       .filter(Boolean);
-    const startupItems = osData?.startupPrograms || [];
-    const clientSuspectStartups = startupItems
-      .map((st) => String(st?.name || '').trim())
-      .filter(
-        (n) =>
-          n &&
-          !/merlin|ghosti|senstalk|sundream|kakao|telegram|onedrive|googledrive|dropbox|securityhealth|defender|realtek|nvidia|amd|intel|logi|steam|discord|slack|notion|antigravity|edge|chrome|whale/i.test(
-            n
-          )
-      );
+    const sleepingSecLabels = (osData?.spoolerAndSecurity?.sleepingSecurityPlugins || [])
+      .map((sLbl) => String(sLbl || '').trim())
+      .filter(Boolean);
+    // [단일 SSOT] Z-코어 activeSecurityPlugins가 이미 실행 중 보안모듈 + 비필수 시작프로그램을 중복 없이 통합 판정하므로
+    // 클라이언트에서 startupPrograms를 중복 합산해 이미 절전된 모듈이 '[자동실행]' 잔재로 남는 현상을 원천 차단합니다.
     const readableSecLabels = formatReadableSecurityItems(secLabels);
-    const readableSuspectStartups = formatReadableStartupItems(clientSuspectStartups);
-    const totalDetectedCount = secLabels.length + clientSuspectStartups.length;
-    const detectedBloatwareLabels = Array.from(
-      new Set([
-        ...readableSecLabels,
-        ...readableSuspectStartups.map((n) => `[자동실행] ${n}`),
-      ])
-    );
+    const detectedBloatwareLabels = Array.from(new Set(readableSecLabels));
+    const totalDetectedCount = detectedBloatwareLabels.length;
 
     const unknown = '확인 불가';
     const ram = typeof s.ramTotalGb === 'number' ? s.ramTotalGb : null;
@@ -4862,6 +4995,8 @@ export async function processUnifiedMonsterChatQuery(params: {
         ? `🔴 속도 저하 원인 포착 (${totalDetectedCount}건${
             cpuLoadPct !== null ? ` · CPU ${cpuLoadPct}%` : ''
           })`
+        : sleepingSecLabels.length > 0
+        ? `🟢 보안모듈 ${sleepingSecLabels.length}종 절전 수면 중 · 쾌적 상태`
         : ram === null
         ? '⚪ 메모리 확인 불가'
         : ram >= 16 && (disk === null || disk >= 30)
@@ -4873,10 +5008,14 @@ export async function processUnifiedMonsterChatQuery(params: {
     const browserBn = osData?.spoolerAndSecurity?.browserMemoryBottleneck;
     const browserTipNote =
       browserBn?.detected && browserBn?.guideKo ? `\n${browserBn.guideKo}` : '';
+    const sleepingInfoNote =
+      totalDetectedCount === 0 && sleepingSecLabels.length > 0
+        ? `\n💤 현재 은행·관공서 보안모듈 **${sleepingSecLabels.length}종**(${sleepingSecLabels.join(', ')})이 조용히 절전 수면 중이에요! 은행 업무 시 **[🏦 보안프로그램 즉시 깨우기]**로 1초 만에 깨우실 수 있습니다.`
+        : '';
     const bloatWarning =
       totalDetectedCount > 0 || (cpuLoadPct !== null && cpuLoadPct >= 50)
         ? `\n⚠️ 현재 뒤에서 안 쓰는 보안·자동실행 모듈 **${totalDetectedCount}건**이 CPU(${cpuLoadPct ?? '?'}%)와 메모리를 차지하고 있어요!${browserTipNote}`
-        : browserTipNote;
+        : `${sleepingInfoNote}${browserTipNote}`;
     const cpu = s.cpuModel || unknown;
     const gpu = s.gpuModel || unknown;
     const hzText = typeof s.displayHz === 'number' ? `${s.displayHz}Hz` : unknown;

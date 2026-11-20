@@ -403,16 +403,35 @@ def restore_from_recycle_bin(
     except Exception:
         pass
 
+    restored_size = int(target.stat().st_size) if target.exists() else int(meta.get("sizeBytes", 0))
+    orig_name = Path(meta["originalPath"]).name
+
+    # [단일 SSOT 장부 동기화] 귀신비서 사진 정리로 휴지통에 들어갔던 사진이 채팅 3초 구출로 복원될 때도
+    # RECYCLE_LEDGER_FILE에서 해당 항목을 즉시 정리하여 연속 5회 이상 왕복 시 장부 불일치를 원천 차단한다.
+    try:
+        with _LOCK:
+            rows = _read_json_list(RECYCLE_LEDGER_FILE)
+            mf_low = str(mf).lower()
+            orig_low = str(meta["originalPath"]).lower()
+            filtered = [
+                r for r in rows
+                if str(r.get("recycleMetaFile") or "").lower() != mf_low
+                and not (not r.get("recycleMetaFile") and str(r.get("originalPath") or "").lower() == orig_low)
+            ]
+            if len(filtered) != len(rows):
+                _write_json_list_atomic(RECYCLE_LEDGER_FILE, filtered)
+    except Exception:
+        pass
+
     restore_id = ""
     if record_restore_point:
         try:
-            orig_name = Path(meta["originalPath"]).name
             op = {
                 "op": "RECYCLE_RESTORE",
                 "name": target.name,
                 "fromPath": meta["originalPath"],
                 "toPath": str(target),
-                "sizeBytes": int(target.stat().st_size) if target.exists() else int(meta.get("sizeBytes", 0)),
+                "sizeBytes": restored_size,
                 "hash": quick_hash(target),
             }
             pt = add_restore_point(
@@ -431,6 +450,8 @@ def restore_from_recycle_bin(
         "restoreId": restore_id,
         "restoredPath": str(target),
         "originalPath": meta["originalPath"],
+        "originalName": orig_name,
+        "sizeBytes": restored_size,
         "renamed": str(target).lower() != meta["originalPath"].lower(),
     }
 
@@ -1032,11 +1053,15 @@ def _cleanup_roots(kind: str) -> List[Path]:
     return [known_folder("desktop"), known_folder("downloads")]
 
 
-def scan_cleanup_candidates(kind: str, min_age_days: float = 3.0, max_items: int = 60) -> Dict[str, Any]:
-    """바탕화면·다운로드 '바로 아래' 파일만 본다(하위 폴더·바로가기·시스템 파일 제외). 파일 본문은 읽지 않는다."""
+def scan_cleanup_candidates(kind: str, min_age_days: float = 0.0, max_items: int = 120) -> Dict[str, Any]:
+    """바탕화면·다운로드 '바로 아래' 파일만 본다(하위 폴더·바로가기·시스템 파일 제외). 파일 본문은 읽지 않는다.
+    1회 실행 시 조건에 해당하는 설치·압축·임시 파일(.zip/.exe/.msi/.apk/.tmp 등) 전량을 빠짐없이 한 번에 스캔하여
+    1회차 5건·2회차 1건처럼 쪼개어 남는 현상을 원천 차단한다.
+    """
     kind = kind if kind in ("DOWNLOAD_INSTALLERS", "FOLDER_REORG") else "FOLDER_REORG"
     t0 = time.perf_counter()
     now = time.time()
+    effective_min_age = max(0.0, float(min_age_days or 0.0))
 
     def _collect(age_threshold: float) -> List[Dict[str, Any]]:
         collected: List[Dict[str, Any]] = []
@@ -1061,7 +1086,7 @@ def scan_cleanup_candidates(kind: str, min_age_days: float = 3.0, max_items: int
                     st = e.stat()
                     age = max(0.0, (now - st.st_mtime) / 86400.0)
                     if kind == "DOWNLOAD_INSTALLERS":
-                        hit = (ext in _INSTALLER_EXTS and age >= age_threshold) or (ext in _PARTIAL_EXTS and age >= min(1.0, age_threshold))
+                        hit = (ext in _INSTALLER_EXTS and age >= age_threshold) or (ext in _PARTIAL_EXTS and age >= age_threshold)
                     else:
                         hit = ext in _DESKTOP_JUNK_EXTS and age >= age_threshold
                     if not hit:
@@ -1081,12 +1106,7 @@ def scan_cleanup_candidates(kind: str, min_age_days: float = 3.0, max_items: int
                     continue
         return collected
 
-    items = _collect(min_age_days)
-    effective_min_age = min_age_days
-    if not items and min_age_days > 0:
-        items = _collect(0.0)
-        if items:
-            effective_min_age = 0.0
+    items = _collect(effective_min_age)
 
     items.sort(key=lambda x: x["sizeBytes"], reverse=True)
     items = items[:max_items]

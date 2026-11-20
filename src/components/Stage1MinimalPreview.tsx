@@ -1989,24 +1989,44 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 </span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[12.5px]">
-                <button
-                  type="button"
-                  onClick={() =>
-                    window.dispatchEvent(
-                      new CustomEvent('ghosti_toss_to_monster_chat', {
-                        detail: { query: '부팅할 때 켜지는 시작프로그램 목록도 보여줘' },
-                      })
-                    )
-                  }
-                  className="text-left p-3.5 rounded-xl bg-white dark:bg-zinc-900/90 hover:bg-emerald-50/70 dark:hover:bg-zinc-900 border border-emerald-200/90 dark:border-emerald-500/25 shadow-xs flex flex-col gap-1.5 transition cursor-pointer"
-                >
-                  <span className="font-extrabold text-slate-900 dark:text-white break-keep leading-snug">
-                    ① ⚡ 은행·관공서 보안앱 자동 절전·기상
-                  </span>
-                  <span className="text-slate-700 dark:text-zinc-300 break-keep leading-relaxed text-[12px]">
-                    평소엔 메모리를 먹는 보안모듈을 재워 컴퓨터를 가볍게 하고, 은행 사이트를 열 때만 자동으로 깨워드려요.
-                  </span>
-                </button>
+                <div className="text-left p-3.5 rounded-xl bg-white dark:bg-zinc-900/90 border border-emerald-200/90 dark:border-emerald-500/25 shadow-xs flex flex-col justify-between gap-2 transition">
+                  <div className="flex flex-col gap-1.5">
+                    <span className="font-extrabold text-slate-900 dark:text-white break-keep leading-snug">
+                      ① ⚡ 은행·관공서 보안앱 자동 절전·기상
+                    </span>
+                    <span className="text-slate-700 dark:text-zinc-300 break-keep leading-relaxed text-[12px]">
+                      평소엔 메모리를 먹는 보안모듈을 재워 컴퓨터를 가볍게 하고, 은행 업무를 볼 때만 1초 만에 깨워드려요.
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap items-center gap-1.5 pt-1">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        window.dispatchEvent(
+                          new CustomEvent('ghosti_toss_to_monster_chat', {
+                            detail: { query: '⚡ 은행·관공서 보안절전' },
+                          })
+                        )
+                      }
+                      className="px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[11.5px] cursor-pointer transition shadow-2xs"
+                    >
+                      ⚡ 은행·관공서 보안절전
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        window.dispatchEvent(
+                          new CustomEvent('ghosti_toss_to_monster_chat', {
+                            detail: { query: '🏦 보안프로그램 즉시 깨우기' },
+                          })
+                        )
+                      }
+                      className="px-2.5 py-1 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-slate-300 dark:border-zinc-600 text-slate-800 dark:text-zinc-100 font-bold text-[11.5px] cursor-pointer transition"
+                    >
+                      🏦 보안프로그램 즉시 깨우기
+                    </button>
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={() =>
@@ -2016,13 +2036,18 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                       })
                     )
                   }
-                  className="text-left p-3.5 rounded-xl bg-white dark:bg-zinc-900/90 hover:bg-emerald-50/70 dark:hover:bg-zinc-900 border border-emerald-200/90 dark:border-emerald-500/25 shadow-xs flex flex-col gap-1.5 transition cursor-pointer"
+                  className="text-left p-3.5 rounded-xl bg-white dark:bg-zinc-900/90 hover:bg-emerald-50/70 dark:hover:bg-zinc-900 border border-emerald-200/90 dark:border-emerald-500/25 shadow-xs flex flex-col justify-between gap-2 transition cursor-pointer"
                 >
-                  <span className="font-extrabold text-slate-900 dark:text-white break-keep leading-snug">
-                    ② 🛡️ 다운로드 파일 무소음 백신 경호
-                  </span>
-                  <span className="text-slate-700 dark:text-zinc-300 break-keep leading-relaxed text-[12px]">
-                    광고 팝업 없이 새로 받은 설치파일·압축파일을 윈도우 기본 백신으로 조용하고 안전하게 검사해요.
+                  <div className="flex flex-col gap-1.5">
+                    <span className="font-extrabold text-slate-900 dark:text-white break-keep leading-snug">
+                      ② 🛡️ 다운로드 파일 무소음 백신 경호
+                    </span>
+                    <span className="text-slate-700 dark:text-zinc-300 break-keep leading-relaxed text-[12px]">
+                      광고 팝업 없이 새로 받은 설치파일·압축파일을 윈도우 기본 백신으로 조용하고 안전하게 검사해요.
+                    </span>
+                  </div>
+                  <span className="inline-flex self-start px-2.5 py-1 rounded-lg bg-emerald-50 dark:bg-emerald-950/60 border border-emerald-300/80 dark:border-emerald-500/30 text-emerald-800 dark:text-emerald-200 font-extrabold text-[11.5px]">
+                    🛡️ 무소음 백신 빠른 점검
                   </span>
                 </button>
                 <button
@@ -2030,17 +2055,22 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   onClick={() =>
                     window.dispatchEvent(
                       new CustomEvent('ghosti_toss_to_monster_chat', {
-                        detail: { query: '방금 지운 파일 찾아줘' },
+                        detail: { query: '🛟 미저장 문서·휴지통 3초 구출' },
                       })
                     )
                   }
-                  className="text-left p-3.5 rounded-xl bg-white dark:bg-zinc-900/90 hover:bg-emerald-50/70 dark:hover:bg-zinc-900 border border-emerald-200/90 dark:border-emerald-500/25 shadow-xs flex flex-col gap-1.5 transition cursor-pointer"
+                  className="text-left p-3.5 rounded-xl bg-white dark:bg-zinc-900/90 hover:bg-emerald-50/70 dark:hover:bg-zinc-900 border border-emerald-200/90 dark:border-emerald-500/25 shadow-xs flex flex-col justify-between gap-2 transition cursor-pointer"
                 >
-                  <span className="font-extrabold text-slate-900 dark:text-white break-keep leading-snug">
-                    ③ 🗑️↩️ 미저장 문서 &amp; 휴지통 3초 구출
-                  </span>
-                  <span className="text-slate-700 dark:text-zinc-300 break-keep leading-relaxed text-[12px]">
-                    실수로 저장 안 하고 끈 문서 임시본을 찾거나, 잘못 지운 휴지통 파일을 5줄 미리보기로 즉시 복원해요.
+                  <div className="flex flex-col gap-1.5">
+                    <span className="font-extrabold text-slate-900 dark:text-white break-keep leading-snug">
+                      ③ 🛟 미저장 문서·휴지통 3초 구출
+                    </span>
+                    <span className="text-slate-700 dark:text-zinc-300 break-keep leading-relaxed text-[12px]">
+                      실수로 저장 안 하고 끈 문서 임시본을 찾거나, 방금 휴지통으로 보낸 사진·문서를 원래 위치로 즉시 복원해요.
+                    </span>
+                  </div>
+                  <span className="inline-flex self-start px-2.5 py-1 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white font-extrabold text-[11.5px] shadow-2xs">
+                    🛟 미저장 문서·휴지통 3초 구출 실행
                   </span>
                 </button>
               </div>

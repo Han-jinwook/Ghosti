@@ -233,6 +233,11 @@ export interface AssistantOnboardingSlice {
   moveSelectedToQuarantine: () => Promise<void>;
   moveAllTrashToQuarantine: () => Promise<void>;
   restoreFromQuarantine: (names: string[]) => Promise<void>;
+  syncPhotosAfterExternalRestore: (
+    names: string[],
+    replacedIds?: Record<string, string>,
+    customToast?: string
+  ) => void;
   undoLastQuarantine: () => Promise<void>;
   dismissUndoBatch: () => void;
   openLocalFolder: (target: 'quarantine' | 'photos' | 'docs' | 'videos', targetPath?: string) => Promise<void>;
@@ -1829,21 +1834,28 @@ export const createAssistantOnboardingSlice: StateCreator<
     await get().moveSelectedToQuarantine();
   },
 
-  restoreFromQuarantine: async (names: string[]) => {
-    if (names.length === 0) return;
-    set({ quarantineMoving: true });
-    const restoreRes = await requestQuarantineOp('restore', names);
-    if (restoreRes.done.length === 0) {
-      set({ quarantineMoving: false, lastQuarantineToast: quarantineFailureToast('restore', restoreRes) });
-      return;
-    }
-    const restoredSet = new Set<string>(restoreRes.done);
-    const replacedMap = restoreRes.replacedIds || {};
+  syncPhotosAfterExternalRestore: (
+    names: string[],
+    replacedIds?: Record<string, string>,
+    customToast?: string
+  ) => {
+    const cleanNames = names.map((n) => String(n || '').trim()).filter(Boolean);
+    if (cleanNames.length === 0) return;
+    const restoredSet = new Set<string>(cleanNames);
+    const restoredLowerSet = new Set<string>(cleanNames.map((n) => n.toLowerCase()));
+    const replacedMap = replacedIds || {};
+    const revTs = Date.now();
 
     set((state) => {
       const restoredIdsAfterReplace = new Set<string>();
+      let anyMatched = false;
       const unquarantinedPhotos = state.photos.map((p) => {
-        if (!restoredSet.has(p.name) && !restoredSet.has(p.id)) return p;
+        const hit =
+          restoredSet.has(p.name) ||
+          restoredSet.has(p.id) ||
+          restoredLowerSet.has((p.name || '').toLowerCase());
+        if (!hit) return p;
+        anyMatched = true;
         const newId = replacedMap[p.id] || p.id;
         if (newId !== p.id) {
           migrateOpticalSigPhotoId(p.id, newId);
@@ -1862,16 +1874,20 @@ export const createAssistantOnboardingSlice: StateCreator<
           id: newId,
           quarantined: false,
           thumbUrl: isZCorePhoto
-            ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&thumb=1`)
+            ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&thumb=1&rev=${revTs}`)
             : p.thumbUrl,
           fullUrl: isZCorePhoto
-            ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}`)
+            ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&rev=${revTs}`)
             : p.fullUrl,
         };
       });
 
-      // 복원된 사진을 포함해 중복·연사 세트(duplicateGroups) 및 trashCategory를 즉시 재클러스터링하여
-      // [① 중복·연사 사진]·[④ 흔들린 사진] 탭과 전체 검색 목록(searchResults)에 복원 즉시 100% 재표시합니다.
+      if (!anyMatched) {
+        return customToast
+          ? { quarantineMoving: false, lastQuarantineToast: customToast }
+          : { quarantineMoving: false };
+      }
+
       const { updatedPhotos, duplicateGroups: nextDupGroups } =
         clusterPhotosIntoDuplicateGroups(unquarantinedPhotos);
 
@@ -1925,7 +1941,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         activeTrashCategoryFilter: restoredFocusCategory || state.activeTrashCategoryFilter,
         searchResults: refreshedSearchResults,
         quarantineMoving: false,
-        lastQuarantineToast: `♻️ 사진 ${restoredSet.size}장을 ${quarantineResultNote('restore', restoreRes)}`,
+        ...(customToast ? { lastQuarantineToast: customToast } : {}),
       };
     });
     if (typeof window !== 'undefined') {
@@ -1934,6 +1950,21 @@ export const createAssistantOnboardingSlice: StateCreator<
     if (!zCoreBridge.isConnected) {
       void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
     }
+  },
+
+  restoreFromQuarantine: async (names: string[]) => {
+    if (names.length === 0) return;
+    set({ quarantineMoving: true });
+    const restoreRes = await requestQuarantineOp('restore', names);
+    if (restoreRes.done.length === 0) {
+      set({ quarantineMoving: false, lastQuarantineToast: quarantineFailureToast('restore', restoreRes) });
+      return;
+    }
+    get().syncPhotosAfterExternalRestore(
+      restoreRes.done,
+      restoreRes.replacedIds,
+      `♻️ 사진 ${restoreRes.done.length}장을 ${quarantineResultNote('restore', restoreRes)}`
+    );
   },
 
   undoLastQuarantine: async () => {
