@@ -1877,6 +1877,7 @@ export class HybridVoiceSession {
       };
 
       try {
+        const srStartedAt = Date.now();
         const r = new SR();
         r.lang = 'ko-KR';
         r.interimResults = true;
@@ -1906,7 +1907,11 @@ export class HybridVoiceSession {
           if (this.sttTranscript) {
             triggerFastAutoStop();
           } else if (!fallbackStarted && !this.autoStopFired) {
-            triggerFastAutoStop();
+            if (Date.now() - srStartedAt < 1400) {
+              void switchToRecorderFallback();
+            } else {
+              triggerFastAutoStop();
+            }
           }
         };
         r.onerror = (ev: any) => {

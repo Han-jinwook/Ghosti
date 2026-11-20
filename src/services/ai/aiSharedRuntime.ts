@@ -170,6 +170,42 @@ const KO_SUBSTRING_FALSE_FRIEND_RX: Record<string, RegExp> = {
   개: /개인|개월|개발|개봉|개선|개설|개시|개수|개념|개요|개최|공개|번개|안개|조개|베개|날개|덮개|지우개/,
 };
 
+const MEDIA_AND_DOC_SEARCH_CATEGORY_NOUNS = new Set([
+  '풍경', '풍경사진', '자연', '경치', '전망', '바다', '해변', '바닷가', '산', '등산', '하늘', '구름', '노을', '일몰', '일출', '야경',
+  '꽃', '나무', '숲', '공원', '호수', '강', '계곡', '폭포', '눈', '설경', '봄', '여름', '가을', '겨울',
+  '강아지', '고양이', '반려견', '반려묘', '동물', '새',
+  '음식', '음식사진', '맛집', '식사', '요리', '커피', '카페', '디저트', '케이크', '빵', '술', '맥주', '와인',
+  '여행', '여행사진', '휴가', '캠핑', '텐트', '수영장', '호텔', '리조트', '비행기', '공항',
+  '가족', '가족사진', '아이', '아기', '어린이', '친구', '모임', '단체', '단체사진', '셀카', '인물', '인물사진', '결혼식', '생일', '졸업식',
+  '사진', '이미지', '동영상', '영상', '비디오', '클립', '녹화',
+  '문서', '서류', '파일', '자료', '영수증', '전표', '계약서', '견적서', '명세서', '세금계산서', '계산서',
+  '사업자등록증', '등록증', '신분증', '운전면허증', '면허증', '주민등록등본', '등본', '초본', '여권', '명함',
+  '이력서', '기획서', '제안서', '품의서', '기안서', '단가표', '가격표', '시간표', '일정표', '식단표',
+  '청첩장', '초대장', '티켓', '항공권', '처방전', '진단서', '통장', '통장사본', '증명서', '수료증', '자격증',
+]);
+
+const NON_SEARCH_SYSTEM_NOUNS = new Set([
+  '속도', '온도', '각도', '국가', '차이', '사이', '나이', '길이', '넓이', '높이', '깊이',
+]);
+
+/**
+ * [단일 SSOT] 음성·채팅 단답 발화('풍경', '문서', '영수증', '강아지' 등)가
+ * 사진·동영상·문서 검색 명사인지 한국어 시각 온톨로지(710+ 어휘) + 미디어/서류 사전으로 즉시 판별합니다.
+ */
+export function isOntologyMediaSearchNoun(word: string): boolean {
+  const raw = String(word || '').toLowerCase().trim();
+  if (raw.length < 1 || !/[가-힣]/.test(raw)) return false;
+  if (NON_SEARCH_SYSTEM_NOUNS.has(raw)) return false;
+  if (MEDIA_AND_DOC_SEARCH_CATEGORY_NOUNS.has(raw)) return true;
+  if (raw.length >= 2 && PROTECTED_ONTOLOGY_KO_NOUNS.has(raw)) return true;
+  const stripped = stripKoSearchParticle(raw, true);
+  if (stripped && !NON_SEARCH_SYSTEM_NOUNS.has(stripped)) {
+    if (MEDIA_AND_DOC_SEARCH_CATEGORY_NOUNS.has(stripped)) return true;
+    if (stripped.length >= 2 && PROTECTED_ONTOLOGY_KO_NOUNS.has(stripped)) return true;
+  }
+  return false;
+}
+
 export function isProtectedKoNoun(word: string): boolean {
   const w = word.toLowerCase().trim();
   if (!w) return false;

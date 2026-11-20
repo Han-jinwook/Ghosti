@@ -1500,9 +1500,20 @@ export const SmartTrashView: React.FC = () => {
               setHealthHistoryRecords((prev) => [rec, ...prev])
             }
             onJumpToSearch={(kw) => {
-              void runTextQuery(kw);
-              if (layout === 'mobile') setMobileTab('search');
-              else setDesktopTab('dashboard');
+              const cleanKw = kw.trim();
+              if (layout === 'mobile') {
+                setMobileTab('search');
+                void runTextQuery(cleanKw).then(() => {
+                  window.setTimeout(() => {
+                    document
+                      .getElementById('ghosti-search-results')
+                      ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                  }, 80);
+                });
+              } else {
+                void runTextQuery(cleanKw);
+                setDesktopTab('dashboard');
+              }
             }}
             onTriggerOsRepair={(symptomQuery) => {
               void useSaySeeStore.getState().submitSetupMonsterQuery(symptomQuery);

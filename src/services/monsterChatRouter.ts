@@ -15,6 +15,7 @@ import {
 import { getZCoreUrl, zCoreBridge } from './zCoreBridge';
 import {
   isAndroidMobileBrowserOrApp,
+  isCapacitorNativeMobileRuntime,
   isIosMobileBrowserOrApp,
   scanMobileBloatCleaners,
   triggerMobileCleanerUninstall,
@@ -548,7 +549,30 @@ interface CachedPcContext {
 
 let cachedPcContext: CachedPcContext | null = null;
 
+function isMobileRuntimeForChat(): boolean {
+  if (
+    isCapacitorNativeMobileRuntime() ||
+    isAndroidMobileBrowserOrApp() ||
+    isIosMobileBrowserOrApp()
+  ) {
+    return true;
+  }
+  try {
+    const st = useSaySeeStore.getState();
+    return Boolean(st.isStoreAppMode || st.layout === 'mobile');
+  } catch {
+    return false;
+  }
+}
+
 export async function fetchRealtimePcContextForLlm(): Promise<CachedPcContext> {
+  if (isMobileRuntimeForChat()) {
+    const st = useSaySeeStore.getState();
+    return {
+      fetchedAt: Date.now(),
+      summaryText: `📱 내 스마트폰 파일 연동 중 (사진 ${st.photos.length}장 · 동영상 ${st.videoSceneItems.length}개 · 문서 ${st.localDocuments.length}건 준비 완료)`,
+    };
+  }
   if (cachedPcContext && Date.now() - cachedPcContext.fetchedAt < 20000) {
     return cachedPcContext;
   }
@@ -560,7 +584,7 @@ export async function fetchRealtimePcContextForLlm(): Promise<CachedPcContext> {
   if (!specRes.ok && !osRes.ok) {
     return {
       fetchedAt: Date.now(),
-      summaryText: '[Z-코어 미연결 상태: 내 PC 실시간 하드웨어 수치 미확인]',
+      summaryText: '💡 내 PC 엔진을 켜 주시면 실시간 사양과 폴더 상태까지 함께 점검해 드려요.',
     };
   }
 
@@ -5225,8 +5249,22 @@ export async function processUnifiedMonsterChatQuery(params: {
     });
   }
 
-  // 10) 오프라인 폴백 (네트워크 단절 시에도 친절하고 정직하게 안내)
+  // 10) 오프라인 폴백 (모바일 앱과 PC 환경을 명확히 구분하여 친절하고 정직하게 안내 — 모바일에서 PC Z-코어 미연결 오표시 원천 차단)
   const tipRes = pickNextShortformTipOnCompletion({ contextTag: 'os_repair', subscribedLounges: [] });
+  if (isMobileRuntimeForChat()) {
+    return reply(
+      sourceTab,
+      `💬 말씀하신 **"${clean}"** 내용을 확인했습니다!\n${pcCtx.summaryText}\n\n찾으실 **사진·동영상·문서 검색어**(예: "풍경", "강아지", "영수증")를 편하게 말씀하시거나 아래 추천 버튼을 눌러 보세요:`,
+      {
+        shortformTip: tipRes.tip,
+        followUpSuggestions: [
+          '풍경 사진 찾아줘',
+          '영수증이나 계약서 문서 찾아줘',
+          '중복·흔들린 사진 정리할 거 봐줘',
+        ],
+      }
+    );
+  }
   return reply(
     sourceTab,
     `💬 말씀하신 **"${clean}"** 내용을 확인했습니다!\n${pcCtx.summaryText}\n\n아래 기능 중 원하시는 항목을 편하게 말씀해 주시거나 아래 추천 버튼을 눌러 주세요:\n• **사라진 파일 1초 추적·복구** · **다운로드/바탕화면 정리**\n• **자주 가는 사이트 바탕화면 바로가기** · **[복원 기록] 1초 되돌리기**\n• **내 PC 실측 사양 & 업그레이드 상담**`,

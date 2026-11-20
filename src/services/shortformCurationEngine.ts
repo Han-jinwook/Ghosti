@@ -139,6 +139,8 @@ export function pickNextShortformTipOnCompletion(params: {
   }
 }
 
+import { isOntologyMediaSearchNoun, stripKoSearchParticle } from './ai/aiSharedRuntime';
+
 /**
  * Z몬스터 대화창에 입력된 문장이 '단순 파일/사진 찾기'인지 0.001초 만에 로컬 판별 (LLM 토큰 0원)
  */
@@ -149,14 +151,14 @@ export function detectZeroLlmPerspectiveSearchIntent(userInput: string): {
   const text = (userInput || '').trim();
   if (!text) return { isSimpleSearchIntent: false, extractedKeyword: '' };
 
-  // 정리/이동/숨김/복원/수리/진단/시작프로그램/온보딩/설정 명령어가 들어있으면 사진·문서 단순 검색이 아닌 귀신비서 고유 작업으로 분류
+  // 정리/이동/숨김/복원/수리/진단/시작프로그램/온보딩/설정 명령어나 일상 인사가 들어있으면 단순 검색이 아닌 귀신비서 고유 작업으로 분류
   const doctorActionRegex =
-    /(정리|옮겨|이동|숨겨|숨김|복원|복구|되돌려|고쳐|수리|안\s*돼|안\s*나와|오류|에러|느려|버벅|폴더\s*만들|진단|점검|검진|부팅|재부팅|경과|켜\s*둔|시작\s*프로그램|자동\s*실행|보안\s*프로그램|보안\s*모듈|애드웨어|백신|디펜더|바이러스|랜섬웨어|사양|스펙|용량|메모리|램|cpu|프로세스|점유율|사라졌|없어졌|날아갔|지웠|휴지통|저장\s*안\s*하고|실적|보고서|온보딩|초능력|상용구|복사\s*기록|스튜디오|문의방|요금|가격)/i;
+    /(정리|옮겨|이동|숨겨|숨김|복원|복구|되돌려|고쳐|수리|안\s*돼|안\s*나와|오류|에러|느려|버벅|폴더\s*만들|진단|점검|검진|부팅|재부팅|경과|켜\s*둔|시작\s*프로그램|자동\s*실행|보안\s*프로그램|보안\s*모듈|애드웨어|백신|디펜더|바이러스|랜섬웨어|사양|스펙|용량|메모리|램|cpu|프로세스|점유율|사라졌|없어졌|날아갔|지웠|휴지통|저장\s*안\s*하고|실적|보고서|온보딩|초능력|상용구|복사\s*기록|스튜디오|문의방|요금|가격|구독|결제|해지|별명|닉네임|로그인|로그아웃)/i;
   if (doctorActionRegex.test(text)) {
     return { isSimpleSearchIntent: false, extractedKeyword: '' };
   }
 
-  // 단순 검색/열람 패턴 ("~찾아줘", "~보여줘", "~어디 있어?")
+  // 1) 명시적 검색/열람 서술어 패턴 ("~찾아줘", "~보여줘", "~어디 있어?")
   const searchMatch = text.match(/^(.+?)\s*(찾아\s*줘|찾아|보여\s*줘|보여|어디\s*있어|어딨어|열어\s*줘|열어|검색해\s*줘|검색)\??$/i);
   if (searchMatch && searchMatch[1]) {
     const cleaned = searchMatch[1]
@@ -166,6 +168,23 @@ export function detectZeroLlmPerspectiveSearchIntent(userInput: string): {
       isSimpleSearchIntent: true,
       extractedKeyword: cleaned || text,
     };
+  }
+
+  // 2) 마이크 단답형 검색어 발화("풍경", "문서", "강아지", "바다 사진", "영수증" 등 1~2어절 시각/미디어/문서 명사):
+  //    서술어('찾아줘')를 붙이지 않고 핵심 단어만 말해도 외부 AI 바톤터치나 PC 진단 폴백으로 빠지지 않고 즉시 통합 검색으로 연결!
+  if (!/[?？!]/.test(text) && text.length <= 16) {
+    const conversationalChitChatRx =
+      /^(?:안녕|안녕하세요|반가워|반갑습니다|고마워|고맙습니다|감사합니다|응|네|예|아니|아니요|좋아|좋아요|싫어|됐어|괜찮아|나중에|다음에|확인|취소|시작|중지|그만|멈춰|오케이|ok|yes|no|ㅎㅎ|ㅋㅋ|헤헤)$/i;
+    if (!conversationalChitChatRx.test(text)) {
+      const words = text.split(/\s+/).filter(Boolean);
+      if (words.length >= 1 && words.length <= 2 && words.every((w) => isOntologyMediaSearchNoun(w))) {
+        const normalizedWords = words.map((w) => stripKoSearchParticle(w, words.length === 1) || w);
+        return {
+          isSimpleSearchIntent: true,
+          extractedKeyword: normalizedWords.join(' '),
+        };
+      }
+    }
   }
 
   return { isSimpleSearchIntent: false, extractedKeyword: '' };

@@ -1379,6 +1379,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     }
 
     try {
+      const srStartedAt = Date.now();
       const recognition = new SpeechRecognitionCtor();
       recognition.lang = 'ko-KR';
       recognition.interimResults = true;
@@ -1437,6 +1438,10 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         setIsMicListening(false);
       };
       recognition.onend = () => {
+        if (!latestTranscriptRef.current.trim() && Date.now() - srStartedAt < 1400) {
+          void startMediaRecorderChatFallback();
+          return;
+        }
         setIsMicListening(false);
         finalizeAndSubmitSpokenText();
       };
