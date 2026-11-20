@@ -410,6 +410,8 @@ export interface PhotoItem {
   vaultCategoryLabel?: string;
   /** 스마트 다이어트 쓰레기 사진 분류 (해당 시) */
   trashCategory?: TrashCategory;
+  /** 중복·연사 그룹 편입 전 사진 자체의 고유 광학 분류 (흔들림·스크린샷·메모 — 중복 해소 후 1장 남았을 때 자동 복귀용) */
+  intrinsicTrashCategory?: TrashCategory;
   /** 쓰레기 분류 신뢰도 (0.85 ~ 0.99) */
   trashConfidence?: number;
   /** 연사/중복 쌍둥이 그룹 ID (Perceptual dHash 클러스터) */

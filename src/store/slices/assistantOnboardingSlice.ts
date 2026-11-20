@@ -313,6 +313,85 @@ export interface AssistantOnboardingSlice {
 
 let pendingMobileGalleryResync = false;
 
+function buildQuarantineMoveStatePatch(opts: {
+  state: SaySeeStore;
+  movedSet: Set<string>;
+  savedBytes: number;
+  demo: boolean;
+  actionLabel: string;
+  nonIosToast: string;
+  clearSelectedBurstModal?: boolean;
+}): Partial<SaySeeStore> {
+  const {
+    state,
+    movedSet,
+    savedBytes,
+    demo,
+    actionLabel,
+    nonIosToast,
+    clearSelectedBurstModal,
+  } = opts;
+  const isIosNativeApp = !zCoreBridge.isConnected && isCapacitorIosRuntime();
+  const prevTrashById = new Map(state.photos.map((p) => [p.id, p.trashCategory]));
+  const afterMovePhotos = state.photos.map((p) => {
+    if (!movedSet.has(p.id)) return p;
+    const isZCorePhoto = p.thumbUrl.includes('/__photos/file');
+    return {
+      ...p,
+      quarantined: true,
+      thumbUrl: isZCorePhoto
+        ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`)
+        : p.thumbUrl,
+      fullUrl: isZCorePhoto
+        ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`)
+        : p.fullUrl,
+    };
+  });
+  const { updatedPhotos, duplicateGroups: nextDupGroups } =
+    clusterPhotosIntoDuplicateGroups(afterMovePhotos);
+  const cleanedSelected = new Set<string>(state.selectedTrashIds);
+  movedSet.forEach((id) => cleanedSelected.delete(id));
+  updatedPhotos.forEach((p) => {
+    if (!p.quarantined && p.trashCategory && !prevTrashById.get(p.id)) {
+      cleanedSelected.add(p.id);
+    }
+  });
+  const nextFilter =
+    state.activeTrashCategoryFilter === 'duplicate' && nextDupGroups.length === 0
+      ? updatedPhotos.some((p) => !p.quarantined && p.trashCategory === 'blurry')
+        ? 'blurry'
+        : updatedPhotos.some((p) => !p.quarantined && p.trashCategory === 'screenshot')
+        ? 'screenshot'
+        : updatedPhotos.some((p) => !p.quarantined && p.trashCategory === 'memo')
+        ? 'memo'
+        : state.activeTrashCategoryFilter
+      : state.activeTrashCategoryFilter;
+
+  return {
+    photos: updatedPhotos,
+    duplicateGroups: nextDupGroups,
+    activeTrashCategoryFilter: nextFilter,
+    searchResults: state.searchResults.filter((r) => !movedSet.has(r.photo.id)),
+    selectedTrashIds: cleanedSelected,
+    ...(clearSelectedBurstModal ? { selectedPhoto: null, selectedBurstGroup: null } : {}),
+    quarantineMoving: false,
+    freeTrialUsed: true,
+    lastUndoBatch: isIosNativeApp
+      ? null
+      : {
+          fileNames: Array.from(movedSet),
+          actionLabel,
+          count: movedSet.size,
+          savedBytes,
+          timestamp: Date.now(),
+          demo,
+        },
+    lastQuarantineToast: isIosNativeApp
+      ? `🔒 사진 ${movedSet.size}장이 아이폰 『최근 삭제된 항목』에 30일간 안전 보관되었습니다. 복원은 아이폰 『사진 ➔ 최근 삭제된 항목(FaceID)』에서 가능합니다.`
+      : nonIosToast,
+  };
+}
+
 export const createAssistantOnboardingSlice: StateCreator<
   SaySeeStore,
   [],
@@ -1600,41 +1679,15 @@ export const createAssistantOnboardingSlice: StateCreator<
         .reduce((acc, p) => acc + p.size, 0);
 
       set((state) => {
-        const afterMovePhotos = state.photos.map((p) => {
-          if (!movedSet.has(p.id)) return p;
-          const isZCorePhoto = p.thumbUrl.includes('/__photos/file');
-          return {
-            ...p,
-            quarantined: true,
-            thumbUrl: isZCorePhoto
-              ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`)
-              : p.thumbUrl,
-            fullUrl: isZCorePhoto
-              ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`)
-              : p.fullUrl,
-          };
-        });
-        const afterSearch = state.searchResults.filter((r) => !movedSet.has(r.photo.id));
-        const cleanedSelected = new Set(state.selectedTrashIds);
-        movedSet.forEach((id) => cleanedSelected.delete(id));
         const wasFreeTrialFirstUse = !state.freeTrialUsed && state.activePricingPlan === 'free_trial';
-
-        return {
-          photos: afterMovePhotos,
-          searchResults: afterSearch,
-          selectedTrashIds: cleanedSelected,
-          quarantineMoving: false,
-          freeTrialUsed: true,
-          lastUndoBatch: {
-            fileNames: Array.from(movedSet),
-            actionLabel: '연사 바둑판 베스트 컷 Pick 정리',
-            count: movedSet.size,
-            savedBytes,
-            timestamp: Date.now(),
-            demo: moveRes.demo,
-          },
-          lastQuarantineToast: `${wasFreeTrialFirstUse ? '🎁 첫 정리 완료! ' : '✨ '}베스트 원본 1장을 남기고 나머지 ${movedSet.size}장을 ${moveNote}`,
-        };
+        return buildQuarantineMoveStatePatch({
+          state,
+          movedSet,
+          savedBytes,
+          demo: moveRes.demo,
+          actionLabel: '연사 바둑판 베스트 컷 Pick 정리',
+          nonIosToast: `${wasFreeTrialFirstUse ? '🎁 첫 정리 완료! ' : '✨ '}베스트 원본 1장을 남기고 나머지 ${movedSet.size}장을 ${moveNote}`,
+        });
       });
       if (!zCoreBridge.isConnected) {
         void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
@@ -1664,43 +1717,17 @@ export const createAssistantOnboardingSlice: StateCreator<
       .filter((p) => movedSet.has(p.id))
       .reduce((acc, p) => acc + p.size, 0);
 
-    set((state) => {
-      const afterMovePhotos = state.photos.map((p) => {
-        if (!movedSet.has(p.id)) return p;
-        const isZCorePhoto = p.thumbUrl.includes('/__photos/file');
-        return {
-          ...p,
-          quarantined: true,
-          thumbUrl: isZCorePhoto
-            ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`)
-            : p.thumbUrl,
-          fullUrl: isZCorePhoto
-            ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`)
-            : p.fullUrl,
-        };
-      });
-      const afterSearch = state.searchResults.filter((r) => !movedSet.has(r.photo.id));
-      const cleanedSelected = new Set(state.selectedTrashIds);
-      movedSet.forEach((id) => cleanedSelected.delete(id));
-      return {
-        photos: afterMovePhotos,
-        searchResults: afterSearch,
-        selectedTrashIds: cleanedSelected,
-        selectedPhoto: null,
-        selectedBurstGroup: null,
-        quarantineMoving: false,
-        freeTrialUsed: true,
-        lastUndoBatch: {
-          fileNames: Array.from(movedSet),
-          actionLabel: '검색 결과 연사 베스트 컷 Pick',
-          count: movedSet.size,
-          savedBytes,
-          timestamp: Date.now(),
-          demo: moveRes.demo,
-        },
-        lastQuarantineToast: `✨ 베스트 컷 1장을 남기고 나머지 연사 ${movedSet.size}장을 ${moveNote}`,
-      };
-    });
+    set((state) =>
+      buildQuarantineMoveStatePatch({
+        state,
+        movedSet,
+        savedBytes,
+        demo: moveRes.demo,
+        actionLabel: '검색 결과 연사 베스트 컷 Pick',
+        nonIosToast: `✨ 베스트 컷 1장을 남기고 나머지 연사 ${movedSet.size}장을 ${moveNote}`,
+        clearSelectedBurstModal: true,
+      })
+    );
     if (!zCoreBridge.isConnected) {
       void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
     }
@@ -1777,48 +1804,16 @@ export const createAssistantOnboardingSlice: StateCreator<
       .filter((p) => movedSet.has(p.id))
       .reduce((acc, p) => acc + p.size, 0);
 
-    const updatedPhotos = photos.map((p) => {
-      if (!movedSet.has(p.id)) return p;
-      const isZCorePhoto = p.thumbUrl.includes('/__photos/file');
-      return {
-        ...p,
-        quarantined: true,
-        thumbUrl: isZCorePhoto
-          ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`)
-          : p.thumbUrl,
-        fullUrl: isZCorePhoto
-          ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine`)
-          : p.fullUrl,
-      };
-    });
-
-    const nextTrashIds = new Set<string>();
-    selectedTrashIds.forEach((id) => {
-      if (!movedSet.has(id)) nextTrashIds.add(id);
-    });
-
-    const isIosNativeApp = !zCoreBridge.isConnected && isCapacitorIosRuntime();
-
-    set((state) => ({
-      photos: updatedPhotos,
-      searchResults: state.searchResults.filter((r) => !movedSet.has(r.photo.id)),
-      selectedTrashIds: nextTrashIds,
-      quarantineMoving: false,
-      freeTrialUsed: true,
-      lastUndoBatch: isIosNativeApp
-        ? null
-        : {
-            fileNames: Array.from(movedSet),
-            actionLabel: '손보기 추천 항목 일괄 정리',
-            count: movedSet.size,
-            savedBytes,
-            timestamp: Date.now(),
-            demo: moveRes.demo,
-          },
-      lastQuarantineToast: isIosNativeApp
-        ? `🔒 사진 ${movedSet.size}장이 아이폰 『최근 삭제된 항목』에 30일간 안전 보관되었습니다. 복원은 아이폰 『사진 ➔ 최근 삭제된 항목(FaceID)』에서 가능합니다.`
-        : `🗑️ 사진 ${movedSet.size}장을 ${moveNote}`,
-    }));
+    set((state) =>
+      buildQuarantineMoveStatePatch({
+        state,
+        movedSet,
+        savedBytes,
+        demo: moveRes.demo,
+        actionLabel: '손보기 추천 항목 일괄 정리',
+        nonIosToast: `🗑️ 사진 ${movedSet.size}장을 ${moveNote}`,
+      })
+    );
     if (!zCoreBridge.isConnected) {
       void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
     }

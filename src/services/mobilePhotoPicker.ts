@@ -267,6 +267,43 @@ export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalS
  *   ➔ 기준 사진(first) 대비 10초 이내 촬영 & 화면비 일치 & dHash 해밍거리 <= 8 & 8x8 RGB 평균오차 <= 11.5 & 최대블록오차 <= 35
  * 로 엄격히 클러스터링하여, 다른 페이지 문서(`(1)` vs `(2)`)나 다른 구도/색상 이미지가 한 세트로 섞이는 현상을 100% 차단합니다.
  */
+/**
+ * 사진 1장의 중복 그룹 외부 고유 광학 분류(흔들림·스크린샷·메모)를 판별하는 단일 SSOT 헬퍼.
+ * - 흔들린 사진 2장(또는 스크린샷 2장)이 중복·연사 세트로 묶였다가 1장이 정리되어 단독 1장만 남았을 때,
+ *   베스트 컷 지정으로 지워졌던 원래의 'blurry' / 'screenshot' 분류를 100% 유실 없이 복원합니다.
+ */
+export function resolveIntrinsicPhotoTrashCategory(p: PhotoItem): TrashCategory | undefined {
+  if (p.intrinsicTrashCategory && p.intrinsicTrashCategory !== 'duplicate') {
+    return p.intrinsicTrashCategory;
+  }
+  if (p.trashCategory && p.trashCategory !== 'duplicate') {
+    return p.trashCategory;
+  }
+  const tags = p.tags || [];
+  const kws = p.keywordsKo || [];
+  if (
+    p.isVaultDocument ||
+    tags.some((t) => t.includes('영수증') || t.includes('메모'))
+  ) {
+    return 'memo';
+  }
+  if (
+    tags.some((t) => t.includes('스크린샷') || t.includes('캡처')) ||
+    kws.includes('스크린샷') ||
+    kws.includes('화면캡처')
+  ) {
+    return 'screenshot';
+  }
+  if (
+    tags.some((t) => t.includes('흔들림') || t.includes('초점이탈')) ||
+    kws.includes('흔들린사진') ||
+    (typeof p.opticalSharpness === 'number' && p.opticalSharpness > 0 && p.opticalSharpness < 3200)
+  ) {
+    return 'blurry';
+  }
+  return undefined;
+}
+
 export function clusterPhotosIntoDuplicateGroups(
   photos: PhotoItem[]
 ): { updatedPhotos: PhotoItem[]; duplicateGroups: DuplicateGroup[] } {
@@ -395,16 +432,27 @@ export function clusterPhotosIntoDuplicateGroups(
     if (p.quarantined) {
       return p;
     }
+    const intrinsic = resolveIntrinsicPhotoTrashCategory(p);
     const role = groupRoleByPhotoId.get(p.id);
     if (!role) {
-      if (p.trashCategory === 'duplicate') {
-        return { ...p, trashCategory: undefined, isBestInDuplicateGroup: false };
-      }
-      return p;
+      const strippedDupTags = (p.tags || []).filter(
+        (t) => !t.includes('연사') && !t.includes('사본') && !t.includes('원본보존') && !t.includes('원본1장')
+      );
+      return {
+        ...p,
+        intrinsicTrashCategory: intrinsic,
+        duplicateGroupId: undefined,
+        isBestInDuplicateGroup: false,
+        trashCategory: intrinsic,
+        trashConfidence: intrinsic ? p.trashConfidence ?? 0.95 : undefined,
+        tags: strippedDupTags.length > 0 ? strippedDupTags : p.tags,
+      };
     }
     if (role.isBest) {
       return {
         ...p,
+        intrinsicTrashCategory: intrinsic,
+        duplicateGroupId: role.groupId,
         isBestInDuplicateGroup: true,
         trashCategory: undefined,
         trashConfidence: undefined,
@@ -416,6 +464,8 @@ export function clusterPhotosIntoDuplicateGroups(
     }
     return {
       ...p,
+      intrinsicTrashCategory: intrinsic,
+      duplicateGroupId: role.groupId,
       isBestInDuplicateGroup: false,
       trashCategory: 'duplicate' as TrashCategory,
       trashConfidence: 0.98,
@@ -572,6 +622,7 @@ export async function analyzeMobilePickedPhotoFiles(
           isVaultDocument: isReceiptOrDoc,
           vaultCategoryLabel: isReceiptOrDoc ? '스마트폰 촬영 영수증·서류' : undefined,
           trashCategory,
+          intrinsicTrashCategory: trashCategory,
           trashConfidence: trashCategory ? 0.95 : undefined,
           opticalSharpness: sharpness,
           dhash,
@@ -734,6 +785,7 @@ export async function auditRealPcPhotosAndCluster(
         (meta.whitePct >= 74 && /\.png$/i.test(p.name));
       if (isPhoneOrDesktopUiCapture) {
         p.trashCategory = 'screenshot';
+        p.intrinsicTrashCategory = 'screenshot';
         p.trashConfidence = 0.96;
         if (!p.tags.some((t) => t.includes('스크린샷'))) {
           p.tags = ['#스크린샷·화면캡처', ...p.tags];
@@ -744,6 +796,7 @@ export async function auditRealPcPhotosAndCluster(
         !(meta.aspect >= 1.95 && meta.aspect <= 2.35)
       ) {
         p.trashCategory = 'blurry';
+        p.intrinsicTrashCategory = 'blurry';
         p.trashConfidence = 0.95;
         if (!p.tags.includes('#초점이탈·심한흔들림')) {
           p.tags = ['#초점이탈·심한흔들림', ...p.tags];
@@ -920,6 +973,7 @@ export async function analyzeNativeGalleryPhotoBatch(
           isVaultDocument: isReceiptOrDoc,
           vaultCategoryLabel: isReceiptOrDoc ? '스마트폰 촬영 영수증·서류' : undefined,
           trashCategory,
+          intrinsicTrashCategory: trashCategory,
           trashConfidence: trashCategory ? 0.95 : undefined,
           opticalSharpness: sharpness,
           dhash,
