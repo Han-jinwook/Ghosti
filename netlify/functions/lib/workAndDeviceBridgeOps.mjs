@@ -26,17 +26,15 @@ function sha256Hex(text) {
 
 async function ensureVaultBuckets(supabaseUrl, serviceKey) {
   if (bucketsEnsured) return;
-  for (const b of [WORK_BUCKET, DEVICE_BUCKET]) {
-    try {
-      await fetch(`${supabaseUrl}/storage/v1/bucket`, {
+  await Promise.all(
+    [WORK_BUCKET, DEVICE_BUCKET].map((b) =>
+      fetch(`${supabaseUrl}/storage/v1/bucket`, {
         method: 'POST',
         headers: srvHeaders(serviceKey, { 'Content-Type': 'application/json' }),
         body: JSON.stringify({ id: b, name: b, public: false }),
-      });
-    } catch {
-      /* already exists */
-    }
-  }
+      }).catch(() => {})
+    )
+  );
   bucketsEnsured = true;
 }
 
@@ -691,21 +689,33 @@ export async function handleAuthedWorkAndDeviceAction({
       }),
     });
 
-    const listRes = await fetch(
-      `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&order=created_at.asc`,
-      { headers: srvHeaders(serviceKey) }
-    );
-    const devices = listRes.ok ? await listRes.json().catch(() => []) : [];
+    const [listRes, codeRes, entRaw] = await Promise.all([
+      fetch(
+        `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&order=created_at.asc`,
+        { headers: srvHeaders(serviceKey) }
+      ),
+      deviceKind === 'pc_master'
+        ? fetch(
+            `${supabaseUrl}/rest/v1/ghosti_pairing_codes?owner_email=eq.${encodeURIComponent(email)}&consumed_at=is.null&order=expires_at.desc&limit=1`,
+            { headers: srvHeaders(serviceKey) }
+          )
+        : Promise.resolve(null),
+      readStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/entitlement_v1.json`,
+        { planId: 'free_trial', trialOptInStartedAt: null, activatedAt: null }
+      ),
+    ]);
+
+    const devices = listRes && listRes.ok ? await listRes.json().catch(() => []) : [];
     const safeDevices = Array.isArray(devices) ? devices : [];
 
     // 6자리 페어링 코드 발급/유지 (PC 마스터일 때)
     let pairingCode = null;
     if (deviceKind === 'pc_master') {
-      const codeRes = await fetch(
-        `${supabaseUrl}/rest/v1/ghosti_pairing_codes?owner_email=eq.${encodeURIComponent(email)}&consumed_at=is.null&order=expires_at.desc&limit=1`,
-        { headers: srvHeaders(serviceKey) }
-      );
-      const codeRows = codeRes.ok ? await codeRes.json().catch(() => []) : [];
+      const codeRows = codeRes && codeRes.ok ? await codeRes.json().catch(() => []) : [];
       if (
         Array.isArray(codeRows) &&
         codeRows[0]?.code &&
@@ -731,14 +741,6 @@ export async function handleAuthedWorkAndDeviceAction({
         if (ins.ok) pairingCode = newCode;
       }
     }
-
-    const entRaw = await readStorageJson(
-      supabaseUrl,
-      serviceKey,
-      DEVICE_BUCKET,
-      `${emailHash}/entitlement_v1.json`,
-      { planId: 'free_trial', trialOptInStartedAt: null, activatedAt: null }
-    );
 
     // 명시적 동의(explicitTrialOptIn) 시 30일 무료체험(D-30) 즉시 개시
     if (body.explicitTrialOptIn && !entRaw.trialOptInStartedAt) {
@@ -783,56 +785,60 @@ export async function handleAuthedWorkAndDeviceAction({
     const rawDevId = String(body.deviceId || '').trim();
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawDevId);
     const mobileDevId = isUuid ? rawDevId : crypto.randomUUID();
-    await fetch(`${supabaseUrl}/rest/v1/ghosti_devices?on_conflict=device_id`, {
-      method: 'POST',
-      headers: srvHeaders(serviceKey, {
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates,return=minimal',
+    const [, , entRaw] = await Promise.all([
+      fetch(`${supabaseUrl}/rest/v1/ghosti_devices?on_conflict=device_id`, {
+        method: 'POST',
+        headers: srvHeaders(serviceKey, {
+          'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates,return=minimal',
+        }),
+        body: JSON.stringify({
+          device_id: mobileDevId,
+          owner_email: email,
+          device_kind: 'mobile',
+          display_name: String(body.displayName || '내 스마트폰').slice(0, 48),
+          platform: ['android', 'ios', 'web'].includes(String(body.platform))
+            ? String(body.platform)
+            : 'android',
+          last_seen_at: new Date().toISOString(),
+          revoked_at: null,
+        }),
       }),
-      body: JSON.stringify({
-        device_id: mobileDevId,
-        owner_email: email,
-        device_kind: 'mobile',
-        display_name: String(body.displayName || '내 스마트폰').slice(0, 48),
-        platform: ['android', 'ios', 'web'].includes(String(body.platform))
-          ? String(body.platform)
-          : 'android',
-        last_seen_at: new Date().toISOString(),
-        revoked_at: null,
+      fetch(`${supabaseUrl}/rest/v1/ghosti_pairing_codes?code=eq.${cleanCode}`, {
+        method: 'PATCH',
+        headers: srvHeaders(serviceKey, { 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          consumed_at: new Date().toISOString(),
+          consumed_by_device_id: mobileDevId,
+        }),
       }),
-    });
-
-    await fetch(`${supabaseUrl}/rest/v1/ghosti_pairing_codes?code=eq.${cleanCode}`, {
-      method: 'PATCH',
-      headers: srvHeaders(serviceKey, { 'Content-Type': 'application/json' }),
-      body: JSON.stringify({
-        consumed_at: new Date().toISOString(),
-        consumed_by_device_id: mobileDevId,
-      }),
-    });
-
-    const entRaw = await readStorageJson(
-      supabaseUrl,
-      serviceKey,
-      DEVICE_BUCKET,
-      `${emailHash}/entitlement_v1.json`,
-      { planId: 'free_trial', trialOptInStartedAt: null, activatedAt: null }
-    );
-    if (!entRaw.trialOptInStartedAt) {
-      entRaw.trialOptInStartedAt = new Date().toISOString();
-      await writeStorageJson(
+      readStorageJson(
         supabaseUrl,
         serviceKey,
         DEVICE_BUCKET,
         `${emailHash}/entitlement_v1.json`,
-        entRaw
-      );
-    }
+        { planId: 'free_trial', trialOptInStartedAt: null, activatedAt: null }
+      ),
+    ]);
 
-    const listRes = await fetch(
-      `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&order=created_at.asc`,
-      { headers: srvHeaders(serviceKey) }
-    );
+    const [, listRes] = await Promise.all([
+      !entRaw.trialOptInStartedAt
+        ? (() => {
+            entRaw.trialOptInStartedAt = new Date().toISOString();
+            return writeStorageJson(
+              supabaseUrl,
+              serviceKey,
+              DEVICE_BUCKET,
+              `${emailHash}/entitlement_v1.json`,
+              entRaw
+            );
+          })()
+        : Promise.resolve(true),
+      fetch(
+        `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&order=created_at.asc`,
+        { headers: srvHeaders(serviceKey) }
+      ),
+    ]);
     const devices = listRes.ok ? await listRes.json().catch(() => []) : [];
     const safeDevices = Array.isArray(devices) ? devices : [];
     return {

@@ -24,6 +24,8 @@ const HUB_CLIENT_SECRET = process.env.MERLIN_HUB_CLIENT_SECRET || 'merlin-family
 const TOKEN_TTL_SEC = 60 * 60;
 const PHOTO_SEED_TTL_DAYS = 14;
 const PHOTO_SEED_TTL_MS = PHOTO_SEED_TTL_DAYS * 24 * 60 * 60 * 1000;
+const HUB_VERIFY_CACHE_TTL_MS = 45 * 1000;
+const verifiedHubUserCache = new Map();
 let lastAutoPurgeAtMs = 0;
 
 async function inspectOrPurgePhotoSeedBuffer(supabaseUrl, serviceKey, shouldPurge) {
@@ -256,23 +258,36 @@ export default async (req) => {
   const hubToken = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
   if (!hubToken) return json(401, { ok: false, reason: '허브 토큰 없음' });
 
-  // ① 허브 토큰 서버 검증 (브라우저가 보낸 userId/email은 신뢰하지 않음)
-  let hubUser;
-  try {
-    const r = await fetch(`${HUB_URL}/api/auth/me?t=${Date.now()}`, {
-      headers: {
-        Authorization: `Bearer ${hubToken}`,
-        'X-Client-Id': HUB_CLIENT_ID,
-        'X-Client-Secret': HUB_CLIENT_SECRET,
-      },
-    });
-    const data = await r.json().catch(() => ({}));
-    if (!r.ok || !data?.success || !data?.user) {
-      return json(401, { ok: false, reason: `허브 토큰 검증 실패 (HTTP ${r.status})` });
+  // ① 허브 토큰 서버 검증 (브라우저가 보낸 userId/email은 신뢰하지 않으며, 동일 서버리스 인스턴스 내 45초 단기 검증 캐시로 외부 왕복 지연을 최소화)
+  const tokenCacheKey = crypto.createHash('sha256').update(hubToken).digest('hex');
+  const cachedVerify = verifiedHubUserCache.get(tokenCacheKey);
+  let hubUser =
+    cachedVerify && cachedVerify.expiresAtMs > Date.now() ? cachedVerify.user : null;
+  if (!hubUser) {
+    try {
+      const r = await fetch(`${HUB_URL}/api/auth/me?t=${Date.now()}`, {
+        headers: {
+          Authorization: `Bearer ${hubToken}`,
+          'X-Client-Id': HUB_CLIENT_ID,
+          'X-Client-Secret': HUB_CLIENT_SECRET,
+        },
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok || !data?.success || !data?.user) {
+        verifiedHubUserCache.delete(tokenCacheKey);
+        return json(401, { ok: false, reason: `허브 토큰 검증 실패 (HTTP ${r.status})` });
+      }
+      hubUser = data.user;
+      if (verifiedHubUserCache.size > 200) {
+        verifiedHubUserCache.clear();
+      }
+      verifiedHubUserCache.set(tokenCacheKey, {
+        user: hubUser,
+        expiresAtMs: Date.now() + HUB_VERIFY_CACHE_TTL_MS,
+      });
+    } catch (e) {
+      return json(502, { ok: false, reason: `허브 연결 실패: ${e?.message || e}` });
     }
-    hubUser = data.user;
-  } catch (e) {
-    return json(502, { ok: false, reason: `허브 연결 실패: ${e?.message || e}` });
   }
 
   const userId = String(hubUser.userId || hubUser.id || '').trim();

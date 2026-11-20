@@ -21,6 +21,10 @@ import { zCoreBridge } from '../services/zCoreBridge';
 import { syncHubUserToLocalSupabase, clearGhostiSupabaseSession } from '../services/supabaseClient';
 import { clearCachedSharedRoomTokens } from '../services/sharedPhotoRoomSupabase';
 import {
+  loadCachedDeviceIntegrationSnapshot,
+  loadCachedSyncedClips,
+} from '../services/deviceIntegrationService';
+import {
   clearStoredInviteSession,
   readActiveInviteToken,
 } from '../services/shareInviteDeepLinkBridge';
@@ -160,8 +164,24 @@ const GhostiHubGlobalModals: React.FC = () => {
           restoredMobilePaired = false;
         }
       }
+      const cachedDevSnap = loadCachedDeviceIntegrationSnapshot(cleanUserEmail);
       useSaySeeStore.setState((state) => ({
-        pcAgentPairedMobile: restoredMobilePaired,
+        pcAgentPairedMobile:
+          restoredMobilePaired ||
+          Boolean(cachedDevSnap?.devices?.some((d) => d.device_kind === 'mobile')) ||
+          (cachedDevSnap?.devices?.length || 0) >= 2,
+        connectedDevices: didSwitchAccountDirectly
+          ? cachedDevSnap?.devices || []
+          : cachedDevSnap?.devices?.length
+          ? cachedDevSnap.devices
+          : state.connectedDevices,
+        devicePairingCode6: didSwitchAccountDirectly
+          ? cachedDevSnap?.pairingCode ?? null
+          : cachedDevSnap?.pairingCode ?? state.devicePairingCode6,
+        deviceEntitlement: didSwitchAccountDirectly
+          ? cachedDevSnap?.entitlement ?? null
+          : cachedDevSnap?.entitlement ?? state.deviceEntitlement,
+        syncedClipboardItems: loadCachedSyncedClips(cleanUserEmail),
         ...(didSwitchAccountDirectly
           ? {
               sharedRoomAddedPhotos: [],
@@ -233,6 +253,10 @@ const GhostiHubGlobalModals: React.FC = () => {
           state.activeLoungeType === 'student';
         return {
           pcAgentPairedMobile: false,
+          connectedDevices: [],
+          devicePairingCode6: null,
+          deviceEntitlement: null,
+          syncedClipboardItems: [],
           showSharedPhotoUploadModal: false,
           isInvitedMemberSession: false,
           ...(wasLoggedInRef.current && !hasUrlInviteToken

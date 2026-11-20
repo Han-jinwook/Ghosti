@@ -1,8 +1,9 @@
-import type { RealtimeChannel } from '@supabase/supabase-js';
+import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import type { LocalDocumentFile, PhotoItem, PrivateSyncStrategy } from '../types/saysee';
 import {
   callGhostiServerBridge,
   ensureGhostiAuthedSupabaseClient,
+  getGhostiAuthedSupabase,
   hasAuthenticatedHubAccountSession,
   supabase,
 } from './supabaseClient';
@@ -70,6 +71,98 @@ export interface RemoteMonitorCastPacket {
 const THIS_DEVICE_ID_KEY = 'ghosti_this_device_uuid_v1';
 const SEEN_CLIPS_STORAGE_KEY = 'ghosti_seen_clip_hashes_v1';
 const CACHED_RECEIVED_CLIPS_PREFIX = 'ghosti_received_e2ee_clips_v2::';
+const CACHED_DEVICE_SNAPSHOT_PREFIX = 'ghosti_device_integration_cache_v1::';
+const DEVICE_SYNC_BROADCAST_CHANNEL = 'ghosti_device_sync_bus_v1';
+
+export interface CachedDeviceIntegrationSnapshot {
+  devices: GhostiConnectedDeviceDto[];
+  pairingCode: string | null;
+  entitlement: GhostiDeviceEntitlementView | null;
+  updatedAt: number;
+}
+
+function resolveScopedDeviceSnapshotKey(explicitEmail?: string): string | null {
+  if (typeof window === 'undefined') return null;
+  if (!explicitEmail && !hasAuthenticatedHubAccountSession()) return null;
+  try {
+    const email = (
+      explicitEmail ||
+      localStorage.getItem('ghosti_hub_user_email') ||
+      localStorage.getItem('userEmail') ||
+      ''
+    )
+      .trim()
+      .toLowerCase();
+    return email ? `${CACHED_DEVICE_SNAPSHOT_PREFIX}${email}` : null;
+  } catch {
+    return null;
+  }
+}
+
+export function loadCachedDeviceIntegrationSnapshot(
+  explicitEmail?: string
+): CachedDeviceIntegrationSnapshot | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const key = resolveScopedDeviceSnapshotKey(explicitEmail);
+    if (!key) return null;
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CachedDeviceIntegrationSnapshot>;
+    if (!parsed || typeof parsed !== 'object') return null;
+    return {
+      devices: Array.isArray(parsed.devices) ? parsed.devices : [],
+      pairingCode: typeof parsed.pairingCode === 'string' ? parsed.pairingCode : null,
+      entitlement: parsed.entitlement ?? null,
+      updatedAt: Number(parsed.updatedAt || 0),
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveCachedDeviceIntegrationSnapshot(
+  patch: Partial<CachedDeviceIntegrationSnapshot>,
+  explicitEmail?: string
+): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const key = resolveScopedDeviceSnapshotKey(explicitEmail);
+    if (!key) return;
+    const prev = loadCachedDeviceIntegrationSnapshot(explicitEmail);
+    const next: CachedDeviceIntegrationSnapshot = {
+      devices: patch.devices !== undefined ? patch.devices : prev?.devices || [],
+      pairingCode: patch.pairingCode !== undefined ? patch.pairingCode : prev?.pairingCode ?? null,
+      entitlement: patch.entitlement !== undefined ? patch.entitlement : prev?.entitlement ?? null,
+      updatedAt: Date.now(),
+    };
+    localStorage.setItem(key, JSON.stringify(next));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function buildOptimisticTrialEntitlement(
+  prev: GhostiDeviceEntitlementView | null | undefined,
+  activeDeviceCount: number
+): GhostiDeviceEntitlementView {
+  const nowIso = new Date().toISOString();
+  const isPaidUnlimited = Boolean(prev?.isPaidUnlimited);
+  const trialDaysLeft =
+    prev?.trialActive && typeof prev.trialDaysLeft === 'number' && prev.trialDaysLeft > 0
+      ? prev.trialDaysLeft
+      : 30;
+  return {
+    planId: prev?.planId || 'free_trial',
+    trialOptInStartedAt: prev?.trialOptInStartedAt || nowIso,
+    activatedAt: prev?.activatedAt ?? null,
+    activeDeviceCount: Math.max(1, activeDeviceCount),
+    trialActive: !isPaidUnlimited,
+    trialDaysLeft: isPaidUnlimited ? 0 : trialDaysLeft,
+    isPaidUnlimited,
+    unlimitedBindingUnlocked: true,
+  };
+}
 
 const seenClipHashes = new Set<string>();
 const uploadedMirrorHashes = new Set<string>();
@@ -359,12 +452,26 @@ export async function syncDeviceHeartbeatAndList(opts?: {
       entitlement: null,
     };
   }
+  const safeDevices = Array.isArray(res.devices) ? res.devices : [];
+  const safePairingCode = res.pairingCode || null;
+  const safeEntitlement = res.entitlement || null;
+  saveCachedDeviceIntegrationSnapshot({
+    devices: safeDevices,
+    ...(safePairingCode ? { pairingCode: safePairingCode } : {}),
+    entitlement: safeEntitlement,
+  });
+  if (opts?.explicitTrialOptIn || safeDevices.length >= 2) {
+    broadcastDeviceIntegrationStateUpdate({
+      devices: safeDevices,
+      entitlement: safeEntitlement,
+    });
+  }
   return {
     ok: true,
     thisDeviceId: res.deviceId || ident.deviceId,
-    devices: Array.isArray(res.devices) ? res.devices : [],
-    pairingCode: res.pairingCode || null,
-    entitlement: res.entitlement || null,
+    devices: safeDevices,
+    pairingCode: safePairingCode,
+    entitlement: safeEntitlement,
   };
 }
 
@@ -391,11 +498,23 @@ export async function consumeDevicePairingCode6(code: string): Promise<{
     displayName: ident.displayName,
     platform: ident.platform,
   });
+  const safeDevices = Array.isArray(res.devices) ? res.devices : [];
+  const safeEntitlement = res.entitlement || null;
+  if (res.ok) {
+    saveCachedDeviceIntegrationSnapshot({
+      devices: safeDevices,
+      entitlement: safeEntitlement,
+    });
+    broadcastDeviceIntegrationStateUpdate({
+      devices: safeDevices,
+      entitlement: safeEntitlement,
+    });
+  }
   return {
     ok: Boolean(res.ok),
     reason: res.reason,
-    devices: Array.isArray(res.devices) ? res.devices : [],
-    entitlement: res.entitlement || null,
+    devices: safeDevices,
+    entitlement: safeEntitlement,
   };
 }
 
@@ -407,15 +526,60 @@ export async function activateDevicePlanPersistent(
     'device_activate_plan',
     { planId }
   );
-  return res.ok && res.entitlement ? res.entitlement : null;
+  if (res.ok && res.entitlement) {
+    saveCachedDeviceIntegrationSnapshot({ entitlement: res.entitlement });
+    broadcastDeviceIntegrationStateUpdate({ entitlement: res.entitlement });
+    return res.entitlement;
+  }
+  return null;
 }
 
 // ============================================================================
-// 실시간 기기 페어링 채널 (ghosti:pair:<emailHash>) + 클립보드·모니터캐스트·공간이동
+// 실시간 기기 페어링 채널 (ghosti:pair:<emailHash>) + 클립보드·모니터캐스트·공간이동·기기상태 즉시전파
 // ============================================================================
 let activePairChannel: RealtimeChannel | null = null;
+let activePairClient: SupabaseClient | null = null;
+let activePairSubscribed = false;
 let activePairTopic = '';
 let activeClipboardPollTimer: number | null = null;
+let pendingDeviceStatePacket: {
+  devices?: GhostiConnectedDeviceDto[];
+  entitlement?: GhostiDeviceEntitlementView | null;
+  senderDeviceId: string;
+  updatedAt: number;
+} | null = null;
+
+export function broadcastDeviceIntegrationStateUpdate(payload: {
+  devices?: GhostiConnectedDeviceDto[];
+  entitlement?: GhostiDeviceEntitlementView | null;
+}): void {
+  const ident = getThisDeviceIdentity();
+  const packet = {
+    devices: payload.devices,
+    entitlement: payload.entitlement,
+    senderDeviceId: ident.deviceId,
+    updatedAt: Date.now(),
+  };
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      const bc = new BroadcastChannel(DEVICE_SYNC_BROADCAST_CHANNEL);
+      bc.postMessage({ type: 'DEVICE_STATE_UPDATED', payload: packet });
+      bc.close();
+    }
+  } catch {
+    /* ignore */
+  }
+  if (activePairChannel && activePairSubscribed) {
+    pendingDeviceStatePacket = null;
+    void activePairChannel.send({
+      type: 'broadcast',
+      event: 'DEVICE_STATE_UPDATED',
+      payload: packet,
+    });
+  } else {
+    pendingDeviceStatePacket = packet;
+  }
+}
 
 export async function pushCrossDeviceClipboardText(opts: {
   text: string;
@@ -818,15 +982,27 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
   const ident = getThisDeviceIdentity();
   const normEmail = (opts.email || '').trim().toLowerCase();
 
+  let localBus: BroadcastChannel | null = null;
+
   const cleanup = () => {
     disposed = true;
+    if (localBus) {
+      try {
+        localBus.close();
+      } catch {
+        /* ignore */
+      }
+      localBus = null;
+    }
     if (activeClipboardPollTimer !== null) {
       window.clearInterval(activeClipboardPollTimer);
       activeClipboardPollTimer = null;
     }
-    if (activePairChannel && supabase) {
-      void supabase.removeChannel(activePairChannel);
+    if (activePairChannel && (activePairClient || supabase)) {
+      void (activePairClient || supabase)?.removeChannel(activePairChannel);
       activePairChannel = null;
+      activePairClient = null;
+      activePairSubscribed = false;
       activePairTopic = '';
     }
   };
@@ -836,103 +1012,145 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     return cleanup;
   }
 
-  const boot = async () => {
-    loadSeenHashesOnce();
-
-    // URL에 ?pairCode=XXXXXX가 있으면 자동 페어링 소비 처리
-    if (typeof window !== 'undefined') {
-      const params = new URLSearchParams(window.location.search);
-      const urlPairCode = (params.get('pairCode') || '').replace(/\D/g, '').slice(0, 6);
-      if (urlPairCode.length === 6) {
-        await consumeDevicePairingCode6(urlPairCode);
-        params.delete('pairCode');
-        const nextQs = params.toString();
-        const cleanUrl = `${window.location.pathname}${nextQs ? `?${nextQs}` : ''}${window.location.hash}`;
-        window.history.replaceState({}, '', cleanUrl);
-      }
-    }
-
-    const hb = await syncDeviceHeartbeatAndList();
-    if (!disposed && hb.ok && opts.onDevicesUpdated) {
-      opts.onDevicesUpdated({
-        devices: hb.devices,
-        pairingCode: hb.pairingCode,
-        entitlement: hb.entitlement,
-      });
-    }
-
-    // 시작 즉시 24시간 지연 E2EE 클립보드 우체통 수신
-    const delayed = await pullDelayedE2eeClipboardMailbox({
-      email: normEmail,
-      userId: opts.userId,
-      injectToOsClipboard: true,
+  // 0.00ms 계정 격리 로컬 캐시 즉시 복원 (새로고침·탭 이동 시 2초 대기 없이 D-30 및 연결 기기 상태 즉시 표시)
+  const cachedSnap = loadCachedDeviceIntegrationSnapshot(normEmail);
+  if (cachedSnap && opts.onDevicesUpdated) {
+    opts.onDevicesUpdated({
+      devices: cachedSnap.devices,
+      pairingCode: cachedSnap.pairingCode,
+      entitlement: cachedSnap.entitlement,
     });
-    if (!disposed && delayed[0] && delayed[0].senderDeviceId !== ident.deviceId) {
-      opts.onIncomingClip(delayed[0]);
-    }
+  }
 
+  try {
+    if (typeof BroadcastChannel !== 'undefined') {
+      localBus = new BroadcastChannel(DEVICE_SYNC_BROADCAST_CHANNEL);
+      localBus.onmessage = (ev) => {
+        if (disposed || !opts.onDevicesUpdated) return;
+        const msg = ev.data as {
+          type?: string;
+          payload?: {
+            devices?: GhostiConnectedDeviceDto[];
+            entitlement?: GhostiDeviceEntitlementView | null;
+          };
+        };
+        if (msg?.type === 'DEVICE_STATE_UPDATED' && msg.payload) {
+          saveCachedDeviceIntegrationSnapshot(
+            {
+              ...(msg.payload.devices ? { devices: msg.payload.devices } : {}),
+              ...(msg.payload.entitlement !== undefined
+                ? { entitlement: msg.payload.entitlement }
+                : {}),
+            },
+            normEmail
+          );
+          opts.onDevicesUpdated({
+            devices: msg.payload.devices || loadCachedDeviceIntegrationSnapshot(normEmail)?.devices || [],
+            pairingCode: loadCachedDeviceIntegrationSnapshot(normEmail)?.pairingCode ?? null,
+            entitlement:
+              msg.payload.entitlement !== undefined
+                ? msg.payload.entitlement
+                : loadCachedDeviceIntegrationSnapshot(normEmail)?.entitlement ?? null,
+          });
+        }
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+
+  const setupRealtimeChannel = async () => {
     const authedOk = await ensureGhostiAuthedSupabaseClient();
-    if (!authedOk || disposed || !supabase) return;
+    const sbClient = getGhostiAuthedSupabase() || supabase;
+    if (!authedOk || disposed || !sbClient) return;
 
     const emailHash = (await sha256HexBrowser(normEmail)).slice(0, 24);
     const topic = `ghosti:pair:${emailHash}`;
-    if (activePairChannel && activePairTopic === topic) {
+    if (activePairChannel && activePairTopic === topic && activePairClient === sbClient) {
       return;
     }
-    if (activePairChannel) {
-      void supabase.removeChannel(activePairChannel);
+    if (activePairChannel && (activePairClient || supabase)) {
+      void (activePairClient || supabase)?.removeChannel(activePairChannel);
       activePairChannel = null;
+      activePairClient = null;
+      activePairSubscribed = false;
     }
 
     activePairTopic = topic;
-    const ch = supabase.channel(topic, {
+    activePairClient = sbClient;
+    const ch = sbClient.channel(topic, {
       config: { broadcast: { self: false } },
     });
 
-    ch.on('broadcast', { event: 'E2EE_CLIPBOARD_PUSH' }, async ({ payload }) => {
-      if (disposed || !payload?.cipherB64 || !payload?.ivB64) return;
-      if (payload.senderDeviceId === ident.deviceId) return;
-      const hash = String(payload.clipHash || '');
-      if (hash && seenClipHashes.has(hash)) return;
-
-      const plain = await decryptClipboardE2ee(
-        String(payload.cipherB64),
-        String(payload.ivB64),
-        normEmail,
-        opts.userId
+    ch.on('broadcast', { event: 'DEVICE_STATE_UPDATED' }, ({ payload }) => {
+      if (disposed || !payload || !opts.onDevicesUpdated) return;
+      const incomingDevices = Array.isArray(payload.devices)
+        ? (payload.devices as GhostiConnectedDeviceDto[])
+        : undefined;
+      const incomingEnt =
+        payload.entitlement !== undefined
+          ? (payload.entitlement as GhostiDeviceEntitlementView | null)
+          : undefined;
+      const prevSnap = loadCachedDeviceIntegrationSnapshot(normEmail);
+      const mergedDevices = incomingDevices ?? prevSnap?.devices ?? [];
+      const mergedEnt = incomingEnt !== undefined ? incomingEnt : prevSnap?.entitlement ?? null;
+      saveCachedDeviceIntegrationSnapshot(
+        {
+          devices: mergedDevices,
+          entitlement: mergedEnt,
+        },
+        normEmail
       );
-      if (!plain) return;
-      rememberSeenClipHash(hash || (await sha256HexBrowser(plain)));
-
-      if (zCoreBridge.isConnected) {
-        try {
-          await fetch(getZCoreUrl('/__sync/clipboard'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ text: plain }),
-          });
-        } catch {
-          /* ignore */
-        }
-      } else if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
-        void navigator.clipboard.writeText(plain).catch(() => {});
-      }
-
-      const clipItem: GhostiSyncedClipItem = {
-        clipHash: hash || (await sha256HexBrowser(plain)),
-        text: plain,
-        senderDeviceId: String(payload.senderDeviceId || ''),
-        senderName: String(payload.senderName || '연결된 내 기기'),
-        createdAt: String(payload.createdAt || new Date().toISOString()),
-        encryptedE2ee: true,
-      };
-      const nextClips = [
-        clipItem,
-        ...loadCachedSyncedClips().filter((c) => c.clipHash !== clipItem.clipHash),
-      ].slice(0, 15);
-      saveCachedSyncedClips(nextClips);
-      opts.onIncomingClip(clipItem);
+      opts.onDevicesUpdated({
+        devices: mergedDevices,
+        pairingCode: prevSnap?.pairingCode ?? null,
+        entitlement: mergedEnt,
+      });
     })
+      .on('broadcast', { event: 'E2EE_CLIPBOARD_PUSH' }, async ({ payload }) => {
+        if (disposed || !payload?.cipherB64 || !payload?.ivB64) return;
+        if (payload.senderDeviceId === ident.deviceId) return;
+        const hash = String(payload.clipHash || '');
+        if (hash && seenClipHashes.has(hash)) return;
+
+        const plain = await decryptClipboardE2ee(
+          String(payload.cipherB64),
+          String(payload.ivB64),
+          normEmail,
+          opts.userId
+        );
+        if (!plain) return;
+        rememberSeenClipHash(hash || (await sha256HexBrowser(plain)));
+
+        if (zCoreBridge.isConnected) {
+          try {
+            await fetch(getZCoreUrl('/__sync/clipboard'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ text: plain }),
+            });
+          } catch {
+            /* ignore */
+          }
+        } else if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+          void navigator.clipboard.writeText(plain).catch(() => {});
+        }
+
+        const clipItem: GhostiSyncedClipItem = {
+          clipHash: hash || (await sha256HexBrowser(plain)),
+          text: plain,
+          senderDeviceId: String(payload.senderDeviceId || ''),
+          senderName: String(payload.senderName || '연결된 내 기기'),
+          createdAt: String(payload.createdAt || new Date().toISOString()),
+          encryptedE2ee: true,
+        };
+        const nextClips = [
+          clipItem,
+          ...loadCachedSyncedClips().filter((c) => c.clipHash !== clipItem.clipHash),
+        ].slice(0, 15);
+        saveCachedSyncedClips(nextClips);
+        opts.onIncomingClip(clipItem);
+      })
       .on('broadcast', { event: 'MONITOR_CAST_REMOTE' }, ({ payload }) => {
         if (disposed || !payload) return;
         const pkt = payload as RemoteMonitorCastPacket;
@@ -953,9 +1171,80 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
           /* ignore */
         }
       })
-      .subscribe();
+      .subscribe((status) => {
+        if (disposed) return;
+        activePairSubscribed = status === 'SUBSCRIBED';
+        if (activePairSubscribed && pendingDeviceStatePacket) {
+          const pkt = pendingDeviceStatePacket;
+          pendingDeviceStatePacket = null;
+          void ch.send({
+            type: 'broadcast',
+            event: 'DEVICE_STATE_UPDATED',
+            payload: pkt,
+          });
+        }
+      });
 
     activePairChannel = ch;
+  };
+
+  const boot = async () => {
+    loadSeenHashesOnce();
+
+    // 실시간 채널 구독을 직렬 대기 없이 0ms 즉시 병렬 착수하여 기기 간 상태 전파 지연을 원천 제거
+    const realtimePromise = setupRealtimeChannel();
+
+    // URL에 ?pairCode=XXXXXX가 있으면 낙관적 D-30 반영 + 소비 즉시 UI 및 상대 기기에 전파
+    let pairedViaUrl = false;
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      const urlPairCode = (params.get('pairCode') || '').replace(/\D/g, '').slice(0, 6);
+      if (urlPairCode.length === 6) {
+        params.delete('pairCode');
+        const nextQs = params.toString();
+        const cleanUrl = `${window.location.pathname}${nextQs ? `?${nextQs}` : ''}${window.location.hash}`;
+        window.history.replaceState({}, '', cleanUrl);
+        if (opts.onDevicesUpdated) {
+          const prev = loadCachedDeviceIntegrationSnapshot(normEmail);
+          opts.onDevicesUpdated({
+            devices: prev?.devices || [],
+            pairingCode: prev?.pairingCode ?? null,
+            entitlement: buildOptimisticTrialEntitlement(prev?.entitlement, 2),
+          });
+        }
+        const pairRes = await consumeDevicePairingCode6(urlPairCode);
+        if (!disposed && pairRes.ok && opts.onDevicesUpdated) {
+          pairedViaUrl = true;
+          opts.onDevicesUpdated({
+            devices: pairRes.devices,
+            pairingCode: loadCachedDeviceIntegrationSnapshot(normEmail)?.pairingCode ?? null,
+            entitlement: pairRes.entitlement,
+          });
+        }
+      }
+    }
+
+    const [hb, delayed] = await Promise.all([
+      pairedViaUrl ? Promise.resolve(null) : syncDeviceHeartbeatAndList(),
+      pullDelayedE2eeClipboardMailbox({
+        email: normEmail,
+        userId: opts.userId,
+        injectToOsClipboard: true,
+      }),
+      realtimePromise,
+    ]);
+
+    if (!disposed && hb?.ok && opts.onDevicesUpdated) {
+      opts.onDevicesUpdated({
+        devices: hb.devices,
+        pairingCode: hb.pairingCode,
+        entitlement: hb.entitlement,
+      });
+    }
+
+    if (!disposed && delayed[0] && delayed[0].senderDeviceId !== ident.deviceId) {
+      opts.onIncomingClip(delayed[0]);
+    }
 
     // PC에서 Z코어 연결 시: 2.5초 주기로 윈도우 OS 클립보드(Ctrl+C) 감지 -> 스마트폰·서브PC로 즉시 암호화 전송
     if (activeClipboardPollTimer !== null) {

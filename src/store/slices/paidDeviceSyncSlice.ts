@@ -131,10 +131,14 @@ import {
 } from './storeSharedRefs';
 import {
   activateDevicePlanPersistent,
+  broadcastDeviceIntegrationStateUpdate,
+  buildOptimisticTrialEntitlement,
   consumeDevicePairingCode6,
   executeRealDeviceSyncNow,
+  loadCachedDeviceIntegrationSnapshot,
   loadCachedSyncedClips,
   pushCrossDeviceClipboardText,
+  saveCachedDeviceIntegrationSnapshot,
   syncDeviceHeartbeatAndList,
   type GhostiConnectedDeviceDto,
   type GhostiDeviceEntitlementView,
@@ -194,9 +198,9 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
   telemetry: null,
   merlinAuth: loadMerlinAuth(),
   syncState: loadSyncState(0, 0),
-  connectedDevices: [],
-  devicePairingCode6: null,
-  deviceEntitlement: null,
+  connectedDevices: loadCachedDeviceIntegrationSnapshot()?.devices || [],
+  devicePairingCode6: loadCachedDeviceIntegrationSnapshot()?.pairingCode || null,
+  deviceEntitlement: loadCachedDeviceIntegrationSnapshot()?.entitlement || null,
   syncedClipboardItems: loadCachedSyncedClips(),
   showProModal:
     typeof window !== 'undefined' &&
@@ -498,8 +502,35 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
   },
 
   refreshDeviceIntegrationState: async (explicitTrialOptIn?: boolean) => {
+    const prevEntitlement = get().deviceEntitlement;
+    if (explicitTrialOptIn) {
+      // 체험 동의 클릭 즉시 0.00ms 낙관적 상태 전환 + 같은 계정 다른 탭·기기로 즉시 전파 (서버 왕복 ~2초 대기 제거)
+      const optimisticEnt = buildOptimisticTrialEntitlement(
+        prevEntitlement,
+        Math.max(2, get().connectedDevices.length)
+      );
+      saveCachedDeviceIntegrationSnapshot({ entitlement: optimisticEnt });
+      broadcastDeviceIntegrationStateUpdate({
+        devices: get().connectedDevices,
+        entitlement: optimisticEnt,
+      });
+      set({
+        deviceEntitlement: optimisticEnt,
+        lastQuarantineToast: `🎁 [30일 무제한 무료체험 시작 (D-${optimisticEnt.trialDaysLeft})] 카드 등록·자동 결제 0%로 내 모든 PC·스마트폰이 직결되었습니다!`,
+      });
+    }
     const hb = await syncDeviceHeartbeatAndList({ explicitTrialOptIn });
-    if (!hb.ok) return;
+    if (!hb.ok) {
+      if (explicitTrialOptIn) {
+        saveCachedDeviceIntegrationSnapshot({ entitlement: prevEntitlement });
+        set({
+          deviceEntitlement: prevEntitlement,
+          lastQuarantineToast:
+            '⚠️ 일시적인 네트워크 지연으로 체험 시작을 저장하지 못했습니다. 다시 한 번 눌러 주세요.',
+        });
+      }
+      return;
+    }
     const hasMobilePeer = hb.devices.some((d) => d.device_kind === 'mobile');
     const hasMultiDevices = hb.devices.length >= 2;
     set((state) => ({
@@ -507,18 +538,22 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
       devicePairingCode6: hb.pairingCode ?? state.devicePairingCode6,
       deviceEntitlement: hb.entitlement ?? state.deviceEntitlement,
       pcAgentPairedMobile: hasMobilePeer || hasMultiDevices || state.pcAgentPairedMobile,
-      ...(explicitTrialOptIn && hb.entitlement?.trialActive
-        ? {
-            lastQuarantineToast: `🎁 [30일 무제한 무료체험 시작 (D-${hb.entitlement.trialDaysLeft})] 카드 등록·자동 결제 0%로 내 모든 PC·스마트폰이 직결되었습니다!`,
-          }
-        : {}),
     }));
   },
 
   pairWithSixDigitCode: async (code: string) => {
+    const prevEntitlement = get().deviceEntitlement;
+    const optimisticEnt = buildOptimisticTrialEntitlement(
+      prevEntitlement,
+      Math.max(2, get().connectedDevices.length)
+    );
+    set({
+      deviceEntitlement: optimisticEnt,
+    });
     const res = await consumeDevicePairingCode6(code);
     if (!res.ok) {
       set({
+        deviceEntitlement: prevEntitlement,
         lastQuarantineToast:
           res.reason === 'AUTH_REQUIRED'
             ? '🔑 먼저 PC와 동일한 이메일로 1초 로그인해 주세요!'
