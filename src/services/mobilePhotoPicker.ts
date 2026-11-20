@@ -82,38 +82,69 @@ export function computeDhashHammingDistance(hashA?: string, hashB?: string): num
 }
 
 /**
- * 두 8x8 RGB 컬러 그리드(192바이트) 간의 평균 절대 색상·밝기 오차(0~255) 및 최대 블록 오차를 계산합니다.
- * - 서로 다른 문서 페이지(예: 2021-07-12 (1).png vs (2).png)나 배경색이 다른 이미지(예: 게시판 캡처 vs 민트색 포스터)가
- *   한 세트로 잘못 묶이는 현상을 원천 차단합니다.
+ * 두 8x8 RGB 컬러 그리드(192바이트) 간의 평균 오차, 상위 90% 블록 오차(p90BlockDiff · 테두리 3~6% 구도 이동 내성),
+ * 최대 블록 오차 및 중앙 6x6 핵심 피사체 영역 오차를 계산합니다.
+ * - 문서 페이지((1).png vs (2).png)나 제2의 인물이 새로 진입한 사진(p90 >= 30, centerMax >= 50)은 칼같이 분리하면서,
+ *   음식·인물·사물 연속 촬영 시 손 이동(3~6%)으로 테두리 몇 칸만 달라진 사진은 정확히 동일 세트로 묶어줍니다.
  */
 function computeRgbGridDifference(
   gridA?: Uint8Array,
   gridB?: Uint8Array
-): { meanDiff: number; maxBlockDiff: number } {
+): {
+  meanDiff: number;
+  p90BlockDiff: number;
+  maxBlockDiff: number;
+  centerMeanDiff: number;
+  centerMaxBlockDiff: number;
+} {
   if (!gridA || !gridB || gridA.length !== 192 || gridB.length !== 192) {
-    return { meanDiff: 255, maxBlockDiff: 255 };
+    return {
+      meanDiff: 255,
+      p90BlockDiff: 255,
+      maxBlockDiff: 255,
+      centerMeanDiff: 255,
+      centerMaxBlockDiff: 255,
+    };
   }
   let sum = 0;
   let maxBlock = 0;
-  for (let i = 0; i < 192; i += 3) {
+  let centerSum = 0;
+  let centerMax = 0;
+  const blockDiffs = new Float32Array(64);
+  for (let cell = 0; cell < 64; cell++) {
+    const i = cell * 3;
     const dr = Math.abs(gridA[i] - gridB[i]);
     const dg = Math.abs(gridA[i + 1] - gridB[i + 1]);
     const db = Math.abs(gridA[i + 2] - gridB[i + 2]);
     const blockDiff = (dr + dg + db) / 3;
+    blockDiffs[cell] = blockDiff;
     sum += dr + dg + db;
     if (blockDiff > maxBlock) maxBlock = blockDiff;
+
+    const cy = (cell / 8) | 0;
+    const cx = cell & 7;
+    if (cy >= 1 && cy <= 6 && cx >= 1 && cx <= 6) {
+      centerSum += blockDiff;
+      if (blockDiff > centerMax) centerMax = blockDiff;
+    }
   }
+  blockDiffs.sort();
   return {
     meanDiff: sum / 192,
+    p90BlockDiff: blockDiffs[57], // 64개 블록 중 90퍼센타일 (테두리 미세 구도 이동 최대 6칸 허용)
     maxBlockDiff: maxBlock,
+    centerMeanDiff: centerSum / 36,
+    centerMaxBlockDiff: centerMax,
   };
 }
 
 /**
- * HTMLImageElement로부터:
- * 1) 9x8 그레이스케일 기반 64-bit dHash (16자리 hex)
- * 2) 8x8 RGB 블록 컬러 시그니처 (192 bytes) & 백색 배경 비율(whitePct)
- * 3) 128x128 그레이스케일 2D 라플라시안(Laplacian) 선명도 점수
+ * HTMLImageElement로부터 단일 512px 디코딩 패스 안에서:
+ * 1) 면적 적분(Area-Integral Box Averaging) 9x8 그레이스케일 64-bit dHash
+ *    (Chromium/WebKit `drawImage(512 -> 9x8)`의 2x2 점샘플링 에일리어싱으로 음식·고주파 연사 사진 dHash가 26까지 튀던 현상 원천 제거!)
+ * 2) 면적 적분 8x8 RGB 컬러 시그니처 (192 bytes) & 백색 배경 비율(whitePct)
+ * 3) 명암·조도 불변(Contrast-Invariant) 4축 방향성(가로·세로·양대각선) 경계 첨예도(min4AxisHf) & 8x8 국소 패치 선명도
+ *    (실내 난색 조명 아래 매끈한 피부·손·네일아트 클로즈업 등 저대비 정상 사진이 분산 부족으로 흔들림 오분류되던 현상 0% 차단 + 대각선/단방향 손떨림 정밀 포착!)
  * 를 동시에 계산합니다.
  */
 export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalSignatureMeta {
@@ -125,56 +156,6 @@ export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalS
   const aspect = img.width > 0 ? img.height / img.width : 1;
 
   try {
-    // 1) 9x8 dHash 계산
-    const hashCanvas = document.createElement('canvas');
-    hashCanvas.width = 9;
-    hashCanvas.height = 8;
-    const hCtx = hashCanvas.getContext('2d');
-    if (hCtx) {
-      hCtx.drawImage(img, 0, 0, 9, 8);
-      const data = hCtx.getImageData(0, 0, 9, 8).data;
-      let bits = '';
-      for (let y = 0; y < 8; y++) {
-        for (let x = 0; x < 8; x++) {
-          const i1 = (y * 9 + x) * 4;
-          const i2 = (y * 9 + (x + 1)) * 4;
-          const g1 = data[i1] * 0.299 + data[i1 + 1] * 0.587 + data[i1 + 2] * 0.114;
-          const g2 = data[i2] * 0.299 + data[i2 + 1] * 0.587 + data[i2 + 2] * 0.114;
-          bits += g1 > g2 ? '1' : '0';
-        }
-      }
-      for (let k = 0; k < 64; k += 4) {
-        dhash += parseInt(bits.slice(k, k + 4), 2).toString(16);
-      }
-    }
-
-    // 2) 8x8 RGB 블록 시그니처 & 백색 배경 비율 측정
-    const rgbCanvas = document.createElement('canvas');
-    rgbCanvas.width = 8;
-    rgbCanvas.height = 8;
-    const rCtx = rgbCanvas.getContext('2d');
-    if (rCtx) {
-      rCtx.drawImage(img, 0, 0, 8, 8);
-      const rData = rCtx.getImageData(0, 0, 8, 8).data;
-      let whiteCells = 0;
-      for (let i = 0; i < 64; i++) {
-        const p = i * 4;
-        const r = rData[p];
-        const g = rData[p + 1];
-        const b = rData[p + 2];
-        rgbGrid[i * 3] = r;
-        rgbGrid[i * 3 + 1] = g;
-        rgbGrid[i * 3 + 2] = b;
-        if (r >= 232 && g >= 232 && b >= 232) {
-          whiteCells++;
-        }
-      }
-      whitePct = (whiteCells / 64) * 100;
-    }
-
-    // 3) 최대 512px 해상도 보존 기반 [2차 미분(Laplacian) / 1차 경사도(Gradient) 경계 첨예도 비율(hfRatio) + 상위 2% 첨두치(p98Lap)] 측정
-    //    - 기존 128x128 과축소 시 6~10px 손떨림 블러가 1px로 뭉개져 선명한 사진으로 오판되던 근본 원인을 해결합니다.
-    //    - 어두운 사진·보케 배경은 경계선에서의 hfRatio(>= 1.18)가 높아 보호되고, 실제 손떨림·초점 이탈 사진은 경계가 완만한 램프로 퍼져 hfRatio(< 1.06)가 급락합니다.
     const maxEvalDim = 512;
     const evalScale =
       img.width > 0 && img.height > 0 ? Math.min(1, maxEvalDim / Math.max(img.width, img.height)) : 1;
@@ -187,23 +168,87 @@ export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalS
     if (lCtx) {
       lCtx.drawImage(img, 0, 0, W, H);
       const px = lCtx.getImageData(0, 0, W, H).data;
+      lapCanvas.width = 1;
+      lapCanvas.height = 1;
+
       const gray = new Float32Array(W * H);
-      for (let i = 0; i < W * H; i++) {
-        const idx = i * 4;
-        gray[i] = px[idx] * 0.299 + px[idx + 1] * 0.587 + px[idx + 2] * 0.114;
+      const hashSum = new Float64Array(72); // 8 rows x 9 cols
+      const hashCnt = new Uint32Array(72);
+      const rgbSum = new Float64Array(192); // 8 rows x 8 cols x 3 channels
+      const rgbCnt = new Uint32Array(64);
+
+      for (let y = 0; y < H; y++) {
+        const by = Math.min(7, ((y * 8) / H) | 0);
+        const rowOff = y * W;
+        for (let x = 0; x < W; x++) {
+          const i = rowOff + x;
+          const p4 = i * 4;
+          const r = px[p4];
+          const g = px[p4 + 1];
+          const b = px[p4 + 2];
+          const lum = r * 0.299 + g * 0.587 + b * 0.114;
+          gray[i] = lum;
+
+          const bx9 = Math.min(8, ((x * 9) / W) | 0);
+          const hIdx = by * 9 + bx9;
+          hashSum[hIdx] += lum;
+          hashCnt[hIdx]++;
+
+          const bx8 = Math.min(7, ((x * 8) / W) | 0);
+          const cIdx = by * 8 + bx8;
+          const c3 = cIdx * 3;
+          rgbSum[c3] += r;
+          rgbSum[c3 + 1] += g;
+          rgbSum[c3 + 2] += b;
+          rgbCnt[cIdx]++;
+        }
       }
+
+      // 1) 면적 적분 9x8 dHash 산출
+      let bits = '';
+      for (let y = 0; y < 8; y++) {
+        for (let x = 0; x < 8; x++) {
+          const i1 = y * 9 + x;
+          const i2 = i1 + 1;
+          const g1 = hashCnt[i1] > 0 ? hashSum[i1] / hashCnt[i1] : 0;
+          const g2 = hashCnt[i2] > 0 ? hashSum[i2] / hashCnt[i2] : 0;
+          bits += g1 > g2 ? '1' : '0';
+        }
+      }
+      for (let k = 0; k < 64; k += 4) {
+        dhash += parseInt(bits.slice(k, k + 4), 2).toString(16);
+      }
+
+      // 2) 면적 적분 8x8 RGB 컬러 시그니처 & 백색 비율 산출
+      let whiteCells = 0;
+      for (let c = 0; c < 64; c++) {
+        const cnt = rgbCnt[c] || 1;
+        const c3 = c * 3;
+        const rAvg = Math.min(255, Math.max(0, Math.round(rgbSum[c3] / cnt)));
+        const gAvg = Math.min(255, Math.max(0, Math.round(rgbSum[c3 + 1] / cnt)));
+        const bAvg = Math.min(255, Math.max(0, Math.round(rgbSum[c3 + 2] / cnt)));
+        rgbGrid[c3] = rAvg;
+        rgbGrid[c3 + 1] = gAvg;
+        rgbGrid[c3 + 2] = bAvg;
+        if (rAvg >= 232 && gAvg >= 232 && bAvg >= 232) {
+          whiteCells++;
+        }
+      }
+      whitePct = (whiteCells / 64) * 100;
+
+      // 3) 조도·대비 불변(Contrast-Invariant) 4축 방향성(X, Y, D1, D2) 및 8x8 국소 패치 경계 첨예도 측정
       let lapSum = 0;
       let lapSqSum = 0;
       let count = 0;
       let edgeLapSum = 0;
       let edgeGradSum = 0;
       let edgeCount = 0;
-      const hist = new Uint32Array(256);
 
-      // [8x8 국소 패치 피사체 선명도 측정 (아웃포커싱·보케·음식 사진 오분류 원천 차단)]:
-      // 인물·사물 클로즈업(예: 피규어 박스·음식 사진)은 배경 70%가 자연 보케로 흐려 전역 평균 hfRatio/variance는 낮아지지만,
-      // 초점이 맞은 전경 피사체 패치들은 국소 라플라시안 분산(patchVar >= 260)과 경계 첨예도(patchHf >= 1.18)가 뚜렷이 높습니다.
-      // 반면 실제 손떨림·전체 초점 이탈 사진은 64개 패치 어디에도 선명한 패치가 존재하지 않습니다(sharpPatchCount === 0).
+      let gxSum = 0, lxSum = 0, nx = 0;
+      let gySum = 0, lySum = 0, ny = 0;
+      let gd1Sum = 0, ld1Sum = 0, nd1 = 0;
+      let gd2Sum = 0, ld2Sum = 0, nd2 = 0;
+
       const innerW = Math.max(1, W - 2);
       const innerH = Math.max(1, H - 2);
       const pCount = new Uint32Array(64);
@@ -212,108 +257,130 @@ export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalS
       const pEdgeCount = new Uint32Array(64);
       const pEdgeLapSum = new Float64Array(64);
       const pEdgeGradSum = new Float64Array(64);
-      const pHighLapCount = new Uint32Array(64); // patch 내 lap >= 58 픽셀 수
+
+      const pNx = new Uint32Array(64), pLxSum = new Float64Array(64), pGxSum = new Float64Array(64);
+      const pNy = new Uint32Array(64), pLySum = new Float64Array(64), pGySum = new Float64Array(64);
+      const pNd1 = new Uint32Array(64), pLd1Sum = new Float64Array(64), pGd1Sum = new Float64Array(64);
+      const pNd2 = new Uint32Array(64), pLd2Sum = new Float64Array(64), pGd2Sum = new Float64Array(64);
 
       for (let y = 1; y < H - 1; y++) {
         const rowOff = y * W;
         const py = Math.min(7, (((y - 1) * 8) / innerH) | 0);
         for (let x = 1; x < W - 1; x++) {
           const centerIdx = rowOff + x;
-          const c = gray[centerIdx] * 4;
+          const centerVal = gray[centerIdx];
           const top = gray[centerIdx - W];
           const bot = gray[centerIdx + W];
           const left = gray[centerIdx - 1];
           const right = gray[centerIdx + 1];
-          const lap = Math.abs(c - top - bot - left - right);
+          const tl = gray[centerIdx - W - 1];
+          const br = gray[centerIdx + W + 1];
+          const tr = gray[centerIdx - W + 1];
+          const bl = gray[centerIdx + W - 1];
+
+          const lap = Math.abs(centerVal * 4 - top - bot - left - right);
+          const lx = Math.abs(centerVal * 2 - left - right);
+          const ly = Math.abs(centerVal * 2 - top - bot);
+          const ld1 = Math.abs(centerVal * 2 - tl - br);
+          const ld2 = Math.abs(centerVal * 2 - tr - bl);
+
+          const gx = Math.abs(right - left) * 0.5;
+          const gy = Math.abs(bot - top) * 0.5;
+          const gd1 = Math.abs(br - tl) * 0.5;
+          const gd2 = Math.abs(bl - tr) * 0.5;
+          const grad = Math.hypot(gx, gy);
+
           lapSum += lap;
           lapSqSum += lap * lap;
           count++;
 
-          const bin = lap >= 255 ? 255 : lap | 0;
-          hist[bin]++;
-
-          const gx = Math.abs(right - left) * 0.5;
-          const gy = Math.abs(bot - top) * 0.5;
-          const grad = Math.hypot(gx, gy);
-          if (grad > 8.0) {
+          if (grad > 6.5) {
             edgeLapSum += lap;
             edgeGradSum += grad;
             edgeCount++;
           }
+          if (gx > 5.5) { lxSum += lx; gxSum += gx; nx++; }
+          if (gy > 5.5) { lySum += ly; gySum += gy; ny++; }
+          if (gd1 > 6.5) { ld1Sum += ld1; gd1Sum += gd1; nd1++; }
+          if (gd2 > 6.5) { ld2Sum += ld2; gd2Sum += gd2; nd2++; }
 
           const pxIdx = Math.min(7, (((x - 1) * 8) / innerW) | 0);
           const pIdx = py * 8 + pxIdx;
           pCount[pIdx]++;
           pLapSum[pIdx] += lap;
           pLapSqSum[pIdx] += lap * lap;
-          if (lap >= 58.0) {
-            pHighLapCount[pIdx]++;
-          }
-          if (grad > 9.0) {
+
+          if (grad > 6.5) {
             pEdgeCount[pIdx]++;
             pEdgeLapSum[pIdx] += lap;
             pEdgeGradSum[pIdx] += grad;
           }
+          if (gx > 5.0) { pNx[pIdx]++; pLxSum[pIdx] += lx; pGxSum[pIdx] += gx; }
+          if (gy > 5.0) { pNy[pIdx]++; pLySum[pIdx] += ly; pGySum[pIdx] += gy; }
+          if (gd1 > 6.0) { pNd1[pIdx]++; pLd1Sum[pIdx] += ld1; pGd1Sum[pIdx] += gd1; }
+          if (gd2 > 6.0) { pNd2[pIdx]++; pLd2Sum[pIdx] += ld2; pGd2Sum[pIdx] += gd2; }
         }
       }
+
       if (count > 0) {
         const mean = lapSum / count;
         const variance = Math.max(0, lapSqSum / count - mean * mean);
         const hfRatio = edgeCount >= 30 ? edgeLapSum / (edgeGradSum + 1e-5) : 0.5;
 
-        // 256-bin 히스토그램으로 98퍼센타일 라플라시안 첨두치 O(1) 산출
-        const targetRank = Math.floor(count * 0.98);
-        let acc = 0;
-        let p98Lap = 0;
-        for (let b = 0; b < 256; b++) {
-          acc += hist[b];
-          if (acc >= targetRank) {
-            p98Lap = b;
-            break;
-          }
-        }
+        const hfX = nx >= 25 ? lxSum / (gxSum + 1e-5) : hfRatio * 0.75;
+        const hfY = ny >= 25 ? lySum / (gySum + 1e-5) : hfRatio * 0.75;
+        const hfD1 = nd1 >= 25 ? ld1Sum / (gd1Sum + 1e-5) : hfRatio * 0.75;
+        const hfD2 = nd2 >= 25 ? ld2Sum / (gd2Sum + 1e-5) : hfRatio * 0.75;
+        const minAxisHf = Math.min(hfX, hfY, hfD1, hfD2);
 
-        let sharpPatchCount = 0;
-        const patchMetrics: Array<{ score: number; pv: number; phf: number }> = [];
+        let sharp4AxisPatches = 0;
+        const patchMetrics: Array<{ score: number; phf: number; pMinAxis: number }> = [];
         for (let k = 0; k < 64; k++) {
           const n = pCount[k];
-          if (n < 16) continue;
+          if (n < 16 || pEdgeCount[k] < 14) continue;
           const pm = pLapSum[k] / n;
           const pv = Math.max(0, pLapSqSum[k] / n - pm * pm);
-          const phf = pEdgeCount[k] >= 15 ? pEdgeLapSum[k] / (pEdgeGradSum[k] + 1e-5) : 0;
-          const highRatio = pHighLapCount[k] / n; // >= 0.05 means p95 >= 58
-          const pScore = pv * Math.max(0.2, phf - 0.55);
-          patchMetrics.push({ score: pScore, pv, phf });
-          if (pv >= 260 && phf >= 1.18 && highRatio >= 0.05) {
-            sharpPatchCount++;
+          const phf = pEdgeLapSum[k] / (pEdgeGradSum[k] + 1e-5);
+
+          const phfX = pNx[k] >= 10 ? pLxSum[k] / (pGxSum[k] + 1e-5) : phf * 0.72;
+          const phfY = pNy[k] >= 10 ? pLySum[k] / (pGySum[k] + 1e-5) : phf * 0.72;
+          const phfD1 = pNd1[k] >= 10 ? pLd1Sum[k] / (pGd1Sum[k] + 1e-5) : phf * 0.72;
+          const phfD2 = pNd2[k] >= 10 ? pLd2Sum[k] / (pGd2Sum[k] + 1e-5) : phf * 0.72;
+          const pMinAxis = Math.min(phfX, phfY, phfD1, phfD2);
+
+          if (phf >= 1.16 && pMinAxis >= 0.78 && pv >= 22.0) {
+            sharp4AxisPatches++;
           }
+          patchMetrics.push({ score: phf * Math.max(0.2, pMinAxis), phf, pMinAxis });
         }
+
         patchMetrics.sort((a, b) => b.score - a.score);
         const topK = patchMetrics.slice(0, 4);
-        const top4PatchScore =
-          topK.length > 0 ? topK.reduce((s, m) => s + m.score, 0) / topK.length : 0;
-        const top4PatchVar =
-          topK.length > 0 ? topK.reduce((s, m) => s + m.pv, 0) / topK.length : 0;
         const top4PatchHf =
           topK.length > 0 ? topK.reduce((s, m) => s + m.phf, 0) / topK.length : 0;
+        const top4MinAxis =
+          topK.length > 0 ? topK.reduce((s, m) => s + m.pMinAxis, 0) / topK.length : 0;
 
         const hasSharpForegroundSubject =
-          sharpPatchCount >= 3 ||
-          (sharpPatchCount >= 2 && top4PatchScore >= 340) ||
-          (top4PatchVar >= 520 && top4PatchHf >= 1.22);
+          sharp4AxisPatches >= 2 ||
+          (sharp4AxisPatches >= 1 && top4PatchHf >= 1.22 && top4MinAxis >= 0.80) ||
+          (minAxisHf >= 0.82 && hfRatio >= 1.12 && edgeCount >= 80);
 
-        const isCleanWhiteDoc = whitePct >= 58 && hfRatio >= 1.15;
-        const globalRawScore = Math.round(variance * 18.0 * Math.max(0.22, hfRatio - 0.55));
-        const subjectBoostScore = hasSharpForegroundSubject
-          ? Math.round(Math.max(4500, top4PatchVar * 6.5))
-          : 0;
-        const finalScore = Math.max(globalRawScore, subjectBoostScore);
-
+        const isCleanWhiteDoc = whitePct >= 58 && hfRatio >= 1.10;
         isMotionOrFocusBlurred =
           !isCleanWhiteDoc &&
           !hasSharpForegroundSubject &&
-          ((hfRatio < 1.15 && p98Lap < 68) || variance < 165 || globalRawScore < 2600);
-        sharpness = Math.max(80, finalScore);
+          (minAxisHf < 0.76 || hfRatio < 1.05 || top4PatchHf < 1.12 || edgeCount < 30);
+
+        const acutanceScore = Math.round(
+          Math.max(
+            variance * 18.0 * Math.max(0.22, minAxisHf),
+            hasSharpForegroundSubject ? 6200 * top4MinAxis : 800 * minAxisHf
+          )
+        );
+        sharpness = isMotionOrFocusBlurred
+          ? Math.min(2200, Math.max(80, acutanceScore))
+          : Math.max(3200, acutanceScore);
       }
     }
   } catch {
@@ -430,7 +497,7 @@ export function clusterPhotosIntoDuplicateGroups(
       const sameAspect =
         !firstSig || !candSig || Math.abs(firstSig.aspect - candSig.aspect) <= aspectLimit;
 
-      // 1) 트랙 A: 동일 사진 중복 사본 및 리사이즈/미세 크롭 쌍둥이 사본 (iOS EXIF/저장 시각 차이와 무관하게 포착)
+      // 1) 트랙 A: 동일 사진 중복 사본 및 미세 구도 이동(3~6% 손 이동·줌) 쌍둥이 촬영본 (EXIF/저장 시각 차이와 무관하게 포착)
       const isExactDuplicateCopy = hasBothRgb
         ? sameAspect &&
           ((distToFirst <= 2 &&
@@ -441,9 +508,21 @@ export function clusterPhotosIntoDuplicateGroups(
               rgbToFirst.meanDiff <= 18.5 &&
               rgbToFirst.maxBlockDiff <= 56) ||
             (!isDocumentOrWhiteSheet &&
+              distToFirst <= 16 &&
+              rgbToFirst.meanDiff <= 16.5 &&
+              rgbToFirst.p90BlockDiff <= 29.0 &&
+              rgbToFirst.centerMeanDiff <= 15.0 &&
+              rgbToFirst.centerMaxBlockDiff <= 44.0) ||
+            (!isDocumentOrWhiteSheet &&
               distToLast <= 11 &&
               rgbToLast.meanDiff <= 17.0 &&
-              rgbToLast.maxBlockDiff <= 52))
+              rgbToLast.maxBlockDiff <= 52) ||
+            (!isDocumentOrWhiteSheet &&
+              distToLast <= 15 &&
+              rgbToLast.meanDiff <= 15.5 &&
+              rgbToLast.p90BlockDiff <= 27.5 &&
+              rgbToLast.centerMeanDiff <= 14.0 &&
+              rgbToLast.centerMaxBlockDiff <= 42.0))
         : sameAspect && (isDocumentOrWhiteSheet ? distToFirst <= 2 : distToFirst <= 10);
 
       // 2) 트랙 B: 실제 카메라 연속 촬영 연사 (백색 문서 페이지가 아닌 실사 촬영본에 한해 허용)
@@ -452,12 +531,18 @@ export function clusterPhotosIntoDuplicateGroups(
         sameAspect &&
         deltaSecFromFirst <= 120 &&
         deltaSecFromLast <= 45 &&
-        distToFirst <= 15 &&
-        distToLast <= 12 &&
-        (!hasBothRgb ||
-          (rgbToFirst.meanDiff <= 20.0 &&
-            rgbToFirst.maxBlockDiff <= 58 &&
-            rgbToLast.meanDiff <= 18.0));
+        (hasBothRgb
+          ? (distToFirst <= 15 &&
+              distToLast <= 12 &&
+              rgbToFirst.meanDiff <= 20.0 &&
+              rgbToFirst.maxBlockDiff <= 58 &&
+              rgbToLast.meanDiff <= 18.0) ||
+            (distToFirst <= 17 &&
+              distToLast <= 14 &&
+              rgbToFirst.meanDiff <= 18.0 &&
+              rgbToFirst.p90BlockDiff <= 30.0 &&
+              rgbToFirst.centerMaxBlockDiff <= 46.0)
+          : distToFirst <= 15 && distToLast <= 12);
 
       if (isExactDuplicateCopy || isCameraBurstShot) {
         members.push(cand);
@@ -862,7 +947,7 @@ export async function analyzeMobilePickedPhotoFiles(
  * 오차 없는 정밀 연사·중복 묶음(DuplicateGroup)을 생성합니다.
  */
 const pcOpticalAuditCache = new Map<string, OpticalSignatureMeta>();
-const OPTICAL_AUDIT_IDB_NAME = 'ghosti_optical_audit_v2';
+const OPTICAL_AUDIT_IDB_NAME = 'ghosti_optical_audit_v3';
 const OPTICAL_AUDIT_IDB_STORE = 'optical_sigs';
 let opticalAuditDbPromise: Promise<IDBDatabase | null> | null = null;
 let opticalAuditHydratePromise: Promise<void> | null = null;
@@ -957,6 +1042,16 @@ export async function auditRealPcPhotosAndCluster(
     opticalSigByPhotoId.set(p.id, meta);
     p.dhash = meta.dhash;
     p.opticalSharpness = meta.sharpness;
+    if (
+      p.trashCategory === 'blurry' &&
+      !meta.isMotionOrFocusBlurred &&
+      !/blur|흔들/i.test(p.name || '')
+    ) {
+      p.trashCategory = undefined;
+      p.intrinsicTrashCategory = undefined;
+      p.trashConfidence = undefined;
+      p.tags = (p.tags || []).filter((t) => !t.includes('흔들림') && !t.includes('초점이탈'));
+    }
     if (!p.trashCategory && !p.isVaultDocument) {
       const isPhoneOrDesktopUiCapture =
         meta.aspect >= 1.96 ||
@@ -1226,7 +1321,7 @@ export function convertNativeGalleryVideos(nativeVideos: NativeGalleryVideoMeta[
 
 const MOBILE_GALLERY_IDB_NAME = 'ghosti_mobile_gallery_cache_v1';
 const MOBILE_GALLERY_STORE = 'snapshot';
-const MOBILE_GALLERY_CACHE_SCHEMA_VER = 8;
+const MOBILE_GALLERY_CACHE_SCHEMA_VER = 9;
 export const MOBILE_VIDEO_OCR_VER = 32;
 
 interface SerializedOpticalSig {
