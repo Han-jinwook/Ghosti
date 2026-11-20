@@ -1234,6 +1234,18 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     }
     persistInviteContextMeta(parsed, isNative);
 
+    // 이전 공유방(예: 본가) 열람 직후 다른 공유방(예: 처가·동호회) 초대 링크로 접속했을 때
+    // 이전 방 탭이나 사진 목록이 단 0.1초도 잔류하지 않도록 즉시 새 초대방 컨텍스트로 초기화!
+    set({
+      activeLoungeType: parsed.loungeType,
+      activeFamilyRoom: parsed.familyRoom,
+      desktopTab: 'dashboard',
+      mobileTab: 'search',
+      isLoadingSharedRoomPhotos: Boolean(parsed.inviteToken),
+      searchResults: [],
+      ...(!isLoggedIn ? { sharedRoomAddedPhotos: [] } : {}),
+    });
+
     if (parsed.nicknameHint && isLoggedIn && typeof window !== 'undefined') {
       try {
         localStorage.setItem('ghosti_invited_member_nickname', parsed.nicknameHint);
@@ -1306,6 +1318,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         searchSpace: 'gallery',
         hasExecutedUserSearch: false,
       });
+      lastDeepLinkHydratedAt = 0;
       await get().syncActiveSharedRoomFromSupabase();
       return true;
     }

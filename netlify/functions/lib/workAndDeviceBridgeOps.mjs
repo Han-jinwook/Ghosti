@@ -1062,13 +1062,28 @@ export async function handleAuthedWorkAndDeviceAction({
         : '';
 
     if (!myRoomId) {
+      // public.users FK(master_user_id) 제약이 있는 환경에서도 신규 방 생성이 100% 성공하도록 사용자 행 선행 보장
+      await fetch(`${supabaseUrl}/rest/v1/users?on_conflict=id`, {
+        method: 'POST',
+        headers: srvHeaders(serviceKey, {
+          'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates,return=minimal',
+        }),
+        body: JSON.stringify({
+          id: userId,
+          email,
+          nickname: effectiveMasterNick,
+          last_login_at: new Date().toISOString(),
+        }),
+      }).catch(() => {});
+
       const md5Hex = crypto
         .createHash('md5')
         .update(`${email}:${dbLoungeType}:${dbSubType}`)
         .digest('hex')
         .slice(0, 16);
       myRoomId = `room_${md5Hex}`;
-      await fetch(`${supabaseUrl}/rest/v1/ghosti_lounge_rooms?on_conflict=room_id`, {
+      const roomCreateRes = await fetch(`${supabaseUrl}/rest/v1/ghosti_lounge_rooms?on_conflict=room_id`, {
         method: 'POST',
         headers: srvHeaders(serviceKey, {
           'Content-Type': 'application/json',
@@ -1083,6 +1098,16 @@ export async function handleAuthedWorkAndDeviceAction({
           master_email: email,
         }),
       });
+      if (!roomCreateRes.ok) {
+        const errDetail = await roomCreateRes.text().catch(() => '');
+        return {
+          status: 500,
+          body: {
+            ok: false,
+            reason: `ROOM_CREATE_FAILED (${roomCreateRes.status}): ${errDetail.slice(0, 180)}`,
+          },
+        };
+      }
     }
 
     // 방장 본인의 room_persona_nickname을 항상 최신 계정 별명으로 동기화 (초대 링크 열람 시 100% 일치 보장)
@@ -1129,7 +1154,7 @@ export async function handleAuthedWorkAndDeviceAction({
       ).catch(() => {});
     } else {
       myInviteToken = crypto.randomBytes(18).toString('hex');
-      await fetch(`${supabaseUrl}/rest/v1/ghosti_room_invites`, {
+      const invCreateRes = await fetch(`${supabaseUrl}/rest/v1/ghosti_room_invites`, {
         method: 'POST',
         headers: srvHeaders(serviceKey, {
           'Content-Type': 'application/json',
@@ -1144,6 +1169,16 @@ export async function handleAuthedWorkAndDeviceAction({
           expires_at: nextExpiryIso,
         }),
       });
+      if (!invCreateRes.ok) {
+        const errDetail = await invCreateRes.text().catch(() => '');
+        return {
+          status: 500,
+          body: {
+            ok: false,
+            reason: `INVITE_CREATE_FAILED (${invCreateRes.status}): ${errDetail.slice(0, 180)}`,
+          },
+        };
+      }
     }
 
     const accessibleSet = new Set([myRoomId]);

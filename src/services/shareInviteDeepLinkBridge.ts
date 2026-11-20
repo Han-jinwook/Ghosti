@@ -266,6 +266,43 @@ export function clearStoredInviteSession(): void {
 }
 
 /**
+ * 비동기 토큰 발급 직후 브라우저 포커스·제스처 만료로 navigator.clipboard.writeText가 실패해
+ * 직전에 복사했던 다른 방(예: 본가) 링크가 클립보드에 그대로 남는 사고를 원천 차단합니다.
+ */
+export async function copyInviteTextReliably(text: string): Promise<boolean> {
+  if (typeof window === 'undefined' || !text) return false;
+  try {
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    /* fallback to synchronous execCommand below */
+  }
+  try {
+    if (typeof document !== 'undefined') {
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.setAttribute('readonly', 'true');
+      ta.style.position = 'fixed';
+      ta.style.top = '-9999px';
+      ta.style.left = '-9999px';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.focus();
+      ta.select();
+      ta.setSelectionRange(0, text.length);
+      const ok = document.execCommand('copy');
+      document.body.removeChild(ta);
+      if (ok) return true;
+    }
+  } catch {
+    /* ignore */
+  }
+  return false;
+}
+
+/**
  * 로그인된 회원이 초대 링크(?invite=...&inviteToken=...)를 통해 정식 멤버(ghosti_lounge_members)로 편입된 직후,
  * 브라우저 주소창에 일회용 초대 파라미터가 그대로 남아 있어 '일반 탭 주소 복사'와 '전용 초대 링크 복사'가 혼동되거나
  * 동일 브라우저에서 타 계정 전환 시 의도치 않게 자동 합류되는 현상을 원천 차단합니다.

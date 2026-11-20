@@ -355,21 +355,22 @@ export const App: React.FC = () => {
         : 'family';
 
       const targetLounge: LoungeType =
-        savedNav?.lounge ||
-        (urlLounge && ['personal', 'family', 'club', 'student', 'work'].includes(urlLounge)
-          ? urlLounge
-          : hasInviteLink || hasWorkRoomLink
-            ? defaultInviteLounge
-            : useSaySeeStore.getState().activeLoungeType);
+        hasInviteLink || hasWorkRoomLink
+          ? defaultInviteLounge
+          : urlLounge && ['personal', 'family', 'club', 'student', 'work'].includes(urlLounge)
+            ? urlLounge
+            : savedNav?.lounge || useSaySeeStore.getState().activeLoungeType;
       const targetDesktopTab: DesktopTab =
-        savedNav?.desktopTab ||
-        (urlTab &&
-        ['trial', 'dashboard', 'trash', 'share', 'settings', 'sync', 'superpower_dojo', 'search_dojo'].includes(urlTab)
-          ? urlTab
-          : hasInviteLink || hasWorkRoomLink
-            ? 'dashboard'
-            : useSaySeeStore.getState().desktopTab);
-      const targetMobileTab: MobileTab = savedNav?.mobileTab || desktopTabToMobileTab(targetDesktopTab);
+        hasInviteLink || hasWorkRoomLink
+          ? 'dashboard'
+          : urlTab &&
+              ['trial', 'dashboard', 'trash', 'share', 'settings', 'sync', 'superpower_dojo', 'search_dojo'].includes(urlTab)
+            ? urlTab
+            : savedNav?.desktopTab || useSaySeeStore.getState().desktopTab;
+      const targetMobileTab: MobileTab =
+        hasInviteLink || hasWorkRoomLink
+          ? 'search'
+          : savedNav?.mobileTab || desktopTabToMobileTab(targetDesktopTab);
       const targetRoom: FamilyRoomId = urlRoom || '우리집';
       const isB2bUrl =
         params.get('from') === 'b2b' ||

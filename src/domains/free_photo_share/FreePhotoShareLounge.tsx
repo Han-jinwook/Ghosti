@@ -25,6 +25,7 @@ import {
   buildAndroidSafeAppProbeIntentUrl,
   buildShareRoomInviteHttpsUrl,
   buildShareRoomNativeSchemeUrl,
+  copyInviteTextReliably,
   readCurrentInviteDisplayMeta,
   resolveDefaultRoomTitle,
 } from '../../services/shareInviteDeepLinkBridge';
@@ -73,19 +74,15 @@ async function issueAuthenticatedInviteHttpsUrl(opts: {
     return null;
   }
   const verifiedHostNick = ensured.masterNickname || hostNick;
-  // 2주(14일) 경과로 서버 마중물 버퍼가 비워진 뒤 재초대할 때도 1초 만에 해당 방(ensured.roomId) 전용 로컬 금고(IndexedDB) 썸네일만 자동 재장전(Re-Seed)
-  // (타인의 초대 합류 방 사진이 포함된 화면 코퍼스는 절대 재장전 입력으로 넘기지 않음)
+  // 2주(14일) 경과로 서버 마중물 버퍼가 비워진 뒤 재초대할 때도 해당 방(ensured.roomId) 전용 로컬 금고(IndexedDB) 썸네일을 백그라운드에서 즉시 재장전(Re-Seed)
+  // (비동기 대기 중 브라우저 클립보드 복사 제스처가 만료되어 직전 방 링크가 남지 않도록 비차단 병행)
   if (ensured.roomId) {
-    const reseedJob = reseedRoomPhotosForInvite({
+    void reseedRoomPhotosForInvite({
       roomId: ensured.roomId,
       loungeType: opts.loungeType,
       familyRoom: opts.familyRoom,
       uploaderNickname: verifiedHostNick,
     });
-    await Promise.race([
-      reseedJob,
-      new Promise<void>((resolve) => setTimeout(resolve, 1200)),
-    ]);
   }
   return buildShareRoomInviteHttpsUrl({
     loungeType: opts.loungeType,
@@ -142,12 +139,9 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
     });
     if (!studentInviteUrl) return;
     const inviteHookCopy = `[${bannerTitle}] 네가 몰랐던 ${cohortShort}년 수학여행·졸업식 사진이 올라왔어! 설치·로그인 없이 바로 구경하고 내 사진도 올려봐 (초대받은 동기는 평생 무료)\n👉 ${studentInviteUrl}`;
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(inviteHookCopy);
-      }
-    } catch {
-      // ignore clipboard fallback
+    const copied = await copyInviteTextReliably(inviteHookCopy);
+    if (!copied && typeof window !== 'undefined') {
+      window.prompt('동창회 초대 링크를 복사해 공유하세요:', studentInviteUrl);
     }
     setInviteCopied(true);
     setTimeout(() => setInviteCopied(false), 2600);
@@ -1800,12 +1794,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
     });
     if (!clubInviteUrl) return;
     const copyTxt = `[${clubBannerTitle}] 이번 모임·라운딩 고화질 원본 사진과 영상이 모두 올라왔습니다! 설치·로그인 없이 바로 구경하세요 (총무님 후원으로 전 회원 평생 0원 무료)\n👉 ${clubInviteUrl}`;
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(copyTxt);
-      }
-    } catch {
-      // ignore
+    const copied = await copyInviteTextReliably(copyTxt);
+    if (!copied && typeof window !== 'undefined') {
+      window.prompt('모임방 초대 링크를 복사해 공유하세요:', clubInviteUrl);
     }
     setClubInviteCopied(true);
     setTimeout(() => setClubInviteCopied(false), 2600);
@@ -2119,10 +2110,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
                         : '🏠 우리집 가족 사진방',
                 });
                 if (!inviteUrl) return;
-                try {
-                  await navigator.clipboard?.writeText(inviteUrl);
-                } catch {
-                  /* ignore */
+                const copied = await copyInviteTextReliably(inviteUrl);
+                if (!copied && typeof window !== 'undefined') {
+                  window.prompt(`『${activeFamilyRoom} 가족 사진방』 초대 링크를 복사해 공유하세요:`, inviteUrl);
                 }
                 useSaySeeStore
                   .getState()
@@ -2314,10 +2304,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
                   roomTitle: `⛰️ ${clubBannerTitle}`,
                 });
                 if (!inviteUrl) return;
-                try {
-                  await navigator.clipboard?.writeText(inviteUrl);
-                } catch {
-                  /* ignore */
+                const copied = await copyInviteTextReliably(inviteUrl);
+                if (!copied && typeof window !== 'undefined') {
+                  window.prompt(`『${clubBannerTitle}』 초대 링크를 복사해 공유하세요:`, inviteUrl);
                 }
                 useSaySeeStore
                   .getState()
@@ -2376,10 +2365,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
                 roomTitle: '🎓 동창회 사진방',
               });
               if (!inviteUrl) return;
-              try {
-                await navigator.clipboard?.writeText(inviteUrl);
-              } catch {
-                /* ignore */
+              const copied = await copyInviteTextReliably(inviteUrl);
+              if (!copied && typeof window !== 'undefined') {
+                window.prompt('『동창회 사진방』 초대 링크를 복사해 공유하세요:', inviteUrl);
               }
               useSaySeeStore
                 .getState()
@@ -3338,12 +3326,9 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     });
     if (!inviteUrl) return;
     const inviteCopy = `[귀신같이 사진 공유방 초대장] 설치·로그인 없이 1초 만에 우리 공유 사진을 구경하고, 무료 앱에서 내 사진 올리기·고화질 원본 저장·새 사진 알림까지 평생 0원으로 함께해요!\n👉 ${inviteUrl}`;
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(inviteCopy);
-      }
-    } catch {
-      // ignore clipboard fallback
+    const copied = await copyInviteTextReliably(inviteCopy);
+    if (!copied && typeof window !== 'undefined') {
+      window.prompt('초대 링크를 복사해 공유하세요:', inviteUrl);
     }
     setInviteCopied(true);
     setTimeout(() => setInviteCopied(false), 2500);
