@@ -3,7 +3,10 @@ import {
   hasAuthenticatedHubAccountSession,
   readGhostiAuthedJwtClaims,
 } from '../../services/supabaseClient';
-import { readActiveInviteToken } from '../../services/shareInviteDeepLinkBridge';
+import {
+  readActiveInviteToken,
+  readVerifiedInviteRoomMeta,
+} from '../../services/shareInviteDeepLinkBridge';
 import { HybridVoiceSession, OnboardingProgressUpdate } from '../../services/aiEngine';
 import {
   isCapacitorNativeMobileRuntime,
@@ -42,6 +45,20 @@ export function resolveInvitedHostLoungeAndRoom(): {
     return { hasActiveInvite: false, hostLounge: null, hostFamilyRoom: '우리집' };
   }
   try {
+    // 1순위: 서버 DB 검증을 마친 초대 토큰 메타(ghosti_verified_invite_v2::<token>)가 있으면
+    // 탭 전환(?lounge=club / ?room=본가 등 URL 변경)이나 새로고침(F5)과 무관하게 초대받은 원래 방을 100% 불변 유지!
+    const activeTok = readActiveInviteToken();
+    if (activeTok) {
+      const verified = readVerifiedInviteRoomMeta(activeTok);
+      if (verified) {
+        return {
+          hasActiveInvite: true,
+          hostLounge: verified.loungeType,
+          hostFamilyRoom: verified.familyRoom,
+        };
+      }
+    }
+
     const params = new URLSearchParams(window.location.search);
     const urlInvite = (params.get('invite') || '').trim().toLowerCase();
     let storedInvite = '';
@@ -57,7 +74,15 @@ export function resolveInvitedHostLoungeAndRoom(): {
     }
 
     let effectiveInvite = urlInvite || storedInvite;
-    let roomVal = (params.get('room') || effectiveInvite).trim().toLowerCase();
+    // invite 코드 자체에 family_home / family_parents / family_inlaws가 명시된 경우,
+    // 유저가 다른 서브방(예: 본가)을 눌러 URL ?room=이 바뀌더라도 원래 초대받은 방(effectiveInvite)을 우선 보존!
+    let roomVal = (
+      effectiveInvite.includes('_')
+        ? effectiveInvite
+        : params.get('room') || effectiveInvite
+    )
+      .trim()
+      .toLowerCase();
 
     if (!effectiveInvite) {
       try {

@@ -207,6 +207,7 @@ export const App: React.FC = () => {
         params.get('preview') === 'legacy' ||
         params.get('preview') === 'guest' ||
         params.has('invite') ||
+        params.has('inviteToken') ||
         params.has('workRoom')
       ) {
         return 'workspace';
@@ -216,6 +217,7 @@ export const App: React.FC = () => {
         hasWorkspaceRouteParams &&
         (OFFICIAL_LAUNCH_LIVE ||
           isDevAuthorized ||
+          Boolean(sessionStorage.getItem('ghosti_active_invite_token')) ||
           sessionStorage.getItem('ghosti_entered_from_showroom') === '1' ||
           localStorage.getItem('ghosti_onboarding_completed') === 'true')
       ) {
@@ -285,10 +287,12 @@ export const App: React.FC = () => {
             params.delete('token');
           }
         }
+        const isAuthedSession = hasAuthenticatedHubAccountSession();
         if (
-          nav.lounge === 'personal' ||
-          (nav.lounge === 'work' && !hasWorkRoomInvite) ||
-          (hasAuthenticatedHubAccountSession() && !hasRealInviteToken)
+          (isAuthedSession && nav.lounge === 'personal') ||
+          (isAuthedSession && nav.lounge === 'work' && !hasWorkRoomInvite) ||
+          (isAuthedSession && !hasRealInviteToken) ||
+          (!isAuthedSession && !hasRealInviteToken && nav.lounge === 'personal')
         ) {
           params.delete('invite');
           params.delete('host');
@@ -334,7 +338,7 @@ export const App: React.FC = () => {
     try {
       const savedNav = window.history.state?.ghostiNav;
       const params = new URLSearchParams(window.location.search);
-      const hasInviteLink = params.has('invite');
+      const hasInviteLink = params.has('invite') || params.has('inviteToken');
       const hasWorkRoomLink = params.has('workRoom');
       const inviteVal = params.get('invite') || '';
       const urlLounge = params.get('lounge') as LoungeType | null;

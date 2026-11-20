@@ -20,6 +20,7 @@ import {
   buildDeferredInviteClipboardToken,
   buildIosStoreInviteUrl,
   buildShareRoomNativeSchemeUrl,
+  readActiveInviteToken,
   readCurrentInviteDisplayMeta,
 } from '../../services/shareInviteDeepLinkBridge';
 import { registerLocalPhotoPreviewDataUrl } from '../../services/sharedPhotoRoomSupabase';
@@ -292,11 +293,18 @@ export const FreePhotoShareOverlays: React.FC = () => {
 
     try {
       const params = new URLSearchParams(window.location.search);
+      const activeTok = readActiveInviteToken();
       const hasRealToken = Boolean(
-        (params.get('inviteToken') || params.get('token') || '').trim()
+        (params.get('inviteToken') || params.get('token') || activeTok || '').trim()
       );
       if (hasRealToken || (!hasAuthenticatedHubAccountSession() && params.has('invite'))) {
-        void applyShareInviteDeepLink(window.location.href, { fromNativeApp: false });
+        const targetHref =
+          (params.has('invite') || params.has('inviteToken') || params.has('token'))
+            ? window.location.href
+            : `https://ghosti.sundreamer.app/?invite=${encodeURIComponent(
+                sessionStorage.getItem('ghosti_active_invite_room') || 'family_home'
+              )}&inviteToken=${encodeURIComponent(activeTok)}&preview=guest`;
+        void applyShareInviteDeepLink(targetHref, { fromNativeApp: false });
       }
     } catch {
       /* ignore */

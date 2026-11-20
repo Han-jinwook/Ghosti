@@ -854,7 +854,9 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     !isCapacitorNativeMobileRuntime() &&
     (new URLSearchParams(window.location.search).has('invite') ||
       new URLSearchParams(window.location.search).has('inviteToken') ||
-      new URLSearchParams(window.location.search).get('preview') === 'guest') &&
+      new URLSearchParams(window.location.search).has('token') ||
+      new URLSearchParams(window.location.search).get('preview') === 'guest' ||
+      Boolean(readActiveInviteToken())) &&
     !hasAuthenticatedHubAccountSession(),
   guestJoinWallReason: null,
   isInvitedMemberSession:
@@ -1408,20 +1410,19 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     }
 
     const stNow = get();
-    const isLoggedIn = hasAuthenticatedHubAccountSession();
-    const nextAdded = !isLoggedIn
-      ? res.photos
-      : [
-          ...res.photos,
-          ...stNow.sharedRoomAddedPhotos.filter(
-            (p) =>
-              !(
-                (p.sharedLoungeType ?? 'family') === targetLounge &&
-                (targetLounge !== 'family' ||
-                  (p.sharedFamilyRoom ?? '우리집') === targetFamilyRoom)
-              )
-          ),
-        ];
+    // 비로그인 게스트가 초대받지 않은 다른 탭(예: 동호회·동창회·본가)을 눌러 res.photos가 빈 배열([])로 올 때도,
+    // 이전에 불러온 정식 초대방(예: 우리집)의 사진은 메모리에서 지우지 않고 해당 탭 범위만 교체하여 복귀 즉시 0.00초 재표시 보장!
+    const nextAdded = [
+      ...res.photos,
+      ...stNow.sharedRoomAddedPhotos.filter(
+        (p) =>
+          !(
+            (p.sharedLoungeType ?? 'family') === targetLounge &&
+            (targetLounge !== 'family' ||
+              (p.sharedFamilyRoom ?? '우리집') === targetFamilyRoom)
+          )
+      ),
+    ];
 
     if (
       stNow.activeLoungeType === targetLounge &&

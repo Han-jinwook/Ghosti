@@ -305,8 +305,13 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
       const isTargetLoungeSubscribed = Boolean(state.subscribedLounges[activeLoungeType]);
       const isSwitchingLounge = state.activeLoungeType !== activeLoungeType;
       const sharedMode = isSharedPhotoLounge(activeLoungeType);
+      const invInfo = resolveInvitedHostLoungeAndRoom();
       const nextFamilyRoom: FamilyRoomId =
-        isSwitchingLounge && activeLoungeType === 'family' ? '우리집' : state.activeFamilyRoom || '우리집';
+        isSwitchingLounge && activeLoungeType === 'family'
+          ? invInfo.hasActiveInvite && invInfo.hostLounge === 'family'
+            ? invInfo.hostFamilyRoom
+            : state.activeFamilyRoom || '우리집'
+          : state.activeFamilyRoom || '우리집';
       const nextCorpus = resolveLoungePhotoCorpus({
         activeLoungeType,
         activeFamilyRoom: nextFamilyRoom,
