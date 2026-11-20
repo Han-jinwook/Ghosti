@@ -1,5 +1,9 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import {
+  filterVisibleGalleryPhotos,
+  resolveLoungePhotoCorpus,
+} from '../store/slices/storeSharedRefs';
 import {
   broadcastRemoteMonitorCast,
   getThisDeviceIdentity,
@@ -124,15 +128,39 @@ export const GhostCastLiveToolbar: React.FC<{ loungeLabel?: string }> = () => {
 export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
   const {
     photos,
+    sharedRoomHostPhotos,
+    sharedRoomAddedPhotos,
     merlinAuth,
     activeLoungeType,
     activeFamilyRoom,
+    activeSharedRoomId,
+    activeJoinedRoomMeta,
     alumniBannerTitle,
     alumniSchoolName,
     setDeviceIntegrationSnapshot,
+    showToast,
   } = useSaySeeStore();
 
-  const activePhotos = photos.filter((p) => !p.quarantined);
+  // [공유방 1:1 단일 SSOT]: 개인 라운지는 내 기기 사진, 사진 공유방(내 방·초대받은 방·게스트 초대방)은
+  // 반드시 현재 열려 있는 단일 room_id의 공유 사진 전체(sharedRoomAddedPhotos/sharedRoomHostPhotos)를 표시합니다.
+  const activePhotos = useMemo(() => {
+    const scoped = resolveLoungePhotoCorpus({
+      activeLoungeType,
+      activeFamilyRoom,
+      activeSharedRoomId,
+      photos,
+      sharedRoomHostPhotos,
+      sharedRoomAddedPhotos,
+    });
+    return filterVisibleGalleryPhotos(scoped);
+  }, [
+    activeLoungeType,
+    activeFamilyRoom,
+    activeSharedRoomId,
+    photos,
+    sharedRoomHostPhotos,
+    sharedRoomAddedPhotos,
+  ]);
 
   // 1) 무기 1: 모니터로 크게 보기 & 스마트폰 무선 리모컨 상태
   const [monitorCastOpen, setMonitorCastOpen] = useState(false);
@@ -325,6 +353,22 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     };
   }, []);
 
+  // 방 전환 시 캐스트/라이브 싱크 인덱스를 안전하게 초기화하고 사진 개수 축소 시 범위 초과를 방지
+  useEffect(() => {
+    setCastState((prev) => ({ ...prev, photoIndex: 0, zoom: 1, rotation: 0 }));
+    setPhotoSyncState((prev) => ({ ...prev, photoIndex: 0, zoom: 1, rotation: 0 }));
+  }, [activeLoungeType, activeFamilyRoom, activeSharedRoomId]);
+
+  useEffect(() => {
+    const maxIdx = Math.max(0, activePhotos.length - 1);
+    setCastState((prev) =>
+      prev.photoIndex > maxIdx ? { ...prev, photoIndex: maxIdx } : prev
+    );
+    setPhotoSyncState((prev) =>
+      prev.photoIndex > maxIdx ? { ...prev, photoIndex: maxIdx } : prev
+    );
+  }, [activePhotos.length]);
+
   // 전역 커맨드 버스 리스너 (툴바, 사진 상세창, 손보기 대화창에서 호출)
   useEffect(() => {
     const onCommand = (e: Event) => {
@@ -336,6 +380,10 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
       if (!d) return;
 
       if (d.action === 'OPEN_MONITOR_CAST') {
+        if (activePhotos.length === 0) {
+          showToast('📸 현재 방에 크게 볼 사진이 아직 없습니다. 먼저 사진을 추가해 주세요.');
+          return;
+        }
         let idx = 0;
         if (d.photoId) {
           const foundIdx = activePhotos.findIndex((p) => p.id === d.photoId);
@@ -368,9 +416,21 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
       } else if (d.action === 'TOGGLE_PHOTO_SYNC') {
         setPhotoSyncState((prev) => {
           const nextActive = !prev.active;
+          if (nextActive && activePhotos.length === 0) {
+            showToast('📸 현재 공유방에 다 같이 볼 사진이 아직 없습니다. 먼저 사진을 추가해 주세요.');
+            window.dispatchEvent(
+              new CustomEvent('ghosti_photo_sync_status', { detail: { active: false } })
+            );
+            return { ...prev, active: false };
+          }
+          const safeNextIdx =
+            nextActive && prev.photoIndex >= activePhotos.length ? 0 : prev.photoIndex;
           const next: RoomLivePhotoSyncState = {
             ...prev,
             active: nextActive,
+            photoIndex: safeNextIdx,
+            zoom: nextActive ? 1 : prev.zoom,
+            rotation: nextActive ? 0 : prev.rotation,
             updatedAt: Date.now(),
           };
           broadcastCastLiveMessage({ type: 'PHOTO_SYNC_UPDATE', state: next });
@@ -384,7 +444,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
 
     window.addEventListener('ghosti_cast_live_command', onCommand);
     return () => window.removeEventListener('ghosti_cast_live_command', onCommand);
-  }, [activePhotos, castState]);
+  }, [activePhotos, castState, showToast]);
 
   const updateCastState = (patch: Partial<MonitorCastState>) => {
     setCastState((prev) => {
@@ -413,19 +473,29 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     });
   };
 
-  const currentCastPhoto =
-    remoteCastPhotoOverride || activePhotos[castState.photoIndex] || activePhotos[0] || null;
-  const currentSyncPhoto =
-    activePhotos[photoSyncState.photoIndex] || activePhotos[0] || null;
+  const safeCastIdx =
+    activePhotos.length > 0
+      ? Math.min(Math.max(0, castState.photoIndex), activePhotos.length - 1)
+      : 0;
+  const safeSyncIdx =
+    activePhotos.length > 0
+      ? Math.min(Math.max(0, photoSyncState.photoIndex), activePhotos.length - 1)
+      : 0;
 
-  const roomDisplayTitle =
-    activeLoungeType === 'family'
-      ? `👨‍👩‍👧‍👦 패밀리 [${activeFamilyRoom}]`
-      : activeLoungeType === 'club'
-      ? '⛰️ 동호회·모임'
-      : activeLoungeType === 'student'
-      ? `🎓 동창회 [${alumniBannerTitle || alumniSchoolName || '동창회'}]`
-      : '👑 내 기기 통합 (폰·PC·노트북)';
+  const currentCastPhoto =
+    remoteCastPhotoOverride || activePhotos[safeCastIdx] || activePhotos[0] || null;
+  const currentSyncPhoto =
+    activePhotos[safeSyncIdx] || activePhotos[0] || null;
+
+  const roomDisplayTitle = activeJoinedRoomMeta
+    ? `💌 ${activeJoinedRoomMeta.masterNickname} · ${activeJoinedRoomMeta.roomTitle}`
+    : activeLoungeType === 'family'
+    ? `👨‍👩‍👧‍👦 패밀리 [${activeFamilyRoom}]`
+    : activeLoungeType === 'club'
+    ? '⛰️ 동호회·모임'
+    : activeLoungeType === 'student'
+    ? `🎓 동창회 [${alumniBannerTitle || alumniSchoolName || '동창회'}]`
+    : '👑 내 기기 통합 (폰·PC·노트북)';
 
   return (
     <>
@@ -523,7 +593,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                       🛡️ 사생활 보호 클린 뷰어 ON (카카오톡·문자·메신저 알림 원천 차단됨)
                     </span>
                     <span className="px-2.5 py-1 rounded-lg bg-zinc-900/90 border border-white/15 text-[11px] text-zinc-300 font-mono shrink-0">
-                      {castState.photoIndex + 1} / {activePhotos.length} • 배율 {castState.zoom.toFixed(1)}x • 회전 {castState.rotation}°
+                      {safeCastIdx + 1} / {activePhotos.length} • 배율 {castState.zoom.toFixed(1)}x • 회전 {castState.rotation}°
                     </span>
                   </div>
 
@@ -585,7 +655,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                       onClick={() =>
                         updateCastState({
                           photoIndex:
-                            (castState.photoIndex - 1 + activePhotos.length) %
+                            (safeCastIdx - 1 + activePhotos.length) %
                             Math.max(1, activePhotos.length),
                           zoom: 1,
                         })
@@ -600,7 +670,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                       onClick={() =>
                         updateCastState({
                           photoIndex:
-                            (castState.photoIndex + 1) % Math.max(1, activePhotos.length),
+                            (safeCastIdx + 1) % Math.max(1, activePhotos.length),
                           zoom: 1,
                         })
                       }
@@ -702,20 +772,26 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
           </div>
 
           <div className="flex items-center gap-3">
-            <img
-              src={currentSyncPhoto.thumbUrl || currentSyncPhoto.fullUrl}
-              alt={currentSyncPhoto.name}
-              style={{
-                transform: `scale(${photoSyncState.zoom}) rotate(${photoSyncState.rotation}deg)`,
-              }}
-              className="w-20 h-20 rounded-xl object-cover border border-emerald-400/50 shrink-0"
-            />
+            <div className="w-20 h-20 rounded-xl overflow-hidden border border-emerald-400/50 shrink-0 bg-black flex items-center justify-center">
+              <img
+                src={currentSyncPhoto.thumbUrl || currentSyncPhoto.fullUrl}
+                alt={currentSyncPhoto.name}
+                style={{
+                  transform: `scale(${photoSyncState.zoom}) rotate(${photoSyncState.rotation}deg)`,
+                  transition: 'transform 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+                }}
+                className="w-full h-full object-cover select-none"
+              />
+            </div>
             <div className="min-w-0 flex-1">
               <div className="text-xs font-extrabold text-emerald-200 truncate">
                 👑 {photoSyncState.presenterName}님이 화면을 리드하는 중
               </div>
               <div className="text-sm font-black text-white truncate mt-0.5">
-                {currentSyncPhoto.name} ({photoSyncState.photoIndex + 1}/{activePhotos.length})
+                {currentSyncPhoto.name} ({safeSyncIdx + 1}/{activePhotos.length})
+              </div>
+              <div className="text-[11px] font-bold text-emerald-300 mt-0.5">
+                사진 {safeSyncIdx + 1} / {activePhotos.length} · 배율 {photoSyncState.zoom.toFixed(1)}x
               </div>
               <div className="text-[11px] text-zinc-400 mt-0.5">
                 내가 넘기거나 확대하면 {roomDisplayTitle} 멤버 전원 화면이 0.1초 만에 똑같이 넘어갑니다.
@@ -729,7 +805,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
               onClick={() =>
                 updatePhotoSync({
                   photoIndex:
-                    (photoSyncState.photoIndex - 1 + activePhotos.length) %
+                    (safeSyncIdx - 1 + activePhotos.length) %
                     Math.max(1, activePhotos.length),
                   zoom: 1,
                 })
@@ -743,7 +819,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
               onClick={() =>
                 updatePhotoSync({
                   photoIndex:
-                    (photoSyncState.photoIndex + 1) % Math.max(1, activePhotos.length),
+                    (safeSyncIdx + 1) % Math.max(1, activePhotos.length),
                   zoom: 1,
                 })
               }
