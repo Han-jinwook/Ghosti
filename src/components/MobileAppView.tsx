@@ -33,6 +33,7 @@ import {
   PcMasterQuickSendPanel,
   buildDocPreviewSnippet,
   renderHighlightedDocText,
+  resolveDocExtBadge,
   maskSensitiveDocText,
 } from './PricingModal';
 import { CrossDeviceClipboardAndPairingBar } from '../domains/paid_device_sync/CrossDeviceClipboardAndPairingBar';
@@ -1163,13 +1164,17 @@ export const MobileAppView: React.FC = () => {
                           {vid.title}
                         </h4>
                         {hasExecutedUserSearch && activeQuery ? (
-                          <p className="font-body-sm text-[11.5px] text-zinc-200 bg-zinc-950/80 border border-primary-container/30 rounded-lg p-2 line-clamp-2">
-                            {vid.matchedFrameCaption}
-                          </p>
+                          <div className="bg-zinc-950/80 border border-primary-container/30 rounded-lg p-2">
+                            <p className="font-body-sm text-[11.5px] text-zinc-200 line-clamp-2 m-0 p-0">
+                              {vid.matchedFrameCaption}
+                            </p>
+                          </div>
                         ) : Array.isArray(vid.ocrLines) && vid.ocrLines.length > 0 ? (
-                          <p className="font-body-sm text-[11.5px] text-zinc-200 bg-zinc-950/80 border border-teal-400/35 rounded-lg p-2 line-clamp-2">
-                            📝 {vid.ocrLines.map((l) => l.text).join(' · ')}
-                          </p>
+                          <div className="bg-zinc-950/80 border border-teal-400/35 rounded-lg p-2">
+                            <p className="font-body-sm text-[11.5px] text-zinc-200 line-clamp-2 m-0 p-0">
+                              📝 {vid.ocrLines.map((l) => l.text).join(' · ')}
+                            </p>
+                          </div>
                         ) : null}
                         <div className="font-label-mono text-[10.5px] text-zinc-400 pt-0.5 flex items-center justify-between gap-2">
                           <span className="truncate">📍 {vid.locationKo}</span>
@@ -1224,7 +1229,7 @@ export const MobileAppView: React.FC = () => {
                         )}
                         <div className="flex items-center justify-between">
                           <span className="px-2 py-0.5 rounded bg-zinc-800 border border-white/10 text-amber-400 font-label-mono text-[10px] font-bold">
-                            {doc.ext} • {doc.categoryBadge}
+                            {resolveDocExtBadge(doc)} • {doc.categoryBadge}
                           </span>
                           <span className="font-label-mono text-[10px] text-zinc-400">
                             {doc.date}
@@ -1233,17 +1238,20 @@ export const MobileAppView: React.FC = () => {
                         <h4 className="font-headline-sm text-[14px] text-white font-bold truncate">
                           {renderHighlightedDocText(
                             doc.title,
-                            hasExecutedUserSearch ? activeQuery : ''
+                            hasExecutedUserSearch ? activeQuery : '',
+                            doc.matchedQueryTokens
                           )}
                         </h4>
-                        <p className="font-body-sm text-[12px] text-zinc-400 line-clamp-2">
+                        <p className="font-body-sm text-[12px] text-zinc-400 line-clamp-3 leading-relaxed m-0 p-0">
                           {renderHighlightedDocText(
                             buildDocPreviewSnippet(
                               maskSensitiveDocText(doc.extractedText),
                               hasExecutedUserSearch ? activeQuery : '',
-                              220
+                              170,
+                              doc.matchedQueryTokens
                             ),
-                            hasExecutedUserSearch ? activeQuery : ''
+                            hasExecutedUserSearch ? activeQuery : '',
+                            doc.matchedQueryTokens
                           )}
                         </p>
                         <div className="pt-1.5 flex items-center justify-between gap-2 border-t border-white/10">

@@ -20,6 +20,7 @@ import {
   extractVideoScreenTextOnDemand,
   resolveVideoCardThumbUrl,
   setVideoPlaybackActive,
+  stripKoSearchParticle,
   type VideoOcrLineItem,
 } from '../services/aiEngine';
 
@@ -985,50 +986,124 @@ export const PricingModal: React.FC = () => {
   );
 };
 
+const DOC_SNIPPET_STOP_WORDS = new Set([
+  '찾아줘',
+  '보여줘',
+  '사진',
+  '문서',
+  '파일',
+  '서류함',
+  '최근',
+  '서류',
+  '내역',
+  '전체',
+  '통합',
+  '로컬',
+]);
+
+function escapeRegExpChars(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+}
+
+function extractDocHighlightTokens(query: string, fallbackKeywords: string[] = []): string[] {
+  const rawQ = (query || '').trim();
+  const rawWords = rawQ
+    .replace(/[.,!?'"“”‘’()[\]{}]/g, ' ')
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 1 && !DOC_SNIPPET_STOP_WORDS.has(t));
+  const isSingleWord = rawWords.length === 1;
+
+  const out: string[] = [];
+  for (const w of rawWords) {
+    const stem = stripKoSearchParticle(w, isSingleWord);
+    if (stem && !DOC_SNIPPET_STOP_WORDS.has(stem) && (stem.length >= 2 || isSingleWord)) {
+      out.push(stem);
+      // '비타민D'처럼 한글+영문/숫자 결합어는 본문 '비타민 D' 띄어쓰기에도 매칭되도록 한글 어근도 보조 등록
+      const koPart = stem.match(/^[가-힣]{2,}(?=[a-zA-Z0-9]+)/)?.[0];
+      if (koPart && koPart.length >= 2) {
+        out.push(koPart);
+      }
+    }
+  }
+
+  for (const fk of fallbackKeywords) {
+    const cleanFk = (fk || '').trim();
+    if (cleanFk.length >= 2 && !DOC_SNIPPET_STOP_WORDS.has(cleanFk)) {
+      out.push(cleanFk);
+    }
+  }
+
+  return Array.from(new Set(out));
+}
+
+function findBestKeywordMatchRange(
+  cleanText: string,
+  tokens: string[]
+): { startIdx: number; endIdx: number } | null {
+  if (!cleanText || tokens.length === 0) return null;
+  const lowClean = cleanText.toLowerCase();
+
+  // 1순위: 공백 없는 정확 부분일치 (가장 긴 토큰 우선)
+  const sorted = [...tokens].sort((a, b) => b.length - a.length);
+  for (const tk of sorted) {
+    const idx = lowClean.indexOf(tk.toLowerCase());
+    if (idx >= 0) {
+      return { startIdx: idx, endIdx: idx + tk.length };
+    }
+  }
+
+  // 2순위: PDF/DOCX 추출 시 글자 사이 공백('비 타민' 등)이 끼어 있는 경우 공백 허용 탐색
+  for (const tk of sorted) {
+    if (tk.length < 2) continue;
+    const spacedPattern = Array.from(tk)
+      .map((ch) => escapeRegExpChars(ch))
+      .join('\\s*');
+    const m = new RegExp(spacedPattern, 'i').exec(cleanText);
+    if (m && m.index >= 0) {
+      return { startIdx: m.index, endIdx: m.index + m[0].length };
+    }
+  }
+
+  return null;
+}
+
+export function resolveDocExtBadge(doc: { fileName?: string; ext?: string }): string {
+  const fname = (doc.fileName || '').trim();
+  const dot = fname.lastIndexOf('.');
+  if (dot > 0 && dot < fname.length - 1) {
+    return fname.slice(dot + 1).toUpperCase();
+  }
+  return (doc.ext || 'DOC').toUpperCase();
+}
+
 export function buildDocPreviewSnippet(
   text: string,
   query: string,
-  maxLen = 240
+  maxLen = 180,
+  fallbackKeywords: string[] = []
 ): string {
   if (!text) return '';
   const clean = text.replace(/\s+/g, ' ').trim();
   if (!clean) return '';
-  const rawQ = (query || '').trim();
-  const stopSet = new Set([
-    '찾아줘',
-    '보여줘',
-    '사진',
-    '문서',
-    '파일',
-    '서류함',
-    '최근',
-    '서류',
-    '내역',
-    '전체',
-  ]);
-  const tokens = rawQ
-    .replace(/[.,!?'"“”‘’()[\]{}]/g, ' ')
-    .split(/\s+/)
-    .map((t) =>
-      t.replace(/(에서|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|에|와|과|도)$/, '')
-    )
-    .filter((t) => t.length >= 2 && !stopSet.has(t));
 
-  if (tokens.length > 0) {
-    const lowClean = clean.toLowerCase();
-    let bestIdx = -1;
-    for (const tk of tokens) {
-      const idx = lowClean.indexOf(tk.toLowerCase());
-      if (idx >= 0 && (bestIdx < 0 || idx < bestIdx)) {
-        bestIdx = idx;
+  const tokens = extractDocHighlightTokens(query, fallbackKeywords);
+  const hitRange = findBestKeywordMatchRange(clean, tokens);
+
+  if (hitRange && hitRange.startIdx > 16) {
+    // 좁은 3열 카드(줄당 약 18~20자)에서도 검색어 노란 하이라이트가 항상 1번째 줄(또는 2번째 줄 앞머리)에
+    // 잘림 없이 바로 보이도록 앞문맥을 14자 내외로 유지하고 어절 경계에 맞춥니다.
+    let start = Math.max(0, hitRange.startIdx - 14);
+    if (start > 0) {
+      const nextSpace = clean.indexOf(' ', start);
+      if (nextSpace > start && nextSpace <= hitRange.startIdx - 4) {
+        start = nextSpace + 1;
       }
     }
-    if (bestIdx > 90) {
-      const start = Math.max(0, bestIdx - 75);
-      const end = Math.min(clean.length, start + maxLen);
-      return `${start > 0 ? '…' : ''}${clean.slice(start, end).trim()}${end < clean.length ? '…' : ''}`;
-    }
+    const end = Math.min(clean.length, Math.max(hitRange.endIdx + 60, start + maxLen));
+    return `${start > 0 ? '…' : ''}${clean.slice(start, end).trim()}${end < clean.length ? '…' : ''}`;
   }
+
   return clean.length > maxLen ? `${clean.slice(0, maxLen).trim()}…` : clean;
 }
 
@@ -1038,48 +1113,29 @@ export function renderHighlightedDocText(
   fallbackKeywords: string[] = []
 ): React.ReactNode {
   if (!text) return text;
-  const rawQ = (query || '').trim();
-  const stopSet = new Set([
-    '찾아줘',
-    '보여줘',
-    '사진',
-    '문서',
-    '파일',
-    '서류함',
-    '최근',
-    '서류',
-    '내역',
-    '전체',
-  ]);
-  const queryTokens = rawQ
-    .replace(/[.,!?'"“”‘’()[\]{}]/g, ' ')
-    .split(/\s+/)
-    .map((t) =>
-      t.replace(/(에서|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|에|와|과|도)$/, '')
-    )
-    .filter((t) => t.length >= 2 && !stopSet.has(t));
-
-  const activeTokens =
-    queryTokens.length > 0
-      ? queryTokens
-      : fallbackKeywords.filter((k) => k && k.trim().length >= 2).slice(0, 4);
-
+  const activeTokens = extractDocHighlightTokens(query, fallbackKeywords);
   if (activeTokens.length === 0) return text;
 
-  const escaped = Array.from(new Set(activeTokens))
+  const patterns = Array.from(new Set(activeTokens))
     .sort((a, b) => b.length - a.length)
-    .map((t) => t.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
-  if (escaped.length === 0) return text;
+    .map((t) =>
+      t.length >= 2
+        ? Array.from(t)
+            .map((ch) => escapeRegExpChars(ch))
+            .join('\\s*')
+        : escapeRegExpChars(t)
+    );
+  if (patterns.length === 0) return text;
 
-  const regex = new RegExp(`(${escaped.join('|')})`, 'gi');
-  const parts = text.split(regex);
-  const lowerSet = new Set(activeTokens.map((t) => t.toLowerCase()));
+  const captureRx = new RegExp(`(${patterns.join('|')})`, 'gi');
+  const exactCheckRx = new RegExp(`^(?:${patterns.join('|')})$`, 'i');
+  const parts = text.split(captureRx);
 
   return parts.map((part, idx) =>
-    lowerSet.has(part.toLowerCase()) ? (
+    part && exactCheckRx.test(part) ? (
       <mark
         key={idx}
-        className="bg-amber-300 text-zinc-950 font-extrabold px-1 py-0.5 rounded shadow-sm"
+        className="bg-amber-300 text-zinc-950 font-extrabold px-1 py-0 rounded"
       >
         {part}
       </mark>
@@ -1215,7 +1271,7 @@ export const LocalDocPreviewModal: React.FC = () => {
           <div className="flex flex-col gap-1 min-w-0">
             <div className="flex flex-wrap items-center gap-1.5">
               <span className="px-2 py-0.5 rounded-md bg-primary-container text-on-primary-container font-label-mono text-[10.5px] font-black">
-                {selectedDocModal.ext} 문서 자산
+                {resolveDocExtBadge(selectedDocModal)} 문서 자산
               </span>
               <span className="px-2 py-0.5 rounded-full bg-surface-container-highest text-primary font-label-sm text-[10.5px] font-bold">
                 {selectedDocModal.categoryBadge}

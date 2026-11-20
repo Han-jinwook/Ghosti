@@ -10,6 +10,7 @@ import { executeRealOsAction } from '../services/setupMonsterEngine';
 import {
   buildDocPreviewSnippet,
   renderHighlightedDocText,
+  resolveDocExtBadge,
   maskSensitiveDocText,
   formatQuickKoreanLabelForFile,
 } from './PricingModal';
@@ -1147,6 +1148,26 @@ export const Stage1MinimalSearchPreview: React.FC<{
               )}
             </div>
 
+            {matchedLocalDocs.length === 0 && matchedVaultPhotos.length === 0 ? (
+              <div className="w-full py-12 px-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col items-center justify-center text-center gap-2.5">
+                <span className="material-symbols-outlined text-4xl text-zinc-500">description</span>
+                <p className="font-headline-sm text-[15px] font-bold text-zinc-200">
+                  {hasExecutedUserSearch && activeQuery
+                    ? `“${activeQuery}”와 일치하는 문서가 없습니다 (0건)`
+                    : '표시할 문서가 없습니다'}
+                </p>
+                {totalIndexedDocs > 0 && hasExecutedUserSearch && (
+                  <button
+                    type="button"
+                    onClick={() => resetSearchSpaceToAll('vault')}
+                    className="mt-1 px-3.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-primary-container text-[12.5px] font-bold cursor-pointer"
+                  >
+                    전체 문서 {totalIndexedDocs}건 다시 보기
+                  </button>
+                )}
+              </div>
+            ) : null}
+
             {matchedLocalDocs.length > 0 && (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5 pb-1">
                 {matchedLocalDocs.map((doc) => (
@@ -1159,7 +1180,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex items-center gap-1.5">
                           <span className="px-2 py-0.5 rounded bg-zinc-800 border border-white/10 text-amber-400 font-label-mono text-[10px] font-bold">
-                            {doc.ext}
+                            {resolveDocExtBadge(doc)}
                           </span>
                           <span className="px-2 py-0.5 rounded bg-zinc-900 text-zinc-300 font-label-sm text-[11px] font-medium">
                             {doc.categoryBadge}
@@ -1171,19 +1192,27 @@ export const Stage1MinimalSearchPreview: React.FC<{
                       </div>
 
                       <h4 className="font-headline-sm text-[15px] text-white font-bold group-hover:text-primary-container transition-colors">
-                        {renderHighlightedDocText(doc.title, hasExecutedUserSearch ? activeQuery : '')}
+                        {renderHighlightedDocText(
+                          doc.title,
+                          hasExecutedUserSearch ? activeQuery : '',
+                          doc.matchedQueryTokens
+                        )}
                       </h4>
 
-                      <p className="font-body-sm text-[12px] text-zinc-400 line-clamp-2 leading-relaxed bg-zinc-950/80 p-2.5 rounded-xl border border-white/5">
-                        {renderHighlightedDocText(
-                          buildDocPreviewSnippet(
-                            maskSensitiveDocText(doc.extractedText),
+                      <div className="bg-zinc-950/80 p-2.5 rounded-xl border border-white/5">
+                        <p className="font-body-sm text-[12px] text-zinc-400 line-clamp-3 leading-relaxed m-0 p-0">
+                          {renderHighlightedDocText(
+                            buildDocPreviewSnippet(
+                              maskSensitiveDocText(doc.extractedText),
+                              hasExecutedUserSearch ? activeQuery : '',
+                              180,
+                              doc.matchedQueryTokens
+                            ),
                             hasExecutedUserSearch ? activeQuery : '',
-                            240
-                          ),
-                          hasExecutedUserSearch ? activeQuery : ''
-                        )}
-                      </p>
+                            doc.matchedQueryTokens
+                          )}
+                        </p>
+                      </div>
                     </div>
 
                     <div className="flex items-center justify-between pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400 gap-2">

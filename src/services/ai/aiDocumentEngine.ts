@@ -239,8 +239,15 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
       for (const d of zDocs) {
         const fname = d.fileName || (d as any).name;
         if (!fname || fname.includes('비밀금고') || realOnly.has(fname)) continue;
+        const dotIdx = fname.lastIndexOf('.');
+        const derivedExt =
+          dotIdx > 0 && dotIdx < fname.length - 1
+            ? fname.slice(dotIdx + 1).toUpperCase()
+            : d.ext || 'DOC';
         realOnly.set(fname, {
           ...d,
+          fileName: fname,
+          ext: derivedExt,
           deviceSource: (d.deviceSource || '내 PC 문서함').replace(/\s*\(test_docs\)/g, ''),
         });
       }

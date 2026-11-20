@@ -87,9 +87,12 @@ import {
   normalizeLocalVideoSceneItem,
   loadInitialPhotoDataset,
   runOnboardingIndexingPipeline,
+  searchLocalDocumentFiles,
   searchLocalDocumentFilesAsync,
+  searchVideoSceneItems,
   searchVideoSceneItemsAsync,
   startSilentRealMediaVisionIndexing,
+  stripKoSearchParticle,
   updateFaceClusterRegistry,
 } from '../../services/aiEngine';
 import {
@@ -297,6 +300,11 @@ export const createSearchSlice: StateCreator<
     })),
 
   setSearchSpace: (searchSpace) => {
+    if (typeof window !== 'undefined' && !isTextQueryEncoderReady()) {
+      window.setTimeout(() => {
+        void ensureTextQueryEncoderLoaded();
+      }, 120);
+    }
     const stateNow = get();
     const { hasExecutedUserSearch, photos, videoSceneItems, localDocuments, activeLoungeType } =
       stateNow;
@@ -853,12 +861,96 @@ export const createSearchSlice: StateCreator<
 
     const encoderReadyBeforeQuery = isTextQueryEncoderReady();
 
-    // [통합 3-Track 고속 검색] 사진·문서 매칭을 즉시 수행한 뒤, 일치 사진 세션 정보를 결합해 동영상을 무블로킹(0.1초) 평가
-    const [docMatches, photoSearchOut] = await Promise.all([
+    // [규칙 1 & 2: 명시적 탭 고정 및 다중 탭 우선순위 판정]
+    // 사용자가 [문서]·[동영상]·[사진] 탭을 직접 눌러 진입한 상태(hasUserSelectedSearchTab === true)에서는
+    // 검색어 자체에 다른 매체 지정("OO 동영상", "OO 사진")이 없는 한 현재 보고 있는 탭을 절대 강제 전환하지 않습니다.
+    const isExplicitVideoIntent =
+      !sharedMode &&
+      !isExplicitPhotoOnlyQuery &&
+      /영상|동영상|장면|구간|순간|말하는\s*부분|외치는|화이트보드|판서/.test(query);
+    const isExplicitDocIntent =
+      !sharedMode &&
+      !isExplicitPhotoOnlyQuery &&
+      /문서|서류|파일|계약|견적|영수증|전표|엑셀|시트|한글|워드|피디에프|pdf|xlsx|xls|docx|hwp|txt/i.test(query);
+
+    const wordsForVault = query
+      .toLowerCase()
+      .replace(/[.,!?'"“”‘’()[\]{}]/g, ' ')
+      .split(/\s+/)
+      .map((t) => t.trim())
+      .filter((t) => t.length >= 1 && !['서류', '문서', '파일', '사본', '사진', '및'].includes(t));
+    const isSingleVaultWord = wordsForVault.length === 1;
+    const rawTokens = Array.from(
+      new Set(
+        wordsForVault
+          .map((t) => stripKoSearchParticle(t, isSingleVaultWord))
+          .filter((t) => t.length >= 1 && !['서류', '문서', '파일', '사본', '사진', '및'].includes(t))
+      )
+    );
+
+    const instantDocMatches =
       isExplicitPhotoOnlyQuery || sharedMode
-        ? Promise.resolve([])
+        ? []
         : isPureBrowseDocIntent
-        ? Promise.resolve(localDocuments)
+        ? localDocuments
+        : searchLocalDocumentFiles(cleanedSearchQuery || query, localDocuments);
+
+    const instantVaultMap = new Map<string, SearchResultItem>();
+    if (!sharedMode && !isExplicitPhotoOnlyQuery && rawTokens.length > 0) {
+      for (const p of photosForSearch) {
+        if (p.quarantined || !p.isVaultDocument) continue;
+        const corpus = `${p.tags.join(' ')} ${p.captionKo ?? ''} ${p.vaultCategoryLabel ?? ''}`.toLowerCase();
+        if (rawTokens.some((tk) => corpus.includes(tk))) {
+          instantVaultMap.set(p.id, {
+            photo: p,
+            score: 0.91,
+            matchPercentage: 95,
+            matchedBy: 'text-direct',
+          });
+        }
+      }
+    }
+    const instantVaultPhotos = Array.from(instantVaultMap.values());
+
+    const instantVideoLexical =
+      isExplicitPhotoOnlyQuery || sharedMode
+        ? []
+        : isPureBrowseVideoIntent
+        ? videoSceneItems.map((v) => ({
+            ...v,
+            matchedSeekSec: 0,
+            matchedTimestamp: '00:00',
+          }))
+        : searchVideoSceneItems(cleanedSearchQuery || query, videoSceneItems);
+
+    // [0.001초 즉시 반영]: 사용자가 [문서] 탭(또는 콜드스타트 상태)에서 엔터를 치면
+    // 768차원 비전/텍스트 ONNX 모델 로딩(2~3초)을 기다리지 않고 0.001초 만에 문서·어휘 결과를 즉시 렌더링합니다!
+    if (searchSpace === 'vault' || !encoderReadyBeforeQuery) {
+      const immediateSpace: SearchSpaceMode = sharedMode || isExplicitPhotoOnlyQuery
+        ? 'gallery'
+        : isExplicitVideoIntent && instantVideoLexical.length > 0
+        ? 'video'
+        : isExplicitDocIntent && (instantDocMatches.length > 0 || instantVaultPhotos.length > 0)
+        ? 'vault'
+        : hasUserSelectedSearchTab
+        ? searchSpace
+        : isTimeRangeOrAlumniQuery
+        ? 'gallery'
+        : searchSpace;
+      set({
+        searchSpace: immediateSpace,
+        hasExecutedUserSearch: true,
+        activeQuery: query,
+        matchedLocalDocs: instantDocMatches,
+        matchedVaultPhotos: instantVaultPhotos,
+        ...(immediateSpace === 'video' ? { matchedVideoScenes: instantVideoLexical } : {}),
+      });
+    }
+
+    // [통합 3-Track 고속 병렬 검색] 문서·사진·동영상을 무대기 병렬 평가
+    const [docMatches, photoSearchOut] = await Promise.all([
+      localDocuments.length > 0 || isExplicitPhotoOnlyQuery || sharedMode || isPureBrowseDocIntent
+        ? Promise.resolve(instantDocMatches)
         : searchLocalDocumentFilesAsync(cleanedSearchQuery || query, localDocuments),
       cleanedSearchQuery && !isPureBrowseVideoIntent && !isPureBrowseDocIntent
         ? executeTextSearch(cleanedSearchQuery, photosForSearch, 'text-direct')
@@ -870,11 +962,7 @@ export const createSearchSlice: StateCreator<
       isExplicitPhotoOnlyQuery || sharedMode
         ? []
         : isPureBrowseVideoIntent
-        ? videoSceneItems.map((v) => ({
-            ...v,
-            matchedSeekSec: 0,
-            matchedTimestamp: '00:00',
-          }))
+        ? instantVideoLexical
         : await searchVideoSceneItemsAsync(
             cleanedSearchQuery || query,
             videoSceneItems,
@@ -987,7 +1075,7 @@ export const createSearchSlice: StateCreator<
     }
 
     // 촬영 서류(isVaultDocument) 매칭 계산 (공유 사진방에서는 내 기기 서류함 누출 완전 차단)
-    const vaultMap = new Map<string, SearchResultItem>();
+    const vaultMap = new Map<string, SearchResultItem>(instantVaultMap);
     if (!sharedMode) {
       for (const r of results) {
         if (r.photo.isVaultDocument) {
@@ -995,44 +1083,11 @@ export const createSearchSlice: StateCreator<
         }
       }
     }
-    const rawTokens = query
-      .toLowerCase()
-      .split(/\s+/)
-      .map((t) => t.replace(/(에서|으로|이랑|하고|있는|하는|들을|들|의|을|를|은|는|에|와|과|도)$/, ''))
-      .filter((t) => t.length >= 2 && !['서류', '문서', '파일', '사본', '사진', '및'].includes(t));
-
-    if (!sharedMode && rawTokens.length > 0) {
-      for (const p of photosForSearch) {
-        if (p.quarantined || !p.isVaultDocument || vaultMap.has(p.id)) continue;
-        const corpus = `${p.tags.join(' ')} ${p.captionKo ?? ''} ${p.vaultCategoryLabel ?? ''}`.toLowerCase();
-        if (rawTokens.some((tk) => corpus.includes(tk))) {
-          vaultMap.set(p.id, {
-            photo: p,
-            score: 0.91,
-            matchPercentage: 95,
-            matchedBy: 'text-direct',
-          });
-        }
-      }
-    }
     const vaultPhotoMatches =
       sharedMode || isExplicitPhotoOnlyQuery ? [] : Array.from(vaultMap.values());
 
-    // [규칙 1 & 2: 다중 탭 동시 매칭 시 우선 표시 탭 규칙]
-    // 1) 검색어에 '동영상/영상/장면' 또는 '문서/서류/PDF/계약서/엑셀' 등 명시적 매체 키워드가 있으면 해당 탭 우선
-    // 2) 매체 지정 없는 일반 단어(예: '패러세일링')이고 여러 탭에 모두 파일이 있을 때는:
-    //    사용자가 현재 보고 있는 탭에 결과가 있으면 그 탭을 유지하고, 없으면 좌측 탭 순서대로 [사진 ➔ 동영상 ➔ 문서] 순으로 표시합니다.
-    const isExplicitVideoIntent =
-      !sharedMode &&
-      !isExplicitPhotoOnlyQuery &&
-      /영상|동영상|장면|구간|순간|말하는\s*부분|외치는|화이트보드|판서/.test(query);
-    const isExplicitDocIntent =
-      !sharedMode &&
-      !isExplicitPhotoOnlyQuery &&
-      /문서|서류|파일|계약|견적|영수증|전표|엑셀|시트|한글|워드|피디에프|pdf|xlsx|xls|docx|hwp|txt/i.test(query);
-
     let targetSpace: SearchSpaceMode =
-      sharedMode || isExplicitPhotoOnlyQuery || isTimeRangeOrAlumniQuery
+      sharedMode || isExplicitPhotoOnlyQuery
         ? 'gallery'
         : isExplicitVideoIntent && videoMatches.length > 0
         ? 'video'
@@ -1040,22 +1095,27 @@ export const createSearchSlice: StateCreator<
         ? 'vault'
         : hasUserSelectedSearchTab
         ? searchSpace
+        : isTimeRangeOrAlumniQuery
+        ? 'gallery'
         : 'gallery';
 
-    // 유저가 이전에 문서(vault)나 사진(gallery) 탭을 열어둔 상태였더라도, 새 검색어가 현재 탭에서 0건이고 다른 탭에 결과가 있다면 [사진 ➔ 동영상 ➔ 문서] 우선순위로 자동 전환!
-    if (targetSpace === 'gallery' && results.length === 0) {
-      if (videoMatches.length > 0) targetSpace = 'video';
-      else if (docMatches.length > 0 || vaultPhotoMatches.length > 0) targetSpace = 'vault';
-    } else if (targetSpace === 'video' && videoMatches.length === 0) {
-      if (results.length > 0) targetSpace = 'gallery';
-      else if (docMatches.length > 0 || vaultPhotoMatches.length > 0) targetSpace = 'vault';
-    } else if (
-      targetSpace === 'vault' &&
-      docMatches.length === 0 &&
-      vaultPhotoMatches.length === 0
-    ) {
-      if (results.length > 0) targetSpace = 'gallery';
-      else if (videoMatches.length > 0) targetSpace = 'video';
+    // 사용자가 명시적으로 특정 탭([문서]·[동영상]·[사진])을 선택하지 않은 초기 통합 검색 상태(!hasUserSelectedSearchTab)일 때만
+    // 현재 탭 결과가 0건이면 다른 탭([사진 ➔ 동영상 ➔ 문서])으로 자동 안내하며, 사용자가 직접 누른 탭은 0건이어도 그대로 유지합니다.
+    if (!hasUserSelectedSearchTab) {
+      if (targetSpace === 'gallery' && results.length === 0) {
+        if (videoMatches.length > 0) targetSpace = 'video';
+        else if (docMatches.length > 0 || vaultPhotoMatches.length > 0) targetSpace = 'vault';
+      } else if (targetSpace === 'video' && videoMatches.length === 0) {
+        if (results.length > 0) targetSpace = 'gallery';
+        else if (docMatches.length > 0 || vaultPhotoMatches.length > 0) targetSpace = 'vault';
+      } else if (
+        targetSpace === 'vault' &&
+        docMatches.length === 0 &&
+        vaultPhotoMatches.length === 0
+      ) {
+        if (results.length > 0) targetSpace = 'gallery';
+        else if (videoMatches.length > 0) targetSpace = 'video';
+      }
     }
 
     const topTags =
