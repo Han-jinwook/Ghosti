@@ -731,8 +731,11 @@ def build_ui2_search_window(
                     r["_search_low"] = cached_low
                     r["_search_src_len"] = len(raw_t)
                 t_low = cached_low
+                fp_stem_low = Path(str(r.get("file_path") or r.get("img_path") or "")).stem.lower()
                 sc = 0.0
-                if q_low in t_low:
+                if fp_stem_low and q_low in fp_stem_low:
+                    sc = 1.15
+                elif q_low in t_low:
                     sc = 1.0
                 elif q_cho:
                     t_cho = r.get("_search_cho")

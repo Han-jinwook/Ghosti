@@ -263,12 +263,36 @@ def _is_protected_ko_noun(w: str) -> bool:
     return bool(w) and (w in _PROTECTED_KO_NOUNS or bool(_PROTECTED_NOUN_SUFFIX_RE.search(w)))
 
 
-def _match_query_token(tk: str, corpus: str, corpus_nospace: str = "") -> bool:
+def _expand_camel_and_alnum(raw: str) -> str:
+    s = re.sub(r"([a-z])([A-Z])", r"\1 \2", raw)
+    s = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", s)
+    s = re.sub(r"([a-zA-Z])([0-9])", r"\1 \2", s)
+    s = re.sub(r"([0-9])([a-zA-Z])", r"\1 \2", s)
+    s = re.sub(r"([가-힣])([a-zA-Z0-9])", r"\1 \2", s)
+    s = re.sub(r"([a-zA-Z0-9])([가-힣])", r"\1 \2", s)
+    return f"{raw} {s}"
+
+
+def _match_query_token(
+    tk: str,
+    corpus: str,
+    corpus_nospace: str = "",
+    *,
+    allow_filename_substring: bool = False,
+) -> bool:
     """영문/숫자 내부 부분문자열('ai'≠'main') 및 한국어 지명·합성어 착시('고양이'≠'고양시', '튜브'≠'유튜브', '아이'≠'아이콘')를 원천 차단합니다."""
     if not tk:
         return False
     if _ASCII_TOKEN_RE.match(tk):
-        return bool(re.search(rf"(?<![a-z0-9]){re.escape(tk)}(?![a-z0-9])", corpus))
+        if re.search(rf"(?<![a-z0-9]){re.escape(tk)}(?![a-z0-9])", corpus):
+            return True
+        if allow_filename_substring and len(tk) >= 3 and tk in corpus:
+            return True
+        if len(tk) >= 4:
+            for w in re.findall(r"[a-z0-9]+", corpus):
+                if w.startswith(tk) or w.endswith(tk):
+                    return True
+        return False
     block_rx = _FALSE_FRIEND_BLOCK_MAP.get(tk)
     target_corpus = block_rx.sub(" ", corpus) if block_rx else corpus
     if len(tk) == 1:
@@ -323,20 +347,29 @@ def docs_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
         return {"ok": True, "documents": docs}
 
     req_hits = len(tokens) if len(tokens) <= 2 else max(2, int((len(tokens) * 0.6) + 0.999))
-    scored: list[tuple[int, Dict[str, Any]]] = []
+    scored: list[tuple[int, int, Dict[str, Any]]] = []
     for d in docs:
+        raw_fname = str(d.get("fileName") or "")
+        fname_stem = Path(raw_fname).stem if raw_fname else ""
+        fname_corpus = _expand_camel_and_alnum(f"{fname_stem} {d.get('title', '')}").lower()
         kws = " ".join(str(x) for x in (d.get("keywords") or []))
-        corpus = f"{d.get('fileName', '')} {d.get('title', '')} {d.get('categoryBadge', '')} {d.get('extractedText', '')} {kws}".lower()
+        corpus = _expand_camel_and_alnum(
+            f"{raw_fname} {d.get('title', '')} {d.get('categoryBadge', '')} {d.get('extractedText', '')} {kws}"
+        ).lower()
         corpus_nospace = re.sub(r"\s+", "", corpus)
         hits = 0
+        fname_hits = 0
         for tk in tokens:
-            if _match_query_token(tk, corpus, corpus_nospace):
+            if _match_query_token(tk, fname_corpus, allow_filename_substring=True):
+                hits += 1
+                fname_hits += 1
+            elif _match_query_token(tk, corpus, corpus_nospace):
                 hits += 1
         if hits >= req_hits:
-            scored.append((hits, d))
+            scored.append((hits, fname_hits, d))
 
-    scored.sort(key=lambda x: x[0], reverse=True)
-    return {"ok": True, "documents": [d for _, d in scored]}
+    scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
+    return {"ok": True, "documents": [d for _, _, d in scored]}
 
 
 def _load_static_json(filename: str) -> Dict[str, Any] | None:

@@ -329,10 +329,22 @@ export async function loadInitialPhotoDataset(): Promise<{
   let quarantinedList: LocalPhotoEntry[] = [];
   const auditByPhoto = new Map<string, PhysicalAuditRecord>();
 
+  const isStandaloneSearchWin =
+    typeof window !== 'undefined' &&
+    Boolean(new URLSearchParams(window.location.search).get('ghostSearchWindow'));
+
   try {
     if (hasActiveGhostiLoginSession() && zCoreBridge.isConnected) {
-      await hydrateRealMediaVectorCacheOnce();
-      const res = await fetch(getZCoreUrl('/__photos/list')).catch(() => fetch(getZCoreUrl('/__photos/list')));
+      const fetchListPromise = fetch(getZCoreUrl('/__photos/list')).catch(() =>
+        fetch(getZCoreUrl('/__photos/list'))
+      );
+      if (isStandaloneSearchWin) {
+        // 독립 귀신검색창 오픈 시에는 IndexedDB 768D 벡터 전체 역직렬화를 기다리지 않고 파일 목록부터 0.02초 만에 즉시 표시한 뒤 백그라운드 복원합니다.
+        void hydrateRealMediaVectorCacheOnce();
+      } else {
+        await Promise.all([hydrateRealMediaVectorCacheOnce(), fetchListPromise]);
+      }
+      const res = await fetchListPromise;
       const json = await res.json();
       fileList = json.files ?? [];
       quarantinedList = json.quarantined ?? [];
@@ -346,34 +358,40 @@ export async function loadInitialPhotoDataset(): Promise<{
     { captionKo: string; captionEn: string; keywordsKo: string[]; primaryTag: string }
   >();
 
-  try {
-    const { pocJson, auditJson, semJson } = await getStaticCorpusCached();
-    const pocData = pocJson?.data ?? pocJson;
-    if (pocData && Array.isArray(pocData.searches)) {
-      aiRuntimeFlags.precomputedSearches = pocData.searches ?? [];
-      aiRuntimeFlags.precomputedAudioRows = pocData.audioBench?.rows ?? [];
-    }
-    if (auditJson && Array.isArray(auditJson.items)) {
-      for (const item of auditJson.items) {
-        auditByPhoto.set(item.f, item);
+  // [10.4MB 정적 쇼룸 샘플 JSON 불필요 다운로드 원천 차단]:
+  // 실전 사용자 PC에 과거 PoC 코퍼스 파일(20240719~20240722_*.jpg)이 단 1장도 없을 때는
+  // 9.73MB corpus_550_semantic_index.json 등을 다운로드·파싱하지 않고 0.0ms로 즉시 통과합니다.
+  const hasLegacyPoc2024Files = [...fileList, ...quarantinedList].some((f) =>
+    /^202407(?:19|20|21|22)_/i.test(f.originalName || f.path)
+  );
+  if (hasLegacyPoc2024Files) {
+    try {
+      const { pocJson, auditJson, semJson } = await getStaticCorpusCached();
+      const pocData = pocJson?.data ?? pocJson;
+      if (pocData && Array.isArray(pocData.searches)) {
+        aiRuntimeFlags.precomputedSearches = pocData.searches ?? [];
+        aiRuntimeFlags.precomputedAudioRows = pocData.audioBench?.rows ?? [];
       }
-    }
-    if (semJson) {
-      if (semJson.photos && typeof semJson.photos === 'object') {
-        for (const [name, meta] of Object.entries(semJson.photos)) {
-          semanticByPhoto.set(name, meta as any);
+      if (auditJson && Array.isArray(auditJson.items)) {
+        for (const item of auditJson.items) {
+          auditByPhoto.set(item.f, item);
         }
       }
-      if (semJson.items && typeof semJson.items === 'object') {
-        for (const [name, meta] of Object.entries(semJson.items)) {
-          semanticByPhoto.set(name, meta as any);
+      if (semJson) {
+        if (semJson.photos && typeof semJson.photos === 'object') {
+          for (const [name, meta] of Object.entries(semJson.photos)) {
+            semanticByPhoto.set(name, meta as any);
+          }
+        }
+        if (semJson.items && typeof semJson.items === 'object') {
+          for (const [name, meta] of Object.entries(semJson.items)) {
+            semanticByPhoto.set(name, meta as any);
+          }
         }
       }
-      // [실물 파일 순수성 철칙]: 로컬 Z-코어 연결 여부와 무관하게 본 앱(workspace)에서는
-      // 번들 샘플 사진(sample_photos_301 / 쇼윈도 예시)을 단 1장도 끼워 넣지 않고 100% 실제 사용자 파일(fileList)만 유지합니다!
+    } catch {
+      /* ignore */
     }
-  } catch {
-    /* ignore */
   }
 
   const scoresByPhoto = new Map<string, Record<string, number>>();
@@ -1385,7 +1403,12 @@ export async function executeTextSearch(
       if (!hasCatWord) continue;
     }
 
-    // 3) 온톨로지 태그 + 한국어 동의어·어간(Stem) 정밀 매칭
+    // 3) 온톨로지 태그 + 실파일명(CamelCase·부분문자열 포함) + 한국어 동의어·어간(Stem) 정밀 매칭
+    const rawFileBase = photo.fullPath
+      ? photo.fullPath.split(/[\\/]/).pop() || photo.name
+      : photo.name;
+    const photoFileStemRaw = String(rawFileBase || '').replace(/\.[^.]+$/, '');
+    const fileNameStems = extractKoStems(photoFileStemRaw);
     const primarySet = new Set([...kws, ...ontoPrimary]);
     const captionSet = new Set(ontoCaption);
     const tagStems = extractKoStems(tagAndKwText);
@@ -1399,7 +1422,11 @@ export async function executeTextSearch(
     if (
       activeTokens.length >= 2 &&
       compoundQuery.length >= 2 &&
-      (primarySet.has(compoundQuery) || matchKoTokenInStems(compoundQuery, tagStems, tagAndKwText))
+      (primarySet.has(compoundQuery) ||
+        matchKoTokenInStems(compoundQuery, fileNameStems, photoFileStemRaw, {
+          allowFilenameSubstring: true,
+        }) ||
+        matchKoTokenInStems(compoundQuery, tagStems, tagAndKwText))
     ) {
       lexicalScore += 0.55;
       compoundHit = true;
@@ -1414,13 +1441,20 @@ export async function executeTextSearch(
 
     for (const tk of activeTokens) {
       const variants = tokenVariantMap.get(tk) || [tk];
-      const hitPrimary = variants.some(
-        (v) => primarySet.has(v) || matchKoTokenInStems(v, tagStems, tagAndKwText)
+      const hitFileName = variants.some((v) =>
+        matchKoTokenInStems(v, fileNameStems, photoFileStemRaw, {
+          allowFilenameSubstring: true,
+        })
       );
+      const hitPrimary =
+        hitFileName ||
+        variants.some(
+          (v) => primarySet.has(v) || matchKoTokenInStems(v, tagStems, tagAndKwText)
+        );
       if (hitPrimary) {
         tagHits += 1;
         totalHits += 1;
-        lexicalScore += 0.36;
+        lexicalScore += hitFileName ? 0.42 : 0.36;
       } else {
         const hitFull = variants.some(
           (v) => captionSet.has(v) || matchKoTokenInStems(v, fullStems, fullText)
@@ -1510,6 +1544,7 @@ export async function executeTextSearch(
       score: item.score,
       matchPercentage: +Math.min(99.9, (item.score / 1.95) * 100).toFixed(1),
       matchedBy,
+      lexicalHits: item.totalHits + (item.compoundHit ? 1 : 0),
     })),
     embedMs,
     searchMs,

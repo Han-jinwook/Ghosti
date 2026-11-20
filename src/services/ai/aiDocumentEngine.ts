@@ -199,36 +199,14 @@ export const GDRIVE_SMART_DOC_ITEMS: LocalDocumentFile[] = [
 export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
   try {
     const canProbeLocal = hasActiveGhostiLoginSession() && zCoreBridge.isConnected;
-    const [zRes, sRes] = await Promise.allSettled([
-      canProbeLocal ? fetch(getZCoreUrl('/__docs/list')) : Promise.reject(new Error('guest_no_local_probe')),
-      fetch('/poc/results/docs_semantic_index.json'),
-    ]);
-
-    const staticByFileName = new Map<string, LocalDocumentFile>();
-    if (sRes.status === 'fulfilled' && sRes.value.ok) {
-      const sJson = await sRes.value.json();
-      const sDocs: LocalDocumentFile[] = Array.isArray(sJson.documents)
-        ? sJson.documents
-        : Array.isArray(sJson.docs)
-        ? sJson.docs
-        : [];
-      for (const d of sDocs) {
-        if (d && d.fileName && !d.fileName.includes('비밀금고')) {
-          staticByFileName.set(d.fileName, {
-            ...d,
-            deviceSource: (d.deviceSource || '내 PC 문서함').replace(/\s*\(test_docs\)/g, ''),
-          });
-        }
-      }
-    }
-    for (const gDoc of GDRIVE_SMART_DOC_ITEMS) {
-      if (!staticByFileName.has(gDoc.fileName)) {
-        staticByFileName.set(gDoc.fileName, gDoc);
-      }
+    if (!canProbeLocal) {
+      // [실전 전용 철칙]: Z-코어 미연결 시에도 번들 샘플 문서(주택임대차계약서·비밀번호관리표 등)를 적재하지 않고 0건 즉시 반환 (불필요한 정적 JSON 다운로드 0건)
+      return [];
     }
 
-    if (zRes.status === 'fulfilled' && zRes.value.ok) {
-      const zJson = await zRes.value.json();
+    const zRes = await fetch(getZCoreUrl('/__docs/list'));
+    if (zRes.ok) {
+      const zJson = await zRes.json();
       const zDocs: LocalDocumentFile[] = Array.isArray(zJson.documents)
         ? zJson.documents
         : Array.isArray(zJson.docs)
@@ -254,10 +232,6 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
       return Array.from(realOnly.values());
     }
 
-    if (canProbeLocal) {
-      return [];
-    }
-    // [실전 전용 철칙]: Z-코어 미연결 시에도 번들 샘플 문서(주택임대차계약서·비밀번호관리표 등)를 적재하지 않고 0건 반환
     return [];
   } catch {
     return [];
@@ -353,27 +327,42 @@ export function searchLocalDocumentFiles(
 
   const scored = sourceDocs
     .map((doc) => {
-      const titleAndName = `${doc.title} ${doc.fileName} ${doc.categoryBadge}`.toLowerCase();
-      const kwText = (doc.keywords || []).join(' ').toLowerCase();
-      const bodyText = (doc.extractedText || '').toLowerCase();
-      const corpus = `${titleAndName} ${kwText} ${bodyText}`;
-      const titleStems = extractKoStems(titleAndName);
-      const kwStems = extractKoStems(kwText);
-      const docStems = extractKoStems(corpus);
+      const fileNameStemRaw = String(doc.fileName || '').replace(/\.[^.]+$/, '');
+      const titleAndNameRaw = `${doc.title || ''} ${fileNameStemRaw} ${doc.fileName || ''} ${doc.categoryBadge || ''}`;
+      const kwTextRaw = (doc.keywords || []).join(' ');
+      const bodyTextRaw = doc.extractedText || '';
+      const corpusRaw = `${titleAndNameRaw} ${kwTextRaw} ${bodyTextRaw}`;
+      const fileNameStems = extractKoStems(fileNameStemRaw);
+      const titleStems = extractKoStems(titleAndNameRaw);
+      const kwStems = extractKoStems(kwTextRaw);
+      const docStems = extractKoStems(corpusRaw);
 
       const matchedTokens: string[] = [];
       const unmatchedTokens: string[] = [];
       let weightedScore = 0;
+      let fileNameHits = 0;
 
       for (const tk of rawTokens) {
         let hit = false;
-        if (matchKoTokenInStems(tk, titleStems, titleAndName)) {
+        if (
+          matchKoTokenInStems(tk, fileNameStems, fileNameStemRaw, {
+            allowFilenameSubstring: true,
+          })
+        ) {
+          weightedScore += 25;
+          fileNameHits += 1;
+          hit = true;
+        } else if (
+          matchKoTokenInStems(tk, titleStems, titleAndNameRaw, {
+            allowFilenameSubstring: true,
+          })
+        ) {
           weightedScore += 15;
           hit = true;
-        } else if (matchKoTokenInStems(tk, kwStems, kwText)) {
+        } else if (matchKoTokenInStems(tk, kwStems, kwTextRaw)) {
           weightedScore += 12;
           hit = true;
-        } else if (matchKoTokenInStems(tk, docStems, corpus)) {
+        } else if (matchKoTokenInStems(tk, docStems, corpusRaw)) {
           weightedScore += 8;
           hit = true;
         }
@@ -386,6 +375,7 @@ export function searchLocalDocumentFiles(
       }
 
       const isExactMatch = matchedTokens.length === rawTokens.length;
+      const matchedInFileName = isExactMatch && fileNameHits === rawTokens.length;
       const matchType: 'EXACT' | 'SIMILAR' = isExactMatch ? 'EXACT' : 'SIMILAR';
       const similarityNoticeKo = !isExactMatch && matchedTokens.length > 0
         ? `💡 검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다! (일치 키워드: ${matchedTokens
@@ -400,8 +390,10 @@ export function searchLocalDocumentFiles(
           matchedQueryTokens: matchedTokens,
           unmatchedQueryTokens: unmatchedTokens,
           similarityNoticeKo,
+          matchedInFileName,
         },
         hits: matchedTokens.length,
+        fileNameHits,
         weightedScore,
         isExactMatch,
       };
@@ -410,7 +402,8 @@ export function searchLocalDocumentFiles(
 
   scored.sort((a, b) => {
     if (a.isExactMatch !== b.isExactMatch) return a.isExactMatch ? -1 : 1;
-    if (b.hits !== a.hits) return b.hits - a.hits;
+    if (a.fileNameHits !== b.fileNameHits) return b.fileNameHits - a.fileNameHits;
+    if (a.hits !== b.hits) return b.hits - a.hits;
     return b.weightedScore - a.weightedScore;
   });
 

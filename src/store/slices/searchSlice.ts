@@ -1078,7 +1078,8 @@ export const createSearchSlice: StateCreator<
 
     // [0.001초 즉시 반영]: 사용자가 [문서] 탭(또는 콜드스타트 상태)에서 엔터를 치면
     // 768차원 비전/텍스트 ONNX 모델 로딩(2~3초)을 기다리지 않고 0.001초 만에 문서·어휘 결과를 즉시 렌더링합니다!
-    if (searchSpace === 'vault' || !encoderReadyBeforeQuery) {
+    const instantHasDirectDocFileHit = instantDocMatches.some((d) => Boolean(d.matchedInFileName));
+    if (searchSpace === 'vault' || !encoderReadyBeforeQuery || (!hasUserSelectedSearchTab && instantHasDirectDocFileHit)) {
       const immediateSpace: SearchSpaceMode = sharedMode || isExplicitPhotoOnlyQuery
         ? 'gallery'
         : isExplicitVideoIntent && instantVideoLexical.length > 0
@@ -1089,6 +1090,8 @@ export const createSearchSlice: StateCreator<
         ? searchSpace
         : isTimeRangeOrAlumniQuery
         ? 'gallery'
+        : instantHasDirectDocFileHit
+        ? 'vault'
         : searchSpace;
       set({
         searchSpace: immediateSpace,
@@ -1239,6 +1242,9 @@ export const createSearchSlice: StateCreator<
     const vaultPhotoMatches =
       sharedMode || isExplicitPhotoOnlyQuery ? [] : Array.from(vaultMap.values());
 
+    const hasDirectDocFileNameMatch = docMatches.some((d) => Boolean(d.matchedInFileName));
+    const hasDirectPhotoLexicalMatch = results.some((r) => (r.lexicalHits ?? 0) > 0);
+
     let targetSpace: SearchSpaceMode =
       sharedMode || isExplicitPhotoOnlyQuery
         ? 'gallery'
@@ -1250,6 +1256,8 @@ export const createSearchSlice: StateCreator<
         ? searchSpace
         : isTimeRangeOrAlumniQuery
         ? 'gallery'
+        : hasDirectDocFileNameMatch && !hasDirectPhotoLexicalMatch
+        ? 'vault'
         : 'gallery';
 
     // 사용자가 명시적으로 특정 탭([문서]·[동영상]·[사진])을 선택하지 않은 초기 통합 검색 상태(!hasUserSelectedSearchTab)일 때만

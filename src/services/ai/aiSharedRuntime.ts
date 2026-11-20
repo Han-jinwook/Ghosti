@@ -203,14 +203,28 @@ export function stripKoSearchParticle(rawWord: string, isSingleWordQuery = false
 }
 
 export function extractKoStems(text: string): string[] {
-  const eojeols = text
+  const intactEojeols = text
     .toLowerCase()
     .replace(/[^가-힣a-z0-9\s]/g, ' ')
     .split(/\s+/)
     .filter(Boolean);
+  // CamelCase·PascalCase('bankTest' ➔ 'bank Test') 및 영문↔숫자↔한글 결합('PI26048S' ➔ 'PI 26048 S', '신한bank' ➔ '신한 bank')을
+  // 소문자화 전에 분리하여 원형 어절('banktest')과 구성 토큰('bank', 'test')을 모두 색인합니다.
+  const splitEojeols = text
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .replace(/([a-zA-Z])([0-9])/g, '$1 $2')
+    .replace(/([0-9])([a-zA-Z])/g, '$1 $2')
+    .replace(/([가-힣])([a-zA-Z0-9])/g, '$1 $2')
+    .replace(/([a-zA-Z0-9])([가-힣])/g, '$1 $2')
+    .toLowerCase()
+    .replace(/[^가-힣a-z0-9\s]/g, ' ')
+    .split(/\s+/)
+    .filter(Boolean);
+
   const stems = new Set<string>();
-  for (const raw of eojeols) {
-    // 원형 어절('고양이', '고양시', '달팽이' 등)은 항상 보존
+  for (const raw of [...intactEojeols, ...splitEojeols]) {
+    // 원형 어절('고양이', '고양시', '달팽이', 'banktest', 'bank' 등)은 항상 보존
     stems.add(raw);
     if (isProtectedKoNoun(raw)) {
       continue;
@@ -223,18 +237,32 @@ export function extractKoStems(text: string): string[] {
   return Array.from(stems);
 }
 
-export function matchKoTokenInStems(token: string, stems: string[], rawText?: string): boolean {
+export function matchKoTokenInStems(
+  token: string,
+  stems: string[],
+  rawText?: string,
+  options?: { allowFilenameSubstring?: boolean }
+): boolean {
   const tk = token.toLowerCase().trim();
   if (!tk) return false;
-  // 영문/숫자 토큰(예: 'ai')은 영단어 내부 부분문자열(예: 'airplane', 'detail', 'main')에 절대 매칭하지 않고
-  // 독립 토큰이거나 한글 조사/명사와 결합된 형태('ai이미지', 'ai가')만 정확히 매칭!
+  // 1~2글자 초단문 영문/숫자 토큰(예: 'ai', 'id')은 영단어 내부 부분문자열(예: 'airplane', 'detail', 'main')에 절대 매칭하지 않고
+  // 독립 토큰·CamelCase 분리 어절('aiPhoto' ➔ 'ai')이거나 한글 조사/명사와 결합된 형태('ai이미지', 'ai가')만 정확히 매칭!
+  // 반면 4글자 이상 영문/숫자 토큰(예: 'bank', '26048')은 소문자 복합어 접두·접미('banktest', 'shinhanbank')까지 매칭하며,
+  // 파일명·제목 매칭(allowFilenameSubstring) 시에는 3글자 이상 토큰의 파일명 부분 일치도 허용합니다.
   if (/^[a-z0-9]+$/.test(tk)) {
     const escaped = tk.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
     const boundaryRx = new RegExp(`(?<![a-z0-9])${escaped}(?![a-z0-9])`, 'i');
+    const allowFileSub = Boolean(options?.allowFilenameSubstring) && tk.length >= 3;
+    const allowCompoundAffix = tk.length >= 4;
     for (const st of stems) {
       if (st === tk || boundaryRx.test(st)) return true;
+      if (allowCompoundAffix && (st.startsWith(tk) || st.endsWith(tk))) return true;
+      if (allowFileSub && st.includes(tk)) return true;
     }
-    if (rawText && boundaryRx.test(rawText)) return true;
+    if (rawText) {
+      if (boundaryRx.test(rawText)) return true;
+      if (allowFileSub && rawText.toLowerCase().includes(tk)) return true;
+    }
     return false;
   }
 

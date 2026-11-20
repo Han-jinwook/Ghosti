@@ -417,6 +417,10 @@ function deriveLocalVideoSemanticEnrichment(video: VideoSceneItem): {
   }
   const stem = String(video.videoFileName || '')
     .replace(/\.[^.]+$/, '')
+    .replace(/([a-z])([A-Z])/g, '$1 $2')
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2')
+    .replace(/([a-zA-Z])([0-9])/g, '$1 $2')
+    .replace(/([0-9])([a-zA-Z])/g, '$1 $2')
     .replace(/[_\-.,()[\]]+/g, ' ');
   for (const tk of stem.split(/\s+/)) {
     const w = tk.trim();
@@ -750,135 +754,151 @@ export function isLocalVideosOcrIndexingPending(): boolean {
 export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
   try {
     const canProbeLocal = hasActiveGhostiLoginSession() && zCoreBridge.isConnected;
-    const [sRes, zRes, staticCorpusRes] = await Promise.allSettled([
-      fetch('/poc/results/video_timeline_index.json'),
-      canProbeLocal ? fetch(getZCoreUrl('/__videos/list')) : Promise.reject(new Error('guest_no_local_probe')),
-      getStaticCorpusCached(),
-    ]);
+    // [실전 전용 철칙]: Z-코어 미연결 시 번들 쇼케이스/샘플 영상(코타키나발루·회의실 등)을 자동 적재하지 않고 0건 즉시 반환 (불필요한 정적 JSON 다운로드 0건)
+    if (!canProbeLocal) {
+      lastLocalVideosOcrIndexingPending = false;
+      return [];
+    }
+
+    const isStandaloneSearchWin =
+      typeof window !== 'undefined' &&
+      Boolean(new URLSearchParams(window.location.search).get('ghostSearchWindow'));
+    const zResPromise = fetch(getZCoreUrl('/__videos/list'));
+    if (isStandaloneSearchWin) {
+      void hydrateRealMediaVectorCacheOnce();
+    } else {
+      await hydrateRealMediaVectorCacheOnce();
+    }
+    const zRes = await zResPromise;
+    if (!zRes.ok) {
+      lastLocalVideosOcrIndexingPending = false;
+      return [];
+    }
+
+    const zJson = await zRes.json();
+    lastLocalVideosOcrIndexingPending = Boolean(zJson.ocrIndexingPending);
+    const zVids: VideoSceneItem[] = Array.isArray(zJson.videos) ? zJson.videos : [];
+    const hasLegacyPoc2024Videos = zVids.some((v) =>
+      /^202407(?:19|20|21|22)_/i.test(v?.videoFileName || '')
+    );
+
     const photoSemEntries: Array<{
       dateYmd: string;
       secOfDay: number;
       keywordsKo: string[];
       captionKo: string;
     }> = [];
-    if (staticCorpusRes.status === 'fulfilled' && staticCorpusRes.value?.semJson) {
-      const rawPhotos = staticCorpusRes.value.semJson.photos || {};
-      if (rawPhotos && typeof rawPhotos === 'object') {
-        for (const [pName, meta] of Object.entries(rawPhotos)) {
-          const ts = parseFileTimestampSecOfDay(pName);
-          if (!ts || !meta || typeof meta !== 'object') continue;
-          const kws = Array.isArray((meta as any).keywordsKo) ? (meta as any).keywordsKo : [];
-          const cap = String((meta as any).captionKo || '').trim();
-          if (kws.length > 0 || cap) {
-            photoSemEntries.push({
-              dateYmd: ts.dateYmd,
-              secOfDay: ts.secOfDay,
-              keywordsKo: kws,
-              captionKo: cap,
-            });
+    const staticVideoByName = new Map<string, VideoSceneItem>();
+
+    if (hasLegacyPoc2024Videos) {
+      const [sRes, staticCorpusRes] = await Promise.allSettled([
+        fetch('/poc/results/video_timeline_index.json'),
+        getStaticCorpusCached(),
+      ]);
+      if (staticCorpusRes.status === 'fulfilled' && staticCorpusRes.value?.semJson) {
+        const rawPhotos = staticCorpusRes.value.semJson.photos || {};
+        if (rawPhotos && typeof rawPhotos === 'object') {
+          for (const [pName, meta] of Object.entries(rawPhotos)) {
+            const ts = parseFileTimestampSecOfDay(pName);
+            if (!ts || !meta || typeof meta !== 'object') continue;
+            const kws = Array.isArray((meta as any).keywordsKo) ? (meta as any).keywordsKo : [];
+            const cap = String((meta as any).captionKo || '').trim();
+            if (kws.length > 0 || cap) {
+              photoSemEntries.push({
+                dateYmd: ts.dateYmd,
+                secOfDay: ts.secOfDay,
+                keywordsKo: kws,
+                captionKo: cap,
+              });
+            }
           }
         }
       }
-    }
-    const staticVideoByName = new Map<string, VideoSceneItem>();
-    if (sRes.status === 'fulfilled' && sRes.value.ok) {
-      try {
-        const sJson = await sRes.value.json();
-        const sVids: VideoSceneItem[] = Array.isArray(sJson.videos) ? sJson.videos : [];
-        for (const sv of sVids) {
-          if (sv && sv.videoFileName) {
-            staticVideoByName.set(sv.videoFileName, sv);
+      if (sRes.status === 'fulfilled' && sRes.value.ok) {
+        try {
+          const sJson = await sRes.value.json();
+          const sVids: VideoSceneItem[] = Array.isArray(sJson.videos) ? sJson.videos : [];
+          for (const sv of sVids) {
+            if (sv && sv.videoFileName) {
+              staticVideoByName.set(sv.videoFileName, sv);
+            }
           }
+        } catch {
+          /* ignore */
         }
-      } catch {
-        /* ignore */
       }
     }
 
     // [실물 파일 순수성 철칙]: 로컬 Z-코어 엔진이 연결된 상태에서는 쇼윈도 샘플 영상을 절대 섞지 않고 100% 내 진짜 PC 영상만 반환!
-    if (canProbeLocal) {
-      await hydrateRealMediaVectorCacheOnce();
-      if (zRes.status === 'fulfilled' && zRes.value.ok) {
-        const zJson = await zRes.value.json();
-        lastLocalVideosOcrIndexingPending = Boolean(zJson.ocrIndexingPending);
-        const zVids: VideoSceneItem[] = Array.isArray(zJson.videos) ? zJson.videos : [];
-        const realVideos = new Map<string, VideoSceneItem>();
-        for (const v of zVids) {
-          if (!v || !v.videoFileName || v.isAllBlack) continue;
-          let normalizedVid = normalizeLocalVideoSceneItem(v);
-          const sv = staticVideoByName.get(v.videoFileName);
-          if (sv) {
-            const enh = BUNDLED_SAMPLE_VIDEO_ENHANCEMENTS[v.videoFileName];
-            const svKws = Array.from(
-              new Set([
-                ...(normalizedVid.keywords || []),
-                ...(sv.keywords || []),
-                ...(enh?.extraKeywords || []),
-              ])
-            );
-            const svVec =
-              Array.isArray((sv as any).vec) && (sv as any).vec.length === DEFAULT_DIM
-                ? new Float32Array((sv as any).vec)
-                : undefined;
-            if (svVec) {
-              const baseKey = getVideoMediaBaseKey(normalizedVid);
-              if (!localVideoFrameVecMap.has(`vrep:${baseKey}`)) {
-                localVideoFrameVecMap.set(`vrep:${baseKey}`, svVec);
-              }
-            }
-            normalizedVid = {
-              ...normalizedVid,
-              keywords: svKws,
-              sceneDescription: sv.sceneDescription || normalizedVid.sceneDescription,
-              timelineFrames: (normalizedVid.timelineFrames || []).map((f) => ({
-                ...f,
-                keywords: Array.from(new Set([...(f.keywords || []), ...svKws.slice(0, 20)])),
-              })),
-            };
+    const realVideos = new Map<string, VideoSceneItem>();
+    for (const v of zVids) {
+      if (!v || !v.videoFileName || v.isAllBlack) continue;
+      let normalizedVid = normalizeLocalVideoSceneItem(v);
+      const sv = staticVideoByName.get(v.videoFileName);
+      if (sv) {
+        const enh = BUNDLED_SAMPLE_VIDEO_ENHANCEMENTS[v.videoFileName];
+        const svKws = Array.from(
+          new Set([
+            ...(normalizedVid.keywords || []),
+            ...(sv.keywords || []),
+            ...(enh?.extraKeywords || []),
+          ])
+        );
+        const svVec =
+          Array.isArray((sv as any).vec) && (sv as any).vec.length === DEFAULT_DIM
+            ? new Float32Array((sv as any).vec)
+            : undefined;
+        if (svVec) {
+          const baseKey = getVideoMediaBaseKey(normalizedVid);
+          if (!localVideoFrameVecMap.has(`vrep:${baseKey}`)) {
+            localVideoFrameVecMap.set(`vrep:${baseKey}`, svVec);
           }
-          const vTs = parseFileTimestampSecOfDay(v.videoFileName);
-          if (vTs && photoSemEntries.length > 0) {
-            const nearbyPhotos = photoSemEntries
-              .map((p) => ({
-                ...p,
-                diffSec: Math.abs(p.secOfDay - vTs.secOfDay),
-              }))
-              .filter((p) => p.dateYmd === vTs.dateYmd && p.diffSec <= 600)
-              .sort((a, b) => a.diffSec - b.diffSec);
-            if (nearbyPhotos.length > 0) {
-              const nearKws = Array.from(
-                new Set(nearbyPhotos.slice(0, 8).flatMap((p) => p.keywordsKo))
-              );
-              const closestCap = nearbyPhotos[0].captionKo;
-              const mergedKws = Array.from(new Set([...(normalizedVid.keywords || []), ...nearKws]));
-              const nextDesc =
-                closestCap &&
-                (!normalizedVid.sceneDescription ||
-                  normalizedVid.sceneDescription.includes('로컬 동영상 파일'))
-                  ? closestCap
-                  : normalizedVid.sceneDescription;
-              normalizedVid = {
-                ...normalizedVid,
-                keywords: mergedKws,
-                sceneDescription: nextDesc,
-                timelineFrames: (normalizedVid.timelineFrames || []).map((f) => ({
-                  ...f,
-                  keywords: Array.from(new Set([...(f.keywords || []), ...nearKws])),
-                })),
-              };
-            }
-          }
-          realVideos.set(v.videoFileName, normalizedVid);
         }
-        return Array.from(realVideos.values());
+        normalizedVid = {
+          ...normalizedVid,
+          keywords: svKws,
+          sceneDescription: sv.sceneDescription || normalizedVid.sceneDescription,
+          timelineFrames: (normalizedVid.timelineFrames || []).map((f) => ({
+            ...f,
+            keywords: Array.from(new Set([...(f.keywords || []), ...svKws.slice(0, 20)])),
+          })),
+        };
       }
-      lastLocalVideosOcrIndexingPending = false;
-      return [];
+      const vTs = parseFileTimestampSecOfDay(v.videoFileName);
+      if (vTs && photoSemEntries.length > 0) {
+        const nearbyPhotos = photoSemEntries
+          .map((p) => ({
+            ...p,
+            diffSec: Math.abs(p.secOfDay - vTs.secOfDay),
+          }))
+          .filter((p) => p.dateYmd === vTs.dateYmd && p.diffSec <= 600)
+          .sort((a, b) => a.diffSec - b.diffSec);
+        if (nearbyPhotos.length > 0) {
+          const nearKws = Array.from(
+            new Set(nearbyPhotos.slice(0, 8).flatMap((p) => p.keywordsKo))
+          );
+          const closestCap = nearbyPhotos[0].captionKo;
+          const mergedKws = Array.from(new Set([...(normalizedVid.keywords || []), ...nearKws]));
+          const nextDesc =
+            closestCap &&
+            (!normalizedVid.sceneDescription ||
+              normalizedVid.sceneDescription.includes('로컬 동영상 파일'))
+              ? closestCap
+              : normalizedVid.sceneDescription;
+          normalizedVid = {
+            ...normalizedVid,
+            keywords: mergedKws,
+            sceneDescription: nextDesc,
+            timelineFrames: (normalizedVid.timelineFrames || []).map((f) => ({
+              ...f,
+              keywords: Array.from(new Set([...(f.keywords || []), ...nearKws])),
+            })),
+          };
+        }
+      }
+      realVideos.set(v.videoFileName, normalizedVid);
     }
-
-    // [실전 전용 철칙]: Z-코어 미연결 시 번들 쇼케이스/샘플 영상(코타키나발루·회의실 등)을 자동 적재하지 않고 0건 반환
-    lastLocalVideosOcrIndexingPending = false;
-    return [];
+    return Array.from(realVideos.values());
   } catch {
     return [];
   }
@@ -1388,7 +1408,9 @@ export function searchVideoSceneItems(
 
   for (const vid of sourceVideos) {
     if (vid.isAllBlack) continue;
-    const videoLevelCorpus = `${vid.title} ${vid.locationKo} ${vid.sceneDescription} ${vid.keywords.join(' ')}`.toLowerCase();
+    const videoFileStemRaw = String(vid.videoFileName || '').replace(/\.[^.]+$/, '');
+    const videoFileStems = extractKoStems(videoFileStemRaw);
+    const videoLevelRaw = `${vid.title || ''} ${videoFileStemRaw} ${vid.locationKo || ''} ${vid.sceneDescription || ''} ${vid.keywords.join(' ')}`;
     const videoOcrCorpus = String(vid.ocrFullText || '').toLowerCase();
     const hasVideoOcr = Boolean(vid.hasScreenOcrText || videoOcrCorpus);
     const defaultRepFrame = vid.timelineFrames[0];
@@ -1400,14 +1422,14 @@ export function searchVideoSceneItems(
       const ontoKws = Array.isArray((frame as any).ontologyKeywords)
         ? ((frame as any).ontologyKeywords as string[]).join(' ')
         : '';
-      const frameCorpus = `${frame.timestampText} ${frame.phaseLabel} ${frame.sceneCaption} ${frame.keywords.join(' ')} ${ontoKws} ${frame.tags.join(' ')}`.toLowerCase();
-      const frameStems = extractKoStems(frameCorpus);
+      const frameCorpusRaw = `${frame.timestampText} ${frame.phaseLabel} ${frame.sceneCaption} ${frame.keywords.join(' ')} ${ontoKws} ${frame.tags.join(' ')}`;
+      const frameStems = extractKoStems(frameCorpusRaw);
       const isOcrFrame = hasVideoOcr || String(frame.frameId || '').startsWith('f_ocr_');
       let frameHits = 0;
       for (const tk of rawTokens) {
-        if (frame.keywords.some((k) => matchKoTokenInStems(tk, [k.toLowerCase()], k.toLowerCase()))) {
+        if (frame.keywords.some((k) => matchKoTokenInStems(tk, extractKoStems(k), k))) {
           frameHits += 6;
-        } else if (matchKoTokenInStems(tk, frameStems, frameCorpus)) {
+        } else if (matchKoTokenInStems(tk, frameStems, frameCorpusRaw)) {
           frameHits += 4;
         } else if (isOcrFrame && matchKoreanOcrFuzzyToken(tk, `${frame.sceneCaption} ${frame.keywords.join(' ')}`)) {
           frameHits += 4;
@@ -1425,17 +1447,23 @@ export function searchVideoSceneItems(
     if (!bestFrame) continue;
     const allFramesCorpus = vid.timelineFrames
       .map((f) => `${f.sceneCaption} ${f.keywords.join(' ')}`)
-      .join(' ')
-      .toLowerCase();
-    const fullVideoAndFrameCorpus = `${videoLevelCorpus} ${videoOcrCorpus} ${allFramesCorpus}`.toLowerCase();
-    const fullStems = extractKoStems(fullVideoAndFrameCorpus);
+      .join(' ');
+    const fullVideoAndFrameCorpusRaw = `${videoLevelRaw} ${videoOcrCorpus} ${allFramesCorpus}`;
+    const fullStems = extractKoStems(fullVideoAndFrameCorpusRaw);
     let matchedTokenCount = 0;
     let videoBaseHits = 0;
     for (const tk of rawTokens) {
-      if (matchKoTokenInStems(tk, fullStems, fullVideoAndFrameCorpus)) {
+      if (
+        matchKoTokenInStems(tk, videoFileStems, videoFileStemRaw, {
+          allowFilenameSubstring: true,
+        })
+      ) {
+        matchedTokenCount += 1;
+        videoBaseHits += 5;
+      } else if (matchKoTokenInStems(tk, fullStems, fullVideoAndFrameCorpusRaw)) {
         matchedTokenCount += 1;
         videoBaseHits += 3;
-      } else if (hasVideoOcr && matchKoreanOcrFuzzyToken(tk, `${videoOcrCorpus} ${allFramesCorpus}`)) {
+      } else if (hasVideoOcr && matchKoreanOcrFuzzyToken(tk, `${videoOcrCorpus} ${allFramesCorpus.toLowerCase()}`)) {
         matchedTokenCount += 1;
         videoBaseHits += 2;
       }

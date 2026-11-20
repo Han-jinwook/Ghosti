@@ -266,11 +266,19 @@ def trace_missing_file_omni(query: str) -> Dict[str, Any]:
                     return base
 
     # 2) 현재 사용자 윈도우 휴지통($Recycle.Bin) 실물 스캔 (kws=[]이면 가장 최근 삭제된 파일 1순위 반환!)
-    rb = safe.scan_user_recycle_bin(kws, max_results=5)
+    rb = safe.scan_user_recycle_bin(kws, max_results=30)
     if rb.get("items"):
         top = rb["items"][0]
+        total_rb = int(rb.get("totalCount") or len(rb["items"]))
         led = next((r for r in safe.ledger_load() if r.get("recycleMetaFile") == top["recycleMetaFile"]), None)
-        who = "귀신같이 사진 정리로" if led else "방금 윈도우에서"
+        age_sec = max(0.0, time.time() - float(top.get("deletedEpoch") or time.time()))
+        if led:
+            who = "귀신같이 사진 정리로"
+        elif age_sec <= 3600:
+            who = "방금 윈도우에서"
+        else:
+            who = "이전에 윈도우 휴지통에 보관된 항목 중 가장 최근 순서로"
+        order_note = f" · 휴지통 내 총 {total_rb}건 중 최신 1순위" if total_rb > 1 else ""
         base.update(
             {
                 "caseType": "CASE_B_FOUND_IN_RECYCLE_BIN",
@@ -283,7 +291,7 @@ def trace_missing_file_omni(query: str) -> Dict[str, Any]:
                 "elapsedMs": round((time.perf_counter() - t0) * 1000, 1),
                 "briefingKo": (
                     f"👻 찾았어요! {who} 휴지통에 들어간 **{top['originalName']}** 파일을 확인했어요 "
-                    f"(삭제 시각: {top['deletedAt']}).\n"
+                    f"(삭제 시각: {top['deletedAt']}{order_note}).\n"
                     f"아래 5줄 미리보기를 확인하시고 **[📂 폴더 열기]**나 **[↩️ 원위치/바탕화면 복원]** 버튼을 눌러 원래 위치(`{top['originalPath']}`)로 바로 되살려 보세요!"
                 ),
             }
@@ -865,6 +873,10 @@ _SCAN_DIRS_MEM_CACHE: Dict[str, tuple[float, str, List[Path]]] = {}
 _SCAN_DIRS_CACHE_LOCK = threading.Lock()
 _PHOTOS_RESP_MEM_CACHE: Dict[str, Any] = {"sig": "", "quarantine_len": -1, "resp": None}
 _DOCS_RESP_MEM_CACHE: Dict[str, Any] = {"sig": "", "resp": None}
+_VIDEOS_RESP_MEM_CACHE: Dict[str, Any] = {"sig": "", "resp": None}
+_WATCH_SIG_TTL_CACHE: Dict[str, Any] = {"ts": 0.0, "resp": None}
+_BG_INDEX_BUMP_SEQ: int = 0
+_DOC_TEXT_CACHE_DIRTY: bool = False
 _PREWARMED_PHOTO_THUMB_SIGS: set[str] = set()
 
 
@@ -1218,8 +1230,14 @@ def get_local_watch_signature(params: Dict[str, Any] | None = None) -> Dict[str,
     """
     [열려 있는 귀신검색창 실시간 파일 추가·삭제·변경 감지용 1ms 무핸들 시그니처 (`GET /__zcore/watch-sig`)]:
     - os.scandir의 WIN32_FIND_DATA(entry.stat(follow_symlinks=False))만으로 커널 핸들 오픈 0회로
-      감시 폴더 내 사진·동영상·문서의 (폴더수, 파일수, 최신수정시각ns, 총용량) 시그니처를 1ms 내에 반환합니다.
+      감시 폴더 내 사진·동영상·문서의 (폴더수, 파일수, 최신수정시각ns, 총용량, 백그라운드OCR완료시퀀스) 시그니처를 1ms 내에 반환합니다.
+    - 동시 다발 요청(/__photos/list, /__docs/list, /__videos/list, /__zcore/watch-sig) 시 0.45초 마이크로 캐시로 중복 탐색을 제거합니다.
     """
+    now_mono = time.monotonic()
+    cached_ws = _WATCH_SIG_TTL_CACHE.get("resp")
+    if cached_ws is not None and (now_mono - float(_WATCH_SIG_TTL_CACHE.get("ts") or 0.0)) < 0.45:
+        return cached_ws
+
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
     target_exts = _IMAGE_EXTS | _VIDEO_EXTS | _DOC_EXTS
     file_count = 0
@@ -1248,13 +1266,16 @@ def get_local_watch_signature(params: Dict[str, Any] | None = None) -> Dict[str,
                         pass
         except Exception:
             pass
-    sig = f"{len(scan_dirs)}:{file_count}:{max_mtime_ns}:{size_acc}"
-    return {
+    sig = f"{len(scan_dirs)}:{file_count}:{max_mtime_ns}:{size_acc}:{_BG_INDEX_BUMP_SEQ}"
+    resp_ws = {
         "ok": True,
         "sig": sig,
         "fileCount": file_count,
         "folderCount": len(scan_dirs),
     }
+    _WATCH_SIG_TTL_CACHE["ts"] = now_mono
+    _WATCH_SIG_TTL_CACHE["resp"] = resp_ws
+    return resp_ws
 
 
 def _guess_image_mime(p: Path, name: str) -> str:
@@ -1487,23 +1508,46 @@ def _make_doc_cache_sig(entry: Path, st: os.stat_result | None = None) -> str:
     return f"{entry.resolve()}|{st_use.st_size}|{int(st_use.st_mtime)}|{_DOC_CACHE_SCHEMA_TAG}"
 
 
-def _save_doc_text_cache_entry(sig: str, text_val: str) -> None:
-    global _DOC_TEXT_MEM_CACHE
+def _save_doc_text_cache_entry(sig: str, text_val: str, *, flush_disk: bool = True) -> None:
+    global _DOC_TEXT_MEM_CACHE, _DOC_TEXT_CACHE_DIRTY
     if not text_val:
         return
     with _DOC_TEXT_CACHE_LOCK:
         cache = _DOC_TEXT_MEM_CACHE if _DOC_TEXT_MEM_CACHE is not None else {}
-        cache[sig] = text_val[:DOC_INDEX_MAX_CHARS]
-        if len(cache) > 800:
+        clipped = text_val[:DOC_INDEX_MAX_CHARS]
+        if cache.get(sig) == clipped:
+            return
+        cache[sig] = clipped
+        if len(cache) > 1000:
             for old_k in list(cache.keys())[:200]:
                 if old_k != sig:
                     cache.pop(old_k, None)
         _DOC_TEXT_MEM_CACHE = cache
+        _DOC_TEXT_CACHE_DIRTY = True
+        if flush_disk:
+            try:
+                _DOC_TEXT_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
+                tmp_f = _DOC_TEXT_CACHE_FILE.with_suffix(".json.tmp")
+                tmp_f.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+                os.replace(tmp_f, _DOC_TEXT_CACHE_FILE)
+                _DOC_TEXT_CACHE_DIRTY = False
+            except Exception:
+                pass
+
+
+def _flush_doc_text_cache_if_dirty() -> None:
+    global _DOC_TEXT_CACHE_DIRTY
+    if not _DOC_TEXT_CACHE_DIRTY:
+        return
+    with _DOC_TEXT_CACHE_LOCK:
+        if not _DOC_TEXT_CACHE_DIRTY or _DOC_TEXT_MEM_CACHE is None:
+            return
         try:
             _DOC_TEXT_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
             tmp_f = _DOC_TEXT_CACHE_FILE.with_suffix(".json.tmp")
-            tmp_f.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
+            tmp_f.write_text(json.dumps(_DOC_TEXT_MEM_CACHE, ensure_ascii=False), encoding="utf-8")
             os.replace(tmp_f, _DOC_TEXT_CACHE_FILE)
+            _DOC_TEXT_CACHE_DIRTY = False
         except Exception:
             pass
 
@@ -2239,7 +2283,12 @@ def _extract_hwp_v5_full_text(entry: Path, max_chars: int = DOC_INDEX_MAX_CHARS)
     return ""
 
 
-def _extract_doc_text(entry: Path, *, allow_pdf_winrt_ocr: bool = True) -> str:
+def _extract_doc_text(
+    entry: Path,
+    *,
+    allow_pdf_winrt_ocr: bool = True,
+    flush_disk: bool = True,
+) -> str:
     if _is_cloud_virtual_or_unpinned_file(entry):
         return f"[{entry.parent.name}] 폴더에 보관된 {entry.name} 클라우드 연동 문서입니다. 파일명 및 키워드로 즉시 검색됩니다."
     ext = entry.suffix.lower()
@@ -2253,29 +2302,35 @@ def _extract_doc_text(entry: Path, *, allow_pdf_winrt_ocr: bool = True) -> str:
     except Exception:
         pass
 
+    fallback_generic = f"[{entry.parent.name}] 폴더에 보관된 {entry.name} 로컬 문서 파일입니다. 파일명 및 키워드로 즉시 검색됩니다."
     try:
         if ext in (".txt", ".md", ".csv"):
             raw = entry.read_bytes()[: 512 * 1024]
             if raw.startswith(b"\xff\xfe"):
                 txt = raw[2:].decode("utf-16-le", errors="ignore").strip()[:DOC_INDEX_MAX_CHARS]
-                if txt and cache_sig:
-                    _save_doc_text_cache_entry(cache_sig, txt)
-                return txt
+                res_txt = txt or fallback_generic
+                if cache_sig:
+                    _save_doc_text_cache_entry(cache_sig, res_txt, flush_disk=flush_disk)
+                return res_txt
             if raw.startswith(b"\xfe\xff"):
                 txt = raw[2:].decode("utf-16-be", errors="ignore").strip()[:DOC_INDEX_MAX_CHARS]
-                if txt and cache_sig:
-                    _save_doc_text_cache_entry(cache_sig, txt)
-                return txt
+                res_txt = txt or fallback_generic
+                if cache_sig:
+                    _save_doc_text_cache_entry(cache_sig, res_txt, flush_disk=flush_disk)
+                return res_txt
             for enc in ("utf-8-sig", "utf-8", "cp949", "euc-kr"):
                 try:
                     txt = raw.decode(enc).strip()[:DOC_INDEX_MAX_CHARS]
                     if txt:
                         if cache_sig:
-                            _save_doc_text_cache_entry(cache_sig, txt)
+                            _save_doc_text_cache_entry(cache_sig, txt, flush_disk=flush_disk)
                         return txt
                 except Exception:
                     continue
-            return raw.decode("utf-8", errors="ignore").strip()[:DOC_INDEX_MAX_CHARS]
+            res_utf = raw.decode("utf-8", errors="ignore").strip()[:DOC_INDEX_MAX_CHARS] or fallback_generic
+            if cache_sig:
+                _save_doc_text_cache_entry(cache_sig, res_utf, flush_disk=flush_disk)
+            return res_utf
         if ext == ".docx":
             with zipfile.ZipFile(entry, "r") as zf:
                 names = set(zf.namelist())
@@ -2293,19 +2348,17 @@ def _extract_doc_text(entry: Path, *, allow_pdf_winrt_ocr: bool = True) -> str:
                     plain = re.sub(r"\n{3,}", "\n\n", plain).strip()
                     if plain:
                         parts_docx.append(plain)
-                text = "\n\n".join(parts_docx).strip()[:DOC_INDEX_MAX_CHARS]
-                if text:
-                    if cache_sig:
-                        _save_doc_text_cache_entry(cache_sig, text)
-                    return text
+                text = "\n\n".join(parts_docx).strip()[:DOC_INDEX_MAX_CHARS] or fallback_generic
+                if cache_sig:
+                    _save_doc_text_cache_entry(cache_sig, text, flush_disk=flush_disk)
+                return text
         if ext == ".xlsx":
             with zipfile.ZipFile(entry, "r") as zf:
                 rows = zos.extract_xlsx_ordered_rows(zf, max_rows=1200, max_chars=DOC_INDEX_MAX_CHARS)
-                joined_xl = "\n".join(rows).strip()[:DOC_INDEX_MAX_CHARS]
-                if joined_xl:
-                    if cache_sig:
-                        _save_doc_text_cache_entry(cache_sig, joined_xl)
-                    return joined_xl
+                joined_xl = "\n".join(rows).strip()[:DOC_INDEX_MAX_CHARS] or fallback_generic
+                if cache_sig:
+                    _save_doc_text_cache_entry(cache_sig, joined_xl, flush_disk=flush_disk)
+                return joined_xl
         if ext == ".pptx":
             def _slide_sort_key(name: str) -> tuple[int, str]:
                 m = re.search(r"(\d+)", Path(name).stem)
@@ -2329,23 +2382,20 @@ def _extract_doc_text(entry: Path, *, allow_pdf_winrt_ocr: bool = True) -> str:
                         total_ppt += len(sl_text) + 3
                         if total_ppt >= DOC_INDEX_MAX_CHARS:
                             break
-                joined_ppt = "\n\n".join(sl_chunks).strip()[:DOC_INDEX_MAX_CHARS]
-                if joined_ppt:
-                    if cache_sig:
-                        _save_doc_text_cache_entry(cache_sig, joined_ppt)
-                    return joined_ppt
+                joined_ppt = "\n\n".join(sl_chunks).strip()[:DOC_INDEX_MAX_CHARS] or fallback_generic
+                if cache_sig:
+                    _save_doc_text_cache_entry(cache_sig, joined_ppt, flush_disk=flush_disk)
+                return joined_ppt
         if ext == ".hwpx":
-            joined_hwpx = _extract_hwpx_zip_full_text(entry, max_chars=DOC_INDEX_MAX_CHARS)
-            if joined_hwpx:
-                if cache_sig:
-                    _save_doc_text_cache_entry(cache_sig, joined_hwpx)
-                return joined_hwpx
+            joined_hwpx = _extract_hwpx_zip_full_text(entry, max_chars=DOC_INDEX_MAX_CHARS) or fallback_generic
+            if cache_sig:
+                _save_doc_text_cache_entry(cache_sig, joined_hwpx, flush_disk=flush_disk)
+            return joined_hwpx
         if ext == ".hwp":
-            hwp_txt = _extract_hwp_v5_full_text(entry, max_chars=DOC_INDEX_MAX_CHARS)
-            if hwp_txt:
-                if cache_sig:
-                    _save_doc_text_cache_entry(cache_sig, hwp_txt)
-                return hwp_txt
+            hwp_txt = _extract_hwp_v5_full_text(entry, max_chars=DOC_INDEX_MAX_CHARS) or fallback_generic
+            if cache_sig:
+                _save_doc_text_cache_entry(cache_sig, hwp_txt, flush_disk=flush_disk)
+            return hwp_txt
         if ext == ".pdf":
             pdf_txt = _extract_pdf_text_sota(
                 entry,
@@ -2355,27 +2405,49 @@ def _extract_doc_text(entry: Path, *, allow_pdf_winrt_ocr: bool = True) -> str:
             )
             if pdf_txt:
                 if cache_sig:
-                    _save_doc_text_cache_entry(cache_sig, pdf_txt)
+                    _save_doc_text_cache_entry(cache_sig, pdf_txt, flush_disk=flush_disk)
                 return pdf_txt
             if allow_pdf_winrt_ocr and cache_sig:
                 fallback_empty = f"[{entry.parent.name}] 폴더에 보관된 {entry.name} PDF 문서입니다."
-                _save_doc_text_cache_entry(cache_sig, fallback_empty)
+                _save_doc_text_cache_entry(cache_sig, fallback_empty, flush_disk=flush_disk)
                 return fallback_empty
+            return fallback_generic
     except Exception:
-        pass
-    return f"[{entry.parent.name}] 폴더에 보관된 {entry.name} 로컬 문서 파일입니다. 파일명 및 키워드로 즉시 검색됩니다."
+        if cache_sig and (ext != ".pdf" or allow_pdf_winrt_ocr):
+            _save_doc_text_cache_entry(cache_sig, fallback_generic, flush_disk=flush_disk)
+    return fallback_generic
+
+
+def _split_camel_and_alnum_words(src: str) -> str:
+    s = re.sub(r"([a-z])([A-Z])", r"\1 \2", src)
+    s = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", s)
+    s = re.sub(r"([a-zA-Z])([0-9])", r"\1 \2", s)
+    s = re.sub(r"([0-9])([a-zA-Z])", r"\1 \2", s)
+    return s
 
 
 def _bg_prewarm_pdf_ocr_worker(targets: List[Path]) -> None:
-    global _PDF_BG_OCR_RUNNING
+    global _PDF_BG_OCR_RUNNING, _BG_INDEX_BUMP_SEQ
+    updated_any = False
     try:
         for p in targets[:40]:
             try:
-                _extract_doc_text(p, allow_pdf_winrt_ocr=True)
-                time.sleep(0.08)
+                prev_cache = dict(_load_doc_text_cache())
+                st_p = p.stat()
+                sig_p = _make_doc_cache_sig(p, st_p)
+                had_before = sig_p in prev_cache
+                res = _extract_doc_text(p, allow_pdf_winrt_ocr=True, flush_disk=False)
+                if not had_before and res and "보관된 " not in res[:60]:
+                    updated_any = True
+                time.sleep(0.06)
             except Exception:
                 pass
     finally:
+        _flush_doc_text_cache_if_dirty()
+        if updated_any:
+            _BG_INDEX_BUMP_SEQ += 1
+            _DOCS_RESP_MEM_CACHE["sig"] = ""
+            _WATCH_SIG_TTL_CACHE["ts"] = 0.0
         _PDF_BG_OCR_RUNNING = False
 
 
@@ -2388,7 +2460,6 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         cur_watch_sig
         and cached_docs_resp is not None
         and _DOCS_RESP_MEM_CACHE.get("sig") == cur_watch_sig
-        and not _PDF_BG_OCR_RUNNING
     ):
         return cached_docs_resp
 
@@ -2422,7 +2493,6 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     raw_entries.sort(key=lambda item: item[2].st_mtime, reverse=True)
     docs: List[Dict[str, Any]] = []
     deferred_pdfs: List[Path] = []
-    sync_pdf_ocr_budget = 3
     doc_cache_ref = _load_doc_text_cache()
 
     ext_badge_map = {
@@ -2440,25 +2510,25 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         ".ppt": ("PPT", "📙 파워포인트 발표자료"),
     }
 
+    # [HTTP 응답 스레드 무거운 PDF 이미지 OCR 동기 블로킹 원천 금지 (13.6초 ➔ 30ms)]:
+    # 전자 PDF 본문(pypdfium2) 및 TXT/DOCX/XLSX/PPTX/HWP는 즉시 고속 추출하여 메모리에 캐싱하고,
+    # 텍스트 레이어가 없는 스캔 이미지 PDF의 래스터 OCR만 백그라운드 스레드(_bg_prewarm_pdf_ocr_worker)로 분리합니다.
     for d, entry, st in raw_entries[:300]:
         try:
             ext_low = entry.suffix.lower()
             stem = entry.stem.replace("_", " ").replace("-", " ").strip()
-            allow_sync_ocr = False
-            if ext_low == ".pdf":
-                sig_chk = _make_doc_cache_sig(entry, st)
-                if sig_chk in doc_cache_ref:
-                    allow_sync_ocr = True
-                elif sync_pdf_ocr_budget > 0:
-                    allow_sync_ocr = True
-                    sync_pdf_ocr_budget -= 1
-                else:
-                    deferred_pdfs.append(entry)
-            extracted = _extract_doc_text(entry, allow_pdf_winrt_ocr=allow_sync_ocr)
-            if ext_low == ".pdf" and not allow_sync_ocr and f"보관된 {entry.name} 로컬 문서" in extracted:
-                pass
+            stem_expanded = _split_camel_and_alnum_words(stem)
+            sig_chk = _make_doc_cache_sig(entry, st) if ext_low == ".pdf" else ""
+            was_pdf_cached = bool(sig_chk and sig_chk in doc_cache_ref)
+            extracted = _extract_doc_text(entry, allow_pdf_winrt_ocr=False, flush_disk=False)
+            if ext_low == ".pdf" and not was_pdf_cached and sig_chk not in doc_cache_ref:
+                deferred_pdfs.append(entry)
             norm_ext, badge = ext_badge_map.get(ext_low, ("DOC", "📄 로컬 문서 파일"))
-            kw_tokens = [w for w in re.split(r"[\s_\-.,()\[\]]+", f"{stem} {d.name} {extracted[:360]}") if len(w) >= 2][:22]
+            kw_tokens = [
+                w
+                for w in re.split(r"[\s_\-.,()\[\]]+", f"{stem} {stem_expanded} {d.name} {extracted[:360]}")
+                if len(w) >= 2
+            ][:26]
             resolved_doc_str = str(entry)
             doc_hash = hashlib.sha1(resolved_doc_str.lower().encode("utf-8", errors="ignore")).hexdigest()[:8]
             docs.append({
@@ -2480,6 +2550,8 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         except Exception:
             pass
 
+    _flush_doc_text_cache_if_dirty()
+
     if deferred_pdfs and not _PDF_BG_OCR_RUNNING:
         _PDF_BG_OCR_RUNNING = True
         threading.Thread(target=_bg_prewarm_pdf_ocr_worker, args=(deferred_pdfs,), daemon=True).start()
@@ -2490,7 +2562,7 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         "documents": docs,
         "docs": docs,
     }
-    if cur_watch_sig and not deferred_pdfs:
+    if cur_watch_sig:
         _DOCS_RESP_MEM_CACHE["sig"] = cur_watch_sig
         _DOCS_RESP_MEM_CACHE["resp"] = resp_docs
     return resp_docs
@@ -2923,11 +2995,15 @@ def _load_video_ocr_cache() -> Dict[str, Any]:
 
 
 def _save_video_ocr_cache(cache_data: Dict[str, Any]) -> None:
+    global _BG_INDEX_BUMP_SEQ
     try:
         _ensure_merlin_dir()
         tmp = _VIDEO_OCR_CACHE_FILE.with_suffix(".tmp")
         tmp.write_text(json.dumps(cache_data, ensure_ascii=False), encoding="utf-8")
         tmp.replace(_VIDEO_OCR_CACHE_FILE)
+        _BG_INDEX_BUMP_SEQ += 1
+        _VIDEOS_RESP_MEM_CACHE["sig"] = ""
+        _WATCH_SIG_TTL_CACHE["ts"] = 0.0
     except Exception:
         pass
 
@@ -4012,6 +4088,15 @@ def ensure_local_videos_ocr_indexed(sync_wait_sec: float = 0.0) -> None:
 
 def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """내 PC 전 폴더(동영상, 사진, 바탕화면, 다운로드 등)의 동영상 파일을 전수 스캔하여 반환합니다."""
+    cur_watch_sig = str(get_local_watch_signature().get("sig") or "")
+    cached_vids_resp = _VIDEOS_RESP_MEM_CACHE.get("resp")
+    if (
+        cur_watch_sig
+        and cached_vids_resp is not None
+        and _VIDEOS_RESP_MEM_CACHE.get("sig") == cur_watch_sig
+    ):
+        return cached_vids_resp
+
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
     videos: List[Dict[str, Any]] = []
     seen_paths: set[str] = set()
@@ -4061,9 +4146,10 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 thumb_seek = max(1, min(int(round(real_dur_sec * 0.2)), 3)) if int_dur >= 4 else 0
                 thumb_url = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={thumb_seek}" if ff else ""
 
-                # 순수 파일명·폴더명 의미어 토큰 + 실제 프레임 OCR 키워드만 정직하게 반영 (파일명 하드코딩 편법 일절 금지)
+                # 순수 파일명·폴더명 의미어 토큰(CamelCase 분리 포함) + 실제 프레임 OCR 키워드만 정직하게 반영 (파일명 하드코딩 편법 일절 금지)
+                stem_expanded = _split_camel_and_alnum_words(stem)
                 raw_kw_tokens = [
-                    w for w in re.split(r"[\s_\-.,()\[\]]+", stem)
+                    w for w in re.split(r"[\s_\-.,()\[\]]+", f"{stem} {stem_expanded}")
                     if len(w) >= 2 and not re.fullmatch(r"[0-9a-fA-F]{4,}", w) and not re.fullmatch(r"\d+", w)
                 ]
                 if d.name and not re.match(r"^(videos|pictures|photos|desktop|downloads|documents|문서|사진|동영상|바탕\s*화면|다운로드|카카오톡\s*받은\s*파일|\d{2}_.+)$", d.name, re.IGNORECASE):
@@ -4204,12 +4290,38 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 threading.Thread(target=_run_batch_video_ocr, args=(missing_for_bg,), daemon=True).start()
 
     # [실물 파일 순수성 철칙] 정적 샘플(poc/results/video_timeline_index.json) 병합을 전면 배제하고 100% 실제 내 PC 동영상만 반환!
-    return {
+    resp_vids = {
         "ok": True,
         "total": len(videos),
         "ocrIndexingPending": bool(missing_for_bg or _VIDEO_OCR_BG_RUNNING),
         "videos": videos,
     }
+    if cur_watch_sig:
+        _VIDEOS_RESP_MEM_CACHE["sig"] = cur_watch_sig
+        _VIDEOS_RESP_MEM_CACHE["resp"] = resp_vids
+    return resp_vids
+
+
+_MEDIA_LIST_PREWARMER_STARTED = False
+
+
+def start_local_media_list_prewarmer() -> None:
+    """Z-코어 데몬 기동 직후 백그라운드에서 사진·문서·동영상 목록 캐시를 선행 예열하여 첫 귀신검색창 오픈 시 5ms 즉시 응답을 보장합니다."""
+    global _MEDIA_LIST_PREWARMER_STARTED
+    if _MEDIA_LIST_PREWARMER_STARTED:
+        return
+    _MEDIA_LIST_PREWARMER_STARTED = True
+
+    def _prewarm_worker() -> None:
+        time.sleep(0.9)
+        for fn in (list_local_photos, list_local_docs, list_local_videos):
+            try:
+                fn({})
+            except Exception:
+                pass
+            time.sleep(0.05)
+
+    threading.Thread(target=_prewarm_worker, daemon=True).start()
 
 
 def _resolve_listed_photo(name: str) -> Path | None:

@@ -264,6 +264,8 @@ export interface LocalDocumentFile {
   matchedQueryTokens?: string[];
   unmatchedQueryTokens?: string[];
   similarityNoticeKo?: string;
+  /** 검색어 전 토큰이 문서 파일명(확장자 제외)에 직접 매칭되었는지 여부 */
+  matchedInFileName?: boolean;
 }
 
 /** [스펙 2] 3중 타임머신 안전망: 즉시 되돌리기(Undo) 배치 스냅샷 */
@@ -477,6 +479,8 @@ export interface SearchResultItem {
     | 'stt-fallback-silent'
     | 'text-direct'
     | 'visual-similarity';
+  /** 어휘·태그·파일명 직접 일치 토큰 수 (순수 벡터 통과 시 0) */
+  lexicalHits?: number;
 }
 
 export interface VoiceRoutingTrace {
