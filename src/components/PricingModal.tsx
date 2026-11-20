@@ -15,6 +15,7 @@ import {
 import { VoiceActorControlPill } from './VoiceActorControlPill';
 import { triggerUserFavoriteAiLiveVoiceBatonTouch } from '../services/voiceSearchAndAiBatonEngine';
 import { resolveNativeMobileVideoPlaybackUrl } from '../services/ghostiMobileCareBridge';
+import { saveCachedMobileGalleryIndex } from '../services/mobilePhotoPicker';
 import {
   cleanVideoTimestampLabel,
   extractVideoScreenTextOnDemand,
@@ -1077,6 +1078,22 @@ export function resolveDocExtBadge(doc: { fileName?: string; ext?: string }): st
   return (doc.ext || 'DOC').toUpperCase();
 }
 
+export function formatVideoCardOcrSummary(
+  ocrLines?: Array<{ text: string }>
+): string {
+  if (!Array.isArray(ocrLines) || ocrLines.length === 0) return '';
+  const cleaned = ocrLines
+    .map((l) => (l?.text || '').trim())
+    .filter(Boolean);
+  if (cleaned.length === 0) return '';
+  // 카드 2줄 요약에서는 키보드 F11·F12 같은 영문 키캡보다 실제 한글 문장([가-힣]{2,})이 포함된 구간을 앞에 배치
+  const koFirst = [
+    ...cleaned.filter((t) => /[가-힣]{2,}/.test(t)),
+    ...cleaned.filter((t) => !/[가-힣]{2,}/.test(t)),
+  ];
+  return koFirst.join(' · ');
+}
+
 export function buildDocPreviewSnippet(
   text: string,
   query: string,
@@ -1613,6 +1630,12 @@ export const VideoScenePreviewModal: React.FC = () => {
             if (res.ocrLines && res.ocrLines.length > 0) {
               setOcrLines(res.ocrLines);
               setOcrFullText(res.fullText || '');
+              const extraTokens = String(res.fullText || '')
+                .replace(/\[\d{2}:\d{2}\]/g, ' ')
+                .split(/\s+/)
+                .map((t) => t.trim())
+                .filter((t) => t.length >= 2)
+                .slice(0, 40);
               useSaySeeStore.setState((st) => ({
                 videoSceneItems: st.videoSceneItems.map((v) =>
                   v.id === selectedVideoModal.id
@@ -1622,6 +1645,7 @@ export const VideoScenePreviewModal: React.FC = () => {
                         ocrLineCount: res.ocrLines.length,
                         ocrLines: res.ocrLines,
                         ocrFullText: res.fullText,
+                        keywords: Array.from(new Set([...(v.keywords || []), ...extraTokens])),
                       }
                     : v
                 ),
@@ -1633,10 +1657,15 @@ export const VideoScenePreviewModal: React.FC = () => {
                         ocrLineCount: res.ocrLines.length,
                         ocrLines: res.ocrLines,
                         ocrFullText: res.fullText,
+                        keywords: Array.from(new Set([...(v.keywords || []), ...extraTokens])),
                       }
                     : v
                 ),
               }));
+              if (String(selectedVideoModal.id || '').startsWith('mobile_vid_')) {
+                const stAfter = useSaySeeStore.getState();
+                void saveCachedMobileGalleryIndex(stAfter.photos, stAfter.videoSceneItems);
+              }
             }
           } catch {
             /* ignore background OCR hydrate error */

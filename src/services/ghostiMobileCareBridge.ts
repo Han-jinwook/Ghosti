@@ -480,21 +480,25 @@ export async function resolveNativeMobileVideoPlaybackUrl(
   }
 
   if (isCapacitorAndroidRuntime()) {
+    const origin =
+      typeof window !== 'undefined' && window.location?.origin
+        ? window.location.origin
+        : 'https://localhost';
     let streamUrl = resolveAndroidDirectVideoStreamUrl(videoId);
-    if (forceTranscode) {
-      try {
-        const res = await GhostiMobileCareNative.resolveVideoPlaybackUrl({
-          id: videoId,
-          forceTranscode: true,
-        });
-        if (res?.ok && res.fileUrl) {
-          streamUrl = res.fileUrl;
-        } else {
-          return '';
-        }
-      } catch {
+    try {
+      const res = await GhostiMobileCareNative.resolveVideoPlaybackUrl({
+        id: videoId,
+        forceTranscode,
+      });
+      if (res?.ok && res.fileUrl) {
+        streamUrl = res.fileUrl.startsWith('/')
+          ? `${origin}${res.fileUrl}`
+          : res.fileUrl.replace(/^https?:\/\/localhost(?=\/)/i, origin);
+      } else if (forceTranscode) {
         return '';
       }
+    } catch {
+      if (forceTranscode) return '';
     }
     if (!streamUrl) return '';
     // 90MB 이하 모바일 촬영 클립은 로컬 스트림을 Blob URL로 변환해 Android System WebView의

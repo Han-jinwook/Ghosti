@@ -985,10 +985,11 @@ export const createAssistantOnboardingSlice: StateCreator<
             ),
           ];
           if (vidsMissingOcr.length > 0) {
-            const vidsToQuickOcr = vidsMissingOcr.slice(0, 4);
+            const vidsToQuickOcr = vidsMissingOcr.slice(0, 12);
             void (async () => {
               for (const nVid of vidsToQuickOcr) {
                 try {
+                  await new Promise((r) => setTimeout(r, 80));
                   const ocrOut = await extractVideoScreenTextOnDemand(nVid);
                   if (ocrOut.ocrLines && ocrOut.ocrLines.length > 0) {
                     const extraTokens = String(ocrOut.fullText || '')

@@ -32,6 +32,7 @@ import { SampleSharedRoomExperienceCard } from '../domains/free_photo_share/Samp
 import {
   PcMasterQuickSendPanel,
   buildDocPreviewSnippet,
+  formatVideoCardOcrSummary,
   renderHighlightedDocText,
   resolveDocExtBadge,
   maskSensitiveDocText,
@@ -1116,7 +1117,9 @@ export const MobileAppView: React.FC = () => {
                       key={vid.id}
                       onClick={() => setSelectedVideoModal(vid, vid.matchedSeekSec)}
                       className={`${
-                        displayVideos.length === 1 ? 'w-full' : 'min-w-[86%]'
+                        displayVideos.length === 1
+                          ? 'w-full max-w-full min-w-0'
+                          : 'w-[86%] min-w-[86%] max-w-[86%]'
                       } snap-center rounded-2xl overflow-hidden bg-[#18181B] border border-white/10 flex flex-col cursor-pointer shrink-0`}
                     >
                       <div className="relative aspect-video w-full bg-black">
@@ -1159,20 +1162,20 @@ export const MobileAppView: React.FC = () => {
                         </div>
                       </div>
 
-                      <div className="p-3.5 flex flex-col gap-2">
+                      <div className="p-3.5 flex flex-col gap-2 min-w-0 max-w-full overflow-hidden">
                         <h4 className="font-headline-sm text-[14px] text-white font-bold truncate">
                           {vid.title}
                         </h4>
                         {hasExecutedUserSearch && activeQuery ? (
-                          <div className="bg-zinc-950/80 border border-primary-container/30 rounded-lg p-2">
-                            <p className="font-body-sm text-[11.5px] text-zinc-200 line-clamp-2 m-0 p-0">
+                          <div className="bg-zinc-950/80 border border-primary-container/30 rounded-lg p-2 min-w-0 max-w-full overflow-hidden">
+                            <p className="font-body-sm text-[11.5px] text-zinc-200 line-clamp-2 break-words m-0 p-0">
                               {vid.matchedFrameCaption}
                             </p>
                           </div>
                         ) : Array.isArray(vid.ocrLines) && vid.ocrLines.length > 0 ? (
-                          <div className="bg-zinc-950/80 border border-teal-400/35 rounded-lg p-2">
-                            <p className="font-body-sm text-[11.5px] text-zinc-200 line-clamp-2 m-0 p-0">
-                              📝 {vid.ocrLines.map((l) => l.text).join(' · ')}
+                          <div className="bg-zinc-950/80 border border-teal-400/35 rounded-lg p-2 min-w-0 max-w-full overflow-hidden">
+                            <p className="font-body-sm text-[11.5px] text-zinc-200 line-clamp-2 break-words m-0 p-0">
+                              📝 {formatVideoCardOcrSummary(vid.ocrLines)}
                             </p>
                           </div>
                         ) : null}
@@ -1220,7 +1223,7 @@ export const MobileAppView: React.FC = () => {
                       <article
                         key={doc.id}
                         onClick={() => setSelectedDocModal(doc)}
-                        className="min-w-[82%] snap-center p-3.5 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-1.5 cursor-pointer shrink-0"
+                        className="w-[82%] min-w-[82%] max-w-[82%] snap-center p-3.5 rounded-2xl overflow-hidden bg-[#18181B] border border-white/10 flex flex-col gap-1.5 cursor-pointer shrink-0"
                       >
                         {hasExecutedUserSearch && doc.matchType === 'SIMILAR' && (
                           <div className="px-2 py-0.5 rounded bg-amber-500/15 border border-amber-400/40 text-amber-300 font-label-sm text-[10.5px] font-extrabold">

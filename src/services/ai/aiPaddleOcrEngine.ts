@@ -227,7 +227,8 @@ export function formatOcrBoxesSmart(rawBoxes: PaddleOcrBox[]): string {
     }))
     .filter((b) => {
       const t = b.text;
-      if (!t || b.conf < 0.78) return false;
+      const minConf = /[가-힣]{2,}/.test(t) ? 0.72 : 0.78;
+      if (!t || b.conf < minConf) return false;
       if (watermarkRx.test(t)) return false;
       // 동영상 플레이어 이동·일시정지 아이콘 노이즈 제거
       if (/^(?:10|0|00|\(\)|00\(\)|\|\||II|lI|Il)$/.test(t)) return false;
@@ -359,9 +360,9 @@ async function runSingleImageOcrInternal(
   if (srcW < 16 || srcH < 16) return { text: '', boxes: [] };
   const { ort, detSession, recSession, charDict } = await getPaddleOcrRuntime();
 
-  // 1) Detection: 저해상도 영상 프레임(예: 525x315)도 8px 소형 글자를 놓치지 않도록 최소 960px 기준으로 DBNet 입력 구성
+  // 1) Detection: 저해상도 영상 프레임(예: 525x315)도 8px 소형 글자를 놓치지 않도록 최소 960px, 고해상도 프레임은 최대 1536px 기준으로 DBNet 입력 구성
   const maxSide = Math.max(srcW, srcH);
-  const targetMax = Math.max(960, Math.min(1280, maxSide));
+  const targetMax = Math.max(960, Math.min(1536, maxSide));
   const scale = targetMax / maxSide;
   const detW = Math.max(32, Math.round((srcW * scale) / 32) * 32);
   const detH = Math.max(32, Math.round((srcH * scale) / 32) * 32);
@@ -737,7 +738,8 @@ async function runSingleImageOcrInternal(
     const scored = charPairs.filter((p) => p.ch !== ' ');
     const avgConf =
       scored.length > 0 ? scored.reduce((acc, p) => acc + p.sc, 0) / scored.length : 0;
-    if (clean && avgConf >= 0.78) {
+    const minAvgConf = /[가-힣]{2,}/.test(clean) ? 0.72 : 0.78;
+    if (clean && avgConf >= minAvgConf) {
       boxes.push({ ...b, conf: avgConf, text: clean });
     }
 

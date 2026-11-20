@@ -269,6 +269,13 @@ public class MainActivity extends BridgeActivity {
 
     private WebResourceResponse serveMediaStoreVideoRange(WebResourceRequest request, String path) {
         try {
+            if (request != null && "OPTIONS".equalsIgnoreCase(request.getMethod())) {
+                Map<String, String> corsHeaders = new HashMap<>();
+                corsHeaders.put("Access-Control-Allow-Origin", "*");
+                corsHeaders.put("Access-Control-Allow-Methods", "GET, HEAD, OPTIONS");
+                corsHeaders.put("Access-Control-Allow-Headers", "Range, Content-Type");
+                return new WebResourceResponse("text/plain", "UTF-8", 200, "OK", corsHeaders, new java.io.ByteArrayInputStream(new byte[0]));
+            }
             String tail = path.substring("/__ghosti_media_video/".length());
             boolean preferH264 = tail.startsWith("h264_");
             String digits = tail.replaceAll("[^0-9]", "");
@@ -284,7 +291,7 @@ public class MainActivity extends BridgeActivity {
                 : "video/mp4";
 
             File cacheRoot = new File(getCacheDir(), "ghosti_vid_stream");
-            File h264Cached = new File(cacheRoot, "vid_h264_" + mediaId + ".mp4");
+            File h264Cached = new File(cacheRoot, "vid_h264_v2_" + mediaId + ".mp4");
 
             FileInputStream fis = null;
             long totalSize = -1L;

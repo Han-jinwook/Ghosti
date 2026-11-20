@@ -1143,18 +1143,106 @@ public class GhostiMobileCarePlugin extends Plugin {
         }
     }
 
+    private boolean needsH264Transcode(Context appCtx, Uri videoUri) {
+        MediaExtractor ex = new MediaExtractor();
+        try {
+            ex.setDataSource(appCtx, videoUri, (Map<String, String>) null);
+            int tracks = ex.getTrackCount();
+            boolean foundAvc = false;
+            for (int i = 0; i < tracks; i++) {
+                MediaFormat fmt = ex.getTrackFormat(i);
+                String mime = fmt.getString(MediaFormat.KEY_MIME);
+                if (mime != null && mime.startsWith("video/")) {
+                    if (!MediaFormat.MIMETYPE_VIDEO_AVC.equalsIgnoreCase(mime)) {
+                        return true;
+                    }
+                    foundAvc = true;
+                    if (fmt.containsKey(MediaFormat.KEY_PROFILE)) {
+                        int profile = fmt.getInteger(MediaFormat.KEY_PROFILE);
+                        // 10-bit / 4:2:2 / 4:4:4 AVC profiles unsupported by mobile WebView <video>
+                        if (profile == MediaCodecInfo.CodecProfileLevel.AVCProfileHigh10
+                            || profile == MediaCodecInfo.CodecProfileLevel.AVCProfileHigh422
+                            || profile == MediaCodecInfo.CodecProfileLevel.AVCProfileHigh444) {
+                            return true;
+                        }
+                    }
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.N && fmt.containsKey(MediaFormat.KEY_COLOR_TRANSFER)) {
+                        int ct = fmt.getInteger(MediaFormat.KEY_COLOR_TRANSFER);
+                        // ST2084 (HDR10 / HDR10+) or HLG 10-bit
+                        if (ct == MediaFormat.COLOR_TRANSFER_ST2084 || ct == MediaFormat.COLOR_TRANSFER_HLG) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return !foundAvc;
+        } catch (Throwable ignored) {
+            return false;
+        } finally {
+            try {
+                ex.release();
+            } catch (Throwable ignored) {
+            }
+        }
+    }
+
+    private MediaCodec createCompatibleAvcEncoder() throws IOException {
+        String[] preferredSwCodecs = new String[] {
+            "c2.android.avc.encoder",
+            "OMX.google.h264.encoder"
+        };
+        for (String name : preferredSwCodecs) {
+            try {
+                return MediaCodec.createByCodecName(name);
+            } catch (Throwable ignored) {
+            }
+        }
+        return MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
+    }
+
+    private static void writeBitmapToNv12ByteBuffer(int[] argb, int width, int height, ByteBuffer buf) {
+        buf.clear();
+        int cap = buf.capacity();
+        int ySize = width * height;
+        for (int j = 0; j < height; j++) {
+            int rowOff = j * width;
+            boolean evenRow = (j & 1) == 0;
+            int uvRowOff = ySize + (j >> 1) * width;
+            for (int i = 0; i < width; i++) {
+                int c = argb[rowOff + i];
+                int r = (c >> 16) & 0xff;
+                int g = (c >> 8) & 0xff;
+                int b = c & 0xff;
+                int y = ((66 * r + 129 * g + 25 * b + 128) >> 8) + 16;
+                int yIdx = rowOff + i;
+                if (yIdx < cap) {
+                    buf.put(yIdx, (byte) Math.max(0, Math.min(255, y)));
+                }
+                if (evenRow && (i & 1) == 0) {
+                    int u = ((-38 * r - 74 * g + 112 * b + 128) >> 8) + 128;
+                    int v = ((112 * r - 94 * g - 18 * b + 128) >> 8) + 128;
+                    int uvIdx = uvRowOff + i;
+                    if (uvIdx + 1 < cap) {
+                        buf.put(uvIdx, (byte) Math.max(0, Math.min(255, u)));
+                        buf.put(uvIdx + 1, (byte) Math.max(0, Math.min(255, v)));
+                    }
+                }
+            }
+        }
+    }
+
     private File ensurePlayableH264Mp4(Context appCtx, long mediaId) {
         synchronized (H264_TRANSCODE_LOCK) {
             File cacheRoot = new File(appCtx.getCacheDir(), "ghosti_vid_stream");
             if (!cacheRoot.exists()) {
                 cacheRoot.mkdirs();
             }
-            File outFile = new File(cacheRoot, "vid_h264_" + mediaId + ".mp4");
+            File outFile = new File(cacheRoot, "vid_h264_v2_" + mediaId + ".mp4");
             if (outFile.exists() && outFile.length() > 4096L) {
                 outFile.setLastModified(System.currentTimeMillis());
                 return outFile;
             }
-            File tmpFile = new File(cacheRoot, "vid_h264_" + mediaId + "_" + System.nanoTime() + ".tmp");
+            File tmpFile = new File(cacheRoot, "vid_h264_v2_" + mediaId + "_" + System.nanoTime() + ".tmp");
             Uri videoUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, mediaId);
 
             MediaMetadataRetriever retriever = new MediaMetadataRetriever();
@@ -1188,14 +1276,15 @@ public class GhostiMobileCarePlugin extends Plugin {
                 int outH = Math.max(160, (Math.round(srcH * scale) / 16) * 16);
                 int fps = 15;
                 int totalFrames = Math.max(2, (int) Math.min(900L, (durMs * (long) fps) / 1000L));
+                int yuvFrameBytes = (outW * outH * 3) / 2;
 
                 MediaFormat vFmt = MediaFormat.createVideoFormat(MediaFormat.MIMETYPE_VIDEO_AVC, outW, outH);
                 vFmt.setInteger(MediaFormat.KEY_COLOR_FORMAT, MediaCodecInfo.CodecCapabilities.COLOR_FormatYUV420Flexible);
-                vFmt.setInteger(MediaFormat.KEY_BIT_RATE, 2000000);
+                vFmt.setInteger(MediaFormat.KEY_BIT_RATE, 2200000);
                 vFmt.setInteger(MediaFormat.KEY_FRAME_RATE, fps);
                 vFmt.setInteger(MediaFormat.KEY_I_FRAME_INTERVAL, 1);
 
-                encoder = MediaCodec.createEncoderByType(MediaFormat.MIMETYPE_VIDEO_AVC);
+                encoder = createCompatibleAvcEncoder();
                 encoder.configure(vFmt, null, null, MediaCodec.CONFIGURE_FLAG_ENCODE);
                 encoder.start();
 
@@ -1269,13 +1358,24 @@ public class GhostiMobileCarePlugin extends Plugin {
                                     }
                                 }
 
+                                // Android MediaCodec 규칙: getInputImage(inIdx) 호출 후 동일 inIdx에 getInputBuffer(inIdx)를 호출하면
+                                // WritableImage가 즉시 close되므로 절대 두 메서드를 동시에 호출하지 않습니다!
                                 Image inImg = encoder.getInputImage(inIdx);
-                                ByteBuffer inBuf = encoder.getInputBuffer(inIdx);
-                                if (inImg != null && inBuf != null) {
-                                    writeBitmapToYuv420Image(argbBuf, outW, outH, inImg);
-                                    encoder.queueInputBuffer(inIdx, 0, inBuf.capacity(), ptsUs, 0);
+                                if (inImg != null) {
+                                    try {
+                                        writeBitmapToYuv420Image(argbBuf, outW, outH, inImg);
+                                    } finally {
+                                        inImg.close();
+                                    }
+                                    encoder.queueInputBuffer(inIdx, 0, yuvFrameBytes, ptsUs, 0);
                                 } else {
-                                    encoder.queueInputBuffer(inIdx, 0, 0, ptsUs, 0);
+                                    ByteBuffer inBuf = encoder.getInputBuffer(inIdx);
+                                    if (inBuf != null && inBuf.capacity() >= yuvFrameBytes) {
+                                        writeBitmapToNv12ByteBuffer(argbBuf, outW, outH, inBuf);
+                                        encoder.queueInputBuffer(inIdx, 0, yuvFrameBytes, ptsUs, 0);
+                                    } else {
+                                        encoder.queueInputBuffer(inIdx, 0, 0, ptsUs, 0);
+                                    }
                                 }
                                 frameIdx++;
                             }
@@ -1314,19 +1414,29 @@ public class GhostiMobileCarePlugin extends Plugin {
                         ByteBuffer aBuf = ByteBuffer.allocate(65536);
                         MediaCodec.BufferInfo aInfo = new MediaCodec.BufferInfo();
                         long maxPtsUs = durMs * 1000L;
+                        long lastAudioPtsUs = -1L;
                         while (true) {
                             int sz = audioEx.readSampleData(aBuf, 0);
                             if (sz < 0) break;
                             long sTime = audioEx.getSampleTime();
                             if (sTime > maxPtsUs) break;
+                            long safePtsUs = Math.max(0L, sTime);
+                            if (safePtsUs <= lastAudioPtsUs) {
+                                safePtsUs = lastAudioPtsUs + 1L;
+                            }
+                            lastAudioPtsUs = safePtsUs;
+                            int exFlags = audioEx.getSampleFlags();
                             aInfo.offset = 0;
                             aInfo.size = sz;
-                            aInfo.presentationTimeUs = Math.max(0L, sTime);
-                            aInfo.flags = audioEx.getSampleFlags();
+                            aInfo.presentationTimeUs = safePtsUs;
+                            aInfo.flags = (exFlags & MediaExtractor.SAMPLE_FLAG_SYNC) != 0
+                                ? MediaCodec.BUFFER_FLAG_KEY_FRAME
+                                : 0;
                             muxer.writeSampleData(muxAudioTrack, aBuf, aInfo);
                             audioEx.advance();
                         }
-                    } catch (Throwable ignored) {
+                    } catch (Throwable audioErr) {
+                        android.util.Log.w("GhostiVidH264", "Audio track copy skipped: " + audioErr.getMessage());
                     }
                 }
 
@@ -1341,7 +1451,8 @@ public class GhostiMobileCarePlugin extends Plugin {
                     }
                     return tmpFile;
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable err) {
+                android.util.Log.e("GhostiVidH264", "ensurePlayableH264Mp4 failed for mediaId=" + mediaId, err);
             } finally {
                 try { retriever.release(); } catch (Throwable ignored) {}
                 if (audioEx != null) {
@@ -1369,7 +1480,7 @@ public class GhostiMobileCarePlugin extends Plugin {
     public void resolveVideoPlaybackUrl(PluginCall call) {
         Context ctx = getContext();
         String rawId = call.getString("id", "");
-        boolean forceTranscode = call.getBoolean("forceTranscode", false);
+        final boolean forceTranscode = call.getBoolean("forceTranscode", false);
         final String digits = rawId != null ? rawId.replaceAll("[^0-9]", "") : "";
         if (digits.isEmpty() || ctx == null) {
             JSObject ret = new JSObject();
@@ -1378,27 +1489,31 @@ public class GhostiMobileCarePlugin extends Plugin {
             call.resolve(ret);
             return;
         }
-        if (!forceTranscode) {
-            JSObject ret = new JSObject();
-            ret.put("ok", true);
-            ret.put("fileUrl", "https://localhost/__ghosti_media_video/" + digits + ".mp4");
-            call.resolve(ret);
-            return;
-        }
         final Context appCtx = ctx.getApplicationContext();
         new Thread(() -> {
             JSObject ret = new JSObject();
             try {
                 long mediaId = Long.parseLong(digits);
-                File h264 = ensurePlayableH264Mp4(appCtx, mediaId);
-                if (h264 != null && h264.exists() && h264.length() > 4096L) {
+                Uri videoUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, mediaId);
+                boolean mustTranscode = forceTranscode || needsH264Transcode(appCtx, videoUri);
+                if (!mustTranscode) {
                     ret.put("ok", true);
-                    ret.put("fileUrl", "https://localhost/__ghosti_media_video/h264_" + digits + ".mp4");
+                    ret.put("fileUrl", "/__ghosti_media_video/" + digits + ".mp4");
                 } else {
-                    ret.put("ok", false);
-                    ret.put("fileUrl", "");
+                    File h264 = ensurePlayableH264Mp4(appCtx, mediaId);
+                    if (h264 != null && h264.exists() && h264.length() > 4096L) {
+                        ret.put("ok", true);
+                        ret.put("fileUrl", "/__ghosti_media_video/h264_" + digits + ".mp4");
+                    } else if (!forceTranscode) {
+                        ret.put("ok", true);
+                        ret.put("fileUrl", "/__ghosti_media_video/" + digits + ".mp4");
+                    } else {
+                        ret.put("ok", false);
+                        ret.put("fileUrl", "");
+                    }
                 }
-            } catch (Throwable ignored) {
+            } catch (Throwable err) {
+                android.util.Log.e("GhostiVidH264", "resolveVideoPlaybackUrl error", err);
                 ret.put("ok", false);
                 ret.put("fileUrl", "");
             }
@@ -1455,15 +1570,15 @@ public class GhostiMobileCarePlugin extends Plugin {
                         int h = frame.getHeight();
                         int maxSide = Math.max(w, h);
                         Bitmap targetBmp = frame;
-                        if (maxSide > 1280) {
-                            float scale = 1280.0f / (float) maxSide;
+                        if (maxSide > 1600) {
+                            float scale = 1600.0f / (float) maxSide;
                             int nw = Math.max(64, Math.round(w * scale));
                             int nh = Math.max(64, Math.round(h * scale));
                             scaled = Bitmap.createScaledBitmap(frame, nw, nh, true);
                             targetBmp = scaled;
                         }
                         ByteArrayOutputStream baos = new ByteArrayOutputStream(65536);
-                        targetBmp.compress(Bitmap.CompressFormat.JPEG, 82, baos);
+                        targetBmp.compress(Bitmap.CompressFormat.JPEG, 88, baos);
                         String dataUrl = "data:image/jpeg;base64," + Base64.encodeToString(baos.toByteArray(), Base64.NO_WRAP);
                         JSObject fObj = new JSObject();
                         fObj.put("timeSec", Math.max(0, (int) Math.round(sampleMs / 1000.0)));

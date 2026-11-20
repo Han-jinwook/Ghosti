@@ -9,6 +9,7 @@ import {
 import { executeRealOsAction } from '../services/setupMonsterEngine';
 import {
   buildDocPreviewSnippet,
+  formatVideoCardOcrSummary,
   renderHighlightedDocText,
   resolveDocExtBadge,
   maskSensitiveDocText,
@@ -1100,10 +1101,23 @@ export const Stage1MinimalSearchPreview: React.FC<{
                       </div>
                     )}
                   </div>
-                  <div className="p-4 flex flex-col gap-2.5 flex-1 justify-between">
-                    <h3 className="font-headline-sm text-[15px] text-white font-bold group-hover:text-primary-container transition-colors">
-                      {renderHighlightedDocText(vid.title, hasExecutedUserSearch ? activeQuery : '')}
-                    </h3>
+                  <div className="p-4 flex flex-col gap-2.5 flex-1 justify-between min-w-0 max-w-full overflow-hidden">
+                    <div className="flex flex-col gap-2 min-w-0 max-w-full">
+                      <h3 className="font-headline-sm text-[15px] text-white font-bold group-hover:text-primary-container transition-colors truncate">
+                        {renderHighlightedDocText(vid.title, hasExecutedUserSearch ? activeQuery : '')}
+                      </h3>
+                      {Array.isArray(vid.ocrLines) && vid.ocrLines.length > 0 && (
+                        <div className="bg-zinc-950/80 border border-teal-400/35 rounded-lg p-2 min-w-0 max-w-full overflow-hidden">
+                          <p className="font-body-sm text-[11.5px] text-zinc-200 line-clamp-2 break-words m-0 p-0">
+                            📝{' '}
+                            {renderHighlightedDocText(
+                              formatVideoCardOcrSummary(vid.ocrLines),
+                              hasExecutedUserSearch ? activeQuery : ''
+                            )}
+                          </p>
+                        </div>
+                      )}
+                    </div>
                     <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400">
                       <span>{vid.date}</span>
                       <div className="flex items-center gap-2">

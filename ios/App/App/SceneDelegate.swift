@@ -458,7 +458,7 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         let fm = FileManager.default
         let tmpDir = fm.temporaryDirectory
 
-        let filePrefix = forceTranscode ? "ghosti_vid_h264_" : "ghosti_vid_"
+        let filePrefix = forceTranscode ? "ghosti_vid_h264_v2_" : "ghosti_vid_v2_"
         let outUrl = tmpDir.appendingPathComponent("\(filePrefix)\(safeStem).mp4")
         if let attrs = try? fm.attributesOfItem(atPath: outUrl.path),
            let sz = attrs[.size] as? NSNumber,
@@ -477,16 +477,28 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
                 return
             }
 
+            var isPureAvcMp4 = false
             if !forceTranscode,
                let urlAsset = compAsset as? AVURLAsset,
                urlAsset.url.pathExtension.lowercased() == "mp4" {
-                try? fm.removeItem(at: outUrl)
-                if (try? fm.copyItem(at: urlAsset.url, to: outUrl)) != nil,
-                   let attrs = try? fm.attributesOfItem(atPath: outUrl.path),
-                   let sz = attrs[.size] as? NSNumber,
-                   sz.int64Value > 4096 {
-                    call.resolve(["ok": true, "fileUrl": outUrl.path])
-                    return
+                let vTracks = compAsset.tracks(withMediaType: .video)
+                if let firstTrack = vTracks.first,
+                   let desc = firstTrack.formatDescriptions.first {
+                    let subType = CMFormatDescriptionGetMediaSubType(desc as! CMFormatDescription)
+                    // 'avc1' = 0x61766331
+                    if subType == 0x61766331 {
+                        isPureAvcMp4 = true
+                    }
+                }
+                if isPureAvcMp4 {
+                    try? fm.removeItem(at: outUrl)
+                    if (try? fm.copyItem(at: urlAsset.url, to: outUrl)) != nil,
+                       let attrs = try? fm.attributesOfItem(atPath: outUrl.path),
+                       let sz = attrs[.size] as? NSNumber,
+                       sz.int64Value > 4096 {
+                        call.resolve(["ok": true, "fileUrl": outUrl.path])
+                        return
+                    }
                 }
             }
 
@@ -543,7 +555,7 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
                 let count = durSec <= 2.2 ? 2 : (durSec <= 6.0 ? min(4, maxFrames) : maxFrames)
                 let generator = AVAssetImageGenerator(asset: compAsset)
                 generator.appliesPreferredTrackTransform = true
-                generator.maximumSize = CGSize(width: 1280, height: 1280)
+                generator.maximumSize = CGSize(width: 1600, height: 1600)
                 let tol = CMTime(seconds: durSec <= 12.0 ? 0.15 : 0.35, preferredTimescale: 600)
                 generator.requestedTimeToleranceBefore = tol
                 generator.requestedTimeToleranceAfter = tol
@@ -555,7 +567,7 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
                     let cmTime = CMTime(seconds: tSec, preferredTimescale: 600)
                     if let cgImg = try? generator.copyCGImage(at: cmTime, actualTime: nil) {
                         let uiImg = UIImage(cgImage: cgImg)
-                        if let jpeg = uiImg.jpegData(compressionQuality: 0.82) {
+                        if let jpeg = uiImg.jpegData(compressionQuality: 0.88) {
                             framesList.append([
                                 "timeSec": Int(round(tSec)),
                                 "dataUrl": "data:image/jpeg;base64," + jpeg.base64EncodedString()
