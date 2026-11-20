@@ -18,8 +18,11 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
     devicePairingCode6,
     deviceEntitlement,
     syncedClipboardItems,
+    thisDeviceRevoked,
     refreshDeviceIntegrationState,
     pairWithSixDigitCode,
+    unlinkConnectedDevice,
+    reconnectThisDevice,
     sendTextToPairedClipboard,
     setDeviceIntegrationSnapshot,
     setShowProModal,
@@ -30,6 +33,8 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
   const [sendingClip, setSendingClip] = useState(false);
   const [pullingLocalClip, setPullingLocalClip] = useState(false);
   const [pairingBusy, setPairingBusy] = useState(false);
+  const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
+  const [reconnectingBusy, setReconnectingBusy] = useState(false);
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
   const [zCoreConnected, setZCoreConnected] = useState<boolean>(zCoreBridge.isConnected);
 
@@ -39,7 +44,8 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
     merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest'
   );
   const hidePricingForStore = Boolean(isStoreAppMode) || isMobileOrStoreRuntime();
-  const isMobileDevice = getThisDeviceIdentity().deviceKind === 'mobile';
+  const thisDeviceIdentity = getThisDeviceIdentity();
+  const isMobileDevice = thisDeviceIdentity.deviceKind === 'mobile';
 
   const openLoginModal = () => {
     if (typeof window !== 'undefined') {
@@ -138,7 +144,7 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
           )}
           {isLoggedIn && (
             <span className="px-2.5 py-0.5 rounded-full bg-zinc-900 border border-white/15 text-zinc-200 text-[11px] font-bold">
-              연결된 내 기기 {Math.max(1, connectedDevices.length)}대
+              연결된 내 기기 {connectedDevices.length}대
             </span>
           )}
           {isLoggedIn && deviceEntitlement?.isPaidUnlimited && !hidePricingForStore && (
@@ -181,6 +187,67 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
           )}
         </div>
       </div>
+
+      {/* 1.5. 연결 해제된 현재 기기 재연결 안내 & 연결된 내 기기 목록(개별 연결 해제 버튼) */}
+      {isLoggedIn && thisDeviceRevoked && (
+        <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-400/45 flex flex-wrap items-center justify-between gap-2 text-[12px]">
+          <span className="text-amber-200 font-bold break-keep">
+            🔌 이 기기의 연결이 해제된 상태입니다. QR 스캔·6자리 번호 입력 또는 아래 버튼으로 다시 연결할 수 있습니다.
+          </span>
+          <button
+            type="button"
+            disabled={reconnectingBusy}
+            onClick={async () => {
+              setReconnectingBusy(true);
+              await reconnectThisDevice();
+              setReconnectingBusy(false);
+            }}
+            className="px-3 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer disabled:opacity-50 shrink-0"
+          >
+            {reconnectingBusy ? '연결 중...' : '🔄 이 기기 다시 연결'}
+          </button>
+        </div>
+      )}
+
+      {isLoggedIn && connectedDevices.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-zinc-900/70 border border-white/10">
+          <span className="text-[11px] font-extrabold text-zinc-400 shrink-0">
+            연결된 기기 관리:
+          </span>
+          {connectedDevices.map((dev) => {
+            const isCurrent = dev.device_id === thisDeviceIdentity.deviceId;
+            const isBusy = revokingDeviceId === dev.device_id;
+            return (
+              <div
+                key={dev.device_id}
+                className={`inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg border text-[11.5px] ${
+                  isCurrent
+                    ? 'bg-zinc-950 border-primary-container/40 text-zinc-100'
+                    : 'bg-zinc-950/80 border-white/15 text-zinc-200'
+                }`}
+              >
+                <span className="font-bold">
+                  {dev.device_kind === 'mobile' ? '📱' : '💻'} {dev.display_name}
+                  {isCurrent ? ' (현재 기기)' : ''}
+                </span>
+                <button
+                  type="button"
+                  disabled={isBusy}
+                  data-testid={`unlink-device-${dev.device_id}`}
+                  onClick={async () => {
+                    setRevokingDeviceId(dev.device_id);
+                    await unlinkConnectedDevice(dev.device_id);
+                    setRevokingDeviceId(null);
+                  }}
+                  className="px-2 py-0.5 rounded-md bg-rose-500/15 hover:bg-rose-500/30 border border-rose-400/40 text-rose-200 text-[10.5px] font-extrabold cursor-pointer disabled:opacity-50 transition-colors"
+                >
+                  {isBusy ? '해제 중...' : '🔌 연결 해제'}
+                </button>
+              </div>
+            );
+          })}
+        </div>
+      )}
 
       {/* 2. 6자리 즉시 바인딩 번호 표시(PC) & 번호 입력(모바일·서브PC) */}
       <div className="flex flex-wrap items-center justify-between gap-2.5 p-2.5 rounded-xl bg-zinc-900/80 border border-white/10 text-[12px]">

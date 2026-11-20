@@ -138,6 +138,7 @@ import {
   loadCachedDeviceIntegrationSnapshot,
   loadCachedSyncedClips,
   pushCrossDeviceClipboardText,
+  revokeConnectedDevice,
   saveCachedDeviceIntegrationSnapshot,
   syncDeviceHeartbeatAndList,
   type GhostiConnectedDeviceDto,
@@ -167,8 +168,11 @@ export interface PaidDeviceSyncSlice {
   devicePairingCode6: string | null;
   deviceEntitlement: GhostiDeviceEntitlementView | null;
   syncedClipboardItems: GhostiSyncedClipItem[];
+  thisDeviceRevoked: boolean;
   refreshDeviceIntegrationState: (explicitTrialOptIn?: boolean) => Promise<void>;
   pairWithSixDigitCode: (code: string) => Promise<boolean>;
+  unlinkConnectedDevice: (targetDeviceId: string) => Promise<boolean>;
+  reconnectThisDevice: () => Promise<boolean>;
   sendTextToPairedClipboard: (text: string) => Promise<boolean>;
   setDeviceIntegrationSnapshot: (payload: {
     devices?: GhostiConnectedDeviceDto[];
@@ -176,6 +180,7 @@ export interface PaidDeviceSyncSlice {
     entitlement?: GhostiDeviceEntitlementView | null;
     incomingClip?: GhostiSyncedClipItem;
     syncedClips?: GhostiSyncedClipItem[];
+    revokedSelf?: boolean;
   }) => void;
 
   setShowProModal: (show: boolean) => void;
@@ -203,6 +208,7 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
   devicePairingCode6: loadCachedDeviceIntegrationSnapshot()?.pairingCode || null,
   deviceEntitlement: loadCachedDeviceIntegrationSnapshot()?.entitlement || null,
   syncedClipboardItems: loadCachedSyncedClips(),
+  thisDeviceRevoked: false,
   showProModal:
     typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('master') === 'pc' &&
@@ -542,7 +548,8 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
       connectedDevices: hb.devices,
       devicePairingCode6: hb.pairingCode ?? state.devicePairingCode6,
       deviceEntitlement: hb.entitlement ?? state.deviceEntitlement,
-      pcAgentPairedMobile: hasMobilePeer || hasMultiDevices || state.pcAgentPairedMobile,
+      thisDeviceRevoked: hb.revokedSelf,
+      pcAgentPairedMobile: hasMobilePeer || hasMultiDevices,
     }));
   },
 
@@ -566,12 +573,60 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
       });
       return false;
     }
+    const hasMobile = res.devices.some((d) => d.device_kind === 'mobile');
     set({
       connectedDevices: res.devices,
       deviceEntitlement: res.entitlement,
-      pcAgentPairedMobile: true,
-      lastQuarantineToast: `🎉 내 PC ↔ 스마트폰 6자리 보안 바인딩 완료! (${res.devices.length}대 연결됨 · 30일 무제한 무료체험 가동)`,
+      thisDeviceRevoked: false,
+      pcAgentPairedMobile: hasMobile || res.devices.length >= 2,
+      lastQuarantineToast: res.alreadyPaired
+        ? `✅ 이미 연결된 기기입니다! 최신 연결 상태를 확인했습니다 (연결된 내 기기 ${res.devices.length}대)`
+        : `🎉 내 PC ↔ 스마트폰 보안 연결 완료! (${res.devices.length}대 연결됨 · 30일 무제한 무료체험 가동)`,
     });
+    return true;
+  },
+
+  unlinkConnectedDevice: async (targetDeviceId: string) => {
+    const target = get().connectedDevices.find((d) => d.device_id === targetDeviceId);
+    const targetName = target?.display_name || '선택한 기기';
+    const res = await revokeConnectedDevice(targetDeviceId);
+    if (!res.ok) {
+      set({
+        lastQuarantineToast:
+          '⚠️ 기기 연결을 해제하지 못했습니다. 네트워크 상태를 확인한 뒤 다시 눌러 주세요.',
+      });
+      return false;
+    }
+    const hasMobile = res.devices.some((d) => d.device_kind === 'mobile');
+    set((state) => ({
+      connectedDevices: res.devices,
+      deviceEntitlement: res.entitlement ?? state.deviceEntitlement,
+      thisDeviceRevoked: res.revokedSelf ? true : state.thisDeviceRevoked,
+      pcAgentPairedMobile: hasMobile || res.devices.length >= 2,
+      lastQuarantineToast: res.revokedSelf
+        ? '🔌 이 기기의 연결이 해제되었습니다. 다시 연결하려면 PC QR 스캔 또는 6자리 연결번호를 입력해 주세요.'
+        : `🔌 [${targetName}] 연결이 해제되었습니다. (현재 연결된 내 기기 ${res.devices.length}대)`,
+    }));
+    return true;
+  },
+
+  reconnectThisDevice: async () => {
+    const hb = await syncDeviceHeartbeatAndList({ explicitReconnect: true });
+    if (!hb.ok) {
+      set({
+        lastQuarantineToast: '⚠️ 기기 재연결에 실패했습니다. 잠시 후 다시 시도해 주세요.',
+      });
+      return false;
+    }
+    const hasMobile = hb.devices.some((d) => d.device_kind === 'mobile');
+    set((state) => ({
+      connectedDevices: hb.devices,
+      devicePairingCode6: hb.pairingCode ?? state.devicePairingCode6,
+      deviceEntitlement: hb.entitlement ?? state.deviceEntitlement,
+      thisDeviceRevoked: false,
+      pcAgentPairedMobile: hasMobile || hb.devices.length >= 2,
+      lastQuarantineToast: `✅ 이 기기가 다시 연결되었습니다! (연결된 내 기기 ${hb.devices.length}대)`,
+    }));
     return true;
   },
 
@@ -623,7 +678,12 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
           payload.pairingCode !== undefined ? payload.pairingCode : state.devicePairingCode6,
         deviceEntitlement:
           payload.entitlement !== undefined ? payload.entitlement : state.deviceEntitlement,
-        pcAgentPairedMobile: hasMobile || nextDevices.length >= 2 || state.pcAgentPairedMobile,
+        thisDeviceRevoked:
+          payload.revokedSelf !== undefined ? payload.revokedSelf : state.thisDeviceRevoked,
+        pcAgentPairedMobile:
+          payload.devices !== undefined
+            ? hasMobile || nextDevices.length >= 2
+            : state.pcAgentPairedMobile,
         syncedClipboardItems: nextClips,
       };
     });

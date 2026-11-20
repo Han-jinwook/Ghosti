@@ -249,6 +249,7 @@ export const MobileAppView: React.FC = () => {
     pcAgentPairedMobile,
     connectedDevices,
     syncedClipboardItems,
+    thisDeviceRevoked,
     themeMode,
     toggleThemeMode,
     merlinAuth,
@@ -277,8 +278,33 @@ export const MobileAppView: React.FC = () => {
     syncMobileNativeGalleryAuto,
   } = useSaySeeStore();
 
-  const [showPrivateSyncSection, setShowPrivateSyncSection] = useState(false);
+  const [showPrivateSyncSection, setShowPrivateSyncSection] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      if (params.has('pairCode') || sessionStorage.getItem('ghosti_expand_device_sync_once') === '1') {
+        sessionStorage.removeItem('ghosti_expand_device_sync_once');
+        return true;
+      }
+    } catch {
+      /* ignore */
+    }
+    return false;
+  });
+  const privateSyncSectionRef = useRef<HTMLElement | null>(null);
   const [showPolicyAndStoreSection, setShowPolicyAndStoreSection] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onOpenDeviceSync = () => {
+      setShowPrivateSyncSection(true);
+      window.setTimeout(() => {
+        privateSyncSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }, 160);
+    };
+    window.addEventListener('ghosti_open_device_sync_section', onOpenDeviceSync);
+    return () => window.removeEventListener('ghosti_open_device_sync_section', onOpenDeviceSync);
+  }, []);
   const prevTopClipKeyRef = useRef<string>(
     syncedClipboardItems[0]
       ? `${syncedClipboardItems[0].clipHash}:${syncedClipboardItems[0].createdAt}`
@@ -1583,16 +1609,22 @@ export const MobileAppView: React.FC = () => {
                 );
                 const isPeerConnected =
                   isLoggedInUser &&
+                  !thisDeviceRevoked &&
                   (zCoreBridge.isConnected ||
                     Boolean(pcAgentPairedMobile) ||
                     connectedDevices.length >= 2);
                 const syncStatusLine = !isLoggedInUser
                   ? '🔒 아직 로그인되지 않음 — 같은 이메일로 로그인하면 내 PC와 연결됩니다 (0GB)'
+                  : thisDeviceRevoked
+                  ? '🔌 이 기기의 연결이 해제된 상태입니다 — 눌러서 QR·6자리 번호로 다시 연결해 주세요'
                   : !isPeerConnected
                   ? '💻 연결된 내 PC 없음 (0GB) — 내 PC에서도 같은 이메일로 로그인하거나 6자리 번호로 연결해 주세요'
                   : `내 기기 ${Math.max(2, connectedDevices.length)}대 직결 · 마지막 일치화: ${syncState.lastSyncedAt}`;
                 return (
-                  <section className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden transition-all">
+                  <section
+                    ref={privateSyncSectionRef}
+                    className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden transition-all"
+                  >
                     <div
                       onClick={() => setShowPrivateSyncSection((prev) => !prev)}
                       className="p-3.5 sm:p-4 flex flex-wrap items-center justify-between gap-2.5 cursor-pointer hover:bg-zinc-900/60 transition-colors"

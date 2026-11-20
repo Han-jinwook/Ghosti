@@ -360,8 +360,8 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     const stopRuntime = startDeviceIntegrationRealtimeRuntime({
       email: merlinAuth.email,
       userId: merlinAuth.userId,
-      onDevicesUpdated: ({ devices, pairingCode, entitlement }) => {
-        setDeviceIntegrationSnapshot({ devices, pairingCode, entitlement });
+      onDevicesUpdated: ({ devices, pairingCode, entitlement, revokedSelf }) => {
+        setDeviceIntegrationSnapshot({ devices, pairingCode, entitlement, revokedSelf });
         if (
           entitlement?.isPaidUnlimited &&
           (entitlement.planId === 'personal_sub_3900' ||
@@ -377,6 +377,31 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
             });
           }
         }
+      },
+      onPairingCompleted: ({ ok, alreadyPaired, deviceCount, reason }) => {
+        if (ok) {
+          useSaySeeStore.setState({
+            lastQuarantineToast: alreadyPaired
+              ? `✅ 이미 연결된 기기입니다! 최신 연결 상태를 확인했습니다 (연결된 내 기기 ${deviceCount}대)`
+              : `🎉 QR·6자리 보안 연결 완료! 내 PC와 스마트폰이 직결되었습니다 (연결된 내 기기 ${deviceCount}대)`,
+          });
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('ghosti_open_device_sync_section'));
+          }
+        } else {
+          useSaySeeStore.setState({
+            lastQuarantineToast:
+              reason === 'AUTH_REQUIRED'
+                ? '🔑 먼저 PC와 같은 이메일로 로그인하면 QR 연결이 바로 완료됩니다.'
+                : '⚠️ QR 연결 번호가 만료되었거나 다른 계정 번호입니다. PC 화면의 최신 QR·6자리 번호를 다시 스캔해 주세요.',
+          });
+        }
+      },
+      onSelfRevoked: () => {
+        useSaySeeStore.setState({
+          lastQuarantineToast:
+            '🔌 다른 기기에서 이 기기의 연결이 해제되었습니다. 다시 연결하려면 QR 스캔 또는 [이 기기 다시 연결]을 눌러 주세요.',
+        });
       },
       onIncomingClip: (clip, meta) => {
         setDeviceIntegrationSnapshot({ incomingClip: clip });

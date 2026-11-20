@@ -4,6 +4,10 @@ import type { FamilyRoomId, LoungeType } from './types/saysee';
 import { playAppEnterGiggleSound } from './services/babyGhostSound';
 import { hasActiveGhostiLoginSession, zCoreBridge } from './services/zCoreBridge';
 import { hasAuthenticatedHubAccountSession } from './services/supabaseClient';
+import {
+  clearPendingQrPairCode,
+  savePendingQrPairCode,
+} from './services/deviceIntegrationService';
 import { DesktopDashboard } from './components/DesktopDashboard';
 import { GhostiLoadingSplash } from './components/GhostiLoadingSplash';
 import { GhostiHubRootProvider } from './components/GhostiHubInfraBridge';
@@ -167,7 +171,8 @@ export const App: React.FC = () => {
         params.get('preview') === 'legacy' ||
         params.get('preview') === 'guest' ||
         params.has('invite') ||
-        params.has('workRoom')
+        params.has('workRoom') ||
+        params.has('pairCode')
       ) {
         return true;
       }
@@ -210,7 +215,8 @@ export const App: React.FC = () => {
         params.get('preview') === 'guest' ||
         params.has('invite') ||
         params.has('inviteToken') ||
-        params.has('workRoom')
+        params.has('workRoom') ||
+        params.has('pairCode')
       ) {
         return 'workspace';
       }
@@ -352,6 +358,17 @@ export const App: React.FC = () => {
       const params = new URLSearchParams(window.location.search);
       const hasInviteLink = params.has('invite') || params.has('inviteToken');
       const hasWorkRoomLink = params.has('workRoom');
+      const rawPairCode = (params.get('pairCode') || '').replace(/\D/g, '').slice(0, 6);
+      const hasPairCodeLink = rawPairCode.length === 6 || params.has('pairCode');
+      if (rawPairCode.length === 6) {
+        savePendingQrPairCode(rawPairCode);
+        try {
+          sessionStorage.setItem('ghosti_expand_device_sync_once', '1');
+          sessionStorage.setItem('ghosti_entered_from_showroom', '1');
+        } catch {
+          /* ignore */
+        }
+      }
       const inviteVal = params.get('invite') || '';
       const urlLounge = params.get('lounge') as LoungeType | null;
       const urlTab = params.get('tab') as DesktopTab | null;
@@ -369,18 +386,22 @@ export const App: React.FC = () => {
       const targetLounge: LoungeType =
         hasInviteLink || hasWorkRoomLink
           ? defaultInviteLounge
+          : hasPairCodeLink
+          ? 'personal'
           : urlLounge && ['personal', 'family', 'club', 'student', 'work'].includes(urlLounge)
             ? urlLounge
             : savedNav?.lounge || useSaySeeStore.getState().activeLoungeType;
       const targetDesktopTab: DesktopTab =
         hasInviteLink || hasWorkRoomLink
           ? 'dashboard'
+          : hasPairCodeLink
+          ? 'sync'
           : urlTab &&
               ['trial', 'dashboard', 'trash', 'share', 'settings', 'sync', 'superpower_dojo', 'search_dojo'].includes(urlTab)
             ? urlTab
             : savedNav?.desktopTab || useSaySeeStore.getState().desktopTab;
       const targetMobileTab: MobileTab =
-        hasInviteLink || hasWorkRoomLink
+        hasInviteLink || hasWorkRoomLink || hasPairCodeLink
           ? 'search'
           : savedNav?.mobileTab || desktopTabToMobileTab(targetDesktopTab);
       const urlRoomId = (params.get('roomId') || '').trim() || null;
@@ -413,15 +434,29 @@ export const App: React.FC = () => {
           urlTab ||
           hasInviteLink ||
           hasWorkRoomLink ||
+          hasPairCodeLink ||
           params.get('dev') === 'true' ||
           canAutoBypassToWorkspace
       );
       const targetView: 'showroom' | 'workspace' =
         !isNativeRuntime &&
         params.get('storeApp') !== '1' &&
+        !hasPairCodeLink &&
         (urlView === 'showroom' || isB2bUrl || !hasExplicitWorkspaceUrl)
           ? 'showroom'
+          : hasPairCodeLink
+          ? 'workspace'
           : savedNav?.viewMode || viewMode;
+
+      if (rawPairCode.length === 6 && !hasAuthenticatedHubAccountSession()) {
+        useSaySeeStore.setState({
+          lastQuarantineToast:
+            '📱 QR 연결 준비 완료! PC와 같은 이메일로 로그인하면 6자리 보안 연결이 바로 완료됩니다.',
+        });
+        window.setTimeout(() => {
+          window.dispatchEvent(new CustomEvent('openLoginModal'));
+        }, 250);
+      }
 
       isApplyingPopStateRef.current = true;
       if (targetView !== viewMode) {
@@ -649,10 +684,82 @@ export const App: React.FC = () => {
     window.addEventListener('ghosti_navigate_showroom', onGoShowroom);
     window.addEventListener('ghosti_navigate_workspace', onGoWorkspace);
     window.addEventListener('merlinLoggedIn', onMerlinLoggedIn);
+
+    // [네이티브 Android/iOS 앱 QR 스캔 App Links / Universal Links 딥링크 즉시 바인딩]
+    let capUrlOpenHandle: { remove?: () => Promise<void> | void } | null = null;
+    const handleIncomingNativePairUrl = (rawUrl?: string | null) => {
+      if (!rawUrl) return;
+      try {
+        const parsed = new URL(rawUrl);
+        const code = (parsed.searchParams.get('pairCode') || '').replace(/\D/g, '').slice(0, 6);
+        if (code.length !== 6) return;
+        savePendingQrPairCode(code);
+        setViewMode('workspace');
+        useSaySeeStore.setState({
+          activeLoungeType: 'personal',
+          desktopTab: 'sync',
+          mobileTab: 'search',
+        });
+        window.dispatchEvent(new CustomEvent('ghosti_open_device_sync_section'));
+        if (hasAuthenticatedHubAccountSession()) {
+          clearPendingQrPairCode();
+          void useSaySeeStore.getState().pairWithSixDigitCode(code);
+        } else {
+          useSaySeeStore.setState({
+            lastQuarantineToast:
+              '📱 QR 연결 준비 완료! PC와 같은 이메일로 로그인하면 6자리 보안 연결이 바로 완료됩니다.',
+          });
+          window.dispatchEvent(new CustomEvent('openLoginModal'));
+        }
+      } catch {
+        /* ignore malformed url */
+      }
+    };
+    try {
+      const capApp = (
+        window as unknown as {
+          Capacitor?: {
+            Plugins?: {
+              App?: {
+                getLaunchUrl?: () => Promise<{ url?: string } | null>;
+                addListener?: (
+                  ev: string,
+                  cb: (data: { url?: string }) => void
+                ) => Promise<{ remove?: () => Promise<void> | void }> | { remove?: () => void };
+              };
+            };
+          };
+        }
+      ).Capacitor?.Plugins?.App;
+      if (capApp?.getLaunchUrl) {
+        void Promise.resolve(capApp.getLaunchUrl())
+          .then((launch) => handleIncomingNativePairUrl(launch?.url))
+          .catch(() => {});
+      }
+      if (capApp?.addListener) {
+        void Promise.resolve(
+          capApp.addListener('appUrlOpen', (data) => handleIncomingNativePairUrl(data?.url))
+        )
+          .then((handle) => {
+            capUrlOpenHandle = handle || null;
+          })
+          .catch(() => {});
+      }
+    } catch {
+      /* ignore */
+    }
+
     return () => {
       window.removeEventListener('ghosti_navigate_showroom', onGoShowroom);
       window.removeEventListener('ghosti_navigate_workspace', onGoWorkspace);
       window.removeEventListener('merlinLoggedIn', onMerlinLoggedIn);
+      if (capUrlOpenHandle?.remove) {
+        try {
+          void capUrlOpenHandle.remove();
+        } catch {
+          /* ignore */
+        }
+      }
     };
   }, [isDevAuthorized]);
 

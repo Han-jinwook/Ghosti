@@ -804,24 +804,39 @@ export async function handleAuthedWorkAndDeviceAction({
     const displayName = String(
       body.displayName || (deviceKind === 'mobile' ? '내 스마트폰' : '메인 PC')
     ).slice(0, 48);
+    const explicitReconnect = Boolean(body.explicitReconnect || body.explicitTrialOptIn);
 
-    await fetch(`${supabaseUrl}/rest/v1/ghosti_devices?on_conflict=device_id`, {
-      method: 'POST',
-      headers: srvHeaders(serviceKey, {
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates,return=minimal',
-      }),
-      body: JSON.stringify({
-        device_id: deviceId,
-        owner_email: email,
-        device_kind: deviceKind,
-        display_name: displayName,
-        platform,
-        app_version: String(body.appVersion || '1.0.38').slice(0, 24),
-        last_seen_at: new Date().toISOString(),
-        revoked_at: null,
-      }),
-    });
+    let revokedSelf = false;
+    if (!explicitReconnect) {
+      const selfCheckRes = await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_devices?device_id=eq.${encodeURIComponent(deviceId)}&owner_email=eq.${encodeURIComponent(email)}&select=device_id,revoked_at&limit=1`,
+        { headers: srvHeaders(serviceKey) }
+      );
+      const selfRows = selfCheckRes.ok ? await selfCheckRes.json().catch(() => []) : [];
+      if (Array.isArray(selfRows) && selfRows[0]?.revoked_at) {
+        revokedSelf = true;
+      }
+    }
+
+    if (!revokedSelf) {
+      await fetch(`${supabaseUrl}/rest/v1/ghosti_devices?on_conflict=device_id`, {
+        method: 'POST',
+        headers: srvHeaders(serviceKey, {
+          'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates,return=minimal',
+        }),
+        body: JSON.stringify({
+          device_id: deviceId,
+          owner_email: email,
+          device_kind: deviceKind,
+          display_name: displayName,
+          platform,
+          app_version: String(body.appVersion || '1.0.61').slice(0, 24),
+          last_seen_at: new Date().toISOString(),
+          revoked_at: null,
+        }),
+      });
+    }
 
     const [listRes, codeRes, entRaw] = await Promise.all([
       fetch(
@@ -894,9 +909,11 @@ export async function handleAuthedWorkAndDeviceAction({
       body: {
         ok: true,
         deviceId,
+        revokedSelf,
         devices: safeDevices,
         pairingCode,
         entitlement,
+        canonicalUserId: userId,
       },
     };
   }
@@ -907,7 +924,7 @@ export async function handleAuthedWorkAndDeviceAction({
       return { status: 200, body: { ok: false, reason: 'INVALID_CODE_FORMAT' } };
     }
     const cRes = await fetch(
-      `${supabaseUrl}/rest/v1/ghosti_pairing_codes?code=eq.${cleanCode}&owner_email=eq.${encodeURIComponent(email)}&consumed_at=is.null&limit=1`,
+      `${supabaseUrl}/rest/v1/ghosti_pairing_codes?code=eq.${cleanCode}&owner_email=eq.${encodeURIComponent(email)}&order=expires_at.desc&limit=1`,
       { headers: srvHeaders(serviceKey) }
     );
     const cRows = cRes.ok ? await cRes.json().catch(() => []) : [];
@@ -918,7 +935,15 @@ export async function handleAuthedWorkAndDeviceAction({
 
     const rawDevId = String(body.deviceId || '').trim();
     const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawDevId);
-    const mobileDevId = isUuid ? rawDevId : crypto.randomUUID();
+    const targetDevId = isUuid ? rawDevId : crypto.randomUUID();
+    const targetKind = body.deviceKind === 'pc_master' ? 'pc_master' : 'mobile';
+    const targetPlatform = ['windows', 'macos', 'android', 'ios', 'web'].includes(String(body.platform))
+      ? String(body.platform)
+      : targetKind === 'pc_master'
+      ? 'windows'
+      : 'android';
+    const alreadyPaired = Boolean(found.consumed_at && found.consumed_by_device_id === targetDevId);
+
     const [, , entRaw] = await Promise.all([
       fetch(`${supabaseUrl}/rest/v1/ghosti_devices?on_conflict=device_id`, {
         method: 'POST',
@@ -927,25 +952,27 @@ export async function handleAuthedWorkAndDeviceAction({
           Prefer: 'resolution=merge-duplicates,return=minimal',
         }),
         body: JSON.stringify({
-          device_id: mobileDevId,
+          device_id: targetDevId,
           owner_email: email,
-          device_kind: 'mobile',
-          display_name: String(body.displayName || '내 스마트폰').slice(0, 48),
-          platform: ['android', 'ios', 'web'].includes(String(body.platform))
-            ? String(body.platform)
-            : 'android',
+          device_kind: targetKind,
+          display_name: String(
+            body.displayName || (targetKind === 'pc_master' ? '서브 PC' : '내 스마트폰')
+          ).slice(0, 48),
+          platform: targetPlatform,
           last_seen_at: new Date().toISOString(),
           revoked_at: null,
         }),
       }),
-      fetch(`${supabaseUrl}/rest/v1/ghosti_pairing_codes?code=eq.${cleanCode}`, {
-        method: 'PATCH',
-        headers: srvHeaders(serviceKey, { 'Content-Type': 'application/json' }),
-        body: JSON.stringify({
-          consumed_at: new Date().toISOString(),
-          consumed_by_device_id: mobileDevId,
-        }),
-      }),
+      found.consumed_at
+        ? Promise.resolve(null)
+        : fetch(`${supabaseUrl}/rest/v1/ghosti_pairing_codes?code=eq.${cleanCode}`, {
+            method: 'PATCH',
+            headers: srvHeaders(serviceKey, { 'Content-Type': 'application/json' }),
+            body: JSON.stringify({
+              consumed_at: new Date().toISOString(),
+              consumed_by_device_id: targetDevId,
+            }),
+          }),
       readStorageJson(
         supabaseUrl,
         serviceKey,
@@ -979,9 +1006,58 @@ export async function handleAuthedWorkAndDeviceAction({
       status: 200,
       body: {
         ok: true,
-        deviceId: mobileDevId,
+        alreadyPaired,
+        deviceId: targetDevId,
         devices: safeDevices,
         entitlement: computeEntitlementView(entRaw, safeDevices.length),
+        canonicalUserId: userId,
+      },
+    };
+  }
+
+  if (action === 'device_revoke_device') {
+    const targetDeviceId = String(body.targetDeviceId || body.deviceId || '').trim();
+    if (!targetDeviceId || targetDeviceId.length > 128) {
+      return { status: 400, body: { ok: false, reason: 'INVALID_DEVICE_ID' } };
+    }
+    const nowIso = new Date().toISOString();
+    const patchRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_devices?device_id=eq.${encodeURIComponent(targetDeviceId)}&owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null`,
+      {
+        method: 'PATCH',
+        headers: srvHeaders(serviceKey, {
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        }),
+        body: JSON.stringify({ revoked_at: nowIso }),
+      }
+    );
+    if (!patchRes.ok) {
+      return { status: 502, body: { ok: false, reason: 'DEVICE_REVOKE_FAILED' } };
+    }
+    const [listRes, entRaw] = await Promise.all([
+      fetch(
+        `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&order=created_at.asc`,
+        { headers: srvHeaders(serviceKey) }
+      ),
+      readStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/entitlement_v1.json`,
+        { planId: 'free_trial', trialOptInStartedAt: null, activatedAt: null }
+      ),
+    ]);
+    const devices = listRes.ok ? await listRes.json().catch(() => []) : [];
+    const safeDevices = Array.isArray(devices) ? devices : [];
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        revokedDeviceId: targetDeviceId,
+        devices: safeDevices,
+        entitlement: computeEntitlementView(entRaw, safeDevices.length),
+        canonicalUserId: userId,
       },
     };
   }
@@ -1035,6 +1111,12 @@ export async function handleAuthedWorkAndDeviceAction({
     }
     const nowMs = Date.now();
     const cutoffMs = nowMs - 24 * 3600 * 1000;
+    const rawClientCreatedAt = String(body.createdAt || '').trim();
+    const parsedClientMs = rawClientCreatedAt ? Date.parse(rawClientCreatedAt) : NaN;
+    const effectiveCreatedAt =
+      Number.isFinite(parsedClientMs) && Math.abs(nowMs - parsedClientMs) <= 5 * 60 * 1000
+        ? new Date(parsedClientMs).toISOString()
+        : new Date(nowMs).toISOString();
     const mailbox = await readStorageJson(
       supabaseUrl,
       serviceKey,
@@ -1052,7 +1134,7 @@ export async function handleAuthedWorkAndDeviceAction({
       ivB64,
       senderDeviceId,
       senderName,
-      createdAt: new Date(nowMs).toISOString(),
+      createdAt: effectiveCreatedAt,
     });
     const trimmed = filtered.slice(0, 15);
     const saved = await writeStorageJson(

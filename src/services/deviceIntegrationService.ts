@@ -2,9 +2,7 @@ import type { RealtimeChannel, SupabaseClient } from '@supabase/supabase-js';
 import type { LocalDocumentFile, PhotoItem, PrivateSyncStrategy } from '../types/saysee';
 import {
   callGhostiServerBridge,
-  ensureGhostiAuthedSupabaseClient,
   ensureGhostiPublicSupabaseClient,
-  getGhostiAuthedSupabase,
   hasAuthenticatedHubAccountSession,
   readGhostiAuthedJwtClaims,
   supabase,
@@ -79,7 +77,89 @@ const THIS_DEVICE_ID_KEY = 'ghosti_this_device_uuid_v1';
 const DELIVERED_ENVELOPES_PREFIX = 'ghosti_delivered_clip_envelopes_v1::';
 const CACHED_RECEIVED_CLIPS_PREFIX = 'ghosti_received_e2ee_clips_v2::';
 const CACHED_DEVICE_SNAPSHOT_PREFIX = 'ghosti_device_integration_cache_v1::';
+const CANONICAL_E2EE_UID_PREFIX = 'ghosti_e2ee_canonical_uid_v1::';
+const PENDING_PAIR_CODE_SESSION_KEY = 'ghosti_pending_pair_code_v1';
 const DEVICE_SYNC_BROADCAST_CHANNEL = 'ghosti_device_sync_bus_v1';
+
+const canonicalUidMemoryCache = new Map<string, string>();
+let thisDeviceRevokedLocally = false;
+
+export function isThisDeviceRevokedLocally(): boolean {
+  return thisDeviceRevokedLocally;
+}
+
+export function setThisDeviceRevokedLocally(revoked: boolean): void {
+  thisDeviceRevokedLocally = Boolean(revoked);
+}
+
+export function savePendingQrPairCode(code: string): void {
+  const clean = (code || '').replace(/\D/g, '').slice(0, 6);
+  if (clean.length !== 6 || typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(PENDING_PAIR_CODE_SESSION_KEY, clean);
+  } catch {
+    /* ignore */
+  }
+}
+
+export function readPendingQrPairCode(): string | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = (sessionStorage.getItem(PENDING_PAIR_CODE_SESSION_KEY) || '').replace(/\D/g, '').slice(0, 6);
+    return raw.length === 6 ? raw : null;
+  } catch {
+    return null;
+  }
+}
+
+export function clearPendingQrPairCode(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem(PENDING_PAIR_CODE_SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
+function saveCanonicalE2eeUid(email: string, uid: string): void {
+  const normEmail = (email || '').trim().toLowerCase();
+  const normUid = (uid || '').trim();
+  if (!normEmail || !normUid) return;
+  canonicalUidMemoryCache.set(normEmail, normUid);
+  if (typeof window !== 'undefined') {
+    try {
+      localStorage.setItem(`${CANONICAL_E2EE_UID_PREFIX}${normEmail}`, normUid);
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+function loadCanonicalE2eeUid(email?: string): string {
+  const normEmail = (
+    email ||
+    (typeof window !== 'undefined'
+      ? localStorage.getItem('ghosti_hub_user_email') || localStorage.getItem('userEmail') || ''
+      : '')
+  )
+    .trim()
+    .toLowerCase();
+  if (!normEmail) return '';
+  const mem = canonicalUidMemoryCache.get(normEmail);
+  if (mem) return mem;
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = (localStorage.getItem(`${CANONICAL_E2EE_UID_PREFIX}${normEmail}`) || '').trim();
+      if (saved) {
+        canonicalUidMemoryCache.set(normEmail, saved);
+        return saved;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  return '';
+}
 
 export interface CachedDeviceIntegrationSnapshot {
   devices: GhostiConnectedDeviceDto[];
@@ -373,10 +453,30 @@ export async function sha256HexBrowser(text: string): Promise<string> {
 
 const e2eeKeyCache = new Map<string, CryptoKey>();
 
-function resolveCanonicalE2eeUserId(fallbackUserId: string): string {
+function resolveCanonicalE2eeUserId(fallbackUserId: string, email?: string): string {
+  const cachedServerUid = loadCanonicalE2eeUid(email);
+  if (cachedServerUid) return cachedServerUid;
   const jwtSub = readGhostiAuthedJwtClaims()?.sub?.trim() || '';
   if (jwtSub) return jwtSub;
   return (fallbackUserId || '').trim();
+}
+
+export async function prewarmAccountE2eeKey(email: string, userId: string): Promise<void> {
+  const normEmail = (email || '').trim().toLowerCase();
+  if (!normEmail) return;
+  const candidates = new Set<string>();
+  const primary = resolveCanonicalE2eeUserId(userId, normEmail);
+  if (primary) candidates.add(primary);
+  const jwtSub = readGhostiAuthedJwtClaims()?.sub?.trim() || '';
+  if (jwtSub) candidates.add(jwtSub);
+  if (userId && userId.trim()) candidates.add(userId.trim());
+  for (const uid of candidates) {
+    try {
+      await deriveAccountAesGcmKey(normEmail, uid);
+    } catch {
+      /* ignore */
+    }
+  }
 }
 
 async function deriveAccountAesGcmKey(email: string, userId: string): Promise<CryptoKey> {
@@ -419,7 +519,7 @@ export async function encryptClipboardE2ee(
   email: string,
   userId: string
 ): Promise<{ cipherB64: string; ivB64: string; clipHash: string }> {
-  const canonicalUid = resolveCanonicalE2eeUserId(userId);
+  const canonicalUid = resolveCanonicalE2eeUserId(userId, email);
   const key = await deriveAccountAesGcmKey(email, canonicalUid);
   const iv = crypto.getRandomValues(new Uint8Array(12));
   const plainBytes = new TextEncoder().encode(plainText);
@@ -442,8 +542,10 @@ export async function decryptClipboardE2ee(
   const iv = base64ToBytes(ivB64);
   const cipherBytes = base64ToBytes(cipherB64);
   const candidateSet = new Set<string>();
-  const primaryUid = resolveCanonicalE2eeUserId(userId);
+  const primaryUid = resolveCanonicalE2eeUserId(userId, email);
   if (primaryUid) candidateSet.add(primaryUid);
+  const jwtSub = readGhostiAuthedJwtClaims()?.sub?.trim() || '';
+  if (jwtSub) candidateSet.add(jwtSub);
   if (userId && userId.trim()) {
     candidateSet.add(userId.trim());
     candidateSet.add(userId.trim().toLowerCase());
@@ -474,9 +576,11 @@ export async function decryptClipboardE2ee(
 
 export async function syncDeviceHeartbeatAndList(opts?: {
   explicitTrialOptIn?: boolean;
+  explicitReconnect?: boolean;
 }): Promise<{
   ok: boolean;
   thisDeviceId: string;
+  revokedSelf: boolean;
   devices: GhostiConnectedDeviceDto[];
   pairingCode: string | null;
   entitlement: GhostiDeviceEntitlementView | null;
@@ -486,6 +590,7 @@ export async function syncDeviceHeartbeatAndList(opts?: {
     return {
       ok: false,
       thisDeviceId: ident.deviceId,
+      revokedSelf: false,
       devices: [],
       pairingCode: null,
       entitlement: null,
@@ -493,22 +598,26 @@ export async function syncDeviceHeartbeatAndList(opts?: {
   }
   const res = await callGhostiServerBridge<{
     deviceId?: string;
+    revokedSelf?: boolean;
     devices?: GhostiConnectedDeviceDto[];
     pairingCode?: string | null;
     entitlement?: GhostiDeviceEntitlementView;
+    canonicalUserId?: string;
   }>('device_heartbeat_and_list', {
     deviceId: ident.deviceId,
     deviceKind: ident.deviceKind,
     platform: ident.platform,
     displayName: ident.displayName,
-    appVersion: '1.0.39',
+    appVersion: '1.0.61',
     explicitTrialOptIn: Boolean(opts?.explicitTrialOptIn),
+    explicitReconnect: Boolean(opts?.explicitReconnect),
   });
 
   if (!res.ok) {
     return {
       ok: false,
       thisDeviceId: ident.deviceId,
+      revokedSelf: false,
       devices: [],
       pairingCode: null,
       entitlement: null,
@@ -517,12 +626,23 @@ export async function syncDeviceHeartbeatAndList(opts?: {
   const safeDevices = Array.isArray(res.devices) ? res.devices : [];
   const safePairingCode = res.pairingCode || null;
   const safeEntitlement = res.entitlement || null;
+  const revokedSelf = Boolean(res.revokedSelf);
+  thisDeviceRevokedLocally = revokedSelf;
+  if (res.canonicalUserId) {
+    const emailFromStorage =
+      typeof window !== 'undefined'
+        ? localStorage.getItem('ghosti_hub_user_email') || localStorage.getItem('userEmail') || ''
+        : '';
+    if (emailFromStorage) {
+      saveCanonicalE2eeUid(emailFromStorage, res.canonicalUserId);
+    }
+  }
   saveCachedDeviceIntegrationSnapshot({
     devices: safeDevices,
     ...(safePairingCode ? { pairingCode: safePairingCode } : {}),
     entitlement: safeEntitlement,
   });
-  if (opts?.explicitTrialOptIn || safeDevices.length >= 2) {
+  if (opts?.explicitTrialOptIn || opts?.explicitReconnect || safeDevices.length >= 2) {
     broadcastDeviceIntegrationStateUpdate({
       devices: safeDevices,
       entitlement: safeEntitlement,
@@ -531,6 +651,7 @@ export async function syncDeviceHeartbeatAndList(opts?: {
   return {
     ok: true,
     thisDeviceId: res.deviceId || ident.deviceId,
+    revokedSelf,
     devices: safeDevices,
     pairingCode: safePairingCode,
     entitlement: safeEntitlement,
@@ -539,6 +660,7 @@ export async function syncDeviceHeartbeatAndList(opts?: {
 
 export async function consumeDevicePairingCode6(code: string): Promise<{
   ok: boolean;
+  alreadyPaired?: boolean;
   reason?: string;
   devices: GhostiConnectedDeviceDto[];
   entitlement: GhostiDeviceEntitlementView | null;
@@ -552,17 +674,28 @@ export async function consumeDevicePairingCode6(code: string): Promise<{
     return { ok: false, reason: 'AUTH_REQUIRED', devices: [], entitlement: null };
   }
   const res = await callGhostiServerBridge<{
+    alreadyPaired?: boolean;
     devices?: GhostiConnectedDeviceDto[];
     entitlement?: GhostiDeviceEntitlementView;
+    canonicalUserId?: string;
   }>('device_consume_pairing_code', {
     code: clean,
     deviceId: ident.deviceId,
+    deviceKind: ident.deviceKind,
     displayName: ident.displayName,
     platform: ident.platform,
   });
   const safeDevices = Array.isArray(res.devices) ? res.devices : [];
   const safeEntitlement = res.entitlement || null;
   if (res.ok) {
+    thisDeviceRevokedLocally = false;
+    if (res.canonicalUserId && typeof window !== 'undefined') {
+      const emailFromStorage =
+        localStorage.getItem('ghosti_hub_user_email') || localStorage.getItem('userEmail') || '';
+      if (emailFromStorage) {
+        saveCanonicalE2eeUid(emailFromStorage, res.canonicalUserId);
+      }
+    }
     saveCachedDeviceIntegrationSnapshot({
       devices: safeDevices,
       entitlement: safeEntitlement,
@@ -574,7 +707,65 @@ export async function consumeDevicePairingCode6(code: string): Promise<{
   }
   return {
     ok: Boolean(res.ok),
+    alreadyPaired: Boolean(res.alreadyPaired),
     reason: res.reason,
+    devices: safeDevices,
+    entitlement: safeEntitlement,
+  };
+}
+
+export async function revokeConnectedDevice(targetDeviceId: string): Promise<{
+  ok: boolean;
+  revokedDeviceId: string;
+  revokedSelf: boolean;
+  devices: GhostiConnectedDeviceDto[];
+  entitlement: GhostiDeviceEntitlementView | null;
+}> {
+  const cleanId = (targetDeviceId || '').trim();
+  const ident = getThisDeviceIdentity();
+  if (!cleanId || !hasAuthenticatedHubAccountSession()) {
+    return {
+      ok: false,
+      revokedDeviceId: cleanId,
+      revokedSelf: false,
+      devices: [],
+      entitlement: null,
+    };
+  }
+  const res = await callGhostiServerBridge<{
+    revokedDeviceId?: string;
+    devices?: GhostiConnectedDeviceDto[];
+    entitlement?: GhostiDeviceEntitlementView;
+    canonicalUserId?: string;
+  }>('device_revoke_device', { targetDeviceId: cleanId });
+  if (!res.ok) {
+    return {
+      ok: false,
+      revokedDeviceId: cleanId,
+      revokedSelf: false,
+      devices: [],
+      entitlement: null,
+    };
+  }
+  const safeDevices = Array.isArray(res.devices) ? res.devices : [];
+  const safeEntitlement = res.entitlement || null;
+  const revokedSelf = cleanId === ident.deviceId;
+  if (revokedSelf) {
+    thisDeviceRevokedLocally = true;
+  }
+  saveCachedDeviceIntegrationSnapshot({
+    devices: safeDevices,
+    entitlement: safeEntitlement,
+  });
+  broadcastDeviceIntegrationStateUpdate({
+    devices: safeDevices,
+    entitlement: safeEntitlement,
+    revokedDeviceId: cleanId,
+  });
+  return {
+    ok: true,
+    revokedDeviceId: cleanId,
+    revokedSelf,
     devices: safeDevices,
     entitlement: safeEntitlement,
   };
@@ -615,6 +806,7 @@ let pendingOsInjectClip: { envKey: string; clipHash: string; text: string } | nu
 let pendingDeviceStatePacket: {
   devices?: GhostiConnectedDeviceDto[];
   entitlement?: GhostiDeviceEntitlementView | null;
+  revokedDeviceId?: string;
   senderDeviceId: string;
   updatedAt: number;
 } | null = null;
@@ -725,11 +917,13 @@ function createUnthrottledIntervalWorker(intervalMs: number, onTick: () => void)
 export function broadcastDeviceIntegrationStateUpdate(payload: {
   devices?: GhostiConnectedDeviceDto[];
   entitlement?: GhostiDeviceEntitlementView | null;
+  revokedDeviceId?: string;
 }): void {
   const ident = getThisDeviceIdentity();
   const packet = {
     devices: payload.devices,
     entitlement: payload.entitlement,
+    ...(payload.revokedDeviceId ? { revokedDeviceId: payload.revokedDeviceId } : {}),
     senderDeviceId: ident.deviceId,
     updatedAt: Date.now(),
   };
@@ -764,6 +958,9 @@ export async function pushCrossDeviceClipboardText(opts: {
   const cleanText = (opts.text || '').trim();
   const normEmail = (opts.email || '').trim().toLowerCase();
   if (!cleanText || !normEmail || !opts.userId || !hasAuthenticatedHubAccountSession()) {
+    return { ok: false };
+  }
+  if (thisDeviceRevokedLocally) {
     return { ok: false };
   }
   loadDeliveredEnvelopesOnce(normEmail);
@@ -824,30 +1021,52 @@ export async function pushCrossDeviceClipboardText(opts: {
   }
 
   // 1) 온라인 기기로 0.05초 즉시 Realtime 브로드캐스트 (아직 구독 핸드셰이크 중이면 큐에 보관 후 SUBSCRIBED 즉시 발송 + 재연결 트리거)
-  const realtimeSendPromise =
-    activePairChannel && activePairSubscribed
-      ? activePairChannel.send({
-          type: 'broadcast',
-          event: 'E2EE_CLIPBOARD_PUSH',
-          payload: broadcastPayload,
-        })
-      : (() => {
-          pendingClipBroadcastPacket = broadcastPayload;
-          if (activePairReconnectTrigger) {
-            activePairReconnectTrigger();
-          }
-          return Promise.resolve('queued');
-        })();
+  const isRealtimeReady = Boolean(activePairChannel && activePairSubscribed);
+  const realtimeSendPromise = isRealtimeReady
+    ? activePairChannel!.send({
+        type: 'broadcast',
+        event: 'E2EE_CLIPBOARD_PUSH',
+        payload: broadcastPayload,
+      })
+    : (() => {
+        pendingClipBroadcastPacket = broadcastPayload;
+        if (activePairReconnectTrigger) {
+          activePairReconnectTrigger();
+        }
+        return Promise.resolve('queued');
+      })();
 
   // 2) 오프라인/백그라운드 기기를 위한 24시간 지연 E2EE 암호화 우체통 병렬 보관 (서버 평문 열람 0% 불가)
+  const mailboxPersistPromise = callGhostiServerBridge<{
+    count?: number;
+    canonicalUserId?: string;
+  }>('device_push_e2ee_clip', broadcastPayload)
+    .then((res) => {
+      if (res?.ok && res.canonicalUserId) {
+        saveCanonicalE2eeUid(normEmail, res.canonicalUserId);
+      }
+      return res;
+    })
+    .catch(() => ({ ok: false }));
+
+  // Realtime 채널이 이미 연결되어 있으면 ~50ms 브로드캐스트 완료 즉시 반환하고 24h 우체통은 백그라운드로 비차단 저장
+  if (isRealtimeReady) {
+    const rtStatus = await Promise.race([
+      realtimeSendPromise.catch(() => 'error'),
+      new Promise<string>((resolve) => window.setTimeout(() => resolve('timeout'), 650)),
+    ]);
+    if (rtStatus === 'ok') {
+      void mailboxPersistPromise;
+      return { ok: true, item };
+    }
+  }
+
   const [, bridgeRes] = await Promise.all([
     realtimeSendPromise.catch(() => 'error'),
-    callGhostiServerBridge<{ count?: number }>('device_push_e2ee_clip', broadcastPayload).catch(
-      () => ({ ok: false })
-    ),
+    mailboxPersistPromise,
   ]);
 
-  return { ok: Boolean(bridgeRes?.ok || (activePairChannel && activePairSubscribed)), item };
+  return { ok: Boolean(bridgeRes?.ok || isRealtimeReady), item };
 }
 
 export async function pullDelayedE2eeClipboardMailbox(opts: {
@@ -877,6 +1096,9 @@ export async function pullDelayedE2eeClipboardMailbox(opts: {
     return { items: loadCachedSyncedClips(normEmail), newlyDeliveredExternal: null };
   }
 
+  if (res.canonicalUserId) {
+    saveCanonicalE2eeUid(normEmail, res.canonicalUserId);
+  }
   const extraUids = res.canonicalUserId ? [res.canonicalUserId] : undefined;
   const decryptedList: GhostiSyncedClipItem[] = [];
   let newestExternalItem: GhostiSyncedClipItem | null = null;
@@ -1384,7 +1606,15 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     devices: GhostiConnectedDeviceDto[];
     pairingCode: string | null;
     entitlement: GhostiDeviceEntitlementView | null;
+    revokedSelf?: boolean;
   }) => void;
+  onPairingCompleted?: (info: {
+    ok: boolean;
+    alreadyPaired?: boolean;
+    deviceCount: number;
+    reason?: string;
+  }) => void;
+  onSelfRevoked?: (devices: GhostiConnectedDeviceDto[]) => void;
 }): () => void {
   let disposed = false;
   const ident = getThisDeviceIdentity();
@@ -1510,37 +1740,27 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     }
   };
 
-  const scheduleRealtimeReconnect = (delayMs = 2500, usePublicFallback = false) => {
+  const scheduleRealtimeReconnect = (delayMs = 800) => {
     if (disposed || typeof window === 'undefined') return;
     if (realtimeReconnectTimer !== null) return;
     realtimeReconnectTimer = window.setTimeout(() => {
       realtimeReconnectTimer = null;
       if (!disposed && !activePairSubscribed) {
-        void setupRealtimeChannel(usePublicFallback);
+        void setupRealtimeChannel();
       }
     }, delayMs);
   };
 
-  const setupRealtimeChannel = async (usePublicFallback = false) => {
+  const setupRealtimeChannel = async () => {
     if (disposed || settingUpRealtime) return;
     settingUpRealtime = true;
     try {
-      const publicClient = (await ensureGhostiPublicSupabaseClient()) || supabase;
-      let sbClient: SupabaseClient | null = null;
-      let usingAuthedClient = false;
-      if (!usePublicFallback) {
-        const authed = await ensureGhostiAuthedSupabaseClient();
-        if (authed) {
-          sbClient = authed;
-          usingAuthedClient = true;
-        }
-      }
-      if (!sbClient) {
-        sbClient = publicClient;
-        usingAuthedClient = false;
-      }
+      // 모든 클립보드 페이로드가 클라이언트에서 AES-256-GCM 종단간 암호화되며 채널 토픽도 SHA-256 해시로 격리되므로
+      // hub-supabase-bridge 왕복·5초 JWT 워치독 대기 없이 공개 Realtime 클라이언트로 0.1초 만에 즉시 직결합니다.
+      const sbClient: SupabaseClient | null =
+        (await ensureGhostiPublicSupabaseClient()) || supabase;
       if (disposed || !sbClient) {
-        scheduleRealtimeReconnect(3000, true);
+        scheduleRealtimeReconnect(1200);
         return;
       }
 
@@ -1581,9 +1801,15 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
           payload.entitlement !== undefined
             ? (payload.entitlement as GhostiDeviceEntitlementView | null)
             : undefined;
+        const revokedDevId =
+          typeof payload.revokedDeviceId === 'string' ? payload.revokedDeviceId.trim() : '';
         const prevSnap = loadCachedDeviceIntegrationSnapshot(normEmail);
         const mergedDevices = incomingDevices ?? prevSnap?.devices ?? [];
         const mergedEnt = incomingEnt !== undefined ? incomingEnt : prevSnap?.entitlement ?? null;
+        const isSelfNowRevoked = Boolean(revokedDevId && revokedDevId === ident.deviceId);
+        if (isSelfNowRevoked) {
+          thisDeviceRevokedLocally = true;
+        }
         saveCachedDeviceIntegrationSnapshot(
           {
             devices: mergedDevices,
@@ -1595,23 +1821,29 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
           devices: mergedDevices,
           pairingCode: prevSnap?.pairingCode ?? null,
           entitlement: mergedEnt,
+          revokedSelf: isSelfNowRevoked ? true : undefined,
         });
+        if (isSelfNowRevoked && opts.onSelfRevoked) {
+          opts.onSelfRevoked(mergedDevices);
+        }
       })
         .on('broadcast', { event: 'E2EE_CLIPBOARD_PUSH' }, async ({ payload }) => {
-          if (disposed || !payload?.cipherB64 || !payload?.ivB64) return;
+          if (disposed || thisDeviceRevokedLocally || !payload?.cipherB64 || !payload?.ivB64) return;
           if (payload.senderDeviceId === ident.deviceId) return;
           const hash = String(payload.clipHash || '');
           const envKey = `${String(payload.senderDeviceId || '')}:${hash}:${String(payload.createdAt || '')}`;
           if (deliveredRemoteEnvelopeKeys.has(envKey)) return;
-          rememberDeliveredEnvelope(envKey, normEmail);
 
+          const cachedUid = loadCanonicalE2eeUid(normEmail);
           const plain = await decryptClipboardE2ee(
             String(payload.cipherB64),
             String(payload.ivB64),
             normEmail,
-            opts.userId
+            opts.userId,
+            cachedUid ? [cachedUid] : undefined
           );
           if (!plain) return;
+          rememberDeliveredEnvelope(envKey, normEmail);
           const resolvedHash = hash || (await sha256HexBrowser(plain));
 
           const injected = await writeTextToLocalOsClipboard(plain, resolvedHash);
@@ -1685,24 +1917,11 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
             status === 'CLOSED'
           ) {
             activePairSubscribed = false;
-            if (usingAuthedClient) {
-              // 인증 JWT 만료·거부 시 페이로드가 이미 E2EE 암호화되어 있으므로 공개 Realtime 브로드캐스트로 즉시 폴백
-              scheduleRealtimeReconnect(400, true);
-            } else {
-              scheduleRealtimeReconnect(2500, true);
-            }
+            scheduleRealtimeReconnect(800);
           }
         });
 
       activePairChannel = ch;
-      if (typeof window !== 'undefined' && usingAuthedClient) {
-        realtimeWatchdogTimer = window.setTimeout(() => {
-          realtimeWatchdogTimer = null;
-          if (!disposed && !activePairSubscribed && activePairChannel === ch) {
-            void setupRealtimeChannel(true);
-          }
-        }, 5000);
-      }
     } finally {
       settingUpRealtime = false;
     }
@@ -1710,7 +1929,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
 
   activePairReconnectTrigger = () => {
     if (!disposed && !activePairSubscribed) {
-      void setupRealtimeChannel(false);
+      void setupRealtimeChannel();
     }
   };
 
@@ -1718,7 +1937,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     isBaselineOnly = false,
     isUserGesture = false
   ): Promise<void> => {
-    if (disposed || checkingOsClip || !hasAuthenticatedHubAccountSession()) return;
+    if (disposed || checkingOsClip || thisDeviceRevokedLocally || !hasAuthenticatedHubAccountSession()) return;
     checkingOsClip = true;
     try {
       const res = await captureAndPushCurrentOsClipboard({
@@ -1738,7 +1957,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
   };
 
   const syncRemoteMailboxToUi = async (injectToOs: boolean): Promise<void> => {
-    if (disposed || !hasAuthenticatedHubAccountSession()) return;
+    if (disposed || thisDeviceRevokedLocally || !hasAuthenticatedHubAccountSession()) return;
     const pulled = await pullDelayedE2eeClipboardMailbox({
       email: normEmail,
       userId: opts.userId,
@@ -1754,24 +1973,27 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
   };
 
   const triggerMobileForegroundCapture = () => {
-    if (disposed || ident.deviceKind !== 'mobile' || typeof window === 'undefined') return;
+    if (disposed || thisDeviceRevokedLocally || ident.deviceKind !== 'mobile' || typeof window === 'undefined') return;
     if (mobileResumeCaptureTimer !== null) {
       window.clearTimeout(mobileResumeCaptureTimer);
     }
-    // 안드로이드 10+ WindowFocus 확보 직후(180ms) 안전하게 OS 클립보드 읽기 실행
+    // 안드로이드 10+ WindowFocus 확보 직후(120ms) 빠르게 OS 클립보드 읽기 실행
     mobileResumeCaptureTimer = window.setTimeout(() => {
       mobileResumeCaptureTimer = null;
       if (!disposed && document.visibilityState === 'visible') {
         void inspectAndPushLocalOsClipboard(false, false);
       }
-    }, 180);
+    }, 120);
   };
 
   const boot = async () => {
     loadDeliveredEnvelopesOnce(normEmail);
 
-    // 1) 실시간 채널 구독을 최우선 0ms 즉시 병렬 착수 (Z-코어 미설치 시 checkHealth 13초 대기로 차단되던 결함 원천 제거)
-    const realtimePromise = setupRealtimeChannel(false);
+    // 0) PBKDF2 AES-256-GCM 암호화 키를 백그라운드에서 선행 예열 (첫 Ctrl+C 시 ~400ms 지연 제거)
+    void prewarmAccountE2eeKey(normEmail, opts.userId);
+
+    // 1) 실시간 채널 구독을 최우선 0ms 즉시 병렬 착수
+    const realtimePromise = setupRealtimeChannel();
 
     // 2) 초기 클립보드 기준점 비차단 기록 (iOS는 baselineOnly로 changeCount만 기록하여 불필요한 OS 붙여넣기 배너 0회)
     if (ident.deviceKind === 'pc_master') {
@@ -1812,7 +2034,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
           Promise.resolve(
             capApp.addListener('appStateChange', (st) => {
               if (disposed || !st?.isActive) return;
-              if (!activePairSubscribed) void setupRealtimeChannel(false);
+              if (!activePairSubscribed) void setupRealtimeChannel();
               triggerMobileForegroundCapture();
               void syncRemoteMailboxToUi(true);
             })
@@ -1831,32 +2053,56 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       }
     }
 
-    // URL에 ?pairCode=XXXXXX가 있으면 낙관적 D-30 반영 + 소비 즉시 UI 및 상대 기기에 전파
+    // URL ?pairCode=XXXXXX 또는 로그인 전 보관된 sessionStorage pendingPairCode 소비 즉시 UI 및 상대 기기에 전파
     let pairedViaUrl = false;
     if (typeof window !== 'undefined') {
       const params = new URLSearchParams(window.location.search);
-      const urlPairCode = (params.get('pairCode') || '').replace(/\D/g, '').slice(0, 6);
-      if (urlPairCode.length === 6) {
-        params.delete('pairCode');
-        const nextQs = params.toString();
-        const cleanUrl = `${window.location.pathname}${nextQs ? `?${nextQs}` : ''}${window.location.hash}`;
-        window.history.replaceState({}, '', cleanUrl);
+      const urlRawCode = (params.get('pairCode') || '').replace(/\D/g, '').slice(0, 6);
+      const pendingSessionCode = readPendingQrPairCode() || '';
+      const effectivePairCode = urlRawCode.length === 6 ? urlRawCode : pendingSessionCode;
+      if (effectivePairCode.length === 6) {
+        clearPendingQrPairCode();
+        if (params.has('pairCode')) {
+          params.delete('pairCode');
+          const nextQs = params.toString();
+          const cleanUrl = `${window.location.pathname}${nextQs ? `?${nextQs}` : ''}${window.location.hash}`;
+          window.history.replaceState(window.history.state, '', cleanUrl);
+        }
         if (opts.onDevicesUpdated) {
           const prev = loadCachedDeviceIntegrationSnapshot(normEmail);
           opts.onDevicesUpdated({
             devices: prev?.devices || [],
             pairingCode: prev?.pairingCode ?? null,
             entitlement: buildOptimisticTrialEntitlement(prev?.entitlement, 2),
+            revokedSelf: false,
           });
         }
-        const pairRes = await consumeDevicePairingCode6(urlPairCode);
-        if (!disposed && pairRes.ok && opts.onDevicesUpdated) {
-          pairedViaUrl = true;
-          opts.onDevicesUpdated({
-            devices: pairRes.devices,
-            pairingCode: loadCachedDeviceIntegrationSnapshot(normEmail)?.pairingCode ?? null,
-            entitlement: pairRes.entitlement,
-          });
+        const pairRes = await consumeDevicePairingCode6(effectivePairCode);
+        if (!disposed) {
+          if (pairRes.ok) {
+            pairedViaUrl = true;
+            if (opts.onDevicesUpdated) {
+              opts.onDevicesUpdated({
+                devices: pairRes.devices,
+                pairingCode: loadCachedDeviceIntegrationSnapshot(normEmail)?.pairingCode ?? null,
+                entitlement: pairRes.entitlement,
+                revokedSelf: false,
+              });
+            }
+            if (opts.onPairingCompleted) {
+              opts.onPairingCompleted({
+                ok: true,
+                alreadyPaired: pairRes.alreadyPaired,
+                deviceCount: pairRes.devices.length,
+              });
+            }
+          } else if (opts.onPairingCompleted) {
+            opts.onPairingCompleted({
+              ok: false,
+              deviceCount: loadCachedDeviceIntegrationSnapshot(normEmail)?.devices.length || 0,
+              reason: pairRes.reason,
+            });
+          }
         }
       }
     }
@@ -1872,23 +2118,37 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         devices: hb.devices,
         pairingCode: hb.pairingCode,
         entitlement: hb.entitlement,
+        revokedSelf: hb.revokedSelf,
       });
+      if (hb.revokedSelf && opts.onSelfRevoked) {
+        opts.onSelfRevoked(hb.devices);
+      }
+      // 서버가 확정한 canonicalUserId로 키 추가 예열
+      void prewarmAccountE2eeKey(normEmail, opts.userId);
     }
 
-    // PC 마스터: 백그라운드 탭(메모장·노션·카톡 등에서 Ctrl+C 복사 중)에서도 60초 스로틀링 없이 0.8초 내에 감지하는 전용 Web Worker 기동
+    // PC 마스터: 백그라운드 탭(메모장·노션·카톡 등에서 Ctrl+C 복사 중)에서도 60초 스로틀링 없이 0.35초 내에 감지하는 전용 Web Worker 기동
     if (ident.deviceKind === 'pc_master') {
       if (osClipTicker) osClipTicker.stop();
-      osClipTicker = createUnthrottledIntervalWorker(800, () => {
-        if (!zCoreBridge.isConnected) return;
+      osClipTicker = createUnthrottledIntervalWorker(350, () => {
+        if (!zCoreBridge.isConnected || thisDeviceRevokedLocally) return;
         void inspectAndPushLocalOsClipboard(false, false);
       });
     }
 
-    // 전 기기 공통: Realtime 일시 순단(LTE↔Wi-Fi 전환·절전 복귀 등)까지 100% 보완하는 2.5초 경량 우체통 동기화
+    // 전 기기 공통: Realtime 연결 시 4.8초 경량 보조 동기화 / 일시 순단 시 1.2초 고속 폴백 동기화 + 즉시 재연결
+    let mailboxTickCounter = 0;
     if (mobileMailboxTicker) mobileMailboxTicker.stop();
-    mobileMailboxTicker = createUnthrottledIntervalWorker(2500, () => {
+    mobileMailboxTicker = createUnthrottledIntervalWorker(1200, () => {
+      if (thisDeviceRevokedLocally) return;
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-      void syncRemoteMailboxToUi(true);
+      mailboxTickCounter += 1;
+      if (!activePairSubscribed) {
+        void setupRealtimeChannel();
+        void syncRemoteMailboxToUi(true);
+      } else if (mailboxTickCounter % 4 === 0) {
+        void syncRemoteMailboxToUi(true);
+      }
     });
   };
 
@@ -1927,7 +2187,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
   const onWindowFocus = () => {
     if (disposed) return;
     if (!activePairSubscribed) {
-      void setupRealtimeChannel(false);
+      void setupRealtimeChannel();
     }
     if (ident.deviceKind === 'pc_master') {
       void inspectAndPushLocalOsClipboard(false, false);
@@ -1940,7 +2200,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
   const onVisibility = () => {
     if (document.visibilityState === 'visible' && !disposed) {
       if (!activePairSubscribed) {
-        void setupRealtimeChannel(false);
+        void setupRealtimeChannel();
       }
       if (ident.deviceKind === 'pc_master') {
         void inspectAndPushLocalOsClipboard(false, false);
@@ -1954,7 +2214,11 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
             devices: hb.devices,
             pairingCode: hb.pairingCode,
             entitlement: hb.entitlement,
+            revokedSelf: hb.revokedSelf,
           });
+          if (hb.revokedSelf && opts.onSelfRevoked) {
+            opts.onSelfRevoked(hb.devices);
+          }
         }
       });
     }
@@ -1963,7 +2227,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
   const onOnline = () => {
     if (disposed) return;
     if (!activePairSubscribed) {
-      void setupRealtimeChannel(false);
+      void setupRealtimeChannel();
     }
     void syncRemoteMailboxToUi(true);
   };

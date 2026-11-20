@@ -39,6 +39,7 @@ import { LOUNGE_TABS, PLAN_BADGE_LABELS, HostThreeBodyControlPanel } from '../sh
 import { WorkLoungeB2BHub } from '../paid_work_share/WorkLoungeB2BHub';
 import { QrCodeSvg } from '../../utils/qrCodeSvg';
 import { CrossDeviceClipboardAndPairingBar } from '../paid_device_sync/CrossDeviceClipboardAndPairingBar';
+import { getThisDeviceIdentity } from '../../services/deviceIntegrationService';
 
 async function copyAuthenticatedRoomInviteFlow(opts: {
   loungeType: LoungeType;
@@ -3434,8 +3435,11 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     connectedDevices,
     devicePairingCode6,
     refreshDeviceIntegrationState,
+    unlinkConnectedDevice,
     merlinAuth,
   } = useSaySeeStore();
+
+  const [revokingSlotDeviceId, setRevokingSlotDeviceId] = useState<string | null>(null);
 
   const [inviteCopied, setInviteCopied] = useState(false);
   const [trojanBragCopied, setTrojanBragCopied] = useState(false);
@@ -3601,14 +3605,16 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   };
 
   if (activeLoungeType === 'personal') {
+    const thisDeviceId = getThisDeviceIdentity().deviceId;
     const isShadowMode = syncState.privateSyncStrategy === 'shadow';
     const mobilePeers = connectedDevices.filter((d) => d.device_kind === 'mobile');
     const pcPeers = connectedDevices.filter((d) => d.device_kind === 'pc_master');
+    const secondaryPcPeer = pcPeers.find((p) => p.device_id !== thisDeviceId) || pcPeers[1];
     const subPcConnected = isLoggedInUser && pcPeers.length >= 2;
     const realMobileConnected = isMobileConnected || (isLoggedInUser && mobilePeers.length > 0);
     const qrConnectUrl = devicePairingCode6
-      ? `https://ghosti.sundreamer.app/?pairCode=${devicePairingCode6}`
-      : 'https://ghosti.sundreamer.app';
+      ? `https://ghosti.sundreamer.app/?lounge=personal&tab=sync&pairCode=${devicePairingCode6}`
+      : 'https://ghosti.sundreamer.app/?lounge=personal&tab=sync';
 
     return (
       <div className="p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
@@ -3659,6 +3665,11 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                     ' 로그인하는 즉시 1초 만에 자동 직결됩니다.'
                   )}
                 </p>
+                {realMobileConnected && mobilePeers.length > 0 && (
+                  <p className="text-[11.5px] text-emerald-300 font-bold mt-0.5">
+                    ✓ 현재 스마트폰({mobilePeers[0]?.display_name})이 이미 연결되어 있습니다. 연결을 끊고 새로 QR 연결을 테스트하려면 아래 카드의 [🔌 연결 해제]를 눌러 주세요.
+                  </p>
+                )}
               </div>
             </div>
 
@@ -3813,13 +3824,31 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             <p className="text-[13px] text-white font-bold">
               {mobilePeers[0]?.display_name || '폰 사진 자동 백업 & 밖에서 내 PC 검색'}
             </p>
-            <span className="text-[11.5px] text-primary-container font-bold">
-              {realMobileConnected
-                ? '✓ 실시간 클립보드 · 무선 리모컨 · 13KB 섀도우 검색 직결됨'
-                : isLoggedInUser
-                ? '👉 클릭하여 앱 설치 QR · 이메일 1초 연결 보기'
-                : '👉 클릭하여 먼저 이메일 로그인 후 스마트폰 연결하기'}
-            </span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11.5px] text-primary-container font-bold">
+                {realMobileConnected
+                  ? '✓ 실시간 클립보드 · 무선 리모컨 · 13KB 섀도우 검색 직결됨'
+                  : isLoggedInUser
+                  ? '👉 클릭하여 앱 설치 QR · 이메일 1초 연결 보기'
+                  : '👉 클릭하여 먼저 이메일 로그인 후 스마트폰 연결하기'}
+              </span>
+              {realMobileConnected && mobilePeers[0] && (
+                <button
+                  type="button"
+                  disabled={revokingSlotDeviceId === mobilePeers[0].device_id}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const targetId = mobilePeers[0].device_id;
+                    setRevokingSlotDeviceId(targetId);
+                    await unlinkConnectedDevice(targetId);
+                    setRevokingSlotDeviceId(null);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/30 border border-rose-400/40 text-rose-200 text-[11px] font-extrabold cursor-pointer disabled:opacity-50 shrink-0"
+                >
+                  {revokingSlotDeviceId === mobilePeers[0].device_id ? '해제 중...' : '🔌 연결 해제'}
+                </button>
+              )}
+            </div>
           </div>
 
           {/* [기기 3 서브 PC] 실제 다중 PC 등록 감지 + 클릭 시 설치 주소 복사 */}
@@ -3856,15 +3885,33 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               </span>
             </div>
             <p className="text-[13px] text-white font-bold">
-              {pcPeers[1]?.display_name || '집 ↔ 사무실 PC 양방향 AI 내용검색'}
+              {secondaryPcPeer?.display_name || '집 ↔ 사무실 PC 양방향 AI 내용검색'}
             </p>
-            <span className={`text-[11.5px] font-bold ${subPcLinkCopied || subPcConnected ? 'text-emerald-300' : 'text-zinc-400'}`}>
-              {subPcLinkCopied
-                ? '✅ 서브 PC 연결 주소가 복사되었습니다! 다른 PC에서 접속 후 같은 이메일로 로그인하면 자동 연결됩니다.'
-                : subPcConnected
-                ? '✓ 다중 PC 실시간 클립보드 · 통합 카탈로그 연결됨'
-                : '👉 클릭 시 서브 PC 설치 주소 복사 (동일 이메일 자동 연결)'}
-            </span>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className={`text-[11.5px] font-bold ${subPcLinkCopied || subPcConnected ? 'text-emerald-300' : 'text-zinc-400'}`}>
+                {subPcLinkCopied
+                  ? '✅ 서브 PC 연결 주소가 복사되었습니다! 다른 PC에서 접속 후 같은 이메일로 로그인하면 자동 연결됩니다.'
+                  : subPcConnected
+                  ? '✓ 다중 PC 실시간 클립보드 · 통합 카탈로그 연결됨'
+                  : '👉 클릭 시 서브 PC 설치 주소 복사 (동일 이메일 자동 연결)'}
+              </span>
+              {subPcConnected && secondaryPcPeer && (
+                <button
+                  type="button"
+                  disabled={revokingSlotDeviceId === secondaryPcPeer.device_id}
+                  onClick={async (e) => {
+                    e.stopPropagation();
+                    const targetId = secondaryPcPeer.device_id;
+                    setRevokingSlotDeviceId(targetId);
+                    await unlinkConnectedDevice(targetId);
+                    setRevokingSlotDeviceId(null);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-rose-500/15 hover:bg-rose-500/30 border border-rose-400/40 text-rose-200 text-[11px] font-extrabold cursor-pointer disabled:opacity-50 shrink-0"
+                >
+                  {revokingSlotDeviceId === secondaryPcPeer.device_id ? '해제 중...' : '🔌 연결 해제'}
+                </button>
+              )}
+            </div>
           </div>
         </div>
 
