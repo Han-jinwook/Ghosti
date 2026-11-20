@@ -248,6 +248,8 @@ html.theme-warm-light .bg-\[\#121215\]:not([data-keep-dark="true"]):not([data-ke
 html.theme-warm-light .bg-\[\#121318\]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
 html.theme-warm-light .bg-\[\#070B11\]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
 html.theme-warm-light .bg-\[\#070B11\]\/85:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
+html.theme-warm-light .bg-\[\#090B10\]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
+html.theme-warm-light .bg-\[\#0B0E14\]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
 html.theme-warm-light .bg-\[\#0B1120\]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
 html.theme-warm-light .bg-\[\#0b1020\]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
 html.theme-warm-light .bg-\[\#0b1020\]\/90:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
@@ -392,24 +394,55 @@ html.theme-warm-light .text-slate-500:not([data-keep-dark="true"] *) {
   color: #64748B !important;
 }
 
-/* 7. 밝은 파스텔 포인트 텍스트를 화이트/아이보리 바탕 위에서 선명하게 읽히도록 고대비 보정 */
-html.theme-warm-light .text-primary-container:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
-html.theme-warm-light .text-cyan-200:not([data-keep-dark="true"] *),
-html.theme-warm-light [class*="text-cyan-200/"]:not([data-keep-dark="true"] *),
-html.theme-warm-light .text-cyan-300:not([data-keep-dark="true"] *),
-html.theme-warm-light .text-cyan-100:not([data-keep-dark="true"] *),
-html.theme-warm-light [class*="text-cyan-100/"]:not([data-keep-dark="true"] *),
-html.theme-warm-light .text-cyan-400:not([data-keep-dark="true"] *),
-html.theme-warm-light .text-teal-100:not([data-keep-dark="true"] *),
-html.theme-warm-light [class*="text-teal-100/"]:not([data-keep-dark="true"] *),
-html.theme-warm-light .text-teal-200:not([data-keep-dark="true"] *),
-html.theme-warm-light [class*="text-teal-200/"]:not([data-keep-dark="true"] *),
-html.theme-warm-light .text-teal-300:not([data-keep-dark="true"] *),
-html.theme-warm-light .text-teal-400:not([data-keep-dark="true"] *),
-html.theme-warm-light .text-\[\#5EEAD4\]:not([data-keep-dark="true"] *),
-html.theme-warm-light .text-\[\#2DD4BF\]:not([data-keep-dark="true"] *),
-html.theme-warm-light .text-\[\#00F0B5\]:not([data-keep-dark="true"] *) {
-  color: #0F766E !important;
+/* 7. 화이트/아이보리 바탕 위 민트·시안 계열 강조 문구 전체를 'Ctrl + 0' 고대비 남색(#1E3A8A) 단일 SSOT로 통일
+   - 초록(emerald)·노랑(amber)·보라(violet)·분홍(rose) 배지 및 브랜드 로고([data-ghosti-brand-logo="true"]), 다크 모니터([data-keep-dark="true"])는 원래 색상 100% 보존 */
+html.theme-warm-light :is(
+  .text-primary,
+  [class*="text-primary/"],
+  .text-primary-container,
+  [class*="text-primary-container/"],
+  .text-cyan-50,
+  [class*="text-cyan-50/"],
+  .text-cyan-100,
+  [class*="text-cyan-100/"],
+  .text-cyan-200,
+  [class*="text-cyan-200/"],
+  .text-cyan-300,
+  [class*="text-cyan-300/"],
+  .text-cyan-400,
+  [class*="text-cyan-400/"],
+  .text-cyan-500,
+  [class*="text-cyan-500/"],
+  .text-teal-50,
+  [class*="text-teal-50/"],
+  .text-teal-100,
+  [class*="text-teal-100/"],
+  .text-teal-200,
+  [class*="text-teal-200/"],
+  .text-teal-300,
+  [class*="text-teal-300/"],
+  .text-teal-400,
+  [class*="text-teal-400/"],
+  .text-teal-500,
+  [class*="text-teal-500/"],
+  .text-teal-600,
+  [class*="text-teal-600/"],
+  .text-\[\#5EEAD4\],
+  [class*="text-[#5EEAD4]/"],
+  .text-\[\#5eead4\],
+  .text-\[\#2DD4BF\],
+  [class*="text-[#2DD4BF]/"],
+  .text-\[\#2dd4bf\],
+  .text-\[\#00F0B5\],
+  [class*="text-[#00F0B5]/"],
+  .text-\[\#00f0b5\],
+  .text-\[\#00E5FF\],
+  [class*="text-[#00E5FF]/"],
+  .text-\[\#67E8F9\],
+  .text-\[\#99F6E4\],
+  .text-\[\#A5F3FC\]
+):not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not([data-ghosti-brand-logo="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *):not(.bg-black):not(.bg-black *):not(.bg-black\/50 *):not(.bg-black\/60 *):not(.bg-black\/70 *):not(.bg-black\/75 *):not(.bg-black\/80 *):not(.bg-black\/85 *):not(.bg-black\/90 *):not(.bg-primary-container):not(.bg-primary-container *) {
+  color: #1E3A8A !important;
 }
 
 html.theme-warm-light .text-emerald-100:not([data-keep-dark="true"] *),
@@ -417,62 +450,76 @@ html.theme-warm-light [class*="text-emerald-100/"]:not([data-keep-dark="true"] *
 html.theme-warm-light .text-emerald-200:not([data-keep-dark="true"] *),
 html.theme-warm-light [class*="text-emerald-200/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-emerald-300:not([data-keep-dark="true"] *),
-html.theme-warm-light .text-emerald-400:not([data-keep-dark="true"] *) {
+html.theme-warm-light [class*="text-emerald-300/"]:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-emerald-400:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-emerald-400/"]:not([data-keep-dark="true"] *) {
   color: #047857 !important;
 }
 
-html.theme-warm-light [class*="bg-emerald-950"]:not([data-keep-dark="true"]):not(.hub-purchase-widget *),
-html.theme-warm-light [class*="bg-emerald-900"]:not([data-keep-dark="true"]):not(.hub-purchase-widget *) {
+html.theme-warm-light [class*="bg-emerald-950"]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
+html.theme-warm-light [class*="bg-emerald-900"]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *) {
   background-color: #ECFDF5 !important;
   border-color: #34D399 !important;
   color: #065F46 !important;
 }
 
-html.theme-warm-light [class*="bg-amber-950"]:not([data-keep-dark="true"]):not(.hub-purchase-widget *),
-html.theme-warm-light [class*="bg-amber-900"]:not([data-keep-dark="true"]):not(.hub-purchase-widget *) {
+html.theme-warm-light [class*="bg-amber-950"]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
+html.theme-warm-light [class*="bg-amber-900"]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *) {
   background-color: #FFFBEB !important;
   border-color: #FBBF24 !important;
   color: #92400E !important;
 }
 
-html.theme-warm-light [class*="bg-cyan-950"]:not([data-keep-dark="true"]):not(.hub-purchase-widget *),
-html.theme-warm-light [class*="bg-cyan-900"]:not([data-keep-dark="true"]):not(.hub-purchase-widget *) {
-  background-color: #ECFEFF !important;
-  border-color: #22D3EE !important;
-  color: #155E75 !important;
+html.theme-warm-light :is(
+  [class*="bg-cyan-950"],
+  [class*="bg-cyan-900"],
+  [class*="bg-teal-950"],
+  [class*="bg-teal-900"],
+  [class*="bg-cyan-500/1"],
+  [class*="bg-cyan-500/2"],
+  [class*="bg-teal-500/1"],
+  [class*="bg-teal-500/2"],
+  [class*="bg-teal-400/2"]
+):not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not([data-ghosti-brand-logo="true"] *):not(.hub-purchase-widget *) {
+  background-color: #EEF2FF !important;
+  border-color: rgba(79, 70, 229, 0.35) !important;
+  color: #1E3A8A !important;
 }
 
-html.theme-warm-light [class*="bg-indigo-950"]:not([data-keep-dark="true"]):not(.hub-purchase-widget *),
-html.theme-warm-light [class*="bg-indigo-900"]:not([data-keep-dark="true"]):not(.hub-purchase-widget *) {
+html.theme-warm-light [class*="bg-indigo-950"]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
+html.theme-warm-light [class*="bg-indigo-900"]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *) {
   background-color: #EEF2FF !important;
   border-color: #818CF8 !important;
   color: #3730A3 !important;
 }
 
-html.theme-warm-light [class*="bg-violet-950"]:not([data-keep-dark="true"]):not(.hub-purchase-widget *),
-html.theme-warm-light [class*="bg-violet-900"]:not([data-keep-dark="true"]):not(.hub-purchase-widget *) {
+html.theme-warm-light [class*="bg-violet-950"]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
+html.theme-warm-light [class*="bg-violet-900"]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *) {
   background-color: #F5F3FF !important;
   border-color: #A78BFA !important;
   color: #5B21B6 !important;
 }
 
-html.theme-warm-light [class*="bg-rose-950"]:not([data-keep-dark="true"]):not(.hub-purchase-widget *),
-html.theme-warm-light [class*="bg-rose-900"]:not([data-keep-dark="true"]):not(.hub-purchase-widget *) {
+html.theme-warm-light [class*="bg-rose-950"]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
+html.theme-warm-light [class*="bg-rose-900"]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *) {
   background-color: #FFF1F2 !important;
   border-color: #FB7185 !important;
   color: #9F1239 !important;
 }
 
-html.theme-warm-light [class*="bg-fuchsia-950"]:not([data-keep-dark="true"]):not(.hub-purchase-widget *),
-html.theme-warm-light [class*="bg-fuchsia-900"]:not([data-keep-dark="true"]):not(.hub-purchase-widget *) {
+html.theme-warm-light [class*="bg-fuchsia-950"]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
+html.theme-warm-light [class*="bg-fuchsia-900"]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *) {
   background-color: #FDF4FF !important;
   border-color: #E879F9 !important;
   color: #86198F !important;
 }
 
 html.theme-warm-light .text-violet-200:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-violet-200/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-violet-300:not([data-keep-dark="true"] *),
-html.theme-warm-light .text-violet-400:not([data-keep-dark="true"] *) {
+html.theme-warm-light [class*="text-violet-300/"]:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-violet-400:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-violet-400/"]:not([data-keep-dark="true"] *) {
   color: #5B21B6 !important;
 }
 
@@ -483,7 +530,9 @@ html.theme-warm-light [class*="text-amber-100/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-amber-200:not([data-keep-dark="true"] *):not(.aspect-video *),
 html.theme-warm-light [class*="text-amber-200/"]:not([data-keep-dark="true"] *):not(.aspect-video *),
 html.theme-warm-light .text-amber-300:not([data-keep-dark="true"] *):not(.aspect-video *),
-html.theme-warm-light .text-amber-400:not([data-keep-dark="true"] *) {
+html.theme-warm-light [class*="text-amber-300/"]:not([data-keep-dark="true"] *):not(.aspect-video *),
+html.theme-warm-light .text-amber-400:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-amber-400/"]:not([data-keep-dark="true"] *) {
   color: #92400E !important;
 }
 
@@ -491,7 +540,10 @@ html.theme-warm-light .text-indigo-100:not([data-keep-dark="true"] *),
 html.theme-warm-light [class*="text-indigo-100/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-indigo-200:not([data-keep-dark="true"] *),
 html.theme-warm-light [class*="text-indigo-200/"]:not([data-keep-dark="true"] *),
-html.theme-warm-light .text-indigo-300:not([data-keep-dark="true"] *) {
+html.theme-warm-light .text-indigo-300:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-indigo-300/"]:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-indigo-400:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-indigo-400/"]:not([data-keep-dark="true"] *) {
   color: #4338CA !important;
 }
 
@@ -499,7 +551,10 @@ html.theme-warm-light .text-fuchsia-100:not([data-keep-dark="true"] *),
 html.theme-warm-light [class*="text-fuchsia-100/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-fuchsia-200:not([data-keep-dark="true"] *),
 html.theme-warm-light [class*="text-fuchsia-200/"]:not([data-keep-dark="true"] *),
-html.theme-warm-light .text-fuchsia-300:not([data-keep-dark="true"] *) {
+html.theme-warm-light .text-fuchsia-300:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-fuchsia-300/"]:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-fuchsia-400:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-fuchsia-400/"]:not([data-keep-dark="true"] *) {
   color: #7E22CE !important;
 }
 
@@ -508,13 +563,18 @@ html.theme-warm-light [class*="text-rose-200/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-rose-100:not([data-keep-dark="true"] *),
 html.theme-warm-light [class*="text-rose-100/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-rose-300:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-rose-300/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-rose-400:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-rose-400/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-pink-100:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-pink-200:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-pink-200/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-pink-300:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-pink-300/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-pink-400:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-red-200:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-red-300:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-red-300/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-red-400:not([data-keep-dark="true"] *) {
   color: #BE123C !important;
 }
@@ -524,18 +584,16 @@ html.theme-warm-light [class*="text-sky-100/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-sky-200:not([data-keep-dark="true"] *),
 html.theme-warm-light [class*="text-sky-200/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-sky-300:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-sky-300/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-sky-400:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-sky-400/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-blue-200:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-blue-200/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-blue-300:not([data-keep-dark="true"] *),
-html.theme-warm-light .text-blue-400:not([data-keep-dark="true"] *) {
+html.theme-warm-light [class*="text-blue-300/"]:not([data-keep-dark="true"] *),
+html.theme-warm-light .text-blue-400:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-blue-400/"]:not([data-keep-dark="true"] *) {
   color: #0369A1 !important;
-}
-
-html.theme-warm-light [class*="bg-teal-950"]:not([data-keep-dark="true"]):not(.hub-purchase-widget *),
-html.theme-warm-light [class*="bg-teal-900"]:not([data-keep-dark="true"]):not(.hub-purchase-widget *) {
-  background-color: #F0FDFA !important;
-  border-color: #2DD4BF !important;
-  color: #0F766E !important;
 }
 
 /* 8. 솔리드 포인트 버튼 (primary-container 등) 화이트 바탕 위 시인성 강화 */
