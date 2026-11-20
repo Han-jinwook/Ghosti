@@ -1397,12 +1397,12 @@ export const SmartTrashView: React.FC = () => {
             {showQuarantineDrawer && (
               <div className="px-5 pb-5 pt-2 border-t border-white/10 flex flex-col gap-3">
                 {isIosNativeTrash && quarantinedPhotos.length > 0 && (
-                  <div className="p-3 rounded-xl bg-zinc-900 border border-teal-400/40 flex items-start gap-2.5">
-                    <span className="material-symbols-outlined text-teal-300 text-[18px] shrink-0 mt-0.5">
+                  <div className="p-3 rounded-xl bg-teal-50 dark:bg-zinc-900 border border-teal-300 dark:border-teal-400/40 flex items-start gap-2.5">
+                    <span className="material-symbols-outlined text-teal-700 dark:text-teal-300 text-[18px] shrink-0 mt-0.5">
                       lock
                     </span>
-                    <p className="text-[12px] text-zinc-100 font-semibold leading-relaxed break-keep">
-                      🔒 아이폰은 애플 FaceID 보안 정책에 따라 『사진 ➔ 최근 삭제된 항목』에 30일간 안전 보관되며, 그곳에서 원본 그대로 복원할 수 있습니다.
+                    <p className="text-[12px] text-slate-900 dark:text-zinc-100 font-bold leading-relaxed break-keep">
+                      아이폰은 애플 FaceID 보안 정책에 따라 『사진 ➔ 최근 삭제된 항목』에 30일간 안전 보관되며, 그곳에서 원본 그대로 복원할 수 있습니다.
                     </p>
                   </div>
                 )}

@@ -865,6 +865,8 @@ export const createAssistantOnboardingSlice: StateCreator<
     set({ mobileGalleryScanning: true });
     let newlyAddedTotal = 0;
     let totalGalleryPhotos = get().photos.length;
+    const allLiveNativePhotoIds = new Set<string>();
+    let scannedFullGallery = false;
 
     try {
       const pageSize = 60;
@@ -891,12 +893,27 @@ export const createAssistantOnboardingSlice: StateCreator<
           mobileGalleryPermissionDenied: false,
           mobileGalleryLimitedAccess: Boolean(res.limitedAccess),
         });
-        if (res.totalPhotoCount > 0) {
+        if (res.totalPhotoCount >= 0) {
           totalGalleryPhotos = res.totalPhotoCount;
+        }
+
+        const liveBatchIds = new Set<string>();
+        for (const np of res.photos || []) {
+          if (np?.id) {
+            liveBatchIds.add(np.id);
+            allLiveNativePhotoIds.add(np.id);
+          }
         }
 
         const curPhotos = get().photos;
         const seenIds = new Set(curPhotos.map((p) => p.id));
+
+        // [아이폰 『사진 ➔ 최근 삭제된 항목』 / 갤러리 외부 복구 자동 동기화]:
+        // 유저가 OS 사진 앱(FaceID 최근 삭제된 항목 등)에서 사진을 복구하면 동일한 에셋 ID(np.id)가 다시 활성 갤러리에 포함되므로,
+        // 앱 복귀·새로고침·재실행 스캔 시 quarantined=true 상태를 즉시 해제(false)하고 최근 정리 내역에서 제거·재클러스터링합니다.
+        const hasRevivedFromOsTrash = curPhotos.some(
+          (p) => p.quarantined && liveBatchIds.has(p.id)
+        );
 
         // [iOS PhotoKit 중복 에셋 누락 원천 차단]:
         // iOS 사진첩에 저장된 동일 사진 2장은 asset.localIdentifier(np.id)만 다르고 originalFilename과 해상도 기반 estSize가 동일할 수 있으므로,
@@ -911,10 +928,15 @@ export const createAssistantOnboardingSlice: StateCreator<
             : [];
 
         let newlyDiscoveredVids: VideoSceneItem[] = [];
-        if (analyzedBatch.length > 0 || convertedVideos.length > 0) {
+        if (hasRevivedFromOsTrash || analyzedBatch.length > 0 || convertedVideos.length > 0) {
           newlyAddedTotal += analyzedBatch.length;
           set((state) => {
-            const mergedPhotos = [...state.photos, ...analyzedBatch];
+            const revivedBasePhotos = hasRevivedFromOsTrash
+              ? state.photos.map((p) =>
+                  p.quarantined && liveBatchIds.has(p.id) ? { ...p, quarantined: false } : p
+                )
+              : state.photos;
+            const mergedPhotos = [...revivedBasePhotos, ...analyzedBatch];
             const { updatedPhotos, duplicateGroups: nextDupGroups } =
               clusterPhotosIntoDuplicateGroups(mergedPhotos);
             const nextTrashIds = new Set<string>();
@@ -1039,9 +1061,39 @@ export const createAssistantOnboardingSlice: StateCreator<
           res.photos.length < pageSize ||
           offset + pageSize >= (res.totalPhotoCount || 0)
         ) {
+          scannedFullGallery = (res.totalPhotoCount || 0) <= maxTargetCount;
           break;
         }
         await new Promise((r) => setTimeout(r, 80));
+      }
+
+      // 전체 갤러리 스캔 완료 시 OS 사진 앱에서 직접 삭제된(quarantined 아닌데 실제 갤러리에 없는) 항목도 정리하여 정합성 100% 유지
+      if (scannedFullGallery && get().photos.some((p) => !p.quarantined && !allLiveNativePhotoIds.has(p.id))) {
+        set((state) => {
+          const pruned = state.photos.filter((p) => p.quarantined || allLiveNativePhotoIds.has(p.id));
+          const { updatedPhotos, duplicateGroups: nextDupGroups } =
+            clusterPhotosIntoDuplicateGroups(pruned);
+          const nextTrashIds = new Set<string>();
+          updatedPhotos.forEach((p) => {
+            if (p.trashCategory && !p.quarantined) nextTrashIds.add(p.id);
+          });
+          const nextSearchResults: SearchResultItem[] = updatedPhotos
+            .filter((p) => !p.quarantined && !p.isVaultDocument)
+            .map((photo) => ({
+              photo,
+              score: 0.99,
+              matchPercentage: 99,
+              matchedBy: 'text-direct',
+            }));
+          const inSharedLounge = isSharedPhotoLounge(state.activeLoungeType);
+          return {
+            photos: updatedPhotos,
+            duplicateGroups: nextDupGroups,
+            selectedTrashIds: nextTrashIds,
+            searchResults:
+              inSharedLounge || state.hasExecutedUserSearch ? state.searchResults : nextSearchResults,
+          };
+        });
       }
 
       const finalPhotos = get().photos;

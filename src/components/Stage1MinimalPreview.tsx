@@ -2628,16 +2628,15 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             return (
               <section
                 id="ghosti-quarantine-restore-section"
-                className="p-4 sm:p-5 rounded-2xl bg-[#18181B] border border-emerald-500/35 shadow-sm flex flex-col gap-3"
-                data-keep-dark="true"
+                className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#18181B] border border-teal-300 dark:border-emerald-500/35 shadow-sm flex flex-col gap-3"
               >
                 {lastUndoBatch && !isIosNativeTrash && (
-                  <div className="p-3.5 rounded-xl bg-zinc-900 border border-primary-container/60 flex flex-wrap items-center justify-between gap-3">
+                  <div className="p-3.5 rounded-xl bg-teal-50/70 dark:bg-zinc-900 border border-teal-300 dark:border-primary-container/60 flex flex-wrap items-center justify-between gap-3">
                     <div className="flex items-center gap-2.5">
-                      <span className="material-symbols-outlined text-primary-container text-[20px] shrink-0">
+                      <span className="material-symbols-outlined text-teal-700 dark:text-primary-container text-[20px] shrink-0">
                         history
                       </span>
-                      <span className="font-label-md text-[13px] text-zinc-100 font-semibold break-keep">
+                      <span className="font-label-md text-[13px] text-slate-900 dark:text-zinc-100 font-semibold break-keep">
                         {`방금 정리한 ${lastUndoBatch.count}장 (${fmtMB(lastUndoBatch.savedBytes)})이 휴지통(정리 보관함)으로 안전하게 이동되었습니다.`}
                       </span>
                     </div>
@@ -2653,7 +2652,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                       <button
                         type="button"
                         onClick={dismissUndoBatch}
-                        className="p-1 text-zinc-400 hover:text-white cursor-pointer"
+                        className="p-1 text-slate-500 hover:text-slate-900 dark:text-zinc-400 dark:hover:text-white cursor-pointer"
                         title="닫기"
                       >
                         <span className="material-symbols-outlined text-[16px]">close</span>
@@ -2663,12 +2662,12 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 )}
 
                 {isIosNativeTrash && quarantinedPhotos.length > 0 && (
-                  <div className="p-3.5 rounded-xl bg-zinc-900 border border-teal-400/40 flex items-start gap-2.5">
-                    <span className="material-symbols-outlined text-teal-300 text-[19px] shrink-0 mt-0.5">
+                  <div className="p-3.5 rounded-xl bg-teal-50 dark:bg-zinc-900 border border-teal-300 dark:border-teal-400/40 flex items-start gap-2.5">
+                    <span className="material-symbols-outlined text-teal-700 dark:text-teal-300 text-[19px] shrink-0 mt-0.5">
                       lock
                     </span>
-                    <p className="text-[12.5px] text-zinc-100 font-semibold leading-relaxed break-keep">
-                      🔒 아이폰은 애플 FaceID 보안 정책에 따라 『사진 ➔ 최근 삭제된 항목』에 30일간 안전 보관되며, 그곳에서 원본 그대로 복원할 수 있습니다.
+                    <p className="text-[12.5px] text-slate-900 dark:text-zinc-100 font-bold leading-relaxed break-keep">
+                      아이폰은 애플 FaceID 보안 정책에 따라 『사진 ➔ 최근 삭제된 항목』에 30일간 안전 보관되며, 그곳에서 원본 그대로 복원할 수 있습니다.
                     </p>
                   </div>
                 )}
@@ -2679,14 +2678,14 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setShowQuarantineDrawer((v) => !v)}
-                        className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-100 font-label-sm text-[12.5px] font-bold flex items-center gap-1.5 cursor-pointer"
+                        className="w-full sm:w-auto px-3.5 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200/80 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-slate-300 dark:border-white/10 text-slate-900 dark:text-zinc-100 font-label-sm text-[12.5px] font-extrabold flex items-center justify-between gap-2 cursor-pointer"
                       >
-                        <span>
+                        <span className="text-left break-keep">
                           {isIosNativeTrash
-                            ? `🗂️ 최근 정리 내역 (${quarantinedPhotos.length}장 · 최근 삭제된 항목 30일 보관)`
+                            ? `🗂️ 최근 정리 내역 (${quarantinedPhotos.length}장 · 30일 보관)`
                             : `↩️ 정리한 사진 복원 (${quarantinedPhotos.length}장)`}
                         </span>
-                        <span className="text-emerald-300 text-[11px]">
+                        <span className="text-teal-700 dark:text-emerald-300 text-[11.5px] font-black shrink-0 whitespace-nowrap">
                           {showQuarantineDrawer ? '접기 ▲' : '펼치기 ▼'}
                         </span>
                       </button>
@@ -2705,25 +2704,25 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     </div>
 
                     {showQuarantineDrawer && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 p-3 rounded-xl bg-zinc-950/80 border border-white/10 max-h-64 overflow-y-auto">
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 p-3 rounded-xl bg-slate-50 dark:bg-zinc-950/80 border border-slate-200 dark:border-white/10 max-h-64 overflow-y-auto">
                         {quarantinedPhotos.map((qp) => (
                           <div
                             key={qp.id}
-                            className="p-2.5 rounded-lg bg-zinc-900/90 border border-white/10 flex items-center justify-between gap-2.5"
+                            className="p-2.5 rounded-lg bg-white dark:bg-zinc-900/90 border border-slate-200 dark:border-white/10 flex items-center justify-between gap-2.5"
                           >
                             <div className="flex items-center gap-2.5 min-w-0 flex-1">
                               <img
                                 src={qp.thumbUrl}
                                 alt=""
                                 loading="lazy"
-                                className="w-10 h-10 rounded-md object-cover border border-white/10 shrink-0 bg-zinc-800"
+                                className="w-10 h-10 rounded-md object-cover border border-slate-200 dark:border-white/10 shrink-0 bg-slate-200 dark:bg-zinc-800"
                               />
-                              <span className="text-[11.5px] text-zinc-200 font-semibold break-all leading-snug">
+                              <span className="text-[11.5px] text-slate-900 dark:text-zinc-200 font-semibold break-all leading-snug">
                                 {qp.name}
                               </span>
                             </div>
                             {isIosNativeTrash ? (
-                              <span className="px-2 py-1 rounded-md bg-zinc-800 text-teal-300 border border-teal-500/30 text-[10.5px] font-bold shrink-0">
+                              <span className="px-2 py-1 rounded-md bg-teal-100 dark:bg-zinc-800 text-teal-900 dark:text-teal-300 border border-teal-300 dark:border-teal-500/30 text-[10.5px] font-bold shrink-0 whitespace-nowrap">
                                 30일 보관됨
                               </span>
                             ) : (
@@ -2731,7 +2730,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                                 type="button"
                                 disabled={quarantineMoving}
                                 onClick={() => void restoreFromQuarantine([qp.id])}
-                                className="px-2.5 py-1.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-zinc-950 border border-emerald-500/40 text-[11px] font-extrabold shrink-0 cursor-pointer transition-colors"
+                                className="px-2.5 py-1.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500 text-emerald-800 dark:text-emerald-300 hover:text-zinc-950 border border-emerald-500/40 text-[11px] font-extrabold shrink-0 cursor-pointer transition-colors"
                               >
                                 복원
                               </button>
