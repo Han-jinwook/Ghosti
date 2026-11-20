@@ -392,7 +392,7 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
 
    - **근본 처방 완결**: 5곳에 흩어진 개별 조사 정규식을 전면 폐기하고 `aiSharedRuntime.ts`(Layer 0)의 단일 SSOT(`stripKoSearchParticle` — `koreanPhotoOntology.json` 710어휘 자동 적재 + 1어절 단음절 조사 박리 원천 금지 + 형태소 접미 규칙 보호, `matchKoTokenInStems` — 한국어 복합명사·행정구역 경계 가드, `getContrastiveNonAnimalAnchorVecs` — 동물 질의 대조 비동물 앵커 마진)와 Z-코어 명시적 자음(`[ㄱ-ㅎ]`) 전용 초성 매칭으로 구조적 일원화함.
 
-3. **5대 필수 행동 지침 (1·2·3귀신 전원 예외 없이 준수)**:
+3. **6대 필수 행동 지침 (1·2·3귀신 전원 예외 없이 준수)**:
 
    - **① 땜빵 처방(특정 테스트 예시 단어만 하드코딩 추가·무분별한 업스케일링·임의 딜레이 `sleep` 증가) 영구 금지**: 버그 리포트에 적힌 예시 단어 1~2개만 조건문으로 막아 눈가림하는 행위를 절대 금지하며, 반드시 같은 원리로 발생하는 전체 범주(Class of Bugs)를 한 번에 해결하는 구조적 알고리즘으로 처방합니다.
 
@@ -404,20 +404,23 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
 
    - **⑤ 중요 이슈 및 테스터 `'멀린님과 상의 필요'` 코멘트는 독단 처리 금지, 반드시 멀린님과 `🚨` 선(先) 상의**: PC 자원(CPU/메모리/디스크) 부하 변경, 아키텍처·정책·기획안 변경, 또는 노션 카드에 해나라님이 **`"멀린님과 상의 필요"`**라고 남긴 항목은 에이전트가 임의로 코딩하지 말고 반드시 먼저 `## 🚨 [기획/아키텍처 상의] ...`로 원인과 근본 대안을 멀린님께 보고·승인받은 뒤 진행합니다.
 
+   - **⑥ 고객(유저) 기준 최고 퀄리티 · 최대 효과 정공법 최우선 결정·추천·상의 대원칙 (2026-11-20 멀린님 지시 제정)**: 모든 기술·기획·UX 결정과 대안 설계는 에이전트의 구현 편의나 공수 절감이 아니라 **실제 고객 입장에서 체감 품질(정확도·선명도·부드러움·완성도)이 가장 높고 실사용 효과(속도·즉각성·학습/전환 효율)가 극대화되는 정공법**을 최우선 기준으로 삼습니다. 멀린님께 대안을 상의드릴 때도 선택지를 중립 나열하지 말고 반드시 고객 기준 최고 퀄리티·최대 효과 안을 1순위 **`(권장 정공법)`**으로 명확한 수치 근거와 함께 추천합니다.
+
 ---
 
-### 📱 [전사·노션 QA 3단 공식 호칭 엄격 분리 · 모바일 OS별 영구 규칙 · iOS TestFlight 무인 트리거 (2026-11-19 확정)]
+### 📱 [전사·노션 QA 3단 공식 호칭 엄격 분리 · 3·4호컴 직접 배포 의무 · 모바일 OS별 영구 규칙 · iOS TestFlight 무제한 무료 Public 전용 러너 (2026-11-20 최신화)]
 
 1. **🏷️ 전사·노션 QA 3단 공식 호칭 엄격 분리 (모바일을 ‘엔진’이라 부르는 것 영구 금지)**:
-   - **① `PC 엔진` (`Z코어`)**: `Merlin_Z_Core.exe` (`127.0.0.1:5199`, 현행 `v2.6.19`) — PC 로컬 기능(PP-OCRv5, PDFium/HWP 해독, `Ctrl+0` 귀신창, `G:`/`S:` 드라이브, PC 청소) 수정 시 버전업.
+   - **① `PC 엔진` (`Z코어`)**: `Merlin_Z_Core.exe` (`127.0.0.1:5199`, 현행 `v2.6.39`) — PC 로컬 기능(PP-OCRv5, PDFium/HWP 해독, `Ctrl+0` 귀신창, `G:`/`S:` 드라이브, PC 보안절전·청소·휴지통 구출) 수정 시 버전업하며, **`1·2·3귀신` 전원 버전업 때마다 테스터에게 직접 다운받으라고 안내하는 것을 영구 금지하고 반드시 `python universal_z_core/deploy_z_core_cluster.py`로 `3호컴`(`100.102.43.42`)·`4호컴`(`100.114.100.24`) 포함 `1~6호컴` 전체 및 모드전환기 캐시(`Merlin_Mode_Vault`)까지 최신 엔진을 직접 꽂아 넣고 헬스체크(`/__merlin/health`) 버전을 확인한 뒤 안내**합니다.
    - **② `웹 화면` (`웹 UI`)**: `https://ghosti.sundreamer.app` — 일반 UI 디자인, 문구, 채팅 라우터, 공유방 화면 수정 시 (`git push` 즉시 반영).
-   - **③ `모바일 앱` (`안드로이드 앱` / `아이폰 앱`)**: 안드로이드 앱(`.aab`, Google Play) 및 아이폰 앱(`.ipa`, Apple TestFlight · Apple ID `6836307976` · `app.sundreamer.ghosti`) — 양대 스토어 1:1 동일 버전 라임 통일 (현행 `1.0.25 (25)`~, 사소한 UI/로직 수정은 모아서 배치 출시). 노션 카드에 GitHub `.apk` 수동 다운로드 링크 기재 영구 금지.
+   - **③ `모바일 앱` (`안드로이드 앱` / `아이폰 앱`)**: 안드로이드 앱(`.aab`, Google Play) 및 아이폰 앱(`.ipa`, Apple TestFlight · Apple ID `6836307976` · `app.sundreamer.ghosti`) — 양대 스토어 1:1 동일 버전 라임 통일 (현행 `1.0.54 (54)`~`1.0.55 (55)`~, 사소한 UI/로직 수정은 모아서 배치 출시). 노션 카드에 GitHub `.apk` 수동 다운로드 링크 기재 영구 금지.
 2. **📱 안드로이드 앱 vs 🍎 아이폰 앱 영구 확정 스펙 (임시 심사 분기 없음 · QA = 정식 출시 100% 동일 고정, `ghosti-guide.html#sec-menus` 박제)**:
    - **🤖 `안드로이드 앱` 전용 기능**: 악성·유료결제 유도 클리너(`CleanX` 등 100종) 3단 구출 배너(`MobileCleanerRescueBanner.tsx`) 및 삭제 인텐트.
    - **🍎 `아이폰 앱` (iOS) 영구 미제공·비노출**: Apple iOS 샌드박스 보안 정책 및 Guideline 2.5.2에 따라 클리너 3단 구출 배너는 아이폰에서 영구 비노출하는 것이 정상 규칙이며, 아이폰 유저가 채팅창(`monsterChatRouter.ts`)에 클리너/구독 해지를 질문하면 Google Play 링크 대신 **"아이폰(iOS)은 애플 보안 정책상 악성 청소앱이 자동 침투할 수 없으며, 정기구독 확인은 [아이폰 설정 > 내 이름(Apple 계정) > 구독]에서 안전하게 관리하실 수 있습니다"**라고 안내합니다.
    - **💳 양대 모바일 앱 내 요금표·결제창 상시 비노출**: 모바일 앱 내부에서는 요금표(`PricingModal`)·결제 유도 버튼을 상시 비노출하며 PC `웹 화면(웹 UI)`이 전담합니다.
-3. **🚀 `Ghosti` 양대 스토어(Google Play + Apple TestFlight) 5초 즉석 무인 동시 출시 명령어 (비서실 대기 병목 0초)**:
-   - 모바일 앱 배치 버전업(예: `1.0.17`, 빌드 `17`) 시 6호컴에서 `npm.cmd run build && npx cap sync android` 및 서명 `.aab` (`D:\Ghosti\android\app\build\outputs\bundle\release\app-release.aab`) 빌드 + `git push origin main`을 마친 직후, 비서실 공문 요청 없이 **아래 명령어 1줄만 실행**하면 Google Play 내부 테스트 트랙(`.aab` 즉시 업로드·출시)과 Apple TestFlight(`.ipa` GitHub Actions `macos-26` + `Xcode 26.6` 자동 빌드·업로드)가 1:1 동일 버전 라임으로 동시 출시됩니다 (사전 연결 점검: `--verify-only`):
+3. **🚀 `Ghosti` 양대 스토어(Google Play + Apple TestFlight) 5초 즉석 무인 동시 출시 명령어 & 무제한 무료 Public 전용 러너 레포 고정 (`Han-jinwook/ghosti-ios-runner`)**:
+   - **🚨 iOS TestFlight GitHub Actions 무인 빌드 전용 러너 레포 고정 철칙**: 비공개 레포(`Han-jinwook/Secretary` 등)의 `macOS` 10배 차감 월 무료 쿼터(2,000분) 소진을 원천 차단하기 위해, **iOS TestFlight GitHub Actions 무인 빌드는 반드시 공개 빌드 전용 러너 레포(`https://github.com/Han-jinwook/ghosti-ios-runner`, 소스코드 0줄 · 워크플로우 전용 · 365일 무제한 0원, `D:\Secretary\tools\release_mobile_stores.py` 연동)에서만 구동**합니다.
+   - 모바일 앱 버전업(예: `1.0.55`, 빌드 `55`) 시 6호컴에서 `npm.cmd run build && npx cap sync android` 및 서명 `.aab` (`D:\Ghosti\android\app\build\outputs\bundle\release\app-release.aab`) 빌드 + `git push origin main`을 마친 직후 **아래 명령어 1줄만 실행**하면 Google Play 내부 테스트 트랙(`.aab` 즉시 업로드·출시)과 Apple TestFlight(`Han-jinwook/ghosti-ios-runner` `macos-26` + `Xcode 26.6` 무제한 무료 자동 빌드·업로드)가 1:1 동일 버전 라임으로 동시 출시됩니다 (사전 연결 점검: `--verify-only`):
      ```powershell
-     python D:\Secretary\tools\release_mobile_stores.py --version 1.0.17 --build 17 --notes "v1.0.17 (17): 모바일 QA 수정 반영"
+     python D:\Secretary\tools\release_mobile_stores.py --version 1.0.55 --build 55 --notes "v1.0.55 (55): 모바일 QA 수정 반영"
      ```

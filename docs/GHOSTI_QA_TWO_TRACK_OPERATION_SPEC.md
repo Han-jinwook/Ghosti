@@ -135,6 +135,6 @@ flowchart LR
    - 임시 심사 분기 없이 연습(QA) 단계부터 정식 출시와 100% 동일한 화면·규칙으로 고정합니다.
    - **🤖 안드로이드 앱 전용**: 유료결제 유도 클리너(`CleanX` 등 100종) 3단 구출 배너 작동 / **🍎 아이폰 앱**: iOS 샌드박스 정책(Guideline 2.5.2)상 영구 미제공·비노출이 정상이며, 채팅 질문 시 `[아이폰 설정 > 내 이름(Apple 계정) > 구독]` 경로로 맞춤 안내.
    - **💳 모바일 앱 내 요금표·결제창 상시 비노출**: 양대 모바일 앱 모두 요금표·결제창을 상시 비노출하며 PC `웹 화면(웹 UI)`이 전담.
-   - **🚀 양대 스토어(Google Play + Apple TestFlight) 5초 즉석 무인 동시 출시 워커**: 모바일 앱 배치 버전업 시 서명 `.aab` 빌드 및 `git push origin main` 직후 6호컴에서 **`python D:\Secretary\tools\release_mobile_stores.py --version 1.0.17 --build 17 --notes "v1.0.17 (17): 모바일 QA 수정 반영"`** 1줄을 실행하면 Google Play 내부 테스트 트랙(`.aab` REST API 직결 출시)과 Apple TestFlight(`ghosti_ios_testflight.yml` 무인 빌드·업로드)가 1:1 동일 버전 라임으로 동시 출시됨 (`--verify-only`로 1초 자가 진단 가능).
+   - **🚀 양대 스토어(Google Play + Apple TestFlight) 5초 즉석 무인 동시 출시 워커 & 공개 전용 러너(`Han-jinwook/ghosti-ios-runner`) 고정**: 모바일 앱 버전업 시 서명 `.aab` 빌드 및 `git push origin main` 직후 6호컴에서 **`python D:\Secretary\tools\release_mobile_stores.py --version 1.0.55 --build 55 --notes "v1.0.55 (55): 모바일 QA 수정 반영"`** 1줄을 실행하면 Google Play 내부 테스트 트랙(`.aab` REST API 직결 출시)과 Apple TestFlight(**비공개 쿼터 2,000분 소진을 원천 차단하는 공개 빌드 전용 러너 레포 `Han-jinwook/ghosti-ios-runner`의 `ghosti_ios_testflight.yml` 무제한 무료 빌드·업로드**)가 1:1 동일 버전 라임으로 동시 출시됨 (`--verify-only`로 1초 자가 진단 가능).
 
 
