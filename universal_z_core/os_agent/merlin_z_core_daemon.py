@@ -159,7 +159,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.5.39"
+CORE_VERSION = "2.5.49"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -470,9 +470,9 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             return
 
         # 1) 이미 완성된 720p H.264 Faststart MP4 캐시가 있으면 대기 없이 0.01초 만에 Range 스트리밍으로 즉시 응답!
-        #    45초 이하 단편 클립이 아직 미캐싱 상태면 최대 2.8초 동기 변환하여 파이프 끊김 없는 완전한 Range 재생을 보장합니다.
+        #    미캐싱 상태라면 최대 0.25초만 확인 후 즉시 하단 zerolatency 파이프로 첫 프레임을 0.2초 내에 송출(백그라운드 캐싱 병행)하여 초기 재생 지연을 원천 차단합니다.
         dur_hint = plugin_ghosti_os._get_fast_video_duration_sec(file_path)
-        sync_budget = 2.8 if 0 < dur_hint <= 45.0 else 0.0
+        sync_budget = 0.25 if 0 < dur_hint <= 45.0 else 0.0
         cached_mp4 = plugin_ghosti_os.get_or_create_faststart_video_cache(
             file_path,
             max_sync_sec=sync_budget,

@@ -1157,8 +1157,6 @@ export function formatQuickKoreanLabelForFile(
   return `${yymmdd}_${slug}${ext}`;
 }
 
-const videoBlobUrlCache = new Map<string, string>();
-
 /**
  * [스펙 1] 스마트 서류함 내 로컬 PDF/TXT/DOCX 문서 상세 열람 모달
  */
@@ -1387,6 +1385,8 @@ export const VideoScenePreviewModal: React.FC = () => {
   const {
     selectedVideoModal,
     setSelectedVideoModal,
+    videoSceneItems,
+    matchedVideoScenes,
     syncRealVideoDuration,
     openLocalFolder,
     showToast,
@@ -1395,16 +1395,55 @@ export const VideoScenePreviewModal: React.FC = () => {
   } = useSaySeeStore();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const pendingSeekSecRef = useRef<number | null>(null);
+  const pipeBaseSecRef = useRef<number>(0);
+  const seekHudTimerRef = useRef<number>(0);
   const triedTranscodeFallbackRef = useRef<boolean>(false);
   const [resolvedVideoSrc, setResolvedVideoSrc] = useState<string>('');
   const [isResolvingVideo, setIsResolvingVideo] = useState<boolean>(false);
   const [videoPlaybackError, setVideoPlaybackError] = useState<boolean>(false);
   const [isPortraitVideo, setIsPortraitVideo] = useState<boolean>(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState<boolean>(false);
+  const [seekHudText, setSeekHudText] = useState<string>('');
   const [isOcrExtracting, setIsOcrExtracting] = useState<boolean>(false);
   const [ocrLines, setOcrLines] = useState<VideoOcrLineItem[]>([]);
   const [ocrFullText, setOcrFullText] = useState<string>('');
   const [ocrCopied, setOcrCopied] = useState<boolean>(false);
+
+  const videoNavList = React.useMemo(() => {
+    if (!selectedVideoModal) return [];
+    if (
+      matchedVideoScenes.length > 0 &&
+      matchedVideoScenes.some((v) => v.id === selectedVideoModal.id)
+    ) {
+      return matchedVideoScenes;
+    }
+    if (
+      videoSceneItems.length > 0 &&
+      videoSceneItems.some((v) => v.id === selectedVideoModal.id)
+    ) {
+      return videoSceneItems;
+    }
+    return [selectedVideoModal];
+  }, [selectedVideoModal, matchedVideoScenes, videoSceneItems]);
+
+  const currentVideoIdx = React.useMemo(() => {
+    if (!selectedVideoModal || videoNavList.length === 0) return -1;
+    return videoNavList.findIndex((v) => v.id === selectedVideoModal.id);
+  }, [selectedVideoModal, videoNavList]);
+
+  const navigateAdjacentVideo = React.useCallback(
+    (delta: -1 | 1) => {
+      if (videoNavList.length < 2 || currentVideoIdx < 0) return;
+      const nextIdx = (currentVideoIdx + delta + videoNavList.length) % videoNavList.length;
+      const nextVid = videoNavList[nextIdx];
+      if (!nextVid) return;
+      setSelectedVideoModal(
+        nextVid,
+        hasExecutedUserSearch && activeQuery ? nextVid.matchedSeekSec : undefined
+      );
+    },
+    [videoNavList, currentVideoIdx, setSelectedVideoModal, hasExecutedUserSearch, activeQuery]
+  );
 
   const buildInstantPreindexedOcr = (
     targetVid: NonNullable<typeof selectedVideoModal>
@@ -1482,16 +1521,19 @@ export const VideoScenePreviewModal: React.FC = () => {
       setVideoPlaybackError(false);
       setIsPortraitVideo(false);
       setIsVideoPlaying(false);
+      setSeekHudText('');
       setIsOcrExtracting(false);
       setOcrLines([]);
       setOcrFullText('');
       setOcrCopied(false);
+      pipeBaseSecRef.current = 0;
       triedTranscodeFallbackRef.current = false;
       return;
     }
     const resMatch = String(selectedVideoModal.resolution || '').match(/(\d+)\s*[xX×]\s*(\d+)/);
     setIsPortraitVideo(Boolean(resMatch && Number(resMatch[2]) > Number(resMatch[1])));
     setIsVideoPlaying(false);
+    setSeekHudText('');
     setOcrCopied(false);
 
     // 1) 클릭 즉시 0.00초 무로딩으로 기인덱싱된 OCR 텍스트를 하단에 바로 표시
@@ -1499,155 +1541,192 @@ export const VideoScenePreviewModal: React.FC = () => {
     setOcrLines(instant.lines);
     setOcrFullText(instant.fullText);
 
-    // 2) 백그라운드 인덱싱이 아직 덜 끝난 영상은 정밀 OCR 결과를 받아 즉시 보강
+    // 2) 이미 OCR이 있거나 글자 없음(hasScreenOcrText === false)으로 판정된 영상은 중복 호출을 생략하고,
+    //    미인덱싱 영상만 첫 프레임 재생(700ms) 이후 백그라운드에서 조용히 보강하여 초기 재생 버퍼링 경합을 0%로 차단!
     let ocrCancelled = false;
-    setIsOcrExtracting(instant.lines.length === 0);
-    void (async () => {
-      try {
-        const res = await extractVideoScreenTextOnDemand(selectedVideoModal);
-        if (ocrCancelled) return;
-        if (res.ocrLines && res.ocrLines.length > 0) {
-          setOcrLines(res.ocrLines);
-          setOcrFullText(res.fullText || '');
-          // 스토어의 해당 동영상 아이템에도 캐시 주입하여 다음 클릭 시 0.00초 즉시 표시
-          useSaySeeStore.setState((st) => ({
-            videoSceneItems: st.videoSceneItems.map((v) =>
-              v.id === selectedVideoModal.id
-                ? {
-                    ...v,
-                    hasScreenOcrText: true,
-                    ocrLineCount: res.ocrLines.length,
-                    ocrLines: res.ocrLines,
-                    ocrFullText: res.fullText,
-                  }
-                : v
-            ),
-            matchedVideoScenes: st.matchedVideoScenes.map((v) =>
-              v.id === selectedVideoModal.id
-                ? {
-                    ...v,
-                    hasScreenOcrText: true,
-                    ocrLineCount: res.ocrLines.length,
-                    ocrLines: res.ocrLines,
-                    ocrFullText: res.fullText,
-                  }
-                : v
-            ),
-          }));
-        }
-      } catch {
-        /* ignore background OCR hydrate error */
-      } finally {
-        if (!ocrCancelled) {
-          setIsOcrExtracting(false);
-        }
-      }
-    })();
+    let ocrDeferTimer = 0;
+    const needsBgOcr =
+      instant.lines.length === 0 && selectedVideoModal.hasScreenOcrText !== false;
+    setIsOcrExtracting(needsBgOcr);
+    if (needsBgOcr) {
+      ocrDeferTimer = window.setTimeout(() => {
+        void (async () => {
+          try {
+            const res = await extractVideoScreenTextOnDemand(selectedVideoModal);
+            if (ocrCancelled) return;
+            if (res.ocrLines && res.ocrLines.length > 0) {
+              setOcrLines(res.ocrLines);
+              setOcrFullText(res.fullText || '');
+              useSaySeeStore.setState((st) => ({
+                videoSceneItems: st.videoSceneItems.map((v) =>
+                  v.id === selectedVideoModal.id
+                    ? {
+                        ...v,
+                        hasScreenOcrText: true,
+                        ocrLineCount: res.ocrLines.length,
+                        ocrLines: res.ocrLines,
+                        ocrFullText: res.fullText,
+                      }
+                    : v
+                ),
+                matchedVideoScenes: st.matchedVideoScenes.map((v) =>
+                  v.id === selectedVideoModal.id
+                    ? {
+                        ...v,
+                        hasScreenOcrText: true,
+                        ocrLineCount: res.ocrLines.length,
+                        ocrLines: res.ocrLines,
+                        ocrFullText: res.fullText,
+                      }
+                    : v
+                ),
+              }));
+            }
+          } catch {
+            /* ignore background OCR hydrate error */
+          } finally {
+            if (!ocrCancelled) {
+              setIsOcrExtracting(false);
+            }
+          }
+        })();
+      }, 700);
+    }
+
     const rawUrl = selectedVideoModal.videoUrl || '';
     const baseStreamUrl = rawUrl.replace(/[&?]t=[^&]*/g, '');
     const targetSec = selectedVideoModal.matchedSeekSec ?? 0;
     const seekTarget = hasExecutedUserSearch && activeQuery ? targetSec : 0;
     setVideoPlaybackError(false);
     triedTranscodeFallbackRef.current = false;
+    pipeBaseSecRef.current = 0;
     pendingSeekSecRef.current = seekTarget;
 
-    const cachedBlob = videoBlobUrlCache.get(baseStreamUrl) || videoBlobUrlCache.get(rawUrl);
-    if (cachedBlob) {
-      setIsResolvingVideo(false);
-      setResolvedVideoSrc(cachedBlob);
-      return () => {
-        ocrCancelled = true;
-      };
-    }
-
-    const isShortLocalClip =
-      baseStreamUrl.includes('127.0.0.1:5199') &&
-      (selectedVideoModal.durationSec || 20) <= 45 &&
-      (selectedVideoModal.sizeMB || 20) <= 55;
-
-    if (!isShortLocalClip) {
-      if (String(selectedVideoModal.id || '').startsWith('mobile_vid_') && !baseStreamUrl.startsWith('blob:')) {
-        setResolvedVideoSrc('');
-        setIsResolvingVideo(true);
-        void resolveNativeMobileVideoPlaybackUrl(selectedVideoModal.id, {
-          sizeMB: selectedVideoModal.sizeMB,
-        })
-          .then((nativeUrl) => {
-            if (ocrCancelled) return;
-            setIsResolvingVideo(false);
-            if (!nativeUrl) {
-              setVideoPlaybackError(true);
-              return;
-            }
-            setResolvedVideoSrc(nativeUrl);
-          })
-          .catch(() => {
-            if (!ocrCancelled) {
-              setIsResolvingVideo(false);
-              setVideoPlaybackError(true);
-            }
-          });
-      } else {
-        setIsResolvingVideo(false);
-        setResolvedVideoSrc(baseStreamUrl);
-      }
-      return () => {
-        ocrCancelled = true;
-      };
-    }
-
-    // 45초 이하 로컬 영상(720p Faststart 약 2~6MB)은 0.02초 만에 RAM Blob으로 선적재하여 재생 중 버퍼링·끊김을 0%로 원천 차단합니다.
-    let cancelled = false;
-    const ctrl = new AbortController();
-    const fallbackTimer = window.setTimeout(() => {
-      if (!cancelled) {
-        ctrl.abort();
-        setResolvedVideoSrc(baseStreamUrl);
-      }
-    }, 2200);
-
-    setResolvedVideoSrc('');
-    void (async () => {
-      try {
-        const res = await fetch(baseStreamUrl, { signal: ctrl.signal });
-        const ct = res.headers.get('content-type') || '';
-        const cacheCtl = res.headers.get('cache-control') || '';
-        if (!res.ok || !ct.includes('video') || cacheCtl.includes('no-store')) {
-          window.clearTimeout(fallbackTimer);
-          if (!cancelled) setResolvedVideoSrc(baseStreamUrl);
-          return;
-        }
-        const blob = await res.blob();
-        window.clearTimeout(fallbackTimer);
-        if (cancelled) return;
-        if (blob.size < 4096) {
-          setResolvedVideoSrc(baseStreamUrl);
-          return;
-        }
-        if (videoBlobUrlCache.size >= 8) {
-          const oldestKey = videoBlobUrlCache.keys().next().value;
-          if (oldestKey) {
-            const oldUrl = videoBlobUrlCache.get(oldestKey);
-            if (oldUrl) URL.revokeObjectURL(oldUrl);
-            videoBlobUrlCache.delete(oldestKey);
+    // [근본 해결]: 전체 파일(최대 55MB)을 fetch().blob()으로 끝까지 다 받을 때까지 <video> 마운트를 막던 병목을 전면 제거하고,
+    // PC 로컬 영상(127.0.0.1:5199 HTTP 206 Range 스트림)은 0.00초 즉시 <video src>에 직결하여 첫 프레임을 바로 재생합니다!
+    if (String(selectedVideoModal.id || '').startsWith('mobile_vid_') && !baseStreamUrl.startsWith('blob:')) {
+      setResolvedVideoSrc('');
+      setIsResolvingVideo(true);
+      void resolveNativeMobileVideoPlaybackUrl(selectedVideoModal.id, {
+        sizeMB: selectedVideoModal.sizeMB,
+      })
+        .then((nativeUrl) => {
+          if (ocrCancelled) return;
+          setIsResolvingVideo(false);
+          if (!nativeUrl) {
+            setVideoPlaybackError(true);
+            return;
           }
-        }
-        const blobUrl = URL.createObjectURL(blob);
-        videoBlobUrlCache.set(baseStreamUrl, blobUrl);
-        setResolvedVideoSrc(blobUrl);
-      } catch {
-        window.clearTimeout(fallbackTimer);
-        if (!cancelled) setResolvedVideoSrc(baseStreamUrl);
-      }
-    })();
+          setResolvedVideoSrc(nativeUrl);
+        })
+        .catch(() => {
+          if (!ocrCancelled) {
+            setIsResolvingVideo(false);
+            setVideoPlaybackError(true);
+          }
+        });
+    } else {
+      setIsResolvingVideo(false);
+      setResolvedVideoSrc(baseStreamUrl);
+    }
 
     return () => {
       ocrCancelled = true;
-      cancelled = true;
-      window.clearTimeout(fallbackTimer);
-      ctrl.abort();
+      window.clearTimeout(ocrDeferTimer);
     };
   }, [selectedVideoModal?.id, selectedVideoModal?.videoUrl, selectedVideoModal?.matchedSeekSec, hasExecutedUserSearch, activeQuery]);
+
+  const seekVideoBySeconds = React.useCallback(
+    (deltaSec: number) => {
+      const el = videoRef.current;
+      if (!el || !selectedVideoModal) return;
+      const fmtSec = (secVal: number) => {
+        const s = Math.max(0, Math.floor(secVal || 0));
+        const mm = String(Math.floor(s / 60)).padStart(2, '0');
+        const ss = String(s % 60).padStart(2, '0');
+        return `${mm}:${ss}`;
+      };
+      const showHud = (msg: string) => {
+        setSeekHudText(msg);
+        window.clearTimeout(seekHudTimerRef.current);
+        seekHudTimerRef.current = window.setTimeout(() => setSeekHudText(''), 950);
+      };
+
+      if (Number.isFinite(el.duration) && el.duration > 0) {
+        const nextT = Math.max(0, Math.min(Math.max(0, el.duration - 0.1), (el.currentTime || 0) + deltaSec));
+        el.currentTime = nextT;
+        showHud(`${deltaSec < 0 ? `⏪ ${Math.abs(deltaSec)}초 뒤로` : `⏩ ${deltaSec}초 앞으로`} · ${fmtSec(nextT)}`);
+        return;
+      }
+
+      // 미캐싱 대용량 HEVC 실시간 파이프 스트림(duration === Infinity)에서도 서버 -ss 재시크 지원
+      const rawUrl = selectedVideoModal.videoUrl || '';
+      const baseStreamUrl = rawUrl.replace(/[&?]t=[^&]*/g, '');
+      if (baseStreamUrl.includes('/__videos/stream')) {
+        const maxDur = Math.max(1, selectedVideoModal.durationSec || 3600);
+        const curLogical = pipeBaseSecRef.current + (el.currentTime || 0);
+        const nextLogical = Math.max(0, Math.min(maxDur - 0.5, curLogical + deltaSec));
+        pipeBaseSecRef.current = nextLogical;
+        const sep = baseStreamUrl.includes('?') ? '&' : '?';
+        setResolvedVideoSrc(`${baseStreamUrl}${sep}t=${nextLogical.toFixed(1)}`);
+        showHud(`${deltaSec < 0 ? `⏪ ${Math.abs(deltaSec)}초 뒤로` : `⏩ ${deltaSec}초 앞으로`} · ${fmtSec(nextLogical)}`);
+      }
+    },
+    [selectedVideoModal]
+  );
+
+  useEffect(() => {
+    if (!selectedVideoModal) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tgt = e.target as HTMLElement | null;
+      const tag = tgt?.tagName?.toLowerCase() || '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || tgt?.isContentEditable) {
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSelectedVideoModal(null);
+        return;
+      }
+      if (e.key === 'ArrowLeft' && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.shiftKey) {
+          navigateAdjacentVideo(-1);
+        } else {
+          seekVideoBySeconds(-5);
+        }
+        return;
+      }
+      if (e.key === 'ArrowRight' && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        if (e.shiftKey) {
+          navigateAdjacentVideo(1);
+        } else {
+          seekVideoBySeconds(5);
+        }
+        return;
+      }
+      if (e.key === ' ' && tag !== 'button' && tag !== 'a') {
+        const el = videoRef.current;
+        if (el) {
+          e.preventDefault();
+          e.stopPropagation();
+          if (el.paused) {
+            void el.play().catch(() => {});
+          } else {
+            el.pause();
+          }
+        }
+      }
+    };
+    window.addEventListener('keydown', onKeyDown, { capture: true });
+    return () => {
+      window.removeEventListener('keydown', onKeyDown, { capture: true });
+      window.clearTimeout(seekHudTimerRef.current);
+    };
+  }, [selectedVideoModal, seekVideoBySeconds, navigateAdjacentVideo, setSelectedVideoModal]);
 
   if (!selectedVideoModal) return null;
 
@@ -1741,6 +1820,14 @@ export const VideoScenePreviewModal: React.FC = () => {
               <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-label-mono text-[10.5px] font-bold">
                 전체 길이 {selectedVideoModal.durationText}
               </span>
+              <span className="px-2 py-0.5 rounded-full bg-zinc-800/80 text-zinc-300 font-label-mono text-[10.5px] font-semibold border border-white/10">
+                ⌨️ ← · → 5초 이동
+              </span>
+              {videoNavList.length >= 2 && currentVideoIdx >= 0 && (
+                <span className="px-2 py-0.5 rounded-full bg-zinc-800/70 text-zinc-300 font-label-mono text-[10.5px] font-semibold border border-white/10">
+                  {currentVideoIdx + 1} / {videoNavList.length}
+                </span>
+              )}
               <span className="font-label-mono text-[10.5px] text-on-surface-variant truncate">
                 • 📍 {selectedVideoModal.locationKo}
               </span>
@@ -1829,6 +1916,11 @@ export const VideoScenePreviewModal: React.FC = () => {
                     <span className="material-symbols-outlined text-[34px]">play_arrow</span>
                   </button>
                 )}
+                {seekHudText && (
+                  <div className="absolute top-3 right-3 z-20 px-3 py-1 rounded-full bg-black/80 border border-white/25 text-white text-[12px] font-extrabold pointer-events-none shadow-lg">
+                    {seekHudText}
+                  </div>
+                )}
               </>
             ) : (
               <div className="relative w-full h-full flex items-center justify-center">
@@ -1847,12 +1939,42 @@ export const VideoScenePreviewModal: React.FC = () => {
                 ) : null}
                 <div className="absolute inset-0 bg-black/45 flex flex-col items-center justify-center gap-2 px-4 text-center">
                   <span className="px-3.5 py-1.5 rounded-full bg-black/85 border border-white/25 text-white text-[12.5px] font-extrabold shadow-lg">
-                    {isResolvingVideo
+                    {videoPlaybackError
+                      ? '⚠️ 이 영상 형식을 재생할 수 없습니다'
+                      : isResolvingVideo
                       ? '🎬 스마트폰 원본 동영상을 불러오는 중...'
-                      : '⚠️ 이 영상 형식을 재생할 수 없습니다'}
+                      : '🎬 동영상을 불러오는 중...'}
                   </span>
                 </div>
               </div>
+            )}
+            {videoNavList.length >= 2 && (
+              <>
+                <button
+                  type="button"
+                  aria-label="이전 동영상"
+                  title="이전 동영상 (Shift + ←)"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigateAdjacentVideo(-1);
+                  }}
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-zinc-900/40 hover:bg-zinc-800/80 border border-zinc-300/25 hover:border-zinc-200/55 text-zinc-300/75 hover:text-zinc-100 backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs"
+                >
+                  <span className="material-symbols-outlined text-[22px]">chevron_left</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label="다음 동영상"
+                  title="다음 동영상 (Shift + →)"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigateAdjacentVideo(1);
+                  }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-zinc-900/40 hover:bg-zinc-800/80 border border-zinc-300/25 hover:border-zinc-200/55 text-zinc-300/75 hover:text-zinc-100 backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs"
+                >
+                  <span className="material-symbols-outlined text-[22px]">chevron_right</span>
+                </button>
+              </>
             )}
             {hasExecutedUserSearch && activeQuery && !isVideoPlaying && (
               <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-primary-container/65 text-primary-container font-label-mono text-[11px] font-black pointer-events-none shadow-md">

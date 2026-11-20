@@ -69,11 +69,11 @@
 
 ---
 
-## 🧩 [확정 추가] 단일 표준 포트(`127.0.0.1:5199`) 내장 소프트웨어 플러그인 7종 상세 입출력 아키텍처 (`merlin_z_core_daemon.py` v2.5.39)
+## 🧩 [확정 추가] 단일 표준 포트(`127.0.0.1:5199`) 내장 소프트웨어 플러그인 7종 상세 입출력 아키텍처 (`merlin_z_core_daemon.py` v2.5.49)
 
 ### 1. 왜 단일 포트(`5199`) + 내장 소프트웨어 플러그인(`Built-in Software Plugins`)인가?
 - 유저가 귀신같이·센스톡·어그로필터·썬드리머 스튜디오를 쓸 때마다 별도 설치파일을 2중으로 설치하거나 포트를 나누면 방화벽 경고와 포트 충돌이 발생합니다.
-- 따라서 단일 설치파일 **`Merlin_Z_Core_Setup.exe` (`v2.5.39`, 실행 즉시 `%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe` 영구 경로 자동 동기화)** 내부에 소프트웨어 플러그인(`plugin_ghosti_os.py`, `plugin_paid_work_sdrive.py`, `plugin_paid_sync_ghostwin.py`, `plugin_ghosti_care_suite.py`, `plugin_ghosti_superpowers.py`, `plugin_senstalk.py`, `plugin_aggrofilter.py`) 및 `seq_paste_daemon.py`(`--seq-paste-daemon`)를 기본 내장하고, `ThreadingHTTPServer` 멀티스레드 비동기 서버로 **단일 표준 포트 `http://127.0.0.1:5199`**에서 모든 패밀리 앱 요청을 병렬 처리합니다.
+- 따라서 단일 설치파일 **`Merlin_Z_Core_Setup.exe` (`v2.5.49`, 실행 즉시 `%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe` 영구 경로 자동 동기화)** 내부에 소프트웨어 플러그인(`plugin_ghosti_os.py`, `plugin_paid_work_sdrive.py`, `plugin_paid_sync_ghostwin.py`, `plugin_ghosti_care_suite.py`, `plugin_ghosti_superpowers.py`, `plugin_senstalk.py`, `plugin_aggrofilter.py`) 및 `seq_paste_daemon.py`(`--seq-paste-daemon`)를 기본 내장하고, `ThreadingHTTPServer` 멀티스레드 비동기 서버로 **단일 표준 포트 `http://127.0.0.1:5199`**에서 모든 패밀리 앱 요청을 병렬 처리합니다.
 
 ### 2. 표준 라우팅 테이블 및 JSON 입출력 규격 (`merlin_z_core_daemon.py` 직결)
 
@@ -583,7 +583,7 @@ exit
 
 ---
 
-## 🚀 5. 1~6호기 전 클러스터 Z-코어(`v2.5.39`) 자동 배포 (`deploy_z_core_cluster.py`) · 1ms 포트 바인딩 · 마우스 이동 GIL 진입 `0%` & 첫 귀신창 0.03초 즉시 소환 아키텍처 (2026-11-20 최신화)
+## 🚀 5. 1~6호기 전 클러스터 Z-코어(`v2.5.49`) 자동 배포 (`deploy_z_core_cluster.py`) · 1ms 포트 바인딩 · 마우스 이동 GIL 진입 `0%` & 첫 귀신창 0.03초 즉시 소환 아키텍처 (2026-11-20 최신화)
 
 1. **`ensure_port_free()` 1ms 소켓 바인딩 Fast-Path & `--seq-paste-daemon` 조기 직행 분기 (`merlin_z_core_daemon.py`)**:
    - 포트 `5199`가 이미 비어 있는 상태(최초 설치 또는 정상 종료 직후)에서 불필요한 HTTP 타임아웃(`/__merlin/health`, `/__merlin/shutdown`) 및 `netstat -ano` 전수 스캔으로 인해 기동이 6초 이상 지연되던 문제를 해결하기 위해, `ensure_port_free(port, force_replace)` 진입 즉시 `socket.bind(("127.0.0.1", port))`로 1ms 만에 빈 포트를 판별하고 즉시 HTTP 서버를 바인딩합니다. 또한 `--seq-paste-daemon`·`--smart-unzip`·`--gui-task-runner` 서브프로세스 실행 시에는 최상단에서 서버 플러그인 8종 import를 생략해 즉시 진입하고, `_start_auxiliary_watchers()`에서도 귀신창 데몬(`51988`) 기동을 0순위로 배치했습니다.
@@ -591,7 +591,7 @@ exit
 2. **1~6호기 전 클러스터 `Merlin_Z_Core_Setup.exe` 단일 바이너리 + `LogonType Interactive` 무간섭 리로드 (`universal_z_core/deploy_z_core_cluster.py`)**:
    - **로컬 본진(6호기)**: 백그라운드 툴 세션 종료 시 자식 프로세스가 함께 종료(Job Object Kill)되는 현상을 차단하기 위해 `Invoke-WmiMethod -Class Win32_Process -Name Create`로 `merlin_z_core_daemon.py`(`5199`)와 `seq_paste_daemon.py`(`51988`)를 독립 기동합니다.
    - **원격 1~5호기 (`1호기 100.86.161.8` · `2호기 100.88.230.16` · `3호기 100.102.43.42` · `4호기 100.114.100.24` · `5호기 집 100.122.235.63`)**: `~/.ssh/id_ai_master` 키를 동적 탐색하여 `%LOCALAPPDATA%\Programs\MerlinFamily\Merlin_Z_Core_Setup.exe` 단일 실행파일을 SCP로 전수 동기화하고, `LogonType Interactive` 작업 스케줄러(`StartMerlinZCore5199`) 및 `HKCU\...\Run\MerlinZCoreDaemon`을 통해 Session 0 격리 없이 데스크톱 인터랙티브 세션에서 `5199`와 `51988`을 기동·검증합니다.
-3. **마우스 이동 GIL 진입 `0%` 네이티브 x64 프리필터 스텁 & 백그라운드 디스크/프로세스 I/O 완전 제거 (`Z-Core v2.5.39`)**:
+3. **마우스 이동 GIL 진입 `0%` 네이티브 x64 프리필터 스텁 & 백그라운드 디스크/프로세스 I/O 완전 제거 (`Z-Core v2.5.49`)**:
    - **`seq_paste_daemon.py` (`WH_MOUSE_LL` W^X 네이티브 기계어 트램펄린 & 15ms 루프 무-I/O)**: `VirtualAlloc` + `VirtualProtect(PAGE_EXECUTE_READ)` 기반 56바이트 x64 네이티브 스텁이 `WM_MOUSEMOVE`를 Python GIL 진입 `0회`(0.0001ms 네이티브 `CallNextHookEx` 직행)로 즉시 반환하고 오직 `WM_RBUTTONDOWN`/`WM_RBUTTONUP`만 `THREAD_PRIORITY_HIGHEST` 스레드에서 처리합니다. 15ms 루프 내 중복 `check_window_title_for_prewake` 및 디스크 JSON 읽기를 제거하고 `PID➔exe`(30초)·`should_skip_auto_typo`(250ms)·`_find_edit_control_child`(250ms)·시그널 파일(120ms) 메모리 캐시를 적용했습니다.
    - **맨 처음 귀신창(`Ctrl+0`/`Ctrl+우클릭`) 초기 로딩 지연 0.03초 근본 해소 (`build_signed_merlin_z_core.py`, `seq_paste_daemon.py`, `ghost_search_window_ui2.py`)**: ① PyInstaller 단일 `.exe`에 `win32com.client`·`pythoncom`·`pywintypes`를 정식 번들링하고 빈 바탕화면 `SysListView32`(`LVM_GETSELECTEDCOUNT`) 0.005ms 네이티브 판별을 추가해 PowerShell COM 1.5초 콜드 스폰 지연을 제거했으며, ② `_toast_worker` 기동 즉시 `ghost_search_window_ui2` 선행 import 및 비가시(`withdraw`) Toplevel `Malgun Gothic` GDI 폰트 워밍업 + 큐 폴링 `12ms` 단축, ③ 데몬 부팅 직후 백그라운드 선행 예열기(`_start_first_summon_prewarmer`)가 `os.scandir` `WIN32_FIND_DATA` 무핸들 스캔(OneDrive 클라우드 미동기화 파일 스킵)·동영상 OCR 캐시·상위 이미지 소형 썸네일(42×28)을 미리 적재(55초 주기 Stale-While-Revalidate)하고 창 위치/포커스(`_resize_for_stage`)를 먼저 즉시 표시한 뒤 비동기 썸네일 하이드레이션을 수행하도록 설계해 첫 실행부터 지체 없이 열립니다.
    - **`plugin_ghosti_care_suite.py` & `plugin_ghosti_superpowers.py` 경량화**: `/api/care/*`의 화이트리스트·설정·`schtasks` 권한헬퍼 조회를 메모리 캐시(5~60초 TTL)로 보호하고, 브라우저 진입 효과음 워처(`start_ghosti_browser_entry_sound_watcher`)는 평소 활성 창(`GetForegroundWindow`) 1개의 제목만 0.01ms 만에 검사(전체 창 정리는 6초 주기 + `PID➔exe` 캐시)하여 커널 핸들 부하를 원천 차단합니다.

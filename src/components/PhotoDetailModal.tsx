@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { resolveLoungePhotoCorpus } from '../store/slices/storeSharedRefs';
 import { cosineSimilarity } from '../services/aiEngine';
@@ -171,6 +171,9 @@ export const PhotoDetailModal: React.FC = () => {
     selectedBurstGroup,
     setSelectedPhoto,
     photos,
+    searchResults,
+    matchedVaultPhotos,
+    searchSpace,
     duplicateGroups,
     toggleBookmark,
     removeSharedRoomPhoto,
@@ -198,6 +201,88 @@ export const PhotoDetailModal: React.FC = () => {
   const [drillQuery, setDrillQuery] = useState('');
   const [actionNotice, setActionNotice] = useState<string | null>(null);
   const [isHiddenInLounge, setIsHiddenInLounge] = useState(false);
+
+  const photoNavContext = useMemo(() => {
+    if (!selectedPhoto) return { list: [] as PhotoItem[], keepGroup: false };
+    let rawList: PhotoItem[] = [];
+    let keepGroup = false;
+    if (
+      searchSpace === 'vault' &&
+      matchedVaultPhotos.length >= 2 &&
+      matchedVaultPhotos.some((it) => it.photo.id === selectedPhoto.id)
+    ) {
+      rawList = matchedVaultPhotos.map((it) => it.photo).filter((p) => !p.quarantined);
+    } else if (
+      searchResults.length >= 2 &&
+      searchResults.some((it) => it.photo.id === selectedPhoto.id)
+    ) {
+      rawList = searchResults.map((it) => it.photo).filter((p) => !p.quarantined);
+    } else if (
+      selectedBurstGroup &&
+      selectedBurstGroup.length >= 2 &&
+      selectedBurstGroup.some((p) => p.id === selectedPhoto.id)
+    ) {
+      rawList = selectedBurstGroup.filter((p) => !p.quarantined);
+      keepGroup = true;
+    } else {
+      rawList = scopedPhotos.filter((p) => !p.quarantined);
+    }
+    const deduped: PhotoItem[] = [];
+    const seen = new Set<string>();
+    for (const p of rawList) {
+      if (!seen.has(p.id)) {
+        seen.add(p.id);
+        deduped.push(p);
+      }
+    }
+    return { list: deduped, keepGroup };
+  }, [selectedPhoto, searchSpace, matchedVaultPhotos, searchResults, selectedBurstGroup, scopedPhotos]);
+
+  const photoNavList = photoNavContext.list;
+  const currentPhotoIdx = useMemo(() => {
+    if (!selectedPhoto || photoNavList.length === 0) return -1;
+    return photoNavList.findIndex((p) => p.id === selectedPhoto.id);
+  }, [selectedPhoto, photoNavList]);
+
+  const navigateAdjacentPhoto = useCallback(
+    (delta: -1 | 1) => {
+      if (photoNavList.length < 2 || currentPhotoIdx < 0) return;
+      const nextIdx = (currentPhotoIdx + delta + photoNavList.length) % photoNavList.length;
+      const nextPhoto = photoNavList[nextIdx];
+      if (!nextPhoto) return;
+      setActionNotice(null);
+      setIsHiddenInLounge(false);
+      setSelectedPhoto(nextPhoto, photoNavContext.keepGroup ? photoNavList : null);
+    },
+    [photoNavList, currentPhotoIdx, photoNavContext.keepGroup, setSelectedPhoto]
+  );
+
+  useEffect(() => {
+    if (!selectedPhoto) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      const tgt = e.target as HTMLElement | null;
+      const tag = tgt?.tagName?.toLowerCase() || '';
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || tgt?.isContentEditable) {
+        return;
+      }
+      if (e.key === 'Escape') {
+        e.preventDefault();
+        setSelectedPhoto(null);
+        return;
+      }
+      if (e.key === 'ArrowLeft' && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        navigateAdjacentPhoto(-1);
+        return;
+      }
+      if (e.key === 'ArrowRight' && !e.altKey && !e.metaKey) {
+        e.preventDefault();
+        navigateAdjacentPhoto(1);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [selectedPhoto, navigateAdjacentPhoto, setSelectedPhoto]);
 
   // 선택된 사진이 속한 실제 연사/중복 그룹 전체 조회
   const resolvedBurstPhotos = useMemo(() => {
@@ -630,13 +715,46 @@ export const PhotoDetailModal: React.FC = () => {
 
         {/* Main Photo Preview + Tags */}
         <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
-          <div className="md:col-span-7 rounded-2xl overflow-hidden bg-surface-container-lowest border border-outline-variant/30 max-h-[380px] flex items-center justify-center">
+          <div className="md:col-span-7 relative rounded-2xl overflow-hidden bg-surface-container-lowest border border-outline-variant/30 min-h-[220px] max-h-[380px] flex items-center justify-center">
             <img
               src={selectedPhoto.fullUrl}
               alt={selectedPhoto.name}
               crossOrigin={selectedPhoto.fullUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
               className="max-h-[380px] w-auto object-contain"
             />
+            {photoNavList.length >= 2 && (
+              <>
+                <button
+                  type="button"
+                  aria-label="이전 사진"
+                  title="이전 사진 (←)"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigateAdjacentPhoto(-1);
+                  }}
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-zinc-900/35 hover:bg-zinc-800/80 border border-zinc-300/25 hover:border-zinc-200/55 text-zinc-300/75 hover:text-zinc-100 backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs"
+                >
+                  <span className="material-symbols-outlined text-[22px]">chevron_left</span>
+                </button>
+                <button
+                  type="button"
+                  aria-label="다음 사진"
+                  title="다음 사진 (→)"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    navigateAdjacentPhoto(1);
+                  }}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-zinc-900/35 hover:bg-zinc-800/80 border border-zinc-300/25 hover:border-zinc-200/55 text-zinc-300/75 hover:text-zinc-100 backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs"
+                >
+                  <span className="material-symbols-outlined text-[22px]">chevron_right</span>
+                </button>
+                {currentPhotoIdx >= 0 && (
+                  <span className="absolute bottom-2.5 right-2.5 z-10 px-2 py-0.5 rounded-full bg-zinc-900/50 border border-zinc-300/20 text-zinc-300/85 text-[11px] font-semibold backdrop-blur-xs pointer-events-none">
+                    {currentPhotoIdx + 1} / {photoNavList.length}
+                  </span>
+                )}
+              </>
+            )}
           </div>
 
           {/* 3.2절: 2차 연관 꼬리물기 탐색 (Contextual Tabs) */}
