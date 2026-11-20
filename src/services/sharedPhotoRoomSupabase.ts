@@ -1,5 +1,6 @@
 import type { FamilyRoomId, LoungeType, PhotoItem } from '../types/saysee';
 import {
+  callGhostiServerBridge,
   ensureGhostiAuthedSupabaseClient,
   ensureGhostiPublicSupabaseClient,
   hasAuthenticatedHubAccountSession,
@@ -12,6 +13,7 @@ import {
   removeMemberLocalRoomPhotoEverywhere,
   upsertMemberLocalRoomPhotos,
 } from './sharedRoomLocalVault';
+import { saveVerifiedInviteRoomMeta } from './shareInviteDeepLinkBridge';
 import { getZCoreUrl } from './zCoreBridge';
 
 /**
@@ -77,7 +79,10 @@ interface GuestPreviewRoomRpcResponse {
   photos?: GuestPreviewPhotoDto[];
 }
 
-const roomTokenCache = new Map<string, { roomId: string; inviteToken: string }>();
+const roomTokenCache = new Map<
+  string,
+  { roomId: string; inviteToken: string; masterNickname?: string; accessibleRoomIds?: string[] }
+>();
 
 export function clearCachedSharedRoomTokens(): void {
   roomTokenCache.clear();
@@ -337,7 +342,14 @@ export async function ensureMyRoomAndInviteToken(opts: {
   familyRoom: FamilyRoomId;
   roomTitle: string;
   masterNickname: string;
-}): Promise<{ ok: boolean; roomId?: string; inviteToken?: string; error?: string }> {
+}): Promise<{
+  ok: boolean;
+  roomId?: string;
+  inviteToken?: string;
+  masterNickname?: string;
+  accessibleRoomIds?: string[];
+  error?: string;
+}> {
   if (!hasAuthenticatedHubAccountSession()) {
     return { ok: false, error: 'AUTH_REQUIRED' };
   }
@@ -346,18 +358,66 @@ export async function ensureMyRoomAndInviteToken(opts: {
     return { ok: false, error: 'SUPABASE_AUTH_FAILED' };
   }
   const email = resolveCurrentAuthedEmail();
+  const cleanMasterNick = (opts.masterNickname || '').trim() || '방장';
   const { dbLoungeType, dbSubType } = mapUiLoungeToDbRoom(opts.loungeType, opts.familyRoom);
-  const cacheKey = `${email}:${dbLoungeType}:${dbSubType}`;
+  const cacheKey = `${email}:${dbLoungeType}:${dbSubType}:${cleanMasterNick}`;
   const cached = roomTokenCache.get(cacheKey);
   if (cached?.roomId && cached?.inviteToken) {
-    return { ok: true, roomId: cached.roomId, inviteToken: cached.inviteToken };
+    return {
+      ok: true,
+      roomId: cached.roomId,
+      inviteToken: cached.inviteToken,
+      masterNickname: cached.masterNickname,
+      accessibleRoomIds: cached.accessibleRoomIds,
+    };
   }
 
+  // 1순위: 서버 브릿지(service_role + 허브 계정 실검증)로 방장 별명 최신화 및 합류 공유방 전체 조회
+  const bridgeRes = await callGhostiServerBridge<{
+    roomId?: string;
+    inviteToken?: string;
+    masterNickname?: string;
+    accessibleRoomIds?: string[];
+  }>('photo_resolve_accessible_rooms', {
+    dbLoungeType,
+    dbSubType,
+    roomTitle: opts.roomTitle,
+    masterNickname: cleanMasterNick,
+  });
+
+  if (bridgeRes.ok && bridgeRes.roomId && bridgeRes.inviteToken) {
+    const resolvedNick = (bridgeRes.masterNickname || cleanMasterNick).trim() || '방장';
+    saveVerifiedInviteRoomMeta(bridgeRes.inviteToken, {
+      loungeType: opts.loungeType,
+      familyRoom: opts.familyRoom,
+      hostName: resolvedNick,
+      roomTitle: opts.roomTitle,
+    });
+    roomTokenCache.set(cacheKey, {
+      roomId: bridgeRes.roomId,
+      inviteToken: bridgeRes.inviteToken,
+      masterNickname: resolvedNick,
+      accessibleRoomIds: Array.isArray(bridgeRes.accessibleRoomIds)
+        ? bridgeRes.accessibleRoomIds
+        : [bridgeRes.roomId],
+    });
+    return {
+      ok: true,
+      roomId: bridgeRes.roomId,
+      inviteToken: bridgeRes.inviteToken,
+      masterNickname: resolvedNick,
+      accessibleRoomIds: Array.isArray(bridgeRes.accessibleRoomIds)
+        ? bridgeRes.accessibleRoomIds
+        : [bridgeRes.roomId],
+    };
+  }
+
+  // 2순위 폴백: 직접 Supabase SECURITY DEFINER RPC 호출
   const { data, error } = await authed.rpc('ghosti_ensure_room_and_invite', {
     p_lounge_type: dbLoungeType,
     p_sub_type: dbSubType,
     p_room_title: opts.roomTitle,
-    p_master_nickname: opts.masterNickname || '방장',
+    p_master_nickname: cleanMasterNick,
   });
   if (error || !data) {
     return { ok: false, error: error?.message || 'RPC_FAILED' };
@@ -366,14 +426,22 @@ export async function ensureMyRoomAndInviteToken(opts: {
   if (!parsed.ok || !parsed.roomId || !parsed.inviteToken) {
     return { ok: false, error: 'INVALID_RPC_RESULT' };
   }
+  saveVerifiedInviteRoomMeta(parsed.inviteToken, {
+    loungeType: opts.loungeType,
+    familyRoom: opts.familyRoom,
+    hostName: cleanMasterNick,
+    roomTitle: opts.roomTitle,
+  });
   roomTokenCache.set(cacheKey, {
     roomId: parsed.roomId,
     inviteToken: parsed.inviteToken,
+    masterNickname: cleanMasterNick,
   });
   return {
     ok: true,
     roomId: parsed.roomId,
     inviteToken: parsed.inviteToken,
+    masterNickname: cleanMasterNick,
   };
 }
 
@@ -405,6 +473,13 @@ export async function fetchGuestPreviewRoomByToken(inviteToken: string): Promise
     return { ok: false, reason: res.reason || 'INVALID_INVITE', photos: [] };
   }
   const mappedLounge = mapDbRoomToUiLounge(res.room.loungeType, res.room.subType);
+  const verifiedHostNickname = (res.room.hostNickname || '').trim() || '방장';
+  saveVerifiedInviteRoomMeta(cleanToken, {
+    loungeType: mappedLounge.loungeType,
+    familyRoom: mappedLounge.familyRoom,
+    hostName: verifiedHostNickname,
+    roomTitle: res.room.roomTitle,
+  });
   // 14일(2주) 초대 골든타임 마중물 버퍼(TTL) 이내의 유효 행만 카톡 무가입 1초 프리뷰로 노출
   const activeSeedRows = (res.photos || []).filter((row) =>
     isWithinSeedBufferTtl(row.createdAt)
@@ -419,7 +494,7 @@ export async function fetchGuestPreviewRoomByToken(inviteToken: string): Promise
       loungeType: mappedLounge.loungeType,
       familyRoom: mappedLounge.familyRoom,
       roomTitle: res.room.roomTitle,
-      hostNickname: res.room.hostNickname || '방장',
+      hostNickname: verifiedHostNickname,
     },
     photos: items,
   };
@@ -575,19 +650,26 @@ export async function fetchScopedSharedRoomPhotos(opts: {
   if (ensured.ok && ensured.roomId) {
     accessibleRoomIdSet.add(ensured.roomId);
   }
+  if (Array.isArray(ensured.accessibleRoomIds)) {
+    for (const rId of ensured.accessibleRoomIds) {
+      if (rId) accessibleRoomIdSet.add(String(rId));
+    }
+  }
   if (matchedInvitedRoomMeta?.roomId) {
     accessibleRoomIdSet.add(matchedInvitedRoomMeta.roomId);
   }
 
-  const { data: memberRoomRows } = await authed
-    .from('ghosti_lounge_rooms')
-    .select('room_id')
-    .eq('lounge_type', dbLoungeType)
-    .eq('sub_type', dbSubType)
-    .limit(20);
-  if (Array.isArray(memberRoomRows)) {
-    for (const r of memberRoomRows) {
-      if (r?.room_id) accessibleRoomIdSet.add(String(r.room_id));
+  if (!Array.isArray(ensured.accessibleRoomIds)) {
+    const { data: memberRoomRows } = await authed
+      .from('ghosti_lounge_rooms')
+      .select('room_id')
+      .eq('lounge_type', dbLoungeType)
+      .eq('sub_type', dbSubType)
+      .limit(20);
+    if (Array.isArray(memberRoomRows)) {
+      for (const r of memberRoomRows) {
+        if (r?.room_id) accessibleRoomIdSet.add(String(r.room_id));
+      }
     }
   }
 

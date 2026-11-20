@@ -1224,7 +1224,9 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                 <div className="flex flex-wrap items-center gap-2">
                   {isGuestPreviewMode ? (
                     <span className="px-2.5 py-1 rounded-lg bg-[#FEE500] text-[#191919] font-label-sm text-[11.5px] font-extrabold shadow-xs">
-                      💌 {inviteMeta.hostName}님이 초대한 [{inviteMeta.roomTitle}] · 로그인 없이 구경 중
+                      {inviteMeta.inviteToken && !inviteMeta.isHostVerified
+                        ? `💌 [${inviteMeta.roomTitle}] 초대장 불러오는 중...`
+                        : `💌 ${inviteMeta.hostName}님이 초대한 [${inviteMeta.roomTitle}] · 로그인 없이 구경 중`}
                     </span>
                   ) : (
                     <button

@@ -32,6 +32,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
   const photos = useSaySeeStore((s) => s.photos);
   const activeFamilyRoom = useSaySeeStore((s) => s.activeFamilyRoom);
   const isGuestPreviewMode = useSaySeeStore((s) => s.isGuestPreviewMode);
+  const isLoadingSharedRoomPhotos = useSaySeeStore((s) => s.isLoadingSharedRoomPhotos);
   const guestJoinWallReason = useSaySeeStore((s) => s.guestJoinWallReason);
   const triggerGuestJoinWall = useSaySeeStore((s) => s.triggerGuestJoinWall);
   const completeGuestOneSecJoin = useSaySeeStore((s) => s.completeGuestOneSecJoin);
@@ -291,7 +292,9 @@ export const FreePhotoShareOverlays: React.FC = () => {
 
     try {
       const params = new URLSearchParams(window.location.search);
-      const hasRealToken = Boolean((params.get('token') || '').trim());
+      const hasRealToken = Boolean(
+        (params.get('inviteToken') || params.get('token') || '').trim()
+      );
       if (hasRealToken || (!hasAuthenticatedHubAccountSession() && params.has('invite'))) {
         void applyShareInviteDeepLink(window.location.href, { fromNativeApp: false });
       }
@@ -304,7 +307,14 @@ export const FreePhotoShareOverlays: React.FC = () => {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (isSharedPhotoLounge(activeLoungeType)) {
-      void syncActiveSharedRoomFromSupabase();
+      const params = new URLSearchParams(window.location.search);
+      const hasUrlInvite =
+        Boolean((params.get('inviteToken') || params.get('token') || '').trim()) ||
+        (!hasAuthenticatedHubAccountSession() && params.has('invite'));
+      // 초기 URL 초대 진입 시에는 위 applyShareInviteDeepLink가 단일 검증 RPC를 수행하므로 중복 호출·경합 방지
+      if (!hasUrlInvite || !useSaySeeStore.getState().isLoadingSharedRoomPhotos) {
+        void syncActiveSharedRoomFromSupabase();
+      }
     }
     const onUserSynced = () => {
       useSaySeeStore.setState({ isGuestPreviewMode: false, guestJoinWallReason: null });
@@ -427,7 +437,9 @@ export const FreePhotoShareOverlays: React.FC = () => {
           >
             <div className="flex items-center justify-between gap-2">
               <span className="px-2.5 py-1 rounded-full bg-[#FEE500] text-[#191919] font-label-sm text-[11.5px] font-black">
-                💌 {inviteMeta.hostName}님의 초대장 적용됨 (평생 0원)
+                {inviteMeta.isHostVerified && inviteMeta.hostName
+                  ? `💌 ${inviteMeta.hostName}님의 초대장 적용됨 (평생 0원)`
+                  : '💌 공유 사진방 초대장 적용됨 (평생 0원)'}
               </span>
               <button
                 type="button"

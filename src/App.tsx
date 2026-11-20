@@ -272,13 +272,16 @@ export const App: React.FC = () => {
           params.delete('room');
         }
         // 정식 로그인 세션에서 토큰 없는 구형 ?invite=... 또는 ?preview=guest가 URL에 잔류해 새로고침 시 내 방을 가리는 현상 방지
-        const hasRealInviteToken = Boolean((params.get('token') || '').trim());
+        const hasRealInviteToken = Boolean(
+          (params.get('inviteToken') || params.get('token') || '').trim()
+        );
         const hasWorkRoomInvite = Boolean((params.get('workRoom') || '').trim());
         if (nav.lounge !== 'work' && hasWorkRoomInvite) {
           params.delete('workRoom');
           params.delete('host');
           params.delete('title');
           if (!params.has('invite')) {
+            params.delete('inviteToken');
             params.delete('token');
           }
         }
@@ -288,6 +291,10 @@ export const App: React.FC = () => {
           (hasAuthenticatedHubAccountSession() && !hasRealInviteToken)
         ) {
           params.delete('invite');
+          params.delete('host');
+          if (nav.lounge === 'personal') {
+            params.delete('inviteToken');
+          }
           if (params.get('preview') === 'guest') {
             params.delete('preview');
           }

@@ -129,6 +129,7 @@ import { loadSyncState, saveSyncPrefs } from '../../services/syncEngine';
 import {
   executeMobileSteppingStoneScan,
   loadGhostSecretaryState,
+  resolveAccountScopedNickname,
   saveGhostSecretaryState,
 } from '../../services/ghostSecretaryEngine';
 import {
@@ -852,7 +853,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     typeof window !== 'undefined' &&
     !isCapacitorNativeMobileRuntime() &&
     (new URLSearchParams(window.location.search).has('invite') ||
-      new URLSearchParams(window.location.search).has('token') ||
+      new URLSearchParams(window.location.search).has('inviteToken') ||
       new URLSearchParams(window.location.search).get('preview') === 'guest') &&
     !hasAuthenticatedHubAccountSession(),
   guestJoinWallReason: null,
@@ -865,7 +866,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           return (
             Boolean(localStorage.getItem('ghosti_joined_invite_room_v1')) ||
             new URLSearchParams(window.location.search).has('invite') ||
-            new URLSearchParams(window.location.search).has('token')
+            new URLSearchParams(window.location.search).has('inviteToken')
           );
         } catch {
           return false;
@@ -995,11 +996,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           ).trim();
         uploaderUserId =
           uploaderUserId || (localStorage.getItem('ghosti_hub_user_id') || '').trim();
-        uploaderNick =
-          loadGhostSecretaryState().nickname ||
-          localStorage.getItem('ghosti_invited_member_nickname') ||
-          localStorage.getItem('ghosti_hub_user_nickname') ||
-          (uploaderEmail ? uploaderEmail.split('@')[0] : '가족멤버');
+        uploaderNick = resolveAccountScopedNickname(uploaderEmail, '가족멤버');
       } catch {
         /* ignore */
       }
@@ -1229,9 +1226,12 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     const reqSeq = ++sharedRoomSyncSeq;
     const isNative = Boolean(opts?.fromNativeApp || isCapacitorNativeMobileRuntime());
     const isLoggedIn = hasAuthenticatedHubAccountSession();
+    if (parsed.inviteToken) {
+      lastDeepLinkHydratedAt = Date.now();
+    }
     persistInviteContextMeta(parsed, isNative);
 
-    if (parsed.nicknameHint && typeof window !== 'undefined') {
+    if (parsed.nicknameHint && isLoggedIn && typeof window !== 'undefined') {
       try {
         localStorage.setItem('ghosti_invited_member_nickname', parsed.nicknameHint);
         const prevSec = loadGhostSecretaryState();
@@ -1259,7 +1259,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         previewValid = true;
         resolvedLounge = previewRes.room.loungeType;
         resolvedFamilyRoom = previewRes.room.familyRoom;
-        resolvedHostName = previewRes.room.hostNickname || resolvedHostName;
+        resolvedHostName = previewRes.room.hostNickname || '방장';
         resolvedRoomTitle = previewRes.room.roomTitle || resolvedRoomTitle;
         fetchedPhotos = previewRes.photos;
         persistInviteContextMeta(
@@ -1273,11 +1273,13 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           isNative
         );
         if (isLoggedIn) {
+          const authedEmail =
+            get().merlinAuth.email ||
+            (typeof window !== 'undefined'
+              ? localStorage.getItem('ghosti_hub_user_email') || ''
+              : '');
           const nick =
-            parsed.nicknameHint ||
-            loadGhostSecretaryState().nickname ||
-            get().merlinAuth.email?.split('@')[0] ||
-            '멤버';
+            parsed.nicknameHint || resolveAccountScopedNickname(authedEmail, '멤버');
           await acceptRoomInviteAsLoggedInMember(parsed.inviteToken, nick);
         }
       }
@@ -1380,12 +1382,10 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     if (shouldLoadFromRemote && stBefore.searchResults.length === 0) {
       set({ isLoadingSharedRoomPhotos: true });
     }
-    const nickname =
-      loadGhostSecretaryState().nickname ||
-      (typeof window !== 'undefined'
-        ? localStorage.getItem('ghosti_hub_user_nickname') || ''
-        : '') ||
-      (stBefore.merlinAuth.email ? stBefore.merlinAuth.email.split('@')[0] : '방장');
+    const authedEmail =
+      stBefore.merlinAuth.email ||
+      (typeof window !== 'undefined' ? localStorage.getItem('ghosti_hub_user_email') || '' : '');
+    const nickname = resolveAccountScopedNickname(authedEmail, '방장');
 
     let res: Awaited<ReturnType<typeof fetchScopedSharedRoomPhotos>>;
     try {

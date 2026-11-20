@@ -32,6 +32,7 @@ import {
   ensureMyRoomAndInviteToken,
   reseedRoomPhotosForInvite,
 } from '../../services/sharedPhotoRoomSupabase';
+import { resolveAccountScopedNickname } from '../../services/ghostSecretaryEngine';
 import { LOUNGE_TABS, PLAN_BADGE_LABELS, HostThreeBodyControlPanel } from '../shared/loungeHelpers';
 import { WorkLoungeB2BHub } from '../paid_work_share/WorkLoungeB2BHub';
 import { QrCodeSvg } from '../../utils/qrCodeSvg';
@@ -53,12 +54,10 @@ async function issueAuthenticatedInviteHttpsUrl(opts: {
     return null;
   }
   const st = useSaySeeStore.getState();
-  const hostNick =
-    (typeof window !== 'undefined'
-      ? localStorage.getItem('ghosti_hub_user_nickname') || ''
-      : '') ||
-    (st.merlinAuth.email ? st.merlinAuth.email.split('@')[0] : '') ||
-    opts.defaultHostLabel;
+  const authedEmail =
+    st.merlinAuth.email ||
+    (typeof window !== 'undefined' ? localStorage.getItem('ghosti_hub_user_email') || '' : '');
+  const hostNick = resolveAccountScopedNickname(authedEmail, opts.defaultHostLabel);
   const resolvedTitle =
     opts.roomTitle || resolveDefaultRoomTitle(opts.loungeType, opts.familyRoom);
   const ensured = await ensureMyRoomAndInviteToken({
@@ -73,6 +72,7 @@ async function issueAuthenticatedInviteHttpsUrl(opts: {
       .showToast('⚠️ 공유방 초대 토큰 발급 중 일시적 오류가 발생했습니다. 다시 눌러주세요.');
     return null;
   }
+  const verifiedHostNick = ensured.masterNickname || hostNick;
   // 2주(14일) 경과로 서버 마중물 버퍼가 비워진 뒤 재초대할 때도 1초 만에 로컬 금고(IndexedDB) 썸네일을 자동 재장전(Re-Seed)
   if (ensured.roomId) {
     const fallbackRoomPhotos = resolveLoungePhotoCorpus({
@@ -86,7 +86,7 @@ async function issueAuthenticatedInviteHttpsUrl(opts: {
       roomId: ensured.roomId,
       loungeType: opts.loungeType,
       familyRoom: opts.familyRoom,
-      uploaderNickname: hostNick,
+      uploaderNickname: verifiedHostNick,
       fallbackPhotos: fallbackRoomPhotos,
     });
     await Promise.race([
@@ -98,7 +98,7 @@ async function issueAuthenticatedInviteHttpsUrl(opts: {
     loungeType: opts.loungeType,
     familyRoom: opts.familyRoom,
     inviteToken: ensured.inviteToken,
-    hostName: hostNick,
+    hostName: verifiedHostNick,
     roomTitle: resolvedTitle,
   });
 }
@@ -2019,7 +2019,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
       <div className="flex flex-wrap items-center justify-between gap-2">
         {isGuestPreviewMode ? (
           <span className="px-2.5 py-1 rounded-lg bg-[#FEE500] text-[#191919] font-label-sm text-[11px] font-extrabold shadow-xs break-keep">
-            💌 {inviteMeta.hostName}님이 초대한 [{inviteMeta.roomTitle}] · 로그인 없이 구경 중
+            {inviteMeta.inviteToken && !inviteMeta.isHostVerified
+              ? `💌 [${inviteMeta.roomTitle}] 초대장 불러오는 중...`
+              : `💌 ${inviteMeta.hostName}님이 초대한 [${inviteMeta.roomTitle}] · 로그인 없이 구경 중`}
           </span>
         ) : (
           <button

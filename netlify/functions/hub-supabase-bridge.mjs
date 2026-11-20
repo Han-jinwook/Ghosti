@@ -200,7 +200,10 @@ export default async (req) => {
       if (!supabaseUrl || !serviceKey) {
         return json(500, { ok: false, reason: '서버 환경변수 미설정' });
       }
-      const inviteToken = reqUrl?.searchParams.get('token') || '';
+      const inviteToken =
+        reqUrl?.searchParams.get('inviteToken') ||
+        reqUrl?.searchParams.get('token') ||
+        '';
       const out = await handlePublicWorkPreviewAction({
         supabaseUrl,
         serviceKey,
@@ -358,6 +361,7 @@ export default async (req) => {
     ok: true,
     userId,
     email,
+    nickname: String(hubUser.nickname || '').trim(),
     supabaseUrl,
     supabaseAnonKey: publicAnonKey,
     supabaseAccessToken: token,

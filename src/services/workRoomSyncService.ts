@@ -102,7 +102,7 @@ export function readActiveWorkRoomInviteMeta(): WorkRoomInviteMeta {
   try {
     const params = new URLSearchParams(window.location.search);
     const urlRoomId = (params.get('workRoom') || '').trim();
-    const urlToken = (params.get('token') || '').trim();
+    const urlToken = (params.get('inviteToken') || params.get('token') || '').trim();
     const urlHost = (params.get('host') || '').trim();
     const urlTitle = (params.get('title') || '').trim();
 
@@ -191,7 +191,7 @@ export async function ensureMyWorkRoomAndInvite(opts: {
     lounge: 'work',
     tab: 'dashboard',
     workRoom: bridgeRes.roomId,
-    token: bridgeRes.inviteToken,
+    inviteToken: bridgeRes.inviteToken,
     host: hostNickname,
     title: roomTitle,
   });

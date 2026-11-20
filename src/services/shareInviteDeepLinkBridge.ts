@@ -2,6 +2,7 @@ import type { FamilyRoomId, LoungeType } from '../types/saysee';
 import { OFFICIAL_LAUNCH_LIVE } from '../components/GhostiShowroomLanding';
 import { hasAuthenticatedHubAccountSession } from './supabaseClient';
 import { isCapacitorNativeMobileRuntime } from './ghostiMobileCareBridge';
+import { resolveAccountScopedNickname } from './ghostSecretaryEngine';
 
 export interface ParsedShareInvite {
   inviteCode: string;
@@ -13,11 +14,94 @@ export interface ParsedShareInvite {
   nicknameHint?: string;
 }
 
+export interface VerifiedInviteRoomMeta {
+  inviteToken: string;
+  loungeType: LoungeType;
+  familyRoom: FamilyRoomId;
+  hostName: string;
+  roomTitle: string;
+  verifiedAt: number;
+}
+
 const INVITE_SESSION_KEY = 'ghosti_active_invite_room';
 const INVITE_TOKEN_KEY = 'ghosti_active_invite_token';
-const INVITE_HOST_KEY = 'ghosti_active_invite_host';
-const INVITE_TITLE_KEY = 'ghosti_active_invite_title';
+const LEGACY_INVITE_HOST_KEY = 'ghosti_active_invite_host';
+const LEGACY_INVITE_TITLE_KEY = 'ghosti_active_invite_title';
+const VERIFIED_INVITE_META_PREFIX = 'ghosti_verified_invite_v2::';
 const JOINED_NATIVE_INVITE_KEY = 'ghosti_joined_invite_room_v1';
+
+const verifiedInviteMemoryCache = new Map<string, VerifiedInviteRoomMeta>();
+
+function extractSafeRoomInviteToken(params: URLSearchParams): string | undefined {
+  const explicitTok = (params.get('inviteToken') || '').trim();
+  if (explicitTok) return explicitTok;
+  const legacyTok = (params.get('token') || '').trim();
+  if (!legacyTok) return undefined;
+  // 허브 SSO 3단 JWT(eyJ...)는 방 초대 토큰이 아니므로 엄격 배제
+  if (legacyTok.startsWith('eyJ') && legacyTok.split('.').length === 3) {
+    return undefined;
+  }
+  return legacyTok;
+}
+
+export function saveVerifiedInviteRoomMeta(
+  inviteToken: string,
+  meta: Omit<VerifiedInviteRoomMeta, 'inviteToken' | 'verifiedAt'>
+): void {
+  const cleanTok = (inviteToken || '').trim();
+  if (!cleanTok) return;
+  const entry: VerifiedInviteRoomMeta = {
+    inviteToken: cleanTok,
+    loungeType: meta.loungeType,
+    familyRoom: meta.familyRoom,
+    hostName: (meta.hostName || '').trim() || '방장',
+    roomTitle: (meta.roomTitle || '').trim() || resolveDefaultRoomTitle(meta.loungeType, meta.familyRoom),
+    verifiedAt: Date.now(),
+  };
+  verifiedInviteMemoryCache.set(cleanTok, entry);
+  if (typeof window !== 'undefined') {
+    try {
+      sessionStorage.removeItem(LEGACY_INVITE_HOST_KEY);
+      sessionStorage.removeItem(LEGACY_INVITE_TITLE_KEY);
+      sessionStorage.setItem(`${VERIFIED_INVITE_META_PREFIX}${cleanTok}`, JSON.stringify(entry));
+    } catch {
+      /* ignore storage error */
+    }
+  }
+}
+
+export function readVerifiedInviteRoomMeta(inviteToken: string): VerifiedInviteRoomMeta | null {
+  const cleanTok = (inviteToken || '').trim();
+  if (!cleanTok) return null;
+  const mem = verifiedInviteMemoryCache.get(cleanTok);
+  if (mem) return mem;
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(`${VERIFIED_INVITE_META_PREFIX}${cleanTok}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<VerifiedInviteRoomMeta>;
+    if (parsed?.inviteToken === cleanTok && parsed.hostName) {
+      const restored: VerifiedInviteRoomMeta = {
+        inviteToken: cleanTok,
+        loungeType: (parsed.loungeType as LoungeType) || 'family',
+        familyRoom: (parsed.familyRoom as FamilyRoomId) || '우리집',
+        hostName: parsed.hostName,
+        roomTitle:
+          parsed.roomTitle ||
+          resolveDefaultRoomTitle(
+            (parsed.loungeType as LoungeType) || 'family',
+            (parsed.familyRoom as FamilyRoomId) || '우리집'
+          ),
+        verifiedAt: parsed.verifiedAt || Date.now(),
+      };
+      verifiedInviteMemoryCache.set(cleanTok, restored);
+      return restored;
+    }
+  } catch {
+    /* ignore */
+  }
+  return null;
+}
 
 export function buildInviteCodeForRoom(
   loungeType: LoungeType,
@@ -87,7 +171,11 @@ export function parseShareInviteInput(rawInput: string | null | undefined): Pars
         : text;
       const parsedUrl = new URL(normalizedForUrl);
       params = parsedUrl.searchParams;
-    } else if (text.includes('invite=') || text.includes('token=')) {
+    } else if (
+      text.includes('invite=') ||
+      text.includes('inviteToken=') ||
+      text.includes('token=')
+    ) {
       params = new URLSearchParams(text.startsWith('?') ? text.slice(1) : text);
     }
   } catch {
@@ -99,7 +187,7 @@ export function parseShareInviteInput(rawInput: string | null | undefined): Pars
 
   if (!params) return null;
   const inviteRaw = (params.get('invite') || '').trim();
-  const inviteToken = (params.get('token') || '').trim() || undefined;
+  const inviteToken = extractSafeRoomInviteToken(params);
   if (!inviteRaw && !inviteToken) return null;
 
   const lowerInvite = (inviteRaw || 'family_home').toLowerCase();
@@ -115,12 +203,14 @@ export function parseShareInviteInput(rawInput: string | null | undefined): Pars
       : '우리집';
 
   const inviteCode = buildInviteCodeForRoom(loungeType, familyRoom);
-  const hostName = (params.get('host') || '').trim() || '방장';
-  const roomTitle = resolveDefaultRoomTitle(
-    loungeType,
-    familyRoom,
-    params.get('title') || undefined
-  );
+  const verified = inviteToken ? readVerifiedInviteRoomMeta(inviteToken) : null;
+  // 초대 토큰이 있는 정식 초대 링크는 서버 DB 검증값(verified)만 신뢰하고 미검증 URL ?host= 파라미터(과거 타 계정 혼입값 등)는 배제
+  const hostName = inviteToken
+    ? verified?.hostName || '방장'
+    : (params.get('host') || '').trim() || '방장';
+  const roomTitle = verified?.roomTitle
+    ? verified.roomTitle
+    : resolveDefaultRoomTitle(loungeType, familyRoom, params.get('title') || undefined);
   const nicknameHint = (params.get('nick') || '').trim() || undefined;
 
   return {
@@ -137,9 +227,9 @@ export function parseShareInviteInput(rawInput: string | null | undefined): Pars
 export function persistInviteContextMeta(parsed: ParsedShareInvite, isNativeJoined = false): void {
   if (typeof window === 'undefined') return;
   try {
+    sessionStorage.removeItem(LEGACY_INVITE_HOST_KEY);
+    sessionStorage.removeItem(LEGACY_INVITE_TITLE_KEY);
     sessionStorage.setItem(INVITE_SESSION_KEY, parsed.inviteCode);
-    sessionStorage.setItem(INVITE_HOST_KEY, parsed.hostName);
-    sessionStorage.setItem(INVITE_TITLE_KEY, parsed.roomTitle);
     if (parsed.inviteToken) {
       sessionStorage.setItem(INVITE_TOKEN_KEY, parsed.inviteToken);
     }
@@ -167,8 +257,8 @@ export function clearStoredInviteSession(): void {
   try {
     sessionStorage.removeItem(INVITE_SESSION_KEY);
     sessionStorage.removeItem(INVITE_TOKEN_KEY);
-    sessionStorage.removeItem(INVITE_HOST_KEY);
-    sessionStorage.removeItem(INVITE_TITLE_KEY);
+    sessionStorage.removeItem(LEGACY_INVITE_HOST_KEY);
+    sessionStorage.removeItem(LEGACY_INVITE_TITLE_KEY);
     localStorage.removeItem(JOINED_NATIVE_INVITE_KEY);
   } catch {
     /* ignore */
@@ -179,14 +269,14 @@ export function readActiveInviteToken(): string {
   if (typeof window === 'undefined') return '';
   try {
     const params = new URLSearchParams(window.location.search);
-    const urlTok = (params.get('token') || '').trim();
+    const urlTok = extractSafeRoomInviteToken(params) || '';
     if (urlTok) {
       sessionStorage.setItem(INVITE_TOKEN_KEY, urlTok);
       return urlTok;
     }
     const isLoggedIn = hasAuthenticatedHubAccountSession();
     const isNative = isCapacitorNativeMobileRuntime();
-    // 로그인된 웹 사용자가 일반 공유방 주소(?token 없음)에서 새로고침할 때는 과거 테스트용 sessionStorage 토큰이 내 방을 가리지 않도록 배제
+    // 로그인된 웹 사용자가 일반 공유방 주소(?inviteToken 없음)에서 새로고침할 때는 과거 테스트용 sessionStorage 토큰이 내 방을 가리지 않도록 배제
     if (!isLoggedIn || isNative) {
       const ssTok = (sessionStorage.getItem(INVITE_TOKEN_KEY) || '').trim();
       if (ssTok) return ssTok;
@@ -213,6 +303,7 @@ export function readCurrentInviteDisplayMeta(
   hostName: string;
   roomTitle: string;
   hasExplicitUrlInvite: boolean;
+  isHostVerified: boolean;
 } {
   const defaultCode = buildInviteCodeForRoom(fallbackLounge, fallbackFamilyRoom);
   const defaultTitle = resolveDefaultRoomTitle(fallbackLounge, fallbackFamilyRoom);
@@ -223,45 +314,85 @@ export function readCurrentInviteDisplayMeta(
       hostName: '방장',
       roomTitle: defaultTitle,
       hasExplicitUrlInvite: false,
+      isHostVerified: true,
     };
   }
   try {
+    sessionStorage.removeItem(LEGACY_INVITE_HOST_KEY);
+    sessionStorage.removeItem(LEGACY_INVITE_TITLE_KEY);
+
     const fromUrl = parseShareInviteInput(window.location.href);
     if (fromUrl) {
       persistInviteContextMeta(fromUrl, false);
-      return {
-        inviteCode: fromUrl.inviteCode,
-        inviteToken: fromUrl.inviteToken || readActiveInviteToken(),
-        hostName: fromUrl.hostName,
-        roomTitle: fromUrl.roomTitle,
-        hasExplicitUrlInvite: true,
-      };
-    }
-    const storedHost = (sessionStorage.getItem(INVITE_HOST_KEY) || '').trim();
-    const storedTitle = (sessionStorage.getItem(INVITE_TITLE_KEY) || '').trim();
-    const storedCode = (sessionStorage.getItem(INVITE_SESSION_KEY) || '').trim();
-    const storedToken = readActiveInviteToken();
-    if (storedCode || storedToken) {
-      return {
-        inviteCode: storedCode || defaultCode,
-        inviteToken: storedToken,
-        hostName: storedHost || '방장',
-        roomTitle: storedTitle || defaultTitle,
-        hasExplicitUrlInvite: false,
-      };
-    }
-    const rawJoined = localStorage.getItem(JOINED_NATIVE_INVITE_KEY);
-    if (rawJoined) {
-      const joined = JSON.parse(rawJoined) as Partial<ParsedShareInvite>;
-      if (joined?.inviteCode || joined?.inviteToken) {
+      const activeTok = fromUrl.inviteToken || readActiveInviteToken();
+      if (activeTok) {
+        const verified = readVerifiedInviteRoomMeta(activeTok);
         return {
-          inviteCode: joined.inviteCode || defaultCode,
-          inviteToken: joined.inviteToken || '',
-          hostName: joined.hostName || '방장',
-          roomTitle: joined.roomTitle || defaultTitle,
-          hasExplicitUrlInvite: false,
+          inviteCode: verified
+            ? buildInviteCodeForRoom(verified.loungeType, verified.familyRoom)
+            : fromUrl.inviteCode,
+          inviteToken: activeTok,
+          hostName: verified ? verified.hostName : '',
+          roomTitle: verified ? verified.roomTitle : fromUrl.roomTitle,
+          hasExplicitUrlInvite: true,
+          isHostVerified: Boolean(verified),
         };
       }
+      return {
+        inviteCode: fromUrl.inviteCode,
+        inviteToken: '',
+        hostName: fromUrl.hostName || '방장',
+        roomTitle: fromUrl.roomTitle,
+        hasExplicitUrlInvite: true,
+        isHostVerified: true,
+      };
+    }
+
+    const storedToken = readActiveInviteToken();
+    const storedCode = (sessionStorage.getItem(INVITE_SESSION_KEY) || '').trim();
+    if (storedToken) {
+      const verified = readVerifiedInviteRoomMeta(storedToken);
+      return {
+        inviteCode: verified
+          ? buildInviteCodeForRoom(verified.loungeType, verified.familyRoom)
+          : storedCode || defaultCode,
+        inviteToken: storedToken,
+        hostName: verified ? verified.hostName : '',
+        roomTitle: verified ? verified.roomTitle : defaultTitle,
+        hasExplicitUrlInvite: false,
+        isHostVerified: Boolean(verified),
+      };
+    }
+
+    if (isCapacitorNativeMobileRuntime()) {
+      const rawJoined = localStorage.getItem(JOINED_NATIVE_INVITE_KEY);
+      if (rawJoined) {
+        const joined = JSON.parse(rawJoined) as Partial<ParsedShareInvite>;
+        if (joined?.inviteToken) {
+          const verified = readVerifiedInviteRoomMeta(joined.inviteToken);
+          return {
+            inviteCode: joined.inviteCode || defaultCode,
+            inviteToken: joined.inviteToken,
+            hostName: verified ? verified.hostName : joined.hostName || '방장',
+            roomTitle: verified ? verified.roomTitle : joined.roomTitle || defaultTitle,
+            hasExplicitUrlInvite: false,
+            isHostVerified: Boolean(verified || joined.hostName),
+          };
+        }
+      }
+    }
+
+    // 로그인 방장이 본인 방에서 [👀 카톡 초대 링크 수신 화면 미리보기] 버튼을 눌렀을 때: 오직 본인 계정의 별명만 표시
+    if (hasAuthenticatedHubAccountSession()) {
+      const authedEmail = (localStorage.getItem('ghosti_hub_user_email') || '').trim();
+      return {
+        inviteCode: defaultCode,
+        inviteToken: '',
+        hostName: resolveAccountScopedNickname(authedEmail, '방장'),
+        roomTitle: defaultTitle,
+        hasExplicitUrlInvite: false,
+        isHostVerified: true,
+      };
     }
   } catch {
     /* ignore */
@@ -272,6 +403,7 @@ export function readCurrentInviteDisplayMeta(
     hostName: '방장',
     roomTitle: defaultTitle,
     hasExplicitUrlInvite: false,
+    isHostVerified: true,
   };
 }
 
@@ -290,11 +422,13 @@ export function buildShareRoomInviteHttpsUrl(opts: {
   }
   const cleanToken = (opts.inviteToken || '').trim();
   if (cleanToken) {
-    params.set('token', cleanToken);
-  }
-  const cleanHost = (opts.hostName || '').trim();
-  if (cleanHost && cleanHost !== '방장') {
-    params.set('host', cleanHost);
+    // 허브 SSO ?token= 충돌 방지 및 방별 DB 방장 별명 단일 진실(SSOT) 보장
+    params.set('inviteToken', cleanToken);
+  } else {
+    const cleanHost = (opts.hostName || '').trim();
+    if (cleanHost && cleanHost !== '방장') {
+      params.set('host', cleanHost);
+    }
   }
   const cleanTitle = (opts.roomTitle || '').trim();
   if (cleanTitle) {
@@ -319,10 +453,7 @@ export function buildShareRoomNativeSchemeUrl(opts: {
     params.set('room', opts.familyRoom);
   }
   if (opts.inviteToken?.trim()) {
-    params.set('token', opts.inviteToken.trim());
-  }
-  if (opts.hostName?.trim()) {
-    params.set('host', opts.hostName.trim());
+    params.set('inviteToken', opts.inviteToken.trim());
   }
   if (opts.roomTitle?.trim()) {
     params.set('title', opts.roomTitle.trim());
@@ -345,10 +476,7 @@ export function buildAndroidSafeAppProbeIntentUrl(currentHref: string): string |
       schemeQuery.set('room', parsed.familyRoom);
     }
     if (parsed.inviteToken) {
-      schemeQuery.set('token', parsed.inviteToken);
-    }
-    if (parsed.hostName) {
-      schemeQuery.set('host', parsed.hostName);
+      schemeQuery.set('inviteToken', parsed.inviteToken);
     }
     if (parsed.roomTitle) {
       schemeQuery.set('title', parsed.roomTitle);
@@ -376,10 +504,7 @@ export function buildDeferredInviteClipboardToken(opts: {
     params.set('room', opts.familyRoom);
   }
   if (opts.inviteToken?.trim()) {
-    params.set('token', opts.inviteToken.trim());
-  }
-  if (opts.hostName?.trim()) {
-    params.set('host', opts.hostName.trim());
+    params.set('inviteToken', opts.inviteToken.trim());
   }
   if (opts.roomTitle?.trim()) {
     params.set('title', opts.roomTitle.trim());
@@ -405,10 +530,7 @@ export function buildAndroidPlayStoreInviteUrl(opts: {
     refParams.set('room', opts.familyRoom);
   }
   if (opts.inviteToken?.trim()) {
-    refParams.set('token', opts.inviteToken.trim());
-  }
-  if (opts.hostName?.trim()) {
-    refParams.set('host', opts.hostName.trim());
+    refParams.set('inviteToken', opts.inviteToken.trim());
   }
   if (opts.nicknameHint?.trim()) {
     refParams.set('nick', opts.nicknameHint.trim());

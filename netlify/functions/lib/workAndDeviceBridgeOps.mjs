@@ -354,20 +354,20 @@ export async function handleAuthedWorkAndDeviceAction({
           master_email: email,
         }),
       });
-      await fetch(`${supabaseUrl}/rest/v1/ghosti_lounge_members?on_conflict=room_id,member_email`, {
-        method: 'POST',
-        headers: srvHeaders(serviceKey, {
-          'Content-Type': 'application/json',
-          Prefer: 'resolution=merge-duplicates,return=minimal',
-        }),
-        body: JSON.stringify({
-          room_id: roomId,
-          member_email: email,
-          role: 'master',
-          room_persona_nickname: hostNickname,
-        }),
-      });
     }
+    await fetch(`${supabaseUrl}/rest/v1/ghosti_lounge_members?on_conflict=room_id,member_email`, {
+      method: 'POST',
+      headers: srvHeaders(serviceKey, {
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=minimal',
+      }),
+      body: JSON.stringify({
+        room_id: roomId,
+        member_email: email,
+        role: 'master',
+        room_persona_nickname: hostNickname,
+      }),
+    });
 
     const invRes = await fetch(
       `${supabaseUrl}/rest/v1/ghosti_room_invites?room_id=eq.${encodeURIComponent(roomId)}&revoked_at=is.null&order=created_at.desc&limit=1`,
@@ -1010,6 +1010,185 @@ export async function handleAuthedWorkAndDeviceAction({
       600
     );
     return { status: signed.ok ? 200 : 404, body: signed };
+  }
+
+  // ===================================================================
+  // C. 4. 📸 사진 공유방 — 방장 별명 정합화 & 합류 공유방 목록 조회 (service_role)
+  // ===================================================================
+  if (action === 'photo_resolve_accessible_rooms') {
+    const dbLoungeType = body.dbLoungeType === 'club' ? 'club' : 'family';
+    const dbSubType = String(body.dbSubType || '우리집').trim();
+    const roomTitle = String(body.roomTitle || '🏠 우리집 가족 사진방').trim();
+    const verifiedHubNick = String(hubNickname || '').trim();
+    const rawMasterNick = String(body.masterNickname || '').trim();
+    const genericLabels = new Set(['방장', '가족방장', '모임방장', '모임총무', '동기회장']);
+
+    let sanitizedClientNick =
+      rawMasterNick && !genericLabels.has(rawMasterNick) ? rawMasterNick : '';
+
+    // 타 계정 별명('ㅇㄴ' 등)이 구버전 클라이언트 캐시로 넘어온 경우 public.users 대조로 원천 배제
+    if (sanitizedClientNick && sanitizedClientNick !== verifiedHubNick) {
+      try {
+        const otherRes = await fetch(
+          `${supabaseUrl}/rest/v1/users?nickname=eq.${encodeURIComponent(
+            sanitizedClientNick
+          )}&email=neq.${encodeURIComponent(email)}&select=id&limit=1`,
+          { headers: srvHeaders(serviceKey) }
+        );
+        const otherRows = otherRes.ok ? await otherRes.json().catch(() => []) : [];
+        if (Array.isArray(otherRows) && otherRows.length > 0) {
+          sanitizedClientNick = '';
+        }
+      } catch {
+        /* ignore lookup failure */
+      }
+    }
+
+    const effectiveMasterNick =
+      sanitizedClientNick || verifiedHubNick || email.split('@')[0] || '방장';
+
+    const existRoomRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?master_email=eq.${encodeURIComponent(
+        email
+      )}&lounge_type=eq.${encodeURIComponent(dbLoungeType)}&sub_type=eq.${encodeURIComponent(
+        dbSubType
+      )}&order=created_at.asc&limit=1`,
+      { headers: srvHeaders(serviceKey) }
+    );
+    const existRoomRows = existRoomRes.ok ? await existRoomRes.json().catch(() => []) : [];
+    let myRoomId =
+      Array.isArray(existRoomRows) && existRoomRows[0]?.room_id
+        ? String(existRoomRows[0].room_id)
+        : '';
+
+    if (!myRoomId) {
+      const md5Hex = crypto
+        .createHash('md5')
+        .update(`${email}:${dbLoungeType}:${dbSubType}`)
+        .digest('hex')
+        .slice(0, 16);
+      myRoomId = `room_${md5Hex}`;
+      await fetch(`${supabaseUrl}/rest/v1/ghosti_lounge_rooms?on_conflict=room_id`, {
+        method: 'POST',
+        headers: srvHeaders(serviceKey, {
+          'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates,return=minimal',
+        }),
+        body: JSON.stringify({
+          room_id: myRoomId,
+          lounge_type: dbLoungeType,
+          sub_type: dbSubType,
+          room_title: roomTitle,
+          master_user_id: userId,
+          master_email: email,
+        }),
+      });
+    }
+
+    // 방장 본인의 room_persona_nickname을 항상 최신 계정 별명으로 동기화 (초대 링크 열람 시 100% 일치 보장)
+    await fetch(`${supabaseUrl}/rest/v1/ghosti_lounge_members?on_conflict=room_id,member_email`, {
+      method: 'POST',
+      headers: srvHeaders(serviceKey, {
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=minimal',
+      }),
+      body: JSON.stringify({
+        room_id: myRoomId,
+        member_email: email,
+        role: 'master',
+        room_persona_nickname: effectiveMasterNick,
+      }),
+    });
+
+    const invRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_room_invites?room_id=eq.${encodeURIComponent(
+        myRoomId
+      )}&revoked_at=is.null&order=created_at.desc&limit=1`,
+      { headers: srvHeaders(serviceKey) }
+    );
+    const invRows = invRes.ok ? await invRes.json().catch(() => []) : [];
+    let myInviteToken = '';
+    const nextExpiryIso = new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString();
+    if (
+      Array.isArray(invRows) &&
+      invRows[0]?.token &&
+      Date.parse(invRows[0].expires_at || '') > Date.now() &&
+      Number(invRows[0].used_count || 0) < Number(invRows[0].max_uses || 500)
+    ) {
+      myInviteToken = String(invRows[0].token);
+      await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_room_invites?token=eq.${encodeURIComponent(myInviteToken)}`,
+        {
+          method: 'PATCH',
+          headers: srvHeaders(serviceKey, {
+            'Content-Type': 'application/json',
+            Prefer: 'return=minimal',
+          }),
+          body: JSON.stringify({ expires_at: nextExpiryIso }),
+        }
+      ).catch(() => {});
+    } else {
+      myInviteToken = crypto.randomBytes(18).toString('hex');
+      await fetch(`${supabaseUrl}/rest/v1/ghosti_room_invites`, {
+        method: 'POST',
+        headers: srvHeaders(serviceKey, {
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        }),
+        body: JSON.stringify({
+          token: myInviteToken,
+          room_id: myRoomId,
+          created_by_email: email,
+          default_role: 'member',
+          max_uses: 500,
+          expires_at: nextExpiryIso,
+        }),
+      });
+    }
+
+    const accessibleSet = new Set([myRoomId]);
+    try {
+      const memRowsRes = await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_members?member_email=eq.${encodeURIComponent(
+          email
+        )}&select=room_id&limit=40`,
+        { headers: srvHeaders(serviceKey) }
+      );
+      const memRows = memRowsRes.ok ? await memRowsRes.json().catch(() => []) : [];
+      const joinedRoomIds = Array.isArray(memRows)
+        ? memRows.map((m) => String(m?.room_id || '')).filter((id) => id && id !== myRoomId)
+        : [];
+      if (joinedRoomIds.length > 0) {
+        const inClause = joinedRoomIds.map((id) => `"${id.replace(/"/g, '')}"`).join(',');
+        const matchRoomsRes = await fetch(
+          `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=in.(${encodeURIComponent(
+            inClause
+          )})&lounge_type=eq.${encodeURIComponent(dbLoungeType)}&sub_type=eq.${encodeURIComponent(
+            dbSubType
+          )}&select=room_id`,
+          { headers: srvHeaders(serviceKey) }
+        );
+        const matchRooms = matchRoomsRes.ok ? await matchRoomsRes.json().catch(() => []) : [];
+        if (Array.isArray(matchRooms)) {
+          for (const mr of matchRooms) {
+            if (mr?.room_id) accessibleSet.add(String(mr.room_id));
+          }
+        }
+      }
+    } catch {
+      /* ignore member room expansion error */
+    }
+
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        roomId: myRoomId,
+        inviteToken: myInviteToken,
+        masterNickname: effectiveMasterNick,
+        accessibleRoomIds: Array.from(accessibleSet),
+      },
+    };
   }
 
   return null;

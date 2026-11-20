@@ -20,8 +20,13 @@ import { useSaySeeStore } from '../store/useSaySeeStore';
 import { zCoreBridge } from '../services/zCoreBridge';
 import { syncHubUserToLocalSupabase, clearGhostiSupabaseSession } from '../services/supabaseClient';
 import { clearCachedSharedRoomTokens } from '../services/sharedPhotoRoomSupabase';
-import { readActiveInviteToken } from '../services/shareInviteDeepLinkBridge';
 import {
+  clearStoredInviteSession,
+  readActiveInviteToken,
+} from '../services/shareInviteDeepLinkBridge';
+import {
+  bindGhostSecretaryAccountOwner,
+  clearGhostSecretaryAccountNicknameOnLogout,
   isInvalidNicknameCandidate,
   loadGhostPassportBook,
   loadGhostSecretaryState,
@@ -152,20 +157,27 @@ const GhostiHubGlobalModals: React.FC = () => {
         },
       }));
 
+      const cleanHubNick = (user.nickname || '').trim();
+      bindGhostSecretaryAccountOwner(user.email, cleanHubNick);
+
       void syncHubUserToLocalSupabase({
         userId: user.id,
         email: user.email,
-        nickname: user.nickname,
+        nickname: cleanHubNick || undefined,
         hubToken: token,
       });
 
       // 허브 회원 닉네임이 있을 때 귀신비서 별명이 비어 있거나 문장형 오인식 값으로 오염되어 있으면 즉시 정화·복원하고 awaitingNickname 지뢰 해제
-      const cleanHubNick = (user.nickname || '').trim();
       if (cleanHubNick && !isInvalidNicknameCandidate(cleanHubNick)) {
         const secSt = loadGhostSecretaryState();
         if (!secSt.nickname || isInvalidNicknameCandidate(secSt.nickname) || secSt.awaitingNickname) {
           const healedNick = !secSt.nickname || isInvalidNicknameCandidate(secSt.nickname) ? cleanHubNick : secSt.nickname;
-          saveGhostSecretaryState({ ...secSt, nickname: healedNick, awaitingNickname: false });
+          saveGhostSecretaryState({
+            ...secSt,
+            ownerEmail: user.email.trim().toLowerCase(),
+            nickname: healedNick,
+            awaitingNickname: false,
+          });
           saveGhostPassportBook(setPassportSelf(loadGhostPassportBook(), healedNick));
           try {
             localStorage.setItem('userNickname', healedNick);
@@ -183,12 +195,16 @@ const GhostiHubGlobalModals: React.FC = () => {
         }
       });
     } else if (!isLoggedIn) {
-      // 로그아웃(로그인 → 게스트 전환) 시 귀신같이 Supabase 단기 토큰 및 공유방 메모리 캐시 즉시 폐기 (타 계정 사진 노출 0%)
+      const hasUrlInviteToken = Boolean(readActiveInviteToken());
+      // 로그아웃(로그인 → 게스트 전환) 시 귀신같이 Supabase 단기 토큰·별명·공유방 메모리 캐시 즉시 폐기 (타 계정 사진·별명 노출 0%)
       if (wasLoggedInRef.current) {
         clearGhostiSupabaseSession();
+        clearGhostSecretaryAccountNicknameOnLogout();
         clearCachedSharedRoomTokens();
+        if (!hasUrlInviteToken) {
+          clearStoredInviteSession();
+        }
       }
-      const hasUrlInviteToken = Boolean(readActiveInviteToken());
       useSaySeeStore.setState((state) => {
         const isInSharedLounge =
           state.activeLoungeType === 'family' ||

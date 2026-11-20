@@ -414,6 +414,8 @@ export function parseNicknameSettingIntent(
 export type QuestStep = 'labeler' | 'son_free' | 'voice' | 'done';
 
 export interface GhostSecretaryState {
+  /** 현재 별명이 귀속된 로그인 계정 이메일(소문자) — 타 계정 전환 시 이전 계정 별명('ㅇㄴ' 등) 혼입 0% 차단 */
+  ownerEmail?: string;
   nickname?: string;
   awaitingNickname?: boolean;
   coldReadingShownAt?: string;
@@ -489,11 +491,36 @@ export function loadGhostSecretaryState(): GhostSecretaryState {
       /* ignore */
     }
   }
+  try {
+    const activeEmail = (localStorage.getItem('ghosti_hub_user_email') || '').trim().toLowerCase();
+    const lastAccountEmail = (localStorage.getItem('ghosti_last_active_account_email') || '')
+      .trim()
+      .toLowerCase();
+    // 다른 계정으로 전환되었거나 로그아웃된 상태에서 이전 계정의 귀신비서 별명('ㅇㄴ' 등)이 남아 있으면 즉시 소거
+    if (
+      (activeEmail && st.ownerEmail && st.ownerEmail.trim().toLowerCase() !== activeEmail) ||
+      (activeEmail && !st.ownerEmail && lastAccountEmail && lastAccountEmail !== activeEmail)
+    ) {
+      delete st.nickname;
+      st.ownerEmail = activeEmail;
+      dirty = true;
+    } else if (!activeEmail && st.ownerEmail) {
+      delete st.nickname;
+      delete st.ownerEmail;
+      dirty = true;
+    }
+  } catch {
+    /* ignore */
+  }
   if (!st.nickname) {
     try {
-      const hubNick = localStorage.getItem('userNickname');
+      const activeEmail = (localStorage.getItem('ghosti_hub_user_email') || '').trim().toLowerCase();
+      const hubNick = activeEmail
+        ? (localStorage.getItem('ghosti_hub_user_nickname') || '').trim()
+        : '';
       if (hubNick && !TEST_ACCOUNT_NICKNAMES.has(hubNick) && !isInvalidNicknameCandidate(hubNick)) {
         st.nickname = hubNick;
+        st.ownerEmail = activeEmail;
         if (st.awaitingNickname) {
           st.awaitingNickname = false;
         }
@@ -509,12 +536,141 @@ export function loadGhostSecretaryState(): GhostSecretaryState {
   return st;
 }
 export function saveGhostSecretaryState(st: GhostSecretaryState): void {
+  try {
+    const activeEmail = (localStorage.getItem('ghosti_hub_user_email') || '').trim().toLowerCase();
+    if (activeEmail && !st.ownerEmail) {
+      st = { ...st, ownerEmail: activeEmail };
+    }
+  } catch {
+    /* ignore */
+  }
   writeJson(GHOST_SECRETARY_STATE_KEY, st);
   try {
     window.dispatchEvent(new CustomEvent('ghosti_ghost_secretary_state_updated', { detail: st }));
   } catch {
     /* ignore */
   }
+}
+
+const LAST_ACTIVE_ACCOUNT_EMAIL_KEY = 'ghosti_last_active_account_email';
+
+/**
+ * 로그인 계정이 확정될 때 귀신비서·여권·공유방 별명 저장소를 해당 이메일 단독 소유로 격리합니다.
+ * - 직전 로그인 계정과 이메일이 다르면 이전 계정의 별명/초대 캐시를 100% 초기화하여 타 계정 별명 혼입을 원천 차단합니다.
+ */
+export function bindGhostSecretaryAccountOwner(
+  email: string,
+  verifiedHubNickname?: string
+): void {
+  if (typeof window === 'undefined') return;
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail) return;
+  const cleanHubNick =
+    verifiedHubNickname &&
+    !TEST_ACCOUNT_NICKNAMES.has(verifiedHubNickname.trim()) &&
+    !isInvalidNicknameCandidate(verifiedHubNickname.trim())
+      ? verifiedHubNickname.trim()
+      : '';
+
+  try {
+    const prevEmail = (localStorage.getItem(LAST_ACTIVE_ACCOUNT_EMAIL_KEY) || '')
+      .trim()
+      .toLowerCase();
+    const rawSt = readJson<GhostSecretaryState>(GHOST_SECRETARY_STATE_KEY, {});
+    const stOwner = (rawSt.ownerEmail || '').trim().toLowerCase();
+    const isDifferentAccount =
+      Boolean(prevEmail && prevEmail !== cleanEmail) ||
+      Boolean(stOwner && stOwner !== cleanEmail) ||
+      Boolean(!stOwner && !prevEmail && rawSt.nickname && cleanHubNick && rawSt.nickname !== cleanHubNick);
+
+    if (isDifferentAccount) {
+      localStorage.removeItem('userNickname');
+      localStorage.removeItem('ghosti_invited_member_nickname');
+      localStorage.removeItem('ghosti_joined_invite_room_v1');
+      const cleanedBook = loadGhostPassportBook();
+      if (cleanedBook.self) {
+        saveGhostPassportBook({ ...cleanedBook, self: undefined });
+      }
+      const nextSt: GhostSecretaryState = {
+        ...rawSt,
+        ownerEmail: cleanEmail,
+        nickname: cleanHubNick || undefined,
+        awaitingNickname: !cleanHubNick,
+      };
+      writeJson(GHOST_SECRETARY_STATE_KEY, nextSt);
+    } else {
+      const healedNick =
+        !rawSt.nickname || isInvalidNicknameCandidate(rawSt.nickname)
+          ? cleanHubNick || undefined
+          : rawSt.nickname;
+      writeJson(GHOST_SECRETARY_STATE_KEY, {
+        ...rawSt,
+        ownerEmail: cleanEmail,
+        ...(healedNick ? { nickname: healedNick, awaitingNickname: false } : {}),
+      });
+    }
+    if (cleanHubNick) {
+      localStorage.setItem('ghosti_hub_user_nickname', cleanHubNick);
+      localStorage.setItem('userNickname', cleanHubNick);
+    } else if (isDifferentAccount) {
+      localStorage.removeItem('ghosti_hub_user_nickname');
+    }
+    localStorage.setItem(LAST_ACTIVE_ACCOUNT_EMAIL_KEY, cleanEmail);
+  } catch {
+    /* ignore storage error */
+  }
+}
+
+export function clearGhostSecretaryAccountNicknameOnLogout(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem('userNickname');
+    localStorage.removeItem('ghosti_hub_user_nickname');
+    localStorage.removeItem('ghosti_invited_member_nickname');
+    localStorage.removeItem('ghosti_joined_invite_room_v1');
+    const rawSt = readJson<GhostSecretaryState>(GHOST_SECRETARY_STATE_KEY, {});
+    if (rawSt.ownerEmail || rawSt.nickname) {
+      const nextSt: GhostSecretaryState = { ...rawSt };
+      delete nextSt.nickname;
+      delete nextSt.ownerEmail;
+      writeJson(GHOST_SECRETARY_STATE_KEY, nextSt);
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+/**
+ * 현재 로그인된 계정(currentEmail)에 정식 귀속된 별명만 반환합니다.
+ * - 타 계정의 localStorage 잔재나 비로그인 상태의 잔류 별명은 절대 반환하지 않습니다.
+ */
+export function resolveAccountScopedNickname(
+  currentEmail: string | null | undefined,
+  fallbackLabel = '방장'
+): string {
+  const cleanEmail = (currentEmail || '').trim().toLowerCase();
+  if (!cleanEmail || typeof window === 'undefined') {
+    return fallbackLabel;
+  }
+  try {
+    const storedEmail = (localStorage.getItem('ghosti_hub_user_email') || '')
+      .trim()
+      .toLowerCase();
+    const secSt = loadGhostSecretaryState();
+    const secOwner = (secSt.ownerEmail || '').trim().toLowerCase();
+    if (secSt.nickname && secOwner === cleanEmail && !isInvalidNicknameCandidate(secSt.nickname)) {
+      return secSt.nickname.trim();
+    }
+    if (storedEmail === cleanEmail) {
+      const hubNick = (localStorage.getItem('ghosti_hub_user_nickname') || '').trim();
+      if (hubNick && !TEST_ACCOUNT_NICKNAMES.has(hubNick) && !isInvalidNicknameCandidate(hubNick)) {
+        return hubNick;
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+  return cleanEmail.split('@')[0] || fallbackLabel;
 }
 
 /**

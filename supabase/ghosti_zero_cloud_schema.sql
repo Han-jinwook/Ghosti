@@ -1065,11 +1065,12 @@ begin
       coalesce(auth.uid()::text, v_email), v_email
     )
     on conflict (room_id) do nothing;
-
-    insert into public.ghosti_lounge_members (room_id, member_email, role, room_persona_nickname)
-    values (v_room_id, v_email, 'master', coalesce(nullif(p_master_nickname, ''), '방장'))
-    on conflict (room_id, member_email) do nothing;
   end if;
+
+  insert into public.ghosti_lounge_members (room_id, member_email, role, room_persona_nickname)
+  values (v_room_id, v_email, 'master', coalesce(nullif(p_master_nickname, ''), '방장'))
+  on conflict (room_id, member_email) do update
+    set room_persona_nickname = coalesce(nullif(excluded.room_persona_nickname, ''), public.ghosti_lounge_members.room_persona_nickname);
 
   select i.token into v_token
     from public.ghosti_room_invites i

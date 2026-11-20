@@ -131,7 +131,9 @@ export function hasAuthenticatedHubAccountSession(): boolean {
   if (typeof window === 'undefined') return false;
   try {
     const hubToken = (getSessionToken() || localStorage.getItem('merlin_session_token') || '').trim();
-    if (hubToken) return true;
+    if (hubToken && !(!hubToken.includes('.') && /^[a-f0-9]{28,48}$/i.test(hubToken))) {
+      return true;
+    }
     return Boolean(getGhostiSupabaseAccessToken());
   } catch {
     return false;
@@ -254,15 +256,39 @@ export async function syncHubUserToLocalSupabase(params: {
   }
 
   try {
+    let accountSwitched = false;
     if (typeof window !== 'undefined') {
+      const prevEmail = (localStorage.getItem('ghosti_hub_user_email') || '')
+        .trim()
+        .toLowerCase();
+      accountSwitched = Boolean(prevEmail && prevEmail !== cleanEmail);
+      if (accountSwitched) {
+        localStorage.removeItem(GHOSTI_SB_TOKEN_KEY);
+        localStorage.removeItem(GHOSTI_SB_TOKEN_EXP_KEY);
+        localStorage.removeItem('ghosti_hub_user_nickname');
+        localStorage.removeItem('userNickname');
+        localStorage.removeItem('ghosti_invited_member_nickname');
+        localStorage.removeItem('ghosti_joined_invite_room_v1');
+        authedClient = null;
+        authedClientToken = '';
+      }
       localStorage.setItem('ghosti_hub_user_id', cleanUserId);
       localStorage.setItem('ghosti_hub_user_email', cleanEmail);
-      if (params.nickname) {
-        localStorage.setItem('ghosti_hub_user_nickname', params.nickname);
+      const cleanParamNick = (params.nickname || '').trim();
+      if (cleanParamNick) {
+        localStorage.setItem('ghosti_hub_user_nickname', cleanParamNick);
+      } else {
+        localStorage.removeItem('ghosti_hub_user_nickname');
       }
     }
 
-    if (!params.forceSync && getGhostiSupabaseAccessToken()) {
+    const activeClaims = readGhostiAuthedJwtClaims();
+    if (
+      !params.forceSync &&
+      !accountSwitched &&
+      getGhostiSupabaseAccessToken() &&
+      activeClaims?.email === cleanEmail
+    ) {
       if (typeof window !== 'undefined') {
         window.dispatchEvent(
           new CustomEvent('ghostiSupabaseUserSynced', {
@@ -328,11 +354,23 @@ export async function syncHubUserToLocalSupabase(params: {
           data.supabaseAnonKey
         );
       }
+      if (typeof data.nickname === 'string') {
+        const verifiedNick = data.nickname.trim();
+        if (verifiedNick) {
+          localStorage.setItem('ghosti_hub_user_nickname', verifiedNick);
+        } else {
+          localStorage.removeItem('ghosti_hub_user_nickname');
+        }
+      }
       localStorage.setItem(GHOSTI_SB_TOKEN_KEY, data.supabaseAccessToken);
       localStorage.setItem(GHOSTI_SB_TOKEN_EXP_KEY, String(data.expiresAt || 0));
       window.dispatchEvent(
         new CustomEvent('ghostiSupabaseUserSynced', {
-          detail: { userId: cleanUserId, email: cleanEmail, nickname: params.nickname },
+          detail: {
+            userId: cleanUserId,
+            email: cleanEmail,
+            nickname: typeof data.nickname === 'string' ? data.nickname : params.nickname,
+          },
         })
       );
     }
@@ -357,7 +395,9 @@ export async function ensureGhostiAuthedSupabaseClient(): Promise<SupabaseClient
   if (typeof window === 'undefined') return null;
 
   const hubToken = (getSessionToken() || localStorage.getItem('merlin_session_token') || '').trim();
-  if (!hubToken) return null;
+  if (!hubToken || (!hubToken.includes('.') && /^[a-f0-9]{28,48}$/i.test(hubToken))) {
+    return null;
+  }
 
   let userId = (localStorage.getItem('ghosti_hub_user_id') || '').trim();
   let email = (localStorage.getItem('ghosti_hub_user_email') || '').trim();
@@ -395,6 +435,7 @@ export async function ensureGhostiAuthedSupabaseClient(): Promise<SupabaseClient
         ok?: boolean;
         userId?: string;
         email?: string;
+        nickname?: string;
         supabaseUrl?: string;
         supabaseAnonKey?: string;
         supabaseAccessToken?: string;
@@ -406,6 +447,14 @@ export async function ensureGhostiAuthedSupabaseClient(): Promise<SupabaseClient
         }
         if (data.userId) localStorage.setItem('ghosti_hub_user_id', data.userId);
         if (data.email) localStorage.setItem('ghosti_hub_user_email', data.email.trim().toLowerCase());
+        if (typeof data.nickname === 'string') {
+          const verifiedNick = data.nickname.trim();
+          if (verifiedNick) {
+            localStorage.setItem('ghosti_hub_user_nickname', verifiedNick);
+          } else {
+            localStorage.removeItem('ghosti_hub_user_nickname');
+          }
+        }
         localStorage.setItem(GHOSTI_SB_TOKEN_KEY, data.supabaseAccessToken);
         localStorage.setItem(GHOSTI_SB_TOKEN_EXP_KEY, String(data.expiresAt || 0));
         return getGhostiAuthedSupabase();
@@ -427,7 +476,7 @@ export async function ensureGhostiAuthedSupabaseClient(): Promise<SupabaseClient
   return getGhostiAuthedSupabase();
 }
 
-/** 로그아웃 시 단기 토큰 및 허브 캐시 폐기 */
+/** 로그아웃 시 단기 토큰 및 허브·별명·초대방 캐시 일괄 폐기 (타 계정/타 공유방 혼동 0%) */
 export function clearGhostiSupabaseSession(): void {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(GHOSTI_SB_TOKEN_KEY);
@@ -435,6 +484,9 @@ export function clearGhostiSupabaseSession(): void {
   localStorage.removeItem('ghosti_hub_user_id');
   localStorage.removeItem('ghosti_hub_user_email');
   localStorage.removeItem('ghosti_hub_user_nickname');
+  localStorage.removeItem('userNickname');
+  localStorage.removeItem('ghosti_invited_member_nickname');
+  localStorage.removeItem('ghosti_joined_invite_room_v1');
   authedClient = null;
   authedClientToken = '';
 }
