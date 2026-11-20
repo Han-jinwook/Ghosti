@@ -1,8 +1,8 @@
 /**
- * 🪪 귀신계 여권(Ghost Passport) 로컬 전용 기본 보관(OFF) & 명시적 동의(Opt-in) 기반 암호화 동기화
- *  - [R2 해결]: 귀신계 여권은 기본적으로 100% 내 기기 로컬 DB(localStorage/IndexedDB)에만 저장되며(isCloudSyncEnabled = false 기본값),
- *    사용자가 직접 `[📱 내 폰·다른 PC와 여권 동기화 켜기 (암호화 보관)]` 버튼을 눌러 명시적 동의(Opt-in)를 했을 때만 클라우드 동기화가 작동합니다.
- *  - 업로드 시 128차원 얼굴 벡터 및 10KB 이하 미니 도장 썸네일 페이로드는 사용자 키 기반 암호화 래핑(AES-GCM / XOR-Base64 Envelope)되어 저장되며 사진 원본은 절대 업로드되지 않습니다.
+ * 🪪 귀신계 여권(Ghost Passport) 내 계정(PC ↔ 모바일) 기본 자동 동기화 (물밑 무질문 연동)
+ *  - 내 PC와 모바일이 같은 계정으로 로그인되어 있으면 버튼이나 질문 없이 기본으로 자동 연결되어,
+ *    유료 기기 통합 구독 전이라도 모바일에서 내 사진·가족 사진을 찾고 PC에서도 동일하게 찾아줍니다.
+ *  - 업로드 시 128차원 얼굴 벡터 및 10KB 이하 미니 도장 썸네일 페이로드는 사용자 키 기반 암호화 래핑되어 저장되며 사진 원본은 절대 업로드되지 않습니다.
  *  - 테이블: supabase/ghosti_zero_cloud_schema.sql (하단 ghost_passports · unmatched_questions 절)
  */
 import { getGhostiAuthedSupabase } from './supabaseClient';
@@ -27,14 +27,14 @@ export const STAMP_THUMB_MAX_CHARS = 14000;
 export const PASSPORT_CLOUD_SYNC_OPT_IN_KEY = 'ghosti_passport_cloud_sync_opt_in_v1';
 
 /**
- * [R2 해결] 귀신계 여권 클라우드 동기화 명시적 동의(Opt-in) 상태 조회 (기본값: false = 100% 로컬 전용)
+ * 내 계정 여권 동기화 활성 여부 (기본값: true = 같은 계정 로그인 시 물밑 자동 연동)
  */
 export function isPassportCloudSyncOptedIn(): boolean {
   try {
-    if (typeof window === 'undefined' || !window.localStorage) return false;
-    return window.localStorage.getItem(PASSPORT_CLOUD_SYNC_OPT_IN_KEY) === 'true';
+    if (typeof window === 'undefined' || !window.localStorage) return true;
+    return window.localStorage.getItem(PASSPORT_CLOUD_SYNC_OPT_IN_KEY) !== 'false';
   } catch {
-    return false;
+    return true;
   }
 }
 

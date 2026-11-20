@@ -1155,7 +1155,8 @@ export function resolveGhostSecretaryTurn(
     const consents = { ...(st.consents || {}) };
     if (st.questStep === 'labeler') consents.labeler = yes;
     if (st.questStep === 'son_free') consents.sonFreeAndSpeedAlert = yes;
-    const step = nextQuest(st.questStep);
+    const step: QuestStep =
+      st.questStep === 'son_free' && !ctx.isMobileEnv ? 'done' : nextQuest(st.questStep);
     const prompt = questPromptFor(step, nickname);
     const ack = yes ? '좋아요, 켜뒀어요! ' : '알겠어요, 언제든 말씀만 하세요! ';
     const after: QuestStep = step === 'voice' ? 'done' : step;

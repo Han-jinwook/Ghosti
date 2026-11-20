@@ -546,23 +546,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           });
         });
     }
-    // [v1.3 #7] 같은 계정의 다른 기기에서 만든 🪪 귀신계 여권 무료 동기화 (로그인 시에만)
-    void pullGhostPassportsFromCloud(secretaryOwnerEmail()).then((res) => {
-      if (!res.ok || res.newNames.length === 0) return;
-      const st = loadGhostSecretaryState();
-      const sc = findScenario('passport_cross_device_supabase_synced');
-      if (!sc) return;
-      setSharedMonsterMessages((prev) => [
-        ...prev,
-        {
-          id: `secretary_passport_sync_${Date.now()}`,
-          role: 'assistant',
-          timestamp: nowTimeKo(),
-          sourceTab: 'trash',
-          text: renderPlaybookText(sc.response, { nickname: st.nickname || '', synced_names: res.newNames.join(', ') }),
-        },
-      ]);
-    });
+    // 같은 계정의 다른 기기(PC ↔ 모바일)에서 등록한 여권은 질문이나 알림 말풍선 없이 물밑에서 조용히 자동 동기화
+    void pullGhostPassportsFromCloud(secretaryOwnerEmail());
     return () => {
       window.removeEventListener('ghosti_jump_to_secretary', onJumpRefresh);
       window.removeEventListener('merlinSessionExpired', onJumpRefresh);
@@ -1272,7 +1257,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           });
           nextState = { ...nextState, coldReadingShownAt: new Date().toISOString() };
         }
-        if (turn.scenarioId === 'quest_mobile_voice_search') {
+        if (turn.scenarioId === 'quest_done' || turn.scenarioId === 'quest_mobile_voice_search') {
           const entry = buildPassportEntryTurn(
             nextState.passportStep === 'done' || nextState.passportStep === 'skipped'
               ? { ...nextState, passportStep: undefined }

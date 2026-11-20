@@ -19,6 +19,10 @@ import {
   upsertPassportMember,
   isRelationTagOnly,
 } from './ghostSecretaryEngine';
+import {
+  buildPassportExtrasFromClusters,
+  pushGhostPassportsToCloud,
+} from './ghostPassportSync';
 
 export type PassportRegMode = 'self' | 'family';
 
@@ -517,5 +521,25 @@ export async function updateSelfPassportRealName(realName: string): Promise<void
       const cluster = useSaySeeStore.getState().faceClusters.find((c) => c.clusterId === st.selfClusterId);
       addTagToPhotos(cluster?.matchedPhotoFiles || [], `#${nickname}`);
     }
+  }
+  const ownerEmail = useSaySeeStore.getState().merlinAuth?.email || '';
+  if (ownerEmail) {
+    const selfCluster = st.selfClusterId
+      ? useSaySeeStore.getState().faceClusters.find((c) => c.clusterId === st.selfClusterId)
+      : undefined;
+    void pushGhostPassportsToCloud(
+      ownerEmail,
+      useSaySeeStore.getState().layout === 'mobile' ? 'mobile' : 'pc',
+      selfCluster
+        ? buildPassportExtrasFromClusters([
+            {
+              name: clean,
+              seedVecPreview: selfCluster.seedVecPreview,
+              avatarUrl: selfCluster.avatarUrl,
+              cropUrl: selfCluster.cropUrl,
+            },
+          ])
+        : {}
+    );
   }
 }
