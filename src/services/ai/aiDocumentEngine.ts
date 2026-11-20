@@ -3,7 +3,7 @@ import type { LocalDocumentFile } from '../../types/saysee';
 import {
   extractKoStems,
   matchKoTokenInStems,
-  matchKoreanOcrFuzzyToken,
+  stripKoSearchParticle,
 } from './aiSharedRuntime';
 
 export const LOCAL_DOCUMENT_FILES: LocalDocumentFile[] = [];
@@ -266,8 +266,14 @@ export async function searchLocalDocumentFilesAsync(
 
   // 1차로 로컬 정밀 키워드 변별(100% 일치 'EXACT' vs 일부 일치 'SIMILAR')을 먼저 수행하여
   // 전혀 연관이 없는 문서가 섞이거나 유사 문서 안내 배지가 누락되는 것을 원천 차단합니다.
+  // 이미 로컬 문서 목록(fallbackDocs)이 적재되어 있는데 일치 결과가 0건이면 억지 유사 문서를 끌어오지 않고 즉시 0건을 반환합니다.
   const localScored = searchLocalDocumentFiles(q, fallbackDocs);
-  if (localScored.length > 0 || !hasActiveGhostiLoginSession() || !zCoreBridge.isConnected) {
+  if (
+    localScored.length > 0 ||
+    fallbackDocs.length > 0 ||
+    !hasActiveGhostiLoginSession() ||
+    !zCoreBridge.isConnected
+  ) {
     return localScored;
   }
 
@@ -322,16 +328,16 @@ export function searchLocalDocumentFiles(
     '이', '그', '저', '내', '우리', '좀', '다', '에서', '중에서', '관련',
   ]);
 
+  const candidateWords = cleaned
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 1 && !DOC_STOP_WORDS.has(t));
+  const isSingleWordQuery = candidateWords.length === 1;
+
   const rawTokens = Array.from(
     new Set(
-      cleaned
-        .split(/\s+/)
-        .map((t) =>
-          t.replace(
-            /(에서부터|으로부터|에서|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|이|가|에|와|과|도|만|나)$/,
-            ''
-          ).trim()
-        )
+      candidateWords
+        .map((t) => stripKoSearchParticle(t, isSingleWordQuery))
         .filter((t) => t.length >= 1 && !DOC_STOP_WORDS.has(t))
     )
   );
@@ -344,6 +350,8 @@ export function searchLocalDocumentFiles(
       const kwText = (doc.keywords || []).join(' ').toLowerCase();
       const bodyText = (doc.extractedText || '').toLowerCase();
       const corpus = `${titleAndName} ${kwText} ${bodyText}`;
+      const titleStems = extractKoStems(titleAndName);
+      const kwStems = extractKoStems(kwText);
       const docStems = extractKoStems(corpus);
 
       const matchedTokens: string[] = [];
@@ -352,10 +360,10 @@ export function searchLocalDocumentFiles(
 
       for (const tk of rawTokens) {
         let hit = false;
-        if (titleAndName.includes(tk) || titleAndName.replace(/\s+/g, '').includes(tk.replace(/\s+/g, ''))) {
+        if (matchKoTokenInStems(tk, titleStems, titleAndName)) {
           weightedScore += 15;
           hit = true;
-        } else if (kwText.includes(tk) || kwText.replace(/\s+/g, '').includes(tk.replace(/\s+/g, ''))) {
+        } else if (matchKoTokenInStems(tk, kwStems, kwText)) {
           weightedScore += 12;
           hit = true;
         } else if (matchKoTokenInStems(tk, docStems, corpus)) {

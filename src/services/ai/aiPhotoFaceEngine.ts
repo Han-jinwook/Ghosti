@@ -39,16 +39,19 @@ import {
   ensureHubnessReferenceVecsLoaded,
   ensureTextQueryEncoderLoaded,
   extractKoStems,
+  getContrastiveNonAnimalAnchorVecs,
   getOptimalEmbeddingDtype,
   getPhotoMediaCacheKey,
   getStaticCorpusCached,
   hydrateRealMediaVectorCacheOnce,
   hydratedPhotoVecMap,
+  isNonHumanAnimalSearchQuery,
   loadWithR2Fallback,
   matchKoTokenInStems,
   normalizeVector,
   persistMediaCacheEntry,
   staticCaptionedPhotoIds,
+  stripKoSearchParticle,
   toRows,
 } from './aiSharedRuntime';
 import {
@@ -1005,15 +1008,17 @@ export async function executeTextSearch(
     '독사진', '증명사진', '여권사진', '선글라스', '세금계산서', '사업자등록증',
   ]);
 
+  const cleaned = qLower.replace(/[?!.,"'“”‘’()#]/g, ' ');
+  const rawCandidateWords = cleaned
+    .split(/\s+/)
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 1);
+  const contentWordCount = rawCandidateWords.filter((t) => !SOFT_WORDS.has(t)).length;
+  const isSingleWordPhotoQuery = contentWordCount <= 1;
+
   const stripParticle = (w: string): string => {
     if (KEEP_NOUNS.has(w) || SOFT_WORDS.has(w)) return w;
-    let cur = w;
-    const m2 = cur.replace(/(에서부터|으로부터|에서|으로|이랑|하고|부터|까지|처럼|보다|있는|찍은|들을|만은|만을)$/, '');
-    if (m2 !== cur && m2.length >= 2) cur = m2;
-    else if (cur.length >= 3) {
-      const m1 = cur.replace(/(들|의|을|를|은|는|이|가|에|와|과|도|만)$/, '');
-      if (m1.length >= 2) cur = m1;
-    }
+    let cur = stripKoSearchParticle(w, isSingleWordPhotoQuery);
     if (cur.length >= 4 && cur.endsWith('사진') && !KEEP_NOUNS.has(cur)) {
       const stem = cur.slice(0, -2);
       if (stem.length >= 2) cur = stem;
@@ -1021,10 +1026,8 @@ export async function executeTextSearch(
     return cur;
   };
 
-  const cleaned = qLower.replace(/[?!.,"'“”‘’()#]/g, ' ');
-  const rawSplitWords = cleaned
-    .split(/\s+/)
-    .map((t) => stripParticle(t.trim()))
+  const rawSplitWords = rawCandidateWords
+    .map((t) => stripParticle(t))
     .filter((t) => t.length >= 1);
 
   const allWords: string[] = [];
@@ -1053,12 +1056,16 @@ export async function executeTextSearch(
   const activeTokens = hardTokens.length > 0 ? hardTokens : softTokens;
   const compoundQuery = activeTokens.join('');
 
+  const isAnimalOnlyPhotoQuery =
+    isDogQuery || isCatQuery || isNonHumanAnimalSearchQuery(qLower);
   let queryVecs: Float32Array[] = [];
   let hubRefVecs: Float32Array[] = [];
+  let nonAnimalAnchorVecs: Float32Array[] = [];
   if (activePhotos.some((p) => p.vec && p.vec.length === DEFAULT_DIM)) {
-    [queryVecs, hubRefVecs] = await Promise.all([
+    [queryVecs, hubRefVecs, nonAnimalAnchorVecs] = await Promise.all([
       encodeMultimodalSearchQueryVecs(qRaw, 4200),
       ensureHubnessReferenceVecsLoaded(),
+      isAnimalOnlyPhotoQuery ? getContrastiveNonAnimalAnchorVecs(900) : Promise.resolve([]),
     ]);
   }
   const embedMs = +(performance.now() - t0).toFixed(1);
@@ -1104,6 +1111,23 @@ export async function executeTextSearch(
         staticVecSims.push(bestS);
         if (bestS > topStaticSim) topStaticSim = bestS;
       } else {
+        // [실사진 동물 단독 검색 대조 검증(Contrastive Margin)]:
+        // 사람·휴양지·문서 유사도가 동물 유사도보다 높은 실사진은 '강아지'/'고양이' 비전 통과 후보에서 원천 배제!
+        if (nonAnimalAnchorVecs.length > 0) {
+          const photoTagHint = `${p.tags.join(' ')} ${(p.keywordsKo || []).join(' ')}`.toLowerCase();
+          const hasExplicitAnimalTag =
+            /강아지|반려견|멍멍이|고양이|반려묘|냥이|호랑이|동물|조류/.test(photoTagHint);
+          if (!hasExplicitAnimalTag) {
+            let nonAnimSim = -1;
+            for (const nv of nonAnimalAnchorVecs) {
+              const ns = cosineSimilarity(nv, p.vec);
+              if (ns > nonAnimSim) nonAnimSim = ns;
+            }
+            if (bestS < nonAnimSim + 0.012) {
+              continue;
+            }
+          }
+        }
         const pKey = getPhotoMediaCacheKey(p.name, p.size);
         const hub = computeFrameHubnessScore(pKey, p.vec, hubRefVecs);
         const optSig = getOpticalSigForPhoto(p.id);

@@ -687,14 +687,15 @@ def build_ui2_search_window(
         matched: list[tuple[float, dict]] = []
         if q:
             q_low = q.lower()
-            q_cho = extract_chosung(q_low)
+            has_explicit_chosung = bool(re.search(r"[ㄱ-ㅎ]", q_low))
+            q_cho = extract_chosung(q_low) if has_explicit_chosung else ""
             q_kor_alt = eng_to_kor(q) if re.search(r"[A-Za-z]", q) else ""
             q_eng_alt = kor_to_eng(q) if re.search(r"[가-힣ㄱ-ㅎㅏ-ㅣ]", q) else ""
             for idx_p, r in enumerate(pool):
                 raw_t = r.get("text", "")
                 clean_t = clean_ocr_noise(raw_t) if r.get("kind") == "image" else raw_t
                 t_low = clean_t.lower()
-                t_cho = extract_chosung(t_low)
+                t_cho = extract_chosung(t_low) if has_explicit_chosung else ""
                 sc = 0.0
                 if q_low in t_low or (q_cho and q_cho in t_cho):
                     sc = 1.0

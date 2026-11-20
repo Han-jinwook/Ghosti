@@ -226,35 +226,86 @@ _STOP_WORDS_KO = {
     "돌리는", "돌아가는", "나오는", "보이는", "찍은", "찍는", "촬영", "화면", "구간", "순간", "부분", "전구간",
     "타임라인", "해부", "속에서", "속에", "있는", "하는",
 }
-_PARTICLE_TAIL_RE = re.compile(
-    r"(에서부터|으로부터|에게서|에서|에게|으로|이랑|하고|부터|까지|있는|하는|찍는|들을|들|의|을|를|은|는|에|와|과|도|이|가|로|만)$"
+_PROTECTED_KO_NOUNS = {
+    "아이", "어린이", "고양이", "멍멍이", "길냥이", "호랑이", "부엉이", "원숭이", "거북이", "떡볶이",
+    "강아지", "송아지", "망아지", "강냉이", "달팽이", "지렁이", "올챙이", "코끼리", "너구리", "개구리",
+    "오이", "종이", "놀이", "높이", "길이", "넓이", "깊이", "나이", "차이", "사이",
+    "바닷가", "창가", "물가", "길가", "강가", "화가", "작가", "국가", "상가", "단가", "원가", "휴가",
+    "목걸이", "귀걸이", "물놀이", "나들이", "비행기", "세탁기", "선풍기", "청소기",
+    "종로", "을지로", "퇴계로", "대학로", "세종대로", "테헤란로",
+    "제주도", "강원도", "경기도", "충청도", "전라도", "경상도", "울릉도", "독도", "여의도", "영종도", "송도",
+    "포도", "지도", "속도", "온도", "각도", "세금계산서", "사업자등록증",
+}
+_PROTECTED_NOUN_SUFFIX_RE = re.compile(
+    r"(양이|아지|멍이|랑이|엉이|숭이|북이|끼리|팽이|구리|오리|거미|개미|매미|나비|오이|종이|놀이|걸이|볶이|구이|어린이|할머니|어머니|아버지|높이|길이|넓이|깊이|닷가|창가|물가|길가|강가|화가|작가|국가|상가|단가|원가|휴가|제주도|강원도|경기도|충청도|전라도|경상도|울릉도|독도|여의도|영종도|송도|종로|을지로|퇴계로|대학로|대로|[가-힣]{1,4}(?:시|군|구))$"
+)
+_MULTI_PARTICLE_TAIL_RE = re.compile(
+    r"(?:들)?(에서부터|으로부터|에게서|속에서|에서|에게|으로|이랑|하고|부터|까지|처럼|보다|마다|대로|밖에|마저|조차|이나|이란|이고|이며|있는|하는|찍는)$"
+)
+_SINGLE_PARTICLE_TAIL_RE = re.compile(
+    r"(들|의|을|를|은|는|에|와|과|도|이|가|로|만|랑|나)$"
 )
 _ASCII_TOKEN_RE = re.compile(r"^[a-z0-9]+$")
+_FALSE_FRIEND_BLOCK_MAP = {
+    "고양이": re.compile(r"고양시"),
+    "고양": re.compile(r"고양시"),
+    "아이": re.compile(r"아이콘|아이폰|아이패드|아이디|아이템|아이디어|아이스|아이언|아이라인|아이섀도"),
+    "튜브": re.compile(r"유튜브"),
+    "다리": re.compile(r"사다리|기다리|다리미"),
+    "고기": re.compile(r"물고기"),
+    "배": re.compile(r"택배|배달|배경|배터리|배구|배추|담배|선배|후배"),
+    "말": re.compile(r"말레이시아|말씀|주말|연말|결말|양말|단말"),
+    "개": re.compile(r"개인|개월|개발|개봉|개선|개설|개시|개수|개념|개요|개최|공개|번개|안개|조개|베개|날개|덮개|지우개"),
+}
+
+
+def _is_protected_ko_noun(w: str) -> bool:
+    return bool(w) and (w in _PROTECTED_KO_NOUNS or bool(_PROTECTED_NOUN_SUFFIX_RE.search(w)))
 
 
 def _match_query_token(tk: str, corpus: str, corpus_nospace: str = "") -> bool:
-    """영문/숫자 토큰(예: 'ai')이 다른 영단어(예: 'airplane', 'detail', 'main') 내부 부분문자열로 오탐되는 현상을 원천 차단합니다."""
+    """영문/숫자 내부 부분문자열('ai'≠'main') 및 한국어 지명·합성어 착시('고양이'≠'고양시', '튜브'≠'유튜브', '아이'≠'아이콘')를 원천 차단합니다."""
     if not tk:
         return False
     if _ASCII_TOKEN_RE.match(tk):
         return bool(re.search(rf"(?<![a-z0-9]){re.escape(tk)}(?![a-z0-9])", corpus))
-    if tk in corpus:
+    block_rx = _FALSE_FRIEND_BLOCK_MAP.get(tk)
+    target_corpus = block_rx.sub(" ", corpus) if block_rx else corpus
+    if len(tk) == 1:
+        return bool(re.search(rf"(?<![가-힣]){re.escape(tk)}(?=(?:이|가|은|는|을|를|의|에|와|과|도|만|들|\s|$))", target_corpus))
+    if len(tk) == 2:
+        # 2음절 어간이 행정구역 접미사('고양'+'시')에 붙는 오탐 차단
+        if re.search(rf"{re.escape(tk)}(?![시군구동읍면리역콘폰템드])", target_corpus):
+            return True
+        return False
+    if tk in target_corpus:
         return True
-    if len(tk) >= 2 and corpus_nospace and tk in corpus_nospace:
-        return True
+    if corpus_nospace:
+        target_ns = block_rx.sub("", corpus_nospace) if block_rx else corpus_nospace
+        if tk in target_ns:
+            return True
     return False
 
 
 def _tokenize_ko_query(q: str) -> list[str]:
     cleaned = re.sub(r"[.,!?'\"“”‘’()\[\]{}]", " ", (q or "").lower())
+    candidates = [w for w in cleaned.split() if w and w not in _STOP_WORDS_KO]
+    is_single_word = len(candidates) == 1
     out: list[str] = []
-    for raw in cleaned.split():
-        if raw in _STOP_WORDS_KO:
+    for raw in candidates:
+        if _is_protected_ko_noun(raw):
+            out.append(raw)
             continue
-        stem = _PARTICLE_TAIL_RE.sub("", raw)
-        tok = stem if len(stem) >= 1 else raw
-        if tok and tok not in _STOP_WORDS_KO:
-            out.append(tok)
+        cur = raw
+        m_multi = _MULTI_PARTICLE_TAIL_RE.sub("", cur)
+        if m_multi != cur and len(m_multi) >= 1:
+            cur = m_multi
+        if not is_single_word and len(cur) >= 3 and not _is_protected_ko_noun(cur):
+            m_single = _SINGLE_PARTICLE_TAIL_RE.sub("", cur)
+            if m_single != cur and len(m_single) >= 2:
+                cur = m_single
+        if cur and cur not in _STOP_WORDS_KO:
+            out.append(cur)
     return out
 
 

@@ -24,16 +24,19 @@ import {
   encodeMultimodalSearchQueryVecs,
   ensureHubnessReferenceVecsLoaded,
   extractKoStems,
+  getContrastiveNonAnimalAnchorVecs,
   getStaticCorpusCached,
   getVideoFrameCacheKey,
   getVideoMediaBaseKey,
   hydrateRealMediaVectorCacheOnce,
+  isNonHumanAnimalSearchQuery,
   localVideoFrameThumbMap,
   localVideoFrameVecMap,
   localVideoRepThumbMap,
   matchKoTokenInStems,
   matchKoreanOcrFuzzyToken,
   persistMediaCacheEntry,
+  stripKoSearchParticle,
 } from './aiSharedRuntime';
 
 export const VIDEO_SCENE_ITEMS: VideoSceneItem[] = [];
@@ -992,12 +995,16 @@ export async function searchVideoSceneItemsAsync(
     void ensureVideoKeyframesEmbeddedForSearch(nonBlackVideos, 12, undefined, 1);
   }
 
-  const [queryVecs, hubRefVecs] = await Promise.all([
+  const isAnimalOnlyQuery = isNonHumanAnimalSearchQuery(q);
+  const [queryVecs, hubRefVecs, nonAnimalAnchorVecs] = await Promise.all([
     encodeMultimodalSearchQueryVecs(q, 1400),
     ensureHubnessReferenceVecsLoaded(),
+    isAnimalOnlyQuery ? getContrastiveNonAnimalAnchorVecs(900) : Promise.resolve([]),
   ]);
 
-  // 동일 날짜·인접 시각 실제 촬영 사진 중 쿼리와 일치하는 앵커 시각 수집 (콜드 스타트 시에도 즉시 작동)
+  // 동일 날짜·인접 시각 실제 촬영 사진 중 쿼리와 일치하는 앵커 시각 수집:
+  // 사진 검색 결과(matchedPhotoResults)가 이미 전달된 경우(예: '강아지' 검색 ➔ 사진 0장),
+  // 사진 검색에서 탈락한 인물·풍경 사진을 보정 없이 재스캔해 세션 가산점으로 우회 유입시키는 행위를 원천 차단합니다!
   const matchedPhotoBursts: Array<{ dateYmd: string; secOfDay: number; sim: number }> = [];
   const burstSeenKeys = new Set<string>();
   const isSelectivePhotoMatch =
@@ -1021,10 +1028,9 @@ export async function searchVideoSceneItemsAsync(
         });
       }
     }
-  }
-
-  if (contextPhotos.length > 0 && (!matchedPhotoResults || queryVecs.length > 0)) {
-    const qLow = q.toLowerCase();
+  } else if (!matchedPhotoResults && contextPhotos.length > 0) {
+    const qStems = extractKoStems(q);
+    const primaryTok = qStems[0] || q.toLowerCase();
     for (const p of contextPhotos) {
       if (p.quarantined) continue;
       const pts = parseFileTimestampSecOfDay(p.name);
@@ -1037,10 +1043,19 @@ export async function searchVideoSceneItemsAsync(
           const s = cosineSimilarity(qv, p.vec);
           if (s > pSim) pSim = s;
         }
+        if (nonAnimalAnchorVecs.length > 0) {
+          let nonAnimSim = -1;
+          for (const nv of nonAnimalAnchorVecs) {
+            const ns = cosineSimilarity(nv, p.vec);
+            if (ns > nonAnimSim) nonAnimSim = ns;
+          }
+          if (pSim < nonAnimSim + 0.012) pSim = 0;
+        }
       }
       const pCorpus = `${p.tags.join(' ')} ${(p.keywordsKo || []).join(' ')} ${p.captionKo || ''}`.toLowerCase();
-      const hasPhotoLex = qLow.length >= 2 && pCorpus.includes(qLow);
-      if (hasPhotoLex || pSim >= 0.695) {
+      const hasPhotoLex =
+        primaryTok.length >= 2 && matchKoTokenInStems(primaryTok, extractKoStems(pCorpus), pCorpus);
+      if (hasPhotoLex || pSim >= 0.71) {
         burstSeenKeys.add(bk);
         matchedPhotoBursts.push({ dateYmd: pts.dateYmd, secOfDay: pts.secOfDay, sim: hasPhotoLex ? 0.74 : pSim });
       }
@@ -1095,6 +1110,18 @@ export async function searchVideoSceneItemsAsync(
         for (const qv of queryVecs) {
           const s = cosineSimilarity(qv, fVec);
           if (s > fSim) fSim = s;
+        }
+        // [동물 단독 검색 대조 검증(Contrastive Margin)]:
+        // 사람·휴양지·화면캡처 유사도가 동물 유사도보다 높은 프레임은 '강아지'/'고양이' 시각 후보에서 즉시 탈락!
+        if (!lexicalByKey.has(key) && nonAnimalAnchorVecs.length > 0) {
+          let nonAnimalSim = -1;
+          for (const nv of nonAnimalAnchorVecs) {
+            const ns = cosineSimilarity(nv, fVec);
+            if (ns > nonAnimalSim) nonAnimalSim = ns;
+          }
+          if (fSim < nonAnimalSim + 0.012) {
+            return;
+          }
         }
         if (sec <= 2 && fSim > openingSim) {
           openingSim = fSim;
@@ -1186,21 +1213,26 @@ export async function searchVideoSceneItemsAsync(
     .map((e) => e.bestSim)
     .sort((a, b) => b - a);
   const topSim = embeddedSims[0] ?? 0;
-  const p60Sim = embeddedSims[Math.floor(embeddedSims.length * 0.6)] ?? 0;
+  const topRawSim = evals.reduce((mx, e) => (e.rawBestSim > mx ? e.rawBestSim : mx), 0);
+  const medSim = embeddedSims[Math.floor(embeddedSims.length * 0.5)] ?? 0;
+  const minSim = embeddedSims[embeddedSims.length - 1] ?? 0;
+  // 사진 비전 검색(aiPhotoFaceEngine.ts)과 동일한 EmbeddingGemma 2 정밀 합격선으로 정합화하여
+  // 화면녹화 영상들 사이에서 무관한 야외 인물 영상(0.62~0.64)이 상대 점수 차로 통과하는 현상을 원천 차단합니다.
   const hasCorpusSeparation =
     embeddedSims.length >= 6
-      ? topSim >= 0.622 && topSim - p60Sim >= 0.015
+      ? topSim >= 0.658 && topSim - medSim >= 0.036
       : embeddedSims.length >= 3
-      ? topSim >= 0.648 && topSim - (embeddedSims[embeddedSims.length - 1] ?? 0) >= 0.018
+      ? topSim >= 0.666 && topSim - minSim >= 0.034
       : embeddedSims.length >= 1
-      ? topSim >= 0.675
+      ? topSim >= 0.682 && topRawSim >= 0.668
       : false;
-  const admitThreshold =
-    embeddedSims.length >= 6
-      ? Math.max(0.622, topSim - 0.036, p60Sim + 0.015)
-      : embeddedSims.length >= 3
-      ? Math.max(0.646, topSim - 0.034)
-      : Math.max(0.672, topSim - 0.03);
+  const admitThreshold = !hasCorpusSeparation
+    ? 1.01
+    : embeddedSims.length >= 6
+    ? Math.max(0.652, topSim - 0.034, medSim + 0.034)
+    : embeddedSims.length >= 3
+    ? Math.max(0.660, topSim - 0.032)
+    : Math.max(0.678, topSim - 0.028);
 
   const strongVideoBursts = hasCorpusSeparation
     ? evals
@@ -1248,8 +1280,9 @@ export async function searchVideoSceneItemsAsync(
 
     const passesVisual = hasCorpusSeparation && ev.bestSim > 0 && effectiveSim >= admitThreshold;
     const passesSessionContinuity =
+      !isAnimalOnlyQuery &&
       isTightSessionBurst &&
-      (ev.bestSim <= 0 || ev.bestSim >= Math.max(0.625, admitThreshold - 0.03));
+      ev.bestSim >= Math.max(0.648, admitThreshold - 0.022);
 
     if (!lexHit && !passesVisual && !passesSessionContinuity) continue;
 
@@ -1334,16 +1367,15 @@ export function searchVideoSceneItems(
     }
   }
 
-  const rawTokens = q
+  const candidateWords = q
     .replace(/[.,!?'"“”‘’()[\]{}]/g, ' ')
     .split(/\s+/)
-    .map((t) => {
-      if (KEEP_VIDEO_NOUNS.has(t)) return t;
-      return t.replace(
-        /(에서부터|으로부터|속에서|에서|으로|이랑|하고|부터|까지|있는|하는|찍는|라고|들을|들|의|을|를|은|는|이|가|에|와|과|도)$/,
-        ''
-      );
-    })
+    .map((t) => t.trim())
+    .filter((t) => t.length >= 1 && !STOP_WORDS.has(t));
+  const isSingleWordQuery = candidateWords.length === 1;
+
+  const rawTokens = candidateWords
+    .map((t) => (KEEP_VIDEO_NOUNS.has(t) ? t : stripKoSearchParticle(t, isSingleWordQuery)))
     .filter((t) => t.length >= 1 && !STOP_WORDS.has(t));
 
   if (rawTokens.length === 0) return sourceVideos;

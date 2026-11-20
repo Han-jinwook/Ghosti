@@ -14,6 +14,7 @@ import {
   storageInfo,
 } from '../opfsCache';
 import { getZCoreUrl } from '../zCoreBridge';
+import koreanPhotoOntologyData from '../../data/koreanPhotoOntology.json';
 import type { HardwareTelemetry, TrashCategory, VideoSceneItem } from '../../types/saysee';
 
 export const aiRuntimeFlags = {
@@ -63,11 +64,95 @@ export function notifyVideoPlaybackStop(): void {
 
 const KEEP_STEM_WORDS = new Set([
   '아이', '어린이', '고양이', '멍멍이', '길냥이', '호랑이', '부엉이', '원숭이', '거북이', '떡볶이',
-  '바닷가', '창가', '물가', '길가', '목걸이', '귀걸이', '물놀이', '나들이', '비행기', '종로', '을지로',
+  '강아지', '송아지', '망아지', '강냉이', '달팽이', '지렁이', '올챙이', '코끼리', '너구리', '개구리',
+  '오이', '종이', '놀이', '높이', '길이', '넓이', '깊이', '나이', '차이', '사이',
+  '바닷가', '창가', '물가', '길가', '강가', '화가', '작가', '국가', '상가', '단가', '원가', '휴가',
+  '목걸이', '귀걸이', '물놀이', '나들이', '비행기', '세탁기', '선풍기', '청소기',
+  '종로', '을지로', '퇴계로', '대학로', '세종대로', '테헤란로',
+  '제주도', '강원도', '경기도', '충청도', '전라도', '경상도', '울릉도', '독도', '여의도', '영종도', '송도',
+  '포도', '지도', '속도', '온도', '각도', '세금계산서', '사업자등록증',
 ]);
+
+// 표준 한국어 시각 개념 족보(koreanPhotoOntology.json, 710+ 어휘) 전체 명사를 자동 등록하여
+// 수동 단어 땜빵 없이 모든 도메인 어휘가 조사 절단으로부터 100% 보호되도록 보장합니다.
+const PROTECTED_ONTOLOGY_KO_NOUNS: Set<string> = (() => {
+  const s = new Set<string>(KEEP_STEM_WORDS);
+  const nodes = Array.isArray((koreanPhotoOntologyData as { nodes?: unknown[] })?.nodes)
+    ? ((koreanPhotoOntologyData as { nodes: Array<{ triggers?: string[]; equivalents?: string[]; parents?: string[] }> }).nodes)
+    : [];
+  for (const n of nodes) {
+    for (const arr of [n.triggers, n.equivalents, n.parents]) {
+      if (!Array.isArray(arr)) continue;
+      for (const w of arr) {
+        const clean = String(w || '').toLowerCase().trim();
+        if (clean.length >= 2 && /[가-힣]/.test(clean)) {
+          s.add(clean);
+        }
+      }
+    }
+  }
+  return s;
+})();
+
+// 고유 접미 형태로 끝나는 한국어 명사 어미 보호 패턴 (예: ~양이, ~아지, ~도, ~로, ~가, ~시/군/구)
+const KO_PROTECTED_NOUN_SUFFIX_RX =
+  /(?:양이|아지|멍이|랑이|엉이|숭이|북이|끼리|팽이|구리|오리|거미|개미|매미|나비|오이|종이|놀이|걸이|볶이|구이|어린이|할머니|어머니|아버지|높이|길이|넓이|깊이|닷가|창가|물가|길가|강가|화가|작가|국가|상가|단가|원가|휴가|제주도|강원도|경기도|충청도|전라도|경상도|울릉도|독도|여의도|영종도|송도|종로|을지로|퇴계로|대학로|대로|[가-힣]{1,4}(?:시|군|구))$/;
+
+const KO_MULTI_PARTICLE_RX =
+  /(?:들)?(?:에서부터|으로부터|에게서|속에서|에서|에게|으로|이랑|하고|부터|까지|처럼|보다|마다|대로|밖에|마저|조차|이나|이란|이고|이며|하는|있는|없는|되는|했던|하던|해서|하며)$/;
+
+const KO_SINGLE_PARTICLE_RX =
+  /(?:들|의|을|를|은|는|이|가|에|와|과|도|만|로|랑|나)$/;
+
 const KO_PARTICLE_RX =
   /(?:들)?(?:에서부터|으로부터|에게서|에서|에게|으로|이랑|하고|부터|까지|처럼|보다|마다|대로|밖에|마저|조차|이나|이란|이고|이며|하는|있는|없는|되는|했던|하던|해서|하며|된|한|할|님|씨|이|가|은|는|을|를|의|에|로|와|과|랑|도|만|나|란|다)$/;
-const LOAN_TAILS = /^(이크|패드|디어|라인|스크림|언맨|사이트|이드|이즈|이트)$/;
+const LOAN_TAILS = /^(이크|패드|디어|라인|스크림|언맨|사이트|이드|이즈|이트|콘|폰|템)$/;
+const ADMIN_PLACE_TAILS = /^(시|군|구|동|읍|면|리|역)$/;
+
+// 부분 문자열 착시 차단 사전 (예: '튜브'≠'유튜브', '아이'≠'아이콘/아이폰', '다리'≠'사다리', '고기'≠'물고기', '고양'≠'고양시')
+const KO_SUBSTRING_FALSE_FRIEND_RX: Record<string, RegExp> = {
+  고양이: /고양시/,
+  고양: /고양시/,
+  아이: /아이콘|아이폰|아이패드|아이디|아이템|아이디어|아이스|아이언|아이라인|아이섀도/,
+  튜브: /유튜브/,
+  다리: /사다리|기다리|다리미/,
+  고기: /물고기/,
+  배: /택배|배달|배경|배터리|배구|배추|담배|선배|후배/,
+  말: /말레이시아|말씀|주말|연말|결말|양말|단말/,
+  개: /개인|개월|개발|개봉|개선|개설|개시|개수|개념|개요|개최|공개|번개|안개|조개|베개|날개|덮개|지우개/,
+};
+
+export function isProtectedKoNoun(word: string): boolean {
+  const w = word.toLowerCase().trim();
+  if (!w) return false;
+  return PROTECTED_ONTOLOGY_KO_NOUNS.has(w) || KO_PROTECTED_NOUN_SUFFIX_RX.test(w);
+}
+
+/**
+ * [전 탭(사진·동영상·문서) 단일 한국어 검색어 조사 분리기 — 파편화 영구 폐지]:
+ * 1) 온톨로지 710+ 명사 및 한국어 고유 명사 어미(~양이, ~아지, ~도, ~로, ~가 등)는 절대 끝 글자를 잘라내지 않습니다.
+ * 2) 1단어 단독 검색어(isSingleWordQuery=true, 예: '고양이', '포도', '종이')는 1음절 조사(이/가/도/로 등)를 절대 절단하지 않습니다.
+ */
+export function stripKoSearchParticle(rawWord: string, isSingleWordQuery = false): string {
+  const cur0 = rawWord.toLowerCase().trim();
+  if (!cur0 || isProtectedKoNoun(cur0)) return cur0;
+
+  let cur = cur0;
+  const mMulti = cur.replace(KO_MULTI_PARTICLE_RX, '');
+  if (mMulti !== cur && mMulti.length >= 1) {
+    cur = mMulti;
+    if (isProtectedKoNoun(cur)) return cur;
+  }
+
+  // 1어절 단독 검색어에서는 1글자 어미(이/가/은/는/도/로 등)를 절대 절단하지 않음
+  if (!isSingleWordQuery && cur.length >= 3 && !isProtectedKoNoun(cur)) {
+    const mSingle = cur.replace(KO_SINGLE_PARTICLE_RX, '');
+    if (mSingle !== cur && mSingle.length >= 2) {
+      cur = mSingle;
+    }
+  }
+  return cur;
+}
 
 export function extractKoStems(text: string): string[] {
   const eojeols = text
@@ -77,12 +162,15 @@ export function extractKoStems(text: string): string[] {
     .filter(Boolean);
   const stems = new Set<string>();
   for (const raw of eojeols) {
-    if (KEEP_STEM_WORDS.has(raw)) {
-      stems.add(raw);
+    // 원형 어절('고양이', '고양시', '달팽이' 등)은 항상 보존
+    stems.add(raw);
+    if (isProtectedKoNoun(raw)) {
       continue;
     }
     const next = raw.replace(KO_PARTICLE_RX, '');
-    stems.add(next && next.length >= 1 ? next : raw);
+    if (next && next.length >= 2 && next !== raw) {
+      stems.add(next);
+    }
   }
   return Array.from(stems);
 }
@@ -101,12 +189,17 @@ export function matchKoTokenInStems(token: string, stems: string[], rawText?: st
     if (rawText && boundaryRx.test(rawText)) return true;
     return false;
   }
+
+  const falseFriendRx = KO_SUBSTRING_FALSE_FRIEND_RX[tk];
+
   for (const st of stems) {
     if (st === tk) return true;
     if (tk.length === 1) continue;
+    if (falseFriendRx && falseFriendRx.test(st)) continue;
     if (tk.length === 2) {
       if (st.startsWith(tk)) {
         const rem = st.slice(tk.length);
+        if (ADMIN_PLACE_TAILS.test(rem)) continue;
         if (rem.length >= 2 && !LOAN_TAILS.test(rem)) return true;
       }
       if (st.endsWith(tk)) {
@@ -118,7 +211,8 @@ export function matchKoTokenInStems(token: string, stems: string[], rawText?: st
     if (st.includes(tk)) return true;
   }
   if (tk.length >= 3 && rawText) {
-    const noSpace = rawText.toLowerCase().replace(/\s+/g, '');
+    const cleanedRaw = falseFriendRx ? rawText.toLowerCase().replace(new RegExp(falseFriendRx.source, 'g'), ' ') : rawText.toLowerCase();
+    const noSpace = cleanedRaw.replace(/\s+/g, '');
     if (noSpace.includes(tk.replace(/\s+/g, ''))) return true;
   }
   return false;
@@ -1006,6 +1100,58 @@ export async function encodeMultimodalSearchQueryVecs(
 
   pendingEncodeQueryMap.set(q, task);
   return task;
+}
+
+const ANIMAL_QUERY_RX =
+  /강아지|반려견|멍멍이|시바견|비글|푸들|말티즈|웰시코기|코기|불독|리트리버|고양이|반려묘|냥이|길냥이|호랑이|사자|코끼리|원숭이|토끼|햄스터|다람쥐|거북이|부엉이|올빼미|앵무새|갈매기|비둘기|오리|동물|\b(dog|puppy|cat|kitten|tiger|lion|rabbit|hamster|bird|animal)\b/i;
+const HUMAN_EXPLICIT_QUERY_RX =
+  /사람|인물|아이|아기|어린이|가족|엄마|아빠|부모님|할머니|할아버지|친구|동료|남자|여자|커플|셀카|단체|\b(person|people|family|baby|kid|child|man|woman)\b/i;
+
+export function isNonHumanAnimalSearchQuery(query: string): boolean {
+  const qLow = (query || '').toLowerCase().trim();
+  if (!qLow || HUMAN_EXPLICIT_QUERY_RX.test(qLow)) return false;
+  if (ANIMAL_QUERY_RX.test(qLow)) return true;
+  const standaloneDog =
+    /(?:^|\s)개(?:$|\s|가|를|랑|와|들|사진|영상|동영상)/.test(qLow) &&
+    !/(?:한|두|세|네|다섯|여섯|일곱|여덟|아홉|열|몇|\d)\s*개(?:$|\s)/.test(qLow);
+  return standaloneDog;
+}
+
+let cachedContrastiveNonAnimalVecs: Float32Array[] | null = null;
+let pendingContrastiveNonAnimalPromise: Promise<Float32Array[]> | null = null;
+
+/**
+ * [동물 검색 대조 검증(Contrastive Margin) 앵커 벡터]:
+ * '강아지'·'고양이' 등 동물 단독 검색 시 인물·휴양지·화면캡처·문서만 찍힌 영상/사진이
+ * 상대 유사도 차이만으로 통과하는 현상을 수학적 대조 마진으로 원천 차단합니다.
+ */
+export async function getContrastiveNonAnimalAnchorVecs(
+  maxWaitMs = 900
+): Promise<Float32Array[]> {
+  if (cachedContrastiveNonAnimalVecs && cachedContrastiveNonAnimalVecs.length > 0) {
+    return cachedContrastiveNonAnimalVecs;
+  }
+  if (pendingContrastiveNonAnimalPromise) {
+    return pendingContrastiveNonAnimalPromise;
+  }
+  pendingContrastiveNonAnimalPromise = (async () => {
+    try {
+      const [humanVecs, uiDocVecs] = await Promise.all([
+        encodeMultimodalSearchQueryVecs('사람 인물 얼굴 상반신 남녀 가족 휴양지 리조트 여행 셀카', maxWaitMs),
+        encodeMultimodalSearchQueryVecs('스마트폰 앱 화면 캡처 문서 글자 건물 실내 풍경', maxWaitMs),
+      ]);
+      const combined = [...humanVecs.slice(0, 2), ...uiDocVecs.slice(0, 1)];
+      if (combined.length > 0) {
+        cachedContrastiveNonAnimalVecs = combined;
+      }
+      return combined;
+    } catch {
+      return [];
+    } finally {
+      pendingContrastiveNonAnimalPromise = null;
+    }
+  })();
+  return pendingContrastiveNonAnimalPromise;
 }
 
 let sharedVisionModel: any = null;
