@@ -305,10 +305,11 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
   setShowProModal: (showProModal) => set({ showProModal }),
 
   setActiveLoungeType: (requestedLoungeType) => {
+    storeSharedRefs.activeSharedRoomId = null;
     set((state) => {
       const activeLoungeType: LoungeType = requestedLoungeType;
       const isTargetLoungeSubscribed = Boolean(state.subscribedLounges[activeLoungeType]);
-      const isSwitchingLounge = state.activeLoungeType !== activeLoungeType;
+      const isSwitchingLounge = state.activeLoungeType !== activeLoungeType || Boolean(state.activeJoinedRoomMeta);
       const sharedMode = isSharedPhotoLounge(activeLoungeType);
       const invInfo = resolveInvitedHostLoungeAndRoom();
       const nextFamilyRoom: FamilyRoomId =
@@ -320,6 +321,7 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
       const nextCorpus = resolveLoungePhotoCorpus({
         activeLoungeType,
         activeFamilyRoom: nextFamilyRoom,
+        activeSharedRoomId: null,
         photos: state.photos,
         sharedRoomHostPhotos: state.sharedRoomHostPhotos,
         sharedRoomAddedPhotos: state.sharedRoomAddedPhotos,
@@ -345,6 +347,8 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
       return {
         activeLoungeType,
         activeFamilyRoom: nextFamilyRoom,
+        activeSharedRoomId: null,
+        activeJoinedRoomMeta: null,
         activePricingPlan: state.subscribedLounges[activeLoungeType] ?? 'free_trial',
         ...(isSwitchingLounge
           ? {

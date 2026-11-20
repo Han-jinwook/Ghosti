@@ -316,7 +316,11 @@ export async function copyInviteTextReliably(text: string): Promise<boolean> {
  * 동일 브라우저에서 타 계정 전환 시 의도치 않게 자동 합류되는 현상을 원천 차단합니다.
  * (※ 비로그인 게스트 프리뷰 중에는 F5 새로고침 유지를 위해 호출하지 않습니다.)
  */
-export function stripConsumedInviteParamsFromLoggedInUrl(): void {
+export function stripConsumedInviteParamsFromLoggedInUrl(opts?: {
+  loungeType?: LoungeType;
+  familyRoom?: FamilyRoomId;
+  joinedRoomId?: string | null;
+}): void {
   if (typeof window === 'undefined' || !hasAuthenticatedHubAccountSession()) return;
   try {
     sessionStorage.removeItem(INVITE_SESSION_KEY);
@@ -332,7 +336,8 @@ export function stripConsumedInviteParamsFromLoggedInUrl(): void {
       params.has('host') ||
       params.has('nick') ||
       params.get('preview') === 'guest';
-    if (!hadInviteParams) return;
+    const wantsJoinedRoomId = Boolean((opts?.joinedRoomId || '').trim());
+    if (!hadInviteParams && !wantsJoinedRoomId) return;
 
     params.delete('invite');
     params.delete('inviteToken');
@@ -345,6 +350,20 @@ export function stripConsumedInviteParamsFromLoggedInUrl(): void {
     params.delete('nick');
     if (params.get('preview') === 'guest') {
       params.delete('preview');
+    }
+    if (opts?.loungeType) {
+      params.set('lounge', opts.loungeType);
+      params.set('tab', 'dashboard');
+      if (opts.loungeType === 'family' && opts.familyRoom) {
+        params.set('room', opts.familyRoom);
+      } else {
+        params.delete('room');
+      }
+    }
+    if (wantsJoinedRoomId && opts?.joinedRoomId) {
+      params.set('roomId', opts.joinedRoomId.trim());
+    } else if (opts && opts.joinedRoomId === null) {
+      params.delete('roomId');
     }
     const qs = params.toString();
     const cleanUrl = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash || ''}`;

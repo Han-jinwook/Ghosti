@@ -910,7 +910,10 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
     subscribedLounges,
     themeMode,
     activeFamilyRoom,
-    setActiveFamilyRoom,
+    activeJoinedRoomMeta,
+    joinedSharedRooms,
+    selectOwnSharedRoom,
+    selectJoinedSharedRoom,
     isGuestPreviewMode,
     setIsGuestPreviewMode,
     triggerGuestJoinWall,
@@ -1096,15 +1099,14 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
             {resolveQuickMenuId(activeLoungeType) === 'photo_share' && (
               <div className="flex lg:hidden items-center gap-1.5 overflow-x-auto no-scrollbar">
                 {PHOTO_SHARE_GROUPS.map((group) => {
-                  const groupActive = activeLoungeType === group.id;
+                  const groupActive = !activeJoinedRoomMeta && activeLoungeType === group.id;
                   return (
                     <button
                       key={group.id}
                       type="button"
                       onClick={() => {
                         if (groupActive) return;
-                        setActiveLoungeType(group.id);
-                        setDesktopTab('dashboard');
+                        selectOwnSharedRoom(group.id);
                         resetToZenCanvas();
                       }}
                       className={`px-2.5 py-1 rounded-lg border text-[11px] shrink-0 whitespace-nowrap transition-all cursor-pointer ${
@@ -1128,82 +1130,150 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
 
         {/* ─────────────── 공유 라운지(패밀리 / 동호회·동창회 / 업무 공유) 본문 상단 우측 통합 탭 바 ─────────────── */}
         {activeLoungeType !== 'personal' && (
-          <div className="w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 pt-5 pb-1 flex flex-wrap items-center justify-between gap-3">
-            {/* 좌측: 패밀리일 때는 우리집 / 본가 / 처가 방 선택 알약, 그 외에는 라운지 타이틀 */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              {activeLoungeType === 'family' ? (
-                FAMILY_ROOMS.map((room) => {
-                  const roomActive = activeFamilyRoom === room;
-                  return (
-                    <button
-                      key={room}
-                      type="button"
-                      onClick={() => {
-                        setActiveFamilyRoom(room);
-                        if (desktopTab !== 'dashboard') setDesktopTab('dashboard');
-                      }}
-                      className={`px-3.5 py-1.5 rounded-full font-label-sm text-[13px] font-extrabold border transition-all shrink-0 whitespace-nowrap cursor-pointer ${
-                        roomActive && desktopTab === 'dashboard'
-                          ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-xs'
-                          : themeMode === 'light'
-                          ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                          : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
-                      }`}
-                    >
-                      {room === '우리집'
-                        ? '🏠 우리집'
-                        : room === '본가(친가)'
-                        ? '🏡 본가(친가)'
-                        : '🌸 처가(친정)'}
-                    </button>
-                  );
-                })
-              ) : (
-                <button
-                  type="button"
-                  onClick={() => setDesktopTab('dashboard')}
-                  className={`px-3.5 py-1.5 rounded-full font-label-sm text-[13px] font-extrabold border transition-all cursor-pointer ${
-                    desktopTab === 'dashboard'
-                      ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-xs'
-                      : themeMode === 'light'
-                      ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                      : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
-                  }`}
-                >
-                  {activeLoungeType === 'work'
-                    ? '📂 업무 공유(S:) 메인'
-                    : activeLoungeType === 'club'
-                    ? '⛰️ 동호회·모임 앨범 홈'
-                    : '🎓 동창회 앨범 홈'}
-                </button>
-              )}
+          <div className="w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 pt-5 pb-1 flex flex-col gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {/* 좌측: 내 기본 공유방 선택 알약 (타인 초대방과 100% 독립 분리) */}
+              <div className="flex flex-wrap items-center gap-1.5">
+                {activeLoungeType === 'family' ? (
+                  FAMILY_ROOMS.map((room) => {
+                    const roomActive =
+                      !activeJoinedRoomMeta &&
+                      activeFamilyRoom === room &&
+                      desktopTab === 'dashboard';
+                    return (
+                      <button
+                        key={room}
+                        type="button"
+                        data-own-room={room}
+                        onClick={() => {
+                          selectOwnSharedRoom('family', room);
+                        }}
+                        className={`px-3.5 py-1.5 rounded-full font-label-sm text-[13px] font-extrabold border transition-all shrink-0 whitespace-nowrap cursor-pointer ${
+                          roomActive
+                            ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-xs'
+                            : themeMode === 'light'
+                            ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                            : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                        }`}
+                      >
+                        {room === '우리집'
+                          ? '🏠 우리집'
+                          : room === '본가(친가)'
+                          ? '🏡 본가(친가)'
+                          : '🌸 처가(친정)'}
+                      </button>
+                    );
+                  })
+                ) : (
+                  <button
+                    type="button"
+                    data-own-lounge={activeLoungeType}
+                    onClick={() => {
+                      if (activeLoungeType === 'work') {
+                        setDesktopTab('dashboard');
+                      } else {
+                        selectOwnSharedRoom(activeLoungeType);
+                      }
+                    }}
+                    className={`px-3.5 py-1.5 rounded-full font-label-sm text-[13px] font-extrabold border transition-all cursor-pointer ${
+                      !activeJoinedRoomMeta && desktopTab === 'dashboard'
+                        ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-xs'
+                        : themeMode === 'light'
+                        ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
+                        : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                    }`}
+                  >
+                    {activeLoungeType === 'work'
+                      ? '📂 업무 공유(S:) 메인'
+                      : activeLoungeType === 'club'
+                      ? '⛰️ 내 동호회·모임 앨범'
+                      : '🎓 내 동창회 앨범'}
+                  </button>
+                )}
+              </div>
+
+              {/* 우측: 해당 공유방의 서브메뉴 버튼들 (공유 시작 / 새 사진 정리함 / 초대 & 방 관리) */}
+              <div className="flex flex-wrap items-center gap-1.5 ml-auto">
+                {currentSubmenus
+                  .filter((sub) => sub.id !== 'dashboard' && !(sub.id === 'trial' && isCurrentLoungeSubscribed))
+                  .map((sub) => {
+                    const isSubActive = desktopTab === sub.id;
+                    return (
+                      <button
+                        key={sub.id}
+                        type="button"
+                        onClick={() => setDesktopTab(sub.id)}
+                        className={`px-3.5 py-1.5 rounded-full font-label-sm text-[12.5px] font-extrabold border transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
+                          isSubActive
+                            ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-xs'
+                            : themeMode === 'light'
+                            ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
+                            : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                        }`}
+                      >
+                        <span className="grayscale opacity-80 text-[12px]">{sub.icon}</span>
+                        <span>{sub.label}</span>
+                      </button>
+                    );
+                  })}
+              </div>
             </div>
 
-            {/* 우측: 해당 공유방의 서브메뉴 버튼들 (공유 시작 / 새 사진 정리함 / 초대 & 방 관리) */}
-            <div className="flex flex-wrap items-center gap-1.5 ml-auto">
-              {currentSubmenus
-                .filter((sub) => sub.id !== 'dashboard' && !(sub.id === 'trial' && isCurrentLoungeSubscribed))
-                .map((sub) => {
-                  const isSubActive = desktopTab === sub.id;
+            {/* [안 A 카톡 단톡방식 독립 분리]: 타인에게 초대받아 합류한 공유방 전용 개별 알약 스트립 */}
+            {activeLoungeType !== 'work' && joinedSharedRooms.length > 0 && (
+              <div
+                aria-label="초대받은 독립 공유방 목록"
+                className={`flex flex-wrap items-center gap-1.5 px-3 py-1.5 rounded-2xl border transition-colors ${
+                  themeMode === 'light'
+                    ? 'bg-amber-50/75 border-amber-200/90'
+                    : 'bg-amber-500/8 border-amber-400/25'
+                }`}
+              >
+                <span
+                  className={`text-[11.5px] font-extrabold shrink-0 whitespace-nowrap mr-0.5 ${
+                    themeMode === 'light' ? 'text-amber-800' : 'text-amber-300'
+                  }`}
+                >
+                  💌 초대받은 방 ({joinedSharedRooms.length}):
+                </span>
+                {joinedSharedRooms.map((jr) => {
+                  const isJoinedActive =
+                    activeJoinedRoomMeta?.roomId === jr.roomId && desktopTab === 'dashboard';
+                  const roomIcon =
+                    jr.loungeType === 'club'
+                      ? '⛰️'
+                      : jr.loungeType === 'student'
+                      ? '🎓'
+                      : jr.familyRoom === '본가(친가)'
+                      ? '🏡'
+                      : jr.familyRoom === '처가(친정)'
+                      ? '🌸'
+                      : '🏠';
+                  const shortRoomLabel =
+                    jr.loungeType === 'family'
+                      ? jr.familyRoom
+                      : jr.roomTitle.replace(/^[⛰️🎓🏠🏡🌸\s]+/, '').trim() ||
+                        (jr.loungeType === 'club' ? '동호회·모임' : '동창회');
                   return (
                     <button
-                      key={sub.id}
+                      key={jr.roomId}
                       type="button"
-                      onClick={() => setDesktopTab(sub.id)}
-                      className={`px-3.5 py-1.5 rounded-full font-label-sm text-[12.5px] font-extrabold border transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
-                        isSubActive
-                          ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-xs'
+                      data-joined-room-id={jr.roomId}
+                      onClick={() => selectJoinedSharedRoom(jr)}
+                      className={`px-3 py-1 rounded-full font-label-sm text-[12px] font-extrabold border transition-all shrink-0 whitespace-nowrap cursor-pointer ${
+                        isJoinedActive
+                          ? 'bg-amber-500 text-zinc-950 border-amber-500 shadow-xs'
                           : themeMode === 'light'
-                          ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                          : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                          ? 'bg-white text-amber-900 border-amber-300 hover:bg-amber-100/80'
+                          : 'bg-zinc-900 text-amber-200 border-amber-400/35 hover:bg-zinc-800'
                       }`}
                     >
-                      <span className="grayscale opacity-80 text-[12px]">{sub.icon}</span>
-                      <span>{sub.label}</span>
+                      {roomIcon} {jr.masterNickname} · {shortRoomLabel}
                     </button>
                   );
                 })}
-            </div>
+              </div>
+            )}
           </div>
         )}
 

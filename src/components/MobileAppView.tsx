@@ -266,7 +266,10 @@ export const MobileAppView: React.FC = () => {
     setShowProModal,
     faceClusters,
     activeFamilyRoom,
-    setActiveFamilyRoom,
+    activeJoinedRoomMeta,
+    joinedSharedRooms,
+    selectOwnSharedRoom,
+    selectJoinedSharedRoom,
     setDoorplatePickerClusterId,
     mobileGalleryScanning,
     mobileGalleryPermissionDenied,
@@ -734,20 +737,19 @@ export const MobileAppView: React.FC = () => {
                 })}
               </nav>
 
-              {/* 사진 공유 하위 선택: 패밀리 ↔ 동호회·모임 ↔ 동창회 + (가족일 때 우리집/본가/처가 하위 계층 박스 명시) */}
+              {/* 사진 공유 하위 선택: 내 방(패밀리/동호회/동창회) ↔ 타인에게 초대받은 독립 공유방 (100% 분리) */}
               {resolveMainMenuId(activeLoungeType) === 'photo_share' && (
                 <div className="flex flex-col gap-1.5 -mt-0.5">
                   <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar">
                     {PHOTO_SHARE_GROUPS.map((group) => {
-                      const groupActive = activeLoungeType === group.id;
+                      const groupActive = !activeJoinedRoomMeta && activeLoungeType === group.id;
                       return (
                         <button
                           key={group.id}
                           type="button"
                           onClick={() => {
                             if (!groupActive) {
-                              setActiveLoungeType(group.id);
-                              setMobileTab('search');
+                              selectOwnSharedRoom(group.id);
                             }
                           }}
                           className={`px-2.5 py-1.5 rounded-lg border text-[11.5px] shrink-0 whitespace-nowrap transition-all outline-none focus:outline-none cursor-pointer ${
@@ -775,17 +777,17 @@ export const MobileAppView: React.FC = () => {
                       }`}
                     >
                       <span className="text-[11px] font-extrabold text-[#0D9488] dark:text-teal-300 shrink-0 whitespace-nowrap">
-                        ↳ 가족방:
+                        ↳ 내 가족방:
                       </span>
                       {FAMILY_ROOM_PILLS.map((room) => {
-                        const roomActive = activeFamilyRoom === room.id;
+                        const roomActive = !activeJoinedRoomMeta && activeFamilyRoom === room.id;
                         return (
                           <button
                             key={room.id}
                             type="button"
+                            data-own-room={room.id}
                             onClick={() => {
-                              setActiveFamilyRoom(room.id);
-                              if (mobileTab !== 'search') setMobileTab('search');
+                              selectOwnSharedRoom('family', room.id);
                             }}
                             className={`px-2.5 py-1 rounded-full border text-[11px] shrink-0 whitespace-nowrap transition-all cursor-pointer ${
                               roomActive
@@ -796,6 +798,60 @@ export const MobileAppView: React.FC = () => {
                             }`}
                           >
                             {room.label}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {joinedSharedRooms.length > 0 && (
+                    <div
+                      aria-label="초대받은 독립 공유방 목록"
+                      className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1.5 overflow-x-auto no-scrollbar ${
+                        themeMode === 'light'
+                          ? 'bg-amber-50/85 border-amber-200/90'
+                          : 'bg-amber-500/10 border-amber-400/30'
+                      }`}
+                    >
+                      <span
+                        className={`text-[11px] font-extrabold shrink-0 whitespace-nowrap ${
+                          themeMode === 'light' ? 'text-amber-800' : 'text-amber-300'
+                        }`}
+                      >
+                        💌 초대받은 방:
+                      </span>
+                      {joinedSharedRooms.map((jr) => {
+                        const isJoinedActive = activeJoinedRoomMeta?.roomId === jr.roomId;
+                        const roomIcon =
+                          jr.loungeType === 'club'
+                            ? '⛰️'
+                            : jr.loungeType === 'student'
+                            ? '🎓'
+                            : jr.familyRoom === '본가(친가)'
+                            ? '🏡'
+                            : jr.familyRoom === '처가(친정)'
+                            ? '🌸'
+                            : '🏠';
+                        const shortRoomLabel =
+                          jr.loungeType === 'family'
+                            ? jr.familyRoom
+                            : jr.roomTitle.replace(/^[⛰️🎓🏠🏡🌸\s]+/, '').trim() ||
+                              (jr.loungeType === 'club' ? '동호회·모임' : '동창회');
+                        return (
+                          <button
+                            key={jr.roomId}
+                            type="button"
+                            data-joined-room-id={jr.roomId}
+                            onClick={() => selectJoinedSharedRoom(jr)}
+                            className={`px-2.5 py-1 rounded-full border text-[11px] shrink-0 whitespace-nowrap transition-all cursor-pointer ${
+                              isJoinedActive
+                                ? 'bg-amber-500 border-amber-500 text-zinc-950 font-extrabold'
+                                : themeMode === 'light'
+                                ? 'bg-white border-amber-300 text-amber-900 font-bold'
+                                : 'bg-zinc-900 border-amber-400/35 text-amber-200 font-bold'
+                            }`}
+                          >
+                            {roomIcon} {jr.masterNickname} · {shortRoomLabel}
                           </button>
                         );
                       })}
@@ -887,15 +943,14 @@ export const MobileAppView: React.FC = () => {
             {resolveMainMenuId(activeLoungeType) === 'photo_share' && (
               <div className="flex items-center gap-1 shrink-0">
                 {PHOTO_SHARE_GROUPS.map((group) => {
-                  const groupActive = activeLoungeType === group.id;
+                  const groupActive = !activeJoinedRoomMeta && activeLoungeType === group.id;
                   return (
                     <button
                       key={group.id}
                       type="button"
                       onClick={() => {
                         if (!groupActive) {
-                          setActiveLoungeType(group.id);
-                          setMobileTab('search');
+                          selectOwnSharedRoom(group.id);
                         }
                       }}
                       className={`px-2 py-1 rounded-lg border text-[11px] shrink-0 whitespace-nowrap cursor-pointer ${
@@ -915,17 +970,16 @@ export const MobileAppView: React.FC = () => {
                 {activeLoungeType === 'family' && (
                   <div className="flex items-center gap-1 ml-1 pl-2 border-l border-teal-500/40">
                     <span className="text-[10.5px] font-extrabold text-[#0D9488] dark:text-teal-300 shrink-0 whitespace-nowrap">
-                      ↳ 가족방:
+                      ↳ 내 가족방:
                     </span>
                     {FAMILY_ROOM_PILLS.map((room) => {
-                      const roomActive = activeFamilyRoom === room.id;
+                      const roomActive = !activeJoinedRoomMeta && activeFamilyRoom === room.id;
                       return (
                         <button
                           key={room.id}
                           type="button"
                           onClick={() => {
-                            setActiveFamilyRoom(room.id);
-                            if (mobileTab !== 'search') setMobileTab('search');
+                            selectOwnSharedRoom('family', room.id);
                           }}
                           className={`px-2 py-0.5 rounded-full border text-[10.5px] shrink-0 whitespace-nowrap cursor-pointer ${
                             roomActive
@@ -936,6 +990,47 @@ export const MobileAppView: React.FC = () => {
                           }`}
                         >
                           {room.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+                {joinedSharedRooms.length > 0 && (
+                  <div className="flex items-center gap-1 ml-1 pl-2 border-l border-amber-400/50">
+                    <span className="text-[10.5px] font-extrabold text-amber-700 dark:text-amber-300 shrink-0 whitespace-nowrap">
+                      💌 초대방:
+                    </span>
+                    {joinedSharedRooms.map((jr) => {
+                      const isJoinedActive = activeJoinedRoomMeta?.roomId === jr.roomId;
+                      const roomIcon =
+                        jr.loungeType === 'club'
+                          ? '⛰️'
+                          : jr.loungeType === 'student'
+                          ? '🎓'
+                          : jr.familyRoom === '본가(친가)'
+                          ? '🏡'
+                          : jr.familyRoom === '처가(친정)'
+                          ? '🌸'
+                          : '🏠';
+                      const shortRoomLabel =
+                        jr.loungeType === 'family'
+                          ? jr.familyRoom
+                          : jr.roomTitle.replace(/^[⛰️🎓🏠🏡🌸\s]+/, '').trim() ||
+                            (jr.loungeType === 'club' ? '동호회·모임' : '동창회');
+                      return (
+                        <button
+                          key={jr.roomId}
+                          type="button"
+                          onClick={() => selectJoinedSharedRoom(jr)}
+                          className={`px-2 py-0.5 rounded-full border text-[10.5px] shrink-0 whitespace-nowrap cursor-pointer ${
+                            isJoinedActive
+                              ? 'bg-amber-500 border-amber-500 text-zinc-950 font-extrabold'
+                              : themeMode === 'light'
+                              ? 'bg-white border-amber-300 text-amber-900 font-bold'
+                              : 'bg-zinc-900 border-amber-400/35 text-amber-200 font-bold'
+                          }`}
+                        >
+                          {roomIcon} {jr.masterNickname} · {shortRoomLabel}
                         </button>
                       );
                     })}

@@ -17,6 +17,7 @@ import {
   HubNotifier,
 } from '../services/merlin-hub-sdk/react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import { storeSharedRefs } from '../store/slices/storeSharedRefs';
 import { zCoreBridge } from '../services/zCoreBridge';
 import {
   syncHubUserToLocalSupabase,
@@ -149,6 +150,8 @@ const GhostiHubGlobalModals: React.FC = () => {
     purgeAllGhostiLocalAuthArtifacts({ setLogoutLockMs: 15_000 });
     clearGhostSecretaryAccountNicknameOnLogout();
     clearCachedSharedRoomTokens();
+    storeSharedRefs.activeSharedRoomId = null;
+    storeSharedRefs.knownJoinedRoomIds.clear();
     if (!hasUrlInviteToken) {
       clearStoredInviteSession();
     }
@@ -165,6 +168,9 @@ const GhostiHubGlobalModals: React.FC = () => {
         syncedClipboardItems: [],
         showSharedPhotoUploadModal: false,
         isInvitedMemberSession: false,
+        activeSharedRoomId: null,
+        activeJoinedRoomMeta: null,
+        joinedSharedRooms: [],
         ...(!hasUrlInviteToken
           ? {
               sharedRoomAddedPhotos: [],
@@ -209,6 +215,8 @@ const GhostiHubGlobalModals: React.FC = () => {
 
       if (didSwitchAccountDirectly) {
         clearCachedSharedRoomTokens();
+        storeSharedRefs.activeSharedRoomId = null;
+        storeSharedRefs.knownJoinedRoomIds.clear();
         if (!readActiveInviteToken()) {
           clearStoredInviteSession();
         }
@@ -243,6 +251,9 @@ const GhostiHubGlobalModals: React.FC = () => {
         syncedClipboardItems: loadCachedSyncedClips(cleanUserEmail),
         ...(didSwitchAccountDirectly
           ? {
+              activeSharedRoomId: null,
+              activeJoinedRoomMeta: null,
+              joinedSharedRooms: [],
               sharedRoomAddedPhotos: [],
               sharedRoomHostPhotos: [],
               searchResults: [],
@@ -303,6 +314,8 @@ const GhostiHubGlobalModals: React.FC = () => {
         clearGhostiSupabaseSession();
         clearGhostSecretaryAccountNicknameOnLogout();
         clearCachedSharedRoomTokens();
+        storeSharedRefs.activeSharedRoomId = null;
+        storeSharedRefs.knownJoinedRoomIds.clear();
         if (!hasUrlInviteToken) {
           clearStoredInviteSession();
         }
@@ -322,6 +335,9 @@ const GhostiHubGlobalModals: React.FC = () => {
           isInvitedMemberSession: false,
           ...(wasLoggedInRef.current && !hasUrlInviteToken
             ? {
+                activeSharedRoomId: null,
+                activeJoinedRoomMeta: null,
+                joinedSharedRooms: [],
                 sharedRoomAddedPhotos: [],
                 sharedRoomHostPhotos: [],
                 ...(isInSharedLounge ? { searchResults: [] } : {}),

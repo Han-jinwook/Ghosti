@@ -65,6 +65,38 @@ async function copyAuthenticatedRoomInviteFlow(opts: {
   const resolvedTitle =
     opts.roomTitle || resolveDefaultRoomTitle(opts.loungeType, opts.familyRoom);
 
+  // [안 A 1:1 독립 방 초대 링크 복사]: 현재 타인의 초대받은 독립 공유방에 들어가 있는 상태에서
+  // 초대 링크를 복사하면 내 방 주소가 아닌, 바로 지금 보고 있는 그 초대방 전용 링크를 정확히 복사합니다.
+  const activeJoined = st.activeJoinedRoomMeta;
+  if (
+    activeJoined &&
+    activeJoined.inviteToken &&
+    activeJoined.loungeType === opts.loungeType &&
+    (opts.loungeType !== 'family' || activeJoined.familyRoom === opts.familyRoom)
+  ) {
+    const joinedUrl = buildShareRoomInviteHttpsUrl({
+      loungeType: activeJoined.loungeType,
+      familyRoom: activeJoined.familyRoom,
+      inviteToken: activeJoined.inviteToken,
+      hostName: activeJoined.masterNickname || hostNick,
+      roomTitle: activeJoined.roomTitle || resolvedTitle,
+    });
+    const textToCopy = opts.formatCopyText ? opts.formatCopyText(joinedUrl) : joinedUrl;
+    const copied = await copyInviteTextReliably(textToCopy);
+    if (!copied && typeof window !== 'undefined') {
+      window.prompt(opts.promptLabel, joinedUrl);
+    }
+    if (activeJoined.roomId) {
+      void reseedRoomPhotosForInvite({
+        roomId: activeJoined.roomId,
+        loungeType: activeJoined.loungeType,
+        familyRoom: activeJoined.familyRoom,
+        uploaderNickname: hostNick,
+      });
+    }
+    return true;
+  }
+
   // [0.00ms 동기 즉시 복사 경로]: 사진 공유방 진입 시 일괄 예열된 5대 공유방 토큰이 있으면
   // 클릭 제스처(0ms) 안에서 즉시 해당 방 전용 링크를 클립보드에 기록하여, 사용자가 0.1초 만에 카톡 창으로 전환(Alt+Tab)해 붙여넣어도
   // 이전 방(예: 본가) 링크가 남는 현상을 0%로 원천 차단합니다.
@@ -1810,6 +1842,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
     setActiveLoungeType,
     activeFamilyRoom,
     setActiveFamilyRoom,
+    activeSharedRoomId,
+    activeJoinedRoomMeta,
+    selectOwnSharedRoom,
     faceClusters,
     runTextQuery,
     photos,
@@ -1857,6 +1892,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
   const activeRoomPhotoCount = resolveLoungePhotoCorpus({
     activeLoungeType,
     activeFamilyRoom,
+    activeSharedRoomId,
     photos,
     sharedRoomHostPhotos,
     sharedRoomAddedPhotos,
@@ -2020,6 +2056,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
   const currentRoomPhotos = resolveLoungePhotoCorpus({
     activeLoungeType,
     activeFamilyRoom,
+    activeSharedRoomId,
     photos,
     sharedRoomHostPhotos,
     sharedRoomAddedPhotos,
@@ -2130,10 +2167,56 @@ export const LoungeFeedContextBanner: React.FC = () => {
     </div>
   );
 
+  const renderJoinedRoomContextBanner = () => {
+    if (!activeJoinedRoomMeta || isGuestPreviewMode) return null;
+    return (
+      <div
+        className={`px-3.5 py-2.5 rounded-2xl border flex flex-wrap items-center justify-between gap-2 transition-all ${
+          themeMode === 'light'
+            ? 'bg-amber-50/95 border-amber-300 text-amber-950'
+            : 'bg-amber-500/12 border-amber-400/45 text-amber-100'
+        }`}
+      >
+        <div className="flex flex-wrap items-center gap-2 min-w-0">
+          <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-zinc-950 font-label-sm text-[11px] font-black shrink-0">
+            💌 초대받은 독립 공유방
+          </span>
+          <span className="font-label-sm text-[12.5px] font-extrabold break-keep">
+            {activeJoinedRoomMeta.masterNickname}님이 초대한 『{activeJoinedRoomMeta.roomTitle}』
+          </span>
+          <span
+            className={`text-[11px] font-bold break-keep ${
+              themeMode === 'light' ? 'text-amber-800/85' : 'text-amber-200/80'
+            }`}
+          >
+            · 🔒 내 공유방과 100% 분리 보관 중
+          </span>
+        </div>
+        <button
+          type="button"
+          onClick={() =>
+            selectOwnSharedRoom(
+              activeJoinedRoomMeta.loungeType,
+              activeJoinedRoomMeta.familyRoom
+            )
+          }
+          className={`px-2.5 py-1 rounded-lg border text-[11.5px] font-extrabold cursor-pointer shrink-0 transition-all ${
+            themeMode === 'light'
+              ? 'bg-white border-amber-300 text-amber-900 hover:bg-amber-100'
+              : 'bg-zinc-900 border-amber-400/40 text-amber-200 hover:bg-zinc-800'
+          }`}
+        >
+          ↩️ 내 공유방으로 돌아가기
+        </button>
+      </div>
+    );
+  };
+
   if (activeLoungeType === 'family') {
     return (
       <div className="flex flex-col gap-2.5">
         {renderMobileGuestPreviewBanner()}
+        {renderJoinedRoomContextBanner()}
         <div className="px-1 py-1 flex flex-wrap items-center justify-between gap-2.5">
           <div className="flex flex-wrap items-center gap-2">
             {renderMemberPersonaPills(`[${activeFamilyRoom}] 인물:`)}
@@ -2163,13 +2246,16 @@ export const LoungeFeedContextBanner: React.FC = () => {
                   promptLabel: `『${activeFamilyRoom} 가족 사진방』 초대 링크를 복사해 공유하세요:`,
                 });
                 if (!ok) return;
+                const targetLabel = activeJoinedRoomMeta
+                  ? `${activeJoinedRoomMeta.masterNickname} · ${activeJoinedRoomMeta.roomTitle}`
+                  : `${activeFamilyRoom} 가족 사진방`;
                 useSaySeeStore
                   .getState()
-                  .showToast(`💌 『${activeFamilyRoom} 가족 사진방』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.`);
+                  .showToast(`💌 『${targetLabel}』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.`);
               }}
               className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-400/50 text-amber-300 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 cursor-pointer transition-all"
             >
-              <span>💌 가족방 초대 링크 복사</span>
+              <span>{activeJoinedRoomMeta ? '💌 이 초대방 링크 복사' : '💌 가족방 초대 링크 복사'}</span>
             </button>
           </div>
         </div>
@@ -2184,6 +2270,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
     return (
       <div className="flex flex-col gap-2.5">
         {renderMobileGuestPreviewBanner()}
+        {renderJoinedRoomContextBanner()}
         {/* 동호회·모임 전용 헤더 바 (동창회와 동일한 간판·초대장 열기/접기 및 후원 문구 통일) */}
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <div className="flex flex-wrap items-center gap-2">
@@ -2381,6 +2468,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
   return (
     <div className="flex flex-col gap-2.5">
       {renderMobileGuestPreviewBanner()}
+      {renderJoinedRoomContextBanner()}
       <AlumniRetroBannerAndTwoTrackBar
         onOpenWaitingRoom={() => {
           setDesktopTab('trash');
@@ -2440,6 +2528,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
     activeLoungeType,
     setActiveLoungeType,
     activeFamilyRoom,
+    activeSharedRoomId,
     photos,
     sharedRoomHostPhotos,
     sharedRoomAddedPhotos,
@@ -2503,6 +2592,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
   const scopedWaitingPhotos = resolveLoungePhotoCorpus({
     activeLoungeType,
     activeFamilyRoom,
+    activeSharedRoomId,
     photos,
     sharedRoomHostPhotos,
     sharedRoomAddedPhotos,
@@ -3260,17 +3350,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     };
   }, []);
 
-  // [가족 초대 & 방 설정] 진입 시 양가 3개 방 중 '우리집'이 기본 선택되어 있도록 보장
-  useEffect(() => {
-    if (activeLoungeType === 'family' && activeFamilyRoom !== '우리집') {
-      const hasUrlRoom =
-        typeof window !== 'undefined' &&
-        new URLSearchParams(window.location.search).has('invite');
-      if (!hasUrlRoom) {
-        setActiveFamilyRoom('우리집');
-      }
-    }
-  }, [activeLoungeType]);
+  // [안 A 방 보존 원칙]: 사용자가 선택한 본가(친가)·처가(친정)·초대받은 방이 [초대 & 방 관리] 진입 시 '우리집'으로 강제 덮어쓰이지 않도록 원상태 그대로 유지합니다.
 
   const isLoggedInUser = Boolean(
     merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest'

@@ -27,7 +27,7 @@ import { FreePhotoShareOverlays } from './domains/free_photo_share/FreePhotoShar
 import { GhostSecretaryFirstModal } from './components/GhostSecretaryFirstGuard';
 import { GhostPhotoOcrTeleportModal } from './components/GhostWindowThreeStageMockup';
 import { useDashboardNavStore } from './domains/shared/dashboardNavState';
-import { resolveViewportLayout } from './store/slices/storeSharedRefs';
+import { resolveViewportLayout, storeSharedRefs } from './store/slices/storeSharedRefs';
 
 export const App: React.FC = () => {
   const {
@@ -39,6 +39,8 @@ export const App: React.FC = () => {
     desktopTab,
     mobileTab,
     activeFamilyRoom,
+    activeSharedRoomId,
+    activeJoinedRoomMeta,
     lastQuarantineToast,
     dismissQuarantineToast,
     lastUndoBatch,
@@ -256,6 +258,7 @@ export const App: React.FC = () => {
     lounge: LoungeType;
     desktopTab: DesktopTab;
     familyRoom: FamilyRoomId;
+    joinedRoomId?: string | null;
   }): string => {
     try {
       const params = new URLSearchParams(window.location.search);
@@ -264,6 +267,7 @@ export const App: React.FC = () => {
         params.delete('lounge');
         params.delete('tab');
         params.delete('room');
+        params.delete('roomId');
       } else {
         params.delete('view');
         params.set('lounge', nav.lounge);
@@ -272,6 +276,14 @@ export const App: React.FC = () => {
           params.set('room', nav.familyRoom);
         } else {
           params.delete('room');
+        }
+        const isSharedPhoto =
+          nav.lounge === 'family' || nav.lounge === 'club' || nav.lounge === 'student';
+        const cleanJoinedRoomId = (nav.joinedRoomId || '').trim();
+        if (isSharedPhoto && cleanJoinedRoomId) {
+          params.set('roomId', cleanJoinedRoomId);
+        } else {
+          params.delete('roomId');
         }
         // 정식 로그인 세션에서 토큰 없는 구형 ?invite=... 또는 ?preview=guest가 URL에 잔류해 새로고침 시 내 방을 가리는 현상 방지
         const hasRealInviteToken = Boolean(
@@ -371,7 +383,12 @@ export const App: React.FC = () => {
         hasInviteLink || hasWorkRoomLink
           ? 'search'
           : savedNav?.mobileTab || desktopTabToMobileTab(targetDesktopTab);
-      const targetRoom: FamilyRoomId = urlRoom || '우리집';
+      const urlRoomId = (params.get('roomId') || '').trim() || null;
+      const targetRoom: FamilyRoomId =
+        urlRoom ||
+        normalizeFamilyRoomParam(savedNav?.familyRoom) ||
+        useSaySeeStore.getState().activeFamilyRoom ||
+        '우리집';
       const isB2bUrl =
         params.get('from') === 'b2b' ||
         /[?&]from=b2b\b/i.test(window.location.href) ||
@@ -410,26 +427,30 @@ export const App: React.FC = () => {
       if (targetView !== viewMode) {
         setViewMode(targetView);
       }
+      if (urlRoomId) {
+        storeSharedRefs.activeSharedRoomId = urlRoomId;
+      }
       useSaySeeStore.setState({
         activeLoungeType: targetLounge,
         desktopTab: targetDesktopTab,
         mobileTab: targetMobileTab,
         activeFamilyRoom: targetRoom,
+        ...(urlRoomId ? { activeSharedRoomId: urlRoomId } : {}),
       });
 
       const initialNav = {
         viewMode: targetView,
-        lounge: (targetLounge === 'student' && !hasInviteLink ? 'club' : targetLounge) as LoungeType,
+        lounge: targetLounge,
         desktopTab: targetDesktopTab,
         mobileTab: targetMobileTab,
         familyRoom: targetRoom,
+        joinedRoomId: urlRoomId,
       };
-      const initKey = `${initialNav.viewMode}:${initialNav.lounge}:${initialNav.desktopTab}:${initialNav.familyRoom}`;
+      const initKey = `${initialNav.viewMode}:${initialNav.lounge}:${initialNav.desktopTab}:${initialNav.familyRoom}:${initialNav.joinedRoomId || ''}`;
       lastPushedNavKeyRef.current = initKey;
 
       // 루트 가드 엔트리(ghostiRootGuard) + 현재 엔트리(ghostiActiveEntry) 이중 구성:
-      // - 안드로이드에서 뒤로가기 시 앱/탭이 닫히거나 PC에서 구글 첫 화면으로 튕기는 현상 차단
-      // - 아이폰 Safari에서 뒤로가기(<) 버튼 즉시 활성화
+      // - 초대 링크 진입 시 replaceState가 초대 파라미터/처가 방을 덮어쓰지 않도록 루트 가드 URL을 순수 홈 URL로 분리
       const initUrl = buildNavUrl(initialNav);
       if (!window.history.state?.ghostiNav) {
         const rootHomeNav = {
@@ -438,11 +459,16 @@ export const App: React.FC = () => {
           desktopTab: 'trash' as DesktopTab,
           mobileTab: 'trash' as MobileTab,
           familyRoom: '우리집' as FamilyRoomId,
+          joinedRoomId: null as string | null,
         };
+        const cleanRootGuardUrl =
+          rootHomeNav.viewMode === 'showroom'
+            ? window.location.pathname
+            : `${window.location.pathname}?lounge=personal&tab=trash`;
         window.history.replaceState(
           { ...(window.history.state || {}), ghostiRootGuard: true, ghostiNav: rootHomeNav },
           '',
-          buildNavUrl(rootHomeNav)
+          cleanRootGuardUrl
         );
         window.history.pushState(
           { ...(window.history.state || {}), ghostiRootGuard: false, ghostiActiveEntry: true, ghostiNav: initialNav },
@@ -549,14 +575,16 @@ export const App: React.FC = () => {
     if (!isHistoryInitializedRef.current) return;
     if (isApplyingPopStateRef.current) return;
 
+    const nextJoinedRoomId = activeJoinedRoomMeta?.roomId || null;
     const nextNav = {
       viewMode,
       lounge: activeLoungeType,
       desktopTab,
       mobileTab,
       familyRoom: activeFamilyRoom,
+      joinedRoomId: nextJoinedRoomId,
     };
-    const nextKey = `${nextNav.viewMode}:${nextNav.lounge}:${nextNav.desktopTab}:${nextNav.familyRoom}`;
+    const nextKey = `${nextNav.viewMode}:${nextNav.lounge}:${nextNav.desktopTab}:${nextNav.familyRoom}:${nextNav.joinedRoomId || ''}`;
     if (nextKey === lastPushedNavKeyRef.current) return;
     lastPushedNavKeyRef.current = nextKey;
 
@@ -574,7 +602,7 @@ export const App: React.FC = () => {
     } catch {
       // ignore
     }
-  }, [viewMode, activeLoungeType, desktopTab, mobileTab, activeFamilyRoom]);
+  }, [viewMode, activeLoungeType, desktopTab, mobileTab, activeFamilyRoom, activeSharedRoomId, activeJoinedRoomMeta]);
 
   const handleEnterWorkspace = (forceAllow = false) => {
     if (!OFFICIAL_LAUNCH_LIVE && !isDevAuthorized && !forceAllow) {

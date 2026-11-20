@@ -1245,98 +1245,108 @@ export async function handleAuthedWorkAndDeviceAction({
     for (const [k, rId] of roomIdByKey.entries()) {
       const tok = activeTokenByRoomId.get(rId) || '';
       if (rId && tok) {
-        roomTokensByKey[k] = { roomId: rId, inviteToken: tok };
+        // [보안 절대 철칙 — 안 A 1:1 room_id 완전 독립 격리]:
+        // 내 계정 소유 5대 표준 방은 오직 본인 room_id 1개만 매핑하며, 타인 초대방 room_id를 절대 합치지 않습니다.
+        roomTokensByKey[k] = { roomId: rId, inviteToken: tok, accessibleRoomIds: [rId] };
       }
     }
 
-    const accessibleByKey = new Map();
-    for (const [k, rId] of roomIdByKey.entries()) {
-      accessibleByKey.set(k, new Set([rId]));
-    }
-    const accessibleSet = accessibleByKey.get(requestedKey) || new Set([myRoomId]);
+    // 타인에게 초대받아 정식 합류한 공유방(ghosti_lounge_members)은 내 방과 섞지 않고
+    // 별도의 독립 방 목록(joinedRooms: roomId · 방장 별명 · 방 제목 · 유형 · 초대 토큰)으로 분리 반환합니다.
+    const joinedRooms = [];
     try {
       const myOwnSet = new Set(allMyRoomIds);
       const memRowsRes = await fetch(
         `${supabaseUrl}/rest/v1/ghosti_lounge_members?member_email=eq.${encodeURIComponent(
           email
-        )}&select=room_id&limit=40`,
+        )}&select=room_id,role&limit=60`,
         { headers: srvHeaders(serviceKey) }
       );
       const memRows = memRowsRes.ok ? await memRowsRes.json().catch(() => []) : [];
-      const joinedRoomIds = Array.isArray(memRows)
-        ? memRows.map((m) => String(m?.room_id || '')).filter((id) => id && !myOwnSet.has(id))
-        : [];
+      const joinedRoomIds = Array.from(
+        new Set(
+          (Array.isArray(memRows) ? memRows : [])
+            .map((m) => String(m?.room_id || '').trim())
+            .filter((id) => id && !myOwnSet.has(id))
+        )
+      );
       if (joinedRoomIds.length > 0) {
         const inClause = joinedRoomIds.map((id) => `"${id.replace(/"/g, '')}"`).join(',');
-        const matchRoomsRes = await fetch(
-          `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=in.(${encodeURIComponent(
-            inClause
-          )})&lounge_type=in.(family,club)&select=room_id,lounge_type,sub_type`,
-          { headers: srvHeaders(serviceKey) }
-        );
+        const [matchRoomsRes, mastersRes, joinedInvRes] = await Promise.all([
+          fetch(
+            `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=in.(${encodeURIComponent(
+              inClause
+            )})&lounge_type=in.(family,club)&select=room_id,lounge_type,sub_type,room_title,master_email,created_at&order=created_at.desc`,
+            { headers: srvHeaders(serviceKey) }
+          ),
+          fetch(
+            `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=in.(${encodeURIComponent(
+              inClause
+            )})&role=eq.master&select=room_id,member_email,room_persona_nickname&limit=100`,
+            { headers: srvHeaders(serviceKey) }
+          ),
+          fetch(
+            `${supabaseUrl}/rest/v1/ghosti_room_invites?room_id=in.(${encodeURIComponent(
+              inClause
+            )})&revoked_at=is.null&order=created_at.desc&limit=100`,
+            { headers: srvHeaders(serviceKey) }
+          ),
+        ]);
+
         const matchRooms = matchRoomsRes.ok ? await matchRoomsRes.json().catch(() => []) : [];
-        const matchedJoinedIds = [];
-        if (Array.isArray(matchRooms)) {
-          for (const mr of matchRooms) {
-            if (mr?.room_id) {
-              const rStr = String(mr.room_id);
-              const mrKey = `${String(mr.lounge_type || '')}:${String(mr.sub_type || '')}`;
-              if (!accessibleByKey.has(mrKey)) {
-                accessibleByKey.set(mrKey, new Set());
-              }
-              accessibleByKey.get(mrKey).add(rStr);
-              if (mrKey === requestedKey) {
-                accessibleSet.add(rStr);
-                matchedJoinedIds.push(rStr);
-              }
+        const masterRows = mastersRes.ok ? await mastersRes.json().catch(() => []) : [];
+        const joinedInvRows = joinedInvRes.ok ? await joinedInvRes.json().catch(() => []) : [];
+
+        const masterNickByRoom = new Map();
+        if (Array.isArray(masterRows)) {
+          for (const mr of masterRows) {
+            const rStr = String(mr?.room_id || '');
+            const nick = String(mr?.room_persona_nickname || '').trim();
+            if (rStr && nick && !masterNickByRoom.has(rStr)) {
+              masterNickByRoom.set(rStr, nick);
             }
           }
         }
-        // 과거 reseed 버그로 초대 합류 방(matchedJoinedIds)의 원본 사진이 내 방(myRoomId)에 내 이름으로 중복 복제된 행이 있으면 서버에서 자동 청소
-        if (matchedJoinedIds.length > 0) {
-          const allCheckIds = [myRoomId, ...matchedJoinedIds]
-            .map((id) => `"${id.replace(/"/g, '')}"`)
-            .join(',');
-          const dupCheckRes = await fetch(
-            `${supabaseUrl}/rest/v1/ghosti_room_shared_photos?room_id=in.(${encodeURIComponent(
-              allCheckIds
-            )})&select=id,room_id,thumb_webp_url,created_at&order=created_at.asc&limit=300`,
-            { headers: srvHeaders(serviceKey) }
-          );
-          const dupRows = dupCheckRes.ok ? await dupCheckRes.json().catch(() => []) : [];
-          if (Array.isArray(dupRows) && dupRows.length > 1) {
-            const joinedThumbSigs = new Set();
-            for (const r of dupRows) {
-              if (r?.room_id && String(r.room_id) !== myRoomId && r?.thumb_webp_url) {
-                const th = String(r.thumb_webp_url);
-                joinedThumbSigs.add(`${th.slice(0, 180)}:${th.length}`);
-              }
+        const joinedTokByRoom = new Map();
+        if (Array.isArray(joinedInvRows)) {
+          for (const ir of joinedInvRows) {
+            const rStr = String(ir?.room_id || '');
+            if (
+              rStr &&
+              !joinedTokByRoom.has(rStr) &&
+              ir?.token &&
+              Date.parse(ir.expires_at || '') > nowMs &&
+              Number(ir.used_count || 0) < Number(ir.max_uses || 500)
+            ) {
+              joinedTokByRoom.set(rStr, String(ir.token));
             }
-            if (joinedThumbSigs.size > 0) {
-              for (const r of dupRows) {
-                if (r?.id && String(r.room_id) === myRoomId && r?.thumb_webp_url) {
-                  const th = String(r.thumb_webp_url);
-                  if (joinedThumbSigs.has(`${th.slice(0, 180)}:${th.length}`)) {
-                    await fetch(
-                      `${supabaseUrl}/rest/v1/ghosti_room_shared_photos?id=eq.${encodeURIComponent(
-                        String(r.id)
-                      )}`,
-                      { method: 'DELETE', headers: srvHeaders(serviceKey) }
-                    ).catch(() => {});
-                  }
-                }
-              }
-            }
+          }
+        }
+
+        if (Array.isArray(matchRooms)) {
+          for (const mr of matchRooms) {
+            const rStr = String(mr?.room_id || '').trim();
+            if (!rStr) continue;
+            const mEmail = String(mr?.master_email || '').trim().toLowerCase();
+            // 동일 이메일(본인 소유) 방은 내 5대 기본 방으로만 관리하고 초대받은 방 목록에서는 제외
+            if (mEmail && mEmail === email) continue;
+            const dbLt = String(mr?.lounge_type || 'family');
+            const dbSt = String(mr?.sub_type || '우리집');
+            const fallbackMasterNick = mEmail ? mEmail.split('@')[0] : '방장';
+            joinedRooms.push({
+              roomId: rStr,
+              dbLoungeType: dbLt,
+              dbSubType: dbSt,
+              roomTitle: String(mr?.room_title || '').trim() || dbSt,
+              masterEmail: mEmail,
+              masterNickname: masterNickByRoom.get(rStr) || fallbackMasterNick,
+              inviteToken: joinedTokByRoom.get(rStr) || '',
+            });
           }
         }
       }
     } catch {
-      /* ignore member room expansion error */
-    }
-
-    for (const [k, entry] of Object.entries(roomTokensByKey)) {
-      const setForKey = accessibleByKey.get(k);
-      entry.accessibleRoomIds = setForKey ? Array.from(setForKey) : [entry.roomId];
+      /* ignore member room lookup error */
     }
 
     return {
@@ -1346,8 +1356,9 @@ export async function handleAuthedWorkAndDeviceAction({
         roomId: myRoomId,
         inviteToken: myInviteToken,
         masterNickname: effectiveMasterNick,
-        accessibleRoomIds: Array.from(accessibleSet),
+        accessibleRoomIds: [myRoomId],
         roomTokensByKey,
+        joinedRooms,
       },
     };
   }

@@ -32,6 +32,8 @@ export const FreePhotoShareOverlays: React.FC = () => {
   const activeLoungeType = useSaySeeStore((s) => s.activeLoungeType);
   const photos = useSaySeeStore((s) => s.photos);
   const activeFamilyRoom = useSaySeeStore((s) => s.activeFamilyRoom);
+  const activeSharedRoomId = useSaySeeStore((s) => s.activeSharedRoomId);
+  const activeJoinedRoomMeta = useSaySeeStore((s) => s.activeJoinedRoomMeta);
   const isGuestPreviewMode = useSaySeeStore((s) => s.isGuestPreviewMode);
   const isLoadingSharedRoomPhotos = useSaySeeStore((s) => s.isLoadingSharedRoomPhotos);
   const guestJoinWallReason = useSaySeeStore((s) => s.guestJoinWallReason);
@@ -69,17 +71,19 @@ export const FreePhotoShareOverlays: React.FC = () => {
     [selectedSharedUploadIds]
   );
 
-  const activeSharedRoomTitle =
-    activeLoungeType === 'club'
-      ? '동호회·모임 앨범'
-      : activeLoungeType === 'student'
-      ? '동창회 앨범'
-      : `${activeFamilyRoom} 패밀리 앨범`;
+  const activeSharedRoomTitle = activeJoinedRoomMeta
+    ? `💌 ${activeJoinedRoomMeta.masterNickname} · ${activeJoinedRoomMeta.roomTitle}`
+    : activeLoungeType === 'club'
+    ? '동호회·모임 앨범'
+    : activeLoungeType === 'student'
+    ? '동창회 앨범'
+    : `${activeFamilyRoom} 패밀리 앨범`;
 
   const uploadableLocalPhotos = useMemo(() => {
     const currentRoomCorpus = resolveLoungePhotoCorpus({
       activeLoungeType,
       activeFamilyRoom,
+      activeSharedRoomId,
       photos,
       sharedRoomHostPhotos,
       sharedRoomAddedPhotos,
@@ -101,6 +105,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
   }, [
     activeLoungeType,
     activeFamilyRoom,
+    activeSharedRoomId,
     photos,
     sharedRoomHostPhotos,
     sharedRoomAddedPhotos,
@@ -339,7 +344,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
     return () => {
       window.removeEventListener('ghostiSupabaseUserSynced', onUserSynced);
     };
-  }, [activeLoungeType, activeFamilyRoom, syncActiveSharedRoomFromSupabase]);
+  }, [activeLoungeType, activeFamilyRoom, activeSharedRoomId, syncActiveSharedRoomFromSupabase]);
 
   const inviteMeta = readCurrentInviteDisplayMeta(
     isSharedPhotoLounge(activeLoungeType) ? activeLoungeType : 'family',

@@ -30,13 +30,17 @@ import {
   ensureMyRoomAndInviteToken,
   fetchGuestPreviewRoomByToken,
   fetchScopedSharedRoomPhotos,
+  getCachedJoinedSharedRoomsSync,
   readInstantLocalVaultSharedPhotos,
   uploadPhotosToSupabaseSharedRoom,
+  type JoinedSharedPhotoRoomInfo,
 } from '../../services/sharedPhotoRoomSupabase';
 import { aiRuntimeFlags } from '../../services/ai/aiSharedRuntime';
 
 let sharedRoomSyncSeq = 0;
 let lastDeepLinkHydratedAt = 0;
+let lastCompletedRoomSig = '';
+let lastCompletedRoomAt = 0;
 import {
   dispatchFileToKakaoRealChatroom,
   extractKeywordSentencesZeroLlm,
@@ -197,6 +201,12 @@ export interface FreePhotoShareSlice {
   runGlobalSwarmRetroScanAll: () => Promise<void>;
 
   activeFamilyRoom: FamilyRoomId;
+  /** [안 A 1:1 room_id 완전 독립 격리]: 현재 화면에 열린 유일한 공유방 room_id (null = 내 기본 방) */
+  activeSharedRoomId: string | null;
+  /** 타인에게 초대받아 합류한 독립 방을 열람 중일 때의 메타 정보 (내 방 열람 시 null) */
+  activeJoinedRoomMeta: JoinedSharedPhotoRoomInfo | null;
+  /** 로그인 계정이 타인에게 초대받아 합류한 독립 공유방 목록 (카톡 방 목록식 개별 알약) */
+  joinedSharedRooms: JoinedSharedPhotoRoomInfo[];
   clubSizeTier: ClubSizeTier;
   studentOcrVerified: boolean;
 
@@ -228,6 +238,8 @@ export interface FreePhotoShareSlice {
   syncActiveSharedRoomFromSupabase: (opts?: { forceInviteToken?: string }) => Promise<void>;
 
   setActiveFamilyRoom: (room: FamilyRoomId) => void;
+  selectOwnSharedRoom: (loungeType: LoungeType, familyRoom?: FamilyRoomId) => void;
+  selectJoinedSharedRoom: (room: JoinedSharedPhotoRoomInfo) => void;
   setClubSizeTier: (tier: ClubSizeTier) => void;
   verifyStudentOcr: () => void;
 
@@ -850,6 +862,35 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
   },
 
   activeFamilyRoom: resolveInvitedHostLoungeAndRoom().hostFamilyRoom,
+  activeSharedRoomId: (() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const rid = (new URLSearchParams(window.location.search).get('roomId') || '').trim();
+      if (rid) {
+        storeSharedRefs.activeSharedRoomId = rid;
+        return rid;
+      }
+    } catch {
+      /* ignore */
+    }
+    return null;
+  })(),
+  activeJoinedRoomMeta: (() => {
+    if (typeof window === 'undefined') return null;
+    try {
+      const rid = (new URLSearchParams(window.location.search).get('roomId') || '').trim();
+      if (!rid) return null;
+      const cached = getCachedJoinedSharedRoomsSync();
+      return cached.find((r) => r.roomId === rid) || null;
+    } catch {
+      return null;
+    }
+  })(),
+  joinedSharedRooms: (() => {
+    const cached = getCachedJoinedSharedRoomsSync();
+    storeSharedRefs.knownJoinedRoomIds = new Set(cached.map((r) => r.roomId));
+    return cached;
+  })(),
   clubSizeTier: 'small',
   studentOcrVerified: false,
 
@@ -1009,13 +1050,20 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       }
     }
 
-    const targetLounge: LoungeType = isSharedPhotoLounge(state.activeLoungeType)
+    const activeJoinedMeta = state.activeJoinedRoomMeta;
+    const targetLounge: LoungeType = activeJoinedMeta
+      ? activeJoinedMeta.loungeType
+      : isSharedPhotoLounge(state.activeLoungeType)
       ? state.activeLoungeType
       : 'family';
-    const targetFamilyRoom: FamilyRoomId = state.activeFamilyRoom || '우리집';
+    const targetFamilyRoom: FamilyRoomId = activeJoinedMeta
+      ? activeJoinedMeta.familyRoom
+      : state.activeFamilyRoom || '우리집';
+    const explicitTargetRoomId = activeJoinedMeta?.roomId || state.activeSharedRoomId || null;
     const currentRoomCorpus = resolveLoungePhotoCorpus({
       activeLoungeType: targetLounge,
       activeFamilyRoom: targetFamilyRoom,
+      activeSharedRoomId: explicitTargetRoomId,
       photos: state.photos,
       sharedRoomHostPhotos: state.sharedRoomHostPhotos,
       sharedRoomAddedPhotos: state.sharedRoomAddedPhotos,
@@ -1037,12 +1085,13 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       return;
     }
 
-    const roomLabel =
-      targetLounge === 'family'
-        ? `${targetFamilyRoom} 패밀리 앨범`
-        : targetLounge === 'club'
-        ? '동호회·모임 앨범'
-        : '동창회 앨범';
+    const roomLabel = activeJoinedMeta
+      ? `${activeJoinedMeta.masterNickname} · ${activeJoinedMeta.roomTitle}`
+      : targetLounge === 'family'
+      ? `${targetFamilyRoom} 패밀리 앨범`
+      : targetLounge === 'club'
+      ? '동호회·모임 앨범'
+      : '동창회 앨범';
 
     set({
       showSharedPhotoUploadModal: false,
@@ -1051,8 +1100,8 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
 
     void (async () => {
       const activeToken = readActiveInviteToken();
-      let targetRoomId = '';
-      if (activeToken) {
+      let targetRoomId = explicitTargetRoomId || '';
+      if (!targetRoomId && activeToken) {
         const preview = await fetchGuestPreviewRoomByToken(activeToken);
         if (
           preview.ok &&
@@ -1103,25 +1152,19 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
 
       const latestState = get();
       const otherRoomsPhotos = latestState.sharedRoomAddedPhotos.filter(
-        (p) =>
-          !(
-            (p.sharedLoungeType ?? 'family') === targetLounge &&
-            (targetLounge !== 'family' || (p.sharedFamilyRoom ?? '우리집') === targetFamilyRoom) &&
-            p.sharedRoomId === targetRoomId
-          )
+        (p) => p.sharedRoomId !== targetRoomId
       );
       const existingInSameRoom = latestState.sharedRoomAddedPhotos.filter(
-        (p) =>
-          (p.sharedLoungeType ?? 'family') === targetLounge &&
-          (targetLounge !== 'family' || (p.sharedFamilyRoom ?? '우리집') === targetFamilyRoom) &&
-          p.sharedRoomId === targetRoomId
+        (p) => p.sharedRoomId === targetRoomId
       );
       const nextAdded = [...upRes.uploadedPhotos, ...existingInSameRoom, ...otherRoomsPhotos];
       persistSharedRoomAddedPhotos(nextAdded);
 
+      storeSharedRefs.activeSharedRoomId = targetRoomId;
       const mergedShared = resolveLoungePhotoCorpus({
         activeLoungeType: targetLounge,
         activeFamilyRoom: targetFamilyRoom,
+        activeSharedRoomId: targetRoomId,
         photos: latestState.photos,
         sharedRoomHostPhotos: latestState.sharedRoomHostPhotos,
         sharedRoomAddedPhotos: nextAdded,
@@ -1136,13 +1179,14 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       );
 
       set({
+        activeSharedRoomId: targetRoomId,
         sharedRoomAddedPhotos: nextAdded,
         searchSpace: 'gallery',
         hasExecutedUserSearch: false,
         activeQuery: `${roomLabel} (${nextResults.length}장 · 방금 ${upRes.uploadedPhotos.length}장 추가됨)`,
         matchedTags: [`#${uploaderNick}사진추가`, '#공유앨범'],
         searchResults: nextResults,
-        lastQuarantineToast: `🎉 사진 ${upRes.uploadedPhotos.length}장을 『${roomLabel}』에 올렸습니다! 이제 초대 링크로 들어온 가족·회원 누구에게나 즉시 보입니다.`,
+        lastQuarantineToast: `🎉 사진 ${upRes.uploadedPhotos.length}장을 『${roomLabel}』에 올렸습니다! 이제 이 방 멤버 누구에게나 즉시 보입니다.`,
       });
     })();
   },
@@ -1240,9 +1284,12 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
 
     // 이전 공유방(예: 본가) 열람 직후 다른 공유방(예: 처가·동호회) 초대 링크로 접속했을 때
     // 이전 방 탭이나 사진 목록이 단 0.1초도 잔류하지 않도록 즉시 새 초대방 컨텍스트로 초기화!
+    storeSharedRefs.activeSharedRoomId = null;
     set({
       activeLoungeType: parsed.loungeType,
       activeFamilyRoom: parsed.familyRoom,
+      activeSharedRoomId: null,
+      activeJoinedRoomMeta: null,
       desktopTab: 'dashboard',
       mobileTab: 'search',
       isLoadingSharedRoomPhotos: Boolean(parsed.inviteToken),
@@ -1268,6 +1315,9 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     let resolvedFamilyRoom = parsed.familyRoom;
     let resolvedHostName = parsed.hostName;
     let resolvedRoomTitle = parsed.roomTitle;
+    let resolvedRoomId: string | null = null;
+    let resolvedJoinedMeta: JoinedSharedPhotoRoomInfo | null = null;
+    let refreshedJoinedList: JoinedSharedPhotoRoomInfo[] | null = null;
     let fetchedPhotos: PhotoItem[] = [];
     let previewValid = false;
 
@@ -1276,6 +1326,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       const previewRes = await fetchGuestPreviewRoomByToken(parsed.inviteToken);
       if (previewRes.ok && previewRes.room) {
         previewValid = true;
+        resolvedRoomId = previewRes.room.roomId;
         resolvedLounge = previewRes.room.loungeType;
         resolvedFamilyRoom = previewRes.room.familyRoom;
         resolvedHostName = previewRes.room.hostNickname || '방장';
@@ -1292,15 +1343,61 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           isNative
         );
         if (isLoggedIn) {
-          const authedEmail =
+          const authedEmail = (
             get().merlinAuth.email ||
             (typeof window !== 'undefined'
               ? localStorage.getItem('ghosti_hub_user_email') || ''
-              : '');
+              : '')
+          )
+            .trim()
+            .toLowerCase();
           const nick =
             parsed.nicknameHint || resolveAccountScopedNickname(authedEmail, '멤버');
           await acceptRoomInviteAsLoggedInMember(parsed.inviteToken, nick);
-          stripConsumedInviteParamsFromLoggedInUrl();
+          // 내 방인지 타인의 초대방인지 서버에서 즉시 대조하여 [안 A] 1:1 독립 방 메타 및 목록 갱신
+          const ensuredMine = await ensureMyRoomAndInviteToken({
+            loungeType: resolvedLounge,
+            familyRoom: resolvedFamilyRoom,
+            roomTitle: resolveDefaultRoomTitle(resolvedLounge, resolvedFamilyRoom),
+            masterNickname: nick,
+            forceRefresh: true,
+          });
+          const isOtherUsersRoom = Boolean(
+            resolvedRoomId && ensuredMine.roomId && resolvedRoomId !== ensuredMine.roomId
+          );
+          const serverJoined = ensuredMine.joinedRooms ?? get().joinedSharedRooms;
+          if (isOtherUsersRoom && resolvedRoomId) {
+            const matchedJoined = serverJoined.find((r) => r.roomId === resolvedRoomId);
+            resolvedJoinedMeta = matchedJoined || {
+              roomId: resolvedRoomId,
+              loungeType: resolvedLounge,
+              familyRoom: resolvedFamilyRoom,
+              roomTitle: resolvedRoomTitle,
+              masterNickname: resolvedHostName,
+              inviteToken: parsed.inviteToken,
+            };
+            refreshedJoinedList = matchedJoined
+              ? serverJoined
+              : [resolvedJoinedMeta, ...serverJoined.filter((r) => r.roomId !== resolvedRoomId)];
+            storeSharedRefs.knownJoinedRoomIds = new Set(refreshedJoinedList.map((r) => r.roomId));
+          } else {
+            refreshedJoinedList = serverJoined;
+            storeSharedRefs.knownJoinedRoomIds = new Set(serverJoined.map((r) => r.roomId));
+          }
+          // 로그인 회원이 초대방으로 입장한 뒤에도 URL에 ?roomId=<joinedRoomId>와 정확한 방을 보존해 새로고침·방 혼선 0% 차단
+          stripConsumedInviteParamsFromLoggedInUrl({
+            loungeType: resolvedLounge,
+            familyRoom: resolvedFamilyRoom,
+            joinedRoomId: isOtherUsersRoom ? resolvedRoomId : null,
+          });
+          // 로그인 회원의 사진 항목에 현재 계정 소유 태그를 맞춰 로컬 필터와 정합
+          if (authedEmail) {
+            fetchedPhotos = fetchedPhotos.map((p) => ({
+              ...p,
+              sharedRoomId: resolvedRoomId || p.sharedRoomId,
+              sharedOwnerEmail: authedEmail,
+            }));
+          }
         }
       }
     }
@@ -1312,9 +1409,12 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     // 로그인 상태에서 토큰 없는 구형 ?invite=... 파라미터만 남아 새로고침된 경우:
     // 내 방 사진을 빈 배열([])로 덮어쓰지 않고 즉시 정식 Supabase 공유방 조회로 위임!
     if (isLoggedIn && !previewValid) {
+      storeSharedRefs.activeSharedRoomId = null;
       set({
         activeLoungeType: resolvedLounge,
         activeFamilyRoom: resolvedFamilyRoom,
+        activeSharedRoomId: null,
+        activeJoinedRoomMeta: null,
         desktopTab: 'dashboard',
         mobileTab: 'search',
         isGuestPreviewMode: false,
@@ -1331,25 +1431,23 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       lastDeepLinkHydratedAt = Date.now();
     }
 
+    storeSharedRefs.activeSharedRoomId = resolvedRoomId;
+
     const st = get();
     const nextAdded =
       parsed.inviteToken && !isLoggedIn
         ? fetchedPhotos
         : [
             ...fetchedPhotos,
-            ...st.sharedRoomAddedPhotos.filter(
-              (p) =>
-                !(
-                  (p.sharedLoungeType ?? 'family') === resolvedLounge &&
-                  (resolvedLounge !== 'family' ||
-                    (p.sharedFamilyRoom ?? '우리집') === resolvedFamilyRoom)
-                )
+            ...st.sharedRoomAddedPhotos.filter((p) =>
+              resolvedRoomId ? p.sharedRoomId !== resolvedRoomId : true
             ),
           ];
 
     const mergedShared = resolveLoungePhotoCorpus({
       activeLoungeType: resolvedLounge,
       activeFamilyRoom: resolvedFamilyRoom,
+      activeSharedRoomId: resolvedRoomId,
       photos: st.photos,
       sharedRoomHostPhotos: st.sharedRoomHostPhotos,
       sharedRoomAddedPhotos: nextAdded,
@@ -1363,9 +1461,16 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       })
     );
 
+    const displayRoomLabel = resolvedJoinedMeta
+      ? `${resolvedJoinedMeta.masterNickname} · ${resolvedJoinedMeta.roomTitle}`
+      : resolvedRoomTitle;
+
     set({
       activeLoungeType: resolvedLounge,
       activeFamilyRoom: resolvedFamilyRoom,
+      activeSharedRoomId: resolvedRoomId,
+      activeJoinedRoomMeta: resolvedJoinedMeta,
+      ...(refreshedJoinedList ? { joinedSharedRooms: refreshedJoinedList } : {}),
       desktopTab: 'dashboard',
       mobileTab: 'search',
       sharedRoomAddedPhotos: nextAdded,
@@ -1375,14 +1480,14 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       guestJoinWallReason: null,
       searchSpace: 'gallery',
       hasExecutedUserSearch: false,
-      activeQuery: `${resolvedRoomTitle} (${sharedGalleryResults.length}장)`,
+      activeQuery: `${displayRoomLabel} (${sharedGalleryResults.length}장)`,
       matchedVideoScenes: [],
       matchedLocalDocs: [],
       matchedVaultPhotos: [],
       searchResults: sharedGalleryResults,
       lastQuarantineToast: isNative
         ? `💌 ${resolvedHostName}님이 초대한 『${resolvedRoomTitle}』(${sharedGalleryResults.length}장)에 바로 입장했습니다!`
-        : `💌 ${resolvedHostName}님이 초대한 『${resolvedRoomTitle}』(${sharedGalleryResults.length}장)을 열었습니다.`,
+        : `💌 ${resolvedHostName}님이 초대한 『${resolvedRoomTitle}』(${sharedGalleryResults.length}장)을 독립 공유방으로 열었습니다.`,
     });
     return true;
   },
@@ -1398,35 +1503,52 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     const reqSeq = ++sharedRoomSyncSeq;
     const targetLounge = stBefore.activeLoungeType;
     const targetFamilyRoom = stBefore.activeFamilyRoom || '우리집';
+    const explicitRoomId = (
+      stBefore.activeJoinedRoomMeta?.roomId ||
+      stBefore.activeSharedRoomId ||
+      ''
+    ).trim() || null;
+    const candidateSig = `${targetLounge}|${targetFamilyRoom}|${explicitRoomId || ''}`;
+    if (
+      !opts?.forceInviteToken &&
+      explicitRoomId &&
+      candidateSig === lastCompletedRoomSig &&
+      Date.now() - lastCompletedRoomAt < 1000
+    ) {
+      return;
+    }
     const inviteToken = (opts?.forceInviteToken ?? readActiveInviteToken()).trim();
     const shouldLoadFromRemote = Boolean(inviteToken || hasAuthenticatedHubAccountSession());
 
-    // [0.01초 즉시 렌더링 — Local-Vault-First Stale-While-Revalidate]:
-    // 서버 네트워크 응답을 기다리느라 빈 로딩 화면이 길어지지 않도록, 로컬 IndexedDB 금고에 저장된 방 사진이 있으면
-    // 10ms 내에 먼저 화면에 즉시 표시한 뒤 백그라운드에서 서버 신규 사진을 증분 동기화합니다.
+    // [0.01초 즉시 렌더링 — Local-Vault-First Stale-While-Revalidate (단일 room_id 1:1 격리)]:
     if (!inviteToken && hasAuthenticatedHubAccountSession()) {
-      const localFastPhotos = await readInstantLocalVaultSharedPhotos(targetLounge, targetFamilyRoom);
+      const localFastPhotos = await readInstantLocalVaultSharedPhotos(
+        targetLounge,
+        targetFamilyRoom,
+        explicitRoomId
+      );
       if (reqSeq !== sharedRoomSyncSeq) return;
       if (localFastPhotos.length > 0) {
         const stFast = get();
+        const fastRoomId = explicitRoomId || localFastPhotos[0]?.sharedRoomId || null;
         const fastAdded = [
           ...localFastPhotos,
-          ...stFast.sharedRoomAddedPhotos.filter(
-            (p) =>
-              !(
-                (p.sharedLoungeType ?? 'family') === targetLounge &&
-                (targetLounge !== 'family' ||
-                  (p.sharedFamilyRoom ?? '우리집') === targetFamilyRoom)
-              )
+          ...stFast.sharedRoomAddedPhotos.filter((p) =>
+            fastRoomId ? p.sharedRoomId !== fastRoomId : true
           ),
         ];
         if (
           stFast.activeLoungeType === targetLounge &&
-          (targetLounge !== 'family' || stFast.activeFamilyRoom === targetFamilyRoom)
+          (targetLounge !== 'family' || stFast.activeFamilyRoom === targetFamilyRoom) &&
+          (stFast.activeSharedRoomId || null) === (explicitRoomId || null)
         ) {
+          if (fastRoomId) {
+            storeSharedRefs.activeSharedRoomId = fastRoomId;
+          }
           const fastMerged = resolveLoungePhotoCorpus({
             activeLoungeType: targetLounge,
             activeFamilyRoom: targetFamilyRoom,
+            activeSharedRoomId: fastRoomId,
             photos: stFast.photos,
             sharedRoomHostPhotos: stFast.sharedRoomHostPhotos,
             sharedRoomAddedPhotos: fastAdded,
@@ -1466,6 +1588,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         roomTitle: resolveDefaultRoomTitle(targetLounge, targetFamilyRoom),
         nickname,
         inviteToken: inviteToken || undefined,
+        explicitRoomId,
       });
     } catch {
       if (reqSeq === sharedRoomSyncSeq) {
@@ -1483,27 +1606,56 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     }
 
     const stNow = get();
-    // 비로그인 게스트가 초대받지 않은 다른 탭(예: 동호회·동창회·본가)을 눌러 res.photos가 빈 배열([])로 올 때도,
-    // 이전에 불러온 정식 초대방(예: 우리집)의 사진은 메모리에서 지우지 않고 해당 탭 범위만 교체하여 복귀 즉시 0.00초 재표시 보장!
+    const resolvedJoinedList = res.joinedRooms ?? stNow.joinedSharedRooms;
+    if (res.joinedRooms) {
+      storeSharedRefs.knownJoinedRoomIds = new Set(res.joinedRooms.map((r) => r.roomId));
+    }
+
+    // URL ?roomId=<joinedRoomId> 새로고침 복원: 서버 joinedRooms에서 해당 독립 방 메타를 자동 매칭
+    const matchedJoinedMeta =
+      res.roomId && res.isJoinedOtherRoom
+        ? resolvedJoinedList.find((r) => r.roomId === res.roomId) ||
+          stNow.activeJoinedRoomMeta || {
+            roomId: res.roomId,
+            loungeType: targetLounge,
+            familyRoom: targetFamilyRoom,
+            roomTitle: res.roomTitle || resolveDefaultRoomTitle(targetLounge, targetFamilyRoom),
+            masterNickname: res.hostNickname || '방장',
+            inviteToken: res.inviteToken || undefined,
+          }
+        : null;
+
+    const finalLounge = matchedJoinedMeta ? matchedJoinedMeta.loungeType : targetLounge;
+    const finalFamilyRoom = matchedJoinedMeta ? matchedJoinedMeta.familyRoom : targetFamilyRoom;
+    const finalRoomId = res.roomId || explicitRoomId;
+
     const nextAdded = [
       ...res.photos,
-      ...stNow.sharedRoomAddedPhotos.filter(
-        (p) =>
-          !(
-            (p.sharedLoungeType ?? 'family') === targetLounge &&
-            (targetLounge !== 'family' ||
-              (p.sharedFamilyRoom ?? '우리집') === targetFamilyRoom)
-          )
+      ...stNow.sharedRoomAddedPhotos.filter((p) =>
+        finalRoomId
+          ? p.sharedRoomId !== finalRoomId
+          : !(
+              (p.sharedLoungeType ?? 'family') === targetLounge &&
+              (targetLounge !== 'family' ||
+                (p.sharedFamilyRoom ?? '우리집') === targetFamilyRoom) &&
+              (!p.sharedRoomId || !storeSharedRefs.knownJoinedRoomIds.has(p.sharedRoomId))
+            )
       ),
     ];
 
-    if (
+    const isStillOnSameView =
       stNow.activeLoungeType === targetLounge &&
-      (targetLounge !== 'family' || stNow.activeFamilyRoom === targetFamilyRoom)
-    ) {
+      (targetLounge !== 'family' || stNow.activeFamilyRoom === targetFamilyRoom) &&
+      (stNow.activeSharedRoomId || null) === (explicitRoomId || null);
+
+    if (isStillOnSameView) {
+      lastCompletedRoomSig = `${finalLounge}|${finalFamilyRoom}|${finalRoomId || ''}`;
+      lastCompletedRoomAt = Date.now();
+      storeSharedRefs.activeSharedRoomId = finalRoomId;
       const mergedShared = resolveLoungePhotoCorpus({
-        activeLoungeType: targetLounge,
-        activeFamilyRoom: targetFamilyRoom,
+        activeLoungeType: finalLounge,
+        activeFamilyRoom: finalFamilyRoom,
+        activeSharedRoomId: finalRoomId,
         photos: stNow.photos,
         sharedRoomHostPhotos: stNow.sharedRoomHostPhotos,
         sharedRoomAddedPhotos: nextAdded,
@@ -1517,6 +1669,11 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         })
       );
       set({
+        activeLoungeType: finalLounge,
+        activeFamilyRoom: finalFamilyRoom,
+        activeSharedRoomId: finalRoomId,
+        activeJoinedRoomMeta: matchedJoinedMeta,
+        joinedSharedRooms: resolvedJoinedList,
         sharedRoomAddedPhotos: nextAdded,
         isLoadingSharedRoomPhotos: false,
         ...(stNow.hasExecutedUserSearch
@@ -1527,6 +1684,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       });
     } else {
       set({
+        joinedSharedRooms: resolvedJoinedList,
         sharedRoomAddedPhotos: nextAdded,
         isLoadingSharedRoomPhotos: false,
       });
@@ -1534,16 +1692,20 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
   },
 
   setActiveFamilyRoom: (activeFamilyRoom) => {
+    storeSharedRefs.activeSharedRoomId = null;
     set((state) => {
       if (state.activeLoungeType !== 'family') {
         return {
           activeFamilyRoom,
-          lastQuarantineToast: `🏠 패밀리 라운지 [${activeFamilyRoom}] 독립 보안 룸으로 전환되었습니다.`,
+          activeSharedRoomId: null,
+          activeJoinedRoomMeta: null,
+          lastQuarantineToast: `🏠 패밀리 라운지 [내 ${activeFamilyRoom}] 독립 보안 룸으로 전환되었습니다.`,
         };
       }
       const nextCorpus = resolveLoungePhotoCorpus({
         activeLoungeType: 'family',
         activeFamilyRoom,
+        activeSharedRoomId: null,
         photos: state.photos,
         sharedRoomHostPhotos: state.sharedRoomHostPhotos,
         sharedRoomAddedPhotos: state.sharedRoomAddedPhotos,
@@ -1556,14 +1718,16 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       }));
       return {
         activeFamilyRoom,
+        activeSharedRoomId: null,
+        activeJoinedRoomMeta: null,
         hasExecutedUserSearch: false,
         searchSpace: 'gallery',
         searchResults: nextResults,
         matchedVideoScenes: [],
         matchedLocalDocs: [],
         matchedVaultPhotos: [],
-        activeQuery: `${activeFamilyRoom} 패밀리 앨범 (${nextResults.length}장)`,
-        lastQuarantineToast: `🏠 패밀리 라운지 [${activeFamilyRoom}] 독립 보안 룸으로 전환되었습니다.`,
+        activeQuery: `내 ${activeFamilyRoom} 패밀리 앨범 (${nextResults.length}장)`,
+        lastQuarantineToast: `🏠 [내 ${activeFamilyRoom}] 독립 공유방으로 전환되었습니다.`,
       };
     });
     if (typeof window !== 'undefined') {
@@ -1571,6 +1735,85 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       document.documentElement.scrollTop = 0;
       document.body.scrollTop = 0;
     }
+  },
+
+  selectOwnSharedRoom: (loungeType, familyRoom) => {
+    lastCompletedRoomSig = '';
+    storeSharedRefs.activeSharedRoomId = null;
+    const nextFamily: FamilyRoomId = familyRoom || get().activeFamilyRoom || '우리집';
+    set((state) => {
+      const nextCorpus = resolveLoungePhotoCorpus({
+        activeLoungeType: loungeType,
+        activeFamilyRoom: nextFamily,
+        activeSharedRoomId: null,
+        photos: state.photos,
+        sharedRoomHostPhotos: state.sharedRoomHostPhotos,
+        sharedRoomAddedPhotos: state.sharedRoomAddedPhotos,
+      });
+      const nextResults: SearchResultItem[] = filterVisibleGalleryPhotos(nextCorpus).map((photo) => ({
+        photo,
+        score: 0.95,
+        matchPercentage: 97,
+        matchedBy: 'text-direct' as const,
+      }));
+      return {
+        activeLoungeType: loungeType,
+        activeFamilyRoom: nextFamily,
+        activeSharedRoomId: null,
+        activeJoinedRoomMeta: null,
+        desktopTab: 'dashboard',
+        mobileTab: 'search',
+        hasExecutedUserSearch: false,
+        searchSpace: 'gallery',
+        searchResults: nextResults,
+        matchedVideoScenes: [],
+        matchedLocalDocs: [],
+        matchedVaultPhotos: [],
+      };
+    });
+    void get().syncActiveSharedRoomFromSupabase();
+  },
+
+  selectJoinedSharedRoom: (room) => {
+    lastCompletedRoomSig = '';
+    storeSharedRefs.activeSharedRoomId = room.roomId;
+    set((state) => {
+      const nextCorpus = resolveLoungePhotoCorpus({
+        activeLoungeType: room.loungeType,
+        activeFamilyRoom: room.familyRoom,
+        activeSharedRoomId: room.roomId,
+        photos: state.photos,
+        sharedRoomHostPhotos: state.sharedRoomHostPhotos,
+        sharedRoomAddedPhotos: state.sharedRoomAddedPhotos,
+      });
+      const nextResults: SearchResultItem[] = filterVisibleGalleryPhotos(nextCorpus).map((photo) => ({
+        photo,
+        score: 0.96,
+        matchPercentage: 98,
+        matchedBy: 'text-direct' as const,
+      }));
+      return {
+        activeLoungeType: room.loungeType,
+        activeFamilyRoom: room.familyRoom,
+        activeSharedRoomId: room.roomId,
+        activeJoinedRoomMeta: room,
+        desktopTab: 'dashboard',
+        mobileTab: 'search',
+        isGuestPreviewMode: false,
+        hasExecutedUserSearch: false,
+        searchSpace: 'gallery',
+        searchResults: nextResults,
+        matchedVideoScenes: [],
+        matchedLocalDocs: [],
+        matchedVaultPhotos: [],
+        activeQuery: `💌 ${room.masterNickname} · ${room.roomTitle} (${nextResults.length}장)`,
+        lastQuarantineToast: `💌 [${room.masterNickname} · ${room.roomTitle}] 초대받은 독립 공유방으로 이동했습니다. (내 공유방과 100% 분리)`,
+      };
+    });
+    if (typeof window !== 'undefined') {
+      window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    }
+    void get().syncActiveSharedRoomFromSupabase();
   },
 
   setClubSizeTier: (clubSizeTier) =>

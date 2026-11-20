@@ -30,6 +30,10 @@ export type ThemeMode = 'light' | 'dark';
 export const storeSharedRefs = {
   cancelOnboardingFlag: false,
   latestRunTextQuerySeq: 0,
+  /** [안 A 1:1 room_id 절대 격리 SSOT]: 현재 화면이 보고 있는 유일한 공유방 room_id (null = 내 기본 방) */
+  activeSharedRoomId: null as string | null,
+  /** [안 A 1:1 room_id 절대 격리 SSOT]: 타인에게 초대받아 합류한 방 room_id 집합 (내 기본 방 뷰에 절대 섞이지 않도록 차단) */
+  knownJoinedRoomIds: new Set<string>(),
 };
 
 export function isSharedPhotoLounge(loungeType: LoungeType): boolean {
@@ -134,6 +138,7 @@ export function resolveInvitedHostLoungeAndRoom(): {
 export function resolveLoungePhotoCorpus(args: {
   activeLoungeType: LoungeType;
   activeFamilyRoom: FamilyRoomId;
+  activeSharedRoomId?: string | null;
   photos: PhotoItem[];
   sharedRoomHostPhotos: PhotoItem[];
   sharedRoomAddedPhotos: PhotoItem[];
@@ -150,6 +155,10 @@ export function resolveLoungePhotoCorpus(args: {
     const isLoggedIn = hasAuthenticatedHubAccountSession();
     const activeInviteToken = readActiveInviteToken();
     const { hasActiveInvite, hostLounge, hostFamilyRoom } = resolveInvitedHostLoungeAndRoom();
+    const effectiveRoomId =
+      args.activeSharedRoomId !== undefined
+        ? args.activeSharedRoomId
+        : storeSharedRefs.activeSharedRoomId;
 
     if (!isLoggedIn && !activeInviteToken) {
       return [];
@@ -168,6 +177,27 @@ export function resolveLoungePhotoCorpus(args: {
         : '';
 
     const scopedAdded = sharedRoomAddedPhotos.filter((p) => {
+      // [안 A 1:1 room_id 절대 격리]: 특정 room_id가 선택된 경우 오직 그 room_id의 사진만 반환!
+      // 타인 초대방과 내 방(동일 '처가'/'우리집'/'동호회' 유형 포함) 사진 혼입을 0%로 원천 차단합니다.
+      if (effectiveRoomId) {
+        if (p.sharedRoomId !== effectiveRoomId) return false;
+        if (!isLoggedIn) {
+          const matchesInvitedTab =
+            hasActiveInvite &&
+            hostLounge === activeLoungeType &&
+            (activeLoungeType !== 'family' || hostFamilyRoom === activeFamilyRoom);
+          return Boolean(matchesInvitedTab && !p.sharedOwnerEmail);
+        }
+        if (p.sharedOwnerEmail && currentEmail && p.sharedOwnerEmail !== currentEmail) {
+          return false;
+        }
+        return true;
+      }
+
+      // 내 기본 방 뷰(effectiveRoomId 미지정): 타인 초대방(knownJoinedRoomIds) 사진은 절대 혼입 금지!
+      if (p.sharedRoomId && storeSharedRefs.knownJoinedRoomIds.has(p.sharedRoomId)) {
+        return false;
+      }
       const matchesLounge = (p.sharedLoungeType ?? 'family') === activeLoungeType;
       if (!matchesLounge) return false;
       if (activeLoungeType === 'family' && (p.sharedFamilyRoom ?? '우리집') !== activeFamilyRoom) {
@@ -187,6 +217,7 @@ export function resolveLoungePhotoCorpus(args: {
     });
 
     const hostForFamily =
+      !effectiveRoomId &&
       activeLoungeType === 'family' &&
       hasActiveInvite &&
       hostLounge === 'family' &&

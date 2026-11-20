@@ -8,12 +8,12 @@ import {
   supabase,
 } from './supabaseClient';
 import {
-  loadMemberLocalMultiRoomPhotos,
   loadMemberLocalRoomPhotos,
   removeMemberLocalRoomPhotoEverywhere,
   upsertMemberLocalRoomPhotos,
 } from './sharedRoomLocalVault';
 import {
+  resolveDefaultRoomTitle,
   saveVerifiedInviteRoomMeta,
   stripConsumedInviteParamsFromLoggedInUrl,
 } from './shareInviteDeepLinkBridge';
@@ -82,17 +82,31 @@ interface GuestPreviewRoomRpcResponse {
   photos?: GuestPreviewPhotoDto[];
 }
 
+export interface JoinedSharedPhotoRoomInfo {
+  roomId: string;
+  loungeType: LoungeType;
+  familyRoom: FamilyRoomId;
+  roomTitle: string;
+  masterEmail?: string;
+  masterNickname: string;
+  inviteToken?: string;
+}
+
 const MY_ROOM_TOKEN_SESSION_PREFIX = 'ghosti_my_room_token_v1::';
+const JOINED_ROOMS_SESSION_PREFIX = 'ghosti_joined_rooms_v1::';
 
 interface CachedRoomTokenEntry {
   roomId: string;
   inviteToken: string;
   masterNickname?: string;
-  accessibleRoomIds?: string[];
   cachedAt: number;
 }
 
 const roomTokenCache = new Map<string, CachedRoomTokenEntry>();
+const joinedRoomsMemoryCache = new Map<
+  string,
+  { rooms: JoinedSharedPhotoRoomInfo[]; cachedAt: number }
+>();
 const inflightEnsureRoomMap = new Map<
   string,
   Promise<{
@@ -100,10 +114,51 @@ const inflightEnsureRoomMap = new Map<
     roomId?: string;
     inviteToken?: string;
     masterNickname?: string;
-    accessibleRoomIds?: string[];
+    joinedRooms?: JoinedSharedPhotoRoomInfo[];
     error?: string;
   }>
 >();
+
+function saveCachedJoinedRooms(email: string, rooms: JoinedSharedPhotoRoomInfo[]): void {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail) return;
+  const payload = { rooms, cachedAt: Date.now() };
+  joinedRoomsMemoryCache.set(cleanEmail, payload);
+  if (typeof window !== 'undefined') {
+    try {
+      sessionStorage.setItem(`${JOINED_ROOMS_SESSION_PREFIX}${cleanEmail}`, JSON.stringify(payload));
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+export function getCachedJoinedSharedRoomsSync(): JoinedSharedPhotoRoomInfo[] {
+  if (!hasAuthenticatedHubAccountSession()) return [];
+  const email = resolveCurrentAuthedEmail();
+  if (!email) return [];
+  const mem = joinedRoomsMemoryCache.get(email);
+  if (mem && Date.now() - mem.cachedAt < 25 * 60 * 1000) {
+    return mem.rooms;
+  }
+  if (typeof window === 'undefined') return [];
+  try {
+    const raw = sessionStorage.getItem(`${JOINED_ROOMS_SESSION_PREFIX}${email}`);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw) as { rooms?: JoinedSharedPhotoRoomInfo[]; cachedAt?: number };
+    if (
+      Array.isArray(parsed?.rooms) &&
+      typeof parsed.cachedAt === 'number' &&
+      Date.now() - parsed.cachedAt < 25 * 60 * 1000
+    ) {
+      joinedRoomsMemoryCache.set(email, { rooms: parsed.rooms, cachedAt: parsed.cachedAt });
+      return parsed.rooms;
+    }
+  } catch {
+    /* ignore */
+  }
+  return [];
+}
 
 function saveCachedRoomTokenEntry(cacheKey: string, entry: CachedRoomTokenEntry): void {
   roomTokenCache.set(cacheKey, entry);
@@ -136,9 +191,6 @@ function readCachedRoomTokenEntry(cacheKey: string): CachedRoomTokenEntry | null
         roomId: parsed.roomId,
         inviteToken: parsed.inviteToken,
         masterNickname: parsed.masterNickname,
-        accessibleRoomIds: Array.isArray(parsed.accessibleRoomIds)
-          ? parsed.accessibleRoomIds
-          : undefined,
         cachedAt: parsed.cachedAt,
       };
       roomTokenCache.set(cacheKey, restored);
@@ -152,13 +204,17 @@ function readCachedRoomTokenEntry(cacheKey: string): CachedRoomTokenEntry | null
 
 export function clearCachedSharedRoomTokens(): void {
   roomTokenCache.clear();
+  joinedRoomsMemoryCache.clear();
   inflightEnsureRoomMap.clear();
   if (typeof window !== 'undefined') {
     try {
       const keysToRemove: string[] = [];
       for (let i = 0; i < sessionStorage.length; i += 1) {
         const k = sessionStorage.key(i);
-        if (k && k.startsWith(MY_ROOM_TOKEN_SESSION_PREFIX)) {
+        if (
+          k &&
+          (k.startsWith(MY_ROOM_TOKEN_SESSION_PREFIX) || k.startsWith(JOINED_ROOMS_SESSION_PREFIX))
+        ) {
           keysToRemove.push(k);
         }
       }
@@ -186,16 +242,24 @@ export function mapDbRoomToUiLounge(
   dbLoungeType: string,
   dbSubType?: string | null
 ): { loungeType: LoungeType; familyRoom: FamilyRoomId } {
-  if (dbLoungeType === 'club') {
-    if (dbSubType === '동창회') {
+  const lt = String(dbLoungeType || '').trim().toLowerCase();
+  const st = String(dbSubType || '').trim();
+  const stLower = st.toLowerCase();
+  if (lt === 'club' || lt === 'student') {
+    if (
+      lt === 'student' ||
+      st.includes('동창') ||
+      stLower.includes('alumni') ||
+      stLower.includes('student')
+    ) {
       return { loungeType: 'student', familyRoom: '우리집' };
     }
     return { loungeType: 'club', familyRoom: '우리집' };
   }
   const fam: FamilyRoomId =
-    dbSubType === '본가(친가)'
+    st.includes('본가') || st.includes('친가') || stLower.includes('parent')
       ? '본가(친가)'
-      : dbSubType === '처가(친정)'
+      : st.includes('처가') || st.includes('친정') || stLower.includes('inlaw')
       ? '처가(친정)'
       : '우리집';
   return { loungeType: 'family', familyRoom: fam };
@@ -437,23 +501,23 @@ export function getPrewarmedRoomInviteTokenSync(
 
 export async function readInstantLocalVaultSharedPhotos(
   loungeType: LoungeType,
-  familyRoom: FamilyRoomId
+  familyRoom: FamilyRoomId,
+  explicitRoomId?: string | null
 ): Promise<PhotoItem[]> {
   if (!hasAuthenticatedHubAccountSession()) return [];
   const email = resolveCurrentAuthedEmail();
   if (!email) return [];
-  const { dbLoungeType, dbSubType } = mapUiLoungeToDbRoom(loungeType, familyRoom);
-  const cached = readCachedRoomTokenEntry(`${email}:${dbLoungeType}:${dbSubType}`);
-  const roomIds = Array.from(
-    new Set(
-      [cached?.roomId, ...(Array.isArray(cached?.accessibleRoomIds) ? cached.accessibleRoomIds : [])].filter(
-        (id): id is string => Boolean(id)
-      )
-    )
-  );
-  if (roomIds.length === 0) return [];
+  const cleanExplicitRoomId = (explicitRoomId || '').trim();
+  let targetRoomId = cleanExplicitRoomId;
+  if (!targetRoomId) {
+    const { dbLoungeType, dbSubType } = mapUiLoungeToDbRoom(loungeType, familyRoom);
+    const cached = readCachedRoomTokenEntry(`${email}:${dbLoungeType}:${dbSubType}`);
+    targetRoomId = cached?.roomId || '';
+  }
+  if (!targetRoomId) return [];
   try {
-    return await loadMemberLocalMultiRoomPhotos(email, roomIds);
+    // [안 A 1:1 room_id 절대 격리]: 단 1개의 targetRoomId 로컬 금고만 조회 (복수 방 합치기 영구 금지)
+    return await loadMemberLocalRoomPhotos(email, targetRoomId);
   } catch {
     return [];
   }
@@ -464,28 +528,30 @@ export async function ensureMyRoomAndInviteToken(opts: {
   familyRoom: FamilyRoomId;
   roomTitle: string;
   masterNickname: string;
+  forceRefresh?: boolean;
 }): Promise<{
   ok: boolean;
   roomId?: string;
   inviteToken?: string;
   masterNickname?: string;
-  accessibleRoomIds?: string[];
+  joinedRooms?: JoinedSharedPhotoRoomInfo[];
   error?: string;
 }> {
   if (!hasAuthenticatedHubAccountSession()) {
     return { ok: false, error: 'AUTH_REQUIRED' };
   }
   const fastEmail = resolveCurrentAuthedEmail();
-  if (fastEmail) {
+  if (fastEmail && !opts.forceRefresh) {
     const { dbLoungeType, dbSubType } = mapUiLoungeToDbRoom(opts.loungeType, opts.familyRoom);
     const fastCached = readCachedRoomTokenEntry(`${fastEmail}:${dbLoungeType}:${dbSubType}`);
-    if (fastCached?.roomId && fastCached?.inviteToken && Array.isArray(fastCached.accessibleRoomIds)) {
+    const cachedJoined = joinedRoomsMemoryCache.get(fastEmail);
+    if (fastCached?.roomId && fastCached?.inviteToken && cachedJoined) {
       return {
         ok: true,
         roomId: fastCached.roomId,
         inviteToken: fastCached.inviteToken,
         masterNickname: fastCached.masterNickname,
-        accessibleRoomIds: fastCached.accessibleRoomIds,
+        joinedRooms: cachedJoined.rooms,
       };
     }
   }
@@ -497,15 +563,18 @@ export async function ensureMyRoomAndInviteToken(opts: {
   const cleanMasterNick = (opts.masterNickname || '').trim() || '방장';
   const { dbLoungeType, dbSubType } = mapUiLoungeToDbRoom(opts.loungeType, opts.familyRoom);
   const cacheKey = `${email}:${dbLoungeType}:${dbSubType}`;
-  const cached = readCachedRoomTokenEntry(cacheKey);
-  if (cached?.roomId && cached?.inviteToken && Array.isArray(cached.accessibleRoomIds)) {
-    return {
-      ok: true,
-      roomId: cached.roomId,
-      inviteToken: cached.inviteToken,
-      masterNickname: cached.masterNickname,
-      accessibleRoomIds: cached.accessibleRoomIds,
-    };
+  if (!opts.forceRefresh) {
+    const cached = readCachedRoomTokenEntry(cacheKey);
+    const cachedJoined = joinedRoomsMemoryCache.get(email);
+    if (cached?.roomId && cached?.inviteToken && cachedJoined) {
+      return {
+        ok: true,
+        roomId: cached.roomId,
+        inviteToken: cached.inviteToken,
+        masterNickname: cached.masterNickname,
+        joinedRooms: cachedJoined.rooms,
+      };
+    }
   }
 
   const inflight = inflightEnsureRoomMap.get(cacheKey);
@@ -515,16 +584,24 @@ export async function ensureMyRoomAndInviteToken(opts: {
 
   const task = (async () => {
     try {
-      // 1순위: 서버 브릿지(service_role + 허브 계정 실검증)로 5대 공유방 토큰 일괄 예열 + 방장 별명 최신화 및 합류 공유방 전체 조회
+      // 1순위: 서버 브릿지(service_role + 허브 계정 실검증)로 내 5대 방 토큰 일괄 예열 + 초대 합류한 타인 방 목록(joinedRooms) 독립 조회
       const bridgeRes = await callGhostiServerBridge<{
         roomId?: string;
         inviteToken?: string;
         masterNickname?: string;
-        accessibleRoomIds?: string[];
         roomTokensByKey?: Record<
           string,
-          { roomId: string; inviteToken: string; accessibleRoomIds?: string[] }
+          { roomId: string; inviteToken: string }
         >;
+        joinedRooms?: Array<{
+          roomId: string;
+          dbLoungeType?: string;
+          dbSubType?: string;
+          roomTitle?: string;
+          masterEmail?: string;
+          masterNickname?: string;
+          inviteToken?: string;
+        }>;
       }>('photo_resolve_accessible_rooms', {
         dbLoungeType,
         dbSubType,
@@ -554,13 +631,33 @@ export async function ensureMyRoomAndInviteToken(opts: {
               roomId: entry.roomId,
               inviteToken: entry.inviteToken,
               masterNickname: resolvedNick,
-              accessibleRoomIds: Array.isArray(entry.accessibleRoomIds)
-                ? entry.accessibleRoomIds
-                : [entry.roomId],
               cachedAt: nowTs,
             });
           }
         }
+
+        const parsedJoinedRooms: JoinedSharedPhotoRoomInfo[] = Array.isArray(bridgeRes.joinedRooms)
+          ? bridgeRes.joinedRooms
+              .filter((jr) => jr?.roomId)
+              .map((jr) => {
+                const mappedUi = mapDbRoomToUiLounge(
+                  jr.dbLoungeType || 'family',
+                  jr.dbSubType || '우리집'
+                );
+                return {
+                  roomId: String(jr.roomId),
+                  loungeType: mappedUi.loungeType,
+                  familyRoom: mappedUi.familyRoom,
+                  roomTitle:
+                    String(jr.roomTitle || '').trim() ||
+                    resolveDefaultRoomTitle(mappedUi.loungeType, mappedUi.familyRoom),
+                  masterEmail: String(jr.masterEmail || '').trim().toLowerCase() || undefined,
+                  masterNickname: String(jr.masterNickname || '').trim() || '방장',
+                  inviteToken: String(jr.inviteToken || '').trim() || undefined,
+                };
+              })
+          : [];
+        saveCachedJoinedRooms(email, parsedJoinedRooms);
 
         saveVerifiedInviteRoomMeta(bridgeRes.inviteToken, {
           loungeType: opts.loungeType,
@@ -568,14 +665,10 @@ export async function ensureMyRoomAndInviteToken(opts: {
           hostName: resolvedNick,
           roomTitle: opts.roomTitle,
         });
-        const resolvedAccessible = Array.isArray(bridgeRes.accessibleRoomIds)
-          ? bridgeRes.accessibleRoomIds
-          : [bridgeRes.roomId];
         saveCachedRoomTokenEntry(cacheKey, {
           roomId: bridgeRes.roomId,
           inviteToken: bridgeRes.inviteToken,
           masterNickname: resolvedNick,
-          accessibleRoomIds: resolvedAccessible,
           cachedAt: nowTs,
         });
         return {
@@ -583,7 +676,7 @@ export async function ensureMyRoomAndInviteToken(opts: {
           roomId: bridgeRes.roomId,
           inviteToken: bridgeRes.inviteToken,
           masterNickname: resolvedNick,
-          accessibleRoomIds: resolvedAccessible,
+          joinedRooms: parsedJoinedRooms,
         };
       }
 
@@ -618,6 +711,7 @@ export async function ensureMyRoomAndInviteToken(opts: {
         roomId: parsed.roomId,
         inviteToken: parsed.inviteToken,
         masterNickname: cleanMasterNick,
+        joinedRooms: getCachedJoinedSharedRoomsSync(),
       };
     } finally {
       inflightEnsureRoomMap.delete(cacheKey);
@@ -741,17 +835,21 @@ export async function fetchScopedSharedRoomPhotos(opts: {
   roomTitle: string;
   nickname: string;
   inviteToken?: string;
+  explicitRoomId?: string | null;
 }): Promise<{
   roomId: string | null;
   inviteToken: string | null;
   hostNickname?: string;
   roomTitle?: string;
+  joinedRooms?: JoinedSharedPhotoRoomInfo[];
+  isJoinedOtherRoom?: boolean;
   photos: PhotoItem[];
 }> {
   const cleanInviteToken = (opts.inviteToken || '').trim();
+  const cleanExplicitRoomId = (opts.explicitRoomId || '').trim();
   const isLoggedIn = hasAuthenticatedHubAccountSession();
 
-  // 1. 초대 토큰(?token=...)으로 접속한 경우: 해당 토큰의 방과 현재 보고 있는 탭이 일치할 때만 그 방 사진을 노출!
+  // 1. 초대 토큰(?inviteToken=...)으로 접속한 경우: 해당 토큰의 방과 현재 보고 있는 뷰가 일치할 때만 그 단일 방 사진을 노출!
   let matchedInvitedRoomPhotos: PhotoItem[] = [];
   let matchedInvitedRoomMeta: {
     roomId: string;
@@ -763,12 +861,12 @@ export async function fetchScopedSharedRoomPhotos(opts: {
     const previewRes = await fetchGuestPreviewRoomByToken(cleanInviteToken);
     if (previewRes.ok && previewRes.room) {
       const matchesCurrentView =
+        (!cleanExplicitRoomId || previewRes.room.roomId === cleanExplicitRoomId) &&
         previewRes.room.loungeType === opts.loungeType &&
         (opts.loungeType !== 'family' || previewRes.room.familyRoom === opts.familyRoom);
 
       if (isLoggedIn) {
         await acceptRoomInviteAsLoggedInMember(cleanInviteToken, opts.nickname);
-        stripConsumedInviteParamsFromLoggedInUrl();
       }
 
       if (matchesCurrentView) {
@@ -801,7 +899,7 @@ export async function fetchScopedSharedRoomPhotos(opts: {
     return { roomId: null, inviteToken: null, photos: [] };
   }
 
-  // 3. 로그인 상태: 현재 로그인 계정의 자체 방 + 정식 멤버로 합류한 동일 탭 공유방(RLS 검증) 조회 + 내 기기 로컬 영구 금고(IndexedDB) 동기화
+  // 3. 로그인 상태: [안 A 절대 보안 격리] 오직 단 1개의 targetRoomId(내 방 또는 선택한 타인 초대방)만 독립 조회!
   const authed = await ensureGhostiAuthedSupabaseClient();
   const currentEmail = resolveCurrentAuthedEmail();
   if (!authed) {
@@ -824,8 +922,6 @@ export async function fetchScopedSharedRoomPhotos(opts: {
     };
   }
 
-  const { dbLoungeType, dbSubType } = mapUiLoungeToDbRoom(opts.loungeType, opts.familyRoom);
-
   const ensured = await ensureMyRoomAndInviteToken({
     loungeType: opts.loungeType,
     familyRoom: opts.familyRoom,
@@ -833,36 +929,39 @@ export async function fetchScopedSharedRoomPhotos(opts: {
     masterNickname: opts.nickname || '방장',
   });
 
-  const accessibleRoomIdSet = new Set<string>();
-  if (ensured.ok && ensured.roomId) {
-    accessibleRoomIdSet.add(ensured.roomId);
-  }
-  if (Array.isArray(ensured.accessibleRoomIds)) {
-    for (const rId of ensured.accessibleRoomIds) {
-      if (rId) accessibleRoomIdSet.add(String(rId));
-    }
-  }
-  if (matchedInvitedRoomMeta?.roomId) {
-    accessibleRoomIdSet.add(matchedInvitedRoomMeta.roomId);
+  const joinedRooms = ensured.joinedRooms ?? getCachedJoinedSharedRoomsSync();
+  const joinedMatch = cleanExplicitRoomId
+    ? joinedRooms.find((jr) => jr.roomId === cleanExplicitRoomId)
+    : matchedInvitedRoomMeta?.roomId && matchedInvitedRoomMeta.roomId !== ensured.roomId
+    ? joinedRooms.find((jr) => jr.roomId === matchedInvitedRoomMeta?.roomId)
+    : undefined;
+
+  // 타인 초대방(explicitRoomId 또는 방금 수락한 타인 초대방)을 선택한 경우: 오직 그 단일 room_id만 조회!
+  // 내 기본 탭(우리집/본가/처가/동호회/동창회)을 선택한 경우: 오직 내 방(ensured.roomId) 1개만 조회!
+  const targetRoomId =
+    cleanExplicitRoomId ||
+    matchedInvitedRoomMeta?.roomId ||
+    (ensured.ok && ensured.roomId ? ensured.roomId : '');
+  const isJoinedOtherRoom = Boolean(
+    targetRoomId && ensured.roomId && targetRoomId !== ensured.roomId
+  );
+
+  if (isLoggedIn && cleanInviteToken) {
+    stripConsumedInviteParamsFromLoggedInUrl({
+      loungeType: opts.loungeType,
+      familyRoom: opts.familyRoom,
+      joinedRoomId: isJoinedOtherRoom ? targetRoomId : null,
+    });
   }
 
-  if (!Array.isArray(ensured.accessibleRoomIds)) {
-    const { data: memberRoomRows } = await authed
-      .from('ghosti_lounge_rooms')
-      .select('room_id')
-      .eq('lounge_type', dbLoungeType)
-      .eq('sub_type', dbSubType)
-      .limit(20);
-    if (Array.isArray(memberRoomRows)) {
-      for (const r of memberRoomRows) {
-        if (r?.room_id) accessibleRoomIdSet.add(String(r.room_id));
-      }
-    }
-  }
-
-  const accessibleRoomIds = Array.from(accessibleRoomIdSet);
-  if (accessibleRoomIds.length === 0) {
-    return { roomId: null, inviteToken: null, photos: matchedInvitedRoomPhotos };
+  if (!targetRoomId) {
+    return {
+      roomId: null,
+      inviteToken: null,
+      joinedRooms,
+      isJoinedOtherRoom: false,
+      photos: [],
+    };
   }
 
   const { data, error } = await authed
@@ -870,131 +969,124 @@ export async function fetchScopedSharedRoomPhotos(opts: {
     .select(
       'id, room_id, uploader_nickname, thumb_webp_url, caption_ko, keywords_ko, face_person_names, shot_date_display, shot_place_display, width_px, height_px, created_at'
     )
-    .in('room_id', accessibleRoomIds)
+    .eq('room_id', targetRoomId)
     .eq('is_hidden_by_master', false)
     .order('created_at', { ascending: false })
     .limit(200);
 
-  // 오프라인이거나 일시적 네트워크 장애 시에도 합류 멤버는 본인 기기 로컬 금고(IndexedDB)에서 즉시 100% 열람!
+  // 오프라인이거나 일시적 네트워크 장애 시에도 합류 멤버는 본인 기기 로컬 금고(IndexedDB)에서 해당 단일 room_id만 100% 열람!
   if (error || !Array.isArray(data)) {
     const localVaultPhotos = currentEmail
-      ? await loadMemberLocalMultiRoomPhotos(currentEmail, accessibleRoomIds)
+      ? await loadMemberLocalRoomPhotos(currentEmail, targetRoomId)
       : [];
     return {
-      roomId: ensured.roomId || accessibleRoomIds[0],
-      inviteToken: ensured.inviteToken || null,
+      roomId: targetRoomId,
+      inviteToken: isJoinedOtherRoom
+        ? joinedMatch?.inviteToken || cleanInviteToken || null
+        : ensured.inviteToken || null,
+      hostNickname: joinedMatch?.masterNickname || matchedInvitedRoomMeta?.hostNickname,
+      roomTitle: joinedMatch?.roomTitle || matchedInvitedRoomMeta?.roomTitle,
+      joinedRooms,
+      isJoinedOtherRoom,
       photos: localVaultPhotos.length > 0 ? localVaultPhotos : matchedInvitedRoomPhotos,
     };
   }
 
-  const serverItemsByRoom = new Map<string, PhotoItem[]>();
+  const serverItems: PhotoItem[] = [];
   let hasExpiredRowsOnServer = false;
 
   for (const row of data) {
     const rId = String(row.room_id || '');
-    if (!rId) continue;
+    if (rId !== targetRoomId) continue;
     const createdStr = String(row.created_at || '');
     if (!isWithinSeedBufferTtl(createdStr)) {
       hasExpiredRowsOnServer = true;
     }
-    const mappedItem = dtoToPhotoItem(
-      {
-        id: String(row.id),
-        roomId: rId,
-        uploaderNickname: String(row.uploader_nickname || '멤버'),
-        thumbWebpUrl: String(row.thumb_webp_url || ''),
-        captionKo: String(row.caption_ko || ''),
-        keywordsKo: Array.isArray(row.keywords_ko) ? (row.keywords_ko as string[]) : [],
-        facePersonNames: Array.isArray(row.face_person_names)
-          ? (row.face_person_names as string[])
-          : [],
-        shotDateDisplay: (row.shot_date_display as string | null) || null,
-        shotPlaceDisplay: (row.shot_place_display as string | null) || null,
-        widthPx: Number(row.width_px || 0),
-        heightPx: Number(row.height_px || 0),
-        createdAt: createdStr,
-      },
-      opts.loungeType,
-      opts.familyRoom,
-      currentEmail
+    serverItems.push(
+      dtoToPhotoItem(
+        {
+          id: String(row.id),
+          roomId: rId,
+          uploaderNickname: String(row.uploader_nickname || '멤버'),
+          thumbWebpUrl: String(row.thumb_webp_url || ''),
+          captionKo: String(row.caption_ko || ''),
+          keywordsKo: Array.isArray(row.keywords_ko) ? (row.keywords_ko as string[]) : [],
+          facePersonNames: Array.isArray(row.face_person_names)
+            ? (row.face_person_names as string[])
+            : [],
+          shotDateDisplay: (row.shot_date_display as string | null) || null,
+          shotPlaceDisplay: (row.shot_place_display as string | null) || null,
+          widthPx: Number(row.width_px || 0),
+          heightPx: Number(row.height_px || 0),
+          createdAt: createdStr,
+        },
+        opts.loungeType,
+        opts.familyRoom,
+        currentEmail
+      )
     );
-    const list = serverItemsByRoom.get(rId) || [];
-    list.push(mappedItem);
-    serverItemsByRoom.set(rId, list);
   }
 
-  if (matchedInvitedRoomMeta?.roomId && matchedInvitedRoomPhotos.length > 0) {
-    const prevList = serverItemsByRoom.get(matchedInvitedRoomMeta.roomId) || [];
-    const seenIds = new Set(prevList.map((p) => p.id));
+  if (matchedInvitedRoomMeta?.roomId === targetRoomId && matchedInvitedRoomPhotos.length > 0) {
+    const seenIds = new Set(serverItems.map((p) => p.id));
     for (const invPhoto of matchedInvitedRoomPhotos) {
       if (!seenIds.has(invPhoto.id)) {
-        prevList.push({ ...invPhoto, sharedOwnerEmail: currentEmail || undefined });
+        serverItems.push({ ...invPhoto, sharedOwnerEmail: currentEmail || undefined });
         seenIds.add(invPhoto.id);
       }
     }
-    serverItemsByRoom.set(matchedInvitedRoomMeta.roomId, prevList);
   }
 
-  // 먼저 합류 멤버의 로컬 영구 금고(IndexedDB)에 안전하게 병합 저장한 뒤, 만료된(14일 경과) 서버 마중물 행을 비동기 청소
   if (currentEmail) {
-    for (const rId of accessibleRoomIds) {
-      const incoming = serverItemsByRoom.get(rId) || [];
-      if (incoming.length > 0) {
-        await upsertMemberLocalRoomPhotos(currentEmail, rId, incoming);
-      }
+    if (serverItems.length > 0) {
+      await upsertMemberLocalRoomPhotos(currentEmail, targetRoomId, serverItems);
     }
     if (hasExpiredRowsOnServer) {
-      void purgeExpiredSeedPhotosAfterLocalArchive(authed, currentEmail, accessibleRoomIds);
+      void purgeExpiredSeedPhotosAfterLocalArchive(authed, currentEmail, [targetRoomId]);
     }
-    const mergedFromLocalVault = await loadMemberLocalMultiRoomPhotos(
-      currentEmail,
-      accessibleRoomIds
+    const localPhotos = await loadMemberLocalRoomPhotos(currentEmail, targetRoomId);
+    // 서버에서 삭제되었거나 빈 방인데 로컬에 잘못 남았을 때를 제외하고, 14일 TTL 경과 후에도 합류 멤버 로컬 금고 영구 보존
+    const mergedById = new Map<string, PhotoItem>();
+    for (const item of serverItems) {
+      mergedById.set(item.id, { ...item, sharedRoomId: targetRoomId, sharedOwnerEmail: currentEmail });
+    }
+    for (const item of localPhotos) {
+      if (!mergedById.has(item.id) && (!item.sharedRoomId || item.sharedRoomId === targetRoomId)) {
+        mergedById.set(item.id, {
+          ...item,
+          sharedLoungeType: opts.loungeType,
+          sharedFamilyRoom: opts.familyRoom,
+          sharedRoomId: targetRoomId,
+          sharedOwnerEmail: currentEmail,
+        });
+      }
+    }
+    const finalPhotos = Array.from(mergedById.values()).sort(
+      (a, b) => (b.mtimeMs || 0) - (a.mtimeMs || 0)
     );
-    // 다중 접근 방(내 방 + 초대 합류 방) 병합 시, 과거 reseed 버그로 동일 썸네일이 내 방 이름으로 중복 복제된 항목은
-    // 최초 업로드 원본(가장 오래된 createdAt / 초대 원방) 1건만 유지하고 복제본은 로컬 금고에서도 자동 정리합니다.
-    const sortedOldestFirst = [...mergedFromLocalVault].sort((a, b) => {
-      const aJoinedPriority = a.sharedRoomId && a.sharedRoomId !== ensured.roomId ? 0 : 1;
-      const bJoinedPriority = b.sharedRoomId && b.sharedRoomId !== ensured.roomId ? 0 : 1;
-      if (aJoinedPriority !== bJoinedPriority) return aJoinedPriority - bJoinedPriority;
-      return String(a.date || '').localeCompare(String(b.date || ''));
-    });
-    const seenVisualSigs = new Set<string>();
-    const duplicateCloneIdsToPurge: string[] = [];
-    const keptIds = new Set<string>();
-    for (const item of sortedOldestFirst) {
-      const rawThumb = String(item.thumbUrl || '');
-      const sig = rawThumb ? `${rawThumb.slice(0, 180)}:${rawThumb.length}` : item.id;
-      if (rawThumb && seenVisualSigs.has(sig)) {
-        if (item.sharedRoomId && ensured.roomId && item.sharedRoomId === ensured.roomId) {
-          duplicateCloneIdsToPurge.push(item.id);
-        }
-        continue;
-      }
-      seenVisualSigs.add(sig);
-      keptIds.add(item.id);
-    }
-    if (duplicateCloneIdsToPurge.length > 0) {
-      for (const dupId of duplicateCloneIdsToPurge) {
-        void removeMemberLocalRoomPhotoEverywhere(currentEmail, dupId);
-      }
-    }
-    const dedupedMergedPhotos = mergedFromLocalVault.filter((p) => keptIds.has(p.id));
     return {
-      roomId: matchedInvitedRoomMeta?.roomId || ensured.roomId || accessibleRoomIds[0],
-      inviteToken: cleanInviteToken || ensured.inviteToken || null,
-      hostNickname: matchedInvitedRoomMeta?.hostNickname,
-      roomTitle: matchedInvitedRoomMeta?.roomTitle,
-      photos: dedupedMergedPhotos,
+      roomId: targetRoomId,
+      inviteToken: isJoinedOtherRoom
+        ? joinedMatch?.inviteToken || cleanInviteToken || null
+        : ensured.inviteToken || null,
+      hostNickname: joinedMatch?.masterNickname || matchedInvitedRoomMeta?.hostNickname,
+      roomTitle: joinedMatch?.roomTitle || matchedInvitedRoomMeta?.roomTitle,
+      joinedRooms,
+      isJoinedOtherRoom,
+      photos: finalPhotos,
     };
   }
 
-  const fallbackMerged = Array.from(serverItemsByRoom.values()).flat();
   return {
-    roomId: matchedInvitedRoomMeta?.roomId || ensured.roomId || accessibleRoomIds[0],
-    inviteToken: cleanInviteToken || ensured.inviteToken || null,
-    hostNickname: matchedInvitedRoomMeta?.hostNickname,
-    roomTitle: matchedInvitedRoomMeta?.roomTitle,
-    photos: fallbackMerged,
+    roomId: targetRoomId,
+    inviteToken: isJoinedOtherRoom
+      ? joinedMatch?.inviteToken || cleanInviteToken || null
+      : ensured.inviteToken || null,
+    hostNickname: joinedMatch?.masterNickname || matchedInvitedRoomMeta?.hostNickname,
+    roomTitle: joinedMatch?.roomTitle || matchedInvitedRoomMeta?.roomTitle,
+    joinedRooms,
+    isJoinedOtherRoom,
+    photos: serverItems,
   };
 }
 
