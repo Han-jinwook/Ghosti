@@ -41,6 +41,108 @@ let sharedRoomSyncSeq = 0;
 let lastDeepLinkHydratedAt = 0;
 let lastCompletedRoomSig = '';
 let lastCompletedRoomAt = 0;
+
+const SHARED_ROOM_SOFT_DELETED_STORAGE_KEY = 'ghosti_shared_room_soft_deleted_v1';
+const SHARED_ROOM_STICK_OVERLAY_STORAGE_KEY = 'ghosti_shared_room_stickers_v1';
+
+export interface SharedRoomStickOverlayEntry {
+  appliedSticks: string[];
+  looseTimelineGroup?: string;
+  expandedSearchKeywords: string[];
+}
+
+function readSharedRoomSoftDeletedMap(): Record<string, string> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(SHARED_ROOM_SOFT_DELETED_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, string>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSharedRoomSoftDeletedMap(next: Record<string, string>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(SHARED_ROOM_SOFT_DELETED_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    /* ignore */
+  }
+}
+
+function readSharedRoomStickOverlayMap(): Record<string, SharedRoomStickOverlayEntry> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(SHARED_ROOM_STICK_OVERLAY_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object'
+      ? (parsed as Record<string, SharedRoomStickOverlayEntry>)
+      : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeSharedRoomStickOverlayMap(
+  next: Record<string, SharedRoomStickOverlayEntry>
+): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(SHARED_ROOM_STICK_OVERLAY_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    /* ignore */
+  }
+}
+
+function applySharedRoomLocalOverlays(
+  items: PhotoItem[],
+  softDeletedMap: Record<string, string>,
+  stickOverlayMap: Record<string, SharedRoomStickOverlayEntry>
+): PhotoItem[] {
+  if (
+    items.length === 0 ||
+    (Object.keys(softDeletedMap).length === 0 && Object.keys(stickOverlayMap).length === 0)
+  ) {
+    return items;
+  }
+  return items.map((item) => {
+    const deletedAt = softDeletedMap[item.id];
+    const stickOverlay = stickOverlayMap[item.id];
+    if (!deletedAt && !stickOverlay) return item;
+    const nextTags = stickOverlay
+      ? Array.from(
+          new Set([
+            ...(item.tags ?? []),
+            ...stickOverlay.appliedSticks.map((s) => (s.startsWith('#') ? s : `#${s}`)),
+          ])
+        )
+      : item.tags;
+    const nextKeywords = stickOverlay
+      ? Array.from(
+          new Set([
+            ...(item.keywordsKo ?? []),
+            ...stickOverlay.appliedSticks,
+            ...stickOverlay.expandedSearchKeywords,
+          ])
+        )
+      : item.keywordsKo;
+    return {
+      ...item,
+      ...(deletedAt ? { quarantined: true, sharedDeletedAt: deletedAt } : {}),
+      ...(stickOverlay
+        ? {
+            appliedStickChips: stickOverlay.appliedSticks,
+            looseTimelineGroup: stickOverlay.looseTimelineGroup ?? item.looseTimelineGroup,
+            tags: nextTags,
+            keywordsKo: nextKeywords,
+          }
+        : {}),
+    };
+  });
+}
 import {
   dispatchFileToKakaoRealChatroom,
   extractKeywordSentencesZeroLlm,
@@ -230,6 +332,14 @@ export interface FreePhotoShareSlice {
   requestAddMyPhotosToSharedRoom: () => void;
   addLocalPhotosToSharedRoom: (selectedIds: string[]) => void;
   removeSharedRoomPhoto: (photoId: string) => void;
+  sharedRoomSoftDeletedMap: Record<string, string>;
+  sharedRoomStickOverlayMap: Record<string, SharedRoomStickOverlayEntry>;
+  softDeleteSharedRoomPhoto24h: (photoId: string) => void;
+  restoreSharedRoomPhotoFromTrash: (photoId: string) => void;
+  restoreAllSharedRoomTrashPhotos: (photoIds: string[]) => void;
+  permanentlyDeleteSharedRoomTrashPhoto: (photoId: string) => void;
+  applyStickChipToSharedPhoto: (photoId: string, chipLabel: string) => void;
+  applyStickChipToAllSharedPhotos: (photoIds: string[], chipLabel: string) => void;
   returnToSharedRoomAndOpenUpload: () => Promise<void>;
   applyShareInviteDeepLink: (
     rawUrlOrToken: string,
@@ -287,19 +397,10 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
   detectingLiveFaces: false,
   globalSeedVersion: 3,
   retroScanRunning: false,
-  lastRetroScanReport: {
-    seedVersion: 3,
-    triggerTitle: '다년도·다각도(정면·측면·야외·선글라스) 자동 시드 패키지 + 전 멤버 1초 만에 역스캔 가동 중',
-    rescuedHostPhotos: 42,
-    rescuedMemberPhonePhotos: 31,
-    rescuedVideoSegments: 12,
-    totalSyncedDevices: 5,
-    elapsedMs: 38,
-    sampleQuery: '은숙 나무 다리',
-    sampleSpace: 'gallery',
-    timestampText: '자동 동기화됨 (1초 만에)',
-  },
+  lastRetroScanReport: null,
   swarmFaceCandidates: [],
+  sharedRoomSoftDeletedMap: readSharedRoomSoftDeletedMap(),
+  sharedRoomStickOverlayMap: readSharedRoomStickOverlayMap(),
   setShowFaceRegistryModal: (showFaceRegistryModal) => set({ showFaceRegistryModal }),
   setDoorplatePickerClusterId: (doorplatePickerClusterId) => set({ doorplatePickerClusterId }),
   selectDoorplateStyleSlot: (clusterId, slotIndex) => {
@@ -1157,7 +1258,12 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       const existingInSameRoom = latestState.sharedRoomAddedPhotos.filter(
         (p) => p.sharedRoomId === targetRoomId
       );
-      const nextAdded = [...upRes.uploadedPhotos, ...existingInSameRoom, ...otherRoomsPhotos];
+      const overlaidUploaded = applySharedRoomLocalOverlays(
+        upRes.uploadedPhotos,
+        latestState.sharedRoomSoftDeletedMap,
+        latestState.sharedRoomStickOverlayMap
+      );
+      const nextAdded = [...overlaidUploaded, ...existingInSameRoom, ...otherRoomsPhotos];
       persistSharedRoomAddedPhotos(nextAdded);
 
       storeSharedRefs.activeSharedRoomId = targetRoomId;
@@ -1203,6 +1309,292 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       searchResults: nextResults,
       lastQuarantineToast:
         '🗑️ 공유방에서 해당 사진을 삭제했습니다. (내 기기 원본 사진은 안전하게 보존됩니다)',
+    });
+  },
+
+  softDeleteSharedRoomPhoto24h: (photoId) => {
+    if (!photoId) return;
+    set((state) => {
+      const deletedAt = new Date().toISOString();
+      const nextSoftDeletedMap = {
+        ...state.sharedRoomSoftDeletedMap,
+        [photoId]: deletedAt,
+      };
+      writeSharedRoomSoftDeletedMap(nextSoftDeletedMap);
+
+      const markDeleted = (p: PhotoItem): PhotoItem =>
+        p.id === photoId ? { ...p, quarantined: true, sharedDeletedAt: deletedAt } : p;
+
+      const nextAdded = state.sharedRoomAddedPhotos.map(markDeleted);
+      const nextHost = state.sharedRoomHostPhotos.map(markDeleted);
+      const nextPhotos = state.photos.map(markDeleted);
+      const nextResults = state.searchResults.filter((item) => item.photo.id !== photoId);
+
+      return {
+        sharedRoomSoftDeletedMap: nextSoftDeletedMap,
+        sharedRoomAddedPhotos: nextAdded,
+        sharedRoomHostPhotos: nextHost,
+        photos: nextPhotos,
+        searchResults: nextResults,
+        lastQuarantineToast:
+          '🗑️ 24시간 내 본인 삭제 처리되어 공유방에서 내려가고 [공유방 휴지통]으로 이동되었습니다. (언제든 1초 복원 가능)',
+      };
+    });
+  },
+
+  restoreSharedRoomPhotoFromTrash: (photoId) => {
+    if (!photoId) return;
+    set((state) => {
+      const nextSoftDeletedMap = { ...state.sharedRoomSoftDeletedMap };
+      delete nextSoftDeletedMap[photoId];
+      writeSharedRoomSoftDeletedMap(nextSoftDeletedMap);
+
+      const markRestored = (p: PhotoItem): PhotoItem =>
+        p.id === photoId ? { ...p, quarantined: false, sharedDeletedAt: undefined } : p;
+
+      const nextAdded = state.sharedRoomAddedPhotos.map(markRestored);
+      const nextHost = state.sharedRoomHostPhotos.map(markRestored);
+      const nextPhotos = state.photos.map(markRestored);
+
+      const nextCorpus = resolveLoungePhotoCorpus({
+        activeLoungeType: state.activeLoungeType,
+        activeFamilyRoom: state.activeFamilyRoom,
+        activeSharedRoomId: state.activeSharedRoomId,
+        photos: nextPhotos,
+        sharedRoomHostPhotos: nextHost,
+        sharedRoomAddedPhotos: nextAdded,
+      });
+      const nextResults: SearchResultItem[] = filterVisibleGalleryPhotos(nextCorpus).map(
+        (photo) => ({
+          photo,
+          score: 0.96,
+          matchPercentage: 98,
+          matchedBy: 'text-direct' as const,
+        })
+      );
+
+      return {
+        sharedRoomSoftDeletedMap: nextSoftDeletedMap,
+        sharedRoomAddedPhotos: nextAdded,
+        sharedRoomHostPhotos: nextHost,
+        photos: nextPhotos,
+        ...(state.hasExecutedUserSearch ? {} : { searchResults: nextResults }),
+        lastQuarantineToast:
+          '↩️ [공유방 휴지통]에서 사진을 1초 만에 복원하여 공유방 앨범에 다시 올렸습니다!',
+      };
+    });
+  },
+
+  restoreAllSharedRoomTrashPhotos: (photoIds) => {
+    if (!photoIds || photoIds.length === 0) return;
+    const idSet = new Set(photoIds);
+    set((state) => {
+      const nextSoftDeletedMap = { ...state.sharedRoomSoftDeletedMap };
+      for (const pid of photoIds) {
+        delete nextSoftDeletedMap[pid];
+      }
+      writeSharedRoomSoftDeletedMap(nextSoftDeletedMap);
+
+      const markRestored = (p: PhotoItem): PhotoItem =>
+        idSet.has(p.id) ? { ...p, quarantined: false, sharedDeletedAt: undefined } : p;
+
+      const nextAdded = state.sharedRoomAddedPhotos.map(markRestored);
+      const nextHost = state.sharedRoomHostPhotos.map(markRestored);
+      const nextPhotos = state.photos.map(markRestored);
+
+      const nextCorpus = resolveLoungePhotoCorpus({
+        activeLoungeType: state.activeLoungeType,
+        activeFamilyRoom: state.activeFamilyRoom,
+        activeSharedRoomId: state.activeSharedRoomId,
+        photos: nextPhotos,
+        sharedRoomHostPhotos: nextHost,
+        sharedRoomAddedPhotos: nextAdded,
+      });
+      const nextResults: SearchResultItem[] = filterVisibleGalleryPhotos(nextCorpus).map(
+        (photo) => ({
+          photo,
+          score: 0.96,
+          matchPercentage: 98,
+          matchedBy: 'text-direct' as const,
+        })
+      );
+
+      return {
+        sharedRoomSoftDeletedMap: nextSoftDeletedMap,
+        sharedRoomAddedPhotos: nextAdded,
+        sharedRoomHostPhotos: nextHost,
+        photos: nextPhotos,
+        ...(state.hasExecutedUserSearch ? {} : { searchResults: nextResults }),
+        lastQuarantineToast: `↩️ [공유방 휴지통]의 사진 ${photoIds.length}장을 모두 1초 만에 복원했습니다!`,
+      };
+    });
+  },
+
+  permanentlyDeleteSharedRoomTrashPhoto: (photoId) => {
+    if (!photoId) return;
+    const state = get();
+    const nextSoftDeletedMap = { ...state.sharedRoomSoftDeletedMap };
+    delete nextSoftDeletedMap[photoId];
+    writeSharedRoomSoftDeletedMap(nextSoftDeletedMap);
+
+    const nextAdded = state.sharedRoomAddedPhotos.filter((p) => p.id !== photoId);
+    const nextHost = state.sharedRoomHostPhotos.filter((p) => p.id !== photoId);
+    persistSharedRoomAddedPhotos(nextAdded);
+    const nextResults = state.searchResults.filter((item) => item.photo.id !== photoId);
+    void deleteSupabaseSharedRoomPhoto(photoId);
+
+    set({
+      sharedRoomSoftDeletedMap: nextSoftDeletedMap,
+      sharedRoomAddedPhotos: nextAdded,
+      sharedRoomHostPhotos: nextHost,
+      searchResults: nextResults,
+      lastQuarantineToast:
+        '🗑️ 휴지통에서 해당 사진을 영구 삭제했습니다. (내 기기 원본 파일은 안전하게 보존됩니다)',
+    });
+  },
+
+  applyStickChipToSharedPhoto: (photoId, chipLabel) => {
+    if (!photoId || !chipLabel.trim()) return;
+    set((state) => {
+      const chipObj =
+        state.alumniStickChips.find((c) => c.label === chipLabel) ||
+        state.alumniStickChips.find((c) => c.chipId === chipLabel);
+      const effectiveLabel = (chipObj?.label ?? chipLabel).trim();
+      const parsedYearMatch = effectiveLabel.match(/(19\d{2}|20\d{2})/);
+      const targetYear =
+        chipObj?.year ?? (parsedYearMatch ? Number(parsedYearMatch[1]) : new Date().getFullYear());
+      const hashTag = effectiveLabel.startsWith('#') ? effectiveLabel : `#${effectiveLabel}`;
+
+      const prevEntry = state.sharedRoomStickOverlayMap[photoId];
+      const existingPhoto =
+        state.sharedRoomAddedPhotos.find((p) => p.id === photoId) ||
+        state.sharedRoomHostPhotos.find((p) => p.id === photoId) ||
+        state.photos.find((p) => p.id === photoId);
+      const currentSticks = prevEntry?.appliedSticks ?? existingPhoto?.appliedStickChips ?? [];
+      const alreadyHas = currentSticks.includes(effectiveLabel);
+      const nextSticks = alreadyHas
+        ? currentSticks.filter((s) => s !== effectiveLabel)
+        : [...currentSticks, effectiveLabel];
+
+      const nextGroup =
+        nextSticks.length === 0
+          ? undefined
+          : chipObj?.looseTimelineGroup ||
+            nextSticks.find((s) => s.includes('년')) ||
+            `${targetYear}년`;
+
+      const nextExpanded =
+        nextSticks.length === 0
+          ? []
+          : buildBidirectionalStickKeywords({
+              year: targetYear,
+              season: chipObj?.season,
+              place: nextSticks.join(' '),
+              looseTimelineGroup: nextGroup || `${targetYear}년`,
+              schoolName: state.activeLoungeType === 'student' ? state.alumniSchoolName : undefined,
+            });
+
+      const nextOverlayMap = { ...state.sharedRoomStickOverlayMap };
+      if (nextSticks.length === 0) {
+        delete nextOverlayMap[photoId];
+      } else {
+        nextOverlayMap[photoId] = {
+          appliedSticks: nextSticks,
+          looseTimelineGroup: nextGroup,
+          expandedSearchKeywords: nextExpanded,
+        };
+      }
+      writeSharedRoomStickOverlayMap(nextOverlayMap);
+
+      const patchPhoto = (p: PhotoItem): PhotoItem => {
+        if (p.id !== photoId) return p;
+        const baseTags = (p.tags ?? []).filter((t) => t !== hashTag);
+        const nextTags = alreadyHas ? baseTags : Array.from(new Set([...baseTags, hashTag]));
+        const nextKeywords = Array.from(
+          new Set([...(p.keywordsKo ?? []), ...nextSticks, ...nextExpanded])
+        );
+        return {
+          ...p,
+          appliedStickChips: nextSticks,
+          looseTimelineGroup: nextGroup,
+          tags: nextTags,
+          keywordsKo: nextKeywords,
+        };
+      };
+
+      return {
+        sharedRoomStickOverlayMap: nextOverlayMap,
+        sharedRoomAddedPhotos: state.sharedRoomAddedPhotos.map(patchPhoto),
+        sharedRoomHostPhotos: state.sharedRoomHostPhotos.map(patchPhoto),
+        photos: state.photos.map(patchPhoto),
+        searchResults: state.searchResults.map((item) =>
+          item.photo.id === photoId ? { ...item, photo: patchPhoto(item.photo) } : item
+        ),
+        lastQuarantineToast: alreadyHas
+          ? `🏷️ [스티커 떼기] ‘${effectiveLabel}’ 스티커를 사진에서 제거했습니다.`
+          : `🏷️ [1초 스티커 부착 완료] ‘${effectiveLabel}’ 스티커가 사진에 바로 붙고 검색 키워드로 반영되었습니다!`,
+      };
+    });
+  },
+
+  applyStickChipToAllSharedPhotos: (photoIds, chipLabel) => {
+    if (!photoIds || photoIds.length === 0 || !chipLabel.trim()) return;
+    const idSet = new Set(photoIds);
+    set((state) => {
+      const chipObj =
+        state.alumniStickChips.find((c) => c.label === chipLabel) ||
+        state.alumniStickChips.find((c) => c.chipId === chipLabel);
+      const effectiveLabel = (chipObj?.label ?? chipLabel).trim();
+      const parsedYearMatch = effectiveLabel.match(/(19\d{2}|20\d{2})/);
+      const targetYear =
+        chipObj?.year ?? (parsedYearMatch ? Number(parsedYearMatch[1]) : new Date().getFullYear());
+      const hashTag = effectiveLabel.startsWith('#') ? effectiveLabel : `#${effectiveLabel}`;
+      const groupName = chipObj?.looseTimelineGroup || `${targetYear}년`;
+
+      const nextOverlayMap = { ...state.sharedRoomStickOverlayMap };
+
+      const patchPhoto = (p: PhotoItem): PhotoItem => {
+        if (!idSet.has(p.id)) return p;
+        const prevSticks = nextOverlayMap[p.id]?.appliedSticks ?? p.appliedStickChips ?? [];
+        const mergedSticks = Array.from(new Set([...prevSticks, effectiveLabel]));
+        const nextExpanded = buildBidirectionalStickKeywords({
+          year: targetYear,
+          season: chipObj?.season,
+          place: mergedSticks.join(' '),
+          looseTimelineGroup: groupName,
+          schoolName: state.activeLoungeType === 'student' ? state.alumniSchoolName : undefined,
+        });
+        nextOverlayMap[p.id] = {
+          appliedSticks: mergedSticks,
+          looseTimelineGroup: groupName,
+          expandedSearchKeywords: nextExpanded,
+        };
+        return {
+          ...p,
+          appliedStickChips: mergedSticks,
+          looseTimelineGroup: groupName,
+          tags: Array.from(new Set([...(p.tags ?? []), hashTag])),
+          keywordsKo: Array.from(
+            new Set([...(p.keywordsKo ?? []), ...mergedSticks, ...nextExpanded])
+          ),
+        };
+      };
+
+      const nextAdded = state.sharedRoomAddedPhotos.map(patchPhoto);
+      const nextHost = state.sharedRoomHostPhotos.map(patchPhoto);
+      const nextPhotos = state.photos.map(patchPhoto);
+      writeSharedRoomStickOverlayMap(nextOverlayMap);
+
+      return {
+        sharedRoomStickOverlayMap: nextOverlayMap,
+        sharedRoomAddedPhotos: nextAdded,
+        sharedRoomHostPhotos: nextHost,
+        photos: nextPhotos,
+        searchResults: state.searchResults.map((item) =>
+          idSet.has(item.photo.id) ? { ...item, photo: patchPhoto(item.photo) } : item
+        ),
+        lastQuarantineToast: `⚡ [1초 일괄 부착 완료] 이 방 사진 ${photoIds.length}장 전체에 [🏷️ ${effectiveLabel}] 스티커가 바로 붙었습니다!`,
+      };
     });
   },
 
@@ -1434,11 +1826,16 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     storeSharedRefs.activeSharedRoomId = resolvedRoomId;
 
     const st = get();
+    const overlaidFetched = applySharedRoomLocalOverlays(
+      fetchedPhotos,
+      st.sharedRoomSoftDeletedMap,
+      st.sharedRoomStickOverlayMap
+    );
     const nextAdded =
       parsed.inviteToken && !isLoggedIn
-        ? fetchedPhotos
+        ? overlaidFetched
         : [
-            ...fetchedPhotos,
+            ...overlaidFetched,
             ...st.sharedRoomAddedPhotos.filter((p) =>
               resolvedRoomId ? p.sharedRoomId !== resolvedRoomId : true
             ),
@@ -1531,8 +1928,13 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       if (localFastPhotos.length > 0) {
         const stFast = get();
         const fastRoomId = explicitRoomId || localFastPhotos[0]?.sharedRoomId || null;
+        const overlaidLocalFast = applySharedRoomLocalOverlays(
+          localFastPhotos,
+          stFast.sharedRoomSoftDeletedMap,
+          stFast.sharedRoomStickOverlayMap
+        );
         const fastAdded = [
-          ...localFastPhotos,
+          ...overlaidLocalFast,
           ...stFast.sharedRoomAddedPhotos.filter((p) =>
             fastRoomId ? p.sharedRoomId !== fastRoomId : true
           ),
@@ -1629,8 +2031,13 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     const finalFamilyRoom = matchedJoinedMeta ? matchedJoinedMeta.familyRoom : targetFamilyRoom;
     const finalRoomId = res.roomId || explicitRoomId;
 
+    const overlaidRemotePhotos = applySharedRoomLocalOverlays(
+      res.photos,
+      stNow.sharedRoomSoftDeletedMap,
+      stNow.sharedRoomStickOverlayMap
+    );
     const nextAdded = [
-      ...res.photos,
+      ...overlaidRemotePhotos,
       ...stNow.sharedRoomAddedPhotos.filter((p) =>
         finalRoomId
           ? p.sharedRoomId !== finalRoomId
@@ -1910,114 +2317,10 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       }),
     },
   ],
-  analogScannedPhotos: [
-    {
-      id: 'analog_scan_1',
-      photoFile: '20260926_160221.jpg',
-      thumbUrl: getZCoreUrl('/__photos/file?p=20260926_160221.jpg&thumb=1'),
-      uploaderLabel: '📸 김총무 스캔 업로드 (EXIF 없음)',
-      hasExif: false,
-      unknownDatePlace: false,
-      appliedSticks: ['1989', '제주도 수학여행', '1989년 봄'],
-      looseTimelineGroup: '1989년 봄',
-      mappedPassportBucketLabel: '🛂 귀신같이 여권 1980년대 바구니(1989~1980) 자동 매핑',
-      detectedMemberNames: ['👑 멀린프로(18세)', '박회장(18세)', '김총무(18세)'],
-      captionKo: '1989년 봄 제주도 수학여행 나무 다리 단체컷 (아날로그 인화 사진 스캔본)',
-      expandedSearchKeywords: buildBidirectionalStickKeywords({
-        year: 1989,
-        season: '봄',
-        place: '제주도 수학여행 나무 다리',
-        looseTimelineGroup: '1989년 봄',
-        schoolName: '성동고',
-      }),
-    },
-    {
-      id: 'analog_scan_2',
-      photoFile: '20260926_131225.jpg',
-      thumbUrl: getZCoreUrl('/__photos/file?p=20260926_131225.jpg&thumb=1'),
-      uploaderLabel: '📸 박회장 스캔 업로드 (EXIF 없음)',
-      hasExif: false,
-      unknownDatePlace: false,
-      appliedSticks: ['1989', '제주도 수학여행', '1989년 봄'],
-      looseTimelineGroup: '1989년 봄',
-      mappedPassportBucketLabel: '🛂 귀신같이 여권 1980년대 바구니(1989~1980) 자동 매핑',
-      detectedMemberNames: ['👑 멀린프로(18세)', '이프로(18세)'],
-      captionKo: '1989년 봄 제주도 수학여행 성산일출봉 앞 추억 스캔본',
-      expandedSearchKeywords: buildBidirectionalStickKeywords({
-        year: 1989,
-        season: '봄',
-        place: '제주도 수학여행 성산일출봉',
-        looseTimelineGroup: '1989년 봄',
-        schoolName: '성동고',
-      }),
-    },
-    {
-      id: 'analog_scan_3',
-      photoFile: '20240720_182301.jpg',
-      thumbUrl: getZCoreUrl('/__photos/file?p=20240720_182301.jpg&thumb=1'),
-      uploaderLabel: '📸 최회원 스캔 업로드 (연도·장소 미상)',
-      hasExif: false,
-      unknownDatePlace: true,
-      appliedSticks: [],
-      looseTimelineGroup: '❓ 언제/어디인가요?',
-      mappedPassportBucketLabel: '⏳ 연도 제보 대기 중 (승인 시 1980년대 바구니 편입)',
-      detectedMemberNames: ['👑 멀린프로', '박회장', '최회원'],
-      captionKo: '[❓ 언제/어디인가요?] 옛날 앨범에서 나온 사진인데 언제 어디 소풍인지 기억나는 친구 제보 바람!',
-      expandedSearchKeywords: buildBidirectionalStickKeywords({
-        year: 1989,
-        season: '가을',
-        place: '가을 소풍',
-        looseTimelineGroup: '1989년 가을',
-        schoolName: '성동고',
-      }),
-    },
-    {
-      id: 'analog_scan_4',
-      photoFile: '20240721_183234.jpg',
-      thumbUrl: getZCoreUrl('/__photos/file?p=20240721_183234.jpg&thumb=1'),
-      uploaderLabel: '📸 이프로 스캔 업로드 (연도·장소 미상)',
-      hasExif: false,
-      unknownDatePlace: true,
-      appliedSticks: [],
-      looseTimelineGroup: '❓ 언제/어디인가요?',
-      mappedPassportBucketLabel: '⏳ 연도 제보 대기 중 (승인 시 1980년대 바구니 편입)',
-      detectedMemberNames: ['👑 멀린프로(선글라스)', '김총무'],
-      captionKo: '[❓ 언제/어디인가요?] 선글라스 끼고 바닷가에서 찍은 필름 스캔본 — 연도/장소 제보해 주세요!',
-      expandedSearchKeywords: buildBidirectionalStickKeywords({
-        year: 1989,
-        season: '봄',
-        place: '제주도 수학여행 바다 선글라스',
-        looseTimelineGroup: '1989년 봄',
-        schoolName: '성동고',
-      }),
-    },
-  ],
-  analogYearProposals: [
-    {
-      proposalId: 'prop_1989_autumn_picnic',
-      targetAnalogPhotoId: 'analog_scan_3',
-      photoFile: '20240720_182301.jpg',
-      thumbUrl: getZCoreUrl('/__photos/file?p=20240720_182301.jpg&thumb=1'),
-      proposerName: '박회장 (3학년 4반 반장)',
-      proposedTimelineGroup: '1989년 가을',
-      proposedPlaceTag: '1989년 가을 소풍',
-      proposedYear: 1989,
-      commentText: '야 이거 1989년 가을 소풍 때 찍은 거잖아! 내가 옆에서 찍어줬음 ㅋㅋ',
-      approvedByHost: false,
-    },
-    {
-      proposalId: 'prop_1989_spring_jeju',
-      targetAnalogPhotoId: 'analog_scan_4',
-      photoFile: '20240721_183234.jpg',
-      thumbUrl: getZCoreUrl('/__photos/file?p=20240721_183234.jpg&thumb=1'),
-      proposerName: '김총무 (89회 동창총무)',
-      proposedTimelineGroup: '1989년 봄',
-      proposedPlaceTag: '제주도 수학여행 (중문해수욕장)',
-      proposedYear: 1989,
-      commentText: '1989년 봄 제주도 수학여행 중문 바닷가에서 빌린 선글라스 끼고 찍은 사진 맞네!',
-      approvedByHost: false,
-    },
-  ],
+  // [2026-11-20 깨진 번들 목업 영구 소거]: 가짜 샘플 스캔 사진(엑박) 4장 & 가짜 연도 제보 2건을 0건으로 정리하고,
+  // 대기실의 연도·장소 스티커(Chip) 부착은 실제 공유방 사진(basePhotos)에 직접 동작합니다.
+  analogScannedPhotos: [],
+  analogYearProposals: [],
 
   setAlumniBannerInfo: (schoolName, gradYear, theme, customBannerTitle) =>
     set((state) => {

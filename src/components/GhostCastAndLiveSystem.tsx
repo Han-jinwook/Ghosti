@@ -18,6 +18,7 @@ import {
   type RoomLivePhotoSyncSession,
 } from '../services/roomLivePhotoSyncService';
 import { resolveAccountScopedNickname } from '../services/ghostSecretaryEngine';
+import { hasAuthenticatedHubAccountSession } from '../services/supabaseClient';
 import type { PhotoItem, PricingPlanId } from '../types/saysee';
 
 export interface MonitorCastState {
@@ -170,6 +171,8 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     sharedRoomHostPhotos,
     sharedRoomAddedPhotos,
     merlinAuth,
+    isGuestPreviewMode,
+    triggerGuestJoinWall,
     activeLoungeType,
     activeFamilyRoom,
     activeSharedRoomId,
@@ -179,6 +182,18 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     setDeviceIntegrationSnapshot,
     showToast,
   } = useSaySeeStore();
+
+  const isAuthenticatedLiveSyncMember = useMemo(() => {
+    const email = (merlinAuth?.email || '').trim();
+    const uid = (merlinAuth?.userId || '').trim();
+    return Boolean(
+      !isGuestPreviewMode &&
+        email &&
+        uid &&
+        uid !== 'guest' &&
+        hasAuthenticatedHubAccountSession()
+    );
+  }, [isGuestPreviewMode, merlinAuth?.email, merlinAuth?.userId]);
 
   // [공유방 1:1 단일 SSOT]: 개인 라운지는 내 기기 사진, 사진 공유방(내 방·초대받은 방·게스트 초대방)은
   // 반드시 현재 열려 있는 단일 room_id의 공유 사진 전체(sharedRoomAddedPhotos/sharedRoomHostPhotos)를 표시합니다.
@@ -473,13 +488,16 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     };
   }, []);
 
-  // [단일 SSOT 실시간 앨범 라이브 싱크]: 현재 열려 있는 사진 공유방(effectiveLiveSyncRoomId)의
-  // 모든 참여자(방장 · 초대받은 타 계정 · 비로그인 초대 링크 게스트 · 모바일 앱)를 Supabase Realtime으로 직결
+  // [단일 SSOT 실시간 앨범 라이브 싱크 — 로그인 정식 방 멤버 전용]:
+  // 비로그인 초대 링크 구경(게스트)은 실시간 동기화 채널에 연결하지 않으며, 버튼 클릭 시 로그인 전환 기회(Auth-Wall)로 안내합니다.
   useEffect(() => {
-    if (!effectiveLiveSyncRoomId) {
+    if (!effectiveLiveSyncRoomId || !isAuthenticatedLiveSyncMember) {
       liveSyncSessionRef.current = null;
       setRemoteOngoingSession(null);
       setLiveSyncPeers({ connectedCount: 1, peerNames: [], channelStatus: 'connecting' });
+      if (!isAuthenticatedLiveSyncMember && photoSyncStateRef.current.active) {
+        setPhotoSyncState((prev) => ({ ...prev, active: false }));
+      }
       return undefined;
     }
 
@@ -609,7 +627,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
         liveSyncSessionRef.current = null;
       }
     };
-  }, [effectiveLiveSyncRoomId, mySyncClientId, showToast]);
+  }, [effectiveLiveSyncRoomId, isAuthenticatedLiveSyncMember, mySyncClientId, showToast]);
 
   // 툴바 상단 [📡 다 같이 보기] 버튼 상태 실시간 동기화
   useEffect(() => {
@@ -675,6 +693,10 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
       if (!d) return;
 
       if (d.action === 'OPEN_MONITOR_CAST') {
+        if (activeLoungeType !== 'personal' && !isAuthenticatedLiveSyncMember) {
+          triggerGuestJoinWall('💻 모니터로 크게 보기 (스마트폰 무선 리모컨 · 전체화면)');
+          return;
+        }
         if (activePhotos.length === 0) {
           showToast('📸 현재 방에 크게 볼 사진이 아직 없습니다. 먼저 사진을 추가해 주세요.');
           return;
@@ -709,6 +731,10 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
         broadcastCastLiveMessage({ type: 'MONITOR_CAST_UPDATE', state: next });
         emitRemoteCastPacket(next, null);
       } else if (d.action === 'TOGGLE_PHOTO_SYNC') {
+        if (!isAuthenticatedLiveSyncMember) {
+          triggerGuestJoinWall('📡 다 같이 보기 (가족·멤버와 실시간 사진 함께 보기)');
+          return;
+        }
         const prev = photoSyncStateRef.current;
         if (!prev.active) {
           const ongoing = remoteOngoingRef.current;
@@ -783,7 +809,16 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
 
     window.addEventListener('ghosti_cast_live_command', onCommand);
     return () => window.removeEventListener('ghosti_cast_live_command', onCommand);
-  }, [activePhotos, castState, effectiveLiveSyncRoomId, mySyncClientId, showToast]);
+  }, [
+    activeLoungeType,
+    activePhotos,
+    castState,
+    effectiveLiveSyncRoomId,
+    isAuthenticatedLiveSyncMember,
+    mySyncClientId,
+    showToast,
+    triggerGuestJoinWall,
+  ]);
 
   const updateCastState = (patch: Partial<MonitorCastState>) => {
     setCastState((prev) => {

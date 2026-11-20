@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   buildWindowsNativeWebDavMountCommand,
   verifyHybridP2PBridgeConnection,
@@ -2532,9 +2532,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
     photos,
     sharedRoomHostPhotos,
     sharedRoomAddedPhotos,
-    videoSceneItems,
     gpuHelper24hActive,
-    activateGpuHelper24h,
     setDesktopTab,
     setMobileTab,
     swarmFaceCandidates,
@@ -2546,15 +2544,17 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
     runGlobalSwarmRetroScanAll,
     setShowFaceRegistryModal,
     alumniStickChips,
-    analogScannedPhotos,
     analogYearProposals,
     createAlumniStickChipsFromInput,
-    applyStickChipToAnalogPhoto,
-    applyStickChipToAllPendingAnalogPhotos,
-    submitAnalogYearProposal,
+    applyStickChipToSharedPhoto,
+    applyStickChipToAllSharedPhotos,
     approveAllAnalogYearProposals,
+    softDeleteSharedRoomPhoto24h,
+    restoreSharedRoomPhotoFromTrash,
+    restoreAllSharedRoomTrashPhotos,
+    permanentlyDeleteSharedRoomTrashPhoto,
+    requestAddMyPhotosToSharedRoom,
     isStoreAppMode,
-    setShowProModal,
   } = useSaySeeStore();
 
   const [instantFlushed, setInstantFlushed] = useState(false);
@@ -2578,12 +2578,18 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
   const [stickPlaceInput, setStickPlaceInput] = useState('제주도 수학여행');
   const [stickSeasonInput, setStickSeasonInput] = useState('봄');
   const [selectedStickLabel, setSelectedStickLabel] = useState<string>('1989년 봄');
-  const [proposalDraftByPhoto, setProposalDraftByPhoto] = useState<Record<string, string>>({});
-  const [proposalAuthor] = useState('박회장(동기)');
+  const [stickCreatedNotice, setStickCreatedNotice] = useState<string | null>(null);
   const [batchApprovedBanner, setBatchApprovedBanner] = useState<string | null>(null);
-  const [deletedLoungePhotoIds, setDeletedLoungePhotoIds] = useState<string[]>([]);
   const [lastDeletedPhotoId, setLastDeletedPhotoId] = useState<string | null>(null);
   const [showAnalogStickSection, setShowAnalogStickSection] = useState(false);
+  const [highlightTrashSection, setHighlightTrashSection] = useState(false);
+  const trashSectionRef = useRef<HTMLElement | null>(null);
+
+  const scrollToSharedTrash = () => {
+    setHighlightTrashSection(true);
+    trashSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    setTimeout(() => setHighlightTrashSection(false), 2400);
+  };
 
   const memberActiveHints = swarmFaceCandidates.filter((c) => !c.applied && !c.passedToHostQueue);
   const hostCleanupQueue = swarmFaceCandidates.filter((c) => !c.applied);
@@ -2597,9 +2603,12 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
     sharedRoomHostPhotos,
     sharedRoomAddedPhotos,
   });
-  const basePhotos = scopedWaitingPhotos
-    .filter((p) => !p.quarantined && !deletedLoungePhotoIds.includes(p.id));
-  const queuePhotos = basePhotos.slice(0, Math.max(0, 8 - deletedLoungePhotoIds.length));
+  const basePhotos = scopedWaitingPhotos.filter((p) => !p.quarantined);
+  const trashedRoomPhotos = scopedWaitingPhotos.filter((p) => Boolean(p.quarantined));
+  const queuePhotos = basePhotos.slice(0, 24);
+  const stickeredPhotoCount = basePhotos.filter(
+    (p) => Array.isArray(p.appliedStickChips) && p.appliedStickChips.length > 0
+  ).length;
 
   const metaByLounge: Record<
     Exclude<LoungeType, 'personal'>,
@@ -2608,36 +2617,35 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
       title: string;
       subtitle: string;
       bufferReason: string;
-      senderLabels: string[];
     }
   > = {
     family: {
-      badge: `⏳ AI 정리 대기실 (${activeFamilyRoom})`,
+      badge: `🧹 새 사진 정리함 · AI 대기실 (${activeFamilyRoom})`,
       title: '새로 올라온 가족 사진을 정리하고 있습니다',
-      subtitle: '',
+      subtitle:
+        '상단 [🧹 새 사진 정리함] 메뉴의 AI 정리 대기실입니다. 옛날 종이 사진 스티커 1초 부착 및 24시간 내 본인 삭제·공유방 휴지통 복원을 여기서 바로 관리합니다.',
       bufferReason: '✨ 인물·날짜 자동 분류 중',
-      senderLabels: ['은숙(아내)', '진욱(방장)', '우리딸', '본가 어머님'],
     },
     club: {
-      badge: '⏳ AI 정리 대기실',
+      badge: '🧹 새 사진 정리함 · AI 대기실',
       title: '새로 올라온 모임 사진을 정리하고 있습니다',
-      subtitle: '',
+      subtitle:
+        '상단 [🧹 새 사진 정리함] 메뉴의 AI 정리 대기실입니다. 옛날 종이 사진 스티커 1초 부착 및 24시간 내 본인 삭제·공유방 휴지통 복원을 여기서 바로 관리합니다.',
       bufferReason: '✨ 인물 분류 및 스캔 사진 정리 중',
-      senderLabels: ['김총무(방장)', '박회장', '이프로', '최회원'],
     },
     student: {
-      badge: '📥 우리반 새 사진·영상 정리함',
+      badge: '🧹 새 사진·영상 정리함 · AI 대기실',
       title: '친구들이 올린 사진과 영상을 정리하고 있습니다',
-      subtitle: '',
+      subtitle:
+        '상단 [🧹 새 사진·영상 정리함] 메뉴의 AI 정리 대기실입니다. 옛날 사진 스티커 1초 부착 및 24시간 내 본인 삭제·공유방 휴지통 복원을 관리합니다.',
       bufferReason: '방장 PC가 켜지면 자동으로 사진·영상 정리가 시작됩니다',
-      senderLabels: ['민준 아이폰', '서연 갤럭시', '도윤 아이폰', '하은 아이폰'],
     },
     work: {
-      badge: '📥 새 업무 문서 정리함',
+      badge: '🧹 새 업무파일 정리함',
       title: '새로 올라온 업무 서류·사진을 폴더별로 자동 정리합니다',
-      subtitle: '',
+      subtitle:
+        '상단 [🧹 새 업무파일 정리함] 화면입니다. 업무 공유 드라이브(S:) 폴더 자동 분류 및 휴지통 복원을 관리합니다.',
       bufferReason: '업무 공유 드라이브(S:) 폴더 자동 분류 중',
-      senderLabels: ['박과장 외근 노트북', '이팀장 아이폰', '정실장 데스크탑', '강사원 현장 태블릿'],
     },
   };
 
@@ -2647,40 +2655,21 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
   const handleGenerateSticks = (e: React.FormEvent) => {
     e.preventDefault();
     createAlumniStickChipsFromInput(stickYearInput, stickPlaceInput, stickSeasonInput);
-    if (analogScannedPhotos.length > 0) {
-      const firstId = analogScannedPhotos[0].id;
-      const cleanYear = stickYearInput.replace(/[^0-9]/g, '') || '1989';
-      const cleanSeason = stickSeasonInput.trim() || '봄';
-      const comboLabel = `${cleanYear}년 ${cleanSeason}`;
-      setSelectedStickLabel(comboLabel);
-      setTimeout(() => {
-        applyStickChipToAnalogPhoto(firstId, comboLabel);
-      }, 0);
-    }
+    const cleanYear = stickYearInput.replace(/[^0-9]/g, '') || '1989';
+    const cleanPlace = stickPlaceInput.trim() || '제주도 수학여행';
+    const cleanSeason = stickSeasonInput.trim() || '봄';
+    const comboLabel = `${cleanYear}년 ${cleanSeason}`;
+    setSelectedStickLabel(comboLabel);
+    setStickCreatedNotice(
+      `✓ [🏷️ ${cleanYear}] [🏷️ ${cleanPlace}] [🏷️ ${comboLabel}] 스티커 3종이 생성되어 선택되었습니다! 아래 실제 공유방 사진에서 [👆 1초 부착]을 눌러 바로 붙여 보세요.`
+    );
   };
 
   const handleApproveAllAnalog = () => {
     const count = pendingAnalogProposals.length;
     approveAllAnalogYearProposals();
     setBatchApprovedBanner(
-      `✓ 동기들이 제보한 옛날 사진 연도/장소 ${count}건이 👑 방장 일괄 결재로 느슨한 타임라인 · 계절↔월(Month) 양방향 인덱스 · 귀신같이 여권 1980년대 바구니(1989~1980)에 즉시 반영되었습니다!`
-    );
-  };
-
-  const handleSubmitWaitingRoomProposal = (photoId: string, rawText: string) => {
-    const yearMatch = rawText.match(/(19\d{2}|20\d{2}|\d{2})/);
-    const parsedYear = yearMatch
-      ? Number(yearMatch[1].length === 2 ? `19${yearMatch[1]}` : yearMatch[1])
-      : 1989;
-    const seasonMatch = rawText.match(/(봄|여름|가을|겨울)/);
-    const parsedSeason = seasonMatch ? seasonMatch[1] : '가을';
-    submitAnalogYearProposal(
-      photoId,
-      proposalAuthor,
-      parsedYear,
-      parsedSeason,
-      rawText,
-      `${rawText} 때 찍은 사진입니다!`
+      `✓ 동기들이 제보한 옛날 사진 연도/장소 ${count}건이 👑 방장 일괄 결재로 타임라인과 검색 키워드에 즉시 반영되었습니다!`
     );
   };
 
@@ -2781,19 +2770,32 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
             </span>
             <span className="font-label-sm text-[12.5px] text-zinc-200 font-bold">
               {instantFlushed
-                ? `정리 완료 — 새로 올라온 사진 ${queuePhotos.length}장 & 동영상 ${videoSceneItems.length}개가 앨범 피드에 모두 반영되었습니다!`
-                : `${currentMeta.bufferReason} (사진 ${queuePhotos.length}장 · 동영상 ${videoSceneItems.length}개)`}
+                ? `정리 완료 — 이 방의 사진 ${basePhotos.length}장이 앨범 피드에 모두 반영되었습니다!`
+                : `${currentMeta.bufferReason} (이 방 사진 ${basePhotos.length}장${
+                    trashedRoomPhotos.length > 0 ? ` · 휴지통 ${trashedRoomPhotos.length}장` : ''
+                  })`}
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
+            <button
+              type="button"
+              onClick={scrollToSharedTrash}
+              className={`px-3 py-1 rounded-lg border font-label-sm text-[11px] font-extrabold cursor-pointer transition-colors ${
+                trashedRoomPhotos.length > 0
+                  ? 'bg-rose-500/20 hover:bg-rose-500/30 border-rose-400/50 text-rose-200'
+                  : 'bg-zinc-900 hover:bg-zinc-800 border-white/15 text-zinc-200'
+              }`}
+            >
+              🗑️ 공유방 휴지통 바로가기 ({trashedRoomPhotos.length}장) ➔
+            </button>
             <button
               type="button"
               onClick={() => {
                 setDesktopTab('dashboard');
                 setMobileTab('search');
               }}
-              className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11px] font-bold"
+              className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11px] font-bold cursor-pointer"
             >
               앨범 피드 보러가기 →
             </button>
@@ -2929,7 +2931,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
         )}
       </section>
 
-      {/* 3 & 4. 옛날 스캔 사진용 '연도·장소 스티커' & [❓ 언제/어디인가요?] 동기 제보 ➔ 👑 방장 일괄 승인 (노션 스타일 동적 토글 · 업무 공유 제외) */}
+      {/* 3 & 4. 옛날 스캔 사진용 '연도·장소 스티커(Chip)' 1초 부착 (실제 공유방 사진 직결 · 깨진 목업 0건) */}
       {activeLoungeType !== 'work' && (
       <section className="rounded-2xl bg-[#18181B] border border-amber-400/35 overflow-hidden transition-all">
         <div
@@ -2946,19 +2948,19 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                   🎞️ 촬영 날짜 없는 옛날 종이 사진 · 연도·장소 스티커 붙이기
                 </span>
                 <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-bold">
-                  🛂 연도 입력 시 [1980년대 앨범]으로 자동 분류
+                  🛂 실제 공유방 사진({basePhotos.length}장)에 바로 부착 · 1초 검색 자동 연결
                 </span>
               </div>
               <h2 className="font-headline-sm text-[16px] md:text-[17.5px] text-white font-bold mt-0.5">
-                첫 번째 스캔 사진에 연도·장소·계절을 한 번만 적으면 [🏷️ 스티커]가 만들어져, 다음 사진부터는 클릭 한 번으로 바로 붙일 수 있습니다
+                연도·장소·계절을 한 번만 적어 [🏷️ 스티커]를 만들면, 이 방 사진에 클릭 한 번으로 바로 붙이고 검색할 수 있습니다
               </h2>
             </div>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            {analogScannedPhotos.filter((ap) => ap.unknownDatePlace).length > 0 && (
-              <span className="px-2.5 py-1 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-300 font-label-sm text-[11.5px] font-extrabold">
-                ❓ 연도 미분류 {analogScannedPhotos.filter((ap) => ap.unknownDatePlace).length}장
+            {stickeredPhotoCount > 0 && (
+              <span className="px-2.5 py-1 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold">
+                🏷️ 스티커 부착 {stickeredPhotoCount}장
               </span>
             )}
             {pendingAnalogProposals.length > 0 && (
@@ -2989,7 +2991,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
           >
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-label-sm text-[12px] text-amber-300 font-bold">
-                ① 첫 사진 키워드 입력:
+                ① 연도·장소·계절 입력:
               </span>
               <input
                 type="text"
@@ -3014,7 +3016,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
               />
               <button
                 type="submit"
-                className="px-3.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold"
+                className="px-3.5 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer"
               >
                 + 스틱(Chip) 자동 생성
               </button>
@@ -3022,10 +3024,16 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
 
             <button
               type="button"
-              onClick={() => applyStickChipToAllPendingAnalogPhotos(selectedStickLabel)}
-              className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold"
+              disabled={basePhotos.length === 0}
+              onClick={() =>
+                applyStickChipToAllSharedPhotos(
+                  basePhotos.map((p) => p.id),
+                  selectedStickLabel
+                )
+              }
+              className="px-3.5 py-1.5 rounded-lg bg-primary-container disabled:opacity-40 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
             >
-              ⚡ 선택된 스틱으로 미분류 스캔 사진 전체 1초 연쇄 태깅
+              ⚡ 선택한 스틱 이 방 사진 전체({basePhotos.length}장) 1초 일괄 부착
             </button>
           </form>
 
@@ -3041,7 +3049,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                   key={chip.chipId}
                   type="button"
                   onClick={() => setSelectedStickLabel(chip.label)}
-                  className={`px-3 py-1 rounded-full font-label-sm text-[12px] font-extrabold transition-all border ${
+                  className={`px-3 py-1 rounded-full font-label-sm text-[12px] font-extrabold transition-all border cursor-pointer ${
                     isSelected
                       ? 'bg-amber-400 text-zinc-950 border-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.35)]'
                       : 'bg-zinc-900 hover:bg-zinc-800 text-amber-200 border-amber-400/35'
@@ -3052,48 +3060,72 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
               );
             })}
           </div>
+
+          {stickCreatedNotice && (
+            <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-200 text-[11.5px] font-bold">
+              {stickCreatedNotice}
+            </div>
+          )}
         </div>
 
-        {/* 스캔된 옛날 사진 카드 그리드 (1초 스틱 부착 & [❓ 언제/어디인가요?] 댓글 제보) — 길어지면 내부 스크롤 */}
+        {/* 실제 공유방 사진 카드 그리드 (깨진 가짜 샘플 0건 · 실제 사진에 1초 스티커 부착) */}
+        {basePhotos.length === 0 ? (
+          <div className="p-6 rounded-2xl bg-zinc-950/90 border border-dashed border-white/15 flex flex-col items-center justify-center text-center gap-3">
+            <span className="text-[13.5px] text-zinc-200 font-bold">
+              📸 이 공유방에 올라온 사진이 아직 없어요.
+            </span>
+            <p className="text-[12px] text-zinc-400 max-w-md leading-relaxed">
+              사진을 1장 이상 올리면 실제 공유방 사진이 여기에 표시되며, 위에서 만든 연도·장소 스티커를 클릭 한 번으로 바로 붙일 수 있습니다.
+            </p>
+            <button
+              type="button"
+              onClick={() => requestAddMyPhotosToSharedRoom()}
+              className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer"
+            >
+              📸 내 사진 이 방에 추가하기
+            </button>
+          </div>
+        ) : (
         <div className="max-h-[640px] overflow-y-auto pr-1 grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-3.5">
-          {analogScannedPhotos.map((ap, index) => {
-            const photoProposals = analogYearProposals.filter(
-              (p) => p.targetAnalogPhotoId === ap.id
-            );
+          {basePhotos.map((photo, index) => {
+            const appliedSticks = photo.appliedStickChips ?? [];
             const activeStick = alumniStickChips.find((s) => s.label === selectedStickLabel);
+            const activeLabel = activeStick?.label ?? selectedStickLabel;
+            const hasSelectedStick = appliedSticks.includes(activeLabel);
+            const displayUploader = photo.uploaderLabel || '방장';
             return (
               <div
-                key={ap.id}
+                key={`stick_${photo.id}`}
                 className={`rounded-2xl overflow-hidden bg-zinc-950 border flex flex-col justify-between transition-all ${
-                  ap.unknownDatePlace
-                    ? 'border-amber-400/60 shadow-[0_0_18px_rgba(251,191,36,0.12)]'
+                  appliedSticks.length > 0
+                    ? 'border-emerald-400/45 shadow-[0_0_16px_rgba(16,185,129,0.12)]'
                     : 'border-white/10'
                 }`}
               >
                 <div>
                   <div className="relative aspect-[4/3] w-full bg-zinc-900 overflow-hidden">
                     <img
-                      src={ap.thumbUrl}
-                      alt={ap.captionKo}
-                      crossOrigin={ap.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
-                      className="w-full h-full object-cover sepia-[0.25] contrast-[1.04]"
+                      src={photo.thumbUrl}
+                      alt={photo.name}
+                      crossOrigin={photo.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
+                      className="w-full h-full object-cover"
                     />
                     <div className="absolute top-2 left-2 flex flex-wrap items-center gap-1">
-                      <span className="px-2 py-0.5 rounded bg-black/80 border border-white/15 text-zinc-300 font-mono text-[10px]">
-                        {ap.uploaderLabel}
+                      <span className="px-2 py-0.5 rounded bg-black/80 border border-white/15 text-zinc-200 font-mono text-[10px] font-bold">
+                        👤 {displayUploader}
                       </span>
                     </div>
                     <div className="absolute bottom-2 left-2 right-2 flex items-center justify-between gap-1">
-                      <span className="px-2 py-0.5 rounded bg-emerald-950/90 border border-emerald-400/50 text-emerald-300 font-mono text-[10px] font-bold truncate">
-                        {ap.mappedPassportBucketLabel}
+                      <span className="px-2 py-0.5 rounded bg-zinc-950/90 border border-white/15 text-zinc-200 font-mono text-[10px] font-bold truncate">
+                        📅 {photo.looseTimelineGroup || photo.date.split(' ')[0]}
                       </span>
-                      {ap.unknownDatePlace ? (
-                        <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold animate-pulse shrink-0">
-                          ❓ 언제/어디인가요?
+                      {appliedSticks.length > 0 ? (
+                        <span className="px-2 py-0.5 rounded bg-emerald-950/95 border border-emerald-400/50 text-emerald-300 font-label-sm text-[10.5px] font-extrabold shrink-0">
+                          ✓ 스티커 {appliedSticks.length}개
                         </span>
                       ) : (
-                        <span className="px-2 py-0.5 rounded bg-zinc-950/90 border border-amber-400/40 text-amber-300 font-label-sm text-[10.5px] font-bold shrink-0">
-                          🗓️ {ap.looseTimelineGroup}
+                        <span className="px-2 py-0.5 rounded bg-amber-400/90 text-zinc-950 font-label-sm text-[10.5px] font-extrabold shrink-0">
+                          🏷️ 부착 대기
                         </span>
                       )}
                     </div>
@@ -3102,14 +3134,14 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                   <div className="p-3 flex flex-col gap-2">
                     <div className="flex items-center justify-between gap-1">
                       <span className="font-label-sm text-[12px] text-white font-bold truncate">
-                        #{index + 1}. {ap.captionKo}
+                        #{index + 1}. {photo.captionKo || photo.name}
                       </span>
                     </div>
 
                     {/* 부착된 스틱 태그 목록 */}
                     <div className="flex flex-wrap items-center gap-1 min-h-[24px]">
-                      {ap.appliedSticks.length > 0 ? (
-                        ap.appliedSticks.map((tag) => (
+                      {appliedSticks.length > 0 ? (
+                        appliedSticks.map((tag) => (
                           <span
                             key={tag}
                             className="px-2 py-0.5 rounded-full bg-amber-400/15 border border-amber-400/40 text-amber-200 font-label-sm text-[10.5px] font-bold"
@@ -3118,89 +3150,35 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                           </span>
                         ))
                       ) : (
-                        <span className="text-[11px] text-amber-300/90 font-bold">
-                          ⚠️ 연도·장소 미분류 — 스틱을 찍거나 동기 제보를 기다립니다
+                        <span className="text-[11px] text-zinc-400 font-medium">
+                          아직 붙인 스티커가 없어요 — 아래 버튼으로 1초 부착
                         </span>
                       )}
                     </div>
-
-                    {/* 양방향 확장 인덱싱 키워드 미리보기 */}
-                    {ap.expandedSearchKeywords && ap.expandedSearchKeywords.length > 0 && (
-                      <div className="px-2 py-1 rounded bg-zinc-900/90 border border-white/5 text-[10px] text-zinc-400 font-mono truncate">
-                        🔍 자동매칭: {ap.expandedSearchKeywords.slice(0, 7).join(' · ')}
-                      </div>
-                    )}
-
-                    {/* 동기들의 연도/장소 제보 내역 */}
-                    {photoProposals.length > 0 && (
-                      <div className="p-2 rounded-lg bg-zinc-900 border border-amber-400/30 flex flex-col gap-1">
-                        {photoProposals.map((prop) => (
-                          <div
-                            key={prop.proposalId}
-                            className="flex items-center justify-between gap-1 text-[11px]"
-                          >
-                            <span className="text-amber-200 font-bold truncate">
-                              💬 {prop.proposerName}: &ldquo;{prop.proposedPlaceTag}&rdquo;
-                            </span>
-                            <span
-                              className={`px-1.5 py-0.2 rounded font-mono text-[9.5px] shrink-0 ${
-                                prop.approvedByHost
-                                  ? 'bg-emerald-500/20 text-emerald-300'
-                                  : 'bg-amber-400/20 text-amber-300'
-                              }`}
-                            >
-                              {prop.approvedByHost ? '✓ 방장 승인됨' : '결재 대기'}
-                            </span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                   </div>
                 </div>
 
-                {/* 하단 액션: 1초 스틱 찍기 & [❓ 언제인가요?] 제보 입력 */}
+                {/* 하단 액션: 1초 스틱 부착 / 떼기 */}
                 <div className="p-3 pt-0 flex flex-col gap-2">
                   <button
                     type="button"
-                    onClick={() => applyStickChipToAnalogPhoto(ap.id, selectedStickLabel)}
-                    className="w-full py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-amber-400/40 text-amber-300 font-label-sm text-[11.5px] font-extrabold transition-colors"
+                    onClick={() => applyStickChipToSharedPhoto(photo.id, activeLabel)}
+                    className={`w-full py-1.5 rounded-lg border font-label-sm text-[11.5px] font-extrabold transition-colors cursor-pointer ${
+                      hasSelectedStick
+                        ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-400/60 text-emerald-200'
+                        : 'bg-zinc-900 hover:bg-zinc-800 border-amber-400/40 text-amber-300'
+                    }`}
                   >
-                    👆 {activeStick ? `[🏷️ ${activeStick.label}] 1초 부착` : '선택한 스틱 1초 부착'}
+                    {hasSelectedStick
+                      ? `✓ [🏷️ ${activeLabel}] 부착됨 (눌러서 떼기)`
+                      : `👆 [🏷️ ${activeLabel}] 1초 부착`}
                   </button>
-
-                  {ap.unknownDatePlace && (
-                    <div className="flex items-center gap-1">
-                      <input
-                        type="text"
-                        value={proposalDraftByPhoto[ap.id] ?? '1989년 가을 소풍'}
-                        onChange={(e) =>
-                          setProposalDraftByPhoto((prev) => ({
-                            ...prev,
-                            [ap.id]: e.target.value,
-                          }))
-                        }
-                        placeholder="예: 1989년 가을 소풍"
-                        className="flex-1 min-w-0 px-2 py-1 rounded-lg bg-zinc-900 border border-white/15 text-white text-[11px]"
-                      />
-                      <button
-                        type="button"
-                        onClick={() =>
-                          handleSubmitWaitingRoomProposal(
-                            ap.id,
-                            proposalDraftByPhoto[ap.id] ?? '1989년 가을 소풍'
-                          )
-                        }
-                        className="px-2.5 py-1 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold shrink-0"
-                      >
-                        제보
-                      </button>
-                    </div>
-                  )}
                 </div>
               </div>
             );
           })}
         </div>
+        )}
         </div>
         )}
       </section>
@@ -3212,30 +3190,52 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
           <span className="font-headline-sm text-[15.5px] text-white font-bold">
             📥 최근 올라온 사진 ({queuePhotos.length}장)
           </span>
+          <button
+            type="button"
+            onClick={scrollToSharedTrash}
+            className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
+          >
+            🗑️ 공유방 휴지통 ({trashedRoomPhotos.length}장) 보기 ➔
+          </button>
         </div>
 
         {lastDeletedPhotoId && (
           <div className="px-3.5 py-2.5 rounded-xl bg-zinc-900 border border-emerald-400/50 flex flex-wrap items-center justify-between gap-2 text-[12px] text-emerald-200">
             <span>
-              🗑️ 업로드 후 24시간 내 본인 삭제 요청에 따라 사진이 라운지에서 내려가고 방장 PC의 OS 기본 [휴지통]으로 이동되었습니다.
+              🗑️ 업로드 후 24시간 내 본인 삭제 요청에 따라 사진이 공유방에서 내려가고 아래 <strong>[🗑️ 공유방 휴지통]</strong>으로 이동되었습니다. (원본 기기 사진은 안전하며 언제든 복원 가능)
             </span>
-            <button
-              type="button"
-              onClick={() => {
-                setDeletedLoungePhotoIds((prev) => prev.filter((id) => id !== lastDeletedPhotoId));
-                setLastDeletedPhotoId(null);
-              }}
-              className="px-3 py-1 rounded-lg bg-emerald-400 text-zinc-950 font-label-sm text-[11px] font-extrabold cursor-pointer"
-            >
-              ↩️ 1초 실행 취소 (되돌리기)
-            </button>
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  restoreSharedRoomPhotoFromTrash(lastDeletedPhotoId);
+                  setLastDeletedPhotoId(null);
+                }}
+                className="px-3 py-1 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[11px] font-extrabold cursor-pointer"
+              >
+                ↩️ 1초 실행 취소 (되돌리기)
+              </button>
+              <button
+                type="button"
+                onClick={scrollToSharedTrash}
+                className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-emerald-400/40 text-emerald-200 font-label-sm text-[11px] font-extrabold cursor-pointer"
+              >
+                🗑️ 휴지통 바로가기 ({trashedRoomPhotos.length}장) ➔
+              </button>
+            </div>
           </div>
         )}
 
+        {queuePhotos.length === 0 ? (
+          <div className="p-6 rounded-2xl bg-[#18181B] border border-white/10 text-center text-[12.5px] text-zinc-400">
+            {trashedRoomPhotos.length > 0
+              ? `이 방의 사진이 모두 아래 [🗑️ 공유방 휴지통(${trashedRoomPhotos.length}장)]으로 이동되었습니다. 아래 휴지통에서 언제든 1초 만에 복원할 수 있습니다.`
+              : '아직 이 공유방에 올라온 사진이 없습니다. 앨범 화면에서 사진을 올리면 여기에 표시됩니다.'}
+          </div>
+        ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
           {queuePhotos.map((photo, idx) => {
-            const sender =
-              currentMeta.senderLabels[idx % currentMeta.senderLabels.length];
+            const sender = photo.uploaderLabel || '방장';
             const isDone = instantFlushed || idx < 5;
             return (
               <article
@@ -3270,7 +3270,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        setDeletedLoungePhotoIds((prev) => [...prev, photo.id]);
+                        softDeleteSharedRoomPhoto24h(photo.id);
                         setLastDeletedPhotoId(photo.id);
                       }}
                       title="올린 원본 주인은 업로드 후 24시간 내에 언제나 직접 삭제할 수 있습니다"
@@ -3290,6 +3290,116 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
             );
           })}
         </div>
+        )}
+      </section>
+
+      {/* 공유방 휴지통 섹션 (24시간 내 본인 삭제 사진 보관 및 1초 복원) */}
+      <section
+        id="shared-room-trash-section"
+        ref={trashSectionRef}
+        className={`p-5 rounded-2xl bg-[#18181B] border flex flex-col gap-3.5 transition-all ${
+          highlightTrashSection
+            ? 'border-emerald-400 ring-2 ring-emerald-400/50 shadow-[0_0_24px_rgba(52,211,153,0.2)]'
+            : trashedRoomPhotos.length > 0
+            ? 'border-rose-400/40'
+            : 'border-white/10'
+        }`}
+      >
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-col gap-0.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="font-headline-sm text-[15.5px] text-white font-bold">
+                🗑️ 공유방 휴지통 ({trashedRoomPhotos.length}장)
+              </span>
+              <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 text-[11px] font-bold">
+                24시간 내 본인 삭제 임시 보관 · 1초 복원 지원
+              </span>
+            </div>
+            <p className="text-[11.5px] text-zinc-400">
+              공유방에서 삭제한 사진이 여기에 임시 보관됩니다. 원본 기기(PC/스마트폰) 파일은 삭제되지 않으며, [↩️ 1초 복원]을 누르면 공유방 앨범으로 즉시 돌아옵니다.
+            </p>
+          </div>
+
+          {trashedRoomPhotos.length > 0 && (
+            <button
+              type="button"
+              onClick={() => {
+                restoreAllSharedRoomTrashPhotos(trashedRoomPhotos.map((p) => p.id));
+                setLastDeletedPhotoId(null);
+              }}
+              className="px-3.5 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer shrink-0"
+            >
+              ↩️ 휴지통 전체 복원 ({trashedRoomPhotos.length}장)
+            </button>
+          )}
+        </div>
+
+        {trashedRoomPhotos.length === 0 ? (
+          <div className="px-4 py-3.5 rounded-xl bg-zinc-950/80 border border-white/5 text-[12px] text-zinc-400">
+            현재 공유방 휴지통이 비어 있습니다. 위 [📥 최근 올라온 사진]에서 [🗑️ 24시간 내 본인 삭제]를 누르면 이곳에 임시 보관되어 언제든 1초 만에 복원할 수 있습니다.
+          </div>
+        ) : (
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
+            {trashedRoomPhotos.map((photo) => {
+              const sender = photo.uploaderLabel || '방장';
+              return (
+                <article
+                  key={`trash_${photo.id}`}
+                  className="rounded-2xl overflow-hidden bg-zinc-950 border border-rose-400/35 flex flex-col"
+                >
+                  <div className="relative aspect-[4/3] w-full bg-zinc-900 overflow-hidden">
+                    <img
+                      src={photo.thumbUrl}
+                      alt={photo.name}
+                      crossOrigin={photo.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
+                      loading="lazy"
+                      className="w-full h-full object-cover opacity-75"
+                    />
+                    <div className="absolute top-2 left-2 px-2 py-0.5 rounded-md bg-rose-950/90 border border-rose-400/50 text-rose-200 font-label-sm text-[10px] font-extrabold">
+                      🗑️ 휴지통 보관 중
+                    </div>
+                  </div>
+                  <div className="p-3 flex flex-col gap-2">
+                    <div className="flex items-center justify-between gap-1 text-[11px]">
+                      <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-zinc-200 font-bold truncate">
+                        👤 {sender}
+                      </span>
+                      <span className="text-zinc-500 font-mono text-[10px] shrink-0">
+                        {photo.date.split(' ')[0]}
+                      </span>
+                    </div>
+                    <div className="flex items-center gap-1.5">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          restoreSharedRoomPhotoFromTrash(photo.id);
+                          if (lastDeletedPhotoId === photo.id) {
+                            setLastDeletedPhotoId(null);
+                          }
+                        }}
+                        className="flex-1 py-1.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[11px] font-extrabold cursor-pointer"
+                      >
+                        ↩️ 1초 복원
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          permanentlyDeleteSharedRoomTrashPhoto(photo.id);
+                          if (lastDeletedPhotoId === photo.id) {
+                            setLastDeletedPhotoId(null);
+                          }
+                        }}
+                        className="px-2.5 py-1.5 rounded-lg bg-zinc-900 hover:bg-rose-950/80 border border-white/10 hover:border-rose-400/50 text-zinc-400 hover:text-rose-200 font-label-sm text-[10.5px] font-bold cursor-pointer shrink-0"
+                      >
+                        ✕ 영구 삭제
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              );
+            })}
+          </div>
+        )}
       </section>
     </main>
   );
