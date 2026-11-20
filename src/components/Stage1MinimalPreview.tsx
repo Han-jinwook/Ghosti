@@ -38,7 +38,7 @@ import {
   getAndAdvanceSessionPlaceholderStartIndex,
 } from '../services/weeklyCareAndPlaceholderEngine';
 import { MonsterStandardChatColumn } from './MonsterStandardChatColumn';
-import { GhostPassportCandidatesPanel } from './GhostPassportCandidatesPanel';
+import { PassportRegistrationPanel } from './PassportRegistrationPanel';
 import { GhostPhotoOcrTeleportModal } from './GhostWindowThreeStageMockup';
 import { GhostSecretaryFirstGuard, jumpToGhostSecretary } from './GhostSecretaryFirstGuard';
 
@@ -1893,6 +1893,8 @@ export const Stage1MinimalCarePreview: React.FC = () => {
           context="secretary_left"
           className="xl:col-span-7 2xl:col-span-8 flex flex-col gap-5 min-w-0"
         >
+          {/* [D-35] 🪪 시기별 다양한 여권사진 등록 — 비서 질문·유저 요청·검색 칩 클릭 시에만 조용히 열림 */}
+          <PassportRegistrationPanel />
           {/* 1. 슬림 헤더: 현재 쾌적한 상태 요약 + [⚡ 원본 남기고 N장 일괄 정리] 버튼만 깔끔하게 유지 (여권은 설정방 내부 보관으로 외부 비노출) */}
           <section className="p-3.5 sm:p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-3.5 sm:gap-4">
             <div className="flex flex-wrap items-center justify-between gap-2.5 sm:gap-3 pb-3 border-b border-white/10">

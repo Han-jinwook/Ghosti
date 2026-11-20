@@ -51,7 +51,7 @@ export const MOBILE_CLEAN_ROLLING_PLACEHOLDERS_10: readonly string[] = [
   '보증금 적힌 계약서 찾아줘',
   '글씨 크기 시원하게 키워줘',
   '점검 요일 금요일로 바꿔줘',
-  '내 귀신계 여권 어디 있어?',
+  '가족 얼굴 등록하자',
 ] as const;
 
 /**

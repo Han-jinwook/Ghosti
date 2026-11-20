@@ -15,6 +15,15 @@ import {
 } from '../services/ghostSecretaryEngine';
 import { jumpToGhostSecretary } from './GhostSecretaryFirstGuard';
 import type { FaceMemberCluster, RoomPersonaMap, YearlyFaceBestCut } from '../types/saysee';
+import {
+  PASSPORT_REG_STATE_EVENT,
+  confirmedCutsFor,
+  cutKey,
+  deletePassportCut,
+  findSelfCluster,
+  loadPassportRegState,
+  updateSelfPassportRealName,
+} from '../services/passportRegistrationFlow';
 
 /**
  * 실제 원본 이미지에서 검출된 얼굴 Bounding Box [ymin, xmin, ymax, xmax] (0..1000) 좌표를
@@ -1170,19 +1179,13 @@ export const FaceMemberRegistryModal: React.FC = () => {
  * - 프로필 문패 클릭 시 5대 스타일 슬롯(① 정면 / ② 활짝 미소 / ③ 측면 / ④ 선글라스 / ⑤ 야외)을 원터치로 취향껏 교체!
  */
 export const PassportDoorplateStyleModal: React.FC = () => {
-  const {
-    doorplatePickerClusterId,
-    setDoorplatePickerClusterId,
-    selectDoorplateStyleSlot,
-    faceClusters,
-    activeLoungeType,
-    activeFamilyRoom,
-    layout,
-    isStoreAppMode,
-  } = useSaySeeStore();
+  const { doorplatePickerClusterId, setDoorplatePickerClusterId, faceClusters } = useSaySeeStore();
 
-  const [selfNameInput, setSelfNameInput] = useState<string>('');
-  const [savedSelfName, setSavedSelfName] = useState<string>('');
+  const [realNameInput, setRealNameInput] = useState<string>('');
+  const [savedRealName, setSavedRealName] = useState<string>('');
+  const [nickname, setNickname] = useState<string>('');
+  const [regTick, setRegTick] = useState(0);
+  const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
 
   useEffect(() => {
     if (!doorplatePickerClusterId) return;
@@ -1194,351 +1197,134 @@ export const PassportDoorplateStyleModal: React.FC = () => {
     } catch {
       /* ignore */
     }
-    const resolved = (book.self?.realName || secSt.nickname || storedNick || '').trim();
-    setSavedSelfName(resolved);
-    setSelfNameInput(resolved);
+    const real = (book.self?.realName || '').trim();
+    setSavedRealName(real);
+    setRealNameInput(real);
+    setNickname((secSt.nickname || book.self?.nickname || storedNick || '').trim());
+    setPendingDeleteKey(null);
   }, [doorplatePickerClusterId]);
+
+  useEffect(() => {
+    const onState = () => setRegTick((n) => n + 1);
+    window.addEventListener(PASSPORT_REG_STATE_EVENT, onState);
+    return () => window.removeEventListener(PASSPORT_REG_STATE_EVENT, onState);
+  }, []);
+
+  const regState = useMemo(() => loadPassportRegState(), [regTick, faceClusters, doorplatePickerClusterId]);
+  const selfCluster = useMemo(() => findSelfCluster(regState), [regState, faceClusters]);
+  const cuts = useMemo(() => (selfCluster ? confirmedCutsFor(selfCluster, regState) : []), [selfCluster, regState]);
 
   if (!doorplatePickerClusterId) return null;
 
-  const namedClusters = faceClusters.filter((c) => !c.excludedAsPasserby && c.registeredName);
-  // [멀린님 확정 지시]: 설정방 안의 여권은 타인 목록 없이 오직 '내 여권(본인 내 것만)'만 표시·관리합니다.
-  const targetCluster =
-    namedClusters.find((c) => c.clusterId === 'face_member_5') ||
-    faceClusters.find((c) => c.clusterId === 'face_member_5') ||
-    faceClusters.find((c) => c.clusterId === doorplatePickerClusterId) ||
-    namedClusters[0] ||
-    faceClusters[0] ||
-    null;
+  const close = () => setDoorplatePickerClusterId(null);
 
-  const SLOT_TITLES = [
-    { num: '①', name: '정면', desc: '당해 연도 최신 기준컷 (기본 자동 장착)' },
-    { num: '②', name: '활짝 미소', desc: '밝게 웃는 표정 베스트컷' },
-    { num: '③', name: '측면', desc: '자연스러운 옆모습 베스트컷' },
-    { num: '④', name: '선글라스', desc: '야외·라운딩 선글라스 컷' },
-    { num: '⑤', name: '야외', desc: '여행·자연광 감성 베스트컷' },
-  ];
-
-  const handleSaveSelfPassportName = (e: React.FormEvent) => {
+  const handleSaveRealName = async (e: React.FormEvent) => {
     e.preventDefault();
-    const clean = selfNameInput.trim();
-    if (!clean) return;
-    saveGhostPassportBook(setPassportSelf(loadGhostPassportBook(), clean));
-    const secSt = loadGhostSecretaryState();
-    saveGhostSecretaryState({ ...secSt, nickname: clean, awaitingNickname: false });
-    try {
-      localStorage.setItem('userNickname', clean);
-    } catch {
-      /* ignore */
-    }
-    setSavedSelfName(clean);
-    useSaySeeStore.setState({
-      lastQuarantineToast: `🛂 내 귀신여권 이름·별명이 '${clean}'(으)로 안전하게 보관되었습니다!`,
-    });
+    const clean = realNameInput.trim();
+    if (!clean || clean === savedRealName) return;
+    await updateSelfPassportRealName(clean);
+    setSavedRealName(clean);
   };
-
-  if (!targetCluster) {
-    const isMobileEnv = layout === 'mobile' || Boolean(isStoreAppMode);
-    return (
-      <div
-        className="fixed inset-0 z-[140] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
-        onClick={() => setDoorplatePickerClusterId(null)}
-      >
-        <div
-          className="w-full max-w-lg rounded-3xl bg-[#121318] border border-primary-container/40 text-zinc-100 shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] my-auto"
-          onClick={(e) => e.stopPropagation()}
-        >
-          <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-white/10 bg-zinc-950/90 flex items-start justify-between gap-3">
-            <div className="flex flex-col gap-0.5 min-w-0">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold shrink-0">
-                  🛂 내 귀신계 여권 (본인 전용)
-                </span>
-                <h2 className="font-headline-sm text-[15.5px] sm:text-[18px] font-extrabold text-white break-keep">
-                  내 여권 단독 보관함 &amp; 자동 문패 설정
-                </h2>
-              </div>
-              <p className="font-body-sm text-[12px] text-zinc-400 break-keep">
-                외부 화면에는 절대 노출되지 않으며, 오직 이 설정방 안에서 본인 여권만 안전하게 관리합니다.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setDoorplatePickerClusterId(null)}
-              className="w-9 h-9 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer shrink-0"
-            >
-              ✕
-            </button>
-          </div>
-
-          <div className="p-4 sm:p-5 overflow-y-auto flex flex-col gap-4">
-            <div className="p-4 rounded-2xl bg-zinc-900/90 border border-primary-container/35 flex flex-col gap-3">
-              <div className="flex items-center gap-3.5">
-                <div className="w-16 h-16 rounded-2xl bg-teal-500/15 border border-teal-400/40 flex items-center justify-center text-3xl shrink-0">
-                  🛂
-                </div>
-                <div className="flex flex-col gap-1 min-w-0">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <span className="font-headline-sm text-[17px] font-extrabold text-white">
-                      {savedSelfName ? `${savedSelfName}님의 귀신여권` : '내 귀신여권 (이름·별명 미등록)'}
-                    </span>
-                    <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[10.5px] font-bold">
-                      본인 단독 보관
-                    </span>
-                  </div>
-                  <span className="font-body-sm text-[12px] text-zinc-300 break-keep">
-                    내 사진을 찾거나 공유방에 참여할 때 기준이 되는 나만의 온디바이스 여권입니다 (외부 서버 전송 0%).
-                  </span>
-                </div>
-              </div>
-
-              <form onSubmit={handleSaveSelfPassportName} className="flex items-center gap-2 pt-1">
-                <input
-                  type="text"
-                  value={selfNameInput}
-                  onChange={(e) => setSelfNameInput(e.target.value)}
-                  placeholder="내 여권 이름 또는 별명 입력 (예: 해나라)"
-                  maxLength={18}
-                  className="flex-1 h-10 px-3.5 rounded-xl bg-zinc-950 border border-white/15 focus:border-primary-container outline-none text-[13px] text-white placeholder:text-zinc-500"
-                />
-                <button
-                  type="submit"
-                  className="h-10 px-4 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-extrabold text-[12.5px] whitespace-nowrap cursor-pointer shrink-0"
-                >
-                  저장
-                </button>
-              </form>
-            </div>
-
-            <div className="p-3.5 rounded-2xl bg-zinc-950/90 border border-white/10 flex flex-col gap-2.5">
-              <span className="font-label-md text-[12.5px] font-extrabold text-white">
-                🎨 5대 자동 문패 스타일 슬롯 (사진 인식 시 자동 활성화)
-              </span>
-              <div className="grid grid-cols-5 gap-1.5">
-                {SLOT_TITLES.map((meta) => (
-                  <div
-                    key={meta.num}
-                    className="p-2 rounded-xl bg-zinc-900/80 border border-white/10 flex flex-col items-center text-center gap-1"
-                  >
-                    <span className="text-[10.5px] font-extrabold text-primary-container">
-                      {meta.num}
-                    </span>
-                    <span className="text-[11px] font-bold text-zinc-200 break-keep">
-                      {meta.name}
-                    </span>
-                  </div>
-                ))}
-              </div>
-              <p className="text-[11.5px] text-zinc-400 break-keep leading-relaxed">
-                {isMobileEnv
-                  ? '📱 내 스마트폰 사진을 불러오거나 PC와 연동해 내 얼굴 사진이 분석되면, 가장 선명한 정면 사진(① 정면)부터 5가지 스타일 문패를 원터치로 고르실 수 있습니다.'
-                  : '💻 내 컴퓨터 엔진(Z-코어)이 연결되어 사진 속 내 얼굴이 분석되면, 가장 선명한 정면 사진(① 정면)부터 5가지 스타일 문패를 원터치로 고르실 수 있습니다.'}
-              </p>
-              <div className="pt-1 flex justify-end">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setDoorplatePickerClusterId(null);
-                    if (isMobileEnv) {
-                      window.dispatchEvent(new CustomEvent('ghosti_trigger_mobile_photo_picker'));
-                    } else {
-                      requestConnectMyComputer();
-                    }
-                  }}
-                  className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[12px] font-extrabold cursor-pointer"
-                >
-                  {isMobileEnv ? '🔄 사진첩 자동 동기화' : '⚡ 내 컴퓨터 연결 안내'}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          <div className="px-4 sm:px-5 py-3 border-t border-white/10 bg-zinc-950/90 flex items-center justify-end">
-            <button
-              type="button"
-              onClick={() => setDoorplatePickerClusterId(null)}
-              className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12.5px] font-extrabold cursor-pointer"
-            >
-              닫기
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  const { activePersona, isRoomCreator, roomLabelKo } = getActivePersonaForCluster(
-    targetCluster,
-    activeLoungeType,
-    activeFamilyRoom
-  );
-  const displayPersona = savedSelfName || activePersona || targetCluster.registeredName || '내 프로필';
-  const slots = targetCluster.yearlyBestCuts || [];
-  const activeSlotIdx = targetCluster.activeDoorplateSlotIndex ?? 0;
-  const activeSlot = slots[activeSlotIdx] || slots[0];
 
   return (
     <div
       className="fixed inset-0 z-[140] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
-      onClick={() => setDoorplatePickerClusterId(null)}
+      onClick={close}
     >
       <div
-        className="w-full max-w-2xl rounded-3xl bg-[#121318] border border-primary-container/40 text-zinc-100 shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] my-auto"
+        className="w-full max-w-lg rounded-3xl bg-[#121318] border border-primary-container/40 text-zinc-100 shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] my-auto"
         onClick={(e) => e.stopPropagation()}
       >
-        {/* 헤더 */}
-        <div className="px-4 sm:px-5 py-3.5 sm:py-4 border-b border-white/10 bg-zinc-950/90 flex items-start sm:items-center justify-between gap-3">
-          <div className="flex flex-col gap-0.5 min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-full bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold shrink-0">
-                🛂 귀신같이 여권 자동 문패
-              </span>
-              <h2 className="font-headline-sm text-[15.5px] sm:text-[18px] font-extrabold text-white break-keep">
-                최신 연도 정면 얼굴 자동 문패 &amp; 5대 스타일 슬롯
-              </h2>
-            </div>
-            <p className="font-body-sm text-[12px] text-zinc-400 break-keep">
-              수동 업로드 없이 귀신같이 여권의 최신 정면 기준컷(① 정면)이 자동 장착되며, 원터치로 스타일을 바꿀 수 있습니다.
-            </p>
-          </div>
+        {/* 헤더 — [D-35] 유저 화면 용어는 '여권' 하나만 */}
+        <div className="px-4 sm:px-5 py-3.5 border-b border-white/10 bg-zinc-950/90 flex items-center justify-between gap-3">
+          <h2 className="text-[17px] font-extrabold text-white">🛂 여권</h2>
           <button
             type="button"
-            onClick={() => setDoorplatePickerClusterId(null)}
+            onClick={close}
             className="w-9 h-9 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-white flex items-center justify-center cursor-pointer shrink-0"
+            aria-label="닫기"
           >
             ✕
           </button>
         </div>
 
-        {/* 본문 — 오직 '내 여권(본인 내 것만)' 단독 표시 (타인 얼굴 전환 칩 미노출) */}
-        <div className="p-5 overflow-y-auto flex flex-col gap-4">
-          {/* 현재 장착된 내 여권 대표 문패 프리뷰 카드 */}
-          <div className="p-4 rounded-2xl bg-zinc-900/90 border border-primary-container/35 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-            <div className="flex items-center gap-4">
-              <AutonomousCanvasFaceAvatar
-                photoFile={activeSlot?.representativePhoto || targetCluster.representativePhoto}
-                boundingBox={activeSlot?.boundingBox || targetCluster.boundingBox}
-                fallbackAvatarUrl={targetCluster.avatarUrl}
-                altText={displayPersona}
-                isHighlighted={true}
-                sizeClass="w-20 h-20"
-                shape="square"
+        <div className="p-4 sm:p-5 overflow-y-auto flex flex-col gap-4">
+          {/* 이름(실명) — 공유방 어디서나 같은 이름 · 별명은 내부적으로 함께 묶여 검색 */}
+          <form onSubmit={(e) => void handleSaveRealName(e)} className="flex flex-col gap-1.5">
+            <label className="text-[12px] font-bold text-zinc-400">이름</label>
+            <div className="flex items-center gap-2">
+              <input
+                type="text"
+                value={realNameInput}
+                onChange={(e) => setRealNameInput(e.target.value)}
+                placeholder="이름"
+                maxLength={18}
+                className="flex-1 h-10 px-3.5 rounded-xl bg-zinc-950 border border-white/15 focus:border-primary-container outline-none text-[13.5px] text-white placeholder:text-zinc-600"
               />
-              <div className="flex flex-col gap-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="font-headline-sm text-[18px] font-extrabold text-white">
-                    {isRoomCreator ? `👑 ${displayPersona}` : displayPersona}
-                  </span>
-                  <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-bold">
-                    현재 문패: {targetCluster.doorplateSlotLabelKo || '① 정면'} (
-                    {activeSlot?.year || 2026}년)
-                  </span>
-                </div>
-                <span className="font-body-sm text-[12px] text-zinc-300">
-                  현재 공간({roomLabelKo}) 자동 호칭 · 이메일 여권({targetCluster.passportEmail})
-                </span>
-                <span className="font-body-sm text-[11.5px] text-primary-container">
-                  ✨ {activeSlotIdx === 0
-                    ? '당해 연도(2026년) 가장 선명한 정면 기준컷(Slot 1 Anchor)이 자동 장착되어 있습니다.'
-                    : `귀신같이 여권 5대 스타일 슬롯 중 [${targetCluster.doorplateSlotLabelKo}] 컷이 문패로 적용 중입니다.`}
-                </span>
-              </div>
-            </div>
-
-            {activeSlotIdx !== 0 && (
               <button
-                type="button"
-                onClick={() => selectDoorplateStyleSlot(targetCluster.clusterId, 0)}
-                className="px-3 py-2 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold shrink-0 cursor-pointer"
+                type="submit"
+                disabled={!realNameInput.trim() || realNameInput.trim() === savedRealName}
+                className="h-10 px-4 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-extrabold text-[12.5px] whitespace-nowrap cursor-pointer shrink-0 disabled:opacity-40"
               >
-                ↺ ① 정면 기준컷 복원
+                저장
               </button>
-            )}
-          </div>
-
-          {/* 5대 스타일 슬롯 원터치 선택 그리드 */}
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-wrap items-center justify-between gap-1.5">
-              <span className="font-label-md text-[13px] font-extrabold text-white break-keep">
-                🎨 귀신같이 여권에 확보된 5대 스타일 슬롯 (원터치 문패 변경)
-              </span>
-              <span className="font-label-sm text-[11px] text-zinc-400 break-keep">
-                클릭 즉시 상단 프로필 및 라운지 문패에 반영됩니다
-              </span>
             </div>
+            {nickname && <span className="text-[11.5px] text-zinc-500">별명 {nickname}</span>}
+          </form>
 
-            <div className="grid grid-cols-2 sm:grid-cols-5 gap-2.5">
-              {SLOT_TITLES.map((meta, idx) => {
-                const cut = slots[idx] || slots[0];
-                const isSelected = activeSlotIdx === idx;
+          {/* 시기별 사진 — 보기 + 지우기(🗑)만 */}
+          {cuts.length > 0 ? (
+            <div className="grid grid-cols-4 sm:grid-cols-5 gap-2.5">
+              {cuts.map((cut) => {
+                const k = selfCluster ? cutKey(selfCluster.clusterId, cut) : String(cut.year);
+                const confirming = pendingDeleteKey === k;
                 return (
-                  <button
-                    key={meta.num}
-                    type="button"
-                    onClick={() => selectDoorplateStyleSlot(targetCluster.clusterId, idx)}
-                    className={`p-3 rounded-2xl border flex flex-col items-center text-center gap-2 transition-all cursor-pointer ${
-                      isSelected
-                        ? 'bg-primary-container/15 border-2 border-primary-container shadow-[0_0_20px_rgba(45,212,191,0.2)]'
-                        : 'bg-zinc-900/70 border-white/10 hover:bg-zinc-800/80 hover:border-white/25'
-                    }`}
-                  >
-                    <div className="relative">
-                      <AutonomousCanvasFaceAvatar
-                        photoFile={cut?.representativePhoto || targetCluster.representativePhoto}
-                        boundingBox={cut?.boundingBox || targetCluster.boundingBox}
-                        fallbackAvatarUrl={cut?.cropUrl || cut?.avatarUrl || targetCluster.avatarUrl}
-                        altText={`${displayPersona} ${meta.name}`}
-                        isHighlighted={isSelected}
-                        sizeClass="w-16 h-16"
-                        shape="square"
-                      />
-                      <span
-                        className={`absolute -top-1.5 -left-1.5 px-1.5 py-0.5 rounded-md font-label-sm text-[10px] font-extrabold ${
-                          isSelected
-                            ? 'bg-primary-container text-zinc-950'
-                            : 'bg-zinc-950/90 text-zinc-200 border border-white/15'
-                        }`}
-                      >
-                        {meta.num} {meta.name}
-                      </span>
-                    </div>
-
-                    <div className="flex flex-col gap-0.5">
-                      <span className="font-label-sm text-[11.5px] font-extrabold text-white">
-                        {cut?.year || 2026}년 컷
-                      </span>
-                      <span className="font-body-sm text-[10.5px] text-zinc-400 leading-tight line-clamp-2">
-                        {meta.desc}
-                      </span>
-                    </div>
-
-                    <span
-                      className={`w-full py-1 rounded-lg font-label-sm text-[10.5px] font-extrabold ${
-                        isSelected
-                          ? 'bg-primary-container text-zinc-950'
-                          : 'bg-zinc-950 text-zinc-300'
+                  <div key={k} className="relative flex flex-col items-center gap-1">
+                    <AutonomousCanvasFaceAvatar
+                      photoFile={cut.representativePhoto || selfCluster?.representativePhoto || ''}
+                      boundingBox={cut.boundingBox || selfCluster?.boundingBox || [200, 200, 600, 600]}
+                      fallbackAvatarUrl={cut.cropUrl || cut.avatarUrl || selfCluster?.avatarUrl || ''}
+                      altText={`${cut.year}년`}
+                      sizeClass="w-16 h-16"
+                      shape="square"
+                    />
+                    <span className="text-[10.5px] font-bold text-zinc-500">{cut.year}</span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (!selfCluster) return;
+                        if (!confirming) {
+                          setPendingDeleteKey(k);
+                          return;
+                        }
+                        deletePassportCut(selfCluster.clusterId, cut);
+                        setPendingDeleteKey(null);
+                      }}
+                      title="지우기"
+                      className={`absolute -top-1.5 -right-1.5 h-6 rounded-full text-[11px] font-bold flex items-center justify-center cursor-pointer border ${
+                        confirming
+                          ? 'px-2 bg-rose-500 border-rose-400 text-white'
+                          : 'w-6 bg-zinc-900/90 border-white/15 text-zinc-400 hover:text-white'
                       }`}
                     >
-                      {isSelected ? '✓ 현재 문패' : '원터치 장착'}
-                    </span>
-                  </button>
+                      {confirming ? '지우기' : '🗑'}
+                    </button>
+                  </div>
                 );
               })}
             </div>
-          </div>
+          ) : (
+            <p className="text-[12.5px] text-zinc-500">아직 등록된 사진이 없어요.</p>
+          )}
         </div>
 
-        {/* 푸터 */}
-        <div className="px-4 sm:px-5 py-3.5 border-t border-white/10 bg-zinc-950/90 flex flex-wrap items-center justify-between gap-2.5">
-          <span className="font-body-sm text-[11.5px] text-zinc-400 break-keep min-w-0 flex-1">
-            💡 새해(2027년~)에 더 선명한 정면 사진이 찍히면 Slot 1 문패가 자동으로 최신화됩니다.
-          </span>
+        <div className="px-4 sm:px-5 py-3 border-t border-white/10 bg-zinc-950/90 flex items-center justify-end">
           <button
             type="button"
-            onClick={() => setDoorplatePickerClusterId(null)}
-            className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12.5px] font-extrabold shrink-0 ml-auto cursor-pointer"
+            onClick={close}
+            className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 text-[12.5px] font-extrabold cursor-pointer"
           >
-            완료
+            닫기
           </button>
         </div>
       </div>

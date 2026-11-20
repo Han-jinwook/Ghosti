@@ -558,17 +558,14 @@ const GhostiHubGlobalModals: React.FC = () => {
                   type="button"
                   onClick={() => {
                     setIsProfileOpen(false);
-                    const st = useSaySeeStore.getState();
-                    const cluster =
-                      st.faceClusters.find((c) => c.clusterId === 'face_member_5') ||
-                      st.faceClusters[0];
-                    st.setDoorplatePickerClusterId(cluster ? cluster.clusterId : 'self_passport');
+                    // [D-35] 여권은 등록 흐름이 기억하는 '내 얼굴'만 표시 (임의 클러스터 추정 금지)
+                    useSaySeeStore.getState().setDoorplatePickerClusterId('self_passport');
                   }}
                   className="px-3 py-1.5 rounded-full bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold shadow-xs transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap"
-                  title="설정방 보관 내 귀신계 여권(본인 전용) 확인 및 문패 스타일 관리"
+                  title="내 여권 (이름 · 시기별 사진)"
                 >
                   <span>🛂</span>
-                  <span>내 귀신여권</span>
+                  <span>여권</span>
                 </button>
                 <button
                   type="button"

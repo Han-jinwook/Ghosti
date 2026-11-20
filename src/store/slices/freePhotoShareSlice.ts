@@ -286,7 +286,8 @@ export interface FreePhotoShareSlice {
   registerFaceMember: (
     clusterId: string,
     registeredName: string,
-    relationshipTag?: string
+    relationshipTag?: string,
+    options?: { silent?: boolean }
   ) => Promise<void>;
   updateRoomPersonaForCluster: (
     clusterId: string,
@@ -453,7 +454,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
    * ② Global Seed 버전 자동 갱신
    * ③ 호스트 원본 + 전 멤버 폰 + 동영상 전 구간 1초 만에 역스캔 및 누락 사진 자동 편입
    */
-  registerFaceMember: async (clusterId, registeredName, relationshipTag) => {
+  registerFaceMember: async (clusterId, registeredName, relationshipTag, options) => {
     const cleanName = registeredName.trim();
     const {
       faceClusters: prevClusters,
@@ -601,7 +602,8 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       swarmFaceCandidates: nextCandidates,
       globalSeedVersion: nextSeedVer,
       lastRetroScanReport: nextReport,
-      lastQuarantineToast: cleanName
+      // [D-35] 귀신비서 여권 조용한 등록 흐름(silent)에서는 토스트 없이 조용히 반영
+      lastQuarantineToast: cleanName && !options?.silent
         ? `✅ '${cleanName}'님의 실제 이름이 얼굴 여권에 등록되어 사진과 즉시 매칭되었습니다!`
         : get().lastQuarantineToast,
     });

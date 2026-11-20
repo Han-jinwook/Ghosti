@@ -25,6 +25,7 @@ import {
   FaceMemberRegistryModal,
   PassportDoorplateStyleModal,
 } from './components/FaceMemberRegistryModal';
+import { startPassportPhotoActivityWatcher } from './services/passportRegistrationFlow';
 import { SetupFloatingOverlayGuide } from './components/SetupMonsterModal';
 import { GhostCastAndLiveGlobalOverlay } from './components/GhostCastAndLiveSystem';
 import { FreePhotoShareOverlays } from './domains/free_photo_share/FreePhotoShareOverlays';
@@ -70,6 +71,11 @@ export const App: React.FC = () => {
     guestJoinWallReason,
   } = useSaySeeStore();
   const { ocrModalPhoto, setOcrModalPhoto } = useDashboardNavStore();
+
+  // [D-35] 🪪 여권 조용한 등록: 사진 활동(검색·사진 추가) 감지기 1회 기동 (날짜 고정 없이 활동 직후 1번만 질문)
+  useEffect(() => {
+    startPassportPhotoActivityWatcher();
+  }, []);
 
   // 뷰포트 크기·회전 변경 시 PC ↔ 모바일 레이아웃 실시간 반응형 동기화 (?ghostSearchWindow 제외)
   const [isLandscapeCompact, setIsLandscapeCompact] = useState<boolean>(() =>
@@ -1115,7 +1121,7 @@ export const App: React.FC = () => {
     <GhostiHubRootProvider>
       {/* 앱 진입 시 0.5초 가벼운 로딩 스플래시 */}
       <GhostiLoadingSplash />
-      {/* [설정방 내 본인 여권 단독 보관함] 쇼룸·워크스페이스·모바일 전 화면 어디서든 상단 설정방 [🛂 내 귀신여권] 클릭 시 즉시 오픈 */}
+      {/* [프로필 내 본인 여권 단독 보관함 — D-35] 쇼룸·워크스페이스·모바일 전 화면 어디서든 프로필 [🛂 여권] 클릭 시 즉시 오픈 */}
       <PassportDoorplateStyleModal />
 
       {/* 모바일(iOS/AOS) 전 화면 공통 상단 당겨서 새로고침(Pull-to-refresh) 플로팅 인디케이터 — iOS 상단 상태바(topSafeAreaShieldView) 차폐 영역 아래에 배치하여 상단 잘림 원천 차단 */}

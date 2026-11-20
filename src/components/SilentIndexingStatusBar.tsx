@@ -8,6 +8,15 @@ import {
   isSharedPhotoLounge,
   resolveLoungePhotoCorpus,
 } from '../store/slices/storeSharedRefs';
+import {
+  PASSPORT_REG_STATE_EVENT,
+  markPassportPrompted,
+  openPassportRegistration,
+  passportPromptForActivity,
+  summarizePassportPending,
+  type PassportRegMode,
+} from '../services/passportRegistrationFlow';
+import { jumpToGhostSecretary } from './GhostSecretaryFirstGuard';
 
 interface SilentIndexingStatusBarProps {
   variant?: 'search-bar' | 'lounge-top';
@@ -20,11 +29,27 @@ interface SilentIndexingStatusBarProps {
  *   기존 1줄 상태바 안에서 방금 준비된 내 PC 최근 문서·사진 파일명 1~2개를 바로 보여주며 클릭 시 즉시 검색 실행
  */
 export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = ({
+  variant = 'search-bar',
   className = '',
 }) => {
   const [snap, setSnap] = useState<SilentIndexingBrakeSnapshot>(() =>
     silentIndexingBrake.getSnapshot()
   );
+  // [D-35] 사진 검색 직후 1회: 🪪 시기별 다양한 여권사진 등록 칩 (누르면 귀신비서 왼쪽 등록 화면으로)
+  const [passportChipMode, setPassportChipMode] = useState<PassportRegMode | null>(null);
+  useEffect(() => {
+    if (variant !== 'search-bar') return;
+    const check = () => {
+      if (isSharedPhotoLounge(useSaySeeStore.getState().activeLoungeType)) return;
+      const mode = passportPromptForActivity();
+      if (!mode) return;
+      markPassportPrompted();
+      setPassportChipMode(mode);
+    };
+    check();
+    window.addEventListener(PASSPORT_REG_STATE_EVENT, check);
+    return () => window.removeEventListener(PASSPORT_REG_STATE_EVENT, check);
+  }, [variant]);
   const {
     activeLoungeType,
     activeFamilyRoom,
@@ -172,6 +197,36 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
       {showPriorityJumpToast && snap.lastPriorityJump && (
         <div className="px-2.5 py-1 rounded-lg bg-teal-50 dark:bg-primary-container/15 border border-teal-200 dark:border-primary-container/30 text-[12.5px] font-bold text-teal-800 dark:text-primary-container">
           🎯 &ldquo;{snap.lastPriorityJump.query}&rdquo; 과거 파일({snap.lastPriorityJump.jumpedCount}개) 우선 검색 반영됨
+        </div>
+      )}
+
+      {passportChipMode && !sharedMode && (
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={() => {
+              const mode = passportChipMode;
+              setPassportChipMode(null);
+              openPassportRegistration(mode);
+              jumpToGhostSecretary();
+            }}
+            className="px-3 py-1 rounded-full bg-primary-container/15 hover:bg-primary-container/25 border border-primary-container/40 text-teal-800 dark:text-primary-container text-[12px] font-extrabold cursor-pointer transition-all"
+          >
+            🪪 시기별 다양한 여권사진 등록
+            {(() => {
+              const s = summarizePassportPending();
+              const n = passportChipMode === 'self' ? s.selfPendingCount : s.familyPendingCount;
+              return n > 0 ? ` · ${n}장` : '';
+            })()}
+          </button>
+          <button
+            type="button"
+            onClick={() => setPassportChipMode(null)}
+            aria-label="닫기"
+            className="w-6 h-6 rounded-full text-[11px] text-slate-400 hover:text-slate-700 dark:text-zinc-500 dark:hover:text-zinc-200 cursor-pointer"
+          >
+            ✕
+          </button>
         </div>
       )}
     </div>

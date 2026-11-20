@@ -51,13 +51,11 @@ import {
   logUnmatchedQuestion,
   canKnockToday,
   todayKey,
-  decidePassportEntry,
   executeMobileSteppingStoneScan,
   buildMobileRemainingPhotosChoicePrompt,
   buildMobileToPcBridgePrompt,
   findScenario,
   renderPlaybookText,
-  upsertPassportMember,
   isImpatientIntent,
   isStoreLinkIntent,
   isYes,
@@ -65,14 +63,34 @@ import {
   parseNicknameSettingIntent,
   normalizeSuggestionChipTone,
   type GhostSecretaryState,
-  type PassportNamingResult,
 } from '../services/ghostSecretaryEngine';
 import {
   pushGhostPassportsToCloud,
   pullGhostPassportsFromCloud,
   buildPassportExtrasFromClusters,
 } from '../services/ghostPassportSync';
-import { rankPassportCandidates, countUniqueFacePhotos } from './GhostPassportCandidatesPanel';
+import {
+  PASSPORT_MIN_FACE_PHOTOS_FOR_ASK,
+  PASSPORT_REG_DONE_EVENT,
+  PASSPORT_REG_STATE_EVENT,
+  countFacePhotos,
+  familyCandidates,
+  findSelfCluster,
+  loadPassportRegState,
+  markFirstOfferShown,
+  markPassportPrompted,
+  matchPassportRegCommand,
+  openPassportRegistration,
+  passportPromptForActivity,
+  passportUnavailableReason,
+  summarizePassportPending,
+  type PassportRegMode,
+} from '../services/passportRegistrationFlow';
+
+/** [D-35] 여권 등록 카드 선택지 (유저 화면 용어: '여권'만 사용) */
+const PASSPORT_CHIP_OPEN_SELF = '🪪 여권사진 확인하기';
+const PASSPORT_CHIP_OPEN_FAMILY = '👨‍👩‍👧 가족 사진도 등록할래';
+const PASSPORT_CHIP_LATER = '다음에 할게';
 
 /** [v1.3] 내 컴퓨터 연결 직후 자동 실행할 1단계 분석 문구 — 멋대로 삭제하지 않고 실측 사양 + 속도 저하 범인(상주 보안모듈·애드웨어) 분석표를 먼저 제시 */
 const SECRETARY_FIRST_CARE_QUERY = '요즘 컴퓨터가 좀 느린데 내 사양이랑 누가 속도 잡아먹는지 분석해줘';
@@ -202,18 +220,18 @@ function secretaryOwnerEmail(): string {
   return useSaySeeStore.getState().merlinAuth?.email || '';
 }
 
-/** 홀림 퀘스트 마지막(차 안 음성검색 안내) 직후 → 🪪 귀신계 여권 진입 또는 업무용 PC 자동 패스 (모바일은 100→300→500장 징검다리 스캔 연결) */
+/** 홀림 퀘스트 마지막(차 안 음성검색 안내) 직후 → 🪪 여권(내 사진) 확인 제안 또는 업무용 PC 자동 패스 (모바일은 100→300→500장 징검다리 스캔 연결) */
 function buildPassportEntryTurn(
   st: GhostSecretaryState,
   isMobileEnv = false
-): { text: string; nextState: GhostSecretaryState } {
+): { text: string; followUps?: string[]; nextState: GhostSecretaryState } {
   const state = useSaySeeStore.getState();
   const clusters = state.faceClusters || [];
   const photos = state.photos || [];
   const nickname = st.nickname || '';
 
   let nextSt: GhostSecretaryState = { ...st };
-  let effectiveFacePhotos = countUniqueFacePhotos(clusters);
+  let effectiveFacePhotos = countFacePhotos(clusters);
 
   if (isMobileEnv) {
     const orderedPhotos = photos
@@ -246,11 +264,15 @@ function buildPassportEntryTurn(
     };
   }
 
-  if (decidePassportEntry(effectiveFacePhotos, st.passportStep === 'done') === 'ask') {
-    const sc = findScenario('passport_ask_gender_age_humble');
+  // [D-35] 첫날엔 '내 사진'만 조용히 확인받는다 (성별·나이대 문답 · 번호표 대화 폐지)
+  const pending = summarizePassportPending();
+  const hasSelfToAsk = pending.needsSelfPick || pending.selfPendingCount > 0;
+  if (effectiveFacePhotos >= PASSPORT_MIN_FACE_PHOTOS_FOR_ASK && hasSelfToAsk) {
+    markFirstOfferShown();
     return {
-      text: renderPlaybookText(sc?.response || '', { nickname }),
-      nextState: { ...nextSt, passportStep: 'ask_hint' },
+      text: buildPassportSelfOfferText(nickname),
+      followUps: [PASSPORT_CHIP_OPEN_SELF, PASSPORT_CHIP_LATER],
+      nextState: { ...nextSt, passportStep: 'done' },
     };
   }
   return {
@@ -259,33 +281,97 @@ function buildPassportEntryTurn(
   };
 }
 
-/** 채팅으로 받은 실명을 여권 후보 번호에 등록 (관계 칩 없이 실명만, 본인은 별명+본인 플래그) */
-async function applyPassportNaming(parsed: PassportNamingResult, nickname: string): Promise<void> {
+function buildPassportSelfOfferText(nickname: string): string {
+  const who = nickname ? `${nickname}님` : '주인님';
+  return `🪪 **시기별 다양한 여권사진 등록**\n사진에서 ${who}으로 보이는 얼굴을 찾았어요. 확인해 보실래요?`;
+}
+
+function buildPassportFamilyOfferText(): string {
+  return `🪪 **시기별 다양한 여권사진 등록**\n가족으로 보이는 사진도 등록할까요?`;
+}
+
+/** 여권 등록 직후 계정 동기화(명시적 동의 시에만 실제 업로드) */
+function syncPassportAfterRegistration(): void {
   const store = useSaySeeStore.getState();
-  const ranked = rankPassportCandidates(store.faceClusters || []);
-  let book = loadGhostPassportBook();
-  const named: Array<{ name: string; seedVecPreview?: number[]; avatarUrl?: string; cropUrl?: string }> = [];
-  if (parsed.selfIndex !== undefined && ranked[parsed.selfIndex - 1]) {
-    const selfCluster = ranked[parsed.selfIndex - 1];
-    await store.registerFaceMember(selfCluster.clusterId, nickname, '');
-    book = setPassportSelf(book, nickname);
-    named.push({ name: (book.self?.realName || nickname).trim(), seedVecPreview: selfCluster.seedVecPreview, avatarUrl: selfCluster.avatarUrl, cropUrl: selfCluster.cropUrl });
-  }
-  for (const n of parsed.names) {
-    const cluster = ranked[n.index - 1];
-    if (cluster) {
-      await store.registerFaceMember(cluster.clusterId, n.realName, '');
-      named.push({ name: n.realName, seedVecPreview: cluster.seedVecPreview, avatarUrl: cluster.avatarUrl, cropUrl: cluster.cropUrl });
-    }
-    book = upsertPassportMember(book, n.realName);
-  }
-  saveGhostPassportBook(book);
-  // [v1.3 마감 #4-4] 클러스터에 128차원 벡터·data: 썸네일이 있으면 함께 동기화 (없으면 이름만, null 안전)
+  const book = loadGhostPassportBook();
+  const names = new Set<string>([
+    ...(book.self ? [(book.self.realName || book.self.nickname || '').trim()] : []),
+    ...book.members.map((m) => m.realName),
+  ]);
+  const named = (store.faceClusters || [])
+    .filter((c) => c.registeredName && names.has(c.registeredName.trim()))
+    .map((c) => ({ name: c.registeredName.trim(), seedVecPreview: c.seedVecPreview, avatarUrl: c.avatarUrl, cropUrl: c.cropUrl }));
   void pushGhostPassportsToCloud(
     secretaryOwnerEmail(),
     isMobileVoiceEnvironment() ? 'mobile' : 'pc',
     buildPassportExtrasFromClusters(named)
   );
+}
+
+function passportOfferWasLast(lastAssistantText: string): boolean {
+  return /시기별 다양한 여권사진 등록/.test(lastAssistantText || '');
+}
+
+/**
+ * [D-35] 여권 등록 명령 · 카드 선택지 즉시 처리
+ *  - "여권 등록", "내 사진 등록", "가족 얼굴 등록하자" 등 → 왼쪽 등록 화면 즉시 오픈
+ *  - 미연결·스캔 중·후보 없음 → 지어내지 않고 정직하게 안내
+ *  - 카드의 [다음에 할게] → 조용히 물러남 (다음 사진 활동 때 다시)
+ */
+function resolvePassportCommandReply(
+  raw: string,
+  sourceTab: 'trash' | 'repair',
+  lastAssistantText: string
+): MonsterChatMessage | null {
+  const text = (raw || '').trim();
+  const nickname = (loadGhostSecretaryState().nickname || '').trim();
+  const nickPrefix = nickname ? `${nickname}님, ` : '';
+  const base = { role: 'assistant' as const, timestamp: nowTimeKo(), sourceTab };
+
+  if (text === PASSPORT_CHIP_LATER && passportOfferWasLast(lastAssistantText)) {
+    return {
+      ...base,
+      id: `secretary_passport_later_${Date.now()}`,
+      text: `네! ${nickPrefix}다음에 사진 보실 때 다시 여쭤볼게요 👻\n이제 『👻 귀신검색』에서 내 파일을 1초 만에 찾아보실까요?`,
+      followUpSuggestions: ['🔍 귀신검색으로 내 파일 찾아볼래'],
+    };
+  }
+
+  let mode: PassportRegMode | null = null;
+  if (text === PASSPORT_CHIP_OPEN_SELF) mode = 'self';
+  else if (text === PASSPORT_CHIP_OPEN_FAMILY) mode = 'family';
+  else mode = matchPassportRegCommand(text);
+  if (!mode) return null;
+
+  const unavailable = passportUnavailableReason(mode, nickname, zCoreBridge.isConnected);
+  if (unavailable) {
+    return { ...base, id: `secretary_passport_unavailable_${Date.now()}`, text: unavailable };
+  }
+
+  const regSt = loadPassportRegState();
+  const self = findSelfCluster(regSt);
+  // 가족을 원해도 '나'를 아직 고르지 않았다면 내 얼굴부터 자연스럽게
+  const openMode: PassportRegMode = mode === 'family' && !self ? 'self' : mode;
+  const pending = summarizePassportPending(regSt);
+  const hasRealName = Boolean((loadGhostPassportBook().self?.realName || '').trim());
+  const nothingForSelf = openMode === 'self' && self && pending.selfPendingCount === 0 && hasRealName;
+  if (nothingForSelf) {
+    return {
+      ...base,
+      id: `secretary_passport_done_${Date.now()}`,
+      text: `${nickPrefix}지금 찾은 사진은 모두 등록되어 있어요! 새 사진이 생기면 조용히 찾아둘게요 👻`,
+    };
+  }
+
+  openPassportRegistration(openMode);
+  markPassportPrompted();
+  const guide =
+    openMode === 'self' && !self
+      ? mode === 'family'
+        ? `좋아요! 가족 전에 ${nickname ? `${nickname}님` : '내'} 얼굴부터 왼쪽에서 한 번만 골라주세요 👻`
+        : `왼쪽에 띄워드렸어요! ${nickname ? `${nickname}님` : '내'} 얼굴을 한 번만 골라주세요 👻`
+      : `왼쪽에 띄워드렸어요! 아닌 사진만 빼고 [등록]을 눌러주세요 👻`;
+  return { ...base, id: `secretary_passport_open_${Date.now()}`, text: guide };
 }
 
 interface MonsterStandardChatColumnProps {
@@ -525,7 +611,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         const entry = buildPassportEntryTurn({ ...st, passportStep: undefined }, isMobileOrStore);
         const updatedState: GhostSecretaryState = { ...entry.nextState, questStep: 'done' };
         saveGhostSecretaryState(updatedState);
-        if (updatedState.passportStep === 'ask_hint') {
+        if (entry.followUps) {
           setSharedMonsterMessages((prev) => [
             ...prev,
             {
@@ -534,7 +620,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               timestamp: nowTimeKo(),
               sourceTab: 'trash',
               text: `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두고 다음 안내로 넘어갈게요 👻✨\n\n${entry.text}`,
-              followUpSuggestions: ['여성 40대', '남성 40대', '여성 30대', '남성 30대'],
+              followUpSuggestions: entry.followUps,
             },
           ]);
           return;
@@ -685,7 +771,83 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     };
   }, [sourceTab, isMobileOrStore]);
 
-  // [멀린님 확정 명세 ②] 2중 자동 케어 엔진 (트랙 A: 20% 과부하 10분 지속 감지 ➕ 트랙 B: 수요일 13:00 「수요 손 없는 날」 정기 검진)
+  // [D-35] 🪪 여권 조용한 등록: ① 내 사진 등록 완료 → 가족 질문(따로) ② 사진 활동 직후 1회 질문
+  useEffect(() => {
+    if (sourceTab !== 'trash') return;
+    const pushOnce = (idPrefix: string, msg: Omit<MonsterChatMessage, 'id' | 'role' | 'timestamp' | 'sourceTab'>) => {
+      setSharedMonsterMessages((prev) => {
+        const last = prev[prev.length - 1];
+        if (last?.id.startsWith(idPrefix) && Date.now() - Number(last.id.split('_').pop() || 0) < 3000) return prev;
+        return [
+          ...prev,
+          { id: `${idPrefix}${Date.now()}`, role: 'assistant', timestamp: nowTimeKo(), sourceTab: 'trash', ...msg },
+        ];
+      });
+    };
+
+    const onRegDone = (e: Event) => {
+      const mode = (e as CustomEvent<{ mode?: PassportRegMode }>).detail?.mode;
+      syncPassportAfterRegistration();
+      if (mode === 'self') {
+        const hasFamily = familyCandidates().length > 0;
+        if (hasFamily) {
+          pushOnce('secretary_passport_family_offer_', {
+            text: `등록했어요! 👻\n\n${buildPassportFamilyOfferText()}`,
+            followUpSuggestions: [PASSPORT_CHIP_OPEN_FAMILY, PASSPORT_CHIP_LATER],
+          });
+        } else {
+          pushOnce('secretary_passport_done_', { text: '등록했어요! 👻' });
+        }
+        // 모바일 단독: 1차 여권 등록 직후 남은 옛날 사진 스캔 시점 선택권 + PC 연결 브릿지 (기존 v1.3 흐름 유지)
+        if (isMobileOrStore) {
+          const st = loadGhostSecretaryState();
+          if (st.nickname && !st.mobileRemainingScanChoice) {
+            const remainingPhotos =
+              st.mobileRemainingOldPhotos ??
+              Math.max(0, (useSaySeeStore.getState().photos || []).length - (st.mobileSteppingStoneScanned || 100));
+            const choicePrompt = buildMobileRemainingPhotosChoicePrompt(st.nickname, remainingPhotos);
+            if (choicePrompt) {
+              pushOnce('secretary_mobile_remaining_', {
+                text: choicePrompt.text,
+                followUpSuggestions: choicePrompt.followUps,
+              });
+            }
+          }
+          const pcBridge = buildMobileToPcBridgePrompt(st.nickname);
+          pushOnce('secretary_mobile_pc_bridge_', { text: pcBridge.text, showMobileToPcBridgeButton: true });
+        }
+      } else {
+        const names = (e as CustomEvent<{ names?: string[] }>).detail?.names || [];
+        pushOnce('secretary_passport_done_', {
+          text: names[0]
+            ? `등록했어요! 👻 이제 귀신검색에서 🔍 "${names[0]} 웃는 사진"처럼 찾아보실 수 있어요.`
+            : '등록했어요! 👻',
+        });
+      }
+    };
+
+    const onRegState = () => {
+      const mode = passportPromptForActivity();
+      if (!mode) return;
+      markPassportPrompted();
+      pushOnce('secretary_passport_activity_offer_', {
+        text:
+          mode === 'self'
+            ? buildPassportSelfOfferText(loadGhostSecretaryState().nickname || '')
+            : buildPassportFamilyOfferText(),
+        followUpSuggestions: [mode === 'self' ? PASSPORT_CHIP_OPEN_SELF : PASSPORT_CHIP_OPEN_FAMILY, PASSPORT_CHIP_LATER],
+      });
+    };
+
+    window.addEventListener(PASSPORT_REG_DONE_EVENT, onRegDone);
+    window.addEventListener(PASSPORT_REG_STATE_EVENT, onRegState);
+    // 다른 화면에서 사진 활동이 있었다면, 귀신비서로 돌아왔을 때 한 번 묻는다
+    onRegState();
+    return () => {
+      window.removeEventListener(PASSPORT_REG_DONE_EVENT, onRegDone);
+      window.removeEventListener(PASSPORT_REG_STATE_EVENT, onRegState);
+    };
+  }, [sourceTab, isMobileOrStore]);
   useEffect(() => {
     let cancelled = false;
     const runProactiveCheck = async () => {
@@ -1028,17 +1190,21 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     }
 
     if (sourceTab === 'trash' && !shouldBypassSecretaryPlaybook) {
+      // [D-35] 여권 등록 명령("여권 등록", "가족 얼굴 등록하자" 등)·카드 선택지에는 퀘스트 순서와 무관하게 즉시 반응
+      const passportReply = resolvePassportCommandReply(raw, sourceTab, lastAssistantBubble?.text || '');
+      if (passportReply) {
+        setSharedMonsterMessages((prev) => [...prev, passportReply]);
+        setSharedMonsterBusy(false);
+        return;
+      }
       const secretaryState = loadGhostSecretaryState();
       const turn = resolveGhostSecretaryTurn(raw, secretaryState, {
-        passportClusterCount: rankPassportCandidates(useSaySeeStore.getState().faceClusters || []).length,
+        passportClusterCount: (useSaySeeStore.getState().faceClusters || []).filter((c) => !c.excludedAsPasserby).length,
         isMobileEnv: isMobileOrStore,
         lastAssistantText: lastAssistantBubble?.text,
       });
       if (turn) {
         let nextState = turn.nextState;
-        if (turn.passportNaming && nextState.nickname) {
-          await applyPassportNaming(turn.passportNaming, nextState.nickname);
-        }
         const replies: MonsterChatMessage[] = [
           {
             id: `secretary_${Date.now()}`,
@@ -1050,33 +1216,6 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             passportViralFamilyName: turn.passportViralFamilyName,
           },
         ];
-        if (turn.passportNaming && nextState.nickname && isMobileOrStore && !nextState.mobileRemainingScanChoice) {
-          const remainingPhotos =
-            nextState.mobileRemainingOldPhotos ??
-            Math.max(0, (useSaySeeStore.getState().photos || []).length - (nextState.mobileSteppingStoneScanned || 100));
-          const choicePrompt = buildMobileRemainingPhotosChoicePrompt(nextState.nickname, remainingPhotos);
-          if (choicePrompt) {
-            replies.push({
-              id: `secretary_mobile_remaining_${Date.now()}`,
-              role: 'assistant',
-              timestamp: nowTimeKo(),
-              sourceTab,
-              text: choicePrompt.text,
-              followUpSuggestions: choicePrompt.followUps,
-            });
-          }
-        }
-        if (turn.passportNaming && isMobileOrStore) {
-          const pcBridge = buildMobileToPcBridgePrompt(nextState.nickname);
-          replies.push({
-            id: `secretary_mobile_pc_bridge_${Date.now()}`,
-            role: 'assistant',
-            timestamp: nowTimeKo(),
-            sourceTab,
-            text: pcBridge.text,
-            showMobileToPcBridgeButton: true,
-          });
-        }
         if (turn.clipboardText) {
           void navigator.clipboard?.writeText(turn.clipboardText).catch(() => {});
         }
@@ -1145,6 +1284,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             timestamp: nowTimeKo(),
             sourceTab,
             text: entry.text,
+            followUpSuggestions: entry.followUps,
           });
           if (isMobileOrStore && nextState.passportStep === 'skipped') {
             const pcBridge = buildMobileToPcBridgePrompt(nextState.nickname);

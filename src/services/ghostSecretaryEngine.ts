@@ -976,77 +976,18 @@ export function resolveGhostSecretaryTurn(
     return null;
   }
 
-  // ⓪-0 사용자가 직접 '🛂 귀신계 여권' 또는 '인물 사진 이름 등록'을 요청한 경우 설정방 내 본인 여권 보관 원칙 안내!
-  if (
-    /(귀신계?\s*여권|여권\s*(등록|발급|만들|보여|확인|열어|안내|설정|해\s*볼래|할래)|인물\s*사진\s*이름|얼굴\s*이름\s*(등록|설정|붙이|알려)|사진\s*속\s*(사람|인물|가족)\s*이름)/i.test(
-      text
-    ) &&
-    !/\d+\s*번\s*(?:은|는|이|가)/.test(text)
-  ) {
+  // ⓪-0 [D-35] 여권 확인 요청('여권 보여줘' 등) → 프로필 안 여권 위치만 짧게 안내
+  //  ('여권 등록', '가족 얼굴 등록하자' 등 등록 명령은 채팅창에서 먼저 가로채 왼쪽 등록 화면을 즉시 연다)
+  if (/(귀신계?\s*여권|여권\s*(보여|확인|열어|어디|안내|설정))/i.test(text)) {
     const nickLabel = nickname ? `${nickname}님! ` : '';
-    const passportGuideText = `${nickLabel}🛂 **내 귀신계 여권**은 화면 바깥에 복잡하게 나와 있지 않고, 사진 검색이나 공유를 하실 때 제가 뒤에서 자동으로 알아보고 잡아드려요! 👻✨\n혹시 **내 여권(본인 전용)**을 직접 확인하거나 문패 스타일을 바꾸고 싶으실 때는 화면 상단 **[🐾 내 프로필 · 계정 설정(설정방)] ➔ [🛂 내 귀신여권]** 안에 안전하게 보관되어 있으니 언제든 열어보실 수 있어요! 🔒`;
     return {
       scenarioId: 'passport_manual_open_guide',
-      text: passportGuideText,
+      text: `${nickLabel}🛂 여권은 화면 오른쪽 위 **[🐾 내 프로필] ➔ [🛂 여권]**에서 보실 수 있어요! 🔒`,
       followUps: ctx.isMobileEnv
-        ? ['🔍 맨 위 검색창으로 바로 찾아볼래', '📱 내 폰 사진 자동 점검 결과 볼래']
-        : ['귀신검색으로 내 파일 찾아볼래', '최근 복원 기록 보여줘'],
-      nextState: { ...st, awaitingNickname: false, passportStep: 'done' },
+        ? ['🔍 맨 위 검색창으로 바로 찾아볼래']
+        : ['귀신검색으로 내 파일 찾아볼래'],
+      nextState: { ...st, awaitingNickname: false },
     };
-  }
-
-  // ⓪ 🛂 귀신계 여권 발급 대행 (성별·나이대 힌트 → 후보 번호별 실명 입력)
-  if (st.passportStep === 'ask_hint') {
-    if (isPassportGenderAgeHint(text)) {
-      const sc = findScenario('passport_show_top_candidates_ask_real_name');
-      if (sc) {
-        return {
-          scenarioId: sc.id,
-          text: renderPlaybookText(sc.response, { nickname, cluster_count: ctx.passportClusterCount || 0 }),
-          nextState: { ...st, passportStep: 'naming' },
-        };
-      }
-    }
-    if (isYes(text) || isNo(text) || text === QUEST_NO) {
-      return {
-        scenarioId: 'passport_reask_gender_age_after_ack',
-        text: `히히, 알겠어요! 그럼 이제 사진첩 속에 ${nickname ? `${nickname}님` : '회원님'} 얼굴이 어디 숨어있는지 찾아드릴 수 있게 성별과 나이대(예: 여성 40대 / 남성 40대)만 살짝 알려주실래요?`,
-        followUps: ['여성 40대', '남성 40대'],
-        nextState: st,
-      };
-    }
-  }
-  if (st.passportStep === 'naming') {
-    const parsed = parsePassportNamingAnswer(text);
-    if (parsed.names.length || parsed.selfIndex !== undefined) {
-      const firstFamily = parsed.names[0]?.realName;
-      const sc = findScenario('passport_complete_suggest_natural_search');
-      const done = adaptSearchGuideForMobile(
-        firstFamily && sc
-          ? renderPlaybookText(sc.response, { nickname, registered_family_name: firstFamily })
-          : `${nickname}님 본인 여권을 새겨뒀어요! 이제 왼쪽 두 번째 메뉴인 『👻 귀신검색』에서 직접 불러보는 마법을 따라 해볼까요?`
-      );
-      const viralAsk = firstFamily
-        ? `\n\n방금 찾아낸 『${firstFamily}』 사진들을 가족 카톡방에 로그인 없이 1초 만에 구경시켜 드릴까요?`
-        : '';
-      const warn = parsed.rejectedRelationTags.length
-        ? `\n(『${parsed.rejectedRelationTags.join('』, 『')}』처럼 관계로만 말씀하신 분은 진짜 이름을 알려주시면 여권을 찍어드릴게요!)`
-        : '';
-      return {
-        scenarioId: sc?.id || 'passport_self_only_done',
-        text: done + viralAsk + warn,
-        passportNaming: parsed,
-        passportViralFamilyName: firstFamily,
-        nextState: { ...st, passportStep: 'done' },
-      };
-    }
-    if (parsed.rejectedRelationTags.length) {
-      return {
-        scenarioId: 'passport_need_real_name',
-        text: `${nickname}님, 『${parsed.rejectedRelationTags.join('』, 『')}』 말고 진짜 여권처럼 실제 이름으로 알려주세요! (예: 2번은 홍길동, 3번은 김철수)`,
-        nextState: st,
-      };
-    }
   }
 
   // ⓪-2 모바일 옛날 사진 스캔 시점 선택 응답
@@ -1099,11 +1040,11 @@ export function resolveGhostSecretaryTurn(
       }
       const changedMsg =
         renderPlaybookText(findScenario('profile_change_nickname')?.response || '', { nickname: nick }) ||
-        `앗, 알겠어요! 앞으로는 『${nick}』님이라고 꼭 기억해서 불러드릴게요! 프로필과 🛂 귀신계 여권(나) 이름도 『${nick}』님으로 바로 바꿔뒀어요!`;
+        `앗, 알겠어요! 앞으로는 『${nick}』님이라고 꼭 기억해서 불러드릴게요! 프로필 별명도 『${nick}』님으로 바로 바꿔뒀어요!`;
       return {
         scenarioId: isFirstTime ? 'nickname_registered' : 'profile_change_nickname',
         text: isFirstTime
-          ? `${nick}님! 이름 예쁘네요, 평생 이렇게 불러드릴게요. 🛂 귀신계 여권(나)에도 새겨뒀어요!`
+          ? `${nick}님! 이름 예쁘네요, 평생 이렇게 불러드릴게요.`
           : changedMsg,
         nextState: { ...st, nickname: nick, awaitingNickname: false },
         needsColdReading: isFirstTime,
@@ -1127,10 +1068,10 @@ export function resolveGhostSecretaryTurn(
       return {
         scenarioId: isFirstTime ? 'nickname_registered' : sc?.id || 'profile_change_nickname',
         text: isFirstTime
-          ? `${newNick}님! 이름 예쁘네요, 평생 이렇게 불러드릴게요. 🛂 귀신계 여권(나)에도 새겨뒀어요!`
+          ? `${newNick}님! 이름 예쁘네요, 평생 이렇게 불러드릴게요.`
           : sc
           ? renderPlaybookText(sc.response, { nickname: newNick })
-          : `앗, 알겠어요! 앞으로는 『${newNick}』님이라고 꼭 기억해서 불러드릴게요! 프로필과 🛂 귀신계 여권(나) 이름도 『${newNick}』님으로 바로 바꿔뒀어요!`,
+          : `앗, 알겠어요! 앞으로는 『${newNick}』님이라고 꼭 기억해서 불러드릴게요! 프로필 별명도 『${newNick}』님으로 바로 바꿔뒀어요!`,
         nextState: { ...st, nickname: newNick, awaitingNickname: false },
         needsColdReading: isFirstTime,
       };
@@ -1150,7 +1091,7 @@ export function resolveGhostSecretaryTurn(
           scenarioId: sc?.id || 'profile_query_my_nickname',
           text: sc
             ? renderPlaybookText(sc.response, { nickname })
-            : `지금 제 마음속과 🛂 귀신계 여권(나)에는 『${nickname}』님으로 저장되어 있어요! 다른 이름으로 바꾸고 싶으시면 '은호라고 불러줘'처럼 언제든 말씀해 주세요!`,
+            : `지금 제 마음속에는 『${nickname}』님으로 저장되어 있어요! 다른 이름으로 바꾸고 싶으시면 '은호라고 불러줘'처럼 언제든 말씀해 주세요!`,
           nextState: st,
         };
       }
@@ -1228,42 +1169,7 @@ export function resolveGhostSecretaryTurn(
     };
   }
 
-  // ③-2 유저가 성별·나이대('여성 40대' 등)를 직접 말했을 때 여권 후보 단계로 즉시 진입
-  if (st.passportStep !== 'naming' && isPassportGenderAgeHint(text) && text.length <= 24) {
-    const sc = findScenario('passport_show_top_candidates_ask_real_name');
-    if (sc) {
-      return {
-        scenarioId: sc.id,
-        text: renderPlaybookText(sc.response, { nickname, cluster_count: ctx.passportClusterCount || 6 }),
-        nextState: { ...st, passportStep: 'naming' },
-      };
-    }
-  }
-
-  // ③-3 유저가 "1번은 나고, 2번은 홍길동..."처럼 여권 번호+실명을 직접 말했을 때 즉시 여권 등록
-  if (st.passportStep !== 'naming' && /\d+\s*번\s*(?:은|는|이|가)?/.test(text)) {
-    const parsedDirect = parsePassportNamingAnswer(text);
-    if (parsedDirect.names.length || parsedDirect.selfIndex !== undefined) {
-      const firstFamily = parsedDirect.names[0]?.realName;
-      const sc = findScenario('passport_complete_suggest_natural_search');
-      const done = adaptSearchGuideForMobile(
-        firstFamily && sc
-          ? renderPlaybookText(sc.response, { nickname, registered_family_name: firstFamily })
-          : `${nickname}님 본인 여권을 새겨뒀어요! 이제 왼쪽 두 번째 메뉴인 『👻 귀신검색』에서 직접 불러보는 마법을 따라 해볼까요?`
-      );
-      const viralAsk = firstFamily
-        ? `\n\n방금 찾아낸 『${firstFamily}』 사진들을 가족 카톡방에 로그인 없이 1초 만에 구경시켜 드릴까요?`
-        : '';
-      return {
-        scenarioId: sc?.id || 'passport_self_only_done',
-        text: done + viralAsk,
-        passportNaming: parsedDirect,
-        passportViralFamilyName: firstFamily,
-        nextState: { ...st, passportStep: 'done' },
-      };
-    }
-  }
-
+  // [D-35] 성별·나이대 문답 및 "1번은 나, 2번은 홍길동" 번호표 대화는 폐지 (여권은 왼쪽 등록 화면에서 탭으로 조용히 확인)
   // ④ 급한 유저 → 채팅으로 말 걸었을 때만 귀신검색 안내 (버튼 없음)
   if (isImpatientIntent(text)) {
     const sc = findScenario('impatient_user_wants_search_now');
@@ -1315,7 +1221,7 @@ export function resolveGhostSecretaryTurn(
           const iosFaqText =
             sc.id === 'faq_refund_and_cancel'
               ? '🍎 **아이폰(iOS)은 애플 보안 정책상 악성 청소앱이 자동 침투할 수 없으며, 정기구독 확인은 [아이폰 설정 > 내 이름(Apple 계정) > 구독]에서 안전하게 관리하실 수 있습니다.**'
-              : `${nickPrefix}아이폰 앱에서 쓰시는 **『👻 귀신비서(내 폰 사진 정리·귀신계 여권)』**, **『👻 귀신검색』**, **『📸 사진 공유』** 기능은 광고 없이 무료로 바로 이용하실 수 있어요! (아이폰 정기구독 확인은 **[아이폰 설정 > 내 이름(Apple 계정) > 구독]**에서 안전하게 관리하실 수 있습니다.)`;
+              : `${nickPrefix}아이폰 앱에서 쓰시는 **『👻 귀신비서(내 폰 사진 정리)』**, **『👻 귀신검색』**, **『📸 사진 공유』** 기능은 광고 없이 무료로 바로 이용하실 수 있어요! (아이폰 정기구독 확인은 **[아이폰 설정 > 내 이름(Apple 계정) > 구독]**에서 안전하게 관리하실 수 있습니다.)`;
           return {
             scenarioId: sc.id,
             text: iosFaqText,
@@ -1502,7 +1408,7 @@ export function buildWelcomeTurn(
   if (!st.nickname) {
     if (isMobileEnv) {
       return {
-        text: '반가워요! 저는 앞으로 내 폰 사진 1분 정리부터 말로 찾는 1초 검색, 귀신계 여권까지 다 챙겨드릴 전용 『👻 귀신비서』예요! 먼저 제가 앞으로 뭐라고 불러드리면 기분 좋으실까요? 편한 별명(닉네임) 하나만 알려주세요!',
+        text: '반가워요! 저는 앞으로 내 폰 사진 1분 정리부터 말로 찾는 1초 검색까지 다 챙겨드릴 전용 『👻 귀신비서』예요! 먼저 제가 앞으로 뭐라고 불러드리면 기분 좋으실까요? 편한 별명(닉네임) 하나만 알려주세요!',
         nextState: { ...st, awaitingNickname: true },
       };
     }
@@ -1512,12 +1418,12 @@ export function buildWelcomeTurn(
   const cleanNextState = st.awaitingNickname ? { ...st, awaitingNickname: false } : st;
   if (isMobileEnv) {
     return {
-      text: `${st.nickname}님, 다시 오셨네요! 내 폰 사진 정리, 1초 음성·글자 검색, 귀신계 여권까지 편하게 말씀해 주세요.`,
+      text: `${st.nickname}님, 다시 오셨네요! 내 폰 사진 정리, 1초 음성·글자 검색까지 편하게 말씀해 주세요.`,
       nextState: cleanNextState,
     };
   }
   return {
-    text: `${st.nickname}님, 다시 오셨네요! 컴퓨터·휴대폰 손보기, 복원, 귀신계 여권까지 편하게 말씀해 주세요.`,
+    text: `${st.nickname}님, 다시 오셨네요! 컴퓨터·휴대폰 손보기, 복원까지 편하게 말씀해 주세요.`,
     nextState: cleanNextState,
   };
 }
