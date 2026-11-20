@@ -1321,7 +1321,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               <div className="inline-flex flex-wrap items-center gap-2 px-3.5 py-1 rounded-full bg-amber-400/20 border border-amber-300/50 text-amber-200 text-xs sm:text-[13px] font-black">
                 <span>🏢 기업·사무실 전용 안내</span>
                 <span>·</span>
-                <span>소기업 5인·30GB 평생 0원 보증</span>
+                <span>인당 과금 0원 · 대표 1인 정액제 (월 9,900원~ · 30일 무료체험)</span>
               </div>
               <button
                 type="button"
@@ -1338,7 +1338,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   클라우드 월세 0원, 우리 팀 PC를 <span className="text-amber-300">공용 폴더(S: 드라이브)</span> 하나로
                 </h2>
                 <p className="text-sm sm:text-[15px] text-zinc-200 font-semibold leading-relaxed break-keep">
-                  비싼 서버나 클라우드 구독 없이 사내 문서·현장 사진을 공유 드라이브(S:) 하나로 묶어 1초 만에 찾고 씁니다. (소기업 5인·30GB 평생 0원 보증 · 추가 팀 월 9,900원~)
+                  비싼 서버나 클라우드 구독 없이 사내 문서·현장 사진을 공유 드라이브(S:) 하나로 묶어 1초 만에 찾고 씁니다. (🎁 30일 무료체험 · 소호 ~5인 월 9,900원~ / 인당 과금 0원)
                 </p>
                 <div className="flex flex-wrap gap-2 pt-1 text-xs font-extrabold text-teal-100">
                   <span className="px-3 py-1.5 rounded-xl bg-white/10 border border-white/15">🔒 종단간 암호화(E2EE) 및 퇴사자 권한 즉시 회수</span>
@@ -3667,7 +3667,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       style={{ backgroundColor: 'rgba(245, 158, 11, 0.2)', color: '#FDE68A' }}
                       className="px-2.5 py-0.5 rounded-full border border-amber-400/40 text-xs font-extrabold whitespace-nowrap"
                     >
-                      5인·30GB 평생 0원 보증
+                      🎁 30일 체험 · 월 9,900원~
                     </span>
                   </div>
                 </div>
@@ -3677,7 +3677,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <p className="text-[13px] text-zinc-100 font-semibold leading-relaxed break-keep">
                   비싼 서버나 클라우드 구독 없이 사내 문서·현장 사진을 공유 드라이브(S:) 하나로 묶어 1초 만에 찾고 씁니다.{' '}
                   <span style={{ color: '#FCD34D' }} className="font-bold">
-                    (소기업 5인·30GB 평생 0원 보증 · 추가 팀 월 9,900원~)
+                    (소호 ~5인 월 9,900원~ · 인당 과금 없는 대표 1인 정액제 · 30일 무료체험)
                   </span>
                 </p>
                 <details open={b2bFocused || undefined} className="pt-1 text-xs text-zinc-300">
@@ -3685,7 +3685,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     사내 공용 폴더(S: 드라이브) 도입 &amp; 팀 요금 안내 보기 ▾
                   </summary>
                   <p className="mt-2 leading-relaxed text-zinc-200 break-keep">
-                    NAS 장비 도입이나 인당 클라우드 월세 부담 없이 사무실 대표 PC 한 대를 사내 공용 폴더(S: 드라이브)로 종단간 암호화(E2EE) 연결해, 계약서·단가표·현장 시공 사진을 전 직원이 1초 만에 함께 찾고 활용합니다. 5인 이하·30GB 이하 민간 소기업은 평생 0원 보증서가 발급되며, 6인 이상·용량 확장 팀은 월 9,900원~ 정찰제로 운영됩니다.
+                    NAS 장비 도입이나 인당 클라우드 월세 부담 없이 사무실 대표 PC 한 대를 사내 공용 폴더(S: 드라이브)로 종단간 암호화(E2EE) 연결해, 계약서·단가표·현장 시공 사진을 전 직원이 1초 만에 함께 찾고 활용합니다. 카드 등록 없는 30일 무료체험 후 소호(~5인) 월 9,900원 / 소기업(~20인) 월 19,000원 / 중소기업(~50인) 월 29,000원 대표 1인 정찰제로 운영됩니다 (기본 1~4번 개인·사진공유는 회사 PC에서도 평생 0원 공식 보증서 발급).
                   </p>
                 </details>
               </div>

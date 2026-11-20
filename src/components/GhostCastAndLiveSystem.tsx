@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import {
   filterVisibleGalleryPhotos,
@@ -10,6 +10,14 @@ import {
   startDeviceIntegrationRealtimeRuntime,
   type RemoteMonitorCastPacket,
 } from '../services/deviceIntegrationService';
+import {
+  getOrCreateLiveSyncClientId,
+  startRoomLivePhotoSyncSession,
+  type LivePhotoSyncPacket,
+  type LivePhotoSyncPeerSummary,
+  type RoomLivePhotoSyncSession,
+} from '../services/roomLivePhotoSyncService';
+import { resolveAccountScopedNickname } from '../services/ghostSecretaryEngine';
 import type { PhotoItem, PricingPlanId } from '../types/saysee';
 
 export interface MonitorCastState {
@@ -24,15 +32,29 @@ export interface MonitorCastState {
 
 export interface RoomLivePhotoSyncState {
   active: boolean;
+  roomId: string;
   photoIndex: number;
+  totalPhotos: number;
+  photoId?: string;
+  photoName?: string;
+  remotePhotoThumbUrl?: string;
   zoom: number;
   rotation: number;
+  presenterClientId: string;
   presenterName: string;
+  seq: number;
   updatedAt: number;
 }
 
+interface PhotoSyncToolbarStatusDetail {
+  active: boolean;
+  isPresenter?: boolean;
+  presenterName?: string;
+  remoteOngoing?: boolean;
+  connectedCount?: number;
+}
+
 const CAST_STORAGE_KEY = 'ghosti_monitor_cast_state_v1';
-const PHOTO_SYNC_STORAGE_KEY = 'ghosti_room_photo_sync_state_v1';
 const BROADCAST_CHANNEL_NAME = 'ghosti_cast_live_bus_v1';
 
 export function dispatchGhostCastLiveCommand(detail: {
@@ -53,10 +75,12 @@ function broadcastCastLiveMessage(payload: Record<string, unknown>): void {
   try {
     if (payload.type === 'MONITOR_CAST_UPDATE' && payload.state) {
       localStorage.setItem(CAST_STORAGE_KEY, JSON.stringify(payload.state));
-    } else if (payload.type === 'PHOTO_SYNC_UPDATE' && payload.state) {
-      localStorage.setItem(PHOTO_SYNC_STORAGE_KEY, JSON.stringify(payload.state));
     }
   } catch {}
+}
+
+function dispatchPhotoSyncToolbarStatus(detail: PhotoSyncToolbarStatusDetail): void {
+  window.dispatchEvent(new CustomEvent('ghosti_photo_sync_status', { detail }));
 }
 
 /**
@@ -66,12 +90,16 @@ function broadcastCastLiveMessage(payload: Record<string, unknown>): void {
  */
 export const GhostCastLiveToolbar: React.FC<{ loungeLabel?: string }> = () => {
   const { activeLoungeType } = useSaySeeStore();
-  const [photoSyncActive, setPhotoSyncActive] = useState(false);
+  const [syncToolbarStatus, setSyncToolbarStatus] = useState<PhotoSyncToolbarStatusDetail>({
+    active: false,
+  });
 
   useEffect(() => {
     const onSyncState = (e: Event) => {
-      const ce = e as CustomEvent<{ active: boolean }>;
-      if (typeof ce.detail?.active === 'boolean') setPhotoSyncActive(ce.detail.active);
+      const ce = e as CustomEvent<PhotoSyncToolbarStatusDetail>;
+      if (typeof ce.detail?.active === 'boolean') {
+        setSyncToolbarStatus(ce.detail);
+      }
     };
     window.addEventListener('ghosti_photo_sync_status', onSyncState);
     return () => {
@@ -96,6 +124,15 @@ export const GhostCastLiveToolbar: React.FC<{ loungeLabel?: string }> = () => {
     );
   }
 
+  const photoSyncActive = syncToolbarStatus.active;
+  const syncButtonLabel = photoSyncActive
+    ? syncToolbarStatus.isPresenter
+      ? '📡 다 같이 보기 (싱크 ON · 리드 중)'
+      : '📡 다 같이 보기 (싱크 ON · 참여 중)'
+    : syncToolbarStatus.remoteOngoing
+    ? `📡 다 같이 보기 (${syncToolbarStatus.presenterName || '멤버'}님 진행 중 · 참여)`
+    : '📡 다 같이 보기';
+
   // 2) '사진 공유방(패밀리 / 동호회·동창회)'에서는 [💻 모니터로 크게 보기] + [📡 다 같이 보기] 버튼만 깔끔하게 노출
   return (
     <div className="w-full flex flex-wrap items-center justify-end gap-1.5">
@@ -113,10 +150,12 @@ export const GhostCastLiveToolbar: React.FC<{ loungeLabel?: string }> = () => {
         className={`px-3 py-1 rounded-xl border text-[11.5px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
           photoSyncActive
             ? 'bg-emerald-400 text-zinc-950 border-emerald-300'
+            : syncToolbarStatus.remoteOngoing
+            ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-400 text-emerald-200'
             : 'bg-zinc-900 hover:bg-zinc-800 border-emerald-400/40 text-emerald-300'
         }`}
       >
-        <span>📡 다 같이 보기 {photoSyncActive ? '(싱크 ON)' : ''}</span>
+        <span>{syncButtonLabel}</span>
       </button>
     </div>
   );
@@ -178,15 +217,108 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     senderDevice: '내 스마트폰 리모컨',
   });
 
-  // 2) 무기 2: 다 같이 사진 보기 (앨범 라이브 싱크) 상태
+  // 2) 무기 2: 다 같이 사진 보기 (앨범 라이브 싱크) — 공용 Supabase Realtime 단일 SSOT 상태
+  const mySyncClientId = useMemo(() => getOrCreateLiveSyncClientId(), []);
+  const effectiveLiveSyncRoomId = useMemo(() => {
+    if (activeLoungeType === 'personal' || activeLoungeType === 'work') return '';
+    const explicit = (activeJoinedRoomMeta?.roomId || activeSharedRoomId || '').trim();
+    if (explicit) return explicit;
+    const fromPhotos = activePhotos
+      .find((p) => (p.sharedRoomId || '').trim())
+      ?.sharedRoomId?.trim();
+    return fromPhotos || '';
+  }, [activeLoungeType, activeJoinedRoomMeta?.roomId, activeSharedRoomId, activePhotos]);
+
+  const mySyncDisplayName = useMemo(() => {
+    const email = (merlinAuth?.email || '').trim().toLowerCase();
+    const emailPrefix = email.split('@')[0]?.trim() || '';
+    const isLoggedIn = Boolean(emailPrefix && merlinAuth?.userId && merlinAuth.userId !== 'guest');
+    if (isLoggedIn) {
+      const scopedNick = resolveAccountScopedNickname(email, '').trim();
+      if (scopedNick && scopedNick !== '게스트' && scopedNick !== '방장') {
+        return scopedNick;
+      }
+      return emailPrefix;
+    }
+    return activeJoinedRoomMeta ? '초대 게스트' : '게스트';
+  }, [merlinAuth?.email, merlinAuth?.userId, activeJoinedRoomMeta]);
+
   const [photoSyncState, setPhotoSyncState] = useState<RoomLivePhotoSyncState>({
     active: false,
+    roomId: '',
     photoIndex: 0,
+    totalPhotos: 0,
     zoom: 1,
     rotation: 0,
-    presenterName: merlinAuth?.email ? merlinAuth.email.split('@')[0] : '방장(나)',
-    updatedAt: Date.now(),
+    presenterClientId: '',
+    presenterName: '',
+    seq: 0,
+    updatedAt: 0,
   });
+  const [remoteOngoingSession, setRemoteOngoingSession] = useState<LivePhotoSyncPacket | null>(
+    null
+  );
+  const [liveSyncPeers, setLiveSyncPeers] = useState<LivePhotoSyncPeerSummary>({
+    connectedCount: 1,
+    peerNames: [],
+    channelStatus: 'connecting',
+  });
+
+  const liveSyncSessionRef = useRef<RoomLivePhotoSyncSession | null>(null);
+  const syncSeqRef = useRef<number>(0);
+  const photoSyncStateRef = useRef<RoomLivePhotoSyncState>(photoSyncState);
+  photoSyncStateRef.current = photoSyncState;
+  const mySyncDisplayNameRef = useRef<string>(mySyncDisplayName);
+  mySyncDisplayNameRef.current = mySyncDisplayName;
+  const activePhotosRef = useRef<PhotoItem[]>(activePhotos);
+  activePhotosRef.current = activePhotos;
+  const remoteOngoingRef = useRef<LivePhotoSyncPacket | null>(remoteOngoingSession);
+  remoteOngoingRef.current = remoteOngoingSession;
+  const pendingPublishAfterRoomIdRef = useRef<boolean>(false);
+
+  const buildPhotoSyncPacketFromState = (
+    st: RoomLivePhotoSyncState,
+    roomId: string,
+    targetPhoto?: PhotoItem | null
+  ): LivePhotoSyncPacket => {
+    const list = activePhotosRef.current;
+    const p = targetPhoto || list[st.photoIndex] || list[0] || null;
+    const rawThumb = (p?.thumbUrl || p?.fullUrl || '').trim();
+    const thumb =
+      rawThumb && rawThumb.startsWith('data:image/') && rawThumb.length <= 96000
+        ? rawThumb
+        : rawThumb && rawThumb.startsWith('https://')
+        ? rawThumb
+        : undefined;
+    return {
+      roomId,
+      active: st.active,
+      photoIndex: st.photoIndex,
+      totalPhotos: Math.max(list.length, st.totalPhotos || 0),
+      photoId: st.photoId || p?.id,
+      photoName: st.photoName || p?.name,
+      photoThumbUrl: thumb,
+      zoom: st.zoom || 1,
+      rotation: st.rotation || 0,
+      presenterClientId: st.presenterClientId || mySyncClientId,
+      presenterName: st.presenterName || mySyncDisplayNameRef.current || '멤버',
+      seq: st.seq || ++syncSeqRef.current,
+      updatedAt: st.updatedAt || Date.now(),
+    };
+  };
+
+  const publishLivePhotoSyncState = (next: RoomLivePhotoSyncState, targetPhoto?: PhotoItem | null) => {
+    const rid = (next.roomId || effectiveLiveSyncRoomId || '').trim();
+    if (!rid || !liveSyncSessionRef.current) {
+      if (next.active) {
+        pendingPublishAfterRoomIdRef.current = true;
+      }
+      return;
+    }
+    pendingPublishAfterRoomIdRef.current = false;
+    const pkt = buildPhotoSyncPacketFromState(next, rid, targetPhoto);
+    liveSyncSessionRef.current.sendState(pkt);
+  };
 
   const emitRemoteCastPacket = (nextState: MonitorCastState, targetPhoto?: PhotoItem | null) => {
     const p = targetPhoto || activePhotos[nextState.photoIndex] || activePhotos[0] || null;
@@ -306,7 +438,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     return () => clearInterval(timer);
   }, [monitorCastOpen, castState.isPlaying, activePhotos.length]);
 
-  // BroadcastChannel & Storage 이벤트 수신 (같은 이메일로 열린 다른 탭/창과 0.05초 실시간 연동)
+  // BroadcastChannel & Storage 이벤트 수신 (모니터 캐스트 동일 브라우저 멀티탭 즉시 연동)
   useEffect(() => {
     let ch: BroadcastChannel | null = null;
     try {
@@ -319,12 +451,6 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
             setCastState(st);
             if (st.active) setMonitorCastOpen(true);
             else setMonitorCastOpen(false);
-          } else if (data?.type === 'PHOTO_SYNC_UPDATE' && data.state) {
-            const st = data.state as RoomLivePhotoSyncState;
-            setPhotoSyncState(st);
-            window.dispatchEvent(
-              new CustomEvent('ghosti_photo_sync_status', { detail: { active: st.active } })
-            );
           }
         };
       }
@@ -336,12 +462,6 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
           const st = JSON.parse(e.newValue) as MonitorCastState;
           setCastState(st);
           setMonitorCastOpen(st.active);
-        } else if (e.key === PHOTO_SYNC_STORAGE_KEY && e.newValue) {
-          const st = JSON.parse(e.newValue) as RoomLivePhotoSyncState;
-          setPhotoSyncState(st);
-          window.dispatchEvent(
-            new CustomEvent('ghosti_photo_sync_status', { detail: { active: st.active } })
-          );
         }
       } catch {}
     };
@@ -353,10 +473,185 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     };
   }, []);
 
+  // [단일 SSOT 실시간 앨범 라이브 싱크]: 현재 열려 있는 사진 공유방(effectiveLiveSyncRoomId)의
+  // 모든 참여자(방장 · 초대받은 타 계정 · 비로그인 초대 링크 게스트 · 모바일 앱)를 Supabase Realtime으로 직결
+  useEffect(() => {
+    if (!effectiveLiveSyncRoomId) {
+      liveSyncSessionRef.current = null;
+      setRemoteOngoingSession(null);
+      setLiveSyncPeers({ connectedCount: 1, peerNames: [], channelStatus: 'connecting' });
+      return undefined;
+    }
+
+    const session = startRoomLivePhotoSyncSession({
+      roomId: effectiveLiveSyncRoomId,
+      clientId: mySyncClientId,
+      getSelfName: () => mySyncDisplayNameRef.current || '멤버',
+      getActivePresenterSnapshot: () => {
+        const cur = photoSyncStateRef.current;
+        if (
+          cur.active &&
+          cur.presenterClientId === mySyncClientId &&
+          (!cur.roomId || cur.roomId === effectiveLiveSyncRoomId)
+        ) {
+          return buildPhotoSyncPacketFromState(cur, effectiveLiveSyncRoomId);
+        }
+        return null;
+      },
+      onPeersChanged: (summary) => {
+        setLiveSyncPeers(summary);
+      },
+      onRemoteSyncState: (pkt) => {
+        if (pkt.roomId !== effectiveLiveSyncRoomId) return;
+        const cur = photoSyncStateRef.current;
+
+        if (!pkt.active) {
+          setRemoteOngoingSession((prev) =>
+            prev?.presenterClientId === pkt.presenterClientId ? null : prev
+          );
+          if (cur.active && cur.presenterClientId === pkt.presenterClientId) {
+            setPhotoSyncState((prev) => ({
+              ...prev,
+              active: false,
+              updatedAt: pkt.updatedAt || Date.now(),
+            }));
+            showToast(`📡 ${pkt.presenterName}님이 다 같이 보기를 종료했습니다.`);
+          }
+          return;
+        }
+
+        if (
+          cur.active &&
+          cur.roomId === effectiveLiveSyncRoomId &&
+          cur.presenterClientId === mySyncClientId &&
+          cur.updatedAt > pkt.updatedAt
+        ) {
+          liveSyncSessionRef.current?.sendState(
+            buildPhotoSyncPacketFromState(cur, effectiveLiveSyncRoomId)
+          );
+          return;
+        }
+        if (
+          cur.active &&
+          cur.roomId === effectiveLiveSyncRoomId &&
+          cur.presenterClientId === mySyncClientId &&
+          cur.updatedAt === pkt.updatedAt &&
+          mySyncClientId < pkt.presenterClientId
+        ) {
+          return;
+        }
+
+        const list = activePhotosRef.current;
+        let matchedIdx = pkt.photoIndex;
+        if (pkt.photoId) {
+          const byId = list.findIndex((p) => p.id === pkt.photoId);
+          if (byId >= 0) matchedIdx = byId;
+        } else if (pkt.photoName) {
+          const byName = list.findIndex((p) => p.name === pkt.photoName);
+          if (byName >= 0) matchedIdx = byName;
+        }
+        if (list.length > 0) {
+          matchedIdx = Math.min(Math.max(0, matchedIdx), list.length - 1);
+        } else {
+          matchedIdx = Math.max(0, pkt.photoIndex || 0);
+        }
+
+        setRemoteOngoingSession(pkt);
+        const wasInactive = !cur.active;
+        const nextState: RoomLivePhotoSyncState = {
+          active: true,
+          roomId: effectiveLiveSyncRoomId,
+          photoIndex: matchedIdx,
+          totalPhotos: Math.max(list.length, pkt.totalPhotos || 0),
+          photoId: pkt.photoId,
+          photoName: pkt.photoName,
+          remotePhotoThumbUrl: pkt.photoThumbUrl,
+          zoom: pkt.zoom || 1,
+          rotation: pkt.rotation || 0,
+          presenterClientId: pkt.presenterClientId,
+          presenterName: pkt.presenterName || '멤버',
+          seq: pkt.seq || 0,
+          updatedAt: pkt.updatedAt || Date.now(),
+        };
+        setPhotoSyncState(nextState);
+        if (wasInactive) {
+          showToast(`📡 ${nextState.presenterName}님이 [다 같이 보기]를 시작해 화면이 자동 동기화되었습니다!`);
+        }
+      },
+    });
+
+    liveSyncSessionRef.current = session;
+
+    if (
+      pendingPublishAfterRoomIdRef.current &&
+      photoSyncStateRef.current.active &&
+      photoSyncStateRef.current.presenterClientId === mySyncClientId
+    ) {
+      pendingPublishAfterRoomIdRef.current = false;
+      const updated = { ...photoSyncStateRef.current, roomId: effectiveLiveSyncRoomId };
+      setPhotoSyncState(updated);
+      session.sendState(buildPhotoSyncPacketFromState(updated, effectiveLiveSyncRoomId));
+    }
+
+    return () => {
+      const cur = photoSyncStateRef.current;
+      if (
+        cur.active &&
+        cur.presenterClientId === mySyncClientId &&
+        cur.roomId === effectiveLiveSyncRoomId
+      ) {
+        session.sendState(
+          buildPhotoSyncPacketFromState({ ...cur, active: false, updatedAt: Date.now() }, effectiveLiveSyncRoomId)
+        );
+      }
+      session.stop();
+      if (liveSyncSessionRef.current === session) {
+        liveSyncSessionRef.current = null;
+      }
+    };
+  }, [effectiveLiveSyncRoomId, mySyncClientId, showToast]);
+
+  // 툴바 상단 [📡 다 같이 보기] 버튼 상태 실시간 동기화
+  useEffect(() => {
+    const isPresenter =
+      photoSyncState.active && photoSyncState.presenterClientId === mySyncClientId;
+    const remoteOngoing = Boolean(
+      !photoSyncState.active &&
+        remoteOngoingSession?.active &&
+        remoteOngoingSession.roomId === effectiveLiveSyncRoomId
+    );
+    dispatchPhotoSyncToolbarStatus({
+      active: photoSyncState.active,
+      isPresenter,
+      presenterName: photoSyncState.active
+        ? photoSyncState.presenterName
+        : remoteOngoingSession?.presenterName,
+      remoteOngoing,
+      connectedCount: liveSyncPeers.connectedCount,
+    });
+  }, [
+    photoSyncState.active,
+    photoSyncState.presenterClientId,
+    photoSyncState.presenterName,
+    remoteOngoingSession,
+    effectiveLiveSyncRoomId,
+    mySyncClientId,
+    liveSyncPeers.connectedCount,
+  ]);
+
   // 방 전환 시 캐스트/라이브 싱크 인덱스를 안전하게 초기화하고 사진 개수 축소 시 범위 초과를 방지
   useEffect(() => {
     setCastState((prev) => ({ ...prev, photoIndex: 0, zoom: 1, rotation: 0 }));
-    setPhotoSyncState((prev) => ({ ...prev, photoIndex: 0, zoom: 1, rotation: 0 }));
+    setRemoteOngoingSession(null);
+    setPhotoSyncState((prev) => ({
+      ...prev,
+      active: false,
+      roomId: effectiveLiveSyncRoomId,
+      photoIndex: 0,
+      zoom: 1,
+      rotation: 0,
+      remotePhotoThumbUrl: undefined,
+    }));
   }, [activeLoungeType, activeFamilyRoom, activeSharedRoomId]);
 
   useEffect(() => {
@@ -414,37 +709,81 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
         broadcastCastLiveMessage({ type: 'MONITOR_CAST_UPDATE', state: next });
         emitRemoteCastPacket(next, null);
       } else if (d.action === 'TOGGLE_PHOTO_SYNC') {
-        setPhotoSyncState((prev) => {
-          const nextActive = !prev.active;
-          if (nextActive && activePhotos.length === 0) {
-            showToast('📸 현재 공유방에 다 같이 볼 사진이 아직 없습니다. 먼저 사진을 추가해 주세요.');
-            window.dispatchEvent(
-              new CustomEvent('ghosti_photo_sync_status', { detail: { active: false } })
-            );
-            return { ...prev, active: false };
+        const prev = photoSyncStateRef.current;
+        if (!prev.active) {
+          const ongoing = remoteOngoingRef.current;
+          if (ongoing && ongoing.active && ongoing.roomId === effectiveLiveSyncRoomId) {
+            const byId = ongoing.photoId
+              ? activePhotos.findIndex((p) => p.id === ongoing.photoId)
+              : -1;
+            const joinedIdx =
+              byId >= 0
+                ? byId
+                : Math.min(Math.max(0, ongoing.photoIndex), Math.max(0, activePhotos.length - 1));
+            setPhotoSyncState({
+              active: true,
+              roomId: effectiveLiveSyncRoomId,
+              photoIndex: joinedIdx,
+              totalPhotos: Math.max(activePhotos.length, ongoing.totalPhotos || 0),
+              photoId: ongoing.photoId,
+              photoName: ongoing.photoName,
+              remotePhotoThumbUrl: ongoing.photoThumbUrl,
+              zoom: ongoing.zoom || 1,
+              rotation: ongoing.rotation || 0,
+              presenterClientId: ongoing.presenterClientId,
+              presenterName: ongoing.presenterName,
+              seq: ongoing.seq || 0,
+              updatedAt: ongoing.updatedAt || Date.now(),
+            });
+            liveSyncSessionRef.current?.requestCurrentState();
+            return;
           }
-          const safeNextIdx =
-            nextActive && prev.photoIndex >= activePhotos.length ? 0 : prev.photoIndex;
+
+          if (activePhotos.length === 0) {
+            showToast('📸 현재 공유방에 다 같이 볼 사진이 아직 없습니다. 먼저 사진을 추가해 주세요.');
+            return;
+          }
+          const safeNextIdx = prev.photoIndex >= activePhotos.length ? 0 : prev.photoIndex;
+          const targetPhoto = activePhotos[safeNextIdx] || activePhotos[0];
           const next: RoomLivePhotoSyncState = {
-            ...prev,
-            active: nextActive,
+            active: true,
+            roomId: effectiveLiveSyncRoomId,
             photoIndex: safeNextIdx,
-            zoom: nextActive ? 1 : prev.zoom,
-            rotation: nextActive ? 0 : prev.rotation,
+            totalPhotos: activePhotos.length,
+            photoId: targetPhoto?.id,
+            photoName: targetPhoto?.name,
+            remotePhotoThumbUrl: undefined,
+            zoom: 1,
+            rotation: 0,
+            presenterClientId: mySyncClientId,
+            presenterName: mySyncDisplayNameRef.current || '멤버',
+            seq: ++syncSeqRef.current,
             updatedAt: Date.now(),
           };
-          broadcastCastLiveMessage({ type: 'PHOTO_SYNC_UPDATE', state: next });
-          window.dispatchEvent(
-            new CustomEvent('ghosti_photo_sync_status', { detail: { active: nextActive } })
-          );
-          return next;
-        });
+          setRemoteOngoingSession(null);
+          setPhotoSyncState(next);
+          publishLivePhotoSyncState(next, targetPhoto);
+        } else {
+          const isPresenter = prev.presenterClientId === mySyncClientId;
+          const next: RoomLivePhotoSyncState = {
+            ...prev,
+            active: false,
+            updatedAt: Date.now(),
+          };
+          setPhotoSyncState(next);
+          if (isPresenter) {
+            setRemoteOngoingSession(null);
+            publishLivePhotoSyncState(next, null);
+          } else {
+            showToast('📡 다 같이 보기 참여를 잠시 닫았습니다. 상단 버튼으로 언제든 다시 합류할 수 있어요.');
+          }
+        }
       }
     };
 
     window.addEventListener('ghosti_cast_live_command', onCommand);
     return () => window.removeEventListener('ghosti_cast_live_command', onCommand);
-  }, [activePhotos, castState, showToast]);
+  }, [activePhotos, castState, effectiveLiveSyncRoomId, mySyncClientId, showToast]);
 
   const updateCastState = (patch: Partial<MonitorCastState>) => {
     setCastState((prev) => {
@@ -460,32 +799,125 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     });
   };
 
-  const updatePhotoSync = (patch: Partial<RoomLivePhotoSyncState>) => {
-    setPhotoSyncState((prev) => {
-      const next = { ...prev, ...patch, updatedAt: Date.now() };
-      broadcastCastLiveMessage({ type: 'PHOTO_SYNC_UPDATE', state: next });
-      if (typeof patch.active === 'boolean') {
-        window.dispatchEvent(
-          new CustomEvent('ghosti_photo_sync_status', { detail: { active: patch.active } })
-        );
-      }
-      return next;
-    });
+  const updatePhotoSync = (
+    patch: Partial<RoomLivePhotoSyncState>,
+    opts?: { takeLead?: boolean }
+  ) => {
+    const prev = photoSyncStateRef.current;
+    const isCurrentlyPresenter = prev.presenterClientId === mySyncClientId;
+
+    if (patch.active === false && !isCurrentlyPresenter) {
+      setPhotoSyncState({ ...prev, active: false, updatedAt: Date.now() });
+      showToast('📡 다 같이 보기 참여를 닫았습니다. 발표자가 계속 진행 중이면 상단 버튼으로 다시 합류할 수 있어요.');
+      return;
+    }
+
+    const nextIdx =
+      patch.photoIndex !== undefined ? patch.photoIndex : prev.photoIndex;
+    const effectiveTotal = Math.max(activePhotos.length, prev.totalPhotos || 0);
+    const clampedIdx =
+      activePhotos.length > 0
+        ? Math.min(Math.max(0, nextIdx), activePhotos.length - 1)
+        : effectiveTotal > 0
+        ? Math.min(Math.max(0, nextIdx), effectiveTotal - 1)
+        : 0;
+    const targetPhoto = activePhotos[clampedIdx] || null;
+    const shouldTakeLead =
+      opts?.takeLead === true ||
+      patch.photoIndex !== undefined ||
+      patch.zoom !== undefined ||
+      patch.rotation !== undefined ||
+      !prev.presenterClientId;
+    const indexChangedWithoutLocalPhoto = patch.photoIndex !== undefined && !targetPhoto;
+
+    const next: RoomLivePhotoSyncState = {
+      ...prev,
+      ...patch,
+      roomId: effectiveLiveSyncRoomId || prev.roomId,
+      photoIndex: clampedIdx,
+      totalPhotos: Math.max(activePhotos.length, prev.totalPhotos || 0),
+      photoId: indexChangedWithoutLocalPhoto ? undefined : targetPhoto?.id ?? prev.photoId,
+      photoName: indexChangedWithoutLocalPhoto ? undefined : targetPhoto?.name ?? prev.photoName,
+      remotePhotoThumbUrl:
+        shouldTakeLead || indexChangedWithoutLocalPhoto ? undefined : prev.remotePhotoThumbUrl,
+      presenterClientId: shouldTakeLead ? mySyncClientId : prev.presenterClientId,
+      presenterName: shouldTakeLead
+        ? mySyncDisplayNameRef.current || '멤버'
+        : prev.presenterName,
+      seq: ++syncSeqRef.current,
+      updatedAt: Date.now(),
+    };
+
+    if (next.active === false || shouldTakeLead) {
+      setRemoteOngoingSession(null);
+    }
+    setPhotoSyncState(next);
+    publishLivePhotoSyncState(next, targetPhoto);
   };
 
   const safeCastIdx =
     activePhotos.length > 0
       ? Math.min(Math.max(0, castState.photoIndex), activePhotos.length - 1)
       : 0;
-  const safeSyncIdx =
-    activePhotos.length > 0
-      ? Math.min(Math.max(0, photoSyncState.photoIndex), activePhotos.length - 1)
-      : 0;
+  const isLiveSyncPresenter =
+    photoSyncState.active && photoSyncState.presenterClientId === mySyncClientId;
+  const matchedLocalSyncIdx = useMemo(() => {
+    if (activePhotos.length === 0) return 0;
+    if (photoSyncState.photoId) {
+      const byId = activePhotos.findIndex((p) => p.id === photoSyncState.photoId);
+      if (byId >= 0) return byId;
+    }
+    if (photoSyncState.photoName) {
+      const byName = activePhotos.findIndex((p) => p.name === photoSyncState.photoName);
+      if (byName >= 0) return byName;
+    }
+    return Math.min(Math.max(0, photoSyncState.photoIndex), activePhotos.length - 1);
+  }, [activePhotos, photoSyncState.photoId, photoSyncState.photoName, photoSyncState.photoIndex]);
 
+  const safeSyncIdx = matchedLocalSyncIdx;
   const currentCastPhoto =
     remoteCastPhotoOverride || activePhotos[safeCastIdx] || activePhotos[0] || null;
-  const currentSyncPhoto =
-    activePhotos[safeSyncIdx] || activePhotos[0] || null;
+  const currentSyncPhoto: PhotoItem | null = useMemo(() => {
+    const exactById =
+      photoSyncState.photoId && activePhotos.find((p) => p.id === photoSyncState.photoId);
+    if (exactById) return exactById;
+    const exactByName =
+      photoSyncState.photoName && activePhotos.find((p) => p.name === photoSyncState.photoName);
+    if (exactByName) return exactByName;
+    if (!isLiveSyncPresenter && photoSyncState.remotePhotoThumbUrl) {
+      return {
+        id: photoSyncState.photoId || 'remote-live-sync-photo',
+        name: photoSyncState.photoName || '공유방 사진',
+        size: 13000,
+        date: '실시간 싱크',
+        mtimeMs: photoSyncState.updatedAt || Date.now(),
+        locationKo: roomDisplayTitleFallback(activeJoinedRoomMeta, activeLoungeType, activeFamilyRoom),
+        tags: ['다 같이 보기'],
+        captionKo: '',
+        thumbUrl: photoSyncState.remotePhotoThumbUrl,
+        fullUrl: photoSyncState.remotePhotoThumbUrl,
+        bookmarked: false,
+        quarantined: false,
+      };
+    }
+    return activePhotos[safeSyncIdx] || activePhotos[0] || null;
+  }, [
+    photoSyncState.photoId,
+    photoSyncState.photoName,
+    photoSyncState.remotePhotoThumbUrl,
+    photoSyncState.updatedAt,
+    isLiveSyncPresenter,
+    activePhotos,
+    safeSyncIdx,
+    activeJoinedRoomMeta,
+    activeLoungeType,
+    activeFamilyRoom,
+  ]);
+  const displaySyncTotal = Math.max(activePhotos.length, photoSyncState.totalPhotos || 0, 1);
+  const displaySyncPosition = Math.min(
+    displaySyncTotal,
+    (isLiveSyncPresenter ? safeSyncIdx : photoSyncState.photoIndex) + 1
+  );
 
   const roomDisplayTitle = activeJoinedRoomMeta
     ? `💌 ${activeJoinedRoomMeta.masterNickname} · ${activeJoinedRoomMeta.roomTitle}`
@@ -753,8 +1185,11 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
       {/* ====================================================================
           무기 2: [📡 다 같이 사진 보기 — 앨범 라이브 싱크 (Live Photo Sync)] 플로팅 컨트롤러
       ==================================================================== */}
-      {photoSyncState.active && currentSyncPhoto && (
-        <div className="fixed bottom-20 sm:bottom-6 mb-safe left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-6 z-[135] w-[94%] max-w-md rounded-3xl bg-zinc-950/95 backdrop-blur-2xl border-2 border-emerald-400 shadow-[0_0_50px_rgba(16,185,129,0.4)] p-4 flex flex-col gap-3 text-white">
+      {photoSyncState.active && (
+        <div
+          data-testid="live-photo-sync-overlay"
+          className="fixed bottom-20 sm:bottom-6 mb-safe left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-6 z-[135] w-[94%] max-w-md rounded-3xl bg-zinc-950/95 backdrop-blur-2xl border-2 border-emerald-400 shadow-[0_0_50px_rgba(16,185,129,0.4)] p-4 flex flex-col gap-3 text-white"
+        >
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2.5">
             <div className="flex items-center gap-2 min-w-0">
               <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
@@ -762,39 +1197,73 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                 📡 다 같이 보기 (앨범 라이브 싱크 ON)
               </span>
             </div>
-            <button
-              type="button"
-              onClick={() => updatePhotoSync({ active: false })}
-              className="px-2.5 py-1 rounded-full bg-zinc-800 hover:bg-zinc-700 text-[11px] text-zinc-300 font-bold shrink-0 cursor-pointer"
-            >
-              싱크 끄기 ✕
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <span
+                data-testid="live-sync-peer-badge"
+                className={`px-2 py-0.5 rounded-full text-[10.5px] font-extrabold border ${
+                  liveSyncPeers.connectedCount >= 2
+                    ? 'bg-emerald-500/20 border-emerald-400/60 text-emerald-200'
+                    : liveSyncPeers.channelStatus === 'connected'
+                    ? 'bg-amber-500/20 border-amber-400/50 text-amber-200'
+                    : 'bg-zinc-800 border-white/15 text-zinc-300'
+                }`}
+              >
+                {liveSyncPeers.connectedCount >= 2
+                  ? `🟢 ${liveSyncPeers.connectedCount}명 실시간 연결`
+                  : liveSyncPeers.channelStatus === 'connected'
+                  ? '🟡 1명 · 멤버 대기'
+                  : '🔄 연결 중...'}
+              </span>
+              <button
+                type="button"
+                onClick={() => updatePhotoSync({ active: false })}
+                className="px-2.5 py-1 rounded-full bg-zinc-800 hover:bg-zinc-700 text-[11px] text-zinc-300 font-bold shrink-0 cursor-pointer"
+              >
+                {isLiveSyncPresenter ? '싱크 끄기 ✕' : '나만 닫기 ✕'}
+              </button>
+            </div>
           </div>
 
           <div className="flex items-center gap-3">
             <div className="w-20 h-20 rounded-xl overflow-hidden border border-emerald-400/50 shrink-0 bg-black flex items-center justify-center">
-              <img
-                src={currentSyncPhoto.thumbUrl || currentSyncPhoto.fullUrl}
-                alt={currentSyncPhoto.name}
-                style={{
-                  transform: `scale(${photoSyncState.zoom}) rotate(${photoSyncState.rotation}deg)`,
-                  transition: 'transform 180ms cubic-bezier(0.22, 1, 0.36, 1)',
-                }}
-                className="w-full h-full object-cover select-none"
-              />
+              {currentSyncPhoto && (currentSyncPhoto.thumbUrl || currentSyncPhoto.fullUrl) ? (
+                <img
+                  src={currentSyncPhoto.thumbUrl || currentSyncPhoto.fullUrl}
+                  alt={currentSyncPhoto.name}
+                  style={{
+                    transform: `scale(${photoSyncState.zoom}) rotate(${photoSyncState.rotation}deg)`,
+                    transition: 'transform 180ms cubic-bezier(0.22, 1, 0.36, 1)',
+                  }}
+                  className="w-full h-full object-cover select-none"
+                />
+              ) : (
+                <span className="text-[11px] text-emerald-300 font-bold text-center px-1">
+                  📸 동기화 중
+                </span>
+              )}
             </div>
             <div className="min-w-0 flex-1">
-              <div className="text-xs font-extrabold text-emerald-200 truncate">
-                👑 {photoSyncState.presenterName}님이 화면을 리드하는 중
+              <div
+                data-testid="live-sync-role-label"
+                className="text-xs font-extrabold text-emerald-200 truncate"
+              >
+                {isLiveSyncPresenter
+                  ? `👑 ${mySyncDisplayName}(나)님이 화면을 리드하는 중`
+                  : `👀 ${photoSyncState.presenterName}님의 화면을 함께 보는 중`}
               </div>
               <div className="text-sm font-black text-white truncate mt-0.5">
-                {currentSyncPhoto.name} ({safeSyncIdx + 1}/{activePhotos.length})
+                {currentSyncPhoto?.name || photoSyncState.photoName || '공유방 사진'} ({displaySyncPosition}/{displaySyncTotal})
               </div>
-              <div className="text-[11px] font-bold text-emerald-300 mt-0.5">
-                사진 {safeSyncIdx + 1} / {activePhotos.length} · 배율 {photoSyncState.zoom.toFixed(1)}x
+              <div
+                data-testid="live-sync-status-line"
+                className="text-[11px] font-bold text-emerald-300 mt-0.5"
+              >
+                사진 {displaySyncPosition} / {displaySyncTotal} · 배율 {photoSyncState.zoom.toFixed(1)}x
               </div>
               <div className="text-[11px] text-zinc-400 mt-0.5">
-                내가 넘기거나 확대하면 {roomDisplayTitle} 멤버 전원 화면이 0.1초 만에 똑같이 넘어갑니다.
+                {isLiveSyncPresenter
+                  ? `내가 넘기거나 확대하면 ${roomDisplayTitle} 멤버 전원 화면이 0.1초 만에 똑같이 넘어갑니다.`
+                  : `${photoSyncState.presenterName}님이 넘기거나 확대하면 내 화면도 0.1초 만에 똑같이 따라갑니다.`}
               </div>
             </div>
           </div>
@@ -802,27 +1271,32 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5">
             <button
               type="button"
-              onClick={() =>
-                updatePhotoSync({
-                  photoIndex:
-                    (safeSyncIdx - 1 + activePhotos.length) %
-                    Math.max(1, activePhotos.length),
-                  zoom: 1,
-                })
-              }
+              onClick={() => {
+                const curPos = activePhotos.length > 0 ? safeSyncIdx : photoSyncState.photoIndex;
+                updatePhotoSync(
+                  {
+                    photoIndex: (curPos - 1 + displaySyncTotal) % displaySyncTotal,
+                    zoom: 1,
+                  },
+                  { takeLead: true }
+                );
+              }}
               className="py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-xs font-extrabold cursor-pointer"
             >
               ◀ 이전
             </button>
             <button
               type="button"
-              onClick={() =>
-                updatePhotoSync({
-                  photoIndex:
-                    (safeSyncIdx + 1) % Math.max(1, activePhotos.length),
-                  zoom: 1,
-                })
-              }
+              onClick={() => {
+                const curPos = activePhotos.length > 0 ? safeSyncIdx : photoSyncState.photoIndex;
+                updatePhotoSync(
+                  {
+                    photoIndex: (curPos + 1) % displaySyncTotal,
+                    zoom: 1,
+                  },
+                  { takeLead: true }
+                );
+              }}
               className="py-2 rounded-xl bg-emerald-500/25 hover:bg-emerald-500/35 border border-emerald-400/60 text-emerald-200 text-xs font-extrabold cursor-pointer"
             >
               다음 ▶
@@ -830,9 +1304,12 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
             <button
               type="button"
               onClick={() =>
-                updatePhotoSync({
-                  zoom: photoSyncState.zoom >= 2 ? 1 : 2,
-                })
+                updatePhotoSync(
+                  {
+                    zoom: photoSyncState.zoom >= 2 ? 1 : 2,
+                  },
+                  { takeLead: true }
+                )
               }
               className="py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-xs font-extrabold cursor-pointer"
             >
@@ -841,14 +1318,18 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
             <button
               type="button"
               onClick={() => {
+                if (!isLiveSyncPresenter) {
+                  updatePhotoSync({ photoIndex: safeSyncIdx, zoom: photoSyncState.zoom }, { takeLead: true });
+                  return;
+                }
                 dispatchGhostCastLiveCommand({
                   action: 'OPEN_MONITOR_CAST',
-                  photoId: currentSyncPhoto.id,
+                  photoId: currentSyncPhoto?.id,
                 });
               }}
               className="py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-200 text-xs font-extrabold cursor-pointer"
             >
-              💻 모니터로
+              {isLiveSyncPresenter ? '💻 모니터로' : '👑 내가 리드'}
             </button>
           </div>
         </div>
@@ -856,3 +1337,15 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     </>
   );
 };
+
+function roomDisplayTitleFallback(
+  joinedMeta: { masterNickname: string; roomTitle: string } | null,
+  loungeType: string,
+  familyRoom: string
+): string {
+  if (joinedMeta) return `${joinedMeta.masterNickname} · ${joinedMeta.roomTitle}`;
+  if (loungeType === 'family') return familyRoom || '우리집';
+  if (loungeType === 'club') return '동호회·모임';
+  if (loungeType === 'student') return '동창회';
+  return '사진 공유방';
+}

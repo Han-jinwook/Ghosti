@@ -777,7 +777,7 @@ export const DesktopSidebarContainer: React.FC<{
                         title={
                           isStoreAppMode
                             ? '사내 팀 문서와 현장 사진을 공용 폴더(S: 드라이브) 하나로 공유합니다.'
-                            : '클라우드 월세 0원, 우리 팀 PC를 공용 폴더(S: 드라이브) 하나로 — 비싼 서버나 클라우드 구독 없이 사내 문서·현장 사진을 공유 드라이브(S:) 하나로 묶어 1초 만에 찾고 씁니다. (소기업 5인·30GB 평생 0원 보증 · 추가 팀 월 9,900원~)'
+                            : '클라우드 월세 0원, 우리 팀 PC를 공용 폴더(S: 드라이브) 하나로 — 비싼 서버나 클라우드 구독 없이 사내 문서·현장 사진을 공유 드라이브(S:) 하나로 묶어 1초 만에 찾고 씁니다. (소호 ~5인 월 9,900원~ · 30일 무료체험 · 인당 과금 0원)'
                         }
                         className={mainBtnClass(isWorkShareActive || isWorkTeamSuperpowerActive)}
                       >
@@ -793,9 +793,9 @@ export const DesktopSidebarContainer: React.FC<{
                               '팀 문서·현장 사진 공용 폴더(S:) 통합'
                             ) : (
                               <>
-                                <span className="whitespace-nowrap">5인·30GB 평생 0원 보증</span>
+                                <span className="whitespace-nowrap">월 9,900원~ (팀 ~5인)</span>
                                 {' · '}
-                                <span className="whitespace-nowrap">추가 월 9,900원~</span>
+                                <span className="whitespace-nowrap">30일 무료체험</span>
                               </>
                             )}
                           </span>

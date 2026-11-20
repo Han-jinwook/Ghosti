@@ -44,7 +44,7 @@ const PLAN_LABELS: Record<PricingPlanId, string> = {
   club_large_year_149000: '⛰️ 4번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
   student_sub_900: '🎓 4번 사진 공유 (동창회 · 학급) • 인원 무제한 평생 0원 (사진·동영상 전용)',
   student_year_9000: '🎓 4번 사진 공유 (동창회 · 학급) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  work_soho_9900: '💼 6번 업무 공유 (S: 드라이브 · 5인·30GB 평생 0원 / 초과 시 월 9,900원)',
+  work_soho_9900: '💼 6번 업무 공유 (S: 드라이브 · 소호 ~5인 월 9,900원 · 30일 무료체험)',
   work_soho_year_99000: '💼 6번 업무 공유 (S: 드라이브 · 소호 ~5인 연간 결제 99,000원 · 월 8,250원꼴)',
   work_biz_19900: '💼 6번 업무 공유 • 소기업 ~20인 (월 19,000원) / 중소기업 ~50인 (월 29,000원)',
   work_biz_year_199000: '💼 6번 업무 공유 • 소기업 ~20인 (연 190,000원) / 중소기업 ~50인 (연 290,000원)',
@@ -76,7 +76,7 @@ export function validateClubSignboardName(rawName: string): {
     return {
       valid: false,
       blockedCategory: 'WORK',
-      reason: '🚫 [AI 문패 필터] 기업/부서/업무 명칭은 무료 사진 공유방 문패로 사용할 수 없습니다. 엑셀·한글·PDF·워드 업무 서류 검색 및 윈도우 탐색기 S: 드라이브는 [💼 6번 업무 공유 (5인·30GB 평생 0원 / 월 9,900원~)]를 이용해 주세요.',
+      reason: '🚫 [AI 문패 필터] 기업/부서/업무 명칭은 무료 사진 공유방 문패로 사용할 수 없습니다. 엑셀·한글·PDF·워드 업무 서류 검색 및 윈도우 탐색기 S: 드라이브는 [💼 6번 업무 공유 (월 9,900원~ · 30일 무료체험)]를 이용해 주세요.',
     };
   }
   return { valid: true };
@@ -584,7 +584,7 @@ export const PricingModal: React.FC = () => {
                 <p className="font-body-sm text-[12px] text-zinc-200 leading-relaxed">
                   • 👨‍👩‍👧‍👦 <strong>가족</strong> (우리집 · 친가 · 처가) / ⛰️ <strong>동호회</strong> (산악회 · 골프 · 소모임) / 🎓 <strong>동창회</strong> 모두 <strong>인원수·장수 제한 없이 100% 평생 무료</strong>!<br />
                   • 💬 <strong>카톡 단톡방 인앱 무가입 1초 프리뷰</strong> + 🛂 <strong>각 방 인물 얼굴 1초 찾기</strong> 기본 제공<br />
-                  • ⚠️ <strong className="text-amber-300">오직 사진 · 동영상 공유만 작동</strong>합니다. (엑셀·한글·PDF·워드 등 업무 문서 공유 및 윈도우 탐색기 <code>S: 드라이브</code> 마운트는 <strong>6번 업무 공유(5인·30GB 평생 0원 / 유료 확장)</strong> 전용입니다.)
+                  • ⚠️ <strong className="text-amber-300">오직 사진 · 동영상 공유만 작동</strong>합니다. (엑셀·한글·PDF·워드 등 업무 문서 공유 및 윈도우 탐색기 <code>S: 드라이브</code> 마운트는 <strong>6번 업무 공유(월 9,900원~ · 30일 무료체험)</strong> 전용입니다.)
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 pt-1">
                   <button
@@ -684,7 +684,7 @@ export const PricingModal: React.FC = () => {
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-md bg-cyan-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                  6번 [5인·30GB 평생 0원 보증 / 유료 확장] 업무 공유 • 공용 폴더(S: 드라이브) · 문서/계약서 공유
+                  6번 [🎁 30일 무료체험 · 월 9,900원~] 업무 공유 • 공용 폴더(S: 드라이브) · 문서/계약서 공유
                 </span>
                 <span className="px-2.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-extrabold">
                   💽 공용 폴더(S: 드라이브) 종단간 암호화(E2EE) · 🛡️ 랜섬웨어 격리 · 🧾 세금계산서 발행

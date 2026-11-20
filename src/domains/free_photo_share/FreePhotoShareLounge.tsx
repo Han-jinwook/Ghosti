@@ -588,7 +588,7 @@ export const LoungeView: React.FC = () => {
         <section className="px-4 py-3 rounded-2xl bg-amber-950/50 border-2 border-amber-400/70 flex flex-wrap items-center justify-between gap-3 shadow-lg">
           <span className="text-[12.5px] text-amber-100 font-bold leading-relaxed">
             📄 계약서·엑셀 등 업무 문서(<code className="text-amber-300">{droppedBusinessDocName}</code>)는 카톡보다 10배 편한{' '}
-            <strong className="text-amber-300">[6. 사내 공용 폴더(S: 드라이브) — 소기업 5인·30GB 평생 0원]</strong>에서 바로 공유해 보세요!
+            <strong className="text-amber-300">[6. 사내 공용 폴더(S: 드라이브) — 월 9,900원~ · 30일 무료체험]</strong>에서 바로 공유해 보세요!
           </span>
           <div className="flex items-center gap-2 shrink-0">
             <button
@@ -1208,7 +1208,7 @@ export const LoungeView: React.FC = () => {
 
                     <div className="p-3.5 rounded-xl bg-primary-container/10 border border-primary-container/35 flex flex-wrap items-center justify-between gap-2">
                       <span className="text-[12px] text-emerald-200 font-medium">
-                        📌 <strong>[안내]</strong> 4번 사진 공유(가족·동호회·동창회)는 <strong>개인 사진·영상 전용</strong>으로 평생 무료입니다. 📄 계약서·엑셀 등 업무 문서는 카톡보다 10배 편한 <strong>6. 사내 공용 폴더(S: 드라이브) — 소기업 5인·30GB 평생 0원</strong>에서 바로 공유해 보세요!
+                        📌 <strong>[안내]</strong> 4번 사진 공유(가족·동호회·동창회)는 <strong>개인 사진·영상 전용</strong>으로 평생 무료입니다. 📄 계약서·엑셀 등 업무 문서는 카톡보다 10배 편한 <strong>6. 사내 공용 폴더(S: 드라이브) — 월 9,900원~ · 30일 무료체험</strong>에서 바로 공유해 보세요!
                       </span>
                       <button
                         type="button"
@@ -1537,7 +1537,7 @@ export const LoungeView: React.FC = () => {
 
                     <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-400/35 flex flex-wrap items-center justify-between gap-2">
                       <span className="text-[12px] text-amber-200 font-medium">
-                        📌 <strong>[안내]</strong> 4번 사진 공유(가족·동호회·동창회)는 <strong>개인 사진·영상 전용</strong>으로 평생 무료입니다. 📄 계약서·엑셀 등 업무 문서는 카톡보다 10배 편한 <strong>6. 사내 공용 폴더(S: 드라이브) — 소기업 5인·30GB 평생 0원</strong>에서 바로 공유해 보세요!
+                        📌 <strong>[안내]</strong> 4번 사진 공유(가족·동호회·동창회)는 <strong>개인 사진·영상 전용</strong>으로 평생 무료입니다. 📄 계약서·엑셀 등 업무 문서는 카톡보다 10배 편한 <strong>6. 사내 공용 폴더(S: 드라이브) — 월 9,900원~ · 30일 무료체험</strong>에서 바로 공유해 보세요!
                       </span>
                       <button
                         type="button"
@@ -2698,7 +2698,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
         <section className="px-4 py-3 rounded-2xl bg-amber-950/50 border-2 border-amber-400/70 flex flex-wrap items-center justify-between gap-3 shadow-lg">
           <span className="text-[12.5px] text-amber-100 font-bold leading-relaxed">
             📄 계약서·엑셀 등 업무 문서(<code className="text-amber-300">{droppedBusinessDocName}</code>)는 카톡보다 10배 편한{' '}
-            <strong className="text-amber-300">[6. 사내 공용 폴더(S: 드라이브) — 소기업 5인·30GB 평생 0원]</strong>에서 바로 공유해 보세요!
+            <strong className="text-amber-300">[6. 사내 공용 폴더(S: 드라이브) — 월 9,900원~ · 30일 무료체험]</strong>에서 바로 공유해 보세요!
           </span>
           <div className="flex items-center gap-2 shrink-0">
             <button
