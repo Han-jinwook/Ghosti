@@ -213,16 +213,19 @@ export async function fetchIndexedDocuments(): Promise<LocalDocumentFile[]> {
         ? zJson.docs
         : [];
       // [실물 파일 순수성 철칙]: 로컬 Z-코어 엔진이 연결된 상태에서는 예시 샘플 문서를 절대 섞지 않고 100% 내 진짜 PC 문서만 반환!
+      // (바탕화면·다운로드 등 서로 다른 폴더에 동일 파일명이 있어도 누락되지 않도록 절대경로 기준으로 보존)
       const realOnly = new Map<string, LocalDocumentFile>();
       for (const d of zDocs) {
         const fname = d.fileName || (d as any).name;
-        if (!fname || fname.includes('비밀금고') || realOnly.has(fname)) continue;
+        if (!fname || fname.includes('비밀금고')) continue;
+        const uniqueDocKey = String(d.path || d.id || fname).toLowerCase();
+        if (realOnly.has(uniqueDocKey)) continue;
         const dotIdx = fname.lastIndexOf('.');
         const derivedExt =
           dotIdx > 0 && dotIdx < fname.length - 1
             ? fname.slice(dotIdx + 1).toUpperCase()
             : d.ext || 'DOC';
-        realOnly.set(fname, {
+        realOnly.set(uniqueDocKey, {
           ...d,
           fileName: fname,
           ext: derivedExt,

@@ -778,8 +778,10 @@ export const App: React.FC = () => {
       );
       if (!isNative && !zCoreBridge.isConnected) {
         await Promise.race([
-          zCoreBridge.checkHealth(false),
-          new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 260)),
+          zCoreBridge.checkHealth(isStandaloneSearchWin),
+          new Promise<boolean>((resolve) =>
+            window.setTimeout(() => resolve(false), isStandaloneSearchWin ? 1200 : 260)
+          ),
         ]);
       }
       if (cancelled) return;

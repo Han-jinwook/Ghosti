@@ -42,11 +42,18 @@ let _openGhostSearchInflight = false;
 let _lastOpenGhostSearchTs = 0;
 let _lastGhostSearchWasReused = false;
 
+declare const __GHOSTI_BUILD_ID__: string | undefined;
+const CURRENT_WEB_BUILD_ID = typeof __GHOSTI_BUILD_ID__ !== 'undefined' ? __GHOSTI_BUILD_ID__ : '';
+
 function broadcastFocusToOpenGhostSearchWindow(query?: string): void {
   try {
     if (typeof BroadcastChannel !== 'undefined') {
       const bc = new BroadcastChannel('ghosti_search_window_singleton_v1');
-      bc.postMessage({ type: 'FOCUS_AND_QUERY', query: (query || '').trim() });
+      bc.postMessage({
+        type: 'FOCUS_AND_QUERY',
+        query: (query || '').trim(),
+        buildId: CURRENT_WEB_BUILD_ID,
+      });
       bc.close();
     }
   } catch {

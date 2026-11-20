@@ -3421,6 +3421,7 @@ export default defineConfig({
   // (빌드 모드는 Vite가 자동 치환하지만 dev 모드는 미치환이므로 빈 객체 명시 주입. SDK 원본 무수정 원칙)
   define: {
     'process.env': '{}',
+    __GHOSTI_BUILD_ID__: JSON.stringify('20261120_v2679'),
   },
   server: {
     host: true,
@@ -3432,5 +3433,18 @@ export default defineConfig({
   },
   build: {
     target: 'es2022',
+    rollupOptions: {
+      output: {
+        manualChunks(id) {
+          if (id.includes('@huggingface/transformers') || id.includes('onnxruntime-web')) {
+            return 'vendor-ai';
+          }
+          if (id.includes('node_modules/react') || id.includes('node_modules/zustand')) {
+            return 'vendor-core';
+          }
+          return undefined;
+        },
+      },
+    },
   },
 });

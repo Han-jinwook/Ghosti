@@ -16,6 +16,10 @@ import { GhostSearchPane } from '../domains/search/GhostSearchPane';
 import { PaidDeviceSyncPane } from '../domains/paid_device_sync/PaidDeviceSyncPane';
 import { PaidWorkSharePane } from '../domains/paid_work_share/PaidWorkSharePane';
 
+declare const __GHOSTI_BUILD_ID__: string | undefined;
+const CURRENT_DASHBOARD_BUILD_ID =
+  typeof __GHOSTI_BUILD_ID__ !== 'undefined' ? __GHOSTI_BUILD_ID__ : '';
+
 export const DesktopDashboard: React.FC = () => {
   const {
     desktopTab,
@@ -107,17 +111,34 @@ export const DesktopDashboard: React.FC = () => {
               /* ignore */
             }
           } else if (msg.type === 'FOCUS_AND_QUERY') {
+            const incomingBuildId = typeof (msg as { buildId?: string }).buildId === 'string'
+              ? (msg as { buildId?: string }).buildId || ''
+              : '';
+            if (
+              incomingBuildId &&
+              CURRENT_DASHBOARD_BUILD_ID &&
+              incomingBuildId !== CURRENT_DASHBOARD_BUILD_ID
+            ) {
+              const nextQ = (msg.query || '').trim();
+              if (nextQ) {
+                const u = new URL(window.location.href);
+                u.searchParams.set('q', nextQ);
+                window.location.replace(u.toString());
+              } else {
+                window.location.reload();
+              }
+              return;
+            }
             try {
               window.focus();
             } catch {
               /* ignore */
             }
+            const st = useSaySeeStore.getState();
+            void st.refreshLiveLocalFilesInSearchWindow();
             const nextQ = (msg.query || '').trim();
-            if (nextQ) {
-              const st = useSaySeeStore.getState();
-              if (!st.hasExecutedUserSearch || st.activeQuery !== nextQ) {
-                void st.runTextQuery(nextQ);
-              }
+            if (nextQ && (!st.hasExecutedUserSearch || st.activeQuery !== nextQ)) {
+              void st.runTextQuery(nextQ);
             }
           }
         };

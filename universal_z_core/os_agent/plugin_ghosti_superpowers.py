@@ -884,17 +884,28 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
     }
 
 
+def _deferred_prewarm_ppocr_worker() -> None:
+    try:
+        import ppocr_v5_worker
+
+        ppocr_v5_worker.prewarm_ppocr_worker_async()
+    except Exception:
+        pass
+
+
 def open_ghost_search_window_api(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """
     [👻 귀신검색창 로컬 리얼 팝업 직결 API]
     - 로컬 엔진(127.0.0.1:5199)이 연결되어 있을 때 온보딩 수련장이나 웹 화면에서
       Ctrl+0, Ctrl+우클릭, 또는 [👻 내 진짜 파일로 리얼 귀신검색창 바로 띄우기] 호출 시
       가짜 시뮬레이터가 아니라 실제 모니터 위에 프레임리스 독립 팝업(소형 520x380 / 중형 960x640 / 갤러리 1440x900)을 즉시 띄웁니다.
+    - 창 오픈 순간(0.0~1.5초)에 크롬 --app 부팅 및 사진·문서·동영상 목록 I/O와 CPU가 경합하지 않도록
+      PP-OCRv5 워커 예열은 3.5초 뒤 백그라운드 타이머로 분리합니다.
     """
     try:
-        import ppocr_v5_worker
-
-        ppocr_v5_worker.prewarm_ppocr_worker_async()
+        t_ocr = threading.Timer(3.5, _deferred_prewarm_ppocr_worker)
+        t_ocr.daemon = True
+        t_ocr.start()
     except Exception:
         pass
     data = params or {}

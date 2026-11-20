@@ -524,12 +524,41 @@ export const createAssistantOnboardingSlice: StateCreator<
     if (isStandaloneSearchWin && !zCoreBridge.isConnected) {
       await Promise.race([
         zCoreBridge.checkHealth(true),
-        new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 1600)),
+        new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 1200)),
       ]);
     }
 
+    const urlQueryEarly =
+      typeof window !== 'undefined'
+        ? (new URLSearchParams(window.location.search).get('q') || '').trim()
+        : '';
+    const photoDatasetPromise = loadInitialPhotoDataset();
+    if (isStandaloneSearchWin && !urlQueryEarly && !get().hasExecutedUserSearch) {
+      void photoDatasetPromise
+        .then((earlyDataset) => {
+          const curSt = get();
+          if (curSt.initialized || earlyDataset.photos.length === 0) return;
+          const earlyGalleryResults = filterVisibleGalleryPhotos(earlyDataset.photos).map(
+            (photo) => ({
+              photo,
+              score: 0.95,
+              matchPercentage: 97,
+              matchedBy: 'text-direct' as const,
+            })
+          );
+          set({
+            photos: earlyDataset.photos,
+            duplicateGroups: earlyDataset.duplicateGroups,
+            searchResults: earlyGalleryResults,
+            activeQuery: `전체 갤러리 사진 (${earlyGalleryResults.length}장)`,
+            initialized: true,
+          });
+        })
+        .catch(() => {});
+    }
+
     const [dataset, telemetry, indexedDocs, indexedVideos, faceData, hostSharedPhotos] = await Promise.all([
-      loadInitialPhotoDataset(),
+      photoDatasetPromise,
       isStandaloneSearchWin ? Promise.resolve(null) : detectHardwareTelemetry(),
       fetchIndexedDocuments(),
       fetchIndexedVideos(),

@@ -243,6 +243,7 @@ html.theme-warm-light .bg-\[\#111114\]\/90 {
 /* 2. 카드 및 컨테이너 영역 (#FFFFFF 깔끔한 화이트 + 부드러운 그림자) */
 html.theme-warm-light :not([data-keep-dark="true"]) > .bg-\[\#18181B\]:not([data-keep-dark="true"] *),
 html.theme-warm-light .bg-\[\#18181B\]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
+html.theme-warm-light .bg-\[\#14161B\]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
 html.theme-warm-light .bg-\[\#111114\]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
 html.theme-warm-light .bg-\[\#121215\]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
 html.theme-warm-light .bg-\[\#121318\]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
