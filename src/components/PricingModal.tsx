@@ -1660,7 +1660,7 @@ export const VideoScenePreviewModal: React.FC = () => {
       }
 
       // 미캐싱 대용량 HEVC 실시간 파이프 스트림(duration === Infinity)에서도 서버 -ss 재시크 지원
-      const rawUrl = selectedVideoModal.videoUrl || '';
+      const rawUrl = resolvedVideoSrc || el.currentSrc || selectedVideoModal.videoUrl || '';
       const baseStreamUrl = rawUrl.replace(/[&?]t=[^&]*/g, '');
       if (baseStreamUrl.includes('/__videos/stream')) {
         const maxDur = Math.max(1, selectedVideoModal.durationSec || 3600);
@@ -1672,11 +1672,25 @@ export const VideoScenePreviewModal: React.FC = () => {
         showHud(`${deltaSec < 0 ? `⏪ ${Math.abs(deltaSec)}초 뒤로` : `⏩ ${deltaSec}초 앞으로`} · ${fmtSec(nextLogical)}`);
       }
     },
-    [selectedVideoModal]
+    [selectedVideoModal, resolvedVideoSrc]
   );
 
   useEffect(() => {
     if (!selectedVideoModal) return;
+    const releaseFullscreenControlFocus = () => {
+      const el = videoRef.current;
+      if (!el || typeof document === 'undefined') return;
+      if (document.fullscreenElement === el || document.activeElement === el) {
+        el.blur();
+        window.setTimeout(() => {
+          if (videoRef.current && document.activeElement === videoRef.current) {
+            videoRef.current.blur();
+          }
+        }, 30);
+      }
+    };
+    document.addEventListener('fullscreenchange', releaseFullscreenControlFocus);
+    document.addEventListener('webkitfullscreenchange', releaseFullscreenControlFocus as EventListener);
     const onKeyDown = (e: KeyboardEvent) => {
       const tgt = e.target as HTMLElement | null;
       const tag = tgt?.tagName?.toLowerCase() || '';
@@ -1684,6 +1698,9 @@ export const VideoScenePreviewModal: React.FC = () => {
         return;
       }
       if (e.key === 'Escape') {
+        if (typeof document !== 'undefined' && document.fullscreenElement) {
+          return;
+        }
         e.preventDefault();
         setSelectedVideoModal(null);
         return;
@@ -1723,6 +1740,8 @@ export const VideoScenePreviewModal: React.FC = () => {
     };
     window.addEventListener('keydown', onKeyDown, { capture: true });
     return () => {
+      document.removeEventListener('fullscreenchange', releaseFullscreenControlFocus);
+      document.removeEventListener('webkitfullscreenchange', releaseFullscreenControlFocus as EventListener);
       window.removeEventListener('keydown', onKeyDown, { capture: true });
       window.clearTimeout(seekHudTimerRef.current);
     };
@@ -1820,11 +1839,12 @@ export const VideoScenePreviewModal: React.FC = () => {
               <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-label-mono text-[10.5px] font-bold">
                 전체 길이 {selectedVideoModal.durationText}
               </span>
-              <span className="px-2 py-0.5 rounded-full bg-zinc-800/80 text-zinc-300 font-label-mono text-[10.5px] font-semibold border border-white/10">
-                ⌨️ ← · → 5초 이동
-              </span>
               {videoNavList.length >= 2 && currentVideoIdx >= 0 && (
-                <span className="px-2 py-0.5 rounded-full bg-zinc-800/70 text-zinc-300 font-label-mono text-[10.5px] font-semibold border border-white/10">
+                <span
+                  data-keep-dark="true"
+                  style={{ backgroundColor: '#1E293B', color: '#FFFFFF', borderColor: '#475569' }}
+                  className="px-2.5 py-0.5 rounded-full font-label-mono text-[11px] font-extrabold border shadow-2xs"
+                >
                   {currentVideoIdx + 1} / {videoNavList.length}
                 </span>
               )}
@@ -1857,6 +1877,7 @@ export const VideoScenePreviewModal: React.FC = () => {
 
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pr-0.5">
           <div
+            data-keep-dark="true"
             className={`relative w-full shrink-0 rounded-2xl overflow-hidden bg-black border border-primary-container/40 flex items-center justify-center ${
               isPortraitVideo
                 ? 'h-[44dvh] min-h-[260px] max-h-[440px] sm:h-[50dvh]'
@@ -1873,8 +1894,29 @@ export const VideoScenePreviewModal: React.FC = () => {
                   playsInline
                   autoPlay
                   preload="auto"
-                  onPlay={() => setIsVideoPlaying(true)}
-                  onPause={() => setIsVideoPlaying(false)}
+                  onPlay={(e) => {
+                    setIsVideoPlaying(true);
+                    if (typeof document !== 'undefined' && document.fullscreenElement === e.currentTarget) {
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  onPause={(e) => {
+                    setIsVideoPlaying(false);
+                    if (typeof document !== 'undefined' && document.fullscreenElement === e.currentTarget) {
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  onVolumeChange={(e) => {
+                    if (typeof document !== 'undefined' && document.fullscreenElement === e.currentTarget) {
+                      e.currentTarget.blur();
+                    }
+                  }}
+                  onMouseUp={(e) => {
+                    if (typeof document !== 'undefined' && document.fullscreenElement === e.currentTarget) {
+                      const targetEl = e.currentTarget;
+                      window.setTimeout(() => targetEl.blur(), 20);
+                    }
+                  }}
                   onEnded={() => setIsVideoPlaying(false)}
                   onError={() => {
                     if (!trySwitchToTranscodeStream()) {
@@ -1917,7 +1959,15 @@ export const VideoScenePreviewModal: React.FC = () => {
                   </button>
                 )}
                 {seekHudText && (
-                  <div className="absolute top-3 right-3 z-20 px-3 py-1 rounded-full bg-black/80 border border-white/25 text-white text-[12px] font-extrabold pointer-events-none shadow-lg">
+                  <div
+                    data-keep-dark="true"
+                    style={{
+                      backgroundColor: 'rgba(15, 23, 42, 0.92)',
+                      color: '#FFFFFF',
+                      borderColor: 'rgba(255, 255, 255, 0.48)',
+                    }}
+                    className="absolute top-3 right-3 z-20 px-3.5 py-1 rounded-full border text-[12.5px] font-extrabold pointer-events-none shadow-xl"
+                  >
                     {seekHudText}
                   </div>
                 )}

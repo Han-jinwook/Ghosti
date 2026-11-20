@@ -726,30 +726,40 @@ export const PhotoDetailModal: React.FC = () => {
               <>
                 <button
                   type="button"
+                  data-keep-dark="true"
                   aria-label="이전 사진"
                   title="이전 사진 (←)"
                   onClick={(e) => {
                     e.stopPropagation();
                     navigateAdjacentPhoto(-1);
                   }}
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-zinc-900/35 hover:bg-zinc-800/80 border border-zinc-300/25 hover:border-zinc-200/55 text-zinc-300/75 hover:text-zinc-100 backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs"
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-zinc-900/45 hover:bg-zinc-800/85 border border-zinc-300/35 hover:border-zinc-100/70 text-zinc-200 hover:text-white backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs"
                 >
                   <span className="material-symbols-outlined text-[22px]">chevron_left</span>
                 </button>
                 <button
                   type="button"
+                  data-keep-dark="true"
                   aria-label="다음 사진"
                   title="다음 사진 (→)"
                   onClick={(e) => {
                     e.stopPropagation();
                     navigateAdjacentPhoto(1);
                   }}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-zinc-900/35 hover:bg-zinc-800/80 border border-zinc-300/25 hover:border-zinc-200/55 text-zinc-300/75 hover:text-zinc-100 backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-zinc-900/45 hover:bg-zinc-800/85 border border-zinc-300/35 hover:border-zinc-100/70 text-zinc-200 hover:text-white backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs"
                 >
                   <span className="material-symbols-outlined text-[22px]">chevron_right</span>
                 </button>
                 {currentPhotoIdx >= 0 && (
-                  <span className="absolute bottom-2.5 right-2.5 z-10 px-2 py-0.5 rounded-full bg-zinc-900/50 border border-zinc-300/20 text-zinc-300/85 text-[11px] font-semibold backdrop-blur-xs pointer-events-none">
+                  <span
+                    data-keep-dark="true"
+                    style={{
+                      backgroundColor: 'rgba(15, 23, 42, 0.90)',
+                      color: '#FFFFFF',
+                      borderColor: 'rgba(255, 255, 255, 0.42)',
+                    }}
+                    className="absolute bottom-2.5 right-2.5 z-10 px-2.5 py-0.5 rounded-full border text-[11.5px] font-extrabold backdrop-blur-xs pointer-events-none shadow-md"
+                  >
                     {currentPhotoIdx + 1} / {photoNavList.length}
                   </span>
                 )}
