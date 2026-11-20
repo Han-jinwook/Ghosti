@@ -1884,19 +1884,31 @@ def _run_winrt_image_ocr_raw(img_path: Path) -> Dict[str, Any]:
     try:
         import ppocr_v5_worker
 
-        deunderlined_path = _prepare_deunderlined_image_if_needed(img_path, tmp_dir)
-        targets = [img_path] + ([deunderlined_path] if deunderlined_path is not None else [])
-        res_map = ppocr_v5_worker.invoke_ppocr_subprocess(targets, filter_video_ui=False, timeout_sec=45.0)
+        res_map = ppocr_v5_worker.invoke_ppocr_subprocess(
+            [img_path],
+            filter_video_ui=False,
+            timeout_sec=35.0,
+            priority_interactive=True,
+        )
         best = res_map.get(str(img_path.resolve())) or res_map.get(img_path.name) or {"width": 0, "height": 0, "lines": []}
-        if deunderlined_path is not None:
-            alt = res_map.get(str(deunderlined_path.resolve())) or res_map.get(deunderlined_path.name)
-            if isinstance(alt, dict):
-                t0 = str(best.get("smartText") or "")
-                t1 = str(alt.get("smartText") or "")
-                sc0 = len(re.findall(r"[가-힣]", t0)) * 4 + len(re.findall(r"[A-Za-z0-9]", t0))
-                sc1 = len(re.findall(r"[가-힣]", t1)) * 4 + len(re.findall(r"[A-Za-z0-9]", t1))
-                if sc1 > sc0 + 4:
-                    best = alt
+        # 글자 박스가 존재하는데 밑줄 간섭 이미지가 생성되는 경우에만 보조 비교 수행 (풍경 사진은 1회 추론으로 즉시 종료)
+        if isinstance(best, dict) and len(best.get("boxes") or []) >= 1:
+            deunderlined_path = _prepare_deunderlined_image_if_needed(img_path, tmp_dir)
+            if deunderlined_path is not None:
+                alt_map = ppocr_v5_worker.invoke_ppocr_subprocess(
+                    [deunderlined_path],
+                    filter_video_ui=False,
+                    timeout_sec=25.0,
+                    priority_interactive=True,
+                )
+                alt = alt_map.get(str(deunderlined_path.resolve())) or alt_map.get(deunderlined_path.name)
+                if isinstance(alt, dict):
+                    t0 = str(best.get("smartText") or "")
+                    t1 = str(alt.get("smartText") or "")
+                    sc0 = len(re.findall(r"[가-힣]", t0)) * 4 + len(re.findall(r"[A-Za-z0-9]", t0))
+                    sc1 = len(re.findall(r"[가-힣]", t1)) * 4 + len(re.findall(r"[A-Za-z0-9]", t1))
+                    if sc1 > sc0 + 4:
+                        best = alt
         if isinstance(best, dict):
             return best
     except Exception:

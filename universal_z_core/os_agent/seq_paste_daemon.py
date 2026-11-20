@@ -3250,7 +3250,7 @@ def _run_ondemand_winrt_image_ocr(img_path: Path | str) -> dict:
             headers={"Origin": "http://127.0.0.1:5199"},
             method="GET",
         )
-        with urllib.request.urlopen(req, timeout=8.0) as resp:
+        with urllib.request.urlopen(req, timeout=25.0) as resp:
             payload = json.loads(resp.read().decode("utf-8", errors="replace"))
             if isinstance(payload, dict) and payload.get("ok"):
                 ft = str(payload.get("fullText") or "").strip()
@@ -3274,7 +3274,9 @@ def _run_ondemand_winrt_image_ocr(img_path: Path | str) -> dict:
     try:
         import ppocr_v5_worker
 
-        res_map = ppocr_v5_worker.invoke_ppocr_subprocess([p], filter_video_ui=False, timeout_sec=35.0)
+        res_map = ppocr_v5_worker.invoke_ppocr_subprocess(
+            [p], filter_video_ui=False, timeout_sec=28.0, priority_interactive=True
+        )
         item = res_map.get(str(p.resolve())) or res_map.get(p.name) or {}
         words_flat: list[dict] = []
         for ln in item.get("lines") or []:

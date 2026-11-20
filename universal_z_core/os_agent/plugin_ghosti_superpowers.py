@@ -834,8 +834,11 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
             "consumed": False,
             "feature_id": feature_id,
             "feature_name": feature_name,
+            "status": summary_q["status"],
             "feature_status": summary_q["status"],
             "days_left": summary_q["days_left"],
+            "daysLeft": summary_q["days_left"],
+            "isSubscribed": bool(summary_q["status"] == "SUBSCRIBED"),
             "daily_free_remaining": 9999,
             "message": f"🎁 [{feature_name}] 30일 무제한 무료체험 적용 중 (잔여 D-{summary_q['days_left']})",
         }
@@ -847,11 +850,14 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
             "consumed": False,
             "feature_id": feature_id,
             "feature_name": feature_name,
+            "status": "NOT_STARTED",
             "feature_status": "NOT_STARTED",
+            "reason": "TRIAL_NOT_STARTED",
+            "trialOptInRequired": True,
             "daily_free_remaining": 0,
             "daily_free_limit": 0,
             "error": "TRIAL_OPT_IN_REQUIRED",
-            "message": msg_q,
+            "message": f"🎁 [{feature_name}]은 신용카드 등록 없이 30일 무제한 무료체험 시작 버튼만 누르면 바로 사용하실 수 있습니다.",
         }
 
     # Case C: 30일 무제한이 만료된 🔒 유료 티어 기능 ➔ 즉시 깔끔하게 유료 잠금(EXPIRED_LOCKED)
@@ -861,11 +867,14 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
         "consumed": False,
         "feature_id": feature_id,
         "feature_name": feature_name,
+        "status": "EXPIRED_LOCKED",
         "feature_status": "EXPIRED_LOCKED",
+        "reason": "EXPIRED_LOCKED",
+        "trialOptInRequired": False,
         "daily_free_remaining": 0,
         "daily_free_limit": 0,
         "error": "TRIAL_EXPIRED_LOCKED",
-        "message": msg_q,
+        "message": "🔒 30일 무료체험이 만료되었습니다. [5번 내 기기 통합 · 월 3,900원]에서 무제한 해금되며, 무료 기본기 검색은 평생 0원입니다.",
     }
 
 

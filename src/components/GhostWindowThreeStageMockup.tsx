@@ -2100,43 +2100,104 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
       setOcrResult(null);
       setGateState('checking');
       try {
-        // 1) 유료 티어 30일 Opt-in 무료체험 게이트 점검
+        // 1) 유료 티어 30일 Opt-in 무료체험 게이트 점검 (5. 내 기기 통합 구독/체험 상태와도 1:1 자동 연동)
         try {
-          const gateRes = await fetch(getZCoreUrl('/api/superpower/consume-action'), {
+          const storeState = useSaySeeStore.getState();
+          const ent = storeState.deviceEntitlement;
+          const isSubFromStore = Boolean(ent?.isPaidUnlimited);
+          let gateRes = await fetch(getZCoreUrl('/api/superpower/consume-action'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ actionType: 'feat_6_screen_ocr' }),
+            body: JSON.stringify({
+              actionType: 'feat_6_screen_ocr',
+              isSubscribed: isSubFromStore,
+              accountId: storeState.merlinAuth?.email || 'local_user',
+            }),
           });
-          if (gateRes.ok) {
-            const gateJson = await gateRes.json();
-            if (gateJson && gateJson.allowed === false) {
-              const reasonStr = String(gateJson.reason || gateJson.status || '');
-              const msgStr = String(gateJson.message || '');
-              if (reasonStr === 'TRIAL_NOT_STARTED' || msgStr.includes('무료체험 시작') || gateJson.trialOptInRequired) {
-                if (!cancelled) {
-                  setGateState('need_opt_in');
-                  setGateMessage(
-                    msgStr ||
-                      '🎁 [사진·표 OCR 창🔒]은 신용카드 등록 없이 30일 무제한 무료체험 동의 후 바로 사용하실 수 있습니다.'
-                  );
-                  setLoading(false);
-                }
-                return;
-              }
+          let gateJson = gateRes.ok ? await gateRes.json().catch(() => null) : null;
+
+          const isNotStartedResponse = (gj: Record<string, unknown> | null): boolean => {
+            if (!gj || gj.allowed !== false) return false;
+            const codeCandidates = [
+              gj.reason,
+              gj.status,
+              gj.feature_status,
+              gj.error,
+              gj.message,
+            ]
+              .map((v) => String(v || '').trim())
+              .filter(Boolean);
+            if (Boolean(gj.trialOptInRequired)) return true;
+            return codeCandidates.some(
+              (c) =>
+                c === 'NOT_STARTED' ||
+                c === 'UNOPENED' ||
+                c === 'TRIAL_NOT_STARTED' ||
+                c === 'TRIAL_OPT_IN_REQUIRED' ||
+                c.includes('무료체험 시작') ||
+                c.includes('동의 후')
+            );
+          };
+
+          // 웹 [5. 내 기기 통합]에서 이미 30일 무료체험이 활성화된 상태라면 로컬 엔진 원장에도 자동 동기화하여 이중 클릭 제거
+          if (ent?.trialActive && isNotStartedResponse(gateJson)) {
+            await fetch(getZCoreUrl('/api/superpower/start-trial'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                agreed: true,
+                optIn: true,
+                accountId: storeState.merlinAuth?.email || 'local_user',
+              }),
+            }).catch(() => null);
+            gateRes = await fetch(getZCoreUrl('/api/superpower/consume-action'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                actionType: 'feat_6_screen_ocr',
+                isSubscribed: isSubFromStore,
+                accountId: storeState.merlinAuth?.email || 'local_user',
+              }),
+            });
+            gateJson = gateRes.ok ? await gateRes.json().catch(() => null) : null;
+          }
+
+          if (gateJson && gateJson.allowed === false) {
+            const rawMsg = String(gateJson.message || '').trim();
+            const isMachineCodeMsg = !rawMsg || /^[A-Z0-9_]+$/.test(rawMsg);
+            if (isNotStartedResponse(gateJson)) {
               if (!cancelled) {
-                setGateState('expired');
+                setGateState('need_opt_in');
                 setGateMessage(
-                  msgStr ||
-                    '🔒 30일 무료체험이 만료되었습니다. [5번 내 기기 통합 · 월 3,900원]에서 무제한 해금되며, 무료 기본기 검색은 평생 0원입니다.'
+                  isMachineCodeMsg
+                    ? '🎁 [사진·표 OCR 창🔒]은 신용카드 등록 없이 30일 무제한 무료체험 시작 버튼만 누르면 바로 사용하실 수 있습니다.'
+                    : rawMsg
                 );
                 setLoading(false);
               }
               return;
             }
-            if (gateJson?.daysLeft !== undefined && gateJson?.status !== 'FREE_FOREVER') {
-              setTrialBadge(
-                gateJson.isSubscribed ? '👑 내 기기 통합 무제한' : `🎁 무료체험 D-${gateJson.daysLeft}`
+            if (!cancelled) {
+              setGateState('expired');
+              setGateMessage(
+                isMachineCodeMsg
+                  ? '🔒 30일 무료체험이 만료되었습니다. [5번 내 기기 통합 · 월 3,900원]에서 무제한 해금되며, 무료 기본기 검색은 평생 0원입니다.'
+                  : rawMsg
               );
+              setLoading(false);
+            }
+            return;
+          }
+          if (gateJson) {
+            const resolvedDays = gateJson.daysLeft ?? gateJson.days_left;
+            const featStatus = String(gateJson.status || gateJson.feature_status || '');
+            const isSub = Boolean(
+              gateJson.isSubscribed || gateJson.is_subscribed || featStatus === 'SUBSCRIBED'
+            );
+            if (isSub) {
+              setTrialBadge('👑 내 기기 통합 무제한');
+            } else if (resolvedDays !== undefined && featStatus !== 'FREE_FOREVER') {
+              setTrialBadge(`🎁 무료체험 D-${resolvedDays}`);
             }
           }
         } catch {
@@ -2146,12 +2207,15 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
         if (cancelled) return;
         setGateState('allowed');
 
-        // 2) 내 PC 로컬 WinRT OCR + 기하학적 표(TSV) 복원 호출
+        // 2) 내 PC 로컬 PP-OCRv5 Korean + 기하학적 표(TSV) 복원 호출
         const targetKey = extractLocalPhotoPathParam(photo);
         const res = await fetch(getZCoreUrl('/__photos/ocr'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ p: targetKey }),
+          body: JSON.stringify({
+            p: targetKey,
+            fullPath: photo.fullPath || '',
+          }),
         });
         const data = (await res.json().catch(() => null)) as RealPhotoOcrResponse | null;
         if (cancelled) return;
@@ -2195,10 +2259,11 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
 
   const handleStart30DayTrial = async () => {
     try {
+      const accountEmail = useSaySeeStore.getState().merlinAuth?.email || 'local_user';
       await fetch(getZCoreUrl('/api/superpower/start-trial'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ optIn: true }),
+        body: JSON.stringify({ agreed: true, optIn: true, accountId: accountEmail }),
       });
     } catch {
       /* ignore */
@@ -2366,7 +2431,7 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
                 <div className="flex-1 min-h-[240px] flex flex-col items-center justify-center text-center gap-3 p-6">
                   <div className="w-9 h-9 rounded-full border-3 border-teal-400 border-t-transparent animate-spin" />
                   <p className="text-[14px] font-extrabold text-teal-200">
-                    ⏳ 내 PC 로컬 WinRT OCR 엔진이 사진 속 글자와 표를 정밀 판독하고 있습니다...
+                    ⏳ 내 컴퓨터에서 사진 속 글자와 표를 정밀 판독하고 있습니다...
                   </p>
                   <span className="text-[11.5px] text-zinc-400">
                     외부 서버 전송 0 Byte · 가로/세로 회전 자동 보정 · 한번 읽은 사진은 0.01초 즉시 열람
