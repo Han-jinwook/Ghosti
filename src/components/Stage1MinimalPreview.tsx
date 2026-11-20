@@ -1574,9 +1574,16 @@ export const Stage1MinimalCarePreview: React.FC = () => {
       clearTrashSelection();
       setActiveTrashCategoryFilter('none');
     };
+    const onPhotoRestored = () => {
+      setIsCleanupPaused(false);
+      setPausedSnapshot(null);
+      setSkippedGroupIds(new Set());
+    };
     window.addEventListener('ghosti_pause_cleanup_pane_only', onPauseCleanupPaneOnly);
+    window.addEventListener('ghosti_photo_restored_from_quarantine', onPhotoRestored);
     return () => {
       window.removeEventListener('ghosti_pause_cleanup_pane_only', onPauseCleanupPaneOnly);
+      window.removeEventListener('ghosti_photo_restored_from_quarantine', onPhotoRestored);
     };
   }, [liveActiveTrash, duplicateGroups, clearTrashSelection, setActiveTrashCategoryFilter]);
 

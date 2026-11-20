@@ -248,6 +248,7 @@ export const voiceSession = new HybridVoiceSession();
 
 export type QuarantineOpResult = {
   done: string[];
+  replacedIds?: Record<string, string>;
   errors: { file: string; error: string }[];
   demo: boolean;
   offline: boolean;
@@ -310,7 +311,13 @@ export async function requestQuarantineOp(kind: 'move' | 'restore', names: strin
           offline: false,
         };
       }
-      return { done: names, errors: [], demo: false, offline: false };
+      return {
+        done: names,
+        replacedIds: nativeRes.replacedIds,
+        errors: [],
+        demo: false,
+        offline: false,
+      };
     }
     const isMobileEnv = isMobileOrStoreRuntime();
     return { done: names, errors: [], demo: !isMobileEnv, offline: false };

@@ -34,12 +34,14 @@ export interface SystemPhotoTrashTarget {
   name: string;
   size?: number;
   mtimeMs?: number;
+  thumbDataUrl?: string;
 }
 
 export interface SystemPhotoTrashResult {
   ok: boolean;
   action?: 'move' | 'restore';
   doneIds: string[];
+  replacedIds?: Record<string, string>;
   matchedMediaStoreCount?: number;
   canceled?: boolean;
   error?: string;
@@ -345,6 +347,8 @@ export async function requestNativeSystemPhotoTrash(
         ok: true,
         action,
         doneIds: Array.isArray(res.doneIds) && res.doneIds.length > 0 ? res.doneIds : keys,
+        replacedIds:
+          res.replacedIds && typeof res.replacedIds === 'object' ? res.replacedIds : undefined,
         matchedMediaStoreCount: res.matchedMediaStoreCount || 0,
         canceled: false,
       };

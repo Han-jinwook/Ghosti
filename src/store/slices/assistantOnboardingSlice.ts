@@ -14,10 +14,12 @@ import {
   clusterPhotosIntoDuplicateGroups,
   convertNativeGalleryVideos,
   loadCachedMobileGalleryIndex,
+  migrateOpticalSigPhotoId,
   saveCachedMobileGalleryIndex,
 } from '../../services/mobilePhotoPicker';
 import {
   isCapacitorNativeMobileRuntime,
+  registerMobilePickedPhotoMeta,
   scanNativeDeviceGalleryMedia,
 } from '../../services/ghostiMobileCareBridge';
 import { extractVideoScreenTextOnDemand } from '../../services/ai/aiVideoEngine';
@@ -1521,6 +1523,9 @@ export const createAssistantOnboardingSlice: StateCreator<
           lastQuarantineToast: `${wasFreeTrialFirstUse ? '🎁 첫 정리 완료! ' : '✨ '}베스트 원본 1장을 남기고 나머지 ${movedSet.size}장을 ${moveNote}`,
         };
       });
+      if (!zCoreBridge.isConnected) {
+        void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
+      }
     } else {
       set({
         lastQuarantineToast: `🛡️ 선택한 사진을 [보존할 원본 1장]으로 변경했습니다. (나머지 ${redundantIds.length}장이 정리 대상으로 전환됨)`,
@@ -1583,6 +1588,9 @@ export const createAssistantOnboardingSlice: StateCreator<
         lastQuarantineToast: `✨ 베스트 컷 1장을 남기고 나머지 연사 ${movedSet.size}장을 ${moveNote}`,
       };
     });
+    if (!zCoreBridge.isConnected) {
+      void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
+    }
   },
 
   moveSelectedToQuarantine: async () => {
@@ -1716,13 +1724,28 @@ export const createAssistantOnboardingSlice: StateCreator<
       return;
     }
     const restoredSet = new Set<string>(restoreRes.done);
+    const replacedMap = restoreRes.replacedIds || {};
 
-    set((state) => ({
-      photos: state.photos.map((p) => {
+    set((state) => {
+      const restoredIdsAfterReplace = new Set<string>();
+      const unquarantinedPhotos = state.photos.map((p) => {
         if (!restoredSet.has(p.name) && !restoredSet.has(p.id)) return p;
+        const newId = replacedMap[p.id] || p.id;
+        if (newId !== p.id) {
+          migrateOpticalSigPhotoId(p.id, newId);
+        }
+        registerMobilePickedPhotoMeta({
+          id: newId,
+          name: p.name,
+          size: p.size,
+          mtimeMs: p.mtimeMs,
+          thumbDataUrl: p.thumbUrl,
+        });
+        restoredIdsAfterReplace.add(newId);
         const isZCorePhoto = p.thumbUrl.includes('/__photos/file');
         return {
           ...p,
+          id: newId,
           quarantined: false,
           thumbUrl: isZCorePhoto
             ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&thumb=1`)
@@ -1731,10 +1754,69 @@ export const createAssistantOnboardingSlice: StateCreator<
             ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}`)
             : p.fullUrl,
         };
-      }),
-      quarantineMoving: false,
-      lastQuarantineToast: `♻️ 사진 ${restoredSet.size}장을 ${quarantineResultNote('restore', restoreRes)}`,
-    }));
+      });
+
+      // 복원된 사진을 포함해 중복·연사 세트(duplicateGroups) 및 trashCategory를 즉시 재클러스터링하여
+      // [① 중복·연사 사진]·[④ 흔들린 사진] 탭과 전체 검색 목록(searchResults)에 복원 즉시 100% 재표시합니다.
+      const { updatedPhotos, duplicateGroups: nextDupGroups } =
+        clusterPhotosIntoDuplicateGroups(unquarantinedPhotos);
+
+      const nextSelectedTrashIds = new Set<string>(state.selectedTrashIds);
+      let restoredFocusCategory: TrashCategory | null = null;
+      updatedPhotos.forEach((p) => {
+        if (p.trashCategory && !p.quarantined) {
+          nextSelectedTrashIds.add(p.id);
+          if (restoredIdsAfterReplace.has(p.id) && !restoredFocusCategory) {
+            restoredFocusCategory = p.trashCategory;
+          }
+        }
+      });
+      if (!restoredFocusCategory && nextDupGroups.some((g) => g.photoIds.some((id) => restoredIdsAfterReplace.has(id)))) {
+        restoredFocusCategory = 'duplicate';
+      }
+
+      const inSharedLounge = isSharedPhotoLounge(state.activeLoungeType);
+      const existingSearchIds = new Set(state.searchResults.map((r) => r.photo.id));
+      const newlyRestoredSearchItems: SearchResultItem[] = updatedPhotos
+        .filter(
+          (p) =>
+            !p.quarantined &&
+            !p.isVaultDocument &&
+            restoredIdsAfterReplace.has(p.id) &&
+            !existingSearchIds.has(p.id)
+        )
+        .map((photo) => ({
+          photo,
+          score: 0.99,
+          matchPercentage: 99,
+          matchedBy: 'text-direct' as const,
+        }));
+      const refreshedSearchResults: SearchResultItem[] = inSharedLounge
+        ? state.searchResults
+        : state.hasExecutedUserSearch
+        ? [...newlyRestoredSearchItems, ...state.searchResults]
+        : updatedPhotos
+            .filter((p) => !p.quarantined && !p.isVaultDocument)
+            .map((photo) => ({
+              photo,
+              score: 0.99,
+              matchPercentage: 99,
+              matchedBy: 'text-direct' as const,
+            }));
+
+      return {
+        photos: updatedPhotos,
+        duplicateGroups: nextDupGroups,
+        selectedTrashIds: nextSelectedTrashIds,
+        activeTrashCategoryFilter: restoredFocusCategory || state.activeTrashCategoryFilter,
+        searchResults: refreshedSearchResults,
+        quarantineMoving: false,
+        lastQuarantineToast: `♻️ 사진 ${restoredSet.size}장을 ${quarantineResultNote('restore', restoreRes)}`,
+      };
+    });
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ghosti_photo_restored_from_quarantine'));
+    }
     if (!zCoreBridge.isConnected) {
       void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
     }

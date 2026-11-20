@@ -21,6 +21,14 @@ export function getOpticalSigForPhoto(photoId: string): OpticalSignatureMeta | u
   return opticalSigByPhotoId.get(photoId);
 }
 
+export function migrateOpticalSigPhotoId(oldId: string, newId: string): void {
+  if (!oldId || !newId || oldId === newId) return;
+  const existing = opticalSigByPhotoId.get(oldId);
+  if (existing) {
+    opticalSigByPhotoId.set(newId, existing);
+  }
+}
+
 const GENERIC_CAMERA_OR_BUCKET_RX =
   /^(?:img|dsc|pxl|sam|pic|mov|vid|mvi|dji|gopr|photo|image|externalfile|kakaotalk|screenshot|screen|capture|camera|dcim|recents|all\s*photos|camera\s*roll|pictures|photos|downloads?|documents?|desktop|내폰|갤러리|사진|폴더|복사본|copy)$/i;
 
@@ -383,6 +391,9 @@ export function clusterPhotosIntoDuplicateGroups(
   }
 
   const updatedPhotos = photos.map((p) => {
+    if (p.quarantined) {
+      return p;
+    }
     const role = groupRoleByPhotoId.get(p.id);
     if (!role) {
       if (p.trashCategory === 'duplicate') {
@@ -791,6 +802,7 @@ export async function analyzeNativeGalleryPhotoBatch(
           name: item.name,
           size: item.size || 0,
           mtimeMs: item.mtimeMs || Date.now(),
+          thumbDataUrl: item.thumbDataUrl,
         });
 
         const meaningfulTokens = extractMeaningfulUserMediaTokens(item.name, item.bucket);
@@ -976,6 +988,7 @@ export async function loadCachedMobileGalleryIndex(): Promise<{
             name: p.name,
             size: p.size,
             mtimeMs: p.mtimeMs,
+            thumbDataUrl: p.thumbUrl,
           });
         }
         const hydratedVideos = Array.isArray(val.videos)
