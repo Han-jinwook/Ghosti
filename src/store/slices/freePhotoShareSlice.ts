@@ -31,10 +31,12 @@ import {
   fetchGuestPreviewRoomByToken,
   fetchScopedSharedRoomPhotos,
   getCachedJoinedSharedRoomsSync,
+  leaveSupabaseSharedPhotoRoom,
   readInstantLocalVaultSharedPhotos,
   uploadPhotosToSupabaseSharedRoom,
   type JoinedSharedPhotoRoomInfo,
 } from '../../services/sharedPhotoRoomSupabase';
+import { loadPassportFlowState } from '../../services/passportRegistrationFlow';
 import { aiRuntimeFlags } from '../../services/ai/aiSharedRuntime';
 
 let sharedRoomSyncSeq = 0;
@@ -351,6 +353,7 @@ export interface FreePhotoShareSlice {
   setActiveFamilyRoom: (room: FamilyRoomId) => void;
   selectOwnSharedRoom: (loungeType: LoungeType, familyRoom?: FamilyRoomId) => void;
   selectJoinedSharedRoom: (room: JoinedSharedPhotoRoomInfo) => void;
+  leaveJoinedSharedRoom: (roomId?: string) => Promise<void>;
   setClubSizeTier: (tier: ClubSizeTier) => void;
   verifyStudentOcr: () => void;
 
@@ -1316,6 +1319,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
 
   softDeleteSharedRoomPhoto24h: (photoId) => {
     if (!photoId) return;
+    void deleteSupabaseSharedRoomPhoto(photoId);
     set((state) => {
       const deletedAt = new Date().toISOString();
       const nextSoftDeletedMap = {
@@ -1339,7 +1343,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         photos: nextPhotos,
         searchResults: nextResults,
         lastQuarantineToast:
-          '🗑️ 24시간 내 본인 삭제 처리되어 공유방에서 내려가고 [공유방 휴지통]으로 이동되었습니다. (언제든 1초 복원 가능)',
+          '🗑️ 공유방에서 사진이 숨김·삭제 처리되어 [공유방 휴지통]으로 이동되었습니다. (내 기기 원본 보존 · 언제든 1초 복원 가능)',
       };
     });
   },
@@ -2225,6 +2229,73 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     void get().syncActiveSharedRoomFromSupabase();
   },
 
+  leaveJoinedSharedRoom: async (explicitRoomId) => {
+    const stateBefore = get();
+    const targetRoomId = (
+      explicitRoomId ||
+      stateBefore.activeJoinedRoomMeta?.roomId ||
+      stateBefore.activeSharedRoomId ||
+      ''
+    ).trim();
+    if (!targetRoomId) return;
+
+    const targetMeta =
+      stateBefore.joinedSharedRooms.find((r) => r.roomId === targetRoomId) ||
+      stateBefore.activeJoinedRoomMeta;
+    const roomLabel = targetMeta
+      ? `${targetMeta.masterNickname} · ${targetMeta.roomTitle}`
+      : '초대받은 공유방';
+
+    await leaveSupabaseSharedPhotoRoom(targetRoomId);
+    storeSharedRefs.knownJoinedRoomIds.delete(targetRoomId);
+    if (storeSharedRefs.activeSharedRoomId === targetRoomId) {
+      storeSharedRefs.activeSharedRoomId = null;
+    }
+    lastCompletedRoomSig = '';
+
+    const nextLounge = stateBefore.activeLoungeType;
+    const nextFamily = stateBefore.activeFamilyRoom || '우리집';
+
+    set((state) => {
+      const nextJoinedList = state.joinedSharedRooms.filter((r) => r.roomId !== targetRoomId);
+      const nextAdded = state.sharedRoomAddedPhotos.filter((p) => p.sharedRoomId !== targetRoomId);
+      persistSharedRoomAddedPhotos(nextAdded);
+      const nextCorpus = resolveLoungePhotoCorpus({
+        activeLoungeType: nextLounge,
+        activeFamilyRoom: nextFamily,
+        activeSharedRoomId: null,
+        photos: state.photos,
+        sharedRoomHostPhotos: state.sharedRoomHostPhotos,
+        sharedRoomAddedPhotos: nextAdded,
+      });
+      const nextResults: SearchResultItem[] = filterVisibleGalleryPhotos(nextCorpus).map(
+        (photo) => ({
+          photo,
+          score: 0.95,
+          matchPercentage: 97,
+          matchedBy: 'text-direct' as const,
+        })
+      );
+      return {
+        activeSharedRoomId: null,
+        activeJoinedRoomMeta: null,
+        joinedSharedRooms: nextJoinedList,
+        sharedRoomAddedPhotos: nextAdded,
+        desktopTab: 'dashboard',
+        mobileTab: 'search',
+        isGuestPreviewMode: false,
+        hasExecutedUserSearch: false,
+        searchSpace: 'gallery',
+        searchResults: nextResults,
+        matchedVideoScenes: [],
+        matchedLocalDocs: [],
+        matchedVaultPhotos: [],
+        lastQuarantineToast: `🚪 [${roomLabel}] 공유방에서 나왔습니다. (해당 방 로컬 캐시 0.1초 자동 삭제 완료 · 내 개인 여권과 내 사진은 100% 보존)`,
+      };
+    });
+    void get().syncActiveSharedRoomFromSupabase();
+  },
+
   setClubSizeTier: (clubSizeTier) =>
     set({
       clubSizeTier,
@@ -2704,10 +2775,31 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       faceClusters,
     } = stateNow;
     const sharedMode = isSharedPhotoLounge(activeLoungeType);
-    const creator = faceClusters.find((c) => c.clusterId === 'face_member_5');
-    const clubPersona = creator?.roomPersonas?.club || '내 얼굴';
+    const isClubRoom = activeLoungeType === 'club';
 
-    // [개인 PC 사진 유출 0%]: 동창회 방에 실제로 올라온 공유 사진 코퍼스 안에서만 검색
+    const passportFlow = loadPassportFlowState();
+    const secretaryState = loadGhostSecretaryState();
+    const selfCluster = faceClusters.find(
+      (c) =>
+        (passportFlow.myClusterId && c.clusterId === passportFlow.myClusterId) ||
+        c.clusterId === 'face_member_5'
+    );
+    const candidateNames = Array.from(
+      new Set(
+        [
+          passportFlow.userRealName,
+          ...(passportFlow.userAliases || []),
+          secretaryState.nickname,
+          selfCluster?.registeredName,
+          selfCluster?.roomPersonas?.club,
+        ]
+          .map((v) => String(v || '').trim())
+          .filter(Boolean)
+      )
+    );
+    const myDisplayName = candidateNames[0] || '나';
+
+    // [개인 PC 사진 유출 0%]: 현재 공유방(동호회·동창회·가족)에 실제로 올라온 공유 사진 코퍼스 안에서만 검색
     const scopedCorpus = resolveLoungePhotoCorpus({
       activeLoungeType,
       activeFamilyRoom,
@@ -2717,16 +2809,36 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       sharedRoomAddedPhotos,
     });
     const visibleRoomPhotos = filterVisibleGalleryPhotos(scopedCorpus);
-    const schoolRe = new RegExp(
-      `(${alumniGradYear}|수학여행|소풍|추억|학창|졸업|${alumniSchoolName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`,
-      'i'
-    );
-    const taggedMatches = visibleRoomPhotos.filter((p) => {
-      const hay = `${p.name} ${p.captionKo || ''} ${(p.tags || []).join(' ')} ${(p.keywordsKo || []).join(' ')}`;
-      return schoolRe.test(hay);
+
+    const escapedNames = candidateNames
+      .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .filter(Boolean);
+    const matchedFileSet = new Set(selfCluster?.matchedPhotoFiles || []);
+
+    const personMatches = visibleRoomPhotos.filter((p) => {
+      if (matchedFileSet.has(p.name)) return true;
+      const hay = `${p.name} ${p.uploaderLabel || ''} ${p.captionKo || ''} ${(p.tags || []).join(' ')} ${(p.keywordsKo || []).join(' ')}`;
+      if (escapedNames.length > 0 && new RegExp(`(${escapedNames.join('|')})`, 'i').test(hay)) {
+        return true;
+      }
+      return false;
     });
+
+    const fallbackRe = isClubRoom
+      ? /(모임|동호회|산행|라운딩|번개|단체|인물)/i
+      : new RegExp(
+          `(${alumniGradYear}|수학여행|소풍|추억|학창|졸업|${alumniSchoolName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`,
+          'i'
+        );
+    const taggedMatches =
+      personMatches.length > 0
+        ? personMatches
+        : visibleRoomPhotos.filter((p) => {
+            const hay = `${p.name} ${p.captionKo || ''} ${(p.tags || []).join(' ')} ${(p.keywordsKo || []).join(' ')}`;
+            return fallbackRe.test(hay);
+          });
     const targetList = taggedMatches.length > 0 ? taggedMatches : visibleRoomPhotos;
-    const matchedSchoolPhotos = targetList.map((photo, idx) => ({
+    const matchedPhotos = targetList.map((photo, idx) => ({
       photo,
       score: Math.max(0.75, 0.99 - idx * 0.01),
       matchPercentage: Math.max(75, 99 - idx),
@@ -2734,26 +2846,32 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     }));
 
     set({
-      clubFeedTrack: 'memories_1989',
+      ...(isClubRoom ? {} : { clubFeedTrack: 'memories_1989' }),
       searchSpace: 'gallery',
-      hasExecutedUserSearch: matchedSchoolPhotos.length > 0,
+      hasExecutedUserSearch: matchedPhotos.length > 0,
       hasUserSelectedSearchTab: true,
       desktopTab: 'dashboard',
       mobileTab: 'search',
-      activeQuery: `🎯 [${clubPersona}] ${alumniBannerTitle || `${alumniSchoolName} ${alumniGradYear}년`} 학창 시절 추억 사진 (${matchedSchoolPhotos.length}장)`,
-      matchedTags: [
-        `#${(alumniBannerTitle || alumniSchoolName).replace(/\s+/g, '')}`,
-        `#${alumniGradYear}년추억`,
-        `#동창회앨범`,
-      ],
-      searchResults: matchedSchoolPhotos,
+      activeQuery: isClubRoom
+        ? `🎯 [${myDisplayName}] 내 모임 사진 (${matchedPhotos.length}장)`
+        : `🎯 [${myDisplayName}] ${alumniBannerTitle || `${alumniSchoolName} ${alumniGradYear}년`} 학창 시절 추억 사진 (${matchedPhotos.length}장)`,
+      matchedTags: isClubRoom
+        ? [`#${myDisplayName}`, '#내모임사진', '#동호회앨범']
+        : [
+            `#${myDisplayName}`,
+            `#${(alumniBannerTitle || alumniSchoolName).replace(/\s+/g, '')}`,
+            `#${alumniGradYear}년추억`,
+          ],
+      searchResults: matchedPhotos,
       ...(sharedMode
         ? { matchedVideoScenes: [], matchedLocalDocs: [], matchedVaultPhotos: [] }
         : {}),
       lastQuarantineToast:
-        matchedSchoolPhotos.length > 0
-          ? `🎯 [학창 시절 사진 찾기 완료] 현재 동창회 공유방 사진 중 ${matchedSchoolPhotos.length}장을 찾았습니다!`
-          : `📸 아직 이 동창회 공유방에 올라온 사진이 없습니다. [+ 내 사진 추가]로 추억 사진을 먼저 올려보세요!`,
+        matchedPhotos.length > 0
+          ? isClubRoom
+            ? `🎯 [${myDisplayName}] 여권 기준 이 모임방 사진 중 ${matchedPhotos.length}장을 1초 만에 찾았습니다!`
+            : `🎯 [${myDisplayName}] 여권 기준 동창회 공유방 사진 중 ${matchedPhotos.length}장을 1초 만에 찾았습니다!`
+          : `📸 아직 이 공유방에 올라온 사진이 없습니다. [+ 내 사진도 이 방에 추가하기]로 먼저 올려보세요!`,
     });
   },
 });

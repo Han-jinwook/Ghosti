@@ -24,6 +24,7 @@ import {
   readCurrentInviteDisplayMeta,
 } from '../../services/shareInviteDeepLinkBridge';
 import { registerLocalPhotoPreviewDataUrl } from '../../services/sharedPhotoRoomSupabase';
+import { loadPassportFlowState } from '../../services/passportRegistrationFlow';
 
 const PERSISTENT_BATCH_THUMB_CACHE = new Map<string, string>();
 const INFLIGHT_BATCH_THUMB_IDS = new Set<string>();
@@ -46,6 +47,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
   const addLocalPhotosToSharedRoom = useSaySeeStore((s) => s.addLocalPhotosToSharedRoom);
   const sharedRoomHostPhotos = useSaySeeStore((s) => s.sharedRoomHostPhotos);
   const sharedRoomAddedPhotos = useSaySeeStore((s) => s.sharedRoomAddedPhotos);
+  const faceClusters = useSaySeeStore((s) => s.faceClusters);
   const importMobileLocalPhotos = useSaySeeStore((s) => s.importMobileLocalPhotos);
   const layout = useSaySeeStore((s) => s.layout);
   const isStoreAppMode = useSaySeeStore((s) => s.isStoreAppMode);
@@ -57,6 +59,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
   const [guestEmailDraft, setGuestEmailDraft] = useState('');
   const [selectedSharedUploadIds, setSelectedSharedUploadIds] = useState<string[]>([]);
   const [recentPickedNames, setRecentPickedNames] = useState<string[]>([]);
+  const [uploadModalFilterMode, setUploadModalFilterMode] = useState<'all' | 'passport_recommended'>('all');
   const [, setThumbCacheTick] = useState(0);
   const scrollWrapRef = useRef<HTMLDivElement | null>(null);
   const [scrollState, setScrollState] = useState({
@@ -112,6 +115,86 @@ export const FreePhotoShareOverlays: React.FC = () => {
     recentPickedNames,
   ]);
 
+  // [Step 1 — 여권(나·가족·반려견) 일치 사진 자동 추출 & 추천 배지 매핑]
+  const passportRecommendationByPhotoId = useMemo(() => {
+    const map = new Map<string, string>();
+    const flow = loadPassportFlowState();
+    const myFileSet = new Set<string>();
+    const familyFileSet = new Set<string>();
+    const registeredNames: string[] = [];
+
+    if (flow.userRealName?.trim()) {
+      registeredNames.push(flow.userRealName.trim());
+    }
+    for (const alias of flow.userAliases || []) {
+      if (alias?.trim()) registeredNames.push(alias.trim());
+    }
+
+    for (const fc of faceClusters) {
+      if (fc.excludedAsPasserby) continue;
+      const isMyCluster =
+        (flow.myClusterId && fc.clusterId === flow.myClusterId) ||
+        fc.clusterId === 'face_member_5';
+      const isRegFamily =
+        (flow.familyClusterIds || []).includes(fc.clusterId) ||
+        Boolean(fc.registeredName?.trim());
+      if (fc.registeredName?.trim()) {
+        registeredNames.push(fc.registeredName.trim());
+      }
+      if (isMyCluster) {
+        for (const fn of fc.matchedPhotoFiles || []) myFileSet.add(fn);
+      } else if (isRegFamily) {
+        for (const fn of fc.matchedPhotoFiles || []) familyFileSet.add(fn);
+      }
+    }
+
+    const escapedNames = Array.from(new Set(registeredNames))
+      .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+      .filter(Boolean);
+    const nameRegex =
+      escapedNames.length > 0 ? new RegExp(`(${escapedNames.join('|')})`, 'i') : null;
+    const themeRegex =
+      activeLoungeType === 'family'
+        ? /(가족|아내|남편|아이|딸|아들|부모|어머니|아버지|반려견|강아지|고양이|여행|나들이|인물)/i
+        : activeLoungeType === 'student'
+        ? /(동창|졸업|학창|수학여행|소풍|추억|단체|친구|인물)/i
+        : /(모임|동호회|산행|라운딩|번개|단체|여행|인물)/i;
+
+    for (const p of uploadableLocalPhotos) {
+      const hay = `${p.name} ${p.captionKo || ''} ${(p.tags || []).join(' ')} ${(p.keywordsKo || []).join(' ')}`;
+      if (myFileSet.has(p.name)) {
+        map.set(p.id, `🪪 ${flow.userRealName?.trim() || '내'} 여권 매칭`);
+      } else if (familyFileSet.has(p.name)) {
+        map.set(p.id, '👨‍👩‍👧‍👦 가족 여권 매칭');
+      } else if (nameRegex && nameRegex.test(hay)) {
+        map.set(p.id, '🪪 여권 이름 매칭');
+      } else if (themeRegex.test(hay)) {
+        map.set(
+          p.id,
+          activeLoungeType === 'family'
+            ? '✨ 가족·반려견 추천'
+            : activeLoungeType === 'student'
+            ? '✨ 동창·추억 추천'
+            : '✨ 모임·인물 추천'
+        );
+      }
+    }
+    return map;
+  }, [uploadableLocalPhotos, faceClusters, activeLoungeType]);
+
+  const recommendedLocalPhotos = useMemo(
+    () => uploadableLocalPhotos.filter((p) => passportRecommendationByPhotoId.has(p.id)),
+    [uploadableLocalPhotos, passportRecommendationByPhotoId]
+  );
+
+  const displayedModalPhotos = useMemo(
+    () =>
+      uploadModalFilterMode === 'passport_recommended' && recommendedLocalPhotos.length > 0
+        ? recommendedLocalPhotos
+        : uploadableLocalPhotos,
+    [uploadModalFilterMode, recommendedLocalPhotos, uploadableLocalPhotos]
+  );
+
   const handlePickedFilesForSharedModal = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
     const files = Array.from(fileList);
@@ -142,6 +225,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
     if (showSharedPhotoUploadModal && !wasUploadModalOpenRef.current) {
       setSelectedSharedUploadIds([]);
       setRecentPickedNames([]);
+      setUploadModalFilterMode('all');
       setScrollState((prev) => ({ ...prev, scrollTop: 0 }));
       if (scrollWrapRef.current) {
         scrollWrapRef.current.scrollTop = 0;
@@ -170,7 +254,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
       ro.observe(el);
       return () => ro.disconnect();
     }
-  }, [showSharedPhotoUploadModal, uploadableLocalPhotos.length]);
+  }, [showSharedPhotoUploadModal, displayedModalPhotos.length]);
 
   const gridCols = useMemo(() => {
     if (typeof window === 'undefined') return 6;
@@ -186,27 +270,27 @@ export const FreePhotoShareOverlays: React.FC = () => {
     Math.floor((Math.max(280, scrollState.containerW - 6) - (gridCols - 1) * gapPx) / gridCols)
   );
   const rowHeightPx = cardSidePx + gapPx;
-  const totalRows = Math.ceil(uploadableLocalPhotos.length / gridCols);
+  const totalRows = Math.ceil(displayedModalPhotos.length / gridCols);
   const startRow = Math.max(0, Math.floor(scrollState.scrollTop / rowHeightPx) - 4);
   const endRow = Math.min(
     totalRows,
     Math.ceil((scrollState.scrollTop + scrollState.viewportH) / rowHeightPx) + 6
   );
   const startIndex = startRow * gridCols;
-  const endIndex = Math.min(uploadableLocalPhotos.length, endRow * gridCols);
+  const endIndex = Math.min(displayedModalPhotos.length, endRow * gridCols);
   const topSpacerPx = startRow * rowHeightPx;
   const bottomSpacerPx = Math.max(0, (totalRows - endRow) * rowHeightPx);
 
   // [수백·수천 장 초고속 무지연 배치 프리페처]:
   // 브라우저 6-소켓 병목 없이 1회 HTTP 요청으로 48장씩 묶어 가져오고, 현재 스크롤 위치 앞쪽으로 144장을 선행 캐싱합니다.
   useEffect(() => {
-    if (!showSharedPhotoUploadModal || !zCoreBridge.isConnected || uploadableLocalPhotos.length === 0) {
+    if (!showSharedPhotoUploadModal || !zCoreBridge.isConnected || displayedModalPhotos.length === 0) {
       return;
     }
     let cancelled = false;
     const windowStart = Math.max(0, startIndex - 24);
-    const lookaheadEnd = Math.min(uploadableLocalPhotos.length, endIndex + 72);
-    const prioritySlice = uploadableLocalPhotos.slice(windowStart, lookaheadEnd);
+    const lookaheadEnd = Math.min(displayedModalPhotos.length, endIndex + 72);
+    const prioritySlice = displayedModalPhotos.slice(windowStart, lookaheadEnd);
 
     const pumpBatches = async () => {
       for (let cursor = 0; cursor < prioritySlice.length; ) {
@@ -605,53 +689,98 @@ export const FreePhotoShareOverlays: React.FC = () => {
               </button>
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-white/10">
-              <div className="flex flex-wrap items-center gap-2">
-                <label className="px-3 py-1.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer">
-                  {isMobileEnv ? '📱 내 폰 갤러리에서 사진 고르기' : '📂 파일 탐색기에서 직접 사진 고르기'}
-                  <input
-                    type="file"
-                    accept="image/*"
-                    multiple
-                    className="hidden"
-                    onChange={(e) => {
-                      void handlePickedFilesForSharedModal(e.target.files);
-                      e.target.value = '';
-                    }}
-                  />
-                </label>
+            <div className="flex flex-col gap-2 pb-2 border-b border-white/10">
+              {/* [Step 1 — 여권·인물 자동 추출 추천 필터 탭] */}
+              {uploadableLocalPhotos.length > 0 && (
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="inline-flex items-center gap-1.5 p-1 rounded-2xl bg-zinc-900 border border-white/10">
+                    <button
+                      type="button"
+                      onClick={() => setUploadModalFilterMode('all')}
+                      className={`px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer ${
+                        uploadModalFilterMode === 'all' || recommendedLocalPhotos.length === 0
+                          ? 'bg-[#2DD4BF] text-zinc-950 shadow-xs'
+                          : 'text-zinc-300 hover:text-white'
+                      }`}
+                    >
+                      🖼️ 내 기기 전체 새 사진 ({uploadableLocalPhotos.length}장)
+                    </button>
+                    {recommendedLocalPhotos.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setUploadModalFilterMode('passport_recommended')}
+                        className={`px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer ${
+                          uploadModalFilterMode === 'passport_recommended'
+                            ? 'bg-amber-400 text-zinc-950 shadow-xs'
+                            : 'text-amber-300 hover:text-amber-200'
+                        }`}
+                      >
+                        🪪 여권·인물 매칭 추천 ({recommendedLocalPhotos.length}장)
+                      </button>
+                    )}
+                  </div>
+                  {recommendedLocalPhotos.length > 0 && (
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSelectedSharedUploadIds(recommendedLocalPhotos.map((p) => p.id))
+                      }
+                      className="px-3 py-1.5 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/50 text-amber-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+                    >
+                      🪪 여권 매칭 추천 {recommendedLocalPhotos.length}장 한 번에 선택
+                    </button>
+                  )}
+                </div>
+              )}
+
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  <label className="px-3 py-1.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer">
+                    {isMobileEnv ? '📱 내 폰 갤러리에서 사진 고르기' : '📂 파일 탐색기에서 직접 사진 고르기'}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      multiple
+                      className="hidden"
+                      onChange={(e) => {
+                        void handlePickedFilesForSharedModal(e.target.files);
+                        e.target.value = '';
+                      }}
+                    />
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSharedUploadIds(displayedModalPhotos.map((p) => p.id))}
+                    className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-teal-400/50 text-teal-300 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+                  >
+                    ✨ 현재 목록 {displayedModalPhotos.length}장 전체 선택
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedSharedUploadIds([])}
+                    className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11.5px] font-bold cursor-pointer"
+                  >
+                    선택 해제
+                  </button>
+                </div>
                 <button
                   type="button"
-                  onClick={() => setSelectedSharedUploadIds(uploadableLocalPhotos.map((p) => p.id))}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-teal-400/50 text-teal-300 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+                  onClick={() => {
+                    setShowSharedPhotoUploadModal(false);
+                    useSaySeeStore.setState({
+                      pendingReturnShareRoom: {
+                        loungeType: activeLoungeType,
+                        familyRoom: activeFamilyRoom,
+                        roomTitle: activeSharedRoomTitle,
+                      },
+                    });
+                    jumpToGhostSecretary();
+                  }}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-bold cursor-pointer break-keep"
                 >
-                  ✨ {isMobileEnv ? '내 폰 새 사진' : '내 컴퓨터 새 사진'} {uploadableLocalPhotos.length}장 전체 선택
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedSharedUploadIds([])}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11.5px] font-bold cursor-pointer"
-                >
-                  선택 해제
+                  👻 올리기 전에 귀신비서에서 중복·흔들린 사진 먼저 점검하기
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={() => {
-                  setShowSharedPhotoUploadModal(false);
-                  useSaySeeStore.setState({
-                    pendingReturnShareRoom: {
-                      loungeType: activeLoungeType,
-                      familyRoom: activeFamilyRoom,
-                      roomTitle: activeSharedRoomTitle,
-                    },
-                  });
-                  jumpToGhostSecretary();
-                }}
-                className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-bold cursor-pointer break-keep"
-              >
-                👻 올리기 전에 귀신비서에서 중복·흔들린 사진 먼저 점검하기
-              </button>
             </div>
 
             <div
@@ -718,9 +847,10 @@ export const FreePhotoShareOverlays: React.FC = () => {
                   }}
                 >
                   <div className="grid grid-cols-3 sm:grid-cols-4 md:grid-cols-6 gap-2.5">
-                    {uploadableLocalPhotos.slice(startIndex, endIndex).map((p) => {
+                    {displayedModalPhotos.slice(startIndex, endIndex).map((p) => {
                       const checked = selectedSharedUploadSet.has(p.id);
                       const resolvedSrc = PERSISTENT_BATCH_THUMB_CACHE.get(p.id) || p.thumbUrl;
+                      const passportBadge = passportRecommendationByPhotoId.get(p.id);
                       return (
                         <button
                           key={p.id}
@@ -750,6 +880,11 @@ export const FreePhotoShareOverlays: React.FC = () => {
                             }}
                             className="w-full h-full object-cover"
                           />
+                          {passportBadge && (
+                            <span className="absolute top-1.5 left-1.5 max-w-[72%] truncate px-1.5 py-0.5 rounded-md bg-zinc-950/85 border border-amber-400/50 text-amber-300 text-[9.5px] font-extrabold">
+                              {passportBadge}
+                            </span>
+                          )}
                           <div
                             className={`absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-black shadow ${
                               checked

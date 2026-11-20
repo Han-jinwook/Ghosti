@@ -184,22 +184,19 @@ const LOUNGE_SUBMENU_CONFIG: Record<
     { id: 'dashboard', icon: '👻', label: '귀신검색', subcaption: 'Ctrl + 0 현장 소환 수련' },
   ],
   family: [
-    { id: 'trial', icon: '📸', label: '패밀리 공유 시작' },
-    { id: 'dashboard', icon: '🖼️', label: '우리집·가족 앨범 & 검색' },
+    { id: 'dashboard', icon: '🖼️', label: '앨범 피드' },
     { id: 'trash', icon: '🧹', label: '새 사진 정리함' },
-    { id: 'sync', icon: '⚙️', label: '가족 초대 & 방 관리' },
+    { id: 'sync', icon: '👑', label: '가족 초대 & 방 관리' },
   ],
   club: [
-    { id: 'trial', icon: '⛰️', label: '동호회·모임 시작' },
-    { id: 'dashboard', icon: '🖼️', label: '동호회·모임 앨범 & 원본 다운로드' },
+    { id: 'dashboard', icon: '🖼️', label: '앨범 피드' },
     { id: 'trash', icon: '🧹', label: '새 사진 정리함' },
-    { id: 'sync', icon: '⚙️', label: '모임 관리 & 회원 초대' },
+    { id: 'sync', icon: '👑', label: '모임 초대 & 방 관리' },
   ],
   student: [
-    { id: 'trial', icon: '🎓', label: '동창회 시작' },
-    { id: 'dashboard', icon: '🖼️', label: '동창회 앨범 & 원본 다운로드' },
-    { id: 'trash', icon: '🧹', label: '새 사진·영상 정리함' },
-    { id: 'sync', icon: '⚙️', label: '동창회 관리 & 동기 초대' },
+    { id: 'dashboard', icon: '🖼️', label: '앨범 피드' },
+    { id: 'trash', icon: '🧹', label: '새 사진 정리함' },
+    { id: 'sync', icon: '👑', label: '동창회 초대 & 방 관리' },
   ],
   work: [
     { id: 'trial', icon: '💼', label: '업무 공유(공용 폴더 S:) 시작' },
@@ -1223,12 +1220,18 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                 )}
               </div>
 
-              {/* 우측: 해당 공유방의 서브메뉴 버튼들 (공유 시작 / 새 사진 정리함 / 초대 & 방 관리) */}
+              {/* 우측: 해당 공유방의 서브메뉴 버튼들 (앨범 피드 / 새 사진 정리함 / 초대 & 방 관리) */}
               <div className="flex flex-wrap items-center gap-1.5 ml-auto">
                 {currentSubmenus
-                  .filter((sub) => sub.id !== 'dashboard' && !(sub.id === 'trial' && isCurrentLoungeSubscribed))
+                  .filter(
+                    (sub) =>
+                      (activeLoungeType !== 'work' || sub.id !== 'dashboard') &&
+                      !(sub.id === 'trial' && isCurrentLoungeSubscribed)
+                  )
                   .map((sub) => {
-                    const isSubActive = desktopTab === sub.id;
+                    const isSubActive =
+                      desktopTab === sub.id ||
+                      (sub.id === 'dashboard' && desktopTab === 'trial');
                     return (
                       <button
                         key={sub.id}
@@ -1308,53 +1311,34 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
           </div>
         )}
 
-        {/* ─────────────── 💌 사진 공유방 카톡 초대 링크 수신 헤더 & 3대 본능 스위치 바 (패밀리/동호회/동창회 공유방 전용) ─────────────── */}
-        {(activeLoungeType === 'family' || activeLoungeType === 'club' || activeLoungeType === 'student') && (() => {
-          const inviteMeta = readCurrentInviteDisplayMeta(activeLoungeType, activeFamilyRoom);
-          return (
-            <div className="w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 pt-2">
-              <div
-                className={`px-3.5 py-2.5 rounded-2xl border flex flex-wrap items-center justify-between gap-2.5 transition-all ${
-                  isGuestPreviewMode
-                    ? 'bg-gradient-to-r from-amber-500/15 via-emerald-500/10 to-zinc-900 border-amber-400/50'
-                    : themeMode === 'light'
-                    ? 'bg-slate-50 border-slate-200/90'
-                    : 'bg-zinc-900/70 border-white/10'
-                }`}
-              >
-                <div className="flex flex-wrap items-center gap-2">
-                  {isGuestPreviewMode ? (
+        {/* ─────────────── 💌 사진 공유방 카톡 초대 링크 수신 헤더 (실제 비로그인 게스트 프리뷰 상태일 때만 표시) ─────────────── */}
+        {(activeLoungeType === 'family' || activeLoungeType === 'club' || activeLoungeType === 'student') &&
+          isGuestPreviewMode &&
+          (() => {
+            const inviteMeta = readCurrentInviteDisplayMeta(activeLoungeType, activeFamilyRoom);
+            return (
+              <div className="w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 pt-2">
+                <div className="px-3.5 py-2.5 rounded-2xl border flex flex-wrap items-center justify-between gap-2.5 transition-all bg-gradient-to-r from-amber-500/15 via-emerald-500/10 to-zinc-900 border-amber-400/50">
+                  <div className="flex flex-wrap items-center gap-2">
                     <span className="px-2.5 py-1 rounded-lg bg-[#FEE500] text-[#191919] font-label-sm text-[11.5px] font-extrabold shadow-xs">
                       {inviteMeta.inviteToken && !inviteMeta.isHostVerified
                         ? `💌 [${inviteMeta.roomTitle}] 초대장 불러오는 중...`
                         : `💌 ${inviteMeta.hostName}님이 초대한 [${inviteMeta.roomTitle}] · 로그인 없이 구경 중`}
                     </span>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setIsGuestPreviewMode(true)}
-                      className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-amber-400/30 font-label-sm text-[11.5px] font-extrabold cursor-pointer transition-all"
-                    >
-                      👀 카톡 초대 링크 수신 화면 미리보기
-                    </button>
-                  )}
-                  <span className="text-[11.5px] text-zinc-300">
-                    {isGuestPreviewMode
-                      ? '로그인·설치 없이 공유 사진방을 자유롭게 구경하고 검색해 보세요! 내 사진 올리기·원본 일괄 저장·새 사진 알림 클릭 시 합류 창이 열립니다.'
-                      : '상대방이 카톡 초대 링크를 눌렀을 때 설치·가입 없이 1초 만에 열리는 공유방 구경 화면을 미리 확인합니다.'}
-                  </span>
-                  {isGuestPreviewMode && !inviteMeta.hasExplicitUrlInvite && hasAuthenticatedHubAccountSession() && (
-                    <button
-                      type="button"
-                      onClick={() => setIsGuestPreviewMode(false)}
-                      className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-bold cursor-pointer"
-                    >
-                      ↩️ 방장 화면 복귀
-                    </button>
-                  )}
-                </div>
+                    <span className="text-[11.5px] text-zinc-300">
+                      로그인·설치 없이 공유 사진방을 자유롭게 구경하고 검색해 보세요! 내 사진 올리기·원본 일괄 저장·새 사진 알림 클릭 시 합류 창이 열립니다.
+                    </span>
+                    {!inviteMeta.hasExplicitUrlInvite && hasAuthenticatedHubAccountSession() && (
+                      <button
+                        type="button"
+                        onClick={() => setIsGuestPreviewMode(false)}
+                        className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[11px] font-bold cursor-pointer"
+                      >
+                        ↩️ 방장 화면 복귀
+                      </button>
+                    )}
+                  </div>
 
-                {isGuestPreviewMode && (
                   <div className="flex flex-wrap items-center gap-1.5">
                     {[
                       { label: '📸 내 사진도 이 방에 올리기', reason: '📸 내 폰 사진도 이 방에 올리기' },
@@ -1371,11 +1355,10 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                       </button>
                     ))}
                   </div>
-                )}
+                </div>
               </div>
-            </div>
-          );
-        })()}
+            );
+          })()}
     </>
   );
 };

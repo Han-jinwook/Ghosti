@@ -9,6 +9,7 @@ import {
 } from './supabaseClient';
 import {
   loadMemberLocalRoomPhotos,
+  purgeMemberLocalRoomVault,
   removeMemberLocalRoomPhotoEverywhere,
   upsertMemberLocalRoomPhotos,
 } from './sharedRoomLocalVault';
@@ -94,6 +95,37 @@ export interface JoinedSharedPhotoRoomInfo {
 
 const MY_ROOM_TOKEN_SESSION_PREFIX = 'ghosti_my_room_token_v1::';
 const JOINED_ROOMS_SESSION_PREFIX = 'ghosti_joined_rooms_v1::';
+const LEFT_ROOMS_LOCAL_PREFIX = 'ghosti_left_shared_rooms_v1::';
+
+function readLocallyLeftRoomIdSet(email: string): Set<string> {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  if (!cleanEmail || typeof window === 'undefined') return new Set();
+  try {
+    const raw = localStorage.getItem(`${LEFT_ROOMS_LOCAL_PREFIX}${cleanEmail}`);
+    if (!raw) return new Set();
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed) ? new Set(parsed.map((v) => String(v))) : new Set();
+  } catch {
+    return new Set();
+  }
+}
+
+function recordLocallyLeftRoomId(email: string, roomId: string, left: boolean): void {
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const cleanRoomId = (roomId || '').trim();
+  if (!cleanEmail || !cleanRoomId || typeof window === 'undefined') return;
+  try {
+    const set = readLocallyLeftRoomIdSet(cleanEmail);
+    if (left) {
+      set.add(cleanRoomId);
+    } else {
+      set.delete(cleanRoomId);
+    }
+    localStorage.setItem(`${LEFT_ROOMS_LOCAL_PREFIX}${cleanEmail}`, JSON.stringify(Array.from(set)));
+  } catch {
+    /* ignore */
+  }
+}
 
 interface CachedRoomTokenEntry {
   roomId: string;
@@ -122,7 +154,9 @@ const inflightEnsureRoomMap = new Map<
 function saveCachedJoinedRooms(email: string, rooms: JoinedSharedPhotoRoomInfo[]): void {
   const cleanEmail = (email || '').trim().toLowerCase();
   if (!cleanEmail) return;
-  const payload = { rooms, cachedAt: Date.now() };
+  const leftSet = readLocallyLeftRoomIdSet(cleanEmail);
+  const filteredRooms = rooms.filter((r) => !leftSet.has(r.roomId));
+  const payload = { rooms: filteredRooms, cachedAt: Date.now() };
   joinedRoomsMemoryCache.set(cleanEmail, payload);
   if (typeof window !== 'undefined') {
     try {
@@ -137,9 +171,10 @@ export function getCachedJoinedSharedRoomsSync(): JoinedSharedPhotoRoomInfo[] {
   if (!hasAuthenticatedHubAccountSession()) return [];
   const email = resolveCurrentAuthedEmail();
   if (!email) return [];
+  const leftSet = readLocallyLeftRoomIdSet(email);
   const mem = joinedRoomsMemoryCache.get(email);
   if (mem && Date.now() - mem.cachedAt < 25 * 60 * 1000) {
-    return mem.rooms;
+    return mem.rooms.filter((r) => !leftSet.has(r.roomId));
   }
   if (typeof window === 'undefined') return [];
   try {
@@ -151,8 +186,9 @@ export function getCachedJoinedSharedRoomsSync(): JoinedSharedPhotoRoomInfo[] {
       typeof parsed.cachedAt === 'number' &&
       Date.now() - parsed.cachedAt < 25 * 60 * 1000
     ) {
-      joinedRoomsMemoryCache.set(email, { rooms: parsed.rooms, cachedAt: parsed.cachedAt });
-      return parsed.rooms;
+      const cleanRooms = parsed.rooms.filter((r) => !leftSet.has(r.roomId));
+      joinedRoomsMemoryCache.set(email, { rooms: cleanRooms, cachedAt: parsed.cachedAt });
+      return cleanRooms;
     }
   } catch {
     /* ignore */
@@ -824,6 +860,10 @@ export async function acceptRoomInviteAsLoggedInMember(
   }
   const memberRow = data as { room_id?: string };
   if (memberRow?.room_id) {
+    const email = resolveCurrentAuthedEmail();
+    if (email) {
+      recordLocallyLeftRoomId(email, memberRow.room_id, false);
+    }
     clearCachedSharedRoomTokens();
   }
   return { ok: Boolean(memberRow?.room_id), roomId: memberRow?.room_id };
@@ -1308,4 +1348,69 @@ export async function deleteSupabaseSharedRoomPhoto(photoItemId: string): Promis
   if (!/^[0-9a-f-]{36}$/i.test(rawUuid)) return false;
   const { error } = await authed.from('ghosti_room_shared_photos').delete().eq('id', rawUuid);
   return !error;
+}
+
+/**
+ * [Step 6 — 공유방 나가기(자퇴) & 해당 공유방 로컬 IndexedDB 금고 0.1초 즉시 소거]
+ * - 멤버가 초대받은 공유방에서 스스로 나가면 즉시当該 방의 로컬 금고(IndexedDB) 사진을 0 Byte로 비우고
+ *   서버 멤버십(ghosti_room_members)에서 탈퇴합니다 (내 개인 귀신계 여권과 내 기기 사진은 100% 보존).
+ */
+export async function leaveSupabaseSharedPhotoRoom(roomId: string): Promise<boolean> {
+  const cleanRoomId = (roomId || '').trim();
+  if (!cleanRoomId) return false;
+  const currentEmail = resolveCurrentAuthedEmail();
+  if (currentEmail) {
+    recordLocallyLeftRoomId(currentEmail, cleanRoomId, true);
+    await purgeMemberLocalRoomVault(currentEmail, cleanRoomId);
+    const existingJoined = getCachedJoinedSharedRoomsSync().filter((r) => r.roomId !== cleanRoomId);
+    saveCachedJoinedRooms(currentEmail, existingJoined);
+  }
+  if (!hasAuthenticatedHubAccountSession()) return true;
+  const authed = await ensureGhostiAuthedSupabaseClient();
+  if (!authed) return true;
+  try {
+    const jwtClaims = readGhostiAuthedJwtClaims();
+    if (jwtClaims?.sub && /^[0-9a-f-]{36}$/i.test(jwtClaims.sub)) {
+      await authed
+        .from('ghosti_room_members')
+        .delete()
+        .eq('room_id', cleanRoomId)
+        .eq('member_user_id', jwtClaims.sub);
+    }
+    if (currentEmail) {
+      await authed
+        .from('ghosti_room_members')
+        .delete()
+        .eq('room_id', cleanRoomId)
+        .eq('member_email', currentEmail);
+    }
+  } catch {
+    /* ignore transient network error */
+  }
+  return true;
+}
+
+/**
+ * [Step 6 — 방장의 멤버 내보내기(강퇴)]
+ * - 방장이 특정 멤버를 공유방에서 내보내면 서버 멤버십(ghosti_room_members) 및 해당 멤버의 업로드 마중물을 정리합니다.
+ */
+export async function kickMemberFromSupabaseSharedPhotoRoom(
+  roomId: string,
+  memberNickname: string
+): Promise<boolean> {
+  const cleanRoomId = (roomId || '').trim();
+  const cleanNick = (memberNickname || '').trim();
+  if (!cleanRoomId || !cleanNick || !hasAuthenticatedHubAccountSession()) return false;
+  const authed = await ensureGhostiAuthedSupabaseClient();
+  if (!authed) return false;
+  try {
+    await authed
+      .from('ghosti_room_members')
+      .delete()
+      .eq('room_id', cleanRoomId)
+      .eq('nickname', cleanNick);
+  } catch {
+    /* ignore */
+  }
+  return true;
 }

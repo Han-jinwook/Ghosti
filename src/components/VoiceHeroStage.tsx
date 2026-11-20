@@ -4,7 +4,6 @@ import {
   isSharedPhotoLounge,
   resolveLoungePhotoCorpus,
 } from '../store/slices/storeSharedRefs';
-import { FaceMemberInlineBar } from './FaceMemberRegistryModal';
 import { ensureLoginAndZCoreReady, requestConnectMyComputer, zCoreBridge } from '../services/zCoreBridge';
 import { SilentIndexingStatusBar } from './SilentIndexingStatusBar';
 import { VoiceActorControlPill } from './VoiceActorControlPill';
@@ -62,6 +61,13 @@ export const VoiceHeroStage: React.FC = () => {
   }, []);
 
   const sharedMode = isSharedPhotoLounge(activeLoungeType);
+
+  useEffect(() => {
+    if (sharedMode && searchSpace === 'vault') {
+      setSearchSpace('gallery');
+    }
+  }, [sharedMode, searchSpace, setSearchSpace]);
+
   const scopedLocalDocuments = useMemo(
     () => (sharedMode ? [] : localDocuments),
     [sharedMode, localDocuments]
@@ -327,9 +333,13 @@ export const VoiceHeroStage: React.FC = () => {
           </div>
         )}
 
-        {/* 1-B. 3대 카테고리 스위칭 캡슐 탭: [사진] | [동영상] | [문서] (모바일은 검색창 좌우 폭에 맞춰 3등분 균등 정렬) */}
+        {/* 1-B. 카테고리 스위칭 캡슐 탭: 개인 라운지는 [사진] | [동영상] | [문서], 사진 공유방은 [사진] | [동영상] */}
         <div className="flex flex-wrap items-center justify-between gap-2 pb-0.5">
-          <div className="grid grid-cols-3 w-full sm:w-auto sm:flex items-center gap-2 max-w-full">
+          <div
+            className={`grid ${
+              sharedMode ? 'grid-cols-2' : 'grid-cols-3'
+            } w-full sm:w-auto sm:flex items-center gap-2 max-w-full`}
+          >
             <button
               type="button"
               onClick={() => {
@@ -393,31 +403,33 @@ export const VoiceHeroStage: React.FC = () => {
               </span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                setSearchSpace('vault');
-                scrollToResults();
-              }}
-              className={`px-3 sm:px-4 py-2 rounded-full font-label-md text-[13px] font-bold flex items-center justify-center gap-1.5 transition-all border shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
-                searchSpace === 'vault'
-                  ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
-                  : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
-              }`}
-            >
-              <span>문서</span>
-              <span
-                className={`px-2 py-0.2 rounded-full text-[11px] font-mono ${
+            {!sharedMode && (
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchSpace('vault');
+                  scrollToResults();
+                }}
+                className={`px-3 sm:px-4 py-2 rounded-full font-label-md text-[13px] font-bold flex items-center justify-center gap-1.5 transition-all border shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
                   searchSpace === 'vault'
-                    ? 'bg-white/25 text-zinc-950 font-black'
-                    : hasExecutedUserSearch && matchedTotalDocsCount > 0
-                    ? 'bg-primary-container/20 text-primary-container font-bold'
-                    : 'text-zinc-400 font-bold'
+                    ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
+                    : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10'
                 }`}
               >
-                {hasExecutedUserSearch ? `(${matchedTotalDocsCount})` : totalIndexedDocs}
-              </span>
-            </button>
+                <span>문서</span>
+                <span
+                  className={`px-2 py-0.2 rounded-full text-[11px] font-mono ${
+                    searchSpace === 'vault'
+                      ? 'bg-white/25 text-zinc-950 font-black'
+                      : hasExecutedUserSearch && matchedTotalDocsCount > 0
+                      ? 'bg-primary-container/20 text-primary-container font-bold'
+                      : 'text-zinc-400 font-bold'
+                  }`}
+                >
+                  {hasExecutedUserSearch ? `(${matchedTotalDocsCount})` : totalIndexedDocs}
+                </span>
+              </button>
+            )}
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
@@ -426,7 +438,8 @@ export const VoiceHeroStage: React.FC = () => {
                 <span className="hidden md:inline font-label-mono text-[11.5px] text-zinc-300">
                   <strong className="text-white">“{activeQuery}”</strong> 매칭:{' '}
                   <span className="text-primary-container font-bold">
-                    (사진 {searchResults.length}) (동영상 {matchedVideoScenes.length}) (문서 {matchedTotalDocsCount})
+                    (사진 {searchResults.length}) (동영상 {matchedVideoScenes.length})
+                    {!sharedMode ? ` (문서 ${matchedTotalDocsCount})` : ''}
                   </span>
                 </span>
                 <button
@@ -442,7 +455,7 @@ export const VoiceHeroStage: React.FC = () => {
               </div>
             )}
 
-            {searchSpace === 'vault' && !isMobile && (
+            {!sharedMode && searchSpace === 'vault' && !isMobile && (
               <button
                 type="button"
                 onClick={() => void openLocalFolder('docs')}
@@ -506,18 +519,6 @@ export const VoiceHeroStage: React.FC = () => {
           </div>
         )}
       </div>
-
-      {/* ─────────────── [라운지 마스터 단일 확인 카드] 개인 라운지에서는 100% 숨김 · 사진 공유(패밀리·동호회·동창회)에서 확인 대기 건이 있을 때만 1장씩 노출 후 Auto-Hide ─────────────── */}
-      {activeLoungeType !== 'personal' && (searchSpace === 'gallery' || searchSpace === 'video') && (
-        <FaceMemberInlineBar
-          onRunRealNameQuery={(query, targetSpace = 'gallery') => {
-            setTextInput(query);
-            setSearchSpace(targetSpace);
-            void runTextQuery(query);
-            scrollToResults();
-          }}
-        />
-      )}
     </section>
   );
 };

@@ -314,6 +314,35 @@ export async function removeMemberLocalRoomPhotoEverywhere(
 }
 
 /**
+ * [공유방 나가기(자퇴) / 내보내기(강퇴) 시 해당 공유방 로컬 IndexedDB 금고 0.1초 즉시 소거]
+ * - 해당 공유방(ownerEmail + roomId)의 로컬 캐시 사진만 0 Byte로 즉시 비우며,
+ *   내 개인 귀신계 여권(얼굴 시드)과 내 기기 원본 사진은 100% 보존합니다.
+ */
+export async function purgeMemberLocalRoomVault(
+  ownerEmail: string,
+  roomId: string
+): Promise<void> {
+  const cleanEmail = (ownerEmail || '').trim().toLowerCase();
+  const cleanRoomId = (roomId || '').trim();
+  if (!cleanEmail || !cleanRoomId) return;
+
+  const db = await openSharedRoomLocalVaultDb();
+  if (!db) return;
+
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(PHOTO_STORE_NAME, 'readwrite');
+      const store = tx.objectStore(PHOTO_STORE_NAME);
+      store.delete(buildPhotoVaultKey(cleanEmail, cleanRoomId));
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+/**
  * [업무 공유(S:) 전용 Zero-Cloud 로컬 30KB 미리보기 캐시]
  * - 업무 공유방 문서·단가표·도면은 Supabase 서버 DB 테이블에 단 1 Byte도 저장하지 않습니다 (서버 점유 0 Byte 원안 엄수).
  * - 대신 Realtime Broadcast로 수신한 30KB 이하 경량 텍스트/표/썸네일 미리보기만 팀원 본인 기기 IndexedDB에 캐싱하여

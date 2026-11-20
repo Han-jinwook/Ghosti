@@ -87,6 +87,34 @@ export function loadPassportRegState(): PassportRegState {
   }
 }
 
+export function loadPassportFlowState(): {
+  userRealName: string;
+  userAliases: string[];
+  myClusterId?: string;
+  familyClusterIds: string[];
+} {
+  const reg = loadPassportRegState();
+  const book = loadGhostPassportBook();
+  const sec = loadGhostSecretaryState();
+  const userRealName = (book.self?.realName || book.self?.nickname || sec.nickname || '').trim();
+  const userAliases = Array.from(
+    new Set([book.self?.nickname, sec.nickname].map((s) => String(s || '').trim()).filter(Boolean))
+  );
+  const confirmedClusterIds = Array.from(
+    new Set(
+      (reg.confirmedKeys || [])
+        .map((k) => String(k || '').split('::')[0])
+        .filter((cid) => cid && cid !== reg.selfClusterId)
+    )
+  );
+  return {
+    userRealName,
+    userAliases,
+    myClusterId: reg.selfClusterId,
+    familyClusterIds: confirmedClusterIds,
+  };
+}
+
 export function savePassportRegState(next: PassportRegState): void {
   try {
     localStorage.setItem(PASSPORT_REG_STATE_KEY, JSON.stringify(next));

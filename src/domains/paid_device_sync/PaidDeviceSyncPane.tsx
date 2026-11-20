@@ -97,9 +97,13 @@ export const PaidDeviceSyncPane: React.FC = () => {
                 </span>
               </div>
             </>
+          ) : activeLoungeType === 'family' ||
+            activeLoungeType === 'club' ||
+            activeLoungeType === 'student' ? (
+            <LoungeCustomSettingsHeader />
           ) : (
             <>
-          {/* 라운지별 전용 상단 설정 섹션 (가족 무수락 초대·강퇴 / 동호·동창회 관리 / 업무 공유(S:) 관리) */}
+          {/* 업무 공유(S:) 상단 설정 섹션 */}
           <LoungeCustomSettingsHeader />
 
           {/* 노션 토글 1: 🔄 폰↔PC 프라이빗 싱크 센터 & 내 PC 로컬 폴더 직결 관리 (클릭 시 동적 펼침) */}

@@ -32,14 +32,88 @@ import {
 import {
   ensureMyRoomAndInviteToken,
   getPrewarmedRoomInviteTokenSync,
+  kickMemberFromSupabaseSharedPhotoRoom,
   reseedRoomPhotosForInvite,
 } from '../../services/sharedPhotoRoomSupabase';
 import { resolveAccountScopedNickname } from '../../services/ghostSecretaryEngine';
+import { loadPassportFlowState } from '../../services/passportRegistrationFlow';
 import { LOUNGE_TABS, PLAN_BADGE_LABELS, HostThreeBodyControlPanel } from '../shared/loungeHelpers';
 import { WorkLoungeB2BHub } from '../paid_work_share/WorkLoungeB2BHub';
 import { QrCodeSvg } from '../../utils/qrCodeSvg';
 import { CrossDeviceClipboardAndPairingBar } from '../paid_device_sync/CrossDeviceClipboardAndPairingBar';
 import { getThisDeviceIdentity } from '../../services/deviceIntegrationService';
+
+const HOST_HIDE_PERMISSION_STORAGE_KEY = 'ghosti_room_host_hide_perm_v1';
+const KICKED_ROOM_MEMBERS_STORAGE_KEY = 'ghosti_kicked_room_members_v1';
+
+export function readHostRetainsHidePermission(): boolean {
+  if (typeof window === 'undefined') return true;
+  try {
+    return localStorage.getItem(HOST_HIDE_PERMISSION_STORAGE_KEY) !== 'false';
+  } catch {
+    return true;
+  }
+}
+
+export function writeHostRetainsHidePermission(enabled: boolean): void {
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(HOST_HIDE_PERMISSION_STORAGE_KEY, enabled ? 'true' : 'false');
+  } catch {
+    /* ignore */
+  }
+}
+
+export function resolveCurrentUserIdentityTokens(email?: string | null): string[] {
+  const flow = loadPassportFlowState();
+  const cleanEmail = (email || '').trim().toLowerCase();
+  const emailPrefix = cleanEmail.includes('@') ? cleanEmail.split('@')[0] : cleanEmail;
+  const nick = resolveAccountScopedNickname(cleanEmail, '');
+  return Array.from(
+    new Set(
+      [flow.userRealName, ...(flow.userAliases || []), nick, emailPrefix, '나', '방장']
+        .map((s) => String(s || '').trim())
+        .filter(Boolean)
+    )
+  );
+}
+
+/**
+ * [Step 4 — '👑 방장 상시 숨기기' + '24시간 내 본인 삭제' 권한 판별]
+ */
+export function evaluateSharedPhotoDeletePermission(opts: {
+  photoId: string;
+  uploaderLabel?: string;
+  mtimeMs?: number;
+  isJoinedOtherRoom: boolean;
+  hostRetainsHidePermission?: boolean;
+  currentIdentityTokens: string[];
+}): { allowed: boolean; mode: 'host_hide' | 'owner_24h' | 'none' } {
+  const hostPerm = opts.hostRetainsHidePermission ?? readHostRetainsHidePermission();
+  const rawUploader = String(opts.uploaderLabel || '').trim();
+  const cleanUploader = rawUploader.replace(/^[👑📸👤\s]+/, '').trim();
+  const isLocalAdded = String(opts.photoId || '').startsWith('shared_added_');
+  const isMyUpload =
+    isLocalAdded ||
+    !cleanUploader ||
+    opts.currentIdentityTokens.some(
+      (tok) =>
+        tok &&
+        (cleanUploader.toLowerCase() === tok.toLowerCase() ||
+          cleanUploader.toLowerCase().includes(tok.toLowerCase()))
+    );
+  const ageMs =
+    typeof opts.mtimeMs === 'number' && opts.mtimeMs > 0 ? Date.now() - opts.mtimeMs : 0;
+  const within24h = ageMs <= 24 * 60 * 60 * 1000;
+
+  if (isMyUpload && within24h) {
+    return { allowed: true, mode: 'owner_24h' };
+  }
+  if (!opts.isJoinedOtherRoom && hostPerm) {
+    return { allowed: true, mode: 'host_hide' };
+  }
+  return { allowed: false, mode: 'none' };
+}
 
 async function copyAuthenticatedRoomInviteFlow(opts: {
   loungeType: LoungeType;
@@ -271,7 +345,7 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
             🎓 {bannerTitle}
           </span>
           <span className="px-2 py-0.5 rounded-full bg-amber-400/15 border border-amber-300/30 text-amber-300 text-[11px] font-bold">
-            🏅 총무님 후원 · 전 회원 평생 0원
+            🎉 인원·장수 제한 없이 평생 0원
           </span>
           <button
             type="button"
@@ -399,7 +473,7 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
                 {bannerTitle}
               </h2>
               <span className="text-[12px] text-amber-200/95 font-medium">
-                🏅 총무님 후원 · 전 회원 평생 0원 운영 중
+                🎉 인원·장수 제한 없이 전 회원 평생 0원 운영 중
               </span>
             </div>
 
@@ -926,7 +1000,7 @@ export const LoungeView: React.FC = () => {
             <div className="p-5 md:p-6 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
-                  👨‍👩‍👧‍👦 패밀리 라운지 — 양가 분리 가족 사진관 (마스터 1인 결제 ➔ 가족 전원 무료)
+                  👨‍👩‍👧‍👦 패밀리 라운지 — 양가 분리 가족 사진관 (인원·장수 무제한 평생 0원)
                 </h1>
                 <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
                   사생활 혼선 없이 <strong>[우리집] · [본가(친가)] · [처가(친정)]</strong> 방을 분리하고, 카톡 링크 하나로 가족 스마트폰에서 함께 찍힌 사진만 3초 만에 자동 수합합니다.
@@ -995,7 +1069,7 @@ export const LoungeView: React.FC = () => {
                       📡 카톡 초대 &amp; 3초 레이더 수합
                     </span>
                     <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
-                      방장 1인 결제 ➔ 전원 무료
+                      인원·장수 무제한 평생 0원
                     </span>
                   </div>
                   <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
@@ -1615,16 +1689,14 @@ export const LoungeView: React.FC = () => {
                 <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-headline-sm text-[15px] text-white font-bold">
-                      {isStoreAppMode ? '🎮 방장 게이밍 PC 연동 부스트' : '🪙 인원 무제한 월 900원 단일 특가'}
+                      🎉 인원·장수 제한 없이 평생 0원
                     </span>
                     <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
-                      방장 PC 콕 찌르기
+                      총무 부담 0원
                     </span>
                   </div>
                   <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                    {isStoreAppMode
-                      ? '30명 학급이든 100명 동아리든 인원 제한 없이 연결! 초기 샘플 10장 한도 도달 시 방장에게 집 게이밍 PC 설치 알림을 보낼 수 있습니다.'
-                      : '30명 학급이든 100명 동아리든 인원 제한 없이 월 900원! 초기 샘플 10장 한도 도달 시 방장에게 집 게이밍 PC 설치 알림을 보낼 수 있습니다.'}
+                    30명 학급이든 100명 동호회든 인원·장수 제한 없이 방장과 전 회원이 평생 0원으로 공유하고 내 얼굴이 나온 사진을 1초 만에 찾습니다.
                   </p>
                 </div>
               </div>
@@ -1846,8 +1918,10 @@ export const LoungeFeedContextBanner: React.FC = () => {
     activeSharedRoomId,
     activeJoinedRoomMeta,
     selectOwnSharedRoom,
+    leaveJoinedSharedRoom,
     faceClusters,
     runTextQuery,
+    findMySchoolDaysPhotosFast,
     photos,
     sharedRoomHostPhotos,
     sharedRoomAddedPhotos,
@@ -1866,7 +1940,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
 
   const [p2pOriginalSummoned, setP2pOriginalSummoned] = useState(false);
   const [showStorageCheckBanner, setShowStorageCheckBanner] = useState(false);
-  const [simulateLowStorage, setSimulateLowStorage] = useState(false);
+  const [estimatedFreeStorageGb, setEstimatedFreeStorageGb] = useState<string | null>(null);
   const [downloadDirPath, setDownloadDirPath] = useState('D:\\Ghosti\\다운로드_원본');
   const [showClubCover, setShowClubCover] = useState(false);
   const [clubBannerBgTheme, setClubBannerBgTheme] = useState<'forest' | 'sunset'>('forest');
@@ -1874,6 +1948,30 @@ export const LoungeFeedContextBanner: React.FC = () => {
   const [editingClubTitle, setEditingClubTitle] = useState(false);
   const [clubTitleDraft, setClubTitleDraft] = useState('주말 산악 · 골프 · 취미 동호회 모임방');
   const [clubInviteCopied, setClubInviteCopied] = useState(false);
+
+  useEffect(() => {
+    if (!showStorageCheckBanner || typeof navigator === 'undefined' || !navigator.storage?.estimate) {
+      return;
+    }
+    let cancelled = false;
+    void navigator.storage
+      .estimate()
+      .then((est) => {
+        if (cancelled) return;
+        const quota = typeof est.quota === 'number' ? est.quota : 0;
+        const usage = typeof est.usage === 'number' ? est.usage : 0;
+        if (quota > usage && quota > 0) {
+          const freeGb = (quota - usage) / (1024 * 1024 * 1024);
+          if (freeGb >= 0.1) {
+            setEstimatedFreeStorageGb(`${freeGb.toFixed(1)}GB`);
+          }
+        }
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [showStorageCheckBanner]);
 
   const handleCopyClubInviteHook = async () => {
     const ok = await copyAuthenticatedRoomInviteFlow({
@@ -1883,7 +1981,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
       roomTitle: `⛰️ ${clubBannerTitle}`,
       promptLabel: '모임방 초대 링크를 복사해 공유하세요:',
       formatCopyText: (clubInviteUrl) =>
-        `[${clubBannerTitle}] 이번 모임·라운딩 고화질 원본 사진과 영상이 모두 올라왔습니다! 설치·로그인 없이 바로 구경하세요 (총무님 후원으로 전 회원 평생 0원 무료)\n👉 ${clubInviteUrl}`,
+        `[${clubBannerTitle}] 이번 모임·라운딩 고화질 원본 사진과 영상이 모두 올라왔습니다! 설치·로그인 없이 바로 구경하세요 (인원·장수 제한 없이 전원 평생 0원 무료)\n👉 ${clubInviteUrl}`,
     });
     if (!ok) return;
     setClubInviteCopied(true);
@@ -1898,11 +1996,15 @@ export const LoungeFeedContextBanner: React.FC = () => {
     sharedRoomHostPhotos,
     sharedRoomAddedPhotos,
   }).length;
+  const estimatedOriginalSizeLabel =
+    activeRoomPhotoCount === 0
+      ? '0장 (0MB)'
+      : `${activeRoomPhotoCount}장 (약 ${(activeRoomPhotoCount * 3.2).toFixed(1)}MB)`;
 
   const renderOriginalAutoSyncControl = () => (
     <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0 max-w-full">
-      {/* 실제 공유 사진이 있고 사용자가 원본 동기화를 켰을 때만 실제 장수로 표시 (0장 빈 방에서 가짜 9장 추가 표시 금지) */}
-      {p2pOriginalSummoned && !simulateLowStorage && activeRoomPhotoCount > 0 && (
+      {/* 실제 공유 사진이 있고 사용자가 원본 동기화를 켰을 때만 실제 장수로 표시 */}
+      {p2pOriginalSummoned && activeRoomPhotoCount > 0 && (
         <span className="px-2 sm:px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-label-sm text-[11px] font-extrabold flex items-center gap-1 shadow-xs shrink-0">
           <span className="sm:hidden">✨ 동기화 ({activeRoomPhotoCount}장)</span>
           <span className="hidden sm:inline">✨ 원본 동기화 완료 ({activeRoomPhotoCount}장)</span>
@@ -1917,10 +2019,6 @@ export const LoungeFeedContextBanner: React.FC = () => {
             return;
           }
           setShowStorageCheckBanner(true);
-          if (simulateLowStorage) {
-            setP2pOriginalSummoned(false);
-            return;
-          }
           const next = !p2pOriginalSummoned;
           setP2pOriginalSummoned(next);
           if (next) {
@@ -1937,26 +2035,18 @@ export const LoungeFeedContextBanner: React.FC = () => {
           }
         }}
         className={`px-3.5 py-1.5 rounded-full font-label-sm text-[12px] font-extrabold transition-all border shrink-0 whitespace-nowrap cursor-pointer ${
-          simulateLowStorage
-            ? 'bg-zinc-900/70 text-zinc-500 border-zinc-700/60 opacity-75'
-            : p2pOriginalSummoned
+          p2pOriginalSummoned
             ? 'bg-primary-container text-zinc-950 border-primary-container'
             : 'bg-zinc-900 hover:bg-zinc-800 text-primary-container border-primary-container/50'
         }`}
-        title="Wi-Fi 연결 및 내 기기 여유 공간이 넉넉할 때만 활성화됩니다 (그 외 비활성 · 클릭 시 용량 부족 안내)"
+        title="공유방의 고화질 원본 사진을 내 기기 폴더에 자동 동기화합니다"
       >
         <span className="sm:hidden">
-          {simulateLowStorage
-            ? '⚠️ 동기화 불가'
-            : p2pOriginalSummoned
-            ? '🔄 원본 동기화 ON'
-            : '🔄 원본 동기화'}
+          {p2pOriginalSummoned ? '🔄 원본 동기화 ON' : '🔄 원본 동기화'}
         </span>
         <span className="hidden sm:inline">
-          {simulateLowStorage
-            ? '⚠️ 원본 동기화 (용량 부족 · 비활성)'
-            : p2pOriginalSummoned
-            ? '🔄 원본 동기화 (ON · Wi-Fi+여유공간 확인됨)'
+          {p2pOriginalSummoned
+            ? '🔄 원본 동기화 (ON · 자동 보관 중)'
             : '🔄 원본 동기화 켜기'}
         </span>
       </button>
@@ -1969,36 +2059,26 @@ export const LoungeFeedContextBanner: React.FC = () => {
       <div className="px-4 py-3.5 rounded-2xl bg-[#18181B] border-2 border-emerald-400/50 shadow-sm flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
-            <span
-              className={`px-2.5 py-1 rounded-lg font-extrabold text-[11px] ${
-                simulateLowStorage
-                  ? 'bg-rose-500 text-white'
-                  : 'bg-emerald-400 text-zinc-950'
-              }`}
-            >
-              {simulateLowStorage
-                ? '⚠️ 용량 부족 안내 (동기화 버튼 비활성)'
-                : '✓ Wi-Fi 연결 & 여유 공간 충분 · 내 기기 원본 동기화 ON'}
+            <span className="px-2.5 py-1 rounded-lg font-extrabold text-[11px] bg-emerald-400 text-zinc-950">
+              {p2pOriginalSummoned
+                ? '✓ 내 기기 원본 자동 동기화 ON'
+                : 'ℹ️ 내 기기 원본 동기화 안내'}
             </span>
-            {simulateLowStorage ? (
-              <span className="text-rose-200 font-bold">
-                ⚠️ 내 기기 여유 공간(0.4GB)이 공유방 원본 총량(1.2GB)보다 부족하여 원본 동기화 버튼이 비활성화되었습니다 (평소엔 숨김 영역 13KB 썸네일 DB만 유지됩니다).
-              </span>
-            ) : (
-              <span className="text-white font-bold">
-                Wi-Fi 연결됨 · 내 기기 여유 공간 <strong className="text-emerald-300">48.2GB</strong> / 공유방 원본 <strong className="text-emerald-300">1.2GB (넉넉함 ✓)</strong> — 방장 PC 호출 없이 내 기기 동기화 폴더에서 원본까지 100% 자체 해결됩니다!
-              </span>
-            )}
+            <span className="text-white font-bold">
+              현재 공유방 사진 <strong className="text-emerald-300">{estimatedOriginalSizeLabel}</strong>
+              {estimatedFreeStorageGb ? (
+                <>
+                  {' '}· 내 기기 가용 여유 공간{' '}
+                  <strong className="text-emerald-300">{estimatedFreeStorageGb}</strong>
+                </>
+              ) : null}{' '}
+              — {activeRoomPhotoCount === 0
+                ? '새 사진이 올라오면 내 기기 원본 동기화 폴더에 자동으로 저장됩니다.'
+                : '내 기기 동기화 폴더에 원본 사진을 안전하게 자동 보관합니다.'}
+            </span>
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => setSimulateLowStorage((v) => !v)}
-              className="px-2.5 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 text-[11px] font-bold cursor-pointer"
-            >
-              {simulateLowStorage ? '💡 용량 충분 상태로 보기' : '📱 용량 부족 안내 시뮬레이션'}
-            </button>
             <button
               type="button"
               onClick={() => setShowStorageCheckBanner(false)}
@@ -2010,46 +2090,46 @@ export const LoungeFeedContextBanner: React.FC = () => {
         </div>
 
         {/* 원본 동기화 저장 경로 지정 */}
-        {!simulateLowStorage && (
-          <div className="p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-2.5 text-[12px]">
-            <span className="text-emerald-300 font-extrabold">
-              📂 원본 동기화 저장 경로
-            </span>
-            <div className="flex flex-wrap items-center gap-2 shrink-0 max-w-full">
-              <input
-                type="text"
-                value={downloadDirPath}
-                onChange={(e) => setDownloadDirPath(e.target.value)}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white font-mono text-[11.5px] font-bold w-full sm:w-60 min-w-0"
-                aria-label="원본 동기화 저장 경로"
-              />
-              <button
-                type="button"
-                onClick={() => {
-                  window.alert(
-                    `[원본 동기화 경로 설정 완료]\n앞으로 이 방의 원본 사진은 내 기기의 '${downloadDirPath}' 폴더에 자동 동기화됩니다.`
+        <div className="p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-2.5 text-[12px]">
+          <span className="text-emerald-300 font-extrabold">
+            📂 원본 동기화 저장 경로
+          </span>
+          <div className="flex flex-wrap items-center gap-2 shrink-0 max-w-full">
+            <input
+              type="text"
+              value={downloadDirPath}
+              onChange={(e) => setDownloadDirPath(e.target.value)}
+              className="px-3 py-1.5 rounded-lg bg-zinc-900 border border-white/15 text-white font-mono text-[11.5px] font-bold w-full sm:w-60 min-w-0"
+              aria-label="원본 동기화 저장 경로"
+            />
+            <button
+              type="button"
+              onClick={() => {
+                useSaySeeStore
+                  .getState()
+                  .showToast(
+                    `📂 [원본 동기화 경로 저장 완료] 앞으로 이 방의 원본 사진은 '${downloadDirPath}' 폴더에 자동 동기화됩니다.`
                   );
-                }}
-                className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
-              >
-                📍 경로 지정 확인
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  void fetch('/__club/download-originals', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ openExplorer: true }),
-                  }).catch(() => {});
-                }}
-                className="hidden sm:inline-flex px-3 py-1.5 rounded-xl bg-primary-container text-zinc-950 hover:opacity-90 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
-              >
-                📂 내 기기 원본 폴더 열기
-              </button>
-            </div>
+              }}
+              className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
+            >
+              📍 경로 지정 확인
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                void fetch('/__club/download-originals', {
+                  method: 'POST',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({ openExplorer: true }),
+                }).catch(() => {});
+              }}
+              className="hidden sm:inline-flex px-3 py-1.5 rounded-xl bg-primary-container text-zinc-950 hover:opacity-90 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+            >
+              📂 내 기기 원본 폴더 열기
+            </button>
           </div>
-        )}
+        </div>
       </div>
     );
   };
@@ -2080,74 +2160,55 @@ export const LoungeFeedContextBanner: React.FC = () => {
   const inviteMeta = readCurrentInviteDisplayMeta(activeLoungeType, activeFamilyRoom);
   const isNativeAppRuntime = isCapacitorNativeMobileRuntime();
 
-  const renderMobileGuestPreviewBanner = () => (
-    <div
-      className={`md:hidden px-3.5 py-2.5 rounded-2xl border flex flex-col gap-2 transition-all ${
-        isGuestPreviewMode
-          ? 'bg-gradient-to-r from-amber-500/15 via-emerald-500/10 to-zinc-900 border-amber-400/50'
-          : themeMode === 'light'
-          ? 'bg-slate-50 border-slate-200/90'
-          : 'bg-zinc-900/70 border-white/10'
-      }`}
-    >
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        {isGuestPreviewMode ? (
+  const renderMobileGuestPreviewBanner = () => {
+    if (!isGuestPreviewMode) return null;
+    return (
+      <div className="md:hidden px-3.5 py-2.5 rounded-2xl border flex flex-col gap-2 transition-all bg-gradient-to-r from-amber-500/15 via-emerald-500/10 to-zinc-900 border-amber-400/50">
+        <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="px-2.5 py-1 rounded-lg bg-[#FEE500] text-[#191919] font-label-sm text-[11px] font-extrabold shadow-xs break-keep">
             {inviteMeta.inviteToken && !inviteMeta.isHostVerified
               ? `💌 [${inviteMeta.roomTitle}] 초대장 불러오는 중...`
               : `💌 ${inviteMeta.hostName}님이 초대한 [${inviteMeta.roomTitle}] · 로그인 없이 구경 중`}
           </span>
-        ) : (
-          <button
-            type="button"
-            onClick={() => setIsGuestPreviewMode(true)}
-            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-amber-300 border border-amber-400/30 font-label-sm text-[11px] font-extrabold cursor-pointer transition-all"
-          >
-            👀 카톡 초대 링크 수신 화면 미리보기
-          </button>
-        )}
 
-        {isGuestPreviewMode && !isNativeAppRuntime && (
-          <button
-            type="button"
-            onClick={() => {
-              if (isAndroidMobileBrowserOrApp()) {
-                const safeIntentUrl = buildAndroidSafeAppProbeIntentUrl(window.location.href);
-                if (safeIntentUrl) {
-                  window.location.href = safeIntentUrl;
-                  return;
+          {!isNativeAppRuntime && (
+            <button
+              type="button"
+              onClick={() => {
+                if (isAndroidMobileBrowserOrApp()) {
+                  const safeIntentUrl = buildAndroidSafeAppProbeIntentUrl(window.location.href);
+                  if (safeIntentUrl) {
+                    window.location.href = safeIntentUrl;
+                    return;
+                  }
                 }
-              }
-              window.location.href = buildShareRoomNativeSchemeUrl({
-                loungeType: activeLoungeType,
-                familyRoom: activeFamilyRoom,
-                inviteToken: inviteMeta.inviteToken,
-                hostName: inviteMeta.hostName,
-                roomTitle: inviteMeta.roomTitle,
-              });
-            }}
-            className="px-2.5 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/50 text-teal-200 font-label-sm text-[10.5px] font-extrabold cursor-pointer shrink-0"
-          >
-            📱 이미 앱이 있다면 앱으로 열기
-          </button>
-        )}
+                window.location.href = buildShareRoomNativeSchemeUrl({
+                  loungeType: activeLoungeType,
+                  familyRoom: activeFamilyRoom,
+                  inviteToken: inviteMeta.inviteToken,
+                  hostName: inviteMeta.hostName,
+                  roomTitle: inviteMeta.roomTitle,
+                });
+              }}
+              className="px-2.5 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/50 text-teal-200 font-label-sm text-[10.5px] font-extrabold cursor-pointer shrink-0"
+            >
+              📱 이미 앱이 있다면 앱으로 열기
+            </button>
+          )}
 
-        {isGuestPreviewMode && !inviteMeta.hasExplicitUrlInvite && hasAuthenticatedHubAccountSession() && (
-          <button
-            type="button"
-            onClick={() => setIsGuestPreviewMode(false)}
-            className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10.5px] font-bold cursor-pointer"
-          >
-            ↩️ 방장 화면 복귀
-          </button>
-        )}
-      </div>
-      <span className="text-[11px] text-zinc-300 leading-snug break-keep">
-        {isGuestPreviewMode
-          ? '설치·가입 없이 공유 사진방을 자유롭게 구경하고 검색해 보세요! 아래 기능을 누르면 무료 모바일 앱 설치 후 이 방으로 자동 입장됩니다.'
-          : '상대방이 카톡 초대 링크를 눌렀을 때 설치·로그인 없이 1초 만에 열리는 공유방 구경 화면을 미리 확인합니다.'}
-      </span>
-      {isGuestPreviewMode && (
+          {!inviteMeta.hasExplicitUrlInvite && hasAuthenticatedHubAccountSession() && (
+            <button
+              type="button"
+              onClick={() => setIsGuestPreviewMode(false)}
+              className="px-2 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-200 text-[10.5px] font-bold cursor-pointer"
+            >
+              ↩️ 방장 화면 복귀
+            </button>
+          )}
+        </div>
+        <span className="text-[11px] text-zinc-300 leading-snug break-keep">
+          설치·가입 없이 공유 사진방을 자유롭게 구경하고 검색해 보세요! 아래 기능을 누르면 무료 모바일 앱 설치 후 이 방으로 자동 입장됩니다.
+        </span>
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
           {[
             { label: '📸 내 폰 사진도 이 방에 올리기', reason: '📸 내 폰 사진도 이 방에 올리기' },
@@ -2164,9 +2225,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
             </button>
           ))}
         </div>
-      )}
-    </div>
-  );
+      </div>
+    );
+  };
 
   const renderJoinedRoomContextBanner = () => {
     if (!activeJoinedRoomMeta || isGuestPreviewMode) return null;
@@ -2193,22 +2254,32 @@ export const LoungeFeedContextBanner: React.FC = () => {
             · 🔒 내 공유방과 100% 분리 보관 중
           </span>
         </div>
-        <button
-          type="button"
-          onClick={() =>
-            selectOwnSharedRoom(
-              activeJoinedRoomMeta.loungeType,
-              activeJoinedRoomMeta.familyRoom
-            )
-          }
-          className={`px-2.5 py-1 rounded-lg border text-[11.5px] font-extrabold cursor-pointer shrink-0 transition-all ${
-            themeMode === 'light'
-              ? 'bg-white border-amber-300 text-amber-900 hover:bg-amber-100'
-              : 'bg-zinc-900 border-amber-400/40 text-amber-200 hover:bg-zinc-800'
-          }`}
-        >
-          ↩️ 내 공유방으로 돌아가기
-        </button>
+        <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+          <button
+            type="button"
+            onClick={() =>
+              selectOwnSharedRoom(
+                activeJoinedRoomMeta.loungeType,
+                activeJoinedRoomMeta.familyRoom
+              )
+            }
+            className={`px-2.5 py-1 rounded-lg border text-[11.5px] font-extrabold cursor-pointer shrink-0 transition-all ${
+              themeMode === 'light'
+                ? 'bg-white border-amber-300 text-amber-900 hover:bg-amber-100'
+                : 'bg-zinc-900 border-amber-400/40 text-amber-200 hover:bg-zinc-800'
+            }`}
+          >
+            ↩️ 내 공유방으로 돌아가기
+          </button>
+          <button
+            type="button"
+            onClick={() => void leaveJoinedSharedRoom(activeJoinedRoomMeta.roomId)}
+            title="이 초대받은 공유방에서 나가며 내 기기의 이 방 로컬 캐시 사진을 즉시 삭제합니다 (내 개인 여권과 내 사진은 100% 보존)"
+            className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/50 text-rose-200 text-[11.5px] font-extrabold cursor-pointer shrink-0 transition-all"
+          >
+            🚪 이 공유방 나가기
+          </button>
+        </div>
       </div>
     );
   };
@@ -2279,7 +2350,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
               ⛰️ {clubBannerTitle}
             </span>
             <span className="px-2 py-0.5 rounded-full bg-emerald-400/15 border border-emerald-300/30 text-emerald-300 text-[11px] font-bold">
-              🏅 총무님 후원 · 전 회원 평생 0원
+              🎉 인원·장수 제한 없이 평생 0원
             </span>
             <button
               type="button"
@@ -2324,7 +2395,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
                   triggerGuestJoinWall('🎯 내 얼굴이 나온 모임 사진만 1초 만에 다 찾기');
                   return;
                 }
-                void runTextQuery('바다 노을');
+                void findMySchoolDaysPhotosFast();
               }}
               className="px-3 py-1.5 rounded-xl bg-primary-container/15 hover:bg-primary-container/25 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-extrabold cursor-pointer whitespace-nowrap"
             >
@@ -2398,7 +2469,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
                   {clubBannerTitle}
                 </h2>
                 <span className="text-[12px] text-amber-200/95 font-medium">
-                  🏅 총무님 후원 · 전 회원 평생 0원 운영 중
+                  🎉 인원·장수 제한 없이 전 회원 평생 0원 운영 중
                 </span>
               </div>
 
@@ -2530,6 +2601,8 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
     setActiveLoungeType,
     activeFamilyRoom,
     activeSharedRoomId,
+    activeJoinedRoomMeta,
+    merlinAuth,
     photos,
     sharedRoomHostPhotos,
     sharedRoomAddedPhotos,
@@ -2558,8 +2631,8 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
     isStoreAppMode,
   } = useSaySeeStore();
 
-  const [instantFlushed, setInstantFlushed] = useState(false);
-  const [pokedStudentHost, setPokedStudentHost] = useState(false);
+  const currentIdentityTokens = resolveCurrentUserIdentityTokens(merlinAuth?.email);
+  const hostRetainsHidePerm = readHostRetainsHidePermission();
   const [droppedBusinessDocName, setDroppedBusinessDocName] = useState<string | null>(null);
 
   const handlePhotoLoungeDrop = (e: React.DragEvent<HTMLElement>) => {
@@ -2727,26 +2800,12 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            {activeLoungeType === 'student' && !gpuHelper24hActive && (
-              <button
-                type="button"
-                onClick={() => setPokedStudentHost(true)}
-                className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold"
-              >
-                {pokedStudentHost
-                  ? '✓ 방장에게 "PC 켜줘!" 알림 전송됨'
-                  : '👉 방장에게 "PC 켜줘!" 알림 보내기'}
-              </button>
-            )}
-
             <button
               type="button"
-              onClick={() => setInstantFlushed(true)}
-              className="px-3.5 py-1.5 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold"
+              onClick={() => requestAddMyPhotosToSharedRoom()}
+              className="px-3.5 py-1.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer"
             >
-              {instantFlushed
-                ? '✓ 앨범 피드에 전체 반영 완료!'
-                : '⚡ 지금 바로 앨범 피드에 올리기'}
+              📸 내 사진도 이 방에 추가하기
             </button>
           </div>
         </div>
@@ -2770,11 +2829,9 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
               <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-400" />
             </span>
             <span className="font-label-sm text-[12.5px] text-zinc-200 font-bold">
-              {instantFlushed
-                ? `정리 완료 — 이 방의 사진 ${basePhotos.length}장이 앨범 피드에 모두 반영되었습니다!`
-                : `${currentMeta.bufferReason} (이 방 사진 ${basePhotos.length}장${
-                    trashedRoomPhotos.length > 0 ? ` · 휴지통 ${trashedRoomPhotos.length}장` : ''
-                  })`}
+              {`${currentMeta.bufferReason} (이 방 사진 ${basePhotos.length}장${
+                trashedRoomPhotos.length > 0 ? ` · 휴지통 ${trashedRoomPhotos.length}장` : ''
+              })`}
             </span>
           </div>
 
@@ -2854,13 +2911,6 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                   ✓ 멤버 연도 제보 일괄 승인 ({pendingAnalogProposals.length}건)
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => setShowFaceRegistryModal(true)}
-                className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11px] font-bold"
-              >
-                👑 방장 총점검 센터 →
-              </button>
             </div>
           </div>
 
@@ -3235,9 +3285,9 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
           </div>
         ) : (
         <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3.5">
-          {queuePhotos.map((photo, idx) => {
+          {queuePhotos.map((photo) => {
             const sender = photo.uploaderLabel || '방장';
-            const isDone = instantFlushed || idx < 5;
+            const isDone = true;
             return (
               <article
                 key={photo.id}
@@ -3268,17 +3318,34 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                     <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/10 text-zinc-200 font-bold truncate">
                       👤 {sender}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        softDeleteSharedRoomPhoto24h(photo.id);
-                        setLastDeletedPhotoId(photo.id);
-                      }}
-                      title="올린 원본 주인은 업로드 후 24시간 내에 언제나 직접 삭제할 수 있습니다"
-                      className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-rose-950/80 border border-white/10 hover:border-rose-400/50 text-zinc-400 hover:text-rose-200 font-label-sm text-[10.5px] font-bold cursor-pointer shrink-0"
-                    >
-                      🗑️ 24시간 내 본인 삭제
-                    </button>
+                    {(() => {
+                      const delPerm = evaluateSharedPhotoDeletePermission({
+                        photoId: photo.id,
+                        uploaderLabel: photo.uploaderLabel,
+                        mtimeMs: photo.mtimeMs,
+                        isJoinedOtherRoom: Boolean(activeJoinedRoomMeta),
+                        hostRetainsHidePermission: hostRetainsHidePerm,
+                        currentIdentityTokens,
+                      });
+                      if (!delPerm.allowed) return null;
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            softDeleteSharedRoomPhoto24h(photo.id);
+                            setLastDeletedPhotoId(photo.id);
+                          }}
+                          title={
+                            delPerm.mode === 'host_hide'
+                              ? '방장 권한으로 이 사진을 공유방에서 숨기고 휴지통으로 이동합니다'
+                              : '올린 원본 주인은 업로드 후 24시간 내에 언제나 직접 삭제할 수 있습니다'
+                          }
+                          className="px-2 py-0.5 rounded bg-zinc-900 hover:bg-rose-950/80 border border-white/10 hover:border-rose-400/50 text-zinc-400 hover:text-rose-200 font-label-sm text-[10.5px] font-bold cursor-pointer shrink-0"
+                        >
+                          {delPerm.mode === 'host_hide' ? '👑 방장 숨기기' : '🗑️ 24시간 내 본인 삭제'}
+                        </button>
+                      );
+                    })()}
                   </div>
                   <div className="flex items-center justify-between text-[10.5px]">
                     <p className="text-zinc-400 truncate">
@@ -3419,6 +3486,11 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     setActiveLoungeType,
     activeFamilyRoom,
     setActiveFamilyRoom,
+    activeSharedRoomId,
+    activeJoinedRoomMeta,
+    leaveJoinedSharedRoom,
+    sharedRoomHostPhotos,
+    sharedRoomAddedPhotos,
     clubSizeTier,
     setClubSizeTier,
     studentOcrVerified,
@@ -3448,13 +3520,27 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   const [revokingSlotDeviceId, setRevokingSlotDeviceId] = useState<string | null>(null);
 
   const [inviteCopied, setInviteCopied] = useState(false);
-  const [trojanBragCopied, setTrojanBragCopied] = useState(false);
-  const [familyTrojanBragCopied, setFamilyTrojanBragCopied] = useState(false);
   const [familyShortsWatermark, setFamilyShortsWatermark] = useState('사랑하는 우리가족');
   const [clubShortsWatermark, setClubShortsWatermark] = useState('제주여고 89회 공식 갤러리');
   const [shortsExportToast, setShortsExportToast] = useState<string | null>(null);
-  const [gamingPcAutoSyncAfterSchool, setGamingPcAutoSyncAfterSchool] = useState(true);
-  const [hostRetainsHidePermission, setHostRetainsHidePermission] = useState(true);
+  const [hostRetainsHidePermission, setHostRetainsHidePermissionState] = useState<boolean>(() =>
+    readHostRetainsHidePermission()
+  );
+  const setHostRetainsHidePermission = (enabled: boolean) => {
+    setHostRetainsHidePermissionState(enabled);
+    writeHostRetainsHidePermission(enabled);
+  };
+  const [kickedMemberNames, setKickedMemberNames] = useState<string[]>(() => {
+    if (typeof window === 'undefined') return [];
+    try {
+      const raw = localStorage.getItem(KICKED_ROOM_MEMBERS_STORAGE_KEY);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? parsed.map((v) => String(v)) : [];
+    } catch {
+      return [];
+    }
+  });
   const [showInlineQrPanel, setShowInlineQrPanel] = useState(false);
   const [showQuickSendDrawer, setShowQuickSendDrawer] = useState(false);
   const [mobileInstallLinkCopied, setMobileInstallLinkCopied] = useState(false);
@@ -3517,45 +3603,114 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
         >
           🤝 24시간 내 본인 삭제만
         </button>
+
+        {activeJoinedRoomMeta && (
+          <button
+            type="button"
+            onClick={() => void leaveJoinedSharedRoom(activeJoinedRoomMeta.roomId)}
+            className="px-3 py-1.5 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/50 text-rose-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer break-keep"
+          >
+            🚪 이 공유방 나가기 (내 기기 이 방 캐시 즉시 삭제)
+          </button>
+        )}
       </div>
     </div>
   );
-  const { hasActiveInvite } = resolveInvitedHostLoungeAndRoom();
-  const [familyMembers, setFamilyMembers] = useState([
-    { id: 'm1', name: '진욱 (방장·마스터)', room: '우리집', role: 'HOST' },
-    { id: 'm2', name: '은숙 (아내)', room: '우리집', role: 'MEMBER' },
-    { id: 'm3', name: '우리딸', room: '우리집', role: 'MEMBER' },
-    { id: 'm4', name: '처가 어머님', room: '처가(친정)', role: 'MEMBER' },
-    { id: 'm5', name: '본가 어머님', room: '본가(친가)', role: 'MEMBER' },
-  ]);
-  const [clubMembers, setClubMembers] = useState([
-    { id: 'c1', name: '김철수 총무 (방장·마스터)', badge: '총무', role: 'HOST' },
-    { id: 'c2', name: '박회장', badge: '정회원', role: 'MEMBER' },
-    { id: 'c3', name: '이프로', badge: '정회원', role: 'MEMBER' },
-    { id: 'c4', name: '최회원', badge: '신입회원', role: 'MEMBER' },
-  ]);
-  const visibleFamilyMembers = hasActiveInvite
-    ? familyMembers
-    : isLoggedInUser
+
+  // [D-11/D-12 가짜 목업 0건 원칙]: 하드코딩된 가짜 가족·동호회 멤버('진욱/은숙/김철수 총무')를 100% 소거하고,
+  // 현재 방의 실제 방장 + 실제 사진 업로더/합류 멤버만 표시합니다.
+  const currentRoomCorpus = resolveLoungePhotoCorpus({
+    activeLoungeType,
+    activeFamilyRoom,
+    activeSharedRoomId,
+    photos,
+    sharedRoomHostPhotos,
+    sharedRoomAddedPhotos,
+  });
+  const passportState = loadPassportFlowState();
+  const myDisplayName =
+    passportState.userRealName?.trim() ||
+    resolveAccountScopedNickname(merlinAuth?.email || '', '') ||
+    merlinAuth?.email?.split('@')[0] ||
+    '나';
+  const hostDisplayName = activeJoinedRoomMeta
+    ? activeJoinedRoomMeta.masterNickname || '방장'
+    : myDisplayName;
+
+  const kickedSet = new Set(kickedMemberNames);
+  const handleKickRoomMember = (memberName: string) => {
+    const clean = memberName.trim();
+    if (!clean) return;
+    const nextKicked = Array.from(new Set([...kickedMemberNames, clean]));
+    setKickedMemberNames(nextKicked);
+    if (typeof window !== 'undefined') {
+      try {
+        localStorage.setItem(KICKED_ROOM_MEMBERS_STORAGE_KEY, JSON.stringify(nextKicked));
+      } catch {
+        /* ignore */
+      }
+    }
+    if (activeSharedRoomId) {
+      void kickMemberFromSupabaseSharedPhotoRoom(activeSharedRoomId, clean);
+    }
+    useSaySeeStore
+      .getState()
+      .showToast(`🚫 [${clean}] 멤버를 공유방에서 내보냈습니다.`);
+  };
+
+  const derivedParticipantNames = Array.from(
+    new Set(
+      [
+        ...(activeJoinedRoomMeta && isLoggedInUser ? [myDisplayName] : []),
+        ...currentRoomCorpus
+          .map((p) => String(p.uploaderLabel || '').replace(/^[👑📸👤\s]+/, '').trim())
+          .filter(Boolean),
+      ].filter(
+        (name) =>
+          name &&
+          name !== hostDisplayName &&
+          name !== `${hostDisplayName} (방장)` &&
+          name !== '방장' &&
+          !kickedSet.has(name)
+      )
+    )
+  );
+
+  const visibleFamilyMembers = isLoggedInUser || activeJoinedRoomMeta
     ? [
         {
-          id: 'me_host',
-          name: `${merlinAuth.email?.split('@')[0] || '나'} (방장)`,
-          room: activeFamilyRoom,
-          role: 'HOST',
+          id: 'host_member',
+          name: `${hostDisplayName} (방장)`,
+          rawName: hostDisplayName,
+          room: activeFamilyRoom || '우리집',
+          role: 'HOST' as const,
         },
+        ...derivedParticipantNames.map((name, idx) => ({
+          id: `fam_member_${idx}_${name}`,
+          name,
+          rawName: name,
+          room: activeFamilyRoom || '우리집',
+          role: 'MEMBER' as const,
+        })),
       ]
     : [];
-  const visibleClubMembers = hasActiveInvite
-    ? clubMembers
-    : isLoggedInUser
+
+  const visibleClubMembers = isLoggedInUser || activeJoinedRoomMeta
     ? [
         {
-          id: 'me_club_host',
-          name: `${merlinAuth.email?.split('@')[0] || '나'} (방장)`,
+          id: 'club_host_member',
+          name: `${hostDisplayName} (방장)`,
+          rawName: hostDisplayName,
           badge: '방장',
-          role: 'HOST',
+          role: 'HOST' as const,
         },
+        ...derivedParticipantNames.map((name, idx) => ({
+          id: `club_member_${idx}_${name}`,
+          name,
+          rawName: name,
+          badge: '참여회원',
+          role: 'MEMBER' as const,
+        })),
       ]
     : [];
 
@@ -3568,39 +3723,11 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
       defaultHostLabel: targetLounge === 'family' ? '가족방장' : '모임방장',
       promptLabel: '초대 링크를 복사해 공유하세요:',
       formatCopyText: (inviteUrl) =>
-        `[귀신같이 사진 공유방 초대장] 설치·로그인 없이 1초 만에 우리 공유 사진을 구경하고, 무료 앱에서 내 사진 올리기·고화질 원본 저장·새 사진 알림까지 평생 0원으로 함께해요!\n👉 ${inviteUrl}`,
+        `[귀신같이 사진 공유방 초대장] 설치·로그인 없이 1초 만에 우리 공유 사진을 구경하고, 무료 앱에서 내 사진 올리기·고화질 원본 저장·새 사진 알림까지 인원·장수 제한 없이 평생 0원으로 함께해요!\n👉 ${inviteUrl}`,
     });
     if (!ok) return;
     setInviteCopied(true);
     setTimeout(() => setInviteCopied(false), 2500);
-  };
-
-  const handleCopyTrojanCoupon = async () => {
-    const text =
-      '내가 동호회·동창회 연구독(마스터권) 끊어서 [가족 라운지 1개월 무료 구독권 3장] 받았는데, 선착순 3명에게 줄 테니 가족방 쓸 사람?';
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(text);
-      }
-    } catch {
-      // ignore clipboard fallback
-    }
-    setTrojanBragCopied(true);
-    setTimeout(() => setTrojanBragCopied(false), 2600);
-  };
-
-  const handleCopyFamilyTrojanCoupon = async () => {
-    const text =
-      '내가 가족 라운지 연구독(마스터권) 끊어서 [동호회·동창회 모임 라운지 3개월 무료 구독권 1장] 받았는데, 우리 모임 총무님께 선물할게요!';
-    try {
-      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-        await navigator.clipboard.writeText(text);
-      }
-    } catch {
-      // ignore clipboard fallback
-    }
-    setFamilyTrojanBragCopied(true);
-    setTimeout(() => setFamilyTrojanBragCopied(false), 2600);
   };
 
   const triggerShortsWatermarkPreview = (label: string) => {
@@ -4075,39 +4202,16 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
+            <span className="px-3 py-1.5 rounded-xl bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold">
+              🎉 우리집·본가·처가 3방 인원·장수 무제한 평생 0원
+            </span>
             <button
               type="button"
               onClick={copyInviteLink}
-              className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold"
+              className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer"
             >
               {inviteCopied ? '✓ 카톡 무수락 초대 링크 복사됨!' : '💬 가족 무수락 카톡 초대 링크·QR 발급'}
             </button>
-            {isStoreAppMode ? (
-              <button
-                type="button"
-                onClick={() => setShowProModal(true)}
-                className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold"
-              >
-                💻 내 PC 연동 시작 가이드 보내기
-              </button>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={() => activatePricingPlan('family_home_5900')}
-                  className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-emerald-400/40 text-emerald-300 font-label-sm text-[12px] font-bold"
-                >
-                  🏠 우리집 단독 (평생 0원)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => activatePricingPlan('family_three_8900')}
-                  className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-primary-container/50 text-primary-container font-label-sm text-[12px] font-bold"
-                >
-                  👨‍👩‍👧‍👦 양가 통합권 3방 (평생 0원)
-                </button>
-              </>
-            )}
           </div>
         </div>
 
@@ -4154,13 +4258,11 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                   >
                     <span className="text-zinc-200 font-bold">{m.name}</span>
                     <span className="text-zinc-500">({m.room})</span>
-                    {m.role !== 'HOST' && (
+                    {m.role !== 'HOST' && !activeJoinedRoomMeta && (
                       <button
                         type="button"
-                        onClick={() =>
-                          setFamilyMembers((prev) => prev.filter((x) => x.id !== m.id))
-                        }
-                        className="text-rose-400 hover:text-rose-300 font-bold ml-1"
+                        onClick={() => handleKickRoomMember(m.rawName)}
+                        className="text-rose-400 hover:text-rose-300 font-bold ml-1 cursor-pointer"
                       >
                         [강퇴]
                       </button>
@@ -4172,7 +4274,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
           </div>
         </div>
 
-        {/* [치트키 4] 자동화 숏폼 '가족 맞춤형 워터마크' 권한 */}
+        {/* 자동화 숏폼 '가족 맞춤형 워터마크' 권한 */}
         <div className="p-4 rounded-xl bg-zinc-950/90 border border-primary-container/35 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 max-w-full overflow-hidden">
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
@@ -4203,21 +4305,6 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             >
               🎬 워터마크 적용 &amp; 쇼츠 미리보기
             </button>
-            {!isStoreAppMode && (
-              <button
-                type="button"
-                onClick={() => void handleCopyFamilyTrojanCoupon()}
-                className={`px-3.5 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold break-keep text-left cursor-pointer ${
-                  familyTrojanBragCopied
-                    ? 'bg-emerald-400 text-zinc-950'
-                    : 'bg-zinc-900 hover:bg-zinc-800 border border-primary-container/45 text-primary-container'
-                }`}
-              >
-                {familyTrojanBragCopied
-                  ? '✓ 모임 3개월 무료권 문구 복사됨!'
-                  : '🎁 [가족방 연구독 특전] 모임 라운지 3개월 무료 구독권 1장 선물'}
-              </button>
-            )}
           </div>
         </div>
 
@@ -4236,7 +4323,8 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     triggerShortsWatermarkPreview(label);
   }
 
-  if (activeLoungeType === 'club') {
+  if (activeLoungeType === 'club' || activeLoungeType === 'student') {
+    const isAlumniRoom = activeLoungeType === 'student';
     return (
       <div className="p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-5">
         <div className="flex flex-wrap items-center justify-between gap-3">
@@ -4244,11 +4332,16 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             <div className="flex flex-wrap items-center gap-2 mb-0.5">
               <GhostiBrandLogo size="mobile" showBadge={true} />
               <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
-                ⛰️ 동호회·모임 관리
+                {isAlumniRoom ? '🎓 동창회 초대 & 방 관리' : '⛰️ 동호회·모임 초대 & 방 관리'}
+              </span>
+              <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-extrabold">
+                🎉 인원·장수 제한 없이 평생 0원
               </span>
             </div>
             <h2 className="font-headline-sm text-[18px] text-white font-bold mt-0.5">
-              ⛰️ 동호회·모임 초대 &amp; 회원 관리
+              {isAlumniRoom
+                ? '🎓 동창회 카톡 초대 & 동기 회원 관리'
+                : '⛰️ 동호회·모임 카톡 초대 & 회원 관리'}
             </h2>
           </div>
 
@@ -4258,80 +4351,29 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               onClick={copyInviteLink}
               className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer"
             >
-              {inviteCopied ? '✓ 동호·동창 회원 초대 링크 복사됨!' : '⛳ 동호·동창회 무수락 초대 링크·QR 발급'}
+              {inviteCopied
+                ? '✓ 초대 링크 복사됨!'
+                : isAlumniRoom
+                ? '💌 동창회 무가입 1초 초대 링크 복사'
+                : '⛳ 동호회·모임 무가입 1초 초대 링크 복사'}
             </button>
-            {isStoreAppMode && (
-              <button
-                type="button"
-                onClick={() => setShowProModal(true)}
-                className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold"
-              >
-                💻 내 PC 연동 시작 가이드 보내기
-              </button>
-            )}
           </div>
         </div>
 
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {[
-            {
-              id: 'mini_9' as ClubSizeTier,
-              label: '🥂 일상 소모임 (친구·계모임·취미)',
-              price: '인원 무제한 평생 0원 (사진·동영상 전용)',
-              plan: 'club_mini_free_300' as PricingPlanId,
-            },
-            {
-              id: 'small' as ClubSizeTier,
-              label: '⛰️ 동호회 사진방 (모임 이름 문패 · 인원 무제한)',
-              price: '인원 무제한 평생 0원 (사진·동영상 전용)',
-              plan: 'club_small_4900' as PricingPlanId,
-            },
-            {
-              id: 'large' as ClubSizeTier,
-              label: '🎓 동창회 · 반창회 사진방 (학교/학년/반 문패 · 인원 무제한)',
-              price: '인원 무제한 평생 0원 (사진·동영상 전용)',
-              plan: 'club_small_year_49000' as PricingPlanId,
-            },
-          ].map((t) => (
-            <div
-              key={t.id}
-              onClick={() => {
-                setClubSizeTier(t.id);
-                if (!isStoreAppMode) {
-                  activatePricingPlan(t.plan);
-                }
-              }}
-              className={`p-3.5 rounded-xl border cursor-pointer flex items-center justify-between gap-2 ${
-                clubSizeTier === t.id
-                  ? 'bg-zinc-900 border-primary-container'
-                  : 'bg-zinc-950 border-white/10'
-              }`}
-            >
-              <div className="flex flex-col min-w-0">
-                <span className="font-label-sm text-[12.5px] text-white font-bold break-keep">{t.label}</span>
-                <span className="font-label-mono text-[11.5px] text-primary-container font-bold">{t.price}</span>
-              </div>
-              <span className="text-[11px] text-zinc-400 font-bold shrink-0 whitespace-nowrap">
-                {clubSizeTier === t.id ? '✓ 선택됨' : '선택'}
-              </span>
-            </div>
-          ))}
-        </div>
-
-        {/* [치트키 3 & 4] 모임용 맞춤형 쇼츠 워터마크 커스텀 + 모임 연구독 특전 가족방 1개월 무료 구독권 3장 */}
+        {/* 모임·동창회 맞춤형 쇼츠 워터마크 커스텀 */}
         <div className="p-4 rounded-xl bg-zinc-950/90 border border-amber-400/40 flex flex-col gap-3">
           <div className="flex flex-col lg:flex-row items-start lg:items-center justify-between gap-3">
             <div className="flex flex-col gap-1">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold">
-                  🎬 모임용 맞춤형 쇼츠 워터마크 특권
+                  🎬 맞춤형 쇼츠 워터마크
                 </span>
                 <span className="font-mono text-[11.5px] text-amber-300 font-bold">
                   우측 하단 각인: [{clubShortsWatermark}]
                 </span>
               </div>
               <p className="font-body-sm text-[12px] text-zinc-300">
-                자동 렌더링 변천사 쇼츠 우측 하단에 <code>[Ghosti]</code> 대신 <strong>[{clubShortsWatermark}]</strong>를 박아 카톡·인스타로 공유하면 타 동창회·모임의 꼬리물기 유입이 일어납니다.
+                자동 렌더링 변천사 쇼츠 우측 하단에 <code>[Ghosti]</code> 대신 <strong>[{clubShortsWatermark}]</strong>를 박아 카톡·인스타로 공유할 수 있습니다.
               </p>
             </div>
 
@@ -4350,21 +4392,6 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               >
                 🎬 워터마크 적용 &amp; 쇼츠 각인
               </button>
-              {!isStoreAppMode && (
-                <button
-                  type="button"
-                  onClick={() => void handleCopyTrojanCoupon()}
-                  className={`px-3.5 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold break-keep text-left cursor-pointer ${
-                    trojanBragCopied
-                      ? 'bg-emerald-400 text-zinc-950'
-                      : 'bg-zinc-900 hover:bg-zinc-800 border border-amber-400/45 text-amber-300'
-                  }`}
-                >
-                  {trojanBragCopied
-                    ? '✓ 가족방 1개월권 3장 문구 복사됨!'
-                    : '🎁 [모임방 연구독 특전] 가족 라운지 1개월 무료 구독권 3장 선물'}
-                </button>
-              )}
             </div>
           </div>
 
@@ -4377,7 +4404,9 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
 
         <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10">
           <span className="font-label-sm text-[12px] text-zinc-300 font-bold mr-1">
-            참여 동호·동창 회원 ({visibleClubMembers.length}명):
+            {isAlumniRoom
+              ? `참여 중인 동창 회원 (${visibleClubMembers.length}명):`
+              : `참여 중인 모임 회원 (${visibleClubMembers.length}명):`}
           </span>
           {visibleClubMembers.length === 0 ? (
             <span className="text-[12px] text-zinc-400 break-keep">
@@ -4391,13 +4420,11 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               >
                 <span className="text-zinc-200 font-bold">{m.name}</span>
                 <span className="text-zinc-500">[{m.badge}]</span>
-                {m.role !== 'HOST' && (
+                {m.role !== 'HOST' && !activeJoinedRoomMeta && (
                   <button
                     type="button"
-                    onClick={() =>
-                      setClubMembers((prev) => prev.filter((x) => x.id !== m.id))
-                    }
-                    className="text-rose-400 hover:text-rose-300 font-bold"
+                    onClick={() => handleKickRoomMember(m.rawName)}
+                    className="text-rose-400 hover:text-rose-300 font-bold cursor-pointer"
                   >
                     [강퇴]
                   </button>
@@ -4412,116 +4439,47 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     );
   }
 
-  if (activeLoungeType === 'work') {
-    return (
-      <div className="p-6 rounded-2xl bg-[#18181B] border border-cyan-400/45 flex flex-col gap-4">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-col gap-1">
-            <span className="px-2.5 py-0.5 rounded-md bg-cyan-400 text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
-              💼 업무 공유 드라이브 (S:)
-            </span>
-            <h2 className="font-headline-sm text-[18px] text-white font-bold mt-0.5">
-              사무실 PC 업무 폴더 &amp; 탐색기(S:) 연동
-            </h2>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            {!isStoreAppMode && (
-              <>
-                <button
-                  type="button"
-                  onClick={() => activatePricingPlan('personal_sub_3900')}
-                  className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold cursor-pointer"
-                >
-                  💻 1인 멀티PC 월 1,900원
-                </button>
-                <button
-                  type="button"
-                  onClick={() => activatePricingPlan('work_soho_9900')}
-                  className="px-3.5 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer"
-                >
-                  🏢 소호(~5인) 월 9,900원
-                </button>
-                <button
-                  type="button"
-                  onClick={() => activatePricingPlan('work_biz_19900')}
-                  className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-cyan-400/50 text-cyan-300 font-label-sm text-[12px] font-extrabold cursor-pointer"
-                >
-                  🏢 소기업(~20인) 월 19,000원 · 중소(~50인) 29,000원
-                </button>
-              </>
-            )}
-          </div>
-        </div>
-        <WorkLoungeB2BHub />
-      </div>
-    );
-  }
-
-  // student ('⛳ 동호회 · 동창회 (사진 공유)')
+  // work ('💼 업무 공유 드라이브 (S:)')
   return (
-    <div className="p-6 rounded-2xl bg-[#18181B] border border-primary-container/40 flex flex-col gap-4">
+    <div className="p-6 rounded-2xl bg-[#18181B] border border-cyan-400/45 flex flex-col gap-4">
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div className="flex flex-col gap-1">
-          <span className="px-2.5 py-0.5 rounded-md bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
-            🎓 동창회 관리 &amp; 동기 초대 (평생 0원)
+          <span className="px-2.5 py-0.5 rounded-md bg-cyan-400 text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
+            💼 업무 공유 드라이브 (S:)
           </span>
-          <h2 className="font-headline-sm text-[19px] text-white font-bold mt-1">
-            🎓 동창회 초대 &amp; 동기 회원 관리 (학교/학년/반 타임캡슐 · 평생 0원)
+          <h2 className="font-headline-sm text-[18px] text-white font-bold mt-0.5">
+            사무실 PC 업무 폴더 &amp; 탐색기(S:) 연동
           </h2>
-          <p className="font-body-sm text-[12.5px] text-zinc-300">
-            낮에 학교·학원에서 찍은 우리반 사진·영상은 대기실에 모아두었다가, 하교 후 방장 집 게이밍 PC가 켜지면 그래픽카드(GPU) 파워로 1초 만에 색인·압축 배포합니다.
-          </p>
         </div>
-
         <div className="flex flex-wrap items-center gap-2">
-          <button
-            type="button"
-            onClick={verifyStudentOcr}
-            className={`px-4 py-2 rounded-xl font-label-sm text-[12px] font-extrabold border ${
-              studentOcrVerified
-                ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300'
-                : 'bg-zinc-900 hover:bg-zinc-800 border-primary-container text-primary-container'
-            }`}
-          >
-            {studentOcrVerified
-              ? '✓ 학생증 로컬 OCR 0.1초 인증됨'
-              : '🪪 학생증 로컬 OCR 0.1초 인증하기'}
-          </button>
-          <button
-            type="button"
-            onClick={copyInviteLink}
-            className="px-4 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer"
-          >
-            {inviteCopied ? '✓ 동창회 초대 링크 복사됨!' : '💌 동창회 무가입 1초 초대 링크 복사'}
-          </button>
-          {isStoreAppMode && (
-            <button
-              type="button"
-              onClick={() => setShowProModal(true)}
-              className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold cursor-pointer"
-            >
-              💻 내 PC 연동 시작 가이드 보내기
-            </button>
+          {!isStoreAppMode && (
+            <>
+              <button
+                type="button"
+                onClick={() => activatePricingPlan('personal_sub_3900')}
+                className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold cursor-pointer"
+              >
+                💻 1인 멀티PC 월 1,900원
+              </button>
+              <button
+                type="button"
+                onClick={() => activatePricingPlan('work_soho_9900')}
+                className="px-3.5 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer"
+              >
+                🏢 소호(~5인) 월 9,900원
+              </button>
+              <button
+                type="button"
+                onClick={() => activatePricingPlan('work_biz_19900')}
+                className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-cyan-400/50 text-cyan-300 font-label-sm text-[12px] font-extrabold cursor-pointer"
+              >
+                🏢 소기업(~20인) 월 19,000원 · 중소(~50인) 29,000원
+              </button>
+            </>
           )}
         </div>
       </div>
-
-      <label className="p-3.5 rounded-xl bg-zinc-950 border border-white/10 flex items-center justify-between gap-3 cursor-pointer">
-        <div className="flex flex-col">
-          <span className="font-label-md text-[13px] text-white font-bold">
-            🎮 하교 후 방장 게이밍 PC 집중 동기화 모드 (오후 4시 ~ 자정 자동 부스트)
-          </span>
-          <span className="font-body-sm text-[11.5px] text-zinc-400">
-            방장이 게임하는 동안에도 프레임 드랍 없이 유휴 텐서 코어만 활용해 친구들이 올린 대기실 영상을 초고속 색인합니다.
-          </span>
-        </div>
-        <input
-          type="checkbox"
-          checked={gamingPcAutoSyncAfterSchool}
-          onChange={(e) => setGamingPcAutoSyncAfterSchool(e.target.checked)}
-          className="w-5 h-5 accent-[#00E5FF] rounded shrink-0"
-        />
-      </label>
+      <WorkLoungeB2BHub />
     </div>
   );
 };

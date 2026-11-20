@@ -28,6 +28,11 @@ import { GhostSearchTrainingPage } from '../../components/ghostDojo/GhostSearchT
 import { GhostSecretaryFirstGuard } from '../../components/GhostSecretaryFirstGuard';
 import { useDashboardNavStore } from '../shared/dashboardNavState';
 import { SampleSharedRoomExperienceCard } from '../free_photo_share/SampleSharedRoomExperienceCard';
+import {
+  evaluateSharedPhotoDeletePermission,
+  readHostRetainsHidePermission,
+  resolveCurrentUserIdentityTokens,
+} from '../free_photo_share/FreePhotoShareLounge';
 
 
 /**
@@ -42,6 +47,8 @@ export const GhostSearchPane: React.FC<{
     desktopTab,
     activeLoungeType,
     activeFamilyRoom,
+    activeJoinedRoomMeta,
+    merlinAuth,
     searchSpace,
     resetSearchSpaceToAll,
     matchedLocalDocs,
@@ -61,6 +68,11 @@ export const GhostSearchPane: React.FC<{
     hasExecutedUserSearch,
     refreshLiveLocalFilesInSearchWindow,
   } = useSaySeeStore();
+
+  const currentIdentityTokens = useMemo(
+    () => resolveCurrentUserIdentityTokens(merlinAuth?.email),
+    [merlinAuth?.email]
+  );
 
   const { setOcrModalPhoto } = useDashboardNavStore();
   const lastWatchSigRef = useRef<string>('');
@@ -219,7 +231,7 @@ export const GhostSearchPane: React.FC<{
 
   return (
     <>
-        {desktopTab === 'trial' && (
+        {desktopTab === 'trial' && activeLoungeType === 'work' && (
           <GhostSecretaryFirstGuard>
             <LoungeView />
           </GhostSecretaryFirstGuard>
@@ -239,7 +251,8 @@ export const GhostSearchPane: React.FC<{
             </div>
           </div>
         ) : (
-          desktopTab === 'dashboard' &&
+          (desktopTab === 'dashboard' ||
+            (desktopTab === 'trial' && activeLoungeType !== 'work')) &&
           (activeLoungeType === 'personal' && isStage1MinimalPreview ? (
             // [v1.3] 웹 검색 입력창 폐지 → 소환술 수련 + 귀신검색 도장깨기(가상 모니터 안 귀신검색창 = 기존 찾기 UI 100% 승계)
             <GhostSearchTrainingPage />
@@ -715,20 +728,36 @@ export const GhostSearchPane: React.FC<{
 
                             {(String(item.photo.id || '').startsWith('shared_sb_') ||
                               String(item.photo.id || '').startsWith('shared_added_')) &&
-                              hasAuthenticatedHubAccountSession() && (
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  removeSharedRoomPhoto(item.photo.id);
-                                }}
-                                aria-label="공유방에서 삭제"
-                                title="공유방에서 이 사진 삭제 (내 기기 원본은 보존됩니다)"
-                                className="absolute top-2.5 right-12 z-20 px-2.5 py-1 rounded-full bg-rose-600/95 hover:bg-rose-500 text-white text-[11px] font-black shadow-md flex items-center gap-1 cursor-pointer"
-                              >
-                                🗑️ 삭제
-                              </button>
-                            )}
+                              hasAuthenticatedHubAccountSession() &&
+                              (() => {
+                                const delPerm = evaluateSharedPhotoDeletePermission({
+                                  photoId: item.photo.id,
+                                  uploaderLabel: item.photo.uploaderLabel,
+                                  mtimeMs: item.photo.mtimeMs,
+                                  isJoinedOtherRoom: Boolean(activeJoinedRoomMeta),
+                                  hostRetainsHidePermission: readHostRetainsHidePermission(),
+                                  currentIdentityTokens,
+                                });
+                                if (!delPerm.allowed) return null;
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      removeSharedRoomPhoto(item.photo.id);
+                                    }}
+                                    aria-label="공유방에서 삭제"
+                                    title={
+                                      delPerm.mode === 'host_hide'
+                                        ? '방장 권한으로 공유방에서 이 사진 숨기기·삭제 (내 기기 원본은 보존됩니다)'
+                                        : '공유방에서 이 사진 삭제 (내 기기 원본은 보존됩니다)'
+                                    }
+                                    className="absolute top-2.5 right-12 z-20 px-2.5 py-1 rounded-full bg-rose-600/95 hover:bg-rose-500 text-white text-[11px] font-black shadow-md flex items-center gap-1 cursor-pointer"
+                                  >
+                                    {delPerm.mode === 'host_hide' ? '👑 숨기기' : '🗑️ 삭제'}
+                                  </button>
+                                );
+                              })()}
 
                             <button
                               onClick={(e) => {
