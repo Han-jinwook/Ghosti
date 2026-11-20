@@ -291,11 +291,45 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
 
     private func runPhotoKitScan(call: CAPPluginCall, offset: Int, limit: Int, thumbMaxDim: Int, includeVideos: Bool, isLimited: Bool = false) {
         DispatchQueue.global(qos: .userInitiated).async {
-            let fetchOpts = PHFetchOptions()
-            fetchOpts.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
+            // [Android MediaStore DATE_MODIFIED DESC 1:1 정합화 & 연사(Burst) 전체 프레임 개방]:
+            // 1) 과거 EXIF 촬영일(creationDate)을 가진 최근 다운로드/공유 중복 사진이 수백 장 뒤로 밀려 스캔에서 누락되지 않도록
+            //    iPhone '최근 항목(Recents / .smartAlbumUserLibrary)' 컬렉션을 역순(내 폰에 가장 최근 저장된 순서)으로 최우선 조회합니다.
+            // 2) includeAllBurstAssets = true를 지정하여 iOS 연사 묶음 내부의 개별 사진이 숨겨지지 않고 모두 중복·연사 분석기에 전달되게 합니다.
+            var orderedAssets: [PHAsset] = []
+            var seenLocalIds = Set<String>()
 
-            let assets = PHAsset.fetchAssets(with: .image, options: fetchOpts)
-            let totalPhotoCount = assets.count
+            let libCols = PHAssetCollection.fetchAssetCollections(with: .smartAlbum, subtype: .smartAlbumUserLibrary, options: nil)
+            if let recentsCol = libCols.firstObject {
+                let recentsOpts = PHFetchOptions()
+                recentsOpts.includeAllBurstAssets = true
+                recentsOpts.includeAssetSourceTypes = [.typeUserLibrary, .typeCloudShared, .typeiTunesSynced]
+                recentsOpts.predicate = NSPredicate(format: "mediaType == %d", PHAssetMediaType.image.rawValue)
+                let recents = PHAsset.fetchAssets(in: recentsCol, options: recentsOpts)
+                if recents.count > 0 {
+                    for rIdx in stride(from: recents.count - 1, through: 0, by: -1) {
+                        let a = recents.object(at: rIdx)
+                        if seenLocalIds.insert(a.localIdentifier).inserted {
+                            orderedAssets.append(a)
+                        }
+                    }
+                }
+            }
+
+            let allImgOpts = PHFetchOptions()
+            allImgOpts.includeAllBurstAssets = true
+            allImgOpts.includeAssetSourceTypes = [.typeUserLibrary, .typeCloudShared, .typeiTunesSynced]
+            allImgOpts.sortDescriptors = [NSSortDescriptor(key: "modificationDate", ascending: false)]
+            let fallbackAssets = PHAsset.fetchAssets(with: .image, options: allImgOpts)
+            if fallbackAssets.count > 0 {
+                for fIdx in 0..<fallbackAssets.count {
+                    let a = fallbackAssets.object(at: fIdx)
+                    if seenLocalIds.insert(a.localIdentifier).inserted {
+                        orderedAssets.append(a)
+                    }
+                }
+            }
+
+            let totalPhotoCount = orderedAssets.count
             let endIdx = min(totalPhotoCount, offset + limit)
 
             let imgManager = PHImageManager.default()
@@ -309,7 +343,7 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
             if offset < endIdx {
                 for idx in offset..<endIdx {
                     autoreleasepool {
-                        let asset = assets.object(at: idx)
+                        let asset = orderedAssets[idx]
                         var thumbDataUrl = ""
                         let targetSize = CGSize(width: CGFloat(thumbMaxDim), height: CGFloat(thumbMaxDim))
                         imgManager.requestImage(
@@ -352,7 +386,9 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
 
             var videosList: [[String: Any]] = []
             if includeVideos {
-                let vidAssets = PHAsset.fetchAssets(with: .video, options: fetchOpts)
+                let vidFetchOpts = PHFetchOptions()
+                vidFetchOpts.sortDescriptors = [NSSortDescriptor(key: "modificationDate", ascending: false)]
+                let vidAssets = PHAsset.fetchAssets(with: .video, options: vidFetchOpts)
                 let vEnd = min(vidAssets.count, 40)
                 for vIdx in 0..<vEnd {
                     autoreleasepool {

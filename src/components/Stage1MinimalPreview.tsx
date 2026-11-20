@@ -1486,6 +1486,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     isStoreAppMode,
     mobileGalleryScanning,
     mobileGalleryPermissionDenied,
+    mobileGalleryLimitedAccess,
     syncMobileNativeGalleryAuto,
     pendingReturnShareRoom,
     returnToSharedRoomAndOpenUpload,
@@ -1908,6 +1909,41 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 </button>
               </div>
             </section>
+          )}
+
+          {/* iOS/Android '제한된 사진 접근(선택한 사진만 허용)' 상태 안내 배너 — 새로 저장한 테스트 사진이 스캔에서 빠지지 않도록 즉시 안내 */}
+          {mobileGalleryLimitedAccess && isCapacitorNativeMobileRuntime() && (
+            <div className="p-3.5 rounded-2xl bg-amber-950/85 border border-amber-400/50 flex flex-wrap items-center justify-between gap-2.5 shadow-sm">
+              <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+                <span className="text-[12.5px] sm:text-[13px] font-extrabold text-amber-200 break-keep">
+                  ⚠️ 현재 휴대폰 사진 권한이 『선택한 사진만 허용(제한된 접근)』으로 되어 있어요 (현재 허용된 사진 {displayPhotos.length}장)
+                </span>
+                <span className="text-[11.5px] text-amber-100/90 break-keep">
+                  새로 저장한 중복·흔들린 사진까지 빠짐없이 분류하려면 [전체 사진 허용]으로 바꾸거나 [사진 추가 선택]을 눌러주세요.
+                </span>
+              </div>
+              <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() =>
+                    void syncMobileNativeGalleryAuto({
+                      promptPermission: true,
+                      forceExpandSelected: true,
+                    })
+                  }
+                  className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[11.5px] font-black cursor-pointer"
+                >
+                  📸 사진 추가 선택
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void openNativeAppPermissionSettings()}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-300/40 text-amber-200 text-[11.5px] font-bold cursor-pointer"
+                >
+                  ⚙️ 설정에서 전체 허용
+                </button>
+              </div>
+            </div>
           )}
 
           {/* 2. 깔끔한 4열 정리 카테고리 카드 (글자 잘림 0% + 미니 샘플 썸네일 프리뷰 내장) */}

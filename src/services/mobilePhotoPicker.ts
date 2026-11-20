@@ -898,7 +898,7 @@ export function convertNativeGalleryVideos(nativeVideos: NativeGalleryVideoMeta[
 
 const MOBILE_GALLERY_IDB_NAME = 'ghosti_mobile_gallery_cache_v1';
 const MOBILE_GALLERY_STORE = 'snapshot';
-const MOBILE_GALLERY_CACHE_SCHEMA_VER = 6;
+const MOBILE_GALLERY_CACHE_SCHEMA_VER = 7;
 
 interface SerializedOpticalSig {
   dhash: string;

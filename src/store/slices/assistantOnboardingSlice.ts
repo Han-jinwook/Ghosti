@@ -743,7 +743,7 @@ export const createAssistantOnboardingSlice: StateCreator<
   syncMobileNativeGalleryAuto: async (options) => {
     if (zCoreBridge.isConnected) return;
     const promptPermission = options?.promptPermission ?? true;
-    const maxTargetCount = options?.maxTargetCount ?? 240;
+    const maxTargetCount = options?.maxTargetCount ?? 480;
     const forceExpandSelected = Boolean(options?.forceExpandSelected);
 
     // 1) 재실행/새로고침 시 0장 깜빡임 방지: IndexedDB 영구 캐시 즉시 복원
