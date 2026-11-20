@@ -1186,7 +1186,7 @@ public class GhostiMobileCarePlugin extends Plugin {
         }
     }
 
-    private MediaCodec createCompatibleAvcEncoder() throws IOException {
+    private MediaCodec createCompatibleAvcEncoder() throws java.io.IOException {
         String[] preferredSwCodecs = new String[] {
             "c2.android.avc.encoder",
             "OMX.google.h264.encoder"
