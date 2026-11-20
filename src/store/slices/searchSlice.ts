@@ -7,7 +7,14 @@ import {
   stopSetupMonsterTts,
   triggerSetupMonsterTtsPrewarm,
 } from '../../services/setupMonsterTts';
-import { analyzeMobilePickedPhotoFiles } from '../../services/mobilePhotoPicker';
+import {
+  analyzeMobilePickedPhotoFiles,
+  saveCachedMobileGalleryIndex,
+} from '../../services/mobilePhotoPicker';
+import {
+  isCapacitorNativeMobileRuntime,
+  openNativeMobileVideoPlayerModal,
+} from '../../services/ghostiMobileCareBridge';
 import {
   dispatchFileToKakaoRealChatroom,
   extractKeywordSentencesZeroLlm,
@@ -248,6 +255,81 @@ export const createSearchSlice: StateCreator<
   setSelectedVideoModal: (selectedVideoModal, seekSec) => {
     if (!selectedVideoModal) {
       set({ selectedVideoModal: null });
+      return;
+    }
+    if (
+      isCapacitorNativeMobileRuntime() &&
+      String(selectedVideoModal.id || '').startsWith('mobile_vid_')
+    ) {
+      const stateSnap = get();
+      const targetSeek =
+        seekSec !== undefined
+          ? seekSec
+          : stateSnap.hasExecutedUserSearch && stateSnap.activeQuery
+          ? selectedVideoModal.matchedSeekSec ?? 0
+          : 0;
+      void (async () => {
+        const res = await openNativeMobileVideoPlayerModal({
+          id: selectedVideoModal.id,
+          title: selectedVideoModal.title,
+          durationText: selectedVideoModal.durationText,
+          seekSec: targetSeek,
+          ocrLines: selectedVideoModal.ocrLines,
+        });
+        if (!res.supported) {
+          // 구버전 네이티브 래퍼 미지원 시 기존 WebView 모달로 자연 폴백
+          set({
+            selectedVideoModal:
+              seekSec !== undefined
+                ? { ...selectedVideoModal, matchedSeekSec: seekSec }
+                : selectedVideoModal,
+          });
+          return;
+        }
+        if (res.hasText && res.ocrLines.length > 0) {
+          const summaryLine = res.ocrLines
+            .map((l) => l.text.trim())
+            .filter(Boolean)
+            .slice(0, 2)
+            .join(' · ');
+          const extraTokens = String(res.fullText || '')
+            .replace(/\[\d{2}:\d{2}\]/g, ' ')
+            .split(/\s+/)
+            .map((t) => t.trim())
+            .filter((t) => t.length >= 2)
+            .slice(0, 40);
+          set((st) => ({
+            videoSceneItems: st.videoSceneItems.map((v) =>
+              v.id === selectedVideoModal.id
+                ? {
+                    ...v,
+                    hasScreenOcrText: true,
+                    ocrLineCount: res.ocrLines.length,
+                    ocrLines: res.ocrLines,
+                    ocrFullText: res.fullText,
+                    matchedFrameCaption: summaryLine ? `📝 ${summaryLine}` : v.matchedFrameCaption,
+                    keywords: Array.from(new Set([...(v.keywords || []), ...extraTokens])),
+                  }
+                : v
+            ),
+            matchedVideoScenes: st.matchedVideoScenes.map((v) =>
+              v.id === selectedVideoModal.id
+                ? {
+                    ...v,
+                    hasScreenOcrText: true,
+                    ocrLineCount: res.ocrLines.length,
+                    ocrLines: res.ocrLines,
+                    ocrFullText: res.fullText,
+                    matchedFrameCaption: summaryLine ? `📝 ${summaryLine}` : v.matchedFrameCaption,
+                    keywords: Array.from(new Set([...(v.keywords || []), ...extraTokens])),
+                  }
+                : v
+            ),
+          }));
+          const afterSt = get();
+          void saveCachedMobileGalleryIndex(afterSt.photos, afterSt.videoSceneItems);
+        }
+      })();
       return;
     }
     if (seekSec !== undefined) {

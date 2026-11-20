@@ -968,9 +968,7 @@ export const createAssistantOnboardingSlice: StateCreator<
       return;
     }
     if (get().mobileGalleryScanning) {
-      if (promptPermission || forceExpandSelected) {
-        pendingMobileGalleryResync = true;
-      }
+      pendingMobileGalleryResync = true;
       return;
     }
 
@@ -1138,18 +1136,24 @@ export const createAssistantOnboardingSlice: StateCreator<
               (v) =>
                 !newlyDiscoveredVids.some((nv) => nv.id === v.id) &&
                 String(v.id || '').startsWith('mobile_vid_') &&
+                v.hasScreenOcrText === undefined &&
                 !v.ocrFullText &&
                 (!Array.isArray(v.ocrLines) || v.ocrLines.length === 0)
             ),
           ];
           if (vidsMissingOcr.length > 0) {
-            const vidsToQuickOcr = vidsMissingOcr.slice(0, 12);
+            const vidsToQuickOcr = vidsMissingOcr.slice(0, 16);
             void (async () => {
               for (const nVid of vidsToQuickOcr) {
                 try {
-                  await new Promise((r) => setTimeout(r, 80));
+                  await new Promise((r) => setTimeout(r, 20));
                   const ocrOut = await extractVideoScreenTextOnDemand(nVid);
                   if (ocrOut.ocrLines && ocrOut.ocrLines.length > 0) {
+                    const summaryLine = ocrOut.ocrLines
+                      .map((l) => l.text.trim())
+                      .filter(Boolean)
+                      .slice(0, 2)
+                      .join(' · ');
                     const extraTokens = String(ocrOut.fullText || '')
                       .replace(/\[\d{2}:\d{2}\]/g, ' ')
                       .split(/\s+/)
@@ -1165,6 +1169,7 @@ export const createAssistantOnboardingSlice: StateCreator<
                               ocrLineCount: ocrOut.ocrLines.length,
                               ocrLines: ocrOut.ocrLines,
                               ocrFullText: ocrOut.fullText || '',
+                              matchedFrameCaption: summaryLine ? `📝 ${summaryLine}` : v.matchedFrameCaption,
                               keywords: Array.from(new Set([...(v.keywords || []), ...extraTokens])),
                             }
                           : v
@@ -1177,12 +1182,22 @@ export const createAssistantOnboardingSlice: StateCreator<
                               ocrLineCount: ocrOut.ocrLines.length,
                               ocrLines: ocrOut.ocrLines,
                               ocrFullText: ocrOut.fullText || '',
+                              matchedFrameCaption: summaryLine ? `📝 ${summaryLine}` : v.matchedFrameCaption,
                               keywords: Array.from(new Set([...(v.keywords || []), ...extraTokens])),
                             }
                           : v
                       ),
                     }));
                     void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
+                  } else if (ocrOut.ok) {
+                    set((state) => ({
+                      videoSceneItems: state.videoSceneItems.map((v) =>
+                        v.id === nVid.id ? { ...v, hasScreenOcrText: false } : v
+                      ),
+                      matchedVideoScenes: state.matchedVideoScenes.map((v) =>
+                        v.id === nVid.id ? { ...v, hasScreenOcrText: false } : v
+                      ),
+                    }));
                   }
                 } catch {
                   /* ignore background quick OCR error */

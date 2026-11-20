@@ -130,6 +130,28 @@ export interface GhostiMobileCarePluginInterface {
     clipHash?: string;
     changeCount?: number;
   }>;
+  extractVideoNativeOcr(options: {
+    id: string;
+    maxFrames?: number;
+  }): Promise<{
+    ok: boolean;
+    hasText: boolean;
+    ocrLines: Array<{ timeSec: number; timestamp: string; text: string }>;
+    fullText: string;
+  }>;
+  openNativeVideoPlayerModal(options: {
+    id: string;
+    title?: string;
+    durationText?: string;
+    seekSec?: number;
+    ocrLines?: Array<{ timeSec: number; timestamp: string; text: string }>;
+  }): Promise<{
+    ok: boolean;
+    closed?: boolean;
+    hasText?: boolean;
+    ocrLines?: Array<{ timeSec: number; timestamp: string; text: string }>;
+    fullText?: string;
+  }>;
 }
 
 const GhostiMobileCareNative = registerPlugin<GhostiMobileCarePluginInterface>('GhostiMobileCare');
@@ -710,4 +732,82 @@ export async function writeNativeMobileClipboardText(text: string): Promise<{
     /* 구버전 네이티브 래퍼 미지원 시 웹 폴백으로 자연 전환 */
   }
   return { supported: false, ok: false };
+}
+
+export async function extractNativeMobileVideoOcr(
+  videoId: string,
+  maxFrames = 5
+): Promise<{
+  supported: boolean;
+  ok: boolean;
+  hasText: boolean;
+  ocrLines: Array<{ timeSec: number; timestamp: string; text: string }>;
+  fullText: string;
+}> {
+  if (!isCapacitorNativeMobileRuntime() || !videoId) {
+    return { supported: false, ok: false, hasText: false, ocrLines: [], fullText: '' };
+  }
+  try {
+    const res = await GhostiMobileCareNative.extractVideoNativeOcr({
+      id: videoId,
+      maxFrames,
+    });
+    if (res && typeof res.ok === 'boolean') {
+      const lines = Array.isArray(res.ocrLines)
+        ? res.ocrLines.filter((l) => Boolean(l && typeof l.text === 'string' && l.text.trim()))
+        : [];
+      return {
+        supported: true,
+        ok: res.ok,
+        hasText: Boolean(res.hasText && lines.length > 0),
+        ocrLines: lines,
+        fullText: typeof res.fullText === 'string' ? res.fullText : '',
+      };
+    }
+  } catch {
+    /* 구버전 네이티브 래퍼(v1.0.54 이하) 미지원 시 기존 키프레임 WASM 경로로 자연 폴백 */
+  }
+  return { supported: false, ok: false, hasText: false, ocrLines: [], fullText: '' };
+}
+
+export async function openNativeMobileVideoPlayerModal(options: {
+  id: string;
+  title?: string;
+  durationText?: string;
+  seekSec?: number;
+  ocrLines?: Array<{ timeSec: number; timestamp: string; text: string }>;
+}): Promise<{
+  supported: boolean;
+  ok: boolean;
+  hasText: boolean;
+  ocrLines: Array<{ timeSec: number; timestamp: string; text: string }>;
+  fullText: string;
+}> {
+  if (!isCapacitorNativeMobileRuntime() || !options?.id) {
+    return { supported: false, ok: false, hasText: false, ocrLines: [], fullText: '' };
+  }
+  try {
+    const res = await GhostiMobileCareNative.openNativeVideoPlayerModal({
+      id: options.id,
+      title: options.title || '내 스마트폰 동영상',
+      durationText: options.durationText || '',
+      seekSec: Math.max(0, Math.floor(options.seekSec || 0)),
+      ocrLines: Array.isArray(options.ocrLines) ? options.ocrLines : [],
+    });
+    if (res && res.ok) {
+      const lines = Array.isArray(res.ocrLines)
+        ? res.ocrLines.filter((l) => Boolean(l && typeof l.text === 'string' && l.text.trim()))
+        : [];
+      return {
+        supported: true,
+        ok: true,
+        hasText: Boolean(res.hasText && lines.length > 0),
+        ocrLines: lines,
+        fullText: typeof res.fullText === 'string' ? res.fullText : '',
+      };
+    }
+  } catch {
+    /* 구버전 네이티브 래퍼(v1.0.54 이하) 미지원 시 WebView 모달 폴백 */
+  }
+  return { supported: false, ok: false, hasText: false, ocrLines: [], fullText: '' };
 }

@@ -4,6 +4,8 @@ import Capacitor
 import Photos
 import PhotosUI
 import AVFoundation
+import AVKit
+import Vision
 
 @objc(GhostiBridgeViewController)
 class GhostiBridgeViewController: CAPBridgeViewController {
@@ -180,7 +182,9 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "consumePendingDeepLink", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "setNativeThemeMode", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "readClipboardText", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "writeClipboardText", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "writeClipboardText", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "extractVideoNativeOcr", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "openNativeVideoPlayerModal", returnType: CAPPluginReturnPromise)
     ]
 
     private var lastInjectedChangeCount: Int = -1
@@ -912,6 +916,591 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
                 "matchedMediaStoreCount": fetched.count,
                 "doneIds": success ? requestedIds : []
             ])
+        }
+    }
+
+    // =========================================================================
+    // [모바일 정공법 — 대안 B (iOS)]:
+    // 1) Apple Vision 온디바이스 한국어 OCR (VNRecognizeTextRequest ko-KR, Neural Engine 0.2~0.4초)
+    // 2) AVPlayerViewController 순정 하드웨어 재생 + 하단 추출 한글·복사 통합 모달 (무변환 0.05초)
+    // =========================================================================
+    fileprivate struct IosNativeOcrLine {
+        let timeSec: Int
+        let timestamp: String
+        let text: String
+    }
+
+    fileprivate struct IosNativeVideoOcrResult {
+        let hasText: Bool
+        let lines: [IosNativeOcrLine]
+        let fullText: String
+
+        func toDict() -> [String: Any] {
+            let arr: [[String: Any]] = lines.map { item in
+                [
+                    "timeSec": item.timeSec,
+                    "timestamp": item.timestamp,
+                    "text": item.text
+                ]
+            }
+            return [
+                "ok": true,
+                "hasText": hasText,
+                "ocrLines": arr,
+                "fullText": fullText
+            ]
+        }
+    }
+
+    private static var iosVideoOcrCache: [String: IosNativeVideoOcrResult] = [:]
+    private static let iosVideoOcrCacheLock = NSLock()
+
+    fileprivate static func formatMmSs(_ secVal: Int) -> String {
+        let s = max(0, secVal)
+        return String(format: "%02d:%02d", s / 60, s % 60)
+    }
+
+    private static func recognizeKoreanTextInCGImage(_ cgImg: CGImage) -> String {
+        var observations: [VNRecognizedTextObservation] = []
+        let req = VNRecognizeTextRequest { request, _ in
+            if let res = request.results as? [VNRecognizedTextObservation] {
+                observations = res
+            }
+        }
+        req.recognitionLevel = .accurate
+        req.usesLanguageCorrection = true
+        req.recognitionLanguages = ["ko-KR", "en-US"]
+
+        let handler = VNImageRequestHandler(cgImage: cgImg, options: [:])
+        do {
+            try handler.perform([req])
+        } catch {
+            return ""
+        }
+        if observations.isEmpty { return "" }
+
+        // Vision 좌표계는 좌하단 원점(y=1.0이 상단)이므로 상단부터 하단 순으로 정렬
+        let sortedObs = observations.sorted { a, b in
+            let ay = a.boundingBox.midY
+            let by = b.boundingBox.midY
+            let minH = max(0.015, min(a.boundingBox.height, b.boundingBox.height))
+            if abs(ay - by) <= minH * 0.55 {
+                return a.boundingBox.minX < b.boundingBox.minX
+            }
+            return ay > by
+        }
+
+        let watermarkRx = try? NSRegularExpression(
+            pattern: "(notebooklm|^capcut$|^veo$|^kapwing$|^[xyv]?rec[eo@0]rder$|mobizen|bandicam|gomcam|^ocam$|az\\s*screen|^inshot$|kinemaster|vivavideo|filmora)",
+            options: [.caseInsensitive]
+        )
+        let statusBarRx = try? NSRegularExpression(
+            pattern: "^(?:SKT|KT|LG\\s*U\\+|U\\+|LTE|5G|\\d{1,3}%|\\d{1,2}:\\d{2})$",
+            options: [.caseInsensitive]
+        )
+        let kbdTokenRx = try? NSRegularExpression(
+            pattern: "^(?:스페이스|한/?영|완료|이동|검색|123|!#1|!#7|[ㄱ-ㅎㅏ-ㅣ]{1,3})$",
+            options: [.caseInsensitive]
+        )
+
+        var kept: [String] = []
+        var seenNorm = Set<String>()
+        for obs in sortedObs {
+            guard let topCand = obs.topCandidates(1).first else { continue }
+            if topCand.confidence < 0.30 { continue }
+            let cleaned = topCand.string
+                .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+            if cleaned.count < 2 { continue }
+            let nsRange = NSRange(cleaned.startIndex..<cleaned.endIndex, in: cleaned)
+            if obs.boundingBox.minY >= 0.94, let sRx = statusBarRx, sRx.firstMatch(in: cleaned, options: [], range: nsRange) != nil {
+                continue
+            }
+            if let wRx = watermarkRx, wRx.firstMatch(in: cleaned, options: [], range: nsRange) != nil {
+                continue
+            }
+            if let kRx = kbdTokenRx, kRx.firstMatch(in: cleaned, options: [], range: nsRange) != nil {
+                continue
+            }
+            var hasHangul = false
+            var meaningfulCount = 0
+            for scalar in cleaned.unicodeScalars {
+                if scalar.value >= 0xAC00 && scalar.value <= 0xD7A3 {
+                    hasHangul = true
+                    meaningfulCount += 2
+                } else if CharacterSet.alphanumerics.contains(scalar) {
+                    meaningfulCount += 1
+                }
+            }
+            if !hasHangul && meaningfulCount < 3 { continue }
+            let normKey = cleaned.lowercased().replacingOccurrences(of: " ", with: "")
+            if !seenNorm.contains(normKey) {
+                seenNorm.insert(normKey)
+                kept.append(cleaned)
+            }
+        }
+        return kept.joined(separator: " · ")
+    }
+
+    fileprivate static func extractIosVideoNativeOcrInternal(
+        localId: String,
+        maxFrames: Int,
+        completion: @escaping (IosNativeVideoOcrResult) -> Void
+    ) {
+        iosVideoOcrCacheLock.lock()
+        if let cached = iosVideoOcrCache[localId] {
+            iosVideoOcrCacheLock.unlock()
+            completion(cached)
+            return
+        }
+        iosVideoOcrCacheLock.unlock()
+
+        let fetched = PHAsset.fetchAssets(withLocalIdentifiers: [localId], options: nil)
+        guard let asset = fetched.firstObject else {
+            completion(IosNativeVideoOcrResult(hasText: false, lines: [], fullText: ""))
+            return
+        }
+
+        let vOpts = PHVideoRequestOptions()
+        vOpts.isNetworkAccessAllowed = true
+        vOpts.deliveryMode = .highQualityFormat
+
+        PHImageManager.default().requestAVAsset(forVideo: asset, options: vOpts) { avAsset, _, _ in
+            guard let compAsset = avAsset else {
+                completion(IosNativeVideoOcrResult(hasText: false, lines: [], fullText: ""))
+                return
+            }
+            DispatchQueue.global(qos: .userInitiated).async {
+                let durSec = max(0.8, CMTimeGetSeconds(compAsset.duration))
+                let sampleCount = durSec <= 3.2 ? min(3, maxFrames) : (durSec <= 9.0 ? min(4, maxFrames) : min(6, maxFrames))
+                let generator = AVAssetImageGenerator(asset: compAsset)
+                generator.appliesPreferredTrackTransform = true
+                generator.maximumSize = CGSize(width: 1440, height: 1440)
+                let tol = CMTime(seconds: durSec <= 15.0 ? 0.08 : 0.30, preferredTimescale: 600)
+                generator.requestedTimeToleranceBefore = tol
+                generator.requestedTimeToleranceAfter = tol
+
+                var entries: [IosNativeOcrLine] = []
+                var prevNormSig = ""
+                for i in 0..<sampleCount {
+                    let ratio = sampleCount == 1 ? 0.35 : (0.10 + 0.80 * (Double(i) / Double(sampleCount - 1)))
+                    let tSec = max(0.08, min(durSec - 0.10, durSec * ratio))
+                    let cmTime = CMTime(seconds: tSec, preferredTimescale: 600)
+                    autoreleasepool {
+                        if let cgImg = try? generator.copyCGImage(at: cmTime, actualTime: nil) {
+                            let frameText = recognizeKoreanTextInCGImage(cgImg)
+                            if !frameText.isEmpty {
+                                let normSig = frameText.lowercased().replacingOccurrences(
+                                    of: "[\\s·.,|/-]+",
+                                    with: "",
+                                    options: .regularExpression
+                                )
+                                if !normSig.isEmpty && normSig != prevNormSig {
+                                    prevNormSig = normSig
+                                    let secInt = max(0, Int(round(tSec)))
+                                    entries.append(
+                                        IosNativeOcrLine(
+                                            timeSec: secInt,
+                                            timestamp: formatMmSs(secInt),
+                                            text: frameText
+                                        )
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+                let fullText = entries.map { "[\($0.timestamp)] \($0.text)" }.joined(separator: "\n")
+                let result = IosNativeVideoOcrResult(hasText: !entries.isEmpty, lines: entries, fullText: fullText)
+                iosVideoOcrCacheLock.lock()
+                iosVideoOcrCache[localId] = result
+                iosVideoOcrCacheLock.unlock()
+                completion(result)
+            }
+        }
+    }
+
+    @objc func extractVideoNativeOcr(_ call: CAPPluginCall) {
+        let rawId = call.getString("id") ?? ""
+        let maxFrames = max(1, min(8, call.getInt("maxFrames") ?? 5))
+        let localId = rawId.hasPrefix("mobile_vid_")
+            ? String(rawId.dropFirst("mobile_vid_".count))
+            : rawId
+        if localId.isEmpty {
+            call.resolve(["ok": false, "hasText": false, "ocrLines": [], "fullText": ""])
+            return
+        }
+        Self.extractIosVideoNativeOcrInternal(localId: localId, maxFrames: maxFrames) { result in
+            call.resolve(result.toDict())
+        }
+    }
+
+    @objc func openNativeVideoPlayerModal(_ call: CAPPluginCall) {
+        let rawId = call.getString("id") ?? ""
+        let title = call.getString("title") ?? "내 스마트폰 동영상"
+        let durationText = call.getString("durationText") ?? ""
+        let seekSec = max(0, call.getInt("seekSec") ?? 0)
+        let preloadedArr = call.getArray("ocrLines", JSObject.self) ?? []
+        let localId = rawId.hasPrefix("mobile_vid_")
+            ? String(rawId.dropFirst("mobile_vid_".count))
+            : rawId
+        if localId.isEmpty {
+            call.resolve(["ok": false])
+            return
+        }
+
+        var initialLines: [IosNativeOcrLine] = []
+        for obj in preloadedArr {
+            let tx = ((obj["text"] as? String) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            if tx.isEmpty { continue }
+            let tsSec = max(0, (obj["timeSec"] as? Int) ?? 0)
+            let tsStr = (obj["timestamp"] as? String) ?? Self.formatMmSs(tsSec)
+            initialLines.append(IosNativeOcrLine(timeSec: tsSec, timestamp: tsStr, text: tx))
+        }
+
+        DispatchQueue.main.async { [weak self] in
+            guard let presenter = self?.bridge?.viewController else {
+                call.resolve(["ok": false])
+                return
+            }
+            let modalVC = GhostiNativeVideoModalViewController(
+                localId: localId,
+                videoTitle: title,
+                durationText: durationText,
+                initialSeekSec: seekSec,
+                initialLines: initialLines
+            ) { finalResult in
+                self?.lastInjectedChangeCount = UIPasteboard.general.changeCount
+                var payload = finalResult?.toDict() ?? [
+                    "ok": true,
+                    "hasText": false,
+                    "ocrLines": [],
+                    "fullText": ""
+                ]
+                payload["closed"] = true
+                call.resolve(payload)
+            }
+            modalVC.modalPresentationStyle = .overFullScreen
+            modalVC.modalTransitionStyle = .crossDissolve
+            presenter.present(modalVC, animated: true)
+        }
+    }
+}
+
+private final class GhostiNativeVideoModalViewController: UIViewController {
+    private let localId: String
+    private let videoTitle: String
+    private let durationText: String
+    private let initialSeekSec: Int
+    private var currentOcrResult: GhostiMobileCarePlugin.IosNativeVideoOcrResult?
+    private let onDismissCallback: (GhostiMobileCarePlugin.IosNativeVideoOcrResult?) -> Void
+    private var didInvokeDismiss = false
+
+    private let playerVC = AVPlayerViewController()
+    private let ocrTitleLabel = UILabel()
+    private let copyAllButton = UIButton(type: .system)
+    private let linesStack = UIStackView()
+    private var lineTimeSecs: [Int] = []
+    private var lineTexts: [String] = []
+
+    init(
+        localId: String,
+        videoTitle: String,
+        durationText: String,
+        initialSeekSec: Int,
+        initialLines: [GhostiMobileCarePlugin.IosNativeOcrLine],
+        onDismissCallback: @escaping (GhostiMobileCarePlugin.IosNativeVideoOcrResult?) -> Void
+    ) {
+        self.localId = localId
+        self.videoTitle = videoTitle
+        self.durationText = durationText
+        self.initialSeekSec = initialSeekSec
+        if !initialLines.isEmpty {
+            let full = initialLines.map { "[\($0.timestamp)] \($0.text)" }.joined(separator: "\n")
+            self.currentOcrResult = GhostiMobileCarePlugin.IosNativeVideoOcrResult(
+                hasText: true,
+                lines: initialLines,
+                fullText: full
+            )
+        }
+        self.onDismissCallback = onDismissCallback
+        super.init(nibName: nil, bundle: nil)
+    }
+
+    required init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    override var preferredStatusBarStyle: UIStatusBarStyle {
+        return .lightContent
+    }
+
+    override func viewDidLoad() {
+        super.viewDidLoad()
+        view.backgroundColor = UIColor(red: 9.0 / 255.0, green: 13.0 / 255.0, blue: 22.0 / 255.0, alpha: 1.0)
+
+        let headerStack = UIStackView()
+        headerStack.axis = .horizontal
+        headerStack.alignment = .center
+        headerStack.spacing = 10
+        headerStack.translatesAutoresizingMaskIntoConstraints = false
+
+        let titleStack = UIStackView()
+        titleStack.axis = .vertical
+        titleStack.spacing = 3
+
+        let titleLbl = UILabel()
+        titleLbl.text = videoTitle
+        titleLbl.textColor = .white
+        titleLbl.font = UIFont.boldSystemFont(ofSize: 16.5)
+        titleLbl.numberOfLines = 2
+
+        let subLbl = UILabel()
+        subLbl.text = durationText.isEmpty
+            ? "🎬 아이폰 원본 하드웨어 즉시 재생"
+            : "⏱️ 전체 길이 \(durationText) · 원본 무변환 즉시 재생"
+        subLbl.textColor = UIColor(red: 148.0 / 255.0, green: 163.0 / 255.0, blue: 184.0 / 255.0, alpha: 1.0)
+        subLbl.font = UIFont.systemFont(ofSize: 12.0, weight: .medium)
+
+        titleStack.addArrangedSubview(titleLbl)
+        titleStack.addArrangedSubview(subLbl)
+
+        let closeBtn = UIButton(type: .system)
+        closeBtn.setTitle("✕ 닫기", for: .normal)
+        closeBtn.setTitleColor(.white, for: .normal)
+        closeBtn.titleLabel?.font = UIFont.boldSystemFont(ofSize: 13.5)
+        closeBtn.backgroundColor = UIColor(red: 30.0 / 255.0, green: 41.0 / 255.0, blue: 59.0 / 255.0, alpha: 1.0)
+        closeBtn.layer.cornerRadius = 18
+        closeBtn.layer.borderWidth = 1
+        closeBtn.layer.borderColor = UIColor(red: 71.0 / 255.0, green: 85.0 / 255.0, blue: 105.0 / 255.0, alpha: 1.0).cgColor
+        closeBtn.contentEdgeInsets = UIEdgeInsets(top: 8, left: 14, bottom: 8, right: 14)
+        closeBtn.setContentHuggingPriority(.required, for: .horizontal)
+        closeBtn.setContentCompressionResistancePriority(.required, for: .horizontal)
+        closeBtn.addTarget(self, action: #selector(handleCloseTapped), for: .touchUpInside)
+
+        headerStack.addArrangedSubview(titleStack)
+        headerStack.addArrangedSubview(closeBtn)
+        view.addSubview(headerStack)
+
+        let playerContainer = UIView()
+        playerContainer.backgroundColor = .black
+        playerContainer.layer.cornerRadius = 16
+        playerContainer.layer.borderWidth = 1
+        playerContainer.layer.borderColor = UIColor(red: 51.0 / 255.0, green: 65.0 / 255.0, blue: 85.0 / 255.0, alpha: 1.0).cgColor
+        playerContainer.clipsToBounds = true
+        playerContainer.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(playerContainer)
+
+        addChild(playerVC)
+        playerVC.view.translatesAutoresizingMaskIntoConstraints = false
+        playerVC.showsPlaybackControls = true
+        playerContainer.addSubview(playerVC.view)
+        playerVC.didMove(toParent: self)
+
+        let ocrCard = UIView()
+        ocrCard.backgroundColor = UIColor(red: 17.0 / 255.0, green: 24.0 / 255.0, blue: 39.0 / 255.0, alpha: 1.0)
+        ocrCard.layer.cornerRadius = 16
+        ocrCard.layer.borderWidth = 1
+        ocrCard.layer.borderColor = UIColor(red: 20.0 / 255.0, green: 184.0 / 255.0, blue: 166.0 / 255.0, alpha: 1.0).cgColor
+        ocrCard.translatesAutoresizingMaskIntoConstraints = false
+        view.addSubview(ocrCard)
+
+        let ocrHeader = UIStackView()
+        ocrHeader.axis = .horizontal
+        ocrHeader.alignment = .center
+        ocrHeader.spacing = 8
+        ocrHeader.translatesAutoresizingMaskIntoConstraints = false
+
+        ocrTitleLabel.text = "📝 영상 화면 속 한글 자동 추출"
+        ocrTitleLabel.textColor = UIColor(red: 94.0 / 255.0, green: 234.0 / 255.0, blue: 212.0 / 255.0, alpha: 1.0)
+        ocrTitleLabel.font = UIFont.boldSystemFont(ofSize: 13.5)
+
+        copyAllButton.setTitle("📋 전체 복사", for: .normal)
+        copyAllButton.setTitleColor(UIColor(red: 15.0 / 255.0, green: 23.0 / 255.0, blue: 42.0 / 255.0, alpha: 1.0), for: .normal)
+        copyAllButton.titleLabel?.font = UIFont.boldSystemFont(ofSize: 12.0)
+        copyAllButton.backgroundColor = UIColor(red: 45.0 / 255.0, green: 212.0 / 255.0, blue: 191.0 / 255.0, alpha: 1.0)
+        copyAllButton.layer.cornerRadius = 13
+        copyAllButton.contentEdgeInsets = UIEdgeInsets(top: 5, left: 11, bottom: 5, right: 11)
+        copyAllButton.isHidden = true
+        copyAllButton.setContentHuggingPriority(.required, for: .horizontal)
+        copyAllButton.addTarget(self, action: #selector(handleCopyAllTapped), for: .touchUpInside)
+
+        ocrHeader.addArrangedSubview(ocrTitleLabel)
+        ocrHeader.addArrangedSubview(copyAllButton)
+        ocrCard.addSubview(ocrHeader)
+
+        let ocrScroll = UIScrollView()
+        ocrScroll.translatesAutoresizingMaskIntoConstraints = false
+        linesStack.axis = .vertical
+        linesStack.spacing = 6
+        linesStack.translatesAutoresizingMaskIntoConstraints = false
+        ocrScroll.addSubview(linesStack)
+        ocrCard.addSubview(ocrScroll)
+
+        NSLayoutConstraint.activate([
+            headerStack.topAnchor.constraint(equalTo: view.safeAreaLayoutGuide.topAnchor, constant: 8),
+            headerStack.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 14),
+            headerStack.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -14),
+
+            playerContainer.topAnchor.constraint(equalTo: headerStack.bottomAnchor, constant: 10),
+            playerContainer.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 14),
+            playerContainer.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -14),
+
+            playerVC.view.topAnchor.constraint(equalTo: playerContainer.topAnchor),
+            playerVC.view.bottomAnchor.constraint(equalTo: playerContainer.bottomAnchor),
+            playerVC.view.leadingAnchor.constraint(equalTo: playerContainer.leadingAnchor),
+            playerVC.view.trailingAnchor.constraint(equalTo: playerContainer.trailingAnchor),
+
+            ocrCard.topAnchor.constraint(equalTo: playerContainer.bottomAnchor, constant: 12),
+            ocrCard.leadingAnchor.constraint(equalTo: view.leadingAnchor, constant: 14),
+            ocrCard.trailingAnchor.constraint(equalTo: view.trailingAnchor, constant: -14),
+            ocrCard.bottomAnchor.constraint(equalTo: view.safeAreaLayoutGuide.bottomAnchor, constant: -10),
+            ocrCard.heightAnchor.constraint(lessThanOrEqualTo: view.heightAnchor, multiplier: 0.32),
+            ocrCard.heightAnchor.constraint(greaterThanOrEqualToConstant: 96),
+
+            ocrHeader.topAnchor.constraint(equalTo: ocrCard.topAnchor, constant: 11),
+            ocrHeader.leadingAnchor.constraint(equalTo: ocrCard.leadingAnchor, constant: 12),
+            ocrHeader.trailingAnchor.constraint(equalTo: ocrCard.trailingAnchor, constant: -12),
+
+            ocrScroll.topAnchor.constraint(equalTo: ocrHeader.bottomAnchor, constant: 8),
+            ocrScroll.leadingAnchor.constraint(equalTo: ocrCard.leadingAnchor, constant: 12),
+            ocrScroll.trailingAnchor.constraint(equalTo: ocrCard.trailingAnchor, constant: -12),
+            ocrScroll.bottomAnchor.constraint(equalTo: ocrCard.bottomAnchor, constant: -11),
+
+            linesStack.topAnchor.constraint(equalTo: ocrScroll.contentLayoutGuide.topAnchor),
+            linesStack.bottomAnchor.constraint(equalTo: ocrScroll.contentLayoutGuide.bottomAnchor),
+            linesStack.leadingAnchor.constraint(equalTo: ocrScroll.contentLayoutGuide.leadingAnchor),
+            linesStack.trailingAnchor.constraint(equalTo: ocrScroll.contentLayoutGuide.trailingAnchor),
+            linesStack.widthAnchor.constraint(equalTo: ocrScroll.frameLayoutGuide.widthAnchor)
+        ])
+
+        startDirectHardwarePlayback()
+        renderOcrState()
+        if currentOcrResult == nil {
+            GhostiMobileCarePlugin.extractIosVideoNativeOcrInternal(localId: localId, maxFrames: 5) { [weak self] extracted in
+                DispatchQueue.main.async {
+                    guard let self = self else { return }
+                    self.currentOcrResult = extracted
+                    self.renderOcrState()
+                }
+            }
+        }
+    }
+
+    private func startDirectHardwarePlayback() {
+        let fetched = PHAsset.fetchAssets(withLocalIdentifiers: [localId], options: nil)
+        guard let asset = fetched.firstObject else { return }
+        let pOpts = PHVideoRequestOptions()
+        pOpts.isNetworkAccessAllowed = true
+        pOpts.deliveryMode = .automatic
+        try? AVAudioSession.sharedInstance().setCategory(.playback, mode: .moviePlayback, options: [])
+        try? AVAudioSession.sharedInstance().setActive(true)
+        PHImageManager.default().requestPlayerItem(forVideo: asset, options: pOpts) { [weak self] playerItem, _ in
+            guard let self = self, let item = playerItem else { return }
+            DispatchQueue.main.async {
+                let player = AVPlayer(playerItem: item)
+                self.playerVC.player = player
+                if self.initialSeekSec > 0 {
+                    let target = CMTime(seconds: Double(self.initialSeekSec), preferredTimescale: 600)
+                    player.seek(to: target, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                        player.play()
+                    }
+                } else {
+                    player.play()
+                }
+            }
+        }
+    }
+
+    private func renderOcrState() {
+        for sub in linesStack.arrangedSubviews {
+            linesStack.removeArrangedSubview(sub)
+            sub.removeFromSuperview()
+        }
+        lineTimeSecs.removeAll()
+        lineTexts.removeAll()
+
+        guard let cur = currentOcrResult else {
+            copyAllButton.isHidden = true
+            let loadingLbl = UILabel()
+            loadingLbl.text = "🔍 온디바이스 AI가 영상 화면 속 한글을 빠르게 읽고 있습니다..."
+            loadingLbl.textColor = UIColor(red: 226.0 / 255.0, green: 232.0 / 255.0, blue: 240.0 / 255.0, alpha: 1.0)
+            loadingLbl.font = UIFont.systemFont(ofSize: 13.0)
+            loadingLbl.numberOfLines = 0
+            linesStack.addArrangedSubview(loadingLbl)
+            return
+        }
+
+        if !cur.hasText || cur.lines.isEmpty {
+            copyAllButton.isHidden = true
+            let emptyLbl = UILabel()
+            emptyLbl.text = "이 영상 화면에서는 인식된 글자가 없습니다."
+            emptyLbl.textColor = UIColor(red: 148.0 / 255.0, green: 163.0 / 255.0, blue: 184.0 / 255.0, alpha: 1.0)
+            emptyLbl.font = UIFont.systemFont(ofSize: 13.0)
+            emptyLbl.numberOfLines = 0
+            linesStack.addArrangedSubview(emptyLbl)
+            return
+        }
+
+        ocrTitleLabel.text = "📝 추출된 화면 한글 (\(cur.lines.count)구간 · 터치 시 구간 이동·복사)"
+        copyAllButton.isHidden = false
+        for (idx, entry) in cur.lines.enumerated() {
+            lineTimeSecs.append(entry.timeSec)
+            lineTexts.append(entry.text)
+
+            let btn = UIButton(type: .system)
+            btn.tag = idx
+            btn.contentHorizontalAlignment = .leading
+            btn.titleLabel?.numberOfLines = 0
+            btn.titleLabel?.font = UIFont.systemFont(ofSize: 13.5, weight: .medium)
+            btn.setTitle("[\(entry.timestamp)]  \(entry.text)", for: .normal)
+            btn.setTitleColor(UIColor(red: 248.0 / 255.0, green: 250.0 / 255.0, blue: 252.0 / 255.0, alpha: 1.0), for: .normal)
+            btn.backgroundColor = UIColor(red: 30.0 / 255.0, green: 41.0 / 255.0, blue: 59.0 / 255.0, alpha: 1.0)
+            btn.layer.cornerRadius = 10
+            btn.contentEdgeInsets = UIEdgeInsets(top: 8, left: 10, bottom: 8, right: 10)
+            btn.addTarget(self, action: #selector(handleLineTapped(_:)), for: .touchUpInside)
+            linesStack.addArrangedSubview(btn)
+        }
+    }
+
+    @objc private func handleLineTapped(_ sender: UIButton) {
+        let idx = sender.tag
+        guard idx >= 0 && idx < lineTexts.count else { return }
+        let sec = lineTimeSecs[idx]
+        let txt = lineTexts[idx]
+        if let player = playerVC.player {
+            let cm = CMTime(seconds: Double(max(0, sec)), preferredTimescale: 600)
+            player.seek(to: cm, toleranceBefore: .zero, toleranceAfter: .zero) { _ in
+                player.play()
+            }
+        }
+        UIPasteboard.general.string = txt
+        ocrTitleLabel.text = "✅ 구간 이동 및 문장 복사 완료!"
+    }
+
+    @objc private func handleCopyAllTapped() {
+        guard !lineTexts.isEmpty else { return }
+        UIPasteboard.general.string = lineTexts.joined(separator: "\n")
+        copyAllButton.setTitle("✅ 복사됨", for: .normal)
+    }
+
+    @objc private func handleCloseTapped() {
+        playerVC.player?.pause()
+        playerVC.player = nil
+        dismiss(animated: true) { [weak self] in
+            guard let self = self, !self.didInvokeDismiss else { return }
+            self.didInvokeDismiss = true
+            self.onDismissCallback(self.currentOcrResult)
+        }
+    }
+
+    override func viewDidDisappear(_ animated: Bool) {
+        super.viewDidDisappear(animated)
+        if isBeingDismissed && !didInvokeDismiss {
+            playerVC.player?.pause()
+            playerVC.player = nil
+            didInvokeDismiss = true
+            onDismissCallback(currentOcrResult)
         }
     }
 }

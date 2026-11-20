@@ -2,6 +2,7 @@ import { RawImage } from '@huggingface/transformers';
 import { getZCoreUrl, zCoreBridge, hasActiveGhostiLoginSession } from '../zCoreBridge';
 import {
   extractNativeMobileVideoKeyframes,
+  extractNativeMobileVideoOcr,
   resolveNativeMobileVideoPlaybackUrl,
 } from '../ghostiMobileCareBridge';
 import { silentIndexingBrake } from '../silentIndexingBrake';
@@ -2374,7 +2375,7 @@ export async function extractVideoScreenTextOnDemand(
     return `${mm}:${ss}`;
   };
 
-  const memKey = `${vid.videoFileName || vid.id}|${vid.sizeMB || 0}|v30`;
+  const memKey = `${vid.videoFileName || vid.id}|${vid.sizeMB || 0}|v32`;
   const memHit = inMemoryPaddleVideoOcrCache.get(memKey);
   if (memHit && memHit.ocrLines.length > 0) {
     return memHit;
@@ -2443,9 +2444,26 @@ export async function extractVideoScreenTextOnDemand(
     try {
       const rawPaddleFrames: Array<{ timeSec: number; ocrText: string }> = [];
 
-      // 2-A) 모바일 네이티브 앱(iOS AVAssetImageGenerator / Android MediaMetadataRetriever) 직접 키프레임 추출 경로 (WKWebView/ScopedStorage <video> 디코더 제약 0%)
+      // 2-A) 모바일 정공법(대안 B): Android ML Kit Korean v2 번들 + iOS Apple Vision ko-KR 네이티브 NPU 직결 (0.2~0.4초, WASM 경합 0%)
       if (isMobileVid) {
-        const nativeFrames = await extractNativeMobileVideoKeyframes(vid.id, 8);
+        const nativeOcr = await extractNativeMobileVideoOcr(vid.id, 5);
+        if (nativeOcr.supported) {
+          const outNative: VideoOcrExtractResult = {
+            ok: nativeOcr.ok,
+            hasText: nativeOcr.hasText && nativeOcr.ocrLines.length > 0,
+            videoFileName: vid.videoFileName,
+            ocrLines: nativeOcr.ocrLines,
+            fullText:
+              nativeOcr.fullText ||
+              nativeOcr.ocrLines.map((l) => `[${l.timestamp}] ${l.text}`).join('\n'),
+          };
+          if (outNative.ocrLines.length > 0) {
+            inMemoryPaddleVideoOcrCache.set(memKey, outNative);
+          }
+          return outNative;
+        }
+        // 구버전 네이티브 래퍼(<= 1.0.54) 폴백
+        const nativeFrames = await extractNativeMobileVideoKeyframes(vid.id, 6);
         if (nativeFrames.length > 0) {
           let prevDataSig = '';
           for (const nf of nativeFrames) {

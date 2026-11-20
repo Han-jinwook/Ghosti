@@ -2,6 +2,7 @@ package app.sundreamer.ghosti;
 
 import android.Manifest;
 import android.app.Activity;
+import android.app.Dialog;
 import android.app.PendingIntent;
 import android.content.ClipData;
 import android.content.ClipboardManager;
@@ -16,9 +17,12 @@ import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Color;
 import android.graphics.ImageDecoder;
 import android.graphics.Matrix;
 import android.graphics.SurfaceTexture;
+import android.graphics.Typeface;
+import android.graphics.drawable.GradientDrawable;
 import android.media.ExifInterface;
 import android.media.Image;
 import android.media.MediaCodec;
@@ -45,7 +49,21 @@ import android.provider.MediaStore;
 import android.provider.Settings;
 import android.util.Base64;
 import android.util.Size;
+import android.util.TypedValue;
+import android.view.Gravity;
 import android.view.Surface;
+import android.view.View;
+import android.view.ViewGroup;
+import android.view.Window;
+import android.view.WindowInsets;
+import android.view.WindowManager;
+import android.widget.FrameLayout;
+import android.widget.LinearLayout;
+import android.widget.MediaController;
+import android.widget.ScrollView;
+import android.widget.TextView;
+import android.widget.Toast;
+import android.widget.VideoView;
 
 import java.io.ByteArrayOutputStream;
 import java.io.File;
@@ -55,10 +73,19 @@ import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.util.concurrent.ConcurrentHashMap;
+import java.util.concurrent.TimeUnit;
+import java.util.regex.Pattern;
 
 import com.android.installreferrer.api.InstallReferrerClient;
 import com.android.installreferrer.api.InstallReferrerStateListener;
 import com.android.installreferrer.api.ReferrerDetails;
+import com.google.android.gms.tasks.Tasks;
+import com.google.mlkit.vision.common.InputImage;
+import com.google.mlkit.vision.text.Text;
+import com.google.mlkit.vision.text.TextRecognition;
+import com.google.mlkit.vision.text.TextRecognizer;
+import com.google.mlkit.vision.text.korean.KoreanTextRecognizerOptions;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
@@ -2324,6 +2351,610 @@ public class GhostiMobileCarePlugin extends Plugin {
             ret.put("ok", ok);
             ret.put("clipHash", hash);
             call.resolve(ret);
+        });
+    }
+
+    // =========================================================================
+    // [모바일 정공법 — 대안 B]:
+    // 1) OS 네이티브 온디바이스 한글 OCR (Google ML Kit Korean v2 번들, 오프라인 NPU 0.2~0.4초)
+    // 2) OS 순정 하드웨어 VideoView + 하단 추출 한글·복사 통합 모달 (무변환 0.05초 즉시 재생)
+    // =========================================================================
+    private static volatile TextRecognizer sKoreanTextRecognizer = null;
+    private static final Object KOREAN_OCR_LOCK = new Object();
+    private static final Map<Long, NativeVideoOcrResult> sNativeVideoOcrCache = new ConcurrentHashMap<>();
+    private static final Pattern WATERMARK_NOISE_RX = Pattern.compile(
+        "(?i)(notebooklm|^capcut$|^veo$|^kapwing$|^[xyv]?rec[eo@0]rder$|mobizen|bandicam|gomcam|^ocam$|az\\s*screen|^inshot$|kinemaster|vivavideo|filmora)"
+    );
+    private static final Pattern STATUS_BAR_NOISE_RX = Pattern.compile(
+        "(?i)^(?:SKT|KT|LG\\s*U\\+|U\\+|LTE|5G|\\d{1,3}%|\\d{1,2}:\\d{2})$"
+    );
+    private static final Pattern KBD_TOKEN_NOISE_RX = Pattern.compile(
+        "(?i)^(?:스페이스|한/?영|완료|이동|검색|123|!#1|!#7|[ㄱ-ㅎㅏ-ㅣ]{1,3})$"
+    );
+
+    private static class NativeOcrLineEntry {
+        final int timeSec;
+        final String timestamp;
+        final String text;
+
+        NativeOcrLineEntry(int timeSec, String timestamp, String text) {
+            this.timeSec = timeSec;
+            this.timestamp = timestamp;
+            this.text = text;
+        }
+    }
+
+    private static class NativeVideoOcrResult {
+        final boolean hasText;
+        final List<NativeOcrLineEntry> lines;
+        final String fullText;
+
+        NativeVideoOcrResult(boolean hasText, List<NativeOcrLineEntry> lines, String fullText) {
+            this.hasText = hasText;
+            this.lines = lines;
+            this.fullText = fullText;
+        }
+
+        JSObject toJSObject() {
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("hasText", hasText);
+            JSArray arr = new JSArray();
+            for (NativeOcrLineEntry item : lines) {
+                JSObject o = new JSObject();
+                o.put("timeSec", item.timeSec);
+                o.put("timestamp", item.timestamp);
+                o.put("text", item.text);
+                arr.put(o);
+            }
+            ret.put("ocrLines", arr);
+            ret.put("fullText", fullText);
+            return ret;
+        }
+    }
+
+    private static TextRecognizer getKoreanRecognizer() {
+        if (sKoreanTextRecognizer == null) {
+            synchronized (KOREAN_OCR_LOCK) {
+                if (sKoreanTextRecognizer == null) {
+                    sKoreanTextRecognizer = TextRecognition.getClient(
+                        new KoreanTextRecognizerOptions.Builder().build()
+                    );
+                }
+            }
+        }
+        return sKoreanTextRecognizer;
+    }
+
+    private static String formatMmSs(int secVal) {
+        int s = Math.max(0, secVal);
+        return String.format(Locale.US, "%02d:%02d", s / 60, s % 60);
+    }
+
+    private static String cleanRecognizedFrameText(Text visionText, int imgHeight) {
+        if (visionText == null) return "";
+        List<Text.Line> allLines = new ArrayList<>();
+        for (Text.TextBlock block : visionText.getTextBlocks()) {
+            if (block != null && block.getLines() != null) {
+                allLines.addAll(block.getLines());
+            }
+        }
+        if (allLines.isEmpty()) return "";
+
+        allLines.sort((a, b) -> {
+            android.graphics.Rect ra = a.getBoundingBox();
+            android.graphics.Rect rb = b.getBoundingBox();
+            if (ra == null || rb == null) return 0;
+            int dy = Math.abs(ra.centerY() - rb.centerY());
+            int minH = Math.max(12, Math.min(ra.height(), rb.height()));
+            if (dy <= minH / 2) {
+                return Integer.compare(ra.left, rb.left);
+            }
+            return Integer.compare(ra.top, rb.top);
+        });
+
+        List<String> kept = new ArrayList<>();
+        Set<String> seenInFrame = new LinkedHashSet<>();
+        for (Text.Line line : allLines) {
+            String raw = line.getText();
+            if (raw == null) continue;
+            String cleaned = raw.replaceAll("\\s+", " ").trim();
+            if (cleaned.length() < 2) continue;
+            android.graphics.Rect box = line.getBoundingBox();
+            if (box != null && imgHeight > 0 && box.bottom <= Math.round(imgHeight * 0.055f)) {
+                if (STATUS_BAR_NOISE_RX.matcher(cleaned).matches()) continue;
+            }
+            if (WATERMARK_NOISE_RX.matcher(cleaned).find()) continue;
+            if (KBD_TOKEN_NOISE_RX.matcher(cleaned).matches()) continue;
+            // 의미 있는 한글 1자 이상 또는 영숫자 2자 이상 포함 시 채택
+            boolean hasMeaningful = false;
+            int meaningfulCount = 0;
+            for (int ci = 0; ci < cleaned.length(); ci++) {
+                char ch = cleaned.charAt(ci);
+                if (ch >= 0xAC00 && ch <= 0xD7A3) {
+                    hasMeaningful = true;
+                    meaningfulCount += 2;
+                } else if (Character.isLetterOrDigit(ch)) {
+                    meaningfulCount += 1;
+                }
+            }
+            if (!hasMeaningful && meaningfulCount < 3) continue;
+            String normKey = cleaned.toLowerCase(Locale.ROOT).replaceAll("\\s+", "");
+            if (seenInFrame.add(normKey)) {
+                kept.add(cleaned);
+            }
+        }
+        if (kept.isEmpty()) return "";
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < kept.size(); i++) {
+            if (i > 0) sb.append(" · ");
+            sb.append(kept.get(i));
+        }
+        return sb.toString();
+    }
+
+    private NativeVideoOcrResult extractNativeVideoOcrInternal(Context appCtx, long mediaId, int maxFrames) {
+        NativeVideoOcrResult cached = sNativeVideoOcrCache.get(mediaId);
+        if (cached != null) {
+            return cached;
+        }
+        List<NativeOcrLineEntry> entries = new ArrayList<>();
+        MediaMetadataRetriever retriever = new MediaMetadataRetriever();
+        try {
+            Uri videoUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, mediaId);
+            retriever.setDataSource(appCtx, videoUri);
+            String durStr = retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION);
+            long durMs = 3000L;
+            if (durStr != null && !durStr.trim().isEmpty()) {
+                try {
+                    durMs = Math.max(500L, Long.parseLong(durStr.trim()));
+                } catch (NumberFormatException ignored) {
+                }
+            }
+            int sampleCount = durMs <= 3200L ? Math.min(3, maxFrames) : (durMs <= 9000L ? Math.min(4, maxFrames) : Math.min(6, maxFrames));
+            // 6.5초 이하 짧은 촬영 클립은 I-프레임이 1개뿐일 수 있으므로 3~4지점에 한해 정밀 프레임 추출, 장편은 고속 키프레임 우선
+            int primaryOpt = durMs <= 6500L
+                ? MediaMetadataRetriever.OPTION_CLOSEST
+                : MediaMetadataRetriever.OPTION_CLOSEST_SYNC;
+
+            TextRecognizer recognizer = getKoreanRecognizer();
+            String prevNormSig = "";
+            for (int i = 0; i < sampleCount; i++) {
+                double ratio = sampleCount == 1 ? 0.35 : (0.10 + 0.80 * ((double) i / (double) (sampleCount - 1)));
+                long sampleMs = Math.max(80L, Math.min(durMs - 100L, Math.round(durMs * ratio)));
+                Bitmap bmp = null;
+                try {
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+                        bmp = retriever.getScaledFrameAtTime(sampleMs * 1000L, primaryOpt, 1280, 1280);
+                    }
+                    if (bmp == null) {
+                        bmp = retriever.getFrameAtTime(sampleMs * 1000L, primaryOpt);
+                    }
+                    if (bmp == null && primaryOpt != MediaMetadataRetriever.OPTION_CLOSEST_SYNC) {
+                        bmp = retriever.getFrameAtTime(sampleMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
+                    }
+                    if (bmp == null) continue;
+
+                    InputImage inputImage = InputImage.fromBitmap(bmp, 0);
+                    Text visionRes = Tasks.await(recognizer.process(inputImage), 4, TimeUnit.SECONDS);
+                    String frameText = cleanRecognizedFrameText(visionRes, bmp.getHeight());
+                    if (!frameText.isEmpty()) {
+                        String normSig = frameText.toLowerCase(Locale.ROOT).replaceAll("[\\s·.,|/-]+", "");
+                        if (!normSig.isEmpty() && !normSig.equals(prevNormSig)) {
+                            prevNormSig = normSig;
+                            int sec = Math.max(0, (int) Math.round(sampleMs / 1000.0));
+                            entries.add(new NativeOcrLineEntry(sec, formatMmSs(sec), frameText));
+                        }
+                    }
+                } catch (Throwable ignored) {
+                } finally {
+                    if (bmp != null && !bmp.isRecycled()) {
+                        try { bmp.recycle(); } catch (Throwable ignored) {}
+                    }
+                }
+            }
+        } catch (Throwable err) {
+            android.util.Log.w("GhostiVidOcr", "extractNativeVideoOcrInternal failed for mediaId=" + mediaId, err);
+        } finally {
+            try { retriever.release(); } catch (Throwable ignored) {}
+        }
+
+        StringBuilder fullSb = new StringBuilder();
+        for (int i = 0; i < entries.size(); i++) {
+            if (i > 0) fullSb.append('\n');
+            NativeOcrLineEntry e = entries.get(i);
+            fullSb.append('[').append(e.timestamp).append("] ").append(e.text);
+        }
+        NativeVideoOcrResult out = new NativeVideoOcrResult(!entries.isEmpty(), entries, fullSb.toString());
+        sNativeVideoOcrCache.put(mediaId, out);
+        return out;
+    }
+
+    @PluginMethod
+    public void extractVideoNativeOcr(PluginCall call) {
+        Context ctx = getContext();
+        String rawId = call.getString("id", "");
+        final int maxFrames = Math.max(1, Math.min(8, call.getInt("maxFrames", 5)));
+        final String digits = rawId != null ? rawId.replaceAll("[^0-9]", "") : "";
+        if (ctx == null || digits.isEmpty()) {
+            JSObject empty = new JSObject();
+            empty.put("ok", false);
+            empty.put("hasText", false);
+            empty.put("ocrLines", new JSArray());
+            empty.put("fullText", "");
+            call.resolve(empty);
+            return;
+        }
+        final Context appCtx = ctx.getApplicationContext();
+        new Thread(() -> {
+            try {
+                long mediaId = Long.parseLong(digits);
+                NativeVideoOcrResult res = extractNativeVideoOcrInternal(appCtx, mediaId, maxFrames);
+                call.resolve(res.toJSObject());
+            } catch (Throwable err) {
+                JSObject fail = new JSObject();
+                fail.put("ok", false);
+                fail.put("hasText", false);
+                fail.put("ocrLines", new JSArray());
+                fail.put("fullText", "");
+                call.resolve(fail);
+            }
+        }, "GhostiNativeVideoOcr").start();
+    }
+
+    private int dpToPx(Context ctx, float dp) {
+        return Math.round(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, dp, ctx.getResources().getDisplayMetrics()));
+    }
+
+    @PluginMethod
+    public void openNativeVideoPlayerModal(PluginCall call) {
+        final Activity activity = getActivity();
+        final String rawId = call.getString("id", "");
+        final String title = call.getString("title", "내 스마트폰 동영상");
+        final String durationText = call.getString("durationText", "");
+        final int initialSeekSec = Math.max(0, call.getInt("seekSec", 0));
+        final JSArray preloadedArr = call.getArray("ocrLines");
+        final String digits = rawId != null ? rawId.replaceAll("[^0-9]", "") : "";
+        if (activity == null || activity.isFinishing() || digits.isEmpty()) {
+            JSObject fail = new JSObject();
+            fail.put("ok", false);
+            call.resolve(fail);
+            return;
+        }
+        final long mediaId;
+        try {
+            mediaId = Long.parseLong(digits);
+        } catch (NumberFormatException e) {
+            JSObject fail = new JSObject();
+            fail.put("ok", false);
+            call.resolve(fail);
+            return;
+        }
+
+        final List<NativeOcrLineEntry> initialLines = new ArrayList<>();
+        if (preloadedArr != null) {
+            try {
+                for (int i = 0; i < preloadedArr.length(); i++) {
+                    JSONObject obj = preloadedArr.getJSONObject(i);
+                    if (obj == null) continue;
+                    String tx = obj.optString("text", "").trim();
+                    if (tx.isEmpty()) continue;
+                    int tsSec = Math.max(0, obj.optInt("timeSec", 0));
+                    String tsStr = obj.optString("timestamp", formatMmSs(tsSec));
+                    initialLines.add(new NativeOcrLineEntry(tsSec, tsStr, tx));
+                }
+            } catch (Throwable ignored) {
+            }
+        }
+
+        activity.runOnUiThread(() -> {
+            final boolean[] resolvedOnce = new boolean[] { false };
+            final NativeVideoOcrResult[] latestOcrHolder = new NativeVideoOcrResult[] {
+                !initialLines.isEmpty()
+                    ? new NativeVideoOcrResult(true, initialLines, "")
+                    : sNativeVideoOcrCache.get(mediaId)
+            };
+
+            final Dialog dialog = new Dialog(activity, android.R.style.Theme_Black_NoTitleBar_Fullscreen);
+            dialog.requestWindowFeature(Window.FEATURE_NO_TITLE);
+            Window win = dialog.getWindow();
+            if (win != null) {
+                win.setLayout(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
+                win.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.LOLLIPOP) {
+                    win.clearFlags(WindowManager.LayoutParams.FLAG_FULLSCREEN);
+                    win.addFlags(WindowManager.LayoutParams.FLAG_DRAWS_SYSTEM_BAR_BACKGROUNDS);
+                    win.setStatusBarColor(Color.parseColor("#090D16"));
+                    win.setNavigationBarColor(Color.parseColor("#090D16"));
+                }
+            }
+
+            LinearLayout root = new LinearLayout(activity);
+            root.setOrientation(LinearLayout.VERTICAL);
+            root.setBackgroundColor(Color.parseColor("#090D16"));
+            int padH = dpToPx(activity, 14);
+            int padTopFallback = dpToPx(activity, 16);
+            int padBotFallback = dpToPx(activity, 14);
+            root.setPadding(padH, padTopFallback, padH, padBotFallback);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                root.setOnApplyWindowInsetsListener((v, insets) -> {
+                    int topInset = insets.getSystemWindowInsetTop();
+                    int botInset = insets.getSystemWindowInsetBottom();
+                    v.setPadding(
+                        padH,
+                        Math.max(padTopFallback, topInset + dpToPx(activity, 8)),
+                        padH,
+                        Math.max(padBotFallback, botInset + dpToPx(activity, 10))
+                    );
+                    return insets;
+                });
+            }
+
+            // 1) 상단 헤더 (제목 + 길이 배지 + 닫기 버튼)
+            LinearLayout header = new LinearLayout(activity);
+            header.setOrientation(LinearLayout.HORIZONTAL);
+            header.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams headerLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            headerLp.bottomMargin = dpToPx(activity, 10);
+            header.setLayoutParams(headerLp);
+
+            LinearLayout titleCol = new LinearLayout(activity);
+            titleCol.setOrientation(LinearLayout.VERTICAL);
+            LinearLayout.LayoutParams titleColLp = new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f);
+            titleColLp.rightMargin = dpToPx(activity, 10);
+            titleCol.setLayoutParams(titleColLp);
+
+            final TextView titleTv = new TextView(activity);
+            titleTv.setText(title);
+            titleTv.setTextColor(Color.WHITE);
+            titleTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 16.5f);
+            titleTv.setTypeface(Typeface.DEFAULT_BOLD);
+            titleTv.setMaxLines(2);
+            titleCol.addView(titleTv);
+
+            TextView subTv = new TextView(activity);
+            subTv.setText(durationText.isEmpty() ? "🎬 스마트폰 원본 하드웨어 즉시 재생" : "⏱️ 전체 길이 " + durationText + " · 원본 무변환 즉시 재생");
+            subTv.setTextColor(Color.parseColor("#94A3B8"));
+            subTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.0f);
+            titleCol.addView(subTv);
+            header.addView(titleCol);
+
+            TextView closeBtn = new TextView(activity);
+            closeBtn.setText("✕ 닫기");
+            closeBtn.setTextColor(Color.WHITE);
+            closeBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f);
+            closeBtn.setTypeface(Typeface.DEFAULT_BOLD);
+            closeBtn.setGravity(Gravity.CENTER);
+            closeBtn.setPadding(dpToPx(activity, 14), dpToPx(activity, 9), dpToPx(activity, 14), dpToPx(activity, 9));
+            GradientDrawable closeBg = new GradientDrawable();
+            closeBg.setColor(Color.parseColor("#1E293B"));
+            closeBg.setCornerRadius(dpToPx(activity, 20));
+            closeBg.setStroke(dpToPx(activity, 1), Color.parseColor("#475569"));
+            closeBtn.setBackground(closeBg);
+            closeBtn.setOnClickListener(v -> dialog.dismiss());
+            header.addView(closeBtn);
+            root.addView(header);
+
+            // 2) 중앙 OS 순정 하드웨어 VideoView 플레이어 영역
+            FrameLayout playerBox = new FrameLayout(activity);
+            LinearLayout.LayoutParams playerBoxLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, 0, 1.0f
+            );
+            playerBoxLp.bottomMargin = dpToPx(activity, 12);
+            playerBox.setLayoutParams(playerBoxLp);
+            GradientDrawable playerBg = new GradientDrawable();
+            playerBg.setColor(Color.BLACK);
+            playerBg.setCornerRadius(dpToPx(activity, 16));
+            playerBg.setStroke(dpToPx(activity, 1), Color.parseColor("#334155"));
+            playerBox.setBackground(playerBg);
+
+            final VideoView videoView = new VideoView(activity);
+            FrameLayout.LayoutParams vvLp = new FrameLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                Gravity.CENTER
+            );
+            videoView.setLayoutParams(vvLp);
+            playerBox.addView(videoView);
+
+            final MediaController mediaController = new MediaController(activity);
+            mediaController.setAnchorView(playerBox);
+            videoView.setMediaController(mediaController);
+
+            Uri directVideoUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, mediaId);
+            videoView.setVideoURI(directVideoUri);
+            videoView.setOnPreparedListener(mp -> {
+                try {
+                    mp.setLooping(false);
+                    if (initialSeekSec > 0) {
+                        videoView.seekTo(initialSeekSec * 1000);
+                    }
+                    videoView.start();
+                } catch (Throwable ignored) {
+                }
+            });
+            root.addView(playerBox);
+
+            // 3) 하단 영상 속 한글 추출 결과 & 복사 패널
+            LinearLayout ocrCard = new LinearLayout(activity);
+            ocrCard.setOrientation(LinearLayout.VERTICAL);
+            int cardMaxH = Math.round(activity.getResources().getDisplayMetrics().heightPixels * 0.31f);
+            LinearLayout.LayoutParams ocrCardLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            ocrCard.setLayoutParams(ocrCardLp);
+            int cardPad = dpToPx(activity, 12);
+            ocrCard.setPadding(cardPad, cardPad, cardPad, cardPad);
+            GradientDrawable ocrCardBg = new GradientDrawable();
+            ocrCardBg.setColor(Color.parseColor("#111827"));
+            ocrCardBg.setCornerRadius(dpToPx(activity, 16));
+            ocrCardBg.setStroke(dpToPx(activity, 1), Color.parseColor("#14B8A6"));
+            ocrCard.setBackground(ocrCardBg);
+
+            LinearLayout ocrHeader = new LinearLayout(activity);
+            ocrHeader.setOrientation(LinearLayout.HORIZONTAL);
+            ocrHeader.setGravity(Gravity.CENTER_VERTICAL);
+            LinearLayout.LayoutParams ocrHeaderLp = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+            );
+            ocrHeaderLp.bottomMargin = dpToPx(activity, 8);
+            ocrHeader.setLayoutParams(ocrHeaderLp);
+
+            final TextView ocrTitleTv = new TextView(activity);
+            ocrTitleTv.setText("📝 영상 화면 속 한글 자동 추출");
+            ocrTitleTv.setTextColor(Color.parseColor("#5EEAD4"));
+            ocrTitleTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f);
+            ocrTitleTv.setTypeface(Typeface.DEFAULT_BOLD);
+            ocrTitleTv.setLayoutParams(new LinearLayout.LayoutParams(0, ViewGroup.LayoutParams.WRAP_CONTENT, 1.0f));
+            ocrHeader.addView(ocrTitleTv);
+
+            final TextView copyAllBtn = new TextView(activity);
+            copyAllBtn.setText("📋 전체 복사");
+            copyAllBtn.setTextColor(Color.parseColor("#0F172A"));
+            copyAllBtn.setTextSize(TypedValue.COMPLEX_UNIT_SP, 12.0f);
+            copyAllBtn.setTypeface(Typeface.DEFAULT_BOLD);
+            copyAllBtn.setPadding(dpToPx(activity, 11), dpToPx(activity, 5), dpToPx(activity, 11), dpToPx(activity, 5));
+            GradientDrawable copyBg = new GradientDrawable();
+            copyBg.setColor(Color.parseColor("#2DD4BF"));
+            copyBg.setCornerRadius(dpToPx(activity, 14));
+            copyAllBtn.setBackground(copyBg);
+            copyAllBtn.setVisibility(View.GONE);
+            ocrHeader.addView(copyAllBtn);
+            ocrCard.addView(ocrHeader);
+
+            ScrollView ocrScroll = new ScrollView(activity) {
+                @Override
+                protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                    int cappedSpec = MeasureSpec.makeMeasureSpec(cardMaxH, MeasureSpec.AT_MOST);
+                    super.onMeasure(widthMeasureSpec, cappedSpec);
+                }
+            };
+            final LinearLayout linesContainer = new LinearLayout(activity);
+            linesContainer.setOrientation(LinearLayout.VERTICAL);
+            ocrScroll.addView(linesContainer);
+            ocrCard.addView(ocrScroll);
+            root.addView(ocrCard);
+
+            final Runnable renderOcrState = new Runnable() {
+                @Override
+                public void run() {
+                    linesContainer.removeAllViews();
+                    NativeVideoOcrResult cur = latestOcrHolder[0];
+                    if (cur == null) {
+                        copyAllBtn.setVisibility(View.GONE);
+                        TextView loadingTv = new TextView(activity);
+                        loadingTv.setText("🔍 온디바이스 AI가 영상 화면 속 한글을 빠르게 읽고 있습니다...");
+                        loadingTv.setTextColor(Color.parseColor("#E2E8F0"));
+                        loadingTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.0f);
+                        linesContainer.addView(loadingTv);
+                        return;
+                    }
+                    if (!cur.hasText || cur.lines.isEmpty()) {
+                        copyAllBtn.setVisibility(View.GONE);
+                        TextView emptyTv = new TextView(activity);
+                        emptyTv.setText("이 영상 화면에서는 인식된 글자가 없습니다.");
+                        emptyTv.setTextColor(Color.parseColor("#94A3B8"));
+                        emptyTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.0f);
+                        linesContainer.addView(emptyTv);
+                        return;
+                    }
+                    ocrTitleTv.setText("📝 추출된 화면 한글 (" + cur.lines.size() + "구간 · 터치 시 구간 이동·복사)");
+                    copyAllBtn.setVisibility(View.VISIBLE);
+                    final StringBuilder copyBuf = new StringBuilder();
+                    for (int idx = 0; idx < cur.lines.size(); idx++) {
+                        final NativeOcrLineEntry entry = cur.lines.get(idx);
+                        if (idx > 0) copyBuf.append('\n');
+                        copyBuf.append(entry.text);
+
+                        TextView rowTv = new TextView(activity);
+                        rowTv.setText("[" + entry.timestamp + "]  " + entry.text);
+                        rowTv.setTextColor(Color.parseColor("#F8FAFC"));
+                        rowTv.setTextSize(TypedValue.COMPLEX_UNIT_SP, 13.5f);
+                        rowTv.setPadding(dpToPx(activity, 10), dpToPx(activity, 8), dpToPx(activity, 10), dpToPx(activity, 8));
+                        GradientDrawable rowBg = new GradientDrawable();
+                        rowBg.setColor(Color.parseColor("#1E293B"));
+                        rowBg.setCornerRadius(dpToPx(activity, 10));
+                        rowTv.setBackground(rowBg);
+                        LinearLayout.LayoutParams rowLp = new LinearLayout.LayoutParams(
+                            ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT
+                        );
+                        if (idx > 0) rowLp.topMargin = dpToPx(activity, 6);
+                        rowTv.setLayoutParams(rowLp);
+                        rowTv.setOnClickListener(v -> {
+                            try {
+                                videoView.seekTo(Math.max(0, entry.timeSec) * 1000);
+                                if (!videoView.isPlaying()) videoView.start();
+                                ClipboardManager cm = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
+                                if (cm != null) {
+                                    sLastInjectedClipHash = sha256HexUtf8(entry.text);
+                                    sLastInjectedClipAtMs = System.currentTimeMillis();
+                                    cm.setPrimaryClip(ClipData.newPlainText("GhostiVideoOcr", entry.text));
+                                    Toast.makeText(activity, "구간 이동 및 문장 복사 완료", Toast.LENGTH_SHORT).show();
+                                }
+                            } catch (Throwable ignored) {
+                            }
+                        });
+                        linesContainer.addView(rowTv);
+                    }
+                    final String allPlain = copyBuf.toString();
+                    copyAllBtn.setOnClickListener(v -> {
+                        try {
+                            ClipboardManager cm = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
+                            if (cm != null && !allPlain.isEmpty()) {
+                                sLastInjectedClipHash = sha256HexUtf8(allPlain);
+                                sLastInjectedClipAtMs = System.currentTimeMillis();
+                                cm.setPrimaryClip(ClipData.newPlainText("GhostiVideoOcrAll", allPlain));
+                                Toast.makeText(activity, "추출된 한글 전체를 복사했습니다", Toast.LENGTH_SHORT).show();
+                            }
+                        } catch (Throwable ignored) {
+                        }
+                    });
+                }
+            };
+
+            renderOcrState.run();
+            if (latestOcrHolder[0] == null) {
+                final Context appCtx = activity.getApplicationContext();
+                new Thread(() -> {
+                    NativeVideoOcrResult extracted = extractNativeVideoOcrInternal(appCtx, mediaId, 5);
+                    latestOcrHolder[0] = extracted;
+                    activity.runOnUiThread(() -> {
+                        if (dialog.isShowing()) {
+                            renderOcrState.run();
+                        }
+                    });
+                }, "GhostiDialogVideoOcr").start();
+            }
+
+            dialog.setOnDismissListener(d -> {
+                try {
+                    videoView.stopPlayback();
+                } catch (Throwable ignored) {
+                }
+                if (!resolvedOnce[0]) {
+                    resolvedOnce[0] = true;
+                    NativeVideoOcrResult fin = latestOcrHolder[0];
+                    if (fin != null) {
+                        JSObject ret = fin.toJSObject();
+                        ret.put("closed", true);
+                        call.resolve(ret);
+                    } else {
+                        JSObject ret = new JSObject();
+                        ret.put("ok", true);
+                        ret.put("closed", true);
+                        ret.put("hasText", false);
+                        ret.put("ocrLines", new JSArray());
+                        ret.put("fullText", "");
+                        call.resolve(ret);
+                    }
+                }
+            });
+
+            dialog.setContentView(root);
+            dialog.show();
         });
     }
 }
