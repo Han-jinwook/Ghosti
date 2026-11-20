@@ -1931,7 +1931,11 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             value={inputText}
             onChange={(e) => setInputText(e.target.value)}
             onFocus={() => {
-              if (isMobileOrStore) {
+              if (
+                isMobileOrStore &&
+                typeof navigator !== 'undefined' &&
+                !/iPhone|iPad|iPod/i.test(navigator.userAgent || '')
+              ) {
                 window.setTimeout(() => {
                   const el = scrollContainerRef.current;
                   if (el && el.scrollHeight - el.scrollTop - el.clientHeight > 8) {

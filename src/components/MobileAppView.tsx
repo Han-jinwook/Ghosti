@@ -18,6 +18,7 @@ import { Stage1MinimalCarePreview } from './Stage1MinimalPreview';
 import { MobileCleanerRescueBanner } from './MobileCleanerRescueBanner';
 import {
   isCapacitorNativeMobileRuntime,
+  isIosMobileBrowserOrApp,
   openNativeAppPermissionSettings,
   syncNativeMobileThemeMode,
 } from '../services/ghostiMobileCareBridge';
@@ -290,6 +291,11 @@ export const MobileAppView: React.FC = () => {
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    // [iOS 이중 스크롤 원천 차단]:
+    // iOS WKWebView는 키보드 상승 시 OS가 이미 키보드 스프링 곡선에 맞춰 화면을 1회 자연스럽게 스크롤하므로,
+    // iOS에서 JS가 추가로 window.scrollTo 보정을 수행하면 '자연스러운 스크롤 직후 한 번 더 아래로 점프'하는 이중 스크롤이 발생합니다.
+    // 따라서 JS Cubic-Out 글라이드 보정은 AOS(안드로이드) 전용으로만 구동하고 iOS는 순수 OS 네이티브 스크롤 1회만 수행합니다.
+    if (isIosMobileBrowserOrApp()) return;
     let latestIosKb = 0;
     let settleTimer: number | undefined;
     let animRafId: number | undefined;

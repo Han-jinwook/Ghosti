@@ -29,19 +29,13 @@
     color: #e3e1e9;
   }
 
-  /* 모바일(iOS Safari / WKWebView / 인앱) 입력창 포커스 시 자동 화면 확대(Auto-Zoom) 원천 차단 + placeholder 잘림 방지 + 네이티브 포커스 스크롤 상하 안전 여백 */
+  /* 모바일(iOS Safari / WKWebView / 인앱) 입력창 포커스 시 자동 화면 확대(Auto-Zoom) 원천 차단 + placeholder 잘림 방지 */
   @media (max-width: 767px) {
-    html {
-      scroll-padding-top: calc(max(env(safe-area-inset-top, 0px), var(--ghosti-safe-top, 0px)) + 118px);
-      scroll-padding-bottom: 24px;
-    }
     input:not([type='checkbox']):not([type='radio']):not([type='range']):not([type='file']),
     textarea,
     select {
       font-size: 16px !important;
       text-overflow: ellipsis;
-      scroll-margin-top: calc(max(env(safe-area-inset-top, 0px), var(--ghosti-safe-top, 0px)) + 118px);
-      scroll-margin-bottom: 24px;
     }
     input::placeholder,
     textarea::placeholder {
