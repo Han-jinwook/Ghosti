@@ -332,7 +332,10 @@ export const VoiceHeroStage: React.FC = () => {
           <div className="grid grid-cols-3 w-full sm:w-auto sm:flex items-center gap-2 max-w-full">
             <button
               type="button"
-              onClick={() => setSearchSpace('gallery')}
+              onClick={() => {
+                setSearchSpace('gallery');
+                scrollToResults();
+              }}
               className={`px-3 sm:px-4 py-2 rounded-full font-label-md text-[13px] font-bold flex items-center justify-center gap-1.5 transition-all border shrink-0 whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
                 searchSpace === 'gallery'
                   ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'

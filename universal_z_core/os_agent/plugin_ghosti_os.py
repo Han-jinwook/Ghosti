@@ -4027,17 +4027,32 @@ _VANGUARD_PACKETS: Dict[str, Dict[str, Any]] = {}
 _LATEST_VANGUARD_PACKET_ID: str | None = None
 
 
+def _teleport_vanguard_signal_path() -> Path:
+    base = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+    return base / "Merlin_Z_Core" / "latest_teleport_vanguard.json"
+
+
 def store_teleport_ocr_vanguard(data: Dict[str, Any]) -> Dict[str, Any]:
-    """[창 UI ③ 사진·OCR 창 브릿지] 스마트폰 촬영 선발대 패킷(15KB 단어칩 JSON + 30KB WebP 썸네일)을 저장합니다."""
+    """[창 UI ③ 사진·OCR 창 + Ctrl+0 귀신창 브릿지] 스마트폰 [⚡ PC전송] 패킷을 저장하고 PC 클립보드·귀신창 신호 파일에 즉시 반영합니다."""
     global _LATEST_VANGUARD_PACKET_ID
     pkt_id = str(data.get("packetId") or f"vg_{int(time.time() * 1000)}").strip()
+    file_name = str(data.get("fileName") or data.get("file_name") or "스마트폰 사진").strip()[:120]
+    source_device = str(data.get("sourceDevice") or data.get("source_device") or "내 스마트폰").strip()[:64]
+    summary = str(data.get("summary") or f"[스마트폰 0.2초 공간이동] {file_name}").strip()[:300]
+    full_text = str(
+        data.get("fullText") or data.get("ocr_text") or data.get("text") or summary
+    ).strip()
+    now_ts = float(data.get("capturedAt") or time.time())
     packet = {
         "packetId": pkt_id,
         "source": str(data.get("source") or "mobile_camera"),
-        "capturedAt": float(data.get("capturedAt") or time.time()),
+        "sourceDevice": source_device,
+        "fileName": file_name,
+        "summary": summary,
+        "capturedAt": now_ts,
         "thumbWebpBase64": str(data.get("thumbWebpBase64") or ""),
         "imageSize": data.get("imageSize") or {"width": 0, "height": 0},
-        "fullText": str(data.get("fullText") or ""),
+        "fullText": full_text,
         "chips": data.get("chips") if isinstance(data.get("chips"), list) else [],
         "tsvTable": str(data.get("tsvTable") or ""),
         "origLocalPath": data.get("origLocalPath"),
@@ -4049,7 +4064,53 @@ def store_teleport_ocr_vanguard(data: Dict[str, Any]) -> Dict[str, Any]:
             if oldest_key != pkt_id:
                 _VANGUARD_PACKETS.pop(oldest_key, None)
         _LATEST_VANGUARD_PACKET_ID = pkt_id
-    return {"ok": True, "packetId": pkt_id, "packet": packet}
+
+    # 1) 별도 프로세스인 Ctrl+0 귀신창(seq_paste_daemon.py)이 0.2ms 만에 읽을 수 있도록 원자적 신호 파일 기록
+    try:
+        sig_path = _teleport_vanguard_signal_path()
+        sig_path.parent.mkdir(parents=True, exist_ok=True)
+        tmp_sig = sig_path.with_suffix(".tmp")
+        tmp_sig.write_text(
+            json.dumps(
+                {
+                    "packetId": pkt_id,
+                    "fileName": file_name,
+                    "sourceDevice": source_device,
+                    "summary": summary,
+                    "fullText": full_text[:8000],
+                    "capturedAt": now_ts,
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        os.replace(tmp_sig, sig_path)
+    except Exception:
+        pass
+
+    # 2) Windows OS 클립보드에도 즉시 장전하여 메모장 Ctrl+V / Ctrl+0 양쪽 모두 즉시 붙여넣기 보장
+    clipboard_armed = False
+    if full_text:
+        try:
+            from plugins import plugin_paid_sync_ghostwin as _sync_gw  # type: ignore
+
+            res_clip = _sync_gw.set_os_clipboard_text({"text": full_text})
+            clipboard_armed = bool(res_clip.get("ok"))
+        except Exception:
+            try:
+                import plugin_paid_sync_ghostwin as _sync_gw2  # type: ignore
+
+                res_clip = _sync_gw2.set_os_clipboard_text({"text": full_text})
+                clipboard_armed = bool(res_clip.get("ok"))
+            except Exception:
+                clipboard_armed = False
+
+    return {
+        "ok": True,
+        "packetId": pkt_id,
+        "clipboardArmed": clipboard_armed,
+        "packet": packet,
+    }
 
 
 def get_teleport_ocr_vanguard(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
@@ -4391,7 +4452,16 @@ def handle_quarantine(action: str, payload: Dict[str, Any] | None = None) -> Dic
             if tp.exists():
                 zos.open_file_location_on_interactive_desktop(tp, mode="open_file_location")
                 return {"ok": True, "opened": str(tp), "selectedFile": tp.is_file()}
-        if target == "photos":
+        if target == "phone_backup":
+            bdir = safe.known_folder("pictures") / "Ghosti_Phone_Backup"
+            try:
+                bdir.mkdir(parents=True, exist_ok=True)
+            except Exception:
+                bdir = Path.home() / "Pictures" / "Ghosti_Phone_Backup"
+                bdir.mkdir(parents=True, exist_ok=True)
+            zos.open_file_location_on_interactive_desktop(bdir, mode="open_file_location")
+            return {"ok": True, "opened": str(bdir)}
+        elif target == "photos":
             pdir = resolve_active_photo_dir()
             zos.open_file_location_on_interactive_desktop(pdir, mode="open_file_location")
             return {"ok": True, "opened": str(pdir)}

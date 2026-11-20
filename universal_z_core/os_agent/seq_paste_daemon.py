@@ -8503,8 +8503,52 @@ def main() -> None:
             superpower_7_toggle_topmost(_LAST_TARGET_HWND)
             complete_feature_action_success("superpower_key_4")
 
+    def _read_fresh_mobile_teleport_packet(max_age_sec: float = 180.0) -> dict | None:
+        try:
+            sig_path = os.path.join(
+                os.environ.get("LOCALAPPDATA") or os.path.join(os.path.expanduser("~"), "AppData", "Local"),
+                "Merlin_Z_Core",
+                "latest_teleport_vanguard.json",
+            )
+            if not os.path.exists(sig_path):
+                return None
+            st = os.stat(sig_path)
+            if (time.time() - st.st_mtime) > max_age_sec:
+                return None
+            with open(sig_path, "r", encoding="utf-8") as fp:
+                pkt = json.load(fp)
+            if not isinstance(pkt, dict):
+                return None
+            ft = str(pkt.get("fullText") or "").strip()
+            if not ft:
+                return None
+            pkt_ts = float(pkt.get("capturedAt") or st.st_mtime)
+            if last_copy_ts > pkt_ts + 1.0:
+                return None
+            return pkt
+        except Exception:
+            return None
+
     def _show_default_ui1_bar(live_clip_val: str | None) -> None:
         nonlocal seq_queue
+        teleport_pkt = _read_fresh_mobile_teleport_packet(180.0)
+        if teleport_pkt:
+            tp_text = str(teleport_pkt.get("fullText") or "").strip()
+            tp_name = str(teleport_pkt.get("fileName") or "스마트폰 사진").strip()
+            if len(tp_name) > 18:
+                tp_name = tp_name[:17] + "…"
+            tp_preview = " ".join(tp_text.split())
+            if len(tp_preview) > 28:
+                tp_preview = tp_preview[:27] + "…"
+            seq_queue.clear()
+            daemon_set_clipboard(tp_text)
+            arm_sub_hotkeys()
+            show_ghost_toast(
+                f"📱 폰 전송 도착 [{tp_name}] \"{tp_preview}\" | [Ctrl+V] 바로 붙여넣기\n[1] 🧹서식·줄바꿈   [2] 📄스샷·PDF·OCR🔒   [3] 🔗다중합본🔒   [4] 📌창고정🔒",
+                duration_ms=7500,
+            )
+            return
+
         excel_cells = []
         if recent_unpasted:
             excel_cells = split_excel_cells(recent_unpasted[-1])

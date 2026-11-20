@@ -243,7 +243,10 @@ export interface AssistantOnboardingSlice {
   ) => void;
   undoLastQuarantine: () => Promise<void>;
   dismissUndoBatch: () => void;
-  openLocalFolder: (target: 'quarantine' | 'photos' | 'docs' | 'videos', targetPath?: string) => Promise<void>;
+  openLocalFolder: (
+    target: 'quarantine' | 'photos' | 'docs' | 'videos' | 'phone_backup',
+    targetPath?: string
+  ) => Promise<void>;
   dismissQuarantineToast: () => void;
   showToast: (msg: string) => void;
 
@@ -2151,9 +2154,15 @@ export const createAssistantOnboardingSlice: StateCreator<
 
   dismissUndoBatch: () => set({ lastUndoBatch: null }),
 
-  openLocalFolder: async (target: 'quarantine' | 'photos' | 'docs' | 'videos', targetPath?: string) => {
+  openLocalFolder: async (
+    target: 'quarantine' | 'photos' | 'docs' | 'videos' | 'phone_backup',
+    targetPath?: string
+  ) => {
     try {
       let cleanTargetPath = (targetPath || '').trim();
+      if (!cleanTargetPath && target === 'phone_backup') {
+        cleanTargetPath = (get().lastPhoneBackupFolderPath || '').trim();
+      }
       if (!cleanTargetPath && target === 'photos') {
         const firstRealPhoto = get().photos.find((p) => !p.quarantined && p.fullPath);
         if (firstRealPhoto?.fullPath) {
@@ -2198,6 +2207,8 @@ export const createAssistantOnboardingSlice: StateCreator<
         lastQuarantineToast:
           cleanTargetPath
             ? `📂 윈도우 탐색기에서 [${fileLabel}] 실제 원본 위치를 열었습니다.`
+            : target === 'phone_backup'
+            ? '📂 윈도우 탐색기에서 [내 PC ➔ 사진 ➔ Ghosti_Phone_Backup] 폰 백업 폴더를 열었습니다.'
             : target === 'quarantine'
             ? '🗑️ OS 기본 [휴지통] 이동 내역 폴더를 열었습니다.'
             : target === 'docs'

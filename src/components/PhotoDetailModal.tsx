@@ -3,7 +3,10 @@ import { useSaySeeStore } from '../store/useSaySeeStore';
 import { resolveLoungePhotoCorpus } from '../store/slices/storeSharedRefs';
 import { cosineSimilarity } from '../services/aiEngine';
 import { dispatchGhostCastLiveCommand } from './GhostCastAndLiveSystem';
-import { pushTeleportPhotoToPcVanguard } from '../services/deviceIntegrationService';
+import {
+  pushTeleportPhotoToPcVanguard,
+  tryMakeCompactThumbDataUrl,
+} from '../services/deviceIntegrationService';
 import type { PhotoItem } from '../types/saysee';
 
 type ContextTab = 'same-day' | 'similar-visual' | 'drill-down';
@@ -558,18 +561,37 @@ export const PhotoDetailModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => {
+                  const pieces: string[] = [];
+                  if (selectedPhoto.captionKo && selectedPhoto.captionKo.trim()) {
+                    pieces.push(selectedPhoto.captionKo.trim());
+                  }
+                  const kw = (selectedPhoto.keywordsKo || []).filter(Boolean);
+                  if (kw.length > 0 && !pieces.join(' ').includes(kw[0])) {
+                    pieces.push(kw.join(' · '));
+                  }
+                  const tagText = (selectedPhoto.tags || []).filter(Boolean).join(' · ');
+                  if (pieces.length === 0 && tagText) {
+                    pieces.push(tagText);
+                  }
                   const extracted =
-                    selectedPhoto.captionKo ||
-                    (selectedPhoto.keywordsKo || []).join(' · ') ||
-                    (selectedPhoto.tags || []).join(' · ') ||
-                    selectedPhoto.name;
-                  pushTeleportPhotoToPcVanguard({
-                    fileName: selectedPhoto.name,
-                    ocrText: extracted,
-                    summary: `[0.2초 공간이동] ${selectedPhoto.name}`,
-                  });
+                    pieces.join('\n') ||
+                    `${selectedPhoto.name}${selectedPhoto.date ? ` (${selectedPhoto.date})` : ''}`;
+                  const chips = Array.from(
+                    new Set([...(selectedPhoto.keywordsKo || []), ...(selectedPhoto.tags || [])])
+                  ).slice(0, 16);
+                  void tryMakeCompactThumbDataUrl(selectedPhoto.thumbUrl || selectedPhoto.fullUrl).then(
+                    (thumbB64) => {
+                      pushTeleportPhotoToPcVanguard({
+                        fileName: selectedPhoto.name,
+                        ocrText: extracted,
+                        summary: `[스마트폰 0.2초 공간이동] ${selectedPhoto.name}`,
+                        thumbWebpBase64: thumbB64,
+                        chips,
+                      });
+                    }
+                  );
                   setActionNotice(
-                    `⚡ '${selectedPhoto.name}' 텍스트·정보가 연결된 내 PC 귀신창(Ctrl+0)으로 0.2초 공간이동 전송되었습니다!`
+                    `⚡ '${selectedPhoto.name}' 글자·정보를 내 PC 귀신창(Ctrl+0)과 클립보드로 전송했습니다! PC 메모장에서 Ctrl+0 또는 Ctrl+V를 눌러 바로 확인·붙여넣기 하세요.`
                   );
                 }}
                 className="px-3.5 py-1.5 rounded-full bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/60 text-teal-700 dark:text-teal-200 font-label-sm text-label-sm font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"

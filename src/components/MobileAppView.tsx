@@ -229,6 +229,7 @@ export const MobileAppView: React.FC = () => {
     syncRealVideoDuration,
     activeQuery,
     hasExecutedUserSearch,
+    hasUserSelectedSearchTab,
     searchResults,
     groupBurstsInSearch,
     setGroupBurstsInSearch,
@@ -1135,6 +1136,7 @@ export const MobileAppView: React.FC = () => {
 
           {activeLoungeType === 'personal' &&
             ((hasExecutedUserSearch && Boolean(activeQuery.trim())) ||
+              hasUserSelectedSearchTab ||
               searchSpace === 'video' ||
               searchSpace === 'vault') && (
             <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-teal-500/15 border border-teal-400/50 text-teal-200 text-[12px] font-extrabold">
@@ -1143,7 +1145,9 @@ export const MobileAppView: React.FC = () => {
                   ? `🔍 “${activeQuery}” 통합 검색 결과`
                   : searchSpace === 'video'
                   ? `🎬 동영상 바로보기 (${matchedVideoScenes.length || videoSceneItems.length}개)`
-                  : `📁 문서·서류함 바로보기 (${matchedLocalDocs.length + matchedVaultPhotos.length}건)`}
+                  : searchSpace === 'vault'
+                  ? `📁 문서·서류함 바로보기 (${matchedLocalDocs.length + matchedVaultPhotos.length}건)`
+                  : `📷 사진 바로보기 (${searchResults.length}장)`}
               </span>
               <button
                 type="button"
@@ -1162,9 +1166,10 @@ export const MobileAppView: React.FC = () => {
             </div>
           )}
 
-          {/* 검색 결과 영역 (공유 사진방에서는 상시 노출, 귀신비서에서는 검색 실행 시 또는 [동영상]/[문서] 탭 직접 선택 시 즉시 인플레이스 노출) */}
+          {/* 검색 결과 영역 (공유 사진방에서는 상시 노출, 귀신비서에서는 검색 실행 시 또는 [사진]/[동영상]/[문서] 탭 직접 선택 시 즉시 인플레이스 노출) */}
           {activeLoungeType !== 'work' &&
             (activeLoungeType !== 'personal' ||
+              hasUserSelectedSearchTab ||
               searchSpace === 'video' ||
               searchSpace === 'vault' ||
               (hasExecutedUserSearch && Boolean(activeQuery.trim()))) && (
@@ -1676,6 +1681,53 @@ export const MobileAppView: React.FC = () => {
                     {showPrivateSyncSection && (
                       <div className="px-4 pb-4 pt-3 border-t border-white/10 flex flex-col gap-3">
                         <CrossDeviceClipboardAndPairingBar compact />
+
+                        {(() => {
+                          const remoteSyncedPhotos = photos.filter(
+                            (p) => !p.quarantined && p.id.startsWith('shadow-remote-')
+                          );
+                          if (remoteSyncedPhotos.length === 0) return null;
+                          return (
+                            <div className="p-3 rounded-xl bg-zinc-900/90 border border-primary-container/35 flex flex-col gap-2">
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-[12px] font-extrabold text-primary-container">
+                                  🔗 연결된 다른 기기에서 동기화된 사진 ({remoteSyncedPhotos.length}장)
+                                </span>
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    setSearchSpace('gallery');
+                                    window.setTimeout(() => {
+                                      document
+                                        .getElementById('ghosti-search-results')
+                                        ?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                                    }, 120);
+                                  }}
+                                  className="px-2.5 py-1 rounded-lg bg-primary-container text-zinc-950 text-[11px] font-extrabold cursor-pointer shrink-0"
+                                >
+                                  📸 사진 탭에서 보기
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                                {remoteSyncedPhotos.slice(0, 8).map((rp) => (
+                                  <button
+                                    key={rp.id}
+                                    type="button"
+                                    onClick={() => setSelectedPhoto(rp)}
+                                    className="w-14 h-14 rounded-lg overflow-hidden border border-white/15 shrink-0 cursor-pointer bg-zinc-950"
+                                    title={rp.name}
+                                  >
+                                    <img
+                                      src={rp.thumbUrl}
+                                      alt={rp.name}
+                                      className="w-full h-full object-cover"
+                                    />
+                                  </button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
 
                         <div
                           onClick={() => setPrivateSyncStrategy('shadow')}

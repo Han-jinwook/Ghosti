@@ -3436,6 +3436,12 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     devicePairingCode6,
     refreshDeviceIntegrationState,
     unlinkConnectedDevice,
+    photos,
+    setSelectedPhoto,
+    setDesktopTab,
+    setSearchSpace,
+    openLocalFolder,
+    lastPhoneBackupFolderPath,
     merlinAuth,
   } = useSaySeeStore();
 
@@ -3915,67 +3921,128 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
           </div>
         </div>
 
-        {/* 직관적 1줄 동기화 모드 스위처 & 지금 일치시키기 */}
-        <div className="px-4 py-3 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
-            <span className="text-zinc-200 font-bold">
-              {!isLoggedInUser
-                ? '🔒 아직 연결된 기기가 없습니다 — 우측 상단에서 로그인하면 내 PC와 스마트폰이 안전하게 연결됩니다.'
-                : !realMobileConnected && !subPcConnected
-                ? isShadowMode
-                  ? '📱 다른 기기 연결 대기 중 — 연결 시 원본은 PC에 보관하고 스마트폰 용량을 99% 이상 절약합니다.'
-                  : '💾 다른 기기 연결 대기 중 — 연결 시 폰·PC 양쪽에 100% 원본을 동일하게 보관합니다.'
-                : isShadowMode
-                ? `⚡ 스마트폰 용량 99.4% 절약 중 (원본은 PC 안전 보관 · 폰 점유 ${syncState.packSizeMB}MB)`
-                : `💾 폰·PC 양쪽 100% 원본 보관 중 (${syncState.originalSizeGB}GB)`}
-            </span>
-          </div>
-
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex p-0.5 rounded-xl bg-zinc-900 border border-white/10">
-              <button
-                type="button"
-                onClick={() => setPrivateSyncStrategy('shadow')}
-                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold cursor-pointer transition-all whitespace-nowrap ${
-                  isShadowMode
-                    ? 'bg-primary-container text-zinc-950 shadow-xs'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                ⚡ 스마트 절약 연동(기본)
-              </button>
-              <button
-                type="button"
-                onClick={() => setPrivateSyncStrategy('mirror')}
-                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold cursor-pointer transition-all whitespace-nowrap ${
-                  !isShadowMode
-                    ? 'bg-primary-container text-zinc-950 shadow-xs'
-                    : 'text-zinc-400 hover:text-white'
-                }`}
-              >
-                💾 원본 전체 백업
-              </button>
+        {/* 직관적 1줄 동기화 모드 스위처 & 지금 일치시키기 & 백업 폴더 바로 열기 */}
+        <div className="px-4 py-3 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-col gap-2.5">
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="flex flex-col gap-0.5 text-[12.5px]">
+              <span className="text-zinc-200 font-bold">
+                {!isLoggedInUser
+                  ? '🔒 아직 연결된 기기가 없습니다 — 우측 상단에서 로그인하면 내 PC와 스마트폰이 안전하게 연결됩니다.'
+                  : !realMobileConnected && !subPcConnected
+                  ? isShadowMode
+                    ? '📱 다른 기기 연결 대기 중 — 연결 시 원본은 PC에 보관하고 스마트폰 용량을 99% 이상 절약합니다.'
+                    : '💾 다른 기기 연결 대기 중 — 연결 시 폰·PC 양쪽에 100% 원본을 동일하게 보관합니다.'
+                  : isShadowMode
+                  ? `⚡ 스마트폰 용량 99.4% 절약 중 (원본은 PC 안전 보관 · 폰 점유 ${syncState.packSizeMB}MB)`
+                  : `💾 폰·PC 양쪽 100% 원본 보관 중 (${syncState.originalSizeGB}GB)`}
+              </span>
+              {isLoggedInUser && (
+                <span className="text-[11.5px] text-zinc-400">
+                  📁 PC 원본 백업 저장 위치:{' '}
+                  <strong className="text-zinc-200">
+                    {lastPhoneBackupFolderPath || '내 PC ➔ 사진(Pictures) ➔ Ghosti_Phone_Backup'}
+                  </strong>
+                </span>
+              )}
             </div>
 
-            {!isLoggedInUser ? (
-              <button
-                type="button"
-                onClick={openLoginModal}
-                className="px-3.5 py-1.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer whitespace-nowrap"
-              >
-                🔑 로그인하여 기기 연결
-              </button>
-            ) : (
-              <button
-                type="button"
-                disabled={syncState.syncing}
-                onClick={() => void triggerSyncNow()}
-                className="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-sm text-[11.5px] font-extrabold cursor-pointer disabled:opacity-50 whitespace-nowrap"
-              >
-                {syncState.syncing ? '동기화 중...' : '⚡ 지금 일치시키기'}
-              </button>
-            )}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex p-0.5 rounded-xl bg-zinc-900 border border-white/10">
+                <button
+                  type="button"
+                  onClick={() => setPrivateSyncStrategy('shadow')}
+                  className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold cursor-pointer transition-all whitespace-nowrap ${
+                    isShadowMode
+                      ? 'bg-primary-container text-zinc-950 shadow-xs'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  ⚡ 스마트 절약 연동(기본)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPrivateSyncStrategy('mirror')}
+                  className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold cursor-pointer transition-all whitespace-nowrap ${
+                    !isShadowMode
+                      ? 'bg-primary-container text-zinc-950 shadow-xs'
+                      : 'text-zinc-400 hover:text-white'
+                  }`}
+                >
+                  💾 원본 전체 백업
+                </button>
+              </div>
+
+              {isLoggedInUser && isZCoreConnected && (
+                <button
+                  type="button"
+                  data-testid="open-phone-backup-folder-btn"
+                  onClick={() => void openLocalFolder('phone_backup')}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold cursor-pointer whitespace-nowrap"
+                  title="윈도우 탐색기에서 내 PC 사진\Ghosti_Phone_Backup 폴더를 바로 엽니다"
+                >
+                  📂 폰 백업 폴더 바로 열기
+                </button>
+              )}
+
+              {!isLoggedInUser ? (
+                <button
+                  type="button"
+                  onClick={openLoginModal}
+                  className="px-3.5 py-1.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer whitespace-nowrap"
+                >
+                  🔑 로그인하여 기기 연결
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  disabled={syncState.syncing}
+                  onClick={() => void triggerSyncNow()}
+                  className="px-3.5 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-sm text-[11.5px] font-extrabold cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                >
+                  {syncState.syncing ? '동기화 중...' : '⚡ 지금 일치시키기'}
+                </button>
+              )}
+            </div>
           </div>
+
+          {(() => {
+            const remoteSyncedPhotos = photos.filter(
+              (p) => !p.quarantined && p.id.startsWith('shadow-remote-')
+            );
+            if (!isLoggedInUser || remoteSyncedPhotos.length === 0) return null;
+            return (
+              <div className="pt-2.5 border-t border-white/10 flex flex-col gap-2">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <span className="text-[12px] font-extrabold text-primary-container">
+                    🔗 다른 내 기기에서 동기화된 사진 ({remoteSyncedPhotos.length}장)
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchSpace('gallery');
+                      setDesktopTab('dashboard');
+                    }}
+                    className="px-3 py-1 rounded-lg bg-primary-container/15 hover:bg-primary-container/25 border border-primary-container/45 text-primary-container text-[11.5px] font-extrabold cursor-pointer"
+                  >
+                    📸 귀신검색 [사진] 탭에서 전체 보기
+                  </button>
+                </div>
+                <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                  {remoteSyncedPhotos.slice(0, 10).map((rp) => (
+                    <button
+                      key={rp.id}
+                      type="button"
+                      onClick={() => setSelectedPhoto(rp)}
+                      className="w-14 h-14 rounded-lg overflow-hidden border border-white/15 hover:border-primary-container shrink-0 cursor-pointer bg-zinc-900 transition-colors"
+                      title={`${rp.name} (${rp.locationKo || '동기화 사진'})`}
+                    >
+                      <img src={rp.thumbUrl} alt={rp.name} className="w-full h-full object-cover" />
+                    </button>
+                  ))}
+                </div>
+              </div>
+            );
+          })()}
         </div>
 
         {/* 실시간 E2EE 클립보드 & 6자리 바인딩 & 30일 체험 상태 바 */}

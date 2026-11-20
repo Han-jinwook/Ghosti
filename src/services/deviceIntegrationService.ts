@@ -608,7 +608,7 @@ export async function syncDeviceHeartbeatAndList(opts?: {
     deviceKind: ident.deviceKind,
     platform: ident.platform,
     displayName: ident.displayName,
-    appVersion: '1.0.61',
+    appVersion: '1.0.64',
     explicitTrialOptIn: Boolean(opts?.explicitTrialOptIn),
     explicitReconnect: Boolean(opts?.explicitReconnect),
   });
@@ -810,6 +810,7 @@ let pendingDeviceStatePacket: {
   senderDeviceId: string;
   updatedAt: number;
 } | null = null;
+let pendingTeleportPacket: Record<string, unknown> | null = null;
 let pendingClipBroadcastPacket: {
   clipHash: string;
   cipherB64: string;
@@ -1348,59 +1349,113 @@ export function pushTeleportPhotoToPcVanguard(opts: {
   fileName: string;
   ocrText: string;
   summary?: string;
-}): void {
-  if (!activePairChannel) return;
+  thumbWebpBase64?: string;
+  chips?: string[];
+}): boolean {
   const ident = getThisDeviceIdentity();
-  void activePairChannel.send({
-    type: 'broadcast',
-    event: 'TELEPORT_OCR_VANGUARD',
-    payload: {
-      file_name: opts.fileName,
-      ocr_text: opts.ocrText,
-      summary: opts.summary || `[모바일 0.2초 공간이동] ${opts.fileName}`,
-      source_device: ident.displayName,
-      sent_at: new Date().toISOString(),
-    },
-  });
+  const cleanFileName = (opts.fileName || '스마트폰 사진').trim();
+  const cleanOcr = (opts.ocrText || '').trim();
+  const cleanSummary = (opts.summary || `[모바일 0.2초 공간이동] ${cleanFileName}`).trim();
+  const fullText = cleanOcr || cleanSummary;
+  const payload: Record<string, unknown> = {
+    file_name: cleanFileName,
+    fileName: cleanFileName,
+    ocr_text: fullText,
+    fullText,
+    summary: cleanSummary,
+    source_device: ident.displayName,
+    sourceDevice: ident.displayName,
+    senderDeviceId: ident.deviceId,
+    ...(opts.thumbWebpBase64 ? { thumbWebpBase64: opts.thumbWebpBase64 } : {}),
+    ...(Array.isArray(opts.chips) && opts.chips.length > 0 ? { chips: opts.chips.slice(0, 24) } : {}),
+    sent_at: new Date().toISOString(),
+  };
+  if (activePairChannel && activePairSubscribed) {
+    pendingTeleportPacket = null;
+    void activePairChannel.send({
+      type: 'broadcast',
+      event: 'TELEPORT_OCR_VANGUARD',
+      payload,
+    });
+    return true;
+  }
+  pendingTeleportPacket = payload;
+  if (activePairReconnectTrigger) {
+    activePairReconnectTrigger();
+  }
+  return Boolean(activePairChannel);
 }
 
-async function tryMakeCompactThumbDataUrl(srcUrl?: string): Promise<string | undefined> {
+function encodeCanvasCompactThumb(img: HTMLImageElement): string | undefined {
+  const attempts: Array<{ maxSide: number; quality: number }> = [
+    { maxSide: 220, quality: 0.66 },
+    { maxSide: 176, quality: 0.56 },
+    { maxSide: 136, quality: 0.46 },
+  ];
+  for (const { maxSide, quality } of attempts) {
+    const scale = Math.min(1, maxSide / Math.max(img.width || 1, img.height || 1));
+    const w = Math.max(1, Math.round((img.width || 160) * scale));
+    const h = Math.max(1, Math.round((img.height || 120) * scale));
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return undefined;
+    ctx.drawImage(img, 0, 0, w, h);
+    try {
+      const webp = canvas.toDataURL('image/webp', quality);
+      if (webp.startsWith('data:image/webp') && webp.length <= 32000) {
+        return webp;
+      }
+    } catch {
+      /* fallback to jpeg */
+    }
+    try {
+      // iOS Safari/WKWebView는 image/webp 인코딩 미지원(image/png 폴백으로 용량 폭증)이므로 표준 JPEG 폴백 적용
+      const jpeg = canvas.toDataURL('image/jpeg', quality);
+      if (jpeg.startsWith('data:image/jpeg') && jpeg.length <= 32000) {
+        return jpeg;
+      }
+    } catch {
+      /* try smaller dimensions */
+    }
+  }
+  return undefined;
+}
+
+export async function tryMakeCompactThumbDataUrl(srcUrl?: string): Promise<string | undefined> {
   if (!srcUrl || typeof document === 'undefined') return undefined;
-  if (srcUrl.startsWith('data:image/') && srcUrl.length <= 28000) {
+  if (srcUrl.startsWith('data:image/') && srcUrl.length <= 30000) {
     return srcUrl;
   }
-  return new Promise<string | undefined>((resolve) => {
-    const img = new Image();
-    img.crossOrigin = 'anonymous';
-    const timeout = window.setTimeout(() => resolve(undefined), 1500);
-    img.onload = () => {
-      window.clearTimeout(timeout);
-      try {
-        const maxSide = 220;
-        const scale = Math.min(1, maxSide / Math.max(img.width || 1, img.height || 1));
-        const w = Math.max(1, Math.round((img.width || 160) * scale));
-        const h = Math.max(1, Math.round((img.height || 120) * scale));
-        const canvas = document.createElement('canvas');
-        canvas.width = w;
-        canvas.height = h;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          resolve(undefined);
-          return;
-        }
-        ctx.drawImage(img, 0, 0, w, h);
-        const webp = canvas.toDataURL('image/webp', 0.62);
-        resolve(webp.length <= 34000 ? webp : undefined);
-      } catch {
-        resolve(undefined);
+  const loadOnce = (useCors: boolean) =>
+    new Promise<string | undefined>((resolve) => {
+      const img = new Image();
+      if (useCors && !srcUrl.startsWith('data:') && !srcUrl.startsWith('blob:')) {
+        img.crossOrigin = 'anonymous';
       }
-    };
-    img.onerror = () => {
-      window.clearTimeout(timeout);
-      resolve(undefined);
-    };
-    img.src = srcUrl;
-  });
+      const timeout = window.setTimeout(() => resolve(undefined), 1800);
+      img.onload = () => {
+        window.clearTimeout(timeout);
+        try {
+          resolve(encodeCanvasCompactThumb(img));
+        } catch {
+          resolve(undefined);
+        }
+      };
+      img.onerror = () => {
+        window.clearTimeout(timeout);
+        resolve(undefined);
+      };
+      img.src = srcUrl;
+    });
+
+  const first = await loadOnce(true);
+  if (first) return first;
+  if (!srcUrl.startsWith('data:') && !srcUrl.startsWith('blob:')) {
+    return loadOnce(false);
+  }
+  return undefined;
 }
 
 export async function executeRealDeviceSyncNow(opts: {
@@ -1413,6 +1468,7 @@ export async function executeRealDeviceSyncNow(opts: {
   remotePhotosToMerge: PhotoItem[];
   mirroredUploadCount: number;
   mirroredPullCount: number;
+  backupDirPath: string | null;
   packSizeMB: number;
 }> {
   if (!hasAuthenticatedHubAccountSession()) {
@@ -1422,6 +1478,7 @@ export async function executeRealDeviceSyncNow(opts: {
       remotePhotosToMerge: [],
       mirroredUploadCount: 0,
       mirroredPullCount: 0,
+      backupDirPath: null,
       packSizeMB: 0,
     };
   }
@@ -1433,23 +1490,50 @@ export async function executeRealDeviceSyncNow(opts: {
 
   let mirroredUploadCount = 0;
 
-  // 1) 양쪽 원본 보관(mirror) 모드일 때: 내 기기 원본 이미지 바이트를 암호화 서명 URL로 업로드
+  // 1) 양쪽 원본 보관(mirror) 모드일 때: 내 기기 원본 이미지 바이트를 암호화 서명 URL로 업로드 (fullUrl 실패 시 thumbUrl 자동 폴백)
   const mirrorUploadedIds = new Set<string>();
   if (opts.strategy === 'mirror') {
     for (const p of activeLocalPhotos.slice(0, 12)) {
-      const src = p.fullUrl || p.thumbUrl;
-      if (!src) continue;
+      const candidates = [p.fullUrl, p.thumbUrl].filter(
+        (u): u is string => Boolean(u && u.trim())
+      );
+      if (candidates.length === 0) continue;
       const hashSeed = await sha256HexBrowser(`${p.id}::${p.name}::${p.size}`);
       const shaKey = `${hashSeed.slice(0, 40)}.jpg`;
       if (uploadedMirrorHashes.has(shaKey)) {
         mirrorUploadedIds.add(p.id);
         continue;
       }
+      let blob: Blob | null = null;
+      for (const src of candidates) {
+        try {
+          const blobRes = await fetch(src);
+          if (!blobRes.ok) continue;
+          const b = await blobRes.blob();
+          if (b.size > 0 && b.size <= 25 * 1024 * 1024) {
+            blob = b;
+            break;
+          }
+        } catch {
+          /* try next candidate */
+        }
+      }
+      if (!blob) {
+        try {
+          const compactFallback = await tryMakeCompactThumbDataUrl(p.thumbUrl || p.fullUrl);
+          if (compactFallback) {
+            const fbRes = await fetch(compactFallback);
+            if (fbRes.ok) {
+              const fbBlob = await fbRes.blob();
+              if (fbBlob.size > 0) blob = fbBlob;
+            }
+          }
+        } catch {
+          /* ignore */
+        }
+      }
+      if (!blob) continue;
       try {
-        const blobRes = await fetch(src);
-        if (!blobRes.ok) continue;
-        const blob = await blobRes.blob();
-        if (blob.size <= 0 || blob.size > 25 * 1024 * 1024) continue;
         const signUp = await callGhostiServerBridge<{ signedUploadUrl?: string }>(
           'device_sign_mirror_upload',
           { sha256: shaKey }
@@ -1457,7 +1541,7 @@ export async function executeRealDeviceSyncNow(opts: {
         if (signUp.ok && signUp.signedUploadUrl) {
           const putRes = await fetch(signUp.signedUploadUrl, {
             method: 'PUT',
-            headers: { 'Content-Type': blob.type || 'application/octet-stream' },
+            headers: { 'Content-Type': blob.type || 'image/jpeg' },
             body: blob,
           });
           if (putRes.ok) {
@@ -1477,7 +1561,7 @@ export async function executeRealDeviceSyncNow(opts: {
   for (const p of activeLocalPhotos.slice(0, 45)) {
     const hashSeed = await sha256HexBrowser(`${p.id}::${p.name}::${p.size}`);
     const shaKey = `${hashSeed.slice(0, 40)}.jpg`;
-    const thumbWebp = await tryMakeCompactThumbDataUrl(p.thumbUrl);
+    const thumbWebp = await tryMakeCompactThumbDataUrl(p.thumbUrl || p.fullUrl);
     outgoingItems.push({
       id: p.id,
       kind: 'photo',
@@ -1521,6 +1605,7 @@ export async function executeRealDeviceSyncNow(opts: {
   const existingIds = new Set(opts.photos.map((p) => p.id));
   const remotePhotosToMerge: PhotoItem[] = [];
   let mirroredPullCount = 0;
+  let backupDirPath: string | null = null;
 
   for (const item of mergedCatalog) {
     if (!item || item.sourceDeviceId === ident.deviceId) continue;
@@ -1551,10 +1636,18 @@ export async function executeRealDeviceSyncNow(opts: {
           const pj = (await pullRes.json().catch(() => ({}))) as {
             ok?: boolean;
             alreadyExists?: boolean;
+            savedPath?: string;
+            backupDir?: string;
           };
           if (pj.ok) {
             pulledMirrorHashes.add(item.sha256);
             if (!pj.alreadyExists) mirroredPullCount += 1;
+            if (pj.backupDir) {
+              backupDirPath = pj.backupDir;
+            } else if (pj.savedPath) {
+              const lastSep = Math.max(pj.savedPath.lastIndexOf('\\'), pj.savedPath.lastIndexOf('/'));
+              if (lastSep > 0) backupDirPath = pj.savedPath.slice(0, lastSep);
+            }
           }
         } catch {
           /* ignore */
@@ -1592,6 +1685,7 @@ export async function executeRealDeviceSyncNow(opts: {
     remotePhotosToMerge,
     mirroredUploadCount,
     mirroredPullCount,
+    backupDirPath,
     packSizeMB,
   };
 }
@@ -1615,6 +1709,11 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     reason?: string;
   }) => void;
   onSelfRevoked?: (devices: GhostiConnectedDeviceDto[]) => void;
+  onTeleportReceived?: (info: {
+    fileName: string;
+    fullText: string;
+    sourceDevice: string;
+  }) => void;
 }): () => void {
   let disposed = false;
   const ident = getThisDeviceIdentity();
@@ -1877,15 +1976,57 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
           window.dispatchEvent(new CustomEvent('ghosti_remote_monitor_cast', { detail: pkt }));
         })
         .on('broadcast', { event: 'TELEPORT_OCR_VANGUARD' }, async ({ payload }) => {
-          if (disposed || !payload || !zCoreBridge.isConnected) return;
-          try {
-            await fetch(getZCoreUrl('/api/teleport/ocr-vanguard'), {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify(payload),
-            });
-          } catch {
-            /* ignore */
+          if (disposed || thisDeviceRevokedLocally || !payload) return;
+          if (payload.senderDeviceId && payload.senderDeviceId === ident.deviceId) return;
+          const fileName = String(payload.fileName || payload.file_name || '스마트폰 사진').trim();
+          const sourceDevice = String(payload.sourceDevice || payload.source_device || '내 스마트폰').trim();
+          const fullText = String(
+            payload.fullText || payload.ocr_text || payload.summary || fileName
+          ).trim();
+          if (!fullText) return;
+
+          // 1) PC 엔진(/api/teleport/ocr-vanguard)에 선발대 패킷 저장 ➔ Ctrl+0 귀신창 헤더 표시 + Windows OS 클립보드 자동 장전
+          if (zCoreBridge.isConnected) {
+            try {
+              await fetch(getZCoreUrl('/api/teleport/ocr-vanguard'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  ...payload,
+                  fileName,
+                  file_name: fileName,
+                  fullText,
+                  ocr_text: fullText,
+                  sourceDevice,
+                  source_device: sourceDevice,
+                }),
+              });
+            } catch {
+              /* ignore */
+            }
+          }
+
+          // 2) PC OS 클립보드에도 이중 안전 장전 (구버전 엔진·브라우저 환경에서도 메모장 Ctrl+V 즉시 붙여넣기 보장)
+          const clipHash = await sha256HexBrowser(fullText);
+          await writeTextToLocalOsClipboard(fullText, clipHash);
+
+          // 3) 웹 화면 클립보드 목록 및 도착 토스트 즉시 갱신
+          const clipItem: GhostiSyncedClipItem = {
+            clipHash,
+            text: fullText,
+            senderDeviceId: String(payload.senderDeviceId || 'mobile-teleport'),
+            senderName: `⚡ ${sourceDevice} · ${fileName}`,
+            createdAt: String(payload.sent_at || new Date().toISOString()),
+            encryptedE2ee: true,
+          };
+          const nextClips = [
+            clipItem,
+            ...loadCachedSyncedClips(normEmail).filter((c) => c.clipHash !== clipItem.clipHash),
+          ].slice(0, 15);
+          saveCachedSyncedClips(nextClips, normEmail);
+          opts.onIncomingClip(clipItem, { isLocalAutoCapture: false });
+          if (opts.onTeleportReceived) {
+            opts.onTeleportReceived({ fileName, fullText, sourceDevice });
           }
         })
         .subscribe((status) => {
@@ -1909,6 +2050,15 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
                 type: 'broadcast',
                 event: 'E2EE_CLIPBOARD_PUSH',
                 payload: clipPkt,
+              });
+            }
+            if (pendingTeleportPacket) {
+              const tpPkt = pendingTeleportPacket;
+              pendingTeleportPacket = null;
+              void ch.send({
+                type: 'broadcast',
+                event: 'TELEPORT_OCR_VANGUARD',
+                payload: tpPkt,
               });
             }
           } else if (

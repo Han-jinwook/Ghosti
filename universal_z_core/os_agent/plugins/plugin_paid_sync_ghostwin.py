@@ -189,8 +189,21 @@ def set_os_clipboard_text(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     return {"ok": True, "clipHash": new_hash, "seqNum": after_seq}
 
 
+def resolve_phone_backup_dir() -> Path:
+    """Windows 탐색기 좌측 [사진] 실제 경로(OneDrive 리디렉션 포함) 하위의 Ghosti_Phone_Backup 단일 SSOT 경로를 반환합니다."""
+    try:
+        import ghosti_safe_ops as _safe_ops  # type: ignore
+
+        pic_dir = _safe_ops.known_folder("pictures")
+        if pic_dir:
+            return Path(pic_dir) / "Ghosti_Phone_Backup"
+    except Exception:
+        pass
+    return Path.home() / "Pictures" / "Ghosti_Phone_Backup"
+
+
 def save_mirrored_device_file(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    """폰·서브PC에서 미러링된 원본 사진·문서를 내 PC Pictures\\Ghosti_Phone_Backup 에 안전하게 보관합니다."""
+    """폰·서브PC에서 미러링된 원본 사진·문서를 내 PC [사진\\Ghosti_Phone_Backup]에 안전하게 보관합니다."""
     payload = data or {}
     raw_name = os.path.basename(str(payload.get("fileName") or "").strip())
     if not raw_name:
@@ -198,7 +211,7 @@ def save_mirrored_device_file(data: Dict[str, Any] | None = None) -> Dict[str, A
     if Path(raw_name).suffix.lower() in _BLOCKED_EXEC_EXTS:
         return {"ok": False, "error": "BLOCKED_EXECUTABLE_EXTENSION"}
 
-    backup_dir = Path.home() / "Pictures" / "Ghosti_Phone_Backup"
+    backup_dir = resolve_phone_backup_dir()
     backup_dir.mkdir(parents=True, exist_ok=True)
     target = backup_dir / raw_name
 
@@ -220,7 +233,12 @@ def save_mirrored_device_file(data: Dict[str, Any] | None = None) -> Dict[str, A
         tmp_p = target.with_name(f".{target.name}.ghosti_mirror_tmp")
         tmp_p.write_bytes(file_bytes)
         os.replace(tmp_p, target)
-        return {"ok": True, "savedPath": str(target), "size": len(file_bytes)}
+        return {
+            "ok": True,
+            "savedPath": str(target),
+            "backupDir": str(backup_dir),
+            "size": len(file_bytes),
+        }
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
 

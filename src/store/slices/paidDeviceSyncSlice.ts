@@ -169,6 +169,7 @@ export interface PaidDeviceSyncSlice {
   deviceEntitlement: GhostiDeviceEntitlementView | null;
   syncedClipboardItems: GhostiSyncedClipItem[];
   thisDeviceRevoked: boolean;
+  lastPhoneBackupFolderPath: string | null;
   refreshDeviceIntegrationState: (explicitTrialOptIn?: boolean) => Promise<void>;
   pairWithSixDigitCode: (code: string) => Promise<boolean>;
   unlinkConnectedDevice: (targetDeviceId: string) => Promise<boolean>;
@@ -209,6 +210,7 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
   deviceEntitlement: loadCachedDeviceIntegrationSnapshot()?.entitlement || null,
   syncedClipboardItems: loadCachedSyncedClips(),
   thisDeviceRevoked: false,
+  lastPhoneBackupFolderPath: null,
   showProModal:
     typeof window !== 'undefined' &&
     new URLSearchParams(window.location.search).get('master') === 'pc' &&
@@ -787,8 +789,47 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
         .map((d) => d.display_name)
         .join(' · ');
 
+      // [사진 탭 0장 공백 근본 해결]: 동기화된 다른 기기 사진이 있으면 즉시 searchResults에 합류시켜 PC/모바일 [사진] 탭에서 바로 확인 가능
+      let nextSearchResults = state.searchResults;
+      if (state.activeLoungeType === 'personal') {
+        if (syncRes.remotePhotosToMerge.length > 0) {
+          const existingSrIds = new Set(state.searchResults.map((r) => r.photo.id));
+          const appendedResults = syncRes.remotePhotosToMerge
+            .filter((p) => !existingSrIds.has(p.id))
+            .map((photo) => ({
+              photo,
+              score: 0.97,
+              matchPercentage: 98,
+              matchedBy: 'text-direct' as const,
+            }));
+          if (!state.hasExecutedUserSearch) {
+            nextSearchResults = filterVisibleGalleryPhotos(mergedPhotos).map((photo) => ({
+              photo,
+              score: 0.96,
+              matchPercentage: 97,
+              matchedBy: 'text-direct' as const,
+            }));
+          } else if (appendedResults.length > 0) {
+            nextSearchResults = [...appendedResults, ...state.searchResults];
+          }
+        } else if (!state.hasExecutedUserSearch && state.searchResults.length === 0 && mergedPhotos.length > 0) {
+          nextSearchResults = filterVisibleGalleryPhotos(mergedPhotos).map((photo) => ({
+            photo,
+            score: 0.96,
+            matchPercentage: 97,
+            matchedBy: 'text-direct' as const,
+          }));
+        }
+      }
+
+      const remoteCountNow = mergedPhotos.filter(
+        (p) => !p.quarantined && p.id.startsWith('shadow-remote-')
+      ).length;
+
       return {
         photos: mergedPhotos,
+        searchResults: nextSearchResults,
+        lastPhoneBackupFolderPath: syncRes.backupDirPath || state.lastPhoneBackupFolderPath,
         connectedDevices: hb.ok ? hb.devices : state.connectedDevices,
         devicePairingCode6: hb.pairingCode ?? state.devicePairingCode6,
         deviceEntitlement: hb.entitlement ?? state.deviceEntitlement,
@@ -801,12 +842,12 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
           syncing: false,
           packSizeMB: syncRes.packSizeMB || state.syncState.packSizeMB,
           connectedPeer: peerNames || state.syncState.connectedPeer,
-          lastSyncedAt: `방금 전 (항목 ${syncRes.mergedCatalog.length}건 일치화 완료)`,
+          lastSyncedAt: `방금 전 (전체 ${syncRes.mergedCatalog.length}건 · 타 기기 사진 ${remoteCountNow}장 동기화)`,
         },
         lastQuarantineToast:
           state.syncState.privateSyncStrategy === 'shadow'
-            ? `⚡ [폰 용량 절약 일치화 완료] 총 ${syncRes.mergedCatalog.length}건의 13KB 초경량 미리보기(${syncRes.packSizeMB}MB)가 내 기기 간 동기화되어 집 PC가 꺼져 있어도 밖에서 1초 검색이 가능합니다!`
-            : `💾 [폰·PC 양쪽 원본 보관 일치화 완료] 총 ${syncRes.mergedCatalog.length}건 카탈로그 및 원본 파일(업로드 ${syncRes.mirroredUploadCount}건 · PC 백업 수신 ${syncRes.mirroredPullCount}건)이 일치되었습니다!`,
+            ? `⚡ [스마트 절약 일치화 완료] 총 ${syncRes.mergedCatalog.length}건 동기화(다른 기기 사진 ${remoteCountNow}장 사진 탭 반영 · 폰 점유 ${syncRes.packSizeMB}MB)! [사진] 탭을 눌러 바로 확인해 보세요.`
+            : `💾 [원본 전체 백업 완료] 총 ${syncRes.mergedCatalog.length}건(업로드 ${syncRes.mirroredUploadCount}건 · PC 백업 저장 ${syncRes.mirroredPullCount}건) — 저장 위치: 내 PC ➔ 사진 ➔ Ghosti_Phone_Backup ([📂 폰 백업 폴더 바로 열기] 버튼으로 즉시 열 수 있어요!)`,
       };
     });
   },

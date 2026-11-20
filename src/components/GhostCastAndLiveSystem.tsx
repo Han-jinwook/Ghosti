@@ -8,6 +8,7 @@ import {
   broadcastRemoteMonitorCast,
   getThisDeviceIdentity,
   startDeviceIntegrationRealtimeRuntime,
+  tryMakeCompactThumbDataUrl,
   type RemoteMonitorCastPacket,
 } from '../services/deviceIntegrationService';
 import {
@@ -337,19 +338,31 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
 
   const emitRemoteCastPacket = (nextState: MonitorCastState, targetPhoto?: PhotoItem | null) => {
     const p = targetPhoto || activePhotos[nextState.photoIndex] || activePhotos[0] || null;
-    const thumb =
+    const directThumb =
       p?.thumbUrl && p.thumbUrl.startsWith('data:image/') && p.thumbUrl.length <= 48000
         ? p.thumbUrl
         : p?.thumbUrl && p.thumbUrl.startsWith('https://')
         ? p.thumbUrl
         : undefined;
-    broadcastRemoteMonitorCast({
+    const basePacket = {
       ...nextState,
       senderDevice: getThisDeviceIdentity().displayName,
       photoId: p?.id,
       photoTitle: p?.name,
-      photoThumbUrl: thumb,
-    });
+      photoThumbUrl: directThumb,
+    };
+    broadcastRemoteMonitorCast(basePacket);
+    if (!directThumb && p && (p.thumbUrl || p.fullUrl) && nextState.active) {
+      void tryMakeCompactThumbDataUrl(p.thumbUrl || p.fullUrl).then((compactThumb) => {
+        if (compactThumb) {
+          broadcastRemoteMonitorCast({
+            ...basePacket,
+            photoThumbUrl: compactThumb,
+            updatedAt: Date.now(),
+          });
+        }
+      });
+    }
   };
 
   // [전역 5번 내 기기 통합 실시간 엔진]: 기기 바인딩 하트비트 · E2EE 클립보드(PC Ctrl+C ↔ 폰) · 무선 리모컨 · 0.2초 공간이동 수신
@@ -401,6 +414,11 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
         useSaySeeStore.setState({
           lastQuarantineToast:
             '🔌 다른 기기에서 이 기기의 연결이 해제되었습니다. 다시 연결하려면 QR 스캔 또는 [이 기기 다시 연결]을 눌러 주세요.',
+        });
+      },
+      onTeleportReceived: ({ fileName, sourceDevice }) => {
+        useSaySeeStore.setState({
+          lastQuarantineToast: `⚡ [${sourceDevice} ➔ PC전송 도착] '${fileName}' 글자·정보가 PC 귀신창(Ctrl+0)과 클립보드에 장전되었습니다! 메모장에서 Ctrl+0 또는 Ctrl+V를 눌러 바로 확인하세요.`,
         });
       },
       onIncomingClip: (clip, meta) => {
