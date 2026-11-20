@@ -647,9 +647,9 @@ public class GhostiMobileCarePlugin extends Plugin {
     }
 
     private void executeSystemPhotoTrashInternal(PluginCall call, boolean permissionAlreadyRequested) {
-        String action = call.getString("action", "move");
-        boolean isMoveToTrash = !"restore".equalsIgnoreCase(action);
-        JSArray items = call.getArray("items");
+        final String action = call.getString("action", "move");
+        final boolean isMoveToTrash = !"restore".equalsIgnoreCase(action);
+        final JSArray items = call.getArray("items");
         if (items == null || items.length() == 0) {
             JSObject ret = new JSObject();
             ret.put("ok", false);
@@ -659,87 +659,54 @@ public class GhostiMobileCarePlugin extends Plugin {
             return;
         }
 
-        Context ctx = getContext();
-        ContentResolver resolver = ctx.getContentResolver();
-        List<Uri> targetUris = new ArrayList<>();
-        JSArray requestedIds = new JSArray();
-        final JSObject replacedIdsObj = new JSObject();
-        final List<JSONObject> trackedRestoreItems = new ArrayList<>();
+        final Context ctx = getContext();
+        final ContentResolver resolver = ctx.getContentResolver();
+        final Set<String> protectedKeepIdStrings = new LinkedHashSet<>();
+        final Set<Long> protectedMediaIds = new LinkedHashSet<>();
+        JSArray protectedKeepArr = call.getArray("protectedKeepIds");
+        if (protectedKeepArr != null) {
+            for (int i = 0; i < protectedKeepArr.length(); i++) {
+                String keepRaw = protectedKeepArr.optString(i, "");
+                if (keepRaw != null && !keepRaw.isEmpty()) {
+                    protectedKeepIdStrings.add(keepRaw);
+                    Long keepMid = extractNumericMediaStoreIdFromFileName(keepRaw);
+                    if (keepMid != null && keepMid > 0) {
+                        protectedMediaIds.add(keepMid);
+                    }
+                }
+            }
+        }
+
+        final List<JSONObject> rawList = new ArrayList<>();
+        final JSArray requestedIds = new JSArray();
         boolean needsMediaQuery = false;
 
         try {
-            List<JSONObject> rawList = new ArrayList<>();
             for (int i = 0; i < items.length(); i++) {
                 JSONObject obj = items.optJSONObject(i);
                 if (obj == null) continue;
-                rawList.add(obj);
                 String id = obj.optString("id", "");
                 String name = obj.optString("name", "");
+                Long pickerMediaId = extractNumericMediaStoreIdFromFileName(id);
+                if (pickerMediaId == null) {
+                    pickerMediaId = extractNumericMediaStoreIdFromFileName(name);
+                }
+                if (isMoveToTrash) {
+                    if ((!id.isEmpty() && protectedKeepIdStrings.contains(id))
+                        || (!name.isEmpty() && protectedKeepIdStrings.contains(name))
+                        || (pickerMediaId != null && protectedMediaIds.contains(pickerMediaId))) {
+                        // 보존 베스트 사진(protectedKeepIds)은 어떤 경우에도 OS 휴지통 이동 목록에 포함 금지
+                        continue;
+                    }
+                }
+                rawList.add(obj);
                 if (!id.isEmpty()) {
                     requestedIds.put(id);
                 } else if (!name.isEmpty()) {
                     requestedIds.put(name);
                 }
-                Long pickerMediaId = extractNumericMediaStoreIdFromFileName(id);
-                if (pickerMediaId == null) {
-                    pickerMediaId = extractNumericMediaStoreIdFromFileName(name);
-                }
                 if (pickerMediaId == null) {
                     needsMediaQuery = true;
-                }
-            }
-
-            if (needsMediaQuery && !hasMediaReadPermission(ctx) && !permissionAlreadyRequested) {
-                String alias = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ? "mediaModern" : "mediaLegacy";
-                requestPermissionForAlias(alias, call, "onMediaImagesPermissionForTrash");
-                return;
-            }
-
-            Set<Long> seenMediaIds = new LinkedHashSet<>();
-            for (JSONObject obj : rawList) {
-                String id = obj.optString("id", "");
-                String name = obj.optString("name", "");
-                long size = obj.optLong("size", -1L);
-                Long mediaId = extractNumericMediaStoreIdFromFileName(id);
-                if (mediaId == null) {
-                    mediaId = extractNumericMediaStoreIdFromFileName(name);
-                }
-                if (mediaId != null && mediaId > 0) {
-                    int rowState = queryMediaStoreIdTrashState(resolver, mediaId);
-                    if (isMoveToTrash && rowState == 1) {
-                        // 이미 OS 휴지통(IS_TRASHED=1)에 들어가 있는 항목은 중복 요청 없이 완료 처리
-                        continue;
-                    }
-                    if (!isMoveToTrash && rowState == 0) {
-                        // 이미 활성 갤러리(IS_TRASHED=0)로 복원되어 있는 항목은 중복 요청 생략
-                        continue;
-                    }
-                    if (rowState == -1) {
-                        // 반복 이동·복원 중 MediaProvider가 새 _ID를 부여한 경우 파일명(+용량)으로 재탐색
-                        Long reboundId = queryMediaStoreIdForPhoto(resolver, name, size, !isMoveToTrash);
-                        if (reboundId != null && reboundId > 0) {
-                            mediaId = reboundId;
-                            if (!id.isEmpty()) {
-                                replacedIdsObj.put(id, "ms_img_" + reboundId);
-                            }
-                        } else {
-                            mediaId = null;
-                        }
-                    }
-                } else {
-                    mediaId = queryMediaStoreIdForPhoto(resolver, name, size, !isMoveToTrash);
-                }
-
-                if (mediaId != null && mediaId > 0 && seenMediaIds.add(mediaId)) {
-                    targetUris.add(ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, mediaId));
-                    if (!isMoveToTrash) {
-                        JSONObject track = new JSONObject();
-                        track.put("reqId", id);
-                        track.put("mediaId", mediaId);
-                        track.put("name", name);
-                        track.put("size", size);
-                        trackedRestoreItems.add(track);
-                    }
                 }
             }
         } catch (Exception e) {
@@ -752,49 +719,99 @@ public class GhostiMobileCarePlugin extends Plugin {
             return;
         }
 
-        if (targetUris.isEmpty()) {
+        if (rawList.isEmpty()) {
             JSObject ret = new JSObject();
             ret.put("ok", true);
             ret.put("action", isMoveToTrash ? "move" : "restore");
             ret.put("canceled", false);
             ret.put("matchedMediaStoreCount", 0);
-            ret.put("doneIds", requestedIds);
-            ret.put("replacedIds", replacedIdsObj);
+            ret.put("doneIds", new JSArray());
             call.resolve(ret);
             return;
         }
 
-        try {
-            PendingIntent pi = MediaStore.createTrashRequest(resolver, targetUris, isMoveToTrash);
-            Activity act = getActivity();
-            if (act instanceof MainActivity) {
-                final int matchedCount = targetUris.size();
-                ((MainActivity) act).launchMediaStoreIntentSender(pi.getIntentSender(), (resultCode, data) -> {
-                    JSObject ret = new JSObject();
-                    boolean approved = (resultCode == Activity.RESULT_OK);
-                    if (approved && !isMoveToTrash && !trackedRestoreItems.isEmpty()) {
-                        for (JSONObject tr : trackedRestoreItems) {
-                            String reqId = tr.optString("reqId", "");
-                            long oldMid = tr.optLong("mediaId", -1L);
-                            String tName = tr.optString("name", "");
-                            long tSize = tr.optLong("size", -1L);
-                            if (!reqId.isEmpty() && oldMid > 0 && queryMediaStoreIdTrashState(resolver, oldMid) != 0) {
-                                Long activeMid = queryMediaStoreIdForPhoto(resolver, tName, tSize, false);
-                                if (activeMid != null && activeMid > 0 && activeMid != oldMid) {
-                                    replacedIdsObj.put(reqId, "ms_img_" + activeMid);
+        if (needsMediaQuery && !hasMediaReadPermission(ctx) && !permissionAlreadyRequested) {
+            String alias = Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU ? "mediaModern" : "mediaLegacy";
+            requestPermissionForAlias(alias, call, "onMediaImagesPermissionForTrash");
+            return;
+        }
+
+        // [메인 UI 스레드 프리즈 0.0ms 정공법]
+        // ContentResolver.query IPC 및 MediaStore.createTrashRequest 생성을 전용 워커 스레드에서 수행하고,
+        // 시스템 확인 팝업(launchMediaStoreIntentSender)만 UI 스레드로 마샬링합니다.
+        new Thread(() -> {
+            final List<Uri> targetUris = new ArrayList<>();
+            final JSObject replacedIdsObj = new JSObject();
+            final List<JSONObject> trackedRestoreItems = new ArrayList<>();
+            final Set<Long> seenMediaIds = new LinkedHashSet<>();
+
+            try {
+                for (JSONObject obj : rawList) {
+                    String id = obj.optString("id", "");
+                    String name = obj.optString("name", "");
+                    long size = obj.optLong("size", -1L);
+                    Long mediaId = extractNumericMediaStoreIdFromFileName(id);
+                    if (mediaId == null) {
+                        mediaId = extractNumericMediaStoreIdFromFileName(name);
+                    }
+
+                    Set<Long> queryExcludeIds = new LinkedHashSet<>(seenMediaIds);
+                    if (isMoveToTrash) {
+                        queryExcludeIds.addAll(protectedMediaIds);
+                    }
+
+                    if (mediaId != null && mediaId > 0) {
+                        if (isMoveToTrash && protectedMediaIds.contains(mediaId)) {
+                            continue;
+                        }
+                        int rowState = queryMediaStoreIdTrashState(resolver, mediaId);
+                        if (isMoveToTrash && rowState == 1) {
+                            // 이미 OS 휴지통(IS_TRASHED=1)에 들어가 있는 항목은 중복 요청 없이 완료 처리
+                            continue;
+                        }
+                        if (!isMoveToTrash && rowState == 0) {
+                            // 이미 활성 갤러리(IS_TRASHED=0)로 복원되어 있는 항목은 중복 요청 생략
+                            continue;
+                        }
+                        if (rowState == -1) {
+                            // 반복 이동·복원 중 MediaProvider가 새 _ID를 부여한 경우 파일명(+용량)으로 재탐색 (보존 베스트 ID는 절대 제외)
+                            Long reboundId = queryMediaStoreIdForPhoto(resolver, name, size, !isMoveToTrash, queryExcludeIds);
+                            if (reboundId != null && reboundId > 0) {
+                                mediaId = reboundId;
+                                if (!id.isEmpty()) {
+                                    replacedIdsObj.put(id, "ms_img_" + reboundId);
                                 }
+                            } else {
+                                mediaId = null;
                             }
                         }
+                    } else {
+                        mediaId = queryMediaStoreIdForPhoto(resolver, name, size, !isMoveToTrash, queryExcludeIds);
                     }
-                    ret.put("ok", approved);
-                    ret.put("action", isMoveToTrash ? "move" : "restore");
-                    ret.put("canceled", !approved);
-                    ret.put("matchedMediaStoreCount", matchedCount);
-                    ret.put("doneIds", approved ? requestedIds : new JSArray());
-                    ret.put("replacedIds", replacedIdsObj);
-                    call.resolve(ret);
-                });
-            } else {
+
+                    if (mediaId != null && mediaId > 0 && (!isMoveToTrash || !protectedMediaIds.contains(mediaId)) && seenMediaIds.add(mediaId)) {
+                        targetUris.add(ContentUris.withAppendedId(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, mediaId));
+                        if (!isMoveToTrash) {
+                            JSONObject track = new JSONObject();
+                            track.put("reqId", id);
+                            track.put("mediaId", mediaId);
+                            track.put("name", name);
+                            track.put("size", size);
+                            trackedRestoreItems.add(track);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                JSObject ret = new JSObject();
+                ret.put("ok", false);
+                ret.put("canceled", false);
+                ret.put("doneIds", new JSArray());
+                ret.put("error", e.getMessage());
+                call.resolve(ret);
+                return;
+            }
+
+            if (targetUris.isEmpty()) {
                 JSObject ret = new JSObject();
                 ret.put("ok", true);
                 ret.put("action", isMoveToTrash ? "move" : "restore");
@@ -803,15 +820,80 @@ public class GhostiMobileCarePlugin extends Plugin {
                 ret.put("doneIds", requestedIds);
                 ret.put("replacedIds", replacedIdsObj);
                 call.resolve(ret);
+                return;
             }
-        } catch (Exception e) {
-            JSObject ret = new JSObject();
-            ret.put("ok", false);
-            ret.put("canceled", false);
-            ret.put("doneIds", new JSArray());
-            ret.put("error", "CREATE_TRASH_REQUEST_FAILED: " + e.getMessage());
-            call.resolve(ret);
-        }
+
+            try {
+                final PendingIntent pi = MediaStore.createTrashRequest(resolver, targetUris, isMoveToTrash);
+                final Activity act = getActivity();
+                if (act instanceof MainActivity) {
+                    final int matchedCount = targetUris.size();
+                    act.runOnUiThread(() -> {
+                        try {
+                            ((MainActivity) act).launchMediaStoreIntentSender(pi.getIntentSender(), (resultCode, data) -> {
+                                final boolean approved = (resultCode == Activity.RESULT_OK);
+                                if (approved && !isMoveToTrash && !trackedRestoreItems.isEmpty()) {
+                                    new Thread(() -> {
+                                        for (JSONObject tr : trackedRestoreItems) {
+                                            String reqId = tr.optString("reqId", "");
+                                            long oldMid = tr.optLong("mediaId", -1L);
+                                            String tName = tr.optString("name", "");
+                                            long tSize = tr.optLong("size", -1L);
+                                            if (!reqId.isEmpty() && oldMid > 0 && queryMediaStoreIdTrashState(resolver, oldMid) != 0) {
+                                                Long activeMid = queryMediaStoreIdForPhoto(resolver, tName, tSize, false, null);
+                                                if (activeMid != null && activeMid > 0 && activeMid != oldMid) {
+                                                    replacedIdsObj.put(reqId, "ms_img_" + activeMid);
+                                                }
+                                            }
+                                        }
+                                        JSObject ret = new JSObject();
+                                        ret.put("ok", true);
+                                        ret.put("action", "restore");
+                                        ret.put("canceled", false);
+                                        ret.put("matchedMediaStoreCount", matchedCount);
+                                        ret.put("doneIds", requestedIds);
+                                        ret.put("replacedIds", replacedIdsObj);
+                                        call.resolve(ret);
+                                    }, "GhostiRestoreVerifyWorker").start();
+                                    return;
+                                }
+                                JSObject ret = new JSObject();
+                                ret.put("ok", approved);
+                                ret.put("action", isMoveToTrash ? "move" : "restore");
+                                ret.put("canceled", !approved);
+                                ret.put("matchedMediaStoreCount", matchedCount);
+                                ret.put("doneIds", approved ? requestedIds : new JSArray());
+                                ret.put("replacedIds", replacedIdsObj);
+                                call.resolve(ret);
+                            });
+                        } catch (Exception launchErr) {
+                            JSObject ret = new JSObject();
+                            ret.put("ok", false);
+                            ret.put("canceled", false);
+                            ret.put("doneIds", new JSArray());
+                            ret.put("error", "LAUNCH_TRASH_INTENT_FAILED: " + launchErr.getMessage());
+                            call.resolve(ret);
+                        }
+                    });
+                } else {
+                    JSObject ret = new JSObject();
+                    ret.put("ok", true);
+                    ret.put("action", isMoveToTrash ? "move" : "restore");
+                    ret.put("canceled", false);
+                    ret.put("matchedMediaStoreCount", 0);
+                    ret.put("doneIds", requestedIds);
+                    ret.put("replacedIds", replacedIdsObj);
+                    call.resolve(ret);
+                }
+            } catch (Exception e) {
+                JSObject ret = new JSObject();
+                ret.put("ok", false);
+                ret.put("canceled", false);
+                ret.put("doneIds", new JSArray());
+                ret.put("error", "CREATE_TRASH_REQUEST_FAILED: " + e.getMessage());
+                call.resolve(ret);
+            }
+        }, "GhostiTrashWorker").start();
     }
 
     private boolean hasImageReadPermission(Context ctx) {
@@ -1279,7 +1361,13 @@ public class GhostiMobileCarePlugin extends Plugin {
         return -1;
     }
 
-    private Long queryMediaStoreIdForPhoto(ContentResolver resolver, String fileName, long fileSize, boolean trashedOnly) {
+    private Long queryMediaStoreIdForPhoto(
+        ContentResolver resolver,
+        String fileName,
+        long fileSize,
+        boolean trashedOnly,
+        Set<Long> excludedIds
+    ) {
         if (fileName == null || fileName.isEmpty()) return null;
         try {
             String[] projection = new String[] {
@@ -1287,7 +1375,7 @@ public class GhostiMobileCarePlugin extends Plugin {
                 MediaStore.Images.Media.DISPLAY_NAME,
                 MediaStore.Images.Media.SIZE
             };
-            // 1차: 파일명 + 파일 크기 동시 일치 조회 (동일 크기 타 중복 원본 오매칭 원천 차단)
+            // 1차: 파일명 + 파일 크기 동시 일치 조회 (보존 베스트 ID 및 기선택 ID는 제외하여 쌍둥이 원본 오타격 원천 차단)
             if (fileSize > 0) {
                 Bundle exactArgs = new Bundle();
                 if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -1305,12 +1393,17 @@ public class GhostiMobileCarePlugin extends Plugin {
                     new String[] { fileName, String.valueOf(fileSize) }
                 );
                 try (Cursor c = resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, exactArgs, null)) {
-                    if (c != null && c.moveToFirst()) {
-                        return c.getLong(0);
+                    if (c != null) {
+                        while (c.moveToNext()) {
+                            long candId = c.getLong(0);
+                            if (candId > 0 && (excludedIds == null || !excludedIds.contains(candId))) {
+                                return candId;
+                            }
+                        }
                     }
                 }
             }
-            // 2차: 파일명 일치 조회 (파일명 없이 SIZE 단독 조회는 보존 대상 쌍둥이 원본을 오타격할 수 있으므로 영구 금지!)
+            // 2차: 파일명 일치 조회 (파일명 없이 SIZE 단독 조회는 영구 금지하며, 보존 베스트 ID 제외)
             Bundle nameArgs = new Bundle();
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                 nameArgs.putInt(
@@ -1321,8 +1414,13 @@ public class GhostiMobileCarePlugin extends Plugin {
             nameArgs.putString(ContentResolver.QUERY_ARG_SQL_SELECTION, MediaStore.Images.Media.DISPLAY_NAME + " = ?");
             nameArgs.putStringArray(ContentResolver.QUERY_ARG_SQL_SELECTION_ARGS, new String[] { fileName });
             try (Cursor c = resolver.query(MediaStore.Images.Media.EXTERNAL_CONTENT_URI, projection, nameArgs, null)) {
-                if (c != null && c.moveToFirst()) {
-                    return c.getLong(0);
+                if (c != null) {
+                    while (c.moveToNext()) {
+                        long candId = c.getLong(0);
+                        if (candId > 0 && (excludedIds == null || !excludedIds.contains(candId))) {
+                            return candId;
+                        }
+                    }
                 }
             }
         } catch (Throwable ignored) {

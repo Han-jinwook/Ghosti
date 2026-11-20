@@ -1716,11 +1716,17 @@ export const Stage1MinimalCarePreview: React.FC = () => {
       setPausedSnapshot(null);
       setSkippedGroupIds(new Set());
     };
+    const onPhotoMovedToQuarantine = () => {
+      setIsCleanupPaused(false);
+      setPausedSnapshot(null);
+    };
     window.addEventListener('ghosti_pause_cleanup_pane_only', onPauseCleanupPaneOnly);
     window.addEventListener('ghosti_photo_restored_from_quarantine', onPhotoRestored);
+    window.addEventListener('ghosti_photo_moved_to_quarantine', onPhotoMovedToQuarantine);
     return () => {
       window.removeEventListener('ghosti_pause_cleanup_pane_only', onPauseCleanupPaneOnly);
       window.removeEventListener('ghosti_photo_restored_from_quarantine', onPhotoRestored);
+      window.removeEventListener('ghosti_photo_moved_to_quarantine', onPhotoMovedToQuarantine);
     };
   }, [liveActiveTrash, duplicateGroups, clearTrashSelection, setActiveTrashCategoryFilter]);
 
@@ -2415,7 +2421,9 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                             </p>
                             <span className="text-[11.5px] text-zinc-300 break-keep">
                               {isStoreAppMode || layout === 'mobile'
-                                ? '🗑️ [OK]를 누르면 시스템 확인창을 거쳐 내 폰 갤러리(구글 포토) 실제 휴지통(30일 보관)으로 이동하며, 아래쪽 [↩️ 정리한 사진 복원]에서 언제든 되돌릴 수 있어요.'
+                                ? !zCoreBridge.isConnected && isCapacitorIosRuntime()
+                                  ? '🗑️ [OK]를 누르면 시스템 확인창을 거쳐 아이폰 『사진 ➔ 최근 삭제된 항목』(30일 보관)으로 이동하며, 그곳에서 FaceID로 언제든 원본 복원할 수 있어요.'
+                                  : '🗑️ [OK]를 누르면 시스템 확인창을 거쳐 내 폰 갤러리(구글 포토) 실제 휴지통(30일 보관)으로 이동하며, 아래쪽 [↩️ 정리한 사진 복원]에서 언제든 되돌릴 수 있어요.'
                                 : '💡 다른 사진을 남기고 싶다면 아래 실사진 중 원하는 사진을 먼저 터치해 👑 베스트 1장을 바꾼 뒤 [OK]를 눌러주세요.'}
                             </span>
                           </div>

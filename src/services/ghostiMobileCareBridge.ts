@@ -114,6 +114,7 @@ export interface GhostiMobileCarePluginInterface {
   requestSystemPhotoTrash(options: {
     action: 'move' | 'restore';
     items: SystemPhotoTrashTarget[];
+    protectedKeepIds?: string[];
   }): Promise<SystemPhotoTrashResult>;
   consumePendingDeepLink(): Promise<{ ok: boolean; deepLinkUrl: string; source?: string }>;
   setNativeThemeMode(options: { dark: boolean }): Promise<{ ok: boolean }>;
@@ -361,21 +362,31 @@ export function isCapacitorNativeMobileRuntime(): boolean {
  */
 export async function requestNativeSystemPhotoTrash(
   action: 'move' | 'restore',
-  keys: string[]
+  keys: string[],
+  protectedKeepIds?: string[]
 ): Promise<SystemPhotoTrashResult> {
-  const items: SystemPhotoTrashTarget[] = keys.map((k) => {
+  const keepSet = new Set<string>((protectedKeepIds || []).filter(Boolean));
+  const safeKeys = action === 'move' ? keys.filter((k) => !keepSet.has(k)) : keys;
+  if (safeKeys.length === 0) {
+    return { ok: false, action, doneIds: [], matchedMediaStoreCount: 0, canceled: false };
+  }
+  const items: SystemPhotoTrashTarget[] = safeKeys.map((k) => {
     const found = mobilePhotoMetaRegistry.get(k);
     if (found) return found;
     return { id: k, name: k, size: 0 };
   });
 
   if (!isCapacitorNativeMobileRuntime()) {
-    return { ok: true, action, doneIds: keys, matchedMediaStoreCount: 0, canceled: false };
+    return { ok: true, action, doneIds: safeKeys, matchedMediaStoreCount: 0, canceled: false };
   }
 
   nativeTrashDialogInFlightCount += 1;
   try {
-    const res = await GhostiMobileCareNative.requestSystemPhotoTrash({ action, items });
+    const res = await GhostiMobileCareNative.requestSystemPhotoTrash({
+      action,
+      items,
+      protectedKeepIds: Array.from(keepSet),
+    });
     lastNativeTrashDialogCompletedAt = Date.now();
     if (res && res.canceled) {
       return {
@@ -391,7 +402,7 @@ export async function requestNativeSystemPhotoTrash(
       return {
         ok: true,
         action,
-        doneIds: Array.isArray(res.doneIds) && res.doneIds.length > 0 ? res.doneIds : keys,
+        doneIds: Array.isArray(res.doneIds) && res.doneIds.length > 0 ? res.doneIds : safeKeys,
         replacedIds:
           res.replacedIds && typeof res.replacedIds === 'object' ? res.replacedIds : undefined,
         matchedMediaStoreCount: res.matchedMediaStoreCount || 0,
@@ -404,7 +415,7 @@ export async function requestNativeSystemPhotoTrash(
   } finally {
     nativeTrashDialogInFlightCount = Math.max(0, nativeTrashDialogInFlightCount - 1);
   }
-  return { ok: true, action, doneIds: keys, matchedMediaStoreCount: 0, canceled: false };
+  return { ok: true, action, doneIds: safeKeys, matchedMediaStoreCount: 0, canceled: false };
 }
 
 export async function scanNativeDeviceGalleryMedia(options?: {

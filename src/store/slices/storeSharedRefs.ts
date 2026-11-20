@@ -331,10 +331,14 @@ export function resolveViewportLayout(): ViewportLayout {
   }
 }
 
-export async function requestQuarantineOp(kind: 'move' | 'restore', names: string[]): Promise<QuarantineOpResult> {
+export async function requestQuarantineOp(
+  kind: 'move' | 'restore',
+  names: string[],
+  protectedKeepIds?: string[]
+): Promise<QuarantineOpResult> {
   if (!zCoreBridge.isConnected) {
     if (isCapacitorNativeMobileRuntime()) {
-      const nativeRes = await requestNativeSystemPhotoTrash(kind, names);
+      const nativeRes = await requestNativeSystemPhotoTrash(kind, names, protectedKeepIds);
       if (nativeRes.canceled || !nativeRes.ok) {
         return {
           done: [],
@@ -344,7 +348,7 @@ export async function requestQuarantineOp(kind: 'move' | 'restore', names: strin
         };
       }
       return {
-        done: names,
+        done: Array.isArray(nativeRes.doneIds) && nativeRes.doneIds.length > 0 ? nativeRes.doneIds : names,
         replacedIds: nativeRes.replacedIds,
         errors: [],
         demo: false,

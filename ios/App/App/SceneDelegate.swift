@@ -851,6 +851,8 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         purgeLegacyIosTrashVaultIfNeeded()
 
         let action = call.getString("action") ?? "move"
+        let isMoveToTrash = action.lowercased() != "restore"
+        let protectedKeepSet = Set(call.getArray("protectedKeepIds", String.self) ?? [])
         let items = call.getArray("items", JSObject.self) ?? []
         var requestedIds: [String] = []
         var assetIds: [String] = []
@@ -858,6 +860,9 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         for obj in items {
             let idVal = (obj["id"] as? String) ?? ""
             let nameVal = (obj["name"] as? String) ?? ""
+            if isMoveToTrash && ((!idVal.isEmpty && protectedKeepSet.contains(idVal)) || (!nameVal.isEmpty && protectedKeepSet.contains(nameVal))) {
+                continue
+            }
             if !idVal.isEmpty {
                 requestedIds.append(idVal)
                 if idVal.contains("/") {
@@ -871,7 +876,7 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         // [대안 B · 구글 포토 iOS / 애플 순정 표준]
         // 애플 PhotoKit은 FaceID로 잠긴 『최근 삭제된 항목』에서 외부 앱이 사진을 꺼내오는(Undelete) API를 보안 정책상 제공하지 않으므로,
         // 앱 캐시 사본 백업이나 중복 사본 생성을 하지 않고 아이폰 순정 『사진 ➔ 최근 삭제된 항목(FaceID)』 복원 안내로 일원화합니다.
-        if action.lowercased() == "restore" {
+        if !isMoveToTrash {
             call.resolve([
                 "ok": false,
                 "action": "restore",
@@ -894,28 +899,30 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
-        let fetched = PHAsset.fetchAssets(withLocalIdentifiers: assetIds, options: nil)
-        if fetched.count == 0 {
-            call.resolve([
-                "ok": true,
-                "action": "move",
-                "canceled": false,
-                "matchedMediaStoreCount": 0,
-                "doneIds": requestedIds
-            ])
-            return
-        }
+        DispatchQueue.global(qos: .userInitiated).async {
+            let fetched = PHAsset.fetchAssets(withLocalIdentifiers: assetIds, options: nil)
+            if fetched.count == 0 {
+                call.resolve([
+                    "ok": true,
+                    "action": "move",
+                    "canceled": false,
+                    "matchedMediaStoreCount": 0,
+                    "doneIds": requestedIds
+                ])
+                return
+            }
 
-        PHPhotoLibrary.shared().performChanges({
-            PHAssetChangeRequest.deleteAssets(fetched)
-        }) { success, _ in
-            call.resolve([
-                "ok": success,
-                "action": "move",
-                "canceled": !success,
-                "matchedMediaStoreCount": fetched.count,
-                "doneIds": success ? requestedIds : []
-            ])
+            PHPhotoLibrary.shared().performChanges({
+                PHAssetChangeRequest.deleteAssets(fetched)
+            }) { success, _ in
+                call.resolve([
+                    "ok": success,
+                    "action": "move",
+                    "canceled": !success,
+                    "matchedMediaStoreCount": fetched.count,
+                    "doneIds": success ? requestedIds : []
+                ])
+            }
         }
     }
 

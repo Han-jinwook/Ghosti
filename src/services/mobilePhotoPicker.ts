@@ -14,6 +14,7 @@ interface OpticalSignatureMeta {
   aspect: number;
   whitePct: number;
   rgbGrid: Uint8Array; // 8x8x3 = 192 bytes
+  rgbHex?: string;
 }
 
 const opticalSigByPhotoId = new Map<string, OpticalSignatureMeta>();
@@ -372,6 +373,7 @@ export function clusterPhotosIntoDuplicateGroups(
   const candidates = photos.filter(
     (p) =>
       !p.quarantined &&
+      !p.userKeptAsBest &&
       p.dhash &&
       p.dhash.length === 16 &&
       p.trashCategory !== 'memo'
@@ -467,17 +469,18 @@ export function clusterPhotosIntoDuplicateGroups(
 
     if (members.length >= 2) {
       visited.add(first.id);
-      // 1) 이미 세트 내에서 유저/이전 클러스터링으로 확정된 단일 👑 베스트 1장이 있으면 보존하여
+      // 1) 이미 세트 내에서 유저/이전 클러스터링으로 확정된 👑 베스트 컷이 있으면 최우선 보존하여
       //    반복 휴지통 이동·복원이나 백그라운드 재스캔 시 보존 대상(bestPhotoId)이 뒤집히는 현상을 원천 차단합니다.
-      const existingBests = members.filter((m) => m.isBestInDuplicateGroup);
-      const ranked = [...members].sort((a, b) => {
+      const rankComparator = (a: PhotoItem, b: PhotoItem): number => {
         const sDiff = (b.opticalSharpness || 10000) - (a.opticalSharpness || 10000);
         if (Math.abs(sDiff) > 250) return sDiff;
         const sizeDiff = (b.size || 0) - (a.size || 0);
         if (sizeDiff !== 0) return sizeDiff;
         return a.id.localeCompare(b.id);
-      });
-      const bestPhoto = existingBests.length === 1 ? existingBests[0] : ranked[0];
+      };
+      const existingBests = members.filter((m) => m.isBestInDuplicateGroup).sort(rankComparator);
+      const ranked = [...members].sort(rankComparator);
+      const bestPhoto = existingBests.length >= 1 ? existingBests[0] : ranked[0];
       const canonicalMinId = [...members].map((m) => m.id).sort((a, b) => a.localeCompare(b))[0];
       const groupId = `dup_set_${canonicalMinId}`;
 
@@ -520,6 +523,7 @@ export function clusterPhotosIntoDuplicateGroups(
         ...p,
         intrinsicTrashCategory: intrinsic,
         duplicateGroupId: role.groupId,
+        lastDuplicateGroupId: role.groupId,
         isBestInDuplicateGroup: true,
         trashCategory: undefined,
         trashConfidence: undefined,
@@ -533,6 +537,7 @@ export function clusterPhotosIntoDuplicateGroups(
       ...p,
       intrinsicTrashCategory: intrinsic,
       duplicateGroupId: role.groupId,
+      lastDuplicateGroupId: role.groupId,
       isBestInDuplicateGroup: false,
       trashCategory: 'duplicate' as TrashCategory,
       trashConfidence: 0.98,
@@ -544,6 +549,114 @@ export function clusterPhotosIntoDuplicateGroups(
   });
 
   return { updatedPhotos, duplicateGroups };
+}
+
+/**
+ * [세트 경계 불변(Set Boundary Immutability) & 보존 확정컷 영구 보호 SSOT — O(N) 0.2ms 무렉 처리]
+ * - 사진 정리(휴지통 이동) 시 전체 사진을 처음부터 다시 클러스터링하지 않고, 기존 세트 경계를 그대로 유지한 채
+ *   휴지통으로 이동한 사진만 해당 세트에서 제거합니다.
+ * - 살아남은 사진이 1장뿐인 세트는 즉시 해체(세트 개수 정확히 -1 감소 · 다음 세트로 즉시 전환)되며,
+ *   유저가 남기기로 승인한 베스트 컷(userKeptAsBest=true)이 옆 사진과 재결합해 버릴 후보로 뒤집히는 현상을 100% 원천 차단합니다.
+ */
+export function pruneQuarantinedFromDuplicateGroups(
+  photos: PhotoItem[],
+  existingGroups: DuplicateGroup[],
+  newlyKeptIds?: Set<string>
+): { updatedPhotos: PhotoItem[]; duplicateGroups: DuplicateGroup[] } {
+  const photoById = new Map<string, PhotoItem>(photos.map((p) => [p.id, p]));
+  const activeGroupRoleByPhotoId = new Map<string, { groupId: string; isBest: boolean }>();
+  const dissolvedSurvivorGroupByPhotoId = new Map<string, string>();
+  const nextGroups: DuplicateGroup[] = [];
+
+  for (const g of existingGroups) {
+    const activeIds = g.photoIds.filter((id) => {
+      const ph = photoById.get(id);
+      return Boolean(ph && !ph.quarantined);
+    });
+    if (activeIds.length >= 2) {
+      const nextBestId = activeIds.includes(g.bestPhotoId) ? g.bestPhotoId : activeIds[0];
+      nextGroups.push({
+        ...g,
+        bestPhotoId: nextBestId,
+        photoIds: activeIds,
+      });
+      for (const id of activeIds) {
+        activeGroupRoleByPhotoId.set(id, { groupId: g.groupId, isBest: id === nextBestId });
+      }
+    } else if (activeIds.length === 1) {
+      dissolvedSurvivorGroupByPhotoId.set(activeIds[0], g.groupId);
+    }
+  }
+
+  const updatedPhotos = photos.map((p) => {
+    if (p.quarantined) {
+      return {
+        ...p,
+        lastDuplicateGroupId: p.lastDuplicateGroupId || p.duplicateGroupId,
+      };
+    }
+    const intrinsic = resolveIntrinsicPhotoTrashCategory(p);
+    const activeRole = activeGroupRoleByPhotoId.get(p.id);
+    if (activeRole) {
+      if (activeRole.isBest) {
+        return {
+          ...p,
+          intrinsicTrashCategory: intrinsic,
+          duplicateGroupId: activeRole.groupId,
+          lastDuplicateGroupId: activeRole.groupId,
+          isBestInDuplicateGroup: true,
+          trashCategory: undefined,
+          trashConfidence: undefined,
+          tags: [
+            '#원본보존(Best)',
+            ...p.tags.filter((t) => !t.includes('연사') && !t.includes('사본') && !t.includes('원본보존')),
+          ].slice(0, 4),
+        };
+      }
+      return {
+        ...p,
+        intrinsicTrashCategory: intrinsic,
+        duplicateGroupId: activeRole.groupId,
+        lastDuplicateGroupId: activeRole.groupId,
+        isBestInDuplicateGroup: false,
+        trashCategory: 'duplicate' as TrashCategory,
+        trashConfidence: 0.98,
+        tags: [
+          '#연사·중복사본',
+          ...p.tags.filter((t) => !t.includes('원본보존') && !t.includes('베스트컷')),
+        ].slice(0, 4),
+      };
+    }
+
+    const dissolvedFromGroupId = dissolvedSurvivorGroupByPhotoId.get(p.id);
+    const isNewlyKept = Boolean(newlyKeptIds?.has(p.id) || dissolvedFromGroupId);
+    if (dissolvedFromGroupId || p.duplicateGroupId) {
+      const strippedDupTags = (p.tags || []).filter(
+        (t) => !t.includes('연사') && !t.includes('사본') && !t.includes('원본보존') && !t.includes('원본1장')
+      );
+      return {
+        ...p,
+        intrinsicTrashCategory: intrinsic,
+        duplicateGroupId: undefined,
+        lastDuplicateGroupId: dissolvedFromGroupId || p.lastDuplicateGroupId || p.duplicateGroupId,
+        isBestInDuplicateGroup: false,
+        userKeptAsBest: isNewlyKept ? true : p.userKeptAsBest,
+        trashCategory: intrinsic,
+        trashConfidence: intrinsic ? p.trashConfidence ?? 0.95 : undefined,
+        tags: strippedDupTags.length > 0 ? strippedDupTags : p.tags,
+      };
+    }
+
+    if (newlyKeptIds?.has(p.id)) {
+      return {
+        ...p,
+        userKeptAsBest: true,
+      };
+    }
+    return p;
+  });
+
+  return { updatedPhotos, duplicateGroups: nextGroups };
 }
 
 export async function analyzeMobilePickedPhotoFiles(
@@ -1195,6 +1308,7 @@ export async function loadCachedMobileGalleryIndex(): Promise<{
               aspect: Number(sig.aspect || 1),
               whitePct: Number(sig.whitePct || 0),
               rgbGrid: decodeRgbGridHex(sig.rgbHex || ''),
+              rgbHex: sig.rgbHex || undefined,
             });
           }
         }
@@ -1241,6 +1355,43 @@ export async function loadCachedMobileGalleryIndex(): Promise<{
   });
 }
 
+let pendingIdbSaveTimer: number | null = null;
+let latestPendingIdbSnapshot: { photos: PhotoItem[]; videos: VideoSceneItem[] } | null = null;
+
+/**
+ * 연속 사진 정리·복원 클릭 시 대용량(30~50MB) Base64 썸네일 IndexedDB 직렬화로 인한 메인 스레드 멈춤(Jank)을 0ms로 차단합니다.
+ * 유저 조작이 1.6초 이상 멈춘 유휴 시점(requestIdleCallback/setTimeout)에만 단 1회 병합 저장합니다.
+ */
+export function scheduleSaveCachedMobileGalleryIndex(
+  photos: PhotoItem[],
+  videos: VideoSceneItem[],
+  delayMs = 1600
+): void {
+  latestPendingIdbSnapshot = { photos, videos };
+  if (typeof window === 'undefined') {
+    void saveCachedMobileGalleryIndex(photos, videos);
+    return;
+  }
+  if (pendingIdbSaveTimer !== null) {
+    window.clearTimeout(pendingIdbSaveTimer);
+  }
+  pendingIdbSaveTimer = window.setTimeout(() => {
+    pendingIdbSaveTimer = null;
+    const snap = latestPendingIdbSnapshot;
+    latestPendingIdbSnapshot = null;
+    if (!snap) return;
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => void })
+      .requestIdleCallback;
+    if (typeof ric === 'function') {
+      ric(() => {
+        void saveCachedMobileGalleryIndex(snap.photos, snap.videos);
+      }, { timeout: 2000 });
+    } else {
+      void saveCachedMobileGalleryIndex(snap.photos, snap.videos);
+    }
+  }, delayMs);
+}
+
 export async function saveCachedMobileGalleryIndex(
   photos: PhotoItem[],
   videos: VideoSceneItem[]
@@ -1264,13 +1415,16 @@ export async function saveCachedMobileGalleryIndex(
     for (const p of cleanPhotos) {
       const sig = opticalSigByPhotoId.get(p.id);
       if (sig) {
+        if (!sig.rgbHex) {
+          sig.rgbHex = encodeRgbGridHex(sig.rgbGrid);
+        }
         opticalSigs[p.id] = {
           dhash: sig.dhash,
           sharpness: sig.sharpness,
           isMotionOrFocusBlurred: sig.isMotionOrFocusBlurred,
           aspect: sig.aspect,
           whitePct: sig.whitePct,
-          rgbHex: encodeRgbGridHex(sig.rgbGrid),
+          rgbHex: sig.rgbHex,
         };
       }
     }

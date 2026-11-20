@@ -15,7 +15,9 @@ import {
   convertNativeGalleryVideos,
   loadCachedMobileGalleryIndex,
   migrateOpticalSigPhotoId,
+  pruneQuarantinedFromDuplicateGroups,
   saveCachedMobileGalleryIndex,
+  scheduleSaveCachedMobileGalleryIndex,
 } from '../../services/mobilePhotoPicker';
 import {
   isCapacitorIosRuntime,
@@ -324,6 +326,7 @@ const recentlyQuarantinedAtById = new Map<string, number>();
 function buildQuarantineMoveStatePatch(opts: {
   state: SaySeeStore;
   movedSet: Set<string>;
+  newlyKeptIds?: Set<string>;
   savedBytes: number;
   demo: boolean;
   actionLabel: string;
@@ -333,6 +336,7 @@ function buildQuarantineMoveStatePatch(opts: {
   const {
     state,
     movedSet,
+    newlyKeptIds,
     savedBytes,
     demo,
     actionLabel,
@@ -346,11 +350,23 @@ function buildQuarantineMoveStatePatch(opts: {
   const isIosNativeApp = !zCoreBridge.isConnected && isCapacitorIosRuntime();
   const prevTrashById = new Map(state.photos.map((p) => [p.id, p.trashCategory]));
   const afterMovePhotos = state.photos.map((p) => {
-    if (!movedSet.has(p.id)) return p;
+    if (!movedSet.has(p.id)) {
+      if (newlyKeptIds?.has(p.id)) {
+        return {
+          ...p,
+          isBestInDuplicateGroup: true,
+          userKeptAsBest: true,
+          trashCategory: undefined,
+          trashConfidence: undefined,
+        };
+      }
+      return p;
+    }
     const isZCorePhoto = p.thumbUrl.includes('/__photos/file');
     return {
       ...p,
       quarantined: true,
+      lastDuplicateGroupId: p.lastDuplicateGroupId || p.duplicateGroupId,
       thumbUrl: isZCorePhoto
         ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&loc=quarantine&thumb=1`)
         : p.thumbUrl,
@@ -359,8 +375,9 @@ function buildQuarantineMoveStatePatch(opts: {
         : p.fullUrl,
     };
   });
+  // [세트 경계 불변 정공법]: 정리 시 전체 사진을 처음부터 다시 클러스터링하지 않고 해당 세트에서만 버린 사진을 O(N) 제거!
   const { updatedPhotos, duplicateGroups: nextDupGroups } =
-    clusterPhotosIntoDuplicateGroups(afterMovePhotos);
+    pruneQuarantinedFromDuplicateGroups(afterMovePhotos, state.duplicateGroups, newlyKeptIds);
   const cleanedSelected = new Set<string>(state.selectedTrashIds);
   movedSet.forEach((id) => cleanedSelected.delete(id));
   updatedPhotos.forEach((p) => {
@@ -982,6 +999,9 @@ export const createAssistantOnboardingSlice: StateCreator<
     try {
       const pageSize = 60;
       for (let offset = 0; offset < maxTargetCount; offset += pageSize) {
+        while (get().quarantineMoving || isSystemTrashDialogActiveOrCoolingDown(1800)) {
+          await new Promise((r) => setTimeout(r, 250));
+        }
         const batchStartEpoch = quarantineMutationEpoch;
         const res = await scanNativeDeviceGalleryMedia({
           offset,
@@ -1710,6 +1730,49 @@ export const createAssistantOnboardingSlice: StateCreator<
       .filter((p) => p.id !== effectiveKeepId)
       .map((p) => p.id);
 
+    if (quarantineRestImmediately && redundantIds.length > 0) {
+      if (!ensureLoginAndZCoreReady('연사 베스트 컷 정리')) return;
+      // OS 확인창 호출 전 불필요한 전체 photos 배열 재렌더링을 생략하고 단일 가드 상태만 세팅해 터치 반응 멈춤을 0ms로 차단합니다.
+      set({ quarantineMoving: true });
+      const moveRes = await requestQuarantineOp('move', redundantIds, [effectiveKeepId]);
+      if (moveRes.done.length === 0) {
+        set({ quarantineMoving: false, lastQuarantineToast: quarantineFailureToast('move', moveRes) });
+        return;
+      }
+      const movedList: string[] = moveRes.done.filter((id) => id !== effectiveKeepId);
+      if (movedList.length === 0) {
+        set({ quarantineMoving: false });
+        return;
+      }
+      const moveNote = quarantineResultNote('move', moveRes);
+
+      const movedSet = new Set<string>(movedList);
+      const newlyKeptIds = new Set<string>([effectiveKeepId]);
+      const savedBytes = photos
+        .filter((p) => movedSet.has(p.id))
+        .reduce((acc, p) => acc + p.size, 0);
+
+      set((state) => {
+        const wasFreeTrialFirstUse = !state.freeTrialUsed && state.activePricingPlan === 'free_trial';
+        return buildQuarantineMoveStatePatch({
+          state,
+          movedSet,
+          newlyKeptIds,
+          savedBytes,
+          demo: moveRes.demo,
+          actionLabel: '연사 바둑판 베스트 컷 Pick 정리',
+          nonIosToast: `${wasFreeTrialFirstUse ? '🎁 첫 정리 완료! ' : '✨ '}베스트 원본 1장을 남기고 나머지 ${movedSet.size}장을 ${moveNote}`,
+        });
+      });
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('ghosti_photo_moved_to_quarantine'));
+      }
+      if (!zCoreBridge.isConnected) {
+        scheduleSaveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
+      }
+      return;
+    }
+
     const updatedGroups = duplicateGroups.map((g) =>
       g.groupId === groupId ? { ...g, bestPhotoId: effectiveKeepId } : g
     );
@@ -1752,43 +1815,8 @@ export const createAssistantOnboardingSlice: StateCreator<
       duplicateGroups: updatedGroups,
       photos: updatedPhotos,
       selectedTrashIds: nextTrashIds,
+      lastQuarantineToast: `🛡️ 선택한 사진을 [보존할 원본 1장]으로 변경했습니다. (나머지 ${redundantIds.length}장이 정리 대상으로 전환됨)`,
     });
-
-    if (quarantineRestImmediately && redundantIds.length > 0) {
-      if (!ensureLoginAndZCoreReady('연사 베스트 컷 정리')) return;
-      set({ quarantineMoving: true });
-      const moveRes = await requestQuarantineOp('move', redundantIds);
-      if (moveRes.done.length === 0) {
-        set({ quarantineMoving: false, lastQuarantineToast: quarantineFailureToast('move', moveRes) });
-        return;
-      }
-      const movedList: string[] = moveRes.done;
-      const moveNote = quarantineResultNote('move', moveRes);
-
-      const movedSet = new Set<string>(movedList);
-      const savedBytes = photos
-        .filter((p) => movedSet.has(p.id))
-        .reduce((acc, p) => acc + p.size, 0);
-
-      set((state) => {
-        const wasFreeTrialFirstUse = !state.freeTrialUsed && state.activePricingPlan === 'free_trial';
-        return buildQuarantineMoveStatePatch({
-          state,
-          movedSet,
-          savedBytes,
-          demo: moveRes.demo,
-          actionLabel: '연사 바둑판 베스트 컷 Pick 정리',
-          nonIosToast: `${wasFreeTrialFirstUse ? '🎁 첫 정리 완료! ' : '✨ '}베스트 원본 1장을 남기고 나머지 ${movedSet.size}장을 ${moveNote}`,
-        });
-      });
-      if (!zCoreBridge.isConnected) {
-        void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
-      }
-    } else {
-      set({
-        lastQuarantineToast: `🛡️ 선택한 사진을 [보존할 원본 1장]으로 변경했습니다. (나머지 ${redundantIds.length}장이 정리 대상으로 전환됨)`,
-      });
-    }
   },
 
   pickBestInBurstPhotos: async (burstPhotos: PhotoItem[], keepPhotoId: string) => {
@@ -1796,15 +1824,20 @@ export const createAssistantOnboardingSlice: StateCreator<
     if (redundantIds.length === 0) return;
 
     set({ quarantineMoving: true });
-    const moveRes = await requestQuarantineOp('move', redundantIds);
+    const moveRes = await requestQuarantineOp('move', redundantIds, [keepPhotoId]);
     if (moveRes.done.length === 0) {
       set({ quarantineMoving: false, lastQuarantineToast: quarantineFailureToast('move', moveRes) });
       return;
     }
-    const movedList: string[] = moveRes.done;
+    const movedList: string[] = moveRes.done.filter((id) => id !== keepPhotoId);
+    if (movedList.length === 0) {
+      set({ quarantineMoving: false });
+      return;
+    }
     const moveNote = quarantineResultNote('move', moveRes);
 
     const movedSet = new Set<string>(movedList);
+    const newlyKeptIds = new Set<string>([keepPhotoId]);
     const savedBytes = burstPhotos
       .filter((p) => movedSet.has(p.id))
       .reduce((acc, p) => acc + p.size, 0);
@@ -1813,6 +1846,7 @@ export const createAssistantOnboardingSlice: StateCreator<
       buildQuarantineMoveStatePatch({
         state,
         movedSet,
+        newlyKeptIds,
         savedBytes,
         demo: moveRes.demo,
         actionLabel: '검색 결과 연사 베스트 컷 Pick',
@@ -1820,8 +1854,11 @@ export const createAssistantOnboardingSlice: StateCreator<
         clearSelectedBurstModal: true,
       })
     );
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ghosti_photo_moved_to_quarantine'));
+    }
     if (!zCoreBridge.isConnected) {
-      void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
+      scheduleSaveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
     }
   },
 
@@ -1906,8 +1943,11 @@ export const createAssistantOnboardingSlice: StateCreator<
         nonIosToast: `🗑️ 사진 ${movedSet.size}장을 ${moveNote}`,
       })
     );
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('ghosti_photo_moved_to_quarantine'));
+    }
     if (!zCoreBridge.isConnected) {
-      void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
+      scheduleSaveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
     }
   },
 
@@ -1942,15 +1982,26 @@ export const createAssistantOnboardingSlice: StateCreator<
 
     set((state) => {
       const restoredIdsAfterReplace = new Set<string>();
+      const restoredOriginGroupIds = new Set<string>();
       let anyMatched = false;
-      const unquarantinedPhotos = state.photos.map((p) => {
-        const hit =
-          restoredSet.has(p.name) ||
-          restoredSet.has(p.id) ||
-          restoredLowerSet.has((p.name || '').toLowerCase());
-        if (!hit) return p;
+      const firstPassPhotos = state.photos.map((p) => {
+        const isNativeAsset = String(p.id || '').startsWith('ms_img_') || String(p.id || '').includes('/');
+        const hit = isNativeAsset
+          ? restoredSet.has(p.id)
+          : restoredSet.has(p.id) ||
+            restoredSet.has(p.name) ||
+            restoredLowerSet.has((p.name || '').toLowerCase());
+        if (!hit || !p.quarantined) return p;
         anyMatched = true;
-        const newId = replacedMap[p.id] || p.id;
+        const originGroupId = p.lastDuplicateGroupId || p.duplicateGroupId;
+        if (originGroupId) {
+          restoredOriginGroupIds.add(originGroupId);
+        }
+        const candidateNewId = replacedMap[p.id];
+        const newId =
+          candidateNewId && !state.photos.some((other) => other.id === candidateNewId && other.id !== p.id)
+            ? candidateNewId
+            : p.id;
         if (newId !== p.id) {
           migrateOpticalSigPhotoId(p.id, newId);
         }
@@ -1967,6 +2018,7 @@ export const createAssistantOnboardingSlice: StateCreator<
           ...p,
           id: newId,
           quarantined: false,
+          userKeptAsBest: false,
           thumbUrl: isZCorePhoto
             ? getZCoreUrl(`/__photos/file?p=${encodeURIComponent(p.name)}&thumb=1&rev=${revTs}`)
             : p.thumbUrl,
@@ -1981,6 +2033,21 @@ export const createAssistantOnboardingSlice: StateCreator<
           ? { quarantineMoving: false, lastQuarantineToast: customToast }
           : { quarantineMoving: false };
       }
+
+      // [원래 세트 정밀 재결합]: 방금 복원된 사진과 같은 세트였던 보존 사진(originGroupId 일치)만 userKeptAsBest 잠금을 해제해
+      // 원래 베스트 컷(isBestInDuplicateGroup=true) 그대로 재결합시키고, 이미 정리가 끝난 다른 세트의 보존 사진은 userKeptAsBest=true를 그대로 유지합니다!
+      const unquarantinedPhotos = firstPassPhotos.map((p) => {
+        if (p.quarantined || restoredIdsAfterReplace.has(p.id)) return p;
+        const gId = p.lastDuplicateGroupId || p.duplicateGroupId;
+        if (gId && restoredOriginGroupIds.has(gId)) {
+          return {
+            ...p,
+            userKeptAsBest: false,
+            isBestInDuplicateGroup: true,
+          };
+        }
+        return p;
+      });
 
       const { updatedPhotos, duplicateGroups: nextDupGroups } =
         clusterPhotosIntoDuplicateGroups(unquarantinedPhotos);
@@ -2042,7 +2109,7 @@ export const createAssistantOnboardingSlice: StateCreator<
       window.dispatchEvent(new CustomEvent('ghosti_photo_restored_from_quarantine'));
     }
     if (!zCoreBridge.isConnected) {
-      void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
+      scheduleSaveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
     }
   },
 

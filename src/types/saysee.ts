@@ -420,8 +420,12 @@ export interface PhotoItem {
   trashConfidence?: number;
   /** 연사/중복 쌍둥이 그룹 ID (Perceptual dHash 클러스터) */
   duplicateGroupId?: string;
+  /** 정리 전 소속되어 있던 마지막 중복·연사 그룹 ID ([복원] 시 원래 세트로 정확히 재결합하기 위한 원장) */
+  lastDuplicateGroupId?: string;
   /** 연사/중복 그룹에서 [원본 1장 안전하게 보존됨]으로 지정된 대표 원본인지 여부 */
   isBestInDuplicateGroup?: boolean;
+  /** 유저가 직접 [베스트 1장만 남기고 정리]를 승인해 보존 확정된 사진 여부 (인접 사진과의 연쇄 재결합·버림 반전 영구 차단) */
+  userKeptAsBest?: boolean;
   /** 8방향 3x3 그리드 라플라시안 최고 선명도 점수 */
   opticalSharpness?: number;
   /** 64-bit Perceptual dHash (16진수) */
@@ -448,6 +452,12 @@ export interface PhotoItem {
   sharedSupabasePhotoId?: string;
   /** [방식 A] 하트 반응 수 */
   sharedHeartCount?: number;
+  /** [옛날 종이 사진 · 연도·장소 스티커(Chip) 1초 부착] 사진에 부착된 스티커 라벨 목록 */
+  appliedStickChips?: string[];
+  /** [느슨한 타임라인] 연도·계절 스티커 부착 시 자동 매핑되는 타임라인 그룹 (예: '1989년 봄') */
+  looseTimelineGroup?: string;
+  /** [공유방 24시간 내 본인 삭제] 공유방 휴지통으로 이동된 시각 ISO (1초 복원 지원) */
+  sharedDeletedAt?: string;
   /** [방식 A] 댓글 목록 (무가입 프리뷰 읽기 공개) */
   sharedComments?: Array<{
     id: string;
