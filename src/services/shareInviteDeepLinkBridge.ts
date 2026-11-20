@@ -265,6 +265,50 @@ export function clearStoredInviteSession(): void {
   }
 }
 
+/**
+ * 로그인된 회원이 초대 링크(?invite=...&inviteToken=...)를 통해 정식 멤버(ghosti_lounge_members)로 편입된 직후,
+ * 브라우저 주소창에 일회용 초대 파라미터가 그대로 남아 있어 '일반 탭 주소 복사'와 '전용 초대 링크 복사'가 혼동되거나
+ * 동일 브라우저에서 타 계정 전환 시 의도치 않게 자동 합류되는 현상을 원천 차단합니다.
+ * (※ 비로그인 게스트 프리뷰 중에는 F5 새로고침 유지를 위해 호출하지 않습니다.)
+ */
+export function stripConsumedInviteParamsFromLoggedInUrl(): void {
+  if (typeof window === 'undefined' || !hasAuthenticatedHubAccountSession()) return;
+  try {
+    sessionStorage.removeItem(INVITE_SESSION_KEY);
+    sessionStorage.removeItem(INVITE_TOKEN_KEY);
+    sessionStorage.removeItem(LEGACY_INVITE_HOST_KEY);
+    sessionStorage.removeItem(LEGACY_INVITE_TITLE_KEY);
+
+    const params = new URLSearchParams(window.location.search);
+    const hadInviteParams =
+      params.has('invite') ||
+      params.has('inviteToken') ||
+      params.has('token') ||
+      params.has('host') ||
+      params.has('nick') ||
+      params.get('preview') === 'guest';
+    if (!hadInviteParams) return;
+
+    params.delete('invite');
+    params.delete('inviteToken');
+    const rawTok = (params.get('token') || '').trim();
+    if (rawTok && !(rawTok.startsWith('eyJ') && rawTok.split('.').length === 3)) {
+      params.delete('token');
+    }
+    params.delete('host');
+    params.delete('title');
+    params.delete('nick');
+    if (params.get('preview') === 'guest') {
+      params.delete('preview');
+    }
+    const qs = params.toString();
+    const cleanUrl = `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash || ''}`;
+    window.history.replaceState(window.history.state || {}, '', cleanUrl);
+  } catch {
+    /* ignore history error */
+  }
+}
+
 export function readActiveInviteToken(): string {
   if (typeof window === 'undefined') return '';
   try {

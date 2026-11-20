@@ -1169,9 +1169,51 @@ export async function handleAuthedWorkAndDeviceAction({
           { headers: srvHeaders(serviceKey) }
         );
         const matchRooms = matchRoomsRes.ok ? await matchRoomsRes.json().catch(() => []) : [];
+        const matchedJoinedIds = [];
         if (Array.isArray(matchRooms)) {
           for (const mr of matchRooms) {
-            if (mr?.room_id) accessibleSet.add(String(mr.room_id));
+            if (mr?.room_id) {
+              const rStr = String(mr.room_id);
+              accessibleSet.add(rStr);
+              matchedJoinedIds.push(rStr);
+            }
+          }
+        }
+        // 과거 reseed 버그로 초대 합류 방(matchedJoinedIds)의 원본 사진이 내 방(myRoomId)에 내 이름으로 중복 복제된 행이 있으면 서버에서 자동 청소
+        if (matchedJoinedIds.length > 0) {
+          const allCheckIds = [myRoomId, ...matchedJoinedIds]
+            .map((id) => `"${id.replace(/"/g, '')}"`)
+            .join(',');
+          const dupCheckRes = await fetch(
+            `${supabaseUrl}/rest/v1/ghosti_room_shared_photos?room_id=in.(${encodeURIComponent(
+              allCheckIds
+            )})&select=id,room_id,thumb_webp_url,created_at&order=created_at.asc&limit=300`,
+            { headers: srvHeaders(serviceKey) }
+          );
+          const dupRows = dupCheckRes.ok ? await dupCheckRes.json().catch(() => []) : [];
+          if (Array.isArray(dupRows) && dupRows.length > 1) {
+            const joinedThumbSigs = new Set();
+            for (const r of dupRows) {
+              if (r?.room_id && String(r.room_id) !== myRoomId && r?.thumb_webp_url) {
+                const th = String(r.thumb_webp_url);
+                joinedThumbSigs.add(`${th.slice(0, 180)}:${th.length}`);
+              }
+            }
+            if (joinedThumbSigs.size > 0) {
+              for (const r of dupRows) {
+                if (r?.id && String(r.room_id) === myRoomId && r?.thumb_webp_url) {
+                  const th = String(r.thumb_webp_url);
+                  if (joinedThumbSigs.has(`${th.slice(0, 180)}:${th.length}`)) {
+                    await fetch(
+                      `${supabaseUrl}/rest/v1/ghosti_room_shared_photos?id=eq.${encodeURIComponent(
+                        String(r.id)
+                      )}`,
+                      { method: 'DELETE', headers: srvHeaders(serviceKey) }
+                    ).catch(() => {});
+                  }
+                }
+              }
+            }
           }
         }
       }

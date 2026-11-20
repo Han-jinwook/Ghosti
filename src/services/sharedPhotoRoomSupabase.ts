@@ -13,7 +13,10 @@ import {
   removeMemberLocalRoomPhotoEverywhere,
   upsertMemberLocalRoomPhotos,
 } from './sharedRoomLocalVault';
-import { saveVerifiedInviteRoomMeta } from './shareInviteDeepLinkBridge';
+import {
+  saveVerifiedInviteRoomMeta,
+  stripConsumedInviteParamsFromLoggedInUrl,
+} from './shareInviteDeepLinkBridge';
 import { getZCoreUrl } from './zCoreBridge';
 
 /**
@@ -582,6 +585,7 @@ export async function fetchScopedSharedRoomPhotos(opts: {
 
       if (isLoggedIn) {
         await acceptRoomInviteAsLoggedInMember(cleanInviteToken, opts.nickname);
+        stripConsumedInviteParamsFromLoggedInUrl();
       }
 
       if (matchesCurrentView) {
@@ -763,12 +767,41 @@ export async function fetchScopedSharedRoomPhotos(opts: {
       currentEmail,
       accessibleRoomIds
     );
+    // 다중 접근 방(내 방 + 초대 합류 방) 병합 시, 과거 reseed 버그로 동일 썸네일이 내 방 이름으로 중복 복제된 항목은
+    // 최초 업로드 원본(가장 오래된 createdAt / 초대 원방) 1건만 유지하고 복제본은 로컬 금고에서도 자동 정리합니다.
+    const sortedOldestFirst = [...mergedFromLocalVault].sort((a, b) => {
+      const aJoinedPriority = a.sharedRoomId && a.sharedRoomId !== ensured.roomId ? 0 : 1;
+      const bJoinedPriority = b.sharedRoomId && b.sharedRoomId !== ensured.roomId ? 0 : 1;
+      if (aJoinedPriority !== bJoinedPriority) return aJoinedPriority - bJoinedPriority;
+      return String(a.date || '').localeCompare(String(b.date || ''));
+    });
+    const seenVisualSigs = new Set<string>();
+    const duplicateCloneIdsToPurge: string[] = [];
+    const keptIds = new Set<string>();
+    for (const item of sortedOldestFirst) {
+      const rawThumb = String(item.thumbUrl || '');
+      const sig = rawThumb ? `${rawThumb.slice(0, 180)}:${rawThumb.length}` : item.id;
+      if (rawThumb && seenVisualSigs.has(sig)) {
+        if (item.sharedRoomId && ensured.roomId && item.sharedRoomId === ensured.roomId) {
+          duplicateCloneIdsToPurge.push(item.id);
+        }
+        continue;
+      }
+      seenVisualSigs.add(sig);
+      keptIds.add(item.id);
+    }
+    if (duplicateCloneIdsToPurge.length > 0) {
+      for (const dupId of duplicateCloneIdsToPurge) {
+        void removeMemberLocalRoomPhotoEverywhere(currentEmail, dupId);
+      }
+    }
+    const dedupedMergedPhotos = mergedFromLocalVault.filter((p) => keptIds.has(p.id));
     return {
       roomId: matchedInvitedRoomMeta?.roomId || ensured.roomId || accessibleRoomIds[0],
       inviteToken: cleanInviteToken || ensured.inviteToken || null,
       hostNickname: matchedInvitedRoomMeta?.hostNickname,
       roomTitle: matchedInvitedRoomMeta?.roomTitle,
-      photos: mergedFromLocalVault,
+      photos: dedupedMergedPhotos,
     };
   }
 
@@ -790,6 +823,7 @@ export async function uploadPhotosToSupabaseSharedRoom(opts: {
   uploaderEmail: string;
   uploaderNickname: string;
   photos: PhotoItem[];
+  preserveOriginalUploader?: boolean;
 }): Promise<{ ok: boolean; uploadedPhotos: PhotoItem[]; error?: string }> {
   if (!hasAuthenticatedHubAccountSession()) {
     return { ok: false, uploadedPhotos: [], error: 'AUTH_REQUIRED' };
@@ -814,6 +848,10 @@ export async function uploadPhotosToSupabaseSharedRoom(opts: {
   for (const p of opts.photos) {
     const compressed = await compressPhotoTo13KbWebpDataUrl(p);
     if (!compressed.thumbWebpUrl) continue;
+    const itemUploaderNick =
+      opts.preserveOriginalUploader && (p.uploaderLabel || '').trim()
+        ? String(p.uploaderLabel).trim()
+        : cleanNick;
     const personNames = (p.tags || [])
       .filter((t) => t.startsWith('#') && !t.includes('·') && t.length <= 12)
       .map((t) => t.slice(1));
@@ -828,7 +866,7 @@ export async function uploadPhotosToSupabaseSharedRoom(opts: {
       room_id: opts.roomId,
       uploader_user_id: validUuid,
       uploader_email: cleanEmail,
-      uploader_nickname: cleanNick,
+      uploader_nickname: itemUploaderNick,
       dhash_64: p.dhash || null,
       thumb_webp_url: compressed.thumbWebpUrl,
       caption_ko: p.captionKo || '',
@@ -913,8 +951,12 @@ export async function reseedRoomPhotosForInvite(opts: {
     return { ok: false, reseededCount: 0 };
   }
 
+  // 오직 이 방(opts.roomId)의 로컬 영구 금고에 정식 보관된 사진만 재장전 대상으로 한정!
+  // (타인의 초대 합류 방 사진이 섞인 화면 fallbackPhotos를 끌어다 내 방 이름으로 자동 중복 업로드하는 현상 원천 차단)
   const vaultPhotos = await loadMemberLocalRoomPhotos(cleanEmail, opts.roomId);
-  const candidatePool = [...vaultPhotos, ...(opts.fallbackPhotos || [])];
+  const candidatePool = vaultPhotos.filter(
+    (cand) => !cand.sharedRoomId || cand.sharedRoomId === opts.roomId
+  );
   if (candidatePool.length === 0) {
     return { ok: true, reseededCount: 0 };
   }
@@ -968,6 +1010,7 @@ export async function reseedRoomPhotosForInvite(opts: {
     uploaderEmail: cleanEmail,
     uploaderNickname: opts.uploaderNickname || '방장',
     photos: missingPhotos,
+    preserveOriginalUploader: true,
   });
 
   return {

@@ -22,6 +22,7 @@ import {
   persistInviteContextMeta,
   readActiveInviteToken,
   resolveDefaultRoomTitle,
+  stripConsumedInviteParamsFromLoggedInUrl,
 } from '../../services/shareInviteDeepLinkBridge';
 import {
   acceptRoomInviteAsLoggedInMember,
@@ -1283,6 +1284,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           const nick =
             parsed.nicknameHint || resolveAccountScopedNickname(authedEmail, '멤버');
           await acceptRoomInviteAsLoggedInMember(parsed.inviteToken, nick);
+          stripConsumedInviteParamsFromLoggedInUrl();
         }
       }
     }

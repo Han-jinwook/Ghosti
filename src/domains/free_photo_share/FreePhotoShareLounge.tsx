@@ -73,21 +73,14 @@ async function issueAuthenticatedInviteHttpsUrl(opts: {
     return null;
   }
   const verifiedHostNick = ensured.masterNickname || hostNick;
-  // 2주(14일) 경과로 서버 마중물 버퍼가 비워진 뒤 재초대할 때도 1초 만에 로컬 금고(IndexedDB) 썸네일을 자동 재장전(Re-Seed)
+  // 2주(14일) 경과로 서버 마중물 버퍼가 비워진 뒤 재초대할 때도 1초 만에 해당 방(ensured.roomId) 전용 로컬 금고(IndexedDB) 썸네일만 자동 재장전(Re-Seed)
+  // (타인의 초대 합류 방 사진이 포함된 화면 코퍼스는 절대 재장전 입력으로 넘기지 않음)
   if (ensured.roomId) {
-    const fallbackRoomPhotos = resolveLoungePhotoCorpus({
-      activeLoungeType: opts.loungeType,
-      activeFamilyRoom: opts.familyRoom,
-      photos: st.photos,
-      sharedRoomHostPhotos: st.sharedRoomHostPhotos,
-      sharedRoomAddedPhotos: st.sharedRoomAddedPhotos,
-    });
     const reseedJob = reseedRoomPhotosForInvite({
       roomId: ensured.roomId,
       loungeType: opts.loungeType,
       familyRoom: opts.familyRoom,
       uploaderNickname: verifiedHostNick,
-      fallbackPhotos: fallbackRoomPhotos,
     });
     await Promise.race([
       reseedJob,

@@ -130,6 +130,7 @@ const GhostiHubGlobalModals: React.FC = () => {
   const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
   const [withdrawingApp, setWithdrawingApp] = useState(false);
   const wasLoggedInRef = useRef(false);
+  const lastAuthedEmailRef = useRef('');
 
   // 허브 인증/잔액 변화 시 Ghosti 내부 스토어(merlinAuth) 및 단독 Supabase(`public.users.id = family_users.id`) 자동 동기화
   useEffect(() => {
@@ -137,17 +138,37 @@ const GhostiHubGlobalModals: React.FC = () => {
       typeof window !== 'undefined' ? localStorage.getItem('merlin_session_token') || '' : '';
 
     if (isLoggedIn && user?.id && user?.email) {
+      const cleanUserEmail = user.email.trim().toLowerCase();
+      const didSwitchAccountDirectly = Boolean(
+        lastAuthedEmailRef.current && lastAuthedEmailRef.current !== cleanUserEmail
+      );
+      lastAuthedEmailRef.current = cleanUserEmail;
+
+      if (didSwitchAccountDirectly) {
+        clearCachedSharedRoomTokens();
+        if (!readActiveInviteToken()) {
+          clearStoredInviteSession();
+        }
+      }
+
       let restoredMobilePaired = false;
       if (typeof window !== 'undefined') {
         try {
           restoredMobilePaired =
-            localStorage.getItem(`ghosti_mobile_paired_${user.email.trim().toLowerCase()}`) === '1';
+            localStorage.getItem(`ghosti_mobile_paired_${cleanUserEmail}`) === '1';
         } catch {
           restoredMobilePaired = false;
         }
       }
       useSaySeeStore.setState((state) => ({
         pcAgentPairedMobile: restoredMobilePaired,
+        ...(didSwitchAccountDirectly
+          ? {
+              sharedRoomAddedPhotos: [],
+              sharedRoomHostPhotos: [],
+              searchResults: [],
+            }
+          : {}),
         merlinAuth: {
           ...state.merlinAuth,
           token,
