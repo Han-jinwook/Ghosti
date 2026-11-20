@@ -117,6 +117,19 @@ export interface GhostiMobileCarePluginInterface {
   }): Promise<SystemPhotoTrashResult>;
   consumePendingDeepLink(): Promise<{ ok: boolean; deepLinkUrl: string; source?: string }>;
   setNativeThemeMode(options: { dark: boolean }): Promise<{ ok: boolean }>;
+  readClipboardText(options?: { force?: boolean; baselineOnly?: boolean }): Promise<{
+    ok: boolean;
+    text?: string;
+    clipHash?: string;
+    isSelfInjected?: boolean;
+    unchanged?: boolean;
+    changeCount?: number;
+  }>;
+  writeClipboardText(options: { text: string }): Promise<{
+    ok: boolean;
+    clipHash?: string;
+    changeCount?: number;
+  }>;
 }
 
 const GhostiMobileCareNative = registerPlugin<GhostiMobileCarePluginInterface>('GhostiMobileCare');
@@ -648,4 +661,53 @@ export async function consumeNativePendingDeepLink(): Promise<{
     /* 구버전 네이티브 래퍼 호환 폴백 */
   }
   return { ok: false, deepLinkUrl: '' };
+}
+
+export async function readNativeMobileClipboardText(
+  force = false,
+  baselineOnly = false
+): Promise<{
+  supported: boolean;
+  ok: boolean;
+  text: string;
+  clipHash?: string;
+  isSelfInjected?: boolean;
+  unchanged?: boolean;
+}> {
+  if (!isCapacitorNativeMobileRuntime()) {
+    return { supported: false, ok: false, text: '' };
+  }
+  try {
+    const res = await GhostiMobileCareNative.readClipboardText({ force, baselineOnly });
+    if (res && typeof res.ok === 'boolean') {
+      return {
+        supported: true,
+        ok: res.ok,
+        text: typeof res.text === 'string' ? res.text.trim() : '',
+        clipHash: typeof res.clipHash === 'string' ? res.clipHash : undefined,
+        isSelfInjected: Boolean(res.isSelfInjected),
+        unchanged: Boolean(res.unchanged),
+      };
+    }
+  } catch {
+    /* 구버전 네이티브 래퍼(v1.0.54 이하) 미지원 시 웹 폴백으로 자연 전환 */
+  }
+  return { supported: false, ok: false, text: '' };
+}
+
+export async function writeNativeMobileClipboardText(text: string): Promise<{
+  supported: boolean;
+  ok: boolean;
+}> {
+  const clean = (text || '').trim();
+  if (!clean || !isCapacitorNativeMobileRuntime()) {
+    return { supported: false, ok: false };
+  }
+  try {
+    const res = await GhostiMobileCareNative.writeClipboardText({ text: clean });
+    return { supported: true, ok: Boolean(res?.ok) };
+  } catch {
+    /* 구버전 네이티브 래퍼 미지원 시 웹 폴백으로 자연 전환 */
+  }
+  return { supported: false, ok: false };
 }

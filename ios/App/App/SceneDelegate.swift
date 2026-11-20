@@ -178,8 +178,95 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "openAppPermissionSettings", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "scanInstalledBloatCleaners", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "consumePendingDeepLink", returnType: CAPPluginReturnPromise),
-        CAPPluginMethod(name: "setNativeThemeMode", returnType: CAPPluginReturnPromise)
+        CAPPluginMethod(name: "setNativeThemeMode", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "readClipboardText", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "writeClipboardText", returnType: CAPPluginReturnPromise)
     ]
+
+    private var lastInjectedChangeCount: Int = -1
+    private var lastObservedChangeCount: Int = -1
+
+    @objc func readClipboardText(_ call: CAPPluginCall) {
+        let force = call.getBool("force") ?? false
+        let baselineOnly = call.getBool("baselineOnly") ?? false
+        DispatchQueue.main.async { [weak self] in
+            guard let self = self else {
+                call.resolve(["ok": false, "text": "", "isSelfInjected": false, "unchanged": true])
+                return
+            }
+            let pb = UIPasteboard.general
+            let cc = pb.changeCount
+            if baselineOnly && !force {
+                self.lastObservedChangeCount = cc
+                call.resolve([
+                    "ok": true,
+                    "text": "",
+                    "isSelfInjected": false,
+                    "unchanged": true,
+                    "changeCount": cc
+                ])
+                return
+            }
+            if !force && self.lastInjectedChangeCount >= 0 && cc == self.lastInjectedChangeCount {
+                call.resolve([
+                    "ok": true,
+                    "text": "",
+                    "isSelfInjected": true,
+                    "unchanged": true,
+                    "changeCount": cc
+                ])
+                return
+            }
+            if !pb.hasStrings {
+                self.lastObservedChangeCount = cc
+                call.resolve([
+                    "ok": true,
+                    "text": "",
+                    "isSelfInjected": false,
+                    "unchanged": true,
+                    "changeCount": cc
+                ])
+                return
+            }
+            if !force && self.lastObservedChangeCount >= 0 && cc == self.lastObservedChangeCount {
+                call.resolve([
+                    "ok": true,
+                    "text": "",
+                    "isSelfInjected": false,
+                    "unchanged": true,
+                    "changeCount": cc
+                ])
+                return
+            }
+            let raw = (pb.string ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+            let limited = raw.count > 32000 ? String(raw.prefix(32000)) : raw
+            self.lastObservedChangeCount = cc
+            call.resolve([
+                "ok": true,
+                "text": limited,
+                "isSelfInjected": (self.lastInjectedChangeCount >= 0 && cc == self.lastInjectedChangeCount),
+                "unchanged": false,
+                "changeCount": cc
+            ])
+        }
+    }
+
+    @objc func writeClipboardText(_ call: CAPPluginCall) {
+        let raw = (call.getString("text") ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !raw.isEmpty else {
+            call.resolve(["ok": false])
+            return
+        }
+        let limited = raw.count > 32000 ? String(raw.prefix(32000)) : raw
+        DispatchQueue.main.async { [weak self] in
+            let pb = UIPasteboard.general
+            pb.string = limited
+            let cc = pb.changeCount
+            self?.lastInjectedChangeCount = cc
+            self?.lastObservedChangeCount = cc
+            call.resolve(["ok": true, "changeCount": cc])
+        }
+    }
 
     @objc func setNativeThemeMode(_ call: CAPPluginCall) {
         let isDark = call.getBool("dark") ?? false

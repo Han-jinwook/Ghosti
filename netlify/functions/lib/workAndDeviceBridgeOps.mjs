@@ -24,25 +24,35 @@ function sha256Hex(text) {
   return crypto.createHash('sha256').update(String(text)).digest('hex');
 }
 
-async function ensureVaultBuckets(supabaseUrl, serviceKey) {
-  if (bucketsEnsured) return;
-  await Promise.all(
-    [WORK_BUCKET, DEVICE_BUCKET].map((b) =>
-      fetch(`${supabaseUrl}/storage/v1/bucket`, {
-        method: 'POST',
-        headers: srvHeaders(serviceKey, { 'Content-Type': 'application/json' }),
-        body: JSON.stringify({ id: b, name: b, public: false }),
-      }).catch(() => {})
-    )
+async function ensureVaultBuckets(supabaseUrl, serviceKey, force = false) {
+  if (bucketsEnsured && !force) return;
+  const results = await Promise.all(
+    [WORK_BUCKET, DEVICE_BUCKET].map(async (b) => {
+      try {
+        const res = await fetch(`${supabaseUrl}/storage/v1/bucket`, {
+          method: 'POST',
+          headers: srvHeaders(serviceKey, { 'Content-Type': 'application/json' }),
+          body: JSON.stringify({ id: b, name: b, public: false }),
+        });
+        return res.ok || res.status === 409;
+      } catch {
+        return false;
+      }
+    })
   );
-  bucketsEnsured = true;
+  if (results.every(Boolean)) {
+    bucketsEnsured = true;
+  }
 }
 
 async function readStorageJson(supabaseUrl, serviceKey, bucket, objectPath, fallback) {
   try {
     const res = await fetch(`${supabaseUrl}/storage/v1/object/${bucket}/${objectPath}`, {
       method: 'GET',
-      headers: srvHeaders(serviceKey),
+      cache: 'no-store',
+      headers: srvHeaders(serviceKey, {
+        'Cache-Control': 'no-cache, no-store, max-age=0',
+      }),
     });
     if (!res.ok) return fallback;
     const data = await res.json();
@@ -53,16 +63,31 @@ async function readStorageJson(supabaseUrl, serviceKey, bucket, objectPath, fall
 }
 
 async function writeStorageJson(supabaseUrl, serviceKey, bucket, objectPath, payload) {
-  await ensureVaultBuckets(supabaseUrl, serviceKey);
-  const res = await fetch(`${supabaseUrl}/storage/v1/object/${bucket}/${objectPath}`, {
-    method: 'POST',
-    headers: srvHeaders(serviceKey, {
-      'Content-Type': 'application/json; charset=utf-8',
-      'x-upsert': 'true',
-    }),
-    body: JSON.stringify(payload),
-  });
-  return res.ok;
+  await ensureVaultBuckets(supabaseUrl, serviceKey, false);
+  const bodyStr = JSON.stringify(payload);
+  const doUpload = async (method) =>
+    fetch(`${supabaseUrl}/storage/v1/object/${bucket}/${objectPath}`, {
+      method,
+      headers: srvHeaders(serviceKey, {
+        'Content-Type': 'application/json',
+        'x-upsert': 'true',
+        'cache-control': '0',
+      }),
+      body: bodyStr,
+    });
+
+  try {
+    let res = await doUpload('POST');
+    if (res.ok) return true;
+    // 버킷 미생성 또는 중복 충돌 시 버킷 강제 보장 후 PUT/POST 1회 재시도
+    await ensureVaultBuckets(supabaseUrl, serviceKey, true);
+    res = await doUpload(res.status === 409 || res.status === 400 ? 'PUT' : 'POST');
+    if (res.ok) return true;
+    res = await doUpload('POST');
+    return res.ok;
+  } catch {
+    return false;
+  }
 }
 
 async function createSignedUploadUrl(supabaseUrl, serviceKey, bucket, objectPath) {
@@ -921,14 +946,28 @@ export async function handleAuthedWorkAndDeviceAction({
       createdAt: new Date(nowMs).toISOString(),
     });
     const trimmed = filtered.slice(0, 15);
-    await writeStorageJson(
+    const saved = await writeStorageJson(
       supabaseUrl,
       serviceKey,
       DEVICE_BUCKET,
       `${emailHash}/clipboard_mailbox_v1.json`,
       { updatedAt: new Date(nowMs).toISOString(), items: trimmed }
     );
-    return { status: 200, body: { ok: true, count: trimmed.length } };
+    if (!saved) {
+      return {
+        status: 502,
+        body: { ok: false, reason: 'CLIPBOARD_MAILBOX_WRITE_FAILED' },
+      };
+    }
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        count: trimmed.length,
+        canonicalUserId: userId,
+        canonicalEmail: email,
+      },
+    };
   }
 
   if (action === 'device_pull_e2ee_clips') {
@@ -944,7 +983,15 @@ export async function handleAuthedWorkAndDeviceAction({
     const items = (Array.isArray(mailbox.items) ? mailbox.items : []).filter(
       (it) => it && (Date.parse(it.createdAt || '') || 0) >= cutoffMs
     );
-    return { status: 200, body: { ok: true, items } };
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        items,
+        canonicalUserId: userId,
+        canonicalEmail: email,
+      },
+    };
   }
 
   if (action === 'device_sync_shadow_catalog') {

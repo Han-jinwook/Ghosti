@@ -587,6 +587,7 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
       text,
       email: merlinAuth.email,
       userId: merlinAuth.userId,
+      allowBypassEchoGuard: true,
     });
     if (!pushed.ok) return false;
     if (pushed.item) {

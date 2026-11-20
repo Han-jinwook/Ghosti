@@ -1,6 +1,12 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
 import { isMobileOrStoreRuntime } from '../../store/slices/storeSharedRefs';
+import {
+  captureAndPushCurrentOsClipboard,
+  getThisDeviceIdentity,
+  writeTextToLocalOsClipboard,
+} from '../../services/deviceIntegrationService';
+import { zCoreBridge } from '../../services/zCoreBridge';
 
 export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> = ({
   compact = false,
@@ -15,19 +21,25 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
     refreshDeviceIntegrationState,
     pairWithSixDigitCode,
     sendTextToPairedClipboard,
+    setDeviceIntegrationSnapshot,
     setShowProModal,
   } = useSaySeeStore();
 
   const [codeInput, setCodeInput] = useState('');
   const [clipDraft, setClipDraft] = useState('');
   const [sendingClip, setSendingClip] = useState(false);
+  const [pullingLocalClip, setPullingLocalClip] = useState(false);
   const [pairingBusy, setPairingBusy] = useState(false);
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
+  const [zCoreConnected, setZCoreConnected] = useState<boolean>(zCoreBridge.isConnected);
+
+  useEffect(() => zCoreBridge.subscribe((alive) => setZCoreConnected(alive)), []);
 
   const isLoggedIn = Boolean(
     merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest'
   );
   const hidePricingForStore = Boolean(isStoreAppMode) || isMobileOrStoreRuntime();
+  const isMobileDevice = getThisDeviceIdentity().deviceKind === 'mobile';
 
   const openLoginModal = () => {
     if (typeof window !== 'undefined') {
@@ -63,6 +75,37 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
     if (ok) setClipDraft('');
   };
 
+  const handleSendCurrentOsClipboard = async () => {
+    if (!isLoggedIn || !merlinAuth?.email || !merlinAuth?.userId) {
+      openLoginModal();
+      return;
+    }
+    setPullingLocalClip(true);
+    try {
+      const res = await captureAndPushCurrentOsClipboard({
+        email: merlinAuth.email,
+        userId: merlinAuth.userId,
+        isUserGesture: true,
+      });
+      if (res.ok && res.item) {
+        setDeviceIntegrationSnapshot({ incomingClip: res.item });
+        useSaySeeStore.setState({
+          lastQuarantineToast:
+            '📋 방금 복사한 글이 연결된 내 기기로 암호화 전송되었습니다! 바로 붙여넣기 하세요.',
+        });
+      } else {
+        useSaySeeStore.setState({
+          lastQuarantineToast:
+            res.reason === 'EMPTY'
+              ? '📋 현재 기기에 복사된 글자가 없습니다. 먼저 원하는 문장을 복사한 뒤 다시 눌러 주세요.'
+              : '📋 브라우저 클립보드 읽기 권한이 차단되어 있어요. 아래 입력칸에 붙여넣기(Ctrl+V) 후 전송 버튼을 눌러 주세요.',
+        });
+      }
+    } finally {
+      setPullingLocalClip(false);
+    }
+  };
+
   return (
     <div
       className={`rounded-2xl bg-zinc-950/90 border border-primary-container/35 flex flex-col gap-3.5 ${
@@ -78,6 +121,21 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
           <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-mono text-[10.5px] font-bold">
             🔒 AES-256-GCM 암호화 · Echo-Loop 0%
           </span>
+          {isLoggedIn && (
+            <span
+              className={`px-2 py-0.5 rounded-full border text-[10.5px] font-bold ${
+                isMobileDevice || zCoreConnected
+                  ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-200'
+                  : 'bg-amber-500/15 border-amber-400/40 text-amber-200'
+              }`}
+            >
+              {isMobileDevice
+                ? '🟢 폰 복사 복귀 자동 감지'
+                : zCoreConnected
+                ? '🟢 PC Ctrl+C 실시간 감지 중'
+                : '🟡 브라우저 복사 감지 (외부 앱 자동 감지는 PC 엔진 필요)'}
+            </span>
+          )}
           {isLoggedIn && (
             <span className="px-2.5 py-0.5 rounded-full bg-zinc-900 border border-white/15 text-zinc-200 text-[11px] font-bold">
               연결된 내 기기 {Math.max(1, connectedDevices.length)}대
@@ -170,19 +228,31 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
         </form>
       </div>
 
-      {/* 3. 암호화 클립보드 즉시 발송 입력창 */}
-      <form onSubmit={handleSendClip} className="flex items-center gap-2">
+      {/* 3. 암호화 클립보드 즉시 발송 입력창 & 원클릭 OS 클립보드 가져오기 */}
+      <form onSubmit={handleSendClip} className="flex flex-wrap items-center gap-2">
         <input
           type="text"
           value={clipDraft}
           onChange={(e) => setClipDraft(e.target.value)}
           placeholder={
             isLoggedIn
-              ? 'PC에서 Ctrl+C 복사 시 자동 전송됩니다 (여기에 계좌·링크·메모를 적어 바로 보낼 수도 있어요)'
+              ? isMobileDevice
+                ? '폰에서 복사 후 앱 복귀 시 자동 전송됩니다 (여기에 직접 적어 보낼 수도 있어요)'
+                : 'PC에서 Ctrl+C 복사 시 자동 전송됩니다 (여기에 계좌·링크·메모를 적어 바로 보낼 수도 있어요)'
               : '먼저 이메일 로그인 후 기기 간 1초 클립보드를 이용해 보세요'
           }
-          className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-zinc-900 border border-white/15 text-white text-[12.5px] placeholder-zinc-500 focus:outline-none focus:border-primary-container"
+          className="flex-1 min-w-[180px] px-3 py-2 rounded-xl bg-zinc-900 border border-white/15 text-white text-[12.5px] placeholder-zinc-500 focus:outline-none focus:border-primary-container"
         />
+        {isLoggedIn && (
+          <button
+            type="button"
+            disabled={pullingLocalClip}
+            onClick={() => void handleSendCurrentOsClipboard()}
+            className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-cyan-400/40 text-cyan-200 font-label-sm text-[11.5px] font-extrabold shrink-0 cursor-pointer disabled:opacity-50"
+          >
+            {pullingLocalClip ? '읽는 중...' : '📋 복사한 글 바로 보내기'}
+          </button>
+        )}
         <button
           type="submit"
           disabled={sendingClip}
@@ -199,7 +269,7 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
             const isCopied = copiedHash === clip.clipHash;
             return (
               <div
-                key={clip.clipHash}
+                key={`${clip.clipHash}:${clip.createdAt}`}
                 className="px-3 py-2 rounded-xl bg-zinc-900/90 border border-white/10 flex items-center justify-between gap-2.5"
               >
                 <div className="flex flex-col min-w-0 flex-1">
@@ -213,11 +283,7 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
                 <button
                   type="button"
                   onClick={async () => {
-                    try {
-                      await navigator.clipboard?.writeText(clip.text);
-                    } catch {
-                      /* ignore */
-                    }
+                    await writeTextToLocalOsClipboard(clip.text, clip.clipHash);
                     setCopiedHash(clip.clipHash);
                     window.setTimeout(() => setCopiedHash(null), 2000);
                   }}

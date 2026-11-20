@@ -3,6 +3,8 @@ package app.sundreamer.ghosti;
 import android.Manifest;
 import android.app.Activity;
 import android.app.PendingIntent;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.ContentResolver;
 import android.content.ContentUris;
 import android.content.Context;
@@ -51,6 +53,8 @@ import java.io.InputStream;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.FloatBuffer;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 
 import com.android.installreferrer.api.InstallReferrerClient;
 import com.android.installreferrer.api.InstallReferrerStateListener;
@@ -2225,5 +2229,101 @@ public class GhostiMobileCarePlugin extends Plugin {
             ret.put("source", "error");
             call.resolve(ret);
         }
+    }
+
+    private static volatile String sLastInjectedClipHash = "";
+    private static volatile long sLastInjectedClipAtMs = 0L;
+
+    private static String sha256HexUtf8(String input) {
+        if (input == null || input.isEmpty()) return "";
+        try {
+            MessageDigest md = MessageDigest.getInstance("SHA-256");
+            byte[] digest = md.digest(input.getBytes(StandardCharsets.UTF_8));
+            StringBuilder sb = new StringBuilder(digest.length * 2);
+            for (byte b : digest) {
+                sb.append(String.format("%02x", b));
+            }
+            return sb.toString();
+        } catch (Throwable ignored) {
+            return "";
+        }
+    }
+
+    @PluginMethod
+    public void readClipboardText(PluginCall call) {
+        final Context ctx = getContext();
+        if (ctx == null) {
+            JSObject empty = new JSObject();
+            empty.put("ok", false);
+            empty.put("text", "");
+            empty.put("clipHash", "");
+            empty.put("isSelfInjected", false);
+            call.resolve(empty);
+            return;
+        }
+        new Handler(android.os.Looper.getMainLooper()).post(() -> {
+            String text = "";
+            try {
+                ClipboardManager cm = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
+                if (cm != null && cm.hasPrimaryClip()) {
+                    ClipData clip = cm.getPrimaryClip();
+                    if (clip != null && clip.getItemCount() > 0) {
+                        CharSequence seq = clip.getItemAt(0).coerceToText(ctx);
+                        if (seq != null) {
+                            text = seq.toString().trim();
+                            if (text.length() > 32000) {
+                                text = text.substring(0, 32000);
+                            }
+                        }
+                    }
+                }
+            } catch (Throwable ignored) {
+                text = "";
+            }
+            String hash = sha256HexUtf8(text);
+            boolean isSelf = !hash.isEmpty()
+                    && hash.equals(sLastInjectedClipHash)
+                    && (System.currentTimeMillis() - sLastInjectedClipAtMs) < 60_000L;
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("text", text);
+            ret.put("clipHash", hash);
+            ret.put("isSelfInjected", isSelf);
+            call.resolve(ret);
+        });
+    }
+
+    @PluginMethod
+    public void writeClipboardText(PluginCall call) {
+        final Context ctx = getContext();
+        String raw = call.getString("text");
+        final String clean = raw != null ? raw.trim() : "";
+        if (ctx == null || clean.isEmpty()) {
+            JSObject fail = new JSObject();
+            fail.put("ok", false);
+            fail.put("clipHash", "");
+            call.resolve(fail);
+            return;
+        }
+        final String limited = clean.length() > 32000 ? clean.substring(0, 32000) : clean;
+        final String hash = sha256HexUtf8(limited);
+        sLastInjectedClipHash = hash;
+        sLastInjectedClipAtMs = System.currentTimeMillis();
+        new Handler(android.os.Looper.getMainLooper()).post(() -> {
+            boolean ok = false;
+            try {
+                ClipboardManager cm = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
+                if (cm != null) {
+                    cm.setPrimaryClip(ClipData.newPlainText("Ghosti", limited));
+                    ok = true;
+                }
+            } catch (Throwable ignored) {
+                ok = false;
+            }
+            JSObject ret = new JSObject();
+            ret.put("ok", ok);
+            ret.put("clipHash", hash);
+            call.resolve(ret);
+        });
     }
 }

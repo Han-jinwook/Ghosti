@@ -17,6 +17,7 @@ import ctypes
 import hashlib
 import json
 import os
+import time
 from pathlib import Path
 from typing import Any, Dict
 import urllib.request
@@ -36,6 +37,7 @@ SYNC_GHOSTWIN_ACTIONS = {
 }
 
 _LAST_INJECTED_CLIP_HASH: str = ""
+_LAST_INJECTED_CLIP_SEQ: int = -1
 _BLOCKED_EXEC_EXTS = {
     ".exe", ".bat", ".cmd", ".ps1", ".vbs", ".vbe", ".js", ".jse",
     ".wsf", ".wsh", ".hta", ".scr", ".msi", ".msp", ".dll", ".com", ".pif", ".reg",
@@ -46,25 +48,49 @@ def _sha256_text(txt: str) -> str:
     return hashlib.sha256(txt.encode("utf-8", errors="ignore")).hexdigest()
 
 
-def get_os_clipboard_text() -> Dict[str, Any]:
-    """Windows OS 클립보드의 현재 유니코드 텍스트와 해시를 읽고, 자체 주입(Echo) 여부를 반환합니다."""
-    if os.name != "nt":
-        return {"ok": True, "text": "", "clipHash": "", "isSelfInjected": False}
-
+def _configure_win32_clip_funcs() -> tuple[Any, Any]:
     u32 = ctypes.windll.user32
     k32 = ctypes.windll.kernel32
+    u32.OpenClipboard.argtypes = [ctypes.c_void_p]
+    u32.OpenClipboard.restype = ctypes.c_int
+    u32.CloseClipboard.argtypes = []
+    u32.CloseClipboard.restype = ctypes.c_int
+    u32.EmptyClipboard.argtypes = []
+    u32.EmptyClipboard.restype = ctypes.c_int
+    u32.IsClipboardFormatAvailable.argtypes = [ctypes.c_uint]
+    u32.IsClipboardFormatAvailable.restype = ctypes.c_int
+    u32.GetClipboardData.argtypes = [ctypes.c_uint]
     u32.GetClipboardData.restype = ctypes.c_void_p
+    u32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
+    u32.SetClipboardData.restype = ctypes.c_void_p
+    u32.GetClipboardSequenceNumber.argtypes = []
+    u32.GetClipboardSequenceNumber.restype = ctypes.c_uint
+    k32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
+    k32.GlobalAlloc.restype = ctypes.c_void_p
     k32.GlobalLock.argtypes = [ctypes.c_void_p]
     k32.GlobalLock.restype = ctypes.c_void_p
     k32.GlobalUnlock.argtypes = [ctypes.c_void_p]
+    k32.GlobalUnlock.restype = ctypes.c_int
+    return u32, k32
+
+
+def get_os_clipboard_text() -> Dict[str, Any]:
+    """Windows OS 클립보드의 현재 유니코드 텍스트와 해시를 읽고, 자체 주입(Echo) 여부를 반환합니다."""
+    if os.name != "nt":
+        return {"ok": True, "text": "", "clipHash": "", "isSelfInjected": False, "seqNum": 0}
+
+    u32, k32 = _configure_win32_clip_funcs()
+    curr_seq = int(u32.GetClipboardSequenceNumber())
 
     text_val = ""
     opened = False
     try:
-        for _ in range(3):
+        for attempt in range(6):
             if u32.OpenClipboard(None):
                 opened = True
                 break
+            if attempt < 5:
+                time.sleep(0.015)
         if opened and u32.IsClipboardFormatAvailable(CF_UNICODETEXT):
             handle = u32.GetClipboardData(CF_UNICODETEXT)
             if handle:
@@ -87,17 +113,24 @@ def get_os_clipboard_text() -> Dict[str, Any]:
     if len(clean) > 32000:
         clean = clean[:32000]
     h = _sha256_text(clean) if clean else ""
+    is_self = bool(
+        h
+        and h == _LAST_INJECTED_CLIP_HASH
+        and _LAST_INJECTED_CLIP_SEQ >= 0
+        and curr_seq == _LAST_INJECTED_CLIP_SEQ
+    )
     return {
         "ok": True,
         "text": clean,
         "clipHash": h,
-        "isSelfInjected": bool(h and h == _LAST_INJECTED_CLIP_HASH),
+        "isSelfInjected": is_self,
+        "seqNum": curr_seq,
     }
 
 
 def set_os_clipboard_text(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """타 기기(스마트폰/서브 PC)에서 수신한 클립보드를 무한 반사 루프 없이 Windows 클립보드에 1회 주입합니다."""
-    global _LAST_INJECTED_CLIP_HASH
+    global _LAST_INJECTED_CLIP_HASH, _LAST_INJECTED_CLIP_SEQ
     payload = data or {}
     text_val = str(payload.get("text") or "").strip()
     if not text_val:
@@ -106,32 +139,28 @@ def set_os_clipboard_text(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
         text_val = text_val[:32000]
 
     new_hash = _sha256_text(text_val)
-    if new_hash == _LAST_INJECTED_CLIP_HASH:
-        return {"ok": True, "alreadyInjected": True, "clipHash": new_hash}
-
-    # 먼저 자체 주입 해시를 기록하여 폴링 감시기가 다시 역전송(Echo Loop)하지 못하게 원천 차단!
-    _LAST_INJECTED_CLIP_HASH = new_hash
-
     if os.name != "nt":
+        _LAST_INJECTED_CLIP_HASH = new_hash
         return {"ok": True, "clipHash": new_hash}
 
-    u32 = ctypes.windll.user32
-    k32 = ctypes.windll.kernel32
-    k32.GlobalAlloc.argtypes = [ctypes.c_uint, ctypes.c_size_t]
-    k32.GlobalAlloc.restype = ctypes.c_void_p
-    k32.GlobalLock.argtypes = [ctypes.c_void_p]
-    k32.GlobalLock.restype = ctypes.c_void_p
-    k32.GlobalUnlock.argtypes = [ctypes.c_void_p]
-    u32.SetClipboardData.argtypes = [ctypes.c_uint, ctypes.c_void_p]
-    u32.SetClipboardData.restype = ctypes.c_void_p
+    u32, k32 = _configure_win32_clip_funcs()
+    curr_seq = int(u32.GetClipboardSequenceNumber())
+    if (
+        new_hash == _LAST_INJECTED_CLIP_HASH
+        and _LAST_INJECTED_CLIP_SEQ >= 0
+        and curr_seq == _LAST_INJECTED_CLIP_SEQ
+    ):
+        return {"ok": True, "alreadyInjected": True, "clipHash": new_hash, "seqNum": curr_seq}
 
     raw_u16 = text_val.encode("utf-16-le") + b"\x00\x00"
     opened = False
     try:
-        for _ in range(4):
+        for attempt in range(8):
             if u32.OpenClipboard(None):
                 opened = True
                 break
+            if attempt < 7:
+                time.sleep(0.015)
         if not opened:
             return {"ok": False, "error": "OPEN_CLIPBOARD_BUSY"}
         u32.EmptyClipboard()
@@ -144,7 +173,6 @@ def set_os_clipboard_text(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
         ctypes.memmove(ptr, raw_u16, len(raw_u16))
         k32.GlobalUnlock(h_mem)
         u32.SetClipboardData(CF_UNICODETEXT, h_mem)
-        return {"ok": True, "clipHash": new_hash}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
     finally:
@@ -153,6 +181,12 @@ def set_os_clipboard_text(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 u32.CloseClipboard()
             except Exception:
                 pass
+
+    # 닫힌 직후 Windows 시퀀스 번호를 각인하여 외부 새 Ctrl+C는 즉시 감지하고, 방금 주입한 항목만 Echo 차단
+    after_seq = int(u32.GetClipboardSequenceNumber())
+    _LAST_INJECTED_CLIP_HASH = new_hash
+    _LAST_INJECTED_CLIP_SEQ = after_seq
+    return {"ok": True, "clipHash": new_hash, "seqNum": after_seq}
 
 
 def save_mirrored_device_file(data: Dict[str, Any] | None = None) -> Dict[str, Any]:

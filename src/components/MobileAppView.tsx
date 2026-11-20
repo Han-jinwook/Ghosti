@@ -279,12 +279,17 @@ export const MobileAppView: React.FC = () => {
 
   const [showPrivateSyncSection, setShowPrivateSyncSection] = useState(false);
   const [showPolicyAndStoreSection, setShowPolicyAndStoreSection] = useState(false);
-  const prevTopClipHashRef = useRef<string>(syncedClipboardItems[0]?.clipHash || '');
+  const prevTopClipKeyRef = useRef<string>(
+    syncedClipboardItems[0]
+      ? `${syncedClipboardItems[0].clipHash}:${syncedClipboardItems[0].createdAt}`
+      : ''
+  );
 
   useEffect(() => {
-    const topHash = syncedClipboardItems[0]?.clipHash || '';
-    if (topHash && topHash !== prevTopClipHashRef.current) {
-      prevTopClipHashRef.current = topHash;
+    const topClip = syncedClipboardItems[0];
+    const topKey = topClip ? `${topClip.clipHash}:${topClip.createdAt}` : '';
+    if (topKey && topKey !== prevTopClipKeyRef.current) {
+      prevTopClipKeyRef.current = topKey;
       setShowPrivateSyncSection(true);
     }
   }, [syncedClipboardItems]);
