@@ -111,6 +111,8 @@ const GHOSTI_SB_TOKEN_KEY = 'ghosti_supabase_access_token';
 const GHOSTI_SB_TOKEN_EXP_KEY = 'ghosti_supabase_access_token_exp';
 /** 로그아웃 직후 인플라이트 /api/auth/me(newToken) 응답이 세션을 되살리는 레이스를 막는 단기 1회성 가드 키 */
 export const GHOSTI_LOGOUT_LOCK_UNTIL_KEY = 'ghosti_pending_logout_lock_until';
+/** 워크스페이스에서 로그아웃했을 때 쇼룸(온보딩 대문)으로 튕기지 않고 게스트 워크스페이스에 머무르기 위한 1회성 복귀 키 */
+export const GHOSTI_POST_LOGOUT_WORKSPACE_KEY = 'ghosti_post_logout_workspace_v1';
 
 let authedClient: SupabaseClient | null = null;
 let authedClientToken = '';

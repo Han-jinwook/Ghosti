@@ -1,14 +1,17 @@
 /**
- * Version: v2.3.4
- * Last Updated: 2026-11-13
+ * Version: v2.3.6
+ * Last Updated: 2026-11-20
  * Merlin Hub SDK — 프로필/선물함/알림/로그아웃 카드
+ * - v2.3.6: 프로필 모달 오픈 직후 빠른 [로그아웃] 클릭 시 인플라이트 getProfile() 응답 차단 및 location.replace 단일 리로드 정리
+ * - v2.3.5: HubLogoutCard 내 [회원 탈퇴] 버튼 및 안전 2중 확인 모달 탑재 (개별 앱 단독 탈퇴 API + onWithdrawApp 콜백 지원)
  * - v2.3.4: 프로필 정보 창(HubProfileCard) 상단의 중복 배너(내 잔여 코인 / 코인 선물함) 기본 제거 (showCoin = false 기본값 적용)
  */
 'use client';
 
 import React, { useState, useEffect } from 'react';
-import { Camera, Mail, User, Edit2, Save, LogOut, Bell, Gift } from 'lucide-react';
+import { Camera, Mail, User, Edit2, Save, LogOut, Bell, Gift, UserX } from 'lucide-react';
 import { MerlinHub } from '../index';
+import { withdrawApp } from '../Auth/auth';
 import { HubAvatar } from './HubProfileWidget';
 import { useHub } from '../HubProvider';
 import { compressImage, triggerHaptic } from '../CoreLogic/index';
@@ -94,6 +97,9 @@ export const HubProfileCard: React.FC<HubProfileCardProps> = ({ onSuccess, class
       // 서버에서 최신 프로필 정보 갱신
       MerlinHub.auth.getProfile()
         .then(result => {
+          if (typeof window !== 'undefined' && localStorage.getItem('merlin_logged_out') === '1') {
+            return;
+          }
           if (result.success) {
             const dbNickname = (result.nickname && result.nickname !== '회원' && result.nickname !== '가족회원') 
               ? result.nickname 
@@ -484,17 +490,27 @@ export const HubNotificationCard: React.FC<HubNotificationCardProps> = ({
 
 
 // -----------------------------------------
-// 3. HubLogoutCard (하단 섹션: 로그아웃 및 회원탈퇴)
+// 3. HubLogoutCard (하단 섹션: 로그아웃 및 개별 앱 회원탈퇴)
 // -----------------------------------------
 export interface HubLogoutCardProps {
   onLogout?: () => void;
+  onWithdrawApp?: () => Promise<void> | void;
+  appName?: string;
   className?: string;
 }
 
-export const HubLogoutCard: React.FC<HubLogoutCardProps> = ({ onLogout, className = '' }) => {
+export const HubLogoutCard: React.FC<HubLogoutCardProps> = ({
+  onLogout,
+  onWithdrawApp,
+  appName,
+  className = ''
+}) => {
   const { isLoggedIn } = useHub();
+  const [showWithdrawModal, setShowWithdrawModal] = useState(false);
+  const [isWithdrawing, setIsWithdrawing] = useState(false);
+  const [withdrawError, setWithdrawError] = useState<string | null>(null);
 
-  const handleLogout = async () => {
+  const clearLocalSessionAndReload = async (runLogoutCallback: boolean = true) => {
     try {
       const { clearSessionToken } = await import('../CoreLogic/client');
       clearSessionToken('local');
@@ -506,34 +522,114 @@ export const HubLogoutCard: React.FC<HubLogoutCardProps> = ({ onLogout, classNam
       localStorage.removeItem('merlin_cached_balance');
       localStorage.removeItem('merlin_user_id');
       localStorage.removeItem('merlin_family_uid');
+      localStorage.setItem('merlin_logged_out', '1');
       sessionStorage.clear();
       // 🚨 해당 앱 호스트 쿠키만 소멸시키고, 타 패밀리 앱 세션을 위해 .sundreamer.app 공용 쿠키는 보존
       document.cookie = 'merlin_session_token=; path=/; max-age=0;';
       window.dispatchEvent(new CustomEvent('merlinSessionExpired'));
       window.dispatchEvent(new Event('profileUpdated'));
-      if (onLogout) {
+      if (runLogoutCallback && onLogout) {
         onLogout();
       }
-      window.location.href = window.location.origin + '/';
-      setTimeout(() => {
-        window.location.reload();
-      }, 50);
+      window.location.replace(window.location.origin + '/');
+    }
+  };
+
+  const handleLogout = async () => {
+    await clearLocalSessionAndReload(true);
+  };
+
+  const handleConfirmWithdraw = async () => {
+    if (isWithdrawing) return;
+    setIsWithdrawing(true);
+    setWithdrawError(null);
+    try {
+      if (onWithdrawApp) {
+        await onWithdrawApp();
+      }
+      const res = await withdrawApp();
+      if (!res.success) {
+        setWithdrawError(res.error || '앱 이용 해지에 실패했습니다.');
+        setIsWithdrawing(false);
+        return;
+      }
+      setShowWithdrawModal(false);
+      await clearLocalSessionAndReload(true);
+    } catch (err: any) {
+      setWithdrawError(err?.message || '탈퇴 처리 중 오류가 발생했습니다.');
+      setIsWithdrawing(false);
     }
   };
 
   if (!isLoggedIn) return null;
 
+  const targetAppLabel = appName ? `(${appName})` : '';
+
   return (
-    <div className={`bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden ${className}`}>
-      <div className="p-3.5 sm:p-4 flex flex-col gap-2">
-        <button
-          onClick={handleLogout}
-          className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-slate-50 border border-slate-200 text-slate-700 text-xs sm:text-sm font-bold rounded-xl hover:bg-slate-100 transition-colors shadow-xs cursor-pointer"
-        >
-          <LogOut className="h-3.5 w-3.5" />
-          로그아웃
-        </button>
+    <>
+      <div className={`bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden ${className}`}>
+        <div className="p-3.5 sm:p-4 flex flex-col gap-2">
+          <button
+            onClick={handleLogout}
+            className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-slate-50 border border-slate-200 text-slate-700 text-xs sm:text-sm font-bold rounded-xl hover:bg-slate-100 transition-colors shadow-xs cursor-pointer"
+          >
+            <LogOut className="h-3.5 w-3.5" />
+            로그아웃
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setWithdrawError(null);
+              setShowWithdrawModal(true);
+            }}
+            className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-white border border-rose-200/80 text-rose-600 text-xs font-semibold rounded-xl hover:bg-rose-50 transition-colors cursor-pointer"
+          >
+            <UserX className="h-3.5 w-3.5" />
+            회원 탈퇴
+          </button>
+        </div>
       </div>
-    </div>
+
+      {showWithdrawModal && (
+        <div className="fixed inset-0 z-[120] flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-xs">
+          <div className="w-full max-w-sm rounded-2xl bg-white border border-slate-200 shadow-2xl p-5 space-y-4">
+            <div className="space-y-1.5">
+              <h3 className="text-base font-black text-slate-900 flex items-center gap-1.5">
+                <UserX className="h-4 w-4 text-rose-500" />
+                앱 이용 해지 (회원 탈퇴)
+              </h3>
+              <p className="text-xs sm:text-sm text-slate-600 leading-relaxed">
+                현재 앱{targetAppLabel} 이용만 해지되며, <strong className="text-slate-900">다른 멀린 패밀리 앱 계정과 보유 코인은 안전하게 유지</strong>됩니다. 계속하시겠습니까?
+              </p>
+            </div>
+
+            {withdrawError && (
+              <p className="text-xs font-semibold text-rose-600 bg-rose-50 border border-rose-200 rounded-xl px-3 py-2">
+                {withdrawError}
+              </p>
+            )}
+
+            <div className="flex gap-2">
+              <button
+                type="button"
+                disabled={isWithdrawing}
+                onClick={() => setShowWithdrawModal(false)}
+                className="flex-1 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs sm:text-sm font-bold transition-colors cursor-pointer disabled:opacity-50"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={isWithdrawing}
+                onClick={handleConfirmWithdraw}
+                className="flex-1 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs sm:text-sm font-bold transition-colors cursor-pointer disabled:opacity-50"
+              >
+                {isWithdrawing ? '처리 중...' : '탈퇴 확인'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </>
   );
 };

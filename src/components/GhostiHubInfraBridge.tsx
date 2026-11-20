@@ -20,9 +20,11 @@ import { useSaySeeStore } from '../store/useSaySeeStore';
 import { storeSharedRefs } from '../store/slices/storeSharedRefs';
 import { zCoreBridge } from '../services/zCoreBridge';
 import {
+  GHOSTI_POST_LOGOUT_WORKSPACE_KEY,
   syncHubUserToLocalSupabase,
   clearGhostiSupabaseSession,
   clearGhostiLogoutLock,
+  isGhostiExplicitlyLoggedOut,
   purgeAllGhostiLocalAuthArtifacts,
 } from '../services/supabaseClient';
 import { clearCachedSharedRoomTokens } from '../services/sharedPhotoRoomSupabase';
@@ -137,8 +139,6 @@ const GhostiHubGlobalModals: React.FC = () => {
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isPurchaseOpen, setIsPurchaseOpen] = useState(false);
   const [isGiftBoxOpen, setIsGiftBoxOpen] = useState(false);
-  const [showWithdrawConfirm, setShowWithdrawConfirm] = useState(false);
-  const [withdrawingApp, setWithdrawingApp] = useState(false);
   const wasLoggedInRef = useRef(false);
   const lastAuthedEmailRef = useRef('');
   const logoutInProgressRef = useRef(false);
@@ -146,8 +146,43 @@ const GhostiHubGlobalModals: React.FC = () => {
   const performGhostiCleanLogout = useCallback(() => {
     logoutInProgressRef.current = true;
     setIsProfileOpen(false);
+    const curState = useSaySeeStore.getState();
     const hasUrlInviteToken = Boolean(readActiveInviteToken());
     purgeAllGhostiLocalAuthArtifacts({ setLogoutLockMs: 15_000 });
+    // 워크스페이스 내부에서 로그아웃 시 허브 SDK가 루트('/')로 리다이렉트하더라도
+    // 온보딩/쇼룸 대문으로 튕기지 않고 현재 워크스페이스(개인 탭 유지, 공유방은 귀신비서방 복귀)의 게스트 화면에 머무르도록 1회성 복귀 힌트 기록
+    if (typeof window !== 'undefined') {
+      try {
+        const curParams = new URLSearchParams(window.location.search);
+        const isInWorkspace =
+          curParams.get('view') !== 'showroom' &&
+          (Boolean(curParams.get('lounge')) ||
+            Boolean(curParams.get('tab')) ||
+            curParams.has('invite') ||
+            curParams.has('workRoom') ||
+            Boolean(
+              (window as unknown as { __GHOSTI_ACTIVE_ROUTE__?: { viewMode?: string } })
+                .__GHOSTI_ACTIVE_ROUTE__?.viewMode === 'workspace'
+            ));
+        if (isInWorkspace) {
+          const safeTab =
+            curState.activeLoungeType === 'personal' &&
+            ['trash', 'dashboard', 'sync', 'settings', 'share'].includes(curState.desktopTab)
+              ? curState.desktopTab
+              : 'trash';
+          localStorage.setItem(
+            GHOSTI_POST_LOGOUT_WORKSPACE_KEY,
+            JSON.stringify({
+              lounge: 'personal',
+              tab: safeTab,
+              ts: Date.now(),
+            })
+          );
+        }
+      } catch {
+        /* ignore storage error */
+      }
+    }
     clearGhostSecretaryAccountNicknameOnLogout();
     clearCachedSharedRoomTokens();
     storeSharedRefs.activeSharedRoomId = null;
@@ -374,12 +409,52 @@ const GhostiHubGlobalModals: React.FC = () => {
       clearGhostSecretaryAccountNicknameOnLogout();
       clearCachedSharedRoomTokens();
     };
+    // 브라우저 뒤로가기(BFCache 복원 포함) 시 로그아웃 직전 화면의 로그인 상태가 그대로 노출되는 현상 원천 차단
+    const enforceLogoutOnHistoryRestore = (ev?: PageTransitionEvent) => {
+      if (!isGhostiExplicitlyLoggedOut()) return;
+      const st = useSaySeeStore.getState();
+      const looksStaleAuthed =
+        Boolean(ev?.persisted) ||
+        st.merlinAuth.userId !== 'guest' ||
+        Boolean(st.merlinAuth.email) ||
+        Boolean(st.merlinAuth.token);
+      if (looksStaleAuthed) {
+        purgeAllGhostiLocalAuthArtifacts();
+        clearGhostSecretaryAccountNicknameOnLogout();
+        clearCachedSharedRoomTokens();
+        useSaySeeStore.setState((s) => ({
+          pcAgentPairedMobile: false,
+          connectedDevices: [],
+          devicePairingCode6: null,
+          deviceEntitlement: null,
+          syncedClipboardItems: [],
+          activeSharedRoomId: null,
+          activeJoinedRoomMeta: null,
+          joinedSharedRooms: [],
+          merlinAuth: {
+            ...s.merlinAuth,
+            token: '',
+            userId: 'guest',
+            email: '',
+            coinBalance: 0,
+          },
+        }));
+        window.dispatchEvent(new CustomEvent('merlinSessionExpired'));
+        if (ev?.persisted) {
+          window.location.replace(window.location.href);
+        }
+      }
+    };
+    const onPageShow = (ev: PageTransitionEvent) => enforceLogoutOnHistoryRestore(ev);
+    const onPopState = () => enforceLogoutOnHistoryRestore();
 
     window.addEventListener('openLoginModal', onOpenLogin);
     window.addEventListener('openProfileModal', onOpenProfile);
     window.addEventListener('openPurchaseModal', onOpenPurchase);
     window.addEventListener('openGiftBoxModal', onOpenGiftBox);
     window.addEventListener('merlinSessionExpired', onHubSessionExpired);
+    window.addEventListener('pageshow', onPageShow);
+    window.addEventListener('popstate', onPopState);
 
     return () => {
       window.removeEventListener('openLoginModal', onOpenLogin);
@@ -387,6 +462,8 @@ const GhostiHubGlobalModals: React.FC = () => {
       window.removeEventListener('openPurchaseModal', onOpenPurchase);
       window.removeEventListener('openGiftBoxModal', onOpenGiftBox);
       window.removeEventListener('merlinSessionExpired', onHubSessionExpired);
+      window.removeEventListener('pageshow', onPageShow);
+      window.removeEventListener('popstate', onPopState);
     };
   }, [hideCoin]);
 
@@ -503,88 +580,22 @@ const GhostiHubGlobalModals: React.FC = () => {
             <HubSupportLink appId="Ghosti" />
 
             <HubLogoutCard
+              appName="귀신같이"
               onLogout={() => {
                 performGhostiCleanLogout();
               }}
+              onWithdrawApp={async () => {
+                performGhostiCleanLogout();
+                try {
+                  localStorage.removeItem('ghosti_secretary_engine_agreed');
+                  localStorage.removeItem('ghosti_invited_member_email');
+                  localStorage.removeItem('ghosti_invited_member_nickname');
+                  localStorage.removeItem('ghosti_shared_family_added_photos_v1');
+                } catch {
+                  /* ignore */
+                }
+              }}
             />
-
-            {isLoggedIn && (
-              <div className="pt-1 flex flex-col items-center gap-2">
-                {!showWithdrawConfirm ? (
-                  <button
-                    type="button"
-                    onClick={() => setShowWithdrawConfirm(true)}
-                    className="text-xs font-semibold text-slate-400 hover:text-rose-600 underline underline-offset-4 transition-colors cursor-pointer py-1"
-                  >
-                    회원 탈퇴 (귀신같이 서비스 이용 해지)
-                  </button>
-                ) : (
-                  <div className="w-full rounded-2xl bg-rose-50 border border-rose-200 p-3.5 space-y-2.5 text-left">
-                    <p className="text-xs font-extrabold text-rose-700">
-                      ⚠️ 귀신같이 앱 이용을 해지(회원 탈퇴)하시겠습니까?
-                    </p>
-                    <p className="text-[11.5px] text-slate-700 leading-relaxed break-keep">
-                      <strong>귀신같이</strong> 앱의 기기 연동·공유방 설정만 해지되며, <strong>다른 멀린 패밀리 앱 계정(센스톡·썬드리머 등)과 보유 코인은 안전하게 그대로 유지</strong>됩니다. (내 기기 원본 파일은 절대 삭제되지 않습니다.)
-                    </p>
-                    <div className="flex items-center justify-end gap-2 pt-1">
-                      <button
-                        type="button"
-                        disabled={withdrawingApp}
-                        onClick={() => setShowWithdrawConfirm(false)}
-                        className="px-3 py-1.5 rounded-xl bg-white border border-slate-200 text-xs font-bold text-slate-700 hover:bg-slate-100 cursor-pointer"
-                      >
-                        취소
-                      </button>
-                      <button
-                        type="button"
-                        disabled={withdrawingApp}
-                        onClick={async () => {
-                          setWithdrawingApp(true);
-                          try {
-                            const { hubFetch, clearSessionToken } = await import(
-                              '../services/merlin-hub-sdk/CoreLogic/client'
-                            );
-                            await hubFetch('/api/auth/withdraw-app', {
-                              method: 'POST',
-                              body: JSON.stringify({ appId: 'Ghosti' }),
-                            }).catch(() => {});
-                            clearSessionToken('local');
-                          } catch {
-                            /* ignore */
-                          }
-                          void clearGhostiSupabaseSession();
-                          purgeAllGhostiLocalAuthArtifacts({ setLogoutLockMs: 15_000 });
-                          if (typeof window !== 'undefined') {
-                            try {
-                              localStorage.removeItem('merlin_session_token');
-                              localStorage.removeItem('merlin_cached_user');
-                              localStorage.removeItem('merlin_cached_balance');
-                              localStorage.removeItem('merlin_user_id');
-                              localStorage.removeItem('merlin_family_uid');
-                              localStorage.removeItem('ghosti_secretary_engine_agreed');
-                              localStorage.removeItem('ghosti_invited_member_email');
-                              localStorage.removeItem('ghosti_invited_member_nickname');
-                              localStorage.removeItem('ghosti_shared_family_added_photos_v1');
-                              sessionStorage.clear();
-                              document.cookie = 'merlin_session_token=; path=/; max-age=0;';
-                            } catch {
-                              /* ignore */
-                            }
-                            setShowWithdrawConfirm(false);
-                            setWithdrawingApp(false);
-                            setIsProfileOpen(false);
-                            window.location.href = window.location.origin + '/';
-                          }
-                        }}
-                        className="px-3.5 py-1.5 rounded-xl bg-rose-600 hover:bg-rose-700 text-xs font-extrabold text-white cursor-pointer"
-                      >
-                        {withdrawingApp ? '처리 중...' : '귀신같이 탈퇴 확인'}
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
-            )}
           </div>
         </div>
       )}

@@ -28,7 +28,40 @@ interface HubContextType {
 
 const HubContext = createContext<HubContextType | undefined>(undefined);
 
+function extractJwtPayloadInfo(token?: string | null): { userId: string; email: string } {
+  if (!token) return { userId: '', email: '' };
+  try {
+    const parts = token.split('.');
+    if (parts.length < 2) return { userId: '', email: '' };
+    const base64 = parts[1].replace(/-/g, '+').replace(/_/g, '/');
+    const jsonStr = decodeURIComponent(
+      atob(base64)
+        .split('')
+        .map(c => '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2))
+        .join('')
+    );
+    const payload = JSON.parse(jsonStr);
+    return {
+      userId: String(payload.userId || payload.id || payload.sub || '').trim(),
+      email: String(payload.email || '').trim().toLowerCase()
+    };
+  } catch {
+    return { userId: '', email: '' };
+  }
+}
+
 export function HubProvider({ children, appId }: { children: React.ReactNode; appId?: string }) {
+  // 🚀 [SSO 선제 캡처 방어막] 자식 컴포넌트(예: App.tsx의 useEffect history.replaceState)가 실행되기 전에
+  // 렌더링 초기화 단계에서 URL의 ?sso_token= 또는 ?token=을 최우선으로 로컬스토리지/쿠키에 저장하고 이전 계정 캐시를 즉시 소거합니다.
+  useState(() => {
+    if (typeof window !== 'undefined') {
+      try {
+        getSessionToken();
+      } catch {}
+    }
+    return true;
+  });
+
   const [user, setUser] = useState<HubUser | null>(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
@@ -68,6 +101,14 @@ export function HubProvider({ children, appId }: { children: React.ReactNode; ap
         return prev;
       });
       const session = await checkSession();
+
+      // 🚨 인플라이트 checkSession() 대기 중 로그아웃이 실행된 경우 상태/캐시 복원 즉시 차단
+      if (typeof window !== 'undefined' && localStorage.getItem('merlin_logged_out') === '1') {
+        setUser(null);
+        setIsLoggedIn(false);
+        setBalance(null);
+        return;
+      }
       
       if (session.valid && session.email) {
         const freshUser = {
@@ -170,9 +211,35 @@ export function HubProvider({ children, appId }: { children: React.ReactNode; ap
 
       const urlParams = new URLSearchParams(window.location.search);
 
-      // SSO (Single Sign-On) 토큰 파싱: F 아이콘 앱 스위처를 통해 넘어올 때 로그인 상태 유지
-      const ssoToken = urlParams.get('token') || urlParams.get('sso_token');
-      if (ssoToken) {
+      // SSO (Single Sign-On) 토큰 파싱: 귀신팸 앱 스위처를 통해 넘어올 때 로그인 상태 유지
+      const ssoToken = urlParams.get('sso_token') || urlParams.get('token');
+      if (ssoToken && ssoToken.split('.').length === 3) {
+        const prevToken = localStorage.getItem('merlin_session_token');
+        const incomingInfo = extractJwtPayloadInfo(ssoToken);
+        const cachedRaw = localStorage.getItem('merlin_cached_user');
+        let cachedEmail = '';
+        let cachedId = '';
+        if (cachedRaw) {
+          try {
+            const parsed = JSON.parse(cachedRaw);
+            cachedEmail = String(parsed?.email || '').trim().toLowerCase();
+            cachedId = String(parsed?.id || parsed?.userId || '').trim();
+          } catch {}
+        }
+        const isDifferentUser =
+          (prevToken && prevToken !== ssoToken) ||
+          (incomingInfo.email && cachedEmail && incomingInfo.email !== cachedEmail) ||
+          (incomingInfo.userId && cachedId && incomingInfo.userId !== cachedId);
+
+        if (isDifferentUser) {
+          localStorage.removeItem('merlin_cached_user');
+          localStorage.removeItem('merlin_cached_balance');
+          localStorage.removeItem('userNickname');
+          localStorage.removeItem('userEmail');
+          localStorage.removeItem('userProfileImage');
+          localStorage.removeItem('merlin_user_id');
+        }
+
         setSessionToken(ssoToken);
         console.log('[HubProvider] Detected SSO token, saving to session and domain cookie');
         
@@ -181,13 +248,14 @@ export function HubProvider({ children, appId }: { children: React.ReactNode; ap
         urlParams.delete('sso_token');
         const searchStr = urlParams.toString();
         const newUrl = window.location.pathname + (searchStr ? '?' + searchStr : '') + window.location.hash;
-        window.history.replaceState(window.history.state || {}, '', newUrl);
+        window.history.replaceState({}, '', newUrl);
       }
     }
 
     // 1. SSR Hydration 이후 즉시 로컬 스토리지/공용 쿠키의 세션 토큰을 확인 (SWR)
     const token = getSessionToken();
     if (token) {
+      const tokenInfo = extractJwtPayloadInfo(token);
       const cachedUser = localStorage.getItem('merlin_cached_user');
       const cachedBalance = localStorage.getItem('merlin_cached_balance');
       
@@ -196,18 +264,30 @@ export function HubProvider({ children, appId }: { children: React.ReactNode; ap
       
       if (cachedUser) {
         try {
-          parsedUser = JSON.parse(cachedUser);
+          const candidate = JSON.parse(cachedUser);
+          const candEmail = String(candidate?.email || '').trim().toLowerCase();
+          const candId = String(candidate?.id || candidate?.userId || '').trim();
+          const emailMismatch = Boolean(tokenInfo.email && candEmail && tokenInfo.email !== candEmail);
+          const idMismatch = Boolean(tokenInfo.userId && candId && tokenInfo.userId !== candId);
+          if (emailMismatch || idMismatch) {
+            localStorage.removeItem('merlin_cached_user');
+            localStorage.removeItem('merlin_cached_balance');
+          } else {
+            parsedUser = candidate;
+          }
         } catch {}
       } else {
         // 백업용 fallback: 기존 어플리케이션 전역에서 쓰고 있는 userNickname/userProfileImage 사용
         const backupNickname = localStorage.getItem('userNickname');
-        const backupEmail = localStorage.getItem('userEmail') || '';
+        const backupEmail = (localStorage.getItem('userEmail') || '').trim().toLowerCase();
         const backupAvatar = localStorage.getItem('userProfileImage') || '';
-        const backupUserId = localStorage.getItem('merlin_user_id') || '';
-        if (backupNickname) {
+        const backupUserId = (localStorage.getItem('merlin_user_id') || '').trim();
+        const emailMismatch = Boolean(tokenInfo.email && backupEmail && tokenInfo.email !== backupEmail);
+        const idMismatch = Boolean(tokenInfo.userId && backupUserId && tokenInfo.userId !== backupUserId);
+        if (backupNickname && !emailMismatch && !idMismatch) {
           parsedUser = {
-            id: backupUserId,
-            email: backupEmail,
+            id: backupUserId || tokenInfo.userId,
+            email: backupEmail || tokenInfo.email,
             nickname: backupNickname,
             avatar_url: backupAvatar,
             notification_settings: {}

@@ -1,13 +1,15 @@
 /**
- * Version: v1.2.0
- * Last Updated: 2026-10-24
+ * Version: v1.3.1
+ * Last Updated: 2026-11-20
  * Merlin Hub SDK — Auth Module
  * 이메일 OTP 인증: requestOTP → verifyOTP → JWT 저장
  * 프로필 관리: updateProfile → Hub family_users 직접 갱신
- * 로그아웃 스코프 분리 ('local' vs 'global') 지원
+ * 로그아웃 스코프 분리 ('local' vs 'global') 및 개별 앱 단독 탈퇴(withdrawApp) 지원
+ * - v1.3.1: checkSession() 인플라이트 응답 수신 시 merlin_logged_out 플래그 재검사로 빠른 로그아웃 직후 newToken 세션 부활 레이스 원천 차단
  */
 
 import { hubFetch, setSessionToken, clearSessionToken, getSessionToken } from '../CoreLogic/client';
+import { getConfig } from '../CoreLogic/config';
 
 export interface OTPRequestResult {
   success: boolean;
@@ -132,6 +134,12 @@ export async function checkSession(): Promise<SessionResult> {
   try {
     const timestamp = Date.now();
     const { ok, status, data } = await hubFetch<{ success: boolean; user: any }>(`/api/auth/me?t=${timestamp}`);
+
+    // 🚨 인플라이트 요청 도중 사용자가 [로그아웃]을 클릭한 경우(merlin_logged_out === '1'),
+    // 뒤늦게 도착한 newToken이 로그아웃 플래그를 지우고 세션을 부활시키지 못하도록 즉시 중단!
+    if (typeof window !== 'undefined' && localStorage.getItem('merlin_logged_out') === '1') {
+      return { valid: false, status: 401 };
+    }
     
     if (!ok) {
       if (status === 401 || status === 403) {
@@ -248,5 +256,29 @@ export function logout(scope: 'local' | 'global' = 'local') {
     localStorage.removeItem('userId');
     localStorage.removeItem('userNickname');
     localStorage.removeItem('userProfileImage');
+  }
+}
+
+/**
+ * 개별 앱 단독 탈퇴 (타 패밀리 앱 계정 및 공용 코인 지갑은 보존)
+ * @param appId 탈퇴할 앱 ID (미지정 시 SDK 설정 appId 사용)
+ */
+export async function withdrawApp(appId?: string): Promise<{ success: boolean; error?: string; message?: string }> {
+  try {
+    const resolvedAppId = appId || getConfig().appId || getConfig().clientId;
+    const { ok, data } = await hubFetch<{ success: boolean; message?: string; error?: string }>('/api/auth/withdraw-app', {
+      method: 'POST',
+      body: JSON.stringify({ appId: resolvedAppId }),
+    });
+
+    if (!ok || !data?.success) {
+      return { success: false, error: data?.message || data?.error || '앱 탈퇴 처리에 실패했습니다.' };
+    }
+
+    logout('local');
+    return { success: true, message: data.message };
+  } catch (err) {
+    console.error('[MerlinHub] withdrawApp error:', err);
+    return { success: false, error: '허브 서버 연결 실패' };
   }
 }
