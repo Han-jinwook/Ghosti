@@ -888,11 +888,17 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         raw
       );
     const preStForPlaybook = loadGhostSecretaryState();
+    const lastAssistantBubble = [...getSharedMonsterChatState().messages]
+      .reverse()
+      .find((m) => m.role === 'assistant');
+    const isLastBubbleAskingNickname =
+      /(?:어떤|무슨|새)\s*(?:별명|이름|닉네임|호칭).*?(?:바꿔|불러|말씀|알려|좋을)|뭐라고\s*불러\s*드리면|어떻게\s*불러\s*드릴까/i.test(
+        lastAssistantBubble?.text || ''
+      );
     const isNickOrStoreSpecial =
       Boolean(parseNicknameSettingIntent(raw, preStForPlaybook.nickname)) || isStoreLinkIntent(raw);
     const isAnsweringInitialNickname =
-      Boolean(preStForPlaybook.awaitingNickname) &&
-      !preStForPlaybook.nickname &&
+      (Boolean(preStForPlaybook.awaitingNickname) || isLastBubbleAskingNickname) &&
       raw.length <= 18 &&
       !/(진단해|점검해|정리해|치워|지워|삭제해|복구해|복원해|손봐|알려\s*줘|보여\s*줘|찾아\s*줘|깨워|재워|구독|해지|결제|청소\s*앱|클리너)/i.test(raw);
     const shouldBypassSecretaryPlaybook =
@@ -1024,6 +1030,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       const turn = resolveGhostSecretaryTurn(raw, secretaryState, {
         passportClusterCount: rankPassportCandidates(useSaySeeStore.getState().faceClusters || []).length,
         isMobileEnv: isMobileOrStore,
+        lastAssistantText: lastAssistantBubble?.text,
       });
       if (turn) {
         let nextState = turn.nextState;

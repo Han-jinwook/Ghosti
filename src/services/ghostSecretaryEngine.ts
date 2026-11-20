@@ -339,10 +339,10 @@ export function parseNicknameSettingIntent(
     return { kind: 'query' };
   }
 
-  // 2) "이름/별명/닉네임 다른 걸로 바꿔줘/변경해줘/수정해줘" 또는 새 이름 없이 "별명 바꿔줘"만 말한 경우 (최우선 판별하여 '다른걸'님이 되는 사고 원천 차단!)
+  // 2) "이름/별명/닉네임 다른 걸로 바꿔줘/변경해줘/수정해줘" 또는 새 이름 없이 "별명 바꿀래 / 별명 바꿔줘 / 별명 바꾸고 싶어"만 말한 경우 (최우선 판별하여 '다른걸'님이 되는 사고 원천 차단!)
   if (
-    /(?:다른\s*(?:걸|것|거|이름|별명|닉네임)|딴\s*(?:걸|거|이름|별명)|새\s*(?:이름|별명|닉네임))(?:으로|로)?\s*(?:바꿔|바꿀|변경|수정|다시|새로|해)/i.test(t) ||
-    /(?:내\s*|제\s*)?(?:이름|별명|닉네임|호칭)(?:은|을|이|가)?\s*(?:좀\s*)?(?:다시\s*|새로\s*)?(?:바꿔|바꿀|변경|수정|다시\s*설정|새로\s*설정)(?:줘|주세요|줘요|할래|할게|해줘|해주세요|해)?[.!~?]*$/i.test(t)
+    /(?:다른\s*(?:걸|것|거|이름|별명|닉네임)|딴\s*(?:걸|거|이름|별명)|새\s*(?:이름|별명|닉네임))(?:으로|로)?\s*(?:바꿔|바꿀|바꾸|변경|수정|다시|새로|해)/i.test(t) ||
+    /(?:내\s*|제\s*)?(?:이름|별명|닉네임|호칭)(?:은|을|이|가)?\s*(?:좀\s*)?(?:다시\s*|새로\s*)?(?:바꿔|바꿀|바꾸고\s*싶|바꾸기|변경|수정|다시\s*설정|새로\s*설정)(?:줘|주세요|줘요|래|래요|게|게요|까|까요|할래|할래요|할게|할게요|해줘|해주세요|해|어|어요|습니다)?[.!~?]*$/i.test(t)
   ) {
     return { kind: 'ask' };
   }
@@ -910,7 +910,7 @@ function nextQuest(step: QuestStep): QuestStep {
 export function resolveGhostSecretaryTurn(
   rawText: string,
   st: GhostSecretaryState,
-  ctx: { passportClusterCount?: number; isMobileEnv?: boolean } = {}
+  ctx: { passportClusterCount?: number; isMobileEnv?: boolean; lastAssistantText?: string } = {}
 ): GhostSecretaryTurn | null {
   const text = rawText.trim();
   if (!text) return null;
@@ -1037,8 +1037,19 @@ export function resolveGhostSecretaryTurn(
       text
     );
 
-  // ① 첫인사 별명 답변 또는 별명 재설정 대기 중인 경우 (단, 손보기·사양진단·승인 명령은 별명으로 오인식하지 않고 즉시 손보기 라우터로 통과)
-  if (st.awaitingNickname && !isCareActionApprovalText && !CARE_COMMAND_RE.test(text) && text.length <= 16) {
+  const isLastAssistantAskingNickname =
+    /(?:어떤|무슨|새)\s*(?:별명|이름|닉네임|호칭).*?(?:바꿔|불러|말씀|알려|좋을)|뭐라고\s*불러\s*드리면|어떻게\s*불러\s*드릴까/i.test(
+      ctx.lastAssistantText || ''
+    );
+
+  // ① 첫인사 별명 답변 또는 별명 재설정 대기 중인 경우(직전 귀신비서 말풍선이 새 별명을 물어본 문맥 포함)
+  //    선택지 칩을 누르지 않고 채팅으로 직접 새 별명('해나라' 등)을 입력해도 외부 AI로 빠지지 않고 즉시 별명을 변경합니다.
+  if (
+    (st.awaitingNickname || isLastAssistantAskingNickname) &&
+    !isCareActionApprovalText &&
+    !CARE_COMMAND_RE.test(text) &&
+    text.length <= 18
+  ) {
     const nick = sanitizeNicknameAnswer(text);
     // 초성/자모음 단타(예: 'ㅇㄴ', 'ㅋㅋ', 'ㅎㅎ', 'ㄴㄴ')가 평생 별명으로 잘못 저장되는 현상 차단
     if (nick && /^[ㄱ-ㅎㅏ-ㅣ]+$/.test(nick)) {
@@ -1054,11 +1065,21 @@ export function resolveGhostSecretaryTurn(
     }
     if (nick && !isInvalidNicknameCandidate(nick)) {
       const isFirstTime = !st.nickname;
+      saveGhostPassportBook(setPassportSelf(loadGhostPassportBook(), nick));
+      try {
+        localStorage.setItem('userNickname', nick);
+        localStorage.setItem('ghosti_hub_user_nickname', nick);
+      } catch {
+        /* ignore */
+      }
+      const changedMsg =
+        renderPlaybookText(findScenario('profile_change_nickname')?.response || '', { nickname: nick }) ||
+        `앗, 알겠어요! 앞으로는 『${nick}』님이라고 꼭 기억해서 불러드릴게요! 프로필과 🛂 귀신계 여권(나) 이름도 『${nick}』님으로 바로 바꿔뒀어요!`;
       return {
         scenarioId: isFirstTime ? 'nickname_registered' : 'profile_change_nickname',
         text: isFirstTime
           ? `${nick}님! 이름 예쁘네요, 평생 이렇게 불러드릴게요. 🛂 귀신계 여권(나)에도 새겨뒀어요!`
-          : renderPlaybookText(findScenario('profile_change_nickname')?.response || '', { nickname: nick }),
+          : changedMsg,
         nextState: { ...st, nickname: nick, awaitingNickname: false },
         needsColdReading: isFirstTime,
       };
