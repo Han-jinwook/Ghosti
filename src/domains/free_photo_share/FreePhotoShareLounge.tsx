@@ -143,7 +143,7 @@ async function copyAuthenticatedRoomInviteFlow(opts: {
 
 /**
  * ⛳ 동호회 · 동창회 (사진 공유) (4050 동창회 특화 UX — Warm Light 앨범 프레임 + 1줄 요약 정화 버전)
- * 1) 생성형 맞춤형 간판 'Text-to-Banner' (복고풍 칠판 / 노을 진 운동장 그래픽 + '성동고 89회 동창회' + 초대장 카피 버튼)
+ * 1) 맞춤형 동창회 간판 (복고풍 칠판 / 노을 진 운동장 그래픽 + 사용자 입력 문구 그대로 간판명 반영 + 초대장 카피 버튼)
  * 2) 첫 화면 검색 전면 배치 ([🎯 내 얼굴로 학창 시절 사진 1초 만에 찾기]) & '추억 vs 근황' 투트랙 탭 ([🎞️ 응답하라 1989 (추억)] 기본 고정 / [🍻 최근 우리들 (근황)]) + 1줄 스마트 알림 클린존 안내
  */
 const AlumniRetroBannerAndTwoTrackBar: React.FC<{
@@ -151,9 +151,9 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
   onOpenWaitingRoom?: () => void;
 }> = ({ onNavigateToFeed, onOpenWaitingRoom }) => {
   const {
+    alumniBannerTitle,
     alumniSchoolName,
     alumniGradYear,
-    alumniGradCohortNumber,
     alumniBannerTheme,
     setAlumniBannerInfo,
     clubFeedTrack,
@@ -170,10 +170,9 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
   const [inviteCopied, setInviteCopied] = useState(false);
   const [trojanBragCopied, setTrojanBragCopied] = useState(false);
   const [editingBannerKeyword, setEditingBannerKeyword] = useState(false);
-  const [keywordDraft, setKeywordDraft] = useState(`${alumniSchoolName} ${alumniGradYear}`);
+  const [keywordDraft, setKeywordDraft] = useState(alumniBannerTitle);
 
-  const cohortShort = String(alumniGradCohortNumber).padStart(2, '0');
-  const bannerTitle = `${alumniSchoolName} ${cohortShort}회 동창회`;
+  const bannerTitle = alumniBannerTitle;
   const trojanBragCopy = `내가 동호회·동창회 마스터권 끊어서 패밀리 라운지 무료 이용권 3장 받았는데, 선착순으로 줄 테니 쓸 사람?`;
 
   const pendingProposals = analogYearProposals.filter((p) => !p.approvedByHost);
@@ -184,9 +183,9 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
       familyRoom: '우리집',
       defaultHostLabel: '동기회장',
       roomTitle: `🎓 ${bannerTitle}`,
-      promptLabel: '동창회 초대 링크를 복사해 공유하세요:',
+      promptLabel: `『${bannerTitle}』 초대 링크를 복사해 공유하세요:`,
       formatCopyText: (studentInviteUrl) =>
-        `[${bannerTitle}] 네가 몰랐던 ${cohortShort}년 수학여행·졸업식 사진이 올라왔어! 설치·로그인 없이 바로 구경하고 내 사진도 올려봐 (초대받은 동기는 평생 무료)\n👉 ${studentInviteUrl}`,
+        `[${bannerTitle}] 네가 몰랐던 ${alumniGradYear}년 수학여행·졸업식 사진이 올라왔어! 설치·로그인 없이 바로 구경하고 내 사진도 올려봐 (초대받은 동기는 평생 무료)\n👉 ${studentInviteUrl}`,
     });
     if (!ok) return;
     setInviteCopied(true);
@@ -209,13 +208,21 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
     e.preventDefault();
     const trimmed = keywordDraft.trim();
     if (!trimmed) return;
-    const yearMatch = trimmed.match(/(19\d{2}|20\d{2}|\d{2})/);
-    const yearNum = yearMatch
-      ? Number(yearMatch[1].length === 2 ? `19${yearMatch[1]}` : yearMatch[1])
-      : alumniGradYear;
+    const fullYearMatch = trimmed.match(/(19\d{2}|20\d{2})/);
+    const shortYearMatch = !fullYearMatch ? trimmed.match(/(?:^|\s)(\d{2})년/) : null;
+    const yearNum = fullYearMatch
+      ? Number(fullYearMatch[1])
+      : shortYearMatch
+        ? Number(shortYearMatch[1]) >= 50
+          ? 1900 + Number(shortYearMatch[1])
+          : 2000 + Number(shortYearMatch[1])
+        : alumniGradYear;
     const schoolPart =
-      trimmed.replace(/(19\d{2}|20\d{2}|\d{2})년?|\s+/g, '').trim() || alumniSchoolName;
-    setAlumniBannerInfo(schoolPart, yearNum);
+      trimmed
+        .replace(/(?:19\d{2}|20\d{2})년?|\d{2}년|\d+회|\d+기|\d+학번|동창회/g, '')
+        .replace(/\s+/g, ' ')
+        .trim() || trimmed;
+    setAlumniBannerInfo(schoolPart, yearNum, undefined, trimmed);
     setEditingBannerKeyword(false);
   };
 
@@ -330,8 +337,8 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
                     type="text"
                     value={keywordDraft}
                     onChange={(e) => setKeywordDraft(e.target.value)}
-                    placeholder="예: 성동고 1989"
-                    className="px-2.5 py-1 rounded bg-black/60 border border-amber-300/70 text-white text-[12px] font-bold w-32 focus:outline-none"
+                    placeholder="예: 썬드림 2026 / 성동고 1989"
+                    className="px-2.5 py-1 rounded bg-black/60 border border-amber-300/70 text-white text-[12px] font-bold w-44 sm:w-52 focus:outline-none"
                   />
                   <button
                     type="submit"
@@ -344,12 +351,12 @@ const AlumniRetroBannerAndTwoTrackBar: React.FC<{
                 <button
                   type="button"
                   onClick={() => {
-                    setKeywordDraft(`${alumniSchoolName} ${alumniGradYear}`);
+                    setKeywordDraft(alumniBannerTitle);
                     setEditingBannerKeyword(true);
                   }}
                   className="underline text-amber-200 hover:text-amber-100 cursor-pointer font-bold whitespace-nowrap"
                 >
-                  ✏️ 학교·연도 변경
+                  ✏️ 간판 이름·연도 변경
                 </button>
               )}
             </div>
@@ -1814,6 +1821,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
     setMobileTab,
     clubFeedTrack,
     setClubFeedTrack,
+    alumniBannerTitle,
     isGuestPreviewMode,
     setIsGuestPreviewMode,
     triggerGuestJoinWall,
@@ -2400,13 +2408,13 @@ export const LoungeFeedContextBanner: React.FC = () => {
                 loungeType: 'student',
                 familyRoom: '우리집',
                 defaultHostLabel: '동기회장',
-                roomTitle: '🎓 동창회 사진방',
-                promptLabel: '『동창회 사진방』 초대 링크를 복사해 공유하세요:',
+                roomTitle: `🎓 ${alumniBannerTitle}`,
+                promptLabel: `『${alumniBannerTitle}』 초대 링크를 복사해 공유하세요:`,
               });
               if (!ok) return;
               useSaySeeStore
                 .getState()
-                .showToast('💌 『동창회 사진방』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.');
+                .showToast(`💌 『${alumniBannerTitle}』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.`);
             }}
             className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-400/50 text-amber-300 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 cursor-pointer transition-all"
           >

@@ -231,7 +231,8 @@ export interface FreePhotoShareSlice {
   setClubSizeTier: (tier: ClubSizeTier) => void;
   verifyStudentOcr: () => void;
 
-  // [⛳ 4050 동창회 락인(Lock-in) 특화 UX: Text-to-Banner 간판 + 투트랙 탭 + 스틱(Chip) 연쇄 태깅 + [❓ 언제/어디인가요?] 방장 일괄 승인]
+  // [⛳ 4050 동창회 락인(Lock-in) 특화 UX: 입력 문구 그대로 간판명 적용 + 투트랙 탭 + 스틱(Chip) 연쇄 태깅 + [❓ 언제/어디인가요?] 방장 일괄 승인]
+  alumniBannerTitle: string;
   alumniSchoolName: string;
   alumniGradYear: number;
   alumniGradCohortNumber: number;
@@ -243,7 +244,8 @@ export interface FreePhotoShareSlice {
   setAlumniBannerInfo: (
     schoolName: string,
     gradYear: number,
-    theme?: 'chalkboard' | 'sunset_field'
+    theme?: 'chalkboard' | 'sunset_field',
+    customBannerTitle?: string
   ) => void;
   setClubFeedTrack: (track: ClubFeedTrackId) => void;
   createAlumniStickChipsFromInput: (
@@ -1590,6 +1592,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     }),
 
   // ─────────────── [⛳ 4050 동창회 락인(Lock-in) 특화 UX 상태 & 액션] ───────────────
+  alumniBannerTitle: '성동고 1989 동창회',
   alumniSchoolName: '성동고',
   alumniGradYear: 1989,
   alumniGradCohortNumber: 89,
@@ -1773,11 +1776,19 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     },
   ],
 
-  setAlumniBannerInfo: (schoolName, gradYear, theme) =>
+  setAlumniBannerInfo: (schoolName, gradYear, theme, customBannerTitle) =>
     set((state) => {
-      const cleanSchool = schoolName.trim() || '성동고';
-      const validYear = Number.isFinite(gradYear) && gradYear >= 1950 ? gradYear : 1989;
+      const cleanSchool = schoolName.trim() || state.alumniSchoolName || '성동고';
+      const validYear =
+        Number.isFinite(gradYear) && gradYear >= 1950 && gradYear <= 2099
+          ? gradYear
+          : state.alumniGradYear || 1989;
       const cohort = validYear % 100;
+      const trimmedCustomTitle = (customBannerTitle ?? '').trim();
+      const nextBannerTitle =
+        trimmedCustomTitle || state.alumniBannerTitle || `${cleanSchool} ${validYear}`;
+      const inheritedTokens = deriveLoungeProperNounTokens(cleanSchool);
+      const inheritedLabel = inheritedTokens.length > 0 ? inheritedTokens.join('/') : cleanSchool;
       const updatedAnalogPhotos = state.analogScannedPhotos.map((item) => ({
         ...item,
         expandedSearchKeywords: buildBidirectionalStickKeywords({
@@ -1788,12 +1799,15 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         }),
       }));
       return {
+        alumniBannerTitle: nextBannerTitle,
         alumniSchoolName: cleanSchool,
         alumniGradYear: validYear,
         alumniGradCohortNumber: cohort,
         alumniBannerTheme: theme ?? state.alumniBannerTheme,
         analogScannedPhotos: updatedAnalogPhotos,
-        lastQuarantineToast: `🎓 [Text-to-Banner 자동 간판 & 고유명사 상속] ‘${cleanSchool} ${cohort}회 동창회 (${validYear})’ 간판이 장착되어 방 전체 사진에 "${cleanSchool}"·"${deriveLoungeProperNounTokens(cleanSchool).join('/')}" 검색 키워드가 기본 상속되었습니다!`,
+        lastQuarantineToast: trimmedCustomTitle
+          ? `🎓 [동창회 간판 변경] ‘${nextBannerTitle}’ 간판이 그대로 적용되어 방 전체 사진에 "${inheritedLabel}" 검색 키워드가 기본 상속되었습니다!`
+          : `🎓 [동창회 배경 변경] ‘${nextBannerTitle}’ 간판 배경이 전환되었습니다.`,
       };
     }),
 
@@ -2102,7 +2116,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
   },
 
   findMySchoolDaysPhotosFast: async () => {
-    const { photos, alumniSchoolName, alumniGradYear, faceClusters } = get();
+    const { photos, alumniBannerTitle, alumniSchoolName, alumniGradYear, faceClusters } = get();
     const creator = faceClusters.find((c) => c.clusterId === 'face_member_5');
     const clubPersona = creator?.roomPersonas?.club || '멀린프로';
 
@@ -2132,9 +2146,9 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       hasUserSelectedSearchTab: true,
       desktopTab: 'dashboard',
       mobileTab: 'search',
-      activeQuery: `🎯 [👑 ${clubPersona}] 내 얼굴로 찾은 ${alumniSchoolName} ${alumniGradYear}년 학창 시절 수학여행·소풍 사진 (${matchedSchoolPhotos.length}장 · 1초 만에)`,
+      activeQuery: `🎯 [👑 ${clubPersona}] 내 얼굴로 찾은 ${alumniBannerTitle || `${alumniSchoolName} ${alumniGradYear}년`} 학창 시절 수학여행·소풍 사진 (${matchedSchoolPhotos.length}장 · 1초 만에)`,
       matchedTags: [
-        `#${alumniSchoolName}${alumniGradYear % 100}회`,
+        `#${(alumniBannerTitle || alumniSchoolName).replace(/\s+/g, '')}`,
         `#${alumniGradYear}년수학여행`,
         `#내얼굴1초매칭`,
         '#1980년대여권바구니',

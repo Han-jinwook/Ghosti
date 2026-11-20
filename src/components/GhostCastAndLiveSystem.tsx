@@ -61,7 +61,7 @@ function broadcastCastLiveMessage(payload: Record<string, unknown>): void {
  * - [무기 2] 📡 다 같이 보기 (앨범 싱크): 사진 공유방에서 발표자가 넘기거나 확대한 사진 화면이 방 멤버 전원에게 0.1초 만에 똑같이 동기화 (발열·트래픽 부담 0%)
  */
 export const GhostCastLiveToolbar: React.FC<{ loungeLabel?: string }> = () => {
-  const { activeLoungeType, activeFamilyRoom, alumniSchoolName } = useSaySeeStore();
+  const { activeLoungeType } = useSaySeeStore();
   const [photoSyncActive, setPhotoSyncActive] = useState(false);
 
   useEffect(() => {
@@ -127,6 +127,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     merlinAuth,
     activeLoungeType,
     activeFamilyRoom,
+    alumniBannerTitle,
     alumniSchoolName,
     setDeviceIntegrationSnapshot,
   } = useSaySeeStore();
@@ -421,7 +422,9 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
     activeLoungeType === 'family'
       ? `👨‍👩‍👧‍👦 패밀리 [${activeFamilyRoom}]`
       : activeLoungeType === 'club'
-      ? `⛳ 동호·동창회 [${alumniSchoolName || '모임방'}]`
+      ? '⛰️ 동호회·모임'
+      : activeLoungeType === 'student'
+      ? `🎓 동창회 [${alumniBannerTitle || alumniSchoolName || '동창회'}]`
       : '👑 내 기기 통합 (폰·PC·노트북)';
 
   return (
