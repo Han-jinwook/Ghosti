@@ -1946,18 +1946,18 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             </section>
           )}
 
-          {/* iOS/Android '제한된 사진 접근(선택한 사진만 허용)' 상태 안내 배너 — 새로 저장한 테스트 사진이 스캔에서 빠지지 않도록 즉시 안내 */}
+          {/* iOS/Android '제한된 사진 접근(선택한 사진만 허용)' 상태 안내 배너 — 모바일 전폭 2단 레이아웃 & 라이트/다크 고대비 보장 */}
           {mobileGalleryLimitedAccess && isCapacitorNativeMobileRuntime() && (
-            <div className="p-3.5 rounded-2xl bg-amber-950/85 border border-amber-400/50 flex flex-wrap items-center justify-between gap-2.5 shadow-sm">
-              <div className="flex flex-col gap-0.5 min-w-0 flex-1">
-                <span className="text-[12.5px] sm:text-[13px] font-extrabold text-amber-200 break-keep">
+            <div className="p-4 rounded-2xl bg-amber-50 dark:bg-amber-950/85 border border-amber-300 dark:border-amber-400/50 flex flex-col md:flex-row md:items-center md:justify-between gap-3 shadow-sm">
+              <div className="flex flex-col gap-1 w-full md:flex-1 min-w-0">
+                <span className="text-[13px] sm:text-[13.5px] leading-snug font-extrabold text-amber-950 dark:text-amber-200 break-keep">
                   ⚠️ 현재 휴대폰 사진 권한이 『선택한 사진만 허용(제한된 접근)』으로 되어 있어요 (현재 허용된 사진 {displayPhotos.length}장)
                 </span>
-                <span className="text-[11.5px] text-amber-100/90 break-keep">
-                  새로 저장한 중복·흔들린 사진까지 빠짐없이 분류하려면 [전체 사진 허용]으로 바꾸거나 [사진 추가 선택]을 눌러주세요.
+                <span className="text-[12px] sm:text-[12.5px] leading-relaxed font-semibold text-amber-900 dark:text-amber-100 break-keep">
+                  새로 저장한 중복·흔들린 사진까지 빠짐없이 분류하려면 [설정에서 전체 허용]으로 바꾸거나 [사진 추가 선택]을 눌러주세요.
                 </span>
               </div>
-              <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full md:w-auto shrink-0">
                 <button
                   type="button"
                   onClick={() =>
@@ -1966,14 +1966,14 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                       forceExpandSelected: true,
                     })
                   }
-                  className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[11.5px] font-black cursor-pointer"
+                  className="py-2.5 px-3 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[12px] font-black flex items-center justify-center gap-1 cursor-pointer shadow-xs whitespace-nowrap"
                 >
                   📸 사진 추가 선택
                 </button>
                 <button
                   type="button"
                   onClick={() => void openNativeAppPermissionSettings()}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-300/40 text-amber-200 text-[11.5px] font-bold cursor-pointer"
+                  className="py-2.5 px-3 rounded-xl bg-white dark:bg-zinc-900 hover:bg-amber-100/70 dark:hover:bg-zinc-800 border border-amber-400/80 dark:border-amber-300/40 text-amber-950 dark:text-amber-200 text-[12px] font-extrabold flex items-center justify-center gap-1 cursor-pointer shadow-xs whitespace-nowrap"
                 >
                   ⚙️ 설정에서 전체 허용
                 </button>

@@ -359,8 +359,11 @@ html.theme-warm-light .border-white\/25 {
 /* 6. 타이포그래피 (#1E293B 진한 차콜 & #334155 슬레이트)
    - [data-keep-dark="true"](8090 칠판/노을 간판) 및 썸네일 오버레이 내부는 원래 밝은 글씨 유지 */
 html.theme-warm-light .text-white:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *):not([class*="bg-emerald-500"]):not([class*="bg-indigo-500"]):not([class*="bg-rose-500"]):not([class*="bg-fuchsia-500"]),
+html.theme-warm-light [class*="text-white/"]:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
 html.theme-warm-light .text-zinc-100:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
+html.theme-warm-light [class*="text-zinc-100/"]:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
 html.theme-warm-light .text-slate-100:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
+html.theme-warm-light [class*="text-slate-100/"]:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
 html.theme-warm-light .\!text-white:not([data-keep-dark="true"] *),
 html.theme-warm-light .\!text-zinc-100:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-on-surface:not([data-keep-dark="true"] *) {
@@ -368,9 +371,13 @@ html.theme-warm-light .text-on-surface:not([data-keep-dark="true"] *) {
 }
 
 html.theme-warm-light .text-zinc-200:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
+html.theme-warm-light [class*="text-zinc-200/"]:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
 html.theme-warm-light .text-zinc-300:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
+html.theme-warm-light [class*="text-zinc-300/"]:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
 html.theme-warm-light .text-slate-200:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
-html.theme-warm-light .text-slate-300:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *) {
+html.theme-warm-light [class*="text-slate-200/"]:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
+html.theme-warm-light .text-slate-300:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
+html.theme-warm-light [class*="text-slate-300/"]:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *) {
   color: #334155 !important;
 }
 
@@ -388,11 +395,15 @@ html.theme-warm-light .text-slate-500:not([data-keep-dark="true"] *) {
 /* 7. 밝은 파스텔 포인트 텍스트를 화이트/아이보리 바탕 위에서 선명하게 읽히도록 고대비 보정 */
 html.theme-warm-light .text-primary-container:not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
 html.theme-warm-light .text-cyan-200:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-cyan-200/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-cyan-300:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-cyan-100:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-cyan-100/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-cyan-400:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-teal-100:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-teal-100/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-teal-200:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-teal-200/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-teal-300:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-teal-400:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-\[\#5EEAD4\]:not([data-keep-dark="true"] *),
@@ -402,7 +413,9 @@ html.theme-warm-light .text-\[\#00F0B5\]:not([data-keep-dark="true"] *) {
 }
 
 html.theme-warm-light .text-emerald-100:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-emerald-100/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-emerald-200:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-emerald-200/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-emerald-300:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-emerald-400:not([data-keep-dark="true"] *) {
   color: #047857 !important;
@@ -464,27 +477,36 @@ html.theme-warm-light .text-violet-400:not([data-keep-dark="true"] *) {
 }
 
 html.theme-warm-light .text-amber-50:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-amber-50/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-amber-100:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-amber-100/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-amber-200:not([data-keep-dark="true"] *):not(.aspect-video *),
+html.theme-warm-light [class*="text-amber-200/"]:not([data-keep-dark="true"] *):not(.aspect-video *),
 html.theme-warm-light .text-amber-300:not([data-keep-dark="true"] *):not(.aspect-video *),
 html.theme-warm-light .text-amber-400:not([data-keep-dark="true"] *) {
-  color: #B45309 !important;
+  color: #92400E !important;
 }
 
 html.theme-warm-light .text-indigo-100:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-indigo-100/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-indigo-200:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-indigo-200/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-indigo-300:not([data-keep-dark="true"] *) {
   color: #4338CA !important;
 }
 
 html.theme-warm-light .text-fuchsia-100:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-fuchsia-100/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-fuchsia-200:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-fuchsia-200/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-fuchsia-300:not([data-keep-dark="true"] *) {
   color: #7E22CE !important;
 }
 
 html.theme-warm-light .text-rose-200:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-rose-200/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-rose-100:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-rose-100/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-rose-300:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-rose-400:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-pink-100:not([data-keep-dark="true"] *),
@@ -498,7 +520,9 @@ html.theme-warm-light .text-red-400:not([data-keep-dark="true"] *) {
 }
 
 html.theme-warm-light .text-sky-100:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-sky-100/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-sky-200:not([data-keep-dark="true"] *),
+html.theme-warm-light [class*="text-sky-200/"]:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-sky-300:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-sky-400:not([data-keep-dark="true"] *),
 html.theme-warm-light .text-blue-200:not([data-keep-dark="true"] *),
