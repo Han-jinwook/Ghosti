@@ -628,13 +628,36 @@ export const App: React.FC = () => {
   }, [isDevAuthorized]);
 
   useEffect(() => {
-    playAppEnterGiggleSound();
-    void initApp();
+    const isStandaloneSearchWin =
+      typeof window !== 'undefined' &&
+      Boolean(new URLSearchParams(window.location.search).get('ghostSearchWindow'));
+    if (!isStandaloneSearchWin) {
+      playAppEnterGiggleSound();
+    }
+    let didInitWithZCore = zCoreBridge.isConnected;
+    let cancelled = false;
+    void (async () => {
+      const isNative = Boolean(
+        (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+      );
+      if (!isNative && !zCoreBridge.isConnected) {
+        await Promise.race([
+          zCoreBridge.checkHealth(false),
+          new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 260)),
+        ]);
+      }
+      if (cancelled) return;
+      didInitWithZCore = zCoreBridge.isConnected;
+      await initApp();
+    })();
     const handleZCoreConnected = () => {
       // 세션당 최초 1회만 연결 완료 토스트를 노출하여 반복 팝업 원천 차단
       let shouldShowToast = false;
       try {
-        if (sessionStorage.getItem('ghosti_zcore_connected_toast_shown') !== '1') {
+        if (
+          !isStandaloneSearchWin &&
+          sessionStorage.getItem('ghosti_zcore_connected_toast_shown') !== '1'
+        ) {
           sessionStorage.setItem('ghosti_zcore_connected_toast_shown', '1');
           shouldShowToast = true;
         }
@@ -646,6 +669,10 @@ export const App: React.FC = () => {
           lastQuarantineToast: '🎉 멀린 Z-코어(Port 5199) 연결 완료! 내 컴퓨터 실물 파일이 연동되었습니다.',
         });
       }
+      if (didInitWithZCore && useSaySeeStore.getState().initialized) {
+        return;
+      }
+      didInitWithZCore = true;
       void initApp(true);
     };
     window.addEventListener('zCoreConnected', handleZCoreConnected);
@@ -670,6 +697,7 @@ export const App: React.FC = () => {
     window.addEventListener('focus', handleMobileForegroundResume);
 
     return () => {
+      cancelled = true;
       window.removeEventListener('zCoreConnected', handleZCoreConnected);
       document.removeEventListener('visibilitychange', handleMobileForegroundResume);
       window.removeEventListener('focus', handleMobileForegroundResume);

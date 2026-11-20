@@ -2300,6 +2300,22 @@ async function ensureGemma2ConceptProbeVecs(isMobileEnv = false): Promise<Map<st
  * [EmbeddingGemma 2 주력 + 광학엔진(dHash/선명도/종횡비) 보조 + PP-OCRv5 글자 보조 단일 통합 파이프라인]
  * - PC Z-코어 연결 시 및 모바일(Android/iOS) 실사진·실영상 불러오기 시 모두 동일하게 작동합니다.
  */
+export async function hydrateCachedPhotoVectorsLightweight(
+  photos: PhotoItem[]
+): Promise<Map<string, Float32Array>> {
+  await hydrateRealMediaVectorCacheOnce();
+  const matched = new Map<string, Float32Array>();
+  for (const item of photos) {
+    if (item.quarantined || (item.vec && item.vec.length === DEFAULT_DIM)) continue;
+    const pKey = getPhotoMediaCacheKey(item.name, item.size);
+    const cachedVec = hydratedPhotoVecMap.get(pKey);
+    if (cachedVec && cachedVec.length === DEFAULT_DIM) {
+      matched.set(item.id, cachedVec);
+    }
+  }
+  return matched;
+}
+
 export async function startSilentRealMediaVisionIndexing(params: {
   photos: PhotoItem[];
   videos: VideoSceneItem[];
@@ -2358,6 +2374,9 @@ export async function startSilentRealMediaVisionIndexing(params: {
     const pendingOcrQueue: Array<{ item: PhotoItem; thumb: string }> = [];
 
     for (let i = 0; i < unindexedPhotos.length; i++) {
+      if (i > 0 && i % 16 === 0) {
+        await new Promise((r) => setTimeout(r, 0));
+      }
       if (!(await waitForMobileUserIdleIfNeeded(isMobileEnv))) {
         return;
       }

@@ -97,6 +97,7 @@ import {
   fetchIndexedVideos,
   fetchSharedFamilyHostPhotos,
   hasUnindexedLocalVideos,
+  hydrateCachedPhotoVectorsLightweight,
   isLocalVideosOcrIndexingPending,
   isTextQueryEncoderReady,
   normalizeLocalVideoSceneItem,
@@ -395,13 +396,24 @@ export const createAssistantOnboardingSlice: StateCreator<
     if (!force && (get().initialized || get().initializing)) return;
     set({ initializing: true });
 
+    const isStandaloneSearchWin =
+      typeof window !== 'undefined' &&
+      Boolean(new URLSearchParams(window.location.search).get('ghostSearchWindow')) &&
+      (() => {
+        try {
+          return window.self === window.top;
+        } catch {
+          return false;
+        }
+      })();
+
     const [dataset, telemetry, indexedDocs, indexedVideos, faceData, hostSharedPhotos] = await Promise.all([
       loadInitialPhotoDataset(),
-      detectHardwareTelemetry(),
+      isStandaloneSearchWin ? Promise.resolve(null) : detectHardwareTelemetry(),
       fetchIndexedDocuments(),
       fetchIndexedVideos(),
       fetchAutonomousFaceClusters(),
-      fetchSharedFamilyHostPhotos(),
+      isStandaloneSearchWin ? Promise.resolve([]) : fetchSharedFamilyHostPhotos(),
     ]);
 
     const autoMultiClusters = buildAutoMultiConditionSeedClusters(faceData.clusters);
@@ -615,67 +627,114 @@ export const createAssistantOnboardingSlice: StateCreator<
       const saveData = typeof navigator !== 'undefined' && (navigator as any).connection?.saveData === true;
       if (!isMobileUA && !saveData && typeof window !== 'undefined') {
         if (zCoreBridge.isConnected) {
-          // 0) 내 PC 실물 사진들의 실제 64-bit dHash 및 2D 라플라시안 선명도(흐린 사진 판별) + 다중 연사 묶음(5장·10장 세트) 즉시 클러스터링
-          window.setTimeout(async () => {
-            try {
-              const currentPhotos = get().photos;
-              const { updatedPhotos, duplicateGroups: realDupGroups } =
-                await auditRealPcPhotosAndCluster(currentPhotos);
-              const nextTrashIds = new Set<string>();
-              updatedPhotos.forEach((p) => {
-                if (p.trashCategory && !p.quarantined) nextTrashIds.add(p.id);
-              });
-              set({
-                photos: updatedPhotos,
-                duplicateGroups: realDupGroups,
-                selectedTrashIds: nextTrashIds,
-                activeTrashCategoryFilter:
-                  realDupGroups.length > 0
-                    ? 'duplicate'
-                    : updatedPhotos.some((p) => p.trashCategory === 'blurry' && !p.quarantined)
-                    ? 'blurry'
-                    : get().activeTrashCategoryFilter,
-              });
-            } catch {
-              /* ignore */
-            }
-          }, 150);
+          if (isStandaloneSearchWin) {
+            // [독립 귀신검색창(?ghostSearchWindow) 초반 무렉 경량 부팅]:
+            // 정리 탭 전용 800장 광학 스캔(auditRealPcPhotosAndCluster)과 중복 WebGPU 비전 모델 기동을 생략하고,
+            // 본 창이 색인해 둔 IndexedDB 768D 벡터 캐시만 단 1회 배치로 즉시 복원합니다.
+            window.setTimeout(async () => {
+              try {
+                const vecMap = await hydrateCachedPhotoVectorsLightweight(get().photos);
+                if (vecMap.size > 0) {
+                  set((state) => ({
+                    photos: state.photos.map((p) => {
+                      const v = vecMap.get(p.id);
+                      return v ? { ...p, vec: v } : p;
+                    }),
+                    searchResults: state.searchResults.map((sr) => {
+                      const v = vecMap.get(sr.photo.id);
+                      return v ? { ...sr, photo: { ...sr.photo, vec: v } } : sr;
+                    }),
+                  }));
+                }
+              } catch {
+                /* ignore */
+              }
+            }, 280);
+          } else {
+            // 0) 내 PC 실물 사진들의 실제 64-bit dHash 및 2D 라플라시안 선명도(흐린 사진 판별) + 다중 연사 묶음(5장·10장 세트) 즉시 클러스터링
+            window.setTimeout(async () => {
+              try {
+                const currentPhotos = get().photos;
+                const { updatedPhotos, duplicateGroups: realDupGroups } =
+                  await auditRealPcPhotosAndCluster(currentPhotos);
+                const nextTrashIds = new Set<string>();
+                updatedPhotos.forEach((p) => {
+                  if (p.trashCategory && !p.quarantined) nextTrashIds.add(p.id);
+                });
+                set({
+                  photos: updatedPhotos,
+                  duplicateGroups: realDupGroups,
+                  selectedTrashIds: nextTrashIds,
+                  activeTrashCategoryFilter:
+                    realDupGroups.length > 0
+                      ? 'duplicate'
+                      : updatedPhotos.some((p) => p.trashCategory === 'blurry' && !p.quarantined)
+                      ? 'blurry'
+                      : get().activeTrashCategoryFilter,
+                });
+              } catch {
+                /* ignore */
+              }
+            }, 150);
 
-          // 첫 화면 썸네일 렌더 직후(0.9초) 동영상 키프레임 및 실사진 비전 벡터를 조용히 고속 인덱싱
-          window.setTimeout(() => {
-            void startSilentRealMediaVisionIndexing({
-              photos: get().photos,
-              videos: get().videoSceneItems,
-              onVideoThumbHydrated: (videoFileName, thumbUrl) => {
+            // 첫 화면 썸네일 렌더 직후(0.9초) 동영상 키프레임 및 실사진 비전 벡터를 조용히 고속 인덱싱 (380ms 배치 반영으로 리렌더 폭주 차단)
+            window.setTimeout(() => {
+              const pendingPhotoPatches = new Map<string, Partial<PhotoItem>>();
+              let flushTimer = 0;
+              const flushPhotoPatches = () => {
+                flushTimer = 0;
+                if (pendingPhotoPatches.size === 0) return;
+                const snap = new Map(pendingPhotoPatches);
+                pendingPhotoPatches.clear();
                 set((state) => ({
-                  videoSceneItems: state.videoSceneItems.map((v) =>
-                    v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
-                  ),
-                  matchedVideoScenes: state.matchedVideoScenes.map((v) =>
-                    v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
-                  ),
+                  photos: state.photos.map((p) => {
+                    const pt = snap.get(p.id);
+                    return pt ? { ...p, ...pt } : p;
+                  }),
+                  searchResults: state.searchResults.map((sr) => {
+                    const pt = snap.get(sr.photo.id);
+                    return pt ? { ...sr, photo: { ...sr.photo, ...pt } } : sr;
+                  }),
                 }));
-              },
-              onVideoOcrHydrated: (videoFileName, ocrMeta) => {
-                set((state) => ({
-                  videoSceneItems: state.videoSceneItems.map((v) =>
-                    v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
-                  ),
-                  matchedVideoScenes: state.matchedVideoScenes.map((v) =>
-                    v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
-                  ),
-                }));
-              },
-              onPhotoVisionHydrated: (photoId, patch) => {
-                set((state) => ({
-                  photos: state.photos.map((p) => (p.id === photoId ? { ...p, ...patch } : p)),
-                  searchResults: state.searchResults.map((sr) =>
-                    sr.photo.id === photoId ? { ...sr, photo: { ...sr.photo, ...patch } } : sr
-                  ),
-                }));
-              },
-            });
-          }, 900);
+              };
+              void startSilentRealMediaVisionIndexing({
+                photos: get().photos,
+                videos: get().videoSceneItems,
+                onVideoThumbHydrated: (videoFileName, thumbUrl) => {
+                  set((state) => ({
+                    videoSceneItems: state.videoSceneItems.map((v) =>
+                      v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
+                    ),
+                    matchedVideoScenes: state.matchedVideoScenes.map((v) =>
+                      v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
+                    ),
+                  }));
+                },
+                onVideoOcrHydrated: (videoFileName, ocrMeta) => {
+                  set((state) => ({
+                    videoSceneItems: state.videoSceneItems.map((v) =>
+                      v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
+                    ),
+                    matchedVideoScenes: state.matchedVideoScenes.map((v) =>
+                      v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
+                    ),
+                  }));
+                },
+                onPhotoVisionHydrated: (photoId, patch) => {
+                  const prev = pendingPhotoPatches.get(photoId);
+                  pendingPhotoPatches.set(photoId, prev ? { ...prev, ...patch } : patch);
+                  if (!flushTimer) {
+                    flushTimer = window.setTimeout(flushPhotoPatches, 380);
+                  }
+                },
+              }).finally(() => {
+                if (flushTimer) {
+                  window.clearTimeout(flushTimer);
+                }
+                flushPhotoPatches();
+              });
+            }, 900);
+          }
 
           // 첫 기동 시 백그라운드 배치 OCR(10개 단위)이 진행 중이면 완료 시점에 최신 배지·텍스트 메타데이터를 자동 동기화
           if (isLocalVideosOcrIndexingPending()) {

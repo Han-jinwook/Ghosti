@@ -604,12 +604,17 @@ export const Stage1MinimalSearchPreview: React.FC<{
     return orderedGroups;
   }, [searchResults, searchSpace]);
 
-  const [visiblePhotoLimit, setVisiblePhotoLimit] = useState<number>(48);
+  const isStandaloneSearchWin = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return Boolean(new URLSearchParams(window.location.search).get('ghostSearchWindow'));
+  }, []);
+  const initialPhotoBatchSize = isStandaloneSearchWin ? 20 : 48;
+  const [visiblePhotoLimit, setVisiblePhotoLimit] = useState<number>(initialPhotoBatchSize);
   const photoLoadMoreRef = React.useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    setVisiblePhotoLimit(48);
-  }, [activeQuery, searchSpace]);
+    setVisiblePhotoLimit(initialPhotoBatchSize);
+  }, [activeQuery, searchSpace, initialPhotoBatchSize]);
 
   useEffect(() => {
     const el = photoLoadMoreRef.current;
@@ -618,7 +623,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
     const obs = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {
-          setVisiblePhotoLimit((prev) => Math.min(groupedResults.length, prev + 48));
+          setVisiblePhotoLimit((prev) => Math.min(groupedResults.length, prev + 36));
         }
       },
       { rootMargin: '320px' }

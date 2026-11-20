@@ -137,7 +137,7 @@ export const DesktopDashboard: React.FC = () => {
     };
   }, [ghostSearchWindowStage, isInsideIframe]);
 
-  const switchStandaloneWindowSize = async (targetMode: 'compact' | 'large') => {
+  const switchStandaloneWindowSize = (targetMode: 'compact' | 'large') => {
     const nextIsLarge = targetMode === 'large';
     setIsGalleryViewport(nextIsLarge);
     try {
@@ -148,20 +148,6 @@ export const DesktopDashboard: React.FC = () => {
       );
     } catch {
       /* ignore */
-    }
-    const daemonStage = nextIsLarge ? 'gallery' : 'medium';
-    if (zCoreBridge.isConnected) {
-      try {
-        const res = await fetch(getZCoreUrl('/api/superpower/open_search_window'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ stage: daemonStage, ui_mode: 'web_monitor', resize_existing: true }),
-          signal: AbortSignal.timeout(2000),
-        });
-        if (res.ok) return;
-      } catch {
-        /* fallback below */
-      }
     }
     try {
       const availW = window.screen?.availWidth || DEFAULT_WORK_AREA.right;
@@ -177,6 +163,15 @@ export const DesktopDashboard: React.FC = () => {
       window.moveTo(rect.x, rect.y);
     } catch {
       /* ignore */
+    }
+    const daemonStage = nextIsLarge ? 'gallery' : 'medium';
+    if (zCoreBridge.isConnected) {
+      void fetch(getZCoreUrl('/api/superpower/open_search_window'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ stage: daemonStage, ui_mode: 'web_monitor', resize_existing: true }),
+        signal: AbortSignal.timeout(2000),
+      }).catch(() => {});
     }
   };
 

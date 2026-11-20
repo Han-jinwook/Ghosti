@@ -704,6 +704,9 @@ export async function auditRealPcPhotosAndCluster(
 
   for (let i = 0; i < targetSlice.length; i += BATCH) {
     await Promise.all(targetSlice.slice(i, i + BATCH).map(auditOne));
+    if (i + BATCH < targetSlice.length) {
+      await new Promise((r) => setTimeout(r, 12));
+    }
   }
 
   return clusterPhotosIntoDuplicateGroups(photos.filter((p) => !isSample(p.name)));
