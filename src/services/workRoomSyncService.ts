@@ -54,7 +54,48 @@ export type WorkDeletedTombstoneMap = Record<string, { deletedAt: string; delete
 
 const WORK_INVITE_SESSION_KEY = 'ghosti_active_work_room_invite_v1';
 const MY_WORK_ROOM_CACHE_KEY = 'ghosti_my_work_room_meta_v1';
+const LOCAL_WORK_TOMBSTONES_PREFIX = 'ghosti_work_tombstones_v1::';
 const uploadedCloudBlobKeys = new Set<string>();
+
+const INVALID_WORK_LOCK_OWNER_RE =
+  /(hcell|hwpshare|hshowshare|sharefileinfo|hancom|libreoffice|soffice|microsoft|msoffice|lockfile|winword|powerpnt)/i;
+
+export function sanitizeWorkLockOwner(
+  rawOwner: string | null | undefined,
+  fallbackName = '팀원'
+): string | null {
+  const s = String(rawOwner || '').trim();
+  if (!s) return null;
+  if (INVALID_WORK_LOCK_OWNER_RE.test(s)) {
+    const cleanFallback = String(fallbackName || '').trim();
+    return cleanFallback && !INVALID_WORK_LOCK_OWNER_RE.test(cleanFallback) ? cleanFallback : '팀원';
+  }
+  return s.slice(0, 32);
+}
+
+export function loadCachedWorkTombstones(roomId: string): WorkDeletedTombstoneMap {
+  if (typeof window === 'undefined' || !roomId) return {};
+  try {
+    const raw = localStorage.getItem(`${LOCAL_WORK_TOMBSTONES_PREFIX}${roomId}`);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as WorkDeletedTombstoneMap) : {};
+  } catch {
+    return {};
+  }
+}
+
+export function saveCachedWorkTombstones(
+  roomId: string,
+  tombstones: WorkDeletedTombstoneMap
+): void {
+  if (typeof window === 'undefined' || !roomId) return;
+  try {
+    localStorage.setItem(`${LOCAL_WORK_TOMBSTONES_PREFIX}${roomId}`, JSON.stringify(tombstones || {}));
+  } catch {
+    /* ignore */
+  }
+}
 
 function formatBytesLabel(bytes: number): string {
   if (!bytes || bytes <= 0) return '0.1 KB';
@@ -314,7 +355,7 @@ export function mapRawWorkFileToDto(rf: Record<string, unknown>, idx: number): W
   const folderId = String(rf.folderId || 'root');
   const folderPath = String(rf.folderPath || 'S:\\');
   const author = String(rf.author || rf.uploaderNickname || '팀원');
-  const lockedBy = rf.lockedBy ? String(rf.lockedBy) : null;
+  const lockedBy = sanitizeWorkLockOwner(rf.lockedBy ? String(rf.lockedBy) : null, author);
   const isImage = Boolean(rf.isImage);
   const previewText = String(rf.previewText || rf.fullTextPreview || '').trim();
   const rawHeaders = Array.isArray(rf.tableHeaders) ? (rf.tableHeaders as string[]) : [];
@@ -380,10 +421,17 @@ export async function fetchLocalWorkFilesNative(opts?: {
   targetDir?: string;
   docs: WorkLoungeDocDto[];
   locallyDeletedRelPaths: string[];
+  localDeletedTombstones: WorkDeletedTombstoneMap;
 }> {
   const base = resolveWorkApiUrl('/__work/files');
   if (!base) {
-    return { ok: false, mounted: false, docs: [], locallyDeletedRelPaths: [] };
+    return {
+      ok: false,
+      mounted: false,
+      docs: [],
+      locallyDeletedRelPaths: [],
+      localDeletedTombstones: {},
+    };
   }
   try {
     const qs = new URLSearchParams();
@@ -391,16 +439,31 @@ export async function fetchLocalWorkFilesNative(opts?: {
     if (opts?.author) qs.set('author', opts.author);
     const fullUrl = qs.toString() ? `${base}?${qs.toString()}` : base;
     const res = await fetch(fullUrl);
-    if (!res.ok) return { ok: false, mounted: false, docs: [], locallyDeletedRelPaths: [] };
+    if (!res.ok) {
+      return {
+        ok: false,
+        mounted: false,
+        docs: [],
+        locallyDeletedRelPaths: [],
+        localDeletedTombstones: {},
+      };
+    }
     const data = (await res.json()) as {
       ok?: boolean;
       mounted?: boolean;
       targetDir?: string;
       files?: Array<Record<string, unknown>>;
       locallyDeletedRelPaths?: string[];
+      localDeletedTombstones?: WorkDeletedTombstoneMap;
     };
     if (!data?.ok || !Array.isArray(data.files)) {
-      return { ok: false, mounted: false, docs: [], locallyDeletedRelPaths: [] };
+      return {
+        ok: false,
+        mounted: false,
+        docs: [],
+        locallyDeletedRelPaths: [],
+        localDeletedTombstones: {},
+      };
     }
     return {
       ok: true,
@@ -410,9 +473,59 @@ export async function fetchLocalWorkFilesNative(opts?: {
       locallyDeletedRelPaths: Array.isArray(data.locallyDeletedRelPaths)
         ? data.locallyDeletedRelPaths
         : [],
+      localDeletedTombstones:
+        data.localDeletedTombstones && typeof data.localDeletedTombstones === 'object'
+          ? data.localDeletedTombstones
+          : {},
     };
   } catch {
-    return { ok: false, mounted: false, docs: [], locallyDeletedRelPaths: [] };
+    return {
+      ok: false,
+      mounted: false,
+      docs: [],
+      locallyDeletedRelPaths: [],
+      localDeletedTombstones: {},
+    };
+  }
+}
+
+export async function fetchLocalWorkLocksFast(author?: string): Promise<{
+  ok: boolean;
+  locks: Record<string, string | null>;
+  fileCount: number;
+  unsupported?: boolean;
+}> {
+  const base = resolveWorkApiUrl('/__work/locks');
+  if (!base) return { ok: false, locks: {}, fileCount: 0 };
+  try {
+    const qs = new URLSearchParams();
+    if (author) qs.set('author', author);
+    const fullUrl = qs.toString() ? `${base}?${qs.toString()}` : base;
+    const res = await fetch(fullUrl);
+    if (res.status === 404) {
+      return { ok: false, locks: {}, fileCount: 0, unsupported: true };
+    }
+    if (!res.ok) return { ok: false, locks: {}, fileCount: 0 };
+    const data = (await res.json()) as {
+      ok?: boolean;
+      locks?: Record<string, string | null>;
+      fileCount?: number;
+    };
+    if (!data?.ok || !data.locks || typeof data.locks !== 'object') {
+      return { ok: false, locks: {}, fileCount: 0 };
+    }
+    const cleanLocks: Record<string, string | null> = {};
+    for (const [k, v] of Object.entries(data.locks)) {
+      const sanitized = sanitizeWorkLockOwner(v, author || '팀원');
+      if (sanitized) cleanLocks[k] = sanitized;
+    }
+    return {
+      ok: true,
+      locks: cleanLocks,
+      fileCount: Number(data.fileCount || 0),
+    };
+  } catch {
+    return { ok: false, locks: {}, fileCount: 0 };
   }
 }
 
@@ -677,34 +790,55 @@ export async function deleteWorkFileShared(opts: {
   roomId?: string;
   relPath: string;
   actorNickname?: string;
+  deletedAt?: string;
 }): Promise<{ ok: boolean; deletedTombstones?: WorkDeletedTombstoneMap }> {
   const cleanRel = (opts.relPath || '').replace(/\\/g, '/').replace(/^\/+/, '').trim();
   if (!cleanRel) return { ok: false };
+  const deletedAt = opts.deletedAt || new Date().toISOString();
+  const actor = opts.actorNickname || '팀원';
 
+  let localTombstones: WorkDeletedTombstoneMap | undefined;
   if (zCoreBridge.isConnected) {
     try {
-      await fetch(getZCoreUrl('/__work/delete-file'), {
+      const lRes = await fetch(getZCoreUrl('/__work/delete-file'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ relPath: cleanRel }),
+        body: JSON.stringify({
+          relPath: cleanRel,
+          actorNickname: actor,
+          deletedAt,
+        }),
       });
+      if (lRes.ok) {
+        const lj = (await lRes.json().catch(() => ({}))) as {
+          localDeletedTombstones?: WorkDeletedTombstoneMap;
+        };
+        if (lj?.localDeletedTombstones) {
+          localTombstones = lj.localDeletedTombstones;
+        }
+      }
     } catch {
       /* ignore */
     }
   }
 
-  if (opts.roomId && hasAuthenticatedHubAccountSession()) {
+  const effectiveRoomId =
+    (opts.roomId || '').trim() || readCachedMyWorkRoomMeta()?.roomId || '';
+  if (effectiveRoomId && hasAuthenticatedHubAccountSession()) {
     const srv = await callGhostiServerBridge<{ deletedTombstones?: WorkDeletedTombstoneMap }>(
       'work_delete_file',
       {
-        roomId: opts.roomId,
+        roomId: effectiveRoomId,
         relPath: cleanRel,
-        actorNickname: opts.actorNickname || '팀원',
+        actorNickname: actor,
       }
     );
-    return { ok: Boolean(srv.ok), deletedTombstones: srv.deletedTombstones };
+    return {
+      ok: Boolean(srv.ok),
+      deletedTombstones: { ...(localTombstones || {}), ...(srv.deletedTombstones || {}) },
+    };
   }
-  return { ok: true };
+  return { ok: true, deletedTombstones: localTombstones };
 }
 
 export async function toggleHideWorkFileNative(relPath: string): Promise<boolean> {

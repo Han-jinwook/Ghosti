@@ -161,7 +161,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.6.49"
+CORE_VERSION = "2.6.69"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -683,6 +683,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path in ("/__work/files", "/api/work/files"):
             self._send_json(plugin_paid_work_sdrive.list_work_files(qp))
+            return
+
+        if path in ("/__work/locks", "/api/work/locks"):
+            self._send_json(plugin_paid_work_sdrive.get_work_locks_fast(qp))
             return
 
         if path in ("/__work/file-sync-payload", "/api/work/file-sync-payload"):

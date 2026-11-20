@@ -12,14 +12,18 @@ import {
   downloadWorkFileOriginal,
   ensureMyWorkRoomAndInvite,
   fetchLocalWorkFilesNative,
+  fetchLocalWorkLocksFast,
   fetchWorkRoomAuthedState,
   fetchWorkRoomCloudPreview,
   loadCachedWorkRoomPreview,
+  loadCachedWorkTombstones,
   mountWorkSDriveNative,
   openGhostSearchForWorkSDrive,
   pullSyncRemoteWorkFilesToLocalSDrive,
   readActiveWorkRoomInviteMeta,
   readCachedMyWorkRoomMeta,
+  sanitizeWorkLockOwner,
+  saveCachedWorkTombstones,
   toggleHideWorkFileNative,
   uploadWorkFileToNativeSDrive,
   upsertWorkFilesToSupabase,
@@ -73,24 +77,68 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const [nightSleepBannerPhase, setNightSleepBannerPhase] = useState<'hidden' | 'visible' | 'fading'>('hidden');
   const [showMemberPermissions, setShowMemberPermissions] = useState<boolean>(() => !isMobileOrStoreRuntime());
   const [hiddenDocIds, setHiddenDocIds] = useState<string[]>([]);
-  const [deletedTombstones, setDeletedTombstones] = useState<WorkDeletedTombstoneMap>({});
-  const [docActionNotice, setDocActionNotice] = useState<string | null>(null);
-  const [inviteCopied, setInviteCopied] = useState<boolean>(false);
-  const [uploadingFiles, setUploadingFiles] = useState<boolean>(false);
-  const [lastSyncedToLocalCount, setLastSyncedToLocalCount] = useState<number>(0);
-  const [presencePeers, setPresencePeers] = useState<WorkRoomPresenceMember[]>([]);
   const [activeWorkRoomId, setActiveWorkRoomId] = useState<string>(() => {
     const inv = readActiveWorkRoomInviteMeta();
     if (inv.hasWorkInvite && inv.roomId) return inv.roomId;
     return readCachedMyWorkRoomMeta()?.roomId || '';
   });
+  const [deletedTombstones, setDeletedTombstones] = useState<WorkDeletedTombstoneMap>(() => {
+    const inv = readActiveWorkRoomInviteMeta();
+    const initRoom =
+      (inv.hasWorkInvite && inv.roomId ? inv.roomId : readCachedMyWorkRoomMeta()?.roomId) || '';
+    return initRoom ? loadCachedWorkTombstones(initRoom) : {};
+  });
+  const [hasAuthoritativeRemoteState, setHasAuthoritativeRemoteState] = useState<boolean>(false);
+  const [docActionNotice, setDocActionNotice] = useState<string | null>(null);
+  const [inviteCopied, setInviteCopied] = useState<boolean>(false);
+  const [uploadingFiles, setUploadingFiles] = useState<boolean>(false);
+  const [lastSyncedToLocalCount, setLastSyncedToLocalCount] = useState<number>(0);
+  const [presencePeers, setPresencePeers] = useState<WorkRoomPresenceMember[]>([]);
 
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const localDocsRef = useRef<WorkLoungeDocDto[]>([]);
+  const remoteDocsRef = useRef<WorkLoungeDocDto[]>([]);
+  remoteDocsRef.current = remoteDocs;
+  const deletedTombstonesRef = useRef<WorkDeletedTombstoneMap>(deletedTombstones);
+  deletedTombstonesRef.current = deletedTombstones;
+  const inFlightDeletesRef = useRef<Set<string>>(new Set());
+  const fastLocksUnsupportedRef = useRef<boolean>(false);
   const prevLockSignatureRef = useRef<string>('');
   const prevCloudUpsertSigRef = useRef<string>('');
   const acceptedInviteTokenRef = useRef<string>('');
   const realtimeRef = useRef<ReturnType<typeof connectWorkRoomRealtimeChannel> | null>(null);
+
+  const mergeAndPersistTombstones = useCallback(
+    (patch: WorkDeletedTombstoneMap, clearRelPaths?: string[]) => {
+      setDeletedTombstones((prev) => {
+        const next: WorkDeletedTombstoneMap = { ...prev, ...patch };
+        if (clearRelPaths && clearRelPaths.length > 0) {
+          for (const rp of clearRelPaths) {
+            delete next[rp];
+          }
+        }
+        deletedTombstonesRef.current = next;
+        if (activeWorkRoomId) {
+          saveCachedWorkTombstones(activeWorkRoomId, next);
+        }
+        return next;
+      });
+    },
+    [activeWorkRoomId]
+  );
+
+  useEffect(() => {
+    if (!activeWorkRoomId) return;
+    setHasAuthoritativeRemoteState(false);
+    const cachedTombs = loadCachedWorkTombstones(activeWorkRoomId);
+    if (Object.keys(cachedTombs).length > 0) {
+      setDeletedTombstones((prev) => {
+        const merged = { ...cachedTombs, ...prev };
+        deletedTombstonesRef.current = merged;
+        return merged;
+      });
+    }
+  }, [activeWorkRoomId]);
 
   const inviteMeta = useMemo(() => readActiveWorkRoomInviteMeta(), [activeWorkRoomId]);
   const actorNickname = useMemo(() => {
@@ -149,22 +197,52 @@ export const WorkLoungeB2BHub: React.FC = () => {
     if (res.targetDir) {
       setDriveTargetPath(res.targetDir);
     }
-    localDocsRef.current = res.docs;
-    setLocalDocs(res.docs);
+
+    // 로컬 Z-코어 영구 삭제 원장(localDeletedTombstones) 즉시 병합
+    if (res.localDeletedTombstones && Object.keys(res.localDeletedTombstones).length > 0) {
+      mergeAndPersistTombstones(res.localDeletedTombstones);
+    }
+
+    // 현재 삭제 진행 중인 파일(inFlightDeletesRef)은 목록/업로드에서 즉시 제외
+    const activeLocalDocs = res.docs.filter((d) => !inFlightDeletesRef.current.has(d.relPath));
+    localDocsRef.current = activeLocalDocs;
+    setLocalDocs(activeLocalDocs);
+
+    // 로컬 PC에서 파일 잠금이 해제되었을 때 remoteDocs의 옛 잠금 잔상을 즉시 제거 (15초 지연 해소)
+    setRemoteDocs((prev) => {
+      if (prev.length === 0) return prev;
+      const localLockByRel = new Map<string, string | null>();
+      for (const d of activeLocalDocs) {
+        localLockByRel.set(d.relPath, d.lockedBy);
+      }
+      let changed = false;
+      const next = prev.map((rd) => {
+        if (!localLockByRel.has(rd.relPath)) return rd;
+        const locLock = localLockByRel.get(rd.relPath) ?? null;
+        if (locLock === null && rd.lockedBy !== null) {
+          changed = true;
+          return { ...rd, lockedBy: null };
+        }
+        return rd;
+      });
+      return changed ? next : prev;
+    });
 
     // 윈도우 탐색기 S:\에서 직접 삭제된 파일 감지 -> 전 팀원 공유방 Tombstone 전파 (부활 원천 차단)
     if (res.locallyDeletedRelPaths.length > 0) {
       const nowIso = new Date().toISOString();
-      setDeletedTombstones((prev) => {
-        const next = { ...prev };
-        for (const rel of res.locallyDeletedRelPaths) {
-          next[rel] = { deletedAt: nowIso, deletedBy: actorNickname };
-        }
-        return next;
-      });
-      setRemoteDocs((prev) =>
-        prev.filter((rd) => !res.locallyDeletedRelPaths.includes(rd.relPath))
+      const delPatch: WorkDeletedTombstoneMap = {};
+      for (const rel of res.locallyDeletedRelPaths) {
+        delPatch[rel] = { deletedAt: nowIso, deletedBy: actorNickname };
+      }
+      mergeAndPersistTombstones(delPatch);
+      const nextRemoteFiltered = remoteDocsRef.current.filter(
+        (rd) => !res.locallyDeletedRelPaths.includes(rd.relPath)
       );
+      setRemoteDocs(nextRemoteFiltered);
+      if (activeWorkRoomId) {
+        void cacheWorkRoomPreviewLocally(activeWorkRoomId, nextRemoteFiltered);
+      }
       for (const rel of res.locallyDeletedRelPaths) {
         realtimeRef.current?.broadcastFileDeleted(rel, nowIso);
         if (activeWorkRoomId) {
@@ -172,13 +250,18 @@ export const WorkLoungeB2BHub: React.FC = () => {
             roomId: activeWorkRoomId,
             relPath: rel,
             actorNickname,
+            deletedAt: nowIso,
+          }).then((delRes) => {
+            if (delRes.deletedTombstones) {
+              mergeAndPersistTombstones(delRes.deletedTombstones);
+            }
           });
         }
       }
     }
 
     const lockMap: Record<string, string | null> = {};
-    for (const d of res.docs) {
+    for (const d of activeLocalDocs) {
       if (d.lockedBy) lockMap[d.relPath] = d.lockedBy;
     }
     const lockSig = JSON.stringify(lockMap);
@@ -187,25 +270,36 @@ export const WorkLoungeB2BHub: React.FC = () => {
       realtimeRef.current?.broadcastLocks(lockMap);
     }
 
-    if (activeWorkRoomId && res.docs.length > 0) {
-      const cloudSig = res.docs
+    const uploadableDocs = activeLocalDocs.filter((d) => {
+      if (inFlightDeletesRef.current.has(d.relPath)) return false;
+      const tomb = deletedTombstonesRef.current[d.relPath];
+      if (tomb?.deletedAt) {
+        const delTs = Date.parse(tomb.deletedAt) || 0;
+        const locTs = Date.parse(d.fileMtimeIso) || 0;
+        if (delTs <= 0 || locTs <= delTs + 5000) return false;
+      }
+      return true;
+    });
+
+    if (activeWorkRoomId && uploadableDocs.length > 0) {
+      const cloudSig = uploadableDocs
         .map((d) => `${d.relPath}:${d.sha256}:${d.lockedBy || ''}`)
         .join('|');
       if (cloudSig !== prevCloudUpsertSigRef.current) {
         prevCloudUpsertSigRef.current = cloudSig;
-        realtimeRef.current?.broadcastSnapshot(res.docs);
-        void cacheWorkRoomPreviewLocally(activeWorkRoomId, res.docs);
+        realtimeRef.current?.broadcastSnapshot(uploadableDocs);
+        void cacheWorkRoomPreviewLocally(activeWorkRoomId, uploadableDocs);
         void upsertWorkFilesToSupabase({
           roomId: activeWorkRoomId,
-          docs: res.docs,
+          docs: uploadableDocs,
           actorNickname,
         }).then((upRes) => {
           if (upRes.deletedTombstones) {
-            setDeletedTombstones((prev) => ({ ...prev, ...upRes.deletedTombstones }));
+            mergeAndPersistTombstones(upRes.deletedTombstones);
           }
           if (upRes.uploadedLargeBlob) {
             realtimeRef.current?.broadcastSnapshot(
-              res.docs.map((d) => ({
+              uploadableDocs.map((d) => ({
                 ...d,
                 hasCloudBlob: Boolean(d.hasCloudBlob || d.byteSize > 512 * 1024),
               }))
@@ -214,9 +308,62 @@ export const WorkLoungeB2BHub: React.FC = () => {
         });
       }
     }
-  }, [activeWorkRoomId, actorNickname]);
+  }, [activeWorkRoomId, actorNickname, mergeAndPersistTombstones]);
 
-  // Z-코어 연결 시 S: 드라이브 무인 마운트 + 3초 주기 파일·오피스 잠금(~$) 실시간 감시
+  // [초경량 1초 잠금 폴링]: 탐색기에서 엑셀·한셀·한글 파일을 열거나 닫을 때 1초 이내로 [🔒 사용 중] ↔ [🔓 수정 가능] 즉시 반영
+  const pollLocalLocksFast = useCallback(async () => {
+    if (fastLocksUnsupportedRef.current) {
+      await syncRealWorkFiles();
+      return;
+    }
+    const fast = await fetchLocalWorkLocksFast(actorNickname);
+    if (fast.unsupported) {
+      fastLocksUnsupportedRef.current = true;
+      await syncRealWorkFiles();
+      return;
+    }
+    if (!fast.ok) return;
+
+    // 탐색기에서 파일이 추가/삭제되어 총 개수가 바뀐 경우 즉시 풀 동기화 실행
+    if (fast.fileCount !== localDocsRef.current.length) {
+      await syncRealWorkFiles();
+      return;
+    }
+
+    const lockSig = JSON.stringify(fast.locks);
+    if (lockSig !== prevLockSignatureRef.current) {
+      prevLockSignatureRef.current = lockSig;
+      const updatedLocal = localDocsRef.current.map((d) => {
+        const nextLock = fast.locks[d.relPath] || null;
+        return d.lockedBy === nextLock ? d : { ...d, lockedBy: nextLock };
+      });
+      localDocsRef.current = updatedLocal;
+      setLocalDocs(updatedLocal);
+      // 로컬 잠금 해제 시 remoteDocs 옛 잠금 잔상도 0.01초 만에 즉시 제거
+      setRemoteDocs((prev) =>
+        prev.map((rd) => {
+          const nextLock = fast.locks[rd.relPath] ?? null;
+          return rd.lockedBy !== nextLock && localDocsRef.current.some((l) => l.relPath === rd.relPath)
+            ? { ...rd, lockedBy: nextLock }
+            : rd;
+        })
+      );
+      realtimeRef.current?.broadcastLocks(fast.locks);
+      // 서버 매니페스트에도 잠금 상태 즉시 반영
+      if (activeWorkRoomId && updatedLocal.length > 0 && inFlightDeletesRef.current.size === 0) {
+        prevCloudUpsertSigRef.current = updatedLocal
+          .map((d) => `${d.relPath}:${d.sha256}:${d.lockedBy || ''}`)
+          .join('|');
+        void upsertWorkFilesToSupabase({
+          roomId: activeWorkRoomId,
+          docs: updatedLocal,
+          actorNickname,
+        });
+      }
+    }
+  }, [activeWorkRoomId, actorNickname, syncRealWorkFiles]);
+
+  // Z-코어 연결 시 S: 드라이브 무인 마운트 + 1초 초경량 잠금(~$) 감시 + 4초 전체 동기화 + 창 포커스 즉시 갱신
   useEffect(() => {
     void verifyHybridP2PBridgeConnection({
       roomId: activeWorkRoomId || 'lounge-work-b2b',
@@ -234,13 +381,28 @@ export const WorkLoungeB2BHub: React.FC = () => {
         void syncRealWorkFiles();
       });
 
-      const interval = window.setInterval(() => {
+      const fastLockInterval = window.setInterval(() => {
+        void pollLocalLocksFast();
+      }, 1000);
+      const fullSyncInterval = window.setInterval(() => {
         void syncRealWorkFiles();
-      }, 3000);
-      return () => window.clearInterval(interval);
+      }, 4000);
+      const onFocusOrVisible = () => {
+        if (document.visibilityState === 'visible') {
+          void pollLocalLocksFast();
+        }
+      };
+      window.addEventListener('focus', onFocusOrVisible);
+      document.addEventListener('visibilitychange', onFocusOrVisible);
+      return () => {
+        window.clearInterval(fastLockInterval);
+        window.clearInterval(fullSyncInterval);
+        window.removeEventListener('focus', onFocusOrVisible);
+        document.removeEventListener('visibilitychange', onFocusOrVisible);
+      };
     }
     return undefined;
-  }, [isZCoreConnected, isMobileOrStore, activeWorkRoomId, syncRealWorkFiles]);
+  }, [isZCoreConnected, isMobileOrStore, activeWorkRoomId, syncRealWorkFiles, pollLocalLocksFast]);
 
   // 로그인한 방장이 업무방 진입 시 내 고유 업무방 ID 자동 확보
   useEffect(() => {
@@ -279,9 +441,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
   // 로컬 즉시 캐시 복원 + 방장 PC 절전/퇴근 시에도 작동하는 24시간 공유방 상태·미리보기 로드
   useEffect(() => {
     if (activeWorkRoomId) {
+      const knownTombs = loadCachedWorkTombstones(activeWorkRoomId);
       void loadCachedWorkRoomPreview(activeWorkRoomId).then((cachedDocs) => {
-        if (cachedDocs.length > 0) {
-          setRemoteDocs((prev) => (prev.length > 0 ? prev : cachedDocs));
+        const filteredCached = cachedDocs.filter((d) => !knownTombs[d.relPath]);
+        if (filteredCached.length > 0) {
+          setRemoteDocs((prev) => (prev.length > 0 ? prev : filteredCached));
         }
       });
     }
@@ -291,24 +455,23 @@ export const WorkLoungeB2BHub: React.FC = () => {
       if (activeWorkRoomId && hasAuthenticatedHubAccountSession()) {
         const authed = await fetchWorkRoomAuthedState(activeWorkRoomId, inviteMeta.inviteToken);
         if (!cancelled && authed.ok) {
-          setDeletedTombstones((prev) => ({ ...prev, ...authed.deletedTombstones }));
-          if (authed.docs.length > 0) {
-            setRemoteDocs(authed.docs);
-            void cacheWorkRoomPreviewLocally(activeWorkRoomId, authed.docs);
-          }
+          mergeAndPersistTombstones(authed.deletedTombstones);
+          // 마지막 1개 파일 삭제 시에도 빈 목록([])을 정확히 반영하고 로컬 캐시를 갱신!
+          setRemoteDocs(authed.docs);
+          void cacheWorkRoomPreviewLocally(activeWorkRoomId, authed.docs);
+          setHasAuthoritativeRemoteState(true);
           return;
         }
       }
       if (inviteMeta.hasWorkInvite && inviteMeta.inviteToken) {
         const pub = await fetchWorkRoomCloudPreview(inviteMeta.inviteToken);
         if (!cancelled && pub.ok) {
-          setDeletedTombstones((prev) => ({ ...prev, ...pub.deletedTombstones }));
-          if (pub.docs.length > 0) {
-            setRemoteDocs(pub.docs);
-            if (activeWorkRoomId) {
-              void cacheWorkRoomPreviewLocally(activeWorkRoomId, pub.docs);
-            }
+          mergeAndPersistTombstones(pub.deletedTombstones);
+          setRemoteDocs(pub.docs);
+          if (activeWorkRoomId) {
+            void cacheWorkRoomPreviewLocally(activeWorkRoomId, pub.docs);
           }
+          setHasAuthoritativeRemoteState(true);
         }
       }
     };
@@ -321,7 +484,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
       cancelled = true;
       window.clearInterval(pollId);
     };
-  }, [activeWorkRoomId, inviteMeta.hasWorkInvite, inviteMeta.inviteToken, merlinAuth?.userId]);
+  }, [activeWorkRoomId, inviteMeta.hasWorkInvite, inviteMeta.inviteToken, merlinAuth?.userId, mergeAndPersistTombstones]);
 
   // 방장 ↔ 팀원 실시간 파일·잠금(~$)·삭제 Tombstone 동기화 채널 연결
   useEffect(() => {
@@ -333,21 +496,37 @@ export const WorkLoungeB2BHub: React.FC = () => {
       role: inviteMeta.hasWorkInvite ? 'editor' : 'host',
       getLocalDocs: () => localDocsRef.current,
       onRemoteSnapshot: (incomingDocs) => {
-        setRemoteDocs(incomingDocs);
+        const curTombs = deletedTombstonesRef.current;
+        const cleaned = incomingDocs.filter((d) => {
+          if (inFlightDeletesRef.current.has(d.relPath)) return false;
+          const tomb = curTombs[d.relPath];
+          if (tomb?.deletedAt) {
+            const delTs = Date.parse(tomb.deletedAt) || 0;
+            const dTs = Date.parse(d.fileMtimeIso) || 0;
+            if (delTs <= 0 || dTs <= delTs + 5000) return false;
+          }
+          return true;
+        });
+        setRemoteDocs(cleaned);
       },
       onRemoteFileDeleted: (relPath, deletedAt) => {
-        setDeletedTombstones((prev) => ({
-          ...prev,
-          [relPath]: { deletedAt },
-        }));
-        setRemoteDocs((prev) => prev.filter((d) => d.relPath !== relPath));
+        mergeAndPersistTombstones({ [relPath]: { deletedAt } });
+        const nextRemote = remoteDocsRef.current.filter((d) => d.relPath !== relPath);
+        setRemoteDocs(nextRemote);
+        if (activeWorkRoomId) {
+          void cacheWorkRoomPreviewLocally(activeWorkRoomId, nextRemote);
+        }
         setLocalDocs((prev) => prev.filter((d) => d.relPath !== relPath));
         if (zCoreBridge.isConnected) {
-          void deleteWorkFileShared({ relPath });
+          void deleteWorkFileShared({ relPath, deletedAt });
         }
       },
       onRemoteLockMap: (locks) => {
-        setRemoteLocksByRelPath(locks);
+        const sanitized: Record<string, string | null> = {};
+        for (const [k, v] of Object.entries(locks || {})) {
+          sanitized[k] = sanitizeWorkLockOwner(v, '팀원');
+        }
+        setRemoteLocksByRelPath(sanitized);
       },
       onPresenceMembers: (members) => {
         setPresencePeers(members);
@@ -358,11 +537,17 @@ export const WorkLoungeB2BHub: React.FC = () => {
       handle.dispose();
       realtimeRef.current = null;
     };
-  }, [activeWorkRoomId, actorNickname, inviteMeta.hasWorkInvite]);
+  }, [activeWorkRoomId, actorNickname, inviteMeta.hasWorkInvite, mergeAndPersistTombstones]);
 
   // 팀원 PC에서 Z-코어가 켜지는 즉시 원격 공유 업무파일(50MB 대용량 포함) 및 삭제 Tombstone을 내 S:\ 탐색기로 자동 동기화
+  // [재부활 원천 차단]: 서버 정식 상태(hasAuthoritativeRemoteState) 수신 전에는 로컬 구 캐시로 S:\에 파일을 복원하지 않습니다!
   useEffect(() => {
-    if (!isZCoreConnected || (remoteDocs.length === 0 && Object.keys(deletedTombstones).length === 0)) {
+    if (
+      !isZCoreConnected ||
+      !hasAuthoritativeRemoteState ||
+      inFlightDeletesRef.current.size > 0 ||
+      (remoteDocs.length === 0 && Object.keys(deletedTombstones).length === 0)
+    ) {
       return;
     }
 
@@ -381,6 +566,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     });
   }, [
     isZCoreConnected,
+    hasAuthoritativeRemoteState,
     remoteDocs,
     deletedTombstones,
     activeWorkRoomId,
@@ -393,22 +579,36 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const docs = useMemo<WorkLoungeDocDto[]>(() => {
     const byRel = new Map<string, WorkLoungeDocDto>();
     for (const rd of remoteDocs) {
-      if (deletedTombstones[rd.relPath]) continue;
-      byRel.set(rd.relPath, rd);
+      if (inFlightDeletesRef.current.has(rd.relPath)) continue;
+      const tomb = deletedTombstones[rd.relPath];
+      if (tomb?.deletedAt) {
+        const delTs = Date.parse(tomb.deletedAt) || 0;
+        const rTs = Date.parse(rd.fileMtimeIso) || 0;
+        if (delTs <= 0 || rTs <= delTs + 5000) continue;
+      }
+      byRel.set(rd.relPath, {
+        ...rd,
+        lockedBy: sanitizeWorkLockOwner(rd.lockedBy, rd.author || '팀원'),
+      });
     }
     for (const ld of localDocs) {
+      if (inFlightDeletesRef.current.has(ld.relPath)) continue;
       const tomb = deletedTombstones[ld.relPath];
       if (tomb?.deletedAt) {
         const delTs = Date.parse(tomb.deletedAt) || 0;
         const locTs = Date.parse(ld.fileMtimeIso) || 0;
-        if (delTs >= locTs) continue;
+        if (delTs > 0 && locTs <= delTs + 5000) continue;
       }
       const prev = byRel.get(ld.relPath);
+      const localOwner = sanitizeWorkLockOwner(ld.lockedBy, ld.author || actorNickname);
+      const peerOwner = sanitizeWorkLockOwner(remoteLocksByRelPath[ld.relPath], '팀원');
+      // [15초 잠금 잔류 근본 해결]: 내 PC에 실존하는 파일(ld)이 로컬에서 잠금 해제(null)되었다면
+      // 서버 매니페스트의 낡은 이전 잠금(prev?.lockedBy)을 절대 되살리지 않고 실시간 잠금만 반영!
       byRel.set(ld.relPath, {
         ...ld,
         author: ld.author || prev?.author || actorNickname,
         hasCloudBlob: Boolean(ld.hasCloudBlob || prev?.hasCloudBlob),
-        lockedBy: ld.lockedBy || remoteLocksByRelPath[ld.relPath] || prev?.lockedBy || null,
+        lockedBy: localOwner || peerOwner || null,
       });
     }
     return Array.from(byRel.values()).map((d) => ({
@@ -416,7 +616,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
       lockedBy:
         simulatedLocksByDocId[d.id] !== undefined
           ? simulatedLocksByDocId[d.id]
-          : d.lockedBy || remoteLocksByRelPath[d.relPath] || null,
+          : sanitizeWorkLockOwner(d.lockedBy || remoteLocksByRelPath[d.relPath], d.author || '팀원'),
     }));
   }, [localDocs, remoteDocs, deletedTombstones, remoteLocksByRelPath, simulatedLocksByDocId, actorNickname]);
 
@@ -601,16 +801,23 @@ export const WorkLoungeB2BHub: React.FC = () => {
     }
     setUploadingFiles(true);
     let okCount = 0;
+    const uploadedRelPaths: string[] = [];
     for (const file of Array.from(fileList)) {
       const uploaded = await uploadWorkFileToNativeSDrive({
         file,
         folderId: selectedFolderId,
         author: actorNickname,
       });
-      if (uploaded.ok) okCount += 1;
+      if (uploaded.ok) {
+        okCount += 1;
+        if (uploaded.relPath) uploadedRelPaths.push(uploaded.relPath);
+      }
     }
     setUploadingFiles(false);
     if (okCount > 0) {
+      if (uploadedRelPaths.length > 0) {
+        mergeAndPersistTombstones({}, uploadedRelPaths);
+      }
       showToast(`✅ 업무 파일 ${okCount}건이 S:\\ 드라이브 및 팀원 공유 목록에 즉시 반영되었습니다!`);
       await syncRealWorkFiles();
     }
@@ -1299,7 +1506,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                           </span>
                           {doc.lockedBy ? (
                             <span className="px-2.5 py-0.5 rounded-md bg-amber-500/20 border border-amber-400/60 text-amber-200 font-label-sm text-[10.5px] font-extrabold">
-                              🔒 {doc.lockedBy} 수정 중
+                              🔒 현재 {doc.lockedBy}님이 사용 중
                             </span>
                           ) : (
                             <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/30 text-emerald-300 font-label-sm text-[10.5px] font-bold">
@@ -1520,21 +1727,41 @@ export const WorkLoungeB2BHub: React.FC = () => {
                   const targetRel = selectedDoc.relPath;
                   const targetName = selectedDoc.fileName;
                   const nowIso = new Date().toISOString();
-                  setDeletedTombstones((prev) => ({
-                    ...prev,
-                    [targetRel]: { deletedAt: nowIso, deletedBy: actorNickname },
-                  }));
-                  setRemoteDocs((prev) => prev.filter((d) => d.relPath !== targetRel));
-                  setLocalDocs((prev) => prev.filter((d) => d.relPath !== targetRel));
-                  realtimeRef.current?.broadcastFileDeleted(targetRel, nowIso);
-                  await deleteWorkFileShared({
-                    roomId: activeWorkRoomId,
-                    relPath: targetRel,
-                    actorNickname,
-                  });
-                  showToast(
-                    `🗑️ '${targetName}' 파일이 윈도우 [휴지통]으로 안전하게 이동되었으며 팀원 공유 목록에서도 함께 정리되었습니다.`
-                  );
+                  inFlightDeletesRef.current.add(targetRel);
+                  try {
+                    mergeAndPersistTombstones({
+                      [targetRel]: { deletedAt: nowIso, deletedBy: actorNickname },
+                    });
+                    const nextRemote = remoteDocsRef.current.filter((d) => d.relPath !== targetRel);
+                    const nextLocal = localDocsRef.current.filter((d) => d.relPath !== targetRel);
+                    localDocsRef.current = nextLocal;
+                    setRemoteDocs(nextRemote);
+                    setLocalDocs(nextLocal);
+                    if (activeWorkRoomId) {
+                      void cacheWorkRoomPreviewLocally(activeWorkRoomId, nextRemote);
+                    }
+                    realtimeRef.current?.broadcastFileDeleted(targetRel, nowIso);
+                    const delRes = await deleteWorkFileShared({
+                      roomId: activeWorkRoomId || readCachedMyWorkRoomMeta()?.roomId || '',
+                      relPath: targetRel,
+                      actorNickname,
+                      deletedAt: nowIso,
+                    });
+                    if (delRes.deletedTombstones) {
+                      mergeAndPersistTombstones(delRes.deletedTombstones);
+                    }
+                    if (!delRes.ok) {
+                      showToast(
+                        `⚠️ '${targetName}' 파일은 내 PC [휴지통]으로 이동했지만 서버 공유방 반영에 실패했습니다. 잠시 후 다시 확인해 주세요.`
+                      );
+                    } else {
+                      showToast(
+                        `🗑️ '${targetName}' 파일이 윈도우 [휴지통]으로 안전하게 이동되었으며 새로고침해도 다시 살아나지 않습니다.`
+                      );
+                    }
+                  } finally {
+                    inFlightDeletesRef.current.delete(targetRel);
+                  }
                 }}
                 className="px-3 py-1.5 rounded-xl bg-rose-500/15 hover:bg-rose-500/25 border border-rose-400/50 text-rose-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1"
               >

@@ -47,7 +47,8 @@ async function ensureVaultBuckets(supabaseUrl, serviceKey, force = false) {
 
 async function readStorageJson(supabaseUrl, serviceKey, bucket, objectPath, fallback) {
   try {
-    const res = await fetch(`${supabaseUrl}/storage/v1/object/${bucket}/${objectPath}`, {
+    const bust = `t=${Date.now()}_${Math.random().toString(36).slice(2, 6)}`;
+    const res = await fetch(`${supabaseUrl}/storage/v1/object/${bucket}/${objectPath}?${bust}`, {
       method: 'GET',
       cache: 'no-store',
       headers: srvHeaders(serviceKey, {
@@ -191,13 +192,90 @@ async function isEmailAuthorizedForWorkRoom(supabaseUrl, serviceKey, roomId, ema
   return false;
 }
 
+const INVALID_LOCK_OWNER_RE =
+  /(hcell|hwpshare|hshowshare|sharefileinfo|hancom|libreoffice|soffice|microsoft|msoffice|lockfile|winword|powerpnt)/i;
+
+function sanitizeLockOwnerName(rawOwner, fallbackName = '팀원') {
+  const s = String(rawOwner || '').trim();
+  if (!s) return null;
+  if (INVALID_LOCK_OWNER_RE.test(s)) {
+    return String(fallbackName || '팀원').trim() || '팀원';
+  }
+  return s.slice(0, 32);
+}
+
+/**
+ * 구버전 PC 엔진이 타임존 없는 로컬 KST ISO("2026-11-20T16:10:00")를 보낼 경우
+ * UTC Lambda에서 +9시간 미래로 파싱되어 삭제 Tombstone을 뚫고 파일이 부활하는 문제를 원천 차단합니다.
+ */
+function parseSafeWorkMtimeMs(rawMtime, nowMs = Date.now()) {
+  const s = String(rawMtime || '').trim();
+  if (!s) return nowMs;
+  const hasExplicitTz = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(s);
+  const parsed = Date.parse(hasExplicitTz ? s : `${s}+09:00`);
+  if (!Number.isFinite(parsed) || parsed <= 0) return nowMs;
+  // 시계 오차(+60초) 초과 미래 시각은 현재 시각으로 클램프
+  return parsed > nowMs + 60_000 ? nowMs : parsed;
+}
+
+function mergeWorkTombstones(a, b) {
+  const out = {};
+  for (const src of [a, b]) {
+    if (!src || typeof src !== 'object') continue;
+    for (const [rawKey, val] of Object.entries(src)) {
+      const k = String(rawKey || '').replace(/\\/g, '/').replace(/^\/+/, '').trim();
+      if (!k || !val || typeof val !== 'object') continue;
+      const prevTs = Date.parse(out[k]?.deletedAt || '') || 0;
+      const nextTs = Date.parse(val.deletedAt || '') || 0;
+      if (!out[k] || nextTs >= prevTs) {
+        out[k] = val;
+      }
+    }
+  }
+  return out;
+}
+
+async function readWorkRoomManifestAndTombstones(supabaseUrl, serviceKey, roomId) {
+  const [manifest, tombFile] = await Promise.all([
+    readStorageJson(
+      supabaseUrl,
+      serviceKey,
+      WORK_BUCKET,
+      `${roomId}/index_v1.json`,
+      { filesByRelPath: {}, deletedTombstones: {} }
+    ),
+    readStorageJson(
+      supabaseUrl,
+      serviceKey,
+      WORK_BUCKET,
+      `${roomId}/tombstones_v1.json`,
+      { deletedTombstones: {} }
+    ),
+  ]);
+  const mergedTombstones = mergeWorkTombstones(
+    manifest?.deletedTombstones,
+    tombFile?.deletedTombstones
+  );
+  return {
+    manifest: {
+      ...(manifest || {}),
+      filesByRelPath: manifest?.filesByRelPath || {},
+      deletedTombstones: mergedTombstones,
+    },
+    tombstones: mergedTombstones,
+  };
+}
+
 function sanitizeWorkFileRecord(doc, actorEmail, actorNickname) {
   const relPath = String(doc.relPath || doc.fileName || '')
     .replace(/\\/g, '/')
     .replace(/^\/+/, '')
     .trim();
-  const nowIso = new Date().toISOString();
-  const lockedBy = doc.lockedBy ? String(doc.lockedBy) : null;
+  const nowMs = Date.now();
+  const nowIso = new Date(nowMs).toISOString();
+  const uploaderNickname = String(doc.author || doc.uploaderNickname || actorNickname || '팀원');
+  const lockedBy = sanitizeLockOwnerName(doc.lockedBy, uploaderNickname);
+  const safeMtimeMs = parseSafeWorkMtimeMs(doc.fileMtimeIso || doc.fileMtime, nowMs);
   return {
     id: String(doc.id || `work-${relPath}`),
     relPath,
@@ -209,7 +287,7 @@ function sanitizeWorkFileRecord(doc, actorEmail, actorNickname) {
     sizeLabel: String(doc.sizeLabel || ''),
     sha256: String(doc.sha256 || ''),
     uploaderEmail: actorEmail,
-    uploaderNickname: String(doc.author || doc.uploaderNickname || actorNickname || '팀원'),
+    uploaderNickname,
     summaryTitle: String(doc.summaryTitle || '').slice(0, 300),
     matchedSnippet: String(doc.matchedSnippet || '').slice(0, 500),
     fullTextPreview: String(doc.fullTextPreview || '').slice(0, 12000),
@@ -225,7 +303,7 @@ function sanitizeWorkFileRecord(doc, actorEmail, actorNickname) {
     hasCloudBlob: Boolean(doc.hasCloudBlob),
     lockedBy,
     lockedAt: lockedBy ? nowIso : null,
-    fileMtime: String(doc.fileMtimeIso || doc.fileMtime || nowIso),
+    fileMtime: new Date(safeMtimeMs).toISOString(),
     updatedAtServer: nowIso,
   };
 }
@@ -235,13 +313,22 @@ function formatManifestForClient(manifest) {
   const tombstones = manifest?.deletedTombstones || {};
   const filesMap = manifest?.filesByRelPath || {};
   const list = Object.values(filesMap)
-    .filter((f) => f && f.relPath && !tombstones[f.relPath])
+    .filter((f) => {
+      if (!f || !f.relPath) return false;
+      const tomb = tombstones[f.relPath];
+      if (tomb?.deletedAt) {
+        const delMs = Date.parse(String(tomb.deletedAt)) || 0;
+        const fMs = parseSafeWorkMtimeMs(f.fileMtime, nowMs);
+        if (delMs <= 0 || fMs <= delMs + 5000) return false;
+      }
+      return true;
+    })
     .map((f) => {
       const lockAlive =
         f.lockedBy && f.lockedAt && nowMs - Date.parse(String(f.lockedAt)) <= 3 * 60 * 1000;
       return {
         ...f,
-        lockedBy: lockAlive ? f.lockedBy : null,
+        lockedBy: lockAlive ? sanitizeLockOwnerName(f.lockedBy, f.uploaderNickname || '팀원') : null,
       };
     })
     .sort((a, b) => (Date.parse(b.fileMtime || '') || 0) - (Date.parse(a.fileMtime || '') || 0));
@@ -287,13 +374,7 @@ export async function handlePublicWorkPreviewAction({
     return { status: 200, body: { ok: false, reason: 'INVALID_OR_EXPIRED_INVITE' } };
   }
   const roomId = verified.room.room_id;
-  const manifest = await readStorageJson(
-    supabaseUrl,
-    serviceKey,
-    WORK_BUCKET,
-    `${roomId}/index_v1.json`,
-    { filesByRelPath: {}, deletedTombstones: {} }
-  );
+  const { manifest } = await readWorkRoomManifestAndTombstones(supabaseUrl, serviceKey, roomId);
   const { files, deletedTombstones } = formatManifestForClient(manifest);
   return {
     status: 200,
@@ -478,13 +559,7 @@ export async function handleAuthedWorkAndDeviceAction({
       }
       return { status: 403, body: { ok: false, reason: 'NOT_A_WORK_ROOM_MEMBER' } };
     }
-    const manifest = await readStorageJson(
-      supabaseUrl,
-      serviceKey,
-      WORK_BUCKET,
-      `${roomId}/index_v1.json`,
-      { filesByRelPath: {}, deletedTombstones: {} }
-    );
+    const { manifest } = await readWorkRoomManifestAndTombstones(supabaseUrl, serviceKey, roomId);
     const { files, deletedTombstones } = formatManifestForClient(manifest);
     return { status: 200, body: { ok: true, roomId, files, deletedTombstones } };
   }
@@ -495,34 +570,34 @@ export async function handleAuthedWorkAndDeviceAction({
       return { status: 403, body: { ok: false, reason: 'NOT_A_WORK_ROOM_MEMBER' } };
     }
     const incomingDocs = Array.isArray(body.docs) ? body.docs.slice(0, 150) : [];
-    const manifest = await readStorageJson(
+    const { manifest, tombstones } = await readWorkRoomManifestAndTombstones(
       supabaseUrl,
       serviceKey,
-      WORK_BUCKET,
-      `${roomId}/index_v1.json`,
-      { filesByRelPath: {}, deletedTombstones: {} }
+      roomId
     );
     const filesMap = manifest.filesByRelPath || {};
-    const tombstones = manifest.deletedTombstones || {};
+    const nowMs = Date.now();
+    let tombstonesChanged = false;
 
     for (const rawDoc of incomingDocs) {
       const clean = sanitizeWorkFileRecord(rawDoc, email, actorNick);
       if (!clean.relPath) continue;
-      const incomingMtimeMs = Date.parse(clean.fileMtime) || Date.now();
+      const incomingMtimeMs = parseSafeWorkMtimeMs(clean.fileMtime, nowMs);
 
-      // 삭제된 파일이 늦게 켜진 다른 PC에서 옛날 mtime으로 부활(역류)하는 현상 원천 차단
+      // 삭제된 파일이 늦게 켜진 다른 PC 또는 인플라이트 폴링에서 부활(역류)하는 현상 원천 차단
       const tomb = tombstones[clean.relPath];
       if (tomb?.deletedAt) {
         const deletedMs = Date.parse(tomb.deletedAt) || 0;
-        if (incomingMtimeMs <= deletedMs + 1500) {
+        if (deletedMs <= 0 || incomingMtimeMs <= deletedMs + 5000) {
           continue;
         }
         delete tombstones[clean.relPath];
+        tombstonesChanged = true;
       }
 
       const prev = filesMap[clean.relPath];
       if (prev) {
-        const prevMtimeMs = Date.parse(prev.fileMtime || '') || 0;
+        const prevMtimeMs = parseSafeWorkMtimeMs(prev.fileMtime || '', nowMs);
         // 옛날 파일이 최신 수정본을 덮어쓰지 못하도록 보호 (단, 동일 sha256의 잠금 상태 변경은 허용)
         if (clean.sha256 !== prev.sha256 && incomingMtimeMs + 1500 < prevMtimeMs) {
           continue;
@@ -537,12 +612,30 @@ export async function handleAuthedWorkAndDeviceAction({
       filesMap[clean.relPath] = clean;
     }
 
+    // tombstones에 남아 있는 파일이 filesMap에 잔존하지 않도록 최종 정리
+    for (const [tk, tv] of Object.entries(tombstones)) {
+      const f = filesMap[tk];
+      if (f && tv?.deletedAt) {
+        const delMs = Date.parse(String(tv.deletedAt)) || 0;
+        const fMs = parseSafeWorkMtimeMs(f.fileMtime, nowMs);
+        if (delMs <= 0 || fMs <= delMs + 5000) {
+          delete filesMap[tk];
+        }
+      }
+    }
+
     const nextManifest = {
       updatedAt: new Date().toISOString(),
       filesByRelPath: filesMap,
       deletedTombstones: tombstones,
     };
     await writeStorageJson(supabaseUrl, serviceKey, WORK_BUCKET, `${roomId}/index_v1.json`, nextManifest);
+    if (tombstonesChanged) {
+      await writeStorageJson(supabaseUrl, serviceKey, WORK_BUCKET, `${roomId}/tombstones_v1.json`, {
+        updatedAt: new Date().toISOString(),
+        deletedTombstones: tombstones,
+      });
+    }
     const { files, deletedTombstones } = formatManifestForClient(nextManifest);
     return { status: 200, body: { ok: true, files, deletedTombstones } };
   }
@@ -556,27 +649,43 @@ export async function handleAuthedWorkAndDeviceAction({
     if (!(await isEmailAuthorizedForWorkRoom(supabaseUrl, serviceKey, roomId, email))) {
       return { status: 403, body: { ok: false, reason: 'NOT_A_WORK_ROOM_MEMBER' } };
     }
-    const manifest = await readStorageJson(
+    const { manifest, tombstones } = await readWorkRoomManifestAndTombstones(
       supabaseUrl,
       serviceKey,
-      WORK_BUCKET,
-      `${roomId}/index_v1.json`,
-      { filesByRelPath: {}, deletedTombstones: {} }
+      roomId
     );
     const filesMap = manifest.filesByRelPath || {};
-    const tombstones = manifest.deletedTombstones || {};
-    const removedEntry = filesMap[relPath];
-    delete filesMap[relPath];
+    const relLow = relPath.toLowerCase();
+    let removedEntry = filesMap[relPath];
+    const matchedKeys = Object.keys(filesMap).filter((k) => k === relPath || k.toLowerCase() === relLow);
+    for (const mk of matchedKeys) {
+      if (!removedEntry) removedEntry = filesMap[mk];
+      delete filesMap[mk];
+    }
+    const delNowIso = new Date().toISOString();
     tombstones[relPath] = {
-      deletedAt: new Date().toISOString(),
+      deletedAt: delNowIso,
       deletedBy: actorNick,
     };
+    for (const mk of matchedKeys) {
+      tombstones[mk] = { deletedAt: delNowIso, deletedBy: actorNick };
+    }
     const nextManifest = {
-      updatedAt: new Date().toISOString(),
+      updatedAt: delNowIso,
       filesByRelPath: filesMap,
       deletedTombstones: tombstones,
     };
-    await writeStorageJson(supabaseUrl, serviceKey, WORK_BUCKET, `${roomId}/index_v1.json`, nextManifest);
+    // 전용 tombstones_v1.json + index_v1.json 동시 기록 (인플라이트 work_upsert_files와 경합 시에도 삭제 불변 보장)
+    const [okTomb, okManifest] = await Promise.all([
+      writeStorageJson(supabaseUrl, serviceKey, WORK_BUCKET, `${roomId}/tombstones_v1.json`, {
+        updatedAt: delNowIso,
+        deletedTombstones: tombstones,
+      }),
+      writeStorageJson(supabaseUrl, serviceKey, WORK_BUCKET, `${roomId}/index_v1.json`, nextManifest),
+    ]);
+    if (!okTomb && !okManifest) {
+      return { status: 502, body: { ok: false, reason: 'WORK_DELETE_STORAGE_WRITE_FAILED' } };
+    }
     // 삭제된 대용량 파일의 고아 바이너리 블롭(ghosti-work-vault)도 즉시 제거하여 영구 스토리지 비대화 차단
     if (removedEntry?.sha256) {
       const stillReferenced = Object.values(filesMap).some(

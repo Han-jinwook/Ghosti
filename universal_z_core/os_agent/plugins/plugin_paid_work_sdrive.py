@@ -3,11 +3,12 @@
 """
 [3귀신 전담 플러그인] plugin_paid_work_sdrive.py
 - 담당 도메인:
-  1) 💼 업무 공유 (S: 드라이브 · 월 9,900~29,000원 / 민간 소기업 5인·30GB 평생 0원):
+  1) 💼 업무 공유 (S: 드라이브 · 월 9,900~29,000원 · 30일 무료체험):
      - 정식 배포 웹(ghosti.sundreamer.app) + PC 엔진(Z코어 :5199) 직결 윈도우 S: 드라이브 자동 마운트·해제
      - 실제 파일 읽기/쓰기/업로드/다운로드 및 방장↔팀원(?workRoom=...) 실시간 파일 동기화
-     - 엑셀·워드·파워포인트(~$ 소유자 잠금 파일) + 아래아한글(.lck) + Win32 공유 잠금(ERROR_SHARING_VIOLATION) 실시간 감지
+     - 엑셀·한셀·워드·파워포인트(~$ 소유자 잠금 파일) + 아래아한글(.lck) + Win32 공유 잠금(ERROR_SHARING_VIOLATION) 실시간 감지
      - PDF·HWP·HWPX·DOCX·XLSX·PPTX·CSV·현장사진 본문/표 미리보기 추출 (인메모리 시그니처 캐싱으로 폴링 CPU 0.0%)
+     - 영구 삭제 Tombstone 원장(work_sdrive_config.json) 및 UTC ISO 타임스탬프 일원화로 새로고침/동기화 재부활 0% 차단
 - 헌법 가드레일: 본 플러그인 내부에 ONNX/AI 모델(InferenceSession 등) 직접 로드 영구 금지.
 """
 
@@ -16,7 +17,7 @@ from __future__ import annotations
 import base64
 import csv
 import ctypes
-from datetime import datetime
+from datetime import datetime, timezone
 import hashlib
 import io
 import json
@@ -319,31 +320,66 @@ def is_temp_or_lock_artifact(file_name: str) -> bool:
     return False
 
 
+_INVALID_LOCK_OWNER_RE = re.compile(
+    r"(hcell|hwpshare|hshowshare|sharefileinfo|hancom|libreoffice|soffice|microsoft|msoffice|lockfile|winword|powerpnt|excel\.exe)",
+    re.IGNORECASE,
+)
+
+
+def _iso_utc(ts: Optional[float] = None) -> str:
+    dt = (
+        datetime.fromtimestamp(ts, tz=timezone.utc)
+        if ts is not None
+        else datetime.now(tz=timezone.utc)
+    )
+    return dt.isoformat().replace("+00:00", "Z")
+
+
+def _is_valid_human_lock_owner(cand: str) -> bool:
+    s = (cand or "").strip()
+    if len(s) < 2 or len(s) > 32:
+        return False
+    if _INVALID_LOCK_OWNER_RE.search(s):
+        return False
+    if re.fullmatch(r"[0-9A-Fa-f_.-]+", s):
+        return False
+    return bool(re.search(r"[가-힣A-Za-z]", s))
+
+
 def _extract_owner_from_office_lock_file(lock_file: Path) -> Optional[str]:
-    """MS Office ~$ 소유자 파일 내부에 기록된 사용자 이름(ASCII + UTF-16LE)을 비파괴 파싱합니다."""
+    """MS Office ~$ 소유자 파일 내부에 기록된 사용자 이름(ASCII + UTF-16LE)을 비파괴 파싱합니다.
+    한셀(HCellShareFileInfo)·한글 등 내부 매직 헤더 문자열은 절대 사용자명으로 반환하지 않습니다.
+    """
     try:
-        raw = lock_file.read_bytes()[:256]
+        raw = lock_file.read_bytes()[:512]
         if not raw:
             return None
+        # 한컴오피스(한셀/한글/한쇼) 전용 공유 잠금 헤더(HCellShareFileInfo 등)가 감지되면
+        # 바이너리 내부 식별자가 노출되지 않도록 즉시 None 반환 -> 실제 사용자 별명 폴백
+        txt_u16_full = raw.decode("utf-16-le", errors="ignore")
+        txt_ascii_full = raw.decode("ascii", errors="ignore")
+        if _INVALID_LOCK_OWNER_RE.search(txt_u16_full) or _INVALID_LOCK_OWNER_RE.search(txt_ascii_full):
+            return None
+
         # Word/Excel/PPT owner files typically store 1-byte length at offset 0 followed by ANSI name, then UTF-16LE name
         first_len = raw[0]
         if 1 <= first_len <= 64 and len(raw) >= 1 + first_len:
-            # Try UTF-16LE block right after the ANSI block (Word/Excel standard)
             rem = raw[1 + first_len :]
             if len(rem) >= 4:
                 u16_len_chars = rem[0] if rem[1] == 0 else 0
                 if 1 <= u16_len_chars <= 48 and len(rem) >= 2 + u16_len_chars * 2:
                     cand_u16 = rem[2 : 2 + u16_len_chars * 2].decode("utf-16-le", errors="ignore").strip("\x00 ").strip()
-                    if cand_u16 and re.search(r"[가-힣A-Za-z0-9]", cand_u16):
+                    if _is_valid_human_lock_owner(cand_u16):
                         return cand_u16[:32]
             cand_ansi = raw[1 : 1 + first_len].decode("cp949", errors="ignore").strip("\x00 ").strip()
-            if cand_ansi and re.search(r"[가-힣A-Za-z0-9]", cand_ansi):
+            if _is_valid_human_lock_owner(cand_ansi):
                 return cand_ansi[:32]
         # Fallback: scan UTF-16LE printable characters
-        txt_u16 = raw.decode("utf-16-le", errors="ignore")
-        m = re.search(r"([가-힣A-Za-z0-9_. -]{2,24})", txt_u16)
+        m = re.search(r"([가-힣A-Za-z0-9_. -]{2,24})", txt_u16_full)
         if m:
-            return m.group(1).strip()
+            cand = m.group(1).strip()
+            if _is_valid_human_lock_owner(cand):
+                return cand[:32]
     except Exception:
         pass
     return None
@@ -379,8 +415,8 @@ def _is_win32_exclusively_locked(file_path: Path) -> bool:
         return False
 
 
-def detect_file_lock_owner(file_path: Path) -> Optional[str]:
-    """~$ 오피스 잠금 파일, .lck 한글 잠금 파일 및 OS 파일 핸들 점유를 실시간 감지하여 열람자 이름을 반환합니다."""
+def detect_file_lock_owner(file_path: Path, fallback_owner: str = "") -> Optional[str]:
+    """~$ 오피스·한셀 잠금 파일, .lck 한글 잠금 파일 및 OS 파일 핸들 점유를 실시간 감지하여 친숙한 사용자 이름을 반환합니다."""
     try:
         parent = file_path.parent
         name = file_path.name
@@ -399,14 +435,17 @@ def detect_file_lock_owner(file_path: Path) -> Optional[str]:
         elif len(stem) == 7:
             lock_candidates.append(parent / f"~${stem[1:]}{ext}")
 
-        default_local_user = os.environ.get("USERNAME") or "현재 PC 사용자"
+        clean_fallback = (fallback_owner or "").strip()
+        if not _is_valid_human_lock_owner(clean_fallback):
+            clean_fallback = (os.environ.get("USERNAME") or "").strip() or "현재 PC 사용자"
+
         for lc in lock_candidates:
             if lc.exists() and lc.is_file():
                 owner = _extract_owner_from_office_lock_file(lc)
-                return owner or default_local_user
+                return owner or clean_fallback
 
         if ext.lower() in _LOCK_PROBE_EXTS and _is_win32_exclusively_locked(file_path):
-            return default_local_user
+            return clean_fallback
     except Exception:
         pass
     return None
@@ -672,7 +711,7 @@ def list_work_files(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     for full_p, rel_p, st in entries:
         meta = _extract_rich_preview_cached(full_p, st)
         folder_id, folder_name, folder_path = _resolve_folder_meta(rel_p)
-        locked_by = detect_file_lock_owner(full_p)
+        locked_by = detect_file_lock_owner(full_p, fallback_owner=default_author)
         item: Dict[str, Any] = {
             "name": full_p.name,
             "relPath": rel_p,
@@ -684,7 +723,7 @@ def list_work_files(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
             "ext": meta["ext"],
             "size": st.st_size,
             "sizeFormatted": _format_size(st.st_size),
-            "mtime": datetime.fromtimestamp(st.st_mtime).isoformat(),
+            "mtime": _iso_utc(st.st_mtime),
             "mtimeFormatted": _format_mtime_ko(st.st_mtime),
             "author": uploader_map.get(rel_p) or default_author,
             "lockedBy": locked_by,
@@ -706,8 +745,26 @@ def list_work_files(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     cur_rel_set = {str(f["relPath"]) for f in files_out}
     prev_known_set = set(cfg.get("knownRelPaths") or [])
     locally_deleted = sorted(prev_known_set - cur_rel_set - hidden_rel_set)
-    if cur_rel_set != prev_known_set:
-        _save_sdrive_config({"knownRelPaths": sorted(cur_rel_set)})
+    local_tombs: Dict[str, Any] = dict(cfg.get("deletedTombstones") or {})
+    tombs_changed = False
+    now_iso = _iso_utc()
+    for del_rel in locally_deleted:
+        local_tombs[del_rel] = {"deletedAt": now_iso, "deletedBy": default_author}
+        tombs_changed = True
+    # 실제 사용자가 새로 저장한 파일(mtime > deletedAt + 5초)은 tombstone에서 자동 해제
+    for full_p, rel_p, st in entries:
+        t_info = local_tombs.get(rel_p)
+        if isinstance(t_info, dict):
+            del_ts = _parse_iso_mtime_sec(t_info.get("deletedAt"))
+            if del_ts > 0 and st.st_mtime > del_ts + 5.0:
+                local_tombs.pop(rel_p, None)
+                tombs_changed = True
+
+    if cur_rel_set != prev_known_set or tombs_changed:
+        patch: Dict[str, Any] = {"knownRelPaths": sorted(cur_rel_set)}
+        if tombs_changed:
+            patch["deletedTombstones"] = local_tombs
+        _save_sdrive_config(patch)
 
     return {
         "ok": True,
@@ -715,6 +772,55 @@ def list_work_files(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         "targetDir": str(vault_dir),
         "files": files_out,
         "locallyDeletedRelPaths": locally_deleted,
+        "localDeletedTombstones": local_tombs,
+    }
+
+
+def get_work_locks_fast(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """[초경량 2ms 실시간 잠금 감지 전용]: Base64·해시·본문 파싱 없이 현재 S:\\ 파일들의 열람 잠금(lockedBy)만 1초 주기로 즉시 조회합니다."""
+    qp = params or {}
+    vault_dir = get_work_vault_dir(ensure_dirs=False)
+    if not vault_dir.exists():
+        return {"ok": True, "locks": {}, "fileCount": 0}
+    cfg = _load_sdrive_config()
+    hidden_rel_set = set(cfg.get("hiddenRelPaths") or [])
+    default_author = str(qp.get("author") or cfg.get("hostNickname") or os.environ.get("USERNAME") or "현재 PC 사용자")
+
+    locks_out: Dict[str, Optional[str]] = {}
+    file_count = 0
+
+    def _walk_locks(cur_dir: Path, depth: int) -> None:
+        nonlocal file_count
+        if depth > 4 or file_count >= 500:
+            return
+        try:
+            with os.scandir(cur_dir) as it:
+                for entry in it:
+                    if file_count >= 500:
+                        break
+                    if entry.name.startswith("."):
+                        continue
+                    if entry.is_dir(follow_symlinks=False):
+                        _walk_locks(Path(entry.path), depth + 1)
+                    elif entry.is_file(follow_symlinks=False):
+                        if is_temp_or_lock_artifact(entry.name):
+                            continue
+                        full_p = Path(entry.path)
+                        rel_p = str(full_p.relative_to(vault_dir)).replace("\\", "/")
+                        if rel_p in hidden_rel_set:
+                            continue
+                        file_count += 1
+                        owner = detect_file_lock_owner(full_p, fallback_owner=default_author)
+                        if owner:
+                            locks_out[rel_p] = owner
+        except Exception:
+            pass
+
+    _walk_locks(vault_dir, 0)
+    return {
+        "ok": True,
+        "locks": locks_out,
+        "fileCount": file_count,
     }
 
 
@@ -736,7 +842,7 @@ def get_single_work_file_sync_payload(params: Dict[str, Any] | None = None) -> D
         "relPath": rel_p.replace("\\", "/"),
         "fileName": target.name,
         "size": st.st_size,
-        "mtime": datetime.fromtimestamp(st.st_mtime).isoformat(),
+        "mtime": _iso_utc(st.st_mtime),
         "base64Data": b64,
     }
 
@@ -791,11 +897,18 @@ def write_uploaded_work_file(data: Dict[str, Any] | None = None) -> Dict[str, An
     tmp_p.write_bytes(file_bytes)
     os.replace(tmp_p, target)
 
+    cfg = _load_sdrive_config()
+    patch_up: Dict[str, Any] = {}
     if uploader:
-        cfg = _load_sdrive_config()
         up_map = dict(cfg.get("uploaderByRelPath") or {})
         up_map[rel_path] = uploader
-        _save_sdrive_config({"uploaderByRelPath": up_map})
+        patch_up["uploaderByRelPath"] = up_map
+    tombs_up = dict(cfg.get("deletedTombstones") or {})
+    if rel_path in tombs_up:
+        tombs_up.pop(rel_path, None)
+        patch_up["deletedTombstones"] = tombs_up
+    if patch_up:
+        _save_sdrive_config(patch_up)
 
     # Ensure S: is mounted when writing on Windows
     mount_or_unmount_s_drive({"action": "mount", "openExplorer": False})
@@ -868,18 +981,23 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     cfg = _load_sdrive_config()
     up_map = dict(cfg.get("uploaderByRelPath") or {})
     known_set = set(cfg.get("knownRelPaths") or [])
+    merged_tombstones: Dict[str, Any] = dict(cfg.get("deletedTombstones") or {})
+    if isinstance(tombstones, dict):
+        for tk, tv in tombstones.items():
+            clean_tk = str(tk or "").strip().replace("\\", "/").lstrip("/")
+            if clean_tk:
+                merged_tombstones[clean_tk] = tv
 
     removed_by_tombstone = 0
-    if isinstance(tombstones, dict):
-        for t_rel, t_info in tombstones.items():
-            clean_t = str(t_rel or "").strip().replace("\\", "/").lstrip("/")
-            target_t = _safe_resolve_inside_vault(vault_dir, clean_t)
-            if target_t and target_t.is_file() and not detect_file_lock_owner(target_t):
-                del_ts = _parse_iso_mtime_sec(t_info.get("deletedAt") if isinstance(t_info, dict) else "")
-                if del_ts <= 0 or target_t.stat().st_mtime <= del_ts + 2.0:
-                    if _move_to_recycle_bin_safe(target_t):
-                        known_set.discard(clean_t)
-                        removed_by_tombstone += 1
+    for t_rel, t_info in merged_tombstones.items():
+        clean_t = str(t_rel or "").strip().replace("\\", "/").lstrip("/")
+        target_t = _safe_resolve_inside_vault(vault_dir, clean_t)
+        if target_t and target_t.is_file() and not detect_file_lock_owner(target_t):
+            del_ts = _parse_iso_mtime_sec(t_info.get("deletedAt") if isinstance(t_info, dict) else "")
+            if del_ts <= 0 or target_t.stat().st_mtime <= del_ts + 5.0:
+                if _move_to_recycle_bin_safe(target_t):
+                    known_set.discard(clean_t)
+                    removed_by_tombstone += 1
 
     synced = 0
     skipped = 0
@@ -894,9 +1012,13 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
         if not rel_p or not b64_raw:
             skipped += 1
             continue
-        if isinstance(tombstones, dict) and rel_p in tombstones:
-            skipped += 1
-            continue
+        tomb_entry = merged_tombstones.get(rel_p)
+        if tomb_entry is not None:
+            del_ts = _parse_iso_mtime_sec(tomb_entry.get("deletedAt") if isinstance(tomb_entry, dict) else "")
+            if del_ts <= 0 or remote_mtime <= 0 or remote_mtime <= del_ts + 5.0:
+                skipped += 1
+                continue
+            merged_tombstones.pop(rel_p, None)
 
         target = _safe_resolve_inside_vault(vault_dir, rel_p)
         if target is None or target.suffix.lower() in _BLOCKED_EXEC_EXTS:
@@ -941,7 +1063,10 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
         except Exception:
             skipped += 1
 
-    patch_cfg: Dict[str, Any] = {"knownRelPaths": sorted(known_set)}
+    patch_cfg: Dict[str, Any] = {
+        "knownRelPaths": sorted(known_set),
+        "deletedTombstones": merged_tombstones,
+    }
     if up_map != (cfg.get("uploaderByRelPath") or {}):
         patch_cfg["uploaderByRelPath"] = up_map
     _save_sdrive_config(patch_cfg)
@@ -1004,6 +1129,14 @@ def pull_work_blob_from_signed_url(data: Dict[str, Any] | None = None) -> Dict[s
     if target is None or target.suffix.lower() in _BLOCKED_EXEC_EXTS:
         return {"ok": False, "error": "BLOCKED_OR_INVALID_PATH"}
 
+    cfg_pre = _load_sdrive_config()
+    local_tombs_pre = dict(cfg_pre.get("deletedTombstones") or {})
+    tomb_entry = local_tombs_pre.get(rel_p)
+    if isinstance(tomb_entry, dict):
+        del_ts = _parse_iso_mtime_sec(tomb_entry.get("deletedAt"))
+        if del_ts <= 0 or remote_mtime <= 0 or remote_mtime <= del_ts + 5.0:
+            return {"ok": True, "skippedByTombstone": True, "relPath": rel_p}
+
     if target.exists() and target.is_file():
         if detect_file_lock_owner(target):
             return {"ok": False, "error": "FILE_CURRENTLY_LOCKED_OPEN"}
@@ -1041,9 +1174,11 @@ def pull_work_blob_from_signed_url(data: Dict[str, Any] | None = None) -> Dict[s
 
 
 def delete_or_apply_tombstones(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    """로컬 S:\\ 업무 파일을 OS 휴지통으로 안전 이동시키고 knownRelPaths에서 제거해 역류(부활)를 차단합니다."""
+    """로컬 S:\\ 업무 파일을 OS 휴지통으로 안전 이동시키고 knownRelPaths 제거 + 영구 Tombstone 원장을 기록해 새로고침/동기화 역류(부활)를 100% 차단합니다."""
     payload = data or {}
     rel_p = str(payload.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
+    actor = str(payload.get("actorNickname") or os.environ.get("USERNAME") or "팀원").strip()
+    deleted_at = str(payload.get("deletedAt") or "").strip() or _iso_utc()
     if not rel_p:
         return {"ok": False, "error": "EMPTY_REL_PATH"}
     vault_dir = get_work_vault_dir(ensure_dirs=False)
@@ -1057,8 +1192,14 @@ def delete_or_apply_tombstones(data: Dict[str, Any] | None = None) -> Dict[str, 
     cfg = _load_sdrive_config()
     known_set = set(cfg.get("knownRelPaths") or [])
     known_set.discard(rel_p)
-    _save_sdrive_config({"knownRelPaths": sorted(known_set)})
-    return {"ok": ok_del, "relPath": rel_p}
+    local_tombs = dict(cfg.get("deletedTombstones") or {})
+    if ok_del:
+        local_tombs[rel_p] = {"deletedAt": deleted_at, "deletedBy": actor}
+    _save_sdrive_config({
+        "knownRelPaths": sorted(known_set),
+        "deletedTombstones": local_tombs,
+    })
+    return {"ok": ok_del, "relPath": rel_p, "deletedAt": deleted_at, "localDeletedTombstones": local_tombs}
 
 
 def toggle_hide_work_file(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
