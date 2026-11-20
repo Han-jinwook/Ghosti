@@ -800,48 +800,48 @@ export const PhotoDetailModal: React.FC = () => {
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => setActiveTab('same-day')}
-                className={`p-3 rounded-xl text-left flex items-center justify-between gap-2 border transition-all ${
+                className={`p-3 rounded-xl text-left flex items-center justify-between gap-2 border transition-all cursor-pointer ${
                   activeTab === 'same-day'
-                    ? 'bg-primary-container/20 border-primary-container text-on-surface font-bold shadow-sm'
-                    : 'bg-surface-container/70 border-outline-variant/25 text-on-surface-variant hover:text-on-surface'
+                    ? 'bg-cyan-50 border-2 border-[#1E3A8A] text-slate-900 font-extrabold shadow-sm'
+                    : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-800 font-semibold shadow-xs'
                 }`}
               >
                 <span className="font-label-md text-label-md">
                   📅 이 날 찍은 사진 전체 ({dayString})
                 </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-teal-600 text-white dark:bg-teal-400 dark:text-slate-950 font-label-mono text-[12px] font-extrabold shrink-0 shadow-sm">
+                <span className="px-2.5 py-0.5 rounded-full bg-teal-600 text-white font-label-mono text-[12px] font-extrabold shrink-0 shadow-sm">
                   {sameDayPhotos.length}장
                 </span>
               </button>
 
               <button
                 onClick={() => setActiveTab('similar-visual')}
-                className={`p-3 rounded-xl text-left flex items-center justify-between gap-2 border transition-all ${
+                className={`p-3 rounded-xl text-left flex items-center justify-between gap-2 border transition-all cursor-pointer ${
                   activeTab === 'similar-visual'
-                    ? 'bg-primary-container/20 border-primary-container text-on-surface font-bold shadow-sm'
-                    : 'bg-surface-container/70 border-outline-variant/25 text-on-surface-variant hover:text-on-surface'
+                    ? 'bg-cyan-50 border-2 border-[#1E3A8A] text-slate-900 font-extrabold shadow-sm'
+                    : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-800 font-semibold shadow-xs'
                 }`}
               >
                 <span className="font-label-md text-label-md">
                   🐶 비슷한 피사체 사진 (벡터 유사도 매칭)
                 </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-indigo-600 text-white dark:bg-indigo-400 dark:text-slate-950 font-label-mono text-[12px] font-extrabold shrink-0 shadow-sm">
+                <span className="px-2.5 py-0.5 rounded-full bg-indigo-600 text-white font-label-mono text-[12px] font-extrabold shrink-0 shadow-sm">
                   {similarVisualPhotos.length}장
                 </span>
               </button>
 
               <button
                 onClick={() => setActiveTab('drill-down')}
-                className={`p-3 rounded-xl text-left flex items-center justify-between gap-2 border transition-all ${
+                className={`p-3 rounded-xl text-left flex items-center justify-between gap-2 border transition-all cursor-pointer ${
                   activeTab === 'drill-down'
-                    ? 'bg-primary-container/20 border-primary-container text-on-surface font-bold shadow-sm'
-                    : 'bg-surface-container/70 border-outline-variant/25 text-on-surface-variant hover:text-on-surface'
+                    ? 'bg-cyan-50 border-2 border-[#1E3A8A] text-slate-900 font-extrabold shadow-sm'
+                    : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-800 font-semibold shadow-xs'
                 }`}
               >
                 <span className="font-label-md text-label-md">
                   ➕ 2차 자연어 좁혀가기 (결과 내 재검색)
                 </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-600 text-white dark:bg-amber-400 dark:text-slate-950 font-label-mono text-[12px] font-extrabold shrink-0 shadow-sm">
+                <span className="px-2.5 py-0.5 rounded-full bg-amber-600 text-white font-label-mono text-[12px] font-extrabold shrink-0 shadow-sm">
                   {drillDownPhotos.length}장
                 </span>
               </button>

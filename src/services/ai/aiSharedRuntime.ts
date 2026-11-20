@@ -1475,3 +1475,121 @@ export function getStaticCorpusCached(): Promise<{ pocJson: any; auditJson: any;
   }
   return _staticCorpusCachePromise;
 }
+
+/**
+ * [단일 SSOT] 기계적 출처·시스템 기본 태그 필터 정규식:
+ * 귀신라벨러(YYMMDD_내용) 및 어휘 검색 시 '#내기기사진' 등 비내용성 메타 태그가 실제 피사체/문서 키워드처럼 오작동하는 현상을 원천 차단합니다.
+ */
+export const SHARED_PHOTO_BOILERPLATE_TAG_RX =
+  /원본보존|연사|중복|내폰사진|내기기사진|내pc사진|스마트폰사진|자동인덱싱|온디바이스ai분류|선명한베스트컷|베스트컷|일상스냅|가족앨범|풍경스냅|정리파일|^(?:#?\s*(?:내폰|갤러리|다운로드|바탕화면|문서|사진|이미지|동영상|파일|스크린샷|화면캡처|캡처))$/i;
+
+/**
+ * [단일 SSOT] 동명 파일 충돌 방지용 해시 접미사(`__Downloads_b2e4f5` 등) 제거 유틸
+ */
+export function stripCollisionKeySuffix(nameOrStem: string): string {
+  return String(nameOrStem || '').replace(/__[0-9A-Za-z가-힣_-]{1,18}_[0-9a-f]{6}(?=\.[^.]+$|$)/gi, '');
+}
+
+/**
+ * [단일 SSOT] 카메라 픽셀(시각 벡터)만으로는 판별 불가능하고 반드시 텍스트(OCR·파일명·태그·여권 신원) 근거가 있어야 하는 직급·식별자 전용 질의 판별기:
+ * - 예: '팀장', '과장', '대리', '사업자번호', '단가표', '비밀번호' 단독 검색 시
+ *   무관한 일반 사무실 스톡 영상/사진('Office workers typing at desks')이 영어 임베딩 공간 근접성으로 오탐되는 현상을 사진·동영상 양쪽에서 100% 차단합니다.
+ */
+const NON_VISUAL_ROLE_OR_ID_TOKEN_RX =
+  /^(?:사장|대표|회장|부회장|전무|상무|이사|본부장|실장|팀장|부장|차장|과장|대리|주임|계장|사원|인턴|소장|원장|관장|점장|지점장|교수|강사|담당자|거래처|발주처|수신자|발신자|작성자|결재자|사업자번호|등록번호|주민번호|계좌번호|비밀번호|비번|아이디|학번|사번|송장번호|승인번호|단가표|납품단가|계약금|잔금|중도금|세금계산서|견적서|이력서|사직서|품의서|기안서|시말서)(?:님|들)?$/i;
+
+const EXPLICIT_VISUAL_SCENE_WORD_RX =
+  /사무실|회의|컴퓨터|노트북|책상|모니터|바다|해변|산|등산|강아지|고양이|음식|커피|웃는|셀카|단체|야경|풍경|꽃|나무|하늘|운동|축구|수영|캠핑|차량|자동차|아이|가족/;
+
+const LABEL_NOISE_TOKEN_RX =
+  /^(?:파일|편집|보기|도움말|닫기|확인|취소|복사|저장|전체|검색|메뉴|로그인|홈|설정|선택|추가|삭제|이동|완료|이전|다음|목록|내역|번호|일자|날짜|시간|금액|합계)$/;
+
+export function extractCrispKoreanLabelTokens(inputs: Array<string | undefined | null>): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const raw of inputs) {
+    if (!raw) continue;
+    const cleaned = stripCollisionKeySuffix(String(raw))
+      .replace(/📝\s*OCR\s*:/gi, ' ')
+      .replace(/[#[\]()/\\:*?"<>|·•—–_.,!~`'"0-9a-zA-Z%-]+/g, ' ')
+      .trim();
+    if (!cleaned) continue;
+    for (const part of cleaned.split(/\s+/)) {
+      const tok = stripKoSearchParticle(part.trim(), true);
+      if (tok.length < 2 || tok.length > 10) continue;
+      if (!/[가-힣]{2,}/.test(tok)) continue;
+      if (SHARED_PHOTO_BOILERPLATE_TAG_RX.test(tok) || LABEL_NOISE_TOKEN_RX.test(tok)) continue;
+      if (!seen.has(tok)) {
+        seen.add(tok);
+        out.push(tok);
+        if (out.length >= 4) return out;
+      }
+    }
+  }
+  return out;
+}
+
+export function formatQuickKoreanLabelCore(
+  fileName: string,
+  dateStr?: string,
+  tagsOrTitle?: string | string[]
+): string {
+  const rawName = stripCollisionKeySuffix((fileName || '파일.jpg').trim());
+  const dotIdx = rawName.lastIndexOf('.');
+  const stem = dotIdx > 0 ? rawName.slice(0, dotIdx) : rawName;
+  const ext = dotIdx > 0 ? rawName.slice(dotIdx) : '';
+
+  let yymmdd = '';
+  const mDate = (dateStr || '').match(/20(\d{2})[-./](\d{2})[-./](\d{2})/);
+  if (mDate) {
+    yymmdd = `${mDate[1]}${mDate[2]}${mDate[3]}`;
+  } else if (/^1[5-9]\d{11}$/.test(stem)) {
+    const dt = new Date(Number(stem));
+    if (!Number.isNaN(dt.getTime())) {
+      const yy = String(dt.getFullYear()).slice(-2);
+      const mm = String(dt.getMonth() + 1).padStart(2, '0');
+      const dd = String(dt.getDate()).padStart(2, '0');
+      yymmdd = `${yy}${mm}${dd}`;
+    }
+  } else {
+    const mStemDate = stem.match(/20(\d{6})/);
+    if (mStemDate) yymmdd = mStemDate[1];
+  }
+  if (!yymmdd) {
+    const now = new Date();
+    yymmdd = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+  }
+
+  const tagList = Array.isArray(tagsOrTitle)
+    ? tagsOrTitle
+    : typeof tagsOrTitle === 'string'
+      ? [tagsOrTitle]
+      : [];
+  const cleanTokens = extractCrispKoreanLabelTokens(tagList);
+
+  let slug = '';
+  if (cleanTokens.length > 0) {
+    slug = cleanTokens.slice(0, 2).join('_').slice(0, 20);
+  } else if (/[가-힣]{2,}/.test(stem)) {
+    const stemTokens = extractCrispKoreanLabelTokens([stem]);
+    slug =
+      stemTokens.length > 0
+        ? stemTokens.slice(0, 2).join('_').slice(0, 20)
+        : stem.replace(/[^0-9A-Za-z가-힣_-]+/g, '_').replace(/^_+|_+$/g, '').slice(0, 18);
+  } else {
+    slug = '문서기록';
+  }
+  return `${yymmdd}_${slug}${ext}`;
+}
+
+export function isTextOrIdentityBoundQuery(query: string): boolean {
+  const qClean = String(query || '').trim().toLowerCase();
+  if (!qClean) return false;
+  if (EXPLICIT_VISUAL_SCENE_WORD_RX.test(qClean)) return false;
+  const rawWords = qClean.split(/[\s,./|]+/).filter(Boolean);
+  if (rawWords.length === 0 || rawWords.length > 2) return false;
+  return rawWords.every((w) => {
+    const stripped = stripKoSearchParticle(w, rawWords.length === 1);
+    return NON_VISUAL_ROLE_OR_ID_TOKEN_RX.test(w) || NON_VISUAL_ROLE_OR_ID_TOKEN_RX.test(stripped);
+  });
+}

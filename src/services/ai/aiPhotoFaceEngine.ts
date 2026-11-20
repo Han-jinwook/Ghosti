@@ -24,6 +24,7 @@ import {
   MODEL_ID,
   PRESET_QUERIES,
   PresetQueryDef,
+  SHARED_PHOTO_BOILERPLATE_TAG_RX,
   THUMB_SIDE,
   VISION_TOKEN_BUDGET,
   acquireSharedVisionEncoder,
@@ -39,7 +40,9 @@ import {
   ensureGlobalUserInputQuietGuardBound,
   ensureHubnessReferenceVecsLoaded,
   ensureTextQueryEncoderLoaded,
+  extractCrispKoreanLabelTokens,
   extractKoStems,
+  formatQuickKoreanLabelCore,
   getContrastiveNonAnimalAnchorVecs,
   getOptimalEmbeddingDtype,
   getPhotoMediaCacheKey,
@@ -48,11 +51,13 @@ import {
   hydratedPhotoMetaMap,
   hydratedPhotoVecMap,
   isNonHumanAnimalSearchQuery,
+  isTextOrIdentityBoundQuery,
   loadWithR2Fallback,
   matchKoTokenInStems,
   normalizeVector,
   persistMediaCacheEntry,
   staticCaptionedPhotoIds,
+  stripCollisionKeySuffix,
   stripKoSearchParticle,
   toRows,
   waitForUserTypingAndModalQuiet,
@@ -939,8 +944,7 @@ const KO_PHOTO_SYNONYM_GROUPS: readonly (readonly string[])[] = [
   ['스크린샷', '화면캡처', '캡처'],
 ];
 
-const PHOTO_BOILERPLATE_TAG_RX =
-  /원본보존|연사|중복|내폰사진|내기기사진|자동인덱싱|온디바이스ai분류|선명한베스트컷|베스트컷|일상스냅|가족앨범/i;
+const PHOTO_BOILERPLATE_TAG_RX = SHARED_PHOTO_BOILERPLATE_TAG_RX;
 const PHOTO_BOILERPLATE_LOC_RX =
   /^(?:내\s*스마트폰.*|스마트폰\s*다운로드|스마트폰\s*사진첩.*|pc\s*로컬\s*폴더|camera|dcim|recents|all\s*photos|camera\s*roll|downloads?|pictures|photos|desktop|documents)$/i;
 
@@ -1080,6 +1084,7 @@ export async function executeTextSearch(
 
   const isAnimalOnlyPhotoQuery =
     isDogQuery || isCatQuery || isNonHumanAnimalSearchQuery(qLower);
+  const isTextBoundPhotoQuery = isTextOrIdentityBoundQuery(qRaw);
   let queryVecs: Float32Array[] = [];
   let hubRefVecs: Float32Array[] = [];
   let nonAnimalAnchorVecs: Float32Array[] = [];
@@ -1479,7 +1484,8 @@ export async function executeTextSearch(
 
     const realVecSim = vecSimById.get(photo.id);
     const vecThresholdForPhoto = isStaticCapPhoto ? staticAdmitThreshold : visionAdmitThreshold;
-    const passesVecGate = realVecSim !== undefined && realVecSim >= vecThresholdForPhoto;
+    const passesVecGate =
+      !isTextBoundPhotoQuery && realVecSim !== undefined && realVecSim >= vecThresholdForPhoto;
     const vecSim = realVecSim ?? 0.64;
 
     if (totalHits > 0 || compoundHit || passesVecGate) {
@@ -2742,6 +2748,138 @@ export async function startSilentRealMediaVisionIndexing(params: {
       bumpSharedVisionIdleDispose(15000);
     }
   }
+}
+
+export async function resolveSmartKoreanLabelForPhoto(photo: PhotoItem): Promise<{
+  displaySourceName: string;
+  label: string;
+  enrichedTags: string[];
+  ocrSnippet?: string;
+}> {
+  const displaySourceName = stripCollisionKeySuffix(photo.name || '사진.png');
+  const ocrFromCaption = (photo.captionKo || '').includes('📝 OCR:')
+    ? (photo.captionKo || '').split('📝 OCR:')[1] || ''
+    : '';
+  let tokens = extractCrispKoreanLabelTokens([
+    ocrFromCaption,
+    ...(photo.ontologyPrimaryTags || []),
+    ...(photo.tags || []),
+    ...(photo.keywordsKo || []),
+  ]);
+
+  let discoveredOcrSnippet = '';
+  const discoveredTagSet = new Set<string>(
+    (photo.tags || []).filter((t) => t && !SHARED_PHOTO_BOILERPLATE_TAG_RX.test(t))
+  );
+
+  // 아직 백그라운드 인덱싱이 도달하지 않아 '#내기기사진'만 있는 경우 즉시 온디맨드 실물 OCR + 시각 개념 판독 수행
+  if (tokens.length === 0) {
+    if (zCoreBridge.isConnected) {
+      try {
+        const rawUrl = photo.fullUrl || photo.thumbUrl || '';
+        let pParam = photo.name || '';
+        const qMatch = rawUrl.match(/[?&]p=([^&]+)/);
+        if (qMatch?.[1]) {
+          try {
+            pParam = decodeURIComponent(qMatch[1]);
+          } catch {
+            pParam = qMatch[1];
+          }
+        }
+        const ctrl = new AbortController();
+        const tid = setTimeout(() => ctrl.abort(), 4500);
+        const res = await fetch(getZCoreUrl('/__photos/ocr'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            p: pParam,
+            fullPath: photo.fullPath || '',
+          }),
+          signal: ctrl.signal,
+        }).finally(() => clearTimeout(tid));
+        if (res.ok) {
+          const ocrJson = await res.json().catch(() => null);
+          if (ocrJson?.ok && ocrJson?.hasText) {
+            const chips = Array.isArray(ocrJson.chips) ? ocrJson.chips.map(String) : [];
+            const fullText = String(ocrJson.fullText || '').trim();
+            discoveredOcrSnippet = fullText.slice(0, 140);
+            tokens = extractCrispKoreanLabelTokens([...chips, fullText]);
+            for (const tk of tokens.slice(0, 2)) discoveredTagSet.add(`#${tk}`);
+          }
+        }
+      } catch {
+        /* fallback to client vision/ocr below */
+      }
+    }
+
+    if (tokens.length === 0) {
+      try {
+        await hydrateRealMediaVectorCacheOnce();
+        const pKey = getPhotoMediaCacheKey(photo.name, photo.size);
+        let vec =
+          photo.vec && photo.vec.length === DEFAULT_DIM
+            ? photo.vec
+            : hydratedPhotoVecMap.get(pKey) || null;
+        let thumbDataUrl = '';
+        const srcUrl = photo.thumbUrl || photo.fullUrl || '';
+        if (srcUrl) {
+          const imgRes = await fetch(srcUrl);
+          if (imgRes.ok) {
+            const blob = await imgRes.blob();
+            const decoded = await decodeImageBlobToRawAndThumb(blob);
+            if (decoded) {
+              thumbDataUrl = decoded.thumbDataUrl || '';
+              if (!vec || vec.length !== DEFAULT_DIM) {
+                vec = await embedRawImageWithSharedVision(decoded.rawImg);
+                if (vec) hydratedPhotoVecMap.set(pKey, vec);
+              }
+            }
+          }
+        }
+        if (!zCoreBridge.isConnected && thumbDataUrl) {
+          const ocrRes = await recognizeDataUrlWithPaddleOcr(thumbDataUrl).catch(() => null);
+          if (ocrRes?.text) {
+            discoveredOcrSnippet = ocrRes.text.slice(0, 140);
+            tokens = extractCrispKoreanLabelTokens([ocrRes.text]);
+            for (const tk of tokens.slice(0, 2)) discoveredTagSet.add(`#${tk}`);
+          }
+        }
+        if (tokens.length === 0 && vec && vec.length === DEFAULT_DIM) {
+          const conceptMap = await ensureGemma2ConceptProbeVecs();
+          let bestProbe: Gemma2ConceptProbe | null = null;
+          let bestSim = -1;
+          for (const probe of GEMMA2_VISUAL_CONCEPT_PROBES) {
+            const pVec = conceptMap.get(probe.id);
+            if (!pVec) continue;
+            const sim = cosineSimilarity(pVec, vec);
+            if (sim > bestSim) {
+              bestSim = sim;
+              bestProbe = probe;
+            }
+          }
+          if (bestProbe && bestSim >= 0.61) {
+            const cleanProbeTag = bestProbe.tag.replace(/^#/, '');
+            tokens = extractCrispKoreanLabelTokens([cleanProbeTag, ...(bestProbe.keywordsKo || [])]);
+            discoveredTagSet.add(bestProbe.tag);
+          }
+        }
+      } catch {
+        /* ignore vision fallback error */
+      }
+    }
+  }
+
+  if (tokens.length === 0) {
+    tokens = [photo.trashCategory === 'screenshot' ? '화면캡처' : '사진기록'];
+  }
+
+  const label = formatQuickKoreanLabelCore(displaySourceName, photo.date, tokens);
+  return {
+    displaySourceName,
+    label,
+    enrichedTags: Array.from(discoveredTagSet),
+    ...(discoveredOcrSnippet ? { ocrSnippet: discoveredOcrSnippet } : {}),
+  };
 }
 
 export async function fetchSharedFamilyHostPhotos(): Promise<PhotoItem[]> {

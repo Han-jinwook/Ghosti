@@ -4,7 +4,9 @@ import type { LocalDocumentFile, PhotoItem, TrashCategory, VideoSceneItem } from
 import {
   cleanVideoTimestampLabel,
   groupBurstSearchResults,
+  resolveSmartKoreanLabelForPhoto,
   resolveVideoCardThumbUrl,
+  stripCollisionKeySuffix,
 } from '../services/aiEngine';
 import { executeRealOsAction } from '../services/setupMonsterEngine';
 import {
@@ -1319,10 +1321,15 @@ export const Stage1MinimalSearchPreview: React.FC<{
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            const newLabel = formatQuickKoreanLabelForFile(doc.fileName, doc.date, doc.title);
+                            const cleanDocName = stripCollisionKeySuffix(doc.fileName);
+                            const newLabel = formatQuickKoreanLabelForFile(
+                              cleanDocName,
+                              doc.date,
+                              [doc.title, (doc.extractedText || '').slice(0, 120)]
+                            );
                             void navigator.clipboard?.writeText(newLabel);
                             useSaySeeStore.setState({
-                              lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${doc.fileName} ➔ ${newLabel} (클립보드에 한글 라벨명 복사됨)`,
+                              lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${cleanDocName} ➔ ${newLabel} (클립보드에 한글 라벨명 복사됨)`,
                             });
                           }}
                           className="px-2 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/50 text-teal-200 font-label-sm text-[11px] font-extrabold transition-colors cursor-pointer"
@@ -1456,14 +1463,57 @@ export const Stage1MinimalSearchPreview: React.FC<{
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              const newLabel = formatQuickKoreanLabelForFile(
-                                item.photo.name,
-                                item.photo.date,
-                                item.photo.tags
-                              );
-                              void navigator.clipboard?.writeText(newLabel);
+                              const targetPhoto = item.photo;
                               useSaySeeStore.setState({
-                                lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${item.photo.name} ➔ ${newLabel} (클립보드에 한글 라벨명 복사됨)`,
+                                lastQuarantineToast: '🏷️ 사진 속 글자·피사체를 분석해 한글 라벨명을 생성하는 중...',
+                              });
+                              void resolveSmartKoreanLabelForPhoto(targetPhoto).then(async (res) => {
+                                let copiedOk = false;
+                                try {
+                                  if (navigator.clipboard?.writeText) {
+                                    await navigator.clipboard.writeText(res.label);
+                                    copiedOk = true;
+                                  }
+                                } catch {
+                                  copiedOk = false;
+                                }
+                                if (!copiedOk && typeof document !== 'undefined') {
+                                  try {
+                                    const ta = document.createElement('textarea');
+                                    ta.value = res.label;
+                                    ta.style.position = 'fixed';
+                                    ta.style.opacity = '0';
+                                    document.body.appendChild(ta);
+                                    ta.focus();
+                                    ta.select();
+                                    document.execCommand('copy');
+                                    document.body.removeChild(ta);
+                                  } catch {
+                                    /* ignore fallback error */
+                                  }
+                                }
+                                useSaySeeStore.setState((st) => ({
+                                  lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${res.displaySourceName} ➔ ${res.label} (클립보드에 한글 라벨명 복사됨)`,
+                                  ...(res.enrichedTags.length > 0
+                                    ? {
+                                        photos: st.photos.map((p) =>
+                                          p.id === targetPhoto.id
+                                            ? {
+                                                ...p,
+                                                tags: Array.from(new Set([...res.enrichedTags, ...(p.tags || [])])),
+                                                ...(res.ocrSnippet && !(p.captionKo || '').includes('📝 OCR:')
+                                                  ? {
+                                                      captionKo: p.captionKo
+                                                        ? `${p.captionKo} | 📝 OCR: ${res.ocrSnippet}`
+                                                        : `📝 OCR: ${res.ocrSnippet}`,
+                                                    }
+                                                  : {}),
+                                              }
+                                            : p
+                                        ),
+                                      }
+                                    : {}),
+                                }));
                               });
                             }}
                             title="기계적 파일명을 촬영일·내용 기반 한글 라벨명(YYMMDD_내용)으로 생성·복사합니다"

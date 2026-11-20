@@ -1175,59 +1175,14 @@ export function hasSensitiveDocInfo(_text: string): boolean {
   return false;
 }
 
+import { formatQuickKoreanLabelCore } from '../services/ai/aiSharedRuntime';
+
 export function formatQuickKoreanLabelForFile(
   fileName: string,
   dateStr?: string,
   tagsOrTitle?: string | string[]
 ): string {
-  const rawName = (fileName || '파일.jpg').trim();
-  const dotIdx = rawName.lastIndexOf('.');
-  const stem = dotIdx > 0 ? rawName.slice(0, dotIdx) : rawName;
-  const ext = dotIdx > 0 ? rawName.slice(dotIdx) : '';
-
-  let yymmdd = '';
-  const mDate = (dateStr || '').match(/20(\d{2})[-./](\d{2})[-./](\d{2})/);
-  if (mDate) {
-    yymmdd = `${mDate[1]}${mDate[2]}${mDate[3]}`;
-  } else if (/^1[5-9]\d{11}$/.test(stem)) {
-    const dt = new Date(Number(stem));
-    if (!Number.isNaN(dt.getTime())) {
-      const yy = String(dt.getFullYear()).slice(-2);
-      const mm = String(dt.getMonth() + 1).padStart(2, '0');
-      const dd = String(dt.getDate()).padStart(2, '0');
-      yymmdd = `${yy}${mm}${dd}`;
-    }
-  } else {
-    const mStemDate = stem.match(/20(\d{6})/);
-    if (mStemDate) yymmdd = mStemDate[1];
-  }
-  if (!yymmdd) {
-    const now = new Date();
-    yymmdd = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
-  }
-
-  const tagList = Array.isArray(tagsOrTitle)
-    ? tagsOrTitle
-    : typeof tagsOrTitle === 'string'
-      ? [tagsOrTitle]
-      : [];
-  const cleanTags = tagList
-    .map((t) =>
-      String(t || '')
-        .replace(/[#[\]()/\\:*?"<>|]/g, ' ')
-        .trim()
-    )
-    .filter((t) => t.length >= 2 && /[가-힣]/.test(t));
-
-  let slug = '';
-  if (cleanTags.length > 0) {
-    slug = cleanTags.slice(0, 2).join('_').replace(/\s+/g, '_').slice(0, 18);
-  } else if (/^1[5-9]\d{8,11}$/.test(stem) || /^(IMG|DSC|PXL|SAM|Screenshot|화면\s*캡처)/i.test(stem)) {
-    slug = '풍경스냅_사진';
-  } else {
-    slug = stem.replace(/\s+/g, '_').slice(0, 18) || '정리파일';
-  }
-  return `${yymmdd}_${slug}${ext}`;
+  return formatQuickKoreanLabelCore(fileName, dateStr, tagsOrTitle);
 }
 
 /**

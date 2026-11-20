@@ -688,7 +688,7 @@ import zlib
 
 _PHOTO_PATH_INDEX: Dict[str, Path] = {}
 _IMAGE_EXTS = {".jpg", ".jpeg", ".png", ".webp", ".bmp", ".gif", ".heic"}
-_VIDEO_EXTS = {".mp4", ".mov", ".webm", ".m4v", ".avi", ".mkv"}
+_VIDEO_EXTS = {".mp4", ".mov", ".webm", ".m4v", ".avi", ".mkv", ".wmv", ".3gp", ".ts", ".mts", ".flv"}
 _PHOTO_EXTS = _IMAGE_EXTS | _VIDEO_EXTS
 _DOC_EXTS = {".pdf", ".txt", ".md", ".docx", ".doc", ".xlsx", ".xls", ".pptx", ".ppt", ".hwp", ".hwpx", ".csv"}
 _SKIP_DIR_NAMES = {
@@ -1120,9 +1120,10 @@ def _make_collision_safe_media_key(resolved: Path, folder_name: str, seen_keys: 
     if base not in seen_keys:
         seen_keys.add(base)
         return base
+    clean_stem = re.sub(r"__[0-9A-Za-z가-힣_-]{1,18}_[0-9a-f]{6}$", "", resolved.stem, flags=re.IGNORECASE) or resolved.stem
     safe_folder = re.sub(r"[^0-9A-Za-z가-힣_-]+", "_", folder_name or "folder").strip("_")[:14] or "dir"
     short_hash = hashlib.sha1(str(resolved).lower().encode("utf-8", errors="ignore")).hexdigest()[:6]
-    key = f"{resolved.stem}__{safe_folder}_{short_hash}{resolved.suffix}"
+    key = f"{clean_stem}__{safe_folder}_{short_hash}{resolved.suffix}"
     seen_keys.add(key)
     return key
 
@@ -1342,6 +1343,12 @@ def resolve_local_media_file(params: Dict[str, Any] | None = None) -> tuple[Path
         ".m4v": "video/mp4",
         ".avi": "video/x-msvideo",
         ".mkv": "video/x-matroska",
+        ".wmv": "video/x-ms-wmv",
+        ".3gp": "video/3gpp",
+        ".ts": "video/mp2t",
+        ".mts": "video/mp2t",
+        ".flv": "video/x-flv",
+        ".heic": "image/heic",
     }
     ext = full_path.suffix.lower()
     if ext not in mime_map:
@@ -2759,9 +2766,13 @@ def find_ffmpeg_exe() -> str | None:
 
 
 def _detect_video_codec_fast(file_path: Path) -> str:
-    """0.5ms 내에 MP4/MOV 헤더/트레일러에서 비디오 코덱(hvc1/hev1 vs avc1) 및 moov 위치(non-faststart)를 판별합니다."""
+    """0.5ms 내에 MP4/MOV/WMV/AVI 헤더/트레일러에서 브라우저 직접 재생 가능 여부(hvc1/non-faststart/레거시 컨테이너)를 판별합니다."""
     ext = file_path.suffix.lower()
-    if ext not in (".mp4", ".mov", ".m4v") or _is_cloud_virtual_or_unpinned_file(file_path):
+    if _is_cloud_virtual_or_unpinned_file(file_path):
+        return "avc1"
+    if ext in (".wmv", ".avi", ".mkv", ".3gp", ".ts", ".mts", ".flv"):
+        return "needs_transcode"
+    if ext not in (".mp4", ".mov", ".m4v"):
         return "avc1"
     try:
         sz = file_path.stat().st_size
@@ -4145,7 +4156,7 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 dur_text = f"{int(int_dur // 60):02d}:{int(int_dur % 60):02d}"
 
                 codec_tag = _detect_video_codec_fast(resolved)
-                if codec_tag in ("hevc", "mov_slow") and ff:
+                if codec_tag in ("hevc", "mov_slow", "needs_transcode") and ff:
                     vid_url = f"http://127.0.0.1:5199/__videos/stream?p={enc_name}"
                     if len(prewarm_targets) < 40:
                         prewarm_targets.append(resolved)

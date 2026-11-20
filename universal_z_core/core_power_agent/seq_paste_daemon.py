@@ -2852,7 +2852,7 @@ def _compute_watched_folders_fast_sig() -> str:
     target_exts = {
         ".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md",
         ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp",
-        ".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v",
+        ".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v", ".3gp", ".ts", ".mts", ".flv",
     }
     skip_sub_dirs = {
         "node_modules", ".git", "appdata", "__pycache__", "venv", ".venv",
@@ -2866,10 +2866,11 @@ def _compute_watched_folders_fast_sig() -> str:
             seen_scan_dirs.add(norm_r)
             scan_dirs.append(root_fd)
         sub_added = 0
+        lvl1_dirs: list[Path] = []
         try:
             with os.scandir(root_fd) as it_sub:
                 for sub_e in it_sub:
-                    if sub_added >= 15:
+                    if sub_added >= 24:
                         break
                     try:
                         if not sub_e.is_dir(follow_symlinks=False):
@@ -2880,12 +2881,37 @@ def _compute_watched_folders_fast_sig() -> str:
                         norm_s = os.path.normcase(os.path.abspath(sub_e.path))
                         if norm_s not in seen_scan_dirs:
                             seen_scan_dirs.add(norm_s)
-                            scan_dirs.append(Path(sub_e.path))
+                            p_sub = Path(sub_e.path)
+                            scan_dirs.append(p_sub)
+                            lvl1_dirs.append(p_sub)
                             sub_added += 1
                     except Exception:
                         pass
         except Exception:
             pass
+        for l1_fd in lvl1_dirs:
+            if sub_added >= 48:
+                break
+            try:
+                with os.scandir(l1_fd) as it_sub2:
+                    for sub_e2 in it_sub2:
+                        if sub_added >= 48:
+                            break
+                        try:
+                            if not sub_e2.is_dir(follow_symlinks=False):
+                                continue
+                            sname2 = sub_e2.name
+                            if sname2.startswith((".", "$", "~")) or sname2.lower() in skip_sub_dirs:
+                                continue
+                            norm_s2 = os.path.normcase(os.path.abspath(sub_e2.path))
+                            if norm_s2 not in seen_scan_dirs:
+                                seen_scan_dirs.add(norm_s2)
+                                scan_dirs.append(Path(sub_e2.path))
+                                sub_added += 1
+                        except Exception:
+                            pass
+            except Exception:
+                pass
 
     f_cnt = 0
     max_mt_ns = 0
@@ -2943,7 +2969,7 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
         folders = _get_known_user_folders_for_search()
         doc_exts = {".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md"}
         img_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
-        vid_exts = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v"}
+        vid_exts = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v", ".3gp", ".ts", ".mts", ".flv"}
         skip_sub_dirs = {
             "node_modules", ".git", "appdata", "__pycache__", "venv", ".venv",
             "dist", "build", "universal_z_core", "merlin_z_core", "$recycle.bin",
@@ -2957,10 +2983,11 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
                 seen_scan_dirs.add(norm_r)
                 scan_dirs.append(root_fd)
             sub_added = 0
+            lvl1_dirs: list[Path] = []
             try:
                 with os.scandir(root_fd) as it_sub:
                     for sub_e in it_sub:
-                        if sub_added >= 15:
+                        if sub_added >= 24:
                             break
                         try:
                             if not sub_e.is_dir(follow_symlinks=False):
@@ -2971,12 +2998,37 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
                             norm_s = os.path.normcase(os.path.abspath(sub_e.path))
                             if norm_s not in seen_scan_dirs:
                                 seen_scan_dirs.add(norm_s)
-                                scan_dirs.append(Path(sub_e.path))
+                                p_sub = Path(sub_e.path)
+                                scan_dirs.append(p_sub)
+                                lvl1_dirs.append(p_sub)
                                 sub_added += 1
                         except Exception:
                             pass
             except Exception:
                 pass
+            for l1_fd in lvl1_dirs:
+                if sub_added >= 48:
+                    break
+                try:
+                    with os.scandir(l1_fd) as it_sub2:
+                        for sub_e2 in it_sub2:
+                            if sub_added >= 48:
+                                break
+                            try:
+                                if not sub_e2.is_dir(follow_symlinks=False):
+                                    continue
+                                sname2 = sub_e2.name
+                                if sname2.startswith((".", "$", "~")) or sname2.lower() in skip_sub_dirs:
+                                    continue
+                                norm_s2 = os.path.normcase(os.path.abspath(sub_e2.path))
+                                if norm_s2 not in seen_scan_dirs:
+                                    seen_scan_dirs.add(norm_s2)
+                                    scan_dirs.append(Path(sub_e2.path))
+                                    sub_added += 1
+                            except Exception:
+                                pass
+                except Exception:
+                    pass
 
         by_kind: dict[str, list[dict]] = {"doc": [], "image": [], "video": []}
         seen_files: set[str] = set()

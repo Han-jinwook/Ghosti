@@ -31,6 +31,7 @@ import {
   getVideoMediaBaseKey,
   hydrateRealMediaVectorCacheOnce,
   isNonHumanAnimalSearchQuery,
+  isTextOrIdentityBoundQuery,
   localVideoFrameThumbMap,
   localVideoFrameVecMap,
   localVideoRepThumbMap,
@@ -1017,6 +1018,7 @@ export async function searchVideoSceneItemsAsync(
   }
 
   const isAnimalOnlyQuery = isNonHumanAnimalSearchQuery(q);
+  const isTextBoundVideoQuery = isTextOrIdentityBoundQuery(q);
   const [queryVecs, hubRefVecs, nonAnimalAnchorVecs] = await Promise.all([
     encodeMultimodalSearchQueryVecs(q, 1400),
     ensureHubnessReferenceVecsLoaded(),
@@ -1299,8 +1301,10 @@ export async function searchVideoSceneItemsAsync(
       effectiveSim += 0.025;
     }
 
-    const passesVisual = hasCorpusSeparation && ev.bestSim > 0 && effectiveSim >= admitThreshold;
+    const passesVisual =
+      !isTextBoundVideoQuery && hasCorpusSeparation && ev.bestSim > 0 && effectiveSim >= admitThreshold;
     const passesSessionContinuity =
+      !isTextBoundVideoQuery &&
       !isAnimalOnlyQuery &&
       isTightSessionBurst &&
       ev.bestSim >= Math.max(0.648, admitThreshold - 0.022);
