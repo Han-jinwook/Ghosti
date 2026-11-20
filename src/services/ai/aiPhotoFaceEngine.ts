@@ -36,6 +36,7 @@ import {
   embedRawImageWithSharedVision,
   enableOpfsCache,
   encodeMultimodalSearchQueryVecs,
+  ensureGlobalUserInputQuietGuardBound,
   ensureHubnessReferenceVecsLoaded,
   ensureTextQueryEncoderLoaded,
   extractKoStems,
@@ -44,6 +45,7 @@ import {
   getPhotoMediaCacheKey,
   getStaticCorpusCached,
   hydrateRealMediaVectorCacheOnce,
+  hydratedPhotoMetaMap,
   hydratedPhotoVecMap,
   isNonHumanAnimalSearchQuery,
   loadWithR2Fallback,
@@ -53,6 +55,8 @@ import {
   staticCaptionedPhotoIds,
   stripKoSearchParticle,
   toRows,
+  waitForUserTypingAndModalQuiet,
+  type CachedPhotoSemanticMeta,
 } from './aiSharedRuntime';
 import {
   embedSingleLocalVideoIfNeeded,
@@ -2371,6 +2375,7 @@ export async function startSilentRealMediaVisionIndexing(params: {
     ensureMobileLifecycleAndTouchGuardBound();
   }
 
+  ensureGlobalUserInputQuietGuardBound();
   aiRuntimeFlags.silentMediaIndexingRunning = true;
   try {
     await hydrateRealMediaVectorCacheOnce();
@@ -2379,38 +2384,89 @@ export async function startSilentRealMediaVisionIndexing(params: {
       return;
     }
 
-    // [모바일 ANR & OOM 원천 차단 + 실사진 최우선 인덱싱]:
-    // 모바일은 q4 단일 스레드 WASM만 사용하며, 사진 의미 검색이 즉시 작동하도록 미색인 사진(최대 120장)의 768D 비전 벡터를
-    // 다중 동영상 OCR보다 먼저 추출한 뒤 비전 모델을 해제하고 경량 PP-OCRv5(Pass 2)로 넘어가 2중 WASM 피크를 원천 차단합니다!
-    await acquireSharedVisionEncoder();
-    if (!(await waitForMobileUserIdleIfNeeded(isMobileEnv))) {
-      return;
-    }
-    const conceptVecMap = await ensureGemma2ConceptProbeVecs(isMobileEnv);
-
-    // 1) 미색인 실사용 사진(PC + 모바일 공통) EmbeddingGemma 2 768차원 비전 벡터 최우선 인덱싱 (Pass 1)
-    const unindexedPhotos = silentIndexingBrake
+    // 1) 이미 IndexedDB에 비전 벡터·시맨틱/OCR 메타가 캐싱된 사진은 모델 로딩(WebGPU 컴파일) 및 재추론 없이 0.5ms 배치로 즉시 복원!
+    const candidatesAll = silentIndexingBrake
       .sortPhotosRecent90DaysFirst(
         params.photos.filter((p) => !p.quarantined && (!p.vec || p.vec.length !== DEFAULT_DIM))
       )
       .slice(0, isMobileEnv ? 120 : 360);
 
-    const pendingOcrQueue: Array<{ item: PhotoItem; thumb: string }> = [];
+    const unindexedPhotos: PhotoItem[] = [];
+    for (const item of candidatesAll) {
+      const pKey = getPhotoMediaCacheKey(item.name, item.size);
+      const cachedVec = hydratedPhotoVecMap.get(pKey);
+      const cachedMeta = hydratedPhotoMetaMap.get(pKey);
+      if (cachedVec && cachedVec.length === DEFAULT_DIM && cachedMeta?.ocrDone) {
+        item.vec = cachedVec;
+        if (cachedMeta.tags?.length) {
+          item.tags = Array.from(new Set([...(item.tags || []), ...cachedMeta.tags]));
+        }
+        if (cachedMeta.keywordsKo?.length) {
+          item.keywordsKo = Array.from(new Set([...(item.keywordsKo || []), ...cachedMeta.keywordsKo]));
+        }
+        if (cachedMeta.ontologyPrimaryTags?.length) {
+          item.ontologyPrimaryTags = Array.from(
+            new Set([...(item.ontologyPrimaryTags || []), ...cachedMeta.ontologyPrimaryTags])
+          );
+        }
+        if (cachedMeta.ocrSnippet && !(item.captionKo || '').includes('📝 OCR:')) {
+          item.captionKo = item.captionKo
+            ? `${item.captionKo} | 📝 OCR: ${cachedMeta.ocrSnippet}`
+            : `📝 OCR: ${cachedMeta.ocrSnippet}`;
+        }
+        params.onPhotoVisionHydrated?.(item.id, {
+          vec: cachedVec,
+          tags: item.tags,
+          keywordsKo: item.keywordsKo,
+          ontologyPrimaryTags: item.ontologyPrimaryTags,
+          ...(item.captionKo ? { captionKo: item.captionKo } : {}),
+        });
+      } else {
+        unindexedPhotos.push(item);
+      }
+    }
+
+    const localVids = params.videos
+      .filter(
+        (v) =>
+          !v.isAllBlack &&
+          (String(v.id || '').startsWith('local_vid_') || String(v.id || '').startsWith('mobile_vid_'))
+      )
+      .slice(0, isMobileEnv ? 3 : params.videos.length);
+
+    if (unindexedPhotos.length === 0 && localVids.length === 0) {
+      return;
+    }
+
+    let visionEncoderReady = false;
+    let conceptVecMap: Map<string, Float32Array> | null = null;
+    const ensureVisionAndConceptsReady = async () => {
+      if (!visionEncoderReady) {
+        await waitForUserTypingAndModalQuiet();
+        await acquireSharedVisionEncoder();
+        visionEncoderReady = true;
+      }
+      if (!conceptVecMap) {
+        conceptVecMap = await ensureGemma2ConceptProbeVecs(isMobileEnv);
+      }
+      return conceptVecMap;
+    };
+
+    const pendingOcrQueue: Array<{
+      item: PhotoItem;
+      pKey: string;
+      vec: Float32Array;
+      thumb: string;
+    }> = [];
 
     for (let i = 0; i < unindexedPhotos.length; i++) {
-      if (i > 0 && i % 16 === 0) {
+      if (i > 0 && i % 8 === 0) {
         await new Promise((r) => setTimeout(r, 0));
       }
       if (!(await waitForMobileUserIdleIfNeeded(isMobileEnv))) {
         return;
       }
-      while (
-        aiRuntimeFlags.priorityVideoSearchDepth > 0 ||
-        aiRuntimeFlags.activeVideoPlaybackCount > 0 ||
-        aiRuntimeFlags.priorityModalGalleryOpen
-      ) {
-        await new Promise((r) => setTimeout(r, 450));
-      }
+      await waitForUserTypingAndModalQuiet();
       await silentIndexingBrake.waitForIndexingSlot(i);
       const item = unindexedPhotos[i];
       const pKey = getPhotoMediaCacheKey(item.name, item.size);
@@ -2418,6 +2474,7 @@ export async function startSilentRealMediaVisionIndexing(params: {
       let decodedThumb = item.thumbUrl || item.fullUrl;
 
       if (!vec || vec.length !== DEFAULT_DIM) {
+        await ensureVisionAndConceptsReady();
         const t0 = performance.now();
         try {
           const res = await fetch(item.thumbUrl || item.fullUrl);
@@ -2429,14 +2486,11 @@ export async function startSilentRealMediaVisionIndexing(params: {
           if (!(await waitForMobileUserIdleIfNeeded(isMobileEnv))) {
             return;
           }
-          while (aiRuntimeFlags.priorityVideoSearchDepth > 0 || aiRuntimeFlags.activeVideoPlaybackCount > 0) {
-            await new Promise((r) => setTimeout(r, 450));
-          }
+          await waitForUserTypingAndModalQuiet();
           vec = await embedRawImageWithSharedVision(decoded.rawImg);
           const inferElapsed = performance.now() - t0;
           if (vec) {
             hydratedPhotoVecMap.set(pKey, vec);
-            await persistMediaCacheEntry(pKey, vec);
             silentIndexingBrake.recordInferenceLatencyMs(inferElapsed);
           }
           if (isMobileEnv) {
@@ -2453,11 +2507,12 @@ export async function startSilentRealMediaVisionIndexing(params: {
 
       if (vec && vec.length === DEFAULT_DIM) {
         item.vec = vec;
+        const activeConceptMap = await ensureVisionAndConceptsReady();
         // [Gemma 2 중앙값 마진 보정 의미 분류]: 모든 프롬프트에 유사도가 높은 UI/문서 허브 이미지가
         // 엉뚱한 풍경·음식·가족 태그를 강제로 받지 않도록, 이미지별 중앙값 대비 분리도(>= 0.052) 및 최소 임계치(>= 0.655) 통과 항목만 부착!
         const rankedConcepts: Array<{ probe: Gemma2ConceptProbe; sim: number }> = [];
         for (const probe of GEMMA2_VISUAL_CONCEPT_PROBES) {
-          const pVec = conceptVecMap.get(probe.id);
+          const pVec = activeConceptMap.get(probe.id);
           if (!pVec) continue;
           const sim = cosineSimilarity(pVec, vec);
           rankedConcepts.push({ probe, sim });
@@ -2503,38 +2558,45 @@ export async function startSilentRealMediaVisionIndexing(params: {
         item.keywordsKo = Array.from(mergedKws);
         item.ontologyPrimaryTags = Array.from(ontoTags);
 
+        const prevMeta = hydratedPhotoMetaMap.get(pKey);
+        const alreadyOcrDone = Boolean(prevMeta?.ocrDone);
+        if (alreadyOcrDone && prevMeta?.ocrSnippet && !(item.captionKo || '').includes('📝 OCR:')) {
+          item.captionKo = item.captionKo
+            ? `${item.captionKo} | 📝 OCR: ${prevMeta.ocrSnippet}`
+            : `📝 OCR: ${prevMeta.ocrSnippet}`;
+        }
+
         params.onPhotoVisionHydrated?.(item.id, {
           vec,
           tags: item.tags,
           keywordsKo: item.keywordsKo,
           ontologyPrimaryTags: item.ontologyPrimaryTags,
+          ...(item.captionKo ? { captionKo: item.captionKo } : {}),
         });
 
-        if (shouldRunOcr && decodedThumb) {
-          pendingOcrQueue.push({ item, thumb: decodedThumb });
+        if (shouldRunOcr && decodedThumb && !alreadyOcrDone) {
+          pendingOcrQueue.push({ item, pKey, vec, thumb: decodedThumb });
+        } else {
+          const finalMeta: CachedPhotoSemanticMeta = {
+            tags: item.tags,
+            keywordsKo: item.keywordsKo,
+            ontologyPrimaryTags: item.ontologyPrimaryTags,
+            ocrDone: true,
+            ocrSnippet: prevMeta?.ocrSnippet,
+          };
+          hydratedPhotoMetaMap.set(pKey, finalMeta);
+          await persistMediaCacheEntry(pKey, vec, undefined, finalMeta);
         }
       }
     }
 
-    // 2) 동영상 키프레임 비전 임베딩 (비전 모델이 마운트된 상태에서 연속 처리)
-    const localVids = params.videos
-      .filter(
-        (v) =>
-          !v.isAllBlack &&
-          (String(v.id || '').startsWith('local_vid_') || String(v.id || '').startsWith('mobile_vid_'))
-      )
-      .slice(0, isMobileEnv ? 3 : params.videos.length);
+    // 2) 동영상 키프레임 비전 임베딩
     for (let i = 0; i < localVids.length; i++) {
       if (!(await waitForMobileUserIdleIfNeeded(isMobileEnv))) {
         return;
       }
-      while (
-        aiRuntimeFlags.priorityVideoSearchDepth > 0 ||
-        aiRuntimeFlags.activeVideoPlaybackCount > 0 ||
-        aiRuntimeFlags.priorityModalGalleryOpen
-      ) {
-        await new Promise((r) => setTimeout(r, 350));
-      }
+      await waitForUserTypingAndModalQuiet();
+      await ensureVisionAndConceptsReady();
       await silentIndexingBrake.waitForIndexingSlot(i);
       await embedSingleLocalVideoIfNeeded(
         localVids[i],
@@ -2542,11 +2604,10 @@ export async function startSilentRealMediaVisionIndexing(params: {
         params.onVideoThumbHydrated,
         params.onVideoOcrHydrated
       );
-      await new Promise((r) => setTimeout(r, isMobileEnv ? 380 : 80));
+      await new Promise((r) => setTimeout(r, isMobileEnv ? 380 : 120));
     }
 
-    // 3) Pass 2 (서류·영수증·스크린샷·백색문서 PP-OCRv5 보조 추출 + 모바일 잔여 동영상 화면글자 추출):
-    //    모바일에서는 거대 비전 모델(sharedVisionModel)을 먼저 해제한 뒤 경량 OCR 세션을 실행해 2중 WASM 피크를 원천 차단합니다!
+    // 3) Pass 2 (미추출 서류·영수증·스크린샷 PP-OCRv5 1회 추출 후 IndexedDB 영구 캐싱 + 타이핑 시 즉시 양보):
     const mobileVidsForOcr = isMobileEnv
       ? params.videos
           .filter(
@@ -2566,15 +2627,20 @@ export async function startSilentRealMediaVisionIndexing(params: {
       }
       for (const ocrJob of pendingOcrQueue) {
         if (isMobileEnv && !(await waitForMobileUserIdleIfNeeded(true))) break;
+        await waitForUserTypingAndModalQuiet();
+        let savedSnippet: string | undefined;
         try {
           const ocrRes = await recognizeDataUrlWithPaddleOcr(ocrJob.thumb);
           if (ocrRes.text && ocrRes.text.trim().length >= 2) {
             const ocrSnippet = ocrRes.text.trim().slice(0, 240);
+            savedSnippet = ocrSnippet;
             const mergedKws = new Set<string>(ocrJob.item.keywordsKo || []);
             for (const tk of extractKoStems(ocrSnippet).slice(0, 24)) {
               if (tk.length >= 2) mergedKws.add(tk);
             }
-            const nextCaption = ocrJob.item.captionKo
+            const nextCaption = ocrJob.item.captionKo?.includes('📝 OCR:')
+              ? ocrJob.item.captionKo
+              : ocrJob.item.captionKo
               ? `${ocrJob.item.captionKo} | 📝 OCR: ${ocrSnippet}`
               : `📝 OCR: ${ocrSnippet}`;
             ocrJob.item.keywordsKo = Array.from(mergedKws);
@@ -2587,9 +2653,16 @@ export async function startSilentRealMediaVisionIndexing(params: {
         } catch {
           /* OCR 보조 실패 시 비전/광학 결과 유지 */
         }
-        if (isMobileEnv) {
-          await new Promise((r) => setTimeout(r, 60));
-        }
+        const ocrDoneMeta: CachedPhotoSemanticMeta = {
+          tags: ocrJob.item.tags,
+          keywordsKo: ocrJob.item.keywordsKo,
+          ontologyPrimaryTags: ocrJob.item.ontologyPrimaryTags,
+          ocrDone: true,
+          ocrSnippet: savedSnippet,
+        };
+        hydratedPhotoMetaMap.set(ocrJob.pKey, ocrDoneMeta);
+        await persistMediaCacheEntry(ocrJob.pKey, ocrJob.vec, undefined, ocrDoneMeta);
+        await new Promise((r) => setTimeout(r, isMobileEnv ? 90 : 150));
       }
 
       for (const mVid of mobileVidsForOcr) {

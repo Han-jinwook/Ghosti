@@ -17,11 +17,21 @@ import { getZCoreUrl } from '../zCoreBridge';
 import koreanPhotoOntologyData from '../../data/koreanPhotoOntology.json';
 import type { HardwareTelemetry, TrashCategory, VideoSceneItem } from '../../types/saysee';
 
+export interface CachedPhotoSemanticMeta {
+  tags?: string[];
+  keywordsKo?: string[];
+  ontologyPrimaryTags?: string[];
+  ocrDone?: boolean;
+  ocrSnippet?: string;
+}
+
 export const aiRuntimeFlags = {
   priorityVideoSearchDepth: 0,
   priorityModalGalleryOpen: false,
   silentMediaIndexingRunning: false,
   activeVideoPlaybackCount: 0,
+  lastUserInputAt: 0,
+  sharedRoomSyncActive: false,
   precomputedSearches: [] as PrecomputedSearchEntry[],
   precomputedAudioRows: [] as any[],
 };
@@ -30,7 +40,45 @@ export const localVideoRepThumbMap = new Map<string, string>();
 export const localVideoFrameThumbMap = new Map<string, string>();
 export const localVideoFrameVecMap = new Map<string, Float32Array>();
 export const hydratedPhotoVecMap = new Map<string, Float32Array>();
+export const hydratedPhotoMetaMap = new Map<string, CachedPhotoSemanticMeta>();
 export const staticCaptionedPhotoIds = new Set<string>();
+
+let globalInputQuietListenerBound = false;
+export function ensureGlobalUserInputQuietGuardBound(): void {
+  if (globalInputQuietListenerBound || typeof window === 'undefined') return;
+  globalInputQuietListenerBound = true;
+  const markTyping = (ev: Event) => {
+    const t = ev.target as HTMLElement | null;
+    const tag = t?.tagName;
+    if (tag === 'INPUT' || tag === 'TEXTAREA' || t?.isContentEditable) {
+      aiRuntimeFlags.lastUserInputAt = performance.now();
+    }
+  };
+  window.addEventListener('keydown', markTyping, { passive: true, capture: true });
+  window.addEventListener('input', markTyping, { passive: true, capture: true });
+  window.addEventListener('compositionupdate', markTyping, { passive: true, capture: true });
+}
+
+export function markUserSearchInputActivity(): void {
+  aiRuntimeFlags.lastUserInputAt = performance.now();
+}
+
+export async function waitForUserTypingAndModalQuiet(quietWindowMs = 1600): Promise<void> {
+  ensureGlobalUserInputQuietGuardBound();
+  while (
+    aiRuntimeFlags.priorityVideoSearchDepth > 0 ||
+    aiRuntimeFlags.activeVideoPlaybackCount > 0 ||
+    aiRuntimeFlags.priorityModalGalleryOpen ||
+    aiRuntimeFlags.sharedRoomSyncActive ||
+    performance.now() - aiRuntimeFlags.lastUserInputAt < quietWindowMs
+  ) {
+    const remainingInputQuiet = Math.max(
+      120,
+      Math.min(450, quietWindowMs - (performance.now() - aiRuntimeFlags.lastUserInputAt))
+    );
+    await new Promise((r) => setTimeout(r, remainingInputQuiet));
+  }
+}
 
 export function getPhotoMediaCacheKey(path: string, size: number): string {
   return `photo:${path}|${Math.max(0, Math.floor(size || 0))}`;
@@ -769,6 +817,7 @@ interface StoredMediaVecRecord {
   key: string;
   vecBuffer: ArrayBuffer;
   thumbDataUrl?: string;
+  semanticMeta?: CachedPhotoSemanticMeta;
   updatedAt: number;
 }
 
@@ -816,6 +865,9 @@ export function hydrateRealMediaVectorCacheOnce(): Promise<void> {
             }
             if (row.key.startsWith('photo:') && vec) {
               hydratedPhotoVecMap.set(row.key, vec);
+              if (row.semanticMeta) {
+                hydratedPhotoMetaMap.set(row.key, row.semanticMeta);
+              }
             } else if (row.key.startsWith('vframe:')) {
               if (vec) localVideoFrameVecMap.set(row.key, vec);
               if (row.thumbDataUrl) localVideoFrameThumbMap.set(row.key, row.thumbDataUrl);
@@ -838,7 +890,8 @@ export function hydrateRealMediaVectorCacheOnce(): Promise<void> {
 export async function persistMediaCacheEntry(
   key: string,
   vec: Float32Array | null,
-  thumbDataUrl?: string
+  thumbDataUrl?: string,
+  semanticMeta?: CachedPhotoSemanticMeta
 ): Promise<void> {
   const db = await openRealMediaVecDb();
   if (!db) return;
@@ -849,6 +902,7 @@ export async function persistMediaCacheEntry(
       key,
       vecBuffer: copyBuf,
       thumbDataUrl,
+      semanticMeta,
       updatedAt: Date.now(),
     } satisfies StoredMediaVecRecord);
   } catch {

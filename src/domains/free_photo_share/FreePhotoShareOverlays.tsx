@@ -199,12 +199,9 @@ export const FreePhotoShareOverlays: React.FC = () => {
       return;
     }
     let cancelled = false;
-    const lookaheadEnd = Math.min(uploadableLocalPhotos.length, endIndex + 96);
-    const prioritySlice = [
-      ...uploadableLocalPhotos.slice(startIndex, lookaheadEnd),
-      ...uploadableLocalPhotos.slice(0, startIndex),
-      ...uploadableLocalPhotos.slice(lookaheadEnd),
-    ];
+    const windowStart = Math.max(0, startIndex - 24);
+    const lookaheadEnd = Math.min(uploadableLocalPhotos.length, endIndex + 72);
+    const prioritySlice = uploadableLocalPhotos.slice(windowStart, lookaheadEnd);
 
     const pumpBatches = async () => {
       for (let cursor = 0; cursor < prioritySlice.length; ) {

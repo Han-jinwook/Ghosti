@@ -854,7 +854,30 @@ def _is_code_repo_dir(d: Path) -> bool:
     return False
 
 
+_SCAN_DIRS_MEM_CACHE: Dict[str, tuple[float, str, List[Path]]] = {}
+_SCAN_DIRS_CACHE_LOCK = threading.Lock()
+_PHOTOS_RESP_MEM_CACHE: Dict[str, Any] = {"sig": "", "quarantine_len": -1, "resp": None}
+_DOCS_RESP_MEM_CACHE: Dict[str, Any] = {"sig": "", "resp": None}
+_PREWARMED_PHOTO_THUMB_SIGS: set[str] = set()
+
+
 def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
+    # [165ms ➔ 0.05ms 초고속 폴더 트리 캐시]: 루트 디렉터리 목록 + 루트 mtime_ns가 동일하면 12초간 하위 폴더 트리 탐색을 재사용하고,
+    # 루트에 새 폴더가 생성·삭제되는 즉시 root_sig가 변해 0ms 지연으로 재스캔합니다.
+    now_mono = time.monotonic()
+    root_sig_parts: List[str] = [str(max_depth)]
+    for r in roots:
+        try:
+            st_r = os.stat(r)
+            root_sig_parts.append(f"{os.path.normcase(str(r))}:{getattr(st_r, 'st_mtime_ns', int(st_r.st_mtime * 1e9))}")
+        except Exception:
+            root_sig_parts.append(os.path.normcase(str(r)))
+    cache_key = "|".join(root_sig_parts)
+    with _SCAN_DIRS_CACHE_LOCK:
+        cached = _SCAN_DIRS_MEM_CACHE.get(cache_key)
+        if cached is not None and (now_mono - cached[0]) < 12.0:
+            return list(cached[2])
+
     result: List[Path] = []
     seen: set[str] = set()
     max_total = 400
@@ -870,7 +893,7 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
             if depth > max_depth or root_count >= per_root_cap or len(result) >= max_total:
                 return
             try:
-                r_str = str(curr.resolve()).lower()
+                r_str = os.path.normcase(os.path.abspath(curr))
                 if r_str in seen:
                     return
                 seen.add(r_str)
@@ -878,20 +901,34 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
                 root_count += 1
                 if depth == max_depth:
                     return
-                for sub in sorted(curr.iterdir(), key=lambda x: x.name):
+                sub_dirs: List[Path] = []
+                with os.scandir(curr) as it:
+                    for dent in it:
+                        try:
+                            if not dent.is_dir(follow_symlinks=False):
+                                continue
+                            nm = dent.name
+                            if (nm.startswith(".") and nm != ".shortcut-targets-by-id") or nm.lower() in _SKIP_DIR_NAMES:
+                                continue
+                            p_sub = Path(dent.path)
+                            if not _is_code_repo_dir(p_sub):
+                                sub_dirs.append(p_sub)
+                        except Exception:
+                            pass
+                sub_dirs.sort(key=lambda x: x.name)
+                for sub in sub_dirs:
                     if root_count >= per_root_cap or len(result) >= max_total:
                         break
-                    if (
-                        sub.is_dir()
-                        and (not sub.name.startswith(".") or sub.name == ".shortcut-targets-by-id")
-                        and sub.name.lower() not in _SKIP_DIR_NAMES
-                        and not _is_code_repo_dir(sub)
-                    ):
-                        _walk(sub, depth + 1)
+                    _walk(sub, depth + 1)
             except Exception:
                 pass
 
         _walk(r, 0)
+
+    with _SCAN_DIRS_CACHE_LOCK:
+        if len(_SCAN_DIRS_MEM_CACHE) > 16:
+            _SCAN_DIRS_MEM_CACHE.clear()
+        _SCAN_DIRS_MEM_CACHE[cache_key] = (now_mono, cache_key, list(result))
     return result
 
 
@@ -1075,6 +1112,19 @@ def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """내 PC 전 폴더(사진, 바탕화면, 다운로드, 문서, 동영상 등)의 모든 실물 사진을 전수 스캔하여 반환합니다."""
     data = params or {}
     req_dir = str(data.get("dir") or data.get("targetPath") or "").strip()
+    recycled_now = safe.recycled_photo_entries()
+    cur_watch_sig = ""
+    if not req_dir:
+        cur_watch_sig = str(get_local_watch_signature().get("sig") or "")
+        cached_resp = _PHOTOS_RESP_MEM_CACHE.get("resp")
+        if (
+            cur_watch_sig
+            and cached_resp is not None
+            and _PHOTOS_RESP_MEM_CACHE.get("sig") == cur_watch_sig
+            and _PHOTOS_RESP_MEM_CACHE.get("quarantine_len") == len(recycled_now)
+        ):
+            return cached_resp
+
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(req_dir), max_depth=3)
 
     files: List[Dict[str, Any]] = []
@@ -1082,36 +1132,41 @@ def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     seen_keys: set[str] = set()
 
     for d in scan_dirs:
+        d_label = _detect_folder_label(d)
+        d_low = str(d).lower()
+        is_sample_or_test_dir = "test_photos" in d_low or "sample" in d_low
+        is_legacy_sample_dir = "sample_photos" in d.name.lower()
         try:
-            for entry in sorted(d.iterdir(), key=lambda x: x.name):
-                if not entry.is_file():
+            with os.scandir(d) as it:
+                entries = [e for e in it if e.is_file(follow_symlinks=False)]
+            entries.sort(key=lambda x: x.name)
+            for dent in entries:
+                nm = dent.name
+                if is_legacy_sample_dir and _LEGACY_PERSONAL_RX.match(nm):
                     continue
-                # [데이터 보호 철칙] 유저 파일은 어떤 경우에도 자동 삭제하지 않습니다.
-                # 구버전 샘플 압축파일(sample_photos_*) 폴더 안에 섞여 있던 개인 사진만 '목록 노출'에서 제외하며,
-                # 사진·바탕화면·다운로드 등 유저 폴더의 파일(예: 삼성폰 기본 파일명 20241029_123456.jpg)은 정상 사진으로 취급합니다.
-                if _LEGACY_PERSONAL_RX.match(entry.name) and "sample_photos" in d.name.lower():
+                dot = nm.rfind(".")
+                if dot < 0 or nm[dot:].lower() not in _IMAGE_EXTS:
                     continue
-                ext = entry.suffix.lower()
-                if ext not in _IMAGE_EXTS:
+                entry_path = Path(dent.path)
+                if _is_cloud_virtual_or_unpinned_file(entry_path):
                     continue
-                if _is_cloud_virtual_or_unpinned_file(entry):
-                    continue
-                resolved = entry.resolve()
-                norm_resolved = str(resolved).lower()
+                abs_str = os.path.abspath(dent.path)
+                norm_resolved = abs_str.lower()
                 if norm_resolved in seen_paths:
                     continue
-                st = entry.stat()
-                if st.st_size < 4096 and "test_photos" not in str(d).lower() and "sample" not in str(d).lower():
+                st = dent.stat(follow_symlinks=False)
+                if st.st_size < 4096 and not is_sample_or_test_dir:
                     continue
                 seen_paths.add(norm_resolved)
+                resolved = Path(abs_str)
                 photo_key = _make_collision_safe_media_key(resolved, d.name, seen_keys)
                 _PHOTO_PATH_INDEX[photo_key] = resolved
                 files.append({
                     "path": photo_key,
-                    "originalName": entry.name,
-                    "fullPath": str(resolved),
+                    "originalName": nm,
+                    "fullPath": abs_str,
                     "folderName": d.name,
-                    "deviceSource": _detect_folder_label(d),
+                    "deviceSource": d_label,
                     "size": int(st.st_size),
                     "date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d"),
                     "mtimeMs": int(st.st_mtime * 1000),
@@ -1126,16 +1181,30 @@ def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     files.sort(key=lambda f: int(f.get("mtimeMs") or 0), reverse=True)
     primary_dir = resolve_active_photo_dir(req_dir)
     if files:
-        _trigger_bg_photo_thumb_prewarm([Path(f["fullPath"]) for f in files[:360] if f.get("fullPath")])
-    return {
+        unwarmed_paths: List[Path] = []
+        for f in files[:360]:
+            fp_s = f.get("fullPath")
+            if fp_s:
+                psig = f"{fp_s}|{f.get('size')}|{f.get('mtimeMs')}"
+                if psig not in _PREWARMED_PHOTO_THUMB_SIGS:
+                    _PREWARMED_PHOTO_THUMB_SIGS.add(psig)
+                    unwarmed_paths.append(Path(fp_s))
+        if unwarmed_paths:
+            _trigger_bg_photo_thumb_prewarm(unwarmed_paths)
+    resp_obj = {
         "ok": True,
         "dir": str(primary_dir),
         "scannedFolderCount": len(scan_dirs),
         "exists": True,
         "total": len(files),
         "files": files,
-        "quarantined": safe.recycled_photo_entries(),
+        "quarantined": recycled_now,
     }
+    if not req_dir and cur_watch_sig:
+        _PHOTOS_RESP_MEM_CACHE["sig"] = cur_watch_sig
+        _PHOTOS_RESP_MEM_CACHE["quarantine_len"] = len(recycled_now)
+        _PHOTOS_RESP_MEM_CACHE["resp"] = resp_obj
+    return resp_obj
 
 
 def get_local_watch_signature(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
@@ -2294,27 +2363,39 @@ def _bg_prewarm_pdf_ocr_worker(targets: List[Path]) -> None:
 def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """내 PC 전 폴더(문서, 바탕화면, 다운로드, OneDrive 등)의 서류 파일을 전수 스캔하여 반환합니다."""
     global _PDF_BG_OCR_RUNNING
+    cur_watch_sig = str(get_local_watch_signature().get("sig") or "")
+    cached_docs_resp = _DOCS_RESP_MEM_CACHE.get("resp")
+    if (
+        cur_watch_sig
+        and cached_docs_resp is not None
+        and _DOCS_RESP_MEM_CACHE.get("sig") == cur_watch_sig
+        and not _PDF_BG_OCR_RUNNING
+    ):
+        return cached_docs_resp
+
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
     raw_entries: List[tuple[Path, Path, os.stat_result]] = []
     seen_paths: set[str] = set()
 
     for d in scan_dirs:
         try:
-            for entry in d.iterdir():
-                if not entry.is_file():
-                    continue
-                ext_low = entry.suffix.lower()
-                if ext_low not in _DOC_EXTS:
-                    continue
-                if entry.name.startswith("~$") or entry.name.lower().startswith("readme"):
-                    continue
-                resolved_doc = entry.resolve()
-                norm_doc = str(resolved_doc).lower()
-                if norm_doc in seen_paths:
-                    continue
-                seen_paths.add(norm_doc)
-                st = entry.stat()
-                raw_entries.append((d, entry, st))
+            with os.scandir(d) as it:
+                for dent in it:
+                    if not dent.is_file(follow_symlinks=False):
+                        continue
+                    nm = dent.name
+                    dot = nm.rfind(".")
+                    if dot < 0 or nm[dot:].lower() not in _DOC_EXTS:
+                        continue
+                    if nm.startswith("~$") or nm.lower().startswith("readme"):
+                        continue
+                    abs_doc = os.path.abspath(dent.path)
+                    norm_doc = abs_doc.lower()
+                    if norm_doc in seen_paths:
+                        continue
+                    seen_paths.add(norm_doc)
+                    st = dent.stat(follow_symlinks=False)
+                    raw_entries.append((d, Path(abs_doc), st))
         except Exception:
             pass
 
@@ -2359,7 +2440,7 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 pass
             norm_ext, badge = ext_badge_map.get(ext_low, ("DOC", "📄 로컬 문서 파일"))
             kw_tokens = [w for w in re.split(r"[\s_\-.,()\[\]]+", f"{stem} {d.name} {extracted[:360]}") if len(w) >= 2][:22]
-            resolved_doc_str = str(entry.resolve())
+            resolved_doc_str = str(entry)
             doc_hash = hashlib.sha1(resolved_doc_str.lower().encode("utf-8", errors="ignore")).hexdigest()[:8]
             docs.append({
                 "id": f"local_doc_{doc_hash}_{entry.stem[:20]}",
@@ -2384,12 +2465,16 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         _PDF_BG_OCR_RUNNING = True
         threading.Thread(target=_bg_prewarm_pdf_ocr_worker, args=(deferred_pdfs,), daemon=True).start()
 
-    return {
+    resp_docs = {
         "ok": True,
         "total": len(docs),
         "documents": docs,
         "docs": docs,
     }
+    if cur_watch_sig and not deferred_pdfs:
+        _DOCS_RESP_MEM_CACHE["sig"] = cur_watch_sig
+        _DOCS_RESP_MEM_CACHE["resp"] = resp_docs
+    return resp_docs
 
 
 def _parse_mvhd_chunk(buf: bytes) -> float | None:

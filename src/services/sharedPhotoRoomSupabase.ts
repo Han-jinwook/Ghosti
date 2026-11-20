@@ -435,6 +435,30 @@ export function getPrewarmedRoomInviteTokenSync(
   };
 }
 
+export async function readInstantLocalVaultSharedPhotos(
+  loungeType: LoungeType,
+  familyRoom: FamilyRoomId
+): Promise<PhotoItem[]> {
+  if (!hasAuthenticatedHubAccountSession()) return [];
+  const email = resolveCurrentAuthedEmail();
+  if (!email) return [];
+  const { dbLoungeType, dbSubType } = mapUiLoungeToDbRoom(loungeType, familyRoom);
+  const cached = readCachedRoomTokenEntry(`${email}:${dbLoungeType}:${dbSubType}`);
+  const roomIds = Array.from(
+    new Set(
+      [cached?.roomId, ...(Array.isArray(cached?.accessibleRoomIds) ? cached.accessibleRoomIds : [])].filter(
+        (id): id is string => Boolean(id)
+      )
+    )
+  );
+  if (roomIds.length === 0) return [];
+  try {
+    return await loadMemberLocalMultiRoomPhotos(email, roomIds);
+  } catch {
+    return [];
+  }
+}
+
 export async function ensureMyRoomAndInviteToken(opts: {
   loungeType: LoungeType;
   familyRoom: FamilyRoomId;
@@ -450,6 +474,20 @@ export async function ensureMyRoomAndInviteToken(opts: {
 }> {
   if (!hasAuthenticatedHubAccountSession()) {
     return { ok: false, error: 'AUTH_REQUIRED' };
+  }
+  const fastEmail = resolveCurrentAuthedEmail();
+  if (fastEmail) {
+    const { dbLoungeType, dbSubType } = mapUiLoungeToDbRoom(opts.loungeType, opts.familyRoom);
+    const fastCached = readCachedRoomTokenEntry(`${fastEmail}:${dbLoungeType}:${dbSubType}`);
+    if (fastCached?.roomId && fastCached?.inviteToken && Array.isArray(fastCached.accessibleRoomIds)) {
+      return {
+        ok: true,
+        roomId: fastCached.roomId,
+        inviteToken: fastCached.inviteToken,
+        masterNickname: fastCached.masterNickname,
+        accessibleRoomIds: fastCached.accessibleRoomIds,
+      };
+    }
   }
   const authed = await ensureGhostiAuthedSupabaseClient();
   if (!authed) {

@@ -396,6 +396,223 @@ export const DEMO_SEARCH_SAMPLE_VIDEOS_2: VideoSceneItem[] = [];
 
 export const DEMO_SEARCH_SAMPLE_DOCS_2: LocalDocumentFile[] = [];
 
+const Stage1IsolatedSearchInputForm: React.FC<{
+  initialQuery: string;
+  initialized: boolean;
+  hasExecutedUserSearch: boolean;
+  activeQuery: string;
+  searchSpace: 'gallery' | 'video' | 'vault';
+  searchPlaceholderPool: readonly string[];
+  allowMobileVoice: boolean;
+  isListening: boolean;
+  clearSignal: number;
+  onExecuteQuery: (q: string) => Promise<void>;
+  onToggleMic: () => void;
+}> = React.memo(
+  ({
+    initialQuery,
+    initialized,
+    hasExecutedUserSearch,
+    activeQuery,
+    searchSpace,
+    searchPlaceholderPool,
+    allowMobileVoice,
+    isListening,
+    clearSignal,
+    onExecuteQuery,
+    onToggleMic,
+  }) => {
+    const [textInput, setTextInput] = useState(() => {
+      if (initialQuery && initialQuery.trim()) return initialQuery.trim();
+      if (typeof window !== 'undefined') {
+        const qParam = new URLSearchParams(window.location.search).get('q');
+        if (qParam && qParam.trim()) return qParam.trim();
+      }
+      if (
+        hasExecutedUserSearch &&
+        activeQuery &&
+        !activeQuery.startsWith('전체 갤러리 사진') &&
+        !activeQuery.startsWith('동영상 ') &&
+        !activeQuery.startsWith('최근 서류 ')
+      ) {
+        return activeQuery;
+      }
+      return '';
+    });
+    const [isInputFocused, setIsInputFocused] = useState(false);
+    const consumedInitialQueryRef = React.useRef<string>('');
+    const lastClearSignalRef = React.useRef<number>(clearSignal);
+
+    useEffect(() => {
+      if (clearSignal !== lastClearSignalRef.current) {
+        lastClearSignalRef.current = clearSignal;
+        setTextInput('');
+      }
+    }, [clearSignal]);
+
+    useEffect(() => {
+      const q = (initialQuery || '').trim();
+      if (q && initialized && consumedInitialQueryRef.current !== q) {
+        consumedInitialQueryRef.current = q;
+        setTextInput(q);
+        if (!hasExecutedUserSearch || activeQuery !== q) {
+          void onExecuteQuery(q);
+        }
+        return;
+      }
+      if (
+        !isInputFocused &&
+        hasExecutedUserSearch &&
+        activeQuery &&
+        !activeQuery.startsWith('전체 갤러리 사진') &&
+        !activeQuery.startsWith('동영상 ') &&
+        !activeQuery.startsWith('최근 서류 ')
+      ) {
+        setTextInput(activeQuery);
+      }
+    }, [initialQuery, initialized, hasExecutedUserSearch, activeQuery, isInputFocused, onExecuteQuery]);
+
+    const [rollingSearchIdx, setRollingSearchIdx] = useState<number>(() =>
+      getAndAdvanceSessionPlaceholderStartIndex(10)
+    );
+
+    useEffect(() => {
+      if (isInputFocused || textInput.trim().length > 0) return;
+      const timer = window.setInterval(() => {
+        setRollingSearchIdx((prev) => (prev + 1) % searchPlaceholderPool.length);
+      }, STAGE1_ROLLING_INTERVAL_MS);
+      return () => window.clearInterval(timer);
+    }, [isInputFocused, textInput, searchPlaceholderPool.length]);
+
+    const currentExampleSentence = useMemo(() => {
+      return searchPlaceholderPool[rollingSearchIdx % searchPlaceholderPool.length];
+    }, [searchPlaceholderPool, rollingSearchIdx]);
+
+    const handleStepPlaceholder = (delta: -1 | 1) => {
+      setRollingSearchIdx(
+        (prev) => (prev + delta + searchPlaceholderPool.length) % searchPlaceholderPool.length
+      );
+    };
+
+    const handleTextSubmit = async (e: React.FormEvent) => {
+      e.preventDefault();
+      unlockMobileAudioOnUserGesture();
+      const fallbackExample = searchSpace === 'video' ? '룰렛 돌리는 장면' : currentExampleSentence;
+      const q = (textInput.trim() || fallbackExample).trim();
+      if (!q) return;
+      setTextInput(q);
+      await onExecuteQuery(q);
+    };
+
+    const handleRunExampleInstant = async () => {
+      unlockMobileAudioOnUserGesture();
+      const fallbackExample = searchSpace === 'video' ? '룰렛 돌리는 장면' : currentExampleSentence;
+      const q = fallbackExample.trim();
+      if (!q) return;
+      setTextInput(q);
+      await onExecuteQuery(q);
+    };
+
+    return (
+      <form onSubmit={handleTextSubmit} className="w-full flex flex-wrap items-center gap-1.5 sm:gap-2">
+        <div className="relative flex-1 min-w-[200px] flex items-center">
+          <span className="material-symbols-outlined text-[20px] absolute left-3.5 pointer-events-none text-zinc-400">
+            {searchSpace === 'vault'
+              ? 'folder_managed'
+              : searchSpace === 'video'
+              ? 'smart_display'
+              : 'search'}
+          </span>
+          <input
+            type="text"
+            value={textInput}
+            onFocus={() => setIsInputFocused(true)}
+            onBlur={() => setIsInputFocused(false)}
+            onChange={(e) => setTextInput(e.target.value)}
+            placeholder={
+              searchSpace === 'video'
+                ? '내 영상 속 찾고 싶은 특정 장면이나 대사를 입력해 보세요 (그 순간부터 바로 재생됩니다)'
+                : `예) ${currentExampleSentence}`
+            }
+            className="w-full h-11 md:h-13 pl-10 pr-[110px] sm:pr-[264px] rounded-2xl bg-[#18181B] border border-white/15 focus:border-primary-container shadow-sm outline-none font-body-md text-[13px] md:text-[14.5px] text-white placeholder:text-zinc-400/75 transition-colors"
+          />
+
+          <div className="absolute right-1.5 inset-y-0 flex items-center gap-1">
+            {!textInput.trim() ? (
+              <div className="hidden sm:flex items-center gap-1">
+                <button
+                  type="button"
+                  onClick={() => handleStepPlaceholder(-1)}
+                  title="이전 예시 문구 보기"
+                  className="w-7 h-7 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 hover:text-white text-[11px] font-bold flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  ◀
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleStepPlaceholder(1)}
+                  title="다음 예시 문구 보기"
+                  className="w-7 h-7 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 hover:text-white text-[11px] font-bold flex items-center justify-center transition-colors cursor-pointer"
+                >
+                  ▶
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void handleRunExampleInstant()}
+                  title="지금 보이는 예시 문장으로 1초 만에 바로 검색해 봅니다"
+                  className="inline-flex items-center gap-1 h-7.5 px-2.5 rounded-lg bg-teal-500/15 hover:bg-teal-500/25 border border-teal-400/35 text-teal-300 font-label-sm text-[11.5px] font-extrabold transition-all whitespace-nowrap cursor-pointer"
+                >
+                  <span>예시 바로 검색 ↵</span>
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setTextInput('')}
+                className="text-zinc-400 hover:text-white p-1 cursor-pointer"
+                title="지우기"
+              >
+                <span className="material-symbols-outlined text-[17px]">close</span>
+              </button>
+            )}
+            <button
+              type="submit"
+              className="h-8.5 md:h-10 px-3.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] md:text-[13px] font-extrabold transition-all whitespace-nowrap cursor-pointer"
+            >
+              검색
+            </button>
+          </div>
+        </div>
+
+        {allowMobileVoice && (
+          <div className="flex items-center gap-1.5 shrink-0 ml-auto">
+            <button
+              type="button"
+              onClick={onToggleMic}
+              title="모바일 마이크로 말해서 검색·낭독·손보기"
+              className={`h-10 px-3 rounded-2xl border flex items-center gap-1 font-label-md text-[12px] font-bold shrink-0 whitespace-nowrap transition-all cursor-pointer ${
+                isListening
+                  ? 'bg-primary-container text-zinc-950 border-primary-container animate-pulse'
+                  : 'bg-[#18181B] hover:bg-zinc-800 text-zinc-200 border-white/15'
+              }`}
+            >
+              <span
+                className={`material-symbols-outlined text-[18px] ${
+                  isListening ? 'text-zinc-950' : 'text-primary-container'
+                }`}
+              >
+                {isListening ? 'stop_circle' : 'mic'}
+              </span>
+              <span>{isListening ? '듣는 중' : '말하기'}</span>
+            </button>
+            <VoiceActorControlPill />
+          </div>
+        )}
+      </form>
+    );
+  }
+);
+
 export const Stage1MinimalSearchPreview: React.FC<{
   initialQuery?: string;
   forceSampleOnly?: boolean;
@@ -486,58 +703,14 @@ export const Stage1MinimalSearchPreview: React.FC<{
     return filtered.length > 0 ? filtered : DEMO_SEARCH_SAMPLE_DOCS_2;
   }, [forceSampleOnly, store.matchedLocalDocs, demoQuery]);
 
-  const [textInput, setTextInput] = useState(() => {
-    if (initialQuery && initialQuery.trim()) return initialQuery.trim();
-    if (typeof window !== 'undefined') {
-      const qParam = new URLSearchParams(window.location.search).get('q');
-      if (qParam && qParam.trim()) return qParam.trim();
-    }
-    if (
-      hasExecutedUserSearch &&
-      activeQuery &&
-      !activeQuery.startsWith('전체 갤러리 사진') &&
-      !activeQuery.startsWith('동영상 ') &&
-      !activeQuery.startsWith('최근 서류 ')
-    ) {
-      return activeQuery;
-    }
-    return '';
-  });
   const [ocrModalPhoto, setOcrModalPhoto] = useState<PhotoItem | null>(null);
-  const [isInputFocused, setIsInputFocused] = useState(false);
+  const [clearInputSignal, setClearInputSignal] = useState<number>(0);
   const mobilePhotoInputRef = React.useRef<HTMLInputElement | null>(null);
   const [isZCoreConnected, setIsZCoreConnected] = useState(zCoreBridge.isConnected);
 
   useEffect(() => {
     return zCoreBridge.subscribe((connected) => setIsZCoreConnected(connected));
   }, []);
-
-  const consumedInitialQueryRef = React.useRef<string>('');
-
-  const isFirstAutoSyncRef = React.useRef<boolean>(true);
-
-  useEffect(() => {
-    const q = (initialQuery || '').trim();
-    if (q && initialized && consumedInitialQueryRef.current !== q) {
-      consumedInitialQueryRef.current = q;
-      setTextInput(q);
-      if (!hasExecutedUserSearch || activeQuery !== q) {
-        void runTextQuery(q);
-      }
-      return;
-    }
-    if (
-      !isInputFocused &&
-      hasExecutedUserSearch &&
-      activeQuery &&
-      !activeQuery.startsWith('전체 갤러리 사진') &&
-      !activeQuery.startsWith('동영상 ') &&
-      !activeQuery.startsWith('최근 서류 ')
-    ) {
-      setTextInput(activeQuery);
-    }
-    isFirstAutoSyncRef.current = false;
-  }, [initialQuery, initialized, hasExecutedUserSearch, activeQuery, runTextQuery]);
 
   const isMobile = layout === 'mobile';
   const isMobileOrStore = isMobile || Boolean(isStoreAppMode);
@@ -549,23 +722,6 @@ export const Stage1MinimalSearchPreview: React.FC<{
         : SEARCH_STAGE_PC_ROLLING_PLACEHOLDERS_10,
     [isMobileOrStore]
   );
-
-  const [rollingSearchIdx, setRollingSearchIdx] = useState<number>(() =>
-    getAndAdvanceSessionPlaceholderStartIndex(10)
-  );
-
-  // [레드팀 보완 1] 포커스 중이거나 1글자라도 타이핑 중이면 10초 자동 롤링 일시정지
-  useEffect(() => {
-    if (isInputFocused || textInput.trim().length > 0) return;
-    const timer = window.setInterval(() => {
-      setRollingSearchIdx((prev) => (prev + 1) % searchPlaceholderPool.length);
-    }, STAGE1_ROLLING_INTERVAL_MS);
-    return () => window.clearInterval(timer);
-  }, [isInputFocused, textInput, searchPlaceholderPool.length]);
-
-  const currentExampleSentence = useMemo(() => {
-    return searchPlaceholderPool[rollingSearchIdx % searchPlaceholderPool.length];
-  }, [searchPlaceholderPool, rollingSearchIdx]);
 
   const activePhotos = useMemo(() => photos.filter((p) => !p.quarantined), [photos]);
   const gallerySceneCount = useMemo(
@@ -640,7 +796,36 @@ export const Stage1MinimalSearchPreview: React.FC<{
     [groupedResults, visiblePhotoLimit]
   );
 
-  const scrollToResults = () => {
+  const initialDocBatchSize = isStandaloneSearchWin ? 18 : 36;
+  const [visibleDocLimit, setVisibleDocLimit] = useState<number>(initialDocBatchSize);
+  const docLoadMoreRef = React.useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setVisibleDocLimit(initialDocBatchSize);
+  }, [activeQuery, searchSpace, initialDocBatchSize]);
+
+  useEffect(() => {
+    const el = docLoadMoreRef.current;
+    if (!el || visibleDocLimit >= matchedLocalDocs.length) return;
+    if (typeof IntersectionObserver === 'undefined') return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setVisibleDocLimit((prev) => Math.min(matchedLocalDocs.length, prev + 36));
+        }
+      },
+      { rootMargin: '320px' }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [visibleDocLimit, matchedLocalDocs.length]);
+
+  const visibleMatchedDocs = useMemo(
+    () => matchedLocalDocs.slice(0, visibleDocLimit),
+    [matchedLocalDocs, visibleDocLimit]
+  );
+
+  const scrollToResults = React.useCallback(() => {
     if (typeof document !== 'undefined') {
       window.setTimeout(() => {
         document.getElementById('ghosti-search-results')?.scrollIntoView({
@@ -649,46 +834,25 @@ export const Stage1MinimalSearchPreview: React.FC<{
         });
       }, 60);
     }
-  };
+  }, []);
 
-  const handleTextSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleExecuteQuery = React.useCallback(
+    async (q: string) => {
+      if (forceSampleOnly) {
+        setDemoQuery(q);
+        setDemoExecuted(true);
+      } else {
+        await runTextQuery(q);
+      }
+      scrollToResults();
+    },
+    [forceSampleOnly, runTextQuery, scrollToResults]
+  );
+
+  const handleToggleMic = React.useCallback(() => {
     unlockMobileAudioOnUserGesture();
-    const fallbackExample =
-      searchSpace === 'video' ? '룰렛 돌리는 장면' : currentExampleSentence;
-    const q = (textInput.trim() || fallbackExample).trim();
-    if (!q) return;
-    setTextInput(q);
-    if (forceSampleOnly) {
-      setDemoQuery(q);
-      setDemoExecuted(true);
-    } else {
-      await runTextQuery(q);
-    }
-    scrollToResults();
-  };
-
-  const handleRunExampleInstant = async () => {
-    unlockMobileAudioOnUserGesture();
-    const fallbackExample =
-      searchSpace === 'video' ? '룰렛 돌리는 장면' : currentExampleSentence;
-    const q = fallbackExample.trim();
-    if (!q) return;
-    setTextInput(q);
-    if (forceSampleOnly) {
-      setDemoQuery(q);
-      setDemoExecuted(true);
-    } else {
-      await runTextQuery(q);
-    }
-    scrollToResults();
-  };
-
-  const handleStepPlaceholder = (delta: -1 | 1) => {
-    setRollingSearchIdx(
-      (prev) => (prev + delta + searchPlaceholderPool.length) % searchPlaceholderPool.length
-    );
-  };
+    void toggleMicRecording();
+  }, [toggleMicRecording]);
 
   return (
     <main className="flex-1 w-full px-4 sm:px-6 py-5 sm:py-6 flex flex-col gap-5">
@@ -702,106 +866,20 @@ export const Stage1MinimalSearchPreview: React.FC<{
 
         <section className="w-full flex flex-col gap-3">
           <div className="w-full flex flex-col gap-3">
-            {/* 1-A. 자연어 문장형 통합 검색창 (10초 롤링 플레이스홀더 + 포커스 정지 + [◀][▶][예시 바로 검색 ↵][검색] 우측 정렬) */}
-            <form onSubmit={handleTextSubmit} className="w-full flex flex-wrap items-center gap-1.5 sm:gap-2">
-              <div className="relative flex-1 min-w-[200px] flex items-center">
-                <span className="material-symbols-outlined text-[20px] absolute left-3.5 pointer-events-none text-zinc-400">
-                  {searchSpace === 'vault'
-                    ? 'folder_managed'
-                    : searchSpace === 'video'
-                    ? 'smart_display'
-                    : 'search'}
-                </span>
-                <input
-                  type="text"
-                  value={textInput}
-                  onFocus={() => setIsInputFocused(true)}
-                  onBlur={() => setIsInputFocused(false)}
-                  onChange={(e) => setTextInput(e.target.value)}
-                  placeholder={
-                    searchSpace === 'video'
-                      ? '내 영상 속 찾고 싶은 특정 장면이나 대사를 입력해 보세요 (그 순간부터 바로 재생됩니다)'
-                      : `예) ${currentExampleSentence}`
-                  }
-                  className="w-full h-11 md:h-13 pl-10 pr-[110px] sm:pr-[264px] rounded-2xl bg-[#18181B] border border-white/15 focus:border-primary-container shadow-sm outline-none font-body-md text-[13px] md:text-[14.5px] text-white placeholder:text-zinc-400/75 transition-colors"
-                />
-
-                {/* 우측 컨트롤 그룹: [◀] [▶] [예시 바로 검색 ↵] [검색] (좌측 겹침 원천 차단) */}
-                <div className="absolute right-1.5 inset-y-0 flex items-center gap-1">
-                  {!textInput.trim() ? (
-                    <div className="hidden sm:flex items-center gap-1">
-                      <button
-                        type="button"
-                        onClick={() => handleStepPlaceholder(-1)}
-                        title="이전 예시 문구 보기"
-                        className="w-7 h-7 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 hover:text-white text-[11px] font-bold flex items-center justify-center transition-colors cursor-pointer"
-                      >
-                        ◀
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleStepPlaceholder(1)}
-                        title="다음 예시 문구 보기"
-                        className="w-7 h-7 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 hover:text-white text-[11px] font-bold flex items-center justify-center transition-colors cursor-pointer"
-                      >
-                        ▶
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => void handleRunExampleInstant()}
-                        title="지금 보이는 예시 문장으로 1초 만에 바로 검색해 봅니다"
-                        className="inline-flex items-center gap-1 h-7.5 px-2.5 rounded-lg bg-teal-500/15 hover:bg-teal-500/25 border border-teal-400/35 text-teal-300 font-label-sm text-[11.5px] font-extrabold transition-all whitespace-nowrap cursor-pointer"
-                      >
-                        <span>예시 바로 검색 ↵</span>
-                      </button>
-                    </div>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={() => setTextInput('')}
-                      className="text-zinc-400 hover:text-white p-1 cursor-pointer"
-                      title="지우기"
-                    >
-                      <span className="material-symbols-outlined text-[17px]">close</span>
-                    </button>
-                  )}
-                  <button
-                    type="submit"
-                    className="h-8.5 md:h-10 px-3.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-md text-[12.5px] md:text-[13px] font-extrabold transition-all whitespace-nowrap cursor-pointer"
-                  >
-                    검색
-                  </button>
-                </div>
-              </div>
-
-              {allowMobileVoice && (
-                <div className="flex items-center gap-1.5 shrink-0 ml-auto">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      unlockMobileAudioOnUserGesture();
-                      void toggleMicRecording();
-                    }}
-                    title="모바일 마이크로 말해서 검색·낭독·손보기"
-                    className={`h-10 px-3 rounded-2xl border flex items-center gap-1 font-label-md text-[12px] font-bold shrink-0 whitespace-nowrap transition-all cursor-pointer ${
-                      isListening
-                        ? 'bg-primary-container text-zinc-950 border-primary-container animate-pulse'
-                        : 'bg-[#18181B] hover:bg-zinc-800 text-zinc-200 border-white/15'
-                    }`}
-                  >
-                    <span
-                      className={`material-symbols-outlined text-[18px] ${
-                        isListening ? 'text-zinc-950' : 'text-primary-container'
-                      }`}
-                    >
-                      {isListening ? 'stop_circle' : 'mic'}
-                    </span>
-                    <span>{isListening ? '듣는 중' : '말하기'}</span>
-                  </button>
-                  <VoiceActorControlPill />
-                </div>
-              )}
-            </form>
+            {/* 1-A. 자연어 문장형 통합 검색창 (독립 상태 분리로 타이핑 시 하단 그리드 리렌더링 0회 보장) */}
+            <Stage1IsolatedSearchInputForm
+              initialQuery={initialQuery}
+              initialized={initialized}
+              hasExecutedUserSearch={hasExecutedUserSearch}
+              activeQuery={activeQuery}
+              searchSpace={searchSpace}
+              searchPlaceholderPool={searchPlaceholderPool}
+              allowMobileVoice={allowMobileVoice}
+              isListening={isListening}
+              clearSignal={clearInputSignal}
+              onExecuteQuery={handleExecuteQuery}
+              onToggleMic={handleToggleMic}
+            />
 
             {allowMobileVoice && isListening && (
               <div className="px-3.5 py-2 rounded-xl bg-zinc-950 border border-white/10 flex items-center justify-between gap-3">
@@ -932,7 +1010,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
                   <button
                     type="button"
                     onClick={() => {
-                      setTextInput('');
+                      setClearInputSignal((c) => c + 1);
                       resetSearchSpaceToAll(searchSpace);
                     }}
                     className="px-3 py-1.5 rounded-full bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-400 hover:text-white font-label-sm text-[11.5px] whitespace-nowrap cursor-pointer"
@@ -1183,8 +1261,9 @@ export const Stage1MinimalSearchPreview: React.FC<{
             ) : null}
 
             {matchedLocalDocs.length > 0 && (
+              <>
               <div className="grid grid-cols-[repeat(auto-fill,minmax(240px,1fr))] gap-3.5 pb-1">
-                {matchedLocalDocs.map((doc) => (
+                {visibleMatchedDocs.map((doc) => (
                   <article
                     key={doc.id}
                     onClick={() => setSelectedDocModal(doc)}
@@ -1216,11 +1295,15 @@ export const Stage1MinimalSearchPreview: React.FC<{
                       <div className="bg-zinc-950/80 p-2.5 rounded-xl border border-white/5">
                         <p className="font-body-sm text-[12px] text-zinc-400 line-clamp-3 leading-relaxed m-0 p-0">
                           {renderHighlightedDocText(
-                            buildDocPreviewSnippet(
-                              maskSensitiveDocText(doc.extractedText),
-                              hasExecutedUserSearch ? activeQuery : '',
-                              180,
-                              doc.matchedQueryTokens
+                            maskSensitiveDocText(
+                              hasExecutedUserSearch && activeQuery
+                                ? buildDocPreviewSnippet(
+                                    doc.extractedText,
+                                    activeQuery,
+                                    180,
+                                    doc.matchedQueryTokens
+                                  )
+                                : doc.extractedText.slice(0, 220)
                             ),
                             hasExecutedUserSearch ? activeQuery : '',
                             doc.matchedQueryTokens
@@ -1282,6 +1365,10 @@ export const Stage1MinimalSearchPreview: React.FC<{
                   </article>
                 ))}
               </div>
+              {visibleDocLimit < matchedLocalDocs.length && (
+                <div ref={docLoadMoreRef} className="h-4 w-full" aria-hidden="true" />
+              )}
+              </>
             )}
           </section>
         ) : (

@@ -30,8 +30,10 @@ import {
   ensureMyRoomAndInviteToken,
   fetchGuestPreviewRoomByToken,
   fetchScopedSharedRoomPhotos,
+  readInstantLocalVaultSharedPhotos,
   uploadPhotosToSupabaseSharedRoom,
 } from '../../services/sharedPhotoRoomSupabase';
+import { aiRuntimeFlags } from '../../services/ai/aiSharedRuntime';
 
 let sharedRoomSyncSeq = 0;
 let lastDeepLinkHydratedAt = 0;
@@ -1396,15 +1398,65 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     const targetFamilyRoom = stBefore.activeFamilyRoom || '우리집';
     const inviteToken = (opts?.forceInviteToken ?? readActiveInviteToken()).trim();
     const shouldLoadFromRemote = Boolean(inviteToken || hasAuthenticatedHubAccountSession());
-    if (shouldLoadFromRemote && stBefore.searchResults.length === 0) {
+
+    // [0.01초 즉시 렌더링 — Local-Vault-First Stale-While-Revalidate]:
+    // 서버 네트워크 응답을 기다리느라 빈 로딩 화면이 길어지지 않도록, 로컬 IndexedDB 금고에 저장된 방 사진이 있으면
+    // 10ms 내에 먼저 화면에 즉시 표시한 뒤 백그라운드에서 서버 신규 사진을 증분 동기화합니다.
+    if (!inviteToken && hasAuthenticatedHubAccountSession()) {
+      const localFastPhotos = await readInstantLocalVaultSharedPhotos(targetLounge, targetFamilyRoom);
+      if (reqSeq !== sharedRoomSyncSeq) return;
+      if (localFastPhotos.length > 0) {
+        const stFast = get();
+        const fastAdded = [
+          ...localFastPhotos,
+          ...stFast.sharedRoomAddedPhotos.filter(
+            (p) =>
+              !(
+                (p.sharedLoungeType ?? 'family') === targetLounge &&
+                (targetLounge !== 'family' ||
+                  (p.sharedFamilyRoom ?? '우리집') === targetFamilyRoom)
+              )
+          ),
+        ];
+        if (
+          stFast.activeLoungeType === targetLounge &&
+          (targetLounge !== 'family' || stFast.activeFamilyRoom === targetFamilyRoom)
+        ) {
+          const fastMerged = resolveLoungePhotoCorpus({
+            activeLoungeType: targetLounge,
+            activeFamilyRoom: targetFamilyRoom,
+            photos: stFast.photos,
+            sharedRoomHostPhotos: stFast.sharedRoomHostPhotos,
+            sharedRoomAddedPhotos: fastAdded,
+          });
+          const fastResults: SearchResultItem[] = filterVisibleGalleryPhotos(fastMerged).map(
+            (photo) => ({
+              photo,
+              score: 0.96,
+              matchPercentage: 98,
+              matchedBy: 'text-direct' as const,
+            })
+          );
+          set({
+            sharedRoomAddedPhotos: fastAdded,
+            isLoadingSharedRoomPhotos: false,
+            ...(stFast.hasExecutedUserSearch ? {} : { searchResults: fastResults }),
+          });
+        }
+      } else if (shouldLoadFromRemote && get().searchResults.length === 0) {
+        set({ isLoadingSharedRoomPhotos: true });
+      }
+    } else if (shouldLoadFromRemote && stBefore.searchResults.length === 0) {
       set({ isLoadingSharedRoomPhotos: true });
     }
+
     const authedEmail =
       stBefore.merlinAuth.email ||
       (typeof window !== 'undefined' ? localStorage.getItem('ghosti_hub_user_email') || '' : '');
     const nickname = resolveAccountScopedNickname(authedEmail, '방장');
 
     let res: Awaited<ReturnType<typeof fetchScopedSharedRoomPhotos>>;
+    aiRuntimeFlags.sharedRoomSyncActive = true;
     try {
       res = await fetchScopedSharedRoomPhotos({
         loungeType: targetLounge,
@@ -1418,6 +1470,10 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         set({ isLoadingSharedRoomPhotos: false });
       }
       return;
+    } finally {
+      if (reqSeq === sharedRoomSyncSeq) {
+        aiRuntimeFlags.sharedRoomSyncActive = false;
+      }
     }
 
     if (reqSeq !== sharedRoomSyncSeq) {

@@ -20,6 +20,7 @@ import {
   LoungeView,
 } from '../../components/LoungeView';
 import {
+  buildDocPreviewSnippet,
   renderHighlightedDocText,
   maskSensitiveDocText,
 } from '../../components/PricingModal';
@@ -164,6 +165,57 @@ export const GhostSearchPane: React.FC<{
   }, [searchResults, groupBurstsInSearch, searchSpace, hasExecutedUserSearch, activeLoungeType]);
 
   const collapsedBurstCount = searchResults.length - groupedResults.length;
+
+  const [visiblePhotoLimit, setVisiblePhotoLimit] = useState<number>(48);
+  const [visibleDocLimit, setVisibleDocLimit] = useState<number>(36);
+  const photoMoreRef = useRef<HTMLDivElement | null>(null);
+  const docMoreRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    setVisiblePhotoLimit(48);
+    setVisibleDocLimit(36);
+  }, [activeQuery, searchSpace, activeLoungeType, activeFamilyRoom]);
+
+  useEffect(() => {
+    const el = photoMoreRef.current;
+    if (!el || visiblePhotoLimit >= groupedResults.length) return;
+    if (typeof IntersectionObserver === 'undefined') return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setVisiblePhotoLimit((prev) => Math.min(groupedResults.length, prev + 48));
+        }
+      },
+      { rootMargin: '360px' }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [visiblePhotoLimit, groupedResults.length]);
+
+  useEffect(() => {
+    const el = docMoreRef.current;
+    if (!el || visibleDocLimit >= matchedLocalDocs.length) return;
+    if (typeof IntersectionObserver === 'undefined') return;
+    const obs = new IntersectionObserver(
+      (entries) => {
+        if (entries.some((e) => e.isIntersecting)) {
+          setVisibleDocLimit((prev) => Math.min(matchedLocalDocs.length, prev + 36));
+        }
+      },
+      { rootMargin: '360px' }
+    );
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [visibleDocLimit, matchedLocalDocs.length]);
+
+  const visibleGroupedResults = useMemo(
+    () => groupedResults.slice(0, visiblePhotoLimit),
+    [groupedResults, visiblePhotoLimit]
+  );
+  const visibleMatchedDocs = useMemo(
+    () => matchedLocalDocs.slice(0, visibleDocLimit),
+    [matchedLocalDocs, visibleDocLimit]
+  );
 
   return (
     <>
@@ -434,7 +486,7 @@ export const GhostSearchPane: React.FC<{
                 {matchedLocalDocs.length > 0 && (
                   <div className="flex flex-col gap-2.5">
                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pb-1">
-                      {matchedLocalDocs.map((doc) => (
+                      {visibleMatchedDocs.map((doc) => (
                         <article
                           key={doc.id}
                           onClick={() => setSelectedDocModal(doc)}
@@ -463,16 +515,29 @@ export const GhostSearchPane: React.FC<{
                             <h4 className="font-headline-sm text-[15px] text-white font-bold group-hover:text-primary-container transition-colors">
                               {renderHighlightedDocText(
                                 doc.title,
-                                hasExecutedUserSearch ? activeQuery : ''
+                                hasExecutedUserSearch ? activeQuery : '',
+                                doc.matchedQueryTokens
                               )}
                             </h4>
 
-                            <p className="font-body-sm text-[12px] text-zinc-400 line-clamp-2 leading-relaxed bg-zinc-950/80 p-2.5 rounded-xl border border-white/5">
-                              {renderHighlightedDocText(
-                                maskSensitiveDocText(doc.extractedText),
-                                hasExecutedUserSearch ? activeQuery : ''
-                              )}
-                            </p>
+                            <div className="bg-zinc-950/80 p-2.5 rounded-xl border border-white/5">
+                              <p className="font-body-sm text-[12px] text-zinc-400 line-clamp-3 leading-relaxed m-0 p-0">
+                                {renderHighlightedDocText(
+                                  maskSensitiveDocText(
+                                    hasExecutedUserSearch && activeQuery
+                                      ? buildDocPreviewSnippet(
+                                          doc.extractedText,
+                                          activeQuery,
+                                          180,
+                                          doc.matchedQueryTokens
+                                        )
+                                      : doc.extractedText.slice(0, 220)
+                                  ),
+                                  hasExecutedUserSearch ? activeQuery : '',
+                                  doc.matchedQueryTokens
+                                )}
+                              </p>
+                            </div>
                           </div>
 
                           <div className="flex items-center justify-between pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400 gap-2">
@@ -511,6 +576,9 @@ export const GhostSearchPane: React.FC<{
                         </article>
                       ))}
                     </div>
+                    {visibleDocLimit < matchedLocalDocs.length && (
+                      <div ref={docMoreRef} className="h-4 w-full" aria-hidden="true" />
+                    )}
                   </div>
                 )}
 
@@ -596,6 +664,7 @@ export const GhostSearchPane: React.FC<{
                 </div>
 
                 {groupedResults.length > 0 ? (
+                  <>
                   <div
                     className={
                       groupedResults.length <= 16
@@ -603,7 +672,7 @@ export const GhostSearchPane: React.FC<{
                         : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5'
                     }
                   >
-                    {groupedResults.map((group) => {
+                    {visibleGroupedResults.map((group) => {
                       const item = group.representative;
                       const isBurst = group.burstCount >= 2;
                       return (
@@ -713,6 +782,10 @@ export const GhostSearchPane: React.FC<{
                       );
                     })}
                   </div>
+                  {visiblePhotoLimit < groupedResults.length && (
+                    <div ref={photoMoreRef} className="h-4 w-full" aria-hidden="true" />
+                  )}
+                  </>
                 ) : !hasExecutedUserSearch &&
                   (activeLoungeType === 'family' ||
                     activeLoungeType === 'club' ||

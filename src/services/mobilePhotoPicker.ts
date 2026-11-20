@@ -5,6 +5,7 @@ import {
   type NativeGalleryPhotoMeta,
   type NativeGalleryVideoMeta,
 } from './ghostiMobileCareBridge';
+import { waitForUserTypingAndModalQuiet } from './ai/aiSharedRuntime';
 
 interface OpticalSignatureMeta {
   dhash: string;
@@ -631,6 +632,80 @@ export async function analyzeMobilePickedPhotoFiles(
  * 오차 없는 정밀 연사·중복 묶음(DuplicateGroup)을 생성합니다.
  */
 const pcOpticalAuditCache = new Map<string, OpticalSignatureMeta>();
+const OPTICAL_AUDIT_IDB_NAME = 'ghosti_optical_audit_v1';
+const OPTICAL_AUDIT_IDB_STORE = 'optical_sigs';
+let opticalAuditDbPromise: Promise<IDBDatabase | null> | null = null;
+let opticalAuditHydratePromise: Promise<void> | null = null;
+
+function openOpticalAuditDb(): Promise<IDBDatabase | null> {
+  if (typeof indexedDB === 'undefined') return Promise.resolve(null);
+  if (opticalAuditDbPromise) return opticalAuditDbPromise;
+  opticalAuditDbPromise = new Promise((resolve) => {
+    try {
+      const req = indexedDB.open(OPTICAL_AUDIT_IDB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(OPTICAL_AUDIT_IDB_STORE)) {
+          db.createObjectStore(OPTICAL_AUDIT_IDB_STORE, { keyPath: 'key' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+  return opticalAuditDbPromise;
+}
+
+function hydratePcOpticalAuditCacheOnce(): Promise<void> {
+  if (opticalAuditHydratePromise) return opticalAuditHydratePromise;
+  opticalAuditHydratePromise = (async () => {
+    const db = await openOpticalAuditDb();
+    if (!db) return;
+    await new Promise<void>((resolve) => {
+      try {
+        const tx = db.transaction(OPTICAL_AUDIT_IDB_STORE, 'readonly');
+        const req = tx.objectStore(OPTICAL_AUDIT_IDB_STORE).getAll();
+        req.onsuccess = () => {
+          const rows = (req.result as Array<{ key: string; meta: OpticalSignatureMeta }>) || [];
+          for (const row of rows) {
+            if (row?.key && row.meta && !pcOpticalAuditCache.has(row.key)) {
+              pcOpticalAuditCache.set(row.key, {
+                ...row.meta,
+                rgbGrid:
+                  row.meta.rgbGrid instanceof Uint8Array
+                    ? row.meta.rgbGrid
+                    : new Uint8Array(Object.values(row.meta.rgbGrid || {})),
+              });
+            }
+          }
+          resolve();
+        };
+        req.onerror = () => resolve();
+      } catch {
+        resolve();
+      }
+    });
+  })();
+  return opticalAuditHydratePromise;
+}
+
+function persistOpticalAuditBatch(entries: Array<{ key: string; meta: OpticalSignatureMeta }>): void {
+  if (entries.length === 0) return;
+  void openOpticalAuditDb().then((db) => {
+    if (!db) return;
+    try {
+      const tx = db.transaction(OPTICAL_AUDIT_IDB_STORE, 'readwrite');
+      const st = tx.objectStore(OPTICAL_AUDIT_IDB_STORE);
+      for (const e of entries) {
+        st.put(e);
+      }
+    } catch {
+      /* ignore */
+    }
+  });
+}
 
 export async function auditRealPcPhotosAndCluster(
   photos: PhotoItem[]
@@ -643,8 +718,10 @@ export async function auditRealPcPhotosAndCluster(
     return { updatedPhotos: photos, duplicateGroups: [] };
   }
 
+  await hydratePcOpticalAuditCacheOnce();
+
   const targetSlice = realCandidates.slice(0, 800);
-  const BATCH = 8;
+  const uncachedSlice: PhotoItem[] = [];
 
   const applyMetaToPhoto = (p: PhotoItem, meta: OpticalSignatureMeta) => {
     opticalSigByPhotoId.set(p.id, meta);
@@ -675,37 +752,53 @@ export async function auditRealPcPhotosAndCluster(
     }
   };
 
-  const auditOne = (p: PhotoItem): Promise<void> => {
+  for (const p of targetSlice) {
     const cacheKey = `${p.name}_${p.size}_${p.mtimeMs}`;
     const cached = pcOpticalAuditCache.get(cacheKey);
     if (cached) {
       applyMetaToPhoto(p, cached);
-      return Promise.resolve();
+    } else {
+      uncachedSlice.push(p);
     }
+  }
 
-    return new Promise((resolve) => {
-      const img = new Image();
-      img.crossOrigin = 'anonymous';
-      const timer = window.setTimeout(() => resolve(), 2500);
-      img.onload = () => {
-        window.clearTimeout(timer);
-        const meta = computeOpticalDhashAndSharpness(img);
-        pcOpticalAuditCache.set(cacheKey, meta);
-        applyMetaToPhoto(p, meta);
-        resolve();
-      };
-      img.onerror = () => {
-        window.clearTimeout(timer);
-        resolve();
-      };
-      img.src = p.thumbUrl || p.fullUrl;
-    });
-  };
+  if (uncachedSlice.length > 0) {
+    const BATCH = 6;
+    const newlyComputed: Array<{ key: string; meta: OpticalSignatureMeta }> = [];
+    const auditOne = (p: PhotoItem): Promise<void> => {
+      const cacheKey = `${p.name}_${p.size}_${p.mtimeMs}`;
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = 'anonymous';
+        const timer = window.setTimeout(() => resolve(), 2500);
+        img.onload = () => {
+          window.clearTimeout(timer);
+          const meta = computeOpticalDhashAndSharpness(img);
+          pcOpticalAuditCache.set(cacheKey, meta);
+          newlyComputed.push({ key: cacheKey, meta });
+          applyMetaToPhoto(p, meta);
+          resolve();
+        };
+        img.onerror = () => {
+          window.clearTimeout(timer);
+          resolve();
+        };
+        img.src = p.thumbUrl || p.fullUrl;
+      });
+    };
 
-  for (let i = 0; i < targetSlice.length; i += BATCH) {
-    await Promise.all(targetSlice.slice(i, i + BATCH).map(auditOne));
-    if (i + BATCH < targetSlice.length) {
-      await new Promise((r) => setTimeout(r, 12));
+    for (let i = 0; i < uncachedSlice.length; i += BATCH) {
+      await waitForUserTypingAndModalQuiet(1400);
+      await Promise.all(uncachedSlice.slice(i, i + BATCH).map(auditOne));
+      if (newlyComputed.length >= 24) {
+        persistOpticalAuditBatch(newlyComputed.splice(0, newlyComputed.length));
+      }
+      if (i + BATCH < uncachedSlice.length) {
+        await new Promise((r) => setTimeout(r, 28));
+      }
+    }
+    if (newlyComputed.length > 0) {
+      persistOpticalAuditBatch(newlyComputed);
     }
   }
 

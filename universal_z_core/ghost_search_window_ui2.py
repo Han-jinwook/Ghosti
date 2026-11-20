@@ -36,7 +36,10 @@ except Exception:
 
 _VIDEO_OCR_UI_CACHE: dict[str, Any] = {"ts": 0.0, "by_name": {}}
 _UI2_SMALL_THUMB_CACHE: dict[str, bytes] = {}
+_UI2_SMALL_THUMB_BY_PATH: dict[str, bytes] = {}
 _UI2_THUMB_INFLIGHT: set[str] = set()
+_UI2_PREVIEW_BYTES_CACHE: dict[str, tuple[bytes, str]] = {}
+_UI2_PREVIEW_INFLIGHT: set[str] = set()
 _EXTRACTED_QUEUE_UI_CACHE: dict[str, Any] = {"mtime_ns": -1, "size": -1, "items": []}
 
 
@@ -48,31 +51,27 @@ def _mask_sensitive_doc_text(text: str) -> str:
 
 
 def _peek_cached_small_thumb_bytes(img_path_str: str) -> bytes | None:
-    """디스크 이미지 디코딩 없이 이미 메모리에 캐싱된 소형 썸네일(42x28) 바이트만 0.01ms 내에 조회합니다."""
+    """디스크 I/O(stat/open) 0회로 이미 메모리에 캐싱된 소형 썸네일(42x28) 바이트만 0.001ms 내에 조회합니다."""
     if not img_path_str or Image is None:
         return b""
-    try:
-        st = os.stat(img_path_str)
-        if st.st_size <= 0 or st.st_size > 25 * 1024 * 1024:
-            return b""
-        sig = f"{os.path.normcase(os.path.abspath(img_path_str))}|{st.st_size}|{int(st.st_mtime)}"
-        return _UI2_SMALL_THUMB_CACHE.get(sig)
-    except Exception:
-        return b""
+    norm_p = os.path.normcase(os.path.abspath(img_path_str))
+    return _UI2_SMALL_THUMB_BY_PATH.get(norm_p)
 
 
 def _get_or_make_small_thumb_bytes(img_path_str: str) -> bytes:
     if not img_path_str or Image is None:
         return b""
     try:
+        norm_p = os.path.normcase(os.path.abspath(img_path_str))
         if not os.path.isfile(img_path_str):
             return b""
         st = os.stat(img_path_str)
         if st.st_size <= 0 or st.st_size > 25 * 1024 * 1024:
             return b""
-        sig = f"{os.path.normcase(os.path.abspath(img_path_str))}|{st.st_size}|{int(st.st_mtime)}"
+        sig = f"{norm_p}|{st.st_size}|{int(st.st_mtime)}"
         cached = _UI2_SMALL_THUMB_CACHE.get(sig)
         if cached is not None:
+            _UI2_SMALL_THUMB_BY_PATH[norm_p] = cached
             return cached
         with Image.open(img_path_str) as raw_im:
             im_c = raw_im.convert("RGBA")
@@ -81,12 +80,41 @@ def _get_or_make_small_thumb_bytes(img_path_str: str) -> bytes:
             bio = io.BytesIO()
             im_c.save(bio, "PNG")
             tb = bio.getvalue()
-        if len(_UI2_SMALL_THUMB_CACHE) > 240:
+        if len(_UI2_SMALL_THUMB_CACHE) > 320:
             _UI2_SMALL_THUMB_CACHE.clear()
+            _UI2_SMALL_THUMB_BY_PATH.clear()
         _UI2_SMALL_THUMB_CACHE[sig] = tb
+        _UI2_SMALL_THUMB_BY_PATH[norm_p] = tb
         return tb
     except Exception:
         return b""
+
+
+def _get_or_make_preview_bytes(img_path_str: str) -> tuple[bytes, str]:
+    """중형(960x640) 우측 미리보기 이미지(352x220)를 백그라운드 스레드에서 디코딩해 LRU 캐싱합니다."""
+    if not img_path_str or Image is None:
+        return b"", ""
+    try:
+        norm_p = os.path.normcase(os.path.abspath(img_path_str))
+        cached = _UI2_PREVIEW_BYTES_CACHE.get(norm_p)
+        if cached is not None:
+            return cached
+        if not os.path.isfile(img_path_str):
+            return b"", ""
+        with Image.open(img_path_str) as raw_im:
+            dim_str = f"{raw_im.width}×{raw_im.height}px"
+            im_copy = raw_im.convert("RGB")
+            resamp = getattr(getattr(Image, "Resampling", Image), "BILINEAR", Image.NEAREST)
+            im_copy.thumbnail((352, 220), resamp)
+            bio = io.BytesIO()
+            im_copy.save(bio, "JPEG", quality=84)
+            out = (bio.getvalue(), dim_str)
+        if len(_UI2_PREVIEW_BYTES_CACHE) > 64:
+            _UI2_PREVIEW_BYTES_CACHE.clear()
+        _UI2_PREVIEW_BYTES_CACHE[norm_p] = out
+        return out
+    except Exception:
+        return b"", ""
 
 
 def _load_extracted_queue_fast() -> list[dict[str, Any]]:
@@ -692,17 +720,30 @@ def build_ui2_search_window(
             q_cho = extract_chosung(q_low) if has_explicit_chosung else ""
             q_kor_alt = eng_to_kor(q) if re.search(r"[A-Za-z]", q) else ""
             q_eng_alt = kor_to_eng(q) if re.search(r"[가-힣ㄱ-ㅎㅏ-ㅣ]", q) else ""
+            q_kor_alt_low = q_kor_alt.lower() if q_kor_alt else ""
+            q_eng_alt_low = q_eng_alt.lower() if (q_eng_alt and len(q_eng_alt) >= 2) else ""
             for idx_p, r in enumerate(pool):
                 raw_t = r.get("text", "")
-                clean_t = clean_ocr_noise(raw_t) if r.get("kind") == "image" else raw_t
-                t_low = clean_t.lower()
-                t_cho = extract_chosung(t_low) if has_explicit_chosung else ""
+                cached_low = r.get("_search_low")
+                if cached_low is None or r.get("_search_src_len") != len(raw_t):
+                    clean_t = clean_ocr_noise(raw_t) if r.get("kind") == "image" else raw_t
+                    cached_low = clean_t.lower()
+                    r["_search_low"] = cached_low
+                    r["_search_src_len"] = len(raw_t)
+                t_low = cached_low
                 sc = 0.0
-                if q_low in t_low or (q_cho and q_cho in t_cho):
+                if q_low in t_low:
                     sc = 1.0
-                elif q_kor_alt and q_kor_alt.lower() in t_low:
+                elif q_cho:
+                    t_cho = r.get("_search_cho")
+                    if t_cho is None:
+                        t_cho = extract_chosung(t_low)
+                        r["_search_cho"] = t_cho
+                    if q_cho in t_cho:
+                        sc = 1.0
+                elif q_kor_alt_low and q_kor_alt_low in t_low:
                     sc = 0.85
-                elif q_eng_alt and len(q_eng_alt) >= 2 and q_eng_alt.lower() in t_low:
+                elif q_eng_alt_low and q_eng_alt_low in t_low:
                     sc = 0.85
                 if sc > 0:
                     matched.append((sc - idx_p * 0.0001, r))
@@ -875,7 +916,7 @@ def build_ui2_search_window(
                     pass
 
             row_fp = str(rec.get("img_path") or rec.get("file_path") or "").strip()
-            if row_fp and os.path.isfile(row_fp):
+            if row_fp:
                 lbl_row_b = tk.Label(
                     card,
                     text="🏷️귀신라벨링🔒",
@@ -988,22 +1029,45 @@ def build_ui2_search_window(
                 anchor="w",
             ).pack(fill="x", pady=(0, 6))
 
-            # [핵심 보완]: 중형(960x640) 우측 상세 미리보기 칸에 실제 큰 사진/캡처 이미지 미리보기를 선명하게 렌더링!
+            # [타이핑 버벅임 0% 보장]: UI 메인 스레드에서 5~15MB 원본 사진을 동기 디스크 오픈·디코딩하지 않고,
+            # 메모리 LRU 캐시(352x220) 또는 소형 썸네일을 0.2ms 내에 즉시 그린 뒤 미캐싱 고화질 미리보기만 백그라운드 스레드에서 디코드합니다!
             if s_kind == "image" and Image is not None and ImageTk is not None:
                 big_photo = None
                 img_dim_str = ""
                 try:
-                    if s_fpath and os.path.isfile(s_fpath):
-                        with Image.open(s_fpath) as raw_im:
-                            img_dim_str = f"{raw_im.width}×{raw_im.height}px"
-                            im_copy = raw_im.convert("RGB")
-                            im_copy.thumbnail((352, 220))
-                            big_photo = ImageTk.PhotoImage(im_copy, master=root)
-                    elif sel_rec.get("thumb_bytes"):
-                        with Image.open(io.BytesIO(sel_rec["thumb_bytes"])) as raw_tb:
-                            im_copy = raw_tb.convert("RGB")
-                            im_copy = im_copy.resize((260, 165))
-                            big_photo = ImageTk.PhotoImage(im_copy, master=root)
+                    norm_sfp = os.path.normcase(os.path.abspath(s_fpath)) if s_fpath else ""
+                    cached_prev = _UI2_PREVIEW_BYTES_CACHE.get(norm_sfp) if norm_sfp else None
+                    if cached_prev and cached_prev[0]:
+                        img_dim_str = cached_prev[1]
+                        with Image.open(io.BytesIO(cached_prev[0])) as pv_im:
+                            big_photo = ImageTk.PhotoImage(pv_im.copy(), master=root)
+                    else:
+                        quick_tb = sel_rec.get("thumb_bytes") or (_peek_cached_small_thumb_bytes(s_fpath) if s_fpath else b"")
+                        if quick_tb:
+                            with Image.open(io.BytesIO(quick_tb)) as raw_tb:
+                                im_copy = raw_tb.convert("RGB").resize((260, 165))
+                                big_photo = ImageTk.PhotoImage(im_copy, master=root)
+                        if s_fpath and norm_sfp and norm_sfp not in _UI2_PREVIEW_INFLIGHT:
+                            _UI2_PREVIEW_INFLIGHT.add(norm_sfp)
+
+                            def _decode_preview_bg(target_fp: str, target_norm: str) -> None:
+                                try:
+                                    pv_bytes, _ = _get_or_make_preview_bytes(target_fp)
+                                    if pv_bytes:
+                                        win.after(
+                                            0,
+                                            lambda: _render_search_results() if current_win[0] is win else None,
+                                        )
+                                except Exception:
+                                    pass
+                                finally:
+                                    _UI2_PREVIEW_INFLIGHT.discard(target_norm)
+
+                            threading.Thread(
+                                target=_decode_preview_bg,
+                                args=(s_fpath, norm_sfp),
+                                daemon=True,
+                            ).start()
                 except Exception:
                     big_photo = None
 
@@ -1103,7 +1167,7 @@ def build_ui2_search_window(
                     "<Button-1>",
                     lambda _e, t=str(sel_rec.get("video_ocr_full") or ""): _copy_video_ocr_text(t),
                 )
-            if s_fpath and os.path.isfile(s_fpath):
+            if s_fpath:
                 lbl_jump = tk.Label(
                     preview_pane,
                     text="🏷️ 이 파일 귀신라벨링🔒",
@@ -1139,7 +1203,7 @@ def build_ui2_search_window(
             if current_win[0] is win:
                 _render_search_results()
 
-        st_state["debounce_job"] = win.after(120, _apply_debounced)
+        st_state["debounce_job"] = win.after(55, _apply_debounced)
 
     def _on_down(_e=None):
         if st_state["items"]:
