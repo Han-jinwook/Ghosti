@@ -117,6 +117,8 @@ const panelCls = 'p-4 rounded-2xl bg-zinc-900 border border-white/10 flex flex-c
 const boxCls = 'px-3 py-2.5 rounded-xl bg-zinc-950 border border-white/10 text-[13px] text-zinc-100';
 const btnCls =
   'px-3 py-2 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[12.5px] font-extrabold transition cursor-pointer disabled:opacity-40';
+const summonKeyBadgeCls =
+  'inline-flex items-center px-2 py-0.5 mx-0.5 rounded-md bg-[#EEF2FF] text-[#1E3A8A] border border-[#4F46E5]/35 dark:bg-indigo-500/25 dark:text-indigo-100 dark:border-indigo-300/45 font-extrabold text-[12px] shadow-2xs';
 
 /* ─────────────────────────────────────────────────────────────
  * 1단계: 애기귀신 소환술 기본기 3단 수련 (B1~B3)
@@ -1245,15 +1247,8 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
               ⚡ 하던 일 멈추지 마세요, 쓰던 자리에서 1초면 끝 (평생 무료 핵심 3종)
             </h3>
             <p className="text-[12.5px] text-zinc-400 mt-1 leading-relaxed">
-              어느 창에서든{' '}
-              <kbd className="inline-flex items-center px-2 py-0.5 mx-0.5 rounded-md bg-[#EEF2FF] text-[#1E3A8A] border border-[#4F46E5]/35 dark:bg-indigo-500/25 dark:text-indigo-100 dark:border-indigo-300/45 font-extrabold text-[12px] shadow-2xs">
-                Ctrl + 0
-              </kbd>{' '}
-              (보조:{' '}
-              <kbd className="inline-flex items-center px-2 py-0.5 mx-0.5 rounded-md bg-[#ECFDF5] text-[#065F46] border border-[#059669]/40 dark:bg-emerald-500/20 dark:text-emerald-100 dark:border-emerald-300/45 font-extrabold text-[12px] shadow-2xs">
-                Ctrl + 우클릭
-              </kbd>
-              ) 하나로 부르면 일하던 커서 위에서 바로 작동합니다.
+              어느 창에서든 <kbd className={summonKeyBadgeCls}>Ctrl + 0</kbd> (보조:{' '}
+              <kbd className={summonKeyBadgeCls}>Ctrl + 우클릭</kbd>) 하나로 부르면 일하던 커서 위에서 바로 작동합니다.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
