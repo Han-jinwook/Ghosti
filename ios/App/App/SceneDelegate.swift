@@ -571,55 +571,28 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         }
     }
 
-    private func iosTrashVaultDirectory() -> URL {
+    private func purgeLegacyIosTrashVaultIfNeeded() {
         let fm = FileManager.default
         let base = fm.urls(for: .cachesDirectory, in: .userDomainMask).first ?? fm.temporaryDirectory
-        let dir = base.appendingPathComponent("ghosti_ios_trash_vault", isDirectory: true)
-        if !fm.fileExists(atPath: dir.path) {
-            try? fm.createDirectory(at: dir, withIntermediateDirectories: true)
+        let legacyDir = base.appendingPathComponent("ghosti_ios_trash_vault", isDirectory: true)
+        if fm.fileExists(atPath: legacyDir.path) {
+            try? fm.removeItem(at: legacyDir)
         }
-        return dir
-    }
-
-    private func safeVaultStem(_ rawId: String) -> String {
-        return rawId
-            .replacingOccurrences(of: "/", with: "_")
-            .replacingOccurrences(of: ":", with: "_")
-            .replacingOccurrences(of: " ", with: "_")
-    }
-
-    private func decodeDataUrlToImage(_ dataUrl: String) -> UIImage? {
-        guard !dataUrl.isEmpty else { return nil }
-        if let commaRange = dataUrl.range(of: ",") {
-            let b64 = String(dataUrl[commaRange.upperBound...])
-            if let data = Data(base64Encoded: b64, options: .ignoreUnknownCharacters) {
-                return UIImage(data: data)
-            }
-        }
-        return nil
     }
 
     @objc func requestSystemPhotoTrash(_ call: CAPPluginCall) {
+        purgeLegacyIosTrashVaultIfNeeded()
+
         let action = call.getString("action") ?? "move"
         let items = call.getArray("items", JSObject.self) ?? []
         var requestedIds: [String] = []
         var assetIds: [String] = []
-        var thumbById: [String: String] = [:]
-        var mtimeById: [String: Double] = [:]
 
         for obj in items {
             let idVal = (obj["id"] as? String) ?? ""
             let nameVal = (obj["name"] as? String) ?? ""
-            let thumbVal = (obj["thumbDataUrl"] as? String) ?? ""
-            let mtimeMs = (obj["mtimeMs"] as? Double) ?? 0.0
             if !idVal.isEmpty {
                 requestedIds.append(idVal)
-                if !thumbVal.isEmpty {
-                    thumbById[idVal] = thumbVal
-                }
-                if mtimeMs > 0 {
-                    mtimeById[idVal] = mtimeMs / 1000.0
-                }
                 if idVal.contains("/") {
                     assetIds.append(idVal)
                 }
@@ -628,79 +601,18 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
             }
         }
 
-        let vaultDir = iosTrashVaultDirectory()
-        let fm = FileManager.default
-
+        // [대안 B · 구글 포토 iOS / 애플 순정 표준]
+        // 애플 PhotoKit은 FaceID로 잠긴 『최근 삭제된 항목』에서 외부 앱이 사진을 꺼내오는(Undelete) API를 보안 정책상 제공하지 않으므로,
+        // 앱 캐시 사본 백업이나 중복 사본 생성을 하지 않고 아이폰 순정 『사진 ➔ 최근 삭제된 항목(FaceID)』 복원 안내로 일원화합니다.
         if action.lowercased() == "restore" {
-            DispatchQueue.global(qos: .userInitiated).async {
-                var restorePayloads: [(oldId: String, image: UIImage, creationDate: Date?, imgPath: URL, metaPath: URL)] = []
-                for reqId in requestedIds {
-                    let stem = self.safeVaultStem(reqId)
-                    let imgUrl = vaultDir.appendingPathComponent("\(stem).img")
-                    let metaUrl = vaultDir.appendingPathComponent("\(stem).meta")
-                    var restoredImage: UIImage? = nil
-                    if fm.fileExists(atPath: imgUrl.path),
-                       let data = try? Data(contentsOf: imgUrl),
-                       let uiImg = UIImage(data: data) {
-                        restoredImage = uiImg
-                    } else if let fbThumb = thumbById[reqId],
-                              let uiImg = self.decodeDataUrlToImage(fbThumb) {
-                        restoredImage = uiImg
-                    }
-                    if let finalImg = restoredImage {
-                        var cDate: Date? = nil
-                        if fm.fileExists(atPath: metaUrl.path),
-                           let metaStr = try? String(contentsOf: metaUrl, encoding: .utf8),
-                           let ts = Double(metaStr.trimmingCharacters(in: .whitespacesAndNewlines)),
-                           ts > 0 {
-                            cDate = Date(timeIntervalSince1970: ts)
-                        } else if let fallbackTs = mtimeById[reqId], fallbackTs > 0 {
-                            cDate = Date(timeIntervalSince1970: fallbackTs)
-                        }
-                        restorePayloads.append((oldId: reqId, image: finalImg, creationDate: cDate, imgPath: imgUrl, metaPath: metaUrl))
-                    }
-                }
-
-                if restorePayloads.isEmpty {
-                    call.resolve([
-                        "ok": true,
-                        "action": "restore",
-                        "canceled": false,
-                        "matchedMediaStoreCount": 0,
-                        "doneIds": requestedIds,
-                        "replacedIds": [:]
-                    ])
-                    return
-                }
-
-                var replacedIds: [String: String] = [:]
-                PHPhotoLibrary.shared().performChanges({
-                    for item in restorePayloads {
-                        let createReq = PHAssetChangeRequest.creationRequestForAsset(from: item.image)
-                        if let cDate = item.creationDate {
-                            createReq.creationDate = cDate
-                        }
-                        if let placeholder = createReq.placeholderForCreatedAsset {
-                            replacedIds[item.oldId] = placeholder.localIdentifier
-                        }
-                    }
-                }) { success, _ in
-                    if success {
-                        for item in restorePayloads {
-                            try? fm.removeItem(at: item.imgPath)
-                            try? fm.removeItem(at: item.metaPath)
-                        }
-                    }
-                    call.resolve([
-                        "ok": true,
-                        "action": "restore",
-                        "canceled": false,
-                        "matchedMediaStoreCount": replacedIds.count,
-                        "doneIds": requestedIds,
-                        "replacedIds": success ? replacedIds : [:]
-                    ])
-                }
-            }
+            call.resolve([
+                "ok": false,
+                "action": "restore",
+                "canceled": false,
+                "matchedMediaStoreCount": 0,
+                "doneIds": [],
+                "error": "아이폰은 애플 FaceID 보안 정책에 따라 『사진 ➔ 최근 삭제된 항목』에서 30일 내 언제든 원본 그대로 복원할 수 있습니다."
+            ])
             return
         }
 
@@ -727,56 +639,16 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
             return
         }
 
-        DispatchQueue.global(qos: .userInitiated).async {
-            let imgOpts = PHImageRequestOptions()
-            imgOpts.isSynchronous = true
-            imgOpts.deliveryMode = .highQualityFormat
-            imgOpts.isNetworkAccessAllowed = true
-
-            for i in 0..<fetched.count {
-                autoreleasepool {
-                    let asset = fetched.object(at: i)
-                    var rawData: Data? = nil
-                    if #available(iOS 13, *) {
-                        PHImageManager.default().requestImageDataAndOrientation(for: asset, options: imgOpts) { data, _, _, _ in
-                            rawData = data
-                        }
-                    }
-                    if rawData == nil {
-                        PHImageManager.default().requestImage(
-                            for: asset,
-                            targetSize: CGSize(width: 2048, height: 2048),
-                            contentMode: .aspectFit,
-                            options: imgOpts
-                        ) { uiImg, _ in
-                            if let img = uiImg {
-                                rawData = img.jpegData(compressionQuality: 0.92)
-                            }
-                        }
-                    }
-                    if let d = rawData {
-                        let stem = self.safeVaultStem(asset.localIdentifier)
-                        let imgUrl = vaultDir.appendingPathComponent("\(stem).img")
-                        try? d.write(to: imgUrl, options: .atomic)
-                        if let cDate = asset.creationDate {
-                            let metaUrl = vaultDir.appendingPathComponent("\(stem).meta")
-                            try? "\(cDate.timeIntervalSince1970)".data(using: .utf8)?.write(to: metaUrl, options: .atomic)
-                        }
-                    }
-                }
-            }
-
-            PHPhotoLibrary.shared().performChanges({
-                PHAssetChangeRequest.deleteAssets(fetched)
-            }) { success, _ in
-                call.resolve([
-                    "ok": success,
-                    "action": "move",
-                    "canceled": !success,
-                    "matchedMediaStoreCount": fetched.count,
-                    "doneIds": success ? requestedIds : []
-                ])
-            }
+        PHPhotoLibrary.shared().performChanges({
+            PHAssetChangeRequest.deleteAssets(fetched)
+        }) { success, _ in
+            call.resolve([
+                "ok": success,
+                "action": "move",
+                "canceled": !success,
+                "matchedMediaStoreCount": fetched.count,
+                "doneIds": success ? requestedIds : []
+            ])
         }
     }
 }

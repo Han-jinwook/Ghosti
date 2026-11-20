@@ -20,6 +20,7 @@ import {
   LATEST_Z_CORE_VERSION,
   Z_CORE_ZIP_URL,
 } from '../services/zCoreBridge';
+import { isCapacitorIosRuntime } from '../services/ghostiMobileCareBridge';
 
 const TRASH_TABS: {
   key: 'duplicate' | 'memo' | 'screenshot' | 'blurry';
@@ -788,11 +789,13 @@ export const SmartTrashView: React.FC = () => {
                   🗑️
                 </span>
                 <span className="font-headline-sm text-[14.5px] text-white font-bold truncate">
-                  휴지통 보관함
+                  {isCapacitorIosRuntime() && !zCoreBridge.isConnected ? '최근 정리 내역' : '휴지통 보관함'}
                 </span>
               </div>
               <span className="font-body-sm text-[11px] text-zinc-400 line-clamp-1">
-                정리된 사진 확인 &amp; 1초 즉시 원상복구
+                {isCapacitorIosRuntime() && !zCoreBridge.isConnected
+                  ? '아이폰 최근 삭제된 항목 30일 안전 보관'
+                  : '정리된 사진 확인 & 1초 즉시 원상복구'}
               </span>
             </div>
             <span className="material-symbols-outlined text-[17px] text-amber-400 shrink-0">
@@ -808,46 +811,55 @@ export const SmartTrashView: React.FC = () => {
               <span className="font-label-sm text-[11.5px] text-zinc-400">장 보관 중</span>
             </div>
             <span className="font-label-mono text-[11px] text-primary-container font-bold">
-              ↩️ 1초 복원
+              {isCapacitorIosRuntime() && !zCoreBridge.isConnected ? '🔒 30일 보관' : '↩️ 1초 복원'}
             </span>
           </div>
         </button>
       </div>
 
       {/* ─────────────── 3-B. [🗑️ 휴지통 보관함] 탭 선택 시 상단에 바로 열리는 전용 복원 뷰 ─────────────── */}
-      {isTrashBinTabActive && (
-        <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-primary-container/50 flex flex-col gap-4">
+      {isTrashBinTabActive && (() => {
+        const isIosNativeTrash = !zCoreBridge.isConnected && isCapacitorIosRuntime();
+        return (
+        <section
+          className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-primary-container/50 flex flex-col gap-4"
+          data-keep-dark="true"
+        >
           <div className="flex flex-wrap items-center justify-between gap-3 pb-3.5 border-b border-white/10">
             <div className="flex flex-col gap-0.5">
               <div className="flex flex-wrap items-center gap-2">
-                <h2 className="font-headline-sm text-[17px] md:text-[18.5px] text-zinc-900 dark:text-white font-extrabold flex items-center gap-1.5">
-                  <span>🗑️ 휴지통 보관함</span>
+                <h2 className="font-headline-sm text-[17px] md:text-[18.5px] text-white font-extrabold flex items-center gap-1.5">
+                  <span>{isIosNativeTrash ? '🗂️ 최근 정리 내역' : '🗑️ 휴지통 보관함'}</span>
                 </h2>
                 <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-primary-container/40 text-primary-container font-label-sm text-[12.5px] font-bold">
                   총 {quarantinedPhotos.length}장 보관 중
                 </span>
               </div>
-              <p className="font-body-sm text-[13.5px] text-zinc-600 dark:text-zinc-400">
-                [↩️ 1초 복원]을 누르면 즉시 원래 자리로 돌아갑니다.
+              <p className="font-body-sm text-[13.5px] text-zinc-300">
+                {isIosNativeTrash
+                  ? '🔒 아이폰은 애플 FaceID 보안 정책에 따라 『사진 ➔ 최근 삭제된 항목』에 30일간 안전 보관되며, 그곳에서 원본 그대로 복원할 수 있습니다.'
+                  : '[↩️ 1초 복원]을 누르면 즉시 원래 자리로 돌아갑니다.'}
               </p>
             </div>
 
             <div className="flex flex-wrap items-center gap-2">
-
-
-              <button
-                type="button"
-                onClick={() => void openLocalFolder('quarantine')}
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-bold cursor-pointer"
-              >
-                📂 실제 휴지통 폴더 열기
-              </button>
-              {quarantinedPhotos.length > 0 && (
+              {zCoreBridge.isConnected && (
+                <button
+                  type="button"
+                  onClick={() => void openLocalFolder('quarantine')}
+                  className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-bold cursor-pointer"
+                >
+                  📂 실제 휴지통 폴더 열기
+                </button>
+              )}
+              {quarantinedPhotos.length > 0 && !isIosNativeTrash && (
                 <button
                   type="button"
                   disabled={quarantineMoving}
                   onClick={() =>
-                    void restoreFromQuarantine(quarantinedPhotos.map((p) => p.name))
+                    void restoreFromQuarantine(
+                      quarantinedPhotos.map((p) => (zCoreBridge.isConnected ? p.name : p.id))
+                    )
                   }
                   className="px-4 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12.5px] font-extrabold flex items-center gap-1.5 cursor-pointer"
                 >
@@ -898,13 +910,21 @@ export const SmartTrashView: React.FC = () => {
                     <span className="font-label-sm text-[11.5px] text-zinc-200 font-semibold truncate">
                       {p.tags[0] || '#휴지통이동'}
                     </span>
-                    <button
-                      type="button"
-                      onClick={() => void restoreFromQuarantine([p.name])}
-                      className="w-full py-1.5 rounded-lg bg-primary-container/20 hover:bg-primary-container text-primary-container hover:text-zinc-950 border border-primary-container/40 font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer"
-                    >
-                      ↩️ 1초 복원
-                    </button>
+                    {isIosNativeTrash ? (
+                      <div className="w-full py-1.5 px-2 rounded-lg bg-zinc-800 text-teal-300 border border-teal-500/30 font-label-sm text-[11px] font-bold text-center">
+                        최근 삭제된 항목 30일 보관
+                      </div>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          void restoreFromQuarantine([zCoreBridge.isConnected ? p.name : p.id])
+                        }
+                        className="w-full py-1.5 rounded-lg bg-primary-container/20 hover:bg-primary-container text-primary-container hover:text-zinc-950 border border-primary-container/40 font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer"
+                      >
+                        ↩️ 1초 복원
+                      </button>
+                    )}
                   </div>
                 </div>
               ))}
@@ -923,7 +943,8 @@ export const SmartTrashView: React.FC = () => {
             </div>
           )}
         </section>
-      )}
+        );
+      })()}
 
       {/* ─────────────── 3-C. 탭을 다시 눌러 접었을 때 또는 [남은 사진 정리는 다음에]로 화면을 멈췄을 때(currentTab === 'none') 노출되는 깔끔한 안내 바 ─────────────── */}
       {!isTrashBinTabActive && currentTab === 'none' && (
@@ -1319,88 +1340,120 @@ export const SmartTrashView: React.FC = () => {
       )}
 
       {/* ─────────────── 5. 노션 토글형 정리 보관함(휴지통) 이동 내역 & 1초 복원 드로어 ─────────────── */}
-      <section className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden">
-        <div
-          onClick={() => setShowQuarantineDrawer((v) => !v)}
-          className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 cursor-pointer hover:bg-zinc-900/60 transition-colors select-none"
-        >
-          <div className="flex items-center gap-2">
-            <span className="text-[12px] text-zinc-400 font-bold">
-              {showQuarantineDrawer ? '▾' : '▸'}
-            </span>
-            <span className="material-symbols-outlined text-zinc-400 text-[18px]">delete</span>
-            <h3 className="font-headline-sm text-[15px] text-white font-bold">
-              정리 보관함(휴지통) 이동 내역 ({quarantinedPhotos.length}장)
-            </h3>
-            <span className="hidden sm:inline text-[12px] text-zinc-400">
-              · 클릭 한 번으로 원래 위치에 1초 복원됩니다
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-            {quarantinedPhotos.length > 0 && (
-              <button
-                type="button"
-                disabled={quarantineMoving}
-                onClick={() =>
-                  void restoreFromQuarantine(quarantinedPhotos.map((p) => p.name))
-                }
-                className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-primary-container font-label-sm text-[11.5px] font-bold border border-white/10 flex items-center gap-1 cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[15px]">restore_from_trash</span>
-                <span>↩️ 전체 복원 ({quarantinedPhotos.length}장)</span>
-              </button>
-            )}
-            <button
-              type="button"
+      {(() => {
+        const isIosNativeTrash = !zCoreBridge.isConnected && isCapacitorIosRuntime();
+        return (
+          <section
+            className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden"
+            data-keep-dark="true"
+          >
+            <div
               onClick={() => setShowQuarantineDrawer((v) => !v)}
-              className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[13px] font-extrabold select-none shadow-sm cursor-pointer transition-all"
+              className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 cursor-pointer hover:bg-zinc-900/60 transition-colors select-none"
             >
-              {showQuarantineDrawer ? '접기 ▴' : '펼치기 ▾'}
-            </button>
-          </div>
-        </div>
-
-        {showQuarantineDrawer && (
-          <div className="px-5 pb-5 pt-2 border-t border-white/10">
-            {quarantinedPhotos.length > 0 ? (
-              <div className="max-h-[420px] overflow-y-auto pr-1 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">
-                {quarantinedPhotos.map((p) => (
-                  <div
-                    key={p.id}
-                    className="group relative rounded-xl overflow-hidden bg-zinc-950 border border-white/10"
-                  >
-                    <div className="aspect-square w-full overflow-hidden">
-                      <img
-                      src={p.thumbUrl}
-                      alt=""
-                      crossOrigin={p.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
-                      className="w-full h-full object-cover"
-                    />
-                    </div>
-                    <div className="p-2 flex flex-col gap-1 bg-zinc-900">
-                      <span className="font-label-sm text-[11px] text-zinc-200 font-semibold truncate">
-                        {p.tags[0] || '#휴지통이동'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => void restoreFromQuarantine([p.name])}
-                        className="w-full py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-primary-container font-label-sm text-[10px] font-bold cursor-pointer"
-                      >
-                        ↩️ 1초 복원
-                      </button>
-                    </div>
-                  </div>
-                ))}
+              <div className="flex items-center gap-2">
+                <span className="text-[12px] text-zinc-400 font-bold">
+                  {showQuarantineDrawer ? '▾' : '▸'}
+                </span>
+                <span className="material-symbols-outlined text-zinc-400 text-[18px]">delete</span>
+                <h3 className="font-headline-sm text-[15px] text-white font-bold">
+                  {isIosNativeTrash
+                    ? `최근 정리 내역 (${quarantinedPhotos.length}장 · 최근 삭제된 항목 30일 보관)`
+                    : `정리 보관함(휴지통) 이동 내역 (${quarantinedPhotos.length}장)`}
+                </h3>
+                <span className="hidden sm:inline text-[12px] text-zinc-400">
+                  {isIosNativeTrash
+                    ? '· 아이폰 사진 ➔ 최근 삭제된 항목(FaceID)에서 30일 내 원본 복원 가능'
+                    : '· 클릭 한 번으로 원래 위치에 1초 복원됩니다'}
+                </span>
               </div>
-            ) : (
-              <div className="py-4 text-center font-body-sm text-[12px] text-zinc-500">
-                현재 최근 정리된 휴지통 이동 내역이 비어 있습니다.
+
+              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                {quarantinedPhotos.length > 0 && !isIosNativeTrash && (
+                  <button
+                    type="button"
+                    disabled={quarantineMoving}
+                    onClick={() =>
+                      void restoreFromQuarantine(
+                        quarantinedPhotos.map((p) => (zCoreBridge.isConnected ? p.name : p.id))
+                      )
+                    }
+                    className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-primary-container font-label-sm text-[11.5px] font-bold border border-white/10 flex items-center gap-1 cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">restore_from_trash</span>
+                    <span>↩️ 전체 복원 ({quarantinedPhotos.length}장)</span>
+                  </button>
+                )}
+                <button
+                  type="button"
+                  onClick={() => setShowQuarantineDrawer((v) => !v)}
+                  className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-zinc-700 text-zinc-100 text-[13px] font-extrabold select-none shadow-sm cursor-pointer transition-all"
+                >
+                  {showQuarantineDrawer ? '접기 ▴' : '펼치기 ▾'}
+                </button>
+              </div>
+            </div>
+
+            {showQuarantineDrawer && (
+              <div className="px-5 pb-5 pt-2 border-t border-white/10 flex flex-col gap-3">
+                {isIosNativeTrash && quarantinedPhotos.length > 0 && (
+                  <div className="p-3 rounded-xl bg-zinc-900 border border-teal-400/40 flex items-start gap-2.5">
+                    <span className="material-symbols-outlined text-teal-300 text-[18px] shrink-0 mt-0.5">
+                      lock
+                    </span>
+                    <p className="text-[12px] text-zinc-100 font-semibold leading-relaxed break-keep">
+                      🔒 아이폰은 애플 FaceID 보안 정책에 따라 『사진 ➔ 최근 삭제된 항목』에 30일간 안전 보관되며, 그곳에서 원본 그대로 복원할 수 있습니다.
+                    </p>
+                  </div>
+                )}
+                {quarantinedPhotos.length > 0 ? (
+                  <div className="max-h-[420px] overflow-y-auto pr-1 grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5">
+                    {quarantinedPhotos.map((p) => (
+                      <div
+                        key={p.id}
+                        className="group relative rounded-xl overflow-hidden bg-zinc-950 border border-white/10"
+                      >
+                        <div className="aspect-square w-full overflow-hidden">
+                          <img
+                            src={p.thumbUrl}
+                            alt=""
+                            crossOrigin={p.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
+                            className="w-full h-full object-cover"
+                          />
+                        </div>
+                        <div className="p-2 flex flex-col gap-1 bg-zinc-900">
+                          <span className="font-label-sm text-[11px] text-zinc-200 font-semibold truncate">
+                            {p.tags[0] || '#휴지통이동'}
+                          </span>
+                          {isIosNativeTrash ? (
+                            <div className="w-full py-1 px-1.5 rounded bg-zinc-800 text-teal-300 border border-teal-500/30 font-label-sm text-[10px] font-bold text-center">
+                              30일 보관됨
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() =>
+                                void restoreFromQuarantine([zCoreBridge.isConnected ? p.name : p.id])
+                              }
+                              className="w-full py-1 rounded bg-zinc-800 hover:bg-zinc-700 text-primary-container font-label-sm text-[10px] font-bold cursor-pointer"
+                            >
+                              ↩️ 1초 복원
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="py-4 text-center font-body-sm text-[12px] text-zinc-400">
+                    현재 최근 정리된 내역이 비어 있습니다.
+                  </div>
+                )}
               </div>
             )}
-          </div>
-        )}
-      </section>
+          </section>
+        );
+      })()}
 
       {/* ─────────────── 6. ⚙️ 고치기 진단 & 3초 포렌식 실물 수리 패널 ─────────────── */}
       <section id="ghosti-inline-setup-monster" className="scroll-mt-24">

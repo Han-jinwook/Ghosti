@@ -22,6 +22,7 @@ import {
 } from '../services/zCoreBridge';
 import { SilentIndexingStatusBar } from './SilentIndexingStatusBar';
 import {
+  isCapacitorIosRuntime,
   isCapacitorNativeMobileRuntime,
   openNativeAppPermissionSettings,
 } from '../services/ghostiMobileCareBridge';
@@ -2578,104 +2579,129 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             </section>
           )}
 
-          {/* 3-C. 화면 아래쪽 [↩️ 정리한 사진 복원 (정리 보관함 / 휴지통 복원)] — 중복·연사 세트별 정리 화면보다 아래쪽에 배치 */}
-          {(quarantinedPhotos.length > 0 || lastUndoBatch) && (
-            <section
-              id="ghosti-quarantine-restore-section"
-              className="p-4 sm:p-5 rounded-2xl bg-[#18181B] border border-emerald-500/35 shadow-sm flex flex-col gap-3"
-            >
-              {lastUndoBatch && (
-                <div className="p-3.5 rounded-xl bg-zinc-900 border border-primary-container/60 flex flex-wrap items-center justify-between gap-3">
-                  <div className="flex items-center gap-2.5">
-                    <span className="material-symbols-outlined text-primary-container text-[20px] shrink-0">
-                      history
-                    </span>
-                    <span className="font-label-md text-[13px] text-zinc-100 font-semibold break-keep">
-                      {`방금 정리한 ${lastUndoBatch.count}장 (${fmtMB(lastUndoBatch.savedBytes)})이 휴지통(정리 보관함)으로 안전하게 이동되었습니다.`}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    <button
-                      type="button"
-                      onClick={() => void undoLastQuarantine()}
-                      className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold transition-all cursor-pointer"
-                    >
-                      ↩️ 1초 즉시 되돌리기 (Undo)
-                    </button>
-                    <button
-                      type="button"
-                      onClick={dismissUndoBatch}
-                      className="p-1 text-zinc-400 hover:text-white cursor-pointer"
-                      title="닫기"
-                    >
-                      <span className="material-symbols-outlined text-[16px]">close</span>
-                    </button>
-                  </div>
-                </div>
-              )}
-
-              {quarantinedPhotos.length > 0 && (
-                <>
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowQuarantineDrawer((v) => !v)}
-                      className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-100 font-label-sm text-[12.5px] font-bold flex items-center gap-1.5 cursor-pointer"
-                    >
-                      <span>↩️ 정리한 사진 복원 ({quarantinedPhotos.length}장)</span>
-                      <span className="text-emerald-300 text-[11px]">
-                        {showQuarantineDrawer ? '접기 ▲' : '펼치기 ▼'}
+          {/* 3-C. 화면 아래쪽 [↩️ 정리한 사진 복원 / 아이폰 최근 삭제된 항목 안내] — 중복·연사 세트별 정리 화면보다 아래쪽에 배치 */}
+          {(quarantinedPhotos.length > 0 || lastUndoBatch) && (() => {
+            const isIosNativeTrash = !zCoreBridge.isConnected && isCapacitorIosRuntime();
+            return (
+              <section
+                id="ghosti-quarantine-restore-section"
+                className="p-4 sm:p-5 rounded-2xl bg-[#18181B] border border-emerald-500/35 shadow-sm flex flex-col gap-3"
+                data-keep-dark="true"
+              >
+                {lastUndoBatch && !isIosNativeTrash && (
+                  <div className="p-3.5 rounded-xl bg-zinc-900 border border-primary-container/60 flex flex-wrap items-center justify-between gap-3">
+                    <div className="flex items-center gap-2.5">
+                      <span className="material-symbols-outlined text-primary-container text-[20px] shrink-0">
+                        history
                       </span>
-                    </button>
-                    {showQuarantineDrawer && (
+                      <span className="font-label-md text-[13px] text-zinc-100 font-semibold break-keep">
+                        {`방금 정리한 ${lastUndoBatch.count}장 (${fmtMB(lastUndoBatch.savedBytes)})이 휴지통(정리 보관함)으로 안전하게 이동되었습니다.`}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2">
                       <button
                         type="button"
-                        disabled={quarantineMoving}
-                        onClick={() =>
-                          void restoreFromQuarantine(quarantinedPhotos.map((p) => p.id))
-                        }
-                        className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer disabled:opacity-40 shadow-xs"
+                        onClick={() => void undoLastQuarantine()}
+                        className="px-3.5 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold transition-all cursor-pointer"
                       >
-                        ♻️ {quarantinedPhotos.length}장 전체 원위치 복원
+                        ↩️ 1초 즉시 되돌리기 (Undo)
                       </button>
-                    )}
-                  </div>
-
-                  {showQuarantineDrawer && (
-                    <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 p-3 rounded-xl bg-zinc-950/80 border border-white/10 max-h-64 overflow-y-auto">
-                      {quarantinedPhotos.map((qp) => (
-                        <div
-                          key={qp.id}
-                          className="p-2.5 rounded-lg bg-zinc-900/90 border border-white/10 flex items-center justify-between gap-2.5"
-                        >
-                          <div className="flex items-center gap-2.5 min-w-0 flex-1">
-                            <img
-                              src={qp.thumbUrl}
-                              alt=""
-                              loading="lazy"
-                              className="w-10 h-10 rounded-md object-cover border border-white/10 shrink-0 bg-zinc-800"
-                            />
-                            <span className="text-[11.5px] text-zinc-200 font-semibold break-all leading-snug">
-                              {qp.name}
-                            </span>
-                          </div>
-                          <button
-                            type="button"
-                            disabled={quarantineMoving}
-                            onClick={() => void restoreFromQuarantine([qp.id])}
-                            className="px-2.5 py-1.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-zinc-950 border border-emerald-500/40 text-[11px] font-extrabold shrink-0 cursor-pointer transition-colors"
-                          >
-                            복원
-                          </button>
-                        </div>
-                      ))}
+                      <button
+                        type="button"
+                        onClick={dismissUndoBatch}
+                        className="p-1 text-zinc-400 hover:text-white cursor-pointer"
+                        title="닫기"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">close</span>
+                      </button>
                     </div>
-                  )}
-                </>
-              )}
-            </section>
-          )}
+                  </div>
+                )}
+
+                {isIosNativeTrash && quarantinedPhotos.length > 0 && (
+                  <div className="p-3.5 rounded-xl bg-zinc-900 border border-teal-400/40 flex items-start gap-2.5">
+                    <span className="material-symbols-outlined text-teal-300 text-[19px] shrink-0 mt-0.5">
+                      lock
+                    </span>
+                    <p className="text-[12.5px] text-zinc-100 font-semibold leading-relaxed break-keep">
+                      🔒 아이폰은 애플 FaceID 보안 정책에 따라 『사진 ➔ 최근 삭제된 항목』에 30일간 안전 보관되며, 그곳에서 원본 그대로 복원할 수 있습니다.
+                    </p>
+                  </div>
+                )}
+
+                {quarantinedPhotos.length > 0 && (
+                  <>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowQuarantineDrawer((v) => !v)}
+                        className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-100 font-label-sm text-[12.5px] font-bold flex items-center gap-1.5 cursor-pointer"
+                      >
+                        <span>
+                          {isIosNativeTrash
+                            ? `🗂️ 최근 정리 내역 (${quarantinedPhotos.length}장 · 최근 삭제된 항목 30일 보관)`
+                            : `↩️ 정리한 사진 복원 (${quarantinedPhotos.length}장)`}
+                        </span>
+                        <span className="text-emerald-300 text-[11px]">
+                          {showQuarantineDrawer ? '접기 ▲' : '펼치기 ▼'}
+                        </span>
+                      </button>
+                      {showQuarantineDrawer && !isIosNativeTrash && (
+                        <button
+                          type="button"
+                          disabled={quarantineMoving}
+                          onClick={() =>
+                            void restoreFromQuarantine(quarantinedPhotos.map((p) => p.id))
+                          }
+                          className="px-3 py-1.5 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer disabled:opacity-40 shadow-xs"
+                        >
+                          ♻️ {quarantinedPhotos.length}장 전체 원위치 복원
+                        </button>
+                      )}
+                    </div>
+
+                    {showQuarantineDrawer && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2.5 p-3 rounded-xl bg-zinc-950/80 border border-white/10 max-h-64 overflow-y-auto">
+                        {quarantinedPhotos.map((qp) => (
+                          <div
+                            key={qp.id}
+                            className="p-2.5 rounded-lg bg-zinc-900/90 border border-white/10 flex items-center justify-between gap-2.5"
+                          >
+                            <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                              <img
+                                src={qp.thumbUrl}
+                                alt=""
+                                loading="lazy"
+                                className="w-10 h-10 rounded-md object-cover border border-white/10 shrink-0 bg-zinc-800"
+                              />
+                              <span className="text-[11.5px] text-zinc-200 font-semibold break-all leading-snug">
+                                {qp.name}
+                              </span>
+                            </div>
+                            {isIosNativeTrash ? (
+                              <span className="px-2 py-1 rounded-md bg-zinc-800 text-teal-300 border border-teal-500/30 text-[10.5px] font-bold shrink-0">
+                                30일 보관됨
+                              </span>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={quarantineMoving}
+                                onClick={() => void restoreFromQuarantine([qp.id])}
+                                className="px-2.5 py-1.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500 text-emerald-300 hover:text-zinc-950 border border-emerald-500/40 text-[11px] font-extrabold shrink-0 cursor-pointer transition-colors"
+                              >
+                                복원
+                              </button>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </>
+                )}
+              </section>
+            );
+          })()}
 
         </GhostSecretaryFirstGuard>
 

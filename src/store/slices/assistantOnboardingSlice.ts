@@ -18,6 +18,7 @@ import {
   saveCachedMobileGalleryIndex,
 } from '../../services/mobilePhotoPicker';
 import {
+  isCapacitorIosRuntime,
   isCapacitorNativeMobileRuntime,
   registerMobilePickedPhotoMeta,
   scanNativeDeviceGalleryMedia,
@@ -1743,21 +1744,27 @@ export const createAssistantOnboardingSlice: StateCreator<
       if (!movedSet.has(id)) nextTrashIds.add(id);
     });
 
+    const isIosNativeApp = !zCoreBridge.isConnected && isCapacitorIosRuntime();
+
     set((state) => ({
       photos: updatedPhotos,
       searchResults: state.searchResults.filter((r) => !movedSet.has(r.photo.id)),
       selectedTrashIds: nextTrashIds,
       quarantineMoving: false,
       freeTrialUsed: true,
-      lastUndoBatch: {
-        fileNames: Array.from(movedSet),
-        actionLabel: '손보기 추천 항목 일괄 정리',
-        count: movedSet.size,
-        savedBytes,
-        timestamp: Date.now(),
-        demo: moveRes.demo,
-      },
-      lastQuarantineToast: `🗑️ 사진 ${movedSet.size}장을 ${moveNote}`,
+      lastUndoBatch: isIosNativeApp
+        ? null
+        : {
+            fileNames: Array.from(movedSet),
+            actionLabel: '손보기 추천 항목 일괄 정리',
+            count: movedSet.size,
+            savedBytes,
+            timestamp: Date.now(),
+            demo: moveRes.demo,
+          },
+      lastQuarantineToast: isIosNativeApp
+        ? `🔒 사진 ${movedSet.size}장이 아이폰 『최근 삭제된 항목』에 30일간 안전 보관되었습니다. 복원은 아이폰 『사진 ➔ 최근 삭제된 항목(FaceID)』에서 가능합니다.`
+        : `🗑️ 사진 ${movedSet.size}장을 ${moveNote}`,
     }));
     if (!zCoreBridge.isConnected) {
       void saveCachedMobileGalleryIndex(get().photos, get().videoSceneItems);
