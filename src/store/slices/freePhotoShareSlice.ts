@@ -2358,60 +2358,86 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     }),
 
   setClubFeedTrack: (clubFeedTrack) => {
-    const { photos, alumniGradYear } = get();
-    const allGallery = photos
-      .filter((p) => !p.quarantined)
-      .slice(0, 350)
-      .map((photo, idx) => ({
-        photo,
-        score: 0.96,
-        matchPercentage: 98 - (idx % 4),
-        matchedBy: 'text-direct' as const,
-      }));
+    const stateNow = get();
+    const {
+      activeLoungeType,
+      activeFamilyRoom,
+      activeSharedRoomId,
+      photos,
+      sharedRoomHostPhotos,
+      sharedRoomAddedPhotos,
+      alumniGradYear,
+    } = stateNow;
+    const sharedMode = isSharedPhotoLounge(activeLoungeType);
+    // [개인 PC 사진 유출 0% 단일 SSOT]: 동호회·동창회 공유방의 모든 하위 탭(정기모임·번개·추억·최근근황)은
+    // 오직 현재 공유방 전용 코퍼스(resolveLoungePhotoCorpus)만 참조하며 내 PC 개인 사진(state.photos)을 절대 혼입하지 않음
+    const scopedCorpus = resolveLoungePhotoCorpus({
+      activeLoungeType,
+      activeFamilyRoom,
+      activeSharedRoomId,
+      photos,
+      sharedRoomHostPhotos,
+      sharedRoomAddedPhotos,
+    });
+    const visibleRoomPhotos = filterVisibleGalleryPhotos(scopedCorpus).slice(0, 350);
+    const toResultItem = (photo: PhotoItem, idx: number) => ({
+      photo,
+      score: 0.96,
+      matchPercentage: 98 - (idx % 4),
+      matchedBy: 'text-direct' as const,
+    });
+
+    const isClubLounge = activeLoungeType === 'club';
 
     if (clubFeedTrack === 'memories_1989') {
-      // 추억 탭: 아날로그 스캔본 및 학창 시절 사진 우선 정렬
-      const memoryPhotos = [
-        ...allGallery.filter((item) =>
-          [
-            '20260926_160221.jpg',
-            '20260926_131225.jpg',
-            '20240720_182301.jpg',
-            '20240721_183234.jpg',
-          ].includes(item.photo.name)
-        ),
-        ...allGallery.filter(
-          (item) =>
-            ![
-              '20260926_160221.jpg',
-              '20260926_131225.jpg',
-              '20240720_182301.jpg',
-              '20240721_183234.jpg',
-            ].includes(item.photo.name)
-        ),
+      const priorityRe = isClubLounge
+        ? /(번개|추억|회식|뒷풀이|친목|앨범|옛날)/i
+        : new RegExp(`(${alumniGradYear}|수학여행|소풍|추억|학창|졸업|옛날)`, 'i');
+      const prioritized = [
+        ...visibleRoomPhotos.filter((p) => {
+          const hay = `${p.name} ${p.captionKo || ''} ${(p.tags || []).join(' ')} ${(p.keywordsKo || []).join(' ')}`;
+          return priorityRe.test(hay);
+        }),
+        ...visibleRoomPhotos.filter((p) => {
+          const hay = `${p.name} ${p.captionKo || ''} ${(p.tags || []).join(' ')} ${(p.keywordsKo || []).join(' ')}`;
+          return !priorityRe.test(hay);
+        }),
       ];
       set({
         clubFeedTrack,
         searchSpace: 'gallery',
+        hasExecutedUserSearch: false,
         hasUserSelectedSearchTab: true,
-        activeQuery: `🎞️ 응답하라 ${alumniGradYear} (추억) — ${alumniGradYear}년 봄 · 제주도 수학여행 & ${alumniGradYear}년 가을 소풍`,
-        matchedTags: [
-          `#${alumniGradYear}년봄`,
-          '#제주도수학여행',
-          `#${alumniGradYear}년가을소풍`,
-          '#1980년대여권바구니',
-        ],
-        searchResults: memoryPhotos,
+        activeQuery: isClubLounge
+          ? `🍻 번개 · 추억 앨범 (${prioritized.length}장)`
+          : `🎞️ ${alumniGradYear} 추억 앨범 (${prioritized.length}장)`,
+        matchedTags: isClubLounge
+          ? ['#번개모임', '#추억앨범', '#동호회공유방']
+          : [`#${alumniGradYear}추억`, '#동창회앨범', '#학창시절'],
+        searchResults: prioritized.map(toResultItem),
+        ...(sharedMode
+          ? { matchedVideoScenes: [], matchedLocalDocs: [], matchedVaultPhotos: [] }
+          : {}),
       });
     } else {
-      // 근황 탭: 최근 모임 사진
+      const latestFirst = visibleRoomPhotos
+        .slice()
+        .sort((a, b) => (b.mtimeMs || 0) - (a.mtimeMs || 0));
       set({
         clubFeedTrack,
         searchSpace: 'gallery',
+        hasExecutedUserSearch: false,
         hasUserSelectedSearchTab: true,
-        activeQuery: '🍻 최근 우리들 (근황) — 2026 정기 동창 모임 & 라운딩 (🔔 전체 알림 OFF 클린존)',
-        matchedTags: ['#2026동창모임', '#최근우리들', '#알림클린존'],
-        searchResults: allGallery.slice().reverse(),
+        activeQuery: isClubLounge
+          ? `🏕️ 정기 모임·라운딩 (${latestFirst.length}장)`
+          : `🍻 최근 근황 (${latestFirst.length}장)`,
+        matchedTags: isClubLounge
+          ? ['#정기모임', '#라운딩', '#동호회공유방']
+          : ['#최근근황', '#동창모임', '#알림클린존'],
+        searchResults: latestFirst.map(toResultItem),
+        ...(sharedMode
+          ? { matchedVideoScenes: [], matchedLocalDocs: [], matchedVaultPhotos: [] }
+          : {}),
       });
     }
   },
@@ -2662,45 +2688,70 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
   },
 
   findMySchoolDaysPhotosFast: async () => {
-    const { photos, alumniBannerTitle, alumniSchoolName, alumniGradYear, faceClusters } = get();
+    const stateNow = get();
+    const {
+      activeLoungeType,
+      activeFamilyRoom,
+      activeSharedRoomId,
+      photos,
+      sharedRoomHostPhotos,
+      sharedRoomAddedPhotos,
+      alumniBannerTitle,
+      alumniSchoolName,
+      alumniGradYear,
+      faceClusters,
+    } = stateNow;
+    const sharedMode = isSharedPhotoLounge(activeLoungeType);
     const creator = faceClusters.find((c) => c.clusterId === 'face_member_5');
-    const clubPersona = creator?.roomPersonas?.club || '멀린프로';
+    const clubPersona = creator?.roomPersonas?.club || '내 얼굴';
 
-    const matchedSchoolPhotos = photos
-      .filter((p) => !p.quarantined)
-      .filter((p) =>
-        [
-          '20260926_160221.jpg',
-          '20260926_131225.jpg',
-          '20240720_182301.jpg',
-          '20240721_183234.jpg',
-          '20240720_184614.jpg',
-          '20240721_122820.jpg',
-        ].includes(p.name)
-      )
-      .map((photo, idx) => ({
-        photo,
-        score: 0.99 - idx * 0.01,
-        matchPercentage: 99 - idx,
-        matchedBy: 'text-direct' as const,
-      }));
+    // [개인 PC 사진 유출 0%]: 동창회 방에 실제로 올라온 공유 사진 코퍼스 안에서만 검색
+    const scopedCorpus = resolveLoungePhotoCorpus({
+      activeLoungeType,
+      activeFamilyRoom,
+      activeSharedRoomId,
+      photos,
+      sharedRoomHostPhotos,
+      sharedRoomAddedPhotos,
+    });
+    const visibleRoomPhotos = filterVisibleGalleryPhotos(scopedCorpus);
+    const schoolRe = new RegExp(
+      `(${alumniGradYear}|수학여행|소풍|추억|학창|졸업|${alumniSchoolName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`,
+      'i'
+    );
+    const taggedMatches = visibleRoomPhotos.filter((p) => {
+      const hay = `${p.name} ${p.captionKo || ''} ${(p.tags || []).join(' ')} ${(p.keywordsKo || []).join(' ')}`;
+      return schoolRe.test(hay);
+    });
+    const targetList = taggedMatches.length > 0 ? taggedMatches : visibleRoomPhotos;
+    const matchedSchoolPhotos = targetList.map((photo, idx) => ({
+      photo,
+      score: Math.max(0.75, 0.99 - idx * 0.01),
+      matchPercentage: Math.max(75, 99 - idx),
+      matchedBy: 'text-direct' as const,
+    }));
 
     set({
       clubFeedTrack: 'memories_1989',
       searchSpace: 'gallery',
-      hasExecutedUserSearch: true,
+      hasExecutedUserSearch: matchedSchoolPhotos.length > 0,
       hasUserSelectedSearchTab: true,
       desktopTab: 'dashboard',
       mobileTab: 'search',
-      activeQuery: `🎯 [👑 ${clubPersona}] 내 얼굴로 찾은 ${alumniBannerTitle || `${alumniSchoolName} ${alumniGradYear}년`} 학창 시절 수학여행·소풍 사진 (${matchedSchoolPhotos.length}장 · 1초 만에)`,
+      activeQuery: `🎯 [${clubPersona}] ${alumniBannerTitle || `${alumniSchoolName} ${alumniGradYear}년`} 학창 시절 추억 사진 (${matchedSchoolPhotos.length}장)`,
       matchedTags: [
         `#${(alumniBannerTitle || alumniSchoolName).replace(/\s+/g, '')}`,
-        `#${alumniGradYear}년수학여행`,
-        `#내얼굴1초매칭`,
-        '#1980년대여권바구니',
+        `#${alumniGradYear}년추억`,
+        `#동창회앨범`,
       ],
       searchResults: matchedSchoolPhotos,
-      lastQuarantineToast: `🎯 [내 얼굴로 학창 시절 사진 1초 만에 찾기 완료] 귀신같이 여권 1980년대 바구니(1989~1980) 시드로 ${alumniGradYear}년 수학여행·소풍 속 내 사진 ${matchedSchoolPhotos.length}장을 1초 만에 모두 찾았습니다!`,
+      ...(sharedMode
+        ? { matchedVideoScenes: [], matchedLocalDocs: [], matchedVaultPhotos: [] }
+        : {}),
+      lastQuarantineToast:
+        matchedSchoolPhotos.length > 0
+          ? `🎯 [학창 시절 사진 찾기 완료] 현재 동창회 공유방 사진 중 ${matchedSchoolPhotos.length}장을 찾았습니다!`
+          : `📸 아직 이 동창회 공유방에 올라온 사진이 없습니다. [+ 내 사진 추가]로 추억 사진을 먼저 올려보세요!`,
     });
   },
 });

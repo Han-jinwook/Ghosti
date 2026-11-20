@@ -1455,7 +1455,7 @@ export const createSearchSlice: StateCreator<
             : photoSearchOut;
         if (reqSeq !== storeSharedRefs.latestRunTextQuerySeq) return;
         const refreshedVideos =
-          isExplicitPhotoOnlyQuery || isPureBrowseDocIntent
+          isExplicitPhotoOnlyQuery || isPureBrowseDocIntent || sharedMode
             ? videoMatches
             : await searchVideoSceneItemsAsync(
                 cleanedSearchQuery || query,
