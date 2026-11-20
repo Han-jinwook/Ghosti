@@ -1875,14 +1875,14 @@ export const Stage1MinimalCarePreview: React.FC = () => {
       {zCoreOutdated && (
         <div className="p-3.5 rounded-2xl bg-amber-50 dark:bg-amber-950/80 border-2 border-amber-400 flex flex-wrap items-center justify-between gap-3 shadow-xs">
           <span className="text-[14px] text-amber-900 dark:text-amber-200 font-extrabold">
-            ⚠️ 실행 중인 Z-코어가 구버전(v{zCoreBridge.version || '구버전'})입니다 — 최신 버전(v{LATEST_Z_CORE_VERSION})으로 업데이트해 주세요.
+            ⚠️ 실행 중인 PC 엔진이 구버전(v{zCoreBridge.version || '구버전'})입니다 — 최신 버전(v{LATEST_Z_CORE_VERSION})으로 업데이트해 주세요.
           </span>
           <a
             href={Z_CORE_ZIP_URL}
             download="Merlin_Z_Core.zip"
             className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[13px] font-extrabold whitespace-nowrap shadow cursor-pointer"
           >
-            ⬇️ 최신 Z-코어 (v{LATEST_Z_CORE_VERSION}) 다운로드
+            ⬇️ 최신 PC 엔진 (v{LATEST_Z_CORE_VERSION}) 다운로드
           </a>
         </div>
       )}
@@ -2000,7 +2000,8 @@ export const Stage1MinimalCarePreview: React.FC = () => {
               </div>
             </div>
 
-            {!(isStoreAppMode || layout === 'mobile') && <SecretarySamplePcCarePanel />}
+            {/* [D-11 본 앱 목업 0건] 샘플 PC 미리 체험은 미연결 '눈으로 구경' 상태에서만 — 내 PC 연결 즉시 숨기고 실제 내 PC 카드만 노출 */}
+            {!(isStoreAppMode || layout === 'mobile') && !zConnected && <SecretarySamplePcCarePanel />}
 
             <div className="font-headline-md text-[15.5px] sm:text-[16px] md:text-[18px] text-zinc-900 dark:text-white font-extrabold tracking-tight leading-snug break-keep">
               {activeTrash.length > 0 ? (

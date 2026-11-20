@@ -3161,7 +3161,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       🎉 정식 무료 배포 오픈! 내 PC와 모바일에 1초 초능력을
                     </div>
                     <p className="text-[13px] text-zinc-300 break-keep">
-                      가입·카드 등록 없이 즉시 시작 · 서버 전송 0% · 광고 0% 평생 무료 (원클릭 입장 또는 Windows Z-코어 다운로드)
+                      가입·카드 등록 없이 즉시 시작 · 서버 전송 0% · 광고 0% 평생 무료 (원클릭 입장 또는 Windows PC 엔진 다운로드)
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2 shrink-0">
@@ -3179,7 +3179,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       download="Merlin_Z_Core.zip"
                       className="px-4 py-3 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-[#00F0B5]/40 text-[#00F0B5] font-extrabold text-[13px]"
                     >
-                      💻 Z-코어 받기
+                      💻 PC 엔진 받기
                     </a>
                   </div>
                 </div>

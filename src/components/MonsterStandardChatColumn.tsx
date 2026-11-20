@@ -655,7 +655,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       const isRestoreDone = msgText.includes('원상복구') || msgText.includes('복구됐어요');
       const extraRealHint =
         isRestoreDone && zCoreBridge.isConnected
-          ? '\n\n💡 지금 제트코어가 연결되어 있으니 아래 버튼을 눌러 **진짜 내 PC의 시작프로그램 목록**도 바로 점검해 보세요!'
+          ? '\n\n💡 지금 내 컴퓨터가 연결되어 있으니 아래 버튼을 눌러 **진짜 내 PC의 시작프로그램 목록**도 바로 점검해 보세요!'
           : '';
       setSharedMonsterMessages((prev) => [
         ...prev,
@@ -1262,6 +1262,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               : needsEngineRite
               ? [
                   '🔍 응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘',
+                  // [기능명세 1931행] 설치가 부담스러운 첫 방문자를 위한 안심 퇴로 (2지선다)
+                  '👀 일단 눈으로 구경부터 할래',
                 ]
               : [
                   '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
@@ -1321,11 +1323,22 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         // 대본집·손보기 라우터 어디에도 정형 매칭되지 않은 자유 질문 → 주간 대본집 편입 후보로 포집
         logUnmatchedQuestion(raw, 'no_playbook_match');
       }
+      // [UX 점검 #3] 엔진 연결 직후 자동 실행되는 첫 분석 질문(SECRETARY_FIRST_CARE_QUERY)도 '첫 건강검진'으로 인정 —
+      //  깨끗한 PC(정리할 상주 모듈 0건 → 복원 기록 미발급)에서도 홀림 퀘스트(손없는 날 알림 → 음성검색 → 여권)가 끊기지 않게 이어간다
       const isExplicitFirstCareQuery = /(1초\s*건강\s*검진|건강\s*검진\s*(해\s*줘|해\s*주세요|실행|시작))/i.test(raw);
+      // [UX 점검 #3] 엔진 연결 직후 자동 첫 분석에서 정리할 거리가 없는 깨끗한 PC(복원 기록 미발급)여도
+      //  홀림 퀘스트(손없는 날 알림 → 음성검색 → 여권)가 끊기지 않게 이어간다. 정리 승인 질문이 떠 있으면 그 답을 먼저 기다린다.
+      const spec = assistantMsg.pcSpecPayload;
+      const awaitingSpecApproval = Boolean(
+        spec && !spec.bloatwareCleaned &&
+          ((spec.detectedBloatwareLabels?.length || 0) > 0 || (spec.cpuLoadPercent ?? 0) >= 50)
+      );
+      const isAutoFirstCareQuery =
+        raw.trim() === SECRETARY_FIRST_CARE_QUERY && !loadGhostSecretaryState().questStep && !awaitingSpecApproval;
       if (assistantMsg.healthRecordIssued) {
         onHealthRecordAdded(assistantMsg.healthRecordIssued);
       }
-      if (assistantMsg.healthRecordIssued || isExplicitFirstCareQuery) {
+      if (assistantMsg.healthRecordIssued || isExplicitFirstCareQuery || isAutoFirstCareQuery) {
         const storeNow = useSaySeeStore.getState();
         const pendingShare = storeNow.pendingReturnShareRoom;
 

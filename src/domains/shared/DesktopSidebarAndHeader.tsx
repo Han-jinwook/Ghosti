@@ -280,26 +280,23 @@ export const DesktopSidebarContainer: React.FC<{
     isDeviceIntegrationManuallyExpanded,
   ]);
 
-  // 조건 1&2: 로그인된 상태에서 Team 구독 중, 30일 무료체험 중, 모바일(아이폰/안드로이드) 연결 시, 또는 수동 Sticky
+  // [기획서 1171-1183 점진적 공개] B2B '6. 업무 공유'는 Team 구독·체험 중이거나 팀 공유방(S:) 합류, 또는 직접 펼쳤을 때만 자동 펼침
+  //  (개인 30일 체험·내 폰 연결만으로는 회사 메뉴를 펼치지 않는다)
   const isWorkShareAutoExpanded = useMemo(() => {
     const isTeamSubscribed =
       isAuthenticatedUser &&
       (activePricingPlan.startsWith('work_') || Boolean(subscribedLounges.work));
-    const isProOrTrial =
-      isAuthenticatedUser &&
-      (activePricingPlan !== 'free_trial' ||
-        Boolean(superpowerStatus?.is_subscribed) ||
-        (superpowerStatus?.trial_status && superpowerStatus.trial_status !== 'NOT_STARTED'));
-    const isDevicePaired = isAuthenticatedUser && Boolean(pcAgentPairedMobile);
-    return Boolean(isTeamSubscribed || isProOrTrial || isDevicePaired || isWorkShareManuallyExpanded);
+    return Boolean(isTeamSubscribed || isWorkShareManuallyExpanded);
   }, [
     isAuthenticatedUser,
     activePricingPlan,
     subscribedLounges.work,
-    superpowerStatus,
-    pcAgentPairedMobile,
     isWorkShareManuallyExpanded,
   ]);
+
+  // ▾/▸ 화살표로 접기 — 현재 보고 있는 메뉴라도 유저가 접으면 접힌 상태 유지 (메뉴 본체를 다시 누르면 펼침)
+  const [isDeviceIntegrationCollapsed, setIsDeviceIntegrationCollapsed] = useState(false);
+  const [isWorkShareCollapsed, setIsWorkShareCollapsed] = useState(false);
 
   const toggleDeviceIntegrationExpanded = (force?: boolean) => {
     const next = typeof force === 'boolean' ? force : !isDeviceIntegrationAutoExpanded;
@@ -658,12 +655,14 @@ export const DesktopSidebarContainer: React.FC<{
                 )}
                 {/* [확장 1 / 5번] 📱 내 기기 통합 */}
                 {(() => {
-                  const isDeviceIntegrationExpanded = isDeviceIntegrationAutoExpanded || isPhonePcIntegrationActive;
+                  const isDeviceIntegrationExpanded =
+                    (isDeviceIntegrationAutoExpanded || isPhonePcIntegrationActive) && !isDeviceIntegrationCollapsed;
                   return (
                     <div className="flex flex-col gap-0.5">
                       <button
                         type="button"
                         onClick={() => {
+                          setIsDeviceIntegrationCollapsed(false);
                           toggleDeviceIntegrationExpanded(true);
                           setIsDeviceIntegrationOpen(true);
                           setActiveIntegrationSubTab('devices');
@@ -708,7 +707,23 @@ export const DesktopSidebarContainer: React.FC<{
                             )}
                           </span>
                         </div>
-                        <span className="text-[10px] opacity-60 shrink-0">{isDeviceIntegrationExpanded ? '▾' : '▸'}</span>
+                        <span
+                          role="button"
+                          aria-label={isDeviceIntegrationExpanded ? '접기' : '펼치기'}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isDeviceIntegrationExpanded) {
+                              setIsDeviceIntegrationCollapsed(true);
+                              toggleDeviceIntegrationExpanded(false);
+                            } else {
+                              setIsDeviceIntegrationCollapsed(false);
+                              toggleDeviceIntegrationExpanded(true);
+                            }
+                          }}
+                          className="text-[10px] opacity-60 hover:opacity-100 shrink-0 px-1 cursor-pointer"
+                        >
+                          {isDeviceIntegrationExpanded ? '▾' : '▸'}
+                        </span>
                       </button>
 
                       {isDeviceIntegrationExpanded && (
@@ -762,12 +777,14 @@ export const DesktopSidebarContainer: React.FC<{
 
                 {/* [확장 2 / 6번] 💼 업무 공유 (공용 폴더 S:) */}
                 {(() => {
-                  const isWorkShareExpanded = isWorkShareAutoExpanded || isWorkShareActive || isWorkTeamSuperpowerActive;
+                  const isWorkShareExpanded =
+                    (isWorkShareAutoExpanded || isWorkShareActive || isWorkTeamSuperpowerActive) && !isWorkShareCollapsed;
                   return (
                     <div className="flex flex-col gap-0.5">
                       <button
                         type="button"
                         onClick={() => {
+                          setIsWorkShareCollapsed(false);
                           toggleWorkShareExpanded(true);
                           setIsDeviceIntegrationOpen(false);
                           setActiveLoungeType('work');
@@ -800,7 +817,21 @@ export const DesktopSidebarContainer: React.FC<{
                             )}
                           </span>
                         </div>
-                        <span className="text-[10px] opacity-60 shrink-0">
+                        <span
+                          role="button"
+                          aria-label={isWorkShareExpanded ? '접기' : '펼치기'}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (isWorkShareExpanded) {
+                              setIsWorkShareCollapsed(true);
+                              toggleWorkShareExpanded(false);
+                            } else {
+                              setIsWorkShareCollapsed(false);
+                              toggleWorkShareExpanded(true);
+                            }
+                          }}
+                          className="text-[10px] opacity-60 hover:opacity-100 shrink-0 px-1 cursor-pointer"
+                        >
                           {isWorkShareExpanded ? '▾' : '▸'}
                         </span>
                       </button>

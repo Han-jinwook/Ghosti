@@ -182,7 +182,8 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
           <div className="flex flex-wrap items-center justify-between gap-1.5 text-[11.5px] text-zinc-200">
             <div className="flex flex-wrap gap-1.5">
               <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[3] 🔗다중합본🔒</span>
-              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[4] 📌창고정🔒</span>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[4] 🔢번호·일정🔒</span>
+              <span className="px-2 py-0.5 rounded bg-zinc-900 border border-white/15">[5] 📌창고정🔒</span>
             </div>
             <div className="flex flex-wrap gap-1.5">
               <span className="px-2 py-0.5 rounded bg-amber-400/20 border border-amber-300/50 text-amber-200 font-bold">[⌨️상용구▾]</span>
@@ -484,7 +485,7 @@ const Dojo1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
         </button>
       </div>
       <div className="text-[11.5px] text-zinc-400">
-        💡 실전 안내: <strong className="text-zinc-200">메모장·카카오톡·엑셀 셀 편집</strong>에서는 스페이스바·문장부호(. ? !) 또는 1초 정지 시 실시간 자동변환되며, <strong className="text-zinc-200">크롬·노션·한글(HWP)</strong> 등 웹/문서창은 자소 꼬임 방지를 위해 <strong className={highlightTextCls}>Ctrl+0 ➔ [1]</strong>로 안전하게 변환됩니다.
+        💡 실전 안내: <strong className="text-zinc-200">메모장·카카오톡·엑셀 셀 편집·크롬/엣지/웨일 웹 글쓰기</strong>에서는 스페이스바·문장부호(. ? !) 또는 1초 정지 시 버튼 없이 실시간 자동변환되며, 이메일·주소·비밀번호처럼 영문이어야 하는 글자는 그대로 지켜집니다. <strong className={highlightTextCls}>Ctrl+0 ➔ [1]</strong>은 복사해 온 글의 서식·줄바꿈을 깔끔하게 다림질할 때 씁니다.
       </div>
     </div>
   );
@@ -1516,7 +1517,7 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
       {/* 하단 3: 유료 고급 도구 & 30일 무제한 체험 아코디언 접힘 */}
       <details className="rounded-2xl bg-zinc-900/80 border border-white/10 p-4">
         <summary className="cursor-pointer select-none text-[13.5px] font-extrabold text-amber-300 hover:text-amber-200 flex items-center justify-between gap-2">
-          <span>🔒 유료 확장 기술 미리 체험해보기 ([2] 스샷·PDF변환 · [3] 다중합본 · [4] 창고정 · F7~F12 팀 상용구) ▾</span>
+          <span>🔒 유료 확장 기술 미리 체험해보기 ([2] 스샷·PDF변환 · [3] 다중합본 · [4] 번호·일정 · [5] 창고정 · F7~F12 팀 상용구) ▾</span>
           <span className="text-[11.5px] text-zinc-400 font-semibold shrink-0">카드 등록 없는 30일 무료체험</span>
         </summary>
         <div className="pt-4 mt-3 border-t border-white/10 flex flex-col gap-4">

@@ -211,7 +211,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
             if (prev === 'waiting_engine') {
               useSaySeeStore.setState({
                 lastQuarantineToast:
-                  '🎉 멀린 Z-코어(127.0.0.1:5199) 연결 완료! 화살표 안내를 닫고 내 PC 사진·서류를 즉시 불러옵니다!',
+                  '🎉 내 컴퓨터 연결 완료! 화살표 안내를 닫고 내 PC 사진·서류를 즉시 불러옵니다!',
               });
             }
             setProgress(0);
@@ -265,7 +265,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       })
       .catch(() => {
         if (!cancelled) {
-          setLoadError('사진 목록을 불러오지 못했습니다. 멀린 Z-코어가 켜져 있는지 확인한 뒤 다시 시도해 주세요.');
+          setLoadError('사진 목록을 불러오지 못했습니다. 귀신같이 PC 엔진이 켜져 있는지 확인한 뒤 다시 시도해 주세요.');
         }
       });
 
@@ -362,7 +362,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
 
   const handleManualCheck = async () => {
     setIsChecking(true);
-    setManualCheckHint('🔍 Z-코어 실행 신호를 확인하고 있습니다 (최초 실행 시 압축 해제에 4~6초가 걸릴 수 있습니다)...');
+    setManualCheckHint('🔍 PC 엔진 실행 신호를 확인하고 있습니다 (최초 실행 시 압축 해제에 4~6초가 걸릴 수 있습니다)...');
     let ok = false;
     for (let attempt = 0; attempt < 9; attempt++) {
       ok = await zCoreBridge.checkHealth(true);
@@ -375,7 +375,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     if (ok) {
       if (isZCoreOutdated(zCoreBridge.version) && !isMobileEnv) {
         setManualCheckHint(
-          `⚠️ 아직 구버전(v${zCoreBridge.version || '구버전'})이 응답하고 있습니다. 방금 내려받은 최신 Z-코어(v${LATEST_Z_CORE_VERSION}) 압축을 풀고 [Merlin_Z_Core_Setup.exe]를 실행한 뒤 다시 확인해 주세요.`
+          `⚠️ 아직 구버전(v${zCoreBridge.version || '구버전'})이 응답하고 있습니다. 방금 내려받은 최신 PC 엔진(v${LATEST_Z_CORE_VERSION}) 압축을 풀고 [Merlin_Z_Core_Setup.exe]를 실행한 뒤 다시 확인해 주세요.`
         );
         setStep('ready');
         return;
@@ -389,7 +389,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       setStep('indexing');
     } else {
       setManualCheckHint(
-        '⚠️ 아직 로컬 포트(127.0.0.1:5199)에서 실행 신호가 감지되지 않았습니다. 다운로드된 Merlin_Z_Core.zip 압축을 풀고 [Merlin_Z_Core_Setup.exe]를 더블클릭해 실행(파란 보호창이 뜨면 [추가 정보] ➔ [실행])한 뒤 5초 후 다시 눌러 주세요.'
+        '⚠️ 아직 내 컴퓨터에서 PC 엔진 실행 신호가 감지되지 않았습니다. 다운로드된 Merlin_Z_Core.zip 압축을 풀고 [Merlin_Z_Core_Setup.exe]를 더블클릭해 실행(파란 보호창이 뜨면 [추가 정보] ➔ [실행])한 뒤 5초 후 다시 눌러 주세요.'
       );
     }
   };
@@ -403,7 +403,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     ? loadError
     : loadDone
     ? `✨ 불러오기 완료: 사진 ${totalPhotoCount}장 · 영상 ${totalVideoCount}개 · 서류 ${totalDocCount}건`
-    : '📂 멀린 Z-코어에서 내 PC 사진·영상·서류 목록을 불러오는 중...';
+    : '📂 PC 엔진에서 내 PC 사진·영상·서류 목록을 불러오는 중...';
 
   return (
     <div
@@ -448,12 +448,12 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 </div>
                 <div className="min-w-0">
                   <span className="inline-block px-2 py-0.5 rounded-full text-[10.5px] font-black bg-teal-500/15 text-teal-600 dark:text-teal-300 border border-teal-400/30 mb-0.5">
-                    {isMobileEnv ? '📱 모바일 갤러리 & PC 연동' : '⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어)'}
+                    {isMobileEnv ? '📱 모바일 갤러리 & PC 연동' : '⚡ 내 컴퓨터 1초 연결'}
                   </span>
                   <h3 className="text-base sm:text-lg font-black tracking-tight break-keep">
                     {isMobileEnv
                       ? '모바일 시작 & PC 폴더 연동'
-                      : '⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어) · 사진·영상·서류 인덱싱'}
+                      : '⚡ 내 컴퓨터 1초 연결 · 사진·영상·서류 인덱싱'}
                   </h3>
                 </div>
               </div>
@@ -547,10 +547,10 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 </div>
                 <div>
                   <span className="inline-block px-2 py-0.5 rounded-full text-[10.5px] font-black bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-400/30 mb-1">
-                    ⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어) · 단계 1/2 엔진 실행 대기 중
+                    ⚡ 내 컴퓨터 1초 연결 · 단계 1/2 엔진 실행 대기 중
                   </span>
                   <h3 className="text-lg font-black tracking-tight">
-                    ⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어) — 다운로드된 압축을 풀고 실행해 주세요!
+                    ⚡ 내 컴퓨터 1초 연결 — 다운로드된 압축을 풀고 실행해 주세요!
                   </h3>
                 </div>
               </div>
@@ -588,7 +588,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
               <p className="text-xs opacity-85 mt-1.5 leading-relaxed">
                 우측 상단 다운로드 창에서 <strong>Merlin_Z_Core.zip</strong>을 열어 압축을 풀고{' '}
                 <strong>Merlin_Z_Core_Setup.exe</strong> (또는 <strong>Merlin_Z_Core_실행.bat</strong>)을
-                더블클릭해 딱 한 번만 켜주시면, 신호(127.0.0.1:5199) 감지 즉시 자동으로 연결됩니다!
+                더블클릭해 딱 한 번만 켜주시면, 실행 신호를 감지하는 즉시 자동으로 연결됩니다!
               </p>
             </div>
 
@@ -669,7 +669,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 <div>
                   <div className="flex items-center gap-2 mb-1">
                     <span className="px-2 py-0.5 rounded-full text-[10.5px] font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-400/30">
-                      🟢 엔진 연결됨 (Port {Z_CORE_PORT})
+                      🟢 엔진 연결됨
                     </span>
                     <span className="text-[11px] font-bold text-teal-500">
                       단계 2/2 · 목록 불러오는 중
@@ -677,10 +677,10 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                   </div>
                   <h3 className="text-lg font-black tracking-tight">
                     {loadDone
-                      ? '⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어) · 불러오기 완료!'
+                      ? '⚡ 내 컴퓨터 1초 연결 · 불러오기 완료!'
                       : loadError
-                      ? '⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어) · 불러오기 실패'
-                      : '⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어) · 사진 목록 불러오는 중...'}
+                      ? '⚡ 내 컴퓨터 1초 연결 · 불러오기 실패'
+                      : '⚡ 내 컴퓨터 1초 연결 · 사진 목록 불러오는 중...'}
                   </h3>
                 </div>
               </div>
@@ -763,12 +763,12 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                         : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-400/30'
                     }`}
                   >
-                    Port {Z_CORE_PORT} · v{version || '?'} {isOutdated ? `구버전 (최신 v${LATEST_Z_CORE_VERSION} 필요)` : '정상 가동 중'}
+                    PC 엔진 · v{version || '?'} {isOutdated ? `구버전 (최신 v${LATEST_Z_CORE_VERSION} 필요)` : '정상 가동 중'}
                   </span>
                   <h3 className="text-lg font-black tracking-tight">
                     {isOutdated
-                      ? `⚠️ Z-코어 구버전 감지 — 최신 버전(v${LATEST_Z_CORE_VERSION}) 수동 업데이트 필요`
-                      : '⚡ 내 컴퓨터 1초 연결 (멀린 Z-코어) 연결 완료!'}
+                      ? `⚠️ PC 엔진 구버전 감지 — 최신 버전(v${LATEST_Z_CORE_VERSION}) 수동 업데이트 필요`
+                      : '⚡ 내 컴퓨터 1초 연결 연결 완료!'}
                   </h3>
                 </div>
               </div>
@@ -792,10 +792,10 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                   }`}
                 >
                   <p className="font-extrabold mb-1.5">
-                    현재 PC에 실행 중인 Z-코어(v{version || '구버전'})가 구버전이어서 일부 최신 기능이 동작하지 않을 수 있습니다.
+                    현재 PC에 실행 중인 PC 엔진(v{version || '구버전'})가 구버전이어서 일부 최신 기능이 동작하지 않을 수 있습니다.
                   </p>
                   <p className="opacity-90">
-                    자동 업데이트가 되지 않은 경우 아래 버튼으로 <strong>최신 Z-코어(v{LATEST_Z_CORE_VERSION})</strong>를 직접 내려받아 압축을 풀고{' '}
+                    자동 업데이트가 되지 않은 경우 아래 버튼으로 <strong>최신 PC 엔진(v{LATEST_Z_CORE_VERSION})</strong>를 직접 내려받아 압축을 풀고{' '}
                     <strong>Merlin_Z_Core_Setup.exe</strong>를 실행해 주세요.
                   </p>
                 </div>
@@ -818,7 +818,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                     download="Merlin_Z_Core.zip"
                     className="w-full flex-1 py-3 px-5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-black text-sm text-center shadow-lg shadow-amber-500/25 transition-all no-underline cursor-pointer"
                   >
-                    ⬇️ 최신 Z-코어 (v{LATEST_Z_CORE_VERSION}) 다운로드
+                    ⬇️ 최신 PC 엔진 (v{LATEST_Z_CORE_VERSION}) 다운로드
                   </a>
                   <button
                     type="button"
@@ -879,7 +879,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                       download="Merlin_Z_Core.zip"
                       className="text-[11px] font-bold text-zinc-400 hover:text-teal-400 underline cursor-pointer"
                     >
-                      📥 Z-코어 설치파일 다시 받기 (v{LATEST_Z_CORE_VERSION})
+                      📥 PC 엔진 설치파일 다시 받기 (v{LATEST_Z_CORE_VERSION})
                     </a>
                   </div>
                 )}

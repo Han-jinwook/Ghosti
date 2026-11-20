@@ -246,9 +246,21 @@ export const App: React.FC = () => {
       if (!OFFICIAL_LAUNCH_LIVE) {
         return 'showroom';
       }
-      // [라우팅 잠금 철칙 1 준수]:
-      // ?lounge=... 또는 ?tab=... 파라미터가 없는 순수 루트(https://ghosti.sundreamer.app/) 접속 시에는
-      // 이전 세션 토큰 유무와 무관하게 무조건 온보딩 첫 화면('showroom')을 먼저 노출합니다.
+      // [기능명세 1030-1032 · Seamless Auto-Bypass] 정식 출시 후 로그인 세션이 있거나 온보딩을 마친 재방문자는
+      // 순수 루트 접속이어도 쇼룸을 건너뛰고 첫 렌더부터 본진 워크스페이스로 직행 (쇼룸 깜빡임 0)
+      // — 명시적 ?view=showroom / B2B 유입(?from=b2b, #work-share)일 때만 쇼룸을 보여준다
+      const wantsShowroomExplicitly =
+        params.get('view') === 'showroom' ||
+        params.get('from') === 'b2b' ||
+        window.location.hash === '#work-share';
+      if (
+        !wantsShowroomExplicitly &&
+        (hasActiveGhostiLoginSession() || localStorage.getItem('ghosti_onboarding_completed') === 'true')
+      ) {
+        return 'workspace';
+      }
+      // [라우팅 잠금 철칙 1 준수 — 출시 전]:
+      // ?lounge=... 또는 ?tab=... 파라미터가 없는 순수 루트 접속 시, 재방문 조건이 아니면 온보딩 첫 화면('showroom')을 먼저 노출합니다.
     } catch {
       // ignore
     }
@@ -452,7 +464,7 @@ export const App: React.FC = () => {
           ? 'showroom'
           : hasPairCodeLink
           ? 'workspace'
-          : savedNav?.viewMode || viewMode;
+          : savedNav?.viewMode || (canAutoBypassToWorkspace ? 'workspace' : viewMode);
 
       if (rawPairCode.length === 6 && !hasAuthenticatedHubAccountSession()) {
         useSaySeeStore.setState({
@@ -810,7 +822,7 @@ export const App: React.FC = () => {
       }
       if (shouldShowToast) {
         useSaySeeStore.setState({
-          lastQuarantineToast: '🎉 멀린 Z-코어(Port 5199) 연결 완료! 내 컴퓨터 실물 파일이 연동되었습니다.',
+          lastQuarantineToast: '🎉 내 컴퓨터 연결 완료! 내 컴퓨터 실물 파일이 연동되었습니다.',
         });
       }
       if (didInitWithZCore && useSaySeeStore.getState().initialized) {

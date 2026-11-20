@@ -1140,14 +1140,8 @@ export const GhostSearchTrainingPage: React.FC = () => {
             </div>
           </div>
 
-          <div className="px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-400/40 text-zinc-800 dark:text-amber-100 text-[12.5px] leading-relaxed flex flex-wrap items-center justify-between gap-2">
-            <span>
-              💡 <strong>안내:</strong> 현재는 <strong>개발 중인 상태의 검색창 UI를 반영해 자동 변신 움짤(시뮬레이션)</strong>로 제작되어 있으며,{' '}
-              <strong>향후 검색창 UI가 최종 완성되면 그때 다시 움짤을 새로 만들 예정</strong>입니다.{' '}
-              <span className="text-teal-700 dark:text-[#5EEAD4] font-extrabold">
-                (움짤이 변신하는 도중에도 모니터 안의 버튼을 직접 마우스로 눌러보실 수 있습니다!)
-              </span>
-            </span>
+          <div className="px-3.5 py-2 rounded-xl bg-teal-500/10 border border-teal-400/30 text-zinc-800 dark:text-teal-100 text-[12.5px] leading-relaxed">
+            💡 움짤이 변신하는 도중에도 모니터 안의 버튼을 직접 마우스로 눌러보실 수 있어요!
           </div>
 
           <VirtualMonitorSimulator
@@ -1207,7 +1201,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
             🔒 귀신검색 유료 티어 안내 (명시적 동의 시 30일 무제한 무료체험 · 만료 시 자동 결제 없이 깔끔 잠금🔒)
           </span>
           <span className="text-[11.5px] text-slate-700 dark:text-zinc-300 font-bold">
-            내 PC 문서·사진·영상 소환 &amp; 동영상 [📝 글자 뽑기]는 평생 무제한 무료
+            내 PC 문서·사진·영상 소환 &amp; 동영상 화면 글자 자동 추출은 평생 무제한 무료
           </span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[12px] text-slate-800 dark:text-zinc-200">
