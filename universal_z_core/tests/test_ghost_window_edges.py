@@ -157,7 +157,7 @@ class TestGhostWindowEdges(unittest.TestCase):
         self.assertTrue(ok_free)
         self.assertEqual(tag_free, "FREE_FOREVER")
 
-        for locked_key in ("superpower_2", "superpower_3", "superpower_4", "ui3_photo_ocr", "feat_b3_pdf_merge"):
+        for locked_key in ("superpower_2", "superpower_3", "superpower_4", "superpower_5", "ui3_photo_ocr", "feat_b3_pdf_merge"):
             ok_lk, msg_lk = spd.check_feature_quota_allowed(locked_key, interactive_opt_in=False)
             self.assertFalse(ok_lk, f"{locked_key} must NOT pass before explicit Opt-in!")
             self.assertNotIn("하루 3회", msg_lk)
@@ -171,7 +171,7 @@ class TestGhostWindowEdges(unittest.TestCase):
         st_act = pgs.start_superpower_trial({"accountId": "qa_tester", "agreed": True})
         self.assertEqual(st_act["trial_status"], "ACTIVE_30D")
         self.assertEqual(spd.get_trial_badge_summary()["status"], "ACTIVE_30D")
-        for locked_key in ("superpower_2", "superpower_3", "superpower_4", "ui3_photo_ocr", "feat_b3_pdf_merge"):
+        for locked_key in ("superpower_2", "superpower_3", "superpower_4", "superpower_5", "ui3_photo_ocr", "feat_b3_pdf_merge"):
             ok_lk2, _ = spd.check_feature_quota_allowed(locked_key, interactive_opt_in=False)
             self.assertTrue(ok_lk2, f"{locked_key} must pass during ACTIVE_30D!")
 
@@ -212,8 +212,11 @@ class TestGhostWindowEdges(unittest.TestCase):
         self.assertEqual(master_spd, os_spd, "os_agent/seq_paste_daemon.py out of sync with master!")
         self.assertEqual(master_spd, cp_spd, "core_power_agent/seq_paste_daemon.py out of sync with master!")
 
-        self.assertIn("[4] 📌창고정🔒", master_spd)
-        self.assertNotIn("[5] 📌창고정", master_spd)
+        self.assertIn("[1] 🧹서식·줄바꿈", master_spd)
+        self.assertIn("[2] 📄스샷·PDF변환🔒", master_spd)
+        self.assertIn("[3] 🔗다중합본🔒", master_spd)
+        self.assertIn("[4] 🔢번호·일정🔒", master_spd)
+        self.assertIn("[5] 📌창고정🔒", master_spd)
 
 
 if __name__ == "__main__":

@@ -16,7 +16,7 @@ export const DOJO_ROI_BANNER_TEXT =
   '⏱️ 총 예상 소요시간: 딱 4분 30초! — 지금 4분 투자하고 1년 중 27일(209시간)을 아끼세요!';
 
 export type BasicStepId = 'b1' | 'b2' | 'b3';
-export type DojoItemId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9;
+export type DojoItemId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
 
 export interface DojoItemMeta {
   id: DojoItemId;
@@ -51,10 +51,14 @@ export const DOJO_ITEMS: DojoItemMeta[] = [
   { id: 2, icon: '🧺', title: '줄바꿈·띄어쓰기 1초 다림질', mission: '뚝뚝 끊긴 문단을 한 번에 펴세요' },
   { id: 3, icon: '🔫', title: '1➔2➔3 연속 복사 순차발사', mission: '빈칸에서 Ctrl+V를 누르거나 클릭·우클릭해 줄줄이 꽂으세요' },
   { id: 4, icon: '🧼', title: '시커먼 배경·광고꼬리말 서식 세탁기', mission: '지저분한 글을 순수 텍스트로 세탁하세요' },
-  { id: 5, icon: '🔑', title: 'F7~F12 팀 공유 상용구', mission: '칸을 누르고 F1, F7을 차례로 누르세요' },
+  { id: 5, icon: '🔑', title: 'F7~F12 팀 공유 상용구', mission: '귀신창(Ctrl+0) 소환 후 F1, F7을 차례로 누르세요' },
   { id: 6, icon: '📋', title: '최근 5개 & 한 달 치 클립보드 검색', mission: '「우리」를 검색해 옛날 계좌를 찾으세요' },
   { id: 7, icon: '📊', title: '화면 캡처 표 ➔ 엑셀 표(TSV) 직행', mission: '드래그 막힌 단가표를 엑셀 표로 바꾸세요' },
   { id: 8, icon: '🏷️', title: '귀신 라벨러 (깡통 파일명 자동 작명)', mission: '암호 같은 파일명을 한 번에 바꾸세요' },
+  { id: 10, icon: '📄', title: '[2] 스샷·PDF변환🔒 (300DPI PDF)', mission: '클립보드 캡처 화면을 실물 PNG와 300DPI PDF로 즉시 변환하세요' },
+  { id: 11, icon: '🔗', title: '[3] 다중합본🔒 (연속 복사 1초 병합)', mission: '여러 번 복사한 조항들을 하나의 깔끔한 문단으로 합치세요' },
+  { id: 12, icon: '🔢', title: '[4] 번호·일정🔒 (하이픈·억만금 성형)', mission: '전화번호·사업자번호·날짜 하이픈 및 한글 금액을 1초 성형하세요' },
+  { id: 13, icon: '📌', title: '[5] 창고정🔒 (작업창 최상단 핀 고정)', mission: '참고 중인 작업창을 다른 창에 가려지지 않게 맨 위에 고정하세요' },
 ];
 
 // ─────────────────────────────────────────────────────────────

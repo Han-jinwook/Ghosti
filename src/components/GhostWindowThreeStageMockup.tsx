@@ -984,7 +984,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
                 </button>
               </div>
 
-              {/* 2줄 (흰색 #E2E8F0 — [3]·[5] 유료 티어 정배열 + 우측 끝 [⌨️상용구▾] · [💡꿀팁·기타▾], [4] 번호·일정은 Wave 2 순연) */}
+              {/* 2줄 (흰색 #E2E8F0 — [3]·[4]·[5] 유료 티어 정배열 + 우측 끝 [⌨️상용구▾] · [💡꿀팁·기타▾]) */}
               <div className="flex flex-wrap items-center justify-between gap-2 pt-1 border-t border-white/5">
                 <div className="flex flex-wrap items-center gap-1.5">
                   {[
@@ -992,6 +992,11 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
                       id: 3,
                       label: '[3] 🔗다중합본🔒',
                       sampleOut: '[다중 복사 합본] 1. 계약 개요 / 2. 단가 조건 / 3. 특약 사항 통짜 병합 완료',
+                    },
+                    {
+                      id: 4,
+                      label: '[4] 🔢번호·일정🔒',
+                      sampleOut: '[🔢 번호·일정 하이픈 성형] 연락처: 010-1234-5678 / 사업자: 214-88-12345 / 일정: 2026-11-20',
                     },
                     {
                       id: 5,
@@ -2016,7 +2021,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
           <p className="text-[12px] text-zinc-200">
             {trainingStage === 1 && '키보드 Ctrl + 0 또는 Ctrl + 우클릭을 누르면 1초 만에 효과음과 함께 귀신창이 열립니다.'}
             {trainingStage === 2 && '여러 줄을 차례대로 복사한 뒤 순서대로 톡톡 붙여넣습니다.'}
-            {trainingStage === 3 && '문장 끝에 ?를 치고 Ctrl + 0 또는 Ctrl + 우클릭을 누르면 계약서·단가표 숫자가 바로 들어갑니다.'}
+            {trainingStage === 3 && '드래그 후 Ctrl + 0(다림질 우선 시도 후 자동 검색) 또는 문장 끝에 ?를 치고 Ctrl + 0을 누르면 계약서·단가표 숫자가 바로 들어갑니다.'}
           </p>
         </div>
       )}

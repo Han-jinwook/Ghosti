@@ -485,7 +485,7 @@ const Dojo1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
         </button>
       </div>
       <div className="text-[11.5px] text-zinc-400">
-        💡 실전 안내: <strong className="text-zinc-200">메모장·카카오톡·엑셀 셀 편집·크롬/엣지/웨일 웹 글쓰기</strong>에서는 스페이스바·문장부호(. ? !) 또는 1초 정지 시 버튼 없이 실시간 자동변환되며, 이메일·주소·비밀번호처럼 영문이어야 하는 글자는 그대로 지켜집니다. <strong className={highlightTextCls}>Ctrl+0 ➔ [1]</strong>은 복사해 온 글의 서식·줄바꿈을 깔끔하게 다림질할 때 씁니다.
+        💡 실전 안내: <strong className="text-zinc-200">메모장·카카오톡·엑셀 셀 편집·크롬/엣지/웨일 웹 글쓰기</strong>에서는 스페이스바·문장부호(. ? !) 또는 1초 정지 시 실시간 자동변환(원복은 <strong className={highlightTextCls}>Ctrl+Z</strong> 또는 5초 내 <strong className={highlightTextCls}>Ctrl+0</strong>)되며, 이메일·주소·비밀번호처럼 영문이어야 하는 글자는 그대로 지켜지고 <strong className="text-zinc-200">한글(HWP)·MS Word</strong>는 자체 한영 교정에 양보합니다. <strong className={highlightTextCls}>Ctrl+0 ➔ [1]</strong>은 복사해 온 글의 서식·줄바꿈 다림질을 전담합니다.
       </div>
     </div>
   );
@@ -812,6 +812,118 @@ const Dojo9: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   );
 };
 
+const Dojo10: React.FC<{ onDone: () => void }> = ({ onDone }) => {
+  const [converted, setConverted] = useState(false);
+  return (
+    <div className="flex flex-col gap-2">
+      <div className={boxCls}>
+        📸 클립보드 화면 캡처 3장 (세금계산서_1.png · 영수증_2.png · 견적서_3.png)
+      </div>
+      <button
+        type="button"
+        disabled={converted}
+        className={btnCls}
+        onClick={() => {
+          setConverted(true);
+          playBabyGhostChime('typo');
+          onDone();
+        }}
+      >
+        📄 [2] 스샷 ➔ 실물 PNG &amp; 300DPI PDF 변환
+      </button>
+      {converted && (
+        <div className="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/50 text-[12.5px] font-extrabold text-emerald-300">
+          ✅ [귀신스샷_합본_3장_300DPI.pdf] 생성 및 클립보드 파일 장전 완료! (카톡·메일에서 Ctrl+V로 즉시 첨부)
+        </div>
+      )}
+    </div>
+  );
+};
+
+const Dojo11: React.FC<{ onDone: () => void }> = ({ onDone }) => {
+  const [merged, setMerged] = useState(false);
+  const sampleParts = ['1. 계약 개요: 역삼빌딩 6층 임대차', '2. 단가 조건: 보증금 5,000만 / 월 220만', '3. 특약 사항: 기본 칸막이 원상복구 면제'];
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap gap-1.5">
+        {sampleParts.map((p) => (
+          <span key={p} className="px-2.5 py-1 rounded-lg bg-zinc-900 border border-white/10 text-[12px] text-zinc-200">
+            {p}
+          </span>
+        ))}
+      </div>
+      <button
+        type="button"
+        disabled={merged}
+        className={btnCls}
+        onClick={() => {
+          setMerged(true);
+          playBabyGhostChime('typo');
+          onDone();
+        }}
+      >
+        🔗 [3] 다중 복사 1초 통짜 합본
+      </button>
+      {merged && (
+        <div className="px-3 py-2 rounded-xl bg-emerald-500/15 border border-emerald-400/50 text-[12.5px] font-bold text-emerald-200 whitespace-pre-line">
+          {sampleParts.join('\n')}
+        </div>
+      )}
+    </div>
+  );
+};
+
+const Dojo12: React.FC<{ onDone: () => void }> = ({ onDone }) => {
+  const [formatted, setFormatted] = useState(false);
+  return (
+    <div className="flex flex-col gap-2">
+      <div className={`${boxCls} font-mono`}>
+        {formatted
+          ? '연락처: 010-1234-5678 / 사업자: 214-88-12345 / 계약일: 2026-11-20'
+          : '연락처: 01012345678 / 사업자: 2148812345 / 계약일: 20261120'}
+      </div>
+      <button
+        type="button"
+        disabled={formatted}
+        className={btnCls}
+        onClick={() => {
+          setFormatted(true);
+          playBabyGhostChime('typo');
+          onDone();
+        }}
+      >
+        🔢 [4] 번호·일정 하이픈 1초 성형
+      </button>
+    </div>
+  );
+};
+
+const Dojo13: React.FC<{ onDone: () => void }> = ({ onDone }) => {
+  const [pinned, setPinned] = useState(false);
+  return (
+    <div className="flex flex-col gap-2">
+      <div className={`${boxCls} flex items-center justify-between`}>
+        <span>🪟 참고 중인 단가표 엑셀 창 (261105_납품단가표.xlsx)</span>
+        <span className={`px-2 py-0.5 rounded text-[11px] font-extrabold ${pinned ? 'bg-amber-400 text-zinc-950' : 'bg-zinc-800 text-zinc-400'}`}>
+          {pinned ? '📌 항상 위 고정됨 (Always on Top)' : '일반 창'}
+        </span>
+      </div>
+      <button
+        type="button"
+        disabled={pinned}
+        className={btnCls}
+        onClick={() => {
+          setPinned(true);
+          playBabyGhostChime('typo');
+          onDone();
+        }}
+      >
+        📌 [5] 현재 작업창 화면 최상단 고정
+      </button>
+    </div>
+  );
+};
+
 const DOJO_SANDBOXES: Record<DojoItemId, React.FC<{ onDone: () => void }>> = {
   1: Dojo1,
   2: Dojo2,
@@ -822,6 +934,10 @@ const DOJO_SANDBOXES: Record<DojoItemId, React.FC<{ onDone: () => void }>> = {
   7: Dojo7,
   8: Dojo8,
   9: Dojo9,
+  10: Dojo10,
+  11: Dojo11,
+  12: Dojo12,
+  13: Dojo13,
 };
 
 const BASIC_SANDBOXES: Record<BasicStepId, React.FC<{ onDone: () => void }>> = {
@@ -1040,6 +1156,10 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
   const [savedSlotConfirm, setSavedSlotConfirm] = useState<string | null>(null);
   const [zCoreSynced, setZCoreSynced] = useState<boolean>(false);
   const syncTimerRef = useRef<number>(0);
+  const slotsRef = useRef<PersonalSnippetSlot[]>(slots);
+  useEffect(() => {
+    slotsRef.current = slots;
+  }, [slots]);
 
   const pushSnippetsToZCore = useCallback(async (targetSlots: PersonalSnippetSlot[], confirmKey?: string) => {
     const snippetMap: Record<string, string> = {};
@@ -1057,6 +1177,7 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
       playBabyGhostChime('typo');
       window.setTimeout(() => setSavedSlotConfirm((prev) => (prev === confirmKey ? null : prev)), 1800);
     }
+    if (!zCoreBridge.isConnected) return;
     try {
       const res = await fetch(getZCoreUrl('/api/superpower/snippets'), {
         method: 'POST',
@@ -1074,6 +1195,7 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
 
   useEffect(() => {
     const hydrateFromZCore = async () => {
+      if (!zCoreBridge.isConnected) return;
       const hadCustomLocal = Boolean(localStorage.getItem(PERSONAL_SNIPPETS_STORAGE_KEY));
       try {
         const res = await fetch(getZCoreUrl('/api/superpower/snippets'), {
@@ -1083,8 +1205,8 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
         const data = await res.json();
         const remote = (data?.snippets || {}) as Record<string, string>;
         if (hadCustomLocal) {
-          // 로컬에서 먼저 적어둔 상용구가 있으면 Z-코어로 즉시 밀어넣어 100% 일치시킴
-          void pushSnippetsToZCore(slots);
+          // 로컬에서 먼저 적어둔 최신 상용구가 있으면 Z-코어로 즉시 밀어넣어 100% 일치시킴
+          void pushSnippetsToZCore(slotsRef.current);
           return;
         }
         setSlots((prev) => {
@@ -1104,7 +1226,7 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
         /* ignore */
       }
     };
-    void hydrateFromZCore();
+    if (zCoreBridge.isConnected) void hydrateFromZCore();
     const unsub = zCoreBridge.subscribe((connected) => {
       if (connected) void hydrateFromZCore();
       else setZCoreSynced(false);
@@ -1113,23 +1235,21 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
       unsub();
       window.clearTimeout(syncTimerRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [pushSnippetsToZCore]);
 
   const updateSlot = (idx: number, field: 'title' | 'value', nextVal: string) => {
     const updated = slots.map((item, i) => (i === idx ? { ...item, [field]: nextVal } : item));
+    slotsRef.current = updated;
     setSlots(updated);
     try {
       localStorage.setItem(PERSONAL_SNIPPETS_STORAGE_KEY, JSON.stringify(updated));
     } catch {
       /* ignore */
     }
-    if (field === 'value') {
-      window.clearTimeout(syncTimerRef.current);
-      syncTimerRef.current = window.setTimeout(() => {
-        void pushSnippetsToZCore(updated);
-      }, 320);
-    }
+    window.clearTimeout(syncTimerRef.current);
+    syncTimerRef.current = window.setTimeout(() => {
+      void pushSnippetsToZCore(updated);
+    }, 320);
   };
 
   const { isStoreAppMode, setActiveLoungeType, setDesktopTab } = useSaySeeStore();
@@ -1162,7 +1282,7 @@ const PersonalSnippetsRegistryPanel: React.FC = () => {
             ⌨️ 내 개인 상용구 등록창 (F1 ~ F6 · 평생 무료)
           </h3>
           <p className="text-[12px] text-zinc-400 mt-0.5">
-            자주 쓰는 계좌번호·주소·인사말을 적어 저장하면 메모장·카톡에서 F1~F6 키 한 번으로 1초 자동 입력됩니다.
+            자주 쓰는 계좌번호·주소·인사말을 적어 저장하면 어느 창에서든 귀신창(<kbd className={summonKeyBadgeCls}>Ctrl + 0</kbd>) 소환 후 F1~F6 키 한 번으로 0.1초 자동 입력됩니다 (평소 브라우저·앱의 F1~F6 단축키와 충돌 0%).
           </p>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -1320,20 +1440,27 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
   }, []);
 
   const markBasic = (id: BasicStepId) => {
-    const next: DojoProgress = { ...progress, basics: { ...progress.basics, [id]: true } };
-    setProgress(next);
-    saveDojoProgress(next);
+    setProgress((prev) => {
+      const next: DojoProgress = { ...prev, basics: { ...prev.basics, [id]: true } };
+      saveDojoProgress(next);
+      return next;
+    });
   };
   const markDojo = (id: DojoItemId) => {
-    const next: DojoProgress = { ...progress, dojo: { ...progress.dojo, [id]: true } };
-    setProgress(next);
-    saveDojoProgress(next);
+    setProgress((prev) => {
+      const next: DojoProgress = { ...prev, dojo: { ...prev.dojo, [id]: true } };
+      saveDojoProgress(next);
+      return next;
+    });
   };
 
   const basicsDone = countBasicsDone(progress);
   const BasicSandbox = BASIC_SANDBOXES[activeBasic];
   const paidDojoItems = useMemo(
-    () => DOJO_ITEMS.filter((d) => d.id === 5 || d.id === 6 || d.id === 7 || d.id === 8),
+    () =>
+      DOJO_ITEMS.filter(
+        (d) => d.id === 5 || d.id === 6 || d.id === 7 || d.id === 8 || d.id === 10 || d.id === 11 || d.id === 12 || d.id === 13
+      ),
     []
   );
   const ActiveDojoSandbox = activeDojo ? DOJO_SANDBOXES[activeDojo] : null;
@@ -1535,7 +1662,7 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
                   setSandboxKey((k) => k + 1);
                 }}
                 className={`flex items-center gap-2 px-2.5 py-2 rounded-xl text-left text-[12px] font-bold border cursor-pointer ${
-                  trialStarted && activeDojoMeta?.id === d.id
+                  (trialStarted || isSubscribed) && activeDojoMeta?.id === d.id
                     ? 'border-amber-400 bg-amber-400/10 text-white'
                     : 'border-white/10 text-zinc-300 hover:bg-white/5'
                 }`}
@@ -1599,7 +1726,7 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = ({ varian
               </div>
             </div>
           )}
-          {trialStarted && ActiveDojoSandbox && activeDojoMeta && (
+          {(trialStarted || isSubscribed) && ActiveDojoSandbox && activeDojoMeta && (
             <div className="flex flex-col gap-2 p-3.5 rounded-xl bg-zinc-950/80 border border-white/10">
               <div className="text-[12.5px] text-zinc-300 font-bold">
                 {activeDojoMeta.icon} {activeDojoMeta.mission}

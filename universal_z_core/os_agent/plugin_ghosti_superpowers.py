@@ -334,6 +334,21 @@ def _compute_cross_device_trial(cross_ledger: Dict[str, Any], linked_device_coun
     }
 
 
+def _parse_bool(val: Any, default: bool = False) -> bool:
+    if val is None:
+        return default
+    if isinstance(val, bool):
+        return val
+    if isinstance(val, (int, float)):
+        return bool(val)
+    s = str(val).strip().lower()
+    if s in ("true", "1", "yes", "y", "on"):
+        return True
+    if s in ("false", "0", "no", "n", "off", ""):
+        return False
+    return default
+
+
 def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     try:
         import ppocr_v5_worker
@@ -344,8 +359,11 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
     data = params or {}
     account_id = str(data.get("accountId") or "guest_local").strip()
     has_explicit_sub_flag = "isSubscribed" in data and str(data.get("isSubscribed") or "").strip() != ""
-    is_subscribed = str(data.get("isSubscribed") or "false").lower() in ("true", "1", "yes")
-    linked_device_count = int(data.get("linkedDeviceCount") or data.get("linked_device_count") or 1)
+    is_subscribed = _parse_bool(data.get("isSubscribed"), False)
+    try:
+        linked_device_count = int(data.get("linkedDeviceCount") or data.get("linked_device_count") or 1)
+    except (ValueError, TypeError):
+        linked_device_count = 1
     hwid = get_machine_hwid()
     ledger = _load_trial_ledger()
 
@@ -354,6 +372,11 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
         "machineHwid": hwid,
         "isSubscribed": False,
     })
+    if is_subscribed:
+        m_entry["accountId"] = account_id
+        m_entry["isSubscribed"] = True
+        m_entry["updatedAt"] = datetime.datetime.now().isoformat()
+        _save_trial_ledger(ledger)
 
     # [누수 봉쇄] 웹 서버 원장(entitlement)에서 isSubscribed=true/false가 명시 전달되면 양방향 1:1 동기화
     # (구독 만료·해지 시 로컬 영구 True 고착 버그 차단)
@@ -431,8 +454,8 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
 def start_superpower_trial(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
     data = body or {}
     account_id = str(data.get("accountId") or "local_user").strip()
-    is_subscribed = bool(data.get("isSubscribed", False))
-    agreed = True if "agreed" not in data else bool(data.get("agreed"))
+    is_subscribed = _parse_bool(data.get("isSubscribed"), False)
+    agreed = _parse_bool(data.get("agreed"), True)
 
     opt_res = spd.opt_in_30d_unlimited_superpower_trial(agreed=agreed, account_id=account_id)
     if agreed and is_subscribed:
@@ -453,21 +476,9 @@ def start_superpower_trial(body: Dict[str, Any] | None = None) -> Dict[str, Any]
     return status
 
 
-SNIPPET_KEYS = ("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10")
+SNIPPET_KEYS = ("F1", "F2", "F3", "F4", "F5", "F6", "F7", "F8", "F9", "F10", "F11", "F12")
 
-SUPERPOWER_12_FEATURES: Dict[str, str] = {
-    "feat_1_seq_paste": "[Ctrl+V] 순차·칸맞춤 (평생 무료)",
-    "feat_2_typo_morph": "[자동] 한영·띄어쓰기 성형 (평생 무료)",
-    "feat_4_iron_lines": "[1] 서식·줄바꿈 다림질 (평생 무료)",
-    "feat_3_clean_format": "[1] 서식 세탁·특수문자 보존 (평생 무료)",
-    "feat_9_image_file": "[2] 스샷·PDF·파일변환🔒",
-    "feat_6_screen_ocr": "[UI③] 사진·표 OCR 공간이동🔒",
-    "feat_5_ai_search": "[3] 다중 문서 합본🔒",
-    "feat_7_toggle_topmost": "[4] 창 고정 Pin🔒",
-    "feat_b1_snippets": "[⌨️상용구▾] F1~F6 내 상용구 (평생 무료)",
-    "feat_b2_excel_split": "[💡꿀팁·기타▾] 엑셀 다중 칸 자동 쪼개기 (평생 무료)",
-    "feat_b3_pdf_merge": "[2] 다중 스샷 300DPI PDF 합본🔒",
-}
+SUPERPOWER_12_FEATURES: Dict[str, str] = dict(spd.SUPERPOWER_12_FEATURES)
 
 
 
@@ -733,7 +744,7 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
     """
     data = body or {}
     account_id = str(data.get("accountId") or "local_user").strip()
-    is_subscribed = bool(data.get("isSubscribed", False))
+    is_subscribed = _parse_bool(data.get("isSubscribed"), False)
     raw_action = str(data.get("actionType") or data.get("feature_id") or "feat_1_seq_paste").strip()
     hwid = get_machine_hwid()
     ledger = _load_trial_ledger()
@@ -745,7 +756,7 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
     })
 
     # 🧪 시뮬레이션 지원: 원장 리셋
-    if data.get("resetTrials"):
+    if _parse_bool(data.get("resetTrials"), False):
         m_entry["featureTrials"] = {}
         m_entry["crossDeviceTrial"] = {}
         m_entry["dailyUsage"] = {}
@@ -755,7 +766,7 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
         return {"ok": True, "message": "🧹 모든 귀신 초능력 30일 무제한 Opt-in 원장을 미시작 초기 상태로 리셋했습니다."}
 
     # 🧪 시뮬레이션 지원: 특정 기능 또는 전체 30일 강제 만료
-    sim_expire = data.get("simulateExpireFeature")
+    sim_expire = spd.normalize_feature_id(str(data.get("simulateExpireFeature") or "")) if data.get("simulateExpireFeature") else ""
     if sim_expire and sim_expire in SUPERPOWER_12_FEATURES:
         ft_ledger = m_entry.setdefault("featureTrials", {})
         thirty_one_days_ago = time.time() - (31 * 86400)
@@ -774,38 +785,13 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
         _save_trial_ledger(ledger)
         return {"ok": True, "message": f"🧪 [{SUPERPOWER_12_FEATURES[sim_expire]}] 및 기기 30일 체험을 만료 상태로 시뮬레이션 설정했습니다."}
 
-    # 기능 ID 정규화 (feat_1 ~ feat_9, feat_b1 ~ feat_b3 또는 숫자 매핑)
-    feature_id = raw_action
-    if not feature_id.startswith("feat_"):
-        num_match = re.search(r"\d+", raw_action)
-        if num_match:
-            n = int(num_match.group())
-            if 1 <= n <= 9:
-                feature_id = f"feat_{n}_" + list(SUPERPOWER_12_FEATURES.keys())[n-1].split(f"feat_{n}_")[-1]
-            elif n >= 10:
-                feature_id = "feat_b1_snippets"
-        elif "snippet" in raw_action.lower() or "f1" in raw_action.lower():
-            feature_id = "feat_b1_snippets"
-        elif "excel" in raw_action.lower():
-            feature_id = "feat_b2_excel_split"
-        elif "pdf" in raw_action.lower():
-            feature_id = "feat_b3_pdf_merge"
-        else:
-            feature_id = "feat_1_seq_paste"
-
-    # 유효한 기능 키인지 확인 (없으면 feat_1 기본)
+    # 단일 SSOT: 데몬 normalize_feature_id로 정규화
+    feature_id = spd.normalize_feature_id(raw_action)
     if feature_id not in SUPERPOWER_12_FEATURES:
         feature_id = "feat_1_seq_paste"
 
     feature_name = SUPERPOWER_12_FEATURES[feature_id]
-    free_forever_ids = {
-        "feat_1_seq_paste",
-        "feat_2_typo_morph",
-        "feat_4_iron_lines",
-        "feat_3_clean_format",
-        "feat_b1_snippets",
-        "feat_b2_excel_split",
-    }
+    free_forever_ids = set(spd.FREE_FOREVER_FEATURES)
     if feature_id in free_forever_ids:
         return {
             "ok": True,
@@ -926,8 +912,8 @@ def open_ghost_search_window_api(params: Dict[str, Any] | None = None) -> Dict[s
     anchor_y = data.get("anchor_y") or data.get("y")
     ax = int(anchor_x) if anchor_x is not None and str(anchor_x).lstrip("-").isdigit() else None
     ay = int(anchor_y) if anchor_y is not None and str(anchor_y).lstrip("-").isdigit() else None
-    focus_only = bool(data.get("focus_only"))
-    resize_existing = bool(data.get("resize_existing"))
+    focus_only = _parse_bool(data.get("focus_only"), False)
+    resize_existing = _parse_bool(data.get("resize_existing"), False)
 
     res = spd._open_ghost_search_window_popup(
         stage=stage,

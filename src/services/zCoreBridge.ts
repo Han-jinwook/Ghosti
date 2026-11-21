@@ -12,7 +12,7 @@ export const Z_CORE_PORT = 5199;
 export const Z_CORE_ORIGIN = `http://127.0.0.1:${Z_CORE_PORT}`;
 export const Z_CORE_ZIP_URL = '/Merlin_Z_Core.zip';
 /** 현재 배포 중인 최신 Z-코어 버전 (Merlin_Z_Core.zip 안의 Merlin_Z_Core_Setup.exe 버전과 반드시 일치시킬 것 — 불일치 시 self-update 루프 발생) */
-export const LATEST_Z_CORE_VERSION = '2.6.79';
+export const LATEST_Z_CORE_VERSION = '2.6.99';
 
 /**
  * 현재 브라우저 세션이 로그인된 실사용자인지, 아니면 비로그인(크롬 게스트 모드 / 시크릿 창 / 첫 방문자)인지 판별합니다.
@@ -232,10 +232,10 @@ class ZCoreBridgeManager {
       }
     }
 
-    // [보조 데몬/구버전 포트 폴백]: 5199 또는 51988의 /api/superpower/status가 살아있으면 이미 Z-코어가 실행 중인 상태로 즉시 인정 (중복 다운로드 원천 방지)
+    // [보조 데몬/구버전 포트 폴백]: 5199의 /api/superpower/status가 살아있으면 이미 Z-코어가 실행 중인 상태로 즉시 인정 (중복 다운로드 원천 방지)
     for (const fallbackUrl of [
       `${Z_CORE_ORIGIN}/api/superpower/status`,
-      'http://127.0.0.1:51988/api/superpower/status',
+      `http://localhost:${Z_CORE_PORT}/api/superpower/status`,
     ]) {
       try {
         const controller = new AbortController();

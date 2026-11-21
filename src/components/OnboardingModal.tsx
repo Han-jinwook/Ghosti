@@ -844,13 +844,13 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
             }`}
           >
             <div className="flex items-center justify-between gap-1">
-              <span className="text-[13.5px] font-extrabold">탭 1. 🎯 찾기 &amp; 🪄 손보기</span>
+              <span className="text-[13.5px] font-extrabold">탭 1. 🎯 귀신검색 &amp; 👻 귀신비서</span>
               <span className="px-1.5 py-0.5 rounded-md bg-teal-500/20 text-teal-300 text-[10px] font-black">
                 내 기기 0원
               </span>
             </div>
             <span className="text-[11px] opacity-80">
-              1초 AI 내용검색 + 손보기 통합 대화창
+              1초 AI 내용검색 + 귀신비서 통합 대화창
             </span>
           </button>
 
@@ -903,17 +903,17 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
         )}
 
         {/* ─────────────────────────────────────────────────────────────
-            [탭 1] 🎯 찾기 & 🪄 손보기 (내 기기 1대는 언제나 0원)
+            [탭 1] 🎯 귀신검색 & 👻 귀신비서 (내 기기 1대는 언제나 0원)
            ───────────────────────────────────────────────────────────── */}
         {activeTab === 'tab1_find_care' && (
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {/* 1) 🎯 귀신같이 찾기 */}
+              {/* 1) 🎯 귀신검색 */}
               <div className="p-4 rounded-2xl bg-zinc-900/90 border border-teal-500/35 flex flex-col justify-between gap-3">
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
                     <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 text-[11px] font-extrabold">
-                      🎯 귀신같이 찾기 (1초 AI 내용검색)
+                      🎯 귀신검색 (1초 AI 내용검색)
                     </span>
                     <span className="text-[11px] text-emerald-400 font-bold">평생 무료</span>
                   </div>
@@ -980,12 +980,12 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                 </div>
               </div>
 
-              {/* 2) ✋ 손보기 (노션형 통합 대화창) */}
+              {/* 2) 👻 귀신비서 (노션형 통합 대화창) */}
               <div className="p-4 rounded-2xl bg-zinc-900/90 border border-emerald-500/35 flex flex-col justify-between gap-3">
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
                     <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 text-[11px] font-extrabold">
-                      ✋ 손보기 (정리 · 수리 · 복원)
+                      👻 귀신비서 (정리 · 수리 · 복원)
                     </span>
                     <span className="text-[11px] text-emerald-400 font-bold">평생 무료</span>
                   </div>
@@ -1015,7 +1015,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                     }}
                     className="w-full py-2.5 px-3 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 text-[12.5px] font-black cursor-pointer"
                   >
-                    ✋ 손보기 대화창 바로 열기 →
+                    👻 귀신비서 대화창 바로 열기 →
                   </button>
                 </div>
               </div>

@@ -161,7 +161,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.6.80"
+CORE_VERSION = "2.6.99"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -734,29 +734,29 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(ghosti_setup_parity.faces_index())
             return
 
-        if path == "/api/superpower/status":
-            self._send_json(plugin_ghosti_superpowers.get_superpower_status(qp))
-            return
-
-        if path in ("/__merlin/open-ghost-search", "/api/superpower/open_search_window"):
-            self._send_json(plugin_ghosti_superpowers.open_ghost_search_window_api(qp))
-            return
-
-        if path == "/api/superpower/snippets":
-            self._send_json({"ok": True, "snippets": plugin_ghosti_superpowers.get_snippets()})
-            return
-
-        if path == "/api/superpower/telemetry":
-            self._send_json(plugin_ghosti_superpowers.get_telemetry())
-            return
-
-        if path == "/api/superpower/settings":
-            self._send_json(plugin_ghosti_superpowers.get_superpower_settings_api())
-            return
-
-        if path == "/api/superpower/mailbox-sync":
-            self._send_json(plugin_ghosti_superpowers.sync_e2ee_mailbox_api({}))
-            return
+        if path in ("/__merlin/open-ghost-search", "/api/superpower/open_search_window") or path.startswith("/api/superpower/"):
+            try:
+                if path == "/api/superpower/status":
+                    self._send_json(plugin_ghosti_superpowers.get_superpower_status(qp))
+                    return
+                if path in ("/__merlin/open-ghost-search", "/api/superpower/open_search_window"):
+                    self._send_json(plugin_ghosti_superpowers.open_ghost_search_window_api(qp))
+                    return
+                if path == "/api/superpower/snippets":
+                    self._send_json({"ok": True, "snippets": plugin_ghosti_superpowers.get_snippets()})
+                    return
+                if path == "/api/superpower/telemetry":
+                    self._send_json(plugin_ghosti_superpowers.get_telemetry())
+                    return
+                if path == "/api/superpower/settings":
+                    self._send_json(plugin_ghosti_superpowers.get_superpower_settings_api())
+                    return
+                if path == "/api/superpower/mailbox-sync":
+                    self._send_json(plugin_ghosti_superpowers.sync_e2ee_mailbox_api({}))
+                    return
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc)}, status=500)
+                return
 
         # [방어 21·22] 구 3대장 척결 독립 격리 플러그인 (Try-Except Firewall + Lazy-Import + GET Read-Only 강제)
         if path.startswith("/api/care/"):
@@ -911,34 +911,34 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(dispatch_plugin_call(plugin_name, action, payload))
             return
 
-        if path == "/api/superpower/start-trial":
-            self._send_json(plugin_ghosti_superpowers.start_superpower_trial(body))
-            return
-        if path == "/api/superpower/consume-action":
-            self._send_json(plugin_ghosti_superpowers.consume_superpower_action(body))
-            return
-
-        if path == "/api/superpower/snippets":
-            self._send_json(plugin_ghosti_superpowers.save_snippets(body))
-            return
-
-        if path == "/api/superpower/simulate":
-            self._send_json(plugin_ghosti_superpowers.simulate_superpower(body))
-            return
-
-        if path == "/api/superpower/telemetry":
-            self._send_json(plugin_ghosti_superpowers.update_telemetry(body))
-            return
-
-        if path in ("/api/superpower/settings", "/api/superpower/clear-history"):
-            if path.endswith("/clear-history"):
-                body = {**(body or {}), "clear_history": True}
-            self._send_json(plugin_ghosti_superpowers.update_superpower_settings_api(body))
-            return
-
-        if path == "/api/superpower/mailbox-sync":
-            self._send_json(plugin_ghosti_superpowers.sync_e2ee_mailbox_api(body))
-            return
+        if path.startswith("/api/superpower/"):
+            try:
+                if path == "/api/superpower/start-trial":
+                    self._send_json(plugin_ghosti_superpowers.start_superpower_trial(body))
+                    return
+                if path == "/api/superpower/consume-action":
+                    self._send_json(plugin_ghosti_superpowers.consume_superpower_action(body))
+                    return
+                if path == "/api/superpower/snippets":
+                    self._send_json(plugin_ghosti_superpowers.save_snippets(body))
+                    return
+                if path == "/api/superpower/simulate":
+                    self._send_json(plugin_ghosti_superpowers.simulate_superpower(body))
+                    return
+                if path == "/api/superpower/telemetry":
+                    self._send_json(plugin_ghosti_superpowers.update_telemetry(body))
+                    return
+                if path in ("/api/superpower/settings", "/api/superpower/clear-history"):
+                    if path.endswith("/clear-history"):
+                        body = {**(body or {}), "clear_history": True}
+                    self._send_json(plugin_ghosti_superpowers.update_superpower_settings_api(body))
+                    return
+                if path == "/api/superpower/mailbox-sync":
+                    self._send_json(plugin_ghosti_superpowers.sync_e2ee_mailbox_api(body))
+                    return
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc)}, status=500)
+                return
 
         # [방어 21·22] 구 3대장 척결 독립 격리 플러그인 POST (Try-Except Firewall + Lazy-Import)
         if path.startswith("/api/care/"):

@@ -539,7 +539,7 @@ export const PricingModal: React.FC = () => {
                 </span>
               </div>
               <h3 className="font-headline-sm text-[19px] text-white font-extrabold">
-                🆓 내 기기 (PC·폰) — 🔍 찾기 &amp; ✋ 손보기
+                🆓 내 기기 (PC·폰) — 👻 귀신비서 · 🎯 귀신검색 · ⚡ 귀신창
               </h3>
 
               <div className="p-4 rounded-xl bg-zinc-950/90 border border-emerald-400/35 flex flex-col justify-between gap-2.5">
@@ -552,11 +552,11 @@ export const PricingModal: React.FC = () => {
                   </span>
                 </div>
                 <p className="font-body-sm text-[12px] text-emerald-200/95 font-bold">
-                  &ldquo;혼자 쓰는 내 PC · 내 폰의 1초 AI 내용검색(찾기)과 PC 속도·용량 주치의(손보기)는 평생 0원&rdquo;
+                  &ldquo;혼자 쓰는 내 PC · 내 폰의 1초 AI 내용검색(귀신검색)과 PC 속도·용량 주치의(귀신비서), 기본 귀신창(Ctrl+0)은 평생 0원&rdquo;
                 </p>
                 <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
-                  • 🔍 <strong>찾기</strong> (내 기기 사진·영상·서류 1초 내용검색 · 바탕화면·다운로드·최근 100개 우선 개통 · 평생 0원)<br />
-                  • ✋ <strong>손보기</strong> (PC 속도 랙 처치 · 수요일 오후 1시 주간 건강검진 · 중복 사진 정리 · 빨간 손가락 <code>👆</code> 수리 · 평생 0원)
+                  • 🎯 <strong>귀신검색</strong> (내 기기 사진·영상·서류 1초 내용검색 · 바탕화면·다운로드·최근 100개 우선 개통 · 평생 0원)<br />
+                  • 👻 <strong>귀신비서</strong> (PC 속도 랙 처치 · 수요일 오후 1시 주간 건강검진 · 중복 사진 정리 · 빨간 손가락 <code>👆</code> 수리 · 평생 0원)
                 </p>
               </div>
             </div>
@@ -662,7 +662,7 @@ export const PricingModal: React.FC = () => {
                 <p className="font-body-sm text-[12px] text-zinc-200 leading-relaxed">
                   • 🔗 <strong>내 기기 연결 (PC↔폰)</strong>: 카톡 ‘나에게 보내기’ &amp; 클라우드 월세 종식 (내 폰 ⇄ 집 PC ⇄ 회사 PC ⇄ 노트북 원본 직결 통합 검색)<br />
                   • 📋 <strong>무버튼 양방향 클립보드 ‘암호화 우체통(E2EE)’</strong>: 꺼져 있던 집 PC 부팅 즉시 회사·폰에서 복사한 텍스트 100개·스샷 10장 자동 장전<br />
-                  • ⚡ <strong>귀신창·귀신검색 유료 확장</strong>: 사진·표 OCR 창, 귀신 라벨러, 스샷·PDF 변환, 다중합본, 창고정 전 기기 무제한 해금
+                  • ⚡ <strong>귀신창·귀신검색 유료 확장</strong>: 사진·표 OCR 창, 귀신 라벨러, [2] 스샷·PDF 변환, [3] 다중합본, [4] 번호·일정, [5] 창고정 전 기기 무제한 해금
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                   <button

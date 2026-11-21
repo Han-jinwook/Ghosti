@@ -244,7 +244,18 @@ def save_mirrored_device_file(data: Dict[str, Any] | None = None) -> Dict[str, A
 
 
 def check_ghostwin_daemon_alive(timeout_sec: float = 0.8) -> Dict[str, Any]:
-    """로컬 귀신창 데몬(127.0.0.1:51988) 생존 여부를 초경량 소켓/HTTP로 확인합니다."""
+    """로컬 귀신창 데몬(127.0.0.1:51988) 생존 여부를 초경량 TCP PING/PONG(및 HTTP 폴백)으로 확인합니다."""
+    import socket
+
+    try:
+        with socket.create_connection(("127.0.0.1", GHOSTWIN_LOCAL_PORT), timeout=timeout_sec) as sock:
+            sock.settimeout(timeout_sec)
+            sock.sendall(b"__PING__")
+            reply = sock.recv(64)
+            if b"PONG" in reply:
+                return {"ok": True, "alive": True, "port": GHOSTWIN_LOCAL_PORT, "detail": {"pong": True}}
+    except Exception:
+        pass
     for ep in ("/__merlin/ping", "/health"):
         url = f"http://127.0.0.1:{GHOSTWIN_LOCAL_PORT}{ep}"
         try:
