@@ -1,0 +1,484 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>👻 귀신같이(Ghosti) 2차원 매트릭스 전략 상황판 (SSOT v2.3)</title>
+<style>
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: 'Pretendard', 'Malgun Gothic', sans-serif;
+    background: #0b1120;
+    color: #f8fafc;
+    padding: 14px;
+    min-height: 100vh;
+  }
+  header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: #1e293b;
+    padding: 12px 18px;
+    border-radius: 12px;
+    margin-bottom: 14px;
+    border: 1px solid #334155;
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  .title-area h1 { font-size: 19px; font-weight: 800; color: #f8fafc; }
+  .title-area p { font-size: 12.5px; color: #94a3b8; margin-top: 4px; }
+  .header-right {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .legend {
+    display: flex;
+    gap: 7px;
+    align-items: center;
+    flex-wrap: wrap;
+    font-size: 11.5px;
+  }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 4px 9px;
+    border-radius: 999px;
+    font-weight: 700;
+  }
+  .lg-w1 { background: rgba(34,197,94,0.2); border: 2px solid #22c55e; color: #86efac; }
+  .lg-w2 { background: rgba(59,130,246,0.2); border: 2px solid #3b82f6; color: #93c5fd; }
+  .lg-w3 { background: rgba(168,85,247,0.2); border: 2px solid #a855f7; color: #d8b4fe; }
+  .lg-w4 { background: rgba(239,68,68,0.2); border: 2px solid #ef4444; color: #fca5a5; }
+
+  .status-pill {
+    font-size: 12px;
+    padding: 6px 11px;
+    border-radius: 8px;
+    font-weight: 700;
+  }
+  .pill-editor { background: #064e3b; color: #6ee7b7; border: 1px solid #10b981; }
+  .pill-viewer { background: #1e3a8a; color: #bfdbfe; border: 1px solid #3b82f6; }
+
+  .matrix-wrapper { overflow-x: auto; }
+  table.matrix {
+    width: 100%;
+    border-collapse: separate;
+    border-spacing: 8px;
+    table-layout: fixed;
+    min-width: 1360px;
+  }
+  table.matrix th.corner-header {
+    width: 195px;
+    background: #0f172a;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 10px;
+    text-align: center;
+    font-size: 12.5px;
+    color: #94a3b8;
+    line-height: 1.45;
+  }
+  table.matrix th.col-header {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-radius: 10px;
+    padding: 10px 12px;
+    text-align: left;
+    vertical-align: top;
+  }
+  .col-header h2 { font-size: 14.5px; font-weight: 800; color: #f8fafc; }
+  .col-header p { font-size: 11.5px; color: #94a3b8; margin-top: 4px; font-weight: 500; line-height: 1.35; }
+  .col-count {
+    float: right;
+    background: #334155;
+    color: #e2e8f0;
+    font-size: 11px;
+    padding: 2px 7px;
+    border-radius: 99px;
+  }
+
+  table.matrix td.row-header {
+    background: #1e293b;
+    border: 1px solid #334155;
+    border-left: 5px solid #38bdf8;
+    border-radius: 10px;
+    padding: 12px 10px;
+    vertical-align: top;
+  }
+  .row-header h3 { font-size: 13.5px; font-weight: 800; color: #f8fafc; line-height: 1.4; }
+  .row-header p { font-size: 11.5px; color: #94a3b8; margin-top: 6px; line-height: 1.45; }
+  .row-add-btn {
+    margin-top: 10px;
+    display: inline-block;
+    background: #334155;
+    color: #e2e8f0;
+    border: 1px solid #475569;
+    padding: 4px 8px;
+    font-size: 11px;
+    border-radius: 6px;
+    cursor: pointer;
+    font-weight: 700;
+  }
+  .row-add-btn:hover { background: #3b82f6; color: #fff; }
+
+  table.matrix td.cell {
+    background: #131c31;
+    border: 1px solid #26334d;
+    border-radius: 10px;
+    vertical-align: top;
+    padding: 8px;
+  }
+  .dropzone {
+    min-height: 165px;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    border-radius: 8px;
+    padding: 2px;
+    transition: background 0.15s;
+  }
+  .dropzone.drag-over {
+    background: rgba(59, 130, 246, 0.18);
+    outline: 2px dashed #60a5fa;
+  }
+
+  .card {
+    padding: 9px 10px;
+    border-radius: 8px;
+    position: relative;
+    transition: transform 0.12s, box-shadow 0.12s;
+  }
+  .card.editable { cursor: grab; user-select: none; }
+  .card.editable:active { cursor: grabbing; }
+  .card:hover { transform: translateY(-2px); box-shadow: 0 5px 12px rgba(0,0,0,0.45); }
+
+  .stage-wave1 { background: #143326; border-left: 5px solid #22c55e; border-top: 1px solid #1f513b; border-right: 1px solid #1f513b; border-bottom: 1px solid #1f513b; }
+  .stage-wave2 { background: #172554; border-left: 5px solid #3b82f6; border-top: 1px solid #1e3a8a; border-right: 1px solid #1e3a8a; border-bottom: 1px solid #1e3a8a; }
+  .stage-wave3 { background: #2e1065; border-left: 5px solid #a855f7; border-top: 1px solid #4c1d95; border-right: 1px solid #4c1d95; border-bottom: 1px solid #4c1d95; }
+  .stage-wave4 { background: #450a0a; border-left: 5px solid #ef4444; border-top: 1px solid #7f1d1d; border-right: 1px solid #7f1d1d; border-bottom: 1px solid #7f1d1d; }
+  .stage-pool  { background: #3f2e05; border-left: 5px solid #eab308; border-top: 1px solid #713f12; border-right: 1px solid #713f12; border-bottom: 1px solid #713f12; }
+
+  .card-top {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 4px;
+    font-size: 10.5px;
+    gap: 4px;
+    flex-wrap: wrap;
+  }
+  .card-cat {
+    font-weight: 700;
+    color: #cbd5e1;
+    background: rgba(0,0,0,0.35);
+    padding: 2px 6px;
+    border-radius: 4px;
+  }
+  .moved-badge {
+    font-size: 10px;
+    font-weight: 800;
+    padding: 2px 5px;
+    border-radius: 4px;
+    background: #f59e0b;
+    color: #000;
+  }
+  .card-title {
+    font-size: 12.5px;
+    font-weight: 800;
+    line-height: 1.35;
+    color: #ffffff;
+    margin-bottom: 4px;
+    outline: none;
+  }
+  .card-desc {
+    font-size: 11px;
+    line-height: 1.38;
+    color: #cbd5e1;
+    outline: none;
+  }
+  .card-title[contenteditable="true"]:focus,
+  .card-desc[contenteditable="true"]:focus,
+  .card-cat[contenteditable="true"]:focus {
+    background: rgba(0,0,0,0.5);
+    padding: 3px;
+    border-radius: 4px;
+    outline: 1px solid #60a5fa;
+  }
+  .card-actions {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: none;
+    gap: 4px;
+  }
+  .card.editable:hover .card-actions { display: flex; }
+  .btn-del {
+    background: rgba(239,68,68,0.85);
+    color: white;
+    border: none;
+    border-radius: 4px;
+    font-size: 10px;
+    padding: 1px 5px;
+    cursor: pointer;
+  }
+</style>
+<script>window.__INITIAL_BOARD_DATA__ = {"updated_at": "2026-11-21 16:01:28", "schema_version": 2, "columns": [{"id": "wave1", "title": "🟢 1차: 12/17 귀신같이 풀파워 출시", "subtitle": "검증 완료 본체 기능 전면 오픈 · 초기 구독 전환 극대화"}, {"id": "wave2", "title": "🔵 2차: +3~4주 귀신키(GhostKey) & 글로벌 출격", "subtitle": "Door 2 스핀오프(복붙 노가다 삭제기) + 글로벌 Ghosti AI(한/영/일)"}, {"id": "wave3", "title": "🔴 3차: +4~8주 2웨이브 대형 무료 업데이트", "subtitle": "제9호 특허 삼체 P2P 원격 GPU + OS 고위험 개입 3종(랜섬웨어·엑셀구출·호버말풍선)"}], "rows": [{"id": "free", "title": "🆓 무료구역 1: 귀신 3총사 (1.👻귀신비서 · 2.🎯귀신검색 · 3.⚡귀신창 코어)", "subtitle": "1순위 귀신비서(PC 무삭제 보안모듈 수면·광고 0% 압축·복원롤백 + AOS 악성 클리너 100종 3단 구출) · 2순위 귀신검색(PP-OCRv5·HWP 직독 1초 내용소환·3단변신) · 3순위 귀신창 기본 4코어(무버튼 한영변환·Ctrl+V 순차복붙·[1] 다림질·F1~F6 개인 상용구 평생 무료)"}, {"id": "photo", "title": "📸 무료구역 2: 4. 사진 공유 (가족·동호회·동창회 전면 무료)", "subtitle": "인원·장수 제한 없는 100% 평생 무료! (내 PC 직결 서버비 0원 · [설정방 > 내 여권] 인물 자동 분류 · 사진/영상 전용 바이럴 트로이목마)"}, {"id": "device", "title": "💻 유료구역 1: 5. 내 기기 통합 + 귀신창(📱 폰+PC 고급확장) 🔒", "subtitle": "월 3,900원 (연간 결제 시 월 3,250원꼴) · [🎁 동의 시 30일 무제한 무료 체험(카드 등록 없음)] 후 깔끔한 🔒 잠금 · PC↔폰 연결 & 폰 촬영/스샷 공간이동"}, {"id": "work", "title": "💼 유료구역 2: 6. 업무 공유(S: 드라이브) + 귀신창(💼 팀 공유) 🔒", "subtitle": "S: 드라이브 · 민간 소기업(5인·30GB) 평생 0원 보증 / 소호(~5인 무제한) 월 9.9천 / 소기업(~20인) 월 1.9만 / 중소기업(~50인) 월 2.9만 · [🎁 동의 시 30일 무제한 체험]"}], "cards": [{"id": "c04", "col": "wave1", "row": "free", "orig_stage": "wave1", "orig_row": "free", "cat": "👻 1순위: PC 귀신비서 (100% 평생 무료 · 다운로드 유도 1순위)", "title": "원클릭 속도 진단 · 무삭제 은행 보안모듈 수면 · 광고 0% 무소음 압축 · 친절 설정 안내", "desc": "내 기기 1대 평생 0원! 뱅킹·관공서 보안프로그램 비삭제 수면(은행 창 켤 때만 2-Layer 자동 기상), 한글 자소 안 깨지는 무소음 압축, 잡파일 정돈, 글자크기/알림 1초 안내 (쇼핑몰 링크 금지 · 부품 규격만 정직 진단)"}, {"id": "c04_aos_rescue", "col": "wave1", "row": "free", "orig_stage": "wave1", "orig_row": "free", "cat": "📱 1순위: 모바일 귀신비서 (Android 앱 전용 · 평생 무료)", "title": "안드로이드 유료유도·악성 클리너(CleanX 등 100종) 탐지 & 3단 원터치 구출", "desc": "스마트폰을 느리게 만들고 몰래 정기결제를 유도하는 악성 클리너 100종 합법 스캔 ➔ ① 앱 즉시 삭제 · ② Play 정기구독 해지 직행 · ③ 구글 계정 OAuth 권한 해제 + 스마트폰 갤러리 4대 AI 정리 (※ 아이폰 앱은 iOS 정책상 영구 비노출)"}, {"id": "c19", "col": "wave1", "row": "free", "orig_stage": "wave3", "orig_row": "free", "cat": "🛡️ 귀신비서 안전 짝꿍 (무료)", "title": "시스템 복원 지점(🟢/🟡/🔴) 1초 타임머신 롤백 & OS 휴지통 안전 이동", "desc": "귀신비서와 한 쌍! 모든 정리 파일은 OS 기본 휴지통/정리 보관함으로 안전 이동(+1초 되돌리기)되며, '원래대로 돌려줘' 한마디로 PC 상태 안전 복구"}, {"id": "c01", "col": "wave1", "row": "free", "orig_stage": "wave1", "orig_row": "free", "cat": "🎯 2순위: 귀신검색 (시각 쇼케이스 1순위 · 내 PC 무제한 무료)", "title": "One-Pass 스텔스 인덱싱 & SOTA 엔진(PP-OCRv5 · HWP 본문 직독 · 5만 자) 1초 내용소환", "desc": "사진·영상·PDF PP-OCRv5 + pypdfium2 + 한글(HWP) BodyText 본문 직독 + 문서당 50,000자 풀 인덱싱 & 768차원 EmbeddingGemma 2 온디바이스 검색 · 동영상 포착 장면 직행 · 채팅 한마디로 무설정 즉시 스캔"}, {"id": "c01_onsite", "col": "wave1", "row": "free", "orig_stage": "wave1", "orig_row": "free", "cat": "🎯 2순위: 현장 귀신검색창 (내 PC 무제한 무료)", "title": "[창 UI ②] 🎯 귀신검색창: 3단 크기 자유 변신(소형 미니 ↔ 중형 문서·사진OCR ↔ 대형 갤러리) & 현장 통합 소환", "desc": "탐색기·웹에 찾아가지 않고 일하던 현장에서 Ctrl+0(보조 Ctrl+우클릭) ➔ 소형·중형·대형 3단 변신, 모든 검색 사진 원클릭 [OCR 단어칩 따기], [설정방 > 내 여권] 등록 인물 자연어 검색 연동 및 WorkArea 자석 클램핑"}, {"id": "c03", "col": "wave1", "row": "free", "orig_stage": "wave1", "orig_row": "free", "cat": "🎙️ 성우 TTS (무료)", "title": "현수 & 선희 무료 무제한 문서 요약/발췌 낭독", "desc": "특정 키워드 문장 형광펜 하이라이트 + MS 신경망 성우(현수·선희) 음성 연속 낭독"}, {"id": "c06_ui3", "col": "wave2", "row": "free", "orig_stage": "wave1", "orig_row": "free", "cat": "⚡ 3순위: 귀신창 코어 (평생 무료 코어 + 고급확장 30일 체험)", "title": "[창 UI ①] 👻애기귀신 2줄 기본창 + Ctrl+0 / Ctrl+우클릭 2종 호출 단일화", "desc": "평소엔 날렵한 2줄 ➔ [⌨️상용구] 클릭 시 F1~F6(개인 무료)/F7~F12(팀 유료) 1줄 펼침, [📋🔍클립보드] 클릭 시 Win+V처럼 최근 복사 5개 + 검색칸 펼침 (우클릭 0.35초 롱프레스 폐기로 오작동 0%)"}, {"id": "c06", "col": "wave2", "row": "free", "orig_stage": "wave1", "orig_row": "free", "cat": "⚡ 귀신창 기본 코어 ① (100% 평생 무료)", "title": "글 쓰는 뒤 따라가며 영타➔한타 무버튼 1초 자동변환", "desc": "EM_REPLACESEL 0.2ms 원자적 교체 (특수기호·단위명사 포함 · 평생 무료)"}, {"id": "c12", "col": "wave2", "row": "free", "orig_stage": "wave2", "orig_row": "free", "cat": "⚡ 귀신창 기본 코어 ② (중독성 1위 마약 · 평생 무료)", "title": "Ctrl+0(보조 Ctrl+우클릭) 귀신창 & Ctrl+V 순차복사(1➔2➔3) 사출 + 7일 클립보드 검색", "desc": "복사한 순서대로 줄줄이 사출(평생 무료) + 과거 복사한 텍스트·스샷 속 글자를 단어로 검색 (기본 7일 무료 / 30일 유료 확장)"}, {"id": "c07", "col": "wave2", "row": "free", "orig_stage": "wave1", "orig_row": "free", "cat": "⚡ 귀신창 기본 코어 ③ (100% 평생 무료)", "title": "[1] 시커먼 서식·광고꼬리말 세탁 & 줄바꿈 정돈·드래그 문장 원위치 1초 다림질 (+Ctrl+Z)", "desc": "웹·AI·엑셀 복사 시 따라오는 시커먼 배경·글씨체·뉴스 '무단전재 금지' 꼬리말 100% 순수 텍스트 세탁 + 타이핑/드래그 문장 그 자리 1초 다림질 및 Ctrl+Z 1타 원복 (평생 무료 통합)"}, {"id": "c13", "col": "wave2", "row": "free", "orig_stage": "wave2", "orig_row": "free", "cat": "⚡ 귀신창 기본 코어 ④ (대중성 1순위 · 평생 무료)", "title": "F1~F6 내 개인 상용구(6칸) 0.1초 사출 (계좌·집주소·이메일·단골멘트)", "desc": "귀신창 호출 후 F1~F6으로 내 개인 단골 계좌·주소·멘트를 기존 단축키 충돌 없이 0.1초 즉시 입력 (F7~F12 팀 공유 상용구는 업무 공유 구역)"}, {"id": "c11", "col": "wave1", "row": "free", "orig_stage": "wave2", "orig_row": "free", "cat": "🤝 AI 바톤터치 (Wave 1 암묵작동 ➔ 2 공식발표)", "title": "단골 AI(제미나이) 1초 라이브 음성 바톤터치", "desc": "1웨이브부터 작동 오픈, 마케팅 공식 발표는 2웨이브! [귀신검색/귀신비서] 문맥 자동 채움 후 제미나이 음성 직결"}, {"id": "c20", "col": "wave3", "row": "free", "orig_stage": "wave3", "orig_row": "free", "cat": "👻 귀신비서 고급 구출 (Wave 1 암묵작동 ➔ 3 공식발표)", "title": "저장 안 하고 끈 엑셀·한글 & 휴지통 숨은 파일 3초 구출", "desc": "1웨이브부터 귀신비서에 요청하면 즉시 구출! 대대적인 공식 캠페인·쇼츠 홍보만 3웨이브 집중 전개"}, {"id": "c27_free", "col": "wave3", "row": "free", "orig_stage": "wave4", "orig_row": "free", "cat": "🎁 삼체 맛보기", "title": "무료 유저 대상 '삼체 10초 회의록' 7일 무제한 체험권", "desc": "집 PC 그래픽카드를 끌어다 쓰는 마약 체험 ➔ 유료 전환 기폭제"}, {"id": "c09", "col": "wave1", "row": "photo", "orig_stage": "wave1", "orig_row": "photo", "cat": "📸 인원·장수 무제한 평생 0원 & 카톡 1초 뷰어", "title": "가족·동호회·동창회 사진방 100% 평생 무료 & 카톡 무가입 1초 뷰어", "desc": "방장·멤버 전원 평생 0원(내 PC 하드 직결 · 사진/영상 전용) + 카톡 무가입 13KB 1초 열람으로 전 국민 모임 바이럴 폭발"}, {"id": "c22", "col": "wave1", "row": "photo", "orig_stage": "wave3", "orig_row": "photo", "cat": "🪪 기본골격 (제5호 특허 · 설정방 은닉)", "title": "[설정방 > 내 여권(내 것만)] 은닉 장착 & 인물별 1초 자동 분류 · 계정 간 무료 동기화", "desc": "외부 원탭 칩 노출 없이 [설정방] 내부 '내 여권(내 것만)'에서 로컬 얼굴 클러스터링으로 조용히 등록(타인은 실명만, '나'는 별명+실명 세트) · PC↔폰 여권 무료 동기화 & 인물 자연어 검색('바닷가 웃는 사진') 연동"}, {"id": "c22_pre", "col": "wave1", "row": "photo", "orig_stage": "wave2", "orig_row": "photo", "cat": "📸 기본골격 (입구 컷 & 원본교체)", "title": "AI 꽃단장 대기실 (즉시 합류) & 저화질➔진짜 고화질 원본 자동 교체", "desc": "방장 검수 없이 즉시 합류 + 중복·영수증 입구 컷 + 카톡 저화질 사진을 진짜 고화질 원본(64-bit dHash)으로 자동 Swap"}, {"id": "c09_sync", "col": "wave1", "row": "photo", "orig_stage": "wave1", "orig_row": "photo", "cat": "💾 기본골격 (동기화 & 권한)", "title": "전 멤버 13KB 무용량 열람 & 내 기기 [원본 일괄 동기화]", "desc": "평소엔 폰 용량 안 먹는 13KB 뷰어, 원할 땐 내 PC/폰으로 원본 일괄 동기화 (+24시간 삭제·방장 숨기기)"}, {"id": "c29", "col": "wave1", "row": "photo", "orig_stage": "pool", "orig_row": "photo", "cat": "🎬 감동 바이럴 무기", "title": "연도별 얼굴 변천사 & 과거-현재 투샷 15초 숏폼 자동 생성", "desc": "가족방/동창회방 눈물 버튼! 모임 전용 맞춤형 워터마크 각인 추억 영상 자동 제작"}, {"id": "c22_alumni", "col": "wave1", "row": "photo", "orig_stage": "wave3", "orig_row": "photo", "cat": "🎓 4050 동창회 락인 무기 (평생 0원)", "title": "복고풍 칠판·운동장 자동 간판 & '89년 봄↔월(Month)' 추억 검색", "desc": "'성동고 1989' 입력 시 레트로 배너 장착 + [추억 vs 근황] 투트랙 탭 + 계절('89년 봄') 양방향 1초 검색"}, {"id": "c28", "col": "wave1", "row": "photo", "orig_stage": "pool", "orig_row": "photo", "cat": "📺 실시간 모임 특화", "title": "고스트 모니터 캐스트 & 앨범 싱크 (다 같이 실시간 함께 보기)", "desc": "명절·동창회 모임에서 내 화면/추억 사진을 모임원들과 실시간으로 동시에 넘겨보며 감상"}, {"id": "c27_photo", "col": "wave3", "row": "photo", "orig_stage": "wave4", "orig_row": "photo", "cat": "🚀 삼체 GPU 모임특전", "title": "수천 장 모임 고화질 사진·영상을 방장 집 GPU로 1초 초고속 인덱싱", "desc": "모임 방장에게도 삼체 원격 근육 무료 개방!"}, {"id": "c08", "col": "wave1", "row": "device", "orig_stage": "wave1", "orig_row": "device", "cat": "💰 내기기통합 본진 (월 3,900원 / 연간 결제 시 월 3,250원꼴)", "title": "집PC·회사PC·내폰 중복 정리 & 원하는 곳(1~2곳) 원본 보관·통합 1초 내용검색", "desc": "흩어진 파일 중복 정리 & 원하는 기기(1~2곳) 원본 보관·통합 1초 내용검색 + 30일 클립보드 전문·OCR 기억검색 ([🎁 동의 시 30일 무제한 무료 체험(카드 등록 없음)] 후 깔끔한 🔒 잠금 / 모바일 앱 내 요금표 비노출·PC 웹 결제)"}, {"id": "c08_cam_ocr", "col": "wave2", "row": "device", "orig_stage": "wave1", "orig_row": "device", "cat": "👻 귀신창 고급확장 : 📱 폰+PC (월 3,900원 / 연간 월 3,250원꼴)", "title": "[창 UI ③] 폰 촬영·스샷 60초 시한부 원샷 공간이동 창 ([원본 이미지] vs [OCR 단어칩 콕 찍기]) & 타 기기 파일 소환", "desc": "폰으로 영수증·계약서 촬영 직후 60초 내 PC Ctrl+0(보조 Ctrl+우클릭) 시 1회 자동 팝업 후 원래 모드로 자동 복귀 + 집/회사 다른 PC·내 폰의 문서·사진·영상을 작업 현장에서 즉시 소환"}, {"id": "c10_fomo", "col": "wave1", "row": "device", "orig_stage": "wave1", "orig_row": "device", "cat": "📢 창립 멤버 FOMO 앵커링 (초기 유료 전환 지렛대)", "title": "창립 멤버 월 3,900원 평생 요금 동결 + Wave 4 삼체 GPU 추가금 0원 무상 탑재 선언", "desc": "'8주 뒤 삼체 P2P 원격 GPU(10초 회의록) 탑재 시 신규 가입자 요금이 인상되지만, 지금 합류하시는 창립 멤버는 추가금 0원에 평생 3,900원 동결로 무상 탑재됩니다!'"}, {"id": "c11_mailbox", "col": "wave1", "row": "device", "orig_stage": "wave2", "orig_row": "device", "cat": "👻 내기기통합 확장 : 📱 폰+PC (월 3,900원)", "title": "기기 간 실시간 무버튼 클립보드 공유 & 꺼진 PC '암호화 우체통' 예약배달", "desc": "폰/집에서 복사한 글·스샷을 다른 기기에서 바로 붙여넣고, 꺼진 PC는 켜는 순간 [복사검색]으로 자동 배달 (+글로벌 영문판 iPhone↔Windows 4K 무손실 P2P 핵심 무기)"}, {"id": "c_labeler_dev", "col": "wave1", "row": "device", "orig_stage": "wave2", "orig_row": "device", "cat": "🏷️ 귀신 라벨러 : 📱 내 기기 통합 (개인결제 기폭제)", "title": "👻 귀신 라벨러: 내 하드 과거 수만 개 깡통 파일(IMG_·스캔) 일괄 자동 작명 & 정직한 날짜 정렬", "desc": "폴더 지정 시 무의미한 깡통 파일만 골라 [261107_제주애월_가족산책.jpg]로 일괄 성형 (+1초 원상복구 Undo). 메타 지워진 카톡 사진은 [261106_카톡_...], 본문 날짜 힌트는 [250315_내용_...]으로 정직 표기"}, {"id": "c16_merge", "col": "wave2", "row": "device", "orig_stage": "wave2", "orig_row": "device", "cat": "👻 귀신창 고급확장 🔒", "title": "[5] 여기저기 흩어진 문장 콕콕 찍어 1초 통짜 합본", "desc": "여러 웹페이지·댓글에서 Ctrl+C로 콕콕 찍어 모은 문장들을 줄바꿈 정돈된 1개의 문서로 한 방에 붙여넣기"}, {"id": "c_tooltip_dev", "col": "wave3", "row": "device", "orig_stage": "wave3", "orig_row": "device", "cat": "💬 귀신 말풍선 : 📱 내 기기 통합 (Wave 2 순연 쇼크 무기)", "title": "💬 일반 윈도우 탐색기(Win+E) 마우스 호버 '3줄 핵심 요약 귀신 말풍선'", "desc": "앱을 안 켜고 일반 윈도우 폴더에서 계약서·영수증 파일 위에 마우스 커서만 올려도 열지 않고 [보증금 5,000만 / 월세 320만 / 만기 28.11.14] 핵심 3줄 요약 툴팁(Shell InfoTip)이 0.05초 팝업!"}, {"id": "c15_pin_tel", "col": "wave2", "row": "device", "orig_stage": "wave2", "orig_row": "device", "cat": "👻 귀신창 Wave 2 순연 합류 🔒", "title": "[4] 번호·일정 추출(전화·계좌 하이픈 1초 토글)🔒 & 계산기·메모장 항상 위 고정 핀", "desc": "전화/계좌번호 하이픈(-) 1초 삽입·제거 및 텍스트 속 일정 자동 추출 + 은행 이체·작업 중 창이 뒤로 숨지 않게 최상단 핀 고정 (초기 예외 제로화를 위해 Wave 2 정식 오픈)"}, {"id": "c21", "col": "wave1", "row": "device", "orig_stage": "wave3", "orig_row": "device", "cat": "👻 내기기통합 전문확장 🔒", "title": "원격/로컬 파일 찾아 카톡 실채팅방 1초 직행", "desc": "'계약서 찾아서 카톡 이쁜이에게 보내줘' ➔ 실채팅방 장전 후 엔터 1회로 전송 및 자동 복귀"}, {"id": "c14", "col": "wave2", "row": "device", "orig_stage": "wave2", "orig_row": "device", "cat": "👻 귀신창 전문무기 🔒", "title": "엑셀 다중 셀 자동 쪼개기 & 입력칸 이름 AI 자동 매칭", "desc": "복잡한 엑셀 표를 칸칸이 분해 사출 + 이름·연락처·주소 입력란 라벨을 AI가 읽고 알맞은 복사본 자동 매칭"}, {"id": "c15", "col": "wave2", "row": "device", "orig_stage": "wave2", "orig_row": "device", "cat": "👻 귀신창 전문무기 🔒", "title": "[2] 화면 캡처 표·글자 1초 추출(OCR) ➔ 엑셀 표(TSV) 직행", "desc": "드래그 막힌 웹·이미지 표·영수증을 캡처하면 글자 추출은 물론 엑셀 칸에 딱 맞게 들어가는 표로 1초 변환"}, {"id": "c17", "col": "wave2", "row": "device", "orig_stage": "wave2", "orig_row": "device", "cat": "👻 귀신창 전문무기 🔒", "title": "[3] 스샷 찍고 저장 없이 Ctrl+V로 진짜 파일(.png / 300DPI 합본 PDF) 첨부", "desc": "관공서·스마트스토어·카페에서 파일 저장/찾기 없이 클립보드 스샷을 즉시 실물 파일이나 1개 합본 PDF로 꽂기"}, {"id": "c25", "col": "wave3", "row": "device", "orig_stage": "wave4", "orig_row": "device", "cat": "🚀 제9호 특허 (v2.0)", "title": "삼체 P2P 원격 근육 (내 집 엔비디아 GPU 원격 위임)", "desc": "'한국의 1인 스타트업이 엔비디아 GPU를 P2P로 연결한 미친 기능' (한·미·일 동시 오픈)"}, {"id": "c26", "col": "wave3", "row": "device", "orig_stage": "wave4", "orig_row": "device", "cat": "🚀 제9호 특허 (v2.0)", "title": "1시간 회의 녹취록 ➔ 집 GPU로 10초 만에 텍스트 STT", "desc": "기존 월 3,900원(글로벌 $49.99/년) 창립 구독자 전원 추가금 0원 평생 무상 탑재!"}, {"id": "c23_w1", "col": "wave1", "row": "work", "orig_stage": "wave1", "orig_row": "work", "cat": "💼 기본골격 (민간 5인·30GB 평생 0원 / 소호 9.9천·소기업 1.9만·중소 2.9만)", "title": "내 컴퓨터 탐색기 실물 [S: 드라이브(WinFsp)] 장착 & 신규 유입 파일 [김대리] 자동 라벨링", "desc": "민간 소기업(5인·30GB) 영구 0원 보증서 제공! 직원 폰 [공유 ➔ 👻 회사 S: 폴더] 1초 투입 시 깡통 파일(IMG_4829)이 [261107_김대리_역삼동_욕실타일.jpg] 또는 [261107_김대리_영수증_145,000원.jpg]로 자동 작명 (더존·한글·캐드 호환 100%)"}, {"id": "c23_team_ghost", "col": "wave2", "row": "work", "orig_stage": "wave1", "orig_row": "work", "cat": "👻 귀신창 팀 공유 (민간 5인·30GB 평생 0원 / 유료 월 9.9천~2.9만)", "title": "전 직원 공유 상용구 (F7~F12 6슬롯 1초 동기화) & S: 드라이브 무오픈(Zero-Open) 숫자 스나이퍼", "desc": "방장이 등록한 회사 법인계좌·사업자번호·표준멘트를 F7~F12로 1초 동기화 + 카톡·이메일 현장에서 S: 드라이브 공용 문서·엑셀·시공사진을 열지 않고 내 커서로 즉시 소환"}, {"id": "c23_lock", "col": "wave1", "row": "work", "orig_stage": "wave1", "orig_row": "work", "cat": "🔒 기본골격 (충돌·증발 방어)", "title": "동시 편집 충돌 방지(읽기모드 안내) & 공유폴더 삭제 시 [휴지통] 직행 안전핀", "desc": "팀원 사용 중일 때 읽기모드 안내 + S: 드라이브에서 지워도 영구 증발하지 않고 마스터 PC 휴지통으로 안전 보관"}, {"id": "c23", "col": "wave1", "row": "work", "orig_stage": "wave3", "orig_row": "work", "cat": "🛡️ 기본골격 (권한·절전)", "title": "퇴사자 1초 권한 차단(원격 캐시 즉시 소거) & 퇴근 초절전 모드", "desc": "퇴사·강퇴 시 해당 직원의 업무방 캐시 0.1초 자동 파기 + 야간·퇴근 원클릭 초절전(월 전기료 1,800원)"}, {"id": "c_labeler_work", "col": "wave1", "row": "work", "orig_stage": "wave2", "orig_row": "work", "cat": "🏷️ 귀신 라벨러 : 💼 팀 공유 S: 드라이브 (마이박스 완파 무기)", "title": "👻 S: 드라이브 과거 공용폴더 일괄 라벨링 & 개인➔업무 스마트 재라벨링 ([날짜_김대리_...])", "desc": "마이박스는 창고에 무지 박스(IMG_4829)만 던지지만, 귀신 S: 드라이브는 박스 겉면에 [261107_김대리_영수증_한일건재_145,000원] 이름표를 자동 부착! 개인 라벨 파일 투입 시에도 중복 없이 [_김대리]만 스마트 삽입"}, {"id": "c_tooltip_work", "col": "wave3", "row": "work", "orig_stage": "wave3", "orig_row": "work", "cat": "💬 귀신 말풍선 : 💼 팀 공유 S: 드라이브 (Wave 2 순연 쇼크 무기)", "title": "💬 S: 드라이브 탐색기 마우스 호버 '3줄 핵심 요약 귀신 말풍선' (전 직원 공용 작동)", "desc": "사장님·경리 직원이 S: 드라이브 폴더를 열고 파일 위에 마우스만 가져다 대도 더존·엑셀·PDF를 열지 않고 핵심 금액·계약 조건 3줄이 즉시 요약됨 (직원 개인 C:/D: 드라이브 확장은 3,900원 개인 구독 유도)"}, {"id": "c23_w2", "col": "wave1", "row": "work", "orig_stage": "wave2", "orig_row": "work", "cat": "💼 소호·현장 특화", "title": "세무·법무·인테리어 현장 시공사진 글자(OCR)·서류 1초 내용소환 보드", "desc": "카톡방 유효기간 만료로 날아가는 업무 서류·현장 시공사진 영구 보존 및 사진 속 글자 1초 검색"}, {"id": "c31", "col": "wave1", "row": "work", "orig_stage": "pool", "orig_row": "work", "cat": "📮 사내 기밀 직송", "title": "사내 오프라인 암호화 우체통 & 기밀 서류 1:1 P2P 직송", "desc": "외부 클라우드를 절대 거치지 않고 사내 팀원에게 암호화하여 100% 로컬 P2P로 기밀 문서 전달"}, {"id": "c23_mirror", "col": "wave1", "row": "work", "orig_stage": "wave3", "orig_row": "work", "cat": "⚡ 이중 백업 & 타임머신", "title": "백업 PC 1·2호 실시간 미러링 & 직전 5버전 타임머신 (4KB 조각 전송)", "desc": "20MB 엑셀 중 수정된 4KB 조각만 0.1초 전송 + 실수로 덮어써도 파일당 최근 5개 버전으로 1초 복원"}, {"id": "c23_ransom", "col": "wave3", "row": "work", "orig_stage": "wave3", "orig_row": "work", "cat": "🛡️ 랜섬웨어 철벽방어", "title": "랜섬웨어·대량삭제 서킷 브레이커 (미끼 파일 감지 시 0.01초 백업 자동 격리)", "desc": "1분 30개 이상 삭제 또는 은닉 미끼 파일 건드리는 순간 백업 PC 1·2호 동기화를 0.01초 만에 차단해 원본 사수"}, {"id": "c27_work", "col": "wave3", "row": "work", "orig_stage": "wave4", "orig_row": "work", "cat": "🚀 B2B 삼체 회의록", "title": "팀 전체 회의 녹음 ➔ 사무실 대장 PC GPU로 10초 회의록 자동 공유", "desc": "유료 클라우드 회의록(월 1.5만) 완벽 대체 ➔ B2B 팀방 락인"}]};</script>
+</head>
+<body>
+
+<header>
+  <div class="title-area">
+    <h1>👻 귀신같이(Ghosti) 2차원 매트릭스 전략 상황판 (가로: Wave 1~4 × 세로: 4대 구간 · SSOT v2.3)</h1>
+    <p id="subGuideText">🎯 정식 출시 D-Day: <b>2026-12-17 (천덕황도일 · 손 없는 날)</b> | 국내 Wave 1~4 파도타기 오픈 & 글로벌(Ghosti AI · Paddle $) 병행 로드맵</p>
+  </div>
+  <div class="header-right">
+    <div class="legend">
+      <span>🎨 <b>초기 단계 색상:</b></span>
+      <span class="legend-item lg-w1">🟢 1단계</span>
+      <span class="legend-item lg-w2">🔵 2단계</span>
+      <span class="legend-item lg-w3">🟣 3단계</span>
+      <span class="legend-item lg-w4">🔴 4단계</span>
+    </div>
+    <span id="saveStatus" class="status-pill pill-viewer">동기화 중...</span>
+  </div>
+</header>
+
+<div class="matrix-wrapper">
+  <table id="matrixTable" class="matrix"></table>
+</div>
+
+<script>
+const IS_EDITOR = false;
+let boardData = null;
+let lastUpdatedAt = null;
+let draggedCardId = null;
+
+const STAGE_NAMES = {
+  wave1: "1단계",
+  wave2: "2단계",
+  wave3: "3단계",
+  wave4: "4단계",
+  pool: "여유함"
+};
+
+function updateStatusPill(msg) {
+  const pill = document.getElementById('saveStatus');
+  if (!pill) return;
+  if (IS_EDITOR) {
+    pill.className = 'status-pill pill-editor';
+    pill.textContent = msg || '✏️ 마스터 편집 모드 (드래그·클릭 즉시 저장)';
+  } else {
+    pill.className = 'status-pill pill-viewer';
+    pill.textContent = msg || '👀 사내 열람 모드 (실시간 자동 동기화)';
+  }
+}
+
+async function fetchBoard(silent = false) {
+  const data = window.__INITIAL_BOARD_DATA__;
+  if (silent && lastUpdatedAt && data.updated_at === lastUpdatedAt) {
+    return;
+  }
+  boardData = data;
+  lastUpdatedAt = data.updated_at;
+  renderMatrix();
+  updateStatusPill();
+}
+
+async function saveBoard() {
+  if (!IS_EDITOR) return;
+  updateStatusPill('⏳ 저장 중...');
+  boardData.updated_at = new Date().toLocaleString('ko-KR');
+  lastUpdatedAt = boardData.updated_at;
+  await fetch('/api/state' + window.location.search, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(boardData)
+  });
+  updateStatusPill('✅ 자동 저장됨 (' + new Date().toLocaleTimeString('ko-KR') + ')');
+}
+
+function renderMatrix() {
+  const tableEl = document.getElementById('matrixTable');
+  tableEl.innerHTML = '';
+
+  const thead = document.createElement('thead');
+  const headRow = document.createElement('tr');
+  const cornerTh = document.createElement('th');
+  cornerTh.className = 'corner-header';
+  cornerTh.innerHTML = '<b>세로: 4대 구간<br>＼ 가로: 오픈 단계</b>';
+  headRow.appendChild(cornerTh);
+
+  boardData.columns.forEach(col => {
+    const colCount = boardData.cards.filter(c => c.col === col.id).length;
+    const th = document.createElement('th');
+    th.className = 'col-header';
+    th.innerHTML = `
+      <span class="col-count">${colCount}개</span>
+      <h2>${col.title}</h2>
+      <p>${col.subtitle}</p>
+    `;
+    headRow.appendChild(th);
+  });
+  thead.appendChild(headRow);
+  tableEl.appendChild(thead);
+
+  const tbody = document.createElement('tbody');
+  boardData.rows.forEach(row => {
+    const tr = document.createElement('tr');
+
+    const rowTd = document.createElement('td');
+    rowTd.className = 'row-header';
+    const addBtnHtml = IS_EDITOR
+      ? `<button class="row-add-btn" onclick="addNewCard('${row.id}')">+ 이 구간에 카드 추가</button>`
+      : '';
+    rowTd.innerHTML = `
+      <h3>${row.title}</h3>
+      <p>${row.subtitle}</p>
+      ${addBtnHtml}
+    `;
+    tr.appendChild(rowTd);
+
+    boardData.columns.forEach(col => {
+      const td = document.createElement('td');
+      td.className = 'cell';
+      const dz = document.createElement('div');
+      dz.className = 'dropzone';
+      dz.dataset.col = col.id;
+      dz.dataset.row = row.id;
+
+      if (IS_EDITOR) {
+        dz.addEventListener('dragover', e => {
+          e.preventDefault();
+          dz.classList.add('drag-over');
+        });
+        dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+        dz.addEventListener('drop', e => {
+          e.preventDefault();
+          dz.classList.remove('drag-over');
+          if (!draggedCardId) return;
+          const card = boardData.cards.find(c => c.id === draggedCardId);
+          if (card) {
+            const afterElement = getDragAfterElement(dz, e.clientY);
+            card.col = col.id;
+            card.row = row.id;
+            boardData.cards = boardData.cards.filter(c => c.id !== draggedCardId);
+            if (afterElement == null) {
+              boardData.cards.push(card);
+            } else {
+              const targetIdx = boardData.cards.findIndex(c => c.id === afterElement.dataset.id);
+              boardData.cards.splice(targetIdx, 0, card);
+            }
+            renderMatrix();
+            saveBoard();
+          }
+        });
+      }
+
+      const cellCards = boardData.cards.filter(c => c.col === col.id && c.row === row.id);
+      cellCards.forEach(card => {
+        const cardEl = document.createElement('div');
+        cardEl.className = `card stage-${card.orig_stage || 'pool'}` + (IS_EDITOR ? ' editable' : '');
+        cardEl.draggable = IS_EDITOR;
+        cardEl.dataset.id = card.id;
+
+        const isMovedStage = card.orig_stage && card.orig_stage !== card.col;
+        const isMovedRow = card.orig_row && card.orig_row !== card.row;
+        let movedHtml = '';
+        if (isMovedStage || isMovedRow) {
+          movedHtml = `<span class="moved-badge">🚚 ${STAGE_NAMES[card.orig_stage] || '여유함'} ➔ 이동됨</span>`;
+        }
+
+        const ceAttr = IS_EDITOR ? 'contenteditable="true" spellcheck="false"' : '';
+        const delBtnHtml = IS_EDITOR
+          ? `<div class="card-actions"><button class="btn-del" title="삭제" onclick="deleteCard('${card.id}')">✕</button></div>`
+          : '';
+
+        cardEl.innerHTML = `
+          <div class="card-top">
+            <span class="card-cat" ${ceAttr}>${card.cat}</span>
+            ${movedHtml}
+          </div>
+          <div class="card-title" ${ceAttr}>${card.title}</div>
+          <div class="card-desc" ${ceAttr}>${card.desc}</div>
+          ${delBtnHtml}
+        `;
+
+        if (IS_EDITOR) {
+          cardEl.addEventListener('dragstart', () => {
+            draggedCardId = card.id;
+            cardEl.style.opacity = '0.4';
+          });
+          cardEl.addEventListener('dragend', () => {
+            draggedCardId = null;
+            cardEl.style.opacity = '1';
+          });
+
+          const catEl = cardEl.querySelector('.card-cat');
+          const titleEl = cardEl.querySelector('.card-title');
+          const descEl = cardEl.querySelector('.card-desc');
+
+          catEl.addEventListener('blur', () => { card.cat = catEl.innerText.trim(); saveBoard(); });
+          titleEl.addEventListener('blur', () => { card.title = titleEl.innerText.trim(); saveBoard(); });
+          descEl.addEventListener('blur', () => { card.desc = descEl.innerText.trim(); saveBoard(); });
+        }
+
+        dz.appendChild(cardEl);
+      });
+
+      td.appendChild(dz);
+      tr.appendChild(td);
+    });
+
+    tbody.appendChild(tr);
+  });
+  tableEl.appendChild(tbody);
+}
+
+function getDragAfterElement(container, y) {
+  const draggableElements = [...container.querySelectorAll('.card')];
+  return draggableElements.reduce((closest, child) => {
+    const box = child.getBoundingClientRect();
+    const offset = y - box.top - box.height / 2;
+    if (offset < 0 && offset > closest.offset) {
+      return { offset: offset, element: child };
+    } else {
+      return closest;
+    }
+  }, { offset: Number.NEGATIVE_INFINITY }).element;
+}
+
+function addNewCard(targetRowId) {
+  if (!IS_EDITOR) return;
+  const newId = 'c_' + Date.now();
+  boardData.cards.unshift({
+    id: newId,
+    col: 'wave1',
+    row: targetRowId || 'free',
+    orig_stage: 'wave1',
+    orig_row: targetRowId || 'free',
+    cat: '✏️ 멀린님 직접작성',
+    title: '새 기능 / 아이디어 제목 입력',
+    desc: '클릭해서 내용을 직접 작성하세요'
+  });
+  renderMatrix();
+  saveBoard();
+}
+
+function deleteCard(id) {
+  if (!IS_EDITOR) return;
+  if (!confirm('이 카드를 삭제할까요?')) return;
+  boardData.cards = boardData.cards.filter(c => c.id !== id);
+  renderMatrix();
+  saveBoard();
+}
+
+fetchBoard();
+if (!IS_EDITOR) {
+  setInterval(() => fetchBoard(true), 5000);
+}
+</script>
+</body>
+</html>
