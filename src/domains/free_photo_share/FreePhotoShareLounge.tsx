@@ -106,7 +106,7 @@ export function evaluateSharedPhotoDeletePermission(opts: {
     typeof opts.mtimeMs === 'number' && opts.mtimeMs > 0 ? Date.now() - opts.mtimeMs : 0;
   const within24h = ageMs <= 24 * 60 * 60 * 1000;
 
-  if (isMyUpload && within24h) {
+  if (isMyUpload && (within24h || (!opts.isJoinedOtherRoom && hostPerm))) {
     return { allowed: true, mode: 'owner_24h' };
   }
   if (!opts.isJoinedOtherRoom && hostPerm) {
