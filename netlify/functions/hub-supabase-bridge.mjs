@@ -306,6 +306,10 @@ export default async (req) => {
       userId,
       email,
       hubNickname: hubUser.nickname || '',
+      hubToken,
+      hubUrl: HUB_URL,
+      hubClientId: HUB_CLIENT_ID,
+      hubClientSecret: HUB_CLIENT_SECRET,
       supabaseUrl,
       serviceKey,
     });

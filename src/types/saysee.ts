@@ -350,6 +350,7 @@ export type PricingPlanId =
   | 'personal_single_2900'
   | 'personal_sub_3900'
   | 'personal_year_35000'
+  | 'personal_year_39000'
   | 'family_home_5900'
   | 'family_home_year_59000'
   | 'family_three_8900'
@@ -366,8 +367,12 @@ export type PricingPlanId =
   | 'student_year_9000'
   | 'work_soho_9900'
   | 'work_soho_year_99000'
+  | 'work_biz_19000'
+  | 'work_biz_year_190000'
   | 'work_biz_19900'
-  | 'work_biz_year_199000';
+  | 'work_biz_year_199000'
+  | 'work_pro_29000'
+  | 'work_pro_year_290000';
 
 export interface DuplicateGroup {
   groupId: string;

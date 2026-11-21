@@ -3506,9 +3506,13 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
     setPcAgentPairedMobile,
     connectedDevices,
     devicePairingCode6,
+    deviceEntitlement,
+    deviceSyncProgress,
     refreshDeviceIntegrationState,
     unlinkConnectedDevice,
+    openSubscriptionCheckout,
     photos,
+    localDocuments,
     setSelectedPhoto,
     setDesktopTab,
     setSearchSpace,
@@ -3900,7 +3904,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                 {isMainPcConnected
                   ? '연결됨'
                   : isLoggedInUser
-                  ? 'Z-코어 실행 대기'
+                  ? 'PC 엔진 실행 대기'
                   : '미연결'}
               </span>
             </div>
@@ -3917,7 +3921,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               {isMainPcConnected
                 ? '로컬 디스크 원본 100% 직결 탐색 · Ctrl+C 자동 암호화 발신'
                 : isLoggedInUser
-                ? '👉 클릭하여 PC Z-코어 1초 실행 가이드 보기'
+                ? '👉 클릭하여 PC 엔진 1초 실행 가이드 보기'
                 : '👉 클릭하여 이메일 1초 로그인 후 이 PC 연결하기'}
             </span>
           </div>
@@ -4053,16 +4057,42 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-col gap-0.5 text-[12.5px]">
               <span className="text-zinc-200 font-bold">
-                {!isLoggedInUser
-                  ? '🔒 아직 연결된 기기가 없습니다 — 우측 상단에서 로그인하면 내 PC와 스마트폰이 안전하게 연결됩니다.'
-                  : !realMobileConnected && !subPcConnected
-                  ? isShadowMode
-                    ? '📱 다른 기기 연결 대기 중 — 연결 시 원본은 PC에 보관하고 스마트폰 용량을 99% 이상 절약합니다.'
-                    : '💾 다른 기기 연결 대기 중 — 연결 시 폰·PC 양쪽에 100% 원본을 동일하게 보관합니다.'
-                  : isShadowMode
-                  ? `⚡ 스마트폰 용량 99.4% 절약 중 (원본은 PC 안전 보관 · 폰 점유 ${syncState.packSizeMB}MB)`
-                  : `💾 폰·PC 양쪽 100% 원본 보관 중 (${syncState.originalSizeGB}GB)`}
+                {(() => {
+                  const localPhotoBytes = photos
+                    .filter((p) => !p.quarantined && !p.id.startsWith('shadow-remote-'))
+                    .reduce((acc, p) => acc + (p.size || 0), 0);
+                  const liveOriginalGB =
+                    syncState.originalSizeGB > 0
+                      ? syncState.originalSizeGB
+                      : Number((localPhotoBytes / (1024 * 1024 * 1024)).toFixed(2));
+                  const remoteTotalCount =
+                    photos.filter((p) => !p.quarantined && p.id.startsWith('shadow-remote-')).length +
+                    localDocuments.filter((d) => d.id.startsWith('shadow-remote-doc-')).length;
+                  const livePackMB =
+                    syncState.packSizeMB > 0
+                      ? syncState.packSizeMB
+                      : Number(Math.max(0.1, (remoteTotalCount * 13) / 1024).toFixed(2));
+                  if (!isLoggedInUser) {
+                    return '🔒 아직 연결된 기기가 없습니다 — 우측 상단에서 로그인하면 내 PC와 스마트폰이 안전하게 연결됩니다.';
+                  }
+                  if (deviceEntitlement && !deviceEntitlement.unlimitedBindingUnlocked && deviceEntitlement.trialExpired) {
+                    return '🔒 30일 무료체험 종료 — 대장 PC에 복사된 원본 파일은 100% 그대로 보존되며, 월 3,900원 구독 시 원격 통합이 즉시 재개됩니다.';
+                  }
+                  if (!realMobileConnected && !subPcConnected) {
+                    return isShadowMode
+                      ? '📱 다른 기기 연결 대기 중 — 연결 시 원본은 PC에 보관하고 스마트폰 용량을 99% 이상 절약합니다.'
+                      : '💾 다른 기기 연결 대기 중 — 연결 시 폰·PC 양쪽에 100% 원본을 동일하게 보관합니다.';
+                  }
+                  return isShadowMode
+                    ? `⚡ 스마트폰 용량 99.4% 절약 중 (원본은 PC 안전 보관 · 폰 점유 ${livePackMB}MB)`
+                    : `💾 폰·PC 양쪽 100% 원본 보관 중 (${liveOriginalGB > 0 ? `${liveOriginalGB}GB` : `${photos.filter((p) => !p.quarantined).length}장 인덱싱됨`})`;
+                })()}
               </span>
+              {syncState.syncing && deviceSyncProgress && (
+                <span className="text-[11.5px] text-primary-container font-extrabold">
+                  ⏳ {deviceSyncProgress.phase} ({deviceSyncProgress.current}/{Math.max(1, deviceSyncProgress.total)})
+                </span>
+              )}
               {isLoggedInUser && (
                 <span className="text-[11.5px] text-zinc-400">
                   📁 PC 원본 백업 저장 위치:{' '}
@@ -4119,6 +4149,14 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                 >
                   🔑 로그인하여 기기 연결
                 </button>
+              ) : deviceEntitlement && !deviceEntitlement.unlimitedBindingUnlocked && deviceEntitlement.trialExpired && !isStoreAppMode ? (
+                <button
+                  type="button"
+                  onClick={() => openSubscriptionCheckout('personal_sub_3900')}
+                  className="px-3.5 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer whitespace-nowrap"
+                >
+                  💳 월 3,900원 구독으로 다시 연결
+                </button>
               ) : (
                 <button
                   type="button"
@@ -4136,37 +4174,68 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             const remoteSyncedPhotos = photos.filter(
               (p) => !p.quarantined && p.id.startsWith('shadow-remote-')
             );
-            if (!isLoggedInUser || remoteSyncedPhotos.length === 0) return null;
+            const remoteSyncedDocs = localDocuments.filter((d) =>
+              d.id.startsWith('shadow-remote-doc-')
+            );
+            if (!isLoggedInUser || (remoteSyncedPhotos.length === 0 && remoteSyncedDocs.length === 0)) {
+              return null;
+            }
             return (
               <div className="pt-2.5 border-t border-white/10 flex flex-col gap-2">
-                <div className="flex flex-wrap items-center justify-between gap-2">
-                  <span className="text-[12px] font-extrabold text-primary-container">
-                    🔗 다른 내 기기에서 동기화된 사진 ({remoteSyncedPhotos.length}장)
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setSearchSpace('gallery');
-                      setDesktopTab('dashboard');
-                    }}
-                    className="px-3 py-1 rounded-lg bg-primary-container/15 hover:bg-primary-container/25 border border-primary-container/45 text-primary-container text-[11.5px] font-extrabold cursor-pointer"
-                  >
-                    📸 귀신검색 [사진] 탭에서 전체 보기
-                  </button>
-                </div>
-                <div className="flex items-center gap-2 overflow-x-auto pb-1">
-                  {remoteSyncedPhotos.slice(0, 10).map((rp) => (
+                {remoteSyncedPhotos.length > 0 && (
+                  <>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[12px] font-extrabold text-primary-container">
+                        🔗 다른 내 기기에서 동기화된 사진 ({remoteSyncedPhotos.length}장)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setSearchSpace('gallery');
+                          setDesktopTab('dashboard');
+                        }}
+                        className="px-3 py-1 rounded-lg bg-primary-container/15 hover:bg-primary-container/25 border border-primary-container/45 text-primary-container text-[11.5px] font-extrabold cursor-pointer"
+                      >
+                        📸 귀신검색 [사진] 탭에서 전체 보기
+                      </button>
+                    </div>
+                    <div className="flex items-center gap-2 overflow-x-auto pb-1">
+                      {remoteSyncedPhotos.slice(0, 10).map((rp) => (
+                        <button
+                          key={rp.id}
+                          type="button"
+                          onClick={() => setSelectedPhoto(rp)}
+                          className="w-14 h-14 rounded-lg overflow-hidden border border-white/15 hover:border-primary-container shrink-0 cursor-pointer bg-zinc-900 transition-colors"
+                          title={`${rp.name} (${rp.locationKo || '동기화 사진'})`}
+                        >
+                          <img src={rp.thumbUrl} alt={rp.name} className="w-full h-full object-cover" />
+                        </button>
+                      ))}
+                      {remoteSyncedPhotos.length > 10 && (
+                        <span className="text-[11px] text-zinc-400 font-bold shrink-0 px-1">
+                          +{remoteSyncedPhotos.length - 10}장
+                        </span>
+                      )}
+                    </div>
+                  </>
+                )}
+                {remoteSyncedDocs.length > 0 && (
+                  <div className="flex flex-wrap items-center justify-between gap-2 pt-1.5 border-t border-white/5">
+                    <span className="text-[12px] font-extrabold text-cyan-300">
+                      📄 다른 내 기기(PC)에서 동기화된 문서 ({remoteSyncedDocs.length}건 · 밖에서도 1초 검색 가능)
+                    </span>
                     <button
-                      key={rp.id}
                       type="button"
-                      onClick={() => setSelectedPhoto(rp)}
-                      className="w-14 h-14 rounded-lg overflow-hidden border border-white/15 hover:border-primary-container shrink-0 cursor-pointer bg-zinc-900 transition-colors"
-                      title={`${rp.name} (${rp.locationKo || '동기화 사진'})`}
+                      onClick={() => {
+                        setSearchSpace('vault');
+                        setDesktopTab('dashboard');
+                      }}
+                      className="px-3 py-1 rounded-lg bg-cyan-500/15 hover:bg-cyan-500/25 border border-cyan-400/45 text-cyan-200 text-[11.5px] font-extrabold cursor-pointer"
                     >
-                      <img src={rp.thumbUrl} alt={rp.name} className="w-full h-full object-cover" />
+                      📄 귀신검색 [문서] 탭에서 전체 보기
                     </button>
-                  ))}
-                </div>
+                  </div>
+                )}
               </div>
             );
           })()}

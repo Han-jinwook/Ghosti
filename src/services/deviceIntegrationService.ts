@@ -28,10 +28,18 @@ export interface GhostiDeviceEntitlementView {
   planId: string;
   trialOptInStartedAt: string | null;
   activatedAt: string | null;
+  paidExpiresAt?: string | null;
+  lastOrderId?: string | null;
   activeDeviceCount: number;
   trialActive: boolean;
   trialDaysLeft: number;
+  trialExpired?: boolean;
   isPaidUnlimited: boolean;
+  paidDaysLeft?: number;
+  workPlanId?: string | null;
+  workPaidExpiresAt?: string | null;
+  workPaidActive?: boolean;
+  workPaidDaysLeft?: number;
   unlimitedBindingUnlocked: boolean;
 }
 
@@ -771,20 +779,337 @@ export async function revokeConnectedDevice(targetDeviceId: string): Promise<{
   };
 }
 
+export function isCurrentAccountSyncUnlocked(email?: string): boolean {
+  const snap = loadCachedDeviceIntegrationSnapshot(email);
+  const ent = snap?.entitlement;
+  if (!ent) return false;
+  if (ent.isPaidUnlimited) {
+    if (ent.paidExpiresAt) {
+      const expMs = Date.parse(ent.paidExpiresAt);
+      if (Number.isFinite(expMs) && expMs <= Date.now()) return false;
+    }
+    return true;
+  }
+  if (ent.trialActive && ent.trialDaysLeft > 0) return true;
+  return Boolean(ent.unlimitedBindingUnlocked);
+}
+
+let lastSyncedPcEngineSubFlag: string | null = null;
+export async function syncEntitlementToLocalPcEngine(
+  entitlement: GhostiDeviceEntitlementView | null,
+  accountEmail?: string
+): Promise<void> {
+  if (typeof window === 'undefined' || !zCoreBridge.isConnected) return;
+  const isSub = Boolean(entitlement?.isPaidUnlimited);
+  const devCnt = Math.max(1, Number(entitlement?.activeDeviceCount || 1));
+  const sig = `${accountEmail || ''}::${isSub ? '1' : '0'}::${devCnt}`;
+  if (lastSyncedPcEngineSubFlag === sig) return;
+  lastSyncedPcEngineSubFlag = sig;
+  try {
+    const qs = new URLSearchParams({
+      accountId: (accountEmail || 'local_user').trim().toLowerCase(),
+      isSubscribed: isSub ? 'true' : 'false',
+      linkedDeviceCount: String(devCnt),
+    });
+    await fetch(getZCoreUrl(`/api/superpower/status?${qs.toString()}`), { method: 'GET' });
+  } catch {
+    lastSyncedPcEngineSubFlag = null;
+  }
+}
+
 export async function activateDevicePlanPersistent(
   planId: string
-): Promise<GhostiDeviceEntitlementView | null> {
-  if (!hasAuthenticatedHubAccountSession()) return null;
-  const res = await callGhostiServerBridge<{ entitlement?: GhostiDeviceEntitlementView }>(
-    'device_activate_plan',
-    { planId }
-  );
+): Promise<{
+  ok: boolean;
+  entitlement: GhostiDeviceEntitlementView | null;
+  reason?: string;
+  message?: string;
+}> {
+  if (!hasAuthenticatedHubAccountSession()) {
+    return { ok: false, entitlement: null, reason: 'AUTH_REQUIRED', message: '로그인이 필요합니다.' };
+  }
+  const res = await callGhostiServerBridge<{
+    entitlement?: GhostiDeviceEntitlementView;
+    reason?: string;
+    message?: string;
+  }>('device_activate_plan', { planId });
   if (res.ok && res.entitlement) {
     saveCachedDeviceIntegrationSnapshot({ entitlement: res.entitlement });
     broadcastDeviceIntegrationStateUpdate({ entitlement: res.entitlement });
-    return res.entitlement;
+    void syncEntitlementToLocalPcEngine(res.entitlement);
+    return { ok: true, entitlement: res.entitlement };
   }
-  return null;
+  if (res.entitlement) {
+    saveCachedDeviceIntegrationSnapshot({ entitlement: res.entitlement });
+  }
+  return {
+    ok: false,
+    entitlement: res.entitlement || null,
+    reason: res.reason,
+    message: res.message,
+  };
+}
+
+export interface PurchaseDevicePlanResult {
+  ok: boolean;
+  reason?: string;
+  message?: string;
+  orderId?: string;
+  planId?: string;
+  category?: 'personal' | 'work';
+  paidCoins?: number;
+  remainingBalance?: number;
+  currentBalance?: number;
+  requiredCoins?: number;
+  shortfall?: number;
+  expiresAt?: string;
+  entitlement?: GhostiDeviceEntitlementView | null;
+}
+
+export async function purchaseDeviceSubscriptionPlan(
+  planId: string,
+  requestId?: string
+): Promise<PurchaseDevicePlanResult> {
+  if (!hasAuthenticatedHubAccountSession()) {
+    return { ok: false, reason: 'AUTH_REQUIRED', message: '먼저 이메일로 로그인해 주세요.' };
+  }
+  const safeReqId =
+    requestId || `ghosti_sub_${planId}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
+  const res = await callGhostiServerBridge<PurchaseDevicePlanResult>('device_purchase_plan', {
+    planId,
+    requestId: safeReqId,
+  });
+  if (res.ok && res.entitlement) {
+    saveCachedDeviceIntegrationSnapshot({ entitlement: res.entitlement });
+    broadcastDeviceIntegrationStateUpdate({ entitlement: res.entitlement });
+    void syncEntitlementToLocalPcEngine(res.entitlement);
+  }
+  return res;
+}
+
+// ============================================================================
+// [타 기기 섀도우 영구 IndexedDB 캐시] — 새로고침(F5) 증발 방지 + 만료 시 원격만 깔끔 숨김
+// ============================================================================
+const REMOTE_SHADOW_DB_NAME = 'ghosti_remote_shadow_cache_v1';
+const REMOTE_SHADOW_STORE = 'snapshots';
+
+interface RemoteShadowCachePayload {
+  email: string;
+  updatedAt: string;
+  photos: PhotoItem[];
+  docs: LocalDocumentFile[];
+}
+
+function openRemoteShadowDb(): Promise<IDBDatabase | null> {
+  if (typeof window === 'undefined' || !window.indexedDB) return Promise.resolve(null);
+  return new Promise((resolve) => {
+    try {
+      const req = window.indexedDB.open(REMOTE_SHADOW_DB_NAME, 1);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(REMOTE_SHADOW_STORE)) {
+          db.createObjectStore(REMOTE_SHADOW_STORE, { keyPath: 'email' });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => resolve(null);
+    } catch {
+      resolve(null);
+    }
+  });
+}
+
+export async function saveRemoteShadowCache(
+  email: string,
+  photos: PhotoItem[],
+  docs: LocalDocumentFile[]
+): Promise<void> {
+  const norm = String(email || '').trim().toLowerCase();
+  if (!norm) return;
+  const db = await openRemoteShadowDb();
+  if (!db) return;
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(REMOTE_SHADOW_STORE, 'readwrite');
+      const payload: RemoteShadowCachePayload = {
+        email: norm,
+        updatedAt: new Date().toISOString(),
+        photos: photos.filter((p) => p.id.startsWith('shadow-remote-')).slice(0, 600),
+        docs: docs.filter((d) => d.id.startsWith('shadow-remote-doc-')).slice(0, 400),
+      };
+      tx.objectStore(REMOTE_SHADOW_STORE).put(payload);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+export async function loadRemoteShadowCache(
+  email: string
+): Promise<{ photos: PhotoItem[]; docs: LocalDocumentFile[] }> {
+  const norm = String(email || '').trim().toLowerCase();
+  if (!norm) return { photos: [], docs: [] };
+  const db = await openRemoteShadowDb();
+  if (!db) return { photos: [], docs: [] };
+  return new Promise((resolve) => {
+    try {
+      const tx = db.transaction(REMOTE_SHADOW_STORE, 'readonly');
+      const req = tx.objectStore(REMOTE_SHADOW_STORE).get(norm);
+      req.onsuccess = () => {
+        const row = req.result as RemoteShadowCachePayload | undefined;
+        resolve({
+          photos: Array.isArray(row?.photos) ? row.photos : [],
+          docs: Array.isArray(row?.docs) ? row.docs : [],
+        });
+      };
+      req.onerror = () => resolve({ photos: [], docs: [] });
+    } catch {
+      resolve({ photos: [], docs: [] });
+    }
+  });
+}
+
+export async function clearRemoteShadowCache(email: string): Promise<void> {
+  const norm = String(email || '').trim().toLowerCase();
+  if (!norm) return;
+  const db = await openRemoteShadowDb();
+  if (!db) return;
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(REMOTE_SHADOW_STORE, 'readwrite');
+      tx.objectStore(REMOTE_SHADOW_STORE).delete(norm);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+// ============================================================================
+// [F1~F6 내 상용구 전 기기 E2EE 자동 동기화]
+// ============================================================================
+export async function syncEncryptedSnippetsWithCloud(opts: {
+  email: string;
+  userId: string;
+  direction?: 'auto' | 'push' | 'pull';
+  localSnippetsOverride?: Record<string, string>;
+}): Promise<{
+  ok: boolean;
+  snippets: Record<string, string>;
+  updatedAt?: string | null;
+  reason?: string;
+}> {
+  if (!hasAuthenticatedHubAccountSession()) {
+    return { ok: false, snippets: {}, reason: 'AUTH_REQUIRED' };
+  }
+  const normEmail = opts.email.trim().toLowerCase();
+  const ident = getThisDeviceIdentity();
+  const cachedUid = loadCanonicalE2eeUid(normEmail);
+  const activeUid = cachedUid || opts.userId;
+
+  // 1) PC 엔진이 연결돼 있으면 로컬 F1~F10 상용구 로드
+  let localSnippets: Record<string, string> = opts.localSnippetsOverride || {};
+  if (Object.keys(localSnippets).length === 0 && zCoreBridge.isConnected) {
+    try {
+      const r = await fetch(getZCoreUrl('/api/superpower/snippets'), { method: 'GET' });
+      const j = (await r.json().catch(() => ({}))) as { snippets?: Record<string, string> };
+      if (j && j.snippets && typeof j.snippets === 'object') {
+        localSnippets = j.snippets;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
+  // 2) 서버에서 기존 암호화 상용구 조회
+  const pullRes = await callGhostiServerBridge<{
+    cipherB64?: string;
+    ivB64?: string;
+    updatedAt?: string | null;
+    reason?: string;
+  }>('device_sync_snippets', { mode: 'pull' });
+
+  if (!pullRes.ok) {
+    return { ok: false, snippets: localSnippets, reason: pullRes.reason };
+  }
+
+  let remoteSnippets: Record<string, string> = {};
+  if (pullRes.cipherB64 && pullRes.ivB64) {
+    const plain = await decryptClipboardE2ee(
+      pullRes.cipherB64,
+      pullRes.ivB64,
+      normEmail,
+      activeUid,
+      cachedUid && cachedUid !== opts.userId ? [opts.userId] : undefined
+    );
+    if (plain) {
+      try {
+        const parsed = JSON.parse(plain);
+        if (parsed && typeof parsed === 'object') {
+          remoteSnippets = parsed as Record<string, string>;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+
+  // 3) direction === 'push' 또는 로컬 상용구가 존재하고 서버가 비어있을 때 암호화 푸시
+  const mergedSnippets: Record<string, string> = {
+    ...remoteSnippets,
+    ...(opts.direction === 'pull' ? {} : localSnippets),
+  };
+
+  if (
+    (opts.direction === 'push' ||
+      (opts.direction !== 'pull' && Object.keys(localSnippets).length > 0)) &&
+    Object.keys(mergedSnippets).length > 0
+  ) {
+    const enc = await encryptClipboardE2ee(JSON.stringify(mergedSnippets), normEmail, activeUid);
+    const pushRes = await callGhostiServerBridge<{ updatedAt?: string; reason?: string }>(
+      'device_sync_snippets',
+      {
+        mode: 'push',
+        cipherB64: enc.cipherB64,
+        ivB64: enc.ivB64,
+        deviceId: ident.deviceId,
+        deviceName: ident.displayName,
+      }
+    );
+    if (!pushRes.ok) {
+      return { ok: false, snippets: mergedSnippets, reason: pushRes.reason };
+    }
+    try {
+      localStorage.setItem(`ghosti_synced_snippets_${normEmail}`, JSON.stringify(mergedSnippets));
+    } catch {
+      /* ignore */
+    }
+    return { ok: true, snippets: mergedSnippets, updatedAt: pushRes.updatedAt || new Date().toISOString() };
+  }
+
+  // 4) 원격에서 받은 상용구가 있으면 PC 엔진 + 로컬 캐시에 반영
+  if (Object.keys(mergedSnippets).length > 0) {
+    try {
+      localStorage.setItem(`ghosti_synced_snippets_${normEmail}`, JSON.stringify(mergedSnippets));
+    } catch {
+      /* ignore */
+    }
+    if (zCoreBridge.isConnected && Object.keys(remoteSnippets).length > 0) {
+      try {
+        await fetch(getZCoreUrl('/api/superpower/snippets'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ snippets: mergedSnippets }),
+        });
+      } catch {
+        /* ignore */
+      }
+    }
+  }
+  return { ok: true, snippets: mergedSnippets, updatedAt: pullRes.updatedAt || null };
 }
 
 // ============================================================================
@@ -1338,6 +1663,7 @@ export async function captureAndPushCurrentOsClipboard(opts: {
 
 export function broadcastRemoteMonitorCast(packet: RemoteMonitorCastPacket): void {
   if (!activePairChannel) return;
+  if (!isCurrentAccountSyncUnlocked()) return;
   void activePairChannel.send({
     type: 'broadcast',
     event: 'MONITOR_CAST_REMOTE',
@@ -1352,6 +1678,7 @@ export function pushTeleportPhotoToPcVanguard(opts: {
   thumbWebpBase64?: string;
   chips?: string[];
 }): boolean {
+  if (!isCurrentAccountSyncUnlocked()) return false;
   const ident = getThisDeviceIdentity();
   const cleanFileName = (opts.fileName || '스마트폰 사진').trim();
   const cleanOcr = (opts.ocrText || '').trim();
@@ -1462,10 +1789,15 @@ export async function executeRealDeviceSyncNow(opts: {
   strategy: PrivateSyncStrategy;
   photos: PhotoItem[];
   localDocuments: LocalDocumentFile[];
+  email?: string;
+  onProgress?: (progress: { phase: string; current: number; total: number }) => void;
 }): Promise<{
   ok: boolean;
+  reason?: string;
+  message?: string;
   mergedCatalog: GhostiShadowCatalogItem[];
   remotePhotosToMerge: PhotoItem[];
+  remoteDocsToMerge: LocalDocumentFile[];
   mirroredUploadCount: number;
   mirroredPullCount: number;
   backupDirPath: string | null;
@@ -1474,8 +1806,10 @@ export async function executeRealDeviceSyncNow(opts: {
   if (!hasAuthenticatedHubAccountSession()) {
     return {
       ok: false,
+      reason: 'AUTH_REQUIRED',
       mergedCatalog: [],
       remotePhotosToMerge: [],
+      remoteDocsToMerge: [],
       mirroredUploadCount: 0,
       mirroredPullCount: 0,
       backupDirPath: null,
@@ -1486,24 +1820,38 @@ export async function executeRealDeviceSyncNow(opts: {
   const ident = getThisDeviceIdentity();
   const activeLocalPhotos = opts.photos
     .filter((p) => !p.quarantined && !p.id.startsWith('shadow-remote-'))
-    .slice(0, 60);
+    .slice(0, 200);
+  const activeLocalDocs = opts.localDocuments
+    .filter((d) => !d.id.startsWith('shadow-remote-doc-'))
+    .slice(0, 150);
 
   let mirroredUploadCount = 0;
 
-  // 1) 양쪽 원본 보관(mirror) 모드일 때: 내 기기 원본 이미지 바이트를 암호화 서명 URL로 업로드 (fullUrl 실패 시 thumbUrl 자동 폴백)
+  // 1) 양쪽 원본 보관(mirror) 모드일 때: 아직 업로드되지 않은 원본 사진 위주로 배치 증분 업로드 (회당 최대 36장)
   const mirrorUploadedIds = new Set<string>();
   if (opts.strategy === 'mirror') {
-    for (const p of activeLocalPhotos.slice(0, 12)) {
-      const candidates = [p.fullUrl, p.thumbUrl].filter(
-        (u): u is string => Boolean(u && u.trim())
-      );
-      if (candidates.length === 0) continue;
+    const pendingOriginals: Array<{ photo: PhotoItem; shaKey: string }> = [];
+    for (const p of activeLocalPhotos) {
       const hashSeed = await sha256HexBrowser(`${p.id}::${p.name}::${p.size}`);
       const shaKey = `${hashSeed.slice(0, 40)}.jpg`;
       if (uploadedMirrorHashes.has(shaKey)) {
         mirrorUploadedIds.add(p.id);
-        continue;
+      } else if (pendingOriginals.length < 36) {
+        pendingOriginals.push({ photo: p, shaKey });
       }
+    }
+
+    for (let i = 0; i < pendingOriginals.length; i++) {
+      const { photo: p, shaKey } = pendingOriginals[i];
+      opts.onProgress?.({
+        phase: '원본 안전 백업 업로드 중',
+        current: i + 1,
+        total: pendingOriginals.length,
+      });
+      const candidates = [p.fullUrl, p.thumbUrl].filter(
+        (u): u is string => Boolean(u && u.trim())
+      );
+      if (candidates.length === 0) continue;
       let blob: Blob | null = null;
       for (const src of candidates) {
         try {
@@ -1534,10 +1882,25 @@ export async function executeRealDeviceSyncNow(opts: {
       }
       if (!blob) continue;
       try {
-        const signUp = await callGhostiServerBridge<{ signedUploadUrl?: string }>(
-          'device_sign_mirror_upload',
-          { sha256: shaKey }
-        );
+        const signUp = await callGhostiServerBridge<{
+          signedUploadUrl?: string;
+          reason?: string;
+          message?: string;
+        }>('device_sign_mirror_upload', { sha256: shaKey });
+        if (!signUp.ok && (signUp.reason === 'TRIAL_EXPIRED' || signUp.reason === 'TRIAL_OPT_IN_REQUIRED')) {
+          return {
+            ok: false,
+            reason: signUp.reason,
+            message: signUp.message,
+            mergedCatalog: [],
+            remotePhotosToMerge: [],
+            remoteDocsToMerge: [],
+            mirroredUploadCount,
+            mirroredPullCount: 0,
+            backupDirPath: null,
+            packSizeMB: 0,
+          };
+        }
         if (signUp.ok && signUp.signedUploadUrl) {
           const putRes = await fetch(signUp.signedUploadUrl, {
             method: 'PUT',
@@ -1556,9 +1919,18 @@ export async function executeRealDeviceSyncNow(opts: {
     }
   }
 
-  // 2) 장당 ~13KB 초경량 섀도우 카탈로그 패킹 후 기기 간 양방향 병합
+  // 2) 장당 ~13KB 초경량 섀도우 카탈로그 패킹 후 기기 간 양방향 병합 (사진 + PC 문서 동시)
   const outgoingItems: Array<Record<string, unknown>> = [];
-  for (const p of activeLocalPhotos.slice(0, 45)) {
+  const totalPackCount = activeLocalPhotos.length + activeLocalDocs.length;
+  for (let i = 0; i < activeLocalPhotos.length; i++) {
+    const p = activeLocalPhotos[i];
+    if (i % 10 === 0 || i === activeLocalPhotos.length - 1) {
+      opts.onProgress?.({
+        phase: '사진·문서 초경량 인덱스 동기화 중',
+        current: i + 1,
+        total: Math.max(1, totalPackCount),
+      });
+    }
     const hashSeed = await sha256HexBrowser(`${p.id}::${p.name}::${p.size}`);
     const shaKey = `${hashSeed.slice(0, 40)}.jpg`;
     const thumbWebp = await tryMakeCompactThumbDataUrl(p.thumbUrl || p.fullUrl);
@@ -1567,7 +1939,7 @@ export async function executeRealDeviceSyncNow(opts: {
       kind: 'photo',
       title: p.name,
       thumbWebp,
-      keywords: (p.tags || []).slice(0, 10),
+      keywords: (p.tags || []).slice(0, 12),
       ocrSnippet: p.captionKo || (p.keywordsKo || []).join(' ') || '',
       shotDate: p.date || '',
       sourceDeviceId: ident.deviceId,
@@ -1578,14 +1950,14 @@ export async function executeRealDeviceSyncNow(opts: {
     });
   }
 
-  for (const doc of opts.localDocuments.slice(0, 25)) {
+  for (const doc of activeLocalDocs) {
     const hashSeed = await sha256HexBrowser(`doc::${doc.id}::${doc.fileName}`);
     outgoingItems.push({
       id: `doc-${doc.id}`,
       kind: 'doc',
       title: doc.fileName,
-      keywords: (doc.keywords || []).slice(0, 10),
-      ocrSnippet: (doc.extractedText || doc.title || '').slice(0, 450),
+      keywords: (doc.keywords || []).slice(0, 14),
+      ocrSnippet: (doc.extractedText || doc.title || '').slice(0, 750),
       shotDate: doc.date || '',
       sourceDeviceId: ident.deviceId,
       sourceDeviceName: ident.displayName,
@@ -1595,15 +1967,55 @@ export async function executeRealDeviceSyncNow(opts: {
     });
   }
 
-  const syncRes = await callGhostiServerBridge<{ items?: GhostiShadowCatalogItem[] }>(
-    'device_sync_shadow_catalog',
-    { items: outgoingItems }
-  );
-  const mergedCatalog = Array.isArray(syncRes.items) ? syncRes.items : [];
+  // 서버 250건 단위 배치 전송으로 대량 사진·문서도 끊김 없이 동기화
+  let mergedCatalog: GhostiShadowCatalogItem[] = [];
+  let syncOk = true;
+  let syncErrorReason: string | undefined;
+  let syncErrorMessage: string | undefined;
+  const BATCH_SIZE = 200;
+  const totalBatches = Math.max(1, Math.ceil(outgoingItems.length / BATCH_SIZE));
+  for (let b = 0; b < totalBatches; b++) {
+    const chunk = outgoingItems.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+    const syncRes = await callGhostiServerBridge<{
+      items?: GhostiShadowCatalogItem[];
+      reason?: string;
+      message?: string;
+      entitlement?: GhostiDeviceEntitlementView;
+    }>('device_sync_shadow_catalog', { items: chunk });
+    if (!syncRes.ok) {
+      syncOk = false;
+      syncErrorReason = syncRes.reason;
+      syncErrorMessage = syncRes.message;
+      if (syncRes.entitlement) {
+        saveCachedDeviceIntegrationSnapshot({ entitlement: syncRes.entitlement }, opts.email);
+      }
+      break;
+    }
+    if (Array.isArray(syncRes.items)) {
+      mergedCatalog = syncRes.items;
+    }
+  }
 
-  // 3) 다른 내 기기에서 올라온 섀도우 사진들을 현재 기기 갤러리 검색 풀에 병합
-  const existingIds = new Set(opts.photos.map((p) => p.id));
+  if (!syncOk) {
+    return {
+      ok: false,
+      reason: syncErrorReason,
+      message: syncErrorMessage,
+      mergedCatalog: [],
+      remotePhotosToMerge: [],
+      remoteDocsToMerge: [],
+      mirroredUploadCount,
+      mirroredPullCount: 0,
+      backupDirPath: null,
+      packSizeMB: 0,
+    };
+  }
+
+  // 3) 다른 내 기기에서 올라온 섀도우 사진 + PC 문서를 현재 기기 검색 풀에 양방향 병합
+  const existingPhotoIds = new Set(opts.photos.map((p) => p.id));
+  const existingDocIds = new Set(opts.localDocuments.map((d) => d.id));
   const remotePhotosToMerge: PhotoItem[] = [];
+  const remoteDocsToMerge: LocalDocumentFile[] = [];
   let mirroredPullCount = 0;
   let backupDirPath: string | null = null;
 
@@ -1657,7 +2069,7 @@ export async function executeRealDeviceSyncNow(opts: {
 
     if (item.kind === 'photo' && item.thumbWebp) {
       const remoteId = `shadow-remote-${item.id}`;
-      if (!existingIds.has(remoteId) && !existingIds.has(item.id)) {
+      if (!existingPhotoIds.has(remoteId) && !existingPhotoIds.has(item.id)) {
         remotePhotosToMerge.push({
           id: remoteId,
           name: item.title || '연결 기기 사진',
@@ -1675,14 +2087,36 @@ export async function executeRealDeviceSyncNow(opts: {
           quarantined: false,
         });
       }
+    } else if (item.kind === 'doc') {
+      const rawDocId = item.id.startsWith('doc-') ? item.id.slice(4) : item.id;
+      const remoteDocId = `shadow-remote-doc-${rawDocId}`;
+      if (!existingDocIds.has(remoteDocId) && !existingDocIds.has(rawDocId)) {
+        const cleanFileName = item.title || '연결된 PC 문서';
+        const extRaw = cleanFileName.includes('.')
+          ? cleanFileName.slice(cleanFileName.lastIndexOf('.') + 1).toUpperCase()
+          : 'DOC';
+        remoteDocsToMerge.push({
+          id: remoteDocId,
+          fileName: cleanFileName,
+          ext: extRaw || 'DOC',
+          title: cleanFileName,
+          categoryBadge: `🔗 ${item.sourceDeviceName}`,
+          extractedText: item.ocrSnippet || cleanFileName,
+          keywords: Array.from(new Set([...(item.keywords || []), item.sourceDeviceName])),
+          date: item.shotDate || item.syncedAt.slice(0, 10),
+          sizeKB: Math.max(1, Math.round((item.byteSize || 122880) / 1024)),
+          deviceSource: `🔗 ${item.sourceDeviceName}`,
+        });
+      }
     }
   }
 
   const packSizeMB = Number(Math.max(0.1, (mergedCatalog.length * 13) / 1024).toFixed(2));
   return {
-    ok: Boolean(syncRes.ok),
+    ok: true,
     mergedCatalog,
     remotePhotosToMerge,
+    remoteDocsToMerge,
     mirroredUploadCount,
     mirroredPullCount,
     backupDirPath,
@@ -1928,6 +2362,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       })
         .on('broadcast', { event: 'E2EE_CLIPBOARD_PUSH' }, async ({ payload }) => {
           if (disposed || thisDeviceRevokedLocally || !payload?.cipherB64 || !payload?.ivB64) return;
+          if (!isCurrentAccountSyncUnlocked(normEmail)) return;
           if (payload.senderDeviceId === ident.deviceId) return;
           const hash = String(payload.clipHash || '');
           const envKey = `${String(payload.senderDeviceId || '')}:${hash}:${String(payload.createdAt || '')}`;
@@ -1969,6 +2404,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         })
         .on('broadcast', { event: 'MONITOR_CAST_REMOTE' }, ({ payload }) => {
           if (disposed || !payload) return;
+          if (!isCurrentAccountSyncUnlocked(normEmail)) return;
           const pkt = payload as RemoteMonitorCastPacket;
           if (opts.onRemoteMonitorCast) {
             opts.onRemoteMonitorCast(pkt);
@@ -1977,6 +2413,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         })
         .on('broadcast', { event: 'TELEPORT_OCR_VANGUARD' }, async ({ payload }) => {
           if (disposed || thisDeviceRevokedLocally || !payload) return;
+          if (!isCurrentAccountSyncUnlocked(normEmail)) return;
           if (payload.senderDeviceId && payload.senderDeviceId === ident.deviceId) return;
           const fileName = String(payload.fileName || payload.file_name || '스마트폰 사진').trim();
           const sourceDevice = String(payload.sourceDevice || payload.source_device || '내 스마트폰').trim();
@@ -2088,6 +2525,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     isUserGesture = false
   ): Promise<void> => {
     if (disposed || checkingOsClip || thisDeviceRevokedLocally || !hasAuthenticatedHubAccountSession()) return;
+    if (!isBaselineOnly && !isCurrentAccountSyncUnlocked(normEmail)) return;
     checkingOsClip = true;
     try {
       const res = await captureAndPushCurrentOsClipboard({
@@ -2108,6 +2546,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
 
   const syncRemoteMailboxToUi = async (injectToOs: boolean): Promise<void> => {
     if (disposed || thisDeviceRevokedLocally || !hasAuthenticatedHubAccountSession()) return;
+    if (!isCurrentAccountSyncUnlocked(normEmail)) return;
     const pulled = await pullDelayedE2eeClipboardMailbox({
       email: normEmail,
       userId: opts.userId,

@@ -2,6 +2,24 @@
 
 ---
 
+## 🕒 [2026-11-21 13:30 KST `1·3귀신` 진행 기록 (`5. 🔄 내 기기 통합` 전용 구독 결제창 UI 신설 · 과금 누수 0% 서버 실차감/3중 게이트 · 유료 만족도 5종 업그레이드 완결 · `Z-Core v2.6.80`)]
+
+- **세션 제목**: `내기기통합 결제창·누수봉쇄`
+1. **귀신같이 전용 구독 결제창 UI 신설 (`GhostiSubscriptionCheckoutModal.tsx`, `subscriptionPlanCatalog.ts`, `GhostiHubInfraBridge.tsx`)**:
+   - 요금제 모달(`PricingModal`) 및 `5. 내 기기 통합`에서 유료 이용권(`월 3,900원` · `연간 39,000원` · `업무 공유 소호/소기업/중소기업`) 클릭 시 임의 무료 개통을 100% 차단하고 전용 구독 결제창을 오픈.
+   - 결제창에서 이용권 정보·월간/연간 1클릭 전환·기존 만료일 누적 연장 계산·허브 실시간 보유 귀신코인 잔액 대조를 한눈에 제공하며, **잔액 충분 시 원클릭 실차감 결제 ➔ 영수증 화면**, **잔액 부족 시 부족 코인 계산 + `[⚡ 귀신코인 충전소 열기]` ➔ 충전 완료/닫기 또는 KCP 리다이렉트 복귀 시 자동 잔액 갱신 및 구독 결제창 복귀** 원스톱 루프 완결. (미체험 개인 유저에게는 하단 `[0원으로 30일 먼저 체험]` 보조 옵션 제공, 스토어 심사 모드 `hideCoin` 100% 준수).
+2. **치명 과금 누수 3종 원천 봉쇄 (`hub-supabase-bridge.mjs`, `workAndDeviceBridgeOps.mjs`, `deviceIntegrationService.ts`, `paidDeviceSyncSlice.ts`, `plugin_ghosti_superpowers.py`, `Z-Core v2.6.80`)**:
+   - **`device_activate_plan` 유료 우회 차단 (`402 PAYMENT_REQUIRED`)** 및 **신규 `device_purchase_plan` 서버-투-서버 실차감**(`MerlinHub` 잔액 검증 ➔ `POST /api/wallet/transaction` 실차감 ➔ 멱등 `request_id` + 누적 `paidExpiresAt` 기록).
+   - 서버 유료 API(`device_push/pull_e2ee_clip`, `device_sync_shadow_catalog`, `device_sync_snippets`, `device_sign_mirror_upload/download`, 만료 후 2대+ 페어링) + 클라이언트 Realtime/클립보드 송수신 + 로컬 PC 엔진(`plugin_ghosti_superpowers.py` `v3.8`, `isSubscribed=true/false` 양방향 동기화 교정) **3중 권한 게이트** 전면 적용.
+   - `[⚡ 지금 일치시키기]` 클릭 시 동의 없는 임의 체험 개시 제거 및 만료 유저 UI(`🔒 30일 무료체험 종료 — 대장 PC 원본 100% 보존 · [💳 월 3,900원 구독으로 다시 연결]`) 분기 완결.
+3. **유료 고객 만족도 5대 업그레이드 & 구버전/가짜 요소 정화 (`deviceIntegrationService.ts`, `paidDeviceSyncSlice.ts`, `CrossDeviceClipboardAndPairingBar.tsx`, `FreePhotoShareLounge.tsx`, `PricingModal.tsx`, `plugin_paid_sync_ghostwin.py`)**:
+   - **PC↔폰 문서(`localDocuments`) 양방향 수신·병합(`remoteDocsToMerge`)** 완성(밖에서 폰으로 내 PC 문서 1초 검색 + `5. 내 기기 통합` 하단 문서 동기화 스트립 추가).
+   - **타 기기 사진·문서 `IndexedDB` 영구 캐시(`ghosti_remote_shadow_cache_v1`)**로 새로고침(`F5`) 증발 해결 + **만료 시 원격 `shadow-remote-*`만 깔끔히 숨기고 대장 PC 로컬 원본 100% 보존** 규칙 구현.
+   - 동기화 배치 상한 대폭 확장(사진 200장 · 문서 150건 · 원본 미업로드분 36장 증분 · 서버 카탈로그 1,500건 · 실시간 진행률 표시) + **`F1~F6` 상용구 전 기기 E2EE 동기화(`device_sync_snippets` · `[⌨️ F1~F6 상용구 동기화]`)** 추가 + `paid-sync-summon-file` 실구현.
+   - `Z-코어` ➔ `PC 엔진` 통일, `0GB` 가짜 용량 실측 전환, iOS 클립보드 정책 정직 병기, `PricingModal` 구버전 문구(`가족방 1개월권 3장`)·가짜 `5,200코인`·가짜 코인 선물하기(`HubGiftBoxModal`/`HubPurchaseWidget` 직결)·가짜 이메일 발송(`beakes@sundreamer.app` 제거 ➔ PC 연결 주소 1초 복사) 전수 정화.
+
+---
+
 ## 🕒 [2026-11-21 03:50 KST `1·3귀신` 진행 기록 (`🪪 귀신계 여권` 조용한 등록 D-35 · PC 온보딩 UX 정밀 점검 · `4. 📸 사진 공유` 총점검 정공법 완결)]
 
 - **세션 제목**: `사진공유 총점검 정공법 완결`

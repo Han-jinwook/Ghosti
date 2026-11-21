@@ -47,6 +47,9 @@ import {
   setPassportSelf,
 } from '../services/ghostSecretaryEngine';
 import type { GiftProductItem } from '../services/merlin-hub-sdk/react';
+import { GhostiSubscriptionCheckoutModal } from './GhostiSubscriptionCheckoutModal';
+import { PENDING_SUB_CHECKOUT_STORAGE_KEY } from '../services/subscriptionPlanCatalog';
+import type { PricingPlanId } from '../types/saysee';
 
 /**
  * [귀신같이 선물함 상품]
@@ -138,6 +141,11 @@ const GhostiHubGlobalModals: React.FC = () => {
   const [isLoginOpen, setIsLoginOpen] = useState(false);
   const [isProfileOpen, setIsProfileOpen] = useState(false);
   const [isPurchaseOpen, setIsPurchaseOpen] = useState(false);
+  const [purchaseModalOpts, setPurchaseModalOpts] = useState<{
+    minCustomCoin?: number;
+    redirectUrl?: string;
+    returnToCheckoutPlan?: PricingPlanId;
+  }>({});
   const [isGiftBoxOpen, setIsGiftBoxOpen] = useState(false);
   const wasLoggedInRef = useRef(false);
   const lastAuthedEmailRef = useRef('');
@@ -408,12 +416,59 @@ const GhostiHubGlobalModals: React.FC = () => {
     wasLoggedInRef.current = isLoggedIn;
   }, [isLoggedIn, user?.id, user?.email, user?.nickname, balance]);
 
+  // KCP 충전 리다이렉트(?ghosti_checkout_plan=... 또는 ?payment=success) 복귀 시 잔액 새로고침 + 구독 결제창 자동 복귀
+  useEffect(() => {
+    if (hideCoin || !isLoggedIn || typeof window === 'undefined') return;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const urlPlan = params.get('ghosti_checkout_plan') as PricingPlanId | null;
+      const isPaySuccess = params.get('payment') === 'success';
+      let pendingPlan: PricingPlanId | null = urlPlan;
+      if (!pendingPlan && isPaySuccess) {
+        const raw = localStorage.getItem(PENDING_SUB_CHECKOUT_STORAGE_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as { planId?: PricingPlanId; createdAt?: number };
+          if (parsed?.planId && Date.now() - (parsed.createdAt || 0) <= 30 * 60 * 1000) {
+            pendingPlan = parsed.planId;
+          } else {
+            localStorage.removeItem(PENDING_SUB_CHECKOUT_STORAGE_KEY);
+          }
+        }
+      }
+      if (pendingPlan) {
+        localStorage.removeItem(PENDING_SUB_CHECKOUT_STORAGE_KEY);
+        if (params.has('ghosti_checkout_plan') || params.has('payment')) {
+          params.delete('ghosti_checkout_plan');
+          params.delete('payment');
+          const qs = params.toString();
+          window.history.replaceState(
+            window.history.state || {},
+            '',
+            `${window.location.pathname}${qs ? `?${qs}` : ''}${window.location.hash || ''}`
+          );
+        }
+        void refreshBalance().finally(() => {
+          useSaySeeStore.getState().openSubscriptionCheckout(pendingPlan!);
+        });
+      }
+    } catch {
+      /* ignore */
+    }
+  }, [hideCoin, isLoggedIn, refreshBalance]);
+
   // 전역 모달 오픈 이벤트 리스너
   useEffect(() => {
     const onOpenLogin = () => setIsLoginOpen(true);
     const onOpenProfile = () => setIsProfileOpen(true);
-    const onOpenPurchase = () => {
-      if (!hideCoin) setIsPurchaseOpen(true);
+    const onOpenPurchase = (ev?: Event) => {
+      if (hideCoin) return;
+      const detail = (ev as CustomEvent<{
+        minCustomCoin?: number;
+        redirectUrl?: string;
+        returnToCheckoutPlan?: PricingPlanId;
+      }> | undefined)?.detail;
+      setPurchaseModalOpts(detail || {});
+      setIsPurchaseOpen(true);
     };
     const onOpenGiftBox = () => {
       if (!hideCoin) setIsGiftBoxOpen(true);
@@ -616,10 +671,27 @@ const GhostiHubGlobalModals: React.FC = () => {
         <HubPurchaseWidget
           isModal
           isOpen={isPurchaseOpen}
-          onClose={() => setIsPurchaseOpen(false)}
+          minCustomCoin={purchaseModalOpts.minCustomCoin}
+          redirectUrl={purchaseModalOpts.redirectUrl}
+          onSuccess={() => {
+            void refreshBalance();
+          }}
+          onClose={() => {
+            const returnPlan = purchaseModalOpts.returnToCheckoutPlan;
+            setIsPurchaseOpen(false);
+            setPurchaseModalOpts({});
+            void refreshBalance().finally(() => {
+              if (returnPlan) {
+                useSaySeeStore.getState().openSubscriptionCheckout(returnPlan);
+              }
+            });
+          }}
           appName="귀신같이"
         />
       )}
+
+      {/* 3-1. 귀신같이 전용 이용권 구독 결제창 (잔액 확인 · 부족 시 충전소 직결 · 실차감 영수증) */}
+      {!hideCoin && <GhostiSubscriptionCheckoutModal />}
 
       {/* 4. 패밀리 선물함 단독 모달 (스토어 심사 모드에서는 아예 렌더링하지 않음) */}
       {!hideCoin && (

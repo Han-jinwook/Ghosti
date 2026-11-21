@@ -335,29 +335,164 @@ function formatManifestForClient(manifest) {
   return { files: list, deletedTombstones: tombstones };
 }
 
+const SERVER_SUBSCRIPTION_PLANS = {
+  personal_sub_3900: {
+    canonicalId: 'personal_sub_3900',
+    category: 'personal',
+    priceCoins: 3900,
+    durationDays: 30,
+    displayText: '귀신같이 [5. 내 기기 통합] 30일 이용권 (3,900C)',
+  },
+  personal_year_39000: {
+    canonicalId: 'personal_year_39000',
+    category: 'personal',
+    priceCoins: 39000,
+    durationDays: 365,
+    displayText: '귀신같이 [5. 내 기기 통합] 연간 365일 이용권 (39,000C)',
+  },
+  personal_year_35000: {
+    canonicalId: 'personal_year_39000',
+    category: 'personal',
+    priceCoins: 39000,
+    durationDays: 365,
+    displayText: '귀신같이 [5. 내 기기 통합] 연간 365일 이용권 (39,000C)',
+  },
+  work_soho_9900: {
+    canonicalId: 'work_soho_9900',
+    category: 'work',
+    priceCoins: 9900,
+    durationDays: 30,
+    displayText: '귀신같이 [6. 업무 공유] 소호(~5인) 30일 이용권 (9,900C)',
+  },
+  work_soho_year_99000: {
+    canonicalId: 'work_soho_year_99000',
+    category: 'work',
+    priceCoins: 99000,
+    durationDays: 365,
+    displayText: '귀신같이 [6. 업무 공유] 소호(~5인) 연간 365일 이용권 (99,000C)',
+  },
+  work_biz_19000: {
+    canonicalId: 'work_biz_19000',
+    category: 'work',
+    priceCoins: 19000,
+    durationDays: 30,
+    displayText: '귀신같이 [6. 업무 공유] 소기업(~20인) 30일 이용권 (19,000C)',
+  },
+  work_biz_year_190000: {
+    canonicalId: 'work_biz_year_190000',
+    category: 'work',
+    priceCoins: 190000,
+    durationDays: 365,
+    displayText: '귀신같이 [6. 업무 공유] 소기업(~20인) 연간 365일 이용권 (190,000C)',
+  },
+  work_biz_19900: {
+    canonicalId: 'work_biz_19000',
+    category: 'work',
+    priceCoins: 19000,
+    durationDays: 30,
+    displayText: '귀신같이 [6. 업무 공유] 소기업(~20인) 30일 이용권 (19,000C)',
+  },
+  work_biz_year_199000: {
+    canonicalId: 'work_biz_year_190000',
+    category: 'work',
+    priceCoins: 190000,
+    durationDays: 365,
+    displayText: '귀신같이 [6. 업무 공유] 소기업(~20인) 연간 365일 이용권 (190,000C)',
+  },
+  work_pro_29000: {
+    canonicalId: 'work_pro_29000',
+    category: 'work',
+    priceCoins: 29000,
+    durationDays: 30,
+    displayText: '귀신같이 [6. 업무 공유] 중소기업(~50인) 30일 이용권 (29,000C)',
+  },
+  work_pro_year_290000: {
+    canonicalId: 'work_pro_year_290000',
+    category: 'work',
+    priceCoins: 290000,
+    durationDays: 365,
+    displayText: '귀신같이 [6. 업무 공유] 중소기업(~50인) 연간 365일 이용권 (290,000C)',
+  },
+};
+
 function computeEntitlementView(entRaw, activeDeviceCount) {
   const nowMs = Date.now();
   const ent = {
     planId: entRaw?.planId || 'free_trial',
     trialOptInStartedAt: entRaw?.trialOptInStartedAt || null,
     activatedAt: entRaw?.activatedAt || null,
+    paidExpiresAt: entRaw?.paidExpiresAt || null,
+    lastOrderId: entRaw?.lastOrderId || null,
+    workPlanId: entRaw?.workPlanId || null,
+    workPaidExpiresAt: entRaw?.workPaidExpiresAt || null,
   };
   let trialActive = false;
   let trialDaysLeft = 0;
   if (ent.trialOptInStartedAt) {
-    const elapsedDays = Math.floor((nowMs - Date.parse(ent.trialOptInStartedAt)) / (24 * 3600 * 1000));
-    trialDaysLeft = Math.max(0, 30 - elapsedDays);
-    trialActive = trialDaysLeft > 0;
+    const startMs = Date.parse(ent.trialOptInStartedAt);
+    if (Number.isFinite(startMs)) {
+      const remainMs = startMs + 30 * 24 * 3600 * 1000 - nowMs;
+      trialDaysLeft = remainMs > 0 ? Math.ceil(remainMs / (24 * 3600 * 1000)) : 0;
+      trialActive = remainMs > 0;
+    }
   }
-  const isPaidUnlimited =
-    ent.planId === 'personal_sub_3900' || ent.planId === 'personal_year_35000';
+  const paidExpMs = ent.paidExpiresAt ? Date.parse(ent.paidExpiresAt) : NaN;
+  const isPersonalPaidPlan =
+    ent.planId === 'personal_sub_3900' ||
+    ent.planId === 'personal_year_39000' ||
+    ent.planId === 'personal_year_35000';
+  // 실결제 만료일(paidExpiresAt)이 미래인 경우에만 유료 무제한 인정 (구버전 무결제 개통 잔여분 자동 차단)
+  const isPaidUnlimited = Boolean(isPersonalPaidPlan && Number.isFinite(paidExpMs) && paidExpMs > nowMs);
+  const paidDaysLeft = isPaidUnlimited
+    ? Math.max(1, Math.ceil((paidExpMs - nowMs) / (24 * 3600 * 1000)))
+    : 0;
+
+  const workExpMs = ent.workPaidExpiresAt ? Date.parse(ent.workPaidExpiresAt) : NaN;
+  const workPaidActive = Boolean(ent.workPlanId && Number.isFinite(workExpMs) && workExpMs > nowMs);
+  const workPaidDaysLeft = workPaidActive
+    ? Math.max(1, Math.ceil((workExpMs - nowMs) / (24 * 3600 * 1000)))
+    : 0;
+
+  const trialExpired = Boolean(ent.trialOptInStartedAt && !trialActive && !isPaidUnlimited);
   return {
     ...ent,
     activeDeviceCount,
     trialActive,
     trialDaysLeft,
+    trialExpired,
     isPaidUnlimited,
+    paidDaysLeft,
+    workPaidActive,
+    workPaidDaysLeft,
     unlimitedBindingUnlocked: isPaidUnlimited || trialActive,
+  };
+}
+
+async function assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash) {
+  const entRaw = await readStorageJson(
+    supabaseUrl,
+    serviceKey,
+    DEVICE_BUCKET,
+    `${emailHash}/entitlement_v1.json`,
+    { planId: 'free_trial', trialOptInStartedAt: null, activatedAt: null, paidExpiresAt: null }
+  );
+  const view = computeEntitlementView(entRaw, 1);
+  if (view.unlimitedBindingUnlocked) {
+    return { ok: true, entitlement: view };
+  }
+  return {
+    ok: false,
+    response: {
+      status: 402,
+      body: {
+        ok: false,
+        reason: view.trialExpired ? 'TRIAL_EXPIRED' : 'TRIAL_OPT_IN_REQUIRED',
+        message: view.trialExpired
+          ? '30일 무료체험이 종료되었습니다. 월 3,900원 이용권 결제 후 내 기기 통합을 계속 이용할 수 있습니다.'
+          : '내 기기 통합(2대+ 연동)은 30일 무료체험 시작 또는 이용권 구독 후 이용할 수 있습니다.',
+        entitlement: view,
+      },
+    },
   };
 }
 
@@ -422,6 +557,10 @@ export async function handleAuthedWorkAndDeviceAction({
   userId,
   email,
   hubNickname,
+  hubToken,
+  hubUrl,
+  hubClientId,
+  hubClientSecret,
   supabaseUrl,
   serviceKey,
 }) {
@@ -944,6 +1083,27 @@ export async function handleAuthedWorkAndDeviceAction({
       : 'android';
     const alreadyPaired = Boolean(found.consumed_at && found.consumed_by_device_id === targetDevId);
 
+    const entPre = await readStorageJson(
+      supabaseUrl,
+      serviceKey,
+      DEVICE_BUCKET,
+      `${emailHash}/entitlement_v1.json`,
+      { planId: 'free_trial', trialOptInStartedAt: null, activatedAt: null, paidExpiresAt: null }
+    );
+    const preView = computeEntitlementView(entPre, 2);
+    if (preView.trialExpired && !preView.isPaidUnlimited) {
+      return {
+        status: 402,
+        body: {
+          ok: false,
+          reason: 'TRIAL_EXPIRED',
+          message:
+            '30일 무료체험이 만료되었습니다. 월 3,900원 이용권 결제 후 새 기기를 연결할 수 있습니다.',
+          entitlement: preView,
+        },
+      };
+    }
+
     const [, , entRaw] = await Promise.all([
       fetch(`${supabaseUrl}/rest/v1/ghosti_devices?on_conflict=device_id`, {
         method: 'POST',
@@ -973,13 +1133,7 @@ export async function handleAuthedWorkAndDeviceAction({
               consumed_by_device_id: targetDevId,
             }),
           }),
-      readStorageJson(
-        supabaseUrl,
-        serviceKey,
-        DEVICE_BUCKET,
-        `${emailHash}/entitlement_v1.json`,
-        { planId: 'free_trial', trialOptInStartedAt: null, activatedAt: null }
-      ),
+      Promise.resolve(entPre),
     ]);
 
     const [, listRes] = await Promise.all([
@@ -1063,29 +1217,61 @@ export async function handleAuthedWorkAndDeviceAction({
   }
 
   if (action === 'device_activate_plan') {
-    const planId = String(body.planId || 'free_trial');
+    const planId = String(body.planId || '').trim();
     const entRaw = await readStorageJson(
       supabaseUrl,
       serviceKey,
       DEVICE_BUCKET,
       `${emailHash}/entitlement_v1.json`,
-      { planId: 'free_trial', trialOptInStartedAt: null, activatedAt: null }
+      { planId: 'free_trial', trialOptInStartedAt: null, activatedAt: null, paidExpiresAt: null }
     );
-    if (planId === 'trial_opt_in_30d') {
-      if (!entRaw.trialOptInStartedAt) {
-        entRaw.trialOptInStartedAt = new Date().toISOString();
-      }
-    } else {
-      entRaw.planId = planId;
-      entRaw.activatedAt = new Date().toISOString();
+    // [치명 과금 누수 영구 봉쇄] device_activate_plan은 오직 최초 1회 30일 무료체험 Opt-in만 허용하며,
+    // 모든 유료 플랜은 반드시 서버 코인 실차감(device_purchase_plan)을 통해서만 개통됩니다.
+    if (planId !== 'trial_opt_in_30d') {
+      const listRes = await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&select=device_id`,
+        { headers: srvHeaders(serviceKey) }
+      );
+      const devRows = listRes.ok ? await listRes.json().catch(() => []) : [];
+      return {
+        status: 402,
+        body: {
+          ok: false,
+          reason: 'PAYMENT_REQUIRED',
+          message: '유료 이용권은 귀신같이 구독 결제창에서 귀신코인 결제 후 즉시 개통됩니다.',
+          entitlement: computeEntitlementView(entRaw, Array.isArray(devRows) ? devRows.length : 1),
+        },
+      };
     }
-    await writeStorageJson(
-      supabaseUrl,
-      serviceKey,
-      DEVICE_BUCKET,
-      `${emailHash}/entitlement_v1.json`,
-      entRaw
-    );
+
+    const curView = computeEntitlementView(entRaw, 1);
+    if (entRaw.trialOptInStartedAt && !curView.trialActive && !curView.isPaidUnlimited) {
+      const listRes = await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&select=device_id`,
+        { headers: srvHeaders(serviceKey) }
+      );
+      const devRows = listRes.ok ? await listRes.json().catch(() => []) : [];
+      return {
+        status: 402,
+        body: {
+          ok: false,
+          reason: 'TRIAL_ALREADY_USED',
+          message: '이 계정은 30일 무료체험을 이미 사용 완료했습니다. 이용권 구독으로 계속 이용하실 수 있습니다.',
+          entitlement: computeEntitlementView(entRaw, Array.isArray(devRows) ? devRows.length : 1),
+        },
+      };
+    }
+
+    if (!entRaw.trialOptInStartedAt) {
+      entRaw.trialOptInStartedAt = new Date().toISOString();
+      await writeStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/entitlement_v1.json`,
+        entRaw
+      );
+    }
     const listRes = await fetch(
       `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&select=device_id`,
       { headers: srvHeaders(serviceKey) }
@@ -1100,7 +1286,224 @@ export async function handleAuthedWorkAndDeviceAction({
     };
   }
 
+  if (action === 'device_purchase_plan') {
+    const requestedPlanId = String(body.planId || '').trim();
+    const spec = SERVER_SUBSCRIPTION_PLANS[requestedPlanId];
+    if (!spec) {
+      return {
+        status: 400,
+        body: { ok: false, reason: 'UNKNOWN_SUBSCRIPTION_PLAN', message: '지원하지 않는 이용권입니다.' },
+      };
+    }
+    if (!hubToken || !hubUrl) {
+      return {
+        status: 401,
+        body: { ok: false, reason: 'HUB_AUTH_REQUIRED', message: '허브 로그인 세션이 필요합니다.' },
+      };
+    }
+
+    const requestId =
+      String(body.requestId || '').trim().slice(0, 96) ||
+      `ghosti_sub_${spec.canonicalId}_${userId.slice(0, 8)}_${Date.now()}`;
+
+    const entRaw = await readStorageJson(
+      supabaseUrl,
+      serviceKey,
+      DEVICE_BUCKET,
+      `${emailHash}/entitlement_v1.json`,
+      { planId: 'free_trial', trialOptInStartedAt: null, activatedAt: null, paidExpiresAt: null }
+    );
+    const processedIds = Array.isArray(entRaw.processedRequestIds) ? entRaw.processedRequestIds : [];
+    if (processedIds.includes(requestId)) {
+      const listRes = await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&select=device_id`,
+        { headers: srvHeaders(serviceKey) }
+      );
+      const devRows = listRes.ok ? await listRes.json().catch(() => []) : [];
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          idempotentReplay: true,
+          orderId: requestId,
+          planId: spec.canonicalId,
+          paidCoins: spec.priceCoins,
+          entitlement: computeEntitlementView(entRaw, Array.isArray(devRows) ? devRows.length : 1),
+        },
+      };
+    }
+
+    const hubHeaders = {
+      'Content-Type': 'application/json',
+      Authorization: `Bearer ${hubToken}`,
+      'X-Client-Id': hubClientId || 'APP-01',
+      'X-Client-Secret': hubClientSecret || 'merlin-family-secret-key-2026',
+    };
+
+    // 1) 서버에서 직접 MerlinHub 최신 코인 잔액 조회 (클라이언트 잔액 신뢰 0%)
+    let currentBalance = 0;
+    try {
+      const balRes = await fetch(
+        `${hubUrl}/api/wallet/balance?userId=${encodeURIComponent(userId)}&t=${Date.now()}`,
+        { method: 'GET', headers: hubHeaders }
+      );
+      const balData = await balRes.json().catch(() => ({}));
+      if (!balRes.ok || typeof balData?.balance !== 'number') {
+        return {
+          status: 502,
+          body: {
+            ok: false,
+            reason: 'HUB_BALANCE_CHECK_FAILED',
+            message: balData?.message || '귀신코인 잔액을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+          },
+        };
+      }
+      currentBalance = Number(balData.balance);
+    } catch (e) {
+      return {
+        status: 502,
+        body: { ok: false, reason: 'HUB_CONNECTION_FAILED', message: `허브 연결 오류: ${e?.message || e}` },
+      };
+    }
+
+    if (currentBalance < spec.priceCoins) {
+      return {
+        status: 402,
+        body: {
+          ok: false,
+          reason: 'INSUFFICIENT_COINS',
+          requiredCoins: spec.priceCoins,
+          currentBalance,
+          shortfall: spec.priceCoins - currentBalance,
+          message: `귀신코인이 ${(spec.priceCoins - currentBalance).toLocaleString()}C 부족합니다. 충전소에서 충전 후 바로 구독을 완료할 수 있습니다.`,
+        },
+      };
+    }
+
+    // 2) 서버에서 직접 MerlinHub 코인 실차감 트랜잭션 실행
+    let remainingBalance = currentBalance - spec.priceCoins;
+    try {
+      const txRes = await fetch(`${hubUrl}/api/wallet/transaction`, {
+        method: 'POST',
+        headers: hubHeaders,
+        body: JSON.stringify({
+          userId,
+          amount: -spec.priceCoins,
+          request_id: requestId,
+          transaction_type: 'SPEND',
+          display_text: spec.displayText,
+          app_id: 'Ghosti',
+          usage_metadata: {
+            planId: spec.canonicalId,
+            category: spec.category,
+            durationDays: spec.durationDays,
+            email,
+          },
+        }),
+      });
+      const txData = await txRes.json().catch(() => ({}));
+      if (!txRes.ok || txData?.success === false) {
+        const msg = String(txData?.message || txData?.error || '결제 승인에 실패했습니다.');
+        const isInsufficient = /부족|insufficient|balance/i.test(msg);
+        return {
+          status: isInsufficient ? 402 : 502,
+          body: {
+            ok: false,
+            reason: isInsufficient ? 'INSUFFICIENT_COINS' : 'HUB_TRANSACTION_FAILED',
+            requiredCoins: spec.priceCoins,
+            currentBalance,
+            shortfall: Math.max(0, spec.priceCoins - currentBalance),
+            message: msg,
+          },
+        };
+      }
+      if (typeof txData?.balance === 'number') {
+        remainingBalance = Number(txData.balance);
+      }
+    } catch (e) {
+      return {
+        status: 502,
+        body: { ok: false, reason: 'HUB_TRANSACTION_ERROR', message: `결제 통신 오류: ${e?.message || e}` },
+      };
+    }
+
+    // 3) 실차감 성공 시에만 서버 원장(entitlement_v1.json)에 누적 이용 기간 기록
+    const nowMs = Date.now();
+    const nowIso = new Date(nowMs).toISOString();
+    const addMs = spec.durationDays * 24 * 3600 * 1000;
+    if (spec.category === 'personal') {
+      const prevExpMs = entRaw.paidExpiresAt ? Date.parse(entRaw.paidExpiresAt) : 0;
+      const baseMs = Number.isFinite(prevExpMs) && prevExpMs > nowMs ? prevExpMs : nowMs;
+      entRaw.planId = spec.canonicalId;
+      entRaw.activatedAt = nowIso;
+      entRaw.paidExpiresAt = new Date(baseMs + addMs).toISOString();
+    } else {
+      const prevWorkExpMs = entRaw.workPaidExpiresAt ? Date.parse(entRaw.workPaidExpiresAt) : 0;
+      const baseMs = Number.isFinite(prevWorkExpMs) && prevWorkExpMs > nowMs ? prevWorkExpMs : nowMs;
+      entRaw.workPlanId = spec.canonicalId;
+      entRaw.workActivatedAt = nowIso;
+      entRaw.workPaidExpiresAt = new Date(baseMs + addMs).toISOString();
+    }
+    entRaw.lastOrderId = requestId;
+    entRaw.lastPaidCoins = spec.priceCoins;
+    entRaw.processedRequestIds = [...processedIds.slice(-39), requestId];
+    const prevHistory = Array.isArray(entRaw.purchaseHistory) ? entRaw.purchaseHistory : [];
+    entRaw.purchaseHistory = [
+      {
+        orderId: requestId,
+        planId: spec.canonicalId,
+        category: spec.category,
+        paidCoins: spec.priceCoins,
+        durationDays: spec.durationDays,
+        purchasedAt: nowIso,
+        expiresAt: spec.category === 'personal' ? entRaw.paidExpiresAt : entRaw.workPaidExpiresAt,
+      },
+      ...prevHistory,
+    ].slice(0, 20);
+
+    const saved = await writeStorageJson(
+      supabaseUrl,
+      serviceKey,
+      DEVICE_BUCKET,
+      `${emailHash}/entitlement_v1.json`,
+      entRaw
+    );
+    if (!saved) {
+      return {
+        status: 500,
+        body: {
+          ok: false,
+          reason: 'ENTITLEMENT_PERSIST_FAILED',
+          orderId: requestId,
+          message: '코인은 차감되었으나 이용권 저장에 일시 오류가 발생했습니다. 고객센터에 주문번호를 알려주시면 즉시 복구해 드립니다.',
+        },
+      };
+    }
+
+    const listRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&select=device_id`,
+      { headers: srvHeaders(serviceKey) }
+    );
+    const devRows = listRes.ok ? await listRes.json().catch(() => []) : [];
+    const entitlement = computeEntitlementView(entRaw, Array.isArray(devRows) ? devRows.length : 1);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        orderId: requestId,
+        planId: spec.canonicalId,
+        category: spec.category,
+        paidCoins: spec.priceCoins,
+        remainingBalance,
+        expiresAt: spec.category === 'personal' ? entRaw.paidExpiresAt : entRaw.workPaidExpiresAt,
+        entitlement,
+      },
+    };
+  }
+
   if (action === 'device_push_e2ee_clip') {
+    const gate = await assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash);
+    if (!gate.ok) return gate.response;
     const cipherB64 = String(body.cipherB64 || '').trim();
     const ivB64 = String(body.ivB64 || '').trim();
     const clipHash = String(body.clipHash || '').trim().slice(0, 64);
@@ -1136,7 +1539,7 @@ export async function handleAuthedWorkAndDeviceAction({
       senderName,
       createdAt: effectiveCreatedAt,
     });
-    const trimmed = filtered.slice(0, 15);
+    const trimmed = filtered.slice(0, 20);
     const saved = await writeStorageJson(
       supabaseUrl,
       serviceKey,
@@ -1162,6 +1565,8 @@ export async function handleAuthedWorkAndDeviceAction({
   }
 
   if (action === 'device_pull_e2ee_clips') {
+    const gate = await assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash);
+    if (!gate.ok) return gate.response;
     const nowMs = Date.now();
     const cutoffMs = nowMs - 24 * 3600 * 1000;
     const mailbox = await readStorageJson(
@@ -1186,7 +1591,9 @@ export async function handleAuthedWorkAndDeviceAction({
   }
 
   if (action === 'device_sync_shadow_catalog') {
-    const incoming = Array.isArray(body.items) ? body.items.slice(0, 150) : [];
+    const gate = await assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash);
+    if (!gate.ok) return gate.response;
+    const incoming = Array.isArray(body.items) ? body.items.slice(0, 250) : [];
     const catalog = await readStorageJson(
       supabaseUrl,
       serviceKey,
@@ -1204,8 +1611,8 @@ export async function handleAuthedWorkAndDeviceAction({
         title: String(raw.title || '').slice(0, 180),
         thumbWebp:
           raw.thumbWebp && String(raw.thumbWebp).length <= 36000 ? String(raw.thumbWebp) : undefined,
-        keywords: Array.isArray(raw.keywords) ? raw.keywords.slice(0, 12).map(String) : [],
-        ocrSnippet: String(raw.ocrSnippet || '').slice(0, 500),
+        keywords: Array.isArray(raw.keywords) ? raw.keywords.slice(0, 16).map(String) : [],
+        ocrSnippet: String(raw.ocrSnippet || '').slice(0, 800),
         shotDate: String(raw.shotDate || '').slice(0, 40),
         sourceDeviceId: String(raw.sourceDeviceId || ''),
         sourceDeviceName: String(raw.sourceDeviceName || '내 기기').slice(0, 48),
@@ -1217,7 +1624,7 @@ export async function handleAuthedWorkAndDeviceAction({
     }
     const allItems = Object.values(byId)
       .sort((a, b) => (Date.parse(b.syncedAt || '') || 0) - (Date.parse(a.syncedAt || '') || 0))
-      .slice(0, 300);
+      .slice(0, 1500);
     const nextById = {};
     for (const it of allItems) nextById[it.id] = it;
 
@@ -1228,10 +1635,51 @@ export async function handleAuthedWorkAndDeviceAction({
       `${emailHash}/shadow_catalog_v1.json`,
       { updatedAt: new Date().toISOString(), byId: nextById }
     );
-    return { status: 200, body: { ok: true, items: allItems } };
+    return { status: 200, body: { ok: true, items: allItems, entitlement: gate.entitlement } };
+  }
+
+  if (action === 'device_sync_snippets') {
+    const gate = await assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash);
+    if (!gate.ok) return gate.response;
+    const mode = body.mode === 'push' ? 'push' : 'pull';
+    const current = await readStorageJson(
+      supabaseUrl,
+      serviceKey,
+      DEVICE_BUCKET,
+      `${emailHash}/snippets_e2ee_v1.json`,
+      { cipherB64: '', ivB64: '', updatedAt: null, updatedByDeviceId: '', updatedByDeviceName: '' }
+    );
+    if (mode === 'push') {
+      const cipherB64 = String(body.cipherB64 || '').trim();
+      const ivB64 = String(body.ivB64 || '').trim();
+      if (!cipherB64 || !ivB64 || cipherB64.length > 64000) {
+        return { status: 400, body: { ok: false, reason: 'INVALID_E2EE_SNIPPETS_PAYLOAD' } };
+      }
+      const nextDoc = {
+        cipherB64,
+        ivB64,
+        updatedAt: new Date().toISOString(),
+        updatedByDeviceId: String(body.deviceId || '').slice(0, 80),
+        updatedByDeviceName: String(body.deviceName || actorNick || '내 기기').slice(0, 48),
+      };
+      const saved = await writeStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/snippets_e2ee_v1.json`,
+        nextDoc
+      );
+      if (!saved) {
+        return { status: 502, body: { ok: false, reason: 'SNIPPETS_WRITE_FAILED' } };
+      }
+      return { status: 200, body: { ok: true, ...nextDoc } };
+    }
+    return { status: 200, body: { ok: true, ...current } };
   }
 
   if (action === 'device_sign_mirror_upload') {
+    const gate = await assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash);
+    if (!gate.ok) return gate.response;
     const sha256 = String(body.sha256 || '').replace(/[^a-fA-F0-9_.-]/g, '').slice(0, 80);
     if (!sha256) return { status: 400, body: { ok: false, reason: 'MISSING_SHA256' } };
     const signed = await createSignedUploadUrl(
@@ -1244,6 +1692,8 @@ export async function handleAuthedWorkAndDeviceAction({
   }
 
   if (action === 'device_sign_mirror_download') {
+    const gate = await assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash);
+    if (!gate.ok) return gate.response;
     const sha256 = String(body.sha256 || '').replace(/[^a-fA-F0-9_.-]/g, '').slice(0, 80);
     if (!sha256) return { status: 400, body: { ok: false, reason: 'MISSING_SHA256' } };
     const signed = await createSignedDownloadUrl(

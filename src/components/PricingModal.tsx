@@ -30,6 +30,7 @@ const PLAN_LABELS: Record<PricingPlanId, string> = {
   personal_single_2900: '🆓 1~3번 내 기기 (PC·폰) : 언제나 0원 • 👻 귀신비서 · 🎯 귀신검색 · ⚡ 귀신창',
   personal_sub_3900: '👑 5번 내 기기 통합 (PC+폰+PC+) • 🎁 30일 무료체험 (이후 월 3,900원)',
   personal_year_35000: '👑 5번 내 기기 통합 (PC+폰+PC+) • 연간 결제 39,000원 (월 3,250원꼴 · 2개월 무료 할인)',
+  personal_year_39000: '👑 5번 내 기기 통합 (PC+폰+PC+) • 연간 결제 39,000원 (월 3,250원꼴 · 2개월 무료 할인)',
   family_home_5900: '👨‍👩‍👧‍👦 4번 사진 공유 (가족 · 우리집) • 인원 무제한 평생 0원 (사진·동영상 전용)',
   family_home_year_59000: '👨‍👩‍👧‍👦 4번 사진 공유 (가족 · 우리집) • 인원 무제한 평생 0원 (사진·동영상 전용)',
   family_three_8900: '👨‍👩‍👧‍👦 4번 사진 공유 (가족 · 양가 3방) • 인원 무제한 평생 0원 (사진·동영상 전용)',
@@ -46,8 +47,12 @@ const PLAN_LABELS: Record<PricingPlanId, string> = {
   student_year_9000: '🎓 4번 사진 공유 (동창회 · 학급) • 인원 무제한 평생 0원 (사진·동영상 전용)',
   work_soho_9900: '💼 6번 업무 공유 (S: 드라이브 · 소호 ~5인 월 9,900원 · 30일 무료체험)',
   work_soho_year_99000: '💼 6번 업무 공유 (S: 드라이브 · 소호 ~5인 연간 결제 99,000원 · 월 8,250원꼴)',
-  work_biz_19900: '💼 6번 업무 공유 • 소기업 ~20인 (월 19,000원) / 중소기업 ~50인 (월 29,000원)',
-  work_biz_year_199000: '💼 6번 업무 공유 • 소기업 ~20인 (연 190,000원) / 중소기업 ~50인 (연 290,000원)',
+  work_biz_19000: '💼 6번 업무 공유 • 소기업 ~20인 (월 19,000원)',
+  work_biz_year_190000: '💼 6번 업무 공유 • 소기업 ~20인 (연 190,000원 · 2개월 무료)',
+  work_biz_19900: '💼 6번 업무 공유 • 소기업 ~20인 (월 19,000원)',
+  work_biz_year_199000: '💼 6번 업무 공유 • 소기업 ~20인 (연 190,000원)',
+  work_pro_29000: '💼 6번 업무 공유 • 중소기업 ~50인 (월 29,000원)',
+  work_pro_year_290000: '💼 6번 업무 공유 • 중소기업 ~50인 (연 290,000원 · 2개월 무료)',
 };
 
 /**
@@ -141,18 +146,18 @@ export const PcMasterQuickSendPanel: React.FC<{ compact?: boolean }> = ({ compac
             <span>💬 카톡(나에게)으로 ‘내 PC 연동 시작 가이드’ 보내두기</span>
           </button>
 
-          {/* 보조 버튼 (이메일 2순위): 가입된 귀신같이 여권 이메일로 PC 연동 안내서 발송 */}
+          {/* 보조 버튼 (PC 연결 주소 1초 복사): PC 브라우저에서 바로 열 수 있도록 클립보드 복사 */}
           <button
             type="button"
             onClick={() => void sendPcMasterUrlToEmail()}
             className="px-4 py-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-primary-container/50 text-primary-container font-label-md text-[13px] font-black flex items-center justify-center gap-2 shadow-md transition-all cursor-pointer active:scale-[0.98]"
           >
-            <span>📩 가입 이메일로 PC 연동 안내서 발송</span>
+            <span>📋 내 PC 연결 주소 복사 (PC 브라우저에 붙여넣기)</span>
           </button>
         </div>
       ) : (
         <div className="p-3 rounded-xl bg-zinc-900/90 border border-white/10 text-zinc-300 font-body-sm text-[12px]">
-          💡 데스크톱(Windows / Mac) 환경에서 귀신같이(Ghosti) 마스터 엔진을 실행한 뒤 동일한 여권 계정({merlinAuth.email})으로 로그인하시면 즉시 연동됩니다.
+          💡 데스크톱(Windows / Mac) 환경에서 귀신같이(Ghosti) 마스터 엔진을 실행한 뒤 동일한 여권 계정({merlinAuth.email || '로그인 계정'})으로 로그인하시면 즉시 연동됩니다.
         </div>
       )}
 
@@ -161,7 +166,7 @@ export const PcMasterQuickSendPanel: React.FC<{ compact?: boolean }> = ({ compac
           <span>
             {lastSentPcLinkChannel === 'kakao'
               ? '✓ 카톡(나에게)으로 ‘내 PC 연동 시작 가이드’가 준비되었습니다! 데스크톱(PC) 카카오톡에서 열어 작업을 바로 이어가세요.'
-              : `✓ 가입 이메일(${merlinAuth.email})로 ‘내 PC 연동 안내서’가 발송되었습니다! 데스크톱(PC)에서 확인해 주세요.`}
+              : '✓ 내 PC 연결 주소가 클립보드에 복사되었습니다! PC 브라우저 주소창에 붙여넣고 같은 이메일로 로그인하세요.'}
           </span>
         </div>
       )}
@@ -665,11 +670,11 @@ export const PricingModal: React.FC = () => {
                     onClick={() => activatePricingPlan('personal_sub_3900')}
                     className="py-2.5 rounded-lg bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[12.5px] font-black cursor-pointer"
                   >
-                    🎁 30일 무료체험 후 월 3,900원 시작
+                    💳 월 3,900원 구독 결제 (30일 무료체험 선택 가능)
                   </button>
                   <button
                     type="button"
-                    onClick={() => activatePricingPlan('personal_year_35000')}
+                    onClick={() => activatePricingPlan('personal_year_39000')}
                     className="py-2.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12.5px] font-black cursor-pointer"
                   >
                     ✨ 연간 결제 39,000원 (월 3,250원꼴 · 2개월 무료)
@@ -748,14 +753,14 @@ export const PricingModal: React.FC = () => {
                   <div className="grid grid-cols-2 gap-1.5">
                     <button
                       type="button"
-                      onClick={() => activatePricingPlan('work_biz_19900')}
+                      onClick={() => activatePricingPlan('work_biz_19000')}
                       className="py-2 rounded-lg bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
                     >
                       월 19,000원
                     </button>
                     <button
                       type="button"
-                      onClick={() => activatePricingPlan('work_biz_year_199000')}
+                      onClick={() => activatePricingPlan('work_biz_year_190000')}
                       className="py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11px] font-extrabold cursor-pointer"
                     >
                       연 19만 (2개월 무료)
@@ -782,14 +787,14 @@ export const PricingModal: React.FC = () => {
                   <div className="grid grid-cols-2 gap-1.5">
                     <button
                       type="button"
-                      onClick={() => activatePricingPlan('work_biz_19900')}
+                      onClick={() => activatePricingPlan('work_pro_29000')}
                       className="py-2 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-label-sm text-[11.5px] font-bold cursor-pointer"
                     >
                       월 29,000원
                     </button>
                     <button
                       type="button"
-                      onClick={() => activatePricingPlan('work_biz_year_199000')}
+                      onClick={() => activatePricingPlan('work_pro_year_290000')}
                       className="py-2 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11px] font-extrabold cursor-pointer"
                     >
                       연 29만 (2개월 무료)
@@ -925,7 +930,7 @@ export const PricingModal: React.FC = () => {
 
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
             <span className="font-body-sm text-[11.5px] text-zinc-400">
-              💡 모임 연구독 총무님께는 <strong>[가족 라운지 1개월 무료 구독권 3장]</strong>, 가족방 연구독 방장님께는 <strong>[모임 라운지 3개월 무료 구독권 1장]</strong> 교차 특전이 제공됩니다.
+              💡 <strong>4번 사진 공유(가족·동호회·동창회)</strong>는 방장도 멤버도 인원·장수 제한 없이 <strong>평생 0원 무료</strong>입니다.
             </span>
 
             <div className="flex flex-wrap items-center gap-2">
@@ -959,28 +964,48 @@ export const PricingModal: React.FC = () => {
           </div>
         </div>
 
-        {/* 4. 마이페이지 / 지갑 기본 편의 기능: 멀린 코인 잔액 & 코인 선물하기 (조용한 기본 기능) */}
+        {/* 4. 내 귀신코인 지갑 (실제 허브 잔액 · 충전소 · 선물함 직결) */}
         <div className="px-4 py-3 rounded-xl bg-zinc-950/90 border border-white/10 flex flex-wrap items-center justify-between gap-2 text-[12px]">
           <div className="flex flex-wrap items-center gap-2 text-zinc-300">
             <span className="font-bold text-amber-300">
-              🪙 내 멀린 코인 지갑: {(merlinAuth.coinBalance ?? 5200).toLocaleString()} 코인
+              🪙 내 귀신코인 지갑:{' '}
+              {merlinAuth?.userId && merlinAuth.userId !== 'guest'
+                ? `${(merlinAuth.coinBalance ?? 0).toLocaleString()} C`
+                : '로그인 후 잔액 확인'}
             </span>
             <span className="text-zinc-500">|</span>
             <span className="text-zinc-400">
-              MerlinFamilyOS 패밀리 앱 공통 기축 통화 (충전 및 가족·총무 코인 선물 지원)
+              3몬스터 패밀리 앱 공통 코인 (구독 결제 · 충전소 · 지인 선물 지원)
             </span>
           </div>
-          <button
-            type="button"
-            onClick={handleSimulateP2pCoinGift}
-            className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold border transition-all cursor-pointer ${
-              p2pGiftSent
-                ? 'bg-emerald-500/20 border-emerald-400/50 text-emerald-300'
-                : 'bg-zinc-900 hover:bg-zinc-800 border-white/15 text-zinc-300'
-            }`}
-          >
-            {p2pGiftSent ? '✓ 코인 선물 전송 완료' : '🎁 코인 선물하기'}
-          </button>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
+              onClick={() => {
+                if (!merlinAuth?.userId || merlinAuth.userId === 'guest') {
+                  window.dispatchEvent(new CustomEvent('openLoginModal'));
+                  return;
+                }
+                window.dispatchEvent(new CustomEvent('openPurchaseModal'));
+              }}
+              className="px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold bg-amber-400 hover:bg-amber-300 text-zinc-950 cursor-pointer"
+            >
+              ⚡ 코인 충전소
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                if (!merlinAuth?.userId || merlinAuth.userId === 'guest') {
+                  window.dispatchEvent(new CustomEvent('openLoginModal'));
+                  return;
+                }
+                window.dispatchEvent(new CustomEvent('openGiftBoxModal'));
+              }}
+              className="px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-bold border bg-zinc-900 hover:bg-zinc-800 border-white/15 text-zinc-200 cursor-pointer"
+            >
+              🎁 선물함 열기
+            </button>
+          </div>
         </div>
       </div>
     </div>

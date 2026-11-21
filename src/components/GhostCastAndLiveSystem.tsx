@@ -378,6 +378,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
         if (
           entitlement?.isPaidUnlimited &&
           (entitlement.planId === 'personal_sub_3900' ||
+            entitlement.planId === 'personal_year_39000' ||
             entitlement.planId === 'personal_year_35000')
         ) {
           const cur = useSaySeeStore.getState();

@@ -42,6 +42,7 @@ export const PLAN_BADGE_LABELS: Record<PricingPlanId, string> = {
   personal_single_2900: '🩺 내 기기 (찾기·손보기 : 언제나 0원)',
   personal_sub_3900: '👑 5번 내 기기 통합 (🎁 30일 무료체험 / 월 3,900원)',
   personal_year_35000: '👑 5번 내 기기 통합 (연간 결제 39,000원 · 월 3,250원꼴)',
+  personal_year_39000: '👑 5번 내 기기 통합 (연간 결제 39,000원 · 월 3,250원꼴)',
   family_home_5900: '👨‍👩‍👧‍👦 4번 사진 공유 (가족 · 우리집 : 평생 0원)',
   family_home_year_59000: '👨‍👩‍👧‍👦 4번 사진 공유 (가족 · 우리집 : 평생 0원)',
   family_three_8900: '👨‍👩‍👧‍👦 4번 사진 공유 (가족 · 양가 3방 : 평생 0원)',
@@ -58,8 +59,12 @@ export const PLAN_BADGE_LABELS: Record<PricingPlanId, string> = {
   student_year_9000: '🎓 4번 사진 공유 (동창회 · 학급 : 평생 0원)',
   work_soho_9900: '💼 6번 업무 공유 SOHO ~5인 (🎁 30일 무료체험 / 월 9,900원)',
   work_soho_year_99000: '💼 6번 업무 공유 SOHO ~5인 (연 99,000원 · 월 8,250원꼴)',
-  work_biz_19900: '💼 6번 업무 공유 소기업 ~20인 (월 19,000원) / 중소기업 ~50인 (월 29,000원)',
-  work_biz_year_199000: '💼 6번 업무 공유 기업 (연 190,000원 / 연 290,000원 · 2개월 무료)',
+  work_biz_19000: '💼 6번 업무 공유 소기업 ~20인 (월 19,000원)',
+  work_biz_year_190000: '💼 6번 업무 공유 소기업 ~20인 (연 190,000원 · 2개월 무료)',
+  work_biz_19900: '💼 6번 업무 공유 소기업 ~20인 (월 19,000원)',
+  work_biz_year_199000: '💼 6번 업무 공유 소기업 ~20인 (연 190,000원)',
+  work_pro_29000: '💼 6번 업무 공유 중소기업 ~50인 (월 29,000원)',
+  work_pro_year_290000: '💼 6번 업무 공유 중소기업 ~50인 (연 290,000원 · 2개월 무료)',
 };
 
 export function formatLoungeBytes(bytes: number): string {

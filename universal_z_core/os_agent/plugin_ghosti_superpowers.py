@@ -343,32 +343,37 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
         pass
     data = params or {}
     account_id = str(data.get("accountId") or "guest_local").strip()
+    has_explicit_sub_flag = "isSubscribed" in data and str(data.get("isSubscribed") or "").strip() != ""
     is_subscribed = str(data.get("isSubscribed") or "false").lower() in ("true", "1", "yes")
     linked_device_count = int(data.get("linkedDeviceCount") or data.get("linked_device_count") or 1)
     hwid = get_machine_hwid()
     ledger = _load_trial_ledger()
 
-    if is_subscribed:
-        ledger.setdefault("machines", {})[hwid] = {
-            "accountId": account_id,
-            "isSubscribed": True,
-            "updatedAt": datetime.datetime.now().isoformat(),
-        }
-        _save_trial_ledger(ledger)
-
     m_entry = ledger.setdefault("machines", {}).setdefault(hwid, {
         "accountId": account_id,
         "machineHwid": hwid,
-        "isSubscribed": is_subscribed,
+        "isSubscribed": False,
     })
+
+    # [누수 봉쇄] 웹 서버 원장(entitlement)에서 isSubscribed=true/false가 명시 전달되면 양방향 1:1 동기화
+    # (구독 만료·해지 시 로컬 영구 True 고착 버그 차단)
+    if has_explicit_sub_flag:
+        prev_sub = bool(m_entry.get("isSubscribed", False))
+        if prev_sub != is_subscribed or m_entry.get("accountId") != account_id:
+            m_entry["accountId"] = account_id
+            m_entry["isSubscribed"] = is_subscribed
+            m_entry["updatedAt"] = datetime.datetime.now().isoformat()
+            _save_trial_ledger(ledger)
+
+    effective_subscribed = is_subscribed if has_explicit_sub_flag else bool(m_entry.get("isSubscribed", False))
 
     # 1. 개별 기능별 30일 무제한 타이머 원장
     feature_trials_ledger = m_entry.setdefault("featureTrials", {})
-    ft_res = _compute_feature_trials(feature_trials_ledger, is_subscribed or m_entry.get("isSubscribed", False))
+    ft_res = _compute_feature_trials(feature_trials_ledger, effective_subscribed)
 
     # 2. 내 기기 통합 (2번째 기기 연결 시 30일 무료체험)
     cross_ledger = m_entry.setdefault("crossDeviceTrial", {})
-    cross_res = _compute_cross_device_trial(cross_ledger, linked_device_count, is_subscribed or m_entry.get("isSubscribed", False))
+    cross_res = _compute_cross_device_trial(cross_ledger, linked_device_count, effective_subscribed)
 
     # 3. [2026-11-15 확정 정책] Opt-in 30일 무제한 무료체험 (설치 시 몰래 자동개시 0% · 만료 후 유료 티어만 깔끔 잠금🔒)
     daily_free_limit = 0
@@ -376,7 +381,7 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
 
     summary = spd.get_trial_badge_summary()
     opt_in_raw = str(m_entry.get("trialOptInStatus") or "").strip().upper()
-    if is_subscribed or m_entry.get("isSubscribed") or summary["status"] == "SUBSCRIBED":
+    if effective_subscribed or (not has_explicit_sub_flag and summary["status"] == "SUBSCRIBED"):
         trial_status = "SUBSCRIBED"
         trial_opt_in_status = "SUBSCRIBED"
         trial_days_left = 9999
@@ -398,7 +403,7 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
     return {
         "ok": True,
         "engine_running": True,
-        "version": "3.7",
+        "version": "3.8",
         "port": 5199,
         "machine_hwid": hwid,
         "account_id": account_id,

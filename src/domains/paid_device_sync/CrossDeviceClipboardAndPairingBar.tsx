@@ -7,6 +7,7 @@ import {
   writeTextToLocalOsClipboard,
 } from '../../services/deviceIntegrationService';
 import { zCoreBridge } from '../../services/zCoreBridge';
+import { formatKoreaDateShort } from '../../services/subscriptionPlanCatalog';
 
 export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> = ({
   compact = false,
@@ -19,6 +20,7 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
     deviceEntitlement,
     syncedClipboardItems,
     thisDeviceRevoked,
+    syncedSnippetsMap,
     refreshDeviceIntegrationState,
     pairWithSixDigitCode,
     unlinkConnectedDevice,
@@ -26,12 +28,15 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
     sendTextToPairedClipboard,
     setDeviceIntegrationSnapshot,
     setShowProModal,
+    openSubscriptionCheckout,
+    syncSnippetsNow,
   } = useSaySeeStore();
 
   const [codeInput, setCodeInput] = useState('');
   const [clipDraft, setClipDraft] = useState('');
   const [sendingClip, setSendingClip] = useState(false);
   const [pullingLocalClip, setPullingLocalClip] = useState(false);
+  const [syncingSnippets, setSyncingSnippets] = useState(false);
   const [pairingBusy, setPairingBusy] = useState(false);
   const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
   const [reconnectingBusy, setReconnectingBusy] = useState(false);
@@ -149,7 +154,10 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
           )}
           {isLoggedIn && deviceEntitlement?.isPaidUnlimited && !hidePricingForStore && (
             <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 border border-amber-300/50 text-amber-200 text-[11px] font-extrabold">
-              👑 무제한 기기 통합 활성
+              👑 무제한 기기 통합 구독 중
+              {deviceEntitlement.paidExpiresAt
+                ? ` (${formatKoreaDateShort(deviceEntitlement.paidExpiresAt)}까지 · D-${deviceEntitlement.paidDaysLeft ?? 1})`
+                : ''}
             </span>
           )}
           {isLoggedIn &&
@@ -161,13 +169,42 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
                   : `🎁 30일 무제한 무료체험 중 (D-${deviceEntitlement.trialDaysLeft} · 자동결제 0%)`}
               </span>
             )}
+          {isLoggedIn &&
+            !deviceEntitlement?.isPaidUnlimited &&
+            deviceEntitlement?.trialExpired && (
+              <span className="px-2.5 py-0.5 rounded-full bg-rose-500/20 border border-rose-400/50 text-rose-200 text-[11px] font-extrabold">
+                🔒 30일 무료체험 종료 (대장 PC 로컬 원본 100% 보존 중)
+              </span>
+            )}
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
+          {isLoggedIn && deviceEntitlement?.unlimitedBindingUnlocked && (
+            <button
+              type="button"
+              disabled={syncingSnippets}
+              onClick={async () => {
+                setSyncingSnippets(true);
+                await syncSnippetsNow('auto');
+                setSyncingSnippets(false);
+              }}
+              className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-emerald-400/40 text-emerald-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer disabled:opacity-50"
+              title="내 PC 귀신창 F1~F6 개인 상용구를 암호화(E2EE)하여 모든 기기에 동기화합니다"
+            >
+              {syncingSnippets
+                ? '⌨️ 상용구 동기화 중...'
+                : `⌨️ F1~F6 상용구 동기화${
+                    Object.keys(syncedSnippetsMap || {}).length > 0
+                      ? ` (${Object.keys(syncedSnippetsMap).length}개)`
+                      : ''
+                  }`}
+            </button>
+          )}
           {isLoggedIn &&
             !hidePricingForStore &&
             !deviceEntitlement?.isPaidUnlimited &&
-            !deviceEntitlement?.trialActive && (
+            !deviceEntitlement?.trialActive &&
+            !deviceEntitlement?.trialExpired && (
               <button
                 type="button"
                 onClick={() => void refreshDeviceIntegrationState(true)}
@@ -176,6 +213,27 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
                 🎁 2대+ 연동 30일 무료체험 시작 (자동결제 0%)
               </button>
             )}
+          {isLoggedIn &&
+            !hidePricingForStore &&
+            !deviceEntitlement?.isPaidUnlimited &&
+            deviceEntitlement?.trialExpired && (
+              <button
+                type="button"
+                onClick={() => openSubscriptionCheckout('personal_sub_3900')}
+                className="px-3 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer"
+              >
+                💳 월 3,900원 구독으로 다시 연결
+              </button>
+            )}
+          {isLoggedIn && !hidePricingForStore && deviceEntitlement?.isPaidUnlimited && (
+            <button
+              type="button"
+              onClick={() => openSubscriptionCheckout('personal_sub_3900')}
+              className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-400/40 text-amber-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
+            >
+              ⏳ 이용 기간 연장
+            </button>
+          )}
           {isLoggedIn && !hidePricingForStore && !deviceEntitlement?.isPaidUnlimited && (
             <button
               type="button"
@@ -186,6 +244,11 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
             </button>
           )}
         </div>
+      </div>
+
+      {/* 1.2. iOS 클립보드 동기화 정책 정직 병기 (가격표 마스터 SSOT 의무 고지) */}
+      <div className="text-[11px] text-zinc-400 leading-snug">
+        💡 <strong>동기화 안내:</strong> 안드로이드·PC는 백그라운드 즉시 동기화되며, <strong>iOS(아이폰)</strong>는 Apple OS 정책상 앱 진입(화면 전환) 시 0.1초 만에 즉시 동기화됩니다.
       </div>
 
       {/* 1.5. 연결 해제된 현재 기기 재연결 안내 & 연결된 내 기기 목록(개별 연결 해제 버튼) */}

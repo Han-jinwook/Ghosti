@@ -276,7 +276,29 @@ def handle_action(act: str, data: Dict[str, Any]) -> Dict[str, Any] | None:
         return save_mirrored_device_file(data)
 
     if act == "paid-sync-summon-file":
-        target_id = str(data.get("fileId") or data.get("fileName") or "").strip()
-        return {"ok": True, "track": "paid-sync", "status": "queued", "target": target_id}
+        target_name = os.path.basename(str(data.get("fileName") or data.get("fileId") or "").strip())
+        if not target_name:
+            return {"ok": False, "track": "paid-sync", "error": "EMPTY_FILE_NAME"}
+        backup_dir = resolve_phone_backup_dir()
+        existing = backup_dir / target_name
+        if existing.exists() and existing.is_file():
+            return {
+                "ok": True,
+                "track": "paid-sync",
+                "status": "ready_local",
+                "savedPath": str(existing),
+                "backupDir": str(backup_dir),
+                "size": existing.stat().st_size,
+            }
+        if data.get("signedDownloadUrl") or data.get("base64Data"):
+            pulled = save_mirrored_device_file({**data, "fileName": target_name})
+            return {"track": "paid-sync", **pulled}
+        return {
+            "ok": False,
+            "track": "paid-sync",
+            "status": "not_found_local",
+            "error": "FILE_NOT_YET_MIRRORED_LOCALLY",
+            "target": target_name,
+        }
 
     return {"ok": False, "track": "paid-sync", "error": f"UNHANDLED_PAID_SYNC_ACTION: {act}"}
