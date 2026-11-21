@@ -417,11 +417,8 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
         pass
     data = params or {}
     account_id = str(data.get("accountId") or "guest_local").strip()
-<<<<<<< HEAD
     has_explicit_sub_flag = "isSubscribed" in data and str(data.get("isSubscribed") or "").strip() != ""
-    is_subscribed = _parse_bool(data.get("isSubscribed"), False)
-=======
->>>>>>> 4126ad4 (fix(2귀신): 귀신검색 전수점검 정합화(v2.7.0) 및 귀신창 평상시 2회 복사 무소환 자동연사 폐지(Ctrl+0 명시 소환 시에만 순차복붙 장전))
+    explicit_sub_val = _parse_bool(data.get("isSubscribed"), False)
     try:
         linked_device_count = int(data.get("linkedDeviceCount") or data.get("linked_device_count") or 1)
     except (ValueError, TypeError):
@@ -436,23 +433,27 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
         "isSubscribedVerified": False,
     })
     prev_verified = bool(m_entry.get("isSubscribedVerified"))
-    is_subscribed = _resolve_verified_subscription(data, m_entry)
-    if is_subscribed and not prev_verified:
-        m_entry["accountId"] = account_id
-        m_entry["updatedAt"] = datetime.datetime.now().isoformat()
-        _save_trial_ledger(ledger)
+    prev_sub = bool(m_entry.get("isSubscribed", False))
 
-    # [누수 봉쇄] 웹 서버 원장(entitlement)에서 isSubscribed=true/false가 명시 전달되면 양방향 1:1 동기화
-    # (구독 만료·해지 시 로컬 영구 True 고착 버그 차단)
-    if has_explicit_sub_flag:
-        prev_sub = bool(m_entry.get("isSubscribed", False))
-        if prev_sub != is_subscribed or m_entry.get("accountId") != account_id:
+    # [누수 봉쇄] 웹 서버 원장(entitlement)에서 isSubscribed=false가 명시 전달되면 즉시 해제 동기화하고,
+    # true 요청은 검증된 원장/Hub 토큰(_resolve_verified_subscription)으로만 신뢰합니다.
+    if has_explicit_sub_flag and not explicit_sub_val:
+        is_subscribed = False
+        if prev_sub or prev_verified or m_entry.get("accountId") != account_id:
             m_entry["accountId"] = account_id
-            m_entry["isSubscribed"] = is_subscribed
+            m_entry["isSubscribed"] = False
+            m_entry["isSubscribedVerified"] = False
+            m_entry["updatedAt"] = datetime.datetime.now().isoformat()
+            _save_trial_ledger(ledger)
+    else:
+        is_subscribed = _resolve_verified_subscription(data, m_entry)
+        if is_subscribed and (not prev_verified or not prev_sub or m_entry.get("accountId") != account_id):
+            m_entry["accountId"] = account_id
+            m_entry["isSubscribed"] = True
             m_entry["updatedAt"] = datetime.datetime.now().isoformat()
             _save_trial_ledger(ledger)
 
-    effective_subscribed = is_subscribed if has_explicit_sub_flag else bool(m_entry.get("isSubscribed", False))
+    effective_subscribed = is_subscribed
 
     # 1. 개별 기능별 30일 무제한 타이머 원장
     feature_trials_ledger = m_entry.setdefault("featureTrials", {})
