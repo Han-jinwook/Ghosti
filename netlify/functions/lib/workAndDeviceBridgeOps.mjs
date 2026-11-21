@@ -1622,9 +1622,9 @@ export async function handleAuthedWorkAndDeviceAction({
         syncedAt: new Date().toISOString(),
       };
     }
-    const allItems = Object.values(byId)
-      .sort((a, b) => (Date.parse(b.syncedAt || '') || 0) - (Date.parse(a.syncedAt || '') || 0))
-      .slice(0, 1500);
+    const allItems = Object.values(byId).sort(
+      (a, b) => (Date.parse(b.syncedAt || '') || 0) - (Date.parse(a.syncedAt || '') || 0)
+    );
     const nextById = {};
     for (const it of allItems) nextById[it.id] = it;
 

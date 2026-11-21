@@ -1818,16 +1818,16 @@ export async function executeRealDeviceSyncNow(opts: {
   }
 
   const ident = getThisDeviceIdentity();
-  const activeLocalPhotos = opts.photos
-    .filter((p) => !p.quarantined && !p.id.startsWith('shadow-remote-'))
-    .slice(0, 200);
-  const activeLocalDocs = opts.localDocuments
-    .filter((d) => !d.id.startsWith('shadow-remote-doc-'))
-    .slice(0, 150);
+  const activeLocalPhotos = opts.photos.filter(
+    (p) => !p.quarantined && !p.id.startsWith('shadow-remote-')
+  );
+  const activeLocalDocs = opts.localDocuments.filter(
+    (d) => !d.id.startsWith('shadow-remote-doc-')
+  );
 
   let mirroredUploadCount = 0;
 
-  // 1) 양쪽 원본 보관(mirror) 모드일 때: 아직 업로드되지 않은 원본 사진 위주로 배치 증분 업로드 (회당 최대 36장)
+  // 1) 양쪽 원본 보관(mirror) 모드일 때: 아직 업로드되지 않은 원본 사진 전체를 증분 업로드
   const mirrorUploadedIds = new Set<string>();
   if (opts.strategy === 'mirror') {
     const pendingOriginals: Array<{ photo: PhotoItem; shaKey: string }> = [];
@@ -1836,7 +1836,7 @@ export async function executeRealDeviceSyncNow(opts: {
       const shaKey = `${hashSeed.slice(0, 40)}.jpg`;
       if (uploadedMirrorHashes.has(shaKey)) {
         mirrorUploadedIds.add(p.id);
-      } else if (pendingOriginals.length < 36) {
+      } else {
         pendingOriginals.push({ photo: p, shaKey });
       }
     }

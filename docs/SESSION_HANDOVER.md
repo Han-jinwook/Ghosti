@@ -36,7 +36,7 @@
 3. **유료 고객 만족도 5대 업그레이드 & 구버전/가짜 요소 정화 (`deviceIntegrationService.ts`, `paidDeviceSyncSlice.ts`, `CrossDeviceClipboardAndPairingBar.tsx`, `FreePhotoShareLounge.tsx`, `PricingModal.tsx`, `plugin_paid_sync_ghostwin.py`)**:
    - **PC↔폰 문서(`localDocuments`) 양방향 수신·병합(`remoteDocsToMerge`)** 완성(밖에서 폰으로 내 PC 문서 1초 검색 + `5. 내 기기 통합` 하단 문서 동기화 스트립 추가).
    - **타 기기 사진·문서 `IndexedDB` 영구 캐시(`ghosti_remote_shadow_cache_v1`)**로 새로고침(`F5`) 증발 해결 + **만료 시 원격 `shadow-remote-*`만 깔끔히 숨기고 대장 PC 로컬 원본 100% 보존** 규칙 구현.
-   - 동기화 배치 상한 대폭 확장(사진 200장 · 문서 150건 · 원본 미업로드분 36장 증분 · 서버 카탈로그 1,500건 · 실시간 진행률 표시) + **`F1~F6` 상용구 전 기기 E2EE 동기화(`device_sync_snippets` · `[⌨️ F1~F6 상용구 동기화]`)** 추가 + `paid-sync-summon-file` 실구현.
+   - 동기화 수량 제한 전면 해제(전체 사진·문서 증분 배치 동기화 + 실시간 진행률 표시) + **`F1~F6` 상용구 전 기기 E2EE 동기화(`device_sync_snippets` · `[⌨️ F1~F6 상용구 동기화]`)** 추가 + `paid-sync-summon-file` 실구현.
    - `Z-코어` ➔ `PC 엔진` 통일, `0GB` 가짜 용량 실측 전환, iOS 클립보드 정책 정직 병기, `PricingModal` 구버전 문구(`가족방 1개월권 3장`)·가짜 `5,200코인`·가짜 코인 선물하기(`HubGiftBoxModal`/`HubPurchaseWidget` 직결)·가짜 이메일 발송(`beakes@sundreamer.app` 제거 ➔ PC 연결 주소 1초 복사) 전수 정화.
 
 ---
