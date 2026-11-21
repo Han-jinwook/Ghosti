@@ -161,11 +161,19 @@ export const DesktopDashboard: React.FC = () => {
   const switchStandaloneWindowSize = (targetMode: 'compact' | 'large') => {
     const nextIsLarge = targetMode === 'large';
     setIsGalleryViewport(nextIsLarge);
+    const stNow = useSaySeeStore.getState();
+    const hasQ = Boolean(stNow.hasExecutedUserSearch && stNow.activeQuery?.trim());
+    const compactStage = hasQ ? 'medium' : 'small';
+    const nextStage = nextIsLarge ? 'large' : compactStage;
     try {
       const saved = JSON.parse(localStorage.getItem('ghosti_search_game_v1') || '{}');
       localStorage.setItem(
         'ghosti_search_game_v1',
-        JSON.stringify({ ...saved, summon: true, medium: true, ...(nextIsLarge ? { large: true } : {}) })
+        JSON.stringify({
+          ...saved,
+          summon: true,
+          ...(nextIsLarge ? { large: true } : { medium: true }),
+        })
       );
     } catch {
       /* ignore */
@@ -174,18 +182,18 @@ export const DesktopDashboard: React.FC = () => {
       const availW = window.screen?.availWidth || DEFAULT_WORK_AREA.right;
       const availH = window.screen?.availHeight || DEFAULT_WORK_AREA.bottom;
       const rect = computeGhostSearchWindowRect(
-        nextIsLarge ? 'large' : 'medium',
+        nextStage,
         window.screenX || 120,
         window.screenY || 80,
         { left: 0, top: 0, right: availW, bottom: availH },
-        20
+        nextStage === 'small' ? 340 : 20
       );
       window.resizeTo(rect.width, rect.height);
       window.moveTo(rect.x, rect.y);
     } catch {
       /* ignore */
     }
-    const daemonStage = nextIsLarge ? 'gallery' : 'medium';
+    const daemonStage = nextIsLarge ? 'gallery' : compactStage;
     if (zCoreBridge.isConnected) {
       void fetch(getZCoreUrl('/api/superpower/open_search_window'), {
         method: 'POST',
@@ -202,7 +210,11 @@ export const DesktopDashboard: React.FC = () => {
       const saved = JSON.parse(localStorage.getItem('ghosti_search_game_v1') || '{}');
       localStorage.setItem(
         'ghosti_search_game_v1',
-        JSON.stringify({ ...saved, summon: true, medium: true, large: true })
+        JSON.stringify({
+          ...saved,
+          summon: true,
+          ...(ghostSearchWindowStage === 'large' ? { large: true } : { medium: true }),
+        })
       );
     } catch {
       /* ignore */

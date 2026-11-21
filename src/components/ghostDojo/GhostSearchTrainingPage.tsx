@@ -466,27 +466,17 @@ const VirtualMonitorSimulator: React.FC<{
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  });
+  }, [connected]);
 
   const scale = monitorW / SIMULATOR_WORK_AREA.right;
   const rect = stage
-    ? stage === 'large'
-      ? {
-          stage: 'large' as const,
-          x: 16,
-          y: 36,
-          width: 1088,
-          height: 590,
-          framelessAppMode: true,
-        }
-      : {
-          stage: 'small' as const,
-          x: 100,
-          y: 52,
-          width: 920,
-          height: 540,
-          framelessAppMode: false,
-        }
+    ? computeGhostSearchWindowRect(
+        stage,
+        anchor.x,
+        anchor.y,
+        SIMULATOR_WORK_AREA,
+        stage === 'small' ? customSlimHeight : undefined
+      )
     : null;
   const currentScript = AUTO_MORPH_SCRIPT[autoPhase] || AUTO_MORPH_SCRIPT[1];
 
@@ -1091,7 +1081,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
                 <span>STEP 2 · 귀신검색 2단계 도장판 (🖥️ ⤡ 작게 · ⤢ 크게 실시간 완료 도장)</span>
               </h2>
               <span className="text-[11.5px] text-zinc-400">
-                아래 체험판 검색창 상단 또는 바탕화면 Ctrl+0 귀신검색창 상단의 <strong className="text-teal-300">⤡ 작게 · ⤢ 크게(갤러리)</strong> 버튼을 누르면 우측 도장판에 <strong className="text-emerald-300">✓ 완료 도장</strong>이 즉시 찍힙니다.
+                아래 웹 체험검색창 상단 또는 바탕화면 Ctrl+0 네이티브 귀신검색창 상단의 <strong className="text-teal-300">⤡ 작게 · ⤢ 크게(갤러리)</strong> 버튼을 직접 눌러 보면 우측 도장판에 <strong className="text-emerald-300">✓ 완료 도장</strong>이 즉시 찍힙니다.
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
@@ -1104,7 +1094,6 @@ export const GhostSearchTrainingPage: React.FC = () => {
                   type="button"
                   onClick={() => {
                     const targetStage: GhostSearchStage = s.id === 'summon' ? 'small' : s.id;
-                    markStep(s.id);
                     if (typeof window !== 'undefined') {
                       window.dispatchEvent(
                         new CustomEvent('ghosti_focus_virtual_monitor_window', {
@@ -1208,7 +1197,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
           <div className="p-3 rounded-xl bg-white dark:bg-zinc-900/80 border border-slate-200 dark:border-white/10 flex flex-col gap-1 shadow-2xs">
             <span className="font-extrabold text-slate-900 dark:text-white">① 📱 내 기기 통합 소환🔒</span>
             <span className="text-slate-600 dark:text-zinc-400 leading-snug">
-              동일 이메일 연결 시 핸드폰 사진·타 PC 파일 검색창 통합 노출 &amp; 폰 촬영 직후 <strong className="text-[#1E3A8A] dark:text-teal-300">0.2초 공간이동 (촬영 후 1분간 자동팝업 대기)</strong> · 30일 만료 시 원격 노출만 OFF되며 이미 대장 PC 로컬 폴더에 복사된 원본 파일은 영구 보존
+              동일 이메일 연결 시 핸드폰 사진·타 PC 파일 검색창 통합 노출 &amp; 폰 촬영 직후 <strong className="text-[#1E3A8A] dark:text-teal-300">1초 공간이동 (전송 후 1분간 자동 안내)</strong> · 30일 만료 시 원격 노출만 OFF되며 이미 대장 PC 로컬 폴더에 복사된 원본 파일은 영구 보존
             </span>
           </div>
           <div className="p-3 rounded-xl bg-white dark:bg-zinc-900/80 border border-slate-200 dark:border-white/10 flex flex-col gap-1 shadow-2xs">

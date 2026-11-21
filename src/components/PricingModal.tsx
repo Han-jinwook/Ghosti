@@ -27,7 +27,7 @@ import {
 
 const PLAN_LABELS: Record<PricingPlanId, string> = {
   free_trial: '🆓 1~4번 무료 코어 (귀신비서 · 귀신검색 · 귀신창 · 사진 공유) : 평생 0원 (5·6번 유료 확장 🎁 30일 무료체험 포함)',
-  personal_single_2900: '🆓 1~3번 내 기기 (PC·폰) : 언제나 0원 • 👻 귀신비서 · 🎯 귀신검색 · ⚡ 귀신창',
+  personal_single_2900: '🆓 1~3번 내 기기 (PC·폰) : 언제나 0원 • 👻 귀신비서 · 👻 귀신검색 · ⚡ 귀신창',
   personal_sub_3900: '👑 5번 내 기기 통합 (PC+폰+PC+) • 🎁 30일 무료체험 (이후 월 3,900원)',
   personal_year_35000: '👑 5번 내 기기 통합 (PC+폰+PC+) • 연간 결제 39,000원 (월 3,250원꼴 · 2개월 무료 할인)',
   personal_year_39000: '👑 5번 내 기기 통합 (PC+폰+PC+) • 연간 결제 39,000원 (월 3,250원꼴 · 2개월 무료 할인)',
@@ -527,7 +527,7 @@ export const PricingModal: React.FC = () => {
 
         {/* 1. 좌측 사이드바 메뉴와 100% 일치하는 요금 체계 (평생 무료 4코어 / 선택형 유료 확장 2종) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* ① [평생 무료] 내 기기 (PC·폰): 👻 귀신비서 · 🎯 귀신검색 · ⚡ 귀신창 */}
+          {/* ① [평생 무료] 내 기기 (PC·폰): 👻 귀신비서 · 👻 귀신검색 · ⚡ 귀신창 */}
           <div className="p-5 rounded-2xl bg-[#18181B] border border-emerald-400/40 flex flex-col justify-between gap-4">
             <div className="flex flex-col gap-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
@@ -539,7 +539,7 @@ export const PricingModal: React.FC = () => {
                 </span>
               </div>
               <h3 className="font-headline-sm text-[19px] text-white font-extrabold">
-                🆓 내 기기 (PC·폰) — 👻 귀신비서 · 🎯 귀신검색 · ⚡ 귀신창
+                🆓 내 기기 (PC·폰) — 👻 귀신비서 · 👻 귀신검색 · ⚡ 귀신창
               </h3>
 
               <div className="p-4 rounded-xl bg-zinc-950/90 border border-emerald-400/35 flex flex-col justify-between gap-2.5">

@@ -102,9 +102,9 @@ export const GhostSearchPane: React.FC<{
           cache: 'no-store',
           signal: ctrl.signal,
         }).finally(() => window.clearTimeout(tid));
-        if (!res.ok) return;
+        if (cancelled || !res.ok) return;
         const data = (await res.json()) as { ok?: boolean; sig?: string };
-        if (!data?.ok || !data.sig) return;
+        if (cancelled || !data?.ok || !data.sig) return;
         if (!lastWatchSigRef.current) {
           lastWatchSigRef.current = data.sig;
           return;

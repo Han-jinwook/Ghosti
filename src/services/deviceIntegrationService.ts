@@ -1682,7 +1682,7 @@ export function pushTeleportPhotoToPcVanguard(opts: {
   const ident = getThisDeviceIdentity();
   const cleanFileName = (opts.fileName || '스마트폰 사진').trim();
   const cleanOcr = (opts.ocrText || '').trim();
-  const cleanSummary = (opts.summary || `[모바일 0.2초 공간이동] ${cleanFileName}`).trim();
+  const cleanSummary = (opts.summary || `[모바일 1초 공간이동] ${cleanFileName}`).trim();
   const fullText = cleanOcr || cleanSummary;
   const payload: Record<string, unknown> = {
     file_name: cleanFileName,

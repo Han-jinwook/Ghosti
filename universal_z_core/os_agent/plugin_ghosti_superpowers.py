@@ -40,6 +40,65 @@ _DAEMON_WATCHDOG_STARTED = False
 _DAEMON_LOCK = threading.Lock()
 _LAST_SPAWNED_PROC: subprocess.Popen | None = None
 _LAST_SPAWN_TS: float = 0.0
+_HUB_SUB_CACHE: Dict[str, tuple[float, bool]] = {}
+_HUB_SUB_CACHE_LOCK = threading.Lock()
+
+
+def _is_s_drive_path(raw_path: str) -> bool:
+    s = str(raw_path or "").strip()
+    if len(s) >= 2 and s[0].upper() == "S" and s[1] == ":":
+        return True
+    norm = s.replace("\\", "/").lower()
+    return "/s:/" in norm or norm.startswith("s:/")
+
+
+def _verify_hub_subscription(hub_token: str) -> bool:
+    """Merlin Hub 서버(device_get_state)로 실제 유료 구독 여부를 검증하고 10분간 메모리 캐싱합니다."""
+    tok = str(hub_token or "").strip()
+    if len(tok) < 16:
+        return False
+    tok_hash = hashlib.sha256(tok.encode("utf-8")).hexdigest()
+    now_m = time.monotonic()
+    with _HUB_SUB_CACHE_LOCK:
+        cached = _HUB_SUB_CACHE.get(tok_hash)
+        if cached and (now_m - cached[0]) < 600.0:
+            return cached[1]
+    verified = False
+    try:
+        import urllib.request
+
+        req = urllib.request.Request(
+            "https://ghosti.sundreamer.app/.netlify/functions/hub-supabase-bridge",
+            data=json.dumps({"op": "device_get_state", "hubToken": tok}).encode("utf-8"),
+            headers={
+                "Content-Type": "application/json",
+                "Authorization": f"Bearer {tok}",
+                "User-Agent": "MerlinZCore/2.6",
+            },
+            method="POST",
+        )
+        with urllib.request.urlopen(req, timeout=2.8) as resp:
+            payload = json.loads(resp.read().decode("utf-8", errors="ignore") or "{}")
+        ent = payload.get("entitlement") if isinstance(payload, dict) else None
+        if isinstance(ent, dict):
+            verified = bool(ent.get("isPaidUnlimited"))
+    except Exception:
+        return False
+    with _HUB_SUB_CACHE_LOCK:
+        _HUB_SUB_CACHE[tok_hash] = (time.monotonic(), verified)
+    return verified
+
+
+def _resolve_verified_subscription(data: Dict[str, Any], m_entry: Dict[str, Any]) -> bool:
+    """클라이언트의 단순 isSubscribed=True 위변조를 차단하고 검증된 원장/Hub 토큰만 신뢰합니다."""
+    if m_entry.get("isSubscribedVerified") is True:
+        return True
+    hub_tok = str(data.get("hubToken") or data.get("accessToken") or "").strip()
+    if hub_tok and _verify_hub_subscription(hub_tok):
+        m_entry["isSubscribedVerified"] = True
+        m_entry["isSubscribed"] = True
+        return True
+    return False
 
 
 def shutdown_superpower_daemon_for_update() -> None:
@@ -358,8 +417,11 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
         pass
     data = params or {}
     account_id = str(data.get("accountId") or "guest_local").strip()
+<<<<<<< HEAD
     has_explicit_sub_flag = "isSubscribed" in data and str(data.get("isSubscribed") or "").strip() != ""
     is_subscribed = _parse_bool(data.get("isSubscribed"), False)
+=======
+>>>>>>> 4126ad4 (fix(2귀신): 귀신검색 전수점검 정합화(v2.7.0) 및 귀신창 평상시 2회 복사 무소환 자동연사 폐지(Ctrl+0 명시 소환 시에만 순차복붙 장전))
     try:
         linked_device_count = int(data.get("linkedDeviceCount") or data.get("linked_device_count") or 1)
     except (ValueError, TypeError):
@@ -371,10 +433,12 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
         "accountId": account_id,
         "machineHwid": hwid,
         "isSubscribed": False,
+        "isSubscribedVerified": False,
     })
-    if is_subscribed:
+    prev_verified = bool(m_entry.get("isSubscribedVerified"))
+    is_subscribed = _resolve_verified_subscription(data, m_entry)
+    if is_subscribed and not prev_verified:
         m_entry["accountId"] = account_id
-        m_entry["isSubscribed"] = True
         m_entry["updatedAt"] = datetime.datetime.now().isoformat()
         _save_trial_ledger(ledger)
 
@@ -454,21 +518,18 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
 def start_superpower_trial(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
     data = body or {}
     account_id = str(data.get("accountId") or "local_user").strip()
-    is_subscribed = _parse_bool(data.get("isSubscribed"), False)
     agreed = _parse_bool(data.get("agreed"), True)
 
     opt_res = spd.opt_in_30d_unlimited_superpower_trial(agreed=agreed, account_id=account_id)
-    if agreed and is_subscribed:
+    if agreed and data.get("hubToken"):
         ledger = _load_trial_ledger()
         hwid = get_machine_hwid()
         m_entry = ledger.setdefault("machines", {}).setdefault(hwid, {"machineHwid": hwid})
-        m_entry["isSubscribed"] = True
-        _save_trial_ledger(ledger)
-    elif not agreed:
-        is_subscribed = False
+        if _resolve_verified_subscription(data, m_entry):
+            _save_trial_ledger(ledger)
 
     ensure_superpower_daemon_running()
-    status = get_superpower_status({"accountId": account_id, "isSubscribed": is_subscribed})
+    status = get_superpower_status({"accountId": account_id, "hubToken": data.get("hubToken")})
     if agreed:
         status["message"] = f"🎁 30일 무제한 무료체험이 시작되었습니다! ({opt_res.get('badge_label', 'D-30')})"
     else:
@@ -723,7 +784,7 @@ def update_telemetry(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
     data = body or {}
     if "enabled" in data and data["enabled"] is not None:
         spd.set_telemetry_enabled(bool(data["enabled"]))
-    feature_key = str(data.get("feature_key") or data.get("featureKey") or "").strip()
+    feature_key = str(data.get("feature_key") or data.get("featureKey") or data.get("action") or "").strip()
     if feature_key and (spd.is_telemetry_enabled() or feature_key.startswith("ghost_search_window_")):
         spd.record_feature_telemetry(feature_key)
         time.sleep(0.04)
@@ -739,21 +800,26 @@ def update_telemetry(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
 def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """
     [v3.6 확정 정책: 평생 무료 기본기(FREE_FOREVER) 상시 개방 + 🔒 유료 티어 30일 무제한 체험 후 깔끔 잠금]
-    - 평생 무료 기본기(순차붙여넣기, 자동 한영·띄어쓰기, 서식·줄바꿈 다림질, F1~F6 내 상용구, 엑셀 칸 쪼개기, 스마트 ZIP): 만료 없이 평생 무제한 허용!
+    - 평생 무료 기본기(순차붙여넣기, 자동 한영·띄어쓰기, 서식·줄바꿈 다림질, F1~F6 내 상용구, 엑셀 칸 쪼개기, 스마트 ZIP, S: 업무 공유 드라이브 내 귀신 라벨러): 만료 없이 평생 무제한 허용!
     - 🔒 유료 티어 기능: 첫 완수(또는 Opt-in) 시 30일간 무제한 무료체험 ➔ 30일 만료 시 즉시 유료 잠금(EXPIRED_LOCKED)
     """
     data = body or {}
     account_id = str(data.get("accountId") or "local_user").strip()
-    is_subscribed = _parse_bool(data.get("isSubscribed"), False)
     raw_action = str(data.get("actionType") or data.get("feature_id") or "feat_1_seq_paste").strip()
+    target_path = str(data.get("filePath") or data.get("file_path") or data.get("path") or "").strip()
     hwid = get_machine_hwid()
     ledger = _load_trial_ledger()
     machines = ledger.setdefault("machines", {})
     m_entry = machines.setdefault(hwid, {
         "accountId": account_id,
         "machineHwid": hwid,
-        "isSubscribed": is_subscribed,
+        "isSubscribed": False,
+        "isSubscribedVerified": False,
     })
+    prev_verified = bool(m_entry.get("isSubscribedVerified"))
+    is_subscribed = _resolve_verified_subscription(data, m_entry)
+    if is_subscribed and not prev_verified:
+        _save_trial_ledger(ledger)
 
     # 🧪 시뮬레이션 지원: 원장 리셋
     if _parse_bool(data.get("resetTrials"), False):
@@ -787,10 +853,21 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
 
     # 단일 SSOT: 데몬 normalize_feature_id로 정규화
     feature_id = spd.normalize_feature_id(raw_action)
-    if feature_id not in SUPERPOWER_12_FEATURES:
+    if feature_id not in SUPERPOWER_12_FEATURES and feature_id != "feat_ghost_labeler":
         feature_id = "feat_1_seq_paste"
 
-    feature_name = SUPERPOWER_12_FEATURES[feature_id]
+    feature_name = SUPERPOWER_12_FEATURES.get(feature_id, "🏷️ 귀신 라벨러🔒" if feature_id == "feat_ghost_labeler" else feature_id)
+    if feature_id == "feat_ghost_labeler" and _is_s_drive_path(target_path):
+        return {
+            "ok": True,
+            "allowed": True,
+            "consumed": False,
+            "feature_id": feature_id,
+            "feature_name": feature_name,
+            "feature_status": "FREE_FOREVER_S_DRIVE",
+            "daily_free_remaining": 9999,
+            "message": "[🏷️ 귀신 라벨러] S: 업무 공유 드라이브 무료 무제한 통과",
+        }
     free_forever_ids = set(spd.FREE_FOREVER_FEATURES)
     if feature_id in free_forever_ids:
         return {
@@ -804,8 +881,8 @@ def consume_superpower_action(body: Dict[str, Any] | None = None) -> Dict[str, A
             "message": f"[{feature_name}] 평생 무제한 무료 기본기 통과",
         }
 
-    # 1. 구독 회원인 경우 무제한 허용
-    if is_subscribed or m_entry.get("isSubscribed"):
+    # 1. 구독 회원인 경우 무제한 허용 (Hub 서명 검증된 상태만 신뢰)
+    if is_subscribed:
         return {
             "ok": True,
             "allowed": True,

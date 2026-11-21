@@ -137,6 +137,26 @@ class TestGhostSearchEdges(unittest.TestCase):
         vmap = ui2._load_local_video_ocr_by_name()
         self.assertIsInstance(vmap, dict)
 
+    def test_08_docs_search_and_security_guards(self):
+        import ghosti_setup_parity as gsp_parity
+
+        res_docs = gsp_parity.docs_search({"query": "최근 서류"})
+        self.assertTrue(res_docs.get("ok"))
+        self.assertIsInstance(res_docs.get("documents"), list)
+        self.assertFalse(gos._is_safe_user_media_path(Path(r"C:\Windows\System32\drivers\etc\hosts")))
+        self.assertFalse(gos._is_safe_user_media_path(Path(r"C:\ProgramData\Microsoft\test.png")))
+        s_lbl = gsp.consume_superpower_action({
+            "actionType": "feat_ghost_labeler",
+            "filePath": r"S:\팀문서\2026_견적서.pdf",
+        })
+        self.assertTrue(s_lbl.get("ok") and s_lbl.get("allowed"))
+        self.assertEqual(s_lbl.get("feature_status"), "FREE_FOREVER_S_DRIVE")
+        spoof_res = gsp.consume_superpower_action({
+            "actionType": "feat_6_screen_ocr",
+            "isSubscribed": True,
+        })
+        self.assertNotEqual(spoof_res.get("feature_status"), "SUBSCRIBED")
+
 
 if __name__ == "__main__":
     unittest.main()

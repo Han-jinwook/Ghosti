@@ -43,6 +43,7 @@ import {
   extractCrispKoreanLabelTokens,
   extractKoStems,
   formatQuickKoreanLabelCore,
+  loadModelWithWebGpuToWasmFallback,
   getContrastiveNonAnimalAnchorVecs,
   getOptimalEmbeddingDtype,
   getPhotoMediaCacheKey,
@@ -122,6 +123,7 @@ export async function updateFaceClusterRegistry(payload: {
 export async function detectLiveFacesFromPhoto(
   fileName: string
 ): Promise<{ detectedCount: number; clusters: FaceMemberCluster[] } | null> {
+  if (!zCoreBridge.isConnected) return null;
   try {
     const res = await fetch(getZCoreUrl('/__faces/detect'), {
       method: 'POST',
@@ -920,27 +922,16 @@ async function blobToBase64(blob: Blob): Promise<string> {
 }
 
 const KO_PHOTO_SYNONYM_GROUPS: readonly (readonly string[])[] = [
-  ['아이', '어린이', '아기', '유아', '꼬마', '자녀', '아들', '딸', '남매'],
   ['강아지', '반려견', '멍멍이'],
   ['고양이', '반려묘', '냥이', '길냥이'],
-  ['바다', '해변', '바닷가', '해수욕장', '백사장', '모래사장', '해안', '해안가'],
-  ['노을', '석양', '일몰', '해질녘', '황혼'],
-  ['일출', '해돋이', '여명'],
-  ['웃는', '웃고', '미소', '웃음', '활짝', '해맑게', '해맑은', '환하게'],
-  ['가족', '식구', '대가족', '부모님'],
-  ['단체', '모임', '일행', '여럿'],
-  ['셀카', '독사진', '단독'],
-  ['산', '등산', '산행', '트레킹', '등산로', '정상석'],
-  ['음식', '요리', '식사', '맛집', '식도락', '상차림', '먹방'],
-  ['카페', '커피', '라떼', '아메리카노', '디저트'],
-  ['케이크', '생일', '촛불'],
-  ['스키', '스키장', '스노우보드', '슬로프', '보딩', '설원'],
-  ['캠핑', '캠핑장', '글램핑', '텐트', '타프', '오토캠핑', '불멍'],
-  ['수영장', '풀장', '인피니티풀', '패밀리풀', '선베드'],
-  ['영수증', '전표', '결제내역', '카드전표'],
+  ['바다', '바닷가', '해변'],
+  ['노을', '석양', '일몰'],
+  ['일출', '해돋이'],
+  ['등산', '산행', '트레킹'],
+  ['영수증', '카드전표'],
   ['세금계산서', '계산서'],
-  ['문서', '서류', '계약서', '증명서', '등본', '공문'],
-  ['신분증', '여권', '주민등록증', '운전면허증', '명함'],
+  ['여권사진', '여권'],
+  ['가족사진', '가족'],
   ['스크린샷', '화면캡처', '캡처'],
 ];
 
@@ -2110,6 +2101,7 @@ export async function runOnboardingIndexingPipeline(params: {
 
   let visionModel: any = null;
   let visionProcessor: any = null;
+  let lastDone = 0;
   const startT0 = performance.now();
 
   try {
@@ -2136,16 +2128,10 @@ export async function runOnboardingIndexingPipeline(params: {
       const config: any = await loadWithR2Fallback(() => AutoConfig.from_pretrained(MODEL_ID));
       config.audio_config = null;
 
-      visionModel = await loadWithR2Fallback(() =>
-        AutoModel.from_pretrained(MODEL_ID, {
-          config,
-          device: 'webgpu',
-          dtype: {
-            model: targetDtype,
-            vision_encoder: targetDtype,
-          },
-        } as any)
-      );
+      visionModel = await loadModelWithWebGpuToWasmFallback(config, {
+        model: targetDtype,
+        vision_encoder: targetDtype,
+      });
 
       visionProcessor = await loadWithR2Fallback(() => AutoProcessor.from_pretrained(MODEL_ID));
       visionProcessor.image_processor.max_soft_tokens = VISION_TOKEN_BUDGET;
@@ -2196,6 +2182,7 @@ export async function runOnboardingIndexingPipeline(params: {
       }
 
       const done = i + 1;
+      lastDone = done;
       const remaining = total - done;
       const elapsedSec = (performance.now() - indexT0) / 1000;
       const perImageSec = useRealWebGpuVision ? elapsedSec / done : 2.66;
@@ -2241,19 +2228,25 @@ export async function runOnboardingIndexingPipeline(params: {
       }
     }
 
+    const wasCancelled = shouldCancel();
+    const finalDone = wasCancelled ? lastDone : total;
     onUpdate({
       phase: 'completed',
-      done: total,
+      done: finalDone,
       total,
-      remaining: 0,
-      percent: 100,
+      remaining: Math.max(0, total - finalDone),
+      percent: total > 0 ? +((finalDone / total) * 100).toFixed(1) : 100,
       elapsedSec: Math.round((performance.now() - startT0) / 1000),
       etaSec: 0,
       perImageSec: 2.66,
-      currentPhotoName: '인덱싱 100% 완료! 검색이 오픈되었습니다.',
+      currentPhotoName: wasCancelled
+        ? '사용자 요청으로 인덱싱이 중단되었습니다.'
+        : '인덱싱 100% 완료! 검색이 오픈되었습니다.',
       currentPhotoThumb: targetPhotos[0]?.thumbUrl ?? '',
       liveVector64: Array.from({ length: 64 }, () => 0.85),
-      modelStatusText: 'Zero-STT 오디오 & 시맨틱 검색 준비 완료',
+      modelStatusText: wasCancelled
+        ? '부분 인덱싱 완료 (나머지 항목은 이어하기 가능)'
+        : 'Zero-STT 오디오 & 시맨틱 검색 준비 완료',
     });
   }
 }

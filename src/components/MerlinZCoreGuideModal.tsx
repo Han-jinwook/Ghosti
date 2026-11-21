@@ -517,7 +517,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                   {isMobileEnv
                     ? '바로 시작하기'
                     : isConnected
-                    ? '🚀 내 PC 전체 인덱싱 시작'
+                    ? '✨ 내 PC 자동 인덱싱 확인'
                     : '연결 시작하기'}
                 </span>
               </button>
@@ -858,7 +858,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                     }}
                     className="w-full flex-1 py-3 px-5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-black text-sm text-center shadow-lg shadow-teal-500/25 transition-all cursor-pointer"
                   >
-                    🚀 내 PC 전체 인덱싱 시작 ({totalPhotoCount}장 스캔)
+                    🔄 내 PC 최신 상태 새로고침 ({totalPhotoCount}장 스캔)
                   </button>
                   <button
                     type="button"

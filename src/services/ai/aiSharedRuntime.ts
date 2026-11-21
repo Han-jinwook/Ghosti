@@ -312,7 +312,12 @@ export function matchKoTokenInStems(
       if (st.startsWith(tk)) {
         const rem = st.slice(tk.length);
         if (ADMIN_PLACE_TAILS.test(rem)) continue;
-        if (rem.length >= 2 && !LOAN_TAILS.test(rem)) return true;
+        if (
+          (rem.length >= 2 && !LOAN_TAILS.test(rem)) ||
+          (rem.length === 1 && /^[가-힣]$/.test(rem) && !'은는이가을를의에로와과도만'.includes(rem))
+        ) {
+          return true;
+        }
       }
       if (st.endsWith(tk)) {
         const rem = st.slice(0, st.length - tk.length);
@@ -477,37 +482,64 @@ export function isMobileDeviceRuntime(): boolean {
 export function getOptimalEmbeddingDtype(): 'q8' | 'q4' {
   if (typeof window === 'undefined') return 'q8';
 
-  if (isMobileDeviceRuntime() || window.innerWidth < 860) {
+  if (isMobileDeviceRuntime()) {
     return 'q4';
   }
 
-  // PC 데스크톱은 사양 불문 무조건 8비트(q8) 100% 통일
+  // PC 데스크톱은 창 너비·사양 불문 무조건 8비트(q8) 100% 통일
   return 'q8';
 }
 
+let modelRemoteFallbackMutex: Promise<void> = Promise.resolve();
+
+async function runWithTimeout<T>(task: Promise<T>, timeoutMs: number, label: string): Promise<T> {
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  try {
+    return await Promise.race([
+      task,
+      new Promise<T>((_resolve, reject) => {
+        timer = setTimeout(() => reject(new Error(`${label}_TIMEOUT_${timeoutMs}MS`)), timeoutMs);
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 /**
- * [2중 안전망 로더]
- * - 1순위 HuggingFace CDN 시도 실패 시 자동으로 Cloudflare R2 비상 백업 URL로 교체하여 재시도합니다.
+ * [3중 안전망 로더 (뮤텍스 직렬화 + 타임아웃 자동 페일오버)]
+ * - 1순위 HuggingFace CDN ➔ 2순위 GitHub Releases 무료 CDN 미러(/api/models-mirror/) ➔ 3순위 로컬 Z-코어(/__models/)
  */
 export async function loadWithR2Fallback<T>(loader: () => Promise<T>): Promise<T> {
+  const prev = modelRemoteFallbackMutex;
+  let release!: () => void;
+  modelRemoteFallbackMutex = new Promise<void>((res) => {
+    release = res;
+  });
+  await prev;
   try {
-    env.remoteHost = PRIMARY_REMOTE_HOST;
-    return await loader();
-  } catch (err) {
-    console.warn('[Ghosti AI Engine] 허깅페이스 1차 로드 실패 ➔ 당사 GitHub Releases 비상 마스터 사본으로 자동 전환합니다:', err);
     try {
-      env.remoteHost = FALLBACK_R2_HOST;
-      return await loader();
-    } catch (r2Err) {
-      console.warn('[Ghosti AI Engine] R2 2차 로드 실패 ➔ 로컬 Z-코어 오프라인 마스터 사본(127.0.0.1:5199/__models/)으로 전환합니다:', r2Err);
+      env.remoteHost = PRIMARY_REMOTE_HOST;
+      return await runWithTimeout(loader(), 45000, 'HF_PRIMARY');
+    } catch (err) {
+      console.warn('[Ghosti AI Engine] 허깅페이스 1차 로드 실패 ➔ 당사 GitHub Releases 미러(/api/models-mirror/)로 자동 전환합니다:', err);
       try {
-        env.remoteHost = FALLBACK_LOCAL_ZCORE_HOST;
-        return await loader();
-      } catch (localErr) {
-        env.remoteHost = PRIMARY_REMOTE_HOST;
-        throw localErr;
+        env.remoteHost = FALLBACK_R2_HOST;
+        return await runWithTimeout(loader(), 45000, 'GH_MIRROR');
+      } catch (mirrorErr) {
+        console.warn('[Ghosti AI Engine] 미러 2차 로드 실패 ➔ 로컬 Z-코어 오프라인 마스터 사본(127.0.0.1:5199/__models/)으로 전환합니다:', mirrorErr);
+        try {
+          env.remoteHost = FALLBACK_LOCAL_ZCORE_HOST;
+          return await runWithTimeout(loader(), 30000, 'ZCORE_LOCAL');
+        } catch (localErr) {
+          env.remoteHost = PRIMARY_REMOTE_HOST;
+          throw localErr;
+        }
       }
     }
+  } finally {
+    env.remoteHost = PRIMARY_REMOTE_HOST;
+    release();
   }
 }
 
@@ -749,7 +781,7 @@ async function detectUsableWebGpu(): Promise<boolean> {
   return cachedUsableWebGpuPromise;
 }
 
-async function loadModelWithWebGpuToWasmFallback(config: any, dtypeSpec: any): Promise<any> {
+export async function loadModelWithWebGpuToWasmFallback(config: any, dtypeSpec: any): Promise<any> {
   const canTryGpu = await detectUsableWebGpu();
   if (canTryGpu) {
     try {
@@ -858,7 +890,7 @@ export async function ensureSearchEngineLoaded(
       } as any));
 
       processor = await loadWithR2Fallback(() => AutoProcessor.from_pretrained(MODEL_ID));
-      tokenizer = await AutoTokenizer.from_pretrained(MODEL_ID);
+      tokenizer = await loadWithR2Fallback(() => AutoTokenizer.from_pretrained(MODEL_ID));
       searchModelHasAudio = true;
       onProgress?.('Zero-STT 오디오 & 텍스트 엔진 준비 완료', 100);
       return true;
@@ -1327,6 +1359,35 @@ export async function disposeSharedVisionEncoderNow(): Promise<void> {
     sharedVisionProcessor = null;
     await Promise.resolve(m.dispose?.()).catch(() => {});
   }
+}
+
+export async function releaseAllOnDeviceAiModelsForBackground(): Promise<void> {
+  await disposeSharedVisionEncoderNow();
+  if (textQueryModel) {
+    const tm = textQueryModel;
+    textQueryModel = null;
+    await Promise.resolve(tm.dispose?.()).catch(() => {});
+  }
+  if (searchModel) {
+    const sm = searchModel;
+    searchModel = null;
+    await Promise.resolve(sm.dispose?.()).catch(() => {});
+  }
+}
+
+if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+  const onBgFree = () => {
+    if (!isMobileDeviceRuntime()) return;
+    if (document.visibilityState === 'hidden') {
+      void releaseAllOnDeviceAiModelsForBackground();
+    }
+  };
+  document.addEventListener('visibilitychange', onBgFree, { passive: true });
+  window.addEventListener('pagehide', () => {
+    if (isMobileDeviceRuntime()) {
+      void releaseAllOnDeviceAiModelsForBackground();
+    }
+  }, { passive: true });
 }
 
 export async function acquireSharedVisionEncoder(): Promise<boolean> {

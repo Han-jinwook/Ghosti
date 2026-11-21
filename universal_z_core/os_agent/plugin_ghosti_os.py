@@ -15,6 +15,8 @@ from __future__ import annotations
 import ctypes
 import datetime
 import hashlib
+import html
+import io
 import json
 import os
 from pathlib import Path
@@ -22,6 +24,7 @@ import re
 import shutil
 import struct
 import sys
+import tempfile
 import threading
 import time
 from typing import Any, Dict, List
@@ -852,8 +855,7 @@ def _is_code_repo_dir(d: Path) -> bool:
     name_low = d.name.lower()
     if name_low in _ALLOW_CORPUS_DIRS:
         return False
-    # 구글드라이브 내부 해시 캐시 폴더(12자리 이상 숫자 폴더명) 및 GitHub zip 압축해제 폴더 제외
-    if re.match(r"^\d{10,}$", name_low) or "-main" in name_low or "-master" in name_low:
+    if "-main" in name_low or "-master" in name_low or re.fullmatch(r"[0-9a-f]{24,}", name_low):
         return True
     try:
         if (
@@ -869,6 +871,43 @@ def _is_code_repo_dir(d: Path) -> bool:
     return False
 
 
+_SAFE_USER_TEMP_ROOT = Path(tempfile.gettempdir()).resolve()
+
+
+def _is_safe_user_media_path(p: Path) -> bool:
+    """OS 핵심 시스템·프로그램·인증서·브라우저 AppData 영역 접근을 차단하고 사용자 드라이브 실물 파일만 허용합니다."""
+    try:
+        resolved = p.resolve()
+        s = str(resolved)
+        low = s.lower().replace("/", "\\")
+        if s.startswith("\\\\"):
+            return False
+        blocked_segments = (
+            "\\windows\\",
+            "\\system32\\",
+            "\\syswow64\\",
+            "\\program files\\",
+            "\\program files (x86)\\",
+            "\\programdata\\",
+            "\\$recycle.bin\\",
+            "\\system volume information\\",
+            "\\.ssh\\",
+            "\\npki\\",
+            "\\gnupg\\",
+            "\\appdata\\roaming\\",
+            "\\appdata\\locallow\\",
+        )
+        if any(seg in low for seg in blocked_segments):
+            return False
+        if "\\appdata\\local\\" in low:
+            # 로컬 AppData 중 OCR/테스트용 임시 디렉터리만 예외 허용
+            if not resolved.is_relative_to(_SAFE_USER_TEMP_ROOT):
+                return False
+        return True
+    except Exception:
+        return False
+
+
 _SCAN_DIRS_MEM_CACHE: Dict[str, tuple[float, str, List[Path]]] = {}
 _SCAN_DIRS_CACHE_LOCK = threading.Lock()
 _PHOTOS_RESP_MEM_CACHE: Dict[str, Any] = {"sig": "", "quarantine_len": -1, "resp": None}
@@ -878,13 +917,123 @@ _WATCH_SIG_TTL_CACHE: Dict[str, Any] = {"ts": 0.0, "resp": None}
 _BG_INDEX_BUMP_SEQ: int = 0
 _DOC_TEXT_CACHE_DIRTY: bool = False
 _PREWARMED_PHOTO_THUMB_SIGS: set[str] = set()
+_FULL_DRIVE_EXTRA_DIRS: List[Path] = []
+_FULL_DRIVE_SCAN_STARTED = False
+_FULL_DRIVE_SCAN_LOCK = threading.Lock()
+
+
+def _start_bg_full_drive_scan_once() -> None:
+    """
+    [2단계 백그라운드 전체 드라이브 스캔 (1단계 우선 폴더 0.05초 즉시 개방 후 C:, D:, E: 전수 확대)]
+    - 사용자가 일일이 폴더를 선택 지정할 필요 없이, 우선 폴더 먼저 열고 뒤이어 내 PC 전 드라이브를 저부하 스로틀링으로 훑습니다.
+    """
+    global _FULL_DRIVE_SCAN_STARTED, _BG_INDEX_BUMP_SEQ
+    if os.environ.get("GHOSTI_HEADLESS_TEST") == "1" or os.name != "nt":
+        return
+    with _FULL_DRIVE_SCAN_LOCK:
+        if _FULL_DRIVE_SCAN_STARTED:
+            return
+        _FULL_DRIVE_SCAN_STARTED = True
+
+    def _bg_worker() -> None:
+        global _BG_INDEX_BUMP_SEQ
+        try:
+            time.sleep(1.5)
+            apply_hardware_protection_guard(mode="silent", batch_count=0)
+            target_exts = _IMAGE_EXTS | _DOC_EXTS | _VIDEO_EXTS
+            skip_top_names = {
+                "windows",
+                "program files",
+                "program files (x86)",
+                "programdata",
+                "$recycle.bin",
+                "system volume information",
+                "recovery",
+                "perflogs",
+                "appdata",
+                "node_modules",
+                "msocache",
+            }
+            known_roots_low = {str(r.resolve()).lower() for r in _get_user_scan_roots() if r.exists()}
+            discovered: List[Path] = []
+            seen_d: set[str] = set()
+            batch_counter = 0
+
+            import string
+            for letter in string.ascii_uppercase:
+                if letter in ("A", "B", "S"):
+                    continue
+                drive = Path(f"{letter}:\\")
+                try:
+                    if not drive.exists():
+                        continue
+                    dtype = ctypes.windll.kernel32.GetDriveTypeW(str(drive))
+                    if dtype not in (2, 3):  # DRIVE_REMOVABLE(2), DRIVE_FIXED(3)
+                        continue
+                except Exception:
+                    continue
+
+                stack: List[tuple[Path, int]] = [(drive, 0)]
+                while stack and len(discovered) < 800:
+                    cur, depth = stack.pop(0)
+                    try:
+                        cur_res = cur.resolve()
+                        cur_low = str(cur_res).lower()
+                        if cur_low in seen_d or not _is_safe_user_media_path(cur_res):
+                            continue
+                        seen_d.add(cur_low)
+                        has_media = False
+                        sub_cands: List[Path] = []
+                        with os.scandir(cur_res) as it:
+                            for dent in it:
+                                nm = dent.name
+                                nm_low = nm.lower()
+                                try:
+                                    if dent.is_dir(follow_symlinks=False):
+                                        if depth < 5 and not nm.startswith(".") and nm_low not in skip_top_names and nm_low not in _SKIP_DIR_NAMES:
+                                            p_sub = Path(dent.path)
+                                            if not _is_code_repo_dir(p_sub):
+                                                sub_cands.append(p_sub)
+                                    elif not has_media and dent.is_file(follow_symlinks=False):
+                                        dot = nm_low.rfind(".")
+                                        if dot >= 0 and nm_low[dot:] in target_exts:
+                                            has_media = True
+                                except Exception:
+                                    pass
+                        if has_media and cur_low not in known_roots_low:
+                            discovered.append(cur_res)
+                        stack.extend((sd, depth + 1) for sd in sub_cands)
+                        batch_counter += 1
+                        if batch_counter % 20 == 0:
+                            apply_hardware_protection_guard(mode="silent", batch_count=batch_counter)
+                            time.sleep(0.02)
+                    except Exception:
+                        pass
+
+            if discovered:
+                with _FULL_DRIVE_SCAN_LOCK:
+                    _FULL_DRIVE_EXTRA_DIRS[:] = discovered
+                with _SCAN_DIRS_CACHE_LOCK:
+                    _SCAN_DIRS_MEM_CACHE.clear()
+                _BG_INDEX_BUMP_SEQ += 1
+                _WATCH_SIG_TTL_CACHE["ts"] = 0.0
+                _PHOTOS_RESP_MEM_CACHE["sig"] = ""
+                _DOCS_RESP_MEM_CACHE["sig"] = ""
+                _VIDEOS_RESP_MEM_CACHE["sig"] = ""
+        except Exception:
+            pass
+
+    threading.Thread(target=_bg_worker, daemon=True, name="GhostiFullDriveScanStage2").start()
 
 
 def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
     # [165ms ➔ 0.05ms 초고속 폴더 트리 캐시]: 루트 디렉터리 목록 + 루트 mtime_ns가 동일하면 12초간 하위 폴더 트리 탐색을 재사용하고,
     # 루트에 새 폴더가 생성·삭제되는 즉시 root_sig가 변해 0ms 지연으로 재스캔합니다.
+    _start_bg_full_drive_scan_once()
     now_mono = time.monotonic()
-    root_sig_parts: List[str] = [str(max_depth)]
+    with _FULL_DRIVE_SCAN_LOCK:
+        extra_dirs = list(_FULL_DRIVE_EXTRA_DIRS)
+    root_sig_parts: List[str] = [str(max_depth), str(len(extra_dirs))]
     for r in roots:
         try:
             st_r = os.stat(r)
@@ -899,8 +1048,8 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
 
     result: List[Path] = []
     seen: set[str] = set()
-    max_total = 400
-    per_root_cap = 80
+    max_total = 1600
+    per_root_cap = 220
 
     for r in roots:
         if len(result) >= max_total:
@@ -943,6 +1092,17 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
                 pass
 
         _walk(r, 0)
+
+    for xd in extra_dirs:
+        if len(result) >= max_total:
+            break
+        try:
+            x_str = os.path.normcase(os.path.abspath(xd))
+            if x_str not in seen:
+                seen.add(x_str)
+                result.append(xd)
+        except Exception:
+            pass
 
     with _SCAN_DIRS_CACHE_LOCK:
         if len(_SCAN_DIRS_MEM_CACHE) > 16:
@@ -1147,9 +1307,8 @@ def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
 
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(req_dir), max_depth=3)
 
-    files: List[Dict[str, Any]] = []
+    raw_photo_candidates: List[tuple[Path, str, str, os.stat_result, Path, str]] = []
     seen_paths: set[str] = set()
-    seen_keys: set[str] = set()
 
     for d in scan_dirs:
         d_label = _detect_folder_label(d)
@@ -1158,47 +1317,46 @@ def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         is_legacy_sample_dir = "sample_photos" in d.name.lower()
         try:
             with os.scandir(d) as it:
-                entries = [e for e in it if e.is_file(follow_symlinks=False)]
-            entries.sort(key=lambda x: x.name)
-            for dent in entries:
-                nm = dent.name
-                if is_legacy_sample_dir and _LEGACY_PERSONAL_RX.match(nm):
-                    continue
-                dot = nm.rfind(".")
-                if dot < 0 or nm[dot:].lower() not in _IMAGE_EXTS:
-                    continue
-                entry_path = Path(dent.path)
-                if _is_cloud_virtual_or_unpinned_file(entry_path):
-                    continue
-                abs_str = os.path.abspath(dent.path)
-                norm_resolved = abs_str.lower()
-                if norm_resolved in seen_paths:
-                    continue
-                st = dent.stat(follow_symlinks=False)
-                if st.st_size < 4096 and not is_sample_or_test_dir:
-                    continue
-                seen_paths.add(norm_resolved)
-                resolved = Path(abs_str)
-                photo_key = _make_collision_safe_media_key(resolved, d.name, seen_keys)
-                _PHOTO_PATH_INDEX[photo_key] = resolved
-                files.append({
-                    "path": photo_key,
-                    "originalName": nm,
-                    "fullPath": abs_str,
-                    "folderName": d.name,
-                    "deviceSource": d_label,
-                    "size": int(st.st_size),
-                    "date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d"),
-                    "mtimeMs": int(st.st_mtime * 1000),
-                })
-                if len(files) >= 1500:
-                    break
+                for dent in it:
+                    if not dent.is_file(follow_symlinks=False):
+                        continue
+                    nm = dent.name
+                    if is_legacy_sample_dir and _LEGACY_PERSONAL_RX.match(nm):
+                        continue
+                    dot = nm.rfind(".")
+                    if dot < 0 or nm[dot:].lower() not in _IMAGE_EXTS:
+                        continue
+                    entry_path = Path(dent.path)
+                    if _is_cloud_virtual_or_unpinned_file(entry_path):
+                        continue
+                    abs_str = os.path.abspath(dent.path)
+                    norm_resolved = abs_str.lower()
+                    if norm_resolved in seen_paths:
+                        continue
+                    st = dent.stat(follow_symlinks=False)
+                    if st.st_size < 4096 and not is_sample_or_test_dir:
+                        continue
+                    seen_paths.add(norm_resolved)
+                    raw_photo_candidates.append((d, d_label, abs_str, st, Path(abs_str), nm))
         except Exception:
             pass
-        if len(files) >= 1500:
-            break
 
-    files.sort(key=lambda f: int(f.get("mtimeMs") or 0), reverse=True)
+    raw_photo_candidates.sort(key=lambda item: item[3].st_mtime, reverse=True)
+    files: List[Dict[str, Any]] = []
+    seen_keys: set[str] = set()
+    for d, d_label, abs_str, st, resolved, nm in raw_photo_candidates[:1500]:
+        photo_key = _make_collision_safe_media_key(resolved, d.name, seen_keys)
+        _PHOTO_PATH_INDEX[photo_key] = resolved
+        files.append({
+            "path": photo_key,
+            "originalName": nm,
+            "fullPath": abs_str,
+            "folderName": d.name,
+            "deviceSource": d_label,
+            "size": int(st.st_size),
+            "date": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d"),
+            "mtimeMs": int(st.st_mtime * 1000),
+        })
     primary_dir = resolve_active_photo_dir(req_dir)
     if files:
         unwarmed_paths: List[Path] = []
@@ -1353,8 +1511,7 @@ def resolve_local_media_file(params: Dict[str, Any] | None = None) -> tuple[Path
     ext = full_path.suffix.lower()
     if ext not in mime_map:
         return None, "text/plain", 403
-    low_resolved = str(full_path.resolve()).lower()
-    if "\\windows\\" in low_resolved or "\\system32\\" in low_resolved:
+    if not _is_safe_user_media_path(full_path):
         return None, "text/plain", 403
     content_type = mime_map[ext]
     return full_path, content_type, 200
@@ -1534,7 +1691,7 @@ def _save_doc_text_cache_entry(sig: str, text_val: str, *, flush_disk: bool = Tr
         if flush_disk:
             try:
                 _DOC_TEXT_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-                tmp_f = _DOC_TEXT_CACHE_FILE.with_suffix(".json.tmp")
+                tmp_f = _DOC_TEXT_CACHE_FILE.with_name(f"{_DOC_TEXT_CACHE_FILE.name}.tmp.{os.getpid()}.{threading.get_ident()}")
                 tmp_f.write_text(json.dumps(cache, ensure_ascii=False), encoding="utf-8")
                 os.replace(tmp_f, _DOC_TEXT_CACHE_FILE)
                 _DOC_TEXT_CACHE_DIRTY = False
@@ -1551,7 +1708,7 @@ def _flush_doc_text_cache_if_dirty() -> None:
             return
         try:
             _DOC_TEXT_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-            tmp_f = _DOC_TEXT_CACHE_FILE.with_suffix(".json.tmp")
+            tmp_f = _DOC_TEXT_CACHE_FILE.with_name(f"{_DOC_TEXT_CACHE_FILE.name}.tmp.{os.getpid()}.{threading.get_ident()}")
             tmp_f.write_text(json.dumps(_DOC_TEXT_MEM_CACHE, ensure_ascii=False), encoding="utf-8")
             os.replace(tmp_f, _DOC_TEXT_CACHE_FILE)
             _DOC_TEXT_CACHE_DIRTY = False
@@ -1569,7 +1726,7 @@ def _count_meaningful_doc_chars(txt: str) -> int:
     if not txt:
         return 0
     cleaned = _PDF_STRUCT_NOISE_RX.sub(" ", txt)
-    non_sp = re.sub(r"\s+", "", cleaned)
+    non_sp = re.sub(r"[\s·°±×÷%₩$€~/:,.()\[\]\-_=+\"'\*!?#@&]+", "", cleaned)
     if not non_sp:
         return 0
     mojibake_cnt = len(re.findall(r"[\u0080-\u024f\ufffd]", non_sp))
@@ -1589,32 +1746,49 @@ def _run_ppocr_pdf_pages_ocr(
     max_pages: int = 6,
     max_chars: int = DOC_INDEX_MAX_CHARS,
 ) -> str:
-    """스캔 이미지·커스텀 폰트 PDF의 페이지를 Google PDFium(pypdfium2)으로 고해상도 렌더링 후 PP-OCRv5 Korean(ONNX)으로 정밀 판독합니다."""
+    """스캔 이미지·커스텀 폰트 PDF의 페이지를 Google PDFium(pypdfium2 우선) 또는 pypdf 이미지 추출로 PNG 변환 후 PP-OCRv5 Korean(ONNX)으로 정밀 판독합니다."""
     if not entry.exists():
         return ""
     tmp_dir = Path(tempfile.mkdtemp(prefix="merlin_pdf_ppocr_"))
     try:
-        import pypdfium2 as pdfium
         import ppocr_v5_worker
 
-        pdf = pdfium.PdfDocument(str(entry))
+        png_paths: List[Path] = []
         try:
-            n_pages = min(len(pdf), max(1, int(max_pages)))
-            png_paths: List[Path] = []
-            for p_idx in range(n_pages):
-                page = pdf[p_idx]
-                try:
-                    w_pt, h_pt = page.get_size()
-                    scale = max(1.6, min(2.6, 1750.0 / max(1.0, max(w_pt, h_pt))))
-                    bmp = page.render(scale=scale)
-                    pil_im = bmp.to_pil()
-                    out_png = tmp_dir / f"p_{p_idx:03d}.png"
-                    pil_im.save(out_png, "PNG")
-                    png_paths.append(out_png)
-                finally:
-                    page.close()
-        finally:
-            pdf.close()
+            import pypdfium2 as pdfium
+
+            pdf = pdfium.PdfDocument(str(entry))
+            try:
+                n_pages = min(len(pdf), max(1, int(max_pages)))
+                for p_idx in range(n_pages):
+                    page = pdf[p_idx]
+                    try:
+                        w_pt, h_pt = page.get_size()
+                        scale = max(1.6, min(2.6, 1750.0 / max(1.0, max(w_pt, h_pt))))
+                        bmp = page.render(scale=scale)
+                        pil_im = bmp.to_pil()
+                        out_png = tmp_dir / f"p_{p_idx:03d}.png"
+                        pil_im.save(out_png, "PNG")
+                        png_paths.append(out_png)
+                    finally:
+                        page.close()
+            finally:
+                pdf.close()
+        except ImportError:
+            import pypdf
+            from PIL import Image
+
+            reader = pypdf.PdfReader(str(entry))
+            for p_idx in range(min(len(reader.pages), max(1, int(max_pages)))):
+                page = reader.pages[p_idx]
+                for img_idx, im_obj in enumerate(getattr(page, "images", [])):
+                    try:
+                        pil_im = Image.open(io.BytesIO(im_obj.data)).convert("RGB")
+                        out_png = tmp_dir / f"p_{p_idx:03d}_{img_idx:02d}.png"
+                        pil_im.save(out_png, "PNG")
+                        png_paths.append(out_png)
+                    except Exception:
+                        continue
 
         if not png_paths:
             return ""
@@ -1651,18 +1825,18 @@ def _extract_pdf_text_sota(
 ) -> str:
     """
     [정식 SOTA PDF 본문 추출기]
-    1순위: Google PDFium C++ 엔진(pypdfium2)으로 한글 CID/ToUnicode/압축 스트림 전체 페이지를 최대 50,000자까지 고속 추출합니다.
-    2순위: 텍스트 레이어가 없는 스캔 이미지 PDF일 때만 PDFium 렌더링 + PP-OCRv5 Korean(ONNX)으로 자동 폴백합니다.
+    1순위: Google PDFium C++ 엔진(pypdfium2) / pypdf 텍스트 레이어로 한글 CID/ToUnicode/압축 스트림 전체 페이지를 최대 50,000자까지 고속 추출합니다.
+    2순위: 텍스트 레이어가 없는 스캔 이미지 PDF일 때만 PDFium(또는 pypdf 이미지 추출) + PP-OCRv5 Korean(ONNX)으로 자동 폴백합니다.
     """
     if not entry.exists():
         return ""
+    page_chunks: List[str] = []
     try:
         import pypdfium2 as pdfium
 
         pdf = pdfium.PdfDocument(str(entry))
         try:
             n_pages = min(len(pdf), 160)
-            page_chunks: List[str] = []
             total_len = 0
             for p_idx in range(n_pages):
                 page = pdf[p_idx]
@@ -1685,12 +1859,31 @@ def _extract_pdf_text_sota(
                         break
         finally:
             pdf.close()
+    except ImportError:
+        try:
+            import pypdf
 
-        joined = "\n\n".join(page_chunks).strip()[:max_chars]
-        if _count_meaningful_doc_chars(joined) >= 16:
-            return joined
+            reader = pypdf.PdfReader(str(entry))
+            total_len = 0
+            for page in reader.pages[:160]:
+                raw_t = page.extract_text() or ""
+                norm_t = unicodedata.normalize("NFC", raw_t.replace("\r\n", "\n").replace("\r", "\n"))
+                norm_t = re.sub(r"[\x00-\x08\x0b\x0c\x0e-\x1f]+", " ", norm_t)
+                norm_t = re.sub(r"[ \t]+", " ", norm_t)
+                norm_t = re.sub(r"\n{3,}", "\n\n", norm_t).strip()
+                if norm_t:
+                    page_chunks.append(norm_t)
+                    total_len += len(norm_t) + 2
+                    if total_len >= max_chars:
+                        break
+        except Exception:
+            pass
     except Exception:
         pass
+
+    joined = "\n\n".join(page_chunks).strip()[:max_chars]
+    if _count_meaningful_doc_chars(joined) >= 16:
+        return joined
 
     if allow_ocr_fallback:
         return _run_ppocr_pdf_pages_ocr(entry, max_pages=max_ocr_pages, max_chars=max_chars)
@@ -2039,8 +2232,7 @@ def extract_photo_winrt_ocr(params: Dict[str, Any] | None = None) -> Dict[str, A
             else:
                 cand_p = Path(urllib.parse.unquote(raw_ref))
                 if cand_p.exists() and cand_p.is_file() and cand_p.suffix.lower() in _IMAGE_EXTS:
-                    low_c = str(cand_p.resolve()).lower()
-                    if "\\windows\\" not in low_c and "\\system32\\" not in low_c:
+                    if _is_safe_user_media_path(cand_p):
                         target_path = cand_p.resolve()
             if target_path is None or not target_path.exists():
                 return {"ok": False, "error": "IMAGE_NOT_FOUND"}
@@ -2094,7 +2286,7 @@ def extract_photo_winrt_ocr(params: Dict[str, Any] | None = None) -> Dict[str, A
             _PHOTO_OCR_MEM_CACHE = cur_c
             try:
                 _PHOTO_OCR_CACHE_FILE.parent.mkdir(parents=True, exist_ok=True)
-                tmp_c = _PHOTO_OCR_CACHE_FILE.with_suffix(".json.tmp")
+                tmp_c = _PHOTO_OCR_CACHE_FILE.with_name(f"{_PHOTO_OCR_CACHE_FILE.name}.tmp.{os.getpid()}.{threading.get_ident()}")
                 tmp_c.write_text(json.dumps(cur_c, ensure_ascii=False), encoding="utf-8")
                 os.replace(tmp_c, _PHOTO_OCR_CACHE_FILE)
             except Exception:
@@ -2171,11 +2363,17 @@ def _extract_hwpx_zip_full_text(entry: Path, max_chars: int = DOC_INDEX_MAX_CHAR
         sec_chunks: List[str] = []
         total_len = 0
         for sec_name in sec_names:
+            try:
+                zinfo = zf.getinfo(sec_name)
+                if getattr(zinfo, "file_size", 0) > 25 * 1024 * 1024:
+                    continue
+            except Exception:
+                pass
             sec_bytes = zf.read(sec_name)
             xml_str = sec_bytes.decode("utf-8", errors="ignore")
             xml_str = re.sub(r"</(?:hp:p|p|hp:tr|tr)>", "\n", xml_str)
             xml_str = re.sub(r"</(?:hp:tc|tc)>", "\t", xml_str)
-            sec_text = re.sub(r"<[^>]+>", " ", xml_str)
+            sec_text = html.unescape(re.sub(r"<[^>]+>", " ", xml_str))
             sec_text = unicodedata.normalize("NFC", sec_text)
             sec_text = re.sub(r"[ \t]+", " ", sec_text)
             sec_text = re.sub(r"\n{3,}", "\n\n", sec_text).strip()
@@ -2236,7 +2434,8 @@ def _extract_hwp_v5_full_text(entry: Path, max_chars: int = DOC_INDEX_MAX_CHARS)
                             dec_sec = None
                             for wb in (-15, zlib.MAX_WBITS):
                                 try:
-                                    dec_sec = zlib.decompress(raw_sec, wb)
+                                    dec_obj = zlib.decompressobj(wb)
+                                    dec_sec = dec_obj.decompress(raw_sec, 8 * 1024 * 1024)
                                     break
                                 except Exception:
                                     continue
@@ -2355,10 +2554,15 @@ def _extract_doc_text(
                 )
                 parts_docx: List[str] = []
                 for xname in doc_xml_targets:
+                    try:
+                        if zf.getinfo(xname).file_size > 25 * 1024 * 1024:
+                            continue
+                    except Exception:
+                        pass
                     xml_str = zf.read(xname).decode("utf-8", errors="ignore")
                     xml_str = re.sub(r"</w:(?:p|tr)>", "\n", xml_str)
                     xml_str = re.sub(r"</w:tc>", "\t", xml_str)
-                    plain = re.sub(r"<[^>]+>", " ", xml_str)
+                    plain = html.unescape(re.sub(r"<[^>]+>", " ", xml_str))
                     plain = unicodedata.normalize("NFC", plain)
                     plain = re.sub(r"[ \t]+", " ", plain)
                     plain = re.sub(r"\n{3,}", "\n\n", plain).strip()
@@ -2388,9 +2592,14 @@ def _extract_doc_text(
                     key=_slide_sort_key,
                 )[:80]
                 for sl_name in slide_names:
+                    try:
+                        if zf.getinfo(sl_name).file_size > 25 * 1024 * 1024:
+                            continue
+                    except Exception:
+                        pass
                     sl_bytes = zf.read(sl_name)
                     sl_xml = re.sub(r"</a:p>", "\n", sl_bytes.decode("utf-8", errors="ignore"))
-                    sl_text = re.sub(r"<[^>]+>", " ", sl_xml)
+                    sl_text = html.unescape(re.sub(r"<[^>]+>", " ", sl_xml))
                     sl_text = unicodedata.normalize("NFC", re.sub(r"[ \t]+", " ", sl_text))
                     sl_text = re.sub(r"\n{2,}", "\n", sl_text).strip()
                     if sl_text:
@@ -2423,14 +2632,9 @@ def _extract_doc_text(
                 if cache_sig:
                     _save_doc_text_cache_entry(cache_sig, pdf_txt, flush_disk=flush_disk)
                 return pdf_txt
-            if allow_pdf_winrt_ocr and cache_sig:
-                fallback_empty = f"[{entry.parent.name}] 폴더에 보관된 {entry.name} PDF 문서입니다."
-                _save_doc_text_cache_entry(cache_sig, fallback_empty, flush_disk=flush_disk)
-                return fallback_empty
-            return fallback_generic
+            return f"[{entry.parent.name}] 폴더에 보관된 {entry.name} PDF 문서입니다."
     except Exception:
-        if cache_sig and (ext != ".pdf" or allow_pdf_winrt_ocr):
-            _save_doc_text_cache_entry(cache_sig, fallback_generic, flush_disk=flush_disk)
+        return fallback_generic
     return fallback_generic
 
 
@@ -4218,184 +4422,190 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         return cached_vids_resp
 
     scan_dirs = _iter_scan_dirs(_get_user_scan_roots(), max_depth=3)
-    videos: List[Dict[str, Any]] = []
+    raw_video_candidates: List[tuple[Path, Path, os.stat_result]] = []
     seen_paths: set[str] = set()
+    for d in scan_dirs:
+        try:
+            with os.scandir(d) as it:
+                for dent in it:
+                    if not dent.is_file(follow_symlinks=False):
+                        continue
+                    nm = dent.name
+                    dot = nm.rfind(".")
+                    if dot < 0 or nm[dot:].lower() not in _VIDEO_EXTS:
+                        continue
+                    abs_v = os.path.abspath(dent.path)
+                    norm_vid = abs_v.lower()
+                    if norm_vid in seen_paths:
+                        continue
+                    seen_paths.add(norm_vid)
+                    st = dent.stat(follow_symlinks=False)
+                    raw_video_candidates.append((d, Path(abs_v), st))
+        except Exception:
+            pass
+
+    raw_video_candidates.sort(key=lambda item: item[2].st_mtime, reverse=True)
+    videos: List[Dict[str, Any]] = []
     seen_keys: set[str] = set()
     ff = find_ffmpeg_exe()
     ocr_cache = _load_video_ocr_cache()
     missing_for_bg: List[tuple[str, Path, float]] = []
     prewarm_targets: List[Path] = []
 
-    for d in scan_dirs:
+    for d, resolved, st in raw_video_candidates[:300]:
         try:
-            for entry in sorted(d.iterdir(), key=lambda x: x.name):
-                if not entry.is_file():
-                    continue
-                ext_low = entry.suffix.lower()
-                if ext_low not in _VIDEO_EXTS:
-                    continue
-                resolved = entry.resolve()
-                norm_vid = str(resolved).lower()
-                if norm_vid in seen_paths:
-                    continue
-                seen_paths.add(norm_vid)
-                video_key = _make_collision_safe_media_key(resolved, d.name, seen_keys)
-                _PHOTO_PATH_INDEX[video_key] = resolved
-                st = entry.stat()
-                size_mb = round(max(0.1, st.st_size / (1024 * 1024)), 1)
-                date_str = datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y.%m.%d")
-                stem = entry.stem.replace("_", " ").replace("-", " ").strip()
-                enc_name = urllib.parse.quote(video_key)
+            entry = resolved
+            norm_vid = str(resolved).lower()
+            video_key = _make_collision_safe_media_key(resolved, d.name, seen_keys)
+            _PHOTO_PATH_INDEX[video_key] = resolved
+            size_mb = round(max(0.1, st.st_size / (1024 * 1024)), 1)
+            date_str = datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y.%m.%d")
+            stem = entry.stem.replace("_", " ").replace("-", " ").strip()
+            enc_name = urllib.parse.quote(video_key)
 
-                real_dur_sec = _get_fast_video_duration_sec(resolved)
-                if real_dur_sec <= 0:
-                    # moov atom 누락 등 재생 불가능한 손상 더미 파일은 목록에서 자동 제외
-                    continue
-                # HTML5 <video> 플레이어(Chrome/Edge) 하단 컨트롤바의 전체 길이 표기(초 단위 버림: 20.7s -> 0:20, 17.7s -> 0:17)와 100% 일치
-                int_dur = max(1, int(real_dur_sec))
-                dur_text = f"{int(int_dur // 60):02d}:{int(int_dur % 60):02d}"
+            real_dur_sec = _get_fast_video_duration_sec(resolved)
+            if real_dur_sec <= 0:
+                # moov atom 누락 등 재생 불가능한 손상 더미 파일은 목록에서 자동 제외
+                continue
+            # HTML5 <video> 플레이어(Chrome/Edge) 하단 컨트롤바의 전체 길이 표기(초 단위 버림: 20.7s -> 0:20, 17.7s -> 0:17)와 100% 일치
+            int_dur = max(1, int(real_dur_sec))
+            dur_text = f"{int(int_dur // 60):02d}:{int(int_dur % 60):02d}"
 
-                codec_tag = _detect_video_codec_fast(resolved)
-                if codec_tag in ("hevc", "mov_slow", "needs_transcode") and ff:
-                    vid_url = f"http://127.0.0.1:5199/__videos/stream?p={enc_name}"
-                    if len(prewarm_targets) < 40:
-                        prewarm_targets.append(resolved)
-                else:
-                    vid_url = f"http://127.0.0.1:5199/__photos/file?p={enc_name}"
+            codec_tag = _detect_video_codec_fast(resolved)
+            if codec_tag in ("hevc", "mov_slow", "needs_transcode") and ff:
+                vid_url = f"http://127.0.0.1:5199/__videos/stream?p={enc_name}"
+                if len(prewarm_targets) < 40:
+                    prewarm_targets.append(resolved)
+            else:
+                vid_url = f"http://127.0.0.1:5199/__photos/file?p={enc_name}"
 
-                thumb_seek = max(1, min(int(round(real_dur_sec * 0.2)), 3)) if int_dur >= 4 else 0
-                thumb_url = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={thumb_seek}" if ff else ""
+            thumb_seek = max(1, min(int(round(real_dur_sec * 0.2)), 3)) if int_dur >= 4 else 0
+            thumb_url = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={thumb_seek}" if ff else ""
 
-                # 순수 파일명·폴더명 의미어 토큰(CamelCase 분리 포함) + 실제 프레임 OCR 키워드만 정직하게 반영 (파일명 하드코딩 편법 일절 금지)
-                stem_expanded = _split_camel_and_alnum_words(stem)
-                raw_kw_tokens = [
-                    w for w in re.split(r"[\s_\-.,()\[\]]+", f"{stem} {stem_expanded}")
-                    if len(w) >= 2 and not re.fullmatch(r"[0-9a-fA-F]{4,}", w) and not re.fullmatch(r"\d+", w)
-                ]
-                if d.name and not re.match(r"^(videos|pictures|photos|desktop|downloads|documents|문서|사진|동영상|바탕\s*화면|다운로드|카카오톡\s*받은\s*파일|\d{2}_.+)$", d.name, re.IGNORECASE):
-                    for fw in re.split(r"[\s_\-.,()\[\]&]+", d.name):
-                        if len(fw) >= 2 and not re.fullmatch(r"\d+", fw):
-                            raw_kw_tokens.append(fw)
+            # 순수 파일명·폴더명 의미어 토큰(CamelCase 분리 포함) + 실제 프레임 OCR 키워드만 정직하게 반영 (파일명 하드코딩 편법 일절 금지)
+            stem_expanded = _split_camel_and_alnum_words(stem)
+            raw_kw_tokens = [
+                w for w in re.split(r"[\s_\-.,()\[\]]+", f"{stem} {stem_expanded}")
+                if len(w) >= 2 and not re.fullmatch(r"[0-9a-fA-F]{4,}", w) and not re.fullmatch(r"\d+", w)
+            ]
+            if d.name and not re.match(r"^(videos|pictures|photos|desktop|downloads|documents|문서|사진|동영상|바탕\s*화면|다운로드|카카오톡\s*받은\s*파일|\d{2}_.+)$", d.name, re.IGNORECASE):
+                for fw in re.split(r"[\s_\-.,()\[\]&]+", d.name):
+                    if len(fw) >= 2 and not re.fullmatch(r"\d+", fw):
+                        raw_kw_tokens.append(fw)
 
-                base_file_kw_list = list(dict.fromkeys(raw_kw_tokens))[:35]
+            base_file_kw_list = list(dict.fromkeys(raw_kw_tokens))[:35]
 
-                sig = f"{entry.name}|{st.st_size}|{int(st.st_mtime)}"
-                cached_ocr = ocr_cache.get(sig)
-                cached_ver = int((cached_ocr or {}).get("ocrVer") or 0)
-                if (
-                    (cached_ocr is None or cached_ver < _VIDEO_PADDLE_OCR_VER)
-                    and os.name == "nt"
-                    and not _is_cloud_virtual_or_unpinned_file(resolved)
-                ):
-                    missing_for_bg.append((sig, resolved, real_dur_sec))
+            sig = f"{entry.name}|{st.st_size}|{int(st.st_mtime)}"
+            cached_ocr = ocr_cache.get(sig)
+            cached_ver = int((cached_ocr or {}).get("ocrVer") or 0)
+            if (
+                (cached_ocr is None or cached_ver < _VIDEO_PADDLE_OCR_VER)
+                and os.name == "nt"
+                and not _is_cloud_virtual_or_unpinned_file(resolved)
+            ):
+                missing_for_bg.append((sig, resolved, real_dur_sec))
 
-                is_all_black = bool((cached_ocr or {}).get("isAllBlack", False))
+            is_all_black = bool((cached_ocr or {}).get("isAllBlack", False))
 
-                ocr_lines_cached = []
-                ocr_full_cached = ""
-                valid_ocr_frames: List[Dict[str, Any]] = []
-                if cached_ocr and cached_ver >= 20 and isinstance(cached_ocr.get("frames"), list):
-                    for ofr in cached_ocr["frames"]:
-                        is_p5 = bool(ofr.get("fromPaddleV5")) or cached_ver >= 20
-                        raw_str = str(ofr.get("ocrText") or "").strip()
-                        raw_ot = re.sub(r"\s+", " ", raw_str).strip() if is_p5 else _clean_video_ocr_display_text(raw_str)
-                        if raw_ot and (is_p5 or _is_meaningful_ocr_text(raw_ot)):
-                            valid_ocr_frames.append({
-                                "timeSec": int(ofr.get("timeSec") or 0),
-                                "ocrText": raw_ot,
-                                "keywords": _enrich_ocr_semantic_keywords(raw_ot),
-                                "fromPaddleV5": is_p5,
-                            })
-                    ocr_lines_cached = _dedupe_ocr_timeline_lines(valid_ocr_frames)
-                    ocr_full_cached = "\n".join(
-                        f"[{ln['timestamp']}] {ln['text']}" for ln in ocr_lines_cached
-                    )
-
-                has_meaningful_screen_ocr = (
-                    len(ocr_lines_cached) > 0
-                    and sum(len(str(ln.get("text") or "").strip()) for ln in ocr_lines_cached) >= 8
+            ocr_lines_cached = []
+            ocr_full_cached = ""
+            valid_ocr_frames: List[Dict[str, Any]] = []
+            if cached_ocr and cached_ver >= 20 and isinstance(cached_ocr.get("frames"), list):
+                for ofr in cached_ocr["frames"]:
+                    is_p5 = bool(ofr.get("fromPaddleV5")) or cached_ver >= 20
+                    raw_str = str(ofr.get("ocrText") or "").strip()
+                    raw_ot = re.sub(r"\s+", " ", raw_str).strip() if is_p5 else _clean_video_ocr_display_text(raw_str)
+                    if raw_ot and (is_p5 or _is_meaningful_ocr_text(raw_ot)):
+                        valid_ocr_frames.append({
+                            "timeSec": int(ofr.get("timeSec") or 0),
+                            "ocrText": raw_ot,
+                            "keywords": _enrich_ocr_semantic_keywords(raw_ot),
+                            "fromPaddleV5": is_p5,
+                        })
+                ocr_lines_cached = _dedupe_ocr_timeline_lines(valid_ocr_frames)
+                ocr_full_cached = "\n".join(
+                    f"[{ln['timestamp']}] {ln['text']}" for ln in ocr_lines_cached
                 )
-                if has_meaningful_screen_ocr:
-                    for vf in valid_ocr_frames:
-                        raw_kw_tokens.extend(str(k) for k in (vf.get("keywords") or []))
 
-                kw_list = list(dict.fromkeys(raw_kw_tokens))[:45]
-                # 기본 타임라인 프레임에는 파일·폴더 공통 키워드만 부여하고, 화면 OCR 키워드는 실제로 등장한 해당 시점 프레임에만 귀속
-                timeline_frames = _build_proportional_timeline_frames(stem, base_file_kw_list, d.name, len(videos) + 1, real_dur_sec)
+            has_meaningful_screen_ocr = (
+                len(ocr_lines_cached) > 0
+                and sum(len(str(ln.get("text") or "").strip()) for ln in ocr_lines_cached) >= 8
+            )
+            if has_meaningful_screen_ocr:
+                for vf in valid_ocr_frames:
+                    raw_kw_tokens.extend(str(k) for k in (vf.get("keywords") or []))
 
-                # 유효한 화면 글자(OCR) 프레임만 비례 타임라인 프레임과 병합하여 워터마크·노이즈 오염을 원천 차단
-                if has_meaningful_screen_ocr and valid_ocr_frames:
-                    existing_secs = {int(tf.get("timeSec") or 0): tf for tf in timeline_frames}
-                    for f_idx, ofr in enumerate(valid_ocr_frames):
-                        s_val = int(ofr.get("timeSec") or 0)
-                        ts_str = f"{int(s_val // 60):02d}:{int(s_val % 60):02d}"
-                        ocr_txt = str(ofr.get("ocrText") or "").strip()
-                        if not ocr_txt:
-                            continue
-                        f_kws = list(dict.fromkeys([*(ofr.get("keywords") or []), *base_file_kw_list[:12]]))
-                        nearest_sec = min(existing_secs.keys(), key=lambda x: abs(x - s_val)) if existing_secs else None
-                        if nearest_sec is not None and abs(nearest_sec - s_val) <= 1:
-                            target_tf = existing_secs[nearest_sec]
-                            target_tf["timeSec"] = s_val
-                            target_tf["timestampText"] = ts_str
-                            target_tf["sceneCaption"] = ocr_txt
-                            target_tf["keywords"] = list(dict.fromkeys([*(target_tf.get("keywords") or []), *f_kws]))
-                            target_tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, s_val)}" if ff else ""
-                        else:
-                            timeline_frames.append({
-                                "frameId": f"f_ocr_{len(videos) + 1}_{f_idx}_{s_val}",
-                                "timeSec": s_val,
-                                "timestampText": ts_str,
-                                "phaseLabel": "장면 포착",
-                                "sceneCaption": ocr_txt,
-                                "keywords": f_kws,
-                                "tags": ["#내PC동영상", f"#{d.name}"],
-                                "thumbUrl": f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, s_val)}" if ff else "",
-                            })
-                    timeline_frames.sort(key=lambda x: int(x.get("timeSec") or 0))
+            kw_list = list(dict.fromkeys(raw_kw_tokens))[:45]
+            # 기본 타임라인 프레임에는 파일·폴더 공통 키워드만 부여하고, 화면 OCR 키워드는 실제로 등장한 해당 시점 프레임에만 귀속
+            timeline_frames = _build_proportional_timeline_frames(stem, base_file_kw_list, d.name, len(videos) + 1, real_dur_sec)
 
-                if ff:
-                    for tf in timeline_frames:
-                        if not tf.get("thumbUrl"):
-                            tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, int(tf.get('timeSec') or 0))}"
+            # 유효한 화면 글자(OCR) 프레임만 비례 타임라인 프레임과 병합하여 워터마크·노이즈 오염을 원천 차단
+            if has_meaningful_screen_ocr and valid_ocr_frames:
+                existing_secs = {int(tf.get("timeSec") or 0): tf for tf in timeline_frames}
+                for f_idx, ofr in enumerate(valid_ocr_frames):
+                    s_val = int(ofr.get("timeSec") or 0)
+                    ts_str = f"{int(s_val // 60):02d}:{int(s_val % 60):02d}"
+                    ocr_txt = str(ofr.get("ocrText") or "").strip()
+                    if not ocr_txt:
+                        continue
+                    f_kws = list(dict.fromkeys([*(ofr.get("keywords") or []), *base_file_kw_list[:12]]))
+                    nearest_sec = min(existing_secs.keys(), key=lambda x: abs(x - s_val)) if existing_secs else None
+                    if nearest_sec is not None and abs(nearest_sec - s_val) <= 1:
+                        target_tf = existing_secs[nearest_sec]
+                        target_tf["timeSec"] = s_val
+                        target_tf["timestampText"] = ts_str
+                        target_tf["sceneCaption"] = ocr_txt
+                        target_tf["keywords"] = list(dict.fromkeys([*(target_tf.get("keywords") or []), *f_kws]))
+                        target_tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, s_val)}" if ff else ""
+                    else:
+                        timeline_frames.append({
+                            "frameId": f"f_ocr_{len(videos) + 1}_{f_idx}_{s_val}",
+                            "timeSec": s_val,
+                            "timestampText": ts_str,
+                            "phaseLabel": "장면 포착",
+                            "sceneCaption": ocr_txt,
+                            "keywords": f_kws,
+                            "tags": ["#내PC동영상", f"#{d.name}"],
+                            "thumbUrl": f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, s_val)}" if ff else "",
+                        })
+                timeline_frames.sort(key=lambda x: int(x.get("timeSec") or 0))
 
-                vid_hash = hashlib.sha1(norm_vid.encode("utf-8", errors="ignore")).hexdigest()[:8]
-                videos.append({
-                    "id": f"local_vid_{vid_hash}_{entry.stem[:20]}",
-                    "videoFileName": video_key,
-                    "fullPath": str(resolved),
-                    "title": f"{stem} ({d.name})",
-                    "keyframePhotoId": entry.name,
-                    "thumbUrl": thumb_url,
-                    "videoUrl": vid_url,
-                    "date": date_str,
-                    "mtimeMs": int(st.st_mtime * 1000),
-                    "durationText": dur_text,
-                    "durationSec": int_dur,
-                    "matchedSeekSec": 0,
-                    "matchedTimestamp": "00:00",
-                    "matchedFrameCaption": f"[{d.name}] 폴더의 내 PC 동영상 ({entry.name})",
-                    "locationKo": f"내 PC · {d.name}",
-                    "sceneDescription": f"{stem} 로컬 동영상 파일 ({size_mb}MB · 전체 길이 {dur_text})",
-                    "keywords": list(dict.fromkeys(kw_list)),
-                    "resolution": "1920x1080",
-                    "sizeMB": size_mb,
-                    "isAllBlack": is_all_black,
-                    "codecTag": codec_tag,
-                    "hasScreenOcrText": has_meaningful_screen_ocr,
-                    "ocrLineCount": len(ocr_lines_cached) if has_meaningful_screen_ocr else 0,
-                    "ocrLines": ocr_lines_cached if has_meaningful_screen_ocr else [],
-                    "ocrFullText": ocr_full_cached if has_meaningful_screen_ocr else "",
-                    "timelineFrames": timeline_frames,
-                })
-                if len(videos) >= 300:
-                    break
+            if ff:
+                for tf in timeline_frames:
+                    if not tf.get("thumbUrl"):
+                        tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, int(tf.get('timeSec') or 0))}"
+
+            vid_hash = hashlib.sha1(norm_vid.encode("utf-8", errors="ignore")).hexdigest()[:8]
+            videos.append({
+                "id": f"local_vid_{vid_hash}_{entry.stem[:20]}",
+                "videoFileName": video_key,
+                "fullPath": str(resolved),
+                "title": f"{stem} ({d.name})",
+                "keyframePhotoId": entry.name,
+                "thumbUrl": thumb_url,
+                "videoUrl": vid_url,
+                "date": date_str,
+                "mtimeMs": int(st.st_mtime * 1000),
+                "durationText": dur_text,
+                "durationSec": int_dur,
+                "matchedSeekSec": 0,
+                "matchedTimestamp": "00:00",
+                "matchedFrameCaption": f"[{d.name}] 폴더의 내 PC 동영상 ({entry.name})",
+                "locationKo": f"내 PC · {d.name}",
+                "sceneDescription": f"{stem} 로컬 동영상 파일 ({size_mb}MB · 전체 길이 {dur_text})",
+                "keywords": list(dict.fromkeys(kw_list)),
+                "resolution": "1920x1080",
+                "sizeMB": size_mb,
+                "isAllBlack": is_all_black,
+                "codecTag": codec_tag,
+                "hasScreenOcrText": has_meaningful_screen_ocr,
+                "ocrLineCount": len(ocr_lines_cached) if has_meaningful_screen_ocr else 0,
+                "ocrLines": ocr_lines_cached if has_meaningful_screen_ocr else [],
+                "ocrFullText": ocr_full_cached if has_meaningful_screen_ocr else "",
+                "timelineFrames": timeline_frames,
+            })
         except Exception:
             pass
-        if len(videos) >= 300:
-            break
-
-    videos.sort(key=lambda v: int(v.get("mtimeMs") or 0), reverse=True)
 
     videos.sort(key=lambda v: int(v.get("mtimeMs") or 0), reverse=True)
 
@@ -4676,13 +4886,14 @@ def apply_hardware_protection_guard(mode: str = "silent", batch_count: int = 0) 
     if os.name == "nt":
         try:
             kernel32 = ctypes.windll.kernel32
-            h_proc = kernel32.GetCurrentProcess()
             h_thread = kernel32.GetCurrentThread()
-            # 1) 인덱싱 워커 스레드만 우선순위를 조정하고, 5199 Z-코어 HTTP 데몬 프로세스 전체가 애드웨어에 밀려 기아(Starvation) 상태에 빠지지 않도록 프로세스 우선순위와 코어 마스크는 정상 유지
-            priority_applied = True
-            affinity_applied = True
+            # 1) 현재 워커 스레드에만 THREAD_PRIORITY_BELOW_NORMAL(-1) 적용해 5199 HTTP 응답 스레드 기아 없이 백그라운드 부하만 억제
+            ret_pri = kernel32.SetThreadPriority(h_thread, -1)
+            priority_applied = bool(ret_pri)
+            affinity_applied = False
         except Exception:
-            pass
+            priority_applied = False
+            affinity_applied = False
 
     # 3) 20개 파일 단위 명시적 GC 및 500MB 상한 메모리 워킹셋 릴리즈
     gc_collected = 0

@@ -49,6 +49,16 @@ u32 = ctypes.windll.user32
 k32 = ctypes.windll.kernel32
 imm32 = ctypes.windll.imm32
 
+try:
+    ctypes.windll.shcore.SetProcessDpiAwareness(2)
+except Exception:
+    try:
+        u32.SetProcessDPIAware()
+    except Exception:
+        pass
+
+_IS_INPUT_SUMMON_CONTEXT = True
+
 # Win32 상수
 WM_HOTKEY = 0x0312
 WM_TIMER = 0x0113
@@ -700,7 +710,7 @@ def get_hybrid_caret_anchor_pos(fg_hwnd: int | None = None) -> tuple[int, int, s
                 if caret_hwnd and (rc.right > 0 or rc.bottom > 0):
                     pt_c = wintypes.POINT(rc.left, rc.bottom)
                     if u32.ClientToScreen(caret_hwnd, ctypes.byref(pt_c)):
-                        if -10000 < pt_c.x < 20000 and -10000 < pt_c.y < 20000:
+                        if (pt_c.x != 0 or pt_c.y != 0) and -10000 < pt_c.x < 20000 and -10000 < pt_c.y < 20000:
                             return int(pt_c.x), int(pt_c.y), "win32_rcCaret"
         except Exception:
             pass
@@ -2032,6 +2042,7 @@ SUPERPOWER_12_FEATURES: dict[str, str] = {
     "feat_3_clean_format": "🧹 서식세탁",
     "feat_9_image_file": "[2] 📄스샷·PDF변환🔒",
     "feat_6_screen_ocr": "📸 사진·표 OCR 공간이동🔒",
+    "feat_ghost_labeler": "🏷️ 귀신 라벨러🔒",
     "feat_5_merge_search": "[3] 🔗다중합본🔒",
     "feat_8_number_format": "[4] 🔢번호·일정🔒",
     "feat_7_window_pin": "[5] 📌창고정🔒",
@@ -2063,6 +2074,8 @@ def normalize_feature_id(raw_key: str) -> str:
         return "feat_2_typo_morph"
     if k in ("superpower_key_1", "superpower_1", "1"):
         return "feat_4_iron_lines"
+    if k in ("feat_ghost_labeler", "ghost_labeler", "labeler"):
+        return "feat_ghost_labeler"
     if k in ("superpower_key_2", "superpower_key_9", "superpower_2", "superpower_9", "2", "9"):
         return "feat_9_image_file"
     if k in ("ui3_photo_ocr", "screen_ocr", "superpower_6", "superpower_key_6", "6"):
@@ -2613,11 +2626,14 @@ def _open_ghost_search_window_popup(
 
     record_feature_telemetry(f"ghost_search_window_{rect['stage']}")
 
+    local_app = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
     browser_candidates = [
         Path(r"C:\Program Files\Google\Chrome\Application\chrome.exe"),
         Path(r"C:\Program Files (x86)\Google\Chrome\Application\chrome.exe"),
+        local_app / "Google" / "Chrome" / "Application" / "chrome.exe",
         Path(r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe"),
         Path(r"C:\Program Files\Microsoft\Edge\Application\msedge.exe"),
+        local_app / "Microsoft" / "Edge" / "Application" / "msedge.exe",
     ]
     launched = False
     for b_exe in browser_candidates:
@@ -3702,6 +3718,9 @@ def _toast_worker() -> None:
                 "make_context_snippet": _make_context_snippet,
                 "toast_queue": _toast_queue,
                 "paste_to_target": _paste_to_target,
+                "is_input_context": _IS_INPUT_SUMMON_CONTEXT,
+                "daemon_set_clipboard": set_clipboard_text,
+                "daemon_copy_file": set_clipboard_hdrop_file,
                 "get_last_rbtn_dismiss_esc_ts": lambda: _LAST_RBTN_DISMISS_ESC_TS,
                 "get_trial_badge_summary": get_trial_badge_summary,
                 "check_feature_quota_allowed": check_feature_quota_allowed,
@@ -4070,8 +4089,6 @@ def _toast_worker() -> None:
         s_entry.bind("<Down>", _on_down)
         s_entry.bind("<Up>", _on_up)
         s_entry.bind("<Return>", _on_ret)
-        s_entry.bind("<Tab>", _toggle_window_mode)
-        s_entry.bind("<Alt-Return>", _toggle_window_mode)
         s_entry.bind("<Escape>", lambda _e: None if (time.time() - _LAST_RBTN_DISMISS_ESC_TS) < 0.45 else _close_win())
 
         _render_search_results()
@@ -4086,6 +4103,35 @@ def _toast_worker() -> None:
         active_mode[0] = "ui3"
         _CURRENT_OPEN_UI_MODE = "ui3"
         m_left, m_top, m_right, m_bottom = work_area
+
+        teleport_text = ""
+        teleport_tsv = ""
+        teleport_chips: list[str] = []
+        if img_path_arg == "__TELEPORT__":
+            img_path_arg = ""
+            try:
+                tp_path = Path(
+                    os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")
+                ) / "Merlin_Z_Core" / "latest_teleport_vanguard.json"
+                if tp_path.exists():
+                    tp_data = json.loads(tp_path.read_text(encoding="utf-8", errors="ignore"))
+                    if isinstance(tp_data, dict):
+                        teleport_text = str(tp_data.get("fullText") or tp_data.get("ocr_text") or "").strip()
+                        teleport_tsv = str(tp_data.get("tsvTable") or "").strip()
+                        raw_ch = tp_data.get("chips") or tp_data.get("spots") or []
+                        if isinstance(raw_ch, list):
+                            for ch_i in raw_ch:
+                                if isinstance(ch_i, dict):
+                                    sv = str(ch_i.get("insertValue") or ch_i.get("displayText") or ch_i.get("value") or "").strip()
+                                    if sv:
+                                        teleport_chips.append(sv)
+                                elif str(ch_i or "").strip():
+                                    teleport_chips.append(str(ch_i).strip())
+                        tp_fp = str(tp_data.get("filePath") or tp_data.get("imgPath") or "").strip()
+                        if tp_fp and os.path.isfile(tp_fp):
+                            img_path_arg = tp_fp
+            except Exception:
+                pass
 
         norm_arg = os.path.normcase(os.path.abspath(img_path_arg)) if img_path_arg else ""
         target_rec = None
@@ -4164,15 +4210,17 @@ def _toast_worker() -> None:
             rec_txt_raw = rec_txt_raw.split(" | ", 1)[1].strip()
 
         init_ocr_t = ""
-        if not is_placeholder_txt:
+        if teleport_text:
+            init_ocr_t = teleport_text
+        elif not is_placeholder_txt:
             init_ocr_t = rec_txt_raw
         elif not img_p_str:
             init_ocr_t = get_clipboard_text()
 
-        need_ondemand_ocr = bool(img_p_str and os.path.isfile(img_p_str) and not init_ocr_t.strip())
+        need_ondemand_ocr = bool(not teleport_text and img_p_str and os.path.isfile(img_p_str) and not init_ocr_t.strip())
         ocr_state: dict[str, str] = {
             "full": init_ocr_t,
-            "tsv": re.sub(r"  +", "\t", _clean_ocr_noise(init_ocr_t)) if init_ocr_t else "",
+            "tsv": teleport_tsv or (re.sub(r"  +", "\t", _clean_ocr_noise(init_ocr_t)) if init_ocr_t else ""),
         }
 
         b_tsv = tk.Label(left_p, text="📊 표 전체 엑셀(TSV)로 넣기", fg="#F8FAFC", bg="#1E293B", padx=6, pady=4, font=("Malgun Gothic", 8, "bold"), cursor="hand2")
@@ -4246,7 +4294,7 @@ def _toast_worker() -> None:
 
             threading.Thread(target=_bg_ocr_worker, args=(img_p_str,), daemon=True).start()
         else:
-            chips = _extract_word_chips_from_text(init_ocr_t)
+            chips = teleport_chips or _extract_word_chips_from_text(init_ocr_t)
             if chips:
                 _render_ui3_chips(chips)
             else:
@@ -4435,12 +4483,30 @@ def _toast_worker() -> None:
                         mute_btn.bind("<Button-1>", _toggle_mute)
 
                         t_sum = get_trial_badge_summary()
+                        is_teleport_banner = "📱" in left_tag
                         status_hint = str(t_sum.get("ui1_hint") or "✨ 무료 초능력 평생 0원 · 글자 입력 시 👻귀신검색창 전환")
-                        if "📱" in left_tag:
-                            status_hint = left_tag.strip()
+                        if is_teleport_banner:
+                            status_hint = left_tag.strip() + " (클릭: OCR창)"
                         elif "(" in left_tag and ")" in left_tag:
                             status_hint = left_tag[left_tag.find("(") : left_tag.rfind(")") + 1] + " · " + status_hint
-                        tk.Label(top_bar, text=status_hint, fg="#FDE047", bg="#0F172A", font=("Malgun Gothic", 8, "bold"), anchor="w").pack(side="left", fill="x", expand=True)
+                        hint_lbl_top = tk.Label(
+                            top_bar,
+                            text=status_hint,
+                            fg="#FDE047",
+                            bg="#0F172A",
+                            font=("Malgun Gothic", 8, "bold"),
+                            anchor="w",
+                            cursor="hand2" if is_teleport_banner else "arrow",
+                        )
+                        hint_lbl_top.pack(side="left", fill="x", expand=True)
+                        if is_teleport_banner:
+                            hint_lbl_top.bind(
+                                "<Button-1>",
+                                lambda _e: (
+                                    _CLICKED_SUPERPOWER_QUEUE.put(("disarm_only", 0)),
+                                    _toast_queue.put(("__UI3_OCR__|__TELEPORT__", 8000)),
+                                ),
+                            )
 
                         bottom_bar = tk.Frame(container, bg="#0B1120")
                         bottom_bar.pack(fill="x")
@@ -8629,7 +8695,7 @@ def main() -> None:
 
     last_consumed_teleport_ts: float = 0.0
 
-    def _read_fresh_mobile_teleport_packet(max_age_sec: float = 180.0) -> dict | None:
+    def _read_fresh_mobile_teleport_packet(max_age_sec: float = 60.0) -> dict | None:
         nonlocal last_consumed_teleport_ts
         try:
             sig_path = os.path.join(
@@ -8669,7 +8735,7 @@ def main() -> None:
     def _show_default_ui1_bar(live_clip_val: str | None) -> None:
         nonlocal seq_mode, pasting_started, copied_after_trigger, seq_queue
         win_dur_ms = int(get_superpower_settings().get("window_duration_ms", 6500) or 6500)
-        teleport_pkt = _read_fresh_mobile_teleport_packet(180.0)
+        teleport_pkt = _read_fresh_mobile_teleport_packet(60.0)
         if teleport_pkt:
             tp_text = str(teleport_pkt.get("fullText") or "").strip()
             tp_name = str(teleport_pkt.get("fileName") or "스마트폰 사진").strip()
@@ -8785,6 +8851,7 @@ def main() -> None:
         3) [창 UI ① 기본 귀신창]: 일반 입력창에서 드래그/물음표 없이 소환 시 ➔ 기본 귀신창 직행 (타이핑 시작 시 검색창 자동 변신)!
         """
         nonlocal seq_mode, pasting_started, copied_after_trigger, seq_queue, last_summon_raw_clip, last_consumed_image_ts, last_hdrop_copy_ts, last_question_mark_ts, last_drag_select_ts, summon_had_recent_drag, last_alpha_type_ts, pending_first_typo
+        global _IS_INPUT_SUMMON_CONTEXT
         now_s = time.time()
         summon_had_recent_drag = bool(last_drag_select_ts > last_any_key_ts and (now_s - last_drag_select_ts) <= 20.0)
 
@@ -8838,6 +8905,7 @@ def main() -> None:
             is_dedicated_input_app = False
         else:
             is_dedicated_input_app = True
+        _IS_INPUT_SUMMON_CONTEXT = is_dedicated_input_app
 
         if proc_before not in ("python.exe", "pythonw.exe"):
             _capture_target_hwnd()
@@ -8958,7 +9026,8 @@ def main() -> None:
         elif summon_had_recent_drag and fg_before and u32.IsWindow(fg_before) and proc_before not in _SECURITY_SENSITIVE_PROCS:
             try:
                 sentinel_dr = "__GHOSTI_DRAG_AUTO__"
-                prev_cb_dr = live_clip
+                prev_cb_dr = get_clipboard_text() or live_clip
+                prev_hdrop_dr = get_clipboard_hdrop_files()
                 release_all_modifiers()
                 daemon_set_clipboard(sentinel_dr)
                 time.sleep(0.015)
@@ -8970,6 +9039,13 @@ def main() -> None:
                     if c_now and c_now != sentinel_dr:
                         probed_sel = c_now
                         break
+                def _restore_prev_clipboard_dr() -> None:
+                    if prev_hdrop_dr and Path(prev_hdrop_dr[0]).exists():
+                        set_clipboard_hdrop_file(prev_hdrop_dr[0])
+                    elif prev_cb_dr:
+                        daemon_set_clipboard(prev_cb_dr)
+                    else:
+                        empty_os_clipboard()
                 if probed_sel and probed_sel != sentinel_dr and probed_sel.strip():
                     selected_raw = probed_sel
                     cand_iron = clean_and_iron_text(selected_raw, allow_typo_morph=True)
@@ -8988,10 +9064,10 @@ def main() -> None:
                         did_auto_iron = True
                         ironed_result = cand_iron
                         complete_feature_action_success("superpower_key_1")
-                    elif prev_cb_dr:
-                        daemon_set_clipboard(prev_cb_dr)
-                elif prev_cb_dr:
-                    daemon_set_clipboard(prev_cb_dr)
+                    else:
+                        _restore_prev_clipboard_dr()
+                else:
+                    _restore_prev_clipboard_dr()
             except Exception:
                 pass
 
@@ -9321,6 +9397,32 @@ def main() -> None:
                             else:
                                 superpower_fixed_snippet(fslot, daemon_set_clipboard)
                                 complete_feature_action_success(fkey)
+                            continue
+                        if isinstance(q_cmd, tuple) and q_cmd[0] == "labeler":
+                            lbl_fp = str(q_cmd[1] or "").strip() if len(q_cmd) >= 2 else ""
+                            disarm_sub_hotkeys()
+                            _cancel_unstarted_seq_mode_and_restore_clip()
+                            seq_mode = False
+                            if not lbl_fp or not Path(lbl_fp).exists():
+                                show_ghost_toast("🏷️ 먼저 라벨을 붙일 실제 파일을 선택해 주세요.", duration_ms=2200)
+                                continue
+                            norm_lbl_fp = lbl_fp.replace("\\", "/").lower()
+                            is_s_drive_lbl = (
+                                (len(lbl_fp) >= 2 and lbl_fp[0].upper() == "S" and lbl_fp[1] == ":")
+                                or "/s:/" in norm_lbl_fp
+                            )
+                            if not is_s_drive_lbl:
+                                allowed, q_msg = check_feature_quota_allowed("feat_ghost_labeler", interactive_opt_in=True)
+                                if not allowed:
+                                    show_ghost_toast(q_msg, duration_ms=3200)
+                                    continue
+                            superpower_9_image_or_pdf_file(
+                                recent_images,
+                                target_hwnd=_LAST_TARGET_HWND,
+                                explicit_files=[lbl_fp],
+                                force_explicit=True,
+                            )
+                            complete_feature_action_success("feat_ghost_labeler")
                             continue
                         exp_files: list[str] | None = None
                         force_exp = False

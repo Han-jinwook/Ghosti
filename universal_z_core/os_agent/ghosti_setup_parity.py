@@ -338,18 +338,18 @@ def docs_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
 
     q = str((body or {}).get("query") or "").strip()
     listed = plugin_ghosti_os.list_local_docs({})
-    docs = list(listed.get("documents") or [])
+    docs = list(listed.get("docs") or listed.get("documents") or [])
     if not q or "최근 서류" in q:
-        return {"ok": True, "documents": docs}
+        return {"ok": True, "documents": docs, "docs": docs}
 
     tokens = _tokenize_ko_query(q)
     if not tokens:
-        return {"ok": True, "documents": docs}
+        return {"ok": True, "documents": docs, "docs": docs}
 
     req_hits = len(tokens) if len(tokens) <= 2 else max(2, int((len(tokens) * 0.6) + 0.999))
     scored: list[tuple[int, int, Dict[str, Any]]] = []
     for d in docs:
-        raw_fname = str(d.get("fileName") or "")
+        raw_fname = str(d.get("fileName") or d.get("name") or "")
         fname_stem = Path(raw_fname).stem if raw_fname else ""
         fname_corpus = _expand_camel_and_alnum(f"{fname_stem} {d.get('title', '')}").lower()
         kws = " ".join(str(x) for x in (d.get("keywords") or []))
@@ -366,10 +366,13 @@ def docs_search(body: Dict[str, Any] | None) -> Dict[str, Any]:
             elif _match_query_token(tk, corpus, corpus_nospace):
                 hits += 1
         if hits >= req_hits:
-            scored.append((hits, fname_hits, d))
+            item = dict(d)
+            item["matchType"] = "filename" if fname_hits > 0 else "body"
+            scored.append((hits, fname_hits, item))
 
     scored.sort(key=lambda x: (x[0], x[1]), reverse=True)
-    return {"ok": True, "documents": [d for _, _, d in scored]}
+    matched = [d for _, _, d in scored]
+    return {"ok": True, "documents": matched, "docs": matched}
 
 
 def _load_static_json(filename: str) -> Dict[str, Any] | None:

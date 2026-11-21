@@ -35,12 +35,23 @@ except Exception:
     ImageTk = None
 
 _VIDEO_OCR_UI_CACHE: dict[str, Any] = {"ts": 0.0, "by_name": {}}
+_UI2_CACHE_LOCK = threading.Lock()
 _UI2_SMALL_THUMB_CACHE: dict[str, bytes] = {}
 _UI2_SMALL_THUMB_BY_PATH: dict[str, bytes] = {}
 _UI2_THUMB_INFLIGHT: set[str] = set()
 _UI2_PREVIEW_BYTES_CACHE: dict[str, tuple[bytes, str]] = {}
 _UI2_PREVIEW_INFLIGHT: set[str] = set()
 _EXTRACTED_QUEUE_UI_CACHE: dict[str, Any] = {"mtime_ns": -1, "size": -1, "items": []}
+
+
+def _expand_camel_search_text(src: str) -> str:
+    if not src:
+        return ""
+    s = re.sub(r"([a-z])([A-Z])", r"\1 \2", src)
+    s = re.sub(r"([A-Z]+)([A-Z][a-z])", r"\1 \2", s)
+    s = re.sub(r"([a-zA-Z])([0-9])", r"\1 \2", s)
+    s = re.sub(r"([0-9])([a-zA-Z])", r"\1 \2", s)
+    return s.lower()
 
 
 def _mask_sensitive_doc_text(text: str) -> str:
@@ -55,7 +66,8 @@ def _peek_cached_small_thumb_bytes(img_path_str: str) -> bytes | None:
     if not img_path_str or Image is None:
         return b""
     norm_p = os.path.normcase(os.path.abspath(img_path_str))
-    return _UI2_SMALL_THUMB_BY_PATH.get(norm_p)
+    with _UI2_CACHE_LOCK:
+        return _UI2_SMALL_THUMB_BY_PATH.get(norm_p)
 
 
 def _get_or_make_small_thumb_bytes(img_path_str: str) -> bytes:
@@ -69,10 +81,11 @@ def _get_or_make_small_thumb_bytes(img_path_str: str) -> bytes:
         if st.st_size <= 0 or st.st_size > 25 * 1024 * 1024:
             return b""
         sig = f"{norm_p}|{st.st_size}|{int(st.st_mtime)}"
-        cached = _UI2_SMALL_THUMB_CACHE.get(sig)
-        if cached is not None:
-            _UI2_SMALL_THUMB_BY_PATH[norm_p] = cached
-            return cached
+        with _UI2_CACHE_LOCK:
+            cached = _UI2_SMALL_THUMB_CACHE.get(sig)
+            if cached is not None:
+                _UI2_SMALL_THUMB_BY_PATH[norm_p] = cached
+                return cached
         with Image.open(img_path_str) as raw_im:
             im_c = raw_im.convert("RGBA")
             resamp = getattr(getattr(Image, "Resampling", Image), "BILINEAR", Image.NEAREST)
@@ -80,11 +93,12 @@ def _get_or_make_small_thumb_bytes(img_path_str: str) -> bytes:
             bio = io.BytesIO()
             im_c.save(bio, "PNG")
             tb = bio.getvalue()
-        if len(_UI2_SMALL_THUMB_CACHE) > 320:
-            _UI2_SMALL_THUMB_CACHE.clear()
-            _UI2_SMALL_THUMB_BY_PATH.clear()
-        _UI2_SMALL_THUMB_CACHE[sig] = tb
-        _UI2_SMALL_THUMB_BY_PATH[norm_p] = tb
+        with _UI2_CACHE_LOCK:
+            if len(_UI2_SMALL_THUMB_CACHE) > 320:
+                _UI2_SMALL_THUMB_CACHE.clear()
+                _UI2_SMALL_THUMB_BY_PATH.clear()
+            _UI2_SMALL_THUMB_CACHE[sig] = tb
+            _UI2_SMALL_THUMB_BY_PATH[norm_p] = tb
         return tb
     except Exception:
         return b""
@@ -96,9 +110,10 @@ def _get_or_make_preview_bytes(img_path_str: str) -> tuple[bytes, str]:
         return b"", ""
     try:
         norm_p = os.path.normcase(os.path.abspath(img_path_str))
-        cached = _UI2_PREVIEW_BYTES_CACHE.get(norm_p)
-        if cached is not None:
-            return cached
+        with _UI2_CACHE_LOCK:
+            cached = _UI2_PREVIEW_BYTES_CACHE.get(norm_p)
+            if cached is not None:
+                return cached
         if not os.path.isfile(img_path_str):
             return b"", ""
         with Image.open(img_path_str) as raw_im:
@@ -109,9 +124,10 @@ def _get_or_make_preview_bytes(img_path_str: str) -> tuple[bytes, str]:
             bio = io.BytesIO()
             im_copy.save(bio, "JPEG", quality=84)
             out = (bio.getvalue(), dim_str)
-        if len(_UI2_PREVIEW_BYTES_CACHE) > 64:
-            _UI2_PREVIEW_BYTES_CACHE.clear()
-        _UI2_PREVIEW_BYTES_CACHE[norm_p] = out
+        with _UI2_CACHE_LOCK:
+            if len(_UI2_PREVIEW_BYTES_CACHE) > 64:
+                _UI2_PREVIEW_BYTES_CACHE.clear()
+            _UI2_PREVIEW_BYTES_CACHE[norm_p] = out
         return out
     except Exception:
         return b"", ""
@@ -255,8 +271,43 @@ def build_ui2_search_window(
     make_context_snippet = ctx["make_context_snippet"]
     toast_queue = ctx["toast_queue"]
     paste_to_target = ctx["paste_to_target"]
+    is_input_context = bool(ctx.get("is_input_context", True))
+    daemon_set_clipboard = ctx.get("daemon_set_clipboard")
+    daemon_copy_file = ctx.get("daemon_copy_file")
     get_last_rbtn_dismiss_esc_ts = ctx["get_last_rbtn_dismiss_esc_ts"]
     get_trial_badge_summary = ctx.get("get_trial_badge_summary")
+
+    def _open_file_in_os(fpath: str) -> None:
+        if not fpath or not os.path.exists(fpath):
+            toast_queue.put(("⚠️ 원본 파일을 찾을 수 없습니다.", 2000))
+            return
+        try:
+            close_win()
+            os.startfile(fpath)
+        except Exception:
+            toast_queue.put(("⚠️ 파일 열기에 실패했습니다.", 2200))
+
+    def _copy_item_to_clipboard(text_val: str = "", file_path: str = "") -> None:
+        fp = (file_path or "").strip()
+        if fp and os.path.exists(fp) and callable(daemon_copy_file):
+            if daemon_copy_file(fp):
+                close_win()
+                toast_queue.put((f"📋 [{Path(fp).name}] 복사 완료! 원하는 곳에서 Ctrl+V 하세요", 2200))
+                return
+        t_clean = str(text_val or "").strip() or (fp if fp else "")
+        if not t_clean:
+            return
+        if callable(daemon_set_clipboard):
+            daemon_set_clipboard(t_clean)
+        else:
+            try:
+                root.clipboard_clear()
+                root.clipboard_append(t_clean)
+                root.update_idletasks()
+            except Exception:
+                pass
+        close_win()
+        toast_queue.put(("📋 클립보드에 복사했습니다! (Ctrl+V)", 2000))
 
     active_mode[0] = "ui2"
     set_current_open_ui_mode("ui2")
@@ -264,7 +315,7 @@ def build_ui2_search_window(
     st_state: dict[str, Any] = {
         "mode": init_mode,
         "stage": "large" if init_mode == "large" else ("medium" if init_stage == "medium" or init_query.strip() else "small"),
-        "manual_stage": "medium" if init_stage == "medium" else ("large" if init_mode == "large" else None),
+        "manual_stage": "large" if init_mode == "large" else None,
         "custom_h": None if init_mode == "large" else 330,
         "filter": "all",
         "sel_idx": 0,
@@ -338,21 +389,18 @@ def build_ui2_search_window(
 
     mute_btn.bind("<Button-1>", _toggle_snd)
 
-    stage_btns: dict[str, tk.Label] = {}
-    for st_k, st_txt in (("large", "크게"), ("medium", "중간"), ("small", "작게")):
-        sb = tk.Label(
-            hdr,
-            text=st_txt,
-            fg="#0B1120" if st_state["stage"] == st_k else "#5EEAD4",
-            bg="#2DD4BF" if st_state["stage"] == st_k else "#1E293B",
-            padx=4,
-            pady=1,
-            font=("Malgun Gothic", 8, "bold"),
-            cursor="hand2",
-        )
-        sb.pack(side="right", padx=(2, 0))
-        sb.bind("<Button-1>", lambda _e, sk=st_k: _set_explicit_stage(sk))
-        stage_btns[st_k] = sb
+    toggle_mode_btn = tk.Label(
+        hdr,
+        text="⤡ 작게" if st_state["mode"] == "large" else "⤢ 크게(갤러리)",
+        fg="#0B1120" if st_state["mode"] == "large" else "#5EEAD4",
+        bg="#2DD4BF" if st_state["mode"] == "large" else "#1E293B",
+        padx=6,
+        pady=1,
+        font=("Malgun Gothic", 8, "bold"),
+        cursor="hand2",
+    )
+    toggle_mode_btn.pack(side="right", padx=(2, 0))
+    toggle_mode_btn.bind("<Button-1>", lambda _e: _toggle_window_mode())
 
     lbl_quick_btn = tk.Label(
         hdr,
@@ -365,13 +413,17 @@ def build_ui2_search_window(
         cursor="hand2",
     )
     lbl_quick_btn.pack(side="right", padx=(4, 2))
+
     def _on_hdr_labeler(_e=None) -> None:
         sel_fp = ""
         if st_state["items"]:
             cur_r = st_state["items"][min(st_state["sel_idx"], len(st_state["items"]) - 1)]
             sel_fp = str(cur_r.get("file_path") or cur_r.get("img_path") or "").strip()
+        if not sel_fp or not os.path.exists(sel_fp):
+            toast_queue.put(("🏷️ 먼저 목록에서 실제 파일을 하나 선택해 주세요.", 2200))
+            return
         close_win()
-        clicked_superpower_queue.put((2, sel_fp, True) if sel_fp else 2)
+        clicked_superpower_queue.put(("labeler", sel_fp))
 
     lbl_quick_btn.bind("<Button-1>", _on_hdr_labeler)
 
@@ -459,20 +511,18 @@ def build_ui2_search_window(
         is_hovered[0] = True
         opened_at[0] = time.time()
         was_mouse_down[0] = True
-        st_state["manual_stage"] = target_st
-        st_state["mode"] = "large" if target_st == "large" else "compact"
-        st_state["stage"] = target_st
-        st_state["custom_h"] = 330 if target_st == "small" else None
-        record_feature_telemetry(f"ghost_search_window_{target_st}")
+        is_large = target_st == "large"
+        st_state["mode"] = "large" if is_large else "compact"
+        st_state["manual_stage"] = "large" if is_large else None
+        st_state["stage"] = "large" if is_large else "small"
+        st_state["custom_h"] = None if is_large else 330
+        record_feature_telemetry(f"ghost_search_window_{'large' if is_large else 'small'}")
         _render_search_results()
         _resize_for_stage(activate=True)
         return "break"
 
     def _toggle_window_mode(_e=None) -> str:
-        order = ("small", "medium", "large")
-        cur_s = str(st_state.get("stage") or "small")
-        nxt_s = order[(order.index(cur_s) + 1) % len(order)] if cur_s in order else "medium"
-        return _set_explicit_stage(nxt_s)
+        return _set_explicit_stage("small" if st_state["mode"] == "large" else "large")
 
     def _switch_filter(new_flt: str) -> None:
         is_hovered[0] = True
@@ -511,12 +561,16 @@ def build_ui2_search_window(
 
         def _bg_job() -> None:
             res = _fetch_video_ocr_from_zcore(target_fp)
-            ft = str(res.get("fullText") or "").strip() if res.get("ok") else ""
-            if not ft:
-                ft = "이 영상에서는 추출 가능한 화면 글자(자막·발표자료·표지판)가 감지되지 않았어요."
+            if not res.get("ok"):
+                err_s = str(res.get("error") or "UNKNOWN")
+                ft = f"⚠️ 영상 글자 추출에 실패했습니다 ({err_s})."
             else:
-                rec["video_ocr_full"] = ft
-                rec["video_ocr_lines"] = int(res.get("lineCount") or len(ft.splitlines()))
+                ft = str(res.get("fullText") or "").strip()
+                if not ft:
+                    ft = "이 영상에서는 추출 가능한 화면 글자(자막·발표자료·표지판)가 감지되지 않았어요."
+                else:
+                    rec["video_ocr_full"] = ft
+                    rec["video_ocr_lines"] = int(res.get("lineCount") or len(ft.splitlines()))
 
             def _apply_ui() -> None:
                 if current_win[0] is not win:
@@ -603,7 +657,11 @@ def build_ui2_search_window(
             act_row = tk.Frame(body_frame, bg="#0B1120")
             act_row.pack(fill="x")
             res_str = str(st_state.get("video_ocr_result_text") or "")
-            can_copy = (not st_state.get("video_ocr_loading")) and ("감지되지 않았어요" not in res_str)
+            can_copy = (
+                (not st_state.get("video_ocr_loading"))
+                and ("감지되지 않았어요" not in res_str)
+                and ("실패했습니다" not in res_str)
+            )
             if can_copy:
                 cp_b = tk.Label(
                     act_row,
@@ -715,6 +773,8 @@ def build_ui2_search_window(
 
         matched: list[tuple[float, dict]] = []
         if q:
+            q_exp = _expand_camel_search_text(q)
+            q_terms = [t for t in re.split(r"\s+", q_exp) if t]
             q_low = q.lower()
             has_explicit_chosung = bool(re.search(r"[ㄱ-ㅎ]", q_low))
             q_cho = extract_chosung(q_low) if has_explicit_chosung else ""
@@ -729,14 +789,23 @@ def build_ui2_search_window(
                     clean_t = clean_ocr_noise(raw_t) if r.get("kind") == "image" else raw_t
                     cached_low = clean_t.lower()
                     r["_search_low"] = cached_low
+                    r["_search_exp"] = _expand_camel_search_text(clean_t)
                     r["_search_src_len"] = len(raw_t)
+                    r.pop("_search_cho", None)
                 t_low = cached_low
-                fp_stem_low = Path(str(r.get("file_path") or r.get("img_path") or "")).stem.lower()
+                t_exp = r.get("_search_exp") or t_low
+                fp_stem_raw = Path(str(r.get("file_path") or r.get("img_path") or "")).stem
+                fp_stem_low = fp_stem_raw.lower()
+                fp_stem_exp = _expand_camel_search_text(fp_stem_raw)
                 sc = 0.0
-                if fp_stem_low and q_low in fp_stem_low:
+                if fp_stem_low and (q_low in fp_stem_low or (len(q_terms) > 1 and all(tm in fp_stem_exp for tm in q_terms))):
                     sc = 1.15
-                elif q_low in t_low:
+                elif q_low in t_low or (len(q_terms) > 1 and all(tm in t_exp for tm in q_terms)):
                     sc = 1.0
+                elif q_terms and all(tm in fp_stem_exp for tm in q_terms):
+                    sc = 1.08
+                elif q_terms and all(tm in t_exp for tm in q_terms):
+                    sc = 0.95
                 elif q_cho:
                     t_cho = r.get("_search_cho")
                     if t_cho is None:
@@ -764,9 +833,9 @@ def build_ui2_search_window(
         )
         prev_stage = st_state["stage"]
         prev_h = st_state.get("custom_h")
-        if st_state.get("manual_stage") in ("small", "medium", "large"):
-            st_state["stage"] = st_state["manual_stage"]
-            st_state["custom_h"] = 330 if st_state["stage"] == "small" else None
+        if st_state.get("manual_stage") == "large":
+            st_state["stage"] = "large"
+            st_state["custom_h"] = None
         else:
             st_state["stage"] = auto_stage
             st_state["custom_h"] = auto_slim_h
@@ -774,12 +843,12 @@ def build_ui2_search_window(
                 record_feature_telemetry("ghost_search_window_medium")
 
         st_now = st_state["stage"]
-        for sk_b, sb_w in stage_btns.items():
-            is_act = sk_b == st_now
-            sb_w.config(
-                fg="#0B1120" if is_act else "#5EEAD4",
-                bg="#2DD4BF" if is_act else "#1E293B",
-            )
+        is_lg_mode = st_state["mode"] == "large"
+        toggle_mode_btn.config(
+            text="⤡ 작게" if is_lg_mode else "⤢ 크게(갤러리)",
+            fg="#0B1120" if is_lg_mode else "#5EEAD4",
+            bg="#2DD4BF" if is_lg_mode else "#1E293B",
+        )
 
         max_cnt = 5 if st_now == "small" else (8 if st_now == "medium" else 10)
         snip_len = 34 if st_now == "small" else (46 if st_now == "medium" else 32)
@@ -907,8 +976,10 @@ def build_ui2_search_window(
                     tb_raw = rec.get("thumb_bytes")
                     if not tb_raw and img_cand_p:
                         tb_raw = _peek_cached_small_thumb_bytes(img_cand_p)
-                        if tb_raw is None and img_cand_p not in _UI2_THUMB_INFLIGHT and img_cand_p not in pending_thumb_paths:
-                            pending_thumb_paths.append(img_cand_p)
+                        if tb_raw is None:
+                            with _UI2_CACHE_LOCK:
+                                if img_cand_p not in _UI2_THUMB_INFLIGHT and img_cand_p not in pending_thumb_paths:
+                                    pending_thumb_paths.append(img_cand_p)
                     if tb_raw:
                         im_p = Image.open(io.BytesIO(tb_raw))
                         th_p = ImageTk.PhotoImage(im_p, master=root)
@@ -933,7 +1004,7 @@ def build_ui2_search_window(
                 lbl_row_b.pack(side="right", padx=(3, 0))
                 lbl_row_b.bind(
                     "<Button-1>",
-                    lambda _e, fp=row_fp: (close_win(), clicked_superpower_queue.put((2, fp, True))),
+                    lambda _e, fp=row_fp: (close_win(), clicked_superpower_queue.put(("labeler", fp))),
                 )
 
             if kind == "image":
@@ -983,24 +1054,39 @@ def build_ui2_search_window(
                 if r.get("kind") == "video" and r.get("video_ocr_full") and st_now != "medium":
                     _open_video_ocr_extractor(r)
                     return
-                if st_now == "medium" and st_state["sel_idx"] != i_row:
+                if st_state["sel_idx"] != i_row:
                     st_state["sel_idx"] = i_row
+                    if st_state["mode"] == "compact" and (r.get("file_path") or r.get("img_path")):
+                        st_state["stage"] = "medium"
+                        st_state["custom_h"] = None
+                        _resize_for_stage(activate=False)
                     _render_search_results()
                     return
-                fpath = r.get("file_path") or r.get("img_path") or ""
-                paste_to_target(text_val=r.get("text", ""), file_path=fpath)
+                fpath = str(r.get("file_path") or r.get("img_path") or "").strip()
+                if fpath and not is_input_context:
+                    _open_file_in_os(fpath)
+                elif is_input_context:
+                    paste_to_target(text_val=r.get("text", ""), file_path=fpath)
+                else:
+                    _copy_item_to_clipboard(text_val=r.get("text", ""), file_path=fpath)
 
             def _on_dbl_pick(_e=None, r=rec):
-                fpath = r.get("file_path") or r.get("img_path") or ""
-                paste_to_target(text_val=r.get("text", ""), file_path=fpath)
+                fpath = str(r.get("file_path") or r.get("img_path") or "").strip()
+                if fpath:
+                    _open_file_in_os(fpath)
+                elif is_input_context:
+                    paste_to_target(text_val=r.get("text", ""), file_path="")
+                else:
+                    _copy_item_to_clipboard(text_val=r.get("text", ""), file_path="")
 
             for w_it in (card, num_l, body_l, time_l):
                 w_it.bind("<Button-1>", _on_pick)
                 w_it.bind("<Double-Button-1>", _on_dbl_pick)
 
         if pending_thumb_paths:
-            for _ptp in pending_thumb_paths:
-                _UI2_THUMB_INFLIGHT.add(_ptp)
+            with _UI2_CACHE_LOCK:
+                for _ptp in pending_thumb_paths:
+                    _UI2_THUMB_INFLIGHT.add(_ptp)
 
             def _decode_thumbs_bg(paths_to_load: list[str]) -> None:
                 any_decoded = False
@@ -1009,7 +1095,8 @@ def build_ui2_search_window(
                         if _get_or_make_small_thumb_bytes(p_load):
                             any_decoded = True
                     finally:
-                        _UI2_THUMB_INFLIGHT.discard(p_load)
+                        with _UI2_CACHE_LOCK:
+                            _UI2_THUMB_INFLIGHT.discard(p_load)
                 if any_decoded:
                     try:
                         win.after(0, lambda: _render_search_results() if current_win[0] is win else None)
@@ -1039,7 +1126,8 @@ def build_ui2_search_window(
                 img_dim_str = ""
                 try:
                     norm_sfp = os.path.normcase(os.path.abspath(s_fpath)) if s_fpath else ""
-                    cached_prev = _UI2_PREVIEW_BYTES_CACHE.get(norm_sfp) if norm_sfp else None
+                    with _UI2_CACHE_LOCK:
+                        cached_prev = _UI2_PREVIEW_BYTES_CACHE.get(norm_sfp) if norm_sfp else None
                     if cached_prev and cached_prev[0]:
                         img_dim_str = cached_prev[1]
                         with Image.open(io.BytesIO(cached_prev[0])) as pv_im:
@@ -1050,9 +1138,13 @@ def build_ui2_search_window(
                             with Image.open(io.BytesIO(quick_tb)) as raw_tb:
                                 im_copy = raw_tb.convert("RGB").resize((260, 165))
                                 big_photo = ImageTk.PhotoImage(im_copy, master=root)
-                        if s_fpath and norm_sfp and norm_sfp not in _UI2_PREVIEW_INFLIGHT:
-                            _UI2_PREVIEW_INFLIGHT.add(norm_sfp)
-
+                        should_spawn_pv = False
+                        if s_fpath and norm_sfp:
+                            with _UI2_CACHE_LOCK:
+                                if norm_sfp not in _UI2_PREVIEW_INFLIGHT:
+                                    _UI2_PREVIEW_INFLIGHT.add(norm_sfp)
+                                    should_spawn_pv = True
+                        if should_spawn_pv:
                             def _decode_preview_bg(target_fp: str, target_norm: str) -> None:
                                 try:
                                     pv_bytes, _ = _get_or_make_preview_bytes(target_fp)
@@ -1064,7 +1156,8 @@ def build_ui2_search_window(
                                 except Exception:
                                     pass
                                 finally:
-                                    _UI2_PREVIEW_INFLIGHT.discard(target_norm)
+                                    with _UI2_CACHE_LOCK:
+                                        _UI2_PREVIEW_INFLIGHT.discard(target_norm)
 
                             threading.Thread(
                                 target=_decode_preview_bg,
@@ -1121,27 +1214,72 @@ def build_ui2_search_window(
                 wraplength=350,
                 anchor="w",
             ).pack(fill="x", pady=(0, 8))
-            act_b = tk.Label(
-                preview_pane,
-                text="📎 현재 커서에 바로 꽂기 (Enter)",
-                fg="#0B1120",
-                bg="#2DD4BF",
-                padx=8,
-                pady=4,
-                font=("Malgun Gothic", 9, "bold"),
-                cursor="hand2",
-            )
-            act_b.pack(fill="x", pady=2)
-            act_b.bind(
-                "<Button-1>",
-                lambda _e, r=sel_rec: paste_to_target(
-                    r.get("text", ""), r.get("file_path") or r.get("img_path") or ""
-                ),
-            )
+            if s_fpath:
+                exp_row = tk.Frame(preview_pane, bg="#0F172A")
+                exp_row.pack(fill="x", pady=2)
+                exp_row.grid_columnconfigure(0, weight=1, uniform="actbtn")
+                exp_row.grid_columnconfigure(1, weight=1, uniform="actbtn")
+                open_b = tk.Label(
+                    exp_row,
+                    text="📂 원본 열기",
+                    fg="#0B1120",
+                    bg="#38BDF8",
+                    padx=6,
+                    pady=4,
+                    font=("Malgun Gothic", 9, "bold"),
+                    cursor="hand2",
+                )
+                open_b.grid(row=0, column=0, sticky="ew", padx=(0, 3))
+                open_b.bind("<Button-1>", lambda _e, fp=s_fpath: _open_file_in_os(fp))
+                copy_b = tk.Label(
+                    exp_row,
+                    text="📋 복사하기",
+                    fg="#F8FAFC",
+                    bg="#1E293B",
+                    padx=6,
+                    pady=4,
+                    font=("Malgun Gothic", 9, "bold"),
+                    cursor="hand2",
+                )
+                copy_b.grid(row=0, column=1, sticky="ew", padx=(3, 0))
+                copy_b.bind("<Button-1>", lambda _e, t=str(s_txt), fp=s_fpath: _copy_item_to_clipboard(t, fp))
+            else:
+                copy_b = tk.Label(
+                    preview_pane,
+                    text="📋 클립보드에 복사하기",
+                    fg="#F8FAFC",
+                    bg="#1E293B",
+                    padx=8,
+                    pady=4,
+                    font=("Malgun Gothic", 9, "bold"),
+                    cursor="hand2",
+                )
+                copy_b.pack(fill="x", pady=2)
+                copy_b.bind("<Button-1>", lambda _e, t=str(s_txt): _copy_item_to_clipboard(t, ""))
+
+            if is_input_context or not s_fpath:
+                act_b = tk.Label(
+                    preview_pane,
+                    text="📎 현재 커서에 바로 꽂기 (Enter)" if is_input_context else "📎 바로 붙여넣기",
+                    fg="#0B1120",
+                    bg="#2DD4BF",
+                    padx=8,
+                    pady=4,
+                    font=("Malgun Gothic", 9, "bold"),
+                    cursor="hand2",
+                )
+                act_b.pack(fill="x", pady=2)
+                act_b.bind(
+                    "<Button-1>",
+                    lambda _e, r=sel_rec: paste_to_target(
+                        r.get("text", ""), r.get("file_path") or r.get("img_path") or ""
+                    ),
+                )
+
             if sel_rec.get("kind") == "image":
                 ocr_jump = tk.Label(
                     preview_pane,
-                    text="📝 사진·OCR 창으로 열기",
+                    text="📝 사진·표 OCR 창으로 열기",
                     fg="#FDE047",
                     bg="#1E293B",
                     padx=8,
@@ -1154,22 +1292,35 @@ def build_ui2_search_window(
                     "<Button-1>",
                     lambda _e, ip=s_fpath: toast_queue.put((f"__UI3_OCR__|{ip}", 8000)),
                 )
-            elif sel_rec.get("kind") == "video" and sel_rec.get("video_ocr_full"):
-                vocr_copy_b = tk.Label(
+            elif sel_rec.get("kind") == "video":
+                vocr_extract_b = tk.Label(
                     preview_pane,
-                    text="📋 추출된 영상 글자 전체 복사하기",
-                    fg="#0B1120",
-                    bg="#FDE047",
+                    text="📝 영상 속 글자 뽑기" if not sel_rec.get("video_ocr_full") else "📝 추출된 영상 글자 보기",
+                    fg="#FDE047",
+                    bg="#1E293B",
                     padx=8,
                     pady=4,
                     font=("Malgun Gothic", 9, "bold"),
                     cursor="hand2",
                 )
-                vocr_copy_b.pack(fill="x", pady=2)
-                vocr_copy_b.bind(
-                    "<Button-1>",
-                    lambda _e, t=str(sel_rec.get("video_ocr_full") or ""): _copy_video_ocr_text(t),
-                )
+                vocr_extract_b.pack(fill="x", pady=2)
+                vocr_extract_b.bind("<Button-1>", lambda _e, r=sel_rec: _open_video_ocr_extractor(r))
+                if sel_rec.get("video_ocr_full"):
+                    vocr_copy_b = tk.Label(
+                        preview_pane,
+                        text="📋 추출된 영상 글자 전체 복사하기",
+                        fg="#0B1120",
+                        bg="#FDE047",
+                        padx=8,
+                        pady=4,
+                        font=("Malgun Gothic", 9, "bold"),
+                        cursor="hand2",
+                    )
+                    vocr_copy_b.pack(fill="x", pady=2)
+                    vocr_copy_b.bind(
+                        "<Button-1>",
+                        lambda _e, t=str(sel_rec.get("video_ocr_full") or ""): _copy_video_ocr_text(t),
+                    )
             if s_fpath:
                 lbl_jump = tk.Label(
                     preview_pane,
@@ -1184,7 +1335,7 @@ def build_ui2_search_window(
                 lbl_jump.pack(fill="x", pady=2)
                 lbl_jump.bind(
                     "<Button-1>",
-                    lambda _e, fp=s_fpath: (close_win(), clicked_superpower_queue.put((2, fp, True))),
+                    lambda _e, fp=s_fpath: (close_win(), clicked_superpower_queue.put(("labeler", fp))),
                 )
 
     def _on_key_rel(event=None):
@@ -1223,16 +1374,20 @@ def build_ui2_search_window(
     def _on_ret(_e=None):
         if st_state["items"]:
             r = st_state["items"][st_state["sel_idx"]]
-            paste_to_target(r.get("text", ""), r.get("file_path") or r.get("img_path") or "")
+            fpath = str(r.get("file_path") or r.get("img_path") or "").strip()
+            if fpath and not is_input_context:
+                _open_file_in_os(fpath)
+            elif is_input_context:
+                paste_to_target(r.get("text", ""), fpath)
+            else:
+                _copy_item_to_clipboard(r.get("text", ""), fpath)
         return "break"
 
     s_entry.bind("<KeyRelease>", _on_key_rel)
-    s_entry.bind("<Down>", _on_down)
-    s_entry.bind("<Up>", _on_up)
-    s_entry.bind("<Return>", _on_ret)
-    s_entry.bind("<Tab>", _toggle_window_mode)
-    s_entry.bind("<Alt-Return>", _toggle_window_mode)
-    s_entry.bind(
+    win.bind("<Down>", _on_down)
+    win.bind("<Up>", _on_up)
+    win.bind("<Return>", _on_ret)
+    win.bind(
         "<Escape>",
         lambda _e: None if (time.time() - get_last_rbtn_dismiss_esc_ts()) < 0.45 else close_win(),
     )

@@ -84,7 +84,7 @@ def _resolve_model_paths() -> Dict[str, Path]:
                     with urllib.request.urlopen(req, timeout=20) as resp:
                         data = resp.read()
                     if len(data) > 1024:
-                        tmp = dest.with_suffix(".tmp")
+                        tmp = dest.with_name(f"{dest.name}.tmp.{os.getpid()}.{threading.get_ident()}")
                         tmp.write_bytes(data)
                         tmp.replace(dest)
                         found = dest
@@ -582,11 +582,12 @@ class _PpOcrRuntimeSession:
                 v0 = max(v0, (0.0 - cy_m) / cos_a)
                 v1 = min(v1, (src_h - cy_m) / cos_a)
 
-            x0 = max(0, int(math.floor(cx_m + u0 * cos_a)))
-            x1 = min(src_w, int(math.ceil(cx_m + u1 * cos_a)))
-            box_h_est = max(4, int(round(v1 - v0)))
-            y0 = max(0, int(round(cy_m - box_h_est * 0.5)))
-            y1 = min(src_h, y0 + box_h_est)
+            corners_x = [cx_m + cu * cos_a - cv * sin_a for cu in (u0, u1) for cv in (v0, v1)]
+            corners_y = [cy_m + cu * sin_a + cv * cos_a for cu in (u0, u1) for cv in (v0, v1)]
+            x0 = max(0, int(math.floor(min(corners_x))))
+            x1 = min(src_w, int(math.ceil(max(corners_x))))
+            y0 = max(0, int(math.floor(min(corners_y))))
+            y1 = min(src_h, int(math.ceil(max(corners_y))))
             if (x1 - x0) >= 6 and (y1 - y0) >= 4:
                 cand_items.append({
                     "x0": x0, "y0": y0, "x1": x1, "y1": y1,
@@ -1038,40 +1039,46 @@ def _kill_stdio_worker_locked() -> None:
 
 
 def _send_stdio_cmd_locked(payload_obj: Dict[str, Any], timeout_sec: float = 35.0) -> Dict[str, Any] | None:
-    proc = _ensure_stdio_worker_locked()
-    if proc is None or proc.stdin is None or proc.stdout is None:
-        return None
-    timed_out = {"flag": False}
+    for attempt in range(2):
+        proc = _ensure_stdio_worker_locked()
+        if proc is None or proc.stdin is None or proc.stdout is None:
+            return None
+        timed_out = {"flag": False}
 
-    def _on_timeout() -> None:
-        timed_out["flag"] = True
+        def _on_timeout() -> None:
+            timed_out["flag"] = True
+            try:
+                if proc.poll() is None:
+                    proc.kill()
+            except Exception:
+                pass
+
+        watchdog = threading.Timer(max(2.0, timeout_sec), _on_timeout)
+        watchdog.daemon = True
+        watchdog.start()
+        should_retry_eof = False
         try:
-            if proc.poll() is None:
-                proc.kill()
+            proc.stdin.write(json.dumps(payload_obj, ensure_ascii=False) + "\n")
+            proc.stdin.flush()
+            while True:
+                resp_line = proc.stdout.readline()
+                if not resp_line:
+                    _kill_stdio_worker_locked()
+                    should_retry_eof = attempt == 0 and not timed_out["flag"]
+                    break
+                s = resp_line.strip()
+                if s.startswith(_STDIO_RES_PREFIX):
+                    return json.loads(s[len(_STDIO_RES_PREFIX) :])
         except Exception:
-            pass
-
-    watchdog = threading.Timer(max(2.0, timeout_sec), _on_timeout)
-    watchdog.daemon = True
-    watchdog.start()
-    try:
-        proc.stdin.write(json.dumps(payload_obj, ensure_ascii=False) + "\n")
-        proc.stdin.flush()
-        while True:
-            resp_line = proc.stdout.readline()
-            if not resp_line:
-                _kill_stdio_worker_locked()
-                return None
-            s = resp_line.strip()
-            if s.startswith(_STDIO_RES_PREFIX):
-                return json.loads(s[len(_STDIO_RES_PREFIX) :])
-    except Exception:
-        _kill_stdio_worker_locked()
-        return None
-    finally:
-        watchdog.cancel()
-        if timed_out["flag"]:
             _kill_stdio_worker_locked()
+            should_retry_eof = attempt == 0 and not timed_out["flag"]
+        finally:
+            watchdog.cancel()
+            if timed_out["flag"]:
+                _kill_stdio_worker_locked()
+        if not should_retry_eof:
+            return None
+    return None
 
 
 def prewarm_ppocr_worker_async() -> None:

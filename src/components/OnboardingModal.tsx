@@ -301,7 +301,8 @@ export async function fetchSuperpowerStatus(accountId: string, isSubscribed: boo
   const hasLocalSavedSnippets = Boolean(localStorage.getItem(SNIPPETS_STORAGE_KEY));
   if (hasActiveGhostiLoginSession()) {
     try {
-      const q = new URLSearchParams({ accountId, isSubscribed: String(isSubscribed) });
+      const hubToken = useSaySeeStore.getState().merlinAuth?.token || '';
+      const q = new URLSearchParams({ accountId, isSubscribed: String(isSubscribed), hubToken });
       const res = await fetch(getZCoreUrl(`/api/superpower/status?${q.toString()}`), {
         signal: AbortSignal.timeout(1500),
       });
@@ -354,10 +355,11 @@ export async function startSuperpowerTrialAction(
   const localSnippets = loadLocalSnippets();
   if (hasActiveGhostiLoginSession()) {
     try {
+      const hubToken = useSaySeeStore.getState().merlinAuth?.token || '';
       const res = await fetch(getZCoreUrl('/api/superpower/start-trial'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ accountId, isSubscribed, agreed }),
+        body: JSON.stringify({ accountId, isSubscribed, agreed, hubToken }),
         signal: AbortSignal.timeout(1800),
       });
       if (res.ok) {
@@ -507,7 +509,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
         relTime: '2분 전',
         snippet: '[이미지 1280x720] 세금계산서_영수증_캡처 · 합계금액 350,000,000원 승인번호 9482-11',
         fullText:
-          '[스샷 이미지 (1280x720) · 백그라운드 WinRT OCR 추출 원문]\n공급자: (주)썬드림 / 등록번호: 123-86-98765\n품목: 귀신같이 엔터프라이즈 연간 라이선스\n합계금액: 350,000,000원 (승인번호 9482-11)',
+          '[스샷 이미지 (1280x720) · 백그라운드 PP-OCRv5 Korean 추출 원문]\n공급자: (주)썬드림 / 등록번호: 123-86-98765\n품목: 귀신같이 엔터프라이즈 연간 라이선스\n합계금액: 350,000,000원 (승인번호 9482-11)',
       },
       {
         id: 'mem-3',
@@ -844,7 +846,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
             }`}
           >
             <div className="flex items-center justify-between gap-1">
-              <span className="text-[13.5px] font-extrabold">탭 1. 🎯 귀신검색 &amp; 👻 귀신비서</span>
+              <span className="text-[13.5px] font-extrabold">탭 1. 👻 귀신검색 &amp; 👻 귀신비서</span>
               <span className="px-1.5 py-0.5 rounded-md bg-teal-500/20 text-teal-300 text-[10px] font-black">
                 내 기기 0원
               </span>
@@ -903,17 +905,17 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
         )}
 
         {/* ─────────────────────────────────────────────────────────────
-            [탭 1] 🎯 귀신검색 & 👻 귀신비서 (내 기기 1대는 언제나 0원)
+            [탭 1] 👻 귀신검색 & 👻 귀신비서 (내 기기 1대는 언제나 0원)
            ───────────────────────────────────────────────────────────── */}
         {activeTab === 'tab1_find_care' && (
           <div className="flex flex-col gap-4">
             <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
-              {/* 1) 🎯 귀신검색 */}
+              {/* 1) 👻 귀신검색 */}
               <div className="p-4 rounded-2xl bg-zinc-900/90 border border-teal-500/35 flex flex-col justify-between gap-3">
                 <div className="flex flex-col gap-2">
                   <div className="flex items-center justify-between">
                     <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 text-teal-300 text-[11px] font-extrabold">
-                      🎯 귀신검색 (1초 AI 내용검색)
+                      👻 귀신검색 (1초 AI 내용검색)
                     </span>
                     <span className="text-[11px] text-emerald-400 font-bold">평생 무료</span>
                   </div>
@@ -1407,7 +1409,7 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
               {/* 클립보드 보관 기간 1줄 미니 설정 */}
               <div className="pt-2.5 border-t border-white/10 flex flex-wrap items-center justify-between gap-2 text-[11.5px]">
                 <span className="font-bold text-zinc-300">
-                  📋 복사 내역 보관 기간 (손보기 대화창에서 말로도 변경 가능):
+                  📋 복사 내역 보관 기간 (귀신비서 대화창에서 말로도 변경 가능):
                 </span>
                 <div className="flex flex-wrap items-center gap-1.5">
                   {(
@@ -1642,10 +1644,10 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
                   </h3>
                   <ul className="text-[12.5px] text-zinc-300 space-y-2 leading-relaxed pt-1">
                     <li>
-                      ✅ <strong className="text-white">🎯 귀신같이 찾기</strong>: 내 기기 1대 안의 사진·서류·동영상 1초 AI 내용검색 <strong className="text-teal-300">평생 무제한 무료</strong>
+                      ✅ <strong className="text-white">👻 귀신검색</strong>: 내 기기 1대 안의 사진·서류·동영상 1초 AI 내용검색 <strong className="text-teal-300">평생 무제한 무료</strong>
                     </li>
                     <li>
-                      ✅ <strong className="text-white">✋ 귀신같이 손보기</strong>: 중복·흔들린 사진 정리, 사양 진단, 빨간 손가락(<code className="text-amber-300">👆</code>) 수리, 복원 기록 되돌리기 <strong className="text-teal-300">평생 무제한 무료</strong>
+                      ✅ <strong className="text-white">👻 귀신비서</strong>: 중복·흔들린 사진 정리, 사양 진단, 빨간 손가락(<code className="text-amber-300">👆</code>) 수리, 복원 기록 되돌리기 <strong className="text-teal-300">평생 무제한 무료</strong>
                     </li>
                     <li>
                       🎁 <strong className="text-white">👻 귀신 초능력 팩 (Ctrl + 0)</strong>: 자동 한영·띄어쓰기·<code className="text-teal-300">[Ctrl+V]</code> 순차붙여넣기·<code className="text-teal-300">[1]</code> 서식·줄바꿈·<code className="text-teal-300">F1~F6</code>·ZIP 압축 <strong className="text-teal-300">평생 무제한 무료</strong> + 모든 🔒 유료 티어 기능 <strong className="text-amber-300">30일 무제한 무료체험</strong> (만료 시 자동 결제 없이 깔끔 잠금🔒)

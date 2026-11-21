@@ -713,19 +713,40 @@ export async function probeBrowserVideoDurationSec(
     return viaVideoTag;
   }
 
-  // 2차: .mov 등 moov 아톰이 파일 끝에 있어 <video preload="metadata">가 실패한 경우 직접 바이너리 mvhd 파싱
+  // 2차: .mov 등 moov 아톰이 파일 끝에 있어 <video preload="metadata">가 실패한 경우 HTTP Range 헤더로 앞·뒤 최대 131KB만 부분 파싱
   try {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), 3500);
-    const res = await fetch(videoUrl, { signal: controller.signal }).finally(() =>
-      clearTimeout(timer)
-    );
-    if (res.ok) {
-      const buf = await res.arrayBuffer();
-      const parsed = parseMp4MvhdDurationFromBuffer(buf);
-      if (parsed !== null && parsed >= 1) {
-        probedDurationMemoryCache.set(videoUrl, parsed);
-        return parsed;
+    const resHead = await fetch(videoUrl, {
+      headers: { Range: 'bytes=0-131071' },
+      signal: controller.signal,
+    }).finally(() => clearTimeout(timer));
+    if (resHead.ok && resHead.status === 206) {
+      const headBuf = await resHead.arrayBuffer();
+      const headParsed = parseMp4MvhdDurationFromBuffer(headBuf);
+      if (headParsed !== null && headParsed >= 1) {
+        probedDurationMemoryCache.set(videoUrl, headParsed);
+        return headParsed;
+      }
+      const cr = resHead.headers.get('content-range') || '';
+      const totalM = cr.match(/\/(\d+)$/);
+      const totalBytes = totalM ? Number(totalM[1]) : 0;
+      if (totalBytes > 131072) {
+        const tailStart = Math.max(0, totalBytes - 131072);
+        const ctrl2 = new AbortController();
+        const timer2 = setTimeout(() => ctrl2.abort(), 3500);
+        const resTail = await fetch(videoUrl, {
+          headers: { Range: `bytes=${tailStart}-${totalBytes - 1}` },
+          signal: ctrl2.signal,
+        }).finally(() => clearTimeout(timer2));
+        if (resTail.ok) {
+          const tailBuf = await resTail.arrayBuffer();
+          const tailParsed = parseMp4MvhdDurationFromBuffer(tailBuf);
+          if (tailParsed !== null && tailParsed >= 1) {
+            probedDurationMemoryCache.set(videoUrl, tailParsed);
+            return tailParsed;
+          }
+        }
       }
     }
   } catch {
@@ -1322,9 +1343,10 @@ export async function searchVideoSceneItemsAsync(
       });
     } else if (passesVisual) {
       const matchPct = Math.min(99, Math.max(78, Math.round((effectiveSim / Math.max(0.76, topSim)) * 96)));
-      // 영상 초반(0~3초)부터 동일 장면이 시작되거나 도입부(0초) 유사도도 중반부와 동일 수준이면 전 구간 일치로 00:00부터 재생
+      // 영상 초반(0~2초)부터 동일 장면이 시작되거나 도입부(0초) 유사도도 중반부와 사실상 동일할 때만 00:00부터 재생
       const isWholeClipScene =
-        ev.bestSec <= 3 || (ev.openingSim > 0 && ev.openingSim >= ev.bestSim - 0.045);
+        ev.bestSec <= 2 ||
+        (ev.openingSim > 0 && ev.openingSim >= ev.bestSim - 0.015 && ev.openingSim >= 0.74);
       const effectiveSeekSec = isWholeClipScene ? 0 : ev.bestSec;
       const cleanTs = isWholeClipScene ? '00:00' : cleanVideoTimestampLabel(ev.bestTsText);
       finalScored.push({

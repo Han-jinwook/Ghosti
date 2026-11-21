@@ -495,7 +495,7 @@ export const DesktopSidebarContainer: React.FC<{
                 className={mainBtnClass(isGhostSearchActive)}
               >
                 <div className="flex flex-col text-left min-w-0 flex-1">
-                  <span className="text-[14.5px] leading-snug">🎯 귀신검색</span>
+                  <span className="text-[14.5px] leading-snug">👻 귀신검색</span>
                   <span className="text-[10.5px] opacity-75 font-normal whitespace-normal break-keep leading-snug">
                     <span className="whitespace-nowrap">파일 이름 몰라도,</span>{' '}
                     <span className="whitespace-nowrap">열지 않고 1초 소환</span>

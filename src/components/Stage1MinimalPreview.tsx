@@ -18,6 +18,7 @@ import {
   formatQuickKoreanLabelForFile,
 } from './PricingModal';
 import {
+  getZCoreUrl,
   requestConnectMyComputer,
   zCoreBridge,
   isZCoreOutdated,
@@ -777,6 +778,102 @@ export const Stage1MinimalSearchPreview: React.FC<{
   const localDocuments = forceSampleOnly ? DEMO_SEARCH_SAMPLE_DOCS_2 : store.localDocuments;
   const initialized = forceSampleOnly ? true : store.initialized;
   const hasExecutedUserSearch = forceSampleOnly ? demoExecuted : store.hasExecutedUserSearch;
+  const copyTextSafe = async (text: string): Promise<void> => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+        return;
+      }
+    } catch {
+      /* fallback below */
+    }
+    if (typeof document !== 'undefined') {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        document.execCommand('copy');
+        document.body.removeChild(ta);
+      } catch {
+        /* ignore */
+      }
+    }
+  };
+
+  const verifyGhostLabelerGate = async (targetFilePath?: string): Promise<boolean> => {
+    if (forceSampleOnly) return true;
+    const fp = String(targetFilePath || '').trim();
+    const normFp = fp.replace(/\\/g, '/').toLowerCase();
+    if (/^[sS]:/.test(fp) || normFp.includes('/s:/')) {
+      return true;
+    }
+    const st = useSaySeeStore.getState();
+    const ent = st.deviceEntitlement;
+    if (zCoreBridge.isConnected) {
+      try {
+        const res = await fetch(getZCoreUrl('/api/superpower/consume-action'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            actionType: 'feat_ghost_labeler',
+            filePath: fp,
+            isSubscribed: Boolean(ent?.isPaidUnlimited),
+            hubToken: st.merlinAuth?.token || '',
+            accountId: st.merlinAuth?.email || 'local_user',
+          }),
+          signal: AbortSignal.timeout(1800),
+        });
+        if (!res.ok) {
+          useSaySeeStore.setState({
+            lastQuarantineToast: '🔒 [귀신 라벨러] 권한 확인에 실패해 실행을 보류했습니다.',
+          });
+          return false;
+        }
+        const gj = (await res.json().catch(() => null)) as Record<string, unknown> | null;
+        if (gj && gj.allowed === false) {
+          if (ent?.trialActive && (gj.trialOptInRequired || gj.status === 'NOT_STARTED' || gj.reason === 'TRIAL_NOT_STARTED')) {
+            await fetch(getZCoreUrl('/api/superpower/start-trial'), {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                agreed: true,
+                optIn: true,
+                hubToken: st.merlinAuth?.token || '',
+                accountId: st.merlinAuth?.email || 'local_user',
+              }),
+              signal: AbortSignal.timeout(1500),
+            }).catch(() => null);
+            return true;
+          }
+          useSaySeeStore.setState({
+            lastQuarantineToast: String(
+              gj.message || '🔒 [귀신 라벨러] 30일 무료체험 또는 [5. 내 기기 통합] 구독 후 사용 가능합니다 (S: 업무 드라이브는 무료).'
+            ),
+          });
+          return false;
+        }
+        if (gj && gj.allowed === true) return true;
+      } catch {
+        useSaySeeStore.setState({
+          lastQuarantineToast: '🔒 [귀신 라벨러] 로컬 엔진 권한 응답이 지연되어 보류되었습니다.',
+        });
+        return false;
+      }
+    }
+    if (ent?.isPaidUnlimited || ent?.trialActive) {
+      return true;
+    }
+    useSaySeeStore.setState({
+      lastQuarantineToast:
+        '🔒 [귀신 라벨러] 유료 기능입니다. [5. 내 기기 통합] 30일 무료체험 시작 또는 구독 시 무제한 사용 가능(S: 업무 드라이브는 무료)합니다.',
+    });
+    return false;
+  };
+
   const activeQuery = forceSampleOnly ? demoQuery : store.activeQuery;
   const matchedVaultPhotos = useMemo(
     () => (forceSampleOnly ? [] : store.matchedVaultPhotos),
@@ -1150,7 +1247,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
             {forceSampleOnly ? (
               <div className="w-full px-4 py-2 rounded-2xl bg-teal-500/10 dark:bg-teal-950/35 border border-teal-500/30 flex flex-wrap items-center justify-between gap-2.5 mt-0.5 shadow-sm">
                 <div className="flex flex-wrap items-center gap-2 text-[12px] font-extrabold text-slate-900 dark:text-teal-200">
-                  <span>🧪 체험판 검색창 (샘플 사진 2 · 동영상 2 · 문서 2 고정) — 내 진짜 PC 파일은 귀신비서 연결 후 독립 『👻 귀신검색창(Ctrl+0)』에서 검색됩니다!</span>
+                  <span>🧪 웹 체험검색창 (샘플 사진 2 · 동영상 2 · 문서 2 고정) — 내 진짜 PC 파일은 귀신비서 연결 후 네이티브 『👻 귀신검색창(Ctrl+0)』에서 검색됩니다!</span>
                 </div>
               </div>
             ) : isZCoreConnected ? (
@@ -1446,15 +1543,18 @@ export const Stage1MinimalSearchPreview: React.FC<{
                           type="button"
                           onClick={(e) => {
                             e.stopPropagation();
-                            const cleanDocName = stripCollisionKeySuffix(doc.fileName);
-                            const newLabel = formatQuickKoreanLabelForFile(
-                              cleanDocName,
-                              doc.date,
-                              [doc.title, (doc.extractedText || '').slice(0, 120)]
-                            );
-                            void navigator.clipboard?.writeText(newLabel);
-                            useSaySeeStore.setState({
-                              lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${cleanDocName} ➔ ${newLabel} (클립보드에 한글 라벨명 복사됨)`,
+                            void verifyGhostLabelerGate(doc.path || doc.fileName).then(async (allowed) => {
+                              if (!allowed) return;
+                              const cleanDocName = stripCollisionKeySuffix(doc.fileName);
+                              const newLabel = formatQuickKoreanLabelForFile(
+                                cleanDocName,
+                                doc.date,
+                                [doc.title, (doc.extractedText || '').slice(0, 120)]
+                              );
+                              await copyTextSafe(newLabel);
+                              useSaySeeStore.setState({
+                                lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${cleanDocName} ➔ ${newLabel} (클립보드에 한글 라벨명 복사됨)`,
+                              });
                             });
                           }}
                           className="px-2 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/50 text-teal-200 font-label-sm text-[11px] font-extrabold transition-colors cursor-pointer"
@@ -1501,6 +1601,77 @@ export const Stage1MinimalSearchPreview: React.FC<{
                 <div ref={docLoadMoreRef} className="h-4 w-full" aria-hidden="true" />
               )}
               </>
+            )}
+
+            {matchedVaultPhotos.length > 0 && (
+              <div className="flex flex-col gap-2.5 pt-2">
+                <div className="flex items-center gap-2">
+                  <h3 className="font-headline-sm text-[14.5px] font-bold text-teal-200">
+                    📸 촬영·스캔 서류 사진 ({matchedVaultPhotos.length}건)
+                  </h3>
+                </div>
+                <div className="grid grid-cols-[repeat(auto-fill,minmax(220px,1fr))] gap-3">
+                  {matchedVaultPhotos.map((vItem) => {
+                    const vp = vItem.photo;
+                    return (
+                      <article
+                        key={vp.id}
+                        onClick={() => setSelectedPhoto(vp, null)}
+                        className="group p-3 rounded-2xl bg-[#18181B] hover:bg-zinc-900 border border-white/10 hover:border-teal-400/40 flex flex-col gap-2.5 cursor-pointer transition-colors"
+                      >
+                        <div className="flex items-center gap-2.5">
+                          <img
+                            src={vp.thumbUrl}
+                            alt={vp.name}
+                            loading="lazy"
+                            className="w-14 h-14 rounded-xl object-cover bg-zinc-950 border border-white/10 shrink-0"
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[13px] font-bold text-white truncate">{vp.name}</p>
+                            <p className="text-[11px] text-zinc-400 line-clamp-2 mt-0.5">
+                              {maskSensitiveDocText(vp.captionKo || vp.tags.join(' '))}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="flex items-center justify-between gap-1.5 pt-1.5 border-t border-white/10">
+                          <span className="font-label-mono text-[10.5px] text-zinc-400">
+                            {vp.date.split(' ')[0]}
+                          </span>
+                          <div className="flex items-center gap-1.5">
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                void verifyGhostLabelerGate(vp.fullPath || vp.name).then(async (allowed) => {
+                                  if (!allowed) return;
+                                  const res = await resolveSmartKoreanLabelForPhoto(vp);
+                                  await copyTextSafe(res.label);
+                                  useSaySeeStore.setState({
+                                    lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${res.displaySourceName} ➔ ${res.label} (복사됨)`,
+                                  });
+                                });
+                              }}
+                              className="px-2 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/50 text-amber-200 font-label-sm text-[10.5px] font-extrabold cursor-pointer"
+                            >
+                              🏷️ 라벨링🔒
+                            </button>
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setOcrModalPhoto(vp);
+                              }}
+                              className="px-2 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/50 text-teal-200 font-label-sm text-[10.5px] font-extrabold cursor-pointer"
+                            >
+                              📝 OCR
+                            </button>
+                          </div>
+                        </div>
+                      </article>
+                    );
+                  })}
+                </div>
+              </div>
             )}
           </section>
         ) : (
@@ -1589,53 +1760,36 @@ export const Stage1MinimalSearchPreview: React.FC<{
                             onClick={(e) => {
                               e.stopPropagation();
                               const targetPhoto = item.photo;
-                              useSaySeeStore.setState({
-                                lastQuarantineToast: '🏷️ 사진 속 글자·피사체를 분석해 한글 라벨명을 생성하는 중...',
-                              });
-                              void resolveSmartKoreanLabelForPhoto(targetPhoto).then(async (res) => {
-                                let copiedOk = false;
-                                try {
-                                  if (navigator.clipboard?.writeText) {
-                                    await navigator.clipboard.writeText(res.label);
-                                    copiedOk = true;
-                                  }
-                                } catch {
-                                  copiedOk = false;
-                                }
-                                if (!copiedOk && typeof document !== 'undefined') {
-                                  try {
-                                    const ta = document.createElement('textarea');
-                                    ta.value = res.label;
-                                    ta.style.position = 'fixed';
-                                    ta.style.opacity = '0';
-                                    document.body.appendChild(ta);
-                                    ta.focus();
-                                    ta.select();
-                                    document.execCommand('copy');
-                                    document.body.removeChild(ta);
-                                  } catch {
-                                    /* ignore fallback error */
-                                  }
-                                }
+                              void verifyGhostLabelerGate(targetPhoto.fullPath || targetPhoto.name).then(async (allowed) => {
+                                if (!allowed) return;
+                                useSaySeeStore.setState({
+                                  lastQuarantineToast: '🏷️ 사진 속 글자·피사체를 분석해 한글 라벨명을 생성하는 중...',
+                                });
+                                const res = await resolveSmartKoreanLabelForPhoto(targetPhoto);
+                                await copyTextSafe(res.label);
+                                const patchPhoto = (p: PhotoItem): PhotoItem =>
+                                  p.id === targetPhoto.id
+                                    ? {
+                                        ...p,
+                                        tags: Array.from(new Set([...res.enrichedTags, ...(p.tags || [])])),
+                                        ...(res.ocrSnippet && !(p.captionKo || '').includes('📝 OCR:')
+                                          ? {
+                                              captionKo: p.captionKo
+                                                ? `${p.captionKo} | 📝 OCR: ${res.ocrSnippet}`
+                                                : `📝 OCR: ${res.ocrSnippet}`,
+                                            }
+                                          : {}),
+                                      }
+                                    : p;
                                 useSaySeeStore.setState((st) => ({
                                   lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${res.displaySourceName} ➔ ${res.label} (클립보드에 한글 라벨명 복사됨)`,
                                   ...(res.enrichedTags.length > 0
                                     ? {
-                                        photos: st.photos.map((p) =>
-                                          p.id === targetPhoto.id
-                                            ? {
-                                                ...p,
-                                                tags: Array.from(new Set([...res.enrichedTags, ...(p.tags || [])])),
-                                                ...(res.ocrSnippet && !(p.captionKo || '').includes('📝 OCR:')
-                                                  ? {
-                                                      captionKo: p.captionKo
-                                                        ? `${p.captionKo} | 📝 OCR: ${res.ocrSnippet}`
-                                                        : `📝 OCR: ${res.ocrSnippet}`,
-                                                    }
-                                                  : {}),
-                                              }
-                                            : p
-                                        ),
+                                        photos: st.photos.map(patchPhoto),
+                                        searchResults: st.searchResults.map((sr) => ({
+                                          ...sr,
+                                          photo: patchPhoto(sr.photo),
+                                        })),
                                       }
                                     : {}),
                                 }));
@@ -1652,7 +1806,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
                               e.stopPropagation();
                               setOcrModalPhoto(item.photo);
                             }}
-                            title="귀신검색창에서 이 사진의 별도 독립 사진·OCR 창(창 UI ③)을 열어 글자·표를 추출합니다"
+                            title="귀신검색창에서 이 사진의 별도 독립 📝 사진·표 OCR 창을 열어 글자·표를 추출합니다"
                             className="px-2.5 py-1 rounded-lg bg-zinc-950/90 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/60 font-label-sm text-[11px] font-black shadow-md transition-all cursor-pointer"
                           >
                             📝 OCR
@@ -1737,13 +1891,13 @@ export const Stage1MinimalSearchPreview: React.FC<{
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-950/80 border border-slate-200/90 dark:border-white/10 flex flex-col gap-1">
             <span className="font-extrabold text-slate-900 dark:text-white">① 📱 내 기기 통합 소환🔒</span>
             <span className="text-slate-600 dark:text-zinc-400 leading-snug">
-              동일 이메일 연결 시 핸드폰 사진·타 PC 파일 통합 노출 &amp; 폰 촬영 직후 <strong className="text-teal-700 dark:text-teal-300">1초 공간이동 (촬영 후 1분간 자동팝업 대기)</strong> · 30일 만료 시 원격 노출만 OFF되며 이미 내 PC 폴더에 복사된 원본 파일은 영구 보존
+              동일 이메일 연결 시 핸드폰 사진·타 PC 파일 통합 노출 &amp; 폰 촬영 직후 <strong className="text-teal-700 dark:text-teal-300">1초 공간이동 (전송 후 1분간 자동 안내)</strong> · 30일 만료 시 원격 노출만 OFF되며 이미 내 PC 폴더에 복사된 원본 파일은 영구 보존
             </span>
           </div>
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-950/80 border border-slate-200/90 dark:border-white/10 flex flex-col gap-1">
             <span className="font-extrabold text-slate-900 dark:text-white">② 📝 사진·표 OCR 창🔒 (별도 독립 창)</span>
             <span className="text-slate-600 dark:text-zinc-400 leading-snug">
-              귀신검색창 안에는 사진 목록만 깔끔하게 보이고, 사진에서 <strong className="text-teal-700 dark:text-teal-300">[📝 OCR]</strong>을 누르면 별도 독립 <strong className="text-slate-900 dark:text-white">사진·OCR 창</strong>이 열려 글자·표를 추출
+              귀신검색창 안에는 사진 목록만 깔끔하게 보이고, 사진에서 <strong className="text-teal-700 dark:text-teal-300">[📝 OCR]</strong>을 누르면 별도 독립 <strong className="text-slate-900 dark:text-white">📝 사진·표 OCR 창</strong>이 열려 글자·표를 추출
             </span>
           </div>
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-950/80 border border-slate-200/90 dark:border-white/10 flex flex-col gap-1">

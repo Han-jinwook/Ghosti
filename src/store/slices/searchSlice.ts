@@ -760,6 +760,7 @@ export const createSearchSlice: StateCreator<
         const scanData = await res.json();
         if (scanData?.ok) {
           await get().initApp(true);
+          if (reqSeq !== storeSharedRefs.latestRunTextQuerySeq) return;
           const label = scanData.driveLabel || '추가 드라이브';
           const toastMsg = `⚡ 별도 설정 없이 [${label}]를 즉시 스캔하여 연결했습니다! (사진 ${
             scanData.drivePhotoCount ?? 0
@@ -821,10 +822,12 @@ export const createSearchSlice: StateCreator<
       );
       const targetTitle = matchedDoc?.fileName || matchedDoc?.title || `${voiceDocCmd.targetDocKeyword}.pdf`;
       const docMatches = await searchLocalDocumentFilesAsync(voiceDocCmd.targetDocKeyword, localDocuments);
+      if (reqSeq !== storeSharedRefs.latestRunTextQuerySeq) return;
       const kakaoRes = await dispatchFileToKakaoRealChatroom({
         recipientName: voiceDocCmd.kakaoRecipientName,
         fileName: targetTitle,
       });
+      if (reqSeq !== storeSharedRefs.latestRunTextQuerySeq) return;
       set({
         searchSpace: 'vault',
         hasExecutedUserSearch: true,
@@ -847,6 +850,7 @@ export const createSearchSlice: StateCreator<
         void speakWithHyunsuOrSunhi(factAnswerKo, 'hyunsu_briefing');
       }
       const docMatches = await searchLocalDocumentFilesAsync(voiceDocCmd.targetDocKeyword, localDocuments);
+      if (reqSeq !== storeSharedRefs.latestRunTextQuerySeq) return;
       const finalDocs =
         rankedDocs.length > 0
           ? rankedDocs
@@ -954,6 +958,7 @@ export const createSearchSlice: StateCreator<
         docText: matchedDoc?.extractedText || '',
         userQuestion: query,
       });
+      if (reqSeq !== storeSharedRefs.latestRunTextQuerySeq) return;
       const isMobileVoice = isMobileVoiceEnvironment();
       set({
         searchSpace: 'vault',
@@ -1466,10 +1471,22 @@ export const createSearchSlice: StateCreator<
         if (reqSeq !== storeSharedRefs.latestRunTextQuerySeq) return;
         const latest = get();
         if (!latest.hasExecutedUserSearch || latest.activeQuery !== query) return;
+        const nextResults = !isTimeRangeOrAlumniQuery ? refreshedPhotoOut.results : latest.searchResults;
+        const nextVaultMap = new Map<string, SearchResultItem>();
+        if (!sharedMode && !isExplicitPhotoOnlyQuery) {
+          for (const vr of nextResults) {
+            if (vr.photo.isVaultDocument) {
+              nextVaultMap.set(vr.photo.id, vr);
+            }
+          }
+        }
         set({
           matchedVideoScenes: refreshedVideos,
           ...(!isTimeRangeOrAlumniQuery
-            ? { searchResults: refreshedPhotoOut.results }
+            ? {
+                searchResults: refreshedPhotoOut.results,
+                matchedVaultPhotos: Array.from(nextVaultMap.values()),
+              }
             : {}),
           ...(isExplicitVideoIntent && refreshedVideos.length > 0
             ? { searchSpace: 'video' }

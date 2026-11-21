@@ -161,7 +161,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.6.99"
+CORE_VERSION = "2.7.0"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -557,6 +557,83 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         except Exception:
             return {}
 
+    def _resolve_local_model_file(self, path: str) -> tuple[Path | None, str]:
+        rel = path[len("/__models/") :].lstrip("/")
+        prefix = "onnx-community/embeddinggemma-2-ONNX/resolve/main/"
+        if rel.startswith(prefix):
+            rel = rel[len(prefix) :]
+        if not rel or ".." in Path(rel).parts or rel.startswith("/") or "\\" in rel and ":" in rel:
+            return None, ""
+        allowed_exts = {".json", ".onnx", ".onnx_data", ".txt", ".bin", ".model", ".vocab"}
+        for candidate_root in (
+            Path("D:/Merlin_AI_Models/embeddinggemma-2"),
+            Path("E:/Merlin_AI_Models/embeddinggemma-2"),
+            Path("C:/Merlin_AI_Models/embeddinggemma-2"),
+            Path("F:/Merlin_AI_Models/embeddinggemma-2"),
+            Path("G:/Merlin_AI_Models/embeddinggemma-2"),
+        ):
+            if not candidate_root.exists():
+                continue
+            try:
+                root_res = candidate_root.resolve()
+                target_file = (root_res / rel).resolve()
+                if not target_file.is_file() and "_q8.onnx" in rel:
+                    target_file = (root_res / rel.replace("_q8.onnx", "_quantized.onnx")).resolve()
+                if (
+                    target_file.is_relative_to(root_res)
+                    and target_file.is_file()
+                    and target_file.suffix.lower() in allowed_exts
+                ):
+                    mime = "application/json; charset=utf-8" if target_file.suffix.lower() == ".json" else "application/octet-stream"
+                    return target_file, mime
+            except Exception:
+                continue
+        return None, ""
+
+    def _check_photo_ocr_quota_allowed(self, payload: Dict[str, Any] | None = None) -> Dict[str, Any] | None:
+        if os.environ.get("GHOSTI_HEADLESS_TEST") == "1":
+            return None
+        try:
+            res = plugin_ghosti_superpowers.consume_superpower_action({
+                **(payload or {}),
+                "actionType": "feat_6_screen_ocr",
+            })
+            if res and res.get("allowed") is False:
+                return res
+        except Exception:
+            pass
+        return None
+
+    def do_HEAD(self) -> None:
+        if self._reject_untrusted():
+            return
+        parsed = urllib.parse.urlparse(self.path)
+        path = parsed.path.rstrip("/") or "/"
+        if path.startswith("/__models/"):
+            target_file, mime = self._resolve_local_model_file(path)
+            if target_file is not None:
+                try:
+                    fsize = os.path.getsize(target_file)
+                except Exception:
+                    fsize = 0
+                self.send_response(200)
+                self.send_header("Content-Type", mime)
+                self.send_header("Accept-Ranges", "bytes")
+                self.send_header("Content-Length", str(fsize))
+                self.send_header("Cache-Control", "public, max-age=86400")
+                self._write_cors_headers(expose_range=True)
+                self.end_headers()
+                return
+            self.send_response(404)
+            self.send_header("Content-Length", "0")
+            self._write_cors_headers(expose_range=False)
+            self.end_headers()
+            return
+        self.send_response(200)
+        self.send_header("Content-Length", "0")
+        self._write_cors_headers(expose_range=True)
+        self.end_headers()
+
     def do_OPTIONS(self) -> None:
         trusted, _ = self._check_origin_and_fetch_site()
         if not trusted:
@@ -626,6 +703,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             return
 
         if path in ("/__photos/ocr", "/api/ghosti/photos/ocr"):
+            gate_err = self._check_photo_ocr_quota_allowed(qp)
+            if gate_err is not None:
+                self._send_json(gate_err, status=402)
+                return
             self._send_json(plugin_ghosti_os.extract_photo_winrt_ocr(qp))
             return
 
@@ -838,25 +919,11 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             return
 
         if path.startswith("/__models/"):
+            target_file, mime = self._resolve_local_model_file(path)
+            if target_file is not None:
+                self._send_file_stream(target_file, content_type=mime, cache_max_age=86400)
+                return
             rel = path[len("/__models/") :].lstrip("/")
-            prefix = "onnx-community/embeddinggemma-2-ONNX/resolve/main/"
-            if rel.startswith(prefix):
-                rel = rel[len(prefix) :]
-            for candidate_root in (
-                Path("D:/Merlin_AI_Models/embeddinggemma-2"),
-                Path("E:/Merlin_AI_Models/embeddinggemma-2"),
-                Path("C:/Merlin_AI_Models/embeddinggemma-2"),
-                Path("F:/Merlin_AI_Models/embeddinggemma-2"),
-                Path("G:/Merlin_AI_Models/embeddinggemma-2"),
-            ):
-                if candidate_root.exists():
-                    target_file = (candidate_root / rel).resolve()
-                    if not target_file.is_file() and "_q8.onnx" in rel:
-                        target_file = (candidate_root / rel.replace("_q8.onnx", "_quantized.onnx")).resolve()
-                    if str(target_file).startswith(str(candidate_root.resolve())) and target_file.is_file():
-                        mime = "application/json; charset=utf-8" if target_file.suffix.lower() == ".json" else "application/octet-stream"
-                        self._send_bytes(target_file.read_bytes(), content_type=mime, status=200)
-                        return
             self._send_json({"ok": False, "error": f"LOCAL_MODEL_NOT_FOUND: {rel}"}, status=404)
             return
 
@@ -969,11 +1036,17 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 return
 
         if path in ("/__merlin/open-ghost-search", "/api/superpower/open_search_window"):
-            self._send_json(plugin_ghosti_superpowers.open_ghost_search_window_api(body))
+            try:
+                self._send_json(plugin_ghosti_superpowers.open_ghost_search_window_api(body))
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc)}, status=500)
             return
 
         if path in ("/__merlin/play-enter-giggle", "/api/superpower/play-enter-giggle"):
-            self._send_json(plugin_ghosti_superpowers.play_web_enter_giggle_api(body))
+            try:
+                self._send_json(plugin_ghosti_superpowers.play_web_enter_giggle_api(body))
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc)}, status=500)
             return
 
         if path in ("/__videos/ocr-frames", "/api/ghosti/videos/ocr-frames"):
@@ -981,7 +1054,14 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             return
 
         if path in ("/__photos/ocr", "/api/ghosti/photos/ocr"):
-            self._send_json(plugin_ghosti_os.extract_photo_winrt_ocr(body))
+            gate_err = self._check_photo_ocr_quota_allowed(body)
+            if gate_err is not None:
+                self._send_json(gate_err, status=402)
+                return
+            try:
+                self._send_json(plugin_ghosti_os.extract_photo_winrt_ocr(body))
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc)}, status=500)
             return
 
         if path in ("/__videos/extract-ocr-text", "/api/ghosti/videos/extract-ocr-text"):

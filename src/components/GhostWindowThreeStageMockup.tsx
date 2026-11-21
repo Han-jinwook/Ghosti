@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { getZCoreUrl, zCoreBridge } from '../services/zCoreBridge';
+import { recognizeDataUrlWithPaddleOcr } from '../services/ai/aiPaddleOcrEngine';
 import type { PhotoItem } from '../types/saysee';
 
 export type GhostWindowTierMode = 'pc_free' | 'phone_pc' | 'work_team';
@@ -374,9 +375,9 @@ const OCR_PRESETS: OcrSamplePreset[] = [
     sourceLabel: '📱 방금 찍은 사진 (1분간 표시)',
     thumbUrl: '/sample_photos_301/MEMO_202509_1259_주차장_기둥.jpg',
     fullText:
-      '[전자세금계산서 영수증] 승인번호: 20261107-849201 | 상호: (주)성수오피스디포 | 대표자: 김상훈 | 사업자번호: 123-45-67890 | 품목1: A4 복사용지 80g 10박스 (단가 22,000원) | 품목2: 레이저 토너 카트리지 2개 (단가 44,500원) | 공급가액: 131,818원 | 부가세: 13,182원 | 합계금액: 145,000원 | 입금계좌: 국민은행 012-3456-7890',
+      '[체험용 샘플 영수증] 승인번호: 20261107-849201 | 상호: (체험용 예시) | 담당자: 홍길동 | 사업자번호: 123-45-67890 | 품목1: A4 복사용지 80g 10박스 (단가 22,000원) | 품목2: 레이저 토너 카트리지 2개 (단가 44,500원) | 공급가액: 131,818원 | 부가세: 13,182원 | 합계금액: 145,000원 | 입금계좌: 국민은행 012-3456-7890',
     tsvTableText:
-      '항목\t내용\n승인번호\t20261107-849201\n상호\t(주)성수오피스디포\n사업자번호\t123-45-67890\n품목1\tA4 복사용지 80g 10박스\n품목2\t레이저 토너 카트리지 2개\n공급가액\t131,818원\n부가세\t13,182원\n합계금액\t145,000원\n입금계좌\t국민은행 012-3456-7890',
+      '항목\t내용\n승인번호\t20261107-849201\n상호\t(체험용 예시)\n사업자번호\t123-45-67890\n품목1\tA4 복사용지 80g 10박스\n품목2\t레이저 토너 카트리지 2개\n공급가액\t131,818원\n부가세\t13,182원\n합계금액\t145,000원\n입금계좌\t국민은행 012-3456-7890',
     liveTextSpots: [
       {
         id: 'spot_1',
@@ -391,9 +392,9 @@ const OCR_PRESETS: OcrSamplePreset[] = [
         id: 'spot_2',
         topPercent: 21,
         leftPercent: 6,
-        categoryHint: '상호·대표',
-        displayText: '상호: (주)성수오피스디포  |  성명: 김상훈',
-        insertValue: '(주)성수오피스디포',
+        categoryHint: '상호·담당',
+        displayText: '상호: (체험용 예시)  |  성명: 홍길동',
+        insertValue: '(체험용 예시)',
       },
       {
         id: 'spot_3',
@@ -434,7 +435,7 @@ const OCR_PRESETS: OcrSamplePreset[] = [
         topPercent: 84,
         leftPercent: 6,
         categoryHint: '입금계좌',
-        displayText: '입금계좌: 국민은행 012-3456-7890-11 (예금주: 성수오피스디포)',
+        displayText: '입금계좌: 국민은행 012-3456-7890-11 (체험용 예시)',
         insertValue: '국민은행 012-3456-7890-11',
         isPrimaryHighlight: true,
       },
@@ -1069,7 +1070,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
                   <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10">① 스페이스바 자동 한영·띄어쓰기 성형 (5초 내 Ctrl+0 / Ctrl+Z 원복 · 평생 무료)</div>
                   <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10">② 엑셀 다중 칸 자동 쪼개기 ([Ctrl+V] 순차붙여넣기 · 평생 무료)</div>
                   <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10">③ 다중 스샷 300DPI PDF 합본 ([2] 📄스샷·PDF변환🔒)</div>
-                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10">④ 📱 0.2초 공간이동 (촬영 후 1분간 자동팝업 대기)🔒</div>
+                  <div className="p-2.5 rounded-xl bg-zinc-950 border border-white/10">④ 📱 1초 공간이동 (전송 후 1분간 자동 안내)🔒</div>
                 </div>
               </div>
             )}
@@ -2105,95 +2106,99 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
       setOcrResult(null);
       setGateState('checking');
       try {
-        // 1) 유료 티어 30일 Opt-in 무료체험 게이트 점검 (5. 내 기기 통합 구독/체험 상태와도 1:1 자동 연동)
-        try {
-          const storeState = useSaySeeStore.getState();
-          const ent = storeState.deviceEntitlement;
-          const isSubFromStore = Boolean(ent?.isPaidUnlimited);
-          let gateRes = await fetch(getZCoreUrl('/api/superpower/consume-action'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              actionType: 'feat_6_screen_ocr',
-              isSubscribed: isSubFromStore,
-              accountId: storeState.merlinAuth?.email || 'local_user',
-            }),
-          });
-          let gateJson = gateRes.ok ? await gateRes.json().catch(() => null) : null;
+        // 1) 유료 티어 30일 Opt-in 무료체험 게이트 점검 (Fail-Closed + hubToken 검증 연동)
+        const storeState = useSaySeeStore.getState();
+        const ent = storeState.deviceEntitlement;
+        const hubToken = storeState.merlinAuth?.token || '';
+        const isSubFromStore = Boolean(ent?.isPaidUnlimited);
 
-          const isNotStartedResponse = (gj: Record<string, unknown> | null): boolean => {
-            if (!gj || gj.allowed !== false) return false;
-            const codeCandidates = [
-              gj.reason,
-              gj.status,
-              gj.feature_status,
-              gj.error,
-              gj.message,
-            ]
-              .map((v) => String(v || '').trim())
-              .filter(Boolean);
-            if (Boolean(gj.trialOptInRequired)) return true;
-            return codeCandidates.some(
-              (c) =>
-                c === 'NOT_STARTED' ||
-                c === 'UNOPENED' ||
-                c === 'TRIAL_NOT_STARTED' ||
-                c === 'TRIAL_OPT_IN_REQUIRED' ||
-                c.includes('무료체험 시작') ||
-                c.includes('동의 후')
-            );
-          };
-
-          // 웹 [5. 내 기기 통합]에서 이미 30일 무료체험이 활성화된 상태라면 로컬 엔진 원장에도 자동 동기화하여 이중 클릭 제거
-          if (ent?.trialActive && isNotStartedResponse(gateJson)) {
-            await fetch(getZCoreUrl('/api/superpower/start-trial'), {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                agreed: true,
-                optIn: true,
-                accountId: storeState.merlinAuth?.email || 'local_user',
-              }),
-            }).catch(() => null);
-            gateRes = await fetch(getZCoreUrl('/api/superpower/consume-action'), {
+        if (zCoreBridge.isConnected) {
+          try {
+            let gateRes = await fetch(getZCoreUrl('/api/superpower/consume-action'), {
               method: 'POST',
               headers: { 'Content-Type': 'application/json' },
               body: JSON.stringify({
                 actionType: 'feat_6_screen_ocr',
                 isSubscribed: isSubFromStore,
+                hubToken,
                 accountId: storeState.merlinAuth?.email || 'local_user',
               }),
             });
-            gateJson = gateRes.ok ? await gateRes.json().catch(() => null) : null;
-          }
+            let gateJson = gateRes.ok ? await gateRes.json().catch(() => null) : null;
 
-          if (gateJson && gateJson.allowed === false) {
-            const rawMsg = String(gateJson.message || '').trim();
-            const isMachineCodeMsg = !rawMsg || /^[A-Z0-9_]+$/.test(rawMsg);
-            if (isNotStartedResponse(gateJson)) {
+            const isNotStartedResponse = (gj: Record<string, unknown> | null): boolean => {
+              if (!gj || gj.allowed !== false) return false;
+              const codeCandidates = [
+                gj.reason,
+                gj.status,
+                gj.feature_status,
+                gj.error,
+                gj.message,
+              ]
+                .map((v) => String(v || '').trim())
+                .filter(Boolean);
+              if (Boolean(gj.trialOptInRequired)) return true;
+              return codeCandidates.some(
+                (c) =>
+                  c === 'NOT_STARTED' ||
+                  c === 'UNOPENED' ||
+                  c === 'TRIAL_NOT_STARTED' ||
+                  c === 'TRIAL_OPT_IN_REQUIRED' ||
+                  c.includes('무료체험 시작') ||
+                  c.includes('동의 후')
+              );
+            };
+
+            if (ent?.trialActive && isNotStartedResponse(gateJson)) {
+              await fetch(getZCoreUrl('/api/superpower/start-trial'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  agreed: true,
+                  optIn: true,
+                  hubToken,
+                  accountId: storeState.merlinAuth?.email || 'local_user',
+                }),
+              }).catch(() => null);
+              gateRes = await fetch(getZCoreUrl('/api/superpower/consume-action'), {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                  actionType: 'feat_6_screen_ocr',
+                  isSubscribed: isSubFromStore,
+                  hubToken,
+                  accountId: storeState.merlinAuth?.email || 'local_user',
+                }),
+              });
+              gateJson = gateRes.ok ? await gateRes.json().catch(() => null) : null;
+            }
+
+            if (!gateJson || gateJson.allowed === false) {
+              const rawMsg = String(gateJson?.message || '').trim();
+              const isMachineCodeMsg = !rawMsg || /^[A-Z0-9_]+$/.test(rawMsg);
+              if (gateJson && isNotStartedResponse(gateJson)) {
+                if (!cancelled) {
+                  setGateState('need_opt_in');
+                  setGateMessage(
+                    isMachineCodeMsg
+                      ? '🎁 [사진·표 OCR 창🔒]은 신용카드 등록 없이 30일 무제한 무료체험 시작 버튼만 누르면 바로 사용하실 수 있습니다.'
+                      : rawMsg
+                  );
+                  setLoading(false);
+                }
+                return;
+              }
               if (!cancelled) {
-                setGateState('need_opt_in');
+                setGateState('expired');
                 setGateMessage(
                   isMachineCodeMsg
-                    ? '🎁 [사진·표 OCR 창🔒]은 신용카드 등록 없이 30일 무제한 무료체험 시작 버튼만 누르면 바로 사용하실 수 있습니다.'
+                    ? '🔒 30일 무료체험이 만료되었습니다. [5번 내 기기 통합 · 월 3,900원]에서 무제한 해금되며, 무료 기본기 검색은 평생 0원입니다.'
                     : rawMsg
                 );
                 setLoading(false);
               }
               return;
             }
-            if (!cancelled) {
-              setGateState('expired');
-              setGateMessage(
-                isMachineCodeMsg
-                  ? '🔒 30일 무료체험이 만료되었습니다. [5번 내 기기 통합 · 월 3,900원]에서 무제한 해금되며, 무료 기본기 검색은 평생 0원입니다.'
-                  : rawMsg
-              );
-              setLoading(false);
-            }
-            return;
-          }
-          if (gateJson) {
             const resolvedDays = gateJson.daysLeft ?? gateJson.days_left;
             const featStatus = String(gateJson.status || gateJson.feature_status || '');
             const isSub = Boolean(
@@ -2204,37 +2209,77 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
             } else if (resolvedDays !== undefined && featStatus !== 'FREE_FOREVER') {
               setTrialBadge(`🎁 무료체험 D-${resolvedDays}`);
             }
+          } catch {
+            if (!cancelled) {
+              setGateState('expired');
+              setGateMessage('🔒 권한 확인 중 응답이 지연되어 유료 기능 실행을 안전하게 보류했습니다.');
+              setLoading(false);
+            }
+            return;
           }
-        } catch {
-          // 게이트 일시 응답 지연 시 로컬 OCR은 계속 진행
+        } else {
+          if (!ent?.isPaidUnlimited && !ent?.trialActive) {
+            if (!cancelled) {
+              setGateState('need_opt_in');
+              setGateMessage('🎁 [사진·표 OCR 창🔒]은 신용카드 등록 없이 [5. 내 기기 통합]에서 30일 무제한 무료체험 시작 후 사용하실 수 있습니다.');
+              setLoading(false);
+            }
+            return;
+          }
+          setTrialBadge(
+            ent.isPaidUnlimited ? '👑 내 기기 통합 무제한' : `🎁 무료체험 D-${ent.trialDaysLeft}`
+          );
         }
 
         if (cancelled) return;
         setGateState('allowed');
 
-        // 2) 내 PC 로컬 PP-OCRv5 Korean + 기하학적 표(TSV) 복원 호출
-        const targetKey = extractLocalPhotoPathParam(photo);
-        const res = await fetch(getZCoreUrl('/__photos/ocr'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            p: targetKey,
-            fullPath: photo.fullPath || '',
-          }),
-        });
-        const data = (await res.json().catch(() => null)) as RealPhotoOcrResponse | null;
-        if (cancelled) return;
-        if (res.ok && data && data.ok) {
-          setOcrResult(data);
+        // 2) PC Z-코어 연결 시 PP-OCRv5 + TSV 복원 호출, 미연결 시 웹 온디바이스 PP-OCRv5 폴백!
+        if (zCoreBridge.isConnected) {
+          const targetKey = extractLocalPhotoPathParam(photo);
+          const res = await fetch(getZCoreUrl('/__photos/ocr'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              p: targetKey,
+              fullPath: photo.fullPath || '',
+              isSubscribed: isSubFromStore,
+              hubToken,
+              accountId: storeState.merlinAuth?.email || 'local_user',
+            }),
+          });
+          const data = (await res.json().catch(() => null)) as RealPhotoOcrResponse | null;
+          if (cancelled) return;
+          if (res.ok && data && data.ok) {
+            setOcrResult(data);
+          } else {
+            setOcrResult({
+              ok: false,
+              hasText: false,
+              fullText: '',
+              tsvTable: '',
+              spots: [],
+              chips: [],
+              error: data?.error || '사진 OCR 판독에 실패했습니다.',
+            });
+          }
         } else {
+          const imgUrl = photo.fullUrl || photo.thumbUrl;
+          if (!imgUrl) {
+            setOcrResult({ ok: false, hasText: false, fullText: '', tsvTable: '', spots: [], chips: [] });
+            return;
+          }
+          const webOcr = await recognizeDataUrlWithPaddleOcr(imgUrl);
+          if (cancelled) return;
+          const ft = String(webOcr.text || '').trim();
+          const webChips = ft ? Array.from(new Set(ft.split(/[\s\n]+/).filter((w) => w.length >= 2))).slice(0, 18) : [];
           setOcrResult({
-            ok: false,
-            hasText: false,
-            fullText: '',
-            tsvTable: '',
+            ok: true,
+            hasText: ft.length > 0,
+            fullText: ft,
+            tsvTable: ft ? ft.replace(/  +/g, '\t') : '',
             spots: [],
-            chips: [],
-            error: data?.error || '사진 OCR 판독에 실패했습니다.',
+            chips: webChips,
           });
         }
       } catch {
@@ -2264,17 +2309,45 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
 
   const handleStart30DayTrial = async () => {
     try {
-      const accountEmail = useSaySeeStore.getState().merlinAuth?.email || 'local_user';
+      const st = useSaySeeStore.getState();
+      const accountEmail = st.merlinAuth?.email || 'local_user';
       await fetch(getZCoreUrl('/api/superpower/start-trial'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ agreed: true, optIn: true, accountId: accountEmail }),
+        body: JSON.stringify({
+          agreed: true,
+          optIn: true,
+          hubToken: st.merlinAuth?.token || '',
+          accountId: accountEmail,
+        }),
       });
     } catch {
       /* ignore */
     }
     setGateState('allowed');
     setReloadSeq((s) => s + 1);
+  };
+
+  const handleDownloadOcrTextFile = (ext: 'txt' | 'tsv') => {
+    if (!ocrResult) return;
+    const rawContent =
+      ext === 'tsv'
+        ? ocrResult.tsvTable || ocrResult.fullText
+        : ocrResult.fullText || ocrResult.tsvTable;
+    if (!rawContent.trim()) return;
+    const base = (photo.name || 'ocr_result').replace(/\.[^.]+$/, '');
+    const blob = new Blob([ext === 'tsv' ? `\uFEFF${rawContent}` : rawContent], {
+      type: ext === 'tsv' ? 'text/tab-separated-values;charset=utf-8' : 'text/plain;charset=utf-8',
+    });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${base}_OCR.${ext}`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    window.setTimeout(() => URL.revokeObjectURL(url), 2500);
+    setCopiedNotice(`✅ ${base}_OCR.${ext} 파일 저장 완료!`);
   };
 
   const handleDownloadOriginalPhoto = async () => {
@@ -2465,7 +2538,7 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
               </div>
             </div>
 
-            {/* 우측: 실제 WinRT OCR 추출 항목 & 단어칩 */}
+            {/* 우측: 실제 PP-OCRv5 Korean 추출 항목 & 단어칩 */}
             <div className="lg:col-span-7 rounded-2xl bg-zinc-950 border border-teal-400/40 p-4 flex flex-col justify-between gap-3">
               {loading ? (
                 <div className="flex-1 min-h-[240px] flex flex-col items-center justify-center text-center gap-3 p-6">
@@ -2545,9 +2618,29 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
                   )}
 
                   <div className="flex flex-col gap-1">
-                    <span className="text-[11.5px] font-extrabold text-zinc-400">
-                      📄 추출된 원문 / 표 미리보기 {ocrResult.cached ? '(⚡ 캐시 즉시 로드)' : ''}
-                    </span>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-[11.5px] font-extrabold text-zinc-400">
+                        📄 추출된 원문 / 표 미리보기 {ocrResult.cached ? '(⚡ 캐시 즉시 로드)' : ''}
+                      </span>
+                      <div className="flex items-center gap-1.5">
+                        {ocrResult.tsvTable && (
+                          <button
+                            type="button"
+                            onClick={() => handleDownloadOcrTextFile('tsv')}
+                            className="px-2 py-0.5 rounded-md bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-400/40 text-emerald-200 text-[10.5px] font-bold cursor-pointer"
+                          >
+                            📊 엑셀(.tsv) 저장
+                          </button>
+                        )}
+                        <button
+                          type="button"
+                          onClick={() => handleDownloadOcrTextFile('txt')}
+                          className="px-2 py-0.5 rounded-md bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 text-[10.5px] font-bold cursor-pointer"
+                        >
+                          📝 텍스트(.txt) 저장
+                        </button>
+                      </div>
+                    </div>
                     <pre className="p-3 rounded-xl bg-zinc-900/90 border border-white/10 text-[12px] text-zinc-100 font-mono whitespace-pre-wrap max-h-[150px] overflow-y-auto leading-relaxed">
                       {ocrResult.tsvTable || ocrResult.fullText}
                     </pre>

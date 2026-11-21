@@ -584,7 +584,7 @@ export const PhotoDetailModal: React.FC = () => {
                       pushTeleportPhotoToPcVanguard({
                         fileName: selectedPhoto.name,
                         ocrText: extracted,
-                        summary: `[스마트폰 0.2초 공간이동] ${selectedPhoto.name}`,
+                        summary: `[스마트폰 1초 공간이동] ${selectedPhoto.name}`,
                         thumbWebpBase64: thumbB64,
                         chips,
                       });
@@ -595,7 +595,7 @@ export const PhotoDetailModal: React.FC = () => {
                   );
                 }}
                 className="px-3.5 py-1.5 rounded-full bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/60 text-teal-700 dark:text-teal-200 font-label-sm text-label-sm font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-                title="연결된 내 PC의 귀신창(Ctrl+0) 대기열로 사진 속 글자·정보를 0.2초 만에 전송합니다"
+                title="연결된 내 PC의 귀신창(Ctrl+0) 대기열로 사진 속 글자·정보를 1초 만에 전송합니다"
               >
                 <span className="hidden sm:inline">⚡ PC 귀신창(Ctrl+0) 전송</span><span className="sm:hidden">⚡ PC전송</span>
               </button>

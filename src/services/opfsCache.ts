@@ -39,9 +39,16 @@ export function resetCacheStats() {
 function normalizeCacheKey(key: string): string {
   try {
     const u = new URL(key);
-    return u.pathname.replace(/^\/__models\//, '/').replace(/^\/api\/models-mirror\//, '/').replace(/^\/+/, '');
+    return u.pathname
+      .replace(/^\/__models\//, '/')
+      .replace(/^\/api\/models-mirror\/(?:[^/]+\/)?/, '/')
+      .replace(/^\/+/, '');
   } catch {
-    return key.replace(/^https?:\/\/[^/]+\//, '').replace(/^__models\//, '');
+    return key
+      .replace(/^https?:\/\/[^/]+\//, '')
+      .replace(/^\/+/, '')
+      .replace(/^__models\//, '')
+      .replace(/^api\/models-mirror\/(?:[^/]+\/)?/, '');
   }
 }
 

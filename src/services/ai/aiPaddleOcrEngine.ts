@@ -59,16 +59,28 @@ async function fetchBinaryWithCache(urls: string[]): Promise<ArrayBuffer> {
           return await cached.arrayBuffer();
         }
       }
-      const res = await fetch(url, { mode: 'cors' });
-      if (!res.ok) continue;
-      if (cache) {
-        try {
-          await cache.put(url, res.clone());
-        } catch {
-          /* ignore quota error */
+      const ac = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const tid = ac ? setTimeout(() => ac.abort(), 25000) : null;
+      try {
+        const res = await fetch(url, { mode: 'cors', signal: ac?.signal });
+        if (!res.ok) continue;
+        const ctype = (res.headers.get('content-type') || '').toLowerCase();
+        if (ctype.includes('text/html')) continue;
+        const buf = await res.arrayBuffer();
+        if (!buf.byteLength) continue;
+        const headStr = new TextDecoder('utf-8', { fatal: false }).decode(buf.slice(0, 64)).trimStart().toLowerCase();
+        if (headStr.startsWith('<!doctype') || headStr.startsWith('<html')) continue;
+        if (cache) {
+          try {
+            await cache.put(url, new Response(buf, { headers: { 'content-type': ctype || 'application/octet-stream' } }));
+          } catch {
+            /* ignore quota error */
+          }
         }
+        return buf;
+      } finally {
+        if (tid) clearTimeout(tid);
       }
-      return await res.arrayBuffer();
     } catch {
       /* try fallback url */
     }
@@ -558,8 +570,19 @@ async function runOcrPassOnRgba(
   }
 
   const detTensor = new ort.Tensor('float32', detInput, [1, 3, detH, detW]);
-  const detOut = await detSession.run({ [detSession.inputNames[0]]: detTensor });
-  const prob = detOut[detSession.outputNames[0]].data as Float32Array;
+  let detOut: Record<string, any> | null = null;
+  let prob!: Float32Array;
+  try {
+    detOut = await detSession.run({ [detSession.inputNames[0]]: detTensor });
+    prob = Float32Array.from(detOut[detSession.outputNames[0]].data as Float32Array);
+  } finally {
+    try { (detTensor as any).dispose?.(); } catch {}
+    if (detOut) {
+      for (const k of Object.keys(detOut)) {
+        try { detOut[k]?.dispose?.(); } catch {}
+      }
+    }
+  }
 
   const visited = new Uint8Array(plane);
   const q = new Int32Array(plane);
@@ -700,11 +723,12 @@ async function runOcrPassOnRgba(
         v1 = Math.min(v1, (srcH - cyM) / cosA);
       }
 
-      const x0 = Math.max(0, Math.floor(cxM + u0 * cosA));
-      const x1 = Math.min(srcW, Math.ceil(cxM + u1 * cosA));
-      const boxHEst = Math.max(4, Math.round(v1 - v0));
-      const y0 = Math.max(0, Math.round(cyM - boxHEst * 0.5));
-      const y1 = Math.min(srcH, y0 + boxHEst);
+      const xs = [u0, u1].flatMap((cu) => [v0, v1].map((cv) => cxM + cu * cosA - cv * sinA));
+      const ys = [u0, u1].flatMap((cu) => [v0, v1].map((cv) => cyM + cu * sinA + cv * cosA));
+      const x0 = Math.max(0, Math.floor(Math.min(...xs)));
+      const x1 = Math.min(srcW, Math.ceil(Math.max(...xs)));
+      const y0 = Math.max(0, Math.floor(Math.min(...ys)));
+      const y1 = Math.min(srcH, Math.ceil(Math.max(...ys)));
       if (x1 - x0 >= 6 && y1 - y0 >= 4) {
         candidateBoxes.push({
           x0,
@@ -830,13 +854,27 @@ async function runOcrPassOnRgba(
       }
     }
 
-    const rOut = await recSession.run({
-      [recInName]: new ort.Tensor('float32', recInput, [1, 3, recH, recW]),
-    });
-    const logits = rOut[recOutName];
-    const seqLen = Number(logits.dims[1] || 0);
-    const numCls = Number(logits.dims[2] || 0);
-    const data = logits.data as Float32Array;
+    const recTensor = new ort.Tensor('float32', recInput, [1, 3, recH, recW]);
+    let rOut: Record<string, any> | null = null;
+    let seqLen = 0;
+    let numCls = 0;
+    let data!: Float32Array;
+    try {
+      rOut = await recSession.run({
+        [recInName]: recTensor,
+      });
+      const logits = rOut[recOutName];
+      seqLen = Number(logits.dims[1] || 0);
+      numCls = Number(logits.dims[2] || 0);
+      data = Float32Array.from(logits.data as Float32Array);
+    } finally {
+      try { (recTensor as any).dispose?.(); } catch {}
+      if (rOut) {
+        for (const k of Object.keys(rOut)) {
+          try { rOut[k]?.dispose?.(); } catch {}
+        }
+      }
+    }
 
     const charPairs: Array<{ ch: string; sc: number }> = [];
     let prevIdx = 0;

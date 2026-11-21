@@ -2,6 +2,27 @@
 
 ---
 
+## 🕒 [2026-11-21 14:48 KST `2귀신` 진행 기록 (`2. 👻 귀신검색` 전수 점검 · 귀신창 평상시 2회 복사 무소환 자동연사 폐지 · `Z-Core v2.7.0`)]
+
+- **세션 제목**: `귀신창2회복사자동연사폐지`
+1. **귀신창 평상시 `Ctrl+C` 2회 복사 시 무소환 자동 순차복붙(연사) 발동 및 클립보드 1번 덮어쓰기 영구 폐지 (`seq_paste_daemon.py`)**:
+   - 평상시 `Ctrl+0` 소환 없이 `Ctrl+C`로 2회 이상 복사할 때는 귀신창(토스트)이 뜨지 않고 마지막 복사 항목이 그대로 붙여넣기(`Ctrl+V`) 되도록 수정.
+   - 오직 `Ctrl+0` / `Ctrl+우클릭`으로 `[창 UI ① 기본 귀신창]`을 직접 호출했을 때만 순차복붙 큐가 장전되며, 붙여넣기 없이 닫거나(`✕`, `ESC`) 검색창/타 기능으로 전환 시 즉시 마지막 클립보드 원복 (`41ff9ffd-2c1d-813a-97b8-ef37e6579d08` 테스트 미션 카드 등록 완료).
+2. **멀린님 확정 스펙 100% 문서 반영 (`In-Place Update`)**: `귀신같이_기획서.md`, `기능명세.md`, `정책_및_핵심원칙.md`, `귀신같이_통합_가격표_마스터.md`, `디바이스별_인덱싱_성능부하_집계관리_원장.md`, `검색엔진_온톨로지_아키텍처.md`, `귀신같이_가치명세서.md`, `README.md` 동시 현행화 — 사진 탭 기본+자동전환+수동고정, 네이티브 검색창 vs 웹 체험검색창 분리, `2모드([⤢ 크게(갤러리)] ⇄ [⤡ 작게])`, `Tab` 전환 규칙 폐지, 탐색기식 결과 액션 분리(`[📂 원본 열기]`·`[📋 복사하기]`·입력창 전용 `[📎 바로 꽂기]`), 체감 `1초 공간이동` & 폰 전송 유효시간 `1분(60초)` + `UI ①` 도착 배너 클릭 시 `📝 사진·표 OCR 창` 오픈, 내 PC 로컬 무마스킹(`••••` 폐지), `feat_ghost_labeler` 분리 및 `S:` 무료 무제한, 1단계 우선+2단계 `C:/D:` 전체 드라이브 백그라운드 스캔.
+3. **백엔드·데몬·UI ② (`universal_z_core/`, 3-카피 동시 동기화 & `CORE_VERSION = "2.7.0"`)**:
+   - `ghosti_setup_parity.py`: `docs_search()` `listed.get("docs")` 키 수정 및 `matchType` 부여.
+   - `plugin_ghosti_superpowers.py`: `update_telemetry` `action` 지원, `feat_ghost_labeler` 전용 키 분리(`S:` 무료 통과), Hub 토큰(`device_get_state`) 미검증 클라이언트의 `isSubscribed: true` 영구 위변조 차단.
+   - `merlin_z_core_daemon.py`: `/__models/*` `is_relative_to` + 허용 확장자 + 스트리밍(`_send_file_stream`) + `do_HEAD`, `/__photos/ocr` 서버 쿼터 검증 게이트, `/api/superpower/open_search_window` `try/except` 보호.
+   - `plugin_ghosti_os.py`: `_is_safe_user_media_path` 시스템·인증서·AppData 경계 가드, `list_local_photos`/`list_local_videos` `mtime` 내림차순 선(先)정렬, 2단계 백그라운드 전체 드라이브 스캔 + `SetThreadPriority(-1)` 실배선, `pypdf` 폴백 추가 및 실패 시 캐시 오염 방지, HWPX `html.unescape`·ZIP/zlib 크기 상한 방어.
+   - `ppocr_v5_worker.py`: 회전 `sin_a` 4꼭짓점 AABB 보정, PID+TID 고유 `.tmp` 다운로드, stdio 워커 EOF 자동 재기동.
+   - `ghost_search_window_ui2.py` & `seq_paste_daemon.py`: 3버튼(`크게/중간/작게`) → 2모드 단일 토글(`⤢ 크게(갤러리) ⇄ ⤡ 작게`), `<Tab>`/`<Alt-Return>` 바인딩 제거, 탐색기식 `[📂 원본 열기]`/`[📋 복사하기]`/조건부 `[📎 커서에 바로 꽂기]`, Win32 DPI Per-Monitor v2, 텔레포트 유효시간 `60초` & `UI ①` `📱` 배너 클릭 ➔ `UI ③(__TELEPORT__)`, 비Edit 드래그 probe `CF_HDROP` 복원.
+4. **프론트엔드 AI·스토어·웹 UI (`src/`)**:
+   - `aiSharedRuntime.ts`·`opfsCache.ts`·`aiPaddleOcrEngine.ts`: `계약서`/`견적서` 1글자 명사 접미사 매칭 보완, `getOptimalEmbeddingDtype` 창 너비 무관 PC `q8`/모바일 `q4` 통일, 3중 안전망 로더 뮤텍스+타임아웃 & `AutoTokenizer` 래핑, 모바일 백그라운드 진입 시 모델 메모리 일괄 반환, OPFS `/api/models-mirror/` 캐시 키 정규화, OCR HTML SPA 가드·타임아웃·회전 `sinA`·텐서 `.dispose()`.
+   - `aiPhotoFaceEngine.ts`·`aiVideoEngine.ts`·`voiceSearchAndAiBatonEngine.ts`·`silentIndexingBrake.ts`·`searchSlice.ts`: 수평 유의어 오탐(`카페`≠`커피`) 소거, 온보딩 파이프라인 WASM 폴백/취소 보고, `Range` 헤더 부분 MP4 메타 파싱, `'모아줘'` 휴지통 오라우팅 좁히기, `latestRunTextQuerySeq` 비동기 레이스 가드 전수 적용 & 2단계 `[문서]` 탭 `matchedVaultPhotos` 재계산·표시.
+   - `Stage1MinimalPreview.tsx`·`GhostWindowThreeStageMockup.tsx`·`GhostSearchTrainingPage.tsx`·`DesktopDashboard.tsx`·`GhostSearchPane.tsx`·`PricingModal.tsx`·`OnboardingModal.tsx`·`PhotoDetailModal.tsx`·`MerlinZCoreGuideModal.tsx`·`DesktopSidebarAndHeader.tsx`·`deviceIntegrationService.ts`·`monsterChatRouter.ts`: Fail-Closed 게이트 + `hubToken` 연동, `[🏷️ 이 파일 귀신라벨링🔒]` `S:` 무료+게이트+`searchResults` 동기화, TSV/TXT 저장, `(주)성수오피스디포`/`WinRT OCR`/`0.2초`/`🎯 귀신검색`/`Tab`/가짜 도장 치트 등 구 문구·결함 전면 정합화.
+
+---
+
 ## 🕒 [2026-11-21 13:30 KST `1·3귀신` 진행 기록 (`5. 🔄 내 기기 통합` 전용 구독 결제창 UI 신설 · 과금 누수 0% 서버 실차감/3중 게이트 · 유료 만족도 5종 업그레이드 완결 · `Z-Core v2.6.80`)]
 
 - **세션 제목**: `내기기통합 결제창·누수봉쇄`

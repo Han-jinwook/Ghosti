@@ -141,7 +141,7 @@ class SilentIndexingBrakeManager {
       lastGcFileCount: 1860,
       estimatedTempCelsius: 34.5,
       batteryPercent: 88,
-      isCharging: true,
+      isCharging: !this.isMobileEnvironment(),
       isWifiConnected: true,
       thermalOrBatteryPaused: false,
       pauseReason: null,
@@ -179,8 +179,9 @@ class SilentIndexingBrakeManager {
     // 배터리 및 네트워크 상태 감지 (지원 브라우저)
     this.syncBatteryAndNetworkState();
 
-    // 백그라운드 틱 (유휴 시간 감지 + 과거 파일 조용한 인덱싱 진행 시뮬레이션/동기화)
+    // 백그라운드 틱 (화면 숨김 상태에서는 타이머 양보해 배터리 절약)
     this.tickerId = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       this.tickBackgroundCycle();
     }, 2500);
 
