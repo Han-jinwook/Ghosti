@@ -348,19 +348,39 @@ export async function purgeMemberLocalRoomVault(
  * - 대신 Realtime Broadcast로 수신한 30KB 이하 경량 텍스트/표/썸네일 미리보기만 팀원 본인 기기 IndexedDB에 캐싱하여
  *   대장 PC가 절전 중일 때도 오프라인 0.1초 웹 미리보기·검색을 지원합니다 (원본 바이너리 base64는 로컬 캐시에서 자동 제외).
  */
+function resolveCurrentWorkOwnerEmail(explicitEmail?: string): string {
+  const clean = (explicitEmail || '').trim().toLowerCase();
+  if (clean) return clean;
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = (localStorage.getItem('merlin_hub_user_email') || '').trim().toLowerCase();
+      if (saved) return saved;
+    } catch {
+      /* ignore */
+    }
+  }
+  return 'anonymous';
+}
+
+function buildWorkVaultKey(roomId: string, ownerEmail?: string): string {
+  return `work::${resolveCurrentWorkOwnerEmail(ownerEmail)}::${roomId.trim()}`;
+}
+
 export async function loadLocalWorkRoomDocs<T = Record<string, unknown>>(
-  roomId: string
+  roomId: string,
+  ownerEmail?: string
 ): Promise<T[]> {
   const cleanRoomId = (roomId || '').trim();
   if (!cleanRoomId) return [];
   const db = await openSharedRoomLocalVaultDb();
   if (!db) return [];
+  const key = buildWorkVaultKey(cleanRoomId, ownerEmail);
 
   return new Promise<T[]>((resolve) => {
     try {
       const tx = db.transaction(WORK_STORE_NAME, 'readonly');
       const store = tx.objectStore(WORK_STORE_NAME);
-      const req = store.get(`work::${cleanRoomId}`);
+      const req = store.get(key);
       req.onsuccess = () => {
         const rec = req.result as StoredWorkRoomVaultRecord<T> | undefined;
         resolve(Array.isArray(rec?.docs) ? rec.docs : []);
@@ -374,15 +394,17 @@ export async function loadLocalWorkRoomDocs<T = Record<string, unknown>>(
 
 export async function saveLocalWorkRoomDocs<T extends object>(
   roomId: string,
-  docs: T[]
+  docs: T[],
+  ownerEmail?: string
 ): Promise<void> {
   const cleanRoomId = (roomId || '').trim();
   if (!cleanRoomId) return;
   const db = await openSharedRoomLocalVaultDb();
   if (!db) return;
+  const key = buildWorkVaultKey(cleanRoomId, ownerEmail);
 
   // 30KB 경량 미리보기 규격 준수: 대용량 inlineSyncBase64는 영구 캐시에서 제외하고 요약·표·본문 앞부분만 유지
-  const lightweightDocs = docs.slice(0, 200).map((raw) => {
+  const lightweightDocs = docs.map((raw) => {
     const clone = { ...(raw as Record<string, unknown>) };
     delete clone.inlineSyncBase64;
     if (typeof clone.fullTextPreview === 'string' && clone.fullTextPreview.length > 12_000) {
@@ -399,12 +421,34 @@ export async function saveLocalWorkRoomDocs<T extends object>(
       const tx = db.transaction(WORK_STORE_NAME, 'readwrite');
       const store = tx.objectStore(WORK_STORE_NAME);
       const record: StoredWorkRoomVaultRecord<T> = {
-        vaultKey: `work::${cleanRoomId}`,
+        vaultKey: key,
         roomId: cleanRoomId,
         updatedAtIso: new Date().toISOString(),
         docs: lightweightDocs,
       };
       store.put(record);
+      tx.oncomplete = () => resolve();
+      tx.onerror = () => resolve();
+    } catch {
+      resolve();
+    }
+  });
+}
+
+export async function purgeLocalWorkRoomDocs(
+  roomId: string,
+  ownerEmail?: string
+): Promise<void> {
+  const cleanRoomId = (roomId || '').trim();
+  if (!cleanRoomId) return;
+  const db = await openSharedRoomLocalVaultDb();
+  if (!db) return;
+  const key = buildWorkVaultKey(cleanRoomId, ownerEmail);
+  await new Promise<void>((resolve) => {
+    try {
+      const tx = db.transaction(WORK_STORE_NAME, 'readwrite');
+      const store = tx.objectStore(WORK_STORE_NAME);
+      store.delete(key);
       tx.oncomplete = () => resolve();
       tx.onerror = () => resolve();
     } catch {

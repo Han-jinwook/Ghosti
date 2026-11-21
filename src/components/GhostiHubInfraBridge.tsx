@@ -28,6 +28,7 @@ import {
   purgeAllGhostiLocalAuthArtifacts,
 } from '../services/supabaseClient';
 import { clearCachedSharedRoomTokens } from '../services/sharedPhotoRoomSupabase';
+import { clearWorkRoomLocalCachesOnLogout } from '../services/workRoomSyncService';
 import {
   loadCachedDeviceIntegrationSnapshot,
   loadCachedSyncedClips,
@@ -159,6 +160,7 @@ const GhostiHubGlobalModals: React.FC = () => {
     const curState = useSaySeeStore.getState();
     const hasUrlInviteToken = Boolean(readActiveInviteToken());
     purgeAllGhostiLocalAuthArtifacts({ setLogoutLockMs: 15_000 });
+    clearWorkRoomLocalCachesOnLogout();
     // 워크스페이스 내부에서 로그아웃 시 현재 화면(탭) 그대로 게스트 전환되며,
     // 새로고침(F5)이나 뒤로가기를 눌러도 온보딩/쇼룸 대문으로 튕기지 않고 게스트 워크스페이스에 정착하도록 라우팅 플래그 보존
     if (typeof window !== 'undefined') {
@@ -249,6 +251,7 @@ const GhostiHubGlobalModals: React.FC = () => {
       // 리로드 대기 중 세션을 되살려도 페이지 전환 직전에 즉시 재소거합니다.
       const finalWipe = () => {
         purgeAllGhostiLocalAuthArtifacts({ setLogoutLockMs: 15_000 });
+    clearWorkRoomLocalCachesOnLogout();
       };
       window.addEventListener('pagehide', finalWipe, { once: true });
       window.addEventListener('beforeunload', finalWipe, { once: true });

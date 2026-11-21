@@ -132,6 +132,17 @@ async function createSignedDownloadUrl(supabaseUrl, serviceKey, bucket, objectPa
   };
 }
 
+function resolveWorkPlanSeatLimit(workPlanId, workPaidActive, workTrialActive) {
+  if (workPaidActive) {
+    const id = String(workPlanId || '').trim();
+    if (id.startsWith('work_pro_')) return 50;
+    if (id.startsWith('work_biz_')) return 20;
+    return 5;
+  }
+  if (workTrialActive) return 5;
+  return 0;
+}
+
 async function verifyInviteTokenForWorkRoom(supabaseUrl, serviceKey, inviteToken) {
   const cleanTok = String(inviteToken || '').trim();
   if (!cleanTok) return null;
@@ -144,9 +155,12 @@ async function verifyInviteTokenForWorkRoom(supabaseUrl, serviceKey, inviteToken
   const inv = Array.isArray(invRows) ? invRows[0] : null;
   if (!inv?.room_id) return null;
   if (inv.expires_at && Date.parse(inv.expires_at) <= Date.now()) return null;
+  const maxUses = Number(inv.max_uses || 5);
+  const usedCount = Number(inv.used_count || 0);
+  if (maxUses > 0 && usedCount >= maxUses) return null;
 
   const roomRes = await fetch(
-    `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=eq.${encodeURIComponent(inv.room_id)}&select=room_id,lounge_type,room_title,master_email&limit=1`,
+    `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=eq.${encodeURIComponent(inv.room_id)}&lounge_type=eq.work&select=room_id,lounge_type,room_title,master_email,pricing_plan&limit=1`,
     { headers: srvHeaders(serviceKey) }
   );
   const roomRows = roomRes.ok ? await roomRes.json().catch(() => []) : [];
@@ -163,86 +177,92 @@ async function verifyInviteTokenForWorkRoom(supabaseUrl, serviceKey, inviteToken
   return { invite: inv, room, hostNickname };
 }
 
-async function isEmailAuthorizedForWorkRoom(supabaseUrl, serviceKey, roomId, email) {
+/**
+ * 방 종류(lounge_type === 'work')와 호출자의 정식 멤버십·권한('master' | 'editor' | 'viewer')을 동시에 검증합니다.
+ * 가족방/동호회방 roomId를 넣어 업무방 액션을 호출하는 교차 방 접근을 100% 차단합니다.
+ */
+async function getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email) {
   const cleanRoom = String(roomId || '').trim();
   const cleanEmail = String(email || '').trim().toLowerCase();
-  if (!cleanRoom || !cleanEmail) return false;
-
-  const memRes = await fetch(
-    `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(cleanRoom)}&select=member_email,role`,
-    { headers: srvHeaders(serviceKey) }
-  );
-  if (memRes.ok) {
-    const rows = await memRes.json().catch(() => []);
-    if (Array.isArray(rows) && rows.some((r) => String(r.member_email || '').toLowerCase() === cleanEmail)) {
-      return true;
-    }
-  }
+  if (!cleanRoom || !cleanEmail) return null;
 
   const roomRes = await fetch(
-    `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=eq.${encodeURIComponent(cleanRoom)}&select=master_email&limit=1`,
+    `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=eq.${encodeURIComponent(cleanRoom)}&lounge_type=eq.work&select=room_id,lounge_type,room_title,master_email,pricing_plan&limit=1`,
     { headers: srvHeaders(serviceKey) }
   );
-  if (roomRes.ok) {
-    const rRows = await roomRes.json().catch(() => []);
-    if (Array.isArray(rRows) && rRows[0] && String(rRows[0].master_email || '').toLowerCase() === cleanEmail) {
-      return true;
-    }
-  }
-  return false;
-}
+  const roomRows = roomRes.ok ? await roomRes.json().catch(() => []) : [];
+  const room = Array.isArray(roomRows) ? roomRows[0] : null;
+  if (!room || room.lounge_type !== 'work') return null;
 
-const INVALID_LOCK_OWNER_RE =
-  /(hcell|hwpshare|hshowshare|sharefileinfo|hancom|libreoffice|soffice|microsoft|msoffice|lockfile|winword|powerpnt)/i;
+  const isMaster = String(room.master_email || '').toLowerCase() === cleanEmail;
+  const memRes = await fetch(
+    `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(cleanRoom)}&select=member_email,role,room_persona_nickname,joined_at`,
+    { headers: srvHeaders(serviceKey) }
+  );
+  const memRows = memRes.ok ? await memRes.json().catch(() => []) : [];
+  const members = Array.isArray(memRows) ? memRows : [];
+  const myRow = members.find((r) => String(r.member_email || '').toLowerCase() === cleanEmail);
 
-function sanitizeLockOwnerName(rawOwner, fallbackName = '팀원') {
-  const s = String(rawOwner || '').trim();
-  if (!s) return null;
-  if (INVALID_LOCK_OWNER_RE.test(s)) {
-    return String(fallbackName || '팀원').trim() || '팀원';
-  }
-  return s.slice(0, 32);
-}
+  if (!isMaster && !myRow) return null;
+  const rawRole = isMaster ? 'master' : String(myRow?.role || 'editor').toLowerCase();
+  const normalizedRole =
+    rawRole === 'master' ? 'master' : rawRole === 'viewer' ? 'viewer' : 'editor';
 
-/**
- * 구버전 PC 엔진이 타임존 없는 로컬 KST ISO("2026-11-20T16:10:00")를 보낼 경우
- * UTC Lambda에서 +9시간 미래로 파싱되어 삭제 Tombstone을 뚫고 파일이 부활하는 문제를 원천 차단합니다.
- */
-function parseSafeWorkMtimeMs(rawMtime, nowMs = Date.now()) {
-  const s = String(rawMtime || '').trim();
-  if (!s) return nowMs;
-  const hasExplicitTz = /(?:Z|[+-]\d{2}:?\d{2})$/i.test(s);
-  const parsed = Date.parse(hasExplicitTz ? s : `${s}+09:00`);
-  if (!Number.isFinite(parsed) || parsed <= 0) return nowMs;
-  // 시계 오차(+60초) 초과 미래 시각은 현재 시각으로 클램프
-  return parsed > nowMs + 60_000 ? nowMs : parsed;
+  return {
+    room,
+    isMaster,
+    role: normalizedRole,
+    members,
+  };
 }
 
 function mergeWorkTombstones(a, b) {
   const out = {};
+  const nowMs = Date.now();
+  const maxAgeMs = 60 * 24 * 3600 * 1000; // 60일 경과 Tombstone 자동 가지치기 (무한 비대화 방지)
   for (const src of [a, b]) {
     if (!src || typeof src !== 'object') continue;
     for (const [rawKey, val] of Object.entries(src)) {
       const k = String(rawKey || '').replace(/\\/g, '/').replace(/^\/+/, '').trim();
-      if (!k || !val || typeof val !== 'object') continue;
-      const prevTs = Date.parse(out[k]?.deletedAt || '') || 0;
+      if (!k || k.includes('..') || !val || typeof val !== 'object') continue;
       const nextTs = Date.parse(val.deletedAt || '') || 0;
-      if (!out[k] || nextTs >= prevTs) {
-        out[k] = val;
+      if (nextTs > 0 && nowMs - nextTs > maxAgeMs) continue;
+      const canonKey = k.toLowerCase();
+      const prevTs = Date.parse(out[canonKey]?.deletedAt || '') || 0;
+      if (!out[canonKey] || nextTs >= prevTs) {
+        out[canonKey] = {
+          relPath: k,
+          deletedAt: val.deletedAt || new Date(nowMs).toISOString(),
+          deletedBy: String(val.deletedBy || '팀원').slice(0, 32),
+          uploaderEmail: val.uploaderEmail ? String(val.uploaderEmail).toLowerCase() : undefined,
+        };
       }
     }
   }
   return out;
 }
 
-async function readWorkRoomManifestAndTombstones(supabaseUrl, serviceKey, roomId) {
-  const [manifest, tombFile] = await Promise.all([
+/**
+ * [Zero-Cloud 원칙 — 서버 파일·본문 저장 0 Byte]:
+ * 서버에는 업무 문서 원본(Base64/바이너리)이나 본문 텍스트를 단 1 Byte도 저장하지 않으며,
+ * 오직 ① 대장 PC(24시간 회사 업무 서버)의 상시 아웃바운드 HTTPS 터널 주소·접근 키,
+ * ② 예비 서버(1·2호) 설정, ③ 경량 삭제 Tombstone(경로+시각)만 보관합니다.
+ */
+async function readWorkRoomP2pState(supabaseUrl, serviceKey, roomId) {
+  const [p2pState, tombFile] = await Promise.all([
     readStorageJson(
       supabaseUrl,
       serviceKey,
       WORK_BUCKET,
-      `${roomId}/index_v1.json`,
-      { filesByRelPath: {}, deletedTombstones: {} }
+      `${roomId}/p2p_state_v2.json`,
+      {
+        hostTunnelUrl: '',
+        hostAccessKey: '',
+        hostUpdatedAt: null,
+        masterServerName: '사내 대장 PC (S:)',
+        backupServers: [],
+        deletedTombstones: {},
+      }
     ),
     readStorageJson(
       supabaseUrl,
@@ -253,86 +273,41 @@ async function readWorkRoomManifestAndTombstones(supabaseUrl, serviceKey, roomId
     ),
   ]);
   const mergedTombstones = mergeWorkTombstones(
-    manifest?.deletedTombstones,
+    p2pState?.deletedTombstones,
     tombFile?.deletedTombstones
   );
   return {
-    manifest: {
-      ...(manifest || {}),
-      filesByRelPath: manifest?.filesByRelPath || {},
+    state: {
+      hostTunnelUrl: String(p2pState?.hostTunnelUrl || '').trim(),
+      hostAccessKey: String(p2pState?.hostAccessKey || '').trim(),
+      hostUpdatedAt: p2pState?.hostUpdatedAt || null,
+      masterServerName: String(p2pState?.masterServerName || '사내 대장 PC (S:)').slice(0, 48),
+      backupServers: Array.isArray(p2pState?.backupServers) ? p2pState.backupServers.slice(0, 2) : [],
       deletedTombstones: mergedTombstones,
     },
     tombstones: mergedTombstones,
   };
 }
 
-function sanitizeWorkFileRecord(doc, actorEmail, actorNickname) {
-  const relPath = String(doc.relPath || doc.fileName || '')
-    .replace(/\\/g, '/')
-    .replace(/^\/+/, '')
-    .trim();
-  const nowMs = Date.now();
-  const nowIso = new Date(nowMs).toISOString();
-  const uploaderNickname = String(doc.author || doc.uploaderNickname || actorNickname || '팀원');
-  const lockedBy = sanitizeLockOwnerName(doc.lockedBy, uploaderNickname);
-  const safeMtimeMs = parseSafeWorkMtimeMs(doc.fileMtimeIso || doc.fileMtime, nowMs);
-  return {
-    id: String(doc.id || `work-${relPath}`),
-    relPath,
-    folderId: String(doc.folderId || 'root'),
-    folderPath: String(doc.folderPath || 'S:\\'),
-    fileName: String(doc.fileName || relPath.split('/').pop() || 'file'),
-    ext: String(doc.ext || 'FILE').toUpperCase(),
-    byteSize: Number(doc.byteSize || 0),
-    sizeLabel: String(doc.sizeLabel || ''),
-    sha256: String(doc.sha256 || ''),
-    uploaderEmail: actorEmail,
-    uploaderNickname,
-    summaryTitle: String(doc.summaryTitle || '').slice(0, 300),
-    matchedSnippet: String(doc.matchedSnippet || '').slice(0, 500),
-    fullTextPreview: String(doc.fullTextPreview || '').slice(0, 12000),
-    tableHeaders: Array.isArray(doc.tableHeaders) ? doc.tableHeaders.slice(0, 8) : [],
-    tableRows: Array.isArray(doc.tableRows) ? doc.tableRows.slice(0, 15) : [],
-    isImage: Boolean(doc.isImage),
-    imageBase64:
-      doc.imageBase64 && String(doc.imageBase64).length <= 48000 ? String(doc.imageBase64) : undefined,
-    inlineSyncBase64:
-      doc.inlineSyncBase64 && String(doc.inlineSyncBase64).length <= 700000
-        ? String(doc.inlineSyncBase64)
-        : undefined,
-    hasCloudBlob: Boolean(doc.hasCloudBlob),
-    lockedBy,
-    lockedAt: lockedBy ? nowIso : null,
-    fileMtime: new Date(safeMtimeMs).toISOString(),
-    updatedAtServer: nowIso,
+async function writeWorkRoomP2pState(supabaseUrl, serviceKey, roomId, nextState) {
+  const cleanTombs = mergeWorkTombstones(nextState?.deletedTombstones, {});
+  const payload = {
+    updatedAt: new Date().toISOString(),
+    hostTunnelUrl: String(nextState?.hostTunnelUrl || '').trim(),
+    hostAccessKey: String(nextState?.hostAccessKey || '').trim(),
+    hostUpdatedAt: nextState?.hostUpdatedAt || null,
+    masterServerName: String(nextState?.masterServerName || '사내 대장 PC (S:)').slice(0, 48),
+    backupServers: Array.isArray(nextState?.backupServers) ? nextState.backupServers.slice(0, 2) : [],
+    deletedTombstones: cleanTombs,
   };
-}
-
-function formatManifestForClient(manifest) {
-  const nowMs = Date.now();
-  const tombstones = manifest?.deletedTombstones || {};
-  const filesMap = manifest?.filesByRelPath || {};
-  const list = Object.values(filesMap)
-    .filter((f) => {
-      if (!f || !f.relPath) return false;
-      const tomb = tombstones[f.relPath];
-      if (tomb?.deletedAt) {
-        const delMs = Date.parse(String(tomb.deletedAt)) || 0;
-        const fMs = parseSafeWorkMtimeMs(f.fileMtime, nowMs);
-        if (delMs <= 0 || fMs <= delMs + 5000) return false;
-      }
-      return true;
-    })
-    .map((f) => {
-      const lockAlive =
-        f.lockedBy && f.lockedAt && nowMs - Date.parse(String(f.lockedAt)) <= 3 * 60 * 1000;
-      return {
-        ...f,
-        lockedBy: lockAlive ? sanitizeLockOwnerName(f.lockedBy, f.uploaderNickname || '팀원') : null,
-      };
-    })
-    .sort((a, b) => (Date.parse(b.fileMtime || '') || 0) - (Date.parse(a.fileMtime || '') || 0));
-  return { files: list, deletedTombstones: tombstones };
+  const [okState, okTomb] = await Promise.all([
+    writeStorageJson(supabaseUrl, serviceKey, WORK_BUCKET, `${roomId}/p2p_state_v2.json`, payload),
+    writeStorageJson(supabaseUrl, serviceKey, WORK_BUCKET, `${roomId}/tombstones_v1.json`, {
+      updatedAt: payload.updatedAt,
+      deletedTombstones: cleanTombs,
+    }),
+  ]);
+  return Boolean(okState || okTomb);
 }
 
 const SERVER_SUBSCRIPTION_PLANS = {
@@ -424,6 +399,7 @@ function computeEntitlementView(entRaw, activeDeviceCount) {
     paidExpiresAt: entRaw?.paidExpiresAt || null,
     lastOrderId: entRaw?.lastOrderId || null,
     workPlanId: entRaw?.workPlanId || null,
+    workTrialOptInStartedAt: entRaw?.workTrialOptInStartedAt || null,
     workPaidExpiresAt: entRaw?.workPaidExpiresAt || null,
   };
   let trialActive = false;
@@ -447,6 +423,17 @@ function computeEntitlementView(entRaw, activeDeviceCount) {
     ? Math.max(1, Math.ceil((paidExpMs - nowMs) / (24 * 3600 * 1000)))
     : 0;
 
+  let workTrialActive = false;
+  let workTrialDaysLeft = 0;
+  if (ent.workTrialOptInStartedAt) {
+    const wStartMs = Date.parse(ent.workTrialOptInStartedAt);
+    if (Number.isFinite(wStartMs)) {
+      const wRemainMs = wStartMs + 30 * 24 * 3600 * 1000 - nowMs;
+      workTrialDaysLeft = wRemainMs > 0 ? Math.ceil(wRemainMs / (24 * 3600 * 1000)) : 0;
+      workTrialActive = wRemainMs > 0;
+    }
+  }
+
   const workExpMs = ent.workPaidExpiresAt ? Date.parse(ent.workPaidExpiresAt) : NaN;
   const workPaidActive = Boolean(ent.workPlanId && Number.isFinite(workExpMs) && workExpMs > nowMs);
   const workPaidDaysLeft = workPaidActive
@@ -454,6 +441,10 @@ function computeEntitlementView(entRaw, activeDeviceCount) {
     : 0;
 
   const trialExpired = Boolean(ent.trialOptInStartedAt && !trialActive && !isPaidUnlimited);
+  const workTrialExpired = Boolean(ent.workTrialOptInStartedAt && !workTrialActive && !workPaidActive);
+  const workSubscriptionUnlocked = Boolean(workPaidActive || workTrialActive);
+  const workSeatLimit = resolveWorkPlanSeatLimit(ent.workPlanId, workPaidActive, workTrialActive);
+
   return {
     ...ent,
     activeDeviceCount,
@@ -462,8 +453,13 @@ function computeEntitlementView(entRaw, activeDeviceCount) {
     trialExpired,
     isPaidUnlimited,
     paidDaysLeft,
+    workTrialActive,
+    workTrialDaysLeft,
+    workTrialExpired,
     workPaidActive,
     workPaidDaysLeft,
+    workSubscriptionUnlocked,
+    workSeatLimit,
     unlimitedBindingUnlocked: isPaidUnlimited || trialActive,
   };
 }
@@ -496,8 +492,41 @@ async function assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash) {
   };
 }
 
+async function assertWorkOwnerUnlocked(supabaseUrl, serviceKey, masterEmail) {
+  const cleanMaster = String(masterEmail || '').trim().toLowerCase();
+  const masterHash = sha256Hex(cleanMaster).slice(0, 32);
+  const entRaw = await readStorageJson(
+    supabaseUrl,
+    serviceKey,
+    DEVICE_BUCKET,
+    `${masterHash}/entitlement_v1.json`,
+    { planId: 'free_trial', trialOptInStartedAt: null, activatedAt: null, paidExpiresAt: null }
+  );
+  const view = computeEntitlementView(entRaw, 1);
+  if (view.workSubscriptionUnlocked) {
+    return { ok: true, entitlement: view };
+  }
+  return {
+    ok: false,
+    entitlement: view,
+    response: {
+      status: 402,
+      body: {
+        ok: false,
+        reason: view.workTrialExpired ? 'WORK_TRIAL_EXPIRED' : 'WORK_SUBSCRIPTION_REQUIRED',
+        message: view.workTrialExpired
+          ? '업무 공유(S: 드라이브) 30일 무료체험이 종료되었습니다. 소호(~5인) 월 9,900원 구독 후 S: 드라이브와 팀원 직결을 다시 연결할 수 있습니다. (업무 폴더 안의 원본 파일은 100% 보존됩니다)'
+          : '업무 공유(S: 드라이브)는 30일 무료체험 시작 또는 이용권(월 9,900원~) 구독 후 이용할 수 있습니다.',
+        entitlement: view,
+      },
+    },
+  };
+}
+
 /**
- * 비로그인(초대 토큰 보유자) 공개 조회 핸들러 (GET/POST 공용)
+ * 비로그인(초대 토큰 보유자) 공개 조회 핸들러:
+ * 업무 문서 원본·본문·이메일·경로는 단 1 Byte도 노출하지 않고,
+ * 방 제목과 방장 닉네임만 안내하여 로그인(초대 수락) 후 대장 PC 직통 터널로 연결하도록 유도합니다.
  */
 export async function handlePublicWorkPreviewAction({
   supabaseUrl,
@@ -509,43 +538,20 @@ export async function handlePublicWorkPreviewAction({
     return { status: 200, body: { ok: false, reason: 'INVALID_OR_EXPIRED_INVITE' } };
   }
   const roomId = verified.room.room_id;
-  const { manifest } = await readWorkRoomManifestAndTombstones(supabaseUrl, serviceKey, roomId);
-  const { files, deletedTombstones } = formatManifestForClient(manifest);
   return {
     status: 200,
     body: {
       ok: true,
+      requiresLoginForDirectTunnel: true,
       room: {
         roomId,
         roomTitle: verified.room.room_title || '💼 우리팀 업무 공유방 (S:)',
         hostNickname: verified.hostNickname,
       },
-      files,
-      deletedTombstones,
+      files: [],
+      deletedTombstones: {},
     },
   };
-}
-
-export async function handlePublicWorkSignDownloadAction({
-  supabaseUrl,
-  serviceKey,
-  inviteToken,
-  sha256,
-}) {
-  const cleanSha = String(sha256 || '').replace(/[^a-fA-F0-9_.-]/g, '').slice(0, 80);
-  if (!cleanSha) return { status: 400, body: { ok: false, reason: 'MISSING_SHA256' } };
-  const verified = await verifyInviteTokenForWorkRoom(supabaseUrl, serviceKey, inviteToken);
-  if (!verified) {
-    return { status: 403, body: { ok: false, reason: 'INVALID_OR_EXPIRED_INVITE' } };
-  }
-  const signed = await createSignedDownloadUrl(
-    supabaseUrl,
-    serviceKey,
-    WORK_BUCKET,
-    `${verified.room.room_id}/blobs/${cleanSha}`,
-    600
-  );
-  return { status: signed.ok ? 200 : 404, body: signed };
 }
 
 /**
@@ -567,11 +573,12 @@ export async function handleAuthedWorkAndDeviceAction({
   const actorNick = String(body.nickname || body.actorNickname || hubNickname || email.split('@')[0]);
 
   // ===================================================================
-  // A. 6. 💼 업무 공유 (S: 드라이브) 액션군
+  // A. 6. 💼 업무 공유 (S: 드라이브 · Zero-Cloud 대장 PC 직통 터널) 액션군
   // ===================================================================
   if (action === 'work_ensure_room') {
-    const roomTitle = String(body.roomTitle || '💼 우리팀 업무 공유방 (S:)').trim();
-    const hostNickname = String(body.hostNickname || actorNick || '방장').trim();
+    const gate = await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, email);
+    const roomTitle = String(body.roomTitle || '💼 우리팀 업무 공유방 (S:)').trim().slice(0, 80);
+    const hostNickname = String(body.hostNickname || actorNick || '방장').trim().slice(0, 32);
 
     const existRes = await fetch(
       `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?master_email=eq.${encodeURIComponent(email)}&lounge_type=eq.work&order=created_at.asc&limit=1`,
@@ -580,9 +587,26 @@ export async function handleAuthedWorkAndDeviceAction({
     const existRows = existRes.ok ? await existRes.json().catch(() => []) : [];
     let roomId = Array.isArray(existRows) && existRows[0]?.room_id ? String(existRows[0].room_id) : '';
 
+    if (!gate.ok) {
+      return {
+        status: 402,
+        body: {
+          ...gate.response.body,
+          roomId: roomId || undefined,
+          roomTitle,
+          hostNickname,
+        },
+      };
+    }
+
+    const activePlanId = gate.entitlement.workPaidActive
+      ? gate.entitlement.workPlanId
+      : 'free_trial';
+    const seatLimit = gate.entitlement.workSeatLimit || 5;
+
     if (!roomId) {
       roomId = `room_${sha256Hex(`${email}:work`).slice(0, 16)}`;
-      await fetch(`${supabaseUrl}/rest/v1/ghosti_lounge_rooms?on_conflict=room_id`, {
+      const roomIns = await fetch(`${supabaseUrl}/rest/v1/ghosti_lounge_rooms?on_conflict=room_id`, {
         method: 'POST',
         headers: srvHeaders(serviceKey, {
           'Content-Type': 'application/json',
@@ -595,9 +619,14 @@ export async function handleAuthedWorkAndDeviceAction({
           room_title: roomTitle,
           master_user_id: userId,
           master_email: email,
+          pricing_plan: activePlanId,
         }),
       });
+      if (!roomIns.ok) {
+        return { status: 502, body: { ok: false, reason: 'WORK_ROOM_CREATE_FAILED' } };
+      }
     }
+
     await fetch(`${supabaseUrl}/rest/v1/ghosti_lounge_members?on_conflict=room_id,member_email`, {
       method: 'POST',
       headers: srvHeaders(serviceKey, {
@@ -622,12 +651,12 @@ export async function handleAuthedWorkAndDeviceAction({
       Array.isArray(invRows) &&
       invRows[0]?.token &&
       Date.parse(invRows[0].expires_at || '') > Date.now() &&
-      Number(invRows[0].used_count || 0) < Number(invRows[0].max_uses || 500)
+      Number(invRows[0].used_count || 0) < Number(invRows[0].max_uses || seatLimit)
     ) {
       inviteToken = String(invRows[0].token);
     } else {
       inviteToken = sha256Hex(`${crypto.randomUUID()}:${roomId}:${Date.now()}`).slice(0, 36);
-      const exp = new Date(Date.now() + 365 * 24 * 3600 * 1000).toISOString();
+      const exp = new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString(); // 14일 유효
       await fetch(`${supabaseUrl}/rest/v1/ghosti_room_invites`, {
         method: 'POST',
         headers: srvHeaders(serviceKey, {
@@ -639,7 +668,7 @@ export async function handleAuthedWorkAndDeviceAction({
           room_id: roomId,
           created_by_email: email,
           default_role: 'member',
-          max_uses: 500,
+          max_uses: seatLimit,
           expires_at: exp,
         }),
       });
@@ -647,7 +676,15 @@ export async function handleAuthedWorkAndDeviceAction({
 
     return {
       status: 200,
-      body: { ok: true, roomId, inviteToken, roomTitle, hostNickname },
+      body: {
+        ok: true,
+        roomId,
+        inviteToken,
+        roomTitle,
+        hostNickname,
+        seatLimit,
+        entitlement: gate.entitlement,
+      },
     };
   }
 
@@ -657,22 +694,81 @@ export async function handleAuthedWorkAndDeviceAction({
       return { status: 200, body: { ok: false, reason: 'INVALID_OR_EXPIRED_INVITE' } };
     }
     const roomId = verified.room.room_id;
-    const isMaster = String(verified.room.master_email || '').toLowerCase() === email;
-    if (!isMaster) {
-      await fetch(`${supabaseUrl}/rest/v1/ghosti_lounge_members?on_conflict=room_id,member_email`, {
-        method: 'POST',
-        headers: srvHeaders(serviceKey, {
-          'Content-Type': 'application/json',
-          Prefer: 'resolution=merge-duplicates,return=minimal',
-        }),
-        body: JSON.stringify({
-          room_id: roomId,
-          member_email: email,
-          role: verified.invite.default_role || 'member',
-          room_persona_nickname: actorNick,
-        }),
-      });
+    const ownerGate = await assertWorkOwnerUnlocked(
+      supabaseUrl,
+      serviceKey,
+      verified.room.master_email
+    );
+    if (!ownerGate.ok) {
+      return ownerGate.response;
     }
+
+    const isMaster = String(verified.room.master_email || '').toLowerCase() === email;
+    const memRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(roomId)}&select=member_email,role`,
+      { headers: srvHeaders(serviceKey) }
+    );
+    const memRows = memRes.ok ? await memRes.json().catch(() => []) : [];
+    const members = Array.isArray(memRows) ? memRows : [];
+    const existingMember = members.find(
+      (r) => String(r.member_email || '').toLowerCase() === email
+    );
+
+    const seatLimit = ownerGate.entitlement.workSeatLimit || 5;
+    if (!isMaster && !existingMember) {
+      if (members.length >= seatLimit) {
+        return {
+          status: 403,
+          body: {
+            ok: false,
+            reason: 'WORK_SEAT_LIMIT_EXCEEDED',
+            seatLimit,
+            currentMemberCount: members.length,
+            message: `이 업무 공유방의 이용권 정원(${seatLimit}인)이 모두 찼습니다. 방장님이 상위 이용권으로 변경하면 추가 합류할 수 있습니다.`,
+          },
+        };
+      }
+      const insRes = await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_members?on_conflict=room_id,member_email`,
+        {
+          method: 'POST',
+          headers: srvHeaders(serviceKey, {
+            'Content-Type': 'application/json',
+            Prefer: 'resolution=merge-duplicates,return=minimal',
+          }),
+          body: JSON.stringify({
+            room_id: roomId,
+            member_email: email,
+            role: verified.invite.default_role || 'member',
+            room_persona_nickname: actorNick,
+          }),
+        }
+      );
+      if (!insRes.ok) {
+        return { status: 502, body: { ok: false, reason: 'WORK_MEMBER_JOIN_FAILED' } };
+      }
+      // 초대 토큰 사용 횟수(used_count) 원자적 증가
+      const nextUsed = Number(verified.invite.used_count || 0) + 1;
+      await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_room_invites?token=eq.${encodeURIComponent(verified.invite.token)}`,
+        {
+          method: 'PATCH',
+          headers: srvHeaders(serviceKey, {
+            'Content-Type': 'application/json',
+            Prefer: 'return=minimal',
+          }),
+          body: JSON.stringify({ used_count: nextUsed }),
+        }
+      );
+    }
+
+    const { state } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
+    const myRole = isMaster
+      ? 'host'
+      : String(existingMember?.role || verified.invite.default_role || 'editor').toLowerCase() === 'viewer'
+      ? 'viewer'
+      : 'editor';
+
     return {
       status: 200,
       body: {
@@ -680,15 +776,71 @@ export async function handleAuthedWorkAndDeviceAction({
         roomId,
         roomTitle: verified.room.room_title || '💼 우리팀 업무 공유방 (S:)',
         hostNickname: verified.hostNickname,
-        role: isMaster ? 'host' : 'editor',
+        role: myRole,
+        seatLimit,
+        hostTunnel: {
+          tunnelUrl: state.hostTunnelUrl,
+          accessKey: state.hostAccessKey,
+          updatedAt: state.hostUpdatedAt,
+          masterServerName: state.masterServerName,
+          backupServers: state.backupServers,
+        },
+      },
+    };
+  }
+
+  if (action === 'work_register_tunnel') {
+    const roomId = String(body.roomId || '').trim();
+    const ctx = await getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email);
+    if (!ctx) {
+      return { status: 403, body: { ok: false, reason: 'NOT_A_WORK_ROOM_MEMBER' } };
+    }
+    const ownerGate = await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, ctx.room.master_email);
+    if (!ownerGate.ok) {
+      return ownerGate.response;
+    }
+    if (!ctx.isMaster && ctx.role === 'viewer') {
+      return { status: 403, body: { ok: false, reason: 'WORK_TUNNEL_REGISTER_FORBIDDEN' } };
+    }
+    const rawUrl = String(body.tunnelUrl || '').trim().replace(/\/+$/, '');
+    if (rawUrl && !/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/i.test(rawUrl)) {
+      return { status: 400, body: { ok: false, reason: 'INVALID_TUNNEL_URL' } };
+    }
+    const accessKey = String(body.accessKey || '').trim().slice(0, 96);
+    const { state } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
+    state.hostTunnelUrl = rawUrl;
+    state.hostAccessKey = accessKey;
+    state.hostUpdatedAt = new Date().toISOString();
+    if (body.masterServerName) {
+      state.masterServerName = String(body.masterServerName).trim().slice(0, 48);
+    }
+    if (Array.isArray(body.backupServers)) {
+      state.backupServers = body.backupServers.slice(0, 2);
+    }
+    const okWrite = await writeWorkRoomP2pState(supabaseUrl, serviceKey, roomId, state);
+    if (!okWrite) {
+      return { status: 502, body: { ok: false, reason: 'WORK_TUNNEL_STATE_SAVE_FAILED' } };
+    }
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        roomId,
+        hostTunnel: {
+          tunnelUrl: state.hostTunnelUrl,
+          accessKey: state.hostAccessKey,
+          updatedAt: state.hostUpdatedAt,
+          masterServerName: state.masterServerName,
+          backupServers: state.backupServers,
+        },
       },
     };
   }
 
   if (action === 'work_get_room_state') {
     const roomId = String(body.roomId || '').trim();
-    const authed = await isEmailAuthorizedForWorkRoom(supabaseUrl, serviceKey, roomId, email);
-    if (!authed) {
+    const ctx = await getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email);
+    if (!ctx) {
       if (body.inviteToken) {
         return handlePublicWorkPreviewAction({
           supabaseUrl,
@@ -698,231 +850,215 @@ export async function handleAuthedWorkAndDeviceAction({
       }
       return { status: 403, body: { ok: false, reason: 'NOT_A_WORK_ROOM_MEMBER' } };
     }
-    const { manifest } = await readWorkRoomManifestAndTombstones(supabaseUrl, serviceKey, roomId);
-    const { files, deletedTombstones } = formatManifestForClient(manifest);
-    return { status: 200, body: { ok: true, roomId, files, deletedTombstones } };
+    const ownerGate = await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, ctx.room.master_email);
+    if (!ownerGate.ok) {
+      return ownerGate.response;
+    }
+    const { state, tombstones } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
+    const membersList = ctx.members.map((m) => ({
+      email: String(m.member_email || '').toLowerCase(),
+      nickname: String(m.room_persona_nickname || String(m.member_email || '').split('@')[0]),
+      role:
+        String(m.member_email || '').toLowerCase() === String(ctx.room.master_email || '').toLowerCase()
+          ? 'master'
+          : String(m.role || 'editor').toLowerCase() === 'viewer'
+          ? 'viewer'
+          : 'editor',
+      joinedAt: m.joined_at || null,
+    }));
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        roomId,
+        role: ctx.isMaster ? 'host' : ctx.role,
+        seatLimit: ownerGate.entitlement.workSeatLimit || 5,
+        members: membersList,
+        hostTunnel: {
+          tunnelUrl: state.hostTunnelUrl,
+          accessKey: state.hostAccessKey,
+          updatedAt: state.hostUpdatedAt,
+          masterServerName: state.masterServerName,
+          backupServers: state.backupServers,
+        },
+        files: [], // Zero-Cloud: 서버에는 파일·본문을 0 Byte 보관하며 대장 PC 터널에서 직접 조회
+        deletedTombstones: tombstones,
+        entitlement: ownerGate.entitlement,
+      },
+    };
   }
 
   if (action === 'work_upsert_files') {
+    // [Zero-Cloud 원칙 강제]: 구버전 클라이언트가 work_upsert_files를 호출하더라도
+    // 서버에는 파일 원본(inlineSyncBase64)이나 본문(fullTextPreview)을 절대 저장하지 않으며,
+    // 권한 검증 후 현재 Tombstone과 대장 PC 터널 정보만 반환합니다.
     const roomId = String(body.roomId || '').trim();
-    if (!(await isEmailAuthorizedForWorkRoom(supabaseUrl, serviceKey, roomId, email))) {
+    const ctx = await getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email);
+    if (!ctx) {
       return { status: 403, body: { ok: false, reason: 'NOT_A_WORK_ROOM_MEMBER' } };
     }
-    const incomingDocs = Array.isArray(body.docs) ? body.docs.slice(0, 150) : [];
-    const { manifest, tombstones } = await readWorkRoomManifestAndTombstones(
-      supabaseUrl,
-      serviceKey,
-      roomId
-    );
-    const filesMap = manifest.filesByRelPath || {};
-    const nowMs = Date.now();
-    let tombstonesChanged = false;
-
-    for (const rawDoc of incomingDocs) {
-      const clean = sanitizeWorkFileRecord(rawDoc, email, actorNick);
-      if (!clean.relPath) continue;
-      const incomingMtimeMs = parseSafeWorkMtimeMs(clean.fileMtime, nowMs);
-
-      // 삭제된 파일이 늦게 켜진 다른 PC 또는 인플라이트 폴링에서 부활(역류)하는 현상 원천 차단
-      const tomb = tombstones[clean.relPath];
-      if (tomb?.deletedAt) {
-        const deletedMs = Date.parse(tomb.deletedAt) || 0;
-        if (deletedMs <= 0 || incomingMtimeMs <= deletedMs + 5000) {
-          continue;
-        }
-        delete tombstones[clean.relPath];
-        tombstonesChanged = true;
-      }
-
-      const prev = filesMap[clean.relPath];
-      if (prev) {
-        const prevMtimeMs = parseSafeWorkMtimeMs(prev.fileMtime || '', nowMs);
-        // 옛날 파일이 최신 수정본을 덮어쓰지 못하도록 보호 (단, 동일 sha256의 잠금 상태 변경은 허용)
-        if (clean.sha256 !== prev.sha256 && incomingMtimeMs + 1500 < prevMtimeMs) {
-          continue;
-        }
-        if (prev.hasCloudBlob && prev.sha256 === clean.sha256) {
-          clean.hasCloudBlob = true;
-        }
-        if (!clean.inlineSyncBase64 && prev.inlineSyncBase64 && prev.sha256 === clean.sha256) {
-          clean.inlineSyncBase64 = prev.inlineSyncBase64;
-        }
-      }
-      filesMap[clean.relPath] = clean;
+    const ownerGate = await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, ctx.room.master_email);
+    if (!ownerGate.ok) {
+      return ownerGate.response;
     }
-
-    // tombstones에 남아 있는 파일이 filesMap에 잔존하지 않도록 최종 정리
-    for (const [tk, tv] of Object.entries(tombstones)) {
-      const f = filesMap[tk];
-      if (f && tv?.deletedAt) {
-        const delMs = Date.parse(String(tv.deletedAt)) || 0;
-        const fMs = parseSafeWorkMtimeMs(f.fileMtime, nowMs);
-        if (delMs <= 0 || fMs <= delMs + 5000) {
-          delete filesMap[tk];
-        }
-      }
+    if (ctx.role === 'viewer') {
+      return { status: 403, body: { ok: false, reason: 'WORK_VIEWER_READ_ONLY' } };
     }
-
-    const nextManifest = {
-      updatedAt: new Date().toISOString(),
-      filesByRelPath: filesMap,
-      deletedTombstones: tombstones,
-    };
-    await writeStorageJson(supabaseUrl, serviceKey, WORK_BUCKET, `${roomId}/index_v1.json`, nextManifest);
-    if (tombstonesChanged) {
-      await writeStorageJson(supabaseUrl, serviceKey, WORK_BUCKET, `${roomId}/tombstones_v1.json`, {
-        updatedAt: new Date().toISOString(),
+    const { state, tombstones } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        zeroCloudDirectP2p: true,
+        files: [],
         deletedTombstones: tombstones,
-      });
-    }
-    const { files, deletedTombstones } = formatManifestForClient(nextManifest);
-    return { status: 200, body: { ok: true, files, deletedTombstones } };
+        hostTunnel: {
+          tunnelUrl: state.hostTunnelUrl,
+          accessKey: state.hostAccessKey,
+          updatedAt: state.hostUpdatedAt,
+        },
+      },
+    };
   }
 
   if (action === 'work_delete_file') {
     const roomId = String(body.roomId || '').trim();
     const relPath = String(body.relPath || '').replace(/\\/g, '/').replace(/^\/+/, '').trim();
-    if (!roomId || !relPath) {
-      return { status: 400, body: { ok: false, reason: 'MISSING_ROOM_OR_RELPATH' } };
+    if (!roomId || !relPath || relPath.includes('..')) {
+      return { status: 400, body: { ok: false, reason: 'MISSING_OR_INVALID_RELPATH' } };
     }
-    if (!(await isEmailAuthorizedForWorkRoom(supabaseUrl, serviceKey, roomId, email))) {
+    const ctx = await getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email);
+    if (!ctx) {
       return { status: 403, body: { ok: false, reason: 'NOT_A_WORK_ROOM_MEMBER' } };
     }
-    const { manifest, tombstones } = await readWorkRoomManifestAndTombstones(
-      supabaseUrl,
-      serviceKey,
-      roomId
-    );
-    const filesMap = manifest.filesByRelPath || {};
-    const relLow = relPath.toLowerCase();
-    let removedEntry = filesMap[relPath];
-    const matchedKeys = Object.keys(filesMap).filter((k) => k === relPath || k.toLowerCase() === relLow);
-    for (const mk of matchedKeys) {
-      if (!removedEntry) removedEntry = filesMap[mk];
-      delete filesMap[mk];
+    const ownerGate = await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, ctx.room.master_email);
+    if (!ownerGate.ok) {
+      return ownerGate.response;
     }
+    if (ctx.role === 'viewer') {
+      return {
+        status: 403,
+        body: {
+          ok: false,
+          reason: 'WORK_VIEWER_READ_ONLY',
+          message: '읽기 전용 팀원은 파일을 삭제할 수 없습니다.',
+        },
+      };
+    }
+    const { state, tombstones } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
     const delNowIso = new Date().toISOString();
-    tombstones[relPath] = {
+    const canonKey = relPath.toLowerCase();
+    tombstones[canonKey] = {
+      relPath,
       deletedAt: delNowIso,
       deletedBy: actorNick,
+      uploaderEmail: email,
     };
-    for (const mk of matchedKeys) {
-      tombstones[mk] = { deletedAt: delNowIso, deletedBy: actorNick };
-    }
-    const nextManifest = {
-      updatedAt: delNowIso,
-      filesByRelPath: filesMap,
-      deletedTombstones: tombstones,
-    };
-    // 전용 tombstones_v1.json + index_v1.json 동시 기록 (인플라이트 work_upsert_files와 경합 시에도 삭제 불변 보장)
-    const [okTomb, okManifest] = await Promise.all([
-      writeStorageJson(supabaseUrl, serviceKey, WORK_BUCKET, `${roomId}/tombstones_v1.json`, {
-        updatedAt: delNowIso,
-        deletedTombstones: tombstones,
-      }),
-      writeStorageJson(supabaseUrl, serviceKey, WORK_BUCKET, `${roomId}/index_v1.json`, nextManifest),
-    ]);
-    if (!okTomb && !okManifest) {
+    state.deletedTombstones = tombstones;
+    const okSaved = await writeWorkRoomP2pState(supabaseUrl, serviceKey, roomId, state);
+    if (!okSaved) {
       return { status: 502, body: { ok: false, reason: 'WORK_DELETE_STORAGE_WRITE_FAILED' } };
     }
-    // 삭제된 대용량 파일의 고아 바이너리 블롭(ghosti-work-vault)도 즉시 제거하여 영구 스토리지 비대화 차단
-    if (removedEntry?.sha256) {
-      const stillReferenced = Object.values(filesMap).some(
-        (f) => f && f.sha256 === removedEntry.sha256
-      );
-      if (!stillReferenced) {
-        const cleanSha = String(removedEntry.sha256).replace(/[^a-fA-F0-9_.-]/g, '').slice(0, 80);
-        if (cleanSha) {
-          await fetch(`${supabaseUrl}/storage/v1/object/${WORK_BUCKET}/${roomId}/blobs/${cleanSha}`, {
-            method: 'DELETE',
-            headers: srvHeaders(serviceKey),
-          }).catch(() => {});
-        }
-      }
-    }
-    const { files, deletedTombstones } = formatManifestForClient(nextManifest);
-    return { status: 200, body: { ok: true, relPath, files, deletedTombstones } };
+    return {
+      status: 200,
+      body: { ok: true, relPath, files: [], deletedTombstones: tombstones },
+    };
   }
 
-  if (action === 'work_sign_upload') {
+  if (action === 'work_set_member_role') {
     const roomId = String(body.roomId || '').trim();
-    const sha256 = String(body.sha256 || '').replace(/[^a-fA-F0-9_.-]/g, '').slice(0, 80);
-    const relPath = String(body.relPath || '').replace(/\\/g, '/').replace(/^\/+/, '').trim();
-    if (!roomId || !sha256) {
-      return { status: 400, body: { ok: false, reason: 'MISSING_ROOM_OR_SHA256' } };
+    const targetEmail = String(body.memberEmail || '').trim().toLowerCase();
+    const nextRole = String(body.role || '').trim().toLowerCase() === 'viewer' ? 'viewer' : 'editor';
+    if (!roomId || !targetEmail) {
+      return { status: 400, body: { ok: false, reason: 'MISSING_ROOM_OR_MEMBER_EMAIL' } };
     }
-    if (!(await isEmailAuthorizedForWorkRoom(supabaseUrl, serviceKey, roomId, email))) {
+    const ctx = await getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email);
+    if (!ctx || !ctx.isMaster) {
+      return { status: 403, body: { ok: false, reason: 'ONLY_MASTER_CAN_CHANGE_ROLE' } };
+    }
+    if (targetEmail === String(ctx.room.master_email || '').toLowerCase()) {
+      return { status: 400, body: { ok: false, reason: 'CANNOT_DEMOTE_MASTER' } };
+    }
+    const patchRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(roomId)}&member_email=eq.${encodeURIComponent(targetEmail)}`,
+      {
+        method: 'PATCH',
+        headers: srvHeaders(serviceKey, {
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        }),
+        body: JSON.stringify({ role: nextRole }),
+      }
+    );
+    if (!patchRes.ok) {
+      return { status: 502, body: { ok: false, reason: 'WORK_ROLE_UPDATE_FAILED' } };
+    }
+    return { status: 200, body: { ok: true, roomId, memberEmail: targetEmail, role: nextRole } };
+  }
+
+  if (action === 'work_remove_member') {
+    const roomId = String(body.roomId || '').trim();
+    const targetEmail = String(body.memberEmail || email).trim().toLowerCase();
+    const ctx = await getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email);
+    if (!ctx) {
       return { status: 403, body: { ok: false, reason: 'NOT_A_WORK_ROOM_MEMBER' } };
     }
-    const objectPath = `${roomId}/blobs/${sha256}`;
-    // 이미 동일 해시 블롭이 올라가 있으면 재업로드 생략
-    const probeDl = await createSignedDownloadUrl(supabaseUrl, serviceKey, WORK_BUCKET, objectPath, 60);
-    if (probeDl.ok) {
-      const headRes = await fetch(probeDl.signedDownloadUrl, { method: 'HEAD' }).catch(() => null);
-      if (headRes && headRes.ok) {
-        if (relPath) {
-          const manifest = await readStorageJson(
-            supabaseUrl,
-            serviceKey,
-            WORK_BUCKET,
-            `${roomId}/index_v1.json`,
-            { filesByRelPath: {}, deletedTombstones: {} }
-          );
-          if (manifest.filesByRelPath?.[relPath]) {
-            manifest.filesByRelPath[relPath].hasCloudBlob = true;
-            await writeStorageJson(supabaseUrl, serviceKey, WORK_BUCKET, `${roomId}/index_v1.json`, manifest);
-          }
-        }
-        return { status: 200, body: { ok: true, alreadyUploaded: true, objectPath } };
+    if (targetEmail !== email && !ctx.isMaster) {
+      return { status: 403, body: { ok: false, reason: 'ONLY_MASTER_CAN_KICK_MEMBER' } };
+    }
+    if (targetEmail === String(ctx.room.master_email || '').toLowerCase()) {
+      return { status: 400, body: { ok: false, reason: 'MASTER_CANNOT_LEAVE_OWN_ROOM' } };
+    }
+    const delRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(roomId)}&member_email=eq.${encodeURIComponent(targetEmail)}`,
+      {
+        method: 'DELETE',
+        headers: srvHeaders(serviceKey),
       }
+    );
+    if (!delRes.ok) {
+      return { status: 502, body: { ok: false, reason: 'WORK_MEMBER_REMOVE_FAILED' } };
     }
-    const signed = await createSignedUploadUrl(supabaseUrl, serviceKey, WORK_BUCKET, objectPath);
-    return { status: signed.ok ? 200 : 500, body: signed };
+    return { status: 200, body: { ok: true, roomId, removedEmail: targetEmail } };
   }
 
-  if (action === 'work_mark_blob_uploaded') {
+  if (action === 'work_revoke_invite') {
     const roomId = String(body.roomId || '').trim();
-    const relPath = String(body.relPath || '').replace(/\\/g, '/').replace(/^\/+/, '').trim();
-    if (!roomId || !relPath) return { status: 400, body: { ok: false } };
-    if (!(await isEmailAuthorizedForWorkRoom(supabaseUrl, serviceKey, roomId, email))) {
-      return { status: 403, body: { ok: false, reason: 'NOT_A_WORK_ROOM_MEMBER' } };
+    const ctx = await getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email);
+    if (!ctx || !ctx.isMaster) {
+      return { status: 403, body: { ok: false, reason: 'ONLY_MASTER_CAN_REVOKE_INVITE' } };
     }
-    const manifest = await readStorageJson(
-      supabaseUrl,
-      serviceKey,
-      WORK_BUCKET,
-      `${roomId}/index_v1.json`,
-      { filesByRelPath: {}, deletedTombstones: {} }
+    const ownerGate = await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, ctx.room.master_email);
+    const seatLimit = ownerGate.entitlement?.workSeatLimit || 5;
+    await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_room_invites?room_id=eq.${encodeURIComponent(roomId)}&revoked_at=is.null`,
+      {
+        method: 'PATCH',
+        headers: srvHeaders(serviceKey, {
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        }),
+        body: JSON.stringify({ revoked_at: new Date().toISOString() }),
+      }
     );
-    if (manifest.filesByRelPath?.[relPath]) {
-      manifest.filesByRelPath[relPath].hasCloudBlob = true;
-      await writeStorageJson(supabaseUrl, serviceKey, WORK_BUCKET, `${roomId}/index_v1.json`, manifest);
-    }
-    return { status: 200, body: { ok: true } };
-  }
-
-  if (action === 'work_sign_download') {
-    const roomId = String(body.roomId || '').trim();
-    const sha256 = String(body.sha256 || '').replace(/[^a-fA-F0-9_.-]/g, '').slice(0, 80);
-    if (!roomId || !sha256) {
-      return { status: 400, body: { ok: false, reason: 'MISSING_ROOM_OR_SHA256' } };
-    }
-    let authed = await isEmailAuthorizedForWorkRoom(supabaseUrl, serviceKey, roomId, email);
-    if (!authed && body.inviteToken) {
-      const v = await verifyInviteTokenForWorkRoom(supabaseUrl, serviceKey, body.inviteToken);
-      authed = Boolean(v && v.room.room_id === roomId);
-    }
-    if (!authed) {
-      return { status: 403, body: { ok: false, reason: 'NOT_AUTHORIZED_FOR_DOWNLOAD' } };
-    }
-    const signed = await createSignedDownloadUrl(
-      supabaseUrl,
-      serviceKey,
-      WORK_BUCKET,
-      `${roomId}/blobs/${sha256}`,
-      600
-    );
-    return { status: signed.ok ? 200 : 404, body: signed };
+    const newInviteToken = sha256Hex(`${crypto.randomUUID()}:${roomId}:${Date.now()}`).slice(0, 36);
+    const exp = new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString();
+    await fetch(`${supabaseUrl}/rest/v1/ghosti_room_invites`, {
+      method: 'POST',
+      headers: srvHeaders(serviceKey, {
+        'Content-Type': 'application/json',
+        Prefer: 'return=minimal',
+      }),
+      body: JSON.stringify({
+        token: newInviteToken,
+        room_id: roomId,
+        created_by_email: email,
+        default_role: 'member',
+        max_uses: seatLimit,
+        expires_at: exp,
+      }),
+    });
+    return { status: 200, body: { ok: true, roomId, inviteToken: newInviteToken } };
   }
 
   // ===================================================================
@@ -1216,8 +1352,11 @@ export async function handleAuthedWorkAndDeviceAction({
     };
   }
 
-  if (action === 'device_activate_plan') {
-    const planId = String(body.planId || '').trim();
+  if (action === 'device_activate_plan' || action === 'work_activate_trial') {
+    const planId =
+      action === 'work_activate_trial'
+        ? 'work_trial_opt_in_30d'
+        : String(body.planId || '').trim();
     const entRaw = await readStorageJson(
       supabaseUrl,
       serviceKey,
@@ -1225,9 +1364,9 @@ export async function handleAuthedWorkAndDeviceAction({
       `${emailHash}/entitlement_v1.json`,
       { planId: 'free_trial', trialOptInStartedAt: null, activatedAt: null, paidExpiresAt: null }
     );
-    // [치명 과금 누수 영구 봉쇄] device_activate_plan은 오직 최초 1회 30일 무료체험 Opt-in만 허용하며,
+    // [치명 과금 누수 영구 봉쇄] device_activate_plan은 오직 최초 1회 30일 무료체험 Opt-in(개인 또는 업무공유)만 허용하며,
     // 모든 유료 플랜은 반드시 서버 코인 실차감(device_purchase_plan)을 통해서만 개통됩니다.
-    if (planId !== 'trial_opt_in_30d') {
+    if (planId !== 'trial_opt_in_30d' && planId !== 'work_trial_opt_in_30d') {
       const listRes = await fetch(
         `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&select=device_id`,
         { headers: srvHeaders(serviceKey) }
@@ -1245,32 +1384,60 @@ export async function handleAuthedWorkAndDeviceAction({
     }
 
     const curView = computeEntitlementView(entRaw, 1);
-    if (entRaw.trialOptInStartedAt && !curView.trialActive && !curView.isPaidUnlimited) {
-      const listRes = await fetch(
-        `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&select=device_id`,
-        { headers: srvHeaders(serviceKey) }
-      );
-      const devRows = listRes.ok ? await listRes.json().catch(() => []) : [];
-      return {
-        status: 402,
-        body: {
-          ok: false,
-          reason: 'TRIAL_ALREADY_USED',
-          message: '이 계정은 30일 무료체험을 이미 사용 완료했습니다. 이용권 구독으로 계속 이용하실 수 있습니다.',
-          entitlement: computeEntitlementView(entRaw, Array.isArray(devRows) ? devRows.length : 1),
-        },
-      };
-    }
-
-    if (!entRaw.trialOptInStartedAt) {
-      entRaw.trialOptInStartedAt = new Date().toISOString();
-      await writeStorageJson(
-        supabaseUrl,
-        serviceKey,
-        DEVICE_BUCKET,
-        `${emailHash}/entitlement_v1.json`,
-        entRaw
-      );
+    if (planId === 'work_trial_opt_in_30d') {
+      if (entRaw.workTrialOptInStartedAt && !curView.workTrialActive && !curView.workPaidActive) {
+        const listRes = await fetch(
+          `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&select=device_id`,
+          { headers: srvHeaders(serviceKey) }
+        );
+        const devRows = listRes.ok ? await listRes.json().catch(() => []) : [];
+        return {
+          status: 402,
+          body: {
+            ok: false,
+            reason: 'WORK_TRIAL_ALREADY_USED',
+            message: '이 계정은 업무 공유(S: 드라이브) 30일 무료체험을 이미 사용 완료했습니다. 소호(~5인) 월 9,900원 구독으로 계속 이용하실 수 있습니다.',
+            entitlement: computeEntitlementView(entRaw, Array.isArray(devRows) ? devRows.length : 1),
+          },
+        };
+      }
+      if (!entRaw.workTrialOptInStartedAt) {
+        entRaw.workTrialOptInStartedAt = new Date().toISOString();
+        await writeStorageJson(
+          supabaseUrl,
+          serviceKey,
+          DEVICE_BUCKET,
+          `${emailHash}/entitlement_v1.json`,
+          entRaw
+        );
+      }
+    } else {
+      if (entRaw.trialOptInStartedAt && !curView.trialActive && !curView.isPaidUnlimited) {
+        const listRes = await fetch(
+          `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&select=device_id`,
+          { headers: srvHeaders(serviceKey) }
+        );
+        const devRows = listRes.ok ? await listRes.json().catch(() => []) : [];
+        return {
+          status: 402,
+          body: {
+            ok: false,
+            reason: 'TRIAL_ALREADY_USED',
+            message: '이 계정은 30일 무료체험을 이미 사용 완료했습니다. 이용권 구독으로 계속 이용하실 수 있습니다.',
+            entitlement: computeEntitlementView(entRaw, Array.isArray(devRows) ? devRows.length : 1),
+          },
+        };
+      }
+      if (!entRaw.trialOptInStartedAt) {
+        entRaw.trialOptInStartedAt = new Date().toISOString();
+        await writeStorageJson(
+          supabaseUrl,
+          serviceKey,
+          DEVICE_BUCKET,
+          `${emailHash}/entitlement_v1.json`,
+          entRaw
+        );
+      }
     }
     const listRes = await fetch(
       `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&select=device_id`,
@@ -1486,6 +1653,35 @@ export async function handleAuthedWorkAndDeviceAction({
     );
     const devRows = listRes.ok ? await listRes.json().catch(() => []) : [];
     const entitlement = computeEntitlementView(entRaw, Array.isArray(devRows) ? devRows.length : 1);
+
+    // 업무 공유(S: 드라이브) 플랜 결제 시 방 테이블(pricing_plan)과 초대 토큰 정원(max_uses)도 즉시 동기화
+    if (spec.category === 'work') {
+      const seatLimit = entitlement.workSeatLimit || 5;
+      const roomRes = await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?master_email=eq.${encodeURIComponent(email)}&lounge_type=eq.work&select=room_id`,
+        { headers: srvHeaders(serviceKey) }
+      ).catch(() => null);
+      const roomRows = roomRes && roomRes.ok ? await roomRes.json().catch(() => []) : [];
+      if (Array.isArray(roomRows) && roomRows[0]?.room_id) {
+        const wRoomId = String(roomRows[0].room_id);
+        await Promise.all([
+          fetch(`${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=eq.${encodeURIComponent(wRoomId)}`, {
+            method: 'PATCH',
+            headers: srvHeaders(serviceKey, { 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+            body: JSON.stringify({ pricing_plan: spec.canonicalId }),
+          }).catch(() => {}),
+          fetch(
+            `${supabaseUrl}/rest/v1/ghosti_room_invites?room_id=eq.${encodeURIComponent(wRoomId)}&revoked_at=is.null`,
+            {
+              method: 'PATCH',
+              headers: srvHeaders(serviceKey, { 'Content-Type': 'application/json', Prefer: 'return=minimal' }),
+              body: JSON.stringify({ max_uses: seatLimit }),
+            }
+          ).catch(() => {}),
+        ]);
+      }
+    }
+
     return {
       status: 200,
       body: {

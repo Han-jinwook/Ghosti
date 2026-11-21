@@ -14,20 +14,26 @@
 
 from __future__ import annotations
 
+import atexit
 import base64
 import csv
 import ctypes
 from datetime import datetime, timezone
 import hashlib
+import hmac
 import io
 import json
 import mimetypes
 import os
 from pathlib import Path
 import re
+import secrets
+import shutil
 import subprocess
 import sys
-from typing import Any, Dict, List, Optional, Tuple
+import threading
+from collections import OrderedDict
+from typing import Any, Callable, Dict, List, Optional, Tuple
 import urllib.request
 import xml.etree.ElementTree as ET
 import zipfile
@@ -52,6 +58,12 @@ WORK_SDRIVE_ACTIONS = {
     "sdrive-pull-blob",
     "sdrive-delete-file",
     "sdrive-toggle-hide",
+    "sdrive-sync-entitlement",
+    "sdrive-tunnel-status",
+    "sdrive-tunnel-start",
+    "sdrive-tunnel-stop",
+    "sdrive-night-power-save",
+    "sdrive-backup-servers",
 }
 
 SUBFOLDER_SPECS: Tuple[Tuple[str, str], ...] = (
@@ -80,8 +92,25 @@ _LOCK_PROBE_EXTS = {
 
 _IMAGE_EXTS = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
 
-_PREVIEW_CACHE: Dict[str, Dict[str, Any]] = {}
+# [미리보기 캐시] LRU + 잠금 (구: 600건 초과 시 전체 clear → 수백 개 파일 재추출 폭주)
+_PREVIEW_CACHE_MAX = 6000
+_PREVIEW_CACHE: "OrderedDict[str, Dict[str, Any]]" = OrderedDict()
+_PREVIEW_LOCK = threading.Lock()
 _CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
+
+# [설정 원장 동시성 보호] ThreadingHTTPServer 다중 스레드(/files·/locks·/pull-sync)가
+# work_sdrive_config.json을 동시에 read-modify-write 하면서 Tombstone이 유실되던 경합을 직렬화합니다.
+_CONFIG_LOCK = threading.RLock()
+
+# Windows 예약 장치 파일명 (CON, NUL 등) — 업로드·동기화 경로로 사용 금지
+_WIN_RESERVED_NAMES = {
+    "CON", "PRN", "AUX", "NUL",
+    *(f"COM{i}" for i in range(1, 10)),
+    *(f"LPT{i}" for i in range(1, 10)),
+}
+
+# 업로드·동기화 1건 최대 크기 (명세 5.8: 최대 50MB)
+WORK_MAX_FILE_BYTES = 50 * 1024 * 1024
 
 
 def _get_merlin_appdata_dir() -> Path:
@@ -96,33 +125,86 @@ def _config_file_path() -> Path:
 
 
 def _load_sdrive_config() -> Dict[str, Any]:
+    with _CONFIG_LOCK:
+        cfg_p = _config_file_path()
+        if cfg_p.exists():
+            try:
+                data = json.loads(cfg_p.read_text(encoding="utf-8", errors="ignore"))
+                if isinstance(data, dict):
+                    return data
+            except Exception:
+                pass
+        return {}
+
+
+def _write_sdrive_config_atomic(cur: Dict[str, Any]) -> None:
     cfg_p = _config_file_path()
-    if cfg_p.exists():
+    tmp_p = cfg_p.with_name(cfg_p.name + ".tmp")
+    try:
+        tmp_p.write_text(json.dumps(cur, ensure_ascii=False, indent=2), encoding="utf-8")
+        os.replace(tmp_p, cfg_p)
+    except Exception:
         try:
-            data = json.loads(cfg_p.read_text(encoding="utf-8", errors="ignore"))
-            if isinstance(data, dict):
-                return data
+            tmp_p.unlink(missing_ok=True)
         except Exception:
             pass
-    return {}
 
 
 def _save_sdrive_config(patch: Dict[str, Any]) -> Dict[str, Any]:
-    cur = _load_sdrive_config()
-    cur.update(patch)
+    with _CONFIG_LOCK:
+        cur = _load_sdrive_config()
+        cur.update(patch)
+        _write_sdrive_config_atomic(cur)
+        return cur
+
+
+def _mutate_sdrive_config(mutator: Callable[[Dict[str, Any]], None]) -> Dict[str, Any]:
+    """설정 원장을 잠금 안에서 최신 상태로 다시 읽어 수정·저장합니다 (Tombstone·knownRelPaths 경합 유실 방지)."""
+    with _CONFIG_LOCK:
+        cur = _load_sdrive_config()
+        mutator(cur)
+        _write_sdrive_config_atomic(cur)
+        return cur
+
+
+# [업무 드라이브 문자] 멀린님 확정(2026-11-21): S: 유지.
+# 선호 문자(S:)가 이미 다른 연결(회사 NAS·USB 등)에 쓰이고 있으면 기존 연결은 절대 해제하지 않고(/d 금지)
+# 비어 있는 다음 문자로 만들고 안내합니다.
+WORK_DRIVE_PREFERRED = "S:"
+_WORK_DRIVE_FALLBACKS: Tuple[str, ...] = ("Y:", "X:", "W:", "V:", "U:", "T:", "R:", "Q:", "P:")
+
+_SUBST_CACHE: Dict[str, Any] = {"at": 0.0, "map": {}}
+_SUBST_CACHE_TTL_SEC = 2.0
+
+
+def _norm_letter(drive_letter: Optional[str]) -> str:
+    s = str(drive_letter or "").strip().rstrip("\\/").upper()
+    if not s or not s[0].isalpha():
+        return WORK_DRIVE_PREFERRED
+    return f"{s[0]}:"
+
+
+def _drive_root(drive_letter: str) -> str:
+    return f"{_norm_letter(drive_letter)}\\"
+
+
+def _same_path(a: Path | str, b: Path | str) -> bool:
     try:
-        _config_file_path().write_text(json.dumps(cur, ensure_ascii=False, indent=2), encoding="utf-8")
+        return os.path.normcase(os.path.abspath(str(a))) == os.path.normcase(os.path.abspath(str(b)))
     except Exception:
-        pass
-    return cur
+        return False
 
 
-def _query_subst_target(drive_letter: str = "S:") -> Optional[Path]:
+def _list_subst_map(force: bool = False) -> Dict[str, Path]:
+    """`subst` 현재 매핑 전체를 { 'S:': Path(...) } 형태로 반환합니다 (2초 캐시 — 3초 폴링마다 프로세스 폭주 방지)."""
     if os.name != "nt":
-        return None
-    clean_letter = (drive_letter or "S:").strip().rstrip("\\/").upper()
-    if not clean_letter.endswith(":"):
-        clean_letter = f"{clean_letter[0]}:"
+        return {}
+    import time as _time
+
+    now = _time.time()
+    if not force and now - float(_SUBST_CACHE.get("at") or 0.0) < _SUBST_CACHE_TTL_SEC:
+        return dict(_SUBST_CACHE.get("map") or {})
+    out: Dict[str, Path] = {}
     try:
         res = subprocess.run(
             ["subst"],
@@ -133,20 +215,127 @@ def _query_subst_target(drive_letter: str = "S:") -> Optional[Path]:
             timeout=4,
             creationflags=_CREATE_NO_WINDOW,
         )
-        prefix = f"{clean_letter}\\: => "
         for line in (res.stdout or "").splitlines():
             s = line.strip()
-            if s.upper().startswith(prefix.upper()):
-                target_str = s[len(prefix) :].strip()
-                if target_str:
-                    return Path(target_str)
+            m = re.match(r"^([A-Za-z]):\\:\s*=>\s*(.+)$", s)
+            if m:
+                out[f"{m.group(1).upper()}:"] = Path(m.group(2).strip())
     except Exception:
         pass
-    return None
+    _SUBST_CACHE["at"] = now
+    _SUBST_CACHE["map"] = out
+    return dict(out)
+
+
+def _query_subst_target(drive_letter: str = WORK_DRIVE_PREFERRED) -> Optional[Path]:
+    return _list_subst_map().get(_norm_letter(drive_letter))
+
+
+def _letters_mapped_to(vault_dir: Path) -> List[str]:
+    """이 업무 폴더를 가리키는 '우리(귀신같이)' subst 문자 목록 — 남의 연결은 절대 포함하지 않습니다."""
+    return sorted(letter for letter, target in _list_subst_map().items() if _same_path(target, vault_dir))
+
+
+def _is_drive_letter_occupied(drive_letter: str) -> bool:
+    """로컬 디스크·USB·네트워크 드라이브(연결 끊김 상태의 영구 매핑 포함)·subst 중 하나라도 쓰고 있으면 True."""
+    letter = _norm_letter(drive_letter)
+    if letter in _list_subst_map():
+        return True
+    if os.name != "nt":
+        return os.path.exists(_drive_root(letter))
+    try:
+        mask = int(ctypes.windll.kernel32.GetLogicalDrives())
+        if mask & (1 << (ord(letter[0]) - ord("A"))):
+            return True
+    except Exception:
+        if os.path.exists(_drive_root(letter)):
+            return True
+    try:
+        import winreg
+
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, f"Network\\{letter[0]}"):
+            return True  # 재부팅 후 복원 대기 중인 영구 네트워크 드라이브(net use /persistent:yes)
+    except Exception:
+        pass
+    return False
+
+
+def _mounted_letter_for_vault(vault_dir: Path) -> Optional[str]:
+    ours = _letters_mapped_to(vault_dir)
+    if not ours:
+        return None
+    if WORK_DRIVE_PREFERRED in ours:
+        return WORK_DRIVE_PREFERRED
+    saved = _norm_letter(_load_sdrive_config().get("driveLetter") or "")
+    return saved if saved in ours else ours[0]
+
+
+def _validate_custom_work_target(raw_target: Any) -> Tuple[Optional[Path], str]:
+    """업무 폴더 지정(targetDir) 안전 검증 — 드라이브 루트·Windows·Program Files·AppData·사용자 폴더 최상위 등
+    시스템/민감 경로를 업무 폴더로 지정해 원격 다운로드·삭제 대상이 되는 것을 원천 차단합니다."""
+    s = str(raw_target or "").strip()
+    if not s:
+        return None, "EMPTY_TARGET_DIR"
+    if s.startswith("\\\\") or s.startswith("//"):
+        return None, "NETWORK_PATH_NOT_SUPPORTED"
+    cand = Path(s)
+    if not cand.is_absolute():
+        return None, "TARGET_DIR_NOT_ABSOLUTE"
+    try:
+        resolved = cand.resolve(strict=False)
+    except Exception:
+        return None, "TARGET_DIR_UNRESOLVABLE"
+    if resolved.parent == resolved:
+        return None, "DRIVE_ROOT_NOT_ALLOWED"
+    # 이미 subst로 만든 가상 드라이브 자체(S:\, Z:\ 등)를 다시 업무 폴더로 지정하는 순환 금지
+    if _norm_letter(str(resolved)[:2]) in _list_subst_map():
+        return None, "VIRTUAL_DRIVE_NOT_ALLOWED"
+
+    lowered_parts = {p.lower() for p in resolved.parts}
+    if "$recycle.bin" in lowered_parts or "system volume information" in lowered_parts:
+        return None, "SYSTEM_FOLDER_NOT_ALLOWED"
+
+    def _env_path(name: str) -> Optional[Path]:
+        v = os.environ.get(name)
+        if not v:
+            return None
+        try:
+            return Path(v).resolve(strict=False)
+        except Exception:
+            return None
+
+    def _is_under(child: Path, parent: Optional[Path]) -> bool:
+        if parent is None:
+            return False
+        try:
+            child.relative_to(parent)
+            return True
+        except ValueError:
+            return False
+
+    merlin_dir = _get_merlin_appdata_dir().resolve(strict=False)
+    if _is_under(resolved, merlin_dir):
+        return resolved, ""  # 기본 업무 폴더(%LOCALAPPDATA%\Merlin\...)는 허용
+
+    for env_name in ("SystemRoot", "windir", "ProgramFiles", "ProgramFiles(x86)", "ProgramW6432", "ProgramData", "APPDATA", "LOCALAPPDATA"):
+        if _is_under(resolved, _env_path(env_name)):
+            return None, f"SYSTEM_FOLDER_NOT_ALLOWED:{env_name}"
+
+    user_profile = _env_path("USERPROFILE")
+    if user_profile is not None:
+        if _same_path(resolved, user_profile) or _same_path(resolved, user_profile.parent):
+            return None, "USER_PROFILE_ROOT_NOT_ALLOWED"
+        if _is_under(resolved, user_profile / "AppData"):
+            return None, "SYSTEM_FOLDER_NOT_ALLOWED:AppData"
+
+    if resolved.exists() and not resolved.is_dir():
+        return None, "TARGET_IS_NOT_A_FOLDER"
+    return resolved, ""
 
 
 def _purge_legacy_vite_mock_files_once(vault_dir: Path) -> None:
-    """과거 vite.config.ts 미들웨어가 자동 생성했던 4종의 가짜 샘플 텍스트·CSV만 정밀 소거합니다 (실제 유저 파일은 100% 보존)."""
+    """과거 vite.config.ts 미들웨어가 자동 생성했던 4종의 가짜 샘플 텍스트·CSV만 정밀 소거합니다 (실제 유저 파일은 100% 보존).
+    ※ 영구 삭제가 아닌 OS 휴지통 이동만 사용합니다."""
     for rel in _LEGACY_VITE_MOCK_REL_PATHS:
         cand = vault_dir / Path(rel)
         try:
@@ -161,30 +350,29 @@ def _purge_legacy_vite_mock_files_once(vault_dir: Path) -> None:
                         "바리스타존 커피머신 가동 시 차단기 트립 방지",
                     )
                 ):
-                    cand.unlink(missing_ok=True)
+                    _move_to_recycle_bin_safe(cand)
         except Exception:
             pass
 
 
 def get_work_vault_dir(custom_target: Optional[str] = None, ensure_dirs: bool = True) -> Path:
+    """업무 폴더 실제 경로. custom_target은 반드시 _validate_custom_work_target 통과 시에만 저장됩니다."""
     if custom_target and str(custom_target).strip():
-        cand_custom = Path(str(custom_target).strip())
-        if str(cand_custom).upper().rstrip("\\/") != "S:":
-            _save_sdrive_config({"targetDir": str(cand_custom)})
+        valid_p, _reason = _validate_custom_work_target(custom_target)
+        if valid_p is not None:
+            _save_sdrive_config({"targetDir": str(valid_p)})
 
     cfg = _load_sdrive_config()
     saved_dir = str(cfg.get("targetDir") or "").strip()
     vault_dir: Optional[Path] = None
 
-    if saved_dir and saved_dir.upper().rstrip("\\/") != "S:":
-        vault_dir = Path(saved_dir)
+    if saved_dir:
+        valid_saved, _r = _validate_custom_work_target(saved_dir)
+        if valid_saved is not None:
+            vault_dir = valid_saved
 
-    if vault_dir is None:
-        subst_p = _query_subst_target("S:")
-        if subst_p is not None and subst_p.exists():
-            vault_dir = subst_p
-
-    if vault_dir is None and not getattr(sys, "frozen", False):
+    # 개발 PC 전용 저장소 폴더는 명시적 환경변수가 있을 때만 사용 (배포 PC에 개발 폴더가 끼어드는 것 방지)
+    if vault_dir is None and not getattr(sys, "frozen", False) and os.environ.get("GHOSTI_WORK_DEV_REPO_VAULT") == "1":
         repo_cand = Path(__file__).resolve().parents[3] / "업무공유폴더_S"
         if repo_cand.exists():
             vault_dir = repo_cand
@@ -204,25 +392,33 @@ def get_work_vault_dir(custom_target: Optional[str] = None, ensure_dirs: bool = 
     return vault_dir
 
 
-def inspect_s_drive_status(drive_letter: str = "S:") -> Dict[str, Any]:
-    clean_letter = (drive_letter or "S:").strip().rstrip("\\/").upper()
-    if not clean_letter.endswith(":"):
-        clean_letter = f"{clean_letter[0]}:"
-    mount_root = Path(f"{clean_letter}\\")
-    mounted = False
-    try:
-        mounted = os.path.exists(str(mount_root))
-    except Exception:
-        mounted = False
+def inspect_s_drive_status(drive_letter: str = WORK_DRIVE_PREFERRED) -> Dict[str, Any]:
     vault_dir = get_work_vault_dir(ensure_dirs=False)
-    subst_target = _query_subst_target(clean_letter)
+    mounted_letter = _mounted_letter_for_vault(vault_dir)
     return {
         "ok": True,
         "track": "paid-work",
-        "driveLetter": clean_letter,
-        "mounted": mounted,
-        "targetDir": str(subst_target or vault_dir),
+        "driveLetter": mounted_letter or WORK_DRIVE_PREFERRED,
+        "preferredLetter": WORK_DRIVE_PREFERRED,
+        "mounted": bool(mounted_letter),
+        "targetDir": str(vault_dir),
     }
+
+
+def _run_subst(args: List[str]) -> Tuple[bool, str]:
+    try:
+        res = subprocess.run(
+            ["subst", *args],
+            capture_output=True,
+            text=True,
+            encoding="cp949",
+            errors="ignore",
+            timeout=6,
+            creationflags=_CREATE_NO_WINDOW,
+        )
+        return res.returncode == 0, (res.stderr or res.stdout or "").strip()
+    except Exception as exc:
+        return False, str(exc)
 
 
 def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
@@ -230,79 +426,124 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
     action = str(payload.get("action") or "mount").strip().lower()
     open_explorer = bool(payload.get("openExplorer", False))
     custom_target = payload.get("targetDir")
-    vault_dir = get_work_vault_dir(custom_target=str(custom_target) if custom_target else None, ensure_dirs=True)
+
+    if custom_target and str(custom_target).strip():
+        valid_p, reason = _validate_custom_work_target(custom_target)
+        if valid_p is None:
+            return {
+                "ok": False,
+                "error": "INVALID_TARGET_DIR",
+                "reason": reason,
+                "message": "이 폴더는 업무 공유 폴더로 지정할 수 없어요. (드라이브 최상위·Windows·Program Files·AppData 등 시스템 폴더 제외)",
+            }
+        _save_sdrive_config({"targetDir": str(valid_p)})
+
+    vault_dir = get_work_vault_dir(ensure_dirs=True)
 
     if action == "status":
-        return inspect_s_drive_status("S:")
+        return inspect_s_drive_status()
 
     if action == "unmount":
+        released: List[str] = []
+        failed: List[str] = []
         if os.name == "nt":
-            try:
-                subprocess.run(
-                    ["subst", "S:", "/d"],
-                    capture_output=True,
-                    timeout=5,
-                    creationflags=_CREATE_NO_WINDOW,
-                )
-            except Exception:
-                pass
-        mounted_after = os.path.exists("S:\\")
+            for letter in _letters_mapped_to(vault_dir):  # 우리 연결만 해제 (남의 NAS·USB는 절대 미접촉)
+                ok_d, _msg = _run_subst([letter, "/d"])
+                (released if ok_d else failed).append(letter)
+            _list_subst_map(force=True)
+        still = _mounted_letter_for_vault(vault_dir)
         return {
-            "ok": True,
-            "mounted": mounted_after,
-            "driveLetter": "S:",
+            "ok": not failed,
+            "mounted": bool(still),
+            "driveLetter": still or WORK_DRIVE_PREFERRED,
+            "releasedLetters": released,
             "targetDir": str(vault_dir),
-            "message": "윈도우 탐색기에서 [업무 드라이브 (S:)] 연결을 해제했습니다.",
+            "message": "윈도우 탐색기에서 업무 드라이브 연결을 해제했습니다. 파일은 원래 폴더에 그대로 있습니다.",
         }
 
     # action == "mount"
-    if os.name == "nt":
-        cur_subst = _query_subst_target("S:")
-        already_same = False
-        if cur_subst is not None and os.path.exists("S:\\"):
-            try:
-                already_same = os.path.normcase(os.path.abspath(str(cur_subst))) == os.path.normcase(
-                    os.path.abspath(str(vault_dir))
-                )
-            except Exception:
-                already_same = False
+    if os.name != "nt":
+        return {"ok": False, "error": "WINDOWS_ONLY", "mounted": False, "targetDir": str(vault_dir)}
 
-        if not already_same:
-            if cur_subst is not None:
-                try:
-                    subprocess.run(
-                        ["subst", "S:", "/d"],
-                        capture_output=True,
-                        timeout=5,
-                        creationflags=_CREATE_NO_WINDOW,
-                    )
-                except Exception:
-                    pass
-            try:
-                subprocess.run(
-                    ["subst", "S:", str(vault_dir)],
-                    capture_output=True,
-                    timeout=5,
-                    creationflags=_CREATE_NO_WINDOW,
-                )
-            except Exception:
-                pass
+    cfg_now = _load_sdrive_config()
+    if cfg_now.get("workEntitlementLocked") is True and not bool(payload.get("forceMount")):
+        for letter in _letters_mapped_to(vault_dir):
+            _run_subst([letter, "/d"])
+        _list_subst_map(force=True)
+        return {
+            "ok": False,
+            "error": "WORK_SUBSCRIPTION_LOCKED",
+            "mounted": False,
+            "driveLetter": WORK_DRIVE_PREFERRED,
+            "targetDir": str(vault_dir),
+            "message": "🔒 업무 공유 무료체험(또는 구독)이 종료되어 S: 드라이브 연결이 해제되었습니다. 폴더 안의 원본 파일은 100% 그대로 보존됩니다.",
+        }
 
-    mounted_now = os.path.exists("S:\\")
-    open_target = "S:\\" if mounted_now else str(vault_dir)
-    if open_explorer and os.name == "nt":
+    ours = _letters_mapped_to(vault_dir)
+    preferred = WORK_DRIVE_PREFERRED
+    chosen: Optional[str] = None
+    mount_error = ""
+
+    if preferred in ours:
+        chosen = preferred  # 이미 동일 경로로 연결됨 → 열린 엑셀 핸들 보호를 위해 재연결 생략
+    elif not _is_drive_letter_occupied(preferred):
+        ok_m, mount_error = _run_subst([preferred, str(vault_dir)])
+        if ok_m:
+            chosen = preferred
+    elif ours:
+        chosen = ours[0]  # 선호 문자를 남이 쓰는 중이면 기존 대체 문자 연결을 그대로 유지
+    else:
+        for letter in _WORK_DRIVE_FALLBACKS:
+            if letter == preferred or _is_drive_letter_occupied(letter):
+                continue
+            ok_m, mount_error = _run_subst([letter, str(vault_dir)])
+            if ok_m:
+                chosen = letter
+                break
+
+    _list_subst_map(force=True)
+    verified = bool(chosen) and chosen in _letters_mapped_to(vault_dir) and os.path.exists(_drive_root(chosen))
+
+    if not verified:
+        return {
+            "ok": False,
+            "error": "MOUNT_FAILED" if chosen or mount_error else "NO_FREE_DRIVE_LETTER",
+            "detail": mount_error,
+            "mounted": False,
+            "driveLetter": preferred,
+            "targetDir": str(vault_dir),
+            "message": "업무 드라이브를 만들지 못했어요. 업무 폴더는 그대로 사용할 수 있습니다.",
+        }
+
+    # 구버전(S:) 또는 이전 대체 문자 연결이 남아 있으면 새 연결 성공 후에만 정리 (우리 연결만)
+    for stale in _letters_mapped_to(vault_dir):
+        if stale != chosen:
+            _run_subst([stale, "/d"])
+    _list_subst_map(force=True)
+    _save_sdrive_config({"driveLetter": chosen})
+
+    root = _drive_root(chosen)
+    if open_explorer:
         try:
-            subprocess.Popen(["explorer.exe", open_target])
+            subprocess.Popen(["explorer.exe", root])
         except Exception:
             pass
 
+    used_fallback = chosen != preferred
+    msg = (
+        f"{preferred[0]} 드라이브가 이미 다른 연결(회사 NAS 등)에 쓰이고 있어 {chosen[0]} 드라이브로 만들었어요. 기존 연결은 그대로 두었습니다."
+        if used_fallback
+        else f"✓ 윈도우 탐색기에 업무 드라이브({chosen[0]}:)가 연결되었습니다."
+    )
     return {
         "ok": True,
-        "mounted": mounted_now,
-        "driveLetter": "S:",
+        "mounted": True,
+        "driveLetter": chosen,
+        "preferredLetter": preferred,
+        "usedFallback": used_fallback,
         "targetDir": str(vault_dir),
         "openedExplorer": open_explorer,
-        "message": f"✓ 내 컴퓨터 [윈도우 탐색기 ➔ S: 드라이브]에 업무 공유폴더({vault_dir})가 직결되었습니다.",
+        "message": msg,
     }
 
 
@@ -313,7 +554,7 @@ def is_temp_or_lock_artifact(file_name: str) -> bool:
     low = n.lower()
     if n.startswith(("~$", ".~lock.", "._")) or low in ("desktop.ini", "thumbs.db", ".ds_store"):
         return True
-    if low.endswith((".lck", ".tmp", ".crdownload", ".part", ".ghosti_sync_tmp")):
+    if low.endswith((".lck", ".tmp", ".crdownload", ".part", ".ghosti_sync_tmp", ".dwl", ".dwl2")):
         return True
     if n.startswith("~") and low.endswith(".hwp"):
         return True
@@ -400,7 +641,9 @@ def _is_win32_exclusively_locked(file_path: Path) -> bool:
         handle = k32.CreateFileW(
             ctypes.c_wchar_p(str(file_path)),
             GENERIC_READ,
-            0,  # dwShareMode=0: 다른 앱이 이미 열어서 핸들을 잡고 있으면 즉시 ERROR_SHARING_VIOLATION 반환
+            # FILE_SHARE_READ: 다른 앱이 '쓰기'로 열고 있을 때만 ERROR_SHARING_VIOLATION.
+            # (구: dwShareMode=0 → 검사 순간 사용자가 엑셀로 열면 '다른 사용자가 사용 중' 오류를 유발할 수 있었음)
+            0x00000001,
             None,
             OPEN_EXISTING,
             FILE_ATTRIBUTE_NORMAL,
@@ -415,36 +658,46 @@ def _is_win32_exclusively_locked(file_path: Path) -> bool:
         return False
 
 
+def _lock_artifact_candidates(file_path: Path) -> List[Path]:
+    """오피스(~$)·LibreOffice(.~lock)·아래아한글(.lck)·AutoCAD(.dwl) 잠금 파일 후보 경로."""
+    parent = file_path.parent
+    name = file_path.name
+    stem = file_path.stem
+    ext = file_path.suffix
+    cands: List[Path] = [
+        parent / f"~${name}",
+        parent / f".~lock.{name}#",
+        parent / f"{name}.lck",
+        parent / f"~{name}.lck",
+        parent / f"~${stem}.lck",
+        parent / f"{stem}.lck",
+        parent / f"{stem}.dwl",
+        parent / f"{stem}.dwl2",
+    ]
+    if len(stem) >= 8:
+        cands.append(parent / f"~${stem[2:]}{ext}")
+    elif len(stem) == 7:
+        cands.append(parent / f"~${stem[1:]}{ext}")
+    return cands
+
+
+def _fallback_lock_owner(fallback_owner: str = "") -> str:
+    clean_fallback = (fallback_owner or "").strip()
+    if not _is_valid_human_lock_owner(clean_fallback):
+        clean_fallback = (os.environ.get("USERNAME") or "").strip() or "현재 PC 사용자"
+    return clean_fallback
+
+
 def detect_file_lock_owner(file_path: Path, fallback_owner: str = "") -> Optional[str]:
-    """~$ 오피스·한셀 잠금 파일, .lck 한글 잠금 파일 및 OS 파일 핸들 점유를 실시간 감지하여 친숙한 사용자 이름을 반환합니다."""
+    """~$ 오피스·한셀 잠금 파일, .lck 한글 잠금 파일, .dwl CAD 잠금 및 OS 파일 핸들 점유를 실시간 감지하여 친숙한 사용자 이름을 반환합니다."""
     try:
-        parent = file_path.parent
-        name = file_path.name
-        stem = file_path.stem
-        ext = file_path.suffix
-
-        lock_candidates: List[Path] = [
-            parent / f"~${name}",
-            parent / f".~lock.{name}#",
-            parent / f"{name}.lck",
-            parent / f"~{name}.lck",
-            parent / f"~${stem}.lck",
-        ]
-        if len(stem) >= 8:
-            lock_candidates.append(parent / f"~${stem[2:]}{ext}")
-        elif len(stem) == 7:
-            lock_candidates.append(parent / f"~${stem[1:]}{ext}")
-
-        clean_fallback = (fallback_owner or "").strip()
-        if not _is_valid_human_lock_owner(clean_fallback):
-            clean_fallback = (os.environ.get("USERNAME") or "").strip() or "현재 PC 사용자"
-
-        for lc in lock_candidates:
+        clean_fallback = _fallback_lock_owner(fallback_owner)
+        for lc in _lock_artifact_candidates(file_path):
             if lc.exists() and lc.is_file():
                 owner = _extract_owner_from_office_lock_file(lc)
                 return owner or clean_fallback
 
-        if ext.lower() in _LOCK_PROBE_EXTS and _is_win32_exclusively_locked(file_path):
+        if file_path.suffix.lower() in _LOCK_PROBE_EXTS and _is_win32_exclusively_locked(file_path):
             return clean_fallback
     except Exception:
         pass
@@ -548,15 +801,27 @@ def _make_lightweight_image_data_url(file_path: Path, size_bytes: int) -> str:
     return ""
 
 
-def _extract_rich_preview_cached(file_path: Path, st: os.stat_result) -> Dict[str, Any]:
-    sig_key = f"{os.path.normcase(os.path.abspath(str(file_path)))}|{st.st_size}|{st.st_mtime_ns}"
-    cached = _PREVIEW_CACHE.get(sig_key)
-    if cached is not None:
-        return cached
+def _preview_sig_key(file_path: Path, st: os.stat_result) -> str:
+    return f"{os.path.normcase(os.path.abspath(str(file_path)))}|{st.st_size}|{st.st_mtime_ns}"
 
-    if len(_PREVIEW_CACHE) > 600:
-        _PREVIEW_CACHE.clear()
 
+def _get_cached_preview(sig_key: str) -> Optional[Dict[str, Any]]:
+    with _PREVIEW_LOCK:
+        hit = _PREVIEW_CACHE.get(sig_key)
+        if hit is not None:
+            _PREVIEW_CACHE.move_to_end(sig_key)
+        return hit
+
+
+def _put_cached_preview(sig_key: str, res: Dict[str, Any]) -> None:
+    with _PREVIEW_LOCK:
+        _PREVIEW_CACHE[sig_key] = res
+        _PREVIEW_CACHE.move_to_end(sig_key)
+        while len(_PREVIEW_CACHE) > _PREVIEW_CACHE_MAX:
+            _PREVIEW_CACHE.popitem(last=False)
+
+
+def _compute_rich_preview(file_path: Path, st: os.stat_result) -> Dict[str, Any]:
     ext_low = file_path.suffix.lower()
     ext_upper = ext_low.lstrip(".").upper() or "FILE"
     is_image = ext_low in _IMAGE_EXTS
@@ -618,7 +883,7 @@ def _extract_rich_preview_cached(file_path: Path, st: os.stat_result) -> Dict[st
     else:
         sha256_hex = f"stat_{st.st_size}_{int(st.st_mtime)}"
 
-    res = {
+    return {
         "ext": ext_upper,
         "isImage": is_image,
         "previewText": preview_text.strip(),
@@ -627,19 +892,76 @@ def _extract_rich_preview_cached(file_path: Path, st: os.stat_result) -> Dict[st
         "imageBase64": image_base64,
         "sha256": sha256_hex,
     }
-    _PREVIEW_CACHE[sig_key] = res
+
+
+def _extract_rich_preview_cached(file_path: Path, st: os.stat_result) -> Dict[str, Any]:
+    key = _preview_sig_key(file_path, st)
+    hit = _get_cached_preview(key)
+    if hit is not None:
+        return hit
+    res = _compute_rich_preview(file_path, st)
+    _put_cached_preview(key, res)
     return res
 
 
-def _resolve_folder_meta(rel_path: str) -> Tuple[str, str, str]:
+# ─────────────────────────────────────────────────────────────────────────────
+# [백그라운드 미리보기 추출] 파일 수 제한(구 500개) 없이 수천~수만 개 회사 폴더를 지원하기 위해,
+# 목록 응답은 즉시 반환하고 본문·표·썸네일 추출은 낮은 우선순위 스레드 1개가 순차 처리합니다.
+# ─────────────────────────────────────────────────────────────────────────────
+_PREVIEW_PENDING: "OrderedDict[str, Path]" = OrderedDict()
+_PREVIEW_PENDING_LOCK = threading.Lock()
+_PREVIEW_WAKE = threading.Event()
+_PREVIEW_WORKER: Dict[str, Any] = {"thread": None}
+_PREVIEW_SYNC_BUDGET_SEC = 1.2  # 목록 요청 1회당 즉시 추출에 쓰는 최대 시간 (나머지는 백그라운드)
+
+
+def _preview_worker_loop() -> None:
+    if os.name == "nt":
+        try:
+            k32 = ctypes.windll.kernel32
+            k32.SetThreadPriority(k32.GetCurrentThread(), -2)  # THREAD_PRIORITY_LOWEST
+        except Exception:
+            pass
+    while True:
+        _PREVIEW_WAKE.wait(timeout=30)
+        while True:
+            with _PREVIEW_PENDING_LOCK:
+                if not _PREVIEW_PENDING:
+                    _PREVIEW_WAKE.clear()
+                    break
+                key, path = _PREVIEW_PENDING.popitem(last=False)
+            try:
+                st = path.stat()
+                if _preview_sig_key(path, st) != key:
+                    continue  # 대기 중 파일이 바뀜 → 다음 스캔에서 새 시그니처로 재등록
+                if _get_cached_preview(key) is None:
+                    _put_cached_preview(key, _compute_rich_preview(path, st))
+            except Exception:
+                pass
+
+
+def _enqueue_preview(sig_key: str, path: Path) -> None:
+    with _PREVIEW_PENDING_LOCK:
+        if sig_key not in _PREVIEW_PENDING:
+            _PREVIEW_PENDING[sig_key] = path
+        th = _PREVIEW_WORKER.get("thread")
+        if th is None or not th.is_alive():
+            th = threading.Thread(target=_preview_worker_loop, name="ghosti-work-preview", daemon=True)
+            _PREVIEW_WORKER["thread"] = th
+            th.start()
+    _PREVIEW_WAKE.set()
+
+
+def _resolve_folder_meta(rel_path: str, drive_letter: Optional[str] = None) -> Tuple[str, str, str]:
+    root = _drive_root(drive_letter or WORK_DRIVE_PREFERRED)
     norm_rel = rel_path.replace("\\", "/")
     dir_part = os.path.dirname(norm_rel)
-    folder_path = "S:\\" if not dir_part or dir_part == "." else f"S:\\{dir_part.replace('/', '\\')}"
+    folder_path = root if not dir_part or dir_part == "." else root + dir_part.replace("/", "\\")
     for folder_id, folder_name in SUBFOLDER_SPECS:
         prefix = folder_name.split("_", 2)[0] + "_" + folder_name.split("_", 2)[1][:3]
         if norm_rel.startswith(folder_name) or norm_rel.startswith(prefix):
             return folder_id, folder_name, folder_path
-    return "root", "S:\\ 루트 (최상단)", folder_path
+    return "root", f"{root} 루트 (최상단)", folder_path
 
 
 def _format_size(num_bytes: int) -> str:
@@ -653,12 +975,23 @@ def _format_mtime_ko(ts: float) -> str:
     return f"{dt.month}월 {dt.day}일 {dt.hour:02d}:{dt.minute:02d}"
 
 
+_INVALID_PATH_CHARS = set('<>"|?*')
+
+
 def _safe_resolve_inside_vault(vault_dir: Path, rel_path: str) -> Optional[Path]:
     clean = (rel_path or "").strip().replace("/", "\\").lstrip("\\")
-    if not clean or ".." in Path(clean).parts:
+    if not clean:
         return None
-    if ":" in clean:
+    parts = Path(clean).parts
+    if ".." in parts or ":" in clean:
         return None
+    for part in parts:
+        if not part or part != part.rstrip(" ."):
+            return None
+        if any(ord(ch) < 32 or ch in _INVALID_PATH_CHARS for ch in part):
+            return None
+        if part.split(".")[0].strip().upper() in _WIN_RESERVED_NAMES:
+            return None
     cand = (vault_dir / clean).resolve()
     vault_resolved = vault_dir.resolve()
     try:
@@ -668,116 +1001,269 @@ def _safe_resolve_inside_vault(vault_dir: Path, rel_path: str) -> Optional[Path]
     return cand
 
 
+_FILE_ATTRIBUTE_REPARSE_POINT = 0x400
+_SCAN_MAX_DEPTH = 64  # 정션 순환 무한루프 방지용 안전장치 (파일 개수 제한 아님)
+
+
+def _scan_work_vault(
+    vault_dir: Path, hidden_rel_set: set, include_hidden: bool
+) -> Tuple[List[Tuple[Path, str, os.stat_result]], Dict[str, set], bool]:
+    """업무 폴더 전체를 개수 제한 없이 1패스 스캔합니다.
+    반환: (파일 목록, 폴더별 잠금파일 이름 집합, 스캔 완전성)
+    스캔 도중 접근 오류가 하나라도 나면 complete=False → 호출부는 '삭제됨' 판정을 절대 하지 않습니다."""
+    entries: List[Tuple[Path, str, os.stat_result]] = []
+    lock_names_by_dir: Dict[str, set] = {}
+    state = {"complete": True}
+
+    def _walk(cur_dir: Path, depth: int) -> None:
+        if depth > _SCAN_MAX_DEPTH:
+            state["complete"] = False
+            return
+        try:
+            it = os.scandir(cur_dir)
+        except OSError:
+            state["complete"] = False
+            return
+        dir_key = os.path.normcase(str(cur_dir))
+        with it:
+            for entry in it:
+                try:
+                    name = entry.name
+                    if entry.is_symlink():
+                        continue
+                    if entry.is_dir(follow_symlinks=False):
+                        if name.startswith("."):
+                            continue
+                        try:
+                            attrs = getattr(entry.stat(follow_symlinks=False), "st_file_attributes", 0) or 0
+                        except OSError:
+                            attrs = 0
+                        if attrs & _FILE_ATTRIBUTE_REPARSE_POINT:
+                            continue  # 정션·마운트 포인트는 따라가지 않음 (업무 폴더 밖 탈출·순환 방지)
+                        _walk(Path(entry.path), depth + 1)
+                        continue
+                    if not entry.is_file(follow_symlinks=False):
+                        continue
+                    if is_temp_or_lock_artifact(name):
+                        lock_names_by_dir.setdefault(dir_key, set()).add(name.lower())
+                        continue
+                    if name.startswith("."):
+                        continue
+                    full_p = Path(entry.path)
+                    rel_p = str(full_p.relative_to(vault_dir)).replace("\\", "/")
+                    if not include_hidden and rel_p in hidden_rel_set:
+                        continue
+                    entries.append((full_p, rel_p, entry.stat(follow_symlinks=False)))
+                except (OSError, ValueError):
+                    state["complete"] = False
+
+    _walk(vault_dir, 0)
+    return entries, lock_names_by_dir, state["complete"]
+
+
+# Win32 핸들 점유 검사(잠금파일을 만들지 않는 프로그램 대비): 최근 48시간 내 수정 파일은 매번,
+# 나머지는 회전식으로 1회 최대 250개씩 검사해 수만 개 폴더에서도 1초 폴링 부하를 일정하게 유지합니다.
+_LOCK_PROBE_RECENT_SEC = 48 * 3600
+_LOCK_PROBE_BUDGET = 250
+_LOCK_PROBE_STATE: Dict[str, Any] = {"cursor": 0, "memo": {}}
+_LOCK_PROBE_LOCK = threading.Lock()
+
+
+def _win32_lock_owner_map(entries: List[Tuple[Path, str, os.stat_result]], fallback: str) -> Dict[str, Optional[str]]:
+    import time as _time
+
+    now = _time.time()
+    recent: List[Tuple[Path, str]] = []
+    others: List[Tuple[Path, str]] = []
+    for full_p, rel_p, st in entries:
+        if full_p.suffix.lower() not in _LOCK_PROBE_EXTS:
+            continue
+        (recent if now - st.st_mtime <= _LOCK_PROBE_RECENT_SEC else others).append((full_p, rel_p))
+
+    with _LOCK_PROBE_LOCK:
+        memo: Dict[str, bool] = _LOCK_PROBE_STATE["memo"]
+        to_probe = list(recent)
+        if others:
+            others.sort(key=lambda x: x[1])
+            n = len(others)
+            start = int(_LOCK_PROBE_STATE["cursor"]) % n
+            take = min(_LOCK_PROBE_BUDGET, n)
+            to_probe.extend(others[(start + i) % n] for i in range(take))
+            _LOCK_PROBE_STATE["cursor"] = (start + take) % n
+        for full_p, rel_p in to_probe:
+            memo[rel_p] = _is_win32_exclusively_locked(full_p)
+        live = {rel for _, rel in recent} | {rel for _, rel in others}
+        for stale in [k for k in memo if k not in live]:
+            memo.pop(stale, None)
+        return {rel: (fallback if locked else None) for rel, locked in memo.items()}
+
+
+def _lock_owner_from_scan(
+    full_p: Path, dir_lock_names: Optional[set], fallback: str, win32_map: Dict[str, Optional[str]], rel_p: str
+) -> Optional[str]:
+    if dir_lock_names:
+        for lc in _lock_artifact_candidates(full_p):
+            if lc.name.lower() in dir_lock_names:
+                owner = None
+                try:
+                    owner = _extract_owner_from_office_lock_file(lc)
+                except Exception:
+                    owner = None
+                return owner or fallback
+    return win32_map.get(rel_p)
+
+
 def list_work_files(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    import time as _time
+
     qp = params or {}
     include_hidden = str(qp.get("includeHidden") or "").lower() in ("1", "true", "yes")
     include_sync_b64 = str(qp.get("includeSyncBase64") or "").lower() in ("1", "true", "yes")
+    known_sig = str(qp.get("knownSig") or "").strip()
     vault_dir = get_work_vault_dir(ensure_dirs=True)
     cfg = _load_sdrive_config()
     hidden_rel_set = set(cfg.get("hiddenRelPaths") or [])
     uploader_map: Dict[str, str] = cfg.get("uploaderByRelPath") or {}
     default_author = str(qp.get("author") or cfg.get("hostNickname") or os.environ.get("USERNAME") or "내 PC (로컬)")
+    fallback_owner = _fallback_lock_owner(default_author)
+    mounted_letter = _mounted_letter_for_vault(vault_dir)
 
-    entries: List[Tuple[Path, str, os.stat_result]] = []
-
-    def _walk(cur_dir: Path, depth: int) -> None:
-        if depth > 4 or len(entries) >= 500:
-            return
-        try:
-            with os.scandir(cur_dir) as it:
-                for entry in it:
-                    if len(entries) >= 500:
-                        break
-                    if entry.name.startswith("."):
-                        continue
-                    if entry.is_dir(follow_symlinks=False):
-                        _walk(Path(entry.path), depth + 1)
-                    elif entry.is_file(follow_symlinks=False):
-                        if is_temp_or_lock_artifact(entry.name):
-                            continue
-                        full_p = Path(entry.path)
-                        rel_p = str(full_p.relative_to(vault_dir)).replace("\\", "/")
-                        if not include_hidden and rel_p in hidden_rel_set:
-                            continue
-                        st = entry.stat()
-                        entries.append((full_p, rel_p, st))
-        except Exception:
-            pass
-
-    _walk(vault_dir, 0)
+    entries, lock_names_by_dir, scan_complete = _scan_work_vault(vault_dir, hidden_rel_set, include_hidden)
     entries.sort(key=lambda x: x[2].st_mtime, reverse=True)
+    win32_map = _win32_lock_owner_map(entries, fallback_owner)
 
+    deadline = _time.monotonic() + _PREVIEW_SYNC_BUDGET_SEC
+    pending_count = 0
+    sig_h = hashlib.sha256()
+    sig_h.update(f"{mounted_letter or ''}|{vault_dir}\n".encode("utf-8", "ignore"))
     files_out: List[Dict[str, Any]] = []
     for full_p, rel_p, st in entries:
-        meta = _extract_rich_preview_cached(full_p, st)
-        folder_id, folder_name, folder_path = _resolve_folder_meta(rel_p)
-        locked_by = detect_file_lock_owner(full_p, fallback_owner=default_author)
-        item: Dict[str, Any] = {
-            "name": full_p.name,
-            "relPath": rel_p,
-            "fullPath": f"S:\\{rel_p.replace('/', '\\')}" if os.path.exists("S:\\") else str(full_p),
-            "realDiskPath": str(full_p),
-            "folderId": folder_id,
-            "folderName": folder_name,
-            "folderPath": folder_path,
-            "ext": meta["ext"],
-            "size": st.st_size,
-            "sizeFormatted": _format_size(st.st_size),
-            "mtime": _iso_utc(st.st_mtime),
-            "mtimeFormatted": _format_mtime_ko(st.st_mtime),
-            "author": uploader_map.get(rel_p) or default_author,
-            "lockedBy": locked_by,
-            "isHidden": rel_p in hidden_rel_set,
-            "sha256": meta["sha256"],
-            "previewText": meta["previewText"],
-            "tableHeaders": meta["tableHeaders"],
-            "tableRows": meta["tableRows"],
-            "isImage": meta["isImage"],
-            "imageBase64": meta["imageBase64"],
-        }
-        if include_sync_b64 and st.st_size <= 512 * 1024 and full_p.suffix.lower() not in _BLOCKED_EXEC_EXTS:
-            try:
-                item["syncBase64"] = base64.b64encode(full_p.read_bytes()).decode("ascii")
-            except Exception:
-                pass
-        files_out.append(item)
+        key = _preview_sig_key(full_p, st)
+        meta = _get_cached_preview(key)
+        if meta is None and _time.monotonic() < deadline:
+            meta = _compute_rich_preview(full_p, st)
+            _put_cached_preview(key, meta)
+        pending = meta is None
+        if pending:
+            _enqueue_preview(key, full_p)
+            pending_count += 1
+            ext_low = full_p.suffix.lower()
+            meta = {
+                "ext": ext_low.lstrip(".").upper() or "FILE",
+                "isImage": ext_low in _IMAGE_EXTS,
+                "previewText": "",
+                "tableHeaders": [],
+                "tableRows": [],
+                "imageBase64": "",
+                "sha256": "",
+            }
+        folder_id, folder_name, folder_path = _resolve_folder_meta(rel_p, mounted_letter)
+        locked_by = _lock_owner_from_scan(
+            full_p, lock_names_by_dir.get(os.path.normcase(str(full_p.parent))), fallback_owner, win32_map, rel_p
+        )
+        is_hidden = rel_p in hidden_rel_set
+        sig_h.update(
+            f"{rel_p}|{st.st_size}|{st.st_mtime_ns}|{locked_by or ''}|{0 if pending else 1}|{1 if is_hidden else 0}\n".encode(
+                "utf-8", "ignore"
+            )
+        )
+        files_out.append(
+            {
+                "name": full_p.name,
+                "relPath": rel_p,
+                "fullPath": (_drive_root(mounted_letter) + rel_p.replace("/", "\\")) if mounted_letter else str(full_p),
+                "realDiskPath": str(full_p),
+                "folderId": folder_id,
+                "folderName": folder_name,
+                "folderPath": folder_path,
+                "ext": meta["ext"],
+                "size": st.st_size,
+                "sizeFormatted": _format_size(st.st_size),
+                "mtime": _iso_utc(st.st_mtime),
+                "mtimeFormatted": _format_mtime_ko(st.st_mtime),
+                "author": uploader_map.get(rel_p) or default_author,
+                "lockedBy": locked_by,
+                "isHidden": is_hidden,
+                "sha256": meta["sha256"],
+                "previewText": meta["previewText"],
+                "tableHeaders": meta["tableHeaders"],
+                "tableRows": meta["tableRows"],
+                "isImage": meta["isImage"],
+                "imageBase64": meta["imageBase64"],
+                "previewPending": pending,
+            }
+        )
+    list_sig = sig_h.hexdigest()[:40]
 
-    cur_rel_set = {str(f["relPath"]) for f in files_out}
-    prev_known_set = set(cfg.get("knownRelPaths") or [])
-    locally_deleted = sorted(prev_known_set - cur_rel_set - hidden_rel_set)
+    # ── 탐색기에서 직접 지운 파일 감지 (스캔이 100% 완료된 경우에만 · 실제 부재 재확인 후에만) ──
+    cur_rel_set = {rel for _, rel, _ in entries}
+    vault_key = os.path.normcase(str(vault_dir))
+    known_vault = os.path.normcase(str(cfg.get("knownRelPathsVault") or ""))
+    prev_known_set = set(cfg.get("knownRelPaths") or []) if known_vault in ("", vault_key) else set()
+    locally_deleted: List[str] = []
+    if scan_complete:
+        for rel in sorted(prev_known_set - cur_rel_set - hidden_rel_set):
+            cand = _safe_resolve_inside_vault(vault_dir, rel)
+            if cand is not None and cand.exists():
+                continue  # 스캔에서 빠졌을 뿐 실제로는 존재 → 절대 삭제로 판정하지 않음
+            locally_deleted.append(rel)
+
     local_tombs: Dict[str, Any] = dict(cfg.get("deletedTombstones") or {})
-    tombs_changed = False
-    now_iso = _iso_utc()
-    for del_rel in locally_deleted:
-        local_tombs[del_rel] = {"deletedAt": now_iso, "deletedBy": default_author}
-        tombs_changed = True
-    # 실제 사용자가 새로 저장한 파일(mtime > deletedAt + 5초)은 tombstone에서 자동 해제
-    for full_p, rel_p, st in entries:
-        t_info = local_tombs.get(rel_p)
-        if isinstance(t_info, dict):
-            del_ts = _parse_iso_mtime_sec(t_info.get("deletedAt"))
-            if del_ts > 0 and st.st_mtime > del_ts + 5.0:
-                local_tombs.pop(rel_p, None)
-                tombs_changed = True
+    resurrected = [
+        rel_p
+        for _, rel_p, st in entries
+        if isinstance(local_tombs.get(rel_p), dict)
+        and _parse_iso_mtime_sec(local_tombs[rel_p].get("deletedAt")) > 0
+        and st.st_mtime > _parse_iso_mtime_sec(local_tombs[rel_p].get("deletedAt")) + 5.0
+    ]
+    next_known = sorted(cur_rel_set | (prev_known_set & hidden_rel_set)) if scan_complete else None
+    known_changed = next_known is not None and (next_known != sorted(prev_known_set) or known_vault != vault_key)
 
-    if cur_rel_set != prev_known_set or tombs_changed:
-        patch: Dict[str, Any] = {"knownRelPaths": sorted(cur_rel_set)}
-        if tombs_changed:
-            patch["deletedTombstones"] = local_tombs
-        _save_sdrive_config(patch)
+    if locally_deleted or resurrected or known_changed:
+        now_iso = _iso_utc()
 
-    return {
+        def _apply(cur: Dict[str, Any]) -> None:
+            tombs = dict(cur.get("deletedTombstones") or {})
+            for del_rel in locally_deleted:
+                tombs[del_rel] = {"deletedAt": now_iso, "deletedBy": default_author}
+            for rel_p in resurrected:  # 실제 사용자가 새로 저장한 파일(mtime > deletedAt + 5초)은 tombstone 자동 해제
+                tombs.pop(rel_p, None)
+            cur["deletedTombstones"] = tombs
+            if next_known is not None:
+                cur["knownRelPaths"] = next_known
+                cur["knownRelPathsVault"] = str(vault_dir)
+
+        local_tombs = dict(_mutate_sdrive_config(_apply).get("deletedTombstones") or {})
+
+    resp: Dict[str, Any] = {
         "ok": True,
-        "mounted": os.path.exists("S:\\"),
+        "mounted": bool(mounted_letter),
+        "driveLetter": mounted_letter or WORK_DRIVE_PREFERRED,
         "targetDir": str(vault_dir),
-        "files": files_out,
+        "listSig": list_sig,
+        "scanComplete": scan_complete,
+        "fileCount": len(entries),
+        "previewPendingCount": pending_count,
         "locallyDeletedRelPaths": locally_deleted,
         "localDeletedTombstones": local_tombs,
     }
+    if known_sig and known_sig == list_sig and not locally_deleted and not include_sync_b64:
+        resp["unchanged"] = True  # 변경 없음 → 수천 개 파일 목록 재전송 생략
+        return resp
+
+    if include_sync_b64:
+        for item, (full_p, _rel, st) in zip(files_out, entries):
+            if st.st_size <= 512 * 1024 and full_p.suffix.lower() not in _BLOCKED_EXEC_EXTS:
+                try:
+                    item["syncBase64"] = base64.b64encode(full_p.read_bytes()).decode("ascii")
+                except Exception:
+                    pass
+    resp["files"] = files_out
+    return resp
 
 
 def get_work_locks_fast(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    """[초경량 2ms 실시간 잠금 감지 전용]: Base64·해시·본문 파싱 없이 현재 S:\\ 파일들의 열람 잠금(lockedBy)만 1초 주기로 즉시 조회합니다."""
+    """[초경량 실시간 잠금 감지 전용]: 본문 파싱 없이 1패스 스캔으로 잠금파일(~$·.lck·.dwl)을 모아 열람자를 즉시 판정합니다."""
     qp = params or {}
     vault_dir = get_work_vault_dir(ensure_dirs=False)
     if not vault_dir.exists():
@@ -785,42 +1271,21 @@ def get_work_locks_fast(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     cfg = _load_sdrive_config()
     hidden_rel_set = set(cfg.get("hiddenRelPaths") or [])
     default_author = str(qp.get("author") or cfg.get("hostNickname") or os.environ.get("USERNAME") or "현재 PC 사용자")
+    fallback_owner = _fallback_lock_owner(default_author)
 
+    entries, lock_names_by_dir, _complete = _scan_work_vault(vault_dir, hidden_rel_set, include_hidden=False)
+    win32_map = _win32_lock_owner_map(entries, fallback_owner)
     locks_out: Dict[str, Optional[str]] = {}
-    file_count = 0
-
-    def _walk_locks(cur_dir: Path, depth: int) -> None:
-        nonlocal file_count
-        if depth > 4 or file_count >= 500:
-            return
-        try:
-            with os.scandir(cur_dir) as it:
-                for entry in it:
-                    if file_count >= 500:
-                        break
-                    if entry.name.startswith("."):
-                        continue
-                    if entry.is_dir(follow_symlinks=False):
-                        _walk_locks(Path(entry.path), depth + 1)
-                    elif entry.is_file(follow_symlinks=False):
-                        if is_temp_or_lock_artifact(entry.name):
-                            continue
-                        full_p = Path(entry.path)
-                        rel_p = str(full_p.relative_to(vault_dir)).replace("\\", "/")
-                        if rel_p in hidden_rel_set:
-                            continue
-                        file_count += 1
-                        owner = detect_file_lock_owner(full_p, fallback_owner=default_author)
-                        if owner:
-                            locks_out[rel_p] = owner
-        except Exception:
-            pass
-
-    _walk_locks(vault_dir, 0)
+    for full_p, rel_p, _st in entries:
+        owner = _lock_owner_from_scan(
+            full_p, lock_names_by_dir.get(os.path.normcase(str(full_p.parent))), fallback_owner, win32_map, rel_p
+        )
+        if owner:
+            locks_out[rel_p] = owner
     return {
         "ok": True,
         "locks": locks_out,
-        "fileCount": file_count,
+        "fileCount": len(entries),
     }
 
 
@@ -881,13 +1346,17 @@ def write_uploaded_work_file(data: Dict[str, Any] | None = None) -> Dict[str, An
     if not b64_raw:
         return {"ok": False, "error": "EMPTY_FILE_CONTENT"}
 
-    if "," in b64_raw and b64_raw.startswith("data:"):
+    if b64_raw.startswith("data:") and "," in b64_raw:
         b64_raw = b64_raw.split(",", 1)[1]
 
+    if len(b64_raw) > (WORK_MAX_FILE_BYTES * 4) // 3 + 8:
+        return {"ok": False, "error": "EXCEEDS_50MB_LIMIT"}
     try:
         file_bytes = base64.b64decode(b64_raw)
     except Exception as exc:
         return {"ok": False, "error": f"INVALID_BASE64: {exc}"}
+    if len(file_bytes) > WORK_MAX_FILE_BYTES:
+        return {"ok": False, "error": "EXCEEDS_50MB_LIMIT", "size": len(file_bytes)}
 
     if detect_file_lock_owner(target):
         return {"ok": False, "error": "FILE_CURRENTLY_LOCKED_OPEN"}
@@ -897,26 +1366,27 @@ def write_uploaded_work_file(data: Dict[str, Any] | None = None) -> Dict[str, An
     tmp_p.write_bytes(file_bytes)
     os.replace(tmp_p, target)
 
-    cfg = _load_sdrive_config()
-    patch_up: Dict[str, Any] = {}
-    if uploader:
-        up_map = dict(cfg.get("uploaderByRelPath") or {})
-        up_map[rel_path] = uploader
-        patch_up["uploaderByRelPath"] = up_map
-    tombs_up = dict(cfg.get("deletedTombstones") or {})
-    if rel_path in tombs_up:
-        tombs_up.pop(rel_path, None)
-        patch_up["deletedTombstones"] = tombs_up
-    if patch_up:
-        _save_sdrive_config(patch_up)
+    def _apply_upload(cur: Dict[str, Any]) -> None:
+        if uploader:
+            up_map = dict(cur.get("uploaderByRelPath") or {})
+            up_map[rel_path] = uploader
+            cur["uploaderByRelPath"] = up_map
+        tombs_up = dict(cur.get("deletedTombstones") or {})
+        if rel_path in tombs_up:
+            tombs_up.pop(rel_path, None)
+            cur["deletedTombstones"] = tombs_up
 
-    # Ensure S: is mounted when writing on Windows
-    mount_or_unmount_s_drive({"action": "mount", "openExplorer": False})
+    _mutate_sdrive_config(_apply_upload)
+
+    # Ensure the work drive is mounted when writing on Windows
+    mount_res = mount_or_unmount_s_drive({"action": "mount", "openExplorer": False})
+    letter = mount_res.get("driveLetter") if mount_res.get("mounted") else None
     return {
         "ok": True,
         "relPath": rel_path,
         "savedPath": str(target),
-        "sDrivePath": f"S:\\{rel_path.replace('/', '\\')}",
+        "sDrivePath": (_drive_root(letter) + rel_path.replace("/", "\\")) if letter else str(target),
+        "driveLetter": letter or WORK_DRIVE_PREFERRED,
         "size": len(file_bytes),
     }
 
@@ -934,36 +1404,35 @@ def _parse_iso_mtime_sec(raw_iso: Any) -> float:
 
 
 def _move_to_recycle_bin_safe(target: Path) -> bool:
+    """OS [휴지통]으로만 이동합니다. 휴지통 이동이 실패하면 절대 영구 삭제하지 않고 False를 반환합니다.
+    (명세 8.3-③: 귀신같이 앱은 어떤 경우에도 스스로 파일을 영구 삭제하지 않음)"""
     if not target.exists():
         return True
-    if os.name == "nt":
-        try:
-            class SHFILEOPSTRUCTW(ctypes.Structure):
-                _fields_ = [
-                    ("hwnd", ctypes.c_void_p),
-                    ("wFunc", ctypes.c_uint),
-                    ("pFrom", ctypes.c_wchar_p),
-                    ("pTo", ctypes.c_wchar_p),
-                    ("fFlags", ctypes.c_ushort),
-                    ("fAnyOperationsAborted", ctypes.c_int),
-                    ("hNameMappings", ctypes.c_void_p),
-                    ("lpszProgressTitle", ctypes.c_wchar_p),
-                ]
-
-            op = SHFILEOPSTRUCTW()
-            op.hwnd = None
-            op.wFunc = 0x0003  # FO_DELETE
-            op.pFrom = str(target) + "\x00\x00"
-            op.pTo = None
-            op.fFlags = 0x0040 | 0x0010 | 0x0004 | 0x0400  # ALLOWUNDO | NOCONFIRMATION | SILENT | NOERRORUI
-            rc = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op))
-            if rc == 0 and not target.exists():
-                return True
-        except Exception:
-            pass
+    if os.name != "nt":
+        return False
     try:
-        target.unlink(missing_ok=True)
-        return True
+        class SHFILEOPSTRUCTW(ctypes.Structure):
+            _fields_ = [
+                ("hwnd", ctypes.c_void_p),
+                ("wFunc", ctypes.c_uint),
+                ("pFrom", ctypes.c_wchar_p),
+                ("pTo", ctypes.c_wchar_p),
+                ("fFlags", ctypes.c_ushort),
+                ("fAnyOperationsAborted", ctypes.c_int),
+                ("hNameMappings", ctypes.c_void_p),
+                ("lpszProgressTitle", ctypes.c_wchar_p),
+            ]
+
+        op = SHFILEOPSTRUCTW()
+        op.hwnd = None
+        op.wFunc = 0x0003  # FO_DELETE
+        op.pFrom = str(target) + "\x00\x00"
+        op.pTo = None
+        # ALLOWUNDO | NOCONFIRMATION | SILENT | NOERRORUI | WANTNUKEWARNING
+        # WANTNUKEWARNING(0x4000): 휴지통에 못 넣는 경우(용량 초과 등) 조용히 영구삭제하지 않고 실패 처리
+        op.fFlags = 0x0040 | 0x0010 | 0x0004 | 0x0400 | 0x4000
+        rc = ctypes.windll.shell32.SHFileOperationW(ctypes.byref(op))
+        return rc == 0 and not op.fAnyOperationsAborted and not target.exists()
     except Exception:
         return False
 
@@ -980,7 +1449,6 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     mount_or_unmount_s_drive({"action": "mount", "openExplorer": False})
     cfg = _load_sdrive_config()
     up_map = dict(cfg.get("uploaderByRelPath") or {})
-    known_set = set(cfg.get("knownRelPaths") or [])
     merged_tombstones: Dict[str, Any] = dict(cfg.get("deletedTombstones") or {})
     if isinstance(tombstones, dict):
         for tk, tv in tombstones.items():
@@ -989,6 +1457,9 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 merged_tombstones[clean_tk] = tv
 
     removed_by_tombstone = 0
+    removed_rel_set: set = set()
+    added_rel_set: set = set()
+    revived_rel_set: set = set()
     for t_rel, t_info in merged_tombstones.items():
         clean_t = str(t_rel or "").strip().replace("\\", "/").lstrip("/")
         target_t = _safe_resolve_inside_vault(vault_dir, clean_t)
@@ -996,12 +1467,12 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
             del_ts = _parse_iso_mtime_sec(t_info.get("deletedAt") if isinstance(t_info, dict) else "")
             if del_ts <= 0 or target_t.stat().st_mtime <= del_ts + 5.0:
                 if _move_to_recycle_bin_safe(target_t):
-                    known_set.discard(clean_t)
+                    removed_rel_set.add(clean_t)
                     removed_by_tombstone += 1
 
     synced = 0
     skipped = 0
-    for item in incoming[:200]:
+    for item in incoming:
         if not isinstance(item, dict):
             continue
         rel_p = str(item.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
@@ -1019,6 +1490,7 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 skipped += 1
                 continue
             merged_tombstones.pop(rel_p, None)
+            revived_rel_set.add(rel_p)
 
         target = _safe_resolve_inside_vault(vault_dir, rel_p)
         if target is None or target.suffix.lower() in _BLOCKED_EXEC_EXTS:
@@ -1035,16 +1507,19 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 if local_meta.get("sha256") == remote_sha:
                     if uploader and up_map.get(rel_p) != uploader:
                         up_map[rel_p] = uploader
-                    known_set.add(rel_p)
+                    added_rel_set.add(rel_p)
                     skipped += 1
                     continue
-            # [최신본 보호 가드]: 내 로컬 파일 수정시각이 원격보다 2초 이상 더 최신이면 옛날 원격본으로 덮어쓰지 않음!
-            if remote_mtime > 0 and st.st_mtime > remote_mtime + 2.0:
+            # [최신본 보호 가드]: 원격 수정시각을 알 수 없거나(0) 내 로컬 파일이 2초 이상 더 최신이면 덮어쓰지 않음!
+            if remote_mtime <= 0 or st.st_mtime > remote_mtime + 2.0:
                 skipped += 1
                 continue
 
-        if "," in b64_raw and b64_raw.startswith("data:"):
+        if b64_raw.startswith("data:") and "," in b64_raw:
             b64_raw = b64_raw.split(",", 1)[1]
+        if len(b64_raw) > (WORK_MAX_FILE_BYTES * 4) // 3 + 8:
+            skipped += 1
+            continue
         try:
             raw_bytes = base64.b64decode(b64_raw)
             target.parent.mkdir(parents=True, exist_ok=True)
@@ -1058,22 +1533,31 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
                     pass
             if uploader:
                 up_map[rel_p] = uploader
-            known_set.add(rel_p)
+            added_rel_set.add(rel_p)
             synced += 1
         except Exception:
             skipped += 1
 
-    patch_cfg: Dict[str, Any] = {
-        "knownRelPaths": sorted(known_set),
-        "deletedTombstones": merged_tombstones,
-    }
-    if up_map != (cfg.get("uploaderByRelPath") or {}):
-        patch_cfg["uploaderByRelPath"] = up_map
-    _save_sdrive_config(patch_cfg)
+    def _apply_pull(cur: Dict[str, Any]) -> None:
+        cur["knownRelPaths"] = sorted((set(cur.get("knownRelPaths") or []) - removed_rel_set) | added_rel_set)
+        cur["knownRelPathsVault"] = str(vault_dir)
+        tombs_now = dict(cur.get("deletedTombstones") or {})
+        tombs_now.update(merged_tombstones)
+        for rel_ok in revived_rel_set:
+            tombs_now.pop(rel_ok, None)
+        cur["deletedTombstones"] = tombs_now
+        if up_map != (cfg.get("uploaderByRelPath") or {}):
+            cur_up = dict(cur.get("uploaderByRelPath") or {})
+            cur_up.update(up_map)
+            cur["uploaderByRelPath"] = cur_up
+
+    _mutate_sdrive_config(_apply_pull)
+    mounted_letter = _mounted_letter_for_vault(vault_dir)
 
     return {
         "ok": True,
-        "mounted": os.path.exists("S:\\"),
+        "mounted": bool(mounted_letter),
+        "driveLetter": mounted_letter or WORK_DRIVE_PREFERRED,
         "targetDir": str(vault_dir),
         "syncedCount": synced,
         "removedByTombstoneCount": removed_by_tombstone,
@@ -1081,12 +1565,24 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     }
 
 
+def _is_allowed_signed_storage_url(url: str) -> bool:
+    """서명 URL은 Supabase Storage(https://<project>.supabase.co/storage/...)만 허용 — 임의 내부망·외부 주소 호출(SSRF) 차단."""
+    try:
+        import urllib.parse as _up
+
+        u = _up.urlparse(str(url or "").strip())
+        host = (u.hostname or "").lower()
+        return u.scheme == "https" and host.endswith(".supabase.co") and u.path.startswith("/storage/")
+    except Exception:
+        return False
+
+
 def push_work_blob_to_signed_url(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """512KB 초과 ~ 50MB 대용량 업무 파일(XLSX/PDF/HWP/현장사진)을 브라우저 메모리 거치지 않고 서명 URL로 직접 전송합니다."""
     payload = data or {}
     rel_p = str(payload.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
     signed_url = str(payload.get("signedUploadUrl") or "").strip()
-    if not rel_p or not signed_url.startswith("https://"):
+    if not rel_p or not _is_allowed_signed_storage_url(signed_url):
         return {"ok": False, "error": "INVALID_PUSH_BLOB_ARGS"}
     vault_dir = get_work_vault_dir(ensure_dirs=False)
     target = _safe_resolve_inside_vault(vault_dir, rel_p)
@@ -1121,7 +1617,7 @@ def pull_work_blob_from_signed_url(data: Dict[str, Any] | None = None) -> Dict[s
     remote_mtime = _parse_iso_mtime_sec(payload.get("fileMtimeIso") or payload.get("fileMtime"))
     uploader = str(payload.get("uploaderNickname") or payload.get("author") or "").strip()
 
-    if not rel_p or not signed_url.startswith("https://"):
+    if not rel_p or not _is_allowed_signed_storage_url(signed_url):
         return {"ok": False, "error": "INVALID_PULL_BLOB_ARGS"}
     vault_dir = get_work_vault_dir(ensure_dirs=True)
     mount_or_unmount_s_drive({"action": "mount", "openExplorer": False})
@@ -1145,13 +1641,15 @@ def pull_work_blob_from_signed_url(data: Dict[str, Any] | None = None) -> Dict[s
             local_meta = _extract_rich_preview_cached(target, st)
             if local_meta.get("sha256") == remote_sha:
                 return {"ok": True, "alreadySynced": True, "relPath": rel_p}
-        if remote_mtime > 0 and st.st_mtime > remote_mtime + 2.0:
+        if remote_mtime <= 0 or st.st_mtime > remote_mtime + 2.0:
             return {"ok": True, "skippedNewerLocal": True, "relPath": rel_p}
 
     try:
         req = urllib.request.Request(signed_url, method="GET")
         with urllib.request.urlopen(req, timeout=45) as resp:
-            raw_bytes = resp.read()
+            raw_bytes = resp.read(WORK_MAX_FILE_BYTES + 1)
+        if len(raw_bytes) > WORK_MAX_FILE_BYTES:
+            return {"ok": False, "error": "EXCEEDS_50MB_LIMIT"}
         target.parent.mkdir(parents=True, exist_ok=True)
         tmp_p = target.with_name(f".{target.name}.ghosti_sync_tmp")
         tmp_p.write_bytes(raw_bytes)
@@ -1161,13 +1659,14 @@ def pull_work_blob_from_signed_url(data: Dict[str, Any] | None = None) -> Dict[s
                 os.utime(target, (remote_mtime, remote_mtime))
             except Exception:
                 pass
-        cfg = _load_sdrive_config()
-        known_set = set(cfg.get("knownRelPaths") or [])
-        known_set.add(rel_p)
-        up_map = dict(cfg.get("uploaderByRelPath") or {})
-        if uploader:
-            up_map[rel_p] = uploader
-        _save_sdrive_config({"knownRelPaths": sorted(known_set), "uploaderByRelPath": up_map})
+        def _apply_blob(cur: Dict[str, Any]) -> None:
+            cur["knownRelPaths"] = sorted(set(cur.get("knownRelPaths") or []) | {rel_p})
+            if uploader:
+                up_map = dict(cur.get("uploaderByRelPath") or {})
+                up_map[rel_p] = uploader
+                cur["uploaderByRelPath"] = up_map
+
+        _mutate_sdrive_config(_apply_blob)
         return {"ok": True, "relPath": rel_p, "size": len(raw_bytes)}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}
@@ -1189,17 +1688,25 @@ def delete_or_apply_tombstones(data: Dict[str, Any] | None = None) -> Dict[str, 
         return {"ok": False, "error": "FILE_CURRENTLY_LOCKED_OPEN"}
 
     ok_del = _move_to_recycle_bin_safe(target) if target.exists() else True
-    cfg = _load_sdrive_config()
-    known_set = set(cfg.get("knownRelPaths") or [])
-    known_set.discard(rel_p)
-    local_tombs = dict(cfg.get("deletedTombstones") or {})
-    if ok_del:
-        local_tombs[rel_p] = {"deletedAt": deleted_at, "deletedBy": actor}
-    _save_sdrive_config({
-        "knownRelPaths": sorted(known_set),
-        "deletedTombstones": local_tombs,
-    })
-    return {"ok": ok_del, "relPath": rel_p, "deletedAt": deleted_at, "localDeletedTombstones": local_tombs}
+    if not ok_del:
+        # 휴지통 이동 실패 → 파일은 그대로 두고(영구삭제 금지) Tombstone도 남기지 않음
+        return {
+            "ok": False,
+            "error": "RECYCLE_BIN_MOVE_FAILED",
+            "relPath": rel_p,
+            "message": "휴지통으로 옮기지 못해 파일을 그대로 두었어요.",
+        }
+
+    def _apply_delete(cur: Dict[str, Any]) -> None:
+        known = set(cur.get("knownRelPaths") or [])
+        known.discard(rel_p)
+        cur["knownRelPaths"] = sorted(known)
+        tombs = dict(cur.get("deletedTombstones") or {})
+        tombs[rel_p] = {"deletedAt": deleted_at, "deletedBy": actor}
+        cur["deletedTombstones"] = tombs
+
+    local_tombs = dict(_mutate_sdrive_config(_apply_delete).get("deletedTombstones") or {})
+    return {"ok": True, "relPath": rel_p, "deletedAt": deleted_at, "localDeletedTombstones": local_tombs}
 
 
 def toggle_hide_work_file(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
@@ -1207,16 +1714,20 @@ def toggle_hide_work_file(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     rel_p = str(payload.get("relPath") or "").strip().replace("\\", "/").lstrip("/")
     if not rel_p:
         return {"ok": False, "error": "EMPTY_REL_PATH"}
-    cfg = _load_sdrive_config()
-    cur_list = list(cfg.get("hiddenRelPaths") or [])
-    if rel_p in cur_list:
-        cur_list = [x for x in cur_list if x != rel_p]
-        hidden_now = False
-    else:
-        cur_list.append(rel_p)
-        hidden_now = True
-    _save_sdrive_config({"hiddenRelPaths": cur_list})
-    return {"ok": True, "relPath": rel_p, "hidden": hidden_now}
+    state = {"hidden": False}
+
+    def _apply_hide(cur: Dict[str, Any]) -> None:
+        cur_list = list(cur.get("hiddenRelPaths") or [])
+        if rel_p in cur_list:
+            cur["hiddenRelPaths"] = [x for x in cur_list if x != rel_p]
+            state["hidden"] = False
+        else:
+            cur_list.append(rel_p)
+            cur["hiddenRelPaths"] = cur_list
+            state["hidden"] = True
+
+    _mutate_sdrive_config(_apply_hide)
+    return {"ok": True, "relPath": rel_p, "hidden": state["hidden"]}
 
 
 def resolve_work_download_file(params: Dict[str, Any] | None = None) -> Tuple[Optional[Path], str, int]:
@@ -1230,12 +1741,422 @@ def resolve_work_download_file(params: Dict[str, Any] | None = None) -> Tuple[Op
     return target, mime, 200
 
 
+# ─────────────────────────────────────────────────────────────────────────────
+# [상시 아웃바운드 HTTPS 직통 터널 (특허 제2호 Stage 2 — 방화벽·LTE 0초 통과 & 서버 파일 저장 0 Byte)]
+# 24시간 켜두는 회사 대장 PC의 PC 엔진이 안에서 밖으로(Outbound 443) 암호화 터널을 미리 열어두어
+# 외부 팀원이 대기시간 0초로 S:\에 직결되며, 모든 외부 요청은 방 전용 256-bit 접근 키(X-Ghosti-Work-Key)로 검증합니다.
+# ─────────────────────────────────────────────────────────────────────────────
+_TUNNEL_LOCK = threading.Lock()
+_TUNNEL_STATE: Dict[str, Any] = {
+    "proc": None,
+    "url": "",
+    "status": "idle",  # idle | downloading_binary | starting | connected | error | stopped
+    "error": "",
+    "startedAt": "",
+}
+_CLOUDFLARED_RELEASE_URL = (
+    "https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-windows-amd64.exe"
+)
+_TRYCLOUDFLARE_URL_RE = re.compile(r"(https://[a-z0-9-]+\.trycloudflare\.com)", re.IGNORECASE)
+
+
+def get_or_create_work_access_key(rotate: bool = False) -> str:
+    cfg = _load_sdrive_config()
+    cur_key = str(cfg.get("workRoomAccessKey") or "").strip()
+    if cur_key and len(cur_key) >= 24 and not rotate:
+        return cur_key
+    new_key = secrets.token_urlsafe(24)
+    _save_sdrive_config({"workRoomAccessKey": new_key})
+    return new_key
+
+
+def verify_tunnel_access_key(provided_key: Optional[str], is_external_tunnel_req: bool) -> bool:
+    """외부 터널(*.trycloudflare.com / CF-Connecting-IP) 경유 요청은 반드시 방 전용 비밀 키가 일치해야만 통과합니다."""
+    if not is_external_tunnel_req:
+        return True
+    expected = get_or_create_work_access_key(rotate=False)
+    cand = str(provided_key or "").strip()
+    if not cand or not expected:
+        return False
+    try:
+        return hmac.compare_digest(cand.encode("utf-8"), expected.encode("utf-8"))
+    except Exception:
+        return False
+
+
+def _find_or_download_cloudflared_binary() -> Optional[Path]:
+    bin_dir = _get_merlin_appdata_dir() / "bin"
+    bin_dir.mkdir(parents=True, exist_ok=True)
+    local_bin = bin_dir / "cloudflared.exe"
+    if local_bin.is_file() and local_bin.stat().st_size > 5 * 1024 * 1024:
+        return local_bin
+    which_p = shutil.which("cloudflared")
+    if which_p:
+        return Path(which_p)
+    if os.name != "nt" or os.environ.get("GHOSTI_DISABLE_TUNNEL_DOWNLOAD") == "1":
+        return None
+    with _TUNNEL_LOCK:
+        _TUNNEL_STATE["status"] = "downloading_binary"
+    tmp_bin = bin_dir / f"cloudflared_{os.getpid()}.tmp"
+    try:
+        req = urllib.request.Request(
+            _CLOUDFLARED_RELEASE_URL,
+            headers={"User-Agent": "MerlinZCore/2.7.1"},
+        )
+        with urllib.request.urlopen(req, timeout=60) as resp:
+            data = resp.read()
+        if len(data) > 5 * 1024 * 1024:
+            tmp_bin.write_bytes(data)
+            os.replace(tmp_bin, local_bin)
+            return local_bin
+    except Exception as exc:
+        with _TUNNEL_LOCK:
+            _TUNNEL_STATE["status"] = "error"
+            _TUNNEL_STATE["error"] = f"TUNNEL_BINARY_DOWNLOAD_FAILED: {exc}"
+    finally:
+        try:
+            tmp_bin.unlink(missing_ok=True)
+        except Exception:
+            pass
+    return None
+
+
+def stop_outbound_work_tunnel() -> Dict[str, Any]:
+    with _TUNNEL_LOCK:
+        proc = _TUNNEL_STATE.get("proc")
+        _TUNNEL_STATE["proc"] = None
+        _TUNNEL_STATE["url"] = ""
+        _TUNNEL_STATE["status"] = "stopped"
+    if proc is not None:
+        try:
+            proc.terminate()
+            proc.wait(timeout=3)
+        except Exception:
+            try:
+                proc.kill()
+            except Exception:
+                pass
+    _save_sdrive_config({"lastTunnelUrl": ""})
+    return {"ok": True, "status": "stopped", "tunnelUrl": ""}
+
+
+atexit.register(lambda: stop_outbound_work_tunnel())
+
+
+def get_outbound_work_tunnel_status() -> Dict[str, Any]:
+    cfg = _load_sdrive_config()
+    access_key = get_or_create_work_access_key(rotate=False)
+    with _TUNNEL_LOCK:
+        proc = _TUNNEL_STATE.get("proc")
+        alive = proc is not None and (proc.poll() is None)
+        url = str(_TUNNEL_STATE.get("url") or "") if alive else ""
+        status = str(_TUNNEL_STATE.get("status") or "idle")
+        if not alive and status in ("connected", "starting"):
+            status = "stopped"
+            _TUNNEL_STATE["status"] = status
+            _TUNNEL_STATE["url"] = ""
+        err = str(_TUNNEL_STATE.get("error") or "")
+    return {
+        "ok": True,
+        "status": status,
+        "alive": alive,
+        "tunnelUrl": url,
+        "accessKey": access_key,
+        "error": err,
+        "nightPowerSaveEnabled": bool(cfg.get("nightPowerSaveEnabled")),
+    }
+
+
+def ensure_outbound_work_tunnel(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """대장 PC에서 상시 아웃바운드 HTTPS 직통 터널을 기동합니다 (방화벽 인바운드 포트 개방 불필요 · 대기시간 0초)."""
+    cfg = _load_sdrive_config()
+    if cfg.get("workEntitlementLocked") is True:
+        stop_outbound_work_tunnel()
+        return {
+            "ok": False,
+            "error": "WORK_SUBSCRIPTION_LOCKED",
+            "status": "locked",
+            "tunnelUrl": "",
+        }
+
+    cur = get_outbound_work_tunnel_status()
+    if cur["alive"] and cur["tunnelUrl"]:
+        return cur
+    if cur["status"] in ("starting", "downloading_binary"):
+        return cur
+
+    def _spawn_worker() -> None:
+        bin_p = _find_or_download_cloudflared_binary()
+        if bin_p is None:
+            with _TUNNEL_LOCK:
+                if _TUNNEL_STATE["status"] != "error":
+                    _TUNNEL_STATE["status"] = "error"
+                    _TUNNEL_STATE["error"] = "CLOUDFLARED_BINARY_UNAVAILABLE"
+            return
+        with _TUNNEL_LOCK:
+            _TUNNEL_STATE["status"] = "starting"
+            _TUNNEL_STATE["error"] = ""
+        try:
+            proc = subprocess.Popen(
+                [
+                    str(bin_p),
+                    "tunnel",
+                    "--url",
+                    "http://127.0.0.1:5199",
+                    "--no-autoupdate",
+                ],
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                encoding="utf-8",
+                errors="ignore",
+                creationflags=_CREATE_NO_WINDOW,
+            )
+            with _TUNNEL_LOCK:
+                _TUNNEL_STATE["proc"] = proc
+                _TUNNEL_STATE["startedAt"] = _iso_utc()
+            assert proc.stdout is not None
+            for line in proc.stdout:
+                m = _TRYCLOUDFLARE_URL_RE.search(line or "")
+                if m:
+                    found_url = m.group(1).rstrip("/")
+                    with _TUNNEL_LOCK:
+                        _TUNNEL_STATE["url"] = found_url
+                        _TUNNEL_STATE["status"] = "connected"
+                    _save_sdrive_config({"lastTunnelUrl": found_url})
+        except Exception as exc:
+            with _TUNNEL_LOCK:
+                _TUNNEL_STATE["status"] = "error"
+                _TUNNEL_STATE["error"] = str(exc)
+
+    threading.Thread(target=_spawn_worker, name="ghosti-work-outbound-tunnel", daemon=True).start()
+    return get_outbound_work_tunnel_status()
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# [🌙 야간·퇴근 초절전 모드] (모니터 즉시 절전 OFF + 본체 수면 방지로 밤새 팀원 24시간 직결 유지)
+# ─────────────────────────────────────────────────────────────────────────────
+def set_night_power_save_mode(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    payload = data or {}
+    enable = bool(payload.get("enabled", True))
+    turn_off_monitor = bool(payload.get("turnOffMonitor", enable))
+    ES_CONTINUOUS = 0x80000000
+    ES_SYSTEM_REQUIRED = 0x00000001
+    ES_AWAYMODE_REQUIRED = 0x00000040
+
+    applied_exec_state = False
+    monitor_turned_off = False
+    if os.name == "nt":
+        try:
+            k32 = ctypes.windll.kernel32
+            flags = (ES_CONTINUOUS | ES_SYSTEM_REQUIRED | ES_AWAYMODE_REQUIRED) if enable else ES_CONTINUOUS
+            res = k32.SetThreadExecutionState(ctypes.c_uint(flags))
+            applied_exec_state = bool(res)
+        except Exception:
+            applied_exec_state = False
+
+        if enable and turn_off_monitor and os.environ.get("GHOSTI_HEADLESS_TEST") != "1":
+            try:
+                # HWND_BROADCAST(0xFFFF), WM_SYSCOMMAND(0x0112), SC_MONITORPOWER(0xF170), 2(모니터 전원 OFF)
+                ctypes.windll.user32.PostMessageW(0xFFFF, 0x0112, 0xF170, 2)
+                monitor_turned_off = True
+            except Exception:
+                monitor_turned_off = False
+
+    _save_sdrive_config({
+        "nightPowerSaveEnabled": enable,
+        "nightPowerSaveUpdatedAt": _iso_utc(),
+    })
+    return {
+        "ok": True,
+        "enabled": enable,
+        "appliedExecutionState": applied_exec_state,
+        "monitorTurnedOff": monitor_turned_off,
+        "message": (
+            "🌙 야간·퇴근 초절전 모드가 켜졌습니다. 모니터는 절전으로 꺼지고 PC 엔진과 S: 드라이브 직통 연결은 24시간 깨어 있습니다."
+            if enable
+            else "☀️ 야간·퇴근 초절전 모드를 해제하고 일반 전원 모드로 돌아왔습니다."
+        ),
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# [🛡️ 백업 PC (예비 서버 1·2호)] — 대장 PC 고장·도난 대비 업무 폴더(S:) 이중화 설정 및 실제 증분 예비 백업
+# ─────────────────────────────────────────────────────────────────────────────
+def manage_backup_server_nodes(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    payload = data or {}
+    act = str(payload.get("subAction") or payload.get("action") or "get").strip().lower()
+    cfg = _load_sdrive_config()
+    default_master = str(cfg.get("masterServerName") or os.environ.get("COMPUTERNAME") or "사내 대장 PC (S:)")
+    cur_nodes: List[Dict[str, Any]] = list(cfg.get("backupServers") or [])
+    local_backup_dir_str = str(cfg.get("localBackupServerDir") or "").strip()
+
+    if act == "save":
+        new_master = str(payload.get("masterServerName") or default_master).strip()[:48] or default_master
+        raw_nodes = payload.get("backupServers")
+        clean_nodes: List[Dict[str, Any]] = []
+        if isinstance(raw_nodes, list):
+            for idx, item in enumerate(raw_nodes[:2]):  # 예비 서버 최대 2대 (1호·2호)
+                if not isinstance(item, dict):
+                    continue
+                label = str(item.get("label") or "").strip()[:48]
+                if not label:
+                    continue
+                clean_nodes.append({
+                    "id": str(item.get("id") or f"backup-{idx + 1}"),
+                    "slot": idx + 1,
+                    "label": label,
+                    "role": f"예비 서버 {idx + 1}호",
+                    "status": str(item.get("status") or "대기·자동 이중화"),
+                    "updatedAt": _iso_utc(),
+                })
+        patch: Dict[str, Any] = {
+            "masterServerName": new_master,
+            "backupServers": clean_nodes,
+        }
+        if "localBackupServerDir" in payload:
+            raw_bdir = str(payload.get("localBackupServerDir") or "").strip()
+            if raw_bdir:
+                valid_b, reason = _validate_custom_work_target(raw_bdir)
+                if valid_b is None:
+                    return {"ok": False, "error": "INVALID_BACKUP_DIR", "reason": reason}
+                patch["localBackupServerDir"] = str(valid_b)
+                local_backup_dir_str = str(valid_b)
+            else:
+                patch["localBackupServerDir"] = ""
+                local_backup_dir_str = ""
+        _save_sdrive_config(patch)
+        cur_nodes = clean_nodes
+        default_master = new_master
+
+    synced_files = 0
+    if act == "sync-now":
+        vault_dir = get_work_vault_dir(ensure_dirs=True)
+        target_bdir_str = str(payload.get("localBackupServerDir") or local_backup_dir_str).strip()
+        if not target_bdir_str:
+            target_bdir = _get_merlin_appdata_dir() / "업무공유_예비서버_백업"
+        else:
+            valid_b, reason = _validate_custom_work_target(target_bdir_str)
+            if valid_b is None:
+                return {"ok": False, "error": "INVALID_BACKUP_DIR", "reason": reason}
+            target_bdir = valid_b
+        if _same_path(target_bdir, vault_dir):
+            return {"ok": False, "error": "BACKUP_DIR_SAME_AS_VAULT"}
+        target_bdir.mkdir(parents=True, exist_ok=True)
+        entries, _locks, _complete = _scan_work_vault(vault_dir, set(), include_hidden=True)
+        for full_p, rel_p, st in entries:
+            dest = _safe_resolve_inside_vault(target_bdir, rel_p)
+            if dest is None:
+                continue
+            try:
+                if dest.is_file():
+                    dst_st = dest.stat()
+                    if dst_st.st_size == st.st_size and abs(dst_st.st_mtime - st.st_mtime) < 1.0:
+                        continue
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                shutil.copy2(full_p, dest)
+                synced_files += 1
+            except Exception:
+                pass
+        now_iso = _iso_utc()
+        local_backup_dir_str = str(target_bdir)
+        _save_sdrive_config({
+            "localBackupServerDir": local_backup_dir_str,
+            "lastBackupSyncedAt": now_iso,
+            "lastBackupSyncedCount": len(entries),
+        })
+        cfg = _load_sdrive_config()
+
+    return {
+        "ok": True,
+        "masterServerName": default_master,
+        "backupServers": cur_nodes,
+        "localBackupServerDir": local_backup_dir_str,
+        "lastBackupSyncedAt": str(cfg.get("lastBackupSyncedAt") or ""),
+        "lastBackupSyncedCount": int(cfg.get("lastBackupSyncedCount") or 0),
+        "newlyCopiedCount": synced_files,
+    }
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# [과금·체험 권한 게이트 & 계정/방 격리 동기화]
+# - 만료/미개통(unlocked=False) 시: 즉시 S: 드라이브 연결 해제(폴더 내 원본 파일은 100% 보존) + 외부 터널 종료
+# - 계정(email) 또는 방(roomId) 변경 시: 이전 계정의 knownRelPaths·Tombstone을 계정별 슬롯으로 분리해 혼입 0% 보장
+# ─────────────────────────────────────────────────────────────────────────────
+def sync_work_entitlement_state(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    payload = data or {}
+    unlocked = bool(payload.get("unlocked", False))
+    email = str(payload.get("email") or "").strip().lower()
+    room_id = str(payload.get("roomId") or "").strip()
+    plan_id = str(payload.get("planId") or "").strip()
+    reason = str(payload.get("reason") or "").strip()
+    is_host = bool(payload.get("isHost", False))
+
+    def _apply_ent(cur: Dict[str, Any]) -> None:
+        prev_email = str(cur.get("activeAccountEmail") or "").strip().lower()
+        prev_room = str(cur.get("activeWorkRoomId") or "").strip()
+        by_scope: Dict[str, Any] = dict(cur.get("scopedWorkLedgers") or {})
+
+        # 기존 계정·방의 원장을 슬롯에 백업하고 새 계정·방 원장으로 전환 (계정 A → B 전환 시 혼입 차단)
+        if prev_email or prev_room:
+            prev_key = f"{prev_email}::{prev_room}"
+            by_scope[prev_key] = {
+                "knownRelPaths": list(cur.get("knownRelPaths") or []),
+                "deletedTombstones": dict(cur.get("deletedTombstones") or {}),
+                "uploaderByRelPath": dict(cur.get("uploaderByRelPath") or {}),
+                "hiddenRelPaths": list(cur.get("hiddenRelPaths") or []),
+            }
+        new_key = f"{email}::{room_id}"
+        if (email != prev_email or room_id != prev_room) and (email or room_id):
+            restored = by_scope.get(new_key) if isinstance(by_scope.get(new_key), dict) else {}
+            cur["knownRelPaths"] = list(restored.get("knownRelPaths") or [])
+            cur["deletedTombstones"] = dict(restored.get("deletedTombstones") or {})
+            cur["uploaderByRelPath"] = dict(restored.get("uploaderByRelPath") or {})
+            cur["hiddenRelPaths"] = list(restored.get("hiddenRelPaths") or [])
+
+        cur["scopedWorkLedgers"] = by_scope
+        cur["activeAccountEmail"] = email
+        cur["activeWorkRoomId"] = room_id
+        cur["workEntitlementLocked"] = not unlocked
+        cur["workPlanId"] = plan_id
+        cur["workLockReason"] = "" if unlocked else (reason or "SUBSCRIPTION_REQUIRED")
+        cur["workEntitlementSyncedAt"] = _iso_utc()
+
+    _mutate_sdrive_config(_apply_ent)
+
+    if not unlocked:
+        # 멀린님 확정 (가): 체험/구독 종료 시 탐색기에서 S: 드라이브 이름을 해제하고 원본 파일은 원래 폴더에 그대로 보존
+        unmount_res = mount_or_unmount_s_drive({"action": "unmount"})
+        stop_outbound_work_tunnel()
+        return {
+            "ok": True,
+            "unlocked": False,
+            "mounted": False,
+            "unmountedOnExpiry": True,
+            "targetDir": unmount_res.get("targetDir"),
+            "reason": reason or "SUBSCRIPTION_REQUIRED",
+            "message": "🔒 업무 공유 이용 기간이 종료되어 S: 드라이브 연결을 해제했습니다. 업무 폴더 안의 원본 파일은 100% 그대로 보존됩니다.",
+        }
+
+    # 활성 상태 + 방장 PC이면 아웃바운드 직통 터널도 자동 준비
+    tunnel_info = ensure_outbound_work_tunnel() if is_host else get_outbound_work_tunnel_status()
+    status_info = inspect_s_drive_status()
+    return {
+        "ok": True,
+        "unlocked": True,
+        "mounted": status_info.get("mounted", False),
+        "driveLetter": status_info.get("driveLetter", WORK_DRIVE_PREFERRED),
+        "targetDir": status_info.get("targetDir"),
+        "tunnel": tunnel_info,
+    }
+
+
 def handle_action(act: str, data: Dict[str, Any]) -> Dict[str, Any] | None:
     """plugin_ghosti_os 및 merlin_z_core_daemon 라우터에서 위임받아 업무 공유(S:) 액션을 처리합니다."""
     if act not in WORK_SDRIVE_ACTIONS and not act.startswith(("paid-work-", "sdrive-")):
         return None
 
-    letter = str(data.get("driveLetter") or "S:")
+    letter = str(data.get("driveLetter") or WORK_DRIVE_PREFERRED)
     if act in ("paid-work-status", "sdrive-status", "sdrive-check-mount"):
         return inspect_s_drive_status(letter)
     if act == "sdrive-mount":
@@ -1256,5 +2177,17 @@ def handle_action(act: str, data: Dict[str, Any]) -> Dict[str, Any] | None:
         return delete_or_apply_tombstones(data)
     if act == "sdrive-toggle-hide":
         return toggle_hide_work_file(data)
+    if act == "sdrive-sync-entitlement":
+        return sync_work_entitlement_state(data)
+    if act == "sdrive-tunnel-status":
+        return get_outbound_work_tunnel_status()
+    if act == "sdrive-tunnel-start":
+        return ensure_outbound_work_tunnel(data)
+    if act == "sdrive-tunnel-stop":
+        return stop_outbound_work_tunnel()
+    if act == "sdrive-night-power-save":
+        return set_night_power_save_mode(data)
+    if act == "sdrive-backup-servers":
+        return manage_backup_server_nodes(data)
 
     return {"ok": False, "track": "paid-work", "error": f"UNHANDLED_PAID_WORK_ACTION: {act}"}

@@ -37,9 +37,15 @@ export interface GhostiDeviceEntitlementView {
   isPaidUnlimited: boolean;
   paidDaysLeft?: number;
   workPlanId?: string | null;
+  workTrialOptInStartedAt?: string | null;
+  workTrialActive?: boolean;
+  workTrialDaysLeft?: number;
+  workTrialExpired?: boolean;
   workPaidExpiresAt?: string | null;
   workPaidActive?: boolean;
   workPaidDaysLeft?: number;
+  workSubscriptionUnlocked?: boolean;
+  workSeatLimit?: number;
   unlimitedBindingUnlocked: boolean;
 }
 
@@ -794,6 +800,21 @@ export function isCurrentAccountSyncUnlocked(email?: string): boolean {
   return Boolean(ent.unlimitedBindingUnlocked);
 }
 
+export function isCurrentAccountWorkShareUnlocked(email?: string): boolean {
+  const snap = loadCachedDeviceIntegrationSnapshot(email);
+  const ent = snap?.entitlement;
+  if (!ent) return false;
+  if (ent.workPaidActive) {
+    if (ent.workPaidExpiresAt) {
+      const expMs = Date.parse(ent.workPaidExpiresAt);
+      if (Number.isFinite(expMs) && expMs <= Date.now()) return false;
+    }
+    return true;
+  }
+  if (ent.workTrialActive && Number(ent.workTrialDaysLeft || 0) > 0) return true;
+  return Boolean(ent.workSubscriptionUnlocked);
+}
+
 let lastSyncedPcEngineSubFlag: string | null = null;
 export async function syncEntitlementToLocalPcEngine(
   entitlement: GhostiDeviceEntitlementView | null,
@@ -801,17 +822,33 @@ export async function syncEntitlementToLocalPcEngine(
 ): Promise<void> {
   if (typeof window === 'undefined' || !zCoreBridge.isConnected) return;
   const isSub = Boolean(entitlement?.isPaidUnlimited);
+  const isWorkUnlocked = Boolean(
+    entitlement?.workSubscriptionUnlocked || entitlement?.workPaidActive || entitlement?.workTrialActive
+  );
   const devCnt = Math.max(1, Number(entitlement?.activeDeviceCount || 1));
-  const sig = `${accountEmail || ''}::${isSub ? '1' : '0'}::${devCnt}`;
+  const cleanEmail = (accountEmail || '').trim().toLowerCase();
+  const sig = `${cleanEmail}::${isSub ? '1' : '0'}::${isWorkUnlocked ? '1' : '0'}::${devCnt}`;
   if (lastSyncedPcEngineSubFlag === sig) return;
   lastSyncedPcEngineSubFlag = sig;
   try {
     const qs = new URLSearchParams({
-      accountId: (accountEmail || 'local_user').trim().toLowerCase(),
+      accountId: cleanEmail || 'local_user',
       isSubscribed: isSub ? 'true' : 'false',
       linkedDeviceCount: String(devCnt),
     });
-    await fetch(getZCoreUrl(`/api/superpower/status?${qs.toString()}`), { method: 'GET' });
+    await Promise.all([
+      fetch(getZCoreUrl(`/api/superpower/status?${qs.toString()}`), { method: 'GET' }),
+      fetch(getZCoreUrl('/__work/entitlement'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          unlocked: isWorkUnlocked,
+          email: cleanEmail,
+          planId: entitlement?.workPlanId || (entitlement?.workTrialActive ? 'work_trial_30d' : ''),
+          reason: entitlement?.workTrialExpired ? 'WORK_TRIAL_EXPIRED' : 'WORK_SUBSCRIPTION_REQUIRED',
+        }),
+      }).catch(() => null),
+    ]);
   } catch {
     lastSyncedPcEngineSubFlag = null;
   }

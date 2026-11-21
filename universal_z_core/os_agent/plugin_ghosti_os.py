@@ -723,9 +723,45 @@ _ALLOW_CORPUS_DIRS = {
     "test_docs",
     "ghosti_test_corpus",
     "sample_photos_301",
-    "업무공유폴더_s",
 }
 _CUSTOM_SCAN_ROOTS_FILE = LOCAL_APPDATA / "Merlin" / "ghosti_custom_scan_roots.json"
+_WORK_SDRIVE_CONFIG_FILE = LOCAL_APPDATA / "Merlin" / "work_sdrive_config.json"
+
+
+def _get_unmounted_work_vault_dir_to_exclude() -> Optional[Path]:
+    """순수 개인 모드(S: 드라이브 미마운트 상태)일 때 사용자 지정 업무 폴더(예: Documents/회사자료, D:\\업무폴더)가
+    내 기기 개인 스캔에 섞이지 않도록 물리 격리할 경로를 반환합니다."""
+    try:
+        if Path("S:\\").exists():
+            return None
+        if _WORK_SDRIVE_CONFIG_FILE.exists():
+            cfg = json.loads(_WORK_SDRIVE_CONFIG_FILE.read_text(encoding="utf-8", errors="ignore"))
+            if isinstance(cfg, dict):
+                t_dir = str(cfg.get("targetDir") or "").strip()
+                if t_dir and t_dir.upper().rstrip("\\/") != "S:":
+                    p = Path(t_dir)
+                    if p.exists():
+                        return p.resolve()
+        default_v = LOCAL_APPDATA / "Merlin" / "업무공유폴더_S"
+        if default_v.exists():
+            return default_v.resolve()
+    except Exception:
+        pass
+    return None
+
+
+def _is_under_excluded_work_vault(p: Path, excluded_work_dir: Optional[Path]) -> bool:
+    if excluded_work_dir is None:
+        return False
+    try:
+        pr = p.resolve()
+        if pr == excluded_work_dir or pr.is_relative_to(excluded_work_dir):
+            return True
+    except Exception:
+        pass
+    if p.name.lower() == "업무공유폴더_s":
+        return True
+    return False
 
 
 def _is_cloud_virtual_or_unpinned_file(p: Path) -> bool:
@@ -838,10 +874,13 @@ def _get_user_scan_roots(extra_path: str = "") -> List[Path]:
         kf_down,
         home / "Downloads",
     ])
+    excluded_work_dir = _get_unmounted_work_vault_dir_to_exclude()
     seen_resolved: set[str] = set()
     for c in candidates:
         try:
             if c.exists() and c.is_dir():
+                if _is_under_excluded_work_vault(c, excluded_work_dir):
+                    continue
                 r_str = str(c.resolve()).lower()
                 if r_str not in seen_resolved:
                     seen_resolved.add(r_str)
@@ -1033,7 +1072,8 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
     now_mono = time.monotonic()
     with _FULL_DRIVE_SCAN_LOCK:
         extra_dirs = list(_FULL_DRIVE_EXTRA_DIRS)
-    root_sig_parts: List[str] = [str(max_depth), str(len(extra_dirs))]
+    excluded_work_dir = _get_unmounted_work_vault_dir_to_exclude()
+    root_sig_parts: List[str] = [str(max_depth), str(len(extra_dirs)), str(excluded_work_dir or "")]
     for r in roots:
         try:
             st_r = os.stat(r)
@@ -1061,6 +1101,8 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
             if depth > max_depth or root_count >= per_root_cap or len(result) >= max_total:
                 return
             try:
+                if _is_under_excluded_work_vault(curr, excluded_work_dir):
+                    return
                 r_str = os.path.normcase(os.path.abspath(curr))
                 if r_str in seen:
                     return
@@ -1079,6 +1121,8 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
                             if (nm.startswith(".") and nm != ".shortcut-targets-by-id") or nm.lower() in _SKIP_DIR_NAMES:
                                 continue
                             p_sub = Path(dent.path)
+                            if _is_under_excluded_work_vault(p_sub, excluded_work_dir):
+                                continue
                             if not _is_code_repo_dir(p_sub):
                                 sub_dirs.append(p_sub)
                         except Exception:
@@ -1097,6 +1141,8 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
         if len(result) >= max_total:
             break
         try:
+            if _is_under_excluded_work_vault(xd, excluded_work_dir):
+                continue
             x_str = os.path.normcase(os.path.abspath(xd))
             if x_str not in seen:
                 seen.add(x_str)

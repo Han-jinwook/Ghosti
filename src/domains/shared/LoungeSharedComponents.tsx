@@ -4,6 +4,11 @@ export const LoungeModeSwitcherBar: React.FC = () => null;
 
 
 
+/**
+ * [2웨이브 예정 (+4~8주 대형 무료 업데이트)]
+ * 삼체(Three-Body) P2P 원격 GPU 분산 연산 관제 패널 — 12/17 1차 출시에서는 프론트 비노출(호출부 주석 처리)하며,
+ * 2웨이브 기능 구현 시 실제 연결된 기기 목록과 연동하여 활성화합니다.
+ */
 interface ThreeBodyConnectedNode {
   id: string;
   deviceName: string;

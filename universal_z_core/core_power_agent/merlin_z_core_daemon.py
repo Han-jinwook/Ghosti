@@ -161,7 +161,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.7.0"
+CORE_VERSION = "2.7.1"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -223,14 +223,32 @@ def dispatch_plugin_call(plugin_name: str, action: str, payload: Dict[str, Any] 
 _ALLOWED_ORIGIN_EXACT = {
     "https://sundreamer.app",
     "https://ghosti-app.netlify.app",
+    "https://sensetalk.netlify.app",
     "capacitor://localhost",
     "ionic://localhost",
 }
 
+# 멀린 패밀리 공식 Netlify 사이트 이름 (정확히 일치하거나 `<branch>--<site>.netlify.app` 공식 브랜치 프리뷰만 허용)
+# ⚠️ 구버전의 부분 문자열 매칭(`any(k in host ...)`)은 누구나 무료로 만들 수 있는 `evil-ghosti.netlify.app`에
+# 로컬 PC 엔진(:5199) 전체 권한을 열어주므로 영구 금지합니다.
+_ALLOWED_NETLIFY_SITES = {
+    "ghosti",
+    "ghosti-app",
+    "sundreamer",
+    "merlin",
+    "senstalk",
+    "sensetalk",
+    "aggrofilter",
+    "vaulter",
+    "whateat",
+    "luminote",
+    "autonote",
+}
+
 
 def is_trusted_origin(origin: str | None) -> bool:
-    """파일을 옮기거나 만드는 요청은 멀린 패밀리 공식 도메인·Netlify QA·로컬 개발 화면·사내망에서만 허용한다.
-    (Origin 헤더가 없는 요청은 브라우저가 아닌 로컬 프로그램이므로 허용)"""
+    """파일을 옮기거나 만드는 요청은 멀린 패밀리 공식 도메인·공식 Netlify 사이트·로컬 개발 화면(localhost)에서만 허용한다.
+    (Origin 헤더가 없는 요청은 브라우저가 아닌 로컬 프로그램이므로 허용하되, 브라우저는 Sec-Fetch-Site로 교차 검증)"""
     if not origin:
         return True
     o = origin.strip().lower().rstrip("/")
@@ -247,33 +265,20 @@ def is_trusted_origin(origin: str | None) -> bool:
     host = (u.hostname or "").lower()
     if not host:
         return False
-    # 로컬 개발 및 사내망(Office LAN)
-    if host in ("localhost", "127.0.0.1") or host.startswith("192.168.") or host.startswith("10.") or host.startswith("172.16."):
+    # 로컬 개발 루프백만 허용 (공용 Wi-Fi·카페 공유기에서 같은 대역 타인이 공격할 수 있는 192.168.*/10.*/172.16.* 은 허용하지 않음)
+    if host in ("localhost", "127.0.0.1"):
         return True
-    # 멀린 패밀리 공식 도메인 (sundreamer.app, merlincode.com)
-    if host.endswith(".sundreamer.app") or host == "sundreamer.app":
+    # 멀린 패밀리 공식 도메인 (sundreamer.app, merlincode.com) — 반드시 https
+    if u.scheme == "https" and (host.endswith(".sundreamer.app") or host == "sundreamer.app"):
         return True
-    if host.endswith(".merlincode.com") or host == "merlincode.com":
+    if u.scheme == "https" and (host.endswith(".merlincode.com") or host == "merlincode.com"):
         return True
-    # 멀린 패밀리 공식 Netlify 프리뷰/배포 서브도메인만 허용 (임의 제3자 someone.netlify.app 차단)
-    if host.endswith(".netlify.app") and any(
-        k in host
-        for k in (
-            "ghosti",
-            "sundreamer",
-            "merlin",
-            "senstalk",
-            "aggrofilter",
-            "vaulter",
-            "whateat",
-            "luminote",
-            "autonote",
-        )
-    ):
-        return True
-    # 하이브리드 앱
-    if u.scheme in ("capacitor", "ionic", "tauri", "file"):
-        return True
+    # 멀린 패밀리 공식 Netlify 사이트 (exact 또는 `<deploy-id>--<site>.netlify.app`)
+    if u.scheme == "https" and host.endswith(".netlify.app"):
+        sub = host[: -len(".netlify.app")]
+        site_name = sub.split("--")[-1] if "--" in sub else sub
+        if site_name in _ALLOWED_NETLIFY_SITES:
+            return True
     return False
 
 
@@ -346,10 +351,59 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         else:
             self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type, Authorization, X-Merlin-App, Range")
+        self.send_header(
+            "Access-Control-Allow-Headers",
+            "Content-Type, Authorization, X-Merlin-App, X-Ghosti-Work-Key, Range",
+        )
         if expose_range:
             self.send_header("Access-Control-Expose-Headers", "Content-Range, Accept-Ranges, Content-Length")
         self.send_header("Access-Control-Allow-Private-Network", "true")
+
+    def _is_external_tunnel_request(self) -> bool:
+        """아웃바운드 터널(*.trycloudflare.com / CF-Connecting-IP / X-Forwarded-For)을 통해 외부에서 들어온 요청인지 판별합니다."""
+        host_hdr = (self.headers.get("Host") or "").strip().lower()
+        if ".trycloudflare.com" in host_hdr:
+            return True
+        if self.headers.get("CF-Connecting-IP") or self.headers.get("X-Forwarded-For"):
+            return True
+        return False
+
+    _TUNNEL_ALLOWED_WORK_PATHS = {
+        "/health",
+        "/__merlin/health",
+        "/__work/files",
+        "/api/work/files",
+        "/__work/locks",
+        "/api/work/locks",
+        "/__work/file-sync-payload",
+        "/api/work/file-sync-payload",
+        "/__work/download",
+        "/api/work/download",
+        "/__work/upload",
+        "/api/work/upload",
+        "/__work/delete-file",
+        "/api/work/delete-file",
+    }
+
+    def _reject_if_unauthorized_tunnel(self, path: str, params_or_body: Dict[str, Any] | None = None) -> bool:
+        """외부 터널 경유 요청일 때: ① 업무 공유 파일 엔드포인트 외(종료·개인 사진·시스템 제어 등) 100% 차단,
+        ② 방 전용 비밀 접근 키(X-Ghosti-Work-Key) 불일치 시 403 차단."""
+        if not self._is_external_tunnel_request():
+            return False
+        if path not in self._TUNNEL_ALLOWED_WORK_PATHS:
+            self._send_json({"ok": False, "error": "TUNNEL_PATH_FORBIDDEN", "path": path}, status=403)
+            return True
+        if path in ("/health", "/__merlin/health"):
+            return False
+        provided = (
+            self.headers.get("X-Ghosti-Work-Key")
+            or (params_or_body or {}).get("workKey")
+            or ""
+        )
+        if not plugin_paid_work_sdrive.verify_tunnel_access_key(str(provided), True):
+            self._send_json({"ok": False, "error": "WORK_TUNNEL_KEY_INVALID"}, status=403)
+            return True
+        return False
 
     def _reject_untrusted(self) -> bool:
         """신뢰할 수 없는 출처(Untrusted Origin 또는 Cross-Site Fetch)면 403 응답 후 True 반환"""
@@ -547,9 +601,11 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 except Exception:
                     pass
 
+    _MAX_JSON_BODY_BYTES = 72 * 1024 * 1024  # 50MB 파일 Base64(~67MB) + 여유
+
     def _read_body(self) -> Dict[str, Any]:
         length = int(self.headers.get("Content-Length", "0") or 0)
-        if length <= 0:
+        if length <= 0 or length > self._MAX_JSON_BODY_BYTES:
             return {}
         try:
             raw = self.rfile.read(length).decode("utf-8", errors="replace")
@@ -650,6 +706,9 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         parsed = urllib.parse.urlparse(self.path)
         path = parsed.path.rstrip("/") or "/"
         qp = {k: v[0] for k, v in urllib.parse.parse_qs(parsed.query).items()}
+
+        if self._reject_if_unauthorized_tunnel(path, qp):
+            return
 
         if path in ("/", "/health", "/__merlin/health"):
             if self._reject_untrusted():
@@ -760,6 +819,14 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         # [3귀신 업무 공유(S: 드라이브) 네이티브 마운트 · 실시간 파일/잠금(~$) 스캔 · 원본 다운로드 API]
         if path in ("/__work/s-drive", "/api/work/s-drive"):
             self._send_json(plugin_paid_work_sdrive.inspect_s_drive_status(str(qp.get("driveLetter") or "S:")))
+            return
+
+        if path in ("/__work/tunnel", "/api/work/tunnel"):
+            self._send_json(plugin_paid_work_sdrive.get_outbound_work_tunnel_status())
+            return
+
+        if path in ("/__work/backup-servers", "/api/work/backup-servers"):
+            self._send_json(plugin_paid_work_sdrive.manage_backup_server_nodes({"subAction": "get"}))
             return
 
         if path in ("/__work/files", "/api/work/files"):
@@ -935,6 +1002,8 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         body = self._read_body()
 
         if self._reject_untrusted():
+            return
+        if self._reject_if_unauthorized_tunnel(path, body):
             return
 
         # [귀신같이 윈도우 휴지통 / 격리 / 폴더열기]
@@ -1135,6 +1204,28 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
 
         if path in ("/__work/toggle-hide", "/api/work/toggle-hide"):
             self._send_json(plugin_paid_work_sdrive.toggle_hide_work_file(body))
+            return
+
+        if path in ("/__work/entitlement", "/api/work/entitlement"):
+            self._send_json(plugin_paid_work_sdrive.sync_work_entitlement_state(body))
+            return
+
+        if path in ("/__work/tunnel", "/api/work/tunnel"):
+            sub_act = str(body.get("action") or "start").strip().lower()
+            if sub_act == "stop":
+                self._send_json(plugin_paid_work_sdrive.stop_outbound_work_tunnel())
+            elif sub_act == "status":
+                self._send_json(plugin_paid_work_sdrive.get_outbound_work_tunnel_status())
+            else:
+                self._send_json(plugin_paid_work_sdrive.ensure_outbound_work_tunnel(body))
+            return
+
+        if path in ("/__work/night-power-save", "/api/work/night-power-save"):
+            self._send_json(plugin_paid_work_sdrive.set_night_power_save_mode(body))
+            return
+
+        if path in ("/__work/backup-servers", "/api/work/backup-servers"):
+            self._send_json(plugin_paid_work_sdrive.manage_backup_server_nodes(body))
             return
 
         # [5. 내 기기 통합 네이티브 클립보드 주입 & 원본 미러링 저장 API]

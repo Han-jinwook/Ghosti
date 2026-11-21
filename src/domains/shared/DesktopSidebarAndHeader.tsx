@@ -199,10 +199,9 @@ const LOUNGE_SUBMENU_CONFIG: Record<
     { id: 'sync', icon: '👑', label: '동창회 초대 & 방 관리' },
   ],
   work: [
-    { id: 'trial', icon: '💼', label: '업무 공유(공용 폴더 S:) 시작' },
-    { id: 'dashboard', icon: '📂', label: '업무 문서·현장사진 & 공용 폴더(S:)' },
-    { id: 'trash', icon: '🧹', label: '새 업무파일 정리함' },
-    { id: 'sync', icon: '⚙️', label: '팀원 권한 & 공용 폴더(S:) 연결' },
+    { id: 'dashboard', icon: '🔍', label: '본문·표 내용 검색' },
+    { id: 'trash', icon: '🗂️', label: '폴더별 보기 (S:\\)' },
+    { id: 'sync', icon: '⚙️', label: '팀원 권한 & 예비 서버(S:)' },
   ],
 };
 
@@ -1223,11 +1222,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
               {/* 우측: 해당 공유방의 서브메뉴 버튼들 (앨범 피드 / 새 사진 정리함 / 초대 & 방 관리) */}
               <div className="flex flex-wrap items-center gap-1.5 ml-auto">
                 {currentSubmenus
-                  .filter(
-                    (sub) =>
-                      (activeLoungeType !== 'work' || sub.id !== 'dashboard') &&
-                      !(sub.id === 'trial' && isCurrentLoungeSubscribed)
-                  )
+                  .filter((sub) => !(sub.id === 'trial' && isCurrentLoungeSubscribed))
                   .map((sub) => {
                     const isSubActive =
                       desktopTab === sub.id ||

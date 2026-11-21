@@ -9,6 +9,7 @@ import {
   PENDING_SUB_CHECKOUT_STORAGE_KEY,
 } from '../services/subscriptionPlanCatalog';
 import {
+  activateDevicePlanPersistent,
   purchaseDeviceSubscriptionPlan,
   syncEntitlementToLocalPcEngine,
 } from '../services/deviceIntegrationService';
@@ -94,9 +95,9 @@ export const GhostiSubscriptionCheckoutModal: React.FC = () => {
   const expectedExpiresLabel = formatKoreaDateShort(expectedExpiresMs);
   const canOfferFreeTrial =
     effectiveLoggedIn &&
-    spec.category === 'personal' &&
-    !deviceEntitlement?.trialOptInStartedAt &&
-    !deviceEntitlement?.isPaidUnlimited;
+    (spec.category === 'personal'
+      ? !deviceEntitlement?.trialOptInStartedAt && !deviceEntitlement?.isPaidUnlimited
+      : !deviceEntitlement?.workTrialOptInStartedAt && !deviceEntitlement?.workPaidActive);
 
   const handleRefreshBalance = async () => {
     setRefreshingBal(true);
@@ -200,6 +201,25 @@ export const GhostiSubscriptionCheckoutModal: React.FC = () => {
     setStartingTrial(true);
     setErrorMsg(null);
     try {
+      if (spec.category === 'work') {
+        const res = await activateDevicePlanPersistent('work_trial_opt_in_30d');
+        if (res.ok && res.entitlement) {
+          setDeviceIntegrationSnapshot({ entitlement: res.entitlement });
+          useSaySeeStore.setState({
+            lastQuarantineToast:
+              '🎁 업무 공유(S: 드라이브) 30일 무료체험이 시작되었습니다! 소호(~5인) 직통 연결을 바로 이용해 보세요.',
+          });
+          closeSubscriptionCheckout();
+          setShowProModal(false);
+          setActiveLoungeType('work');
+          setDesktopTab('dashboard');
+        } else {
+          setErrorMsg(
+            res.message || '이 계정은 이미 업무 공유 30일 무료체험을 사용했거나 일시 오류가 발생했습니다.'
+          );
+        }
+        return;
+      }
       const ok = await activate30DayDeviceTrialNow();
       if (ok) {
         closeSubscriptionCheckout();
@@ -266,7 +286,9 @@ export const GhostiSubscriptionCheckoutModal: React.FC = () => {
                 <CheckCircle2 className="w-11 h-11 text-emerald-400" />
                 <div className="text-[16px] font-black text-white">{receipt.planTitle}</div>
                 <p className="text-[12.5px] text-emerald-200">
-                  지금 바로 내 모든 PC·스마트폰과 귀신창 유료 초능력이 무제한으로 열렸습니다.
+                  {spec.category === 'personal'
+                    ? '지금 바로 내 모든 PC·스마트폰과 귀신창 유료 초능력이 무제한으로 열렸습니다.'
+                    : '지금 바로 업무 공유 공용 폴더(S: 드라이브)와 팀원 직통 연결·예비 서버가 열렸습니다.'}
                 </p>
               </div>
 

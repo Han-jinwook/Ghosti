@@ -2,7 +2,6 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 import {
   callGhostiServerBridge,
   ensureGhostiAuthedSupabaseClient,
-  ensureGhostiPublicSupabaseClient,
   hasAuthenticatedHubAccountSession,
   supabase,
 } from './supabaseClient';
@@ -50,12 +49,117 @@ export interface WorkRoomPresenceMember {
   onlineAt: string;
 }
 
-export type WorkDeletedTombstoneMap = Record<string, { deletedAt: string; deletedBy?: string }>;
+export interface WorkBackupServerNodeDto {
+  id: string;
+  slot?: number;
+  label: string;
+  role: string;
+  status: string;
+  updatedAt?: string;
+}
+
+export interface WorkHostTunnelEndpointDto {
+  tunnelUrl: string;
+  accessKey: string;
+  updatedAt?: string | null;
+  masterServerName?: string;
+  backupServers?: WorkBackupServerNodeDto[];
+}
+
+export interface WorkRoomServerMemberDto {
+  email: string;
+  nickname: string;
+  role: 'master' | 'editor' | 'viewer';
+  joinedAt?: string | null;
+}
+
+export type WorkDeletedTombstoneMap = Record<string, { deletedAt: string; deletedBy?: string; relPath?: string }>;
 
 const WORK_INVITE_SESSION_KEY = 'ghosti_active_work_room_invite_v1';
-const MY_WORK_ROOM_CACHE_KEY = 'ghosti_my_work_room_meta_v1';
-const LOCAL_WORK_TOMBSTONES_PREFIX = 'ghosti_work_tombstones_v1::';
-const uploadedCloudBlobKeys = new Set<string>();
+const MY_WORK_ROOM_CACHE_PREFIX = 'ghosti_my_work_room_meta_v2::';
+const LOCAL_WORK_TOMBSTONES_PREFIX = 'ghosti_work_tombstones_v2::';
+
+let activeHostTunnelSession: {
+  roomId: string;
+  tunnelUrl: string;
+  accessKey: string;
+  masterServerName?: string;
+  backupServers?: WorkBackupServerNodeDto[];
+} | null = null;
+
+export function getActiveHostTunnelSession(): typeof activeHostTunnelSession {
+  return activeHostTunnelSession;
+}
+
+export function setActiveHostTunnelSession(
+  roomId: string,
+  tunnel?: Partial<WorkHostTunnelEndpointDto> | null
+): void {
+  const cleanRoom = (roomId || '').trim();
+  const cleanUrl = (tunnel?.tunnelUrl || '').trim().replace(/\/+$/, '');
+  const cleanKey = (tunnel?.accessKey || '').trim();
+  if (!cleanRoom || !cleanUrl) {
+    if (activeHostTunnelSession?.roomId === cleanRoom && !cleanUrl) {
+      activeHostTunnelSession = null;
+    }
+    return;
+  }
+  activeHostTunnelSession = {
+    roomId: cleanRoom,
+    tunnelUrl: cleanUrl,
+    accessKey: cleanKey,
+    masterServerName: tunnel?.masterServerName,
+    backupServers: tunnel?.backupServers,
+  };
+}
+
+function resolveCurrentWorkAccountEmail(explicitEmail?: string): string {
+  const clean = (explicitEmail || '').trim().toLowerCase();
+  if (clean) return clean;
+  if (typeof window !== 'undefined') {
+    try {
+      const saved = (localStorage.getItem('merlin_hub_user_email') || '').trim().toLowerCase();
+      if (saved) return saved;
+    } catch {
+      /* ignore */
+    }
+  }
+  return 'anonymous';
+}
+
+export function normalizeWorkTombstoneMap(
+  raw?: WorkDeletedTombstoneMap | null
+): WorkDeletedTombstoneMap {
+  const out: WorkDeletedTombstoneMap = {};
+  if (!raw || typeof raw !== 'object') return out;
+  for (const [k, v] of Object.entries(raw)) {
+    const cleanRel = String(v?.relPath || k || '')
+      .replace(/\\/g, '/')
+      .replace(/^\/+/, '')
+      .trim();
+    if (!cleanRel || !v?.deletedAt) continue;
+    const low = cleanRel.toLowerCase();
+    const prevMs = Date.parse(out[low]?.deletedAt || '') || 0;
+    const nextMs = Date.parse(v.deletedAt || '') || 0;
+    if (!out[low] || nextMs >= prevMs) {
+      out[low] = {
+        relPath: cleanRel,
+        deletedAt: v.deletedAt,
+        deletedBy: v.deletedBy,
+      };
+    }
+  }
+  return out;
+}
+
+export function lookupWorkTombstone(
+  tombstones: WorkDeletedTombstoneMap | null | undefined,
+  relPath: string
+): { deletedAt: string; deletedBy?: string } | undefined {
+  if (!tombstones || !relPath) return undefined;
+  const clean = relPath.replace(/\\/g, '/').replace(/^\/+/, '').trim();
+  return tombstones[clean] || tombstones[clean.toLowerCase()];
+}
 
 const INVALID_WORK_LOCK_OWNER_RE =
   /(hcell|hwpshare|hshowshare|sharefileinfo|hancom|libreoffice|soffice|microsoft|msoffice|lockfile|winword|powerpnt)/i;
@@ -73,13 +177,19 @@ export function sanitizeWorkLockOwner(
   return s.slice(0, 32);
 }
 
-export function loadCachedWorkTombstones(roomId: string): WorkDeletedTombstoneMap {
+export function loadCachedWorkTombstones(
+  roomId: string,
+  accountEmail?: string
+): WorkDeletedTombstoneMap {
   if (typeof window === 'undefined' || !roomId) return {};
   try {
-    const raw = localStorage.getItem(`${LOCAL_WORK_TOMBSTONES_PREFIX}${roomId}`);
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    const raw = localStorage.getItem(`${LOCAL_WORK_TOMBSTONES_PREFIX}${scopeEmail}::${roomId}`);
     if (!raw) return {};
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? (parsed as WorkDeletedTombstoneMap) : {};
+    return parsed && typeof parsed === 'object'
+      ? normalizeWorkTombstoneMap(parsed as WorkDeletedTombstoneMap)
+      : {};
   } catch {
     return {};
   }
@@ -87,11 +197,16 @@ export function loadCachedWorkTombstones(roomId: string): WorkDeletedTombstoneMa
 
 export function saveCachedWorkTombstones(
   roomId: string,
-  tombstones: WorkDeletedTombstoneMap
+  tombstones: WorkDeletedTombstoneMap,
+  accountEmail?: string
 ): void {
   if (typeof window === 'undefined' || !roomId) return;
   try {
-    localStorage.setItem(`${LOCAL_WORK_TOMBSTONES_PREFIX}${roomId}`, JSON.stringify(tombstones || {}));
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    localStorage.setItem(
+      `${LOCAL_WORK_TOMBSTONES_PREFIX}${scopeEmail}::${roomId}`,
+      JSON.stringify(normalizeWorkTombstoneMap(tombstones))
+    );
   } catch {
     /* ignore */
   }
@@ -185,12 +300,15 @@ export function readActiveWorkRoomInviteMeta(): WorkRoomInviteMeta {
 export async function ensureMyWorkRoomAndInvite(opts: {
   roomTitle?: string;
   hostNickname?: string;
+  accountEmail?: string;
 }): Promise<{
   ok: boolean;
   roomId?: string;
   inviteToken?: string;
   inviteUrl?: string;
+  seatLimit?: number;
   reason?: string;
+  message?: string;
 }> {
   if (!hasAuthenticatedHubAccountSession()) {
     return { ok: false, reason: 'AUTH_REQUIRED' };
@@ -201,18 +319,27 @@ export async function ensureMyWorkRoomAndInvite(opts: {
   const bridgeRes = await callGhostiServerBridge<{
     roomId?: string;
     inviteToken?: string;
+    seatLimit?: number;
+    reason?: string;
+    message?: string;
   }>('work_ensure_room', {
     roomTitle,
     hostNickname,
   });
 
   if (!bridgeRes.ok || !bridgeRes.roomId || !bridgeRes.inviteToken) {
-    return { ok: false, reason: bridgeRes.reason || 'BRIDGE_ENSURE_ROOM_FAILED' };
+    return {
+      ok: false,
+      roomId: bridgeRes.roomId,
+      reason: bridgeRes.reason || 'BRIDGE_ENSURE_ROOM_FAILED',
+      message: bridgeRes.message,
+    };
   }
 
   try {
+    const scopeEmail = resolveCurrentWorkAccountEmail(opts.accountEmail);
     localStorage.setItem(
-      MY_WORK_ROOM_CACHE_KEY,
+      `${MY_WORK_ROOM_CACHE_PREFIX}${scopeEmail}`,
       JSON.stringify({
         roomId: bridgeRes.roomId,
         inviteToken: bridgeRes.inviteToken,
@@ -241,12 +368,14 @@ export async function ensureMyWorkRoomAndInvite(opts: {
     ok: true,
     roomId: bridgeRes.roomId,
     inviteToken: bridgeRes.inviteToken,
+    seatLimit: bridgeRes.seatLimit,
     inviteUrl: `${origin}/?${qs.toString()}`,
   };
 }
 
 /**
- * 초대받은 팀원(?workRoom=...&token=...)이 로그인 완료 시 정식 DB 멤버(ghosti_lounge_members)로 자동 편입합니다.
+ * 초대받은 팀원(?workRoom=...&inviteToken=...)이 로그인 완료 시 정식 DB 멤버(ghosti_lounge_members)로 자동 편입합니다.
+ * 정원(5인/20인/50인) 초과 시 reason: 'WORK_SEAT_LIMIT_EXCEEDED'를 반환합니다.
  */
 export async function acceptWorkRoomInvite(opts: {
   inviteToken: string;
@@ -256,7 +385,11 @@ export async function acceptWorkRoomInvite(opts: {
   roomId?: string;
   roomTitle?: string;
   hostNickname?: string;
-  role?: 'host' | 'editor';
+  role?: 'host' | 'editor' | 'viewer';
+  seatLimit?: number;
+  hostTunnel?: WorkHostTunnelEndpointDto;
+  reason?: string;
+  message?: string;
 }> {
   const cleanTok = (opts.inviteToken || '').trim();
   if (!cleanTok || !hasAuthenticatedHubAccountSession()) {
@@ -266,21 +399,32 @@ export async function acceptWorkRoomInvite(opts: {
     roomId?: string;
     roomTitle?: string;
     hostNickname?: string;
-    role?: 'host' | 'editor';
+    role?: 'host' | 'editor' | 'viewer';
+    seatLimit?: number;
+    hostTunnel?: WorkHostTunnelEndpointDto;
+    reason?: string;
+    message?: string;
   }>('work_accept_invite', {
     inviteToken: cleanTok,
     nickname: (opts.nickname || '팀원').trim(),
   });
+  if (res.ok && res.roomId && res.hostTunnel?.tunnelUrl) {
+    setActiveHostTunnelSession(res.roomId, res.hostTunnel);
+  }
   return {
     ok: Boolean(res.ok && res.roomId),
     roomId: res.roomId,
     roomTitle: res.roomTitle,
     hostNickname: res.hostNickname,
     role: res.role,
+    seatLimit: res.seatLimit,
+    hostTunnel: res.hostTunnel,
+    reason: res.reason,
+    message: res.message,
   };
 }
 
-export function readCachedMyWorkRoomMeta(): {
+export function readCachedMyWorkRoomMeta(accountEmail?: string): {
   roomId: string;
   inviteToken: string;
   roomTitle: string;
@@ -288,7 +432,9 @@ export function readCachedMyWorkRoomMeta(): {
 } | null {
   if (typeof window === 'undefined') return null;
   try {
-    const raw = localStorage.getItem(MY_WORK_ROOM_CACHE_KEY);
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    if (scopeEmail === 'anonymous') return null;
+    const raw = localStorage.getItem(`${MY_WORK_ROOM_CACHE_PREFIX}${scopeEmail}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as {
       roomId?: string;
@@ -308,6 +454,17 @@ export function readCachedMyWorkRoomMeta(): {
     /* ignore */
   }
   return null;
+}
+
+export function clearWorkRoomLocalCachesOnLogout(): void {
+  activeHostTunnelSession = null;
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.removeItem('ghosti_my_work_room_meta_v1');
+    sessionStorage.removeItem(WORK_INVITE_SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
 }
 
 export async function mountWorkSDriveNative(opts?: {
@@ -533,10 +690,21 @@ export async function uploadWorkFileToNativeSDrive(opts: {
   file: File;
   folderId?: string;
   author?: string;
+  roomId?: string;
 }): Promise<{ ok: boolean; relPath?: string; sDrivePath?: string; error?: string }> {
-  const url = resolveWorkApiUrl('/__work/upload');
-  if (!url) {
-    return { ok: false, error: 'ZCORE_NOT_CONNECTED' };
+  if (opts.file.size > 50 * 1024 * 1024) {
+    return { ok: false, error: 'EXCEEDS_50MB_LIMIT' };
+  }
+  const localUrl = resolveWorkApiUrl('/__work/upload');
+  const tunnel =
+    activeHostTunnelSession &&
+    (!opts.roomId || activeHostTunnelSession.roomId === opts.roomId) &&
+    activeHostTunnelSession.tunnelUrl
+      ? activeHostTunnelSession
+      : null;
+
+  if (!localUrl && !tunnel) {
+    return { ok: false, error: 'PC_ENGINE_OR_TUNNEL_NOT_CONNECTED' };
   }
   const base64Data = await new Promise<string>((resolve) => {
     const reader = new FileReader();
@@ -547,77 +715,198 @@ export async function uploadWorkFileToNativeSDrive(opts: {
   if (!base64Data) {
     return { ok: false, error: 'READ_FILE_FAILED' };
   }
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        fileName: opts.file.name,
-        folderId: opts.folderId && opts.folderId !== 'all' ? opts.folderId : '',
-        base64Data,
-        author: opts.author || '',
-      }),
-    });
-    return (await res.json()) as { ok: boolean; relPath?: string; sDrivePath?: string; error?: string };
-  } catch (err) {
-    return { ok: false, error: String(err) };
+
+  const bodyPayload = JSON.stringify({
+    fileName: opts.file.name,
+    folderId: opts.folderId && opts.folderId !== 'all' ? opts.folderId : '',
+    base64Data,
+    author: opts.author || '',
+  });
+
+  // 1) 내 PC 엔진 연결 시 로컬 S:\에 즉시 기록
+  let localResult: { ok: boolean; relPath?: string; sDrivePath?: string; error?: string } | null =
+    null;
+  if (localUrl) {
+    try {
+      const res = await fetch(localUrl, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: bodyPayload,
+      });
+      localResult = (await res.json()) as {
+        ok: boolean;
+        relPath?: string;
+        sDrivePath?: string;
+        error?: string;
+      };
+    } catch (err) {
+      localResult = { ok: false, error: String(err) };
+    }
   }
+
+  // 2) 외부 팀원(또는 모바일)이 대장 PC 직통 HTTPS 터널에 연결된 경우 대장 PC S:\에도 직접 전송 (서버 파일 저장 0 Byte)
+  if (tunnel) {
+    try {
+      const tRes = await fetch(`${tunnel.tunnelUrl}/__work/upload`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(tunnel.accessKey ? { 'X-Ghosti-Work-Key': tunnel.accessKey } : {}),
+        },
+        body: bodyPayload,
+      });
+      if (tRes.ok) {
+        const tj = (await tRes.json()) as {
+          ok: boolean;
+          relPath?: string;
+          sDrivePath?: string;
+          error?: string;
+        };
+        if (tj.ok) {
+          return localResult?.ok ? localResult : tj;
+        }
+      }
+    } catch {
+      /* fallback to localResult */
+    }
+  }
+
+  return localResult || { ok: false, error: 'UPLOAD_FAILED' };
 }
 
 /**
- * 512KB 초과 ~ 50MB 대용량 로컬 S:\ 파일들을 서명 업로드 URL을 통해 클라우드 금고에 자동 업로드합니다.
+ * [Zero-Cloud 직통 터널 조회] 외부 팀원(집·현장·LTE·모바일)이 대장 PC의 상시 아웃바운드 HTTPS 터널에서
+ * S:\ 파일 목록과 본문·표 미리보기를 대기시간 0초로 직접 가져옵니다 (서버 파일 저장 0 Byte).
  */
-async function pushLargeWorkBlobsIfNeeded(roomId: string, docs: WorkLoungeDocDto[]): Promise<boolean> {
-  if (!zCoreBridge.isConnected || !roomId || !hasAuthenticatedHubAccountSession()) {
-    return false;
+export async function fetchWorkFilesFromHostTunnel(
+  tunnelUrl?: string,
+  accessKey?: string
+): Promise<{
+  ok: boolean;
+  docs: WorkLoungeDocDto[];
+  deletedTombstones: WorkDeletedTombstoneMap;
+}> {
+  const cleanUrl = (tunnelUrl || activeHostTunnelSession?.tunnelUrl || '').trim().replace(/\/+$/, '');
+  const cleanKey = (accessKey ?? activeHostTunnelSession?.accessKey ?? '').trim();
+  if (!cleanUrl) {
+    return { ok: false, docs: [], deletedTombstones: {} };
   }
-  let uploadedAny = false;
-  for (const d of docs) {
-    if (d.inlineSyncBase64 || d.byteSize <= 512 * 1024 || d.byteSize > 50 * 1024 * 1024 || !d.sha256) {
-      continue;
-    }
-    const cacheKey = `${roomId}::${d.sha256}`;
-    if (uploadedCloudBlobKeys.has(cacheKey)) continue;
-
-    const signRes = await callGhostiServerBridge<{
-      alreadyUploaded?: boolean;
-      signedUploadUrl?: string;
-    }>('work_sign_upload', {
-      roomId,
-      sha256: d.sha256,
-      relPath: d.relPath,
+  try {
+    const res = await fetch(`${cleanUrl}/__work/files`, {
+      method: 'GET',
+      headers: cleanKey ? { 'X-Ghosti-Work-Key': cleanKey } : {},
     });
-
-    if (!signRes.ok) continue;
-    if (signRes.alreadyUploaded) {
-      uploadedCloudBlobKeys.add(cacheKey);
-      continue;
+    if (!res.ok) {
+      return { ok: false, docs: [], deletedTombstones: {} };
     }
-    if (!signRes.signedUploadUrl) continue;
-
-    try {
-      const pushRes = await fetch(getZCoreUrl('/__work/push-blob'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          relPath: d.relPath,
-          signedUploadUrl: signRes.signedUploadUrl,
-        }),
-      });
-      const pj = (await pushRes.json().catch(() => ({}))) as { ok?: boolean };
-      if (pj.ok) {
-        uploadedCloudBlobKeys.add(cacheKey);
-        uploadedAny = true;
-        await callGhostiServerBridge('work_mark_blob_uploaded', {
-          roomId,
-          relPath: d.relPath,
-        });
-      }
-    } catch {
-      /* retry next cycle */
+    const data = (await res.json()) as {
+      ok?: boolean;
+      files?: Array<Record<string, unknown>>;
+      localDeletedTombstones?: WorkDeletedTombstoneMap;
+    };
+    if (!data?.ok || !Array.isArray(data.files)) {
+      return { ok: false, docs: [], deletedTombstones: {} };
     }
+    return {
+      ok: true,
+      docs: data.files.map((rf, idx) => mapRawWorkFileToDto(rf, idx)),
+      deletedTombstones: normalizeWorkTombstoneMap(data.localDeletedTombstones),
+    };
+  } catch {
+    return { ok: false, docs: [], deletedTombstones: {} };
   }
-  return uploadedAny;
+}
+
+export async function fetchWorkLocksFromHostTunnel(
+  tunnelUrl?: string,
+  accessKey?: string
+): Promise<{
+  ok: boolean;
+  locks: Record<string, string | null>;
+}> {
+  const cleanUrl = (tunnelUrl || activeHostTunnelSession?.tunnelUrl || '').trim().replace(/\/+$/, '');
+  const cleanKey = (accessKey ?? activeHostTunnelSession?.accessKey ?? '').trim();
+  if (!cleanUrl) return { ok: false, locks: {} };
+  try {
+    const res = await fetch(`${cleanUrl}/__work/locks`, {
+      method: 'GET',
+      headers: cleanKey ? { 'X-Ghosti-Work-Key': cleanKey } : {},
+    });
+    if (!res.ok) return { ok: false, locks: {} };
+    const data = (await res.json()) as {
+      ok?: boolean;
+      locks?: Record<string, string | null>;
+    };
+    if (!data?.ok || !data.locks || typeof data.locks !== 'object') {
+      return { ok: false, locks: {} };
+    }
+    const cleanLocks: Record<string, string | null> = {};
+    for (const [k, v] of Object.entries(data.locks)) {
+      const sanitized = sanitizeWorkLockOwner(v, '팀원');
+      if (sanitized) cleanLocks[k] = sanitized;
+    }
+    return { ok: true, locks: cleanLocks };
+  } catch {
+    return { ok: false, locks: {} };
+  }
+}
+
+export async function ensureLocalHostOutboundTunnelAndRegister(
+  roomId: string,
+  extra?: {
+    masterServerName?: string;
+    backupServers?: WorkBackupServerNodeDto[];
+  }
+): Promise<{
+  ok: boolean;
+  status: string;
+  tunnelUrl: string;
+  accessKey: string;
+}> {
+  if (!zCoreBridge.isConnected || !roomId) {
+    return { ok: false, status: 'disconnected', tunnelUrl: '', accessKey: '' };
+  }
+  try {
+    const res = await fetch(getZCoreUrl('/__work/tunnel'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'start' }),
+    });
+    if (!res.ok) {
+      return { ok: false, status: 'error', tunnelUrl: '', accessKey: '' };
+    }
+    const data = (await res.json()) as {
+      ok?: boolean;
+      status?: string;
+      tunnelUrl?: string;
+      accessKey?: string;
+    };
+    const tunnelUrl = (data.tunnelUrl || '').trim().replace(/\/+$/, '');
+    const accessKey = (data.accessKey || '').trim();
+    if (tunnelUrl && hasAuthenticatedHubAccountSession()) {
+      setActiveHostTunnelSession(roomId, {
+        tunnelUrl,
+        accessKey,
+        masterServerName: extra?.masterServerName,
+        backupServers: extra?.backupServers,
+      });
+      await callGhostiServerBridge('work_register_tunnel', {
+        roomId,
+        tunnelUrl,
+        accessKey,
+        ...(extra?.masterServerName ? { masterServerName: extra.masterServerName } : {}),
+        ...(extra?.backupServers ? { backupServers: extra.backupServers } : {}),
+      });
+    }
+    return {
+      ok: Boolean(data.ok),
+      status: data.status || (tunnelUrl ? 'connected' : 'starting'),
+      tunnelUrl,
+      accessKey,
+    };
+  } catch {
+    return { ok: false, status: 'error', tunnelUrl: '', accessKey: '' };
+  }
 }
 
 export async function pullSyncRemoteWorkFilesToLocalSDrive(
@@ -631,9 +920,9 @@ export async function pullSyncRemoteWorkFilesToLocalSDrive(
   if (!zCoreBridge.isConnected) {
     return { ok: false, syncedCount: 0, removedCount: 0 };
   }
-  const tombstones = opts?.deletedTombstones || {};
+  const tombstones = normalizeWorkTombstoneMap(opts?.deletedTombstones);
   const inlineItems = remoteDocs
-    .filter((d) => Boolean(d.inlineSyncBase64) && !tombstones[d.relPath])
+    .filter((d) => Boolean(d.inlineSyncBase64) && !lookupWorkTombstone(tombstones, d.relPath))
     .map((d) => ({
       relPath: d.relPath,
       sha256: d.sha256,
@@ -641,6 +930,47 @@ export async function pullSyncRemoteWorkFilesToLocalSDrive(
       uploaderNickname: d.author,
       base64Data: d.inlineSyncBase64,
     }));
+
+  // 인라인 Base64가 없는 파일은 대장 PC의 상시 HTTPS 직통 터널(/__work/file-sync-payload)에서 직접 가져와 동기화 (서버 저장 0 Byte)
+  const tunnel = activeHostTunnelSession;
+  if (tunnel?.tunnelUrl) {
+    const needFetchDocs = remoteDocs.filter(
+      (d) =>
+        !d.inlineSyncBase64 &&
+        !lookupWorkTombstone(tombstones, d.relPath) &&
+        d.byteSize > 0 &&
+        d.byteSize <= 15 * 1024 * 1024
+    );
+    for (const d of needFetchDocs.slice(0, 15)) {
+      try {
+        const pRes = await fetch(
+          `${tunnel.tunnelUrl}/__work/file-sync-payload?relPath=${encodeURIComponent(d.relPath)}`,
+          {
+            method: 'GET',
+            headers: tunnel.accessKey ? { 'X-Ghosti-Work-Key': tunnel.accessKey } : {},
+          }
+        );
+        if (pRes.ok) {
+          const pj = (await pRes.json()) as {
+            ok?: boolean;
+            base64Data?: string;
+            mtime?: string;
+          };
+          if (pj?.ok && pj.base64Data) {
+            inlineItems.push({
+              relPath: d.relPath,
+              sha256: d.sha256,
+              fileMtimeIso: pj.mtime || d.fileMtimeIso,
+              uploaderNickname: d.author,
+              base64Data: pj.base64Data,
+            });
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+  }
 
   let syncedTotal = 0;
   let removedTotal = 0;
@@ -669,60 +999,14 @@ export async function pullSyncRemoteWorkFilesToLocalSDrive(
     }
   }
 
-  // 512KB 초과 대용량 업무 파일(1~50MB 엑셀·계약서 PDF·현장사진) 서명 다운로드 동기화
-  const roomId = opts?.roomId || '';
-  if (roomId) {
-    const largeDocs = remoteDocs.filter(
-      (d) =>
-        !d.inlineSyncBase64 &&
-        !tombstones[d.relPath] &&
-        Boolean(d.sha256) &&
-        (d.hasCloudBlob || d.byteSize > 512 * 1024)
-    );
-    for (const ld of largeDocs.slice(0, 20)) {
-      const dlSign = await callGhostiServerBridge<{ signedDownloadUrl?: string }>(
-        'work_sign_download',
-        {
-          roomId,
-          sha256: ld.sha256,
-          inviteToken: opts?.inviteToken || '',
-        },
-        { allowAnonymous: Boolean(opts?.inviteToken) }
-      );
-      if (!dlSign.ok || !dlSign.signedDownloadUrl) continue;
-      try {
-        const pr = await fetch(getZCoreUrl('/__work/pull-blob'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            relPath: ld.relPath,
-            signedDownloadUrl: dlSign.signedDownloadUrl,
-            sha256: ld.sha256,
-            fileMtimeIso: ld.fileMtimeIso,
-            uploaderNickname: ld.author,
-          }),
-        });
-        const pj = (await pr.json().catch(() => ({}))) as {
-          ok?: boolean;
-          alreadySynced?: boolean;
-          skippedNewerLocal?: boolean;
-        };
-        if (pj.ok && !pj.alreadySynced && !pj.skippedNewerLocal) {
-          syncedTotal += 1;
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
   return { ok: true, syncedCount: syncedTotal, removedCount: removedTotal };
 }
 
 export async function downloadWorkFileOriginal(
   doc: WorkLoungeDocDto,
-  opts?: { roomId?: string; inviteToken?: string }
+  _opts?: { roomId?: string; inviteToken?: string }
 ): Promise<boolean> {
+  // 1순위: 내 PC 엔진 연결 시 로컬 S:\에서 즉시 다운로드
   if (zCoreBridge.isConnected) {
     try {
       const res = await fetch(
@@ -744,21 +1028,35 @@ export async function downloadWorkFileOriginal(
       /* fallback below */
     }
   }
-  if (opts?.roomId && doc.sha256) {
-    const dlSign = await callGhostiServerBridge<{ signedDownloadUrl?: string }>(
-      'work_sign_download',
-      {
-        roomId: opts.roomId,
-        sha256: doc.sha256,
-        inviteToken: opts.inviteToken || '',
-      },
-      { allowAnonymous: Boolean(opts.inviteToken) }
-    );
-    if (dlSign.ok && dlSign.signedDownloadUrl) {
-      window.open(dlSign.signedDownloadUrl, '_blank', 'noopener,noreferrer');
-      return true;
+  // 2순위: 대장 PC 상시 아웃바운드 HTTPS 직통 터널에서 직접 스트리밍 다운로드 (서버 저장 0 Byte)
+  if (activeHostTunnelSession?.tunnelUrl) {
+    try {
+      const res = await fetch(
+        `${activeHostTunnelSession.tunnelUrl}/__work/download?relPath=${encodeURIComponent(doc.relPath)}`,
+        {
+          method: 'GET',
+          headers: activeHostTunnelSession.accessKey
+            ? { 'X-Ghosti-Work-Key': activeHostTunnelSession.accessKey }
+            : {},
+        }
+      );
+      if (res.ok) {
+        const blob = await res.blob();
+        const objUrl = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = objUrl;
+        a.download = doc.fileName;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.setTimeout(() => URL.revokeObjectURL(objUrl), 3000);
+        return true;
+      }
+    } catch {
+      /* fallback below */
     }
   }
+  // 3순위: Realtime Broadcast로 이미 수신된 경량 인라인 데이터
   if (doc.inlineSyncBase64) {
     try {
       const raw = doc.inlineSyncBase64.includes(',')
@@ -791,7 +1089,7 @@ export async function deleteWorkFileShared(opts: {
   relPath: string;
   actorNickname?: string;
   deletedAt?: string;
-}): Promise<{ ok: boolean; deletedTombstones?: WorkDeletedTombstoneMap }> {
+}): Promise<{ ok: boolean; deletedTombstones?: WorkDeletedTombstoneMap; message?: string }> {
   const cleanRel = (opts.relPath || '').replace(/\\/g, '/').replace(/^\/+/, '').trim();
   if (!cleanRel) return { ok: false };
   const deletedAt = opts.deletedAt || new Date().toISOString();
@@ -811,12 +1109,37 @@ export async function deleteWorkFileShared(opts: {
       });
       if (lRes.ok) {
         const lj = (await lRes.json().catch(() => ({}))) as {
+          ok?: boolean;
           localDeletedTombstones?: WorkDeletedTombstoneMap;
+          message?: string;
         };
+        if (lj?.ok === false) {
+          return { ok: false, message: lj.message };
+        }
         if (lj?.localDeletedTombstones) {
-          localTombstones = lj.localDeletedTombstones;
+          localTombstones = normalizeWorkTombstoneMap(lj.localDeletedTombstones);
         }
       }
+    } catch {
+      /* ignore */
+    }
+  } else if (activeHostTunnelSession?.tunnelUrl) {
+    // 외부 팀원이 삭제 권한으로 삭제 시 대장 PC 직통 터널을 통해 대장 PC의 OS [휴지통]으로 안전 이동
+    try {
+      await fetch(`${activeHostTunnelSession.tunnelUrl}/__work/delete-file`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(activeHostTunnelSession.accessKey
+            ? { 'X-Ghosti-Work-Key': activeHostTunnelSession.accessKey }
+            : {}),
+        },
+        body: JSON.stringify({
+          relPath: cleanRel,
+          actorNickname: actor,
+          deletedAt,
+        }),
+      });
     } catch {
       /* ignore */
     }
@@ -825,17 +1148,21 @@ export async function deleteWorkFileShared(opts: {
   const effectiveRoomId =
     (opts.roomId || '').trim() || readCachedMyWorkRoomMeta()?.roomId || '';
   if (effectiveRoomId && hasAuthenticatedHubAccountSession()) {
-    const srv = await callGhostiServerBridge<{ deletedTombstones?: WorkDeletedTombstoneMap }>(
-      'work_delete_file',
-      {
-        roomId: effectiveRoomId,
-        relPath: cleanRel,
-        actorNickname: actor,
-      }
-    );
+    const srv = await callGhostiServerBridge<{
+      deletedTombstones?: WorkDeletedTombstoneMap;
+      message?: string;
+    }>('work_delete_file', {
+      roomId: effectiveRoomId,
+      relPath: cleanRel,
+      actorNickname: actor,
+    });
     return {
       ok: Boolean(srv.ok),
-      deletedTombstones: { ...(localTombstones || {}), ...(srv.deletedTombstones || {}) },
+      message: srv.message,
+      deletedTombstones: normalizeWorkTombstoneMap({
+        ...(localTombstones || {}),
+        ...(srv.deletedTombstones || {}),
+      }),
     };
   }
   return { ok: true, deletedTombstones: localTombstones };
@@ -853,6 +1180,108 @@ export async function toggleHideWorkFileNative(relPath: string): Promise<boolean
   } catch {
     return false;
   }
+}
+
+export async function setWorkNightPowerSaveNative(
+  enabled: boolean,
+  turnOffMonitor = true
+): Promise<{
+  ok: boolean;
+  enabled: boolean;
+  monitorTurnedOff?: boolean;
+  message?: string;
+}> {
+  if (!zCoreBridge.isConnected) {
+    return {
+      ok: false,
+      enabled: false,
+      message: 'PC 엔진을 연결하면 퇴근 시 모니터만 끄고 S: 드라이브 직통 연결을 24시간 유지합니다.',
+    };
+  }
+  try {
+    const res = await fetch(getZCoreUrl('/__work/night-power-save'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ enabled, turnOffMonitor }),
+    });
+    if (!res.ok) return { ok: false, enabled: false };
+    return (await res.json()) as {
+      ok: boolean;
+      enabled: boolean;
+      monitorTurnedOff?: boolean;
+      message?: string;
+    };
+  } catch {
+    return { ok: false, enabled: false };
+  }
+}
+
+export async function manageWorkBackupServersNative(opts: {
+  subAction: 'get' | 'save' | 'sync-now';
+  masterServerName?: string;
+  backupServers?: WorkBackupServerNodeDto[];
+  localBackupServerDir?: string;
+}): Promise<{
+  ok: boolean;
+  masterServerName?: string;
+  backupServers?: WorkBackupServerNodeDto[];
+  localBackupServerDir?: string;
+  lastBackupSyncedAt?: string;
+  lastBackupSyncedCount?: number;
+  newlyCopiedCount?: number;
+}> {
+  if (!zCoreBridge.isConnected) {
+    return { ok: false };
+  }
+  try {
+    const res = await fetch(getZCoreUrl('/__work/backup-servers'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(opts),
+    });
+    if (!res.ok) return { ok: false };
+    return (await res.json()) as {
+      ok: boolean;
+      masterServerName?: string;
+      backupServers?: WorkBackupServerNodeDto[];
+      localBackupServerDir?: string;
+      lastBackupSyncedAt?: string;
+      lastBackupSyncedCount?: number;
+      newlyCopiedCount?: number;
+    };
+  } catch {
+    return { ok: false };
+  }
+}
+
+export async function updateWorkRoomMemberRoleOnServer(opts: {
+  roomId: string;
+  memberEmail: string;
+  role: 'editor' | 'viewer';
+}): Promise<boolean> {
+  if (!opts.roomId || !opts.memberEmail || !hasAuthenticatedHubAccountSession()) return false;
+  const res = await callGhostiServerBridge('work_set_member_role', opts);
+  return Boolean(res.ok);
+}
+
+export async function removeWorkRoomMemberOnServer(opts: {
+  roomId: string;
+  memberEmail?: string;
+}): Promise<boolean> {
+  if (!opts.roomId || !hasAuthenticatedHubAccountSession()) return false;
+  const res = await callGhostiServerBridge('work_remove_member', opts);
+  return Boolean(res.ok);
+}
+
+export async function revokeAndRotateWorkInviteOnServer(roomId: string): Promise<{
+  ok: boolean;
+  inviteToken?: string;
+}> {
+  if (!roomId || !hasAuthenticatedHubAccountSession()) return { ok: false };
+  const res = await callGhostiServerBridge<{ inviteToken?: string }>('work_revoke_invite', {
+    roomId,
+  });
+  return { ok: Boolean(res.ok && res.inviteToken), inviteToken: res.inviteToken };
 }
 
 export async function openGhostSearchForWorkSDrive(query?: string): Promise<boolean> {
@@ -873,29 +1302,38 @@ export async function openGhostSearchForWorkSDrive(query?: string): Promise<bool
   }
 }
 
-const LOCAL_WORK_PREVIEW_PREFIX = 'ghosti_work_preview_cache_v2::';
+const LOCAL_WORK_PREVIEW_PREFIX = 'ghosti_work_preview_cache_v3::';
 
 export async function cacheWorkRoomPreviewLocally(
   roomId: string,
-  docs: WorkLoungeDocDto[]
+  docs: WorkLoungeDocDto[],
+  accountEmail?: string
 ): Promise<void> {
   if (typeof window === 'undefined' || !roomId) return;
   try {
-    const slim = docs.slice(0, 60).map((d) => ({
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    const slim = docs.slice(0, 120).map((d) => ({
       ...d,
       inlineSyncBase64: undefined,
       imageBase64: d.imageBase64 && d.imageBase64.length <= 45_000 ? d.imageBase64 : undefined,
     }));
-    localStorage.setItem(`${LOCAL_WORK_PREVIEW_PREFIX}${roomId}`, JSON.stringify(slim));
+    localStorage.setItem(
+      `${LOCAL_WORK_PREVIEW_PREFIX}${scopeEmail}::${roomId}`,
+      JSON.stringify(slim)
+    );
   } catch {
     /* ignore quota */
   }
 }
 
-export async function loadCachedWorkRoomPreview(roomId: string): Promise<WorkLoungeDocDto[]> {
+export async function loadCachedWorkRoomPreview(
+  roomId: string,
+  accountEmail?: string
+): Promise<WorkLoungeDocDto[]> {
   if (typeof window === 'undefined' || !roomId) return [];
   try {
-    const raw = localStorage.getItem(`${LOCAL_WORK_PREVIEW_PREFIX}${roomId}`);
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    const raw = localStorage.getItem(`${LOCAL_WORK_PREVIEW_PREFIX}${scopeEmail}::${roomId}`);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     return Array.isArray(parsed) ? (parsed as WorkLoungeDocDto[]) : [];
@@ -908,26 +1346,29 @@ export async function fetchWorkRoomCloudPreview(inviteToken: string): Promise<{
   ok: boolean;
   roomTitle?: string;
   hostNickname?: string;
+  requiresLoginForDirectTunnel?: boolean;
   docs: WorkLoungeDocDto[];
   deletedTombstones: WorkDeletedTombstoneMap;
 }> {
   const cleanToken = (inviteToken || '').trim();
   if (!cleanToken) return { ok: false, docs: [], deletedTombstones: {} };
   const res = await callGhostiServerBridge<{
+    requiresLoginForDirectTunnel?: boolean;
     room?: { roomTitle?: string; hostNickname?: string };
     files?: Array<Record<string, unknown>>;
     deletedTombstones?: WorkDeletedTombstoneMap;
   }>('work_get_preview', { inviteToken: cleanToken }, { allowAnonymous: true });
 
-  if (!res.ok || !Array.isArray(res.files)) {
+  if (!res.ok) {
     return { ok: false, docs: [], deletedTombstones: {} };
   }
   return {
     ok: true,
     roomTitle: res.room?.roomTitle,
     hostNickname: res.room?.hostNickname,
-    docs: res.files.map((f, idx) => mapRawWorkFileToDto(f, idx)),
-    deletedTombstones: res.deletedTombstones || {},
+    requiresLoginForDirectTunnel: Boolean(res.requiresLoginForDirectTunnel),
+    docs: Array.isArray(res.files) ? res.files.map((f, idx) => mapRawWorkFileToDto(f, idx)) : [],
+    deletedTombstones: normalizeWorkTombstoneMap(res.deletedTombstones),
   };
 }
 
@@ -936,24 +1377,63 @@ export async function fetchWorkRoomAuthedState(
   inviteToken?: string
 ): Promise<{
   ok: boolean;
+  role?: 'host' | 'editor' | 'viewer';
+  seatLimit?: number;
+  members?: WorkRoomServerMemberDto[];
+  hostTunnel?: WorkHostTunnelEndpointDto;
   docs: WorkLoungeDocDto[];
   deletedTombstones: WorkDeletedTombstoneMap;
+  reason?: string;
+  message?: string;
 }> {
   if (!roomId || !hasAuthenticatedHubAccountSession()) {
     return { ok: false, docs: [], deletedTombstones: {} };
   }
   const res = await callGhostiServerBridge<{
+    role?: 'host' | 'editor' | 'viewer';
+    seatLimit?: number;
+    members?: WorkRoomServerMemberDto[];
+    hostTunnel?: WorkHostTunnelEndpointDto;
     files?: Array<Record<string, unknown>>;
     deletedTombstones?: WorkDeletedTombstoneMap;
+    reason?: string;
+    message?: string;
   }>('work_get_room_state', { roomId, inviteToken: inviteToken || '' });
 
-  if (!res.ok || !Array.isArray(res.files)) {
-    return { ok: false, docs: [], deletedTombstones: {} };
+  if (!res.ok) {
+    return {
+      ok: false,
+      docs: [],
+      deletedTombstones: {},
+      reason: res.reason,
+      message: res.message,
+    };
   }
+
+  const tombstones = normalizeWorkTombstoneMap(res.deletedTombstones);
+  let tunnelDocs: WorkLoungeDocDto[] = [];
+  if (res.hostTunnel?.tunnelUrl) {
+    setActiveHostTunnelSession(roomId, res.hostTunnel);
+    // 내 PC가 대장 PC가 아닌 경우(외부 팀원/모바일), 대장 PC 직통 HTTPS 터널에서 실시간 S:\ 목록을 0초 직결로 가져옴
+    if (!zCoreBridge.isConnected || res.role !== 'host') {
+      const fromTunnel = await fetchWorkFilesFromHostTunnel(
+        res.hostTunnel.tunnelUrl,
+        res.hostTunnel.accessKey
+      );
+      if (fromTunnel.ok) {
+        tunnelDocs = fromTunnel.docs;
+      }
+    }
+  }
+
   return {
     ok: true,
-    docs: res.files.map((f, idx) => mapRawWorkFileToDto(f, idx)),
-    deletedTombstones: res.deletedTombstones || {},
+    role: res.role,
+    seatLimit: res.seatLimit,
+    members: res.members,
+    hostTunnel: res.hostTunnel,
+    docs: tunnelDocs,
+    deletedTombstones: tombstones,
   };
 }
 
@@ -967,26 +1447,24 @@ export async function upsertWorkFilesToSupabase(opts: {
   deletedTombstones?: WorkDeletedTombstoneMap;
   uploadedLargeBlob?: boolean;
 }> {
-  if (!opts.roomId || opts.docs.length === 0 || !hasAuthenticatedHubAccountSession()) {
+  // [Zero-Cloud 원칙]: 서버에는 파일·본문을 업로드하지 않으며, 대장 PC의 상시 HTTPS 직통 터널과 Tombstone 상태만 동기화합니다.
+  if (!opts.roomId || !hasAuthenticatedHubAccountSession()) {
     return { ok: false };
   }
+  await ensureLocalHostOutboundTunnelAndRegister(opts.roomId);
   const res = await callGhostiServerBridge<{
-    files?: Array<Record<string, unknown>>;
     deletedTombstones?: WorkDeletedTombstoneMap;
-  }>('work_upsert_files', {
+    hostTunnel?: WorkHostTunnelEndpointDto;
+  }>('work_get_room_state', {
     roomId: opts.roomId,
-    actorNickname: opts.actorNickname,
-    docs: opts.docs.slice(0, 120),
   });
-
-  const uploadedLargeBlob = await pushLargeWorkBlobsIfNeeded(opts.roomId, opts.docs);
+  if (res.ok && res.hostTunnel?.tunnelUrl) {
+    setActiveHostTunnelSession(opts.roomId, res.hostTunnel);
+  }
   return {
     ok: Boolean(res.ok),
-    mergedDocs: Array.isArray(res.files)
-      ? res.files.map((f, idx) => mapRawWorkFileToDto(f, idx))
-      : undefined,
-    deletedTombstones: res.deletedTombstones,
-    uploadedLargeBlob,
+    deletedTombstones: normalizeWorkTombstoneMap(res.deletedTombstones),
+    uploadedLargeBlob: false,
   };
 }
 
@@ -1000,30 +1478,31 @@ export function connectWorkRoomRealtimeChannel(opts: {
   onRemoteFileDeleted: (relPath: string, deletedAt: string) => void;
   onRemoteLockMap: (locksByRelPath: Record<string, string | null>) => void;
   onPresenceMembers: (members: WorkRoomPresenceMember[]) => void;
+  onRemoteTunnelEndpoint?: (tunnel: WorkHostTunnelEndpointDto) => void;
 }): {
   broadcastSnapshot: (docs: WorkLoungeDocDto[]) => void;
   broadcastFileDeleted: (relPath: string, deletedAt: string) => void;
   broadcastLocks: (locksByRelPath: Record<string, string | null>) => void;
+  broadcastTunnelEndpoint: (tunnel: WorkHostTunnelEndpointDto) => void;
   dispose: () => void;
 } {
   let channel: RealtimeChannel | null = null;
   let disposed = false;
 
   const stripHeavyPayload = (docs: WorkLoungeDocDto[]) =>
-    docs.slice(0, 80).map((d) => ({
+    docs.slice(0, 120).map((d) => ({
       ...d,
-      // Realtime WebSocket 프레임 한도 보호: 120KB 초과 Base64는 제외하고 서명 다운로드(hasCloudBlob)로 안전 수신
+      // Realtime Broadcast 메모리 패스스루(서버 DB 저장 0 Byte): 120KB 이하 경량 파일만 인라인 패스스루하고 대용량은 대장 PC 직통 터널에서 수신
       inlineSyncBase64:
         d.inlineSyncBase64 && d.inlineSyncBase64.length <= 120_000
           ? d.inlineSyncBase64
           : undefined,
-      hasCloudBlob: Boolean(d.hasCloudBlob || d.byteSize > 512 * 1024),
     }));
 
   const start = async () => {
-    const ok = hasAuthenticatedHubAccountSession()
-      ? await ensureGhostiAuthedSupabaseClient()
-      : await ensureGhostiPublicSupabaseClient();
+    // 비로그인 상태에서는 업무방 Realtime 채널 연결을 허용하지 않음 (Fail-Closed)
+    if (!hasAuthenticatedHubAccountSession()) return;
+    const ok = await ensureGhostiAuthedSupabaseClient();
     if (!ok || disposed || !supabase) return;
     const sbClient = supabase;
 
@@ -1056,6 +1535,17 @@ export function connectWorkRoomRealtimeChannel(opts: {
             payload: { sender: opts.peerId, docs: stripHeavyPayload(curDocs) },
           });
         }
+        if (
+          activeHostTunnelSession &&
+          activeHostTunnelSession.roomId === opts.roomId &&
+          activeHostTunnelSession.tunnelUrl
+        ) {
+          void channel.send({
+            type: 'broadcast',
+            event: 'WORK_TUNNEL_ENDPOINT',
+            payload: activeHostTunnelSession,
+          });
+        }
       })
       .on('broadcast', { event: 'WORK_SNAPSHOT' }, ({ payload }) => {
         if (disposed || !payload?.docs || !Array.isArray(payload.docs)) return;
@@ -1071,6 +1561,18 @@ export function connectWorkRoomRealtimeChannel(opts: {
       .on('broadcast', { event: 'WORK_LOCK_UPDATE' }, ({ payload }) => {
         if (disposed || !payload?.locks) return;
         opts.onRemoteLockMap(payload.locks as Record<string, string | null>);
+      })
+      .on('broadcast', { event: 'WORK_TUNNEL_ENDPOINT' }, ({ payload }) => {
+        if (disposed || !payload?.tunnelUrl) return;
+        const ep: WorkHostTunnelEndpointDto = {
+          tunnelUrl: String(payload.tunnelUrl),
+          accessKey: String(payload.accessKey || ''),
+          updatedAt: new Date().toISOString(),
+          masterServerName: payload.masterServerName,
+          backupServers: payload.backupServers,
+        };
+        setActiveHostTunnelSession(opts.roomId, ep);
+        opts.onRemoteTunnelEndpoint?.(ep);
       })
       .subscribe(async (status) => {
         if (status !== 'SUBSCRIBED' || !channel || disposed) return;
@@ -1122,6 +1624,14 @@ export function connectWorkRoomRealtimeChannel(opts: {
         type: 'broadcast',
         event: 'WORK_LOCK_UPDATE',
         payload: { sender: opts.peerId, locks: locksByRelPath },
+      });
+    },
+    broadcastTunnelEndpoint: (tunnel: WorkHostTunnelEndpointDto) => {
+      if (!channel || disposed) return;
+      void channel.send({
+        type: 'broadcast',
+        event: 'WORK_TUNNEL_ENDPOINT',
+        payload: tunnel,
       });
     },
     dispose: () => {

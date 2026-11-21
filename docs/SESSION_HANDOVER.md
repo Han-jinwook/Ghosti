@@ -2,6 +2,26 @@
 
 ---
 
+## 🕒 [2026-11-21 18:30 KST `3귀신` 진행 기록 (`6. 💼 업무 공유 (S: 드라이브)` 전수검수 완결 · 24시간 대장 PC 상시 아웃바운드 HTTPS 직통 터널(`서버 파일 저장 0 Byte`) · 과금 3중 게이트/정원 강제 · `🛡️ 백업 PC(예비 서버)` · `🌙 야간 초절전` · `Z-Core v2.7.1`)]
+
+- **세션 제목**: `업무공유S전수검수완결`
+1. **`📸 사진 공유방` vs `💼 업무 공유방` 아키텍처 명확 분리 & `Zero-Cloud(서버 파일·본문 저장 0 Byte)` 복원 (`workAndDeviceBridgeOps.mjs`, `hub-supabase-bridge.mjs`, `workRoomSyncService.ts`, `plugin_paid_work_sdrive.py`, `Z-Core v2.7.1`)**:
+   - 이전 세션이 Supabase Storage(`ghosti-work-vault`)에 업무 문서 원본(Base64/50MB 블롭)과 본문을 저장하던 구형 코드(`work_sign_upload`, `work_mark_blob_uploaded`, `work_sign_download`, `handlePublicWorkSignDownloadAction`)를 전면 폐기하고, **24시간 켜두는 사내 대장 PC의 상시 아웃바운드 HTTPS 직통 터널(`Outbound 443` + 방 전용 256-bit `X-Ghosti-Work-Key` 인증)**로 전국 어디서나(집·현장·LTE) 방화벽 막힘·폴백 대기(0초) 없이 `S:\`에 직결되도록 구현.
+   - 비로그인 공개 프리뷰(`work_get_preview`)에서 업로더 이메일·원본 Base64·본문 12,000자·로컬 경로 노출을 100% 차단(방 제목·방장 안내만 반환 후 로그인 시 직통 터널 연결).
+2. **과금 누수 0% 3중 권한 게이트 · 업무 전용 30일 Opt-in 무료체험 · 만료 시 `S:` 자동 해제(원본 100% 보존) · 정원(`5/20/50인`) 강제 (`GhostiSubscriptionCheckoutModal.tsx`, `deviceIntegrationService.ts`, `workAndDeviceBridgeOps.mjs`, `WorkLoungeB2BHub.tsx`)**:
+   - `entitlement_v1.json`에 업무 공유 전용 30일 Opt-in 체험(`workTrialOptInStartedAt`, `workTrialActive`, `workTrialExpired`, `workSeatLimit`, `workSubscriptionUnlocked`)을 분리하고 구독 결제창(`GhostiSubscriptionCheckoutModal`) 및 업무 공유 상단 배너에 연결.
+   - 서버 `assertWorkOwnerUnlocked`(`402`) + 웹 화면 Fail-Closed 잠금 배너 + 로컬 PC 엔진(`/__work/entitlement`) 3중 게이트 적용. **체험/구독 만료 시(멀린님 확정 안 `가`) 탐색기에서 `S:` 드라이브 연결과 직통 터널을 자동 해제하되, 업무 폴더 내 원본 파일은 단 1개도 삭제하지 않고 100% 보존**.
+   - `work_accept_invite`에서 티어별 정원(`소호/체험 5인`, `소기업 20인`, `중소기업 50인`) 및 초대 토큰 `used_count < max_uses`를 서버 강제(`403 WORK_SEAT_LIMIT_EXCEEDED`), 결제 완료 시 `ghosti_lounge_rooms.pricing_plan` 동시 갱신, 멤버별 권한(`✏️ 편집·업로드 허용` / `👁️ 읽기·다운로드 전용`) 및 `[강퇴]`/`[🚪 이 업무방 나가기]` 서버 DB 실저장 연동.
+3. **PC 엔진 데이터 유실·보안 결함 근본 해결 & 3-카피 동기화 (`plugin_paid_work_sdrive.py`, `merlin_z_core_daemon.py`, `plugin_ghosti_os.py`, `Z-Core v2.7.1`)**:
+   - **구 `500개 파일 / 깊이 4단계` 상한 및 휴지통 실패 시 `target.unlink()` 영구삭제 폴백 영구 폐지**: 개수 제한 없는 1패스 스캔 + 백그라운드 저우선순위 미리보기 워커 + `knownSig` 변경 시에만 목록 전송 + 스캔 불완전 시 삭제 오판정 0건 + `SHFileOperationW`(`FOF_ALLOWUNDO | FOF_WANTNUKEWARNING`) 실패 시 원본 보존.
+   - **`subst S:` 기존 연결 보호**: 회사 PC에서 `S:`가 이미 다른 연결(사내 NAS 등)에 사용 중이면 절대 강제 해제(`/d`)하지 않고 비어 있는 다음 드라이브 문자로 안전 폴백.
+   - **보안 강화**: `_validate_custom_work_target`으로 드라이브 루트·`Windows`·`Program Files`·`AppData` 등 시스템/민감 폴더 지정 원천 차단, 데몬 Origin 검사에서 부분 문자열 `.netlify.app` 및 사설 IP(`192.168.*`/`10.*`) 허용을 제거하고 공식 사이트 exact/deploy-preview 화이트리스트로 제한, 외부 터널 요청은 허용된 `/__work/*` 외 전 경로 차단 및 `X-Ghosti-Work-Key` 필수 검증, `core_power_agent/plugins` 누락 복구(3-카피 0줄 차이 동기화), 순수 개인 모드(`S:` 미마운트)에서 사용자 지정 업무 폴더 물리 격리.
+4. **`🛡️ 백업 PC(예비 서버 1·2호)` · `🌙 야간·퇴근 초절전` 실구현 & 구형 문구·가짜 UI·2웨이브 정리**:
+   - `🛡️ 백업 PC(예비 서버 1·2호)` 설정 영구 저장 및 실제 증분 백업(`subAction: 'sync-now'`), `🌙 야간·퇴근 초절전 모드` Windows `SetThreadExecutionState` + `SC_MONITORPOWER` 실제 연동.
+   - `PaidWorkSharePane.tsx`의 사진방 대기실/개인 싱크 오노출 제거, 가짜 `[잠금 시뮬레이션]`/`[본인 업로드 파일 관리]`/하드코딩 검색어(`철거 단가 4,850,000원`)/구 명칭(`Z코어`, `미러링`, `1,900원`) 전수 제거, 삭제 직후 `[↩️ 1초 실행 취소(Undo)]` 및 `[👁️ 읽기 모드로 열기]` 정합화, 모바일 `[📤 업무 파일 추가]` 허용, 계정별 로컬 캐시(`${email}::${roomId}`) 격리, 2웨이브(`HostThreeBodyControlPanel`·랜섬웨어 서킷브레이커) 프론트 비노출 주석 보존.
+
+---
+
 ## 🕒 [2026-11-21 14:48 KST `2귀신` 진행 기록 (`2. 👻 귀신검색` 전수 점검 · 귀신창 평상시 2회 복사 무소환 자동연사 폐지 · `Z-Core v2.7.0`)]
 
 - **세션 제목**: `귀신창2회복사자동연사폐지`

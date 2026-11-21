@@ -15,7 +15,6 @@ import crypto from 'node:crypto';
 import {
   handleAuthedWorkAndDeviceAction,
   handlePublicWorkPreviewAction,
-  handlePublicWorkSignDownloadAction,
 } from './lib/workAndDeviceBridgeOps.mjs';
 
 const HUB_URL = process.env.MERLIN_HUB_URL || 'https://os.sundreamer.app';
@@ -237,21 +236,12 @@ export default async (req) => {
 
   const reqAction = typeof body?.action === 'string' ? body.action.trim() : '';
 
-  // 비로그인 상태에서도 유효한 초대 토큰(inviteToken)만으로 열람·다운로드 가능한 업무방 24시간 프리뷰
+  // 비로그인 초대 링크 클릭 시 방 제목·방장 안내만 반환 (원본·본문·이메일은 절대 비노출, 로그인 수락 후 대장 PC 터널 직결)
   if (reqAction === 'work_get_preview') {
     const out = await handlePublicWorkPreviewAction({
       supabaseUrl,
       serviceKey,
       inviteToken: body?.inviteToken || '',
-    });
-    return json(out.status, out.body);
-  }
-  if (reqAction === 'work_sign_download' && body?.inviteToken) {
-    const out = await handlePublicWorkSignDownloadAction({
-      supabaseUrl,
-      serviceKey,
-      inviteToken: body.inviteToken,
-      sha256: body.sha256 || '',
     });
     return json(out.status, out.body);
   }

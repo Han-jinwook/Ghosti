@@ -4509,46 +4509,5 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   }
 
   // work ('💼 업무 공유 드라이브 (S:)')
-  return (
-    <div className="p-6 rounded-2xl bg-[#18181B] border border-cyan-400/45 flex flex-col gap-4">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <span className="px-2.5 py-0.5 rounded-md bg-cyan-400 text-zinc-950 font-label-sm text-[11px] font-extrabold w-fit">
-            💼 업무 공유 드라이브 (S:)
-          </span>
-          <h2 className="font-headline-sm text-[18px] text-white font-bold mt-0.5">
-            사무실 PC 업무 폴더 &amp; 탐색기(S:) 연동
-          </h2>
-        </div>
-        <div className="flex flex-wrap items-center gap-2">
-          {!isStoreAppMode && (
-            <>
-              <button
-                type="button"
-                onClick={() => activatePricingPlan('personal_sub_3900')}
-                className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12px] font-bold cursor-pointer"
-              >
-                💻 1인 멀티PC 월 1,900원
-              </button>
-              <button
-                type="button"
-                onClick={() => activatePricingPlan('work_soho_9900')}
-                className="px-3.5 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-label-sm text-[12px] font-extrabold cursor-pointer"
-              >
-                🏢 소호(~5인) 월 9,900원
-              </button>
-              <button
-                type="button"
-                onClick={() => activatePricingPlan('work_biz_19900')}
-                className="px-3.5 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-cyan-400/50 text-cyan-300 font-label-sm text-[12px] font-extrabold cursor-pointer"
-              >
-                🏢 소기업(~20인) 월 19,000원 · 중소(~50인) 29,000원
-              </button>
-            </>
-          )}
-        </div>
-      </div>
-      <WorkLoungeB2BHub />
-    </div>
-  );
+  return <WorkLoungeB2BHub />;
 };

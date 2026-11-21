@@ -713,7 +713,7 @@ export const PricingModal: React.FC = () => {
                       (연간 결제 시 99,000원 · 월 8,250원꼴)
                     </span>
                     <p className="font-body-sm text-[11.5px] text-zinc-300 mt-1">
-                      5인 이하 사무실 · S: 드라이브 + 문서/계약서 1초 본문 검색 + 다중 백업 PC 미러링
+                      5인 이하 사무실 · S: 드라이브 + 문서/계약서 1초 본문 검색 + 🛡️ 백업 PC(예비 서버)
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-1.5">
@@ -744,10 +744,10 @@ export const PricingModal: React.FC = () => {
                       월 19,000원
                     </div>
                     <span className="font-label-mono text-[11px] text-amber-300 font-bold">
-                      (연간 결제 시 190,000원 · 월 15,830원꼴)
+                      (연간 결제 시 190,000원 · 월 15,833원꼴)
                     </span>
                     <p className="font-body-sm text-[11.5px] text-zinc-300 mt-1">
-                      20인 이하 기업 · 부서별 S: 폴더 권한 + 다중 백업 PC 실시간 미러링
+                      20인 이하 기업 · 부서별 S: 폴더 권한 + 🛡️ 백업 PC(예비 서버 1·2호)
                     </p>
                   </div>
                   <div className="grid grid-cols-2 gap-1.5">
@@ -778,7 +778,7 @@ export const PricingModal: React.FC = () => {
                       월 29,000원
                     </div>
                     <span className="font-label-mono text-[11px] text-amber-300 font-bold">
-                      (연간 결제 시 290,000원 · 월 24,160원꼴)
+                      (연간 결제 시 290,000원 · 월 24,166원꼴)
                     </span>
                     <p className="font-body-sm text-[11.5px] text-zinc-300 mt-1">
                       50인 이하 전사 문서·도면 통합 금고 (※ 50인 이상은 별도 협의)

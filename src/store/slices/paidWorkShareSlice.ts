@@ -7,7 +7,9 @@ export interface PaidWorkShareSlice {
   workSDriveMountLetter: string;
   workTeamSnippetsSyncedAt: string | null;
   setWorkSDriveMounted: (mounted: boolean, letter?: string) => void;
-  activateWorkSharePlanShortcut: (planId: 'work_soho_9900' | 'work_biz_19900') => void;
+  activateWorkSharePlanShortcut: (
+    planId: 'work_soho_9900' | 'work_biz_19000' | 'work_pro_29000' | 'work_biz_19900'
+  ) => void;
 }
 
 export const createPaidWorkShareSlice: StateCreator<SaySeeStore, [], [], PaidWorkShareSlice> = (set, get) => ({
