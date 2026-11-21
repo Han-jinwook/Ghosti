@@ -2070,10 +2070,10 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
       /* ignore */
     }
 
-    const restoredCnt = Math.max(0, Number(restoreRes.restoredCount ?? 0));
+    const restoredCnt = Math.max(0, Number(restoreRes.totalRestoredCount ?? restoreRes.restoredCount ?? 0));
     const msgKo =
       `↩️ **[은행·관공서 보안프로그램 원래 설정 복구 완료]**\n` +
-      (restoreRes.message ||
+      (restoreRes.toastMessage || restoreRes.message ||
         `잠재워 두었던 보안 서비스 **${restoredCnt}개**를 모두 설치 당시의 원래 시작 설정으로 복구하고 자동 절전을 해제했습니다.`);
     speak('은행 보안프로그램을 모두 원래 설정으로 복구했습니다.');
     return reply(sourceTab, msgKo, {

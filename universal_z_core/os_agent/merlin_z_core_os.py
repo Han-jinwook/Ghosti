@@ -52,6 +52,18 @@ COMMITS_FILE = SYSTEM_GIT_DIR / "commits_history.json"
 GUI_PAYLOAD_FILE = MERLIN_DIR / "gui_task_payload.json"
 OVERLAY_PID_FILE = MERLIN_DIR / "overlay_worker.pid"
 
+# [기획 9.2 방어 2] 사내 DRM·백신은 어떤 정리 경로에서도 절대 건드리지 않는다 (프로세스 종료·서비스 비활성·자동실행 삭제 전부 제외)
+CORPORATE_DRM_NEVER_TOUCH_TOKENS = (
+    "maeps", "markany", "fasoo", "softcamp", "drm", "v3lite", "ahnlab", "alyac", "estsoft",
+    "msmpeng", "windefend", "securityhealth", "mpssvc", "wscsvc",
+)
+
+
+def _is_never_touch_name(*names: str) -> bool:
+    low = " ".join(str(n or "") for n in names).lower()
+    return any(tok in low for tok in CORPORATE_DRM_NEVER_TOUCH_TOKENS)
+
+
 KNOWN_SECURITY_PLUGIN_KEYWORDS = {
     "astx": "미사용 웹 보안 서비스 (온라인 트랜잭션 보호)",
     "touchen": "미사용 웹 보안 서비스 (키보드·방화벽 보안)",
@@ -1947,6 +1959,7 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
         disabled_startups: List[str] = []
         reg_restore_ops: List[Dict[str, Any]] = []
         disabled_tasks_and_services: List[str] = []
+        svc_orig_start: Dict[str, str] = {}  # [정직 원복] 서비스별 원래 시작 유형 (auto/delayed-auto/demand)
         cpu_before = int(pc_state.get("spoolerAndSecurity", {}).get("cpuLoadPercent") or 0)
 
         # [1단계: 부활 원천 봉쇄 — 작업 스케줄러(Scheduled Tasks) & 윈도우 서비스(Services) 선제 비활성화]
@@ -1997,10 +2010,10 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
             except Exception:
                 pass
 
-            kill_keywords = set(KNOWN_SECURITY_PLUGIN_KEYWORDS.keys())
+            kill_keywords = {k for k in KNOWN_SECURITY_PLUGIN_KEYWORDS.keys() if not _is_never_touch_name(k)}
             for sp in (sec_plugins or []):
                 kw = str(sp.get("keyword") or "").strip().lower()
-                if kw and kw not in PROTECTED_PROCESS_NAMES:
+                if kw and kw not in PROTECTED_PROCESS_NAMES and not _is_never_touch_name(kw, sp.get("label")):
                     kill_keywords.add(kw)
                     stopped_names.append(str(sp.get("label") or kw))
 
@@ -2030,6 +2043,8 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
                     exe_low = exe_name.lower()
                     if not exe_low or exe_low in protected_exes or any(t in exe_low for t in safe_family_proc_tokens):
                         continue
+                    if _is_never_touch_name(exe_low):
+                        continue
                     stem_low = exe_low[:-4] if exe_low.endswith(".exe") else exe_low
                     if exe_low in revival_exe_lower or any(len(k) >= 3 and k in stem_low for k in kill_keywords):
                         matched_running_exes.add(exe_name)
@@ -2052,7 +2067,7 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
                     s_ln = ln.strip()
                     if s_ln.startswith("SERVICE_NAME:") or s_ln.startswith("서비스 이름:"):
                         svc_name = s_ln.split(":", 1)[1].strip()
-                        if svc_name and svc_re.search(svc_name) and not svc_safe_re.search(svc_name):
+                        if svc_name and svc_re.search(svc_name) and not svc_safe_re.search(svc_name) and not _is_never_touch_name(svc_name):
                             matched_services.append(svc_name)
                             disabled_tasks_and_services.append(f"서비스:{svc_name}")
             except Exception:
@@ -2068,6 +2083,25 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
                 except OSError:
                     existing_tasks.append(tn)
 
+            # [정직 원복] 서비스를 disabled로 바꾸기 전에 원래 시작 유형을 먼저 기록 (되돌릴 때 그대로 복구)
+            for _sn in set(matched_services):
+                try:
+                    _qc = subprocess.run(
+                        ["sc", "qc", _sn], capture_output=True, text=True, encoding="cp949",
+                        errors="ignore", timeout=1.5, creationflags=0x08000000,
+                    )
+                    for _ln in (_qc.stdout or "").splitlines():
+                        _u = _ln.upper()
+                        if "START_TYPE" in _u or "시작 유형" in _ln:
+                            if "DELAYED" in _u or "지연" in _ln:
+                                svc_orig_start[_sn] = "delayed-auto"
+                            elif "AUTO_START" in _u or re.search(r":\s*2\b", _ln):
+                                svc_orig_start[_sn] = "auto"
+                            elif "DEMAND_START" in _u or re.search(r":\s*3\b", _ln):
+                                svc_orig_start[_sn] = "demand"
+                            break
+                except Exception:
+                    pass
             batch_lines = ["@echo off"]
             for tn in existing_tasks:
                 batch_lines.append(f'schtasks /End /TN "\\{tn}" >nul 2>&1')
@@ -2121,7 +2155,7 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
                                         vname, vval, _ = winreg.EnumValue(rk_ro, idx)
                                         idx += 1
                                         comb = f"{vname} {vval}".lower()
-                                        if any(p in comb for p in safe_run_tokens):
+                                        if any(p in comb for p in safe_run_tokens) or _is_never_touch_name(comb):
                                             continue
                                         candidates_ro.append((str(vname), str(vval)))
                                     except OSError:
@@ -2220,9 +2254,13 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
                     "rolledBack": False,
                 })
             for d_name in disabled_tasks_and_services:
+                _kind_d, _, _target_d = d_name.partition(":")
                 ops_for_bb.append({
                     "op": "ADWARE_TASK_DISABLE",
                     "name": d_name,
+                    "targetKind": "service" if _kind_d == "서비스" else "task",
+                    "target": _target_d or d_name,
+                    "origStart": svc_orig_start.get(_target_d, ""),
                     "fromPath": "작업 스케줄러/서비스 자동부활",
                     "toPath": "사용 안 함(Disabled) 차단",
                     "rolledBack": False,

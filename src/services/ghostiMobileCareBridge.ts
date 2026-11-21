@@ -409,6 +409,17 @@ export async function requestNativeSystemPhotoTrash(
         canceled: false,
       };
     }
+    // [정직 보고] 네이티브가 명시적으로 실패(ok:false)를 돌려줬다면 성공으로 둔갑시키지 않습니다.
+    if (res && res.ok === false) {
+      return {
+        ok: false,
+        action,
+        doneIds: [],
+        matchedMediaStoreCount: res.matchedMediaStoreCount || 0,
+        canceled: false,
+        error: res.error || 'NATIVE_TRASH_FAILED',
+      };
+    }
   } catch {
     lastNativeTrashDialogCompletedAt = Date.now();
     // 구버전 네이티브 래퍼이거나 미지원 기기일 때는 앱 내 정리 보관함 이동으로 안전하게 폴백

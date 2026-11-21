@@ -957,20 +957,73 @@ def rollback_restore_point(restore_id: str, user_rollback_text: str = "") -> Dic
                         op["rolledBack"] = True
                     else:
                         skipped.append(name)
-                elif kind in ("REGISTRY_RUN_RESTORE", "ADWARE_PROCESS_STOP", "ADWARE_TASK_DISABLE", "ADWARE_CLEAN_CHECK"):
-                    if kind == "REGISTRY_RUN_RESTORE" and os.name == "nt":
+                elif kind == "REGISTRY_RUN_RESTORE":
+                    # [정직 원복] 실제로 값이 다시 써진 경우에만 '복원'으로 센다
+                    ok_reg = False
+                    err_reg = ""
+                    if os.name == "nt":
                         try:
                             import winreg as _wr
                             tag = str(op.get("tag") or "HKCU")
                             r_sub = str(op.get("runSubkey") or r"Software\Microsoft\Windows\CurrentVersion\Run")
                             cmd_v = str(op.get("command") or "")
                             r_root = _wr.HKEY_CURRENT_USER if tag == "HKCU" else _wr.HKEY_LOCAL_MACHINE
-                            if cmd_v:
+                            if not cmd_v:
+                                err_reg = "원본 명령 기록 없음"
+                            else:
                                 with _wr.OpenKey(r_root, r_sub, 0, _wr.KEY_WRITE) as rk:
                                     _wr.SetValueEx(rk, name, 0, _wr.REG_SZ, cmd_v)
-                        except Exception:
-                            pass
-                    restored.append(name)
+                                ok_reg = True
+                        except Exception as e_reg:
+                            err_reg = str(e_reg)
+                    else:
+                        err_reg = "Windows 전용"
+                    if ok_reg:
+                        restored.append(name)
+                        op["rolledBack"] = True
+                    else:
+                        skipped.append(f"{name} (자동실행 복구 실패: {err_reg})")
+                elif kind == "ADWARE_TASK_DISABLE":
+                    t_kind = str(op.get("targetKind") or "")
+                    target = str(op.get("target") or "").strip()
+                    ok_task = False
+                    err_task = ""
+                    if os.name == "nt" and target and t_kind in ("service", "task"):
+                        try:
+                            if t_kind == "service":
+                                orig = str(op.get("origStart") or "").strip()
+                                if orig in ("auto", "delayed-auto", "demand"):
+                                    r1 = subprocess.run(["sc", "config", target, "start=", orig],
+                                                        capture_output=True, text=True, timeout=5, creationflags=0x08000000)
+                                    ok_task = r1.returncode == 0
+                                    if ok_task:
+                                        subprocess.run(["sc", "start", target], capture_output=True, text=True,
+                                                       timeout=8, creationflags=0x08000000)
+                                    else:
+                                        err_task = "관리자 권한 필요 또는 서비스 설정 변경 실패"
+                                else:
+                                    err_task = "원래 시작 유형 기록 없음"
+                            else:
+                                r2 = subprocess.run(["schtasks", "/Change", "/TN", "\\" + target, "/ENABLE"],
+                                                    capture_output=True, text=True, timeout=5, creationflags=0x08000000)
+                                ok_task = r2.returncode == 0
+                                if not ok_task:
+                                    err_task = "작업 스케줄러 복구 실패"
+                        except Exception as e_t:
+                            err_task = str(e_t)
+                    else:
+                        err_task = "복구에 필요한 기록 없음 (이전 버전 기록)"
+                    if ok_task:
+                        restored.append(name)
+                        op["rolledBack"] = True
+                    else:
+                        skipped.append(f"{name} ({err_task})")
+                elif kind == "ADWARE_PROCESS_STOP":
+                    # 이미 종료된 프로세스는 코어가 임의로 재실행할 수 없음 → 거짓 '복원'으로 세지 않고 정직 안내
+                    skipped.append(f"{name} (종료된 앱은 직접 다시 실행해 주세요)")
+                    op["rolledBack"] = True
+                    op["rollbackNote"] = "NOT_AUTO_RESTARTABLE"
+                elif kind == "ADWARE_CLEAN_CHECK":
                     op["rolledBack"] = True
                 elif kind == "SHADOW_PROTECT":
                     if to_p.exists():

@@ -7,6 +7,10 @@ import {
 } from './ghostiMobileCareBridge';
 import { waitForUserTypingAndModalQuiet } from './ai/aiSharedRuntime';
 
+// [기획 정합] 보관 서류 vs 정리 후보 파일명 패턴 (기능명세: 금고 문서는 정리 탭에 절대 노출 금지)
+const PERMANENT_DOC_NAME_PATTERN = /(세금계산서|사업자등록증|신분증|여권|계약서|문서|명함|passport|contract|invoice|certificate)/i;
+const RECEIPT_MEMO_PARKING_NAME_PATTERN = /(receipt|영수증|주차|parking|memo|메모|전표)/i;
+
 interface OpticalSignatureMeta {
   dhash: string;
   sharpness: number;
@@ -411,10 +415,11 @@ export function resolveIntrinsicPhotoTrashCategory(p: PhotoItem): TrashCategory 
   }
   const tags = p.tags || [];
   const kws = p.keywordsKo || [];
-  if (
-    p.isVaultDocument ||
-    tags.some((t) => t.includes('영수증') || t.includes('메모'))
-  ) {
+  // [기획 정합] 보관 서류(isVaultDocument)는 정리 후보에서 영구 제외 (스마트 금고 전용)
+  if (p.isVaultDocument) {
+    return undefined;
+  }
+  if (tags.some((t) => t.includes('영수증') || t.includes('메모') || t.includes('주차'))) {
     return 'memo';
   }
   if (
@@ -774,17 +779,10 @@ export async function analyzeMobilePickedPhotoFiles(
 
         const lowerName = file.name.toLowerCase();
         const aspectRatio = img.width > 0 ? img.height / img.width : meta.aspect;
-        const isReceiptOrDoc =
-          lowerName.includes('receipt') ||
-          lowerName.includes('영수증') ||
-          lowerName.includes('세금계산서') ||
-          lowerName.includes('사업자등록증') ||
-          lowerName.includes('신분증') ||
-          lowerName.includes('여권') ||
-          lowerName.includes('계약서') ||
-          lowerName.includes('문서') ||
-          lowerName.includes('명함') ||
-          lowerName.includes('memo');
+        // [기획 정합] 신분증·여권·계약서·세금계산서 등 보관 서류는 스마트 금고 전용(정리·삭제 후보 절대 제외),
+        // 영수증·메모·주차 사진만 ② 주차·영수증·메모 탭 정리 후보로 분류합니다.
+        const isPermanentDoc = PERMANENT_DOC_NAME_PATTERN.test(lowerName);
+        const isReceiptOrDoc = isPermanentDoc || RECEIPT_MEMO_PARKING_NAME_PATTERN.test(lowerName);
         const isScreenshot =
           !isReceiptOrDoc &&
           (lowerName.includes('screenshot') ||
@@ -807,9 +805,11 @@ export async function analyzeMobilePickedPhotoFiles(
         if (isScreenshot) {
           trashCategory = 'screenshot';
           tags.unshift('#스크린샷·캡처');
-        } else if (isReceiptOrDoc) {
+        } else if (isPermanentDoc) {
+          tags.unshift('#보관서류');
+          } else if (isReceiptOrDoc) {
           trashCategory = 'memo';
-          tags.unshift('#영수증·서류·메모');
+          tags.unshift('#영수증·메모');
         } else if (isBlurry) {
           trashCategory = 'blurry';
           tags.unshift('#흔들림·초점이탈');
@@ -883,8 +883,8 @@ export async function analyzeMobilePickedPhotoFiles(
             ...meaningfulTokens,
             ...(isScreenshot ? ['스크린샷', '화면캡처'] : isReceiptOrDoc ? ['영수증', '서류'] : isBlurry ? ['흔들린사진'] : []),
           ],
-          isVaultDocument: isReceiptOrDoc,
-          vaultCategoryLabel: isReceiptOrDoc ? '스마트폰 촬영 영수증·서류' : undefined,
+          isVaultDocument: isPermanentDoc,
+          vaultCategoryLabel: isPermanentDoc ? '스마트폰 촬영 보관 서류' : undefined,
           trashCategory,
           intrinsicTrashCategory: trashCategory,
           trashConfidence: trashCategory ? 0.95 : undefined,
@@ -1158,17 +1158,10 @@ export async function analyzeNativeGalleryPhotoBatch(
         const origH = item.height || img.height || 0;
         const aspectRatio = origW > 0 ? origH / origW : meta.aspect;
         const isTallPhoneScreenAspect = aspectRatio >= 1.75 || aspectRatio <= 0.57;
-        const isReceiptOrDoc =
-          lowerName.includes('receipt') ||
-          lowerName.includes('영수증') ||
-          lowerName.includes('세금계산서') ||
-          lowerName.includes('사업자등록증') ||
-          lowerName.includes('신분증') ||
-          lowerName.includes('여권') ||
-          lowerName.includes('계약서') ||
-          lowerName.includes('문서') ||
-          lowerName.includes('명함') ||
-          lowerName.includes('memo');
+        // [기획 정합] 신분증·여권·계약서·세금계산서 등 보관 서류는 스마트 금고 전용(정리·삭제 후보 절대 제외),
+        // 영수증·메모·주차 사진만 ② 주차·영수증·메모 탭 정리 후보로 분류합니다.
+        const isPermanentDoc = PERMANENT_DOC_NAME_PATTERN.test(lowerName);
+        const isReceiptOrDoc = isPermanentDoc || RECEIPT_MEMO_PARKING_NAME_PATTERN.test(lowerName);
         // iOS PhotoKit은 캡처 후 정방형·일반 카메라 비율(4:3, 1:1 등)로 크롭한 실사 인물/풍경 사진에도
         // photoScreenshot subtype 플래그를 그대로 남기므로, 일반 비율(!isTallPhoneScreenAspect) & 실사 색감(whitePct < 52)이면 일반 사진/블러로 판별합니다.
         const isCroppedRealPhotoFromCapture =
@@ -1204,9 +1197,11 @@ export async function analyzeNativeGalleryPhotoBatch(
         if (isScreenshot) {
           trashCategory = 'screenshot';
           tags.unshift('#스크린샷·캡처');
-        } else if (isReceiptOrDoc) {
+        } else if (isPermanentDoc) {
+          tags.unshift('#보관서류');
+          } else if (isReceiptOrDoc) {
           trashCategory = 'memo';
-          tags.unshift('#영수증·서류·메모');
+          tags.unshift('#영수증·메모');
         } else if (isBlurry) {
           trashCategory = 'blurry';
           tags.unshift('#흔들림·초점이탈');
@@ -1243,8 +1238,8 @@ export async function analyzeNativeGalleryPhotoBatch(
             ...meaningfulTokens,
             ...(isScreenshot ? ['스크린샷', '화면캡처'] : isReceiptOrDoc ? ['영수증', '서류'] : isBlurry ? ['흔들린사진'] : []),
           ],
-          isVaultDocument: isReceiptOrDoc,
-          vaultCategoryLabel: isReceiptOrDoc ? '스마트폰 촬영 영수증·서류' : undefined,
+          isVaultDocument: isPermanentDoc,
+          vaultCategoryLabel: isPermanentDoc ? '스마트폰 촬영 보관 서류' : undefined,
           trashCategory,
           intrinsicTrashCategory: trashCategory,
           trashConfidence: trashCategory ? 0.95 : undefined,

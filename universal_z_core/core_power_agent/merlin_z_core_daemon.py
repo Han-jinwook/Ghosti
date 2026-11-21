@@ -161,7 +161,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.7.1"
+CORE_VERSION = "2.7.2"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1726,7 +1726,7 @@ def start_win32_tray_icon(port: int, replaced_pids: list[int] | None = None) -> 
                                 import plugin_ghosti_care_suite
                                 rres = plugin_ghosti_care_suite.restore_security_services_default(allow_uac_prompt=True)
                                 msg_txt = str(
-                                    rres.get("message")
+                                    rres.get("toastMessage") or rres.get("message")
                                     or "모든 은행·보안 서비스를 원래 자동실행 설정으로 복구했습니다."
                                 )
                                 _push_tray_balloon("↩️ 은행·보안프로그램 원상복구 완료", msg_txt)

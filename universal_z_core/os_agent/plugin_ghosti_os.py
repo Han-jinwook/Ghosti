@@ -4983,6 +4983,9 @@ MUTATING_ACTIONS = {
     "create-desktop-shortcut", "create-shortcut",
     "record-cleanup-restore", "execute-monster-cleanup", "record-cleanup",
     "recycle-restore", "recover-copy", "execute", "os-execute", "overlay", "os-overlay",
+    # [기획 9.3] 상태를 바꾸는 모든 케어/OS 액션은 GET 호출 시 405 (POST 전용)
+    "boot-lag-care", "boot_lag_care", "defender-security-check", "defender_security_check", "defender-check",
+    "scan-drive", "add-scan-drive", "connect-drive", "drive-scan", "ai-baton-touch", "baton-touch",
 }
 
 
