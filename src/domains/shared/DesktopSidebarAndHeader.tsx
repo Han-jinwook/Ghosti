@@ -229,8 +229,6 @@ export const DesktopSidebarContainer: React.FC<{
     setIsMobileDrawerOpen,
     isDeviceIntegrationOpen,
     setIsDeviceIntegrationOpen,
-    activeIntegrationSubTab,
-    setActiveIntegrationSubTab,
   } = useDashboardNavStore();
 
   const [showFamilyAppsInSidebar, setShowFamilyAppsInSidebar] = useState(false);
@@ -313,7 +311,6 @@ export const DesktopSidebarContainer: React.FC<{
     const onAutoOpenIntegration = () => {
       toggleDeviceIntegrationExpanded(true);
       setIsDeviceIntegrationOpen(true);
-      setActiveIntegrationSubTab('devices');
     };
     const onJumpToSecretary = () => {
       setIsDeviceIntegrationOpen(false);
@@ -437,8 +434,7 @@ export const DesktopSidebarContainer: React.FC<{
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
             }`;
 
-          const isPhonePcIntegrationActive =
-            isDeviceIntegrationOpen && activeIntegrationSubTab === 'devices';
+          const isPhonePcIntegrationActive = isDeviceIntegrationOpen;
 
           return (
             <div className="flex flex-col gap-1.5">
@@ -622,7 +618,6 @@ export const DesktopSidebarContainer: React.FC<{
                           setIsDeviceIntegrationCollapsed(false);
                           toggleDeviceIntegrationExpanded(true);
                           setIsDeviceIntegrationOpen(true);
-                          setActiveIntegrationSubTab('devices');
                           setActiveLoungeType('personal');
                           setDesktopTab('sync');
                           if (isMobileDrawer) setIsMobileDrawerOpen(false);
@@ -689,14 +684,11 @@ export const DesktopSidebarContainer: React.FC<{
                             type="button"
                             onClick={() => {
                               setIsDeviceIntegrationOpen(true);
-                              setActiveIntegrationSubTab('devices');
                               setActiveLoungeType('personal');
                               setDesktopTab('sync');
                               if (isMobileDrawer) setIsMobileDrawerOpen(false);
                             }}
-                            className={subBtnClass(
-                              isDeviceIntegrationOpen && activeIntegrationSubTab === 'devices'
-                            )}
+                            className={subBtnClass(isDeviceIntegrationOpen)}
                           >
                             <div className="flex items-center gap-2 min-w-0">
                               <span className="grayscale opacity-75 shrink-0 text-[13px]">🔗</span>

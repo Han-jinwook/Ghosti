@@ -40,7 +40,7 @@ import {
 } from '../services/weeklyCareAndPlaceholderEngine';
 import { MonsterStandardChatColumn } from './MonsterStandardChatColumn';
 import { PassportRegistrationPanel } from './PassportRegistrationPanel';
-import { GhostPhotoOcrTeleportModal } from './GhostWindowThreeStageMockup';
+import { GhostPhotoOcrTeleportModal } from './GhostPhotoOcrTeleportModal';
 import { GhostSecretaryFirstGuard, jumpToGhostSecretary } from './GhostSecretaryFirstGuard';
 
 const STAGE1_ROLLING_INTERVAL_MS = 180_000; // 3분(180초) 자동 롤링 (기획 정합)

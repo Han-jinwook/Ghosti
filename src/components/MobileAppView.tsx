@@ -7,7 +7,6 @@ import {
   GhostiTopRightHubAnchor,
 } from './GhostiHubInfraBridge';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
-import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
 import type { FamilyRoomId, GpuHelperTierId, LoungeType } from '../types/saysee';
 import {

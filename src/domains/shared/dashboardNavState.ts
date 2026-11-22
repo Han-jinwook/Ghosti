@@ -1,9 +1,5 @@
 import { create } from 'zustand';
 import type { PhotoItem } from '../../types/saysee';
-import type {
-  GhostWindowTierMode,
-  GhostWindowUiTab,
-} from '../../components/GhostWindowThreeStageMockup';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
 
 export function scrollAppToTop(): void {
@@ -28,12 +24,6 @@ interface DashboardNavState {
   setIsMobileDrawerOpen: (v: boolean) => void;
   isDeviceIntegrationOpen: boolean;
   setIsDeviceIntegrationOpen: (v: boolean) => void;
-  activeIntegrationSubTab: 'devices' | 'superpower';
-  setActiveIntegrationSubTab: (v: 'devices' | 'superpower') => void;
-  ghostWindowTier: GhostWindowTierMode;
-  setGhostWindowTier: (v: GhostWindowTierMode) => void;
-  ghostWindowInitialTab: GhostWindowUiTab;
-  setGhostWindowInitialTab: (v: GhostWindowUiTab) => void;
   ocrModalPhoto: PhotoItem | null;
   setOcrModalPhoto: (v: PhotoItem | null) => void;
   showZCoreGuideModal: boolean;
@@ -44,9 +34,6 @@ const NAV_STATE_STORAGE_KEY = 'ghosti_dashboard_nav_state_v1';
 
 interface PersistedDashboardNavSlice {
   isDeviceIntegrationOpen: boolean;
-  activeIntegrationSubTab: 'devices' | 'superpower';
-  ghostWindowTier: GhostWindowTierMode;
-  ghostWindowInitialTab: GhostWindowUiTab;
 }
 
 function loadPersistedNavSlice(): PersistedDashboardNavSlice {
@@ -57,10 +44,6 @@ function loadPersistedNavSlice(): PersistedDashboardNavSlice {
         const parsed = JSON.parse(raw) as Partial<PersistedDashboardNavSlice>;
         return {
           isDeviceIntegrationOpen: Boolean(parsed.isDeviceIntegrationOpen),
-          activeIntegrationSubTab:
-            parsed.activeIntegrationSubTab === 'superpower' ? 'superpower' : 'devices',
-          ghostWindowTier: parsed.ghostWindowTier || 'pc_free',
-          ghostWindowInitialTab: parsed.ghostWindowInitialTab || 'ui1_basic',
         };
       }
     } catch {
@@ -69,9 +52,6 @@ function loadPersistedNavSlice(): PersistedDashboardNavSlice {
   }
   return {
     isDeviceIntegrationOpen: false,
-    activeIntegrationSubTab: 'devices',
-    ghostWindowTier: 'pc_free',
-    ghostWindowInitialTab: 'ui1_basic',
   };
 }
 
@@ -96,21 +76,6 @@ export const useDashboardNavStore = create<DashboardNavState>((set) => ({
   setIsDeviceIntegrationOpen: (v) => {
     savePersistedNavSlice({ isDeviceIntegrationOpen: v });
     set({ isDeviceIntegrationOpen: v });
-  },
-  activeIntegrationSubTab: initialPersistedNav.activeIntegrationSubTab,
-  setActiveIntegrationSubTab: (v) => {
-    savePersistedNavSlice({ activeIntegrationSubTab: v });
-    set({ activeIntegrationSubTab: v });
-  },
-  ghostWindowTier: initialPersistedNav.ghostWindowTier,
-  setGhostWindowTier: (v) => {
-    savePersistedNavSlice({ ghostWindowTier: v });
-    set({ ghostWindowTier: v });
-  },
-  ghostWindowInitialTab: initialPersistedNav.ghostWindowInitialTab,
-  setGhostWindowInitialTab: (v) => {
-    savePersistedNavSlice({ ghostWindowInitialTab: v });
-    set({ ghostWindowInitialTab: v });
   },
   ocrModalPhoto: null,
   setOcrModalPhoto: (v) => set({ ocrModalPhoto: v }),

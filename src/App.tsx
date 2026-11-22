@@ -30,7 +30,7 @@ import { SetupFloatingOverlayGuide } from './components/SetupMonsterModal';
 import { GhostCastAndLiveGlobalOverlay } from './components/GhostCastAndLiveSystem';
 import { FreePhotoShareOverlays } from './domains/free_photo_share/FreePhotoShareOverlays';
 import { GhostSecretaryFirstModal } from './components/GhostSecretaryFirstGuard';
-import { GhostPhotoOcrTeleportModal } from './components/GhostWindowThreeStageMockup';
+import { GhostPhotoOcrTeleportModal } from './components/GhostPhotoOcrTeleportModal';
 import { useDashboardNavStore } from './domains/shared/dashboardNavState';
 import { resolveViewportLayout, storeSharedRefs } from './store/slices/storeSharedRefs';
 
