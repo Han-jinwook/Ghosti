@@ -93,9 +93,8 @@ export function useIsCoinHiddenInStore(): boolean {
  * - 하단 전역 토스트(lastQuarantineToast)를 띄우지 않고, 클릭한 공유 아이콘 바로 밑에 가볍게 떴다가 2.2초 뒤 사라집니다.
  */
 export const GhostiHeaderQuickShareButton: React.FC<{
-  themeMode: 'light' | 'dark';
   compact?: boolean;
-}> = ({ themeMode, compact = false }) => {
+}> = ({ compact = false }) => {
   const [copied, setCopied] = useState(false);
   const timerRef = useRef<number | null>(null);
   const wrapRef = useRef<HTMLDivElement | null>(null);
@@ -146,12 +145,8 @@ export const GhostiHeaderQuickShareButton: React.FC<{
           compact ? 'w-7 h-7' : 'w-6 h-6 sm:w-7 sm:h-7'
         } rounded-lg items-center justify-center transition-all cursor-pointer shrink-0 outline-none ${
           copied
-            ? themeMode === 'light'
-              ? 'bg-teal-50 text-teal-700'
-              : 'bg-teal-500/20 text-teal-300'
-            : themeMode === 'light'
-            ? 'text-slate-500 hover:text-slate-800 hover:bg-black/5'
-            : 'text-zinc-300 hover:text-white hover:bg-white/10'
+            ? 'bg-teal-50 text-teal-700'
+            : 'text-slate-500 hover:text-slate-800 hover:bg-black/5'
         }`}
       >
         <span className="material-symbols-outlined text-[15px]">
@@ -164,26 +159,22 @@ export const GhostiHeaderQuickShareButton: React.FC<{
           role="status"
           aria-live="polite"
           className={`absolute right-0 top-full mt-1.5 z-50 px-2.5 py-1.5 rounded-xl border whitespace-nowrap pointer-events-none select-none shadow-lg transition-all ${
-            themeMode === 'light'
-              ? 'bg-white/98 border-teal-200 text-slate-800 shadow-slate-900/10'
-              : 'bg-zinc-900/95 border-teal-400/40 text-zinc-100 shadow-black/50'
+            'bg-white/98 border-teal-200 text-slate-800 shadow-slate-900/10'
           }`}
         >
           <span
             aria-hidden="true"
             className={`absolute -top-1 right-2.5 w-2 h-2 rotate-45 border-l border-t ${
-              themeMode === 'light'
-                ? 'bg-white border-teal-200'
-                : 'bg-zinc-900 border-teal-400/40'
+              'bg-white border-teal-200'
             }`}
           />
           <div className="flex items-center gap-1 text-[11.5px] font-extrabold leading-tight">
-            <span className={themeMode === 'light' ? 'text-teal-600' : 'text-teal-300'}>✓</span>
+            <span className={'text-teal-600'}>✓</span>
             <span>공유 링크 복사됨</span>
           </div>
           <div
             className={`text-[10px] font-semibold leading-tight mt-0.5 ${
-              themeMode === 'light' ? 'text-slate-500' : 'text-zinc-400'
+              'text-slate-500'
             }`}
           >
             초대받은 분은 언제나 무료
@@ -199,17 +190,13 @@ export const GhostiHeaderQuickShareButton: React.FC<{
  * - 코인 표시 알약은 프로필 모달 내부에 이미 포함되어 있으므로 헤더에서 제외하고,
  *   허브 표준 프로필 위젯만 심플하게 렌더링합니다.
  */
-export const GhostiTopRightHubAnchor: React.FC<{ themeMode: 'light' | 'dark' }> = ({
-  themeMode,
-}) => {
+export const GhostiTopRightHubAnchor: React.FC = () => {
   return (
     <div className="flex items-center gap-1.5 shrink-0">
       {/* 🐾 허브 표준 프로필 위젯 (클릭 시 통합 프로필·귀신여권·코인/선물함·문의방 모달 오픈) */}
       <div
         className={`rounded-full px-0.5 sm:px-1 py-0.5 border transition-colors ${
-          themeMode === 'light'
-            ? 'bg-slate-50/90 border-slate-200/80'
-            : 'bg-zinc-900/90 border-white/10'
+          'bg-slate-50/90 border-slate-200/80'
         }`}
       >
         <HubProfileWidget

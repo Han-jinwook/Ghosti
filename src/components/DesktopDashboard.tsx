@@ -27,7 +27,6 @@ export const DesktopDashboard: React.FC = () => {
     activeLoungeType,
     setActiveLoungeType,
     activeFamilyRoom,
-    themeMode,
     initialized,
   } = useSaySeeStore();
 
@@ -304,7 +303,6 @@ export const DesktopDashboard: React.FC = () => {
           }
           setShowZCoreGuideModal(false);
         }}
-        themeMode={themeMode}
       />
     </div>
   );

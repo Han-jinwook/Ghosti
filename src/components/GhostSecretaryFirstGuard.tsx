@@ -220,9 +220,7 @@ export const GhostSecretaryFirstGuard: React.FC<GhostSecretaryFirstGuardProps> =
 /**
  * 👻 귀여운 애기귀신 『귀신비서와 먼저 대화하고 오세요!』 전역 안내 모달
  */
-export const GhostSecretaryFirstModal: React.FC<{ themeMode?: 'light' | 'dark' }> = ({
-  themeMode = 'dark',
-}) => {
+export const GhostSecretaryFirstModal: React.FC = () => {
   const guardActive = useIsSecretaryFirstBrowseGuardActive();
   const [openPayload, setOpenPayload] = useState<SecretaryFirstModalPayload | null>(null);
 
@@ -245,8 +243,6 @@ export const GhostSecretaryFirstModal: React.FC<{ themeMode?: 'light' | 'dark' }
   }, [guardActive, openPayload]);
 
   if (!openPayload) return null;
-
-  const isLight = themeMode === 'light';
   const isSecretaryLeft = openPayload.context === 'secretary_left';
   const isSharedRoomUpload = openPayload.context === 'shared_room_upload';
   const roomTitle = openPayload.roomTitle || '우리집 패밀리 앨범';
@@ -264,9 +260,7 @@ export const GhostSecretaryFirstModal: React.FC<{ themeMode?: 'light' | 'dark' }
       <div
         onClick={(e) => e.stopPropagation()}
         className={`w-full max-w-md rounded-3xl p-6 shadow-2xl border-2 transition-all flex flex-col items-center text-center gap-4 ${
-          isLight
-            ? 'bg-white border-teal-400 text-slate-900 shadow-teal-500/20'
-            : 'bg-zinc-950 border-[#2DD4BF]/70 text-zinc-100 shadow-[0_0_45px_rgba(45,212,191,0.22)]'
+          'bg-white border-teal-400 text-slate-900 shadow-teal-500/20'
         }`}
       >
         {/* 애기귀신 둥실둥실 아이콘 + 귀여운 말풍선 배지 */}
@@ -295,7 +289,7 @@ export const GhostSecretaryFirstModal: React.FC<{ themeMode?: 'light' | 'dark' }
           </h3>
           <p
             className={`text-[13px] leading-relaxed font-medium ${
-              isLight ? 'text-slate-600' : 'text-zinc-300'
+              'text-slate-600'
             }`}
           >
             {isSharedRoomUpload ? (
@@ -342,9 +336,7 @@ export const GhostSecretaryFirstModal: React.FC<{ themeMode?: 'light' | 'dark' }
             data-allow-secretary-jump="true"
             onClick={() => setOpenPayload(null)}
             className={`w-full py-2.5 px-4 rounded-2xl font-bold text-[12.5px] border transition-all cursor-pointer ${
-              isLight
-                ? 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
-                : 'bg-zinc-900 border-white/10 text-zinc-400 hover:bg-zinc-800 hover:text-zinc-200'
+              'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
             }`}
           >
             {isSharedRoomUpload ? `👀 지금은 『${roomTitle}』 사진 먼저 계속 구경할래요` : '👀 알겠어요, 계속 눈으로 구경할게요'}

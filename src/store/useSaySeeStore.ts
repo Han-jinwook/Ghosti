@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import {
-  applyHtmlThemeClass,
+  applyWarmLightThemeClass,
   buildBidirectionalStickKeywords,
   buildYearEquivalenceTokens,
   deriveLoungeProperNounTokens,
@@ -10,7 +10,6 @@ import {
 import type {
   DesktopTab,
   MobileTab,
-  ThemeMode,
   ViewportLayout,
 } from './slices/storeSharedRefs';
 import {
@@ -27,7 +26,7 @@ import {
   type PaidWorkShareSlice,
 } from './slices/paidWorkShareSlice';
 
-export type { ViewportLayout, MobileTab, DesktopTab, ThemeMode };
+export type { ViewportLayout, MobileTab, DesktopTab };
 export {
   SEASON_TO_MONTH_SYNONYM_INDEX,
   buildYearEquivalenceTokens,
@@ -37,7 +36,6 @@ export {
 };
 
 export interface SaySeeCoreState {
-  themeMode: ThemeMode;
   layout: ViewportLayout;
   mobileTab: MobileTab;
   desktopTab: DesktopTab;
@@ -50,7 +48,7 @@ export type SaySeeStore = SaySeeCoreState &
   PaidWorkShareSlice;
 
 export const useSaySeeStore = create<SaySeeStore>()((...a) => {
-  applyHtmlThemeClass('light');
+  applyWarmLightThemeClass();
   return {
     ...createAssistantOnboardingSlice(...a),
     ...createSearchSlice(...a),

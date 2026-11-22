@@ -17,14 +17,12 @@ export const IS_ZCORE_ARTIFACT_SIGNED = false;
 interface MerlinZCoreGuideModalProps {
   isOpen: boolean;
   onClose: () => void;
-  themeMode?: 'light' | 'dark';
   initialStep?: ZCoreModalStep;
 }
 
 export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   isOpen,
   onClose,
-  themeMode = 'dark',
   initialStep,
 }) => {
   const { user, isLoggedIn } = useHub();
@@ -395,8 +393,6 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   };
 
   if (!isOpen) return null;
-
-  const isLight = themeMode === 'light';
   const isOutdated = isConnected && isZCoreOutdated(version);
   const loadDone = progress >= 100;
   const currentStageLabel = loadError
@@ -433,9 +429,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       )}
       <div
         className={`w-full max-w-lg rounded-3xl p-4 sm:p-7 shadow-2xl border transition-all max-h-[90dvh] overflow-y-auto no-scrollbar my-auto ${
-          isLight
-            ? 'bg-white border-slate-200 text-slate-800'
-            : 'bg-zinc-950 border-white/15 text-zinc-100'
+          'bg-white border-slate-200 text-slate-800'
         }`}
       >
         {/* ─────────────── [가벼운 1클릭 연결 안내] ─────────────── */}
@@ -470,9 +464,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
             {!isMobileEnv && (
               <div
                 className={`mb-3 p-3 rounded-2xl border text-xs font-extrabold leading-relaxed ${
-                  isLight
-                    ? 'bg-teal-50 border-teal-200 text-teal-950'
-                    : 'bg-teal-950/40 border-teal-500/35 text-teal-200'
+                  'bg-teal-50 border-teal-200 text-teal-950'
                 }`}
               >
                 ⚡ 내 파일이 외부 클라우드 서버로 절대 전송되지 않도록, 내 PC 전용 초경량 로컬 엔진(3초 연결)을 켭니다.
@@ -488,9 +480,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
             {isMobileEnv && verifiedEmail && (
               <div
                 className={`mb-4 p-3 rounded-2xl border text-xs flex items-center justify-between gap-3 ${
-                  isLight
-                    ? 'bg-teal-50/70 border-teal-200 text-teal-950'
-                    : 'bg-teal-950/30 border-teal-500/30 text-teal-100'
+                  'bg-teal-50/70 border-teal-200 text-teal-950'
                 }`}
               >
                 <div className="min-w-0">
@@ -526,9 +516,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 type="button"
                 onClick={onClose}
                 className={`w-full sm:w-auto py-3 px-4 rounded-2xl font-bold text-xs border transition-all cursor-pointer ${
-                  isLight
-                    ? 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
-                    : 'bg-zinc-900 border-white/10 text-zinc-400 hover:bg-zinc-800'
+                  'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
                 }`}
               >
                 닫기
@@ -566,9 +554,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
 
             <div
               className={`mb-3 p-3 rounded-2xl border text-xs font-extrabold leading-relaxed ${
-                isLight
-                  ? 'bg-teal-50 border-teal-200 text-teal-950'
-                  : 'bg-teal-950/40 border-teal-500/35 text-teal-200'
+                'bg-teal-50 border-teal-200 text-teal-950'
               }`}
             >
               ⚡ 내 파일이 외부 클라우드 서버로 절대 전송되지 않도록, 내 PC 전용 초경량 로컬 엔진(3초 연결)을 켭니다.
@@ -576,9 +562,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
 
             <div
               className={`p-4 rounded-2xl border mb-4 ${
-                isLight
-                  ? 'bg-amber-50 border-amber-200 text-amber-950'
-                  : 'bg-amber-950/35 border-amber-500/30 text-amber-100'
+                'bg-amber-50 border-amber-200 text-amber-950'
               }`}
             >
               <div className="flex items-center gap-2.5 font-black text-[13.5px]">
@@ -594,9 +578,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
 
             <div
               className={`p-3.5 rounded-2xl border text-xs space-y-2 mb-5 ${
-                isLight
-                  ? 'bg-slate-50 border-slate-200 text-slate-700'
-                  : 'bg-zinc-900/70 border-white/10 text-zinc-300'
+                'bg-slate-50 border-slate-200 text-slate-700'
               }`}
             >
               {!IS_ZCORE_ARTIFACT_SIGNED && (
@@ -619,12 +601,8 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
               <div
                 className={`mb-4 p-3 rounded-xl border text-xs leading-relaxed ${
                   isChecking
-                    ? isLight
-                      ? 'bg-teal-50 border-teal-200 text-teal-900'
-                      : 'bg-teal-950/40 border-teal-500/30 text-teal-200'
-                    : isLight
-                    ? 'bg-rose-50 border-rose-200 text-rose-900'
-                    : 'bg-rose-950/40 border-rose-500/30 text-rose-200'
+                    ? 'bg-teal-50 border-teal-200 text-teal-900'
+                    : 'bg-rose-50 border-rose-200 text-rose-900'
                 }`}
               >
                 {manualCheckHint}
@@ -636,9 +614,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 href={Z_CORE_ZIP_URL}
                 download="Merlin_Z_Core.zip"
                 className={`py-2.5 px-4 rounded-xl font-bold text-xs border transition-all no-underline cursor-pointer ${
-                  isLight
-                    ? 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
-                    : 'bg-zinc-900 border-white/15 text-zinc-300 hover:bg-zinc-800'
+                  'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
                 }`}
               >
                 📥 다운로드가 안 됐나요? 다시 받기
@@ -688,9 +664,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
 
             <div
               className={`p-4 rounded-2xl border mb-4 ${
-                isLight
-                  ? 'bg-slate-50 border-slate-200'
-                  : 'bg-zinc-900/90 border-teal-500/30 shadow-[0_0_25px_rgba(20,184,166,0.12)]'
+                'bg-slate-50 border-slate-200'
               }`}
             >
               <div className="w-full h-3.5 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden p-0.5 mb-3">
@@ -786,9 +760,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
               <>
                 <div
                   className={`p-4 rounded-2xl border mb-4 text-xs leading-relaxed ${
-                    isLight
-                      ? 'bg-amber-50 border-amber-300 text-amber-950'
-                      : 'bg-amber-950/40 border-amber-500/40 text-amber-100'
+                    'bg-amber-50 border-amber-300 text-amber-950'
                   }`}
                 >
                   <p className="font-extrabold mb-1.5">
@@ -803,9 +775,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 {manualCheckHint && (
                   <div
                     className={`mb-4 p-3 rounded-xl border text-xs leading-relaxed ${
-                      isLight
-                        ? 'bg-rose-50 border-rose-200 text-rose-900'
-                        : 'bg-rose-950/40 border-rose-500/30 text-rose-200'
+                      'bg-rose-50 border-rose-200 text-rose-900'
                     }`}
                   >
                     {manualCheckHint}
@@ -825,9 +795,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                     onClick={handleManualCheck}
                     disabled={isChecking}
                     className={`w-full sm:w-auto py-3 px-4 rounded-2xl font-bold text-xs border transition-all cursor-pointer ${
-                      isLight
-                        ? 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
-                        : 'bg-zinc-900 border-white/15 text-zinc-200 hover:bg-zinc-800'
+                      'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
                     }`}
                   >
                     {isChecking ? '확인 중...' : '🔄 업데이트 완료 (다시 확인)'}
@@ -838,9 +806,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
               <>
                 <div
                   className={`p-4 rounded-2xl border mb-5 text-xs leading-relaxed ${
-                    isLight
-                      ? 'bg-emerald-50 border-emerald-200 text-emerald-950'
-                      : 'bg-emerald-950/35 border-emerald-500/30 text-emerald-100'
+                    'bg-emerald-50 border-emerald-200 text-emerald-950'
                   }`}
                 >
                   내 컴퓨터 실물 사진 <strong>{totalPhotoCount}장</strong>과 로컬 서류함이 웹 화면과 실시간으로
@@ -864,9 +830,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                     type="button"
                     onClick={finishAndPopOpenPhotos}
                     className={`w-full sm:w-auto py-3 px-4 rounded-2xl font-bold text-xs border transition-all cursor-pointer ${
-                      isLight
-                        ? 'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
-                        : 'bg-zinc-900 border-white/15 text-zinc-300 hover:bg-zinc-800'
+                      'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
                     }`}
                   >
                     🖼️ 사진 전체 펼치기

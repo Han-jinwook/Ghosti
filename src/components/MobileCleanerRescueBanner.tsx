@@ -9,11 +9,8 @@ import {
   triggerOpenGoogleAccountPermissions,
   triggerOpenPlaySubscriptions,
 } from '../services/ghostiMobileCareBridge';
-import { useSaySeeStore } from '../store/useSaySeeStore';
 
 export const MobileCleanerRescueBanner: React.FC = () => {
-  const themeMode = useSaySeeStore((s) => s.themeMode);
-  const isLight = themeMode === 'light';
   const bannerRef = useRef<HTMLElement | null>(null);
 
   const [scanning, setScanning] = useState(false);
@@ -91,12 +88,8 @@ export const MobileCleanerRescueBanner: React.FC = () => {
       data-allow-secretary-jump="true"
       className={`p-4 sm:p-5 rounded-2xl border-2 flex flex-col gap-3 shadow-md transition-colors ${
         hasDetected
-          ? isLight
-            ? 'bg-[#FFF1F2] border-[#E11D48]'
-            : 'bg-gradient-to-r from-red-950/95 via-amber-950/85 to-zinc-950 border-red-400/85'
-          : isLight
-          ? 'bg-white border-[#0F766E]'
-          : 'bg-[#111827] border-[#2DD4BF]/70'
+          ? 'bg-[#FFF1F2] border-[#E11D48]'
+          : 'bg-white border-[#0F766E]'
       }`}
     >
       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -117,7 +110,7 @@ export const MobileCleanerRescueBanner: React.FC = () => {
           </span>
           <span
             className={`text-[11.5px] font-extrabold ${
-              isLight ? 'text-slate-700' : 'text-zinc-200'
+              'text-slate-700'
             }`}
           >
             {isNativeAndroid ? '앱 실시간 스캔 완료' : '모바일 3단 구출 센터'}
@@ -129,9 +122,7 @@ export const MobileCleanerRescueBanner: React.FC = () => {
             type="button"
             onClick={() => void runScan(false)}
             className={`px-2.5 py-1 rounded-lg border text-[11.5px] font-extrabold cursor-pointer transition-colors ${
-              isLight
-                ? 'bg-[#F0FDFA] hover:bg-[#CCFBF1] border-[#0F766E]/40 text-[#0F766E]'
-                : 'bg-zinc-900 hover:bg-zinc-800 border-white/20 text-teal-200'
+              'bg-[#F0FDFA] hover:bg-[#CCFBF1] border-[#0F766E]/40 text-[#0F766E]'
             }`}
           >
             {scanning ? '🔍 스캔 중...' : '🔄 다시 스캔'}
@@ -145,9 +136,7 @@ export const MobileCleanerRescueBanner: React.FC = () => {
               }}
               aria-label="점검 카드 닫기"
               className={`px-2 py-1 rounded-lg border text-[11.5px] font-extrabold cursor-pointer ${
-                isLight
-                  ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700'
-                  : 'bg-zinc-900 hover:bg-zinc-800 border-white/15 text-zinc-300'
+                'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-700'
               }`}
             >
               ✕ 닫기
@@ -162,29 +151,27 @@ export const MobileCleanerRescueBanner: React.FC = () => {
             <div
               key={item.packageName}
               className={`p-3.5 rounded-xl border flex flex-col gap-2.5 ${
-                isLight
-                  ? 'bg-white border-rose-300 shadow-sm'
-                  : 'bg-black/70 border-red-400/55'
+                'bg-white border-rose-300 shadow-sm'
               }`}
             >
               <div className="flex flex-col gap-1">
                 <span
                   className={`text-[14px] font-black leading-snug ${
-                    isLight ? 'text-[#9F1239]' : 'text-red-200'
+                    'text-[#9F1239]'
                   }`}
                 >
                   ⚠️ [{item.appName}] ({item.packageName}) 설치 감지!
                 </span>
                 <span
                   className={`text-[12px] font-extrabold leading-snug ${
-                    isLight ? 'text-[#B45309]' : 'text-amber-200'
+                    'text-[#B45309]'
                   }`}
                 >
                   {item.riskSummaryKo}
                 </span>
                 <span
                   className={`text-[11.5px] font-semibold leading-snug ${
-                    isLight ? 'text-slate-700' : 'text-zinc-200'
+                    'text-slate-700'
                   }`}
                 >
                   💡 앱만 지워서는 주간 자동결제와 구글 계정 권한이 그대로 남을 수 있어요. 아래 1·2·3번 버튼으로 한 번에 깔끔히 정리하세요!
@@ -227,7 +214,7 @@ export const MobileCleanerRescueBanner: React.FC = () => {
         <div className="flex flex-col gap-2.5">
           <p
             className={`text-[12.5px] font-bold leading-relaxed break-keep ${
-              isLight ? 'text-slate-800' : 'text-zinc-100'
+              'text-slate-800'
             }`}
           >
             {showPostUninstallFollowUp && uninstalledTarget
@@ -259,9 +246,7 @@ export const MobileCleanerRescueBanner: React.FC = () => {
               type="button"
               onClick={() => void triggerOpenAllInstalledApps()}
               className={`py-2.5 px-3 rounded-xl border text-[12px] font-extrabold cursor-pointer transition-colors ${
-                isLight
-                  ? 'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800'
-                  : 'bg-zinc-800 hover:bg-zinc-700 border-white/20 text-white'
+                'bg-slate-100 hover:bg-slate-200 border-slate-300 text-slate-800'
               }`}
             >
               📋 내 폰 전체 설치 앱 목록 열기

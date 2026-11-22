@@ -38,7 +38,6 @@ export const App: React.FC = () => {
   const {
     layout,
     setLayout,
-    themeMode,
     initApp,
     activeLoungeType,
     desktopTab,
@@ -1206,7 +1205,7 @@ export const App: React.FC = () => {
 
           {/* PC·모바일 공통 공유방 오버레이 (카톡 1초 합류 Auth-Wall & 공유방 사진 골라 올리기 모달) 및 사진 OCR 모달 */}
           <FreePhotoShareOverlays />
-          <GhostSecretaryFirstModal themeMode={themeMode} />
+          <GhostSecretaryFirstModal />
           <GhostPhotoOcrTeleportModal photo={ocrModalPhoto} onClose={() => setOcrModalPhoto(null)} />
 
           {/* [스펙 2] 글로벌 플로팅 3중 타임머신 안전망 (즉시 되돌리기 Undo 바) */}

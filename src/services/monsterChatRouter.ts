@@ -2060,8 +2060,6 @@ ${payload.summaryText}`, {
     /^(?:다크\s*모드|라이트\s*모드|밝은\s*모드)(?:로)?$/i.test(clean)
   ) {
     const requestedDark = /다크|블랙|어둡게/.test(clean);
-    const store = useSaySeeStore.getState();
-    store.setThemeMode('light');
     const labelKo = '라이트 모드 (밝고 선명한 표준 화면)';
     const summaryText = requestedDark
       ? '귀신같이는 사진과 문서 가독성을 위해 다크 모드를 사용하지 않고 항상 밝고 선명한 라이트 모드로 고정 운영됩니다.'

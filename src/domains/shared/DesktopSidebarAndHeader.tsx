@@ -217,7 +217,6 @@ export const DesktopSidebarContainer: React.FC<{
     pcAgentPairedMobile,
     activePricingPlan,
     subscribedLounges,
-    themeMode,
     merlinAuth,
     isStoreAppMode,
   } = useSaySeeStore();
@@ -359,9 +358,7 @@ export const DesktopSidebarContainer: React.FC<{
   const renderSidebarNavigationContent = (isMobileDrawer = false) => (
     <div
       className={`h-full flex flex-col justify-between p-3 select-none overscroll-contain ${
-        themeMode === 'light'
-          ? 'bg-[#F8F7F4] border-r border-[#E5E0D5] text-slate-800'
-          : 'bg-[#111114] border-r border-white/10 text-zinc-200'
+        'bg-[#F8F7F4] border-r border-[#E5E0D5] text-slate-800'
       }`}
     >
       <div className="flex flex-col gap-4 overflow-y-auto overscroll-contain no-scrollbar">
@@ -369,7 +366,6 @@ export const DesktopSidebarContainer: React.FC<{
         <div className="flex items-center justify-between px-1.5 py-1 gap-1.5">
           <GhostiBrandLogo
             size="desktop"
-            themeMode={themeMode}
             showBadge={true}
             onClick={() => {
               setIsDeviceIntegrationOpen(false);
@@ -411,27 +407,19 @@ export const DesktopSidebarContainer: React.FC<{
           const mainBtnClass = (active: boolean) =>
             `w-full px-3 py-2 rounded-xl font-label-md text-[15px] flex items-center justify-between gap-2 transition-all cursor-pointer ${
               active
-                ? themeMode === 'light'
-                  ? 'bg-[#E6F7F5] text-[#0F766E] font-extrabold'
-                  : 'bg-zinc-800/90 text-primary-container font-extrabold'
-                : themeMode === 'light'
-                ? 'text-slate-800 hover:text-slate-950 hover:bg-black/5 font-extrabold'
-                : 'text-zinc-200 hover:text-white hover:bg-white/5 font-extrabold'
+                ? 'bg-[#E6F7F5] text-[#0F766E] font-extrabold'
+                : 'text-slate-800 hover:text-slate-950 hover:bg-black/5 font-extrabold'
             }`;
 
           const subWrapClass = `ml-3.5 pl-2.5 border-l flex flex-col gap-0.5 py-0.5 ${
-            themeMode === 'light' ? 'border-slate-200' : 'border-white/10'
+            'border-slate-200'
           }`;
 
           const subBtnClass = (active: boolean) =>
             `w-full px-2.5 py-1.5 rounded-lg text-left text-[13.5px] flex items-center justify-between gap-1.5 transition-all cursor-pointer ${
               active
-                ? themeMode === 'light'
-                  ? 'bg-[#0D9488]/10 text-[#0D9488] font-extrabold'
-                  : 'bg-white/10 text-white font-extrabold'
-                : themeMode === 'light'
-                ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5 font-medium'
-                : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
+                ? 'bg-[#0D9488]/10 text-[#0D9488] font-extrabold'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-black/5 font-medium'
             }`;
 
           const isPhonePcIntegrationActive = isDeviceIntegrationOpen;
@@ -792,9 +780,7 @@ export const DesktopSidebarContainer: React.FC<{
                   <div
                     title="💡 기본 3대 무료 기능(귀신비서 · 귀신검색 · 사진 공유)은 외부 클라우드 서버 없이 내 기기 안에서만 작동해 서버 비용이 0원이므로 평생 무료로 제공됩니다."
                     className={`mt-1 px-2.5 py-2 rounded-xl text-[10.5px] leading-snug ${
-                      themeMode === 'light'
-                        ? 'bg-slate-200/60 text-slate-600'
-                        : 'bg-white/[0.04] text-zinc-400'
+                      'bg-slate-200/60 text-slate-600'
                     }`}
                   >
                     💡 기본 3대 무료 기능(귀신비서 · 귀신검색 · 사진 공유)은 외부 클라우드 서버 없이 내 기기 안에서만 작동해 서버 비용이 0원이므로 평생 무료로 제공됩니다.
@@ -847,7 +833,6 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
     activeLoungeType,
     setActiveLoungeType,
     subscribedLounges,
-    themeMode,
     activeFamilyRoom,
     activeJoinedRoomMeta,
     joinedSharedRooms,
@@ -873,9 +858,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
         <header className={`sticky top-0 z-30 backdrop-blur-xl ${ghostSearchWindowStage ? 'hidden' : ''}`}>
           <div
             className={`px-2 sm:px-5 md:px-7 py-2 flex flex-col gap-2 border-b transition-colors ${
-              themeMode === 'light'
-                ? 'bg-white/90 border-[#EAE8E1]'
-                : 'bg-[#09090B]/90 border-white/8'
+              'bg-white/90 border-[#EAE8E1]'
             }`}
           >
             <div className="flex items-center justify-between gap-1 sm:gap-2 flex-nowrap min-w-0">
@@ -886,9 +869,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                   onClick={() => setIsMobileDrawerOpen(true)}
                   title="전체 메뉴 열기"
                   className={`lg:hidden w-7 h-7 sm:w-8 sm:h-8 rounded-lg border flex items-center justify-center cursor-pointer shrink-0 ${
-                    themeMode === 'light'
-                      ? 'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
-                      : 'bg-zinc-900 border-white/10 text-zinc-300'
+                    'bg-white border-slate-200 text-slate-700 hover:bg-slate-50'
                   }`}
                 >
                   ☰
@@ -907,7 +888,6 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                     </button>
                     <GhostiBrandLogo
                       size="desktop"
-                      themeMode={themeMode}
                       showBadge={true}
                       onClick={() => {
                         setIsDeviceIntegrationOpen(false);
@@ -923,7 +903,6 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                 <GhostiBrandLogo
                   size="mobile"
                   autoCycle={false}
-                  themeMode={themeMode}
                   showBadge={false}
                   onClick={() => {
                     setIsDeviceIntegrationOpen(false);
@@ -950,9 +929,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                     }}
                     title="최근 손보기·정리 복원 기록 조회 및 원래대로 1초 되돌리기"
                     className={`flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2.5 py-1 rounded-lg font-extrabold text-[11px] sm:text-[12px] whitespace-nowrap border transition-all cursor-pointer shrink-0 ${
-                      themeMode === 'light'
-                        ? 'bg-violet-50 border-violet-300 text-violet-800 hover:bg-violet-100'
-                        : 'bg-violet-950/70 border-violet-500/40 text-violet-200 hover:bg-violet-900/80'
+                      'bg-violet-50 border-violet-300 text-violet-800 hover:bg-violet-100'
                     }`}
                   >
                     <span className="text-[11px] sm:text-[13px]">🕰️</span>
@@ -967,18 +944,16 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                   }}
                   title="공식 온보딩/가이드 페이지로 이동"
                   className={`flex items-center gap-0.5 sm:gap-1 px-1 sm:px-2.5 py-1 rounded-lg font-bold text-[11px] sm:text-[12px] whitespace-nowrap transition-all cursor-pointer shrink-0 ${
-                    themeMode === 'light'
-                      ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5'
-                      : 'text-zinc-300 hover:text-white hover:bg-white/10'
+                    'text-slate-600 hover:text-slate-900 hover:bg-black/5'
                   }`}
                 >
                   <span className="text-[11px] sm:text-[13px]">📖</span>
                   <span>가이드</span>
                 </button>
 
-                <GhostiHeaderQuickShareButton themeMode={themeMode} />
+                <GhostiHeaderQuickShareButton />
 
-                <GhostiTopRightHubAnchor themeMode={themeMode} />
+                <GhostiTopRightHubAnchor />
               </div>
             </div>
 
@@ -999,12 +974,8 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                     }}
                     className={`py-1.5 px-1 rounded-full font-label-md text-[11.5px] flex items-center justify-center gap-1 transition-all whitespace-nowrap cursor-pointer ${
                       active
-                        ? themeMode === 'light'
-                          ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold'
-                          : 'bg-zinc-800 text-primary-container font-extrabold'
-                        : themeMode === 'light'
-                        ? 'bg-slate-100/80 text-slate-600 font-bold'
-                        : 'bg-zinc-900/80 text-zinc-400 font-bold'
+                        ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold'
+                        : 'bg-slate-100/80 text-slate-600 font-bold'
                     }`}
                   >
                     <MainLoungeMonoIcon id={menu.iconId} className="w-[12px] h-[12px] shrink-0" />
@@ -1030,12 +1001,8 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                       }}
                       className={`px-2.5 py-1 rounded-lg border text-[11px] shrink-0 whitespace-nowrap transition-all cursor-pointer ${
                         groupActive
-                          ? themeMode === 'light'
-                            ? 'bg-white border-[#0D9488] text-[#0D9488] font-extrabold'
-                            : 'bg-zinc-900 border-primary-container text-primary-container font-extrabold'
-                          : themeMode === 'light'
-                          ? 'bg-transparent border-[#E5E0D5] text-slate-500 font-bold'
-                          : 'bg-transparent border-white/10 text-zinc-400 font-bold'
+                          ? 'bg-white border-[#0D9488] text-[#0D9488] font-extrabold'
+                          : 'bg-transparent border-[#E5E0D5] text-slate-500 font-bold'
                       }`}
                     >
                       {group.label}
@@ -1070,9 +1037,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                         className={`px-3.5 py-1.5 rounded-full font-label-sm text-[13px] font-extrabold border transition-all shrink-0 whitespace-nowrap cursor-pointer ${
                           roomActive
                             ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-xs'
-                            : themeMode === 'light'
-                            ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                            : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                         }`}
                       >
                         {room === '우리집'
@@ -1097,9 +1062,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                     className={`px-3.5 py-1.5 rounded-full font-label-sm text-[13px] font-extrabold border transition-all cursor-pointer ${
                       !activeJoinedRoomMeta && desktopTab === 'dashboard'
                         ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-xs'
-                        : themeMode === 'light'
-                        ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
-                        : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                        : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                     }`}
                   >
                     {activeLoungeType === 'work'
@@ -1127,9 +1090,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                         className={`px-3.5 py-1.5 rounded-full font-label-sm text-[12.5px] font-extrabold border transition-all flex items-center gap-1.5 whitespace-nowrap cursor-pointer ${
                           isSubActive
                             ? 'bg-[#0D9488] text-white border-[#0D9488] shadow-xs'
-                            : themeMode === 'light'
-                            ? 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
-                            : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
+                            : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                         }`}
                       >
                         <span className="grayscale opacity-80 text-[12px]">{sub.icon}</span>
@@ -1145,14 +1106,12 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
               <div
                 aria-label="초대받은 독립 공유방 목록"
                 className={`flex flex-wrap items-center gap-1.5 px-3 py-1.5 rounded-2xl border transition-colors ${
-                  themeMode === 'light'
-                    ? 'bg-amber-50/75 border-amber-200/90'
-                    : 'bg-amber-500/8 border-amber-400/25'
+                  'bg-amber-50/75 border-amber-200/90'
                 }`}
               >
                 <span
                   className={`text-[11.5px] font-extrabold shrink-0 whitespace-nowrap mr-0.5 ${
-                    themeMode === 'light' ? 'text-amber-800' : 'text-amber-300'
+                    'text-amber-800'
                   }`}
                 >
                   💌 초대받은 방 ({joinedSharedRooms.length}):
@@ -1184,9 +1143,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                       className={`px-3 py-1 rounded-full font-label-sm text-[12px] font-extrabold border transition-all shrink-0 whitespace-nowrap cursor-pointer ${
                         isJoinedActive
                           ? 'bg-amber-500 text-zinc-950 border-amber-500 shadow-xs'
-                          : themeMode === 'light'
-                          ? 'bg-white text-amber-900 border-amber-300 hover:bg-amber-100/80'
-                          : 'bg-zinc-900 text-amber-200 border-amber-400/35 hover:bg-zinc-800'
+                          : 'bg-white text-amber-900 border-amber-300 hover:bg-amber-100/80'
                       }`}
                     >
                       {roomIcon} {jr.masterNickname} · {shortRoomLabel}

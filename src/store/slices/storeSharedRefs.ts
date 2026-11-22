@@ -25,7 +25,6 @@ import type {
 export type ViewportLayout = 'mobile' | 'desktop';
 export type MobileTab = 'trial' | 'search' | 'trash' | 'settings' | 'share';
 export type DesktopTab = 'trial' | 'dashboard' | 'trash' | 'sync' | 'share';
-export type ThemeMode = 'light' | 'dark';
 
 export const storeSharedRefs = {
   cancelOnboardingFlag: false,
@@ -399,16 +398,11 @@ export function quarantineResultNote(kind: 'move' | 'restore', r: QuarantineOpRe
     : `원래 위치로 되돌렸습니다${fail}`;
 }
 
-export function applyHtmlThemeClass(mode: ThemeMode): void {
+export function applyWarmLightThemeClass(): void {
   if (typeof document === 'undefined') return;
   const root = document.documentElement;
-  if (mode === 'light') {
-    root.classList.remove('dark');
-    root.classList.add('theme-warm-light');
-  } else {
-    root.classList.remove('theme-warm-light');
-    root.classList.add('dark');
-  }
+  root.classList.remove('dark');
+  root.classList.add('theme-warm-light');
 }
 
 export const INITIAL_ONBOARDING_PROGRESS: OnboardingProgressUpdate = {

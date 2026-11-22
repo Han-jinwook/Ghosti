@@ -129,9 +129,7 @@ import {
   INITIAL_ONBOARDING_PROGRESS,
   MobileTab,
   SEASON_TO_MONTH_SYNONYM_INDEX,
-  ThemeMode,
   ViewportLayout,
-  applyHtmlThemeClass,
   buildAutoMultiConditionSeedClusters,
   buildBidirectionalStickKeywords,
   buildYearEquivalenceTokens,
@@ -159,9 +157,6 @@ import type { SaySeeStore } from '../useSaySeeStore';
  */
 export interface AssistantOnboardingSlice {
   // 레이아웃 & 테마 (Warm Light Theme '#F8F7F4' 기본값 고정 + 우상단 ☀️/🌙 토글 지원)
-  themeMode: ThemeMode;
-  setThemeMode: (mode: ThemeMode) => void;
-  toggleThemeMode: () => void;
   layout: ViewportLayout;
   mobileTab: MobileTab;
   desktopTab: DesktopTab;
@@ -430,15 +425,6 @@ export const createAssistantOnboardingSlice: StateCreator<
   [],
   AssistantOnboardingSlice
 > = (set, get) => ({
-  themeMode: 'light',
-  setThemeMode: (_themeMode) => {
-    applyHtmlThemeClass('light');
-    set({ themeMode: 'light' });
-  },
-  toggleThemeMode: () => {
-    applyHtmlThemeClass('light');
-    set({ themeMode: 'light' });
-  },
   layout: resolveViewportLayout(),
   mobileTab: 'trash',
   desktopTab: 'trash',

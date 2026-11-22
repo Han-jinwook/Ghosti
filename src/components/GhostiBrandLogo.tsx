@@ -4,8 +4,6 @@ import { silencePendingEnterGiggleOnLogoClick } from '../services/babyGhostSound
 export interface GhostiBrandLogoProps {
   /** 'desktop' (기본: 36x36px 아이콘) | 'mobile' (32x32px 아이콘) | 'modal' (모달 상단용) */
   size?: 'desktop' | 'mobile' | 'modal';
-  /** 'light' | 'dark' 테마 (미지정 시 테마 자동 적응) */
-  themeMode?: 'light' | 'dark';
   /** 호환성 유지용 배지 */
   showBadge?: boolean;
   /** 호환성 유지용 배지 텍스트 */
@@ -30,7 +28,6 @@ export interface GhostiBrandLogoProps {
  */
 export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
   size = 'desktop',
-  themeMode,
   showBadge: _showBadge,
   badgeText: _badgeText,
   subtitle,
@@ -71,11 +68,7 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
     : 'w-auto';
 
   const sloganColorClass =
-    themeMode === 'light'
-      ? 'text-teal-700'
-      : themeMode === 'dark'
-      ? 'text-teal-300'
-      : 'text-teal-700 dark:text-teal-300';
+    'text-teal-700';
 
   const sloganLines = activeSlogan.split('\n');
 
@@ -125,31 +118,12 @@ export const GhostiBrandLogo: React.FC<GhostiBrandLogoProps> = ({
             </div>
           ) : (
             <div className="w-full flex items-center leading-none">
-              {themeMode === 'light' ? (
+              {(
                 <img
                   src="/gwisinkachi_3d_wordmark_dark.png"
                   alt="귀신같이"
                   className={`${wordmarkHeightClass} w-auto object-contain drop-shadow-sm`}
                 />
-              ) : themeMode === 'dark' ? (
-                <img
-                  src="/gwisinkachi_3d_wordmark_light.png"
-                  alt="귀신같이"
-                  className={`${wordmarkHeightClass} w-auto object-contain drop-shadow-sm`}
-                />
-              ) : (
-                <>
-                  <img
-                    src="/gwisinkachi_3d_wordmark_dark.png"
-                    alt="귀신같이"
-                    className={`${wordmarkHeightClass} w-auto object-contain drop-shadow-sm block dark:hidden`}
-                  />
-                  <img
-                    src="/gwisinkachi_3d_wordmark_light.png"
-                    alt="귀신같이"
-                    className={`${wordmarkHeightClass} w-auto object-contain drop-shadow-sm hidden dark:block`}
-                  />
-                </>
               )}
             </div>
           )}

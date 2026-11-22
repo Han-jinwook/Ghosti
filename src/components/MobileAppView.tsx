@@ -253,8 +253,6 @@ export const MobileAppView: React.FC = () => {
     connectedDevices,
     syncedClipboardItems,
     thisDeviceRevoked,
-    themeMode,
-    toggleThemeMode,
     merlinAuth,
     isStoreAppMode,
     enableSetupMonster,
@@ -334,8 +332,8 @@ export const MobileAppView: React.FC = () => {
   const [isLandscapeCompact, setIsLandscapeCompact] = useState<boolean>(computeIsTrueLandscapeCompact);
 
   useEffect(() => {
-    void syncNativeMobileThemeMode(themeMode === 'dark');
-  }, [themeMode]);
+    void syncNativeMobileThemeMode(false);
+  }, []);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -546,7 +544,7 @@ export const MobileAppView: React.FC = () => {
           : undefined
       }
       className={`${
-        themeMode === 'light' ? 'bg-[#F8F7F4] text-slate-900' : 'bg-[#09090B] text-zinc-100'
+        'bg-[#F8F7F4] text-slate-900'
       } font-body-md flex flex-col min-h-screen min-h-dvh mx-auto relative shadow-2xl border-x border-white/10 ${
         isLandscapeCompact
           ? 'w-full max-w-5xl pb-6'
@@ -556,9 +554,7 @@ export const MobileAppView: React.FC = () => {
       {/* 상단 통합 헤더: 상태바(pt-safe) 영역부터 네비게이션 바까지 단일 불투명 배경으로 일체화하여 iOS 다이나믹 아일랜드·상태바 경계 이질감 원천 제거 */}
       <header
         className={`sticky top-0 inset-x-0 z-50 pt-safe border-b transition-colors ${
-          themeMode === 'light'
-            ? 'bg-white border-[#EAE8E1]'
-            : 'bg-[#09090B] border-white/10'
+          'bg-white border-[#EAE8E1]'
         }`}
       >
         {isLandscapeCompact ? (
@@ -567,7 +563,6 @@ export const MobileAppView: React.FC = () => {
               <GhostiBrandLogo
                 size="mobile"
                 autoCycle={false}
-                themeMode={themeMode}
                 showBadge={false}
                 subtitle=""
                 onClick={() => {
@@ -600,12 +595,8 @@ export const MobileAppView: React.FC = () => {
                     }}
                     className={`px-2.5 py-1 rounded-full font-label-sm text-[11.5px] flex items-center justify-center gap-1 transition-all whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
                       active
-                        ? themeMode === 'light'
-                          ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold shadow-2xs'
-                          : 'bg-zinc-800 text-primary-container font-extrabold'
-                        : themeMode === 'light'
-                        ? 'bg-slate-100/80 text-slate-600 hover:text-slate-900 font-bold'
-                        : 'bg-zinc-900/70 text-zinc-400 hover:text-white font-bold'
+                        ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold shadow-2xs'
+                        : 'bg-slate-100/80 text-slate-600 hover:text-slate-900 font-bold'
                     }`}
                   >
                     <span>{menu.label}</span>
@@ -623,17 +614,15 @@ export const MobileAppView: React.FC = () => {
                   }}
                   title="공식 온보딩/가이드 페이지로 이동"
                   className={`px-2 py-1 rounded-lg font-bold text-[11px] flex items-center gap-0.5 shrink-0 whitespace-nowrap cursor-pointer ${
-                    themeMode === 'light'
-                      ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5'
-                      : 'text-zinc-300 hover:text-white hover:bg-white/10'
+                    'text-slate-600 hover:text-slate-900 hover:bg-black/5'
                   }`}
                 >
                   <span>📖</span>
                   <span>가이드</span>
                 </button>
               )}
-              <GhostiHeaderQuickShareButton themeMode={themeMode} compact />
-              <GhostiTopRightHubAnchor themeMode={themeMode} />
+              <GhostiHeaderQuickShareButton compact />
+              <GhostiTopRightHubAnchor />
             </div>
           </div>
         ) : (
@@ -644,7 +633,6 @@ export const MobileAppView: React.FC = () => {
                   <GhostiBrandLogo
                     size="mobile"
                     autoCycle={false}
-                    themeMode={themeMode}
                     showBadge={false}
                     subtitle=""
                     onClick={() => {
@@ -669,26 +657,22 @@ export const MobileAppView: React.FC = () => {
                       }}
                       title="공식 온보딩/가이드 페이지로 이동"
                       className={`px-2 py-1.5 rounded-lg font-bold text-[11px] flex items-center gap-0.5 shrink-0 whitespace-nowrap cursor-pointer ${
-                        themeMode === 'light'
-                          ? 'text-slate-600 hover:text-slate-900 hover:bg-black/5'
-                          : 'text-zinc-300 hover:text-white hover:bg-white/10'
+                        'text-slate-600 hover:text-slate-900 hover:bg-black/5'
                       }`}
                     >
                       <span>📖</span>
                       <span>가이드</span>
                     </button>
                   )}
-                  <GhostiHeaderQuickShareButton themeMode={themeMode} compact />
-                  <GhostiTopRightHubAnchor themeMode={themeMode} />
+                  <GhostiHeaderQuickShareButton compact />
+                  <GhostiTopRightHubAnchor />
                 </div>
               </div>
 
               {/* 모바일 공식 마스터 슬로건 한 줄 띠 (고정 헤더 높이 일정 유지로 키보드 상승 시 리플로우 버벅임 원천 차단) */}
               <div
                 className={`px-2.5 py-1 rounded-lg border text-[11px] font-bold text-center truncate ${
-                  themeMode === 'light'
-                    ? 'bg-teal-50/80 border-teal-200 text-teal-950'
-                    : 'bg-zinc-900/80 border-teal-500/20 text-zinc-200'
+                  'bg-teal-50/80 border-teal-200 text-teal-950'
                 }`}
                 title="내 PC와 모바일에 1초 초능력을 — 광고 0% · 클라우드 월세 0원"
               >
@@ -716,12 +700,8 @@ export const MobileAppView: React.FC = () => {
                       }}
                       className={`px-1.5 py-2 rounded-full font-label-sm text-[11.5px] flex items-center justify-center gap-1 transition-all whitespace-nowrap outline-none focus:outline-none cursor-pointer ${
                         active
-                          ? themeMode === 'light'
-                            ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold shadow-2xs'
-                            : 'bg-zinc-800 text-primary-container font-extrabold'
-                          : themeMode === 'light'
-                          ? 'bg-slate-100/80 text-slate-600 hover:text-slate-900 font-bold'
-                          : 'bg-zinc-900/70 text-zinc-400 hover:text-white font-bold'
+                          ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold shadow-2xs'
+                          : 'bg-slate-100/80 text-slate-600 hover:text-slate-900 font-bold'
                       }`}
                     >
                       <span>{menu.label}</span>
@@ -747,12 +727,8 @@ export const MobileAppView: React.FC = () => {
                           }}
                           className={`px-2.5 py-1.5 rounded-lg border text-[11.5px] shrink-0 whitespace-nowrap transition-all outline-none focus:outline-none cursor-pointer ${
                             groupActive
-                              ? themeMode === 'light'
-                                ? 'bg-white border-[#0D9488] text-[#0D9488] font-extrabold'
-                                : 'bg-zinc-900 border-primary-container text-primary-container font-extrabold'
-                              : themeMode === 'light'
-                              ? 'bg-transparent border-[#E5E0D5] text-slate-500 hover:text-slate-900 font-bold'
-                              : 'bg-transparent border-white/10 text-zinc-400 hover:text-white font-bold'
+                              ? 'bg-white border-[#0D9488] text-[#0D9488] font-extrabold'
+                              : 'bg-transparent border-[#E5E0D5] text-slate-500 hover:text-slate-900 font-bold'
                           }`}
                         >
                           {group.label}
@@ -764,9 +740,7 @@ export const MobileAppView: React.FC = () => {
                   {activeLoungeType === 'family' && (
                     <div
                       className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1.5 overflow-x-auto no-scrollbar ${
-                        themeMode === 'light'
-                          ? 'bg-teal-50/70 border-teal-200/80'
-                          : 'bg-teal-950/35 border-teal-500/30'
+                        'bg-teal-50/70 border-teal-200/80'
                       }`}
                     >
                       <span className="text-[11px] font-extrabold text-[#0D9488] dark:text-teal-300 shrink-0 whitespace-nowrap">
@@ -785,9 +759,7 @@ export const MobileAppView: React.FC = () => {
                             className={`px-2.5 py-1 rounded-full border text-[11px] shrink-0 whitespace-nowrap transition-all cursor-pointer ${
                               roomActive
                                 ? 'bg-[#0D9488] border-[#0D9488] text-white font-extrabold'
-                                : themeMode === 'light'
-                                ? 'bg-white border-slate-200 text-slate-600 font-bold'
-                                : 'bg-zinc-900 border-white/10 text-zinc-300 font-bold'
+                                : 'bg-white border-slate-200 text-slate-600 font-bold'
                             }`}
                           >
                             {room.label}
@@ -801,14 +773,12 @@ export const MobileAppView: React.FC = () => {
                     <div
                       aria-label="초대받은 독립 공유방 목록"
                       className={`px-2.5 py-1.5 rounded-xl border flex items-center gap-1.5 overflow-x-auto no-scrollbar ${
-                        themeMode === 'light'
-                          ? 'bg-amber-50/85 border-amber-200/90'
-                          : 'bg-amber-500/10 border-amber-400/30'
+                        'bg-amber-50/85 border-amber-200/90'
                       }`}
                     >
                       <span
                         className={`text-[11px] font-extrabold shrink-0 whitespace-nowrap ${
-                          themeMode === 'light' ? 'text-amber-800' : 'text-amber-300'
+                          'text-amber-800'
                         }`}
                       >
                         💌 초대받은 방:
@@ -839,9 +809,7 @@ export const MobileAppView: React.FC = () => {
                             className={`px-2.5 py-1 rounded-full border text-[11px] shrink-0 whitespace-nowrap transition-all cursor-pointer ${
                               isJoinedActive
                                 ? 'bg-amber-500 border-amber-500 text-zinc-950 font-extrabold'
-                                : themeMode === 'light'
-                                ? 'bg-white border-amber-300 text-amber-900 font-bold'
-                                : 'bg-zinc-900 border-amber-400/35 text-amber-200 font-bold'
+                                : 'bg-white border-amber-300 text-amber-900 font-bold'
                             }`}
                           >
                             {roomIcon} {jr.masterNickname} · {shortRoomLabel}
@@ -858,9 +826,7 @@ export const MobileAppView: React.FC = () => {
             {currentSubmenus.length > 0 && (
               <div
                 className={`px-3.5 pt-1 border-b flex items-center gap-1 overflow-x-auto no-scrollbar transition-colors ${
-                  themeMode === 'light'
-                    ? 'bg-[#F8F7F4]/95 border-[#E5E0D5]'
-                    : 'bg-[#111114]/95 border-white/10'
+                  'bg-[#F8F7F4]/95 border-[#E5E0D5]'
                 }`}
               >
                 {currentSubmenus.map((sub) => {
@@ -883,12 +849,8 @@ export const MobileAppView: React.FC = () => {
                       title={sub.subcaption ? `${sub.label} — ${sub.subcaption}` : sub.label}
                       className={`px-3.5 py-2 rounded-t-xl border-b-[3px] font-label-sm text-[12.5px] flex items-center gap-1 transition-all shrink-0 whitespace-nowrap outline-none focus:outline-none ${
                         isSubActive
-                          ? themeMode === 'light'
-                            ? 'bg-[#EAF8F6] text-[#0D9488] border-[#0D9488] font-extrabold'
-                            : 'bg-primary-container/15 text-primary-container border-primary-container font-extrabold'
-                          : themeMode === 'light'
-                          ? 'border-transparent text-slate-800 hover:text-[#0D9488] font-bold'
-                          : 'border-transparent text-zinc-400 hover:text-white font-bold'
+                          ? 'bg-[#EAF8F6] text-[#0D9488] border-[#0D9488] font-extrabold'
+                          : 'border-transparent text-slate-800 hover:text-[#0D9488] font-bold'
                       }`}
                     >
                       <div className="flex flex-col items-center">
@@ -903,12 +865,8 @@ export const MobileAppView: React.FC = () => {
                         <span
                           className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono font-bold ${
                             isSubActive
-                              ? themeMode === 'light'
-                                ? 'bg-[#0D9488]/15 text-[#0D9488]'
-                                : 'bg-primary-container/20 text-primary-container'
-                              : themeMode === 'light'
-                              ? 'bg-slate-200/80 text-slate-600'
-                              : 'bg-zinc-800 text-zinc-300'
+                              ? 'bg-[#0D9488]/15 text-[#0D9488]'
+                              : 'bg-slate-200/80 text-slate-600'
                           }`}
                         >
                           {activeTrashCount}
@@ -928,9 +886,7 @@ export const MobileAppView: React.FC = () => {
         (resolveMainMenuId(activeLoungeType) === 'photo_share' || currentSubmenus.length > 0) && (
           <div
             className={`px-safe py-1.5 border-b flex items-center justify-between gap-2 overflow-x-auto no-scrollbar ${
-              themeMode === 'light'
-                ? 'bg-[#F8F7F4] border-[#E5E0D5]'
-                : 'bg-[#111114] border-white/10'
+              'bg-[#F8F7F4] border-[#E5E0D5]'
             }`}
           >
             {resolveMainMenuId(activeLoungeType) === 'photo_share' && (
@@ -948,12 +904,8 @@ export const MobileAppView: React.FC = () => {
                       }}
                       className={`px-2 py-1 rounded-lg border text-[11px] shrink-0 whitespace-nowrap cursor-pointer ${
                         groupActive
-                          ? themeMode === 'light'
-                            ? 'bg-white border-[#0D9488] text-[#0D9488] font-extrabold'
-                            : 'bg-zinc-900 border-primary-container text-primary-container font-extrabold'
-                          : themeMode === 'light'
-                          ? 'bg-transparent border-[#E5E0D5] text-slate-600 font-bold'
-                          : 'bg-transparent border-white/10 text-zinc-400 font-bold'
+                          ? 'bg-white border-[#0D9488] text-[#0D9488] font-extrabold'
+                          : 'bg-transparent border-[#E5E0D5] text-slate-600 font-bold'
                       }`}
                     >
                       {group.label}
@@ -977,9 +929,7 @@ export const MobileAppView: React.FC = () => {
                           className={`px-2 py-0.5 rounded-full border text-[10.5px] shrink-0 whitespace-nowrap cursor-pointer ${
                             roomActive
                               ? 'bg-[#0D9488] border-[#0D9488] text-white font-extrabold'
-                              : themeMode === 'light'
-                              ? 'bg-white border-slate-200 text-slate-600 font-bold'
-                              : 'bg-zinc-900 border-white/10 text-zinc-300 font-bold'
+                              : 'bg-white border-slate-200 text-slate-600 font-bold'
                           }`}
                         >
                           {room.label}
@@ -1018,9 +968,7 @@ export const MobileAppView: React.FC = () => {
                           className={`px-2 py-0.5 rounded-full border text-[10.5px] shrink-0 whitespace-nowrap cursor-pointer ${
                             isJoinedActive
                               ? 'bg-amber-500 border-amber-500 text-zinc-950 font-extrabold'
-                              : themeMode === 'light'
-                              ? 'bg-white border-amber-300 text-amber-900 font-bold'
-                              : 'bg-zinc-900 border-amber-400/35 text-amber-200 font-bold'
+                              : 'bg-white border-amber-300 text-amber-900 font-bold'
                           }`}
                         >
                           {roomIcon} {jr.masterNickname} · {shortRoomLabel}
@@ -1053,12 +1001,8 @@ export const MobileAppView: React.FC = () => {
                       }}
                       className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold shrink-0 whitespace-nowrap cursor-pointer ${
                         isSubActive
-                          ? themeMode === 'light'
-                            ? 'bg-[#E6F7F5] text-[#0D9488] border border-[#0D9488]/40'
-                            : 'bg-primary-container/20 text-primary-container border border-primary-container/40'
-                          : themeMode === 'light'
-                          ? 'text-slate-600 hover:text-slate-900'
-                          : 'text-zinc-400 hover:text-white'
+                          ? 'bg-[#E6F7F5] text-[#0D9488] border border-[#0D9488]/40'
+                          : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
                       {sub.label}
@@ -1761,9 +1705,7 @@ export const MobileAppView: React.FC = () => {
       <nav
         style={{ paddingBottom: 'max(0.35rem, env(safe-area-inset-bottom, 0px))' }}
         className={`fixed bottom-0 inset-x-0 max-w-xl mx-auto min-h-[56px] backdrop-blur-xl border-t z-50 px-2 pt-1.5 flex items-center justify-around transition-colors ${
-          themeMode === 'light'
-            ? 'bg-white/95 border-[#E5E0D5]'
-            : 'bg-[#09090B]/95 border-white/10'
+          'bg-white/95 border-[#E5E0D5]'
         }`}
       >
         {currentSubmenus.map((sub) => {
@@ -1786,12 +1728,8 @@ export const MobileAppView: React.FC = () => {
               title={sub.subcaption ? `${sub.label} — ${sub.subcaption}` : sub.label}
               className={`flex-1 py-2 px-1.5 rounded-xl flex flex-col items-center justify-center gap-0.5 transition-all cursor-pointer ${
                 isSubActive
-                  ? themeMode === 'light'
-                    ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold'
-                    : 'bg-primary-container/15 text-primary-container font-extrabold'
-                  : themeMode === 'light'
-                  ? 'text-slate-600 font-bold'
-                  : 'text-zinc-400 font-bold'
+                  ? 'bg-[#E6F7F5] text-[#0D9488] font-extrabold'
+                  : 'text-slate-600 font-bold'
               }`}
             >
               <div className="flex items-center gap-1 max-w-full">
@@ -1812,7 +1750,7 @@ export const MobileAppView: React.FC = () => {
         })}
       </nav>
       )}
-      <MerlinZCoreGuideModal isOpen={showZCoreGuideModal} onClose={() => setShowZCoreGuideModal(false)} themeMode={themeMode} />
+      <MerlinZCoreGuideModal isOpen={showZCoreGuideModal} onClose={() => setShowZCoreGuideModal(false)} />
     </div>
   );
 };
