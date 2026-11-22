@@ -105,7 +105,7 @@ let latestRealPcState: RealPcOsInspectionData | null = null;
 
 /** Z-코어 미연결로 실측하지 못했을 때의 정직 안내 (예시 데이터로 대체 금지) */
 const NOT_MEASURED_NOTE =
-  '⚠️ 멀린 Z-코어에 연결되지 않아 내 PC 상태를 실측하지 못했습니다. 아래는 일반 안내이며, 실제 상태는 Z-코어 연결 후 다시 확인해 주세요.';
+  '⚠️ 내 컴퓨터 연결(PC 엔진)이 되어 있지 않아 내 PC 상태를 실측하지 못했습니다. 아래는 일반 안내이며, 실제 상태는 내 컴퓨터 연결 후 다시 확인해 주세요.';
 
 export function getLatestRealPcState(): RealPcOsInspectionData | null {
   return latestRealPcState;
@@ -174,15 +174,22 @@ export async function executeRealOsAction(
     | 'boot_lag_schedule_reboot'
     | 'boot_lag_clean_bloatware'
     | 'defender_status'
-    | 'defender_quick_scan',
+    | 'defender_quick_scan'
+    | 'defender_custom_scan'
+    | 'defender_scan_status'
+    | 'defender_update_signature'
+    | 'defender_open_ransomware_shield'
+    | 'defender_open_quarantine_history'
+    | 'defender_open_threat_settings',
   targetPath?: string
 ): Promise<{ ok: boolean; message?: string; summaryKo?: string; [k: string]: unknown }> {
   try {
+    const timeoutMs = action === 'defender_update_signature' ? 40000 : 12000;
     const res = await fetch(getZCoreUrl('/__zcore/os-execute'), {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action, targetPath }),
-      signal: AbortSignal.timeout(9000),
+      signal: AbortSignal.timeout(timeoutMs),
     });
     if (!res.ok) return { ok: false };
     return await res.json();

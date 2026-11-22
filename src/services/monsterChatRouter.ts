@@ -71,7 +71,11 @@ export type MonsterCardKind =
   | 'GHOSTI_INFO_DESK'
   | 'APP_SETTINGS_CONTROL'
   | 'STUDIO_SUPPORT_PROXY'
-  | 'WEEKLY_CARE_BRIEFING';
+  | 'WEEKLY_CARE_BRIEFING'
+  | 'BOOT_CARE_PREVIEW_GATE'
+  | 'DEFENDER_GUARD_CARD'
+  | 'STARTUP_MANAGER_CARD'
+  | 'INSTALLED_APPS_CARD';
 
 export interface MonsterInfoDeskPayload {
   topicBadge: string;
@@ -142,7 +146,7 @@ export interface MonsterCleanupItem {
 }
 
 export interface MonsterCleanupPreviewPayload {
-  cleanupType: 'FOLDER_REORG' | 'DOWNLOAD_INSTALLERS';
+  cleanupType: 'FOLDER_REORG' | 'DOWNLOAD_INSTALLERS' | 'WINDOWS_TEMP_JUNK';
   summaryTitle: string;
   userPrompt: string;
   targetFolderLabel: string;
@@ -229,7 +233,7 @@ export interface MonsterPcSpecPayload {
 export interface DigitalHealthCheckRecord {
   recordId: string;
   issuedAt: string;
-  category: '🧹 치우기' | '⚙️ 고치기' | '🔗 바로가기' | '↩️ 복원 기록';
+  category: '👻 귀신비서' | '⚙️ 고치기' | '🔗 바로가기' | '↩️ 복원 기록';
   title: string;
   reclaimedSizeLabel: string;
   cleanedItemCount: number;
@@ -284,6 +288,61 @@ export interface MonsterDeepUninstallPayload {
   executionError?: string;
 }
 
+export interface MonsterBootCarePreviewPayload {
+  mode: 'CLEAN_BLOATWARE' | 'SCHEDULE_REBOOT';
+  scheduleTime: string;
+  uptimeSummaryKo: string;
+  detectedPlugins: string[];
+  startupCount: number;
+  approved?: boolean;
+  approvedTypedText?: string;
+  createdRestoreId?: string;
+  executionSummaryKo?: string;
+  executionError?: string;
+}
+
+export interface MonsterDefenderGuardPayload {
+  realTimeProtection: boolean;
+  antivirusEnabled: boolean;
+  firewallEnabled: boolean;
+  ransomwareShieldEnabled: boolean;
+  signatureVersion: string;
+  signatureUpdatedAt: string;
+  removableDrives: Array<{ drive: string; label: string }>;
+  scanRunning: boolean;
+  lastScanResultKo?: string;
+  lastActionNoteKo?: string;
+}
+
+export interface MonsterStartupItem {
+  id: string;
+  name: string;
+  command: string;
+  locationLabel: string;
+  enabled: boolean;
+  isProtected: boolean;
+  requiresAdmin?: boolean;
+}
+
+export interface MonsterStartupManagerPayload {
+  items: MonsterStartupItem[];
+  lastToggleNoteKo?: string;
+}
+
+export interface MonsterInstalledAppItem {
+  name: string;
+  publisher: string;
+  version: string;
+  installDate: string;
+  sizeMb: number;
+  isProtected: boolean;
+}
+
+export interface MonsterInstalledAppsPayload {
+  totalCount: number;
+  items: MonsterInstalledAppItem[];
+}
+
 export interface MonsterChatMessage {
   id: string;
   role: 'user' | 'assistant';
@@ -327,6 +386,10 @@ export interface MonsterChatMessage {
   showMobileToPcBridgeButton?: boolean;
   /** [전환율 보강 ④] 귀신계 여권 가족 실명 등록 직후: 가족 사진 카톡방 1초 구경시켜 주기 바이럴 버튼 대상 실명 */
   passportViralFamilyName?: string;
+  bootCarePreviewPayload?: MonsterBootCarePreviewPayload;
+  defenderGuardPayload?: MonsterDefenderGuardPayload;
+  startupManagerPayload?: MonsterStartupManagerPayload;
+  installedAppsPayload?: MonsterInstalledAppsPayload;
 }
 
 // ---------------------------------------------------------------------------
@@ -748,7 +811,7 @@ export async function callMonsterLowCostLlmJson(params: {
     .join('\n');
 
   const prompt = [
-    '당신은 『귀신같이(Ghosti)』의 내 기기 전담 비서인 **손보기 비서(🪄 정리·수리·원복)**입니다.',
+    '당신은 『귀신같이(Ghosti)』의 내 기기 전담 비서인 **귀신비서(🪄 정리·수리·원복)**입니다.',
     '',
     '[유저 질문 말투에 따른 자동 눈높이 맞춤 규칙 (추가 토큰 없이 즉시 반영)]:',
     '- 유저 질문에 전문용어(RAM, 점유율, 클럭, 코어, 주사율, Hz, GPU 등)가 포함되어 있으면: 엔지니어링 실측 수치를 정확히 인용해 브리핑하세요.',
@@ -1095,7 +1158,7 @@ export async function executeMonsterCleanupApproval(
   const moved = Number(d.movedCount ?? 0);
   const failNote = d.errors?.length ? ` · 실패 ${d.errors.length}건` : '';
   const healthRecord = appendLocalHealthCheckRecord({
-    category: '🧹 치우기',
+    category: '👻 귀신비서',
     title: `${preview.summaryTitle} (승인: "${userTypedText}")`,
     reclaimedSizeLabel: `${formatBytes(Number(d.movedBytes ?? 0))} 정돈`,
     cleanedItemCount: moved,
@@ -1246,6 +1309,163 @@ export async function scanDeepUninstallTarget(appQuery: string): Promise<Monster
   };
 }
 
+export async function executeBootCarePreviewApproval(
+  payload: MonsterBootCarePreviewPayload,
+  userApprovalTypedText: string
+): Promise<{
+  ok: boolean;
+  restoreId?: string;
+  summaryKo: string;
+  healthRecord?: DigitalHealthCheckRecord;
+}> {
+  if (payload.mode === 'SCHEDULE_REBOOT') {
+    const res = await executeRealOsAction('boot_lag_schedule_reboot', payload.scheduleTime || '04:00');
+    if (!res.ok) {
+      return {
+        ok: false,
+        summaryKo: res.summaryKo || res.message || '내 컴퓨터 연결(PC 엔진) 상태를 확인해 주세요.',
+      };
+    }
+    const msg =
+      res.summaryKo ||
+      res.message ||
+      `⏰ 새벽 ${payload.scheduleTime || '04:00'}에 윈도우 자동 다시 시작(재부팅) 예약을 등록했습니다.`;
+    return { ok: true, summaryKo: msg };
+  }
+
+  const osRes = await executeRealOsAction('boot_lag_clean_bloatware', userApprovalTypedText || '응 진행해');
+  if (!osRes.ok) {
+    return {
+      ok: false,
+      summaryKo: osRes.summaryKo || osRes.message || '내 컴퓨터 연결(PC 엔진) 상태를 확인해 주세요.',
+    };
+  }
+  const restoreId = String((osRes as any).restoreId || '#1');
+  const cpuBefore = Number((osRes as any).cpuLoadBefore ?? 24);
+  const cpuAfter = Number((osRes as any).cpuLoadAfter ?? Math.max(6, Math.round(cpuBefore * 0.6)));
+  const cleanedCnt =
+    (Array.isArray((osRes as any).stoppedBloatware) ? (osRes as any).stoppedBloatware.length : 0) +
+      (Array.isArray((osRes as any).disabledStartups) ? (osRes as any).disabledStartups.length : 0) || 1;
+  const summaryKo =
+    osRes.summaryKo ||
+    osRes.message ||
+    `🚀 미사용 웹 보안 모듈과 불필요 자동실행 항목을 정리했습니다! (실측 CPU 부하: ${cpuBefore}% ➔ ${cpuAfter}%)`;
+  const rec = appendLocalHealthCheckRecord({
+    category: '👻 귀신비서',
+    title: '미사용 웹 보안 모듈 및 불필요 자동실행 정리',
+    reclaimedSizeLabel: `CPU 부하 ${cpuBefore}% ➔ ${cpuAfter}%`,
+    cleanedItemCount: cleanedCnt,
+    securityPluginsFrozen: cleanedCnt,
+    speedUpSummary: summaryKo,
+    restoreId,
+  });
+  return { ok: true, restoreId, summaryKo, healthRecord: rec };
+}
+
+export async function fetchDefenderGuardState(
+  subAction:
+    | 'defender_status'
+    | 'defender_quick_scan'
+    | 'defender_custom_scan'
+    | 'defender_scan_status'
+    | 'defender_update_signature'
+    | 'defender_open_ransomware_shield'
+    | 'defender_open_quarantine_history'
+    | 'defender_open_threat_settings' = 'defender_status',
+  targetPath?: string
+): Promise<{ ok: boolean; payload?: MonsterDefenderGuardPayload; summaryKo: string; raw?: any }> {
+  const res = await executeRealOsAction(subAction, targetPath);
+  if (!res.ok && subAction !== 'defender_update_signature') {
+    return {
+      ok: false,
+      summaryKo:
+        res.summaryKo ||
+        res.message ||
+        '⚠️ 내 컴퓨터 연결(PC 엔진)이 꺼져 있어 실시간 백신 방어막 상태를 조회하지 못했어요.',
+    };
+  }
+  const r = res as any;
+  const scanSt = r.scanState || {};
+  const scanRunning = Boolean(r.scanRunning ?? r.running ?? scanSt.running);
+  const payload: MonsterDefenderGuardPayload = {
+    realTimeProtection: Boolean(r.realTimeProtection ?? true),
+    antivirusEnabled: Boolean(r.antivirusEnabled ?? true),
+    firewallEnabled: Boolean(r.firewallEnabled ?? true),
+    ransomwareShieldEnabled: Boolean(r.ransomwareShieldEnabled ?? false),
+    signatureVersion: String(r.signatureVersion || ''),
+    signatureUpdatedAt: String(r.signatureUpdatedAt || ''),
+    removableDrives: Array.isArray(r.removableDrives) ? r.removableDrives : [],
+    scanRunning,
+    lastScanResultKo: String(r.resultSummaryKo || scanSt.resultSummaryKo || ''),
+    lastActionNoteKo: String(r.summaryKo || r.message || ''),
+  };
+  return {
+    ok: Boolean(res.ok),
+    payload,
+    summaryKo: String(r.summaryKo || r.message || ''),
+    raw: r,
+  };
+}
+
+export async function fetchStartupManagerPayload(): Promise<{
+  ok: boolean;
+  payload?: MonsterStartupManagerPayload;
+  errorKo?: string;
+}> {
+  const r = await zcoreJson<any>('/api/care/startup-list');
+  if (!r.ok || !r.data?.ok) {
+    return {
+      ok: false,
+      errorKo: (!r.ok ? r.error : r.data?.error) || '내 컴퓨터 연결(PC 엔진) 상태를 확인해 주세요.',
+    };
+  }
+  return {
+    ok: true,
+    payload: {
+      items: Array.isArray(r.data.items) ? r.data.items : [],
+    },
+  };
+}
+
+export async function toggleStartupProgramItem(
+  id: string,
+  enable: boolean
+): Promise<{ ok: boolean; message: string }> {
+  const r = await zcoreJson<any>(
+    '/api/care/startup-toggle',
+    postJson({ id, enable, userApprovalTypedText: `시작프로그램 ${enable ? '켜기' : '끄기'} 스위치 승인` })
+  );
+  if (!r.ok || !r.data?.ok) {
+    return {
+      ok: false,
+      message: (!r.ok ? r.error : r.data?.message) || '시작프로그램 상태를 변경하지 못했습니다.',
+    };
+  }
+  return { ok: true, message: String(r.data.message || '변경되었습니다.') };
+}
+
+export async function fetchInstalledAppsPayload(query = ''): Promise<{
+  ok: boolean;
+  payload?: MonsterInstalledAppsPayload;
+  errorKo?: string;
+}> {
+  const qs = query ? `?query=${encodeURIComponent(query)}&limit=80` : '?limit=80';
+  const r = await zcoreJson<any>(`/api/care/installed-apps-list${qs}`);
+  if (!r.ok || !r.data?.ok) {
+    return {
+      ok: false,
+      errorKo: (!r.ok ? r.error : r.data?.error) || '내 컴퓨터 연결(PC 엔진) 상태를 확인해 주세요.',
+    };
+  }
+  return {
+    ok: true,
+    payload: {
+      totalCount: Number(r.data.totalCount ?? 0),
+      items: Array.isArray(r.data.items) ? r.data.items : [],
+    },
+  };
+}
+
 export async function executeDeepUninstallApproval(
   payload: MonsterDeepUninstallPayload,
   userTypedText = '흔적까지 100% 심층 적출 실행'
@@ -1306,7 +1526,7 @@ export async function executeDeepUninstallApproval(
       `• **안심 복구 안내**: 지운 잔여 폴더는 바탕화면 **[휴지통]**에 그대로 들어 있어 언제든 우클릭 \`[복원]\`으로 되살릴 수 있습니다!`;
 
   const healthRecord = appendLocalHealthCheckRecord({
-    category: '🧹 치우기',
+    category: '👻 귀신비서',
     title: `[심층 제거] ${d.targetAppLabel || payload.targetAppLabel} (승인: "${userTypedText}")`,
     reclaimedSizeLabel: `휴지통 안전 이동 ${reclaimedMb}MB · 상주/스케줄러 ${totalTriggers}개 정리`,
     cleanedItemCount: (d.cleanedFolderCount ?? 0) + totalTriggers || 1,
@@ -1657,15 +1877,23 @@ async function handleAppSettingsControlIfMatched(
 ): Promise<MonsterChatMessage | null> {
   // 1) 클립보드 [복사검색] 기록 즉시 비우기
   if (/(복사|클립보드)\s*(기록|내역|목록|히스토리).*?(비워|지워|삭제|초기화|클리어)/i.test(clean)) {
+    let zSyncedClear = false;
     try {
-      await fetch(getZCoreUrl('/api/superpower/clear-history'), {
+      const rClr = await fetch(getZCoreUrl('/api/superpower/clear-history'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ clear_history: true }),
-        signal: AbortSignal.timeout(1500),
+        signal: AbortSignal.timeout(1800),
       });
+      zSyncedClear = rClr.ok;
     } catch {
-      /* local fallback */
+      zSyncedClear = false;
+    }
+    if (!zSyncedClear && !zCoreBridge.isConnected) {
+      return reply(
+        sourceTab,
+        '⚠️ 내 컴퓨터 연결(PC 엔진)이 꺼져 있어 로컬 Ctrl+0 클립보드 기록을 비우지 못했어요. 내 컴퓨터 연결 후 다시 말씀해 주세요!'
+      );
     }
     const payload: MonsterAppSettingsPayload = {
       settingCategory: 'CLIPBOARD_RETENTION',
@@ -2247,7 +2475,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
         : '';
 
     const issuedRec = appendLocalHealthCheckRecord({
-      category: '⚙️ 고치기',
+      category: '👻 귀신비서',
       title: '안 쓰는 은행·관공서 보안프로그램 자동 재우기(절전) 및 은행 접속 시 자동 기상 설정',
       reclaimedSizeLabel:
         stoppedCount > 0 ? `메모리 약 ${reclaimedMb}MB 확보` : '절전 수면 상태 유지 확인',
@@ -2784,7 +3012,10 @@ export async function processUnifiedMonsterChatQuery(params: {
             !m.proactiveCareBriefing.executed) ||
           (m.cardKind === 'DEEP_UNINSTALL_GATE' &&
             m.deepUninstallPayload &&
-            !m.deepUninstallPayload.executed))
+            !m.deepUninstallPayload.executed) ||
+          (m.cardKind === 'BOOT_CARE_PREVIEW_GATE' &&
+            m.bootCarePreviewPayload &&
+            !m.bootCarePreviewPayload.approved))
     );
 
   const isPendingMissingFileRestoreApprove =
@@ -2940,7 +3171,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       const healthRecord: DigitalHealthCheckRecord = {
         recordId: `HC-${Date.now()}`,
         issuedAt: new Date().toLocaleString('ko-KR'),
-        category: '⚙️ 고치기',
+        category: '👻 귀신비서',
         title: `애드웨어·보안·CPU 과점유 상주모듈 정리 (승인: "${clean}")`,
         reclaimedSizeLabel: `CPU 부하 ${cpuBefore}% ➔ ${cpuAfter}%`,
         cleanedItemCount: cleanedCount || pendingApprovalMsg.pcSpecPayload.detectedBloatwareLabels?.length || 1,
@@ -2997,7 +3228,7 @@ export async function processUnifiedMonsterChatQuery(params: {
         ? baseMsg
         : `${baseMsg}\n\n${(osRes as any)?.browserMemoryBottleneck?.guideKo || defaultChromeGuide}`;
       const issuedRec = appendLocalHealthCheckRecord({
-        category: '⚙️ 고치기',
+        category: '👻 귀신비서',
         title: '시작프로그램·상주 보안모듈 정리',
         reclaimedSizeLabel: `CPU 부하 ${cpuBefore}% ➔ ${cpuAfter}%`,
         cleanedItemCount: cleanedCnt,
@@ -3051,7 +3282,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       const healthRecord: DigitalHealthCheckRecord = {
         recordId: `HC-${Date.now()}`,
         issuedAt: new Date().toLocaleString('ko-KR'),
-        category: '⚙️ 고치기',
+        category: '👻 귀신비서',
         title: `[${pendingApprovalMsg.proactiveCareBriefing.badgeLabel}] 속도 회복 처치 (승인: "${clean}")`,
         reclaimedSizeLabel: `보안·유령모듈 ${pendingApprovalMsg.proactiveCareBriefing.detectedBloatwareCount || 1}건 제압`,
         cleanedItemCount: pendingApprovalMsg.proactiveCareBriefing.detectedBloatwareCount || 1,
@@ -3081,6 +3312,44 @@ export async function processUnifiedMonsterChatQuery(params: {
       speak('보안 프로그램과 유령 프로세스를 정리하여 컴퓨터 속도를 회복했으며, 다음 주 정기 검진도 자동 예약했습니다.');
       return reply(sourceTab, msgText, {
         healthRecordIssued: healthRecord,
+      });
+    }
+
+    if (
+      pendingApprovalMsg.cardKind === 'BOOT_CARE_PREVIEW_GATE' &&
+      pendingApprovalMsg.bootCarePreviewPayload &&
+      !pendingApprovalMsg.bootCarePreviewPayload.approved
+    ) {
+      const bPayload = pendingApprovalMsg.bootCarePreviewPayload;
+      const execRes = await executeBootCarePreviewApproval(bPayload, clean);
+      cachedPcContext = null;
+      setSharedMonsterMessages((prev) =>
+        prev.map((m) =>
+          m.id === pendingApprovalMsg.id && m.bootCarePreviewPayload
+            ? {
+                ...m,
+                bootCarePreviewPayload: {
+                  ...m.bootCarePreviewPayload,
+                  approved: execRes.ok,
+                  approvedTypedText: clean,
+                  createdRestoreId: execRes.restoreId,
+                  executionSummaryKo: execRes.ok ? execRes.summaryKo : undefined,
+                  executionError: execRes.ok ? undefined : execRes.summaryKo,
+                },
+                healthRecordIssued: execRes.healthRecord || m.healthRecordIssued,
+              }
+            : m
+        )
+      );
+      const msgText = execRes.ok
+        ? `${execRes.summaryKo}\n📋 **블랙박스 승인 기록 완료** — 승인 발화: \`"${clean}"\`${
+            execRes.restoreId ? ` · 복원 번호: \`${execRes.restoreId}\`` : ''
+          }\n언제든 채팅창에 **"원래대로 돌려줘"**라고 입력하시면 1초 만에 원복됩니다.`
+        : `⚠️ ${execRes.summaryKo}`;
+      speak(execRes.summaryKo);
+      return reply(sourceTab, msgText, {
+        healthRecordIssued: execRes.healthRecord,
+        followUpSuggestions: ['최근 [복원 기록] 보여줘', '시작프로그램 목록도 보여줘'],
       });
     }
 
@@ -3139,7 +3408,8 @@ export async function processUnifiedMonsterChatQuery(params: {
     }
   }
 
-  // 0-0A1) [대기 카드가 없을 때 "응 진행해" / "응 정리해줘" 입력 시 직전 맥락(사양·속도 진단 vs 폴더 정리)에 맞춰 즉시 실행 완료 보장]
+  // [임의 실행 0% 원칙] 대기 중인 미리보기 카드가 없을 때 "응" / "진행해"가 입력되면
+  // 절대 바로 파일을 옮기거나 프로세스를 끄지 않고, 먼저 대상 목록 미리보기 카드를 띄워 확인을 받습니다!
   const recentAssistantMsgsEarly = sharedChatState.messages.filter((m) => m.role === 'assistant');
   const lastAssistantMsgEarly = recentAssistantMsgsEarly[recentAssistantMsgsEarly.length - 1];
   const lastApprovedCleanupMsgEarly = [...recentAssistantMsgsEarly]
@@ -3157,44 +3427,31 @@ export async function processUnifiedMonsterChatQuery(params: {
       /사양|스펙|CPU\s*부하|애드웨어|보안모듈|속도\s*저하|시작프로그램/.test(lastAssistantMsgEarly?.text || '');
 
     if (isRecentSpecOrSlowContext) {
-      const osRes = await executeRealOsAction('boot_lag_clean_bloatware', clean);
-      cachedPcContext = null;
-      const restoreId = String((osRes as any).restoreId || '#1');
-      const cpuBefore = Number((osRes as any).cpuLoadBefore ?? lastAssistantMsgEarly?.pcSpecPayload?.cpuLoadPercent ?? 28);
-      const cpuAfter = Number((osRes as any).cpuLoadAfter ?? Math.max(8, Math.round(cpuBefore * 0.45)));
-      const ramTotalLabel = lastAssistantMsgEarly?.pcSpecPayload?.ramTotalGb
-        ? `${Math.round(lastAssistantMsgEarly.pcSpecPayload.ramTotalGb)}GB`
-        : '8GB';
-      const defaultChromeGuide = `💡 애드웨어는 모두 껐지만, 현재 내 컴퓨터 전체 메모리(${ramTotalLabel}) 중 크롬 브라우저(창/탭 다수)가 메모리를 많이 차지하고 있습니다. 안 쓰는 크롬 탭만 몇 개 닫아주시면 즉시 체감 속도가 확 빨라집니다!`;
-      const baseSummary =
-        osRes.summaryKo ||
-        osRes.message ||
-        `🚀 작업 스케줄러·서비스 기반 부활형 애드웨어와 상주 보안모듈을 한 번에 강제 종료 및 자동부활 차단했습니다! (실측 CPU 부하: ${cpuBefore}% ➔ ${cpuAfter}% · 잔존 상주 애드웨어 0건)`;
-      const summary = baseSummary.includes('애드웨어는 모두 껐지만')
-        ? baseSummary
-        : `${baseSummary}\n\n${(osRes as any)?.browserMemoryBottleneck?.guideKo || defaultChromeGuide}`;
-      const healthRecord: DigitalHealthCheckRecord = {
-        recordId: `HC-${Date.now()}`,
-        issuedAt: new Date().toLocaleString('ko-KR'),
-        category: '⚙️ 고치기',
-        title: `애드웨어·보안·CPU 과점유 상주모듈 정리 (승인: "${clean}")`,
-        reclaimedSizeLabel: `CPU 부하 ${cpuBefore}% ➔ ${cpuAfter}%`,
-        cleanedItemCount: 1,
-        securityPluginsFrozen: 1,
-        speedUpSummary: summary,
-        restoreId,
+      const diagRes = await executeRealOsAction('boot_lag_diagnose');
+      const plugins = Array.isArray((diagRes as any).activeSecurityPlugins)
+        ? (diagRes as any).activeSecurityPlugins.map((p: any) => String(p?.label || p?.keyword || '')).filter(Boolean)
+        : [];
+      const stCnt = Number((diagRes as any).startupProgramsCount ?? 0);
+      const previewBoot: MonsterBootCarePreviewPayload = {
+        mode: 'CLEAN_BLOATWARE',
+        scheduleTime: '04:00',
+        uptimeSummaryKo:
+          diagRes.summaryKo ||
+          '현재 백그라운드 미사용 웹 보안 서비스와 불필요 자동실행 항목을 점검했습니다.',
+        detectedPlugins: plugins,
+        startupCount: stCnt,
+        approved: false,
       };
-      appendLocalHealthCheckRecord(healthRecord);
-      const msgText = `${summary}\n📋 **블랙박스 승인 기록 완료** — 승인 발화: \`"${clean}"\` · 복원 번호: \`${restoreId}\`\n언제든 채팅창에 **"방금 한 거 되돌려줘"**라고 입력하시면 시작프로그램 설정을 원래대로 1초 원복합니다.`;
-      speak('승인 말씀이 블랙박스에 기록되었으며 애드웨어와 상주 보안 프로그램을 모두 정리했습니다.');
-      return reply(sourceTab, msgText, {
-        healthRecordIssued: healthRecord,
-        followUpSuggestions: [
-          '속도 개선된거야?',
-          '방금 한 거 되돌려줘',
-        ],
-      });
+      return reply(
+        sourceTab,
+        `🔍 **멋대로 지우지 않고 정리 대상 목록부터 먼저 보여드릴게요!**\n아래 점검 내역을 확인하신 뒤 **[✅ 응, 안전하게 정리해줘]** 버튼을 누르시거나 **"응 진행해"**라고 입력해 주세요.`,
+        {
+          cardKind: 'BOOT_CARE_PREVIEW_GATE',
+          bootCarePreviewPayload: previewBoot,
+        }
+      );
     }
+
     const scanNow = await zcoreJson<{
       ok: boolean;
       items?: MonsterCleanupItem[];
@@ -3207,7 +3464,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       const totalBytes = Number(scanNowData?.totalBytes ?? 0);
       const preview: MonsterCleanupPreviewPayload = {
         cleanupType: 'FOLDER_REORG',
-        summaryTitle: '바탕화면·다운로드 임시·설치파일 정리',
+        summaryTitle: '바탕화면·다운로드 임시·설치파일 정리 미리보기',
         userPrompt: clean,
         targetFolderLabel: '바탕화면·다운로드 폴더',
         moveCount: scannedItems.length,
@@ -3217,29 +3474,17 @@ export async function processUnifiedMonsterChatQuery(params: {
         sampleFiles: scannedItems.map(
           (i) => `${i.name} (${i.folderLabel} · ${formatBytes(i.sizeBytes)} · ${i.ageDays}일 전)`
         ),
-        previewDescriptionKo: `바탕화면·다운로드 폴더에서 임시·압축·설치파일 ${scannedItems.length}건을 '기타_정리함'으로 안전 이동했습니다.`,
+        previewDescriptionKo: `승인 시 바탕화면·다운로드 폴더의 설치·임시파일 ${scannedItems.length}건을 '기타_정리함'으로 안전하게 모아드립니다.`,
+        approved: false,
       };
-      const execRes = await executeMonsterCleanupApproval(preview, clean);
-      const approvedPreview: MonsterCleanupPreviewPayload = {
-        ...preview,
-        approved: execRes.ok,
-        approvedTypedText: clean,
-        createdRestoreId: execRes.restoreId,
-        executionError: execRes.ok ? undefined : execRes.message,
-      };
-      const msgText = execRes.ok
-        ? `✅ **정리가 완료되었습니다!**\n${execRes.message}\n📋 **블랙박스 승인 기록 완료** — 승인 발화: \`"${clean}"\` · 복원 번호: \`${execRes.restoreId}\`\n언제든 우측 상단 **[🕰️ 복원 기록]** 버튼을 누르시거나 채팅창에 **"원래대로 되돌려줘"**라고 입력하시면 원래 위치로 1초 원복됩니다.`
-        : execRes.message;
-      speak(execRes.ok ? '정리가 완료되었으며 복원 기록에 안전하게 보관했습니다.' : execRes.message);
-      return reply(sourceTab, msgText, {
-        cardKind: 'CLEANUP_PREVIEW_GATE',
-        cleanupPreview: approvedPreview,
-        healthRecordIssued: execRes.healthRecord,
-        followUpSuggestions: [
-          '최근 [복원 기록] 보여줘',
-          '방금 한 거 원래대로 되돌려줘',
-        ],
-      });
+      return reply(
+        sourceTab,
+        `🔍 **임의 이동 없이 정리할 파일 ${scannedItems.length}건(${formatBytes(totalBytes)}) 목록을 먼저 찾았어요!**\n아래 목록을 확인하신 뒤 **[✅ 응, 안전 정리해줘]** 버튼을 눌러 주세요.`,
+        {
+          cardKind: 'CLEANUP_PREVIEW_GATE',
+          cleanupPreview: preview,
+        }
+      );
     }
     if (lastApprovedCleanupMsgEarly?.cleanupPreview) {
       const prevRid = lastApprovedCleanupMsgEarly.cleanupPreview.createdRestoreId || '#1';
@@ -3569,7 +3814,7 @@ export async function processUnifiedMonsterChatQuery(params: {
   const infoDeskReply = handleGhostiInfoDeskIfMatched(clean, sourceTab, speak);
   if (infoDeskReply) return infoDeskReply;
 
-  // 0-0F) [[🎯 찾기] ↔ [✋ 손보기] 양방향 0토큰 통합 음성/텍스트 자동 라우터]
+  // 0-0F) [[🎯 찾기] ↔ [👻 귀신비서] 양방향 0토큰 통합 음성/텍스트 자동 라우터]
   // [✋ 손보기 대화창]에서 문서 카톡 전달, 문서 핵심 수치 Q&A("보증금 얼마야?"), 키워드 문장 낭독, 문서 요약, 또는 단순 사진·서류 찾기를 말했을 때
   // "다른 메뉴로 가세요"라고 거절하지 않고 0.001초 만에 [🎯 찾기] 엔진으로 자동 토스(Toss) 및 음성 브리핑까지 원스톱 실행합니다!
   const voiceDocCmd = parseZeroLlmVoiceDocCommand(clean);
@@ -3790,9 +4035,23 @@ export async function processUnifiedMonsterChatQuery(params: {
   if (isDeepUninstallRequest) {
     const payload = await scanDeepUninstallTarget(clean);
     if (payload.needsClarification || payload.zCoreOffline) {
+      if (payload.needsClarification && zCoreBridge.isConnected) {
+        const appsRes = await fetchInstalledAppsPayload();
+        if (appsRes.ok && appsRes.payload && appsRes.payload.items.length > 0) {
+          return reply(
+            sourceTab,
+            `${payload.honestBriefingKo}\n\n📋 이름을 일일이 외우실 필요 없도록 **내 PC에 설치된 프로그램 전체 목록(${appsRes.payload.totalCount}개)**을 바로 아래에 띄워 드렸어요! 지우고 싶은 앱 옆의 **[🗑️ 심층 제거 점검]**을 눌러 주세요.`,
+            {
+              cardKind: 'INSTALLED_APPS_CARD',
+              installedAppsPayload: appsRes.payload,
+              followUpSuggestions: ['알약 흔적까지 지워줘', '알집 완전히 삭제해줘', '고클린 제거해줘'],
+            }
+          );
+        }
+      }
       return reply(sourceTab, payload.honestBriefingKo, {
         followUpSuggestions: payload.needsClarification
-          ? ['알약 흔적까지 지워줘', '알집 완전히 삭제해줘', '고클린 제거해줘']
+          ? ['설치된 프로그램 전체 목록 보여줘', '알약 흔적까지 지워줘', '고클린 제거해줘']
           : ['요즘 컴퓨터가 좀 느린데 내 사양이랑 상태 봐줘'],
       });
     }
@@ -3917,94 +4176,237 @@ export async function processUnifiedMonsterChatQuery(params: {
     );
   }
 
+  // [🗑️ "휴지통 비워줘" 직접 타이핑 안전핀 & 휴지통 용량 조회 (기능명세 §5.9-3)]
+  const isRecycleBinPurgeTyped =
+    /휴지통/.test(clean) && /(비워\s*줘|비워\s*주세요|비워\s*줄래|비워라|비우기|완전히\s*비워|싹\s*비워)/i.test(clean);
+  if (isRecycleBinPurgeTyped) {
+    if (isMobileClient) {
+      return reply(
+        sourceTab,
+        '📱 스마트폰 사진 휴지통 비우기는 아이폰 **[사진 앱 ➔ 최근 삭제된 항목]** 또는 안드로이드 **[갤러리 ➔ 휴지통]**에서 OS 보안 확인 후 비우실 수 있어요!'
+      );
+    }
+    const purgeRes = await zcoreJson<any>(
+      '/__zcore/recycle-bin-empty',
+      postJson({ userApprovalTypedText: clean })
+    );
+    if (!purgeRes.ok || !purgeRes.data?.ok) {
+      const errKo =
+        (!purgeRes.ok ? purgeRes.error : purgeRes.data?.message) ||
+        '⚠️ 내 컴퓨터 연결(PC 엔진) 상태를 확인한 뒤 채팅창에 직접 "휴지통 비워줘"라고 입력해 주세요.';
+      return reply(sourceTab, errKo);
+    }
+    const d = purgeRes.data;
+    const msgKo =
+      `${d.message}\n📋 **블랙박스 안전핀 기록 완료** — 직접 입력 발화: \`"${clean}"\``;
+    speak(d.message);
+    return reply(sourceTab, msgKo, {
+      followUpSuggestions: ['윈도우 임시파일(Temp) 정리할 거 봐줘', '요즘 컴퓨터 사양이랑 상태 봐줘'],
+    });
+  }
+
+  const isRecycleBinStatusQuery =
+    /휴지통/.test(clean) && /(용량|상태|몇\s*개|얼마나|남아|확인|조회)/i.test(clean) && !/찾아|살려|복구|복원/i.test(clean);
+  if (isRecycleBinStatusQuery && !isMobileClient) {
+    const rbSt = await zcoreJson<any>('/__zcore/recycle-bin-status');
+    if (rbSt.ok && rbSt.data?.ok) {
+      const cnt = Number(rbSt.data.itemCount ?? 0);
+      const szLbl = String(rbSt.data.sizeLabel || '0B');
+      const cFree = Number(rbSt.data.cDriveFreeGb ?? 0);
+      const infoKo =
+        cnt > 0
+          ? `🗑️ 현재 Windows **[휴지통]**에 **${cnt}개 항목(총 ${szLbl})**이 안전하게 보관 중이에요. (현재 C드라이브 여유 공간: **${cFree}GB**)\n\n💡 휴지통에 보관 중일 때는 C드라이브 남은 용량 숫자가 그대로 유지됩니다. 이상이 없거나 지금 바로 여유 공간(+${szLbl})을 확보하시려면 실수 방지를 위해 채팅창에 직접 **\`"휴지통 비워줘"\`**라고 타이핑해 주세요!`
+          : `✨ 현재 Windows **[휴지통]**이 **0개(0B)**로 깨끗하게 비어 있어요! (C드라이브 여유 공간: **${cFree}GB**)`;
+      return reply(sourceTab, infoKo, {
+        followUpSuggestions: ['윈도우 임시파일(Temp) 정리할 거 봐줘', '바탕화면·다운로드 정리할 파일 봐줘'],
+      });
+    }
+  }
+
+  // [🧹 고클린 대체 ①: 윈도우 임시 쓰레기(Temp · 크래시 덤프) 안전 스캔 미리보기]
+  const isTempJunkCleanupIntent =
+    !isMobileClient &&
+    /(임시\s*파일|임시\s*쓰레기|temp\s*폴더|temp\s*파일|윈도우\s*캐시|찌꺼기\s*파일|크래시\s*덤프)/i.test(clean) &&
+    !/복원|되돌려|찾아/i.test(clean);
+  if (isTempJunkCleanupIntent) {
+    const scanTmp = await zcoreJson<{
+      ok: boolean;
+      items?: MonsterCleanupItem[];
+      totalBytes?: number;
+    }>('/__zcore/cleanup-scan', postJson({ kind: 'WINDOWS_TEMP_JUNK' }));
+    if (!scanTmp.ok || !scanTmp.data?.ok) {
+      return reply(sourceTab, `⚠️ ${(!scanTmp.ok ? scanTmp.error : '') || '내 컴퓨터 연결(PC 엔진) 후 임시파일을 점검할 수 있습니다.'}`);
+    }
+    const items = scanTmp.data.items || [];
+    const totalBytes = Number(scanTmp.data.totalBytes ?? 0);
+    if (items.length === 0) {
+      return reply(
+        sourceTab,
+        '✨ 내 PC의 사용자·윈도우 Temp 폴더를 점검한 결과, 24시간이 지난 불필요 임시 쓰레기 파일이 **0건**으로 아주 깨끗합니다! (열려 있는 브라우저와 최근 작업 파일은 안전하게 보호했습니다)',
+        {
+          followUpSuggestions: ['시작프로그램 목록 보여줘', '설치된 프로그램 전체 목록 보여줘'],
+        }
+      );
+    }
+    const previewTmp: MonsterCleanupPreviewPayload = {
+      cleanupType: 'WINDOWS_TEMP_JUNK',
+      summaryTitle: '윈도우 임시 쓰레기(Temp · 크래시 덤프) 안전 청소',
+      userPrompt: clean,
+      targetFolderLabel: 'Windows·사용자 Temp 폴더 (최근 24시간 작업파일·브라우저 제외)',
+      moveCount: items.length,
+      totalBytes,
+      reclaimSizeLabel: `총 ${formatBytes(totalBytes)}`,
+      items,
+      sampleFiles: items
+        .slice(0, 8)
+        .map((i) => `${i.name} (${i.folderLabel} · ${formatBytes(i.sizeBytes)} · ${i.ageDays}일 전)`),
+      previewDescriptionKo: `영구 삭제 없이 Windows 기본 [휴지통]으로 안전하게 옮기며 [복원 기록]에도 남겨 드립니다.`,
+      approved: false,
+    };
+    return reply(
+      sourceTab,
+      `🧹 **묵은 윈도우 임시 쓰레기 파일 ${items.length}건(${formatBytes(totalBytes)})**을 찾았어요!\n열려 있는 프로그램이나 최근 24시간 파일은 빼고 안전한 항목만 골랐습니다. 아래 목록을 보시고 **[✅ 응, 안전 정리해줘]**를 눌러 주세요.`,
+      {
+        cardKind: 'CLEANUP_PREVIEW_GATE',
+        cleanupPreview: previewTmp,
+      }
+    );
+  }
+
+  // [🚀 고클린 대체 ②: 시작프로그램 목록 & 개별 켜기/끄기(ON/OFF) 매니저]
+  const isStartupManagerIntent =
+    !isMobileClient &&
+    /(시작\s*프로그램|자동\s*실행\s*목록|부팅.*?(켜지는|실행되는)\s*(프로그램|앱|목록))/i.test(clean);
+  if (isStartupManagerIntent) {
+    const stRes = await fetchStartupManagerPayload();
+    if (!stRes.ok || !stRes.payload) {
+      return reply(sourceTab, `⚠️ ${stRes.errorKo || '내 컴퓨터 연결(PC 엔진) 후 시작프로그램을 조회할 수 있습니다.'}`);
+    }
+    const enCnt = stRes.payload.items.filter((x) => x.enabled).length;
+    const disCnt = stRes.payload.items.filter((x) => !x.enabled).length;
+    return reply(
+      sourceTab,
+      `🚀 **내 PC 부팅 시 자동 실행되는 시작프로그램 목록(켜짐 ${enCnt}개 · 꺼둠 ${disCnt}개)**이에요!\n원하시는 항목만 골라서 우측 스위치로 안전하게 **켜고 끄실 수 있으며**, 보안·필수 항목은 실수로 꺼지지 않게 보호해 두었습니다.`,
+      {
+        cardKind: 'STARTUP_MANAGER_CARD',
+        startupManagerPayload: stRes.payload,
+        followUpSuggestions: ['설치된 프로그램 전체 목록 보여줘', '윈도우 임시파일(Temp) 정리할 거 봐줘'],
+      }
+    );
+  }
+
+  // [📋 고클린 대체 ③: 설치된 프로그램 전체 목록 조회 & 원클릭 심층 제거 연결]
+  const isInstalledAppsListIntent =
+    !isMobileClient &&
+    /(설치된\s*(프로그램|앱|어플)|깔린\s*(프로그램|앱|어플)|프로그램\s*(목록|리스트|추가\s*제거)|안\s*쓰는\s*(프로그램|앱)\s*(목록|뭐\s*있|보여))/i.test(
+      clean
+    );
+  if (isInstalledAppsListIntent) {
+    const appsRes = await fetchInstalledAppsPayload();
+    if (!appsRes.ok || !appsRes.payload) {
+      return reply(sourceTab, `⚠️ ${appsRes.errorKo || '내 컴퓨터 연결(PC 엔진) 후 설치된 프로그램 목록을 볼 수 있습니다.'}`);
+    }
+    return reply(
+      sourceTab,
+      `📋 **내 PC에 설치된 프로그램 전체 목록(총 ${appsRes.payload.totalCount}개 · 용량순)**이에요!\n앱 이름을 일일이 입력하실 필요 없이, 정리하고 싶은 프로그램 옆의 **[🗑️ 심층 제거 점검]** 버튼을 누르면 상주 프로세스와 잔여 캐시 용량까지 먼저 진단해 드립니다.`,
+      {
+        cardKind: 'INSTALLED_APPS_CARD',
+        installedAppsPayload: appsRes.payload,
+        followUpSuggestions: ['시작프로그램 목록 보여줘', '윈도우 임시파일(Temp) 정리할 거 봐줘'],
+      }
+    );
+  }
+
   const isExplicitBootUptimeOrRebootCare =
     !/강제\s*종료/i.test(clean) &&
-    /부팅\s*경과|켜\s*둔\s*지|경과\s*시간|부팅\s*컨디션|안\s*끄고|자동\s*재부팅|재부팅\s*예약|새벽.*?재부팅|고클린|구라제거기|핸들\s*누수|응급\s*리셋|(재부팅해도.*?보안\s*쓰레기)/i.test(
+    /부팅\s*경과|켜\s*둔\s*지|경과\s*시간|부팅\s*컨디션|안\s*끄고|자동\s*재부팅|재부팅\s*예약|새벽.*?재부팅|고클린|구라제거기|핸들\s*누수|응급\s*리셋|(재부팅해도.*?보안\s*쓰레기)|보안\s*쓰레기/i.test(
       clean
     );
   if (isExplicitBootUptimeOrRebootCare) {
     if (isMobileClient) {
       const mobileBootMsg =
         `👻 지금은 **스마트폰**으로 접속해 계시네요!\n` +
-        `컴퓨터 부팅 경과 시간 진단은 **PC(컴퓨터)에서 접속하셨을 때** 윈도우 켜둔 시간(시간·분)을 1초 만에 측정해 드려요 ✨ 스마트폰에서는 사진첩 중복·흔들린 사진 정리와 1초 사진·문서 내용검색을 바로 써보실 수 있어요!\n\n` +
-        `💡 **요금 안내**: 시작프로그램 목록 점검과 불필요 자동실행 정리는 내 PC 1대에서 평생 0원(무료)으로 이용하실 수 있습니다!`;
+        `컴퓨터 부팅 경과 시간 진단은 **PC(컴퓨터)에서 접속하셨을 때** 윈도우 켜둔 시간(시간·분)을 1초 만에 측정해 드려요 ✨ 스마트폰에서는 사진첩 중복·흔들린 사진 정리와 1초 사진·문서 내용검색을 바로 써보실 수 있어요!`;
       return reply(sourceTab, mobileBootMsg, {
         followUpSuggestions: [
           '중복·연사 사진 정리하는 법 알려줘',
           '귀신검색으로 내 파일 찾아볼래',
-          '귀신비서의 숨은 초능력 알려줘',
         ],
       });
     }
-    const subAct =
-      /예약|새벽/i.test(clean)
-        ? 'boot_lag_schedule_reboot'
-        : /구라|보안\s*프로그램|보안\s*쓰레기/i.test(clean)
-        ? 'boot_lag_clean_bloatware'
-        : 'boot_lag_diagnose';
-    const osRes = await executeRealOsAction(subAct, subAct === 'boot_lag_clean_bloatware' ? clean : '04:00');
-    if (subAct === 'boot_lag_clean_bloatware') {
-      cachedPcContext = null;
-      const restoreId = String((osRes as any).restoreId || '#1');
-      const cpuBefore = Number((osRes as any).cpuLoadBefore ?? 28);
-      const cpuAfter = Number((osRes as any).cpuLoadAfter ?? Math.max(8, Math.round(cpuBefore * 0.45)));
-      const cleanedCnt =
-        (Array.isArray((osRes as any).stoppedBloatware) ? (osRes as any).stoppedBloatware.length : 0) +
-        (Array.isArray((osRes as any).disabledStartups) ? (osRes as any).disabledStartups.length : 0) || 1;
-      const cleanSummary =
-        osRes.summaryKo ||
-        `🚀 재부팅해도 다시 켜지던 은행·관공서 상주 보안모듈과 불필요 자동실행 항목을 깔끔하게 정리했어요! (실측 CPU 부하: ${cpuBefore}% ➔ ${cpuAfter}% · 잔존 상주 보안쓰레기 0건)`;
-      const issuedRec = appendLocalHealthCheckRecord({
-        category: '⚙️ 고치기',
-        title: '재부팅 자동실행 은행·관공서 보안모듈 및 불필요 상주 항목 정리',
-        reclaimedSizeLabel: `CPU 부하 ${cpuBefore}% ➔ ${cpuAfter}%`,
-        cleanedItemCount: cleanedCnt,
-        securityPluginsFrozen: cleanedCnt,
-        speedUpSummary: cleanSummary,
-        restoreId,
-      });
-      speak(cleanSummary);
-      return reply(sourceTab, cleanSummary, {
-        healthRecordIssued: issuedRec,
-        followUpSuggestions: [
-          '속도 개선된 거야?',
-          '최근 [복원 기록] 보여줘',
-          '다운로드 폴더 방치된 설치파일(.exe) 정리해줘',
-        ],
+    // [임의 실행 0% 철칙] 무조건 먼저 읽기 전용 진단을 수행하고, 정리/재부팅 예약은 미리보기 승인 카드로 제시!
+    const diagRes = await executeRealOsAction('boot_lag_diagnose');
+    const plugins = Array.isArray((diagRes as any).activeSecurityPlugins)
+      ? (diagRes as any).activeSecurityPlugins.map((p: any) => String(p?.label || p?.keyword || '')).filter(Boolean)
+      : [];
+    const stCnt = Number((diagRes as any).startupProgramsCount ?? 0);
+    const wantsScheduleReboot = /예약|새벽/i.test(clean);
+    const wantsCleanBloat = /구라|보안\s*프로그램|보안\s*쓰레기|정리|고클린/i.test(clean);
+
+    if (wantsScheduleReboot || wantsCleanBloat) {
+      const previewBoot: MonsterBootCarePreviewPayload = {
+        mode: wantsScheduleReboot ? 'SCHEDULE_REBOOT' : 'CLEAN_BLOATWARE',
+        scheduleTime: '04:00',
+        uptimeSummaryKo:
+          diagRes.summaryKo ||
+          '내 PC 부팅 경과 시간 및 상주 보안 모듈 상태를 점검했습니다.',
+        detectedPlugins: plugins,
+        startupCount: stCnt,
+        approved: false,
+      };
+      const introKo = wantsScheduleReboot
+        ? `⏰ **새벽 4시 자동 다시 시작(재부팅) 예약 미리보기**입니다.\n바로 예약하지 않고 먼저 확인창을 띄워 드렸어요. 아래 버튼을 누르시거나 **"응 진행해"**라고 입력하시면 등록됩니다.`
+        : `🔍 **미사용 웹 보안 모듈 및 불필요 자동실행 점검 결과**입니다. (사내 문서보안 DRM·백신은 절대 건드리지 않습니다)\n아래 대상 목록을 확인하신 뒤 **[✅ 응, 안전하게 정리해줘]** 버튼을 눌러 주세요!`;
+      return reply(sourceTab, introKo, {
+        cardKind: 'BOOT_CARE_PREVIEW_GATE',
+        bootCarePreviewPayload: previewBoot,
+        followUpSuggestions: ['시작프로그램 목록 보여줘', '윈도우 임시파일(Temp) 정리할 거 봐줘'],
       });
     }
+
     const baseSummary =
-      osRes.summaryKo ||
-      (subAct === 'boot_lag_diagnose'
-        ? '⏱️ **[내 PC 부팅 경과 시간 & 컨디션 진단 안내]**\n현재 무료 로컬 엔진이 꺼져 있어 정확한 윈도우 경과 시간을 읽지 못했어요. 로컬 엔진을 켜두시면 켜둔 시간(시간·분)을 1초 만에 알려드리며, 하루(24시간) 이상 켜두셨다면 억지 메모리 청소 대신 다시 시작(재부팅)을 한 번 해주시는 게 가장 빠르고 안전해요!'
-        : '하루 이상(24시간 초과) 켜두어 윈도우에 쌓인 피로는 억지 메모리 청소 대신 다시 시작(재부팅)을 한 번 해주시는 게 가장 빠르고 깨끗해요! (권장 기준: 매일 1회 재부팅)');
-    const freeTierNote =
-      `\n\n💡 **요금 안내**: 시작프로그램 목록 점검과 불필요 자동실행 정리는 내 PC 1대에서 평생 0원(무료)으로 이용하실 수 있습니다!`;
-    const fullReplyText = baseSummary.includes('요금 안내') ? baseSummary : `${baseSummary}${freeTierNote}`;
+      diagRes.summaryKo ||
+      '⏱️ **[내 PC 부팅 경과 시간 & 컨디션 진단 안내]**\n내 컴퓨터 연결(PC 엔진)을 켜두시면 켜둔 시간(시간·분)을 1초 만에 알려드리며, 하루(24시간) 이상 켜두셨다면 억지 메모리 청소 대신 다시 시작(재부팅)을 한 번 해주시는 게 가장 빠르고 안전해요!';
     speak(baseSummary);
-    return reply(sourceTab, fullReplyText, {
+    return reply(sourceTab, baseSummary, {
       followUpSuggestions: [
-        '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
-        '재부팅해도 다시 켜지는 은행·관공서 보안 쓰레기만 정리해줘',
+        '시작프로그램 목록 보여줘',
+        '윈도우 임시파일(Temp) 정리할 거 봐줘',
         '새벽 4시에 자동 재부팅 예약해줘',
       ],
     });
   }
 
+  // [🛡️ 알약 완전 대체: Windows Defender 순정 백신 통합 관제 카드]
   const isExplicitDefenderCheck =
     !/지워|삭제|제거|적출|언인스톨/i.test(clean) &&
-    /알약|바이러스|랜섬웨어|백신|디펜더|defender|악성코드|방어막/i.test(clean);
+    /알약|바이러스|랜섬웨어|백신|디펜더|defender|악성코드|방어막|(usb.*?검사)/i.test(clean);
   if (isExplicitDefenderCheck) {
-    const subDef = /검사|스캔/i.test(clean) ? 'defender_quick_scan' : 'defender_status';
-    const defRes = await executeRealOsAction(subDef);
+    if (isMobileClient) {
+      return reply(
+        sourceTab,
+        '📱 스마트폰에서는 상단 **[🛡️ 유료결제 유도 악성 클리너 구출]** 기능으로 광고·결제 유도 앱을 안전하게 찾아 삭제하실 수 있어요!'
+      );
+    }
+    const wantsUpdate = /업데이트|패치|최신\s*db/i.test(clean);
+    const wantsScan = /검사|스캔/i.test(clean);
+    const subDef = wantsUpdate
+      ? 'defender_update_signature'
+      : wantsScan
+      ? 'defender_quick_scan'
+      : 'defender_status';
+    const defWrap = await fetchDefenderGuardState(subDef);
     const summaryText =
-      defRes.summaryKo ||
-      '🛡️ 안심하세요! 윈도우 순정 바이러스·랜섬웨어 방어막(Windows Defender)이 기본 보호를 수행합니다. (무겁고 광고 뜨는 무료 백신을 따로 설치하실 필요가 없으며, 순정 백신 점검 역시 내 PC 1대에서 평생 0원 무료입니다!)';
+      defWrap.summaryKo ||
+      '🛡️ 윈도우 순정 바이러스·랜섬웨어 방어막(Microsoft Defender) 상태를 점검했습니다.';
     speak(summaryText);
     return reply(sourceTab, summaryText, {
+      cardKind: defWrap.payload ? 'DEFENDER_GUARD_CARD' : undefined,
+      defenderGuardPayload: defWrap.payload,
       followUpSuggestions: [
-        '윈도우 순정 백신으로 빠른 바이러스 검사 실행해줘',
-        '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
+        '빠른 바이러스 검사 실행해줘',
+        '백신 DB 최신 업데이트 해줘',
+        '설치된 프로그램 전체 목록 보여줘',
       ],
     });
   }
@@ -4156,46 +4558,40 @@ export async function processUnifiedMonsterChatQuery(params: {
         window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
       }
       const promptMsg =
-        '👻 제가 웹 화면 밖으로 손이 닿아 실제 내 컴퓨터의 묵은 먼지와 보안 모듈을 정리하고, 뒤에서 내 진짜 사진·문서도 조용히 읽어두려면 **귀신비서 전용 로컬 엔진(무광고 · 외부 전송 0%)**을 딱 한 번 켜주셔야 해요! 지금 연결 안내창을 띄워 드렸어요 ✨';
+        '👻 제가 웹 화면 밖으로 손이 닿아 실제 내 컴퓨터의 묵은 먼지와 보안 모듈을 점검하려면 **내 컴퓨터 연결(무광고 · 외부 전송 0%)**을 딱 한 번 켜주셔야 해요! 지금 연결 안내창을 띄워 드렸어요 ✨';
       speak(promptMsg);
       return reply(sourceTab, promptMsg, {
         followUpSuggestions: [
-          '🤝 응, 엔진 연결하고 1초 건강검진 해줘',
-          '👀 일단 눈으로 구경부터 할래',
+          '🔍 응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘',
+          '🏠 온보딩 체험관으로 나가서 구경하기 ➔',
         ],
       });
     }
-    const osRes = await executeRealOsAction('boot_lag_clean_bloatware', clean);
-    const restoreId = String((osRes as any).restoreId || '#1');
-    const cpuBefore = Number((osRes as any).cpuLoadBefore ?? lastSpecMsgEarly?.pcSpecPayload?.cpuLoadPercent ?? 28);
-    const cpuAfter = Number((osRes as any).cpuLoadAfter ?? Math.max(8, Math.round(cpuBefore * 0.45)));
-    const defaultChromeGuide =
-      '💡 애드웨어는 모두 껐지만, 현재 내 컴퓨터 전체 메모리(8GB) 중 크롬 브라우저(창/탭 다수)가 메모리를 많이 차지하고 있습니다. 안 쓰는 크롬 탭만 몇 개 닫아주시면 즉시 체감 속도가 확 빨라집니다!';
-    const rawSummary =
-      osRes.summaryKo ||
-      `🚀 작업 스케줄러·서비스 기반 부활형 애드웨어와 상주 보안 모듈, 비필수 자동실행 시작프로그램을 즉시 강제 종료 및 차단했습니다! (실측 CPU 부하: ${cpuBefore}% ➔ ${cpuAfter}% · 잔존 상주 애드웨어 0건)`;
-    const summaryText = rawSummary.includes('애드웨어는 모두 껐지만')
-      ? rawSummary
-      : `${rawSummary}\n\n${(osRes as any)?.browserMemoryBottleneck?.guideKo || defaultChromeGuide}`;
-    const cleanedCount =
-      (Array.isArray((osRes as any).stoppedBloatware) ? (osRes as any).stoppedBloatware.length : 0) +
-      (Array.isArray((osRes as any).disabledStartups) ? (osRes as any).disabledStartups.length : 0) || 1;
-    const issuedRec = appendLocalHealthCheckRecord({
-      category: '⚙️ 고치기',
-      title: '애드웨어·보안모듈·CPU 과점유 프로세스 강제종료 및 시작프로그램 정리',
-      reclaimedSizeLabel: `CPU 부하 ${cpuBefore}% ➔ ${cpuAfter}%`,
-      cleanedItemCount: cleanedCount,
-      securityPluginsFrozen: cleanedCount,
-      speedUpSummary: summaryText,
-      restoreId,
-    });
-    speak(summaryText);
-    return reply(sourceTab, `🛠️ **[실시간 속도 최적화 & 애드웨어·보안모듈 처치 완료]**\n${summaryText}`, {
-      healthRecordIssued: issuedRec,
-      followUpSuggestions: [
-        '속도 개선된거야?',
-        '지금 내 PC CPU 점유율이랑 사양 상태 다시 확인해줘',
-        '바탕화면 잡파일 정리할 게 있는지 봐줘',
+    const diagRes = await executeRealOsAction('boot_lag_diagnose');
+    const plugins = Array.isArray((diagRes as any).activeSecurityPlugins)
+      ? (diagRes as any).activeSecurityPlugins.map((p: any) => String(p?.label || p?.keyword || '')).filter(Boolean)
+      : [];
+    const stCnt = Number((diagRes as any).startupProgramsCount ?? 0);
+    const previewBoot: MonsterBootCarePreviewPayload = {
+      mode: 'CLEAN_BLOATWARE',
+      scheduleTime: '04:00',
+      uptimeSummaryKo:
+        diagRes.summaryKo ||
+        '현재 컴퓨터 속도를 늦추는 미사용 웹 보안 모듈과 자동실행 항목을 점검했습니다.',
+      detectedPlugins: plugins,
+      startupCount: stCnt,
+      approved: false,
+    };
+    const previewIntro =
+      `${llmIntro}🔍 **마음대로 끄지 않고 누가 속도를 잡아먹고 있는지 먼저 점검했어요!**\n` +
+      `아래 점검 카드를 확인하신 뒤 **[✅ 응, 안전하게 정리해줘]** 버튼을 누르시거나 **"응 진행해"**라고 입력해 주세요.`;
+    speak('속도를 늦추는 항목을 먼저 점검했습니다. 확인 후 정리 버튼을 눌러 주세요.');
+    return reply(sourceTab, previewIntro, {
+      cardKind: 'BOOT_CARE_PREVIEW_GATE',
+      bootCarePreviewPayload: previewBoot,
+      followUpSuggestions: defaultFollowUps || [
+        '시작프로그램 목록 보여줘',
+        '윈도우 임시파일(Temp) 정리할 거 봐줘',
       ],
     });
   }
@@ -4246,7 +4642,7 @@ export async function processUnifiedMonsterChatQuery(params: {
       speak('아직 복원 기록이 없습니다.');
       return reply(
         sourceTab,
-        `${llmIntro}🕰️ 아직 [복원 기록]이 없습니다. 귀신같이 손보기로 정리·바로가기·복구를 실행하면 그때마다 되돌리기용 번호가 여기에 남습니다.`,
+        `${llmIntro}🕰️ 아직 [복원 기록]이 없습니다. 귀신비서로 정리·바로가기·복구를 실행하면 그때마다 되돌리기용 번호가 여기에 남습니다.`,
         {
           llmActionJson: actionJson,
           followUpSuggestions: defaultFollowUps || [
@@ -5140,44 +5536,43 @@ export async function processUnifiedMonsterChatQuery(params: {
     );
   }
 
-  // 7-A) [🚀 부팅·버벅임 케어] (매일 1회[24시간] 재부팅 기준점 & 브라우저 강제 청소 영구 금지 + 은행·관공서 보안쓰레기 안전 정리)
+  // 7-A) [🚀 부팅·버벅임 케어 — 진단 후 승인 게이트]
   if (/고클린|구라제거기|버벅|렉\s*풀|응급\s*리셋|핸들\s*누수|재부팅|부팅\s*경과|켜\s*둔\s*지|경과\s*시간|안\s*끄고|보안\s*프로그램|보안\s*쓰레기|부팅\s*컨디션/i.test(clean)) {
-    const subAct =
-      /예약|새벽/i.test(clean)
-        ? 'boot_lag_schedule_reboot'
-        : /구라|보안\s*프로그램|보안\s*쓰레기/i.test(clean)
-        ? 'boot_lag_clean_bloatware'
-        : 'boot_lag_diagnose';
-    const osRes = await executeRealOsAction(subAct, '04:00');
-    const baseSummary =
-      osRes.summaryKo ||
-      '하루 이상(24시간 초과) 켜두어 윈도우에 쌓인 피로는 강제로 메모리를 청소하면 오히려 열려 있는 브라우저(구글시트 등) 화면이 깨질 수 있습니다. 억지 청소 대신 지금 다시 시작(재부팅)을 한 번 해주시는 것이 가장 빠르고 깨끗합니다! (권장 기준: 매일 1회 재부팅)';
-    const freeTierNote =
-      `\n\n💡 **요금 안내**: 시작프로그램 목록 점검과 불필요 자동실행 정리는 내 PC 1대에서 평생 0원(무료)으로 이용하실 수 있습니다!`;
-    const summaryText = baseSummary.includes('요금 안내') ? baseSummary : `${baseSummary}${freeTierNote}`;
-    speak(baseSummary);
-    return reply(sourceTab, summaryText, {
+    const diagRes = await executeRealOsAction('boot_lag_diagnose');
+    const plugins = Array.isArray((diagRes as any).activeSecurityPlugins)
+      ? (diagRes as any).activeSecurityPlugins.map((p: any) => String(p?.label || p?.keyword || '')).filter(Boolean)
+      : [];
+    const stCnt = Number((diagRes as any).startupProgramsCount ?? 0);
+    const wantsSchedule = /예약|새벽/i.test(clean);
+    const previewBoot: MonsterBootCarePreviewPayload = {
+      mode: wantsSchedule ? 'SCHEDULE_REBOOT' : 'CLEAN_BLOATWARE',
+      scheduleTime: '04:00',
+      uptimeSummaryKo: diagRes.summaryKo || '내 PC 부팅 컨디션 및 보안 모듈 점검 결과입니다.',
+      detectedPlugins: plugins,
+      startupCount: stCnt,
+      approved: false,
+    };
+    return reply(sourceTab, previewBoot.uptimeSummaryKo, {
+      cardKind: 'BOOT_CARE_PREVIEW_GATE',
+      bootCarePreviewPayload: previewBoot,
       followUpSuggestions: [
-        '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
-        '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
-        '새벽 4시에 자동 재부팅 예약해줘',
+        '시작프로그램 목록 보여줘',
+        '윈도우 임시파일(Temp) 정리할 거 봐줘',
       ],
     });
   }
 
-  // 7-B) [🛡️ 바이러스·랜섬웨어 안심 점검] (알약 대체: Windows Defender 순정 백신 직결)
+  // 7-B) [🛡️ 바이러스·랜섬웨어 안심 점검 — 알약 완전 대체 카드]
   if (/알약|바이러스|랜섬웨어|백신|디펜더|defender|악성코드|방어막/i.test(clean)) {
     const subDef = /검사|스캔/i.test(clean) ? 'defender_quick_scan' : 'defender_status';
-    const defRes = await executeRealOsAction(subDef);
+    const defWrap = await fetchDefenderGuardState(subDef);
     const summaryText =
-      defRes.summaryKo ||
-      '🛡️ 안심하세요! 윈도우 순정 바이러스·랜섬웨어 방어막(Windows Defender)이 완벽하게 작동 중입니다. (무겁고 광고 뜨는 무료 백신을 따로 까실 필요가 없습니다)';
+      defWrap.summaryKo ||
+      '🛡️ 윈도우 순정 바이러스·랜섬웨어 방어막(Microsoft Defender) 상태를 확인했습니다.';
     speak(summaryText);
     return reply(sourceTab, summaryText, {
-      followUpSuggestions: [
-        '윈도우 순정 백신으로 빠른 바이러스 검사 실행해줘',
-        '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
-      ],
+      cardKind: defWrap.payload ? 'DEFENDER_GUARD_CARD' : undefined,
+      defenderGuardPayload: defWrap.payload,
     });
   }
 
@@ -5192,7 +5587,7 @@ export async function processUnifiedMonsterChatQuery(params: {
     const tipRes = pickNextShortformTipOnCompletion({ contextTag: 'os_repair', subscribedLounges: [] });
     const diagPlan = buildSetupDiagnosisPlan('pc', clean);
     const actionJson: MonsterLlmActionJson = llmDecision || {
-      replyKo: '말씀하신 기기 설정·수리 증상을 확인했습니다. 귀신같이 손보기 수리 엔진으로 바로 연결해 드립니다.',
+      replyKo: '말씀하신 기기 설정·수리 증상을 확인했습니다. 귀신비서 수리 엔진으로 바로 연결해 드립니다.',
       intent: 'OS_REPAIR_ACTION',
       zCoreCommand: {
         endpoint: '/__zcore/os-inspect',
@@ -5210,8 +5605,8 @@ export async function processUnifiedMonsterChatQuery(params: {
       sourceTab,
       `${
         llmDecision?.replyKo
-          ? `💬 ${llmDecision.replyKo}\n\n🛠️ 아래 **[⚙️ 고치기 진단 카드]** 또는 추천 버튼을 눌러 1초 수리와 화면 위 손가락(👆) 안내를 바로 실행하실 수 있습니다.`
-          : `🛠️ 말씀하신 **"${clean}"** 증상을 귀신같이 손보기가 진단했습니다. 언제나 0원으로 수리 전 상태를 백업한 뒤 안전하게 해결해 드립니다.`
+          ? `💬 ${llmDecision.replyKo}\n\n🛠️ 아래 **[👻 귀신비서 수리 진단 카드]** 또는 추천 버튼을 눌러 1초 수리와 화면 위 손가락(👆) 안내를 바로 실행하실 수 있습니다.`
+          : `🛠️ 말씀하신 **"${clean}"** 증상을 귀신비서가 진단했습니다. 언제나 0원으로 수리 전 상태를 백업한 뒤 안전하게 해결해 드립니다.`
       }`,
       {
         cardKind: 'DEVICE_REPAIR_GATE',

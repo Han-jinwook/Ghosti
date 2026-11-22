@@ -836,16 +836,30 @@ export const createAssistantOnboardingSlice: StateCreator<
                 if (pendingPhotoPatches.size === 0) return;
                 const snap = new Map(pendingPhotoPatches);
                 pendingPhotoPatches.clear();
-                set((state) => ({
-                  photos: state.photos.map((p) => {
+                set((state) => {
+                  const nextSel = new Set(state.selectedTrashIds);
+                  const nextPhotos = state.photos.map((p) => {
                     const pt = snap.get(p.id);
-                    return pt ? { ...p, ...pt } : p;
-                  }),
-                  searchResults: state.searchResults.map((sr) => {
-                    const pt = snap.get(sr.photo.id);
-                    return pt ? { ...sr, photo: { ...sr.photo, ...pt } } : sr;
-                  }),
-                }));
+                    if (!pt) return p;
+                    const merged = { ...p, ...pt };
+                    if (merged.isVaultDocument) {
+                      merged.trashCategory = undefined;
+                      merged.intrinsicTrashCategory = undefined;
+                      nextSel.delete(p.id);
+                    } else if (!p.trashCategory && merged.trashCategory && !merged.quarantined) {
+                      nextSel.add(p.id);
+                    }
+                    return merged;
+                  });
+                  return {
+                    photos: nextPhotos,
+                    selectedTrashIds: nextSel,
+                    searchResults: state.searchResults.map((sr) => {
+                      const pt = snap.get(sr.photo.id);
+                      return pt ? { ...sr, photo: { ...sr.photo, ...pt } } : sr;
+                    }),
+                  };
+                });
               };
               void startSilentRealMediaVisionIndexing({
                 photos: get().photos,
@@ -1854,6 +1868,7 @@ export const createAssistantOnboardingSlice: StateCreator<
   pickBestInBurstPhotos: async (burstPhotos: PhotoItem[], keepPhotoId: string) => {
     const redundantIds = burstPhotos.map((p) => p.id).filter((id) => id !== keepPhotoId);
     if (redundantIds.length === 0) return;
+    if (!ensureLoginAndZCoreReady('연사 베스트 컷 정리')) return;
 
     set({ quarantineMoving: true });
     const moveRes = await requestQuarantineOp('move', redundantIds, [keepPhotoId]);
@@ -1971,7 +1986,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         movedSet,
         savedBytes,
         demo: moveRes.demo,
-        actionLabel: '손보기 추천 항목 일괄 정리',
+        actionLabel: '귀신비서 추천 항목 일괄 정리',
         nonIosToast: `🗑️ 사진 ${movedSet.size}장을 ${moveNote}`,
       })
     );
@@ -1984,7 +1999,7 @@ export const createAssistantOnboardingSlice: StateCreator<
   },
 
   moveAllTrashToQuarantine: async () => {
-    if (!ensureLoginAndZCoreReady('손보기 사진 일괄 정리')) return;
+    if (!ensureLoginAndZCoreReady('귀신비서 사진 일괄 정리')) return;
     const { photos } = get();
     const allTrashIds = photos
       .filter((p) => p.trashCategory && !p.quarantined)
@@ -2215,21 +2230,32 @@ export const createAssistantOnboardingSlice: StateCreator<
           cleanTargetPath = String(docPath);
         }
       }
+      let openedOk = false;
       if (cleanTargetPath) {
         const osRes = await executeRealOsAction('open_file_location', cleanTargetPath);
-        if (!osRes?.ok) {
-          await fetch(getZCoreUrl('/__quarantine/open-folder'), {
+        if (osRes?.ok) {
+          openedOk = true;
+        } else {
+          const r = await fetch(getZCoreUrl('/__quarantine/open-folder'), {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ target, targetPath: cleanTargetPath }),
           });
+          const j = r.ok ? await r.json().catch(() => null) : null;
+          openedOk = Boolean(j?.ok);
         }
       } else {
-        await fetch(getZCoreUrl('/__quarantine/open-folder'), {
+        const r = await fetch(getZCoreUrl('/__quarantine/open-folder'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ target }),
         });
+        const j = r.ok ? await r.json().catch(() => null) : null;
+        openedOk = Boolean(j?.ok);
+      }
+      if (!openedOk) {
+        set({ lastQuarantineToast: '⚠️ 내 컴퓨터 연결(PC 엔진) 상태를 확인한 뒤 다시 폴더 열기를 눌러 주세요.' });
+        return;
       }
       const fileLabel = cleanTargetPath ? cleanTargetPath.split(/[\\/]/).pop() || cleanTargetPath : '';
       set({

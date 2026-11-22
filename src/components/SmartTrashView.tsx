@@ -133,7 +133,7 @@ export const SmartTrashView: React.FC = () => {
     query: string;
   } | null>(null);
 
-  // 클린몬스터 종합건강검진 항목별 유저 직접 결정 상태 (노인 별도 안 없이 기본 귀신같이 직관 기능 통합)
+  // 귀신비서 종합건강검진 항목별 유저 직접 결정 상태 (노인 별도 안 없이 기본 귀신같이 직관 기능 통합)
   const [decisions, setDecisions] = useState<{
     downloadInstallers: 'pending' | 'clean_installers' | 'keep';
     pcDesktop: 'pending' | 'archive_move' | 'keep';
@@ -240,7 +240,7 @@ export const SmartTrashView: React.FC = () => {
             <span className="text-[18px]">⚠️</span>
             <div className="flex flex-col">
               <span className="text-[14px] text-amber-900 dark:text-amber-200 font-extrabold">
-                실행 중인 Z-코어가 구버전(v{zCoreBridge.version || '구버전'})입니다 — 최신 버전(v{LATEST_Z_CORE_VERSION})으로 업데이트해 주세요.
+                실행 중인 PC 엔진가 구버전(v{zCoreBridge.version || '구버전'})입니다 — 최신 버전(v{LATEST_Z_CORE_VERSION})으로 업데이트해 주세요.
               </span>
             </div>
           </div>
@@ -249,13 +249,13 @@ export const SmartTrashView: React.FC = () => {
             download="Merlin_Z_Core.zip"
             className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[13px] font-extrabold whitespace-nowrap shadow cursor-pointer"
           >
-            ⬇️ 최신 Z-코어 (v{LATEST_Z_CORE_VERSION}) 다운로드
+            ⬇️ 최신 PC 엔진 (v{LATEST_Z_CORE_VERSION}) 다운로드
           </a>
         </div>
       )}
 
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-start">
-        {/* ═══════════════ [좌측 열] 클린몬스터 정리·검진 워크스페이스 ═══════════════ */}
+        {/* ═══════════════ [좌측 열] 귀신비서 정리·검진 워크스페이스 ═══════════════ */}
         <div className="xl:col-span-7 2xl:col-span-8 flex flex-col gap-5 min-w-0">
       {/* ─────────────── 1. 노션 스타일 페이지 헤더 & 원클릭 정리 컨트롤 바 (고치기 페이지와 100% 대칭 구조) ─────────────── */}
       <section className="p-5 md:p-6 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col gap-4">
@@ -265,7 +265,7 @@ export const SmartTrashView: React.FC = () => {
             <div className="flex flex-wrap items-center gap-4">
               <div className="flex flex-col gap-0.5">
                 <h1 className="font-headline-sm text-[20px] md:text-[22px] text-zinc-900 dark:text-white font-extrabold tracking-tight flex items-center gap-2 whitespace-nowrap">
-                  <span>✋ 손보기</span>
+                  <span>👻 귀신비서</span>
                 </h1>
               </div>
 

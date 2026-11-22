@@ -325,7 +325,7 @@ export function resolveViewportLayout(): ViewportLayout {
     if (/Android|iPhone|iPad|iPod|Mobile/i.test(ua) || isTouchTabletOrSamsung) {
       return 'mobile';
     }
-    return window.innerWidth < 860 ? 'mobile' : 'desktop';
+    return window.innerWidth < 860 && !zCoreBridge.isConnected ? 'mobile' : 'desktop';
   } catch {
     return 'desktop';
   }
@@ -355,8 +355,9 @@ export async function requestQuarantineOp(
         offline: false,
       };
     }
-    const isMobileEnv = isMobileOrStoreRuntime();
-    return { done: names, errors: [], demo: !isMobileEnv, offline: false };
+    const isSessionPickedPhotos =
+      names.length > 0 && names.every((nm) => String(nm || '').startsWith('mobile_local_'));
+    return { done: names, errors: [], demo: !isSessionPickedPhotos, offline: false };
   }
   try {
     const res = await fetch(getZCoreUrl(`/__quarantine/${kind}`), {

@@ -4723,7 +4723,8 @@ def handle_quarantine(action: str, payload: Dict[str, Any] | None = None) -> Dic
     files = [str(x) for x in files if str(x).strip()][:500]
 
     if act == "move":
-        return safe.recycle_photos(files, _resolve_listed_photo)
+        approval_txt = str(data.get("userApprovalTypedText") or "사진 정리 휴지통 이동 승인")
+        return safe.recycle_photos(files, _resolve_listed_photo, user_approval_text=approval_txt)
 
     if act == "restore":
         res = safe.restore_photos(files)
@@ -4986,6 +4987,7 @@ MUTATING_ACTIONS = {
     # [기획 9.3] 상태를 바꾸는 모든 케어/OS 액션은 GET 호출 시 405 (POST 전용)
     "boot-lag-care", "boot_lag_care", "defender-security-check", "defender_security_check", "defender-check",
     "scan-drive", "add-scan-drive", "connect-drive", "drive-scan", "ai-baton-touch", "baton-touch",
+    "recycle-bin-empty", "empty-recycle-bin",
 }
 
 
@@ -5133,7 +5135,7 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
 
     if act in ("folder-tree-summary", "scan-tree", "cleanup-scan"):
         kind = str(data.get("kind") or "").strip().upper()
-        if kind in ("DOWNLOAD_INSTALLERS", "FOLDER_REORG"):
+        if kind in ("DOWNLOAD_INSTALLERS", "FOLDER_REORG", "WINDOWS_TEMP_JUNK"):
             return safe.scan_cleanup_candidates(kind)
         target_dir = str(data.get("targetPath") or data.get("folder") or "").strip()
         return scan_folder_tree_metadata(target_dir)
@@ -5166,6 +5168,14 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
         except Exception:
             pass
         return {"ok": True, "auditFile": str(safe.BLACKBOX_AUDIT_FILE), "entries": entries}
+
+    if act in ("recycle-bin-status", "recycle-status"):
+        return safe.inspect_recycle_bin_summary()
+
+    if act in ("recycle-bin-empty", "empty-recycle-bin"):
+        return safe.empty_recycle_bin_verified(
+            str(data.get("userApprovalTypedText") or data.get("typedText") or "")
+        )
 
     if act in ("recycle-bin-scan", "recycle-bin"):
         q = str(data.get("query") or data.get("q") or "").strip()
@@ -5235,7 +5245,8 @@ def handle_request(action: str, payload: Dict[str, Any] | None = None) -> Dict[s
 
     if act in ("defender-security-check", "defender_security_check", "defender-check"):
         sub = str(data.get("subAction") or data.get("mode") or "status").strip()
-        return zos.run_defender_security_check(sub)
+        t_path = str(data.get("targetPath") or data.get("path") or "").strip()
+        return zos.run_defender_security_check(sub, t_path)
 
     if act in ("execute", "os-execute"):
         exec_action = str(data.get("action") or "inspect").strip()

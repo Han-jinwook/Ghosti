@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   CheckCircle2,
   Sparkles,
@@ -24,6 +24,10 @@ import {
   executeMonsterCleanupApproval,
   executeRestorePointRollback,
   executeDeepUninstallApproval,
+  executeBootCarePreviewApproval,
+  fetchDefenderGuardState,
+  fetchStartupManagerPayload,
+  toggleStartupProgramItem,
   submitExternalMonsterChatQuery,
 } from '../services/monsterChatRouter';
 import { useSaySeeStore } from '../store/useSaySeeStore';
@@ -68,6 +72,41 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
   const [extraSupportKind, setExtraSupportKind] = useState<'CLAIM' | 'AS_BUG' | 'IDEA'>('IDEA');
   const [extraSupportText, setExtraSupportText] = useState('');
   const [extraSupportSending, setExtraSupportSending] = useState(false);
+  const [customScanPath, setCustomScanPath] = useState('');
+  const [appFilterQuery, setAppFilterQuery] = useState('');
+
+  // [알약 완전 대체] 실시간 바이러스 검사 중일 때 2.5초 간격으로 실제 완료 여부 폴링 (0.1초 거짓 0건 보고 원천 차단)
+  useEffect(() => {
+    if (message.cardKind !== 'DEFENDER_GUARD_CARD' || !message.defenderGuardPayload?.scanRunning) {
+      return;
+    }
+    let cancelled = false;
+    const timer = window.setInterval(async () => {
+      const st = await fetchDefenderGuardState('defender_scan_status');
+      if (cancelled || !st.raw) return;
+      const stillRunning = Boolean(st.raw.running);
+      if (!stillRunning) {
+        window.clearInterval(timer);
+        const refreshed = await fetchDefenderGuardState('defender_status');
+        if (cancelled) return;
+        const doneText = String(st.raw.resultSummaryKo || refreshed.payload?.lastScanResultKo || '✅ 바이러스 검사가 완료되었습니다.');
+        onUpdateMessage({
+          ...message,
+          defenderGuardPayload: {
+            ...(refreshed.payload || message.defenderGuardPayload!),
+            scanRunning: false,
+            lastScanResultKo: doneText,
+            lastActionNoteKo: doneText,
+          },
+        });
+        onToast?.(doneText.replace(/\*\*/g, ''));
+      }
+    }, 2500);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [message, onUpdateMessage, onToast]);
 
   const handleBatonTouch = async () => {
     if (!message.batonTouchPayload) return;
@@ -722,7 +761,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         <div className="rounded-xl border border-teal-500/45 bg-slate-900/95 p-3.5 space-y-2.5 text-[13px] overflow-hidden break-words [overflow-wrap:anywhere]">
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 text-[13px] font-extrabold">
-              ✋ 손보기 진단 카드
+              👻 귀신비서 수리 진단 카드
             </span>
             <span className="text-[13px] font-extrabold text-emerald-300">
               {message.deviceRepairPayload.badgeText}
@@ -1454,6 +1493,410 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
           )}
         </div>
       )}
+
+      {/* 11-B3) 🚀 [부팅·보안모듈 정리 / 새벽 재부팅 예약 사전 승인 게이트 (임의 실행 0%)] */}
+      {message.cardKind === 'BOOT_CARE_PREVIEW_GATE' && message.bootCarePreviewPayload && (
+        <div className="rounded-xl border border-teal-500/45 bg-slate-900/95 p-3.5 space-y-2.5 text-[12.5px]">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-200 text-[11.5px] font-extrabold">
+              {message.bootCarePreviewPayload.mode === 'SCHEDULE_REBOOT'
+                ? `⏰ 새벽 ${message.bootCarePreviewPayload.scheduleTime} 자동 재부팅 예약 확인`
+                : '🚀 미사용 보안모듈 · 자동실행 정리 미리보기'}
+            </span>
+            <span className="text-[11px] text-slate-400 font-semibold">🛡️ 사내 DRM · 백신 보호됨</span>
+          </div>
+
+          <div className="rounded-lg bg-slate-950/85 border border-slate-800 p-2.5 text-xs text-slate-200 space-y-1.5 whitespace-pre-line">
+            <div>{message.bootCarePreviewPayload.uptimeSummaryKo}</div>
+            {message.bootCarePreviewPayload.mode === 'CLEAN_BLOATWARE' && (
+              <div className="pt-1 border-t border-slate-800 text-[11.5px] text-teal-300">
+                {message.bootCarePreviewPayload.detectedPlugins.length > 0 ? (
+                  <>
+                    • 포착된 미사용 보안 모듈({message.bootCarePreviewPayload.detectedPlugins.length}종):{' '}
+                    <span className="text-slate-200 font-mono">
+                      {message.bootCarePreviewPayload.detectedPlugins.slice(0, 6).join(', ')}
+                    </span>
+                  </>
+                ) : (
+                  <span>• 현재 활성 미사용 보안 모듈 0종 · 불필요 자동실행 항목만 안전 점검합니다.</span>
+                )}
+              </div>
+            )}
+          </div>
+
+          {message.bootCarePreviewPayload.executionError && !message.bootCarePreviewPayload.approved && (
+            <div className="px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs">
+              ⚠️ {message.bootCarePreviewPayload.executionError}
+            </div>
+          )}
+
+          {message.bootCarePreviewPayload.approved ? (
+            <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold space-y-1">
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="flex items-center gap-1.5">
+                  <CheckCircle2 className="w-4 h-4" />
+                  승인 및 안전 실행 완료
+                  {message.bootCarePreviewPayload.createdRestoreId
+                    ? ` · [복원 기록 ${message.bootCarePreviewPayload.createdRestoreId}]`
+                    : ''}
+                </span>
+              </div>
+              {message.bootCarePreviewPayload.executionSummaryKo && (
+                <div className="text-[11.5px] text-slate-200 font-normal whitespace-pre-line">
+                  {message.bootCarePreviewPayload.executionSummaryKo}
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <span className="text-[11px] text-slate-300">
+                ✍️ 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력하거나 우측 버튼을 눌러 주세요.
+              </span>
+              <button
+                type="button"
+                disabled={busyId === 'boot_care_approve'}
+                onClick={async () => {
+                  if (!message.bootCarePreviewPayload) return;
+                  setBusyId('boot_care_approve');
+                  const res = await executeBootCarePreviewApproval(
+                    message.bootCarePreviewPayload,
+                    '응 진행해 (1회성 버튼 승인)'
+                  );
+                  setBusyId(null);
+                  onUpdateMessage({
+                    ...message,
+                    bootCarePreviewPayload: {
+                      ...message.bootCarePreviewPayload,
+                      approved: res.ok,
+                      approvedTypedText: '응 진행해',
+                      createdRestoreId: res.restoreId,
+                      executionSummaryKo: res.ok ? res.summaryKo : undefined,
+                      executionError: res.ok ? undefined : res.summaryKo,
+                    },
+                    healthRecordIssued: res.healthRecord || message.healthRecordIssued,
+                  });
+                  onToast?.(res.summaryKo);
+                }}
+                className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black cursor-pointer shadow"
+              >
+                {busyId === 'boot_care_approve'
+                  ? '진행 중...'
+                  : message.bootCarePreviewPayload.mode === 'SCHEDULE_REBOOT'
+                  ? `⏰ 응, 새벽 ${message.bootCarePreviewPayload.scheduleTime} 자동 재부팅 예약해줘`
+                  : '✅ 응, 안전하게 정리해줘'}
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* 11-B4) 🛡️ [알약 완전 대체 — Windows 순정 백신 통합 관제 카드] */}
+      {message.cardKind === 'DEFENDER_GUARD_CARD' && message.defenderGuardPayload && (
+        <div className="rounded-xl border border-emerald-500/45 bg-slate-900/95 p-3.5 space-y-3 text-xs">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[11.5px] font-extrabold">
+              <ShieldCheck className="w-4 h-4" />
+              🛡️ 무광고 순정 백신 · 랜섬웨어 방어막 관제
+            </span>
+            <span className="text-[11px] text-slate-400 font-mono">
+              DB 패치: {message.defenderGuardPayload.signatureUpdatedAt || '최신'}
+            </span>
+          </div>
+
+          <div className="grid grid-cols-3 gap-2 text-center">
+            <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2">
+              <div className="text-[10.5px] text-slate-400">실시간 감시</div>
+              <div className={`text-xs font-black ${message.defenderGuardPayload.realTimeProtection ? 'text-emerald-300' : 'text-amber-300'}`}>
+                {message.defenderGuardPayload.realTimeProtection ? '🟢 켜짐(ON)' : '⚠️ 확인 필요'}
+              </div>
+            </div>
+            <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2">
+              <div className="text-[10.5px] text-slate-400">네트워크 방화벽</div>
+              <div className={`text-xs font-black ${message.defenderGuardPayload.firewallEnabled ? 'text-emerald-300' : 'text-amber-300'}`}>
+                {message.defenderGuardPayload.firewallEnabled ? '🟢 켜짐(ON)' : '⚠️ 확인 필요'}
+              </div>
+            </div>
+            <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2">
+              <div className="text-[10.5px] text-slate-400">랜섬웨어 폴더보호</div>
+              <div className="text-xs font-black text-sky-300">
+                {message.defenderGuardPayload.ransomwareShieldEnabled ? '🛡️ 보호 켜짐' : '⚙️ 설정 가능'}
+              </div>
+            </div>
+          </div>
+
+          {message.defenderGuardPayload.scanRunning && (
+            <div className="px-3 py-2.5 rounded-lg bg-sky-500/15 border border-sky-400/40 text-sky-200 font-bold flex items-center gap-2">
+              <Activity className="w-4 h-4 animate-spin text-sky-300 shrink-0" />
+              <span>실시간 바이러스 검사가 진행 중입니다... 끝나는 즉시 진짜 결과를 알려드릴게요!</span>
+            </div>
+          )}
+
+          {!message.defenderGuardPayload.scanRunning && message.defenderGuardPayload.lastScanResultKo && (
+            <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-200 font-semibold whitespace-pre-line">
+              {message.defenderGuardPayload.lastScanResultKo.replace(/\*\*/g, '')}
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-1.5">
+            <button
+              type="button"
+              disabled={message.defenderGuardPayload.scanRunning || busyId === 'def_quick'}
+              onClick={async () => {
+                setBusyId('def_quick');
+                const r = await fetchDefenderGuardState('defender_quick_scan');
+                setBusyId(null);
+                if (r.payload) {
+                  onUpdateMessage({ ...message, defenderGuardPayload: r.payload });
+                }
+                onToast?.(r.summaryKo.replace(/\*\*/g, ''));
+              }}
+              className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-black cursor-pointer"
+            >
+              🔍 빠른 정밀 검사
+            </button>
+
+            <button
+              type="button"
+              disabled={busyId === 'def_sig'}
+              onClick={async () => {
+                setBusyId('def_sig');
+                const r = await fetchDefenderGuardState('defender_update_signature');
+                setBusyId(null);
+                if (r.payload) {
+                  onUpdateMessage({
+                    ...message,
+                    defenderGuardPayload: {
+                      ...r.payload,
+                      lastScanResultKo: r.summaryKo,
+                    },
+                  });
+                }
+                onToast?.(r.summaryKo.replace(/\*\*/g, ''));
+              }}
+              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 font-bold cursor-pointer"
+            >
+              {busyId === 'def_sig' ? 'DB 업데이트 중...' : '🔄 최신 백신 DB 업데이트'}
+            </button>
+
+            {message.defenderGuardPayload.removableDrives.map((usb) => (
+              <button
+                key={usb.drive}
+                type="button"
+                disabled={message.defenderGuardPayload?.scanRunning || busyId === `usb_${usb.drive}`}
+                onClick={async () => {
+                  setBusyId(`usb_${usb.drive}`);
+                  const r = await fetchDefenderGuardState('defender_custom_scan', usb.drive);
+                  setBusyId(null);
+                  if (r.payload) {
+                    onUpdateMessage({ ...message, defenderGuardPayload: r.payload });
+                  }
+                  onToast?.(r.summaryKo.replace(/\*\*/g, ''));
+                }}
+                className="px-3 py-1.5 rounded-lg bg-indigo-500/25 hover:bg-indigo-500/40 border border-indigo-400/40 text-indigo-200 font-bold cursor-pointer"
+              >
+                🔌 {usb.label} 검사
+              </button>
+            ))}
+
+            <button
+              type="button"
+              onClick={async () => {
+                const r = await fetchDefenderGuardState('defender_open_ransomware_shield');
+                onToast?.(r.summaryKo);
+              }}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sky-300 font-bold cursor-pointer"
+            >
+              🛡️ 랜섬웨어 폴더 보호
+            </button>
+
+            <button
+              type="button"
+              onClick={async () => {
+                const r = await fetchDefenderGuardState('defender_open_quarantine_history');
+                onToast?.(r.summaryKo);
+              }}
+              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 font-bold cursor-pointer"
+            >
+              🗂️ 격리함 · 위협 기록
+            </button>
+
+            {!message.defenderGuardPayload.realTimeProtection && (
+              <button
+                type="button"
+                onClick={async () => {
+                  const r = await fetchDefenderGuardState('defender_open_threat_settings');
+                  onToast?.(r.summaryKo);
+                }}
+                className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black cursor-pointer"
+              >
+                ⚡ 실시간 감시 켜기
+              </button>
+            )}
+          </div>
+
+          <div className="flex items-center gap-1.5 pt-1 border-t border-slate-800">
+            <input
+              type="text"
+              value={customScanPath}
+              onChange={(e) => setCustomScanPath(e.target.value)}
+              placeholder="특정 폴더 또는 USB 경로 입력 (예: D:\Downloads)"
+              className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-[11.5px] text-slate-200 placeholder:text-slate-500"
+            />
+            <button
+              type="button"
+              disabled={!customScanPath.trim() || message.defenderGuardPayload.scanRunning || busyId === 'def_custom'}
+              onClick={async () => {
+                const p = customScanPath.trim();
+                if (!p) return;
+                setBusyId('def_custom');
+                const r = await fetchDefenderGuardState('defender_custom_scan', p);
+                setBusyId(null);
+                if (r.payload) {
+                  onUpdateMessage({ ...message, defenderGuardPayload: r.payload });
+                }
+                onToast?.(r.summaryKo.replace(/\*\*/g, ''));
+              }}
+              className="px-3 py-1.5 rounded-lg bg-teal-500/25 hover:bg-teal-500/40 border border-teal-400/40 text-teal-200 font-bold shrink-0 cursor-pointer disabled:opacity-40"
+            >
+              📂 지정 폴더 검사
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* 11-B5) 🚀 [고클린 완전 대체 — 시작프로그램 개별 ON/OFF 매니저 카드] */}
+      {message.cardKind === 'STARTUP_MANAGER_CARD' && message.startupManagerPayload && (
+        <div className="rounded-xl border border-indigo-500/40 bg-slate-900/95 p-3.5 space-y-2.5 text-xs">
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-400/40 text-indigo-200 text-[11.5px] font-extrabold">
+              🚀 부팅 시작프로그램 개별 켜기·끄기 ({message.startupManagerPayload.items.length}개)
+            </span>
+          </div>
+
+          {message.startupManagerPayload.lastToggleNoteKo && (
+            <div className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-400/35 text-emerald-200 text-[11.5px] font-semibold">
+              {message.startupManagerPayload.lastToggleNoteKo}
+            </div>
+          )}
+
+          <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+            {message.startupManagerPayload.items.map((stItem) => (
+              <div
+                key={stItem.id}
+                className="rounded-lg bg-slate-950/90 border border-slate-800 px-2.5 py-2 flex items-center justify-between gap-2"
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="font-bold text-slate-100 truncate flex items-center gap-1.5">
+                    <span>{stItem.name}</span>
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-normal shrink-0">
+                      {stItem.locationLabel}
+                    </span>
+                  </div>
+                  <div className="text-[10.5px] text-slate-500 font-mono truncate">{stItem.command}</div>
+                </div>
+                {stItem.isProtected ? (
+                  <span className="px-2 py-1 rounded-md bg-slate-800 text-slate-400 text-[10.5px] font-bold shrink-0">
+                    🔒 필수 보호
+                  </span>
+                ) : (
+                  <button
+                    type="button"
+                    disabled={busyId === `st_${stItem.id}`}
+                    onClick={async () => {
+                      setBusyId(`st_${stItem.id}`);
+                      const res = await toggleStartupProgramItem(stItem.id, !stItem.enabled);
+                      const fresh = await fetchStartupManagerPayload();
+                      setBusyId(null);
+                      onUpdateMessage({
+                        ...message,
+                        startupManagerPayload: {
+                          items: fresh.payload?.items || message.startupManagerPayload!.items,
+                          lastToggleNoteKo: res.message,
+                        },
+                      });
+                      onToast?.(res.message);
+                    }}
+                    className={`px-2.5 py-1 rounded-lg text-[11px] font-black shrink-0 cursor-pointer transition ${
+                      stItem.enabled
+                        ? 'bg-emerald-500/25 border border-emerald-400/50 text-emerald-200 hover:bg-rose-500/30 hover:text-rose-200'
+                        : 'bg-slate-800 border border-slate-700 text-slate-400 hover:bg-emerald-500/25 hover:text-emerald-200'
+                    }`}
+                  >
+                    {stItem.enabled ? '🟢 켜짐 (눌러서 끄기)' : '⚪ 꺼둠 (다시 켜기)'}
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* 11-B6) 📋 [고클린 완전 대체 — 내 PC 설치된 프로그램 전체 목록 & 원클릭 심층 제거 점검 카드] */}
+      {message.cardKind === 'INSTALLED_APPS_CARD' && message.installedAppsPayload && (() => {
+        const qApp = appFilterQuery.trim().toLowerCase();
+        const filteredApps = qApp
+          ? message.installedAppsPayload.items.filter(
+              (a) => a.name.toLowerCase().includes(qApp) || a.publisher.toLowerCase().includes(qApp)
+            )
+          : message.installedAppsPayload.items;
+        return (
+          <div className="rounded-xl border border-sky-500/40 bg-slate-900/95 p-3.5 space-y-2.5 text-xs">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-sky-500/20 border border-sky-400/40 text-sky-200 text-[11.5px] font-extrabold">
+                📋 내 PC 설치된 프로그램 목록 (총 {message.installedAppsPayload.totalCount}개)
+              </span>
+            </div>
+
+            <input
+              type="text"
+              value={appFilterQuery}
+              onChange={(e) => setAppFilterQuery(e.target.value)}
+              placeholder="찾으시는 프로그램 이름 검색 (예: 알약, 알집, 고클린, Adobe...)"
+              className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-200 placeholder:text-slate-500"
+            />
+
+            <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+              {filteredApps.slice(0, 40).map((app) => (
+                <div
+                  key={app.name}
+                  className="rounded-lg bg-slate-950/90 border border-slate-800 px-2.5 py-2 flex items-center justify-between gap-2"
+                >
+                  <div className="min-w-0 flex-1">
+                    <div className="font-bold text-slate-100 truncate">
+                      {app.name}{' '}
+                      {app.sizeMb > 0 && (
+                        <span className="text-[10.5px] text-sky-300 font-mono">({app.sizeMb}MB)</span>
+                      )}
+                    </div>
+                    <div className="text-[10.5px] text-slate-500 truncate">
+                      {app.publisher || '제조사 미표기'}
+                      {app.installDate ? ` · 설치일 ${app.installDate}` : ''}
+                    </div>
+                  </div>
+                  {app.isProtected ? (
+                    <span className="px-2 py-1 rounded-md bg-slate-800 text-slate-400 text-[10.5px] font-bold shrink-0">
+                      🔒 보호됨
+                    </span>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        void submitExternalMonsterChatQuery(
+                          `${app.name} 완전히 삭제해줘`,
+                          message.sourceTab || 'trash'
+                        );
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 border border-rose-400/40 text-rose-200 text-[11px] font-extrabold shrink-0 cursor-pointer"
+                    >
+                      🗑️ 심층 제거 점검
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
 
       {/* 11-C) 🔊 [모바일 음성 미러링 예외 — 사전 승낙(Prior Consent) 카드] 채팅(타자)으로 설정/고치기 가이드를 요청했을 때 다짜고짜 말하지 않고 먼저 승낙을 구합니다 */}
       {isMobileVoiceEnvironment() && message.voiceConsentPromptKo && (

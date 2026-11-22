@@ -2,6 +2,20 @@
 
 ---
 
+## 🕒 [2026-11-22 10:45 KST `1·3귀신` 진행 기록 (`1. 👻 귀신비서` 전수 감사 · 안전/정직성 수리 · 알약·고클린 완전 대체 완결 · `Z-Core v2.7.3`)]
+
+- **세션 제목**: `귀신비서전수검수완결`
+1. **귀신비서 안전·정직성 7대 결함 근본 해결 (`Z-Core v2.7.3` · 3-카피 동기화)**:
+   - **보관 서류 유출 차단 & 실사진 분류 연동**: `mobilePhotoPicker.ts`·`aiPhotoFaceEngine.ts`·`assistantOnboardingSlice.ts`에서 `신분증·여권·계약서·세금계산서` 등 `isVaultDocument`가 정리 후보(`memo`)로 유출되던 결함을 원천 차단하고, 영수증·주차·스크린샷만 정리 탭에 노출.
+   - **거짓 성공·거짓 원복·영구 삭제 0%**: 모바일 네이티브 휴지통 `ok:false` 거짓 성공 제거(`ghostiMobileCareBridge.ts`), 서비스 원래 시작 유형(`sc qc`)/스케줄러 실제 원복 및 실패 시 정직 보고(`ghosti_safe_ops.py`·`merlin_z_core_os.py`), 사진 정리(`PHOTO_RECYCLE`) 및 심층 제거 `[복원 기록]` 통합, ShadowVault `unlink()` 제거(휴지통 이동), `.7z`/`.rar` Zip-Slip·심볼릭링크 이중 차단, 사내 DRM·백신 불가침(`CORPORATE_DRM_NEVER_TOUCH_TOKENS`) 강제, 데몬 `Sec-Fetch-Site: cross-site` 선차단 및 예외 `500` 정직 반환.
+   - **임의 실행 0% & `"휴지통 비워줘"` 안전핀(`A안`)**: 미리보기 없이 실행되던 경로들을 전부 사전 미리보기 카드(`BOOT_CARE_PREVIEW_GATE`·`CLEANUP_PREVIEW_GATE`) 승인 후 실행으로 통일하고, 휴지통 비우기는 오직 `"휴지통 비워줘"` 직접 타이핑(`/__zcore/recycle-bin-empty`) 시에만 작동하도록 구현.
+2. **알약 · 고클린 완전 대체 기능(`가안`) 실구현 (`plugin_ghosti_care_suite.py` · `merlin_z_core_os.py` · `monsterChatRouter.ts` · `MonsterInteractiveCards.tsx`)**:
+   - **알약 대체 (`DEFENDER_GUARD_CARD`)**: 0.1초 성급한 `'위협 0건'` 거짓 보고를 제거하고 백그라운드 실제 검사 완료까지 `2.5초` 자동 폴링 보고 + 최신 백신 DB 업데이트 + 연결된 USB/지정 폴더 스캔 + 랜섬웨어 폴더 보호·격리함 직결 탑재.
+   - **고클린 대체**: ① 24시간 경과 Windows/사용자 `Temp` 임시 쓰레기·크래시 덤프 안전 청소(`WINDOWS_TEMP_JUNK` ➔ OS 휴지통 이동, 브라우저/최근 작업파일 보호), ② 부팅 시작프로그램 개별 ON/OFF 스위치 매니저(`STARTUP_MANAGER_CARD`), ③ 내 PC 설치된 프로그램 전체 목록 브라우저(`INSTALLED_APPS_CARD` ➔ 원클릭 심층 제거 점검 직결) 탑재.
+   - **UI/구용어 정리**: PC 엔진 연결 시 창 축소(`<860px`) 모바일 오인 차단, 플레이스홀더 `3분` 롤링 정합화, 건너뛴 중복 세트 카운트 즉시 차감, 구용어(`클린몬스터`·`설정몬스터`·`✋ 손보기`·`정리 보관함`) 전면 교체 및 문서/노션 QA 미션카드 동기화.
+
+---
+
 ## 🕒 [2026-11-21 19:12 KST `2귀신` 체크아웃 (`원엔진·투도어 확정 · GhostKey 분리 플랜 · Z-Core v2.7.0 코드 푸시 완료`)]
 
 - **세션 제목**: `원엔진투도어·GhostKey분리`

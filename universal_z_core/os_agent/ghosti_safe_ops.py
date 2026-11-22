@@ -363,7 +363,7 @@ def send_to_recycle_bin(path: Path) -> Dict[str, Any]:
     # 방금 들어간 휴지통 항목($I) 찾기 — 원래 경로 일치 + 이동 시각 이후
     match: Optional[Dict[str, Any]] = None
     drive_root = original[:3].upper()
-    for _ in range(10):
+    for _ in range(12):
         for d in user_recycle_dirs():
             if not str(d).upper().startswith(drive_root):
                 continue
@@ -379,7 +379,7 @@ def send_to_recycle_bin(path: Path) -> Dict[str, Any]:
                         match = meta
         if match:
             break
-        time.sleep(0.05)
+        time.sleep(0.07)
 
     return {
         "ok": True,
@@ -490,10 +490,15 @@ def ledger_find(name: str) -> Optional[Dict[str, Any]]:
     return None
 
 
-def recycle_photos(names: List[str], resolve_path) -> Dict[str, Any]:
-    """사진 목록에서 발견된 파일만 휴지통으로 보낸다. resolve_path(name) -> Path|None (사진 목록 인덱스)."""
+def recycle_photos(
+    names: List[str],
+    resolve_path,
+    user_approval_text: str = "사진 정리 휴지통 이동 승인",
+) -> Dict[str, Any]:
+    """사진 목록에서 발견된 파일만 휴지통으로 보내고 [복원 기록](restore_points.json)에도 함께 남긴다."""
     moved: List[str] = []
     errors: List[Dict[str, str]] = []
+    restore_ops: List[Dict[str, Any]] = []
     with _LOCK:
         rows = _read_json_list(RECYCLE_LEDGER_FILE)
         for name in names:
@@ -502,22 +507,59 @@ def recycle_photos(names: List[str], resolve_path) -> Dict[str, Any]:
             if src is None:
                 errors.append({"file": name, "error": "사진 목록에서 확인된 파일이 아닙니다."})
                 continue
+            try:
+                sz = int(Path(src).stat().st_size)
+            except Exception:
+                sz = 0
             res = send_to_recycle_bin(Path(src))
             if not res.get("ok"):
                 errors.append({"file": name, "error": str(res.get("error"))})
                 continue
+            meta_f = str(res.get("recycleMetaFile", ""))
+            data_f = str(res.get("recycleDataFile", ""))
             rows.append(
                 {
                     "name": name,
                     "originalPath": res["originalPath"],
-                    "recycleMetaFile": res.get("recycleMetaFile", ""),
-                    "recycleDataFile": res.get("recycleDataFile", ""),
+                    "recycleMetaFile": meta_f,
+                    "recycleDataFile": data_f,
                     "movedAt": _now_str(),
                 }
             )
             moved.append(name)
+            restore_ops.append(
+                {
+                    "op": "PHOTO_RECYCLE",
+                    "name": Path(res["originalPath"]).name or name,
+                    "photoKey": name,
+                    "fromPath": res["originalPath"],
+                    "toPath": data_f or meta_f or "WINDOWS_RECYCLE_BIN",
+                    "recycleMetaFile": meta_f,
+                    "sizeBytes": sz,
+                    "rolledBack": False,
+                }
+            )
         _write_json_list_atomic(RECYCLE_LEDGER_FILE, rows)
-    return {"ok": True, "moved": moved, "errors": errors, "destination": "WINDOWS_RECYCLE_BIN"}
+    restore_id = ""
+    if restore_ops:
+        try:
+            pt = add_restore_point(
+                summary=f"귀신비서 사진 정리 ({len(restore_ops)}장 Windows 휴지통 안전 이동)",
+                user_prompt="사진 정리 승인",
+                preview=f"사진 {len(restore_ops)}장을 Windows 기본 [휴지통]으로 안전 이동",
+                operations=restore_ops,
+                user_approval_text=user_approval_text or "사진 정리 휴지통 이동 승인",
+            )
+            restore_id = str(pt.get("restoreId") or "")
+        except Exception:
+            restore_id = ""
+    return {
+        "ok": True,
+        "moved": moved,
+        "errors": errors,
+        "restoreId": restore_id,
+        "destination": "WINDOWS_RECYCLE_BIN",
+    }
 
 
 def restore_photos(names: List[str]) -> Dict[str, Any]:
@@ -677,6 +719,12 @@ def precheck_restore_points() -> Dict[str, Any]:
             if op.get("rolledBack"):
                 rolled_back_count += 1
                 missing.append(f"{name} (이미 되돌림)")
+            elif op.get("op") == "PHOTO_RECYCLE":
+                mf_p = Path(str(op.get("recycleMetaFile") or ""))
+                if (mf_p.name.startswith("$I") and mf_p.exists()) or (to_p.name and to_p.exists()):
+                    ok_count += 1
+                else:
+                    missing.append(name)
             elif op.get("op") in ("REGISTRY_RUN_RESTORE", "ADWARE_PROCESS_STOP", "ADWARE_TASK_DISABLE", "ADWARE_CLEAN_CHECK"):
                 ok_count += 1
             elif to_p.exists():
@@ -1025,6 +1073,22 @@ def rollback_restore_point(restore_id: str, user_rollback_text: str = "") -> Dic
                     op["rollbackNote"] = "NOT_AUTO_RESTARTABLE"
                 elif kind == "ADWARE_CLEAN_CHECK":
                     op["rolledBack"] = True
+                elif kind == "PHOTO_RECYCLE":
+                    mf_str = str(op.get("recycleMetaFile") or "")
+                    if not mf_str:
+                        row_match = ledger_find(str(op.get("photoKey") or name))
+                        if row_match:
+                            mf_str = str(row_match.get("recycleMetaFile") or "")
+                    if mf_str and Path(mf_str).exists():
+                        r_ph = restore_from_recycle_bin(mf_str, record_restore_point=False)
+                        if r_ph.get("ok"):
+                            restored.append(name)
+                            op["rolledBack"] = True
+                            op["restoredTo"] = r_ph.get("restoredPath", "")
+                        else:
+                            skipped.append(f"{name} ({r_ph.get('error')})")
+                    else:
+                        skipped.append(f"{name} (휴지통 메타 기록 없음 — 휴지통을 비웠거나 이미 복원됨)")
                 elif kind == "SHADOW_PROTECT":
                     if to_p.exists():
                         dest = from_p if not from_p.exists() else unique_target(from_p, "복원본")
@@ -1113,7 +1177,177 @@ _DESKTOP_JUNK_EXTS = {".tmp", ".bak", ".log", ".crdownload", ".part", ".zip", ".
 _NEVER_TOUCH_EXTS = {".lnk", ".url", ".ini", ".sys", ".dll"}
 
 
+class _SHQUERYRBINFO(ctypes.Structure):
+    _fields_ = [
+        ("cbSize", wintypes.DWORD),
+        ("i64Size", ctypes.c_longlong),
+        ("i64NumItems", ctypes.c_longlong),
+    ]
+
+
+def _get_c_drive_free_gb() -> float:
+    try:
+        free_b = ctypes.c_ulonglong(0)
+        total_b = ctypes.c_ulonglong(0)
+        ctypes.windll.kernel32.GetDiskFreeSpaceExW(
+            ctypes.c_wchar_p("C:\\"), ctypes.byref(free_b), ctypes.byref(total_b), None
+        )
+        return round(free_b.value / (1024 ** 3), 2)
+    except Exception:
+        return 0.0
+
+
+def _human_bytes(num_bytes: int) -> str:
+    b = max(0, int(num_bytes or 0))
+    if b >= 1024 ** 3:
+        return f"{b / (1024 ** 3):.2f}GB"
+    if b >= 1024 ** 2:
+        return f"{b / (1024 ** 2):.1f}MB"
+    if b >= 1024:
+        return f"{b / 1024:.0f}KB"
+    return f"{b}B"
+
+
+def inspect_recycle_bin_summary() -> Dict[str, Any]:
+    """현재 Windows 휴지통에 쌓인 항목 수·총 용량 및 C드라이브 여유 공간을 0.05초 만에 조회한다."""
+    c_free = _get_c_drive_free_gb()
+    if os.name != "nt":
+        return {"ok": False, "error": "WINDOWS_ONLY", "itemCount": 0, "totalBytes": 0, "cDriveFreeGb": c_free}
+    try:
+        info = _SHQUERYRBINFO()
+        info.cbSize = ctypes.sizeof(_SHQUERYRBINFO)
+        hr = ctypes.windll.shell32.SHQueryRecycleBinW(None, ctypes.byref(info))
+        if hr != 0:
+            return {"ok": False, "error": f"SHQueryRecycleBinW failed ({hr})", "itemCount": 0, "totalBytes": 0, "cDriveFreeGb": c_free}
+        cnt = max(0, int(info.i64NumItems))
+        sz = max(0, int(info.i64Size))
+        return {
+            "ok": True,
+            "itemCount": cnt,
+            "totalBytes": sz,
+            "sizeLabel": _human_bytes(sz),
+            "cDriveFreeGb": c_free,
+        }
+    except Exception as exc:
+        return {"ok": False, "error": str(exc), "itemCount": 0, "totalBytes": 0, "cDriveFreeGb": c_free}
+
+
+def empty_recycle_bin_verified(user_typed_text: str) -> Dict[str, Any]:
+    """[기능명세 §5.9-3 안전핀] 오직 유저가 채팅창에 직접 '휴지통 비워줘'라고 자연어로 타이핑했을 때만 비운다."""
+    typed = (user_typed_text or "").strip()
+    low = typed.lower()
+    if (
+        not typed
+        or "버튼" in low
+        or "button" in low
+        or "휴지통" not in low
+        or not any(k in low for k in ("비워", "비우기", "비울래", "완전 삭제", "영구 삭제"))
+    ):
+        return {
+            "ok": False,
+            "error": "SAFETY_PIN_TYPING_REQUIRED",
+            "message": "휴지통 비우기는 영구 삭제이므로 실수 방지를 위해 채팅창에 직접 '휴지통 비워줘'라고 타이핑해 주셔야 실행됩니다.",
+        }
+    before = inspect_recycle_bin_summary()
+    if not before.get("ok"):
+        return {"ok": False, "error": before.get("error") or "RECYCLE_QUERY_FAILED", "message": "휴지통 상태를 확인하지 못했습니다."}
+    item_cnt = int(before.get("itemCount") or 0)
+    bytes_before = int(before.get("totalBytes") or 0)
+    c_before = float(before.get("cDriveFreeGb") or 0.0)
+    if item_cnt <= 0 and bytes_before <= 0:
+        return {
+            "ok": True,
+            "alreadyEmpty": True,
+            "purgedCount": 0,
+            "reclaimedBytes": 0,
+            "reclaimedLabel": "0B",
+            "cDriveFreeBeforeGb": c_before,
+            "cDriveFreeAfterGb": c_before,
+            "message": f"이미 Windows 휴지통이 깨끗하게 비어 있어요! (현재 C드라이브 여유 공간: {c_before}GB)",
+        }
+    # SHERB_NOCONFIRMATION(0x1) | SHERB_NOPROGRESSUI(0x2) | SHERB_NOSOUND(0x4)
+    hr = ctypes.windll.shell32.SHEmptyRecycleBinW(None, None, 0x00000007)
+    # 빈 폴더 등 일부 경미한 코드 외 실패 시 정직 반환
+    after = inspect_recycle_bin_summary()
+    bytes_after = int(after.get("totalBytes") or 0)
+    cnt_after = int(after.get("itemCount") or 0)
+    c_after = _get_c_drive_free_gb()
+    if hr != 0 and cnt_after >= item_cnt and bytes_after >= bytes_before:
+        return {
+            "ok": False,
+            "error": f"SHEmptyRecycleBinW failed ({hr})",
+            "message": "사용 중인 파일이 있거나 권한 문제로 휴지통을 비우지 못했습니다.",
+        }
+    # 사진 장부에서 사라진 휴지통 항목 동기화 정리
+    try:
+        with _LOCK:
+            rows = _read_json_list(RECYCLE_LEDGER_FILE)
+            kept = [r for r in rows if r.get("recycleDataFile") and Path(str(r["recycleDataFile"])).exists()]
+            if len(kept) != len(rows):
+                _write_json_list_atomic(RECYCLE_LEDGER_FILE, kept)
+    except Exception:
+        pass
+    reclaimed = max(0, bytes_before - bytes_after)
+    purged_cnt = max(0, item_cnt - cnt_after)
+    reclaimed_lbl = _human_bytes(reclaimed)
+    _append_blackbox_audit(
+        {
+            "eventType": "RECYCLE_BIN_PURGE",
+            "timestamp": _now_str(),
+            "userTypedSafetyPin": typed,
+            "purgedCount": purged_cnt,
+            "reclaimedBytes": reclaimed,
+            "cDriveFreeBeforeGb": c_before,
+            "cDriveFreeAfterGb": c_after,
+        }
+    )
+    return {
+        "ok": True,
+        "alreadyEmpty": False,
+        "purgedCount": purged_cnt,
+        "reclaimedBytes": reclaimed,
+        "reclaimedLabel": reclaimed_lbl,
+        "cDriveFreeBeforeGb": c_before,
+        "cDriveFreeAfterGb": c_after,
+        "message": (
+            f"🗑️ Windows 휴지통의 {purged_cnt}개 항목({reclaimed_lbl})을 깔끔하게 비웠어요! "
+            f"(C드라이브 여유 공간: {c_before}GB ➔ {c_after}GB)"
+        ),
+    }
+
+
+_TEMP_SAFE_JUNK_EXTS = {".tmp", ".temp", ".log", ".bak", ".old", ".dmp", ".etl", ".chk", ".cache", ".crdownload", ".part"}
+_TEMP_NEVER_TOUCH_TOKENS = (
+    "chrome", "msedge", "edge", "whale", "firefox", "brave",
+    "merlin", "ghosti", "senstalk", "sundream", "kakao", "discord", "slack", "notion",
+)
+
+
+def _temp_junk_roots() -> List[Path]:
+    roots: List[Path] = []
+    seen = set()
+    for raw in (
+        os.environ.get("TEMP", ""),
+        str(LOCAL_APPDATA / "Temp"),
+        str(LOCAL_APPDATA / "CrashDumps"),
+        os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "Temp"),
+    ):
+        if not raw:
+            continue
+        p = Path(raw)
+        try:
+            rp = str(p.resolve()).lower()
+        except Exception:
+            rp = str(p).lower()
+        if rp not in seen and p.exists():
+            seen.add(rp)
+            roots.append(p)
+    return roots
+
+
 def _cleanup_roots(kind: str) -> List[Path]:
+    if kind == "WINDOWS_TEMP_JUNK":
+        return _temp_junk_roots()
     if kind == "DOWNLOAD_INSTALLERS":
         return [known_folder("downloads"), known_folder("desktop")]
     return [known_folder("desktop"), known_folder("downloads")]
@@ -1124,7 +1358,62 @@ def scan_cleanup_candidates(kind: str, min_age_days: float = 0.0, max_items: int
     1회 실행 시 조건에 해당하는 설치·압축·임시 파일(.zip/.exe/.msi/.apk/.tmp 등) 전량을 빠짐없이 한 번에 스캔하여
     1회차 5건·2회차 1건처럼 쪼개어 남는 현상을 원천 차단한다.
     """
-    kind = kind if kind in ("DOWNLOAD_INSTALLERS", "FOLDER_REORG") else "FOLDER_REORG"
+    kind = kind if kind in ("DOWNLOAD_INSTALLERS", "FOLDER_REORG", "WINDOWS_TEMP_JUNK") else "FOLDER_REORG"
+    if kind == "WINDOWS_TEMP_JUNK":
+        t0_tmp = time.perf_counter()
+        now_tmp = time.time()
+        min_temp_age = max(1.0, float(min_age_days or 1.0))  # 최근 24시간 내 활성 임시파일은 절대 건드리지 않음
+        temp_items: List[Dict[str, Any]] = []
+        seen_tmp = set()
+        for troot in _temp_junk_roots():
+            lbl = "크래시 덤프" if "crashdumps" in str(troot).lower() else ("Windows Temp" if "windows" in str(troot).lower() else "사용자 Temp")
+            try:
+                with os.scandir(troot) as it:
+                    for entry in it:
+                        try:
+                            if not entry.is_file(follow_symlinks=False):
+                                continue
+                            nm_low = entry.name.lower()
+                            if nm_low.startswith("~$") or any(tok in nm_low for tok in _TEMP_NEVER_TOUCH_TOKENS):
+                                continue
+                            ext = Path(entry.name).suffix.lower()
+                            if ext in _NEVER_TOUCH_EXTS or (ext not in _TEMP_SAFE_JUNK_EXTS and not nm_low.startswith("tmp")):
+                                continue
+                            st = entry.stat(follow_symlinks=False)
+                            age = max(0.0, (now_tmp - st.st_mtime) / 86400.0)
+                            if age < min_temp_age or st.st_size <= 0:
+                                continue
+                            resolved = str(Path(entry.path).resolve())
+                            if resolved.lower() in seen_tmp:
+                                continue
+                            seen_tmp.add(resolved.lower())
+                            temp_items.append(
+                                {
+                                    "name": entry.name,
+                                    "fullPath": resolved,
+                                    "folderLabel": lbl,
+                                    "sizeBytes": int(st.st_size),
+                                    "ageDays": round(age, 1),
+                                    "modifiedAt": datetime.datetime.fromtimestamp(st.st_mtime).strftime("%Y-%m-%d"),
+                                }
+                            )
+                        except Exception:
+                            continue
+            except Exception:
+                continue
+        temp_items.sort(key=lambda x: x["sizeBytes"], reverse=True)
+        temp_items = temp_items[:max_items]
+        total_tmp = sum(x["sizeBytes"] for x in temp_items)
+        return {
+            "ok": True,
+            "kind": "WINDOWS_TEMP_JUNK",
+            "scannedFolders": [str(p) for p in _temp_junk_roots()],
+            "items": temp_items,
+            "count": len(temp_items),
+            "totalBytes": total_tmp,
+            "minAgeDays": min_temp_age,
+            "elapsedMs": round((time.perf_counter() - t0_tmp) * 1000, 1),
+        }
     t0 = time.perf_counter()
     now = time.time()
     effective_min_age = max(0.0, float(min_age_days or 0.0))
@@ -1190,8 +1479,9 @@ def scan_cleanup_candidates(kind: str, min_age_days: float = 0.0, max_items: int
 
 
 def execute_cleanup_move(full_paths: List[str], summary: str, user_prompt: str, preview: str, user_approval_text: str = "") -> Dict[str, Any]:
-    """승인된 실물 경로만 같은 폴더의 '기타_정리함'으로 옮기고 [복원 기록]을 남긴다(삭제 없음)."""
+    """승인된 실물 경로만 '기타_정리함'(바탕화면·다운로드) 또는 Windows 기본 [휴지통](Temp 쓰레기)으로 옮기고 [복원 기록]을 남긴다(영구 삭제 0%)."""
     allowed_roots = [known_folder("desktop"), known_folder("downloads")]
+    temp_roots = _temp_junk_roots()
     ops: List[Dict[str, Any]] = []
     errors: List[Dict[str, str]] = []
     for raw in full_paths or []:
@@ -1203,8 +1493,30 @@ def execute_cleanup_move(full_paths: List[str], summary: str, user_prompt: str, 
             parent = src.resolve().parent
             parent_str = str(parent).lower()
             root = next((r for r in allowed_roots if r.exists() and str(r.resolve()).lower() == parent_str), None)
+            temp_root = next((r for r in temp_roots if r.exists() and str(r.resolve()).lower() == parent_str), None)
+            if root is None and temp_root is not None:
+                if src.suffix.lower() in _NEVER_TOUCH_EXTS:
+                    errors.append({"file": src.name, "error": "시스템 파일은 정리하지 않습니다."})
+                    continue
+                sz_t = int(src.stat().st_size)
+                rb_t = send_to_recycle_bin(src)
+                if rb_t.get("ok"):
+                    ops.append(
+                        {
+                            "op": "PHOTO_RECYCLE",
+                            "name": src.name,
+                            "fromPath": rb_t["originalPath"],
+                            "toPath": rb_t.get("recycleDataFile") or rb_t.get("recycleMetaFile") or "WINDOWS_RECYCLE_BIN",
+                            "recycleMetaFile": rb_t.get("recycleMetaFile", ""),
+                            "sizeBytes": sz_t,
+                            "rolledBack": False,
+                        }
+                    )
+                else:
+                    errors.append({"file": src.name, "error": str(rb_t.get("error") or "사용 중인 임시파일")})
+                continue
             if root is None:
-                errors.append({"file": src.name, "error": "바탕화면·다운로드 바로 아래 파일만 정리할 수 있습니다."})
+                errors.append({"file": src.name, "error": "바탕화면·다운로드·Temp 바로 아래 파일만 정리할 수 있습니다."})
                 continue
             if src.suffix.lower() in _NEVER_TOUCH_EXTS:
                 errors.append({"file": src.name, "error": "바로가기·시스템 파일은 정리하지 않습니다."})

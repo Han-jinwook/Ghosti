@@ -1223,7 +1223,7 @@ export const App: React.FC = () => {
                   history
                 </span>
                 <span className="font-label-md text-[12.5px] md:text-[13.5px] font-bold break-keep">
-                  🗑️ 방금 정리한 {lastUndoBatch.count}장이 정리 보관함으로 이동되었습니다.
+                  🗑️ 방금 정리한 {lastUndoBatch.count}장이 OS 기본 [휴지통]으로 안전하게 이동되었습니다.
                 </span>
               </div>
 

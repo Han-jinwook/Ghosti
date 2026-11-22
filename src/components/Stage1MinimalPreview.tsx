@@ -43,7 +43,7 @@ import { PassportRegistrationPanel } from './PassportRegistrationPanel';
 import { GhostPhotoOcrTeleportModal } from './GhostWindowThreeStageMockup';
 import { GhostSecretaryFirstGuard, jumpToGhostSecretary } from './GhostSecretaryFirstGuard';
 
-const STAGE1_ROLLING_INTERVAL_MS = 10_000; // 10초 자동 롤링
+const STAGE1_ROLLING_INTERVAL_MS = 180_000; // 3분(180초) 자동 롤링 (기획 정합)
 
 interface Stage1SamplePcProgram {
   id: string;
@@ -2011,7 +2011,19 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     ? photos.filter((p) => !isShowroomSamplePhoto(p.name))
     : photos;
 
-  const liveActiveTrash = displayPhotos.filter((p) => p.trashCategory && !p.quarantined);
+  const skippedPhotoIds = React.useMemo(() => {
+    if (skippedGroupIds.size === 0) return new Set<string>();
+    const out = new Set<string>();
+    duplicateGroups.forEach((g) => {
+      if (skippedGroupIds.has(g.groupId)) {
+        g.photoIds.forEach((pid) => out.add(pid));
+      }
+    });
+    return out;
+  }, [skippedGroupIds, duplicateGroups]);
+  const liveActiveTrash = displayPhotos.filter(
+    (p) => p.trashCategory && !p.quarantined && !skippedPhotoIds.has(p.id)
+  );
   const activeTrash =
     isCleanupPaused && pausedSnapshot ? pausedSnapshot.activeTrash : liveActiveTrash;
   const quarantinedPhotos = displayPhotos.filter((p) => p.quarantined);
@@ -2037,8 +2049,8 @@ export const Stage1MinimalCarePreview: React.FC = () => {
         duplicateGroups,
       });
       setIsCleanupPaused(true);
-      clearTrashSelection();
       setActiveTrashCategoryFilter('none');
+      clearTrashSelection();
     };
     const onPhotoRestored = () => {
       setIsCleanupPaused(false);
@@ -2256,8 +2268,8 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                               }
                         );
                         setIsCleanupPaused(true);
-                        clearTrashSelection();
                         setActiveTrashCategoryFilter('none');
+                        clearTrashSelection();
                         window.dispatchEvent(
                           new CustomEvent('ghosti_defer_photo_cleanup_and_continue')
                         );
@@ -3125,7 +3137,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                         history
                       </span>
                       <span className="font-label-md text-[13px] text-slate-900 dark:text-zinc-100 font-semibold break-keep">
-                        {`방금 정리한 ${lastUndoBatch.count}장 (${fmtMB(lastUndoBatch.savedBytes)})이 휴지통(정리 보관함)으로 안전하게 이동되었습니다.`}
+                        {`방금 정리한 ${lastUndoBatch.count}장 (${fmtMB(lastUndoBatch.savedBytes)})이 OS 기본 [휴지통]으로 안전하게 이동되었습니다.`}
                       </span>
                     </div>
 

@@ -1,7 +1,7 @@
 import { getZCoreUrl, hasActiveGhostiLoginSession, zCoreBridge } from './zCoreBridge';
 
 /**
- * 👻 『귀신같이 (Ghosti)』 [✋ 손보기] 2중 자동 검진 엔진 & 1줄 롤링 플레이스홀더 마스터 모듈
+ * 👻 『귀신같이 (Ghosti)』 [👻 귀신비서] 2중 자동 검진 엔진 & 1줄 롤링 플레이스홀더 마스터 모듈
  *
  * [멀린님 최종 확정 4대 명세 (v2026.11.06)]:
  * 1. 제1 본질 재정립 ("느려진 컴퓨터 잡아주기" 1순위) + 모바일 스토어 심사 방어선(Apple 2.5.2) 유지
@@ -426,6 +426,8 @@ export async function evaluateDualProactiveCareEngine(options?: {
   const computedOverloadPct = Math.max(
     ramDeltaPct + securityLoadContribution,
     ramUsedPercent !== null && ramUsedPercent >= 80 ? 22 : 0,
+    cpuLoadPercent !== null && cpuLoadPercent >= 80 ? 24 : 0,
+    cpuLoadPercent !== null && cpuLoadPercent >= 20 && bloatwareNames.length >= 2 ? 20 : 0,
     bloatwareNames.length >= 4 ? 22 : 0,
     junkFileCount >= 20 ? 21 : 0
   );

@@ -1377,7 +1377,12 @@ def _discover_security_autostart_bridges() -> List[Dict[str, Any]]:
                     s_name = str(vname or "").strip()
                     s_cmd = str(vval or "").strip()
                     comb_low = f"{s_name} {s_cmd}".lower()
-                    if not s_name or not s_cmd or any(tok in comb_low for tok in _SAFE_FAMILY_TOKENS):
+                    if (
+                        not s_name
+                        or not s_cmd
+                        or any(tok in comb_low for tok in _SAFE_FAMILY_TOKENS)
+                        or any(drm in comb_low for drm in never_touch_tokens)
+                    ):
                         continue
                     matched_kw = ""
                     matched_lbl = ""
@@ -2564,30 +2569,51 @@ def _extract_via_7z(
             "message": "이 형식의 압축 해제 모듈을 찾지 못했습니다. Z-코어를 다시 실행해 주세요.",
         }
 
-    # 1) 비밀번호가 주어지지 않은 경우: 디스크에 아무 폴더도 만들기 전에 암호 유무(헤더 암호화 포함) 즉시 판별!
-    if not password:
-        r_list = subprocess.run(
-            [str(z7_exe), "l", "-slt", "-sccUTF-8", "-p", str(archive_path)],
-            capture_output=True,
-            text=True,
-            encoding="utf-8",
-            errors="replace",
-            timeout=25.0,
-            creationflags=CREATE_NO_WINDOW,
-        )
-        combined_list = ((r_list.stdout or "") + "\n" + (r_list.stderr or "")).lower()
-        if (
-            "encrypted = +" in combined_list
-            or "wrong password" in combined_list
-            or "cannot open encrypted archive" in combined_list
-            or "can not open encrypted archive" in combined_list
-        ):
-            return {
-                "ok": False,
-                "needPassword": True,
-                "wrongPassword": False,
-                "message": "🔑 암호가 걸린 압축 파일입니다. 비밀번호를 입력해 주세요.",
-            }
+    # 1) 사전 목록 검사(암호 유무 + Zip-Slip 경로 탈출·심볼릭링크 악성 엔트리 원천 차단!)
+    pwd_list_arg = f"-p{password}" if password is not None and password != "" else "-p"
+    r_list = subprocess.run(
+        [str(z7_exe), "l", "-slt", "-sccUTF-8", pwd_list_arg, str(archive_path)],
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+        timeout=25.0,
+        creationflags=CREATE_NO_WINDOW,
+    )
+    list_stdout = r_list.stdout or ""
+    combined_list = (list_stdout + "\n" + (r_list.stderr or "")).lower()
+    if not password and (
+        "encrypted = +" in combined_list
+        or "wrong password" in combined_list
+        or "cannot open encrypted archive" in combined_list
+        or "can not open encrypted archive" in combined_list
+    ):
+        return {
+            "ok": False,
+            "needPassword": True,
+            "wrongPassword": False,
+            "message": "🔑 암호가 걸린 압축 파일입니다. 비밀번호를 입력해 주세요.",
+        }
+    for raw_ln in list_stdout.splitlines():
+        s_ln = raw_ln.strip()
+        if s_ln.startswith("Path = "):
+            entry_rel = s_ln[len("Path = ") :].strip()
+            if entry_rel == str(archive_path):
+                continue
+            norm_parts = re.split(r"[\\/]+", entry_rel)
+            if ".." in norm_parts or re.match(r"^[a-zA-Z]:", entry_rel) or entry_rel.startswith(("\\", "/")):
+                return {
+                    "ok": False,
+                    "error": "ZIP_SLIP_BLOCKED",
+                    "message": "보안 경고: 상위 폴더 탈출(..) 또는 절대 경로가 포함된 위험한 압축 파일이어서 해제를 차단했습니다.",
+                }
+        elif s_ln.lower().startswith("symboliclink = +") or s_ln.lower().startswith("reparse = "):
+            if s_ln.split("=", 1)[1].strip():
+                return {
+                    "ok": False,
+                    "error": "SYMLINK_ARCHIVE_BLOCKED",
+                    "message": "보안 경고: 외부 경로를 가리키는 심볼릭 링크가 포함된 압축 파일이어서 해제를 차단했습니다.",
+                }
 
     # 2) 격리 스테이징 폴더에 해제 (중간 오류·암호 불일치 시 찌꺼기 0바이트 완벽 삭제!)
     tmp_stage = Path(tempfile.mkdtemp(prefix=".ghosti_7z_", dir=str(archive_path.parent)))
@@ -2631,6 +2657,25 @@ def _extract_via_7z(
                 "detail": err_txt[:240],
             }
 
+        stage_real = os.path.realpath(str(tmp_stage))
+        for r_dir, d_names, f_names in os.walk(tmp_stage, followlinks=False):
+            for sub_n in list(d_names) + list(f_names):
+                cand_p = Path(r_dir) / sub_n
+                if cand_p.is_symlink():
+                    shutil.rmtree(tmp_stage, ignore_errors=True)
+                    return {
+                        "ok": False,
+                        "error": "SYMLINK_ARCHIVE_BLOCKED",
+                        "message": "보안 경고: 심볼릭 링크가 감지되어 압축 해제를 안전 차단했습니다.",
+                    }
+                cand_real = os.path.realpath(str(cand_p))
+                if os.path.commonpath([stage_real, cand_real]) != stage_real:
+                    shutil.rmtree(tmp_stage, ignore_errors=True)
+                    return {
+                        "ok": False,
+                        "error": "ZIP_SLIP_BLOCKED",
+                        "message": "보안 경고: 지정 폴더 밖으로 벗어나는 경로가 감지되어 해제를 차단했습니다.",
+                    }
         created_folder, extracted_files, total_bytes = _finalize_staged_tree_to_folder(
             tmp_stage, archive_path.parent, archive_path.stem
         )
@@ -2869,7 +2914,7 @@ def smart_extract_archive(archive_path: str, password: Optional[str] = None) -> 
                         )
                     except (RuntimeError, zlib.error, zipfile.BadZipFile) as e_pwd:
                         err_s = str(e_pwd).lower()
-                        if is_encrypted or "password" in err_s or "encrypted" in err_s or "bad crc" in err_s or isinstance(e_pwd, zlib.error):
+                        if is_encrypted or "password" in err_s or "encrypted" in err_s:
                             return {
                                 "ok": False,
                                 "needPassword": True,
@@ -3792,15 +3837,15 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
         except Exception:
             pass
 
+        # 공식 언인스톨러가 지우지 못하고 남기는 캐시·데이터 루트만 체크박스로 제시 (Program Files 허위 체크박스 방지)
         candidate_roots = [
-            Path(os.environ.get("ProgramFiles", r"C:\Program Files")),
-            Path(os.environ.get("ProgramFiles(x86)", r"C:\Program Files (x86)")),
             Path(os.environ.get("CommonProgramFiles", r"C:\Program Files\Common Files")),
             Path(os.environ.get("CommonProgramFiles(x86)", r"C:\Program Files (x86)\Common Files")),
             Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData")),
             LOCAL_APPDATA,
             Path(os.environ.get("APPDATA", os.path.expanduser(r"~\AppData\Roaming"))),
         ]
+        vendor_umbrella_names = {"estsoft", "ahnlab", "adobe", "autodesk", "hancom", "raonsecure", "inca", "zoom"}
         seen_dirs = set()
         for croot in candidate_roots:
             if not croot.exists():
@@ -3826,10 +3871,32 @@ def scan_deep_uninstall_target(app_query: str) -> Dict[str, Any]:
                                     "name": entry.name,
                                     "sizeBytes": sz,
                                     "sizeMb": round(sz / (1024 * 1024), 2),
-                                    "isSafeCacheOrData": any(
-                                        x in p_str.lower() for x in ("appdata", "programdata", "common files", "temp", "cache")
-                                    ),
+                                    "isSafeCacheOrData": True,
                                 })
+                        elif dname_low in vendor_umbrella_names:
+                            # ESTsoft\ALZip 처럼 제조사 상위 폴더 아래 2단계 앱 폴더까지 정밀 탐색
+                            try:
+                                with os.scandir(full_p) as sub_it:
+                                    for sub_e in sub_it:
+                                        if not sub_e.is_dir(follow_symlinks=False):
+                                            continue
+                                        sub_low = sub_e.name.lower()
+                                        sub_full = Path(sub_e.path).resolve()
+                                        sub_str = str(sub_full)
+                                        if _is_protected_system_entity(sub_low) or _is_protected_personal_data_dir(sub_e.name, sub_str):
+                                            continue
+                                        if any(k in sub_low for k in kw_lows) and sub_str.lower() not in seen_dirs:
+                                            seen_dirs.add(sub_str.lower())
+                                            sz2 = _calc_dir_size_fast(sub_full)
+                                            residual_folders.append({
+                                                "path": sub_str,
+                                                "name": f"{entry.name}\\{sub_e.name}",
+                                                "sizeBytes": sz2,
+                                                "sizeMb": round(sz2 / (1024 * 1024), 2),
+                                                "isSafeCacheOrData": True,
+                                            })
+                            except Exception:
+                                pass
             except Exception:
                 continue
 
@@ -3957,11 +4024,22 @@ def execute_deep_uninstall_target(
             except Exception:
                 pass
 
-        # 2) 화이트리스트 해당 서비스만 안전 정지
+        # 2) 대상 앱 서비스 안전 정지 (웹보안 화이트리스트는 승격 헬퍼로, 일반 앱 서비스는 보호목록 검증 후 정지)
         svc_names = [str(s.get("serviceName") or "") for s in scan.get("services", []) if s.get("serviceName")]
         if svc_names:
             elev_res = execute_elevated_service_control("sleep", svc_names, allow_uac_prompt=True)
             disabled_services = list(elev_res.get("processedServices") or [])
+            already_done = {x.lower() for x in disabled_services}
+            for s_nm in svc_names:
+                if s_nm.lower() in already_done or _is_protected_system_entity(s_nm.lower()):
+                    continue
+                try:
+                    r_st = subprocess.run(["sc", "stop", s_nm], capture_output=True, timeout=3.0, creationflags=CREATE_NO_WINDOW)
+                    subprocess.run(["sc", "config", s_nm, "start=", "demand"], capture_output=True, timeout=3.0, creationflags=CREATE_NO_WINDOW)
+                    if r_st.returncode == 0:
+                        disabled_services.append(s_nm)
+                except Exception:
+                    pass
 
         # 3) 공식 언인스톨러 실행 (MsiExec /I -> /X 변환 및 최대 25초 종료 대기 후 잔여 폴더 확인)
         if invoke_official_uninstaller:
@@ -3986,43 +4064,58 @@ def execute_deep_uninstall_target(
                 except Exception:
                     continue
 
-        # 4) 부활형 작업 스케줄러 제거/비활성화
+        # 4) 부활형 작업 스케줄러 안전 비활성화 (/delete 영구삭제 대신 /disable로 언제든 복원 가능 보장)
+        du_restore_ops: List[Dict[str, Any]] = []
         for tname in scan.get("scheduledTasks", []):
             try:
-                r_del = subprocess.run(
-                    ["schtasks", "/delete", "/tn", tname, "/f"],
+                r_dis = subprocess.run(
+                    ["schtasks", "/change", "/tn", tname, "/disable"],
                     capture_output=True,
-                    timeout=2.0,
+                    timeout=2.5,
                     creationflags=CREATE_NO_WINDOW,
                 )
-                if r_del.returncode == 0:
-                    deleted_tasks.append(tname)
-                else:
-                    r_dis = subprocess.run(
-                        ["schtasks", "/change", "/tn", tname, "/disable"],
-                        capture_output=True,
-                        timeout=2.0,
-                        creationflags=CREATE_NO_WINDOW,
-                    )
-                    if r_dis.returncode == 0:
-                        deleted_tasks.append(f"{tname}(비활성화)")
+                if r_dis.returncode == 0:
+                    deleted_tasks.append(f"{tname}(비활성화)")
+                    du_restore_ops.append({
+                        "op": "ADWARE_TASK_DISABLE",
+                        "name": f"스케줄러:{tname.lstrip(chr(92))}",
+                        "targetKind": "task",
+                        "target": tname.lstrip("\\"),
+                        "fromPath": "작업 스케줄러",
+                        "toPath": "비활성화(Disabled)",
+                        "rolledBack": False,
+                    })
             except Exception:
                 continue
 
-        # 5) 시작프로그램(HKCU/HKLM Run) 레지스트리 엔트리 제거
+        # 5) 시작프로그램(HKCU/HKLM Run) 백업 후 제거 ([복원 기록] 원복 보장)
         import winreg
 
         for st_item in scan.get("startupEntries", []):
             vname = str(st_item.get("name") or "")
             rpath = str(st_item.get("regPath") or "")
+            cmd_val = str(st_item.get("command") or "")
             hive_str = str(st_item.get("hive") or "HKCU")
             hive = winreg.HKEY_CURRENT_USER if hive_str == "HKCU" else winreg.HKEY_LOCAL_MACHINE
             if not vname or not rpath:
                 continue
             try:
+                if not cmd_val:
+                    with winreg.OpenKey(hive, rpath, 0, winreg.KEY_READ) as rk_r:
+                        cmd_val, _ = winreg.QueryValueEx(rk_r, vname)
+                with winreg.CreateKey(winreg.HKEY_CURRENT_USER, r"Software\Merlin\DisabledStartupBackup") as bk_k:
+                    winreg.SetValueEx(bk_k, f"{hive_str}__{vname}", 0, winreg.REG_SZ, str(cmd_val or ""))
                 with winreg.OpenKey(hive, rpath, 0, winreg.KEY_SET_VALUE) as wk:
                     winreg.DeleteValue(wk, vname)
                     removed_startups.append(vname)
+                    du_restore_ops.append({
+                        "op": "REGISTRY_RUN_RESTORE",
+                        "name": vname,
+                        "tag": hive_str,
+                        "runSubkey": rpath,
+                        "command": str(cmd_val or ""),
+                        "rolledBack": False,
+                    })
             except Exception:
                 continue
 
@@ -4043,6 +4136,19 @@ def execute_deep_uninstall_target(
             if rb_res.get("ok"):
                 recycled_folders.append(resolved_str)
                 reclaimed_bytes += fsize
+
+        if du_restore_ops:
+            try:
+                import ghosti_safe_ops as _safe_du
+                _safe_du.add_restore_point(
+                    summary=f"{target_label} 심층 제거 사전 스냅샷",
+                    user_prompt=app_query,
+                    preview=f"{target_label} 스케줄러·시작프로그램 정리 기록",
+                    operations=du_restore_ops,
+                    user_approval_text=user_approval_text,
+                )
+            except Exception:
+                pass
 
     audit_payload = {
         "createdAt": datetime.datetime.now().isoformat(),
@@ -4099,11 +4205,297 @@ def execute_deep_uninstall_target(
     }
 
 
+
+# ============================================================================
+# 4-B. [고클린 완전 대체] 시작프로그램 개별 ON/OFF 매니저 & 설치 프로그램 전체 목록 브라우저
+# ============================================================================
+STARTUP_BACKUP_SUBKEY = r"Software\Merlin\DisabledStartupBackup"
+
+
+def list_startup_programs() -> Dict[str, Any]:
+    """현재 활성화된 시작프로그램(Run 레지스트리 + 시작프로그램 폴더)과 귀신비서가 꺼둔(백업된) 항목을 한눈에 반환합니다."""
+    if sys.platform != "win32" or winreg is None:
+        return {"ok": False, "error": "WINDOWS_ONLY", "items": []}
+    wl_data = load_security_whitelist(allow_remote_sync=False)
+    drm_tokens = tuple(
+        str(x).strip().lower()
+        for x in list(wl_data.get("corporate_drm_never_touch", []))
+        + ["merlin", "ghosti", "senstalk", "sundream", "securityhealth", "windefend", "msmpeng"]
+        if str(x).strip()
+    )
+    items: List[Dict[str, Any]] = []
+    seen_ids = set()
+
+    run_sources = [
+        (winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", "HKCU", "내 계정 시작프로그램"),
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\Microsoft\Windows\CurrentVersion\Run", "HKLM", "공용(PC 전체) 시작프로그램"),
+        (winreg.HKEY_LOCAL_MACHINE, r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run", "HKLM_WOW64", "공용(32비트) 시작프로그램"),
+    ]
+    for root_h, sub_k, tag, loc_lbl in run_sources:
+        try:
+            with winreg.OpenKey(root_h, sub_k, 0, winreg.KEY_READ) as rk:
+                idx = 0
+                while True:
+                    try:
+                        vname, vval, _ = winreg.EnumValue(rk, idx)
+                        idx += 1
+                    except OSError:
+                        break
+                    nm = str(vname or "").strip()
+                    cmd = str(vval or "").strip()
+                    if not nm:
+                        continue
+                    item_id = f"{tag}::{nm}"
+                    if item_id.lower() in seen_ids:
+                        continue
+                    seen_ids.add(item_id.lower())
+                    comb = f"{nm} {cmd}".lower()
+                    protected = any(t in comb for t in drm_tokens)
+                    items.append({
+                        "id": item_id,
+                        "name": nm,
+                        "command": cmd,
+                        "tag": tag,
+                        "runSubkey": sub_k,
+                        "locationLabel": loc_lbl,
+                        "enabled": True,
+                        "isProtected": protected,
+                        "requiresAdmin": tag != "HKCU",
+                    })
+        except OSError:
+            continue
+
+    # 귀신비서가 안전하게 꺼둔 백업 항목(다시 켜기 지원)
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_BACKUP_SUBKEY, 0, winreg.KEY_READ) as bk:
+            idx = 0
+            while True:
+                try:
+                    bname, bval, _ = winreg.EnumValue(bk, idx)
+                    idx += 1
+                except OSError:
+                    break
+                raw_b = str(bname or "")
+                cmd_b = str(bval or "")
+                tag_b, sep, orig_nm = raw_b.partition("__")
+                if not sep or not orig_nm:
+                    continue
+                item_id = f"{tag_b}::{orig_nm}"
+                if item_id.lower() in seen_ids:
+                    continue
+                seen_ids.add(item_id.lower())
+                sub_k = (
+                    r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run"
+                    if tag_b == "HKLM_WOW64"
+                    else r"Software\Microsoft\Windows\CurrentVersion\Run"
+                )
+                items.append({
+                    "id": item_id,
+                    "name": orig_nm,
+                    "command": cmd_b,
+                    "tag": tag_b,
+                    "runSubkey": sub_k,
+                    "locationLabel": "귀신비서가 잠시 꺼둠 (언제든 다시 켜기 가능)",
+                    "enabled": False,
+                    "isProtected": False,
+                    "requiresAdmin": tag_b != "HKCU",
+                })
+    except OSError:
+        pass
+
+    items.sort(key=lambda x: (not x["enabled"], x["isProtected"], x["name"].lower()))
+    return {
+        "ok": True,
+        "count": len(items),
+        "enabledCount": sum(1 for x in items if x["enabled"]),
+        "disabledCount": sum(1 for x in items if not x["enabled"]),
+        "items": items,
+    }
+
+
+def toggle_startup_program(item_id: str, enable: bool, user_approval_text: str = "") -> Dict[str, Any]:
+    """특정 시작프로그램 1개를 안전하게 켜거나(ON) 끕니다(OFF, 백업 보관 + 복원기록 등록)."""
+    if sys.platform != "win32" or winreg is None:
+        return {"ok": False, "error": "WINDOWS_ONLY"}
+    tag, sep, vname = (item_id or "").strip().partition("::")
+    if not sep or not vname or tag not in ("HKCU", "HKLM", "HKLM_WOW64"):
+        return {"ok": False, "error": "INVALID_STARTUP_ID", "message": "올바른 시작프로그램 항목이 아닙니다."}
+    sub_k = (
+        r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run"
+        if tag == "HKLM_WOW64"
+        else r"Software\Microsoft\Windows\CurrentVersion\Run"
+    )
+    root_h = winreg.HKEY_CURRENT_USER if tag == "HKCU" else winreg.HKEY_LOCAL_MACHINE
+    backup_val_name = f"{tag}__{vname}"
+
+    if not enable:
+        # OFF: 원본 명령 백업 후 Run에서 제거 (보호 대상 차단)
+        wl_data = load_security_whitelist(allow_remote_sync=False)
+        drm_tokens = tuple(
+            str(x).strip().lower()
+            for x in list(wl_data.get("corporate_drm_never_touch", []))
+            + ["merlin", "ghosti", "senstalk", "sundream", "securityhealth", "windefend", "msmpeng"]
+            if str(x).strip()
+        )
+        try:
+            with winreg.OpenKey(root_h, sub_k, 0, winreg.KEY_READ) as rk_r:
+                cmd_val, _ = winreg.QueryValueEx(rk_r, vname)
+        except OSError:
+            return {"ok": False, "error": "ENTRY_NOT_FOUND", "message": f"'{vname}' 항목이 이미 꺼져 있거나 존재하지 않습니다."}
+        if any(t in f"{vname} {cmd_val}".lower() for t in drm_tokens):
+            return {"ok": False, "error": "PROTECTED_STARTUP", "message": f"'{vname}' 항목은 시스템·보안 필수 모듈이어서 안전을 위해 끄지 않습니다."}
+        try:
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, STARTUP_BACKUP_SUBKEY) as bk:
+                winreg.SetValueEx(bk, backup_val_name, 0, winreg.REG_SZ, str(cmd_val))
+            with winreg.OpenKey(root_h, sub_k, 0, winreg.KEY_SET_VALUE) as rk_w:
+                winreg.DeleteValue(rk_w, vname)
+        except PermissionError:
+            return {
+                "ok": False,
+                "error": "ADMIN_REQUIRED",
+                "message": f"'{vname}' 항목은 PC 전체(관리자) 시작프로그램이어서 표준 권한에서는 변경하지 않았습니다.",
+            }
+        except OSError as exc:
+            return {"ok": False, "error": str(exc), "message": f"시작프로그램 변경 실패: {exc}"}
+        try:
+            import ghosti_safe_ops as _safe_st
+            _safe_st.add_restore_point(
+                summary=f"시작프로그램 '{vname}' 자동실행 끄기",
+                user_prompt=f"시작프로그램 {vname} 꺼줘",
+                preview=f"{vname} 자동실행 OFF (백업 보관)",
+                operations=[{
+                    "op": "REGISTRY_RUN_RESTORE",
+                    "name": vname,
+                    "tag": tag,
+                    "runSubkey": sub_k,
+                    "command": str(cmd_val),
+                    "rolledBack": False,
+                }],
+                user_approval_text=user_approval_text or f"시작프로그램 {vname} 끄기",
+            )
+        except Exception:
+            pass
+        return {
+            "ok": True,
+            "id": item_id,
+            "name": vname,
+            "enabled": False,
+            "message": f"✅ 부팅 시 자동 실행되던 '{vname}' 항목을 껐습니다! (언제든 같은 스위치로 다시 켤 수 있어요)",
+        }
+    else:
+        # ON: 백업에서 읽어 다시 Run에 복원
+        try:
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_BACKUP_SUBKEY, 0, winreg.KEY_READ) as bk_r:
+                cmd_val, _ = winreg.QueryValueEx(bk_r, backup_val_name)
+        except OSError:
+            return {"ok": False, "error": "BACKUP_NOT_FOUND", "message": f"'{vname}' 항목의 백업 명령을 찾지 못했습니다."}
+        try:
+            with winreg.OpenKey(root_h, sub_k, 0, winreg.KEY_SET_VALUE) as rk_w:
+                winreg.SetValueEx(rk_w, vname, 0, winreg.REG_SZ, str(cmd_val))
+            with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_BACKUP_SUBKEY, 0, winreg.KEY_SET_VALUE) as bk_w:
+                try:
+                    winreg.DeleteValue(bk_w, backup_val_name)
+                except OSError:
+                    pass
+        except PermissionError:
+            return {
+                "ok": False,
+                "error": "ADMIN_REQUIRED",
+                "message": f"'{vname}' 항목은 관리자 권한 영역이어서 복원하지 못했습니다.",
+            }
+        except OSError as exc:
+            return {"ok": False, "error": str(exc), "message": f"시작프로그램 복원 실패: {exc}"}
+        return {
+            "ok": True,
+            "id": item_id,
+            "name": vname,
+            "enabled": True,
+            "message": f"🔄 '{vname}' 항목이 부팅 시 다시 켜지도록 원래대로 복원했습니다!",
+        }
+
+
+def list_installed_programs(filter_query: str = "", limit: int = 80) -> Dict[str, Any]:
+    """내 PC에 설치된 전체 프로그램 목록(용량·설치일·제조사 포함)을 조회하여 이름을 몰라도 골라서 정리할 수 있게 합니다."""
+    if sys.platform != "win32" or winreg is None:
+        return {"ok": False, "error": "WINDOWS_ONLY", "items": []}
+    q_low = (filter_query or "").strip().lower()
+    uninstall_roots = [
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+        (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
+        (winreg.HKEY_CURRENT_USER, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
+    ]
+    seen_names = set()
+    apps: List[Dict[str, Any]] = []
+    for hive, subkey in uninstall_roots:
+        try:
+            with winreg.OpenKey(hive, subkey, 0, winreg.KEY_READ) as uk:
+                sub_cnt = winreg.QueryInfoKey(uk)[0]
+                for i in range(sub_cnt):
+                    try:
+                        sk_name = winreg.EnumKey(uk, i)
+                        with winreg.OpenKey(uk, sk_name, 0, winreg.KEY_READ) as ak:
+                            def _qv(v_nm: str) -> Any:
+                                try:
+                                    return winreg.QueryValueEx(ak, v_nm)[0]
+                                except OSError:
+                                    return None
+                            if _qv("SystemComponent") == 1 or _qv("ParentKeyName"):
+                                continue
+                            disp = str(_qv("DisplayName") or "").strip()
+                            uninst = str(_qv("UninstallString") or _qv("QuietUninstallString") or "").strip()
+                            if not disp or not uninst:
+                                continue
+                            disp_low = disp.lower()
+                            if disp_low in seen_names:
+                                continue
+                            if disp_low.startswith(("kb", "security update for", "update for microsoft")):
+                                continue
+                            pub = str(_qv("Publisher") or "").strip()
+                            ver = str(_qv("DisplayVersion") or "").strip()
+                            inst_dt = str(_qv("InstallDate") or "").strip()
+                            est_kb = _qv("EstimatedSize")
+                            size_mb = round(int(est_kb) / 1024.0, 1) if isinstance(est_kb, int) and est_kb > 0 else 0.0
+                            if q_low and q_low not in disp_low and q_low not in pub.lower():
+                                continue
+                            seen_names.add(disp_low)
+                            is_prot = _is_protected_system_entity(disp_low) or any(
+                                x in disp_low for x in ("merlin", "ghosti", "senstalk", "sundream")
+                            )
+                            apps.append({
+                                "name": disp,
+                                "publisher": pub,
+                                "version": ver,
+                                "installDate": (
+                                    f"{inst_dt[:4]}-{inst_dt[4:6]}-{inst_dt[6:8]}"
+                                    if len(inst_dt) == 8 and inst_dt.isdigit()
+                                    else inst_dt
+                                ),
+                                "sizeMb": size_mb,
+                                "isProtected": is_prot,
+                            })
+                    except OSError:
+                        continue
+        except OSError:
+            continue
+
+    apps.sort(key=lambda x: (-x["sizeMb"], x["name"].lower()))
+    total_cnt = len(apps)
+    return {
+        "ok": True,
+        "totalCount": total_cnt,
+        "items": apps[: max(10, min(200, int(limit or 80)))],
+    }
+
+
 # ============================================================================
 # 5. Try-Except Firewall 단일 게이트웨이 디스패처 & 알집 동급 암호 입력창 / CLI 엔트리
 # ============================================================================
 READONLY_CARE_ACTIONS = {
     "status",
+    "startup-list",
+    "startup_list",
+    "installed-apps-list",
+    "installed_apps_list",
     "security-status",
     "security_services_status",
     "security-services/status",
@@ -4216,6 +4608,19 @@ def handle_care_suite_request(action: str, payload: Optional[Dict[str, Any]] = N
                 invoke_official_uninstaller=bool(data.get("invokeOfficialUninstaller", True)),
                 user_approval_text=str(data.get("userApprovalTypedText") or "흔적까지 100% 심층 적출 실행"),
                 selected_folder_paths=([str(x) for x in sel_folders] if isinstance(sel_folders, list) else None),
+            )
+        if act in ("startup-list", "startup_list", "startup/list"):
+            return list_startup_programs()
+        if act in ("startup-toggle", "startup_toggle", "startup/toggle"):
+            return toggle_startup_program(
+                item_id=str(data.get("id") or data.get("itemId") or ""),
+                enable=bool(data.get("enable", False)),
+                user_approval_text=str(data.get("userApprovalTypedText") or ""),
+            )
+        if act in ("installed-apps-list", "installed_apps_list", "apps/list"):
+            return list_installed_programs(
+                filter_query=str(data.get("query") or data.get("filter") or ""),
+                limit=int(data.get("limit") or 80),
             )
         return {"ok": False, "error": f"UNKNOWN_CARE_SUITE_ACTION: {action}"}
     except Exception as exc:

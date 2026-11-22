@@ -2605,11 +2605,31 @@ export async function startSilentRealMediaVisionIndexing(params: {
             : `📝 OCR: ${prevMeta.ocrSnippet}`;
         }
 
+        let inferredTrash: TrashCategory | undefined = undefined;
+        let inferredVaultDoc = false;
+        const top1 = topMatches[0];
+        if (!item.isVaultDocument && !item.trashCategory && top1) {
+          if (top1.probe.id === 'document' && top1.sim >= 0.27) {
+            inferredVaultDoc = true;
+          } else if (top1.probe.id === 'receipt' && top1.sim >= 0.25) {
+            inferredTrash = 'memo';
+          } else if (top1.probe.id === 'screenshot' && top1.sim >= 0.27) {
+            inferredTrash = 'screenshot';
+          }
+        }
+        if (inferredVaultDoc) {
+          item.isVaultDocument = true;
+        } else if (inferredTrash) {
+          item.trashCategory = inferredTrash;
+          item.intrinsicTrashCategory = inferredTrash;
+        }
         params.onPhotoVisionHydrated?.(item.id, {
           vec,
           tags: item.tags,
           keywordsKo: item.keywordsKo,
           ontologyPrimaryTags: item.ontologyPrimaryTags,
+          ...(inferredVaultDoc ? { isVaultDocument: true, trashCategory: undefined } : {}),
+          ...(inferredTrash ? { trashCategory: inferredTrash, intrinsicTrashCategory: inferredTrash, trashConfidence: 0.92 } : {}),
           ...(item.captionKo ? { captionKo: item.captionKo } : {}),
         });
 

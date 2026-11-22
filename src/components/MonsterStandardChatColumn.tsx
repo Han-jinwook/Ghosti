@@ -838,11 +838,12 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     const runProactiveCheck = async () => {
       if (cancelled) return;
       // [v1.3] 전사 단일 웹 알림 = 귀신비서 채팅 노크 (대답할 때까지 하루 1회만)
-      if (!canKnockToday(loadGhostSecretaryState())) return;
       const briefing = await evaluateDualProactiveCareEngine({
         isStoreAppMode: isMobileOrStore,
       });
       if (!briefing || cancelled) return;
+      // Track A(20% 실시간 과부하 10분 지속)는 정기 노크와 별개로 즉시 안내하되, 이미 미실행 브리핑 카드가 있으면 중복 방지
+      if (briefing.triggerType !== 'TRACK_A_20PCT_OVERLOAD' && !canKnockToday(loadGhostSecretaryState())) return;
       saveGhostSecretaryState({ ...loadGhostSecretaryState(), lastKnockDate: todayKey() });
       setSharedMonsterMessages((prev) => {
         if (prev.some((m) => m.cardKind === 'WEEKLY_CARE_BRIEFING' && !m.proactiveCareBriefing?.executed)) {
@@ -982,8 +983,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           sourceTab,
           text:
             mobileQuarantined.length > 0
-              ? `🕰️ 지금 앱 내 정리 보관함에 **${mobileQuarantined.length}장**의 사진이 안전하게 보관되어 있어요!\n아래 펼쳐드린 **[↩️ 정리한 사진 복원 (${mobileQuarantined.length}장)]** 목록에서 언제든 1초 만에 원래대로 되돌리실 수 있어요 👻✨`
-              : '🕰️ 아직 정리 보관함으로 옮긴 사진이 **0장**이에요!\n아래 사진 정리 탭에서 중복·흐린 사진을 확인 후 **[OK]**로 정리하시면 언제든 1초 만에 되돌리실 수 있어요 👻✨',
+              ? `🕰️ 방금 정리한 사진 **${mobileQuarantined.length}장**이 시스템 휴지통에 안전하게 보관되어 있어요!\n아래 펼쳐드린 **[↩️ 정리한 사진 복원 (${mobileQuarantined.length}장)]** 목록(아이폰은 기본 사진 앱 [최근 삭제된 항목])에서 언제든 되돌리실 수 있어요 👻✨`
+              : '🕰️ 아직 휴지통으로 옮긴 사진이 **0장**이에요!\n아이폰은 사진 앱의 **[최근 삭제된 항목]**에서 복원하실 수 있고, 안드로이드·PC는 정리 후 여기서 바로 1초 복원하실 수 있어요 👻✨',
           followUpSuggestions:
             mobileQuarantined.length === 0
               ? ['📱 내 폰 사진 자동 점검 결과 볼래']
@@ -1757,7 +1758,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           <div className="flex items-center gap-1 min-w-0">
             <span className="shrink-0 font-bold">🛡️</span>
             <span className="font-bold text-teal-900 dark:text-emerald-300 whitespace-normal break-keep leading-snug">
-              언제든 1초 복원 보장
+              언제든 &lsquo;원래대로 돌려줘&rsquo; 입력 시 1초 복원 보장
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 max-w-full min-w-0">

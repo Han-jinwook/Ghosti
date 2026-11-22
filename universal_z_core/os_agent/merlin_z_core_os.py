@@ -2343,76 +2343,308 @@ def run_boot_lag_care(sub_action: str = "diagnose", target_param: str = "04:00")
     }
 
 
-def run_defender_security_check(sub_action: str = "status") -> Dict[str, Any]:
+import threading as _def_threading
+
+_DEFENDER_SCAN_LOCK = _def_threading.Lock()
+_DEFENDER_SCAN_STATE: Dict[str, Any] = {
+    "running": False,
+    "scanId": "",
+    "scanType": "quick",
+    "targetPath": "",
+    "startedAt": "",
+    "startedEpoch": 0.0,
+    "completedAt": "",
+    "exitCode": None,
+    "threatsFound": 0,
+    "threatNames": [],
+    "resultSummaryKo": "",
+}
+
+
+def _list_removable_usb_drives() -> List[Dict[str, str]]:
+    out: List[Dict[str, str]] = []
+    if os.name != "nt":
+        return out
+    try:
+        bitmask = ctypes.windll.kernel32.GetLogicalDrives()
+        for i in range(26):
+            if not (bitmask & (1 << i)):
+                continue
+            drv = f"{chr(65 + i)}:\\"
+            dtype = ctypes.windll.kernel32.GetDriveTypeW(ctypes.c_wchar_p(drv))
+            if dtype == 2:
+                vol_buf = ctypes.create_unicode_buffer(128)
+                ctypes.windll.kernel32.GetVolumeInformationW(
+                    ctypes.c_wchar_p(drv), vol_buf, 128, None, None, None, None, 0
+                )
+                vname = vol_buf.value.strip() or "이동식 USB 드라이브"
+                out.append({"drive": drv, "label": f"{drv[:2]} ({vname})"})
+    except Exception:
+        pass
+    return out
+
+
+def _start_tracked_defender_scan(scan_type: str = "quick", target_path: str = "") -> Dict[str, Any]:
+    with _DEFENDER_SCAN_LOCK:
+        if _DEFENDER_SCAN_STATE.get("running"):
+            return dict(_DEFENDER_SCAN_STATE)
+        scan_id = f"SCAN-{int(time.time() * 1000)}"
+        now_s = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        now_ep = time.time()
+        _DEFENDER_SCAN_STATE.update(
+            {
+                "running": True,
+                "scanId": scan_id,
+                "scanType": scan_type,
+                "targetPath": target_path,
+                "startedAt": now_s,
+                "startedEpoch": now_ep,
+                "completedAt": "",
+                "exitCode": None,
+                "threatsFound": 0,
+                "threatNames": [],
+                "resultSummaryKo": "🔍 실시간 바이러스 검사가 진행 중입니다...",
+            }
+        )
+
+    def _worker() -> None:
+        rc = 0
+        threats_found = 0
+        threat_names: List[str] = []
+        try:
+            mp_cmd = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Windows Defender" / "MpCmdRun.exe"
+            if scan_type == "custom" and target_path and Path(target_path).exists():
+                resolved_tp = str(Path(target_path).resolve())
+                if mp_cmd.exists():
+                    proc = subprocess.run(
+                        [str(mp_cmd), "-Scan", "-ScanType", "3", "-File", resolved_tp],
+                        capture_output=True, text=True, encoding="utf-8", errors="ignore",
+                        timeout=600.0, creationflags=0x08000000,
+                    )
+                    rc = proc.returncode
+                else:
+                    safe_ps_tp = resolved_tp.replace("'", "''")
+                    proc = subprocess.run(
+                        ["powershell", "-NoProfile", "-Command", f"Start-MpScan -ScanType CustomScan -ScanPath '{safe_ps_tp}' -ErrorAction Stop"],
+                        capture_output=True, text=True, timeout=600.0, creationflags=0x08000000,
+                    )
+                    rc = proc.returncode
+            else:
+                if mp_cmd.exists():
+                    proc = subprocess.run(
+                        [str(mp_cmd), "-Scan", "-ScanType", "1"],
+                        capture_output=True, text=True, encoding="utf-8", errors="ignore",
+                        timeout=600.0, creationflags=0x08000000,
+                    )
+                    rc = proc.returncode
+                else:
+                    proc = subprocess.run(
+                        ["powershell", "-NoProfile", "-Command", "Start-MpScan -ScanType QuickScan -ErrorAction Stop"],
+                        capture_output=True, text=True, timeout=600.0, creationflags=0x08000000,
+                    )
+                    rc = proc.returncode
+
+            start_iso = datetime.datetime.fromtimestamp(max(0.0, now_ep - 3.0)).strftime("%Y-%m-%dT%H:%M:%S")
+            ps_th = (
+                "try { "
+                f"$since = [datetime]'{start_iso}'; "
+                "$ev = Get-WinEvent -FilterHashtable @{LogName='Microsoft-Windows-Windows Defender/Operational'; Id=1116,1117; StartTime=$since} -MaxEvents 10 -ErrorAction SilentlyContinue; "
+                "[PSCustomObject]@{ count = @($ev).Count; sample = if ($ev) { ($ev[0].Message -split '[\\r\\n]+')[0] } else { '' } } | ConvertTo-Json -Compress "
+                "} catch { [PSCustomObject]@{ count = 0; sample = '' } | ConvertTo-Json -Compress }"
+            )
+            th_res = _run_powershell_json(ps_th, timeout=4.0)
+            if isinstance(th_res, dict):
+                threats_found = int(th_res.get("count") or 0)
+                if th_res.get("sample"):
+                    threat_names.append(str(th_res["sample"])[:120])
+            if rc == 2 and threats_found == 0:
+                threats_found = 1
+        except Exception as exc_s:
+            rc = -1
+            with _DEFENDER_SCAN_LOCK:
+                _DEFENDER_SCAN_STATE.update(
+                    {
+                        "running": False,
+                        "completedAt": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "exitCode": rc,
+                        "resultSummaryKo": f"⚠️ 바이러스 검사 중 예외가 발생했습니다: {exc_s}",
+                    }
+                )
+            return
+
+        done_at = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        elapsed_sec = max(1, int(round(time.time() - now_ep)))
+        scope_lbl = f"지정 경로({target_path})" if (scan_type == "custom" and target_path) else "내 PC 빠른 정밀 영역"
+        if threats_found > 0:
+            res_ko = (
+                f"🚨 **[{scope_lbl} 검사 완료 · {elapsed_sec}초 소요]** "
+                f"위협 요소 **{threats_found}건**이 포착되어 Windows Defender 방어막이 격리·차단했습니다! "
+                f"[격리함·위협 기록 열기]에서 상세 내역을 확인해 주세요."
+            )
+        else:
+            res_ko = (
+                f"✅ **[{scope_lbl} 실제 검사 완료 · {elapsed_sec}초 소요]** "
+                f"끝까지 꼼꼼하게 검사한 결과 발견된 악성코드·랜섬웨어 위협이 **0건**으로 안전합니다!"
+            )
+        with _DEFENDER_SCAN_LOCK:
+            _DEFENDER_SCAN_STATE.update(
+                {
+                    "running": False,
+                    "completedAt": done_at,
+                    "exitCode": rc,
+                    "threatsFound": threats_found,
+                    "threatNames": threat_names,
+                    "resultSummaryKo": res_ko,
+                }
+            )
+
+    _def_threading.Thread(target=_worker, daemon=True).start()
+    with _DEFENDER_SCAN_LOCK:
+        return dict(_DEFENDER_SCAN_STATE)
+
+
+def run_defender_security_check(sub_action: str = "status", target_path: str = "") -> Dict[str, Any]:
     """
-    [🛡️ 바이러스·랜섬웨어 안심 점검] (알약 완벽 대체 — Windows Defender 순정 백신 직결)
-    1) 실시간 감시(RealTimeProtectionEnabled), 방화벽, 최신 바이러스 정의 업데이트 일자 1초 점검
-    2) 원클릭 방어막 복구 및 백그라운드 빠른 스캔(MpCmdRun.exe -Scan -ScanType 1) 실행
+    [🛡️ 바이러스·랜섬웨어 안심 점검] (알약 완전 대체 — Windows Defender 순정 백신 직결)
     """
     t0 = time.perf_counter()
     act = (sub_action or "status").strip().lower()
+    if act == "scan_status":
+        with _DEFENDER_SCAN_LOCK:
+            st = dict(_DEFENDER_SCAN_STATE)
+        return {"ok": True, "subAction": "scan_status", **st}
+
+    if act in ("open_ransomware_shield", "open_quarantine_history", "open_threat_settings"):
+        uri_map = {
+            "open_ransomware_shield": "windowsdefender://ransomwareprotection",
+            "open_quarantine_history": "windowsdefender://history",
+            "open_threat_settings": "windowsdefender://threatsettings",
+        }
+        uri = uri_map[act]
+        opened = False
+        if os.name == "nt" and hasattr(os, "startfile"):
+            try:
+                os.startfile(uri)
+                opened = True
+            except Exception:
+                try:
+                    subprocess.Popen(["explorer.exe", uri], creationflags=0x08000000)
+                    opened = True
+                except Exception:
+                    opened = False
+        label_map = {
+            "open_ransomware_shield": "🛡️ Windows 보안 [랜섬웨어 방지 · 제어된 폴더 액세스] 설정 창을 열었습니다.",
+            "open_quarantine_history": "🗂️ Windows 보안 [보호 기록 · 격리된 파일 복원/삭제] 창을 열었습니다.",
+            "open_threat_settings": "⚙️ Windows 보안 [실시간 바이러스 및 위협 방지 설정] 창을 열었습니다.",
+        }
+        return {"ok": opened, "subAction": act, "openedUri": uri, "summaryKo": label_map[act], "message": label_map[act]}
+
+    if act == "update_signature":
+        updated_ok = False
+        err_msg = ""
+        if os.name == "nt":
+            try:
+                mp_cmd = Path(os.environ.get("ProgramFiles", r"C:\Program Files")) / "Windows Defender" / "MpCmdRun.exe"
+                if mp_cmd.exists():
+                    r_up = subprocess.run(
+                        [str(mp_cmd), "-SignatureUpdate"],
+                        capture_output=True, text=True, encoding="utf-8", errors="ignore",
+                        timeout=35.0, creationflags=0x08000000,
+                    )
+                    updated_ok = r_up.returncode == 0
+                    if not updated_ok:
+                        err_msg = (r_up.stderr or r_up.stdout or "").strip()[:160]
+                else:
+                    r_up2 = subprocess.run(
+                        ["powershell", "-NoProfile", "-Command", "Update-MpSignature -ErrorAction Stop"],
+                        capture_output=True, text=True, timeout=35.0, creationflags=0x08000000,
+                    )
+                    updated_ok = r_up2.returncode == 0
+            except Exception as exc_u:
+                err_msg = str(exc_u)
+        st_after = run_defender_security_check("status")
+        sig_ver = st_after.get("signatureVersion") or ""
+        sig_dt = st_after.get("signatureUpdatedAt") or ""
+        msg_up = (
+            f"🔄 최신 바이러스·랜섬웨어 백신 DB 업데이트를 완료했어요! (버전: {sig_ver or '최신'} · 패치 시각: {sig_dt})"
+            if updated_ok
+            else f"⚠️ 백신 DB 업데이트를 완료하지 못했어요 ({err_msg or '네트워크 또는 서비스 상태 확인 필요'}). 현재 패치 시각: {sig_dt}"
+        )
+        return {
+            **st_after,
+            "ok": updated_ok,
+            "subAction": "update_signature",
+            "summaryKo": msg_up,
+            "message": msg_up,
+        }
 
     real_time_enabled = True
     antivirus_enabled = True
     firewall_enabled = True
+    ransomware_cfa_enabled = False
+    sig_version = ""
     sig_last_updated = datetime.datetime.now().strftime("%Y-%m-%d")
 
     if os.name == "nt":
         ps_def = (
             "try { "
             "$mp = Get-MpComputerStatus -ErrorAction Stop; "
+            "$pref = Get-MpPreference -ErrorAction SilentlyContinue; "
             "$fw = Get-NetFirewallProfile -ErrorAction SilentlyContinue | Where-Object { $_.Enabled -eq $true }; "
             "[PSCustomObject]@{ "
             "  realTime = [bool]$mp.RealTimeProtectionEnabled; "
             "  antivirus = [bool]$mp.AntivirusEnabled; "
+            "  sigVer = [string]$mp.AntivirusSignatureVersion; "
             "  sigDate = if ($mp.AntivirusSignatureLastUpdated) { $mp.AntivirusSignatureLastUpdated.ToString('yyyy-MM-dd HH:mm') } else { '' }; "
+            "  cfa = if ($pref) { [int]$pref.EnableControlledFolderAccess } else { 0 }; "
             "  fwCount = @($fw).Count "
             "} | ConvertTo-Json -Compress "
-            "} catch { [PSCustomObject]@{ realTime = $true; antivirus = $true; sigDate = ''; fwCount = 3 } | ConvertTo-Json -Compress }"
+            "} catch { [PSCustomObject]@{ realTime = $true; antivirus = $true; sigVer = ''; sigDate = ''; cfa = 0; fwCount = 3 } | ConvertTo-Json -Compress }"
         )
-        raw_def = _run_powershell_json(ps_def, timeout=4.0)
+        raw_def = _run_powershell_json(ps_def, timeout=4.5)
         if isinstance(raw_def, dict):
             real_time_enabled = bool(raw_def.get("realTime", True))
             antivirus_enabled = bool(raw_def.get("antivirus", True))
+            sig_version = str(raw_def.get("sigVer") or "")
             if raw_def.get("sigDate"):
                 sig_last_updated = str(raw_def["sigDate"])
+            ransomware_cfa_enabled = int(raw_def.get("cfa") or 0) == 1
             firewall_enabled = int(raw_def.get("fwCount", 3)) > 0
 
-    if act == "quick_scan":
-        scan_triggered = False
-        if os.name == "nt":
-            try:
-                mp_cmd = Path(os.environ.get("ProgramFiles", "C:/Program Files")) / "Windows Defender" / "MpCmdRun.exe"
-                if mp_cmd.exists():
-                    subprocess.Popen(
-                        [str(mp_cmd), "-Scan", "-ScanType", "1"],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        creationflags=0x08000000,
-                    )
-                    scan_triggered = True
-                else:
-                    subprocess.Popen(
-                        ["powershell", "-NoProfile", "-Command", "Start-MpScan -ScanType QuickScan -ErrorAction SilentlyContinue"],
-                        stdout=subprocess.DEVNULL,
-                        stderr=subprocess.DEVNULL,
-                        creationflags=0x08000000,
-                    )
-                    scan_triggered = True
-            except Exception:
-                pass
+    usb_drives = _list_removable_usb_drives()
+
+    if act in ("quick_scan", "custom_scan"):
+        eff_target = (target_path or "").strip()
+        if act == "custom_scan" and (not eff_target or not Path(eff_target).exists()):
+            return {
+                "ok": False,
+                "subAction": act,
+                "error": "TARGET_PATH_NOT_FOUND",
+                "summaryKo": f"⚠️ 검사할 폴더 또는 USB 경로({eff_target or '미지정'})를 찾지 못했습니다.",
+                "message": "검사할 폴더 또는 USB 경로를 확인해 주세요.",
+            }
+        scan_st = _start_tracked_defender_scan(
+            scan_type=("custom" if act == "custom_scan" else "quick"),
+            target_path=eff_target,
+        )
+        scope_desc = f"지정 경로(`{eff_target}`)" if act == "custom_scan" else "내 PC 빠른 정밀 영역"
         summary_ko = (
-            f"🔍 윈도우 순정 백신(Microsoft Defender)으로 내 PC 빠른 바이러스 검사를 시작했습니다! "
-            f"(실시간 감시: 켜짐 · 방화벽: 켜짐 · 최신 백신 패치일: {sig_last_updated} · 발견된 위협 0건)"
+            f"🔍 윈도우 순정 백신(Microsoft Defender)으로 **{scope_desc}** 실시간 검사를 시작했어요!\n"
+            f"검사가 끝나는 즉시 실제 결과와 발견된 위협 건수를 바로 알려드릴게요. (진행 중 · 최신 백신 패치일: {sig_last_updated})"
         )
         return {
             "ok": True,
             "subAction": act,
-            "scanTriggered": scan_triggered,
+            "scanTriggered": True,
+            "scanRunning": True,
+            "scanState": scan_st,
             "realTimeProtection": real_time_enabled,
             "antivirusEnabled": antivirus_enabled,
             "firewallEnabled": firewall_enabled,
+            "ransomwareShieldEnabled": ransomware_cfa_enabled,
+            "signatureVersion": sig_version,
             "signatureUpdatedAt": sig_last_updated,
+            "removableDrives": usb_drives,
             "isHealthy": real_time_enabled and firewall_enabled,
             "summaryKo": summary_ko,
             "message": summary_ko,
@@ -2431,13 +2663,19 @@ def run_defender_security_check(sub_action: str = "status") -> Dict[str, Any]:
             f"[🔍 바이러스 빠른 검사 실행]을 누르시면 즉시 점검합니다."
         )
 
+    with _DEFENDER_SCAN_LOCK:
+        cur_scan_st = dict(_DEFENDER_SCAN_STATE)
     return {
         "ok": True,
         "subAction": "status",
         "realTimeProtection": real_time_enabled,
         "antivirusEnabled": antivirus_enabled,
         "firewallEnabled": firewall_enabled,
+        "ransomwareShieldEnabled": ransomware_cfa_enabled,
+        "signatureVersion": sig_version,
         "signatureUpdatedAt": sig_last_updated,
+        "removableDrives": usb_drives,
+        "scanState": cur_scan_st,
         "isHealthy": is_healthy,
         "summaryKo": summary_ko,
         "message": summary_ko,
@@ -2733,9 +2971,21 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
         }
         return run_boot_lag_care(sub_map.get(action, "diagnose"), target_path or "04:00")
 
-    if action in ("defender_security_check", "defender_status", "defender_quick_scan"):
-        sub_def = "quick_scan" if action == "defender_quick_scan" or target_path == "quick_scan" else "status"
-        return run_defender_security_check(sub_def)
+    if action in (
+        "defender_security_check",
+        "defender_status",
+        "defender_quick_scan",
+        "defender_custom_scan",
+        "defender_scan_status",
+        "defender_update_signature",
+        "defender_open_ransomware_shield",
+        "defender_open_quarantine_history",
+        "defender_open_threat_settings",
+    ):
+        if action != "defender_security_check":
+            sub_def = action.replace("defender_", "", 1)
+            return run_defender_security_check(sub_def, target_path or "")
+        return run_defender_security_check(target_path or "status", "")
 
     before_state = inspect_real_pc_state()
 
@@ -2812,11 +3062,18 @@ def execute_real_os_action(action: str, target_path: str = "") -> Dict[str, Any]
                 shutil.copy2(doc, dest)
                 backed_up.append(str(dest))
         all_shadows = sorted(SHADOW_VAULT_DIR.glob("*.*"), key=lambda p: p.stat().st_mtime, reverse=True)
-        for old_f in all_shadows[10:]:
+        # [영구 삭제 0% 철칙] 오래된 스냅샷 정리 시에도 unlink() 대신 Windows 기본 휴지통으로 안전 이동
+        if len(all_shadows) > 20:
             try:
-                old_f.unlink()
+                import ghosti_safe_ops as _safe_sh
             except Exception:
-                pass
+                _safe_sh = None
+            for old_f in all_shadows[20:]:
+                try:
+                    if _safe_sh is not None:
+                        _safe_sh.send_to_recycle_bin(old_f)
+                except Exception:
+                    pass
         return {
             "ok": True,
             "action": action,
