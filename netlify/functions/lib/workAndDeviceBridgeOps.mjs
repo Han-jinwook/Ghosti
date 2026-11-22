@@ -972,6 +972,116 @@ export async function handleAuthedWorkAndDeviceAction({
     };
   }
 
+  if (action === 'work_sync_team_snippets') {
+    const roomId = String(body.roomId || '').trim();
+    if (!roomId) {
+      return { status: 400, body: { ok: false, reason: 'MISSING_ROOM_ID' } };
+    }
+    const safeRoomId = roomId.replace(/[^a-zA-Z0-9_-]/g, '');
+    if (!safeRoomId) {
+      return { status: 400, body: { ok: false, reason: 'INVALID_ROOM_ID' } };
+    }
+    const ctx = await getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email);
+    if (!ctx) {
+      return { status: 403, body: { ok: false, reason: 'NOT_A_WORK_ROOM_MEMBER' } };
+    }
+    const ownerGate = await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, ctx.room.master_email);
+    if (!ownerGate.ok) {
+      return ownerGate.response;
+    }
+
+    const storagePath = `${safeRoomId}/team_snippets_v1.json`;
+    const mode = body.mode === 'push' ? 'push' : 'pull';
+    const current = await readStorageJson(supabaseUrl, serviceKey, WORK_BUCKET, storagePath, {
+      roomId,
+      snippets: {},
+      cipherB64: '',
+      ivB64: '',
+      version: 0,
+      updatedAt: null,
+      updatedByEmail: '',
+      updatedByNickname: '',
+      updatedByDeviceId: '',
+      updatedByDeviceName: '',
+    });
+
+    if (mode === 'push') {
+      if (!ctx.isMaster && ctx.role === 'viewer') {
+        return { status: 403, body: { ok: false, reason: 'WORK_VIEWER_READ_ONLY' } };
+      }
+
+      const cipherB64 = String(body.cipherB64 || '').trim();
+      const ivB64 = String(body.ivB64 || '').trim();
+      const hasE2ee = Boolean(cipherB64 && ivB64);
+
+      const allowedKeys = ['F7', 'F8', 'F9', 'F10', 'F11', 'F12'];
+      const cleanSnippets = {};
+      let hasPlainSnippets = false;
+      if (body.snippets && typeof body.snippets === 'object' && !Array.isArray(body.snippets)) {
+        hasPlainSnippets = true;
+        for (const k of allowedKeys) {
+          if (Object.prototype.hasOwnProperty.call(body.snippets, k)) {
+            const val = String(body.snippets[k] ?? '').slice(0, 2000);
+            if (val.trim()) {
+              cleanSnippets[k] = val;
+            }
+          }
+        }
+      }
+
+      if (hasE2ee && cipherB64.length > 64000) {
+        return { status: 400, body: { ok: false, reason: 'TEAM_SNIPPETS_PAYLOAD_TOO_LARGE' } };
+      }
+      if (!hasE2ee && !hasPlainSnippets) {
+        return { status: 400, body: { ok: false, reason: 'INVALID_TEAM_SNIPPETS_PAYLOAD' } };
+      }
+
+      const nextDoc = {
+        roomId,
+        snippets: hasPlainSnippets ? cleanSnippets : {},
+        cipherB64: hasE2ee ? cipherB64 : '',
+        ivB64: hasE2ee ? ivB64 : '',
+        version: Number(current?.version || 0) + 1,
+        updatedAt: new Date().toISOString(),
+        updatedByEmail: email,
+        updatedByNickname: actorNick || email.split('@')[0],
+        updatedByDeviceId: String(body.deviceId || '').slice(0, 80),
+        updatedByDeviceName: String(body.deviceName || actorNick || '팀 PC').slice(0, 48),
+      };
+
+      const saved = await writeStorageJson(
+        supabaseUrl,
+        serviceKey,
+        WORK_BUCKET,
+        storagePath,
+        nextDoc
+      );
+      if (!saved) {
+        return { status: 502, body: { ok: false, reason: 'TEAM_SNIPPETS_WRITE_FAILED' } };
+      }
+
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          role: ctx.isMaster ? 'host' : ctx.role,
+          realtimeChannel: `ghosti:room:${roomId}`,
+          ...nextDoc,
+        },
+      };
+    }
+
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        role: ctx.isMaster ? 'host' : ctx.role,
+        realtimeChannel: `ghosti:room:${roomId}`,
+        ...current,
+      },
+    };
+  }
+
   if (action === 'work_upsert_files') {
     // [Zero-Cloud 원칙 강제]: 구버전 클라이언트가 work_upsert_files를 호출하더라도
     // 서버에는 파일 원본(inlineSyncBase64)이나 본문(fullTextPreview)을 절대 저장하지 않으며,
