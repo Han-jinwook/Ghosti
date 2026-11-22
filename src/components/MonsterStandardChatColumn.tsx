@@ -1925,7 +1925,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                       onClick={async () => {
                         await useSaySeeStore.getState().sharePcMasterUrlToKakao();
                         onToast?.(
-                          '💻 카톡(나에게 보내기) 및 클립보드에 PC 실행 링크(⚡ 귀신창 초능력)를 담아두었습니다! 내일 출근해서 PC로 바로 켜보세요.',
+                          '💻 카톡(나에게 보내기) 및 클립보드에 PC 실행 링크(👻 귀신검색 · 귀신비서)를 담아두었습니다! 내일 출근해서 PC로 바로 켜보세요.',
                         );
                       }}
                       className="px-3 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[12px] font-extrabold shadow-sm transition cursor-pointer text-left flex items-center gap-1.5"

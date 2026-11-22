@@ -216,21 +216,6 @@ const DEFAULT_SHORTS_DATA: ShortsItem[] = [
     isNew: true,
   },
   {
-    id: 'typo-756',
-    category: 'typo',
-    searchKeyword: '귀신창',
-    title: 'dkssudgktpdy 치고 백스페이스 누르지 마세요! 무버튼 1초 자동 변환!',
-    hookTime: '00:00 ~ 00:03 (훅)',
-    hookLine: '“급하게 메신저나 보고서 쓰다가 한영키 안 눌러서 영타 외계어 치고 다 지우셨죠?”',
-    solutionLine: '영타·띄어쓰기는 치기만 하면 1초 무버튼 자동 변환! 깨진 줄바꿈·서식은 Ctrl+0 한 번으로 1초 다림질(평소 복붙은 원문 100% 보존)!',
-    recommendedKeyword: '귀신같이 귀신창',
-    tag: '⌨️ #귀신창 · 쓰던 자리에서 1초면 끝',
-    youtubeId: 'tVZ_J4sGJPw',
-    videoUrl: '/showroom/shorts/ghosti_dkssudgktp_261110.mp4',
-    thumbnailBg: 'from-fuchsia-950 via-purple-950 to-slate-900',
-    isNew: true,
-  },
-  {
     id: 'clean-558',
     category: 'clean',
     searchKeyword: '귀신비서',
@@ -795,20 +780,9 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
       } else {
         setCleanSubTab('speed');
       }
-    } else if (
-      /영타|오타|한영|서식|줄바꿈|다림질|귀신창|순차|복붙|상용구|f1|압축|zip|dkssud|rkatk|rmqgk/i.test(
-        q,
-      )
-    ) {
-      matchedTab = 'superpower';
-      if (/서식|줄바꿈|다림질/i.test(q)) setSelectedToolbarKey('1');
-      else if (/순차|복붙/i.test(q)) setSelectedToolbarKey('seq');
-      else if (/상용구|f1/i.test(q)) setSelectedToolbarKey('snip');
-      else if (/압축|zip/i.test(q)) setSelectedToolbarKey('zip');
-      else setSelectedToolbarKey('auto');
     } else if (/무료|가격|유료|보증서|기업|회사|라이선스|결제/.test(q)) {
       customReply =
-        '개인 PC는 물론 민간 기업 업무용 PC까지 기본 4대 핵심 기능 100% 영구 무료예요! 📜✨\n상단 [📜 무료 공식 보증서] 버튼을 누르면 대표이사 직인이 찍힌 공식 보증서도 바로 확인하실 수 있어요~';
+        '개인 PC는 물론 민간 기업 업무용 PC까지 기본 3대 핵심 기능(귀신비서 · 귀신검색 · 사진 공유) 100% 영구 무료예요! 📜✨\n상단 [📜 무료 공식 보증서] 버튼을 누르면 대표이사 직인이 찍힌 공식 보증서도 바로 확인하실 수 있어요~';
     }
 
     if (matchedTab) {
@@ -1479,8 +1453,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 </p>
               </div>
 
-              {/* 한눈에 쏙 들어오는 4대 무료 코어 카드 (축 A~D) */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5 pt-1">
+              {/* 한눈에 쏙 들어오는 3대 무료 코어 카드 */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 pt-1">
                 {[
                   {
                     key: 'secretary',
@@ -1495,16 +1469,8 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     tab: 'video' as OnboardingWeaponTab,
                     stat: '1초 소환',
                     title: '#귀신검색',
-                    sub: '열지 않고 본문·장면 소환',
+                    sub: 'Ctrl+0 열지 않고 본문·장면 소환',
                     accent: '#00F0B5',
-                  },
-                  {
-                    key: 'window',
-                    tab: 'superpower' as OnboardingWeaponTab,
-                    stat: '1초면 끝',
-                    title: '#귀신창',
-                    sub: 'Ctrl+0 쓰던 자리 즉시 해결',
-                    accent: '#FBBF24',
                   },
                   {
                     key: 'share',
@@ -1518,8 +1484,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                   const active =
                     card.key === 'search'
                       ? demoTab === 'video' || demoTab === 'doc'
-                      : card.key === 'window'
-                      ? demoTab === 'superpower'
                       : card.key === 'share'
                       ? demoTab === 'share'
                       : demoTab === 'clean';
@@ -1698,7 +1662,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 <span className="text-zinc-400 shrink-0 whitespace-nowrap">우측 즉시 시연</span>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                {(['video', 'doc', 'clean', 'share', 'superpower'] as OnboardingWeaponTab[]).map((tabKey, chipIdx, arr) => {
+                {(['video', 'doc', 'clean', 'share'] as OnboardingWeaponTab[]).map((tabKey, chipIdx, arr) => {
                   const item = WEAPON_META[tabKey];
                   const isActive = demoTab === tabKey;
                   const isLastOdd = arr.length % 2 === 1 && chipIdx === arr.length - 1;
@@ -2682,328 +2646,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     </div>
                   );
                 })()}
-
-                {/* ④ 귀신창 v1.4 — 100% 무버튼 완전 자동(Auto) 한영 성형 & 평생 무료 5총사 체험 */}
-                {demoTab === 'superpower' && (
-                  <div className="rounded-2xl bg-zinc-950 border border-amber-400/40 p-6 sm:p-7 space-y-5">
-                    <div className="flex flex-wrap items-center justify-between gap-3">
-                      <span className="text-[13px] font-bold text-zinc-300 leading-relaxed break-keep">
-                        ⌨️ <strong className="text-amber-300">수동 버튼 ZERO!</strong> 방금 저절로 한글로 바뀐 예시를 보신 뒤, 아래 칸에 직접 영타를 치고 스페이스바만 눌러보세요:
-                      </span>
-                      <span className="px-3 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-xs font-black text-emerald-300 whitespace-nowrap shrink-0">
-                        ⚡ 1초 무버튼 자동 변환 가동 중
-                      </span>
-                    </div>
-
-                    <div className="flex flex-wrap gap-2">
-                      {TYPO_SAMPLES.map((sample, sIdx) => {
-                        const isSelectedSample = typoSampleIdx === sIdx && typoIsPresetSample;
-                        return (
-                          <button
-                            key={sIdx}
-                            type="button"
-                            onClick={() => triggerTypoAutoIron(sample.raw, sIdx)}
-                            className={`px-3 py-1.5 rounded-xl text-[13px] font-extrabold border transition-all cursor-pointer ${
-                              isSelectedSample
-                                ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-[0_0_12px_rgba(251,191,36,0.35)]'
-                                : 'bg-zinc-900 hover:bg-amber-400 hover:text-slate-950 text-zinc-200 border-white/15'
-                            }`}
-                          >
-                            {sample.label}
-                          </button>
-                        );
-                      })}
-                    </div>
-
-                    {/* Before ➔ After 한눈에 비교하는 상시 프리뷰 배너 (테두리 제거 · 도형 블록 + 필 하단 배치 + 본문 서체 통일 + 넉넉한 상하좌우 여백) */}
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 rounded-3xl bg-zinc-900/60 borderless-shape p-4 sm:p-5 text-[13px]">
-                      <div
-                        style={{ backgroundColor: 'rgba(244, 63, 94, 0.11)', border: 'none' }}
-                        className="rounded-2xl borderless-shape p-5 sm:p-6 space-y-3 relative overflow-hidden"
-                      >
-                        <div className="flex flex-col items-start gap-1.5">
-                          <span className="font-display-kr text-lg sm:text-[19px] leading-snug font-extrabold text-rose-300">
-                            Before · 영타 원문
-                          </span>
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-rose-500/15 text-xs text-rose-300 font-bold whitespace-nowrap">
-                            한영키 실수
-                          </span>
-                        </div>
-                        <p className="font-sans text-zinc-200 font-bold whitespace-pre-line leading-relaxed tracking-normal break-keep text-sm sm:text-[14.5px]">
-                          {typoOriginalBackup || TYPO_SAMPLES[typoSampleIdx].raw}
-                        </p>
-                      </div>
-                      <div
-                        style={{ backgroundColor: 'rgba(16, 185, 129, 0.14)', border: 'none' }}
-                        className="rounded-2xl borderless-shape p-5 sm:p-6 space-y-3 relative overflow-hidden"
-                      >
-                        <img
-                          src="/gwisinkachi_app_icon_512.png"
-                          alt=""
-                          aria-hidden="true"
-                          style={{ width: '34px', height: '34px' }}
-                          className="w-[34px] h-[34px] rounded-full object-cover absolute right-2.5 bottom-2.5 opacity-80 shadow-sm pointer-events-none select-none"
-                        />
-                        <div className="flex flex-col items-start gap-1.5">
-                          <span className="font-display-kr text-lg sm:text-[19px] leading-snug font-extrabold text-[#00F0B5]">
-                            After · 1초 자동 변환
-                          </span>
-                          <span className="inline-flex items-center px-2.5 py-0.5 rounded-full bg-emerald-500/20 text-xs text-[#00F0B5] font-bold whitespace-nowrap">
-                            ✨ 스페이스바 즉시
-                          </span>
-                        </div>
-                        <p className="font-sans text-emerald-100 font-bold whitespace-pre-line leading-relaxed tracking-normal break-keep text-sm sm:text-[14.5px] pr-9">
-                          {formatTypoAfterPreview(typoOriginalBackup || TYPO_SAMPLES[typoSampleIdx].raw)}
-                        </p>
-                      </div>
-                    </div>
-
-                    <div className="space-y-1.5">
-                      <div className="flex items-center justify-between px-1 text-[13px]">
-                        <span className="font-display-kr text-amber-300 text-[13.5px] sm:text-sm">
-                          👇 직접 테스트 입력칸 {typoIsPresetSample ? '(방금 자동 변환 시연 완료! 클릭하면 바로 직접 쳐보실 수 있어요)' : '(영타 입력 후 스페이스바를 탁 눌러보세요!)'}
-                        </span>
-                        {!typoIsPresetSample && typoInput && (
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setTypoInput('');
-                              setTypoConverted(false);
-                            }}
-                            className="text-zinc-400 hover:text-white underline font-bold cursor-pointer whitespace-nowrap shrink-0"
-                          >
-                            비우기
-                          </button>
-                        )}
-                      </div>
-                      <textarea
-                        value={typoInput}
-                        onFocus={handleTypoTextareaFocus}
-                        onChange={(e) => handleTypoInputChange(e.target.value)}
-                        rows={2}
-                        placeholder="직접 영타를 치고 스페이스바를 눌러보세요! (예: dkssudgktpdy ␣ 또는 gksrmf xptmxm ␣)"
-                        style={{
-                          border: 'none',
-                          backgroundColor: typoConverted ? 'rgba(16, 185, 129, 0.16)' : 'rgba(245, 158, 11, 0.10)',
-                        }}
-                        className={`w-full rounded-2xl p-4 text-sm sm:text-[15px] font-sans font-bold leading-relaxed tracking-normal transition-all outline-none borderless-shape shadow-inner ${
-                          typoConverted
-                            ? 'text-emerald-100 shadow-[0_6px_20px_rgba(16,185,129,0.12)]'
-                            : 'text-white placeholder-zinc-500'
-                        }`}
-                      />
-                    </div>
-
-                    {/* 확정 기준점 한 줄 핵심 요약 안내 (테두리 없는 도형 캡슐 + 아기귀신 미니 일러스트 + 단일 서체·단일 색상 통일) */}
-                    <div
-                      style={{ backgroundColor: 'rgba(20, 184, 166, 0.12)', border: 'none' }}
-                      className="rounded-2xl borderless-shape px-5 py-3.5 font-sans tracking-normal text-[13px] text-zinc-100 font-bold leading-relaxed break-keep flex items-center gap-3"
-                    >
-                      <img
-                        src="/gwisinkachi_app_icon_512.png"
-                        alt="아기귀신"
-                        style={{ width: '30px', height: '30px', minWidth: '30px' }}
-                        className="w-[30px] h-[30px] rounded-full object-cover shrink-0 shadow-sm"
-                      />
-                      <div className="font-sans tracking-normal text-[13px] text-zinc-100 font-bold leading-relaxed break-keep">
-                        🛡️ 모를 땐 그냥 Ctrl + 0(또는 Ctrl + 우클릭) 하나만 누르세요! 평소 복붙(Ctrl+C/V)은 원문 서식을 100% 보존하고, 줄바꿈 다림질은 눈앞에 뜬 버튼을 찍을 때만 작동합니다.
-                      </div>
-                    </div>
-
-                    {/* 귀신창 v2.1 표준 하단 미니 툴바 (일반 유저: 단축키 숫자 나열 없이 100% 직관 결과어 5총사 / DEV 전체보기 ON 시 유료 확장 [2]·[3]·[5] 표시) */}
-                    <div className="rounded-2xl bg-zinc-900/95 border border-white/15 p-4 sm:p-5 space-y-3.5">
-                      <div className="flex flex-wrap items-center justify-between gap-2">
-                        <div className="flex flex-wrap items-center gap-1.5" role="tablist" aria-label="귀신창 평생 무료 5총사 설명">
-                          {(
-                            [
-                              { key: 'auto' as FreeOrDevToolbarKey, label: '⚡ 무버튼 한영·띄어쓰기' },
-                              { key: 'seq' as FreeOrDevToolbarKey, label: '📋 Ctrl+V 순차·칸맞춤 복붙' },
-                              { key: '1' as FreeOrDevToolbarKey, label: '🧹 서식·줄바꿈 다림질' },
-                              { key: 'snip' as FreeOrDevToolbarKey, label: '⌨️ 자주 쓰는 문구 1초 입력' },
-                              { key: 'zip' as FreeOrDevToolbarKey, label: '📦 더블클릭·우클릭 1초 압축' },
-                              ...(isDevAuthorized && devFullView
-                                ? ([
-                                    { key: 'dev_2' as FreeOrDevToolbarKey, label: '[2] 스샷·PDF변환 🔒' },
-                                    { key: 'dev_3' as FreeOrDevToolbarKey, label: '[3] 다중합본 🔒' },
-                                    { key: 'dev_5' as FreeOrDevToolbarKey, label: '[5] 창고정 🔒' },
-                                  ] as const)
-                                : []),
-                            ]
-                          ).map((item) => {
-                            const isSelected = selectedToolbarKey === item.key;
-                            return (
-                              <button
-                                key={item.key}
-                                type="button"
-                                role="tab"
-                                aria-selected={isSelected}
-                                onClick={() => {
-                                  playBabyGhostChime();
-                                  setSelectedToolbarKey(item.key);
-                                  if (item.key !== 'zip') setZipDemoApplied(false);
-                                }}
-                                className={`px-2.5 py-1.5 rounded-lg text-[13px] font-black transition-all cursor-pointer border whitespace-nowrap ${
-                                  isSelected
-                                    ? 'bg-amber-400 text-slate-950 border-amber-300 shadow-[0_0_14px_rgba(251,191,36,0.35)] scale-[1.02]'
-                                    : 'bg-zinc-950 hover:bg-zinc-800 border-white/15 text-zinc-200 hover:border-amber-400/50'
-                                }`}
-                              >
-                                {item.label}
-                              </button>
-                            );
-                          })}
-                        </div>
-                        <div className="flex items-center gap-2">
-                          {typoConverted && (
-                            <span className="text-[13px] font-black text-[#00F0B5]">
-                              ✨ 무버튼 1초 자동 변환 완료!
-                            </span>
-                          )}
-                          <button
-                            type="button"
-                            onClick={handleTypoUndo}
-                            className="px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold cursor-pointer whitespace-nowrap"
-                          >
-                            ↩️ 원본 보기(Ctrl+Z)
-                          </button>
-                        </div>
-                      </div>
-
-                      {/* 선택된 평생 무료 기본기(및 DEV 유료 확장)의 상세 설명 + Before ➔ After 실물 예시 카드 */}
-                      <div className="rounded-xl bg-zinc-950/95 border border-amber-400/35 p-4 sm:p-5 space-y-3 font-sans tracking-normal">
-                        {selectedToolbarKey === 'auto' && (
-                          <>
-                            <div className="text-[13.5px] sm:text-sm font-black text-amber-300 break-keep">
-                              ⚡ 무버튼 한영·띄어쓰기 변환 — 한영키 안 눌러도 1초 만에 자연스러운 한글로 자동 전환!
-                            </div>
-                            <p className="text-[13px] text-zinc-300 leading-relaxed font-semibold break-keep">
-                              2어절 연속 영타 실수 시 스페이스바만 누르면 백스페이스 없이 즉시 한글로 고쳐주며, 이메일(<span className="text-white font-extrabold">@</span>)·웹주소(<span className="text-white font-extrabold">URL</span>)·영문 약어(<span className="text-white font-extrabold">PDF·AI·PC</span>)는 똑똑하게 원문 그대로 보호합니다.
-                            </p>
-                            <div className="grid grid-cols-1 gap-1.5 pt-0.5">
-                              <div className="rounded-lg bg-zinc-900/90 border border-white/10 px-3 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[13px]">
-                                <span className="text-zinc-400 font-bold break-keep">dkssudgktpdy 회의 PDF rkatkgkqslek</span>
-                                <div className="flex items-center gap-1.5 font-sans font-bold tracking-normal text-[13px] shrink-0">
-                                  <span className="text-amber-400">➔</span>
-                                  <span className="text-[#00F0B5] font-extrabold">안녕하세요 회의 PDF 감사합니다 (평생 무료)</span>
-                                </div>
-                              </div>
-                            </div>
-                          </>
-                        )}
-
-                        {selectedToolbarKey === 'seq' && (
-                          <>
-                            <div className="text-[13.5px] sm:text-sm font-black text-amber-300 break-keep">
-                              📋 Ctrl+V 순차붙여넣기 — 여러 줄 복사해 두고 Ctrl+V만 연타하면 순서대로 착착!
-                            </div>
-                            <p className="text-[13px] text-zinc-300 leading-relaxed font-semibold break-keep">
-                              이름·연락처·주소를 차례대로 <span className="text-white font-extrabold">Ctrl+C</span> 해 두면 창을 왔다 갔다 할 필요 없이 입력칸마다 <span className="text-[#00F0B5] font-extrabold">Ctrl+V</span>만 눌러 순서대로 자동 입력합니다.
-                            </p>
-                            <div className="grid grid-cols-1 gap-1.5 pt-0.5">
-                              <div className="rounded-lg bg-zinc-900/90 border border-white/10 px-3 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[13px]">
-                                <span className="text-zinc-400 font-bold break-keep">홍길동 · 010-1234-5678 · 강남구 연속 복사</span>
-                                <div className="flex items-center gap-1.5 font-sans font-bold tracking-normal text-[13px] shrink-0">
-                                  <span className="text-amber-400">➔</span>
-                                  <span className="text-[#00F0B5] font-extrabold">신청서 빈칸마다 Ctrl+V 3번으로 1초 입력 끝</span>
-                                </div>
-                              </div>
-                            </div>
-                          </>
-                        )}
-
-                        {selectedToolbarKey === '1' && (
-                          <>
-                            <div className="text-[13.5px] sm:text-sm font-black text-amber-300 break-keep">
-                              🧹 서식·줄바꿈 다림질 — 평소 복붙은 원문 100% 보존, 원할 때만 버튼 한 번으로 1초 다림질!
-                            </div>
-                            <p className="text-[13px] text-zinc-300 leading-relaxed font-semibold break-keep">
-                              일반 <span className="text-white font-extrabold">Ctrl+C ➔ Ctrl+V</span> 시에는 원문 줄바꿈과 서식을 그대로 지켜주고, PDF 깨진 줄바꿈이나 뉴스 광고 꼬리말을 펴고 싶을 때만 <span className="text-[#00F0B5] font-extrabold">Ctrl+0</span>으로 부른 뒤 다림질 버튼을 누르면 제자리에서 깔끔하게 정돈(<span className="text-amber-300 font-extrabold">Ctrl+Z</span> 원복 지원)합니다.
-                            </p>
-                            <div className="grid grid-cols-1 gap-1.5 pt-0.5">
-                              <div className="rounded-lg bg-zinc-900/90 border border-white/10 px-3 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[13px]">
-                                <span className="text-zinc-400 font-bold break-keep">PDF 끊어진 문단 · 시커먼 배경 서식 · 광고 꼬리말</span>
-                                <div className="flex items-center gap-1.5 font-sans font-bold tracking-normal text-[13px] shrink-0">
-                                  <span className="text-amber-400">➔</span>
-                                  <span className="text-[#00F0B5] font-extrabold">클릭 한 번에 매끈한 순수 본문으로 1초 다림질</span>
-                                </div>
-                              </div>
-                            </div>
-                          </>
-                        )}
-
-                        {selectedToolbarKey === 'snip' && (
-                          <>
-                            <div className="text-[13.5px] sm:text-sm font-black text-amber-300 break-keep">
-                              ⌨️ 자주 쓰는 문구 1초 입력 — 계좌번호·사업자번호·배송지 주소를 키 한 번으로 자동 입력!
-                            </div>
-                            <p className="text-[13px] text-zinc-300 leading-relaxed font-semibold break-keep">
-                              매일 똑같이 타이핑하는 계좌번호·이메일·단골 인사말을 한 번만 등록해 두면 메신저나 문서 어디서든 <span className="text-[#00F0B5] font-extrabold">단축키 한 번</span>으로 오타 없이 즉시 입력됩니다.
-                            </p>
-                            <div className="grid grid-cols-1 gap-1.5 pt-0.5">
-                              <div className="rounded-lg bg-zinc-900/90 border border-white/10 px-3 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[13px]">
-                                <span className="text-zinc-400 font-bold break-keep">입금 계좌 · 회사 주소 · 고객 안내 멘트</span>
-                                <div className="flex items-center gap-1.5 font-sans font-bold tracking-normal text-[13px] shrink-0">
-                                  <span className="text-amber-400">➔</span>
-                                  <span className="text-[#00F0B5] font-extrabold">키 한 번으로 1초 무오타 자동 입력 (평생 무료)</span>
-                                </div>
-                              </div>
-                            </div>
-                          </>
-                        )}
-
-                        {selectedToolbarKey === 'zip' && (
-                          <>
-                            <div className="flex flex-wrap items-center justify-between gap-2">
-                              <div className="text-[13.5px] sm:text-sm font-black text-amber-300 break-keep">
-                                📦 [꿀팁] 더블클릭·우클릭 1초 스마트 압축 — 상업광고 0% · 깨진 한글 이름표 자동 복원!
-                              </div>
-                              <button
-                                type="button"
-                                onClick={() => {
-                                  playBabyGhostChime();
-                                  setZipDemoApplied((prev) => !prev);
-                                }}
-                                className={`px-3 py-1 rounded-lg text-xs font-black transition-all cursor-pointer whitespace-nowrap ${
-                                  zipDemoApplied
-                                    ? 'bg-[#00F0B5] text-slate-950'
-                                    : 'bg-amber-400/20 hover:bg-amber-400 hover:text-slate-950 text-amber-200 border border-amber-400/40'
-                                }`}
-                              >
-                                {zipDemoApplied ? '✨ 1초 ZIP 압축 완료! (원본 비교)' : '⚡ 1초 스마트 ZIP 압축 체험'}
-                              </button>
-                            </div>
-                            <p className="text-[13px] text-zinc-300 leading-relaxed font-semibold break-keep">
-                              무거운 광고성 압축 프로그램 없이도 탐색기에서 파일·폴더를 선택해 우클릭하면 오늘 날짜와 대표 파일명이 깔끔하게 붙은 <span className="text-[#00F0B5] font-extrabold">.zip</span> 파일로 1초 만에 묶어줍니다.
-                            </p>
-                            <div className="grid grid-cols-1 gap-1.5 pt-0.5">
-                              <div className="rounded-lg bg-zinc-900/90 border border-white/10 px-3 py-2 flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-[13px]">
-                                <span className="text-zinc-400 font-bold break-keep">세금계산서_1.pdf 외 첨부 서류 4개 선택</span>
-                                <div className="flex items-center gap-1.5 font-sans font-bold tracking-normal text-[13px] shrink-0">
-                                  <span className={zipDemoApplied ? 'line-through text-zinc-500' : 'text-zinc-300'}>
-                                    새 압축.zip
-                                  </span>
-                                  <span className="text-amber-400">➔</span>
-                                  <span className="text-[#00F0B5] font-extrabold">261114_세금계산서_외4건.zip</span>
-                                </div>
-                              </div>
-                            </div>
-                          </>
-                        )}
-
-                        {selectedToolbarKey.startsWith('dev_') && (
-                          <>
-                            <div className="text-[13.5px] sm:text-sm font-black text-amber-300 break-keep">
-                              🔒 [DEV 전용 프리뷰] 귀신창 유료 확장 슬롯 ([2] 스샷·PDF변환 · [3] 다중합본 · [5] 창고정)
-                            </div>
-                            <p className="text-[13px] text-zinc-300 leading-relaxed font-semibold break-keep">
-                              정식 출시 후 사용자가 명시적으로 동의(Opt-in)했을 때만 <span className="text-[#00F0B5] font-extrabold">30일 무제한 체험</span>이 열리며, 만료 후에는 자동 결제 없이 유료 구독 전까지 깔끔하게 잠금(<span className="text-amber-300 font-extrabold">🔒/OFF</span>) 처리됩니다. (파일·라벨러 및 사진·표 OCR은 『2. 👻 귀신검색』 유료 티어 소속)
-                            </p>
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                )}
               </div>
             )}
 
@@ -3198,23 +2840,23 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 🧪 DEV 전체보기 ON (일반 방문자에게는 100% 은닉된 개발자·QA 점검 영역)
               </span>
               <span className="text-xs text-zinc-400 font-bold">
-                귀신창 v1.4 수련장 · 2단계 유료/확장 티어 · Z-코어 폴더 권한 및 QR 테스트
+                2단계 유료/확장 티어 · Z-코어 폴더 권한 및 QR 테스트
               </span>
             </div>
 
-            {/* 최신 v1.4 및 2단계 유료 티어 구분 안내 */}
+            {/* 최신 3코어 무료 및 2단계 유료 티어 구분 안내 */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-xs">
               <div className="p-4 rounded-2xl bg-zinc-950 border border-white/10 space-y-1.5">
-                <div className="font-black text-[#00F0B5]">🟢 1단계 평생 무료 4대 코어 (현재 일반 노출)</div>
+                <div className="font-black text-[#00F0B5]">🟢 1단계 평생 무료 3대 코어 (현재 일반 노출)</div>
                 <p className="text-zinc-300 leading-relaxed">
-                  내 PC·폰 로컬 검색(영상 글자·문서) + 귀신비서(인생샷·보안앱 절전) + 무료 사진공유 + 귀신창 기본기 5총사(무버튼 한영·띄어쓰기 성형 · 순차붙여넣기 · [1] 서식·줄바꿈 · F1~F6 상용구 · 우클릭 ZIP 압축)
+                  내 PC·폰 로컬 검색(영상 글자·문서 · Ctrl+0) + 귀신비서(알약·고클린 대체 보안·속도·용량 케어 · 인생샷 정리) + 무료 사진공유(가족·동호회·동창회)
                 </p>
               </div>
               <div className="p-4 rounded-2xl bg-zinc-950 border border-white/10 space-y-1.5">
-                <div className="font-black text-amber-300">🔒 2단계 Opt-in 30일 체험 ➔ 유료 잠금 (일반 은닉)</div>
+                <div className="font-black text-amber-300">🔒 2단계 Opt-in 30일 체험 ➔ 유료 확장 (일반 은닉)</div>
                 <p className="text-zinc-300 leading-relaxed">
-                  • 귀신창 확장 ([2]스샷·PDF · [3]다중합본 · [5]창고정) &amp; 귀신검색 확장 (파일·라벨러, 사진·표 OCR)<br />
-                  • 내 기기 통합 (폰 ⇄ 집·회사 PC 원격 열람) &amp; B2B 업무 공유
+                  • 내 기기 통합 Pro (폰 ⇄ 집·회사 PC 원격 열람 + 사진·표 OCR 창 + 귀신 라벨러)<br />
+                  • B2B 업무 공유 (공용 폴더 S: 드라이브 · 백업 서버 · 초절전 모드)
                 </p>
               </div>
               <div className="p-4 rounded-2xl bg-zinc-950 border border-white/10 space-y-1.5">
@@ -3224,9 +2866,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 </p>
               </div>
             </div>
-
-            {/* 보존된 초능력 수련장 & 폴더 체크박스 & QR (DEV 모드에서만 렌더링) */}
-            <GhostSuperpowerDojo variant="full" />
 
             <div className="p-4 rounded-2xl bg-zinc-950/90 border border-white/10 flex flex-col lg:flex-row items-start lg:items-center justify-between gap-4">
               <div className="flex flex-col gap-2 flex-1">
@@ -3363,7 +3002,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             </h2>
           </div>
           <p className="text-zinc-400 text-[13.5px] sm:text-sm font-semibold break-keep">
-            글 대신 영상으로 가볍게 확인하세요! <b className="text-[#00F0B5]">#귀신비서 · #귀신검색 · #귀신창</b> {shortsList.length}편 즉시 재생
+            글 대신 영상으로 가볍게 확인하세요! <b className="text-[#00F0B5]">#귀신비서 · #귀신검색</b> {shortsList.length}편 즉시 재생
           </p>
 
           <div className="flex flex-wrap items-center justify-center gap-2 mt-6">
@@ -3372,7 +3011,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               { id: 'video', label: '🎬 영상 글자·장면 소환 (#귀신검색)' },
               { id: 'doc', label: '📊 엑셀·문서 내용 찾기 (#귀신검색)' },
               { id: 'clean', label: '🧹 사진·보안앱 청소 (#귀신비서)' },
-              { id: 'typo', label: '⌨️ 무버튼 자동 한영성형 (#귀신창)' },
             ].map((tab) => (
               <button
                 key={tab.id}
@@ -3531,7 +3169,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               ))}
             </div>
             <p className="text-[13px] text-zinc-300 font-semibold break-keep">
-              ※ 내 기기 로컬 기본 기능(귀신비서·귀신검색·귀신창·사진공유) 영구 무료 (내 기기 통합·팀 공용 폴더 등 확장 옵션 및 공공기관 제외)
+              ※ 내 기기 로컬 기본 기능(귀신비서·귀신검색·사진공유) 영구 무료 (내 기기 통합·팀 공용 폴더 등 확장 옵션 및 공공기관 제외)
             </p>
 
             <div className="flex flex-wrap items-center justify-center lg:justify-start gap-3 pt-1">
@@ -3594,12 +3232,12 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 클라우드 월세 0원, 내 모든 기기와 우리 팀을 1초 만에 하나로
               </h3>
               <p className="text-[13px] text-zinc-300 font-semibold break-keep">
-                기본 4대 초능력은 평생 0원이며, 내 기기 직결이나 팀 공용 폴더가 필요하신 분만 투명한 정찰제로 이용하세요.
+                기본 3대 핵심 기능(귀신비서 · 귀신검색 · 사진 공유)은 평생 0원이며, 내 기기 직결이나 팀 공용 폴더가 필요하신 분만 투명한 정찰제로 이용하세요.
               </p>
             </div>
 
             <div data-keep-dark="true" className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              {/* 5. 📱 내 기기 통합 — 핵심 가격 상시 노출 */}
+              {/* 4. 📱 내 기기 통합 — 핵심 가격 상시 노출 */}
               <div
                 data-keep-dark="true"
                 style={{ backgroundColor: '#060D17' }}
@@ -3607,7 +3245,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span style={{ color: '#00F0B5' }} className="text-sm font-black">
-                    5. 📱 내 기기 통합
+                    4. 📱 내 기기 통합 Pro
                   </span>
                   <span
                     style={{ backgroundColor: 'rgba(13, 148, 136, 0.28)', color: '#5EEAD4' }}
@@ -3648,7 +3286,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
               >
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span style={{ color: '#FCD34D' }} className="text-sm font-black">
-                    6. 💼 업무 공유 (공용 폴더 S:)
+                    5. 💼 업무 공유 (공용 폴더 S:)
                   </span>
                   <div className="flex flex-wrap items-center gap-1.5">
                     <button
@@ -3685,7 +3323,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                     사내 공용 폴더(S: 드라이브) 도입 &amp; 팀 요금 안내 보기 ▾
                   </summary>
                   <p className="mt-2 leading-relaxed text-zinc-200 break-keep">
-                    NAS 장비 도입이나 인당 클라우드 월세 부담 없이 사무실 대표 PC 한 대를 사내 공용 폴더(S: 드라이브)로 종단간 암호화(E2EE) 연결해, 계약서·견적서·현장 시공 사진을 전 직원이 1초 만에 함께 찾고 활용합니다. 카드 등록 없는 30일 무료체험 후 소호(~5인) 월 9,900원 / 소기업(~20인) 월 19,000원 / 중소기업(~50인) 월 29,000원 대표 1인 정찰제로 운영됩니다 (기본 1~4번 개인·사진공유는 회사 PC에서도 평생 0원 공식 보증서 발급).
+                    NAS 장비 도입이나 인당 클라우드 월세 부담 없이 사무실 대표 PC 한 대를 사내 공용 폴더(S: 드라이브)로 종단간 암호화(E2EE) 연결해, 계약서·견적서·현장 시공 사진을 전 직원이 1초 만에 함께 찾고 활용합니다. 카드 등록 없는 30일 무료체험 후 소호(~5인) 월 9,900원 / 소기업(~20인) 월 19,000원 / 중소기업(~50인) 월 29,000원 대표 1인 정찰제로 운영됩니다 (기본 1~3번 개인·사진공유는 회사 PC에서도 평생 0원 공식 보증서 발급).
                   </p>
                 </details>
               </div>
@@ -3699,7 +3337,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
             >
               <p className="text-[12.5px] sm:text-[13px] text-zinc-100 font-semibold leading-relaxed break-keep">
                 <strong style={{ color: '#00F0B5' }}>
-                  💡 기본 4대 초능력은 외부 클라우드 서버 없이 내 기기 안에서만 작동해 서버 비용이 0원이므로 평생 무료로 제공됩니다.
+                  💡 기본 3대 핵심 기능(귀신비서 · 귀신검색 · 사진 공유)은 외부 클라우드 서버 없이 내 기기 안에서만 작동해 서버 비용이 0원이므로 평생 무료로 제공됩니다.
                 </strong>
               </p>
               <div className="flex flex-wrap gap-2 text-xs font-extrabold">

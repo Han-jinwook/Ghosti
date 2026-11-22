@@ -1,11 +1,8 @@
 import React, { useMemo, useState } from 'react';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
-import { GhostWindowThreeStageMockup } from '../../components/GhostWindowThreeStageMockup';
-import { GhostSuperpowerDojo } from '../../components/ghostDojo/GhostSuperpowerDojo';
 import { LoungeCustomSettingsHeader } from '../../components/LoungeView';
 import { PcMasterQuickSendPanel } from '../../components/PricingModal';
 import { GhostSecretaryFirstGuard } from '../../components/GhostSecretaryFirstGuard';
-import { useDashboardNavStore } from '../shared/dashboardNavState';
 
 export const PaidDeviceSyncPane: React.FC = () => {
   const {
@@ -21,14 +18,6 @@ export const PaidDeviceSyncPane: React.FC = () => {
     triggerSyncNow,
   } = useSaySeeStore();
 
-  const {
-    activeIntegrationSubTab,
-    setActiveIntegrationSubTab,
-    ghostWindowTier,
-    setGhostWindowTier,
-    ghostWindowInitialTab,
-  } = useDashboardNavStore();
-
   const [showPrivateSyncSection, setShowPrivateSyncSection] = useState(true);
   const [showPolicyAndStoreSection, setShowPolicyAndStoreSection] = useState(false);
 
@@ -39,65 +28,18 @@ export const PaidDeviceSyncPane: React.FC = () => {
     <>
       {desktopTab === 'sync' && (
         <main className="flex-1 w-full max-w-[1640px] mx-auto px-5 md:px-8 py-7 flex flex-col gap-4">
-          {activeLoungeType === 'personal' && (
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="inline-flex p-1 rounded-2xl bg-zinc-900 border border-white/10 gap-1">
-                <button
-                  type="button"
-                  onClick={() => setActiveIntegrationSubTab('devices')}
-                  className={`px-4 py-2 rounded-xl font-label-sm text-[13px] font-extrabold transition-all cursor-pointer ${
-                    activeIntegrationSubTab === 'devices'
-                      ? 'bg-primary-container text-zinc-950 shadow-xs'
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  🔗 내 기기 연결 (PC↔폰)
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setActiveIntegrationSubTab('superpower')}
-                  className={`px-4 py-2 rounded-xl font-label-sm text-[13px] font-extrabold transition-all cursor-pointer ${
-                    activeIntegrationSubTab === 'superpower'
-                      ? 'bg-amber-400 text-zinc-950 shadow-xs'
-                      : 'text-zinc-400 hover:text-white'
-                  }`}
-                >
-                  ⚡ 귀신창 (Ctrl+0)
-                </button>
-              </div>
-            </div>
-          )}
-
           <GhostSecretaryFirstGuard>
-            {activeLoungeType === 'personal' && activeIntegrationSubTab === 'superpower' ? (
-            <div className="flex flex-col gap-5">
-              {/* [v2.1 감산] 3. ⚡ 귀신창 전면 = 평생 무료 핵심 3종 즉시 체험 + F1~F6 개인 상용구 등록창 / 유료 고급 시뮬레이터는 하단 아코디언 접힘 */}
-              <GhostSuperpowerDojo variant="full" />
-              <details className="rounded-2xl bg-zinc-900/70 border border-white/10 p-4">
-                <summary className="cursor-pointer select-none text-[13.5px] font-extrabold text-amber-300 hover:text-amber-200 flex items-center justify-between">
-                  <span>🔍 현장 소환창(Ctrl+0) 3단 UI &amp; 팀 확장 시뮬레이터 펼쳐보기 ▾</span>
-                  <span className="text-[11.5px] text-zinc-400 font-semibold">유료 확장 미리보기</span>
-                </summary>
-                <div className="pt-4 mt-3 border-t border-white/10">
-                  <GhostWindowThreeStageMockup
-                    activeTier={ghostWindowTier}
-                    onTierChange={setGhostWindowTier}
-                    initialWindowTab={ghostWindowInitialTab}
-                  />
+            {activeLoungeType === 'personal' ? (
+              <>
+                <LoungeCustomSettingsHeader />
+                {/* [결함 3 해결] 하단 거대 중복 아코디언 2개 및 중복 폴더 카운트를 걷어내고 1줄 안심 배너만 유지 */}
+                <div className="px-4 py-3 rounded-xl bg-zinc-900/80 border border-emerald-500/30 flex items-center justify-between gap-2 text-[12.5px] text-emerald-300 font-bold">
+                  <span>
+                    🔒 내 사진·문서는 외부 서버 저장 없이 내 기기 간에만 암호화 직결되며, 탈퇴 시 흔적 없이 즉시 소멸됩니다.
+                  </span>
                 </div>
-              </details>
-            </div>
-          ) : activeLoungeType === 'personal' ? (
-            <>
-              <LoungeCustomSettingsHeader />
-              {/* [결함 3 해결] 하단 거대 중복 아코디언 2개 및 중복 폴더 카운트를 걷어내고 1줄 안심 배너만 유지 */}
-              <div className="px-4 py-3 rounded-xl bg-zinc-900/80 border border-emerald-500/30 flex items-center justify-between gap-2 text-[12.5px] text-emerald-300 font-bold">
-                <span>
-                  🔒 내 사진·문서는 외부 서버 저장 없이 내 기기 간에만 암호화 직결되며, 탈퇴 시 흔적 없이 즉시 소멸됩니다.
-                </span>
-              </div>
-            </>
-          ) : activeLoungeType === 'family' ||
+              </>
+            ) : activeLoungeType === 'family' ||
             activeLoungeType === 'club' ||
             activeLoungeType === 'student' ? (
             <LoungeCustomSettingsHeader />

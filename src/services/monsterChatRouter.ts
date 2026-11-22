@@ -1951,54 +1951,14 @@ ${payload.summaryText}`, {
       appSettingsPayload: payload,
       followUpSuggestions: [
         '방금 복사한 기록 다 비워줘',
-        'F1번에 국민은행 123-45-67890 넣어줘',
-        '귀신창 소리 켜져 있는지 봐줘',
+        '글씨 크기 좀 더 크게 키워줘',
+        '애기귀신 효과음 꺼줘',
       ],
     });
   }
 
-  // 3) F1 ~ F10 상용구 말 한마디로 즉시 등록/변경
-  const snippetMatch =
-    clean.match(/(?:F|상용구\s*)([1-9]|10)\s*번?(?:에|에는|을|를|슬롯에)?\s*["'“”]?(.+?)["'“”]?\s*(?:넣어|등록|저장|설정|바꿔|입력)(?:해\s*줘|해\s*주세요|\s*주세요|해|줘)?$/i) ||
-    clean.match(/^(?:F|상용구\s*)([1-9]|10)\s*[:=-]\s*(.+)$/i);
-  if (snippetMatch) {
-    const slotKey = `F${snippetMatch[1]}`;
-    const slotValue = snippetMatch[2].trim();
-    try {
-      const savedRaw = localStorage.getItem('ghosti_superpower_snippets_v27');
-      const existing = savedRaw ? JSON.parse(savedRaw) : {};
-      const updated = { ...existing, [slotKey]: slotValue };
-      localStorage.setItem('ghosti_superpower_snippets_v27', JSON.stringify(updated));
-      await fetch(getZCoreUrl('/api/superpower/snippets'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ snippets: { [slotKey]: slotValue } }),
-        signal: AbortSignal.timeout(1500),
-      });
-    } catch {
-      /* local fallback */
-    }
-    const payload: MonsterAppSettingsPayload = {
-      settingCategory: 'SNIPPET_UPDATE',
-      badgeText: `⌨️ [${slotKey}] 단축 상용구 즉시 등록 완료`,
-      summaryText: `이제 윈도우 어디서나 Ctrl + 0 ➔ ${slotKey} 키를 누르면 "${slotValue}" 문구가 0.1초 만에 입력됩니다 (내 기기 통합 시 전 기기 자동 동기화).`,
-      appliedValueLabel: `${slotKey} = "${slotValue}"`,
-    };
-    speak(`${slotKey} 상용구 슬롯에 말씀하신 문구를 저장했습니다.`);
-    return reply(sourceTab, `🎛️ **[상용구 즉시 등록 완료]**
-${payload.summaryText}`, {
-      cardKind: 'APP_SETTINGS_CONTROL',
-      appSettingsPayload: payload,
-      followUpSuggestions: [
-        'F2번에 서울 강남구 테헤란로 123 넣어줘',
-        'F6번에 사업자등록번호 123-86-98765 등록해줘',
-        '온보딩 2탭 초능력 체험방 열어줘',
-      ],
-    });
-  }
-
-  // 4) 귀신창(Ghost Window) 소리 / 노출 시간 / 한영 오타 자동변환 설정 변경
-  if (/(귀신창|귀신\s*소리|애기귀신|효과음|초능력\s*소리|음소거|무음|조용히).*?(꺼|켜|음소거|무음|해제|해줘|해주세요)/i.test(clean) && !/스피커|블루투스|윈도우\s*소리/i.test(clean)) {
+  // 4) 애기귀신 소리 / 화면 유지 시간 설정 변경
+  if (/(귀신\s*소리|애기귀신|효과음|음소거|무음|조용히).*?(꺼|켜|음소거|무음|해제|해줘|해주세요)/i.test(clean) && !/스피커|블루투스|윈도우\s*소리/i.test(clean)) {
     const turnOn = /켜|활성|다시|음소거\s*해제/.test(clean) && !/꺼|무음|조용히/.test(clean);
     try {
       await fetch(getZCoreUrl('/api/superpower/settings'), {
@@ -2012,38 +1972,11 @@ ${payload.summaryText}`, {
     }
     const payload: MonsterAppSettingsPayload = {
       settingCategory: 'GHOST_WINDOW_PREF',
-      badgeText: `🔊 귀신창 애기귀신 효과음 ${turnOn ? 'ON (켜짐)' : 'OFF (음소거)'}`,
+      badgeText: `🔊 애기귀신 효과음 ${turnOn ? 'ON (켜짐)' : 'OFF (음소거)'}`,
       summaryText: turnOn
-        ? 'Ctrl+0 귀신창 소환음과 2어절 한영 오타 둔갑술 애기귀신 효과음을 다시 켰습니다.'
-        : '조용한 집중 환경을 위해 귀신창 소환음과 오타 변환 효과음을 음소거(OFF)했습니다.',
+        ? 'Ctrl+0 귀신검색창 소환음과 애기귀신 효과음을 다시 켰습니다.'
+        : '조용한 집중 환경을 위해 애기귀신 소환음과 효과음을 음소거(OFF)했습니다.',
       appliedValueLabel: turnOn ? '효과음 켜짐 (ON)' : '효과음 꺼짐 (OFF)',
-    };
-    speak(payload.summaryText);
-    return reply(sourceTab, `🎛️ **[앱 설정 즉시 변경 완료]**
-${payload.summaryText}`, {
-      cardKind: 'APP_SETTINGS_CONTROL',
-      appSettingsPayload: payload,
-    });
-  }
-
-  const durMatch = clean.match(/귀신창.*?(\d+)\s*초.*?(떠\s*있|유지|노출|보여|바꿔|설정)/i);
-  if (durMatch) {
-    const sec = Math.max(2, Math.min(20, Number(durMatch[1]) || 7));
-    try {
-      await fetch(getZCoreUrl('/api/superpower/settings'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ window_duration_ms: sec * 1000 }),
-        signal: AbortSignal.timeout(1500),
-      });
-    } catch {
-      /* ignore */
-    }
-    const payload: MonsterAppSettingsPayload = {
-      settingCategory: 'GHOST_WINDOW_PREF',
-      badgeText: `⏱️ 귀신창(Ctrl+0) 화면 유지 시간 변경 완료`,
-      summaryText: `Ctrl+0을 눌렀을 때 귀신창이 화면에 머무는 시간을 ${sec}초(${sec * 1000}ms)로 변경했습니다.`,
-      appliedValueLabel: `${sec}초 유지 (바깥 클릭 시 즉시 닫힘)`,
     };
     speak(payload.summaryText);
     return reply(sourceTab, `🎛️ **[앱 설정 즉시 변경 완료]**
@@ -2744,7 +2677,7 @@ function handleGhostiInfoDeskIfMatched(
   if (isConcretePcCareOrSearchCommand) return null;
 
   const isAskingAboutGhosti =
-    /귀신같이|귀신창|ctrl\s*\+?\s*0|컨트롤\s*0|컨트롤\s*영|초능력|복사검색|기억검색|상용구|f1|f10|오타\s*둔갑|한영\s*성형|내\s*기기\s*통합|소모임|300장|300개|2,?900원|3,?900원|4,?900원|5,?900원|8,?900원|9,?900원|마스터권|특판|얼리버드|요금제|구독료|얼마야|암호화\s*우체통|qr\s*코드|이메일\s*연결|기기\s*연결|온보딩|새로\s*추가된|업데이트\s*내역|무슨\s*앱|어떤\s*기능/i.test(
+    /귀신같이|귀신검색|ctrl\s*\+?\s*0|컨트롤\s*0|컨트롤\s*영|내\s*기기\s*통합|소모임|300장|300개|2,?900원|3,?900원|4,?900원|5,?900원|8,?900원|9,?900원|마스터권|특판|얼리버드|요금제|구독료|얼마야|암호화\s*우체통|qr\s*코드|이메일\s*연결|기기\s*연결|온보딩|새로\s*추가된|업데이트\s*내역|무슨\s*앱|어떤\s*기능/i.test(
       clean
     );
 
@@ -2795,7 +2728,7 @@ function handleGhostiInfoDeskIfMatched(
     );
   }
 
-  // 일반 모바일 웹일 때도 PC 전용(QR코드·Ctrl+0·바탕화면 폴더) 3탭 OnboardingModal 대신 모바일 맞춤 버튼 제공
+  // 일반 모바일 웹일 때도 PC 전용(QR코드·Ctrl+0·바탕화면 폴더) OnboardingModal 대신 모바일 맞춤 버튼 제공
   if (isMobileViewportRuntime && !/요금|가격|구독|얼마(?!나)|특판|마스터권|얼리버드|3,?900|9,?900/i.test(clean)) {
     const mobileWebPayload: MonsterInfoDeskPayload = {
       topicBadge: '📱 귀신같이 모바일 3대 통합 영역 & PC 연동 가이드',
@@ -2803,11 +2736,11 @@ function handleGhostiInfoDeskIfMatched(
       bulletPoints: [
         '👻 ① 귀신비서: 화면 맨 위 통합 검색창(사진·동영상 글자뽑기·문서) + 비서 대화창 + 내 폰 사진 4대 분류 정리 + 내 기기 통합(폰↔PC)이 하나로 통합되어 있습니다.',
         '📸 ② 사진 공유 (평생 0원): 가족(우리집·본가·처가)·동호회·동창회 고화질 앨범을 인원·장수 제한 없이 무료로 나눕니다.',
-        '⚡ PC 귀신창(Ctrl+0) 연동: 같은 이메일로 PC에서도 로그인하시면 무버튼 한영 자동변환·순차붙여넣기·폰↔PC 클립보드 우체통까지 이어집니다.',
+        '🔗 PC 연동 & 암호화 우체통: 같은 이메일로 PC에서도 로그인하시면 내 폰↔PC 통합 검색과 양방향 클립보드 우체통까지 이어집니다.',
       ],
       actionButtons: [
         { label: '🔍 맨 위 검색창으로 바로 찾아보기', actionType: 'JUMP_SEARCH' },
-        { label: '👑 내 기기 통합(월 3,900원) 안내 보기', actionType: 'OPEN_PRICING_MODAL' },
+        { label: '👑 내 기기 통합 Pro(월 3,900원) 안내 보기', actionType: 'OPEN_PRICING_MODAL' },
       ],
     };
     return reply(
@@ -2834,22 +2767,22 @@ function handleGhostiInfoDeskIfMatched(
   ) {
     const infoPayload: MonsterInfoDeskPayload = {
       topicBadge: '👑 귀신같이 가격 사다리 & 이메일 자동 기기 통합 안내',
-      title: '내 기기 4대 기본 초능력과 사진 공유는 평생 0원, 내 기기 통합은 월 3,900원입니다',
+      title: '내 기기 기본 기능(귀신비서 · 귀신검색)과 사진 공유는 평생 0원, 내 기기 통합 Pro는 월 3,900원입니다',
       bulletPoints: [
-        '🆓 내 기기 1대 (언제나 0원): 사진·서류·영상 1초 AI 내용검색(👻 귀신검색), 기기 정리·수리·상시 케어 3종(👻 귀신비서), 기본 귀신창 습관기(자동 한영·띄어쓰기 · Ctrl+V 순차붙여넣기 · [1] 서식·줄바꿈 · F1~F6 · 무광고 압축) 평생 무료 + 🔒 유료 티어 기능 동의(Opt-in) 시 신용카드 등록 없이 30일 무제한 무료체험 (만료 시 자동 결제 없이 깔끔 잠금🔒 · 대장 PC 로컬 복사본은 영구 보존)',
-        '👑 내 기기 통합 + 귀신창 폰+PC (개인 유료 주력 · 월 3,900원 / 연간 결제 시 39,000원 · 월 3,250원꼴): 번거로운 QR 스캔 없이 이메일 로그인 하나로 내 폰·집PC·회사PC·노트북이 대수 제한 없이 하나로 묶입니다!',
-        '📬 무버튼 양방향 클립보드 ‘암호화 우체통(E2EE)’: 회사나 폰에서 복사(Ctrl+C)·캡처한 내역(최근 텍스트 100개·스샷 10장)이 꺼져 있던 집 PC를 켜는 순간 Ctrl+0 클립보드 검색에 자동 장전됩니다 (※ iOS는 정책상 앱 진입 시 즉시 동기화).',
+        '🆓 내 기기 1대 (언제나 0원): 사진·서류·영상 1초 AI 내용검색(👻 귀신검색 · Ctrl+0) 및 알약·고클린 대체 PC 보안·속도·용량 케어(👻 귀신비서) 평생 무료 + 🔒 유료 확장 동의(Opt-in) 시 신용카드 등록 없이 30일 무제한 무료체험 (만료 시 자동 결제 0% · 로컬 파일 영구 보존)',
+        '👑 내 기기 통합 Pro (개인 유료 주력 · 월 3,900원 / 연간 결제 시 39,000원 · 월 3,250원꼴): 이메일 로그인 하나로 내 폰·집PC·회사PC·노트북이 대수 제한 없이 묶이며, 📝 사진·표 OCR 창과 🏷️ 귀신 라벨러가 전 기기 무제한 해금됩니다!',
+        '📬 무버튼 양방향 클립보드 ‘암호화 우체통(E2EE)’: 회사나 폰에서 복사(Ctrl+C)·캡처한 내역(최근 텍스트 100개·스샷 10장)이 꺼져 있던 집 PC를 켜는 순간 자동 장전됩니다 (※ iOS는 정책상 앱 진입 시 즉시 동기화).',
         '📸 사진 공유 (가족·동호회·동창회): 인원·장수 제한 없이 100% 평생 무제한 무료!',
-        '💼 업무 공유 (S: 드라이브 + 팀 상용구 · 🎁 30일 무료체험): 소호(~5인) 월 9,900원 (연 99,000원) / 소기업(~20인) 월 19,000원 (연 190,000원) / 중소기업(~50인) 월 29,000원 (연 290,000원) — 대표 1인만 결제하면 초대받은 멤버는 전원 0원!',
+        '💼 업무 공유 (공용 폴더 S: 드라이브 · 🎁 30일 무료체험): 소호(~5인) 월 9,900원 (연 99,000원) / 소기업(~20인) 월 19,000원 (연 190,000원) / 중소기업(~50인) 월 29,000원 (연 290,000원) — 대표 1인만 결제하면 초대받은 멤버는 전원 0원!',
       ],
       actionButtons: isMobileViewportRuntime
-        ? [{ label: '👑 내 기기 통합(월 3,900원) 요금제 창 열기', actionType: 'OPEN_PRICING_MODAL' }]
+        ? [{ label: '👑 내 기기 통합 Pro(월 3,900원) 요금제 창 열기', actionType: 'OPEN_PRICING_MODAL' }]
         : [
-            { label: '👑 내 기기 통합(월 3,900원) 요금제 창 열기', actionType: 'OPEN_PRICING_MODAL' },
-            { label: '📖 온보딩 3탭(기기 묶기 혜택) 보기', actionType: 'OPEN_ONBOARDING_TAB3' },
+            { label: '👑 내 기기 통합 Pro(월 3,900원) 요금제 창 열기', actionType: 'OPEN_PRICING_MODAL' },
+            { label: '📖 온보딩 2탭(기기 묶기 혜택) 보기', actionType: 'OPEN_ONBOARDING_TAB3' },
           ],
     };
-    speak('내 기기 한 대의 기본 기능과 사진 공유는 평생 무료이며, 이메일 하나로 폰과 집 피씨, 회사 피씨를 모두 묶는 내 기기 통합 플랜은 월 삼천구백 원입니다.');
+    speak('내 기기 한 대의 기본 기능과 사진 공유는 평생 무료이며, 이메일 하나로 폰과 집 피씨, 회사 피씨를 모두 묶고 사진 표 오씨알과 라벨러를 해금하는 내 기기 통합 프로 플랜은 월 삼천구백 원입니다.');
     return reply(
       sourceTab,
       `💁‍♂️ **[귀신같이 인포메이션 데스크 — 요금제 & 이메일 자동 기기 연결 안내]**
@@ -2859,7 +2792,7 @@ function handleGhostiInfoDeskIfMatched(
         cardKind: 'GHOSTI_INFO_DESK',
         infoDeskPayload: infoPayload,
         followUpSuggestions: [
-          'Ctrl+0 귀신창 핵심 초능력이랑 F1~F6 상용구도 설명해줘',
+          'Ctrl+0 귀신검색창 사용법 알려줘',
           '복사 기록 한 달(30일) 동안 보관하게 바꿔줘',
           '아이디어 건의하고 싶은데 스튜디오에 접수해줘',
         ],
@@ -2867,34 +2800,32 @@ function handleGhostiInfoDeskIfMatched(
     );
   }
 
-  // Case 2: Ctrl+0 귀신창 · 복사검색 · 상용구 · 최신 업데이트 안내
+  // Case 2: Ctrl+0 귀신검색창 · 핵심 기능 안내
   const infoPayload: MonsterInfoDeskPayload = {
-    topicBadge: '⚡ 귀신창(Ctrl+0) 핵심 초능력 & 최신 업데이트 안내',
-    title: '어느 화면에서든 Ctrl + 0 (보조 Ctrl + 우클릭)으로 『귀신창』이 소환됩니다',
+    topicBadge: '👻 귀신검색(Ctrl+0) & 핵심 기능 안내',
+    title: '어느 화면에서든 Ctrl + 0 (보조 Ctrl + 우클릭)으로 『귀신검색창』이 1초 만에 소환됩니다',
     bulletPoints: [
-      '🔍 상단 클립보드 검색 (Win+V형 5개 카드 아코디언): 내가 복사(Ctrl+C)한 텍스트와 캡처(Win+Shift+S)한 표·이미지만 0.1초 만에 찾아 커서 위치에 바로 붙여넣습니다 (기본 7일·최대 30일 보관).',
-      '⌨️ [F1 ~ F6] 개인 상용구 (평생 무료 · 팀 공용 🔒F7~F12): 자주 쓰는 계좌번호·사업자번호·주소를 저장해 두고 귀신창(Ctrl+0) 소환 후 F1~F6으로 0.1초 만에 입력합니다 (평소 기본 단축키와 충돌 0% · 이 채팅창에서 "F1번에 ~ 넣어줘"라고 말해도 즉시 변경!).',
-      '🪄 무버튼 한영·띄어쓰기 자동 변환 (평생 무료): 영문 상태에서 dkssudgktpdy를 치면 백스페이스 없이 한글로 자동 변환하고 한/영키까지 바꿔줍니다 (원복은 Ctrl+Z).',
-      '📋 연속 복사 순차·칸맞춤(Ctrl+V · 무료) · [1] 🧹서식·줄바꿈 다림질(무료) · [2] 📄스샷·PDF 변환🔒 · [3] 🔗다중합본🔒 · [4] 🔢번호·일정🔒 · [5] 📌창고정🔒 및 무광고 1초 스마트 압축까지 지원합니다.',
+      '🔍 1초 AI 내용검색 (Ctrl+0 · 평생 무료): 파일 이름을 몰라도 계약서 본문 숫자, 사진 속 풍경·글자, 동영상 속 찾던 대사·장면까지 열지 않고 1초 만에 찾아냅니다.',
+      '👻 귀신비서 (평생 무료): 은행 보안프로그램 자동 절전·기상, 윈도우 디펜더 정밀 보안 점검, 임시 캐시 청소, 시작프로그램 관리, 무광고 1초 스마트 압축까지 한 곳에서 해결합니다.',
+      '📝 귀신검색 Pro 유료 확장 (월 3,900원 · 30일 무료체험): 사진·표 OCR 창(이미지 속 표·글자 엑셀/문서 추출)과 귀신 라벨러(AI 자동 파일명 정리), 내 모든 폰·PC 통합 연결을 무제한 지원합니다.',
       '📮 스튜디오 직결 창구: 이 대화창에 클레임·A/S·아이디어를 말씀하시면 회원님 이름으로 스튜디오에 즉시 대리 접수하고 결과 확인 링크를 드립니다.',
     ],
     actionButtons: [
-      { label: '👻 온보딩 2탭(Ctrl+0 초능력 체험방) 열기', actionType: 'OPEN_ONBOARDING_TAB2' },
       { label: '📖 온보딩 1탭(👻 귀신검색 · 👻 귀신비서 가이드) 열기', actionType: 'OPEN_ONBOARDING_TAB1' },
-      { label: '👑 내 기기 통합(월 3,900원) 요금제 보기', actionType: 'OPEN_PRICING_MODAL' },
+      { label: '👑 내 기기 통합 Pro(월 3,900원) 요금제 보기', actionType: 'OPEN_PRICING_MODAL' },
     ],
   };
-  speak('컨트롤 영을 누르시면 마우스 옆에 귀신창이 나타나며 복사검색과 에프일에서 에프십 상용구, 한영 오타 자동 변환을 쓰실 수 있습니다.');
+  speak('컨트롤 영을 누르시면 귀신검색창이 일 초 만에 나타나며 문서와 사진, 동영상 속 내용을 열지 않고 바로 찾으실 수 있습니다.');
   return reply(
     sourceTab,
-    `💁‍♂️ **[귀신같이 인포메이션 데스크 — 핵심 기능 & v2026.11 업데이트 안내]**
+    `💁‍♂️ **[귀신같이 인포메이션 데스크 — 핵심 기능 안내]**
 ` +
-      `궁금하신 **『귀신같이(Ghosti)』**의 주요 기능과 최신 업데이트 내역입니다. 이 대화창에서 **"복사 기록 30일 보관으로 바꿔줘"**, **"F1번에 내 계좌번호 넣어줘"**처럼 말씀하시면 설정도 바로 바꿔 드립니다!`,
+      `궁금하신 **『귀신같이(Ghosti)』**의 주요 기능 안내입니다. 이 대화창에서 **"바탕화면 어지러운 스크린샷 모아줘"**, **"내 컴퓨터 보안이랑 속도 점검해줘"**처럼 편하게 말씀해 보세요!`,
     {
       cardKind: 'GHOSTI_INFO_DESK',
       infoDeskPayload: infoPayload,
       followUpSuggestions: [
-        'F1번에 국민은행 123-45-67890 넣어줘',
+        '요즘 컴퓨터가 좀 느린데 내 사양이랑 상태 봐줘',
         '복사 기록 한 달(30일) 동안 보관하게 바꿔줘',
         '내 기기 통합 3,900원 요금제 혜택 알려줘',
       ],

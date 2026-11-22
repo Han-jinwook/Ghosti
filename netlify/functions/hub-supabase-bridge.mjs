@@ -309,24 +309,61 @@ export default async (req) => {
   }
 
   // ② service_role Upsert (id = 허브 family_users.id)
-  // [제18조 준수]: app_settings JSONB에 기생시키거나 빈 객체로 덮어쓰지 않고, 정식 분리 컬럼에만 전달된 값만 부분 반영!
+  // [원엔진·투도어 앱 분리]: 호출 도메인(Origin) 또는 body.appId로 'ghosti' vs 'ghostkey'를 판별하여
+  // 각 앱의 접속 시각·사전알림 컬럼을 독립 기록하고 최초 가입 앱(first_signup_app / signup_source)이 덮어써지지 않게 보호!
+  const reqOrigin = String(req.headers.get('origin') || req.headers.get('referer') || '').toLowerCase();
+  const callerApp =
+    String(body.appId || '').toLowerCase() === 'ghostkey' || reqOrigin.includes('ghostkey')
+      ? 'ghostkey'
+      : 'ghosti';
+  const nowLoginIso = new Date().toISOString();
+
+  let existingUserRow = null;
+  try {
+    const exRes = await fetch(
+      `${supabaseUrl}/rest/v1/users?id=eq.${encodeURIComponent(userId)}&select=id,signup_source,first_signup_app&limit=1`,
+      {
+        headers: {
+          apikey: serviceKey,
+          Authorization: `Bearer ${serviceKey}`,
+        },
+      }
+    );
+    const exArr = exRes.ok ? await exRes.json().catch(() => []) : [];
+    existingUserRow = Array.isArray(exArr) && exArr[0] ? exArr[0] : null;
+  } catch {
+    existingUserRow = null;
+  }
+
   const baseRow = {
     id: userId,
     email,
     nickname: hubUser.nickname || body.nickname || email.split('@')[0],
-    last_login_at: new Date().toISOString(),
+    last_login_at: nowLoginIso,
   };
 
-  const row = { ...baseRow };
+  const row = {
+    ...baseRow,
+    ...(callerApp === 'ghostkey'
+      ? { ghostkey_last_login_at: nowLoginIso }
+      : { ghosti_last_login_at: nowLoginIso }),
+  };
+  if (!existingUserRow?.first_signup_app) {
+    row.first_signup_app = callerApp;
+  }
   if (body.nativePushToken) {
     row.native_push_token = String(body.nativePushToken);
-    row.push_channel_id = 'ghosti';
+    row.push_channel_id = callerApp;
   }
-  if (body.signupSource) {
+  if (body.signupSource && !existingUserRow?.signup_source) {
     row.signup_source = String(body.signupSource);
   }
   if (typeof body.launchNotifyOptIn === 'boolean') {
-    row.launch_notify_opt_in = body.launchNotifyOptIn;
+    if (callerApp === 'ghostkey') {
+      row.ghostkey_notify_opt_in = body.launchNotifyOptIn;
+    } else {
+      row.launch_notify_opt_in = body.launchNotifyOptIn;
+    }
   }
   if (
     body.devicePlatform &&

@@ -2,6 +2,21 @@
 
 ---
 
+## 🕒 [2026-11-22 19:10 KST `1·2·3귀신` 통합 진행 기록 (`원엔진 · 투도어(귀신같이 × 귀신키)` 완전 분리 · 공유 DB/결제 정식 분리 · `Pro(3,900원)` 전용 OCR/라벨러 고정 · `Z-Core v2.7.5`)]
+
+- **세션 제목**: `원엔진투도어분리완결`
+1. **본체(`D:\Ghosti`) 5단 메뉴 정화 & `귀신창 / 귀신키 / 상용구` UI·문구 100% 분리 제거**:
+   - 좌측 사이드바(`DesktopSidebarAndHeader.tsx`), 내 기기 통합(`PaidDeviceSyncPane.tsx`, `CrossDeviceClipboardAndPairingBar.tsx`), 쇼룸 랜딩(`GhostiShowroomLanding.tsx`), 온보딩 모달(`OnboardingModal.tsx`), 요금제·결제창(`subscriptionPlanCatalog.ts`, `PricingModal.tsx`, `GhostiSubscriptionCheckoutModal.tsx`), 비서 대본집·라우터(`ghost_secretary_playbook.json`, `ghostSecretaryEngine.ts`, `monsterChatRouter.ts`)에서 `⚡ 귀신창 / 귀신키 / F1~F6 상용구` 메뉴 및 설명 문구 전량 제거 (`1. 귀신비서 · 2. 귀신검색 · 3. 사진 공유 · 4. 내 기기 통합 Pro · 5. 업무 공유 S:` 5단 체계 완성).
+   - `GhostPhotoOcrTeleportModal`(`📝 사진·표 OCR 창🔒`)은 `2. 귀신검색` 전용 독립 모달로 보존하되 내부 구형 3탭 헤더(`기본 귀신창`) 노출을 은닉.
+2. **`Ctrl + 0` 기본 동작 및 `Pro(월 3,900원)` 전용 OCR·라벨러 고정 (`Z-Core v2.7.5`, 3-카피 동기화)**:
+   - `seq_paste_daemon.py`: 기본값 `ghostkey_enabled = false` 적용으로 어떤 사용자든 `Ctrl + 0` / `Ctrl + 우클릭` 입력 시 어느 창에서든 **`👻 귀신검색창(UI ②)`**이 기본 소환되도록 구현 (`귀신키` 정식 출시 후 권한 보유 유저가 `ghostkey_enabled = true`를 켰을 때만 `입력창 = 귀신키(UI ①)` / `바탕화면 = 귀신검색창(UI ②)` 분기).
+   - `workAndDeviceBridgeOps.mjs` & `plugin_ghosti_superpowers.py`: **`📝 사진·표 OCR 창🔒`과 `🏷️ 귀신 라벨러🔒`는 단독 `귀신키(월 1,900원)`에 포함하지 않고 오직 `본체 Pro(월 3,900원 / 연 39,000원)`에만 단독 귀속**(`ocrAndLabelerUnlocked = proUnlocked`).
+3. **공유 Supabase DB 정식 SQL 분리 & 공통 결제 브릿지 개통 (`ghosti_zero_cloud_schema.sql`, `hub-supabase-bridge.mjs`, `workAndDeviceBridgeOps.mjs`)**:
+   - `public.users`에 `first_signup_app`, `ghosti_last_login_at`, `ghostkey_last_login_at`, `ghostkey_notify_opt_in` 정식 컬럼 추가(최초 가입 출처 덮어쓰기 원천 차단) + `public.ghosti_product_subscriptions`(`PRIMARY KEY (email, product_code)`, `'ghosti_pro' | 'ghosti_work' | 'ghostkey'`) 정식 테이블 신설.
+   - 서버 브릿지에 `ghostkey_trial_opt_in_30d`, `ghostkey_sub_1900`(1,900C), `ghostkey_year_19000`(19,000C) 및 `MerlinHub` `app_id: 'GhostKey'` 개통 완료(본체 구독창에는 `ghostkey` 코드 0% 비노출). `5호컴 GhostKey` 에이전트 앞 확정 명세 우체국 발송 완료.
+
+---
+
 ## 🕒 [2026-11-22 10:45 KST `1·3귀신` 진행 기록 (`1. 👻 귀신비서` 전수 감사 · 안전/정직성 수리 · 알약·고클린 완전 대체 완결 · `Z-Core v2.7.3`)]
 
 - **세션 제목**: `귀신비서전수검수완결`

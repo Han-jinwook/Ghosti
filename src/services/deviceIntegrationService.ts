@@ -46,6 +46,16 @@ export interface GhostiDeviceEntitlementView {
   workPaidDaysLeft?: number;
   workSubscriptionUnlocked?: boolean;
   workSeatLimit?: number;
+  ghostkeyPlanId?: string | null;
+  ghostkeyTrialOptInStartedAt?: string | null;
+  ghostkeyTrialActive?: boolean;
+  ghostkeyTrialDaysLeft?: number;
+  ghostkeyTrialExpired?: boolean;
+  ghostkeyPaidExpiresAt?: string | null;
+  ghostkeyPaidActive?: boolean;
+  ghostkeyPaidDaysLeft?: number;
+  ghostkeySubscriptionUnlocked?: boolean;
+  ocrAndLabelerUnlocked?: boolean;
   unlimitedBindingUnlocked: boolean;
 }
 

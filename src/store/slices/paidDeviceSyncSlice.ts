@@ -252,7 +252,7 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
     if (res.ok && res.entitlement) {
       get().setDeviceIntegrationSnapshot({ entitlement: res.entitlement });
       set({
-        lastQuarantineToast: `🎁 [30일 무제한 무료체험 시작 (D-${res.entitlement.trialDaysLeft})] 카드 등록·자동 결제 0%로 내 모든 기기와 귀신창 유료 기능이 열렸습니다!`,
+        lastQuarantineToast: `🎁 [30일 무제한 무료체험 시작 (D-${res.entitlement.trialDaysLeft})] 카드 등록·자동 결제 0%로 내 모든 기기 통합과 사진·표 OCR · 귀신 라벨러가 열렸습니다!`,
       });
       return true;
     }

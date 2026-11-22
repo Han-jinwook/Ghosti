@@ -230,9 +230,6 @@ export const DesktopSidebarContainer: React.FC<{
     setIsDeviceIntegrationOpen,
     activeIntegrationSubTab,
     setActiveIntegrationSubTab,
-    ghostWindowTier,
-    setGhostWindowTier,
-    setGhostWindowInitialTab,
   } = useDashboardNavStore();
 
   const [showFamilyAppsInSidebar, setShowFamilyAppsInSidebar] = useState(false);
@@ -439,18 +436,8 @@ export const DesktopSidebarContainer: React.FC<{
                 : 'text-zinc-400 hover:text-zinc-200 hover:bg-white/5 font-medium'
             }`;
 
-          const isPcFreeSuperpowerActive =
-            isDeviceIntegrationOpen &&
-            activeIntegrationSubTab === 'superpower' &&
-            ghostWindowTier === 'pc_free';
           const isPhonePcIntegrationActive =
-            isDeviceIntegrationOpen &&
-            (activeIntegrationSubTab === 'devices' ||
-              (activeIntegrationSubTab === 'superpower' && ghostWindowTier === 'phone_pc'));
-          const isWorkTeamSuperpowerActive =
-            isDeviceIntegrationOpen &&
-            activeIntegrationSubTab === 'superpower' &&
-            ghostWindowTier === 'work_team';
+            isDeviceIntegrationOpen && activeIntegrationSubTab === 'devices';
 
           return (
             <div className="flex flex-col gap-1.5">
@@ -502,34 +489,7 @@ export const DesktopSidebarContainer: React.FC<{
                 </div>
               </button>
 
-              {/* [v2.3 3순위] ⚡ 귀신창 — 축 C 일일 습관 락인 (창 전환 제로) */}
-              <div className="flex flex-col gap-0.5">
-                <button
-                  type="button"
-                  onClick={() => {
-                    setIsDeviceIntegrationOpen(true);
-                    setActiveIntegrationSubTab('superpower');
-                    setGhostWindowTier('pc_free');
-                    setGhostWindowInitialTab('ui1_basic');
-                    setActiveLoungeType('personal');
-                    setDesktopTab('sync');
-                    if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                    else scrollAppToTop();
-                  }}
-                  title="하던 일 멈추지 마세요, 쓰던 자리에서 1초면 끝 — 창을 오가며 헤매지 마세요. 영타 자동 변환부터 칸 맞춤 복붙까지 Ctrl+0 하나로 일하던 커서 위에서 바로 끝냅니다."
-                  className={mainBtnClass(isPcFreeSuperpowerActive)}
-                >
-                  <div className="flex flex-col text-left min-w-0 flex-1">
-                    <span className="text-[14.5px] leading-snug">⚡ 귀신창</span>
-                    <span className="text-[10.5px] opacity-75 font-normal whitespace-normal break-keep leading-snug">
-                      <span className="whitespace-nowrap">하던 일 멈추지 않고,</span>{' '}
-                      <span className="whitespace-nowrap">쓰던 자리에서 1초 끝</span>
-                    </span>
-                  </div>
-                </button>
-              </div>
-
-              {/* [v2.3 4순위] 📸 사진 공유 — 축 D-무료 가족·모임 바이럴 (개인 사진·영상 전용) */}
+              {/* [v2.3 3순위] 📸 사진 공유 — 축 D-무료 가족·모임 바이럴 (개인 사진·영상 전용) */}
               <div className="flex flex-col gap-0.5">
                 <button
                   type="button"
@@ -649,7 +609,7 @@ export const DesktopSidebarContainer: React.FC<{
                     클라우드 월세 0원 · 30일 무료체험 · 투명 정찰제
                   </div>
                 )}
-                {/* [확장 1 / 5번] 📱 내 기기 통합 */}
+                {/* [확장 1 / 4번] 📱 내 기기 통합 */}
                 {(() => {
                   const isDeviceIntegrationExpanded =
                     (isDeviceIntegrationAutoExpanded || isPhonePcIntegrationActive) && !isDeviceIntegrationCollapsed;
@@ -662,10 +622,10 @@ export const DesktopSidebarContainer: React.FC<{
                           toggleDeviceIntegrationExpanded(true);
                           setIsDeviceIntegrationOpen(true);
                           setActiveIntegrationSubTab('devices');
-                          setGhostWindowTier('phone_pc');
                           setActiveLoungeType('personal');
                           setDesktopTab('sync');
-                          if (!isMobileDrawer) scrollAppToTop();
+                          if (isMobileDrawer) setIsMobileDrawerOpen(false);
+                          else scrollAppToTop();
                         }}
                         title={
                           isStoreAppMode
@@ -742,39 +702,16 @@ export const DesktopSidebarContainer: React.FC<{
                               <span className="font-bold whitespace-normal break-keep leading-snug">기기 연결 (PC ↔ 폰)</span>
                             </div>
                           </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsDeviceIntegrationOpen(true);
-                              setActiveIntegrationSubTab('superpower');
-                              setGhostWindowTier('phone_pc');
-                              setGhostWindowInitialTab('ui3_ocr');
-                              setActiveLoungeType('personal');
-                              setDesktopTab('sync');
-                              if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                            }}
-                            className={subBtnClass(
-                              isDeviceIntegrationOpen &&
-                                activeIntegrationSubTab === 'superpower' &&
-                                ghostWindowTier === 'phone_pc'
-                            )}
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="shrink-0 text-[13px]">⚡</span>
-                              <span className="font-bold whitespace-normal break-keep leading-snug">귀신창 : 📱 폰 + PC</span>
-                            </div>
-                          </button>
                         </div>
                       )}
                     </div>
                   );
                 })()}
 
-                {/* [확장 2 / 6번] 💼 업무 공유 (공용 폴더 S:) */}
+                {/* [확장 2 / 5번] 💼 업무 공유 (공용 폴더 S:) */}
                 {(() => {
                   const isWorkShareExpanded =
-                    (isWorkShareAutoExpanded || isWorkShareActive || isWorkTeamSuperpowerActive) && !isWorkShareCollapsed;
+                    (isWorkShareAutoExpanded || isWorkShareActive) && !isWorkShareCollapsed;
                   return (
                     <div className="flex flex-col gap-0.5">
                       <button
@@ -786,13 +723,14 @@ export const DesktopSidebarContainer: React.FC<{
                           setActiveLoungeType('work');
                           setDesktopTab('dashboard');
                           resetToZenCanvas();
+                          if (isMobileDrawer) setIsMobileDrawerOpen(false);
                         }}
                         title={
                           isStoreAppMode
                             ? '사내 팀 문서와 현장 사진을 공용 폴더(S: 드라이브) 하나로 공유합니다.'
                             : '클라우드 월세 0원, 우리 팀 PC를 공용 폴더(S: 드라이브) 하나로 — 비싼 서버나 클라우드 구독 없이 사내 문서·현장 사진을 공유 드라이브(S:) 하나로 묶어 1초 만에 찾고 씁니다. (소호 ~5인 월 9,900원~ · 30일 무료체험 · 인당 과금 0원)'
                         }
-                        className={mainBtnClass(isWorkShareActive || isWorkTeamSuperpowerActive)}
+                        className={mainBtnClass(isWorkShareActive)}
                       >
                         <div className="flex flex-col text-left min-w-0 flex-1">
                           <div className="flex items-center gap-1.5">
@@ -850,25 +788,6 @@ export const DesktopSidebarContainer: React.FC<{
                               <span className="font-bold whitespace-normal break-keep leading-snug">공용 폴더(S: 드라이브) · 문서 공유</span>
                             </div>
                           </button>
-
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setIsDeviceIntegrationOpen(true);
-                              setActiveIntegrationSubTab('superpower');
-                              setGhostWindowTier('work_team');
-                              setGhostWindowInitialTab('ui2_summon');
-                              setActiveLoungeType('personal');
-                              setDesktopTab('sync');
-                              if (isMobileDrawer) setIsMobileDrawerOpen(false);
-                            }}
-                            className={subBtnClass(isWorkTeamSuperpowerActive)}
-                          >
-                            <div className="flex items-center gap-2 min-w-0">
-                              <span className="shrink-0 text-[13px]">⚡</span>
-                              <span className="font-bold whitespace-normal break-keep leading-snug">귀신창 : 💼 팀 공유</span>
-                            </div>
-                          </button>
                         </div>
                       )}
                     </div>
@@ -878,14 +797,14 @@ export const DesktopSidebarContainer: React.FC<{
                 {/* [!isStoreAppMode] SSOT v2.3 원가 투명화 1줄 안내 */}
                 {!isStoreAppMode && (
                   <div
-                    title="💡 기본 4대 초능력은 외부 클라우드 서버 없이 내 기기 안에서만 작동해 서버 비용이 0원이므로 평생 무료로 제공됩니다."
+                    title="💡 기본 3대 무료 기능(귀신비서 · 귀신검색 · 사진 공유)은 외부 클라우드 서버 없이 내 기기 안에서만 작동해 서버 비용이 0원이므로 평생 무료로 제공됩니다."
                     className={`mt-1 px-2.5 py-2 rounded-xl text-[10.5px] leading-snug ${
                       themeMode === 'light'
                         ? 'bg-slate-200/60 text-slate-600'
                         : 'bg-white/[0.04] text-zinc-400'
                     }`}
                   >
-                    💡 기본 4대 초능력은 외부 클라우드 서버 없이 내 기기 안에서만 작동해 서버 비용이 0원이므로 평생 무료로 제공됩니다.
+                    💡 기본 3대 무료 기능(귀신비서 · 귀신검색 · 사진 공유)은 외부 클라우드 서버 없이 내 기기 안에서만 작동해 서버 비용이 0원이므로 평생 무료로 제공됩니다.
                   </div>
                 )}
               </div>

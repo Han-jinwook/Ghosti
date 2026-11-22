@@ -388,7 +388,56 @@ const SERVER_SUBSCRIPTION_PLANS = {
     durationDays: 365,
     displayText: '귀신같이 [6. 업무 공유] 중소기업(~50인) 연간 365일 이용권 (290,000C)',
   },
+  // [Door 2: 귀신키(GhostKey) 단독 요금제 — 본체 구독창에서는 비노출, ghostkey.sundreamer.app 전용 호출]
+  ghostkey_sub_1900: {
+    canonicalId: 'ghostkey_sub_1900',
+    category: 'ghostkey',
+    priceCoins: 1900,
+    durationDays: 30,
+    displayText: '[귀신키] 단독 30일 이용권 (1,900C)',
+  },
+  ghostkey_year_19000: {
+    canonicalId: 'ghostkey_year_19000',
+    category: 'ghostkey',
+    priceCoins: 19000,
+    durationDays: 365,
+    displayText: '[귀신키] 단독 연간 365일 이용권 (19,000C)',
+  },
 };
+
+async function syncProductSubscriptionRow(supabaseUrl, serviceKey, {
+  email,
+  userId,
+  productCode,
+  planId,
+  trialStartedAt,
+  paidExpiresAt,
+  lastOrderId,
+  lastPaidCoins,
+}) {
+  try {
+    await fetch(`${supabaseUrl}/rest/v1/ghosti_product_subscriptions?on_conflict=email,product_code`, {
+      method: 'POST',
+      headers: srvHeaders(serviceKey, {
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=minimal',
+      }),
+      body: JSON.stringify({
+        email,
+        user_id: userId || null,
+        product_code: productCode,
+        plan_id: planId || 'free_trial',
+        trial_started_at: trialStartedAt || null,
+        paid_expires_at: paidExpiresAt || null,
+        last_order_id: lastOrderId || null,
+        last_paid_coins: Number(lastPaidCoins || 0),
+        updated_at: new Date().toISOString(),
+      }),
+    });
+  } catch {
+    /* SQL 테이블 마이그레이션 전에도 Storage 원장은 정상 동작 */
+  }
+}
 
 function computeEntitlementView(entRaw, activeDeviceCount) {
   const nowMs = Date.now();
@@ -401,6 +450,9 @@ function computeEntitlementView(entRaw, activeDeviceCount) {
     workPlanId: entRaw?.workPlanId || null,
     workTrialOptInStartedAt: entRaw?.workTrialOptInStartedAt || null,
     workPaidExpiresAt: entRaw?.workPaidExpiresAt || null,
+    ghostkeyPlanId: entRaw?.ghostkeyPlanId || null,
+    ghostkeyTrialOptInStartedAt: entRaw?.ghostkeyTrialOptInStartedAt || null,
+    ghostkeyPaidExpiresAt: entRaw?.ghostkeyPaidExpiresAt || null,
   };
   let trialActive = false;
   let trialDaysLeft = 0;
@@ -440,9 +492,34 @@ function computeEntitlementView(entRaw, activeDeviceCount) {
     ? Math.max(1, Math.ceil((workExpMs - nowMs) / (24 * 3600 * 1000)))
     : 0;
 
+  let ghostkeyTrialActive = false;
+  let ghostkeyTrialDaysLeft = 0;
+  if (ent.ghostkeyTrialOptInStartedAt) {
+    const gkStartMs = Date.parse(ent.ghostkeyTrialOptInStartedAt);
+    if (Number.isFinite(gkStartMs)) {
+      const gkRemainMs = gkStartMs + 30 * 24 * 3600 * 1000 - nowMs;
+      ghostkeyTrialDaysLeft = gkRemainMs > 0 ? Math.ceil(gkRemainMs / (24 * 3600 * 1000)) : 0;
+      ghostkeyTrialActive = gkRemainMs > 0;
+    }
+  }
+  const gkExpMs = ent.ghostkeyPaidExpiresAt ? Date.parse(ent.ghostkeyPaidExpiresAt) : NaN;
+  const ghostkeyPaidActive = Boolean(ent.ghostkeyPlanId && Number.isFinite(gkExpMs) && gkExpMs > nowMs);
+  const ghostkeyPaidDaysLeft = ghostkeyPaidActive
+    ? Math.max(1, Math.ceil((gkExpMs - nowMs) / (24 * 3600 * 1000)))
+    : 0;
+
   const trialExpired = Boolean(ent.trialOptInStartedAt && !trialActive && !isPaidUnlimited);
   const workTrialExpired = Boolean(ent.workTrialOptInStartedAt && !workTrialActive && !workPaidActive);
+  const ghostkeyTrialExpired = Boolean(
+    ent.ghostkeyTrialOptInStartedAt && !ghostkeyTrialActive && !ghostkeyPaidActive && !isPaidUnlimited
+  );
+  const proUnlocked = Boolean(isPaidUnlimited || trialActive);
   const workSubscriptionUnlocked = Boolean(workPaidActive || workTrialActive);
+  // [멀린님 확정 가격 동인]:
+  // - Pro(월 3,900원 / 본체 30일 체험) 활성 시: 기기통합 + 사진·표 OCR + 귀신 라벨러 + 귀신키 전부 해금!
+  // - 귀신키 단독(월 1,900원 / 귀신키 30일 체험) 활성 시: 오직 귀신키만 해금되며, 사진·표 OCR과 귀신 라벨러는 해금되지 않음(양방향 Pro 업그레이드 동인)!
+  const ghostkeySubscriptionUnlocked = Boolean(ghostkeyPaidActive || ghostkeyTrialActive || proUnlocked);
+  const ocrAndLabelerUnlocked = proUnlocked;
   const workSeatLimit = resolveWorkPlanSeatLimit(ent.workPlanId, workPaidActive, workTrialActive);
 
   return {
@@ -460,7 +537,14 @@ function computeEntitlementView(entRaw, activeDeviceCount) {
     workPaidDaysLeft,
     workSubscriptionUnlocked,
     workSeatLimit,
-    unlimitedBindingUnlocked: isPaidUnlimited || trialActive,
+    ghostkeyTrialActive,
+    ghostkeyTrialDaysLeft,
+    ghostkeyTrialExpired,
+    ghostkeyPaidActive,
+    ghostkeyPaidDaysLeft,
+    ghostkeySubscriptionUnlocked,
+    ocrAndLabelerUnlocked,
+    unlimitedBindingUnlocked: proUnlocked,
   };
 }
 
@@ -1366,8 +1450,33 @@ export async function handleAuthedWorkAndDeviceAction({
     );
     // [치명 과금 누수 영구 봉쇄] device_activate_plan은 오직 최초 1회 30일 무료체험 Opt-in(개인 또는 업무공유)만 허용하며,
     // 모든 유료 플랜은 반드시 서버 코인 실차감(device_purchase_plan)을 통해서만 개통됩니다.
-    if (planId !== 'trial_opt_in_30d' && planId !== 'work_trial_opt_in_30d') {
-      const listRes = await fetch(
+    if (
+      planId !== 'trial_opt_in_30d' &&
+      planId !== 'work_trial_opt_in_30d' &&
+      planId !== 'ghostkey_trial_opt_in_30d'
+    ) {
+      await syncProductSubscriptionRow(supabaseUrl, serviceKey, {
+      email,
+      userId,
+      productCode:
+        spec.category === 'personal'
+          ? 'ghosti_pro'
+          : spec.category === 'ghostkey'
+          ? 'ghostkey'
+          : 'ghosti_work',
+      planId: spec.canonicalId,
+      trialStartedAt:
+        spec.category === 'personal'
+          ? entRaw.trialOptInStartedAt
+          : spec.category === 'ghostkey'
+          ? entRaw.ghostkeyTrialOptInStartedAt
+          : entRaw.workTrialOptInStartedAt,
+      paidExpiresAt: effectiveExpiresIso,
+      lastOrderId: requestId,
+      lastPaidCoins: spec.priceCoins,
+    });
+
+    const listRes = await fetch(
         `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&select=device_id`,
         { headers: srvHeaders(serviceKey) }
       );
@@ -1410,6 +1519,54 @@ export async function handleAuthedWorkAndDeviceAction({
           `${emailHash}/entitlement_v1.json`,
           entRaw
         );
+        await syncProductSubscriptionRow(supabaseUrl, serviceKey, {
+          email,
+          userId,
+          productCode: 'ghosti_work',
+          planId: entRaw.workPlanId || 'work_trial_opt_in_30d',
+          trialStartedAt: entRaw.workTrialOptInStartedAt,
+          paidExpiresAt: entRaw.workPaidExpiresAt,
+        });
+      }
+    } else if (planId === 'ghostkey_trial_opt_in_30d') {
+      if (
+        entRaw.ghostkeyTrialOptInStartedAt &&
+        !curView.ghostkeyTrialActive &&
+        !curView.ghostkeyPaidActive &&
+        !curView.isPaidUnlimited
+      ) {
+        const listRes = await fetch(
+          `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&select=device_id`,
+          { headers: srvHeaders(serviceKey) }
+        );
+        const devRows = listRes.ok ? await listRes.json().catch(() => []) : [];
+        return {
+          status: 402,
+          body: {
+            ok: false,
+            reason: 'GHOSTKEY_TRIAL_ALREADY_USED',
+            message: '이 계정은 귀신키 30일 무료체험을 이미 사용 완료했습니다. 월 1,900원(또는 Pro 3,900원) 구독으로 계속 이용하실 수 있습니다.',
+            entitlement: computeEntitlementView(entRaw, Array.isArray(devRows) ? devRows.length : 1),
+          },
+        };
+      }
+      if (!entRaw.ghostkeyTrialOptInStartedAt) {
+        entRaw.ghostkeyTrialOptInStartedAt = new Date().toISOString();
+        await writeStorageJson(
+          supabaseUrl,
+          serviceKey,
+          DEVICE_BUCKET,
+          `${emailHash}/entitlement_v1.json`,
+          entRaw
+        );
+        await syncProductSubscriptionRow(supabaseUrl, serviceKey, {
+          email,
+          userId,
+          productCode: 'ghostkey',
+          planId: entRaw.ghostkeyPlanId || 'ghostkey_trial_opt_in_30d',
+          trialStartedAt: entRaw.ghostkeyTrialOptInStartedAt,
+          paidExpiresAt: entRaw.ghostkeyPaidExpiresAt,
+        });
       }
     } else {
       if (entRaw.trialOptInStartedAt && !curView.trialActive && !curView.isPaidUnlimited) {
@@ -1438,6 +1595,14 @@ export async function handleAuthedWorkAndDeviceAction({
           entRaw
         );
       }
+        await syncProductSubscriptionRow(supabaseUrl, serviceKey, {
+          email,
+          userId,
+          productCode: 'ghosti_pro',
+          planId: entRaw.planId || 'trial_opt_in_30d',
+          trialStartedAt: entRaw.trialOptInStartedAt,
+          paidExpiresAt: entRaw.paidExpiresAt,
+        });
     }
     const listRes = await fetch(
       `${supabaseUrl}/rest/v1/ghosti_devices?owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&select=device_id`,
@@ -1559,7 +1724,7 @@ export async function handleAuthedWorkAndDeviceAction({
           request_id: requestId,
           transaction_type: 'SPEND',
           display_text: spec.displayText,
-          app_id: 'Ghosti',
+          app_id: spec.category === 'ghostkey' ? 'GhostKey' : 'Ghosti',
           usage_metadata: {
             planId: spec.canonicalId,
             category: spec.category,
@@ -1598,18 +1763,28 @@ export async function handleAuthedWorkAndDeviceAction({
     const nowMs = Date.now();
     const nowIso = new Date(nowMs).toISOString();
     const addMs = spec.durationDays * 24 * 3600 * 1000;
+    let effectiveExpiresIso = nowIso;
     if (spec.category === 'personal') {
       const prevExpMs = entRaw.paidExpiresAt ? Date.parse(entRaw.paidExpiresAt) : 0;
       const baseMs = Number.isFinite(prevExpMs) && prevExpMs > nowMs ? prevExpMs : nowMs;
       entRaw.planId = spec.canonicalId;
       entRaw.activatedAt = nowIso;
       entRaw.paidExpiresAt = new Date(baseMs + addMs).toISOString();
+      effectiveExpiresIso = entRaw.paidExpiresAt;
+    } else if (spec.category === 'ghostkey') {
+      const prevGkExpMs = entRaw.ghostkeyPaidExpiresAt ? Date.parse(entRaw.ghostkeyPaidExpiresAt) : 0;
+      const baseMs = Number.isFinite(prevGkExpMs) && prevGkExpMs > nowMs ? prevGkExpMs : nowMs;
+      entRaw.ghostkeyPlanId = spec.canonicalId;
+      entRaw.ghostkeyActivatedAt = nowIso;
+      entRaw.ghostkeyPaidExpiresAt = new Date(baseMs + addMs).toISOString();
+      effectiveExpiresIso = entRaw.ghostkeyPaidExpiresAt;
     } else {
       const prevWorkExpMs = entRaw.workPaidExpiresAt ? Date.parse(entRaw.workPaidExpiresAt) : 0;
       const baseMs = Number.isFinite(prevWorkExpMs) && prevWorkExpMs > nowMs ? prevWorkExpMs : nowMs;
       entRaw.workPlanId = spec.canonicalId;
       entRaw.workActivatedAt = nowIso;
       entRaw.workPaidExpiresAt = new Date(baseMs + addMs).toISOString();
+      effectiveExpiresIso = entRaw.workPaidExpiresAt;
     }
     entRaw.lastOrderId = requestId;
     entRaw.lastPaidCoins = spec.priceCoins;
@@ -1623,7 +1798,7 @@ export async function handleAuthedWorkAndDeviceAction({
         paidCoins: spec.priceCoins,
         durationDays: spec.durationDays,
         purchasedAt: nowIso,
-        expiresAt: spec.category === 'personal' ? entRaw.paidExpiresAt : entRaw.workPaidExpiresAt,
+        expiresAt: effectiveExpiresIso,
       },
       ...prevHistory,
     ].slice(0, 20);

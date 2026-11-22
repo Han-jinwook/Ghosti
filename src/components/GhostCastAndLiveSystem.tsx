@@ -419,7 +419,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
       },
       onTeleportReceived: ({ fileName, sourceDevice }) => {
         useSaySeeStore.setState({
-          lastQuarantineToast: `⚡ [${sourceDevice} ➔ PC전송 도착] '${fileName}' 글자·정보가 PC 귀신창(Ctrl+0)과 클립보드에 장전되었습니다! 메모장에서 Ctrl+0 또는 Ctrl+V를 눌러 바로 확인하세요.`,
+          lastQuarantineToast: `⚡ [${sourceDevice} ➔ PC전송 도착] '${fileName}' 글자·정보가 내 PC 클립보드에 장전되었습니다! Ctrl+V를 눌러 바로 붙여넣기 하세요.`,
         });
       },
       onIncomingClip: (clip, meta) => {

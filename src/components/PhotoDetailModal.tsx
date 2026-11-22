@@ -591,13 +591,13 @@ export const PhotoDetailModal: React.FC = () => {
                     }
                   );
                   setActionNotice(
-                    `⚡ '${selectedPhoto.name}' 글자·정보를 내 PC 귀신창(Ctrl+0)과 클립보드로 전송했습니다! PC 메모장에서 Ctrl+0 또는 Ctrl+V를 눌러 바로 확인·붙여넣기 하세요.`
+                    `⚡ '${selectedPhoto.name}' 글자·정보를 내 PC 클립보드로 전송했습니다! PC에서 Ctrl+V를 눌러 바로 붙여넣기 하세요.`
                   );
                 }}
                 className="px-3.5 py-1.5 rounded-full bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/60 text-teal-700 dark:text-teal-200 font-label-sm text-label-sm font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-                title="연결된 내 PC의 귀신창(Ctrl+0) 대기열로 사진 속 글자·정보를 1초 만에 전송합니다"
+                title="연결된 내 PC 클립보드로 사진 속 글자·정보를 1초 만에 전송합니다"
               >
-                <span className="hidden sm:inline">⚡ PC 귀신창(Ctrl+0) 전송</span><span className="sm:hidden">⚡ PC전송</span>
+                <span className="hidden sm:inline">⚡ 내 PC로 글자 전송</span><span className="sm:hidden">⚡ PC전송</span>
               </button>
               <button
                 onClick={() => {

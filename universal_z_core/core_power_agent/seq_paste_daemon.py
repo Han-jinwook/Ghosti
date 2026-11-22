@@ -1225,6 +1225,7 @@ DEFAULT_SUPERPOWER_SETTINGS: dict = {
     "sound_enabled": True,
     "sound_volume": 0.25,  # 0.05 ~ 1.0 (기본 25% 은은한 볼륨 강제 스케일링)
     "window_duration_ms": 6500,
+    "ghostkey_enabled": False,  # [원엔진·투도어] 기본 False(모든 Ctrl+0 = 귀신검색창). 귀신키 정식 출시 후 권한 보유 유저가 켰을 때만 입력창 귀신키 분기 활성!
     "auto_typo_enabled": True,
     "e2ee_mailbox_enabled": True,
     "family_shared_slots": ["F1", "F2"],
@@ -1304,6 +1305,8 @@ def update_superpower_settings(patch: dict) -> dict:
                 cfg["window_duration_ms"] = max(2000, min(20000, int(patch["window_duration_ms"])))
             except (ValueError, TypeError):
                 pass
+        if "ghostkey_enabled" in patch and patch["ghostkey_enabled"] is not None:
+            cfg["ghostkey_enabled"] = bool(patch["ghostkey_enabled"])
         if "auto_typo_enabled" in patch and patch["auto_typo_enabled"] is not None:
             cfg["auto_typo_enabled"] = bool(patch["auto_typo_enabled"])
         if "e2ee_mailbox_enabled" in patch and patch["e2ee_mailbox_enabled"] is not None:
@@ -1829,6 +1832,27 @@ def _read_unified_machine_trial_info() -> tuple[Path, dict, str, dict]:
         m_info = {"machineHwid": hwid, "isSubscribed": False}
         machines[hwid] = m_info
     return ledger_path, ledger, hwid, m_info
+
+
+def is_ghostkey_active_mode() -> bool:
+    """귀신키(Door 2) 스위치가 켜져 있고, 유효한 귀신키 권한(귀신키 구독/체험 또는 본체 Pro 구독)이 있는지 판별합니다.
+    False일 때는 어떤 창에서 Ctrl+0을 눌러도 항상 본체 기본 기능인 '👻 귀신검색창(UI ②)'만 열립니다."""
+    cfg = get_superpower_settings()
+    if not bool(cfg.get("ghostkey_enabled", False)):
+        return False
+    try:
+        _, _, _, m_info = _read_unified_machine_trial_info()
+        if bool(m_info.get("isSubscribed")) or bool(m_info.get("isGhostkeyUnlocked")):
+            return True
+        gk_exp = str(m_info.get("ghostkeyExpiresAt") or "").strip()
+        if gk_exp:
+            exp_dt = datetime.datetime.fromisoformat(gk_exp.replace("Z", "+00:00"))
+            now_dt = datetime.datetime.now(exp_dt.tzinfo) if exp_dt.tzinfo else datetime.datetime.now()
+            if exp_dt > now_dt:
+                return True
+    except Exception:
+        pass
+    return False
 
 
 _TRIAL_BADGE_MEM_CACHE: dict = {"ts": 0.0, "mtime_ns": -1, "size": -1, "val": None}
@@ -7280,7 +7304,7 @@ def should_skip_auto_typo(hwnd: int) -> bool:
     if not hwnd:
         return True
     try:
-        auto_enabled = bool(get_superpower_settings().get("auto_typo_enabled", True))
+        auto_enabled = is_ghostkey_active_mode() and bool(get_superpower_settings().get("auto_typo_enabled", True))
         if not auto_enabled:
             return True
 
@@ -8853,6 +8877,35 @@ def main() -> None:
         nonlocal seq_mode, pasting_started, copied_after_trigger, seq_queue, last_summon_raw_clip, last_consumed_image_ts, last_hdrop_copy_ts, last_question_mark_ts, last_drag_select_ts, summon_had_recent_drag, last_alpha_type_ts, pending_first_typo
         global _IS_INPUT_SUMMON_CONTEXT
         now_s = time.time()
+        # [원엔진·투도어 기본 동작 (멀린님 7번 지시 확정)]:
+        # 귀신키 미출시 또는 권한/스위치 비활성 유저는 어느 화면(입력창·바탕화면 무관)에서 Ctrl+0을 눌러도
+        # 무조건 '👻 귀신검색창(UI ②)'이 기본으로 열립니다! (탐색기에서 압축파일 선택 시에만 알집 대체 UI ④ 오픈)
+        if not is_ghostkey_active_mode():
+            if _CURRENT_OPEN_UI_MODE in ("ui2", "ui3", "ui4", "ui1"):
+                disarm_sub_hotkeys()
+                close_ghost_toast()
+                return
+            fg_chk = u32.GetForegroundWindow()
+            proc_chk = _get_process_name_from_hwnd(fg_chk).lower() if fg_chk else ""
+            cls_chk = _get_win_class_only(fg_chk) if fg_chk else ""
+            if (proc_chk == "explorer.exe" and cls_chk in ("CabinetWClass", "ExploreWClass")) or cls_chk in ("Progman", "WorkerW"):
+                try:
+                    sel_p = _get_explorer_selected_paths_safe(fg_chk)
+                    if sel_p and str(sel_p[0]).lower().endswith((".zip", ".7z", ".rar", ".tar", ".gz", ".tgz")):
+                        play_baby_ghost_sound(mode="summon")
+                        disarm_sub_hotkeys()
+                        show_ghost_toast(f"__UI4_ARCHIVE__|{sel_p[0]}", duration_ms=11000)
+                        return
+                except Exception:
+                    pass
+            if proc_chk not in ("python.exe", "pythonw.exe"):
+                _capture_target_hwnd()
+            play_baby_ghost_sound(mode="summon")
+            record_feature_telemetry("ctrl0_summon_bar")
+            disarm_sub_hotkeys()
+            show_ghost_toast("__UI2_SEARCH__|small|", duration_ms=8000)
+            return
+
         summon_had_recent_drag = bool(last_drag_select_ts > last_any_key_ts and (now_s - last_drag_select_ts) <= 20.0)
 
         # [0-A순위: 귀신 변환 직후 5초 이내 Ctrl+0(또는 귀신호출) 1회 입력 ➔ 귀신창을 띄우지 않고 즉시 원상복구!]

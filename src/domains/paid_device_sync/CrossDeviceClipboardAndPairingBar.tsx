@@ -20,7 +20,6 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
     deviceEntitlement,
     syncedClipboardItems,
     thisDeviceRevoked,
-    syncedSnippetsMap,
     refreshDeviceIntegrationState,
     pairWithSixDigitCode,
     unlinkConnectedDevice,
@@ -29,14 +28,12 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
     setDeviceIntegrationSnapshot,
     setShowProModal,
     openSubscriptionCheckout,
-    syncSnippetsNow,
   } = useSaySeeStore();
 
   const [codeInput, setCodeInput] = useState('');
   const [clipDraft, setClipDraft] = useState('');
   const [sendingClip, setSendingClip] = useState(false);
   const [pullingLocalClip, setPullingLocalClip] = useState(false);
-  const [syncingSnippets, setSyncingSnippets] = useState(false);
   const [pairingBusy, setPairingBusy] = useState(false);
   const [revokingDeviceId, setRevokingDeviceId] = useState<string | null>(null);
   const [reconnectingBusy, setReconnectingBusy] = useState(false);
@@ -179,27 +176,6 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {isLoggedIn && deviceEntitlement?.unlimitedBindingUnlocked && (
-            <button
-              type="button"
-              disabled={syncingSnippets}
-              onClick={async () => {
-                setSyncingSnippets(true);
-                await syncSnippetsNow('auto');
-                setSyncingSnippets(false);
-              }}
-              className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-emerald-400/40 text-emerald-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer disabled:opacity-50"
-              title="내 PC 귀신창 F1~F6 개인 상용구를 암호화(E2EE)하여 모든 기기에 동기화합니다"
-            >
-              {syncingSnippets
-                ? '⌨️ 상용구 동기화 중...'
-                : `⌨️ F1~F6 상용구 동기화${
-                    Object.keys(syncedSnippetsMap || {}).length > 0
-                      ? ` (${Object.keys(syncedSnippetsMap).length}개)`
-                      : ''
-                  }`}
-            </button>
-          )}
           {isLoggedIn &&
             !hidePricingForStore &&
             !deviceEntitlement?.isPaidUnlimited &&

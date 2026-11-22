@@ -287,7 +287,7 @@ export const GhostiSubscriptionCheckoutModal: React.FC = () => {
                 <div className="text-[16px] font-black text-white">{receipt.planTitle}</div>
                 <p className="text-[12.5px] text-emerald-200">
                   {spec.category === 'personal'
-                    ? '지금 바로 내 모든 PC·스마트폰과 귀신창 유료 초능력이 무제한으로 열렸습니다.'
+                    ? '지금 바로 내 모든 PC·스마트폰 통합 연결과 귀신검색 Pro(사진·표 OCR · 라벨러)가 무제한으로 열렸습니다.'
                     : '지금 바로 업무 공유 공용 폴더(S: 드라이브)와 팀원 직통 연결·예비 서버가 열렸습니다.'}
                 </p>
               </div>

@@ -1388,7 +1388,7 @@ export function buildMobileRemainingPhotosChoicePrompt(
  * [전환율 보강 ③] 모바일 온보딩 말미 『모바일 ➔ PC 회수 브릿지』 안내 문구 생성
  */
 export const MOBILE_TO_PC_BRIDGE_TEXT =
-  '지금 스마트폰으로 들어오셨네요! 내일 출근해서 PC로 켜시면 카톡·엑셀 작업 시간을 반으로 줄여주는 『⚡ 귀신창 초능력』을 바로 쓰실 수 있게 카톡(나에게 보내기)에 PC 실행 링크를 넣어두실래요?';
+  '지금 스마트폰으로 들어오셨네요! 내일 출근해서 PC로 켜시면 엑셀·한글·PDF 열지 않고 1초 만에 찾는 『👻 귀신검색(Ctrl+0)』과 『👻 귀신비서』를 바로 쓰실 수 있게 카톡(나에게 보내기)에 PC 실행 링크를 넣어두실래요?';
 
 export function buildMobileToPcBridgePrompt(nickname?: string): {
   scenarioId: string;

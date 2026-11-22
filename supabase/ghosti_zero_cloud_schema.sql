@@ -154,6 +154,44 @@ create trigger trg_users_touch
   before update on public.users
   for each row execute function public.ghosti_touch_updated_at();
 
+-- [원엔진·투도어 정식 스키마 분리 (2026-11-22)]: 귀신같이(ghosti)와 귀신키(ghostkey)가 동일 DB를 공유하더라도
+-- 유입 경로·접속 시각·제품별 체험/구독 원장이 절대 덮어써지거나 섞이지 않도록 정식 컬럼·테이블로 명쾌히 분리함
+alter table public.users add column if not exists first_signup_app text check (
+  first_signup_app is null or first_signup_app in ('ghosti', 'ghostkey')
+);
+alter table public.users add column if not exists ghosti_last_login_at timestamptz;
+alter table public.users add column if not exists ghostkey_last_login_at timestamptz;
+alter table public.users add column if not exists ghostkey_notify_opt_in boolean;
+
+create table if not exists public.ghosti_product_subscriptions (
+  email text not null,
+  user_id uuid references public.users(id) on delete cascade,
+  product_code text not null check (product_code in ('ghosti_pro', 'ghosti_work', 'ghostkey')),
+  plan_id text not null default 'free_trial',
+  trial_started_at timestamptz,
+  paid_expires_at timestamptz,
+  last_order_id text,
+  last_paid_coins integer not null default 0,
+  created_at timestamptz not null default now(),
+  updated_at timestamptz not null default now(),
+  primary key (email, product_code)
+);
+
+create index if not exists idx_ghosti_product_subs_user_id on public.ghosti_product_subscriptions(user_id);
+
+alter table public.ghosti_product_subscriptions enable row level security;
+
+drop policy if exists "ghosti_product_subs_select_own" on public.ghosti_product_subscriptions;
+create policy "ghosti_product_subs_select_own"
+  on public.ghosti_product_subscriptions
+  for select
+  using (lower(email) = lower(coalesce(auth.jwt() ->> 'email', '')));
+
+drop trigger if exists trg_ghosti_product_subs_touch on public.ghosti_product_subscriptions;
+create trigger trg_ghosti_product_subs_touch
+  before update on public.ghosti_product_subscriptions
+  for each row execute function public.ghosti_touch_updated_at();
+
 -- ----------------------------------------------------------------------------
 -- 1. 만국공통 귀신같이 여권 (Face Passport) — 1인당 약 15KB 고정
 -- ----------------------------------------------------------------------------

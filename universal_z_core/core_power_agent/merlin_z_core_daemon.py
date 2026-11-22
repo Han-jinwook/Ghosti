@@ -161,7 +161,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.7.4"
+CORE_VERSION = "2.7.5"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -234,6 +234,8 @@ _ALLOWED_ORIGIN_EXACT = {
 _ALLOWED_NETLIFY_SITES = {
     "ghosti",
     "ghosti-app",
+    "ghostkey",
+    "ghostkey-app",
     "sundreamer",
     "merlin",
     "senstalk",

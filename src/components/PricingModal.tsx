@@ -26,33 +26,33 @@ import {
 } from '../services/aiEngine';
 
 const PLAN_LABELS: Record<PricingPlanId, string> = {
-  free_trial: '🆓 1~4번 무료 코어 (귀신비서 · 귀신검색 · 귀신창 · 사진 공유) : 평생 0원 (5·6번 유료 확장 🎁 30일 무료체험 포함)',
-  personal_single_2900: '🆓 1~3번 내 기기 (PC·폰) : 언제나 0원 • 👻 귀신비서 · 👻 귀신검색 · ⚡ 귀신창',
-  personal_sub_3900: '👑 5번 내 기기 통합 (PC+폰+PC+) • 🎁 30일 무료체험 (이후 월 3,900원)',
-  personal_year_35000: '👑 5번 내 기기 통합 (PC+폰+PC+) • 연간 결제 39,000원 (월 3,250원꼴 · 2개월 무료 할인)',
-  personal_year_39000: '👑 5번 내 기기 통합 (PC+폰+PC+) • 연간 결제 39,000원 (월 3,250원꼴 · 2개월 무료 할인)',
-  family_home_5900: '👨‍👩‍👧‍👦 4번 사진 공유 (가족 · 우리집) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  family_home_year_59000: '👨‍👩‍👧‍👦 4번 사진 공유 (가족 · 우리집) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  family_three_8900: '👨‍👩‍👧‍👦 4번 사진 공유 (가족 · 양가 3방) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  family_three_year_89000: '👨‍👩‍👧‍👦 4번 사진 공유 (가족 · 양가 3방) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  club_mini_free_300: '⛰️ 4번 사진 공유 (동호회 · 소모임) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  club_mini_2900: '⛰️ 4번 사진 공유 (동호회 · 소모임) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  club_small_4900: '⛰️ 4번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  club_small_year_49000: '⛰️ 4번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  club_medium_7900: '⛰️ 4번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  club_medium_year_79000: '⛰️ 4번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  club_large_14900: '⛰️ 4번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  club_large_year_149000: '⛰️ 4번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  student_sub_900: '🎓 4번 사진 공유 (동창회 · 학급) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  student_year_9000: '🎓 4번 사진 공유 (동창회 · 학급) • 인원 무제한 평생 0원 (사진·동영상 전용)',
-  work_soho_9900: '💼 6번 업무 공유 (S: 드라이브 · 소호 ~5인 월 9,900원 · 30일 무료체험)',
-  work_soho_year_99000: '💼 6번 업무 공유 (S: 드라이브 · 소호 ~5인 연간 결제 99,000원 · 월 8,250원꼴)',
-  work_biz_19000: '💼 6번 업무 공유 • 소기업 ~20인 (월 19,000원)',
-  work_biz_year_190000: '💼 6번 업무 공유 • 소기업 ~20인 (연 190,000원 · 2개월 무료)',
-  work_biz_19900: '💼 6번 업무 공유 • 소기업 ~20인 (월 19,000원)',
-  work_biz_year_199000: '💼 6번 업무 공유 • 소기업 ~20인 (연 190,000원)',
-  work_pro_29000: '💼 6번 업무 공유 • 중소기업 ~50인 (월 29,000원)',
-  work_pro_year_290000: '💼 6번 업무 공유 • 중소기업 ~50인 (연 290,000원 · 2개월 무료)',
+  free_trial: '🆓 1~3번 무료 코어 (귀신비서 · 귀신검색 · 사진 공유) : 평생 0원 (4·5번 유료 확장 🎁 30일 무료체험 포함)',
+  personal_single_2900: '🆓 1~2번 내 기기 (PC·폰) : 언제나 0원 • 👻 귀신비서 · 👻 귀신검색',
+  personal_sub_3900: '👑 4번 내 기기 통합 Pro (PC+폰+PC+) • 🎁 30일 무료체험 (이후 월 3,900원)',
+  personal_year_35000: '👑 4번 내 기기 통합 Pro (PC+폰+PC+) • 연간 결제 39,000원 (월 3,250원꼴 · 2개월 무료 할인)',
+  personal_year_39000: '👑 4번 내 기기 통합 Pro (PC+폰+PC+) • 연간 결제 39,000원 (월 3,250원꼴 · 2개월 무료 할인)',
+  family_home_5900: '👨‍👩‍👧‍👦 3번 사진 공유 (가족 · 우리집) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  family_home_year_59000: '👨‍👩‍👧‍👦 3번 사진 공유 (가족 · 우리집) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  family_three_8900: '👨‍👩‍👧‍👦 3번 사진 공유 (가족 · 양가 3방) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  family_three_year_89000: '👨‍👩‍👧‍👦 3번 사진 공유 (가족 · 양가 3방) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  club_mini_free_300: '⛰️ 3번 사진 공유 (동호회 · 소모임) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  club_mini_2900: '⛰️ 3번 사진 공유 (동호회 · 소모임) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  club_small_4900: '⛰️ 3번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  club_small_year_49000: '⛰️ 3번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  club_medium_7900: '⛰️ 3번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  club_medium_year_79000: '⛰️ 3번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  club_large_14900: '⛰️ 3번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  club_large_year_149000: '⛰️ 3번 사진 공유 (동호회 · 🎓 동창회) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  student_sub_900: '🎓 3번 사진 공유 (동창회 · 학급) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  student_year_9000: '🎓 3번 사진 공유 (동창회 · 학급) • 인원 무제한 평생 0원 (사진·동영상 전용)',
+  work_soho_9900: '💼 5번 업무 공유 (S: 드라이브 · 소호 ~5인 월 9,900원 · 30일 무료체험)',
+  work_soho_year_99000: '💼 5번 업무 공유 (S: 드라이브 · 소호 ~5인 연간 결제 99,000원 · 월 8,250원꼴)',
+  work_biz_19000: '💼 5번 업무 공유 • 소기업 ~20인 (월 19,000원)',
+  work_biz_year_190000: '💼 5번 업무 공유 • 소기업 ~20인 (연 190,000원 · 2개월 무료)',
+  work_biz_19900: '💼 5번 업무 공유 • 소기업 ~20인 (월 19,000원)',
+  work_biz_year_199000: '💼 5번 업무 공유 • 소기업 ~20인 (연 190,000원)',
+  work_pro_29000: '💼 5번 업무 공유 • 중소기업 ~50인 (월 29,000원)',
+  work_pro_year_290000: '💼 5번 업무 공유 • 중소기업 ~50인 (연 290,000원 · 2개월 무료)',
 };
 
 /**
@@ -481,15 +481,15 @@ export const PricingModal: React.FC = () => {
                   }}
                   className="px-2.5 py-1 rounded-full bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[11px] font-bold"
                 >
-                  ✨ 1~4번 무료 모드 (내 기기 + 사진 공유 0원)로 전환
+                  ✨ 1~3번 무료 모드 (내 기기 + 사진 공유 0원)로 전환
                 </button>
               )}
             </div>
             <h2 className="font-headline-lg text-[21px] md:text-[25px] text-white font-black tracking-tight mt-1">
-              1~4번(귀신비서 · 귀신검색 · 귀신창 · 사진 공유)은 평생 0원! 5·6번(내 기기 통합 · 업무 공유)은 🎁 30일 무료체험 후 결정하세요
+              1~3번(귀신비서 · 귀신검색 · 사진 공유)은 평생 0원! 4·5번(내 기기 통합 · 업무 공유)은 🎁 30일 무료체험 후 결정하세요
             </h2>
             <p className="font-body-sm text-[13px] text-zinc-200 font-medium">
-              • 내 기기(귀신비서·귀신검색·귀신창)와 4번 사진 공유(👨‍👩‍👧‍👦가족 · ⛰️동호회 · 🎓동창회)는 내 PC 하드 직결로 클라우드 서버비가 안 들기 때문에 인원 무제한 평생 0원입니다. (단, 4번 사진 공유는 오직 사진·동영상 전용이며, 업무 서류·S: 드라이브는 6번 업무 공유 전용입니다.)
+              • 내 기기(귀신비서·귀신검색)와 3번 사진 공유(👨‍👩‍👧‍👦가족 · ⛰️동호회 · 🎓동창회)는 내 PC 하드 직결로 클라우드 서버비가 안 들기 때문에 인원 무제한 평생 0원입니다. (단, 3번 사진 공유는 오직 사진·동영상 전용이며, 업무 서류·S: 드라이브는 5번 업무 공유 전용입니다.)
             </p>
           </div>
 
@@ -509,7 +509,7 @@ export const PricingModal: React.FC = () => {
         >
           <div className="flex flex-col gap-0.5">
             <p className="font-body-sm text-[13px] md:text-[13.5px] text-amber-200 font-extrabold leading-relaxed">
-              🎁 <strong className="underline decoration-amber-300 text-amber-300">유료 확장(5번 내 기기 통합 · 6번 업무 공유) 신용카드 등록 없이 30일 무료체험 제공 + {activeMasterTier.bannerHeadline}</strong>
+              🎁 <strong className="underline decoration-amber-300 text-amber-300">유료 확장(4번 내 기기 통합 · 5번 업무 공유) 신용카드 등록 없이 30일 무료체험 제공 + {activeMasterTier.bannerHeadline}</strong>
             </p>
             <span className="text-[11px] text-zinc-300">
               연간 결제 혜택: <strong>10개월 치 요금으로 12개월 이용 (2개월 무료 할인)</strong> · 사진 공유(패밀리·동호회·동창회)는 인원·장수 제한 없이 <strong>평생 100% 무제한 무료</strong>
@@ -525,21 +525,21 @@ export const PricingModal: React.FC = () => {
         {/* 모바일 접속자 편의: 검색 없이 내 이메일/카톡으로 PC 마스터 접속 주소 보내기 */}
         <PcMasterQuickSendPanel compact />
 
-        {/* 1. 좌측 사이드바 메뉴와 100% 일치하는 요금 체계 (평생 무료 4코어 / 선택형 유료 확장 2종) */}
+        {/* 1. 좌측 사이드바 메뉴와 100% 일치하는 요금 체계 (평생 무료 3코어 / 선택형 유료 확장 2종) */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          {/* ① [평생 무료] 내 기기 (PC·폰): 👻 귀신비서 · 👻 귀신검색 · ⚡ 귀신창 */}
+          {/* ① [평생 무료] 내 기기 (PC·폰): 👻 귀신비서 · 👻 귀신검색 */}
           <div className="p-5 rounded-2xl bg-[#18181B] border border-emerald-400/40 flex flex-col justify-between gap-4">
             <div className="flex flex-col gap-2.5">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-bold">
-                  1~3번 [평생 무료] 내 기기 (PC·폰)
+                  1~2번 [평생 무료] 내 기기 (PC·폰)
                 </span>
                 <span className="px-2 py-0.5 rounded bg-emerald-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold">
                   평생 0원 · 신용카드 등록 없음
                 </span>
               </div>
               <h3 className="font-headline-sm text-[19px] text-white font-extrabold">
-                🆓 내 기기 (PC·폰) — 👻 귀신비서 · 👻 귀신검색 · ⚡ 귀신창
+                🆓 내 기기 (PC·폰) — 👻 귀신비서 · 👻 귀신검색
               </h3>
 
               <div className="p-4 rounded-xl bg-zinc-950/90 border border-emerald-400/35 flex flex-col justify-between gap-2.5">
@@ -552,22 +552,22 @@ export const PricingModal: React.FC = () => {
                   </span>
                 </div>
                 <p className="font-body-sm text-[12px] text-emerald-200/95 font-bold">
-                  &ldquo;혼자 쓰는 내 PC · 내 폰의 1초 AI 내용검색(귀신검색)과 PC 속도·용량 주치의(귀신비서), 기본 귀신창(Ctrl+0)은 평생 0원&rdquo;
+                  &ldquo;혼자 쓰는 내 PC · 내 폰의 1초 AI 내용검색(귀신검색 · Ctrl+0)과 PC 속도·용량·보안 주치의(귀신비서)는 평생 0원&rdquo;
                 </p>
                 <p className="font-body-sm text-[12px] text-zinc-300 leading-relaxed">
-                  • 🎯 <strong>귀신검색</strong> (내 기기 사진·영상·서류 1초 내용검색 · 바탕화면·다운로드·최근 100개 우선 개통 · 평생 0원)<br />
-                  • 👻 <strong>귀신비서</strong> (PC 속도 랙 처치 · 수요일 오후 1시 주간 건강검진 · 중복 사진 정리 · 빨간 손가락 <code>👆</code> 수리 · 평생 0원)
+                  • 🎯 <strong>귀신검색 (Ctrl+0)</strong> (내 기기 사진·영상·서류 1초 내용검색 · 바탕화면·다운로드·최근 100개 우선 개통 · 평생 0원)<br />
+                  • 👻 <strong>귀신비서</strong> (알약·고클린 대체 보안·속도·용량 케어 · 수요일 오후 1시 주간 점검 · 중복 사진 정리 · 빨간 손가락 <code>👆</code> 수리 · 평생 0원)
                 </p>
               </div>
             </div>
           </div>
 
-          {/* ② [4번 — 평생 무료] 사진 공유: 👨‍👩‍👧‍👦 가족 / ⛰️ 동호회 / 🎓 동창회 (오직 사진·동영상 전용) */}
+          {/* ② [3번 — 평생 무료] 사진 공유: 👨‍👩‍👧‍👦 가족 / ⛰️ 동호회 / 🎓 동창회 (오직 사진·동영상 전용) */}
           <div className="p-5 rounded-2xl bg-[#18181B] border-2 border-emerald-400/60 flex flex-col justify-between gap-4">
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-md bg-emerald-400 text-zinc-950 font-label-sm text-[11.5px] font-black">
-                  4번 [평생 무료] 사진 공유 (👨‍👩‍👧‍👦 가족 · ⛰️ 동호회 · 🎓 동창회)
+                  3번 [평생 무료] 사진 공유 (👨‍👩‍👧‍👦 가족 · ⛰️ 동호회 · 🎓 동창회)
                 </span>
                 <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/50 text-emerald-200 font-label-sm text-[10.5px] font-extrabold">
                   📸 사진·동영상 전용 · 인원 무제한 평생 0원
@@ -589,7 +589,7 @@ export const PricingModal: React.FC = () => {
                 <p className="font-body-sm text-[12px] text-zinc-200 leading-relaxed">
                   • 👨‍👩‍👧‍👦 <strong>가족</strong> (우리집 · 친가 · 처가) / ⛰️ <strong>동호회</strong> (산악회 · 골프 · 소모임) / 🎓 <strong>동창회</strong> 모두 <strong>인원수·장수 제한 없이 100% 평생 무료</strong>!<br />
                   • 💬 <strong>카톡 단톡방 인앱 무가입 1초 프리뷰</strong> + 🛂 <strong>각 방 인물 얼굴 1초 찾기</strong> 기본 제공<br />
-                  • ⚠️ <strong className="text-amber-300">오직 사진 · 동영상 공유만 작동</strong>합니다. (엑셀·한글·PDF·워드 등 업무 문서 공유 및 윈도우 탐색기 <code>S: 드라이브</code> 마운트는 <strong>6번 업무 공유(월 9,900원~ · 30일 무료체험)</strong> 전용입니다.)
+                  • ⚠️ <strong className="text-amber-300">오직 사진 · 동영상 공유만 작동</strong>합니다. (엑셀·한글·PDF·워드 등 업무 문서 공유 및 윈도우 탐색기 <code>S: 드라이브</code> 마운트는 <strong>5번 업무 공유(월 9,900원~ · 30일 무료체험)</strong> 전용입니다.)
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-3 gap-1.5 pt-1">
                   <button
@@ -618,28 +618,28 @@ export const PricingModal: React.FC = () => {
             </div>
           </div>
 
-          {/* ── 무료(1~4번) / 유료 확장(5·6번 — 30일 무료체험) 경계선 ── */}
+          {/* ── 무료(1~3번) / 유료 확장(4·5번 — 30일 무료체험) 경계선 ── */}
           <div className="md:col-span-2 flex items-center gap-2 sm:gap-3 py-1">
             <div className="hidden sm:block flex-1 border-t border-dashed border-amber-400/40" />
             <span className="w-full sm:w-auto text-center break-keep px-3 py-1.5 rounded-2xl sm:rounded-full bg-amber-500/15 border border-amber-400/40 text-amber-300 font-label-mono text-[11px] sm:text-[11.5px] font-extrabold">
-              🎁 5·6번 유료 확장 기능 (신용카드 등록 없이 30일 무료체험 · 연간 결제 2개월 무료)
+              🎁 4·5번 유료 확장 기능 (신용카드 등록 없이 30일 무료체험 · 연간 결제 2개월 무료)
             </span>
             <div className="hidden sm:block flex-1 border-t border-dashed border-amber-400/40" />
           </div>
 
-          {/* ③ [5번 — 30일 무료체험 / 유료] 내 기기 통합 (PC+폰+PC+): 🔗 내 기기 연결 (PC↔폰) + ⚡ 귀신창 확장 */}
+          {/* ③ [4번 — 30일 무료체험 / 유료] 내 기기 통합 Pro (PC+폰+PC+): 🔗 내 기기 연결 (PC↔폰) + 📝 사진·표 OCR · 🏷️ 귀신 라벨러 */}
           <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-950/75 via-[#18181B] to-[#18181B] border-2 border-emerald-400 shadow-[0_0_28px_rgba(16,185,129,0.22)] md:col-span-2 flex flex-col justify-between gap-4">
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-md bg-emerald-400 text-zinc-950 font-label-sm text-[11.5px] font-black">
-                  5번 [🎁 30일 무료체험 / 유료] 내 기기 통합 (PC+폰+PC+)
+                  4번 [🎁 30일 무료체험 / 유료] 내 기기 통합 Pro (PC+폰+PC+)
                 </span>
                 <span className="px-2 py-0.5 rounded bg-amber-400/20 border border-amber-400/50 text-amber-300 font-label-sm text-[10.5px] font-extrabold">
-                  🔗 내 기기 연결 (PC↔폰) · ⚡ 귀신창 확장 (Ctrl+0) · 대수 무제한
+                  🔗 내 기기 연결 (PC↔폰) · 📝 사진·표 OCR · 🏷️ 귀신 라벨러 · 대수 무제한
                 </span>
               </div>
               <h3 className="font-headline-sm text-[19px] text-white font-extrabold">
-                👑 내 기기 통합 — &ldquo;카톡 ‘나에게 보내기’ 끝, 내 모든 기기를 하나로&rdquo;
+                👑 내 기기 통합 Pro — &ldquo;카톡 ‘나에게 보내기’ 끝, 내 모든 기기를 하나로&rdquo;
               </h3>
 
               <div className="p-4 rounded-xl bg-zinc-950/90 border border-emerald-400/50 flex flex-col justify-between gap-2.5">
@@ -662,7 +662,7 @@ export const PricingModal: React.FC = () => {
                 <p className="font-body-sm text-[12px] text-zinc-200 leading-relaxed">
                   • 🔗 <strong>내 기기 연결 (PC↔폰)</strong>: 카톡 ‘나에게 보내기’ &amp; 클라우드 월세 종식 (내 폰 ⇄ 집 PC ⇄ 회사 PC ⇄ 노트북 원본 직결 통합 검색)<br />
                   • 📋 <strong>무버튼 양방향 클립보드 ‘암호화 우체통(E2EE)’</strong>: 꺼져 있던 집 PC 부팅 즉시 회사·폰에서 복사한 텍스트 100개·스샷 10장 자동 장전<br />
-                  • ⚡ <strong>귀신창·귀신검색 유료 확장</strong>: 사진·표 OCR 창, 귀신 라벨러, [2] 스샷·PDF 변환, [3] 다중합본, [4] 번호·일정, [5] 창고정 전 기기 무제한 해금
+                  • 📝 <strong>귀신검색 Pro 유료 확장</strong>: 사진·표 OCR 창(이미지 속 글자·엑셀 표 1초 추출·이동), 귀신 라벨러(AI 자동 파일명 정리) 전 기기 무제한 해금
                 </p>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                   <button
@@ -684,12 +684,12 @@ export const PricingModal: React.FC = () => {
             </div>
           </div>
 
-          {/* ④ [6번 — 30일 무료체험 / 유료] 업무 공유 (소호 ~5인 9,900원 / 소기업 ~20인 19,000원 / 중소기업 ~50인 29,000원) */}
+          {/* ④ [5번 — 30일 무료체험 / 유료] 업무 공유 (소호 ~5인 9,900원 / 소기업 ~20인 19,000원 / 중소기업 ~50인 29,000원) */}
           <div className="p-5 rounded-2xl bg-[#18181B] border-2 border-cyan-400/45 md:col-span-2 flex flex-col justify-between gap-4">
             <div className="flex flex-col gap-2.5">
               <div className="flex items-center justify-between gap-2 flex-wrap">
                 <span className="px-2.5 py-0.5 rounded-md bg-cyan-400 text-zinc-950 font-label-sm text-[11.5px] font-extrabold">
-                  6번 [🎁 30일 무료체험 · 월 9,900원~] 업무 공유 • 공용 폴더(S: 드라이브) · 문서/계약서 공유
+                  5번 [🎁 30일 무료체험 · 월 9,900원~] 업무 공유 • 공용 폴더(S: 드라이브) · 문서/계약서 공유
                 </span>
                 <span className="px-2.5 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-extrabold">
                   💽 공용 폴더(S: 드라이브) 종단간 암호화(E2EE) · 🛡️ 랜섬웨어 격리 · 🧾 세금계산서 발행

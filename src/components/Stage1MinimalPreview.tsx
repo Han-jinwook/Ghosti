@@ -851,7 +851,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
           }
           useSaySeeStore.setState({
             lastQuarantineToast: String(
-              gj.message || '🔒 [귀신 라벨러] 30일 무료체험 또는 [5. 내 기기 통합] 구독 후 사용 가능합니다 (S: 업무 드라이브는 무료).'
+              gj.message || '🔒 [귀신 라벨러] 30일 무료체험 또는 [4. 내 기기 통합 Pro · 월 3,900원] 구독 후 사용 가능합니다 (S: 업무 드라이브는 무료).'
             ),
           });
           return false;
@@ -869,7 +869,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
     }
     useSaySeeStore.setState({
       lastQuarantineToast:
-        '🔒 [귀신 라벨러] 유료 기능입니다. [5. 내 기기 통합] 30일 무료체험 시작 또는 구독 시 무제한 사용 가능(S: 업무 드라이브는 무료)합니다.',
+        '🔒 [귀신 라벨러] Pro 전용 유료 기능입니다. [4. 내 기기 통합 Pro · 월 3,900원] 30일 무료체험 시작 또는 구독 시 무제한 사용 가능(S: 업무 드라이브는 무료)합니다.',
     });
     return false;
   };

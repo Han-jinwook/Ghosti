@@ -52,28 +52,28 @@ def _is_s_drive_path(raw_path: str) -> bool:
     return "/s:/" in norm or norm.startswith("s:/")
 
 
-def _verify_hub_subscription(hub_token: str) -> bool:
-    """Merlin Hub 서버(device_get_state)로 실제 유료 구독 여부를 검증하고 10분간 메모리 캐싱합니다."""
+def _verify_hub_entitlements(hub_token: str) -> Dict[str, bool]:
+    """Merlin Hub 서버(device_get_state)로 본체 Pro 구독 및 귀신키(GhostKey) 권한을 분리 검증합니다."""
     tok = str(hub_token or "").strip()
     if len(tok) < 16:
-        return False
+        return {"proPaid": False, "proUnlocked": False, "ghostkeyUnlocked": False}
     tok_hash = hashlib.sha256(tok.encode("utf-8")).hexdigest()
     now_m = time.monotonic()
     with _HUB_SUB_CACHE_LOCK:
         cached = _HUB_SUB_CACHE.get(tok_hash)
-        if cached and (now_m - cached[0]) < 600.0:
-            return cached[1]
-    verified = False
+        if cached and (now_m - cached[0]) < 300.0 and isinstance(cached[1], dict):
+            return dict(cached[1])
+    res_map = {"proPaid": False, "proUnlocked": False, "ghostkeyUnlocked": False}
     try:
         import urllib.request
 
         req = urllib.request.Request(
             "https://ghosti.sundreamer.app/.netlify/functions/hub-supabase-bridge",
-            data=json.dumps({"op": "device_get_state", "hubToken": tok}).encode("utf-8"),
+            data=json.dumps({"action": "device_get_state"}).encode("utf-8"),
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {tok}",
-                "User-Agent": "MerlinZCore/2.6",
+                "User-Agent": "MerlinZCore/2.7.5",
             },
             method="POST",
         )
@@ -81,22 +81,33 @@ def _verify_hub_subscription(hub_token: str) -> bool:
             payload = json.loads(resp.read().decode("utf-8", errors="ignore") or "{}")
         ent = payload.get("entitlement") if isinstance(payload, dict) else None
         if isinstance(ent, dict):
-            verified = bool(ent.get("isPaidUnlimited"))
+            pro_paid = bool(ent.get("isPaidUnlimited"))
+            pro_unl = bool(pro_paid or ent.get("trialActive") or ent.get("ocrAndLabelerUnlocked"))
+            gk_unl = bool(ent.get("ghostkeySubscriptionUnlocked") or pro_unl)
+            res_map = {"proPaid": pro_paid, "proUnlocked": pro_unl, "ghostkeyUnlocked": gk_unl}
     except Exception:
-        return False
+        return res_map
     with _HUB_SUB_CACHE_LOCK:
-        _HUB_SUB_CACHE[tok_hash] = (time.monotonic(), verified)
-    return verified
+        _HUB_SUB_CACHE[tok_hash] = (time.monotonic(), res_map)  # type: ignore[assignment]
+    return dict(res_map)
+
+
+def _verify_hub_subscription(hub_token: str) -> bool:
+    return bool(_verify_hub_entitlements(hub_token).get("proPaid"))
 
 
 def _resolve_verified_subscription(data: Dict[str, Any], m_entry: Dict[str, Any]) -> bool:
-    """클라이언트의 단순 isSubscribed=True 위변조를 차단하고 검증된 원장/Hub 토큰만 신뢰합니다."""
-    if m_entry.get("isSubscribedVerified") is True:
-        return True
+    """클라이언트의 단순 isSubscribed=True 위변조를 차단하고 검증된 원장/Hub 토큰만 신뢰합니다.
+    GhostKey(1,900원) 권한은 m_entry['isGhostkeyUnlocked']에만 따로 저장하며, 본체 Pro(isSubscribed)는 절대 켜지 않습니다."""
     hub_tok = str(data.get("hubToken") or data.get("accessToken") or "").strip()
-    if hub_tok and _verify_hub_subscription(hub_tok):
-        m_entry["isSubscribedVerified"] = True
-        m_entry["isSubscribed"] = True
+    if hub_tok:
+        ents = _verify_hub_entitlements(hub_tok)
+        m_entry["isGhostkeyUnlocked"] = bool(ents.get("ghostkeyUnlocked"))
+        if ents.get("proPaid"):
+            m_entry["isSubscribedVerified"] = True
+            m_entry["isSubscribed"] = True
+            return True
+    if m_entry.get("isSubscribedVerified") is True:
         return True
     return False
 
@@ -509,6 +520,8 @@ def get_superpower_status(params: Dict[str, Any] | None = None) -> Dict[str, Any
         "expired_features_count": ft_res["expired_count"],
         "cross_device_trial": cross_res,
         "is_subscribed": bool(is_subscribed or trial_status == "SUBSCRIBED"),
+        "is_ghostkey_unlocked": bool(m_entry.get("isGhostkeyUnlocked") or is_subscribed or trial_status == "SUBSCRIBED"),
+        "ghostkey_enabled": bool(spd.get_superpower_settings().get("ghostkey_enabled", False)),
         "web_launcher_url": spd.GHOSTI_WEB_URL,
         "snippets": get_snippets(),
         "settings": spd.get_superpower_settings(),

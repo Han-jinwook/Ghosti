@@ -788,7 +788,8 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
       aria-label="귀신창 3대 창 UI"
       className="w-full rounded-3xl bg-[#0B0D12] border border-white/10 p-4 sm:p-6 flex flex-col gap-5 text-zinc-100 shadow-xl"
     >
-      {/* 1. 상단 심플 헤더 & 3대 창 UI 탭 스위치 */}
+      {/* 1. 상단 심플 헤더 & 3대 창 UI 탭 스위치 (독립 사진·표 OCR 모달 호출 시에는 은닉) */}
+      {!externalOcrPhoto && (
       <div className="flex flex-col gap-3.5 pb-4 border-b border-white/10">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -877,6 +878,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
           })}
         </div>
       </div>
+      )}
 
       {/* ════════════════════════════════════════════════════════════════════════
           [창 UI ①] 기본 귀신창 (슬림 2줄 + 상용구 F1~F12 + 클립보드)
@@ -1755,13 +1757,6 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
               {lastInsertedSpotNotice && (
                 <div className="flex flex-wrap items-center justify-between gap-2 text-[12px] font-extrabold text-emerald-300">
                   <span>{lastInsertedSpotNotice}</span>
-                  <button
-                    type="button"
-                    onClick={() => setWindowTab('ui1_basic')}
-                    className="text-[11px] text-amber-300 hover:underline cursor-pointer"
-                  >
-                    기본 귀신창으로 돌아가기 ➔
-                  </button>
                 </div>
               )}
 
@@ -1795,6 +1790,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
       {/* ════════════════════════════════════════════════════════════════════════
           [하단 확장 유틸리티 토글] 기본은 1줄로 접어두고 관심 있을 때 클릭해 펼침
          ════════════════════════════════════════════════════════════════════════ */}
+      {!externalOcrPhoto && (
       <div className="rounded-2xl bg-zinc-950/90 border border-white/10 overflow-hidden">
         <div
           onClick={() => setShowAdvancedUtils((v) => !v)}
@@ -1897,6 +1893,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
           </div>
         )}
       </div>
+      )}
 
       {/* 조건부 팝업 모달들 (클릭 시에만 깔끔하게 표시) */}
       {activePromoModal === 'opt_in_30d' && (
@@ -2192,7 +2189,7 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
                 setGateState('expired');
                 setGateMessage(
                   isMachineCodeMsg
-                    ? '🔒 30일 무료체험이 만료되었습니다. [5번 내 기기 통합 · 월 3,900원]에서 무제한 해금되며, 무료 기본기 검색은 평생 0원입니다.'
+                    ? '🔒 30일 무료체험이 만료되었습니다. [4번 내 기기 통합 Pro · 월 3,900원]에서 무제한 해금되며, 무료 기본기 검색은 평생 0원입니다.'
                     : rawMsg
                 );
                 setLoading(false);
@@ -2221,7 +2218,7 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
           if (!ent?.isPaidUnlimited && !ent?.trialActive) {
             if (!cancelled) {
               setGateState('need_opt_in');
-              setGateMessage('🎁 [사진·표 OCR 창🔒]은 신용카드 등록 없이 [5. 내 기기 통합]에서 30일 무제한 무료체험 시작 후 사용하실 수 있습니다.');
+              setGateMessage('🎁 [사진·표 OCR 창🔒]은 신용카드 등록 없이 [4. 내 기기 통합 Pro · 월 3,900원]에서 30일 무제한 무료체험 시작 후 사용하실 수 있습니다.');
               setLoading(false);
             }
             return;
@@ -2412,7 +2409,7 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
       >
         <div className="flex flex-wrap items-center justify-between gap-3 border-b border-white/10 pb-3">
           <div className="flex items-center gap-2.5 min-w-0">
-            <GhostBabyMascotBadge subtitle="📝 사진·표 OCR 창🔒 (창 UI ③ 독립 창 · 실제 글자·엑셀 표 1초 추출)" />
+            <GhostBabyMascotBadge subtitle="📝 사진·표 OCR 창🔒 (내 기기 통합 Pro · 실제 글자·엑셀 표 1초 추출)" />
             <span className="text-[14px] font-black text-white truncate">{photo.name}</span>
             {trialBadge && (
               <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 border border-amber-300/50 text-amber-200 text-[11px] font-extrabold shrink-0">
@@ -2481,7 +2478,7 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
                 }}
                 className="px-5 py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[13px] font-black cursor-pointer"
               >
-                👑 5번 내 기기 통합 (월 3,900원) 안내 보기
+                👑 4번 내 기기 통합 Pro (월 3,900원) 안내 보기
               </button>
               <button
                 type="button"
