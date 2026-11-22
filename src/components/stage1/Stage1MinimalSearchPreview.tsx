@@ -1236,7 +1236,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-950/80 border border-slate-200/90 dark:border-white/10 flex flex-col gap-1">
             <span className="font-extrabold text-slate-900 dark:text-white">① 📱 내 기기 통합 소환🔒</span>
             <span className="text-slate-600 dark:text-zinc-400 leading-snug">
-              동일 이메일 연결 시 핸드폰 사진·타 PC 파일 통합 노출 &amp; 폰 촬영 직후 <strong className="text-teal-700 dark:text-teal-300">1초 공간이동 (전송 후 1분간 자동 안내)</strong> · 30일 만료 시 원격 노출만 OFF되며 이미 내 PC 폴더에 복사된 원본 파일은 영구 보존
+              동일 이메일 연결 시 핸드폰 사진·타 PC 파일 통합 노출 &amp; 폰 촬영 직후 <strong className="text-teal-700 dark:text-teal-300">내 PC 1초 공간이동</strong> · 30일 만료 시 원격 노출만 OFF되며 이미 내 PC 폴더에 복사된 원본 파일은 영구 보존
             </span>
           </div>
           <div className="p-3 rounded-xl bg-slate-50 dark:bg-zinc-950/80 border border-slate-200/90 dark:border-white/10 flex flex-col gap-1">
