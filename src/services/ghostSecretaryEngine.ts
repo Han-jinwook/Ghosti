@@ -33,7 +33,7 @@ export const GHOST_SECRETARY_AVATAR_SRC =
 
 /** 손보기·진단·복원·설정 명령 문장 판별 — '부팅 경과 시간 진단해줘', '보안프로그램 정리해줘', '시작프로그램 목록 보여줘' 같은 실행 요청이 FAQ(보안·요금) 키워드에 가로채이지 않도록 보호 */
 const CARE_COMMAND_RE =
-  /(정리|지워|삭제|청소|클리너|cleanx|클린\s*x|클린엑스|구독\s*해지|정기\s*(?:구독|결제)|자동\s*결제|주간\s*결제|검진|진단|점검|부팅|재부팅|켜\s*둔|경과|시작\s*프로그램|자동\s*실행|목록|느려|느린|버벅|빨라|고쳐|치워|꺼\s*(?:줘|주세요)|최적화|사양|스펙|상태\s*봐|용량|메모리|램|디스크|백신|디펜더|바이러스|랜섬웨어|복원|복구|되돌려|바탕화면|다운로드|휴지통|실적|보고서|온보딩|문의방|상용구|복사\s*기록|진행해|실행해|적출|언인스톨|알려\s*(?:줘|주세요)|보여\s*(?:줘|주세요)|찾아\s*(?:줘|주세요))/i;
+  /(정리|지워|삭제|청소|클리너|cleanx|클린\s*x|클린엑스|구독\s*해지|정기\s*(?:구독|결제)|자동\s*결제|주간\s*결제|검진|진단|점검|부팅|재부팅|켜\s*둔|경과|시작\s*프로그램|자동\s*실행|목록|느려|느린|버벅|빨라|고쳐|치워|꺼\s*(?:줘|주세요)|최적화|사양|스펙|상태\s*봐|용량|메모리|램|디스크|백신|디펜더|바이러스|랜섬웨어|복원|복구|되돌려|바탕화면|다운로드|휴지통|실적|보고서|온보딩|문의방|복사\s*기록|진행해|실행해|적출|언인스톨|알려\s*(?:줘|주세요)|보여\s*(?:줘|주세요)|찾아\s*(?:줘|주세요))/i;
 
 /** 대본집 부분 문자열 오매칭 방지 (예: '얼마나' 안의 '얼마'가 요금 안내로 튀는 현상, '보안프로그램' 안의 '보안'이 개인정보 FAQ로 튀는 현상 차단) */
 function matchesPlaybookKeyword(text: string, kw: string, scenarioId: string): boolean {
@@ -354,7 +354,7 @@ export function parseNicknameSettingIntent(
   const t = raw.trim();
   if (!t || t.length > 50) return null;
   // 파일·폴더·요일·시간·귀신창·여권·구독·청소앱 설정/문의 명령과 혼동 방지
-  if (/파일|폴더|사진|문서|여권|\d+\s*번|요일|시간|소리|효과음|라벨러|검진|알림|귀신창|단축키|상용구|구독|해지|결제|환불|청소\s*앱|클리너|cleanx|클린\s*x|클린엑스/i.test(t)) return null;
+  if (/파일|폴더|사진|문서|여권|\d+\s*번|요일|시간|소리|효과음|라벨러|검진|알림|귀신검색창|단축키|구독|해지|결제|환불|청소\s*앱|클리너|cleanx|클린\s*x|클린엑스/i.test(t)) return null;
 
   // 1) 내 이름/별명 조회 ("내 이름이 뭐야?", "내 별명 뭐라고 했지?", "나 누구야?")
   if (
@@ -944,16 +944,16 @@ export function resolveGhostSecretaryTurn(
     if (!ctx.isMobileEnv) return msg;
     return msg
       .replace(
-        /왼쪽 두 번째 메뉴인 『👻 귀신검색』을 눌러서/g,
-        '화면 맨 위 검색창(또는 🎤 마이크)에서'
+        /왼쪽 두 번째 메뉴인 『(?:👻\s*)?귀신검색』을 눌러서/g,
+        '화면 맨 위 검색창(또는 마이크)에서'
       )
       .replace(
-        /왼쪽 두 번째 메뉴인 『👻 귀신검색』을 누르시거나,\s*바탕화면 빈 곳에서 『Ctrl \+ 0』\(또는 『Ctrl \+ 우클릭』\)을 눌러/g,
-        '화면 맨 위 검색창에 글자로 입력하시거나 🎤 마이크 버튼을 눌러'
+        /왼쪽 두 번째 메뉴인 『(?:👻\s*)?귀신검색』을 누르시거나,\s*바탕화면 빈 곳에서 『Ctrl \+ 0』\(또는 『Ctrl \+ 우클릭』\)(?:을 눌러|으로)/g,
+        '화면 맨 위 검색창에 글자로 입력하시거나 마이크 버튼을 눌러'
       )
       .replace(
-        /왼쪽 두 번째 메뉴\s*(\*\*)?『👻 귀신검색』(\*\*)?(\(또는 단축키 `Ctrl \+ 0`\))?에서/g,
-        '화면 맨 위 **통합 검색창(또는 🎤 마이크)**에서'
+        /왼쪽 두 번째 메뉴\s*(\*\*)?『(?:👻\s*)?귀신검색』(\*\*)?(\(또는 단축키 `Ctrl \+ 0`\))?에서/g,
+        '화면 맨 위 **통합 검색창(또는 마이크)**에서'
       );
   };
 
@@ -967,8 +967,8 @@ export function resolveGhostSecretaryTurn(
   if (isIosMobileBrowserOrApp() && isCleanerOrSubscriptionManageText) {
     return {
       scenarioId: 'ios_safe_cleaner_and_subscription_guide',
-      text: '🍎 **아이폰(iOS)은 애플 보안 정책상 악성 청소앱이 자동 침투할 수 없으며, 정기구독 확인은 [아이폰 설정 > 내 이름(Apple 계정) > 구독]에서 안전하게 관리하실 수 있습니다.**',
-      followUps: ['📱 내 폰 사진 자동 점검 결과 볼래', '🔍 맨 위 검색창으로 바로 찾아볼래'],
+      text: '**아이폰(iOS)은 애플 보안 정책상 악성 청소앱이 자동 설치되지 않으며, 정기구독 확인은 [아이폰 설정 > 내 이름(Apple 계정) > 구독]에서 관리하실 수 있습니다.**',
+      followUps: ['내 폰 사진 점검 결과 볼래', '맨 위 검색창으로 바로 찾아볼래'],
       nextState: st.awaitingNickname ? { ...st, awaitingNickname: false } : st,
     };
   }
@@ -982,9 +982,9 @@ export function resolveGhostSecretaryTurn(
     const nickLabel = nickname ? `${nickname}님! ` : '';
     return {
       scenarioId: 'passport_manual_open_guide',
-      text: `${nickLabel}🛂 여권은 화면 오른쪽 위 **[🐾 내 프로필] ➔ [🛂 여권]**에서 보실 수 있어요! 🔒`,
+      text: `${nickLabel}여권은 화면 오른쪽 위 **[내 프로필] ➔ [여권]**에서 확인하실 수 있어요.`,
       followUps: ctx.isMobileEnv
-        ? ['🔍 맨 위 검색창으로 바로 찾아볼래']
+        ? ['맨 위 검색창으로 바로 찾아볼래']
         : ['귀신검색으로 내 파일 찾아볼래'],
       nextState: { ...st, awaitingNickname: false },
     };
@@ -1021,7 +1021,7 @@ export function resolveGhostSecretaryTurn(
     if (nick && /^[ㄱ-ㅎㅏ-ㅣ]+$/.test(nick)) {
       return {
         scenarioId: 'nickname_jamo_reask',
-        text: '앗, 초성 대신 편하게 부를 수 있는 별명(예: 은호, 멀린)으로 알려주실래요? 지금 바로 진짜 내 컴퓨터 점검부터 해보고 싶으시면 아래 버튼을 눌러보셔도 돼요! 👻✨',
+        text: '초성 대신 부르기 편한 별명(예: 은호, 멀린)으로 알려주실래요? 먼저 컴퓨터 점검부터 진행하시려면 아래 버튼을 눌러보세요.',
         followUps: [
           '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
           '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
@@ -1117,9 +1117,9 @@ export function resolveGhostSecretaryTurn(
     return {
       scenarioId: 'cleanup_defer_remaining_flexible',
       text: adaptSearchGuideForMobile(
-        `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두었어요 👻✨ 그럼 바로 다음 순서로 왼쪽 두 번째 메뉴 **『👻 귀신검색』**(또는 단축키 \`Ctrl + 0\`)에서 방금 읽어둔 내 진짜 사진·문서를 1초 만에 찾아보실까요?`
+        `네, ${nickPrefix}남은 사진 정리 화면은 잠시 멈춰 두었어요. 왼쪽 두 번째 메뉴 **『귀신검색』**(또는 단축키 \`Ctrl + 0\`)에서 내 사진과 문서를 바로 검색해 보실까요?`
       ),
-      followUps: [ctx.isMobileEnv ? '🔍 맨 위 검색창으로 바로 찾아볼래' : '🔍 귀신검색으로 내 파일 찾아볼래'],
+      followUps: [ctx.isMobileEnv ? '맨 위 검색창으로 바로 찾아볼래' : '귀신검색으로 내 파일 찾아볼래'],
       nextState: st,
     };
   }
@@ -1184,7 +1184,7 @@ export function resolveGhostSecretaryTurn(
   }
 
   // ④-2 귀신창 음소거/소리 켜기 즉시 제어 (cmd_unmute_ghost_sound / cmd_mute_ghost_sound 우선 처리)
-  if (/(귀신\s*소리|귀신창\s*소리|소리|효과음|음소거|무음|조용히|시끄러)/.test(text)) {
+  if (/(귀신\s*소리|검색창\s*소리|소리|효과음|음소거|무음|조용히|시끄러)/.test(text)) {
     const isUnmute = /켜|음소거\s*해제|다시\s*나게/.test(text);
     const isMute = !isUnmute && /꺼|끄|음소거|무음|조용히|시끄러|안\s*나게/.test(text);
     if (isMute || isUnmute) {
@@ -1221,8 +1221,8 @@ export function resolveGhostSecretaryTurn(
           const nickPrefix = nickname ? `${nickname}님! ` : '';
           const iosFaqText =
             sc.id === 'faq_refund_and_cancel'
-              ? '🍎 **아이폰(iOS)은 애플 보안 정책상 악성 청소앱이 자동 침투할 수 없으며, 정기구독 확인은 [아이폰 설정 > 내 이름(Apple 계정) > 구독]에서 안전하게 관리하실 수 있습니다.**'
-              : `${nickPrefix}아이폰 앱에서 쓰시는 **『👻 귀신비서(내 폰 사진 정리)』**, **『👻 귀신검색』**, **『📸 사진 공유』** 기능은 광고 없이 무료로 바로 이용하실 수 있어요! (아이폰 정기구독 확인은 **[아이폰 설정 > 내 이름(Apple 계정) > 구독]**에서 안전하게 관리하실 수 있습니다.)`;
+              ? '**아이폰(iOS)은 애플 보안 정책상 악성 청소앱이 자동 설치되지 않으며, 정기구독 확인은 [아이폰 설정 > 내 이름(Apple 계정) > 구독]에서 관리하실 수 있습니다.**'
+              : `${nickPrefix}아이폰 앱에서 쓰시는 **『귀신비서(사진 정리)』**, **『귀신검색』**, **『사진 공유』** 기능은 기본 무료로 이용하실 수 있어요. (정기구독 확인은 **[아이폰 설정 > 내 이름(Apple 계정) > 구독]**에서 관리하실 수 있습니다.)`;
           return {
             scenarioId: sc.id,
             text: iosFaqText,
@@ -1388,7 +1388,7 @@ export function buildMobileRemainingPhotosChoicePrompt(
  * [전환율 보강 ③] 모바일 온보딩 말미 『모바일 ➔ PC 회수 브릿지』 안내 문구 생성
  */
 export const MOBILE_TO_PC_BRIDGE_TEXT =
-  '지금 스마트폰으로 들어오셨네요! 내일 출근해서 PC로 켜시면 엑셀·한글·PDF 열지 않고 1초 만에 찾는 『👻 귀신검색(Ctrl+0)』과 『👻 귀신비서』를 바로 쓰실 수 있게 카톡(나에게 보내기)에 PC 실행 링크를 넣어두실래요?';
+  '스마트폰으로 접속하셨네요. PC에서 문서를 열지 않고 본문 내용으로 찾는 『귀신검색(Ctrl+0)』과 『귀신비서』를 이어서 쓰실 수 있도록 PC 실행 링크를 저장해 두실래요?';
 
 export function buildMobileToPcBridgePrompt(nickname?: string): {
   scenarioId: string;
@@ -1409,7 +1409,7 @@ export function buildWelcomeTurn(
   if (!st.nickname) {
     if (isMobileEnv) {
       return {
-        text: '반가워요! 저는 앞으로 내 폰 사진 1분 정리부터 말로 찾는 1초 검색까지 다 챙겨드릴 전용 『👻 귀신비서』예요! 먼저 제가 앞으로 뭐라고 불러드리면 기분 좋으실까요? 편한 별명(닉네임) 하나만 알려주세요!',
+        text: '반가워요! 내 폰 사진 정리부터 음성·문장 검색까지 도와드릴 『귀신비서』예요. 앞으로 어떻게 불러드리면 편하실까요? 부르기 편한 별명(닉네임) 하나만 알려주세요.',
         nextState: { ...st, awaitingNickname: true },
       };
     }
@@ -1419,7 +1419,7 @@ export function buildWelcomeTurn(
   const cleanNextState = st.awaitingNickname ? { ...st, awaitingNickname: false } : st;
   if (isMobileEnv) {
     return {
-      text: `${st.nickname}님, 다시 오셨네요! 내 폰 사진 정리, 1초 음성·글자 검색까지 편하게 말씀해 주세요.`,
+      text: `${st.nickname}님, 다시 오셨네요. 사진 정리와 음성·글자 검색 중 필요한 작업을 편하게 말씀해 주세요.`,
       nextState: cleanNextState,
     };
   }

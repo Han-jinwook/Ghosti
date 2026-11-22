@@ -110,7 +110,7 @@ const DEFAULT_FAMILY_CONFIG: FamilyConfig = {
       id: 'sundreamer',
       name: '썬드리머',
       url: 'https://sundreamer.app',
-      icon: '☀️',
+      icon: '',
       description: '12년차 비타민D 자외선조사기 회원 전용 멤버십',
       isActive: true,
       isLinkActive: true,
@@ -120,7 +120,7 @@ const DEFAULT_FAMILY_CONFIG: FamilyConfig = {
       id: 'whateat',
       name: '뭐먹지?',
       url: 'https://whateat.sundreamer.app',
-      icon: '🍱',
+      icon: '',
       description: '학교 급식과 식생활 기록 플랫폼',
       isActive: true,
       isLinkActive: true,
@@ -130,7 +130,7 @@ const DEFAULT_FAMILY_CONFIG: FamilyConfig = {
       id: 'aggrofilter',
       name: '어그로필터',
       url: 'https://aggrofilter.com',
-      icon: '🛡️',
+      icon: '',
       description: '유튜브 영상 팩트 신뢰도 분석기',
       isActive: true,
       isLinkActive: true,
@@ -140,7 +140,7 @@ const DEFAULT_FAMILY_CONFIG: FamilyConfig = {
       id: 'sensetalk',
       name: '센스톡',
       url: 'https://sensetalk.netlify.app',
-      icon: '💬',
+      icon: '',
       description: '1:1 맞춤 감성 메시지 고속 발송 비서',
       isActive: true,
       isLinkActive: true,
@@ -150,8 +150,8 @@ const DEFAULT_FAMILY_CONFIG: FamilyConfig = {
       id: 'ghosti',
       name: '귀신같이',
       url: 'https://ghosti.sundreamer.app',
-      icon: '👻',
-      description: '내 PC와 모바일에 1초 초능력을 · 광고 0% · 클라우드 월세 0원',
+      icon: '',
+      description: 'PC·모바일 파일 내용검색 및 기기 정리 도구',
       isActive: true,
       isLinkActive: true,
       sortOrder: 5
@@ -553,7 +553,7 @@ export function HubAppSwitcher({
         <button
           type="button"
           onClick={handleToggleManual}
-          title="👻 귀신팸 — 귀신같이 똑똑한 가족 앱 모음"
+          title="귀신팸 — 귀신같이 똑똑한 가족 앱 모음"
           className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-2xl border transition-all cursor-pointer select-none focus:outline-none active:scale-95 shadow-sm ${
             isOpen
               ? 'bg-white border-amber-400 ring-2 ring-amber-400/30'
@@ -579,7 +579,7 @@ export function HubAppSwitcher({
         <button
           type="button"
           onClick={handleToggleManual}
-          title="👻 귀신팸 — 귀신같이 똑똑한 가족 앱 모음"
+          title="귀신팸 — 귀신같이 똑똑한 가족 앱 모음"
           className={`relative flex items-center justify-center w-8 h-8 rounded-full transition-all cursor-pointer shrink-0 focus:outline-none active:scale-95 shadow-xs ${
             isOpen
               ? 'ring-2 ring-amber-400/60 scale-105'
@@ -599,7 +599,7 @@ export function HubAppSwitcher({
         <button
           type="button"
           onClick={handleToggleManual}
-          title="👻 귀신팸 — 귀신같이 똑똑한 가족 앱 모음"
+          title="귀신팸 — 귀신같이 똑똑한 가족 앱 모음"
           className={`flex items-center gap-1 px-2.5 py-1 rounded-2xl border transition-all cursor-pointer shrink-0 focus:outline-none active:scale-95 shadow-sm ${
             isOpen
               ? 'bg-white border-amber-400 ring-2 ring-amber-400/30'

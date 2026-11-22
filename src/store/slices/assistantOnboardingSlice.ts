@@ -253,7 +253,7 @@ export interface AssistantOnboardingSlice {
   enableMobileCoinDisplay: boolean;
   /** 앱 내 코인 잔액 표시 여부 (기본값 false: !isStoreAppMode ? enableMobileCoinDisplay : enableMobileCoinDisplay) */
   showCoinBalanceInApp: boolean;
-  /** 스토어 심사 기간에 PC 연동 가이드 공유 버튼 노출 여부를 1초 만에 켜고 끌 수 있는 원격 토글 스위치 (기본값 true) */
+  /** 스토어 심사 기간에 PC 연동 가이드 공유 버튼 노출 여부를 켜고 끌 수 있는 원격 토글 스위치 (기본값 true) */
   enablePcGuideShareButton: boolean;
   /** 전송된 링크(/?master=pc)를 모바일 OS(iOS/Android)에서 열었을 때 결제/요금 안내 없이 순수 'PC 데스크톱 엔진 기능 소개 화면'만 띄우는 이중 방어 모달 상태 */
   showMobileMasterPcIntroModal: boolean;
@@ -414,7 +414,7 @@ function buildQuarantineMoveStatePatch(opts: {
           demo,
         },
     lastQuarantineToast: isIosNativeApp
-      ? `🔒 사진 ${movedSet.size}장이 아이폰 『최근 삭제된 항목』에 30일간 안전 보관되었습니다. 복원은 아이폰 『사진 ➔ 최근 삭제된 항목(FaceID)』에서 가능합니다.`
+      ? `사진 ${movedSet.size}장이 아이폰 『최근 삭제된 항목』에 30일간 안전 보관되었습니다. 복원은 아이폰 『사진  최근 삭제된 항목(FaceID)』에서 가능합니다.`
       : nonIosToast,
   };
 }
@@ -508,8 +508,7 @@ export const createAssistantOnboardingSlice: StateCreator<
     // 독립 귀신검색창(?ghostSearchWindow) 첫 기동 시 크롬 --app 프로세스 콜드스타트 중 260ms 헬스체크가 먼저 타임아웃되어
     // 미연결 빈 상태로 1차 initApp() 후 재연결 2차 initApp(true)가 이중 실행되는 현상을 원천 차단합니다.
     if (isStandaloneSearchWin && !zCoreBridge.isConnected) {
-      await Promise.race([
-        zCoreBridge.checkHealth(true),
+      await Promise.race([        zCoreBridge.checkHealth(true),
         new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 1200)),
       ]);
     }
@@ -529,7 +528,7 @@ export const createAssistantOnboardingSlice: StateCreator<
               photo,
               score: 0.95,
               matchPercentage: 97,
-              matchedBy: 'text-direct' as const,
+              matchedBy: 'text-direct'as const,
             })
           );
           set({
@@ -543,8 +542,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         .catch(() => {});
     }
 
-    const [dataset, telemetry, indexedDocs, indexedVideos, faceData, hostSharedPhotos] = await Promise.all([
-      photoDatasetPromise,
+    const [dataset, telemetry, indexedDocs, indexedVideos, faceData, hostSharedPhotos] = await Promise.all([      photoDatasetPromise,
       isStandaloneSearchWin ? Promise.resolve(null) : detectHardwareTelemetry(),
       fetchIndexedDocuments(),
       fetchIndexedVideos(),
@@ -625,13 +623,13 @@ export const createAssistantOnboardingSlice: StateCreator<
             photo,
             score: 0.96,
             matchPercentage: 98,
-            matchedBy: 'text-direct' as const,
+            matchedBy: 'text-direct'as const,
           }));
     const initialGalleryPhotos = filterVisibleGalleryPhotos(gallerySourceCorpus).map((photo) => ({
       photo,
       score: 0.95,
       matchPercentage: 97,
-      matchedBy: 'text-direct' as const,
+      matchedBy: 'text-direct'as const,
     }));
     const effectiveInitialDocs = sharedModeNow ? [] : indexedDocs;
     const effectiveInitialVideos = sharedModeNow ? [] : baseDatasetVideos;
@@ -696,7 +694,7 @@ export const createAssistantOnboardingSlice: StateCreator<
           photo,
           score: 0.95,
           matchPercentage: 97,
-          matchedBy: 'text-direct' as const,
+          matchedBy: 'text-direct'as const,
         }));
         const preserveExistingSharedResults =
           latestSharedMode &&
@@ -742,7 +740,7 @@ export const createAssistantOnboardingSlice: StateCreator<
             ? ['#동영상전구간해부', '#타임라인점프재생', '#자율비전인덱싱']
             : currentSearchSpace === 'vault' && currentHasUserSelectedSearchTab
             ? ['#스마트서류함', '#문서·설명서', '#문서·신분증', '#PDF통합검색']
-            : ['#전체갤러리', '#자율얼굴검출', '#768차원벡터검색'],
+            : ['#전체갤러리', '#자율얼굴검출', '#의미검색'],
           searchResults: preserveExistingSharedResults
             ? latestState.searchResults
             : latestGalleryResults,
@@ -1182,8 +1180,7 @@ export const createAssistantOnboardingSlice: StateCreator<
             };
           });
 
-          const vidsMissingOcr = [
-            ...newlyDiscoveredVids,
+          const vidsMissingOcr = [            ...newlyDiscoveredVids,
             ...get().videoSceneItems.filter(
               (v) =>
                 !newlyDiscoveredVids.some((nv) => nv.id === v.id) &&
@@ -1221,7 +1218,7 @@ export const createAssistantOnboardingSlice: StateCreator<
                               ocrLineCount: ocrOut.ocrLines.length,
                               ocrLines: ocrOut.ocrLines,
                               ocrFullText: ocrOut.fullText || '',
-                              matchedFrameCaption: summaryLine ? `📝 ${summaryLine}` : v.matchedFrameCaption,
+                              matchedFrameCaption: summaryLine ? ` ${summaryLine}` : v.matchedFrameCaption,
                               keywords: Array.from(new Set([...(v.keywords || []), ...extraTokens])),
                             }
                           : v
@@ -1234,7 +1231,7 @@ export const createAssistantOnboardingSlice: StateCreator<
                               ocrLineCount: ocrOut.ocrLines.length,
                               ocrLines: ocrOut.ocrLines,
                               ocrFullText: ocrOut.fullText || '',
-                              matchedFrameCaption: summaryLine ? `📝 ${summaryLine}` : v.matchedFrameCaption,
+                              matchedFrameCaption: summaryLine ? ` ${summaryLine}` : v.matchedFrameCaption,
                               keywords: Array.from(new Set([...(v.keywords || []), ...extraTokens])),
                             }
                           : v
@@ -1508,13 +1505,13 @@ export const createAssistantOnboardingSlice: StateCreator<
           ? 'memo'
           : 'duplicate';
       const skipSuffix =
-        alreadyLoadedCount > 0 ? ` (이미 업로드된 ${alreadyLoadedCount}장은 중복 제외)` : '';
+        alreadyLoadedCount > 0 ? `(이미 업로드된 ${alreadyLoadedCount}장은 중복 제외)` : '';
       const countLabel =
         alreadyLoadedCount > 0 ? `새 사진 ${newAnalyzed.length}장 추가` : `사진 ${newAnalyzed.length}장`;
       const toastMsg =
         dupSetsCount === 0 && blurryCount === 0 && memoScreenCount === 0
-          ? `✅ ${countLabel} 분석 완료!${skipSuffix} 버릴 중복·연사(0세트)나 흐린 사진(0장) 없이 모두 깨끗한 사진이에요.`
-          : `📸 ${countLabel} 분석 완료!${skipSuffix} 중복·연사 ${dupSetsCount}세트 · 흐린 사진 ${blurryCount}장 발견 — 아래에서 실사진을 보고 [OK]로 직접 결정해 주세요!`;
+          ? ` ${countLabel} 분석 완료!${skipSuffix} 버릴 중복·연사(0세트)나 흐린 사진(0장) 없이 모두 깨끗한 사진이에요.`
+          : ` ${countLabel} 분석 완료!${skipSuffix} 중복·연사 ${dupSetsCount}세트 · 흐린 사진 ${blurryCount}장 발견 — 아래에서 실사진을 보고 [OK]로 직접 결정해 주세요!`;
       const baseUpdate = {
         photos: updatedPhotos,
         duplicateGroups: nextDupGroups,
@@ -1535,8 +1532,8 @@ export const createAssistantOnboardingSlice: StateCreator<
         hasExecutedUserSearch: isMobilePersonalSecretary ? state.hasExecutedUserSearch : true,
         activeQuery: isMobilePersonalSecretary
           ? state.activeQuery
-          : `📱 방금 불러온 내 폰 사진 (${updatedPhotos.length}장 · 온디바이스 1초 AI 분석 완료)`,
-        matchedTags: ['#내폰사진즉시분석', '#온디바이스dHash', '#외부전송0Byte'],
+          : `방금 불러온 내 폰 사진 (${updatedPhotos.length}장 · 온디바이스 AI 분석 완료)`,
+        matchedTags: ['#내폰사진즉시분석', '#중복분석', '#로컬처리'],
         lastQuarantineToast: toastMsg,
       };
     });
@@ -1793,7 +1790,7 @@ export const createAssistantOnboardingSlice: StateCreator<
           savedBytes,
           demo: moveRes.demo,
           actionLabel: '연사 바둑판 베스트 컷 Pick 정리',
-          nonIosToast: `${wasFreeTrialFirstUse ? '🎁 첫 정리 완료! ' : '✨ '}베스트 원본 1장을 남기고 나머지 ${movedSet.size}장을 ${moveNote}`,
+          nonIosToast: `${wasFreeTrialFirstUse ? '첫 정리 완료! ' : ' '}베스트 원본 1장을 남기고 나머지 ${movedSet.size}장을 ${moveNote}`,
         });
       });
       if (typeof window !== 'undefined') {
@@ -1817,8 +1814,7 @@ export const createAssistantOnboardingSlice: StateCreator<
           isBestInDuplicateGroup: true,
           trashCategory: undefined,
           trashConfidence: undefined,
-          tags: [
-            '#원본보존(Best)',
+          tags: [            '#원본보존(Best)',
             ...p.tags.filter((t) => !t.includes('연사') && !t.includes('사본') && !t.includes('원본보존')),
           ].slice(0, 3),
         };
@@ -1826,10 +1822,9 @@ export const createAssistantOnboardingSlice: StateCreator<
       return {
         ...p,
         isBestInDuplicateGroup: false,
-        trashCategory: 'duplicate' as TrashCategory,
+        trashCategory: 'duplicate'as TrashCategory,
         trashConfidence: 0.99,
-        tags: [
-          '#연사·중복사본',
+        tags: [          '#연사·중복사본',
           '#원본1장보존됨',
           ...p.tags.filter((t) => !t.includes('원본보존')),
         ].slice(0, 3),
@@ -1847,7 +1842,7 @@ export const createAssistantOnboardingSlice: StateCreator<
       duplicateGroups: updatedGroups,
       photos: updatedPhotos,
       selectedTrashIds: nextTrashIds,
-      lastQuarantineToast: `🛡️ 선택한 사진을 [보존할 원본 1장]으로 변경했습니다. (나머지 ${redundantIds.length}장이 정리 대상으로 전환됨)`,
+      lastQuarantineToast: `선택한 사진을 [보존할 원본 1장]으로 변경했습니다. (나머지 ${redundantIds.length}장이 정리 대상으로 전환됨)`,
     });
   },
 
@@ -1883,7 +1878,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         savedBytes,
         demo: moveRes.demo,
         actionLabel: '검색 결과 연사 베스트 컷 Pick',
-        nonIosToast: `✨ 베스트 컷 1장을 남기고 나머지 연사 ${movedSet.size}장을 ${moveNote}`,
+        nonIosToast: `베스트 컷 1장을 남기고 나머지 연사 ${movedSet.size}장을 ${moveNote}`,
         clearSelectedBurstModal: true,
       })
     );
@@ -1973,7 +1968,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         savedBytes,
         demo: moveRes.demo,
         actionLabel: '귀신비서 추천 항목 일괄 정리',
-        nonIosToast: `🗑️ 사진 ${movedSet.size}장을 ${moveNote}`,
+        nonIosToast: `사진 ${movedSet.size}장을 ${moveNote}`,
       })
     );
     if (typeof window !== 'undefined') {
@@ -2113,7 +2108,7 @@ export const createAssistantOnboardingSlice: StateCreator<
           photo,
           score: 0.99,
           matchPercentage: 99,
-          matchedBy: 'text-direct' as const,
+          matchedBy: 'text-direct'as const,
         }));
       const refreshedSearchResults: SearchResultItem[] = inSharedLounge
         ? state.searchResults
@@ -2125,7 +2120,7 @@ export const createAssistantOnboardingSlice: StateCreator<
               photo,
               score: 0.99,
               matchPercentage: 99,
-              matchedBy: 'text-direct' as const,
+              matchedBy: 'text-direct'as const,
             }));
 
       return {
@@ -2157,7 +2152,7 @@ export const createAssistantOnboardingSlice: StateCreator<
     get().syncPhotosAfterExternalRestore(
       restoreRes.done,
       restoreRes.replacedIds,
-      `♻️ 사진 ${restoreRes.done.length}장을 ${quarantineResultNote('restore', restoreRes)}`
+      `사진 ${restoreRes.done.length}장을 ${quarantineResultNote('restore', restoreRes)}`
     );
   },
 
@@ -2240,23 +2235,23 @@ export const createAssistantOnboardingSlice: StateCreator<
         openedOk = Boolean(j?.ok);
       }
       if (!openedOk) {
-        set({ lastQuarantineToast: '⚠️ 내 컴퓨터 연결(PC 엔진) 상태를 확인한 뒤 다시 폴더 열기를 눌러 주세요.' });
+        set({ lastQuarantineToast: '내 컴퓨터 연결(PC 엔진) 상태를 확인한 뒤 다시 폴더 열기를 눌러 주세요.' });
         return;
       }
       const fileLabel = cleanTargetPath ? cleanTargetPath.split(/[\\/]/).pop() || cleanTargetPath : '';
       set({
         lastQuarantineToast:
           cleanTargetPath
-            ? `📂 윈도우 탐색기에서 [${fileLabel}] 실제 원본 위치를 열었습니다.`
+            ? `윈도우 탐색기에서 [${fileLabel}] 실제 원본 위치를 열었습니다.`
             : target === 'phone_backup'
-            ? '📂 윈도우 탐색기에서 [내 PC ➔ 사진 ➔ Ghosti_Phone_Backup] 폰 백업 폴더를 열었습니다.'
+            ? '윈도우 탐색기에서 [내 PC  사진  Ghosti_Phone_Backup] 폰 백업 폴더를 열었습니다.'
             : target === 'quarantine'
-            ? '🗑️ OS 기본 [휴지통] 이동 내역 폴더를 열었습니다.'
+            ? 'OS 기본 [휴지통] 이동 내역 폴더를 열었습니다.'
             : target === 'docs'
-            ? '📂 윈도우 탐색기에서 내 PC 문서 폴더를 열었습니다.'
+            ? '윈도우 탐색기에서 내 PC 문서 폴더를 열었습니다.'
             : target === 'videos'
-            ? '📂 윈도우 탐색기에서 내 PC 동영상 폴더를 열었습니다.'
-            : '📂 윈도우 탐색기에서 원본 사진 폴더를 열었습니다.',
+            ? '윈도우 탐색기에서 내 PC 동영상 폴더를 열었습니다.'
+            : '윈도우 탐색기에서 원본 사진 폴더를 열었습니다.',
       });
     } catch {
       /* ignore */
@@ -2296,8 +2291,8 @@ export const createAssistantOnboardingSlice: StateCreator<
       enableSetupMonster: isStoreAppMode ? false : true,
       showCoinBalanceInApp: isStoreAppMode ? state.enableMobileCoinDisplay : state.enableMobileCoinDisplay,
       lastQuarantineToast: isStoreAppMode
-        ? '🛡️ [1차 출시용 모바일 클린 모드(isStoreAppMode=true)] 활성화: enableSetupMonster=false 및 크레딧 잔액을 숨기고 스토어 심사 프리패스 모드로 전환했습니다.'
-        : '💻 [데스크톱(PC) 마스터 모드(isStoreAppMode=false)] 활성화: 🛠️ 귀신같이 손보기(enableSetupMonster=true) 및 모든 마스터 기능이 활성화되었습니다.',
+        ? '[1차 출시용 모바일 클린 모드(isStoreAppMode=true)] 활성화: enableSetupMonster=false 및 크레딧 잔액을 숨기고 스토어 심사 프리패스 모드로 전환했습니다.'
+        : '[데스크톱(PC) 마스터 모드(isStoreAppMode=false)] 활성화:  귀신같이 손보기(enableSetupMonster=true) 및 모든 마스터 기능이 활성화되었습니다.',
     })),
 
   setEnableSetupMonster: (enableSetupMonster) =>
@@ -2306,8 +2301,8 @@ export const createAssistantOnboardingSlice: StateCreator<
       enableMobileCoinDisplay: enableSetupMonster,
       showCoinBalanceInApp: enableSetupMonster,
       lastQuarantineToast: enableSetupMonster
-        ? '🛠️ [원격 토글 enableSetupMonster=true] 귀신같이 손보기(AI 스마트폰 & PC 통합 설정 해결사) 및 상단 크레딧 지갑이 즉시 개통되었습니다!'
-        : '🔒 [1차 스토어 심사 방어 enableSetupMonster=false] 모바일 스토어 모드에서 귀신같이 손보기와 크레딧 잔액을 잠시 숨김 처리했습니다.',
+        ? '[원격 토글 enableSetupMonster=true] 귀신같이 손보기(AI 스마트폰 & PC 통합 설정 해결사) 및 상단 크레딧 지갑이 즉시 개통되었습니다!'
+        : '[1차 스토어 심사 방어 enableSetupMonster=false] 모바일 스토어 모드에서 귀신같이 손보기와 크레딧 잔액을 잠시 숨김 처리했습니다.',
     }),
 
   setEnableMobileCoinDisplay: (enableMobileCoinDisplay) =>
@@ -2315,16 +2310,16 @@ export const createAssistantOnboardingSlice: StateCreator<
       enableMobileCoinDisplay,
       showCoinBalanceInApp: enableMobileCoinDisplay,
       lastQuarantineToast: enableMobileCoinDisplay
-        ? '🪙 [코인 잔액 표시(enableMobileCoinDisplay=true)] 활성화: 상단 헤더에 멀린허브 코인 잔액이 표시됩니다.'
-        : '🔒 [코인 잔액 완전 비노출(showCoinBalanceInApp=false)] 기본값 적용 완료.',
+        ? '[코인 잔액 표시(enableMobileCoinDisplay=true)] 활성화: 상단 헤더에 멀린허브 코인 잔액이 표시됩니다.'
+        : '[코인 잔액 완전 비노출(showCoinBalanceInApp=false)] 기본값 적용 완료.',
     }),
 
   setEnablePcGuideShareButton: (enablePcGuideShareButton) =>
     set({
       enablePcGuideShareButton,
       lastQuarantineToast: enablePcGuideShareButton
-        ? '💬 [원격 토글 enablePcGuideShareButton=true] 카톡·이메일 PC 연동 가이드 전송 버튼이 활성화되었습니다.'
-        : '🔒 [원격 토글 enablePcGuideShareButton=false] 스토어 심사 보호를 위해 PC 연동 가이드 전송 버튼이 즉시 숨김 처리되었습니다.',
+        ? '[원격 토글 enablePcGuideShareButton=true] 카톡·이메일 PC 연동 가이드 전송 버튼이 활성화되었습니다.'
+        : '[원격 토글 enablePcGuideShareButton=false] 스토어 심사 보호를 위해 PC 연동 가이드 전송 버튼이 즉시 숨김 처리되었습니다.',
     }),
 
   setShowMobileMasterPcIntroModal: (showMobileMasterPcIntroModal) =>
@@ -2338,12 +2333,11 @@ export const createAssistantOnboardingSlice: StateCreator<
       ? 'mobile'
       : 'pc',
   setupProactiveHints: INITIAL_PROACTIVE_HINTS,
-  setupChatTurns: [
-    {
+  setupChatTurns: [    {
       id: 'welcome_setup_monster',
       role: 'assistant_triage',
       timestamp: '방금',
-      text: '안녕하세요! ✋ 귀신같이 손보기 대화창입니다.\n• 🆓 [내 기기]의 모든 사진·파일 정리, PC 속도 검진, 수리, 복원, 내 PC 사양 상담, 바탕화면 바로가기 생성은 코인 차감 없이 언제나 0원(100% 무료)입니다.\n• 🛡️ 모든 실행 전 [실물 증거 미리보기 게이트(Zero-Auto-Action)]를 먼저 보여드리며, 유저님이 [⭕ 확인 완료]를 누르시기 전에는 절대 임의로 실행하지 않습니다.\n• 🕰️ 모든 변경 0.01초 전 [복원 기록]을 남기며, 🟢[100% 완벽 복원 가능] / 🟡[부분 복원 가능] / 🔴[복원 불가] 3단계 무결성 사전 검진(Pre-Check) 후 1초 만에 원래 상태로 되돌릴 수 있습니다.',
+      text: '안녕하세요! ✋ 귀신같이 손보기 대화창입니다.\n• 🆓 [내 기기]의 모든 사진·파일 정리, PC 속도 검진, 수리, 복원, 내 PC 사양 상담, 바탕화면 바로가기 생성은 코인 차감 없이 무료입니다.\n• 🛡️ 모든 실행 전 [실물 증거 미리보기 게이트(Zero-Auto-Action)]를 먼저 보여드리며, 유저님이 [⭕ 확인 완료]를 누르시기 전에는 절대 임의로 실행하지 않습니다.\n• 🕰️ 모든 변경 0.01초 전 [복원 기록]을 남기며, 🟢[100% 완벽 복원 가능] / 🟡[부분 복원 가능] / 🔴[복원 불가] 3단계 무결성 사전 검진(Pre-Check) 후 원래 상태로 되돌릴 수 있습니다.',
       triageQuestion: buildSetupPreTriageQuestion(
         'pc',
         '부팅 시 뜨는 광고/유령앱 차단',
@@ -2393,7 +2387,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         ...state.merlinAuth,
         coinBalance: Math.max(0, coins),
       },
-      lastQuarantineToast: `🪙 [멀린허브 통합 지갑 잔액 시뮬레이션] 현재 보유 멀린코인이 ${Math.max(
+      lastQuarantineToast: `[멀린허브 통합 지갑 잔액 시뮬레이션] 현재 보유 멀린코인이 ${Math.max(
         0,
         coins
       ).toLocaleString()} 코인으로 설정되었습니다. (0코인 무료 문진 및 부족분 원클릭 충전 브릿지 테스트 가능)`,
@@ -2441,7 +2435,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         ...s.merlinCoinTopupBridge,
         open: false,
       },
-      lastQuarantineToast: `🪙 [멀린허브 1초 원클릭 충전 완료 (+${addCoins} 코인)] 충전 즉시 ${
+      lastQuarantineToast: `[멀린허브 원클릭 충전 완료 (+${addCoins} 코인)] 충전 즉시 ${
         plan?.creditCost ?? 300
       } 코인 에스크로 홀딩(Escrow Holding)을 걸고 1초 자동 수리에 돌입합니다!`,
     }));
@@ -2466,15 +2460,15 @@ export const createAssistantOnboardingSlice: StateCreator<
         ),
         setupAuditLogs: state.setupAuditLogs.map((a) =>
           targetAudit && a.auditId === targetAudit.auditId
-            ? { ...a, escrowStatus: 'SETTLED_COMPLETED' as const }
+            ? { ...a, escrowStatus: 'SETTLED_COMPLETED'as const }
             : a
         ),
         setupChatTurns: state.setupChatTurns.map((t) =>
           targetAudit && t.auditId === targetAudit.auditId
-            ? { ...t, escrowStatus: 'SETTLED_COMPLETED' as const }
+            ? { ...t, escrowStatus: 'SETTLED_COMPLETED'as const }
             : t
         ),
-        lastQuarantineToast: `✅ [완치 확인 · 에스크로 최종 정산 완료] 홀딩 중이던 ${settledCoins} 멀린코인이 정상 정산 확정되었습니다!`,
+        lastQuarantineToast: `[완치 확인 · 에스크로 최종 정산 완료] 홀딩 중이던 ${settledCoins} 멀린코인이 정상 정산 확정되었습니다!`,
       };
     }),
 
@@ -2533,7 +2527,7 @@ export const createAssistantOnboardingSlice: StateCreator<
       return;
     }
 
-    // 유저가 채팅창에 "아직 해결 안 됨 / 안 고쳐졌어 / 환불해줘" 등 수리 실패를 말하면 즉시 1초 원상복구 + 에스크로 100% 반환 + 본사 실패 로그 전송 실행
+    // 유저가 채팅창에 "아직 해결 안 됨 / 안 고쳐졌어 / 환불해줘" 등 수리 실패를 말하면 즉시 원상복구 + 에스크로 100% 반환 + 본사 실패 로그 전송 실행
     if (
       /해결\s*안|안\s*고쳐|그대로|환불|여전히\s*먹통|실패/i.test(clean) &&
       !presetIdHint
@@ -2564,14 +2558,14 @@ export const createAssistantOnboardingSlice: StateCreator<
         const deficit = Math.max(0, plan.creditCost - currentCoins);
         const preCheckLine =
           deficit > 0
-            ? `⚠️ [멀린허브 통합 지갑 사전 잔액 체크(Pre-Check)] 필요 견적 ${plan.creditCost} 코인 / 현재 보유 ${currentCoins} 코인 ➔ 멀린코인 ${deficit}개가 부족합니다. 아래 [🪙 멀린코인 ${deficit}개가 부족합니다 — 1초 충전 후 바로 고치기] 버튼을 누르면 즉시 충전 후 에스크로 수리에 돌입합니다.`
-            : `✅ [멀린허브 통합 지갑 사전 잔액 체크(Pre-Check)] 필요 견적 ${plan.creditCost} 코인 / 현재 보유 ${currentCoins.toLocaleString()} 코인 (충분) ➔ 아래 버튼으로 ${plan.creditCost} 코인 에스크로 홀딩 후 즉시 1초 수리를 시작할 수 있습니다.`;
+            ? `[멀린허브 통합 지갑 사전 잔액 체크(Pre-Check)] 필요 견적 ${plan.creditCost} 코인 / 현재 보유 ${currentCoins} 코인  멀린코인 ${deficit}개가 부족합니다. 아래 [멀린코인 ${deficit}개가 부족합니다 — 충전 후 바로 고치기] 버튼을 누르면 즉시 충전 후 에스크로 수리에 돌입합니다.`
+            : `[멀린허브 통합 지갑 사전 잔액 체크(Pre-Check)] 필요 견적 ${plan.creditCost} 코인 / 현재 보유 ${currentCoins.toLocaleString()} 코인 (충분)  아래 버튼으로 ${plan.creditCost} 코인 에스크로 홀딩 후 즉시 수리를 시작할 수 있습니다.`;
 
         const assistantTurn: SetupChatTurn = {
           id: `ai_${Date.now() + 1}`,
           role: 'assistant',
           timestamp: nowLabel,
-          text: `🔍 무엇이 불편하신지 확인했습니다. 아래 버튼을 누르시면 바로 고쳐 드립니다.`,
+          text: `무엇이 불편하신지 확인했습니다. 아래 버튼을 누르시면 바로 고쳐 드립니다.`,
           diagnosisPlan: plan,
         };
 
@@ -2614,14 +2608,14 @@ export const createAssistantOnboardingSlice: StateCreator<
     const deficit = Math.max(0, plan.creditCost - currentCoins);
     const preCheckLine =
       deficit > 0
-        ? `⚠️ [멀린허브 지갑 사전 잔액 체크] 필요 100 코인 / 보유 ${currentCoins} 코인 ➔ 멀린코인 ${deficit}개가 부족합니다 (1초 충전 후 바로 고치기 지원).`
-        : `✅ [멀린허브 지갑 사전 잔액 체크] 필요 100 코인 / 보유 ${currentCoins.toLocaleString()} 코인 (에스크로 홀딩 가능).`;
+        ? `[멀린허브 지갑 사전 잔액 체크] 필요 100 코인 / 보유 ${currentCoins} 코인  멀린코인 ${deficit}개가 부족합니다 (충전 후 바로 고치기 지원).`
+        : `[멀린허브 지갑 사전 잔액 체크] 필요 100 코인 / 보유 ${currentCoins.toLocaleString()} 코인 (에스크로 홀딩 가능).`;
 
     const assistantTurn: SetupChatTurn = {
       id: `ai_${Date.now() + 1}`,
       role: 'assistant',
       timestamp: nowLabel,
-      text: `🔍 무엇이 불편하신지 확인했습니다. 아래 버튼을 누르시면 바로 고쳐 드립니다.`,
+      text: `무엇이 불편하신지 확인했습니다. 아래 버튼을 누르시면 바로 고쳐 드립니다.`,
       diagnosisPlan: plan,
     };
 
@@ -2653,14 +2647,14 @@ export const createAssistantOnboardingSlice: StateCreator<
     const deficit = Math.max(0, plan.creditCost - currentCoins);
     const preCheckLine =
       deficit > 0
-        ? `⚠️ [멀린허브 통합 지갑 사전 잔액 체크(Pre-Check)] 필요 견적 ${plan.creditCost} 코인 / 현재 보유 ${currentCoins} 코인 ➔ 멀린코인 ${deficit}개가 부족합니다! 아래 [🪙 멀린코인 ${deficit}개가 부족합니다 — 1초 충전 후 바로 고치기] 버튼을 누르면 즉시 충전 후 에스크로 수리에 돌입합니다.`
-        : `✅ [멀린허브 통합 지갑 사전 잔액 체크(Pre-Check)] 필요 견적 ${plan.creditCost} 코인 / 현재 보유 ${currentCoins.toLocaleString()} 코인 (충분) ➔ [${plan.creditCost} 코인 에스크로 홀딩 후 1초 수리 시작] 버튼이 활성화되었습니다.`;
+        ? `[멀린허브 통합 지갑 사전 잔액 체크(Pre-Check)] 필요 견적 ${plan.creditCost} 코인 / 현재 보유 ${currentCoins} 코인  멀린코인 ${deficit}개가 부족합니다! 아래 [멀린코인 ${deficit}개가 부족합니다 — 충전 후 바로 고치기] 버튼을 누르면 즉시 충전 후 에스크로 수리에 돌입합니다.`
+        : `[멀린허브 통합 지갑 사전 잔액 체크(Pre-Check)] 필요 견적 ${plan.creditCost} 코인 / 현재 보유 ${currentCoins.toLocaleString()} 코인 (충분)  [${plan.creditCost} 코인 에스크로 홀딩 후 수리 시작] 버튼이 활성화되었습니다.`;
 
     const assistantTurn: SetupChatTurn = {
       id: `ai_quote_${Date.now() + 1}`,
       role: 'assistant',
       timestamp: nowLabel,
-      text: `🔍 무엇이 불편하신지 확인했습니다. 아래 버튼을 누르시면 바로 고쳐 드립니다.`,
+      text: `무엇이 불편하신지 확인했습니다. 아래 버튼을 누르시면 바로 고쳐 드립니다.`,
       diagnosisPlan: plan,
     };
 
@@ -2678,7 +2672,7 @@ export const createAssistantOnboardingSlice: StateCreator<
 
   approveAndExecuteSetupPlan: async (plan, simulatedBacktrackCount) => {
     const state = get();
-    const cost = 0; // [멀린님 확정 A1]: [내 기기] 치우기·고치기는 코인 차감 없이 언제나 0원(무료)!
+    const cost = 0; // [멀린님 확정 A1]: [내 기기] 치우기·고치기는 코인 차감 없이 무료!
 
     const effectiveBacktrack = Math.max(0, Math.floor(simulatedBacktrackCount ?? 0));
     const nowIso = new Date().toISOString();
@@ -2736,12 +2730,12 @@ export const createAssistantOnboardingSlice: StateCreator<
         } else {
           realExecution = {
             ok: false,
-            message: `⚠️ S: 드라이브를 연결하지 못했습니다: ${String(osRes?.message || osRes?.error || '멀린 Z-코어 연결을 확인해 주세요')}`,
+            message: `S: 드라이브를 연결하지 못했습니다: ${String(osRes?.message || osRes?.error || '멀린 Z-코어 연결을 확인해 주세요')}`,
           };
         }
         await fetchRealPcOsInspection();
       } catch {
-        realExecution = { ok: false, message: '⚠️ 멀린 Z-코어에 연결되지 않아 실행하지 못했습니다. (아무 설정도 바뀌지 않았습니다)' };
+        realExecution = { ok: false, message: '멀린 Z-코어에 연결되지 않아 실행하지 못했습니다. (아무 설정도 바뀌지 않았습니다)' };
       }
     } else if (
       plan.platform === 'pc' &&
@@ -2755,17 +2749,17 @@ export const createAssistantOnboardingSlice: StateCreator<
         } else {
           realExecution = {
             ok: false,
-            message: `⚠️ 애드웨어·보안 프로세스 정리를 완료하지 못했습니다: ${String(osRes?.message || osRes?.error || '멀린 Z-코어 연결을 확인해 주세요')}`,
+            message: `애드웨어·보안 프로세스 정리를 완료하지 못했습니다: ${String(osRes?.message || osRes?.error || '멀린 Z-코어 연결을 확인해 주세요')}`,
           };
         }
         void fetchRealPcOsInspection();
       } catch {
-        realExecution = { ok: false, message: '⚠️ 멀린 Z-코어에 연결되지 않아 실행하지 못했습니다.' };
+        realExecution = { ok: false, message: '멀린 Z-코어에 연결되지 않아 실행하지 못했습니다.' };
       }
     }
     const honestCompletionMessage = realExecution
       ? realExecution.message
-      : '⚠️ 이 항목은 아직 귀신같이가 자동으로 실행하지 않습니다. PC 설정을 바꾸지 않았으니, 위 진단 내용과 안내 단계를 보고 직접 진행해 주세요.';
+      : '이 항목은 아직 귀신같이가 자동으로 실행하지 않습니다. PC 설정을 바꾸지 않았으니, 위 진단 내용과 안내 단계를 보고 직접 진행해 주세요.';
 
     try {
       const res = await fetch(getZCoreUrl('/__setup-monster/execute'), {
@@ -2871,8 +2865,8 @@ export const createAssistantOnboardingSlice: StateCreator<
       lastQuarantineToast: isEmpathyRefund
         ? evalResult.empathyApologyToastKo
         : effectiveBacktrack === 1
-        ? `🟡 [1회 뒤로 가기 인간적 허용 · 언제나 0원] 1회 우회 갈림길 로그를 본사로 전송해 0회 직행 코스로 미세 교정(OTA)했습니다!`
-        : `✅ [내 기기 1초 수리 완료 — 언제나 0원 · [복원 기록] 자동 저장] 언제든 1초 만에 원래 상태로 되돌릴 수 있습니다!`,
+        ? `[1회 뒤로 가기 인간적 허용 · 무료] 1회 우회 갈림길 로그를 본사로 전송해 0회 직행 코스로 미세 교정(OTA)했습니다!`
+        : `[내 기기 수리 완료 — [복원 기록] 자동 저장] 언제든 원래 상태로 되돌릴 수 있습니다!`,
     }));
   },
 
@@ -2886,7 +2880,7 @@ export const createAssistantOnboardingSlice: StateCreator<
     if (!targetAudit) {
       set({
         lastQuarantineToast:
-          '환불할 최근 수리 내역이 없습니다. 먼저 수리를 실행하거나 견적 카드에서 [💖 2회 헤맨 성공 시뮬레이션]을 눌러보세요!',
+          '환불할 최근 수리 내역이 없습니다. 먼저 수리를 실행하거나 견적 카드에서 [2회 헤맨 성공 시뮬레이션]을 눌러보세요!',
       });
       return;
     }
@@ -2975,7 +2969,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         a.auditId === targetAudit.auditId
           ? {
               ...a,
-              escrowStatus: 'RELEASED_EMPATHY_REFUND' as const,
+              escrowStatus: 'RELEASED_EMPATHY_REFUND'as const,
               backtrackCount: effectiveBacktrack,
               trajectoryGrade: evalResult.trajectoryGrade,
               refunded: true,
@@ -2991,7 +2985,7 @@ export const createAssistantOnboardingSlice: StateCreator<
           t.auditId === targetAudit.auditId
             ? {
                 ...t,
-                escrowStatus: 'RELEASED_EMPATHY_REFUND' as const,
+                escrowStatus: 'RELEASED_EMPATHY_REFUND'as const,
                 backtrackCount: effectiveBacktrack,
                 trajectoryGrade: evalResult.trajectoryGrade,
                 selfHealingOta: evalResult.otaEntry ?? t.selfHealingOta,
@@ -3023,9 +3017,9 @@ export const createAssistantOnboardingSlice: StateCreator<
           const r = await executeRealOsAction('s_drive_unmount');
           undoMessage = r?.ok
             ? '↩️ 연결했던 S: 업무 드라이브를 해제해 원래 상태로 되돌렸습니다.'
-            : `⚠️ S: 드라이브를 해제하지 못했습니다: ${String(r?.message || r?.error || '멀린 Z-코어 연결을 확인해 주세요')}`;
+            : `S: 드라이브를 해제하지 못했습니다: ${String(r?.message || r?.error || '멀린 Z-코어 연결을 확인해 주세요')}`;
         } catch {
-          undoMessage = '⚠️ 멀린 Z-코어에 연결되지 않아 되돌리지 못했습니다.';
+          undoMessage = '멀린 Z-코어에 연결되지 않아 되돌리지 못했습니다.';
         }
       }
       try {
@@ -3171,7 +3165,7 @@ export const createAssistantOnboardingSlice: StateCreator<
       id: `refund_${Date.now()}`,
       role: 'system_refund',
       timestamp: nowLabel,
-      text: `📝 [미해결 신고 기록 완료]\n① 해결되지 않았다는 신고를 내 PC 로컬 기록(${failurePacket.failureId})에 남겼습니다. (외부 전송 없음)\n② 귀신같이가 자동으로 바꾼 설정이 있었다면 위 [↩️ 원래 설정으로 되돌리기]로 돌릴 수 있습니다.\n③ 내 기기 고치기는 항상 0원이라 환불할 비용은 없습니다.`,
+      text: `[미해결 신고 기록 완료]\n① 해결되지 않았다는 신고를 내 PC 로컬 기록(${failurePacket.failureId})에 남겼습니다. (외부 전송 없음)\n② 귀신같이가 자동으로 바꾼 설정이 있었다면 위 [↩️ 원래 설정으로 되돌리기]로 돌릴 수 있습니다.\n③ 내 기기 고치기는 항상 0원이라 환불할 비용은 없습니다.`,
       auditId: targetAudit?.auditId,
       escrowStatus: 'RELEASED_REFUNDED',
       trajectoryGrade: 'GRADE_FAIL_ABORTED',
@@ -3195,8 +3189,8 @@ export const createAssistantOnboardingSlice: StateCreator<
         (!targetAudit && !a.refunded)
           ? {
               ...a,
-              escrowStatus: 'RELEASED_REFUNDED' as const,
-              trajectoryGrade: 'GRADE_FAIL_ABORTED' as const,
+              escrowStatus: 'RELEASED_REFUNDED'as const,
+              trajectoryGrade: 'GRADE_FAIL_ABORTED'as const,
               undone: true,
               undoneAt: nowIso,
               refunded: true,
@@ -3211,8 +3205,8 @@ export const createAssistantOnboardingSlice: StateCreator<
           targetAudit && t.auditId === targetAudit.auditId
             ? {
                 ...t,
-                escrowStatus: 'RELEASED_REFUNDED' as const,
-                trajectoryGrade: 'GRADE_FAIL_ABORTED' as const,
+                escrowStatus: 'RELEASED_REFUNDED'as const,
+                trajectoryGrade: 'GRADE_FAIL_ABORTED'as const,
                 undone: true,
                 refunded: true,
                 refundedAmount: refundCoins,
@@ -3224,7 +3218,7 @@ export const createAssistantOnboardingSlice: StateCreator<
       uiNightEyeProtection: false,
       activeOverlayPlan: null,
       activeOverlayBacktrackCount: 0,
-      lastQuarantineToast: `💸 [1초 원상복구 & 에스크로 +${refundCoins} 코인 100% 즉시 반환 완료] 본사 실패 분석 큐(${failurePacket.failureId})로 실패 블랙박스 로그가 자동 전송되었습니다!`,
+      lastQuarantineToast: `[원상복구 & 에스크로 +${refundCoins} 코인 100% 즉시 반환 완료] 본사 실패 분석 큐(${failurePacket.failureId})로 실패 블랙박스 로그가 자동 전송되었습니다!`,
     }));
   },
 
@@ -3241,8 +3235,8 @@ export const createAssistantOnboardingSlice: StateCreator<
       const prevIdx = Math.max(0, state.activeOverlayStepIndex - 1);
       const toastMsg =
         nextCount >= 2
-          ? `💖 [뒤로 가기(Back) ${nextCount}회 감지 — 인간미 100% 쿨 환불 예약!] 초행길에 ${nextCount}번이나 헤매게 해드려 죄송합니다. 가이드를 끝까지 완료하시면 수리는 유지한 채 수리비 100%가 자동 환불되고 최단 지름길이 전 세계에 배포됩니다!`
-          : `🟡 [뒤로 가기(Back) 1회 감지 — 인간적 허용 구간] 낯선 화면에서 1회 우회하셨습니다. 한 번만 더 헤매시면(2회+) 완료 즉시 100% 자동 환불(수업료 면제)이 발동합니다!`;
+          ? `[뒤로 가기(Back) ${nextCount}회 감지 — 인간미 100% 쿨 환불 예약!] 초행길에 ${nextCount}번이나 헤매게 해드려 죄송합니다. 가이드를 끝까지 완료하시면 수리는 유지한 채 수리비 100%가 자동 환불되고 최단 지름길이 전 세계에 배포됩니다!`
+          : `[뒤로 가기(Back) 1회 감지 — 인간적 허용 구간] 낯선 화면에서 1회 우회하셨습니다. 한 번만 더 헤매시면(2회+) 완료 즉시 100% 자동 환불(수업료 면제)이 발동합니다!`;
       return {
         activeOverlayBacktrackCount: nextCount,
         activeOverlayStepIndex: prevIdx,
@@ -3289,7 +3283,7 @@ export const createAssistantOnboardingSlice: StateCreator<
           ? [evalResult.otaEntry, ...s.setupSelfHealingOtaQueue]
           : s.setupSelfHealingOtaQueue,
         lastQuarantineToast:
-          '🟡 [손가락 가이드 완주 · 뒤로 가기 1회 인간적 허용] 정상 정산 처리되었으며, 1회 우회 갈림길 로그를 본사 Multi-LLM으로 보내 0회 직행 코스로 미세 교정(OTA)했습니다!',
+          '[손가락 가이드 완주 · 뒤로 가기 1회 인간적 허용] 정상 정산 처리되었으며, 1회 우회 갈림길 로그를 본사 Multi-LLM으로 보내 0회 직행 코스로 미세 교정(OTA)했습니다!',
       }));
       return;
     }
@@ -3299,7 +3293,7 @@ export const createAssistantOnboardingSlice: StateCreator<
       activeOverlayStepIndex: 0,
       activeOverlayBacktrackCount: 0,
       lastQuarantineToast:
-        '🟢 [실시간 손가락 화살표 가이드 0회 쾌속 완주!] 사전 답사 지도대로 막힘없이 한 번에 도착하셨습니다!',
+        '[실시간 손가락 화살표 가이드 0회 쾌속 완주!] 사전 답사 지도대로 막힘없이 한 번에 도착하셨습니다!',
     });
   },
 

@@ -571,7 +571,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
               : "flex-1 rounded-lg py-1.5 text-xs sm:text-sm font-medium text-slate-500 hover:text-slate-700 hover:bg-white/60 transition-all cursor-pointer"
             }
           >
-            👻 충전하기
+            충전하기
           </button>
           <button
             onClick={() => {
@@ -583,7 +583,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
               : "flex-1 rounded-lg py-1.5 text-xs sm:text-sm font-medium text-slate-500 hover:text-slate-700 hover:bg-white/60 transition-all cursor-pointer"
             }
           >
-            🎁 코인 선물함
+            코인 선물함
           </button>
           <button
             onClick={() => setTab('history')}
@@ -606,7 +606,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                     className="text-xs sm:text-sm text-indigo-950 font-bold"
                     style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
                   >
-                    🎁 기억해 둔 선물: {pendingGiftDraft.receiverName}님께 {pendingGiftDraft.amount.toLocaleString()}C
+                    기억해 둔 선물: {pendingGiftDraft.receiverName}님께 {pendingGiftDraft.amount.toLocaleString()}C
                   </p>
                   <p className="text-[11px] text-slate-600 mt-0.5">
                     아래에서 부족한 코인(최소 {pendingGiftDraft.recommendedChargeCoins.toLocaleString()}C)을 충전하시면, 충전 완료 즉시 자동으로 선물이 발송됩니다!
@@ -644,7 +644,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
                   }}
                   className="px-3 py-1 rounded-lg bg-slate-50 hover:bg-slate-100 text-slate-500 hover:text-slate-700 border border-slate-200 text-xs font-medium transition-all cursor-pointer"
                 >
-                  🎁 코인 선물하기 ›
+                  코인 선물하기 ›
                 </button>
               </div>
 
@@ -902,7 +902,7 @@ export const HubPurchaseWidget: React.FC<HubPurchaseWidgetProps> = ({
               className="gh-dark-cta w-full rounded-2xl bg-gradient-to-b from-[#1b2554] via-[#131b40] to-[#0b1029] hover:from-[#222f68] hover:to-[#101738] py-3.5 text-base text-white border border-amber-300/85 ring-1 ring-amber-400/25 shadow-[0_10px_24px_rgba(13,18,48,0.35)] hover:shadow-xl active:scale-[0.98] transition-all tracking-wide"
             >
               <span style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}>
-                👻 {selectedOption.toLocaleString()} 귀신코인 결제하기 ({selectedMethodObj.label.split(' ')[0]})
+                {selectedOption.toLocaleString()} 귀신코인 결제하기 ({selectedMethodObj.label.split(' ')[0]})
               </span>
             </HubPaymentTrigger>
           </div>

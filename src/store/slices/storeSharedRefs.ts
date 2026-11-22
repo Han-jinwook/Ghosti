@@ -381,20 +381,20 @@ export async function requestQuarantineOp(
 
 export function quarantineFailureToast(kind: 'move' | 'restore', r: QuarantineOpResult): string {
   const verb = kind === 'move' ? '정리 보관함(휴지통)으로 옮기지' : '되돌리지';
-  if (r.offline) return `⚠️ 로컬 엔진에 연결되지 않아 사진을 ${verb} 못했습니다. (아무 파일도 바뀌지 않았습니다)`;
+  if (r.offline) return `로컬 엔진에 연결되지 않아 사진을 ${verb} 못했습니다. (아무 파일도 바뀌지 않았습니다)`;
   const first = r.errors[0];
-  return `⚠️ 사진을 ${verb} 못했습니다${first ? `: ${first.error}` : '.'}`;
+  return `사진을 ${verb} 못했습니다${first ? `: ${first.error}` : '.'}`;
 }
 
 export function quarantineResultNote(kind: 'move' | 'restore', r: QuarantineOpResult): string {
-  const fail = r.errors.length ? ` (실패 ${r.errors.length}건: ${r.errors[0].error})` : '';
+  const fail = r.errors.length ? `(실패 ${r.errors.length}건: ${r.errors[0].error})` : '';
   if (r.demo) {
     return kind === 'move'
-      ? '정리 보관함(휴지통)으로 이동했습니다 (↩️ 1초 되돌리기 가능)'
+      ? '정리 보관함(휴지통)으로 이동했습니다 (↩️ 되돌리기 가능)'
       : '원래 목록으로 복원했습니다';
   }
   return kind === 'move'
-    ? `정리 보관함(휴지통)으로 옮겼습니다 (↩️ 1초 되돌리기 가능)${fail}`
+    ? `정리 보관함(휴지통)으로 옮겼습니다 (↩️ 되돌리기 가능)${fail}`
     : `원래 위치로 되돌렸습니다${fail}`;
 }
 
@@ -417,7 +417,7 @@ export const INITIAL_ONBOARDING_PROGRESS: OnboardingProgressUpdate = {
   currentPhotoName: '로컬 서류함 및 동영상 전 구간 타임라인 프레임 자율 색인 완료',
   currentPhotoThumb: '',
   liveVector64: Array.from({ length: 64 }, (_, i) => +(0.2 + Math.abs(Math.sin(i * 0.25)) * 0.75).toFixed(2)),
-  modelStatusText: '내 PC 직접 구동(Ghosti_PC_Agent.exe) 100% 로컬 색인 완료 (외부 서버 전송 0 Byte)',
+  modelStatusText: '내 PC 직접 구동(Ghosti_PC_Agent.exe) 100% 로컬 색인 완료 (기기 내 로컬 처리)',
 };
 
 /**
@@ -450,8 +450,7 @@ export function buildYearEquivalenceTokens(yearInput: number | string): string[]
   const short2 = String(fullYear % 100).padStart(2, '0');
   const decadeStart = Math.floor(fullYear / 10) * 10;
   return Array.from(
-    new Set([
-      String(fullYear),
+    new Set([      String(fullYear),
       `${fullYear}년`,
       short2,
       `${short2}년`,
@@ -607,8 +606,7 @@ export function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberClust
               yc.conditionShortKo ?? (idx === 0 ? '정면' : '측면'),
             sourceDeviceKo: yc.sourceDeviceKo ?? '호스트 원본',
           }))
-        : [
-            {
+        : [            {
               year: c.representativeYear || 2026,
               representativePhoto: c.representativePhoto,
               representativeDate: c.representativeDate,
@@ -639,7 +637,7 @@ export function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberClust
     let roomPersonas: RoomPersonaMap = hasUserRegisteredName ? userOverride?.roomPersonas || {} : {};
     let crossLoungeEvolutionNote =
       c.crossLoungeEvolutionNote ||
-      '🛂 이메일 여권 영구 귀속 · 전 라운지 무질문 자동 연동됨';
+      '이메일 여권 영구 귀속 · 전 라운지 무질문 자동 연동됨';
 
     if (c.clusterId === 'face_member_3' || c.personKey === 'person_adult_female_partner') {
       passportEmail = 'eunsook@ghosti.ai';
@@ -653,7 +651,7 @@ export function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberClust
         filledStyleSlots: ['정면·선명', '야외·노을', '측면·미소', '선글라스·역광'],
       };
       crossLoungeEvolutionNote =
-        '🏠 처가방 여행 사진에서 [야외·노을] 슬롯 진화 ➔ 전 라운지 여권 자동 동기화됨';
+        '처가방 여행 사진에서 [야외·노을] 슬롯 진화  전 라운지 여권 자동 동기화됨';
 
       if (!baseCuts.some((yc) => yc.year === 2025)) {
         extraCuts.push({
@@ -682,7 +680,7 @@ export function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberClust
         filledStyleSlots: ['정면·선명', '측면·미소', '야외·노을', '선글라스·역광'],
       };
       crossLoungeEvolutionNote =
-        '⛳ 동호·동창회방 라운딩 사진에서 [선글라스·역광] 슬롯 무언 교체(94.2%) ➔ 처가집 방("한진욱 선글라스") 자동 전파됨';
+        '동호·동창회방 라운딩 사진에서 [선글라스·역광] 슬롯 무언 교체(94.2%)  처가집 방("한진욱 선글라스") 자동 전파됨';
 
       if (!baseCuts.some((yc) => yc.year === 2023)) {
         extraCuts.push({
@@ -711,7 +709,7 @@ export function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberClust
         filledStyleSlots: ['정면·선명', '측면·미소', '야외·노을'],
       };
       crossLoungeEvolutionNote =
-        '📱 게스트 폰 동반 등장(4회)으로 [측면·미소] 슬롯 여권 자동 진화됨';
+        '게스트 폰 동반 등장(4회)으로 [측면·미소] 슬롯 여권 자동 진화됨';
 
       if (!baseCuts.some((yc) => yc.year === 2025)) {
         extraCuts.push({
@@ -740,7 +738,7 @@ export function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberClust
         filledStyleSlots: ['정면·선명', '야외·노을', '측면·미소', '야간·실내'],
       };
       crossLoungeEvolutionNote =
-        '🎒 친구 모임방(동호회 · 동창회)에서 [야간·실내] 슬롯 진화(유사도 93.8%) ➔ 우리집 가족방 과거 사진 +7장 자동 구출됨!';
+        '친구 모임방(동호회 · 동창회)에서 [야간·실내] 슬롯 진화(유사도 93.8%)  우리집 가족방 과거 사진 +7장 자동 구출됨!';
 
       if (baseCuts.length < 2) {
         extraCuts.push({
@@ -769,7 +767,7 @@ export function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberClust
         filledStyleSlots: ['정면·선명', '야외·노을'],
       };
       crossLoungeEvolutionNote =
-        '🛂 가족방 초벌 여권 이메일 귀속 완료 (어느 방에 가든 무질문 자동 작동)';
+        '가족방 초벌 여권 이메일 귀속 완료 (어느 방에 가든 무질문 자동 작동)';
 
       if (baseCuts.length < 2) {
         extraCuts.push({
@@ -798,7 +796,7 @@ export function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberClust
       avatarUrl: c.cropUrl || c.avatarUrl,
       cropUrl: c.cropUrl || c.avatarUrl,
       boundingBox: c.boundingBox,
-      conditionTag: '정면·선명' as const,
+      conditionTag: '정면·선명'as const,
       conditionShortKo: '① 정면',
       sourceDeviceKo: '귀신같이 여권 최신 기준컷',
     };
@@ -807,8 +805,7 @@ export function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberClust
     const thirdCut = mergedYearlyRaw[2] || secondCut;
 
     // 5대 스타일 슬롯 표준화: ① 정면(당해 연도 Anchor) / ② 활짝 미소 / ③ 측면 / ④ 선글라스 / ⑤ 야외
-    const fiveStyleSlotCuts: YearlyFaceBestCut[] = [
-      {
+    const fiveStyleSlotCuts: YearlyFaceBestCut[] = [      {
         ...slot1Anchor,
         year: Math.max(slot1Anchor.year || 2026, 2026),
         conditionTag: '정면·선명',

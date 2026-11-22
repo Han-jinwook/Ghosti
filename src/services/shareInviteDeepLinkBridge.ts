@@ -121,11 +121,11 @@ export function resolveDefaultRoomTitle(
 ): string {
   const cleanCustom = (customTitle || '').trim();
   if (cleanCustom) return cleanCustom;
-  if (loungeType === 'club') return '⛰️ 동호회·모임 사진방';
-  if (loungeType === 'student') return '🎓 동창회 사진방';
-  if (familyRoom === '본가(친가)') return '🏡 본가(친가) 가족 사진방';
-  if (familyRoom === '처가(친정)') return '🌸 처가(친정) 가족 사진방';
-  return '🏠 우리집 가족 사진방';
+  if (loungeType === 'club') return '동호회·모임 사진방';
+  if (loungeType === 'student') return '동창회 사진방';
+  if (familyRoom === '본가(친가)') return '본가(친가) 가족 사진방';
+  if (familyRoom === '처가(친정)') return '처가(친정) 가족 사진방';
+  return '우리집 가족 사진방';
 }
 
 export function normalizeInviteFamilyRoom(raw: string | null | undefined): FamilyRoomId {

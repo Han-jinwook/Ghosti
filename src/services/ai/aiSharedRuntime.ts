@@ -110,8 +110,7 @@ export function notifyVideoPlaybackStop(): void {
   setVideoPlaybackActive(false);
 }
 
-const KEEP_STEM_WORDS = new Set([
-  '아이', '어린이', '고양이', '멍멍이', '길냥이', '호랑이', '부엉이', '원숭이', '거북이', '떡볶이',
+const KEEP_STEM_WORDS = new Set([  '아이', '어린이', '고양이', '멍멍이', '길냥이', '호랑이', '부엉이', '원숭이', '거북이', '떡볶이',
   '강아지', '송아지', '망아지', '강냉이', '달팽이', '지렁이', '올챙이', '코끼리', '너구리', '개구리',
   '오이', '종이', '놀이', '높이', '길이', '넓이', '깊이', '나이', '차이', '사이',
   '바닷가', '창가', '물가', '길가', '강가', '화가', '작가', '국가', '상가', '단가', '원가', '휴가',
@@ -170,8 +169,7 @@ const KO_SUBSTRING_FALSE_FRIEND_RX: Record<string, RegExp> = {
   개: /개인|개월|개발|개봉|개선|개설|개시|개수|개념|개요|개최|공개|번개|안개|조개|베개|날개|덮개|지우개/,
 };
 
-const MEDIA_AND_DOC_SEARCH_CATEGORY_NOUNS = new Set([
-  '풍경', '풍경사진', '자연', '경치', '전망', '바다', '해변', '바닷가', '산', '등산', '하늘', '구름', '노을', '일몰', '일출', '야경',
+const MEDIA_AND_DOC_SEARCH_CATEGORY_NOUNS = new Set([  '풍경', '풍경사진', '자연', '경치', '전망', '바다', '해변', '바닷가', '산', '등산', '하늘', '구름', '노을', '일몰', '일출', '야경',
   '꽃', '나무', '숲', '공원', '호수', '강', '계곡', '폭포', '눈', '설경', '봄', '여름', '가을', '겨울',
   '강아지', '고양이', '반려견', '반려묘', '동물', '새',
   '음식', '음식사진', '맛집', '식사', '요리', '커피', '카페', '디저트', '케이크', '빵', '술', '맥주', '와인',
@@ -184,8 +182,7 @@ const MEDIA_AND_DOC_SEARCH_CATEGORY_NOUNS = new Set([
   '청첩장', '초대장', '티켓', '항공권', '처방전', '진단서', '통장', '통장사본', '증명서', '수료증', '자격증',
 ]);
 
-const NON_SEARCH_SYSTEM_NOUNS = new Set([
-  '속도', '온도', '각도', '국가', '차이', '사이', '나이', '길이', '넓이', '높이', '깊이',
+const NON_SEARCH_SYSTEM_NOUNS = new Set([  '속도', '온도', '각도', '국가', '차이', '사이', '나이', '길이', '넓이', '높이', '깊이',
 ]);
 
 /**
@@ -335,8 +332,7 @@ export function matchKoTokenInStems(
   return false;
 }
 
-const OCR_CONFUSABLE_CHO = new Set([
-  '0:15', '15:0', // ㄱ↔ㅋ
+const OCR_CONFUSABLE_CHO = new Set([  '0:15', '15:0', // ㄱ↔ㅋ
   '3:16', '16:3', // ㄷ↔ㅌ
   '7:17', '17:7', // ㅂ↔ㅍ
   '12:14', '14:12', // ㅈ↔ㅊ
@@ -344,8 +340,7 @@ const OCR_CONFUSABLE_CHO = new Set([
   '0:1', '1:0', // ㄱ↔ㄲ
   '9:10', '10:9', // ㅅ↔ㅆ
 ]);
-const OCR_CONFUSABLE_JUNG = new Set([
-  '13:18', '18:13', // ㅜ↔ㅡ (예: 룰렛↔를렛)
+const OCR_CONFUSABLE_JUNG = new Set([  '13:18', '18:13', // ㅜ↔ㅡ (예: 룰렛↔를렛)
   '8:18', '18:8', // ㅗ↔ㅡ (예: 카카오톡↔카카오특)
   '8:12', '12:8', // ㅗ↔ㅛ
   '13:17', '17:13', // ㅜ↔ㅠ
@@ -354,8 +349,7 @@ const OCR_CONFUSABLE_JUNG = new Set([
   '1:5', '5:1', // ㅐ↔ㅔ
   '3:7', '7:3', // ㅒ↔ㅖ
 ]);
-const OCR_CONFUSABLE_JONG = new Set([
-  '16:21', '21:16', // ㅁ↔ㅇ (예: 추첨↔추청)
+const OCR_CONFUSABLE_JONG = new Set([  '16:21', '21:16', // ㅁ↔ㅇ (예: 추첨↔추청)
   '4:8', '8:4', // ㄴ↔ㄹ
   '1:24', '24:1', // ㄱ↔ㅋ
   '17:26', '26:17', // ㅂ↔ㅍ
@@ -495,8 +489,7 @@ let modelRemoteFallbackMutex: Promise<void> = Promise.resolve();
 async function runWithTimeout<T>(task: Promise<T>, timeoutMs: number, label: string): Promise<T> {
   let timer: ReturnType<typeof setTimeout> | null = null;
   try {
-    return await Promise.race([
-      task,
+    return await Promise.race([      task,
       new Promise<T>((_resolve, reject) => {
         timer = setTimeout(() => reject(new Error(`${label}_TIMEOUT_${timeoutMs}MS`)), timeoutMs);
       }),
@@ -522,12 +515,12 @@ export async function loadWithR2Fallback<T>(loader: () => Promise<T>): Promise<T
       env.remoteHost = PRIMARY_REMOTE_HOST;
       return await runWithTimeout(loader(), 45000, 'HF_PRIMARY');
     } catch (err) {
-      console.warn('[Ghosti AI Engine] 허깅페이스 1차 로드 실패 ➔ 당사 GitHub Releases 미러(/api/models-mirror/)로 자동 전환합니다:', err);
+      console.warn('[Ghosti AI Engine] 허깅페이스 1차 로드 실패  당사 GitHub Releases 미러(/api/models-mirror/)로 자동 전환합니다:', err);
       try {
         env.remoteHost = FALLBACK_R2_HOST;
         return await runWithTimeout(loader(), 45000, 'GH_MIRROR');
       } catch (mirrorErr) {
-        console.warn('[Ghosti AI Engine] 미러 2차 로드 실패 ➔ 로컬 Z-코어 오프라인 마스터 사본(127.0.0.1:5199/__models/)으로 전환합니다:', mirrorErr);
+        console.warn('[Ghosti AI Engine] 미러 2차 로드 실패  로컬 Z-코어 오프라인 마스터 사본(127.0.0.1:5199/__models/)으로 전환합니다:', mirrorErr);
         try {
           env.remoteHost = FALLBACK_LOCAL_ZCORE_HOST;
           return await runWithTimeout(loader(), 30000, 'ZCORE_LOCAL');
@@ -552,8 +545,7 @@ export interface PresetQueryDef {
   wavFile: string;
 }
 
-export const PRESET_QUERIES: PresetQueryDef[] = [
-  { id: 'beach_ko', lang: 'ko', q: '바닷가에서 뛰노는 아이', categoryTag: '#해변·파도', wavFile: 'beach_ko.wav' },
+export const PRESET_QUERIES: PresetQueryDef[] = [  { id: 'beach_ko', lang: 'ko', q: '바닷가에서 뛰노는 아이', categoryTag: '#해변·파도', wavFile: 'beach_ko.wav' },
   { id: 'beach_en', lang: 'en', q: 'a child running on the beach', categoryTag: '#해변·파도', wavFile: 'beach_en.wav' },
   { id: 'cake_ko', lang: 'ko', q: '생일 케이크와 촛불', categoryTag: '#생일·케이크', wavFile: 'cake_ko.wav' },
   { id: 'cake_en', lang: 'en', q: 'birthday cake with candles', categoryTag: '#생일·케이크', wavFile: 'cake_en.wav' },
@@ -761,7 +753,7 @@ export function isIosDeviceRuntime(): boolean {
 }
 
 async function detectUsableWebGpu(): Promise<boolean> {
-  if (typeof navigator === 'undefined' || !('gpu' in navigator)) return false;
+  if (typeof navigator === 'undefined' || !('gpu'in navigator)) return false;
   // [모바일(Android CrGpuMain ANR & DMA-BUF 스왑 고갈 / iOS WKWebView Jetsam OOM) 원천 차단]:
   // 스마트폰 WebView에서 수백 개 WGSL 셰이더 컴파일 및 거대 GPU DMA-BUF 할당 시 시스템 UI까지 멈추므로
   // 모바일은 Android·iOS 모두 단일 스레드 WASM q4 모드로 안전 고정하고 WebGPU는 데스크톱 전용으로 가동합니다.
@@ -793,7 +785,7 @@ export async function loadModelWithWebGpuToWasmFallback(config: any, dtypeSpec: 
         } as any)
       );
     } catch (gpuErr) {
-      console.warn('[Ghosti Engine] WebGPU 세션 생성 실패 ➔ WASM 모드로 자동 전환합니다:', gpuErr);
+      console.warn('[Ghosti Engine] WebGPU 세션 생성 실패  WASM 모드로 자동 전환합니다:', gpuErr);
     }
   }
   return loadWithR2Fallback(() =>
@@ -857,7 +849,7 @@ export async function ensureSearchEngineLoaded(
       resetCacheStats();
 
       const targetDtype = getOptimalEmbeddingDtype();
-      onProgress?.(`OPFS 영구 캐시에서 EmbeddingGemma 2 (${targetDtype.toUpperCase()} 텍스트+오디오) 로드 중...`, 15);
+      onProgress?.('검색 엔진 준비 중...', 15);
       const config: any = await loadWithR2Fallback(() => AutoConfig.from_pretrained(MODEL_ID));
       config.vision_config = null;
 
@@ -1012,8 +1004,7 @@ export async function persistMediaCacheEntry(
  * EmbeddingGemma 2 멀티모달 공간에서 어두운 암벽·복잡한 모바일 UI 화면 등 특정 프레임이
  * 모든 한국어 문장에 대해 공통적으로 높은 기본 코사인 유사도(Hubness)를 갖는 현상을 정밀 상쇄합니다.
  */
-const HUBNESS_REFERENCE_PROMPTS: string[] = [
-  '실내 사무실 책상과 의자 컴퓨터 모니터',
+const HUBNESS_REFERENCE_PROMPTS: string[] = [  '실내 사무실 책상과 의자 컴퓨터 모니터',
   '푸른 숲속 나무와 초록 산책로 자연 풍경',
   '도심 거리 고층 건물과 도로 위 자동차',
   '식탁 위 접시에 담긴 따뜻한 음식과 요리',
@@ -1042,8 +1033,7 @@ export async function ensureHubnessReferenceVecsLoaded(): Promise<Float32Array[]
   hubnessRefLoadingPromise = (async () => {
     try {
       if (!isTextQueryEncoderReady()) {
-        const ok = await Promise.race([
-          ensureTextQueryEncoderLoaded(),
+        const ok = await Promise.race([          ensureTextQueryEncoderLoaded(),
           new Promise<boolean>((resolve) => setTimeout(() => resolve(false), 3500)),
         ]);
         if (!ok && !isTextQueryEncoderReady()) return [];
@@ -1058,8 +1048,7 @@ export async function ensureHubnessReferenceVecsLoaded(): Promise<Float32Array[]
       if (!qModel || !qTok) return [];
 
       const prefixed = HUBNESS_REFERENCE_PROMPTS.map((p) => QUERY_PREFIX + p);
-      const rows = await Promise.race([
-        (async () => {
+      const rows = await Promise.race([        (async () => {
           const inputs = await qTok(prefixed, { padding: true, truncation: true });
           const out = await qModel(inputs);
           return toRows(out.sentence_embedding).map((r) => normalizeVector(r, DEFAULT_DIM));
@@ -1102,8 +1091,7 @@ export function computeFrameHubnessScore(
  * 한국어 외래어·일상 시각 개념 검색어의 멀티모달(Vision↔Text) 교차 정렬 정밀도를 높이기 위한 순수 언어 확장 사전
  * (파일명·경로 의존성 0% — 오직 사용자의 검색 질의 문장만 시각 묘사로 보조 확장)
  */
-const VISUAL_QUERY_CONCEPT_EXPANSIONS: Array<[RegExp, string]> = [
-  [/석양|노을|일몰|해질녘|황혼/, '붉은 석양 노을 일몰 주황빛 하늘 수평선 구름 해질녘 golden orange sunset twilight sky horizon clouds'],
+const VISUAL_QUERY_CONCEPT_EXPANSIONS: Array<[RegExp, string]> = [  [/석양|노을|일몰|해질녘|황혼/, '붉은 석양 노을 일몰 주황빛 하늘 수평선 구름 해질녘 golden orange sunset twilight sky horizon clouds'],
   [/일출|해돋이|여명/, '아침 일출 해돋이 붉은 태양 수평선 sunrise morning sun over horizon sky'],
   [/비행기|항공기|기내|공항|창밖\s*하늘/, '비행기 창문 밖 하늘 구름 항공기 날개 공항 view from airplane window clouds sky wing airport'],
   [/동굴|암석|종유석|석회동굴/, '어두운 자연 동굴 암석 바위 종유석 dark natural cave rock formation cavern'],
@@ -1174,8 +1162,7 @@ export async function encodeMultimodalSearchQueryVecs(
     const waitMs = typeof maxWaitMs === 'number' && maxWaitMs > 0 ? Math.min(maxWaitMs, 5500) : 3800;
     if (!isTextQueryEncoderReady()) {
       const loadPromise = ensureTextQueryEncoderLoaded();
-      const readyInTime = await Promise.race([
-        loadPromise,
+      const readyInTime = await Promise.race([        loadPromise,
         new Promise<boolean>((resolve) => setTimeout(() => resolve(false), waitMs)),
       ]);
       if (!readyInTime && !isTextQueryEncoderReady()) {
@@ -1233,8 +1220,7 @@ export async function encodeMultimodalSearchQueryVecs(
         const rows = toRows(out.sentence_embedding);
         return rows.map((r) => normalizeVector(r, DEFAULT_DIM));
       })();
-      const encoded = await Promise.race([
-        inferPromise,
+      const encoded = await Promise.race([        inferPromise,
         new Promise<Float32Array[]>((resolve) => setTimeout(() => resolve([]), 4000)),
       ]);
       if (encoded.length > 0) {
@@ -1286,8 +1272,7 @@ export async function getContrastiveNonAnimalAnchorVecs(
   }
   pendingContrastiveNonAnimalPromise = (async () => {
     try {
-      const [humanVecs, uiDocVecs] = await Promise.all([
-        encodeMultimodalSearchQueryVecs('사람 인물 얼굴 상반신 남녀 가족 휴양지 리조트 여행 셀카', maxWaitMs),
+      const [humanVecs, uiDocVecs] = await Promise.all([        encodeMultimodalSearchQueryVecs('사람 인물 얼굴 상반신 남녀 가족 휴양지 리조트 여행 셀카', maxWaitMs),
         encodeMultimodalSearchQueryVecs('스마트폰 앱 화면 캡처 문서 글자 건물 실내 풍경', maxWaitMs),
       ]);
       const combined = [...humanVecs.slice(0, 2), ...uiDocVecs.slice(0, 1)];
@@ -1478,7 +1463,7 @@ export function createCanvas2D(w: number, h: number): {
 
 export function canvasToJpegDataUrl(canvas: OffscreenCanvas | HTMLCanvasElement): string {
   try {
-    if ('toDataURL' in canvas && typeof canvas.toDataURL === 'function') {
+    if ('toDataURL'in canvas && typeof canvas.toDataURL === 'function') {
       return canvas.toDataURL('image/jpeg', 0.76);
     }
   } catch {
@@ -1545,8 +1530,7 @@ export function getStaticCorpusCached(): Promise<{ pocJson: any; auditJson: any;
   }
   if (!_staticCorpusCachePromise) {
     _staticCorpusCachePromise = (async () => {
-      const [pocRes, auditRes, semRes] = await Promise.all([
-        fetch('/poc/results/precomputed.json').catch(() => fetch(getZCoreUrl('/__poc/precomputed'))),
+      const [pocRes, auditRes, semRes] = await Promise.all([        fetch('/poc/results/precomputed.json').catch(() => fetch(getZCoreUrl('/__poc/precomputed'))),
         fetch('/poc/results/corpus_physical_audit.json').catch(() =>
           fetch(getZCoreUrl('/__photos/physical-audit'))
         ),
@@ -1554,8 +1538,7 @@ export function getStaticCorpusCached(): Promise<{ pocJson: any; auditJson: any;
           fetch(getZCoreUrl('/__photos/semantic-index'))
         ),
       ]);
-      const [pocJson, auditJson, semJson] = await Promise.all([
-        pocRes.json().catch(() => null),
+      const [pocJson, auditJson, semJson] = await Promise.all([        pocRes.json().catch(() => null),
         auditRes.json().catch(() => null),
         semRes.json().catch(() => null),
       ]);

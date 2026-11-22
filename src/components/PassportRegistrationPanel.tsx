@@ -20,12 +20,6 @@ import {
 
 export const PASSPORT_REG_DEFERRED_EVENT = 'ghosti_passport_reg_deferred';
 
-/**
- * 🪪 [D-35] 시기별 다양한 여권사진 등록 — 귀신비서 왼쪽 화면 (조용한 등록)
- *  - 비서가 묻거나, 유저가 "여권 등록" 등으로 말하거나, 검색창 칩을 눌렀을 때만 열린다.
- *  - 사진은 기본 전부 체크 → 아닌 것만 빼고 [등록] 1번.
- *  - 슬롯·바구니 등 내부 용어는 화면에 쓰지 않는다.
- */
 export const PassportRegistrationPanel: React.FC = () => {
   const faceClusters = useSaySeeStore((s) => s.faceClusters);
   const [mode, setMode] = useState<PassportRegMode | null>(null);
@@ -94,7 +88,6 @@ export const PassportRegistrationPanel: React.FC = () => {
     [mode]
   );
 
-  // 열 거리가 없으면 조용히 닫는다 (빈 화면 노출 금지)
   const nothingToShow =
     mode !== null &&
     pickCandidates.length === 0 &&
@@ -144,25 +137,22 @@ export const PassportRegistrationPanel: React.FC = () => {
     }
   };
 
-  const title = '🪪 시기별 다양한 여권사진 등록';
-
   return (
-    <section ref={sectionRef} className="p-4 sm:p-5 rounded-2xl bg-white dark:bg-[#18181B] border-2 border-primary-container/70 shadow-md flex flex-col gap-3.5">
+    <section ref={sectionRef} className="p-4 sm:p-5 rounded-xl bg-white border border-slate-200 shadow-xs flex flex-col gap-3.5">
       <div className="flex items-start justify-between gap-2">
         <div className="flex flex-col gap-0.5 min-w-0">
-          <h2 className="text-[15.5px] sm:text-[16.5px] font-extrabold text-zinc-900 dark:text-white break-keep">{title}</h2>
-          <p className="text-[12.5px] text-zinc-500 dark:text-zinc-400 break-keep">
+          <h2 className="text-[15px] sm:text-[16px] font-bold text-slate-900 break-keep">시기별 여권사진 등록</h2>
+          <p className="text-[12.5px] text-slate-500 break-keep">
             {mode === 'self'
               ? selfCluster
-                ? `${nickname ? `${nickname}님` : '내'} 얼굴로 보이는 사진이에요. 아닌 것만 빼주세요.`
-                : `${nickname ? `${nickname}님` : '내'} 얼굴을 골라주세요.`
-              : '가족으로 보이는 얼굴이에요. 아닌 분은 빼주세요.'}
+                ? `${nickname ? `${nickname}님` : '내'} 얼굴로 보이는 사진입니다. 아닌 사진만 선택 해제해 주세요.`
+                : `${nickname ? `${nickname}님` : '내'} 얼굴을 선택해 주세요.`
+              : '가족으로 보이는 얼굴입니다. 아닌 분은 제외해 주세요.'}
           </p>
         </div>
-        <span className="text-[11px] font-bold text-emerald-600 dark:text-emerald-300 shrink-0">🔒 내 기기 안에서만</span>
+        <span className="text-[11px] font-medium text-slate-500 shrink-0">내 기기에서만 처리</span>
       </div>
 
-      {/* 1단계: 내 얼굴 고르기 */}
       {mode === 'self' && !selfCluster && (
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
           {pickCandidates.map((c) => (
@@ -173,7 +163,7 @@ export const PassportRegistrationPanel: React.FC = () => {
                 pickSelfCluster(c.clusterId);
                 setRegTick((n) => n + 1);
               }}
-              className="flex flex-col items-center gap-1 p-1.5 rounded-xl hover:bg-primary-container/10 border border-transparent hover:border-primary-container/50 cursor-pointer transition-all"
+              className="flex flex-col items-center gap-1 p-1.5 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200 cursor-pointer transition-colors"
             >
               <AutonomousCanvasFaceAvatar
                 photoFile={c.representativePhoto}
@@ -183,13 +173,12 @@ export const PassportRegistrationPanel: React.FC = () => {
                 sizeClass="w-16 h-16"
                 shape="square"
               />
-              <span className="text-[11px] font-bold text-zinc-600 dark:text-zinc-300">이게 나예요</span>
+              <span className="text-[11px] font-medium text-slate-600">내 얼굴 선택</span>
             </button>
           ))}
         </div>
       )}
 
-      {/* 2단계: 시기별 사진 확인 (내 것 또는 가족) */}
       {people.map((c) => {
         const cuts = pendingCutsFor(c, regState);
         const isDismissed = dismissed.has(c.clusterId);
@@ -198,10 +187,10 @@ export const PassportRegistrationPanel: React.FC = () => {
         return (
           <div
             key={c.clusterId}
-            className={`flex flex-col gap-2.5 p-3 rounded-xl border ${
+            className={`flex flex-col gap-2.5 p-3 rounded-lg border ${
               isDismissed
-                ? 'opacity-45 border-dashed border-zinc-300 dark:border-white/15'
-                : 'border-zinc-200 dark:border-white/10 bg-zinc-50 dark:bg-zinc-950/60'
+                ? 'opacity-45 border-dashed border-slate-300'
+                : 'border-slate-200 bg-slate-50'
             }`}
           >
             <div className="flex items-center gap-2.5 flex-wrap">
@@ -221,7 +210,7 @@ export const PassportRegistrationPanel: React.FC = () => {
                   maxLength={18}
                   onChange={(e) => setNames((prev) => ({ ...prev, [c.clusterId]: e.target.value }))}
                   placeholder="이름 (선택)"
-                  className="flex-1 min-w-[140px] h-9 px-3 rounded-lg bg-white dark:bg-zinc-900 border border-zinc-300 dark:border-white/15 focus:border-primary-container outline-none text-[13px] text-zinc-900 dark:text-white placeholder:text-zinc-400"
+                  className="flex-1 min-w-[140px] h-9 px-3 rounded-lg bg-white border border-slate-300 focus:border-slate-600 outline-none text-[13px] text-slate-900 placeholder:text-slate-400"
                 />
               )}
               {mode === 'family' && (
@@ -235,9 +224,9 @@ export const PassportRegistrationPanel: React.FC = () => {
                       return next;
                     })
                   }
-                  className="ml-auto px-2.5 py-1 rounded-lg text-[11.5px] font-bold border border-zinc-300 dark:border-white/15 text-zinc-500 dark:text-zinc-400 hover:text-zinc-800 dark:hover:text-white cursor-pointer"
+                  className="ml-auto px-2.5 py-1 rounded-md text-[11.5px] font-medium border border-slate-200 bg-white text-slate-600 hover:text-slate-900 cursor-pointer"
                 >
-                  {isDismissed ? '되돌리기' : '이분은 빼기'}
+                  {isDismissed ? '되돌리기' : '제외'}
                 </button>
               )}
             </div>
@@ -263,13 +252,13 @@ export const PassportRegistrationPanel: React.FC = () => {
                         shape="square"
                       />
                       <span
-                        className={`absolute top-0.5 right-0.5 w-5 h-5 rounded-full text-[11px] font-extrabold flex items-center justify-center ${
-                          checked ? 'bg-primary-container text-zinc-950' : 'bg-zinc-700 text-zinc-300'
+                        className={`absolute top-0.5 right-0.5 w-5 h-5 rounded-full text-[11px] font-bold flex items-center justify-center ${
+                          checked ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-500'
                         }`}
                       >
                         {checked ? '✓' : ''}
                       </span>
-                      <span className="text-[10.5px] font-bold text-zinc-500 dark:text-zinc-400">{cut.year}</span>
+                      <span className="text-[10.5px] font-medium text-slate-500">{cut.year}</span>
                     </button>
                   );
                 })}
@@ -283,7 +272,7 @@ export const PassportRegistrationPanel: React.FC = () => {
         <button
           type="button"
           onClick={() => close(true)}
-          className="px-3.5 py-2 rounded-xl text-[12.5px] font-bold border border-zinc-300 dark:border-white/15 text-zinc-600 dark:text-zinc-300 hover:bg-zinc-100 dark:hover:bg-zinc-800 cursor-pointer"
+          className="px-3.5 py-2 rounded-lg text-[12.5px] font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
         >
           {mode === 'self' ? '나중에' : '다음에'}
         </button>
@@ -292,7 +281,7 @@ export const PassportRegistrationPanel: React.FC = () => {
             type="button"
             disabled={busy}
             onClick={() => void handleSubmit()}
-            className="px-4 py-2 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 text-[12.5px] font-extrabold cursor-pointer disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer disabled:opacity-50"
           >
             {busy ? '등록 중...' : '등록'}
           </button>

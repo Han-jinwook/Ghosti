@@ -266,7 +266,7 @@ export const HubProfileCard: React.FC<HubProfileCardProps> = ({ onSuccess, class
                 }}
                 className="px-2.5 py-1.5 rounded-xl bg-rose-500 hover:bg-rose-600 text-white text-xs font-black shadow-sm transition-colors cursor-pointer"
               >
-                🎁 코인 선물하기
+                코인 선물하기
               </button>
             </div>
           </div>
@@ -406,7 +406,7 @@ export interface HubNotificationCardProps {
 
 export const HubNotificationCard: React.FC<HubNotificationCardProps> = ({
   title = '알림 설정',
-  toggleLabel = '📧 이메일 알림 수신',
+  toggleLabel = '이메일 알림 수신',
   description = '허브 서비스의 점검, 중요 공지 및 혜택 알림 이메일을 수신합니다.',
   enabled,
   onChange,

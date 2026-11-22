@@ -78,7 +78,6 @@ export function matchPhotoQuery(p: PhotoItem, token: string): boolean {
   const location = (p.locationKo || '').toLowerCase();
   const combined = `${tagsStr} ${kwStr} ${ontoStr} ${caption} ${location}`;
 
-  // 1) 해변 / 바다 키워드 (실제 바다·해변·백사장·파도 장면만 엄격 매칭)
   if (t === '해변' || t === '바다' || t === '바닷가' || t === 'beach' || t === '백사장' || t === '모래사장') {
     return (
       combined.includes('해변') ||
@@ -90,7 +89,6 @@ export function matchPhotoQuery(p: PhotoItem, token: string): boolean {
     );
   }
 
-  // 2) 웃는 / 미소 키워드 (진지한 표정·무표정·실루엣·뒷모습 원천 배제)
   if (t === '웃는' || t === '미소' || t === '웃음' || t === 'smile' || t === '환하게' || t === '해맑게') {
     if (isNonSmilingPhoto(p)) return false;
     return (
@@ -104,7 +102,6 @@ export function matchPhotoQuery(p: PhotoItem, token: string): boolean {
     );
   }
 
-  // 3) 단체 / 모임 키워드 (1인 단독 사진 원천 배제)
   if (t === '단체' || t === '단체사진' || t === '모임' || t === '일행' || t === '여럿') {
     if (isSoloPortraitPhoto(p)) return false;
     return (
@@ -119,7 +116,6 @@ export function matchPhotoQuery(p: PhotoItem, token: string): boolean {
     );
   }
 
-  // 4) 오후 / 낮 / 햇살 / 노을 키워드
   if (t === '오후' || t === '낮' || t === '햇살' || t === '해질녘' || t === '노을' || t === '일몰') {
     if (t === '노을' || t === '일몰' || t === '해질녘') {
       return combined.includes('노을') || combined.includes('일몰') || combined.includes('석양') || combined.includes('해질녘');
@@ -135,7 +131,6 @@ export function matchPhotoQuery(p: PhotoItem, token: string): boolean {
     );
   }
 
-  // 5) 야외 / 풍경 / 자연 / 공원 키워드 (실내 스튜디오/거실/사무실 제외)
   if (t === '야외' || t === '풍경' || t === '자연' || t === '공원') {
     if (combined.includes('실내') && !combined.includes('야외')) return false;
     if (t === '공원') {
@@ -152,7 +147,6 @@ export function matchPhotoQuery(p: PhotoItem, token: string): boolean {
     );
   }
 
-  // 6) 가족 키워드 (실제 가족·아이·부모·아기 사진만 매칭)
   if (t === '가족') {
     return (
       combined.includes('가족') ||
@@ -164,7 +158,6 @@ export function matchPhotoQuery(p: PhotoItem, token: string): boolean {
     );
   }
 
-  // 기본 키워드 검색: 시맨틱 태그·키워드·캡션·위치 일치
   return combined.includes(t);
 }
 
@@ -179,7 +172,6 @@ export const PhotoDetailModal: React.FC = () => {
     searchSpace,
     duplicateGroups,
     toggleBookmark,
-    removeSharedRoomPhoto,
     openLocalFolder,
     pickBestInBurstPhotos,
     isGuestPreviewMode,
@@ -287,7 +279,6 @@ export const PhotoDetailModal: React.FC = () => {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [selectedPhoto, navigateAdjacentPhoto, setSelectedPhoto]);
 
-  // 선택된 사진이 속한 실제 연사/중복 그룹 전체 조회
   const resolvedBurstPhotos = useMemo(() => {
     if (!selectedPhoto) return [];
     if (selectedBurstGroup && selectedBurstGroup.length >= 2) {
@@ -311,7 +302,6 @@ export const PhotoDetailModal: React.FC = () => {
     return [selectedPhoto];
   }, [selectedPhoto, selectedBurstGroup, duplicateGroups, photos]);
 
-  // 1번 탭: 이 날 찍은 사진 전체 (동일 장면 중복 사본은 대표 1장만 남겨 다양한 장면 노출)
   const sameDayPhotos = useMemo(() => {
     if (!selectedPhoto) return [];
     const active = scopedPhotos.filter(
@@ -338,7 +328,6 @@ export const PhotoDetailModal: React.FC = () => {
     return [...combined, ...fallback].slice(0, 12);
   }, [selectedPhoto, scopedPhotos]);
 
-  // 2번 탭: 비슷한 피사체 사진 (768차원 벡터 코사인 유사도 + 핵심 피사체 카테고리 매칭)
   const similarVisualWithScores = useMemo(() => {
     if (!selectedPhoto) return [];
     const active = scopedPhotos.filter(
@@ -378,7 +367,6 @@ export const PhotoDetailModal: React.FC = () => {
     [similarVisualWithScores]
   );
 
-  // 3번 탭: 2차 자연어 좁혀가기 (결과 내 재검색)
   const drillDownPhotos = useMemo(() => {
     if (!selectedPhoto) return [];
     const active = scopedPhotos.filter(
@@ -426,247 +414,223 @@ export const PhotoDetailModal: React.FC = () => {
   return (
     <div
       onClick={() => setSelectedPhoto(null)}
-      className="fixed inset-0 z-[90] bg-black/90 backdrop-blur-2xl flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
+      className="fixed inset-0 z-[90] bg-black/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="relative w-full max-w-4xl max-h-[90dvh] overflow-y-auto rounded-3xl glass-l2 p-4 sm:p-5 md:p-7 border border-primary-container/30 shadow-[0_0_60px_rgba(0,0,0,0.75)] flex flex-col gap-4 sm:gap-5 my-auto"
+        className="relative w-full max-w-4xl max-h-[90dvh] overflow-y-auto rounded-2xl bg-white p-4 sm:p-5 md:p-6 border border-slate-200 shadow-2xl text-slate-900 flex flex-col gap-4 my-auto"
       >
-        {/* Top Bar */}
-        <div className="flex flex-col gap-3">
-          <div className="flex flex-col gap-3">
-            <div className="flex items-start justify-between gap-2.5 min-w-0">
-              <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                <span className="material-symbols-outlined text-primary-container text-[22px] mt-0.5 shrink-0">
-                  auto_awesome
-                </span>
-                <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2">
-                    <h3 className="font-headline-sm text-[15px] sm:text-headline-sm text-on-surface font-bold break-all leading-snug max-w-full">
-                      {selectedPhoto.name}
-                    </h3>
-                    {hasBurstGroup && (
-                      <span className="px-2.5 py-0.5 rounded-full bg-teal-600 text-white dark:bg-primary-container/25 dark:text-primary-container border border-teal-700/40 dark:border-primary-container/50 font-label-sm text-[11px] font-extrabold shrink-0">
-                        ❐ {resolvedBurstPhotos.length}장 연사 묶음
-                      </span>
-                    )}
-                    {isHiddenInLounge && (
-                      <span className="px-2.5 py-0.5 rounded-full bg-amber-500/20 text-amber-300 border border-amber-400/50 font-label-sm text-[11px] font-extrabold shrink-0">
-                        🙈 공유방에서 숨김 처리됨 (원본 안전 보존)
-                      </span>
-                    )}
-                  </div>
-                  <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 mt-1">
-                    <span className="px-2.5 py-0.5 rounded-md bg-emerald-500/15 border border-emerald-400/40 text-emerald-700 dark:text-emerald-300 font-label-sm text-[11.5px] font-extrabold">
-                      {activeLoungeType === 'personal'
-                        ? `💻 내 기기 원본 · ${selectedPhoto.locationKo || '내 기기 보관'}`
-                        : `📸 촬영·업로드: ${selectedPhoto.uploaderLabel || '방장 · 본인 업로드'}`}
-                    </span>
-                    <span className="px-2.5 py-0.5 rounded-md bg-cyan-500/15 border border-cyan-400/40 text-cyan-700 dark:text-cyan-300 font-label-sm text-[11.5px] font-extrabold">
-                      📅 촬영 날짜: {selectedPhoto.date}
-                    </span>
-                    <span className="font-label-mono text-[11px] text-on-surface-variant">
-                      • {(selectedPhoto.size / 1024 / 1024).toFixed(2)} MB • 원본 해상도 100% 보존
-                    </span>
-                  </div>
-                  {selectedPhoto.fullPath ? (
-                    <p className="font-label-mono text-[11px] text-teal-600 dark:text-teal-300 mt-1 break-all">
-                      📁 실제 위치: {selectedPhoto.fullPath}
-                    </p>
-                  ) : selectedPhoto.fullUrl?.startsWith('/sample_photos_301/') ||
-                    selectedPhoto.fullUrl?.startsWith('/poc/') ||
-                    selectedPhoto.fullUrl?.startsWith('/shared_family_host_thumbs/') ||
-                    String(selectedPhoto.id || '').startsWith('shared_host_') ? (
-                    <p className="font-body-sm text-[11.5px] text-amber-600 dark:text-amber-300 mt-1">
-                      ℹ️ 공유방·체험용 예시 사진입니다
-                    </p>
-                  ) : null}
-                </div>
+        {/* Top Header */}
+        <div className="flex flex-col gap-3 pb-3 border-b border-slate-100">
+          <div className="flex items-start justify-between gap-3 min-w-0">
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-center gap-2">
+                <h3 className="text-[15.5px] sm:text-[17px] text-slate-900 font-bold break-all leading-snug">
+                  {selectedPhoto.name}
+                </h3>
+                {hasBurstGroup && (
+                  <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 border border-slate-200 text-[11px] font-semibold shrink-0">
+                    연사 {resolvedBurstPhotos.length}장
+                  </span>
+                )}
+                {isHiddenInLounge && (
+                  <span className="px-2 py-0.5 rounded bg-amber-50 text-amber-800 border border-amber-200 text-[11px] font-semibold shrink-0">
+                    공유방 숨김 (원본 보존)
+                  </span>
+                )}
               </div>
-
-              <button
-                type="button"
-                onClick={() => setSelectedPhoto(null)}
-                aria-label="닫기"
-                className="w-9 h-9 rounded-full bg-surface-container-highest hover:bg-surface-bright flex items-center justify-center text-on-surface shrink-0 cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[19px]">close</span>
-              </button>
-            </div>
-
-            <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 shrink-0 max-w-full">
-              <a
-                href={isGuestPreviewMode ? '#guest-join-wall' : selectedPhoto.fullUrl}
-                download={isGuestPreviewMode ? undefined : selectedPhoto.name}
-                onClick={(e) => {
-                  if (isGuestPreviewMode) {
-                    e.preventDefault();
-                    triggerGuestJoinWall('💾 고화질 원본 내 폰에 일괄 저장');
-                    return;
-                  }
-                  setActionNotice(
-                    `⬇️ '${selectedPhoto.name}' 원본 화질(무압축 ${(selectedPhoto.size / 1024 / 1024).toFixed(2)}MB) 다운로드가 시작되었습니다!`
-                  );
-                }}
-                className="px-3.5 py-1.5 rounded-full bg-emerald-500 hover:bg-emerald-400 text-zinc-950 font-label-sm text-label-sm font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-                title="카톡처럼 화질이 깨지지 않는 100% 무압축 원본 화질 사진을 내 기기에 그대로 저장합니다"
-              >
-                <span className="hidden sm:inline">⬇️ 원본 화질 다운로드</span><span className="sm:hidden">⬇️ 원본</span>
-              </a>
-              <button
-                type="button"
-                onClick={() => {
-                  const next = !isHiddenInLounge;
-                  setIsHiddenInLounge(next);
-                  setActionNotice(
-                    next
-                      ? `🙈 [실수 삭제 방지] '${selectedPhoto.name}' 사진을 공유방 목록에서 안전하게 숨겼습니다. (원본 파일은 삭제되지 않고 보존됩니다)`
-                      : `👁️ '${selectedPhoto.name}' 사진의 숨김을 해제하여 공유방에 다시 표시합니다.`
-                  );
-                }}
-                className={`px-3 py-1.5 rounded-full border font-label-sm text-label-sm font-extrabold flex items-center gap-1 transition-all cursor-pointer ${
-                  isHiddenInLounge
-                    ? 'bg-amber-500 text-zinc-950 border-amber-400'
-                    : 'bg-amber-500/15 hover:bg-amber-500/25 border-amber-400/50 text-amber-700 dark:text-amber-300'
-                }`}
-                title="방장 권한으로 실수 삭제 없이 공유방 화면에서만 사진을 숨기거나 다시 표시합니다"
-              >
-                <span>{isHiddenInLounge ? '👁️ 숨김 해제' : '🙈 숨기기 (실수 삭제 방지)'}</span>
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  setActionNotice(
-                    `🛡️ [본인 업로드 파일 관리] '${selectedPhoto.name}' — 업로더 본인 및 방장만 노출 상태 변경·보관함 이동이 가능하여 다른 회원의 실수 삭제를 원천 차단합니다.`
-                  )
-                }
-                className="px-3 py-1.5 rounded-full bg-purple-500/15 hover:bg-purple-500/25 border border-purple-400/50 text-purple-700 dark:text-purple-300 font-label-sm text-label-sm font-extrabold flex items-center gap-1 transition-all cursor-pointer"
-                title="내가 올린 사진의 공유 범위 변경 및 실수 삭제 방지 보호 설정을 관리합니다"
-              >
-                <span className="hidden sm:inline">🗂️ 본인 업로드 파일 관리</span><span className="sm:hidden">🗂️ 관리</span>
-              </button>
-              <button
-                type="button"
-                onClick={() =>
-                  dispatchGhostCastLiveCommand({
-                    action: 'OPEN_MONITOR_CAST',
-                    photoId: selectedPhoto.id,
-                  })
-                }
-                className="px-3.5 py-1.5 rounded-full bg-cyan-500/20 hover:bg-cyan-500/35 border border-cyan-400/60 text-cyan-700 dark:text-cyan-200 font-label-sm text-label-sm font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-                title="연결된 내 PC/노트북 모니터에 전체화면 클린 뷰어로 띄우고 내 폰을 무선 리모컨으로 전환합니다 (카톡 알림 유출 0%)"
-              >
-                <span className="hidden sm:inline">💻 모니터로 크게 보기</span><span className="sm:hidden">💻 모니터</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  const pieces: string[] = [];
-                  if (selectedPhoto.captionKo && selectedPhoto.captionKo.trim()) {
-                    pieces.push(selectedPhoto.captionKo.trim());
-                  }
-                  const kw = (selectedPhoto.keywordsKo || []).filter(Boolean);
-                  if (kw.length > 0 && !pieces.join(' ').includes(kw[0])) {
-                    pieces.push(kw.join(' · '));
-                  }
-                  const tagText = (selectedPhoto.tags || []).filter(Boolean).join(' · ');
-                  if (pieces.length === 0 && tagText) {
-                    pieces.push(tagText);
-                  }
-                  const extracted =
-                    pieces.join('\n') ||
-                    `${selectedPhoto.name}${selectedPhoto.date ? ` (${selectedPhoto.date})` : ''}`;
-                  const chips = Array.from(
-                    new Set([...(selectedPhoto.keywordsKo || []), ...(selectedPhoto.tags || [])])
-                  ).slice(0, 16);
-                  void tryMakeCompactThumbDataUrl(selectedPhoto.thumbUrl || selectedPhoto.fullUrl).then(
-                    (thumbB64) => {
-                      pushTeleportPhotoToPcVanguard({
-                        fileName: selectedPhoto.name,
-                        ocrText: extracted,
-                        summary: `[스마트폰 1초 공간이동] ${selectedPhoto.name}`,
-                        thumbWebpBase64: thumbB64,
-                        chips,
-                      });
-                    }
-                  );
-                  setActionNotice(
-                    `⚡ '${selectedPhoto.name}' 글자·정보를 내 PC 클립보드로 전송했습니다! PC에서 Ctrl+V를 눌러 바로 붙여넣기 하세요.`
-                  );
-                }}
-                className="px-3.5 py-1.5 rounded-full bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/60 text-teal-700 dark:text-teal-200 font-label-sm text-label-sm font-extrabold flex items-center gap-1.5 transition-all cursor-pointer shadow-xs"
-                title="연결된 내 PC 클립보드로 사진 속 글자·정보를 1초 만에 전송합니다"
-              >
-                <span className="hidden sm:inline">⚡ 내 PC로 글자 전송</span><span className="sm:hidden">⚡ PC전송</span>
-              </button>
-              <button
-                onClick={() => {
-                  if (isGuestPreviewMode) {
-                    triggerGuestJoinWall('❤️ 하트 누르기 / 💬 댓글 달기');
-                    return;
-                  }
-                  toggleBookmark(selectedPhoto.id);
-                }}
-                className={`px-3 py-1.5 rounded-full font-label-sm text-label-sm flex items-center gap-1 transition-all cursor-pointer ${
-                  selectedPhoto.bookmarked
-                    ? 'bg-red-600 text-white font-extrabold shadow-xs'
-                    : 'bg-surface-container-high text-on-surface-variant hover:text-red-500'
-                }`}
-              >
-                <span
-                  className={`material-symbols-outlined text-[16px] ${
-                    selectedPhoto.bookmarked ? 'text-white' : 'text-red-500'
-                  }`}
-                  style={
-                    selectedPhoto.bookmarked
-                      ? { fontVariationSettings: "'FILL' 1, 'wght' 600" }
-                      : undefined
-                  }
-                >
-                  favorite
+              <div className="flex flex-wrap items-center gap-1.5 text-[12px] text-slate-500 mt-1">
+                <span>
+                  {activeLoungeType === 'personal'
+                    ? selectedPhoto.locationKo || '내 기기 보관'
+                    : `업로드: ${(selectedPhoto.uploaderLabel || '방장').replace(/^[👑📸\s]+/u, '')}`}
                 </span>
-                <span>{selectedPhoto.bookmarked ? '즐겨찾기됨' : '즐겨찾기'}</span>
-              </button>
-              <button
-                onClick={() => {
-                  if (selectedPhoto.fullPath) {
-                    void openLocalFolder('photos', selectedPhoto.fullPath);
-                    setActionNotice(`📂 실제 PC 원본 위치 열기: ${selectedPhoto.fullPath}`);
-                    return;
-                  }
-                  const isSampleOrSharedUrl =
-                    selectedPhoto.fullUrl?.startsWith('/sample_photos_301/') ||
-                    selectedPhoto.fullUrl?.startsWith('/poc/') ||
-                    selectedPhoto.fullUrl?.startsWith('/shared_family_host_thumbs/') ||
-                    String(selectedPhoto.id || '').startsWith('shared_host_');
-                  if (isSampleOrSharedUrl) {
-                    setActionNotice(
-                      'ℹ️ 이 사진은 공유방·체험용 예시 항목이라 내 PC 로컬 폴더에는 저장되어 있지 않습니다.'
-                    );
-                    return;
-                  }
-                  const fallbackTarget = selectedPhoto.fullUrl?.includes('/__photos/file')
-                    ? selectedPhoto.name
-                    : undefined;
-                  void openLocalFolder('photos', fallbackTarget);
-                  setActionNotice('📂 윈도우 탐색기에서 사진 원본 위치를 열었습니다.');
-                }}
-                title={selectedPhoto.fullPath || '원본 파일이 있는 내 PC 폴더를 엽니다'}
-                className="hidden sm:flex px-3 py-1.5 rounded-full bg-surface-container-high hover:bg-surface-bright text-on-surface font-label-sm text-label-sm items-center gap-1 cursor-pointer"
-              >
-                <span className="material-symbols-outlined text-[16px]">folder_open</span>
-                <span>원본 폴더</span>
-              </button>
+                <span>·</span>
+                <span>{selectedPhoto.date}</span>
+                <span>·</span>
+                <span>{(selectedPhoto.size / 1024 / 1024).toFixed(2)} MB</span>
+              </div>
+              {selectedPhoto.fullPath ? (
+                <p className="text-[11.5px] text-slate-500 mt-1 break-all">
+                  위치: {selectedPhoto.fullPath}
+                </p>
+              ) : selectedPhoto.fullUrl?.startsWith('/sample_photos_301/') ||
+                selectedPhoto.fullUrl?.startsWith('/poc/') ||
+                selectedPhoto.fullUrl?.startsWith('/shared_family_host_thumbs/') ||
+                String(selectedPhoto.id || '').startsWith('shared_host_') ? (
+                <p className="text-[11.5px] text-slate-400 mt-1">
+                  공유방 · 샘플 예시 사진입니다.
+                </p>
+              ) : null}
             </div>
+
+            <button
+              type="button"
+              onClick={() => setSelectedPhoto(null)}
+              aria-label="닫기"
+              className="w-8 h-8 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 shrink-0 cursor-pointer"
+            >
+              <span className="material-symbols-outlined text-[18px]">close</span>
+            </button>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-1.5 shrink-0 max-w-full">
+            <a
+              href={isGuestPreviewMode ? '#guest-join-wall' : selectedPhoto.fullUrl}
+              download={isGuestPreviewMode ? undefined : selectedPhoto.name}
+              onClick={(e) => {
+                if (isGuestPreviewMode) {
+                  e.preventDefault();
+                  triggerGuestJoinWall('원본 저장');
+                  return;
+                }
+                setActionNotice(
+                  `'${selectedPhoto.name}' 원본(${(selectedPhoto.size / 1024 / 1024).toFixed(2)}MB) 다운로드를 시작했습니다.`
+                );
+              }}
+              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              <span>원본 저장</span>
+            </a>
+
+            <button
+              type="button"
+              onClick={() => {
+                const next = !isHiddenInLounge;
+                setIsHiddenInLounge(next);
+                setActionNotice(
+                  next
+                    ? `'${selectedPhoto.name}' 사진을 공유방 목록에서 숨겼습니다. 내 기기 원본 파일은 유지됩니다.`
+                    : `'${selectedPhoto.name}' 사진 숨김을 해제했습니다.`
+                );
+              }}
+              className={`px-3 py-1.5 rounded-lg border text-[12px] font-medium transition-colors cursor-pointer ${
+                isHiddenInLounge
+                  ? 'bg-slate-900 text-white border-slate-900'
+                  : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+              }`}
+            >
+              <span>{isHiddenInLounge ? '숨김 해제' : '목록에서 숨기기'}</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() =>
+                dispatchGhostCastLiveCommand({
+                  action: 'OPEN_MONITOR_CAST',
+                  photoId: selectedPhoto.id,
+                })
+              }
+              className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium transition-colors cursor-pointer"
+            >
+              <span>모니터로 보기</span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => {
+                const pieces: string[] = [];
+                if (selectedPhoto.captionKo && selectedPhoto.captionKo.trim()) {
+                  pieces.push(selectedPhoto.captionKo.trim());
+                }
+                const kw = (selectedPhoto.keywordsKo || []).filter(Boolean);
+                if (kw.length > 0 && !pieces.join(' ').includes(kw[0])) {
+                  pieces.push(kw.join(' · '));
+                }
+                const tagText = (selectedPhoto.tags || []).filter(Boolean).join(' · ');
+                if (pieces.length === 0 && tagText) {
+                  pieces.push(tagText);
+                }
+                const extracted =
+                  pieces.join('\n') ||
+                  `${selectedPhoto.name}${selectedPhoto.date ? ` (${selectedPhoto.date})` : ''}`;
+                const chips = Array.from(
+                  new Set([...(selectedPhoto.keywordsKo || []), ...(selectedPhoto.tags || [])])
+                ).slice(0, 16);
+                void tryMakeCompactThumbDataUrl(selectedPhoto.thumbUrl || selectedPhoto.fullUrl).then(
+                  (thumbB64) => {
+                    pushTeleportPhotoToPcVanguard({
+                      fileName: selectedPhoto.name,
+                      ocrText: extracted,
+                      summary: selectedPhoto.name,
+                      thumbWebpBase64: thumbB64,
+                      chips,
+                    });
+                  }
+                );
+                setActionNotice(
+                  `'${selectedPhoto.name}' 텍스트 정보를 내 PC 클립보드로 전송했습니다. PC에서 Ctrl + V로 붙여넣을 수 있습니다.`
+                );
+              }}
+              className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium transition-colors cursor-pointer"
+            >
+              <span>PC로 텍스트 전송</span>
+            </button>
+
+            <button
+              onClick={() => {
+                if (isGuestPreviewMode) {
+                  triggerGuestJoinWall('즐겨찾기 및 댓글');
+                  return;
+                }
+                toggleBookmark(selectedPhoto.id);
+              }}
+              className={`px-3 py-1.5 rounded-lg text-[12px] font-medium flex items-center gap-1 border transition-colors cursor-pointer ${
+                selectedPhoto.bookmarked
+                  ? 'bg-rose-50 border-rose-200 text-rose-700 font-semibold'
+                  : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+              }`}
+            >
+              <span
+                className="material-symbols-outlined text-[15px]"
+                style={
+                  selectedPhoto.bookmarked
+                    ? { fontVariationSettings: "'FILL' 1, 'wght' 600" }
+                    : undefined
+                }
+              >
+                favorite
+              </span>
+              <span>{selectedPhoto.bookmarked ? '즐겨찾기됨' : '즐겨찾기'}</span>
+            </button>
+
+            <button
+              onClick={() => {
+                if (selectedPhoto.fullPath) {
+                  void openLocalFolder('photos', selectedPhoto.fullPath);
+                  setActionNotice(`원본 위치를 열었습니다: ${selectedPhoto.fullPath}`);
+                  return;
+                }
+                const isSampleOrSharedUrl =
+                  selectedPhoto.fullUrl?.startsWith('/sample_photos_301/') ||
+                  selectedPhoto.fullUrl?.startsWith('/poc/') ||
+                  selectedPhoto.fullUrl?.startsWith('/shared_family_host_thumbs/') ||
+                  String(selectedPhoto.id || '').startsWith('shared_host_');
+                if (isSampleOrSharedUrl) {
+                  setActionNotice(
+                    '공유방 또는 예시 사진이라 내 PC 로컬 폴더에는 저장되어 있지 않습니다.'
+                  );
+                  return;
+                }
+                const fallbackTarget = selectedPhoto.fullUrl?.includes('/__photos/file')
+                  ? selectedPhoto.name
+                  : undefined;
+                void openLocalFolder('photos', fallbackTarget);
+                setActionNotice('탐색기에서 사진 폴더를 열었습니다.');
+              }}
+              className="hidden sm:flex px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium items-center gap-1 cursor-pointer"
+            >
+              <span>폴더 열기</span>
+            </button>
           </div>
 
           {actionNotice && (
-            <div className="px-4 py-2.5 rounded-xl bg-emerald-950/90 border border-emerald-400/50 text-emerald-200 font-body-sm text-[12.5px] font-bold flex flex-wrap sm:flex-nowrap items-center justify-between gap-2">
+            <div className="px-3.5 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium flex items-center justify-between gap-2">
               <span className="min-w-0 break-keep">{actionNotice}</span>
               <button
                 type="button"
                 onClick={() => setActionNotice(null)}
-                className="text-xs text-emerald-300 hover:text-white font-extrabold px-2.5 py-1 rounded bg-emerald-900/60 shrink-0 cursor-pointer"
+                className="text-xs text-slate-500 hover:text-slate-800 font-semibold px-2 py-0.5 rounded shrink-0 cursor-pointer"
               >
                 닫기
               </button>
@@ -674,44 +638,37 @@ export const PhotoDetailModal: React.FC = () => {
           )}
         </div>
 
-        {/* 연사 묶음일 경우 상단 비교 & 즉시 Pick 바둑판 영역 */}
+        {/* Burst Comparison */}
         {hasBurstGroup && (
-          <div className="p-4 rounded-2xl bg-surface-container-low border border-primary-container/40 flex flex-col gap-3">
+          <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col gap-3">
             <div className="flex flex-wrap items-center justify-between gap-2">
-              <div className="flex items-center gap-2">
-                <span className="px-2.5 py-0.5 rounded-full bg-emerald-600 text-white dark:bg-emerald-500/20 dark:text-emerald-300 border border-emerald-500/50 font-label-sm text-[11px] font-extrabold">
-                  ✓ 원본 1장 안전하게 보존됨
-                </span>
-                <span className="font-label-md text-[13px] text-on-surface font-bold">
-                  함께 묶인 연사 {resolvedBurstPhotos.length}장 비교 — 마음에 드는 1장을 골라보세요
-                </span>
-              </div>
+              <span className="text-[13px] text-slate-800 font-semibold">
+                연사 {resolvedBurstPhotos.length}장 비교 — 남길 사진 1장을 선택해 주세요
+              </span>
 
               <button
                 onClick={() => {
                   void pickBestInBurstPhotos(resolvedBurstPhotos, selectedPhoto.id);
                   setSelectedPhoto(selectedPhoto, null);
                 }}
-                className="px-3.5 py-1.5 rounded-full bg-primary-container text-on-primary-container font-label-sm text-[12px] font-extrabold flex items-center gap-1 shadow-[0_0_14px_rgba(0,229,255,0.35)] hover:opacity-95 transition-all"
+                className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer transition-colors"
               >
-                <span className="material-symbols-outlined text-[15px]">check_circle</span>
-                <span>
-                  현재 사진 1장만 남기고 나머지 {resolvedBurstPhotos.length - 1}장 OS 기본 [휴지통] 정리 (Pick)
-                </span>
+                현재 1장만 남기고 나머지 {resolvedBurstPhotos.length - 1}장 휴지통 이동
               </button>
             </div>
 
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
               {resolvedBurstPhotos.slice(0, 6).map((bp, idx) => {
                 const isCurrent = bp.id === selectedPhoto.id;
                 return (
                   <div
                     key={bp.id}
+                    data-keep-dark="true"
                     onClick={() => setSelectedPhoto(bp, resolvedBurstPhotos)}
-                    className={`relative rounded-xl overflow-hidden aspect-[4/3] cursor-pointer border-2 transition-all ${
+                    className={`relative rounded-lg overflow-hidden aspect-[4/3] cursor-pointer border-2 transition-all bg-black ${
                       isCurrent
-                        ? 'border-primary-container ring-2 ring-primary-container/40 scale-[1.02]'
-                        : 'border-outline-variant/30 opacity-80 hover:opacity-100'
+                        ? 'border-slate-900 ring-2 ring-slate-900/20'
+                        : 'border-slate-200 opacity-80 hover:opacity-100'
                     }`}
                   >
                     <img
@@ -720,11 +677,11 @@ export const PhotoDetailModal: React.FC = () => {
                       crossOrigin={bp.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
                       className="w-full h-full object-cover"
                     />
-                    <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/75 text-[10px] font-bold text-white">
+                    <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/75 text-[10px] font-semibold text-white">
                       #{idx + 1}
                     </div>
                     {isCurrent && (
-                      <div className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-primary-container text-on-primary-container text-[10px] font-extrabold">
+                      <div className="absolute bottom-1.5 right-1.5 px-1.5 py-0.5 rounded bg-white text-slate-900 text-[10px] font-bold">
                         선택됨
                       </div>
                     )}
@@ -735,9 +692,12 @@ export const PhotoDetailModal: React.FC = () => {
           </div>
         )}
 
-        {/* Main Photo Preview + Tags */}
-        <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-center">
-          <div className="md:col-span-7 relative rounded-2xl overflow-hidden bg-surface-container-lowest border border-outline-variant/30 min-h-[220px] max-h-[380px] flex items-center justify-center">
+        {/* Main Photo Preview + Related Tabs */}
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-5 items-start">
+          <div
+            data-keep-dark="true"
+            className="md:col-span-7 relative rounded-xl overflow-hidden bg-zinc-950 border border-slate-200 min-h-[220px] max-h-[380px] flex items-center justify-center"
+          >
             <img
               src={selectedPhoto.fullUrl}
               alt={selectedPhoto.name}
@@ -755,7 +715,7 @@ export const PhotoDetailModal: React.FC = () => {
                     e.stopPropagation();
                     navigateAdjacentPhoto(-1);
                   }}
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-zinc-900/45 hover:bg-zinc-800/85 border border-zinc-300/35 hover:border-zinc-100/70 text-zinc-200 hover:text-white backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs"
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-black/60 hover:bg-black/80 border border-white/25 text-white flex items-center justify-center transition-colors cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[22px]">chevron_left</span>
                 </button>
@@ -768,19 +728,14 @@ export const PhotoDetailModal: React.FC = () => {
                     e.stopPropagation();
                     navigateAdjacentPhoto(1);
                   }}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-zinc-900/45 hover:bg-zinc-800/85 border border-zinc-300/35 hover:border-zinc-100/70 text-zinc-200 hover:text-white backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-black/60 hover:bg-black/80 border border-white/25 text-white flex items-center justify-center transition-colors cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[22px]">chevron_right</span>
                 </button>
                 {currentPhotoIdx >= 0 && (
                   <span
                     data-keep-dark="true"
-                    style={{
-                      backgroundColor: 'rgba(15, 23, 42, 0.90)',
-                      color: '#FFFFFF',
-                      borderColor: 'rgba(255, 255, 255, 0.42)',
-                    }}
-                    className="absolute bottom-2.5 right-2.5 z-10 px-2.5 py-0.5 rounded-full border text-[11.5px] font-extrabold backdrop-blur-xs pointer-events-none shadow-md"
+                    className="absolute bottom-2.5 right-2.5 z-10 px-2.5 py-0.5 rounded-full bg-black/75 border border-white/25 text-white text-[11px] font-semibold pointer-events-none"
                   >
                     {currentPhotoIdx + 1} / {photoNavList.length}
                   </span>
@@ -789,14 +744,13 @@ export const PhotoDetailModal: React.FC = () => {
             )}
           </div>
 
-          {/* 3.2절: 2차 연관 꼬리물기 탐색 (Contextual Tabs) */}
-          <div className="md:col-span-5 flex flex-col gap-3 h-full justify-between">
+          <div className="md:col-span-5 flex flex-col gap-3">
             <div className="flex flex-col gap-2">
-              <span className="font-label-mono text-[11px] text-teal-700 dark:text-primary-container uppercase tracking-wider font-extrabold">
-                CONTEXTUAL SNIPING DRILL-DOWN (3.2절)
+              <span className="text-[12px] text-slate-500 font-semibold">
+                사진 설명 · 연관 탐색
               </span>
               {selectedPhoto.captionKo && (
-                <p className="text-[12px] text-on-surface-variant leading-snug bg-surface-container/60 px-3 py-2 rounded-xl border border-outline-variant/20">
+                <p className="text-[12.5px] text-slate-700 leading-relaxed bg-slate-50 px-3 py-2 rounded-lg border border-slate-200">
                   {selectedPhoto.captionKo}
                 </p>
               )}
@@ -804,94 +758,85 @@ export const PhotoDetailModal: React.FC = () => {
                 {selectedPhoto.tags
                   .filter((t) => !t.includes('원본보존') && !t.includes('연사·중복'))
                   .map((t) => (
-                    <span
+                    <button
                       key={t}
+                      type="button"
                       onClick={() => {
                         setActiveTab('drill-down');
                         setDrillQuery(t.replace(/^#/, ''));
                       }}
-                      className="cursor-pointer px-2.5 py-1 rounded-full bg-primary-container/15 hover:bg-primary-container/30 text-teal-800 dark:text-primary font-label-mono text-[11px] font-bold border border-primary-container/30 transition-colors"
+                      className="cursor-pointer px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11.5px] font-medium transition-colors"
                     >
                       {t}
-                    </span>
+                    </button>
                   ))}
               </div>
             </div>
 
-            {/* 3 Contextual Tabs */}
-            <div className="flex flex-col gap-2">
+            <div className="flex flex-col gap-1.5">
               <button
                 onClick={() => setActiveTab('same-day')}
-                className={`p-3 rounded-xl text-left flex items-center justify-between gap-2 border transition-all cursor-pointer ${
+                className={`px-3 py-2.5 rounded-lg text-left flex items-center justify-between gap-2 border text-[13px] transition-colors cursor-pointer ${
                   activeTab === 'same-day'
-                    ? 'bg-cyan-50 border-2 border-[#1E3A8A] text-slate-900 font-extrabold shadow-sm'
-                    : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-800 font-semibold shadow-xs'
+                    ? 'bg-slate-900 border-slate-900 text-white font-semibold'
+                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-medium'
                 }`}
               >
-                <span className="font-label-md text-label-md">
-                  📅 이 날 찍은 사진 전체 ({dayString})
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-teal-600 text-white font-label-mono text-[12px] font-extrabold shrink-0 shadow-sm">
+                <span>같은 날 찍은 사진 ({dayString})</span>
+                <span className={`text-[12px] tabular-nums ${activeTab === 'same-day' ? 'text-slate-300' : 'text-slate-400'}`}>
                   {sameDayPhotos.length}장
                 </span>
               </button>
 
               <button
                 onClick={() => setActiveTab('similar-visual')}
-                className={`p-3 rounded-xl text-left flex items-center justify-between gap-2 border transition-all cursor-pointer ${
+                className={`px-3 py-2.5 rounded-lg text-left flex items-center justify-between gap-2 border text-[13px] transition-colors cursor-pointer ${
                   activeTab === 'similar-visual'
-                    ? 'bg-cyan-50 border-2 border-[#1E3A8A] text-slate-900 font-extrabold shadow-sm'
-                    : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-800 font-semibold shadow-xs'
+                    ? 'bg-slate-900 border-slate-900 text-white font-semibold'
+                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-medium'
                 }`}
               >
-                <span className="font-label-md text-label-md">
-                  🐶 비슷한 피사체 사진 (벡터 유사도 매칭)
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-indigo-600 text-white font-label-mono text-[12px] font-extrabold shrink-0 shadow-sm">
+                <span>비슷한 장면 · 피사체 사진</span>
+                <span className={`text-[12px] tabular-nums ${activeTab === 'similar-visual' ? 'text-slate-300' : 'text-slate-400'}`}>
                   {similarVisualPhotos.length}장
                 </span>
               </button>
 
               <button
                 onClick={() => setActiveTab('drill-down')}
-                className={`p-3 rounded-xl text-left flex items-center justify-between gap-2 border transition-all cursor-pointer ${
+                className={`px-3 py-2.5 rounded-lg text-left flex items-center justify-between gap-2 border text-[13px] transition-colors cursor-pointer ${
                   activeTab === 'drill-down'
-                    ? 'bg-cyan-50 border-2 border-[#1E3A8A] text-slate-900 font-extrabold shadow-sm'
-                    : 'bg-white hover:bg-slate-50 border-slate-300 text-slate-800 font-semibold shadow-xs'
+                    ? 'bg-slate-900 border-slate-900 text-white font-semibold'
+                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-medium'
                 }`}
               >
-                <span className="font-label-md text-label-md">
-                  ➕ 2차 자연어 좁혀가기 (결과 내 재검색)
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-amber-600 text-white font-label-mono text-[12px] font-extrabold shrink-0 shadow-sm">
+                <span>조건 추가하여 좁혀보기</span>
+                <span className={`text-[12px] tabular-nums ${activeTab === 'drill-down' ? 'text-slate-300' : 'text-slate-400'}`}>
                   {drillDownPhotos.length}장
                 </span>
               </button>
             </div>
 
             {activeTab === 'drill-down' && (
-              <div className="flex flex-col gap-2 p-2.5 rounded-xl bg-surface-container-low border border-primary-container/40">
+              <div className="flex flex-col gap-2 p-2.5 rounded-lg bg-slate-50 border border-slate-200">
                 <div className="relative flex items-center">
                   <input
                     type="text"
                     value={drillQuery}
                     onChange={(e) => setDrillQuery(e.target.value)}
-                    placeholder="연관 사진 내 2차 필터 (예: 오후, 해변, 웃는)"
-                    className="w-full h-10 pl-3 pr-16 rounded-xl bg-surface-container-lowest border border-primary-container/50 text-body-sm text-on-surface outline-none focus:ring-2 focus:ring-primary-container/40"
+                    placeholder="추가 검색어 (예: 오후, 해변, 웃는)"
+                    className="w-full h-9 pl-3 pr-14 rounded-lg bg-white border border-slate-300 focus:border-slate-600 text-[12.5px] text-slate-900 outline-none"
                   />
                   {drillQuery.trim() && (
                     <button
                       onClick={() => setDrillQuery('')}
-                      className="absolute right-2 px-2 py-0.5 rounded-md bg-surface-container-high text-[11px] font-bold text-on-surface-variant hover:text-on-surface"
+                      className="absolute right-2 px-2 py-0.5 rounded bg-slate-100 text-[11px] font-medium text-slate-600 hover:text-slate-900 cursor-pointer"
                     >
                       초기화
                     </button>
                   )}
                 </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[11px] font-bold text-on-surface-variant mr-1">
-                    추천 2차 키워드:
-                  </span>
+                <div className="flex flex-wrap items-center gap-1">
                   {quickDrillKeywords.map((kw) => {
                     const isSelected = drillQuery.trim() === kw;
                     return (
@@ -899,13 +844,13 @@ export const PhotoDetailModal: React.FC = () => {
                         key={kw}
                         type="button"
                         onClick={() => setDrillQuery(isSelected ? '' : kw)}
-                        className={`px-2 py-0.5 rounded-full text-[11px] font-bold transition-all ${
+                        className={`px-2 py-0.5 rounded text-[11px] font-medium transition-colors cursor-pointer ${
                           isSelected
-                            ? 'bg-teal-600 text-white dark:bg-primary-container dark:text-on-primary-container'
-                            : 'bg-surface-container-high text-on-surface hover:bg-primary-container/20'
+                            ? 'bg-slate-900 text-white'
+                            : 'bg-white border border-slate-200 text-slate-600 hover:bg-slate-100'
                         }`}
                       >
-                        #{kw}
+                        {kw}
                       </button>
                     );
                   })}
@@ -915,39 +860,37 @@ export const PhotoDetailModal: React.FC = () => {
           </div>
         </div>
 
-        {/* Contextual Photo Strip */}
-        <div className="flex flex-col gap-2.5 pt-3 border-t border-outline-variant/25">
+        {/* Related Photo Strip */}
+        <div className="flex flex-col gap-2.5 pt-3 border-t border-slate-100">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-label-sm text-[13px] text-on-surface font-bold">
-              {activeTab === 'same-day' &&
-                `📅 ${dayString} 및 인접 시점에 함께 촬영된 기억 (${sameDayPhotos.length}장)`}
-              {activeTab === 'similar-visual' &&
-                `🐶 피사체 시각 임베딩 유사도 상위 결과 (${similarVisualPhotos.length}장)`}
+            <span className="text-[12.5px] text-slate-700 font-semibold">
+              {activeTab === 'same-day' && `${dayString} 전후 촬영 사진 (${sameDayPhotos.length}장)`}
+              {activeTab === 'similar-visual' && `비슷한 사진 (${similarVisualPhotos.length}장)`}
               {activeTab === 'drill-down' &&
                 (drillQuery.trim()
-                  ? `➕ '${drillQuery.trim()}' 조건과 정확히 일치하는 사진 (${drillDownPhotos.length}장)`
-                  : `➕ 2차 자연어 좁혀가기 대상 사진 (${drillDownPhotos.length}장 — 위 입력창에 '해변', '웃는', '오후' 등을 입력하거나 태그를 눌러보세요)`)}
+                  ? `‘${drillQuery.trim()}’ 일치 사진 (${drillDownPhotos.length}장)`
+                  : `연관 사진 (${drillDownPhotos.length}장)`)}
             </span>
-            <span className="px-2.5 py-0.5 rounded-full bg-surface-container-highest text-on-surface font-label-mono text-[11px] font-extrabold shrink-0">
-              표시 중: 상위 {Math.min(6, currentStripPhotos.length)}장 / 전체 {currentStripPhotos.length}장
+            <span className="text-[11.5px] text-slate-400 shrink-0">
+              상위 {Math.min(6, currentStripPhotos.length)}장 표시
             </span>
           </div>
 
           {currentStripPhotos.length === 0 ? (
-            <div className="p-6 rounded-2xl bg-surface-container-low border border-outline-variant/30 text-center flex flex-col items-center gap-2">
-              <span className="text-body-sm font-bold text-on-surface">
-                '{drillQuery}' 조건과 일치하는 연관 사진이 없습니다.
+            <div className="p-5 rounded-xl bg-slate-50 border border-slate-200 text-center flex flex-col items-center gap-2">
+              <span className="text-[13px] font-medium text-slate-600">
+                ‘{drillQuery}’ 조건과 일치하는 연관 사진이 없습니다.
               </span>
               <button
                 type="button"
                 onClick={() => setDrillQuery('')}
-                className="px-3 py-1 rounded-full bg-primary-container text-on-primary-container text-[12px] font-bold"
+                className="px-3 py-1 rounded-md bg-slate-900 text-white text-[12px] font-medium cursor-pointer"
               >
-                필터 초기화하고 전체 보기
+                필터 초기화
               </button>
             </div>
           ) : (
-            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
+            <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
               {currentStripPhotos.slice(0, 6).map((item, idx) => {
                 const simPct =
                   activeTab === 'similar-visual'
@@ -956,8 +899,9 @@ export const PhotoDetailModal: React.FC = () => {
                 return (
                   <div
                     key={`${activeTab}_${item.id}`}
+                    data-keep-dark="true"
                     onClick={() => setSelectedPhoto(item)}
-                    className="group cursor-pointer rounded-xl overflow-hidden bg-surface-container aspect-square relative border border-outline-variant/30 hover:border-primary-container shadow-sm"
+                    className="group cursor-pointer rounded-lg overflow-hidden bg-zinc-900 aspect-square relative border border-slate-200 hover:border-slate-400"
                   >
                     <img
                       src={item.thumbUrl}
@@ -965,15 +909,13 @@ export const PhotoDetailModal: React.FC = () => {
                       crossOrigin={item.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
                       className="w-full h-full object-cover group-hover:scale-105 transition-transform"
                     />
-                    <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/75 text-white font-label-mono text-[10px] font-bold">
-                      {activeTab === 'same-day' && `📅 ${item.date.split(' ')[0].slice(5)}`}
-                      {activeTab === 'similar-visual' && `🐶 유사 ${simPct}%`}
+                    <div className="absolute top-1.5 left-1.5 px-1.5 py-0.5 rounded bg-black/70 text-white text-[10px] font-medium">
+                      {activeTab === 'same-day' && item.date.split(' ')[0].slice(5)}
+                      {activeTab === 'similar-visual' && `유사 ${simPct}%`}
                       {activeTab === 'drill-down' &&
-                        (drillQuery.trim()
-                          ? `🔎 '${drillQuery.trim()}'`
-                          : item.tags[0] || '#연관')}
+                        (drillQuery.trim() ? drillQuery.trim() : item.tags[0] || '연관')}
                     </div>
-                    <div className="absolute inset-x-0 bottom-0 px-1.5 py-1 bg-black/75 font-label-mono text-[10px] text-white font-semibold truncate">
+                    <div className="absolute inset-x-0 bottom-0 px-1.5 py-1 bg-black/70 text-[10px] text-white truncate">
                       {item.name}
                     </div>
                   </div>

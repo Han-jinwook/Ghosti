@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  buildWindowsNativeWebDavMountCommand,
   verifyHybridP2PBridgeConnection,
   type P2PHybridConnectionDiagnostics,
 } from '../../services/p2pHybridBridge';
@@ -122,10 +121,10 @@ export const LoungeFeedContextBanner: React.FC = () => {
       loungeType: 'club',
       familyRoom: '우리집',
       defaultHostLabel: '모임총무',
-      roomTitle: `⛰️ ${clubBannerTitle}`,
+      roomTitle: `${clubBannerTitle}`,
       promptLabel: '모임방 초대 링크를 복사해 공유하세요:',
       formatCopyText: (clubInviteUrl) =>
-        `[${clubBannerTitle}] 이번 모임·라운딩 고화질 원본 사진과 영상이 모두 올라왔습니다! 설치·로그인 없이 바로 구경하세요 (인원·장수 제한 없이 전원 평생 0원 무료)\n👉 ${clubInviteUrl}`,
+        `[${clubBannerTitle}] 이번 모임·라운딩 고화질 원본 사진과 영상이 모두 올라왔습니다! 설치·로그인 없이 바로 구경하세요 \n${clubInviteUrl}`,
     });
     if (!ok) return;
     setClubInviteCopied(true);
@@ -150,8 +149,8 @@ export const LoungeFeedContextBanner: React.FC = () => {
       {/* 실제 공유 사진이 있고 사용자가 원본 동기화를 켰을 때만 실제 장수로 표시 */}
       {p2pOriginalSummoned && activeRoomPhotoCount > 0 && (
         <span className="px-2 sm:px-2.5 py-1 rounded-full bg-emerald-500/20 border border-emerald-400/60 text-emerald-300 font-label-sm text-[11px] font-extrabold flex items-center gap-1 shadow-xs shrink-0">
-          <span className="sm:hidden">✨ 동기화 ({activeRoomPhotoCount}장)</span>
-          <span className="hidden sm:inline">✨ 원본 동기화 완료 ({activeRoomPhotoCount}장)</span>
+          <span className="sm:hidden">동기화 ({activeRoomPhotoCount}장)</span>
+          <span className="hidden sm:inline">원본 동기화 완료 ({activeRoomPhotoCount}장)</span>
         </span>
       )}
 
@@ -159,7 +158,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
         type="button"
         onClick={() => {
           if (isGuestPreviewMode) {
-            triggerGuestJoinWall('💾 고화질 원본 내 폰에 일괄 저장');
+            triggerGuestJoinWall('고화질 원본 내 폰에 일괄 저장');
             return;
           }
           setShowStorageCheckBanner(true);
@@ -186,12 +185,12 @@ export const LoungeFeedContextBanner: React.FC = () => {
         title="공유방의 고화질 원본 사진을 내 기기 폴더에 자동 동기화합니다"
       >
         <span className="sm:hidden">
-          {p2pOriginalSummoned ? '🔄 원본 동기화 ON' : '🔄 원본 동기화'}
+          {p2pOriginalSummoned ? '원본 동기화 ON' : '원본 동기화'}
         </span>
         <span className="hidden sm:inline">
           {p2pOriginalSummoned
-            ? '🔄 원본 동기화 (ON · 자동 보관 중)'
-            : '🔄 원본 동기화 켜기'}
+            ? '원본 동기화 (ON · 자동 보관 중)'
+            : '원본 동기화 켜기'}
         </span>
       </button>
     </div>
@@ -200,10 +199,10 @@ export const LoungeFeedContextBanner: React.FC = () => {
   const renderStorageCheckAndSyncDetail = () => {
     if (!showStorageCheckBanner) return null;
     return (
-      <div className="px-4 py-3.5 rounded-2xl bg-[#18181B] border-2 border-emerald-400/50 shadow-sm flex flex-col gap-3">
+      <div className="px-4 py-3.5 rounded-2xl bg-[#18181B] border border-slate-200/50 shadow-sm flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
-            <span className="px-2.5 py-1 rounded-lg font-extrabold text-[11px] bg-emerald-400 text-zinc-950">
+            <span className="px-2.5 py-1 rounded-lg font-extrabold text-[11px] bg-slate-900 text-white">
               {p2pOriginalSummoned
                 ? '✓ 내 기기 원본 자동 동기화 ON'
                 : 'ℹ️ 내 기기 원본 동기화 안내'}
@@ -236,7 +235,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
         {/* 원본 동기화 저장 경로 지정 */}
         <div className="p-3 rounded-xl bg-zinc-950 border border-white/10 flex flex-col md:flex-row md:items-center justify-between gap-2.5 text-[12px]">
           <span className="text-emerald-300 font-extrabold">
-            📂 원본 동기화 저장 경로
+            원본 동기화 저장 경로
           </span>
           <div className="flex flex-wrap items-center gap-2 shrink-0 max-w-full">
             <input
@@ -252,12 +251,12 @@ export const LoungeFeedContextBanner: React.FC = () => {
                 useSaySeeStore
                   .getState()
                   .showToast(
-                    `📂 [원본 동기화 경로 저장 완료] 앞으로 이 방의 원본 사진은 '${downloadDirPath}' 폴더에 자동 동기화됩니다.`
+                    `[원본 동기화 경로 저장 완료] 앞으로 이 방의 원본 사진은 '${downloadDirPath}' 폴더에 자동 동기화됩니다.`
                   );
               }}
               className="px-3 py-1.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
             >
-              📍 경로 지정 확인
+              경로 지정 확인
             </button>
             <button
               type="button"
@@ -270,7 +269,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
               }}
               className="hidden sm:inline-flex px-3 py-1.5 rounded-xl bg-primary-container text-zinc-950 hover:opacity-90 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
             >
-              📂 내 기기 원본 폴더 열기
+              내 기기 원본 폴더 열기
             </button>
           </div>
         </div>
@@ -311,8 +310,8 @@ export const LoungeFeedContextBanner: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="px-2.5 py-1 rounded-lg bg-[#FEE500] text-[#191919] font-label-sm text-[11px] font-extrabold shadow-xs break-keep">
             {inviteMeta.inviteToken && !inviteMeta.isHostVerified
-              ? `💌 [${inviteMeta.roomTitle}] 초대장 불러오는 중...`
-              : `💌 ${inviteMeta.hostName}님이 초대한 [${inviteMeta.roomTitle}] · 로그인 없이 구경 중`}
+              ? `[${inviteMeta.roomTitle}] 초대장 불러오는 중...`
+              : `${inviteMeta.hostName}님이 초대한 [${inviteMeta.roomTitle}] · 로그인 없이 구경 중`}
           </span>
 
           {!isNativeAppRuntime && (
@@ -336,7 +335,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
               }}
               className="px-2.5 py-1 rounded-lg bg-teal-500/20 hover:bg-teal-500/30 border border-teal-400/50 text-teal-200 font-label-sm text-[10.5px] font-extrabold cursor-pointer shrink-0"
             >
-              📱 이미 앱이 있다면 앱으로 열기
+              이미 앱이 있다면 앱으로 열기
             </button>
           )}
 
@@ -355,9 +354,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
         </span>
         <div className="flex flex-wrap items-center gap-1.5 pt-0.5">
           {[
-            { label: '📸 내 폰 사진도 이 방에 올리기', reason: '📸 내 폰 사진도 이 방에 올리기' },
-            { label: '💾 고화질 원본 내 폰에 일괄 저장', reason: '💾 고화질 원본 내 폰에 일괄 저장' },
-            { label: '🔔 새 사진 올라오면 알림 받기', reason: '🔔 새 사진 올라오면 카톡·푸시 알림 받기' },
+            { label: '내 폰 사진도 이 방에 올리기', reason: '내 폰 사진도 이 방에 올리기' },
+            { label: '고화질 원본 내 폰에 일괄 저장', reason: '고화질 원본 내 폰에 일괄 저장' },
+            { label: '새 사진 올라오면 알림 받기', reason: '새 사진 올라오면 카톡·푸시 알림 받기' },
           ].map((trig) => (
             <button
               key={trig.label}
@@ -382,8 +381,8 @@ export const LoungeFeedContextBanner: React.FC = () => {
         }`}
       >
         <div className="flex flex-wrap items-center gap-2 min-w-0">
-          <span className="px-2.5 py-0.5 rounded-full bg-amber-400 text-zinc-950 font-label-sm text-[11px] font-black shrink-0">
-            💌 초대받은 독립 공유방
+          <span className="px-2.5 py-0.5 rounded-full bg-slate-900 text-white font-label-sm text-[11px] font-semibold shrink-0">
+            초대받은 독립 공유방
           </span>
           <span className="font-label-sm text-[12.5px] font-extrabold break-keep">
             {activeJoinedRoomMeta.masterNickname}님이 초대한 『{activeJoinedRoomMeta.roomTitle}』
@@ -393,7 +392,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
               'text-amber-800/85'
             }`}
           >
-            · 🔒 내 공유방과 100% 분리 보관 중
+            · 내 공유방과 100% 분리 보관 중
           </span>
         </div>
         <div className="flex flex-wrap items-center gap-1.5 shrink-0">
@@ -417,7 +416,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
             title="이 초대받은 공유방에서 나가며 내 기기의 이 방 로컬 캐시 사진을 즉시 삭제합니다 (내 개인 여권과 내 사진은 100% 보존)"
             className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/30 border border-rose-400/50 text-rose-200 text-[11.5px] font-extrabold cursor-pointer shrink-0 transition-all"
           >
-            🚪 이 공유방 나가기
+            이 공유방 나가기
           </button>
         </div>
       </div>
@@ -438,9 +437,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
             <button
               type="button"
               onClick={() => useSaySeeStore.getState().requestAddMyPhotosToSharedRoom()}
-              className="px-3.5 py-2 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[12px] font-black shadow-md shadow-teal-500/20 flex items-center gap-1.5 cursor-pointer transition-all"
+              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[12px] font-semibold shadow-md shadow-teal-500/20 flex items-center gap-1.5 cursor-pointer transition-all"
             >
-              <span>📸 내 사진도 이 방에 추가하기</span>
+              <span>내 사진도 이 방에 추가하기</span>
             </button>
             <button
               type="button"
@@ -451,10 +450,10 @@ export const LoungeFeedContextBanner: React.FC = () => {
                   defaultHostLabel: '가족방장',
                   roomTitle:
                     activeFamilyRoom === '본가(친가)'
-                      ? '🏡 본가(친가) 가족 사진방'
+                      ? '본가(친가) 가족 사진방'
                       : activeFamilyRoom === '처가(친정)'
-                        ? '🌸 처가(친정) 가족 사진방'
-                        : '🏠 우리집 가족 사진방',
+                        ? '처가(친정) 가족 사진방'
+                        : '우리집 가족 사진방',
                   promptLabel: `『${activeFamilyRoom} 가족 사진방』 초대 링크를 복사해 공유하세요:`,
                 });
                 if (!ok) return;
@@ -463,15 +462,15 @@ export const LoungeFeedContextBanner: React.FC = () => {
                   : `${activeFamilyRoom} 가족 사진방`;
                 useSaySeeStore
                   .getState()
-                  .showToast(`💌 『${targetLabel}』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.`);
+                  .showToast(`『${targetLabel}』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.`);
               }}
               className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-400/50 text-amber-300 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 cursor-pointer transition-all"
             >
-              <span>{activeJoinedRoomMeta ? '💌 이 초대방 링크 복사' : '💌 가족방 초대 링크 복사'}</span>
+              <span>{activeJoinedRoomMeta ? '이 초대방 링크 복사' : '가족방 초대 링크 복사'}</span>
             </button>
           </div>
         </div>
-        <GhostCastLiveToolbar loungeLabel={`👨‍👩‍👧‍👦 패밀리 [${activeFamilyRoom}]`} />
+        <GhostCastLiveToolbar loungeLabel={`패밀리 [${activeFamilyRoom}]`} />
         {renderStorageCheckAndSyncDetail()}
       </div>
     );
@@ -487,17 +486,17 @@ export const LoungeFeedContextBanner: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-headline-sm text-[18px] md:text-[20px] text-white font-extrabold tracking-tight">
-              ⛰️ {clubBannerTitle}
+              {clubBannerTitle}
             </span>
             <span className="px-2 py-0.5 rounded-full bg-emerald-400/15 border border-emerald-300/30 text-emerald-300 text-[11px] font-bold">
-              🎉 인원·장수 제한 없이 평생 0원
+              모임 사진 공유
             </span>
             <button
               type="button"
               onClick={() => setShowClubCover((v) => !v)}
               className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[12.5px] font-extrabold select-none shadow-sm cursor-pointer transition-all"
             >
-              {showClubCover ? '간판 접기 ▴' : '🏕️ 간판·초대장 열기 ▾'}
+              {showClubCover ? '간판 접기 ▴' : '간판·초대장 열기 ▾'}
             </button>
           </div>
 
@@ -512,7 +511,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
                     : 'text-zinc-400 hover:text-white'
                 }`}
               >
-                🏕️ 정기 모임·라운딩
+                정기 모임·라운딩
               </button>
 
               <button
@@ -524,7 +523,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
                     : 'text-zinc-400 hover:text-white'
                 }`}
               >
-                🍻 번개 · 추억 앨범
+                번개 · 추억 앨범
               </button>
             </div>
 
@@ -532,14 +531,14 @@ export const LoungeFeedContextBanner: React.FC = () => {
               type="button"
               onClick={() => {
                 if (isGuestPreviewMode) {
-                  triggerGuestJoinWall('🎯 내 얼굴이 나온 모임 사진만 1초 만에 다 찾기');
+                  triggerGuestJoinWall('내 얼굴이 나온 모임 사진만 다 찾기');
                   return;
                 }
                 void findMySchoolDaysPhotosFast();
               }}
               className="px-3 py-1.5 rounded-xl bg-primary-container/15 hover:bg-primary-container/25 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-extrabold cursor-pointer whitespace-nowrap"
             >
-              🎯 내 모임 사진 1초 찾기
+              내 모임 사진 1초 찾기
             </button>
           </div>
         </div>
@@ -561,7 +560,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
                   onClick={() => setClubBannerBgTheme(isForestTheme ? 'sunset' : 'forest')}
                   className="underline hover:text-white cursor-pointer font-bold whitespace-nowrap"
                 >
-                  {isForestTheme ? '🌅 노을 캠핑 배경으로 변경' : '🌲 숲속 필드 배경으로 변경'}
+                  {isForestTheme ? '노을 캠핑 배경으로 변경' : '숲속 필드 배경으로 변경'}
                 </button>
 
                 <span className="text-white/40">|</span>
@@ -585,7 +584,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
                     />
                     <button
                       type="submit"
-                      className="px-2.5 py-1 rounded bg-amber-300 text-zinc-950 text-[11.5px] font-extrabold whitespace-nowrap cursor-pointer"
+                      className="px-2.5 py-1 rounded bg-slate-900 text-white text-[11.5px] font-extrabold whitespace-nowrap cursor-pointer"
                     >
                       적용
                     </button>
@@ -599,17 +598,17 @@ export const LoungeFeedContextBanner: React.FC = () => {
                     }}
                     className="underline text-amber-200 hover:text-amber-100 cursor-pointer font-bold whitespace-nowrap"
                   >
-                    ✏️ 모임 이름 변경
+                    모임 이름 변경
                   </button>
                 )}
               </div>
 
               <div className="flex flex-col items-start lg:items-center text-left lg:text-center gap-0.5 min-w-0">
-                <h2 className="font-headline-md text-[19px] sm:text-[22px] md:text-[25px] text-white font-black tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] break-keep">
+                <h2 className="font-headline-md text-[19px] sm:text-[22px] md:text-[25px] text-white font-semibold tracking-tight drop-shadow-[0_2px_8px_rgba(0,0,0,0.5)] break-keep">
                   {clubBannerTitle}
                 </h2>
                 <span className="text-[12px] text-amber-200/95 font-medium">
-                  🎉 인원·장수 제한 없이 전 회원 평생 0원 운영 중
+                  모임 사진 공유방
                 </span>
               </div>
 
@@ -618,11 +617,11 @@ export const LoungeFeedContextBanner: React.FC = () => {
                 onClick={() => void handleCopyClubInviteHook()}
                 className={`px-4 py-2 rounded-xl font-label-sm text-[12px] font-extrabold transition-all shadow-md shrink-0 whitespace-nowrap cursor-pointer ${
                   clubInviteCopied
-                    ? 'bg-emerald-400 text-zinc-950'
-                    : 'bg-amber-300 hover:bg-amber-200 text-zinc-950'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-slate-900 hover:bg-slate-800 text-white'
                 }`}
               >
-                {clubInviteCopied ? '✓ 단톡방 초대장 복사됨!' : '💌 단톡방 초대 문구 복사'}
+                {clubInviteCopied ? '✓ 단톡방 초대장 복사됨!' : '단톡방 초대 문구 복사'}
               </button>
             </div>
           </div>
@@ -638,9 +637,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
             <button
               type="button"
               onClick={() => useSaySeeStore.getState().requestAddMyPhotosToSharedRoom()}
-              className="px-3.5 py-2 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[12px] font-black shadow-md shadow-teal-500/20 flex items-center gap-1.5 cursor-pointer transition-all"
+              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[12px] font-semibold shadow-md shadow-teal-500/20 flex items-center gap-1.5 cursor-pointer transition-all"
             >
-              <span>📸 내 사진도 이 방에 추가하기</span>
+              <span>내 사진도 이 방에 추가하기</span>
             </button>
             <button
               type="button"
@@ -649,22 +648,22 @@ export const LoungeFeedContextBanner: React.FC = () => {
                   loungeType: 'club',
                   familyRoom: '우리집',
                   defaultHostLabel: '모임방장',
-                  roomTitle: `⛰️ ${clubBannerTitle}`,
+                  roomTitle: `${clubBannerTitle}`,
                   promptLabel: `『${clubBannerTitle}』 초대 링크를 복사해 공유하세요:`,
                 });
                 if (!ok) return;
                 useSaySeeStore
                   .getState()
-                  .showToast(`💌 『${clubBannerTitle}』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.`);
+                  .showToast(`『${clubBannerTitle}』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.`);
               }}
               className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-400/50 text-amber-300 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 cursor-pointer transition-all"
             >
-              <span>💌 모임방 초대 링크 복사</span>
+              <span>모임방 초대 링크 복사</span>
             </button>
           </div>
         </div>
 
-        <GhostCastLiveToolbar loungeLabel="⛰️ 동호회·모임 사진 공유방" />
+        <GhostCastLiveToolbar loungeLabel="동호회·모임 사진 공유방" />
 
         {/* 남은 용량 대비 가능/불가능 안내 및 내 기기 저장 폴더 열기 */}
         {renderStorageCheckAndSyncDetail()}
@@ -697,9 +696,9 @@ export const LoungeFeedContextBanner: React.FC = () => {
           <button
             type="button"
             onClick={() => useSaySeeStore.getState().requestAddMyPhotosToSharedRoom()}
-            className="px-3.5 py-2 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[12px] font-black shadow-md shadow-teal-500/20 flex items-center gap-1.5 cursor-pointer transition-all"
+            className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[12px] font-semibold shadow-md shadow-teal-500/20 flex items-center gap-1.5 cursor-pointer transition-all"
           >
-            <span>📸 내 사진도 이 방에 추가하기</span>
+            <span>내 사진도 이 방에 추가하기</span>
           </button>
           <button
             type="button"
@@ -708,22 +707,22 @@ export const LoungeFeedContextBanner: React.FC = () => {
                 loungeType: 'student',
                 familyRoom: '우리집',
                 defaultHostLabel: '동기회장',
-                roomTitle: `🎓 ${alumniBannerTitle}`,
+                roomTitle: `${alumniBannerTitle}`,
                 promptLabel: `『${alumniBannerTitle}』 초대 링크를 복사해 공유하세요:`,
               });
               if (!ok) return;
               useSaySeeStore
                 .getState()
-                .showToast(`💌 『${alumniBannerTitle}』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.`);
+                .showToast(`『${alumniBannerTitle}』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.`);
             }}
             className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-400/50 text-amber-300 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 cursor-pointer transition-all"
           >
-            <span>💌 동창회 초대 링크 복사</span>
+            <span>동창회 초대 링크 복사</span>
           </button>
         </div>
       </div>
 
-      <GhostCastLiveToolbar loungeLabel="🎓 동창회 사진 공유방" />
+      <GhostCastLiveToolbar loungeLabel="동창회 사진 공유방" />
 
       {renderStorageCheckAndSyncDetail()}
     </div>

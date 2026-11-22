@@ -1,17 +1,12 @@
 import React, { useState, useEffect } from 'react';
 import {
   CheckCircle2,
-  Sparkles,
-  ShieldCheck,
   ExternalLink,
   Cpu,
   HardDrive,
   FileSearch,
-  FolderCheck,
   Activity,
-  Film,
   Volume2,
-  ClipboardCheck,
 } from 'lucide-react';
 import {
   type MonsterChatMessage,
@@ -75,7 +70,6 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
   const [customScanPath, setCustomScanPath] = useState('');
   const [appFilterQuery, setAppFilterQuery] = useState('');
 
-  // [알약 완전 대체] 실시간 바이러스 검사 중일 때 2.5초 간격으로 실제 완료 여부 폴링 (0.1초 거짓 0건 보고 원천 차단)
   useEffect(() => {
     if (message.cardKind !== 'DEFENDER_GUARD_CARD' || !message.defenderGuardPayload?.scanRunning) {
       return;
@@ -89,7 +83,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         window.clearInterval(timer);
         const refreshed = await fetchDefenderGuardState('defender_status');
         if (cancelled) return;
-        const doneText = String(st.raw.resultSummaryKo || refreshed.payload?.lastScanResultKo || '✅ 바이러스 검사가 완료되었습니다.');
+        const doneText = String(st.raw.resultSummaryKo || refreshed.payload?.lastScanResultKo || '바이러스 검사가 완료되었습니다.');
         onUpdateMessage({
           ...message,
           defenderGuardPayload: {
@@ -121,51 +115,49 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
       },
     });
     onToast?.(
-      `🤝 [${res.detectedAiLabel}] 본문 클립보드 복사 및 라이브 음성 상담 창 연결이 완료되었습니다!`
+      `[${res.detectedAiLabel}] 본문을 클립보드에 복사하고 상담 창을 열었습니다.`
     );
   };
 
   return (
-    <div className="mt-2.5 space-y-2.5">
-      {/* 1) 0토큰 1초 AI 내용검색 직행 카드 */}
+    <div className="mt-2.5 space-y-2.5 text-slate-900">
+      {/* 1) 검색 이동 카드 */}
       {message.cardKind === 'SEARCH_ROUTING' && message.searchKeyword && (
-        <div className="rounded-xl border border-indigo-500/40 bg-indigo-950/30 p-3">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="text-xs font-bold text-indigo-200 flex items-center gap-1.5">
-              <FileSearch className="w-4 h-4 text-indigo-400" />
-              <span>검색 키워드: &ldquo;{message.searchKeyword}&rdquo;</span>
+            <div className="text-xs font-semibold text-slate-700 flex items-center gap-1.5">
+              <FileSearch className="w-4 h-4 text-slate-500" />
+              <span>검색어: &ldquo;{message.searchKeyword}&rdquo;</span>
             </div>
             <button
               type="button"
               onClick={() => onJumpToSearch(message.searchKeyword!)}
-              className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-extrabold flex items-center gap-1.5 shadow"
+              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold cursor-pointer"
             >
-              <Sparkles className="w-3.5 h-3.5" />
-              👻 [귀신검색] 탭에서 바로 열기
+              귀신검색에서 열기
             </button>
           </div>
         </div>
       )}
 
-      {/* 2) 1초 블랙박스 소명 & 5대 은닉 금고 / $Recycle.Bin $I 포렌식 + 지운 파일 5줄 미리보기 카드 */}
+      {/* 2) 삭제·미저장 파일 미리보기 및 복원 카드 */}
       {message.cardKind === 'MISSING_FILE_EXONERATION' && message.missingFilePayload && (
-        <div className="rounded-xl border border-emerald-500/40 bg-slate-900/90 p-3.5 space-y-2.5 text-[13px] overflow-hidden break-words [overflow-wrap:anywhere]">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5 text-[13px] overflow-hidden break-words [overflow-wrap:anywhere]">
           <div className="space-y-1">
             <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[13px] font-extrabold">
-                <ShieldCheck className="w-4 h-4 shrink-0" />
-                📄 지운 파일 5줄 미리보기 카드
+              <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-800 text-[12px] font-semibold">
+                찾은 파일 미리보기
               </span>
-              <span className="text-[13px] text-slate-400 font-semibold">
+              <span className="text-[12px] text-slate-500">
                 {message.missingFilePayload.deletedAtOrSavedAt}
               </span>
             </div>
-            <p className="text-[13px] text-slate-300 leading-snug">
-              복원하기 전에 찾은 파일의 이름·원래 위치·보관 상태를 5줄로 미리 확인하는 카드예요.
+            <p className="text-[12.5px] text-slate-600 leading-snug">
+              복원 전에 파일 이름과 원래 위치, 보관 상태를 확인할 수 있습니다.
             </p>
           </div>
 
-          <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-3 text-[13px] text-emerald-200 space-y-1.5">
+          <div className="rounded-lg bg-white border border-slate-200 p-3 text-[12.5px] text-slate-700 space-y-1">
             {message.missingFilePayload.fiveLinePreview.map((line, i) => (
               <div key={i} className="whitespace-normal break-words [overflow-wrap:anywhere] leading-snug">
                 {line}
@@ -174,7 +166,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
           </div>
 
           <div className="flex items-center justify-between gap-2 flex-wrap pt-1">
-            <div className="flex flex-wrap items-center gap-2">
+            <div className="flex flex-wrap items-center gap-1.5">
               {isMobileVoiceEnvironment() && (
                 <button
                   type="button"
@@ -184,10 +176,10 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       'sunhi_doc_reader'
                     )
                   }
-                  className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-200 text-[13px] font-bold flex items-center gap-1 cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[12px] font-medium flex items-center gap-1 cursor-pointer"
                 >
-                  <Volume2 className="w-4 h-4 text-amber-400 shrink-0" />
-                  👩 음성으로 미리듣기
+                  <Volume2 className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                  음성으로 듣기
                 </button>
               )}
 
@@ -201,11 +193,6 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     const isInRecycleBin =
                       !message.missingFilePayload!.restored &&
                       targetPath.toLowerCase().includes('$recycle.bin');
-                    onToast?.(
-                      isInRecycleBin
-                        ? '📂 윈도우 [휴지통] 폴더를 여는 중이에요...'
-                        : `📂 탐색기에서 [${message.missingFilePayload!.fileName}] 위치를 여는 중이에요...`
-                    );
                     const res = await openMissingFileOrRecycleBinLocation(
                       targetPath,
                       isInRecycleBin
@@ -213,16 +200,16 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     if (res.ok) {
                       onToast?.(
                         isInRecycleBin
-                          ? '📂 윈도우 [휴지통] 폴더를 열었어요!'
-                          : `📂 윈도우 탐색기에서 [${message.missingFilePayload!.fileName}] 폴더를 열었어요!`
+                          ? '휴지통 폴더를 열었습니다.'
+                          : `[${message.missingFilePayload!.fileName}] 위치 폴더를 열었습니다.`
                       );
                     } else {
-                      onToast?.('⚠️ 내 컴퓨터 연결(제트코어) 상태를 확인해 주세요.');
+                      onToast?.('내 컴퓨터 연결 상태를 확인해 주세요.');
                     }
                   }}
-                  className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-500 text-white text-[13px] font-extrabold flex items-center gap-1 cursor-pointer shadow"
+                  className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[12px] font-medium cursor-pointer"
                 >
-                  📂 폴더 열기
+                  폴더 열기
                 </button>
               )}
 
@@ -246,86 +233,81 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                         currentLocation:
                           res.restoredPath || message.missingFilePayload!.currentLocation,
                         createdRestoreId: res.restoreId,
-                        approvedTypedText: '원위치 복원 버튼 원클릭',
+                        approvedTypedText: '원위치 복원 버튼 클릭',
                         restoreError: res.ok ? undefined : res.message,
                       },
                       healthRecordIssued: res.healthRecord || message.healthRecordIssued,
                     });
                     onToast?.(res.message);
                   }}
-                  className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[13px] font-black flex items-center gap-1 cursor-pointer shadow"
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer"
                 >
-                  {busyId === 'missing_restore' ? '복원 중...' : '↩️ 원위치/바탕화면 복원'}
+                  {busyId === 'missing_restore' ? '복원 중...' : '원위치로 복원'}
                 </button>
               )}
             </div>
 
-            {message.missingFilePayload.restored ? (
-              <span className="px-3 py-1.5 rounded-lg bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[13px] font-extrabold flex items-center gap-1.5 flex-wrap">
-                <CheckCircle2 className="w-4 h-4 shrink-0" />
-                ✅ 원위치 복원 완료
+            {message.missingFilePayload.restored && (
+              <span className="px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[12px] font-semibold flex items-center gap-1">
+                <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                복원 완료
                 {message.missingFilePayload.createdRestoreId
-                  ? ` · [복원 기록 ${message.missingFilePayload.createdRestoreId}]`
+                  ? ` (${message.missingFilePayload.createdRestoreId})`
                   : ''}
               </span>
-            ) : (
-              <div className="rounded-lg bg-slate-950/90 border border-emerald-500/30 px-3 py-1.5 text-[13px] text-emerald-200 font-semibold">
-                ✍️ 위 <strong>[↩️ 원위치/바탕화면 복원]</strong> 버튼을 누르거나 채팅창에 <strong>&ldquo;응 복구해줘&rdquo;</strong>라고 입력해 보세요!
-              </div>
             )}
           </div>
           {message.missingFilePayload.restoreError && (
-            <div className="text-[13px] font-bold text-rose-300">{message.missingFilePayload.restoreError}</div>
+            <div className="text-[12px] font-medium text-rose-600">{message.missingFilePayload.restoreError}</div>
           )}
         </div>
       )}
 
-      {/* 3) 대화형 폴더 정리 / 다운로드 설치파일(.apk/.exe) 청소 미리보기 게이트 */}
+      {/* 3) 폴더·설치파일 정리 미리보기 카드 */}
       {message.cardKind === 'CLEANUP_PREVIEW_GATE' && message.cleanupPreview && (
-        <div className="rounded-xl border border-amber-500/40 bg-slate-900/90 p-3.5 space-y-2.5 text-[13px] overflow-hidden break-words [overflow-wrap:anywhere]">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5 text-[13px] overflow-hidden break-words [overflow-wrap:anywhere]">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[13px] font-extrabold">
-              <FolderCheck className="w-4 h-4 shrink-0" />
+            <span className="font-bold text-slate-900">
               {message.cleanupPreview.summaryTitle}
             </span>
-            <span className="text-[13px] font-extrabold text-emerald-400">
+            <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-[11.5px] font-semibold text-slate-700">
               {message.cleanupPreview.reclaimSizeLabel}
             </span>
           </div>
 
-          <p className="text-[13px] text-slate-300 leading-relaxed">
+          <p className="text-[12.5px] text-slate-600 leading-relaxed">
             {message.cleanupPreview.previewDescriptionKo}
           </p>
 
-          <div className="grid grid-cols-2 gap-2 text-center text-[13px]">
-            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5">
-              <div className="text-slate-400">&apos;기타_정리함&apos; 이동 대상</div>
-              <div className="font-black text-amber-300">
+          <div className="grid grid-cols-2 gap-2 text-center text-[12px]">
+            <div className="rounded-lg bg-white border border-slate-200 p-2.5">
+              <div className="text-slate-500">이동 대상</div>
+              <div className="font-bold text-slate-900 mt-0.5">
                 {message.cleanupPreview.moveCount}건
               </div>
             </div>
-            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5">
-              <div className="text-slate-400">대상 파일 합계</div>
-              <div className="font-black text-sky-300">
+            <div className="rounded-lg bg-white border border-slate-200 p-2.5">
+              <div className="text-slate-500">전체 크기</div>
+              <div className="font-bold text-slate-900 mt-0.5">
                 {formatBytes(message.cleanupPreview.totalBytes)}
               </div>
             </div>
           </div>
 
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             <button
               type="button"
               onClick={() => setExpandedDetails((v) => !v)}
-              className="w-full py-2 px-3 rounded-lg bg-slate-950/80 hover:bg-slate-800 border border-slate-700 text-[13px] font-bold text-amber-300 flex items-center justify-between gap-2 cursor-pointer transition text-left"
+              className="w-full py-2 px-3 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-[12px] font-medium text-slate-700 flex items-center justify-between gap-2 cursor-pointer text-left"
             >
-              <span>📋 정리 대상 파일 상세 목록 ({message.cleanupPreview.sampleFiles.length}건)</span>
-              <span className="shrink-0">{expandedDetails ? '▴ 접기' : '▾ 펼치기'}</span>
+              <span>정리 대상 파일 목록 ({message.cleanupPreview.sampleFiles.length}건)</span>
+              <span className="shrink-0 text-slate-400">{expandedDetails ? '접기' : '펼치기'}</span>
             </button>
             {expandedDetails && (
-              <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-3 text-[13px] text-slate-200 space-y-1.5 max-h-52 overflow-y-auto">
+              <div className="rounded-lg bg-white border border-slate-200 p-3 text-[12px] text-slate-700 space-y-1 max-h-52 overflow-y-auto">
                 {message.cleanupPreview.sampleFiles.map((f, idx) => (
                   <div key={idx} className="flex items-start gap-1.5 break-words [overflow-wrap:anywhere]">
-                    <span className="text-amber-400 shrink-0">•</span>
+                    <span className="text-slate-400 shrink-0">·</span>
                     <span>{f}</span>
                   </div>
                 ))}
@@ -334,14 +316,15 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
           </div>
 
           {message.cleanupPreview.executionError && (
-            <div className="text-[13px] font-bold text-rose-300">{message.cleanupPreview.executionError}</div>
+            <div className="text-[12px] font-medium text-rose-600">{message.cleanupPreview.executionError}</div>
           )}
+
           <div className="pt-1">
             {message.cleanupPreview.approved ? (
-              <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-[13px] font-extrabold flex items-center justify-between gap-2 flex-wrap">
+              <div className="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-[12.5px] font-semibold flex items-center justify-between gap-2 flex-wrap">
                 <span className="flex items-center gap-1.5">
                   <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  ✅ 정리 완료 · [복원 기록 {message.cleanupPreview.createdRestoreId || '#1'}]
+                  정리 완료 ({message.cleanupPreview.createdRestoreId || '#1'})
                 </span>
                 <button
                   type="button"
@@ -353,15 +336,15 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     setBusyId(null);
                     onToast?.(res.message);
                   }}
-                  className="px-3 py-1.5 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-[13px] font-extrabold cursor-pointer shadow-xs transition"
+                  className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 border border-emerald-300 text-emerald-900 text-[11.5px] font-medium cursor-pointer"
                 >
-                  {busyId === 'cleanup_undo' ? '복원 중...' : '↩️ 원래대로 되돌려줘'}
+                  {busyId === 'cleanup_undo' ? '복원 중...' : '원래대로 되돌리기'}
                 </button>
               </div>
             ) : (
-              <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2.5 text-[13px] text-amber-200 font-semibold leading-relaxed flex items-center justify-between gap-2 flex-wrap">
-                <span>
-                  ✍️ 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력하거나 우측 버튼을 눌러 정리해 보세요!
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-[12px] text-slate-500">
+                  확인 후 진행을 원하시면 버튼을 누르거나 &ldquo;응 진행해&rdquo;라고 입력해 주세요.
                 </span>
                 <button
                   type="button"
@@ -387,9 +370,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     });
                     onToast?.(res.message);
                   }}
-                  className="px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[13px] font-extrabold cursor-pointer shadow transition shrink-0"
+                  className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
                 >
-                  {busyId === 'cleanup_approve' ? '정리 중...' : '✅ 응, 안전 정리해줘'}
+                  {busyId === 'cleanup_approve' ? '정리 중...' : '정리 실행'}
                 </button>
               </div>
             )}
@@ -397,42 +380,33 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         </div>
       )}
 
-      {/* 4) 자주 가는 사이트 바탕화면 바로가기(.url) 생성 게이트 */}
+      {/* 4) 바탕화면 바로가기 생성 카드 */}
       {message.cardKind === 'DESKTOP_SHORTCUT_GATE' && message.shortcutPreview && (
-        <div className="rounded-xl border border-sky-500/40 bg-slate-900/90 p-3.5 space-y-2.5">
-          <div className="flex items-center justify-between gap-2">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-sky-500/20 border border-sky-500/40 text-sky-300 text-[11px] font-extrabold">
-              🔗 바탕화면 바로가기 생성 미리보기
-            </span>
-          </div>
-          <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5 text-xs space-y-1">
-            <div className="text-slate-200 font-bold">
-              📌 아이콘 이름: <span className="text-sky-300">{message.shortcutPreview.shortcutFileName}</span>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5">
+          <span className="text-[12.5px] font-bold text-slate-900">
+            바탕화면 바로가기 만들기
+          </span>
+          <div className="rounded-lg bg-white border border-slate-200 p-2.5 text-xs space-y-1">
+            <div className="text-slate-800 font-semibold">
+              이름: {message.shortcutPreview.shortcutFileName}
             </div>
-            <div className="text-slate-400 font-mono text-[11px]">
-              🌐 연결 주소: {message.shortcutPreview.targetUrl}
+            <div className="text-slate-500 text-[11px] break-all">
+              주소: {message.shortcutPreview.targetUrl}
             </div>
           </div>
           {message.shortcutPreview.executionError && (
-            <div className="text-[11px] font-bold text-rose-300">{message.shortcutPreview.executionError}</div>
+            <div className="text-[11.5px] font-medium text-rose-600">{message.shortcutPreview.executionError}</div>
           )}
           <div>
             {message.shortcutPreview.approved ? (
-              <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold flex items-center justify-between gap-2 flex-wrap">
-                <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4" />
-                  바탕화면 생성 및 블랙박스 기록 완료 · [복원 기록 {message.shortcutPreview.createdRestoreId}]
-                </span>
-                {message.shortcutPreview.approvedTypedText && (
-                  <span className="text-[11px] text-emerald-200 font-mono">
-                    승인 발화: &ldquo;{message.shortcutPreview.approvedTypedText}&rdquo;
-                  </span>
-                )}
+              <div className="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                바탕화면에 생성되었습니다 ({message.shortcutPreview.createdRestoreId})
               </div>
             ) : (
-              <div className="rounded-lg bg-sky-500/10 border border-sky-500/30 px-3 py-2 text-xs text-sky-200 font-semibold leading-relaxed flex items-center justify-between gap-2 flex-wrap">
-                <span>
-                  ✍️ 생성하시려면 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력하거나 우측 버튼을 눌러 주세요.
+              <div className="flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-xs text-slate-500">
+                  확인 후 생성 버튼을 눌러 주세요.
                 </span>
                 <button
                   type="button"
@@ -442,9 +416,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     await submitExternalMonsterChatQuery('응 진행해', message.sourceTab || 'trash');
                     setBusyId(null);
                   }}
-                  className="px-3 py-1.5 rounded-lg bg-sky-400 hover:bg-sky-300 text-slate-950 text-[11.5px] font-extrabold cursor-pointer shadow transition"
+                  className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer"
                 >
-                  {busyId === 'shortcut_approve' ? '생성 중...' : '✅ 확인 완료 · 바로 생성하기'}
+                  {busyId === 'shortcut_approve' ? '생성 중...' : '바로가기 생성'}
                 </button>
               </div>
             )}
@@ -452,7 +426,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         </div>
       )}
 
-      {/* 5) [복원 기록] 3단계 무결성 사전 검진(🟢/🟡/🔴) 및 자연어 타이핑 원복 (수십 개여도 최근 3건 기본 + 더보기/검색) */}
+      {/* 5) 복원 기록 목록 카드 */}
       {message.cardKind === 'RESTORE_POINTS_LIST' && message.restorePoints && (() => {
         const q = restoreFilterText.trim().toLowerCase();
         const filteredPts = q
@@ -467,11 +441,11 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         const hiddenCount = Math.max(0, filteredPts.length - visiblePts.length);
 
         return (
-          <div className="rounded-xl border border-violet-500/40 bg-slate-900/90 p-3.5 space-y-2.5 text-[13px] overflow-hidden break-words [overflow-wrap:anywhere]">
-            <div className="text-[13px] font-extrabold text-violet-200 flex items-center justify-between flex-wrap gap-2">
-              <span>🕰️ [복원 기록] 히스토리 (총 {message.restorePoints.length}건)</span>
-              <span className="text-[13px] text-violet-300 font-semibold">
-                ✍️ 버튼 클릭 또는 &ldquo;1번 복원해줘&rdquo; 입력
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5 text-[13px] overflow-hidden break-words [overflow-wrap:anywhere]">
+            <div className="flex items-center justify-between flex-wrap gap-2">
+              <span className="font-bold text-slate-900">복원 기록 ({message.restorePoints.length}건)</span>
+              <span className="text-[11.5px] text-slate-500">
+                버튼을 누르거나 &ldquo;1번 복원해줘&rdquo;라고 입력
               </span>
             </div>
 
@@ -480,8 +454,8 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 type="text"
                 value={restoreFilterText}
                 onChange={(e) => setRestoreFilterText(e.target.value)}
-                placeholder="🔍 복원 지점이 많을 땐 번호(#12)·날짜·작업명으로 바로 검색..."
-                className="w-full px-3 py-2 rounded-lg bg-slate-950 border border-slate-800 text-[13px] text-slate-200 placeholder-slate-500 focus:outline-none focus:border-violet-500/50"
+                placeholder="번호(#12), 날짜, 작업명으로 검색..."
+                className="w-full px-3 py-1.5 rounded-lg bg-white border border-slate-300 text-[12.5px] text-slate-900 placeholder-slate-400 focus:outline-none focus:border-slate-600"
               />
             )}
 
@@ -489,73 +463,61 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               {visiblePts.map((pt) => (
                 <div
                   key={pt.restoreId}
-                  className="rounded-lg bg-slate-950/90 border border-slate-800 p-3 space-y-1.5"
+                  className="rounded-lg bg-white border border-slate-200 p-3 space-y-1.5"
                 >
                   <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <span className="text-[13px] font-black text-white break-words [overflow-wrap:anywhere]">
+                    <span className="text-[13px] font-semibold text-slate-900 break-words [overflow-wrap:anywhere]">
                       [{pt.restoreId}] {pt.summary}
                     </span>
-                    <span
-                      className={`px-2.5 py-0.5 rounded-full text-[13px] font-extrabold ${
-                        pt.integrityStatus === 'FULL_RESTORABLE'
-                          ? 'bg-emerald-500/20 text-emerald-300 border border-emerald-500/40'
-                          : pt.integrityStatus === 'PARTIAL_RESTORABLE'
-                          ? 'bg-amber-500/20 text-amber-300 border border-amber-500/40'
-                          : 'bg-slate-700/40 text-slate-300 border border-slate-600/50'
-                      }`}
-                    >
-                      {pt.statusBadge}
+                    <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] font-medium">
+                      {pt.statusBadge.replace(/[🟢🟡🔴✅\s]+/gu, '').trim() || pt.statusBadge}
                     </span>
                   </div>
-                  <p className="text-[13px] text-slate-300 leading-snug">{pt.precheckGuideMessage}</p>
+                  <p className="text-[12px] text-slate-600 leading-snug">{pt.precheckGuideMessage}</p>
                   <div className="flex items-center justify-between gap-2 pt-1 flex-wrap">
-                    <span className="text-[13px] text-slate-400">{pt.createdAt}</span>
+                    <span className="text-[11.5px] text-slate-400">{pt.createdAt}</span>
                     {pt.rolledBack ? (
-                      <span className="text-[13px] font-extrabold text-emerald-400 flex items-center gap-1">
-                        <CheckCircle2 className="w-4 h-4 shrink-0" />
-                        원위치 복원 완료
+                      <span className="text-[12px] font-semibold text-emerald-700 flex items-center gap-1">
+                        <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                        복원 완료
                       </span>
                     ) : pt.integrityStatus === 'UNRESTORABLE' || pt.restorableItems === 0 ? (
-                      <span className="text-[13px] font-semibold text-slate-400">
-                        되돌릴 대상 파일 없음 (추가 작업 불필요)
+                      <span className="text-[12px] text-slate-400">
+                        복원 대상 없음
                       </span>
                     ) : (
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <button
-                          type="button"
-                          disabled={busyId === `rb-${pt.restoreId}`}
-                          onClick={async () => {
-                            setBusyId(`rb-${pt.restoreId}`);
-                            const typed = `${pt.restoreId.replace('#', '')}번 복원해줘`;
-                            const res = await executeRestorePointRollback(pt.restoreId, typed);
-                            setBusyId(null);
-                            if (res.ok) {
-                              onUpdateMessage({
-                                ...message,
-                                restorePoints: message.restorePoints?.map((item) =>
-                                  item.restoreId === pt.restoreId
-                                    ? {
-                                        ...item,
-                                        rolledBack: true,
-                                        rollbackTypedText: typed,
-                                        integrityStatus: 'FULL_RESTORABLE',
-                                        statusBadge: '✅ [원위치 복원 완료]',
-                                        precheckGuideMessage:
-                                          '이미 원래 위치로 안전하게 복원 완료된 기록이에요! (추가 되돌리기 불필요)',
-                                      }
-                                    : item
-                                ),
-                              });
-                            }
-                            onToast?.(res.message);
-                          }}
-                          className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[13px] font-extrabold cursor-pointer shadow-xs transition"
-                        >
-                          {busyId === `rb-${pt.restoreId}`
-                            ? '복원 중...'
-                            : '↩️ 원래대로 되돌리기 (1초 복원)'}
-                        </button>
-                      </div>
+                      <button
+                        type="button"
+                        disabled={busyId === `rb-${pt.restoreId}`}
+                        onClick={async () => {
+                          setBusyId(`rb-${pt.restoreId}`);
+                          const typed = `${pt.restoreId.replace('#', '')}번 복원해줘`;
+                          const res = await executeRestorePointRollback(pt.restoreId, typed);
+                          setBusyId(null);
+                          if (res.ok) {
+                            onUpdateMessage({
+                              ...message,
+                              restorePoints: message.restorePoints?.map((item) =>
+                                item.restoreId === pt.restoreId
+                                  ? {
+                                      ...item,
+                                      rolledBack: true,
+                                      rollbackTypedText: typed,
+                                      integrityStatus: 'FULL_RESTORABLE',
+                                      statusBadge: '원위치 복원 완료',
+                                      precheckGuideMessage:
+                                        '원래 위치로 복원된 기록입니다.',
+                                    }
+                                  : item
+                              ),
+                            });
+                          }
+                          onToast?.(res.message);
+                        }}
+                        className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer"
+                      >
+                        {busyId === `rb-${pt.restoreId}` ? '복원 중...' : '원래대로 되돌리기'}
+                      </button>
                     )}
                   </div>
                 </div>
@@ -566,83 +528,83 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               <button
                 type="button"
                 onClick={() => setShowAllRestorePoints((v) => !v)}
-                className="w-full py-2 rounded-lg bg-slate-950 hover:bg-slate-800 border border-slate-800 text-[13px] font-bold text-violet-300 transition cursor-pointer"
+                className="w-full py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-[12px] font-medium text-slate-700 cursor-pointer"
               >
                 {showAllRestorePoints
-                  ? '▴ 최근 3건만 심플하게 보기'
-                  : `▾ 이전 복원 기록 더 보기 (외 ${hiddenCount}건)`}
+                  ? '최근 3건만 보기'
+                  : `이전 기록 더 보기 (+${hiddenCount}건)`}
               </button>
             )}
           </div>
         );
       })()}
 
-      {/* 6) 내 PC 실시간 사양 스캔(200토큰) 카드 (심플 노션 스타일) */}
+      {/* 6) 내 PC 사양 요약 카드 */}
       {message.cardKind === 'PC_SPEC_CONSULTATION' && message.pcSpecPayload && (
-        <div className="rounded-xl border border-cyan-500/30 bg-slate-900/90 p-3.5 space-y-2.5 text-[13px] overflow-hidden break-words [overflow-wrap:anywhere]">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5 text-[13px] overflow-hidden break-words [overflow-wrap:anywhere]">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 text-[13px] font-extrabold text-cyan-300">
-              <Cpu className="w-4 h-4 shrink-0" />
-              내 PC 실측 하드웨어 요약
+            <span className="inline-flex items-center gap-1.5 text-[13px] font-bold text-slate-900">
+              <Cpu className="w-4 h-4 text-slate-500 shrink-0" />
+              내 PC 하드웨어 요약
             </span>
-            <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-500/40 text-emerald-300 text-[13px] font-extrabold">
+            <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700 text-[11.5px] font-semibold">
               {message.pcSpecPayload.verdictBadge}
             </span>
           </div>
 
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[13px]">
-            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5">
-              <div className="text-slate-400">
-                CPU {typeof message.pcSpecPayload.cpuLoadPercent === 'number' ? `(부하 ${message.pcSpecPayload.cpuLoadPercent}%)` : ''}
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-[12px]">
+            <div className="rounded-lg bg-white border border-slate-200 p-2.5">
+              <div className="text-slate-500">
+                CPU {typeof message.pcSpecPayload.cpuLoadPercent === 'number' ? `(${message.pcSpecPayload.cpuLoadPercent}%)` : ''}
               </div>
-              <div className="font-bold text-slate-100 whitespace-normal break-words leading-snug">
+              <div className="font-semibold text-slate-900 whitespace-normal break-words leading-snug mt-0.5">
                 {message.pcSpecPayload.cpuModel}
               </div>
             </div>
-            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5">
-              <div className="text-slate-400">메모리 (RAM)</div>
-              <div className="font-bold text-emerald-300 whitespace-normal break-words leading-snug">
+            <div className="rounded-lg bg-white border border-slate-200 p-2.5">
+              <div className="text-slate-500">메모리 (RAM)</div>
+              <div className="font-semibold text-slate-900 whitespace-normal break-words leading-snug mt-0.5">
                 {message.pcSpecPayload.ramTotalGb ?? '확인 불가'}
                 {message.pcSpecPayload.ramTotalGb !== null ? 'GB' : ''}
                 {message.pcSpecPayload.ramUsedPercent !== null ? ` (${message.pcSpecPayload.ramUsedPercent}%)` : ''}
               </div>
             </div>
-            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5">
-              <div className="text-slate-400">그래픽 (GPU)</div>
-              <div className="font-bold text-sky-300 whitespace-normal break-words leading-snug">
+            <div className="rounded-lg bg-white border border-slate-200 p-2.5">
+              <div className="text-slate-500">그래픽 (GPU)</div>
+              <div className="font-semibold text-slate-900 whitespace-normal break-words leading-snug mt-0.5">
                 {message.pcSpecPayload.gpuModel}
               </div>
             </div>
-            <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-2.5">
-              <div className="text-slate-400">여유 공간</div>
-              <div className="font-bold text-amber-300 flex items-center gap-1 whitespace-normal break-words leading-snug">
-                <HardDrive className="w-3.5 h-3.5 shrink-0" />
-                <span>{message.pcSpecPayload.diskFreeGb !== null ? `${message.pcSpecPayload.diskFreeGb} GB 여유` : '확인 불가'}</span>
+            <div className="rounded-lg bg-white border border-slate-200 p-2.5">
+              <div className="text-slate-500">여유 공간</div>
+              <div className="font-semibold text-slate-900 flex items-center gap-1 whitespace-normal break-words leading-snug mt-0.5">
+                <HardDrive className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <span>{message.pcSpecPayload.diskFreeGb !== null ? `${message.pcSpecPayload.diskFreeGb} GB` : '확인 불가'}</span>
               </div>
             </div>
           </div>
 
           {message.pcSpecPayload.bloatwareCleanSummary && (
-            <div className="rounded-lg bg-emerald-950/60 border border-emerald-500/40 p-2.5 text-[13px] text-emerald-200 font-bold whitespace-normal break-words">
+            <div className="rounded-lg bg-white border border-slate-200 p-2.5 text-[12.5px] text-slate-700 whitespace-normal break-words">
               {message.pcSpecPayload.bloatwareCleanSummary}
             </div>
           )}
 
           {(message.pcSpecPayload.detectedBloatwareLabels?.length || 0) > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <button
                 type="button"
                 onClick={() => setExpandedDetails((v) => !v)}
-                className="w-full py-2 px-3 rounded-lg bg-slate-950/80 hover:bg-slate-800 border border-slate-700 text-[13px] font-bold text-amber-300 flex items-center justify-between gap-2 cursor-pointer transition text-left"
+                className="w-full py-2 px-3 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-[12px] font-medium text-slate-700 flex items-center justify-between gap-2 cursor-pointer text-left"
               >
-                <span>📋 감지된 보안·자동실행 모듈 상세 목록 ({message.pcSpecPayload.detectedBloatwareLabels!.length}종)</span>
-                <span className="shrink-0">{expandedDetails ? '▴ 접기' : '▾ 펼치기'}</span>
+                <span>감지된 상주 모듈 목록 ({message.pcSpecPayload.detectedBloatwareLabels!.length}종)</span>
+                <span className="shrink-0 text-slate-400">{expandedDetails ? '접기' : '펼치기'}</span>
               </button>
               {expandedDetails && (
-                <div className="rounded-lg bg-slate-950/80 border border-slate-800 p-3 text-[13px] text-slate-200 space-y-1.5 max-h-52 overflow-y-auto">
+                <div className="rounded-lg bg-white border border-slate-200 p-3 text-[12px] text-slate-700 space-y-1 max-h-52 overflow-y-auto">
                   {message.pcSpecPayload.detectedBloatwareLabels!.map((lbl, idx) => (
                     <div key={idx} className="flex items-start gap-1.5 break-words [overflow-wrap:anywhere]">
-                      <span className="text-amber-400 shrink-0">•</span>
+                      <span className="text-slate-400 shrink-0">·</span>
                       <span>{lbl}</span>
                     </div>
                   ))}
@@ -653,23 +615,16 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
 
           <div className="pt-1 space-y-2">
             {message.pcSpecPayload.bloatwareCleaned ? (
-              <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-[13px] font-extrabold flex items-center justify-between gap-2 flex-wrap">
-                <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  실행 및 블랙박스 기록 완료 · [복원 기록 {message.pcSpecPayload.createdRestoreId || '#1'}]
-                </span>
-                {message.pcSpecPayload.approvedTypedText && (
-                  <span className="text-[13px] text-emerald-200">
-                    승인: &ldquo;{message.pcSpecPayload.approvedTypedText}&rdquo;
-                  </span>
-                )}
+              <div className="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-[12.5px] font-semibold flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                정리 완료 ({message.pcSpecPayload.createdRestoreId || '#1'})
               </div>
             ) : (
               ((message.pcSpecPayload.detectedBloatwareLabels?.length || 0) > 0 ||
                 (message.pcSpecPayload.cpuLoadPercent ?? 0) >= 50) && (
-                <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2.5 text-[13px] text-amber-200 font-semibold leading-relaxed flex items-center justify-between gap-2 flex-wrap">
-                  <span>
-                    ✍️ 불필요 항목만 정리할까요? 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 치거나 버튼을 눌러 주세요!
+                <div className="flex items-center justify-between gap-2 flex-wrap">
+                  <span className="text-[12px] text-slate-500">
+                    불필요 상주 항목을 절전·정리할까요?
                   </span>
                   <button
                     type="button"
@@ -679,9 +634,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       await submitExternalMonsterChatQuery('응 진행해', message.sourceTab || 'trash');
                       setBusyId(null);
                     }}
-                    className="px-3.5 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[13px] font-extrabold cursor-pointer shadow transition shrink-0"
+                    className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
                   >
-                    {busyId === 'spec_approve' ? '정리 중...' : '✅ 응, 바로 정리해줘'}
+                    {busyId === 'spec_approve' ? '정리 중...' : '불필요 항목 정리'}
                   </button>
                 </div>
               )
@@ -693,34 +648,33 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 const sp = message.pcSpecPayload!;
                 setBusyId('spec_baton');
                 const specSummary = `CPU: ${sp.cpuModel} | RAM: ${sp.ramTotalGb ?? '확인불가'}GB (${sp.ramUsedPercent ?? '?'}% 사용) | GPU: ${sp.gpuModel} | 여유 공간: ${sp.diskFreeGb ?? '?'}GB | 주사율: ${sp.displayHz ?? '?'}Hz | OS: ${sp.osVersion}`;
-                
-                // 1) 화면 최상단 빨간 손가락(👆) 오버레이 가이드 즉시 투사
+
                 const overlayPlan = buildSetupDiagnosisPlan(
                   'pc',
-                  '내 PC 실측 사양 단골 AI 상담',
+                  '내 PC 사양 AI 상담',
                   'pc_excel_overlay'
                 );
                 useSaySeeStore.getState().openSetupOverlayGuide({
                   ...overlayPlan,
-                  title: '👆 [내 PC 실측 사양] 단골 AI(Gemini) 라이브 음성 상담 2단계 가이드',
+                  title: 'AI 상담창 붙여넣기 안내',
                   overlaySteps: [
                     {
                       step: 1,
-                      screenTitle: 'Google Gemini 웹/앱 상담창',
+                      screenTitle: 'Google Gemini 상담창',
                       scrapedElements: [{ text: '입력창', rect: [420, 180] }],
-                      targetLabel: '입력창 붙여넣기(Ctrl+V)',
-                      bubbleMessage: '👆 ① 클립보드에 내 PC 실측 사양이 복사되었습니다. 제미나이 입력창에 붙여넣기(Ctrl+V) 후 전송(↑)을 누르세요!',
+                      targetLabel: '입력창 붙여넣기 (Ctrl+V)',
+                      bubbleMessage: '👆 1. 클립보드에 사양 정보가 복사되었습니다. 입력창에 붙여넣기(Ctrl+V) 후 전송을 누르세요.',
                       voiceGuideText: '입력창에 붙여넣기 후 전송 버튼을 눌러주세요.',
                       fingerCoordPct: [50, 85],
                       rawLogicalRect: [420, 180, 200, 60],
                     },
                     {
                       step: 2,
-                      screenTitle: 'Google Gemini 웹/앱 상담창',
-                      scrapedElements: [{ text: '라이브 음성', rect: [540, 180] }],
-                      targetLabel: '라이브 음성(🎧)',
-                      bubbleMessage: '👆 ② 바로 옆 [라이브 음성 🎧] 버튼을 누르면 말로 편하게 심층 상담을 이어갈 수 있습니다!',
-                      voiceGuideText: '바로 옆 라이브 음성 버튼을 눌러 말로 상담하세요.',
+                      screenTitle: 'Google Gemini 상담창',
+                      scrapedElements: [{ text: '음성 대화', rect: [540, 180] }],
+                      targetLabel: '라이브 음성',
+                      bubbleMessage: '👆 2. 음성 버튼을 누르면 말로 이어서 질문할 수 있습니다.',
+                      voiceGuideText: '음성 버튼을 눌러 말로 상담할 수 있습니다.',
                       fingerCoordPct: [65, 85],
                       rawLogicalRect: [540, 180, 200, 60],
                     },
@@ -730,76 +684,75 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 void launchRealOsTopmostOverlay({
                   x: 420,
                   y: 150,
-                  text: '👆 [제미나이] 입력창에 붙여넣기(Ctrl+V) 후 ① [전송(↑)] ➔ ② [라이브 음성 🎧] 클릭!',
+                  text: '👆 입력창에 붙여넣기(Ctrl+V) 후 전송 버튼을 클릭하세요.',
                   durationSec: 10,
                 });
 
-                // 2) 클립보드 복사 및 제미나이 새 창 오픈
                 const res = await triggerUserFavoriteAiLiveVoiceBatonTouch({
-                  docTitle: '내 PC 실측 사양 진단표',
+                  docTitle: '내 PC 사양 요약',
                   docText: specSummary,
                   deviceSpecSummary: specSummary,
                   userQuestion:
-                    '위 내 PC 실측 사양을 바탕으로 현재 컴퓨터의 성능 수준, 병목 구간, 업그레이드 또는 최적화 조언을 쉽게 설명해 줘.',
+                    '위 내 PC 사양을 바탕으로 현재 컴퓨터의 성능 수준과 최적화 조언을 쉽게 설명해 줘.',
                 });
                 setBusyId(null);
                 onToast?.(
-                  `🤝 [${res.detectedAiLabel}] 내 PC 실측 사양 복사 및 화면 위 빨간 손가락(👆) 가이드 연결이 완료되었습니다!`
+                  `[${res.detectedAiLabel}] 내 PC 사양을 복사하고 상담 창을 열었습니다.`
                 );
               }}
-              className="w-full py-2 px-3 rounded-lg bg-fuchsia-600/90 hover:bg-fuchsia-500 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow cursor-pointer"
+              className="w-full py-2 px-3 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-xs font-medium flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              🤝 내 PC 실측 사양 담아 단골 AI (기본: Gemini) 라이브 음성 상담
+              사양 복사 후 외부 AI(Gemini)에 질문하기
             </button>
           </div>
         </div>
       )}
 
-      {/* 6-B) ⚙️ 고치기 진단 & 1초 수리 / 상세 목록 펼치기·접기 카드 */}
+      {/* 6-B) 기기 수리 진단 카드 */}
       {message.cardKind === 'DEVICE_REPAIR_GATE' && message.deviceRepairPayload && (
-        <div className="rounded-xl border border-teal-500/45 bg-slate-900/95 p-3.5 space-y-2.5 text-[13px] overflow-hidden break-words [overflow-wrap:anywhere]">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5 text-[13px] overflow-hidden break-words [overflow-wrap:anywhere]">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 text-[13px] font-extrabold">
-              👻 귀신비서 수리 진단 카드
+            <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700 text-[11.5px] font-semibold">
+              진단 및 조치 안내
             </span>
-            <span className="text-[13px] font-extrabold text-emerald-300">
+            <span className="text-[12px] font-semibold text-slate-600">
               {message.deviceRepairPayload.badgeText}
             </span>
           </div>
 
-          <div className="text-[13px] font-extrabold text-white whitespace-normal break-words leading-snug">
+          <div className="text-[13.5px] font-bold text-slate-900 whitespace-normal break-words leading-snug">
             {message.deviceRepairPayload.title}
           </div>
-          <p className="text-[13px] text-slate-300 leading-relaxed whitespace-normal break-words">
+          <p className="text-[12.5px] text-slate-600 leading-relaxed whitespace-normal break-words">
             {message.deviceRepairPayload.rootCause}
           </p>
 
           {message.deviceRepairPayload.detailGroups && message.deviceRepairPayload.detailGroups.length > 0 && (
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               <button
                 type="button"
                 onClick={() => setExpandedDetails((v) => !v)}
-                className="w-full py-2 px-3 rounded-lg bg-slate-950/80 hover:bg-slate-800 border border-slate-700 text-[13px] font-bold text-teal-300 flex items-center justify-between gap-2 cursor-pointer transition text-left"
+                className="w-full py-2 px-3 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-[12px] font-medium text-slate-700 flex items-center justify-between gap-2 cursor-pointer text-left"
               >
                 <span>
-                  📋 상세 목록 {expandedDetails ? '접기' : '펼치기'} (
+                  상세 항목 {expandedDetails ? '접기' : '펼치기'} (
                   {message.deviceRepairPayload.detailGroups.map((g) => g.groupTitle).join(' · ')})
                 </span>
-                <span className="shrink-0 font-extrabold">{expandedDetails ? '▴ 접기' : '▾ 펼치기'}</span>
+                <span className="shrink-0 text-slate-400">{expandedDetails ? '접기' : '펼치기'}</span>
               </button>
               {expandedDetails && (
-                <div className="rounded-lg bg-slate-950/85 border border-slate-800 p-3 space-y-3 max-h-60 overflow-y-auto text-[13px]">
+                <div className="rounded-lg bg-white border border-slate-200 p-3 space-y-2.5 max-h-60 overflow-y-auto text-[12px]">
                   {message.deviceRepairPayload.detailGroups.map((grp, gIdx) => (
-                    <div key={gIdx} className="space-y-1.5">
-                      <div className="font-extrabold text-teal-300">{grp.groupTitle}</div>
-                      <div className="space-y-1">
+                    <div key={gIdx} className="space-y-1">
+                      <div className="font-semibold text-slate-900">{grp.groupTitle}</div>
+                      <div className="space-y-0.5">
                         {grp.items.map((item, iIdx) => (
                           <div
                             key={iIdx}
-                            className="flex items-start gap-1.5 text-slate-200 break-words [overflow-wrap:anywhere] leading-snug"
+                            className="flex items-start gap-1.5 text-slate-600 break-words [overflow-wrap:anywhere] leading-snug"
                           >
-                            <span className="text-emerald-400 shrink-0">•</span>
+                            <span className="text-slate-400 shrink-0">·</span>
                             <span>{item}</span>
                           </div>
                         ))}
@@ -812,19 +765,19 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
           )}
 
           {message.deviceRepairPayload.executed && (
-            <div className="rounded-lg bg-emerald-950/50 border border-emerald-500/40 p-2.5 text-[13px] text-emerald-200 font-bold whitespace-normal break-words">
+            <div className="rounded-lg bg-white border border-slate-200 p-2.5 text-[12.5px] text-slate-700 font-medium whitespace-normal break-words">
               {message.deviceRepairPayload.undone
-                ? '↩️ 수리 전 원래 설정으로 1초 원상복구했어요!'
-                : message.deviceRepairPayload.completionMessage || '✅ 1초 자동 정리 및 설정 백업을 마쳤어요!'}
+                ? '이전 설정으로 원상복구했습니다.'
+                : message.deviceRepairPayload.completionMessage || '조치 및 백업을 완료했습니다.'}
             </div>
           )}
 
           <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
             {message.deviceRepairPayload.executed && !message.deviceRepairPayload.undone ? (
               <>
-                <span className="px-3 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-[13px] font-extrabold flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4 shrink-0" />
-                  정리 완료 · [복원 기록 {message.deviceRepairPayload.createdRestoreId || '#1'}]
+                <span className="px-2.5 py-1 rounded-md bg-emerald-50 border border-emerald-200 text-emerald-800 text-[12px] font-semibold flex items-center gap-1">
+                  <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                  완료 ({message.deviceRepairPayload.createdRestoreId || '#1'})
                 </span>
                 <button
                   type="button"
@@ -834,17 +787,17 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     await submitExternalMonsterChatQuery('방금 한 거 되돌려줘', message.sourceTab || 'trash');
                     setBusyId(null);
                   }}
-                  className="px-3.5 py-2 rounded-lg bg-violet-600 hover:bg-violet-500 text-white text-[13px] font-extrabold cursor-pointer shadow flex items-center gap-1"
+                  className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[12px] font-medium cursor-pointer"
                 >
-                  {busyId === 'repair_undo' ? '복원 중...' : '↩️ 방금 한 거 되돌려줘'}
+                  {busyId === 'repair_undo' ? '복원 중...' : '이전 상태로 되돌리기'}
                 </button>
               </>
             ) : (
-              <div className="w-full rounded-lg bg-amber-500/10 border border-amber-500/30 px-3 py-2.5 text-[13px] text-amber-200 font-semibold leading-relaxed flex items-center justify-between gap-2 flex-wrap">
-                <span>
-                  ✍️ 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력하거나 우측 버튼을 눌러 실행해 보세요! (언제든 복원 가능해요)
+              <div className="w-full flex items-center justify-between gap-2 flex-wrap">
+                <span className="text-[12px] text-slate-500">
+                  승인 시에만 실행되며 언제든 복원할 수 있습니다.
                 </span>
-                <div className="flex flex-wrap items-center gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
                   <button
                     type="button"
                     disabled={busyId === 'repair_approve'}
@@ -853,9 +806,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       await submitExternalMonsterChatQuery('응 진행해', message.sourceTab || 'trash');
                       setBusyId(null);
                     }}
-                    className="px-3.5 py-2 rounded-lg bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-[13px] font-extrabold cursor-pointer shadow transition shrink-0"
+                    className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
                   >
-                    {busyId === 'repair_approve' ? '정리 중...' : '⚡ 응, 지금 바로 정리해줘'}
+                    {busyId === 'repair_approve' ? '진행 중...' : '진행하기'}
                   </button>
                   {message.deviceRepairPayload.hasOverlayGuide && (
                     <button
@@ -876,20 +829,21 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                           );
                           useSaySeeStore.getState().openSetupOverlayGuide({
                             ...fallbackPlan,
-                            title: `👆 [${message.deviceRepairPayload!.symptomQuery}] 빨간 손가락 화면 안내`,
+                            title: `${message.deviceRepairPayload!.symptomQuery} 화면 위치 안내`,
                           });
                         }
                         await launchRealOsTopmostOverlay({
                           x: 420,
                           y: 180,
-                          text: `👆 [${message.deviceRepairPayload!.symptomQuery}] 여기를 클릭해 설정을 확인하세요!`,
+                          text: `👆 [${message.deviceRepairPayload!.symptomQuery}] 여기를 클릭해 설정을 확인하세요.`,
                           durationSec: 10,
                         });
-                        onToast?.('👆 화면 위에 빨간 손가락(👆) 동행 가이드를 띄웠습니다!');
+                        onToast?.('화면 위에 위치 안내(👆)를 표시했습니다.');
                       }}
-                      className="px-3.5 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[13px] font-extrabold cursor-pointer shadow flex items-center gap-1"
+                      className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[12px] font-medium cursor-pointer flex items-center gap-1"
                     >
-                      👆 빨간 손가락 화면 안내 봐줘
+                      <span>👆</span>
+                      <span>화면 위치 안내</span>
                     </button>
                   )}
                 </div>
@@ -899,67 +853,50 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         </div>
       )}
 
-      {/* 7) 3대 선 넘기 정직 컷오프 & 애착 AI(Gemini 기본) 라이브 음성 바통 터치 */}
+      {/* 7) 외부 AI 바통 터치 카드 */}
       {message.cardKind === 'BATON_TOUCH_CUTOFF' && message.batonTouchPayload && (
-        <div className="rounded-xl border border-fuchsia-500/40 bg-slate-900/90 p-3.5 space-y-2.5">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="text-xs font-extrabold text-fuchsia-300">
-              🤝 단골 AI (기본: Google Gemini) 1초 바통 터치
+            <span className="text-xs font-bold text-slate-900">
+              외부 AI(Gemini)에 이어서 질문하기
             </span>
-            <span className="text-[11px] text-slate-400">본문·스펙 + 질문 클립보드 자동 복사</span>
+            <span className="text-[11px] text-slate-500">질문 내용 클립보드 복사</span>
           </div>
           {message.batonTouchPayload.result ? (
-            <div className="rounded-lg bg-fuchsia-950/40 border border-fuchsia-500/40 p-2.5 text-xs text-fuchsia-200 space-y-2">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span className="font-bold">
-                  ✅ {message.batonTouchPayload.result.detectedAiLabel} 연결 완료!
-                </span>
-                <span className="px-2 py-0.5 rounded-full bg-fuchsia-500/20 border border-fuchsia-400/40 text-[10px] font-bold text-fuchsia-200">
-                  {message.batonTouchPayload.result.floatingReturnPill}
-                </span>
+            <div className="rounded-lg bg-white border border-slate-200 p-2.5 text-xs text-slate-700 space-y-2">
+              <div className="font-semibold text-slate-900">
+                {message.batonTouchPayload.result.detectedAiLabel} 상담 창을 열었습니다.
               </div>
-              <div className="text-[11px] text-slate-300 leading-relaxed">
+              <div className="text-[11.5px] text-slate-600 leading-relaxed">
                 {message.batonTouchPayload.result.ttsBriefingKo}
               </div>
-              {message.batonTouchPayload.result.twoStepFingerGuide?.length > 0 && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 pt-1">
-                  {message.batonTouchPayload.result.twoStepFingerGuide.map((st) => (
-                    <div
-                      key={st.step}
-                      className="rounded-lg bg-slate-950/80 border border-fuchsia-500/30 p-2 text-[11px]"
-                    >
-                      <div className="font-extrabold text-fuchsia-300">👆 {st.label}</div>
-                      <div className="text-slate-400 text-[10.5px] mt-0.5">{st.desc}</div>
-                    </div>
-                  ))}
-                </div>
-              )}
-              <div className="flex flex-wrap items-center gap-2 pt-1">
+              <div className="flex flex-wrap items-center gap-1.5 pt-1">
                 {message.batonTouchPayload.result.targetUrl && (
                   <button
                     type="button"
                     onClick={() => void handleBatonTouch()}
-                    className="px-2.5 py-1 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-[11px] font-extrabold flex items-center gap-1 cursor-pointer"
+                    className="px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-semibold flex items-center gap-1 cursor-pointer"
                   >
                     <ExternalLink className="w-3 h-3" />
-                    단골 AI 상담 창 다시 열기
+                    상담 창 다시 열기
                   </button>
                 )}
                 <button
                   type="button"
                   onClick={async () => {
-                    const label = message.batonTouchPayload?.result?.detectedAiLabel || '제미나이 (Gemini)';
+                    const label = message.batonTouchPayload?.result?.detectedAiLabel || 'Gemini';
                     await launchRealOsTopmostOverlay({
                       x: 420,
                       y: 150,
-                      text: `👆 [${label}] 입력창에 붙여넣기(Ctrl+V) 후 ① [전송(↑)] ➔ ② [라이브 음성 🎧] 클릭!`,
+                      text: `👆 [${label}] 입력창에 붙여넣기(Ctrl+V) 후 전송을 클릭하세요.`,
                       durationSec: 10,
                     });
-                    onToast?.('👆 화면 위에 단골 AI 2단계 빨간 손가락(👆) 가이드를 띄웠습니다!');
+                    onToast?.('화면 위에 위치 안내(👆)를 표시했습니다.');
                   }}
-                  className="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-extrabold flex items-center gap-1 cursor-pointer"
+                  className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[11.5px] font-medium flex items-center gap-1 cursor-pointer"
                 >
-                  👆 빨간 손가락 화면 안내 보기
+                  <span>👆</span>
+                  <span>위치 안내 보기</span>
                 </button>
               </div>
             </div>
@@ -968,33 +905,32 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               type="button"
               disabled={busyId === 'baton'}
               onClick={() => void handleBatonTouch()}
-              className="w-full py-2 px-3 rounded-lg bg-fuchsia-600 hover:bg-fuchsia-500 text-white text-xs font-extrabold flex items-center justify-center gap-1.5 shadow cursor-pointer"
+              className="w-full py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <ExternalLink className="w-3.5 h-3.5" />
-              📋 본문·스펙 복사 + 내 단골 AI (기본: Gemini) 라이브 음성 상담 열기
+              내용 복사 후 AI 상담 창 열기
             </button>
           )}
         </div>
       )}
 
-      {/* 8) 발급된 [디지털 건강검진표] (개인 건강검진 기록함 로컬 자동 보관 완료 + 우측 하단 은은한 저장/공유 아이콘) */}
+      {/* 8) 작업 완료 기록 요약 카드 */}
       {message.healthRecordIssued && (
-        <div className="rounded-xl border border-emerald-400/40 bg-slate-900/90 p-3 space-y-1.5">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 space-y-1.5">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 text-xs font-black text-emerald-300">
-              <ClipboardCheck className="w-4 h-4" />
-              🩺 디지털 건강검진 기록 보관 완료
+            <span className="text-xs font-bold text-slate-900">
+              작업 기록 저장됨
             </span>
-            <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-200 text-[11px] font-extrabold">
+            <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700 text-[11px] font-semibold">
               {message.healthRecordIssued.reclaimedSizeLabel}
             </span>
           </div>
-          <div className="text-xs text-slate-200 font-bold">
-            • {message.healthRecordIssued.title}
+          <div className="text-xs text-slate-700 font-medium">
+            {message.healthRecordIssued.title}
           </div>
           <div className="flex items-center justify-between gap-2 flex-wrap pt-0.5">
-            <div className="text-[11px] text-emerald-200">
-              • {message.healthRecordIssued.speedUpSummary} (복원 번호: {message.healthRecordIssued.restoreId})
+            <div className="text-[11px] text-slate-500">
+              {message.healthRecordIssued.speedUpSummary} (복원 번호: {message.healthRecordIssued.restoreId})
             </div>
             <button
               type="button"
@@ -1002,51 +938,43 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 const rec = message.healthRecordIssued;
                 if (!rec) return;
                 const cardSummary = [
-                  '👻 [귀신같이] 내 PC 점괘·청소 결과 카드',
-                  `• 진단 요약: ${rec.title}`,
-                  `• 확보/최적화: ${rec.reclaimedSizeLabel}`,
-                  `• 상세 결과: ${rec.speedUpSummary}`,
-                  `• 안심 복원 번호: ${rec.restoreId}`,
-                  '👉 내 PC도 1초 점괘·청소 받기: https://ghosti.sundreamer.app',
+                  '[귀신같이] 내 PC 정리 결과 요약',
+                  `- 항목: ${rec.title}`,
+                  `- 결과: ${rec.reclaimedSizeLabel} (${rec.speedUpSummary})`,
+                  `- 복원 번호: ${rec.restoreId}`,
                 ].join('\n');
                 try {
                   await navigator.clipboard?.writeText(cardSummary);
                 } catch {
                   /* ignore */
                 }
-                onToast?.(
-                  '📋 내 PC 점괘·청소 결과 카드가 클립보드에 저장되었습니다! 카톡이나 메모장에 바로 붙여넣어 공유해 보세요.',
-                );
+                onToast?.('정리 결과 요약이 클립보드에 복사되었습니다.');
               }}
-              title="내 PC 점괘·청소 결과 카드 저장/공유"
-              className="px-2 py-1 rounded-lg bg-slate-800/90 hover:bg-slate-700 border border-emerald-400/30 text-[10.5px] font-bold text-emerald-200/90 hover:text-white transition cursor-pointer shrink-0"
+              className="px-2 py-1 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-[11px] font-medium text-slate-600 cursor-pointer shrink-0"
             >
-              📋 내 PC 점괘·청소 결과 카드 저장/공유
+              결과 복사
             </button>
           </div>
         </div>
       )}
 
-      {/* 9) 💁‍♂️ 귀신같이 인포메이션 데스크 (자체 기능 · 요금 · 업데이트 안내 + 바로가기 버튼) */}
+      {/* 9) 기능 · 요금 안내 카드 */}
       {message.cardKind === 'GHOSTI_INFO_DESK' && message.infoDeskPayload && (
-        <div className="rounded-xl border border-teal-500/45 bg-slate-900/95 p-3.5 space-y-2.5">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 text-[11px] font-extrabold">
-              <Sparkles className="w-3.5 h-3.5" />
-              {message.infoDeskPayload.topicBadge}
-            </span>
-          </div>
-          <div className="text-xs font-extrabold text-white">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5">
+          <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700 text-[11px] font-semibold inline-block">
+            {message.infoDeskPayload.topicBadge}
+          </span>
+          <div className="text-xs font-bold text-slate-900">
             {message.infoDeskPayload.title}
           </div>
-          <ul className="space-y-1.5 text-[11.5px] text-slate-200 leading-relaxed">
+          <ul className="space-y-1.5 text-[12px] text-slate-700 leading-relaxed">
             {message.infoDeskPayload.bulletPoints.map((pt, idx) => (
-              <li key={idx} className="bg-slate-950/80 border border-slate-800/80 rounded-lg px-2.5 py-1.5">
+              <li key={idx} className="bg-white border border-slate-200 rounded-lg px-2.5 py-1.5">
                 {pt}
               </li>
             ))}
           </ul>
-          <div className="flex flex-wrap gap-2 pt-1">
+          <div className="flex flex-wrap gap-1.5 pt-1">
             {message.infoDeskPayload.actionButtons.map((btn, idx) => (
               <button
                 key={idx}
@@ -1066,9 +994,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
                     } else {
                       const targetTab =
-                        btn.actionType === 'OPEN_ONBOARDING_TAB2'
-                          ? 'tab2_superpower'
-                          : btn.actionType === 'OPEN_ONBOARDING_TAB3'
+                        btn.actionType === 'OPEN_ONBOARDING_TAB3'
                           ? 'tab3_share_pro'
                           : 'tab1_find_care';
                       window.dispatchEvent(
@@ -1079,7 +1005,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     onJumpToSearch('');
                   }
                 }}
-                className="px-3 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 text-[11.5px] font-black cursor-pointer shadow"
+                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-semibold cursor-pointer"
               >
                 {btn.label}
               </button>
@@ -1088,92 +1014,77 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         </div>
       )}
 
-      {/* 10) 🎛️ 말 한마디로 모든 앱 설정·상용구 변경 마스터 컨트롤 센터 완료 카드 */}
+      {/* 10) 앱 설정 변경 결과 카드 */}
       {message.cardKind === 'APP_SETTINGS_CONTROL' && message.appSettingsPayload && (
-        <div
-          className={`rounded-xl border p-3.5 space-y-2 ${
-            message.appSettingsPayload.isBlockedByFilter
-              ? 'border-rose-500/45 bg-rose-950/20'
-              : 'border-emerald-500/45 bg-slate-900/95'
-          }`}
-        >
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span
-              className={`px-2.5 py-0.5 rounded-full text-[11px] font-extrabold ${
-                message.appSettingsPayload.isBlockedByFilter
-                  ? 'bg-rose-500/20 border border-rose-400/50 text-rose-200'
-                  : 'bg-emerald-500/20 border border-emerald-400/50 text-emerald-300'
-              }`}
-            >
+            <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-[11px] font-semibold text-slate-700">
               {message.appSettingsPayload.badgeText}
             </span>
-            <span className="text-[11px] font-mono font-bold text-amber-300">
+            <span className="text-[11.5px] font-semibold text-slate-800">
               {message.appSettingsPayload.appliedValueLabel}
             </span>
           </div>
-          <p className="text-xs text-slate-200 leading-relaxed">
+          <p className="text-xs text-slate-600 leading-relaxed">
             {message.appSettingsPayload.summaryText}
           </p>
           {message.appSettingsPayload.isBlockedByFilter && (
             <button
               type="button"
               onClick={() => useSaySeeStore.getState().setShowProModal(true)}
-              className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-slate-950 text-[11.5px] font-black cursor-pointer"
+              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-semibold cursor-pointer"
             >
-              📸 사진 공유(0원) · 👑 내 기기 통합(월 3,900원) · 업무 공유(S:) 보기 →
+              요금제 안내 보기
             </button>
           )}
         </div>
       )}
 
-      {/* 11) 📮 클레임 · A/S 접수 · 아이디어 제안 스튜디오 대리 접수 & [나의 문의방] 직행 링크 카드 */}
+      {/* 11) 고객 문의 · 오류 접수 카드 */}
       {message.cardKind === 'STUDIO_SUPPORT_PROXY' && message.studioSupportPayload && (
-        <div className="rounded-xl border border-amber-400/50 bg-slate-900/95 p-3.5 space-y-3">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-amber-400 text-slate-950 text-[11px] font-black">
+            <span className="px-2 py-0.5 rounded bg-slate-900 text-white text-[11px] font-semibold">
               {message.studioSupportPayload.badgeLabel}
             </span>
-            <span className="text-[11px] font-mono text-emerald-300 font-bold">
-              접수번호 #{message.studioSupportPayload.ticketId} · 회원 {message.studioSupportPayload.userEmail}
+            <span className="text-[11px] text-slate-500">
+              접수번호 #{message.studioSupportPayload.ticketId}
             </span>
           </div>
 
-          <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2.5 text-xs text-slate-200 space-y-1">
-            <div className="text-[11px] text-slate-400 font-bold">📝 스튜디오에 전달된 접수 원문:</div>
-            <div className="font-semibold text-white">{message.studioSupportPayload.userComment}</div>
+          <div className="rounded-lg bg-white border border-slate-200 p-2.5 text-xs text-slate-700 space-y-1">
+            <div className="text-[11px] text-slate-400 font-medium">접수 내용</div>
+            <div className="font-medium text-slate-900">{message.studioSupportPayload.userComment}</div>
           </div>
 
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <a
-              href={message.studioSupportPayload.studioJumpUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="flex-1 py-2.5 px-3.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-slate-950 text-xs font-black flex items-center justify-center gap-1.5 shadow-[0_0_16px_rgba(16,185,129,0.3)]"
-            >
-              <ExternalLink className="w-3.5 h-3.5" />
-              <span>👉 스튜디오 [나의 문의방]에서 IDE 자동 작업 결과 보러 가기 ↗</span>
-            </a>
-          </div>
+          <a
+            href={message.studioSupportPayload.studioJumpUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="w-full py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center justify-center gap-1.5"
+          >
+            <ExternalLink className="w-3.5 h-3.5" />
+            <span>나의 문의방에서 처리 현황 보기</span>
+          </a>
 
-          {/* 추가 클레임 / A/S / 아이디어 1초 구분 접수 미니 입력줄 */}
-          <div className="pt-2 border-t border-slate-800 space-y-1.5">
+          <div className="pt-2 border-t border-slate-200 space-y-1.5">
             <div className="flex flex-wrap items-center gap-1.5 text-[11px]">
-              <span className="text-slate-400 font-bold">추가 접수 구분:</span>
+              <span className="text-slate-500 font-medium">추가 접수:</span>
               {(
                 [
-                  { id: 'CLAIM' as const, label: '🚨 클레임' },
-                  { id: 'AS_BUG' as const, label: '🛠️ A/S·오류' },
-                  { id: 'IDEA' as const, label: '💡 아이디어' },
+                  { id: 'CLAIM' as const, label: '불편 신고' },
+                  { id: 'AS_BUG' as const, label: '오류 신고' },
+                  { id: 'IDEA' as const, label: '기능 제안' },
                 ]
               ).map((tab) => (
                 <button
                   key={tab.id}
                   type="button"
                   onClick={() => setExtraSupportKind(tab.id)}
-                  className={`px-2 py-0.5 rounded font-bold whitespace-nowrap cursor-pointer ${
+                  className={`px-2 py-0.5 rounded font-medium whitespace-nowrap cursor-pointer ${
                     extraSupportKind === tab.id
-                      ? 'bg-amber-400 text-slate-950 font-black'
-                      : 'bg-slate-950 text-slate-300 border border-slate-800'
+                      ? 'bg-slate-900 text-white'
+                      : 'bg-white text-slate-600 border border-slate-200'
                   }`}
                 >
                   {tab.label}
@@ -1185,8 +1096,8 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 type="text"
                 value={extraSupportText}
                 onChange={(e) => setExtraSupportText(e.target.value)}
-                placeholder="추가로 전달할 클레임·A/S·아이디어를 입력해 주세요..."
-                className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-[11.5px] text-white outline-none focus:border-amber-400"
+                placeholder="추가 전달 내용을 입력해 주세요..."
+                className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-[12px] text-slate-900 outline-none focus:border-slate-600"
               />
               <button
                 type="button"
@@ -1197,10 +1108,10 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   setExtraSupportSending(true);
                   const badge =
                     extraSupportKind === 'CLAIM'
-                      ? '🚨 클레임(불만·환불·개선) 접수'
+                      ? '불편 신고 접수'
                       : extraSupportKind === 'IDEA'
-                      ? '💡 신규 아이디어·기능 제안 접수'
-                      : '🛠️ A/S · 오류 · 버그 수리 접수';
+                      ? '기능 제안 접수'
+                      : '오류 신고 접수';
                   const res = await submitStudioSupportTicket({
                     appId: 'Ghosti',
                     appVersion: 'v2026.11',
@@ -1227,53 +1138,45 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       studioJumpUrl: newJump,
                     },
                   });
-                  onToast?.(`📮 [${badge}] 스튜디오 대리 접수 완료 (#${newTid})`);
+                  onToast?.(`${badge} 완료 (#${newTid})`);
                 }}
-                className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 disabled:opacity-40 text-slate-950 text-[11.5px] font-black cursor-pointer shrink-0"
+                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-[11.5px] font-semibold cursor-pointer shrink-0"
               >
-                {extraSupportSending ? '접수 중...' : '스튜디오 접수'}
+                {extraSupportSending ? '접수 중...' : '접수'}
               </button>
             </div>
           </div>
         </div>
       )}
 
-      {/* 11-B) 👻 2중 자동 검진 엔진 (20% 과부하 감지 + 수요일 13시 '수요 손 없는 날') 2줄 브리핑 & 1초 처치 카드 */}
+      {/* 11-B) 정기 점검 브리핑 카드 */}
       {message.cardKind === 'WEEKLY_CARE_BRIEFING' && message.proactiveCareBriefing && (
-        <div className="rounded-xl border border-emerald-500/45 bg-slate-900/95 p-3.5 space-y-2.5">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[11px] font-extrabold">
-              <Sparkles className="w-3.5 h-3.5" />
+            <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-800 text-[11px] font-semibold">
               {message.proactiveCareBriefing.badgeLabel}
             </span>
-            <span className="text-[11px] font-mono font-bold text-amber-300">
+            <span className="text-[11px] text-slate-500">
               {formatScheduleLabelKo(loadWeeklyCareSchedule())}
             </span>
           </div>
 
-          <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2.5 text-xs text-slate-100 space-y-1.5 leading-relaxed">
-            <div className="font-bold text-emerald-300">
-              1️⃣ {message.proactiveCareBriefing.headlineLine1}
+          <div className="rounded-lg bg-white border border-slate-200 p-2.5 text-xs text-slate-700 space-y-1 leading-relaxed">
+            <div className="font-semibold text-slate-900">
+              {message.proactiveCareBriefing.headlineLine1}
             </div>
-            <div className="text-slate-300">
-              2️⃣ {message.proactiveCareBriefing.schedulePromptLine2}
+            <div className="text-slate-600">
+              {message.proactiveCareBriefing.schedulePromptLine2}
             </div>
           </div>
 
           {message.proactiveCareBriefing.executed ? (
-            <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold flex items-center justify-between gap-2 flex-wrap">
-              <span className="flex items-center gap-1.5">
-                <CheckCircle2 className="w-4 h-4" />
-                속도 회복 처치 및 주간 정기 검진 예약 완료 · [복원 기록 {message.proactiveCareBriefing.createdRestoreId || '#1'}]
-              </span>
-              {message.proactiveCareBriefing.approvedTypedText && (
-                <span className="text-[11px] text-emerald-200 font-mono">
-                  승인: &ldquo;{message.proactiveCareBriefing.approvedTypedText}&rdquo;
-                </span>
-              )}
+            <div className="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold flex items-center gap-1.5">
+              <CheckCircle2 className="w-4 h-4 shrink-0" />
+              정리 및 정기 점검 예약 완료 ({message.proactiveCareBriefing.createdRestoreId || '#1'})
             </div>
           ) : (
-            <div className="flex flex-wrap items-center gap-2 pt-1">
+            <div className="flex flex-wrap items-center gap-2 pt-0.5">
               <button
                 type="button"
                 disabled={busyId === 'weekly_care_exec'}
@@ -1281,7 +1184,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   setBusyId('weekly_care_exec');
                   const osRes = await executeRealOsAction(
                     'boot_lag_clean_bloatware',
-                    '수요 손 없는 날 1초 청소 및 정기 예약 승인'
+                    '정기 청소 및 예약 승인'
                   );
                   setBusyId(null);
                   const restoreId = String((osRes as any).restoreId || '#1');
@@ -1293,52 +1196,49 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       ...message.proactiveCareBriefing!,
                       executed: true,
                       scheduleConfirmed: true,
-                      approvedTypedText: '⚡ 네, 1초 만에 손보고 매주 자동 예약',
+                      approvedTypedText: '정리 및 정기 예약 승인',
                       createdRestoreId: restoreId,
                     },
                   });
-                  onToast?.('✅ 상주 보안프로그램 정리를 완료하고 매주 정기 검진을 자동 세팅했습니다!');
+                  onToast?.('상주 보안프로그램 정리를 완료하고 주간 정기 점검을 설정했습니다.');
                 }}
-                className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black cursor-pointer shadow flex items-center gap-1.5"
+                className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold cursor-pointer"
               >
-                <span>⚡ 네, 1초 만에 손보고 매주 자동 예약할게요</span>
+                정리 후 매주 정기 점검 켜기
               </button>
-              <span className="text-[11px] text-slate-400">
-                (또는 채팅창에 <strong>&ldquo;응&rdquo;</strong> / 요일 변경은 <strong>&ldquo;금요일 오후 4시로 바꿔줘&rdquo;</strong> 입력)
-              </span>
             </div>
           )}
         </div>
       )}
 
-      {/* 11-B2) 🧹 [귀신비서 4단계 심층 앱 적출(Deep Uninstaller) 게이트 카드] */}
+      {/* 11-B2) 심층 프로그램 제거 카드 */}
       {message.cardKind === 'DEEP_UNINSTALL_GATE' && message.deepUninstallPayload && (
-        <div className="rounded-xl border border-rose-500/45 bg-slate-900/95 p-3.5 space-y-2.5">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-rose-500/20 border border-rose-400/40 text-rose-300 text-[11px] font-extrabold">
-              🧹 {message.deepUninstallPayload.targetAppLabel} 심층 적출 검진
+            <span className="font-bold text-slate-900 text-[13px]">
+              {message.deepUninstallPayload.targetAppLabel} 제거 점검
             </span>
-            <span className="text-[11px] font-mono font-bold text-amber-300">
+            <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-[11px] font-medium text-slate-600">
               {message.deepUninstallPayload.summaryBadge}
             </span>
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
-            <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2 flex sm:block items-center justify-between">
-              <div className="text-[11px] sm:text-[10px] text-slate-400">발견된 상주 프로세스</div>
-              <div className="text-sm font-black text-rose-300">
+            <div className="rounded-lg bg-white border border-slate-200 p-2 flex sm:block items-center justify-between">
+              <div className="text-[11px] text-slate-500">실행 중 프로세스</div>
+              <div className="text-sm font-bold text-slate-900">
                 {message.deepUninstallPayload.runningProcessCount}개
               </div>
             </div>
-            <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2 flex sm:block items-center justify-between">
-              <div className="text-[11px] sm:text-[10px] text-slate-400">서비스·스케줄러</div>
-              <div className="text-sm font-black text-amber-300">
+            <div className="rounded-lg bg-white border border-slate-200 p-2 flex sm:block items-center justify-between">
+              <div className="text-[11px] text-slate-500">서비스 · 작업 스케줄</div>
+              <div className="text-sm font-bold text-slate-900">
                 {message.deepUninstallPayload.serviceAndTaskCount}개
               </div>
             </div>
-            <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2 flex sm:block items-center justify-between">
-              <div className="text-[11px] sm:text-[10px] text-slate-400">잔여 폴더 용량</div>
-              <div className="text-sm font-black text-sky-300">
+            <div className="rounded-lg bg-white border border-slate-200 p-2 flex sm:block items-center justify-between">
+              <div className="text-[11px] text-slate-500">잔여 폴더 용량</div>
+              <div className="text-sm font-bold text-slate-900">
                 {message.deepUninstallPayload.totalResidualMb}MB
               </div>
             </div>
@@ -1347,8 +1247,8 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
           {(message.deepUninstallPayload.sampleProcesses.length > 0 ||
             message.deepUninstallPayload.sampleServicesAndTasks.length > 0 ||
             message.deepUninstallPayload.sampleFolders.length > 0) && (
-            <div className="rounded-lg bg-slate-950/85 border border-slate-800 p-2.5 text-[11px] text-slate-300 space-y-1.5">
-              <div className="font-bold text-slate-400">🔍 포착된 상주 모듈·부활 트리거·잔여 폴더:</div>
+            <div className="rounded-lg bg-white border border-slate-200 p-2.5 text-[11.5px] text-slate-700 space-y-1.5">
+              <div className="font-semibold text-slate-800">감지된 프로세스 · 서비스 · 잔여 폴더</div>
               {[
                 ...message.deepUninstallPayload.sampleProcesses,
                 ...message.deepUninstallPayload.sampleServicesAndTasks,
@@ -1356,16 +1256,16 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 .slice(0, 6)
                 .map((item, idx) => (
                   <div key={`proc-${idx}`} className="flex items-center gap-1.5">
-                    <span className="text-rose-400">•</span>
+                    <span className="text-slate-400">·</span>
                     <span className="font-mono break-all">{item}</span>
                   </div>
                 ))}
 
-              {(message.deepUninstallPayload.residualFolderItems &&
+              {message.deepUninstallPayload.residualFolderItems &&
               message.deepUninstallPayload.residualFolderItems.length > 0 ? (
-                <div className="pt-1 space-y-1 border-t border-slate-800/80">
-                  <div className="text-[10.5px] font-bold text-teal-300">
-                    🗑️ Windows [휴지통]으로 옮길 잔여 캐시 폴더 선택 (체크 해제 시 보존):
+                <div className="pt-1.5 space-y-1 border-t border-slate-100">
+                  <div className="text-[11px] font-semibold text-slate-700">
+                    휴지통으로 이동할 잔여 폴더 선택 (해제 시 유지):
                   </div>
                   {message.deepUninstallPayload.residualFolderItems.map((fItem) => {
                     const selectedList =
@@ -1376,7 +1276,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     return (
                       <label
                         key={fItem.path}
-                        className="flex items-center gap-2 cursor-pointer hover:text-white select-none"
+                        className="flex items-center gap-2 cursor-pointer select-none"
                       >
                         <input
                           type="checkbox"
@@ -1395,9 +1295,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                               },
                             });
                           }}
-                          className="accent-teal-400 rounded cursor-pointer"
+                          className="accent-slate-900 rounded cursor-pointer"
                         />
-                        <span className="font-mono break-all">
+                        <span className="font-mono break-all text-slate-700">
                           {fItem.path} ({fItem.sizeMb}MB)
                         </span>
                       </label>
@@ -1407,43 +1307,36 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               ) : (
                 message.deepUninstallPayload.sampleFolders.slice(0, 6).map((item, idx) => (
                   <div key={`dir-${idx}`} className="flex items-center gap-1.5">
-                    <span className="text-rose-400">•</span>
+                    <span className="text-slate-400">·</span>
                     <span className="font-mono break-all">{item}</span>
                   </div>
                 ))
-              ))}
+              )}
             </div>
           )}
 
           {message.deepUninstallPayload.executionError && !message.deepUninstallPayload.executed && (
-            <div className="px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs">
-              ⚠️ {message.deepUninstallPayload.executionError}
+            <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs">
+              {message.deepUninstallPayload.executionError}
             </div>
           )}
 
           {message.deepUninstallPayload.executed ? (
-            <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold space-y-1">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4" />
-                  🔥 심층 제거 완료 (잔여 캐시 폴더 ➔ Windows [휴지통] 안전 이동)
-                </span>
-                {message.deepUninstallPayload.approvedTypedText && (
-                  <span className="text-[11px] text-emerald-200 font-mono">
-                    승인: &ldquo;{message.deepUninstallPayload.approvedTypedText}&rdquo;
-                  </span>
-                )}
+            <div className="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold space-y-1">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                제거 완료 (잔여 폴더는 시스템 휴지통으로 이동됨)
               </div>
               {message.deepUninstallPayload.executionReportKo && (
-                <div className="text-[11px] text-slate-200 font-normal whitespace-pre-line pt-1">
+                <div className="text-[11.5px] text-slate-700 font-normal whitespace-pre-line pt-1">
                   {message.deepUninstallPayload.executionReportKo}
                 </div>
               )}
             </div>
           ) : (
             <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-              <span className="text-[11px] text-slate-300">
-                ✍️ 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력하거나 우측 버튼을 눌러 주세요 (잔여 폴더는 Windows <strong>[휴지통]</strong>으로 안전 이동).
+              <span className="text-[11.5px] text-slate-500">
+                잔여 폴더는 영구 삭제하지 않고 시스템 휴지통으로 이동합니다.
               </span>
               <button
                 type="button"
@@ -1453,7 +1346,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   setBusyId('deep_uninstall_exec');
                   const res = await executeDeepUninstallApproval(
                     message.deepUninstallPayload,
-                    '🔥 흔적까지 100% 심층 제거 실행 (버튼 승인)'
+                    '심층 제거 실행 (버튼 승인)'
                   );
                   setBusyId(null);
                   if (!res.ok) {
@@ -1464,7 +1357,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                         executionError: res.reportKo,
                       },
                     });
-                    onToast?.(`⚠️ ${res.reportKo}`);
+                    onToast?.(res.reportKo);
                     return;
                   }
                   onUpdateMessage({
@@ -1473,84 +1366,78 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       ...message.deepUninstallPayload,
                       executed: true,
                       executionError: undefined,
-                      approvedTypedText: '🔥 흔적까지 100% 심층 제거 실행',
+                      approvedTypedText: '심층 제거 실행',
                       snapshotFile: res.snapshotFile,
                       executionReportKo: res.reportKo,
                     },
                     healthRecordIssued: res.healthRecord || message.healthRecordIssued,
                   });
-                  onToast?.('🔥 심층 제거 완료! 잔여 캐시 폴더는 Windows [휴지통]으로 안전하게 옮겼습니다.');
+                  onToast?.('제거가 완료되었으며 잔여 폴더는 휴지통으로 이동했습니다.');
                 }}
-                className="px-3.5 py-2 rounded-xl bg-rose-500 hover:bg-rose-400 text-white text-xs font-black cursor-pointer shadow flex items-center gap-1.5"
+                className="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold cursor-pointer"
               >
-                <span>
-                  {busyId === 'deep_uninstall_exec'
-                    ? '심층 제거 중...'
-                    : '🔥 흔적까지 100% 심층 제거 실행'}
-                </span>
+                {busyId === 'deep_uninstall_exec' ? '제거 중...' : '제거 실행'}
               </button>
             </div>
           )}
         </div>
       )}
 
-      {/* 11-B3) 🚀 [부팅·보안모듈 정리 / 새벽 재부팅 예약 사전 승인 게이트 (임의 실행 0%)] */}
+      {/* 11-B3) 부팅·보안모듈 정리 승인 카드 */}
       {message.cardKind === 'BOOT_CARE_PREVIEW_GATE' && message.bootCarePreviewPayload && (
-        <div className="rounded-xl border border-teal-500/45 bg-slate-900/95 p-3.5 space-y-2.5 text-[12.5px]">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5 text-[12.5px]">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-200 text-[11.5px] font-extrabold">
+            <span className="font-bold text-slate-900">
               {message.bootCarePreviewPayload.mode === 'SCHEDULE_REBOOT'
-                ? `⏰ 새벽 ${message.bootCarePreviewPayload.scheduleTime} 자동 재부팅 예약 확인`
-                : '🚀 미사용 보안모듈 · 자동실행 정리 미리보기'}
+                ? `새벽 ${message.bootCarePreviewPayload.scheduleTime} 자동 재부팅 예약`
+                : '미사용 보안모듈 · 자동실행 정리 미리보기'}
             </span>
-            <span className="text-[11px] text-slate-400 font-semibold">🛡️ 사내 DRM · 백신 보호됨</span>
+            <span className="text-[11px] text-slate-500">업무용 필수 보안 제외</span>
           </div>
 
-          <div className="rounded-lg bg-slate-950/85 border border-slate-800 p-2.5 text-xs text-slate-200 space-y-1.5 whitespace-pre-line">
+          <div className="rounded-lg bg-white border border-slate-200 p-2.5 text-xs text-slate-700 space-y-1.5 whitespace-pre-line">
             <div>{message.bootCarePreviewPayload.uptimeSummaryKo}</div>
             {message.bootCarePreviewPayload.mode === 'CLEAN_BLOATWARE' && (
-              <div className="pt-1 border-t border-slate-800 text-[11.5px] text-teal-300">
+              <div className="pt-1 border-t border-slate-100 text-[11.5px] text-slate-600">
                 {message.bootCarePreviewPayload.detectedPlugins.length > 0 ? (
                   <>
-                    • 포착된 미사용 보안 모듈({message.bootCarePreviewPayload.detectedPlugins.length}종):{' '}
-                    <span className="text-slate-200 font-mono">
+                    감지된 미사용 보안 모듈 ({message.bootCarePreviewPayload.detectedPlugins.length}종):{' '}
+                    <span className="text-slate-900 font-mono">
                       {message.bootCarePreviewPayload.detectedPlugins.slice(0, 6).join(', ')}
                     </span>
                   </>
                 ) : (
-                  <span>• 현재 활성 미사용 보안 모듈 0종 · 불필요 자동실행 항목만 안전 점검합니다.</span>
+                  <span>현재 실행 중인 미사용 보안 모듈이 없습니다.</span>
                 )}
               </div>
             )}
           </div>
 
           {message.bootCarePreviewPayload.executionError && !message.bootCarePreviewPayload.approved && (
-            <div className="px-3 py-2 rounded-lg bg-amber-500/15 border border-amber-500/40 text-amber-200 text-xs">
-              ⚠️ {message.bootCarePreviewPayload.executionError}
+            <div className="px-3 py-2 rounded-lg bg-amber-50 border border-amber-200 text-amber-900 text-xs">
+              {message.bootCarePreviewPayload.executionError}
             </div>
           )}
 
           {message.bootCarePreviewPayload.approved ? (
-            <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-500/40 text-emerald-300 text-xs font-extrabold space-y-1">
-              <div className="flex items-center justify-between gap-2 flex-wrap">
-                <span className="flex items-center gap-1.5">
-                  <CheckCircle2 className="w-4 h-4" />
-                  승인 및 안전 실행 완료
-                  {message.bootCarePreviewPayload.createdRestoreId
-                    ? ` · [복원 기록 ${message.bootCarePreviewPayload.createdRestoreId}]`
-                    : ''}
-                </span>
+            <div className="px-3 py-2 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-800 text-xs font-semibold space-y-1">
+              <div className="flex items-center gap-1.5">
+                <CheckCircle2 className="w-4 h-4 shrink-0" />
+                실행 완료
+                {message.bootCarePreviewPayload.createdRestoreId
+                  ? ` (${message.bootCarePreviewPayload.createdRestoreId})`
+                  : ''}
               </div>
               {message.bootCarePreviewPayload.executionSummaryKo && (
-                <div className="text-[11.5px] text-slate-200 font-normal whitespace-pre-line">
+                <div className="text-[11.5px] text-slate-700 font-normal whitespace-pre-line">
                   {message.bootCarePreviewPayload.executionSummaryKo}
                 </div>
               )}
             </div>
           ) : (
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-              <span className="text-[11px] text-slate-300">
-                ✍️ 채팅창에 <strong>&ldquo;응 진행해&rdquo;</strong>라고 입력하거나 우측 버튼을 눌러 주세요.
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+              <span className="text-[11.5px] text-slate-500">
+                확인 후 버튼을 누르거나 &ldquo;응 진행해&rdquo;라고 입력해 주세요.
               </span>
               <button
                 type="button"
@@ -1560,7 +1447,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   setBusyId('boot_care_approve');
                   const res = await executeBootCarePreviewApproval(
                     message.bootCarePreviewPayload,
-                    '응 진행해 (1회성 버튼 승인)'
+                    '응 진행해 (버튼 승인)'
                   );
                   setBusyId(null);
                   onUpdateMessage({
@@ -1577,62 +1464,61 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   });
                   onToast?.(res.summaryKo);
                 }}
-                className="px-3.5 py-2 rounded-xl bg-emerald-500 hover:bg-emerald-400 text-slate-950 text-xs font-black cursor-pointer shadow"
+                className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold cursor-pointer"
               >
                 {busyId === 'boot_care_approve'
                   ? '진행 중...'
                   : message.bootCarePreviewPayload.mode === 'SCHEDULE_REBOOT'
-                  ? `⏰ 응, 새벽 ${message.bootCarePreviewPayload.scheduleTime} 자동 재부팅 예약해줘`
-                  : '✅ 응, 안전하게 정리해줘'}
+                  ? `새벽 ${message.bootCarePreviewPayload.scheduleTime} 예약`
+                  : '정리 실행'}
               </button>
             </div>
           )}
         </div>
       )}
 
-      {/* 11-B4) 🛡️ [알약 완전 대체 — Windows 순정 백신 통합 관제 카드] */}
+      {/* 11-B4) Windows 기본 백신 점검 카드 */}
       {message.cardKind === 'DEFENDER_GUARD_CARD' && message.defenderGuardPayload && (
-        <div className="rounded-xl border border-emerald-500/45 bg-slate-900/95 p-3.5 space-y-3 text-xs">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-3 text-xs">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 text-[11.5px] font-extrabold">
-              <ShieldCheck className="w-4 h-4" />
-              🛡️ 무광고 순정 백신 · 랜섬웨어 방어막 관제
+            <span className="font-bold text-slate-900 text-[13px]">
+              Windows 기본 백신 · 보안 상태
             </span>
-            <span className="text-[11px] text-slate-400 font-mono">
-              DB 패치: {message.defenderGuardPayload.signatureUpdatedAt || '최신'}
+            <span className="text-[11px] text-slate-500">
+              업데이트: {message.defenderGuardPayload.signatureUpdatedAt || '최신'}
             </span>
           </div>
 
           <div className="grid grid-cols-3 gap-2 text-center">
-            <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2">
-              <div className="text-[10.5px] text-slate-400">실시간 감시</div>
-              <div className={`text-xs font-black ${message.defenderGuardPayload.realTimeProtection ? 'text-emerald-300' : 'text-amber-300'}`}>
-                {message.defenderGuardPayload.realTimeProtection ? '🟢 켜짐(ON)' : '⚠️ 확인 필요'}
+            <div className="rounded-lg bg-white border border-slate-200 p-2">
+              <div className="text-[10.5px] text-slate-500">실시간 감시</div>
+              <div className={`text-xs font-bold mt-0.5 ${message.defenderGuardPayload.realTimeProtection ? 'text-emerald-700' : 'text-amber-700'}`}>
+                {message.defenderGuardPayload.realTimeProtection ? '켜짐' : '확인 필요'}
               </div>
             </div>
-            <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2">
-              <div className="text-[10.5px] text-slate-400">네트워크 방화벽</div>
-              <div className={`text-xs font-black ${message.defenderGuardPayload.firewallEnabled ? 'text-emerald-300' : 'text-amber-300'}`}>
-                {message.defenderGuardPayload.firewallEnabled ? '🟢 켜짐(ON)' : '⚠️ 확인 필요'}
+            <div className="rounded-lg bg-white border border-slate-200 p-2">
+              <div className="text-[10.5px] text-slate-500">방화벽</div>
+              <div className={`text-xs font-bold mt-0.5 ${message.defenderGuardPayload.firewallEnabled ? 'text-emerald-700' : 'text-amber-700'}`}>
+                {message.defenderGuardPayload.firewallEnabled ? '켜짐' : '확인 필요'}
               </div>
             </div>
-            <div className="rounded-lg bg-slate-950/90 border border-slate-800 p-2">
-              <div className="text-[10.5px] text-slate-400">랜섬웨어 폴더보호</div>
-              <div className="text-xs font-black text-sky-300">
-                {message.defenderGuardPayload.ransomwareShieldEnabled ? '🛡️ 보호 켜짐' : '⚙️ 설정 가능'}
+            <div className="rounded-lg bg-white border border-slate-200 p-2">
+              <div className="text-[10.5px] text-slate-500">랜섬웨어 보호</div>
+              <div className="text-xs font-bold text-slate-800 mt-0.5">
+                {message.defenderGuardPayload.ransomwareShieldEnabled ? '켜짐' : '설정 가능'}
               </div>
             </div>
           </div>
 
           {message.defenderGuardPayload.scanRunning && (
-            <div className="px-3 py-2.5 rounded-lg bg-sky-500/15 border border-sky-400/40 text-sky-200 font-bold flex items-center gap-2">
-              <Activity className="w-4 h-4 animate-spin text-sky-300 shrink-0" />
-              <span>실시간 바이러스 검사가 진행 중입니다... 끝나는 즉시 진짜 결과를 알려드릴게요!</span>
+            <div className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 font-medium flex items-center gap-2">
+              <Activity className="w-4 h-4 animate-spin text-slate-500 shrink-0" />
+              <span>바이러스 검사를 진행하고 있습니다...</span>
             </div>
           )}
 
           {!message.defenderGuardPayload.scanRunning && message.defenderGuardPayload.lastScanResultKo && (
-            <div className="px-3 py-2 rounded-lg bg-emerald-500/15 border border-emerald-400/40 text-emerald-200 font-semibold whitespace-pre-line">
+            <div className="px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-700 whitespace-pre-line">
               {message.defenderGuardPayload.lastScanResultKo.replace(/\*\*/g, '')}
             </div>
           )}
@@ -1650,9 +1536,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 }
                 onToast?.(r.summaryKo.replace(/\*\*/g, ''));
               }}
-              className="px-3 py-1.5 rounded-lg bg-emerald-500 hover:bg-emerald-400 disabled:opacity-50 text-slate-950 font-black cursor-pointer"
+              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-semibold cursor-pointer"
             >
-              🔍 빠른 정밀 검사
+              빠른 검사
             </button>
 
             <button
@@ -1673,9 +1559,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 }
                 onToast?.(r.summaryKo.replace(/\*\*/g, ''));
               }}
-              className="px-3 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-100 font-bold cursor-pointer"
+              className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-medium cursor-pointer"
             >
-              {busyId === 'def_sig' ? 'DB 업데이트 중...' : '🔄 최신 백신 DB 업데이트'}
+              {busyId === 'def_sig' ? '업데이트 중...' : '보안 DB 업데이트'}
             </button>
 
             {message.defenderGuardPayload.removableDrives.map((usb) => (
@@ -1692,9 +1578,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   }
                   onToast?.(r.summaryKo.replace(/\*\*/g, ''));
                 }}
-                className="px-3 py-1.5 rounded-lg bg-indigo-500/25 hover:bg-indigo-500/40 border border-indigo-400/40 text-indigo-200 font-bold cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-medium cursor-pointer"
               >
-                🔌 {usb.label} 검사
+                {usb.label} 검사
               </button>
             ))}
 
@@ -1704,9 +1590,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 const r = await fetchDefenderGuardState('defender_open_ransomware_shield');
                 onToast?.(r.summaryKo);
               }}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-sky-300 font-bold cursor-pointer"
+              className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-medium cursor-pointer"
             >
-              🛡️ 랜섬웨어 폴더 보호
+              랜섬웨어 폴더 보호
             </button>
 
             <button
@@ -1715,9 +1601,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 const r = await fetchDefenderGuardState('defender_open_quarantine_history');
                 onToast?.(r.summaryKo);
               }}
-              className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-amber-300 font-bold cursor-pointer"
+              className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-medium cursor-pointer"
             >
-              🗂️ 격리함 · 위협 기록
+              격리함 · 기록
             </button>
 
             {!message.defenderGuardPayload.realTimeProtection && (
@@ -1727,20 +1613,20 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   const r = await fetchDefenderGuardState('defender_open_threat_settings');
                   onToast?.(r.summaryKo);
                 }}
-                className="px-2.5 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black cursor-pointer"
+                className="px-2.5 py-1.5 rounded-lg bg-amber-600 hover:bg-amber-700 text-white font-semibold cursor-pointer"
               >
-                ⚡ 실시간 감시 켜기
+                실시간 감시 켜기
               </button>
             )}
           </div>
 
-          <div className="flex items-center gap-1.5 pt-1 border-t border-slate-800">
+          <div className="flex items-center gap-1.5 pt-2 border-t border-slate-200">
             <input
               type="text"
               value={customScanPath}
               onChange={(e) => setCustomScanPath(e.target.value)}
-              placeholder="특정 폴더 또는 USB 경로 입력 (예: D:\Downloads)"
-              className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-[11.5px] text-slate-200 placeholder:text-slate-500"
+              placeholder="검사할 폴더 경로 (예: D:\Downloads)"
+              className="flex-1 min-w-0 px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-[11.5px] text-slate-900 placeholder:text-slate-400"
             />
             <button
               type="button"
@@ -1756,25 +1642,23 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 }
                 onToast?.(r.summaryKo.replace(/\*\*/g, ''));
               }}
-              className="px-3 py-1.5 rounded-lg bg-teal-500/25 hover:bg-teal-500/40 border border-teal-400/40 text-teal-200 font-bold shrink-0 cursor-pointer disabled:opacity-40"
+              className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-medium shrink-0 cursor-pointer disabled:opacity-40"
             >
-              📂 지정 폴더 검사
+              지정 폴더 검사
             </button>
           </div>
         </div>
       )}
 
-      {/* 11-B5) 🚀 [고클린 완전 대체 — 시작프로그램 개별 ON/OFF 매니저 카드] */}
+      {/* 11-B5) 시작프로그램 관리 카드 */}
       {message.cardKind === 'STARTUP_MANAGER_CARD' && message.startupManagerPayload && (
-        <div className="rounded-xl border border-indigo-500/40 bg-slate-900/95 p-3.5 space-y-2.5 text-xs">
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-indigo-500/20 border border-indigo-400/40 text-indigo-200 text-[11.5px] font-extrabold">
-              🚀 부팅 시작프로그램 개별 켜기·끄기 ({message.startupManagerPayload.items.length}개)
-            </span>
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5 text-xs">
+          <div className="font-bold text-slate-900 text-[13px]">
+            부팅 시작프로그램 관리 ({message.startupManagerPayload.items.length}개)
           </div>
 
           {message.startupManagerPayload.lastToggleNoteKo && (
-            <div className="px-2.5 py-1.5 rounded-lg bg-emerald-500/15 border border-emerald-400/35 text-emerald-200 text-[11.5px] font-semibold">
+            <div className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-[11.5px]">
               {message.startupManagerPayload.lastToggleNoteKo}
             </div>
           )}
@@ -1783,20 +1667,20 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             {message.startupManagerPayload.items.map((stItem) => (
               <div
                 key={stItem.id}
-                className="rounded-lg bg-slate-950/90 border border-slate-800 px-2.5 py-2 flex items-center justify-between gap-2"
+                className="rounded-lg bg-white border border-slate-200 px-2.5 py-2 flex items-center justify-between gap-2"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="font-bold text-slate-100 truncate flex items-center gap-1.5">
+                  <div className="font-semibold text-slate-900 truncate flex items-center gap-1.5">
                     <span>{stItem.name}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-800 text-slate-400 font-normal shrink-0">
+                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-normal shrink-0">
                       {stItem.locationLabel}
                     </span>
                   </div>
-                  <div className="text-[10.5px] text-slate-500 font-mono truncate">{stItem.command}</div>
+                  <div className="text-[10.5px] text-slate-400 font-mono truncate">{stItem.command}</div>
                 </div>
                 {stItem.isProtected ? (
-                  <span className="px-2 py-1 rounded-md bg-slate-800 text-slate-400 text-[10.5px] font-bold shrink-0">
-                    🔒 필수 보호
+                  <span className="px-2 py-1 rounded bg-slate-100 text-slate-500 text-[10.5px] font-medium shrink-0">
+                    필수 보호
                   </span>
                 ) : (
                   <button
@@ -1816,13 +1700,13 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       });
                       onToast?.(res.message);
                     }}
-                    className={`px-2.5 py-1 rounded-lg text-[11px] font-black shrink-0 cursor-pointer transition ${
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold shrink-0 cursor-pointer border transition-colors ${
                       stItem.enabled
-                        ? 'bg-emerald-500/25 border border-emerald-400/50 text-emerald-200 hover:bg-rose-500/30 hover:text-rose-200'
-                        : 'bg-slate-800 border border-slate-700 text-slate-400 hover:bg-emerald-500/25 hover:text-emerald-200'
+                        ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700'
+                        : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200 hover:text-slate-800'
                     }`}
                   >
-                    {stItem.enabled ? '🟢 켜짐 (눌러서 끄기)' : '⚪ 꺼둠 (다시 켜기)'}
+                    {stItem.enabled ? '켜짐 (끄기)' : '꺼짐 (켜기)'}
                   </button>
                 )}
               </div>
@@ -1831,7 +1715,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         </div>
       )}
 
-      {/* 11-B6) 📋 [고클린 완전 대체 — 내 PC 설치된 프로그램 전체 목록 & 원클릭 심층 제거 점검 카드] */}
+      {/* 11-B6) 설치된 프로그램 목록 카드 */}
       {message.cardKind === 'INSTALLED_APPS_CARD' && message.installedAppsPayload && (() => {
         const qApp = appFilterQuery.trim().toLowerCase();
         const filteredApps = qApp
@@ -1840,42 +1724,40 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             )
           : message.installedAppsPayload.items;
         return (
-          <div className="rounded-xl border border-sky-500/40 bg-slate-900/95 p-3.5 space-y-2.5 text-xs">
-            <div className="flex items-center justify-between gap-2 flex-wrap">
-              <span className="inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full bg-sky-500/20 border border-sky-400/40 text-sky-200 text-[11.5px] font-extrabold">
-                📋 내 PC 설치된 프로그램 목록 (총 {message.installedAppsPayload.totalCount}개)
-              </span>
+          <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5 text-xs">
+            <div className="font-bold text-slate-900 text-[13px]">
+              설치된 프로그램 목록 ({message.installedAppsPayload.totalCount}개)
             </div>
 
             <input
               type="text"
               value={appFilterQuery}
               onChange={(e) => setAppFilterQuery(e.target.value)}
-              placeholder="찾으시는 프로그램 이름 검색 (예: 알약, 알집, 고클린, Adobe...)"
-              className="w-full px-2.5 py-1.5 rounded-lg bg-slate-950 border border-slate-800 text-xs text-slate-200 placeholder:text-slate-500"
+              placeholder="프로그램 이름 검색..."
+              className="w-full px-2.5 py-1.5 rounded-lg bg-white border border-slate-300 text-xs text-slate-900 placeholder:text-slate-400"
             />
 
             <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
               {filteredApps.slice(0, 40).map((app) => (
                 <div
                   key={app.name}
-                  className="rounded-lg bg-slate-950/90 border border-slate-800 px-2.5 py-2 flex items-center justify-between gap-2"
+                  className="rounded-lg bg-white border border-slate-200 px-2.5 py-2 flex items-center justify-between gap-2"
                 >
                   <div className="min-w-0 flex-1">
-                    <div className="font-bold text-slate-100 truncate">
+                    <div className="font-semibold text-slate-900 truncate">
                       {app.name}{' '}
                       {app.sizeMb > 0 && (
-                        <span className="text-[10.5px] text-sky-300 font-mono">({app.sizeMb}MB)</span>
+                        <span className="text-[10.5px] text-slate-500 font-normal">({app.sizeMb}MB)</span>
                       )}
                     </div>
-                    <div className="text-[10.5px] text-slate-500 truncate">
+                    <div className="text-[10.5px] text-slate-400 truncate">
                       {app.publisher || '제조사 미표기'}
                       {app.installDate ? ` · 설치일 ${app.installDate}` : ''}
                     </div>
                   </div>
                   {app.isProtected ? (
-                    <span className="px-2 py-1 rounded-md bg-slate-800 text-slate-400 text-[10.5px] font-bold shrink-0">
-                      🔒 보호됨
+                    <span className="px-2 py-1 rounded bg-slate-100 text-slate-500 text-[10.5px] font-medium shrink-0">
+                      보호됨
                     </span>
                   ) : (
                     <button
@@ -1886,9 +1768,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                           message.sourceTab || 'trash'
                         );
                       }}
-                      className="px-2.5 py-1 rounded-lg bg-rose-500/20 hover:bg-rose-500/35 border border-rose-400/40 text-rose-200 text-[11px] font-extrabold shrink-0 cursor-pointer"
+                      className="px-2.5 py-1 rounded-md bg-white hover:bg-rose-50 border border-slate-200 hover:border-rose-200 text-slate-700 hover:text-rose-700 text-[11px] font-medium shrink-0 cursor-pointer"
                     >
-                      🗑️ 심층 제거 점검
+                      제거 점검
                     </button>
                   )}
                 </div>
@@ -1898,15 +1780,15 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
         );
       })()}
 
-      {/* 11-C) 🔊 [모바일 음성 미러링 예외 — 사전 승낙(Prior Consent) 카드] 채팅(타자)으로 설정/고치기 가이드를 요청했을 때 다짜고짜 말하지 않고 먼저 승낙을 구합니다 */}
+      {/* 11-C) 모바일 음성 사전 동의 카드 */}
       {isMobileVoiceEnvironment() && message.voiceConsentPromptKo && (
-        <div className="rounded-xl border border-teal-500/35 bg-slate-900/90 px-3 py-2.5 flex items-center justify-between gap-2 flex-wrap">
-          <span className="text-[11.5px] font-bold text-slate-200 flex items-center gap-1.5">
-            <Volume2 className="w-4 h-4 text-teal-400 shrink-0" />
+        <div className="rounded-xl border border-slate-200 bg-slate-50 px-3 py-2.5 flex items-center justify-between gap-2 flex-wrap">
+          <span className="text-[12px] font-medium text-slate-700 flex items-center gap-1.5">
+            <Volume2 className="w-4 h-4 text-slate-500 shrink-0" />
             <span>
               {message.voiceConsentApproved
-                ? '🔊 성우 음성 안내를 재생했습니다.'
-                : '화면을 보며 따라 하실 수 있도록 음성으로도 안내해 드릴까요?'}
+                ? '음성 안내를 재생했습니다.'
+                : '음성으로도 함께 안내해 드릴까요?'}
             </span>
           </span>
           {!message.voiceConsentApproved && (
@@ -1920,9 +1802,9 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     voiceConsentApproved: true,
                   });
                 }}
-                className="px-2.5 py-1 rounded-lg bg-teal-500 hover:bg-teal-400 text-slate-950 text-[11px] font-black cursor-pointer"
+                className="px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-semibold cursor-pointer"
               >
-                🔊 음성으로 안내받기
+                음성으로 듣기
               </button>
               <button
                 type="button"
@@ -1932,27 +1814,26 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     voiceConsentPromptKo: undefined,
                   })
                 }
-                className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-[11px] font-bold cursor-pointer"
+                className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 text-[11.5px] font-medium cursor-pointer"
               >
-                그냥 글로 볼게요
+                글로 보기
               </button>
             </div>
           )}
         </div>
       )}
 
-      {/* 12) 짝수 회차(2회 완료마다 1번) 1분 숏폼 큐레이션 팁 */}
+      {/* 12) 활용 팁 */}
       {message.shortformTip && (
-        <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/25 p-3 flex items-center justify-between gap-3 flex-wrap">
+        <div className="rounded-xl border border-slate-200 bg-slate-50 p-3 flex items-center justify-between gap-3 flex-wrap">
           <div className="space-y-0.5">
-            <div className="text-[11px] font-extrabold text-indigo-300 flex items-center gap-1">
-              <Film className="w-3.5 h-3.5" />
+            <div className="text-[11.5px] font-semibold text-slate-900">
               {message.shortformTip.title} ({message.shortformTip.durationLabel})
             </div>
-            <div className="text-xs text-slate-300">{message.shortformTip.summaryText}</div>
+            <div className="text-xs text-slate-600">{message.shortformTip.summaryText}</div>
           </div>
-          <span className="px-2.5 py-1 rounded-lg bg-indigo-500/20 border border-indigo-500/40 text-indigo-200 text-[11px] font-bold">
-            🎬 1분 꿀팁 ({message.shortformTip.targetLounge})
+          <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600 text-[11px] font-medium">
+            활용 팁
           </span>
         </div>
       )}
@@ -1966,25 +1847,22 @@ export const PersonalHealthCheckHistoryDrawer: React.FC<{
   onRollbackRestoreId?: (restoreId: string) => void;
 }> = ({ records, onClose }) => {
   return (
-    <div className="rounded-2xl border border-emerald-500/40 bg-slate-900/95 p-4 space-y-3 shadow-xl">
+    <div className="rounded-xl border border-slate-200 bg-white p-4 space-y-3 shadow-md text-slate-900">
       <div className="flex items-start sm:items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <Activity className="w-5 h-5 text-emerald-400 shrink-0" />
-          <div className="min-w-0">
-            <h4 className="text-sm font-black text-white break-keep">
-              📋 내 기기 건강검진 & 블랙박스 기록함
-            </h4>
-            <p className="text-[11px] text-slate-400 break-keep">
-              자연어 타이핑으로 승인·원복한 내역이 내 기기에 영구 보관됩니다.
-            </p>
-          </div>
+        <div className="min-w-0">
+          <h4 className="text-sm font-bold text-slate-900 break-keep">
+            점검 및 복원 기록함
+          </h4>
+          <p className="text-[11.5px] text-slate-500 break-keep">
+            승인 및 복원한 작업 내역이 기기에 보관됩니다.
+          </p>
         </div>
         <button
           type="button"
           onClick={onClose}
-          className="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 text-xs font-bold shrink-0 whitespace-nowrap cursor-pointer"
+          className="px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-medium shrink-0 whitespace-nowrap cursor-pointer"
         >
-          닫기 ✕
+          닫기
         </button>
       </div>
 
@@ -1992,24 +1870,24 @@ export const PersonalHealthCheckHistoryDrawer: React.FC<{
         {records.map((rec) => (
           <div
             key={rec.recordId}
-            className="rounded-xl bg-slate-950/90 border border-slate-800 p-3 flex items-center justify-between gap-3 flex-wrap"
+            className="rounded-lg bg-slate-50 border border-slate-200 p-3 flex items-center justify-between gap-3 flex-wrap"
           >
             <div className="space-y-1">
               <div className="flex items-center gap-2 flex-wrap">
-                <span className="px-2 py-0.5 rounded-md bg-emerald-500/20 text-emerald-300 text-[11px] font-extrabold">
+                <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-700 text-[11px] font-semibold">
                   {rec.category}
                 </span>
-                <span className="text-xs font-extrabold text-white">{rec.title}</span>
-                <span className="text-[11px] text-emerald-400 font-bold">({rec.reclaimedSizeLabel})</span>
+                <span className="text-xs font-bold text-slate-900">{rec.title}</span>
+                <span className="text-[11px] text-slate-600">({rec.reclaimedSizeLabel})</span>
               </div>
-              <div className="text-[11px] text-slate-300">{rec.speedUpSummary}</div>
-              <div className="text-[10px] text-slate-500">
-                기록 일시: {rec.issuedAt} {rec.restoreId ? `· 복원 번호 ${rec.restoreId}` : ''}
+              <div className="text-[11.5px] text-slate-600">{rec.speedUpSummary}</div>
+              <div className="text-[10.5px] text-slate-400">
+                {rec.issuedAt} {rec.restoreId ? `· 복원 번호 ${rec.restoreId}` : ''}
               </div>
             </div>
             {rec.restoreId && (
-              <span className="px-2.5 py-1 rounded-lg bg-slate-900 border border-slate-800 text-violet-300 text-[11px] font-semibold">
-                채팅창에 &ldquo;{rec.restoreId} 되돌려줘&rdquo; 입력 시 원복
+              <span className="px-2 py-1 rounded bg-white border border-slate-200 text-slate-600 text-[11px]">
+                &ldquo;{rec.restoreId} 되돌려줘&rdquo; 입력 시 복원
               </span>
             )}
           </div>

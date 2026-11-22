@@ -1035,129 +1035,6 @@ export async function clearRemoteShadowCache(email: string): Promise<void> {
   });
 }
 
-// ============================================================================
-// [F1~F6 내 상용구 전 기기 E2EE 자동 동기화]
-// ============================================================================
-export async function syncEncryptedSnippetsWithCloud(opts: {
-  email: string;
-  userId: string;
-  direction?: 'auto' | 'push' | 'pull';
-  localSnippetsOverride?: Record<string, string>;
-}): Promise<{
-  ok: boolean;
-  snippets: Record<string, string>;
-  updatedAt?: string | null;
-  reason?: string;
-}> {
-  if (!hasAuthenticatedHubAccountSession()) {
-    return { ok: false, snippets: {}, reason: 'AUTH_REQUIRED' };
-  }
-  const normEmail = opts.email.trim().toLowerCase();
-  const ident = getThisDeviceIdentity();
-  const cachedUid = loadCanonicalE2eeUid(normEmail);
-  const activeUid = cachedUid || opts.userId;
-
-  // 1) PC 엔진이 연결돼 있으면 로컬 F1~F10 상용구 로드
-  let localSnippets: Record<string, string> = opts.localSnippetsOverride || {};
-  if (Object.keys(localSnippets).length === 0 && zCoreBridge.isConnected) {
-    try {
-      const r = await fetch(getZCoreUrl('/api/superpower/snippets'), { method: 'GET' });
-      const j = (await r.json().catch(() => ({}))) as { snippets?: Record<string, string> };
-      if (j && j.snippets && typeof j.snippets === 'object') {
-        localSnippets = j.snippets;
-      }
-    } catch {
-      /* ignore */
-    }
-  }
-
-  // 2) 서버에서 기존 암호화 상용구 조회
-  const pullRes = await callGhostiServerBridge<{
-    cipherB64?: string;
-    ivB64?: string;
-    updatedAt?: string | null;
-    reason?: string;
-  }>('device_sync_snippets', { mode: 'pull' });
-
-  if (!pullRes.ok) {
-    return { ok: false, snippets: localSnippets, reason: pullRes.reason };
-  }
-
-  let remoteSnippets: Record<string, string> = {};
-  if (pullRes.cipherB64 && pullRes.ivB64) {
-    const plain = await decryptClipboardE2ee(
-      pullRes.cipherB64,
-      pullRes.ivB64,
-      normEmail,
-      activeUid,
-      cachedUid && cachedUid !== opts.userId ? [opts.userId] : undefined
-    );
-    if (plain) {
-      try {
-        const parsed = JSON.parse(plain);
-        if (parsed && typeof parsed === 'object') {
-          remoteSnippets = parsed as Record<string, string>;
-        }
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-
-  // 3) direction === 'push' 또는 로컬 상용구가 존재하고 서버가 비어있을 때 암호화 푸시
-  const mergedSnippets: Record<string, string> = {
-    ...remoteSnippets,
-    ...(opts.direction === 'pull' ? {} : localSnippets),
-  };
-
-  if (
-    (opts.direction === 'push' ||
-      (opts.direction !== 'pull' && Object.keys(localSnippets).length > 0)) &&
-    Object.keys(mergedSnippets).length > 0
-  ) {
-    const enc = await encryptClipboardE2ee(JSON.stringify(mergedSnippets), normEmail, activeUid);
-    const pushRes = await callGhostiServerBridge<{ updatedAt?: string; reason?: string }>(
-      'device_sync_snippets',
-      {
-        mode: 'push',
-        cipherB64: enc.cipherB64,
-        ivB64: enc.ivB64,
-        deviceId: ident.deviceId,
-        deviceName: ident.displayName,
-      }
-    );
-    if (!pushRes.ok) {
-      return { ok: false, snippets: mergedSnippets, reason: pushRes.reason };
-    }
-    try {
-      localStorage.setItem(`ghosti_synced_snippets_${normEmail}`, JSON.stringify(mergedSnippets));
-    } catch {
-      /* ignore */
-    }
-    return { ok: true, snippets: mergedSnippets, updatedAt: pushRes.updatedAt || new Date().toISOString() };
-  }
-
-  // 4) 원격에서 받은 상용구가 있으면 PC 엔진 + 로컬 캐시에 반영
-  if (Object.keys(mergedSnippets).length > 0) {
-    try {
-      localStorage.setItem(`ghosti_synced_snippets_${normEmail}`, JSON.stringify(mergedSnippets));
-    } catch {
-      /* ignore */
-    }
-    if (zCoreBridge.isConnected && Object.keys(remoteSnippets).length > 0) {
-      try {
-        await fetch(getZCoreUrl('/api/superpower/snippets'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ snippets: mergedSnippets }),
-        });
-      } catch {
-        /* ignore */
-      }
-    }
-  }
-  return { ok: true, snippets: mergedSnippets, updatedAt: pullRes.updatedAt || null };
-}
 
 // ============================================================================
 // 실시간 기기 페어링 채널 (ghosti:pair:<emailHash>) + 클립보드·모니터캐스트·공간이동·기기상태 즉시전파
@@ -1729,7 +1606,7 @@ export function pushTeleportPhotoToPcVanguard(opts: {
   const ident = getThisDeviceIdentity();
   const cleanFileName = (opts.fileName || '스마트폰 사진').trim();
   const cleanOcr = (opts.ocrText || '').trim();
-  const cleanSummary = (opts.summary || `[모바일 1초 공간이동] ${cleanFileName}`).trim();
+  const cleanSummary = (opts.summary || `[모바일 전송] ${cleanFileName}`).trim();
   const fullText = cleanOcr || cleanSummary;
   const payload: Record<string, unknown> = {
     file_name: cleanFileName,
@@ -1973,7 +1850,7 @@ export async function executeRealDeviceSyncNow(opts: {
     const p = activeLocalPhotos[i];
     if (i % 10 === 0 || i === activeLocalPhotos.length - 1) {
       opts.onProgress?.({
-        phase: '사진·문서 초경량 인덱스 동기화 중',
+        phase: '사진·문서 목록 동기화 중',
         current: i + 1,
         total: Math.max(1, totalPackCount),
       });
@@ -2123,10 +2000,10 @@ export async function executeRealDeviceSyncNow(opts: {
           size: item.byteSize || 512000,
           date: item.shotDate || item.syncedAt.slice(0, 10),
           mtimeMs: Date.parse(item.syncedAt) || Date.now(),
-          locationKo: `🔗 ${item.sourceDeviceName}`,
+          locationKo: `${item.sourceDeviceName}`,
           tags: Array.from(new Set([...(item.keywords || []), item.sourceDeviceName])),
           captionKo:
-            item.ocrSnippet || `${item.sourceDeviceName}에서 동기화된 13KB 초경량 섀도우 캐시`,
+            item.ocrSnippet || `${item.sourceDeviceName}에서 동기화된 미리보기 항목`,
           keywordsKo: item.keywords || [],
           thumbUrl: item.thumbWebp,
           fullUrl: item.thumbWebp,
@@ -2147,12 +2024,12 @@ export async function executeRealDeviceSyncNow(opts: {
           fileName: cleanFileName,
           ext: extRaw || 'DOC',
           title: cleanFileName,
-          categoryBadge: `🔗 ${item.sourceDeviceName}`,
+          categoryBadge: `${item.sourceDeviceName}`,
           extractedText: item.ocrSnippet || cleanFileName,
           keywords: Array.from(new Set([...(item.keywords || []), item.sourceDeviceName])),
           date: item.shotDate || item.syncedAt.slice(0, 10),
           sizeKB: Math.max(1, Math.round((item.byteSize || 122880) / 1024)),
-          deviceSource: `🔗 ${item.sourceDeviceName}`,
+          deviceSource: `${item.sourceDeviceName}`,
         });
       }
     }
@@ -2499,7 +2376,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
             clipHash,
             text: fullText,
             senderDeviceId: String(payload.senderDeviceId || 'mobile-teleport'),
-            senderName: `⚡ ${sourceDevice} · ${fileName}`,
+            senderName: `${sourceDevice} · ${fileName}`,
             createdAt: String(payload.sent_at || new Date().toISOString()),
             encryptedE2ee: true,
           };

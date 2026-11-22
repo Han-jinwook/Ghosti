@@ -292,7 +292,7 @@ export const VideoScenePreviewModal: React.FC = () => {
       if (Number.isFinite(el.duration) && el.duration > 0) {
         const nextT = Math.max(0, Math.min(Math.max(0, el.duration - 0.1), (el.currentTime || 0) + deltaSec));
         el.currentTime = nextT;
-        showHud(`${deltaSec < 0 ? `⏪ ${Math.abs(deltaSec)}초 뒤로` : `⏩ ${deltaSec}초 앞으로`} · ${fmtSec(nextT)}`);
+        showHud(`${deltaSec < 0 ? `-${Math.abs(deltaSec)}초` : `+${deltaSec}초`} · ${fmtSec(nextT)}`);
         return;
       }
 
@@ -305,7 +305,7 @@ export const VideoScenePreviewModal: React.FC = () => {
         pipeBaseSecRef.current = nextLogical;
         const sep = baseStreamUrl.includes('?') ? '&' : '?';
         setResolvedVideoSrc(`${baseStreamUrl}${sep}t=${nextLogical.toFixed(1)}`);
-        showHud(`${deltaSec < 0 ? `⏪ ${Math.abs(deltaSec)}초 뒤로` : `⏩ ${deltaSec}초 앞으로`} · ${fmtSec(nextLogical)}`);
+        showHud(`${deltaSec < 0 ? `-${Math.abs(deltaSec)}초` : `+${deltaSec}초`} · ${fmtSec(nextLogical)}`);
       }
     },
     [selectedVideoModal, resolvedVideoSrc]
@@ -456,46 +456,44 @@ export const VideoScenePreviewModal: React.FC = () => {
   return (
     <div
       onClick={() => setSelectedVideoModal(null)}
-      className="fixed inset-0 z-[105] bg-black/85 backdrop-blur-xl flex items-center justify-center px-3 sm:px-4 pt-safe pb-safe"
+      className="fixed inset-0 z-[105] bg-black/60 backdrop-blur-xs flex items-center justify-center px-3 sm:px-4 pt-safe pb-safe"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-4xl max-h-full sm:max-h-[90dvh] overflow-hidden rounded-3xl bg-surface-container-low border-2 border-primary-container/60 p-3.5 sm:p-5 md:p-6 shadow-[0_0_64px_rgba(0,229,255,0.25)] flex flex-col gap-3"
+        className="w-full max-w-4xl max-h-full sm:max-h-[90dvh] overflow-hidden rounded-2xl bg-white border border-slate-200 p-4 sm:p-5 md:p-6 shadow-2xl text-slate-900 flex flex-col gap-3.5"
       >
-        <div className="flex items-start justify-between gap-2.5 shrink-0 pb-2 border-b border-outline-variant/20">
+        <div className="flex items-start justify-between gap-3 shrink-0 pb-2.5 border-b border-slate-100">
           <div className="flex flex-col gap-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5">
+            <div className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-slate-500">
               {hasExecutedUserSearch && activeQuery && (
-                <span className="px-2 py-0.5 rounded-md bg-primary-container text-on-primary-container font-label-mono text-[10.5px] font-black">
-                  {isWholeClipMatch ? '🎯 전 구간 일치 (00:00~)' : `🎯 ${cleanTs} 장면 포착`}
+                <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-semibold">
+                  {isWholeClipMatch ? '00:00~' : `${cleanTs} 구간`}
                 </span>
               )}
-              <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 text-emerald-300 font-label-mono text-[10.5px] font-bold">
-                전체 길이 {selectedVideoModal.durationText}
+              <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-medium tabular-nums">
+                길이 {selectedVideoModal.durationText}
               </span>
               {videoNavList.length >= 2 && currentVideoIdx >= 0 && (
-                <span
-                  data-keep-dark="true"
-                  style={{ backgroundColor: '#1E293B', color: '#FFFFFF', borderColor: '#475569' }}
-                  className="px-2.5 py-0.5 rounded-full font-label-mono text-[11px] font-extrabold border shadow-2xs"
-                >
+                <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-700 font-semibold tabular-nums">
                   {currentVideoIdx + 1} / {videoNavList.length}
                 </span>
               )}
-              <span className="font-label-mono text-[10.5px] text-on-surface-variant truncate">
-                • 📍 {selectedVideoModal.locationKo}
-              </span>
+              {selectedVideoModal.locationKo && (
+                <>
+                  <span>·</span>
+                  <span className="truncate">{selectedVideoModal.locationKo}</span>
+                </>
+              )}
             </div>
-            <h3 className="font-headline-sm text-[16px] sm:text-[19px] text-white font-extrabold mt-0.5 leading-snug line-clamp-2">
+            <h3 className="text-[16px] sm:text-[18px] text-slate-900 font-bold mt-0.5 leading-snug line-clamp-2">
               {renderHighlightedDocText(
                 selectedVideoModal.title,
                 effectiveQuery,
                 selectedVideoModal.keywords.slice(0, 4)
               )}
             </h3>
-            <p className="font-label-mono text-[11px] text-on-surface-variant truncate">
-              원본: {selectedVideoModal.videoFileName} • {selectedVideoModal.date} •{' '}
-              {selectedVideoModal.sizeMB} MB
+            <p className="text-[11.5px] text-slate-500 truncate">
+              {selectedVideoModal.videoFileName} · {selectedVideoModal.date} · {selectedVideoModal.sizeMB} MB
             </p>
           </div>
 
@@ -503,16 +501,16 @@ export const VideoScenePreviewModal: React.FC = () => {
             type="button"
             onClick={() => setSelectedVideoModal(null)}
             aria-label="닫기"
-            className="w-10 h-10 rounded-full bg-surface-container-highest hover:bg-surface-bright border border-outline-variant/40 flex items-center justify-center text-on-surface shrink-0 cursor-pointer shadow-sm"
+            className="w-8 h-8 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 shrink-0 cursor-pointer"
           >
-            <span className="material-symbols-outlined text-[20px]">close</span>
+            <span className="material-symbols-outlined text-[18px]">close</span>
           </button>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pr-0.5">
           <div
             data-keep-dark="true"
-            className={`relative w-full shrink-0 rounded-2xl overflow-hidden bg-black border border-primary-container/40 flex items-center justify-center ${
+            className={`relative w-full shrink-0 rounded-xl overflow-hidden bg-black border border-slate-200 flex items-center justify-center ${
               isPortraitVideo
                 ? 'h-[44dvh] min-h-[260px] max-h-[440px] sm:h-[50dvh]'
                 : 'aspect-video min-h-[210px] sm:min-h-[340px]'
@@ -586,20 +584,15 @@ export const VideoScenePreviewModal: React.FC = () => {
                         void videoRef.current.play().catch(() => {});
                       }
                     }}
-                    className="absolute inset-0 m-auto w-16 h-16 rounded-full bg-black/75 hover:bg-black/85 border-2 border-white/85 text-white flex items-center justify-center shadow-2xl cursor-pointer transition-transform active:scale-95"
+                    className="absolute inset-0 m-auto w-14 h-14 rounded-full bg-black/75 hover:bg-black/85 border border-white/60 text-white flex items-center justify-center shadow-xl cursor-pointer transition-transform active:scale-95"
                   >
-                    <span className="material-symbols-outlined text-[34px]">play_arrow</span>
+                    <span className="material-symbols-outlined text-[32px]">play_arrow</span>
                   </button>
                 )}
                 {seekHudText && (
                   <div
                     data-keep-dark="true"
-                    style={{
-                      backgroundColor: 'rgba(15, 23, 42, 0.92)',
-                      color: '#FFFFFF',
-                      borderColor: 'rgba(255, 255, 255, 0.48)',
-                    }}
-                    className="absolute top-3 right-3 z-20 px-3.5 py-1 rounded-full border text-[12.5px] font-extrabold pointer-events-none shadow-xl"
+                    className="absolute top-3 right-3 z-20 px-3 py-1 rounded-full bg-black/80 border border-white/30 text-white text-[12px] font-semibold pointer-events-none"
                   >
                     {seekHudText}
                   </div>
@@ -621,12 +614,12 @@ export const VideoScenePreviewModal: React.FC = () => {
                   />
                 ) : null}
                 <div className="absolute inset-0 bg-black/45 flex flex-col items-center justify-center gap-2 px-4 text-center">
-                  <span className="px-3.5 py-1.5 rounded-full bg-black/85 border border-white/25 text-white text-[12.5px] font-extrabold shadow-lg">
+                  <span className="px-3.5 py-1.5 rounded-full bg-black/80 border border-white/25 text-white text-[12.5px] font-medium">
                     {videoPlaybackError
-                      ? '⚠️ 이 영상 형식을 재생할 수 없습니다'
+                      ? '이 영상 형식을 재생할 수 없습니다.'
                       : isResolvingVideo
-                      ? '🎬 스마트폰 원본 동영상을 불러오는 중...'
-                      : '🎬 동영상을 불러오는 중...'}
+                      ? '원본 동영상을 불러오는 중...'
+                      : '동영상을 불러오는 중...'}
                   </span>
                 </div>
               </div>
@@ -641,7 +634,7 @@ export const VideoScenePreviewModal: React.FC = () => {
                     e.stopPropagation();
                     navigateAdjacentVideo(-1);
                   }}
-                  className="absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-zinc-900/40 hover:bg-zinc-800/80 border border-zinc-300/25 hover:border-zinc-200/55 text-zinc-300/75 hover:text-zinc-100 backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs"
+                  className="absolute left-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-black/60 hover:bg-black/80 border border-white/25 text-white flex items-center justify-center transition-colors cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[22px]">chevron_left</span>
                 </button>
@@ -653,39 +646,37 @@ export const VideoScenePreviewModal: React.FC = () => {
                     e.stopPropagation();
                     navigateAdjacentVideo(1);
                   }}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 sm:w-10 sm:h-10 rounded-full bg-zinc-900/40 hover:bg-zinc-800/80 border border-zinc-300/25 hover:border-zinc-200/55 text-zinc-300/75 hover:text-zinc-100 backdrop-blur-xs flex items-center justify-center transition-all cursor-pointer shadow-xs"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 z-20 w-9 h-9 rounded-full bg-black/60 hover:bg-black/80 border border-white/25 text-white flex items-center justify-center transition-colors cursor-pointer"
                 >
                   <span className="material-symbols-outlined text-[22px]">chevron_right</span>
                 </button>
               </>
             )}
             {hasExecutedUserSearch && activeQuery && !isVideoPlaying && (
-              <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded-full bg-black/80 border border-primary-container/65 text-primary-container font-label-mono text-[11px] font-black pointer-events-none shadow-md">
-                {isWholeClipMatch ? '🎯 처음부터 바로 재생' : `🎯 ${cleanTs} 장면부터 재생`}
+              <div className="absolute top-2.5 left-2.5 px-2.5 py-0.5 rounded bg-black/75 text-white text-[11px] font-medium pointer-events-none">
+                {isWholeClipMatch ? '처음부터 재생' : `${cleanTs} 구간부터 재생`}
               </div>
             )}
           </div>
 
           {selectedVideoModal.fullPath ? (
-            <p className="font-label-mono text-[11px] text-teal-400/90 break-all px-0.5">
-              📁 실제 PC 위치: {selectedVideoModal.fullPath}
+            <p className="text-[11.5px] text-slate-500 break-all px-0.5">
+              위치: {selectedVideoModal.fullPath}
             </p>
           ) : !String(selectedVideoModal.id || '').startsWith('mobile_vid_') &&
             !String(selectedVideoModal.videoUrl || '').startsWith('blob:') &&
             !String(selectedVideoModal.videoUrl || '').includes('127.0.0.1:5199') ? (
-            <p className="font-body-sm text-[11.5px] text-amber-400/90 px-0.5">
-              ℹ️ 체험용 샘플 영상입니다 (PC 엔진 연결 또는 모바일 스토어 정식 앱 자동 인덱싱 후 내 실제 영상을 재생·추출할 수 있습니다)
+            <p className="text-[11.5px] text-slate-400 px-0.5">
+              샘플 영상입니다. 내 컴퓨터를 연결하거나 스마트폰 앱에서 동기화하면 실제 동영상을 재생할 수 있습니다.
             </p>
           ) : null}
 
           {hasExecutedUserSearch && activeQuery && (
-            <div className="p-3 rounded-2xl bg-primary-container/10 border border-primary-container/45 flex flex-col gap-1 shrink-0">
-              <span className="font-label-mono text-[11px] text-primary-container font-black">
-                {isWholeClipMatch
-                  ? '🎯 포착 구간 기준 (00:00 처음부터 · 전 구간 일치):'
-                  : `🎯 찾으신 장면 (${cleanTs} 구간 포착):`}
+            <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex flex-col gap-1 shrink-0">
+              <span className="text-[11.5px] text-slate-500 font-semibold">
+                {isWholeClipMatch ? '일치 구간 (00:00~)' : `일치 장면 (${cleanTs})`}
               </span>
-              <p className="font-body-md text-[13px] sm:text-[13.5px] text-white font-bold leading-relaxed">
+              <p className="text-[13px] text-slate-800 font-medium leading-relaxed">
                 {renderHighlightedDocText(
                   selectedVideoModal.matchedFrameCaption,
                   effectiveQuery,
@@ -696,27 +687,27 @@ export const VideoScenePreviewModal: React.FC = () => {
           )}
 
           {ocrLines.length === 0 && isOcrExtracting && (
-            <div className="px-3.5 py-2.5 rounded-2xl bg-zinc-950/90 border border-teal-400/35 text-teal-200 font-body-sm text-[12px] font-bold shrink-0">
-              🔍 영상 화면 속 한글 문장을 읽고 있습니다...
+            <div className="px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-600 text-[12px] font-medium shrink-0">
+              영상 화면 속 글자를 읽고 있습니다...
             </div>
           )}
 
           {ocrLines.length === 0 && !isOcrExtracting && String(selectedVideoModal.id || '').startsWith('mobile_vid_') && (
-            <div className="px-3.5 py-2.5 rounded-2xl bg-zinc-950/80 border border-white/15 text-zinc-400 font-body-sm text-[12px] shrink-0">
-              ℹ️ 이 영상에서는 화면 속 글자가 감지되지 않았습니다.
+            <div className="px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 text-slate-500 text-[12px] shrink-0">
+              이 영상에서는 화면 속 글자가 감지되지 않았습니다.
             </div>
           )}
 
           {ocrLines.length > 0 && (
-            <div className="p-3.5 rounded-2xl bg-zinc-950/95 border border-teal-400/50 flex flex-col gap-2.5 shrink-0">
+            <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col gap-2.5 shrink-0">
               <div className="flex flex-wrap items-center justify-between gap-2">
                 <div className="flex items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 font-label-mono text-[11px] font-black">
-                    📝 영상 속 추출된 글자 ({ocrLines.length}구간)
+                  <span className="text-[12.5px] text-slate-800 font-semibold">
+                    영상 속 추출된 글자 ({ocrLines.length}구간)
                   </span>
                   {ocrCopied && (
-                    <span className="text-[12px] text-emerald-300 font-bold">
-                      📋 클립보드 복사 완료!
+                    <span className="text-[12px] text-emerald-700 font-medium">
+                      복사됨
                     </span>
                   )}
                 </div>
@@ -732,9 +723,9 @@ export const VideoScenePreviewModal: React.FC = () => {
                           /* ignore */
                         }
                       }}
-                      className="px-3 py-1 rounded-lg bg-teal-400 hover:bg-teal-300 text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer"
+                      className="px-3 py-1 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-semibold cursor-pointer"
                     >
-                      {ocrCopied ? '✅ 전체 복사됨' : '📋 전체 텍스트 복사'}
+                      {ocrCopied ? '복사됨' : '전체 복사'}
                     </button>
                     <button
                       type="button"
@@ -747,18 +738,15 @@ export const VideoScenePreviewModal: React.FC = () => {
                         a.click();
                         URL.revokeObjectURL(url);
                       }}
-                      className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
+                      className="px-3 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[11.5px] font-medium cursor-pointer"
                     >
-                      💾 .txt 저장
+                      .txt 저장
                     </button>
                   </div>
                 )}
               </div>
 
-              <div
-                data-keep-dark="true"
-                className="max-h-48 overflow-y-auto rounded-xl bg-black/75 border border-white/15 p-2.5 flex flex-col gap-1.5"
-              >
+              <div className="max-h-48 overflow-y-auto rounded-lg bg-white border border-slate-200 p-2 flex flex-col gap-1">
                 {ocrLines.map((ln, idx) => (
                   <button
                     key={`${ln.timestamp}_${idx}`}
@@ -772,12 +760,12 @@ export const VideoScenePreviewModal: React.FC = () => {
                         void videoRef.current.play().catch(() => {});
                       }
                     }}
-                    className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-white/10 flex items-start gap-2 transition cursor-pointer"
+                    className="w-full text-left px-2.5 py-1.5 rounded-md hover:bg-slate-50 flex items-start gap-2 transition cursor-pointer"
                   >
-                    <span className="px-1.5 py-0.5 rounded bg-teal-500/20 text-teal-300 font-label-mono text-[11px] font-bold shrink-0">
-                      ▶ {ln.timestamp}
+                    <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[11px] font-semibold tabular-nums shrink-0">
+                      {ln.timestamp}
                     </span>
-                    <span className="text-[12.5px] text-zinc-100 font-medium leading-snug break-all">
+                    <span className="text-[12.5px] text-slate-800 leading-snug break-all">
                       {ln.text}
                     </span>
                   </button>
@@ -787,7 +775,7 @@ export const VideoScenePreviewModal: React.FC = () => {
           )}
         </div>
 
-        <div className="flex flex-wrap items-center justify-end gap-2 pt-2 border-t border-outline-variant/20 shrink-0">
+        <div className="flex flex-wrap items-center justify-end gap-2 pt-2.5 border-t border-slate-100 shrink-0">
           <button
             type="button"
             onClick={() => {
@@ -797,22 +785,20 @@ export const VideoScenePreviewModal: React.FC = () => {
               }
               if (!String(selectedVideoModal.videoUrl || '').includes('127.0.0.1:5199')) {
                 showToast(
-                  'ℹ️ 이 영상은 체험용 샘플이라 내 PC 폴더에는 저장되어 있지 않습니다. 내 PC 연결 시 실제 동영상 위치를 바로 열어드립니다.'
+                  '샘플 영상이라 내 PC 폴더에는 저장되어 있지 않습니다.'
                 );
                 return;
               }
               void openLocalFolder('videos');
             }}
-            title={selectedVideoModal.fullPath || '원본 동영상이 있는 내 PC 폴더를 엽니다'}
-            className="hidden sm:flex px-4 py-2.5 rounded-xl bg-primary-container text-on-primary-container font-label-md text-[13px] font-extrabold items-center gap-1.5 cursor-pointer"
+            className="hidden sm:flex px-3.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium items-center gap-1 cursor-pointer"
           >
-            <span className="material-symbols-outlined text-[18px]">folder_open</span>
-            <span>원본 동영상 폴더 열기</span>
+            <span>동영상 폴더 열기</span>
           </button>
           <button
             type="button"
             onClick={() => setSelectedVideoModal(null)}
-            className="px-4 py-2.5 rounded-xl bg-surface-container-high text-on-surface font-label-md text-[12.5px] sm:text-[13px] font-bold cursor-pointer"
+            className="px-4 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[12px] font-semibold cursor-pointer"
           >
             닫기
           </button>

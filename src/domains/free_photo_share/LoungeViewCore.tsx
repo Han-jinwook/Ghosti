@@ -1,6 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
 import {
-  buildWindowsNativeWebDavMountCommand,
   verifyHybridP2PBridgeConnection,
   type P2PHybridConnectionDiagnostics,
 } from '../../services/p2pHybridBridge';
@@ -183,9 +182,9 @@ export const LoungeView: React.FC = () => {
   }> = [
     {
       id: 'small',
-      title: '⛰️ 동호회 · 소모임 사진방',
+      title: '동호회 · 소모임 사진방',
       capacity: '인원 무제한 (사진·동영상 전용)',
-      monthly: '평생 0원 (무료)',
+      monthly: '기본 무료',
       yearly: '방장·멤버 전원 0원',
       gpuDaily: '내 기기 원본 동기화 지원',
       monthlyPlanId: 'club_small_4900',
@@ -193,9 +192,9 @@ export const LoungeView: React.FC = () => {
     },
     {
       id: 'large',
-      title: '🎓 동창회 · 반창회 사진방',
+      title: '동창회 · 반창회 사진방',
       capacity: '인원 무제한 (사진·동영상 전용)',
-      monthly: '평생 0원 (무료)',
+      monthly: '기본 무료',
       yearly: '방장·동창 전원 0원',
       gpuDaily: '내 기기 원본 동기화 지원',
       monthlyPlanId: 'club_small_4900',
@@ -219,9 +218,9 @@ export const LoungeView: React.FC = () => {
       className="flex-1 w-full max-w-[1360px] mx-auto px-5 md:px-8 py-6 flex flex-col gap-5"
     >
       {droppedBusinessDocName && activeLoungeType !== 'work' && !isStoreAppMode && (
-        <section className="px-4 py-3 rounded-2xl bg-amber-950/50 border-2 border-amber-400/70 flex flex-wrap items-center justify-between gap-3 shadow-lg">
+        <section className="px-4 py-3 rounded-2xl bg-amber-950/50 border border-slate-200/70 flex flex-wrap items-center justify-between gap-3 shadow-lg">
           <span className="text-[12.5px] text-amber-100 font-bold leading-relaxed">
-            📄 계약서·엑셀 등 업무 문서(<code className="text-amber-300">{droppedBusinessDocName}</code>)는 카톡보다 10배 편한{' '}
+            계약서·엑셀 등 업무 문서(<code className="text-amber-300">{droppedBusinessDocName}</code>)는 카톡보다 10배 편한{' '}
             <strong className="text-amber-300">[6. 사내 공용 폴더(S: 드라이브) — 월 9,900원~ · 30일 무료체험]</strong>에서 바로 공유해 보세요!
           </span>
           <div className="flex items-center gap-2 shrink-0">
@@ -232,9 +231,9 @@ export const LoungeView: React.FC = () => {
                 setActiveLoungeType('work');
                 setDesktopTab('dashboard');
               }}
-              className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[12px] font-extrabold cursor-pointer"
+              className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-extrabold cursor-pointer"
             >
-              💼 사내 공용 폴더(S:)로 바로 이동 ➔
+              사내 공용 폴더(S:)로 바로 이동 
             </button>
             <button
               type="button"
@@ -251,12 +250,12 @@ export const LoungeView: React.FC = () => {
       {!isStoreAppMode && activeLoungeType === 'work' && (
         <section className="px-4 py-2.5 rounded-2xl bg-[#18181B] border border-amber-400/30 flex flex-wrap items-center justify-between gap-2">
           <span className="text-[12.5px] text-zinc-200 font-bold">
-            💼 팀 공유 S: 드라이브 · 계약서/업무 문서 본문 검색 (🎁 30일 무제한 무료체험)
+            팀 공유 S: 드라이브 · 계약서/업무 문서 본문 검색 (30일 무제한 무료체험)
           </span>
           <button
             type="button"
             onClick={() => setShowProModal(true)}
-            className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[11.5px] font-extrabold shrink-0 cursor-pointer"
+            className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-extrabold shrink-0 cursor-pointer"
           >
             팀 플랜 안내 보기 →
           </button>
@@ -274,10 +273,10 @@ export const LoungeView: React.FC = () => {
             <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
               <div className="flex flex-col gap-1.5">
                 <span className="text-[12px] font-bold text-primary-container tracking-wide">
-                  💻 내 기기 (PC · 스마트폰)
+                  내 기기 (PC · 스마트폰)
                 </span>
                 <h1 className="font-headline-md text-[22px] md:text-[26px] text-white font-extrabold tracking-tight">
-                  🧹 내 기기 손보기 진단
+                  내 기기 손보기 진단
                 </h1>
                 <p className="font-body-sm text-[13.5px] text-zinc-400">
                   {personalTrialStatus === 'done'
@@ -294,7 +293,7 @@ export const LoungeView: React.FC = () => {
                     onClick={handleStartPersonalTrial}
                     className="px-6 py-3.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-headline-sm text-[14.5px] font-extrabold shadow-sm transition-all whitespace-nowrap cursor-pointer"
                   >
-                    🧹 손보기 진단 시작
+                    손보기 진단 시작
                   </button>
                 )}
 
@@ -314,7 +313,7 @@ export const LoungeView: React.FC = () => {
                     onClick={handleStartPersonalTrial}
                     className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12.5px] font-bold whitespace-nowrap cursor-pointer"
                   >
-                    🔄 다시 진단하기
+                    다시 진단하기
                   </button>
                 )}
               </div>
@@ -325,7 +324,7 @@ export const LoungeView: React.FC = () => {
               <div className="pt-6 border-t border-white/10 flex flex-col gap-5">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <span className="font-headline-sm text-[15px] text-white font-bold">
-                    📊 1차 진단 완료 브리핑 (카드를 누르면 해당 검색 화면으로 이동합니다)
+                    1차 진단 완료 브리핑 (카드를 누르면 해당 검색 화면으로 이동합니다)
                   </span>
                   <span className="text-[12px] text-emerald-400 font-semibold">
                     ✓ 외부 서버 전송 없음 (100% 내 기기 안심 진단)
@@ -342,9 +341,9 @@ export const LoungeView: React.FC = () => {
                     className="p-4 rounded-xl bg-zinc-950/90 hover:bg-zinc-900 border border-white/10 hover:border-primary-container/50 cursor-pointer transition-all flex flex-col justify-between gap-2"
                   >
                     <span className="font-label-sm text-[12px] text-zinc-400 font-semibold">
-                      🎬 동영상 ({totalDeviceVideos}개 중)
+                      동영상 ({totalDeviceVideos}개 중)
                     </span>
-                    <div className="font-headline-md text-[20px] text-white font-black">
+                    <div className="font-headline-md text-[20px] text-white font-semibold">
                       영상 {trialSampleVideos}개 해부 완료
                     </div>
                     <span className="text-primary-container font-label-sm text-[12px] font-bold pt-1">
@@ -360,9 +359,9 @@ export const LoungeView: React.FC = () => {
                     className="p-4 rounded-xl bg-zinc-950/90 hover:bg-zinc-900 border border-white/10 hover:border-primary-container/50 cursor-pointer transition-all flex flex-col justify-between gap-2"
                   >
                     <span className="font-label-sm text-[12px] text-zinc-400 font-semibold">
-                      🖼️ 사진 ({totalDevicePhotos}장 중)
+                      사진 ({totalDevicePhotos}장 중)
                     </span>
-                    <div className="font-headline-md text-[20px] text-white font-black">
+                    <div className="font-headline-md text-[20px] text-white font-semibold">
                       사진 {trialSamplePhotos}장 분석 완료
                     </div>
                     <span className="text-primary-container font-label-sm text-[12px] font-bold pt-1">
@@ -378,9 +377,9 @@ export const LoungeView: React.FC = () => {
                     className="p-4 rounded-xl bg-zinc-950/90 hover:bg-zinc-900 border border-white/10 hover:border-primary-container/50 cursor-pointer transition-all flex flex-col justify-between gap-2"
                   >
                     <span className="font-label-sm text-[12px] text-zinc-400 font-semibold">
-                      📁 문서 ({totalDeviceDocs}건 중)
+                      문서 ({totalDeviceDocs}건 중)
                     </span>
-                    <div className="font-headline-md text-[20px] text-white font-black">
+                    <div className="font-headline-md text-[20px] text-white font-semibold">
                       문서 {trialSampleDocs}건 색인 완료
                     </div>
                     <span className="text-primary-container font-label-sm text-[12px] font-bold pt-1">
@@ -394,10 +393,10 @@ export const LoungeView: React.FC = () => {
                   <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                     <div className="flex flex-col gap-1">
                       <span className="font-headline-sm text-[14.5px] text-white font-bold">
-                        🛡️ 안심 정리 테스트 — 휴지통으로 보내고 1초 만에 되돌려보세요
+                        안심 정리 테스트 — 휴지통으로 보내고 되돌려보세요
                       </span>
                       <p className="font-body-sm text-[12.5px] text-zinc-400">
-                        임의로 영구 삭제하지 않고 OS 기본 [휴지통]으로 이동하며 언제든 1초 만에 복원됩니다.
+                        임의로 영구 삭제하지 않고 OS 기본 [휴지통]으로 이동하며 언제든 복원됩니다.
                       </p>
                     </div>
 
@@ -409,12 +408,12 @@ export const LoungeView: React.FC = () => {
                         className={`px-4 py-2 rounded-xl font-label-md text-[12.5px] font-extrabold transition-all whitespace-nowrap ${
                           trialSafetyStep === 'quarantined'
                             ? 'bg-zinc-900 border border-white/15 text-zinc-400 cursor-not-allowed'
-                            : 'bg-amber-400 hover:bg-amber-300 text-zinc-950 cursor-pointer'
+                            : 'bg-slate-900 hover:bg-slate-800 text-white cursor-pointer'
                         }`}
                       >
                         {trialSafetyStep === 'quarantined'
                           ? '✓ ① 휴지통 이동됨'
-                          : '🗑️ ① 샘플 정리 눌러보기'}
+                          : '① 샘플 정리 눌러보기'}
                       </button>
 
                       <button
@@ -439,20 +438,20 @@ export const LoungeView: React.FC = () => {
                         onClick={() => void openLocalFolder('quarantine')}
                         className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[12px] font-bold whitespace-nowrap cursor-pointer"
                       >
-                        🗑️ 휴지통 열기
+                        휴지통 열기
                       </button>
                     </div>
                   </div>
 
                   {trialSafetyStep === 'quarantined' && (
                     <div className="px-3.5 py-2 rounded-lg bg-amber-500/10 border border-amber-500/30 text-[12.5px] text-amber-200">
-                      🗑️ 샘플 {trialMovedIds.length}건이 휴지통으로 이동되었습니다. 우측의 <strong>[↩️ ② 1초 되돌리기]</strong>를 눌러보세요!
+                      샘플 {trialMovedIds.length}건이 휴지통으로 이동되었습니다. 우측의 <strong>[↩️ ② 1초 되돌리기]</strong>를 눌러보세요!
                     </div>
                   )}
 
                   {trialSafetyStep === 'restored' && (
                     <div className="px-3.5 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-[12.5px] text-emerald-300 flex items-center justify-between gap-2">
-                      <span>✅ 원래 위치로 100% 되돌아왔습니다. 이제 본격적인 정리를 시작해 보세요!</span>
+                      <span>원래 위치로 100% 되돌아왔습니다. 이제 본격적인 정리를 시작해 보세요!</span>
                       <button
                         type="button"
                         onClick={() => {
@@ -461,7 +460,7 @@ export const LoungeView: React.FC = () => {
                         }}
                         className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-primary-container font-label-sm text-[11.5px] font-bold whitespace-nowrap cursor-pointer"
                       >
-                        🩺 손보기 열기 →
+                        손보기 열기 →
                       </button>
                     </div>
                   )}
@@ -485,13 +484,13 @@ export const LoungeView: React.FC = () => {
               >
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[12px] text-primary-container font-bold">
-                    🔍 귀신같이 AI 내용찾기
+                    귀신같이 AI 내용찾기
                   </span>
                   <h3 className="font-headline-sm text-[17px] text-white font-bold">
                     사진 · 영상 · 서류 1초 검색
                   </h3>
                   <p className="font-body-sm text-[12.5px] text-zinc-400 leading-relaxed">
-                    말 한마디로 사진, 동영상 속 장면, 문서 내용까지 1초 만에 찾아냅니다.
+                    말 한마디로 사진, 동영상 속 장면, 문서 내용까지 찾아냅니다.
                   </p>
                 </div>
                 <span className="text-[12.5px] font-extrabold text-primary-container group-hover:translate-x-0.5 transition-transform">
@@ -509,7 +508,7 @@ export const LoungeView: React.FC = () => {
               >
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[12px] text-amber-400 font-bold">
-                    🩺 귀신같이 손보기
+                    귀신같이 손보기
                   </span>
                   <h3 className="font-headline-sm text-[17px] text-white font-bold">
                     중복 사진 · 바탕화면 정리
@@ -533,13 +532,13 @@ export const LoungeView: React.FC = () => {
               >
                 <div className="flex flex-col gap-1.5">
                   <span className="text-[12px] text-emerald-400 font-bold">
-                    ✋ 손보기
+                    손보기
                   </span>
                   <h3 className="font-headline-sm text-[17px] text-white font-bold">
                     1:1 기기 설정 &amp; 수리 해결사
                   </h3>
                   <p className="font-body-sm text-[12.5px] text-zinc-400 leading-relaxed">
-                    복잡한 PC·스마트폰 설정을 1초 만에 고쳐주거나 화살표(👆)로 안내합니다.
+                    복잡한 PC·스마트폰 설정을 고쳐주거나 화살표(👆)로 안내합니다.
                   </p>
                 </div>
                 <span className="text-[12.5px] font-extrabold text-emerald-300 group-hover:translate-x-0.5 transition-transform">
@@ -559,7 +558,7 @@ export const LoungeView: React.FC = () => {
             <div className="p-5 md:p-6 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
-                  👨‍👩‍👧‍👦 패밀리 라운지 — 양가 분리 가족 사진관 (인원·장수 무제한 평생 0원)
+                  패밀리 라운지 — 양가 분리 가족 사진관 (인원·장수 제한 없음)
                 </h1>
                 <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
                   사생활 혼선 없이 <strong>[우리집] · [본가(친가)] · [처가(친정)]</strong> 방을 분리하고, 카톡 링크 하나로 가족 스마트폰에서 함께 찍힌 사진만 3초 만에 자동 수합합니다.
@@ -578,7 +577,7 @@ export const LoungeView: React.FC = () => {
                           : 'bg-zinc-900 text-zinc-300 border-white/10 hover:bg-zinc-800'
                       }`}
                     >
-                      {room === '우리집' ? '🏠 우리집' : room === '본가(친가)' ? '🏡 본가(친가)' : '🌸 처가(친정)'}
+                      {room === '우리집' ? '우리집' : room === '본가(친가)' ? '본가(친가)' : '처가(친정)'}
                     </button>
                   ))}
                 </div>
@@ -597,7 +596,7 @@ export const LoungeView: React.FC = () => {
                 <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-headline-sm text-[15px] text-white font-bold">
-                      🏠🏡🌸 양가 3방 완벽 분리
+                      양가 3방 완벽 분리
                     </span>
                     <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
                       프라이버시 보장
@@ -611,24 +610,24 @@ export const LoungeView: React.FC = () => {
                 <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-headline-sm text-[15px] text-white font-bold">
-                      🛂 가족 얼굴 여권 &amp; 1초 실명 검색
+                      가족 얼굴 여권 &amp; 1초 실명 검색
                     </span>
                     <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
                       호칭·실명 자동 매칭
                     </span>
                   </div>
                   <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                    가족 단체 사진에서 얼굴을 자동 추출해 이름·호칭(할머니, 큰삼촌 등)만 적어두면 온 가족 스마트폰에서 이름으로 1초 만에 찾습니다.
+                    가족 단체 사진에서 얼굴을 자동 추출해 이름·호칭(할머니, 큰삼촌 등)만 적어두면 온 가족 스마트폰에서 이름으로 찾습니다.
                   </p>
                 </div>
 
                 <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-headline-sm text-[15px] text-white font-bold">
-                      📡 카톡 초대 &amp; 3초 레이더 수합
+                      카톡 초대 &amp; 3초 레이더 수합
                     </span>
                     <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
-                      인원·장수 무제한 평생 0원
+                      인원·장수 제한 없음
                     </span>
                   </div>
                   <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
@@ -645,7 +644,7 @@ export const LoungeView: React.FC = () => {
               <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                    ✨ 패밀리 라운지 1초 진단 &amp; 공유 시작 — 가족 얼굴 여권 &amp; 3초 레이더 수합
+                    패밀리 라운지 1초 진단 &amp; 공유 시작 — 가족 얼굴 여권 &amp; 3초 레이더 수합
                   </h2>
                   <span className="text-[12px] text-zinc-400 font-mono">
                     · 소요 시간 약 20초 · 감지된 가족 {activeClusters.length}명 (이름 등록 {namedClusters.length}명)
@@ -663,7 +662,7 @@ export const LoungeView: React.FC = () => {
                     onClick={() => handleStartGroupTrial('family')}
                     className="px-6 py-3 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-headline-sm text-[14px] font-extrabold shadow-sm transition-all whitespace-nowrap cursor-pointer"
                   >
-                    🚀 공유방 시작하기
+                    공유방 시작하기
                   </button>
                 )}
 
@@ -683,7 +682,7 @@ export const LoungeView: React.FC = () => {
                     onClick={() => handleStartGroupTrial('family')}
                     className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12.5px] font-bold whitespace-nowrap cursor-pointer"
                   >
-                    🔄 다시 체험하기
+                    다시 체험하기
                   </button>
                 )}
               </div>
@@ -694,14 +693,14 @@ export const LoungeView: React.FC = () => {
               <div className="pt-4 border-t border-white/10 flex flex-col gap-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                   <span className="font-headline-sm text-[15.5px] text-white font-bold">
-                    👑 Step 1. 가족 얼굴 여권 자동 장착 &amp; 방장 누락분 확인 ({activeFamilyRoom})
+                    Step 1. 가족 얼굴 여권 자동 장착 &amp; 방장 누락분 확인 ({activeFamilyRoom})
                   </span>
                   <button
                     type="button"
                     onClick={() => setShowFaceRegistryModal(true)}
                     className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold"
                   >
-                    🛂 여권 관리 · 👑 방장 총점검 모달 열기 →
+                    여권 관리 · 방장 총점검 모달 열기 →
                   </button>
                 </div>
 
@@ -715,10 +714,10 @@ export const LoungeView: React.FC = () => {
                 <div className="p-4 rounded-xl bg-zinc-950 border border-white/15 flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-col gap-1">
                     <span className="font-label-md text-[13px] text-white font-bold">
-                      📡 Step 2. 카톡 초대 &amp; 가족 스마트폰 ‘3초 얼굴 레이더 스캔’ (최대 10장 무료 수합 체험)
+                      Step 2. 카톡 초대 &amp; 가족 스마트폰 ‘3초 얼굴 레이더 스캔’ (최대 10장 무료 수합 체험)
                     </span>
                     <p className="font-body-sm text-[12px] text-zinc-400">
-                      등록된 가족 얼굴({namedClusters.length}명)의 768차원 특징량과 촬영 날짜를 기준으로 가족 폰에서 함께 찍힌 사진만 골라내어 <strong>[⏳ AI 인덱싱 대기실]</strong>로 전송합니다.
+                      등록된 가족 얼굴({namedClusters.length}명)의 얼굴 정보와 촬영 날짜를 기준으로 가족 폰에서 함께 찍힌 사진만 골라내어 <strong>[⏳ AI 인덱싱 대기실]</strong>로 전송합니다.
                     </p>
                   </div>
 
@@ -732,7 +731,7 @@ export const LoungeView: React.FC = () => {
                       }}
                       className="px-3.5 py-2 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold whitespace-nowrap"
                     >
-                      {radarSimulated ? '✓ 대기실로 전송됨 (대기실 열기)' : '📡 3초 레이더 수합 ➔ 대기실 전송 체험 →'}
+                      {radarSimulated ? '✓ 대기실로 전송됨 (대기실 열기)' : '3초 레이더 수합 대기실 전송 체험 →'}
                     </button>
                     {namedClusters.map((c) => {
                       const { activePersona, isRoomCreator } = getActivePersonaForCluster(
@@ -751,7 +750,7 @@ export const LoungeView: React.FC = () => {
                           }}
                           className="px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-bold whitespace-nowrap"
                         >
-                          🔍 “{isRoomCreator ? `👑 ${labelName}` : labelName} 나무 다리” 검색 →
+                          “{isRoomCreator ? `${labelName}` : labelName} 나무 다리” 검색 →
                         </button>
                       );
                     })}
@@ -776,7 +775,7 @@ export const LoungeView: React.FC = () => {
                       {showLoungePricing ? '▾' : '▸'}
                     </span>
                     <span className="font-headline-sm text-[13.5px] sm:text-[14.5px] text-white font-bold break-keep">
-                      🆓 가족 사진 공유방 — 우리집 단독 &amp; 양가 3방 통합 모두 인원 무제한 평생 0원 (사진·동영상 전용)
+                      🆓 가족 사진 공유방 — 우리집 단독 &amp; 양가 3방 통합 모두 인원 제한 없음 (사진·동영상 전용)
                     </span>
                   </div>
                   <span className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[12px] sm:text-[13px] font-extrabold select-none shadow-sm cursor-pointer transition-all shrink-0 whitespace-nowrap ml-auto">
@@ -790,11 +789,11 @@ export const LoungeView: React.FC = () => {
                       <div className="p-5 rounded-xl bg-zinc-950/80 border border-emerald-400/40 flex flex-col justify-between gap-4">
                         <div className="flex flex-col gap-1.5">
                           <span className="font-label-sm text-[11.5px] text-emerald-300 font-bold">
-                            🏠 우리집 단독 — 우리집 전용 시크릿 사진방 (방 1개 · 가족 인원 무제한)
+                            우리집 단독 — 우리집 전용 시크릿 사진방 (방 1개 · 가족 인원 무제한)
                           </span>
                           <div className="flex items-baseline gap-2">
-                            <span className="font-headline-md text-[24px] text-emerald-300 font-black">
-                              평생 0원 (무료)
+                            <span className="font-headline-md text-[24px] text-emerald-300 font-semibold">
+                              기본 무료
                             </span>
                             <span className="font-label-mono text-[13px] text-amber-300 font-bold">
                               (내 PC 하드 직결 · 클라우드 서버비 0원)
@@ -807,20 +806,20 @@ export const LoungeView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => activatePricingPlan('family_home_5900')}
-                          className="w-full py-2.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
+                          className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-md text-[12.5px] font-extrabold cursor-pointer"
                         >
-                          🏠 우리집 가족 사진방 평생 0원 시작
+                          우리집 가족 사진방 시작하기
                         </button>
                       </div>
 
                       <div className="p-5 rounded-xl bg-zinc-900 border border-primary-container/50 flex flex-col justify-between gap-4">
                         <div className="flex flex-col gap-1.5">
                           <span className="font-label-sm text-[11.5px] text-primary-container font-bold">
-                            👨‍👩‍👧‍👦 양가 통합권 — 우리집 + 본가(친가) + 처가(친정) 3개 방 분리 제공
+                            양가 통합권 — 우리집 + 본가(친가) + 처가(친정) 3개 방 분리 제공
                           </span>
                           <div className="flex items-baseline gap-2">
-                            <span className="font-headline-md text-[24px] text-emerald-300 font-black">
-                              평생 0원 (무료)
+                            <span className="font-headline-md text-[24px] text-emerald-300 font-semibold">
+                              기본 무료
                             </span>
                             <span className="font-label-mono text-[13px] text-amber-300 font-bold">
                               (3개 방 완벽 분리 · 인원 무제한)
@@ -835,7 +834,7 @@ export const LoungeView: React.FC = () => {
                           onClick={() => activatePricingPlan('family_three_8900')}
                           className="w-full py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold cursor-pointer"
                         >
-                          👨‍👩‍👧‍👦 양가 3방 통합 평생 0원 시작
+                          양가 3방 통합 시작하기
                         </button>
                       </div>
                     </div>
@@ -852,7 +851,7 @@ export const LoungeView: React.FC = () => {
                         }}
                         className="px-3 py-1.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer shrink-0"
                       >
-                        💼 사내 공용 폴더(S:) 바로가기 ➔
+                        사내 공용 폴더(S:) 바로가기 
                       </button>
                     </div>
                   </>
@@ -871,10 +870,10 @@ export const LoungeView: React.FC = () => {
             <div className="p-5 md:p-6 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
-                  ⛰️ 동호회·모임 (사진 공유) — 주말 산악회 · 골프 · 취미 모임 {isStoreAppMode ? '(PC 마스터 연동 전 회원 무료 열람)' : '(방장·회원 전원 평생 0원)'}
+                  동호회·모임 (사진 공유) — 주말 산악회 · 골프 · 취미 모임 {isStoreAppMode ? '(PC 마스터 연동 전 회원 무료 열람)' : '(기본 무료)'}
                 </h1>
                 <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
-                  모임 총무(👑 방장) PC 마스터 연동으로 회원 전원이 폰 용량 걱정 없이 <strong>13KB 초경량 썸네일 탐색</strong>과 <strong>내 기기 원본 동기화 자체 해결</strong>을 누립니다.
+                  모임 총무(방장) PC 마스터 연동으로 회원 전원이 폰 용량 걱정 없이 <strong>가벼운 미리보기 탐색</strong>과 <strong>내 기기 원본 동기화 자체 해결</strong>을 누립니다.
                 </p>
               </div>
               <button
@@ -891,7 +890,7 @@ export const LoungeView: React.FC = () => {
                 <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-headline-sm text-[15px] text-white font-bold">
-                      🏫 8090 응답하라 투트랙 앨범
+                      8090 응답하라 투트랙 앨범
                     </span>
                     <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
                       4050 동창회 특화
@@ -905,7 +904,7 @@ export const LoungeView: React.FC = () => {
                 <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-headline-sm text-[15px] text-white font-bold">
-                      🏷️ 스틱 태깅 &amp; 계절↔월 양방향 검색
+                      스틱 태깅 &amp; 계절↔월 양방향 검색
                     </span>
                     <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
                       검색 누락 0%
@@ -919,14 +918,14 @@ export const LoungeView: React.FC = () => {
                 <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-headline-sm text-[15px] text-white font-bold">
-                      🔄 13KB 썸네일 DB &amp; 내 기기 원본 동기화
+                      미리보기 목록 및 원본 동기화
                     </span>
                     <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
                       전 회원 무료 열람
                     </span>
                   </div>
                   <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                    평소엔 보이지 않는 곳에 <strong>13KB 초경량 썸네일 DB</strong>만 보관해 0.01초 만에 검색하며, <strong>[🔄 원본 동기화]</strong>를 켜면 지정한 내 폴더에 원본이 복제되어 자체 해결합니다.
+                    평소엔 보이지 않는 곳에 <strong>미리보기 목록</strong>만 보관해 검색하며, <strong>[🔄 원본 동기화]</strong>를 켜면 지정한 내 폴더에 원본이 복제되어 자체 해결합니다.
                   </p>
                 </div>
               </div>
@@ -939,7 +938,7 @@ export const LoungeView: React.FC = () => {
               <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                    ✨ 동호회 · 동창회 공유방 1초 진단 &amp; 공유 시작 — 동창·회원 얼굴 여권 &amp; 3초 레이더 수합
+                    동호회 · 동창회 공유방 1초 진단 &amp; 공유 시작 — 동창·회원 얼굴 여권 &amp; 3초 레이더 수합
                   </h2>
                   <span className="text-[12px] text-zinc-400 font-mono">
                     · 소요 시간 약 20초 · 감지된 회원 {activeClusters.length}명 (실명·별명 등록 {namedClusters.length}명)
@@ -957,7 +956,7 @@ export const LoungeView: React.FC = () => {
                     onClick={() => handleStartGroupTrial('club')}
                     className="px-6 py-3 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-headline-sm text-[14px] font-extrabold shadow-sm transition-all whitespace-nowrap cursor-pointer"
                   >
-                    🚀 공유방 시작하기
+                    공유방 시작하기
                   </button>
                 )}
 
@@ -977,7 +976,7 @@ export const LoungeView: React.FC = () => {
                     onClick={() => handleStartGroupTrial('club')}
                     className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12.5px] font-bold whitespace-nowrap cursor-pointer"
                   >
-                    🔄 다시 체험하기
+                    다시 체험하기
                   </button>
                 )}
               </div>
@@ -988,14 +987,14 @@ export const LoungeView: React.FC = () => {
               <div className="pt-4 border-t border-white/10 flex flex-col gap-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                   <span className="font-headline-sm text-[15.5px] text-white font-bold">
-                    👑 Step 1. 동창·회원 여권 자동 장착 &amp; 총무 누락분 1장씩 확인
+                    Step 1. 동창·회원 여권 자동 장착 &amp; 총무 누락분 1장씩 확인
                   </span>
                   <button
                     type="button"
                     onClick={() => setShowFaceRegistryModal(true)}
                     className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold"
                   >
-                    🛂 여권 관리 · 👑 방장 총점검 모달 열기 →
+                    여권 관리 · 방장 총점검 모달 열기 →
                   </button>
                 </div>
 
@@ -1009,10 +1008,10 @@ export const LoungeView: React.FC = () => {
                 <div className="p-4 rounded-xl bg-zinc-950 border border-white/15 flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-col gap-1">
                     <span className="font-label-md text-[13px] text-white font-bold">
-                      📡 Step 2. 카톡 단톡방 초대 &amp; 스마트폰 ‘3초 얼굴 레이더 스캔’ (최대 10장 무료 수합 체험)
+                      Step 2. 카톡 단톡방 초대 &amp; 스마트폰 ‘3초 얼굴 레이더 스캔’ (최대 10장 무료 수합 체험)
                     </span>
                     <p className="font-body-sm text-[12px] text-zinc-400">
-                      총무가 등록한 회원 얼굴({namedClusters.length}명)의 768차원 특징량과 모임 날짜를 기준으로 회원 폰에서 모임 사진만 골라내어 <strong>[⏳ AI 인덱싱 대기실]</strong>로 전송합니다.
+                      총무가 등록한 회원 얼굴({namedClusters.length}명)의 얼굴 정보와 모임 날짜를 기준으로 회원 폰에서 모임 사진만 골라내어 <strong>[⏳ AI 인덱싱 대기실]</strong>로 전송합니다.
                     </p>
                   </div>
 
@@ -1026,7 +1025,7 @@ export const LoungeView: React.FC = () => {
                       }}
                       className="px-3.5 py-2 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold whitespace-nowrap"
                     >
-                      {radarSimulated ? '✓ 대기실로 전송됨 (대기실 열기)' : '📡 3초 레이더 수합 ➔ 대기실 전송 체험 →'}
+                      {radarSimulated ? '✓ 대기실로 전송됨 (대기실 열기)' : '3초 레이더 수합 대기실 전송 체험 →'}
                     </button>
                     {namedClusters.map((c) => {
                       const { activePersona, isRoomCreator } = getActivePersonaForCluster(
@@ -1045,7 +1044,7 @@ export const LoungeView: React.FC = () => {
                           }}
                           className="px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-bold whitespace-nowrap"
                         >
-                          🔍 “{isRoomCreator ? `👑 ${labelName}` : labelName} 나무 다리” 검색 →
+                          “{isRoomCreator ? `${labelName}` : labelName} 나무 다리” 검색 →
                         </button>
                       );
                     })}
@@ -1070,7 +1069,7 @@ export const LoungeView: React.FC = () => {
                       {showLoungePricing ? '▾' : '▸'}
                     </span>
                     <span className="font-headline-sm text-[13.5px] sm:text-[14.5px] text-white font-bold break-keep">
-                      🆓 ⛰️ 동호회 · 🎓 동창회 · 🥂 소모임 사진 공유방 — 인원 무제한 평생 0원 (사진·동영상 전용)
+                      🆓 동호회 · 동창회 · 소모임 사진 공유방 — 인원 제한 없음 (사진·동영상 전용)
                     </span>
                   </div>
                   <span className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[12px] sm:text-[13px] font-extrabold select-none shadow-sm cursor-pointer transition-all shrink-0 whitespace-nowrap ml-auto">
@@ -1081,53 +1080,53 @@ export const LoungeView: React.FC = () => {
                 {showLoungePricing && (
                   <>
                     <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-                      {/* ① 🥂 일상 소모임 (평생 0원) */}
+                      {/* ① 🥂 일상 소모임 (기본 무료) */}
                       <div className="p-5 rounded-xl bg-gradient-to-br from-emerald-950/60 via-zinc-950 to-zinc-950 border border-emerald-400/50 flex flex-col justify-between gap-4">
                         <div className="flex flex-col gap-1.5">
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-label-sm text-[12px] text-emerald-300 font-extrabold">
-                              🥂 일상 소모임 (친구·계모임·취미)
+                              일상 소모임 (친구·계모임·취미)
                             </span>
                             <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-200 text-[10px] font-bold">
                               사진·동영상 전용
                             </span>
                           </div>
                           <div className="flex flex-wrap items-baseline gap-1.5 mt-0.5">
-                            <span className="font-headline-md text-[22px] text-emerald-300 font-black">
-                              평생 0원 (무료)
+                            <span className="font-headline-md text-[22px] text-emerald-300 font-semibold">
+                              기본 무료
                             </span>
                           </div>
                           <p className="font-body-sm text-[12px] text-zinc-300">
-                            단톡방 친구들끼리 방 개설 즉시 장수 제한 없이 평생 0원! (내 PC 하드 직결 · 카톡 무가입 1초 프리뷰 지원)
+                            단톡방 친구들끼리 방 개설 즉시 장수 제한 없이 공유할 수 있습니다. (내 PC 하드 직결 · 로그인 전 미리보기 지원)
                           </p>
                         </div>
                         <button
                           type="button"
                           onClick={() => activatePricingPlan('club_mini_free_300')}
-                          className="w-full py-2.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-label-md text-[12px] font-extrabold cursor-pointer"
+                          className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-md text-[12px] font-extrabold cursor-pointer"
                         >
-                          🥂 소모임 사진방 평생 0원 개설
+                          소모임 사진방 시작하기
                         </button>
                       </div>
 
-                      {/* ② ⛰️ 동호회 사진방 (평생 0원) */}
+                      {/* ② ⛰️ 동호회 사진방 (기본 무료) */}
                       <div className="p-5 rounded-xl bg-zinc-950/90 border border-emerald-400/40 flex flex-col justify-between gap-4">
                         <div className="flex flex-col gap-1.5">
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-label-sm text-[12px] text-primary-container font-extrabold">
-                              ⛰️ 동호회 사진방 (모임 이름 문패)
+                              동호회 사진방 (모임 이름 문패)
                             </span>
                             <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 text-[10px] font-bold">
                               인원 무제한 · 0원
                             </span>
                           </div>
                           <div className="flex flex-wrap items-baseline gap-1.5 mt-0.5">
-                            <span className="font-headline-md text-[22px] text-emerald-300 font-black">
-                              평생 0원 (무료)
+                            <span className="font-headline-md text-[22px] text-emerald-300 font-semibold">
+                              기본 무료
                             </span>
                           </div>
                           <p className="font-body-sm text-[12px] text-zinc-300">
-                            골프·산악회·독서·조기축구 등 수백 명 모임도 인원수 제한 없이 방장도 회원도 평생 0원!
+                            골프·산악회·독서·조기축구 등 수백 명 모임도 인원수 제한 없이 기본 무료로 운영됩니다.
                           </p>
                         </div>
                         <button
@@ -1135,24 +1134,24 @@ export const LoungeView: React.FC = () => {
                           onClick={() => activatePricingPlan('club_small_4900')}
                           className="w-full py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12px] font-extrabold cursor-pointer"
                         >
-                          ⛰️ 동호회 사진방 평생 0원 개설
+                          동호회 사진방 시작하기
                         </button>
                       </div>
 
-                      {/* ③ 🎓 동창회·반창회 사진방 (평생 0원) */}
+                      {/* ③ 🎓 동창회·반창회 사진방 (기본 무료) */}
                       <div className="p-5 rounded-xl bg-zinc-900 border border-amber-400/50 flex flex-col justify-between gap-4">
                         <div className="flex flex-col gap-1.5">
                           <div className="flex items-center justify-between gap-2">
                             <span className="font-label-sm text-[12px] text-amber-300 font-extrabold">
-                              🎓 동창회 사진방 (학교/학년/반 문패)
+                              동창회 사진방 (학교/학년/반 문패)
                             </span>
                             <span className="px-2 py-0.5 rounded bg-zinc-800 text-zinc-200 text-[10px] font-bold">
                               인원 무제한 · 0원
                             </span>
                           </div>
                           <div className="flex flex-wrap items-baseline gap-1.5 mt-0.5">
-                            <span className="font-headline-md text-[22px] text-emerald-300 font-black">
-                              평생 0원 (무료)
+                            <span className="font-headline-md text-[22px] text-emerald-300 font-semibold">
+                              기본 무료
                             </span>
                           </div>
                           <p className="font-body-sm text-[12px] text-zinc-300">
@@ -1162,9 +1161,9 @@ export const LoungeView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => activatePricingPlan('club_small_4900')}
-                          className="w-full py-2.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-md text-[12px] font-extrabold cursor-pointer"
+                          className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-md text-[12px] font-extrabold cursor-pointer"
                         >
-                          🎓 동창회 사진방 평생 0원 개설
+                          동창회 사진방 시작하기
                         </button>
                       </div>
                     </div>
@@ -1179,9 +1178,9 @@ export const LoungeView: React.FC = () => {
                           setActiveLoungeType('work');
                           setDesktopTab('dashboard');
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer shrink-0"
+                        className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[11.5px] font-extrabold cursor-pointer shrink-0"
                       >
-                        💼 사내 공용 폴더(S:) 바로가기 ➔
+                        사내 공용 폴더(S:) 바로가기 
                       </button>
                     </div>
                   </>
@@ -1200,10 +1199,10 @@ export const LoungeView: React.FC = () => {
             <div className="p-5 md:p-6 flex flex-wrap items-center justify-between gap-3">
               <div>
                 <h1 className="font-headline-md text-[20px] md:text-[22px] text-white font-bold">
-                  🎓 동창회 · 학급 · 동아리 (사진 공유) — 우리 동창·반 전원 평생 0원 타임캡슐
+                  동창회 · 학급 · 동아리 (사진 공유) — 우리 동창·반 공유 앨범
                 </h1>
                 <p className="font-body-sm text-[13px] text-zinc-400 mt-1">
-                  방장 PC 직결 연동만으로 동창회·학급·동아리 인원수 상관없이 <strong>평생 0원(무료)</strong>! 동창·반 친구들 전원이 졸업앨범·수련회·체육대회·모임 사진·동영상을 1초 만에 찾습니다. (※ 사진·동영상 전용)
+                  방장 PC 직결 연동만으로 동창회·학급·동아리 인원수 상관없이 <strong>기본 무료</strong>! 동창·반 친구들 전원이 졸업앨범·수련회·체육대회·모임 사진·동영상을 찾습니다. (※ 사진·동영상 전용)
                 </p>
               </div>
               <button
@@ -1220,21 +1219,21 @@ export const LoungeView: React.FC = () => {
                 <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-headline-sm text-[15px] text-white font-bold">
-                      🪪 학생증 로컬 OCR 0.1초 인증
+                      학생증 로컬 확인
                     </span>
                     <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-300 text-[10.5px] font-extrabold">
-                      외부 전송 0 Byte
+                      기기 내 로컬 처리
                     </span>
                   </div>
                   <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                    학생증 사진 1장을 내 기기 RAM에서 0.1초 OCR 판독 후 즉시 폐기하여 개인정보 유출 걱정 없이 학생 전용 라운지를 즉시 인증합니다.
+                    학생증 사진 1장을 내 기기 RAM에서 기기 안에서만 확인한 뒤 바로 삭제하여 개인정보 유출 걱정 없이 학생 전용 라운지를 즉시 인증합니다.
                   </p>
                 </div>
 
                 <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-headline-sm text-[15px] text-white font-bold">
-                      🏃 수련회·체육대회·축제 3초 수합
+                      수련회·체육대회·축제 3초 수합
                     </span>
                     <span className="px-2 py-0.5 rounded bg-primary-container/15 text-primary-container text-[10.5px] font-extrabold">
                       우리 반 전원 무료
@@ -1248,14 +1247,14 @@ export const LoungeView: React.FC = () => {
                 <div className="p-4 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5">
                   <div className="flex items-center justify-between gap-2">
                     <span className="font-headline-sm text-[15px] text-white font-bold">
-                      🎉 인원·장수 제한 없이 평생 0원
+                      모임 사진 공유
                     </span>
                     <span className="px-2 py-0.5 rounded bg-amber-400/20 text-amber-300 text-[10.5px] font-extrabold">
                       총무 부담 0원
                     </span>
                   </div>
                   <p className="font-body-sm text-[12.5px] text-zinc-300 leading-relaxed">
-                    30명 학급이든 100명 동호회든 인원·장수 제한 없이 방장과 전 회원이 평생 0원으로 공유하고 내 얼굴이 나온 사진을 1초 만에 찾습니다.
+                    30명 학급이든 100명 동호회든 인원·장수 제한 없이 방장과 전 회원이 함께 공유하고 내 얼굴이 나온 사진을 찾습니다.
                   </p>
                 </div>
               </div>
@@ -1268,7 +1267,7 @@ export const LoungeView: React.FC = () => {
               <div className="flex flex-col gap-2">
                 <div className="flex flex-wrap items-center gap-2">
                   <h2 className="font-headline-sm text-[18px] text-white font-bold">
-                    ✨ 동호회 · 동창회 공유방 1초 진단 &amp; 공유 시작 — 우리 반 얼굴 여권 &amp; 10장 레이더 수합
+                    동호회 · 동창회 공유방 1초 진단 &amp; 공유 시작 — 우리 반 얼굴 여권 &amp; 10장 레이더 수합
                   </h2>
                   <span className="text-[12px] text-zinc-400 font-mono">
                     · 소요 시간 약 20초 · 감지된 우리 반 친구 {activeClusters.length}명 (이름·별명 등록 {namedClusters.length}명)
@@ -1286,7 +1285,7 @@ export const LoungeView: React.FC = () => {
                     onClick={() => handleStartGroupTrial('student')}
                     className="px-6 py-3 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-headline-sm text-[14px] font-extrabold shadow-sm transition-all whitespace-nowrap cursor-pointer"
                   >
-                    🚀 공유방 시작하기
+                    공유방 시작하기
                   </button>
                 )}
 
@@ -1306,7 +1305,7 @@ export const LoungeView: React.FC = () => {
                     onClick={() => handleStartGroupTrial('student')}
                     className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[12.5px] font-bold whitespace-nowrap cursor-pointer"
                   >
-                    🔄 다시 체험하기
+                    다시 체험하기
                   </button>
                 )}
               </div>
@@ -1317,7 +1316,7 @@ export const LoungeView: React.FC = () => {
               <div className="pt-4 border-t border-white/10 flex flex-col gap-3.5">
                 <div className="flex flex-wrap items-center justify-between gap-2 px-1">
                   <span className="font-headline-sm text-[15.5px] text-white font-bold">
-                    👑 Step 1. 우리 반 친구 여권 자동 장착 &amp; 반장 누락분 확인
+                    Step 1. 우리 반 친구 여권 자동 장착 &amp; 반장 누락분 확인
                   </span>
                   <div className="flex flex-wrap items-center gap-2">
                     <button
@@ -1326,19 +1325,19 @@ export const LoungeView: React.FC = () => {
                       className={`px-3 py-1 rounded-lg font-label-sm text-[11.5px] font-extrabold transition-all ${
                         studentPokedHost
                           ? 'bg-emerald-500/20 border border-emerald-400/50 text-emerald-300'
-                          : 'bg-amber-400 hover:bg-amber-300 text-zinc-950'
+                          : 'bg-slate-900 hover:bg-slate-800 text-white'
                       }`}
                     >
                       {studentPokedHost
                         ? '✓ 방장에게 "집 게이밍 PC에 설치해!" 알림 발송됨!'
-                        : '👉 무료 10장 도달 시 방장에게 "집 게이밍 PC에 설치해!" 콕 찌르기'}
+                        : '무료 10장 도달 시 방장에게 "집 게이밍 PC에 설치해!" 콕 찌르기'}
                     </button>
                     <button
                       type="button"
                       onClick={() => setShowFaceRegistryModal(true)}
                       className="px-3 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold"
                     >
-                      🛂 여권 관리 · 👑 방장 총점검 모달 열기 →
+                      여권 관리 · 방장 총점검 모달 열기 →
                     </button>
                   </div>
                 </div>
@@ -1353,10 +1352,10 @@ export const LoungeView: React.FC = () => {
                 <div className="p-4 rounded-xl bg-zinc-950 border border-white/15 flex flex-wrap items-center justify-between gap-3">
                   <div className="flex flex-col gap-1">
                     <span className="font-label-md text-[13px] text-white font-bold">
-                      📡 Step 2. 반 단톡방 초대 &amp; 스마트폰 ‘3초 얼굴 레이더 스캔’ (최대 10장 무료 수합 체험)
+                      Step 2. 반 단톡방 초대 &amp; 스마트폰 ‘3초 얼굴 레이더 스캔’ (최대 10장 무료 수합 체험)
                     </span>
                     <p className="font-body-sm text-[12px] text-zinc-400">
-                      반장이 등록한 친구 얼굴({namedClusters.length}명)의 768차원 특징량과 수련회·체육대회 날짜를 기준으로 친구 폰에서 우리 반 사진만 골라내어 <strong>[⏳ AI 인덱싱 대기실]</strong>로 전송합니다.
+                      반장이 등록한 친구 얼굴({namedClusters.length}명)의 얼굴 정보와 수련회·체육대회 날짜를 기준으로 친구 폰에서 우리 반 사진만 골라내어 <strong>[⏳ AI 인덱싱 대기실]</strong>로 전송합니다.
                     </p>
                   </div>
 
@@ -1370,7 +1369,7 @@ export const LoungeView: React.FC = () => {
                       }}
                       className="px-3.5 py-2 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[12px] font-extrabold whitespace-nowrap"
                     >
-                      {radarSimulated ? '✓ 대기실로 전송됨 (대기실 열기)' : '📡 3초 레이더 수합 ➔ 대기실 전송 체험 →'}
+                      {radarSimulated ? '✓ 대기실로 전송됨 (대기실 열기)' : '3초 레이더 수합 대기실 전송 체험 →'}
                     </button>
                     {namedClusters.map((c) => {
                       const { activePersona, isRoomCreator } = getActivePersonaForCluster(
@@ -1389,7 +1388,7 @@ export const LoungeView: React.FC = () => {
                           }}
                           className="px-3 py-2 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-bold whitespace-nowrap"
                         >
-                          🔍 “{isRoomCreator ? `👑 ${labelName}` : labelName} 나무 다리” 검색 →
+                          “{isRoomCreator ? `${labelName}` : labelName} 나무 다리” 검색 →
                         </button>
                       );
                     })}
@@ -1408,7 +1407,7 @@ export const LoungeView: React.FC = () => {
                 <div className="flex flex-col gap-1.5">
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="px-2.5 py-0.5 rounded bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                      🎓 동창회 · 학급 · 동아리 사진 공유 평생 0원
+                      동창회 · 학급 · 동아리 사진 공유
                     </span>
                     <span
                       className={`px-2.5 py-0.5 rounded font-label-mono text-[11px] font-bold border ${
@@ -1418,20 +1417,20 @@ export const LoungeView: React.FC = () => {
                       }`}
                     >
                       {studentOcrVerified
-                        ? '✓ 학생증 로컬 OCR 0.1초 인증 완료 (외부 전송 0 Byte)'
-                        : '📸 사진·동영상 전용 (업무 문서·S: 드라이브 제외)'}
+                        ? '✓ 학생증 로컬 확인 완료'
+                        : '사진·동영상 전용 (업무 문서·S: 드라이브 제외)'}
                     </span>
                   </div>
                   <div className="flex items-baseline gap-2 mt-1">
-                    <span className="font-headline-md text-[26px] text-emerald-300 font-black">
-                      평생 0원 (무료)
+                    <span className="font-headline-md text-[26px] text-emerald-300 font-semibold">
+                      기본 무료
                     </span>
                     <span className="font-label-mono text-[14px] text-primary-container font-bold">
                       (인원 제한 없음 · 방장도 동창도 0원)
                     </span>
                   </div>
                   <p className="font-body-sm text-[12px] text-zinc-300">
-                    내 PC 하드 직결 구조로 클라우드 서버비가 들지 않아 동창회·학급 사진과 동영상 공유는 평생 0원입니다.
+                    내 PC 하드 직결 구조로 클라우드 서버비가 들지 않아 동창회·학급 사진과 동영상 공유는 기본 무료로 제공됩니다.
                   </p>
                 </div>
 
@@ -1442,7 +1441,7 @@ export const LoungeView: React.FC = () => {
                       onClick={verifyStudentOcr}
                       className="px-4 py-2.5 rounded-xl bg-zinc-950 hover:bg-zinc-800 border border-primary-container/50 text-primary-container font-label-md text-[12.5px] font-bold"
                     >
-                      🪪 학생증 로컬 OCR 0.1초 인증
+                      학생증 로컬 확인
                     </button>
                   )}
                   <button
@@ -1450,7 +1449,7 @@ export const LoungeView: React.FC = () => {
                     onClick={() => activatePricingPlan('student_sub_900')}
                     className="px-4 py-2.5 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold"
                   >
-                    🎓 동창회·학급 사진방 평생 0원 개설
+                    동창회·학급 사진방 시작하기
                   </button>
                 </div>
               </div>

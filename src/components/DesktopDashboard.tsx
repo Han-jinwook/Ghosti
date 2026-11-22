@@ -73,7 +73,7 @@ export const DesktopDashboard: React.FC = () => {
 
   useEffect(() => {
     if (!ghostSearchWindowStage || isInsideIframe) return;
-    document.title = '👻 귀신검색창 — 귀신같이(Ghosti)';
+    document.title = '귀신검색창 — 귀신같이';
     const onPassiveResize = () => {
       const wide = (window.innerWidth || 0) >= 1180;
       setIsGalleryViewport((prev) => (prev === wide ? prev : wide));
@@ -237,42 +237,37 @@ export const DesktopDashboard: React.FC = () => {
   }, [activeLoungeType, desktopTab, activeFamilyRoom, isMobileDrawerOpen]);
 
   return (
-    <div className="min-h-screen flex bg-[#09090B] text-zinc-100">
+    <div className="min-h-screen flex bg-white text-slate-900">
       <DesktopSidebarContainer ghostSearchWindowStage={ghostSearchWindowStage} />
 
       <div className="flex-1 min-w-0 flex flex-col">
         {ghostSearchWindowStage && !isInsideIframe && (
-          <div
-            data-keep-dark="true"
-            className="sticky top-0 z-40 h-9 px-3.5 flex items-center justify-between gap-2 bg-zinc-900 border-b border-white/15 text-white text-[12px] font-bold"
-          >
-            <span className="flex items-center gap-2 min-w-0">
-              <span className="text-[#2DD4BF] font-extrabold whitespace-nowrap">
-                👻 귀신검색창
-              </span>
+          <div className="sticky top-0 z-40 h-9 px-3.5 flex items-center justify-between gap-2 bg-slate-50 border-b border-slate-200 text-slate-800 text-[12px] font-semibold">
+            <span className="font-bold text-slate-900 whitespace-nowrap">
+              귀신검색창
             </span>
             <div className="flex items-center gap-1.5 shrink-0">
               <button
                 type="button"
                 onClick={() => void switchStandaloneWindowSize('compact')}
-                className={`px-2.5 py-0.5 rounded-md text-[11px] font-extrabold transition-colors cursor-pointer ${
+                className={`px-2.5 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
                   !isGalleryViewport
-                    ? 'bg-[#2DD4BF] text-zinc-950'
-                    : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-white/10'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
                 }`}
               >
-                ⤡ 작게
+                작게
               </button>
               <button
                 type="button"
                 onClick={() => void switchStandaloneWindowSize('large')}
-                className={`px-2.5 py-0.5 rounded-md text-[11px] font-extrabold transition-colors cursor-pointer ${
+                className={`px-2.5 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
                   isGalleryViewport
-                    ? 'bg-[#2DD4BF] text-zinc-950'
-                    : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-white/10'
+                    ? 'bg-slate-900 text-white'
+                    : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
                 }`}
               >
-                ⤢ 크게(갤러리)
+                크게 (갤러리)
               </button>
             </div>
           </div>
@@ -280,7 +275,6 @@ export const DesktopDashboard: React.FC = () => {
 
         <DesktopTopHeaderAndLoungeBar ghostSearchWindowStage={ghostSearchWindowStage} />
 
-        {/* 3창 무충돌 도메인 라우팅 스위치 (1귀신 비서 / 2귀신 검색 / 3귀신 공유·통합 / 업무 공유 S:) */}
         {ghostSearchWindowStage ? (
           <GhostSearchPane ghostSearchWindowStage={ghostSearchWindowStage} />
         ) : activeLoungeType === 'work' ? (

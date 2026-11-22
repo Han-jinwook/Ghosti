@@ -88,8 +88,8 @@ import {
 } from '../services/passportRegistrationFlow';
 
 /** [D-35] 여권 등록 카드 선택지 (유저 화면 용어: '여권'만 사용) */
-const PASSPORT_CHIP_OPEN_SELF = '🪪 여권사진 확인하기';
-const PASSPORT_CHIP_OPEN_FAMILY = '👨‍👩‍👧 가족 사진도 등록할래';
+const PASSPORT_CHIP_OPEN_SELF = '여권사진 확인하기';
+const PASSPORT_CHIP_OPEN_FAMILY = '가족 사진도 등록할래';
 const PASSPORT_CHIP_LATER = '다음에 할게';
 
 /** [v1.3] 내 컴퓨터 연결 직후 자동 실행할 1단계 분석 문구 — 멋대로 삭제하지 않고 실측 사양 + 속도 저하 범인(상주 보안모듈·애드웨어) 분석표를 먼저 제시 */
@@ -276,18 +276,18 @@ function buildPassportEntryTurn(
     };
   }
   return {
-    text: `${nickname}님, 기본 세팅은 다 끝났어요! 이제 바로 아래 『👻 귀신검색』에서 10초 만에 직접 불러보는 마법을 따라 해볼까요?`,
+    text: `${nickname}님, 기본 세팅은 다 끝났습니다. 이제 귀신검색에서 내 파일을 바로 찾아보실 수 있습니다.`,
     nextState: { ...nextSt, passportStep: 'skipped' },
   };
 }
 
 function buildPassportSelfOfferText(nickname: string): string {
-  const who = nickname ? `${nickname}님` : '주인님';
-  return `🪪 **시기별 다양한 여권사진 등록**\n사진에서 ${who}으로 보이는 얼굴을 찾았어요. 확인해 보실래요?`;
+  const who = nickname ? `${nickname}님` : '회원님';
+  return `**시기별 여권사진 등록**\n사진에서 ${who}으로 보이는 얼굴을 찾았습니다. 확인해 보실까요?`;
 }
 
 function buildPassportFamilyOfferText(): string {
-  return `🪪 **시기별 다양한 여권사진 등록**\n가족으로 보이는 사진도 등록할까요?`;
+  return `**시기별 여권사진 등록**\n가족으로 보이는 사진도 등록할까요?`;
 }
 
 /** 여권 등록 직후 계정 동기화(명시적 동의 시에만 실제 업로드) */
@@ -309,7 +309,7 @@ function syncPassportAfterRegistration(): void {
 }
 
 function passportOfferWasLast(lastAssistantText: string): boolean {
-  return /시기별 다양한 여권사진 등록/.test(lastAssistantText || '');
+  return /시기별\s*(?:다양한\s*)?여권사진\s*등록/.test(lastAssistantText || '');
 }
 
 /**
@@ -332,14 +332,14 @@ function resolvePassportCommandReply(
     return {
       ...base,
       id: `secretary_passport_later_${Date.now()}`,
-      text: `네! ${nickPrefix}다음에 사진 보실 때 다시 여쭤볼게요 👻\n이제 『👻 귀신검색』에서 내 파일을 1초 만에 찾아보실까요?`,
-      followUpSuggestions: ['🔍 귀신검색으로 내 파일 찾아볼래'],
+      text: `네, ${nickPrefix}다음에 사진 보실 때 다시 안내해 드릴게요.\n귀신검색에서 내 파일을 찾아보실 수 있습니다.`,
+      followUpSuggestions: ['귀신검색으로 내 파일 찾아볼래'],
     };
   }
 
   let mode: PassportRegMode | null = null;
-  if (text === PASSPORT_CHIP_OPEN_SELF) mode = 'self';
-  else if (text === PASSPORT_CHIP_OPEN_FAMILY) mode = 'family';
+  if (text === PASSPORT_CHIP_OPEN_SELF || text === '🪪 여권사진 확인하기') mode = 'self';
+  else if (text === PASSPORT_CHIP_OPEN_FAMILY || text === '👨‍👩‍👧 가족 사진도 등록할래') mode = 'family';
   else mode = matchPassportRegCommand(text);
   if (!mode) return null;
 
@@ -359,7 +359,7 @@ function resolvePassportCommandReply(
     return {
       ...base,
       id: `secretary_passport_done_${Date.now()}`,
-      text: `${nickPrefix}지금 찾은 사진은 모두 등록되어 있어요! 새 사진이 생기면 조용히 찾아둘게요 👻`,
+      text: `${nickPrefix}지금 찾은 사진은 모두 등록되어 있습니다. 새 사진이 생기면 자동으로 찾아둘게요.`,
     };
   }
 
@@ -368,9 +368,9 @@ function resolvePassportCommandReply(
   const guide =
     openMode === 'self' && !self
       ? mode === 'family'
-        ? `좋아요! 가족 전에 ${nickname ? `${nickname}님` : '내'} 얼굴부터 왼쪽에서 한 번만 골라주세요 👻`
-        : `왼쪽에 띄워드렸어요! ${nickname ? `${nickname}님` : '내'} 얼굴을 한 번만 골라주세요 👻`
-      : `왼쪽에 띄워드렸어요! 아닌 사진만 빼고 [등록]을 눌러주세요 👻`;
+        ? `가족 등록 전에 ${nickname ? `${nickname}님` : '내'} 얼굴부터 왼쪽 화면에서 선택해 주세요.`
+        : `왼쪽 화면에 띄워 드렸습니다. ${nickname ? `${nickname}님` : '내'} 얼굴을 선택해 주세요.`
+      : `왼쪽 화면에 띄워 드렸습니다. 아닌 사진만 제외하고 [등록]을 눌러주세요.`;
   return { ...base, id: `secretary_passport_open_${Date.now()}`, text: guide };
 }
 
@@ -479,10 +479,10 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           });
           const introText =
             activeCount > 0
-              ? `👻 ${nickLabel}제가 방금 컴퓨터 뒤쪽을 점검해 봤는데요! 지금 안 쓰시는 **은행·관공서 보안프로그램 ${activeCount}개(약 ${ramMb}MB)**가 뒤에서 메모리를 차지하며 컴퓨터 속도를 늦추고 있어요.\n` +
-                `제가 이 프로그램들을 지우지 않고 **평소엔 잠재워 두었다가, 은행·홈택스 들어가실 때만 귀신같이 깨워드릴까요?** (한 번만 OK 해주시면 앞으로 제가 알아서 다 챙겨드릴게요!)`
-              : `👻 ${nickLabel}제가 방금 컴퓨터 뒤쪽을 점검해 봤는데요! 지금 켜져 있는 안 쓰는 은행·관공서 보안프로그램은 **0개**로 아주 깨끗해요.\n` +
-                `앞으로도 은행·홈택스 들어가실 때만 켜고 **평소엔 자동으로 잠재워 두게 설정해 둘까요?** (한 번만 OK 해주시면 앞으로 제가 알아서 다 챙겨드릴게요!)`;
+              ? `${nickLabel}컴퓨터 백그라운드 상태를 확인해 보니, 현재 사용하지 않는 **은행·관공서 보안프로그램 ${activeCount}개(약 ${ramMb}MB)**가 메모리를 점유하고 있습니다.\n` +
+                `이 프로그램들을 삭제하지 않고 **평소에는 잠재워 두었다가, 은행·홈택스 접속 시에만 다시 깨워드릴까요?**`
+              : `${nickLabel}컴퓨터 백그라운드 상태를 확인해 보니 현재 실행 중인 은행·관공서 보안프로그램은 **0개**입니다.\n` +
+                `앞으로도 은행·홈택스 접속 시에만 켜고 **평소에는 자동으로 잠재워 두도록 설정할까요?**`;
           setSharedMonsterMessages((prev) => {
             if (prev.some((m) => m.id.startsWith('secretary_bank_sleep_intro_'))) return prev;
             return [
@@ -494,14 +494,14 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                 sourceTab: 'trash',
                 text: introText,
                 followUpSuggestions: [
-                  '👍 응, 앞으로 알아서 재우고 깨워줘',
+                  '응, 앞으로 알아서 재우고 깨워줘',
                 ],
               },
             ];
           });
         });
     } else if (
-      // [Stage 2: 호흡 분리 후 다음번 진입 시 — 다운로드 폴더 압축파일 최소 3건 이상(>=3) 누적 시 숨은 초능력 & 압축 풀기 안내]
+      // [Stage 2: 호흡 분리 후 다음번 진입 시 — 다운로드 폴더 압축파일 최소 3건 이상(>=3) 누적 시 압축 풀기 안내]
       !isMobileOrStore &&
       zCoreBridge.isConnected &&
       !turn.nextState.awaitingNickname &&
@@ -535,11 +535,11 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                 timestamp: nowTimeKo(),
                 sourceTab: 'trash',
                 text:
-                  `👻 ${nickLabel}참! 제가 뒤에서 컴퓨터를 챙기다 보니 지금 다운로드 폴더에 압축파일${sampleHint}이 **총 ${zipCount}건** 쌓여 있더라고요.\n` +
-                  `제가 사진 정리랑 속도 관리 말고도 뒤에서 조용히 돕는 **'숨은 초능력'이 두 가지(광고 없는 파일 경호 & 더블클릭·우클릭 1초 압축 풀기)** 더 있는데, 우리 걸로 써보실 수 있게 간단히 알려드릴까요?`,
+                  `${nickLabel}다운로드 폴더에 압축파일${sampleHint}이 **총 ${zipCount}건** 쌓여 있습니다.\n` +
+                  `사진 정리·속도 관리 외에도 **파일 보호 기능과 더블클릭·우클릭 압축 해제 기능**을 함께 사용할 수 있습니다. 사용 방법을 안내해 드릴까요?`,
                 followUpSuggestions: [
-                  '✨ 응, 숨은 초능력 두 가지 알려줘',
-                  '📂 다운로드 폴더 열어서 1초 압축 풀기 써볼래',
+                  '응, 편의 기능 두 가지 알려줘',
+                  '다운로드 폴더 열어서 압축 풀기 써볼래',
                 ],
               },
             ];
@@ -586,7 +586,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             role: 'assistant',
             timestamp: nowTimeKo(),
             sourceTab: 'trash',
-            text: `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두었어요 👻✨\n이제 아래 초록색 **[아까 보던 '${pendingShare.roomTitle}'으로 가서 내 사진 올리기 ➔]** 버튼을 눌러 바로 사진방으로 돌아가 보실까요?`,
+            text: `네, ${nickPrefix}남은 사진 정리 화면은 멈춰 두었습니다.\n아래 **[아까 보던 '${pendingShare.roomTitle}'으로 가서 내 사진 올리기]** 버튼을 눌러 사진방으로 돌아가실 수 있습니다.`,
           },
         ]);
         return;
@@ -604,7 +604,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               role: 'assistant',
               timestamp: nowTimeKo(),
               sourceTab: 'trash',
-              text: `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두고 다음 안내로 넘어갈게요 👻✨\n\n${entry.text}`,
+              text: `네, ${nickPrefix}남은 사진 정리 화면은 멈춰 두고 다음 안내로 넘어갈게요.\n\n${entry.text}`,
               followUpSuggestions: entry.followUps,
             },
           ]);
@@ -621,13 +621,12 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           timestamp: nowTimeKo(),
           sourceTab: 'trash',
           text: isMobileOrStore
-            ? `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두고 다음 안내로 넘어갈게요 👻✨\n이제 화면 맨 위 **통합 검색창(또는 🎤 마이크)**으로 방금 읽어둔 내 사진·문서를 1초 만에 찾아보실까요?`
-            : `네! ${nickPrefix}남은 사진 정리 화면은 멈춰 두고 다음 안내로 넘어갈게요 👻✨\n이제 **『👻 귀신검색』**으로 방금 읽어둔 내 사진·문서를 1초 만에 찾아보시거나 숨은 초능력을 구경해 보실까요?`,
+            ? `네, ${nickPrefix}남은 사진 정리 화면은 멈춰 두고 다음 안내로 넘어갈게요.\n상단 **통합 검색창(또는 마이크)**에서 방금 불러온 사진·문서를 찾아보실 수 있습니다.`
+            : `네, ${nickPrefix}남은 사진 정리 화면은 멈춰 두고 다음 안내로 넘어갈게요.\n**귀신검색**에서 방금 읽어둔 사진·문서를 찾아보실 수 있습니다.`,
           followUpSuggestions: isMobileOrStore
-            ? ['🔍 맨 위 검색창으로 바로 찾아볼래']
+            ? ['맨 위 검색창으로 바로 찾아볼래']
             : [
-                '🔍 귀신검색으로 내 파일 찾아볼래',
-                '✨ 귀신비서의 숨은 초능력 알려줘',
+                '귀신검색으로 내 파일 찾아볼래',
               ],
         },
       ]);
@@ -640,7 +639,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       const isRestoreDone = msgText.includes('원상복구') || msgText.includes('복구됐어요');
       const extraRealHint =
         isRestoreDone && zCoreBridge.isConnected
-          ? '\n\n💡 지금 내 컴퓨터가 연결되어 있으니 아래 버튼을 눌러 **진짜 내 PC의 시작프로그램 목록**도 바로 점검해 보세요!'
+          ? '\n\n현재 내 컴퓨터가 연결되어 있으니 아래 버튼으로 **실제 내 PC의 시작프로그램 목록**도 점검해 보실 수 있습니다.'
           : '';
       setSharedMonsterMessages((prev) => [
         ...prev,
@@ -680,21 +679,21 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       const remainingOldPhotos = Number(detail.remainingOldPhotos ?? 0);
       const st = loadGhostSecretaryState();
       const nickPrefix = st.nickname ? `${st.nickname}님, ` : '';
-      const paneLabel = isMobileOrStore ? '아래 정리 화면에서' : '아래(왼쪽) 정리 화면에서';
+      const paneLabel = isMobileOrStore ? '아래 정리 화면에서' : '왼쪽 정리 화면에서';
       const text =
         dupSets === 0 && blurry === 0 && memoScreen === 0
-          ? `✨ ${nickPrefix}방금 사진 ${total}장을 꼼꼼히 살펴봤는데요! **중복·연사 사진 묶음도 0세트**이고 **흐린 사진도 0장**으로 버릴 사진 없이 아주 깨끗해요! 👻✨`
-          : `📸 ${nickPrefix}사진 ${total}장 분석이 끝났어요!\n` +
-            `• **중복·연사 묶음**: **${dupSets}세트**\n` +
-            `• **흔들린(흐린) 사진**: **${blurry}장**\n` +
-            (memoScreen > 0 ? `• **메모·캡처 후보**: **${memoScreen}장**\n` : '') +
-            `\n🔒 제가 마음대로 지우지 않아요! ${paneLabel} **한 세트씩 실사진과 👑 AI 추천 베스트 1장을 직접 보시고 [👍 OK! 베스트 1장만 남기고 나머지 버리기]** 버튼을 눌러 결정해 주세요!`;
+          ? `${nickPrefix}사진 ${total}장을 확인했습니다. 중복·연사 묶음 0세트, 흐린 사진 0장으로 정리할 항목이 없습니다.`
+          : `${nickPrefix}사진 ${total}장 분석이 완료되었습니다.\n` +
+            `• 중복·연사 묶음: ${dupSets}세트\n` +
+            `• 흔들린(흐린) 사진: ${blurry}장\n` +
+            (memoScreen > 0 ? `• 메모·캡처 후보: ${memoScreen}장\n` : '') +
+            `\n임의로 삭제하지 않습니다. ${paneLabel} 한 세트씩 실사진과 추천 1장을 확인하시고 정리 여부를 선택해 주세요.`;
 
       const storeNow = useSaySeeStore.getState();
       const allowPcBridge =
         isMobileOrStore && (!storeNow.isStoreAppMode || storeNow.enablePcGuideShareButton);
       const pcBridgeTail = allowPcBridge
-        ? `\n\n💻 집이나 회사 PC에서도 내 파일·사진을 1초 만에 찾으실 수 있게, 아래 버튼으로 카톡(나에게 보내기)에 PC 실행 링크를 미리 넣어두세요!`
+        ? `\n\n집이나 회사 PC에서도 내 파일·사진을 찾으시려면 아래 버튼으로 카카오톡(나에게 보내기)에 PC 실행 링크를 저장해 두실 수 있습니다.`
         : '';
 
       for (const prevMsg of getSharedMonsterChatState().messages) {
@@ -715,7 +714,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           text: `${text}${pcBridgeTail}`,
           showMobileToPcBridgeButton: allowPcBridge,
           followUpSuggestions: isMobileOrStore
-            ? ['🔍 맨 위 검색창으로 방금 불러온 사진 찾아볼래']
+            ? ['맨 위 검색창으로 방금 불러온 사진 찾아볼래']
             : undefined,
         },
       ];
@@ -777,11 +776,11 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         const hasFamily = familyCandidates().length > 0;
         if (hasFamily) {
           pushOnce('secretary_passport_family_offer_', {
-            text: `등록했어요! 👻\n\n${buildPassportFamilyOfferText()}`,
+            text: `등록이 완료되었습니다.\n\n${buildPassportFamilyOfferText()}`,
             followUpSuggestions: [PASSPORT_CHIP_OPEN_FAMILY, PASSPORT_CHIP_LATER],
           });
         } else {
-          pushOnce('secretary_passport_done_', { text: '등록했어요! 👻' });
+          pushOnce('secretary_passport_done_', { text: '등록이 완료되었습니다.' });
         }
         // 모바일 단독: 1차 여권 등록 직후 남은 옛날 사진 스캔 시점 선택권 + PC 연결 브릿지 (기존 v1.3 흐름 유지)
         if (isMobileOrStore) {
@@ -805,8 +804,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         const names = (e as CustomEvent<{ names?: string[] }>).detail?.names || [];
         pushOnce('secretary_passport_done_', {
           text: names[0]
-            ? `등록했어요! 👻 이제 귀신검색에서 🔍 "${names[0]} 웃는 사진"처럼 찾아보실 수 있어요.`
-            : '등록했어요! 👻',
+            ? `등록이 완료되었습니다. 이제 귀신검색에서 "${names[0]} 웃는 사진"처럼 찾아보실 수 있습니다.`
+            : '등록이 완료되었습니다.',
         });
       }
     };
@@ -858,11 +857,11 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             second: '2-digit',
           }),
           sourceTab,
-          text: `🩺 **[${briefing.badgeLabel}]**\n1️⃣ ${briefing.headlineLine1}\n2️⃣ ${briefing.schedulePromptLine2}`,
+          text: `[${briefing.badgeLabel}]\n• ${briefing.headlineLine1}\n• ${briefing.schedulePromptLine2}`,
           cardKind: 'WEEKLY_CARE_BRIEFING',
           proactiveCareBriefing: briefing,
           followUpSuggestions: [
-            '응, 지금 1초 만에 손봐줘',
+            '응, 지금 바로 손봐줘',
             '정기 검진 요일 금요일 오후 4시로 바꿔줘',
           ],
         };
@@ -957,8 +956,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           sourceTab,
           text:
             curPhotos.length > 0
-              ? `지금 내 폰 사진 **${curPhotos.length}장** 자동 인덱싱이 완료되어 있어요! 📸✨\n(중복·연사 **${curDups}세트** · 흔들린 사진 **${curBlurry}장** — 바로 아래 정리 탭에서 눈으로 확인하고 **[OK]**만 눌러주시면 안전하게 정리해 드릴게요!)`
-              : '내 스마트폰 사진첩 자동 인덱싱을 확인하고 있어요 📸✨\n사진 접근 권한만 허용해 주시면 수동으로 불러올 필요 없이 **외부 서버 전송 0%**로 내 폰 안에서 자동 분류·검색됩니다!',
+              ? `현재 내 폰 사진 **${curPhotos.length}장** 색인이 완료되어 있습니다.\n(중복·연사 **${curDups}세트** · 흔들린 사진 **${curBlurry}장** — 아래 정리 탭에서 직접 확인하고 선택해 주세요.)`
+              : '스마트폰 사진첩을 확인하고 있습니다.\n사진 접근 권한을 허용해 주시면 기기 안에서 자동으로 분류·검색됩니다.',
         },
       ]);
       setSharedMonsterBusy(false);
@@ -983,11 +982,11 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           sourceTab,
           text:
             mobileQuarantined.length > 0
-              ? `🕰️ 방금 정리한 사진 **${mobileQuarantined.length}장**이 시스템 휴지통에 안전하게 보관되어 있어요!\n아래 펼쳐드린 **[↩️ 정리한 사진 복원 (${mobileQuarantined.length}장)]** 목록(아이폰은 기본 사진 앱 [최근 삭제된 항목])에서 언제든 되돌리실 수 있어요 👻✨`
-              : '🕰️ 아직 휴지통으로 옮긴 사진이 **0장**이에요!\n아이폰은 사진 앱의 **[최근 삭제된 항목]**에서 복원하실 수 있고, 안드로이드·PC는 정리 후 여기서 바로 1초 복원하실 수 있어요 👻✨',
+              ? `방금 정리한 사진 **${mobileQuarantined.length}장**이 시스템 휴지통에 보관되어 있습니다.\n아래 펼쳐진 **[정리한 사진 복원 (${mobileQuarantined.length}장)]** 목록(아이폰은 사진 앱 [최근 삭제된 항목])에서 언제든 되돌리실 수 있습니다.`
+              : '아직 휴지통으로 옮긴 사진이 없습니다.\n아이폰은 사진 앱의 **[최근 삭제된 항목]**에서 복원할 수 있고, 안드로이드·PC는 정리 후 여기서 바로 되돌리실 수 있습니다.',
           followUpSuggestions:
             mobileQuarantined.length === 0
-              ? ['📱 내 폰 사진 자동 점검 결과 볼래']
+              ? ['내 폰 사진 자동 점검 결과 볼래']
               : undefined,
         },
       ]);
@@ -1008,8 +1007,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           timestamp: nowTimeKo(),
           sourceTab,
           text: isMobileOrStore
-            ? '좋아요! 화면 맨 위 통합 검색창으로 이동해 드렸어요 — 찾고 싶은 사진이나 서류를 글자나 🎤 목소리로 편하게 불러보세요 👻✨'
-            : '좋아요! 바로 『👻 귀신검색』 화면을 열어드렸어요 — 찾고 싶은 사진이나 서류를 편하게 불러보세요 👻✨',
+            ? '상단 통합 검색창으로 이동해 드렸습니다. 찾고 싶은 사진이나 서류를 글자나 음성으로 검색해 보세요.'
+            : '귀신검색 화면을 열어드렸습니다. 찾고 싶은 사진이나 서류를 검색해 보세요.',
         },
       ]);
       setSharedMonsterBusy(false);
@@ -1031,7 +1030,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           (m.cardKind === 'WEEKLY_CARE_BRIEFING' && m.proactiveCareBriefing && !m.proactiveCareBriefing.executed) ||
           (m.cardKind === 'DEEP_UNINSTALL_GATE' && m.deepUninstallPayload && !m.deepUninstallPayload.executed) ||
           m.cardKind === 'RESTORE_POINTS_LIST' ||
-          /은행·관공서\s*보안프로그램.*?깨워드릴까요|숨은\s*초능력.*?알려드릴까요/.test(m.text || '')
+          /은행·관공서\s*보안프로그램.*?깨워드릴까요|(?:숨은\s*초능력|편의\s*기능).*?알려드릴까요/.test(m.text || '')
       );
     const isDirectCareOrStatusCommand =
       /(진행해|실행해|정리해|치워\s*(?:줘|주세요)|복구해|복원\s*기록|복원\s*지점|복원해|되돌려|원복|원래대로|진행된|진행한|정리된|정리한|다\s*된|완료된|개선된|빨라졌|1초\s*건강|건강\s*검진|임시\s*설치|바탕화면|다운로드|기본\s*압축\s*앱|[c-zC-Z]\s*드라이브|사양|스펙|상태\s*봐|손봐\s*(?:줘|주세요)|느려|느린|버벅|부팅|재부팅|경과\s*시간|켜\s*둔\s*지|안\s*끄고|진단해|점검해|시작\s*프로그램|자동\s*실행|애드웨어|보안\s*모듈|보안\s*프로그램|보안\s*쓰레기|백신|디펜더|바이러스|랜섬웨어|알아서\s*재우고|숨은\s*초능력|비서\s*실적|실적\s*보고서|우클릭\s*0\.35초|은행\s*업무.*?깨워|강제\s*종료|지워\s*(?:줘|주세요)|삭제해\s*(?:줘|주세요)|적출|언인스톨|뿌리째|뿌리\s*뽑|유령\s*앱|온보딩\s*[123]\s*탭|스튜디오\s*문의방|복사\s*기록.*?(보관|바꿔)|상용구|cleanx|클린\s*x|클린엑스|청소\s*앱|클리너|(?:구독|정기\s*구독|정기\s*결제|자동\s*결제|주간\s*결제)\s*(?:해지|취소|확인|관리|알려|어디|어떻게|방법)|해지\s*(?:알려|어디|어떻게|방법))/i.test(
@@ -1106,11 +1105,11 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               timestamp: nowTimeKo(),
               sourceTab,
               text:
-                `좋아요 ${nickLabel}! 위쪽 다른 메뉴들을 눌러 위아래로 스크롤하며 **눈으로 둘러보시는 건 언제든 환영**이에요!\n` +
-                `다만 내 진짜 사진·문서를 실제로 검색하거나 정리하시려면 **내 컴퓨터 연결**이 필요하고, 연결 없이 샘플 데이터로 직접 클릭 체험만 해보고 싶으시다면 아래 버튼을 눌러 **온보딩 체험관**으로 가보실 수도 있어요 👻✨`,
+                `네 ${nickLabel}, 위쪽 메뉴를 눌러 화면 구성을 둘러보실 수 있습니다.\n` +
+                `실제 내 사진·문서를 검색하거나 정리하려면 **내 컴퓨터 연결**이 필요하며, 연결 없이 샘플 데이터로 체험해 보시려면 **온보딩 체험관**을 이용해 주세요.`,
               followUpSuggestions: [
-                '🏠 온보딩 체험관으로 나가서 구경하기 ➔',
-                '🔍 응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘',
+                '온보딩 체험관으로 나가서 구경하기',
+                '응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘',
               ],
             },
           ]);
@@ -1153,10 +1152,10 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           }
           const isBootOrStartupDiagOffline = /부팅|켜\s*둔|경과\s*시간|시작\s*프로그램/i.test(raw);
           const riteText = isImpatientIntent(raw)
-            ? `앗, 급하시군요 ${nickLabel}! 내 진짜 사진·문서를 1초 만에 찾으시려면 먼저 여기서 **내 컴퓨터 1초 연결(무광고 · 샘플 사진 0장 · 외부 전송 0%)**만 딱 한 번 켜주셔야 해요!\n연결되자마자 뒤에서 내 진짜 파일들을 조용히 읽어들여 바로 검색하실 수 있게 해드릴게요. 지금 연결 창을 띄워 드렸어요 👻⚡`
+            ? `${nickLabel}, 실제 내 사진·문서를 찾으시려면 먼저 **내 컴퓨터 연결**을 켜주셔야 합니다.\n연결 즉시 내 파일을 읽어들여 검색할 수 있도록 연결 안내 창을 열어드렸습니다.`
             : isBootOrStartupDiagOffline
-            ? `좋아요 ${nickLabel}! 💡 **요금 안내**: 시작프로그램 목록 점검과 불필요 자동실행 정리는 내 PC 1대에서 평생 0원(무료)으로 이용하실 수 있습니다!\n단, 윈도우 실제 켜둔 시간과 시작프로그램 목록을 정확히 읽어오려면 **내 컴퓨터 1초 연결(외부 전송 0%)**만 딱 한 번 켜주시면 돼요. 켜주시는 즉시 분석 목록부터 먼저 보여드릴게요 👻✨`
-            : `좋아요 ${nickLabel}! 🔒 **안심하세요 — 연결하셔도 제가 마음대로 프로그램을 지우거나 설정을 바꾸지 않아요!**\n지금 띄워 드린 **내 컴퓨터 1초 연결**만 켜주시면, 누가 내 컴퓨터 속도를 잡아먹고 있는지 **1초 만에 분석해서 목록만 먼저 보여드릴게요.** 보시고 정리할지 편하게 선택만 해주세요 👻✨`;
+            ? `${nickLabel}, 시작프로그램 목록 점검과 자동실행 정리는 내 PC 1대에서 무료로 이용할 수 있습니다.\n윈도우 가동 시간과 시작프로그램 목록을 확인하려면 **내 컴퓨터 연결**을 켜주시면 됩니다. 연결 즉시 목록부터 먼저 보여드릴게요.`
+            : `${nickLabel}, 연결하셔도 임의로 프로그램을 지우거나 설정을 바꾸지 않습니다.\n**내 컴퓨터 연결**을 켜주시면 속도 저하 원인을 분석해 목록부터 먼저 보여드리겠습니다.`;
 
           setSharedMonsterMessages((prev) => [
             ...prev,
@@ -1242,14 +1241,13 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             text: reading.text,
             followUpSuggestions: isMobileReading
               ? [
-                  '📱 내 폰 사진 자동 점검 결과 볼래',
-                  '🔍 맨 위 검색창으로 바로 찾아볼래',
+                  '내 폰 사진 자동 점검 결과 볼래',
+                  '맨 위 검색창으로 바로 찾아볼래',
                 ]
               : needsEngineRite
               ? [
-                  '🔍 응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘',
-                  // [기능명세 1931행] 설치가 부담스러운 첫 방문자를 위한 안심 퇴로 (2지선다)
-                  '👀 일단 눈으로 구경부터 할래',
+                  '응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘',
+                  '일단 눈으로 구경부터 할래',
                 ]
               : [
                   '부팅할 때 켜지는 시작프로그램 목록도 보여줘',
@@ -1338,7 +1336,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                 role: 'assistant',
                 timestamp: nowTimeKo(),
                 sourceTab,
-                text: `📸 준비 완료예요! 내 컴퓨터 새 사진 색인과 1초 점검이 모두 끝났어요.\n아래 초록색 **[아까 보던 '${pendingShare.roomTitle}'으로 가서 내 사진 올리기 ➔]** 버튼만 누르시면 바로 가족방으로 돌아가서 내 사진을 골라 올리실 수 있어요! 👻✨`,
+                text: `내 컴퓨터 새 사진 색인과 점검이 완료되었습니다.\n아래 **[아까 보던 '${pendingShare.roomTitle}'으로 가서 내 사진 올리기]** 버튼을 누르면 사진방으로 돌아가 사진을 올리실 수 있습니다.`,
               },
             ]);
           }, 800);
@@ -1402,7 +1400,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
   const startMediaRecorderChatFallback = async () => {
     if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
       setIsMicListening(false);
-      onToast?.('🎤 마이크 권한이 없거나 음성 입력이 차단된 브라우저입니다.');
+      onToast?.('마이크 권한이 없거나 음성 입력이 차단된 브라우저입니다.');
       return;
     }
     try {
@@ -1447,7 +1445,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
 
         const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
         if (blob.size < 100 || submittedOnceRef.current) return;
-        setInputText('🎙️ 음성을 텍스트로 변환하고 있습니다...');
+        setInputText('음성을 텍스트로 변환하고 있습니다...');
         const transcribed = await transcribeAudioBlobViaCloud(blob);
         if (transcribed && !submittedOnceRef.current) {
           submittedOnceRef.current = true;
@@ -1455,7 +1453,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           void handleSend(normalizeSpokenKoreanQuery(transcribed), 'voice');
         } else {
           setInputText('');
-          onToast?.('🎤 음성이 잘 들리지 않았습니다. 마이크 가까이에서 다시 말씀해 주세요.');
+          onToast?.('음성이 잘 들리지 않았습니다. 마이크 가까이에서 다시 말씀해 주세요.');
         }
       };
       rec.start(200);
@@ -1471,7 +1469,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       }, 4200);
     } catch {
       setIsMicListening(false);
-      onToast?.('🎤 마이크 권한을 허용해 주시거나 아래 입력창에 입력해 주세요.');
+      onToast?.('마이크 권한을 허용해 주시거나 아래 입력창에 입력해 주세요.');
     }
   };
 
@@ -1639,8 +1637,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             timestamp: nowTimeKo(),
             sourceTab: 'trash',
             text:
-              `🎉 와아! 내 컴퓨터 연결 성공이에요 ${nickLabel}! 지금부터 뒤에서는 샘플 사진 한 장 없이 **오직 내 컴퓨터의 진짜 사진·동영상·문서만** 컴퓨터 부하 없이 조용히 읽어두고 있어요!\n` +
-              `잠시 후 『👻 귀신검색』에 가시면 내 진짜 파일들로 바로 리얼 테스트를 해보실 수 있답니다. 먼저 약속드린 대로 **누가 내 컴퓨터 속도를 잡아먹고 있는지 1초 분석표**부터 띄워 드릴게요! (보시고 정리할지 편하게 선택만 해주세요!)`,
+              `내 컴퓨터 연결이 완료되었습니다 ${nickLabel}. 백그라운드에서 내 사진·동영상·문서를 읽어두고 있습니다.\n` +
+              `잠시 후 귀신검색에서 내 파일로 바로 검색하실 수 있습니다. 먼저 **내 컴퓨터 상태 분석표**를 보여드리겠습니다.`,
           },
         ];
       });
@@ -1720,45 +1718,45 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
 
   return (
     <aside
-      className="flex flex-col h-[545px] min-h-[500px] sm:h-[calc(100dvh-155px)] sm:min-h-[580px] max-h-[840px] rounded-2xl border-2 border-teal-500/55 dark:border-teal-400/45 bg-[#E6F1EF] dark:bg-[#0B161C] shadow-[0_12px_36px_rgba(13,148,136,0.18)] overflow-hidden"
+      className="flex flex-col h-[545px] min-h-[500px] sm:h-[calc(100dvh-155px)] sm:min-h-[580px] max-h-[840px] rounded-xl border border-slate-200 bg-white shadow-sm overflow-hidden"
     >
-      {/* 0. 카톡 채팅방 스타일 전용 상단 타이틀 바 — 모바일에서는 2단 헤더 크롬 높이를 1줄로 슬림화하여 대화 본문 가독 면적을 대폭 확대 */}
+      {/* 상단 헤더 */}
       <div
         title={careScheduleSummary}
-        className="px-3 py-2 bg-gradient-to-r from-[#0F766E] via-[#0D9488] to-[#059669] text-white flex items-center justify-between gap-1.5 shadow-xs"
+        className="px-3.5 py-2.5 bg-white border-b border-slate-200 flex items-center justify-between gap-2"
       >
-        <div className="flex items-center gap-1.5 min-w-0">
+        <div className="flex items-center gap-2 min-w-0">
           <img
             src={GHOST_SECRETARY_AVATAR_SRC}
             alt=""
             aria-hidden="true"
-            className="w-6 h-6 sm:w-7 sm:h-7 rounded-full object-cover ring-2 ring-white/80 shadow-xs shrink-0"
+            className="w-6 h-6 rounded-full object-cover border border-slate-200 shrink-0"
           />
-          <span className="text-[13px] sm:text-[14px] font-black tracking-tight whitespace-nowrap">
-            👻 귀신비서
+          <span className="text-[13.5px] font-semibold text-slate-900 tracking-tight whitespace-nowrap">
+            귀신비서
           </span>
-          <span className="px-1.5 py-0.5 rounded-full bg-white/20 text-[10px] font-extrabold whitespace-nowrap">
-            🛡️ 1초 복원 보장
+          <span className="px-1.5 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-medium whitespace-nowrap">
+            실행 취소 지원
           </span>
         </div>
         <div className="flex items-center gap-1.5 shrink-0">
           {isMobileOrStore ? (
             <VoiceActorControlPill compact />
           ) : (
-            <span className="text-[11px] font-bold text-teal-50 bg-black/20 px-2 py-0.5 rounded-full whitespace-nowrap">
-              🗓️ 수요 손 없는 날 · 20% 과부하 자동검진
+            <span className="text-[11px] font-medium text-slate-500 whitespace-nowrap">
+              {careScheduleSummary}
             </span>
           )}
         </div>
       </div>
 
-      {/* 1. 상단 원클릭 바로가기 바: PC 전용 ([🕰️ 복원 기록]+[🏠 체험관]), 모바일은 상단 1줄 헤더에 통합해 대화 본문 영역을 넓게 확보 */}
+      {/* 상단 보조 바 */}
       {(!isMobileOrStore || isZCoreLive) && (
-        <div className="px-3 py-2 bg-white/90 dark:bg-[#10212B] border-b border-teal-600/20 dark:border-teal-400/20 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 text-[12px] text-emerald-950 dark:text-emerald-200">
-          <div className="flex items-center gap-1 min-w-0">
-            <span className="shrink-0 font-bold">🛡️</span>
-            <span className="font-bold text-teal-900 dark:text-emerald-300 whitespace-normal break-keep leading-snug">
-              언제든 &lsquo;원래대로 돌려줘&rsquo; 입력 시 1초 복원 보장
+        <div className="px-3.5 py-2 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-x-2 gap-y-1.5 text-[12px] text-slate-600">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
+            <span className="whitespace-normal break-keep leading-snug">
+              언제든 &lsquo;원래대로 돌려줘&rsquo;라고 입력하면 되돌릴 수 있습니다
             </span>
           </div>
           <div className="flex flex-wrap items-center gap-1.5 max-w-full min-w-0">
@@ -1767,33 +1765,30 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                 type="button"
                 disabled={busy}
                 onClick={() => void handleSend('최근 [복원 기록] 보여줘', 'text')}
-                title="최근 손보기·정리 내역 조회 및 원래대로 1초 되돌리기"
-                style={{ backgroundColor: '#F5F3FF', color: '#5B21B6', borderColor: '#8B5CF6' }}
-                className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
+                title="최근 손보기·정리 내역 조회 및 되돌리기"
+                className="px-2.5 py-1 rounded-md border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-[11.5px] font-medium transition cursor-pointer whitespace-nowrap"
               >
-                <span>🕰️</span>
-                <span>복원 기록</span>
+                복원 기록
               </button>
             )}
             {!isMobileOrStore && (
               <button
                 type="button"
                 onClick={() => window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'))}
-                title="온보딩 체험관으로 나가서 구경하기"
-                style={{ backgroundColor: '#F0FDFA', color: '#0F766E', borderColor: '#14B8A6' }}
-                className="px-2.5 py-1 rounded-xl border-2 text-[11.5px] font-black shadow-xs hover:opacity-90 transition cursor-pointer flex items-center gap-1 whitespace-nowrap"
+                title="온보딩 체험관으로 이동"
+                className="px-2.5 py-1 rounded-md border border-slate-200 bg-white hover:bg-slate-100 text-slate-700 text-[11.5px] font-medium transition cursor-pointer whitespace-nowrap"
               >
-                <span>🏠 체험관 ➔</span>
+                체험관
               </button>
             )}
           </div>
         </div>
       )}
 
-      {/* 2. 본문 대화 스트림 (카톡 채팅방 스타일 전용 배경색 & 또렷한 말풍선 대비) */}
+      {/* 대화 본문 */}
       <div
         ref={scrollContainerRef}
-        className="flex-1 overflow-y-auto px-3.5 sm:px-4 py-4 space-y-3.5 bg-[#E6F1EF] dark:bg-[#0B161C]"
+        className="flex-1 overflow-y-auto px-3.5 sm:px-4 py-4 space-y-3.5 bg-white"
       >
         {(() => {
           const activePendingId =
@@ -1806,7 +1801,6 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               if (msg.id === activePendingId) {
                 foundActive = true;
               } else if (foundActive && !completedSecretaryAnimIds.has(msg.id)) {
-                // 앞선 귀신비서 말풍선이 다 뜰 때까지 다음 말풍선은 대기
                 return null;
               }
             }
@@ -1818,32 +1812,32 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               <div className="flex items-center gap-1.5 mb-1 px-1">
                 {isUser ? (
                   <>
-                    <span className="text-[11px] text-slate-500">{msg.timestamp}</span>
-                    <span className="text-[12px] font-bold text-slate-700 dark:text-slate-300 flex items-center gap-1">
+                    <span className="text-[11px] text-slate-400">{msg.timestamp}</span>
+                    <span className="text-[12px] font-medium text-slate-600 flex items-center gap-1">
                       나 <User className="w-3.5 h-3.5" />
                     </span>
                   </>
                 ) : (
                   <>
-                    <span className="text-[12px] font-extrabold text-emerald-700 dark:text-emerald-400 flex items-center gap-1.5">
+                    <span className="text-[12px] font-semibold text-slate-800 flex items-center gap-1.5">
                       <img
                         src={GHOST_SECRETARY_AVATAR_SRC}
                         alt=""
                         aria-hidden="true"
-                        className="w-6 h-6 rounded-full object-cover shadow-sm ring-1 ring-emerald-400/40"
+                        className="w-5 h-5 rounded-full object-cover border border-slate-200"
                       />
                       {GHOST_SECRETARY_NAME}
                     </span>
-                    <span className="text-[11px] text-slate-500">{msg.timestamp}</span>
+                    <span className="text-[11px] text-slate-400">{msg.timestamp}</span>
                   </>
                 )}
               </div>
 
               <div
-                className={`max-w-[95%] rounded-2xl px-4 py-3 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] overflow-hidden shadow-sm ${
+                className={`max-w-[95%] rounded-xl px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] overflow-hidden ${
                   isUser
-                    ? 'bg-[#0D9488] text-white rounded-tr-sm border border-[#0F766E] font-semibold'
-                    : 'bg-white dark:bg-[#13252E] border border-teal-900/10 dark:border-teal-400/25 text-slate-900 dark:text-slate-100 rounded-tl-sm'
+                    ? 'bg-slate-900 text-white rounded-tr-xs font-medium'
+                    : 'bg-slate-50 border border-slate-200 text-slate-800 rounded-tl-xs'
                 }`}
               >
                 {isUser ? (
@@ -1877,7 +1871,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                 )}
 
                 {!isUser && msg.passportViralFamilyName && (
-                  <div className="mt-2.5 pt-2 border-t border-emerald-200 dark:border-emerald-500/30 flex flex-wrap gap-1.5">
+                  <div className="mt-2.5 pt-2 border-t border-slate-200 flex flex-wrap gap-1.5">
                     <button
                       type="button"
                       onClick={async () => {
@@ -1887,13 +1881,12 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                         st.setDesktopTab?.('share');
                         st.setMobileTab?.('share');
                         const guestPreviewUrl = `https://ghosti.sundreamer.app/?preview=guest&invite=family_${encodeURIComponent(famName)}`;
-                        const shareText = `📸 [귀신같이] 로그인·앱 설치 없이 1초 만에 열리는 『${famName}』 가족 사진방 구경 오세요!
-👉 ${guestPreviewUrl}`;
+                        const shareText = `[귀신같이] 『${famName}』 가족 사진방 미리보기 링크입니다.\n${guestPreviewUrl}`;
                         if (typeof navigator !== 'undefined' && typeof navigator.share === 'function') {
                           try {
                             await navigator.share({
-                              title: `📸 『${famName}』 가족 사진방 1초 미리보기`,
-                              text: `로그인·앱 설치 없이 1초 만에 열리는 『${famName}』 사진들을 구경해 보세요!`,
+                              title: `『${famName}』 가족 사진방 미리보기`,
+                              text: `『${famName}』 사진방을 확인해 보세요.`,
                               url: guestPreviewUrl,
                             });
                             return;
@@ -1907,37 +1900,35 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                           /* ignore */
                         }
                         onToast?.(
-                          `📸 『${famName}』 가족 사진방 1초 미리보기 링크가 복사되었습니다! 가족 카톡방에 바로 붙여넣어 구경시켜 주세요.`,
+                          `『${famName}』 가족 사진방 미리보기 링크가 복사되었습니다.`,
                         );
                       }}
-                      className="px-3 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 text-[12px] font-black shadow-sm transition cursor-pointer text-left flex items-center gap-1.5"
+                      className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold transition cursor-pointer text-left"
                     >
-                      <span>👨‍👩‍👧‍👦</span>
-                      <span>방금 찾아낸 『{msg.passportViralFamilyName}』 사진 가족 카톡방에 1초 구경시켜 주기</span>
+                      『{msg.passportViralFamilyName}』 가족 사진방 링크 공유
                     </button>
                   </div>
                 )}
 
                 {!isUser && msg.showMobileToPcBridgeButton && (
-                  <div className="mt-2.5 pt-2 border-t border-teal-200 dark:border-teal-500/30 flex flex-wrap gap-1.5">
+                  <div className="mt-2.5 pt-2 border-t border-slate-200 flex flex-wrap gap-1.5">
                     <button
                       type="button"
                       onClick={async () => {
                         await useSaySeeStore.getState().sharePcMasterUrlToKakao();
                         onToast?.(
-                          '💻 카톡(나에게 보내기) 및 클립보드에 PC 실행 링크(👻 귀신검색 · 귀신비서)를 담아두었습니다! 내일 출근해서 PC로 바로 켜보세요.',
+                          '카카오톡(나에게 보내기) 및 클립보드에 PC 실행 링크를 저장했습니다.',
                         );
                       }}
-                      className="px-3 py-2 rounded-xl bg-teal-600 hover:bg-teal-500 text-white text-[12px] font-extrabold shadow-sm transition cursor-pointer text-left flex items-center gap-1.5"
+                      className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold transition cursor-pointer text-left"
                     >
-                      <span>💬</span>
-                      <span>카톡(나에게 보내기)에 PC 실행 링크 넣어두기 / 📋 주소 복사</span>
+                      카카오톡에 PC 실행 링크 저장 / 주소 복사
                     </button>
                   </div>
                 )}
 
                 {!isUser && msg.followUpSuggestions && msg.followUpSuggestions.length > 0 && (
-                  <div className="mt-2.5 pt-2 border-t border-slate-200 dark:border-slate-800/80 flex flex-wrap gap-1.5">
+                  <div className="mt-2.5 pt-2 border-t border-slate-200 flex flex-wrap gap-1.5">
                     {msg.followUpSuggestions.map((sug, sIdx) => {
                       const casualSug = normalizeSuggestionChipTone(sug);
                       return (
@@ -1946,22 +1937,21 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                           type="button"
                           disabled={busy}
                           onClick={() => {
-                            // 1회성 대화형 칩: 클릭 즉시 해당 말풍선의 칩 목록을 비워 화면 공해 0% 유지
                             setSharedMonsterMessages((prev) =>
                               prev.map((m) => (m.id === msg.id ? { ...m, followUpSuggestions: [] } : m))
                             );
                             void handleSend(casualSug, 'text');
                           }}
-                          className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-emerald-50 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[13px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left break-words [overflow-wrap:anywhere]"
+                          className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-[12.5px] font-medium text-slate-700 transition cursor-pointer text-left break-words [overflow-wrap:anywhere]"
                         >
-                          💬 {casualSug}
+                          {casualSug}
                         </button>
                       );
                     })}
                   </div>
                 )}
 
-                {/* 첫 환영 말풍선 안 1회성 대답 칩 (재방문 유저 첫 진입 전용 · 신규 별명 질문 말풍선에는 영구 비노출) */}
+                {/* 첫 환영 말풍선 안 1회성 대답 칩 */}
                 {!isUser &&
                   showWelcomeQuickCareActions &&
                   !welcomeChipsDismissed &&
@@ -1970,7 +1960,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                   messages.length === 1 &&
                   !/별명\(닉네임\)/.test(msg.text) &&
                   msg.id === 'monster_welcome_init' && (
-                    <div className="mt-2.5 pt-2.5 border-t border-slate-200 dark:border-slate-800/80 flex flex-wrap gap-1.5">
+                    <div className="mt-2.5 pt-2.5 border-t border-slate-200 flex flex-wrap gap-1.5">
                       {!isZCoreLive ? (
                         <>
                           <button
@@ -1978,22 +1968,22 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                             disabled={busy}
                             onClick={() => {
                               setWelcomeChipsDismissed(true);
-                              void handleSend('🤝 응, 엔진 연결하고 1초 건강검진 해줘', 'text');
+                              void handleSend('응, 엔진 연결하고 1초 건강검진 해줘', 'text');
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 border border-emerald-300 dark:border-emerald-500/40 text-[13px] font-extrabold text-emerald-800 dark:text-emerald-300 transition cursor-pointer text-left break-words"
+                            className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold transition cursor-pointer text-left break-words"
                           >
-                            🤝 응, 엔진 연결하고 1초 건강검진 해줘
+                            내 컴퓨터 연결하고 상태 분석하기
                           </button>
                           <button
                             type="button"
                             disabled={busy}
                             onClick={() => {
                               setWelcomeChipsDismissed(true);
-                              void handleSend('👀 일단 눈으로 구경부터 할래', 'text');
+                              void handleSend('일단 눈으로 구경부터 할래', 'text');
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[13px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left break-words"
+                            className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-[12.5px] font-medium text-slate-700 transition cursor-pointer text-left break-words"
                           >
-                            👀 일단 눈으로 구경부터 할래
+                            일단 둘러보기
                           </button>
                         </>
                       ) : (
@@ -2005,20 +1995,20 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                               setWelcomeChipsDismissed(true);
                               void handleSend('부팅할 때 켜지는 시작프로그램 목록도 보여줘', 'text');
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/70 border border-emerald-300 dark:border-emerald-500/40 text-[13px] font-extrabold text-emerald-800 dark:text-emerald-300 transition cursor-pointer text-left break-words"
+                            className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold transition cursor-pointer text-left break-words"
                           >
-                            ⚙️ 부팅할 때 켜지는 시작프로그램 목록도 보여줘
+                            시작프로그램 목록 보기
                           </button>
                           <button
                             type="button"
                             disabled={busy}
                             onClick={() => {
                               setWelcomeChipsDismissed(true);
-                              void handleSend('👍 응, 앞으로 알아서 재우고 깨워줘', 'text');
+                              void handleSend('응, 앞으로 알아서 재우고 깨워줘', 'text');
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800/90 dark:hover:bg-slate-800 border border-slate-300 dark:border-slate-700 text-[13px] font-bold text-slate-700 dark:text-slate-200 transition cursor-pointer text-left break-words"
+                            className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-[12.5px] font-medium text-slate-700 transition cursor-pointer text-left break-words"
                           >
-                            🏦 안 쓰는 은행 보안프로그램 알아서 재워줘
+                            안 쓰는 은행 보안프로그램 자동 절전 설정
                           </button>
                         </>
                       )}
@@ -2031,25 +2021,25 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         })()}
 
         {busy && (
-          <div className="flex items-center gap-2 text-[13px] font-bold text-slate-700 dark:text-slate-300 px-2 py-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-500 animate-ping" />
+          <div className="flex items-center gap-2 text-[12.5px] font-medium text-slate-500 px-2 py-1.5">
+            <span className="w-2 h-2 rounded-full bg-slate-400 animate-pulse" />
             확인하고 있습니다...
           </div>
         )}
       </div>
 
-      {/* 공유방(가족방/모임방)에서 '내 사진 추가하기'를 눌러 우회해 온 경우 끊김 없는 원클릭 롤백 복귀 바 */}
+      {/* 공유방 복귀 바 */}
       {pendingReturnShareRoom && (
-        <div className="px-3.5 py-2.5 border-t border-teal-400/50 bg-gradient-to-r from-teal-950/90 via-emerald-950/90 to-zinc-950 flex flex-col gap-1.5">
+        <div className="px-3.5 py-2.5 border-t border-slate-200 bg-slate-50 flex flex-col gap-1.5">
           <div className="flex items-center justify-between gap-2">
-            <span className="text-[11.5px] font-extrabold text-teal-200 truncate">
-              👻 『{pendingReturnShareRoom.roomTitle}』 사진 추가 대기 중
+            <span className="text-[12px] font-semibold text-slate-800 truncate">
+              『{pendingReturnShareRoom.roomTitle}』 사진 추가 대기 중
             </span>
             {!isZCoreLive && (
               <button
                 type="button"
                 onClick={() => void returnToSharedRoomAndOpenUpload()}
-                className="text-[11px] font-bold text-zinc-300 hover:text-white underline shrink-0 cursor-pointer"
+                className="text-[11px] font-medium text-slate-500 hover:text-slate-800 underline shrink-0 cursor-pointer"
               >
                 그냥 방으로 돌아가기
               </button>
@@ -2059,22 +2049,20 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             <button
               type="button"
               onClick={() => void returnToSharedRoomAndOpenUpload()}
-              className="w-full py-2.5 px-3.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-black text-[12.5px] shadow-lg shadow-teal-500/25 transition-all cursor-pointer flex items-center justify-center gap-1.5"
+              className="w-full py-2 px-3.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-[12.5px] transition-colors cursor-pointer flex items-center justify-center"
             >
-              <span>
-                📸 준비 완료! 아까 보던 &lsquo;{pendingReturnShareRoom.roomTitle}&rsquo;으로 가서 내 사진 올리기 ➔
-              </span>
+              &lsquo;{pendingReturnShareRoom.roomTitle}&rsquo;으로 가서 내 사진 올리기
             </button>
           ) : (
-            <p className="text-[11px] text-teal-100/85 leading-snug">
-              위 채팅에서 <strong>엔진 연결 &amp; 1초 건강검진</strong>만 마치면 여기에 바로 <strong>내 사진 올리러 가기</strong> 버튼이 켜져요!
+            <p className="text-[11.5px] text-slate-600 leading-snug">
+              위 채팅에서 내 컴퓨터 연결을 마치면 사진 올리기 버튼이 활성화됩니다.
             </p>
           )}
         </div>
       )}
 
-      {/* 3. 하단 초미니멀 입력창 (카톡 채팅방 하단 입력 도크처럼 또렷한 경계) */}
-      <div className="px-3.5 py-3 border-t-2 border-teal-600/20 dark:border-teal-400/25 bg-white dark:bg-[#10212B]">
+      {/* 하단 입력창 */}
+      <div className="px-3.5 py-3 border-t border-slate-200 bg-white">
         <form
           onSubmit={(e) => {
             e.preventDefault();
@@ -2104,24 +2092,23 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             }}
             placeholder={
               isMicListening
-                ? '🎙️ 듣고 있습니다...'
+                ? '듣고 있습니다...'
                 : isMobileOrStore
                 ? currentRollingPlaceholder
                 : `예) ${currentRollingPlaceholder}`
             }
-            className="flex-1 min-w-0 px-2.5 sm:px-3.5 py-2.5 rounded-xl bg-white dark:bg-slate-950 border border-slate-300 dark:border-slate-800 focus:border-emerald-600 focus:outline-none text-[13px] sm:text-[13.5px] text-slate-900 dark:text-white placeholder:text-slate-400/75 dark:placeholder:text-slate-500/75 transition-all"
+            className="flex-1 min-w-0 px-3 py-2 rounded-lg bg-white border border-slate-300 focus:border-slate-900 focus:outline-none text-[13px] text-slate-900 placeholder:text-slate-400 transition-colors"
           />
-          {/* PC는 창 크기를 줄여도 100% 무음 텍스트 채팅 올인, 실제 모바일 기기에서만 [음성] 마이크 버튼 노출 */}
           {isMobileOrStore && (
             <button
               type="button"
               onClick={toggleChatMicRecording}
               disabled={busy}
-              title="모바일 음성으로 말하기 (음성 입력 시에만 성우 음성으로 응답합니다)"
-              className={`px-2 sm:px-3 py-2.5 rounded-xl text-[11.5px] sm:text-[13px] font-extrabold flex items-center gap-1 transition shrink-0 cursor-pointer border ${
+              title="음성으로 말하기"
+              className={`px-2.5 sm:px-3 py-2 rounded-lg text-[12px] font-medium flex items-center gap-1 transition shrink-0 cursor-pointer border ${
                 isMicListening
-                  ? 'bg-rose-600 text-white border-rose-500 animate-pulse'
-                  : 'bg-white hover:bg-emerald-50 dark:bg-slate-900 dark:hover:bg-slate-800 text-emerald-700 dark:text-emerald-300 border-emerald-400/60 dark:border-emerald-500/40'
+                  ? 'bg-rose-600 text-white border-rose-600'
+                  : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-300'
               }`}
             >
               {isMicListening ? <MicOff className="w-4 h-4 shrink-0" /> : <Mic className="w-4 h-4 shrink-0" />}
@@ -2133,8 +2120,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             disabled={busy || !inputText.trim()}
             aria-label="전송"
             className={`${
-              isMobileOrStore && !inputText.trim() ? 'px-2.5' : 'px-2.5 sm:px-3.5'
-            } py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 disabled:opacity-40 text-white text-[12px] sm:text-[13px] font-extrabold flex items-center justify-center gap-1 transition shrink-0 cursor-pointer`}
+              isMobileOrStore && !inputText.trim() ? 'px-2.5' : 'px-3'
+            } py-2 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-[12.5px] font-semibold flex items-center justify-center gap-1 transition shrink-0 cursor-pointer`}
           >
             <Send className="w-4 h-4 shrink-0" />
             {(!isMobileOrStore || Boolean(inputText.trim())) && <span className="shrink-0">전송</span>}

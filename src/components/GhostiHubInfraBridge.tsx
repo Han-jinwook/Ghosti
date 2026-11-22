@@ -52,31 +52,20 @@ import { GhostiSubscriptionCheckoutModal } from './GhostiSubscriptionCheckoutMod
 import { PENDING_SUB_CHECKOUT_STORAGE_KEY } from '../services/subscriptionPlanCatalog';
 import type { PricingPlanId } from '../types/saysee';
 
-/**
- * [귀신같이 선물함 상품]
- * - SDK 기본값(미전달 시)은 어그로필터 '영상 분석 N회' 묶음이 노출되므로 귀신같이 화면에 부적합.
- * - 귀신같이 전용 앱 아이템(예: 방장 구독권) 선물 상품은 가격표 확정 전까지 만들지 않고,
- *   전 패밀리 공통 '자유 코인 선물' 1종만 노출합니다.
- */
 const GHOSTI_GIFT_PRODUCTS: GiftProductItem[] = [
   {
     id: 'custom_coin',
-    title: '🎀 자유 코인 선물',
+    title: '자유 코인 선물',
     subtitle: '1,000C 이상 직접 입력',
-    fullTitle: '🎀 패밀리 코인 자유 선물',
+    fullTitle: '패밀리 코인 자유 선물',
     amount: 1000,
     category: 'COIN',
-    emoji: '🎀',
-    defaultMessage: '마음을 담아 준비한 패밀리 코인 선물입니다! 반갑게 열어보세요 🎁',
+    emoji: '',
+    defaultMessage: '마음을 담아 준비한 패밀리 코인 선물입니다.',
     isCustom: true,
   },
 ];
 
-/**
- * [스토어 심사 방어 감지 헬퍼]
- * - 네이티브(Capacitor iOS/Android) 환경이거나 `isStoreAppMode && !enableMobileCoinDisplay`일 때
- *   앱 내부에서 코인/충전소/결제 유도 DOM을 100% 원천 숨김 처리합니다 (Apple 3.1.3(b) 준수).
- */
 export function useIsCoinHiddenInStore(): boolean {
   const { isStoreAppMode, enableMobileCoinDisplay } = useSaySeeStore();
   const isCapacitorNative =
@@ -88,10 +77,6 @@ export function useIsCoinHiddenInStore(): boolean {
   return Boolean(isStoreAppMode && !enableMobileCoinDisplay);
 }
 
-/**
- * [0. 우측 상단 헤더 앱 공유 아이콘 버튼 + 아이콘 직하단 초경량 복사 알림 말풍선]
- * - 하단 전역 토스트(lastQuarantineToast)를 띄우지 않고, 클릭한 공유 아이콘 바로 밑에 가볍게 떴다가 2.2초 뒤 사라집니다.
- */
 export const GhostiHeaderQuickShareButton: React.FC<{
   compact?: boolean;
 }> = ({ compact = false }) => {
@@ -120,7 +105,7 @@ export const GhostiHeaderQuickShareButton: React.FC<{
 
   const handleShareClick = () => {
     const shareText =
-      '귀신같이(Ghosti) — 내 PC와 모바일에 1초 초능력을! 내용검색·비서·사진공유는 평생 0원 (초대받은 가족·회원·직원도 언제나 무료) https://ghosti.sundreamer.app';
+      '귀신같이(Ghosti) — 사진·동영상·문서 내용 검색과 사진 공유 https://ghosti.sundreamer.app';
     if (typeof navigator !== 'undefined' && navigator.clipboard) {
       void navigator.clipboard.writeText(shareText).catch(() => {});
     }
@@ -139,14 +124,14 @@ export const GhostiHeaderQuickShareButton: React.FC<{
       <button
         type="button"
         onClick={handleShareClick}
-        title="지인·가족에게 앱 공유하기 (초대받은 가족·회원·직원은 언제나 무료)"
+        title="앱 공유 링크 복사"
         aria-label="앱 공유 링크 복사"
         className={`flex ${
           compact ? 'w-7 h-7' : 'w-6 h-6 sm:w-7 sm:h-7'
-        } rounded-lg items-center justify-center transition-all cursor-pointer shrink-0 outline-none ${
+        } rounded-md items-center justify-center transition-colors cursor-pointer shrink-0 outline-none ${
           copied
-            ? 'bg-teal-50 text-teal-700'
-            : 'text-slate-500 hover:text-slate-800 hover:bg-black/5'
+            ? 'bg-slate-100 text-slate-900'
+            : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
         }`}
       >
         <span className="material-symbols-outlined text-[15px]">
@@ -158,26 +143,10 @@ export const GhostiHeaderQuickShareButton: React.FC<{
         <div
           role="status"
           aria-live="polite"
-          className={`absolute right-0 top-full mt-1.5 z-50 px-2.5 py-1.5 rounded-xl border whitespace-nowrap pointer-events-none select-none shadow-lg transition-all ${
-            'bg-white/98 border-teal-200 text-slate-800 shadow-slate-900/10'
-          }`}
+          className="absolute right-0 top-full mt-1.5 z-50 px-2.5 py-1.5 rounded-lg border border-slate-200 bg-white text-slate-800 whitespace-nowrap pointer-events-none select-none shadow-md"
         >
-          <span
-            aria-hidden="true"
-            className={`absolute -top-1 right-2.5 w-2 h-2 rotate-45 border-l border-t ${
-              'bg-white border-teal-200'
-            }`}
-          />
-          <div className="flex items-center gap-1 text-[11.5px] font-extrabold leading-tight">
-            <span className={'text-teal-600'}>✓</span>
-            <span>공유 링크 복사됨</span>
-          </div>
-          <div
-            className={`text-[10px] font-semibold leading-tight mt-0.5 ${
-              'text-slate-500'
-            }`}
-          >
-            초대받은 분은 언제나 무료
+          <div className="text-[11.5px] font-semibold leading-tight">
+            공유 링크가 복사되었습니다
           </div>
         </div>
       )}
@@ -185,20 +154,10 @@ export const GhostiHeaderQuickShareButton: React.FC<{
   );
 };
 
-/**
- * [1. 우측 상단 헤더 허브 앵커 (프로필 위젯 단독)]
- * - 코인 표시 알약은 프로필 모달 내부에 이미 포함되어 있으므로 헤더에서 제외하고,
- *   허브 표준 프로필 위젯만 심플하게 렌더링합니다.
- */
 export const GhostiTopRightHubAnchor: React.FC = () => {
   return (
     <div className="flex items-center gap-1.5 shrink-0">
-      {/* 🐾 허브 표준 프로필 위젯 (클릭 시 통합 프로필·귀신여권·코인/선물함·문의방 모달 오픈) */}
-      <div
-        className={`rounded-full px-0.5 sm:px-1 py-0.5 border transition-colors ${
-          'bg-slate-50/90 border-slate-200/80'
-        }`}
-      >
+      <div className="rounded-full px-0.5 sm:px-1 py-0.5 border border-slate-200 bg-slate-50 transition-colors">
         <HubProfileWidget
           layout="row"
           onLoginClick={() => window.dispatchEvent(new CustomEvent('openLoginModal'))}
@@ -209,25 +168,17 @@ export const GhostiTopRightHubAnchor: React.FC = () => {
   );
 };
 
-/**
- * [2. 좌측 하단 노션형 사이드바 패밀리 앱 런처 (허브 공식 SDK `HubAppSwitcher` v2.8.0 정품 연동)]
- * - 임의의 수동 아코디언 코드를 전량 폐기하고, 허브 공식 SDK `<HubAppSwitcher variant="sidebar" placement="bottom-up" />`를 그대로 렌더링합니다.
- * - 클릭 시 가입된 앱(3열 공식 로고 그리드)과 미가입 앱(`썬드리머 패밀리 앱 New` 상세 리스트)이 담긴 정품 화이트 카드 팝업이 사이드바 위로 펼쳐집니다.
- */
 export const GhostiSidebarBottomFamilyLauncher: React.FC<{
   isOpen?: boolean;
   onToggle?: () => void;
 }> = () => {
   return (
-    <div className="pt-3 border-t border-black/10 dark:border-white/10">
+    <div className="pt-3 border-t border-slate-200">
       <HubAppSwitcher currentAppId="ghosti" variant="sidebar" placement="bottom-up" />
     </div>
   );
 };
 
-/**
- * [3. 허브 전역 모달 & 귀신같이 스토어/수파베이스 자동 동기화 엔진]
- */
 const GhostiHubGlobalModals: React.FC = () => {
   const { user, isLoggedIn, balance, refreshSession, refreshBalance } = useHub();
   const hideCoin = useIsCoinHiddenInStore();
@@ -254,8 +205,6 @@ const GhostiHubGlobalModals: React.FC = () => {
     const hasUrlInviteToken = Boolean(readActiveInviteToken());
     purgeAllGhostiLocalAuthArtifacts({ setLogoutLockMs: 15_000 });
     clearWorkRoomLocalCachesOnLogout();
-    // 워크스페이스 내부에서 로그아웃 시 현재 화면(탭) 그대로 게스트 전환되며,
-    // 새로고침(F5)이나 뒤로가기를 눌러도 온보딩/쇼룸 대문으로 튕기지 않고 게스트 워크스페이스에 정착하도록 라우팅 플래그 보존
     if (typeof window !== 'undefined') {
       try {
         const curParams = new URLSearchParams(window.location.search);
@@ -340,18 +289,15 @@ const GhostiHubGlobalModals: React.FC = () => {
       };
     });
     if (typeof window !== 'undefined') {
-      // 언로드 직전 최종 스위프: 프로필 모달이 띄운 인플라이트 /api/auth/me(newToken) 응답이
-      // 리로드 대기 중 세션을 되살려도 페이지 전환 직전에 즉시 재소거합니다.
       const finalWipe = () => {
         purgeAllGhostiLocalAuthArtifacts({ setLogoutLockMs: 15_000 });
-    clearWorkRoomLocalCachesOnLogout();
+        clearWorkRoomLocalCachesOnLogout();
       };
       window.addEventListener('pagehide', finalWipe, { once: true });
       window.addEventListener('beforeunload', finalWipe, { once: true });
     }
   }, []);
 
-  // 허브 인증/잔액 변화 시 Ghosti 내부 스토어(merlinAuth) 및 단독 Supabase(`public.users.id = family_users.id`) 자동 동기화
   useEffect(() => {
     if (logoutInProgressRef.current) {
       return;
@@ -431,7 +377,6 @@ const GhostiHubGlobalModals: React.FC = () => {
         hubToken: token,
       });
 
-      // 허브 회원 닉네임이 있을 때 귀신비서 별명이 비어 있거나 문장형 오인식 값으로 오염되어 있으면 즉시 정화·복원하고 awaitingNickname 지뢰 해제
       if (cleanHubNick && !isInvalidNicknameCandidate(cleanHubNick)) {
         const secSt = loadGhostSecretaryState();
         if (!secSt.nickname || isInvalidNicknameCandidate(secSt.nickname) || secSt.awaitingNickname) {
@@ -452,7 +397,6 @@ const GhostiHubGlobalModals: React.FC = () => {
         }
       }
 
-      // 유저가 이미 귀신비서에서 내 컴퓨터 연결에 동의한 세션일 때만 로컬 Z-코어 헬스체크 및 실물 파일 동기화 수행
       void zCoreBridge.checkHealth(false).then((alive) => {
         if (alive) {
           void useSaySeeStore.getState().initApp(true);
@@ -462,7 +406,6 @@ const GhostiHubGlobalModals: React.FC = () => {
       const hasUrlInviteToken = Boolean(readActiveInviteToken());
       const isMarkedLoggedOut =
         typeof window !== 'undefined' && localStorage.getItem('merlin_logged_out') === '1';
-      // 로그아웃(로그인 → 게스트 전환) 시 귀신같이 Supabase 단기 토큰·별명·공유방 메모리 캐시 즉시 폐기 (타 계정 사진·별명 노출 0%)
       if (wasLoggedInRef.current || isMarkedLoggedOut) {
         clearGhostiSupabaseSession();
         clearGhostSecretaryAccountNicknameOnLogout();
@@ -512,7 +455,6 @@ const GhostiHubGlobalModals: React.FC = () => {
     wasLoggedInRef.current = isLoggedIn;
   }, [isLoggedIn, user?.id, user?.email, user?.nickname, balance]);
 
-  // KCP 충전 리다이렉트(?ghosti_checkout_plan=... 또는 ?payment=success) 복귀 시 잔액 새로고침 + 구독 결제창 자동 복귀
   useEffect(() => {
     if (hideCoin || !isLoggedIn || typeof window === 'undefined') return;
     try {
@@ -552,7 +494,6 @@ const GhostiHubGlobalModals: React.FC = () => {
     }
   }, [hideCoin, isLoggedIn, refreshBalance]);
 
-  // 전역 모달 오픈 이벤트 리스너
   useEffect(() => {
     const onOpenLogin = () => setIsLoginOpen(true);
     const onOpenProfile = () => setIsProfileOpen(true);
@@ -574,7 +515,6 @@ const GhostiHubGlobalModals: React.FC = () => {
       clearGhostSecretaryAccountNicknameOnLogout();
       clearCachedSharedRoomTokens();
     };
-    // 브라우저 뒤로가기(BFCache 복원 포함) 시 로그아웃 직전 화면의 로그인 상태가 그대로 노출되는 현상 원천 차단
     const enforceLogoutOnHistoryRestore = (ev?: PageTransitionEvent) => {
       if (!isGhostiExplicitlyLoggedOut()) return;
       const st = useSaySeeStore.getState();
@@ -634,14 +574,11 @@ const GhostiHubGlobalModals: React.FC = () => {
 
   return (
     <>
-      {/* 1. 표준 이메일 6자리 OTP 로그인 모달 */}
       <HubAuthModal
         isOpen={isLoginOpen}
         onClose={() => setIsLoginOpen(false)}
         appName="귀신같이"
         appLogoUrl="/gwisinkachi_app_icon_512.png"
-        // 귀신같이는 웰컴 코인 비지급 앱(허브 정책: 웰컴 100코인은 SenseTalk 최초 진입 시에만) →
-        // 기본값 'coin'이면 첫 방문자에게 "무료 코인 받으세요!" 오안내 + 스토어 심사 리스크 → 'none' 고정
         rewardType="none"
         onSuccess={(email, userId) => {
           logoutInProgressRef.current = false;
@@ -660,8 +597,6 @@ const GhostiHubGlobalModals: React.FC = () => {
               launchNotifyOptIn: true,
               forceSync: true,
             });
-            // [골든 타이밍 바톤터치]: 유저가 '[⚡ 내 컴퓨터 1초 연결하기]' 또는 내 컴퓨터 파일 액션을 눌러 로그인한 경우(ghosti_pending_zcore_connect === '1')에만
-            // 로그인 직후 자동으로 Z-코어 연결 모달(또는 인덱싱)로 바톤터치하고, 단순히 우상단 [로그인] 버튼만 누른 경우에는 보던 화면을 그대로 유지합니다.
             let hasPendingZCoreConnect = false;
             try {
               if (sessionStorage.getItem('ghosti_pending_zcore_connect') === '1') {
@@ -690,38 +625,35 @@ const GhostiHubGlobalModals: React.FC = () => {
         }}
       />
 
-      {/* 2. 통합 프로필 설정 모달 (프로필 수정 + 코인/선물함 + 알림 스위치 + 1:1 문의방 + 1초 오류신고 + 로그아웃) */}
       {isProfileOpen && (
         <div
-          className="fixed inset-0 z-[130] flex items-center justify-center bg-black/65 backdrop-blur-sm p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
+          className="fixed inset-0 z-[130] flex items-center justify-center bg-black/50 backdrop-blur-xs p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
           onClick={() => setIsProfileOpen(false)}
         >
           <div
-            className="relative w-full max-w-md max-h-[88dvh] overflow-y-auto rounded-3xl bg-slate-50 p-4 sm:p-5 shadow-2xl border border-slate-200 space-y-3.5 text-slate-900 my-auto"
+            className="relative w-full max-w-md max-h-[88dvh] overflow-y-auto rounded-2xl bg-white p-4 sm:p-5 shadow-xl border border-slate-200 space-y-3.5 text-slate-900 my-auto"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-1">
-              <h3 className="text-[15px] sm:text-base font-extrabold text-slate-900 flex items-center gap-1.5 min-w-0">
-                <span>🐾 내 프로필 · 계정 설정</span>
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-1 border-b border-slate-100">
+              <h3 className="text-[15px] font-bold text-slate-900 min-w-0">
+                내 프로필 · 계정 설정
               </h3>
               <div className="flex items-center gap-1.5 shrink-0 ml-auto">
                 <button
                   type="button"
                   onClick={() => {
                     setIsProfileOpen(false);
-                    // [D-35] 여권은 등록 흐름이 기억하는 '내 얼굴'만 표시 (임의 클러스터 추정 금지)
                     useSaySeeStore.getState().setDoorplatePickerClusterId('self_passport');
                   }}
-                  className="px-3 py-1.5 rounded-full bg-teal-600 hover:bg-teal-500 text-white text-xs font-extrabold shadow-xs transition-all cursor-pointer flex items-center gap-1 whitespace-nowrap"
+                  className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
                   title="내 여권 (이름 · 시기별 사진)"
                 >
-                  <span>🛂</span>
-                  <span>여권</span>
+                  여권
                 </button>
                 <button
                   type="button"
                   onClick={() => setIsProfileOpen(false)}
-                  className="w-9 h-9 rounded-full bg-white hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 shrink-0 cursor-pointer"
+                  className="w-8 h-8 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 shrink-0 cursor-pointer"
                 >
                   <X className="w-4 h-4" />
                 </button>
@@ -762,7 +694,6 @@ const GhostiHubGlobalModals: React.FC = () => {
         </div>
       )}
 
-      {/* 3. 3몬스터 패밀리 코인 충전소 모달 (스토어 심사 모드에서는 아예 렌더링하지 않음) */}
       {!hideCoin && isPurchaseOpen && (
         <HubPurchaseWidget
           isModal
@@ -786,10 +717,8 @@ const GhostiHubGlobalModals: React.FC = () => {
         />
       )}
 
-      {/* 3-1. 귀신같이 전용 이용권 구독 결제창 (잔액 확인 · 부족 시 충전소 직결 · 실차감 영수증) */}
       {!hideCoin && <GhostiSubscriptionCheckoutModal />}
 
-      {/* 4. 패밀리 선물함 단독 모달 (스토어 심사 모드에서는 아예 렌더링하지 않음) */}
       {!hideCoin && (
         <HubGiftBoxModal
           isOpen={isGiftBoxOpen}
@@ -799,16 +728,12 @@ const GhostiHubGlobalModals: React.FC = () => {
         />
       )}
 
-      {/* 5. 1초 미니 오류·불편 즉시 신고 모달 & 전역 토스트 */}
       <HubBugReporter appId="Ghosti" appVersion="v1.0.7" />
       <HubNotifier />
     </>
   );
 };
 
-/**
- * [4. 최상위 HubProvider + HubErrorBoundary 래퍼]
- */
 export const GhostiHubRootProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {

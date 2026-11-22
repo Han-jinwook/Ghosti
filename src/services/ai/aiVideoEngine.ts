@@ -72,8 +72,7 @@ const BUNDLED_SAMPLE_VIDEO_ENHANCEMENTS: Record<
   }
 > = {
   '20240719_105706.mp4': {
-    extraKeywords: [
-      '코타키나발루',
+    extraKeywords: [      '코타키나발루',
       '말레이시아',
       '패러세일링',
       '패러세일',
@@ -91,22 +90,21 @@ const BUNDLED_SAMPLE_VIDEO_ENHANCEMENTS: Record<
     ],
     frameDialogueBySec: {
       0: {
-        subtitle: '💬 음성 대사: “와! 코타키나발루 바다 위 하늘 진짜 높다!”',
+        subtitle: '음성 대사: “와! 코타키나발루 바다 위 하늘 진짜 높다!”',
         extraKeywords: ['코타키나발루', '패러세일링', '상공', '비행', '하늘'],
       },
       12: {
-        subtitle: '💬 음성 대사: “보트 위로 점점 내려간다! 패러세일링 하강 준비!”',
+        subtitle: '음성 대사: “보트 위로 점점 내려간다! 패러세일링 하강 준비!”',
         extraKeywords: ['코타키나발루', '패러세일링', '패러세일', '하강', '보트'],
       },
       20: {
-        subtitle: '💬 음성 대사: “와아 축하합니다! 착지 성공!” (박수 치며 환호하는 순간)',
+        subtitle: '음성 대사: “와아 축하합니다! 착지 성공!” (박수 치며 환호하는 순간)',
         extraKeywords: ['코타키나발루', '박수', '환호', '축하합니다', '축하', '착지', '웃는', '미소'],
       },
     },
   },
   '20240720_134808.mp4': {
-    extraKeywords: [
-      '코타키나발루',
+    extraKeywords: [      '코타키나발루',
       '말레이시아',
       '리조트',
       '테라스',
@@ -126,13 +124,12 @@ const BUNDLED_SAMPLE_VIDEO_ENHANCEMENTS: Record<
     ],
     frameDialogueBySec: {
       0: {
-        subtitle: '💬 음성 대사: “코타키나발루 리조트 테라스에 카메라 세팅 완료!”',
+        subtitle: '음성 대사: “코타키나발루 리조트 테라스에 카메라 세팅 완료!”',
         extraKeywords: ['코타키나발루', '리조트', '테라스', '카메라'],
       },
       6: {
-        subtitle: '💬 음성 대사: “생일 축하합니다! 케이크 촛불 불고 다 같이 박수!”',
-        extraKeywords: [
-          '코타키나발루',
+        subtitle: '음성 대사: “생일 축하합니다! 케이크 촛불 불고 다 같이 박수!”',
+        extraKeywords: [          '코타키나발루',
           '생일',
           '케이크',
           '촛불',
@@ -145,9 +142,8 @@ const BUNDLED_SAMPLE_VIDEO_ENHANCEMENTS: Record<
         ],
       },
       12: {
-        subtitle: '💬 음성 대사: “울다가도 웃는 해맑은 미소! 강아지가 잔디에서 원반 물어오는 구간까지 완벽해!”',
-        extraKeywords: [
-          '코타키나발루',
+        subtitle: '음성 대사: “울다가도 웃는 해맑은 미소! 강아지가 잔디에서 원반 물어오는 구간까지 완벽해!”',
+        extraKeywords: [          '코타키나발루',
           '아이',
           '울면서',
           '웃는',
@@ -164,8 +160,7 @@ const BUNDLED_SAMPLE_VIDEO_ENHANCEMENTS: Record<
     },
   },
   '20240722_052422.mp4': {
-    extraKeywords: [
-      '비행기',
+    extraKeywords: [      '비행기',
       '항공기',
       '기내',
       '창문',
@@ -185,23 +180,22 @@ const BUNDLED_SAMPLE_VIDEO_ENHANCEMENTS: Record<
     ],
     frameDialogueBySec: {
       0: {
-        subtitle: '💬 음성 대사: “비행기 창밖으로 노을빛 일출이 떠오르네요, 노을 지는 바닷가 상공입니다.”',
+        subtitle: '음성 대사: “비행기 창밖으로 노을빛 일출이 떠오르네요, 노을 지는 바닷가 상공입니다.”',
         extraKeywords: ['비행기', '창밖', '일출', '노을', '바닷가', '걷는', '해변', '구름', '코타키나발루'],
       },
       4: {
-        subtitle: '💬 음성 대사: “이번 회의실에서 화이트보드에 판서하며 정리한 내년 매출 목표 브리핑 자료입니다.”',
+        subtitle: '음성 대사: “이번 회의실에서 화이트보드에 판서하며 정리한 내년 매출 목표 브리핑 자료입니다.”',
         extraKeywords: ['비행기', '회의실', '화이트보드', '판서', '판서하는', '내년', '매출', '목표', '말하는'],
       },
       8: {
-        subtitle: '💬 음성 대사: “스마트폰 카메라로 비행기 창문 일출 촬영 완료!”',
+        subtitle: '음성 대사: “스마트폰 카메라로 비행기 창문 일출 촬영 완료!”',
         extraKeywords: ['비행기', '스마트폰', '카메라', '일출', '창문'],
       },
     },
   },
 };
 
-export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
-  {
+export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [  {
     id: 'vid_showcase_ghosti_scene_jump',
     videoFileName: 'ghosti_short_sc552_1793284451.mp4',
     title: '아기 첫 걸음마 장면 & 화면 속 자막 글자 1초 소환 시연 (음성+자막)',
@@ -214,12 +208,11 @@ export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
     matchedSeekSec: 0,
     matchedTimestamp: '00:00',
     matchedFrameCaption:
-      '수백 개의 동영상 중 원하는 장면으로 1초 만에 점프하고 화면 속 자막 글자를 텍스트로 바로 뽑아내는 실제 시연 영상입니다.',
+      '수백 개의 동영상 중 원하는 장면으로 점프하고 화면 속 자막 글자를 텍스트로 바로 뽑아내는 실제 시연 영상입니다.',
     locationKo: '귀신검색 · 동영상 장면·글자 1초 소환',
     sceneDescription:
-      '동영상 수백 개를 일일이 돌려보지 않고 아기 첫 걸음마 장면으로 1초 만에 이동하며 화면 속 한글 자막까지 깔끔하게 추출하는 시연 영상입니다.',
-    keywords: [
-      '아기',
+      '동영상 수백 개를 일일이 돌려보지 않고 아기 첫 걸음마 장면으로 이동하며 화면 속 한글 자막까지 깔끔하게 추출하는 시연 영상입니다.',
+    keywords: [      '아기',
       '걸음마',
       '첫걸음마',
       '자막',
@@ -235,8 +228,7 @@ export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
     resolution: '1080x1920 (음성 + 화면 한글 자막 수록)',
     sizeMB: 13.7,
     hasScreenOcrText: true,
-    timelineFrames: [
-      {
+    timelineFrames: [      {
         frameId: 'vid_sc552_f00',
         timeSec: 0,
         timestampText: '00:00',
@@ -271,12 +263,11 @@ export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
     matchedSeekSec: 8,
     matchedTimestamp: '00:08',
     matchedFrameCaption:
-      '회의실에서 화이트보드에 판서하며 “내년 매출 목표 200% 달성” 전략을 설명하는 핵심 발언 구간입니다. | 💬 음성 대사: “내년 매출 목표는 올해 대비 2배 성장입니다!”',
+      '회의실에서 화이트보드에 판서하며 “내년 매출 목표 200% 달성” 전략을 설명하는 핵심 발언 구간입니다. |  음성 대사: “내년 매출 목표는 올해 대비 2배 성장입니다!”',
     locationKo: '본사 비전 회의실 · 세미나홀',
     sceneDescription:
       '회의실 화이트보드 판서 브리핑부터 내년 매출 목표 발표, 박수 치며 환호하는 축하 순간과 생일 케이크 촛불 파티까지 담긴 통합 하이라이트 영상입니다.',
-    keywords: [
-      '회의실',
+    keywords: [      '회의실',
       '화이트보드',
       '판서',
       '판서하는',
@@ -312,14 +303,13 @@ export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
     resolution: '540x960 (음성 대사 STT + 비전 타임라인 해부)',
     sizeMB: 0.9,
     hasScreenOcrText: true,
-    timelineFrames: [
-      {
+    timelineFrames: [      {
         frameId: 'vid_showcase_f00',
         timeSec: 0,
         timestampText: '00:00',
         phaseLabel: '오프닝 · 노을 해변 & 산책',
         sceneCaption:
-          '노을 지는 바닷가 해변을 걸으며 강아지가 잔디와 모래사장에서 원반을 물어오는 평화로운 오프닝 장면입니다. | 💬 음성 대사: “노을 지는 바닷가 걷는 장면이랑 강아지가 원반 물어오는 구간 찍자!”',
+          '노을 지는 바닷가 해변을 걸으며 강아지가 잔디와 모래사장에서 원반을 물어오는 평화로운 오프닝 장면입니다. |  음성 대사: “노을 지는 바닷가 걷는 장면이랑 강아지가 원반 물어오는 구간 찍자!”',
         keywords: ['노을', '지는', '바닷가', '해변', '걷는', '강아지', '원반', '물어오는', '구간', '산책'],
         tags: ['#노을바닷가', '#강아지원반', '#야외산책'],
         thumbUrl: '/poc/results/video_frames/20260918_202442_t00.jpg',
@@ -330,7 +320,7 @@ export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
         timestampText: '00:04',
         phaseLabel: '골프 스윙 피니시 & 야외 활동',
         sceneCaption:
-          '필드 위에서 깔끔한 골프 스윙 피니시 자세를 유지하고 아이가 울면서 웃는 귀여운 순간이 이어집니다. | 💬 음성 대사: “나이스 샷! 골프 스윙 피니시 자세 완벽하네!”',
+          '필드 위에서 깔끔한 골프 스윙 피니시 자세를 유지하고 아이가 울면서 웃는 귀여운 순간이 이어집니다. |  음성 대사: “나이스 샷! 골프 스윙 피니시 자세 완벽하네!”',
         keywords: ['골프', '스윙', '피니시', '자세', '아이', '울면서', '웃는', '미소', '나이스샷'],
         tags: ['#골프스윙피니시', '#아이웃는장면'],
         thumbUrl: '/poc/results/video_frames/20260918_202442_t01.jpg',
@@ -341,7 +331,7 @@ export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
         timestampText: '00:08',
         phaseLabel: '회의실 판서 & 매출 목표 대사',
         sceneCaption:
-          '회의실에서 화이트보드에 판서하며 “내년 매출 목표” 핵심 수치를 발표하는 브리핑 장면입니다. | 💬 음성 대사: “우리 팀의 내년 매출 목표는 50억 달성입니다!”',
+          '회의실에서 화이트보드에 판서하며 “내년 매출 목표” 핵심 수치를 발표하는 브리핑 장면입니다. |  음성 대사: “우리 팀의 내년 매출 목표는 50억 달성입니다!”',
         keywords: ['회의실', '화이트보드', '판서', '판서하는', '내년', '매출', '목표', '말하는', '부분', '브리핑', '발표'],
         tags: ['#회의실판서', '#내년매출목표', '#음성대사포착'],
         thumbUrl: '/poc/results/video_frames/20260918_202442_t00.jpg',
@@ -352,7 +342,7 @@ export const BUNDLED_SHOWCASE_VIDEO_ITEMS: VideoSceneItem[] = [
         timestampText: '00:13',
         phaseLabel: '생일 케이크 & 박수 환호',
         sceneCaption:
-          '생일 케이크 촛불을 부는 장면 직후 다 함께 박수 치며 환호하는 순간과 “축하합니다!” 외치는 음성이 선명하게 포착되었습니다. | 💬 음성 대사: “축하합니다! 생일 케이크 촛불 불어보세요, 박수!”',
+          '생일 케이크 촛불을 부는 장면 직후 다 함께 박수 치며 환호하는 순간과 “축하합니다!” 외치는 음성이 선명하게 포착되었습니다. |  음성 대사: “축하합니다! 생일 케이크 촛불 불어보세요, 박수!”',
         keywords: ['생일', '케이크', '촛불', '부는', '박수', '치며', '환호', '환호하는', '순간', '축하합니다', '외치는', '파티'],
         tags: ['#생일케이크촛불', '#박수환호', '#축하합니다대사'],
         thumbUrl: '/poc/results/video_frames/20260918_202442_t01.jpg',
@@ -457,8 +447,7 @@ export function buildProportionalVideoTimelineFrames(
   if (tSec < 8) {
     const mid = Math.max(1, Math.min(tSec - 2, Math.round(tSec * 0.45)));
     const end = Math.max(mid + 1, tSec - 1);
-    checkpoints = [
-      { sec: 0, label: '도입부 · 오프닝' },
+    checkpoints = [      { sec: 0, label: '도입부 · 오프닝' },
       { sec: mid, label: '중반부 하이라이트' },
       { sec: end, label: '후반부 · 마무리' },
     ];
@@ -467,8 +456,7 @@ export function buildProportionalVideoTimelineFrames(
     let p2 = Math.max(p1 + 2, Math.round(tSec * 0.58));
     if (p2 === 5) p2 = 6;
     const p3 = Math.max(p2 + 2, Math.min(tSec - 1, Math.round(tSec * 0.85)));
-    checkpoints = [
-      { sec: 0, label: '도입부 · 오프닝' },
+    checkpoints = [      { sec: 0, label: '도입부 · 오프닝' },
       { sec: p1, label: '초반부 전개' },
       { sec: p2, label: '중반부 하이라이트' },
       { sec: p3, label: '후반부 마무리' },
@@ -478,8 +466,7 @@ export function buildProportionalVideoTimelineFrames(
     const p2 = Math.max(p1 + 3, Math.round(tSec * 0.5));
     const p3 = Math.max(p2 + 3, Math.round(tSec * 0.75));
     const p4 = Math.max(p3 + 2, Math.min(tSec - 1, Math.round(tSec * 0.9)));
-    checkpoints = [
-      { sec: 0, label: '도입부 · 오프닝' },
+    checkpoints = [      { sec: 0, label: '도입부 · 오프닝' },
       { sec: p1, label: '초반부 전개' },
       { sec: p2, label: '중반부 하이라이트' },
       { sec: p3, label: '후반부 전개' },
@@ -606,7 +593,7 @@ export function normalizeLocalVideoSceneItem(
 
 /**
  * MP4/MOV 바이너리 버퍼(앞/뒤 구간)에서 직접 'mvhd' 아톰을 찾아
- * 브라우저 <video preload="metadata">가 실패하는 대용량 .mov 파일도 0.01초 만에 정확한 재생 시간을 추출합니다.
+ * 브라우저 <video preload="metadata">가 실패하는 대용량 .mov 파일도 0.0정확한 재생 시간을 추출합니다.
  */
 function parseMp4MvhdDurationFromBuffer(buffer: ArrayBuffer): number | null {
   try {
@@ -814,8 +801,7 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
     const staticVideoByName = new Map<string, VideoSceneItem>();
 
     if (hasLegacyPoc2024Videos) {
-      const [sRes, staticCorpusRes] = await Promise.allSettled([
-        fetch('/poc/results/video_timeline_index.json'),
+      const [sRes, staticCorpusRes] = await Promise.allSettled([        fetch('/poc/results/video_timeline_index.json'),
         getStaticCorpusCached(),
       ]);
       if (staticCorpusRes.status === 'fulfilled' && staticCorpusRes.value?.semJson) {
@@ -861,8 +847,7 @@ export async function _fetchIndexedVideosMerged(): Promise<VideoSceneItem[]> {
       if (sv) {
         const enh = BUNDLED_SAMPLE_VIDEO_ENHANCEMENTS[v.videoFileName];
         const svKws = Array.from(
-          new Set([
-            ...(normalizedVid.keywords || []),
+          new Set([            ...(normalizedVid.keywords || []),
             ...(sv.keywords || []),
             ...(enh?.extraKeywords || []),
           ])
@@ -1040,8 +1025,7 @@ export async function searchVideoSceneItemsAsync(
 
   const isAnimalOnlyQuery = isNonHumanAnimalSearchQuery(q);
   const isTextBoundVideoQuery = isTextOrIdentityBoundQuery(q);
-  const [queryVecs, hubRefVecs, nonAnimalAnchorVecs] = await Promise.all([
-    encodeMultimodalSearchQueryVecs(q, 1400),
+  const [queryVecs, hubRefVecs, nonAnimalAnchorVecs] = await Promise.all([    encodeMultimodalSearchQueryVecs(q, 1400),
     ensureHubnessReferenceVecsLoaded(),
     isAnimalOnlyQuery ? getContrastiveNonAnimalAnchorVecs(900) : Promise.resolve([]),
   ]);
@@ -1394,8 +1378,7 @@ export function searchVideoSceneItems(
   const q = query.trim().toLowerCase();
   if (!q || q.includes('전 구간')) return sourceVideos;
 
-  const STOP_WORDS = new Set([
-    '찾아줘', '보여줘', '영상', '동영상', '장면', '모습', '클로즈업', '초근접촬영', '포즈',
+  const STOP_WORDS = new Set([    '찾아줘', '보여줘', '영상', '동영상', '장면', '모습', '클로즈업', '초근접촬영', '포즈',
     '취하다가', '취하는', '말하며', '말하는', '외치는', '다가오는', '다가옴', '에서', '위에서',
     '아래', '너머', '앞에서', '옆에서', '입고', '있는', '하는', '찍은', '찍는', '촬영', '화면',
     '나오는', '고화질', '전구간', '구간', '순간', '부분', '속에서', '속에', '타임라인', '해부',

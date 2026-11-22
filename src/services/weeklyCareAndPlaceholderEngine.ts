@@ -353,9 +353,9 @@ export async function evaluateDualProactiveCareEngine(options?: {
     if (!options?.forceManual) return null;
     return {
       triggerType: 'MANUAL_CHECKUP',
-      badgeLabel: `📸 ${cfg.memeTitleKo}`,
+      badgeLabel: `${cfg.memeTitleKo}`,
       headlineLine1:
-        '갤러리 속 중복·연사 사진과 오래된 영수증·스크린샷 후보를 귀신같이 분류해 두었습니다. 1초 만에 가장 선명한 베스트 컷만 남기고 정리해 보세요.',
+        '갤러리 속 중복·연사 사진과 영수증·스크린샷 정리 후보를 분류해 두었습니다. 선명한 원본만 남기고 간편하게 정리해 보세요.',
       schedulePromptLine2: '이번 주처럼 매주 수요일 점심마다 알아서 갤러리 정리 후보를 챙겨드릴까요?',
       overloadPercent: 20,
       detectedBloatwareCount: 0,
@@ -437,17 +437,17 @@ export async function evaluateDualProactiveCareEngine(options?: {
     const bloatCount = bloatwareNames.length;
     const line1 =
       bloatCount > 0
-        ? `점심 식사하시는 동안 몰래 숨어든 은행·관공서 보안프로그램 ${bloatCount}마리(${bloatwareNames
+        ? `백그라운드에서 실행 중인 은행·관공서 보안프로그램 ${bloatCount}건(${bloatwareNames
             .slice(0, 3)
-            .join(', ')})를 귀신같이 찾아내 멈춰 세울 준비를 마쳤습니다. 클릭 1초면 오후 업무가 날아갈 듯 가벼워집니다.`
+            .join(', ')})이 확인되었습니다. 절전 전환으로 시스템 부하를 줄일 수 있습니다.`
         : `현재 내 PC 메모리 점유율은 ${ramUsedPercent ?? 58}%, 상주 보안프로그램은 0건으로 쾌적합니다.${
             junkFileCount > 0
-              ? ` 다운로드 폴더에 방치된 임시 설치파일 ${junkFileCount}건만 1초 만에 정리해 드릴까요?`
+              ? ` 다운로드 폴더의 임시 설치파일 ${junkFileCount}건을 함께 정리해 드릴까요?`
               : ''
           }`;
     return {
       triggerType: 'MANUAL_CHECKUP',
-      badgeLabel: `👻 「${cfg.memeTitleKo}」 정기 건강검진 브리핑`,
+      badgeLabel: `「${cfg.memeTitleKo}」 정기 점검 브리핑`,
       headlineLine1: line1,
       schedulePromptLine2: '이번 주처럼 매주 수요일 점심(수요 손 없는 날)마다 알아서 기기 손봐드릴까요?',
       overloadPercent: Math.max(20, computedOverloadPct),
@@ -479,11 +479,11 @@ export async function evaluateDualProactiveCareEngine(options?: {
     }
 
     saveWeeklyCareSchedule({ lastTriggeredWeekKey: weekKey });
-    const countLabel = bloatwareNames.length > 0 ? `${bloatwareNames.length}마리` : '백그라운드 유령 프로세스';
+    const countLabel = bloatwareNames.length > 0 ? `${bloatwareNames.length}건` : '백그라운드 상주 프로세스';
     return {
       triggerType: 'TRACK_B_WEDNESDAY_MEME',
-      badgeLabel: `🗓️ 「${cfg.memeTitleKo}」 정기 건강검진 도착`,
-      headlineLine1: `점심 식사하시는 동안 몰래 숨어든 은행 보안프로그램(${countLabel})을 귀신같이 찾아내 멈춰 세웠습니다. 클릭 1초면 오후 업무가 날아갈 듯 가벼워집니다.`,
+      badgeLabel: `「${cfg.memeTitleKo}」 정기 점검 안내`,
+      headlineLine1: `백그라운드 상주 보안프로그램(${countLabel})이 확인되었습니다. 지금 정리해 시스템을 가볍게 유지해 보세요.`,
       schedulePromptLine2: '이번 주처럼 매주 수요일 점심(수요 손 없는 날)마다 알아서 기기 손봐드릴까요?',
       overloadPercent: Math.max(20, computedOverloadPct),
       detectedBloatwareCount: bloatwareNames.length,
@@ -509,8 +509,8 @@ export async function evaluateDualProactiveCareEngine(options?: {
       const pctDisplay = Math.max(20, Math.min(45, Math.round(computedOverloadPct)));
       return {
         triggerType: 'TRACK_A_20PCT_OVERLOAD',
-        badgeLabel: `⚡ 실시간 20% 과부하 귀신 감지 (${pctDisplay}% 둔화 · 10분 지속)`,
-        headlineLine1: `👻 보안프로그램과 유령 앱이 쌓여 컴퓨터가 평소보다 ${pctDisplay}% 무거워졌습니다. 버벅거리기 전에 미리 잡아뒀는데 1초 만에 손볼까요?`,
+        badgeLabel: `시스템 부하 증가 감지 (${pctDisplay}% 둔화 · 10분 지속)`,
+        headlineLine1: `상주 보안프로그램과 백그라운드 앱 영향으로 컴퓨터 반응이 평소보다 약 ${pctDisplay}% 무거워졌습니다. 지금 정리해 드릴까요?`,
         schedulePromptLine2: '이번 주처럼 매주 수요일 점심(수요 손 없는 날)마다 알아서 기기 손봐드릴까요?',
         overloadPercent: pctDisplay,
         detectedBloatwareCount: bloatwareNames.length,

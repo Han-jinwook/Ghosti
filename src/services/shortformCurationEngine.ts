@@ -20,37 +20,36 @@ export interface ShortformTipItem {
   summaryText: string;
 }
 
-export const GHOSTI_SHORTFORM_TIPS_CATALOG: ShortformTipItem[] = [
-  {
+export const GHOSTI_SHORTFORM_TIPS_CATALOG: ShortformTipItem[] = [  {
     id: 'sf_family_01',
-    title: '🎬 [1분 활용팁] 방금 정리한 가족사진, 카톡 압축 없이 원본 화질 그대로 가족들과 자동 공유하는 법',
+    title: '[1분 활용팁] 방금 정리한 가족사진, 카톡 압축 없이 원본 화질 그대로 가족들과 자동 공유하는 법',
     durationLabel: '0:55',
     targetLounge: 'family',
     contextTags: ['cleanup', 'photo'],
     shortUrl: 'https://youtube.com/shorts/ghosti-family-sync-tip01',
-    summaryText: 'AI 얼굴 여권으로 우리 가족 사진만 0.01초 만에 모아 패밀리 라운지에 올리는 꿀팁',
+    summaryText: 'AI 얼굴 여권으로 우리 가족 사진만 0.0모아 패밀리 라운지에 올리는 꿀팁',
   },
   {
     id: 'sf_family_02',
-    title: '🎬 [1분 활용팁] 부모님 폰 용량 꽉 찼을 때, 내 PC로 원본 백업하고 폰은 가볍게 비워드리는 법',
+    title: '[1분 활용팁] 부모님 폰 용량 꽉 찼을 때, 내 PC로 원본 백업하고 폰은 가볍게 비워드리는 법',
     durationLabel: '0:48',
     targetLounge: 'family',
     contextTags: ['cleanup', 'restore', 'photo'],
     shortUrl: 'https://youtube.com/shorts/ghosti-family-backup-tip02',
-    summaryText: '13KB 초경량 썸네일만 남기고 원본은 방장 PC에 영구 보존하는 비결',
+    summaryText: '경량 미리보기만 남기고 원본은 방장 PC에 영구 보존하는 비결',
   },
   {
     id: 'sf_work_01',
-    title: '🎬 [1분 활용팁] 정리된 세무·계약 서류, 클라우드 월세 0원으로 직원들과 S:드라이브로 같이 쓰는 법',
+    title: '[1분 활용팁] 정리된 세무·계약 서류, 추가 서버 비용 없음으로 직원들과 S:드라이브로 같이 쓰는 법',
     durationLabel: '0:58',
     targetLounge: 'work',
     contextTags: ['cleanup', 'doc', 'os_repair'],
     shortUrl: 'https://youtube.com/shorts/ghosti-work-sdrive-tip01',
-    summaryText: '구글 드라이브/마이박스 폴더 그대로 연결해 1초 만에 계약서 본문까지 내용검색하기',
+    summaryText: '구글 드라이브/마이박스 폴더 그대로 연결해 계약서 본문까지 내용검색하기',
   },
   {
     id: 'sf_work_02',
-    title: '🎬 [1분 활용팁] 실수로 덮어쓴 엑셀·한글 문서, 귀신같이 [복원 기록] 타임머신으로 1초 만에 살리는 법',
+    title: '[1분 활용팁] 실수로 덮어쓴 엑셀·한글 문서, 귀신같이 [복원 기록] 타임머신으로 살리는 법',
     durationLabel: '0:52',
     targetLounge: 'work',
     contextTags: ['restore', 'doc', 'os_repair'],
@@ -59,7 +58,7 @@ export const GHOSTI_SHORTFORM_TIPS_CATALOG: ShortformTipItem[] = [
   },
   {
     id: 'sf_club_01',
-    title: '🎬 [1분 활용팁] 등산·골프 모임 단체사진 똑같은 컷 5번씩 올라올 때, 중복 0%로 깔끔하게 모으는 법',
+    title: '[1분 활용팁] 등산·골프 모임 단체사진 똑같은 컷 5번씩 올라올 때, 중복 0%로 깔끔하게 모으는 법',
     durationLabel: '0:50',
     targetLounge: 'club',
     contextTags: ['photo', 'cleanup'],
@@ -142,7 +141,7 @@ export function pickNextShortformTipOnCompletion(params: {
 import { isOntologyMediaSearchNoun, stripKoSearchParticle } from './ai/aiSharedRuntime';
 
 /**
- * Z몬스터 대화창에 입력된 문장이 '단순 파일/사진 찾기'인지 0.001초 만에 로컬 판별 (LLM 토큰 0원)
+ * Z몬스터 대화창에 입력된 문장이 '단순 파일/사진 찾기'인지 0.00로컬 판별 (LLM 토큰 0원)
  */
 export function detectZeroLlmPerspectiveSearchIntent(userInput: string): {
   isSimpleSearchIntent: boolean;
@@ -153,7 +152,7 @@ export function detectZeroLlmPerspectiveSearchIntent(userInput: string): {
 
   // 정리/이동/숨김/복원/수리/진단/시작프로그램/온보딩/설정 명령어나 일상 인사가 들어있으면 단순 검색이 아닌 귀신비서 고유 작업으로 분류
   const doctorActionRegex =
-    /(정리|옮겨|이동|숨겨|숨김|복원|복구|되돌려|고쳐|수리|안\s*돼|안\s*나와|오류|에러|느려|버벅|폴더\s*만들|진단|점검|검진|부팅|재부팅|경과|켜\s*둔|시작\s*프로그램|자동\s*실행|보안\s*프로그램|보안\s*모듈|애드웨어|백신|디펜더|바이러스|랜섬웨어|사양|스펙|용량|메모리|램|cpu|프로세스|점유율|사라졌|없어졌|날아갔|지웠|휴지통|저장\s*안\s*하고|실적|보고서|온보딩|초능력|상용구|복사\s*기록|스튜디오|문의방|요금|가격|구독|결제|해지|별명|닉네임|로그인|로그아웃)/i;
+    /(정리|옮겨|이동|숨겨|숨김|복원|복구|되돌려|고쳐|수리|안\s*돼|안\s*나와|오류|에러|느려|버벅|폴더\s*만들|진단|점검|검진|부팅|재부팅|경과|켜\s*둔|시작\s*프로그램|자동\s*실행|보안\s*프로그램|보안\s*모듈|애드웨어|백신|디펜더|바이러스|랜섬웨어|사양|스펙|용량|메모리|램|cpu|프로세스|점유율|사라졌|없어졌|날아갔|지웠|휴지통|저장\s*안\s*하고|실적|보고서|온보딩|편의 기능|상용구|복사\s*기록|스튜디오|문의방|요금|가격|구독|결제|해지|별명|닉네임|로그인|로그아웃)/i;
   if (doctorActionRegex.test(text)) {
     return { isSimpleSearchIntent: false, extractedKeyword: '' };
   }
@@ -190,8 +189,7 @@ export function detectZeroLlmPerspectiveSearchIntent(userInput: string): {
   return { isSimpleSearchIntent: false, extractedKeyword: '' };
 }
 
-export const DOCTOR_3_RED_LINES_NOTICE = [
-  '🛡️ 영구 삭제(포맷/와이핑) 불가: 귀신같이 손보기는 이동·분류·숨김·휴지통 보호만 수행하며 파일을 영구 삭제(Shift+Del)하지 않습니다.',
-  '🔒 OS 시스템 폴더 개조 불가: C:\\Windows, Program Files 등 시스템 안정성 영역은 절대 건드리지 않습니다.',
-  '🚫 무단 대리 실행·외부 전송 불가 (Zero-Auto-Action): 미리보기 확인([⭕ 확인 완료]) 없이는 파일을 임의로 옮기거나 설정을 바꾸지 않으며, 외부 서버로 원본을 전송하지 않습니다.',
+export const DOCTOR_3_RED_LINES_NOTICE = [  '영구 삭제(포맷/와이핑) 불가: 귀신같이 손보기는 이동·분류·숨김·휴지통 보호만 수행하며 파일을 영구 삭제(Shift+Del)하지 않습니다.',
+  'OS 시스템 폴더 개조 불가: C:\\Windows, Program Files 등 시스템 안정성 영역은 절대 건드리지 않습니다.',
+  '무단 대리 실행·외부 전송 불가 (Zero-Auto-Action): 미리보기 확인([⭕ 확인 완료]) 없이는 파일을 임의로 옮기거나 설정을 바꾸지 않으며, 외부 서버로 원본을 전송하지 않습니다.',
 ];

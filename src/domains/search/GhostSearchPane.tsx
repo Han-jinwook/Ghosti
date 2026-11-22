@@ -9,14 +9,9 @@ import {
 } from '../../services/aiEngine';
 import { executeRealOsAction } from '../../services/setupMonsterEngine';
 import { VoiceHeroStage } from '../../components/VoiceHeroStage';
-import { SmartTrashView } from '../../components/SmartTrashView';
-import {
-  Stage1MinimalCarePreview,
-  Stage1MinimalSearchPreview,
-} from '../../components/Stage1MinimalPreview';
+import { Stage1MinimalSearchPreview } from '../../components/Stage1MinimalPreview';
 import {
   LoungeFeedContextBanner,
-  LoungeIndexingWaitingRoom,
   LoungeView,
 } from '../../components/LoungeView';
 import {
@@ -34,16 +29,10 @@ import {
   resolveCurrentUserIdentityTokens,
 } from '../free_photo_share/FreePhotoShareLounge';
 
-
-/**
- * [2번 창: 🎯 [2귀신] 전담 UI 패널]
- * - 우측 👻 귀신검색 사진·동영상 글자뽑기·문서 본문 소환 및 도장깨기 수련 화면
- */
 export const GhostSearchPane: React.FC<{
   ghostSearchWindowStage: 'small' | 'medium' | 'large' | null;
 }> = ({ ghostSearchWindowStage }) => {
   const {
-    photos,
     desktopTab,
     activeLoungeType,
     activeFamilyRoom,
@@ -78,7 +67,6 @@ export const GhostSearchPane: React.FC<{
   const lastWatchSigRef = useRef<string>('');
   const watchRefreshInflightRef = useRef<boolean>(false);
 
-  // [귀신검색창 열려 있는 상태에서 파일 추가·삭제·수정 실시간 반영 (1ms 무핸들 시그니처 비교 · 평시 CPU 0.00%)]
   useEffect(() => {
     const isSearchSurfaceActive =
       Boolean(ghostSearchWindowStage) ||
@@ -231,618 +219,560 @@ export const GhostSearchPane: React.FC<{
 
   return (
     <>
-        {desktopTab === 'trial' && activeLoungeType === 'work' && (
-          <GhostSecretaryFirstGuard>
-            <LoungeView />
-          </GhostSecretaryFirstGuard>
-        )}
+      {desktopTab === 'trial' && activeLoungeType === 'work' && (
+        <GhostSecretaryFirstGuard>
+          <LoungeView />
+        </GhostSecretaryFirstGuard>
+      )}
 
-        {/* ─────────────── 서브메뉴 2번: 노션형 백지 도화지(Zen Canvas) & 점진적 결과 펼침 ─────────────── */}
-        {ghostSearchWindowStage ? (
-          <div className="flex-1 min-h-0 flex overflow-hidden bg-zinc-950">
-            <div className="flex-1 min-w-0 h-full overflow-y-auto">
-              <Stage1MinimalSearchPreview
-                initialQuery={
-                  typeof window !== 'undefined'
-                    ? new URLSearchParams(window.location.search).get('q') || ''
-                    : ''
-                }
-              />
-            </div>
+      {ghostSearchWindowStage ? (
+        <div className="flex-1 min-h-0 flex overflow-hidden bg-white">
+          <div className="flex-1 min-w-0 h-full overflow-y-auto">
+            <Stage1MinimalSearchPreview
+              initialQuery={
+                typeof window !== 'undefined'
+                  ? new URLSearchParams(window.location.search).get('q') || ''
+                  : ''
+              }
+            />
           </div>
+        </div>
+      ) : (
+        (desktopTab === 'dashboard' ||
+          (desktopTab === 'trial' && activeLoungeType !== 'work')) &&
+        (activeLoungeType === 'personal' && isStage1MinimalPreview ? (
+          <GhostSearchTrainingPage />
         ) : (
-          (desktopTab === 'dashboard' ||
-            (desktopTab === 'trial' && activeLoungeType !== 'work')) &&
-          (activeLoungeType === 'personal' && isStage1MinimalPreview ? (
-            // [v1.3] 웹 검색 입력창 폐지 → 소환술 수련 + 귀신검색 도장깨기(가상 모니터 안 귀신검색창 = 기존 찾기 UI 100% 승계)
-            <GhostSearchTrainingPage />
-          ) : (
-            <GhostSecretaryFirstGuard>
-              <main className="flex-1 w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 py-6 sm:py-8 flex flex-col gap-6">
-            {activeLoungeType === 'work' ? (
-              <LoungeFeedContextBanner />
-            ) : (
-              <>
-                {/* 상단 검색 프레임: 폭과 위치를 항상 고정하여 검색/탭 전환 시 화면 흔들림 원천 차단 */}
-                <div className="w-full flex flex-col gap-3">
-                  {/* 도화지 타이틀 헤더 */}
-                  <div className="flex flex-wrap items-baseline justify-between gap-2 px-1">
-                    <div className="flex items-center gap-2.5">
-                      <h1 className="font-headline-md text-[20px] md:text-[24px] text-white font-extrabold tracking-tight">
+          <GhostSecretaryFirstGuard>
+            <main className="flex-1 w-full max-w-[1320px] mx-auto px-4 sm:px-6 md:px-10 py-6 sm:py-8 flex flex-col gap-6">
+              {activeLoungeType === 'work' ? (
+                <LoungeFeedContextBanner />
+              ) : (
+                <>
+                  <div className="w-full flex flex-col gap-3">
+                    <div className="flex flex-wrap items-baseline justify-between gap-2 px-0.5">
+                      <h1 className="text-[20px] md:text-[22px] text-slate-900 font-bold tracking-tight">
                         {activeLoungeType === 'personal'
-                          ? '🔍 내 기기 1초 AI 내용검색'
+                          ? '내 기기 검색'
                           : activeLoungeType === 'family'
-                          ? `👨‍👩‍👧‍👦 ${activeFamilyRoom} 패밀리 앨범`
+                          ? `${activeFamilyRoom} 가족 사진방`
                           : activeLoungeType === 'club'
-                          ? '⛰️ 동호회·모임 추억 & 원본 보관함'
-                          : '🎓 동창회 추억 & 원본 보관함'}
+                          ? '동호회 · 모임 사진방'
+                          : '동창회 사진방'}
                       </h1>
                     </div>
+
+                    <LoungeFeedContextBanner />
+
+                    <VoiceHeroStage />
                   </div>
 
-                  {/* 라운지별 인물 시드 알약 & 컨트롤 바 (개인 라운지에서는 불필요한 모니터 버튼 숨김) */}
-                  <LoungeFeedContextBanner />
-
-                  {/* 보더리스 통합 검색창 + [사진/동영상/문서] 캡슐 + 연결/인덱싱 상태 바 */}
-                  <VoiceHeroStage />
-                </div>
-
-                {/* 검색을 실행했거나 [전체 펼치기]를 눌렀을 때만 도화지 아래로 채워지는 결과 영역 */}
-                {showCanvasResults && (
-                  <div id="ghosti-search-results" className="scroll-mt-20">
-                    {searchSpace === 'video' ? (
-              <section className="flex flex-col gap-4">
-                <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-headline-sm text-[17px] md:text-[18px] text-white font-bold">
-                      {hasExecutedUserSearch && activeQuery
-                        ? `“${activeQuery}” 동영상 장면 검색 결과`
-                        : '전체 동영상 목록'}
-                    </h2>
-                    <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-medium">
-                      {hasExecutedUserSearch && activeQuery
-                        ? `${matchedVideoScenes.length}개 영상 · 포착된 장면부터 즉시 재생`
-                        : `총 ${matchedVideoScenes.length}개 영상`}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2">
-                    {matchedVideoScenes.length < videoSceneItems.length && (
-                      <button
-                        onClick={() => resetSearchSpaceToAll('video')}
-                        className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-primary-container font-label-sm text-[12px] font-bold border border-white/10"
-                      >
-                        동영상 {videoSceneItems.length}개 전체 보기
-                      </button>
-                    )}
-                    <button
-                      onClick={() => void openLocalFolder('videos', matchedVideoScenes[0]?.fullPath)}
-                      className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-label-sm text-[12px] font-medium border border-white/10 flex items-center gap-1.5"
-                    >
-                      <span className="material-symbols-outlined text-[15px]">folder_open</span>
-                      <span>원본 폴더 열기</span>
-                    </button>
-                  </div>
-                </div>
-
-                {matchedVideoScenes.length > 0 && (
-                  <div className="px-3.5 py-2.5 rounded-xl bg-teal-950/60 border border-teal-400/40 flex flex-wrap items-center justify-between gap-2">
-                    <span className="text-[12px] text-teal-200 font-bold">
-                      👻 화면 속 글자(자막·문서·칠판)가 찍힌 영상은 <strong className="text-teal-300">동영상 카드를 클릭하면</strong> 하단에 추출된 텍스트가 바로 표시되어 즉시 복사할 수 있어요!
-                    </span>
-                  </div>
-                )}
-
-                {matchedVideoScenes.length === 0 ? (
-                  <div className="p-10 rounded-2xl bg-[#18181B] border border-white/10 flex flex-col items-center justify-center text-center gap-3">
-                    <span className="material-symbols-outlined text-zinc-500 text-[34px]">
-                      videocam_off
-                    </span>
-                    <h3 className="font-headline-sm text-[16px] text-white font-bold">
-                      “{activeQuery}” 조건과 일치하는 동영상 타임라인 구간이 없습니다 (0건)
-                    </h3>
-                    <p className="font-body-sm text-[12.5px] text-zinc-400 max-w-lg">
-                      검색어 팩트와 무관한 동영상을 억지로 끼워 넣지 않습니다. 상단 탭에서 <strong>사진 ({searchResults.length})</strong>이나 <strong>문서 ({matchedLocalDocs.length + matchedVaultPhotos.length})</strong> 결과를 확인하거나, 아래 버튼을 눌러 전체 동영상을 확인해 보세요.
-                    </p>
-                    <button
-                      type="button"
-                      onClick={() => resetSearchSpaceToAll('video')}
-                      className="mt-1 px-4 py-2 rounded-lg bg-primary-container text-zinc-950 font-label-md text-[12.5px] font-extrabold"
-                    >
-                      동영상 {videoSceneItems.length}개 전 구간 전체 보기
-                    </button>
-                  </div>
-                ) : (
-                  /* 컴팩트 화면에서는 좌우 스와이프(Carousel), 데스크톱에서는 깔끔한 카드 그리드 */
-                  <div className="flex md:grid md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1">
-                    {matchedVideoScenes.map((vid) => {
-                      const cardThumbUrl = resolveVideoCardThumbUrl(vid);
-                      const isWholeClip = (vid.matchedSeekSec ?? 0) <= 0;
-                      const cleanTs = cleanVideoTimestampLabel(vid.matchedTimestamp);
-                      return (
-                      <article
-                        key={vid.id}
-                        onClick={() => setSelectedVideoModal(vid, vid.matchedSeekSec)}
-                        className="min-w-[85%] sm:min-w-[340px] md:min-w-0 snap-center group rounded-2xl overflow-hidden bg-[#18181B] hover:bg-zinc-900 border border-white/10 hover:border-white/25 flex flex-col cursor-pointer transition-all"
-                      >
-                        <div className="relative aspect-video w-full overflow-hidden bg-black">
-                          {cardThumbUrl ? (
-                            <img
-                              key={cardThumbUrl}
-                              src={cardThumbUrl}
-                              alt={vid.title}
-                              loading="lazy"
-                              onLoad={(e) => {
-                                (e.currentTarget as HTMLElement).style.display = '';
-                              }}
-                              onError={(e) => {
-                                (e.currentTarget as HTMLElement).style.display = 'none';
-                              }}
-                              className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-300"
-                            />
-                          ) : (
-                            <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 text-zinc-500 gap-1.5 p-4 text-center">
-                              <span className="material-symbols-outlined text-3xl text-zinc-400">movie</span>
-                              <span className="text-[11px] font-medium text-zinc-400 truncate max-w-[80%]">{vid.title}</span>
-                            </div>
-                          )}
-                          <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors flex items-center justify-center">
-                            <div className="w-11 h-11 rounded-full bg-black/75 border border-white/20 text-white flex items-center justify-center group-hover:bg-primary-container group-hover:text-zinc-950 group-hover:border-primary-container transition-all">
-                              <span className="material-symbols-outlined text-[26px]">play_arrow</span>
-                            </div>
-                          </div>
-
-                          {hasExecutedUserSearch && activeQuery && (
-                            <div className="absolute top-2.5 left-2.5 px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-primary-container/50 text-primary-container font-label-mono text-[11px] font-bold">
-                              {isWholeClip ? '🎯 전 구간 일치 (00:00~)' : `🎯 ${cleanTs} 장면 포착`}
-                            </div>
-                          )}
-
-                          <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
-                            {vid.hasScreenOcrText && (
-                              <span className="px-2 py-1 rounded-md bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-black shadow-md">
-                                ✨ 화면 글자 감지됨
-                              </span>
-                            )}
-                            <span className="px-2.5 py-1 rounded-md bg-zinc-950/90 backdrop-blur-md border border-white/15 text-white font-label-mono text-[11px] font-extrabold shadow-md">
-                              ⏱️ {vid.durationText}
-                            </span>
-                          </div>
-
-                          <div className="absolute inset-x-0 bottom-0 px-3 py-2 bg-gradient-to-t from-black/95 via-black/60 to-transparent flex items-center justify-between gap-2">
-                            <span className="font-label-mono text-[11px] text-zinc-200 font-medium truncate">
-                              {vid.locationKo} • {vid.videoFileName} ({vid.sizeMB}MB)
-                            </span>
-                            <span className="px-2 py-0.5 rounded bg-black/85 border border-white/20 font-label-mono text-[11px] text-emerald-300 font-extrabold shrink-0">
-                              ▶ {vid.durationText}
-                            </span>
-                          </div>
-                        </div>
-
-                        <div className="p-4 flex flex-col gap-2.5 flex-1 justify-between">
-                          <div className="flex flex-col gap-2">
-                            <h3 className="font-headline-sm text-[15px] text-white font-bold group-hover:text-primary-container transition-colors">
-                              {renderHighlightedDocText(
-                                vid.title,
-                                hasExecutedUserSearch ? activeQuery : ''
-                              )}
-                            </h3>
-
-                            {hasExecutedUserSearch && activeQuery && (
-                              <div className="p-2.5 rounded-xl bg-zinc-950/80 border border-primary-container/30">
-                                <p className="font-body-sm text-[12px] text-zinc-200 leading-snug line-clamp-2">
-                                  {renderHighlightedDocText(
-                                    vid.matchedFrameCaption,
-                                    activeQuery
-                                  )}
-                                </p>
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex items-center justify-between gap-2 pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400">
-                            <span>{vid.date}</span>
-                            <div className="flex items-center gap-2">
-                              <span className="text-primary-container font-bold">
+                  {showCanvasResults && (
+                    <div id="ghosti-search-results" className="scroll-mt-20">
+                      {searchSpace === 'video' ? (
+                        <section className="flex flex-col gap-4">
+                          <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h2 className="text-[16px] md:text-[17px] text-slate-900 font-bold">
                                 {hasExecutedUserSearch && activeQuery
-                                  ? isWholeClip
-                                    ? '▶ 처음부터 재생'
-                                    : `▶ ${cleanTs} 재생`
-                                  : '▶ 재생'}
-                              </span>
-                            </div>
-                          </div>
-                        </div>
-                      </article>
-                      );
-                    })}
-                  </div>
-                )}
-              </section>
-            ) : searchSpace === 'vault' ? (
-              <section className="flex flex-col gap-5">
-                <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-headline-sm text-[17px] md:text-[18px] text-white font-bold">
-                      {hasExecutedUserSearch && activeQuery
-                        ? `“${activeQuery}” 스마트 서류함 검색 결과`
-                        : '전체 문서·서류 목록'}
-                    </h2>
-                    <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-medium">
-                      {matchedVaultPhotos.length > 0
-                        ? `로컬 문서 ${matchedLocalDocs.length}건 + 촬영 서류 ${matchedVaultPhotos.length}장`
-                        : `실생활 필수 문서 ${matchedLocalDocs.length}건 · 별표(***) 가림 없이 1초 복사`}
-                    </span>
-                  </div>
-
-                  <button
-                    onClick={() => void openLocalFolder('docs')}
-                    className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 text-zinc-300 font-label-sm text-[12px] font-medium border border-white/10 flex items-center gap-1.5"
-                  >
-                    <span className="material-symbols-outlined text-[15px]">folder_open</span>
-                    <span>내 PC 문서 폴더 열기</span>
-                  </button>
-                </div>
-
-                {/* (1) 로컬 PDF / TXT / DOCX 문서 파일 그리드 (3x2 그리드) */}
-                {hasExecutedUserSearch &&
-                  activeQuery &&
-                  matchedLocalDocs.length > 0 &&
-                  matchedLocalDocs.every((d) => d.matchType === 'SIMILAR') && (
-                    <div className="px-4 py-3 rounded-2xl bg-amber-500/15 border border-amber-400/50 text-amber-200 font-label-md text-[13px] font-extrabold flex items-center gap-2">
-                      <span>
-                        {matchedLocalDocs[0].similarityNoticeKo ||
-                          '💡 검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다!'}
-                      </span>
-                    </div>
-                  )}
-                {matchedLocalDocs.length > 0 && (
-                  <div className="flex flex-col gap-2.5">
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pb-1">
-                      {visibleMatchedDocs.map((doc) => (
-                        <article
-                          key={doc.id}
-                          onClick={() => setSelectedDocModal(doc)}
-                          className="min-w-[85%] sm:min-w-[320px] md:min-w-0 snap-center group p-4 rounded-2xl bg-[#18181B] hover:bg-zinc-900 border border-white/10 hover:border-white/25 flex flex-col justify-between gap-3 cursor-pointer transition-all"
-                        >
-                          <div className="flex flex-col gap-2">
-                            {hasExecutedUserSearch && doc.matchType === 'SIMILAR' && (
-                              <div className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-400/40 text-amber-300 font-label-sm text-[11px] font-extrabold">
-                                {doc.similarityNoticeKo || '💡 유사한 문서를 찾았습니다!'}
-                              </div>
-                            )}
-                            <div className="flex items-center justify-between gap-2">
-                              <div className="flex items-center gap-1.5">
-                                <span className="px-2 py-0.5 rounded bg-zinc-800 border border-white/10 text-amber-400 font-label-mono text-[10px] font-bold">
-                                  {doc.ext}
-                                </span>
-                                <span className="px-2 py-0.5 rounded bg-zinc-900 text-zinc-300 font-label-sm text-[11px] font-medium">
-                                  {doc.categoryBadge}
-                                </span>
-                              </div>
-                              <span className="font-label-mono text-[10px] text-zinc-500">
-                                {doc.deviceSource}
+                                  ? `“${activeQuery}” 동영상 검색 결과`
+                                  : '동영상'}
+                              </h2>
+                              <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[12px] font-medium">
+                                {matchedVideoScenes.length}건
                               </span>
                             </div>
 
-                            <h4 className="font-headline-sm text-[15px] text-white font-bold group-hover:text-primary-container transition-colors">
-                              {renderHighlightedDocText(
-                                doc.title,
-                                hasExecutedUserSearch ? activeQuery : '',
-                                doc.matchedQueryTokens
+                            <div className="flex items-center gap-2">
+                              {matchedVideoScenes.length < videoSceneItems.length && (
+                                <button
+                                  onClick={() => resetSearchSpaceToAll('video')}
+                                  className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 text-[12px] font-medium border border-slate-200 cursor-pointer"
+                                >
+                                  전체 {videoSceneItems.length}개 보기
+                                </button>
                               )}
-                            </h4>
+                              <button
+                                onClick={() => void openLocalFolder('videos', matchedVideoScenes[0]?.fullPath)}
+                                className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 text-[12px] font-medium border border-slate-200 flex items-center gap-1.5 cursor-pointer"
+                              >
+                                <span className="material-symbols-outlined text-[15px]">folder_open</span>
+                                <span>폴더 열기</span>
+                              </button>
+                            </div>
+                          </div>
 
-                            <div className="bg-zinc-950/80 p-2.5 rounded-xl border border-white/5">
-                              <p className="font-body-sm text-[12px] text-zinc-400 line-clamp-3 leading-relaxed m-0 p-0">
-                                {renderHighlightedDocText(
-                                  maskSensitiveDocText(
-                                    hasExecutedUserSearch && activeQuery
-                                      ? buildDocPreviewSnippet(
-                                          doc.extractedText,
-                                          activeQuery,
-                                          180,
-                                          doc.matchedQueryTokens
-                                        )
-                                      : doc.extractedText.slice(0, 220)
-                                  ),
-                                  hasExecutedUserSearch ? activeQuery : '',
-                                  doc.matchedQueryTokens
-                                )}
+                          {matchedVideoScenes.length === 0 ? (
+                            <div className="p-10 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center justify-center text-center gap-2.5">
+                              <span className="material-symbols-outlined text-slate-400 text-[32px]">
+                                videocam_off
+                              </span>
+                              <h3 className="text-[15px] text-slate-800 font-semibold">
+                                “{activeQuery}” 조건과 일치하는 동영상 구간이 없습니다.
+                              </h3>
+                              <p className="text-[12.5px] text-slate-500 max-w-md">
+                                상단 탭에서 사진({searchResults.length})이나 문서({matchedLocalDocs.length + matchedVaultPhotos.length}) 결과를 확인하거나 전체 동영상을 볼 수 있습니다.
                               </p>
-                            </div>
-                          </div>
-
-                          <div className="flex items-center justify-between pt-2 border-t border-white/10 font-label-mono text-[11px] text-zinc-400 gap-2">
-                            <span>{doc.date}</span>
-                            <div className="flex items-center gap-1.5">
                               <button
                                 type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void navigator.clipboard?.writeText(doc.extractedText);
-                                  useSaySeeStore.setState({
-                                    lastQuarantineToast: `📋 복사 완료! [${doc.title}] 본문/계정 정보가 별표(***) 가림 없이 즉시 복사되었습니다.`,
-                                  });
-                                }}
-                                className="px-2.5 py-1 rounded-lg bg-emerald-500/20 hover:bg-emerald-500/35 border border-emerald-400/50 text-emerald-300 font-label-sm text-[11.5px] font-extrabold transition-colors cursor-pointer"
+                                onClick={() => resetSearchSpaceToAll('video')}
+                                className="mt-1 px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer"
                               >
-                                📋 복사
+                                전체 동영상 보기 ({videoSceneItems.length})
                               </button>
-                              <button
-                                type="button"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  void executeRealOsAction('open_file_search', doc.path || doc.fileName).then((res) => {
-                                    useSaySeeStore.setState({
-                                      lastQuarantineToast: res.summaryKo || `📂 탐색기에서 [${doc.fileName}] 파일을 바로 띄웠습니다.`,
-                                    });
-                                  });
-                                }}
-                                className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/35 border border-amber-400/50 text-amber-300 font-label-sm text-[11.5px] font-extrabold transition-colors cursor-pointer"
-                              >
-                                🔍 이 파일 바로 띄우기
-                              </button>
-                              <span className="text-primary-container font-bold">본문 →</span>
                             </div>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                    {visibleDocLimit < matchedLocalDocs.length && (
-                      <div ref={docMoreRef} className="h-4 w-full" aria-hidden="true" />
-                    )}
-                  </div>
-                )}
-
-                {/* (2) 사진첩 속 촬영 서류 그리드 (촬영 서류가 있을 때만 표시) */}
-                {matchedVaultPhotos.length > 0 && (
-                  <div className="flex flex-col gap-2.5">
-                    <span className="font-label-md text-[13px] text-zinc-400 font-semibold px-0.5">
-                      갤러리 내 촬영·캡처 서류 자산 ({matchedVaultPhotos.length}장)
-                    </span>
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
-                      {matchedVaultPhotos.map((item) => (
-                        <article
-                          key={item.photo.id}
-                          onClick={() => setSelectedPhoto(item.photo, null)}
-                          className="group relative rounded-2xl overflow-hidden bg-[#18181B] border border-white/10 hover:border-white/25 flex flex-col cursor-pointer transition-all"
-                        >
-                          <div className="relative aspect-[4/5] w-full overflow-hidden bg-zinc-950">
-                            <img
-                              src={item.photo.thumbUrl}
-                              alt={item.photo.name}
-                              crossOrigin={item.photo.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
-                              loading="lazy"
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            />
-
-                            <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-zinc-950/85 backdrop-blur-md border border-white/15 text-zinc-200 font-label-sm text-[10.5px] font-semibold">
-                              {item.photo.vaultCategoryLabel || item.photo.tags[0] || '촬영 서류'}
-                            </div>
-
-                            <div className="absolute inset-x-0 bottom-0 h-[22%] min-h-[44px] px-3 pb-2 pt-4 bg-gradient-to-t from-black/90 via-black/55 to-transparent flex items-end justify-between pointer-events-none">
-                              <span className="font-label-sm text-[11.5px] font-semibold text-white whitespace-nowrap shrink-0">
-                                {item.photo.date.split(' ')[0]}
-                              </span>
-                              <span className="font-label-sm text-[11px] font-medium text-zinc-300 truncate ml-2">
-                                {item.photo.tags[0]}
-                              </span>
-                            </div>
-                          </div>
-                        </article>
-                      ))}
-                    </div>
-                  </div>
-                )}
-              </section>
-            ) : (
-              /* [🖼️ 전체 갤러리] 모드 */
-              <section className="flex flex-col gap-3.5">
-                <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
-                  <div className="flex flex-wrap items-center gap-2">
-                    <h2 className="font-headline-sm text-[17px] md:text-[18px] text-white font-bold">
-                      {hasExecutedUserSearch && activeQuery
-                        ? `“${activeQuery}” 검색 결과`
-                        : '전체 사진 목록'}
-                    </h2>
-                    <span className="px-2.5 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 font-label-sm text-[12px] font-medium">
-                      총 {searchResults.length}장
-                      {(activeLoungeType === 'family' ||
-                        activeLoungeType === 'club' ||
-                        activeLoungeType === 'student')
-                        ? ' · 공유방 전용 (타 공유방·내 PC와 분리)'
-                        : ''}
-                      {groupBurstsInSearch && collapsedBurstCount > 0
-                        ? ' · 연사 묶음 1세트 포함'
-                        : ''}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center gap-2.5">
-                    <button
-                      onClick={() => setGroupBurstsInSearch(!groupBurstsInSearch)}
-                      className={`px-3 py-1.5 rounded-lg font-label-sm text-[12px] font-medium flex items-center gap-1.5 border transition-all ${
-                        groupBurstsInSearch
-                          ? 'bg-zinc-900 border-white/20 text-white'
-                          : 'bg-zinc-950 border-white/10 text-zinc-400'
-                      }`}
-                    >
-                      <span className="material-symbols-outlined text-[15px]">burst_mode</span>
-                      <span>
-                        {groupBurstsInSearch ? '❐ 동일 연사 묶어보기 ON' : '연사 전체 펼쳐보기'}
-                      </span>
-                    </button>
-                  </div>
-                </div>
-
-                {groupedResults.length > 0 ? (
-                  <>
-                  <div
-                    className={
-                      groupedResults.length <= 16
-                        ? 'grid grid-cols-2 sm:grid-cols-4 gap-3.5'
-                        : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5'
-                    }
-                  >
-                    {visibleGroupedResults.map((group) => {
-                      const item = group.representative;
-                      const isBurst = group.burstCount >= 2;
-                      return (
-                        <article
-                          key={item.photo.id}
-                          onClick={() =>
-                            setSelectedPhoto(item.photo, isBurst ? group.burstPhotos : null)
-                          }
-                          className="group relative rounded-2xl overflow-hidden bg-[#18181B] border border-white/10 hover:border-white/25 transition-all cursor-pointer flex flex-col"
-                        >
-                          <div
-                            className={`relative ${
-                              groupedResults.length <= 16 ? 'aspect-[4/3]' : 'aspect-[4/5]'
-                            } w-full overflow-hidden bg-zinc-950`}
-                          >
-                            <img
-                              src={item.photo.thumbUrl}
-                              alt={item.photo.name}
-                              crossOrigin={item.photo.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
-                              loading="lazy"
-                              className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
-                            />
-
-                            {isBurst ? (
-                              <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-zinc-950/85 backdrop-blur-md border border-white/15 text-primary-container font-label-sm text-[10.5px] font-bold flex items-center gap-1">
-                                <span>❐ {group.burstCount}장 연사</span>
-                              </div>
-                            ) : item.photo.uploaderLabel &&
-                              (activeLoungeType === 'family' ||
-                                activeLoungeType === 'club' ||
-                                activeLoungeType === 'student') ? (
-                              <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded-md bg-zinc-950/85 backdrop-blur-md border border-teal-400/40 text-teal-300 font-label-sm text-[10.5px] font-bold flex items-center gap-1">
-                                <span>
-                                  {/^[👑📸]/.test(item.photo.uploaderLabel)
-                                    ? item.photo.uploaderLabel
-                                    : `${item.photo.uploaderLabel.includes('방장') ? '👑' : '📸'} ${item.photo.uploaderLabel}`}
-                                </span>
-                              </div>
-                            ) : null}
-
-                            {(String(item.photo.id || '').startsWith('shared_sb_') ||
-                              String(item.photo.id || '').startsWith('shared_added_')) &&
-                              hasAuthenticatedHubAccountSession() &&
-                              (() => {
-                                const delPerm = evaluateSharedPhotoDeletePermission({
-                                  photoId: item.photo.id,
-                                  uploaderLabel: item.photo.uploaderLabel,
-                                  mtimeMs: item.photo.mtimeMs,
-                                  isJoinedOtherRoom: Boolean(activeJoinedRoomMeta),
-                                  hostRetainsHidePermission: readHostRetainsHidePermission(),
-                                  currentIdentityTokens,
-                                });
-                                if (!delPerm.allowed) return null;
+                          ) : (
+                            <div className="flex md:grid md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1">
+                              {matchedVideoScenes.map((vid) => {
+                                const cardThumbUrl = resolveVideoCardThumbUrl(vid);
+                                const isWholeClip = (vid.matchedSeekSec ?? 0) <= 0;
+                                const cleanTs = cleanVideoTimestampLabel(vid.matchedTimestamp);
                                 return (
-                                  <button
-                                    type="button"
-                                    onClick={(e) => {
-                                      e.stopPropagation();
-                                      removeSharedRoomPhoto(item.photo.id);
-                                    }}
-                                    aria-label="공유방에서 삭제"
-                                    title={
-                                      delPerm.mode === 'host_hide'
-                                        ? '방장 권한으로 공유방에서 이 사진 숨기기·삭제 (내 기기 원본은 보존됩니다)'
-                                        : '공유방에서 이 사진 삭제 (내 기기 원본은 보존됩니다)'
-                                    }
-                                    className="absolute top-2.5 right-12 z-20 px-2.5 py-1 rounded-full bg-rose-600/95 hover:bg-rose-500 text-white text-[11px] font-black shadow-md flex items-center gap-1 cursor-pointer"
+                                  <article
+                                    key={vid.id}
+                                    onClick={() => setSelectedVideoModal(vid, vid.matchedSeekSec)}
+                                    className="min-w-[85%] sm:min-w-[340px] md:min-w-0 snap-center group rounded-xl overflow-hidden bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 flex flex-col cursor-pointer transition-colors"
                                   >
-                                    {delPerm.mode === 'host_hide' ? '👑 숨기기' : '🗑️ 삭제'}
-                                  </button>
+                                    <div data-keep-dark="true" className="relative aspect-video w-full overflow-hidden bg-black">
+                                      {cardThumbUrl ? (
+                                        <img
+                                          key={cardThumbUrl}
+                                          src={cardThumbUrl}
+                                          alt={vid.title}
+                                          loading="lazy"
+                                          onLoad={(e) => {
+                                            (e.currentTarget as HTMLElement).style.display = '';
+                                          }}
+                                          onError={(e) => {
+                                            (e.currentTarget as HTMLElement).style.display = 'none';
+                                          }}
+                                          className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-300"
+                                        />
+                                      ) : (
+                                        <div className="w-full h-full flex flex-col items-center justify-center bg-zinc-900 text-zinc-400 gap-1.5 p-4 text-center">
+                                          <span className="material-symbols-outlined text-3xl text-zinc-400">movie</span>
+                                          <span className="text-[11px] font-medium text-zinc-400 truncate max-w-[80%]">{vid.title}</span>
+                                        </div>
+                                      )}
+                                      <div className="absolute inset-0 bg-black/20 group-hover:bg-black/10 transition-colors flex items-center justify-center">
+                                        <div className="w-10 h-10 rounded-full bg-black/70 border border-white/25 text-white flex items-center justify-center">
+                                          <span className="material-symbols-outlined text-[24px]">play_arrow</span>
+                                        </div>
+                                      </div>
+
+                                      {hasExecutedUserSearch && activeQuery && (
+                                        <div className="absolute top-2.5 left-2.5 px-2 py-0.5 rounded bg-black/80 text-white text-[11px] font-semibold">
+                                          {isWholeClip ? '00:00~' : `${cleanTs} 구간`}
+                                        </div>
+                                      )}
+
+                                      <div className="absolute top-2.5 right-2.5 flex items-center gap-1.5">
+                                        {vid.hasScreenOcrText && (
+                                          <span className="px-2 py-0.5 rounded bg-black/75 text-white text-[10.5px] font-medium">
+                                            화면 글자 포함
+                                          </span>
+                                        )}
+                                        <span className="px-2 py-0.5 rounded bg-black/80 text-white text-[11px] font-medium tabular-nums">
+                                          {vid.durationText}
+                                        </span>
+                                      </div>
+                                    </div>
+
+                                    <div className="p-3.5 flex flex-col gap-2 flex-1 justify-between">
+                                      <div className="flex flex-col gap-1.5">
+                                        <h3 className="text-[14.5px] text-slate-900 font-semibold leading-snug">
+                                          {renderHighlightedDocText(
+                                            vid.title,
+                                            hasExecutedUserSearch ? activeQuery : ''
+                                          )}
+                                        </h3>
+
+                                        {hasExecutedUserSearch && activeQuery && (
+                                          <p className="text-[12px] text-slate-600 leading-snug line-clamp-2 bg-slate-50 p-2 rounded-lg border border-slate-200">
+                                            {renderHighlightedDocText(
+                                              vid.matchedFrameCaption,
+                                              activeQuery
+                                            )}
+                                          </p>
+                                        )}
+                                      </div>
+
+                                      <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100 text-[11.5px] text-slate-500">
+                                        <span>{vid.date}</span>
+                                        <span className="text-slate-800 font-semibold">
+                                          {hasExecutedUserSearch && activeQuery
+                                            ? isWholeClip
+                                              ? '처음부터 재생'
+                                              : `${cleanTs}부터 재생`
+                                            : '재생'}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </article>
                                 );
-                              })()}
+                              })}
+                            </div>
+                          )}
+                        </section>
+                      ) : searchSpace === 'vault' ? (
+                        <section className="flex flex-col gap-5">
+                          <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h2 className="text-[16px] md:text-[17px] text-slate-900 font-bold">
+                                {hasExecutedUserSearch && activeQuery
+                                  ? `“${activeQuery}” 문서 검색 결과`
+                                  : '문서'}
+                              </h2>
+                              <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[12px] font-medium">
+                                {matchedVaultPhotos.length > 0
+                                  ? `문서 ${matchedLocalDocs.length}건 · 촬영 서류 ${matchedVaultPhotos.length}장`
+                                  : `${matchedLocalDocs.length}건`}
+                              </span>
+                            </div>
 
                             <button
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                toggleBookmark(item.photo.id);
-                              }}
-                              aria-label="즐겨찾기"
-                              title={item.photo.bookmarked ? '즐겨찾기 해제' : '즐겨찾기 추가'}
-                              className={`absolute top-2.5 right-2.5 w-7.5 h-7.5 rounded-full backdrop-blur-md flex items-center justify-center transition-all cursor-pointer ${
-                                item.photo.bookmarked
-                                  ? 'bg-red-600/95 text-white ring-2 ring-white/80 shadow-md scale-105'
-                                  : 'bg-black/60 text-white/85 hover:text-red-400 hover:bg-black/80'
-                              }`}
+                              onClick={() => void openLocalFolder('docs')}
+                              className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 text-slate-700 text-[12px] font-medium border border-slate-200 flex items-center gap-1.5 cursor-pointer"
                             >
-                              <span
-                                className="material-symbols-outlined text-[16px]"
-                                style={
-                                  item.photo.bookmarked
-                                    ? { fontVariationSettings: "'FILL' 1, 'wght' 600" }
-                                    : undefined
+                              <span className="material-symbols-outlined text-[15px]">folder_open</span>
+                              <span>문서 폴더 열기</span>
+                            </button>
+                          </div>
+
+                          {hasExecutedUserSearch &&
+                            activeQuery &&
+                            matchedLocalDocs.length > 0 &&
+                            matchedLocalDocs.every((d) => d.matchType === 'SIMILAR') && (
+                              <div className="px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-[12.5px] font-medium">
+                                {matchedLocalDocs[0].similarityNoticeKo ||
+                                  '정확히 일치하는 문서가 없어 유사한 문서를 표시합니다.'}
+                              </div>
+                            )}
+
+                          {matchedLocalDocs.length > 0 && (
+                            <div className="flex flex-col gap-2.5">
+                              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5 pb-1">
+                                {visibleMatchedDocs.map((doc) => (
+                                  <article
+                                    key={doc.id}
+                                    onClick={() => setSelectedDocModal(doc)}
+                                    className="p-4 rounded-xl bg-white hover:bg-slate-50 border border-slate-200 hover:border-slate-300 flex flex-col justify-between gap-3 cursor-pointer transition-colors"
+                                  >
+                                    <div className="flex flex-col gap-2">
+                                      <div className="flex items-center justify-between gap-2">
+                                        <div className="flex items-center gap-1.5">
+                                          <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 text-[10.5px] font-semibold">
+                                            {doc.ext}
+                                          </span>
+                                          <span className="text-slate-500 text-[11.5px]">
+                                            {doc.categoryBadge}
+                                          </span>
+                                        </div>
+                                        <span className="text-[11px] text-slate-400">
+                                          {doc.deviceSource}
+                                        </span>
+                                      </div>
+
+                                      <h4 className="text-[14.5px] text-slate-900 font-semibold leading-snug">
+                                        {renderHighlightedDocText(
+                                          doc.title,
+                                          hasExecutedUserSearch ? activeQuery : '',
+                                          doc.matchedQueryTokens
+                                        )}
+                                      </h4>
+
+                                      <div className="bg-slate-50 p-2.5 rounded-lg border border-slate-100">
+                                        <p className="text-[12px] text-slate-600 line-clamp-3 leading-relaxed m-0 p-0">
+                                          {renderHighlightedDocText(
+                                            maskSensitiveDocText(
+                                              hasExecutedUserSearch && activeQuery
+                                                ? buildDocPreviewSnippet(
+                                                    doc.extractedText,
+                                                    activeQuery,
+                                                    180,
+                                                    doc.matchedQueryTokens
+                                                  )
+                                                : doc.extractedText.slice(0, 220)
+                                            ),
+                                            hasExecutedUserSearch ? activeQuery : '',
+                                            doc.matchedQueryTokens
+                                          )}
+                                        </p>
+                                      </div>
+                                    </div>
+
+                                    <div className="flex items-center justify-between pt-2 border-t border-slate-100 text-[11.5px] text-slate-500 gap-2">
+                                      <span>{doc.date}</span>
+                                      <div className="flex items-center gap-1.5">
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            void navigator.clipboard?.writeText(doc.extractedText);
+                                            useSaySeeStore.setState({
+                                              lastQuarantineToast: `[${doc.title}] 본문이 클립보드에 복사되었습니다.`,
+                                            });
+                                          }}
+                                          className="px-2.5 py-1 rounded-md bg-slate-100 hover:bg-slate-200 text-slate-700 text-[11.5px] font-medium transition-colors cursor-pointer"
+                                        >
+                                          복사
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            void executeRealOsAction('open_file_search', doc.path || doc.fileName).then((res) => {
+                                              useSaySeeStore.setState({
+                                                lastQuarantineToast: res.summaryKo || `[${doc.fileName}] 파일을 열었습니다.`,
+                                              });
+                                            });
+                                          }}
+                                          className="px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-medium transition-colors cursor-pointer"
+                                        >
+                                          열기
+                                        </button>
+                                      </div>
+                                    </div>
+                                  </article>
+                                ))}
+                              </div>
+                              {visibleDocLimit < matchedLocalDocs.length && (
+                                <div ref={docMoreRef} className="h-4 w-full" aria-hidden="true" />
+                              )}
+                            </div>
+                          )}
+
+                          {matchedVaultPhotos.length > 0 && (
+                            <div className="flex flex-col gap-2.5">
+                              <span className="text-[13px] text-slate-600 font-semibold px-0.5">
+                                촬영 · 캡처 서류 ({matchedVaultPhotos.length}장)
+                              </span>
+                              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-3.5">
+                                {matchedVaultPhotos.map((item) => (
+                                  <article
+                                    key={item.photo.id}
+                                    onClick={() => setSelectedPhoto(item.photo, null)}
+                                    className="group relative rounded-xl overflow-hidden bg-slate-100 border border-slate-200 hover:border-slate-300 flex flex-col cursor-pointer transition-colors"
+                                  >
+                                    <div data-keep-dark="true" className="relative aspect-[4/5] w-full overflow-hidden bg-zinc-950">
+                                      <img
+                                        src={item.photo.thumbUrl}
+                                        alt={item.photo.name}
+                                        crossOrigin={item.photo.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
+                                        loading="lazy"
+                                        className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                      />
+                                      <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/75 text-white text-[10.5px] font-medium">
+                                        {item.photo.vaultCategoryLabel || item.photo.tags[0] || '촬영 서류'}
+                                      </div>
+                                      <div className="absolute inset-x-0 bottom-0 h-[22%] min-h-[40px] px-2.5 pb-2 pt-4 bg-gradient-to-t from-black/85 via-black/45 to-transparent flex items-end justify-between pointer-events-none">
+                                        <span className="text-[11px] font-medium text-white whitespace-nowrap shrink-0">
+                                          {item.photo.date.split(' ')[0]}
+                                        </span>
+                                      </div>
+                                    </div>
+                                  </article>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </section>
+                      ) : (
+                        <section className="flex flex-col gap-3.5">
+                          <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h2 className="text-[16px] md:text-[17px] text-slate-900 font-bold">
+                                {hasExecutedUserSearch && activeQuery
+                                  ? `“${activeQuery}” 검색 결과`
+                                  : '사진'}
+                              </h2>
+                              <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[12px] font-medium">
+                                {searchResults.length}장
+                                {groupBurstsInSearch && collapsedBurstCount > 0
+                                  ? ' · 연사 묶음 포함'
+                                  : ''}
+                              </span>
+                            </div>
+
+                            <div className="flex items-center gap-2">
+                              <button
+                                onClick={() => setGroupBurstsInSearch(!groupBurstsInSearch)}
+                                className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors cursor-pointer ${
+                                  groupBurstsInSearch
+                                    ? 'bg-slate-900 border-slate-900 text-white'
+                                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-600'
+                                }`}
+                              >
+                                {groupBurstsInSearch ? '연사 묶어보기 켜짐' : '연사 펼쳐보기'}
+                              </button>
+                            </div>
+                          </div>
+
+                          {groupedResults.length > 0 ? (
+                            <>
+                              <div
+                                className={
+                                  groupedResults.length <= 16
+                                    ? 'grid grid-cols-2 sm:grid-cols-4 gap-3.5'
+                                    : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5'
                                 }
                               >
-                                favorite
-                              </span>
-                            </button>
+                                {visibleGroupedResults.map((group) => {
+                                  const item = group.representative;
+                                  const isBurst = group.burstCount >= 2;
+                                  const cleanUploader = (item.photo.uploaderLabel || '').replace(/^[👑📸\s]+/u, '');
+                                  return (
+                                    <article
+                                      key={item.photo.id}
+                                      onClick={() =>
+                                        setSelectedPhoto(item.photo, isBurst ? group.burstPhotos : null)
+                                      }
+                                      className="group relative rounded-xl overflow-hidden bg-slate-100 border border-slate-200 hover:border-slate-300 transition-colors cursor-pointer flex flex-col"
+                                    >
+                                      <div
+                                        data-keep-dark="true"
+                                        className={`relative ${
+                                          groupedResults.length <= 16 ? 'aspect-[4/3]' : 'aspect-[4/5]'
+                                        } w-full overflow-hidden bg-zinc-950`}
+                                      >
+                                        <img
+                                          src={item.photo.thumbUrl}
+                                          alt={item.photo.name}
+                                          crossOrigin={item.photo.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
+                                          loading="lazy"
+                                          className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
+                                        />
 
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setOcrModalPhoto(item.photo);
-                              }}
-                              title="별도 독립 사진·OCR 창(창 UI ③)을 열어 글자·표·단어칩을 추출합니다"
-                              className="absolute bottom-10 right-2.5 z-10 px-2.5 py-1 rounded-lg bg-zinc-950/90 hover:bg-teal-400 text-teal-200 hover:text-zinc-950 border border-teal-400/60 font-label-sm text-[11px] font-black shadow-md transition-all cursor-pointer"
-                            >
-                              📝 OCR
-                            </button>
+                                        {isBurst ? (
+                                          <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/75 text-white text-[10.5px] font-medium">
+                                            {group.burstCount}장 연사
+                                          </div>
+                                        ) : cleanUploader &&
+                                          (activeLoungeType === 'family' ||
+                                            activeLoungeType === 'club' ||
+                                            activeLoungeType === 'student') ? (
+                                          <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/75 text-white text-[10.5px] font-medium">
+                                            {cleanUploader}
+                                          </div>
+                                        ) : null}
 
-                            <div className="absolute inset-x-0 bottom-0 h-[22%] min-h-[44px] px-3 pb-2.5 pt-4 bg-gradient-to-t from-black/90 via-black/55 to-transparent flex items-end justify-between gap-2 pointer-events-none">
-                              <span className="font-label-sm text-[11.5px] font-semibold text-white whitespace-nowrap shrink-0">
-                                {item.photo.date.split(' ')[0]}
-                              </span>
-                              {item.photo.tags[0] && (
-                                <span className="font-label-sm text-[11.5px] font-bold text-primary-container truncate">
-                                  {item.photo.tags[0]}
-                                </span>
+                                        {(String(item.photo.id || '').startsWith('shared_sb_') ||
+                                          String(item.photo.id || '').startsWith('shared_added_')) &&
+                                          hasAuthenticatedHubAccountSession() &&
+                                          (() => {
+                                            const delPerm = evaluateSharedPhotoDeletePermission({
+                                              photoId: item.photo.id,
+                                              uploaderLabel: item.photo.uploaderLabel,
+                                              mtimeMs: item.photo.mtimeMs,
+                                              isJoinedOtherRoom: Boolean(activeJoinedRoomMeta),
+                                              hostRetainsHidePermission: readHostRetainsHidePermission(),
+                                              currentIdentityTokens,
+                                            });
+                                            if (!delPerm.allowed) return null;
+                                            return (
+                                              <button
+                                                type="button"
+                                                onClick={(e) => {
+                                                  e.stopPropagation();
+                                                  removeSharedRoomPhoto(item.photo.id);
+                                                }}
+                                                aria-label="공유방에서 삭제"
+                                                title={
+                                                  delPerm.mode === 'host_hide'
+                                                    ? '공유방에서 숨기기 (내 기기 원본 보존)'
+                                                    : '공유방에서 삭제 (내 기기 원본 보존)'
+                                                }
+                                                className="absolute top-2 right-11 z-20 px-2 py-0.5 rounded bg-black/75 hover:bg-rose-600 text-white text-[10.5px] font-semibold cursor-pointer transition-colors"
+                                              >
+                                                {delPerm.mode === 'host_hide' ? '숨기기' : '삭제'}
+                                              </button>
+                                            );
+                                          })()}
+
+                                        <button
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            toggleBookmark(item.photo.id);
+                                          }}
+                                          aria-label="즐겨찾기"
+                                          title={item.photo.bookmarked ? '즐겨찾기 해제' : '즐겨찾기 추가'}
+                                          className={`absolute top-2 right-2 w-7 h-7 rounded-full flex items-center justify-center transition-colors cursor-pointer ${
+                                            item.photo.bookmarked
+                                              ? 'bg-rose-600 text-white'
+                                              : 'bg-black/60 text-white/85 hover:bg-black/80'
+                                          }`}
+                                        >
+                                          <span
+                                            className="material-symbols-outlined text-[15px]"
+                                            style={
+                                              item.photo.bookmarked
+                                                ? { fontVariationSettings: "'FILL' 1, 'wght' 600" }
+                                                : undefined
+                                            }
+                                          >
+                                            favorite
+                                          </span>
+                                        </button>
+
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            setOcrModalPhoto(item.photo);
+                                          }}
+                                          title="사진에서 글자·표 추출 (OCR)"
+                                          className="absolute bottom-9 right-2 z-10 px-2 py-0.5 rounded bg-black/75 hover:bg-black text-white text-[10.5px] font-semibold transition-colors cursor-pointer"
+                                        >
+                                          OCR
+                                        </button>
+
+                                        <div className="absolute inset-x-0 bottom-0 h-[22%] min-h-[40px] px-2.5 pb-2 pt-4 bg-gradient-to-t from-black/85 via-black/45 to-transparent flex items-end justify-between gap-2 pointer-events-none">
+                                          <span className="text-[11px] font-medium text-white whitespace-nowrap shrink-0">
+                                            {item.photo.date.split(' ')[0]}
+                                          </span>
+                                          {item.photo.tags[0] && (
+                                            <span className="text-[11px] text-zinc-200 truncate">
+                                              {item.photo.tags[0]}
+                                            </span>
+                                          )}
+                                        </div>
+                                      </div>
+                                    </article>
+                                  );
+                                })}
+                              </div>
+                              {visiblePhotoLimit < groupedResults.length && (
+                                <div ref={photoMoreRef} className="h-4 w-full" aria-hidden="true" />
                               )}
+                            </>
+                          ) : !hasExecutedUserSearch &&
+                            (activeLoungeType === 'family' ||
+                              activeLoungeType === 'club' ||
+                              activeLoungeType === 'student') ? (
+                            <SampleSharedRoomExperienceCard
+                              loungeType={activeLoungeType}
+                              familyRoom={activeFamilyRoom}
+                            />
+                          ) : (
+                            <div className="py-14 rounded-xl bg-slate-50 border border-slate-200 text-center flex flex-col items-center gap-2">
+                              <span className="material-symbols-outlined text-slate-400 text-[34px]">
+                                image_search
+                              </span>
+                              <p className="text-[14.5px] text-slate-600 font-medium">
+                                일치하는 사진을 찾지 못했습니다. 다른 단어로 검색해 보세요.
+                              </p>
                             </div>
-                          </div>
-                        </article>
-                      );
-                    })}
-                  </div>
-                  {visiblePhotoLimit < groupedResults.length && (
-                    <div ref={photoMoreRef} className="h-4 w-full" aria-hidden="true" />
+                          )}
+                        </section>
+                      )}
+                    </div>
                   )}
-                  </>
-                ) : !hasExecutedUserSearch &&
-                  (activeLoungeType === 'family' ||
-                    activeLoungeType === 'club' ||
-                    activeLoungeType === 'student') ? (
-                  <SampleSharedRoomExperienceCard
-                    loungeType={activeLoungeType}
-                    familyRoom={activeFamilyRoom}
-                  />
-                ) : (
-                  <div className="py-14 rounded-2xl bg-[#18181B] border border-white/10 text-center flex flex-col items-center gap-2">
-                    <span className="material-symbols-outlined text-zinc-500 text-[36px]">
-                      image_search
-                    </span>
-                    <p className="font-headline-sm text-[15px] text-zinc-300 font-semibold">
-                      일치하는 사진을 찾지 못했습니다. 다른 문장이나 단어로 검색해 보세요.
-                    </p>
-                  </div>
-                )}
-              </section>
-            )}
-          </div>
-          )}
-            </>
-          )}
-        </main>
-            </GhostSecretaryFirstGuard>
-          )))}
-
+                </>
+              )}
+            </main>
+          </GhostSecretaryFirstGuard>
+        ))
+      )}
     </>
   );
 };

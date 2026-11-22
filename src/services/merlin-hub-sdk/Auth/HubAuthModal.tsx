@@ -330,8 +330,8 @@ export const HubAuthModal: React.FC<HubAuthModalProps> = ({
                       </div>
                       <p className="text-[11px] text-[#03C75A] font-bold text-center">
                         {emailHistory.length > 0 
-                          ? '💡 네이버 아이디로 간편하게 6자리 인증을 진행해 주세요.' 
-                          : '💡 네이버 카페(비타민D/화폐상습진) 회원 및 구매 고객님은 네이버 ID로 5,000P 및 혜택이 자동 연동됩니다.'}
+                          ? '네이버 아이디로 간편하게 6자리 인증을 진행해 주세요.' 
+                          : '네이버 카페(비타민D/화폐상습진) 회원 및 구매 고객님은 네이버 ID로 5,000P 및 혜택이 자동 연동됩니다.'}
                       </p>
                     </div>
                   ) : appName === '썬드리머' ? (
@@ -350,8 +350,8 @@ export const HubAuthModal: React.FC<HubAuthModalProps> = ({
                       />
                       <p className="text-[11px] text-blue-600 font-bold text-center">
                         {emailHistory.length > 0
-                          ? '💡 등록하신 이메일로 6자리 인증코드가 발송됩니다.'
-                          : '💡 외부 방문 고객님도 가입 즉시 5,000P 웰컴 치유 포인트가 100% 자동 지급됩니다!'}
+                          ? '등록하신 이메일로 6자리 인증코드가 발송됩니다.'
+                          : '외부 방문 고객님도 가입 즉시 5,000P 웰컴 치유 포인트가 100% 자동 지급됩니다!'}
                       </p>
                     </div>
                   ) : (
@@ -373,7 +373,7 @@ export const HubAuthModal: React.FC<HubAuthModalProps> = ({
                   {emailHistory.length > 0 && (
                     <div className="flex flex-col items-center gap-1.5 pt-1 animate-in fade-in duration-200">
                       <span className="text-[11px] text-slate-400 font-bold flex items-center gap-1">
-                        <span>✉️</span> 최근 사용한 계정
+                        <span></span> 최근 사용한 계정
                       </span>
                       <div className="flex flex-wrap gap-1.5 justify-center">
                         {emailHistory.map((email) => {
@@ -437,7 +437,7 @@ export const HubAuthModal: React.FC<HubAuthModalProps> = ({
             <div className="w-full space-y-10 animate-in fade-in slide-in-from-bottom-4 duration-500">
               <div className="text-center space-y-3">
                 <div className="inline-flex items-center justify-center w-16 h-16 bg-blue-50 rounded-2xl mb-2">
-                  <span className="text-3xl">📧</span>
+                  <span className="text-3xl"></span>
                 </div>
                 <h3 className="text-2xl font-black text-slate-900 tracking-tight">인증코드를 입력해주세요</h3>
                 <div className="space-y-1">
@@ -483,7 +483,7 @@ export const HubAuthModal: React.FC<HubAuthModalProps> = ({
                   disabled={status === 'verifying'}
                   className="h-14 border-2 border-slate-100 text-slate-600 font-black text-base rounded-xl hover:bg-slate-50 hover:border-slate-200 transition-all flex items-center justify-center gap-2 cursor-pointer"
                 >
-                  🔄 인증코드 재발송
+                  인증코드 재발송
                 </button>
                 <button 
                   type="button" 

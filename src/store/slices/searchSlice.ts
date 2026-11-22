@@ -305,7 +305,7 @@ export const createSearchSlice: StateCreator<
                     ocrLineCount: res.ocrLines.length,
                     ocrLines: res.ocrLines,
                     ocrFullText: res.fullText,
-                    matchedFrameCaption: summaryLine ? `📝 ${summaryLine}` : v.matchedFrameCaption,
+                    matchedFrameCaption: summaryLine ? ` ${summaryLine}` : v.matchedFrameCaption,
                     keywords: Array.from(new Set([...(v.keywords || []), ...extraTokens])),
                   }
                 : v
@@ -318,7 +318,7 @@ export const createSearchSlice: StateCreator<
                     ocrLineCount: res.ocrLines.length,
                     ocrLines: res.ocrLines,
                     ocrFullText: res.fullText,
-                    matchedFrameCaption: summaryLine ? `📝 ${summaryLine}` : v.matchedFrameCaption,
+                    matchedFrameCaption: summaryLine ? ` ${summaryLine}` : v.matchedFrameCaption,
                     keywords: Array.from(new Set([...(v.keywords || []), ...extraTokens])),
                   }
                 : v
@@ -338,7 +338,7 @@ export const createSearchSlice: StateCreator<
           matchedSeekSec: seekSec,
           thumbUrl: matchedFrame?.thumbUrl || selectedVideoModal.thumbUrl,
           matchedTimestamp: matchedFrame
-            ? `🎯 ${matchedFrame.timestampText} 구간 포착`
+            ? ` ${matchedFrame.timestampText} 구간 포착`
             : selectedVideoModal.matchedTimestamp,
           matchedFrameCaption: matchedFrame
             ? `[${matchedFrame.timestampText} · ${matchedFrame.phaseLabel}] ${matchedFrame.sceneCaption}`
@@ -420,7 +420,7 @@ export const createSearchSlice: StateCreator<
               photo,
               score: 0.96,
               matchPercentage: 98,
-              matchedBy: 'text-direct' as const,
+              matchedBy: 'text-direct'as const,
             }));
       set({
         searchSpace: 'vault',
@@ -445,7 +445,7 @@ export const createSearchSlice: StateCreator<
         photo,
         score: 0.95,
         matchPercentage: 97,
-        matchedBy: 'text-direct' as const,
+        matchedBy: 'text-direct'as const,
       }));
       set({
         searchSpace: 'gallery',
@@ -458,7 +458,7 @@ export const createSearchSlice: StateCreator<
             : stateNow.activeLoungeType === 'student'
             ? `동창회 앨범 (${galleryPhotos.length}장)`
             : `전체 갤러리 사진 (${galleryPhotos.length}장)`,
-        matchedTags: ['#전체갤러리', '#자율얼굴검출', '#768차원벡터검색'],
+        matchedTags: ['#전체갤러리', '#자율얼굴검출', '#의미검색'],
         searchResults: galleryPhotos,
       });
     }
@@ -496,13 +496,13 @@ export const createSearchSlice: StateCreator<
             photo,
             score: 0.96,
             matchPercentage: 98,
-            matchedBy: 'text-direct' as const,
+            matchedBy: 'text-direct'as const,
           }));
     const galleryPhotos = filterVisibleGalleryPhotos(sourcePhotos).map((photo) => ({
       photo,
       score: 0.95,
       matchPercentage: 97,
-      matchedBy: 'text-direct' as const,
+      matchedBy: 'text-direct'as const,
     }));
     const totalFrames = scopedVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
 
@@ -555,8 +555,7 @@ export const createSearchSlice: StateCreator<
     const stBefore = get();
     if (isSharedPhotoLounge(stBefore.activeLoungeType)) return;
 
-    const [freshPhotoDataset, freshVideos, freshDocs] = await Promise.all([
-      loadInitialPhotoDataset(),
+    const [freshPhotoDataset, freshVideos, freshDocs] = await Promise.all([      loadInitialPhotoDataset(),
       fetchIndexedVideos(),
       fetchIndexedDocuments(),
     ]);
@@ -641,7 +640,7 @@ export const createSearchSlice: StateCreator<
         photo,
         score: 0.95,
         matchPercentage: 97,
-        matchedBy: 'text-direct' as const,
+        matchedBy: 'text-direct'as const,
       }));
       const vaultPhotos = mergedPersonalPhotos
         .filter((p) => !p.quarantined && p.isVaultDocument)
@@ -649,7 +648,7 @@ export const createSearchSlice: StateCreator<
           photo,
           score: 0.96,
           matchPercentage: 98,
-          matchedBy: 'text-direct' as const,
+          matchedBy: 'text-direct'as const,
         }));
       const totalFrames = nextVideos.reduce((a, v) => a + v.timelineFrames.length, 0);
       set({
@@ -760,7 +759,7 @@ export const createSearchSlice: StateCreator<
           await get().initApp(true);
           if (reqSeq !== storeSharedRefs.latestRunTextQuerySeq) return;
           const label = scanData.driveLabel || '추가 드라이브';
-          const toastMsg = `⚡ 별도 설정 없이 [${label}]를 즉시 스캔하여 연결했습니다! (사진 ${
+          const toastMsg = `별도 설정 없이 [${label}]를 즉시 스캔하여 연결했습니다! (사진 ${
             scanData.drivePhotoCount ?? 0
           }장 · 동영상 ${scanData.driveVideoCount ?? 0}개 · 문서 ${scanData.driveDocCount ?? 0}건)`;
           if (fromVoice) {
@@ -802,7 +801,7 @@ export const createSearchSlice: StateCreator<
       set({
         desktopTab: 'trash',
         mobileTab: 'trash',
-        lastQuarantineToast: `🪄 [양방향 0토큰 자동 실행] "${query}" 음성·텍스트 명령을 [✋ 손보기 대화창]에서 즉시 실행했습니다!`,
+        lastQuarantineToast: `[양방향 0토큰 자동 실행] "${query}"음성·텍스트 명령을 [손보기 대화창]에서 즉시 실행했습니다!`,
       });
       void submitExternalMonsterChatQuery(query, 'trash');
       return;
@@ -811,7 +810,7 @@ export const createSearchSlice: StateCreator<
     // 2) [🎯 찾기]에서 카톡 전달 / 문서 수치 즉답("보증금 얼마야?") / 키워드 문장 발췌 / 요약 낭독 / 단골 AI 바톤터치 의도 처리
     //    (공유 사진방에서는 내 기기 로컬 문서 localDocuments 참조·누출을 100% 원천 차단!)
     const voiceDocCmd = sharedModeEarly
-      ? { intentType: 'NONE' as const, targetDocKeyword: '', extractKeywords: [], kakaoRecipientName: '' }
+      ? { intentType: 'NONE'as const, targetDocKeyword: '', extractKeywords: [], kakaoRecipientName: '' }
       : parseZeroLlmVoiceDocCommand(query);
     if (voiceDocCmd.intentType === 'KAKAO_REAL_CHATROOM_SEND') {
       const { matchedDoc } = resolveTargetDocAndBuildFactAnswer(
@@ -832,7 +831,7 @@ export const createSearchSlice: StateCreator<
         activeQuery: query,
         matchedTags: [`#카톡실채팅방전달(${kakaoRes.recipientName})`, '#엔터1번안전전송', '#0토큰직결'],
         matchedLocalDocs: docMatches.length > 0 ? docMatches : matchedDoc ? [matchedDoc] : localDocuments,
-        lastQuarantineToast: `💬 [카카오톡 '${kakaoRes.recipientName}' 대화방 파일 장전 완료] ${kakaoRes.hyunsuAnnouncement}`,
+        lastQuarantineToast: `[카카오톡 '${kakaoRes.recipientName}'대화방 파일 장전 완료] ${kakaoRes.hyunsuAnnouncement}`,
       });
       return;
     }
@@ -863,20 +862,18 @@ export const createSearchSlice: StateCreator<
         hasExecutedUserSearch: true,
         activeQuery: query,
         matchedTags: isMobileVoice
-          ? [
-              `#${voiceDocCmd.extractKeywords[0] || '핵심수치'}즉답`,
+          ? [              `#${voiceDocCmd.extractKeywords[0] || '핵심수치'}즉답`,
               '#무토큰로컬브리핑',
               '#현수남성성우안내',
             ]
-          : [
-              `#${voiceDocCmd.extractKeywords[0] || '핵심수치'}즉답`,
+          : [              `#${voiceDocCmd.extractKeywords[0] || '핵심수치'}즉답`,
               '#무토큰문서즉답',
             ],
         matchedLocalDocs: finalDocs,
         selectedDocModal: matchedDoc || finalDocs[0] || null,
         lastQuarantineToast: isMobileVoice
-          ? `🎙️ [0토큰 문서 즉답 브리핑 · 현수 성우] ${factAnswerKo}`
-          : `📄 [0토큰 문서 즉답 요약] ${factAnswerKo}`,
+          ? `[0토큰 문서 즉답 브리핑 · 현수 성우] ${factAnswerKo}`
+          : `[0토큰 문서 즉답 요약] ${factAnswerKo}`,
       });
       return;
     }
@@ -897,7 +894,7 @@ export const createSearchSlice: StateCreator<
       const readScript =
         extracted.matchedCount > 0
           ? `${simPrefix}${extracted.hyunsuIntroText} ${extracted.sunhiReadScript}`
-          : `${simPrefix}찾으신 '${matchedDoc?.title || '문서'}' 내용입니다. ${fullText || factAnswerKo}`;
+          : `${simPrefix}찾으신 '${matchedDoc?.title || '문서'}'내용입니다. ${fullText || factAnswerKo}`;
 
       const isMobileVoice = isMobileVoiceEnvironment();
       if (isMobileVoice) {
@@ -913,8 +910,8 @@ export const createSearchSlice: StateCreator<
         matchedLocalDocs: rankedDocs.length > 0 ? rankedDocs : matchedDoc ? [matchedDoc] : localDocuments,
         selectedDocModal: matchedDoc || null,
         lastQuarantineToast: isMobileVoice
-          ? `🎙️ [선희 아나운서 조항·문장 낭독] ${extracted.matchedCount > 0 ? extracted.hyunsuIntroText : (matchedDoc?.title || '문서 낭독')}`
-          : `📄 [문서 핵심 조항 발췌] ${extracted.matchedCount > 0 ? extracted.hyunsuIntroText : (matchedDoc?.title || '문서 요약')}`,
+          ? `[선희 아나운서 조항·문장 낭독] ${extracted.matchedCount > 0 ? extracted.hyunsuIntroText : (matchedDoc?.title || '문서 낭독')}`
+          : `[문서 핵심 조항 발췌] ${extracted.matchedCount > 0 ? extracted.hyunsuIntroText : (matchedDoc?.title || '문서 요약')}`,
       });
       return;
     }
@@ -940,8 +937,8 @@ export const createSearchSlice: StateCreator<
         matchedLocalDocs: rankedDocs.length > 0 ? rankedDocs : matchedDoc ? [matchedDoc] : localDocuments,
         selectedDocModal: matchedDoc || null,
         lastQuarantineToast: isMobileVoice
-          ? `🎙️ [선희 아나운서 문서 요약 낭독] ${factAnswerKo}`
-          : `📄 [문서 핵심 요약] ${factAnswerKo}`,
+          ? `[선희 아나운서 문서 요약 낭독] ${factAnswerKo}`
+          : `[문서 핵심 요약] ${factAnswerKo}`,
       });
       return;
     }
@@ -967,8 +964,8 @@ export const createSearchSlice: StateCreator<
           : [`#${batonRes.detectedAiLabel}바톤터치`, '#심층문서분석', '#0토큰무료'],
         matchedLocalDocs: matchedDoc ? [matchedDoc] : localDocuments,
         lastQuarantineToast: isMobileVoice
-          ? `🤝 [${batonRes.detectedAiLabel} 라이브 음성 바톤터치] ${batonRes.ttsBriefingKo}`
-          : `🤝 [${batonRes.detectedAiLabel} 심층 상담 바톤터치] ${batonRes.ttsBriefingKo}`,
+          ? `[${batonRes.detectedAiLabel} 라이브 음성 바톤터치] ${batonRes.ttsBriefingKo}`
+          : `[${batonRes.detectedAiLabel} 심층 상담 바톤터치] ${batonRes.ttsBriefingKo}`,
       });
       return;
     }
@@ -1162,7 +1159,7 @@ export const createSearchSlice: StateCreator<
         : searchVideoSceneItems(cleanedSearchQuery || query, videoSceneItems);
 
     // [0.001초 즉시 반영]: 사용자가 [문서] 탭(또는 콜드스타트 상태)에서 엔터를 치면
-    // 768차원 비전/텍스트 ONNX 모델 로딩(2~3초)을 기다리지 않고 0.001초 만에 문서·어휘 결과를 즉시 렌더링합니다!
+    // 768차원 비전/텍스트 ONNX 모델 로딩(2~3초)을 기다리지 않고 0.00문서·어휘 결과를 즉시 렌더링합니다!
     const instantHasDirectDocFileHit = instantDocMatches.some((d) => Boolean(d.matchedInFileName));
     if (searchSpace === 'vault' || !encoderReadyBeforeQuery || (!hasUserSelectedSearchTab && instantHasDirectDocFileHit)) {
       const immediateSpace: SearchSpaceMode = sharedMode || isExplicitPhotoOnlyQuery
@@ -1189,8 +1186,7 @@ export const createSearchSlice: StateCreator<
     }
 
     // [통합 3-Track 고속 병렬 검색] 문서·사진·동영상을 무대기 병렬 평가
-    const [docMatches, photoSearchOut] = await Promise.all([
-      localDocuments.length > 0 || isExplicitPhotoOnlyQuery || sharedMode || isPureBrowseDocIntent
+    const [docMatches, photoSearchOut] = await Promise.all([      localDocuments.length > 0 || isExplicitPhotoOnlyQuery || sharedMode || isPureBrowseDocIntent
         ? Promise.resolve(instantDocMatches)
         : searchLocalDocumentFilesAsync(cleanedSearchQuery || query, localDocuments),
       cleanedSearchQuery && !isPureBrowseVideoIntent && !isPureBrowseDocIntent
@@ -1245,8 +1241,7 @@ export const createSearchSlice: StateCreator<
         const effectivePlace =
           item.appliedSticks.join(' ') || relatedProposals[0]?.proposedPlaceTag || '';
 
-        const itemKeywords = new Set<string>([
-          ...(item.expandedSearchKeywords ?? []),
+        const itemKeywords = new Set<string>([          ...(item.expandedSearchKeywords ?? []),
           ...buildBidirectionalStickKeywords({
             year: alumniGradYear,
             looseTimelineGroup: effectiveGroup,
@@ -1273,8 +1268,7 @@ export const createSearchSlice: StateCreator<
           matchedSchoolNouns.some((sn) => itemKeywords.has(sn));
 
         if (yearOk && seasonOk && schoolOk) {
-          const reasonTags = [
-            `#${effectiveGroup.replace(/\s+/g, '')}`,
+          const reasonTags = [            `#${effectiveGroup.replace(/\s+/g, '')}`,
             ...(matchedMonthOrEventTokens.length > 0
               ? [`#${matchedMonthOrEventTokens[0]}사진`]
               : []),
@@ -1367,8 +1361,7 @@ export const createSearchSlice: StateCreator<
     const topTags =
       expansionBadges.length > 0
         ? Array.from(
-            new Set([
-              ...expansionBadges,
+            new Set([              ...expansionBadges,
               ...results.slice(0, 3).flatMap((r) => r.photo.tags),
             ])
           ).slice(0, 4)
@@ -1407,9 +1400,9 @@ export const createSearchSlice: StateCreator<
       telemetry: telemetry ? { ...telemetry, lastQueryMs: +(embedMs + searchMs).toFixed(1) } : null,
       lastQuarantineToast:
         isTimeRangeOrAlumniQuery && results.length > 0
-          ? `🔍 “${query}” 관련 계절·시기 사진 ${results.length}장을 찾았어요!`
+          ? ` “${query}” 관련 계절·시기 사진 ${results.length}장을 찾았어요!`
           : fromVoice && isMobileVoiceEnvironment() && hasAnyMatchedResult
-          ? `🎙️ [현수 성우 브리핑] ${searchBriefingKo}`
+          ? `[현수 성우 브리핑] ${searchBriefingKo}`
           : null,
     });
 
@@ -1424,8 +1417,7 @@ export const createSearchSlice: StateCreator<
         await ensureTextQueryEncoderLoaded();
         if (reqSeq !== storeSharedRefs.latestRunTextQuerySeq) return;
         if (needsVideoKeyframeWarmup) {
-          const prioritized = [
-            ...videoMatches,
+          const prioritized = [            ...videoMatches,
             ...videoSceneItems.filter((v) => !videoMatches.some((m) => m.id === v.id)),
           ];
           await ensureVideoKeyframesEmbeddedForSearch(
@@ -1526,7 +1518,7 @@ export const createSearchSlice: StateCreator<
         set({
           isListening: false,
           lastQuarantineToast:
-            '🎤 연결된 마이크가 없거나 마이크 권한이 거부되었습니다. PC에서는 검색창에 텍스트로 입력해 주세요.',
+            '연결된 마이크가 없거나 마이크 권한이 거부되었습니다. PC에서는 검색창에 텍스트로 입력해 주세요.',
         });
       }
     } else {
@@ -1560,7 +1552,7 @@ export const createSearchSlice: StateCreator<
       const resolvedSpoken = (effectiveStt || trace.resolvedQuery || '').trim();
       if (!resolvedSpoken) {
         set({
-          lastQuarantineToast: '🎤 음성이 인식되지 않았습니다. 마이크에 대고 다시 말씀해 주세요.',
+          lastQuarantineToast: '음성이 인식되지 않았습니다. 마이크에 대고 다시 말씀해 주세요.',
         });
         return;
       }
@@ -1605,8 +1597,7 @@ export const createSearchSlice: StateCreator<
       forceSimulateLowAudioConfidence: forceFallbackDemo,
     });
 
-    const [docMatches, videoMatches] = await Promise.all([
-      searchLocalDocumentFilesAsync(trace.resolvedQuery, localDocuments),
+    const [docMatches, videoMatches] = await Promise.all([      searchLocalDocumentFilesAsync(trace.resolvedQuery, localDocuments),
       searchVideoSceneItemsAsync(trace.resolvedQuery, videoSceneItems, photos, results),
     ]);
     const vaultPhotoMatches = results.filter((r) => r.photo.isVaultDocument);

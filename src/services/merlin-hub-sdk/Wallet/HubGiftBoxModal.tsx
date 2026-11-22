@@ -86,13 +86,13 @@ export interface HubGiftBoxModalProps {
 export const AGGRO_GIFT_PRODUCTS: GiftProductItem[] = [
   {
     id: 'ghost_coin_1000',
-    title: '👻 귀신코인 선물',
+    title: '귀신코인 선물',
     subtitle: '1,000C 단위 자유 선택',
-    fullTitle: '👻 귀신코인 선물',
+    fullTitle: '귀신코인 선물',
     amount: 1000,
     category: 'COIN',
-    emoji: '👻',
-    defaultMessage: '귀신팸 모든 앱에서 자유롭게 쓰실 수 있는 귀신코인 선물을 보냅니다! 🎁',
+    emoji: '·',
+    defaultMessage: '귀신팸 모든 앱에서 자유롭게 쓰실 수 있는 귀신코인 선물을 보냅니다! ',
     isCustom: true,
   },
 ];
@@ -113,38 +113,38 @@ const THEME_OPTIONS: Array<{
   {
     id: 'CHEER',
     label: '응원해요',
-    emoji: '🍀',
+    emoji: '·',
     gradient: 'from-emerald-500 to-teal-600',
     border: 'border-emerald-300 bg-emerald-50/70',
     text: 'text-emerald-800',
-    defaultMsg: '항상 건강하고 기분 좋은 일만 가득하시길 진심으로 응원합니다! 🍀',
+    defaultMsg: '항상 건강하고 기분 좋은 일만 가득하시길 진심으로 응원합니다! ',
   },
   {
     id: 'THANKS',
     label: '감사 인사',
-    emoji: '💝',
+    emoji: '·',
     gradient: 'from-rose-500 to-pink-600',
     border: 'border-rose-300 bg-rose-50/70',
     text: 'text-rose-800',
-    defaultMsg: '평소 나누어주신 따뜻한 마음과 도움에 깊이 감사드립니다 💝',
+    defaultMsg: '평소 나누어주신 따뜻한 마음과 도움에 깊이 감사드립니다 ',
   },
   {
     id: 'TOGETHER',
     label: '함께 힘내요',
-    emoji: '☀️',
+    emoji: '·',
     gradient: 'from-amber-500 to-orange-600',
     border: 'border-amber-300 bg-amber-50/70',
     text: 'text-amber-800',
-    defaultMsg: '오늘도 활기차고 든든한 하루 보내시길 바라며 작은 선물을 보냅니다! ☀️',
+    defaultMsg: '오늘도 활기차고 든든한 하루 보내시길 바라며 작은 선물을 보냅니다! ',
   },
   {
     id: 'CONGRATS',
     label: '축하해요',
-    emoji: '🎉',
+    emoji: '·',
     gradient: 'from-indigo-500 to-violet-600',
     border: 'border-indigo-300 bg-indigo-50/70',
     text: 'text-indigo-800',
-    defaultMsg: '기쁜 날을 진심으로 축하드리며 행운 가득한 선물을 보냅니다! 🎉',
+    defaultMsg: '기쁜 날을 진심으로 축하드리며 행운 가득한 선물을 보냅니다! ',
   },
 ];
 
@@ -289,7 +289,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
               receiverEmail: draft.receiverEmail,
               receiverId: draft.receiverId,
               receiverName: draft.receiverName,
-              giftTitle: draft.giftTitle || `👻 귀신코인 ${draft.amount.toLocaleString()}C 선물`,
+              giftTitle: draft.giftTitle || `귀신코인 ${draft.amount.toLocaleString()}C 선물`,
               giftCategory: 'COIN',
               amount: draft.amount,
               theme: draft.theme || 'CHEER',
@@ -299,7 +299,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
             if (res.success) {
               triggerHaptic('success');
               showToast(
-                `🎉 코인 충전 완료! 기억해 둔 ${draft.receiverName}님께 ${draft.amount.toLocaleString()}C 선물을 자동 발송했습니다!`,
+                `코인 충전 완료! 기억해 둔 ${draft.receiverName}님께 ${draft.amount.toLocaleString()}C 선물을 자동 발송했습니다!`,
                 'info'
               );
               setGiftCoinAmount(0);
@@ -397,7 +397,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
 
   const coinBalance = typeof balance === 'number' ? balance : 0;
   const finalGiftAmount = Math.max(0, Math.floor(giftCoinAmount));
-  const finalGiftTitle = `👻 귀신코인 ${finalGiftAmount.toLocaleString()}C 선물`;
+  const finalGiftTitle = `귀신코인 ${finalGiftAmount.toLocaleString()}C 선물`;
   const activeThemeObj = THEME_OPTIONS.find(t => t.id === selectedTheme) || THEME_OPTIONS[0];
   const isOverBalance = finalGiftAmount > coinBalance;
   const shortfallCoins = Math.max(0, finalGiftAmount - coinBalance);
@@ -563,12 +563,12 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
       const chargeNeed = Math.max(1000, Math.ceil(shortage / 1000) * 1000);
 
       const proceedCharge = window.confirm(
-        `[👻 보유 귀신코인 부족 안내]\n\n` +
+        `[보유 귀신코인 부족 안내]\n\n` +
           `• 선물할 코인: ${finalGiftAmount.toLocaleString()} C\n` +
           `• 현재 보유 코인: ${balance.toLocaleString()} C\n` +
           `• 부족한 코인: ${shortage.toLocaleString()} C (최소 충전 단위: ${chargeNeed.toLocaleString()} C)\n\n` +
           `충전 화면으로 이동하여 부족한 코인을 충전하시겠습니까?\n` +
-          `✨ 지금 입력하신 [${displayTarget}님께 ${finalGiftAmount.toLocaleString()}C 선물] 내용을 그대로 기억해 두었다가, 충전이 끝나는 즉시 자동으로 선물을 보내드립니다!`
+          `지금 입력하신 [${displayTarget}님께 ${finalGiftAmount.toLocaleString()}C 선물] 내용을 그대로 기억해 두었다가, 충전이 끝나는 즉시 자동으로 선물을 보내드립니다!`
       );
 
       if (!proceedCharge) return;
@@ -601,7 +601,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
     }
 
     const confirmSend = window.confirm(
-      `[🎁 귀신코인 선물하기 확인]\n\n• 받는 분: ${displayTarget}\n• 선물 코인: ${finalGiftAmount.toLocaleString()} C (귀신팸 전 앱 공용)\n• 응원 메시지: "${giftMessage}"\n\n위 내용으로 코인을 선물하시겠습니까?\n(상대방이 수령하기 전까지는 [보낸 선물] 탭에서 언제든 취소·환급 가능합니다.)`
+      `[귀신코인 선물하기 확인]\n\n• 받는 분: ${displayTarget}\n• 선물 코인: ${finalGiftAmount.toLocaleString()} C (귀신팸 전 앱 공용)\n• 응원 메시지: "${giftMessage}"\n\n위 내용으로 코인을 선물하시겠습니까?\n(상대방이 수령하기 전까지는 [보낸 선물] 탭에서 언제든 취소·환급 가능합니다.)`
     );
     if (!confirmSend) return;
 
@@ -627,7 +627,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
         localStorage.removeItem(PENDING_GIFT_STORAGE_KEY);
       }
       triggerHaptic('success');
-      showToast(`🎉 ${displayTarget}님께 ${finalGiftAmount.toLocaleString()}C 선물을 성공적으로 보냈습니다!`, 'info');
+      showToast(`${displayTarget}님께 ${finalGiftAmount.toLocaleString()}C 선물을 성공적으로 보냈습니다!`, 'info');
       setGiftCoinAmount(0);
       setRecipientInput('');
       setSelectedContact(null);
@@ -654,7 +654,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
         amount: gift.amount,
         sender: gift.sender_name,
       });
-      showToast(`🎊 선물을 열어 +${gift.amount.toLocaleString()} 코인이 즉시 적립되었습니다!`, 'info');
+      showToast(`선물을 열어 +${gift.amount.toLocaleString()} 코인이 즉시 적립되었습니다!`, 'info');
       refreshBalance();
       await loadGiftData(true);
     } finally {
@@ -676,7 +676,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
         return;
       }
       triggerHaptic('medium');
-      showToast(`✅ 선물이 취소되어 +${gift.amount.toLocaleString()}C가 내 지갑으로 즉시 복구되었습니다.`, 'info');
+      showToast(`선물이 취소되어 +${gift.amount.toLocaleString()}C가 내 지갑으로 즉시 복구되었습니다.`, 'info');
       refreshBalance();
       await loadGiftData(true);
     } finally {
@@ -693,7 +693,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
         return;
       }
       triggerHaptic('light');
-      showToast(`🔔 ${gift.receiver_name}님께 선물 도착 리마인드 알림을 다시 발송했습니다!`, 'info');
+      showToast(`${gift.receiver_name}님께 선물 도착 리마인드 알림을 다시 발송했습니다!`, 'info');
     } finally {
       setActionLoadingId(null);
     }
@@ -910,7 +910,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
               </div>
               <div>
                 <p className="text-xs font-black text-amber-900">
-                  🎊 {unboxedBanner.sender}님의 선물이 적립되었습니다!
+                  {unboxedBanner.sender}님의 선물이 적립되었습니다!
                 </p>
                 <p className="text-sm font-black text-emerald-700 mt-0.5">
                   +{unboxedBanner.amount.toLocaleString()} C 즉시 적립 완료
@@ -997,7 +997,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
                               </span>
                             </div>
                             <div className="p-3 rounded-xl bg-amber-50/70 dark:bg-slate-900/70 border border-amber-200/60 dark:border-slate-700 text-xs text-slate-700 dark:text-slate-200 leading-relaxed font-medium">
-                              💬 &ldquo;{gift.message}&rdquo;
+                              &ldquo;{gift.message}&rdquo;
                             </div>
                             <button
                               type="button"
@@ -1013,7 +1013,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
                               ) : (
                                 <>
                                   <PartyPopper className="w-4 h-4" />
-                                  <span>🎊 선물 받기 (+{gift.amount.toLocaleString()}C 즉시 적립)</span>
+                                  <span>선물 받기 (+{gift.amount.toLocaleString()}C 즉시 적립)</span>
                                 </>
                               )}
                             </button>
@@ -1097,15 +1097,15 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
                           </span>
                           {gift.status === 'CLAIMED' ? (
                             <span className="px-2 py-0.5 rounded-full bg-emerald-100 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-300 text-[10px] font-black">
-                              🟢 수령완료
+                              수령완료
                             </span>
                           ) : gift.status === 'UNCLAIMED' ? (
                             <span className="px-2 py-0.5 rounded-full bg-amber-100 dark:bg-amber-950/60 text-amber-800 dark:text-amber-300 text-[10px] font-black">
-                              🟡 미수령 대기중
+                              미수령 대기중
                             </span>
                           ) : (
                             <span className="px-2 py-0.5 rounded-full bg-slate-100 dark:bg-slate-700 text-slate-500 text-[10px] font-bold">
-                              ⚪ 취소·회수됨
+                              취소·회수됨
                             </span>
                           )}
                         </div>
@@ -1119,7 +1119,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
                     </div>
 
                     <p className="text-xs text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-900/50 p-2.5 rounded-xl border border-slate-100 dark:border-slate-800">
-                      💬 &ldquo;{gift.message}&rdquo;
+                      &ldquo;{gift.message}&rdquo;
                     </p>
 
                     {gift.status === 'UNCLAIMED' && (
@@ -1204,7 +1204,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
                     </div>
                     {isOverBalance && (
                       <span className="text-[11px] text-amber-300/95 block mt-1 leading-tight">
-                        ⚡ 부족분 {shortfallCoins.toLocaleString()}C는 충전 후 자동 선물됩니다
+                        부족분 {shortfallCoins.toLocaleString()}C는 충전 후 자동 선물됩니다
                       </span>
                     )}
                   </div>
@@ -1374,7 +1374,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
                               }`}
                             >
                               <div className="flex items-center gap-1.5 min-w-0">
-                                <span className="text-xs font-black truncate">👤 {c.nickname}</span>
+                                <span className="text-xs font-black truncate">{c.nickname}</span>
                                 <span className="text-[10px] text-slate-400 font-mono truncate">
                                   ({c.email})
                                 </span>
@@ -1429,7 +1429,7 @@ export const HubGiftBoxModal: React.FC<HubGiftBoxModalProps> = ({
                   style={{ fontFamily: "'Cafe24Ssurround', 'TmoneyRoundWindExtraBold', sans-serif" }}
                 >
                   <span>
-                    {activeThemeObj.emoji} {activeThemeObj.label} · 👻 귀신코인 선물
+                    {activeThemeObj.emoji} {activeThemeObj.label} · 귀신코인 선물
                   </span>
                   <span>+{finalGiftAmount.toLocaleString()} C</span>
                 </div>

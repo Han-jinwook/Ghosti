@@ -116,16 +116,14 @@ function applySharedRoomLocalOverlays(
     if (!deletedAt && !stickOverlay) return item;
     const nextTags = stickOverlay
       ? Array.from(
-          new Set([
-            ...(item.tags ?? []),
+          new Set([            ...(item.tags ?? []),
             ...stickOverlay.appliedSticks.map((s) => (s.startsWith('#') ? s : `#${s}`)),
           ])
         )
       : item.tags;
     const nextKeywords = stickOverlay
       ? Array.from(
-          new Set([
-            ...(item.keywordsKo ?? []),
+          new Set([            ...(item.keywordsKo ?? []),
             ...stickOverlay.appliedSticks,
             ...stickOverlay.expandedSearchKeywords,
           ])
@@ -444,7 +442,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
             }
           : c
       ),
-      lastQuarantineToast: `🛂 [자동 문패 스타일 변경] ‘${displayName}’님의 문패가 [${slotLabel} (${chosenSlot.year}년)] 컷으로 즉시 변경되었습니다!`,
+      lastQuarantineToast: `[자동 문패 스타일 변경] ‘${displayName}’님의 문패가 [${slotLabel} (${chosenSlot.year}년)] 컷으로 즉시 변경되었습니다!`,
     });
   },
 
@@ -453,7 +451,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
    * 유저가 이름을 입력(또는 관계 칩 선택)하고 [등록] 버튼 딱 한 번만 누르면:
    * ① 다년도·다각도(정면·측면·야외·선글라스) 멀티 시드 패키지 확정 (대기 중인 동일 인물 후보 자동 흡수)
    * ② Global Seed 버전 자동 갱신
-   * ③ 호스트 원본 + 전 멤버 폰 + 동영상 전 구간 1초 만에 역스캔 및 누락 사진 자동 편입
+   * ③ 호스트 원본 + 전 멤버 폰 + 동영상 전 구간 역스캔 및 누락 사진 자동 편입
    */
   registerFaceMember: async (clusterId, registeredName, relationshipTag, options) => {
     const cleanName = registeredName.trim();
@@ -573,8 +571,8 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       ? {
           seedVersion: nextSeedVer,
           triggerTitle: isSecondaryRoom
-            ? `[${activeRoomKey}] 방 전용 호칭 ‘${cleanName}’ 매핑 완료 (귀신같이 여권 시드 공유 · 1초 만에 역스캔)`
-            : `‘${cleanName}’ [등록] 원터치 ➔ 다년도·다각도 시드(${condSummary}) 확정 & 전 멤버 폰 1초 만에 역스캔 완결`,
+            ? `[${activeRoomKey}] 방 전용 호칭 ‘${cleanName}’ 매핑 완료 (귀신같이 여권 시드 공유 · 역스캔)`
+            : `‘${cleanName}’ [등록] 원터치  다년도·다각도 시드(${condSummary}) 확정 & 전 멤버 폰 역스캔 완결`,
           rescuedHostPhotos: (targetCluster?.matchedPhotoCount ?? 18) + extraRescuedHost,
           rescuedMemberPhonePhotos:
             Math.max(12, Math.round((targetCluster?.matchedPhotoCount ?? 20) * 0.42)) +
@@ -584,7 +582,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           elapsedMs: 36,
           sampleQuery: `${cleanName} 나무 다리`,
           sampleSpace: 'gallery',
-          timestampText: '방금 전자동 역스캔 완료 (1초 만에)',
+          timestampText: '방금 전자동 역스캔 완료 (바로)',
         }
       : get().lastRetroScanReport!;
 
@@ -605,7 +603,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       lastRetroScanReport: nextReport,
       // [D-35] 귀신비서 여권 조용한 등록 흐름(silent)에서는 토스트 없이 조용히 반영
       lastQuarantineToast: cleanName && !options?.silent
-        ? `✅ '${cleanName}'님의 실제 이름이 얼굴 여권에 등록되어 사진과 즉시 매칭되었습니다!`
+        ? ` '${cleanName}'님의 실제 이름이 얼굴 여권에 등록되어 사진과 즉시 매칭되었습니다!`
         : get().lastQuarantineToast,
     });
 
@@ -659,7 +657,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       globalSeedVersion: nextSeedVer,
       lastRetroScanReport: {
         seedVersion: nextSeedVer,
-        triggerTitle: `🛂 귀신같이 여권(${target.passportEmail}) 시드 100% 공유 + [${roomKey}] 방 전용 호칭 ‘${cleanPersona}’ 즉시 매핑`,
+        triggerTitle: `귀신같이 여권(${target.passportEmail}) 시드 100% 공유 + [${roomKey}] 방 전용 호칭 ‘${cleanPersona}’ 즉시 매핑`,
         rescuedHostPhotos: target.matchedPhotoCount,
         rescuedMemberPhonePhotos: Math.max(14, Math.round(target.matchedPhotoCount * 0.45)),
         rescuedVideoSegments: target.matchedVideoSegmentCount,
@@ -667,7 +665,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         elapsedMs: 34,
         sampleQuery: `${cleanPersona} 나무 다리`,
         sampleSpace: 'gallery',
-        timestampText: '방별 호칭 1초 만에 매핑',
+        timestampText: '방별 호칭 매핑',
       },
     });
   },
@@ -692,8 +690,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           ? {
               ...prevBucket,
               forwardBucketActive: true,
-              filledStyleSlots: [
-                '정면·선명',
+              filledStyleSlots: [                '정면·선명',
                 '측면·미소',
                 '야외·노을',
                 '선글라스·역광',
@@ -701,7 +698,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
               ],
             }
           : prevBucket,
-        crossLoungeEvolutionNote: `⚡ 방금 타 라운지 신작 사진에서 5대 스타일 슬롯(5/5) + 미래 바구니(${prevBucket?.forwardBucketRange ?? '2027~2036'}) 자동 확장 ➔ 전 라운지(우리집·처가·본가·동호·동창회·동호·동창회) 실시간 전파 완료`,
+        crossLoungeEvolutionNote: `방금 타 라운지 신작 사진에서 5대 스타일 슬롯(5/5) + 미래 바구니(${prevBucket?.forwardBucketRange ?? '2027~2036'}) 자동 확장  전 라운지(우리집·처가·본가·동호·동창회·동호·동창회) 실시간 전파 완료`,
       };
     });
 
@@ -711,7 +708,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       globalSeedVersion: nextSeedVer,
       lastRetroScanReport: {
         seedVersion: nextSeedVer,
-        triggerTitle: `🛂 [${target.passportEmail}] 크로스-라운지 자율 진화 ➔ 타 방 신작 시드가 우리집·처가·본가·동호·동창회·동호·동창회방에 동시 전파됨`,
+        triggerTitle: `[${target.passportEmail}] 크로스-라운지 자율 진화  타 방 신작 시드가 우리집·처가·본가·동호·동창회·동호·동창회방에 동시 전파됨`,
         rescuedHostPhotos: target.matchedPhotoCount + 9,
         rescuedMemberPhonePhotos: 27,
         rescuedVideoSegments: target.matchedVideoSegmentCount + 2,
@@ -719,7 +716,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         elapsedMs: 35,
         sampleQuery: `${target.roomPersonas?.['처가(친정)'] || target.registeredName} 나무 다리`,
         sampleSpace: 'gallery',
-        timestampText: '전 라운지 여권 진화 동기화 (1초 만에)',
+        timestampText: '전 라운지 여권 진화 동기화 (바로)',
       },
     });
   },
@@ -756,8 +753,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       const prevYearly =
         Array.isArray(fc.yearlyBestCuts) && fc.yearlyBestCuts.length > 0
           ? fc.yearlyBestCuts
-          : [
-              {
+          : [              {
                 year: fc.representativeYear,
                 representativePhoto: fc.representativePhoto,
                 representativeDate: fc.representativeDate,
@@ -766,7 +762,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
                 avatarUrl: fc.avatarUrl,
                 cropUrl: fc.cropUrl,
                 boundingBox: fc.boundingBox,
-                conditionTag: '정면·선명' as const,
+                conditionTag: '정면·선명'as const,
                 conditionShortKo: '정면',
               },
             ];
@@ -810,7 +806,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       retroScanRunning: false,
       lastRetroScanReport: {
         seedVersion: nextSeedVer,
-        triggerTitle: `‘${targetMemberLabel}’ (${cand.conditionBadgeKo}) 원터치 등록 ➔ 전 멤버 폰 1초 만에 역스캔 완료`,
+        triggerTitle: `‘${targetMemberLabel}’ (${cand.conditionBadgeKo}) 원터치 등록  전 멤버 폰 역스캔 완료`,
         rescuedHostPhotos: cand.rescuedHostPhotoCount,
         rescuedMemberPhonePhotos: cand.rescuedMemberPhoneCount,
         rescuedVideoSegments: cand.rescuedVideoSegmentCount,
@@ -818,7 +814,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         elapsedMs: 39,
         sampleQuery: cand.sampleSearchQuery,
         sampleSpace: cand.sampleSearchSpace,
-        timestampText: '방금 전원 역스캔 완료 (1초 만에)',
+        timestampText: '방금 전원 역스캔 완료 (바로)',
       },
     });
   },
@@ -837,7 +833,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
               passedToHostQueue: true,
               contributorLabel: c.contributorLabel.includes('패스')
                 ? c.contributorLabel
-                : `${c.contributorLabel} (멤버 패스 ➔ 👑 방장 대기열 이관)`,
+                : `${c.contributorLabel} (멤버 패스   방장 대기열 이관)`,
             }
           : c
       ),
@@ -854,7 +850,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
               passedToHostQueue: true,
               contributorLabel: c.contributorLabel.includes('패스')
                 ? c.contributorLabel
-                : `${c.contributorLabel} (멤버 패스 ➔ 👑 방장 대기열 이관)`,
+                : `${c.contributorLabel} (멤버 패스   방장 대기열 이관)`,
             }
       ),
     }));
@@ -879,7 +875,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         globalSeedVersion: nextSeedVer,
         lastRetroScanReport: {
           seedVersion: nextSeedVer,
-          triggerTitle: '👑 방장 뒷정리 총점검 완료 ➔ 전 멤버(5대 기기) 다년도·다각도 시드 100% 동기화',
+          triggerTitle: '방장 뒷정리 총점검 완료  전 멤버(5대 기기) 다년도·다각도 시드 100% 동기화',
           rescuedHostPhotos: 38,
           rescuedMemberPhonePhotos: 60,
           rescuedVideoSegments: 10,
@@ -887,7 +883,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           elapsedMs: 39,
           sampleQuery: state.lastRetroScanReport?.sampleQuery ?? '은숙 나무 다리',
           sampleSpace: 'gallery',
-          timestampText: '방금 총점검 완료 (1초 만에)',
+          timestampText: '방금 총점검 완료 (바로)',
         },
       }));
       return;
@@ -900,7 +896,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     // 미등록 인물은 미등록 상태로 두고, 방장이 실명을 직접 입력하도록 안내만 한다.
     if (unregisteredCompanions.length > 0) {
       set({
-        lastQuarantineToast: `🪪 아직 이름이 없는 인물 ${unregisteredCompanions.length}명이 있어요. 얼굴을 눌러 실제 이름을 입력해 주세요.`,
+        lastQuarantineToast: `아직 이름이 없는 인물 ${unregisteredCompanions.length}명이 있어요. 얼굴을 눌러 실제 이름을 입력해 주세요.`,
       });
     }
   },
@@ -946,7 +942,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           globalSeedVersion: nextSeedVer,
           lastRetroScanReport: {
             seedVersion: nextSeedVer,
-            triggerTitle: `신규 사진(${fileName}) 얼굴 추출 ➔ 호스트 원본 + 전 멤버 폰 동시 역스캔 완료`,
+            triggerTitle: `신규 사진(${fileName}) 얼굴 추출  호스트 원본 + 전 멤버 폰 동시 역스캔 완료`,
             rescuedHostPhotos: 11,
             rescuedMemberPhonePhotos: 15,
             rescuedVideoSegments: 2,
@@ -954,7 +950,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
             elapsedMs: 39,
             sampleQuery: '은숙 나무 다리',
             sampleSpace: 'gallery',
-            timestampText: '방금 역스캔 완료 (1초 만에)',
+            timestampText: '방금 역스캔 완료 (바로)',
           },
         });
         return res.detectedCount;
@@ -1046,8 +1042,8 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       isGuestPreviewMode,
       guestJoinWallReason: null,
       lastQuarantineToast: isGuestPreviewMode
-        ? '💌 [카톡 초대 링크 수신 미리보기 ON] 설치·로그인 없이 공유 사진방을 바로 구경하는 화면입니다. 내 사진 올리기·원본 일괄 저장·새 사진 알림을 누르면 무료 앱 설치 및 자동 입장 안내가 열립니다.'
-        : '✅ [정식 멤버 화면 전환] 내 사진 올리기 · 고화질 원본 저장 · 새 사진 알림이 활성화되었습니다.',
+        ? '[카톡 초대 링크 수신 미리보기 ON] 설치·로그인 없이 공유 사진방을 바로 구경하는 화면입니다. 내 사진 올리기·원본 일괄 저장·새 사진 알림을 누르면 무료 앱 설치 및 자동 입장 안내가 열립니다.'
+        : '[정식 멤버 화면 전환] 내 사진 올리기 · 고화질 원본 저장 · 새 사진 알림이 활성화되었습니다.',
     }),
 
   triggerGuestJoinWall: (reason) =>
@@ -1073,7 +1069,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     set({
       guestJoinWallReason: null,
       lastQuarantineToast:
-        '🔐 공유방 정식 합류 및 사진 업로드를 위해 이메일 10초 인증(로그인)을 완료해 주세요!',
+        '공유방 정식 합류 및 사진 업로드를 위해 이메일 10초 인증(로그인)을 완료해 주세요!',
     });
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new CustomEvent('openLoginModal'));
@@ -1085,7 +1081,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       set({
         showSharedPhotoUploadModal: false,
         lastQuarantineToast:
-          '🔒 비로그인 상태에서는 공유방에 사진을 올릴 수 없습니다. 먼저 이메일 로그인을 완료해 주세요!',
+          '비로그인 상태에서는 공유방에 사진을 올릴 수 없습니다. 먼저 이메일 로그인을 완료해 주세요!',
       });
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('openLoginModal'));
@@ -1098,7 +1094,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
   requestAddMyPhotosToSharedRoom: () => {
     const state = get();
     if (state.isGuestPreviewMode) {
-      set({ guestJoinWallReason: '📸 내 폰 사진도 이 방에 올리기' });
+      set({ guestJoinWallReason: '내 폰 사진도 이 방에 올리기' });
       return;
     }
     // [절대 철칙] 비로그인 상태에서는 어떤 경로로도 공유방 사진 업로드 절대 불가 (정식 로그인 모달 호출)
@@ -1106,7 +1102,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       set({
         showSharedPhotoUploadModal: false,
         lastQuarantineToast:
-          '🔒 비로그인 상태에서는 공유방에 사진을 올릴 수 없습니다. 먼저 이메일 로그인(10초 인증)을 완료해 주세요!',
+          '비로그인 상태에서는 공유방에 사진을 올릴 수 없습니다. 먼저 이메일 로그인(10초 인증)을 완료해 주세요!',
       });
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('openLoginModal'));
@@ -1123,7 +1119,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       set({
         showSharedPhotoUploadModal: false,
         lastQuarantineToast:
-          '🔒 비로그인 상태에서는 공유방에 사진을 올릴 수 없습니다. 먼저 로그인해 주세요!',
+          '비로그인 상태에서는 공유방에 사진을 올릴 수 없습니다. 먼저 로그인해 주세요!',
       });
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('openLoginModal'));
@@ -1229,7 +1225,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         if (!ensured.ok || !ensured.roomId) {
           set({
             lastQuarantineToast:
-              '⚠️ 공유방 연결 토큰을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
+              '공유방 연결 토큰을 확인하지 못했습니다. 잠시 후 다시 시도해 주세요.',
           });
           return;
         }
@@ -1249,7 +1245,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       if (!upRes.ok || upRes.uploadedPhotos.length === 0) {
         set({
           lastQuarantineToast:
-            '⚠️ 공유방 사진 등록에 실패했습니다. 로그인 상태를 확인한 뒤 다시 시도해 주세요.',
+            '공유방 사진 등록에 실패했습니다. 로그인 상태를 확인한 뒤 다시 시도해 주세요.',
         });
         return;
       }
@@ -1283,7 +1279,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           photo,
           score: 0.99,
           matchPercentage: 99,
-          matchedBy: 'text-direct' as const,
+          matchedBy: 'text-direct'as const,
         })
       );
 
@@ -1295,7 +1291,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         activeQuery: `${roomLabel} (${nextResults.length}장 · 방금 ${upRes.uploadedPhotos.length}장 추가됨)`,
         matchedTags: [`#${uploaderNick}사진추가`, '#공유앨범'],
         searchResults: nextResults,
-        lastQuarantineToast: `🎉 사진 ${upRes.uploadedPhotos.length}장을 『${roomLabel}』에 올렸습니다! 이제 이 방 멤버 누구에게나 즉시 보입니다.`,
+        lastQuarantineToast: `사진 ${upRes.uploadedPhotos.length}장을 『${roomLabel}』에 올렸습니다! 이제 이 방 멤버 누구에게나 즉시 보입니다.`,
       });
     })();
   },
@@ -1311,7 +1307,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       sharedRoomAddedPhotos: nextAdded,
       searchResults: nextResults,
       lastQuarantineToast:
-        '🗑️ 공유방에서 해당 사진을 삭제했습니다. (내 기기 원본 사진은 안전하게 보존됩니다)',
+        '공유방에서 해당 사진을 삭제했습니다. (내 기기 원본 사진은 안전하게 보존됩니다)',
     });
   },
 
@@ -1341,7 +1337,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         photos: nextPhotos,
         searchResults: nextResults,
         lastQuarantineToast:
-          '🗑️ 공유방에서 사진이 숨김·삭제 처리되어 [공유방 휴지통]으로 이동되었습니다. (내 기기 원본 보존 · 언제든 1초 복원 가능)',
+          '공유방에서 사진이 숨김·삭제 처리되어 [공유방 휴지통]으로 이동되었습니다. (내 기기 원본 보존 · 언제든 복원 가능)',
       };
     });
   },
@@ -1373,7 +1369,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           photo,
           score: 0.96,
           matchPercentage: 98,
-          matchedBy: 'text-direct' as const,
+          matchedBy: 'text-direct'as const,
         })
       );
 
@@ -1384,7 +1380,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         photos: nextPhotos,
         ...(state.hasExecutedUserSearch ? {} : { searchResults: nextResults }),
         lastQuarantineToast:
-          '↩️ [공유방 휴지통]에서 사진을 1초 만에 복원하여 공유방 앨범에 다시 올렸습니다!',
+          '↩️ [공유방 휴지통]에서 사진을 복원하여 공유방 앨범에 다시 올렸습니다!',
       };
     });
   },
@@ -1419,7 +1415,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           photo,
           score: 0.96,
           matchPercentage: 98,
-          matchedBy: 'text-direct' as const,
+          matchedBy: 'text-direct'as const,
         })
       );
 
@@ -1429,7 +1425,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         sharedRoomHostPhotos: nextHost,
         photos: nextPhotos,
         ...(state.hasExecutedUserSearch ? {} : { searchResults: nextResults }),
-        lastQuarantineToast: `↩️ [공유방 휴지통]의 사진 ${photoIds.length}장을 모두 1초 만에 복원했습니다!`,
+        lastQuarantineToast: `↩️ [공유방 휴지통]의 사진 ${photoIds.length}장을 모두 복원했습니다!`,
       };
     });
   },
@@ -1453,7 +1449,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       sharedRoomHostPhotos: nextHost,
       searchResults: nextResults,
       lastQuarantineToast:
-        '🗑️ 휴지통에서 해당 사진을 영구 삭제했습니다. (내 기기 원본 파일은 안전하게 보존됩니다)',
+        '휴지통에서 해당 사진을 영구 삭제했습니다. (내 기기 원본 파일은 안전하게 보존됩니다)',
     });
   },
 
@@ -1535,8 +1531,8 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           item.photo.id === photoId ? { ...item, photo: patchPhoto(item.photo) } : item
         ),
         lastQuarantineToast: alreadyHas
-          ? `🏷️ [스티커 떼기] ‘${effectiveLabel}’ 스티커를 사진에서 제거했습니다.`
-          : `🏷️ [1초 스티커 부착 완료] ‘${effectiveLabel}’ 스티커가 사진에 바로 붙고 검색 키워드로 반영되었습니다!`,
+          ? `[스티커 떼기] ‘${effectiveLabel}’ 스티커를 사진에서 제거했습니다.`
+          : `[스티커 부착 완료] ‘${effectiveLabel}’ 스티커가 사진에 바로 붙고 검색 키워드로 반영되었습니다!`,
       };
     });
   },
@@ -1597,7 +1593,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         searchResults: state.searchResults.map((item) =>
           idSet.has(item.photo.id) ? { ...item, photo: patchPhoto(item.photo) } : item
         ),
-        lastQuarantineToast: `⚡ [1초 일괄 부착 완료] 이 방 사진 ${photoIds.length}장 전체에 [🏷️ ${effectiveLabel}] 스티커가 바로 붙었습니다!`,
+        lastQuarantineToast: `[일괄 부착 완료] 이 방 사진 ${photoIds.length}장 전체에 [${effectiveLabel}] 스티커가 바로 붙었습니다!`,
       };
     });
   },
@@ -1640,7 +1636,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         photo,
         score: 0.96,
         matchPercentage: 98,
-        matchedBy: 'text-direct' as const,
+        matchedBy: 'text-direct'as const,
       })
     );
 
@@ -1660,8 +1656,8 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       matchedVaultPhotos: [],
       searchResults: sharedGalleryResults,
       lastQuarantineToast: zCoreBridge.isConnected
-        ? `📸 『${roomTitle}』으로 돌아왔어요! 방금 점검·색인한 내 컴퓨터 사진을 골라 올려보세요.`
-        : `🏠 『${roomTitle}』으로 돌아왔습니다.`,
+        ? `『${roomTitle}』으로 돌아왔어요! 방금 점검·색인한 내 컴퓨터 사진을 골라 올려보세요.`
+        : `『${roomTitle}』으로 돌아왔습니다.`,
     });
   },
 
@@ -1838,8 +1834,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     const nextAdded =
       parsed.inviteToken && !isLoggedIn
         ? overlaidFetched
-        : [
-            ...overlaidFetched,
+        : [            ...overlaidFetched,
             ...st.sharedRoomAddedPhotos.filter((p) =>
               resolvedRoomId ? p.sharedRoomId !== resolvedRoomId : true
             ),
@@ -1858,7 +1853,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         photo,
         score: 0.96,
         matchPercentage: 98,
-        matchedBy: 'text-direct' as const,
+        matchedBy: 'text-direct'as const,
       })
     );
 
@@ -1887,8 +1882,8 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       matchedVaultPhotos: [],
       searchResults: sharedGalleryResults,
       lastQuarantineToast: isNative
-        ? `💌 ${resolvedHostName}님이 초대한 『${resolvedRoomTitle}』(${sharedGalleryResults.length}장)에 바로 입장했습니다!`
-        : `💌 ${resolvedHostName}님이 초대한 『${resolvedRoomTitle}』(${sharedGalleryResults.length}장)을 독립 공유방으로 열었습니다.`,
+        ? ` ${resolvedHostName}님이 초대한 『${resolvedRoomTitle}』(${sharedGalleryResults.length}장)에 바로 입장했습니다!`
+        : ` ${resolvedHostName}님이 초대한 『${resolvedRoomTitle}』(${sharedGalleryResults.length}장)을 독립 공유방으로 열었습니다.`,
     });
     return true;
   },
@@ -1937,8 +1932,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           stFast.sharedRoomSoftDeletedMap,
           stFast.sharedRoomStickOverlayMap
         );
-        const fastAdded = [
-          ...overlaidLocalFast,
+        const fastAdded = [          ...overlaidLocalFast,
           ...stFast.sharedRoomAddedPhotos.filter((p) =>
             fastRoomId ? p.sharedRoomId !== fastRoomId : true
           ),
@@ -1964,7 +1958,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
               photo,
               score: 0.96,
               matchPercentage: 98,
-              matchedBy: 'text-direct' as const,
+              matchedBy: 'text-direct'as const,
             })
           );
           set({
@@ -2040,8 +2034,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       stNow.sharedRoomSoftDeletedMap,
       stNow.sharedRoomStickOverlayMap
     );
-    const nextAdded = [
-      ...overlaidRemotePhotos,
+    const nextAdded = [      ...overlaidRemotePhotos,
       ...stNow.sharedRoomAddedPhotos.filter((p) =>
         finalRoomId
           ? p.sharedRoomId !== finalRoomId
@@ -2076,7 +2069,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           photo,
           score: 0.96,
           matchPercentage: 98,
-          matchedBy: 'text-direct' as const,
+          matchedBy: 'text-direct'as const,
         })
       );
       set({
@@ -2110,7 +2103,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           activeFamilyRoom,
           activeSharedRoomId: null,
           activeJoinedRoomMeta: null,
-          lastQuarantineToast: `🏠 패밀리 라운지 [내 ${activeFamilyRoom}] 독립 보안 룸으로 전환되었습니다.`,
+          lastQuarantineToast: `패밀리 라운지 [내 ${activeFamilyRoom}] 독립 보안 룸으로 전환되었습니다.`,
         };
       }
       const nextCorpus = resolveLoungePhotoCorpus({
@@ -2125,7 +2118,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         photo,
         score: 0.95,
         matchPercentage: 97,
-        matchedBy: 'text-direct' as const,
+        matchedBy: 'text-direct'as const,
       }));
       return {
         activeFamilyRoom,
@@ -2138,7 +2131,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         matchedLocalDocs: [],
         matchedVaultPhotos: [],
         activeQuery: `내 ${activeFamilyRoom} 패밀리 앨범 (${nextResults.length}장)`,
-        lastQuarantineToast: `🏠 [내 ${activeFamilyRoom}] 독립 공유방으로 전환되었습니다.`,
+        lastQuarantineToast: `[내 ${activeFamilyRoom}] 독립 공유방으로 전환되었습니다.`,
       };
     });
     if (typeof window !== 'undefined') {
@@ -2165,7 +2158,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         photo,
         score: 0.95,
         matchPercentage: 97,
-        matchedBy: 'text-direct' as const,
+        matchedBy: 'text-direct'as const,
       }));
       return {
         activeLoungeType: loungeType,
@@ -2201,7 +2194,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         photo,
         score: 0.96,
         matchPercentage: 98,
-        matchedBy: 'text-direct' as const,
+        matchedBy: 'text-direct'as const,
       }));
       return {
         activeLoungeType: room.loungeType,
@@ -2217,8 +2210,8 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         matchedVideoScenes: [],
         matchedLocalDocs: [],
         matchedVaultPhotos: [],
-        activeQuery: `💌 ${room.masterNickname} · ${room.roomTitle} (${nextResults.length}장)`,
-        lastQuarantineToast: `💌 [${room.masterNickname} · ${room.roomTitle}] 초대받은 독립 공유방으로 이동했습니다. (내 공유방과 100% 분리)`,
+        activeQuery: ` ${room.masterNickname} · ${room.roomTitle} (${nextResults.length}장)`,
+        lastQuarantineToast: `[${room.masterNickname} · ${room.roomTitle}] 초대받은 독립 공유방으로 이동했습니다. (내 공유방과 100% 분리)`,
       };
     });
     if (typeof window !== 'undefined') {
@@ -2271,7 +2264,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           photo,
           score: 0.95,
           matchPercentage: 97,
-          matchedBy: 'text-direct' as const,
+          matchedBy: 'text-direct'as const,
         })
       );
       return {
@@ -2288,7 +2281,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         matchedVideoScenes: [],
         matchedLocalDocs: [],
         matchedVaultPhotos: [],
-        lastQuarantineToast: `🚪 [${roomLabel}] 공유방에서 나왔습니다. (해당 방 로컬 캐시 0.1초 자동 삭제 완료 · 내 개인 여권과 내 사진은 100% 보존)`,
+        lastQuarantineToast: `[${roomLabel}] 공유방에서 나왔습니다. (해당 방 로컬 캐시 0.1초 자동 삭제 완료 · 내 개인 여권과 내 사진은 100% 보존)`,
       };
     });
     void get().syncActiveSharedRoomFromSupabase();
@@ -2309,7 +2302,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     set({
       studentOcrVerified: true,
       lastQuarantineToast:
-        '🎒 [학생증 로컬 OCR 0.1초 인증 완료] 외부 서버 전송 0 Byte • 🎒 동호회 · 동창회 (초·중·고 반/동아리 특가 월 900원) 자격이 즉시 확인되었습니다!',
+        '[학생증 로컬 OCR 0.1초 인증 완료] 기기 내 로컬 처리 •  동호회 · 동창회 (초·중·고 반/동아리 특가 월 900원) 자격이 즉시 확인되었습니다!',
     }),
 
   // ─────────────── [⛳ 4050 동창회 락인(Lock-in) 특화 UX 상태 & 액션] ───────────────
@@ -2319,8 +2312,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
   alumniGradCohortNumber: 89,
   alumniBannerTheme: 'chalkboard',
   clubFeedTrack: 'memories_1989',
-  alumniStickChips: [
-    {
+  alumniStickChips: [    {
       chipId: 'stick_1989',
       label: '1989',
       year: 1989,
@@ -2423,8 +2415,8 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         alumniBannerTheme: theme ?? state.alumniBannerTheme,
         analogScannedPhotos: updatedAnalogPhotos,
         lastQuarantineToast: trimmedCustomTitle
-          ? `🎓 [동창회 간판 변경] ‘${nextBannerTitle}’ 간판이 그대로 적용되어 방 전체 사진에 "${inheritedLabel}" 검색 키워드가 기본 상속되었습니다!`
-          : `🎓 [동창회 배경 변경] ‘${nextBannerTitle}’ 간판 배경이 전환되었습니다.`,
+          ? `[동창회 간판 변경] ‘${nextBannerTitle}’ 간판이 그대로 적용되어 방 전체 사진에 "${inheritedLabel}"검색 키워드가 기본 상속되었습니다!`
+          : `[동창회 배경 변경] ‘${nextBannerTitle}’ 간판 배경이 전환되었습니다.`,
       };
     }),
 
@@ -2455,7 +2447,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       photo,
       score: 0.96,
       matchPercentage: 98 - (idx % 4),
-      matchedBy: 'text-direct' as const,
+      matchedBy: 'text-direct'as const,
     });
 
     const isClubLounge = activeLoungeType === 'club';
@@ -2464,8 +2456,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       const priorityRe = isClubLounge
         ? /(번개|추억|회식|뒷풀이|친목|앨범|옛날)/i
         : new RegExp(`(${alumniGradYear}|수학여행|소풍|추억|학창|졸업|옛날)`, 'i');
-      const prioritized = [
-        ...visibleRoomPhotos.filter((p) => {
+      const prioritized = [        ...visibleRoomPhotos.filter((p) => {
           const hay = `${p.name} ${p.captionKo || ''} ${(p.tags || []).join(' ')} ${(p.keywordsKo || []).join(' ')}`;
           return priorityRe.test(hay);
         }),
@@ -2480,8 +2471,8 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         hasExecutedUserSearch: false,
         hasUserSelectedSearchTab: true,
         activeQuery: isClubLounge
-          ? `🍻 번개 · 추억 앨범 (${prioritized.length}장)`
-          : `🎞️ ${alumniGradYear} 추억 앨범 (${prioritized.length}장)`,
+          ? `번개 · 추억 앨범 (${prioritized.length}장)`
+          : ` ${alumniGradYear} 추억 앨범 (${prioritized.length}장)`,
         matchedTags: isClubLounge
           ? ['#번개모임', '#추억앨범', '#동호회공유방']
           : [`#${alumniGradYear}추억`, '#동창회앨범', '#학창시절'],
@@ -2500,8 +2491,8 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         hasExecutedUserSearch: false,
         hasUserSelectedSearchTab: true,
         activeQuery: isClubLounge
-          ? `🏕️ 정기 모임·라운딩 (${latestFirst.length}장)`
-          : `🍻 최근 근황 (${latestFirst.length}장)`,
+          ? `정기 모임·라운딩 (${latestFirst.length}장)`
+          : `최근 근황 (${latestFirst.length}장)`,
         matchedTags: isClubLounge
           ? ['#정기모임', '#라운딩', '#동호회공유방']
           : ['#최근근황', '#동창모임', '#알림클린존'],
@@ -2532,8 +2523,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         schoolName: state.alumniSchoolName,
       });
 
-      const candidates: AlumniStickChip[] = [
-        {
+      const candidates: AlumniStickChip[] = [        {
           chipId: `stick_${cleanYear}_${Date.now()}_1`,
           label: `${numYear}`,
           year: numYear,
@@ -2568,7 +2558,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
 
       return {
         alumniStickChips: newChips,
-        lastQuarantineToast: `🏷️ [스틱(Chip) 3종 + 월(Month) 양방향 인덱싱 완료] [🏷️ ${numYear}] [🏷️ ${cleanPlace}] [🏷️ ${yearSeasonLabel}] 스틱 생성! (${expanded.slice(0, 8).join(', ')} 자동 매칭 · 귀신같이 여권 ${decadeStart}년대 바구니 직결)`,
+        lastQuarantineToast: `[스틱(Chip) 3종 + 월(Month) 양방향 인덱싱 완료] [${numYear}] [${cleanPlace}] [${yearSeasonLabel}] 스틱 생성! (${expanded.slice(0, 8).join(', ')} 자동 매칭 · 귀신같이 여권 ${decadeStart}년대 바구니 직결)`,
       };
     });
   },
@@ -2606,11 +2596,11 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           ...item,
           unknownDatePlace: nextSticks.length === 0,
           appliedSticks: nextSticks,
-          looseTimelineGroup: nextSticks.length === 0 ? '❓ 언제/어디인가요?' : nextGroup,
+          looseTimelineGroup: nextSticks.length === 0 ? '언제/어디인가요?' : nextGroup,
           mappedPassportBucketLabel:
             nextSticks.length === 0
               ? '⏳ 연도 제보 대기 중'
-              : `🛂 귀신같이 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
+              : `귀신같이 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
           captionKo:
             nextSticks.length === 0
               ? item.captionKo
@@ -2621,7 +2611,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
 
       return {
         analogScannedPhotos: nextPhotos,
-        lastQuarantineToast: `🏷️ [1초 스틱 태깅 & 월(Month) 양방향 인덱싱] ‘${effectiveLabel}’ 스틱이 적용되어 [${
+        lastQuarantineToast: `[스틱 태깅 & 월(Month) 양방향 인덱싱] ‘${effectiveLabel}’ 스틱이 적용되어 [${
           chipObj?.looseTimelineGroup ?? `${targetYear}년 봄`
         }] 타임라인 및 귀신같이 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart})에 즉시 매핑되었습니다!`,
       };
@@ -2653,15 +2643,15 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           unknownDatePlace: false,
           appliedSticks: mergedSticks,
           looseTimelineGroup: groupName,
-          mappedPassportBucketLabel: `🛂 귀신같이 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
-          captionKo: item.captionKo.replace('[❓ 언제/어디인가요?] ', ''),
+          mappedPassportBucketLabel: `귀신같이 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
+          captionKo: item.captionKo.replace('[언제/어디인가요?] ', ''),
           expandedSearchKeywords: nextExpanded,
         };
       });
 
       return {
         analogScannedPhotos: nextPhotos,
-        lastQuarantineToast: `⚡ [초고속 연쇄 일괄 태깅] 대기 중인 모든 스캔 사진에 [🏷️ ${effectiveLabel}] 스틱이 1초 만에 일괄 적용되어 ‘${groupName}’ 타임라인 및 월(Month) 양방향 인덱스로 묶였습니다!`,
+        lastQuarantineToast: `[초고속 연쇄 일괄 태깅] 대기 중인 모든 스캔 사진에 [${effectiveLabel}] 스틱이 일괄 적용되어 ‘${groupName}’ 타임라인 및 월(Month) 양방향 인덱스로 묶였습니다!`,
       };
     });
   },
@@ -2696,7 +2686,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
 
       return {
         analogYearProposals: [newProposal, ...state.analogYearProposals],
-        lastQuarantineToast: `💡 [집단 지성 연도 제보 등록] ‘${cleanPlace} (${cleanGroup})’ 제보가 👑 방장 누락분 뒷정리 결재함에 전달되었습니다!`,
+        lastQuarantineToast: `[집단 지성 연도 제보 등록] ‘${cleanPlace} (${cleanGroup})’ 제보가  방장 누락분 뒷정리 결재함에 전달되었습니다!`,
       };
     });
   },
@@ -2717,8 +2707,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         const decadeStart = Math.floor(prop.proposedYear / 10) * 10;
         const decadeEnd = decadeStart + 9;
         const nextSticks = Array.from(
-          new Set([
-            ...item.appliedSticks,
+          new Set([            ...item.appliedSticks,
             `${prop.proposedYear}`,
             prop.proposedPlaceTag,
             prop.proposedTimelineGroup,
@@ -2735,9 +2724,9 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           unknownDatePlace: false,
           appliedSticks: nextSticks,
           looseTimelineGroup: prop.proposedTimelineGroup,
-          mappedPassportBucketLabel: `🛂 귀신같이 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
+          mappedPassportBucketLabel: `귀신같이 여권 ${decadeStart}년대 바구니(${decadeEnd}~${decadeStart}) 자동 매핑`,
           captionKo: `✓ [제보 반영됨: ${prop.proposedTimelineGroup} · ${prop.proposedPlaceTag}] ${item.captionKo.replace(
-            '[❓ 언제/어디인가요?] ',
+            '[언제/어디인가요?] ',
             ''
           )}`,
           expandedSearchKeywords: nextExpanded,
@@ -2753,7 +2742,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         analogScannedPhotos: nextAnalogPhotos,
         analogYearProposals: nextProposals,
         globalSeedVersion: state.globalSeedVersion + 1,
-        lastQuarantineToast: `👑 [방장 원터치 일괄 결재 완료] 멤버들이 제보한 연도·장소 ${pendingProposals.length}건이 느슨한 타임라인(1989년 봄/가을) · 계절↔월(Month) 양방향 인덱스 · 귀신같이 여권 1980년대 바구니에 100% 반영되었습니다!`,
+        lastQuarantineToast: `[방장 원터치 일괄 결재 완료] 멤버들이 제보한 연도·장소 ${pendingProposals.length}건이 느슨한 타임라인(1989년 봄/가을) · 계절↔월(Month) 양방향 인덱스 · 귀신같이 여권 1980년대 바구니에 100% 반영되었습니다!`,
       };
     });
   },
@@ -2784,8 +2773,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     );
     const candidateNames = Array.from(
       new Set(
-        [
-          passportFlow.userRealName,
+        [          passportFlow.userRealName,
           ...(passportFlow.userAliases || []),
           secretaryState.nickname,
           selfCluster?.registeredName,
@@ -2840,7 +2828,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       photo,
       score: Math.max(0.75, 0.99 - idx * 0.01),
       matchPercentage: Math.max(75, 99 - idx),
-      matchedBy: 'text-direct' as const,
+      matchedBy: 'text-direct'as const,
     }));
 
     set({
@@ -2851,12 +2839,11 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       desktopTab: 'dashboard',
       mobileTab: 'search',
       activeQuery: isClubRoom
-        ? `🎯 [${myDisplayName}] 내 모임 사진 (${matchedPhotos.length}장)`
-        : `🎯 [${myDisplayName}] ${alumniBannerTitle || `${alumniSchoolName} ${alumniGradYear}년`} 학창 시절 추억 사진 (${matchedPhotos.length}장)`,
+        ? `[${myDisplayName}] 내 모임 사진 (${matchedPhotos.length}장)`
+        : `[${myDisplayName}] ${alumniBannerTitle || `${alumniSchoolName} ${alumniGradYear}년`} 학창 시절 추억 사진 (${matchedPhotos.length}장)`,
       matchedTags: isClubRoom
         ? [`#${myDisplayName}`, '#내모임사진', '#동호회앨범']
-        : [
-            `#${myDisplayName}`,
+        : [            `#${myDisplayName}`,
             `#${(alumniBannerTitle || alumniSchoolName).replace(/\s+/g, '')}`,
             `#${alumniGradYear}년추억`,
           ],
@@ -2867,9 +2854,9 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       lastQuarantineToast:
         matchedPhotos.length > 0
           ? isClubRoom
-            ? `🎯 [${myDisplayName}] 여권 기준 이 모임방 사진 중 ${matchedPhotos.length}장을 1초 만에 찾았습니다!`
-            : `🎯 [${myDisplayName}] 여권 기준 동창회 공유방 사진 중 ${matchedPhotos.length}장을 1초 만에 찾았습니다!`
-          : `📸 아직 이 공유방에 올라온 사진이 없습니다. [+ 내 사진도 이 방에 추가하기]로 먼저 올려보세요!`,
+            ? `[${myDisplayName}] 여권 기준 이 모임방 사진 중 ${matchedPhotos.length}장을 찾았습니다!`
+            : `[${myDisplayName}] 여권 기준 동창회 공유방 사진 중 ${matchedPhotos.length}장을 찾았습니다!`
+          : `아직 이 공유방에 올라온 사진이 없습니다. [+ 내 사진도 이 방에 추가하기]로 먼저 올려보세요!`,
     });
   },
 });

@@ -1,23 +1,12 @@
-import React, { useState } from 'react';
+import React from 'react';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
-import { SmartTrashView } from '../../components/SmartTrashView';
 import { Stage1MinimalCarePreview } from '../../components/Stage1MinimalPreview';
 import { LoungeIndexingWaitingRoom } from '../../components/LoungeView';
 import { GhostSecretaryFirstGuard } from '../../components/GhostSecretaryFirstGuard';
 import { MobileCleanerRescueBanner } from '../../components/MobileCleanerRescueBanner';
 
-/**
- * [1번 창: 🎯 [1귀신] 전담 UI 패널]
- * - 좌측 👻 귀신비서 사진정리 · 브리핑 · 대화창 및 대기실 화면
- */
 export const GhostAssistantPane: React.FC = () => {
   const { desktopTab, activeLoungeType } = useSaySeeStore();
-
-  const [isStage1MinimalPreview] = useState<boolean>(() => {
-    if (typeof window === 'undefined') return true;
-    if (new URLSearchParams(window.location.search).get('ghostSearchWindow')) return false;
-    return !window.location.search.includes('preview=legacy');
-  });
 
   if (desktopTab !== 'trash') return null;
 
@@ -25,13 +14,7 @@ export const GhostAssistantPane: React.FC = () => {
     <>
       {activeLoungeType === 'personal' ? (
         <>
-          {isStage1MinimalPreview ? (
-            <Stage1MinimalCarePreview />
-          ) : (
-            <GhostSecretaryFirstGuard>
-              <SmartTrashView />
-            </GhostSecretaryFirstGuard>
-          )}
+          <Stage1MinimalCarePreview />
           <div className="w-full max-w-[1640px] mx-auto px-4 sm:px-6 md:px-8 pb-4">
             <MobileCleanerRescueBanner />
           </div>

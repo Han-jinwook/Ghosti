@@ -161,7 +161,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.7.5"
+CORE_VERSION = "2.7.9"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -884,6 +884,8 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             return
 
         if path in ("/__merlin/open-ghost-search", "/api/superpower/open_search_window") or path.startswith("/api/superpower/"):
+            if self._reject_untrusted():
+                return
             try:
                 if path == "/api/superpower/status":
                     self._send_json(plugin_ghosti_superpowers.get_superpower_status(qp))
@@ -1049,6 +1051,8 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             return
 
         if path.startswith("/api/superpower/"):
+            if self._reject_untrusted():
+                return
             try:
                 if path == "/api/superpower/start-trial":
                     self._send_json(plugin_ghosti_superpowers.start_superpower_trial(body))
@@ -1106,6 +1110,8 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 return
 
         if path in ("/__merlin/open-ghost-search", "/api/superpower/open_search_window"):
+            if self._reject_untrusted():
+                return
             try:
                 self._send_json(plugin_ghosti_superpowers.open_ghost_search_window_api(body))
             except Exception as exc:
@@ -1113,6 +1119,8 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             return
 
         if path in ("/__merlin/play-enter-giggle", "/api/superpower/play-enter-giggle"):
+            if self._reject_untrusted():
+                return
             try:
                 self._send_json(plugin_ghosti_superpowers.play_web_enter_giggle_api(body))
             except Exception as exc:

@@ -73,7 +73,7 @@ def _verify_hub_entitlements(hub_token: str) -> Dict[str, bool]:
             headers={
                 "Content-Type": "application/json",
                 "Authorization": f"Bearer {tok}",
-                "User-Agent": "MerlinZCore/2.7.5",
+                "User-Agent": "MerlinZCore/2.7.9",
             },
             method="POST",
         )

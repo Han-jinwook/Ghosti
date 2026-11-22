@@ -98,15 +98,14 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
       if (res.ok && res.item) {
         setDeviceIntegrationSnapshot({ incomingClip: res.item });
         useSaySeeStore.setState({
-          lastQuarantineToast:
-            '📋 방금 복사한 글이 연결된 내 기기로 암호화 전송되었습니다! 바로 붙여넣기 하세요.',
+          lastQuarantineToast: '복사한 내용이 연결된 기기로 전송되었습니다.',
         });
       } else {
         useSaySeeStore.setState({
           lastQuarantineToast:
             res.reason === 'EMPTY'
-              ? '📋 현재 기기에 복사된 글자가 없습니다. 먼저 원하는 문장을 복사한 뒤 다시 눌러 주세요.'
-              : '📋 브라우저 클립보드 읽기 권한이 차단되어 있어요. 아래 입력칸에 붙여넣기(Ctrl+V) 후 전송 버튼을 눌러 주세요.',
+              ? '복사된 텍스트가 없습니다. 먼저 텍스트를 복사해 주세요.'
+              : '아래 입력칸에 붙여넣기(Ctrl+V) 후 전송 버튼을 눌러 주세요.',
         });
       }
     } finally {
@@ -116,66 +115,47 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
 
   return (
     <div
-      className={`rounded-2xl bg-zinc-950/90 border border-primary-container/35 flex flex-col gap-3.5 ${
+      className={`rounded-xl bg-white border border-slate-200 flex flex-col gap-3 ${
         compact ? 'p-3.5' : 'p-4 md:p-5'
       }`}
     >
-      {/* 1. 실시간 연결 기기 바인딩 & 30일 체험 상태 헤더 */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5">
+      {/* 1. 헤더 */}
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <span className="px-2.5 py-0.5 rounded-lg bg-primary-container text-zinc-950 font-label-sm text-[11px] font-extrabold">
-            📋 실시간 E2EE 클립보드 &amp; 24시간 지연 우체통
-          </span>
-          <span className="px-2 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-mono text-[10.5px] font-bold">
-            🔒 AES-256-GCM 암호화 · Echo-Loop 0%
-          </span>
+          <h3 className="text-[14px] font-semibold text-slate-900">클립보드 공유</h3>
           {isLoggedIn && (
-            <span
-              className={`px-2 py-0.5 rounded-full border text-[10.5px] font-bold ${
-                isMobileDevice || zCoreConnected
-                  ? 'bg-emerald-500/15 border-emerald-400/40 text-emerald-200'
-                  : 'bg-amber-500/15 border-amber-400/40 text-amber-200'
-              }`}
-            >
-              {isMobileDevice
-                ? '🟢 폰 복사 복귀 자동 감지'
-                : zCoreConnected
-                ? '🟢 PC Ctrl+C 실시간 감지 중'
-                : '🟡 브라우저 복사 감지 (외부 앱 자동 감지는 PC 엔진 필요)'}
-            </span>
-          )}
-          {isLoggedIn && (
-            <span className="px-2.5 py-0.5 rounded-full bg-zinc-900 border border-white/15 text-zinc-200 text-[11px] font-bold">
-              연결된 내 기기 {connectedDevices.length}대
+            <span className="text-[12px] text-slate-500">
+              · 기기 {connectedDevices.length}대 연결됨
+              {!isMobileDevice && !zCoreConnected ? ' (외부 앱 자동 감지는 PC 엔진 필요)' : ''}
             </span>
           )}
           {isLoggedIn && deviceEntitlement?.isPaidUnlimited && !hidePricingForStore && (
-            <span className="px-2.5 py-0.5 rounded-full bg-amber-400/20 border border-amber-300/50 text-amber-200 text-[11px] font-extrabold">
-              👑 무제한 기기 통합 구독 중
+            <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-medium">
+              Pro 이용 중
               {deviceEntitlement.paidExpiresAt
-                ? ` (${formatKoreaDateShort(deviceEntitlement.paidExpiresAt)}까지 · D-${deviceEntitlement.paidDaysLeft ?? 1})`
+                ? ` (${formatKoreaDateShort(deviceEntitlement.paidExpiresAt)}까지)`
                 : ''}
             </span>
           )}
           {isLoggedIn &&
             !deviceEntitlement?.isPaidUnlimited &&
             deviceEntitlement?.trialActive && (
-              <span className="px-2.5 py-0.5 rounded-full bg-cyan-500/20 border border-cyan-400/50 text-cyan-200 text-[11px] font-extrabold">
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-700 text-[11px] font-medium">
                 {hidePricingForStore
-                  ? `✨ 다중 기기 통합 활성 (D-${deviceEntitlement.trialDaysLeft})`
-                  : `🎁 30일 무제한 무료체험 중 (D-${deviceEntitlement.trialDaysLeft} · 자동결제 0%)`}
+                  ? `연동 활성 (${deviceEntitlement.trialDaysLeft}일 남음)`
+                  : `무료체험 중 (${deviceEntitlement.trialDaysLeft}일 남음)`}
               </span>
             )}
           {isLoggedIn &&
             !deviceEntitlement?.isPaidUnlimited &&
             deviceEntitlement?.trialExpired && (
-              <span className="px-2.5 py-0.5 rounded-full bg-rose-500/20 border border-rose-400/50 text-rose-200 text-[11px] font-extrabold">
-                🔒 30일 무료체험 종료 (대장 PC 로컬 원본 100% 보존 중)
+              <span className="px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 text-[11px] font-medium">
+                무료체험 종료
               </span>
             )}
         </div>
 
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-1.5">
           {isLoggedIn &&
             !hidePricingForStore &&
             !deviceEntitlement?.isPaidUnlimited &&
@@ -184,9 +164,9 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
               <button
                 type="button"
                 onClick={() => void refreshDeviceIntegrationState(true)}
-                className="px-3 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer transition-colors"
               >
-                🎁 2대+ 연동 30일 무료체험 시작 (자동결제 0%)
+                30일 무료체험 시작
               </button>
             )}
           {isLoggedIn &&
@@ -196,25 +176,25 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
               <button
                 type="button"
                 onClick={() => openSubscriptionCheckout('personal_sub_3900')}
-                className="px-3 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-zinc-950 font-label-sm text-[11.5px] font-black cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer transition-colors"
               >
-                💳 월 3,900원 구독으로 다시 연결
+                Pro 구독 (월 3,900원)
               </button>
             )}
           {isLoggedIn && !hidePricingForStore && deviceEntitlement?.isPaidUnlimited && (
             <button
               type="button"
               onClick={() => openSubscriptionCheckout('personal_sub_3900')}
-              className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-400/40 text-amber-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
+              className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium cursor-pointer"
             >
-              ⏳ 이용 기간 연장
+              기간 연장
             </button>
           )}
           {isLoggedIn && !hidePricingForStore && !deviceEntitlement?.isPaidUnlimited && (
             <button
               type="button"
               onClick={() => setShowProModal(true)}
-              className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold cursor-pointer"
+              className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium cursor-pointer"
             >
               요금제 안내
             </button>
@@ -222,16 +202,11 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
         </div>
       </div>
 
-      {/* 1.2. iOS 클립보드 동기화 정책 정직 병기 (가격표 마스터 SSOT 의무 고지) */}
-      <div className="text-[11px] text-zinc-400 leading-snug">
-        💡 <strong>동기화 안내:</strong> 안드로이드·PC는 백그라운드 즉시 동기화되며, <strong>iOS(아이폰)</strong>는 Apple OS 정책상 앱 진입(화면 전환) 시 0.1초 만에 즉시 동기화됩니다.
-      </div>
-
-      {/* 1.5. 연결 해제된 현재 기기 재연결 안내 & 연결된 내 기기 목록(개별 연결 해제 버튼) */}
+      {/* 1.5. 연결 해제 상태 또는 연결된 기기 목록 */}
       {isLoggedIn && thisDeviceRevoked && (
-        <div className="p-2.5 rounded-xl bg-amber-500/15 border border-amber-400/45 flex flex-wrap items-center justify-between gap-2 text-[12px]">
-          <span className="text-amber-200 font-bold break-keep">
-            🔌 이 기기의 연결이 해제된 상태입니다. QR 스캔·6자리 번호 입력 또는 아래 버튼으로 다시 연결할 수 있습니다.
+        <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[12px]">
+          <span className="text-slate-700">
+            이 기기의 연결이 해제되어 있습니다.
           </span>
           <button
             type="button"
@@ -241,32 +216,26 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
               await reconnectThisDevice();
               setReconnectingBusy(false);
             }}
-            className="px-3 py-1 rounded-lg bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold cursor-pointer disabled:opacity-50 shrink-0"
+            className="px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-semibold cursor-pointer disabled:opacity-50 shrink-0"
           >
-            {reconnectingBusy ? '연결 중...' : '🔄 이 기기 다시 연결'}
+            {reconnectingBusy ? '연결 중...' : '다시 연결'}
           </button>
         </div>
       )}
 
       {isLoggedIn && connectedDevices.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 p-2.5 rounded-xl bg-zinc-900/70 border border-white/10">
-          <span className="text-[11px] font-extrabold text-zinc-400 shrink-0">
-            연결된 기기 관리:
-          </span>
+        <div className="flex flex-wrap items-center gap-2 py-1 text-[12px]">
+          <span className="text-slate-500 font-medium shrink-0">연결된 기기</span>
           {connectedDevices.map((dev) => {
             const isCurrent = dev.device_id === thisDeviceIdentity.deviceId;
             const isBusy = revokingDeviceId === dev.device_id;
             return (
               <div
                 key={dev.device_id}
-                className={`inline-flex items-center gap-1.5 pl-2.5 pr-1.5 py-1 rounded-lg border text-[11.5px] ${
-                  isCurrent
-                    ? 'bg-zinc-950 border-primary-container/40 text-zinc-100'
-                    : 'bg-zinc-950/80 border-white/15 text-zinc-200'
-                }`}
+                className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[12px] text-slate-800"
               >
-                <span className="font-bold">
-                  {dev.device_kind === 'mobile' ? '📱' : '💻'} {dev.display_name}
+                <span className="font-medium">
+                  {dev.display_name}
                   {isCurrent ? ' (현재 기기)' : ''}
                 </span>
                 <button
@@ -278,9 +247,9 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
                     await unlinkConnectedDevice(dev.device_id);
                     setRevokingDeviceId(null);
                   }}
-                  className="px-2 py-0.5 rounded-md bg-rose-500/15 hover:bg-rose-500/30 border border-rose-400/40 text-rose-200 text-[10.5px] font-extrabold cursor-pointer disabled:opacity-50 transition-colors"
+                  className="text-slate-400 hover:text-rose-600 text-[11px] font-medium cursor-pointer disabled:opacity-50 transition-colors"
                 >
-                  {isBusy ? '해제 중...' : '🔌 연결 해제'}
+                  {isBusy ? '해제 중' : '연결 해제'}
                 </button>
               </div>
             );
@@ -288,28 +257,28 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
         </div>
       )}
 
-      {/* 2. 6자리 즉시 바인딩 번호 표시(PC) & 번호 입력(모바일·서브PC) */}
-      <div className="flex flex-wrap items-center justify-between gap-2.5 p-2.5 rounded-xl bg-zinc-900/80 border border-white/10 text-[12px]">
+      {/* 2. 6자리 연결 번호 */}
+      <div className="flex flex-wrap items-center justify-between gap-2.5 px-3 py-2 rounded-lg bg-slate-50 border border-slate-200/80 text-[12px]">
         <div className="flex flex-wrap items-center gap-2">
           {isLoggedIn && devicePairingCode6 ? (
             <>
-              <span className="text-zinc-300 font-bold">🔑 내 PC 6자리 바인딩 번호:</span>
-              <span className="px-2.5 py-0.5 rounded-lg bg-black border border-primary-container/60 text-primary-container font-mono text-[13.5px] font-black tracking-widest">
+              <span className="text-slate-600 font-medium">기기 연결 번호</span>
+              <span className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-900 font-mono text-[13px] font-semibold tracking-wider">
                 {devicePairingCode6.slice(0, 3)}-{devicePairingCode6.slice(3, 6)}
               </span>
               <button
                 type="button"
                 onClick={() => void refreshDeviceIntegrationState()}
-                className="text-[11px] text-zinc-400 hover:text-white underline cursor-pointer"
+                className="text-[11.5px] text-slate-500 hover:text-slate-800 underline cursor-pointer"
               >
                 새로고침
               </button>
             </>
           ) : (
-            <span className="text-zinc-300 font-medium break-keep">
+            <span className="text-slate-500">
               {isLoggedIn
-                ? '🔑 같은 이메일로 로그인하면 자동 연결되며, PC의 6자리 번호로도 즉시 바인딩할 수 있습니다.'
-                : '🔒 로그인하면 PC에서 Ctrl+C 한 글자가 스마트폰으로 1초 만에 암호화 전달됩니다.'}
+                ? '같은 이메일로 로그인하거나 6자리 연결 번호로 기기를 등록할 수 있습니다.'
+                : '로그인 후 기기 간 복사 내역을 공유할 수 있습니다.'}
             </span>
           )}
         </div>
@@ -321,20 +290,20 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
             maxLength={7}
             value={codeInput}
             onChange={(e) => setCodeInput(e.target.value)}
-            placeholder="6자리 연결번호"
-            className="w-28 px-2.5 py-1 rounded-lg bg-zinc-950 border border-white/15 text-white font-mono text-[12px] font-bold placeholder-zinc-500 focus:outline-none focus:border-primary-container"
+            placeholder="6자리 번호"
+            className="w-24 px-2.5 py-1 rounded-md bg-white border border-slate-200 text-slate-900 font-mono text-[12px] placeholder-slate-400 focus:outline-none focus:border-slate-400"
           />
           <button
             type="submit"
             disabled={pairingBusy}
-            className="px-3 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-extrabold cursor-pointer disabled:opacity-50"
+            className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[11.5px] font-medium cursor-pointer disabled:opacity-50"
           >
-            {pairingBusy ? '확인 중...' : '번호 연결'}
+            {pairingBusy ? '확인 중...' : '연결'}
           </button>
         </form>
       </div>
 
-      {/* 3. 암호화 클립보드 즉시 발송 입력창 & 원클릭 OS 클립보드 가져오기 */}
+      {/* 3. 텍스트 전송 */}
       <form onSubmit={handleSendClip} className="flex flex-wrap items-center gap-2">
         <input
           type="text"
@@ -342,49 +311,49 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
           onChange={(e) => setClipDraft(e.target.value)}
           placeholder={
             isLoggedIn
-              ? isMobileDevice
-                ? '폰에서 복사 후 앱 복귀 시 자동 전송됩니다 (여기에 직접 적어 보낼 수도 있어요)'
-                : 'PC에서 Ctrl+C 복사 시 자동 전송됩니다 (여기에 계좌·링크·메모를 적어 바로 보낼 수도 있어요)'
-              : '먼저 이메일 로그인 후 기기 간 1초 클립보드를 이용해 보세요'
+              ? '전송할 내용을 입력하거나 복사(Ctrl+C)하세요'
+              : '로그인 후 사용할 수 있습니다'
           }
-          className="flex-1 min-w-[180px] px-3 py-2 rounded-xl bg-zinc-900 border border-white/15 text-white text-[12.5px] placeholder-zinc-500 focus:outline-none focus:border-primary-container"
+          className="flex-1 min-w-[180px] px-3 py-2 rounded-lg bg-white border border-slate-200 text-slate-900 text-[13px] placeholder-slate-400 focus:outline-none focus:border-slate-400"
         />
         {isLoggedIn && (
           <button
             type="button"
             disabled={pullingLocalClip}
             onClick={() => void handleSendCurrentOsClipboard()}
-            className="px-3 py-2 rounded-xl bg-zinc-800 hover:bg-zinc-700 border border-cyan-400/40 text-cyan-200 font-label-sm text-[11.5px] font-extrabold shrink-0 cursor-pointer disabled:opacity-50"
+            className="px-3 py-2 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium shrink-0 cursor-pointer disabled:opacity-50"
           >
-            {pullingLocalClip ? '읽는 중...' : '📋 복사한 글 바로 보내기'}
+            {pullingLocalClip ? '읽는 중...' : '복사한 글 보내기'}
           </button>
         )}
         <button
           type="submit"
           disabled={sendingClip}
-          className="px-3.5 py-2 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-sm text-[12px] font-extrabold shrink-0 cursor-pointer disabled:opacity-50"
+          className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold shrink-0 cursor-pointer disabled:opacity-50"
         >
-          {!isLoggedIn ? '🔑 로그인' : sendingClip ? '전송 중...' : '📤 내 기기로 전송'}
+          {!isLoggedIn ? '로그인' : sendingClip ? '전송 중...' : '전송'}
         </button>
       </form>
 
-      {/* 4. 최근 수신·발신된 E2EE 클립보드 목록 (최대 4건 컴팩트 노출) */}
+      <p className="text-[11.5px] text-slate-400 leading-normal">
+        안드로이드·PC는 즉시 반영되며, 아이폰(iOS)은 앱 화면으로 돌아올 때 동기화됩니다.
+      </p>
+
+      {/* 4. 최근 공유 목록 */}
       {isLoggedIn && syncedClipboardItems.length > 0 && (
-        <div className="flex flex-col gap-1.5">
+        <div className="flex flex-col divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden bg-white">
           {syncedClipboardItems.slice(0, 4).map((clip) => {
             const isCopied = copiedHash === clip.clipHash;
             return (
               <div
                 key={`${clip.clipHash}:${clip.createdAt}`}
-                className="px-3 py-2 rounded-xl bg-zinc-900/90 border border-white/10 flex items-center justify-between gap-2.5"
+                className="px-3 py-2 flex items-center justify-between gap-2.5 hover:bg-slate-50/70"
               >
                 <div className="flex flex-col min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5 text-[10.5px] text-zinc-400">
-                    <span className="text-cyan-300 font-bold truncate">{clip.senderName}</span>
-                    <span>·</span>
-                    <span>🔒 E2EE 24h 보관</span>
-                  </div>
-                  <p className="text-[12.5px] text-white font-semibold truncate">{clip.text}</p>
+                  <span className="text-[11px] text-slate-400 truncate">
+                    {clip.senderName.replace(/^[⚡📋📱💻\s]+/, '')}
+                  </span>
+                  <p className="text-[13px] text-slate-800 truncate">{clip.text}</p>
                 </div>
                 <button
                   type="button"
@@ -393,13 +362,13 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
                     setCopiedHash(clip.clipHash);
                     window.setTimeout(() => setCopiedHash(null), 2000);
                   }}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-extrabold shrink-0 cursor-pointer border ${
+                  className={`px-2.5 py-1 rounded-md text-[11.5px] font-medium shrink-0 cursor-pointer border ${
                     isCopied
-                      ? 'bg-emerald-400 text-zinc-950 border-emerald-300'
-                      : 'bg-zinc-950 hover:bg-zinc-800 text-primary-container border-primary-container/40'
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
                   }`}
                 >
-                  {isCopied ? '✓ 복사됨' : '📋 복사'}
+                  {isCopied ? '복사됨' : '복사'}
                 </button>
               </div>
             );

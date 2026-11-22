@@ -24,19 +24,12 @@ import {
   jumpToGhostSecretary,
   openGhostSecretaryFirstModal,
 } from '../GhostSecretaryFirstGuard';
-import { GHOST_SECRETARY_AVATAR_SRC } from '../../services/ghostSecretaryEngine';
 
-/** 로컬 귀신검색창이 여는 주소와 동일 (기존 웹 「찾기」 화면 100% 승계 전용 모드) */
 export function ghostSearchWindowUrl(stage: GhostSearchStage, query?: string): string {
   const q = query && query.trim() ? `&q=${encodeURIComponent(query.trim())}` : '';
   return `/?dev=true&preview=legacy&ghostSearchWindow=${stage}${q}`;
 }
 
-/**
- * 로컬 엔진(127.0.0.1:5199 / 51988)이 연결되어 있을 때
- * 가상 모니터 안의 창(`/?dev=true&preview=legacy&ghostSearchWindow=...`)과 100% 동일한
- * 실제 모니터 위 독립 귀신검색창 팝업을 즉시 띄웁니다.
- */
 let _activeRealGhostSearchPopup: Window | null = null;
 let _openGhostSearchInflight = false;
 let _lastOpenGhostSearchTs = 0;
@@ -108,8 +101,6 @@ export async function openRealGhostSearchWindowViaDaemon(
     const wasZCoreConnected = zCoreBridge.isConnected;
     const reqStartedAt = typeof performance !== 'undefined' ? performance.now() : Date.now();
 
-    // 1순위: 로컬 제트코어 연결 시 주소창·설치아이콘 없는 깔끔한 독립 앱 창(--app) 단일 오픈!
-    // (이미 귀신검색창이 열려 있으면 데몬이 중복 기동 없이 기존 HWND만 화면 최상단 전면으로 끌어올립니다)
     try {
       const res = await fetch(getZCoreUrl('/api/superpower/open_search_window'), {
         method: 'POST',
@@ -148,7 +139,6 @@ export async function openRealGhostSearchWindowViaDaemon(
       }
     }
 
-    // 2순위 폴백: 제트코어 미실행 웹 환경에서만 단일 브라우저 팝업으로 오픈
     const targetUrl = ghostSearchWindowUrl(targetStage, query);
     if (typeof window !== 'undefined') {
       try {
@@ -188,7 +178,6 @@ export async function openRealGhostSearchWindowViaDaemon(
   }
 }
 
-/** 귀신비서 채팅이 넘겨준 검색어 (1회 소비) */
 function consumePendingGhostSearchQuery(): string {
   try {
     const q = sessionStorage.getItem('ghosti_pending_ghost_search_query') || '';
@@ -199,25 +188,18 @@ function consumePendingGhostSearchQuery(): string {
   }
 }
 
-/**
- * 👻 2관문 『귀신검색』 웹 메뉴 (v1.3 — 웹 검색 입력창 폐지)
- *  - STEP 1 소환술 3단 수련 → STEP 2 귀신검색 도장깨기(가상 모니터 시뮬레이터) → 마지막 미션(바탕화면에서 Ctrl+0)
- *  - 가상 모니터 안의 귀신검색창 = 기존 웹 「찾기」 화면(구 ?preview=legacy) 100% 그대로 승계 — 실제 창과 같은 주소를 실제 픽셀 크기로 띄워 반응형 그대로 적용
- *  - 크기·위치는 데몬 compute_ghost_search_window_3stage_rect 와 동일 규칙(ghostSearchWindowGeometry.ts)
- */
-
 const GAME_STORAGE_KEY = 'ghosti_search_game_v1';
 type GameStepId = 'summon' | 'medium' | 'large';
 const GAME_STEPS: Array<{ id: GameStepId; actionLabel: string; doneLabel: string }> = [
   {
     id: 'summon',
-    actionLabel: '👆 ① ⤡ 작게 모드 버튼 눌러보기',
-    doneLabel: '✓ 완료 · ① ⤡ 작게 모드 체험',
+    actionLabel: '작게 보기',
+    doneLabel: '작게 보기 확인됨',
   },
   {
     id: 'large',
-    actionLabel: '👆 ② ⤢ 크게(갤러리) 버튼 눌러보기',
-    doneLabel: '✓ 완료 · ② ⤢ 크게(갤러리) 모드 체험',
+    actionLabel: '크게 보기 (갤러리)',
+    doneLabel: '크게 보기 확인됨',
   },
 ];
 
@@ -244,24 +226,24 @@ const AUTO_MORPH_SCRIPT: Array<{
     stage: null,
     cursorPct: { x: 62, y: 54 },
     clicking: true,
-    badge: '🎬 자동 시연 1/3 · 바탕화면 Ctrl + 0 / Ctrl + 우클릭 1초 소환',
-    desc: '가상 모니터 빈 곳에서 Ctrl + 0 또는 Ctrl + 우클릭을 누르면 마우스 위치에 귀신검색창이 즉시 소환됩니다.',
+    badge: '단축키 호출 · 바탕화면에서 Ctrl + 0 또는 Ctrl + 우클릭',
+    desc: '바탕화면에서 단축키를 누르면 마우스 위치에 검색창이 열립니다.',
   },
   {
     phase: 1,
     stage: 'small',
     cursorPct: { x: 56, y: 32 },
     clicking: false,
-    badge: '🎬 자동 시연 2/3 · [작게 모드] 빠른 검색 & 결과 요약 미리보기!',
-    desc: '작게 모드에서도 사진·동영상·문서 검색 결과와 첫 번째 요약 미리보기가 한눈에 또렷하게 보입니다.',
+    badge: '작게 보기 · 빠른 검색과 첫 번째 결과 요약',
+    desc: '사진·동영상·문서 검색 결과와 첫 번째 항목 미리보기를 바로 확인합니다.',
   },
   {
     phase: 2,
     stage: 'large',
     cursorPct: { x: 82, y: 12 },
     clicking: true,
-    badge: '🎬 자동 시연 3/3 · [⤢ 크게(갤러리)] 넓게 펼쳐 보는 전체 갤러리 모드!',
-    desc: '보기 모드는 [작게] / [크게(갤러리)] 단 2가지! 실제 창이 띄워지면 테두리를 잡고 자유롭게 크기 조절도 가능합니다.',
+    badge: '크게 보기 · 전체 갤러리 화면',
+    desc: '많은 사진과 문서를 넓은 화면에서 한눈에 살펴볼 수 있습니다.',
   },
 ];
 
@@ -275,14 +257,12 @@ const VirtualMonitorSimulator: React.FC<{
   connected = true,
 }) => {
   const {
-    photos,
     searchSpace,
     hasExecutedUserSearch,
     activeQuery,
     searchResults,
     matchedLocalDocs,
     matchedVaultPhotos,
-    videoSceneItems,
     matchedVideoScenes,
     setSelectedPhoto,
     setSelectedDocModal,
@@ -306,7 +286,6 @@ const VirtualMonitorSimulator: React.FC<{
     return () => ro.disconnect();
   }, []);
 
-  // 자동 변신 시연 루프: 소환 -> 자율 슬림(520) -> 검색량 반응형 자율 확장(960) -> [⤢ 크게(갤러리)]
   useEffect(() => {
     if (!isAutoPlaying) return;
     const stepInfo = AUTO_MORPH_SCRIPT[autoPhase] || AUTO_MORPH_SCRIPT[1];
@@ -320,7 +299,6 @@ const VirtualMonitorSimulator: React.FC<{
     return () => window.clearTimeout(timer);
   }, [isAutoPlaying, autoPhase]);
 
-  // 직접 조작 중 & '작게(compact)' 모드일 때: 창 안 검색어의 검색량·미리보기에 따라 소(520) ↔ 중(960) 자동 반응형 조절!
   useEffect(() => {
     if (isAutoPlaying || !stage || windowMode === 'large') return;
     const cleanQ =
@@ -331,7 +309,6 @@ const VirtualMonitorSimulator: React.FC<{
       !activeQuery.startsWith('최근 서류 ')
         ? activeQuery.trim()
         : '';
-    // 사용자가 검색어를 직접 입력하지 않은 상태에서 이미 중형(960×640) 창이 열려 있다면 임의로 소형(520)으로 축소하지 않음
     if (!cleanQ && stage === 'medium') return;
     const timer = window.setTimeout(() => {
       const totalMatched =
@@ -450,7 +427,6 @@ const VirtualMonitorSimulator: React.FC<{
     );
   };
 
-  // 페이지 안에서 Ctrl+0 → 가상 귀신검색창 소환 (엔진 미연결 시에는 귀여운 '귀신비서 먼저 대화' 안내창 노출)
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (e.ctrlKey && (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0')) {
@@ -488,61 +464,40 @@ const VirtualMonitorSimulator: React.FC<{
 
   return (
     <div className="flex flex-col items-center w-full select-none">
-      {/* ─── 실제 모니터 베젤 (상단 카메라 + 메탈 프레임 + 하단 모니터 턱) ─── */}
-      <div
-        data-keep-dark="true"
-        className="w-full rounded-[22px] p-3 sm:p-4 shadow-2xl border-2 border-zinc-600/80"
-        style={{
-          background: 'linear-gradient(180deg, #27272a 0%, #18181b 50%, #09090b 100%)',
-          boxShadow: '0 22px 50px -12px rgba(0, 0, 0, 0.65), inset 0 1px 0 rgba(255, 255, 255, 0.18)',
-        }}
-      >
-        {/* 모니터 상단 베젤 (웹캠 렌즈 + 움짤/직접조작 상태 컨트롤 바) */}
-        <div
-          data-keep-dark="true"
-          className="flex flex-wrap items-center justify-between gap-2 px-3 pb-2.5 text-[11.5px] text-zinc-300"
-        >
-          <div className="flex items-center gap-2">
-            <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/50 text-[#5EEAD4] font-extrabold">
-              🖥️ 체험판 검색창 (웹 미리보기)
-            </span>
-            <span className="text-zinc-400 hidden sm:inline">
+      <div className="w-full rounded-xl overflow-hidden border border-slate-300 bg-slate-100 shadow-sm">
+        <div className="flex flex-wrap items-center justify-between gap-2 px-3.5 py-2 bg-white border-b border-slate-200 text-[12px] text-slate-600">
+          <div className="flex items-center gap-2 min-w-0">
+            <span className="font-semibold text-slate-900">검색창 미리보기</span>
+            <span className="text-slate-400 hidden sm:inline">·</span>
+            <span className="text-slate-500 hidden sm:inline truncate">
               {isAutoPlaying
-                ? '자동 변신 움짤 시연 중 · 변신하는 도중에도 안쪽 버튼을 직접 마우스로 눌러보세요!'
-                : '👆 직접 조작 체험 중 · 모니터 안의 버튼과 검색창을 자유롭게 눌러보세요!'}
+                ? currentScript.badge
+                : `직접 조작 중 (${stage ? GHOST_SEARCH_STAGE_LABELS[stage] : '바탕화면 대기'})`}
             </span>
           </div>
 
-          {/* 중앙 웹캠 렌즈 & 센서 LED */}
-          <div className="hidden md:flex items-center gap-1.5 px-3 py-0.5 rounded-full bg-black/50 border border-white/10">
-            <span className="w-2.5 h-2.5 rounded-full bg-zinc-800 border border-zinc-500 shadow-inner" />
-            <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse" />
-            <span className="text-[10px] text-zinc-400 font-bold tracking-wider">CAM</span>
-          </div>
-
-          {/* 우측 [⤡ 작게 · ⤢ 크게(갤러리)] 실제 귀신검색창과 1:1 동일한 보기 모드 버튼 & 자동 시연 재생/일시정지 컨트롤 */}
           <div className="flex flex-wrap items-center gap-1.5" data-allow-secretary-jump="true">
             <button
               type="button"
               onClick={() => selectExplicitStage('small')}
-              className={`px-2.5 py-0.5 rounded-md text-[11px] font-extrabold transition-colors cursor-pointer ${
+              className={`px-2.5 py-1 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer ${
                 stage === 'small' || stage === 'medium'
-                  ? 'bg-[#2DD4BF] text-zinc-950'
-                  : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-white/10'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
               }`}
             >
-              ⤡ 작게
+              작게
             </button>
             <button
               type="button"
               onClick={() => selectExplicitStage('large')}
-              className={`px-2.5 py-0.5 rounded-md text-[11px] font-extrabold transition-colors cursor-pointer ${
+              className={`px-2.5 py-1 rounded-md text-[11.5px] font-semibold transition-colors cursor-pointer ${
                 stage === 'large'
-                  ? 'bg-[#2DD4BF] text-zinc-950'
-                  : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-white/10'
+                  ? 'bg-slate-900 text-white'
+                  : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
               }`}
             >
-              ⤢ 크게(갤러리)
+              크게 (갤러리)
             </button>
             <button
               type="button"
@@ -554,18 +509,13 @@ const VirtualMonitorSimulator: React.FC<{
                   setAutoPhase((prev) => (prev + 1) % AUTO_MORPH_SCRIPT.length);
                 }
               }}
-              className={`px-2.5 py-0.5 rounded-md text-[11px] font-extrabold cursor-pointer transition-all border ${
-                isAutoPlaying
-                  ? 'bg-amber-400/20 border-amber-300/60 text-amber-200 hover:bg-amber-400/30'
-                  : 'bg-emerald-400/20 border-emerald-300/60 text-emerald-200 hover:bg-emerald-400/30'
-              }`}
+              className="px-2.5 py-1 rounded-md text-[11.5px] font-medium cursor-pointer border border-slate-200 bg-white hover:bg-slate-50 text-slate-600"
             >
-              {isAutoPlaying ? '⏸ 시연 일시정지' : '▶ 자동 시연 다시 재생'}
+              {isAutoPlaying ? '일시정지' : '자동 시연'}
             </button>
           </div>
         </div>
 
-        {/* ─── 모니터 실제 LCD 화면 영역 (라이트모드 탈색 원천 차단) ─── */}
         <div
           ref={monitorRef}
           data-keep-dark="true"
@@ -580,102 +530,68 @@ const VirtualMonitorSimulator: React.FC<{
               summon(pos.x, pos.y);
             }
           }}
-          className="relative w-full overflow-hidden rounded-xl border-2 border-black shadow-inner"
+          className="relative w-full overflow-hidden"
           style={{
             aspectRatio: `${SIMULATOR_WORK_AREA.right} / ${SIMULATOR_WORK_AREA.bottom}`,
-            background: 'linear-gradient(135deg, #0c192c 0%, #172554 42%, #1e1b4b 74%, #09090b 100%)',
+            background: 'linear-gradient(135deg, #1e293b 0%, #0f172a 100%)',
           }}
         >
-          {/* 가상 모니터 배경 데스크톱 월페이퍼 은은한 그리드 & 광원 */}
-          <div
-            data-keep-dark="true"
-            className="absolute inset-0 pointer-events-none opacity-25"
-            style={{
-              backgroundImage:
-                'radial-gradient(circle at 75% 25%, rgba(45, 212, 191, 0.35), transparent 45%), radial-gradient(circle at 25% 75%, rgba(99, 102, 241, 0.3), transparent 50%)',
-            }}
-          />
-
-          {/* 가짜 바탕화면 아이콘 (좌측 정렬) */}
-          <div data-keep-dark="true" className="absolute top-3.5 left-3.5 flex flex-col gap-3 text-[11px] text-white font-semibold drop-shadow">
+          <div data-keep-dark="true" className="absolute top-3.5 left-3.5 flex flex-col gap-2.5 text-[11px] text-white font-medium">
             {[
-              { icon: '📁', name: '카톡 받은 파일' },
-              { icon: '📁', name: '다운로드' },
-              { icon: '📊', name: '2026_견적서.xlsx' },
-              { icon: '🖼️', name: '가족여행_바다.jpg' },
-            ].map((item) => (
+              '받은 파일',
+              '다운로드',
+              '2026_견적서.xlsx',
+              '가족여행_바다.jpg',
+            ].map((name) => (
               <div
-                key={item.name}
+                key={name}
                 onClick={() => setManualMode(windowMode)}
-                className="flex flex-col items-center gap-0.5 w-20 p-1.5 rounded-lg bg-black/25 hover:bg-white/15 border border-white/10 cursor-pointer transition-colors text-center"
+                className="flex flex-col items-center gap-1 w-20 p-1.5 rounded-lg bg-white/10 hover:bg-white/15 border border-white/10 cursor-pointer transition-colors text-center"
               >
-                <span className="text-[18px] leading-none">{item.icon}</span>
-                <span className="truncate w-full text-[10px] text-white/90">{item.name}</span>
+                <span className="material-symbols-outlined text-[18px] text-slate-200">
+                  {name.includes('.') ? 'description' : 'folder'}
+                </span>
+                <span className="truncate w-full text-[10px] text-slate-200">{name}</span>
               </div>
             ))}
           </div>
 
-          {/* 상단 현재 변신 단계 캡션 배너 (시연 설명 + 직접 클릭 안내) */}
-          <div
-            data-keep-dark="true"
-            className="absolute top-2.5 left-1/2 -translate-x-1/2 z-30 pointer-events-none flex flex-col items-center gap-0.5 px-3.5 py-1.5 rounded-full bg-black/75 border border-[#2DD4BF]/50 text-white shadow-lg backdrop-blur-sm max-w-[92%]"
-          >
-            <span className="text-[11.5px] font-extrabold text-[#5EEAD4] truncate">
-              {isAutoPlaying
-                ? currentScript.badge
-                : `👆 직접 조작 중 · 현재 [${stage ? GHOST_SEARCH_STAGE_LABELS[stage] : '바탕화면 대기'}] 상태입니다`}
-            </span>
-            <span className="text-[10.5px] text-zinc-200 truncate hidden sm:inline">
-              {isAutoPlaying
-                ? currentScript.desc
-                : '검색어를 입력하면 결과 양에 맞춰 소↔중 크기가 자동 조절되며, 수동 버튼은 [⤢ 크게(갤러리) / ⤡ 작게] 딱 하나입니다!'}
-            </span>
-          </div>
-
-          {/* 소환 대기 상태 안내 (창이 닫혀 있을 때) */}
           {!stage && (
             <div data-keep-dark="true" className="absolute inset-0 flex items-center justify-center">
               <button
                 type="button"
                 onClick={() => summon(1300, 600)}
-                className="px-4 py-2.5 rounded-full bg-black/70 hover:bg-black/85 border-2 border-[#2DD4BF] text-white text-[13px] font-extrabold shadow-xl cursor-pointer transition-all flex items-center gap-2"
+                className="px-4 py-2.5 rounded-lg bg-white text-slate-900 text-[13px] font-semibold shadow-lg cursor-pointer hover:bg-slate-50 transition-colors"
               >
-                <span className="w-2.5 h-2.5 rounded-full bg-[#2DD4BF] animate-ping" />
-                {'🖱️ 여기를 클릭하거나 Ctrl + 0 / Ctrl + 우클릭으로 체험판 검색창 열어보기'}
+                클릭하거나 Ctrl + 0으로 검색창 열기
               </button>
             </div>
           )}
 
-          {/* ─── 자율 반응형(소↔중) + 크게/작게 2모드 가상 귀신검색창 ─── */}
           {rect && (
             <div
-              data-keep-dark="true"
               onMouseDown={() => {
                 if (isAutoPlaying) setIsAutoPlaying(false);
               }}
-              className="absolute rounded-xl overflow-hidden shadow-2xl border-2 border-[#2DD4BF] bg-zinc-950 transition-all duration-500 ease-out z-20"
+              className="absolute rounded-xl overflow-hidden shadow-2xl border border-slate-300 bg-white transition-all duration-500 ease-out z-20"
               style={{
                 left: rect.x * scale,
                 top: rect.y * scale,
                 width: rect.width * scale,
                 height: rect.height * scale,
-                boxShadow: '0 20px 45px rgba(0,0,0,0.75), 0 0 0 1px rgba(45,212,191,0.35)',
               }}
             >
               <div
-                className="origin-top-left"
+                className="origin-top-left bg-white text-slate-900"
                 style={{ width: rect.width, height: rect.height, transform: `scale(${scale})` }}
               >
-                <div
-                  data-keep-dark="true"
-                  className="h-9 px-3.5 flex items-center justify-between gap-2 bg-zinc-900 border-b border-white/15 text-white text-[12px] font-bold"
-                >
+                <div className="h-9 px-3.5 flex items-center justify-between gap-2 bg-slate-50 border-b border-slate-200 text-slate-800 text-[12px] font-semibold">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-[#2DD4BF] font-extrabold whitespace-nowrap">
-                      👻 귀신검색창
+                    <span className="font-bold text-slate-900 whitespace-nowrap">
+                      귀신검색창
                     </span>
-                    <span className="px-2 py-0.5 rounded bg-teal-500/20 text-[#5EEAD4] text-[10.5px] font-extrabold truncate">
-                      {rect.framelessAppMode ? '🖼️ 전체 갤러리 뷰' : '✨ 검색 결과에 맞춰 자동 크기 조절'}
+                    <span className="text-slate-400 text-[11px] truncate">
+                      {rect.framelessAppMode ? '전체 갤러리 보기' : '결과 수에 맞춰 크기 자동 조절'}
                     </span>
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
@@ -685,13 +601,13 @@ const VirtualMonitorSimulator: React.FC<{
                         e.stopPropagation();
                         selectExplicitStage('small');
                       }}
-                      className={`px-2.5 py-0.5 rounded-md text-[11px] font-extrabold transition-colors cursor-pointer ${
+                      className={`px-2.5 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
                         stage !== 'large'
-                          ? 'bg-[#2DD4BF] text-zinc-950'
-                          : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-white/10'
+                          ? 'bg-slate-900 text-white'
+                          : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
                       }`}
                     >
-                      ⤡ 작게
+                      작게
                     </button>
                     <button
                       type="button"
@@ -699,18 +615,18 @@ const VirtualMonitorSimulator: React.FC<{
                         e.stopPropagation();
                         selectExplicitStage('large');
                       }}
-                      className={`px-2.5 py-0.5 rounded-md text-[11px] font-extrabold transition-colors cursor-pointer ${
+                      className={`px-2.5 py-0.5 rounded text-[11px] font-semibold transition-colors cursor-pointer ${
                         stage === 'large'
-                          ? 'bg-[#2DD4BF] text-zinc-950'
-                          : 'bg-zinc-800 hover:bg-zinc-700 text-[#5EEAD4] border border-white/10'
+                          ? 'bg-slate-900 text-white'
+                          : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
                       }`}
                     >
-                      ⤢ 크게(갤러리)
+                      크게 (갤러리)
                     </button>
                   </div>
                 </div>
                 <div
-                  className="h-[calc(100%-2.25rem)] flex overflow-hidden bg-zinc-950"
+                  className="h-[calc(100%-2.25rem)] flex overflow-hidden bg-white"
                   onMouseDown={(e) => {
                     e.stopPropagation();
                     if (isAutoPlaying) setIsAutoPlaying(false);
@@ -727,39 +643,39 @@ const VirtualMonitorSimulator: React.FC<{
                     const topDoc =
                       searchSpace === 'vault' ? DEMO_SEARCH_SAMPLE_DOCS_2[0] : undefined;
                     return (
-                      <aside className="w-[330px] shrink-0 h-full border-l border-[#2DD4BF]/40 bg-[#0F172A] p-3.5 flex flex-col gap-2.5 overflow-y-auto">
-                        <div className="text-[12.5px] font-extrabold text-[#5EEAD4] flex items-center gap-1.5">
-                          <span>👻 첫 번째 결과 요약 미리보기</span>
+                      <aside className="w-[320px] shrink-0 h-full border-l border-slate-200 bg-slate-50 p-3.5 flex flex-col gap-2.5 overflow-y-auto">
+                        <div className="text-[12px] font-bold text-slate-800">
+                          첫 번째 결과 미리보기
                         </div>
                         {topDoc ? (
                           <>
-                            <div className="w-full p-3 rounded-lg bg-slate-900/90 border border-slate-700 flex flex-col gap-1.5">
+                            <div className="w-full p-3 rounded-lg bg-white border border-slate-200 flex flex-col gap-1">
                               <div className="flex items-center gap-1.5">
-                                <span className="px-1.5 py-0.5 rounded bg-teal-500/20 text-[#5EEAD4] text-[10px] font-extrabold">
+                                <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 text-[10px] font-semibold">
                                   {topDoc.ext?.toUpperCase() || 'DOC'}
                                 </span>
-                                <span className="text-[10.5px] text-slate-400 truncate">
-                                  {topDoc.categoryBadge || '내 PC 문서'}
+                                <span className="text-[10.5px] text-slate-500 truncate">
+                                  {topDoc.categoryBadge || '문서'}
                                 </span>
                               </div>
-                              <div className="text-[12px] font-bold text-slate-100 break-all">
-                                📄 {topDoc.fileName}
+                              <div className="text-[12px] font-semibold text-slate-900 break-all">
+                                {topDoc.fileName}
                               </div>
                             </div>
-                            <div className="text-[11px] text-slate-300 leading-relaxed line-clamp-8 whitespace-pre-line bg-black/30 p-2.5 rounded-lg border border-white/5">
-                              {maskSensitiveDocText(topDoc.extractedText) || '문서 본문 미리보기 준비 완료'}
+                            <div className="text-[11px] text-slate-600 leading-relaxed line-clamp-8 whitespace-pre-line bg-white p-2.5 rounded-lg border border-slate-200">
+                              {maskSensitiveDocText(topDoc.extractedText) || '문서 미리보기'}
                             </div>
                             <button
                               type="button"
                               onClick={() => setSelectedDocModal(topDoc)}
-                              className="mt-auto w-full py-2 rounded-lg bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[12px] font-extrabold cursor-pointer transition-colors"
+                              className="mt-auto w-full py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer transition-colors"
                             >
-                              📄 문서 내용 상세 보기
+                              문서 본문 열기
                             </button>
                           </>
                         ) : topVideo ? (
                           <>
-                            <div className="w-full h-[180px] rounded-lg overflow-hidden bg-black border border-slate-700 flex items-center justify-center relative">
+                            <div data-keep-dark="true" className="w-full h-[180px] rounded-lg overflow-hidden bg-black border border-slate-200 flex items-center justify-center relative">
                               {resolveVideoCardThumbUrl(topVideo) ? (
                                 <img
                                   src={resolveVideoCardThumbUrl(topVideo)}
@@ -767,52 +683,52 @@ const VirtualMonitorSimulator: React.FC<{
                                   className="w-full h-full object-cover"
                                 />
                               ) : (
-                                <span className="text-[12px] text-slate-400 font-bold">🎬 {topVideo.videoFileName}</span>
+                                <span className="text-[12px] text-slate-400">{topVideo.videoFileName}</span>
                               )}
-                              <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/80 text-[#5EEAD4] text-[10.5px] font-extrabold">
-                                🎯 {cleanVideoTimestampLabel(topVideo.matchedTimestamp)}
+                              <span className="absolute bottom-2 right-2 px-2 py-0.5 rounded bg-black/80 text-white text-[10.5px] font-semibold">
+                                {cleanVideoTimestampLabel(topVideo.matchedTimestamp)}
                               </span>
                             </div>
-                            <div className="text-[11.5px] font-bold text-slate-200 truncate">
-                              🎬 {topVideo.videoFileName}
+                            <div className="text-[12px] font-semibold text-slate-900 truncate">
+                              {topVideo.videoFileName}
                             </div>
-                            <div className="text-[11px] text-slate-400 line-clamp-3">
+                            <div className="text-[11px] text-slate-600 line-clamp-3">
                               {topVideo.matchedFrameCaption || topVideo.sceneDescription}
                             </div>
                             <button
                               type="button"
                               onClick={() => setSelectedVideoModal(topVideo)}
-                              className="mt-auto w-full py-2 rounded-lg bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[12px] font-extrabold cursor-pointer transition-colors"
+                              className="mt-auto w-full py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer transition-colors"
                             >
-                              ▶ 해당 장면 바로 재생하기
+                              해당 장면 재생
                             </button>
                           </>
                         ) : topPhoto ? (
                           <>
-                            <div className="w-full h-[200px] rounded-lg overflow-hidden bg-black border border-slate-700 flex items-center justify-center">
+                            <div data-keep-dark="true" className="w-full h-[200px] rounded-lg overflow-hidden bg-black border border-slate-200 flex items-center justify-center">
                               <img
                                 src={topPhoto.thumbUrl}
                                 alt={topPhoto.name}
                                 className="w-full h-full object-contain"
                               />
                             </div>
-                            <div className="text-[11.5px] font-bold text-slate-200 truncate">
-                              🖼️ {topPhoto.name}
+                            <div className="text-[12px] font-semibold text-slate-900 truncate">
+                              {topPhoto.name}
                             </div>
-                            <div className="text-[11px] text-slate-400 line-clamp-3">
+                            <div className="text-[11px] text-slate-600 line-clamp-3">
                               {topPhoto.captionKo || topPhoto.tags.join(' · ')}
                             </div>
                             <button
                               type="button"
                               onClick={() => setSelectedPhoto(topPhoto, null)}
-                              className="mt-auto w-full py-2 rounded-lg bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[12px] font-extrabold cursor-pointer transition-colors"
+                              className="mt-auto w-full py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer transition-colors"
                             >
-                              🔍 상세 크게 보기 / 사진·OCR 열기
+                              상세 보기 · 글자 추출
                             </button>
                           </>
                         ) : (
-                          <div className="text-[11.5px] text-slate-400">
-                            현재 탭의 첫 번째 검색 결과 요약이 이곳에 자동으로 표시됩니다.
+                          <div className="text-[11.5px] text-slate-500">
+                            첫 번째 검색 결과 요약이 표시됩니다.
                           </div>
                         )}
                       </aside>
@@ -823,82 +739,21 @@ const VirtualMonitorSimulator: React.FC<{
             </div>
           )}
 
-          {/* 자동 시연 모드일 때 움직이는 가상 마우스 커서 & 클릭 파동 이펙트 */}
-          {isAutoPlaying && (
-            <div
-              data-keep-dark="true"
-              className="absolute z-30 pointer-events-none transition-all duration-700 ease-in-out flex items-center gap-1.5"
-              style={{
-                left: `${currentScript.cursorPct.x}%`,
-                top: `${currentScript.cursorPct.y}%`,
-              }}
-            >
-              <div className="relative flex items-center justify-center">
-                {currentScript.clicking && (
-                  <span className="absolute -inset-3 rounded-full border-2 border-[#2DD4BF] bg-[#2DD4BF]/25 animate-ping" />
-                )}
-                <span className="text-[22px] drop-shadow-[0_2px_8px_rgba(0,0,0,0.9)]">🖱️</span>
-              </div>
-              <span className="px-2 py-0.5 rounded-md bg-black/85 border border-[#2DD4BF] text-[#5EEAD4] text-[10.5px] font-extrabold whitespace-nowrap shadow-lg">
-                {autoPhase === 0
-                  ? 'Ctrl + 0 / Ctrl + 우클릭 소환!'
-                  : autoPhase === 1
-                    ? '작게 모드 · 자율 슬림(520px)'
-                    : autoPhase === 2
-                      ? '검색 결과↑ → 알아서 960×640 확장!'
-                      : '[⤢ 크게(갤러리)] 클릭 전환!'}
-              </span>
-            </div>
-          )}
-
-          {/* 가상 윈도우 작업표시줄 (Taskbar) */}
           <div
             data-keep-dark="true"
-            className="absolute bottom-0 inset-x-0 h-7 px-3 bg-black/80 backdrop-blur-md border-t border-white/10 flex items-center justify-between text-[10.5px] text-zinc-300 z-10 pointer-events-none"
+            className="absolute bottom-0 inset-x-0 h-7 px-3 bg-black/75 border-t border-white/10 flex items-center justify-between text-[10.5px] text-zinc-300 z-10 pointer-events-none"
           >
             <div className="flex items-center gap-2">
-              <span className="px-2 py-0.5 rounded bg-white/10 text-white font-bold">🪟 시작</span>
-              <span className="px-2 py-0.5 rounded bg-[#2DD4BF]/20 text-[#5EEAD4] font-bold">
-                👻 귀신같이 트레이 상주 중 (Ctrl+0)
-              </span>
+              <span className="px-2 py-0.5 rounded bg-white/10 text-white font-medium">시작</span>
+              <span className="text-zinc-300">귀신같이 실행 중 (Ctrl + 0)</span>
             </div>
-            <div className="flex items-center gap-2 text-zinc-400 font-semibold">
+            <div className="flex items-center gap-2 text-zinc-400">
               <span>KOR</span>
-              <span>🔊</span>
               <span>오후 2:05</span>
             </div>
           </div>
         </div>
-
-        {/* 모니터 하단 턱 (Chin Bezel: 브랜드 로고 + 전원 LED) */}
-        <div
-          data-keep-dark="true"
-          className="pt-2.5 px-4 flex items-center justify-between text-[11px] text-zinc-400"
-        >
-          <span className="text-[10.5px] text-zinc-400">
-            💡 팁: 변신 움짤이 돌아가는 중에도 창 안의 버튼을 직접 클릭하면 즉시 <strong>직접 조작 모드</strong>로 전환됩니다.
-          </span>
-          <span className="font-black tracking-[0.2em] text-zinc-300 text-[11px] hidden sm:inline">
-            GHOSTI STUDIO DISPLAY
-          </span>
-          <div className="flex items-center gap-1.5">
-            <span className="text-[10px] text-zinc-400">POWER</span>
-            <span className="w-2 h-2 rounded-full bg-emerald-400 shadow-[0_0_8px_#34d399]" />
-          </div>
-        </div>
       </div>
-
-      {/* ─── 실제 모니터 목(Neck) & 받침대(Stand Base) ─── */}
-      <div
-        data-keep-dark="true"
-        className="w-24 h-6 border-x border-zinc-600/60 shadow-inner"
-        style={{ background: 'linear-gradient(180deg, #18181b 0%, #3f3f46 50%, #27272a 100%)' }}
-      />
-      <div
-        data-keep-dark="true"
-        className="w-64 sm:w-80 h-3.5 rounded-t-2xl border-t border-zinc-500/60 shadow-lg"
-        style={{ background: 'linear-gradient(90deg, #18181b 0%, #52525b 50%, #18181b 100%)' }}
-      />
     </div>
   );
 };
@@ -910,7 +765,6 @@ export const GhostSearchTrainingPage: React.FC = () => {
   const [realPopupToast, setRealPopupToast] = useState<string | null>(null);
   const [isLaunchingRealWindow, setIsLaunchingRealWindow] = useState(false);
   const monitorSectionRef = useRef<HTMLElement | null>(null);
-
   const isLaunchingRef = useRef(false);
 
   const markStep = (id: GameStepId) => {
@@ -955,8 +809,8 @@ export const GhostSearchTrainingPage: React.FC = () => {
       }
       setRealPopupToast(
         _lastGhostSearchWasReused
-          ? '👻 이미 열려 있는 귀신검색창을 화면 맨 앞으로 불러왔습니다!'
-          : `👻 내 진짜 PC 파일·사진·여권이 연동된 귀신검색창(${GHOST_SEARCH_STAGE_LABELS[stage]})을 모니터에 바로 띄웠습니다!`,
+          ? '열려 있는 귀신검색창을 화면 앞으로 불러왔습니다.'
+          : `귀신검색창(${GHOST_SEARCH_STAGE_LABELS[stage]})을 열었습니다.`,
       );
       setTimeout(() => setRealPopupToast(null), 4000);
     } else {
@@ -972,7 +826,6 @@ export const GhostSearchTrainingPage: React.FC = () => {
 
   useEffect(() => zCoreBridge.subscribe((c: boolean) => setConnected(c)), []);
 
-  // 로컬 OS 귀신검색창(Tkinter / --app 독립창)에서 소환·중형·갤러리를 클릭했을 때도 위쪽 도장(✓)이 개별 단계별로만 정확히 각인되도록 동기화
   useEffect(() => {
     const onStorage = (e: StorageEvent) => {
       if (e.key === GAME_STORAGE_KEY) {
@@ -1023,71 +876,70 @@ export const GhostSearchTrainingPage: React.FC = () => {
     };
   }, []);
 
-  const gameDone = GAME_STEPS.every((s) => game[s.id]);
-
   return (
-    <div className="w-full max-w-[1200px] mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col gap-5 pb-24">
-      <div className="flex flex-col gap-1">
-        <h1 className="text-[22px] font-extrabold text-zinc-900 dark:text-white">👻 귀신검색</h1>
-        <p className="text-[13.5px] text-zinc-500 dark:text-zinc-400">
-          파일 이름 몰라도, 열지 않고 1초 소환 — <strong className="text-zinc-800 dark:text-zinc-100">Ctrl + 0</strong> / <strong className="text-zinc-800 dark:text-zinc-100">Ctrl + 우클릭</strong>
-        </p>
+    <div className="w-full max-w-[1160px] mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col gap-5 pb-20">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-col gap-1">
+          <h1 className="text-[20px] sm:text-[22px] font-bold text-slate-900">귀신검색</h1>
+          <p className="text-[13.5px] text-slate-500">
+            바탕화면이나 작업 화면에서 <strong className="text-slate-800">Ctrl + 0</strong> 또는 <strong className="text-slate-800">Ctrl + 우클릭</strong>으로 검색창을 바로 열 수 있습니다.
+          </p>
+        </div>
+        {connected && (
+          <button
+            type="button"
+            aria-busy={isLaunchingRealWindow}
+            onClick={() => void triggerRealGhostSearchWindow('medium', pendingQuery)}
+            className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[13px] font-semibold cursor-pointer shrink-0 transition-colors"
+          >
+            {isLaunchingRealWindow ? '검색창 여는 중...' : '귀신검색창 열기'}
+          </button>
+        )}
       </div>
 
       {!connected && (
-        <div className="px-4 py-3.5 rounded-2xl bg-gradient-to-r from-teal-500/15 via-emerald-500/10 to-zinc-900/40 border-2 border-[#2DD4BF]/50 flex flex-wrap items-center justify-between gap-3 shadow-sm">
-          <div className="flex items-center gap-3 min-w-0">
-            <img
-              src={GHOST_SECRETARY_AVATAR_SRC}
-              alt="귀신비서"
-              className="w-10 h-10 rounded-2xl bg-teal-500/20 border border-[#2DD4BF]/50 p-1 object-contain shrink-0"
-            />
-            <div className="flex flex-col gap-0.5">
-              <span className="text-[13.5px] font-black text-zinc-900 dark:text-white">
-                👀 지금은 눈으로 편하게 구경 중이에요! (스크롤·화면 구경 자유)
-              </span>
-              <span className="text-[12px] text-zinc-600 dark:text-zinc-300 font-semibold">
-                버튼을 눌러 직접 소환하거나 <strong>내 진짜 사진·문서로 리얼 테스트</strong>를 해보시려면, 먼저 첫 번째 메뉴인 <strong>『👻 귀신비서』</strong>와 대화를 나누고 오세요! 헤헤 👻
-              </span>
-            </div>
+        <div className="px-4 py-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="text-[13.5px] font-semibold text-slate-900">
+              현재 샘플 미리보기 화면입니다
+            </span>
+            <span className="text-[12.5px] text-slate-500">
+              내 컴퓨터의 실제 사진·영상·문서를 찾으려면 먼저 귀신비서에서 내 컴퓨터를 연결해 주세요.
+            </span>
           </div>
           <button
             type="button"
             data-allow-secretary-jump="true"
             onClick={jumpToGhostSecretary}
-            className="px-4 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[12.5px] font-black shadow-md transition-all cursor-pointer shrink-0"
+            className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold transition-colors cursor-pointer shrink-0"
           >
-            👻 &apos;귀신비서&apos;와 먼저 대화하러 가기 ➔
+            귀신비서로 이동
           </button>
         </div>
       )}
 
       {realPopupToast && (
-        <div className="px-4 py-3 rounded-xl bg-emerald-500/15 border border-emerald-400/50 text-emerald-700 dark:text-emerald-200 text-[13px] font-extrabold">
+        <div className="px-4 py-2.5 rounded-lg bg-slate-50 border border-slate-200 text-slate-800 text-[13px] font-medium">
           {realPopupToast}
         </div>
       )}
 
       <GhostSecretaryFirstGuard>
         <section className="flex flex-col gap-2">
-          <h2 className="text-[15px] font-extrabold text-zinc-900 dark:text-white">STEP 1 · 소환술 3단 수련</h2>
           <GhostSuperpowerDojo variant="basics" />
         </section>
 
         <section ref={monitorSectionRef} className="flex flex-col gap-2.5">
-          <div className="flex flex-wrap items-center justify-between gap-2 p-3 rounded-2xl bg-zinc-900/80 border border-teal-400/40">
+          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 rounded-xl bg-white border border-slate-200">
             <div className="flex flex-col gap-0.5">
-              <h2 className="text-[15px] font-extrabold text-zinc-900 dark:text-white flex items-center gap-2">
-                <span>STEP 2 · 귀신검색 2단계 도장판 (🖥️ ⤡ 작게 · ⤢ 크게 실시간 완료 도장)</span>
+              <h2 className="text-[14.5px] font-bold text-slate-900">
+                2단계 · 보기 크기 전환 연습
               </h2>
-              <span className="text-[11.5px] text-zinc-400">
-                아래 웹 체험검색창 상단 또는 바탕화면 Ctrl+0 네이티브 귀신검색창 상단의 <strong className="text-teal-300">⤡ 작게 · ⤢ 크게(갤러리)</strong> 버튼을 직접 눌러 보면 우측 도장판에 <strong className="text-emerald-300">✓ 완료 도장</strong>이 즉시 찍힙니다.
+              <span className="text-[12px] text-slate-500">
+                아래 미리보기 또는 실제 귀신검색창에서 작게 / 크게(갤러리) 버튼을 눌러 화면 구성을 확인해 보세요.
               </span>
             </div>
             <div className="flex flex-wrap items-center gap-1.5">
-              <span className="px-2 py-0.5 rounded bg-teal-500/20 text-teal-300 text-[11px] font-extrabold">
-                🎯 도장판:
-              </span>
               {GAME_STEPS.map((s) => (
                 <button
                   key={s.id}
@@ -1102,35 +954,32 @@ export const GhostSearchTrainingPage: React.FC = () => {
                       );
                     }
                   }}
-                  className={`px-3 py-1 rounded-full text-[11.5px] font-extrabold border cursor-pointer transition-all ${
+                  className={`px-3 py-1 rounded-md text-[12px] font-medium border cursor-pointer transition-colors ${
                     game[s.id]
-                      ? 'border-emerald-500 text-emerald-700 dark:text-emerald-300 bg-emerald-500/15 shadow-sm'
-                      : 'border-[#1E3A8A]/45 dark:border-teal-400/50 text-[#1E3A8A] dark:text-[#5EEAD4] bg-[#EEF2FF] dark:bg-teal-500/10 hover:bg-indigo-100'
+                      ? 'border-emerald-200 text-emerald-700 bg-emerald-50'
+                      : 'border-slate-200 text-slate-700 bg-slate-50 hover:bg-slate-100'
                   }`}
                 >
-                  {game[s.id] ? s.doneLabel : s.actionLabel}
+                  {game[s.id] ? `✓ ${s.doneLabel}` : s.actionLabel}
                 </button>
               ))}
-              <button
-                type="button"
-                onClick={() => {
-                  setGame({});
-                  try {
-                    localStorage.removeItem(GAME_STORAGE_KEY);
-                  } catch {
-                    /* ignore */
-                  }
-                }}
-                className="px-2.5 py-1 rounded-full text-[11px] font-extrabold bg-zinc-800 hover:bg-zinc-700 text-zinc-300 border border-white/15 cursor-pointer"
-                title="완료 도장을 초기화하고 ⤡ 작게 · ⤢ 크게(갤러리) 버튼을 눌러 실시간으로 도장이 찍히는 것을 다시 확인합니다"
-              >
-                🔄 도장 초기화
-              </button>
+              {(game.summon || game.large) && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setGame({});
+                    try {
+                      localStorage.removeItem(GAME_STORAGE_KEY);
+                    } catch {
+                      /* ignore */
+                    }
+                  }}
+                  className="px-2.5 py-1 rounded-md text-[11.5px] font-medium bg-white hover:bg-slate-50 text-slate-500 border border-slate-200 cursor-pointer"
+                >
+                  초기화
+                </button>
+              )}
             </div>
-          </div>
-
-          <div className="px-3.5 py-2 rounded-xl bg-teal-500/10 border border-teal-400/30 text-zinc-800 dark:text-teal-100 text-[12.5px] leading-relaxed">
-            💡 움짤이 변신하는 도중에도 모니터 안의 버튼을 직접 마우스로 눌러보실 수 있어요!
           </div>
 
           <VirtualMonitorSimulator
@@ -1141,78 +990,31 @@ export const GhostSearchTrainingPage: React.FC = () => {
         </section>
       </GhostSecretaryFirstGuard>
 
-      <section
-        className={`p-5 rounded-2xl border-2 flex flex-wrap items-center justify-between gap-3 ${
-          gameDone ? 'border-amber-400 bg-amber-500/10' : 'border-zinc-200 dark:border-white/10'
-        }`}
-      >
-        <span className="text-[14.5px] font-extrabold text-zinc-900 dark:text-white">
+      <section className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+        <span className="text-[13.5px] font-medium text-slate-700">
           {connected
-            ? '🏁 마지막 미션 · 바탕화면으로 나가서 Ctrl + 0 (또는 Ctrl + 우클릭)을 눌러 내 진짜 파일을 불러보세요!'
-            : "👻 구경은 재밌으셨나요? 내 진짜 사진·문서로 직접 찾아보려면 먼저 『귀신비서』와 인사를 나누고 오세요!"}
+            ? '바탕화면에서 Ctrl + 0 (또는 Ctrl + 우클릭)을 누르면 실제 내 파일을 검색할 수 있습니다.'
+            : '내 컴퓨터의 실제 사진과 문서를 검색하려면 귀신비서에서 내 컴퓨터를 연결해 주세요.'}
         </span>
         {connected ? (
           <button
             type="button"
             aria-busy={isLaunchingRealWindow}
             onClick={() => void triggerRealGhostSearchWindow('medium', pendingQuery)}
-            onDoubleClick={(e) => {
-              e.preventDefault();
-              void triggerRealGhostSearchWindow('medium', pendingQuery);
-            }}
-            className={`px-4 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[13px] font-extrabold cursor-pointer transition-opacity ${
-              isLaunchingRealWindow ? 'opacity-70' : ''
-            }`}
+            className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
           >
-            {isLaunchingRealWindow
-              ? '⏳ 귀신검색창 띄우는 중...'
-              : '👻 내 진짜 파일로 귀신검색창 바로 띄우기'}
+            {isLaunchingRealWindow ? '여는 중...' : '귀신검색창 열기'}
           </button>
         ) : (
           <button
             type="button"
             data-allow-secretary-jump="true"
             onClick={jumpToGhostSecretary}
-            className="px-4 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 text-[13px] font-extrabold cursor-pointer"
+            className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
           >
-            👻 먼저 &apos;귀신비서&apos;와 대화하러 가기 ➔
+            귀신비서로 이동
           </button>
         )}
-      </section>
-
-      {/* [메뉴 2 · 👻 귀신검색 하단 고정 소속 설명란] 유료 티어(🔒) 및 부가 기능 안내 */}
-      <section
-        aria-label="귀신검색 유료 티어 및 부가 기능 안내"
-        className="p-4 sm:p-5 rounded-2xl bg-slate-100/90 dark:bg-zinc-950/90 border border-slate-300 dark:border-white/10 flex flex-col gap-3 shadow-xs"
-      >
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-[13.5px] font-extrabold text-[#1E3A8A] dark:text-teal-300">
-            🔒 귀신검색 유료 티어 안내 (명시적 동의 시 30일 무제한 무료체험 · 만료 시 자동 결제 없이 깔끔 잠금🔒)
-          </span>
-          <span className="text-[11.5px] text-slate-700 dark:text-zinc-300 font-bold">
-            내 PC 문서·사진·영상 소환 &amp; 동영상 화면 글자 자동 추출은 평생 무제한 무료
-          </span>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 text-[12px] text-slate-800 dark:text-zinc-200">
-          <div className="p-3 rounded-xl bg-white dark:bg-zinc-900/80 border border-slate-200 dark:border-white/10 flex flex-col gap-1 shadow-2xs">
-            <span className="font-extrabold text-slate-900 dark:text-white">① 📱 내 기기 통합 소환🔒</span>
-            <span className="text-slate-600 dark:text-zinc-400 leading-snug">
-              동일 이메일 연결 시 핸드폰 사진·타 PC 파일 검색창 통합 노출 &amp; 폰 촬영 직후 <strong className="text-[#1E3A8A] dark:text-teal-300">내 PC 1초 공간이동</strong> · 30일 만료 시 원격 노출만 OFF되며 이미 대장 PC 로컬 폴더에 복사된 원본 파일은 영구 보존
-            </span>
-          </div>
-          <div className="p-3 rounded-xl bg-white dark:bg-zinc-900/80 border border-slate-200 dark:border-white/10 flex flex-col gap-1 shadow-2xs">
-            <span className="font-extrabold text-slate-900 dark:text-white">② 📝 사진·표 OCR 창🔒 (창 UI ③ 별도 독립 창)</span>
-            <span className="text-slate-600 dark:text-zinc-400 leading-snug">
-              귀신검색창 안에는 사진 목록만 깔끔하게 보이고, 사진에서 <strong className="text-[#1E3A8A] dark:text-teal-300">[📝 OCR]</strong>을 누르면 별도 독립 <strong className="text-slate-900 dark:text-white">사진·표 OCR 창</strong>이 열려 글자·표·단어칩을 추출
-            </span>
-          </div>
-          <div className="p-3 rounded-xl bg-white dark:bg-zinc-900/80 border border-slate-200 dark:border-white/10 flex flex-col gap-1 shadow-2xs">
-            <span className="font-extrabold text-slate-900 dark:text-white">③ 🏷️ 귀신 라벨러🔒</span>
-            <span className="text-slate-600 dark:text-zinc-400 leading-snug">
-              암호 같은 사진·카톡·문서 파일명을 촬영일·내용 규칙(YYMMDD_내용)으로 일괄 자동 작명
-            </span>
-          </div>
-        </div>
       </section>
     </div>
   );

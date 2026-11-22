@@ -17,7 +17,7 @@ import type { LocalDocumentFile } from '../types/saysee';
  *    [🎯 찾기] ↔ [✋ 손보기] 양방향 0토큰 통합 음성 라우터 엔진
  *
  * - 유료 Typecast 전면 배제 -> 100% 무료 MS 신경망(edge-tts) '현수(ko-KR-HyunsuNeural) & 선희(ko-KR-SunHiNeural)' 투톱 일원화
- * - 일일 10회 제한 등 횟수 제한 전면 폐지 ("내 폰·PC 속 내용검색·Z몬스터는 언제나 0원")
+ * - 일일 10회 제한 등 횟수 제한 전면 폐지 ("내 폰·PC 속 내용검색·Z몬스터는 무료")
  * - 최근 열어본 AI 기록이 0건인 초기 유저는 기본값으로 '제미나이(Gemini, https://gemini.google.com/app)' 오픈
  */
 
@@ -78,7 +78,7 @@ export interface ParsedVoiceDocCommand {
 }
 
 /**
- * [🎯 찾기] 화면에서 말했을 때 '[✋ 손보기(치우기/고치기/복원/요금·기능)]' 의도인지 0.001초 만에 판별하는 양방향 0토큰 라우터
+ * [🎯 찾기] 화면에서 말했을 때 '[✋ 손보기(치우기/고치기/복원/요금·기능)]' 의도인지 0.00판별하는 양방향 0토큰 라우터
  */
 export function isMonsterCareIntentFromSearch(utterance: string): boolean {
   const raw = (utterance || '').trim();
@@ -314,7 +314,7 @@ export function parseZeroLlmVoiceDocCommand(utterance: string): ParsedVoiceDocCo
 }
 
 /**
- * LLM 없이 로컬 텍스트에서 특정 키워드가 포함된 문장들만 0.001초 만에 전수 발췌 + 노란 형광펜 하이라이트 생성
+ * LLM 없이 로컬 텍스트에서 특정 키워드가 포함된 문장들만 0.00전수 발췌 + 노란 형광펜 하이라이트 생성
  */
 export function extractKeywordSentencesZeroLlm(
   fullText: string,
@@ -346,8 +346,8 @@ export function extractKeywordSentencesZeroLlm(
   const kwLabel = cleanKeywords.join(', ');
   const hyunsuIntroText =
     matched.length > 0
-      ? `요청하신 '${kwLabel}' 관련 조항 총 ${matched.length}개를 찾았습니다. 여성 성우 선희 목소리로 또렷하게 낭독해 드립니다.`
-      : `문서 본문에서 '${kwLabel}' 단어가 포함된 문장을 찾지 못했습니다.`;
+      ? `요청하신 '${kwLabel}'관련 조항 총 ${matched.length}개를 찾았습니다. 여성 성우 선희 목소리로 또렷하게 낭독해 드립니다.`
+      : `문서 본문에서 '${kwLabel}'단어가 포함된 문장을 찾지 못했습니다.`;
 
   const sunhiReadScript = matched.map((m, i) => `${i + 1}번째 문장입니다. ${m.sentence}`).join(' ');
 
@@ -359,8 +359,7 @@ export function extractKeywordSentencesZeroLlm(
   };
 }
 
-const DOC_QUERY_STOP_WORDS = new Set([
-  '읽어줘', '읽어봐', '읽어', '낭독해줘', '낭독해', '낭독', '들려줘', '들려',
+const DOC_QUERY_STOP_WORDS = new Set([  '읽어줘', '읽어봐', '읽어', '낭독해줘', '낭독해', '낭독', '들려줘', '들려',
   '알려줘', '알려달라', '알려봐', '알려', '있어', '있나', '있니', '있나요',
   '얼마야', '얼마인가요', '얼마', '언제야', '언제', '뭐야', '뭔가요', '뭐',
   '어디야', '어디', '몇', '누구', '맞아', '확인해줘', '확인', '찾아줘', '보여줘',
@@ -484,11 +483,11 @@ export function scoreAndAnnotateDocumentMatch(
 
   let similarityNoticeKo: string | undefined;
   if (!isExactMatch && matchedTokens.length > 0) {
-    similarityNoticeKo = `💡 검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다! (일치 키워드: ${matchedTokens
+    similarityNoticeKo = `검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다! (일치 키워드: ${matchedTokens
       .map((k) => `'${k}'`)
       .join(', ')})`;
   } else if (!isExactMatch) {
-    similarityNoticeKo = `💡 검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다!`;
+    similarityNoticeKo = `검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다!`;
   }
 
   return {
@@ -544,8 +543,8 @@ export function resolveTargetDocAndBuildFactAnswer(
     isExactMatch: false,
     annotatedDoc: {
       ...scoredList[0].annotatedDoc,
-      matchType: 'SIMILAR' as const,
-      similarityNoticeKo: '💡 검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다!',
+      matchType: 'SIMILAR'as const,
+      similarityNoticeKo: '검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다!',
     },
   };
 
@@ -557,7 +556,7 @@ export function resolveTargetDocAndBuildFactAnswer(
 
   const similarPrefixKo = !bestEntry.isExactMatch
     ? bestEntry.matchedTokens.length > 0
-      ? `검색어와 100% 일치하는 문서는 없지만, '${bestEntry.matchedTokens.join(', ')}' 키워드가 포함된 유사한 문서를 찾았습니다! `
+      ? `검색어와 100% 일치하는 문서는 없지만, '${bestEntry.matchedTokens.join(', ')}'키워드가 포함된 유사한 문서를 찾았습니다! `
       : `검색어와 100% 일치하는 문서는 없지만, 유사한 문서를 찾았습니다! `
     : '';
 
@@ -588,8 +587,8 @@ export function resolveTargetDocAndBuildFactAnswer(
     return {
       matchedDoc: doc,
       rankedDocs,
-      factAnswerKo: `${similarPrefixKo}찾으신 '${doc.title}' 확인 결과, ${coreSummary}입니다.`,
-      voiceRole: 'hyunsu_briefing', // 단답/질문/알려줘/있어? ➔ 차분한 남성 성우 (현수) 고정!
+      factAnswerKo: `${similarPrefixKo}찾으신 '${doc.title}'확인 결과, ${coreSummary}입니다.`,
+      voiceRole: 'hyunsu_briefing', // 단답/질문/알려줘/있어?  차분한 남성 성우 (현수) 고정!
     };
   }
 
@@ -603,7 +602,7 @@ export function resolveTargetDocAndBuildFactAnswer(
 }
 
 /**
- * 무료 MS 신경망 '현수(ko-KR-HyunsuNeural)' 또는 '선희(ko-KR-SunHiNeural)' 음성으로 즉시 발화 (횟수 제한 없음 · 평생 0원)
+ * 무료 MS 신경망 '현수(ko-KR-HyunsuNeural)' 또는 '선희(ko-KR-SunHiNeural)' 음성으로 즉시 발화 (횟수 제한 없음 · 기본 무료)
  * - PC/모바일 공통 3단 캐시 + 구형 기계음(Microsoft Heami) 100% 원천 차단 + 경쾌한 속도(+15%)
  */
 export async function speakWithHyunsuOrSunhi(
@@ -677,8 +676,8 @@ export async function dispatchFileToKakaoRealChatroom(params: {
   }
 
   const announcement = delivered
-    ? `찾으신 '${params.fileName}' 파일을 카카오톡 '${params.recipientName}' 대화방에 바로 올려두었어요! 실제 카톡 화면에서 대화방을 눈으로 확인하신 뒤 엔터만 한 번 눌러주세요!`
-    : `찾으신 '${params.fileName}' 문서를 확인했지만, 현재 내 PC 엔진(멀린 Z-코어) 또는 카카오톡 PC 버전이 실행되어 있지 않아 대화방 자동 장전을 보류했어요.${errorDetail ? ` (${errorDetail})` : ''} 엔진과 카카오톡 PC를 켜신 뒤 다시 말씀해 주세요!`;
+    ? `찾으신 '${params.fileName}'파일을 카카오톡 '${params.recipientName}'대화방에 바로 올려두었어요! 실제 카톡 화면에서 대화방을 눈으로 확인하신 뒤 엔터만 한 번 눌러주세요!`
+    : `찾으신 '${params.fileName}'문서를 확인했지만, 현재 내 PC 엔진(멀린 Z-코어) 또는 카카오톡 PC 버전이 실행되어 있지 않아 대화방 자동 장전을 보류했어요.${errorDetail ? `(${errorDetail})` : ''} 엔진과 카카오톡 PC를 켜신 뒤 다시 말씀해 주세요!`;
   void speakWithHyunsuOrSunhi(announcement, 'hyunsu_briefing');
 
   return {
@@ -688,7 +687,7 @@ export async function dispatchFileToKakaoRealChatroom(params: {
     hyunsuAnnouncement: announcement,
     floatingReturnPillLabel: delivered
       ? '⬅️ 전송 완료 후 귀신같이 화면으로 즉시 복귀'
-      : '🔌 엔진·카카오톡 PC 확인 후 다시 시도',
+      : '엔진·카카오톡 PC 확인 후 다시 시도',
   };
 }
 
@@ -856,9 +855,8 @@ export async function triggerUserFavoriteAiLiveVoiceBatonTouch(params: {
     stagedPromptText: combinedPrompt,
     overlayTriggered: false,
     ttsBriefingKo: fallbackBriefing,
-    twoStepFingerGuide: [
-      { step: 1, label: '① 입력창 붙여넣기(Ctrl+V) 및 [전송 (↑)] 클릭', desc: '이미 복사된 본문+질문 데이터를 즉시 전송합니다.' },
-      { step: 2, label: '② 바로 옆 [라이브 음성 🎧] 버튼 클릭', desc: '운전·이동 중에도 말로 편하게 심층 상담을 이어갑니다.' },
+    twoStepFingerGuide: [      { step: 1, label: '① 입력창 붙여넣기(Ctrl+V) 및 [전송 (↑)] 클릭', desc: '이미 복사된 본문+질문 데이터를 즉시 전송합니다.' },
+      { step: 2, label: '② 바로 옆 [라이브 음성 ] 버튼 클릭', desc: '운전·이동 중에도 말로 편하게 심층 상담을 이어갑니다.' },
     ],
     floatingReturnPill: '⬅️ 대화 종료 후 귀신같이 복귀',
   };

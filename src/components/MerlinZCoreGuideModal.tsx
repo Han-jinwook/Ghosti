@@ -1,7 +1,6 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import {
   zCoreBridge,
-  Z_CORE_PORT,
   Z_CORE_ZIP_URL,
   LATEST_Z_CORE_VERSION,
   isZCoreOutdated,
@@ -11,7 +10,6 @@ import { useHub } from '../services/merlin-hub-sdk/react';
 
 export type ZCoreModalStep = 'intro' | 'waiting_engine' | 'indexing' | 'ready';
 
-/** Microsoft Artifact Signing (sundream-public-cert) 코드서명 완료 시 true로 전환하여 SmartScreen 사전 안내 비노출 */
 export const IS_ZCORE_ARTIFACT_SIGNED = false;
 
 interface MerlinZCoreGuideModalProps {
@@ -33,7 +31,6 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     photos,
     videoSceneItems,
     localDocuments,
-    matchedVaultPhotos,
     initApp,
     setDesktopTab,
     setMobileTab,
@@ -91,7 +88,6 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   const [linkCopied, setLinkCopied] = useState<boolean>(false);
   const hasTriggeredInitRef = useRef<boolean>(false);
   const initPromiseRef = useRef<Promise<void> | null>(null);
-
   const quietSecretaryHandledRef = useRef<boolean>(false);
 
   const completeQuietConnectInSecretary = () => {
@@ -104,7 +100,6 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     } catch {
       /* ignore */
     }
-    // 귀신비서 화면에서 다른 탭으로 강제 납치하지 않고, 뒤에서 조용히 내 진짜 사진·동영상·문서만 인덱싱 시작!
     void initApp(true);
     onClose();
     if (typeof window !== 'undefined') {
@@ -112,7 +107,6 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     }
   };
 
-  // 모달 열릴 때 초기 단계 결정
   useEffect(() => {
     if (!isOpen) {
       hasTriggeredInitRef.current = false;
@@ -138,7 +132,6 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       if (outdatedNow) {
         void zCoreBridge.triggerSilentSelfUpdate();
         if (!isMobileEnv) {
-          // 구버전 실행 중일 때는 모달이 자동으로 닫히거나 indexing으로 넘어가버리지 않도록 수동 다운로드 안내 화면('ready')에 고정
           setManualCheckHint(null);
           setStep('ready');
           return;
@@ -184,7 +177,6 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, initialStep, isMobileEnv, isInSecretaryTab]);
 
-  // Z-코어 연결 실시간 감지 (1초 주기 폴링)
   useEffect(() => {
     if (!isOpen) return;
 
@@ -208,8 +200,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
           if (prev === 'intro' || prev === 'waiting_engine') {
             if (prev === 'waiting_engine') {
               useSaySeeStore.setState({
-                lastQuarantineToast:
-                  '🎉 내 컴퓨터 연결 완료! 화살표 안내를 닫고 내 PC 사진·서류를 즉시 불러옵니다!',
+                lastQuarantineToast: 'PC 엔진이 연결되어 파일 목록을 불러옵니다.',
               });
             }
             setProgress(0);
@@ -231,7 +222,6 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOpen, isInSecretaryTab]);
 
-  // 'indexing' 단계: 실제 사진·서류 목록 로딩(initApp)이 끝났을 때만 완료로 전환한다.
   useEffect(() => {
     if (!isOpen || step !== 'indexing') return;
     let cancelled = false;
@@ -263,7 +253,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       })
       .catch(() => {
         if (!cancelled) {
-          setLoadError('사진 목록을 불러오지 못했습니다. 귀신같이 PC 엔진이 켜져 있는지 확인한 뒤 다시 시도해 주세요.');
+          setLoadError('파일 목록을 불러오지 못했습니다. PC 엔진이 실행 중인지 확인해 주세요.');
         }
       });
 
@@ -295,8 +285,8 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       hasUserSelectedSearchTab: true,
       lastQuarantineToast:
         totalPhotoCount > 0
-          ? `🎉 내 기기 진짜 사진 ${totalPhotoCount}장 준비 완료! 모든 사진이 화면에 펼쳐졌습니다.`
-          : '🎉 내 기기 연결 완료! 내 진짜 사진·문서를 바로 검색해 보세요.',
+          ? `사진 ${totalPhotoCount}장 불러오기 완료`
+          : 'PC 연결이 완료되었습니다.',
     });
     onClose();
     if (typeof document !== 'undefined') {
@@ -317,7 +307,6 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       /* ignore */
     }
 
-    // 1) 이미 Z-코어가 연결되어 있거나 실시간 헬스체크에서 살아있으면 다운로드 없이 바로 연결 완료 처리
     const aliveNow = isConnected || zCoreBridge.isConnected || (await zCoreBridge.checkHealth(true));
     if (aliveNow) {
       setIsConnected(true);
@@ -332,13 +321,11 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       return;
     }
 
-    // 2) 모바일 브라우저 접속 시: Windows .zip을 폰에 받지 않고 모바일 시작/PC 주소 복사로 안내
     if (isMobileEnv) {
       finishAndPopOpenPhotos();
       return;
     }
 
-    // 3) PC 데스크톱 접속 시: Merlin_Z_Core.zip 다운로드 트리거
     const link = document.createElement('a');
     link.href = Z_CORE_ZIP_URL;
     link.download = 'Merlin_Z_Core.zip';
@@ -360,7 +347,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
 
   const handleManualCheck = async () => {
     setIsChecking(true);
-    setManualCheckHint('🔍 PC 엔진 실행 신호를 확인하고 있습니다 (최초 실행 시 압축 해제에 4~6초가 걸릴 수 있습니다)...');
+    setManualCheckHint('PC 엔진 실행 상태를 확인하고 있습니다...');
     let ok = false;
     for (let attempt = 0; attempt < 9; attempt++) {
       ok = await zCoreBridge.checkHealth(true);
@@ -373,7 +360,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
     if (ok) {
       if (isZCoreOutdated(zCoreBridge.version) && !isMobileEnv) {
         setManualCheckHint(
-          `⚠️ 아직 구버전(v${zCoreBridge.version || '구버전'})이 응답하고 있습니다. 방금 내려받은 최신 PC 엔진(v${LATEST_Z_CORE_VERSION}) 압축을 풀고 [Merlin_Z_Core_Setup.exe]를 실행한 뒤 다시 확인해 주세요.`
+          `이전 버전(v${zCoreBridge.version || '구버전'})이 실행 중입니다. 최신 버전(v${LATEST_Z_CORE_VERSION}) 압축을 풀고 Merlin_Z_Core_Setup.exe를 실행해 주세요.`
         );
         setStep('ready');
         return;
@@ -387,7 +374,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
       setStep('indexing');
     } else {
       setManualCheckHint(
-        '⚠️ 아직 내 컴퓨터에서 PC 엔진 실행 신호가 감지되지 않았습니다. 다운로드된 Merlin_Z_Core.zip 압축을 풀고 [Merlin_Z_Core_Setup.exe]를 더블클릭해 실행(파란 보호창이 뜨면 [추가 정보] ➔ [실행])한 뒤 5초 후 다시 눌러 주세요.'
+        '아직 실행 신호가 확인되지 않았습니다. 다운로드한 Merlin_Z_Core.zip 압축을 풀고 Merlin_Z_Core_Setup.exe를 실행한 뒤 다시 확인해 주세요.'
       );
     }
   };
@@ -398,292 +385,177 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
   const currentStageLabel = loadError
     ? loadError
     : loadDone
-    ? `✨ 불러오기 완료: 사진 ${totalPhotoCount}장 · 영상 ${totalVideoCount}개 · 서류 ${totalDocCount}건`
-    : '📂 PC 엔진에서 내 PC 사진·영상·서류 목록을 불러오는 중...';
+    ? `완료: 사진 ${totalPhotoCount}장 · 영상 ${totalVideoCount}개 · 문서 ${totalDocCount}건`
+    : '내 PC의 사진·영상·문서 목록을 불러오는 중입니다...';
 
   return (
     <div
-      className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe bg-black/75 backdrop-blur-md animate-fade-in overflow-y-auto"
+      className="fixed inset-0 z-[120] flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe bg-black/50 backdrop-blur-xs overflow-y-auto"
       onClick={(e) => {
         if (e.target === e.currentTarget && step !== 'indexing') onClose();
       }}
     >
-      {/* 브라우저 우측 상단 다운로드 영역을 가리키는 애니메이션 화살표 배너 (하트비트 감지 시 자동 소멸) */}
       {step === 'waiting_engine' && !isMobileEnv && !isConnected && (
         <div
-          className="fixed top-4 right-6 z-[140] max-w-md rounded-2xl border-2 border-amber-400 bg-zinc-950/95 text-white px-4 py-3.5 shadow-2xl shadow-amber-500/30 animate-bounce pointer-events-auto"
+          className="fixed top-4 right-6 z-[140] max-w-sm rounded-xl border border-slate-300 bg-white text-slate-900 px-4 py-3 shadow-xl pointer-events-auto"
           onClick={(e) => e.stopPropagation()}
         >
-          <div className="flex items-start gap-2.5">
-            <span className="text-2xl leading-none shrink-0">👆</span>
-            <div className="flex flex-col gap-1">
-              <p className="text-[13px] font-black text-amber-300 leading-snug">
-                👆 우측 상단 다운로드 창에서 [열기] ➔ [Merlin_Z_Core_Setup.exe] 실행(더블클릭)까지 딱 한 번만 해주세요!
-              </p>
-              <p className="text-[11.5px] font-bold text-zinc-200 leading-snug">
-                ① 우측 상단 다운로드 파일 열기(압축 풀기) ➔ ② 폴더 안의 <code className="text-teal-300">Merlin_Z_Core_Setup.exe</code> 더블클릭 실행
-              </p>
-            </div>
-          </div>
+          <p className="text-[12.5px] font-semibold text-slate-900 leading-snug">
+            브라우저 우측 상단 다운로드 목록에서 압축을 풀고 <code>Merlin_Z_Core_Setup.exe</code>를 실행해 주세요.
+          </p>
         </div>
       )}
-      <div
-        className={`w-full max-w-lg rounded-3xl p-4 sm:p-7 shadow-2xl border transition-all max-h-[90dvh] overflow-y-auto no-scrollbar my-auto ${
-          'bg-white border-slate-200 text-slate-800'
-        }`}
-      >
-        {/* ─────────────── [가벼운 1클릭 연결 안내] ─────────────── */}
+
+      <div className="w-full max-w-md rounded-2xl p-5 sm:p-6 shadow-2xl border bg-white border-slate-200 text-slate-900 max-h-[90dvh] overflow-y-auto my-auto">
         {step === 'intro' && (
-          <>
-            <div className="flex items-start justify-between gap-3 mb-3">
-              <div className="flex items-center gap-3 min-w-0">
-                <div className="w-10 h-10 rounded-2xl bg-teal-500/15 border border-teal-500/30 flex items-center justify-center shrink-0">
-                  <span className="text-xl">{isMobileEnv ? '📱' : '✨'}</span>
-                </div>
-                <div className="min-w-0">
-                  <span className="inline-block px-2 py-0.5 rounded-full text-[10.5px] font-black bg-teal-500/15 text-teal-600 dark:text-teal-300 border border-teal-400/30 mb-0.5">
-                    {isMobileEnv ? '📱 모바일 갤러리 & PC 연동' : '⚡ 내 컴퓨터 1초 연결'}
-                  </span>
-                  <h3 className="text-base sm:text-lg font-black tracking-tight break-keep">
-                    {isMobileEnv
-                      ? '모바일 시작 & PC 폴더 연동'
-                      : '⚡ 내 컴퓨터 1초 연결 · 사진·영상·서류 인덱싱'}
-                  </h3>
-                </div>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="text-[11.5px] font-medium text-slate-500">
+                  {isMobileEnv ? '모바일 · PC 연동' : 'PC 엔진 연결'}
+                </span>
+                <h3 className="text-[18px] font-bold text-slate-900 tracking-tight mt-0.5">
+                  {isMobileEnv ? '모바일 시작 및 PC 연결' : '내 컴퓨터 연결하기'}
+                </h3>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="w-9 h-9 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-white shrink-0 cursor-pointer"
+                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 shrink-0 cursor-pointer"
                 aria-label="닫기"
               >
                 ✕
               </button>
             </div>
 
-            {!isMobileEnv && (
-              <div
-                className={`mb-3 p-3 rounded-2xl border text-xs font-extrabold leading-relaxed ${
-                  'bg-teal-50 border-teal-200 text-teal-950'
-                }`}
-              >
-                ⚡ 내 파일이 외부 클라우드 서버로 절대 전송되지 않도록, 내 PC 전용 초경량 로컬 엔진(3초 연결)을 켭니다.
-              </div>
-            )}
-
-            <p className="text-xs sm:text-[13px] text-zinc-500 dark:text-zinc-300 leading-relaxed mb-4">
+            <p className="text-[13px] text-slate-600 leading-relaxed">
               {isMobileEnv
-                ? '스마트폰에서 바로 시작하실 수 있으며, PC에서도 아래 주소로 접속하시면 PC 속 사진·문서까지 함께 검색됩니다.'
-                : '처음 한 번만 연결해 두시면 다음부터는 이 창 없이 0.1초 만에 내 PC 파일이 자동으로 준비됩니다.'}
+                ? '스마트폰에서 바로 시작할 수 있으며, PC에서도 아래 주소로 접속하면 PC 파일을 함께 검색할 수 있습니다.'
+                : '파일을 외부 서버로 보내지 않고 내 컴퓨터 안에서 바로 검색할 수 있도록 로컬 엔진을 연결합니다. 처음 한 번만 실행하면 이후에는 자동으로 연결됩니다.'}
             </p>
 
             {isMobileEnv && verifiedEmail && (
-              <div
-                className={`mb-4 p-3 rounded-2xl border text-xs flex items-center justify-between gap-3 ${
-                  'bg-teal-50/70 border-teal-200 text-teal-950'
-                }`}
-              >
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-3 text-[12px]">
                 <div className="min-w-0">
-                  <div className="font-black text-[12px]">💻 PC 접속 주소</div>
-                  <p className="text-[11px] opacity-85 truncate">https://ghosti.sundreamer.app/?dev=true</p>
+                  <div className="font-semibold text-slate-900">PC 접속 주소</div>
+                  <p className="text-slate-500 truncate">https://ghosti.sundreamer.app/?dev=true</p>
                 </div>
                 <button
                   type="button"
                   onClick={handleCopyPcLinkForMobile}
-                  className="px-3 py-1.5 rounded-xl bg-teal-500 hover:bg-teal-400 text-zinc-950 font-black text-[11px] shrink-0 cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-slate-900 text-white font-semibold text-[11.5px] shrink-0 cursor-pointer"
                 >
-                  {linkCopied ? '✅ 복사됨' : '📋 주소 복사'}
+                  {linkCopied ? '복사됨' : '복사'}
                 </button>
               </div>
             )}
 
-            <div className="flex flex-col sm:flex-row items-center gap-2">
+            <div className="flex items-center gap-2 pt-1">
               <button
                 type="button"
                 onClick={handleOneStopAgreeAndDownload}
-                className="w-full flex-1 py-3 px-5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-black text-sm text-center shadow-lg shadow-teal-500/25 transition-all flex items-center justify-center gap-2 cursor-pointer"
+                className="flex-1 py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-[13px] text-center cursor-pointer transition-colors"
               >
-                <span>
-                  {isMobileEnv
-                    ? '바로 시작하기'
-                    : isConnected
-                    ? '✨ 내 PC 자동 인덱싱 확인'
-                    : '연결 시작하기'}
-                </span>
+                {isMobileEnv ? '시작하기' : isConnected ? '파일 목록 확인' : '연결 시작하기'}
               </button>
-
               <button
                 type="button"
                 onClick={onClose}
-                className={`w-full sm:w-auto py-3 px-4 rounded-2xl font-bold text-xs border transition-all cursor-pointer ${
-                  'bg-slate-100 border-slate-200 text-slate-600 hover:bg-slate-200'
-                }`}
+                className="py-2.5 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 font-medium text-[13px] cursor-pointer"
               >
                 닫기
               </button>
             </div>
-          </>
+          </div>
         )}
 
-        {/* ─────────────── [2단계: 다운로드 완료 & 실행 신호 실시간 대기 -> 켜자마자 자동 인덱싱] ─────────────── */}
         {step === 'waiting_engine' && (
-          <>
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-amber-500/15 border border-amber-500/30 flex items-center justify-center shrink-0">
-                  <span className="text-2xl animate-bounce">📥</span>
-                </div>
-                <div>
-                  <span className="inline-block px-2 py-0.5 rounded-full text-[10.5px] font-black bg-amber-500/15 text-amber-600 dark:text-amber-300 border border-amber-400/30 mb-1">
-                    ⚡ 내 컴퓨터 1초 연결 · 단계 1/2 엔진 실행 대기 중
-                  </span>
-                  <h3 className="text-lg font-black tracking-tight">
-                    ⚡ 내 컴퓨터 1초 연결 — 다운로드된 압축을 풀고 실행해 주세요!
-                  </h3>
-                </div>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="text-[11.5px] font-medium text-slate-500">1/2단계 · 실행 대기</span>
+                <h3 className="text-[18px] font-bold text-slate-900 tracking-tight mt-0.5">
+                  다운로드한 파일을 실행해 주세요
+                </h3>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-white cursor-pointer"
+                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer"
                 aria-label="닫기"
               >
                 ✕
               </button>
             </div>
 
-            <div
-              className={`mb-3 p-3 rounded-2xl border text-xs font-extrabold leading-relaxed ${
-                'bg-teal-50 border-teal-200 text-teal-950'
-              }`}
-            >
-              ⚡ 내 파일이 외부 클라우드 서버로 절대 전송되지 않도록, 내 PC 전용 초경량 로컬 엔진(3초 연결)을 켭니다.
-            </div>
-
-            <div
-              className={`p-4 rounded-2xl border mb-4 ${
-                'bg-amber-50 border-amber-200 text-amber-950'
-              }`}
-            >
-              <div className="flex items-center gap-2.5 font-black text-[13.5px]">
-                <span className="w-3 h-3 rounded-full bg-amber-500 animate-ping shrink-0" />
-                <span>① 우측 상단 다운로드 파일 열기(압축 풀기) ➔ ② 폴더 안의 Merlin_Z_Core_Setup.exe 더블클릭 실행</span>
-              </div>
-              <p className="text-xs opacity-85 mt-1.5 leading-relaxed">
-                우측 상단 다운로드 창에서 <strong>Merlin_Z_Core.zip</strong>을 열어 압축을 풀고{' '}
-                <strong>Merlin_Z_Core_Setup.exe</strong> (또는 <strong>Merlin_Z_Core_실행.bat</strong>)을
-                더블클릭해 딱 한 번만 켜주시면, 실행 신호를 감지하는 즉시 자동으로 연결됩니다!
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 text-[13px] text-slate-700 space-y-1.5 leading-relaxed">
+              <p className="font-semibold text-slate-900">
+                1. 다운로드된 <code>Merlin_Z_Core.zip</code> 압축 풀기
               </p>
-            </div>
-
-            <div
-              className={`p-3.5 rounded-2xl border text-xs space-y-2 mb-5 ${
-                'bg-slate-50 border-slate-200 text-slate-700'
-              }`}
-            >
+              <p className="font-semibold text-slate-900">
+                2. 폴더 안의 <code>Merlin_Z_Core_Setup.exe</code> 실행
+              </p>
               {!IS_ZCORE_ARTIFACT_SIGNED && (
-                <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded bg-teal-500/20 text-teal-600 dark:text-teal-300 font-black text-[10.5px]">
-                    TIP 1
-                  </span>
-                  <span>Windows 보호 안내가 뜰 경우 [추가 정보] ➔ [실행]을 누르시면 3초 만에 연결됩니다.</span>
-                </div>
+                <p className="text-[12px] text-slate-500 pt-1">
+                  Windows 보호 안내가 표시되면 [추가 정보] → [실행]을 선택해 주세요.
+                </p>
               )}
-              <div className="flex items-center gap-2">
-                <span className="px-2 py-0.5 rounded bg-teal-500/20 text-teal-600 dark:text-teal-300 font-black text-[10.5px]">
-                  {IS_ZCORE_ARTIFACT_SIGNED ? 'TIP' : 'TIP 2'}
-                </span>
-                <span>켜지는 즉시 이 창이 불러오기 화면으로 자동 전환됩니다.</span>
-              </div>
             </div>
 
             {manualCheckHint && (
               <div
-                className={`mb-4 p-3 rounded-xl border text-xs leading-relaxed ${
+                className={`p-3 rounded-lg border text-[12px] leading-relaxed ${
                   isChecking
-                    ? 'bg-teal-50 border-teal-200 text-teal-900'
-                    : 'bg-rose-50 border-rose-200 text-rose-900'
+                    ? 'bg-slate-50 border-slate-200 text-slate-700'
+                    : 'bg-rose-50 border-rose-200 text-rose-700'
                 }`}
               >
                 {manualCheckHint}
               </div>
             )}
 
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
               <a
                 href={Z_CORE_ZIP_URL}
                 download="Merlin_Z_Core.zip"
-                className={`py-2.5 px-4 rounded-xl font-bold text-xs border transition-all no-underline cursor-pointer ${
-                  'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
-                }`}
+                className="py-2 px-3 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 font-medium text-[12px] no-underline cursor-pointer"
               >
-                📥 다운로드가 안 됐나요? 다시 받기
+                다시 다운로드
               </a>
 
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={handleManualCheck}
-                  disabled={isChecking}
-                  className="py-2.5 px-4 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs transition-all cursor-pointer"
-                >
-                  {isChecking ? '연결 확인 중...' : '🔄 실행했어요 (즉시 확인)'}
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleManualCheck}
+                disabled={isChecking}
+                className="py-2 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-[12.5px] cursor-pointer disabled:opacity-50"
+              >
+                {isChecking ? '확인 중...' : '실행 완료 확인'}
+              </button>
             </div>
-          </>
+          </div>
         )}
 
-        {/* ─────────────── [3단계: 귀신같이 찾기 인덱싱 진행 시간표시바 -> 100% 완료 시 사진 딱!] ─────────────── */}
         {step === 'indexing' && (
-          <>
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div className="flex items-center gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-teal-500/15 border border-teal-500/40 flex items-center justify-center shrink-0">
-                  <span className="text-2xl animate-pulse">🧠</span>
-                </div>
-                <div>
-                  <div className="flex items-center gap-2 mb-1">
-                    <span className="px-2 py-0.5 rounded-full text-[10.5px] font-black bg-emerald-500/20 text-emerald-600 dark:text-emerald-300 border border-emerald-400/30">
-                      🟢 엔진 연결됨
-                    </span>
-                    <span className="text-[11px] font-bold text-teal-500">
-                      단계 2/2 · 목록 불러오는 중
-                    </span>
-                  </div>
-                  <h3 className="text-lg font-black tracking-tight">
-                    {loadDone
-                      ? '⚡ 내 컴퓨터 1초 연결 · 불러오기 완료!'
-                      : loadError
-                      ? '⚡ 내 컴퓨터 1초 연결 · 불러오기 실패'
-                      : '⚡ 내 컴퓨터 1초 연결 · 사진 목록 불러오는 중...'}
-                  </h3>
-                </div>
-              </div>
+          <div className="flex flex-col gap-4">
+            <div>
+              <span className="text-[11.5px] font-medium text-teal-700">2/2단계 · 연결됨</span>
+              <h3 className="text-[18px] font-bold text-slate-900 tracking-tight mt-0.5">
+                {loadDone ? '불러오기 완료' : loadError ? '불러오기 실패' : '파일 목록을 불러오는 중'}
+              </h3>
             </div>
 
-            <div
-              className={`p-4 rounded-2xl border mb-4 ${
-                'bg-slate-50 border-slate-200'
-              }`}
-            >
-              <div className="w-full h-3.5 rounded-full bg-zinc-200 dark:bg-zinc-800 overflow-hidden p-0.5 mb-3">
+            <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 space-y-2.5">
+              <div className="w-full h-2 rounded-full bg-slate-200 overflow-hidden">
                 <div
-                  className={`h-full rounded-full bg-gradient-to-r from-teal-500 via-emerald-400 to-cyan-400 transition-all duration-300 ${
-                    loadDone || loadError ? '' : 'animate-pulse'
-                  }`}
-                  style={{ width: loadDone ? '100%' : loadError ? '0%' : '100%', opacity: loadDone ? 1 : 0.45 }}
+                  className="h-full rounded-full bg-slate-900 transition-all duration-300"
+                  style={{ width: loadDone ? '100%' : loadError ? '0%' : `${Math.max(25, progress)}%` }}
                 />
               </div>
-
-              <div className="text-xs font-bold text-slate-700 dark:text-zinc-200 flex items-center gap-2">
-                <span className="w-2 h-2 rounded-full bg-teal-400 animate-ping shrink-0" />
-                <span className="truncate">{currentStageLabel}</span>
-              </div>
+              <p className="text-[12.5px] text-slate-600 truncate">{currentStageLabel}</p>
             </div>
 
-            {loadError && (
-              <div className="mb-4 flex justify-end">
+            <div className="flex items-center justify-between gap-2">
+              {loadError ? (
                 <button
                   type="button"
                   onClick={() => {
@@ -693,63 +565,39 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                     setStep('ready');
                     window.setTimeout(() => setStep('indexing'), 0);
                   }}
-                  className="py-2 px-3.5 rounded-xl bg-teal-600 hover:bg-teal-500 text-white font-black text-xs cursor-pointer"
+                  className="py-2 px-3.5 rounded-lg bg-slate-900 text-white font-semibold text-[12px] cursor-pointer"
                 >
-                  🔄 다시 시도
+                  다시 시도
                 </button>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between gap-2 pt-1">
-              <span className="text-[11px] text-zinc-400">
-                💡 사진 수량에 따라 처음 한 번만 대기 시간이 소요됩니다.
-              </span>
+              ) : (
+                <span className="text-[11.5px] text-slate-400">잠시만 기다려 주세요.</span>
+              )}
               <button
                 type="button"
                 onClick={finishAndPopOpenPhotos}
-                className="py-2 px-3.5 rounded-xl bg-teal-600/20 hover:bg-teal-600/30 border border-teal-500/40 text-teal-400 font-black text-xs transition-all cursor-pointer shrink-0"
+                className="py-2 px-3.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-medium text-[12px] cursor-pointer shrink-0"
               >
-                사진 바로 펼치기 →
+                바로 열기
               </button>
             </div>
-          </>
+          </div>
         )}
 
-        {/* ─────────────── [4단계: 이미 연결 & 인덱싱 완료된 상태 (재열람 시) 및 구버전 수동 업데이트 안내] ─────────────── */}
         {step === 'ready' && (
-          <>
-            <div className="flex items-start justify-between gap-3 mb-4">
-              <div className="flex items-center gap-3">
-                <div
-                  className={`w-12 h-12 rounded-2xl border flex items-center justify-center shrink-0 ${
-                    isOutdated
-                      ? 'bg-amber-500/15 border-amber-500/40'
-                      : 'bg-emerald-500/15 border-emerald-500/30'
-                  }`}
-                >
-                  <span className="text-2xl">{isOutdated ? '⚠️' : '🟢'}</span>
-                </div>
-                <div>
-                  <span
-                    className={`inline-block px-2 py-0.5 rounded-full text-[10.5px] font-black border mb-1 ${
-                      isOutdated
-                        ? 'bg-amber-500/15 text-amber-600 dark:text-amber-300 border-amber-400/40'
-                        : 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-300 border-emerald-400/30'
-                    }`}
-                  >
-                    PC 엔진 · v{version || '?'} {isOutdated ? `구버전 (최신 v${LATEST_Z_CORE_VERSION} 필요)` : '정상 가동 중'}
-                  </span>
-                  <h3 className="text-lg font-black tracking-tight">
-                    {isOutdated
-                      ? `⚠️ PC 엔진 구버전 감지 — 최신 버전(v${LATEST_Z_CORE_VERSION}) 수동 업데이트 필요`
-                      : '⚡ 내 컴퓨터 1초 연결 연결 완료!'}
-                  </h3>
-                </div>
+          <div className="flex flex-col gap-4">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="text-[11.5px] font-medium text-slate-500">
+                  PC 엔진 v{version || '?'} {isOutdated ? `(최신 v${LATEST_Z_CORE_VERSION})` : '연결됨'}
+                </span>
+                <h3 className="text-[18px] font-bold text-slate-900 tracking-tight mt-0.5">
+                  {isOutdated ? 'PC 엔진 업데이트가 필요합니다' : '내 컴퓨터 연결됨'}
+                </h3>
               </div>
               <button
                 type="button"
                 onClick={onClose}
-                className="w-8 h-8 rounded-full flex items-center justify-center text-zinc-400 hover:text-zinc-600 dark:hover:text-white cursor-pointer"
+                className="w-8 h-8 rounded-lg hover:bg-slate-100 flex items-center justify-center text-slate-400 hover:text-slate-700 cursor-pointer"
                 aria-label="닫기"
               >
                 ✕
@@ -758,62 +606,39 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
 
             {isOutdated ? (
               <>
-                <div
-                  className={`p-4 rounded-2xl border mb-4 text-xs leading-relaxed ${
-                    'bg-amber-50 border-amber-300 text-amber-950'
-                  }`}
-                >
-                  <p className="font-extrabold mb-1.5">
-                    현재 PC에 실행 중인 PC 엔진(v{version || '구버전'})가 구버전이어서 일부 최신 기능이 동작하지 않을 수 있습니다.
-                  </p>
-                  <p className="opacity-90">
-                    자동 업데이트가 되지 않은 경우 아래 버튼으로 <strong>최신 PC 엔진(v{LATEST_Z_CORE_VERSION})</strong>를 직접 내려받아 압축을 풀고{' '}
-                    <strong>Merlin_Z_Core_Setup.exe</strong>를 실행해 주세요.
-                  </p>
-                </div>
-
+                <p className="text-[13px] text-slate-600 leading-relaxed">
+                  현재 구버전(v{version || '구버전'})이 실행 중입니다. 최신 버전(v{LATEST_Z_CORE_VERSION})을 내려받아 압축을 풀고 <code>Merlin_Z_Core_Setup.exe</code>를 실행해 주세요.
+                </p>
                 {manualCheckHint && (
-                  <div
-                    className={`mb-4 p-3 rounded-xl border text-xs leading-relaxed ${
-                      'bg-rose-50 border-rose-200 text-rose-900'
-                    }`}
-                  >
+                  <div className="p-3 rounded-lg border bg-rose-50 border-rose-200 text-rose-700 text-[12px]">
                     {manualCheckHint}
                   </div>
                 )}
-
-                <div className="flex flex-col sm:flex-row items-center gap-2.5">
+                <div className="flex items-center gap-2">
                   <a
                     href={Z_CORE_ZIP_URL}
                     download="Merlin_Z_Core.zip"
-                    className="w-full flex-1 py-3 px-5 rounded-2xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-black text-sm text-center shadow-lg shadow-amber-500/25 transition-all no-underline cursor-pointer"
+                    className="flex-1 py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-[13px] text-center no-underline cursor-pointer"
                   >
-                    ⬇️ 최신 PC 엔진 (v{LATEST_Z_CORE_VERSION}) 다운로드
+                    최신 버전 다운로드
                   </a>
                   <button
                     type="button"
                     onClick={handleManualCheck}
                     disabled={isChecking}
-                    className={`w-full sm:w-auto py-3 px-4 rounded-2xl font-bold text-xs border transition-all cursor-pointer ${
-                      'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
-                    }`}
+                    className="py-2.5 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-medium text-[12.5px] cursor-pointer"
                   >
-                    {isChecking ? '확인 중...' : '🔄 업데이트 완료 (다시 확인)'}
+                    {isChecking ? '확인 중...' : '다시 확인'}
                   </button>
                 </div>
               </>
             ) : (
               <>
-                <div
-                  className={`p-4 rounded-2xl border mb-5 text-xs leading-relaxed ${
-                    'bg-emerald-50 border-emerald-200 text-emerald-950'
-                  }`}
-                >
-                  내 컴퓨터 실물 사진 <strong>{totalPhotoCount}장</strong>과 로컬 서류함이 웹 화면과 실시간으로
-                  연결되어 있습니다. 검색창에 찾고 싶은 사진이나 서류 내용을 입력해 보세요!
+                <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 text-[13px] text-slate-700 leading-relaxed">
+                  내 컴퓨터 사진 <strong>{totalPhotoCount}장</strong>과 문서함이 연결되어 있습니다.
                 </div>
 
-                <div className="flex flex-col sm:flex-row items-center gap-2.5">
+                <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => {
@@ -822,34 +647,32 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                       setProgress(0);
                       setStep('indexing');
                     }}
-                    className="w-full flex-1 py-3 px-5 rounded-2xl bg-teal-600 hover:bg-teal-500 text-white font-black text-sm text-center shadow-lg shadow-teal-500/25 transition-all cursor-pointer"
+                    className="flex-1 py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-[13px] text-center cursor-pointer"
                   >
-                    🔄 내 PC 최신 상태 새로고침 ({totalPhotoCount}장 스캔)
+                    목록 새로고침
                   </button>
                   <button
                     type="button"
                     onClick={finishAndPopOpenPhotos}
-                    className={`w-full sm:w-auto py-3 px-4 rounded-2xl font-bold text-xs border transition-all cursor-pointer ${
-                      'bg-slate-100 border-slate-300 text-slate-700 hover:bg-slate-200'
-                    }`}
+                    className="py-2.5 px-4 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-medium text-[13px] cursor-pointer"
                   >
-                    🖼️ 사진 전체 펼치기
+                    사진 보기
                   </button>
                 </div>
                 {!isMobileEnv && (
-                  <div className="mt-3 text-right">
+                  <div className="text-right">
                     <a
                       href={Z_CORE_ZIP_URL}
                       download="Merlin_Z_Core.zip"
-                      className="text-[11px] font-bold text-zinc-400 hover:text-teal-400 underline cursor-pointer"
+                      className="text-[11.5px] text-slate-400 hover:text-slate-700 underline cursor-pointer"
                     >
-                      📥 PC 엔진 설치파일 다시 받기 (v{LATEST_Z_CORE_VERSION})
+                      설치파일 다시 받기 (v{LATEST_Z_CORE_VERSION})
                     </a>
                   </div>
                 )}
               </>
             )}
-          </>
+          </div>
         )}
       </div>
     </div>

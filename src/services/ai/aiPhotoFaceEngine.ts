@@ -447,14 +447,12 @@ export async function loadInitialPhotoDataset(): Promise<{
   //    #문서·설명서, #문서·신분증은 버릴 쓰레기가 아니라 [📁 스마트 서류함] 핵심 정보 자산으로 격상!
   //    단기 일회성 메모(#주차장·기둥, #부품·접사, #택배·상자, #현수막·안내)만 스마트 정리 후보로 제안합니다.
   const VAULT_CORE_DOC_TAGS = new Set(['#문서·설명서', '#문서·신분증']);
-  const BES2_MEMO_TAGS = new Set([
-    '#주차장·기둥',
+  const BES2_MEMO_TAGS = new Set([    '#주차장·기둥',
     '#부품·접사',
     '#택배·상자',
     '#현수막·안내',
   ]);
-  const BES2_EXPLICIT_TRASH_TAGS = new Set([
-    ...BES2_MEMO_TAGS,
+  const BES2_EXPLICIT_TRASH_TAGS = new Set([    ...BES2_MEMO_TAGS,
     ...VAULT_CORE_DOC_TAGS,
     '#스크린샷',
     '#흔들린사진',
@@ -498,8 +496,7 @@ export async function loadInitialPhotoDataset(): Promise<{
   // 템플릿 재사용으로 인해 다른 날짜/카테고리 샘플(반려동물·여행·음식 등)끼리 중복 묶음으로 섞이는 현상 원천 차단
   const isSyntheticSampleFile = (fName: string): boolean =>
     /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(fName);
-  const INTENTIONAL_SYNTHETIC_BURST_SET = new Set([
-    'IMG_20250510_1001.jpg',
+  const INTENTIONAL_SYNTHETIC_BURST_SET = new Set([    'IMG_20250510_1001.jpg',
     'IMG_20250510_1002.jpg',
     'IMG_20250510_1003.jpg',
   ]);
@@ -597,13 +594,13 @@ export async function loadInitialPhotoDataset(): Promise<{
     // [스펙 1 핵심] #문서·설명서, #문서·신분증 및 실물 촬영 서류 파일명(세금계산서·사업자등록증·계약서 등)은 [📁 스마트 서류함] 영구 정보 자산으로 격상!
     const rawCheckName = `${f.originalName || f.path} ${f.folderName || ''}`.toLowerCase();
     if (pTag === '#문서·설명서') {
-      vaultDocByPhoto.set(f.path, '📑 조립 설명서 · 매뉴얼 (촬영 서류)');
+      vaultDocByPhoto.set(f.path, '조립 설명서 · 매뉴얼 (촬영 서류)');
       tagsByPhoto.set(f.path, new Set(['#문서·설명서', '#스마트서류함']));
       scoresByPhoto.get(f.path)!['document_ko'] = 0.85;
       continue;
     }
     if (pTag === '#문서·신분증') {
-      vaultDocByPhoto.set(f.path, '🪪 신분증 · 여권 사본 (촬영 서류)');
+      vaultDocByPhoto.set(f.path, '신분증 · 여권 사본 (촬영 서류)');
       tagsByPhoto.set(f.path, new Set(['#문서·신분증', '#스마트서류함']));
       scoresByPhoto.get(f.path)!['document_ko'] = 0.85;
       continue;
@@ -614,7 +611,7 @@ export async function loadInitialPhotoDataset(): Promise<{
         rawCheckName
       )
     ) {
-      vaultDocByPhoto.set(f.path, '📄 촬영 서류 · 증빙 사본');
+      vaultDocByPhoto.set(f.path, '촬영 서류 · 증빙 사본');
       tagsByPhoto.set(f.path, new Set(['#문서·설명서', '#스마트서류함']));
       scoresByPhoto.get(f.path)!['document_ko'] = 0.85;
       continue;
@@ -857,8 +854,7 @@ function findMatchingPreset(query: string): PresetQueryDef | undefined {
   }
 
   // 2) 키워드 동의어 매핑
-  const keywordMap: [RegExp, string][] = [
-    [/바다|해변|파도|물놀이|안목|동해|뛰노는|뛰는/, 'beach_ko'],
+  const keywordMap: [RegExp, string][] = [    [/바다|해변|파도|물놀이|안목|동해|뛰노는|뛰는/, 'beach_ko'],
     [/beach|ocean|sea|wave|running/, 'beach_en'],
     [/케이크|생일|촛불|파티/, 'cake_ko'],
     [/cake|birthday|candle/, 'cake_en'],
@@ -921,8 +917,7 @@ async function blobToBase64(blob: Blob): Promise<string> {
   });
 }
 
-const KO_PHOTO_SYNONYM_GROUPS: readonly (readonly string[])[] = [
-  ['강아지', '반려견', '멍멍이'],
+const KO_PHOTO_SYNONYM_GROUPS: readonly (readonly string[])[] = [  ['강아지', '반려견', '멍멍이'],
   ['고양이', '반려묘', '냥이', '길냥이'],
   ['바다', '바닷가', '해변'],
   ['노을', '석양', '일몰'],
@@ -1008,8 +1003,7 @@ export async function executeTextSearch(
       !/(?:한|두|세|네|다섯|여섯|일곱|여덟|아홉|열|몇|\d)\s*개(?:$|\s)/.test(qLower));
   const isCatQuery = /고양이|반려묘|냥이|치즈고양이|cat|kitten/.test(qLower);
 
-  const SOFT_WORDS = new Set([
-    '사진', '사진들', '사진만', '이미지', '모습', '장면', '찾아줘', '찾아', '보여줘', '보여', '검색', '검색해줘',
+  const SOFT_WORDS = new Set([    '사진', '사진들', '사진만', '이미지', '모습', '장면', '찾아줘', '찾아', '보여줘', '보여', '검색', '검색해줘',
     '모아서', '모아줘', '골라줘', '해줘', '있나', '있어', '찍은', '찍힌', '찍어둔', '나온', '나오는', '적힌', '적혀',
     '있는', '보이는', '에서', '으로', '에게', '하고', '이랑', '랑', '위', '안', '속', '때', '날', '만', '다',
     '우리', '내', '제', '같이', '함께', '많은', '예쁜', '멋진', '맛있는', '시원한', '따뜻한',
@@ -1018,8 +1012,7 @@ export async function executeTextSearch(
     '끼고', '낀', '쓰고', '쓴', '착용하고', '착용한', '입고', '입은', '타고', '타는', '불고', '부는', '들고', '든',
   ]);
 
-  const KEEP_NOUNS = new Set([
-    '바닷가', '창가', '길가', '물가', '휴가', '아이', '어린이', '고양이', '멍멍이', '길냥이', '호랑이', '부엉이', '원숭이', '거북이', '떡볶이',
+  const KEEP_NOUNS = new Set([    '바닷가', '창가', '길가', '물가', '휴가', '아이', '어린이', '고양이', '멍멍이', '길냥이', '호랑이', '부엉이', '원숭이', '거북이', '떡볶이',
     '물놀이', '나들이', '목걸이', '귀걸이', '종로', '을지로', '다리', '나무다리', '구름다리', '선풍기', '비행기', '세탁기',
     '웃는', '웃고', '미소', '웃음', '단체', '가족', '해변', '바다', '강아지', '오후', '노을',
     '독사진', '증명사진', '여권사진', '선글라스', '세금계산서', '사업자등록증',
@@ -1080,8 +1073,7 @@ export async function executeTextSearch(
   let hubRefVecs: Float32Array[] = [];
   let nonAnimalAnchorVecs: Float32Array[] = [];
   if (activePhotos.some((p) => p.vec && p.vec.length === DEFAULT_DIM)) {
-    [queryVecs, hubRefVecs, nonAnimalAnchorVecs] = await Promise.all([
-      encodeMultimodalSearchQueryVecs(qRaw, 4200),
+    [queryVecs, hubRefVecs, nonAnimalAnchorVecs] = await Promise.all([      encodeMultimodalSearchQueryVecs(qRaw, 4200),
       ensureHubnessReferenceVecsLoaded(),
       isAnimalOnlyPhotoQuery ? getContrastiveNonAnimalAnchorVecs(900) : Promise.resolve([]),
     ]);
@@ -1567,7 +1559,7 @@ export async function executeZeroSttVoiceSearch(params: {
   const activePhotos = params.photos.filter((p) => !p.quarantined);
   const photoMap = new Map(activePhotos.map((p) => [p.name, p]));
 
-  // 1) 실제 마이크로 녹음한 음성 검색: 브라우저 STT가 이미 텍스트를 잡았다면 무거운 오디오 Base64 업로드 생략 (1초 만에 즉시 응답)
+  // 1) 실제 마이크로 녹음한 음성 검색: 브라우저 STT가 이미 텍스트를 잡았다면 무거운 오디오 Base64 업로드 생략 (즉시 응답)
   let existingStt = (params.backgroundSttTranscript || '').trim();
   if (params.audioBlob && !params.presetId && !existingStt && params.audioBlob.size > 100) {
     const canTryLocalVoice =
@@ -1800,8 +1792,7 @@ export class HybridVoiceSession {
       /* ignore audio context visualization error */
     }
 
-    const preferredTypes = [
-      'audio/webm;codecs=opus',
+    const preferredTypes = [      'audio/webm;codecs=opus',
       'audio/webm',
       'audio/mp4',
       'audio/ogg;codecs=opus',
@@ -2201,8 +2192,8 @@ export async function runOnboardingIndexingPipeline(params: {
         currentPhotoThumb: item.thumbUrl,
         liveVector64: liveVec64,
         modelStatusText: useRealWebGpuVision
-          ? `WebGPU EmbeddingGemma 2 (Token Budget 70) 실시간 768차원 벡터 추출 중`
-          : `OPFS 로컬 벡터 스트리밍 인덱싱 가동 중 (실측 기준 2.66초/장)`,
+          ? '기기 내 사진 내용 색인 진행 중'
+          : '사진 검색 목록 정리 중',
       });
     }
   } finally {
@@ -2268,8 +2259,7 @@ interface Gemma2ConceptProbe {
   isDocOrReceipt?: boolean;
 }
 
-const GEMMA2_VISUAL_CONCEPT_PROBES: Gemma2ConceptProbe[] = [
-  { id: 'solo_portrait', prompt: '한 사람 단독 셀카 인물 얼굴 클로즈업 close-up solo portrait selfie of one person', tag: '#인물·셀카', keywordsKo: ['인물', '사람', '셀카', '독사진', '얼굴'] },
+const GEMMA2_VISUAL_CONCEPT_PROBES: Gemma2ConceptProbe[] = [  { id: 'solo_portrait', prompt: '한 사람 단독 셀카 인물 얼굴 클로즈업 close-up solo portrait selfie of one person', tag: '#인물·셀카', keywordsKo: ['인물', '사람', '셀카', '독사진', '얼굴'] },
   { id: 'family_group', prompt: '여러 사람 가족 친구 단체 모임 함께 찍은 사진 group photo of family friends smiling together', tag: '#가족·단체', keywordsKo: ['가족', '단체', '모임', '사람들', '일행'] },
   { id: 'kids', prompt: '귀여운 아기 어린이 아이 모습 cute baby child kid', tag: '#아기·어린이', keywordsKo: ['아기', '어린이', '아이', '육아'] },
   { id: 'dog', prompt: '귀여운 강아지 반려견 개 털 코 cute dog puppy pet', tag: '#반려견·강아지', keywordsKo: ['강아지', '반려견', '멍멍이'] },
@@ -2448,10 +2438,10 @@ export async function startSilentRealMediaVisionIndexing(params: {
             new Set([...(item.ontologyPrimaryTags || []), ...cachedMeta.ontologyPrimaryTags])
           );
         }
-        if (cachedMeta.ocrSnippet && !(item.captionKo || '').includes('📝 OCR:')) {
+        if (cachedMeta.ocrSnippet && !(item.captionKo || '').includes('OCR:')) {
           item.captionKo = item.captionKo
-            ? `${item.captionKo} | 📝 OCR: ${cachedMeta.ocrSnippet}`
-            : `📝 OCR: ${cachedMeta.ocrSnippet}`;
+            ? `${item.captionKo} | OCR: ${cachedMeta.ocrSnippet}`
+            : `OCR: ${cachedMeta.ocrSnippet}`;
         }
         params.onPhotoVisionHydrated?.(item.id, {
           vec: cachedVec,
@@ -2599,10 +2589,10 @@ export async function startSilentRealMediaVisionIndexing(params: {
 
         const prevMeta = hydratedPhotoMetaMap.get(pKey);
         const alreadyOcrDone = Boolean(prevMeta?.ocrDone);
-        if (alreadyOcrDone && prevMeta?.ocrSnippet && !(item.captionKo || '').includes('📝 OCR:')) {
+        if (alreadyOcrDone && prevMeta?.ocrSnippet && !(item.captionKo || '').includes('OCR:')) {
           item.captionKo = item.captionKo
-            ? `${item.captionKo} | 📝 OCR: ${prevMeta.ocrSnippet}`
-            : `📝 OCR: ${prevMeta.ocrSnippet}`;
+            ? `${item.captionKo} | OCR: ${prevMeta.ocrSnippet}`
+            : `OCR: ${prevMeta.ocrSnippet}`;
         }
 
         let inferredTrash: TrashCategory | undefined = undefined;
@@ -2697,11 +2687,11 @@ export async function startSilentRealMediaVisionIndexing(params: {
             for (const tk of extractKoStems(ocrSnippet).slice(0, 24)) {
               if (tk.length >= 2) mergedKws.add(tk);
             }
-            const nextCaption = ocrJob.item.captionKo?.includes('📝 OCR:')
+            const nextCaption = ocrJob.item.captionKo?.includes('OCR:')
               ? ocrJob.item.captionKo
               : ocrJob.item.captionKo
-              ? `${ocrJob.item.captionKo} | 📝 OCR: ${ocrSnippet}`
-              : `📝 OCR: ${ocrSnippet}`;
+              ? `${ocrJob.item.captionKo} | OCR: ${ocrSnippet}`
+              : `OCR: ${ocrSnippet}`;
             ocrJob.item.keywordsKo = Array.from(mergedKws);
             ocrJob.item.captionKo = nextCaption;
             params.onPhotoVisionHydrated?.(ocrJob.item.id, {
@@ -2775,11 +2765,10 @@ export async function resolveSmartKoreanLabelForPhoto(photo: PhotoItem): Promise
   ocrSnippet?: string;
 }> {
   const displaySourceName = stripCollisionKeySuffix(photo.name || '사진.png');
-  const ocrFromCaption = (photo.captionKo || '').includes('📝 OCR:')
-    ? (photo.captionKo || '').split('📝 OCR:')[1] || ''
+  const ocrFromCaption = (photo.captionKo || '').includes('OCR:')
+    ? (photo.captionKo || '').split(/(?:📝\s*)?OCR:/)[1] || ''
     : '';
-  let tokens = extractCrispKoreanLabelTokens([
-    ocrFromCaption,
+  let tokens = extractCrispKoreanLabelTokens([    ocrFromCaption,
     ...(photo.ontologyPrimaryTags || []),
     ...(photo.tags || []),
     ...(photo.keywordsKo || []),

@@ -468,7 +468,7 @@ export const App: React.FC = () => {
       if (rawPairCode.length === 6 && !hasAuthenticatedHubAccountSession()) {
         useSaySeeStore.setState({
           lastQuarantineToast:
-            '📱 QR 연결 준비 완료! PC와 같은 이메일로 로그인하면 6자리 보안 연결이 바로 완료됩니다.',
+            'QR 연결 준비가 완료되었습니다. PC와 같은 이메일로 로그인하면 기기 연결이 완료됩니다.',
         });
         window.setTimeout(() => {
           window.dispatchEvent(new CustomEvent('openLoginModal'));
@@ -724,7 +724,7 @@ export const App: React.FC = () => {
         } else {
           useSaySeeStore.setState({
             lastQuarantineToast:
-              '📱 QR 연결 준비 완료! PC와 같은 이메일로 로그인하면 6자리 보안 연결이 바로 완료됩니다.',
+              'QR 연결 준비가 완료되었습니다. PC와 같은 이메일로 로그인하면 기기 연결이 완료됩니다.',
           });
           window.dispatchEvent(new CustomEvent('openLoginModal'));
         }
@@ -821,7 +821,7 @@ export const App: React.FC = () => {
       }
       if (shouldShowToast) {
         useSaySeeStore.setState({
-          lastQuarantineToast: '🎉 내 컴퓨터 연결 완료! 내 컴퓨터 실물 파일이 연동되었습니다.',
+          lastQuarantineToast: '내 컴퓨터 연결이 완료되어 PC 파일을 사용할 수 있습니다.',
         });
       }
       if (didInitWithZCore && useSaySeeStore.getState().initialized) {
@@ -1148,9 +1148,9 @@ export const App: React.FC = () => {
           }}
           className="fixed left-1/2 z-[180] pointer-events-none transition-transform duration-75"
         >
-          <div className="px-4 py-2 rounded-full bg-white dark:bg-zinc-900 border-2 border-teal-500 text-teal-800 dark:text-teal-200 text-[12.5px] font-extrabold shadow-[0_8px_24px_rgba(13,148,136,0.32)] flex items-center gap-2 whitespace-nowrap">
+          <div className="px-4 py-2 rounded-full bg-white border border-slate-200 text-slate-800 text-[12.5px] font-medium shadow-md flex items-center gap-2 whitespace-nowrap">
             <span
-              className={`inline-block w-4 h-4 rounded-full border-2 border-teal-600 border-t-transparent ${
+              className={`inline-block w-3.5 h-3.5 rounded-full border-2 border-slate-700 border-t-transparent ${
                 isPtrRefreshing || ptrPullDist >= 50 ? 'animate-spin' : ''
               }`}
             />
@@ -1158,7 +1158,7 @@ export const App: React.FC = () => {
               {isPtrRefreshing
                 ? '새로고침 중...'
                 : ptrPullDist >= 50
-                ? '손을 떼면 새로고침돼요!'
+                ? '손을 떼면 새로고침됩니다'
                 : '아래로 당겨서 새로고침'}
             </span>
           </div>
@@ -1215,14 +1215,11 @@ export const App: React.FC = () => {
                 layout === 'mobile' && activeLoungeType !== 'personal' && !isLandscapeCompact
                   ? 'bottom-20'
                   : 'bottom-6'
-              } mb-safe left-1/2 -translate-x-1/2 z-[115] w-[94%] max-w-2xl px-4 sm:px-5 py-3 sm:py-3.5 rounded-2xl bg-gradient-to-r from-emerald-950/95 via-[#072b35]/95 to-surface-container-highest/95 backdrop-blur-2xl border-2 border-emerald-400 text-white shadow-[0_0_40px_rgba(16,185,129,0.45)] flex flex-wrap items-center justify-between gap-2.5 sm:gap-3`}
+              } mb-safe left-1/2 -translate-x-1/2 z-[115] w-[94%] max-w-xl px-4 sm:px-5 py-3 rounded-xl bg-slate-900 border border-slate-800 text-white shadow-lg flex flex-wrap items-center justify-between gap-2.5 sm:gap-3`}
             >
               <div className="flex items-center gap-2 min-w-0">
-                <span className="material-symbols-outlined text-emerald-300 text-[20px] sm:text-[22px] shrink-0">
-                  history
-                </span>
-                <span className="font-label-md text-[12.5px] md:text-[13.5px] font-bold break-keep">
-                  🗑️ 방금 정리한 {lastUndoBatch.count}장이 OS 기본 [휴지통]으로 안전하게 이동되었습니다.
+                <span className="text-[13px] font-medium break-keep">
+                  방금 정리한 {lastUndoBatch.count}장이 휴지통으로 이동되었습니다.
                 </span>
               </div>
 
@@ -1230,14 +1227,14 @@ export const App: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void undoLastQuarantine()}
-                  className="px-3.5 sm:px-4 py-1.5 rounded-xl bg-emerald-400 hover:bg-emerald-300 text-surface-container-lowest font-label-sm text-[12px] sm:text-[12.5px] font-black shadow-md transition-all whitespace-nowrap cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-900 text-[12px] font-semibold transition-colors whitespace-nowrap cursor-pointer"
                 >
-                  ↩️ 1초 실행 취소
+                  실행 취소
                 </button>
                 <button
                   type="button"
                   onClick={dismissUndoBatch}
-                  className="text-white/70 hover:text-white p-1.5 cursor-pointer"
+                  className="text-slate-400 hover:text-white p-1.5 cursor-pointer"
                   title="닫기"
                 >
                   <span className="material-symbols-outlined text-[16px]">close</span>
@@ -1253,7 +1250,7 @@ export const App: React.FC = () => {
                 layout === 'mobile' && activeLoungeType !== 'personal' && !isLandscapeCompact
                   ? 'bottom-20'
                   : 'bottom-6'
-              } mb-safe left-1/2 -translate-x-1/2 z-[110] w-[92vw] max-w-xl px-4 sm:px-5 py-3.5 rounded-2xl bg-white dark:bg-zinc-900 border-2 border-teal-500 text-slate-900 dark:text-zinc-100 font-label-md text-[13px] font-extrabold shadow-[0_12px_32px_rgba(15,23,42,0.32)] flex items-start justify-between gap-2.5`}
+              } mb-safe left-1/2 -translate-x-1/2 z-[110] w-[92vw] max-w-xl px-4 sm:px-5 py-3 rounded-xl bg-white border border-slate-200 text-slate-900 text-[13px] font-medium shadow-lg flex items-start justify-between gap-2.5`}
             >
               <span className="whitespace-normal break-keep leading-snug flex-1">
                 {lastQuarantineToast}
@@ -1272,7 +1269,7 @@ export const App: React.FC = () => {
 
       {/* [R3 해결] 전사 정밀 안심 배지 */}
       <div className="sr-only" data-privacy-guarantee="true">
-        🔒 내 파일 원본·문서 본문은 외부 서버로 절대 전송되지 않습니다 (100% 내 PC 로컬 처리 · 상업광고 영구 0% · 풀기 전 압축 내부 미열람)
+        내 파일 원본과 문서 본문은 외부 서버로 전송되지 않고 내 기기 안에서 처리됩니다.
       </div>
 
       {/* 모든 페이지(쇼룸 대문, 모바일, 데스크톱 전 메뉴) 공통 맨 위로 가기 플로팅 버튼 */}

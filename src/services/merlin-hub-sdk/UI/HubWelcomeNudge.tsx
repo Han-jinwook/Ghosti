@@ -11,7 +11,7 @@ interface HubWelcomeNudgeProps {
 export const HubWelcomeNudge: React.FC<HubWelcomeNudgeProps> = ({ className = '' }) => {
   return (
     <div className={`p-4 bg-orange-50 border border-orange-200 rounded-xl flex items-start gap-3 ${className}`}>
-      <div className="text-2xl mt-1">🎉</div>
+      <div className="text-2xl mt-1"></div>
       <div>
         <h4 className="font-bold text-orange-900 mb-1">가입을 축하합니다!</h4>
         <p className="text-sm text-orange-800">

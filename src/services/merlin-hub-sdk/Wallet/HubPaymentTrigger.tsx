@@ -82,7 +82,7 @@ export const HubPaymentTrigger: React.FC<HubPaymentTriggerProps> = ({
       
       {error && !onError && (
         <p className="text-red-500 text-xs text-center font-medium animate-bounce">
-          ⚠️ {error}
+          {error}
         </p>
       )}
     </div>

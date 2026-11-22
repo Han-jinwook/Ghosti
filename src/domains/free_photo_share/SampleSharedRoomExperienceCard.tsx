@@ -31,12 +31,13 @@ export const SampleSharedRoomExperienceCard: React.FC<{
   if (isLoadingSharedRoomPhotos) {
     return (
       <div className="flex flex-col gap-4" data-allow-secretary-jump="true">
-        <div className="py-10 px-5 rounded-2xl bg-[#18181B] border border-white/10 text-center flex flex-col items-center gap-2.5">
-          <span className="px-3 py-1 rounded-full bg-teal-500/15 border border-teal-400/40 text-[12px] font-extrabold text-teal-300">
-            ⏳ {roomTypeKo} 공유방 사진을 불러오는 중입니다...
-          </span>
-          <p className="font-body-sm text-[12.5px] text-zinc-400">
-            안전하게 보관된 공유방 사진 목록을 확인하고 있습니다.
+        <div className="py-10 px-6 rounded-xl bg-white border border-slate-200 text-center flex flex-col items-center gap-2">
+          <span className="inline-block w-4 h-4 rounded-full border-2 border-slate-700 border-t-transparent animate-spin" />
+          <p className="text-[13.5px] font-medium text-slate-900">
+            {roomTypeKo} 공유방 사진을 불러오는 중입니다
+          </p>
+          <p className="text-[12px] text-slate-500">
+            공유방 사진 목록을 확인하고 있습니다.
           </p>
         </div>
       </div>
@@ -65,36 +66,36 @@ export const SampleSharedRoomExperienceCard: React.FC<{
     } else {
       useSaySeeStore
         .getState()
-        .showToast('⚠️ 유효한 공유방 초대 링크(또는 초대 메시지)를 붙여넣어 주세요.');
+        .showToast('유효한 공유방 초대 링크 또는 초대 문구를 입력해 주세요.');
     }
   };
 
   return (
     <div className="flex flex-col gap-4" data-allow-secretary-jump="true">
-      <div className="py-7 px-5 rounded-2xl bg-[#18181B] border border-white/10 text-center flex flex-col items-center gap-2.5">
-        <span className="px-3 py-1 rounded-full bg-zinc-900 border border-white/15 text-[11.5px] font-bold text-zinc-300">
-          현재 내 {roomTypeKo} 공유방 사진 · 0장 (빈 방)
+      <div className="py-8 px-6 rounded-xl bg-white border border-slate-200 text-center flex flex-col items-center gap-2.5">
+        <span className="px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[11.5px] font-medium text-slate-600">
+          {roomTypeKo} 공유방 · 사진 없음
         </span>
-        <p className="font-headline-sm text-[15px] sm:text-[16px] text-white font-bold break-keep">
-          아직 참여 중이거나 올라온 {roomTypeKo} 공유 사진이 없습니다
+        <p className="text-[15px] sm:text-[16px] text-slate-900 font-semibold break-keep">
+          아직 등록된 {roomTypeKo} 공유 사진이 없습니다
         </p>
-        <p className="font-body-sm text-[12px] sm:text-[12.5px] text-zinc-400 max-w-lg break-keep">
-          가족·동호회·동창회 공유방은 초대 링크를 받아 입장하거나 내가 직접 사진을 올렸을 때만 열리며, 다른 사람의 파일이나 내 기기 사진과 절대 섞이지 않습니다.
+        <p className="text-[12.5px] text-slate-500 max-w-lg break-keep leading-relaxed">
+          초대 링크로 입장하거나 직접 사진을 추가하면 공유방이 시작되며, 개인 기기의 다른 파일과 섞이지 않습니다.
         </p>
-        <div className="mt-1 flex flex-wrap items-center justify-center gap-2">
+        <div className="mt-1.5 flex flex-wrap items-center justify-center gap-2">
           <button
             type="button"
             onClick={() => useSaySeeStore.getState().requestAddMyPhotosToSharedRoom()}
-            className="px-4 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[12.5px] font-black cursor-pointer shadow-md"
+            className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-medium cursor-pointer transition-colors"
           >
-            📸 내 사진 올려서 {roomTypeKo} 공유방 시작하기
+            사진 올려서 공유방 시작하기
           </button>
           <button
             type="button"
             onClick={() => void handleOpenReceivedInvite()}
-            className="px-3.5 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-400/50 text-amber-300 font-label-sm text-[12px] font-extrabold cursor-pointer"
+            className="px-3.5 py-2 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12.5px] font-medium cursor-pointer transition-colors"
           >
-            💌 받은 카톡 초대 링크로 방 바로 열기
+            초대 링크로 입장하기
           </button>
         </div>
 
@@ -107,12 +108,12 @@ export const SampleSharedRoomExperienceCard: React.FC<{
               type="text"
               value={invitePasteDraft}
               onChange={(e) => setInvitePasteDraft(e.target.value)}
-              placeholder="카톡으로 받은 초대 링크나 문구를 붙여넣어 주세요"
-              className="flex-1 px-3 py-2 rounded-xl bg-zinc-900 border border-white/15 text-white text-[12px] outline-none focus:border-amber-400"
+              placeholder="전달받은 초대 링크나 문구를 붙여넣어 주세요"
+              className="flex-1 px-3 py-2 rounded-lg bg-white border border-slate-300 text-slate-900 text-[12.5px] outline-none focus:border-slate-900"
             />
             <button
               type="submit"
-              className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-black cursor-pointer shrink-0"
+              className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-medium cursor-pointer shrink-0 transition-colors"
             >
               입장
             </button>

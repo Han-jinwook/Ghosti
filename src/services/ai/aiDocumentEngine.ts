@@ -8,18 +8,16 @@ import {
 
 export const LOCAL_DOCUMENT_FILES: LocalDocumentFile[] = [];
 
-export const GDRIVE_SMART_DOC_ITEMS: LocalDocumentFile[] = [
-  {
+export const GDRIVE_SMART_DOC_ITEMS: LocalDocumentFile[] = [  {
     id: 'doc_1_주택임대차_표준계약서',
     fileName: '주택임대차_표준계약서_확정일자_사본.pdf',
     path: 'C:\\Users\\Public\\Documents\\주택임대차_표준계약서_확정일자_사본.pdf',
     ext: 'PDF',
     title: '주택·사무실 임대차 표준계약서 및 확정일자 사본',
-    categoryBadge: '📋 부동산 · 임대차 계약서',
+    categoryBadge: '부동산 · 임대차 계약서',
     extractedText:
       '소재지: 인천광역시 서구 청라동 (사무실 겸용 주택 임대차) | 보증금: 5,000만 원 (금 오천만 원정) | 월세(임대료): 월 150만 원 (매월 25일 후불) | 관리비: 월 15만 원 | 계약기간(만기일): 2026.10.28 ~ 2028.10.27 (24개월) | 특약사항: 원상복구 의무 및 중도해지 위약금 10% 조항 포함.',
-    keywords: [
-      '주택임대차',
+    keywords: [      '주택임대차',
       '사무실계약서',
       '임대차계약서',
       '표준계약서',
@@ -52,11 +50,10 @@ export const GDRIVE_SMART_DOC_ITEMS: LocalDocumentFile[] = [
     path: 'G:\\내 드라이브\\01_가족보안\\가족_통합_계정_비밀번호_관리표.xlsx',
     ext: 'XLSX',
     title: '가족 공용 OTT · 홈네트워크 계정 및 비밀번호 관리표',
-    categoryBadge: '🔐 계정 · 비밀번호 관리표',
+    categoryBadge: '계정 · 비밀번호 관리표',
     extractedText:
       '넷플릭스/유튜브 프리미엄 아이디: merlin_family@sundreamer.app | 비밀번호: Merlin#2026!ZCore | 거실 와이파이(Wi-Fi): Ghosti_5GHz (비번: family2026*) | 관리비·공과금 입금 계좌번호: 신한은행 110-482-992018 (별표 *** 가림 없이 1초 복사 지원)',
-    keywords: [
-      '구글드라이브',
+    keywords: [      '구글드라이브',
       'G드라이브',
       '계정관리표',
       '계좌번호',
@@ -81,11 +78,10 @@ export const GDRIVE_SMART_DOC_ITEMS: LocalDocumentFile[] = [
     path: 'C:\\Users\\Public\\Documents\\사업자등록증_사본_썬드림.pdf',
     ext: 'PDF',
     title: '주식회사 썬드림 사업자등록증 사본 (대표 백은숙)',
-    categoryBadge: '🏢 사업자등록증 · 인허가 서류',
+    categoryBadge: '사업자등록증 · 인허가 서류',
     extractedText:
       '상호: 주식회사 썬드림 | 등록번호(사업자등록번호): 214-88-59201 | 대표자: 백은숙 | 개업연월일: 2024년 03월 15일 | 사업장소재지: 인천광역시 서구 청라한내로 100 | 업태: 정보통신업, 소프트웨어 개발 및 공급 | 종목: 응용 소프트웨어 개발, AI 솔루션.',
-    keywords: [
-      '사업자등록증',
+    keywords: [      '사업자등록증',
       '사업자등록번호',
       '등록번호',
       '사업자번호',
@@ -106,11 +102,10 @@ export const GDRIVE_SMART_DOC_ITEMS: LocalDocumentFile[] = [
     path: 'C:\\Users\\Public\\Documents\\클라우드_GPU_서버_구축_견적서_최종.xlsx',
     ext: 'XLSX',
     title: '2026 AI 추론 GPU 클라우드 서버 인프라 구축 견적서',
-    categoryBadge: '💰 견적서 · 발주 명세서',
+    categoryBadge: '견적서 · 발주 명세서',
     extractedText:
       '프로젝트명: Z-코어 고속 분산 추론 서버 인프라 구축 | 견적일자: 2026.10.15 | 총액(견적총액): 1,280만 원 (VAT 포함) | 공급가액: 1,163만 6,364원 | 부가세: 116만 3,636원 | 주요품목: NVIDIA A10G 4식, 고속 NVMe 스토리지 10TB, 10Gbps 전용망 구성.',
-    keywords: [
-      '견적서',
+    keywords: [      '견적서',
       '서버견적서',
       '총액',
       '견적총액',
@@ -133,11 +128,10 @@ export const GDRIVE_SMART_DOC_ITEMS: LocalDocumentFile[] = [
     path: 'C:\\Users\\Public\\Documents\\기술협력_비밀유지계약서_NDA_체결본.pdf',
     ext: 'PDF',
     title: '상호 기술협력 및 영업비밀보호 표준 비밀유지계약서(NDA)',
-    categoryBadge: '📑 법률 · 비밀유지계약서(NDA)',
+    categoryBadge: '법률 · 비밀유지계약서(NDA)',
     extractedText:
       '계약명: 상호 비밀유지 및 권리보호 계약서 | 계약기간: 체결일로부터 3년간 | 제8조 (비밀유지 의무): 양 당사자는 업무상 취득한 상대방의 기술 및 영업 정보를 제3자에게 누설하거나 본 계약 외 목적으로 사용하여서는 아니 된다. | 제12조 (손해배상 조항): 일방 당사자가 본 계약의 비밀유지 의무를 위반하여 상대방에게 손해를 입힌 경우, 위반 당사자는 이로 인하여 발생한 일체의 직접 손해 및 변호사 보수를 포함한 손해배상 책임을 부담한다. | 제15조 (관할법원): 본 계약에 관한 분쟁은 서울중앙지방법원을 제1심 전속 관할법원으로 한다.',
-    keywords: [
-      '비밀유지계약서',
+    keywords: [      '비밀유지계약서',
       'NDA',
       '손해배상',
       '손해배상조항',
@@ -159,7 +153,7 @@ export const GDRIVE_SMART_DOC_ITEMS: LocalDocumentFile[] = [
     path: 'C:\\Users\\Public\\Documents\\자동차운전면허증_1종보통_사본.pdf',
     ext: 'PDF',
     title: '자동차 운전면허증 (1종 보통) 사본',
-    categoryBadge: '🪪 신분증 · 운전면허증',
+    categoryBadge: '신분증 · 운전면허증',
     extractedText:
       '문서종류: 자동차운전면허증 (1종 보통) | 성명: 김철수 | 운전면허증 번호(면허번호): 11-24-385920-10 | 발급일자: 2024년 05월 14일 | 적성검사 기간: 2034.05.14 ~ 2034.11.13 | 발행처: 서울특별시경찰청장',
     keywords: ['운전면허증', '자동차운전면허증', '운전면허증번호', '면허번호', '번호', '11-24-385920-10', '1종보통', '적성검사'],
@@ -173,7 +167,7 @@ export const GDRIVE_SMART_DOC_ITEMS: LocalDocumentFile[] = [
     path: 'C:\\Users\\Public\\Documents\\주민등록등본_정부24_발급본_2026.pdf',
     ext: 'PDF',
     title: '주민등록표 등본 (정부24 전자발급본)',
-    categoryBadge: '🏛️ 증명서 · 주민등록등본',
+    categoryBadge: '증명서 · 주민등록등본',
     extractedText:
       '문서종류: 주민등록표 등본(초본) | 세대주 성명: 김철수 | 주민등록등본 발급일자: 2026년 10월 28일 (정부24 온라인 발급) | 현주소: 인천광역시 서구 청라동 에일린의뜰 | 세대원 구성: 본인(세대주), 배우자, 자녀 2명 | 발급확인번호: 1204-8839-4012-9901',
     keywords: ['주민등록등본', '주민등록표등본', '등본', '발급일자', '발급일', '2026년 10월 28일', '정부24', '세대주'],
@@ -187,7 +181,7 @@ export const GDRIVE_SMART_DOC_ITEMS: LocalDocumentFile[] = [
     path: 'C:\\Users\\Public\\Documents\\표준근로계약서_체결본_2026.pdf',
     ext: 'PDF',
     title: '표준 근로계약서 체결본 (근무시간 및 휴일 조항 포함)',
-    categoryBadge: '📑 계약서 · 표준근로계약서',
+    categoryBadge: '계약서 · 표준근로계약서',
     extractedText:
       '계약명: 표준근로계약서 | 제1조 (근로계약기간): 2026년 03월 01일부터 기간의 정함이 없는 정규직으로 한다. | 제2조 (근무시간 조항): 소정근로시간은 1일 8시간(오전 9시 출근 ~ 오후 6시 퇴근), 주 40시간을 기준으로 하며 당사자 합의 시 유연근무제를 적용한다. | 제3조 (휴게시간 조항): 근무시간 중 오후 12시부터 오후 1시까지 1시간의 휴게시간(점심시간)을 보장한다. | 제4조 (휴일 및 휴가 조항): 매주 토요일(무급휴무일)과 일요일(주휴일), 근로자의 날 및 관공서 공휴일에 관한 규정에 따른 공휴일을 유급 휴일로 부여하며 근로기준법에 따른 연차유급휴가를 보장한다.',
     keywords: ['근로계약서', '표준근로계약서', '근무시간', '휴일', '휴일조항', '근무시간조항', '휴가', '연차', '주40시간'],
@@ -278,7 +272,7 @@ export async function searchLocalDocumentFilesAsync(
           matchType: d.matchType || 'SIMILAR',
           similarityNoticeKo:
             d.similarityNoticeKo ||
-            '💡 검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다!',
+            '검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다!',
         }));
       }
     }
@@ -303,8 +297,7 @@ export function searchLocalDocumentFiles(
       ' '
     );
 
-  const DOC_STOP_WORDS = new Set([
-    '읽어줘', '읽어봐', '읽어', '낭독해줘', '낭독해', '낭독', '들려줘', '들려',
+  const DOC_STOP_WORDS = new Set([    '읽어줘', '읽어봐', '읽어', '낭독해줘', '낭독해', '낭독', '들려줘', '들려',
     '알려줘', '알려달라', '알려봐', '알려', '있어', '있나', '있니', '있나요',
     '얼마야', '얼마인가요', '얼마', '언제야', '언제', '뭐야', '뭔가요', '뭐',
     '어디야', '어디', '몇', '누구', '맞아', '확인해줘', '확인', '찾아줘', '보여줘',
@@ -381,7 +374,7 @@ export function searchLocalDocumentFiles(
       const matchedInFileName = isExactMatch && fileNameHits === rawTokens.length;
       const matchType: 'EXACT' | 'SIMILAR' = isExactMatch ? 'EXACT' : 'SIMILAR';
       const similarityNoticeKo = !isExactMatch && matchedTokens.length > 0
-        ? `💡 검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다! (일치 키워드: ${matchedTokens
+        ? `검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다! (일치 키워드: ${matchedTokens
             .map((k) => `'${k}'`)
             .join(', ')})`
         : undefined;

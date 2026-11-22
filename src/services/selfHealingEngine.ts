@@ -47,7 +47,7 @@ export function evaluateTrajectoryAndBuildSelfHealingOta(params: {
       title: plan.title,
       backtrackCount,
       trajectoryGrade: 'GRADE_FAIL_ABORTED',
-      trajectoryGradeBadgeKo: '🔴 해결하지 못함 (중단)',
+      trajectoryGradeBadgeKo: '해결하지 못함 (중단)',
       escrowSettlementKo: FREE_NOTE,
       multiLlmActionKo: `실패 기록 저장 — ${LOCAL_LOG_NOTE}`,
       rawTrajectorySteps: [`[시작] ${plan.title}`, '[중단] 해결하지 못했다는 유저 신고'],
@@ -77,7 +77,7 @@ export function evaluateTrajectoryAndBuildSelfHealingOta(params: {
       title: plan.title,
       backtrackCount: 0,
       trajectoryGrade: 'GRADE_0_EXPRESS',
-      trajectoryGradeBadgeKo: '🟢 한 번에 완료 (뒤로 가기 0회)',
+      trajectoryGradeBadgeKo: '한 번에 완료 (뒤로 가기 0회)',
       escrowSettlementKo: FREE_NOTE,
       multiLlmActionKo: `길 안내 기록 — ${LOCAL_LOG_NOTE}`,
       rawTrajectorySteps: [`[완료] ${plan.title} · 뒤로 가기 0회`],
@@ -92,7 +92,7 @@ export function evaluateTrajectoryAndBuildSelfHealingOta(params: {
       shouldEmpathyRefund100Pct: false,
       empathyApologyToastKo: '',
       empathyBriefingChatKo: '',
-      fineTuneNoticeKo: '🟢 안내대로 한 번에 마치셨습니다.',
+      fineTuneNoticeKo: '안내대로 한 번에 마치셨습니다.',
       otaEntry,
     };
   }
@@ -107,7 +107,7 @@ export function evaluateTrajectoryAndBuildSelfHealingOta(params: {
       title: plan.title,
       backtrackCount: 1,
       trajectoryGrade: 'GRADE_1_TOLERATED',
-      trajectoryGradeBadgeKo: '🟡 뒤로 가기 1회 후 완료',
+      trajectoryGradeBadgeKo: '뒤로 가기 1회 후 완료',
       escrowSettlementKo: FREE_NOTE,
       multiLlmActionKo: `헤맨 단계 기록 — ${LOCAL_LOG_NOTE}`,
       rawTrajectorySteps: [`[시작] ${plan.title}`, '[뒤로 가기 1회]', '[완료]'],
@@ -122,7 +122,7 @@ export function evaluateTrajectoryAndBuildSelfHealingOta(params: {
       shouldEmpathyRefund100Pct: false,
       empathyApologyToastKo: '',
       empathyBriefingChatKo: '',
-      fineTuneNoticeKo: '🟡 한 번 뒤로 가셨지만 마치셨습니다. 헤맨 단계는 내 PC 기록에 남겨 두었습니다.',
+      fineTuneNoticeKo: '한 번 뒤로 가셨지만 마치셨습니다. 헤맨 단계는 내 PC 기록에 남겨 두었습니다.',
       otaEntry,
     };
   }
@@ -136,7 +136,7 @@ export function evaluateTrajectoryAndBuildSelfHealingOta(params: {
     title: plan.title,
     backtrackCount,
     trajectoryGrade: 'GRADE_2_EMPATHY_REFUND',
-    trajectoryGradeBadgeKo: `💦 뒤로 가기 ${backtrackCount}회 — 안내가 헤매게 해 드렸습니다`,
+    trajectoryGradeBadgeKo: `뒤로 가기 ${backtrackCount}회 — 안내가 헤매게 해 드렸습니다`,
     escrowSettlementKo: FREE_NOTE,
     multiLlmActionKo: `헤맨 단계 기록 — ${LOCAL_LOG_NOTE} (안내 개선 시 참고)`,
     rawTrajectorySteps: [`[시작] ${plan.title}`, `[뒤로 가기 ${backtrackCount}회]`, '[완료]'],

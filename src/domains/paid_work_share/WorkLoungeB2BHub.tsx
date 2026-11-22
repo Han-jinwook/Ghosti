@@ -283,7 +283,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
   const handleStart30DayWorkTrial = async () => {
     if (!hasAuthenticatedHubAccountSession()) {
-      showToast('🔒 30일 무료체험을 시작하려면 먼저 이메일 로그인을 완료해 주세요!');
+      showToast('30일 무료체험을 시작하려면 먼저 이메일 로그인을 완료해 주세요!');
       openLoginModal();
       return;
     }
@@ -293,7 +293,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
       const res = await activateDevicePlanPersistent('work_trial_opt_in_30d');
       if (res.ok && res.entitlement) {
         setDeviceIntegrationSnapshot({ entitlement: res.entitlement });
-        showToast('🎁 업무 공유(S: 드라이브) 30일 무료체험이 시작되었습니다! 소호(~5인) 직통 연결이 열렸습니다.');
+        showToast('업무 공유(S: 드라이브) 30일 무료체험이 시작되었습니다! 소호(~5인) 직통 연결이 열렸습니다.');
       } else {
         showToast(res.message || '이미 30일 무료체험을 사용 완료했습니다. 이용권 구독으로 계속 이용하실 수 있습니다.');
         activatePricingPlan('work_soho_9900');
@@ -305,7 +305,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
   const handleToggleNightPowerSave = async () => {
     if (!isZCoreConnected) {
-      showToast('⚡ PC 엔진을 연결하면 퇴근 시 모니터만 끄고 S: 드라이브 직통 연결을 24시간 유지합니다.');
+      showToast('PC 엔진을 연결하면 퇴근 시 모니터만 끄고 S: 드라이브 직통 연결을 24시간 유지합니다.');
       openZCoreConnectModal();
       return;
     }
@@ -323,8 +323,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
       showToast(
         res.message ||
           (res.enabled
-            ? '🌙 야간·퇴근 초절전 모드가 켜졌습니다. (모니터 절전 · 24시간 직결 유지)'
-            : '☀️ 야간·퇴근 초절전 모드를 해제했습니다.')
+            ? '야간·퇴근 초절전 모드가 켜졌습니다. (모니터 절전 · 24시간 직결 유지)'
+            : '야간·퇴근 초절전 모드를 해제했습니다.')
       );
     }
   };
@@ -618,7 +618,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
       return;
     }
     void ensureMyWorkRoomAndInvite({
-      roomTitle: '💼 우리팀 업무 공유방 (S:)',
+      roomTitle: '우리팀 업무 공유방 (S:)',
       hostNickname: actorNickname,
       accountEmail: merlinAuth?.email || undefined,
     }).then((ensured) => {
@@ -648,7 +648,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
         if (accepted.reason === 'WORK_SEAT_LIMIT_EXCEEDED') {
           showToast(
             accepted.message ||
-              '⚠️ 이 업무 공유방의 이용권 정원이 모두 찼습니다. 방장님께 이용권 업그레이드를 요청해 주세요.'
+              '이 업무 공유방의 이용권 정원이 모두 찼습니다. 방장님께 이용권 업그레이드를 요청해 주세요.'
           );
         } else if (
           accepted.reason === 'WORK_TRIAL_EXPIRED' ||
@@ -859,7 +859,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
         if (pulled.syncedCount > 0) {
           setLastSyncedToLocalCount((prev) => prev + pulled.syncedCount);
           showToast(
-            `⚡ 공유 업무 문서 ${pulled.syncedCount}건이 내 컴퓨터 [S:\\ 드라이브]로 자동 동기화되었습니다!`
+            `공유 업무 문서 ${pulled.syncedCount}건이 내 컴퓨터 [S:\\ 드라이브]로 자동 동기화되었습니다!`
           );
         }
         void syncRealWorkFiles();
@@ -978,8 +978,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
               ? 'S:\\ 대장 PC 직통 터널 가동 중 (방장 1인 결제)'
               : 'PC 엔진 연결 시 S:\\ 드라이브가 자동 마운트됩니다'
             : m.role === 'viewer'
-            ? 'S:\\ 읽기·다운로드 전용 (초대 팀원 평생 0원)'
-            : 'S:\\ 편집·업로드 허용 (초대 팀원 평생 0원)',
+            ? 'S:\\ 읽기·다운로드 전용 (초대 팀원 추가 비용 없음)'
+            : 'S:\\ 편집·업로드 허용 (초대 팀원 추가 비용 없음)',
         };
       });
     }
@@ -1007,7 +1007,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
         role: p.role === 'host' ? ('editor' as const) : p.role,
         sDriveConnected: p.sDriveConnected,
         statusText: p.sDriveConnected
-          ? 'S:\\ 실시간 동기화됨 (초대 팀원 평생 0원)'
+          ? 'S:\\ 실시간 동기화됨 (초대 팀원 추가 비용 없음)'
           : '웹 미리보기 열람 중 (PC 엔진 연결 시 S:\\ 즉시 동기화)',
       }));
     return [baseHost, ...extraPeers];
@@ -1065,22 +1065,22 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
   const handleCopyWorkInviteLink = async () => {
     if (!hasAuthenticatedHubAccountSession()) {
-      showToast('🔒 팀원 초대 링크를 발급하려면 먼저 이메일 로그인을 완료해 주세요!');
+      showToast('팀원 초대 링크를 발급하려면 먼저 이메일 로그인을 완료해 주세요!');
       openLoginModal();
       return;
     }
     if (!isWorkUnlocked) {
-      showToast('🔒 30일 무료체험 시작 또는 이용권 구독 후 팀원 초대 링크를 발급할 수 있습니다.');
+      showToast('30일 무료체험 시작 또는 이용권 구독 후 팀원 초대 링크를 발급할 수 있습니다.');
       activatePricingPlan('work_soho_9900');
       return;
     }
     const ensured = await ensureMyWorkRoomAndInvite({
-      roomTitle: '💼 우리팀 업무 공유방 (S:)',
+      roomTitle: '우리팀 업무 공유방 (S:)',
       hostNickname: actorNickname,
       accountEmail: merlinAuth?.email || undefined,
     });
     if (!ensured.ok || !ensured.inviteUrl || !ensured.roomId) {
-      showToast(ensured.message || '⚠️ 업무방 초대 링크 발급 중 오류가 발생했습니다.');
+      showToast(ensured.message || '업무방 초대 링크 발급 중 오류가 발생했습니다.');
       return;
     }
     setActiveWorkRoomId(ensured.roomId);
@@ -1106,25 +1106,25 @@ export const WorkLoungeB2BHub: React.FC = () => {
     setInviteCopied(true);
     window.setTimeout(() => setInviteCopied(false), 2800);
     showToast(
-      `💌 업무 공유방(S:) 초대 링크가 복사되었습니다! (정원 ${ensured.seatLimit || roomSeatLimit}인 · 팀원은 평생 0원으로 대장 PC S:\\에 직결됩니다)`
+      `업무 공유방(S:) 초대 링크가 복사되었습니다! (정원 ${ensured.seatLimit || roomSeatLimit}인 · 초대 팀원은 추가 비용 없이 공용 드라이브를 함께 사용합니다)`
     );
   };
 
   const handleOpenGhostSearchWindow = async () => {
     if (!isZCoreConnected) {
-      showToast('⚡ PC 엔진을 연결하면 S: 드라이브 계약서·업무 문서 본문을 열지 않고 0.1초 만에 귀신검색창으로 소환합니다!');
+      showToast('PC 엔진을 연결하면 S: 드라이브 문서 본문을 열지 않고 귀신검색창에서 바로 찾을 수 있습니다.');
       openZCoreConnectModal();
       return;
     }
     const opened = await openGhostSearchForWorkSDrive(searchQuery);
     if (opened) {
-      showToast('👻 S: 드라이브 문서·사진 본문이 직결된 [귀신검색창]을 화면 맨 앞에 띄웠습니다!');
+      showToast('S: 드라이브 문서·사진 본문이 직결된 [귀신검색창]을 화면 맨 앞에 띄웠습니다!');
     }
   };
 
   const handleOpenSDriveExplorer = async () => {
     if (!isWorkUnlocked) {
-      showToast('🔒 업무 공유 이용 기간이 종료되어 S: 드라이브가 해제되었습니다. 구독 후 다시 연결할 수 있습니다.');
+      showToast('업무 공유 이용 기간이 종료되어 S: 드라이브가 해제되었습니다. 구독 후 다시 연결할 수 있습니다.');
       activatePricingPlan('work_soho_9900');
       return;
     }
@@ -1135,7 +1135,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     const res = await mountWorkSDriveNative({ action: 'mount', openExplorer: true });
     if (res.ok) {
       setSDriveMounted(Boolean(res.mounted));
-      showToast('📂 윈도우 탐색기 [업무 드라이브 (S:\\)] 폴더를 열었습니다!');
+      showToast('윈도우 탐색기 [업무 드라이브 (S:\\)] 폴더를 열었습니다!');
     } else if (res.message) {
       showToast(res.message);
     }
@@ -1144,12 +1144,12 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const handleUploadFiles = async (fileList: FileList | null) => {
     if (!fileList || fileList.length === 0) return;
     if (!isWorkUnlocked) {
-      showToast('🔒 30일 무료체험 시작 또는 이용권 구독 후 업무 파일을 추가할 수 있습니다.');
+      showToast('30일 무료체험 시작 또는 이용권 구독 후 업무 파일을 추가할 수 있습니다.');
       activatePricingPlan('work_soho_9900');
       return;
     }
     if (myRoomRole === 'viewer') {
-      showToast('👁️ 읽기 전용 팀원은 파일을 추가할 수 없습니다. 방장님께 편집 권한을 요청해 주세요.');
+      showToast('읽기 전용 팀원은 파일을 추가할 수 없습니다. 방장님께 편집 권한을 요청해 주세요.');
       return;
     }
     const hasTunnel = Boolean(getActiveHostTunnelSession()?.tunnelUrl);
@@ -1159,7 +1159,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
       window.location.hostname !== 'localhost' &&
       window.location.hostname !== '127.0.0.1'
     ) {
-      showToast('⚡ 업무 파일을 S:\\ 드라이브에 넣으려면 내 컴퓨터 연결(PC 엔진) 또는 대장 PC 직통 연결이 필요합니다!');
+      showToast('업무 파일을 S:\\ 드라이브에 넣으려면 내 컴퓨터 연결(PC 엔진) 또는 대장 PC 직통 연결이 필요합니다!');
       if (!isMobileOrStore) openZCoreConnectModal();
       return;
     }
@@ -1183,7 +1183,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
       if (uploadedRelPaths.length > 0) {
         mergeAndPersistTombstones({}, uploadedRelPaths);
       }
-      showToast(`✅ 업무 파일 ${okCount}건이 S:\\ 드라이브 및 팀원 공유 목록에 즉시 반영되었습니다!`);
+      showToast(`업무 파일 ${okCount}건이 S:\\ 드라이브 및 팀원 공유 목록에 즉시 반영되었습니다!`);
       if (isZCoreConnected) {
         await syncRealWorkFiles();
       } else if (hasTunnel) {
@@ -1237,7 +1237,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
   const handleRunBackupSyncNow = async () => {
     if (!isZCoreConnected) {
-      showToast('⚡ 예비 서버 백업은 PC 엔진이 연결된 컴퓨터에서 실행할 수 있습니다.');
+      showToast('예비 서버 백업은 PC 엔진이 연결된 컴퓨터에서 실행할 수 있습니다.');
       openZCoreConnectModal();
       return;
     }
@@ -1254,10 +1254,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
           setLastBackupSyncedCount(res.lastBackupSyncedCount);
         }
         showToast(
-          `🛡️ 예비 서버 폴더로 업무 파일 ${res.lastBackupSyncedCount ?? docs.length}건 이중화 백업이 완료되었습니다!`
+          `예비 서버 폴더로 업무 파일 ${res.lastBackupSyncedCount ?? docs.length}건 이중화 백업이 완료되었습니다!`
         );
       } else {
-        showToast('⚠️ 예비 서버 백업 폴더 경로를 확인해 주세요. (시스템 폴더나 S: 원본 폴더와 같은 경로는 제외)');
+        showToast('예비 서버 백업 폴더 경로를 확인해 주세요. (시스템 폴더나 S: 원본 폴더와 같은 경로는 제외)');
       }
     } finally {
       setSyncingBackupNow(false);
@@ -1304,13 +1304,13 @@ export const WorkLoungeB2BHub: React.FC = () => {
       {lastDeletedUndoItem && (
         <div className="p-3.5 rounded-2xl bg-amber-950/90 border border-amber-400/60 flex flex-wrap items-center justify-between gap-3 shadow-lg">
           <span className="text-[12.5px] text-amber-100 font-bold">
-            🗑️ &lsquo;{lastDeletedUndoItem.doc.fileName}&rsquo; 파일을 윈도우 [휴지통]으로 옮겼습니다.
+            &lsquo;{lastDeletedUndoItem.doc.fileName}&rsquo; 파일을 윈도우 [휴지통]으로 옮겼습니다.
           </span>
           <div className="flex items-center gap-2">
             <button
               type="button"
               onClick={() => void handleUndoLastDeletedFile()}
-              className="px-3.5 py-1.5 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-black cursor-pointer"
+              className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[12px] font-semibold cursor-pointer"
             >
               ↩️ 1초 실행 취소(Undo)
             </button>
@@ -1330,19 +1330,19 @@ export const WorkLoungeB2BHub: React.FC = () => {
         <div className="p-4 rounded-2xl bg-gradient-to-r from-cyan-950/85 via-zinc-950 to-emerald-950/75 border border-cyan-400/50 flex flex-wrap items-center justify-between gap-3 shadow-md">
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-lg bg-cyan-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
-                💼 {inviteMeta.hostNickname}님이 초대한 [{inviteMeta.roomTitle}]
+              <span className="px-2.5 py-0.5 rounded-lg bg-slate-900 text-white font-label-sm text-[11px] font-extrabold">
+                {inviteMeta.hostNickname}님이 초대한 [{inviteMeta.roomTitle}]
               </span>
               <span className="text-[11.5px] text-emerald-300 font-bold">
                 {isZCoreConnected
                   ? `✓ 내 컴퓨터 연결됨 · 윈도우 탐색기 S:\\ 실시간 동기화 가동 중${lastSyncedToLocalCount > 0 ? ` (+${lastSyncedToLocalCount}건 동기화됨)` : ''}`
-                  : '👀 대장 PC 직통 연결 — 웹 미리보기 & 실시간 열람 잠금(🔒) 확인 가능'}
+                  : '대장 PC 직통 연결 — 웹 미리보기 & 실시간 열람 잠금 확인 가능'}
               </span>
             </div>
             <p className="text-[12px] text-zinc-300 break-keep">
               {isZCoreConnected
-                ? '방장과 팀원이 올린 업무 파일이 내 컴퓨터 [탐색기 S:\\] 폴더로 자동 동기화되며, 바탕화면·탐색기 빈 공간에서 Ctrl+0 한 번이면 귀신검색창으로 0.1초 본문 검색이 가능합니다.'
-                : '지금 바로 브라우저에서 공유 문서·표 미리보기와 누가 수정 중(🔒)인지 확인할 수 있으며, 우측 버튼으로 PC 엔진을 켜는 즉시 내 윈도우 [탐색기 S:\\]로 실제 파일이 동기화됩니다.'}
+                ? '방장과 팀원이 올린 업무 파일이 내 컴퓨터 [탐색기 S:\\] 폴더로 자동 동기화되며, 바탕화면·탐색기 빈 공간에서 Ctrl+0 단축키로 귀신검색창에서 문서 본문을 바로 검색할 수 있습니다.'
+                : '지금 바로 브라우저에서 공유 문서·표 미리보기와 누가 수정 중인지 확인할 수 있으며, 우측 버튼으로 PC 엔진을 켜는 즉시 내 윈도우 [탐색기 S:\\]로 실제 파일이 동기화됩니다.'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -1356,11 +1356,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
                     openZCoreConnectModal();
                   }
                 }}
-                className="px-3.5 py-2 rounded-xl bg-cyan-400 hover:bg-cyan-300 text-zinc-950 font-label-sm text-[12px] font-black cursor-pointer shrink-0 shadow-sm"
+                className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[12px] font-semibold cursor-pointer shrink-0 shadow-sm"
               >
                 {isZCoreConnected
-                  ? '📂 동기화된 내 탐색기 S:\\ 바로 열기'
-                  : '⚡ PC 엔진 켜고 내 탐색기 S:\\로 동기화'}
+                  ? '동기화된 내 탐색기 S:\\ 바로 열기'
+                  : 'PC 엔진 켜고 내 탐색기 S:\\로 동기화'}
               </button>
             )}
             {activeWorkRoomId && hasAuthenticatedHubAccountSession() && (
@@ -1372,11 +1372,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
                   sessionStorage.removeItem('ghosti_active_work_room_invite_v1');
                   setRemoteDocs([]);
                   setActiveWorkRoomId('');
-                  showToast('🚪 초대받은 업무 공유방에서 나왔으며 내 기기의 해당 방 임시 캐시를 정리했습니다.');
+                  showToast('초대받은 업무 공유방에서 나왔으며 내 기기의 해당 방 임시 캐시를 정리했습니다.');
                 }}
                 className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-rose-400/40 text-rose-200 font-label-sm text-[11.5px] font-bold cursor-pointer shrink-0"
               >
-                🚪 이 업무방 나가기
+                이 업무방 나가기
               </button>
             )}
           </div>
@@ -1388,7 +1388,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
         <div className="flex flex-wrap items-center justify-between gap-2 px-1">
           <div className="flex flex-wrap items-center gap-2.5">
             <h2 className="font-headline-sm text-[20px] md:text-[22px] text-slate-900 dark:text-white font-extrabold tracking-tight">
-              💼 사무실 업무 문서·현장사진함 (S:\)
+              사무실 업무 문서·현장사진함 (S:\)
             </h2>
             {workPlan && PLAN_BADGE_LABELS[workPlan] && (
               <span className="text-[12px] text-emerald-400 font-bold">
@@ -1397,7 +1397,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
             )}
             {isWorkTrialActive && !isWorkPaidActive && (
               <span className="px-2.5 py-0.5 rounded-full bg-emerald-500/15 border border-emerald-400/40 text-[11px] text-emerald-300 font-extrabold">
-                🎁 30일 무료체험 중 (D-{deviceEntitlement?.workTrialDaysLeft ?? 30} · 정원 {roomSeatLimit}인)
+                30일 무료체험 중 (D-{deviceEntitlement?.workTrialDaysLeft ?? 30} · 정원 {roomSeatLimit}인)
               </span>
             )}
             <span
@@ -1425,7 +1425,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 : '연결된 사무실 PC 없음 · 0건'}
             </span>
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-400/25 text-[11px] text-cyan-300 font-bold">
-              📸 현장·증빙 사진 AI 분석 · 🛂 인물 여권 미발동(검색 제외)
+              현장·증빙 사진 AI 분석 · 인물 여권 미발동(검색 제외)
             </span>
           </div>
 
@@ -1435,17 +1435,17 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void handleOpenGhostSearchWindow()}
-                  className="px-3.5 py-1.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[12px] font-black cursor-pointer flex items-center gap-1.5 shadow-sm transition-all"
-                  title="독립 귀신검색창을 띄워 S: 드라이브 계약서·견적서·한글(HWP) 본문을 열지 않고 0.1초 만에 소환합니다 (바탕화면·탐색기 빈 공간 Ctrl+0 1회와 동일)"
+                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[12px] font-semibold cursor-pointer flex items-center gap-1.5 shadow-sm transition-all"
+                  title="독립 귀신검색창을 띄워 S: 드라이브 계약서·견적서·한글(HWP) 본문을 열지 않고 바로 검색합니다 (바탕화면·탐색기 빈 공간 Ctrl+0 1회와 동일)"
                 >
-                  <span>👻 귀신검색창으로 S: 문서 1초 검색</span>
+                  <span>귀신검색창으로 S: 문서 1초 검색</span>
                 </button>
                 <button
                   type="button"
                   onClick={() => void handleOpenSDriveExplorer()}
                   className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-cyan-400/45 text-cyan-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1"
                 >
-                  <span>📂 탐색기 S:\ 열기</span>
+                  <span>탐색기 S:\ 열기</span>
                 </button>
               </>
             )}
@@ -1457,7 +1457,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
               onClick={() => fileInputRef.current?.click()}
               className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-100 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1 disabled:opacity-50"
             >
-              <span>{uploadingFiles ? '⏳ 업로드 중...' : '📤 업무 파일 추가'}</span>
+              <span>{uploadingFiles ? '⏳ 업로드 중...' : '업무 파일 추가'}</span>
             </button>
 
             <button
@@ -1465,11 +1465,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
               onClick={() => void handleCopyWorkInviteLink()}
               className={`px-3 py-1.5 rounded-xl border font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1 transition-all ${
                 inviteCopied
-                  ? 'bg-emerald-400 text-zinc-950 border-emerald-300'
+                  ? 'bg-slate-900 text-white border-emerald-300'
                   : 'bg-zinc-900 hover:bg-zinc-800 border-amber-400/50 text-amber-300'
               }`}
             >
-              <span>{inviteCopied ? '✓ 업무방 초대 링크 복사됨!' : '💌 팀원 초대 링크 복사'}</span>
+              <span>{inviteCopied ? '✓ 업무방 초대 링크 복사됨!' : '팀원 초대 링크 복사'}</span>
             </button>
 
             <button
@@ -1477,7 +1477,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
               onClick={() => setShowMemberPermissions((v) => !v)}
               className="px-3 py-1 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1 shadow-xs"
             >
-              <span>👥 팀원 권한 &amp; S: 드라이브 연결 ({teamMembers.length}/{roomSeatLimit}명)</span>
+              <span>팀원 권한 &amp; S: 드라이브 연결 ({teamMembers.length}/{roomSeatLimit}명)</span>
               <span>{showMemberPermissions ? '▴' : '▾'}</span>
             </button>
             <button
@@ -1485,7 +1485,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
               onClick={() => setShowBackupManager((v) => !v)}
               className="px-3 py-1 rounded-xl bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1"
             >
-              <span>🛡️ 백업 PC(예비 서버 {backupServers.length}/2대)</span>
+              <span>백업 PC(예비 서버 {backupServers.length}/2대)</span>
               <span>{showBackupManager ? '▴' : '▾'}</span>
             </button>
             {!isMobileOrStore && (
@@ -1501,8 +1501,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
               >
                 <span>
                   {nightPowerSaveEnabled
-                    ? '🌙 야간·퇴근 초절전 가동 중 (해제)'
-                    : '🌙 야간·퇴근 초절전 모드'}
+                    ? '야간·퇴근 초절전 가동 중 (해제)'
+                    : '야간·퇴근 초절전 모드'}
                 </span>
               </button>
             )}
@@ -1524,8 +1524,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
             }`}
           >
             <div className="flex flex-col gap-1">
-              <span className="font-headline-sm text-[15px] text-indigo-200 font-black">
-                🌙 야간·퇴근 초절전 모드가 켜졌습니다 — 편히 퇴근하세요!
+              <span className="font-headline-sm text-[15px] text-indigo-200 font-semibold">
+                야간·퇴근 초절전 모드가 켜졌습니다 — 편히 퇴근하세요!
               </span>
               <span className="text-[12px] text-zinc-300">
                 ✓ 본체 절전(수면) 방지 적용 완료 · ✓ S: 드라이브 24시간 직통 연결 유지(월 전기료 약 1,800원) ·{' '}
@@ -1575,28 +1575,28 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 }}
                 className={`px-3 py-1.5 rounded-lg font-label-sm text-[12px] font-extrabold cursor-pointer transition-all ${
                   viewMode === 'semantic'
-                    ? 'bg-[#2DD4BF] text-zinc-950 shadow-xs'
+                    ? 'bg-slate-900 text-white shadow-xs'
                     : 'text-zinc-300 hover:text-white'
                 }`}
               >
-                🔍 본문·표 내용 검색 ({docs.length})
+                본문·표 내용 검색 ({docs.length})
               </button>
               <button
                 type="button"
                 onClick={() => setViewMode('explorer')}
                 className={`px-3 py-1.5 rounded-lg font-label-sm text-[12px] font-extrabold cursor-pointer transition-all ${
                   viewMode === 'explorer'
-                    ? 'bg-[#2DD4BF] text-zinc-950 shadow-xs'
+                    ? 'bg-slate-900 text-white shadow-xs'
                     : 'text-zinc-300 hover:text-white'
                 }`}
               >
-                🗂️ 폴더별 보기 (S:\)
+                폴더별 보기 (S:\)
               </button>
             </div>
           </div>
 
           <div className="flex items-center gap-2 bg-[#18181B] border border-white/15 focus-within:border-primary-container rounded-2xl px-4 py-2.5 shadow-sm transition-colors">
-            <span className="text-zinc-400 text-sm">🔍</span>
+            <span className="text-zinc-400 text-sm"></span>
             <input
               type="text"
               value={searchQuery}
@@ -1652,14 +1652,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
                   >
                     <span>
                       {folder.id === 'all'
-                        ? '💽 S:\\ 전체'
+                        ? 'S:\\ 전체'
                         : folder.id === 'root'
-                        ? '📄 S:\\ 루트'
-                        : `📁 ${folder.name}`}
+                        ? 'S:\\ 루트'
+                        : `${folder.name}`}
                     </span>
                     <span
                       className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                        highlight ? 'bg-black/15 text-zinc-950 font-black' : 'text-zinc-400'
+                        highlight ? 'bg-black/15 text-zinc-950 font-semibold' : 'text-zinc-400'
                       }`}
                     >
                       {count}

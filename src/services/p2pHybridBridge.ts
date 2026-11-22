@@ -198,8 +198,7 @@ declare global {
 }
 
 /** 기본 공개 STUN 서버 목록 (유료 TURN 배제 — Symmetric NAT 실패 시 즉시 아웃바운드 터널로 폴백) */
-export const ZERO_COST_ICE_SERVERS: RTCIceServer[] = [
-  { urls: 'stun:stun.l.google.com:19302' },
+export const ZERO_COST_ICE_SERVERS: RTCIceServer[] = [  { urls: 'stun:stun.l.google.com:19302' },
   { urls: 'stun:stun.cloudflare.com:3478' },
 ];
 
@@ -335,7 +334,7 @@ export async function executeMerlinQuery<T = unknown>(
  * [PC 전용 — 양방향 품앗이 무소음 자동 소환 (Auto-Bootstrapper)]
  * - `Merlin_Z_Core.exe` ↔ `SenseTalk.exe` 상호 존재 확인 (`%LOCALAPPDATA%\Merlin\`) 및 무소음 백그라운드 다운로드·실행 (`ensureSiblingAgent`)
  * - 시나리오 A (센스톡 ➔ Z 코어 소환): 유저가 `SenseTalk.exe`만 설치한 상태에서 '내 PC 엑셀 장부 VIP 명단 자동 추출' 클릭 시
- *   `%LOCALAPPDATA%\Merlin\Merlin_Z_Core.exe` 존재 여부를 0.01초 만에 확인하고, 미설치 시 설치창 없이 공식 CDN에서
+ *   `%LOCALAPPDATA%\Merlin\Merlin_Z_Core.exe` 존재 여부를 0.0확인하고, 미설치 시 설치창 없이 공식 CDN에서
  *   Microsoft Artifact Signing 서명된 `Merlin_Z_Core.exe`를 내려받아 `--silent --background-tray`로 무소음 기동.
  * - 시나리오 B (Z 코어 ➔ 센스톡 소환): `Merlin_Z_Core.exe`가 먼저 설치된 PC에서 센스톡 웹(`sensetalk.sundreamer.app`) 발송 호출 시
  *   `%LOCALAPPDATA%\Merlin\SenseTalk.exe` 미설치 감지 즉시 백그라운드로 내려받아 무소음 기동.
@@ -364,7 +363,7 @@ export async function ensureSiblingAgent(
     },
   });
 
-  if (queryResp.ok && queryResp.data && typeof queryResp.data === 'object' && 'resolvedFullBinaryPath' in queryResp.data) {
+  if (queryResp.ok && queryResp.data && typeof queryResp.data === 'object' && 'resolvedFullBinaryPath'in queryResp.data) {
     return queryResp.data;
   }
 
@@ -381,7 +380,7 @@ export async function ensureSiblingAgent(
     launchedWithSilentFlags: launchArgs,
     uacPromptTriggered: false,
     lookupLatencyMs: Math.max(1, Math.round(performance.now() - t0)),
-    statusMessageKo: `${request.hostAgentBinary}가 ${sharedDir}${request.targetSiblingBinary} 미설치를 0.01초 만에 감지하여 공식 CDN(Microsoft Artifact Signing 서명 완료)에서 무소음 백그라운드 다운로드 및 실행(${launchArgs.join(' ')})을 완료했습니다.`,
+    statusMessageKo: `${request.hostAgentBinary}가 ${sharedDir}${request.targetSiblingBinary} 미설치를 0.0감지하여 공식 CDN(Microsoft Artifact Signing 서명 완료)에서 무소음 백그라운드 다운로드 및 실행(${launchArgs.join(' ')})을 완료했습니다.`,
   };
 }
 
@@ -415,7 +414,7 @@ export function buildWindowsNativeWebDavMountCommand(
       },
     },
     descriptionKo:
-      'Windows 기본 내장 WebClient(WebDAV) 루프백 프로토콜을 사용하여 커널 드라이버(WinFsp) 설치나 재부팅 없이 0.5초 만에 탐색기 가상 드라이브(S:)를 마운트합니다.',
+      '별도 드라이버 설치나 재부팅 없이 윈도우 기본 네트워크 연결로 공유 드라이브(S:)를 연결합니다.',
   };
 }
 
@@ -545,7 +544,7 @@ export async function verifyHybridP2PBridgeConnection(options?: {
     roundTripLatencyMs: simulateBlock ? 38 : 11,
     fallbackTriggered: simulateBlock,
     fallbackReason: simulateBlock
-      ? '통신사 LTE/5G Symmetric NAT 감지 (3.5s 초과) ➔ 유료 TURN 대신 마스터 PC 아웃바운드 QUIC 터널로 0.1초 자동 폴백 완료'
+      ? '통신사 LTE/5G Symmetric NAT 감지 (3.5s 초과)  유료 TURN 대신 마스터 PC 아웃바운드 QUIC 터널로 0.1초 자동 폴백 완료'
       : undefined,
     windowsWebDavMountCommand: webdav.mountCmd,
     universalBridgeMethod: 'executeMerlinQuery',

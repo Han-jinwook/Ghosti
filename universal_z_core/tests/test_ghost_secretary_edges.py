@@ -137,11 +137,37 @@ class GhostSecretaryEdgeAuditTest(unittest.TestCase):
         self.assertNotIn("한치우", playbook)
         self.assertNotIn("한치우", engine_ts)
         self.assertNotIn("F1~F10", playbook)
-        self.assertIn("F1~F6", playbook)
+        self.assertNotIn("F1~F6", playbook)
+        self.assertNotIn("귀신창", playbook)
         self.assertNotIn("5,900원", cards_tsx)
         self.assertNotIn("🎯 [찾기] 탭에서 바로 열기", cards_tsx)
         self.assertNotIn("http://127.0.0.1:5199/api/care/", router_ts)
         self.assertNotIn("[🎯 찾기]", gos_src)
+
+    def test_06_superpower_routes_enforce_reject_untrusted(self) -> None:
+        daemon_src = (OS_AGENT_DIR / "merlin_z_core_daemon.py").read_text(encoding="utf-8")
+        cp_daemon_src = (
+            REPO_ROOT / "universal_z_core" / "core_power_agent" / "merlin_z_core_daemon.py"
+        ).read_text(encoding="utf-8")
+        self.assertIn("if self._reject_untrusted():", daemon_src)
+        self.assertEqual(
+            daemon_src.count('if path.startswith("/api/superpower/")'),
+            cp_daemon_src.count('if path.startswith("/api/superpower/")'),
+        )
+        # Ensure both GET and POST superpower blocks begin with _reject_untrusted()
+        for src_label, src_txt in (("os_agent", daemon_src), ("core_power_agent", cp_daemon_src)):
+            idx = 0
+            while True:
+                pos = src_txt.find('if path.startswith("/api/superpower/")', idx)
+                if pos == -1:
+                    break
+                snippet = src_txt[pos : pos + 260]
+                self.assertIn(
+                    "self._reject_untrusted()",
+                    snippet,
+                    f"{src_label} superpower route missing _reject_untrusted() guard!",
+                )
+                idx = pos + 40
 
 
 if __name__ == "__main__":

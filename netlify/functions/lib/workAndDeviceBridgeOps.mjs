@@ -1665,11 +1665,23 @@ export async function handleAuthedWorkAndDeviceAction({
       };
     }
 
+    const cleanHubSecret = String(hubClientSecret || '').trim();
+    if (!cleanHubSecret) {
+      return {
+        status: 500,
+        body: {
+          ok: false,
+          reason: 'HUB_CLIENT_SECRET_MISSING',
+          message: '서버 결제 인증 설정(MERLIN_HUB_CLIENT_SECRET)이 준비되지 않았습니다.',
+        },
+      };
+    }
+
     const hubHeaders = {
       'Content-Type': 'application/json',
       Authorization: `Bearer ${hubToken}`,
       'X-Client-Id': hubClientId || 'APP-01',
-      'X-Client-Secret': hubClientSecret || 'merlin-family-secret-key-2026',
+      'X-Client-Secret': cleanHubSecret,
     };
 
     // 1) 서버에서 직접 MerlinHub 최신 코인 잔액 조회 (클라이언트 잔액 신뢰 0%)

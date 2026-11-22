@@ -13,9 +13,6 @@ import { VoiceActorControlPill } from '../VoiceActorControlPill';
 import { triggerUserFavoriteAiLiveVoiceBatonTouch } from '../../services/voiceSearchAndAiBatonEngine';
 import { renderHighlightedDocText, resolveDocExtBadge } from './docAndVideoFormatUtils';
 
-/**
- * [스펙 1] 스마트 서류함 내 로컬 PDF/TXT/DOCX 문서 상세 열람 모달
- */
 export const LocalDocPreviewModal: React.FC = () => {
   const {
     selectedDocModal,
@@ -47,13 +44,13 @@ export const LocalDocPreviewModal: React.FC = () => {
     if (getIsTtsSpeaking()) {
       stopSetupMonsterTts();
       useSaySeeStore.setState({
-        lastQuarantineToast: '🔇 음성 안내를 중단했습니다. (다시 클릭하시면 음성이 다시 재생됩니다)',
+        lastQuarantineToast: '음성 안내를 중단했습니다.',
       });
     } else {
       await replayLastSetupMonsterTts(fallbackDocVoiceText);
       const actorName = getPreferredVoiceGender() === 'female' ? '여성 성우(선희)' : '남성 성우(현수)';
       useSaySeeStore.setState({
-        lastQuarantineToast: `🔊 [${actorName}] 문서 음성 안내를 다시 재생합니다.`,
+        lastQuarantineToast: `${actorName} 목소리로 문서 음성 안내를 재생합니다.`,
       });
     }
   };
@@ -61,35 +58,31 @@ export const LocalDocPreviewModal: React.FC = () => {
   return (
     <div
       onClick={handleCloseModal}
-      className="fixed inset-0 z-[105] bg-black/80 backdrop-blur-xl flex items-center justify-center px-3 sm:px-4 pt-safe pb-safe"
+      className="fixed inset-0 z-[105] bg-black/55 backdrop-blur-xs flex items-center justify-center px-3 sm:px-4 pt-safe pb-safe"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className="w-full max-w-2xl max-h-full sm:max-h-[88dvh] overflow-hidden rounded-3xl bg-surface-container-low border border-primary-container/50 p-4 sm:p-6 md:p-7 shadow-2xl flex flex-col gap-3 sm:gap-4"
+        className="w-full max-w-2xl max-h-full sm:max-h-[88dvh] overflow-hidden rounded-2xl bg-white border border-slate-200 p-4 sm:p-6 shadow-2xl text-slate-900 flex flex-col gap-4"
       >
-        <div className="flex items-start justify-between gap-3 shrink-0 pb-2 border-b border-outline-variant/20">
+        <div className="flex items-start justify-between gap-3 shrink-0 pb-3 border-b border-slate-100">
           <div className="flex flex-col gap-1 min-w-0">
-            <div className="flex flex-wrap items-center gap-1.5">
-              <span className="px-2 py-0.5 rounded-md bg-primary-container text-on-primary-container font-label-mono text-[10.5px] font-black">
-                {resolveDocExtBadge(selectedDocModal)} 문서 자산
+            <div className="flex flex-wrap items-center gap-1.5 text-[11.5px] text-slate-500">
+              <span className="px-2 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 font-semibold">
+                {resolveDocExtBadge(selectedDocModal)}
               </span>
-              <span className="px-2 py-0.5 rounded-full bg-surface-container-highest text-primary font-label-sm text-[10.5px] font-bold">
-                {selectedDocModal.categoryBadge}
-              </span>
-              <span className="font-label-mono text-[10.5px] text-on-surface-variant">
-                • {selectedDocModal.deviceSource}
-              </span>
+              <span>{selectedDocModal.categoryBadge}</span>
+              <span>·</span>
+              <span>{selectedDocModal.deviceSource}</span>
             </div>
-            <h3 className="font-headline-sm text-[16.5px] sm:text-[19px] text-on-surface font-extrabold mt-0.5 break-words">
+            <h3 className="text-[16.5px] sm:text-[18px] text-slate-900 font-bold mt-0.5 break-words leading-snug">
               {renderHighlightedDocText(
                 selectedDocModal.title,
                 effectiveQuery,
                 selectedDocModal.keywords.slice(0, 3)
               )}
             </h3>
-            <p className="font-label-mono text-[11px] text-on-surface-variant truncate">
-              파일명: {selectedDocModal.fileName} • 날짜: {selectedDocModal.date} • 크기:{' '}
-              {(selectedDocModal.sizeKB / 1024).toFixed(2)} MB
+            <p className="text-[11.5px] text-slate-500 truncate">
+              {selectedDocModal.fileName} · {selectedDocModal.date} · {(selectedDocModal.sizeKB / 1024).toFixed(2)} MB
             </p>
           </div>
 
@@ -97,67 +90,65 @@ export const LocalDocPreviewModal: React.FC = () => {
             type="button"
             onClick={handleCloseModal}
             aria-label="닫기"
-            className="w-10 h-10 rounded-full bg-surface-container-highest hover:bg-surface-bright border border-outline-variant/40 flex items-center justify-center text-on-surface shrink-0 cursor-pointer shadow-sm"
+            className="w-8 h-8 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 flex items-center justify-center text-slate-500 shrink-0 cursor-pointer"
           >
-            <span className="material-symbols-outlined text-[20px]">close</span>
+            <span className="material-symbols-outlined text-[18px]">close</span>
           </button>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto flex flex-col gap-3 pr-0.5">
           {selectedDocModal.matchType === 'SIMILAR' && (
-            <div className="px-3.5 py-2.5 rounded-2xl bg-amber-500/15 border border-amber-400/50 text-amber-200 font-label-md text-[12.5px] sm:text-[13px] font-extrabold flex items-center gap-2 shrink-0">
-              <span>
-                {selectedDocModal.similarityNoticeKo ||
-                  '💡 검색어와 100% 일치하는 문서가 없어 유사한 문서를 찾았습니다!'}
-              </span>
+            <div className="px-3.5 py-2 rounded-lg bg-slate-50 border border-slate-200 text-slate-700 text-[12.5px] font-medium shrink-0">
+              {selectedDocModal.similarityNoticeKo ||
+                '정확히 일치하는 문서가 없어 유사한 문서를 표시합니다.'}
             </div>
           )}
 
-          <div className="p-3.5 sm:p-4 rounded-2xl bg-surface-container-lowest border border-outline-variant/30 flex flex-col gap-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-label-mono text-[11px] text-primary-container font-bold">
-                🔍 로컬 문서 본문 미리보기 (검색어 노란색 하이라이트 • 1초 복사 지원)
-              </span>
-            </div>
-            <p className="font-body-md text-[13.5px] sm:text-[14px] text-on-surface leading-relaxed whitespace-pre-wrap break-words">
+          <div className="p-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col gap-2.5">
+            <span className="text-[11.5px] text-slate-500 font-semibold">
+              문서 본문 미리보기
+            </span>
+            <p className="text-[13.5px] text-slate-800 leading-relaxed whitespace-pre-wrap break-words">
               {renderHighlightedDocText(
                 selectedDocModal.extractedText,
                 effectiveQuery,
                 selectedDocModal.keywords.slice(0, 4)
               )}
             </p>
-            <div className="flex flex-wrap gap-1.5 pt-2">
-              {selectedDocModal.keywords.map((kw) => (
-                <span
-                  key={kw}
-                  className="px-2.5 py-0.5 rounded-full bg-primary-container/15 text-primary-container font-label-sm text-[11px] font-bold"
-                >
-                  #{kw}
-                </span>
-              ))}
-            </div>
+            {selectedDocModal.keywords.length > 0 && (
+              <div className="flex flex-wrap gap-1.5 pt-1">
+                {selectedDocModal.keywords.map((kw) => (
+                  <span
+                    key={kw}
+                    className="px-2 py-0.5 rounded bg-white border border-slate-200 text-slate-600 text-[11px] font-medium"
+                  >
+                    #{kw}
+                  </span>
+                ))}
+              </div>
+            )}
           </div>
         </div>
 
-        <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-outline-variant/20 shrink-0 bg-surface-container-low">
+        <div className="flex flex-wrap items-center justify-between gap-2 pt-3 border-t border-slate-100 shrink-0">
           {isMobileVoiceEnvironment() && (
             <div className="flex flex-wrap items-center gap-1.5">
               <VoiceActorControlPill fallbackReplayText={fallbackDocVoiceText} compact />
               <button
                 type="button"
                 onClick={() => void handleToggleModalVoice()}
-                className={`px-3 py-2 rounded-xl font-label-md text-[12px] font-extrabold flex items-center gap-1 cursor-pointer transition-all ${
+                className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border cursor-pointer transition-colors ${
                   isSpeakingNow
-                    ? 'bg-rose-500/20 hover:bg-rose-500/35 border border-rose-400/50 text-rose-200'
-                    : 'bg-teal-500/20 hover:bg-teal-500/35 border border-teal-400/50 text-teal-200'
+                    ? 'bg-rose-50 border-rose-200 text-rose-700'
+                    : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
                 }`}
               >
-                <span>{isSpeakingNow ? '🔇 음성 중단' : '🔊 다시 듣기'}</span>
+                <span>{isSpeakingNow ? '음성 중단' : '다시 듣기'}</span>
               </button>
             </div>
           )}
 
-          <div className="flex flex-wrap items-center justify-end gap-2 ml-auto">
+          <div className="flex flex-wrap items-center justify-end gap-1.5 ml-auto">
             {!/(비밀번호|패스워드|password|계정\s*정리|아이디.*비번|암호\s*목록)/i.test(
               selectedDocModal.title || ''
             ) ? (
@@ -170,19 +161,19 @@ export const LocalDocPreviewModal: React.FC = () => {
                     userQuestion:
                       activeQuery && hasExecutedUserSearch
                         ? activeQuery
-                        : '이 문서에서 나에게 불리한 독소조항이나 핵심 주의사항을 쉽게 설명해 줘.',
+                        : '이 문서에서 핵심 내용과 주의사항을 쉽게 설명해 줘.',
                   });
                   useSaySeeStore.setState({
-                    lastQuarantineToast: `🤝 [${res.detectedAiLabel} 바톤터치] ${res.ttsBriefingKo}`,
+                    lastQuarantineToast: `[${res.detectedAiLabel}] ${res.ttsBriefingKo}`,
                   });
                 }}
-                className="px-3 py-2 rounded-xl bg-fuchsia-600 text-white font-label-md text-[12px] font-black flex items-center gap-1 shadow-md hover:bg-fuchsia-500 transition-colors cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium transition-colors cursor-pointer"
               >
-                <span>🤝 AI 상담</span>
+                AI 요약 질문
               </button>
             ) : (
-              <span className="px-2.5 py-1.5 rounded-xl bg-zinc-900 border border-emerald-500/40 text-emerald-300 font-label-sm text-[11px] font-bold">
-                🔒 민감 계정 외부 전송 차단됨
+              <span className="px-2.5 py-1.5 rounded-lg bg-slate-100 text-slate-600 text-[11px] font-medium">
+                민감 정보 외부 전송 제한
               </span>
             )}
             <button
@@ -190,12 +181,12 @@ export const LocalDocPreviewModal: React.FC = () => {
               onClick={() => {
                 void navigator.clipboard?.writeText(selectedDocModal.extractedText);
                 useSaySeeStore.setState({
-                  lastQuarantineToast: `📋 복사 완료! [${selectedDocModal.title}] 본문 내용이 클립보드에 즉시 복사되었습니다.`,
+                  lastQuarantineToast: `[${selectedDocModal.title}] 본문이 클립보드에 복사되었습니다.`,
                 });
               }}
-              className="px-3.5 py-2 rounded-xl bg-emerald-500 text-zinc-950 font-label-md text-[12.5px] font-black flex items-center gap-1 shadow-md hover:bg-emerald-400 transition-colors cursor-pointer"
+              className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold transition-colors cursor-pointer"
             >
-              <span>📋 복사</span>
+              본문 복사
             </button>
             <button
               type="button"
@@ -207,26 +198,25 @@ export const LocalDocPreviewModal: React.FC = () => {
                   useSaySeeStore.setState({
                     lastQuarantineToast:
                       res.summaryKo ||
-                      `📂 탐색기에서 [${selectedDocModal.fileName}] 파일을 바로 띄웠습니다.`,
+                      `[${selectedDocModal.fileName}] 파일을 열었습니다.`,
                   });
                 });
               }}
-              className="hidden sm:flex px-3.5 py-2 rounded-xl bg-amber-500 text-zinc-950 font-label-md text-[12.5px] font-black items-center gap-1 shadow-md hover:bg-amber-400 transition-colors cursor-pointer"
+              className="hidden sm:flex px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium items-center cursor-pointer"
             >
-              <span>🔍 파일 띄우기</span>
+              원본 파일 열기
             </button>
             <button
               type="button"
               onClick={() => void openLocalFolder('docs')}
-              className="hidden sm:flex px-3.5 py-2 rounded-xl bg-primary-container text-on-primary-container font-label-md text-[12.5px] font-extrabold items-center gap-1"
+              className="hidden sm:flex px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium items-center gap-1 cursor-pointer"
             >
-              <span className="material-symbols-outlined text-[16px]">folder_open</span>
-              <span>서류함 폴더</span>
+              <span>문서 폴더</span>
             </button>
             <button
               type="button"
               onClick={handleCloseModal}
-              className="px-4 py-2 rounded-xl bg-surface-container-high text-on-surface font-label-md text-[12.5px] font-extrabold cursor-pointer"
+              className="px-3.5 py-1.5 rounded-lg bg-slate-100 hover:bg-slate-200 text-slate-700 text-[12px] font-medium cursor-pointer"
             >
               닫기
             </button>

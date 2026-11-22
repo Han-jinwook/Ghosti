@@ -313,7 +313,7 @@ export async function ensureMyWorkRoomAndInvite(opts: {
   if (!hasAuthenticatedHubAccountSession()) {
     return { ok: false, reason: 'AUTH_REQUIRED' };
   }
-  const roomTitle = (opts.roomTitle || '💼 우리팀 업무 공유방 (S:)').trim();
+  const roomTitle = (opts.roomTitle || '우리팀 업무 공유방 (S:)').trim();
   const hostNickname = (opts.hostNickname || '방장').trim();
 
   const bridgeRes = await callGhostiServerBridge<{
@@ -446,7 +446,7 @@ export function readCachedMyWorkRoomMeta(accountEmail?: string): {
       return {
         roomId: parsed.roomId,
         inviteToken: parsed.inviteToken,
-        roomTitle: parsed.roomTitle || '💼 우리팀 업무 공유방 (S:)',
+        roomTitle: parsed.roomTitle || '우리팀 업무 공유방 (S:)',
         hostNickname: parsed.hostNickname || '방장',
       };
     }
@@ -547,8 +547,7 @@ export function mapRawWorkFileToDto(rf: Record<string, unknown>, idx: number): W
     tableRows:
       rawRows.length > 0
         ? rawRows
-        : [
-            ['파일명', name],
+        : [            ['파일명', name],
             ['경로', `${folderPath}\\${name}`],
             ['용량', sizeLabel],
             ['최근 수정일', updatedAt],

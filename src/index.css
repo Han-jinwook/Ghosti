@@ -264,7 +264,7 @@ html.theme-warm-light .bg-surface-container-high:not([data-keep-dark="true"]):no
 html.theme-warm-light [class*="bg-surface-container-high/"]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
 html.theme-warm-light .bg-surface-container-highest:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
 html.theme-warm-light [class*="bg-surface-container-highest/"]:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
-html.theme-warm-light .bg-slate-900:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
+html.theme-warm-light .bg-slate-900:not(button):not(a):not(.text-white):not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
 html.theme-warm-light .bg-slate-900\/95:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
 html.theme-warm-light .bg-slate-900\/90:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
 html.theme-warm-light .bg-slate-900\/85:not([data-keep-dark="true"]):not([data-keep-dark="true"] *):not(.hub-purchase-widget *),
@@ -601,13 +601,25 @@ html.theme-warm-light [class*="text-blue-400/"]:not([data-keep-dark="true"] *) {
   color: #0369A1 !important;
 }
 
-/* 8. 솔리드 포인트 버튼 (primary-container 등) 화이트 바탕 위 시인성 강화 */
+/* 8. 솔리드 포인트 버튼 (bg-slate-900 · primary-container 등) 노션 스타일 차콜 단색 시인성 보장 */
+html.theme-warm-light .bg-slate-900.text-white:not(.hub-purchase-widget *),
+html.theme-warm-light button.bg-slate-900:not(.hub-purchase-widget *),
+html.theme-warm-light a.bg-slate-900:not(.hub-purchase-widget *),
 html.theme-warm-light .bg-primary-container:not([data-keep-dark="true"] *) {
-  background-color: #0D9488 !important;
+  background-color: #0F172A !important;
   color: #FFFFFF !important;
+  border-color: #0F172A !important;
 }
+html.theme-warm-light .bg-slate-900.text-white:not(.hub-purchase-widget *) *,
+html.theme-warm-light button.bg-slate-900:not(.hub-purchase-widget *) *,
+html.theme-warm-light a.bg-slate-900:not(.hub-purchase-widget *) *,
 html.theme-warm-light .bg-primary-container:not([data-keep-dark="true"] *) * {
   color: #FFFFFF !important;
+}
+html.theme-warm-light button.bg-slate-900:hover:not(:disabled):not(.hub-purchase-widget *),
+html.theme-warm-light a.bg-slate-900:hover:not(.hub-purchase-widget *),
+html.theme-warm-light .bg-primary-container:hover:not(:disabled):not([data-keep-dark="true"] *) {
+  background-color: #1E293B !important;
 }
 
 

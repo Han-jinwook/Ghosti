@@ -11,7 +11,7 @@ interface HubBenefitModalProps {
 export const HubBenefitModal: React.FC<HubBenefitModalProps> = ({
   customBenefitTitle = "관심 항목 변동 알림",
   customBenefitDesc = "관심 항목이 변경되면 바로 알려드려요",
-  customBenefitIcon = "🔔",
+  customBenefitIcon = "",
   onConfirm,
 }) => {
   const { shouldShow, closeBenefitModal } = useBenefitTrigger();
@@ -34,12 +34,12 @@ export const HubBenefitModal: React.FC<HubBenefitModalProps> = ({
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 px-4">
       <div className="bg-white rounded-2xl shadow-2xl max-w-sm w-full p-6 space-y-5 animate-in zoom-in duration-300">
         <div className="text-center">
-          <div className="text-3xl mb-2">🎁</div>
+          <div className="text-3xl mb-2"></div>
           <h2 className="text-lg font-bold text-gray-900">이메일 등록하면 이런 게 좋아요!</h2>
         </div>
         <ul className="space-y-4">
           <li className="flex items-start gap-3">
-            <span className="text-xl">📱</span>
+            <span className="text-xl"></span>
             <div>
               <div className="text-sm font-semibold text-gray-800">PC · 모바일 어디서든</div>
               <div className="text-xs text-gray-500">로그인만 하면 모든 기기에서 동일하게</div>

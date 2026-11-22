@@ -27,271 +27,199 @@ export const PaidDeviceSyncPane: React.FC = () => {
   return (
     <>
       {desktopTab === 'sync' && (
-        <main className="flex-1 w-full max-w-[1640px] mx-auto px-5 md:px-8 py-7 flex flex-col gap-4">
+        <main className="flex-1 w-full max-w-[1160px] mx-auto px-5 md:px-8 py-7 flex flex-col gap-4">
           <GhostSecretaryFirstGuard>
             {activeLoungeType === 'personal' ? (
+              <LoungeCustomSettingsHeader />
+            ) : activeLoungeType === 'family' ||
+              activeLoungeType === 'club' ||
+              activeLoungeType === 'student' ? (
+              <LoungeCustomSettingsHeader />
+            ) : (
               <>
                 <LoungeCustomSettingsHeader />
-                {/* [결함 3 해결] 하단 거대 중복 아코디언 2개 및 중복 폴더 카운트를 걷어내고 1줄 안심 배너만 유지 */}
-                <div className="px-4 py-3 rounded-xl bg-zinc-900/80 border border-emerald-500/30 flex items-center justify-between gap-2 text-[12.5px] text-emerald-300 font-bold">
-                  <span>
-                    🔒 내 사진·문서는 외부 서버 저장 없이 내 기기 간에만 암호화 직결되며, 탈퇴 시 흔적 없이 즉시 소멸됩니다.
-                  </span>
-                </div>
+
+                <section className="rounded-xl bg-white border border-slate-200 overflow-hidden transition-all">
+                  <div
+                    onClick={() => setShowPrivateSyncSection((v) => !v)}
+                    className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-3 cursor-pointer hover:bg-slate-50 transition-colors select-none"
+                  >
+                    <div className="flex flex-wrap items-center gap-2.5">
+                      <span className="text-[13.5px] text-slate-900 font-semibold">
+                        {showPrivateSyncSection ? '▾' : '▸'} 동기화 및 로컬 폴더 설정
+                      </span>
+                      <span className="text-[12px] text-slate-500">
+                        {syncState.privateSyncStrategy === 'shadow'
+                          ? `용량 절약 모드 (${syncState.packSizeMB}MB)`
+                          : `원본 보관 모드 (${syncState.originalSizeGB}GB)`}
+                      </span>
+                      <span className="hidden md:inline text-[12px] text-slate-400">
+                        최근 동기화: {syncState.lastSyncedAt}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        disabled={syncState.syncing}
+                        onClick={() => void triggerSyncNow()}
+                        className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold transition-all disabled:opacity-50 cursor-pointer"
+                      >
+                        {syncState.syncing ? '동기화 중...' : '지금 동기화'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setShowPrivateSyncSection((v) => !v)}
+                        className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 text-[12px] font-medium select-none cursor-pointer"
+                      >
+                        {showPrivateSyncSection ? '접기' : '펼치기'}
+                      </button>
+                    </div>
+                  </div>
+
+                  {showPrivateSyncSection && (
+                    <div className="px-5 pb-5 pt-3 border-t border-slate-100 flex flex-col gap-4">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3.5">
+                        <div
+                          onClick={() => setPrivateSyncStrategy('mirror')}
+                          className={`p-4 rounded-xl cursor-pointer transition-all flex flex-col justify-between gap-3 border ${
+                            syncState.privateSyncStrategy === 'mirror'
+                              ? 'bg-slate-50 border-slate-900'
+                              : 'bg-white hover:bg-slate-50 border-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[14px] text-slate-900 font-semibold">
+                              양쪽 원본 보관
+                            </span>
+                            <input
+                              type="radio"
+                              checked={syncState.privateSyncStrategy === 'mirror'}
+                              onChange={() => setPrivateSyncStrategy('mirror')}
+                              className="w-4 h-4 accent-slate-900"
+                            />
+                          </div>
+                          <p className="text-[12.5px] text-slate-500">
+                            PC와 스마트폰 양쪽에 원본({syncState.originalSizeGB}GB)을 동일하게 유지합니다.
+                          </p>
+                        </div>
+
+                        <div
+                          onClick={() => setPrivateSyncStrategy('shadow')}
+                          className={`p-4 rounded-xl cursor-pointer transition-all flex flex-col justify-between gap-3 border ${
+                            syncState.privateSyncStrategy === 'shadow'
+                              ? 'bg-slate-50 border-slate-900'
+                              : 'bg-white hover:bg-slate-50 border-slate-200'
+                          }`}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="text-[14px] text-slate-900 font-semibold">
+                              스마트폰 용량 절약 (권장)
+                            </span>
+                            <input
+                              type="radio"
+                              checked={syncState.privateSyncStrategy === 'shadow'}
+                              onChange={() => setPrivateSyncStrategy('shadow')}
+                              className="w-4 h-4 accent-slate-900"
+                            />
+                          </div>
+                          <p className="text-[12.5px] text-slate-500">
+                            원본은 PC에 보관하고 스마트폰에는 미리보기({syncState.packSizeMB}MB)만 남깁니다.
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5">
+                        <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-200 flex flex-col gap-2.5">
+                          <h3 className="text-[13.5px] text-slate-900 font-semibold">동기화 조건</h3>
+                          <label className="p-2.5 rounded-lg bg-white border border-slate-200 flex items-center justify-between gap-3 cursor-pointer">
+                            <span className="text-[12.5px] text-slate-700">Wi-Fi 연결 시에만 동기화</span>
+                            <input
+                              type="checkbox"
+                              checked={syncState.wifiOnly}
+                              onChange={(e) => updateSyncSettings(syncState.mode, e.target.checked)}
+                              className="w-4 h-4 accent-slate-900 rounded"
+                            />
+                          </label>
+                          <label className="p-2.5 rounded-lg bg-white border border-slate-200 flex items-center justify-between gap-3 cursor-pointer">
+                            <span className="text-[12.5px] text-slate-700">충전 중일 때만 실행</span>
+                            <input
+                              type="checkbox"
+                              checked={syncState.chargingOnly}
+                              onChange={(e) => setChargingOnlySync(e.target.checked)}
+                              className="w-4 h-4 accent-slate-900 rounded"
+                            />
+                          </label>
+                        </div>
+
+                        <div className="p-4 rounded-xl bg-slate-50/70 border border-slate-200 flex flex-col justify-between gap-3">
+                          <div className="flex flex-col gap-2">
+                            <h3 className="text-[13.5px] text-slate-900 font-semibold">로컬 폴더</h3>
+                            <div className="grid grid-cols-3 gap-2 text-[12px]">
+                              <div className="p-2.5 rounded-lg bg-white border border-slate-200 flex flex-col">
+                                <span className="text-slate-500">사진</span>
+                                <span className="text-[14px] text-slate-900 font-semibold">{activePhotos.length}장</span>
+                              </div>
+                              <div className="p-2.5 rounded-lg bg-white border border-slate-200 flex flex-col">
+                                <span className="text-slate-500">문서</span>
+                                <span className="text-[14px] text-slate-900 font-semibold">
+                                  {matchedLocalDocs.length + activePhotos.filter((p) => p.isVaultDocument).length}건
+                                </span>
+                              </div>
+                              <div className="p-2.5 rounded-lg bg-white border border-slate-200 flex flex-col">
+                                <span className="text-slate-500">휴지통</span>
+                                <span className="text-[14px] text-slate-900 font-semibold">{quarantinedPhotos.length}장</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-1.5 pt-2 border-t border-slate-200/80">
+                            <button
+                              onClick={() => void openLocalFolder('photos')}
+                              className="px-2.5 py-1.5 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[12px] font-medium cursor-pointer"
+                            >
+                              사진 폴더
+                            </button>
+                            <button
+                              onClick={() => void openLocalFolder('docs')}
+                              className="px-2.5 py-1.5 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[12px] font-medium cursor-pointer"
+                            >
+                              문서 폴더
+                            </button>
+                            <button
+                              onClick={() => void openLocalFolder('quarantine')}
+                              className="px-2.5 py-1.5 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[12px] font-medium cursor-pointer"
+                            >
+                              휴지통 열기
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </section>
+
+                <section className="rounded-xl bg-white border border-slate-200 overflow-hidden transition-all">
+                  <div
+                    onClick={() => setShowPolicyAndStoreSection((v) => !v)}
+                    className="px-5 py-3.5 flex items-center justify-between gap-2 cursor-pointer hover:bg-slate-50 transition-colors select-none"
+                  >
+                    <span className="text-[13.5px] text-slate-900 font-semibold">
+                      {showPolicyAndStoreSection ? '▾' : '▸'} 파일 직접 전송
+                    </span>
+                    <span className="text-[12px] text-slate-500">
+                      {showPolicyAndStoreSection ? '접기' : '펼치기'}
+                    </span>
+                  </div>
+
+                  {showPolicyAndStoreSection && (
+                    <div className="px-5 pb-5 pt-3 border-t border-slate-100 flex flex-col gap-4">
+                      <PcMasterQuickSendPanel />
+                    </div>
+                  )}
+                </section>
               </>
-            ) : activeLoungeType === 'family' ||
-            activeLoungeType === 'club' ||
-            activeLoungeType === 'student' ? (
-            <LoungeCustomSettingsHeader />
-          ) : (
-            <>
-          {/* 업무 공유(S:) 상단 설정 섹션 */}
-          <LoungeCustomSettingsHeader />
-
-          {/* 노션 토글 1: 🔄 폰↔PC 프라이빗 싱크 센터 & 내 PC 로컬 폴더 직결 관리 (클릭 시 동적 펼침) */}
-          <section className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden transition-all">
-            <div
-              onClick={() => setShowPrivateSyncSection((v) => !v)}
-              className="px-5 py-4 flex flex-wrap items-center justify-between gap-3 cursor-pointer hover:bg-zinc-900/60 transition-colors select-none"
-            >
-              <div className="flex flex-wrap items-center gap-2.5">
-                <span className="text-[12.5px] text-primary-container font-bold">
-                  {showPrivateSyncSection ? '▾' : '▸'} 🔄 폰↔PC 프라이빗 싱크 &amp; 로컬 폴더 관리
-                </span>
-                <span className="px-2.5 py-0.5 rounded-full bg-zinc-900 border border-white/10 text-zinc-300 text-[11px] font-bold">
-                  {syncState.privateSyncStrategy === 'shadow'
-                    ? `⚡ 폰 용량 절약 모드 (${syncState.packSizeMB}MB)`
-                    : `💾 양쪽 원본 보관 모드 (${syncState.originalSizeGB}GB)`}
-                </span>
-                <span className="hidden md:inline text-[12px] text-zinc-400">
-                  최근 일치화: {syncState.lastSyncedAt}
-                </span>
-              </div>
-
-              <div className="flex items-center gap-2" onClick={(e) => e.stopPropagation()}>
-                <button
-                  type="button"
-                  disabled={syncState.syncing}
-                  onClick={() => void triggerSyncNow()}
-                  className="px-3.5 py-1.5 rounded-xl bg-primary-container hover:opacity-95 text-zinc-950 font-label-sm text-[12px] font-extrabold transition-all disabled:opacity-50 cursor-pointer"
-                >
-                  {syncState.syncing ? '일치화 실행 중...' : '⚡ 지금 일치시키기'}
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setShowPrivateSyncSection((v) => !v)}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[13px] font-extrabold select-none shadow-sm cursor-pointer transition-all"
-                >
-                  {showPrivateSyncSection ? '접기 ▴' : '설정 펼치기 ▾'}
-                </button>
-              </div>
-            </div>
-
-            {showPrivateSyncSection && (
-              <div className="px-5 pb-5 pt-3 border-t border-white/10 flex flex-col gap-4">
-                <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-                  {/* 양쪽 원본 보관 모드 */}
-                  <div
-                    onClick={() => setPrivateSyncStrategy('mirror')}
-                    className={`p-5 rounded-2xl cursor-pointer transition-all flex flex-col justify-between gap-4 border ${
-                      syncState.privateSyncStrategy === 'mirror'
-                        ? 'bg-zinc-900 border-primary-container'
-                        : 'bg-zinc-950/70 hover:bg-zinc-900/80 border-white/10'
-                    }`}
-                  >
-                    <div className="flex flex-col gap-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="px-2.5 py-0.5 rounded bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[11.5px] font-semibold">
-                          폰 여유 공간이 넉넉할 때
-                        </span>
-                        <input
-                          type="radio"
-                          checked={syncState.privateSyncStrategy === 'mirror'}
-                          onChange={() => setPrivateSyncStrategy('mirror')}
-                          className="w-4 h-4 accent-[#00E5FF]"
-                        />
-                      </div>
-
-                      <h2 className="font-headline-sm text-[17px] text-white font-bold">
-                        💾 폰·PC 양쪽 원본 보관 모드
-                      </h2>
-
-                      <div className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5 font-label-sm text-[12px]">
-                        <div className="flex items-center justify-between">
-                          <span className="text-zinc-400">내 PC 보관함 용량</span>
-                          <span className="text-white font-bold">{syncState.originalSizeGB} GB (원본 100%)</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-zinc-400">내 스마트폰 점유 용량</span>
-                          <span className="text-zinc-200 font-bold">{syncState.originalSizeGB} GB (1:1 똑같이 보관)</span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* 폰 용량 절약 모드 */}
-                  <div
-                    onClick={() => setPrivateSyncStrategy('shadow')}
-                    className={`p-5 rounded-2xl cursor-pointer transition-all flex flex-col justify-between gap-4 border ${
-                      syncState.privateSyncStrategy === 'shadow'
-                        ? 'bg-zinc-900 border-primary-container'
-                        : 'bg-zinc-950/70 hover:bg-zinc-900/80 border-white/10'
-                    }`}
-                  >
-                    <div className="flex flex-col gap-2.5">
-                      <div className="flex items-center justify-between">
-                        <span className="px-2.5 py-0.5 rounded bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-bold">
-                          폰 용량이 부족할 때 (권장)
-                        </span>
-                        <input
-                          type="radio"
-                          checked={syncState.privateSyncStrategy === 'shadow'}
-                          onChange={() => setPrivateSyncStrategy('shadow')}
-                          className="w-4 h-4 accent-[#00E5FF]"
-                        />
-                      </div>
-
-                      <h2 className="font-headline-sm text-[17px] text-white font-bold">
-                        ⚡ 폰 용량 절약 모드 (원본은 PC에 안전 보관)
-                      </h2>
-
-                      <div className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 flex flex-col gap-1.5 font-label-sm text-[12px]">
-                        <div className="flex items-center justify-between">
-                          <span className="text-zinc-400">내 PC 하드디스크 (원본 보관)</span>
-                          <span className="text-white font-bold">{syncState.originalSizeGB} GB (원본 전체)</span>
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-zinc-400">내 스마트폰 점유 용량 ({photos.length}장)</span>
-                          <span className="text-primary-container font-bold">
-                            단 {syncState.packSizeMB} MB (99.4% 절약)
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div className="p-4 rounded-2xl bg-zinc-950/70 border border-white/10 flex flex-col justify-between gap-3">
-                    <div className="flex flex-col gap-2">
-                      <h3 className="font-headline-sm text-[15px] text-white font-bold">
-                        📲 자동 작동 조건 &amp; 즉시 일치화
-                      </h3>
-
-                      <label className="p-2.5 rounded-xl bg-zinc-900/70 border border-white/10 flex items-center justify-between gap-3 cursor-pointer">
-                        <span className="font-label-md text-[12px] text-zinc-200 font-medium">
-                          집/사무실 동일 Wi-Fi 연결 시에만 작동
-                        </span>
-                        <input
-                          type="checkbox"
-                          checked={syncState.wifiOnly}
-                          onChange={(e) => updateSyncSettings(syncState.mode, e.target.checked)}
-                          className="w-4 h-4 accent-[#00E5FF] rounded"
-                        />
-                      </label>
-
-                      <label className="p-2.5 rounded-xl bg-zinc-900/70 border border-white/10 flex items-center justify-between gap-3 cursor-pointer">
-                        <span className="font-label-md text-[12px] text-zinc-200 font-medium">
-                          충전 중일 때만 백그라운드 동기화 실행
-                        </span>
-                        <input
-                          type="checkbox"
-                          checked={syncState.chargingOnly}
-                          onChange={(e) => setChargingOnlySync(e.target.checked)}
-                          className="w-4 h-4 accent-[#00E5FF] rounded"
-                        />
-                      </label>
-                    </div>
-                  </div>
-
-                  <div className="p-4 rounded-2xl bg-zinc-950/70 border border-white/10 flex flex-col justify-between gap-3">
-                    <div className="flex flex-col gap-2.5">
-                      <h3 className="font-headline-sm text-[15px] text-white font-bold">
-                        📁 내 PC 로컬 폴더 직결 관리
-                      </h3>
-                      <div className="grid grid-cols-3 gap-2">
-                        <div className="p-2.5 rounded-xl bg-zinc-900/70 border border-white/10 flex flex-col">
-                          <span className="font-body-sm text-[10.5px] text-zinc-400">갤러리 활성</span>
-                          <span className="font-headline-sm text-[15px] text-white font-bold">
-                            {activePhotos.length}장
-                          </span>
-                        </div>
-                        <div className="p-2.5 rounded-xl bg-zinc-900/70 border border-white/10 flex flex-col">
-                          <span className="font-body-sm text-[10.5px] text-zinc-400">스마트 서류함</span>
-                          <span className="font-headline-sm text-[15px] text-white font-bold">
-                            {matchedLocalDocs.length + activePhotos.filter((p) => p.isVaultDocument).length}건
-                          </span>
-                        </div>
-                        <div className="p-2.5 rounded-xl bg-zinc-900/70 border border-white/10 flex flex-col">
-                          <span className="font-body-sm text-[10.5px] text-zinc-400">휴지통 이동</span>
-                          <span className="font-headline-sm text-[15px] text-white font-bold">
-                            {quarantinedPhotos.length}장
-                          </span>
-                        </div>
-                      </div>
-                    </div>
-
-                    <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10">
-                      <button
-                        onClick={() => void openLocalFolder('photos')}
-                        className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[11.5px] font-medium cursor-pointer"
-                      >
-                        📂 사진 폴더
-                      </button>
-                      <button
-                        onClick={() => void openLocalFolder('docs')}
-                        className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[11.5px] font-medium cursor-pointer"
-                      >
-                        📂 서류함(PDF) 폴더
-                      </button>
-                      <button
-                        onClick={() => void openLocalFolder('quarantine')}
-                        className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-label-sm text-[11.5px] font-medium cursor-pointer"
-                      >
-                        🗑️ OS 기본 휴지통 열기
-                      </button>
-                      <button
-                        onClick={() => {
-                          window.dispatchEvent(new CustomEvent('ghosti_navigate_showroom'));
-                        }}
-                        className="px-3 py-1.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-primary-container font-label-sm text-[11.5px] font-semibold cursor-pointer"
-                      >
-                        🔒 보안 · QR 페어링 설정
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
             )}
-          </section>
-
-          {/* 노션 토글 2: 🛡️ 모바일↔PC 연동 가이드 · 탈퇴 데이터 보호 원칙 */}
-          <section className="rounded-2xl bg-[#18181B] border border-white/10 overflow-hidden transition-all">
-            <div
-              onClick={() => setShowPolicyAndStoreSection((v) => !v)}
-              className="px-5 py-3.5 flex flex-wrap items-center justify-between gap-2 cursor-pointer hover:bg-zinc-900/60 transition-colors select-none"
-            >
-              <div className="flex flex-wrap items-center gap-2.5">
-                <span className="text-[12.5px] text-emerald-400 font-bold">
-                  {showPolicyAndStoreSection ? '▾' : '▸'} 🛡️ 데스크톱 연동 가이드 · 탈퇴 데이터 보호 원칙
-                </span>
-                <span className="hidden sm:inline text-[12px] text-zinc-400">
-                  13KB 썸네일 DB 자체 해결 · 탈퇴 시 내 여권 100% 보존 · 원본 로컬 보관
-                </span>
-              </div>
-              <span className="px-3 py-1.5 rounded-xl bg-zinc-100 hover:bg-zinc-200 dark:bg-zinc-800 dark:hover:bg-zinc-700 border border-zinc-300 dark:border-zinc-700 text-zinc-800 dark:text-zinc-100 text-[13px] font-extrabold select-none shadow-sm cursor-pointer transition-all">
-                {showPolicyAndStoreSection ? '접기 ▴' : '펼치기 ▾'}
-              </span>
-            </div>
-
-            {showPolicyAndStoreSection && (
-              <div className="px-5 pb-5 pt-3 border-t border-white/10 flex flex-col gap-4">
-                <PcMasterQuickSendPanel />
-              </div>
-            )}
-          </section>
-            </>
-          )}
           </GhostSecretaryFirstGuard>
         </main>
       )}

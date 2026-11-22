@@ -45,7 +45,7 @@ export const HubRegisterNudge: React.FC<HubRegisterNudgeProps> = ({
       <div className="flex flex-col items-start flex-grow text-left">
         <div className="flex items-center gap-1">
           <span className="text-sm font-bold text-blue-700">이메일을 등록해봐요!</span>
-          <span className="text-sm">😊</span>
+          <span className="text-sm"></span>
         </div>
         <p className="text-xs text-blue-500/80 font-medium">
           {benefits.join(' · ')}

@@ -63,14 +63,14 @@ export async function evaluateProFeatureGate(options: {
       allowed: true,
       state: 'allowed',
       message: '',
-      trialBadge: '💼 업무 공유(S:) 무료 적용',
+      trialBadge: '업무 공유(S:) 무료 적용',
     };
   }
 
   const featureNameKo =
-    actionType === 'feat_6_screen_ocr' ? '[사진·표 OCR 창🔒]' : '[귀신 라벨러🔒]';
+    actionType === 'feat_6_screen_ocr' ? '사진·표 OCR' : '귀신 라벨러';
   const sDriveNote =
-    actionType === 'feat_ghost_labeler' ? ' (S: 업무 드라이브는 무료)' : '';
+    actionType === 'feat_ghost_labeler' ? ' (업무 공유 S: 드라이브 파일은 무료)' : '';
 
   const storeState = useSaySeeStore.getState();
   const ent = storeState.deviceEntitlement;
@@ -99,7 +99,7 @@ export async function evaluateProFeatureGate(options: {
         return {
           allowed: false,
           state: 'expired',
-          message: '🔒 [귀신 라벨러] 권한 확인에 실패해 실행을 보류했습니다.',
+          message: '귀신 라벨러 권한 확인에 실패해 실행을 보류했습니다.',
           trialBadge: '',
         };
       }
@@ -136,7 +136,7 @@ export async function evaluateProFeatureGate(options: {
             allowed: false,
             state: 'need_opt_in',
             message: isMachineCodeMsg
-              ? `🎁 ${featureNameKo}은 신용카드 등록 없이 30일 무제한 무료체험 시작 버튼만 누르면 바로 사용하실 수 있습니다${sDriveNote}.`
+              ? `${featureNameKo} 기능은 30일 무료체험을 시작하면 바로 사용할 수 있습니다${sDriveNote}.`
               : rawMsg,
             trialBadge: '',
           };
@@ -146,7 +146,7 @@ export async function evaluateProFeatureGate(options: {
           allowed: false,
           state: 'expired',
           message: isMachineCodeMsg
-            ? `🔒 30일 무료체험이 만료되었습니다. [4번 내 기기 통합 Pro · 월 3,900원]에서 무제한 해금되며, 무료 기본기 검색은 평생 0원입니다${sDriveNote}.`
+            ? `30일 무료체험이 종료되었습니다. 내 기기 통합 Pro(월 3,900원) 구독 시 계속 사용할 수 있습니다${sDriveNote}.`
             : rawMsg,
           trialBadge: '',
         };
@@ -159,9 +159,9 @@ export async function evaluateProFeatureGate(options: {
       );
       let trialBadge = '';
       if (isSub) {
-        trialBadge = '👑 내 기기 통합 무제한';
+        trialBadge = 'Pro';
       } else if (resolvedDays !== undefined && featStatus !== 'FREE_FOREVER') {
-        trialBadge = `🎁 무료체험 D-${resolvedDays}`;
+        trialBadge = `체험 ${resolvedDays}일 남음`;
       }
 
       return {
@@ -174,10 +174,7 @@ export async function evaluateProFeatureGate(options: {
       return {
         allowed: false,
         state: 'expired',
-        message:
-          actionType === 'feat_ghost_labeler'
-            ? '🔒 [귀신 라벨러] 로컬 엔진 권한 응답이 지연되어 보류되었습니다.'
-            : '🔒 권한 확인 중 응답이 지연되어 유료 기능 실행을 안전하게 보류했습니다.',
+        message: '로컬 엔진 권한 응답이 지연되어 실행을 보류했습니다.',
         trialBadge: '',
       };
     }
@@ -189,8 +186,8 @@ export async function evaluateProFeatureGate(options: {
       state: actionType === 'feat_6_screen_ocr' ? 'need_opt_in' : 'expired',
       message:
         actionType === 'feat_6_screen_ocr'
-          ? '🎁 [사진·표 OCR 창🔒]은 신용카드 등록 없이 [4. 내 기기 통합 Pro · 월 3,900원]에서 30일 무제한 무료체험 시작 후 사용하실 수 있습니다.'
-          : '🔒 [귀신 라벨러] Pro 전용 유료 기능입니다. [4. 내 기기 통합 Pro · 월 3,900원] 30일 무료체험 시작 또는 구독 시 무제한 사용 가능(S: 업무 드라이브는 무료)합니다.',
+          ? '사진·표 OCR 창은 내 기기 통합 Pro(월 3,900원) 30일 무료체험 시작 후 사용할 수 있습니다.'
+          : '귀신 라벨러는 내 기기 통합 Pro(월 3,900원) 전용 기능입니다 (업무 공유 S: 드라이브 파일은 무료).',
       trialBadge: '',
     };
   }
@@ -199,9 +196,7 @@ export async function evaluateProFeatureGate(options: {
     allowed: true,
     state: 'allowed',
     message: '',
-    trialBadge: ent.isPaidUnlimited
-      ? '👑 내 기기 통합 무제한'
-      : `🎁 무료체험 D-${ent.trialDaysLeft}`,
+    trialBadge: ent.isPaidUnlimited ? 'Pro' : `체험 ${ent.trialDaysLeft}일 남음`,
   };
 }
 

@@ -8,8 +8,8 @@
  *      → 브라우저는 이 토큰으로 RLS(`auth.jwt() ->> 'email'`) 보호 테이블에 접근
  *
  * 외부 패키지 0개 (fetch + node:crypto 만 사용).
- * 필요한 Netlify 환경변수: VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_JWT_SECRET
- * 선택: MERLIN_HUB_URL (기본 https://os.sundreamer.app), MERLIN_HUB_CLIENT_ID, MERLIN_HUB_CLIENT_SECRET
+ * 필요한 Netlify 환경변수: VITE_SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, SUPABASE_JWT_SECRET, MERLIN_HUB_CLIENT_SECRET
+ * 선택: MERLIN_HUB_URL (기본 https://os.sundreamer.app), MERLIN_HUB_CLIENT_ID, GHOSTI_ADMIN_PURGE_KEY
  */
 import crypto from 'node:crypto';
 import {
@@ -19,13 +19,110 @@ import {
 
 const HUB_URL = process.env.MERLIN_HUB_URL || 'https://os.sundreamer.app';
 const HUB_CLIENT_ID = process.env.MERLIN_HUB_CLIENT_ID || 'APP-01';
-const HUB_CLIENT_SECRET = process.env.MERLIN_HUB_CLIENT_SECRET || 'merlin-family-secret-key-2026';
+const HUB_CLIENT_SECRET = (process.env.MERLIN_HUB_CLIENT_SECRET || '').trim();
+const ADMIN_PURGE_KEY = (
+  process.env.GHOSTI_ADMIN_PURGE_KEY ||
+  process.env.MERLIN_HUB_CLIENT_SECRET ||
+  ''
+).trim();
 const TOKEN_TTL_SEC = 60 * 60;
 const PHOTO_SEED_TTL_DAYS = 14;
 const PHOTO_SEED_TTL_MS = PHOTO_SEED_TTL_DAYS * 24 * 60 * 60 * 1000;
 const HUB_VERIFY_CACHE_TTL_MS = 45 * 1000;
 const verifiedHubUserCache = new Map();
 let lastAutoPurgeAtMs = 0;
+
+const ALLOWED_EXACT_ORIGINS = new Set([
+  'https://sundreamer.app',
+  'https://merlincode.com',
+  'https://localhost',
+  'capacitor://localhost',
+  'ionic://localhost',
+  'tauri://localhost',
+]);
+
+const ALLOWED_NETLIFY_SITES = new Set([
+  'ghosti',
+  'ghosti-app',
+  'ghostkey',
+  'ghostkey-app',
+  'sundreamer',
+  'merlin',
+  'senstalk',
+  'sensetalk',
+  'aggrofilter',
+  'vaulter',
+  'whateat',
+  'luminote',
+  'autonote',
+]);
+
+function isTrustedBridgeOrigin(rawOrigin) {
+  if (!rawOrigin) return false;
+  const origin = String(rawOrigin).trim().replace(/\/+$/, '');
+  const lower = origin.toLowerCase();
+  if (!lower || lower === 'null') return false;
+  if (ALLOWED_EXACT_ORIGINS.has(lower)) return true;
+
+  let parsed = null;
+  try {
+    parsed = new URL(lower);
+  } catch {
+    return false;
+  }
+  const scheme = parsed.protocol.replace(/:$/, '');
+  const host = (parsed.hostname || '').toLowerCase();
+  if (!host) return false;
+
+  if (scheme === 'capacitor' || scheme === 'ionic' || scheme === 'tauri') {
+    return host === 'localhost';
+  }
+  if ((scheme === 'http' || scheme === 'https') && (host === 'localhost' || host === '127.0.0.1')) {
+    return true;
+  }
+  if (scheme === 'https' && (host === 'sundreamer.app' || host.endsWith('.sundreamer.app'))) {
+    return true;
+  }
+  if (scheme === 'https' && (host === 'merlincode.com' || host.endsWith('.merlincode.com'))) {
+    return true;
+  }
+  if (scheme === 'https' && host.endsWith('.netlify.app')) {
+    const sub = host.slice(0, -'.netlify.app'.length);
+    const siteName = sub.includes('--') ? sub.split('--').pop() : sub;
+    if (siteName && ALLOWED_NETLIFY_SITES.has(siteName)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function buildCorsHeaders(req) {
+  const rawOrigin = req?.headers?.get?.('origin') || '';
+  const headers = {
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Admin-Purge-Key',
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    Vary: 'Origin',
+  };
+  if (rawOrigin && isTrustedBridgeOrigin(rawOrigin)) {
+    headers['Access-Control-Allow-Origin'] = String(rawOrigin).trim().replace(/\/+$/, '');
+  }
+  return headers;
+}
+
+function verifyAdminPurgeAuth(req) {
+  if (!ADMIN_PURGE_KEY || ADMIN_PURGE_KEY.length < 12) {
+    return false;
+  }
+  const headerKey = (req.headers.get('x-admin-purge-key') || '').trim();
+  const bearerRaw = (req.headers.get('authorization') || '').trim();
+  const bearerKey = bearerRaw.startsWith('Bearer ') ? bearerRaw.slice(7).trim() : '';
+  const candidate = headerKey || bearerKey;
+  if (!candidate) return false;
+  const expectedBuf = Buffer.from(ADMIN_PURGE_KEY, 'utf8');
+  const providedBuf = Buffer.from(candidate, 'utf8');
+  if (expectedBuf.length !== providedBuf.length) return false;
+  return crypto.timingSafeEqual(expectedBuf, providedBuf);
+}
 
 async function inspectOrPurgePhotoSeedBuffer(supabaseUrl, serviceKey, shouldPurge) {
   const nowMs = Date.now();
@@ -96,17 +193,11 @@ async function inspectOrPurgePhotoSeedBuffer(supabaseUrl, serviceKey, shouldPurg
   };
 }
 
-const CORS_HEADERS = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-  'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-};
-
-const json = (status, body) =>
+const makeJsonResponder = (req) => (status, body) =>
   new Response(JSON.stringify(body), {
     status,
     headers: {
-      ...CORS_HEADERS,
+      ...buildCorsHeaders(req),
       'Content-Type': 'application/json; charset=utf-8',
       'Cache-Control': 'no-store',
     },
@@ -170,8 +261,18 @@ function signAnonPublishableJwt(supabaseUrl, secret) {
 }
 
 export default async (req) => {
+  const json = makeJsonResponder(req);
+  const rawOriginHeader = (req.headers.get('origin') || '').trim();
+
   if (req.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: CORS_HEADERS });
+    if (rawOriginHeader && !isTrustedBridgeOrigin(rawOriginHeader)) {
+      return new Response(null, { status: 403 });
+    }
+    return new Response(null, { status: 204, headers: buildCorsHeaders(req) });
+  }
+
+  if (rawOriginHeader && !isTrustedBridgeOrigin(rawOriginHeader)) {
+    return json(403, { ok: false, reason: 'UNTRUSTED_ORIGIN' });
   }
 
   const supabaseUrl = process.env.VITE_SUPABASE_URL || process.env.SUPABASE_URL;
@@ -191,6 +292,13 @@ export default async (req) => {
     }
     const action = reqUrl?.searchParams.get('action') || '';
     if (action === 'photo_seed_ttl_status') {
+      if (!verifyAdminPurgeAuth(req)) {
+        return json(401, {
+          ok: false,
+          reason: 'ADMIN_AUTH_REQUIRED',
+          message: '관리자 시크릿 헤더(X-Admin-Purge-Key) 인증이 필요합니다.',
+        });
+      }
       if (!supabaseUrl || !serviceKey) {
         return json(500, { ok: false, reason: '서버 환경변수 미설정 (VITE_SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY)' });
       }
@@ -249,6 +357,14 @@ export default async (req) => {
   const auth = req.headers.get('authorization') || '';
   const hubToken = auth.startsWith('Bearer ') ? auth.slice(7).trim() : '';
   if (!hubToken) return json(401, { ok: false, reason: '허브 토큰 없음' });
+
+  if (!HUB_CLIENT_SECRET) {
+    return json(500, {
+      ok: false,
+      reason: 'SERVER_ENV_MISSING_MERLIN_HUB_CLIENT_SECRET',
+      message: '서버 환경변수(MERLIN_HUB_CLIENT_SECRET)가 설정되지 않았습니다.',
+    });
+  }
 
   // ① 허브 토큰 서버 검증 (브라우저가 보낸 userId/email은 신뢰하지 않으며, 동일 서버리스 인스턴스 내 45초 단기 검증 캐시로 외부 왕복 지연을 최소화)
   const tokenCacheKey = crypto.createHash('sha256').update(hubToken).digest('hex');

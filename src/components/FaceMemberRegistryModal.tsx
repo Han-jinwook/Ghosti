@@ -103,7 +103,7 @@ export const AutonomousCanvasFaceAvatar: React.FC<{
     <div
       className={`relative ${sizeClass} ${radiusClass} overflow-hidden bg-zinc-900 border-2 ${
         isHighlighted
-          ? 'border-primary-container shadow-[0_0_14px_rgba(32,247,219,0.28)]'
+          ? 'border-primary-container shadow-lg'
           : 'border-white/20'
       } shrink-0`}
     >
@@ -141,10 +141,10 @@ const ROOM_PERSONA_KEYS: Array<{
   label: string;
   shortLabel: string;
 }> = [
-  { key: '우리집', label: '🏠 우리집', shortLabel: '우리집' },
-  { key: '처가(친정)', label: '🏡 처가(친정)', shortLabel: '처가방' },
-  { key: '본가(친가)', label: '🏛️ 본가(친가)', shortLabel: '본가방' },
-  { key: 'club', label: '⛳ 동호·동창회방', shortLabel: '동호·동창' },
+  { key: '우리집', label: '우리집', shortLabel: '우리집' },
+  { key: '처가(친정)', label: '처가(친정)', shortLabel: '처가방' },
+  { key: '본가(친가)', label: '본가(친가)', shortLabel: '본가방' },
+  { key: 'club', label: '동호·동창회방', shortLabel: '동호·동창' },
 ];
 
 type PendingSingleCardItem =
@@ -266,13 +266,13 @@ const _LegacyFaceMemberInlineBarUnused: React.FC<{
     const displayName = personaInfo?.activePersona || cand.suggestedMemberName;
     const isCreator = Boolean(personaInfo?.isRoomCreator || cand.targetClusterId === 'face_member_5');
 
-    let headlinePrefix = '✨ 새로 찾은 이 분도';
+    let headlinePrefix = '새로 찾은 이 분도';
     if (cand.conditionShortKo?.includes('선글라스')) {
-      headlinePrefix = '😎 선글라스 낀 이 분도';
+      headlinePrefix = '선글라스 낀 이 분도';
     } else if (cand.conditionShortKo?.includes('노을')) {
-      headlinePrefix = '🌅 노을 보트 위 이 분도';
+      headlinePrefix = '노을 보트 위 이 분도';
     } else if (cand.conditionShortKo?.includes('측면') || cand.conditionShortKo?.includes('야외')) {
-      headlinePrefix = '🏕️ 캠핑장 야외 컷 이 분도';
+      headlinePrefix = '캠핑장 야외 컷 이 분도';
     }
 
     pendingItems.push({
@@ -287,7 +287,7 @@ const _LegacyFaceMemberInlineBarUnused: React.FC<{
       isRoomCreatorTarget: isCreator,
       subText: `${cand.contributorLabel} · 등록 시 전 멤버 폰 사진 ${
         cand.rescuedHostPhotoCount + cand.rescuedMemberPhoneCount
-      }장 1초 만에 자동 매칭`,
+      }장 자동 매칭`,
     });
   }
 
@@ -325,7 +325,7 @@ const _LegacyFaceMemberInlineBarUnused: React.FC<{
       const cleanName = newPersonDraft.trim();
       if (!cleanName) return; // 이름 없이 더미로 등록하지 않음
       if (isRelationshipOrRoleTerm(cleanName)) {
-        const msg = `⚠️ '${cleanName}' 같은 관계·호칭 대신 실제 이름(실명, 예: 홍길동·김철수)으로 입력해 주세요!`;
+        const msg = `'${cleanName}' 같은 관계·호칭 대신 실제 이름(실명, 예: 홍길동·김철수)으로 입력해 주세요!`;
         setRealNameError(msg);
         useSaySeeStore.setState({ lastQuarantineToast: msg });
         return;
@@ -351,7 +351,7 @@ const _LegacyFaceMemberInlineBarUnused: React.FC<{
           onClick={() => setIsCalloutExpanded(true)}
           className="flex items-center gap-2.5 min-w-0 cursor-pointer flex-1"
         >
-          <span className="text-[14px] shrink-0">💡</span>
+          <span className="text-[14px] shrink-0"></span>
           <span className="font-label-sm text-[12.5px] text-slate-800 dark:text-zinc-300 truncate">
             새 얼굴 확인 대기 <strong className="text-amber-700 dark:text-amber-300 font-extrabold">{remainingCount}건</strong>이 있습니다
             {currentItem.kind === 'candidate'
@@ -368,7 +368,7 @@ const _LegacyFaceMemberInlineBarUnused: React.FC<{
               onClick={() => void runGlobalSwarmRetroScanAll()}
               className="px-2.5 py-1 rounded-lg bg-amber-500/20 hover:bg-amber-500/30 border border-amber-500/40 text-amber-800 dark:text-amber-300 font-label-sm text-[11px] font-extrabold transition-colors cursor-pointer"
             >
-              ⚡ 한 번에 등록
+              한 번에 등록
             </button>
           )}
           <button
@@ -388,8 +388,8 @@ const _LegacyFaceMemberInlineBarUnused: React.FC<{
       {/* 상단 슬림 상태 바: 👑 방장 누락분 뒷정리 & 남은 카드 수 */}
       <div className="flex flex-wrap items-center justify-between gap-2 pb-3 mb-3.5 border-b border-white/10">
         <div className="flex items-center gap-2 flex-wrap">
-          <span className="px-2.5 py-0.5 rounded-md bg-amber-400 text-zinc-950 font-label-sm text-[11px] font-extrabold">
-            👑 방장 누락분 뒷정리 · 남은 확인 {remainingCount}건
+          <span className="px-2.5 py-0.5 rounded-md bg-slate-900 text-white font-label-sm text-[11px] font-extrabold">
+            방장 누락분 뒷정리 · 남은 확인 {remainingCount}건
           </span>
           <span className="font-body-sm text-[12px] text-zinc-400">
             1장씩 확인 후 완료되면 자동으로 닫힙니다
@@ -404,7 +404,7 @@ const _LegacyFaceMemberInlineBarUnused: React.FC<{
               onClick={() => void runGlobalSwarmRetroScanAll()}
               className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-amber-400/40 text-amber-300 font-label-sm text-[11px] font-bold transition-colors cursor-pointer"
             >
-              ⚡ {remainingCount}건 한 번에 등록
+              {remainingCount}건 한 번에 등록
             </button>
           )}
           <button
@@ -412,7 +412,7 @@ const _LegacyFaceMemberInlineBarUnused: React.FC<{
             onClick={() => setShowFaceRegistryModal(true)}
             className="px-2.5 py-1 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-white/10 text-zinc-300 font-label-sm text-[11px] font-medium cursor-pointer"
           >
-            👑 방장 총점검
+            방장 총점검
           </button>
           <button
             type="button"
@@ -447,7 +447,7 @@ const _LegacyFaceMemberInlineBarUnused: React.FC<{
                 <h3 className="font-headline-sm text-[16px] sm:text-[18px] text-white font-extrabold leading-snug">
                   {currentItem.headlinePrefix}{' '}
                   <span className="text-primary-container">
-                    [{currentItem.isRoomCreatorTarget ? '👑 ' : ''}
+                    [{currentItem.isRoomCreatorTarget ? '' : ''}
                     {currentItem.targetDisplayName}]
                   </span>
                   님 맞죠?
@@ -459,7 +459,7 @@ const _LegacyFaceMemberInlineBarUnused: React.FC<{
             ) : (
               <>
                 <h3 className="font-headline-sm text-[16px] sm:text-[18px] text-white font-extrabold leading-snug">
-                  👋 새로 등장한 이 분의 실제 이름을 적어주세요
+                  새로 등장한 이 분의 실제 이름을 적어주세요
                 </h3>
                 <p className="font-body-sm text-[12px] text-zinc-400 truncate">
                   {currentItem.subText}
@@ -475,7 +475,7 @@ const _LegacyFaceMemberInlineBarUnused: React.FC<{
                         setNewPersonDraft(val);
                         if (isRelationshipOrRoleTerm(val)) {
                           setRealNameError(
-                            `⚠️ '${val.trim()}' 같은 관계·호칭 대신 실제 이름(실명, 예: 홍길동·김철수)으로 입력해 주세요!`
+                            `'${val.trim()}' 같은 관계·호칭 대신 실제 이름(실명, 예: 홍길동·김철수)으로 입력해 주세요!`
                           );
                         } else {
                           setRealNameError(null);
@@ -528,7 +528,7 @@ const _LegacyFaceMemberInlineBarUnused: React.FC<{
             type="button"
             disabled={retroScanRunning || (currentItem.kind !== 'candidate' && !newPersonDraft.trim())}
             onClick={() => void handleConfirmCurrent()}
-            className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 disabled:opacity-50 text-zinc-950 font-label-md text-[13px] font-extrabold shadow-[0_0_16px_rgba(32,247,219,0.25)] transition-all"
+            className="px-4 py-2.5 rounded-xl bg-primary-container hover:opacity-95 disabled:opacity-50 text-zinc-950 font-label-md text-[13px] font-extrabold shadow-lg transition-all"
           >
             {retroScanRunning ? '등록 중...' : '⭕ 맞아요! 등록'}
           </button>
@@ -541,7 +541,7 @@ const _LegacyFaceMemberInlineBarUnused: React.FC<{
 /**
  * [귀신같이 여권(Face Passport) · 인물별 독립 타임라인 바구니 · 3단 집단지성 총점검 모달]
  * 1. 인물별 독립 타임라인 바구니: 방(Room)이 아닌 각 인물(Person ID)의 최초 생성 연도(2026년 vs 2029년 신규 합류)에 귀속 + 미래 바구니(2027~2036 / 2027~2031) 자동 확장
- * 2. 무질문 0.1초 자동 장착: "시드를 가져올까요?" 질문 팝업 제로 — 이메일 ID 기반 만국공통 [🛂 귀신같이 여권 자동 연동됨]
+ * 2. 무질문 자동 장착: "시드를 가져올까요?" 질문 팝업 제로 — 이메일 ID 기반 만국공통 [🛂 귀신같이 여권 자동 연동됨]
  * 3. 방별 이름(Room Persona) 독립 매핑: 시드(768차원 벡터 + 연도 바구니)는 100% 공유하며 타인은 실명(백은숙·한치우·한민수)으로 통일하고 나(본인)만 별명+실명 세트(멀린 ↔ 한진욱)로 작동
  * 4. 크로스-라운지 집단지성 진화: 타 방(예: 10대 학생방)에서 채워진 베스트 컷이 이메일 여권을 통해 우리집·처가·본가방에 자동 전파
  */
@@ -576,7 +576,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
     const cleanName = rawName.trim();
     if (!cleanName) return;
     if (isRelationshipOrRoleTerm(cleanName)) {
-      const msg = `⚠️ '${cleanName}' 같은 관계·호칭 대신 실제 이름(실명, 예: 홍길동·김철수)으로 입력해 주세요!`;
+      const msg = `'${cleanName}' 같은 관계·호칭 대신 실제 이름(실명, 예: 홍길동·김철수)으로 입력해 주세요!`;
       setModalNameErrors((prev) => ({ ...prev, [clusterId]: msg }));
       useSaySeeStore.setState({ lastQuarantineToast: msg });
       return;
@@ -637,10 +637,10 @@ export const FaceMemberRegistryModal: React.FC = () => {
           <div className="flex flex-col gap-0.5 min-w-0">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="px-2 py-0.5 rounded bg-emerald-500/20 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11px] font-extrabold">
-                🛂 귀신같이 얼굴 여권 관리 · 👑 방장 총점검 (v{globalSeedVersion})
+                귀신같이 얼굴 여권 관리 · 방장 총점검 (v{globalSeedVersion})
               </span>
               <h2 className="font-headline-sm text-[17px] md:text-[18px] text-white font-extrabold">
-                귀신같이 얼굴 여권 등록 &amp; 👑 방장 누락분 총점검 센터
+                귀신같이 얼굴 여권 등록 &amp; 방장 누락분 총점검 센터
               </h2>
             </div>
             <p className="font-body-sm text-[12px] text-zinc-400">
@@ -685,16 +685,16 @@ export const FaceMemberRegistryModal: React.FC = () => {
                 >
                   {retroScanRunning
                     ? '⏳ 여권 사진 자동 반영 중...'
-                    : '⚡ 다른 방 새 얼굴 사진 ➔ 모든 방에 동시 반영'}
+                    : '다른 방 새 얼굴 사진 모든 방에 동시 반영'}
                 </button>
               ) : (
                 <button
                   type="button"
                   data-allow-secretary-jump="true"
                   onClick={openEngineConnectGuide}
-                  className="px-3.5 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[11.5px] font-extrabold shrink-0 shadow cursor-pointer"
+                  className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[11.5px] font-extrabold shrink-0 shadow cursor-pointer"
                 >
-                  👻 먼저 &apos;귀신비서&apos;와 대화하고 실제 인물 등록하기 ➔
+                  먼저 &apos;귀신비서&apos;와 대화하고 실제 인물 등록하기 
                 </button>
               )}
             </div>
@@ -702,7 +702,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
             {!isEngineReady && visibleClusters.length === 0 ? (
               <div className="p-4 rounded-xl bg-zinc-950/90 border border-amber-400/30 text-zinc-300 font-body-sm text-[12.5px] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <span>
-                  👀 지금은 구경 모드예요! 먼저 첫 번째 메뉴인 <strong>『👻 귀신비서』</strong>와 대화를 나누고 엔진을 켜주시면, 내 진짜 사진 속 가족·모임 인물을 조용히 찾아 여권에 등록해 드립니다.
+                  지금은 구경 모드예요! 먼저 첫 번째 메뉴인 <strong>『귀신비서』</strong>와 대화를 나누고 엔진을 켜주시면, 내 진짜 사진 속 가족·모임 인물을 조용히 찾아 여권에 등록해 드립니다.
                 </span>
               </div>
             ) : (
@@ -764,7 +764,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                         <div className="flex flex-col min-w-0">
                           <div className="flex items-center gap-1.5 flex-wrap">
                             <span className="px-1.5 py-0.5 rounded bg-emerald-500/15 border border-emerald-400/35 text-emerald-300 font-mono text-[9.5px] font-extrabold">
-                              🛂 {c.passportEmail || 'passport@ghosti.ai'}
+                              {c.passportEmail || 'passport@ghosti.ai'}
                             </span>
                             {bucket && (
                               <span
@@ -779,7 +779,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                             )}
                           </div>
                           <span className="font-label-md text-[13.5px] text-white font-bold mt-1 truncate">
-                            기본 여권명: {isCreator ? '👑 ' : ''}{c.registeredName || `${c.roleHintKo} (미등록)`} · 사진 {c.matchedPhotoCount}장 / 영상 {c.matchedVideoSegmentCount}구간
+                            기본 여권명: {isCreator ? '' : ''}{c.registeredName || `${c.roleHintKo} (미등록)`} · 사진 {c.matchedPhotoCount}장 / 영상 {c.matchedVideoSegmentCount}구간
                           </span>
                           {c.crossLoungeEvolutionNote && (
                             <span className="font-body-sm text-[10.5px] text-emerald-300/90 leading-snug mt-0.5">
@@ -819,14 +819,14 @@ export const FaceMemberRegistryModal: React.FC = () => {
                                 key={rk.key}
                                 type="button"
                                 onClick={() => void handleTriggerRealNameSearch(sampleQ, 'gallery')}
-                                title={`[${rk.label}] 방에서 "${sampleQ}" 검색 (동일 얼굴 여권으로 1초 만에 찾기)`}
+                                title={`[${rk.label}] 방에서 "${sampleQ}" 검색 (동일 얼굴 여권으로 찾기)`}
                                 className="px-2 py-0.5 rounded bg-zinc-950 hover:bg-zinc-800 border border-white/10 text-zinc-200 font-mono text-[10px] flex items-center gap-1 transition-colors"
                               >
                                 <span className="text-zinc-400">{rk.shortLabel}:</span>
                                 <strong className="text-primary-container">
-                                  {isCreator ? `👑 ${pName}` : pName}
+                                  {isCreator ? `${pName}` : pName}
                                 </strong>
-                                <span className="text-[9px] text-zinc-500">🔍</span>
+                                <span className="text-[9px] text-zinc-500"></span>
                               </button>
                             );
                           })}
@@ -849,7 +849,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                             if (isRelationshipOrRoleTerm(val)) {
                               setModalNameErrors((prev) => ({
                                 ...prev,
-                                [c.clusterId]: `⚠️ '${val.trim()}' 같은 관계·호칭 대신 실제 이름(실명, 예: 홍길동·김철수)으로 입력해 주세요!`,
+                                [c.clusterId]: `'${val.trim()}' 같은 관계·호칭 대신 실제 이름(실명, 예: 홍길동·김철수)으로 입력해 주세요!`,
                               }));
                             } else {
                               setModalNameErrors((prev) => {
@@ -888,7 +888,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                             }}
                             className="h-8 px-2.5 rounded-lg bg-zinc-900 hover:bg-zinc-800 border border-amber-400/35 text-amber-300 font-label-sm text-[10.5px] font-bold shrink-0"
                           >
-                            처가방 ‘{isCreator ? '👑 ' : ''}{c.roomPersonas['처가(친정)']}’ 검색
+                            처가방 ‘{isCreator ? '' : ''}{c.roomPersonas['처가(친정)']}’ 검색
                           </button>
                         )}
                       </div>
@@ -911,10 +911,10 @@ export const FaceMemberRegistryModal: React.FC = () => {
               <div>
                 <div className="flex items-center gap-2">
                   <span className="px-2 py-0.5 rounded bg-primary-container/20 text-primary-container font-label-sm text-[10.5px] font-extrabold">
-                    ✨ AI 얼굴 자동 찾기 도우미
+                    AI 얼굴 자동 찾기 도우미
                   </span>
                   <h3 className="font-label-md text-[14px] text-white font-bold">
-                    멤버가 사진을 올릴 때 뜨는 ‘원터치 AI 힌트’ (건너뛰어도 👑 방장 대기열에 100% 보관)
+                    멤버가 사진을 올릴 때 뜨는 ‘원터치 AI 힌트’ (건너뛰어도 방장 대기열에 100% 보관)
                   </h3>
                 </div>
                 <p className="font-body-sm text-[12px] text-zinc-400 mt-0.5">
@@ -928,7 +928,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                   onClick={() => passAllSwarmCandidatesToHostQueue()}
                   className="px-3 py-1.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-zinc-200 font-label-sm text-[11.5px] font-bold shrink-0"
                 >
-                  ⚡ 확인 건너뛰고 사진만 바로 올리기 (방장이 나중에 정리)
+                  확인 건너뛰고 사진만 바로 올리기 (방장이 나중에 정리)
                 </button>
               )}
             </div>
@@ -936,13 +936,13 @@ export const FaceMemberRegistryModal: React.FC = () => {
             {!isEngineReady && visibleClusters.length === 0 ? (
               <div className="p-4 rounded-xl bg-zinc-950/90 border border-amber-400/30 text-zinc-300 font-body-sm text-[12.5px] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <span>
-                  💡 현재 엔진 미연결(체험 모드) 상태입니다. 내 PC 엔진을 연결하면 실제 사진 속 가족·모임 인물을 자동으로 찾아 여권에 등록해 드립니다.
+                  현재 엔진 미연결(체험 모드) 상태입니다. 내 PC 엔진을 연결하면 실제 사진 속 가족·모임 인물을 자동으로 찾아 여권에 등록해 드립니다.
                 </span>
               </div>
             ) : memberActiveHints.length === 0 ? (
               <div className="p-3 rounded-xl bg-zinc-950/80 border border-white/10 text-zinc-300 font-body-sm text-[12px] flex items-center justify-between">
                 <span>
-                  ✓ 현재 멤버 업로드 화면의 AI 힌트가 모두 처리되었습니다. (건너뛴 항목은 아래 👑 방장 누락분 뒷정리 대기열로 안전하게 보관되었습니다.)
+                  ✓ 현재 멤버 업로드 화면의 AI 힌트가 모두 처리되었습니다. (건너뛴 항목은 아래 방장 누락분 뒷정리 대기열로 안전하게 보관되었습니다.)
                 </span>
               </div>
             ) : (
@@ -967,9 +967,9 @@ export const FaceMemberRegistryModal: React.FC = () => {
                           {cand.contributorLabel}
                         </span>
                         <p className="font-label-sm text-[12.5px] text-white font-bold leading-snug mt-0.5">
-                          🎯 방금 올린 사진에서{' '}
+                          방금 올린 사진에서{' '}
                           <span className="text-primary-container">
-                            {cand.targetClusterId === 'face_member_5' ? '👑 ' : ''}
+                            {cand.targetClusterId === 'face_member_5' ? '' : ''}
                             {cand.suggestedMemberName}
                           </span>
                           님의 새로운 연도/각도(<span className="text-amber-300">{cand.conditionBadgeKo}</span>) 베스트 컷을 찾았어요!
@@ -1005,15 +1005,15 @@ export const FaceMemberRegistryModal: React.FC = () => {
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div>
                 <div className="flex items-center gap-2">
-                  <span className="px-2 py-0.5 rounded bg-amber-400 text-zinc-950 font-label-sm text-[10.5px] font-extrabold">
-                    👑 방장 누락분 뒷정리 &amp; 총점검
+                  <span className="px-2 py-0.5 rounded bg-slate-900 text-white font-label-sm text-[10.5px] font-extrabold">
+                    방장 누락분 뒷정리 &amp; 총점검
                   </span>
                   <h3 className="font-label-md text-[14px] text-white font-bold">
-                    확인을 건너뛴 사진 속 얼굴 &amp; 누락 연도·각도 👑 방장 총점검
+                    확인을 건너뛴 사진 속 얼굴 &amp; 누락 연도·각도 방장 총점검
                   </h3>
                 </div>
                 <p className="font-body-sm text-[12px] text-zinc-400 mt-0.5">
-                  멤버들이 확인을 건너뛰고 바로 올린 사진 속 얼굴 후보까지 빠짐없이 이곳에 보관됩니다. 👑 방장이 <strong>[누락분 일괄 등록]</strong> 한 번만 누르면 귀신같이 얼굴 여권에 100% 추가됩니다.
+                  멤버들이 확인을 건너뛰고 바로 올린 사진 속 얼굴 후보까지 빠짐없이 이곳에 보관됩니다. 방장이 <strong>[누락분 일괄 등록]</strong> 한 번만 누르면 귀신같이 얼굴 여권에 100% 추가됩니다.
                 </p>
               </div>
 
@@ -1025,18 +1025,18 @@ export const FaceMemberRegistryModal: React.FC = () => {
                   className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 disabled:opacity-50 text-zinc-950 font-label-sm text-[12px] font-extrabold shrink-0 shadow"
                 >
                   {retroScanRunning
-                    ? '⏳ 전 멤버 사진 1초 만에 다시 찾는 중...'
+                    ? '⏳ 전 멤버 사진 다시 찾는 중...'
                     : hostCleanupItems.length > 0
-                    ? `✓ 👑 방장 누락분 ${hostCleanupItems.length}건 일괄 등록`
+                    ? `✓ 방장 누락분 ${hostCleanupItems.length}건 일괄 등록`
                     : '✓ 전 멤버 얼굴 여권 100% 반영됨 (사진 다시 찾기)'}
                 </button>
               ) : (
                 <button
                   type="button"
                   onClick={openEngineConnectGuide}
-                  className="px-4 py-2 rounded-xl bg-amber-400 hover:bg-amber-300 text-zinc-950 font-label-sm text-[12px] font-extrabold shrink-0 shadow cursor-pointer"
+                  className="px-4 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[12px] font-extrabold shrink-0 shadow cursor-pointer"
                 >
-                  🔌 엔진 연결 후 내 PC 사진에서 인물 자동 찾기
+                  엔진 연결 후 내 PC 사진에서 인물 자동 찾기
                 </button>
               )}
             </div>
@@ -1044,7 +1044,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
             {!isEngineReady && visibleClusters.length === 0 ? (
               <div className="p-4 rounded-xl bg-zinc-950/90 border border-amber-400/30 text-zinc-300 font-body-sm text-[12.5px] flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <span>
-                  💡 현재 엔진 미연결(체험 모드) 상태입니다. 내 PC 엔진을 연결하면 실제 사진 속 가족·모임 인물을 자동으로 찾아 여권에 등록해 드립니다.
+                  현재 엔진 미연결(체험 모드) 상태입니다. 내 PC 엔진을 연결하면 실제 사진 속 가족·모임 인물을 자동으로 찾아 여권에 등록해 드립니다.
                 </span>
               </div>
             ) : (
@@ -1073,7 +1073,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                       <div className="flex flex-col min-w-0">
                         <div className="flex items-center gap-1 flex-wrap">
                           <span className="font-label-sm text-[12px] text-white font-bold">
-                            {cand.targetClusterId === 'face_member_5' ? '👑 ' : ''}
+                            {cand.targetClusterId === 'face_member_5' ? '' : ''}
                             {cand.suggestedMemberName}
                           </span>
                           <span className="px-1.5 py-0.2 rounded bg-zinc-800 text-amber-300 font-mono text-[9.5px] font-bold">
@@ -1136,7 +1136,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
               )
             ) : (
               <span className="font-body-sm text-[11.5px] text-amber-300 font-bold">
-                💡 실제 PC 사진에서 가족·모임 인물을 자동 등록하려면 엔진을 연결해 주세요
+                실제 PC 사진에서 가족·모임 인물을 자동 등록하려면 엔진을 연결해 주세요
               </span>
             )}
           </div>
@@ -1162,7 +1162,7 @@ export const FaceMemberRegistryModal: React.FC = () => {
                 onClick={openEngineConnectGuide}
                 className="px-5 py-2 rounded-xl bg-primary-container text-zinc-950 font-label-md text-[13px] font-extrabold cursor-pointer shadow"
               >
-                ⚡ 엔진 연결하고 실명 검색 시작
+                엔진 연결하고 실명 검색 시작
               </button>
             </div>
           )}
@@ -1237,7 +1237,7 @@ export const PassportDoorplateStyleModal: React.FC = () => {
       >
         {/* 헤더 — [D-35] 유저 화면 용어는 '여권' 하나만 */}
         <div className="px-4 sm:px-5 py-3.5 border-b border-white/10 bg-zinc-950/90 flex items-center justify-between gap-3">
-          <h2 className="text-[17px] font-extrabold text-white">🛂 여권</h2>
+          <h2 className="text-[17px] font-extrabold text-white">여권</h2>
           <button
             type="button"
             onClick={close}
@@ -1307,7 +1307,7 @@ export const PassportDoorplateStyleModal: React.FC = () => {
                           : 'w-6 bg-zinc-900/90 border-white/15 text-zinc-400 hover:text-white'
                       }`}
                     >
-                      {confirming ? '지우기' : '🗑'}
+                      {confirming ? '지우기' : ''}
                     </button>
                   </div>
                 );

@@ -88,7 +88,7 @@ function dispatchPhotoSyncToolbarStatus(detail: PhotoSyncToolbarStatusDetail): v
 /**
  * 📡 라운지 상단 『고스트 캐스트 & 라이브 싱크』 2대 알짜 무기 컨트롤 바
  * - [무기 1] 💻 모니터로 크게 보기: 스마트폰 무선 리모컨 ➔ 내 PC/노트북 모니터 0.5초 전체화면 클린 팝업 (카톡·사생활 알림 노출 0%, 화질 저하 0%)
- * - [무기 2] 📡 다 같이 보기 (앨범 싱크): 사진 공유방에서 발표자가 넘기거나 확대한 사진 화면이 방 멤버 전원에게 0.1초 만에 똑같이 동기화 (발열·트래픽 부담 0%)
+ * - [무기 2] 📡 다 같이 보기 (앨범 싱크): 사진 공유방에서 발표자가 넘기거나 확대한 사진 화면이 방 멤버 전원에게 똑같이 동기화 (발열·트래픽 부담 0%)
  */
 export const GhostCastLiveToolbar: React.FC<{ loungeLabel?: string }> = () => {
   const { activeLoungeType } = useSaySeeStore();
@@ -120,7 +120,7 @@ export const GhostCastLiveToolbar: React.FC<{ loungeLabel?: string }> = () => {
           onClick={() => dispatchGhostCastLiveCommand({ action: 'OPEN_MONITOR_CAST' })}
           className="px-3 py-1 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-cyan-400/40 text-cyan-300 text-[11.5px] font-bold flex items-center gap-1.5 transition-all cursor-pointer"
         >
-          <span>💻 모니터로 크게 보기</span>
+          <span>모니터로 크게 보기</span>
         </button>
       </div>
     );
@@ -129,11 +129,11 @@ export const GhostCastLiveToolbar: React.FC<{ loungeLabel?: string }> = () => {
   const photoSyncActive = syncToolbarStatus.active;
   const syncButtonLabel = photoSyncActive
     ? syncToolbarStatus.isPresenter
-      ? '📡 다 같이 보기 (싱크 ON · 리드 중)'
-      : '📡 다 같이 보기 (싱크 ON · 참여 중)'
+      ? '다 같이 보기 (싱크 ON · 리드 중)'
+      : '다 같이 보기 (싱크 ON · 참여 중)'
     : syncToolbarStatus.remoteOngoing
-    ? `📡 다 같이 보기 (${syncToolbarStatus.presenterName || '멤버'}님 진행 중 · 참여)`
-    : '📡 다 같이 보기';
+    ? `다 같이 보기 (${syncToolbarStatus.presenterName || '멤버'}님 진행 중 · 참여)`
+    : '다 같이 보기';
 
   // 2) '사진 공유방(패밀리 / 동호회·동창회)'에서는 [💻 모니터로 크게 보기] + [📡 다 같이 보기] 버튼만 깔끔하게 노출
   return (
@@ -143,7 +143,7 @@ export const GhostCastLiveToolbar: React.FC<{ loungeLabel?: string }> = () => {
         onClick={() => dispatchGhostCastLiveCommand({ action: 'OPEN_MONITOR_CAST' })}
         className="px-3 py-1 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-cyan-400/40 text-cyan-300 text-[11.5px] font-bold flex items-center gap-1 transition-all cursor-pointer"
       >
-        <span>💻 모니터로 크게 보기</span>
+        <span>모니터로 크게 보기</span>
       </button>
 
       <button
@@ -151,7 +151,7 @@ export const GhostCastLiveToolbar: React.FC<{ loungeLabel?: string }> = () => {
         onClick={() => dispatchGhostCastLiveCommand({ action: 'TOGGLE_PHOTO_SYNC' })}
         className={`px-3 py-1 rounded-xl border text-[11.5px] font-bold flex items-center gap-1 transition-all cursor-pointer ${
           photoSyncActive
-            ? 'bg-emerald-400 text-zinc-950 border-emerald-300'
+            ? 'bg-slate-900 text-white border-emerald-300'
             : syncToolbarStatus.remoteOngoing
             ? 'bg-emerald-500/20 hover:bg-emerald-500/30 border-emerald-400 text-emerald-200'
             : 'bg-zinc-900 hover:bg-zinc-800 border-emerald-400/40 text-emerald-300'
@@ -396,8 +396,8 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
         if (ok) {
           useSaySeeStore.setState({
             lastQuarantineToast: alreadyPaired
-              ? `✅ 이미 연결된 기기입니다! 최신 연결 상태를 확인했습니다 (연결된 내 기기 ${deviceCount}대)`
-              : `🎉 QR·6자리 보안 연결 완료! 내 PC와 스마트폰이 직결되었습니다 (연결된 내 기기 ${deviceCount}대)`,
+              ? `이미 연결된 기기입니다! 최신 연결 상태를 확인했습니다 (연결된 내 기기 ${deviceCount}대)`
+              : `QR·6자리 보안 연결 완료! 내 PC와 스마트폰이 직결되었습니다 (연결된 내 기기 ${deviceCount}대)`,
           });
           if (typeof window !== 'undefined') {
             window.dispatchEvent(new CustomEvent('ghosti_open_device_sync_section'));
@@ -406,28 +406,28 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
           useSaySeeStore.setState({
             lastQuarantineToast:
               reason === 'AUTH_REQUIRED'
-                ? '🔑 먼저 PC와 같은 이메일로 로그인하면 QR 연결이 바로 완료됩니다.'
-                : '⚠️ QR 연결 번호가 만료되었거나 다른 계정 번호입니다. PC 화면의 최신 QR·6자리 번호를 다시 스캔해 주세요.',
+                ? '먼저 PC와 같은 이메일로 로그인하면 QR 연결이 바로 완료됩니다.'
+                : 'QR 연결 번호가 만료되었거나 다른 계정 번호입니다. PC 화면의 최신 QR·6자리 번호를 다시 스캔해 주세요.',
           });
         }
       },
       onSelfRevoked: () => {
         useSaySeeStore.setState({
           lastQuarantineToast:
-            '🔌 다른 기기에서 이 기기의 연결이 해제되었습니다. 다시 연결하려면 QR 스캔 또는 [이 기기 다시 연결]을 눌러 주세요.',
+            '다른 기기에서 이 기기의 연결이 해제되었습니다. 다시 연결하려면 QR 스캔 또는 [이 기기 다시 연결]을 눌러 주세요.',
         });
       },
       onTeleportReceived: ({ fileName, sourceDevice }) => {
         useSaySeeStore.setState({
-          lastQuarantineToast: `⚡ [${sourceDevice} ➔ PC전송 도착] '${fileName}' 글자·정보가 내 PC 클립보드에 장전되었습니다! Ctrl+V를 눌러 바로 붙여넣기 하세요.`,
+          lastQuarantineToast: `[${sourceDevice} PC전송 도착] '${fileName}' 글자·정보가 내 PC 클립보드에 장전되었습니다! Ctrl+V를 눌러 바로 붙여넣기 하세요.`,
         });
       },
       onIncomingClip: (clip, meta) => {
         setDeviceIntegrationSnapshot({ incomingClip: clip });
         useSaySeeStore.setState({
           lastQuarantineToast: meta?.isLocalAutoCapture
-            ? '📋 방금 복사한 텍스트가 연결된 내 기기로 자동 암호화 전송되었습니다!'
-            : `📋 [${clip.senderName}]에서 암호화 클립보드가 도착했습니다! 바로 붙여넣기 하세요.`,
+            ? '방금 복사한 텍스트가 연결된 내 기기로 자동 암호화 전송되었습니다!'
+            : `[${clip.senderName}]에서 암호화 클립보드가 도착했습니다! 바로 붙여넣기 하세요.`,
         });
       },
       onClipsSynced: (clips) => {
@@ -577,7 +577,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
               active: false,
               updatedAt: pkt.updatedAt || Date.now(),
             }));
-            showToast(`📡 ${pkt.presenterName}님이 다 같이 보기를 종료했습니다.`);
+            showToast(`${pkt.presenterName}님이 다 같이 보기를 종료했습니다.`);
           }
           return;
         }
@@ -637,7 +637,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
         };
         setPhotoSyncState(nextState);
         if (wasInactive) {
-          showToast(`📡 ${nextState.presenterName}님이 [다 같이 보기]를 시작해 화면이 자동 동기화되었습니다!`);
+          showToast(`${nextState.presenterName}님이 [다 같이 보기]를 시작해 화면이 자동 동기화되었습니다!`);
         }
       },
     });
@@ -738,11 +738,11 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
 
       if (d.action === 'OPEN_MONITOR_CAST') {
         if (activeLoungeType !== 'personal' && !isAuthenticatedLiveSyncMember) {
-          triggerGuestJoinWall('💻 모니터로 크게 보기 (스마트폰 무선 리모컨 · 전체화면)');
+          triggerGuestJoinWall('모니터로 크게 보기 (스마트폰 무선 리모컨 · 전체화면)');
           return;
         }
         if (activePhotos.length === 0) {
-          showToast('📸 현재 방에 크게 볼 사진이 아직 없습니다. 먼저 사진을 추가해 주세요.');
+          showToast('현재 방에 크게 볼 사진이 아직 없습니다. 먼저 사진을 추가해 주세요.');
           return;
         }
         let idx = 0;
@@ -776,7 +776,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
         emitRemoteCastPacket(next, null);
       } else if (d.action === 'TOGGLE_PHOTO_SYNC') {
         if (!isAuthenticatedLiveSyncMember) {
-          triggerGuestJoinWall('📡 다 같이 보기 (가족·멤버와 실시간 사진 함께 보기)');
+          triggerGuestJoinWall('다 같이 보기 (가족·멤버와 실시간 사진 함께 보기)');
           return;
         }
         const prev = photoSyncStateRef.current;
@@ -810,7 +810,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
           }
 
           if (activePhotos.length === 0) {
-            showToast('📸 현재 공유방에 다 같이 볼 사진이 아직 없습니다. 먼저 사진을 추가해 주세요.');
+            showToast('현재 공유방에 다 같이 볼 사진이 아직 없습니다. 먼저 사진을 추가해 주세요.');
             return;
           }
           const safeNextIdx = prev.photoIndex >= activePhotos.length ? 0 : prev.photoIndex;
@@ -845,7 +845,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
             setRemoteOngoingSession(null);
             publishLivePhotoSyncState(next, null);
           } else {
-            showToast('📡 다 같이 보기 참여를 잠시 닫았습니다. 상단 버튼으로 언제든 다시 합류할 수 있어요.');
+            showToast('다 같이 보기 참여를 잠시 닫았습니다. 상단 버튼으로 언제든 다시 합류할 수 있어요.');
           }
         }
       }
@@ -887,7 +887,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
 
     if (patch.active === false && !isCurrentlyPresenter) {
       setPhotoSyncState({ ...prev, active: false, updatedAt: Date.now() });
-      showToast('📡 다 같이 보기 참여를 닫았습니다. 발표자가 계속 진행 중이면 상단 버튼으로 다시 합류할 수 있어요.');
+      showToast('다 같이 보기 참여를 닫았습니다. 발표자가 계속 진행 중이면 상단 버튼으로 다시 합류할 수 있어요.');
       return;
     }
 
@@ -999,19 +999,19 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
   );
 
   const roomDisplayTitle = activeJoinedRoomMeta
-    ? `💌 ${activeJoinedRoomMeta.masterNickname} · ${activeJoinedRoomMeta.roomTitle}`
+    ? `${activeJoinedRoomMeta.masterNickname} · ${activeJoinedRoomMeta.roomTitle}`
     : activeLoungeType === 'family'
-    ? `👨‍👩‍👧‍👦 패밀리 [${activeFamilyRoom}]`
+    ? `패밀리 [${activeFamilyRoom}]`
     : activeLoungeType === 'club'
-    ? '⛰️ 동호회·모임'
+    ? '동호회·모임'
     : activeLoungeType === 'student'
-    ? `🎓 동창회 [${alumniBannerTitle || alumniSchoolName || '동창회'}]`
-    : '👑 내 기기 통합 (폰·PC·노트북)';
+    ? `동창회 [${alumniBannerTitle || alumniSchoolName || '동창회'}]`
+    : '내 기기 통합 (폰·PC·노트북)';
 
   return (
     <>
       {/* ====================================================================
-          무기 1: [💻 모니터로 크게 보기] — PC/노트북 모니터 전체화면 클린 뷰어 + 내 폰 무선 리모컨
+          무기 1: [모니터로 크게 보기] — PC/노트북 모니터 전체화면 클린 뷰어 + 내 폰 무선 리모컨
       ==================================================================== */}
       {monitorCastOpen && currentCastPhoto && (
         <div
@@ -1023,17 +1023,17 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-6xl mx-auto my-auto rounded-3xl bg-zinc-950 border-2 border-cyan-400/50 shadow-[0_0_80px_rgba(34,211,238,0.25)] p-4 md:p-6 flex flex-col gap-4"
+            className="w-full max-w-6xl mx-auto my-auto rounded-3xl bg-zinc-950 border border-slate-200 shadow-lg p-4 md:p-6 flex flex-col gap-4"
           >
             {/* 상단 상태 표시바 & 뷰 모드 전환 */}
             <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-white/10">
               <div className="flex items-center gap-2.5">
-                <span className="px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-400/60 text-cyan-300 text-xs font-black flex items-center gap-1.5">
-                  <span className="w-2 h-2 rounded-full bg-cyan-400 animate-ping" />
-                  <span>💻 고스트 모니터 캐스트 (Ghost Monitor Cast)</span>
+                <span className="px-3 py-1 rounded-full bg-cyan-500/20 border border-cyan-400/60 text-cyan-300 text-xs font-semibold flex items-center gap-1.5">
+                  <span className="w-2 h-2 rounded-full bg-cyan-400 " />
+                  <span>고스트 모니터 캐스트 (Ghost Monitor Cast)</span>
                 </span>
                 <span className="text-xs md:text-sm text-zinc-200 font-bold">
-                  이메일({merlinAuth?.email || '내 계정'}) 자동 연결됨 — 카톡·사생활 알림 노출 0% 클린 전체화면
+                  이메일({merlinAuth?.email || '내 계정'}) 자동 연결됨 — 메신저 알림이 보이지 않는 전체화면 뷰어
                 </span>
               </div>
 
@@ -1043,33 +1043,33 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                   onClick={() => setMonitorViewMode('split_demo')}
                   className={`px-3 py-1 rounded-xl text-xs font-extrabold border cursor-pointer ${
                     monitorViewMode === 'split_demo'
-                      ? 'bg-cyan-400 text-zinc-950 border-cyan-300'
+                      ? 'bg-slate-900 text-white border-cyan-300'
                       : 'bg-zinc-900 text-zinc-300 border-white/15'
                   }`}
                 >
-                  🖥️+📱 모니터 &amp; 폰 리모컨 동시 보기
+                  +모니터 &amp; 폰 리모컨 동시 보기
                 </button>
                 <button
                   type="button"
                   onClick={() => setMonitorViewMode('fullscreen_monitor')}
                   className={`px-3 py-1 rounded-xl text-xs font-extrabold border cursor-pointer ${
                     monitorViewMode === 'fullscreen_monitor'
-                      ? 'bg-cyan-400 text-zinc-950 border-cyan-300'
+                      ? 'bg-slate-900 text-white border-cyan-300'
                       : 'bg-zinc-900 text-zinc-300 border-white/15'
                   }`}
                 >
-                  🖥️ PC 모니터 단독 전체화면
+                  PC 모니터 단독 전체화면
                 </button>
                 <button
                   type="button"
                   onClick={() => setMonitorViewMode('phone_remote')}
                   className={`px-3 py-1 rounded-xl text-xs font-extrabold border cursor-pointer ${
                     monitorViewMode === 'phone_remote'
-                      ? 'bg-cyan-400 text-zinc-950 border-cyan-300'
+                      ? 'bg-slate-900 text-white border-cyan-300'
                       : 'bg-zinc-900 text-zinc-300 border-white/15'
                   }`}
                 >
-                  📱 내 폰 무선 리모컨 단독
+                  내 폰 무선 리모컨 단독
                 </button>
                 <button
                   type="button"
@@ -1097,11 +1097,11 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                 <div
                   className={`${
                     monitorViewMode === 'split_demo' ? 'lg:col-span-8' : ''
-                  } rounded-2xl bg-black border border-cyan-400/30 p-4 flex flex-col justify-between min-h-[380px] md:min-h-[480px] relative overflow-hidden`}
+                  } rounded-2xl bg-black border border-slate-800 p-4 flex flex-col justify-between min-h-[380px]" data-keep-dark="true md:min-h-[480px] relative overflow-hidden`}
                 >
                   <div className="flex flex-wrap items-center justify-between gap-2 z-10">
                     <span className="px-2.5 py-1 rounded-lg bg-zinc-900/90 border border-white/15 text-[11px] text-emerald-300 font-bold break-keep">
-                      🛡️ 사생활 보호 클린 뷰어 ON (카카오톡·문자·메신저 알림 원천 차단됨)
+                      전체화면 클린 뷰어 실행 중
                     </span>
                     <span className="px-2.5 py-1 rounded-lg bg-zinc-900/90 border border-white/15 text-[11px] text-zinc-300 font-mono shrink-0">
                       {safeCastIdx + 1} / {activePhotos.length} • 배율 {castState.zoom.toFixed(1)}x • 회전 {castState.rotation}°
@@ -1143,15 +1143,15 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                 <div
                   className={`${
                     monitorViewMode === 'split_demo' ? 'lg:col-span-4' : 'max-w-md mx-auto w-full'
-                  } rounded-3xl bg-gradient-to-b from-zinc-900 to-zinc-950 border-2 border-cyan-400/40 p-5 flex flex-col justify-between gap-4 shadow-xl`}
+                  } rounded-3xl bg-gradient-to-b from-zinc-900 to-zinc-950 border border-slate-200/40 p-5 flex flex-col justify-between gap-4 shadow-xl`}
                 >
                   <div className="flex items-center justify-between border-b border-white/10 pb-3">
                     <div>
-                      <div className="text-xs text-cyan-300 font-black">
-                        📱 내 스마트폰 무선 리모컨
+                      <div className="text-xs text-cyan-300 font-semibold">
+                        내 스마트폰 무선 리모컨
                       </div>
                       <div className="text-sm text-white font-extrabold mt-0.5">
-                        버튼을 누르면 모니터 화면이 0.1초 만에 바뀝니다
+                        버튼을 누르면 모니터 화면이 바뀝니다
                       </div>
                     </div>
                     <span className="px-2 py-0.5 rounded-full bg-emerald-500/20 border border-emerald-400/50 text-emerald-300 text-[10.5px] font-extrabold">
@@ -1201,7 +1201,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                       }
                       className="py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 text-xs font-extrabold cursor-pointer"
                     >
-                      🔍 확대 (+0.5x)
+                      확대 (+0.5x)
                     </button>
                     <button
                       type="button"
@@ -1210,7 +1210,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                       }
                       className="py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 text-xs font-extrabold cursor-pointer"
                     >
-                      🔎 축소 (-0.5x)
+                      축소 (-0.5x)
                     </button>
                     <button
                       type="button"
@@ -1219,14 +1219,14 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                       }
                       className="py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 text-xs font-extrabold cursor-pointer"
                     >
-                      🔄 90° 회전
+                      90° 회전
                     </button>
                     <button
                       type="button"
                       onClick={() => updateCastState({ zoom: 1, rotation: 0 })}
                       className="py-2.5 px-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-200 text-xs font-extrabold cursor-pointer"
                     >
-                      🎯 원본 크기(1.0x)
+                      원본 크기(1.0x)
                     </button>
                   </div>
 
@@ -1235,7 +1235,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                     onClick={() => updateCastState({ isPlaying: !castState.isPlaying })}
                     className={`w-full py-3 rounded-2xl font-extrabold text-xs border transition-all cursor-pointer ${
                       castState.isPlaying
-                        ? 'bg-amber-400 text-zinc-950 border-amber-300'
+                        ? 'bg-slate-900 text-white border-amber-300'
                         : 'bg-emerald-500/20 hover:bg-emerald-500/30 text-emerald-200 border-emerald-400/50'
                     }`}
                   >
@@ -1262,18 +1262,18 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
       )}
 
       {/* ====================================================================
-          무기 2: [📡 다 같이 사진 보기 — 앨범 라이브 싱크 (Live Photo Sync)] 플로팅 컨트롤러
+          무기 2: [다 같이 사진 보기 — 앨범 라이브 싱크 (Live Photo Sync)] 플로팅 컨트롤러
       ==================================================================== */}
       {photoSyncState.active && (
         <div
           data-testid="live-photo-sync-overlay"
-          className="fixed bottom-20 sm:bottom-6 mb-safe left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-6 z-[135] w-[94%] max-w-md rounded-3xl bg-zinc-950/95 backdrop-blur-2xl border-2 border-emerald-400 shadow-[0_0_50px_rgba(16,185,129,0.4)] p-4 flex flex-col gap-3 text-white"
+          className="fixed bottom-20 sm:bottom-6 mb-safe left-1/2 -translate-x-1/2 sm:left-auto sm:translate-x-0 sm:right-6 z-[135] w-[94%] max-w-md rounded-3xl bg-zinc-950/95 backdrop-blur-2xl border border-slate-200 shadow-lg p-4 flex flex-col gap-3 text-white"
         >
           <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/10 pb-2.5">
             <div className="flex items-center gap-2 min-w-0">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-ping shrink-0" />
-              <span className="text-xs font-black text-emerald-300 truncate">
-                📡 다 같이 보기 (앨범 라이브 싱크 ON)
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-400  shrink-0" />
+              <span className="text-xs font-semibold text-emerald-300 truncate">
+                다 같이 보기 (앨범 라이브 싱크 ON)
               </span>
             </div>
             <div className="flex items-center gap-1.5 shrink-0">
@@ -1288,10 +1288,10 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                 }`}
               >
                 {liveSyncPeers.connectedCount >= 2
-                  ? `🟢 ${liveSyncPeers.connectedCount}명 실시간 연결`
+                  ? `${liveSyncPeers.connectedCount}명 실시간 연결`
                   : liveSyncPeers.channelStatus === 'connected'
-                  ? '🟡 1명 · 멤버 대기'
-                  : '🔄 연결 중...'}
+                  ? '1명 · 멤버 대기'
+                  : '연결 중...'}
               </span>
               <button
                 type="button"
@@ -1317,7 +1317,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                 />
               ) : (
                 <span className="text-[11px] text-emerald-300 font-bold text-center px-1">
-                  📸 동기화 중
+                  동기화 중
                 </span>
               )}
             </div>
@@ -1327,10 +1327,10 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
                 className="text-xs font-extrabold text-emerald-200 truncate"
               >
                 {isLiveSyncPresenter
-                  ? `👑 ${mySyncDisplayName}(나)님이 화면을 리드하는 중`
-                  : `👀 ${photoSyncState.presenterName}님의 화면을 함께 보는 중`}
+                  ? `${mySyncDisplayName}(나)님이 화면을 리드하는 중`
+                  : `${photoSyncState.presenterName}님의 화면을 함께 보는 중`}
               </div>
-              <div className="text-sm font-black text-white truncate mt-0.5">
+              <div className="text-sm font-semibold text-white truncate mt-0.5">
                 {currentSyncPhoto?.name || photoSyncState.photoName || '공유방 사진'} ({displaySyncPosition}/{displaySyncTotal})
               </div>
               <div
@@ -1341,8 +1341,8 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
               </div>
               <div className="text-[11px] text-zinc-400 mt-0.5">
                 {isLiveSyncPresenter
-                  ? `내가 넘기거나 확대하면 ${roomDisplayTitle} 멤버 전원 화면이 0.1초 만에 똑같이 넘어갑니다.`
-                  : `${photoSyncState.presenterName}님이 넘기거나 확대하면 내 화면도 0.1초 만에 똑같이 따라갑니다.`}
+                  ? `내가 넘기거나 확대하면 ${roomDisplayTitle} 멤버 전원 화면이 똑같이 넘어갑니다.`
+                  : `${photoSyncState.presenterName}님이 넘기거나 확대하면 내 화면도 똑같이 따라갑니다.`}
               </div>
             </div>
           </div>
@@ -1392,7 +1392,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
               }
               className="py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-xs font-extrabold cursor-pointer"
             >
-              🔍 {photoSyncState.zoom >= 2 ? '1배' : '2배 줌'}
+              {photoSyncState.zoom >= 2 ? '1배' : '2배 줌'}
             </button>
             <button
               type="button"
@@ -1408,7 +1408,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
               }}
               className="py-2 rounded-xl bg-cyan-500/20 hover:bg-cyan-500/30 border border-cyan-400/50 text-cyan-200 text-xs font-extrabold cursor-pointer"
             >
-              {isLiveSyncPresenter ? '💻 모니터로' : '👑 내가 리드'}
+              {isLiveSyncPresenter ? '모니터로' : '내가 리드'}
             </button>
           </div>
         </div>
