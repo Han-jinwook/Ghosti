@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { getZCoreUrl, zCoreBridge } from '../services/zCoreBridge';
+import { evaluateProFeatureGate } from '../services/proFeatureGate';
 import { recognizeDataUrlWithPaddleOcr } from '../services/ai/aiPaddleOcrEngine';
 import type { PhotoItem } from '../types/saysee';
 
@@ -119,132 +120,27 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
       setOcrResult(null);
       setGateState('checking');
       try {
-        // 1) 유료 티어 30일 Opt-in 무료체험 게이트 점검 (Fail-Closed + hubToken 검증 연동)
+        // 1) 유료 티어 30일 Opt-in 무료체험 게이트 점검 (공통 proFeatureGate 연동)
         const storeState = useSaySeeStore.getState();
         const ent = storeState.deviceEntitlement;
         const hubToken = storeState.merlinAuth?.token || '';
         const isSubFromStore = Boolean(ent?.isPaidUnlimited);
 
-        if (zCoreBridge.isConnected) {
-          try {
-            let gateRes = await fetch(getZCoreUrl('/api/superpower/consume-action'), {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                actionType: 'feat_6_screen_ocr',
-                isSubscribed: isSubFromStore,
-                hubToken,
-                accountId: storeState.merlinAuth?.email || 'local_user',
-              }),
-            });
-            let gateJson = gateRes.ok ? await gateRes.json().catch(() => null) : null;
-
-            const isNotStartedResponse = (gj: Record<string, unknown> | null): boolean => {
-              if (!gj || gj.allowed !== false) return false;
-              const codeCandidates = [
-                gj.reason,
-                gj.status,
-                gj.feature_status,
-                gj.error,
-                gj.message,
-              ]
-                .map((v) => String(v || '').trim())
-                .filter(Boolean);
-              if (Boolean(gj.trialOptInRequired)) return true;
-              return codeCandidates.some(
-                (c) =>
-                  c === 'NOT_STARTED' ||
-                  c === 'UNOPENED' ||
-                  c === 'TRIAL_NOT_STARTED' ||
-                  c === 'TRIAL_OPT_IN_REQUIRED' ||
-                  c.includes('무료체험 시작') ||
-                  c.includes('동의 후')
-              );
-            };
-
-            if (ent?.trialActive && isNotStartedResponse(gateJson)) {
-              await fetch(getZCoreUrl('/api/superpower/start-trial'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  agreed: true,
-                  optIn: true,
-                  hubToken,
-                  accountId: storeState.merlinAuth?.email || 'local_user',
-                }),
-              }).catch(() => null);
-              gateRes = await fetch(getZCoreUrl('/api/superpower/consume-action'), {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                  actionType: 'feat_6_screen_ocr',
-                  isSubscribed: isSubFromStore,
-                  hubToken,
-                  accountId: storeState.merlinAuth?.email || 'local_user',
-                }),
-              });
-              gateJson = gateRes.ok ? await gateRes.json().catch(() => null) : null;
-            }
-
-            if (!gateJson || gateJson.allowed === false) {
-              const rawMsg = String(gateJson?.message || '').trim();
-              const isMachineCodeMsg = !rawMsg || /^[A-Z0-9_]+$/.test(rawMsg);
-              if (gateJson && isNotStartedResponse(gateJson)) {
-                if (!cancelled) {
-                  setGateState('need_opt_in');
-                  setGateMessage(
-                    isMachineCodeMsg
-                      ? '🎁 [사진·표 OCR 창🔒]은 신용카드 등록 없이 30일 무제한 무료체험 시작 버튼만 누르면 바로 사용하실 수 있습니다.'
-                      : rawMsg
-                  );
-                  setLoading(false);
-                }
-                return;
-              }
-              if (!cancelled) {
-                setGateState('expired');
-                setGateMessage(
-                  isMachineCodeMsg
-                    ? '🔒 30일 무료체험이 만료되었습니다. [4번 내 기기 통합 Pro · 월 3,900원]에서 무제한 해금되며, 무료 기본기 검색은 평생 0원입니다.'
-                    : rawMsg
-                );
-                setLoading(false);
-              }
-              return;
-            }
-            const resolvedDays = gateJson.daysLeft ?? gateJson.days_left;
-            const featStatus = String(gateJson.status || gateJson.feature_status || '');
-            const isSub = Boolean(
-              gateJson.isSubscribed || gateJson.is_subscribed || featStatus === 'SUBSCRIBED'
-            );
-            if (isSub) {
-              setTrialBadge('👑 내 기기 통합 무제한');
-            } else if (resolvedDays !== undefined && featStatus !== 'FREE_FOREVER') {
-              setTrialBadge(`🎁 무료체험 D-${resolvedDays}`);
-            }
-          } catch {
-            if (!cancelled) {
-              setGateState('expired');
-              setGateMessage('🔒 권한 확인 중 응답이 지연되어 유료 기능 실행을 안전하게 보류했습니다.');
-              setLoading(false);
-            }
-            return;
-          }
-        } else {
-          if (!ent?.isPaidUnlimited && !ent?.trialActive) {
-            if (!cancelled) {
-              setGateState('need_opt_in');
-              setGateMessage('🎁 [사진·표 OCR 창🔒]은 신용카드 등록 없이 [4. 내 기기 통합 Pro · 월 3,900원]에서 30일 무제한 무료체험 시작 후 사용하실 수 있습니다.');
-              setLoading(false);
-            }
-            return;
-          }
-          setTrialBadge(
-            ent.isPaidUnlimited ? '👑 내 기기 통합 무제한' : `🎁 무료체험 D-${ent.trialDaysLeft}`
-          );
-        }
-
+        const gateOutcome = await evaluateProFeatureGate({
+          actionType: 'feat_6_screen_ocr',
+          filePath: photo.fullPath || extractLocalPhotoPathParam(photo),
+          allowSDriveFree: true,
+        });
         if (cancelled) return;
+        if (!gateOutcome.allowed) {
+          setGateState(gateOutcome.state);
+          setGateMessage(gateOutcome.message);
+          setLoading(false);
+          return;
+        }
+        if (gateOutcome.trialBadge) {
+          setTrialBadge(gateOutcome.trialBadge);
+        }
         setGateState('allowed');
 
         // 2) PC Z-코어 연결 시 PP-OCRv5 + TSV 복원 호출, 미연결 시 웹 온디바이스 PP-OCRv5 폴백!
