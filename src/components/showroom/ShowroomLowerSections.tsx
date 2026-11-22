@@ -208,7 +208,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
               className="w-40 sm:w-48 rounded-xl overflow-hidden border border-slate-200 shadow-sm cursor-pointer hover:border-slate-300 transition-all bg-white"
             >
               <img
-                src="/showroom/certificates/ghosti_b2b_free_certificate.png?v=20261113v2"
+                src="/showroom/certificates/ghosti_b2b_free_certificate.png?v=20261123"
                 alt="귀신같이 무료 사용 확인서"
                 className="w-full h-auto object-contain"
               />
@@ -451,7 +451,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
             </div>
             <div className="rounded-xl overflow-hidden border border-slate-200 bg-white">
               <img
-                src="/showroom/certificates/ghosti_b2b_free_certificate.png?v=20261113v2"
+                src="/showroom/certificates/ghosti_b2b_free_certificate.png?v=20261123"
                 alt="귀신같이 무료 사용 확인서"
                 className="w-full h-auto object-contain"
               />
