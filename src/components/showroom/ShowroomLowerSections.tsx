@@ -3,8 +3,8 @@ import type { ShortsItem } from './showroomDataAndUtils';
 
 export interface ShowroomLowerSectionsProps {
   shortsList: ShortsItem[];
-  selectedCategory: 'all' | 'video' | 'doc' | 'clean' | 'typo';
-  setSelectedCategory: React.Dispatch<React.SetStateAction<'all' | 'video' | 'doc' | 'clean' | 'typo'>>;
+  selectedCategory: 'all' | 'video' | 'doc' | 'clean';
+  setSelectedCategory: React.Dispatch<React.SetStateAction<'all' | 'video' | 'doc' | 'clean'>>;
   filteredShorts: ShortsItem[];
   activeShortsModal: ShortsItem | null;
   setActiveShortsModal: React.Dispatch<React.SetStateAction<ShortsItem | null>>;
@@ -33,7 +33,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
   return (
     <>
       {/* =====================================================================
-          3. 중단 공식 15초 예고편 영상관 (#귀신비서 · #귀신검색 · #귀신창)
+          3. 중단 공식 15초 예고편 영상관 (#귀신비서 · #귀신검색)
          ===================================================================== */}
       <section id="shorts" className="py-16 px-4 sm:px-6 max-w-7xl mx-auto border-t border-white/5">
         <div className="text-center max-w-3xl mx-auto mb-10">

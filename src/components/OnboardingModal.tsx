@@ -3,10 +3,7 @@ import { useSaySeeStore } from '../store/useSaySeeStore';
 import { getZCoreUrl, hasActiveGhostiLoginSession } from '../services/zCoreBridge';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
 
-// [공문 2053·2056] 초능력 수련장 & 9종 도장깨기 체험관 (지연 로드 — OnboardingModal ↔ 도장깨기 순환 import 방지)
-const LazyGhostSuperpowerDojo = React.lazy(() => import('./ghostDojo/GhostSuperpowerDojo'));
-
-export type OnboardingTabId = 'tab1_find_care' | 'tab2_superpower' | 'tab3_share_pro';
+export type OnboardingTabId = 'tab1_find_care' | 'tab3_share_pro';
 
 export interface SuperpowerTrialStatus {
   engine_running: boolean;
@@ -23,24 +20,10 @@ export interface SuperpowerTrialStatus {
   started_at: string | null;
   expires_at: string | null;
   is_subscribed: boolean;
-  snippets: Record<string, string>;
+  snippets?: Record<string, string>;
 }
 
-const DEFAULT_SNIPPETS: Record<string, string> = {
-  F1: '국민은행 123-45-678910 (예금주: 홍길동)',
-  F2: '서울특별시 강남구 테헤란로 123, 4층',
-  F3: 'contact@sundreamer.app',
-  F4: '안녕하세요, 확인 후 빠르게 회신드리겠습니다. 감사합니다.',
-  F5: '귀신같이(Ghosti) 1초 내용검색 https://ghosti.sundreamer.app',
-  F6: '사업자등록번호: 123-86-98765 ((주)썬드림)',
-  F7: '세금계산서 발행 이메일: billing@sundreamer.app',
-  F8: '현관 공동비밀번호 및 와이파이 안내',
-  F9: '오늘 오후 3시 줌(Zoom) 화상 미팅 링크입니다.',
-  F10: '감사합니다. 좋은 하루 보내세요!',
-};
-
 const TRIAL_STORAGE_KEY = 'ghosti_superpower_trial_v27';
-const SNIPPETS_STORAGE_KEY = 'ghosti_superpower_snippets_v27';
 
 /**
  * 애기귀신 3음 상승 차임벨 (도6 -> 미6 -> 솔6, "띠리링~👻") Web Audio 합성기
@@ -89,216 +72,7 @@ function playWebAudioFallbackChime(): void {
   }
 }
 
-/**
- * 두벌식 영->한 / 한->영 로컬 즉시 변환 폴백 (Z-코어 미연결 웹 환경에서도 0.01초 즉시 체험 보장)
- */
-const ENG_TO_JAMO: Record<string, string> = {
-  r: 'ㄱ', R: 'ㄲ', s: 'ㄴ', e: 'ㄷ', E: 'ㄸ', f: 'ㄹ', a: 'ㅁ', q: 'ㅂ', Q: 'ㅃ',
-  t: 'ㅅ', T: 'ㅆ', d: 'ㅇ', w: 'ㅈ', W: 'ㅉ', c: 'ㅊ', z: 'ㅋ', x: 'ㅌ', v: 'ㅍ', g: 'ㅎ',
-  k: 'ㅏ', o: 'ㅐ', i: 'ㅑ', O: 'ㅒ', j: 'ㅓ', p: 'ㅔ', u: 'ㅕ', P: 'ㅖ', h: 'ㅗ', y: 'ㅛ',
-  n: 'ㅜ', b: 'ㅠ', m: 'ㅡ', l: 'ㅣ',
-};
-const CHOSEONG = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
-const JUNGSEONG = ['ㅏ', 'ㅐ', 'ㅑ', 'ㅒ', 'ㅓ', 'ㅔ', 'ㅕ', 'ㅖ', 'ㅗ', 'ㅘ', 'ㅙ', 'ㅚ', 'ㅛ', 'ㅜ', 'ㅝ', 'ㅞ', 'ㅟ', 'ㅠ', 'ㅡ', 'ㅢ', 'ㅣ'];
-const JONGSEONG = ['', 'ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ', 'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ', 'ㅁ', 'ㅂ', 'ㅄ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
-const COMPOUND_JUNG: Record<string, string> = {
-  'ㅗㅏ': 'ㅘ', 'ㅗㅐ': 'ㅙ', 'ㅗㅣ': 'ㅚ', 'ㅜㅓ': 'ㅝ', 'ㅜㅔ': 'ㅞ', 'ㅜㅣ': 'ㅟ', 'ㅡㅣ': 'ㅢ',
-};
-const COMPOUND_JONG: Record<string, string> = {
-  'ㄱㅅ': 'ㄳ', 'ㄴㅈ': 'ㄵ', 'ㄴㅎ': 'ㄶ', 'ㄹㄱ': 'ㄺ', 'ㄹㅁ': 'ㄻ', 'ㄹㅂ': 'ㄼ', 'ㄹㅅ': 'ㄽ', 'ㄹㅌ': 'ㄾ', 'ㄹㅍ': 'ㄿ', 'ㄹㅎ': 'ㅀ', 'ㅂㅅ': 'ㅄ',
-};
-const COMMON_ENG_ALLOW = new Set([
-  'iphone', 'youtube', 'google', 'naver', 'kakao', 'excel', 'office', 'windows',
-  'ghost', 'ghosti', 'hello', 'world', 'test', 'ghdrlfehd', 'myid',
-  'apple', 'chrome', 'notion', 'slack', 'zoom', 'email', 'admin', 'login', 'http', 'https',
-]);
-const DIGIT_UNIT_ALLOW = new Set(['gb', 'mb', 'kb', 'tb', 'km', 'cm', 'mm', 'kg', 'ml', 'hz', 'px', 'am', 'pm']);
-
-function isProtectedTokenLocal(tok: string): boolean {
-  const s = tok.trim();
-  if (!s) return false;
-  if (s.includes('@') || s.includes('://') || /^www\./i.test(s) || s.startsWith('=')) return true;
-  if (/[A-Za-z0-9-]+\.(?:com|net|org|kr|co|io|app|dev|ai|edu|gov|me|biz|info)\b/i.test(s)) return true;
-  return false;
-}
-
-function engWordToKorLocal(word: string): string {
-  if (COMMON_ENG_ALLOW.has(word.toLowerCase())) return word;
-  const raw = Array.from(word).map((c) => ENG_TO_JAMO[c] ?? ENG_TO_JAMO[c.toLowerCase()] ?? c);
-  const merged: string[] = [];
-  for (let i = 0; i < raw.length; i++) {
-    const pair = raw[i] + (raw[i + 1] ?? '');
-    if (COMPOUND_JUNG[pair]) {
-      merged.push(COMPOUND_JUNG[pair]);
-      i++;
-    } else {
-      merged.push(raw[i]);
-    }
-  }
-  const out: string[] = [];
-  let i = 0;
-  while (i < merged.length) {
-    const c = merged[i];
-    const next = merged[i + 1];
-    if (CHOSEONG.includes(c) && next && JUNGSEONG.includes(next)) {
-      const cho = CHOSEONG.indexOf(c);
-      const jung = JUNGSEONG.indexOf(next);
-      let jong = 0;
-      let step = 2;
-      const m2 = merged[i + 2];
-      const m3 = merged[i + 3];
-      const m4 = merged[i + 4];
-      if (m2 && JONGSEONG.includes(m2)) {
-        if (m3 && JUNGSEONG.includes(m3)) {
-          jong = 0;
-        } else if (m3 && COMPOUND_JONG[m2 + m3]) {
-          if (m4 && JUNGSEONG.includes(m4)) {
-            jong = JONGSEONG.indexOf(m2);
-            step = 3;
-          } else {
-            jong = JONGSEONG.indexOf(COMPOUND_JONG[m2 + m3]);
-            step = 4;
-          }
-        } else {
-          jong = JONGSEONG.indexOf(m2);
-          step = 3;
-        }
-      }
-      out.push(String.fromCharCode(0xac00 + (cho * 21 + jung) * 28 + jong));
-      i += step;
-    } else {
-      out.push(c);
-      i++;
-    }
-  }
-  const res = out.join('');
-  if (res === '진자') return '진짜';
-  if (res === '어더케') return '어떻게';
-  return res;
-}
-
-function spaceKorSimpleLocal(s: string): string {
-  if (!/[가-힣]{4,}/.test(s) || /\s/.test(s)) return s;
-  let out = s;
-  out = out.replace(/(안녕하세요|감사합니다|반갑습니다|죄송합니다)(?=[가-힣])/g, '$1 ');
-  out = out.replace(/(오늘|내일|지금|방금|한글이|시간이|회의|연락)(?=[가-힣]{2,})/g, '$1 ');
-  out = out.replace(/(회의)(?=시간)/g, '$1 ');
-  out = out.replace(/([가-힣])(안쳐져|안돼요|안되네요)/g, '$1 $2');
-  out = out.replace(/안쳐져/g, '안 쳐져');
-  return out.replace(/\s{2,}/g, ' ').trim();
-}
-
-export function simulateSuperpowerLocal(mode: 'typo' | 'number9' | 'extract8' | 'hyphen7', text: string): string {
-  const s = text.trim();
-  if (!s) return '';
-  if (mode === 'typo') {
-    return s
-      .split(/(\s+)/)
-      .map((tok) => {
-        if (!tok || /^\s+$/.test(tok) || isProtectedTokenLocal(tok)) {
-          return tok;
-        }
-        const replaced = tok.replace(/[A-Za-z]{2,}/g, (seg, offset: number, fullTok: string) => {
-          if (COMMON_ENG_ALLOW.has(seg.toLowerCase())) return seg;
-          if (offset > 0 && /\d/.test(fullTok[offset - 1]) && DIGIT_UNIT_ALLOW.has(seg.toLowerCase())) {
-            const afterIdx = offset + seg.length;
-            if (afterIdx >= fullTok.length || !/[A-Za-z]/.test(fullTok[afterIdx])) return seg;
-          }
-          const kor = engWordToKorLocal(seg);
-          return /[가-힣]/.test(kor) ? kor : seg;
-        });
-        return replaced !== tok ? spaceKorSimpleLocal(replaced) : tok;
-      })
-      .join('');
-  }
-  if (mode === 'hyphen7') {
-    if (/^\d{2,4}-\d{3,4}-\d{4}$/.test(s)) return s.replace(/\D/g, '');
-    return s.replace(/\b(01[016789])[-.\s]?(\d{3,4})[-.\s]?(\d{4})\b/g, '$1-$2-$3');
-  }
-  if (mode === 'number9') {
-    const digitsOnly = s.replace(/[,\s원]/g, '');
-    if (/^\d+$/.test(digitsOnly)) {
-      const n = Number(digitsOnly);
-      if (!n) return '0';
-      const eok = Math.floor(n / 100_000_000);
-      const man = Math.floor((n % 100_000_000) / 10_000);
-      const rest = n % 10_000;
-      const parts: string[] = [];
-      if (eok > 0) parts.push(`${eok.toLocaleString()}억`);
-      if (man > 0) {
-        const cheon = Math.floor(man / 1000);
-        const baek = Math.floor((man % 1000) / 100);
-        const remMan = man % 100;
-        let manStr = '';
-        if (cheon > 0) manStr += `${cheon > 1 ? cheon : ''}천`;
-        if (baek > 0) manStr += `${baek > 1 ? baek : ''}백`;
-        if (remMan > 0) manStr += `${remMan}`;
-        parts.push(`${manStr || man}만`);
-      }
-      if (rest > 0) parts.push(`${rest.toLocaleString()}`);
-      return parts.join(' ');
-    }
-    const korDigit: Record<string, number> = { 영: 0, 공: 0, 일: 1, 이: 2, 삼: 3, 사: 4, 오: 5, 육: 6, 칠: 7, 팔: 8, 구: 9 };
-    const smallU: Record<string, number> = { 십: 10, 백: 100, 천: 1000 };
-    const largeU: Record<string, number> = { 만: 10000, 억: 100000000, 조: 1000000000000 };
-    let largeAcc = 0;
-    let smallAcc = 0;
-    let cur = 0;
-    const clean = s.replace(/[\s,원]+/g, '');
-    let i = 0;
-    while (i < clean.length) {
-      const ch = clean[i];
-      if (/\d/.test(ch)) {
-        let j = i;
-        while (j < clean.length && /\d/.test(clean[j])) j++;
-        cur = Number(clean.slice(i, j));
-        i = j;
-        continue;
-      }
-      if (korDigit[ch] !== undefined) cur = korDigit[ch];
-      else if (smallU[ch]) {
-        smallAcc += (cur || 1) * smallU[ch];
-        cur = 0;
-      } else if (largeU[ch]) {
-        largeAcc += (smallAcc + cur || 1) * largeU[ch];
-        smallAcc = 0;
-        cur = 0;
-      }
-      i++;
-    }
-    const total = largeAcc + smallAcc + cur;
-    return total > 0 ? total.toLocaleString() : s;
-  }
-  if (mode === 'extract8') {
-    const phoneM = s.match(/\b(01[016789])[-.\s]?(\d{3,4})[-.\s]?(\d{4})\b/);
-    const acctM = s.match(/(국민|신한|우리|하나|농협|기업|카카오뱅크|토스뱅크)\s*([0-9-]{9,18})/);
-    const schedM = s.match(/(오늘|내일|모레|\d{1,2}월\s*\d{1,2}일|[월화수목금토일]요일)\s*(오전|오후)?\s*(\d{1,2}시(\s*\d{1,2}분)?)/);
-    const nameM = s.match(/([가-힣]{2,4})\s*(팀장|대표|과장|대리|사원|입니다|드림)/);
-    const lines: string[] = [];
-    if (nameM) lines.push(`- 성함: ${nameM[1]}`);
-    if (phoneM) lines.push(`- 연락처: ${phoneM[1]}-${phoneM[2]}-${phoneM[3]}`);
-    if (acctM) lines.push(`- 계좌: ${acctM[1]} ${acctM[2]}`);
-    if (schedM) lines.push(`- 일정: ${schedM[0].trim()}`);
-    return lines.length > 0 ? lines.join('\n') : s.replace(/\b(01[016789])[-.\s]?(\d{3,4})[-.\s]?(\d{4})\b/g, '$1-$2-$3');
-  }
-  return s;
-}
-
-function loadLocalSnippets(): Record<string, string> {
-  try {
-    const savedSnippetsRaw = localStorage.getItem(SNIPPETS_STORAGE_KEY);
-    if (savedSnippetsRaw) {
-      return { ...DEFAULT_SNIPPETS, ...JSON.parse(savedSnippetsRaw) };
-    }
-  } catch {
-    // ignore
-  }
-  return { ...DEFAULT_SNIPPETS };
-}
-
 export async function fetchSuperpowerStatus(accountId: string, isSubscribed: boolean): Promise<SuperpowerTrialStatus> {
-  const localSnippets = loadLocalSnippets();
-  const hasLocalSavedSnippets = Boolean(localStorage.getItem(SNIPPETS_STORAGE_KEY));
   if (hasActiveGhostiLoginSession()) {
     try {
       const hubToken = useSaySeeStore.getState().merlinAuth?.token || '';
@@ -309,12 +83,8 @@ export async function fetchSuperpowerStatus(accountId: string, isSubscribed: boo
       if (res.ok) {
         const data = await res.json();
         if (data && data.ok) {
-          const mergedSnippets = hasLocalSavedSnippets
-            ? { ...DEFAULT_SNIPPETS, ...(data.snippets || {}), ...localSnippets }
-            : { ...DEFAULT_SNIPPETS, ...(data.snippets || {}) };
-          const mergedData = { ...data, snippets: mergedSnippets };
-          localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(mergedData));
-          return mergedData as SuperpowerTrialStatus;
+          localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(data));
+          return data as SuperpowerTrialStatus;
         }
       }
     } catch {
@@ -322,14 +92,13 @@ export async function fetchSuperpowerStatus(accountId: string, isSubscribed: boo
     }
   }
   const savedRaw = localStorage.getItem(TRIAL_STORAGE_KEY);
-  const snippets = localSnippets;
   if (savedRaw) {
     try {
       const parsed = JSON.parse(savedRaw) as SuperpowerTrialStatus;
       if (isSubscribed) {
-        return { ...parsed, trial_status: 'SUBSCRIBED', trial_days_left: 9999, is_subscribed: true, snippets };
+        return { ...parsed, trial_status: 'SUBSCRIBED', trial_days_left: 9999, is_subscribed: true };
       }
-      return { ...parsed, snippets };
+      return parsed;
     } catch {
       // ignore
     }
@@ -339,11 +108,10 @@ export async function fetchSuperpowerStatus(accountId: string, isSubscribed: boo
     machine_hwid: 'sha256_local_pc_device',
     account_id: accountId,
     trial_status: isSubscribed ? 'SUBSCRIBED' : 'NOT_STARTED',
-    trial_days_left: isSubscribed ? 9999 : 30, // [v1.3 마감] 체험 기간 30일 전사 통일
+    trial_days_left: isSubscribed ? 9999 : 30,
     started_at: null,
     expires_at: null,
     is_subscribed: isSubscribed,
-    snippets,
   };
 }
 
@@ -352,7 +120,6 @@ export async function startSuperpowerTrialAction(
   isSubscribed: boolean,
   agreed: boolean = true,
 ): Promise<SuperpowerTrialStatus> {
-  const localSnippets = loadLocalSnippets();
   if (hasActiveGhostiLoginSession()) {
     try {
       const hubToken = useSaySeeStore.getState().merlinAuth?.token || '';
@@ -365,10 +132,9 @@ export async function startSuperpowerTrialAction(
       if (res.ok) {
         const data = await res.json();
         if (data && data.ok) {
-          const mergedData = { ...data, snippets: { ...(data.snippets || {}), ...localSnippets } };
-          localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(mergedData));
-          window.dispatchEvent(new CustomEvent('ghosti_superpower_status_updated', { detail: mergedData }));
-          return mergedData as SuperpowerTrialStatus;
+          localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(data));
+          window.dispatchEvent(new CustomEvent('ghosti_superpower_status_updated', { detail: data }));
+          return data as SuperpowerTrialStatus;
         }
       }
     } catch {
@@ -386,13 +152,12 @@ export async function startSuperpowerTrialAction(
       started_at: null,
       expires_at: null,
       is_subscribed: isSubscribed,
-      snippets: localSnippets,
     };
     localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(deferredStatus));
     return deferredStatus;
   }
   const now = new Date();
-  const exp = new Date(now.getTime() + 30 * 86400 * 1000); // [v1.3 마감] 30일 무제한 체험 (데몬 ACTIVE_30D 와 동일)
+  const exp = new Date(now.getTime() + 30 * 86400 * 1000);
   const fallback: SuperpowerTrialStatus = {
     engine_running: true,
     machine_hwid: 'sha256_local_pc_device',
@@ -402,7 +167,6 @@ export async function startSuperpowerTrialAction(
     started_at: now.toISOString().slice(0, 19).replace('T', ' '),
     expires_at: exp.toISOString().slice(0, 19).replace('T', ' '),
     is_subscribed: isSubscribed,
-    snippets: localSnippets,
   };
   localStorage.setItem(TRIAL_STORAGE_KEY, JSON.stringify(fallback));
   window.dispatchEvent(new CustomEvent('ghosti_superpower_status_updated', { detail: fallback }));
@@ -425,13 +189,10 @@ const PairingQrCodeSvg: React.FC = () => {
   );
 };
 
-export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
-  inlineSuperpowerOnly = false,
-}) => {
+export const OnboardingModal: React.FC = () => {
   const {
     showOnboarding,
     setShowOnboarding,
-    onboardingTrackMode,
     setOnboardingTrackMode,
     pcAgentPairedMobile,
     setPcAgentPairedMobile,
@@ -446,113 +207,10 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
     setShowProModal,
     setDesktopTab,
     merlinAuth,
-    activePricingPlan,
-    subscribedLounges,
     isStoreAppMode,
   } = useSaySeeStore();
 
   const [activeTab, setActiveTab] = useState<OnboardingTabId>('tab1_find_care');
-  const [trialStatus, setTrialStatus] = useState<SuperpowerTrialStatus | null>(null);
-
-  // 탭 2: 인터랙티브 체험 상태
-  const [typoInput, setTypoInput] = useState('dkssudgktpdy qksrkqtmqslek');
-  const [typoOutput, setTypoOutput] = useState('안녕하세요 반갑습니다');
-  const [typoBadge, setTypoBadge] = useState('👻 띠리링~♪ (2어절 연속 오타 감지 ➔ 한글 자동 변환 + 한/영키 자동 전환)');
-  const [showDemoStep, setShowDemoStep] = useState(0);
-
-  // 연속 복사·붙여넣기 체험 큐
-  const [pasteQueue, setPasteQueue] = useState<string[]>([
-    '홍길동 대표',
-    '010-1234-5678',
-    '서울 강남구 테헤란로 123',
-  ]);
-  const [pastedSlots, setPastedSlots] = useState<string[]>([]);
-  const [floatingWebOpenedToast, setFloatingWebOpenedToast] = useState(false);
-  const [ghostMemoryQuery, setGhostMemoryQuery] = useState('');
-  const [ghostMemoryResult, setGhostMemoryResult] = useState<string | null>(null);
-  const [ghostMemoryExpanded, setGhostMemoryExpanded] = useState(false);
-  const [ghostMemorySelIdx, setGhostMemorySelIdx] = useState(0);
-  const [ghostMemoryHoverIdx, setGhostMemoryHoverIdx] = useState<number | null>(null);
-  const [isClipboardCleared, setIsClipboardCleared] = useState<boolean>(() => {
-    try {
-      return localStorage.getItem('ghosti_clipboard_cleared') === 'true';
-    } catch {
-      return false;
-    }
-  });
-
-  // F1~F10 내 상용구 & 클립보드 보관 기간(기본 7일·최대 30일) & 전화번호 하이픈
-  const [snippets, setSnippets] = useState<Record<string, string>>(() => loadLocalSnippets());
-  const [snippetSavedMsg, setSnippetSavedMsg] = useState<string | null>(null);
-  const [retentionDays, setRetentionDays] = useState<1 | 3 | 7 | 30>(7);
-  const [retentionToast, setRetentionToast] = useState<string | null>(null);
-  const [hyphenInput, setHyphenInput] = useState('01012345678');
-  const [hyphenOutput, setHyphenOutput] = useState('010-1234-5678');
-
-  const ghostMemoryCandidates = useMemo(() => {
-    if (isClipboardCleared) {
-      return [];
-    }
-    const f1Text = snippets.F1 || DEFAULT_SNIPPETS.F1;
-    const f2Text = snippets.F2 || DEFAULT_SNIPPETS.F2;
-    const baseItems = [
-      {
-        id: 'mem-1',
-        kind: 'text' as const,
-        relTime: '방금 전',
-        snippet: `${f1Text} (F1 상용구 · 월 정기 구독료 정산 계좌 안내)`,
-        fullText: `${f1Text}\n- 용도: 월 정기 구독료 및 거래처 대금 정산 전용 계좌 (F1 단축 슬롯)\n- 세금계산서 발행 이메일: ${snippets.F7 || DEFAULT_SNIPPETS.F7}`,
-      },
-      {
-        id: 'mem-2',
-        kind: 'image' as const,
-        relTime: '2분 전',
-        snippet: '[이미지 1280x720] 세금계산서_영수증_캡처 · 합계금액 350,000,000원 승인번호 9482-11',
-        fullText:
-          '[스샷 이미지 (1280x720) · 백그라운드 PP-OCRv5 Korean 추출 원문]\n공급자: (주)썬드림 / 등록번호: 123-86-98765\n품목: 귀신같이 엔터프라이즈 연간 라이선스\n합계금액: 350,000,000원 (승인번호 9482-11)',
-      },
-      {
-        id: 'mem-3',
-        kind: 'text' as const,
-        relTime: '5분 전',
-        snippet: `${f2Text} (F2 상용구 · 본사 회의실 방문 안내 및 주차 등록)`,
-        fullText: `${f2Text}\n- 지하 2~4층 방문객 주차장 이용 가능 (2시간 무료 쿠폰 지급)\n- 도착 후 안내데스크에서 홍길동 대표에게 연락 부탁드립니다.`,
-      },
-      {
-        id: 'mem-4',
-        kind: 'text' as const,
-        relTime: '14분 전',
-        snippet: '제3조 (납품 및 검수 조건) 본 계약의 유지보수 무상 보증 기간은 검수 완료일로부터 1년으로...',
-        fullText:
-          '제3조 (납품 및 검수 조건)\n1. 본 계약의 유지보수 무상 보증 기간은 최종 검수 완료일로부터 1년으로 한다.\n2. 납품 지연 시 지체상금은 일 1/1000로 산정하며, 천재지변 또는 발주처 사유는 제외한다.\n3. 모든 소스코드 및 산출물의 지식재산권은 잔금 지급과 동시에 이전된다.',
-      },
-      {
-        id: 'mem-5',
-        kind: 'text' as const,
-        relTime: '32분 전',
-        snippet: '김철수 팀장 010-1234-5678 / 내일 오후 3시 줌(Zoom) 화상 미팅 링크 및 아젠다 공유',
-        fullText:
-          '김철수 팀장 (010-1234-5678)\n- 일시: 내일 오후 3시 00분\n- 안건: 2026년 하반기 귀신같이 Z-코어 엔터프라이즈 도입 일정 협의',
-      },
-    ];
-    const q = ghostMemoryQuery.trim().toLowerCase();
-    if (!q) return baseItems;
-    const filtered = baseItems.filter(
-      (it) => it.snippet.toLowerCase().includes(q) || it.fullText.toLowerCase().includes(q)
-    );
-    return filtered.length > 0
-      ? filtered
-      : [
-          {
-            id: 'mem-custom',
-            kind: 'text' as const,
-            relTime: '방금 전',
-            snippet: `[${ghostMemoryQuery}] 관련 의미 유사 기억 자동 매칭 (EmbeddingGemma 2)`,
-            fullText: `검색어 "${ghostMemoryQuery}"와 의미적으로 가장 가까운 클립보드 기억 항목입니다.\n클릭 또는 Enter 입력 시 현재 커서 위치에 즉시 붙여넣기됩니다.`,
-          },
-          ...baseItems.slice(0, 4),
-        ];
-  }, [ghostMemoryQuery, isClipboardCleared, snippets]);
   const [telemetryEnabled, setTelemetryEnabled] = useState<boolean>(() => {
     try {
       return localStorage.getItem('ghosti_telemetry_enabled') !== 'false';
@@ -561,30 +219,8 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
     }
   });
   const [showTermsClause, setShowTermsClause] = useState(false);
-  const [showAllMobileSnippets, setShowAllMobileSnippets] = useState(false);
 
-  // 9번 억만금 숫자 변환
-  const [moneyInput, setMoneyInput] = useState('3억 5천만');
-  const [moneyOutput, setMoneyOutput] = useState('350,000,000');
-
-  // 8번 카톡 혼합 문자 구조화 추출
-  const [extractInput, setExtractInput] = useState(
-    '김철수 팀장입니다 01012345678 국민 123-45-678910 내일 오후 3시 미팅'
-  );
-  const [extractOutput, setExtractOutput] = useState(
-    '- 성함: 김철수\n- 연락처: 010-1234-5678\n- 계좌: 국민 123-45-678910\n- 일정: 내일 오후 3시'
-  );
-
-  const isSubscribedUser = useMemo(
-    () =>
-      activePricingPlan !== 'free_trial' ||
-      Object.values(subscribedLounges).some(Boolean),
-    [activePricingPlan, subscribedLounges]
-  );
-
-  const accountId = merlinAuth?.email || merlinAuth?.userId || 'local_user';
-
-  // 외부에서 특정 탭(예: 골든존 배너 클릭 시 탭 2)으로 온보딩을 열도록 이벤트 수신
+  // 외부에서 특정 탭으로 온보딩을 열도록 이벤트 수신
   useEffect(() => {
     const onOpenOnboardingTab = (e: Event) => {
       const custom = e as CustomEvent<{ tab?: OnboardingTabId }>;
@@ -596,34 +232,6 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
     window.addEventListener('ghosti_open_onboarding_tab', onOpenOnboardingTab);
     return () => window.removeEventListener('ghosti_open_onboarding_tab', onOpenOnboardingTab);
   }, [setShowOnboarding]);
-
-  useEffect(() => {
-    if (!showOnboarding && !inlineSuperpowerOnly) return;
-    void fetchSuperpowerStatus(accountId, isSubscribedUser).then((st) => {
-      setTrialStatus(st);
-      const localSaved = localStorage.getItem(SNIPPETS_STORAGE_KEY);
-      if (localSaved) {
-        try {
-          setSnippets((prev) => ({ ...DEFAULT_SNIPPETS, ...(st.snippets || {}), ...prev, ...JSON.parse(localSaved) }));
-          return;
-        } catch {
-          // ignore
-        }
-      }
-      if (st.snippets) {
-        setSnippets((prev) => ({ ...prev, ...st.snippets }));
-      }
-    });
-  }, [showOnboarding, accountId, isSubscribedUser]);
-
-  // 탭 2 Show 애니메이션 루프 (3단계 자동 순환)
-  useEffect(() => {
-    if ((!showOnboarding && !inlineSuperpowerOnly) || activeTab !== 'tab2_superpower') return;
-    const timer = window.setInterval(() => {
-      setShowDemoStep((s) => (s + 1) % 3);
-    }, 2200);
-    return () => clearInterval(timer);
-  }, [showOnboarding, activeTab]);
 
   const vaultPhotoCount = photos.filter((p) => !p.quarantined && p.isVaultDocument).length;
   const totalIndexedDocs = localDocuments.length + vaultPhotoCount;
@@ -644,145 +252,11 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
     [videoSceneItems]
   );
 
-  if (!showOnboarding && !inlineSuperpowerOnly) return null;
-
-  const handleStart7DayTrial = async () => {
-    const st = await startSuperpowerTrialAction(accountId, isSubscribedUser);
-    setTrialStatus(st);
-    playBabyGhostChime();
-    useSaySeeStore.setState({
-      lastQuarantineToast:
-        '🎉 [모든 귀신 초능력 30일 무제한 무료체험 시작!] 지금부터 30일간 모든 귀신 초능력이 무제한으로 작동합니다. (카드 등록·자동 결제 없음)',
-    });
-  };
-
-  const handleRunTypoSimulation = async (inputVal: string) => {
-    setTypoInput(inputVal);
-    try {
-      const res = await fetch(getZCoreUrl('/api/superpower/simulate'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'typo', text: inputVal }),
-        signal: AbortSignal.timeout(900),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.ok) {
-          setTypoOutput(data.converted);
-          setTypoBadge(data.badge || '👻 띠리링~♪ (한/영키 자동 전환 완료)');
-          playBabyGhostChime();
-          return;
-        }
-      }
-    } catch {
-      // 로컬 폴백
-    }
-    const localOut = simulateSuperpowerLocal('typo', inputVal);
-    setTypoOutput(localOut);
-    setTypoBadge('👻 띠리링~♪ (2어절 연속 오타 감지 ➔ 한글 자동 변환 + 한/영키 자동 전환)');
-    playBabyGhostChime();
-  };
-
-  const handleSaveSnippets = async () => {
-    localStorage.setItem(SNIPPETS_STORAGE_KEY, JSON.stringify(snippets));
-    try {
-      const rawTrial = localStorage.getItem(TRIAL_STORAGE_KEY);
-      if (rawTrial) {
-        const parsedTrial = JSON.parse(rawTrial);
-        localStorage.setItem(
-          TRIAL_STORAGE_KEY,
-          JSON.stringify({ ...parsedTrial, snippets: { ...(parsedTrial.snippets || {}), ...snippets } })
-        );
-      }
-    } catch {
-      // ignore
-    }
-    setGhostMemoryResult(`✅ 상용구 저장 반영 완료! (F1: ${snippets.F1 || DEFAULT_SNIPPETS.F1})`);
-    try {
-      const res = await fetch(getZCoreUrl('/api/superpower/snippets'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ snippets }),
-        signal: AbortSignal.timeout(1200),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.ok) {
-          setSnippetSavedMsg(data.message || '✅ Z-코어에 F1~F10 10개 상용구가 즉시 저장·반영되었습니다!');
-          playBabyGhostChime();
-          setTimeout(() => setSnippetSavedMsg(null), 4000);
-          return;
-        }
-      }
-    } catch {
-      // 로컬 폴백
-    }
-    setSnippetSavedMsg('✅ F1~F10 10개 내 상용구가 즉시 저장·반영되었습니다! (상단 복사검색 목록 및 F1~F10 슬롯에 즉시 적용됨)');
-    playBabyGhostChime();
-    setTimeout(() => setSnippetSavedMsg(null), 4000);
-  };
-
-  const handleMoneySimulate = async (val: string) => {
-    setMoneyInput(val);
-    try {
-      const res = await fetch(getZCoreUrl('/api/superpower/simulate'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'number9', text: val }),
-        signal: AbortSignal.timeout(900),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.ok) {
-          setMoneyOutput(data.converted);
-          return;
-        }
-      }
-    } catch {
-      // ignore
-    }
-    setMoneyOutput(simulateSuperpowerLocal('number9', val));
-  };
-
-  const handleExtractSimulate = async (val: string) => {
-    setExtractInput(val);
-    try {
-      const res = await fetch(getZCoreUrl('/api/superpower/simulate'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ mode: 'extract8', text: val }),
-        signal: AbortSignal.timeout(900),
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data && data.ok) {
-          setExtractOutput(data.converted);
-          return;
-        }
-      }
-    } catch {
-      // ignore
-    }
-    setExtractOutput(simulateSuperpowerLocal('extract8', val));
-  };
+  if (!showOnboarding) return null;
 
   return (
-    <div
-      className={
-        inlineSuperpowerOnly
-          ? 'w-full'
-          : 'fixed inset-0 z-[100] bg-black/80 backdrop-blur-xl flex items-center justify-center p-3 sm:p-5 pt-safe pb-safe overflow-y-auto'
-      }
-    >
-      <div
-        className={
-          inlineSuperpowerOnly
-            ? 'relative w-full rounded-2xl bg-[#18181B] border border-white/10 p-4 sm:p-5 md:p-6 flex flex-col gap-5 text-zinc-100'
-            : 'relative w-full max-w-4xl max-h-[90dvh] overflow-y-auto rounded-3xl bg-[#111114] border border-white/15 p-4 sm:p-5 md:p-7 shadow-[0_0_60px_rgba(0,229,255,0.18)] flex flex-col gap-5 my-auto text-zinc-100'
-        }
-      >
-        {!inlineSuperpowerOnly && (
-          <>
+    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-xl flex items-center justify-center p-3 sm:p-5 pt-safe pb-safe overflow-y-auto">
+      <div className="relative w-full max-w-4xl max-h-[90dvh] overflow-y-auto rounded-3xl bg-[#111114] border border-white/15 p-4 sm:p-5 md:p-7 shadow-[0_0_60px_rgba(0,229,255,0.18)] flex flex-col gap-5 my-auto text-zinc-100">
         {/* 1) 상단 헤더 + 닫기 버튼 */}
         <div className="flex items-start justify-between gap-3 sm:gap-4">
           <div className="flex flex-col gap-1 min-w-0">
@@ -860,9 +334,6 @@ export const OnboardingModal: React.FC<{ inlineSuperpowerOnly?: boolean }> = ({
             </span>
           </button>
         </div>
-
-          </>
-        )}
 
         {/* ─────────────────────────────────────────────────────────────
             [탭 1] 👻 귀신검색 & 👻 귀신비서 (내 기기 1대는 언제나 0원)

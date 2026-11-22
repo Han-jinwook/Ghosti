@@ -9,7 +9,6 @@ import { useSaySeeStore } from '../store/useSaySeeStore';
 import { Z_CORE_ZIP_URL, LATEST_Z_CORE_VERSION } from '../services/zCoreBridge';
 import { playBabyGhostChime } from './OnboardingModal';
 import { silencePendingEnterGiggleOnLogoClick } from '../services/babyGhostSound';
-import { GhostSuperpowerDojo } from './ghostDojo/GhostSuperpowerDojo';
 import {
   SAMPLE_FAMILY_PHOTOS,
   SAMPLE_FAMILY_GROUPS,
@@ -21,7 +20,6 @@ import {
   OFFICIAL_LAUNCH_LIVE,
   type GhostiShowroomLandingProps,
   type ShortsItem,
-  convertEngTypoToKor,
   DEFAULT_SHORTS_DATA,
   INTERACTIVE_SCENARIOS,
   QUICK_EMAIL_DOMAINS,
@@ -30,7 +28,6 @@ import {
   SAMPLE_PC_BASE_PCT,
   SAMPLE_PC_REVIVED_PCT,
   type OnboardingWeaponTab,
-  type FreeOrDevToolbarKey,
   type SafeOnboardingChatMsg,
   WEAPON_META,
   nowTimeStr,
@@ -64,7 +61,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
   });
 
   const [shortsList, setShortsList] = useState<ShortsItem[]>(DEFAULT_SHORTS_DATA);
-  const [selectedCategory, setSelectedCategory] = useState<'all' | 'video' | 'doc' | 'clean' | 'typo'>('all');
+  const [selectedCategory, setSelectedCategory] = useState<'all' | 'video' | 'doc' | 'clean'>('all');
   const [activeShortsModal, setActiveShortsModal] = useState<ShortsItem | null>(null);
 
   // 공식 보증서 모달 상태 & B2B 영업 유입(?from=b2b / #work-share) 직통 포커싱 상태
@@ -223,16 +220,6 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     ]);
   };
 
-  // 무기 4 (귀신창 v1.4 — 100% 무버튼 자동 성형 & 평생 무료 5총사 체험 상태)
-  const [typoSampleIdx, setTypoSampleIdx] = useState<number>(0);
-  const [typoInput, setTypoInput] = useState<string>('dkssudgktpdy! 오늘 회의자료 rkatkgkqslek. 내일 오전 10시에 뵙겠습니다.');
-  const [typoOriginalBackup, setTypoOriginalBackup] = useState<string>('dkssudgktpdy! 오늘 회의자료 rkatkgkqslek. 내일 오전 10시에 뵙겠습니다.');
-  const [typoConverted, setTypoConverted] = useState<boolean>(false);
-  const [typoIsPresetSample, setTypoIsPresetSample] = useState<boolean>(true);
-  const typoDemoTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [selectedToolbarKey, setSelectedToolbarKey] = useState<FreeOrDevToolbarKey>('1');
-  const [zipDemoApplied, setZipDemoApplied] = useState<boolean>(false);
-
   // DEV 전체보기 전용 내부 상태 보존 (코드 삭제 없이 일반 방문자에게만 은닉)
   const {
     trialScanPermissions,
@@ -337,7 +324,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
     playBabyGhostChime();
     const ts = nowTimeStr();
 
-    // 4대 초능력(영상 글자·장면 / 문서·영수증 / 사진정리·공유·보안 / 영타·귀신창) 키워드 정밀 매칭
+    // 4대 무료 코어(영상 글자·장면 / 문서·영수증 / PC·사진 정리 / 가족·모임 사진공유) 키워드 정밀 매칭
     let matchedTab: OnboardingWeaponTab | null = null;
     let customReply: string | null = null;
 
@@ -402,118 +389,14 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
 
     // 4대 초능력과 무관한 일상 질문(예: 오늘 점심, 날씨 알려줘 등) 입력 시 친절한 역할 안내 문구 출력
     const guideReply =
-      `앗, 저는 일상 대화 대신 내 PC·모바일의 4가지 초능력을 체험해 드리는 『👻 귀신비서』예요~ ✨\n` +
-      `아래 초능력 카드를 톡 눌러보시거나 「영상 글자」, 「영수증 찾기」, 「PC 속도」, 「가족 사진 공유」, 「영타 변환」처럼 궁금한 기능을 말씀해 주세요!`;
+      `앗, 저는 일상 대화 대신 내 PC·모바일의 핵심 기능을 체험해 드리는 『👻 귀신비서』예요~ ✨\n` +
+      `아래 카드를 톡 눌러보시거나 「영상 글자」, 「영수증 찾기」, 「PC 속도」, 「가족 사진 공유」처럼 궁금한 기능을 말씀해 주세요!`;
 
     setChatMessages((prev) => [
       ...prev.slice(-6),
       { id: `u-${Date.now()}`, role: 'user', text: q, timestamp: ts },
       { id: `s-${Date.now() + 1}`, role: 'secretary', text: guideReply, timestamp: ts },
     ]);
-  };
-
-  const TYPO_SAMPLES = [
-    {
-      label: '⚡ 예문 1: dkssudgktpdy 영타 무버튼 자동성형',
-      raw: 'dkssudgktpdy! 오늘 회의자료 rkatkgkqslek. 내일 오전 10시에 뵙겠습니다.',
-    },
-    {
-      label: '⚡ 예문 2: 카톡 영타 외계어 1초 자동교정',
-      raw: 'rmqgkRp 카톡 Tmr다가 gksdudzl 안 눌러서 멘붕...',
-    },
-    {
-      label: '🧹 예문 3: PDF 깨진 줄바꿈 (1초 줄바꿈 다림질)',
-      raw: '계약서에서 복사할 때마다\n\n줄바꿈이 마구 깨져서\n\n일일이 백스페이스 누르셨죠?',
-    },
-  ];
-
-  const formatTypoAfterPreview = (rawText: string) =>
-    convertEngTypoToKor(rawText)
-      .replace(/\n{2,}/g, ' ')
-      .replace(/[ \t]{2,}/g, ' ')
-      .trim();
-
-  // 무기 4 (귀신창 v1.4) 예문 칩 클릭 시 Before ➔ After 비교 배너 표시 + 0.45초 즉시 자동 성형 시연 (Show & Try)
-  const triggerTypoAutoIron = (rawText: string, sIdx = 0) => {
-    if (typoDemoTimerRef.current) clearTimeout(typoDemoTimerRef.current);
-    playBabyGhostChime();
-    setTypoSampleIdx(sIdx);
-    setTypoOriginalBackup(rawText);
-    setTypoInput(rawText);
-    setTypoConverted(false);
-    setTypoIsPresetSample(true);
-    typoDemoTimerRef.current = setTimeout(() => {
-      const converted = formatTypoAfterPreview(rawText);
-      setTypoInput(converted);
-      setTypoConverted(true);
-    }, 450);
-  };
-
-  // superpower 탭 진입 시 먼저 영타 원문을 보여준 뒤 450ms 후 저절로 한글로 변환되는 자동 시연(Show) 후 직접 입력(Try) 유도
-  useEffect(() => {
-    if (demoTab !== 'superpower') return;
-    const defaultRaw = TYPO_SAMPLES[0].raw;
-    setTypoSampleIdx(0);
-    setTypoOriginalBackup(defaultRaw);
-    setTypoInput(defaultRaw);
-    setTypoConverted(false);
-    setTypoIsPresetSample(true);
-    const timer = setTimeout(() => {
-      const converted = formatTypoAfterPreview(defaultRaw);
-      setTypoInput(converted);
-      setTypoConverted(true);
-    }, 450);
-    typoDemoTimerRef.current = timer;
-    return () => clearTimeout(timer);
-  }, [demoTab]);
-
-  const handleTypoTextareaFocus = () => {
-    if (typoIsPresetSample) {
-      if (typoDemoTimerRef.current) {
-        clearTimeout(typoDemoTimerRef.current);
-        typoDemoTimerRef.current = null;
-      }
-      setTypoInput('');
-      setTypoConverted(false);
-      setTypoIsPresetSample(false);
-    }
-  };
-
-  const handleTypoInputChange = (val: string) => {
-    if (typoDemoTimerRef.current) {
-      clearTimeout(typoDemoTimerRef.current);
-      typoDemoTimerRef.current = null;
-    }
-    setTypoIsPresetSample(false);
-
-    // 이메일(@), URL, 도메인, 숫자 3자리 이상 계정/비번 토큰은 확정 보호막에 따라 자동 변환하지 않음
-    const trimmed = val.trim();
-    const hasProtectedToken =
-      /@|:\/\/|www\.|\.(com|kr|net|org|app|io)\b|[A-Za-z]{2,}\d{3,}/i.test(trimmed);
-
-    if (!hasProtectedToken && (val.endsWith(' ') || val.endsWith('\n')) && !typoInput.endsWith(' ')) {
-      const converted = convertEngTypoToKor(val)
-        .replace(/\n{2,}/g, ' ')
-        .replace(/[ \t]{2,}/g, ' ');
-      if (converted !== val) {
-        playBabyGhostChime();
-        setTypoOriginalBackup(val);
-        setTypoInput(converted);
-        setTypoConverted(true);
-        return;
-      }
-    }
-    setTypoInput(val);
-    setTypoConverted(false);
-  };
-
-  const handleTypoUndo = () => {
-    if (typoDemoTimerRef.current) {
-      clearTimeout(typoDemoTimerRef.current);
-      typoDemoTimerRef.current = null;
-    }
-    setTypoInput(typoOriginalBackup);
-    setTypoConverted(false);
   };
 
   const filteredShorts =
@@ -1309,7 +1192,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 type="text"
                 value={chatInput}
                 onChange={(e) => setChatInput(e.target.value)}
-                placeholder="궁금한 기능 입력 (예: 영상 점프, 영수증 찾기, 영타)"
+                placeholder="궁금한 기능 입력 (예: 영상 점프, 영수증 찾기, 가족 사진 공유)"
                 className="flex-1 min-w-0 px-3 py-2 rounded-xl bg-zinc-900 border border-white/15 focus:border-[#00F0B5] text-[13px] sm:text-sm text-white placeholder-zinc-500 outline-none"
               />
               <button

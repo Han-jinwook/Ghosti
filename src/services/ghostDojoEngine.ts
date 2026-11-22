@@ -1,36 +1,22 @@
 /**
- * 👻 귀신창 초능력 수련장 & 도장깨기 체험관 엔진 (순수 로직 — UI 비의존)
+ * 👻 귀신검색 소환술 3단 수련 엔진 (순수 로직 — UI 비의존)
  *
- * 정본: Secretary 마스터기획서 5장 5) 「게이밍 감성 2단계 온보딩」
- *  - 1단계: 애기귀신 소환술 기본기 3단 수련 (Ctrl+0 / Ctrl+우클릭 2종 단일화 소환)
- *  - 2단계: 출시 초능력 전 종목(9종) 도장깨기 체험관 (Before → After + ✨성공 효과음 + 도장)
- *  - 최종 보상: 30일 무제한 초능력 체험 명시적 동의(Opt-in)
- * 공문: 20261107_2053(2단계 확장), 20261107_2056(상시 연습장), 20261114_2336(v2.1 수련장 3종 압축 · Wave 2 순연)
+ *  - 1단계: 애기귀신 귀신검색창 소환술 기본기 3단 수련 (Ctrl+0 / Ctrl+우클릭 즉시 소환)
+ *    - b1: Ctrl+0 / Ctrl+우클릭으로 귀신검색창 소환
+ *    - b2: 파일 안 열고 본문 속 "단가" 1초 찾기
+ *    - b3: 영수증 사진 속 사업자번호 단어칩 1초 추출
  */
 
 /** 소환 즉시 반응 판정 시간 (ms) — Ctrl+0 / Ctrl+우클릭 즉시 소환 규격 */
 export const SUMMON_HOLD_MS = 0;
 
-/** 공문 2056 지정 문구 (토씨 그대로 유지) */
-export const DOJO_ROI_BANNER_TEXT =
-  '⏱️ 총 예상 소요시간: 딱 4분 30초! — 지금 4분 투자하고 1년 중 27일(209시간)을 아끼세요!';
-
 export type BasicStepId = 'b1' | 'b2' | 'b3';
-export type DojoItemId = 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 | 12 | 13;
-
-export interface DojoItemMeta {
-  id: DojoItemId;
-  icon: string;
-  title: string;
-  /** 한 줄 미션 안내 (TMI 금지 — 1문장) */
-  mission: string;
-}
 
 export const BASIC_STEPS: Array<{ id: BasicStepId; title: string; mission: string }> = [
   {
     id: 'b1',
     title: 'Ctrl+0 / Ctrl+우클릭 소환',
-    mission: '아래 체험 칸 위에서 키보드 Ctrl + 0 또는 마우스 Ctrl + 우클릭을 눌러 애기귀신을 불러보세요!',
+    mission: '아래 체험 칸 위에서 키보드 Ctrl + 0 또는 마우스 Ctrl + 우클릭을 눌러 귀신검색창을 불러보세요!',
   },
   {
     id: 'b2',
@@ -46,142 +32,6 @@ export const BASIC_STEPS: Array<{ id: BasicStepId; title: string; mission: strin
   },
 ];
 
-export const DOJO_ITEMS: DojoItemMeta[] = [
-  { id: 1, icon: '⌨️', title: '영타➔한타 1초 자동성형', mission: '영문으로 친 뒤 스페이스바를 누르거나 1초만 손을 떼보세요' },
-  { id: 2, icon: '🧺', title: '줄바꿈·띄어쓰기 1초 다림질', mission: '뚝뚝 끊긴 문단을 한 번에 펴세요' },
-  { id: 3, icon: '🔫', title: '1➔2➔3 연속 복사 순차발사', mission: '빈칸에서 Ctrl+V를 누르거나 클릭·우클릭해 줄줄이 꽂으세요' },
-  { id: 4, icon: '🧼', title: '시커먼 배경·광고꼬리말 서식 세탁기', mission: '지저분한 글을 순수 텍스트로 세탁하세요' },
-  { id: 5, icon: '🔑', title: 'F7~F12 팀 공유 상용구', mission: '귀신창(Ctrl+0) 소환 후 F1, F7을 차례로 누르세요' },
-  { id: 6, icon: '📋', title: '최근 5개 & 한 달 치 클립보드 검색', mission: '「우리」를 검색해 옛날 계좌를 찾으세요' },
-  { id: 7, icon: '📊', title: '화면 캡처 표 ➔ 엑셀 표(TSV) 직행', mission: '드래그 막힌 표 이미지를 엑셀 표로 바꾸세요' },
-  { id: 8, icon: '🏷️', title: '귀신 라벨러 (깡통 파일명 자동 작명)', mission: '암호 같은 파일명을 한 번에 바꾸세요' },
-  { id: 10, icon: '📄', title: '[2] 스샷·PDF변환🔒 (300DPI PDF)', mission: '클립보드 캡처 화면을 실물 PNG와 300DPI PDF로 즉시 변환하세요' },
-  { id: 11, icon: '🔗', title: '[3] 다중합본🔒 (연속 복사 1초 병합)', mission: '여러 번 복사한 조항들을 하나의 깔끔한 문단으로 합치세요' },
-  { id: 12, icon: '🔢', title: '[4] 번호·일정🔒 (하이픈·억만금 성형)', mission: '전화번호·사업자번호·날짜 하이픈 및 한글 금액을 1초 성형하세요' },
-  { id: 13, icon: '📌', title: '[5] 창고정🔒 (작업창 최상단 핀 고정)', mission: '참고 중인 작업창을 다른 창에 가려지지 않게 맨 위에 고정하세요' },
-];
-
-// ─────────────────────────────────────────────────────────────
-// 종목별 샘플(Before) & 결과(After) 로직
-// ─────────────────────────────────────────────────────────────
-
-/** ① 영타 예제 (공문 원문) — 변환 결과 '한글이 안 쳐져' */
-export const DOJO1_TYPO_SAMPLE = 'gksrmfdl dks cuwu';
-export const DOJO1_TYPO_EXPECTED = '한글이 안 쳐져';
-
-/** ② PDF 복사로 줄이 끊긴 문단 */
-export const DOJO2_BROKEN_PARAGRAPH =
-  '본 계약은 갑과 을 사이의\n임대차에 관한 사항을 정\n하며, 계약 기간은 2026\n년 11월 14일부터 2년으\n로 한다.';
-
-/**
- * 줄바꿈 다림질: 줄 끝의 단순 개행을 제거하여 한 문단으로 편다.
- * - 한글/숫자 사이에서 단어가 잘린 경우(정\n하며 / 2026\n년)는 공백 없이 붙이고,
- * - 문장부호·조사 경계(사이의\n임대차)는 공백 1칸으로 잇는다.
- * - 빈 줄(문단 구분)은 유지한다.
- */
-export function ironLineBreaks(text: string): string {
-  return text
-    .split(/\n{2,}/)
-    .map((para) =>
-      para
-        .split('\n')
-        .map((l) => l.trim())
-        .filter(Boolean)
-        .reduce((acc, line) => {
-          if (!acc) return line;
-          const prev = acc[acc.length - 1];
-          const next = line[0];
-          const wordCut =
-            (/[가-힣]/.test(prev) && /[가-힣]/.test(next) && !/[의를을이가은는에와과도로]$/.test(acc)) ||
-            (/[0-9]/.test(prev) && /[년월일원%]/.test(next));
-          return wordCut ? acc + line : `${acc} ${line}`;
-        }, '')
-    )
-    .join('\n\n')
-    .replace(/[ \t]{2,}/g, ' ')
-    .trim();
-}
-
-/** ③ 순차발사 큐 (샘플 명함) */
-export const DOJO3_SEQUENCE = ['홍길동', '010-1234-5678', '역삼동'] as const;
-
-/** ④ 뉴스 글 (시커먼 배경 + 광고 꼬리말) */
-export const DOJO4_DIRTY_TEXT =
-  '정부가 내년부터 소상공인 디지털 전환 지원금을 2배로 늘린다.\n' +
-  '▶ 관련기사 더보기\n' +
-  '홍길동 기자 hong@news.example\n' +
-  'ⓒ 귀신일보, 무단전재 및 재배포 금지';
-
-const NEWS_TAIL_PATTERNS: RegExp[] = [
-  /^▶.*$/,
-  /^[가-힣]{2,4}\s?기자(\s|$).*$/, // JS \b는 한글 경계를 인식 못하므로 공백/끝으로 판정
-  /^ⓒ.*$/,
-  /^.*무단\s?전재.*$/,
-  /^.*재배포\s?금지.*$/,
-  /^\s*\[.*(광고|AD).*\]\s*$/i,
-];
-
-/** 서식 세탁기: 광고·기자·저작권 꼬리말 줄을 제거하고 순수 본문만 남긴다. */
-export function launderNewsText(text: string): string {
-  return text
-    .split('\n')
-    .map((l) => l.replace(/\u00a0/g, ' ').trim())
-    .filter((l) => l && !NEWS_TAIL_PATTERNS.some((re) => re.test(l)))
-    .join('\n');
-}
-
-/** ⑤ 상용구 샘플 */
-export const DOJO5_SNIPPETS: Record<'F1' | 'F7', { label: string; text: string }> = {
-  F1: { label: 'F1 · 내 계좌', text: '국민은행 123-45-678910 (예금주: 홍길동)' },
-  F7: { label: 'F7 · 회사 법인계좌', text: '신한은행 140-012-345678 ((주)썬드림)' },
-};
-
-/** ⑥ 한 달 치 클립보드 샘플 (최근 → 과거 순) */
-export const DOJO6_CLIPBOARD_HISTORY: Array<{ text: string; when: string }> = [
-  { text: '오늘 오후 3시 회의실 B', when: '방금' },
-  { text: '서울특별시 강남구 테헤란로 123', when: '1시간 전' },
-  { text: 'contact@sundreamer.app', when: '어제' },
-  { text: '010-9876-5432', when: '3일 전' },
-  { text: '견적 단가 145,000원 (VAT 별도)', when: '1주 전' },
-  { text: '우리은행 1002-345-678901 (예금주: 김대리)', when: '3주 전' },
-  { text: '택배 송장 6543-2109-8765', when: '4주 전' },
-];
-export const DOJO6_TARGET_QUERY = '우리';
-
-/** 공백 무시 · 대소문자 무시 부분일치 클립보드 검색 */
-export function searchClipboardHistory(
-  history: Array<{ text: string; when: string }>,
-  query: string
-): Array<{ text: string; when: string }> {
-  const q = query.replace(/\s+/g, '').toLowerCase();
-  if (!q) return history.slice(0, 5);
-  return history.filter((h) => h.text.replace(/\s+/g, '').toLowerCase().includes(q));
-}
-
-/** ⑦ 드래그 막힌 표 이미지 샘플 */
-export const DOJO7_TABLE: string[][] = [
-  ['품목', '수량', '단가', '금액'],
-  ['A4 복사용지', '10', '4,500', '45,000'],
-  ['토너 카트리지', '2', '50,000', '100,000'],
-];
-
-/** 표 → 엑셀 붙여넣기용 TSV (탭 구분 · 줄바꿈 행 구분) */
-export function tableToTsv(rows: string[][]): string {
-  return rows.map((r) => r.map((c) => c.replace(/[\t\n]/g, ' ')).join('\t')).join('\n');
-}
-
-/** ⑧ 귀신 라벨러 샘플 (공문 원문 예시 기준) */
-export const DOJO8_LABELER_SAMPLES: Array<{ before: string; after: string; dateRule: string }> = [
-  { before: 'IMG_4821.jpg', after: '261107_김대리_영수증_145,000원.jpg', dateRule: '촬영일' },
-  { before: 'KakaoTalk_20261106.jpg', after: '261106_카톡_거래처명함.jpg', dateRule: '카톡 수신일' },
-  { before: 'scan_001.pdf', after: '250315_임대차계약서_역삼동.pdf', dateRule: '문서 내용 날짜' },
-];
-
-/** ⑨ 귀신 말풍선 샘플 */
-export const DOJO9_HOVER_FILE = '임대차계약서.pdf';
-export const DOJO9_SUMMARY_LINES = ['보증금 5,000만', '월세 320만', '만기 28.11.14'];
-export const DOJO9_HOVER_DELAY_MS = 400;
-
 /** 기본기 ② 샘플 */
 export const BASIC2_QUERY = '샘플 견적서?';
 export const BASIC2_RESULT = { file: '샘플_견적서.xlsx', value: '145,000원' };
@@ -195,18 +45,15 @@ export const BASIC3_CHIPS = ['상호: 썬드림카페', BASIC3_TARGET_CHIP, '합
 // ─────────────────────────────────────────────────────────────
 
 export const DOJO_PROGRESS_STORAGE_KEY = 'ghosti_dojo_progress_v1';
-export const DOJO_TRIAL_CHOICE_STORAGE_KEY = 'ghosti_dojo_trial_choice_v2';
 
 export interface DojoProgress {
   basics: Partial<Record<BasicStepId, boolean>>;
-  dojo: Partial<Record<DojoItemId, boolean>>;
 }
 
-export const EMPTY_DOJO_PROGRESS: DojoProgress = { basics: {}, dojo: {} };
+export const EMPTY_DOJO_PROGRESS: DojoProgress = { basics: {} };
 
-let sessionDojoProgress: DojoProgress = { basics: {}, dojo: {} };
+let sessionDojoProgress: DojoProgress = { basics: {} };
 
-// 과거 localStorage에 영구 저장되어 새로고침 후에도 도장(✓)이 지워지지 않던 잔존 데이터 일괄 정리
 try {
   if (typeof localStorage !== 'undefined') {
     localStorage.removeItem(DOJO_PROGRESS_STORAGE_KEY);
@@ -218,14 +65,12 @@ try {
 export function loadDojoProgress(): DojoProgress {
   return {
     basics: { ...sessionDojoProgress.basics },
-    dojo: { ...sessionDojoProgress.dojo },
   };
 }
 
 export function saveDojoProgress(p: DojoProgress): void {
   sessionDojoProgress = {
     basics: { ...(p.basics || {}) },
-    dojo: { ...(p.dojo || {}) },
   };
   try {
     if (typeof window !== 'undefined') {
@@ -237,7 +82,7 @@ export function saveDojoProgress(p: DojoProgress): void {
 }
 
 export function resetDojoProgress(): DojoProgress {
-  sessionDojoProgress = { basics: {}, dojo: {} };
+  sessionDojoProgress = { basics: {} };
   try {
     if (typeof localStorage !== 'undefined') {
       localStorage.removeItem(DOJO_PROGRESS_STORAGE_KEY);
@@ -253,12 +98,4 @@ export function resetDojoProgress(): DojoProgress {
 
 export function countBasicsDone(p: DojoProgress): number {
   return BASIC_STEPS.filter((s) => p.basics[s.id]).length;
-}
-
-export function countDojoDone(p: DojoProgress): number {
-  return DOJO_ITEMS.filter((d) => p.dojo[d.id]).length;
-}
-
-export function isAllDojoDone(p: DojoProgress): boolean {
-  return countBasicsDone(p) === BASIC_STEPS.length && countDojoDone(p) === DOJO_ITEMS.length;
 }

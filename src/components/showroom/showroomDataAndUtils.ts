@@ -12,8 +12,8 @@ export interface GhostiShowroomLandingProps {
 
 export interface ShortsItem {
   id: string;
-  category: 'video' | 'doc' | 'clean' | 'typo';
-  searchKeyword?: '귀신비서' | '귀신검색' | '귀신창';
+  category: 'video' | 'doc' | 'clean';
+  searchKeyword?: '귀신비서' | '귀신검색';
   title: string;
   hookTime: string;
   hookLine: string;
@@ -25,145 +25,6 @@ export interface ShortsItem {
   thumbnailBg: string;
   publishedAt?: string;
   isNew?: boolean;
-}
-
-// ============================================================================
-// 0.2ms Real-Time QWERTY (영타) -> Hangul (한글 두벌식) Buttonless Auto Engine
-// ============================================================================
-const CHO = ['ㄱ', 'ㄲ', 'ㄴ', 'ㄷ', 'ㄸ', 'ㄹ', 'ㅁ', 'ㅂ', 'ㅃ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅉ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
-const JUNG = ['ㅏ', 'ㅐ', 'ㅑ', 'ㅒ', 'ㅓ', 'ㅔ', 'ㅕ', 'ㅖ', 'ㅗ', 'ㅘ', 'ㅙ', 'ㅚ', 'ㅛ', 'ㅜ', 'ㅝ', 'ㅞ', 'ㅟ', 'ㅠ', 'ㅡ', 'ㅢ', 'ㅣ'];
-const JONG = ['', 'ㄱ', 'ㄲ', 'ㄳ', 'ㄴ', 'ㄵ', 'ㄶ', 'ㄷ', 'ㄹ', 'ㄺ', 'ㄻ', 'ㄼ', 'ㄽ', 'ㄾ', 'ㄿ', 'ㅀ', 'ㅁ', 'ㅂ', 'ㅄ', 'ㅅ', 'ㅆ', 'ㅇ', 'ㅈ', 'ㅊ', 'ㅋ', 'ㅌ', 'ㅍ', 'ㅎ'];
-
-const KEY_TO_JAMO: Record<string, string> = {
-  q: 'ㅂ', Q: 'ㅃ', w: 'ㅈ', W: 'ㅉ', e: 'ㄷ', E: 'ㄸ', r: 'ㄱ', R: 'ㄲ', t: 'ㅅ', T: 'ㅆ',
-  y: 'ㅛ', u: 'ㅕ', i: 'ㅑ', o: 'ㅐ', O: 'ㅒ', p: 'ㅔ', P: 'ㅖ',
-  a: 'ㅁ', s: 'ㄴ', d: 'ㅇ', f: 'ㄹ', g: 'ㅎ', h: 'ㅗ', j: 'ㅓ', k: 'ㅏ', l: 'ㅣ',
-  z: 'ㅋ', x: 'ㅌ', c: 'ㅊ', v: 'ㅍ', b: 'ㅠ', n: 'ㅜ', m: 'ㅡ',
-  Y: 'ㅛ', U: 'ㅕ', I: 'ㅑ', A: 'ㅁ', S: 'ㄴ', D: 'ㅇ', F: 'ㄹ', G: 'ㅎ', H: 'ㅗ', J: 'ㅓ', K: 'ㅏ', L: 'ㅣ',
-  Z: 'ㅋ', X: 'ㅌ', C: 'ㅊ', V: 'ㅍ', B: 'ㅠ', N: 'ㅜ', M: 'ㅡ',
-};
-
-const COMBO_JUNG: Record<string, string> = {
-  'ㅗㅏ': 'ㅘ', 'ㅗㅐ': 'ㅙ', 'ㅗㅣ': 'ㅚ',
-  'ㅜㅓ': 'ㅝ', 'ㅜㅔ': 'ㅞ', 'ㅜㅣ': 'ㅟ',
-  'ㅡㅣ': 'ㅢ',
-};
-
-const COMBO_JONG: Record<string, string> = {
-  'ㄱㅅ': 'ㄳ', 'ㄴㅈ': 'ㄵ', 'ㄴㅎ': 'ㄶ',
-  'ㄹㄱ': 'ㄺ', 'ㄹㅁ': 'ㄻ', 'ㄹㅂ': 'ㄼ', 'ㄹㅅ': 'ㄽ', 'ㄹㅌ': 'ㄾ', 'ㄹㅍ': 'ㄿ', 'ㄹㅎ': 'ㅀ',
-  'ㅂㅅ': 'ㅄ',
-};
-
-const SPLIT_JONG: Record<string, [string, string]> = {
-  'ㄳ': ['ㄱ', 'ㅅ'], 'ㄵ': ['ㄴ', 'ㅈ'], 'ㄶ': ['ㄴ', 'ㅎ'],
-  'ㄺ': ['ㄹ', 'ㄱ'], 'ㄻ': ['ㄹ', 'ㅁ'], 'ㄼ': ['ㄹ', 'ㅂ'], 'ㄽ': ['ㄹ', 'ㅅ'], 'ㄾ': ['ㄹ', 'ㅌ'], 'ㄿ': ['ㄹ', 'ㅍ'], 'ㅀ': ['ㄹ', 'ㅎ'],
-  'ㅄ': ['ㅂ', 'ㅅ'],
-};
-
-function assembleJamos(jamos: string[]): string {
-  let result = '';
-  let cho = -1;
-  let jung = -1;
-  let jong = 0;
-
-  const flush = () => {
-    if (cho !== -1 && jung !== -1) {
-      result += String.fromCharCode(0xac00 + (cho * 21 + jung) * 28 + jong);
-    } else if (cho !== -1) {
-      result += CHO[cho];
-    } else if (jung !== -1) {
-      result += JUNG[jung];
-    }
-    cho = -1;
-    jung = -1;
-    jong = 0;
-  };
-
-  for (const j of jamos) {
-    const isVowel = JUNG.includes(j);
-    if (!isVowel) {
-      if (cho === -1) {
-        cho = CHO.indexOf(j);
-      } else if (jung === -1) {
-        flush();
-        cho = CHO.indexOf(j);
-      } else if (jong === 0) {
-        const jIdx = JONG.indexOf(j);
-        if (jIdx !== -1) {
-          jong = jIdx;
-        } else {
-          flush();
-          cho = CHO.indexOf(j);
-        }
-      } else {
-        const prevJong = JONG[jong];
-        const combined = COMBO_JONG[prevJong + j];
-        if (combined && JONG.indexOf(combined) !== -1) {
-          jong = JONG.indexOf(combined);
-        } else {
-          flush();
-          cho = CHO.indexOf(j);
-        }
-      }
-    } else {
-      if (cho === -1) {
-        if (jung === -1) {
-          jung = JUNG.indexOf(j);
-        } else {
-          const prevJung = JUNG[jung];
-          const combined = COMBO_JUNG[prevJung + j];
-          if (combined) {
-            jung = JUNG.indexOf(combined);
-          } else {
-            flush();
-            jung = JUNG.indexOf(j);
-          }
-        }
-      } else if (jung === -1) {
-        jung = JUNG.indexOf(j);
-      } else if (jong === 0) {
-        const prevJung = JUNG[jung];
-        const combined = COMBO_JUNG[prevJung + j];
-        if (combined) {
-          jung = JUNG.indexOf(combined);
-        } else {
-          flush();
-          jung = JUNG.indexOf(j);
-        }
-      } else {
-        const prevJong = JONG[jong];
-        const split = SPLIT_JONG[prevJong];
-        if (split) {
-          jong = JONG.indexOf(split[0]);
-          const nextCho = split[1];
-          flush();
-          cho = CHO.indexOf(nextCho);
-          jung = JUNG.indexOf(j);
-        } else {
-          jong = 0;
-          flush();
-          cho = CHO.indexOf(prevJong);
-          jung = JUNG.indexOf(j);
-        }
-      }
-    }
-  }
-  flush();
-  return result;
-}
-
-export function convertEngTypoToKor(input: string): string {
-  const KEEP_ENG = new Set(['PC', 'AI', 'PDF', 'USB', 'OK', 'SNS', 'VIP', 'B2B', 'IT', 'OS', 'RAM', 'SSD', 'CCTV']);
-  return input.replace(/[A-Za-z]+/g, (word) => {
-    if (KEEP_ENG.has(word.toUpperCase())) return word;
-    const jamos: string[] = [];
-    for (const ch of word) {
-      const mapped = KEY_TO_JAMO[ch];
-      if (mapped) jamos.push(mapped);
-    }
-    return assembleJamos(jamos);
-  });
 }
 
 export const DEFAULT_SHORTS_DATA: ShortsItem[] = [
@@ -337,8 +198,7 @@ export const SAMPLE_PC_PROGRAMS: SamplePcProgram[] = [
 export const SAMPLE_PC_BASE_PCT = 61;
 export const SAMPLE_PC_REVIVED_PCT = 93;
 
-export type OnboardingWeaponTab = 'video' | 'doc' | 'clean' | 'share' | 'superpower';
-export type FreeOrDevToolbarKey = 'auto' | 'seq' | '1' | 'snip' | 'zip' | 'dev_2' | 'dev_3' | 'dev_5';
+export type OnboardingWeaponTab = 'video' | 'doc' | 'clean' | 'share';
 
 export interface SafeOnboardingChatMsg {
   id: string;
@@ -408,18 +268,6 @@ export const WEAPON_META: Record<
     stageTitle: '📸 가족·모임 원본 사진, 만료 없이 평생 0원',
     stageBadge: '#사진공유 (샘플 체험 · 인원·장수 무제한 0원)',
     shortVideoUrl: '',
-  },
-  superpower: {
-    icon: '⚡',
-    chipLabel: '하던 일 멈추지 마세요, 쓰던 자리에서 1초면 끝',
-    chipSub: '영타 자동 변환 · 칸 맞춤 복붙',
-    keywordBadge: '#귀신창',
-    userBubble: 'dkssudgktpdy 영타 오타랑 PDF 깨진 줄바꿈, 창 안 바꾸고 그 자리에서 고쳐줘!',
-    secretaryReply:
-      '하던 일 멈추지 마세요! 창을 오가며 헤매지 않고 영타 자동 변환부터 칸 맞춤 복붙까지 Ctrl+0 하나로 일하던 커서 위에서 1초 만에 끝냅니다~ ⚡',
-    stageTitle: '⚡ 하던 일 멈추지 마세요, 쓰던 자리에서 1초면 끝',
-    stageBadge: '#귀신창 (Ctrl+0 / 보조 Ctrl+우클릭 · 기본기 평생 무료)',
-    shortVideoUrl: '/showroom/shorts/ghosti_dkssudgktp_261110.mp4',
   },
 };
 
