@@ -55,7 +55,7 @@ const WORK_LOUNGE_FOLDERS = [
   { id: 'all', name: 'S:\\ (업무 드라이브 전체)', count: 0, path: 'S:\\' },
   { id: 'root', name: 'S:\\ 루트 (최상단 파일)', count: 0, path: 'S:\\' },
   { id: 'contracts', name: '01_계약서_법무문서', count: 0, path: 'S:\\01_계약서_법무문서' },
-  { id: 'quotes', name: '02_견적서_단가표_엑셀', count: 0, path: 'S:\\02_견적서_단가표_엑셀' },
+  { id: 'quotes', name: '02_견적서_엑셀문서', count: 0, path: 'S:\\02_견적서_엑셀문서' },
   { id: 'tax', name: '03_세금계산서_회계증빙', count: 0, path: 'S:\\03_세금계산서_회계증빙' },
   { id: 'site', name: '04_현장시공_도면_미디어', count: 0, path: 'S:\\04_현장시공_도면_미디어' },
 ];
@@ -1109,7 +1109,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
   const handleOpenGhostSearchWindow = async () => {
     if (!isZCoreConnected) {
-      showToast('⚡ PC 엔진을 연결하면 S: 드라이브 계약서·단가표 본문을 열지 않고 0.1초 만에 귀신검색창으로 소환합니다!');
+      showToast('⚡ PC 엔진을 연결하면 S: 드라이브 계약서·업무 문서 본문을 열지 않고 0.1초 만에 귀신검색창으로 소환합니다!');
       openZCoreConnectModal();
       return;
     }
@@ -1309,7 +1309,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
               </h3>
               <p className="text-[12.5px] text-zinc-200 break-keep">
                 {isWorkTrialExpired || remoteRoomLockReason === 'WORK_TRIAL_EXPIRED'
-                  ? '내 PC 업무 폴더 안의 계약서·단가표·도면 원본 파일은 단 1개도 삭제되지 않고 그대로 보존되어 있습니다. 아래 이용권을 구독하시면 즉시 탐색기 S: 드라이브와 팀원 24시간 직통 연결이 다시 열립니다.'
+                  ? '내 PC 업무 폴더 안의 계약서·견적서·도면 원본 파일은 단 1개도 삭제되지 않고 그대로 보존되어 있습니다. 아래 이용권을 구독하시면 즉시 탐색기 S: 드라이브와 팀원 24시간 직통 연결이 다시 열립니다.'
                   : '24시간 켜두는 사내 대장 PC의 S: 드라이브에 전국 어디서나(집·현장·LTE) 방화벽 막힘 없이 0초 직결되며, 우리 서버에는 회사 파일이 1 Byte도 저장되지 않습니다(Zero-Cloud).'}
               </p>
             </div>
@@ -1491,7 +1491,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                   type="button"
                   onClick={() => void handleOpenGhostSearchWindow()}
                   className="px-3.5 py-1.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] text-zinc-950 font-label-sm text-[12px] font-black cursor-pointer flex items-center gap-1.5 shadow-sm transition-all"
-                  title="독립 귀신검색창을 띄워 S: 드라이브 계약서·단가표·한글(HWP) 본문을 열지 않고 0.1초 만에 소환합니다 (바탕화면·탐색기 빈 공간 Ctrl+0 1회와 동일)"
+                  title="독립 귀신검색창을 띄워 S: 드라이브 계약서·견적서·한글(HWP) 본문을 열지 않고 0.1초 만에 소환합니다 (바탕화면·탐색기 빈 공간 Ctrl+0 1회와 동일)"
                 >
                   <span>👻 귀신검색창으로 S: 문서 1초 검색</span>
                 </button>
@@ -1899,8 +1899,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
               }}
               placeholder={
                 isMobileOrStore
-                  ? '계약서 조항, 단가표 숫자, 시공 사진 검색'
-                  : '계약서 조항, 엑셀 단가표 숫자, 한글(HWP), 현장 시공 사진 검색... (인물 여권 제외 · 바탕화면/S: 탐색기 빈 곳 Ctrl+0 1회로도 즉시 검색)'
+                  ? '계약서 조항, 견적서·엑셀 문서, 시공 사진 검색'
+                  : '계약서 조항, 견적서·엑셀 문서, 한글(HWP), 현장 시공 사진 검색... (인물 여권 제외 · 바탕화면/S: 탐색기 빈 곳 Ctrl+0 1회로도 즉시 검색)'
               }
               className="w-full bg-transparent text-white placeholder-zinc-500 font-body-sm text-[13.5px] focus:outline-none"
             />

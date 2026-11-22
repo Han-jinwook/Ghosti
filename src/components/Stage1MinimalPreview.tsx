@@ -509,8 +509,8 @@ export const DEMO_SEARCH_SAMPLE_DOCS_2: LocalDocumentFile[] = [
   },
   {
     id: 'demo_sample_doc_2',
-    fileName: '2026_하반기_거래처_납품단가표_샘플.xlsx',
-    title: '[체험 샘플 2/2] 2026 하반기 거래처별 자재 납품단가표',
+    fileName: '2026_하반기_거래처_납품견적서_샘플.xlsx',
+    title: '[체험 샘플 2/2] 2026 하반기 거래처별 자재 납품견적서',
     ext: 'XLSX',
     categoryBadge: '견적·단가 샘플',
     date: '2025-09-03',
@@ -518,7 +518,7 @@ export const DEMO_SEARCH_SAMPLE_DOCS_2: LocalDocumentFile[] = [
     deviceSource: '체험판 샘플 문서',
     extractedText:
       '품목: 고효율 LED 모듈 A형 | 공급단가: 145,000원(VAT 별도) | 최소 발주수량: 50EA | 담당: 한일건재 김대리',
-    keywords: ['단가표', '견적서', '납품', '한일건재', '엑셀'],
+    keywords: ['견적서', '문서', '납품', '한일건재', '엑셀'],
   },
 ];
 

@@ -53,7 +53,7 @@ export const DOJO_ITEMS: DojoItemMeta[] = [
   { id: 4, icon: '🧼', title: '시커먼 배경·광고꼬리말 서식 세탁기', mission: '지저분한 글을 순수 텍스트로 세탁하세요' },
   { id: 5, icon: '🔑', title: 'F7~F12 팀 공유 상용구', mission: '귀신창(Ctrl+0) 소환 후 F1, F7을 차례로 누르세요' },
   { id: 6, icon: '📋', title: '최근 5개 & 한 달 치 클립보드 검색', mission: '「우리」를 검색해 옛날 계좌를 찾으세요' },
-  { id: 7, icon: '📊', title: '화면 캡처 표 ➔ 엑셀 표(TSV) 직행', mission: '드래그 막힌 단가표를 엑셀 표로 바꾸세요' },
+  { id: 7, icon: '📊', title: '화면 캡처 표 ➔ 엑셀 표(TSV) 직행', mission: '드래그 막힌 표 이미지를 엑셀 표로 바꾸세요' },
   { id: 8, icon: '🏷️', title: '귀신 라벨러 (깡통 파일명 자동 작명)', mission: '암호 같은 파일명을 한 번에 바꾸세요' },
   { id: 10, icon: '📄', title: '[2] 스샷·PDF변환🔒 (300DPI PDF)', mission: '클립보드 캡처 화면을 실물 PNG와 300DPI PDF로 즉시 변환하세요' },
   { id: 11, icon: '🔗', title: '[3] 다중합본🔒 (연속 복사 1초 병합)', mission: '여러 번 복사한 조항들을 하나의 깔끔한 문단으로 합치세요' },
@@ -158,7 +158,7 @@ export function searchClipboardHistory(
   return history.filter((h) => h.text.replace(/\s+/g, '').toLowerCase().includes(q));
 }
 
-/** ⑦ 드래그 막힌 이미지 단가표 샘플 */
+/** ⑦ 드래그 막힌 표 이미지 샘플 */
 export const DOJO7_TABLE: string[][] = [
   ['품목', '수량', '단가', '금액'],
   ['A4 복사용지', '10', '4,500', '45,000'],

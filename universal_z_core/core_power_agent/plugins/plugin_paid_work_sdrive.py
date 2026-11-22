@@ -68,7 +68,7 @@ WORK_SDRIVE_ACTIONS = {
 
 SUBFOLDER_SPECS: Tuple[Tuple[str, str], ...] = (
     ("contracts", "01_계약서_법무문서"),
-    ("quotes", "02_견적서_단가표_엑셀"),
+    ("quotes", "02_견적서_엑셀문서"),
     ("tax", "03_세금계산서_회계증빙"),
     ("site", "04_현장시공_도면_미디어"),
 )
@@ -1330,7 +1330,7 @@ def write_uploaded_work_file(data: Dict[str, Any] | None = None) -> Dict[str, An
         else:
             ext_l = Path(raw_name).suffix.lower()
             if ext_l in (".xlsx", ".xls", ".csv"):
-                rel_path = f"02_견적서_단가표_엑셀/{raw_name}"
+                rel_path = f"02_견적서_엑셀문서/{raw_name}"
             elif ext_l in (".hwp", ".hwpx", ".docx", ".doc"):
                 rel_path = f"01_계약서_법무문서/{raw_name}"
             elif ext_l in _IMAGE_EXTS or ext_l in (".dwg", ".dxf", ".mp4", ".mov"):

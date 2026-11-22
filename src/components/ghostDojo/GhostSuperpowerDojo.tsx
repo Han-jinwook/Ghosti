@@ -903,7 +903,7 @@ const Dojo13: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   return (
     <div className="flex flex-col gap-2">
       <div className={`${boxCls} flex items-center justify-between`}>
-        <span>🪟 참고 중인 단가표 엑셀 창 (261105_납품단가표.xlsx)</span>
+        <span>🪟 참고 중인 견적서 엑셀 창 (261105_납품견적서.xlsx)</span>
         <span className={`px-2 py-0.5 rounded text-[11px] font-extrabold ${pinned ? 'bg-amber-400 text-zinc-950' : 'bg-zinc-800 text-zinc-400'}`}>
           {pinned ? '📌 항상 위 고정됨 (Always on Top)' : '일반 창'}
         </span>

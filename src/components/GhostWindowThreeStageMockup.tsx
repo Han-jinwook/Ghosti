@@ -207,11 +207,11 @@ const MINI_EXPLORER_ITEMS: SummonCandidateItem[] = [
     sourceBadge: '💼 팀 S: 드라이브',
     tierScope: 'work_team',
     isFreePc: false,
-    fileName: '261105_김대리_A업체_납품단가표.xlsx',
+    fileName: '261105_김대리_A업체_납품견적서.xlsx',
     folderPath: 'S:\\02_구매자재',
     matchedValueShort: 'A업체 표준 납품단가 @14,500원 (500개 이상 @13,800원)',
     replaceSentence: 'A업체 표준 납품단가 개당 14,500원 (500개 이상 13,800원)',
-    ghostPreviewTitle: '📊 S:\\02_구매자재\\261105_김대리_A업체_납품단가표.xlsx',
+    ghostPreviewTitle: '📊 S:\\02_구매자재\\261105_김대리_A업체_납품견적서.xlsx',
     ghostPreviewLines: [
       '코드   | 업체명         | 품목명        | 단가(원)  | MOQ 할인가',
       '👉 V-01 | A업체(성진정밀) | 방열 하우징   | 14,500원  | 500개 이상 13,800원',
@@ -2022,7 +2022,7 @@ export const GhostWindowThreeStageMockup: React.FC<GhostWindowThreeStageMockupPr
           <p className="text-[12px] text-zinc-200">
             {trainingStage === 1 && '키보드 Ctrl + 0 또는 Ctrl + 우클릭을 누르면 1초 만에 효과음과 함께 귀신창이 열립니다.'}
             {trainingStage === 2 && '여러 줄을 차례대로 복사한 뒤 순서대로 톡톡 붙여넣습니다.'}
-            {trainingStage === 3 && '드래그 후 Ctrl + 0(다림질 우선 시도 후 자동 검색) 또는 문장 끝에 ?를 치고 Ctrl + 0을 누르면 계약서·단가표 숫자가 바로 들어갑니다.'}
+            {trainingStage === 3 && '드래그 후 Ctrl + 0(다림질 우선 시도 후 자동 검색) 또는 문장 끝에 ?를 치고 Ctrl + 0을 누르면 계약서·업무 문서 내용이 바로 들어갑니다.'}
           </p>
         </div>
       )}

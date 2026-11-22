@@ -344,7 +344,7 @@ export async function purgeMemberLocalRoomVault(
 
 /**
  * [업무 공유(S:) 전용 Zero-Cloud 로컬 30KB 미리보기 캐시]
- * - 업무 공유방 문서·단가표·도면은 Supabase 서버 DB 테이블에 단 1 Byte도 저장하지 않습니다 (서버 점유 0 Byte 원안 엄수).
+ * - 업무 공유방 문서·견적서·도면은 Supabase 서버 DB 테이블에 단 1 Byte도 저장하지 않습니다 (서버 점유 0 Byte 원안 엄수).
  * - 대신 Realtime Broadcast로 수신한 30KB 이하 경량 텍스트/표/썸네일 미리보기만 팀원 본인 기기 IndexedDB에 캐싱하여
  *   대장 PC가 절전 중일 때도 오프라인 0.1초 웹 미리보기·검색을 지원합니다 (원본 바이너리 base64는 로컬 캐시에서 자동 제외).
  */

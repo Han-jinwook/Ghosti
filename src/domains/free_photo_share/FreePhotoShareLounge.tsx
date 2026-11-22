@@ -692,7 +692,7 @@ export const LoungeView: React.FC = () => {
       {!isStoreAppMode && activeLoungeType === 'work' && (
         <section className="px-4 py-2.5 rounded-2xl bg-[#18181B] border border-amber-400/30 flex flex-wrap items-center justify-between gap-2">
           <span className="text-[12.5px] text-zinc-200 font-bold">
-            💼 팀 공유 S: 드라이브 · 계약서/단가표 본문 검색 (🎁 30일 무제한 무료체험)
+            💼 팀 공유 S: 드라이브 · 계약서/업무 문서 본문 검색 (🎁 30일 무제한 무료체험)
           </span>
           <button
             type="button"
