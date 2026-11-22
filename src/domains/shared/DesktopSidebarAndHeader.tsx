@@ -3,6 +3,7 @@ import { useSaySeeStore, type DesktopTab } from '../../store/useSaySeeStore';
 import type { FamilyRoomId, LoungeType } from '../../types/saysee';
 import { GhostiBrandLogo } from '../../components/GhostiBrandLogo';
 import {
+  GhostiHeaderQuickShareButton,
   GhostiSidebarBottomFamilyLauncher,
   GhostiTopRightHubAnchor,
 } from '../../components/GhostiHubInfraBridge';
@@ -983,27 +984,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                   <span>가이드</span>
                 </button>
 
-                <button
-                  type="button"
-                  onClick={() => {
-                    const shareText =
-                      '귀신같이(Ghosti) | 사진·영상·서류 속 내용까지 1초 만에 꿰뚫어 찾는 1초 AI 내용검색 — 내 폰·PC 속 내용검색·손보기는 언제나 0원, 가족·모임·업무 공유는 방장 한 분만 https://ghosti.sundreamer.app';
-                    if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                      void navigator.clipboard.writeText(shareText);
-                    }
-                    useSaySeeStore.setState({
-                      lastQuarantineToast: '💌 [앱 공유 링크 복사됨] "초대받은 가족·회원·직원은 언제나 무료입니다" 안내가 클립보드에 준비되었습니다!',
-                    });
-                  }}
-                  title="지인·가족에게 앱 공유하기 (초대받은 가족·회원·직원은 언제나 무료)"
-                  className={`flex w-6 h-6 sm:w-7 sm:h-7 rounded-lg items-center justify-center transition-all cursor-pointer shrink-0 outline-none ${
-                    themeMode === 'light'
-                      ? 'text-slate-500 hover:text-slate-800 hover:bg-black/5'
-                      : 'text-zinc-300 hover:text-white hover:bg-white/10'
-                  }`}
-                >
-                  <span className="material-symbols-outlined text-[15px]">share</span>
-                </button>
+                <GhostiHeaderQuickShareButton themeMode={themeMode} />
 
                 <GhostiTopRightHubAnchor themeMode={themeMode} />
               </div>

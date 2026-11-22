@@ -2,7 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { zCoreBridge, isZCoreOutdated } from '../services/zCoreBridge';
 import { hasAuthenticatedHubAccountSession } from '../services/supabaseClient';
 import { useSaySeeStore, getActivePersonaForCluster, type MobileTab } from '../store/useSaySeeStore';
-import { GhostiTopRightHubAnchor } from './GhostiHubInfraBridge';
+import {
+  GhostiHeaderQuickShareButton,
+  GhostiTopRightHubAnchor,
+} from './GhostiHubInfraBridge';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
 import { ZCoreEngineStatusBadge } from './ZCoreEngineStatusBadge';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
@@ -630,28 +633,7 @@ export const MobileAppView: React.FC = () => {
                   <span>가이드</span>
                 </button>
               )}
-              <button
-                type="button"
-                onClick={() => {
-                  const shareText =
-                    '귀신같이(Ghosti) — 내 PC와 모바일에 1초 초능력을! 광고 0% · 클라우드 월세 0원 평생 무료 (초대받은 가족·회원·직원도 언제나 0원) https://ghosti.sundreamer.app';
-                  if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                    void navigator.clipboard.writeText(shareText);
-                  }
-                  useSaySeeStore.setState({
-                    lastQuarantineToast:
-                      '💌 [앱 공유 링크 복사됨] "초대받은 가족·회원·직원은 언제나 무료입니다" 안내가 클립보드에 준비되었습니다!',
-                  });
-                }}
-                title="지인·가족에게 앱 공유하기"
-                className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 cursor-pointer outline-none ${
-                  themeMode === 'light'
-                    ? 'text-slate-500 hover:text-slate-800 hover:bg-black/5'
-                    : 'text-zinc-300 hover:text-white hover:bg-white/10'
-                }`}
-              >
-                <span className="material-symbols-outlined text-[15px]">share</span>
-              </button>
+              <GhostiHeaderQuickShareButton themeMode={themeMode} compact />
               <GhostiTopRightHubAnchor themeMode={themeMode} />
             </div>
           </div>
@@ -697,27 +679,7 @@ export const MobileAppView: React.FC = () => {
                       <span>가이드</span>
                     </button>
                   )}
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const shareText =
-                        '귀신같이(Ghosti) — 내 PC와 모바일에 1초 초능력을! 광고 0% · 클라우드 월세 0원 평생 무료 (초대받은 가족·회원·직원도 언제나 0원) https://ghosti.sundreamer.app';
-                      if (typeof navigator !== 'undefined' && navigator.clipboard) {
-                        void navigator.clipboard.writeText(shareText);
-                      }
-                      useSaySeeStore.setState({
-                        lastQuarantineToast: '💌 [앱 공유 링크 복사됨] "초대받은 가족·회원·직원은 언제나 무료입니다" 안내가 클립보드에 준비되었습니다!',
-                      });
-                    }}
-                    title="지인·가족에게 앱 공유하기"
-                    className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 cursor-pointer outline-none ${
-                      themeMode === 'light'
-                        ? 'text-slate-500 hover:text-slate-800 hover:bg-black/5'
-                        : 'text-zinc-300 hover:text-white hover:bg-white/10'
-                    }`}
-                  >
-                    <span className="material-symbols-outlined text-[16px]">share</span>
-                  </button>
+                  <GhostiHeaderQuickShareButton themeMode={themeMode} compact />
                   <GhostiTopRightHubAnchor themeMode={themeMode} />
                 </div>
               </div>

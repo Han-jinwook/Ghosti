@@ -89,6 +89,112 @@ export function useIsCoinHiddenInStore(): boolean {
 }
 
 /**
+ * [0. 우측 상단 헤더 앱 공유 아이콘 버튼 + 아이콘 직하단 초경량 복사 알림 말풍선]
+ * - 하단 전역 토스트(lastQuarantineToast)를 띄우지 않고, 클릭한 공유 아이콘 바로 밑에 가볍게 떴다가 2.2초 뒤 사라집니다.
+ */
+export const GhostiHeaderQuickShareButton: React.FC<{
+  themeMode: 'light' | 'dark';
+  compact?: boolean;
+}> = ({ themeMode, compact = false }) => {
+  const [copied, setCopied] = useState(false);
+  const timerRef = useRef<number | null>(null);
+  const wrapRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timerRef.current !== null) {
+        window.clearTimeout(timerRef.current);
+      }
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!copied) return;
+    const onDocPointerDown = (e: PointerEvent) => {
+      if (wrapRef.current && !wrapRef.current.contains(e.target as Node)) {
+        setCopied(false);
+      }
+    };
+    document.addEventListener('pointerdown', onDocPointerDown);
+    return () => document.removeEventListener('pointerdown', onDocPointerDown);
+  }, [copied]);
+
+  const handleShareClick = () => {
+    const shareText =
+      '귀신같이(Ghosti) — 내 PC와 모바일에 1초 초능력을! 내용검색·비서·사진공유는 평생 0원 (초대받은 가족·회원·직원도 언제나 무료) https://ghosti.sundreamer.app';
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      void navigator.clipboard.writeText(shareText).catch(() => {});
+    }
+    setCopied(true);
+    if (timerRef.current !== null) {
+      window.clearTimeout(timerRef.current);
+    }
+    timerRef.current = window.setTimeout(() => {
+      setCopied(false);
+      timerRef.current = null;
+    }, 2200);
+  };
+
+  return (
+    <div ref={wrapRef} className="relative flex items-center shrink-0">
+      <button
+        type="button"
+        onClick={handleShareClick}
+        title="지인·가족에게 앱 공유하기 (초대받은 가족·회원·직원은 언제나 무료)"
+        aria-label="앱 공유 링크 복사"
+        className={`flex ${
+          compact ? 'w-7 h-7' : 'w-6 h-6 sm:w-7 sm:h-7'
+        } rounded-lg items-center justify-center transition-all cursor-pointer shrink-0 outline-none ${
+          copied
+            ? themeMode === 'light'
+              ? 'bg-teal-50 text-teal-700'
+              : 'bg-teal-500/20 text-teal-300'
+            : themeMode === 'light'
+            ? 'text-slate-500 hover:text-slate-800 hover:bg-black/5'
+            : 'text-zinc-300 hover:text-white hover:bg-white/10'
+        }`}
+      >
+        <span className="material-symbols-outlined text-[15px]">
+          {copied ? 'check' : 'share'}
+        </span>
+      </button>
+
+      {copied && (
+        <div
+          role="status"
+          aria-live="polite"
+          className={`absolute right-0 top-full mt-1.5 z-50 px-2.5 py-1.5 rounded-xl border whitespace-nowrap pointer-events-none select-none shadow-lg transition-all ${
+            themeMode === 'light'
+              ? 'bg-white/98 border-teal-200 text-slate-800 shadow-slate-900/10'
+              : 'bg-zinc-900/95 border-teal-400/40 text-zinc-100 shadow-black/50'
+          }`}
+        >
+          <span
+            aria-hidden="true"
+            className={`absolute -top-1 right-2.5 w-2 h-2 rotate-45 border-l border-t ${
+              themeMode === 'light'
+                ? 'bg-white border-teal-200'
+                : 'bg-zinc-900 border-teal-400/40'
+            }`}
+          />
+          <div className="flex items-center gap-1 text-[11.5px] font-extrabold leading-tight">
+            <span className={themeMode === 'light' ? 'text-teal-600' : 'text-teal-300'}>✓</span>
+            <span>공유 링크 복사됨</span>
+          </div>
+          <div
+            className={`text-[10px] font-semibold leading-tight mt-0.5 ${
+              themeMode === 'light' ? 'text-slate-500' : 'text-zinc-400'
+            }`}
+          >
+            초대받은 분은 언제나 무료
+          </div>
+        </div>
+      )}
+    </div>
+  );
+};
+
+/**
  * [1. 우측 상단 헤더 허브 앵커 (프로필 위젯 단독)]
  * - 코인 표시 알약은 프로필 모달 내부에 이미 포함되어 있으므로 헤더에서 제외하고,
  *   허브 표준 프로필 위젯만 심플하게 렌더링합니다.
