@@ -879,10 +879,23 @@ export const GhostSearchTrainingPage: React.FC = () => {
   return (
     <div className="w-full max-w-[1160px] mx-auto px-4 sm:px-6 md:px-8 py-6 flex flex-col gap-5 pb-20">
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex flex-col gap-1">
-          <h1 className="text-[20px] sm:text-[22px] font-bold text-slate-900">귀신검색</h1>
+        <div className="flex flex-col gap-2">
+          <div className="flex flex-wrap items-center gap-3">
+            <h1 className="text-[20px] sm:text-[22px] font-bold text-slate-900">귀신검색</h1>
+            <div className="inline-flex flex-wrap items-center gap-2.5 px-3 py-1 rounded-xl bg-white border border-slate-200">
+              <span className="text-[12px] font-semibold text-slate-600 tracking-tight">
+                귀신검색 호출 단축키
+              </span>
+              <span className="h-3.5 w-px bg-slate-200" />
+              <img
+                src="/ghostkey_shortcut_badge.png"
+                alt="Ctrl+0 / Ctrl+우클릭"
+                className="h-6 sm:h-7 w-auto object-contain select-none"
+              />
+            </div>
+          </div>
           <p className="text-[13.5px] text-slate-500">
-            바탕화면이나 작업 화면에서 <strong className="text-slate-800">Ctrl + 0</strong> 또는 <strong className="text-slate-800">Ctrl + 우클릭</strong>으로 검색창을 바로 열 수 있습니다.
+            바탕화면이나 작업 화면에서 언제든 검색창을 바로 열 수 있습니다.
           </p>
         </div>
         {connected && (

@@ -93,8 +93,13 @@ const Basic1: React.FC<{ onDone: () => void }> = ({ onDone }) => {
     <div className="flex flex-col gap-2">
       <div
         {...handlers}
-        className="select-none min-h-20 px-4 py-3 rounded-lg border border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center gap-1.5 text-[13px] text-slate-600 cursor-pointer focus:outline-none focus:border-slate-900"
+        className="select-none min-h-22 px-4 py-3.5 rounded-lg border border-dashed border-slate-300 bg-slate-50 flex flex-col items-center justify-center gap-2 text-[13px] text-slate-600 cursor-pointer focus:outline-none focus:border-slate-900"
       >
+        <img
+          src="/ghostkey_shortcut_badge.png"
+          alt="Ctrl+0 / Ctrl+우클릭"
+          className="h-7 sm:h-8 w-auto object-contain select-none pointer-events-none"
+        />
         <span>
           이 영역 위에서 <kbd className={summonKeyBadgeCls}>Ctrl + 0</kbd> 또는{' '}
           <kbd className={summonKeyBadgeCls}>Ctrl + 우클릭</kbd>을 눌러보세요.
