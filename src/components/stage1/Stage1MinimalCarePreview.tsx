@@ -1293,9 +1293,12 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                         type="button"
                         disabled={quarantineMoving}
                         onClick={() => void undoLastQuarantine()}
-                        className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer disabled:opacity-40"
+                        className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer disabled:opacity-70 disabled:cursor-wait inline-flex items-center gap-1.5"
                       >
-                        되돌리기
+                        {quarantineMoving && (
+                          <span className="inline-block w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                        )}
+                        {quarantineMoving ? '복원 중...' : '되돌리기'}
                       </button>
                       <button
                         type="button"
@@ -1341,9 +1344,12 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                           onClick={() =>
                             void restoreFromQuarantine(quarantinedPhotos.map((p) => p.id))
                           }
-                          className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer disabled:opacity-40"
+                          className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer disabled:opacity-70 disabled:cursor-wait inline-flex items-center gap-1.5"
                         >
-                          전체 복원 ({quarantinedPhotos.length}장)
+                          {quarantineMoving && (
+                            <span className="inline-block w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                          )}
+                          {quarantineMoving ? '복원 중...' : `전체 복원 (${quarantinedPhotos.length}장)`}
                         </button>
                       )}
                     </div>
@@ -1376,9 +1382,9 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                                 type="button"
                                 disabled={quarantineMoving}
                                 onClick={() => void restoreFromQuarantine([qp.id])}
-                                className="px-2.5 py-1 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-semibold shrink-0 cursor-pointer"
+                                className="px-2.5 py-1 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-semibold shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-wait"
                               >
-                                복원
+                                {quarantineMoving ? '복원 중...' : '복원'}
                               </button>
                             )}
                           </div>

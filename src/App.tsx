@@ -47,6 +47,7 @@ export const App: React.FC = () => {
     lastQuarantineToast,
     dismissQuarantineToast,
     lastUndoBatch,
+    quarantineMoving,
     undoLastQuarantine,
     dismissUndoBatch,
     selectedPhoto,
@@ -1235,23 +1236,33 @@ export const App: React.FC = () => {
               } mb-safe left-1/2 -translate-x-1/2 z-[115] w-[94%] max-w-xl px-4 sm:px-5 py-3 rounded-xl bg-slate-900 border border-slate-800 text-white shadow-lg flex flex-wrap items-center justify-between gap-2.5 sm:gap-3`}
             >
               <div className="flex items-center gap-2 min-w-0">
+                {quarantineMoving && (
+                  <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-teal-400 border-t-transparent animate-spin shrink-0" />
+                )}
                 <span className="text-[13px] font-medium break-keep">
-                  방금 정리한 {lastUndoBatch.count}장이 휴지통으로 이동되었습니다.
+                  {quarantineMoving
+                    ? `사진 ${lastUndoBatch.count}장을 원래 위치로 복원하고 있습니다...`
+                    : `방금 정리한 ${lastUndoBatch.count}장이 휴지통으로 이동되었습니다.`}
                 </span>
               </div>
 
               <div className="flex items-center gap-2 shrink-0 ml-auto">
                 <button
                   type="button"
+                  disabled={quarantineMoving}
                   onClick={() => void undoLastQuarantine()}
-                  className="px-3.5 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-white text-[12px] font-semibold transition-colors whitespace-nowrap cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 disabled:bg-teal-600/80 disabled:cursor-wait text-white text-[12px] font-semibold transition-colors whitespace-nowrap cursor-pointer inline-flex items-center gap-1.5"
                 >
-                  실행 취소
+                  {quarantineMoving && (
+                    <span className="inline-block w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                  )}
+                  {quarantineMoving ? '복원 중...' : '실행 취소'}
                 </button>
                 <button
                   type="button"
+                  disabled={quarantineMoving}
                   onClick={dismissUndoBatch}
-                  className="text-slate-400 hover:text-white p-1.5 cursor-pointer"
+                  className="text-slate-400 hover:text-white disabled:opacity-30 p-1.5 cursor-pointer"
                   title="닫기"
                 >
                   <span className="material-symbols-outlined text-[16px]">close</span>
