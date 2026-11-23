@@ -10,7 +10,7 @@
 ## 1. 새 프로젝트 생성 및 원엔진 단일화 철칙
 1. **로컬 폴더 분리**: `D:\Ghosti`(본체 및 원엔진 정본)와 `D:\GhostKey`(독립 프론트엔드 웹앱, 별도 Git 저장소)로 물리 분리하며, 각 전담 에이전트는 타 프로젝트 폴더를 직접 수정하지 않고 우체국(`D:\Secretary\post_office\`) 명세로만 소통합니다.
 2. **원엔진(`Merlin Z-Core v2.7.9+`) 무결성 및 동의 기반 활성화**:
-   - `D:\GhostKey`는 자체 `universal_z_core/` 사본을 빌드하지 않으며, 오직 `D:\Ghosti\universal_z_core\` 단일 엔진(`127.0.0.1:5199`) 및 `https://ghosti.sundreamer.app/Merlin_Z_Core.zip`만 공유합니다.
+   - `D:\GhostKey`는 자체 `universal_z_core/` 사본을 빌드하지 않으며, 오직 `D:\Ghosti\universal_z_core\` 단일 엔진(`127.0.0.1:5199`) 및 GitHub Releases 고속 CDN(`https://github.com/Han-jinwook/Ghosti/releases/download/z-core-latest/Merlin_Z_Core.zip`, 태그 `z-core-latest`)만 공유합니다. (신규 `Merlin_Z_Core.zip` 빌드 시 `z-core-latest` 에셋 동시 교체 의무)
    - Z-Core 통합 엔진 자체에는 어떠한 구조적 충돌도 없으며, 사용자 동의 기반 모듈 활성화 및 `12/17` 본체 QA 집중을 위해 기본 설정값만 `ghostkey_enabled = false`로 시작합니다 (`GhostKey` 정식 출시 후 권한 보유 유저가 `ghostkey_enabled = true`를 켰을 때만 `입력창 = 귀신키(UI ①)` / `바탕화면 = 귀신검색창(UI ②)` 문맥 분기가 작동하고, 그 외 모든 사용자의 `Ctrl + 0` / `Ctrl + 우클릭`은 언제 어디서나 **`👻 귀신검색창(UI ②)`**을 즉시 소환합니다 — 탐색기 `.zip/.7z` 선택 시 `UI ④` 압축 프리뷰는 그대로 유지).
 
 ---
