@@ -486,7 +486,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                     await unlinkConnectedDevice(targetId);
                     setRevokingSlotDeviceId(null);
                   }}
-                  className="text-[11.5px] text-slate-400 hover:text-rose-600 font-medium cursor-pointer disabled:opacity-50 shrink-0"
+                  className="text-[11.5px] text-slate-400 hover:text-rose-600 font-medium cursor-pointer disabled:opacity-50 shrink-0 whitespace-nowrap"
                 >
                   {revokingSlotDeviceId === mobilePeers[0].device_id ? '해제 중' : '연결 해제'}
                 </button>
@@ -548,7 +548,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                     await unlinkConnectedDevice(targetId);
                     setRevokingSlotDeviceId(null);
                   }}
-                  className="text-[11.5px] text-slate-400 hover:text-rose-600 font-medium cursor-pointer disabled:opacity-50 shrink-0"
+                  className="text-[11.5px] text-slate-400 hover:text-rose-600 font-medium cursor-pointer disabled:opacity-50 shrink-0 whitespace-nowrap"
                 >
                   {revokingSlotDeviceId === secondaryPcPeer.device_id ? '해제 중' : '연결 해제'}
                 </button>

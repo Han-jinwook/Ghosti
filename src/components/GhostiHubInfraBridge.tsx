@@ -26,10 +26,12 @@ import {
   clearGhostiLogoutLock,
   isGhostiExplicitlyLoggedOut,
   purgeAllGhostiLocalAuthArtifacts,
+  resolveHubSupabaseBridgeEndpoint,
 } from '../services/supabaseClient';
 import { clearCachedSharedRoomTokens } from '../services/sharedPhotoRoomSupabase';
 import { clearWorkRoomLocalCachesOnLogout } from '../services/workRoomSyncService';
 import {
+  getThisDeviceIdentity,
   loadCachedDeviceIntegrationSnapshot,
   loadCachedSyncedClips,
 } from '../services/deviceIntegrationService';
@@ -203,6 +205,28 @@ const GhostiHubGlobalModals: React.FC = () => {
     setIsProfileOpen(false);
     const curState = useSaySeeStore.getState();
     const hasUrlInviteToken = Boolean(readActiveInviteToken());
+    if (typeof window !== 'undefined') {
+      try {
+        const preLogoutToken = (localStorage.getItem('merlin_session_token') || '').trim();
+        const thisDeviceId = getThisDeviceIdentity().deviceId;
+        if (preLogoutToken && thisDeviceId) {
+          void fetch(resolveHubSupabaseBridgeEndpoint(), {
+            method: 'POST',
+            keepalive: true,
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${preLogoutToken}`,
+            },
+            body: JSON.stringify({
+              action: 'device_revoke',
+              deviceId: thisDeviceId,
+            }),
+          }).catch(() => {});
+        }
+      } catch {
+        /* ignore pre-logout device revoke error */
+      }
+    }
     purgeAllGhostiLocalAuthArtifacts({ setLogoutLockMs: 15_000 });
     clearWorkRoomLocalCachesOnLogout();
     if (typeof window !== 'undefined') {

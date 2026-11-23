@@ -816,6 +816,10 @@ export const MobileAppView: React.FC = () => {
                   type="button"
                   onClick={async () => {
                     if (!hasAuthenticatedHubAccountSession()) {
+                      useSaySeeStore.setState({
+                        lastQuarantineToast:
+                          '현재 게스트(비로그인) 상태입니다. PC와 같은 이메일로 로그인하면 바로 연결됩니다.',
+                      });
                       window.dispatchEvent(new CustomEvent('openLoginModal'));
                       return;
                     }
@@ -1296,7 +1300,7 @@ export const MobileAppView: React.FC = () => {
                     Boolean(pcAgentPairedMobile) ||
                     connectedDevices.length >= 2);
                 const syncStatusLine = !isLoggedInUser
-                  ? '같은 이메일로 로그인하면 내 PC와 연결할 수 있습니다.'
+                  ? '현재 게스트(비로그인) 상태입니다. PC와 같은 이메일로 먼저 로그인해야 기기를 연결할 수 있습니다.'
                   : thisDeviceRevoked
                   ? '이 기기의 연결이 해제되었습니다. 연결 번호로 다시 등록할 수 있습니다.'
                   : !isPeerConnected
@@ -1320,8 +1324,16 @@ export const MobileAppView: React.FC = () => {
                             <h2 className="text-[14px] text-slate-900 font-bold break-keep">
                               내 기기 통합 (폰 ↔ PC)
                             </h2>
-                            <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10.5px] font-medium whitespace-nowrap">
-                              {!isPeerConnected
+                            <span
+                              className={`px-2 py-0.5 rounded text-[10.5px] font-medium whitespace-nowrap ${
+                                !isLoggedInUser
+                                  ? 'bg-amber-50 text-amber-800 border border-amber-200'
+                                  : 'bg-slate-100 text-slate-600'
+                              }`}
+                            >
+                              {!isLoggedInUser
+                                ? '로그인 필요'
+                                : !isPeerConnected
                                 ? '미연결'
                                 : syncState.privateSyncStrategy === 'mirror'
                                 ? '원본 전체 백업'
