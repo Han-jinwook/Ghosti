@@ -125,7 +125,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
   const [showQuarantineDrawer, setShowQuarantineDrawer] = useState<boolean>(false);
   const [activeDupSetIdx, setActiveDupSetIdx] = useState<number>(0);
   const [showAllDupSets, setShowAllDupSets] = useState<boolean>(false);
-  const [showAllSetChips, setShowAllSetChips] = useState<boolean>(false);
+  const [setJumpInput, setSetJumpInput] = useState<string>('1');
   const [skippedGroupIds, setSkippedGroupIds] = useState<Set<string>>(() => new Set());
   const [pausedSnapshot, setPausedSnapshot] = useState<{
     activeTrash: PhotoItem[];
@@ -281,7 +281,11 @@ export const Stage1MinimalCarePreview: React.FC = () => {
   React.useEffect(() => {
     if (activeDupSetIdx >= activeDuplicateGroups.length && activeDuplicateGroups.length > 0) {
       setActiveDupSetIdx(0);
+      setSetJumpInput('1');
+      return;
     }
+    const clamped = Math.min(activeDupSetIdx, Math.max(0, activeDuplicateGroups.length - 1));
+    setSetJumpInput(String(clamped + 1));
   }, [activeDupSetIdx, activeDuplicateGroups.length]);
 
   const showDuplicatePickSection = currentTab === 'duplicate';
@@ -755,56 +759,82 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     </span>
                   </div>
                   {activeDuplicateGroups.length > 0 ? (
-                    <div className="flex flex-col gap-1.5">
-                      {(() => {
+                    <div className="flex flex-col gap-2">
+                      {activeDuplicateGroups.length > 1 && (() => {
                         const totalSets = activeDuplicateGroups.length;
                         const clampedIdx = Math.min(activeDupSetIdx, Math.max(0, totalSets - 1));
-                        const winStart = showAllSetChips
-                          ? 0
-                          : Math.max(0, Math.min(clampedIdx - 2, Math.max(0, totalSets - 6)));
-                        const winEnd = showAllSetChips ? totalSets : Math.min(totalSets, winStart + 6);
-                        const visibleChips = activeDuplicateGroups
-                          .slice(winStart, winEnd)
-                          .map((g, i) => ({ g, idx: winStart + i }));
+                        const curGroup = activeDuplicateGroups[clampedIdx];
+                        const curCnt = curGroup
+                          ? curGroup.photoIds.filter((id) => {
+                              const ph = photoById.get(id);
+                              return ph && !ph.quarantined;
+                            }).length
+                          : 0;
+                        const commitJump = (rawVal?: string) => {
+                          const parsed = parseInt(String(rawVal ?? setJumpInput).replace(/[^0-9]/g, ''), 10);
+                          if (!Number.isFinite(parsed)) {
+                            setSetJumpInput(String(clampedIdx + 1));
+                            return;
+                          }
+                          const targetNum = Math.min(totalSets, Math.max(1, parsed));
+                          setShowAllDupSets(false);
+                          setActiveDupSetIdx(targetNum - 1);
+                          setSetJumpInput(String(targetNum));
+                        };
+                        const goToSet = (nextIdx: number) => {
+                          const safeIdx = Math.min(totalSets - 1, Math.max(0, nextIdx));
+                          setShowAllDupSets(false);
+                          setActiveDupSetIdx(safeIdx);
+                          setSetJumpInput(String(safeIdx + 1));
+                        };
                         return (
-                          <div
-                            className={`flex flex-wrap items-center gap-1.5 ${
-                              showAllSetChips ? 'max-h-28 overflow-y-auto pr-1' : ''
-                            }`}
-                          >
-                            {visibleChips.map(({ g, idx }) => {
-                              const cnt = g.photoIds.filter((id) => {
-                                const ph = photoById.get(id);
-                                return ph && !ph.quarantined;
-                              }).length;
-                              const isCurSet = !showAllDupSets && clampedIdx === idx;
-                              return (
-                                <button
-                                  key={g.groupId}
-                                  type="button"
-                                  onClick={() => {
-                                    setShowAllDupSets(false);
-                                    setActiveDupSetIdx(idx);
-                                  }}
-                                  className={`px-2.5 py-1 rounded-md border text-[11.5px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
-                                    isCurSet
-                                      ? 'bg-slate-900 text-white border-slate-900 font-semibold'
-                                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                                  }`}
-                                >
-                                  {idx + 1}세트 ({cnt}장)
-                                </button>
-                              );
-                            })}
-                            {totalSets > 6 && (
+                          <div className="flex flex-wrap items-center gap-1.5">
+                            <button
+                              type="button"
+                              disabled={clampedIdx <= 0}
+                              onClick={() => goToSet(clampedIdx - 1)}
+                              className="px-2.5 py-1 rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 text-[12px] font-medium cursor-pointer whitespace-nowrap"
+                            >
+                              ‹ 이전
+                            </button>
+                            <form
+                              onSubmit={(e) => {
+                                e.preventDefault();
+                                commitJump();
+                              }}
+                              className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md border border-slate-200 bg-slate-50"
+                            >
+                              <input
+                                type="text"
+                                inputMode="numeric"
+                                aria-label="이동할 세트 번호"
+                                value={setJumpInput}
+                                onFocus={(e) => e.currentTarget.select()}
+                                onChange={(e) => setSetJumpInput(e.target.value.replace(/[^0-9]/g, ''))}
+                                onBlur={() => commitJump()}
+                                className="w-11 px-1.5 py-0.5 rounded bg-white border border-slate-200 text-center text-[12px] font-semibold text-slate-900 focus:outline-none focus:border-slate-500"
+                              />
+                              <span className="text-[12px] text-slate-500 font-medium whitespace-nowrap">
+                                / {totalSets} 세트
+                              </span>
                               <button
-                                type="button"
-                                onClick={() => setShowAllSetChips((v) => !v)}
-                                className="px-2.5 py-1 rounded-md bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-[11.5px] font-medium whitespace-nowrap cursor-pointer"
+                                type="submit"
+                                className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-semibold cursor-pointer whitespace-nowrap"
                               >
-                                {showAllSetChips ? '번호 접기' : `+${totalSets - 6}세트 번호 더 보기`}
+                                이동
                               </button>
-                            )}
+                            </form>
+                            <button
+                              type="button"
+                              disabled={clampedIdx >= totalSets - 1}
+                              onClick={() => goToSet(clampedIdx + 1)}
+                              className="px-2.5 py-1 rounded-md border border-slate-200 bg-white hover:bg-slate-50 disabled:opacity-40 disabled:cursor-not-allowed text-slate-700 text-[12px] font-medium cursor-pointer whitespace-nowrap"
+                            >
+                              다음 ›
+                            </button>
+                            <span className="text-[11.5px] text-slate-400 ml-1 whitespace-nowrap">
+                              현재 세트 {curCnt}장
+                            </span>
                           </div>
                         );
                       })()}
