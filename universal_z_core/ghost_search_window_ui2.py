@@ -16,6 +16,8 @@
 
 from __future__ import annotations
 
+import ctypes
+from ctypes import wintypes
 import io
 import json
 import os
@@ -33,6 +35,132 @@ try:
 except Exception:
     Image = None
     ImageTk = None
+
+
+class _UI2_GUID(ctypes.Structure):
+    _fields_ = [
+        ("Data1", wintypes.DWORD),
+        ("Data2", wintypes.WORD),
+        ("Data3", wintypes.WORD),
+        ("Data4", ctypes.c_ubyte * 8),
+    ]
+
+
+class _UI2_SIZE(ctypes.Structure):
+    _fields_ = [("cx", ctypes.c_long), ("cy", ctypes.c_long)]
+
+
+class _UI2_BITMAPINFOHEADER(ctypes.Structure):
+    _fields_ = [
+        ("biSize", wintypes.DWORD),
+        ("biWidth", ctypes.c_long),
+        ("biHeight", ctypes.c_long),
+        ("biPlanes", wintypes.WORD),
+        ("biBitCount", wintypes.WORD),
+        ("biCompression", wintypes.DWORD),
+        ("biSizeImage", wintypes.DWORD),
+        ("biXPelsPerMeter", ctypes.c_long),
+        ("biYPelsPerMeter", ctypes.c_long),
+        ("biClrUsed", wintypes.DWORD),
+        ("biClrImportant", wintypes.DWORD),
+    ]
+
+
+class _UI2_BITMAP(ctypes.Structure):
+    _fields_ = [
+        ("bmType", ctypes.c_long),
+        ("bmWidth", ctypes.c_long),
+        ("bmHeight", ctypes.c_long),
+        ("bmWidthBytes", ctypes.c_long),
+        ("bmPlanes", wintypes.WORD),
+        ("bmBitsPixel", wintypes.WORD),
+        ("bmBits", ctypes.c_void_p),
+    ]
+
+
+_IID_UI2_ShellItemImageFactory = _UI2_GUID(
+    0xBCC18B79,
+    0xBA16,
+    0x442F,
+    (ctypes.c_ubyte * 8)(0x80, 0xC4, 0x8A, 0x59, 0xC3, 0x0C, 0x46, 0x3B),
+)
+
+
+def _extract_win32_shell_pil_image(file_path_str: str, max_px: int = 360) -> Any:
+    """Windows IShellItemImageFactory로 동영상·이미지 썸네일 PIL.Image를 0-Subprocess로 고속 추출합니다."""
+    if os.name != "nt" or Image is None or not file_path_str or not os.path.isfile(file_path_str):
+        return None
+    try:
+        ole32 = ctypes.windll.ole32
+        shell32 = ctypes.windll.shell32
+        gdi32 = ctypes.windll.gdi32
+        user32 = ctypes.windll.user32
+        try:
+            ole32.CoInitialize(None)
+        except Exception:
+            pass
+        shell32.SHCreateItemFromParsingName.argtypes = [
+            wintypes.LPCWSTR,
+            ctypes.c_void_p,
+            ctypes.POINTER(_UI2_GUID),
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
+        shell32.SHCreateItemFromParsingName.restype = ctypes.c_long
+        ppv = ctypes.c_void_p()
+        hr = shell32.SHCreateItemFromParsingName(
+            os.path.abspath(file_path_str),
+            None,
+            ctypes.byref(_IID_UI2_ShellItemImageFactory),
+            ctypes.byref(ppv),
+        )
+        if hr != 0 or not ppv.value:
+            return None
+        try:
+            vtbl = ctypes.cast(
+                ctypes.cast(ppv, ctypes.POINTER(ctypes.c_void_p))[0],
+                ctypes.POINTER(ctypes.c_void_p),
+            )
+            GetImageProto = ctypes.WINFUNCTYPE(
+                ctypes.c_long,
+                ctypes.c_void_p,
+                _UI2_SIZE,
+                ctypes.c_int,
+                ctypes.POINTER(wintypes.HBITMAP),
+            )
+            get_image = GetImageProto(vtbl[3])
+            hbm = wintypes.HBITMAP()
+            hr_img = get_image(ppv, _UI2_SIZE(max_px, max_px), 0x08, ctypes.byref(hbm))
+            if hr_img != 0 or not hbm.value:
+                hr_img = get_image(ppv, _UI2_SIZE(max_px, max_px), 0x00, ctypes.byref(hbm))
+            if hr_img != 0 or not hbm.value:
+                return None
+            try:
+                bm = _UI2_BITMAP()
+                gdi32.GetObjectW(hbm, ctypes.sizeof(_UI2_BITMAP), ctypes.byref(bm))
+                w, h = int(bm.bmWidth), int(bm.bmHeight)
+                if w <= 0 or h <= 0:
+                    return None
+                bmi = _UI2_BITMAPINFOHEADER()
+                bmi.biSize = ctypes.sizeof(_UI2_BITMAPINFOHEADER)
+                bmi.biWidth = w
+                bmi.biHeight = -h
+                bmi.biPlanes = 1
+                bmi.biBitCount = 32
+                bmi.biCompression = 0
+                buf = ctypes.create_string_buffer(w * h * 4)
+                hdc = user32.GetDC(None)
+                try:
+                    gdi32.GetDIBits(hdc, hbm, 0, h, buf, ctypes.byref(bmi), 0)
+                finally:
+                    user32.ReleaseDC(None, hdc)
+                return Image.frombuffer("RGBA", (w, h), buf, "raw", "BGRA", 0, 1).convert("RGB")
+            finally:
+                gdi32.DeleteObject(hbm)
+        finally:
+            ReleaseProto = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)
+            ReleaseProto(vtbl[2])(ppv)
+    except Exception:
+        return None
 
 _VIDEO_OCR_UI_CACHE: dict[str, Any] = {"ts": 0.0, "by_name": {}}
 _UI2_CACHE_LOCK = threading.Lock()
@@ -78,7 +206,10 @@ def _get_or_make_small_thumb_bytes(img_path_str: str) -> bytes:
         if not os.path.isfile(img_path_str):
             return b""
         st = os.stat(img_path_str)
-        if st.st_size <= 0 or st.st_size > 25 * 1024 * 1024:
+        ext_low = os.path.splitext(norm_p)[1].lower()
+        is_vid = ext_low in (".mp4", ".mov", ".wmv", ".avi", ".mkv", ".webm", ".m4v", ".3gp", ".ts", ".mts", ".flv")
+        max_sz = (800 * 1024 * 1024) if is_vid else (35 * 1024 * 1024)
+        if st.st_size <= 0 or st.st_size > max_sz:
             return b""
         sig = f"{norm_p}|{st.st_size}|{int(st.st_mtime)}"
         with _UI2_CACHE_LOCK:
@@ -86,15 +217,36 @@ def _get_or_make_small_thumb_bytes(img_path_str: str) -> bytes:
             if cached is not None:
                 _UI2_SMALL_THUMB_BY_PATH[norm_p] = cached
                 return cached
-        with Image.open(img_path_str) as raw_im:
-            im_c = raw_im.convert("RGBA")
-            resamp = getattr(getattr(Image, "Resampling", Image), "BILINEAR", Image.NEAREST)
-            im_c.thumbnail((42, 28), resamp)
-            bio = io.BytesIO()
-            im_c.save(bio, "PNG")
-            tb = bio.getvalue()
+        tb = b""
+        if is_vid or ext_low == ".heic":
+            sh_im = _extract_win32_shell_pil_image(img_path_str, max_px=120)
+            if sh_im is not None:
+                resamp = getattr(getattr(Image, "Resampling", Image), "BILINEAR", Image.NEAREST)
+                sh_im.thumbnail((42, 28), resamp)
+                bio = io.BytesIO()
+                sh_im.save(bio, "PNG")
+                tb = bio.getvalue()
+        else:
+            try:
+                with Image.open(img_path_str) as raw_im:
+                    im_c = raw_im.convert("RGBA")
+                    resamp = getattr(getattr(Image, "Resampling", Image), "BILINEAR", Image.NEAREST)
+                    im_c.thumbnail((42, 28), resamp)
+                    bio = io.BytesIO()
+                    im_c.save(bio, "PNG")
+                    tb = bio.getvalue()
+            except Exception:
+                sh_im = _extract_win32_shell_pil_image(img_path_str, max_px=120)
+                if sh_im is not None:
+                    resamp = getattr(getattr(Image, "Resampling", Image), "BILINEAR", Image.NEAREST)
+                    sh_im.thumbnail((42, 28), resamp)
+                    bio = io.BytesIO()
+                    sh_im.save(bio, "PNG")
+                    tb = bio.getvalue()
+        if not tb:
+            return b""
         with _UI2_CACHE_LOCK:
-            if len(_UI2_SMALL_THUMB_CACHE) > 320:
+            if len(_UI2_SMALL_THUMB_CACHE) > 360:
                 _UI2_SMALL_THUMB_CACHE.clear()
                 _UI2_SMALL_THUMB_BY_PATH.clear()
             _UI2_SMALL_THUMB_CACHE[sig] = tb
@@ -105,7 +257,7 @@ def _get_or_make_small_thumb_bytes(img_path_str: str) -> bytes:
 
 
 def _get_or_make_preview_bytes(img_path_str: str) -> tuple[bytes, str]:
-    """중형(960x640) 우측 미리보기 이미지(352x220)를 백그라운드 스레드에서 디코딩해 LRU 캐싱합니다."""
+    """중형(960x640) 우측 미리보기 이미지(352x220)를 백그라운드 스레드에서 디코딩해 LRU 캐싱합니다 (동영상·HEIC 포함)."""
     if not img_path_str or Image is None:
         return b"", ""
     try:
@@ -116,16 +268,41 @@ def _get_or_make_preview_bytes(img_path_str: str) -> tuple[bytes, str]:
                 return cached
         if not os.path.isfile(img_path_str):
             return b"", ""
-        with Image.open(img_path_str) as raw_im:
-            dim_str = f"{raw_im.width}×{raw_im.height}px"
-            im_copy = raw_im.convert("RGB")
-            resamp = getattr(getattr(Image, "Resampling", Image), "BILINEAR", Image.NEAREST)
-            im_copy.thumbnail((352, 220), resamp)
-            bio = io.BytesIO()
-            im_copy.save(bio, "JPEG", quality=84)
-            out = (bio.getvalue(), dim_str)
+        ext_low = os.path.splitext(norm_p)[1].lower()
+        is_vid = ext_low in (".mp4", ".mov", ".wmv", ".avi", ".mkv", ".webm", ".m4v", ".3gp", ".ts", ".mts", ".flv")
+        out = (b"", "")
+        if is_vid or ext_low == ".heic":
+            sh_im = _extract_win32_shell_pil_image(img_path_str, max_px=380)
+            if sh_im is not None:
+                dim_str = "동영상 미리보기" if is_vid else f"{sh_im.width}×{sh_im.height}px"
+                resamp = getattr(getattr(Image, "Resampling", Image), "BILINEAR", Image.NEAREST)
+                sh_im.thumbnail((352, 220), resamp)
+                bio = io.BytesIO()
+                sh_im.save(bio, "JPEG", quality=84)
+                out = (bio.getvalue(), dim_str)
+        else:
+            try:
+                with Image.open(img_path_str) as raw_im:
+                    dim_str = f"{raw_im.width}×{raw_im.height}px"
+                    im_copy = raw_im.convert("RGB")
+                    resamp = getattr(getattr(Image, "Resampling", Image), "BILINEAR", Image.NEAREST)
+                    im_copy.thumbnail((352, 220), resamp)
+                    bio = io.BytesIO()
+                    im_copy.save(bio, "JPEG", quality=84)
+                    out = (bio.getvalue(), dim_str)
+            except Exception:
+                sh_im = _extract_win32_shell_pil_image(img_path_str, max_px=380)
+                if sh_im is not None:
+                    dim_str = f"{sh_im.width}×{sh_im.height}px"
+                    resamp = getattr(getattr(Image, "Resampling", Image), "BILINEAR", Image.NEAREST)
+                    sh_im.thumbnail((352, 220), resamp)
+                    bio = io.BytesIO()
+                    sh_im.save(bio, "JPEG", quality=84)
+                    out = (bio.getvalue(), dim_str)
+        if not out[0]:
+            return b"", ""
         with _UI2_CACHE_LOCK:
-            if len(_UI2_PREVIEW_BYTES_CACHE) > 64:
+            if len(_UI2_PREVIEW_BYTES_CACHE) > 80:
                 _UI2_PREVIEW_BYTES_CACHE.clear()
             _UI2_PREVIEW_BYTES_CACHE[norm_p] = out
         return out
@@ -325,6 +502,8 @@ def build_ui2_search_window(
         "video_ocr_loading": False,
         "video_ocr_result_text": "",
         "video_ocr_copied_msg": "",
+        "bg_ui_dirty": False,
+        "bg_ocr_done_payload": None,
     }
     try:
         record_feature_telemetry(f"ghost_search_window_{st_state['stage']}")
@@ -571,18 +750,8 @@ def build_ui2_search_window(
                 else:
                     rec["video_ocr_full"] = ft
                     rec["video_ocr_lines"] = int(res.get("lineCount") or len(ft.splitlines()))
-
-            def _apply_ui() -> None:
-                if current_win[0] is not win:
-                    return
-                st_state["video_ocr_loading"] = False
-                st_state["video_ocr_result_text"] = ft
-                _render_search_results()
-
-            try:
-                win.after(0, _apply_ui)
-            except Exception:
-                pass
+            st_state["bg_ocr_done_payload"] = ft
+            st_state["bg_ui_dirty"] = True
 
         threading.Thread(target=_bg_job, daemon=True).start()
 
@@ -733,15 +902,8 @@ def build_ui2_search_window(
                 st_state["bg_scan_scheduled"] = True
 
                 def _on_bg_files_ready() -> None:
-                    def _rerender_after_warm() -> None:
-                        st_state["bg_scan_scheduled"] = False
-                        if current_win[0] is win:
-                            _render_search_results()
-
-                    try:
-                        win.after(0, _rerender_after_warm)
-                    except Exception:
-                        pass
+                    st_state["bg_scan_scheduled"] = False
+                    st_state["bg_ui_dirty"] = True
 
                 refresh_lightweight_local_files_async(_on_bg_files_ready)
         else:
@@ -970,7 +1132,7 @@ def build_ui2_search_window(
             )
             num_l.pack(side="left", padx=(0, 5))
 
-            if st_now != "medium" and kind == "image" and Image is not None and ImageTk is not None:
+            if st_now != "medium" and kind in ("image", "video") and Image is not None and ImageTk is not None:
                 try:
                     img_cand_p = str(rec.get("img_path") or rec.get("file_path") or "").strip()
                     tb_raw = rec.get("thumb_bytes")
@@ -1098,10 +1260,7 @@ def build_ui2_search_window(
                         with _UI2_CACHE_LOCK:
                             _UI2_THUMB_INFLIGHT.discard(p_load)
                 if any_decoded:
-                    try:
-                        win.after(0, lambda: _render_search_results() if current_win[0] is win else None)
-                    except Exception:
-                        pass
+                    st_state["bg_ui_dirty"] = True
 
             threading.Thread(target=_decode_thumbs_bg, args=(list(pending_thumb_paths),), daemon=True).start()
 
@@ -1119,9 +1278,9 @@ def build_ui2_search_window(
                 anchor="w",
             ).pack(fill="x", pady=(0, 6))
 
-            # [타이핑 버벅임 0% 보장]: UI 메인 스레드에서 5~15MB 원본 사진을 동기 디스크 오픈·디코딩하지 않고,
+            # [타이핑 버벅임 0% 보장]: UI 메인 스레드에서 5~15MB 원본 사진/동영상을 동기 디스크 오픈·디코딩하지 않고,
             # 메모리 LRU 캐시(352x220) 또는 소형 썸네일을 0.2ms 내에 즉시 그린 뒤 미캐싱 고화질 미리보기만 백그라운드 스레드에서 디코드합니다!
-            if s_kind == "image" and Image is not None and ImageTk is not None:
+            if s_kind in ("image", "video") and Image is not None and ImageTk is not None:
                 big_photo = None
                 img_dim_str = ""
                 try:
@@ -1149,10 +1308,7 @@ def build_ui2_search_window(
                                 try:
                                     pv_bytes, _ = _get_or_make_preview_bytes(target_fp)
                                     if pv_bytes:
-                                        win.after(
-                                            0,
-                                            lambda: _render_search_results() if current_win[0] is win else None,
-                                        )
+                                        st_state["bg_ui_dirty"] = True
                                 except Exception:
                                     pass
                                 finally:
@@ -1182,7 +1338,8 @@ def build_ui2_search_window(
 
                 if s_fpath:
                     fname_only = Path(s_fpath).name
-                    meta_line = f"🖼️ {fname_only}" + (f" ({img_dim_str})" if img_dim_str else "")
+                    icon_m = "🎬" if s_kind == "video" else "🖼️"
+                    meta_line = f"{icon_m} {fname_only}" + (f" ({img_dim_str})" if img_dim_str else "")
                     tk.Label(
                         preview_pane,
                         text=meta_line[:48],
@@ -1396,20 +1553,30 @@ def build_ui2_search_window(
     _resize_for_stage(activate=True)
     _render_search_results()
 
-    # [열려 있는 동안 파일 추가·변경 실시간 자동 반영 (닫혀 있을 때는 타이머 0개로 CPU 0.00%)]
+    # [열려 있는 동안 파일 추가·변경·백그라운드 썸네일 디코딩 실시간 자동 반영 (메인 스레드 폴링으로 Tcl 스레드 충돌 0%, 닫혀 있을 때는 타이머 0개로 CPU 0.00%)]
+    def _poll_main_thread_ui2_updates() -> None:
+        try:
+            if current_win[0] is not win or not win.winfo_exists():
+                return
+            if st_state.get("bg_ocr_done_payload") is not None:
+                ft_done = st_state["bg_ocr_done_payload"]
+                st_state["bg_ocr_done_payload"] = None
+                st_state["video_ocr_loading"] = False
+                st_state["video_ocr_result_text"] = ft_done
+                st_state["bg_ui_dirty"] = True
+            if st_state.get("bg_ui_dirty"):
+                st_state["bg_ui_dirty"] = False
+                _render_search_results()
+            win.after(70, _poll_main_thread_ui2_updates)
+        except Exception:
+            pass
+
+    win.after(70, _poll_main_thread_ui2_updates)
+
     if callable(check_local_files_changed_async):
         def _notify_fs_changed() -> None:
-            def _rerender_if_alive() -> None:
-                try:
-                    if current_win[0] is win and win.winfo_exists():
-                        _VIDEO_OCR_UI_CACHE["ts"] = 0.0
-                        _render_search_results()
-                except Exception:
-                    pass
-            try:
-                win.after(0, _rerender_if_alive)
-            except Exception:
-                pass
+            _VIDEO_OCR_UI_CACHE["ts"] = 0.0
+            st_state["bg_ui_dirty"] = True
 
         def _poll_open_window_fs_changes() -> None:
             try:

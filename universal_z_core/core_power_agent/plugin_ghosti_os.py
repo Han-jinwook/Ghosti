@@ -47,7 +47,7 @@ FILE_ATTRIBUTE_NORMAL = 0x80
 PLUGIN_METADATA = {
     "pluginId": "ghosti_os",
     "pluginName": "Ghosti & 3-Monsters OS + RestorePoint + RecycleBin Omni-Tracker Plugin",
-    "version": "2.7.39",
+    "version": "2.7.49",
     "type": "BUILTIN_SOFTWARE_PLUGIN",
     "port": 5199,
     "capabilities": [
@@ -1568,7 +1568,7 @@ _PREWARM_RUNNING = False
 
 
 def get_or_create_photo_thumb(full_path: Path, max_px: int = 280) -> Path | None:
-    """고해상도 원본 사진(4~12MB)을 libjpeg DCT draft 가속 기반 280px 경량 JPEG 썸네일(6~14KB)로 디스크 캐싱해 즉시 서빙합니다."""
+    """고해상도 원본 사진(4~12MB)을 libjpeg DCT draft 가속 기반 280px 경량 JPEG 썸네일(6~14KB)로 디스크 캐싱해 즉시 서빙합니다 (HEIC/특수 포맷은 Win32 Shell 폴백)."""
     try:
         if _is_cloud_virtual_or_unpinned_file(full_path):
             return None
@@ -1583,22 +1583,30 @@ def get_or_create_photo_thumb(full_path: Path, max_px: int = 280) -> Path | None
         if out_jpg.exists() and out_jpg.stat().st_size > 400:
             return out_jpg
 
+        if full_path.suffix.lower() == ".heic" and os.name == "nt":
+            if _win32_shell_extract_media_thumb(full_path, out_jpg, max_px=max_px) and out_jpg.exists():
+                return out_jpg
+
         from PIL import Image, ImageOps
 
-        with Image.open(full_path) as im:
-            try:
-                im.draft("RGB", (max_px * 2, max_px * 2))
-            except Exception:
-                pass
-            im = ImageOps.exif_transpose(im)
-            if im.mode != "RGB":
-                im = im.convert("RGB")
-            im.thumbnail((max_px, max_px), Image.Resampling.BILINEAR)
-            tmp_jpg = _PHOTO_THUMBS_DIR / f"pt_{cache_key}.{os.getpid()}_{threading.get_ident()}.tmp.jpg"
-            im.save(tmp_jpg, "JPEG", quality=74, optimize=False)
-        if tmp_jpg.exists() and tmp_jpg.stat().st_size > 400:
-            os.replace(tmp_jpg, out_jpg)
-            return out_jpg
+        try:
+            with Image.open(full_path) as im:
+                try:
+                    im.draft("RGB", (max_px * 2, max_px * 2))
+                except Exception:
+                    pass
+                im = ImageOps.exif_transpose(im)
+                if im.mode != "RGB":
+                    im = im.convert("RGB")
+                im.thumbnail((max_px, max_px), Image.Resampling.BILINEAR)
+                tmp_jpg = _PHOTO_THUMBS_DIR / f"pt_{cache_key}.{os.getpid()}_{threading.get_ident()}.tmp.jpg"
+                im.save(tmp_jpg, "JPEG", quality=74, optimize=False)
+            if tmp_jpg.exists() and tmp_jpg.stat().st_size > 400:
+                os.replace(tmp_jpg, out_jpg)
+                return out_jpg
+        except Exception:
+            if os.name == "nt" and _win32_shell_extract_media_thumb(full_path, out_jpg, max_px=max_px) and out_jpg.exists():
+                return out_jpg
     except Exception:
         return None
     return None
@@ -3138,6 +3146,150 @@ def _winrt_transcode_video_to_mp4(src_path: Path, out_mp4: Path, timeout_sec: in
     return False
 
 
+class _WIN32_GUID(ctypes.Structure):
+    _fields_ = [
+        ("Data1", ctypes.wintypes.DWORD),
+        ("Data2", ctypes.wintypes.WORD),
+        ("Data3", ctypes.wintypes.WORD),
+        ("Data4", ctypes.c_ubyte * 8),
+    ]
+
+
+class _WIN32_SIZE(ctypes.Structure):
+    _fields_ = [("cx", ctypes.c_long), ("cy", ctypes.c_long)]
+
+
+class _WIN32_BITMAPINFOHEADER(ctypes.Structure):
+    _fields_ = [
+        ("biSize", ctypes.wintypes.DWORD),
+        ("biWidth", ctypes.c_long),
+        ("biHeight", ctypes.c_long),
+        ("biPlanes", ctypes.wintypes.WORD),
+        ("biBitCount", ctypes.wintypes.WORD),
+        ("biCompression", ctypes.wintypes.DWORD),
+        ("biSizeImage", ctypes.wintypes.DWORD),
+        ("biXPelsPerMeter", ctypes.c_long),
+        ("biYPelsPerMeter", ctypes.c_long),
+        ("biClrUsed", ctypes.wintypes.DWORD),
+        ("biClrImportant", ctypes.wintypes.DWORD),
+    ]
+
+
+class _WIN32_BITMAP(ctypes.Structure):
+    _fields_ = [
+        ("bmType", ctypes.c_long),
+        ("bmWidth", ctypes.c_long),
+        ("bmHeight", ctypes.c_long),
+        ("bmWidthBytes", ctypes.c_long),
+        ("bmPlanes", ctypes.wintypes.WORD),
+        ("bmBitsPixel", ctypes.wintypes.WORD),
+        ("bmBits", ctypes.c_void_p),
+    ]
+
+
+_IID_IShellItemImageFactory = _WIN32_GUID(
+    0xBCC18B79,
+    0xBA16,
+    0x442F,
+    (ctypes.c_ubyte * 8)(0x80, 0xC4, 0x8A, 0x59, 0xC3, 0x0C, 0x46, 0x3B),
+)
+
+
+def _win32_shell_extract_media_thumb(src_path: Path, out_jpg: Path, max_px: int = 512) -> bool:
+    """
+    [무프로세스(0-Subprocess) Win32 IShellItemImageFactory 네이티브 고속 썸네일 추출기]
+    - FFmpeg가 없는 PC에서도 PowerShell 서브프로세스를 띄우지 않고 인프로세스 COM(IShellItemImageFactory)으로
+      30~150ms 내에 MP4/MOV/WMV/AVI/MKV/HEIC 대표 썸네일 JPEG를 즉시 생성합니다.
+    """
+    if os.name != "nt" or not src_path.exists():
+        return False
+    try:
+        from PIL import Image
+
+        ole32 = ctypes.windll.ole32
+        shell32 = ctypes.windll.shell32
+        gdi32 = ctypes.windll.gdi32
+        user32 = ctypes.windll.user32
+
+        try:
+            ole32.CoInitialize(None)
+        except Exception:
+            pass
+
+        shell32.SHCreateItemFromParsingName.argtypes = [
+            ctypes.wintypes.LPCWSTR,
+            ctypes.c_void_p,
+            ctypes.POINTER(_WIN32_GUID),
+            ctypes.POINTER(ctypes.c_void_p),
+        ]
+        shell32.SHCreateItemFromParsingName.restype = ctypes.c_long
+
+        ppv = ctypes.c_void_p()
+        hr = shell32.SHCreateItemFromParsingName(
+            str(src_path.resolve()),
+            None,
+            ctypes.byref(_IID_IShellItemImageFactory),
+            ctypes.byref(ppv),
+        )
+        if hr != 0 or not ppv.value:
+            return False
+        try:
+            vtbl = ctypes.cast(
+                ctypes.cast(ppv, ctypes.POINTER(ctypes.c_void_p))[0],
+                ctypes.POINTER(ctypes.c_void_p),
+            )
+            GetImageProto = ctypes.WINFUNCTYPE(
+                ctypes.c_long,
+                ctypes.c_void_p,
+                _WIN32_SIZE,
+                ctypes.c_int,
+                ctypes.POINTER(ctypes.wintypes.HBITMAP),
+            )
+            get_image = GetImageProto(vtbl[3])
+            hbm = ctypes.wintypes.HBITMAP()
+            # SIIGBF_THUMBNAILONLY (0x08) 우선 시도 ➔ 미지원 시 SIIGBF_RESIZETOFIT (0x00)
+            hr_img = get_image(ppv, _WIN32_SIZE(max_px, max_px), 0x08, ctypes.byref(hbm))
+            if hr_img != 0 or not hbm.value:
+                hr_img = get_image(ppv, _WIN32_SIZE(max_px, max_px), 0x00, ctypes.byref(hbm))
+            if hr_img != 0 or not hbm.value:
+                return False
+            try:
+                bm = _WIN32_BITMAP()
+                gdi32.GetObjectW(hbm, ctypes.sizeof(_WIN32_BITMAP), ctypes.byref(bm))
+                w, h = int(bm.bmWidth), int(bm.bmHeight)
+                if w <= 0 or h <= 0:
+                    return False
+                bmi = _WIN32_BITMAPINFOHEADER()
+                bmi.biSize = ctypes.sizeof(_WIN32_BITMAPINFOHEADER)
+                bmi.biWidth = w
+                bmi.biHeight = -h  # Top-down DIB
+                bmi.biPlanes = 1
+                bmi.biBitCount = 32
+                bmi.biCompression = 0
+                buf = ctypes.create_string_buffer(w * h * 4)
+                hdc = user32.GetDC(None)
+                try:
+                    gdi32.GetDIBits(hdc, hbm, 0, h, buf, ctypes.byref(bmi), 0)
+                finally:
+                    user32.ReleaseDC(None, hdc)
+                im = Image.frombuffer("RGBA", (w, h), buf, "raw", "BGRA", 0, 1).convert("RGB")
+                out_jpg.parent.mkdir(parents=True, exist_ok=True)
+                tmp_jpg = out_jpg.with_name(f"tmp_sh_{os.getpid()}_{threading.get_ident()}_{out_jpg.name}")
+                im.save(tmp_jpg, "JPEG", quality=80, optimize=False)
+                if tmp_jpg.exists() and tmp_jpg.stat().st_size > 1000:
+                    os.replace(tmp_jpg, out_jpg)
+                    return True
+                tmp_jpg.unlink(missing_ok=True)
+            finally:
+                gdi32.DeleteObject(hbm)
+        finally:
+            ReleaseProto = ctypes.WINFUNCTYPE(ctypes.c_ulong, ctypes.c_void_p)
+            ReleaseProto(vtbl[2])(ppv)
+    except Exception:
+        pass
+    return False
+
+
 def _winrt_extract_video_thumb(src_path: Path, seek_sec: float, out_jpg: Path) -> bool:
     """FFmpeg가 설치되지 않은 순정 Windows 10/11 PC에서 WinRT MediaComposition.GetThumbnailAsync로 동영상 썸네일 JPEG를 고속 추출합니다."""
     if os.name != "nt":
@@ -3364,6 +3516,10 @@ def get_or_create_video_thumb(params: Dict[str, Any] | None = None) -> tuple[Pat
             return out_jpg, 200
 
         if not ff:
+            # 1순위: 무프로세스(0-Subprocess) Win32 IShellItemImageFactory (30~150ms 즉시 완료)
+            if _win32_shell_extract_media_thumb(full_path, out_jpg, max_px=512) and out_jpg.exists():
+                return out_jpg, 200
+            # 2순위: WinRT MediaComposition 폴백
             if _winrt_extract_video_thumb(full_path, seek_t, out_jpg) and out_jpg.exists():
                 return out_jpg, 200
             return None, 404
@@ -4584,6 +4740,32 @@ def ensure_local_videos_ocr_indexed(sync_wait_sec: float = 0.0) -> None:
         worker.join(timeout=sync_wait_sec)
 
 
+_VIDEO_THUMB_PREWARM_RUNNING = False
+
+
+def _trigger_bg_video_thumb_prewarm(items: List[tuple[Path, float]]) -> None:
+    """/__videos/list 직후 백그라운드에서 미캐싱 동영상 대표 썸네일을 선행 예열하여 동영상 탭 전환 시 대기 시간을 0ms로 만듭니다."""
+    global _VIDEO_THUMB_PREWARM_RUNNING
+    if _VIDEO_THUMB_PREWARM_RUNNING or not items:
+        return
+    _VIDEO_THUMB_PREWARM_RUNNING = True
+
+    def _vthumb_worker() -> None:
+        global _VIDEO_THUMB_PREWARM_RUNNING
+        try:
+            for v_path, seek_t in items:
+                try:
+                    if v_path.exists() and v_path.is_file():
+                        get_or_create_video_thumb({"p": str(v_path), "fp": str(v_path), "t": seek_t})
+                except Exception:
+                    pass
+                time.sleep(0.01)
+        finally:
+            _VIDEO_THUMB_PREWARM_RUNNING = False
+
+    threading.Thread(target=_vthumb_worker, daemon=True).start()
+
+
 def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """내 PC 전 폴더(동영상, 사진, 바탕화면, 다운로드 등)의 동영상 파일을 전수 스캔하여 반환합니다."""
     cur_watch_sig = str(get_local_watch_signature().get("sig") or "")
@@ -4625,6 +4807,7 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     ocr_cache = _load_video_ocr_cache()
     missing_for_bg: List[tuple[str, Path, float]] = []
     prewarm_targets: List[Path] = []
+    vthumb_prewarm_targets: List[tuple[Path, float]] = []
 
     for d, resolved, st in raw_video_candidates[:300]:
         try:
@@ -4656,6 +4839,8 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
 
             thumb_seek = max(1, min(int(round(real_dur_sec * 0.2)), 3)) if int_dur >= 4 else 0
             thumb_url = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={thumb_seek}" if has_video_transcoder else ""
+            if has_video_transcoder and len(vthumb_prewarm_targets) < 60:
+                vthumb_prewarm_targets.append((resolved, float(thumb_seek)))
 
             # 순수 파일명·폴더명 의미어 토큰(CamelCase 분리 포함) + 실제 프레임 OCR 키워드만 정직하게 반영 (파일명 하드코딩 편법 일절 금지)
             stem_expanded = _split_camel_and_alnum_words(stem)
@@ -4783,6 +4968,9 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
             pass
 
     videos.sort(key=lambda v: int(v.get("mtimeMs") or 0), reverse=True)
+
+    if vthumb_prewarm_targets:
+        _trigger_bg_video_thumb_prewarm(vthumb_prewarm_targets)
 
     if prewarm_targets:
         threading.Thread(target=_prewarm_hevc_stream_caches, args=(prewarm_targets,), daemon=True).start()

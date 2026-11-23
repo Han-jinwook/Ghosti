@@ -714,7 +714,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
               </div>
             ) : (
               <div className="grid grid-cols-[repeat(auto-fill,minmax(260px,1fr))] gap-4 pb-1">
-                {matchedVideoScenes.map((vid) => {
+                {matchedVideoScenes.map((vid, vIdx) => {
                   const cardThumbUrl = resolveVideoCardThumbUrl(vid);
                   const isWholeClip = (vid.matchedSeekSec ?? 0) <= 0;
                   const cleanTs = cleanVideoTimestampLabel(vid.matchedTimestamp);
@@ -727,11 +727,20 @@ export const Stage1MinimalSearchPreview: React.FC<{
                       <div data-keep-dark="true" className="relative aspect-video w-full overflow-hidden bg-black">
                         {cardThumbUrl ? (
                           <img
+                            crossOrigin={cardThumbUrl.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
                             src={cardThumbUrl}
                             alt={vid.title}
-                            loading="lazy"
+                            loading={vIdx < 8 ? 'eager' : 'lazy'}
+                            decoding="async"
                             onError={(e) => {
-                              (e.currentTarget as HTMLElement).style.display = 'none';
+                              const imgEl = e.currentTarget;
+                              if (!imgEl.dataset.retried && cardThumbUrl) {
+                                imgEl.dataset.retried = '1';
+                                const sep = cardThumbUrl.includes('?') ? '&' : '?';
+                                imgEl.src = `${cardThumbUrl}${sep}r=${Date.now()}`;
+                                return;
+                              }
+                              imgEl.style.display = 'none';
                             }}
                             className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-300"
                           />
@@ -954,10 +963,21 @@ export const Stage1MinimalSearchPreview: React.FC<{
                       >
                         <div className="flex items-center gap-2.5">
                           <img
-                            crossOrigin="anonymous"
+                            crossOrigin={vp.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
                             src={vp.thumbUrl}
                             alt={vp.name}
                             loading="lazy"
+                            onError={(e) => {
+                              const imgEl = e.currentTarget;
+                              if (!imgEl.dataset.retried && vp.fullUrl && imgEl.src !== vp.fullUrl) {
+                                imgEl.dataset.retried = '1';
+                                imgEl.src = vp.fullUrl;
+                              } else if (imgEl.dataset.retried === '1' && vp.thumbUrl) {
+                                imgEl.dataset.retried = '2';
+                                const sep = vp.thumbUrl.includes('?') ? '&' : '?';
+                                imgEl.src = `${vp.thumbUrl}${sep}r=${Date.now()}`;
+                              }
+                            }}
                             className="w-14 h-14 rounded-lg object-cover bg-slate-100 border border-slate-200 shrink-0"
                           />
                           <div className="min-w-0 flex-1">
@@ -1016,7 +1036,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
                       : 'grid grid-cols-[repeat(auto-fill,minmax(145px,1fr))] gap-2.5'
                   }
                 >
-                  {visibleGroupedResults.map((group) => {
+                  {visibleGroupedResults.map((group, gIdx) => {
                     const item = group.representative;
                     const isBurst = group.burstCount >= 2;
                     return (
@@ -1034,11 +1054,22 @@ export const Stage1MinimalSearchPreview: React.FC<{
                           } w-full overflow-hidden bg-zinc-950`}
                         >
                           <img
-                            crossOrigin="anonymous"
+                            crossOrigin={item.photo.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
                             src={item.photo.thumbUrl}
                             alt={item.photo.name}
-                            loading="lazy"
+                            loading={gIdx < 16 ? 'eager' : 'lazy'}
                             decoding="async"
+                            onError={(e) => {
+                              const imgEl = e.currentTarget;
+                              if (!imgEl.dataset.retried && item.photo.fullUrl && imgEl.src !== item.photo.fullUrl) {
+                                imgEl.dataset.retried = '1';
+                                imgEl.src = item.photo.fullUrl;
+                              } else if (imgEl.dataset.retried === '1' && item.photo.thumbUrl) {
+                                imgEl.dataset.retried = '2';
+                                const sep = item.photo.thumbUrl.includes('?') ? '&' : '?';
+                                imgEl.src = `${item.photo.thumbUrl}${sep}r=${Date.now()}`;
+                              }
+                            }}
                             className="w-full h-full object-cover"
                           />
 

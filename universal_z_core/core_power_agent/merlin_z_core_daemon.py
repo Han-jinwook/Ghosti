@@ -161,7 +161,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.7.39"
+CORE_VERSION = "2.7.49"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -354,6 +354,23 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         if origin:
             self.send_header("Access-Control-Allow-Origin", origin)
             self.send_header("Vary", "Origin")
+        elif getattr(self, "command", "") in ("GET", "HEAD"):
+            req_path = urllib.parse.urlparse(getattr(self, "path", "") or "").path.rstrip("/")
+            if (
+                req_path in (
+                    "/__photos/file",
+                    "/api/ghosti/photos/file",
+                    "/__videos/thumb",
+                    "/api/ghosti/videos/thumb",
+                    "/__videos/stream",
+                    "/api/ghosti/videos/stream",
+                    "/__videos/frame",
+                    "/api/ghosti/videos/frame",
+                )
+                or req_path.startswith("/__tts/audio/")
+                or req_path.startswith("/__models/")
+            ):
+                self.send_header("Access-Control-Allow-Origin", "*")
         self.send_header("Access-Control-Allow-Methods", "GET, POST, OPTIONS")
         self.send_header(
             "Access-Control-Allow-Headers",

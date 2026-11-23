@@ -348,7 +348,7 @@ export const GhostSearchPane: React.FC<{
                             </div>
                           ) : (
                             <div className="flex md:grid md:grid-cols-2 lg:grid-cols-3 gap-4 overflow-x-auto snap-x snap-mandatory no-scrollbar pb-1">
-                              {matchedVideoScenes.map((vid) => {
+                              {matchedVideoScenes.map((vid, vIdx) => {
                                 const cardThumbUrl = resolveVideoCardThumbUrl(vid);
                                 const isWholeClip = (vid.matchedSeekSec ?? 0) <= 0;
                                 const cleanTs = cleanVideoTimestampLabel(vid.matchedTimestamp);
@@ -362,14 +362,23 @@ export const GhostSearchPane: React.FC<{
                                       {cardThumbUrl ? (
                                         <img
                                           key={cardThumbUrl}
+                                          crossOrigin={cardThumbUrl.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
                                           src={cardThumbUrl}
                                           alt={vid.title}
-                                          loading="lazy"
+                                          loading={vIdx < 8 ? 'eager' : 'lazy'}
+                                          decoding="async"
                                           onLoad={(e) => {
                                             (e.currentTarget as HTMLElement).style.display = '';
                                           }}
                                           onError={(e) => {
-                                            (e.currentTarget as HTMLElement).style.display = 'none';
+                                            const imgEl = e.currentTarget;
+                                            if (!imgEl.dataset.retried && cardThumbUrl) {
+                                              imgEl.dataset.retried = '1';
+                                              const sep = cardThumbUrl.includes('?') ? '&' : '?';
+                                              imgEl.src = `${cardThumbUrl}${sep}r=${Date.now()}`;
+                                              return;
+                                            }
+                                            imgEl.style.display = 'none';
                                           }}
                                           className="w-full h-full object-cover pointer-events-none group-hover:scale-105 transition-transform duration-300"
                                         />
@@ -726,7 +735,7 @@ export const GhostSearchPane: React.FC<{
                                     : 'grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 lg:grid-cols-8 gap-2.5'
                                 }
                               >
-                                {visibleGroupedResults.map((group) => {
+                                {visibleGroupedResults.map((group, gIdx) => {
                                   const item = group.representative;
                                   const isBurst = group.burstCount >= 2;
                                   const cleanUploader = (item.photo.uploaderLabel || '').replace(/^[👑📸\s]+/u, '');
@@ -748,7 +757,19 @@ export const GhostSearchPane: React.FC<{
                                           src={item.photo.thumbUrl}
                                           alt={item.photo.name}
                                           crossOrigin={item.photo.thumbUrl?.startsWith('http://127.0.0.1') ? 'anonymous' : undefined}
-                                          loading="lazy"
+                                          loading={gIdx < 16 ? 'eager' : 'lazy'}
+                                          decoding="async"
+                                          onError={(e) => {
+                                            const imgEl = e.currentTarget;
+                                            if (!imgEl.dataset.retried && item.photo.fullUrl && imgEl.src !== item.photo.fullUrl) {
+                                              imgEl.dataset.retried = '1';
+                                              imgEl.src = item.photo.fullUrl;
+                                            } else if (imgEl.dataset.retried === '1' && item.photo.thumbUrl) {
+                                              imgEl.dataset.retried = '2';
+                                              const sep = item.photo.thumbUrl.includes('?') ? '&' : '?';
+                                              imgEl.src = `${item.photo.thumbUrl}${sep}r=${Date.now()}`;
+                                            }
+                                          }}
                                           className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                                         />
 
