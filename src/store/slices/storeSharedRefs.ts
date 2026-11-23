@@ -251,7 +251,13 @@ export function resolveLoungePhotoCorpus(args: {
         ? sharedRoomHostPhotos
         : [];
 
-    return [...scopedAdded, ...hostForFamily];
+    const combined = [...scopedAdded, ...hostForFamily];
+    const seenIds = new Set<string>();
+    return combined.filter((p) => {
+      if (!p?.id || seenIds.has(p.id)) return false;
+      seenIds.add(p.id);
+      return true;
+    });
   }
 
   return photos.filter(

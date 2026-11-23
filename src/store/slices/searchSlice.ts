@@ -1228,6 +1228,49 @@ export const createSearchSlice: StateCreator<
 
     let { results } = photoSearchOut;
     const { embedMs, searchMs } = photoSearchOut;
+
+    // [인물명·닉네임 단독 검색 벡터 오탐 차단]:
+    // 사용자 닉네임·여권 이름·등록된 인물 이름(예: '해나라')을 검색했을 때 등록된 얼굴/태그가 없는데도
+    // EmbeddingGemma 벡터 폴백(lexicalHits === 0)으로 무관한 캡처·풍경 36장이 쏟아지는 현상을 원천 차단합니다.
+    const secretaryForPersonGuard = loadGhostSecretaryState();
+    const knownPersonNames = new Set<string>(
+      [
+        secretaryForPersonGuard.nickname,
+        ...Array.from(passportTagSet).map((t) => t.replace(/^#/, '')),
+        ...faceClusters.flatMap((c) => [
+          c.registeredName,
+          ...Object.values(c.roomPersonas || {}),
+        ]),
+      ]
+        .map((v) => String(v || '').trim().toLowerCase())
+        .filter((v) => v.length >= 2)
+    );
+    const strippedPersonQuery = cleanedSearchQuery.replace(/\s+/g, '').toLowerCase();
+    const isDirectPersonNameQuery =
+      Boolean(strippedPersonQuery) &&
+      (knownPersonNames.has(strippedPersonQuery) ||
+        Array.from(knownPersonNames).some(
+          (pn) => strippedPersonQuery === pn || strippedPersonQuery === `${pn}사진`
+        ));
+    if (isDirectPersonNameQuery && results.length > 0) {
+      const matchedClusterFiles = new Set(
+        faceClusters
+          .filter((c) => {
+            const names = [
+              c.registeredName,
+              ...Object.values(c.roomPersonas || {}),
+            ]
+              .map((v) => String(v || '').trim().toLowerCase())
+              .filter(Boolean);
+            return names.some((n) => strippedPersonQuery.includes(n));
+          })
+          .flatMap((c) => c.matchedPhotoFiles || [])
+      );
+      results = results.filter(
+        (item) => (item.lexicalHits ?? 0) > 0 || matchedClusterFiles.has(item.photo.name)
+      );
+    }
+
     const expansionBadges: string[] = [];
 
     if (isTimeRangeOrAlumniQuery) {

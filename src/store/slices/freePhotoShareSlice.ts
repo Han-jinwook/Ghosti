@@ -2916,6 +2916,9 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
           .filter(Boolean)
       )
     );
+    const hasPassportRegistered = Boolean(
+      passportFlow.userRealName || passportFlow.myClusterId || selfCluster?.registeredName
+    );
     const myDisplayName = candidateNames[0] || '나';
 
     // [개인 PC 사진 유출 0%]: 현재 공유방(동호회·동창회·가족) 및 활성 하위 탭에 실제로 올라온 공유 사진 코퍼스 안에서만 검색
@@ -2984,6 +2987,8 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
             : `[${myDisplayName}] 인물 기준으로 동창회 공유방 사진 중 ${matchedPhotos.length}장을 찾았습니다.`
           : visibleRoomPhotos.length === 0
           ? `아직 이 공유방에 올라온 사진이 없습니다. [내 사진도 이 방에 추가하기]로 먼저 올려보세요.`
+          : !hasPassportRegistered
+          ? `아직 내 얼굴 여권이 등록되지 않았습니다. 우측 상단 프로필 → [여권]에서 내 얼굴을 먼저 등록하면 내가 나온 사진만 정확히 찾아줍니다.`
           : `이 방에 [${myDisplayName}] 인물 이름표가 등록된 사진이 없습니다. 관련 없는 캡처·풍경 사진은 제외했습니다.`,
     });
   },

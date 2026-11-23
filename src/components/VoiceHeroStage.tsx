@@ -1,6 +1,8 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import {
+  filterPhotosByClubFeedTrack,
+  filterVisibleGalleryPhotos,
   isSharedPhotoLounge,
   resolveLoungePhotoCorpus,
 } from '../store/slices/storeSharedRefs';
@@ -20,6 +22,8 @@ export const VoiceHeroStage: React.FC = () => {
     layout,
     activeLoungeType,
     activeFamilyRoom,
+    activeSharedRoomId,
+    clubFeedTrack,
     photos,
     sharedRoomHostPhotos,
     sharedRoomAddedPhotos,
@@ -76,24 +80,29 @@ export const VoiceHeroStage: React.FC = () => {
     const sourcePhotos = resolveLoungePhotoCorpus({
       activeLoungeType,
       activeFamilyRoom,
+      activeSharedRoomId,
       photos,
       sharedRoomHostPhotos,
       sharedRoomAddedPhotos,
     });
     return sourcePhotos.filter((p) => !p.quarantined);
-  }, [activeLoungeType, activeFamilyRoom, photos, sharedRoomAddedPhotos, sharedRoomHostPhotos]);
+  }, [
+    activeLoungeType,
+    activeFamilyRoom,
+    activeSharedRoomId,
+    photos,
+    sharedRoomAddedPhotos,
+    sharedRoomHostPhotos,
+  ]);
 
   const gallerySceneCount = useMemo(
     () =>
-      activePhotos.filter(
-        (p) =>
-          !p.isVaultDocument &&
-          p.trashCategory !== 'blurry' &&
-          p.trashCategory !== 'screenshot' &&
-          p.trashCategory !== 'memo' &&
-          p.trashCategory !== 'duplicate'
+      filterPhotosByClubFeedTrack(
+        filterVisibleGalleryPhotos(activePhotos),
+        activeLoungeType,
+        clubFeedTrack
       ).length,
-    [activePhotos]
+    [activePhotos, activeLoungeType, clubFeedTrack]
   );
   const vaultPhotoCount = useMemo(
     () => (sharedMode ? 0 : activePhotos.filter((p) => p.isVaultDocument).length),
