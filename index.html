@@ -152,15 +152,6 @@
     />
     <script>
       try {
-        if (
-          window.sessionStorage.getItem('ghosti_splash_shown_v1') === '1' ||
-          window.location.search.indexOf('ghostSearchWindow=') !== -1 ||
-          window.location.search.indexOf('tab=search_dojo') !== -1
-        ) {
-          var _gs = document.createElement('style');
-          _gs.textContent = '#ghosti-boot-splash{display:none!important}';
-          document.head.appendChild(_gs);
-        }
         window.__GHOSTI_BOOT_ERR__ = '';
         window.addEventListener('error', function (ev) {
           if (!window.__GHOSTI_BOOT_ERR__) {
@@ -173,36 +164,11 @@
             window.__GHOSTI_BOOT_ERR__ = String((r && r.message) || r || 'Promise rejection');
           }
         });
-        window.setTimeout(function () {
-          var el = document.getElementById('ghosti-boot-splash');
-          if (!el) return;
-          var msg = document.createElement('div');
-          msg.style.cssText = 'margin-top:16px;padding:12px 16px;border-radius:12px;background:rgba(15,23,42,0.92);color:#e2e8f0;font-size:12.5px;max-width:90vw;text-align:center;line-height:1.5;';
-          msg.innerHTML =
-            '<div style="font-weight:700;margin-bottom:6px;">앱 시작이 지연되고 있습니다</div>' +
-            (window.__GHOSTI_BOOT_ERR__
-              ? '<div style="color:#fca5a5;font-size:11px;word-break:break-all;margin-bottom:8px;">' +
-                window.__GHOSTI_BOOT_ERR__.replace(/</g, '&lt;') +
-                '</div>'
-              : '') +
-            '<button type="button" onclick="location.reload()" style="padding:8px 16px;border-radius:8px;border:none;background:#14b8a6;color:#fff;font-weight:700;font-size:12px;">다시 열기</button>';
-          el.appendChild(msg);
-        }, 4500);
       } catch (e) {}
     </script>
   </head>
   <body class="bg-surface text-on-surface font-body-md antialiased selection:bg-primary-container selection:text-on-primary-container min-h-screen">
     <div id="root">
-      <div
-        id="ghosti-boot-splash"
-        style="position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;background:radial-gradient(circle at 50% 46%, #13254b 0%, #0b1331 52%, #070424 100%);"
-      >
-        <img
-          src="/gwisinkachi_splash_master.jpg"
-          alt="귀신같이 (Ghosti)"
-          style="width:100%;max-width:680px;height:auto;border-radius:24px;display:block;"
-        />
-      </div>
       <noscript>
         <h1>귀신같이(Ghosti) — 파일 내용 검색 · 기기 정리 · 원본 사진 공유</h1>
         <p>귀신같이(Ghosti)는 은행 보안프로그램 절전 전환과 중복 사진 정리, 문서 본문·사진·동영상 장면 검색, 가족·모임 원본 사진 공유, 팀 공용 폴더(S: 드라이브)를 지원하는 기기 내 로컬 관리 도구입니다.</p>

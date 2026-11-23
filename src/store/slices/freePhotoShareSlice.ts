@@ -46,6 +46,32 @@ let lastCompletedRoomAt = 0;
 
 const SHARED_ROOM_SOFT_DELETED_STORAGE_KEY = 'ghosti_shared_room_soft_deleted_v1';
 const SHARED_ROOM_STICK_OVERLAY_STORAGE_KEY = 'ghosti_shared_room_stickers_v1';
+const SHARED_ROOM_FEED_TRACK_STORAGE_KEY = 'ghosti_shared_room_feed_track_v1';
+
+function readSharedRoomFeedTrackMap(): Record<string, ClubFeedTrackId> {
+  if (typeof window === 'undefined') return {};
+  try {
+    const raw = localStorage.getItem(SHARED_ROOM_FEED_TRACK_STORAGE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as Record<string, ClubFeedTrackId>) : {};
+  } catch {
+    return {};
+  }
+}
+
+function recordSharedRoomFeedTrackEntries(photoIds: string[], track: ClubFeedTrackId): void {
+  if (typeof window === 'undefined' || photoIds.length === 0) return;
+  try {
+    const cur = readSharedRoomFeedTrackMap();
+    for (const id of photoIds) {
+      if (id) cur[id] = track;
+    }
+    localStorage.setItem(SHARED_ROOM_FEED_TRACK_STORAGE_KEY, JSON.stringify(cur));
+  } catch {
+    /* ignore */
+  }
+}
 
 export interface SharedRoomStickOverlayEntry {
   appliedSticks: string[];
@@ -104,16 +130,22 @@ function applySharedRoomLocalOverlays(
   softDeletedMap: Record<string, string>,
   stickOverlayMap: Record<string, SharedRoomStickOverlayEntry>
 ): PhotoItem[] {
-  if (
-    items.length === 0 ||
-    (Object.keys(softDeletedMap).length === 0 && Object.keys(stickOverlayMap).length === 0)
-  ) {
+  if (items.length === 0) {
+    return items;
+  }
+  const feedTrackMap = readSharedRoomFeedTrackMap();
+  const hasAnyOverlay =
+    Object.keys(softDeletedMap).length > 0 ||
+    Object.keys(stickOverlayMap).length > 0 ||
+    Object.keys(feedTrackMap).length > 0;
+  if (!hasAnyOverlay) {
     return items;
   }
   return items.map((item) => {
     const deletedAt = softDeletedMap[item.id];
     const stickOverlay = stickOverlayMap[item.id];
-    if (!deletedAt && !stickOverlay) return item;
+    const savedTrack = item.sharedFeedTrack ?? feedTrackMap[item.id];
+    if (!deletedAt && !stickOverlay && !savedTrack) return item;
     const nextTags = stickOverlay
       ? Array.from(
           new Set([            ...(item.tags ?? []),
@@ -131,6 +163,7 @@ function applySharedRoomLocalOverlays(
       : item.keywordsKo;
     return {
       ...item,
+      ...(savedTrack ? { sharedFeedTrack: savedTrack } : {}),
       ...(deletedAt ? { quarantined: true, sharedDeletedAt: deletedAt } : {}),
       ...(stickOverlay
         ? {
@@ -1268,8 +1301,12 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       const existingInSameRoom = latestState.sharedRoomAddedPhotos.filter(
         (p) => p.sharedRoomId === targetRoomId
       );
+      recordSharedRoomFeedTrackEntries(
+        upRes.uploadedPhotos.map((p) => p.id),
+        targetFeedTrack
+      );
       const overlaidUploaded = applySharedRoomLocalOverlays(
-        upRes.uploadedPhotos,
+        upRes.uploadedPhotos.map((p) => ({ ...p, sharedFeedTrack: targetFeedTrack })),
         latestState.sharedRoomSoftDeletedMap,
         latestState.sharedRoomStickOverlayMap
       );
@@ -2071,8 +2108,25 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     const finalFamilyRoom = matchedJoinedMeta ? matchedJoinedMeta.familyRoom : targetFamilyRoom;
     const finalRoomId = res.roomId || explicitRoomId;
 
+    // 서버 방 조회가 일시 실패해 roomId=null & photos=[]가 온 경우, 기존 로컬 공유방 사진을 0장으로 덮어쓰지 않음
+    if (!finalRoomId && res.photos.length === 0) {
+      set({ isLoadingSharedRoomPhotos: false });
+      return;
+    }
+
+    const prevTrackById = new Map<string, ClubFeedTrackId>();
+    for (const prevP of stNow.sharedRoomAddedPhotos) {
+      if (prevP.sharedFeedTrack) {
+        prevTrackById.set(prevP.id, prevP.sharedFeedTrack);
+      }
+    }
+    const hydratedRemotePhotos = res.photos.map((p) => ({
+      ...p,
+      sharedFeedTrack: p.sharedFeedTrack ?? prevTrackById.get(p.id),
+    }));
+
     const overlaidRemotePhotos = applySharedRoomLocalOverlays(
-      res.photos,
+      hydratedRemotePhotos,
       stNow.sharedRoomSoftDeletedMap,
       stNow.sharedRoomStickOverlayMap
     );
@@ -2106,11 +2160,27 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         sharedRoomHostPhotos: stNow.sharedRoomHostPhotos,
         sharedRoomAddedPhotos: nextAdded,
       });
-      const visibleRemoteTrack = filterPhotosByClubFeedTrack(
-        filterVisibleGalleryPhotos(mergedShared),
+      const visibleAllInRoom = filterVisibleGalleryPhotos(mergedShared);
+      let effectiveTrack = stNow.clubFeedTrack;
+      let visibleRemoteTrack = filterPhotosByClubFeedTrack(
+        visibleAllInRoom,
         finalLounge,
-        stNow.clubFeedTrack
+        effectiveTrack
       );
+      // 동호회·동창회 진입 직후 현재 탭이 0장이고 반대쪽 탭에만 사진이 있으면 자동 전환해 "사진이 사라짐" 오해 차단
+      if (
+        (finalLounge === 'club' || finalLounge === 'student') &&
+        visibleRemoteTrack.length === 0 &&
+        visibleAllInRoom.length > 0
+      ) {
+        const altTrack: ClubFeedTrackId =
+          effectiveTrack === 'memories_1989' ? 'recent_now' : 'memories_1989';
+        const altPhotos = filterPhotosByClubFeedTrack(visibleAllInRoom, finalLounge, altTrack);
+        if (altPhotos.length > 0) {
+          effectiveTrack = altTrack;
+          visibleRemoteTrack = altPhotos;
+        }
+      }
       const sharedGalleryResults: SearchResultItem[] = visibleRemoteTrack.map(
         (photo) => ({
           photo,
@@ -2126,6 +2196,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         activeJoinedRoomMeta: matchedJoinedMeta,
         joinedSharedRooms: resolvedJoinedList,
         sharedRoomAddedPhotos: nextAdded,
+        clubFeedTrack: effectiveTrack,
         isLoadingSharedRoomPhotos: false,
         ...(stNow.hasExecutedUserSearch
           ? {}

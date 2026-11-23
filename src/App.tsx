@@ -9,7 +9,6 @@ import {
   savePendingQrPairCode,
 } from './services/deviceIntegrationService';
 import { DesktopDashboard } from './components/DesktopDashboard';
-import { GhostiLoadingSplash } from './components/GhostiLoadingSplash';
 import { GhostiHubRootProvider } from './components/GhostiHubInfraBridge';
 import { GhostiShowroomLanding, OFFICIAL_LAUNCH_LIVE } from './components/GhostiShowroomLanding';
 import { MobileAppView } from './components/MobileAppView';
@@ -1130,8 +1129,6 @@ export const App: React.FC = () => {
 
   return (
     <GhostiHubRootProvider>
-      {/* 앱 진입 시 0.5초 가벼운 로딩 스플래시 */}
-      <GhostiLoadingSplash />
       {/* [프로필 내 본인 여권 단독 보관함 — D-35] 쇼룸·워크스페이스·모바일 전 화면 어디서든 프로필 [🛂 여권] 클릭 시 즉시 오픈 */}
       <PassportDoorplateStyleModal />
 
