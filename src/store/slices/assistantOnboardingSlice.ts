@@ -2175,9 +2175,15 @@ export const createAssistantOnboardingSlice: StateCreator<
   restoreFromQuarantine: async (names: string[]) => {
     if (names.length === 0 || get().quarantineMoving) return;
     const curPhotos = get().photos;
+    // 동일 파일명이 activePhotos(quarantined: false)에도 존재할 때 curPhotos.find()가
+    // 비격리 항목을 먼저 잡아 validTargets가 빈 배열([])이 되어 복원이 무반응으로 종료되던 버그 원천 차단
     const validTargets = names.filter((target) => {
-      const matched = curPhotos.find((p) => p.id === target || p.name === target);
-      return matched ? Boolean(matched.quarantined) : true;
+      const matchedQuarantined = curPhotos.find(
+        (p) => p.quarantined && (p.id === target || p.name === target)
+      );
+      if (matchedQuarantined) return true;
+      const anyMatch = curPhotos.find((p) => p.id === target || p.name === target);
+      return !anyMatch;
     });
     if (validTargets.length === 0) {
       set({ lastUndoBatch: null });
@@ -2188,7 +2194,9 @@ export const createAssistantOnboardingSlice: StateCreator<
       // PC Z-코어는 휴지통 장부(name) 기준으로 매칭하므로 id !== name인 기존 항목도 정확히 name으로 전달
       const wireTargets = zCoreBridge.isConnected
         ? validTargets.map((target) => {
-            const matched = curPhotos.find((p) => p.id === target || p.name === target);
+            const matched = curPhotos.find(
+              (p) => p.quarantined && (p.id === target || p.name === target)
+            );
             return matched?.name || target;
           })
         : validTargets;

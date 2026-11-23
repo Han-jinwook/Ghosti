@@ -1224,7 +1224,7 @@ export const App: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void undoLastQuarantine()}
-                  className="px-3.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 text-slate-900 text-[12px] font-semibold transition-colors whitespace-nowrap cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 text-white text-[12px] font-semibold transition-colors whitespace-nowrap cursor-pointer"
                 >
                   실행 취소
                 </button>

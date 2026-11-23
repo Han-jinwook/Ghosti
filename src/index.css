@@ -365,7 +365,7 @@ html.theme-warm-light .border-white\/25 {
 
 /* 6. 타이포그래피 (#1E293B 진한 차콜 & #334155 슬레이트)
    - [data-keep-dark="true"](8090 칠판/노을 간판), .bg-slate-900(솔리드 차콜 CTA/활성 카드) 및 썸네일 오버레이 내부는 원래 밝은 글씨 유지 */
-html.theme-warm-light .text-white:not(.bg-slate-900):not(.bg-slate-900 *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *):not([class*="bg-emerald-500"]):not([class*="bg-indigo-500"]):not([class*="bg-rose-500"]):not([class*="bg-fuchsia-500"]),
+html.theme-warm-light .text-white:not(.bg-slate-900):not(.bg-slate-900 *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *):not([class*="bg-teal-500"]):not([class*="bg-teal-600"]):not([class*="bg-teal-600"] *):not([class*="bg-teal-700"]):not([class*="bg-emerald-500"]):not([class*="bg-emerald-600"]):not([class*="bg-sky-600"]):not([class*="bg-amber-600"]):not([class*="bg-indigo-500"]):not([class*="bg-indigo-600"]):not([class*="bg-rose-500"]):not([class*="bg-rose-600"]):not([class*="bg-fuchsia-500"]),
 html.theme-warm-light [class*="text-white/"]:not(.bg-slate-900):not(.bg-slate-900 *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
 html.theme-warm-light .text-zinc-100:not(.bg-slate-900):not(.bg-slate-900 *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
 html.theme-warm-light [class*="text-zinc-100/"]:not(.bg-slate-900):not(.bg-slate-900 *):not([data-keep-dark="true"] *):not(.aspect-video *):not(.aspect-square *):not(.aspect-\[4\/5\] *):not(.aspect-\[4\/3\] *),
@@ -635,10 +635,10 @@ html.theme-warm-light .bg-primary-container:not([data-keep-dark="true"] *) {
   color: #FFFFFF !important;
   border-color: #0F172A !important;
 }
-html.theme-warm-light .bg-slate-900.text-white:not(.hub-purchase-widget *) *,
-html.theme-warm-light button.bg-slate-900:not(.hub-purchase-widget *) *,
-html.theme-warm-light a.bg-slate-900:not(.hub-purchase-widget *) *,
-html.theme-warm-light .bg-primary-container:not([data-keep-dark="true"] *) * {
+html.theme-warm-light .bg-slate-900.text-white:not(.hub-purchase-widget *) *:not(.bg-white):not(.bg-white *),
+html.theme-warm-light button.bg-slate-900:not(.hub-purchase-widget *) *:not(.bg-white):not(.bg-white *),
+html.theme-warm-light a.bg-slate-900:not(.hub-purchase-widget *) *:not(.bg-white):not(.bg-white *),
+html.theme-warm-light .bg-primary-container:not([data-keep-dark="true"] *) *:not(.bg-white):not(.bg-white *) {
   color: #FFFFFF !important;
 }
 html.theme-warm-light .bg-slate-900 .text-slate-200,
