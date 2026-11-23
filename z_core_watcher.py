@@ -225,11 +225,18 @@ def scan_post_office_files(role: str = "all") -> Dict[str, str]:
                 and "1귀신" not in p.name
                 and "1호담당" not in recipient_line
             )
+            explicit_r4 = (
+                ("4귀신" in p.name or "4호담당" in p.name or "4귀신" in recipient_line or "4호담당" in recipient_line)
+                and "1귀신" not in p.name
+                and "1호담당" not in recipient_line
+            )
             if explicit_r2 and role != "all" and "2" not in (role or ""):
                 continue
             if explicit_r3 and role != "all" and "3" not in (role or ""):
                 continue
-            if not is_primary and not explicit_r2 and not explicit_r3:
+            if explicit_r4 and role != "all" and "4" not in (role or ""):
+                continue
+            if not is_primary and not explicit_r2 and not explicit_r3 and not explicit_r4:
                 continue
             if prefix == "all":
                 if (receipts_dir / f"{p.stem}.Ghosti.read").exists() or (receipts_dir / f"{p.name}.Ghosti.read").exists():
@@ -273,18 +280,16 @@ def _normalize_role_arg(raw_val: str) -> str:
     val = (raw_val or "").strip().lower()
     if val == "all":
         return "all"
-    normalized = ",".join(r for r in ("1", "2", "3") if r in val)
+    normalized = ",".join(r for r in ("1", "2", "3", "4") if r in val)
     return normalized
 
 
 def _resolve_active_role() -> str:
     """
-    --role 1|2|3|2,3|all 인자(하위호환 --track 포함) 또는 워크트리 폴더명(Ghosti_Search / Ghosti_Share)으로부터
-    현재 창의 담당 역할(1귀신 / 2귀신 / 3귀신 / 2,3 복합 / all)을 판별합니다.
-    - 창 1개만 열었을 때(D:\\Ghosti 무옵션): 기본값 'all' (1귀신·2귀신·3귀신·귀신창 전체 감지)
-    - D:\\Ghosti_Search 무옵션: '2' 자동 감지
-    - D:\\Ghosti_Share 무옵션: '3' 자동 감지
-    - 명시적 --role 1 | 2 | 3 | 2,3 | 23 | 1,2 | 1,3 | all 지정 시 해당 값 최우선 적용
+    --role 1|2|3|4|1,2|3,4|all 인자(하위호환 --track 포함)로부터
+    현재 창의 담당 역할(1귀신 / 2귀신 / 3귀신 / 4귀신 / 복합 / all)을 판별합니다.
+    - 창 1개만 열었을 때(D:\\Ghosti 무옵션): 기본값 'all' (1~4귀신·귀신창 전체 감지)
+    - 명시적 --role 1 | 2 | 3 | 4 | 1,2 | 3,4 | 2,3 | all 지정 시 해당 값 최우선 적용
     """
     for i, arg in enumerate(sys.argv[1:], start=1):
         if arg == "--role" and i + 1 < len(sys.argv):
@@ -297,15 +302,10 @@ def _resolve_active_role() -> str:
                 return norm
         elif arg == "--track" and i + 1 < len(sys.argv):
             val = sys.argv[i + 1].strip().lower()
-            return {"free": "1", "sync": "2", "work": "3"}.get(val, "all")
+            return {"free": "1", "sync": "2", "share": "3", "work": "4"}.get(val, "all")
         elif arg.startswith("--track="):
             val = arg.split("=", 1)[1].strip().lower()
-            return {"free": "1", "sync": "2", "work": "3"}.get(val, "all")
-    folder_lower = ROOT_DIR.name.lower()
-    if "search" in folder_lower:
-        return "2"
-    if "share" in folder_lower:
-        return "3"
+            return {"free": "1", "sync": "2", "share": "3", "work": "4"}.get(val, "all")
     return "all"
 
 
@@ -424,13 +424,15 @@ def main() -> None:
     baseline_inbox = scan_post_office_files(role=active_role)
     baseline_doctrine_hash = file_md5(DOCTRINE_FILE)
     role_label_map = {
-        "1": "role=1 (1귀신 본진: 비서·Z코어·손보기)",
-        "2": "role=2 (2귀신: 검색·귀신창)",
-        "3": "role=3 (3귀신: 사진공유·기기통합 + 1귀신 온보딩)",
-        "2,3": "role=2,3 (2·3귀신 복합: 검색·귀신창·사진공유·기기통합·온보딩)",
-        "1,2": "role=1,2 (1·2귀신 복합: 비서·검색·귀신창)",
-        "1,3": "role=1,3 (1·3귀신 복합: 비서·온보딩·사진공유·기기통합)",
-        "1,2,3": "role=1,2,3 (전체 복합 감지)",
+        "1": "role=1 (1귀신 본진: 온보딩·1.귀신비서·Z코어)",
+        "2": "role=2 (2귀신: 2.귀신검색·귀신창)",
+        "3": "role=3 (3귀신: 3.사진공유·4.내기통합 Pro)",
+        "4": "role=4 (4귀신: 5.업무공유 S:)",
+        "1,2": "role=1,2 (1·2귀신 복합: 해나라 라인)",
+        "3,4": "role=3,4 (3·4귀신 복합: 달나라 라인)",
+        "2,3": "role=2,3 (2·3귀신 복합)",
+        "1,3": "role=1,3 (1·3귀신 복합)",
+        "1,2,3,4": "role=1,2,3,4 (4귀신 전체 복합 감지)",
         "all": "role=all (전체 감지)",
     }
     role_badge = role_label_map.get(active_role, f"role={active_role}")

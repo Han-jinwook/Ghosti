@@ -321,40 +321,37 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
 
 ---
 
-### 🏗️ [귀신창 완전 인수 & 실전 QA 3창(`1귀신` / `2귀신` / `3귀신`) × 무충돌 도메인 모듈화 운영 규격 (2026-11-13 최종 확정)]
+### 🏗️ [귀신창 완전 인수 & 『4귀신 × 2인 QA(해나라·달나라)』 단일 본진(`D:\Ghosti`) + 파일 소유권 격리 운영 규격 (2026-11-23 최종 확정)]
+
+> 📌 **오리지널 원문 참조**: [`4귀신_2인QA_전담작전_20261123_1528_Secretary.md`](file:///d:/Secretary/docs/프로젝트별_문서/Ghosti_귀신같이/4귀신_2인QA_전담작전_20261123_1528_Secretary.md) (구형 껍데기 워크트리 `Ghosti_Search`·`Ghosti_Share`는 폐지되고 **`D:\Ghosti [main]` 단일 본진 1개**로 통일되었습니다.)
 
 1. **`귀신창` 전권 인수 및 단일 원본(SSOT) 경로**:
 
-   - `Secretary`로부터 이관받은 `⚡ 귀신창` 초능력 데몬 및 `👻 귀신검색창`의 단일 마스터 원본(SSOT)은 **`D:\Ghosti\universal_z_core\seq_paste_daemon.py`** 및 **`D:\Ghosti\universal_z_core\ghost_search_window_ui2.py`**로 일원화합니다 (`deploy_z_core_cluster.py` 실행 시 현재 워크트리의 `universal_z_core/` 마스터에서 하위 `os_agent/` · `core_power_agent/` 및 1호기·4호기로 단방향 배포되며 `D:\Secretary\tools\` 역방향 덮어쓰기는 영구 폐지됨).
+   - `Secretary`로부터 이관받은 `⚡ 귀신창` 초능력 데몬 및 `👻 귀신검색창`의 단일 마스터 원본(SSOT)은 **`D:\Ghosti\universal_z_core\seq_paste_daemon.py`** 및 **`D:\Ghosti\universal_z_core\ghost_search_window_ui2.py`**로 일원화합니다 (`deploy_z_core_cluster.py` 실행 시 `D:\Ghosti\universal_z_core\` 마스터에서 하위 `os_agent/` · `core_power_agent/` 및 1~6호기로 단방향 배포되며 `D:\Secretary\tools\` 역방향 덮어쓰기는 영구 폐지됨).
 
-2. **실전 3창(`1귀신` / `2귀신` / `3귀신`) 분리 체제 및 전담 파일 매핑 (상호 간섭 0%)**:
+2. **실전 4귀신(`1귀신` / `2귀신` / `3귀신` / `4귀신`) 단일 본진(`D:\Ghosti`) + 파일 소유권 격리 매트릭스 (상호 간섭 0%)**:
 
-   - **1번 창: `🎯 [1귀신]` (`D:\Ghosti` · 브랜치 `main` · `--role 1`) — 1. 귀신비서 & 온보딩**:
+   - **👩 해나라 QA 라인**:
+     - **1번 창: `🎯 [1귀신]` (`D:\Ghosti` · `--role 1`) — 온보딩 + 1. 귀신비서 & Z-코어**:
+       * 담당 영역: 웹/모바일 온보딩 + 좌측 `👻 귀신비서` 사진정리·여권·브리핑·대화창·손보기 케어·Z-코어 데몬 (`[1귀신]` 노션 카드 전담).
+       * 전담 모듈: `src/components/GhostiShowroomLanding.tsx` (`OnboardingModal.tsx`), `src/components/stage1/Stage1MinimalCarePreview.tsx`, `src/components/MonsterStandardChatColumn.tsx`, `src/store/slices/assistantOnboardingSlice.ts`, `src/services/ai/facePassportWorker.ts`, `src/services/ai/onDeviceFacePassportEngine.ts`, `universal_z_core/os_agent/merlin_z_core_daemon.py`, `plugin_ghosti_os.py`, `plugin_ghosti_care_suite.py`.
+     - **2번 창: `🎯 [2귀신]` (`D:\Ghosti` · `--role 2`) — 2. 귀신검색 & 귀신창**:
+       * 담당 영역: `👻 귀신검색` 사진·동영상 글자뽑기·문서투시 + `⚡ 귀신창`·초능력 (`[2귀신]` 및 `[귀신창]` 노션 카드 전담).
+       * 전담 모듈: `src/domains/search/GhostSearchPane.tsx`, `src/components/stage1/Stage1MinimalSearchPreview.tsx`, `src/store/slices/searchSlice.ts`, `src/services/ai/aiVideoEngine.ts`, `src/services/ai/aiDocumentEngine.ts`, `universal_z_core/seq_paste_daemon.py`, `universal_z_core/ghost_search_window_ui2.py`.
+   - **🧑 달나라 QA 라인**:
+     - **3번 창: `🎯 [3귀신]` (`D:\Ghosti` · `--role 3`) — 3. 사진 공유 + 4. 내 기기 통합 Pro**:
+       * 담당 영역: `📸 사진 공유` 무제한 0원 가족·동호회·동창회 공유방 + `👑 내 기기 통합 Pro` 폰↔PC 연동 (`[3귀신]` 노션 카드 전담).
+       * 전담 모듈: `src/domains/free_photo_share/*`, `src/domains/paid_device_sync/*`, `src/store/slices/freePhotoShareSlice.ts`, `src/store/slices/paidDeviceSyncSlice.ts`, `universal_z_core/os_agent/plugins/plugin_paid_sync_ghostwin.py`.
+     - **4번 창: `🎯 [4귀신]` (`D:\Ghosti` · `--role 4`) — 5. 업무 공유 (`S:` 드라이브)**:
+       * 담당 영역: `🏢 업무 공유 (S:)` 24시간 대장 PC `S:` 드라이브 마운트·직통 터널·백업 PC 이중화·File Lock·B2B 과금 게이트 (`[4귀신]` 노션 카드 전담).
+       * 전담 모듈: `src/domains/paid_work_share/*`, `src/store/slices/paidWorkShareSlice.ts`, `universal_z_core/os_agent/plugins/plugin_paid_work_sdrive.py`.
 
-     * 담당 영역: 웹/모바일 온보딩 + 좌측 `👻 귀신비서` 사진정리·브리핑·대화창·손보기 케어.
+3. **⚡ 멀린님 한마디 역할 지정(`"1귀신"` / `"2귀신"` / `"3귀신"` / `"4귀신"` / `"1,2귀신"` / `"3,4귀신"` — `"체크인"` 생략 시에도 자동 체크인 + 인계장 정독 + 감시병 즉시 기동) 철칙**:
 
-     * 전담 모듈: `src/components/GhostiShowroomLanding.tsx` (`OnboardingPage.tsx`, `OnboardingModal.tsx`), `src/domains/assistant/GhostAssistantPane.tsx`, `src/store/slices/assistantOnboardingSlice.ts`, `src/services/ai/aiPhotoFaceEngine.ts`, `universal_z_core/os_agent/plugin_ghosti_os.py`, `plugin_ghosti_care_suite.py`.
-
-   - **2번 창: `🎯 [2귀신]` (`D:\Ghosti_Search` · 브랜치 `track/search-ghostwin` · `--role 2`) — 2. 귀신검색 & 귀신창**:
-
-     * 담당 영역: 우측 `👻 귀신검색` 사진·동영상 글자뽑기·문서투시 + `⚡ 귀신창`·초능력(`[2귀신]` 및 `[귀신창]` 노션 카드 전담).
-
-     * 전담 모듈: `src/domains/search/GhostSearchPane.tsx`, `src/store/slices/searchSlice.ts`, `src/services/ai/aiVideoEngine.ts`, `src/services/ai/aiDocumentEngine.ts`, `universal_z_core/seq_paste_daemon.py`, `universal_z_core/ghost_search_window_ui2.py`.
-
-   - **3번 창: `🎯 [3귀신]` (`D:\Ghosti_Share` · 브랜치 `track/share-sync` · `--role 3`) — 3. 사진공유 + 내 기기 통합**:
-
-     * 담당 영역: `📸 사진 공유` 무제한 0원 가족·동호회·동창회 공유방·여권 + `👑 내 기기 통합` 폰↔PC 연동(`[3귀신]` 노션 카드 전담).
-
-     * 전담 모듈: `src/domains/free_photo_share/FreePhotoShareLounge.tsx`, `src/domains/paid_device_sync/PaidDeviceSyncPane.tsx`, `src/store/slices/photoShareAndSyncSlice.ts` (`freePhotoShareSlice.ts`, `paidDeviceSyncSlice.ts`), `universal_z_core/os_agent/plugins/plugin_paid_sync_ghostwin.py`.
-
-   - *(업무공유 `S:` 드라이브는 QA 개시 전까지 `src/domains/paid_work_share/*`, `paidWorkShareSlice.ts`, `plugin_paid_work_sdrive.py`에 분리 보존)*
-
-3. **⚡ 멀린님 한마디 역할 지정(`"1귀신"` / `"2귀신"` / `"3귀신"` / `"2,3귀신"` — `"체크인"` 생략 시에도 자동 체크인 + 인계장 정독 + 감시병 즉시 기동) 철칙**:
-
-   - 어떤 새 창에서든 멀린님이 `"체크인"`이라는 단어 없이 단지 **`"1귀신"`**, **`"2귀신"`**, **`"3귀신"`** (또는 **`"넌 1귀신"`**, **`"넌 2귀신"`**, **`"넌 3귀신"`**, **`"넌 2,3귀신 맡아"`**, **`"2번·3번 같이 봐"`**)이라고만 한마디 지시하셔도 이를 **즉시 `[해당 역할 공식 체크인]`으로 간주**하여 아래 3단계를 예외 없이 원스톱 수행합니다:
-     1) **최신 원격 동기화(`git pull`)**: 본진(`D:\Ghosti`) 및 본인 전담 워크트리(`1귀신`=`D:\Ghosti`, `2귀신`=`D:\Ghosti_Search`, `3귀신`=`D:\Ghosti_Share`)에서 `git pull --rebase --autostash origin main`을 즉시 실행합니다.
-     2) **인계장(`docs/SESSION_HANDOVER.md`) 및 목차(`docs/README.md`) 필수 정독**: `read_file`로 최신 **`docs/SESSION_HANDOVER.md` 최상단(1·2·3귀신 통합 인계 기록)**과 `docs/README.md`, 중앙 우체국(`D:\Secretary\post_office\`)을 반드시 읽고 직전 세션 작업과 오늘의 공통 규칙을 100% 숙지한 뒤 1~2줄로 안심 보고합니다.
-     3) **전담 감시병(`--watch`) 단 1개 즉시 기동**: `manage_task(Action="list")`로 기존 중복 감시병을 `kill` 정리한 뒤 **`run_command(CommandLine="python d:\Ghosti\z_core_watcher.py --watch --role 1", IsDaemon=true, WaitMsBeforeAsync=500)`** (2귀신은 `--role 2`, 3귀신은 `--role 3`, 복합은 `--role 2,3`)을 단 1개 기동합니다 (`STATUS_FIXING` 체크도 지정된 `role` 집합 안에서만 판정하므로 타 창 작업 중에도 블로킹 0%). 창 1개만 단독으로 열었을 때는 무옵션 기본값(`--role all`)으로 `1귀신·2귀신·3귀신·귀신창` 전체를 감지합니다.
+   - 어떤 새 창에서든 멀린님이 `"체크인"`이라는 단어 없이 단지 **`"1귀신"`**, **`"2귀신"`**, **`"3귀신"`**, **`"4귀신"`** (또는 **`"넌 1,2귀신 맡아"`**, **`"넌 3,4귀신 맡아"`**)이라고만 한마디 지시하셔도 이를 **즉시 `[해당 역할 공식 체크인]`으로 간주**하여 아래 3단계를 예외 없이 원스톱 수행합니다:
+     1) **최신 원격 동기화(`git pull`)**: 단일 본진(`D:\Ghosti`)에서 `git pull --rebase --autostash origin main`을 즉시 실행합니다.
+     2) **인계장(`docs/SESSION_HANDOVER.md`) 및 목차(`docs/README.md`) 필수 정독**: `read_file`로 최신 **`docs/SESSION_HANDOVER.md` 최상단(1~4귀신 통합 인계 기록)**과 `docs/README.md`, 중앙 우체국(`D:\Secretary\post_office\`)을 반드시 읽고 직전 세션 작업과 오늘의 공통 규칙을 100% 숙지한 뒤 1~2줄로 안심 보고합니다.
+     3) **전담 감시병(`--watch`) 단 1개 즉시 기동**: `manage_task(Action="list")`로 기존 중복 감시병을 `kill` 정리한 뒤 **`run_command(CommandLine="python d:\Ghosti\z_core_watcher.py --watch --role 1", IsDaemon=true, WaitMsBeforeAsync=500)`** (`2귀신`=`--role 2`, `3귀신`=`--role 3`, `4귀신`=`--role 4`, 복합=`--role 1,2` / `--role 3,4`)을 단 1개 기동합니다 (`STATUS_FIXING` 체크도 지정된 `role` 집합 안에서만 판정하므로 타 창 작업 중에도 블로킹 0%). 창 1개만 단독으로 열었을 때는 무옵션 기본값(`--role all`)으로 `1~4귀신·귀신창` 전체를 감지합니다.
 
 4. **무충돌(Zero-Conflict) 가드레일**:
 

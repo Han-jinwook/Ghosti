@@ -321,13 +321,14 @@ def _is_onboarding_card_for_role3(title_text: str) -> bool:
 
 def classify_ghosti_bug_role(title_text: str, body_text: str = "", app_select: str = "") -> str:
     """
-    멀린님 최종 확정 3창(`1귀신` / `2귀신` / `3귀신`) 노션 QA 카드 역할 자동 분류기:
-    - '1': 1번 창 (D:\\Ghosti, --role 1) — `[1귀신]` 본진 (귀신비서 · Z-코어 · 사진정리 · 브리핑, 온보딩 제외)
-    - '2': 2번 창 (D:\\Ghosti_Search, --role 2) — `[2귀신]` 및 `[귀신창]` (귀신검색 · 동영상 글자뽑기 · 문서투시 · 귀신창)
-    - '3': 3번 창 (D:\\Ghosti_Share, --role 3) — `[3귀신]` (사진공유 · 내 기기 통합) + `[1귀신]` 중 온보딩 전담
+    멀린님 최종 확정 4귀신 × 2인 QA 체제 (`1귀신` / `2귀신` / `3귀신` / `4귀신`, 단일 본진 D:\\Ghosti) 노션 QA 카드 역할 자동 분류기:
+    - '1': 1귀신 (--role 1, 해나라) — `[1귀신]` (온보딩 + 1. 귀신비서 · Z-코어 · 사진정리 · 여권 · 손보기)
+    - '2': 2귀신 (--role 2, 해나라) — `[2귀신]` 및 `[귀신창]` (2. 귀신검색 · 동영상 글자뽑기 · 문서투시 · 귀신창)
+    - '3': 3귀신 (--role 3, 달나라) — `[3귀신]` (3. 사진공유 + 4. 내 기기 통합 Pro)
+    - '4': 4귀신 (--role 4, 달나라) — `[4귀신]` (5. 업무 공유 S:)
     """
-    if _is_onboarding_card_for_role3(title_text):
-        return "3"
+    if "[4귀신" in title_text or "4귀신]" in title_text:
+        return "4"
     if "[1귀신" in title_text or "1귀신]" in title_text:
         return "1"
     if (
@@ -343,7 +344,9 @@ def classify_ghosti_bug_role(title_text: str, body_text: str = "", app_select: s
 
     # 말머리가 구버전 '[귀신같이]'인 경우 키워드 폴백 분류
     combined = f"{title_text} {app_select}"
-    if any(k in combined for k in ("사진 공유", "사진공유", "공유방", "패밀리", "동창회", "동호회", "여권", "내 기기 통합", "내기기 통합", "온보딩")):
+    if any(k in combined for k in ("업무 공유", "업무공유", "S:", "S드라이브", "B2B", "팀 드라이브")):
+        return "4"
+    if any(k in combined for k in ("사진 공유", "사진공유", "공유방", "패밀리", "동창회", "동호회", "내 기기 통합", "내기기 통합")):
         return "3"
     if any(k in combined for k in ("귀신창", "귀신검색", "동영상", "글자", "문서", "라벨러", "검색시", "검색창")):
         return "2"
@@ -352,42 +355,48 @@ def classify_ghosti_bug_role(title_text: str, body_text: str = "", app_select: s
 
 def _matches_role_strict(title_text: str, app_select: str, role: str, target_status: str = "", page_id: str = "") -> bool:
     """
-    Secretary 지시 명세에 따른 엄격한 role 매칭 (단일 및 복합 '2,3' 등 완벽 지원):
-    - role == "1": "[1귀신" 중 온보딩을 제외한 본진 카드 감지
+    4귀신 × 2인 QA 체제 엄격한 role 매칭 (단일 1|2|3|4 및 복합 1,2|3,4|all 완벽 지원):
+    - role == "1": "[1귀신" (온보딩 + 1. 귀신비서) 감지
     - role == "2": "[2귀신" 및 "[귀신창" 감지
-    - role == "3": "[3귀신" 및 "[1귀신" 중 온보딩 전담 카드 감지
-    - role == "2,3" 등 복합 지정: 쉼표 구분 각 role 중 하나라도 매칭되면 True
-    - role == "all": 1귀신, 2귀신, 3귀신, 귀신창, 귀신같이 전체 감지
+    - role == "3": "[3귀신" (3. 사진공유 + 4. 내 기기 통합 Pro) 감지
+    - role == "4": "[4귀신" (5. 업무 공유 S:) 감지
+    - role == "1,2" / "3,4" 등 복합 지정: 쉼표 구분 각 role 중 하나라도 매칭되면 True
+    - role == "all": 1~4귀신, 귀신창, 귀신같이 전체 감지
     """
     if role == "all":
         return True
     if "," in role:
-        sub_roles = [r.strip() for r in role.split(",") if r.strip() in ("1", "2", "3")]
+        sub_roles = [r.strip() for r in role.split(",") if r.strip() in ("1", "2", "3", "4")]
         if sub_roles:
             return any(_matches_role_strict(title_text, app_select, sr, target_status, page_id) for sr in sub_roles)
         return True
-    is_onb_role3 = _is_onboarding_card_for_role3(title_text)
-    has_explicit_123 = any(tag in title_text for tag in ("[1귀신", "1귀신]", "[2귀신", "2귀신]", "[3귀신", "3귀신]"))
+    has_explicit_1234 = any(
+        tag in title_text for tag in ("[1귀신", "1귀신]", "[2귀신", "2귀신]", "[3귀신", "3귀신]", "[4귀신", "4귀신]")
+    )
     if role == "1":
-        if is_onb_role3:
-            return False
         if "[1귀신" in title_text or "1귀신]" in title_text:
             return True
-        if has_explicit_123 or "[귀신창" in title_text or app_select == "귀신창":
+        if has_explicit_1234 or "[귀신창" in title_text or app_select == "귀신창":
             return False
         return classify_ghosti_bug_role(title_text, "", app_select) == "1"
     if role == "2":
         if "[2귀신" in title_text or "2귀신]" in title_text or "[귀신창" in title_text or "귀신창]" in title_text or app_select == "귀신창":
             return True
-        if has_explicit_123:
+        if has_explicit_1234:
             return False
         return classify_ghosti_bug_role(title_text, "", app_select) == "2"
     if role == "3":
-        if is_onb_role3 or "[3귀신" in title_text or "3귀신]" in title_text:
+        if "[3귀신" in title_text or "3귀신]" in title_text:
             return True
-        if has_explicit_123 or "[귀신창" in title_text or app_select == "귀신창":
+        if has_explicit_1234 or "[귀신창" in title_text or app_select == "귀신창":
             return False
         return classify_ghosti_bug_role(title_text, "", app_select) == "3"
+    if role == "4":
+        if "[4귀신" in title_text or "4귀신]" in title_text:
+            return True
+        if has_explicit_1234 or "[귀신창" in title_text or app_select == "귀신창":
+            return False
+        return classify_ghosti_bug_role(title_text, "", app_select) == "4"
     return True
 
 
@@ -396,18 +405,18 @@ def query_bugs_raw(
     role: Optional[str] = None,
     track: Optional[str] = None,
 ) -> List[Dict[str, str]]:
-    """출력 없이 지정된 상태의 카드 배열만 조용히 반환합니다 (--role 1|2|3|2,3|all 완벽 지원)."""
+    """출력 없이 지정된 상태의 카드 배열만 조용히 반환합니다 (--role 1|2|3|4|1,2|3,4|all 완벽 지원)."""
     ensure_valid_token()
     SCHEMA.detect(DATABASE_ID)
     resolved_status = target_status or STATUS_DISCOVERED
 
-    # 하위 호환: track 인자가 넘어온 경우 role로 변환, 복합 role('2,3', '23' 등) 정규화
+    # 하위 호환: track 인자가 넘어온 경우 role로 변환, 복합 role('1,2', '3,4' 등) 정규화
     resolved_role = (role or "").strip().lower()
     if not resolved_role and track:
         t_low = track.strip().lower()
-        resolved_role = {"free": "1", "sync": "2", "work": "3"}.get(t_low, "all")
+        resolved_role = {"free": "1", "sync": "2", "share": "3", "work": "4"}.get(t_low, "all")
     if resolved_role != "all":
-        norm_role = ",".join(r for r in ("1", "2", "3") if r in resolved_role)
+        norm_role = ",".join(r for r in ("1", "2", "3", "4") if r in resolved_role)
         resolved_role = norm_role if norm_role else "all"
 
     url = f"{NOTION_API_BASE}/databases/{DATABASE_ID}/query"
