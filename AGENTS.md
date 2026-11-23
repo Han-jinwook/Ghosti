@@ -335,16 +335,24 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
      - **1번 창: `🎯 [1귀신]` (`D:\Ghosti` · `--role 1`) — 온보딩 + 1. 귀신비서 & Z-코어**:
        * 담당 영역: 웹/모바일 온보딩 + 좌측 `👻 귀신비서` 사진정리·여권·브리핑·대화창·손보기 케어·Z-코어 데몬 (`[1귀신]` 노션 카드 전담).
        * 전담 모듈: `src/components/GhostiShowroomLanding.tsx` (`OnboardingModal.tsx`), `src/components/stage1/Stage1MinimalCarePreview.tsx`, `src/components/MonsterStandardChatColumn.tsx`, `src/store/slices/assistantOnboardingSlice.ts`, `src/services/ai/facePassportWorker.ts`, `src/services/ai/onDeviceFacePassportEngine.ts`, `universal_z_core/os_agent/merlin_z_core_daemon.py`, `plugin_ghosti_os.py`, `plugin_ghosti_care_suite.py`.
-     - **2번 창: `🎯 [2귀신]` (`D:\Ghosti` · `--role 2`) — 2. 귀신검색 & 귀신창**:
-       * 담당 영역: `👻 귀신검색` 사진·동영상 글자뽑기·문서투시 + `⚡ 귀신창`·초능력 (`[2귀신]` 및 `[귀신창]` 노션 카드 전담).
-       * 전담 모듈: `src/domains/search/GhostSearchPane.tsx`, `src/components/stage1/Stage1MinimalSearchPreview.tsx`, `src/store/slices/searchSlice.ts`, `src/services/ai/aiVideoEngine.ts`, `src/services/ai/aiDocumentEngine.ts`, `universal_z_core/seq_paste_daemon.py`, `universal_z_core/ghost_search_window_ui2.py`.
+     - **2번 창: `🎯 [2귀신]` (`D:\Ghosti` · `--role 2`) — 2. 귀신검색**:
+       * 담당 영역: `👻 귀신검색` 사진·동영상 글자뽑기·문서투시·표 OCR·귀신 라벨러 (`[2귀신]` 노션 카드 전담).
+       * 전담 모듈: `src/domains/search/GhostSearchPane.tsx`, `src/components/stage1/Stage1MinimalSearchPreview.tsx`, `src/store/slices/searchSlice.ts`, `src/services/ai/aiVideoEngine.ts`, `src/services/ai/aiDocumentEngine.ts`, `universal_z_core/ghost_search_window_ui2.py`.
    - **🧑 달나라 QA 라인**:
-     - **3번 창: `🎯 [3귀신]` (`D:\Ghosti` · `--role 3`) — 3. 사진 공유 + 4. 내 기기 통합 Pro**:
-       * 담당 영역: `📸 사진 공유` 무제한 0원 가족·동호회·동창회 공유방 + `👑 내 기기 통합 Pro` 폰↔PC 연동 (`[3귀신]` 노션 카드 전담).
+     - **3번 창: `🎯 [3귀신]` (`D:\Ghosti` · `--role 3`) — 3. 사진 공유 + 4. 내 기기 통합 Pro (연결·환경설정 협업)**:
+       * 담당 영역: `📸 사진 공유` 무제한 0원 가족·동호회·동창회 공유방 + `👑 내 기기 통합 Pro` 기기 페어링·방 연결·과금 관문 (`[3귀신]` 노션 카드 전담 / 귀신Key 본질 기능인 연속복사·7일 클립보드·상용구는 `귀신Key`가 원소스·기획 주인이며 `3귀신`은 연결·환경설정으로 협업).
        * 전담 모듈: `src/domains/free_photo_share/*`, `src/domains/paid_device_sync/*`, `src/store/slices/freePhotoShareSlice.ts`, `src/store/slices/paidDeviceSyncSlice.ts`, `universal_z_core/os_agent/plugins/plugin_paid_sync_ghostwin.py`.
-     - **4번 창: `🎯 [4귀신]` (`D:\Ghosti` · `--role 4`) — 5. 업무 공유 (`S:` 드라이브)**:
-       * 담당 영역: `🏢 업무 공유 (S:)` 24시간 대장 PC `S:` 드라이브 마운트·직통 터널·백업 PC 이중화·File Lock·B2B 과금 게이트 (`[4귀신]` 노션 카드 전담).
+     - **4번 창: `🎯 [4귀신]` (`D:\Ghosti` · `--role 4`) — 5. 업무 공유 (`S:` 드라이브 · 팀방 연결 협업)**:
+       * 담당 영역: `🏢 업무 공유 (S:)` 24시간 대장 PC `S:` 드라이브 마운트·직통 터널·백업 PC 이중화·File Lock·B2B 과금 게이트 (`[4귀신]` 노션 카드 전담 / `F7~F12` 팀 상용구는 `귀신Key`가 원소스·기획 주인이며 `4귀신`은 팀방 연결·권한으로 협업).
        * 전담 모듈: `src/domains/paid_work_share/*`, `src/store/slices/paidWorkShareSlice.ts`, `universal_z_core/os_agent/plugins/plugin_paid_work_sdrive.py`.
+   - **🔑 Door 2 귀신Key 전담 (`D:\Ghosti\ghostkey\` 통합 완료 · 2026-11-24 멀린님 확정)**:
+     - **5번 창: `🔑 [귀신Key]` (`D:\Ghosti` · `"귀신키"` / `"귀신Key"` 한마디 체크인)**:
+       * **뿌리 주권 절대 원칙**: 뿌리가 `귀신Key` 기능(한영 오타·연속복사·순차붙여넣기·7일 클립보드·`F1~F6` 개인 상용구·`F7~F12` 팀 상용구 등)이면 **무조건 `귀신Key`가 원소스·기획 주인**으로 직접 담당. `내 기기 통합(3귀신)`·`업무 공유(4귀신)`는 그 기능이 확장되는 연결 환경으로 협업.
+       * **원엔진·투도어 단일 앱 원칙**: 모바일 앱은 별도 앱이 아니라 `귀신같이(Door 1)`와 `귀신Key(Door 2)`가 문만 2개일 뿐 똑같은 하나의 앱(`app.sundreamer.ghosti`)으로 들어오는 구조.
+       * **문서 별도 보관 원칙**: 귀신Key 소속 오리지널 문서는 본체 `D:\Ghosti\docs\`와 절대 합치지 않고 **`D:\Ghosti\ghostkey\docs\`에만 별도 보관**.
+       * **아이폰(iOS) OS 제한 확정 기준**: PC·갤럭시·아이폰 모두 7일 치 클립보드 꺼내쓰기 및 1건 복사 전송 지원. 단, **아이폰(iOS)은 OS 제한으로 연속 복사는 미지원(포기)**하며 온보딩·QA 카드에 명확히 고지.
+       * **전담 소유권 파일**: `ghostkey/**`, `universal_z_core/seq_paste_daemon.py`, `android/.../GhostiClipboardImeService.java`, `GhostiSharedClipboardStore.java`, `GhostiQuickClipActivity.java`, `ios/App/GhostKeyKeyboardExtension/**`, `ios/App/GhostKeyShareExtension/**`.
+       * **감시병**: `python d:\Ghosti\ghostkey\z_core_watcher.py --watch` (인계장: `ghostkey/docs/SESSION_HANDOVER.md`).
 
 3. **⚡ 멀린님 한마디 역할 지정(`"1귀신"` / `"2귀신"` / `"3귀신"` / `"4귀신"` / `"1,2귀신"` / `"3,4귀신"` — `"체크인"` 생략 시에도 자동 체크인 + 인계장 정독 + 감시병 즉시 기동) 철칙**:
 
