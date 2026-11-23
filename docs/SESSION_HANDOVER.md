@@ -1,9 +1,9 @@
 # 📋 귀신같이 (Ghosti) 세션 릴레이 인계장 (`SESSION_HANDOVER.md`)
 
-- **최종 갱신 일시**: 2026-11-23 13:15 (KST)
-- **담당 역할**: `1·2·3귀신 통합` (금일 `2귀신` 귀신검색 · OCR · 동영상 · 라벨러 · 썸네일 초고속화 QA 반영)
-- **브랜치 / 기준 커밋**: `main` (`43a51bd` + 본 패치 커밋, `origin/main` 동기화 완료)
-- **로컬 엔진 버전**: `Merlin Z-Core v2.7.49` (전 클러스터 1·2·3·4·6호기 동기화 및 GitHub Releases 고속 CDN `z-core-latest` 연동 완료)
+- **최종 갱신 일시**: 2026-11-23 14:46 (KST)
+- **담당 역할**: `1·2·3귀신 통합` (금일 `2귀신` 귀신검색 · OCR · 동영상 · 라벨러 · 도장깨기/온보딩 통합 · 싱글톤 락 QA 전량 반영)
+- **브랜치 / 기준 커밋**: `main` (`9275c55` + 본 문서 동기화 커밋, `origin/main` 동기화 완료)
+- **로컬 엔진 버전**: `Merlin Z-Core v2.7.53` (전 클러스터 1·2·3·4·6호기 동기화 및 GitHub Releases 고속 CDN `z-core-latest` 연동 완료)
 
 ---
 
@@ -37,6 +37,11 @@
    - **동영상 키워드 포착 & `MM:SS` 즉시 점프 (`aiVideoEngine.ts`, `VideoScenePreviewModal.tsx`):** `normalizeLocalVideoSceneItem`이 OCR 프레임 초(`timeSec`)를 `00:00` 체크포인트로 흡수·초기화하고 `syncRealVideoDuration`이 `matchedSeekSec`를 `0`으로 덮어쓰던 버그를 근본 교정, `vid.ocrLines` 직접 스캔 및 공백 없는 2글자 이상 한글 OCR 부분일치 + `onLoadedMetadata`/`onLoadedData`/`onCanPlay` 3중 시크 점프 적용.
    - **`[🏷️ 귀신라벨링]` 멈춤 & 클립보드 복사 실패 해결 (`proFeatureGate.ts`, `aiPhotoFaceEngine.ts`, `GhostLabelerActionButton.tsx`):** `copyTextSafeToClipboard`에 Z-코어 OS 네이티브 클립보드(`POST /__merlin/clipboard`) 최우선 경로를 추가해 비동기 AI 대기 후 브라우저 제스처 만료로 복사가 무시되던 원인을 제거하고, 비전 폴백 `4.5초`·라벨러 전체 `6.5초` 타임아웃 및 안전 폴백으로 무한 대기 원천 차단.
    - **사진 상세보기 `[PC로 텍스트 전송]` 클립보드 즉시 복사 (`PhotoDetailModal.tsx`):** Supabase 교차 기기 브로드캐스트에만 의존하던 기존 방식을 고쳐 로컬 Z-코어 OS 클립보드(`/ __merlin/clipboard`)·`/api/teleport/ocr-vanguard`·브라우저 클립보드에 즉시 복사(필요 시 `/__photos/ocr` 실시간 추출 포함)하도록 개선.
+9. **`[2귀신]` 온보딩·도장깨기 공용 4단계 보드 통합 · 귀신라벨링 `YYMMDD_HHMMSS`(+ `_2` 일련번호) · 동영상 전 키워드 점프 & 귀신검색창 3중 싱글톤 락 (`aff6dbb` ~ `9275c55`, `Z-Core v2.7.53`)**
+   - **온보딩·`[2. 귀신검색]` 공용 4단계 도장깨기 통합 (`1193c0d`, `ghostSearchDojoShared.tsx`):** `작게 모드` · `크게(갤러리)` · `사진·표 OCR` · `귀신라벨링` 4단계를 단일 저장소(`ghosti_search_game_v1`)와 `BroadcastChannel`로 통합해 온보딩 모달과 귀신검색 체험판 양쪽에 탑재(실사용 시 자동 도장 연동).
+   - **귀신라벨링 무충돌 작명 & 경합 제거 (`aff6dbb`, `48b323a`, `e0c1593`, `f090ca6`):** `YYMMDD_HHMMSS_한글내용.ext` + 동시각 중복 시 `_2`, `_3` 일련번호 자동 부여, 연속 클릭 시퀀스 경합 차단(`_latestGhostLabelerSeq`), 불분명 사진 오라벨링 방지(`0.65+0.015 / 0.68`), Pro 권한 `60초` 검증 캐시 및 활성 구독/체험 안전 폴백, 검색창 상단 1줄 안내 문구 및 전체화면 버튼 줄바꿈 방지(`whitespace-nowrap shrink-0`) 적용.
+   - **동영상 전 키워드 OCR 포착 구간(`MM:SS`) 즉시 점프 & 검색어 단독 하이라이트 (`fb481ce`, `f090ca6`):** `openingOcrLineScore` 분리로 `00:00` 프레임 상속 오염을 제거하고 `#t={초}` 미디어 프래그먼트 + 검색어 단독 하이라이트·일치 키워드 중심 발췌 적용.
+   - **귀신검색창 3중 싱글톤 락 (`9275c55`, `Z-Core v2.7.53`) & 연사 배지/모달 뒤로가기 (`5781702`):** `localStorage` 1초 생존 하트비트 + `BroadcastChannel` + Z-코어 서버측 5.5초 하트비트/5초 기동 락 적용, `refreshLiveLocalFilesInSearchWindow`의 `duplicateGroupId` 보존 및 `PhotoDetailModal` `popstate`/`Backspace` 뒤로가기 지원.
 
 ---
 
