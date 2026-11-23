@@ -1519,6 +1519,7 @@ export function searchVideoSceneItems(
     // timelineFrames에 병합되지 않았거나 초(timeSec)가 어긋난 경우에도 정확한 포착 구간(MM:SS)을 찾아냅니다.
     let bestOcrLine: { timeSec: number; timestamp: string; text: string } | null = null;
     let bestOcrLineScore = 0;
+    let openingOcrLineScore = 0;
     if (Array.isArray(vid.ocrLines) && vid.ocrLines.length > 0) {
       for (const line of vid.ocrLines) {
         const lineText = String(line?.text || '').trim();
@@ -1533,8 +1534,8 @@ export function searchVideoSceneItems(
           }
         }
         const tSec = Math.max(0, Math.floor(Number(line.timeSec) || 0));
-        if (tSec <= 2 && lineHits > openingFrameScore) {
-          openingFrameScore = lineHits;
+        if (tSec <= 2 && lineHits > openingOcrLineScore) {
+          openingOcrLineScore = lineHits;
         }
         if (lineHits > bestOcrLineScore) {
           bestOcrLineScore = lineHits;
@@ -1625,7 +1626,9 @@ export function searchVideoSceneItems(
       const isLocalWholeOrOpening =
         String(vid.id || '').startsWith('local_vid_') &&
         (pickedSeekSec <= 2 ||
-          (openingFrameScore > 0 && openingFrameScore >= effectiveHitScore) ||
+          (useOcrLineHit
+            ? openingOcrLineScore > 0 && openingOcrLineScore >= bestOcrLineScore
+            : openingFrameScore > 0 && openingFrameScore >= effectiveHitScore) ||
           effectiveHitScore === 0);
       const finalSeekSec = isLocalWholeOrOpening ? 0 : pickedSeekSec;
       const finalTs = finalSeekSec === 0 ? '00:00' : cleanVideoTimestampLabel(pickedTs);

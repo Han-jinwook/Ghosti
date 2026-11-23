@@ -1820,35 +1820,73 @@ export function extractCrispKoreanLabelTokens(inputs: Array<string | undefined |
   return out;
 }
 
+const _recentIssuedKoreanLabels = new Set<string>();
+
 export function formatQuickKoreanLabelCore(
   fileName: string,
   dateStr?: string,
-  tagsOrTitle?: string | string[]
+  tagsOrTitle?: string | string[],
+  options?: { mtimeMs?: number; existingNames?: string[] }
 ): string {
   const rawName = stripCollisionKeySuffix((fileName || '파일.jpg').trim());
   const dotIdx = rawName.lastIndexOf('.');
   const stem = dotIdx > 0 ? rawName.slice(0, dotIdx) : rawName;
   const ext = dotIdx > 0 ? rawName.slice(dotIdx) : '';
 
+  const pad2 = (n: number) => String(Math.max(0, Math.floor(n))).padStart(2, '0');
   let yymmdd = '';
-  const mDate = (dateStr || '').match(/20(\d{2})[-./](\d{2})[-./](\d{2})/);
-  if (mDate) {
-    yymmdd = `${mDate[1]}${mDate[2]}${mDate[3]}`;
-  } else if (/^1[5-9]\d{11}$/.test(stem)) {
-    const dt = new Date(Number(stem));
+  let hhmmss = '';
+
+  // 1) mtimeMs(실제 파일 촬영/수정 시각)에서 YYMMDD + HHMMSS 최우선 추출
+  const mtimeVal = Number(options?.mtimeMs);
+  if (Number.isFinite(mtimeVal) && mtimeVal > 946684800000) {
+    const dt = new Date(mtimeVal);
     if (!Number.isNaN(dt.getTime())) {
-      const yy = String(dt.getFullYear()).slice(-2);
-      const mm = String(dt.getMonth() + 1).padStart(2, '0');
-      const dd = String(dt.getDate()).padStart(2, '0');
-      yymmdd = `${yy}${mm}${dd}`;
+      yymmdd = `${String(dt.getFullYear()).slice(-2)}${pad2(dt.getMonth() + 1)}${pad2(dt.getDate())}`;
+      hhmmss = `${pad2(dt.getHours())}${pad2(dt.getMinutes())}${pad2(dt.getSeconds())}`;
     }
-  } else {
-    const mStemDate = stem.match(/20(\d{6})/);
-    if (mStemDate) yymmdd = mStemDate[1];
   }
+
+  // 2) 파일명 타임스탬프(예: 20261123_142511, 2026-11-23 14-25-11, 13자리 epoch ms) 보조 추출
+  if (!yymmdd || !hhmmss) {
+    const mStemFull = stem.match(/20(\d{2})[-._]?(\d{2})[-._]?(\d{2})[\s_-]+(\d{2})[-.:_]?(\d{2})[-.:_]?(\d{2})/);
+    if (mStemFull) {
+      if (!yymmdd) yymmdd = `${mStemFull[1]}${mStemFull[2]}${mStemFull[3]}`;
+      if (!hhmmss) hhmmss = `${mStemFull[4]}${mStemFull[5]}${mStemFull[6]}`;
+    } else if (/^1[5-9]\d{11}$/.test(stem)) {
+      const dt = new Date(Number(stem));
+      if (!Number.isNaN(dt.getTime())) {
+        if (!yymmdd) yymmdd = `${String(dt.getFullYear()).slice(-2)}${pad2(dt.getMonth() + 1)}${pad2(dt.getDate())}`;
+        if (!hhmmss) hhmmss = `${pad2(dt.getHours())}${pad2(dt.getMinutes())}${pad2(dt.getSeconds())}`;
+      }
+    }
+  }
+
+  // 3) dateStr(YYYY-MM-DD HH:MM:SS 등) 보조 추출
   if (!yymmdd) {
+    const mDate = (dateStr || '').match(/20(\d{2})[-./](\d{2})[-./](\d{2})/);
+    if (mDate) {
+      yymmdd = `${mDate[1]}${mDate[2]}${mDate[3]}`;
+    } else {
+      const mStemDate = stem.match(/20(\d{6})/);
+      if (mStemDate) yymmdd = mStemDate[1];
+    }
+  }
+  if (!hhmmss) {
+    const mTime = (dateStr || '').match(/(\d{2}):(\d{2})(?::(\d{2}))?/);
+    if (mTime) {
+      hhmmss = `${mTime[1]}${mTime[2]}${mTime[3] || '00'}`;
+    }
+  }
+
+  if (!yymmdd || !hhmmss) {
     const now = new Date();
-    yymmdd = `${String(now.getFullYear()).slice(-2)}${String(now.getMonth() + 1).padStart(2, '0')}${String(now.getDate()).padStart(2, '0')}`;
+    if (!yymmdd) {
+      yymmdd = `${String(now.getFullYear()).slice(-2)}${pad2(now.getMonth() + 1)}${pad2(now.getDate())}`;
+    }
+    if (!hhmmss) {
+      hhmmss = `${pad2(now.getHours())}${pad2(now.getMinutes())}${pad2(now.getSeconds())}`;
+    }
   }
 
   const tagList = Array.isArray(tagsOrTitle)
@@ -1870,7 +1908,49 @@ export function formatQuickKoreanLabelCore(
   } else {
     slug = '문서기록';
   }
-  return `${yymmdd}_${slug}${ext}`;
+
+  const baseStem = `${yymmdd}_${hhmmss}_${slug}`;
+  const existingSet = new Set<string>();
+  if (Array.isArray(options?.existingNames)) {
+    for (const nm of options.existingNames) {
+      const cleanExisting = stripCollisionKeySuffix(String(nm || '').trim()).toLowerCase();
+      if (cleanExisting && cleanExisting !== rawName.toLowerCase()) {
+        existingSet.add(cleanExisting);
+      }
+    }
+  }
+
+  let candidate = `${baseStem}${ext}`;
+  let seq = 2;
+  while (
+    existingSet.has(candidate.toLowerCase()) ||
+    _recentIssuedKoreanLabels.has(`${rawName.toLowerCase()}::!=::${candidate.toLowerCase()}`)
+  ) {
+    candidate = `${baseStem}_${seq}${ext}`;
+    seq += 1;
+  }
+  // 같은 세션 내 서로 다른 파일에 동일 라벨이 중복 발급되지 않도록 충돌 방어
+  for (const prevEntry of _recentIssuedKoreanLabels) {
+    const sepIdx = prevEntry.indexOf('::');
+    if (sepIdx <= 0) continue;
+    const prevSrc = prevEntry.slice(0, sepIdx);
+    const prevLbl = prevEntry.slice(sepIdx + 2);
+    if (prevSrc !== rawName.toLowerCase() && prevLbl === candidate.toLowerCase()) {
+      while (
+        existingSet.has(candidate.toLowerCase()) ||
+        Array.from(_recentIssuedKoreanLabels).some((e) => {
+          const idx = e.indexOf('::');
+          return idx > 0 && e.slice(0, idx) !== rawName.toLowerCase() && e.slice(idx + 2) === candidate.toLowerCase();
+        })
+      ) {
+        candidate = `${baseStem}_${seq}${ext}`;
+        seq += 1;
+      }
+      break;
+    }
+  }
+  _recentIssuedKoreanLabels.add(`${rawName.toLowerCase()}::${candidate.toLowerCase()}`);
+  return candidate;
 }
 
 export function isTextOrIdentityBoundQuery(query: string): boolean {

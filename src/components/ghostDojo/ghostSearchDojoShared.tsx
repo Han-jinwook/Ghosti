@@ -41,7 +41,7 @@ export const GHOST_DOJO_STEPS: GhostDojoStepDef[] = [
     shortTitle: '4. 귀신라벨링',
     actionLabel: '귀신라벨링 체험하기',
     doneLabel: '귀신라벨링 완료',
-    description: 'IMG_4821.jpg 같은 이름을 261123_영수증_점심식사.jpg 한글 파일명으로 바로 복사합니다.',
+    description: 'IMG_4821.jpg 같은 이름을 261123_142511_영수증_점심식사.jpg 한글 파일명으로 바로 복사합니다.',
   },
 ];
 
@@ -199,7 +199,7 @@ export const GhostSearchDojoStampBoard: React.FC<GhostSearchDojoStampBoardProps>
     }
 
     if (step.id === 'labeler') {
-      const sampleLabel = '261123_영수증_점심식사.jpg';
+      const sampleLabel = '261123_142511_영수증_점심식사.jpg';
       await copyTextSafeToClipboard(sampleLabel);
       const next = markGhostDojoStep('labeler');
       setProgress(next);

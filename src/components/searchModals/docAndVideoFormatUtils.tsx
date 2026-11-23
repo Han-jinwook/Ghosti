@@ -191,7 +191,8 @@ export function hasSensitiveDocInfo(_text: string): boolean {
 export function formatQuickKoreanLabelForFile(
   fileName: string,
   dateStr?: string,
-  tagsOrTitle?: string | string[]
+  tagsOrTitle?: string | string[],
+  options?: { mtimeMs?: number; existingNames?: string[] }
 ): string {
-  return formatQuickKoreanLabelCore(fileName, dateStr, tagsOrTitle);
+  return formatQuickKoreanLabelCore(fileName, dateStr, tagsOrTitle, options);
 }

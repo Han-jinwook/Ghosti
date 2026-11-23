@@ -62,10 +62,15 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
           void verifyGate(doc.path || doc.fileName).then(async (allowed) => {
             if (!allowed || mySeq !== _latestGhostLabelerSeq) return;
             const cleanDocName = stripCollisionKeySuffix(doc.fileName);
-            const newLabel = formatQuickKoreanLabelForFile(cleanDocName, doc.date, [
-              doc.title,
-              (doc.extractedText || '').slice(0, 120),
-            ]);
+            const existingDocNames = useSaySeeStore
+              .getState()
+              .localDocuments.map((d) => d.fileName);
+            const newLabel = formatQuickKoreanLabelForFile(
+              cleanDocName,
+              doc.date,
+              [doc.title, (doc.extractedText || '').slice(0, 120)],
+              { existingNames: existingDocNames }
+            );
             if (mySeq !== _latestGhostLabelerSeq) return;
             await copyTextSafeToClipboard(newLabel);
             if (mySeq !== _latestGhostLabelerSeq) return;
@@ -96,13 +101,15 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
               lastQuarantineToast: '사진 내용을 바탕으로 한글 파일명을 생성하는 중입니다...',
             });
             try {
+              const existingPhotoNames = useSaySeeStore.getState().photos.map((p) => p.name);
               const fallbackLabel = formatQuickKoreanLabelForFile(
                 stripCollisionKeySuffix(vp.name || '사진.png'),
                 vp.date,
-                vp.tags || []
+                vp.tags || [],
+                { mtimeMs: vp.mtimeMs, existingNames: existingPhotoNames }
               );
               const res = await Promise.race([
-                resolveSmartKoreanLabelForPhoto(vp),
+                resolveSmartKoreanLabelForPhoto(vp, existingPhotoNames),
                 new Promise<{ displaySourceName: string; label: string; enrichedTags: string[] }>(
                   (resolve) =>
                     setTimeout(
@@ -156,14 +163,16 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
           useSaySeeStore.setState({
             lastQuarantineToast: '사진 내용을 바탕으로 한글 파일명을 생성하는 중입니다...',
           });
+          const existingPhotoNames = useSaySeeStore.getState().photos.map((p) => p.name);
           const fallbackLabel = formatQuickKoreanLabelForFile(
             stripCollisionKeySuffix(targetPhoto.name || '사진.png'),
             targetPhoto.date,
-            targetPhoto.tags || []
+            targetPhoto.tags || [],
+            { mtimeMs: targetPhoto.mtimeMs, existingNames: existingPhotoNames }
           );
           try {
             const res = await Promise.race([
-              resolveSmartKoreanLabelForPhoto(targetPhoto),
+              resolveSmartKoreanLabelForPhoto(targetPhoto, existingPhotoNames),
               new Promise<{
                 displaySourceName: string;
                 label: string;

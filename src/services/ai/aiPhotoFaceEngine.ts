@@ -2800,7 +2800,10 @@ export async function startSilentRealMediaVisionIndexing(params: {
   }
 }
 
-export async function resolveSmartKoreanLabelForPhoto(photo: PhotoItem): Promise<{
+export async function resolveSmartKoreanLabelForPhoto(
+  photo: PhotoItem,
+  existingNames?: string[]
+): Promise<{
   displaySourceName: string;
   label: string;
   enrichedTags: string[];
@@ -2962,7 +2965,10 @@ export async function resolveSmartKoreanLabelForPhoto(photo: PhotoItem): Promise
     tokens = [photo.trashCategory === 'screenshot' ? '화면캡처' : '사진기록'];
   }
 
-  const label = formatQuickKoreanLabelCore(displaySourceName, photo.date, tokens);
+  const label = formatQuickKoreanLabelCore(displaySourceName, photo.date, tokens, {
+    mtimeMs: photo.mtimeMs,
+    existingNames,
+  });
   return {
     displaySourceName,
     label,
