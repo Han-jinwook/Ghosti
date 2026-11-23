@@ -1793,7 +1793,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                       웹 앱 시작하기 →
                     </button>
                     <a
-                      href="/Merlin_Z_Core.zip"
+                      href={Z_CORE_ZIP_URL}
                       download="Merlin_Z_Core.zip"
                       className="px-3.5 py-2.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-medium text-[13px] transition-colors"
                     >
