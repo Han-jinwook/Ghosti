@@ -2385,7 +2385,7 @@ def _find_live_ghost_search_popup_hwnds() -> list[int]:
     if saved_h > 0:
         if _is_valid_browser_top_window(saved_h):
             _, s_title = _get_hwnd_class_and_title(saved_h)
-            if ("👻 귀신검색창" in s_title) or ("ghostsearchwindow=" in s_title.lower()):
+            if ("귀신검색창" in s_title) or ("ghostsearchwindow=" in s_title.lower()):
                 live.append(saved_h)
             else:
                 _save_active_popup_hwnd(0)
@@ -2400,7 +2400,7 @@ def _find_live_ghost_search_popup_hwnds() -> list[int]:
             return True
         _, title = _get_hwnd_class_and_title(hi)
         t_low = title.lower()
-        if ("👻 귀신검색창" in title) or ("ghostsearchwindow=" in t_low):
+        if ("귀신검색창" in title) or ("ghostsearchwindow=" in t_low):
             live.append(hi)
         return True
 

@@ -79,6 +79,42 @@ export function bringRealGhostSearchPopupToFront(
   }
 }
 
+function probeOpenGhostSearchWindowAlive(timeoutMs = 150): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (typeof BroadcastChannel === 'undefined') {
+      resolve(false);
+      return;
+    }
+    let settled = false;
+    let bc: BroadcastChannel | null = null;
+    const finish = (alive: boolean) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      try {
+        bc?.close();
+      } catch {
+        /* ignore */
+      }
+      resolve(alive);
+    };
+    const timer = window.setTimeout(() => finish(false), timeoutMs);
+    try {
+      bc = new BroadcastChannel('ghosti_search_window_singleton_v1');
+      bc.onmessage = (ev: MessageEvent) => {
+        const msg = ev.data as { type?: string } | null;
+        if (msg && msg.type === 'EXISTING_ALIVE') {
+          finish(true);
+        }
+      };
+      // 현재 시각 + 큰 오프셋으로 PROBE_EXISTING 전송 시 살아있는 기존 귀신검색창이 즉시 EXISTING_ALIVE 응답
+      bc.postMessage({ type: 'PROBE_EXISTING', bornAt: Date.now() + 999999 });
+    } catch {
+      finish(false);
+    }
+  });
+}
+
 export async function openRealGhostSearchWindowViaDaemon(
   stage: GhostSearchStage = 'medium',
   query?: string,
@@ -95,6 +131,13 @@ export async function openRealGhostSearchWindowViaDaemon(
   _lastGhostSearchWasReused = false;
 
   try {
+    // 1차 싱글톤 방어: 이미 열려 있는 귀신검색창이 BroadcastChannel 응답을 주면 중복 실행하지 않고 전면 포커스만 수행
+    const alreadyOpenInBrowser = await probeOpenGhostSearchWindowAlive(150);
+    if (alreadyOpenInBrowser) {
+      _lastGhostSearchWasReused = true;
+      bringRealGhostSearchPopupToFront(stage, query);
+      return true;
+    }
     const targetStage: GhostSearchStage = stage === 'large' ? 'large' : 'medium';
     const daemonStage = targetStage === 'large' ? 'gallery' : targetStage;
     const q = (query || '').trim();
