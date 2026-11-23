@@ -491,7 +491,7 @@ def sync_release_zip_and_frontend_version(exe_path: Path) -> Dict[str, Any]:
         json.dumps(
             {
                 "version": core_version,
-                "zipUrl": "https://ghosti.sundreamer.app/Merlin_Z_Core.zip",
+                "zipUrl": "https://github.com/Han-jinwook/Ghosti/releases/download/z-core-latest/Merlin_Z_Core.zip",
             },
             ensure_ascii=False,
             indent=2,

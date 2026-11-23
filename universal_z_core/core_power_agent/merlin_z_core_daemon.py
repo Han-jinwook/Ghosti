@@ -161,7 +161,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.7.19"
+CORE_VERSION = "2.7.39"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -523,16 +523,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             pass
 
     def _send_transcoded_video_stream(self, file_path: Path, seek_sec: float = 0.0) -> None:
-        """Windows 크롬에서 코덱 미지원으로 화면이 멈추는 HEVC(hvc1) 영상을 0.2초 내 초고속 H.264 MP4로 변환·캐싱하여 Range 탐색이 가능한 완전한 영상으로 스트리밍합니다."""
+        """Windows 크롬에서 코덱 미지원으로 화면이 멈추는 HEVC(hvc1)·WMV·AVI 영상을 0.2초 내 초고속 H.264 MP4로 변환·캐싱하여 Range 탐색이 가능한 완전한 영상으로 스트리밍합니다."""
         ff = plugin_ghosti_os.find_ffmpeg_exe()
-        if not ff:
-            self._send_file_stream(file_path, content_type="video/mp4")
-            return
-
-        # 1) 이미 완성된 720p H.264 Faststart MP4 캐시가 있으면 대기 없이 0.01초 만에 Range 스트리밍으로 즉시 응답!
-        #    미캐싱 상태라면 최대 0.25초만 확인 후 즉시 하단 zerolatency 파이프로 첫 프레임을 0.2초 내에 송출(백그라운드 캐싱 병행)하여 초기 재생 지연을 원천 차단합니다.
         dur_hint = plugin_ghosti_os._get_fast_video_duration_sec(file_path)
-        sync_budget = 0.25 if 0 < dur_hint <= 45.0 else 0.0
+        sync_budget = 0.25 if (ff and 0 < dur_hint <= 45.0) else (25.0 if not ff else 0.0)
         cached_mp4 = plugin_ghosti_os.get_or_create_faststart_video_cache(
             file_path,
             max_sync_sec=sync_budget,
@@ -540,6 +534,9 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
         )
         if cached_mp4 is not None and cached_mp4.exists():
             self._send_file_stream(cached_mp4, content_type="video/mp4", cache_max_age=3600)
+            return
+        if not ff:
+            self._send_file_stream(file_path, content_type="video/mp4")
             return
 
         # 2) 대용량 장편 HEVC 영상(캐시 생성 중)은 0.2초 초고속 720p Fragmented 파이프로 즉시 첫 프레임을 송출하고 백그라운드 캐싱 병행

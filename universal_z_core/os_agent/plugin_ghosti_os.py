@@ -47,7 +47,7 @@ FILE_ATTRIBUTE_NORMAL = 0x80
 PLUGIN_METADATA = {
     "pluginId": "ghosti_os",
     "pluginName": "Ghosti & 3-Monsters OS + RestorePoint + RecycleBin Omni-Tracker Plugin",
-    "version": "2.7.19",
+    "version": "2.7.39",
     "type": "BUILTIN_SOFTWARE_PLUGIN",
     "port": 5199,
     "capabilities": [
@@ -3082,6 +3082,125 @@ def _detect_video_codec_fast(file_path: Path) -> str:
     return "avc1"
 
 
+def _winrt_transcode_video_to_mp4(src_path: Path, out_mp4: Path, timeout_sec: int = 120) -> bool:
+    """FFmpeg가 설치되지 않은 순정 Windows 10/11 PC에서 WinRT MediaTranscoder(하드웨어 가속 H.264 720p)로 WMV/AVI/HEVC 영상을 MP4로 변환합니다."""
+    if os.name != "nt":
+        return False
+    tmp_dir = out_mp4.parent
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    tmp_name = f"tmp_winrt_{os.getpid()}_{threading.get_ident()}.mp4"
+    tmp_file = tmp_dir / tmp_name
+    ps_code = (
+        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
+        "Add-Type -AssemblyName System.Runtime.WindowsRuntime\n"
+        "$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]\n"
+        "$null = [Windows.Storage.StorageFolder, Windows.Storage, ContentType = WindowsRuntime]\n"
+        "$null = [Windows.Media.MediaProperties.MediaEncodingProfile, Windows.Media, ContentType = WindowsRuntime]\n"
+        "$null = [Windows.Media.MediaProperties.VideoEncodingQuality, Windows.Media, ContentType = WindowsRuntime]\n"
+        "$null = [Windows.Media.Transcoding.MediaTranscoder, Windows.Media, ContentType = WindowsRuntime]\n"
+        "$null = [Windows.Media.Transcoding.PrepareTranscodeResult, Windows.Media, ContentType = WindowsRuntime]\n"
+        "$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]\n"
+        "$asTaskActionProg = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncActionWithProgress`1' })[0]\n"
+        "function Await($WinRtTask, $ResultType) { $t = $asTaskGeneric.MakeGenericMethod($ResultType).Invoke($null, @($WinRtTask)); $t.Wait(-1) | Out-Null; $t.Result }\n"
+        "function AwaitActProg($WinRtTask, $PType) { $t = $asTaskActionProg.MakeGenericMethod($PType).Invoke($null, @($WinRtTask)); $t.Wait(-1) | Out-Null }\n"
+        "$vfile = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($args[0])) ([Windows.Storage.StorageFile])\n"
+        "$folder = Await ([Windows.Storage.StorageFolder]::GetFolderFromPathAsync($args[1])) ([Windows.Storage.StorageFolder])\n"
+        "$mp4File = Await ($folder.CreateFileAsync($args[2], [Windows.Storage.CreationCollisionOption]::ReplaceExisting)) ([Windows.Storage.StorageFile])\n"
+        "$prof = [Windows.Media.MediaProperties.MediaEncodingProfile]::CreateMp4([Windows.Media.MediaProperties.VideoEncodingQuality]::HD720p)\n"
+        "$tc = New-Object Windows.Media.Transcoding.MediaTranscoder\n"
+        "$tc.HardwareAccelerationEnabled = $true\n"
+        "$prep = Await ($tc.PrepareFileTranscodeAsync($vfile, $mp4File, $prof)) ([Windows.Media.Transcoding.PrepareTranscodeResult])\n"
+        "if ($prep.CanTranscode) { AwaitActProg ($prep.TranscodeAsync()) ([double]) }\n"
+    )
+    ps_script = tmp_dir / f"winrt_tc_{os.getpid()}_{threading.get_ident()}.ps1"
+    try:
+        ps_script.write_text(ps_code, encoding="utf-8-sig")
+        subprocess.run(
+            [
+                "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", str(ps_script), str(src_path), str(tmp_dir), tmp_name,
+            ],
+            capture_output=True,
+            timeout=timeout_sec,
+            creationflags=0x08000000,
+        )
+        if tmp_file.exists() and tmp_file.stat().st_size > 8192:
+            tmp_file.replace(out_mp4)
+            return True
+    except Exception:
+        pass
+    finally:
+        try:
+            ps_script.unlink(missing_ok=True)
+            tmp_file.unlink(missing_ok=True)
+        except Exception:
+            pass
+    return False
+
+
+def _winrt_extract_video_thumb(src_path: Path, seek_sec: float, out_jpg: Path) -> bool:
+    """FFmpeg가 설치되지 않은 순정 Windows 10/11 PC에서 WinRT MediaComposition.GetThumbnailAsync로 동영상 썸네일 JPEG를 고속 추출합니다."""
+    if os.name != "nt":
+        return False
+    tmp_dir = out_jpg.parent
+    tmp_dir.mkdir(parents=True, exist_ok=True)
+    tmp_name = f"tmp_vt_{os.getpid()}_{threading.get_ident()}.jpg"
+    tmp_file = tmp_dir / tmp_name
+    ps_code = (
+        "[Console]::OutputEncoding = [System.Text.Encoding]::UTF8\n"
+        "Add-Type -AssemblyName System.Runtime.WindowsRuntime\n"
+        "$null = [Windows.Storage.StorageFile, Windows.Storage, ContentType = WindowsRuntime]\n"
+        "$null = [Windows.Storage.StorageFolder, Windows.Storage, ContentType = WindowsRuntime]\n"
+        "$null = [Windows.Media.Editing.MediaClip, Windows.Media.Editing, ContentType = WindowsRuntime]\n"
+        "$null = [Windows.Media.Editing.MediaComposition, Windows.Media.Editing, ContentType = WindowsRuntime]\n"
+        "$null = [Windows.Graphics.Imaging.BitmapDecoder, Windows.Foundation, ContentType = WindowsRuntime]\n"
+        "$null = [Windows.Graphics.Imaging.BitmapEncoder, Windows.Foundation, ContentType = WindowsRuntime]\n"
+        "$asTaskGeneric = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncOperation`1' })[0]\n"
+        "$asTaskAction = ([System.WindowsRuntimeSystemExtensions].GetMethods() | ? { $_.Name -eq 'AsTask' -and $_.GetParameters().Count -eq 1 -and $_.GetParameters()[0].ParameterType.Name -eq 'IAsyncAction' })[0]\n"
+        "function Await($WinRtTask, $ResultType) { $t = $asTaskGeneric.MakeGenericMethod($ResultType).Invoke($null, @($WinRtTask)); $t.Wait(-1) | Out-Null; $t.Result }\n"
+        "function AwaitAct($WinRtAction) { $t = $asTaskAction.Invoke($null, @($WinRtAction)); $t.Wait(-1) | Out-Null }\n"
+        "$vfile = Await ([Windows.Storage.StorageFile]::GetFileFromPathAsync($args[0])) ([Windows.Storage.StorageFile])\n"
+        "$folder = Await ([Windows.Storage.StorageFolder]::GetFolderFromPathAsync($args[1])) ([Windows.Storage.StorageFolder])\n"
+        "$clip = Await ([Windows.Media.Editing.MediaClip]::CreateFromFileAsync($vfile)) ([Windows.Media.Editing.MediaClip])\n"
+        "$comp = New-Object Windows.Media.Editing.MediaComposition\n"
+        "[System.Collections.Generic.ICollection[Windows.Media.Editing.MediaClip]].GetMethod('Add').Invoke($comp.Clips, @($clip)) | Out-Null\n"
+        "$thumb = Await ($comp.GetThumbnailAsync([TimeSpan]::FromSeconds([double]$args[2]), 640, 0, [Windows.Media.Editing.VideoFramePrecision]::NearestFrame)) ([Windows.Graphics.Imaging.ImageStream])\n"
+        "$dec = Await ([Windows.Graphics.Imaging.BitmapDecoder]::CreateAsync($thumb)) ([Windows.Graphics.Imaging.BitmapDecoder])\n"
+        "$bmp = Await ($dec.GetSoftwareBitmapAsync()) ([Windows.Graphics.Imaging.SoftwareBitmap])\n"
+        "$jpgFile = Await ($folder.CreateFileAsync($args[3], [Windows.Storage.CreationCollisionOption]::ReplaceExisting)) ([Windows.Storage.StorageFile])\n"
+        "$st = Await ($jpgFile.OpenAsync([Windows.Storage.FileAccessMode]::ReadWrite)) ([Windows.Storage.Streams.IRandomAccessStream])\n"
+        "$enc = Await ([Windows.Graphics.Imaging.BitmapEncoder]::CreateAsync([Windows.Graphics.Imaging.BitmapEncoder]::JpegEncoderId, $st)) ([Windows.Graphics.Imaging.BitmapEncoder])\n"
+        "$enc.SetSoftwareBitmap($bmp)\n"
+        "AwaitAct ($enc.FlushAsync())\n"
+        "$st.Dispose()\n"
+        "$thumb.Dispose()\n"
+    )
+    ps_script = tmp_dir / f"winrt_vt_{os.getpid()}_{threading.get_ident()}.ps1"
+    try:
+        ps_script.write_text(ps_code, encoding="utf-8-sig")
+        subprocess.run(
+            [
+                "powershell", "-NoProfile", "-ExecutionPolicy", "Bypass",
+                "-File", str(ps_script), str(src_path), str(tmp_dir), f"{seek_sec:.2f}", tmp_name,
+            ],
+            capture_output=True,
+            timeout=12,
+            creationflags=0x08000000,
+        )
+        if tmp_file.exists() and tmp_file.stat().st_size > 1000:
+            tmp_file.replace(out_jpg)
+            return True
+    except Exception:
+        pass
+    finally:
+        try:
+            ps_script.unlink(missing_ok=True)
+            tmp_file.unlink(missing_ok=True)
+        except Exception:
+            pass
+    return False
+
+
 def _transcode_faststart_worker(
     src_path: Path,
     out_mp4: Path,
@@ -3092,7 +3211,12 @@ def _transcode_faststart_worker(
 ) -> None:
     ff = find_ffmpeg_exe()
     if not ff:
-        done_evt.set()
+        try:
+            _winrt_transcode_video_to_mp4(src_path, out_mp4)
+        finally:
+            with _VIDEO_STREAM_LOCK:
+                _VIDEO_STREAM_INFLIGHT.pop(cache_key, None)
+            done_evt.set()
         return
     # 백그라운드 프리워밍 시 BELOW_NORMAL_PRIORITY_CLASS(0x00004000)로 브라우저 디코더 CPU 선점 원천 차단
     bg_prio = 0x00000000 if interactive else 0x00004000
@@ -3156,9 +3280,9 @@ def get_or_create_faststart_video_cache(
     max_sync_sec: float = 0.0,
     interactive: bool = False,
 ) -> Path | None:
-    """HEVC 또는 대용량 MOV 영상을 완전한 길이가 보존된 720p H.264 Faststart MP4(v2)로 캐싱하여 0.01초 즉시 재생 및 무끊김 스트리밍을 보장합니다."""
+    """HEVC·WMV·AVI 또는 대용량 MOV 영상을 완전한 길이가 보존된 720p H.264 Faststart MP4(v2)로 캐싱하여 0.01초 즉시 재생 및 무끊김 스트리밍을 보장합니다."""
     ff = find_ffmpeg_exe()
-    if not ff or _is_cloud_virtual_or_unpinned_file(file_path):
+    if (not ff and os.name != "nt") or _is_cloud_virtual_or_unpinned_file(file_path):
         return None
     try:
         st = file_path.stat()
@@ -3211,12 +3335,12 @@ def _clean_timestamp_badge(ts: str) -> str:
 
 
 def get_or_create_video_thumb(params: Dict[str, Any] | None = None) -> tuple[Path | None, int]:
-    """로컬 동영상의 지정 시각(초) 프레임을 고속 추출·캐싱하여 JPEG 파일 경로로 반환합니다 (검은 도입부 자동 회피)."""
+    """로컬 동영상의 지정 시각(초) 프레임을 고속 추출·캐싱하여 JPEG 파일 경로로 반환합니다 (검은 도입부 자동 회피 · 무-FFmpeg WinRT 폴백 내장)."""
     full_path, _, status = resolve_local_media_file(params)
     if full_path is None or status != 200:
         return None, status
     ff = find_ffmpeg_exe()
-    if not ff or _is_cloud_virtual_or_unpinned_file(full_path):
+    if (not ff and os.name != "nt") or _is_cloud_virtual_or_unpinned_file(full_path):
         return None, 404
 
     data = params or {}
@@ -3238,6 +3362,11 @@ def get_or_create_video_thumb(params: Dict[str, Any] | None = None) -> tuple[Pat
         out_jpg = _VIDEO_THUMBS_DIR / f"vt_{cache_key}.jpg"
         if out_jpg.exists() and out_jpg.stat().st_size > 1500:
             return out_jpg, 200
+
+        if not ff:
+            if _winrt_extract_video_thumb(full_path, seek_t, out_jpg) and out_jpg.exists():
+                return out_jpg, 200
+            return None, 404
 
         creationflags = 0x08000000 if os.name == "nt" else 0  # CREATE_NO_WINDOW
         probe_times = [seek_t]
@@ -4516,8 +4645,9 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
             int_dur = max(1, int(real_dur_sec))
             dur_text = f"{int(int_dur // 60):02d}:{int(int_dur % 60):02d}"
 
+            has_video_transcoder = bool(ff or os.name == "nt")
             codec_tag = _detect_video_codec_fast(resolved)
-            if codec_tag in ("hevc", "mov_slow", "needs_transcode") and ff:
+            if codec_tag in ("hevc", "mov_slow", "needs_transcode") and has_video_transcoder:
                 vid_url = f"http://127.0.0.1:5199/__videos/stream?p={enc_name}"
                 if len(prewarm_targets) < 40:
                     prewarm_targets.append(resolved)
@@ -4525,7 +4655,7 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 vid_url = f"http://127.0.0.1:5199/__photos/file?p={enc_name}"
 
             thumb_seek = max(1, min(int(round(real_dur_sec * 0.2)), 3)) if int_dur >= 4 else 0
-            thumb_url = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={thumb_seek}" if ff else ""
+            thumb_url = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={thumb_seek}" if has_video_transcoder else ""
 
             # 순수 파일명·폴더명 의미어 토큰(CamelCase 분리 포함) + 실제 프레임 OCR 키워드만 정직하게 반영 (파일명 하드코딩 편법 일절 금지)
             stem_expanded = _split_camel_and_alnum_words(stem)
@@ -4601,7 +4731,7 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                         target_tf["timestampText"] = ts_str
                         target_tf["sceneCaption"] = ocr_txt
                         target_tf["keywords"] = list(dict.fromkeys([*(target_tf.get("keywords") or []), *f_kws]))
-                        target_tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, s_val)}" if ff else ""
+                        target_tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, s_val)}" if has_video_transcoder else ""
                     else:
                         timeline_frames.append({
                             "frameId": f"f_ocr_{len(videos) + 1}_{f_idx}_{s_val}",
@@ -4611,11 +4741,11 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
                             "sceneCaption": ocr_txt,
                             "keywords": f_kws,
                             "tags": ["#내PC동영상", f"#{d.name}"],
-                            "thumbUrl": f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, s_val)}" if ff else "",
+                            "thumbUrl": f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, s_val)}" if has_video_transcoder else "",
                         })
                 timeline_frames.sort(key=lambda x: int(x.get("timeSec") or 0))
 
-            if ff:
+            if has_video_transcoder:
                 for tf in timeline_frames:
                     if not tf.get("thumbUrl"):
                         tf["thumbUrl"] = f"http://127.0.0.1:5199/__videos/thumb?p={enc_name}&t={max(1, int(tf.get('timeSec') or 0))}"

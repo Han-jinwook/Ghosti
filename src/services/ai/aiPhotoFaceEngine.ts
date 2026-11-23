@@ -730,12 +730,14 @@ export async function loadInitialPhotoDataset(): Promise<{
     const folderTokens: string[] = [];
     if (
       f.folderName &&
-      !/^(test_photos|sample_photos_301|ghosti_test_corpus|pictures|photos|desktop|downloads|documents|ocam|앱오류|\d{2}_.+)$/i.test(
+      !/^(test_photos|sample_photos_301|ghosti_test_corpus|pictures|photos|desktop|downloads|documents|videos|ocam|앱오류|문서|사진|동영상|바탕\s*화면|다운로드|내\s*문서|내\s*사진|내\s*동영상|\d{2}_.+)$/i.test(
         f.folderName
       )
     ) {
       const cleanedFolder = f.folderName
         .replace(/^\d{4,8}[_-]?/, '')
+        .replace(/바탕\s+화면/g, '바탕화면')
+        .replace(/카카오톡\s+받은\s+파일/g, '카톡받은파일')
         .replace(/[_&-]+/g, ' ')
         .trim();
       for (const tk of cleanedFolder.split(/\s+/)) {
@@ -2853,21 +2855,46 @@ export async function resolveSmartKoreanLabelForPhoto(photo: PhotoItem): Promise
         }
         if (tokens.length === 0 && vec && vec.length === DEFAULT_DIM) {
           const conceptMap = await ensureGemma2ConceptProbeVecs();
-          let bestProbe: Gemma2ConceptProbe | null = null;
-          let bestSim = -1;
+          const ranked: Array<{ probe: Gemma2ConceptProbe; sim: number }> = [];
           for (const probe of GEMMA2_VISUAL_CONCEPT_PROBES) {
             const pVec = conceptMap.get(probe.id);
             if (!pVec) continue;
-            const sim = cosineSimilarity(pVec, vec);
-            if (sim > bestSim) {
-              bestSim = sim;
-              bestProbe = probe;
+            ranked.push({ probe, sim: cosineSimilarity(pVec, vec) });
+          }
+          ranked.sort((a, b) => b.sim - a.sim);
+          const bestEntry = ranked[0];
+          if (bestEntry && bestEntry.sim >= 0.56) {
+            const cleanProbeTag = bestEntry.probe.tag.replace(/^#/, '');
+            tokens = extractCrispKoreanLabelTokens([
+              cleanProbeTag,
+              ...(bestEntry.probe.keywordsKo || []),
+            ]);
+            discoveredTagSet.add(bestEntry.probe.tag);
+          }
+        }
+        if (tokens.length === 0) {
+          const fnMeaningful = extractMeaningfulUserMediaTokens(photo.name);
+          const fnLow = (photo.name || '').toLowerCase();
+          const fnFallbackMap: Array<[RegExp, string, string]> = [
+            [/puppy|dog|pet|hound|retriever|poodle|maltese/, '강아지', '#반려견·강아지'],
+            [/cat|kitty|kitten/, '고양이', '#반려묘·고양이'],
+            [/food|meal|dinner|lunch|menu|dish|coffee|cafe|cake/, '음식_카페', '#음식·맛집'],
+            [/beach|ocean|sea|wave/, '바다_해변', '#바다·해변'],
+            [/mountain|hiking|peak|forest|park|flower/, '자연_풍경', '#공원·꽃·자연'],
+            [/car|parking|vehicle|drive/, '자동차', '#자동차·주차'],
+            [/receipt|invoice|bill|tax|contract|doc/, '문서_영수증', '#문서·서류'],
+            [/screen|capture|snap/, '화면캡처', '#스크린샷'],
+          ];
+          for (const [rx, koWord, koTag] of fnFallbackMap) {
+            if (rx.test(fnLow)) {
+              tokens = extractCrispKoreanLabelTokens([koWord]);
+              discoveredTagSet.add(koTag);
+              break;
             }
           }
-          if (bestProbe && bestSim >= 0.61) {
-            const cleanProbeTag = bestProbe.tag.replace(/^#/, '');
-            tokens = extractCrispKoreanLabelTokens([cleanProbeTag, ...(bestProbe.keywordsKo || [])]);
-            discoveredTagSet.add(bestProbe.tag);
+          if (tokens.length === 0 && fnMeaningful.length > 0) {
+            const koFromFn = extractCrispKoreanLabelTokens(fnMeaningful);
+            if (koFromFn.length > 0) tokens = koFromFn;
           }
         }
       } catch {

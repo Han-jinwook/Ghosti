@@ -560,7 +560,13 @@ def main():
     update_pc2(core_ver)
     update_pc3(core_ver)
     update_pc4(core_ver)
-    update_pc5(core_ver)
+    # 5호기(집 PC)는 오프라인 상태일 수 있으므로 2초 TCP 사전 체크 후 도달 가능할 때만 배포
+    try:
+        import socket
+        with socket.create_connection(("100.122.235.63", 22), timeout=2.0):
+            update_pc5(core_ver)
+    except Exception:
+        log("ℹ️ 5호기 (집 100.122.235.63) 현재 오프라인 — 배포 스킵")
     # 빌드된 최신 Merlin_Z_Core.zip 및 z_core_version.json도 2·3귀신 워크트리에 동시 복사
     import shutil
     repo_root = os.path.dirname(UZC_DIR)
