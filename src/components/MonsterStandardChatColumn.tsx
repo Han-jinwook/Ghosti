@@ -1836,8 +1836,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               <div
                 className={`max-w-[95%] rounded-xl px-3.5 py-2.5 text-[13px] leading-relaxed whitespace-pre-line break-words [overflow-wrap:anywhere] overflow-hidden ${
                   isUser
-                    ? 'bg-slate-900 text-white rounded-tr-xs font-medium'
-                    : 'bg-slate-50 border border-slate-200 text-slate-800 rounded-tl-xs'
+                    ? 'bg-teal-600 text-white rounded-tr-xs font-medium'
+                    : 'bg-teal-50/35 border border-teal-100/90 text-slate-800 rounded-tl-xs'
                 }`}
               >
                 {isUser ? (
@@ -1903,7 +1903,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                           `『${famName}』 가족 사진방 미리보기 링크가 복사되었습니다.`,
                         );
                       }}
-                      className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold transition cursor-pointer text-left"
+                      className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold transition cursor-pointer text-left"
                     >
                       『{msg.passportViralFamilyName}』 가족 사진방 링크 공유
                     </button>
@@ -1920,7 +1920,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                           '카카오톡(나에게 보내기) 및 클립보드에 PC 실행 링크를 저장했습니다.',
                         );
                       }}
-                      className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold transition cursor-pointer text-left"
+                      className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold transition cursor-pointer text-left"
                     >
                       카카오톡에 PC 실행 링크 저장 / 주소 복사
                     </button>
@@ -1970,7 +1970,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                               setWelcomeChipsDismissed(true);
                               void handleSend('응, 엔진 연결하고 1초 건강검진 해줘', 'text');
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold transition cursor-pointer text-left break-words"
+                            className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold transition cursor-pointer text-left break-words"
                           >
                             내 컴퓨터 연결하고 상태 분석하기
                           </button>
@@ -1995,7 +1995,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
                               setWelcomeChipsDismissed(true);
                               void handleSend('부팅할 때 켜지는 시작프로그램 목록도 보여줘', 'text');
                             }}
-                            className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold transition cursor-pointer text-left break-words"
+                            className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold transition cursor-pointer text-left break-words"
                           >
                             시작프로그램 목록 보기
                           </button>
@@ -2049,7 +2049,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             <button
               type="button"
               onClick={() => void returnToSharedRoomAndOpenUpload()}
-              className="w-full py-2 px-3.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-[12.5px] transition-colors cursor-pointer flex items-center justify-center"
+              className="w-full py-2 px-3.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-[12.5px] transition-colors cursor-pointer flex items-center justify-center"
             >
               &lsquo;{pendingReturnShareRoom.roomTitle}&rsquo;으로 가서 내 사진 올리기
             </button>

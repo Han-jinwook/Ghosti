@@ -601,7 +601,32 @@ html.theme-warm-light [class*="text-blue-400/"]:not([data-keep-dark="true"] *) {
   color: #0369A1 !important;
 }
 
-/* 8. 솔리드 포인트 버튼 (bg-slate-900 · primary-container 등) 노션 스타일 차콜 단색 시인성 보장 */
+/* 8. 솔리드 포인트 버튼 (틸 브랜드 · 시맨틱 컬러 · 차콜 등) 밝은 글씨 시인성 보장 */
+html.theme-warm-light .bg-teal-600:not(.hub-purchase-widget *),
+html.theme-warm-light .bg-teal-700:not(.hub-purchase-widget *),
+html.theme-warm-light .bg-emerald-600:not(.hub-purchase-widget *),
+html.theme-warm-light .bg-sky-600:not(.hub-purchase-widget *),
+html.theme-warm-light .bg-amber-600:not(.hub-purchase-widget *),
+html.theme-warm-light .bg-rose-600:not(.hub-purchase-widget *),
+html.theme-warm-light .bg-indigo-600:not(.hub-purchase-widget *) {
+  color: #FFFFFF !important;
+}
+html.theme-warm-light .bg-teal-600:not(.hub-purchase-widget *) *,
+html.theme-warm-light .bg-teal-700:not(.hub-purchase-widget *) *,
+html.theme-warm-light .bg-emerald-600:not(.hub-purchase-widget *) *,
+html.theme-warm-light .bg-sky-600:not(.hub-purchase-widget *) *,
+html.theme-warm-light .bg-amber-600:not(.hub-purchase-widget *) *,
+html.theme-warm-light .bg-rose-600:not(.hub-purchase-widget *) *,
+html.theme-warm-light .bg-indigo-600:not(.hub-purchase-widget *) * {
+  color: #FFFFFF !important;
+}
+html.theme-warm-light .bg-teal-600 .text-teal-100,
+html.theme-warm-light .bg-emerald-600 .text-emerald-100,
+html.theme-warm-light .bg-sky-600 .text-sky-100,
+html.theme-warm-light .bg-amber-600 .text-amber-100,
+html.theme-warm-light .bg-rose-600 .text-rose-100 {
+  color: rgba(255, 255, 255, 0.86) !important;
+}
 html.theme-warm-light .bg-slate-900.text-white:not(.hub-purchase-widget *),
 html.theme-warm-light button.bg-slate-900:not(.hub-purchase-widget *),
 html.theme-warm-light a.bg-slate-900:not(.hub-purchase-widget *),

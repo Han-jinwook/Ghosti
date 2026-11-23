@@ -306,7 +306,7 @@ export const GhostiSubscriptionCheckoutModal: React.FC = () => {
               <button
                 type="button"
                 onClick={handleFinishReceipt}
-                className="w-full py-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[13.5px] font-semibold cursor-pointer transition-colors"
+                className="w-full py-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[13.5px] font-semibold cursor-pointer transition-colors"
               >
                 {spec.category === 'personal' ? '내 기기 통합으로 이동' : '업무 공유로 이동'}
               </button>
@@ -369,7 +369,7 @@ export const GhostiSubscriptionCheckoutModal: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => window.dispatchEvent(new CustomEvent('openLoginModal'))}
-                    className="w-full py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[13px] font-semibold cursor-pointer"
+                    className="w-full py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-semibold cursor-pointer"
                   >
                     이메일 로그인
                   </button>
@@ -424,7 +424,7 @@ export const GhostiSubscriptionCheckoutModal: React.FC = () => {
                       disabled={submitting}
                       onClick={() => void handleConfirmPurchase()}
                       data-testid="confirm-coin-subscription-btn"
-                      className="w-full py-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[13.5px] font-semibold cursor-pointer transition-colors disabled:opacity-60"
+                      className="w-full py-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[13.5px] font-semibold cursor-pointer transition-colors disabled:opacity-60"
                     >
                       {submitting
                         ? '결제 처리 중...'
@@ -436,7 +436,7 @@ export const GhostiSubscriptionCheckoutModal: React.FC = () => {
                         type="button"
                         onClick={handleOpenCoinChargeStation}
                         data-testid="open-charge-station-from-checkout-btn"
-                        className="w-full py-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[13.5px] font-semibold cursor-pointer transition-colors"
+                        className="w-full py-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[13.5px] font-semibold cursor-pointer transition-colors"
                       >
                         {shortfall.toLocaleString()} C 충전하기
                       </button>

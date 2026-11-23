@@ -63,7 +63,7 @@ export const PaidDeviceSyncPane: React.FC = () => {
                         type="button"
                         disabled={syncState.syncing}
                         onClick={() => void triggerSyncNow()}
-                        className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold transition-all disabled:opacity-50 cursor-pointer"
+                        className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold transition-all disabled:opacity-50 cursor-pointer"
                       >
                         {syncState.syncing ? '동기화 중...' : '지금 동기화'}
                       </button>

@@ -132,7 +132,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             <button
               type="button"
               onClick={() => onJumpToSearch(message.searchKeyword!)}
-              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold cursor-pointer"
+              className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold cursor-pointer"
             >
               귀신검색에서 열기
             </button>
@@ -240,7 +240,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     });
                     onToast?.(res.message);
                   }}
-                  className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer"
+                  className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer"
                 >
                   {busyId === 'missing_restore' ? '복원 중...' : '원위치로 복원'}
                 </button>
@@ -370,7 +370,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     });
                     onToast?.(res.message);
                   }}
-                  className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
+                  className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
                 >
                   {busyId === 'cleanup_approve' ? '정리 중...' : '정리 실행'}
                 </button>
@@ -416,7 +416,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     await submitExternalMonsterChatQuery('응 진행해', message.sourceTab || 'trash');
                     setBusyId(null);
                   }}
-                  className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer"
                 >
                   {busyId === 'shortcut_approve' ? '생성 중...' : '바로가기 생성'}
                 </button>
@@ -514,7 +514,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                           }
                           onToast?.(res.message);
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer"
+                        className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer"
                       >
                         {busyId === `rb-${pt.restoreId}` ? '복원 중...' : '원래대로 되돌리기'}
                       </button>
@@ -634,7 +634,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       await submitExternalMonsterChatQuery('응 진행해', message.sourceTab || 'trash');
                       setBusyId(null);
                     }}
-                    className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
+                    className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
                   >
                     {busyId === 'spec_approve' ? '정리 중...' : '불필요 항목 정리'}
                   </button>
@@ -806,7 +806,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       await submitExternalMonsterChatQuery('응 진행해', message.sourceTab || 'trash');
                       setBusyId(null);
                     }}
-                    className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
+                    className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
                   >
                     {busyId === 'repair_approve' ? '진행 중...' : '진행하기'}
                   </button>
@@ -875,7 +875,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   <button
                     type="button"
                     onClick={() => void handleBatonTouch()}
-                    className="px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-semibold flex items-center gap-1 cursor-pointer"
+                    className="px-2.5 py-1 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold flex items-center gap-1 cursor-pointer"
                   >
                     <ExternalLink className="w-3 h-3" />
                     상담 창 다시 열기
@@ -905,7 +905,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               type="button"
               disabled={busyId === 'baton'}
               onClick={() => void handleBatonTouch()}
-              className="w-full py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
+              className="w-full py-2 px-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5 cursor-pointer"
             >
               <ExternalLink className="w-3.5 h-3.5" />
               내용 복사 후 AI 상담 창 열기
@@ -1005,7 +1005,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     onJumpToSearch('');
                   }
                 }}
-                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-semibold cursor-pointer"
+                className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold cursor-pointer"
               >
                 {btn.label}
               </button>
@@ -1032,7 +1032,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             <button
               type="button"
               onClick={() => useSaySeeStore.getState().setShowProModal(true)}
-              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-semibold cursor-pointer"
+              className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold cursor-pointer"
             >
               요금제 안내 보기
             </button>
@@ -1044,7 +1044,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
       {message.cardKind === 'STUDIO_SUPPORT_PROXY' && message.studioSupportPayload && (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-3">
           <div className="flex items-center justify-between gap-2 flex-wrap">
-            <span className="px-2 py-0.5 rounded bg-slate-900 text-white text-[11px] font-semibold">
+            <span className="px-2 py-0.5 rounded bg-teal-600 text-white text-[11px] font-semibold">
               {message.studioSupportPayload.badgeLabel}
             </span>
             <span className="text-[11px] text-slate-500">
@@ -1061,7 +1061,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             href={message.studioSupportPayload.studioJumpUrl}
             target="_blank"
             rel="noopener noreferrer"
-            className="w-full py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold flex items-center justify-center gap-1.5"
+            className="w-full py-2 px-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold flex items-center justify-center gap-1.5"
           >
             <ExternalLink className="w-3.5 h-3.5" />
             <span>나의 문의방에서 처리 현황 보기</span>
@@ -1202,7 +1202,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   });
                   onToast?.('상주 보안프로그램 정리를 완료하고 주간 정기 점검을 설정했습니다.');
                 }}
-                className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold cursor-pointer"
+                className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold cursor-pointer"
               >
                 정리 후 매주 정기 점검 켜기
               </button>
@@ -1464,7 +1464,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   });
                   onToast?.(res.summaryKo);
                 }}
-                className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-xs font-semibold cursor-pointer"
+                className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-xs font-semibold cursor-pointer"
               >
                 {busyId === 'boot_care_approve'
                   ? '진행 중...'
@@ -1802,7 +1802,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                     voiceConsentApproved: true,
                   });
                 }}
-                className="px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-semibold cursor-pointer"
+                className="px-2.5 py-1 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold cursor-pointer"
               >
                 음성으로 듣기
               </button>

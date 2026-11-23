@@ -497,7 +497,7 @@ export const PhotoDetailModal: React.FC = () => {
                   `'${selectedPhoto.name}' 원본(${(selectedPhoto.size / 1024 / 1024).toFixed(2)}MB) 다운로드를 시작했습니다.`
                 );
               }}
-              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
+              className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold flex items-center gap-1 transition-colors cursor-pointer"
             >
               <span>원본 저장</span>
             </a>
@@ -521,7 +521,7 @@ export const PhotoDetailModal: React.FC = () => {
                   }}
                   className={`px-3 py-1.5 rounded-lg border text-[12px] font-medium transition-colors cursor-pointer ${
                     isHiddenInLounge
-                      ? 'bg-slate-900 text-white border-slate-900'
+                      ? 'bg-teal-600 text-white border-teal-600'
                       : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
                   }`}
                 >
@@ -685,7 +685,7 @@ export const PhotoDetailModal: React.FC = () => {
                   void pickBestInBurstPhotos(resolvedBurstPhotos, selectedPhoto.id);
                   setSelectedPhoto(selectedPhoto, null);
                 }}
-                className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer transition-colors"
+                className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer transition-colors"
               >
                 현재 1장만 남기고 나머지 {resolvedBurstPhotos.length - 1}장 휴지통 이동
               </button>
@@ -812,7 +812,7 @@ export const PhotoDetailModal: React.FC = () => {
                 onClick={() => setActiveTab('same-day')}
                 className={`px-3 py-2.5 rounded-lg text-left flex items-center justify-between gap-2 border text-[13px] transition-colors cursor-pointer ${
                   activeTab === 'same-day'
-                    ? 'bg-slate-900 border-slate-900 text-white font-semibold'
+                    ? 'bg-teal-600 border-teal-600 text-white font-semibold'
                     : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-medium'
                 }`}
               >
@@ -826,7 +826,7 @@ export const PhotoDetailModal: React.FC = () => {
                 onClick={() => setActiveTab('similar-visual')}
                 className={`px-3 py-2.5 rounded-lg text-left flex items-center justify-between gap-2 border text-[13px] transition-colors cursor-pointer ${
                   activeTab === 'similar-visual'
-                    ? 'bg-slate-900 border-slate-900 text-white font-semibold'
+                    ? 'bg-teal-600 border-teal-600 text-white font-semibold'
                     : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-medium'
                 }`}
               >
@@ -840,7 +840,7 @@ export const PhotoDetailModal: React.FC = () => {
                 onClick={() => setActiveTab('drill-down')}
                 className={`px-3 py-2.5 rounded-lg text-left flex items-center justify-between gap-2 border text-[13px] transition-colors cursor-pointer ${
                   activeTab === 'drill-down'
-                    ? 'bg-slate-900 border-slate-900 text-white font-semibold'
+                    ? 'bg-teal-600 border-teal-600 text-white font-semibold'
                     : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700 font-medium'
                 }`}
               >
@@ -918,7 +918,7 @@ export const PhotoDetailModal: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setDrillQuery('')}
-                className="px-3 py-1 rounded-md bg-slate-900 text-white text-[12px] font-medium cursor-pointer"
+                className="px-3 py-1 rounded-md bg-teal-600 text-white text-[12px] font-medium cursor-pointer"
               >
                 필터 초기화
               </button>

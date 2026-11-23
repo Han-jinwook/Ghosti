@@ -314,7 +314,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
           <button
             type="button"
             onClick={() => void returnToSharedRoomAndOpenUpload()}
-            className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold transition-colors cursor-pointer whitespace-nowrap"
+            className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold transition-colors cursor-pointer whitespace-nowrap"
           >
             {zConnected
               ? `‘${pendingReturnShareRoom.roomTitle}’으로 이동해 사진 올리기`
@@ -331,7 +331,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
           <a
             href={Z_CORE_ZIP_URL}
             download="Merlin_Z_Core.zip"
-            className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold whitespace-nowrap cursor-pointer"
+            className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold whitespace-nowrap cursor-pointer"
           >
             최신 PC 엔진 다운로드 (v{LATEST_Z_CORE_VERSION})
           </a>
@@ -353,7 +353,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   <h1 className="text-[18px] sm:text-[20px] text-slate-900 font-bold tracking-tight">
                     귀신비서
                   </h1>
-                  <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[11px] font-medium">
+                  <span className="px-2 py-0.5 rounded bg-emerald-50 border border-emerald-200/80 text-emerald-700 text-[11px] font-semibold">
                     확인 후 승인 시에만 정리 · 복원 지원
                   </span>
                 </div>
@@ -372,7 +372,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => void openNativeAppPermissionSettings()}
-                    className="self-start mt-1 px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer"
+                    className="self-start mt-1 px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer"
                   >
                     사진 접근 권한 허용하기
                   </button>
@@ -402,7 +402,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                           duplicateGroups.length > 0 ? 'duplicate' : 'all'
                         );
                       }}
-                      className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold disabled:opacity-40 cursor-pointer"
+                      className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold disabled:opacity-40 cursor-pointer"
                     >
                       남은 사진 정리 펼치기 ({liveActiveTrash.length}장)
                     </button>
@@ -442,7 +442,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             <div className="text-[14.5px] sm:text-[15.5px] text-slate-900 font-semibold leading-snug break-keep">
               {activeTrash.length > 0 ? (
                 <>
-                  정리 후보 <span className="font-bold">{activeTrash.length}장</span>{' '}
+                  정리 후보 <span className="font-bold text-teal-700">{activeTrash.length}장</span>{' '}
                   <span className="text-slate-400 font-normal text-[13.5px]">
                     ({fmtMB(totalTrashBytes)})
                   </span>{' '}
@@ -485,9 +485,9 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                 </span>
               </div>
               <div className="grid grid-cols-1 md:grid-cols-3 gap-2.5 text-[12.5px]">
-                <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col justify-between gap-2.5">
+                <div className="p-3.5 rounded-lg bg-teal-50/45 border border-teal-200/75 flex flex-col justify-between gap-2.5">
                   <div className="flex flex-col gap-1">
-                    <span className="font-bold text-slate-900">
+                    <span className="font-bold text-teal-950">
                       은행·관공서 보안앱 절전
                     </span>
                     <span className="text-slate-600 leading-relaxed text-[12px]">
@@ -504,7 +504,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                           })
                         )
                       }
-                      className="px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-white font-semibold text-[11.5px] cursor-pointer"
+                      className="px-2.5 py-1 rounded-md bg-teal-600 hover:bg-teal-700 text-white font-semibold text-[11.5px] cursor-pointer"
                     >
                       보안앱 절전
                     </button>
@@ -517,7 +517,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                           })
                         )
                       }
-                      className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 font-medium text-[11.5px] cursor-pointer"
+                      className="px-2.5 py-1 rounded-md bg-white hover:bg-teal-50 border border-teal-200 text-teal-800 font-medium text-[11.5px] cursor-pointer"
                     >
                       다시 깨우기
                     </button>
@@ -533,17 +533,17 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                       })
                     )
                   }
-                  className="text-left p-3.5 rounded-lg bg-slate-50 hover:bg-slate-100/80 border border-slate-200 flex flex-col justify-between gap-2.5 cursor-pointer transition-colors"
+                  className="text-left p-3.5 rounded-lg bg-sky-50/45 hover:bg-sky-50/80 border border-sky-200/75 flex flex-col justify-between gap-2.5 cursor-pointer transition-colors"
                 >
                   <div className="flex flex-col gap-1">
-                    <span className="font-bold text-slate-900">
+                    <span className="font-bold text-sky-950">
                       Windows 기본 백신 점검
                     </span>
                     <span className="text-slate-600 leading-relaxed text-[12px]">
                       별도 광고형 백신 없이 Windows 기본 보안 상태로 다운로드 파일을 점검합니다.
                     </span>
                   </div>
-                  <span className="inline-flex self-start px-2.5 py-1 rounded-md bg-white border border-slate-200 text-slate-700 font-medium text-[11.5px]">
+                  <span className="inline-flex self-start px-2.5 py-1 rounded-md bg-white border border-sky-200 text-sky-700 font-medium text-[11.5px]">
                     빠른 백신 검사
                   </span>
                 </button>
@@ -557,17 +557,17 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                       })
                     )
                   }
-                  className="text-left p-3.5 rounded-lg bg-slate-50 hover:bg-slate-100/80 border border-slate-200 flex flex-col justify-between gap-2.5 cursor-pointer transition-colors"
+                  className="text-left p-3.5 rounded-lg bg-amber-50/45 hover:bg-amber-50/80 border border-amber-200/75 flex flex-col justify-between gap-2.5 cursor-pointer transition-colors"
                 >
                   <div className="flex flex-col gap-1">
-                    <span className="font-bold text-slate-900">
+                    <span className="font-bold text-amber-950">
                       미저장 문서 · 휴지통 복원
                     </span>
                     <span className="text-slate-600 leading-relaxed text-[12px]">
                       저장하지 않고 닫은 문서 임시본이나 최근 삭제한 파일을 찾아 원래 위치로 복원합니다.
                     </span>
                   </div>
-                  <span className="inline-flex self-start px-2.5 py-1 rounded-md bg-white border border-slate-200 text-slate-700 font-medium text-[11.5px]">
+                  <span className="inline-flex self-start px-2.5 py-1 rounded-md bg-white border border-amber-200 text-amber-800 font-medium text-[11.5px]">
                     파일 복원 찾기
                   </span>
                 </button>
@@ -594,7 +594,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                       forceExpandSelected: true,
                     })
                   }
-                  className="py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer whitespace-nowrap"
+                  className="py-2 px-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer whitespace-nowrap"
                 >
                   사진 추가 선택
                 </button>
@@ -622,6 +622,39 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   ? FALLBACK_SAMPLE_TRASH_ITEMS[tab.key].slice(0, 2)
                   : [];
 
+              const palette =
+                tab.key === 'duplicate'
+                  ? {
+                      active: 'bg-teal-600 border-teal-600 text-white shadow-xs',
+                      idle: 'bg-white hover:bg-teal-50/40 border-slate-200 hover:border-teal-300 text-slate-900',
+                      step: isSelected ? 'text-teal-100' : 'text-teal-600',
+                      sub: isSelected ? 'text-teal-100' : 'text-slate-500',
+                      borderTop: isSelected ? 'border-teal-500/70' : 'border-slate-100',
+                    }
+                  : tab.key === 'memo'
+                  ? {
+                      active: 'bg-amber-600 border-amber-600 text-white shadow-xs',
+                      idle: 'bg-white hover:bg-amber-50/40 border-slate-200 hover:border-amber-300 text-slate-900',
+                      step: isSelected ? 'text-amber-100' : 'text-amber-600',
+                      sub: isSelected ? 'text-amber-100' : 'text-slate-500',
+                      borderTop: isSelected ? 'border-amber-500/70' : 'border-slate-100',
+                    }
+                  : tab.key === 'screenshot'
+                  ? {
+                      active: 'bg-sky-600 border-sky-600 text-white shadow-xs',
+                      idle: 'bg-white hover:bg-sky-50/40 border-slate-200 hover:border-sky-300 text-slate-900',
+                      step: isSelected ? 'text-sky-100' : 'text-sky-600',
+                      sub: isSelected ? 'text-sky-100' : 'text-slate-500',
+                      borderTop: isSelected ? 'border-sky-500/70' : 'border-slate-100',
+                    }
+                  : {
+                      active: 'bg-rose-600 border-rose-600 text-white shadow-xs',
+                      idle: 'bg-white hover:bg-rose-50/40 border-slate-200 hover:border-rose-300 text-slate-900',
+                      step: isSelected ? 'text-rose-100' : 'text-rose-600',
+                      sub: isSelected ? 'text-rose-100' : 'text-slate-500',
+                      borderTop: isSelected ? 'border-rose-500/70' : 'border-slate-100',
+                    };
+
               return (
                 <button
                   key={tab.key}
@@ -641,19 +674,17 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     }
                   }}
                   className={`text-left cursor-pointer rounded-xl p-3.5 transition-colors flex flex-col justify-between gap-2 border min-w-0 overflow-hidden ${
-                    isSelected
-                      ? 'bg-slate-900 border-slate-900 text-white shadow-xs'
-                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-900'
+                    isSelected ? palette.active : palette.idle
                   }`}
                 >
                   <div className="flex flex-col gap-1 w-full min-w-0">
                     <div className="flex items-center justify-between gap-1 w-full min-w-0">
-                      <span className={`text-[11.5px] font-semibold ${isSelected ? 'text-slate-300' : 'text-slate-400'}`}>
+                      <span className={`text-[11.5px] font-bold ${palette.step}`}>
                         0{tab.stepNum}
                       </span>
                       <span
                         className={`text-[10.5px] font-medium ${
-                          isSelected ? 'text-slate-200' : 'text-slate-400'
+                          isSelected ? 'text-white/90' : 'text-slate-400'
                         }`}
                       >
                         {isSelected ? '접기' : '보기'}
@@ -664,7 +695,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                       {tab.shortTitle}
                     </span>
 
-                    <span className={`text-[11.5px] break-keep leading-snug ${isSelected ? 'text-slate-300' : 'text-slate-500'}`}>
+                    <span className={`text-[11.5px] break-keep leading-snug ${palette.sub}`}>
                       {tab.subtitle}
                     </span>
                   </div>
@@ -687,7 +718,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     </div>
                   )}
 
-                  <div className={`flex flex-wrap items-center justify-between gap-1 pt-2 border-t w-full min-w-0 ${isSelected ? 'border-slate-700' : 'border-slate-100'}`}>
+                  <div className={`flex flex-wrap items-center justify-between gap-1 pt-2 border-t w-full min-w-0 ${palette.borderTop}`}>
                     <div className="flex items-baseline gap-1 whitespace-nowrap">
                       <span className="text-[15px] font-bold tabular-nums">
                         {items.length}
@@ -735,7 +766,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     setPausedSnapshot(null);
                     setActiveTrashCategoryFilter('all');
                   }}
-                  className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer"
                 >
                   전체 후보 보기 ({liveActiveTrash.length}장)
                 </button>
@@ -819,7 +850,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                               </span>
                               <button
                                 type="submit"
-                                className="px-2 py-0.5 rounded bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-semibold cursor-pointer whitespace-nowrap"
+                                className="px-2 py-0.5 rounded bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold cursor-pointer whitespace-nowrap"
                               >
                                 이동
                               </button>
@@ -900,7 +931,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
                           <div className="flex flex-col gap-1">
                             <div className="flex flex-wrap items-center gap-2">
-                              <span className="px-2 py-0.5 rounded bg-slate-900 text-white text-[11px] font-semibold">
+                              <span className="px-2 py-0.5 rounded bg-teal-600 text-white text-[11px] font-semibold">
                                 세트 {gIdx + 1} / {activeDuplicateGroups.length} ({groupPhotos.length}장)
                               </span>
                               <span className="text-[11.5px] text-slate-500 font-medium">
@@ -951,7 +982,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                               onClick={() =>
                                 void pickBestInDuplicateGroup(group.groupId, group.bestPhotoId, true)
                               }
-                              className="w-full sm:w-auto px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold transition-colors cursor-pointer"
+                              className="w-full sm:w-auto px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold transition-colors cursor-pointer"
                             >
                               1장 남기고 {redundantCount}장 휴지통 이동
                             </button>
@@ -1057,7 +1088,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                             ? void openNativeAppPermissionSettings()
                             : void syncMobileNativeGalleryAuto({ promptPermission: true })
                         }
-                        className="mt-1 px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer"
+                        className="mt-1 px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer"
                       >
                         {mobileGalleryPermissionDenied ? '사진 접근 권한 허용' : '사진첩 다시 확인'}
                       </button>
@@ -1119,7 +1150,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                         type="button"
                         disabled={activeSelectedPhotos.length === 0 || quarantineMoving}
                         onClick={() => void moveSelectedToQuarantine()}
-                        className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold disabled:opacity-40 cursor-pointer"
+                        className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold disabled:opacity-40 cursor-pointer"
                       >
                         선택한 {activeSelectedPhotos.length}장 ({fmtMB(selectedBytes)}) 휴지통 이동
                       </button>
@@ -1231,7 +1262,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                         type="button"
                         disabled={quarantineMoving}
                         onClick={() => void undoLastQuarantine()}
-                        className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer disabled:opacity-40"
+                        className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer disabled:opacity-40"
                       >
                         되돌리기
                       </button>
@@ -1279,7 +1310,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                           onClick={() =>
                             void restoreFromQuarantine(quarantinedPhotos.map((p) => p.id))
                           }
-                          className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer disabled:opacity-40"
+                          className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer disabled:opacity-40"
                         >
                           전체 복원 ({quarantinedPhotos.length}장)
                         </button>
@@ -1313,7 +1344,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                                 type="button"
                                 disabled={quarantineMoving}
                                 onClick={() => void restoreFromQuarantine([qp.id])}
-                                className="px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[11px] font-semibold shrink-0 cursor-pointer"
+                                className="px-2.5 py-1 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-semibold shrink-0 cursor-pointer"
                               >
                                 복원
                               </button>

@@ -208,7 +208,7 @@ export const VoiceHeroStage: React.FC = () => {
             )}
             <button
               type="submit"
-              className="absolute right-1.5 h-8.5 md:h-9 px-3.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold transition-colors whitespace-nowrap cursor-pointer"
+              className="absolute right-1.5 h-8.5 md:h-9 px-3.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold transition-colors whitespace-nowrap cursor-pointer"
             >
               검색
             </button>
@@ -225,7 +225,7 @@ export const VoiceHeroStage: React.FC = () => {
                 title="마이크로 말해서 검색"
                 className={`h-10 px-3.5 flex-1 sm:flex-initial justify-center rounded-xl border flex items-center gap-1.5 text-[12px] font-semibold shrink-0 whitespace-nowrap transition-colors cursor-pointer ${
                   isListening
-                    ? 'bg-slate-900 text-white border-slate-900'
+                    ? 'bg-teal-600 text-white border-teal-600'
                     : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
                 }`}
               >
@@ -275,7 +275,7 @@ export const VoiceHeroStage: React.FC = () => {
               }}
               className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-[13px] font-semibold flex items-center justify-center gap-1.5 transition-colors border shrink-0 whitespace-nowrap outline-none cursor-pointer ${
                 searchSpace === 'gallery'
-                  ? 'bg-slate-900 text-white border-slate-900'
+                  ? 'bg-teal-600 text-white border-teal-600'
                   : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
               }`}
             >
@@ -306,7 +306,7 @@ export const VoiceHeroStage: React.FC = () => {
               }}
               className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-[13px] font-semibold flex items-center justify-center gap-1.5 transition-colors border shrink-0 whitespace-nowrap outline-none cursor-pointer ${
                 searchSpace === 'video'
-                  ? 'bg-slate-900 text-white border-slate-900'
+                  ? 'bg-teal-600 text-white border-teal-600'
                   : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
               }`}
             >
@@ -329,7 +329,7 @@ export const VoiceHeroStage: React.FC = () => {
                 }}
                 className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-[13px] font-semibold flex items-center justify-center gap-1.5 transition-colors border shrink-0 whitespace-nowrap outline-none cursor-pointer ${
                   searchSpace === 'vault'
-                    ? 'bg-slate-900 text-white border-slate-900'
+                    ? 'bg-teal-600 text-white border-teal-600'
                     : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
                 }`}
               >
@@ -395,7 +395,7 @@ export const VoiceHeroStage: React.FC = () => {
               <button
                 type="button"
                 onClick={() => void syncMobileNativeGalleryAuto({ promptPermission: true })}
-                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs whitespace-nowrap transition-colors cursor-pointer shrink-0"
+                className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs whitespace-nowrap transition-colors cursor-pointer shrink-0"
               >
                 사진첩 동기화
               </button>
@@ -420,7 +420,7 @@ export const VoiceHeroStage: React.FC = () => {
             <button
               type="button"
               onClick={() => requestConnectMyComputer()}
-              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs whitespace-nowrap transition-colors cursor-pointer shrink-0"
+              className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs whitespace-nowrap transition-colors cursor-pointer shrink-0"
             >
               내 컴퓨터 연결
             </button>

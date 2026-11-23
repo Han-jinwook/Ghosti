@@ -92,7 +92,7 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
             <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-2">
               <div className="flex items-center justify-between">
-                <span className="px-2 py-0.5 rounded bg-slate-900 text-white text-[10.5px] font-medium">
+                <span className="px-2 py-0.5 rounded bg-teal-600 text-white text-[10.5px] font-medium">
                   메인 서버 PC
                 </span>
                 <span className="text-[11px] text-slate-600 font-medium">
@@ -198,7 +198,7 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
                     setNewBackupServerName('');
                     void handleSaveBackupServerConfig(masterWorkPcName, next, localBackupDir);
                   }}
-                  className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-medium cursor-pointer shrink-0 disabled:opacity-40 transition-colors"
+                  className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-medium cursor-pointer shrink-0 disabled:opacity-40 transition-colors"
                 >
                   + 예비 서버 등록
                 </button>

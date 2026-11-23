@@ -229,7 +229,7 @@ export const PricingModal: React.FC = () => {
             <button
               type="button"
               onClick={() => activatePricingPlan('personal_sub_3900')}
-              className="py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[13px] font-semibold cursor-pointer transition-colors"
+              className="py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-semibold cursor-pointer transition-colors"
             >
               월간 이용권 선택 (3,900원)
             </button>
@@ -271,7 +271,7 @@ export const PricingModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => activatePricingPlan('work_soho_9900')}
-                  className="py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer"
+                  className="py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer"
                 >
                   월 9,900원
                 </button>
@@ -298,7 +298,7 @@ export const PricingModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => activatePricingPlan('work_biz_19000')}
-                  className="py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer"
+                  className="py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer"
                 >
                   월 19,000원
                 </button>
@@ -325,7 +325,7 @@ export const PricingModal: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => activatePricingPlan('work_pro_29000')}
-                  className="py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer"
+                  className="py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer"
                 >
                   월 29,000원
                 </button>
@@ -363,7 +363,7 @@ export const PricingModal: React.FC = () => {
                 }
                 window.dispatchEvent(new CustomEvent('openPurchaseModal'));
               }}
-              className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-slate-900 hover:bg-slate-800 text-white cursor-pointer"
+              className="px-3 py-1.5 rounded-lg text-[12px] font-semibold bg-teal-600 hover:bg-teal-700 text-white cursor-pointer"
             >
               코인 충전
             </button>

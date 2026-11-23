@@ -164,7 +164,7 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
               <button
                 type="button"
                 onClick={() => void refreshDeviceIntegrationState(true)}
-                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer transition-colors"
+                className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer transition-colors"
               >
                 30일 무료체험 시작
               </button>
@@ -176,7 +176,7 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
               <button
                 type="button"
                 onClick={() => openSubscriptionCheckout('personal_sub_3900')}
-                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer transition-colors"
+                className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer transition-colors"
               >
                 Pro 구독 (월 3,900원)
               </button>
@@ -216,7 +216,7 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
               await reconnectThisDevice();
               setReconnectingBusy(false);
             }}
-            className="px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-semibold cursor-pointer disabled:opacity-50 shrink-0"
+            className="px-2.5 py-1 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold cursor-pointer disabled:opacity-50 shrink-0"
           >
             {reconnectingBusy ? '연결 중...' : '다시 연결'}
           </button>
@@ -350,7 +350,7 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
         <button
           type="submit"
           disabled={sendingClip}
-          className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold shrink-0 cursor-pointer disabled:opacity-50"
+          className="px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold shrink-0 cursor-pointer disabled:opacity-50"
         >
           {!isLoggedIn ? '로그인' : sendingClip ? '전송 중...' : '전송'}
         </button>
@@ -385,7 +385,7 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
                   }}
                   className={`px-2.5 py-1 rounded-md text-[11.5px] font-medium shrink-0 cursor-pointer border ${
                     isCopied
-                      ? 'bg-slate-900 text-white border-slate-900'
+                      ? 'bg-teal-600 text-white border-teal-600'
                       : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
                   }`}
                 >

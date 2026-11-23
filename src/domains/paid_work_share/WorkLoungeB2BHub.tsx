@@ -1310,7 +1310,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
             <button
               type="button"
               onClick={() => void handleUndoLastDeletedFile()}
-              className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[12px] font-semibold cursor-pointer"
+              className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-label-sm text-[12px] font-semibold cursor-pointer"
             >
               ↩️ 1초 실행 취소(Undo)
             </button>
@@ -1330,7 +1330,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
         <div className="p-4 rounded-2xl bg-gradient-to-r from-cyan-950/85 via-zinc-950 to-emerald-950/75 border border-cyan-400/50 flex flex-wrap items-center justify-between gap-3 shadow-md">
           <div className="flex flex-col gap-1">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="px-2.5 py-0.5 rounded-lg bg-slate-900 text-white font-label-sm text-[11px] font-extrabold">
+              <span className="px-2.5 py-0.5 rounded-lg bg-teal-600 text-white font-label-sm text-[11px] font-extrabold">
                 {inviteMeta.hostNickname}님이 초대한 [{inviteMeta.roomTitle}]
               </span>
               <span className="text-[11.5px] text-emerald-300 font-bold">
@@ -1356,7 +1356,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                     openZCoreConnectModal();
                   }
                 }}
-                className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[12px] font-semibold cursor-pointer shrink-0 shadow-sm"
+                className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-label-sm text-[12px] font-semibold cursor-pointer shrink-0 shadow-sm"
               >
                 {isZCoreConnected
                   ? '동기화된 내 탐색기 S:\\ 바로 열기'
@@ -1435,7 +1435,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => void handleOpenGhostSearchWindow()}
-                  className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[12px] font-semibold cursor-pointer flex items-center gap-1.5 shadow-sm transition-all"
+                  className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-label-sm text-[12px] font-semibold cursor-pointer flex items-center gap-1.5 shadow-sm transition-all"
                   title="독립 귀신검색창을 띄워 S: 드라이브 계약서·견적서·한글(HWP) 본문을 열지 않고 바로 검색합니다 (바탕화면·탐색기 빈 공간 Ctrl+0 1회와 동일)"
                 >
                   <span>귀신검색창으로 S: 문서 1초 검색</span>
@@ -1575,7 +1575,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 }}
                 className={`px-3 py-1.5 rounded-lg font-label-sm text-[12px] font-extrabold cursor-pointer transition-all ${
                   viewMode === 'semantic'
-                    ? 'bg-slate-900 text-white shadow-xs'
+                    ? 'bg-teal-600 text-white shadow-xs'
                     : 'text-zinc-300 hover:text-white'
                 }`}
               >
@@ -1586,7 +1586,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 onClick={() => setViewMode('explorer')}
                 className={`px-3 py-1.5 rounded-lg font-label-sm text-[12px] font-extrabold cursor-pointer transition-all ${
                   viewMode === 'explorer'
-                    ? 'bg-slate-900 text-white shadow-xs'
+                    ? 'bg-teal-600 text-white shadow-xs'
                     : 'text-zinc-300 hover:text-white'
                 }`}
               >

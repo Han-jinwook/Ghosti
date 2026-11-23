@@ -115,7 +115,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
           onClick={() => setHostRetainsHidePermission(true)}
           className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border cursor-pointer break-keep text-left transition-colors ${
             hostRetainsHidePermission
-              ? 'bg-slate-900 text-white border-slate-900'
+              ? 'bg-teal-600 text-white border-teal-600'
               : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
           }`}
         >
@@ -126,7 +126,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
           onClick={() => setHostRetainsHidePermission(false)}
           className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border cursor-pointer break-keep text-left transition-colors ${
             !hostRetainsHidePermission
-              ? 'bg-slate-900 text-white border-slate-900'
+              ? 'bg-teal-600 text-white border-teal-600'
               : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-100'
           }`}
         >
@@ -293,7 +293,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
             }}
             className={`px-3.5 py-2 rounded-lg text-[12.5px] font-semibold cursor-pointer border transition-colors shrink-0 ${
               showInlineQrPanel
-                ? 'bg-slate-900 text-white border-slate-900'
+                ? 'bg-teal-600 text-white border-teal-600'
                 : 'bg-white hover:bg-slate-50 text-slate-800 border-slate-200'
             }`}
           >
@@ -340,7 +340,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                 }}
                 className={`px-3 py-1.5 rounded-lg text-[12px] font-medium cursor-pointer border transition-colors ${
                   mobileInstallLinkCopied
-                    ? 'bg-slate-900 text-white border-slate-900'
+                    ? 'bg-teal-600 text-white border-teal-600'
                     : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
                 }`}
               >
@@ -648,7 +648,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                 <button
                   type="button"
                   onClick={openLoginModal}
-                  className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer whitespace-nowrap"
+                  className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer whitespace-nowrap"
                 >
                   로그인
                 </button>
@@ -656,7 +656,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                 <button
                   type="button"
                   onClick={() => openSubscriptionCheckout('personal_sub_3900')}
-                  className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer whitespace-nowrap"
+                  className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer whitespace-nowrap"
                 >
                   Pro 구독
                 </button>
@@ -665,7 +665,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                   type="button"
                   disabled={syncState.syncing}
                   onClick={() => void triggerSyncNow()}
-                  className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer disabled:opacity-50 whitespace-nowrap"
+                  className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer disabled:opacity-50 whitespace-nowrap"
                 >
                   {syncState.syncing ? '동기화 중...' : '지금 일치시키기'}
                 </button>
@@ -771,7 +771,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
           <button
             type="button"
             onClick={copyInviteLink}
-            className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer"
+            className="px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer"
           >
             {inviteCopied ? '초대 링크 복사됨' : '초대 링크 복사'}
           </button>
@@ -792,7 +792,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                     onClick={() => setActiveFamilyRoom(room)}
                     className={`px-3 py-1.5 rounded-lg text-[12.5px] font-medium border cursor-pointer transition-colors ${
                       isSelectedRoom
-                        ? 'bg-slate-900 text-white border-slate-900'
+                        ? 'bg-teal-600 text-white border-teal-600'
                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-50'
                     }`}
                   >
@@ -857,7 +857,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
           <button
             type="button"
             onClick={copyInviteLink}
-            className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer"
+            className="px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer"
           >
             {inviteCopied ? '초대 링크 복사됨' : '초대 링크 복사'}
           </button>

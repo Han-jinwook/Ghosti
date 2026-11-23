@@ -220,7 +220,7 @@ const Stage1IsolatedSearchInputForm: React.FC<{
             )}
             <button
               type="submit"
-              className="h-8.5 md:h-9 px-3.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold transition-colors whitespace-nowrap cursor-pointer"
+              className="h-8.5 md:h-9 px-3.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold transition-colors whitespace-nowrap cursor-pointer"
             >
               검색
             </button>
@@ -235,7 +235,7 @@ const Stage1IsolatedSearchInputForm: React.FC<{
               title="마이크로 말해서 검색"
               className={`h-10 px-3 rounded-xl border flex items-center gap-1 text-[12px] font-semibold shrink-0 whitespace-nowrap transition-colors cursor-pointer ${
                 isListening
-                  ? 'bg-slate-900 text-white border-slate-900'
+                  ? 'bg-teal-600 text-white border-teal-600'
                   : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
               }`}
             >
@@ -539,7 +539,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
                 onClick={() => setSearchSpace('gallery')}
                 className={`px-3.5 py-1.5 rounded-lg text-[13px] font-semibold flex items-center gap-1.5 transition-colors border shrink-0 whitespace-nowrap outline-none cursor-pointer ${
                   searchSpace === 'gallery'
-                    ? 'bg-slate-900 text-white border-slate-900'
+                    ? 'bg-teal-600 text-white border-teal-600'
                     : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
                 }`}
               >
@@ -554,7 +554,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
                 onClick={() => setSearchSpace('video')}
                 className={`px-3.5 py-1.5 rounded-lg text-[13px] font-semibold flex items-center gap-1.5 transition-colors border shrink-0 whitespace-nowrap outline-none cursor-pointer ${
                   searchSpace === 'video'
-                    ? 'bg-slate-900 text-white border-slate-900'
+                    ? 'bg-teal-600 text-white border-teal-600'
                     : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
                 }`}
               >
@@ -569,7 +569,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
                 onClick={() => setSearchSpace('vault')}
                 className={`px-3.5 py-1.5 rounded-lg text-[13px] font-semibold flex items-center gap-1.5 transition-colors border shrink-0 whitespace-nowrap outline-none cursor-pointer ${
                   searchSpace === 'vault'
-                    ? 'bg-slate-900 text-white border-slate-900'
+                    ? 'bg-teal-600 text-white border-teal-600'
                     : 'bg-white hover:bg-slate-50 text-slate-600 border-slate-200'
                 }`}
               >
@@ -637,7 +637,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
                         .getState()
                         .syncMobileNativeGalleryAuto({ promptPermission: true })
                     }
-                    className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs whitespace-nowrap transition-colors cursor-pointer shrink-0"
+                    className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs whitespace-nowrap transition-colors cursor-pointer shrink-0"
                   >
                     사진첩 동기화
                   </button>
@@ -660,7 +660,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
                 type="button"
                 data-allow-secretary-jump="true"
                 onClick={jumpToGhostSecretary}
-                className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-xs whitespace-nowrap transition-colors cursor-pointer shrink-0"
+                className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-xs whitespace-nowrap transition-colors cursor-pointer shrink-0"
               >
                 귀신비서로 이동
               </button>
@@ -706,7 +706,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
                   <button
                     type="button"
                     onClick={() => resetSearchSpaceToAll('video')}
-                    className="mt-1 px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer"
+                    className="mt-1 px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer"
                   >
                     전체 동영상 보기 ({videoSceneItems.length})
                   </button>
@@ -830,7 +830,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
                   <button
                     type="button"
                     onClick={() => resetSearchSpaceToAll('vault')}
-                    className="mt-1 px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer"
+                    className="mt-1 px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer"
                   >
                     전체 문서 보기 ({totalIndexedDocs})
                   </button>
@@ -923,7 +923,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
                                 });
                               });
                             }}
-                            className="px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-medium transition-colors cursor-pointer"
+                            className="px-2.5 py-1 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-medium transition-colors cursor-pointer"
                           >
                             {isMobileOrStore || !isZCoreConnected ? '본문 보기' : '파일 열기'}
                           </button>

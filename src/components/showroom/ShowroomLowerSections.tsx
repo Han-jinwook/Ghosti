@@ -187,7 +187,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
               <button
                 type="button"
                 onClick={() => setCertModalOpen(true)}
-                className="px-4 py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-[13px] cursor-pointer transition-colors whitespace-nowrap"
+                className="px-4 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium text-[13px] cursor-pointer transition-colors whitespace-nowrap"
               >
                 무료 사용 확인서 보기
               </button>
@@ -420,7 +420,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
                 setActiveShortsModal(null);
                 scrollToEmailBox();
               }}
-              className="w-full py-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-[13.5px] cursor-pointer transition-colors"
+              className="w-full py-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium text-[13.5px] cursor-pointer transition-colors"
             >
               {verifiedUserEmail ? '✓ 출시 알림 예약됨 (다른 기능 둘러보기)' : '출시 알림 신청하기'}
             </button>
@@ -461,7 +461,7 @@ export const ShowroomLowerSections: React.FC<ShowroomLowerSectionsProps> = ({
                 href="/showroom/certificates/ghosti_b2b_free_certificate.html"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-medium text-[13px] transition-colors"
+                className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-medium text-[13px] transition-colors"
               >
                 인쇄 · PDF 저장용 페이지 열기 ↗
               </a>

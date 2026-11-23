@@ -116,7 +116,7 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
                     <button
                       type="button"
                       onClick={() => fileInputRef.current?.click()}
-                      className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-medium cursor-pointer transition-colors"
+                      className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-medium cursor-pointer transition-colors"
                     >
                       S: 드라이브에 파일 추가
                     </button>
@@ -134,7 +134,7 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
                   <button
                     type="button"
                     onClick={openZCoreConnectModal}
-                    className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-medium cursor-pointer transition-colors"
+                    className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-medium cursor-pointer transition-colors"
                   >
                     PC 엔진 연결 및 S: 드라이브 설정
                   </button>
@@ -142,7 +142,7 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
                   <button
                     type="button"
                     onClick={() => fileInputRef.current?.click()}
-                    className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-medium cursor-pointer transition-colors"
+                    className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-medium cursor-pointer transition-colors"
                   >
                     현장 사진 · 업무 파일 추가
                   </button>
@@ -259,7 +259,7 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
                     inviteToken: inviteMeta.inviteToken,
                   })
                 }
-                className="w-full py-1.5 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-medium cursor-pointer text-center transition-colors"
+                className="w-full py-1.5 px-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-medium cursor-pointer text-center transition-colors"
               >
                 읽기 모드로 열기
               </button>
@@ -352,7 +352,7 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
                     : `원본 파일을 받으려면 메인 서버 PC 또는 로컬 PC 엔진 연결이 필요합니다.`
                 );
               }}
-              className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-medium cursor-pointer transition-colors"
+              className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-medium cursor-pointer transition-colors"
             >
               원본 파일 다운로드
             </button>
@@ -444,7 +444,7 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
                   <button
                     type="button"
                     onClick={() => activatePricingPlan('work_soho_9900')}
-                    className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-medium cursor-pointer transition-colors"
+                    className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-medium cursor-pointer transition-colors"
                   >
                     소호(~5인) 월 9,900원 구독
                   </button>

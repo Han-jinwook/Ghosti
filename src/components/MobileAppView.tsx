@@ -461,7 +461,7 @@ export const MobileAppView: React.FC = () => {
                     }}
                     className={`px-2.5 py-1 rounded-lg text-[11.5px] flex items-center justify-center transition-colors whitespace-nowrap outline-none cursor-pointer ${
                       active
-                        ? 'bg-slate-900 text-white font-semibold'
+                        ? 'bg-teal-600 text-white font-semibold'
                         : 'bg-slate-100 text-slate-600 hover:text-slate-900 font-medium'
                     }`}
                   >
@@ -572,7 +572,7 @@ export const MobileAppView: React.FC = () => {
                           }}
                           className={`px-2.5 py-1 rounded-lg border text-[11.5px] shrink-0 whitespace-nowrap transition-colors outline-none cursor-pointer ${
                             groupActive
-                              ? 'bg-slate-900 border-slate-900 text-white font-semibold'
+                              ? 'bg-teal-600 border-teal-600 text-white font-semibold'
                               : 'bg-white border-slate-200 text-slate-600 hover:text-slate-900 font-medium'
                           }`}
                         >
@@ -599,7 +599,7 @@ export const MobileAppView: React.FC = () => {
                             }}
                             className={`px-2.5 py-0.5 rounded-md border text-[11px] shrink-0 whitespace-nowrap transition-colors cursor-pointer ${
                               roomActive
-                                ? 'bg-slate-900 border-slate-900 text-white font-semibold'
+                                ? 'bg-teal-600 border-teal-600 text-white font-semibold'
                                 : 'bg-white border-slate-200 text-slate-600 font-medium'
                             }`}
                           >
@@ -633,7 +633,7 @@ export const MobileAppView: React.FC = () => {
                             onClick={() => selectJoinedSharedRoom(jr)}
                             className={`px-2.5 py-0.5 rounded-md border text-[11px] shrink-0 whitespace-nowrap transition-colors cursor-pointer ${
                               isJoinedActive
-                                ? 'bg-slate-900 border-slate-900 text-white font-semibold'
+                                ? 'bg-teal-600 border-teal-600 text-white font-semibold'
                                 : 'bg-white border-slate-200 text-slate-700 font-medium'
                             }`}
                           >
@@ -705,7 +705,7 @@ export const MobileAppView: React.FC = () => {
                       }}
                       className={`px-2 py-1 rounded-md border text-[11px] shrink-0 whitespace-nowrap cursor-pointer ${
                         groupActive
-                          ? 'bg-slate-900 border-slate-900 text-white font-semibold'
+                          ? 'bg-teal-600 border-teal-600 text-white font-semibold'
                           : 'bg-white border-slate-200 text-slate-600 font-medium'
                       }`}
                     >
@@ -726,7 +726,7 @@ export const MobileAppView: React.FC = () => {
                           }}
                           className={`px-2 py-0.5 rounded-md border text-[10.5px] shrink-0 whitespace-nowrap cursor-pointer ${
                             roomActive
-                              ? 'bg-slate-900 border-slate-900 text-white font-semibold'
+                              ? 'bg-teal-600 border-teal-600 text-white font-semibold'
                               : 'bg-white border-slate-200 text-slate-600 font-medium'
                           }`}
                         >
@@ -760,7 +760,7 @@ export const MobileAppView: React.FC = () => {
                       }}
                       className={`px-2.5 py-1 rounded-md text-[11px] shrink-0 whitespace-nowrap cursor-pointer ${
                         isSubActive
-                          ? 'bg-slate-900 text-white font-semibold'
+                          ? 'bg-teal-600 text-white font-semibold'
                           : 'text-slate-600 hover:text-slate-900 font-medium'
                       }`}
                     >
@@ -808,7 +808,7 @@ export const MobileAppView: React.FC = () => {
               <div className="flex flex-wrap items-center gap-2">
                 <a
                   href={`ghosti://pair?pairCode=${qrAppBridgeCode}`}
-                  className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold no-underline"
+                  className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold no-underline"
                 >
                   귀신같이 앱에서 연결
                 </a>
@@ -933,7 +933,7 @@ export const MobileAppView: React.FC = () => {
                                     forceExpandSelected: true,
                                   })
                                 }
-                                className="px-3 py-1.5 rounded-lg bg-slate-900 text-white text-[12px] font-semibold cursor-pointer"
+                                className="px-3 py-1.5 rounded-lg bg-teal-600 text-white text-[12px] font-semibold cursor-pointer"
                               >
                                 동영상 추가 선택
                               </button>
@@ -1105,7 +1105,7 @@ export const MobileAppView: React.FC = () => {
                               e.stopPropagation();
                               setSelectedDocModal(doc);
                             }}
-                            className="px-2.5 py-1 rounded-md bg-slate-900 text-white text-[11px] font-semibold cursor-pointer"
+                            className="px-2.5 py-1 rounded-md bg-teal-600 text-white text-[11px] font-semibold cursor-pointer"
                           >
                             본문 열기
                           </button>
@@ -1169,7 +1169,7 @@ export const MobileAppView: React.FC = () => {
                     onClick={() => setGroupBurstsInSearch(!groupBurstsInSearch)}
                     className={`px-2.5 py-1 rounded-md text-[11px] font-medium border cursor-pointer ${
                       groupBurstsInSearch
-                        ? 'bg-slate-900 border-slate-900 text-white'
+                        ? 'bg-teal-600 border-teal-600 text-white'
                         : 'bg-white border-slate-200 text-slate-600'
                     }`}
                   >
@@ -1345,7 +1345,7 @@ export const MobileAppView: React.FC = () => {
                           e.stopPropagation();
                           void triggerSyncNow();
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-semibold shrink-0 whitespace-nowrap ml-auto cursor-pointer"
+                        className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold shrink-0 whitespace-nowrap ml-auto cursor-pointer"
                       >
                         {!isLoggedInUser
                           ? '로그인'

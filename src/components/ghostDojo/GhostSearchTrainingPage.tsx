@@ -663,7 +663,7 @@ const VirtualMonitorSimulator: React.FC<{
                             <button
                               type="button"
                               onClick={() => setSelectedDocModal(topDoc)}
-                              className="mt-auto w-full py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer transition-colors"
+                              className="mt-auto w-full py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer transition-colors"
                             >
                               문서 본문 열기
                             </button>
@@ -693,7 +693,7 @@ const VirtualMonitorSimulator: React.FC<{
                             <button
                               type="button"
                               onClick={() => setSelectedVideoModal(topVideo)}
-                              className="mt-auto w-full py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer transition-colors"
+                              className="mt-auto w-full py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer transition-colors"
                             >
                               해당 장면 재생
                             </button>
@@ -716,7 +716,7 @@ const VirtualMonitorSimulator: React.FC<{
                             <button
                               type="button"
                               onClick={() => setSelectedPhoto(topPhoto, null)}
-                              className="mt-auto w-full py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer transition-colors"
+                              className="mt-auto w-full py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer transition-colors"
                             >
                               상세 보기 · 글자 추출
                             </button>
@@ -895,7 +895,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
             type="button"
             aria-busy={isLaunchingRealWindow}
             onClick={() => void triggerRealGhostSearchWindow('medium', pendingQuery)}
-            className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[13px] font-semibold cursor-pointer shrink-0 transition-colors"
+            className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-semibold cursor-pointer shrink-0 transition-colors"
           >
             {isLaunchingRealWindow ? '검색창 여는 중...' : '귀신검색창 열기'}
           </button>
@@ -916,7 +916,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
             type="button"
             data-allow-secretary-jump="true"
             onClick={jumpToGhostSecretary}
-            className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold transition-colors cursor-pointer shrink-0"
+            className="px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold transition-colors cursor-pointer shrink-0"
           >
             귀신비서로 이동
           </button>
@@ -1006,7 +1006,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
             type="button"
             aria-busy={isLaunchingRealWindow}
             onClick={() => void triggerRealGhostSearchWindow('medium', pendingQuery)}
-            className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
+            className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
           >
             {isLaunchingRealWindow ? '여는 중...' : '귀신검색창 열기'}
           </button>
@@ -1015,7 +1015,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
             type="button"
             data-allow-secretary-jump="true"
             onClick={jumpToGhostSecretary}
-            className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
+            className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer shrink-0"
           >
             귀신비서로 이동
           </button>

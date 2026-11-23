@@ -355,7 +355,7 @@ export const OnboardingModal: React.FC = () => {
                     setShowOnboarding(false);
                     setDesktopTab('dashboard');
                   }}
-                  className="w-full py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer"
+                  className="w-full py-2 px-3 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer"
                 >
                   귀신검색 열기 ({totalIndexedDocs}건)
                 </button>
@@ -506,7 +506,7 @@ export const OnboardingModal: React.FC = () => {
                   setShowOnboarding(false);
                   setShowProModal(true);
                 }}
-                className="w-full py-2.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer"
+                className="w-full py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer"
               >
                 {isStoreAppMode ? '데스크톱 연동 안내 보기' : '요금제 자세히 보기'}
               </button>

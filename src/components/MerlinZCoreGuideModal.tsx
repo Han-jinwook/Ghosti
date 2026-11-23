@@ -443,7 +443,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 <button
                   type="button"
                   onClick={handleCopyPcLinkForMobile}
-                  className="px-3 py-1.5 rounded-lg bg-slate-900 text-white font-semibold text-[11.5px] shrink-0 cursor-pointer"
+                  className="px-3 py-1.5 rounded-lg bg-teal-600 text-white font-semibold text-[11.5px] shrink-0 cursor-pointer"
                 >
                   {linkCopied ? '복사됨' : '복사'}
                 </button>
@@ -454,7 +454,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
               <button
                 type="button"
                 onClick={handleOneStopAgreeAndDownload}
-                className="flex-1 py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-[13px] text-center cursor-pointer transition-colors"
+                className="flex-1 py-2.5 px-4 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-[13px] text-center cursor-pointer transition-colors"
               >
                 {isMobileEnv ? '시작하기' : isConnected ? '파일 목록 확인' : '연결 시작하기'}
               </button>
@@ -527,7 +527,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                 type="button"
                 onClick={handleManualCheck}
                 disabled={isChecking}
-                className="py-2 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-[12.5px] cursor-pointer disabled:opacity-50"
+                className="py-2 px-4 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-[12.5px] cursor-pointer disabled:opacity-50"
               >
                 {isChecking ? '확인 중...' : '실행 완료 확인'}
               </button>
@@ -565,7 +565,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                     setStep('ready');
                     window.setTimeout(() => setStep('indexing'), 0);
                   }}
-                  className="py-2 px-3.5 rounded-lg bg-slate-900 text-white font-semibold text-[12px] cursor-pointer"
+                  className="py-2 px-3.5 rounded-lg bg-teal-600 text-white font-semibold text-[12px] cursor-pointer"
                 >
                   다시 시도
                 </button>
@@ -618,7 +618,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                   <a
                     href={Z_CORE_ZIP_URL}
                     download="Merlin_Z_Core.zip"
-                    className="flex-1 py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-[13px] text-center no-underline cursor-pointer"
+                    className="flex-1 py-2.5 px-4 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-[13px] text-center no-underline cursor-pointer"
                   >
                     최신 버전 다운로드
                   </a>
@@ -647,7 +647,7 @@ export const MerlinZCoreGuideModal: React.FC<MerlinZCoreGuideModalProps> = ({
                       setProgress(0);
                       setStep('indexing');
                     }}
-                    className="flex-1 py-2.5 px-4 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-semibold text-[13px] text-center cursor-pointer"
+                    className="flex-1 py-2.5 px-4 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-semibold text-[13px] text-center cursor-pointer"
                   >
                     목록 새로고침
                   </button>

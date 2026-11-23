@@ -231,7 +231,7 @@ export const LoungeView: React.FC = () => {
                 setActiveLoungeType('work');
                 setDesktopTab('dashboard');
               }}
-              className="px-3.5 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-extrabold cursor-pointer"
+              className="px-3.5 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-extrabold cursor-pointer"
             >
               사내 공용 폴더(S:)로 바로 이동 
             </button>
@@ -255,7 +255,7 @@ export const LoungeView: React.FC = () => {
           <button
             type="button"
             onClick={() => setShowProModal(true)}
-            className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-extrabold shrink-0 cursor-pointer"
+            className="px-3 py-1.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-extrabold shrink-0 cursor-pointer"
           >
             팀 플랜 안내 보기 →
           </button>
@@ -408,7 +408,7 @@ export const LoungeView: React.FC = () => {
                         className={`px-4 py-2 rounded-xl font-label-md text-[12.5px] font-extrabold transition-all whitespace-nowrap ${
                           trialSafetyStep === 'quarantined'
                             ? 'bg-zinc-900 border border-white/15 text-zinc-400 cursor-not-allowed'
-                            : 'bg-slate-900 hover:bg-slate-800 text-white cursor-pointer'
+                            : 'bg-teal-600 hover:bg-teal-700 text-white cursor-pointer'
                         }`}
                       >
                         {trialSafetyStep === 'quarantined'
@@ -806,7 +806,7 @@ export const LoungeView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => activatePricingPlan('family_home_5900')}
-                          className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-md text-[12.5px] font-extrabold cursor-pointer"
+                          className="w-full py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-label-md text-[12.5px] font-extrabold cursor-pointer"
                         >
                           우리집 가족 사진방 시작하기
                         </button>
@@ -1103,7 +1103,7 @@ export const LoungeView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => activatePricingPlan('club_mini_free_300')}
-                          className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-md text-[12px] font-extrabold cursor-pointer"
+                          className="w-full py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-label-md text-[12px] font-extrabold cursor-pointer"
                         >
                           소모임 사진방 시작하기
                         </button>
@@ -1161,7 +1161,7 @@ export const LoungeView: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => activatePricingPlan('club_small_4900')}
-                          className="w-full py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-md text-[12px] font-extrabold cursor-pointer"
+                          className="w-full py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-label-md text-[12px] font-extrabold cursor-pointer"
                         >
                           동창회 사진방 시작하기
                         </button>
@@ -1178,7 +1178,7 @@ export const LoungeView: React.FC = () => {
                           setActiveLoungeType('work');
                           setDesktopTab('dashboard');
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[11.5px] font-extrabold cursor-pointer shrink-0"
+                        className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-label-sm text-[11.5px] font-extrabold cursor-pointer shrink-0"
                       >
                         사내 공용 폴더(S:) 바로가기 
                       </button>
@@ -1325,7 +1325,7 @@ export const LoungeView: React.FC = () => {
                       className={`px-3 py-1 rounded-lg font-label-sm text-[11.5px] font-extrabold transition-all ${
                         studentPokedHost
                           ? 'bg-emerald-500/20 border border-emerald-400/50 text-emerald-300'
-                          : 'bg-slate-900 hover:bg-slate-800 text-white'
+                          : 'bg-teal-600 hover:bg-teal-700 text-white'
                       }`}
                     >
                       {studentPokedHost

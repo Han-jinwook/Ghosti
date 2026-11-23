@@ -308,19 +308,19 @@ export const DesktopSidebarContainer: React.FC<{
             (activeLoungeType === 'personal' && desktopTab === 'sync') || isDeviceIntegrationOpen;
 
           const mainBtnClass = (active: boolean) =>
-            `w-full px-2.5 py-1.5 rounded-lg text-[13.5px] flex items-center justify-between gap-2 transition-colors cursor-pointer ${
+            `w-full px-2.5 py-1.5 rounded-lg text-[13.5px] flex items-center justify-between gap-2 transition-colors cursor-pointer border ${
               active
-                ? 'bg-slate-200/75 text-slate-950 font-semibold'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-black/[0.04] font-medium'
+                ? 'bg-teal-50/90 text-teal-800 border-teal-200/80 font-semibold'
+                : 'border-transparent text-slate-600 hover:text-teal-800 hover:bg-teal-50/40 font-medium'
             }`;
 
-          const subWrapClass = 'ml-4 pl-2.5 border-l border-slate-200 flex flex-col gap-0.5 py-0.5';
+          const subWrapClass = 'ml-4 pl-2.5 border-l border-teal-100 flex flex-col gap-0.5 py-0.5';
 
           const subBtnClass = (active: boolean) =>
             `w-full px-2.5 py-1.5 rounded-md text-left text-[13px] flex items-center justify-between gap-1.5 transition-colors cursor-pointer ${
               active
-                ? 'bg-slate-200/65 text-slate-950 font-semibold'
-                : 'text-slate-500 hover:text-slate-900 hover:bg-black/[0.04] font-normal'
+                ? 'bg-teal-50/75 text-teal-800 font-semibold'
+                : 'text-slate-500 hover:text-teal-800 hover:bg-teal-50/40 font-normal'
             }`;
 
           const isTrialActive =
@@ -755,7 +755,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                   }}
                   className={`py-1.5 px-1 rounded-lg text-[12px] flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap cursor-pointer ${
                     active
-                      ? 'bg-slate-900 text-white font-semibold'
+                      ? 'bg-teal-600 text-white font-semibold'
                       : 'bg-slate-100 text-slate-600 font-medium'
                   }`}
                 >
@@ -781,7 +781,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                     }}
                     className={`px-2.5 py-1 rounded-md border text-[11.5px] shrink-0 whitespace-nowrap transition-colors cursor-pointer ${
                       groupActive
-                        ? 'bg-slate-900 border-slate-900 text-white font-semibold'
+                        ? 'bg-teal-600 border-teal-600 text-white font-semibold'
                         : 'bg-white border-slate-200 text-slate-600 font-medium'
                     }`}
                   >
@@ -815,7 +815,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                       }}
                       className={`px-3 py-1.5 rounded-lg text-[12.5px] font-medium border transition-colors shrink-0 whitespace-nowrap cursor-pointer ${
                         roomActive
-                          ? 'bg-slate-900 text-white border-slate-900 font-semibold'
+                          ? 'bg-teal-600 text-white border-teal-600 font-semibold'
                           : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                       }`}
                     >
@@ -836,7 +836,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                   }}
                   className={`px-3 py-1.5 rounded-lg text-[12.5px] font-medium border transition-colors cursor-pointer ${
                     !activeJoinedRoomMeta && desktopTab === 'dashboard'
-                      ? 'bg-slate-900 text-white border-slate-900 font-semibold'
+                      ? 'bg-teal-600 text-white border-teal-600 font-semibold'
                       : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                   }`}
                 >
@@ -863,7 +863,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                       onClick={() => setDesktopTab(sub.id)}
                       className={`px-3 py-1.5 rounded-lg text-[12.5px] font-medium border transition-colors whitespace-nowrap cursor-pointer ${
                         isSubActive
-                          ? 'bg-slate-900 text-white border-slate-900 font-semibold'
+                          ? 'bg-teal-600 text-white border-teal-600 font-semibold'
                           : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50'
                       }`}
                     >
@@ -898,7 +898,7 @@ export const DesktopTopHeaderAndLoungeBar: React.FC<{
                     onClick={() => selectJoinedSharedRoom(jr)}
                     className={`px-2.5 py-1 rounded-md text-[12px] font-medium border transition-colors shrink-0 whitespace-nowrap cursor-pointer ${
                       isJoinedActive
-                        ? 'bg-slate-900 text-white border-slate-900 font-semibold'
+                        ? 'bg-teal-600 text-white border-teal-600 font-semibold'
                         : 'bg-white text-slate-700 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
