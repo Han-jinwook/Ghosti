@@ -126,6 +126,19 @@ if "--ppocr-worker" in sys.argv:
 # 무거운 서버 플러그인 8종(plugin_ghosti_os, plugin_senstalk, plugin_aggrofilter 등) import를 100% 생략하여 초기 기동 지연을 원천 차단!
 _early_argv = sys.argv[1:]
 if "--seq-paste-daemon" in _early_argv:
+    # [영구 충돌 방지] --seq-paste-daemon 단일 인스턴스 Windows Named Mutex 강제
+    # 어떤 경우에도 전역 키보드/클립보드 후킹이 2중으로 걸리지 않도록 원천 차단
+    _seq_paste_mutex = None
+    if os.name == "nt":
+        try:
+            import ctypes as _ct_sp
+
+            _k32_sp = _ct_sp.windll.kernel32
+            _seq_paste_mutex = _k32_sp.CreateMutexW(None, True, "Local\\Merlin_SeqPaste_SingleInstance")
+            if _k32_sp.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
+                os._exit(0)
+        except Exception:
+            pass
     sys.argv = [sys.argv[0]] + [a for a in _early_argv if a != "--seq-paste-daemon"]
     import seq_paste_daemon
 
@@ -161,7 +174,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.7.50"
+CORE_VERSION = "2.7.52"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1598,23 +1611,166 @@ def start_periodic_remote_version_watcher() -> None:
     threading.Thread(target=_poll_loop, daemon=True).start()
 
 
-def ensure_port_free(port: int, force_replace: bool = False) -> list[int]:
-    """포트(기본 5199)를 점유 중인 구버전 Z-코어 프로세스를 자동 감지해 즉시 종료하고 포트를 인계받습니다."""
-    killed_pids: list[int] = []
-    my_pid = os.getpid()
-
-    # Fast-path: 포트가 이미 비어 있다면 불필요한 HTTP 타임아웃이나 netstat 스캔(6초 지연) 없이 1ms 만에 즉시 반환!
-    # (Windows에서는 SO_EXCLUSIVEADDRUSE를 걸어야 기존 리스너의 포트를 중복 바인딩하는 착시를 방지할 수 있음)
+def _collect_protected_self_pids() -> set[int]:
+    """자기 자신 및 PyInstaller onefile 부모 부트스트래퍼 PID 체인을 보호 목록으로 수집합니다."""
+    protected: set[int] = {os.getpid()}
     try:
-        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
-            if sys.platform == "win32" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
-                s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
-            s.bind(("127.0.0.1", port))
-        return []
-    except OSError:
+        ppid = os.getppid()
+        if ppid and ppid > 4:
+            protected.add(int(ppid))
+    except Exception:
+        pass
+    try:
+        import psutil
+
+        cur = psutil.Process(os.getpid())
+        for anc in cur.parents():
+            aname = (anc.name() or "").lower()
+            if "merlin_z_core" in aname or aname in ("python.exe", "pythonw.exe"):
+                protected.add(int(anc.pid))
+    except Exception:
+        pass
+    return protected
+
+
+def _kill_pids_tree_and_wait(target_pids: set[int], protected_pids: set[int], timeout_sec: float = 3.0) -> list[int]:
+    """대상 PID와 그 모든 자식 프로세스 트리를 종료하고 완전히 사라질 때까지 최대 timeout_sec 대기합니다.
+    (절대 원칙: SenseTalk_Engine.exe 는 별도 분리 운영이므로 절대 건드리지 않습니다.)
+    """
+    killed_pids: list[int] = []
+    safe_targets: set[int] = set()
+    procs_to_wait = []
+
+    try:
+        import psutil
+
+        for pid in list(target_pids):
+            if pid <= 4 or pid in protected_pids:
+                continue
+            try:
+                p = psutil.Process(pid)
+                pname = (p.name() or "").lower()
+                if "sensetalk_engine" in pname:
+                    continue
+                # 자식 프로세스 트리까지 모두 수집
+                for child in p.children(recursive=True):
+                    if child.pid > 4 and child.pid not in protected_pids:
+                        cname = (child.name() or "").lower()
+                        if "sensetalk_engine" not in cname:
+                            safe_targets.add(int(child.pid))
+                            procs_to_wait.append(child)
+                safe_targets.add(int(pid))
+                procs_to_wait.append(p)
+            except Exception:
+                safe_targets.add(int(pid))
+    except Exception:
+        safe_targets = {p for p in target_pids if p > 4 and p not in protected_pids}
+
+    for pid in sorted(safe_targets):
+        if sys.platform == "win32":
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/PID", str(pid)],
+                    capture_output=True,
+                    timeout=3,
+                    creationflags=0x08000000,
+                )
+                killed_pids.append(pid)
+            except Exception:
+                pass
+        else:
+            try:
+                import psutil
+
+                psutil.Process(pid).kill()
+                killed_pids.append(pid)
+            except Exception:
+                pass
+
+    if procs_to_wait:
+        try:
+            import psutil
+
+            _, alive = psutil.wait_procs(procs_to_wait, timeout=timeout_sec)
+            for p in alive:
+                try:
+                    p.kill()
+                except Exception:
+                    pass
+        except Exception:
+            time.sleep(0.35)
+
+    return killed_pids
+
+
+def _self_purge_legacy_conflicts() -> None:
+    """기동 직후 백그라운드 1회 실행: 구형 독립 seq_paste_daemon.py 및 중복 작업 스케줄러 자동 숙청.
+    (주의: SenseTalk_Engine.exe 는 당분간 별도 분리 운영이므로 절대 숙청 목록에 넣지 않습니다!)
+    """
+    if sys.platform != "win32":
+        return
+    protected = _collect_protected_self_pids()
+    legacy_pids: set[int] = set()
+    try:
+        import psutil
+
+        for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+            try:
+                pid = int(proc.info.get("pid") or 0)
+                if pid <= 4 or pid in protected:
+                    continue
+                pname = str(proc.info.get("name") or "").lower()
+                # SenseTalk_Engine.exe 절대 보호
+                if "sensetalk_engine" in pname:
+                    continue
+                cmdline = " ".join(proc.info.get("cmdline") or []).lower()
+                if "seq_paste_daemon.py" in cmdline and "merlin_z_core_setup" not in pname:
+                    legacy_pids.add(pid)
+            except Exception:
+                continue
+    except Exception:
         pass
 
-    # 0) 이미 동일 버전(v2.3.3+)의 Z-코어가 정상 실행 중이고 강제 교체(--replace)가 아니라면 중복 실행 방지를 위해 즉시 종료!
+    if legacy_pids:
+        _kill_pids_tree_and_wait(legacy_pids, protected, timeout_sec=2.5)
+
+    # 자동실행은 HKCU\...\Run\MerlinZCoreDaemon 단 1개 SSOT로 통일하고 구형 중복 스케줄러 3종 자동 삭제
+    legacy_tasks = (
+        "MerlinSeqPaste",
+        "MerlinZCoreRestart",
+        "MerlinZCoreOverlay",
+    )
+    for task_name in legacy_tasks:
+        try:
+            subprocess.run(
+                ["schtasks", "/Delete", "/TN", task_name, "/F"],
+                capture_output=True,
+                timeout=3,
+                creationflags=0x08000000,
+            )
+        except Exception:
+            pass
+
+
+def ensure_port_free(port: int, force_replace: bool = False) -> list[int]:
+    """포트(기본 5199)를 점유 중인 구버전 Z-코어 및 고아 자식 프로세스 트리를 100% 정리하고 포트를 인계받습니다."""
+    killed_pids: list[int] = []
+    my_pid = os.getpid()
+    protected_pids = _collect_protected_self_pids()
+
+    # Fast-path: 강제 교체(--replace)가 아니고 포트가 이미 비어 있다면 1ms 만에 즉시 반환!
+    # (--replace 시에는 포트가 비어 있더라도 고아 자식(--seq-paste-daemon, --ppocr-worker) 전수 청소를 수행합니다.)
+    if not force_replace:
+        try:
+            with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                if sys.platform == "win32" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
+                s.bind(("127.0.0.1", port))
+            return []
+        except OSError:
+            pass
+
+    # 0) 이미 동일 버전의 Z-코어가 정상 실행 중이고 강제 교체(--replace)가 아니라면 중복 실행 방지를 위해 즉시 종료!
     if not force_replace:
         try:
             with urllib.request.urlopen(f"http://127.0.0.1:{port}/__merlin/health", timeout=0.6) as resp:
@@ -1632,13 +1788,33 @@ def ensure_port_free(port: int, force_replace: bool = False) -> list[int]:
     except Exception:
         pass
 
-    # 2) psutil 및 netstat으로 포트 점유 PID 전수 조회 후 강제 종료
+    # 2) 포트 점유 PID + (--replace 시) 기존 Merlin_Z_Core_Setup.exe 및 고아 자식(--seq-paste-daemon, --ppocr-worker) 전수 수집
     target_pids: set[int] = set()
     try:
         import psutil
         for conn in psutil.net_connections(kind="inet"):
-            if conn.laddr and conn.laddr.port == port and conn.pid and conn.pid != my_pid and conn.pid > 4:
+            if conn.laddr and conn.laddr.port == port and conn.pid and conn.pid not in protected_pids and conn.pid > 4:
                 target_pids.add(int(conn.pid))
+        if force_replace:
+            for proc in psutil.process_iter(["pid", "name", "cmdline"]):
+                try:
+                    pid = int(proc.info.get("pid") or 0)
+                    if pid <= 4 or pid in protected_pids:
+                        continue
+                    pname = str(proc.info.get("name") or "").lower()
+                    if "sensetalk_engine" in pname:
+                        continue
+                    cmdline = " ".join(proc.info.get("cmdline") or []).lower()
+                    is_zcore_exe = "merlin_z_core_setup" in pname
+                    is_zcore_child = (
+                        "--seq-paste-daemon" in cmdline
+                        or "--ppocr-worker" in cmdline
+                        or "merlin_z_core_daemon.py" in cmdline
+                    )
+                    if is_zcore_exe or is_zcore_child:
+                        target_pids.add(pid)
+                except Exception:
+                    continue
     except Exception:
         pass
 
@@ -1658,35 +1834,20 @@ def ensure_port_free(port: int, force_replace: bool = False) -> list[int]:
                     parts = line.split()
                     if parts and parts[-1].isdigit():
                         pid_val = int(parts[-1])
-                        if pid_val != my_pid and pid_val > 4:
+                        if pid_val not in protected_pids and pid_val > 4:
                             target_pids.add(pid_val)
         except Exception:
             pass
 
-    for pid in target_pids:
-        try:
-            import psutil
-            psutil.Process(pid).kill()
-            killed_pids.append(pid)
-        except Exception:
-            pass
-        if sys.platform == "win32":
-            try:
-                subprocess.run(
-                    ["taskkill", "/F", "/PID", str(pid)],
-                    capture_output=True,
-                    timeout=3,
-                    creationflags=0x08000000,
-                )
-                if pid not in killed_pids:
-                    killed_pids.append(pid)
-            except Exception:
-                pass
+    if target_pids:
+        killed_pids = _kill_pids_tree_and_wait(target_pids, protected_pids, timeout_sec=3.0)
 
     # 3) 포트가 완전히 풀릴 때까지 최대 2.5초 대기
     for _ in range(16):
         try:
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+                if sys.platform == "win32" and hasattr(socket, "SO_EXCLUSIVEADDRUSE"):
+                    s.setsockopt(socket.SOL_SOCKET, socket.SO_EXCLUSIVEADDRUSE, 1)
                 s.bind(("127.0.0.1", port))
             break
         except OSError:
@@ -1952,29 +2113,38 @@ def main() -> None:
         print(json.dumps(res, ensure_ascii=False))
         return
 
-    # Windows Named Mutex 기반 단일 인스턴스 보장 (더블클릭 연타로 2~3개가 동시에 뜨더라도 단 1개만 실행되고 나머지는 트레이 아이콘 생성 전에 즉시 종료)
+    # Windows Named Mutex 기반 단일 인스턴스 보장
+    # 1) 일반 기동(not --replace): 이미 실행 중인 인스턴스가 있으면 즉시 종료
     _single_mutex = None
+    _mutex_name = f"Local\\Merlin_Z_Core_{args.port}_SingleInstance"
     if os.name == "nt" and not args.replace:
         try:
             import ctypes as _ct
 
             _k32 = _ct.windll.kernel32
-            _mutex_name = f"Local\\Merlin_Z_Core_SingleInstance_Port_{args.port}"
             _single_mutex = _k32.CreateMutexW(None, True, _mutex_name)
             if _k32.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
-                # 이미 실행 중인 인스턴스가 최신 버전이면 트레이 아이콘을 추가로 만들지 않고 즉시 조용히 종료
                 try:
                     with urllib.request.urlopen(f"http://127.0.0.1:{args.port}/__merlin/health", timeout=1.5) as resp:
                         hdata = json.loads(resp.read().decode("utf-8", errors="replace"))
                         if hdata.get("ok") and hdata.get("version") == CORE_VERSION:
                             os._exit(0)
                 except Exception:
-                    # 아직 부팅 중인 첫 번째 인스턴스가 뮤텍스를 쥐고 있는 경우에도 두 번째 인스턴스는 즉시 종료!
                     os._exit(0)
         except Exception:
             pass
 
     replaced_pids = ensure_port_free(args.port, force_replace=bool(getattr(args, "replace", False)))
+
+    # 2) --replace 기동 시에도 기존 트리 종료 직후 단일 인스턴스 Mutex를 반드시 확보하여 후속 이중 기동 원천 차단
+    if os.name == "nt" and _single_mutex is None:
+        try:
+            import ctypes as _ct
+
+            _k32 = _ct.windll.kernel32
+            _single_mutex = _k32.CreateMutexW(None, True, _mutex_name)
+        except Exception:
+            pass
 
     if os.name == "nt":
         try:
@@ -2013,6 +2183,11 @@ def main() -> None:
                 w32.ensure_persistent_frozen_install()
             except Exception:
                 pass
+        # [구형 찌꺼기 자동 숙청]: 구형 seq_paste_daemon.py 및 중복 작업 스케줄러 정리 (SenseTalk_Engine.exe 제외)
+        try:
+            _self_purge_legacy_conflicts()
+        except Exception:
+            pass
         try:
             plugin_ghosti_superpowers.ensure_superpower_daemon_running()
             plugin_ghosti_superpowers.start_superpower_daemon_watchdog(lambda: _SELF_UPDATE_IN_PROGRESS)
