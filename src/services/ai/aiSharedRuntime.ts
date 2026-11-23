@@ -925,6 +925,14 @@ export function isTextQueryEncoderReady(): boolean {
 
 export async function ensureTextQueryEncoderLoaded(): Promise<boolean> {
   if (isTextQueryEncoderReady()) return true;
+  // iOS WKWebView에서는 150MB+ ONNX WASM 모델 선로딩 시 Jetsam OOM으로 앱이 자동 새로고침되므로 차단(초고속 어휘·태그·네이티브 OCR 검색 유지)
+  if (
+    typeof navigator !== 'undefined' &&
+    (/iPhone|iPad|iPod/i.test(navigator.userAgent || '') ||
+      (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1))
+  ) {
+    return false;
+  }
   if (textQueryLoading) return textQueryLoading;
   textQueryLoading = (async () => {
     if (canUseEmbeddingWorker()) {

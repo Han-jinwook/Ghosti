@@ -296,22 +296,54 @@ const GhostiHubGlobalModals: React.FC = () => {
         state.activeLoungeType === 'family' ||
         state.activeLoungeType === 'club' ||
         state.activeLoungeType === 'student';
+      const cleanedLocalPhotos = state.photos.filter(
+        (p) =>
+          !String(p.id || '').startsWith('shadow-remote-') &&
+          !String(p.id || '').startsWith('shared_sb_') &&
+          !String(p.id || '').startsWith('shared_added_')
+      );
+      const cleanedLocalDocs = state.localDocuments.filter(
+        (d) => !String(d.id || '').startsWith('shadow-remote-doc-')
+      );
+      const cleanedSearchResults = isInSharedLounge
+        ? []
+        : state.searchResults.filter(
+            (r) =>
+              !String(r.photo?.id || '').startsWith('shadow-remote-') &&
+              !String(r.photo?.id || '').startsWith('shared_sb_') &&
+              !String(r.photo?.id || '').startsWith('shared_added_')
+          );
       return {
+        photos: cleanedLocalPhotos,
+        localDocuments: cleanedLocalDocs,
+        matchedLocalDocs: state.matchedLocalDocs.filter(
+          (d) => !String(d.id || '').startsWith('shadow-remote-doc-')
+        ),
         pcAgentPairedMobile: false,
+        thisDeviceRevoked: false,
         connectedDevices: [],
         devicePairingCode6: null,
         deviceEntitlement: null,
         syncedClipboardItems: [],
+        syncState: {
+          ...state.syncState,
+          syncing: false,
+          connectedPeer: '연결된 기기 없음',
+          lastSyncedAt: '로그인 후 연결 가능',
+        },
         showSharedPhotoUploadModal: false,
         isInvitedMemberSession: false,
         activeSharedRoomId: null,
         activeJoinedRoomMeta: null,
         joinedSharedRooms: [],
+        activeQuery: '',
+        hasExecutedUserSearch: false,
+        matchedTags: [],
         ...(!hasUrlInviteToken
           ? {
               sharedRoomAddedPhotos: [],
               sharedRoomHostPhotos: [],
-              ...(isInSharedLounge ? { searchResults: [] } : {}),
+              searchResults: cleanedSearchResults,
             }
           : {}),
         merlinAuth: {
@@ -604,7 +636,10 @@ const GhostiHubGlobalModals: React.FC = () => {
           },
         }));
         window.dispatchEvent(new CustomEvent('merlinSessionExpired'));
-        if (ev?.persisted) {
+        const isNativeCap = Boolean(
+          (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+        );
+        if (ev?.persisted && !isNativeCap) {
           window.location.replace(window.location.href);
         }
       }

@@ -649,7 +649,7 @@ export async function syncDeviceHeartbeatAndList(opts?: {
     deviceKind: ident.deviceKind,
     platform: ident.platform,
     displayName: ident.displayName,
-    appVersion: '1.0.74',
+    appVersion: '1.0.75',
     explicitTrialOptIn: Boolean(opts?.explicitTrialOptIn),
     explicitReconnect: consumeExplicitReconnect,
     forceRefreshPairingCode: Boolean(opts?.forceRefreshPairingCode),

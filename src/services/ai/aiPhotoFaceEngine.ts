@@ -2437,10 +2437,13 @@ export async function startSilentRealMediaVisionIndexing(params: {
     typeof navigator !== 'undefined' && (navigator as any).connection?.saveData === true;
   if (saveData) return;
 
+  const isIosEnv =
+    typeof navigator !== 'undefined' &&
+    (/iPhone|iPad|iPod/i.test(navigator.userAgent || '') ||
+      (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1));
   const isMobileEnv =
     typeof navigator !== 'undefined' &&
-    (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') ||
-      (navigator.platform === 'MacIntel' && (navigator.maxTouchPoints || 0) > 1));
+    (/Android|Mobile/i.test(navigator.userAgent || '') || isIosEnv);
 
   if (isMobileEnv) {
     ensureMobileLifecycleAndTouchGuardBound();
@@ -2450,6 +2453,14 @@ export async function startSilentRealMediaVisionIndexing(params: {
   aiRuntimeFlags.silentMediaIndexingRunning = true;
   try {
     await hydrateRealMediaVectorCacheOnce();
+
+    // [iOS WKWebView Jetsam(OOM) 강제 새로고침 원천 차단]:
+    // iOS WKWebView는 웹콘텐츠 메모리 상한(~350MB)이 엄격하여 백그라운드 ONNX/WASM 비전·OCR 워커를
+    // 유휴 상태에서 자동 기동하면 OS가 프로세스를 종료하고 앱을 멋대로 새로고침합니다.
+    // iOS에서는 캐시 복원만 즉시 수행하고 무거운 백그라운드 WASM 워커 자동 기동은 차단합니다.
+    if (isIosEnv) {
+      return;
+    }
 
     if (!(await waitForMobileUserIdleIfNeeded(isMobileEnv))) {
       return;
