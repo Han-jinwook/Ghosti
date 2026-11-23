@@ -62,18 +62,72 @@ function configureOrtWasmOnce(): void {
   }
 }
 
+const FACE_MODEL_CACHE_NAME = 'ghosti-face-models-v1';
+const YUNET_LOCAL_PATH = '/models/face/face_detection_yunet_2023mar.onnx';
+const YUNET_CDN_FALLBACK =
+  'https://raw.githubusercontent.com/opencv/opencv_zoo/main/models/face_detection_yunet/face_detection_yunet_2023mar.onnx';
+const SFACE_LOCAL_PATH = '/models/face/face_recognition_sface_2021dec_int8.onnx';
+const SFACE_CDN_FALLBACK =
+  'https://media.githubusercontent.com/media/opencv/opencv_zoo/main/models/face_recognition_sface/face_recognition_sface_2021dec_int8.onnx';
+
+async function fetchModelBytesWithFallback(localPath: string, cdnUrl: string): Promise<Uint8Array> {
+  const localUrl = new URL(localPath, self.location.origin).href;
+  // 1순위: 로컬/앱 내장 모델 (/models/face/*)
+  try {
+    const localResp = await fetch(localUrl);
+    if (localResp.ok) {
+      const buf = await localResp.arrayBuffer();
+      if (buf.byteLength > 10_000) return new Uint8Array(buf);
+    }
+  } catch {
+    /* fall through to cache/CDN */
+  }
+
+  // 2순위: 브라우저 Cache API 영구 캐시
+  const hasCacheApi = typeof caches !== 'undefined';
+  if (hasCacheApi) {
+    try {
+      const cache = await caches.open(FACE_MODEL_CACHE_NAME);
+      const cached = await cache.match(cdnUrl);
+      if (cached && cached.ok) {
+        const buf = await cached.arrayBuffer();
+        if (buf.byteLength > 10_000) return new Uint8Array(buf);
+      }
+    } catch {
+      /* ignore cache read error */
+    }
+  }
+
+  // 3순위: 무료 CDN 폴백 다운로드 후 영구 캐시 저장
+  const cdnResp = await fetch(cdnUrl);
+  if (!cdnResp.ok) {
+    throw new Error(`Face model fetch failed (${localPath} & CDN HTTP ${cdnResp.status})`);
+  }
+  const buf = await cdnResp.arrayBuffer();
+  if (buf.byteLength <= 10_000) {
+    throw new Error(`Face model payload too small (${buf.byteLength} bytes)`);
+  }
+  if (hasCacheApi) {
+    try {
+      const cache = await caches.open(FACE_MODEL_CACHE_NAME);
+      await cache.put(
+        cdnUrl,
+        new Response(buf.slice(0), { headers: { 'Content-Type': 'application/octet-stream' } })
+      );
+    } catch {
+      /* ignore cache write error */
+    }
+  }
+  return new Uint8Array(buf);
+}
+
 async function ensureYuNet(): Promise<ort.InferenceSession> {
   if (yunetSession) return yunetSession;
   if (yunetPromise) return yunetPromise;
 
   yunetPromise = (async () => {
     configureOrtWasmOnce();
-    const modelUrl = new URL('/models/face/face_detection_yunet_2023mar.onnx', self.location.origin).href;
-    const resp = await fetch(modelUrl);
-    if (!resp.ok) {
-      throw new Error(`YuNet model fetch failed: HTTP ${resp.status}`);
-    }
-    const modelBytes = new Uint8Array(await resp.arrayBuffer());
+    const modelBytes = await fetchModelBytesWithFallback(YUNET_LOCAL_PATH, YUNET_CDN_FALLBACK);
     const created = await ort.InferenceSession.create(modelBytes, {
       executionProviders: ['wasm'],
       graphOptimizationLevel: 'all',
@@ -94,12 +148,7 @@ async function ensureSFace(): Promise<ort.InferenceSession> {
 
   sfacePromise = (async () => {
     configureOrtWasmOnce();
-    const modelUrl = new URL('/models/face/face_recognition_sface_2021dec_int8.onnx', self.location.origin).href;
-    const resp = await fetch(modelUrl);
-    if (!resp.ok) {
-      throw new Error(`SFace model fetch failed: HTTP ${resp.status}`);
-    }
-    const modelBytes = new Uint8Array(await resp.arrayBuffer());
+    const modelBytes = await fetchModelBytesWithFallback(SFACE_LOCAL_PATH, SFACE_CDN_FALLBACK);
     const created = await ort.InferenceSession.create(modelBytes, {
       executionProviders: ['wasm'],
       graphOptimizationLevel: 'all',
