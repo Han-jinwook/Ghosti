@@ -33,9 +33,9 @@ export const PASSPORT_REG_DONE_EVENT = 'ghosti_passport_reg_completed';
 export const PASSPORT_REG_STATE_EVENT = 'ghosti_passport_reg_state_updated';
 
 /** 사진이 거의 없는 업무용 PC는 여권 질문 자체를 생략 (기존 기준 유지) */
-/** 얼굴 사진이 최소 이 장수 이상일 때 비서가 먼저 여권사진 등록을 제안 */
-export const PASSPORT_MIN_FACE_PHOTOS_FOR_ASK = 10;
-/** '가족으로 보이는 얼굴' 최소 등장 사진 수 (행인·스쳐 간 얼굴 제외) */
+/** 본인('나')·가족 공통 단일 기준: 동일 인물이 최소 3장 이상 등장할 때만 제안 (1~2장 행인·오탐 배제) */
+export const PASSPORT_MIN_FACE_PHOTOS_FOR_ASK = 3;
+/** '가족으로 보이는 얼굴' 최소 등장 사진 수 (본인과 동일하게 3장 이상) */
 export const FAMILY_MIN_PHOTOS = 3;
 /** 한 화면에 보여줄 최대 인원 / 사진 수 */
 const MAX_FACES = 6;
@@ -133,10 +133,14 @@ function liveClusters(): FaceMemberCluster[] {
   return (useSaySeeStore.getState().faceClusters || []).filter((c) => !c.excludedAsPasserby);
 }
 
-/** 사진 수 기준 얼굴 묶음 순위 */
-export function rankFaceClusters(clusters: FaceMemberCluster[], limit = MAX_FACES): FaceMemberCluster[] {
+/** 사진 수 기준 얼굴 묶음 순위 (동일 인물 3장 이상 등장한 묶음만 최다 등장 순으로 정렬) */
+export function rankFaceClusters(
+  clusters: FaceMemberCluster[],
+  limit = MAX_FACES,
+  minPhotos = PASSPORT_MIN_FACE_PHOTOS_FOR_ASK
+): FaceMemberCluster[] {
   return clusters
-    .filter((c) => !c.excludedAsPasserby)
+    .filter((c) => !c.excludedAsPasserby && (c.matchedPhotoCount || 0) >= minPhotos)
     .slice()
     .sort((a, b) => (b.matchedPhotoCount || 0) - (a.matchedPhotoCount || 0))
     .slice(0, limit);
@@ -229,9 +233,11 @@ export interface PassportPendingSummary {
 
 export function summarizePassportPending(st = loadPassportRegState()): PassportPendingSummary {
   const clusters = liveClusters();
-  const enoughFaces = countFacePhotos(clusters) >= PASSPORT_MIN_FACE_PHOTOS_FOR_ASK;
+  // 본인·가족 공통 단일 기준: 동일 인물이 3장 이상 등장한 얼굴 묶음이 최소 1명 이상일 때
+  const qualifiedClusters = rankFaceClusters(clusters, 30, PASSPORT_MIN_FACE_PHOTOS_FOR_ASK);
+  const enoughFaces = qualifiedClusters.length > 0;
   const self = findSelfCluster(st);
-  const needsSelfPick = !self && enoughFaces && clusters.length > 0;
+  const needsSelfPick = !self && enoughFaces;
   const selfPendingCount = self ? pendingCutsFor(self, st).length : 0;
   const fam = self ? familyCandidates(st) : [];
   const familyPendingCount = fam.reduce((a, c) => a + pendingCutsFor(c, st).length, 0);

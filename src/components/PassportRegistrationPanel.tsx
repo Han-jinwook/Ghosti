@@ -155,7 +155,7 @@ export const PassportRegistrationPanel: React.FC = () => {
 
       {mode === 'self' && !selfCluster && (
         <div className="grid grid-cols-3 sm:grid-cols-6 gap-2.5">
-          {pickCandidates.map((c) => (
+          {pickCandidates.map((c, idx) => (
             <button
               key={c.clusterId}
               type="button"
@@ -163,7 +163,11 @@ export const PassportRegistrationPanel: React.FC = () => {
                 pickSelfCluster(c.clusterId);
                 setRegTick((n) => n + 1);
               }}
-              className="flex flex-col items-center gap-1 p-1.5 rounded-lg hover:bg-slate-50 border border-transparent hover:border-slate-200 cursor-pointer transition-colors"
+              className={`flex flex-col items-center gap-1 p-1.5 rounded-lg cursor-pointer transition-colors border ${
+                idx === 0
+                  ? 'bg-teal-50/70 border-teal-200 hover:bg-teal-50'
+                  : 'hover:bg-slate-50 border-transparent hover:border-slate-200'
+              }`}
             >
               <AutonomousCanvasFaceAvatar
                 photoFile={c.representativePhoto}
@@ -173,7 +177,9 @@ export const PassportRegistrationPanel: React.FC = () => {
                 sizeClass="w-16 h-16"
                 shape="square"
               />
-              <span className="text-[11px] font-medium text-slate-600">내 얼굴 선택</span>
+              <span className={`text-[11px] font-semibold ${idx === 0 ? 'text-teal-800' : 'text-slate-600'}`}>
+                {idx === 0 ? `가장 많음 (${c.matchedPhotoCount || 0}장)` : `내 얼굴 (${c.matchedPhotoCount || 0}장)`}
+              </span>
             </button>
           ))}
         </div>

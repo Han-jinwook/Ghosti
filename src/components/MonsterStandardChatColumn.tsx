@@ -264,10 +264,10 @@ function buildPassportEntryTurn(
     };
   }
 
-  // [D-35] 첫날엔 '내 사진'만 조용히 확인받는다 (성별·나이대 문답 · 번호표 대화 폐지)
+  // [D-35] 첫날엔 '내 사진'만 조용히 확인받는다 (본인·가족 공통 동일 인물 3장 이상 단일 기준)
   const pending = summarizePassportPending();
   const hasSelfToAsk = pending.needsSelfPick || pending.selfPendingCount > 0;
-  if (effectiveFacePhotos >= PASSPORT_MIN_FACE_PHOTOS_FOR_ASK && hasSelfToAsk) {
+  if (hasSelfToAsk) {
     markFirstOfferShown();
     return {
       text: buildPassportSelfOfferText(nickname),
