@@ -30,6 +30,7 @@ import {
 } from '../services/supabaseClient';
 import { clearCachedSharedRoomTokens } from '../services/sharedPhotoRoomSupabase';
 import { clearWorkRoomLocalCachesOnLogout } from '../services/workRoomSyncService';
+import { resetSharedMonsterChatToWelcome } from '../services/monsterChatRouter';
 import {
   getThisDeviceIdentity,
   loadCachedDeviceIntegrationSnapshot,
@@ -197,6 +198,14 @@ const GhostiHubGlobalModals: React.FC = () => {
   const wasLoggedInRef = useRef(false);
   const lastAuthedEmailRef = useRef('');
   const logoutInProgressRef = useRef(false);
+  const pendingLogoutWipeRef = useRef<(() => void) | null>(null);
+
+  const detachPendingLogoutWipe = useCallback(() => {
+    if (typeof window === 'undefined' || !pendingLogoutWipeRef.current) return;
+    window.removeEventListener('pagehide', pendingLogoutWipeRef.current);
+    window.removeEventListener('beforeunload', pendingLogoutWipeRef.current);
+    pendingLogoutWipeRef.current = null;
+  }, []);
 
   const performGhostiCleanLogout = useCallback(() => {
     logoutInProgressRef.current = true;
@@ -275,6 +284,7 @@ const GhostiHubGlobalModals: React.FC = () => {
       }, 400);
     }
     clearGhostSecretaryAccountNicknameOnLogout();
+    resetSharedMonsterChatToWelcome();
     clearCachedSharedRoomTokens();
     storeSharedRefs.activeSharedRoomId = null;
     storeSharedRefs.knownJoinedRoomIds.clear();
@@ -314,14 +324,16 @@ const GhostiHubGlobalModals: React.FC = () => {
       };
     });
     if (typeof window !== 'undefined') {
+      detachPendingLogoutWipe();
       const finalWipe = () => {
         purgeAllGhostiLocalAuthArtifacts({ setLogoutLockMs: 15_000 });
         clearWorkRoomLocalCachesOnLogout();
       };
+      pendingLogoutWipeRef.current = finalWipe;
       window.addEventListener('pagehide', finalWipe, { once: true });
       window.addEventListener('beforeunload', finalWipe, { once: true });
     }
-  }, []);
+  }, [detachPendingLogoutWipe]);
 
   useEffect(() => {
     if (logoutInProgressRef.current) {
@@ -331,11 +343,15 @@ const GhostiHubGlobalModals: React.FC = () => {
       typeof window !== 'undefined' ? localStorage.getItem('merlin_session_token') || '' : '';
 
     if (isLoggedIn && user?.id && user?.email) {
+      detachPendingLogoutWipe();
+      clearGhostiLogoutLock();
       const cleanUserEmail = user.email.trim().toLowerCase();
+      const didTransitionFromGuest = !wasLoggedInRef.current;
       const didSwitchAccountDirectly = Boolean(
         lastAuthedEmailRef.current && lastAuthedEmailRef.current !== cleanUserEmail
       );
       lastAuthedEmailRef.current = cleanUserEmail;
+      wasLoggedInRef.current = true;
 
       if (didSwitchAccountDirectly) {
         clearCachedSharedRoomTokens();
@@ -395,11 +411,27 @@ const GhostiHubGlobalModals: React.FC = () => {
       const cleanHubNick = (user.nickname || '').trim();
       bindGhostSecretaryAccountOwner(user.email, cleanHubNick);
 
+      if (didTransitionFromGuest || didSwitchAccountDirectly) {
+        resetSharedMonsterChatToWelcome();
+      }
+
       void syncHubUserToLocalSupabase({
         userId: user.id,
         email: user.email,
         nickname: cleanHubNick || undefined,
         hubToken: token,
+      }).then(() => {
+        if (didTransitionFromGuest || didSwitchAccountDirectly) {
+          const stNow = useSaySeeStore.getState();
+          void stNow.refreshDeviceIntegrationState();
+          if (
+            stNow.activeLoungeType === 'family' ||
+            stNow.activeLoungeType === 'club' ||
+            stNow.activeLoungeType === 'student'
+          ) {
+            void stNow.syncActiveSharedRoomFromSupabase();
+          }
+        }
       });
 
       if (cleanHubNick && !isInvalidNicknameCandidate(cleanHubNick)) {
@@ -432,8 +464,10 @@ const GhostiHubGlobalModals: React.FC = () => {
       const isMarkedLoggedOut =
         typeof window !== 'undefined' && localStorage.getItem('merlin_logged_out') === '1';
       if (wasLoggedInRef.current || isMarkedLoggedOut) {
+        wasLoggedInRef.current = false;
         clearGhostiSupabaseSession();
         clearGhostSecretaryAccountNicknameOnLogout();
+        resetSharedMonsterChatToWelcome();
         clearCachedSharedRoomTokens();
         storeSharedRefs.activeSharedRoomId = null;
         storeSharedRefs.knownJoinedRoomIds.clear();
@@ -607,6 +641,7 @@ const GhostiHubGlobalModals: React.FC = () => {
         rewardType="none"
         onSuccess={(email, userId) => {
           logoutInProgressRef.current = false;
+          detachPendingLogoutWipe();
           clearGhostiLogoutLock();
           setIsLoginOpen(false);
           void refreshSession();
