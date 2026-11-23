@@ -1269,8 +1269,10 @@ export const App: React.FC = () => {
         내 파일 원본과 문서 본문은 외부 서버로 전송되지 않고 내 기기 안에서 처리됩니다.
       </div>
 
-      {/* 모든 페이지(쇼룸 대문, 모바일, 데스크톱 전 메뉴) 공통 맨 위로 가기 플로팅 버튼 */}
-      {showScrollTopBtn && !(layout === 'mobile' && isMobileInputFocused) && (
+      {/* 모든 페이지(쇼룸 대문, 모바일, 데스크톱 전 메뉴) 공통 맨 위로 가기 플로팅 버튼 (하단 안내창/실행 취소 바가 떠 있을 때는 닫기(X) 버튼 가림 방지를 위해 일시 숨김) */}
+      {showScrollTopBtn &&
+        !(layout === 'mobile' && isMobileInputFocused) &&
+        !(viewMode === 'workspace' && (lastUndoBatch || lastQuarantineToast)) && (
         <button
           type="button"
           onClick={handleScrollToTop}
