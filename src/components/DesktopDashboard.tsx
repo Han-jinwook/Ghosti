@@ -170,8 +170,7 @@ export const DesktopDashboard: React.FC = () => {
         'ghosti_search_game_v1',
         JSON.stringify({
           ...saved,
-          summon: true,
-          ...(nextIsLarge ? { large: true } : { medium: true }),
+          ...(nextIsLarge ? { large: true } : { summon: true, medium: true }),
         })
       );
     } catch {
@@ -206,15 +205,12 @@ export const DesktopDashboard: React.FC = () => {
   useEffect(() => {
     if (!ghostSearchWindowStage) return;
     try {
-      const saved = JSON.parse(localStorage.getItem('ghosti_search_game_v1') || '{}');
-      localStorage.setItem(
-        'ghosti_search_game_v1',
-        JSON.stringify({
-          ...saved,
-          summon: true,
-          ...(ghostSearchWindowStage === 'large' ? { large: true } : { medium: true }),
-        })
-      );
+      localStorage.setItem('ghosti_dojo_last_summon_ts', String(Date.now()));
+      if (typeof BroadcastChannel !== 'undefined') {
+        const bc = new BroadcastChannel('ghosti_search_window_singleton_v1');
+        bc.postMessage({ type: 'DOJO_SUMMON_OBSERVED', ts: Date.now() });
+        bc.close();
+      }
     } catch {
       /* ignore */
     }
@@ -256,7 +252,7 @@ export const DesktopDashboard: React.FC = () => {
                     : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
                 }`}
               >
-                작게
+                ⤡ 작게
               </button>
               <button
                 type="button"
@@ -267,7 +263,7 @@ export const DesktopDashboard: React.FC = () => {
                     : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
                 }`}
               >
-                크게 (갤러리)
+                ⤢ 크게(갤러리)
               </button>
             </div>
           </div>

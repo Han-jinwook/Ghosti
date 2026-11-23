@@ -1,5 +1,6 @@
-import React, { useCallback, useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { playBabyGhostChime } from '../OnboardingModal';
+import { getZCoreUrl, zCoreBridge } from '../../services/zCoreBridge';
 import {
   BASIC_STEPS,
   BASIC2_QUERY,
@@ -16,8 +17,14 @@ import {
 function useInstantSummonTrigger(onComplete: () => void, listenWindowShortcut = true) {
   const [progress, setProgress] = useState(0);
   const [leftClickGuide, setLeftClickGuide] = useState(false);
+  const triggeredRef = useRef(false);
+  const ctrlHeldRef = useRef(false);
+  const ctrlDownTsRef = useRef(0);
+  const otherActionWhileCtrlRef = useRef(false);
 
   const triggerNow = useCallback(() => {
+    if (triggeredRef.current) return;
+    triggeredRef.current = true;
     setLeftClickGuide(false);
     setProgress(1);
     onComplete();
@@ -28,39 +35,185 @@ function useInstantSummonTrigger(onComplete: () => void, listenWindowShortcut = 
 
   useEffect(() => {
     if (!listenWindowShortcut) return;
+    triggeredRef.current = false;
+
+    const isZeroKey = (e: KeyboardEvent) =>
+      e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0' || e.keyCode === 48 || e.keyCode === 96;
+
     const onWinKeyDown = (e: KeyboardEvent) => {
-      if (e.ctrlKey && !e.altKey && !e.shiftKey && (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0')) {
+      if (e.key === 'Control' || e.code === 'ControlLeft' || e.code === 'ControlRight') {
+        if (!ctrlHeldRef.current) {
+          ctrlHeldRef.current = true;
+          ctrlDownTsRef.current = Date.now();
+          otherActionWhileCtrlRef.current = false;
+        }
+        return;
+      }
+      if (e.ctrlKey && !e.altKey && !e.shiftKey && isZeroKey(e)) {
         const t = e.target as HTMLElement | null;
         if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
         e.preventDefault();
         triggerNow();
+        return;
+      }
+      if (e.ctrlKey || ctrlHeldRef.current) {
+        otherActionWhileCtrlRef.current = true;
       }
     };
-    window.addEventListener('keydown', onWinKeyDown);
-    return () => window.removeEventListener('keydown', onWinKeyDown);
+
+    const onWinKeyUp = (e: KeyboardEvent) => {
+      if (e.key === 'Control' || e.code === 'ControlLeft' || e.code === 'ControlRight') {
+        ctrlHeldRef.current = false;
+        void checkDaemonTelemetry();
+      }
+    };
+
+    const onWinMouseDown = (e: MouseEvent) => {
+      if (e.button === 2 && e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        triggerNow();
+        return;
+      }
+      if (e.button === 0) {
+        otherActionWhileCtrlRef.current = true;
+      }
+    };
+
+    const onWinContextMenu = (e: MouseEvent) => {
+      if (e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        triggerNow();
+      }
+    };
+
+    const onWinBlur = () => {
+      const now = Date.now();
+      if (
+        (ctrlHeldRef.current || now - ctrlDownTsRef.current < 750) &&
+        !otherActionWhileCtrlRef.current
+      ) {
+        ctrlHeldRef.current = false;
+        triggerNow();
+        return;
+      }
+      void checkDaemonTelemetry();
+    };
+
+    const onDaemonSummonEvent = () => {
+      triggerNow();
+    };
+
+    const onStorage = (e: StorageEvent) => {
+      if (e.key === 'ghosti_dojo_last_summon_ts' && e.newValue) {
+        triggerNow();
+      }
+    };
+
+    let bc: BroadcastChannel | null = null;
+    try {
+      if (typeof BroadcastChannel !== 'undefined') {
+        bc = new BroadcastChannel('ghosti_search_window_singleton_v1');
+        bc.onmessage = (ev: MessageEvent) => {
+          const msg = ev.data as { type?: string } | null;
+          if (msg && (msg.type === 'DOJO_SUMMON_OBSERVED' || msg.type === 'FOCUS_AND_QUERY')) {
+            triggerNow();
+          }
+        };
+      }
+    } catch {
+      /* ignore */
+    }
+
+    let telemetryBaseline: Record<string, number> | null = null;
+    const sumSummonCounts = (tot: Record<string, number>) =>
+      (tot.ctrl0_summon_bar || 0) +
+      (tot.ghost_search_window_small || 0) +
+      (tot.ghost_search_window_medium || 0);
+
+    const checkDaemonTelemetry = async () => {
+      if (triggeredRef.current || !zCoreBridge.isConnected) return;
+      try {
+        const res = await fetch(getZCoreUrl('/api/superpower/telemetry'), {
+          signal: AbortSignal.timeout(1000),
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        const total = (data?.total || {}) as Record<string, number>;
+        if (!telemetryBaseline) {
+          telemetryBaseline = { ...total };
+          return;
+        }
+        if (sumSummonCounts(total) > sumSummonCounts(telemetryBaseline)) {
+          telemetryBaseline = { ...total };
+          triggerNow();
+        } else {
+          telemetryBaseline = { ...total };
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+
+    void checkDaemonTelemetry();
+    const pollTimer = window.setInterval(() => void checkDaemonTelemetry(), 300);
+
+    window.addEventListener('keydown', onWinKeyDown, true);
+    window.addEventListener('keyup', onWinKeyUp, true);
+    window.addEventListener('mousedown', onWinMouseDown, true);
+    window.addEventListener('contextmenu', onWinContextMenu, true);
+    window.addEventListener('blur', onWinBlur);
+    window.addEventListener('ghosti_daemon_ctrl0_summon', onDaemonSummonEvent);
+    window.addEventListener('storage', onStorage);
+
+    return () => {
+      window.clearInterval(pollTimer);
+      window.removeEventListener('keydown', onWinKeyDown, true);
+      window.removeEventListener('keyup', onWinKeyUp, true);
+      window.removeEventListener('mousedown', onWinMouseDown, true);
+      window.removeEventListener('contextmenu', onWinContextMenu, true);
+      window.removeEventListener('blur', onWinBlur);
+      window.removeEventListener('ghosti_daemon_ctrl0_summon', onDaemonSummonEvent);
+      window.removeEventListener('storage', onStorage);
+      try {
+        bc?.close();
+      } catch {
+        /* ignore */
+      }
+    };
   }, [triggerNow, listenWindowShortcut]);
 
   const handlers = {
     tabIndex: 0,
     onClick: (e: React.MouseEvent<HTMLElement>) => {
+      if (e.ctrlKey) return;
       e.currentTarget.focus();
       setLeftClickGuide(true);
     },
     onMouseDown: (e: React.MouseEvent) => {
       if (e.button === 2 && e.ctrlKey && !e.altKey && !e.shiftKey) {
         e.preventDefault();
+        e.stopPropagation();
         triggerNow();
       }
     },
     onKeyDown: (e: React.KeyboardEvent) => {
-      if (e.ctrlKey && (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0')) {
+      if (
+        e.ctrlKey &&
+        !e.altKey &&
+        !e.shiftKey &&
+        (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0')
+      ) {
         e.preventDefault();
         e.stopPropagation();
         triggerNow();
       }
     },
     onContextMenu: (e: React.MouseEvent) => {
-      if (e.ctrlKey) e.preventDefault();
+      if (e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+        e.stopPropagation();
+        triggerNow();
+      }
     },
   };
   return { progress, leftClickGuide, handlers };
@@ -128,11 +281,13 @@ const Basic2: React.FC<{ onDone: () => void }> = ({ onDone }) => {
   const { leftClickGuide, handlers } = useInstantSummonTrigger(() => {
     playBabyGhostChime('summon');
     setOpen(true);
+    setValue(BASIC2_RESULT.value);
+    onDone();
   }, !open);
   return (
     <div className="flex flex-col gap-2">
       <div className="px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-[12px] text-slate-600 leading-relaxed">
-        작업 중인 입력창에서 파일을 따로 열지 않고 <kbd className={summonKeyBadgeCls}>Ctrl + 0</kbd>을 눌러 문서 속 수치를 바로 찾아 넣을 수 있습니다.
+        작업 중인 입력창에서 파일을 따로 열지 않고 <kbd className={summonKeyBadgeCls}>Ctrl + 0</kbd> 또는 <kbd className={summonKeyBadgeCls}>Ctrl + 우클릭</kbd>을 눌러 문서 속 수치를 바로 찾아 넣을 수 있습니다.
       </div>
       <div
         {...handlers}
@@ -148,10 +303,10 @@ const Basic2: React.FC<{ onDone: () => void }> = ({ onDone }) => {
           입력창이 선택되었습니다. Ctrl + 0 또는 Ctrl + 우클릭을 눌러 단가를 찾아보세요.
         </div>
       )}
-      {open && value === BASIC2_QUERY && (
+      {open && (
         <div className="p-3 rounded-lg bg-white border border-slate-300 flex flex-col gap-2">
           <div className="text-[12px] font-semibold text-slate-700">
-            문서 본문에서 &ldquo;단가&rdquo; 항목을 찾았습니다. 클릭하여 입력창에 넣으세요.
+            문서 본문에서 &ldquo;단가&rdquo; 항목을 찾아 입력창에 반영했습니다.
           </div>
           <button
             type="button"
@@ -164,7 +319,7 @@ const Basic2: React.FC<{ onDone: () => void }> = ({ onDone }) => {
           >
             <span className="font-medium text-slate-800">{BASIC2_RESULT.file}</span>
             <span className="font-semibold text-slate-900">
-              단가 {BASIC2_RESULT.value} 입력하기 →
+              단가 {BASIC2_RESULT.value} 입력 완료 ✓
             </span>
           </button>
         </div>
@@ -356,7 +511,7 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = () => {
           </div>
         </div>
         <div className="flex flex-wrap gap-1.5">
-          {BASIC_STEPS.map((s, i) => (
+          {BASIC_STEPS.map((s) => (
             <button
               key={s.id}
               type="button"
@@ -371,7 +526,7 @@ export const GhostSuperpowerDojo: React.FC<GhostSuperpowerDojoProps> = () => {
               }`}
             >
               <StampBadge done={Boolean(progress.basics[s.id])} />
-              <span>{i + 1}. {s.title}</span>
+              <span>{s.title}</span>
             </button>
           ))}
         </div>

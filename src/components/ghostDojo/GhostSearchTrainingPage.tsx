@@ -193,17 +193,29 @@ type GameStepId = 'summon' | 'medium' | 'large';
 const GAME_STEPS: Array<{ id: GameStepId; actionLabel: string; doneLabel: string }> = [
   {
     id: 'summon',
-    actionLabel: '작게 보기',
-    doneLabel: '작게 보기 확인됨',
+    actionLabel: '⤡ 작게 모드 버튼 눌러보기',
+    doneLabel: '⤡ 작게 모드 완료',
   },
   {
     id: 'large',
-    actionLabel: '크게 보기 (갤러리)',
-    doneLabel: '크게 보기 확인됨',
+    actionLabel: '⤢ 크게(갤러리) 버튼 눌러보기',
+    doneLabel: '⤢ 크게(갤러리) 모드 완료',
   },
 ];
 
 const SIMULATOR_WORK_AREA = { left: 0, top: 0, right: 1120, bottom: 660 };
+
+try {
+  if (
+    typeof window !== 'undefined' &&
+    typeof localStorage !== 'undefined' &&
+    !window.location.search.includes('ghostSearchWindow')
+  ) {
+    localStorage.removeItem(GAME_STORAGE_KEY);
+  }
+} catch {
+  /* ignore */
+}
 
 function loadGame(): Partial<Record<GameStepId, boolean>> {
   try {
@@ -427,23 +439,6 @@ const VirtualMonitorSimulator: React.FC<{
     );
   };
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.ctrlKey && (e.key === '0' || e.code === 'Digit0' || e.code === 'Numpad0')) {
-        const t = e.target as HTMLElement | null;
-        if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
-        e.preventDefault();
-        if (!connected) {
-          openGhostSecretaryFirstModal({ context: 'default' });
-          return;
-        }
-        summon();
-      }
-    };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [connected]);
-
   const scale = monitorW / SIMULATOR_WORK_AREA.right;
   const rect = stage
     ? computeGhostSearchWindowRect(
@@ -486,7 +481,7 @@ const VirtualMonitorSimulator: React.FC<{
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
               }`}
             >
-              작게
+              ⤡ 작게
             </button>
             <button
               type="button"
@@ -497,7 +492,7 @@ const VirtualMonitorSimulator: React.FC<{
                   : 'bg-slate-100 hover:bg-slate-200 text-slate-700'
               }`}
             >
-              크게 (갤러리)
+              ⤢ 크게(갤러리)
             </button>
             <button
               type="button"
@@ -607,7 +602,7 @@ const VirtualMonitorSimulator: React.FC<{
                           : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
                       }`}
                     >
-                      작게
+                      ⤡ 작게
                     </button>
                     <button
                       type="button"
@@ -621,7 +616,7 @@ const VirtualMonitorSimulator: React.FC<{
                           : 'bg-white hover:bg-slate-100 text-slate-600 border border-slate-200'
                       }`}
                     >
-                      크게 (갤러리)
+                      ⤢ 크게(갤러리)
                     </button>
                   </div>
                 </div>
@@ -850,13 +845,10 @@ export const GhostSearchTrainingPage: React.FC = () => {
         baseline = { ...total };
         if (
           (total.ctrl0_summon_bar || 0) > (prevBase.ctrl0_summon_bar || 0) ||
-          (total.ghost_search_window_small || 0) > (prevBase.ghost_search_window_small || 0)
+          (total.ghost_search_window_small || 0) > (prevBase.ghost_search_window_small || 0) ||
+          (total.ghost_search_window_medium || 0) > (prevBase.ghost_search_window_medium || 0)
         ) {
-          markStep('summon');
-        }
-        if ((total.ghost_search_window_medium || 0) > (prevBase.ghost_search_window_medium || 0)) {
-          markStep('summon');
-          markStep('medium');
+          window.dispatchEvent(new CustomEvent('ghosti_daemon_ctrl0_summon'));
         }
         if (
           (total.ghost_search_window_large || 0) > (prevBase.ghost_search_window_large || 0) ||
@@ -989,7 +981,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
                   }}
                   className="px-2.5 py-1 rounded-md text-[11.5px] font-medium bg-white hover:bg-slate-50 text-slate-500 border border-slate-200 cursor-pointer"
                 >
-                  초기화
+                  도장 초기화
                 </button>
               )}
             </div>
