@@ -15,6 +15,8 @@ node_modules/
 # 예외: 귀신비서(Ghost Secretary) 소스 파일명 오탐 방지 — 비밀정보 아님
 !src/**/ghostSecretary*.ts
 !src/**/ghostSecretary*.tsx
+!src/**/*Secretary*.ts
+!src/**/*Secretary*.tsx
 *credential*
 *credentials*
 
