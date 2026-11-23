@@ -6,6 +6,11 @@ import {
   getThisDeviceIdentity,
   writeTextToLocalOsClipboard,
 } from '../../services/deviceIntegrationService';
+import {
+  getNativeClipboardImeStatus,
+  isCapacitorAndroidRuntime,
+  openNativeClipboardImeSettings,
+} from '../../services/ghostiMobileCareBridge';
 import { zCoreBridge } from '../../services/zCoreBridge';
 import { formatKoreaDateShort } from '../../services/subscriptionPlanCatalog';
 
@@ -39,8 +44,33 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
   const [reconnectingBusy, setReconnectingBusy] = useState(false);
   const [copiedHash, setCopiedHash] = useState<string | null>(null);
   const [zCoreConnected, setZCoreConnected] = useState<boolean>(zCoreBridge.isConnected);
+  const [clipSearchQuery, setClipSearchQuery] = useState('');
+  const [showAllClips, setShowAllClips] = useState(false);
+  const [androidImeStatus, setAndroidImeStatus] = useState<{
+    supported: boolean;
+    enabled: boolean;
+    selected: boolean;
+  }>({ supported: false, enabled: false, selected: false });
 
   useEffect(() => zCoreBridge.subscribe((alive) => setZCoreConnected(alive)), []);
+
+  useEffect(() => {
+    if (!isCapacitorAndroidRuntime()) return;
+    let alive = true;
+    const check = () => {
+      void getNativeClipboardImeStatus().then((st) => {
+        if (alive) setAndroidImeStatus(st);
+      });
+    };
+    check();
+    window.addEventListener('focus', check);
+    document.addEventListener('visibilitychange', check);
+    return () => {
+      alive = false;
+      window.removeEventListener('focus', check);
+      document.removeEventListener('visibilitychange', check);
+    };
+  }, []);
 
   const isLoggedIn = Boolean(
     merlinAuth?.email && merlinAuth.userId && merlinAuth.userId !== 'guest'
@@ -395,46 +425,118 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
         </button>
       </form>
 
-      <p className="text-[11.5px] text-slate-400 leading-normal">
-        안드로이드·PC는 즉시 반영되며, 아이폰(iOS)은 앱 화면으로 돌아올 때 동기화됩니다.
+      <p className="text-[11.5px] text-slate-500 leading-normal">
+        PC와 모바일 모두 <strong>7일간(최대 500건)</strong> 암호화 보관됩니다. 다른 앱에서 텍스트를 선택해 <strong>[귀신 클립보드 저장]</strong> 또는 <strong>[귀신 7일 클립보드]</strong> 키보드로 전환하면 앱을 열지 않고도 바로 입력·전송할 수 있습니다.
       </p>
 
-      {/* 4. 최근 공유 목록 */}
-      {isLoggedIn && syncedClipboardItems.length > 0 && (
-        <div className="flex flex-col divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden bg-white">
-          {syncedClipboardItems.slice(0, 4).map((clip) => {
-            const isCopied = copiedHash === clip.clipHash;
-            return (
-              <div
-                key={`${clip.clipHash}:${clip.createdAt}`}
-                className="px-3 py-2 flex items-center justify-between gap-2.5 hover:bg-slate-50/70"
+      {/* 3.5. Android 네이티브 앱 미진입 입력창 직결 키보드 원탭 설정 */}
+      {androidImeStatus.supported && (
+        <div className="px-3 py-2.5 rounded-lg bg-teal-50/70 border border-teal-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[12px]">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="font-semibold text-teal-900">
+              {androidImeStatus.enabled
+                ? '입력창 직결 7일 클립보드 키보드 준비됨'
+                : '다른 앱에서 앱 열지 않고 바로 붙여넣기 (키보드 켜기)'}
+            </span>
+            <span className="text-[11.5px] text-teal-800/90 leading-snug break-keep">
+              {androidImeStatus.enabled
+                ? '카톡·크롬 입력창에서 키보드 전환(🌐)을 누르면 7일 클립보드와 1→2→3 순차 붙여넣기가 바로 뜹니다.'
+                : '시스템 키보드 목록에서 [귀신 7일 클립보드]를 켜 두면 카톡·크롬에서 바로 꺼내 쓸 수 있습니다.'}
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5 shrink-0">
+            {!androidImeStatus.enabled ? (
+              <button
+                type="button"
+                onClick={() => void openNativeClipboardImeSettings('settings')}
+                className="px-2.5 py-1.5 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold cursor-pointer whitespace-nowrap"
               >
-                <div className="flex flex-col min-w-0 flex-1">
-                  <span className="text-[11px] text-slate-400 truncate">
-                    {clip.senderName.replace(/^[⚡📋📱💻\s]+/, '')}
-                  </span>
-                  <p className="text-[13px] text-slate-800 truncate">{clip.text}</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    await writeTextToLocalOsClipboard(clip.text, clip.clipHash);
-                    setCopiedHash(clip.clipHash);
-                    window.setTimeout(() => setCopiedHash(null), 2000);
-                  }}
-                  className={`px-2.5 py-1 rounded-md text-[11.5px] font-medium shrink-0 cursor-pointer border ${
-                    isCopied
-                      ? 'bg-teal-600 text-white border-teal-600'
-                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                  }`}
-                >
-                  {isCopied ? '복사됨' : '복사'}
-                </button>
-              </div>
-            );
-          })}
+                키보드 켜기
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => void openNativeClipboardImeSettings('picker')}
+                className="px-2.5 py-1.5 rounded-md bg-white hover:bg-teal-50 border border-teal-300 text-teal-800 text-[11.5px] font-semibold cursor-pointer whitespace-nowrap"
+              >
+                키보드 선택
+              </button>
+            )}
+          </div>
         </div>
       )}
+
+      {/* 4. 최근 공유 목록 (7일 보관 · 최대 500건) */}
+      {isLoggedIn && syncedClipboardItems.length > 0 && (() => {
+        const q = clipSearchQuery.trim().toLowerCase();
+        const filteredClips = q
+          ? syncedClipboardItems.filter(
+              (c) =>
+                c.text.toLowerCase().includes(q) || c.senderName.toLowerCase().includes(q)
+            )
+          : syncedClipboardItems;
+        const visibleClips = showAllClips ? filteredClips : filteredClips.slice(0, 6);
+        return (
+          <div className="flex flex-col gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="text-[11.5px] font-medium text-slate-500">
+                7일 보관 기록 ({syncedClipboardItems.length}건 / 최대 500건)
+              </span>
+              {syncedClipboardItems.length > 6 && (
+                <div className="flex items-center gap-1.5">
+                  <input
+                    type="text"
+                    value={clipSearchQuery}
+                    onChange={(e) => setClipSearchQuery(e.target.value)}
+                    placeholder="클립보드 검색..."
+                    className="w-36 px-2 py-1 rounded-md bg-white border border-slate-200 text-[11.5px] text-slate-800 placeholder-slate-400 focus:outline-none focus:border-teal-500"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowAllClips((v) => !v)}
+                    className="px-2 py-1 rounded-md bg-white hover:bg-slate-50 border border-slate-200 text-slate-600 text-[11px] font-medium cursor-pointer whitespace-nowrap"
+                  >
+                    {showAllClips ? '접기' : `전체 보기 (${filteredClips.length})`}
+                  </button>
+                </div>
+              )}
+            </div>
+            <div className="flex flex-col divide-y divide-slate-100 border border-slate-200 rounded-lg overflow-hidden bg-white max-h-[360px] overflow-y-auto">
+              {visibleClips.map((clip) => {
+                const isCopied = copiedHash === clip.clipHash;
+                return (
+                  <div
+                    key={`${clip.clipHash}:${clip.createdAt}`}
+                    className="px-3 py-2 flex items-center justify-between gap-2.5 hover:bg-slate-50/70"
+                  >
+                    <div className="flex flex-col min-w-0 flex-1">
+                      <span className="text-[11px] text-slate-400 truncate">
+                        {clip.senderName.replace(/^[⚡📋📱💻\s]+/, '')}
+                      </span>
+                      <p className="text-[13px] text-slate-800 truncate">{clip.text}</p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await writeTextToLocalOsClipboard(clip.text, clip.clipHash);
+                        setCopiedHash(clip.clipHash);
+                        window.setTimeout(() => setCopiedHash(null), 2000);
+                      }}
+                      className={`px-2.5 py-1 rounded-md text-[11.5px] font-medium shrink-0 cursor-pointer border ${
+                        isCopied
+                          ? 'bg-teal-600 text-white border-teal-600'
+                          : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                      }`}
+                    >
+                      {isCopied ? '복사됨' : '복사'}
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };

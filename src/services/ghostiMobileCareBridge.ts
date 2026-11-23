@@ -153,6 +153,15 @@ export interface GhostiMobileCarePluginInterface {
     ocrLines?: Array<{ timeSec: number; timestamp: string; text: string }>;
     fullText?: string;
   }>;
+  syncSharedClipboardHistory(options: {
+    items: Array<{ clipHash: string; text: string; senderName: string; createdAt: string }>;
+  }): Promise<{ ok: boolean; count?: number }>;
+  consumePendingNativeClipboardOutbound(): Promise<{
+    ok: boolean;
+    items?: Array<{ clipHash: string; text: string; senderName?: string; createdAt?: string }>;
+  }>;
+  getNativeClipboardImeStatus(): Promise<{ ok: boolean; enabled?: boolean; selected?: boolean }>;
+  openNativeClipboardImeSettings(options: { mode: 'settings' | 'picker' }): Promise<{ ok: boolean }>;
 }
 
 const GhostiMobileCareNative = registerPlugin<GhostiMobileCarePluginInterface>('GhostiMobileCare');
@@ -832,4 +841,71 @@ export async function openNativeMobileVideoPlayerModal(options: {
     /* 구버전 네이티브 래퍼(v1.0.54 이하) 미지원 시 WebView 모달 폴백 */
   }
   return { supported: false, ok: false, hasText: false, ocrLines: [], fullText: '' };
+}
+
+export async function syncSharedNativeClipboardHistory(
+  items: Array<{ clipHash: string; text: string; senderName: string; createdAt: string }>
+): Promise<boolean> {
+  if (!isCapacitorNativeMobileRuntime()) return false;
+  try {
+    const res = await GhostiMobileCareNative.syncSharedClipboardHistory({
+      items: items.slice(0, 500).map((it) => ({
+        clipHash: it.clipHash,
+        text: it.text,
+        senderName: it.senderName,
+        createdAt: it.createdAt,
+      })),
+    });
+    return Boolean(res?.ok);
+  } catch {
+    return false;
+  }
+}
+
+export async function consumePendingNativeClipboardOutbound(): Promise<
+  Array<{ clipHash: string; text: string; senderName?: string; createdAt?: string }>
+> {
+  if (!isCapacitorNativeMobileRuntime()) return [];
+  try {
+    const res = await GhostiMobileCareNative.consumePendingNativeClipboardOutbound();
+    if (res?.ok && Array.isArray(res.items)) {
+      return res.items.filter((it) => Boolean(it && typeof it.text === 'string' && it.text.trim()));
+    }
+  } catch {
+    /* ignore */
+  }
+  return [];
+}
+
+export async function getNativeClipboardImeStatus(): Promise<{
+  supported: boolean;
+  enabled: boolean;
+  selected: boolean;
+}> {
+  if (!isCapacitorAndroidRuntime()) {
+    return { supported: false, enabled: false, selected: false };
+  }
+  try {
+    const res = await GhostiMobileCareNative.getNativeClipboardImeStatus();
+    if (res?.ok) {
+      return {
+        supported: true,
+        enabled: Boolean(res.enabled),
+        selected: Boolean(res.selected),
+      };
+    }
+  } catch {
+    /* ignore */
+  }
+  return { supported: false, enabled: false, selected: false };
+}
+
+export async function openNativeClipboardImeSettings(mode: 'settings' | 'picker'): Promise<boolean> {
+  if (!isCapacitorAndroidRuntime()) return false;
+  try {
+    const res = await GhostiMobileCareNative.openNativeClipboardImeSettings({ mode });
+    return Boolean(res?.ok);
+  } catch {
+    return false;
+  }
 }

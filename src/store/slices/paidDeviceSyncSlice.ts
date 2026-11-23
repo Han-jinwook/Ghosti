@@ -139,6 +139,7 @@ import {
   loadCachedDeviceIntegrationSnapshot,
   loadCachedSyncedClips,
   loadRemoteShadowCache,
+  pruneSyncedClipsToSevenDays,
   pushCrossDeviceClipboardText,
   revokeConnectedDevice,
   saveCachedDeviceIntegrationSnapshot,
@@ -757,10 +758,10 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
     }
     if (pushed.item) {
       set((state) => ({
-        syncedClipboardItems: [
+        syncedClipboardItems: pruneSyncedClipsToSevenDays([
           pushed.item!,
           ...state.syncedClipboardItems.filter((c) => c.clipHash !== pushed.item!.clipHash),
-        ].slice(0, 15),
+        ]),
         lastQuarantineToast:
           '연결된 기기로 클립보드 내용을 전송했습니다.',
       }));
@@ -781,14 +782,14 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
       const nextDevices = payload.devices ?? state.connectedDevices;
       const hasMobile = nextDevices.some((d) => d.device_kind === 'mobile');
       const nextClips = payload.incomingClip
-        ? [
+        ? pruneSyncedClipsToSevenDays([
             payload.incomingClip,
             ...state.syncedClipboardItems.filter(
               (c) => c.clipHash !== payload.incomingClip!.clipHash
             ),
-          ].slice(0, 15)
+          ])
         : payload.syncedClips
-        ? payload.syncedClips.slice(0, 15)
+        ? pruneSyncedClipsToSevenDays(payload.syncedClips)
         : state.syncedClipboardItems;
 
       // [기획서 확정 30일 만료 깔끔 분리 원칙]:

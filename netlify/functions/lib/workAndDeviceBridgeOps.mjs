@@ -2062,7 +2062,9 @@ export async function handleAuthedWorkAndDeviceAction({
       return { status: 400, body: { ok: false, reason: 'INVALID_E2EE_CLIP_PAYLOAD' } };
     }
     const nowMs = Date.now();
-    const cutoffMs = nowMs - 24 * 3600 * 1000;
+    const CLIPBOARD_TTL_MS = 7 * 24 * 3600 * 1000; // 7일(168시간) 보관 통일
+    const CLIPBOARD_MAX_ITEMS = 500;
+    const cutoffMs = nowMs - CLIPBOARD_TTL_MS;
     const rawClientCreatedAt = String(body.createdAt || '').trim();
     const parsedClientMs = rawClientCreatedAt ? Date.parse(rawClientCreatedAt) : NaN;
     const effectiveCreatedAt =
@@ -2088,7 +2090,7 @@ export async function handleAuthedWorkAndDeviceAction({
       senderName,
       createdAt: effectiveCreatedAt,
     });
-    const trimmed = filtered.slice(0, 20);
+    const trimmed = filtered.slice(0, CLIPBOARD_MAX_ITEMS);
     const saved = await writeStorageJson(
       supabaseUrl,
       serviceKey,
@@ -2107,6 +2109,8 @@ export async function handleAuthedWorkAndDeviceAction({
       body: {
         ok: true,
         count: trimmed.length,
+        retentionDays: 7,
+        maxItems: CLIPBOARD_MAX_ITEMS,
         canonicalUserId: userId,
         canonicalEmail: email,
       },
@@ -2117,7 +2121,9 @@ export async function handleAuthedWorkAndDeviceAction({
     const gate = await assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash);
     if (!gate.ok) return gate.response;
     const nowMs = Date.now();
-    const cutoffMs = nowMs - 24 * 3600 * 1000;
+    const CLIPBOARD_TTL_MS = 7 * 24 * 3600 * 1000; // 7일(168시간) 보관 통일
+    const CLIPBOARD_MAX_ITEMS = 500;
+    const cutoffMs = nowMs - CLIPBOARD_TTL_MS;
     const mailbox = await readStorageJson(
       supabaseUrl,
       serviceKey,
@@ -2125,14 +2131,16 @@ export async function handleAuthedWorkAndDeviceAction({
       `${emailHash}/clipboard_mailbox_v1.json`,
       { items: [] }
     );
-    const items = (Array.isArray(mailbox.items) ? mailbox.items : []).filter(
-      (it) => it && (Date.parse(it.createdAt || '') || 0) >= cutoffMs
-    );
+    const items = (Array.isArray(mailbox.items) ? mailbox.items : [])
+      .filter((it) => it && (Date.parse(it.createdAt || '') || 0) >= cutoffMs)
+      .slice(0, CLIPBOARD_MAX_ITEMS);
     return {
       status: 200,
       body: {
         ok: true,
         items,
+        retentionDays: 7,
+        maxItems: CLIPBOARD_MAX_ITEMS,
         canonicalUserId: userId,
         canonicalEmail: email,
       },

@@ -8,8 +8,10 @@ import {
   supabase,
 } from './supabaseClient';
 import {
+  consumePendingNativeClipboardOutbound,
   isCapacitorNativeMobileRuntime,
   readNativeMobileClipboardText,
+  syncSharedNativeClipboardHistory,
   writeNativeMobileClipboardText,
 } from './ghostiMobileCareBridge';
 import { getZCoreUrl, zCoreBridge } from './zCoreBridge';
@@ -349,6 +351,27 @@ function rememberDeliveredEnvelope(envKey: string, email?: string): void {
   }
 }
 
+export const SYNCED_CLIPBOARD_RETENTION_MS = 7 * 24 * 3600 * 1000; // 7일(168시간) 보관 통일
+export const SYNCED_CLIPBOARD_MAX_ITEMS = 500;
+
+export function pruneSyncedClipsToSevenDays(items: GhostiSyncedClipItem[]): GhostiSyncedClipItem[] {
+  if (!Array.isArray(items) || items.length === 0) return [];
+  const cutoffMs = Date.now() - SYNCED_CLIPBOARD_RETENTION_MS;
+  const seen = new Set<string>();
+  const out: GhostiSyncedClipItem[] = [];
+  for (const it of items) {
+    if (!it || typeof it.text !== 'string' || !it.text.trim()) continue;
+    const ts = Date.parse(it.createdAt || '');
+    if (Number.isFinite(ts) && ts > 0 && ts < cutoffMs) continue;
+    const key = it.clipHash || it.text;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    out.push(it);
+    if (out.length >= SYNCED_CLIPBOARD_MAX_ITEMS) break;
+  }
+  return out;
+}
+
 export function loadCachedSyncedClips(explicitEmail?: string): GhostiSyncedClipItem[] {
   if (typeof window === 'undefined') return [];
   try {
@@ -359,7 +382,7 @@ export function loadCachedSyncedClips(explicitEmail?: string): GhostiSyncedClipI
     const raw = localStorage.getItem(scopedKey);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? (parsed as GhostiSyncedClipItem[]).slice(0, 15) : [];
+    return Array.isArray(parsed) ? pruneSyncedClipsToSevenDays(parsed as GhostiSyncedClipItem[]) : [];
   } catch {
     return [];
   }
@@ -370,7 +393,11 @@ function saveCachedSyncedClips(items: GhostiSyncedClipItem[], explicitEmail?: st
   try {
     const scopedKey = resolveScopedClipStorageKey(explicitEmail);
     if (!scopedKey) return;
-    localStorage.setItem(scopedKey, JSON.stringify(items.slice(0, 15)));
+    const pruned = pruneSyncedClipsToSevenDays(items);
+    localStorage.setItem(scopedKey, JSON.stringify(pruned));
+    if (isCapacitorNativeMobileRuntime()) {
+      void syncSharedNativeClipboardHistory(pruned);
+    }
   } catch {
     /* ignore */
   }
@@ -1272,10 +1299,10 @@ export async function pushCrossDeviceClipboardText(opts: {
     createdAt: nowIso,
     encryptedE2ee: true,
   };
-  const nextList = [
+  const nextList = pruneSyncedClipsToSevenDays([
     item,
     ...loadCachedSyncedClips(normEmail).filter((c) => c.clipHash !== item.clipHash),
-  ].slice(0, 15);
+  ]);
   saveCachedSyncedClips(nextList, normEmail);
 
   try {
@@ -1304,7 +1331,7 @@ export async function pushCrossDeviceClipboardText(opts: {
         return Promise.resolve('queued');
       })();
 
-  // 2) 오프라인/백그라운드 기기를 위한 24시간 지연 E2EE 암호화 우체통 병렬 보관 (서버 평문 열람 0% 불가)
+  // 2) 오프라인/백그라운드 기기를 위한 7일(168시간) 지연 E2EE 암호화 우체통 병렬 보관 (서버 평문 열람 0% 불가)
   const mailboxPersistPromise = callGhostiServerBridge<{
     count?: number;
     canonicalUserId?: string;
@@ -1317,7 +1344,7 @@ export async function pushCrossDeviceClipboardText(opts: {
     })
     .catch(() => ({ ok: false }));
 
-  // Realtime 채널이 이미 연결되어 있으면 ~50ms 브로드캐스트 완료 즉시 반환하고 24h 우체통은 백그라운드로 비차단 저장
+  // Realtime 채널이 이미 연결되어 있으면 ~50ms 브로드캐스트 완료 즉시 반환하고 7일 우체통은 백그라운드로 비차단 저장
   if (isRealtimeReady) {
     const rtStatus = await Promise.race([
       realtimeSendPromise.catch(() => 'error'),
@@ -2442,10 +2469,10 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
             createdAt: String(payload.createdAt || new Date().toISOString()),
             encryptedE2ee: true,
           };
-          const nextClips = [
+          const nextClips = pruneSyncedClipsToSevenDays([
             clipItem,
             ...loadCachedSyncedClips(normEmail).filter((c) => c.clipHash !== clipItem.clipHash),
-          ].slice(0, 15);
+          ]);
           saveCachedSyncedClips(nextClips, normEmail);
           opts.onIncomingClip(clipItem, { isLocalAutoCapture: false });
         })
@@ -2503,10 +2530,10 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
             createdAt: String(payload.sent_at || new Date().toISOString()),
             encryptedE2ee: true,
           };
-          const nextClips = [
+          const nextClips = pruneSyncedClipsToSevenDays([
             clipItem,
             ...loadCachedSyncedClips(normEmail).filter((c) => c.clipHash !== clipItem.clipHash),
-          ].slice(0, 15);
+          ]);
           saveCachedSyncedClips(nextClips, normEmail);
           opts.onIncomingClip(clipItem, { isLocalAutoCapture: false });
           if (opts.onTeleportReceived) {
@@ -2608,15 +2635,48 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     }
   };
 
+  const flushPendingNativeMobileClips = async (): Promise<void> => {
+    if (
+      disposed ||
+      thisDeviceRevokedLocally ||
+      !isCapacitorNativeMobileRuntime() ||
+      !hasAuthenticatedHubAccountSession() ||
+      !isCurrentAccountSyncUnlocked(normEmail)
+    ) {
+      return;
+    }
+    try {
+      const pending = await consumePendingNativeClipboardOutbound();
+      if (disposed || pending.length === 0) return;
+      for (const entry of pending.reverse()) {
+        if (disposed) break;
+        const cleanTxt = String(entry.text || '').trim();
+        if (!cleanTxt) continue;
+        const pushed = await pushCrossDeviceClipboardText({
+          text: cleanTxt,
+          email: normEmail,
+          userId: opts.userId,
+          isAutoOsCapture: true,
+        });
+        if (!disposed && pushed.ok && pushed.item) {
+          opts.onIncomingClip(pushed.item, { isLocalAutoCapture: true });
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
   const triggerMobileForegroundCapture = () => {
     if (disposed || thisDeviceRevokedLocally || ident.deviceKind !== 'mobile' || typeof window === 'undefined') return;
     if (mobileResumeCaptureTimer !== null) {
       window.clearTimeout(mobileResumeCaptureTimer);
     }
-    // 안드로이드 10+ WindowFocus 확보 직후(120ms) 빠르게 OS 클립보드 읽기 실행
+    // 안드로이드 10+ WindowFocus 확보 직후(120ms) 빠르게 OS 클립보드 읽기 + IME/공유시트 대기열 발송
     mobileResumeCaptureTimer = window.setTimeout(() => {
       mobileResumeCaptureTimer = null;
       if (!disposed && document.visibilityState === 'visible') {
+        void flushPendingNativeMobileClips();
         void inspectAndPushLocalOsClipboard(false, false);
       }
     }, 120);
@@ -2624,6 +2684,13 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
 
   const boot = async () => {
     loadDeliveredEnvelopesOnce(normEmail);
+    if (isCapacitorNativeMobileRuntime()) {
+      const existingCached = loadCachedSyncedClips(normEmail);
+      if (existingCached.length > 0) {
+        void syncSharedNativeClipboardHistory(existingCached);
+      }
+      void flushPendingNativeMobileClips();
+    }
 
     // 0) PBKDF2 AES-256-GCM 암호화 키를 백그라운드에서 선행 예열 (첫 Ctrl+C 시 ~400ms 지연 제거)
     void prewarmAccountE2eeKey(normEmail, opts.userId);
@@ -2879,6 +2946,11 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     void syncRemoteMailboxToUi(true);
   };
 
+  const onNativeClipCaptured = () => {
+    if (disposed) return;
+    void flushPendingNativeMobileClips();
+  };
+
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', onVisibility);
     document.addEventListener('copy', onBrowserCopy);
@@ -2886,6 +2958,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
   if (typeof window !== 'undefined') {
     window.addEventListener('focus', onWindowFocus);
     window.addEventListener('online', onOnline);
+    window.addEventListener('ghostiNativeClipCaptured', onNativeClipCaptured);
   }
 
   return () => {
@@ -2914,6 +2987,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     if (typeof window !== 'undefined') {
       window.removeEventListener('focus', onWindowFocus);
       window.removeEventListener('online', onOnline);
+      window.removeEventListener('ghostiNativeClipCaptured', onNativeClipCaptured);
     }
     cleanup();
   };

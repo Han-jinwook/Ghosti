@@ -3177,4 +3177,159 @@ public class GhostiMobileCarePlugin extends Plugin {
             dialog.show();
         });
     }
+
+    // ───────────────────────── [3귀신] Android 앱 미진입 7일 클립보드(IME·텍스트 선택·공유 시트) 브릿지 ─────────────────────────
+    private static volatile GhostiMobileCarePlugin sActiveInstance = null;
+
+    @Override
+    public void load() {
+        super.load();
+        sActiveInstance = this;
+    }
+
+    public static void notifyNativeClipboardCaptured(GhostiSharedClipboardStore.ClipEntry entry) {
+        if (entry == null) return;
+        GhostiMobileCarePlugin inst = sActiveInstance;
+        if (inst == null) return;
+        try {
+            Activity act = inst.getActivity();
+            if (act == null || inst.getBridge() == null || inst.getBridge().getWebView() == null) return;
+            final String payloadJson = entry.toJson().toString();
+            act.runOnUiThread(() -> {
+                try {
+                    inst.getBridge().getWebView().evaluateJavascript(
+                        "window.dispatchEvent(new CustomEvent('ghostiNativeClipCaptured', { detail: " + payloadJson + " }));",
+                        null
+                    );
+                } catch (Throwable ignored) {
+                }
+            });
+        } catch (Throwable ignored) {
+        }
+    }
+
+    @PluginMethod
+    public void syncSharedClipboardHistory(PluginCall call) {
+        Context ctx = getContext();
+        if (ctx == null) {
+            JSObject ret = new JSObject();
+            ret.put("ok", false);
+            ret.put("count", 0);
+            call.resolve(ret);
+            return;
+        }
+        try {
+            JSArray items = call.getArray("items");
+            int mergedCount = GhostiSharedClipboardStore.mergeFromWebHistory(
+                ctx,
+                items != null ? items : new JSONArray()
+            );
+            JSObject ret = new JSObject();
+            ret.put("ok", true);
+            ret.put("count", mergedCount);
+            call.resolve(ret);
+        } catch (Throwable t) {
+            JSObject ret = new JSObject();
+            ret.put("ok", false);
+            ret.put("count", 0);
+            call.resolve(ret);
+        }
+    }
+
+    @PluginMethod
+    public void consumePendingNativeClipboardOutbound(PluginCall call) {
+        Context ctx = getContext();
+        JSObject ret = new JSObject();
+        if (ctx == null) {
+            ret.put("ok", false);
+            ret.put("items", new JSArray());
+            call.resolve(ret);
+            return;
+        }
+        try {
+            JSONArray pending = GhostiSharedClipboardStore.consumePendingOutbound(ctx);
+            JSArray out = new JSArray();
+            for (int i = 0; i < pending.length(); i++) {
+                JSONObject o = pending.optJSONObject(i);
+                if (o != null) {
+                    out.put(o);
+                }
+            }
+            ret.put("ok", true);
+            ret.put("items", out);
+            call.resolve(ret);
+        } catch (Throwable t) {
+            ret.put("ok", false);
+            ret.put("items", new JSArray());
+            call.resolve(ret);
+        }
+    }
+
+    @PluginMethod
+    public void getNativeClipboardImeStatus(PluginCall call) {
+        Context ctx = getContext();
+        JSObject ret = new JSObject();
+        boolean enabled = false;
+        boolean selected = false;
+        try {
+            if (ctx != null) {
+                android.view.inputmethod.InputMethodManager imm =
+                    (android.view.inputmethod.InputMethodManager) ctx.getSystemService(Context.INPUT_METHOD_SERVICE);
+                if (imm != null) {
+                    String pkg = ctx.getPackageName();
+                    for (android.view.inputmethod.InputMethodInfo info : imm.getEnabledInputMethodList()) {
+                        if (info != null && pkg.equals(info.getPackageName())) {
+                            enabled = true;
+                            break;
+                        }
+                    }
+                }
+                String defaultIme = Settings.Secure.getString(
+                    ctx.getContentResolver(),
+                    Settings.Secure.DEFAULT_INPUT_METHOD
+                );
+                if (defaultIme != null && defaultIme.contains(ctx.getPackageName())) {
+                    selected = true;
+                }
+            }
+        } catch (Throwable ignored) {
+        }
+        ret.put("ok", true);
+        ret.put("enabled", enabled);
+        ret.put("selected", selected);
+        call.resolve(ret);
+    }
+
+    @PluginMethod
+    public void openNativeClipboardImeSettings(PluginCall call) {
+        Activity act = getActivity();
+        Context ctx = getContext();
+        String mode = call.getString("mode", "settings");
+        JSObject ret = new JSObject();
+        if (act == null || ctx == null) {
+            ret.put("ok", false);
+            call.resolve(ret);
+            return;
+        }
+        act.runOnUiThread(() -> {
+            try {
+                if ("picker".equalsIgnoreCase(mode)) {
+                    android.view.inputmethod.InputMethodManager imm =
+                        (android.view.inputmethod.InputMethodManager) ctx.getSystemService(Context.INPUT_METHOD_SERVICE);
+                    if (imm != null) {
+                        imm.showInputMethodPicker();
+                    }
+                } else {
+                    Intent intent = new Intent(Settings.ACTION_INPUT_METHOD_SETTINGS);
+                    intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
+                    act.startActivity(intent);
+                }
+                ret.put("ok", true);
+                call.resolve(ret);
+            } catch (Throwable t) {
+                ret.put("ok", false);
+                call.resolve(ret);
+            }
+        });
+    }
 }

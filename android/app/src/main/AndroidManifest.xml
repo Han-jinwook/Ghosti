@@ -41,6 +41,40 @@
 
         </activity>
 
+        <!-- [Ghosti 3귀신] Android 앱 미진입 입력창 직결 정공법: 공식 IME 7일 클립보드 키보드 -->
+        <service
+            android:name=".GhostiClipboardImeService"
+            android:label="귀신 7일 클립보드"
+            android:permission="android.permission.BIND_INPUT_METHOD"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.view.InputMethod" />
+            </intent-filter>
+            <meta-data
+                android:name="android.view.im"
+                android:resource="@xml/ghosti_clipboard_ime" />
+        </service>
+
+        <!-- [Ghosti 3귀신] Android 앱 미진입 텍스트 선택 툴바(PROCESS_TEXT) & 공유 시트(SEND) 투명 무화면 직결 -->
+        <activity
+            android:name=".GhostiQuickClipActivity"
+            android:label="귀신 클립보드 저장"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:noHistory="true"
+            android:excludeFromRecents="true"
+            android:exported="true">
+            <intent-filter>
+                <action android:name="android.intent.action.PROCESS_TEXT" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+            <intent-filter>
+                <action android:name="android.intent.action.SEND" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <data android:mimeType="text/plain" />
+            </intent-filter>
+        </activity>
+
         <provider
             android:name="androidx.core.content.FileProvider"
             android:authorities="${applicationId}.fileprovider"
