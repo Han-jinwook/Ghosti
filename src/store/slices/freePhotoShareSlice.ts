@@ -36,6 +36,7 @@ import {
   getCachedJoinedSharedRoomsSync,
   leaveSupabaseSharedPhotoRoom,
   readInstantLocalVaultSharedPhotos,
+  setSupabaseSharedRoomPhotoHidden,
   uploadPhotosToSupabaseSharedRoom,
   type JoinedSharedPhotoRoomInfo,
 } from '../../services/sharedPhotoRoomSupabase';
@@ -1373,6 +1374,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
 
   softDeleteSharedRoomPhoto24h: (photoId, mode = 'uploader_24h') => {
     if (!photoId) return;
+    void setSupabaseSharedRoomPhotoHidden(photoId, true);
     set((state) => {
       const deletedAt = new Date().toISOString();
       const nextSoftDeletedMap = {
@@ -1406,6 +1408,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
 
   restoreSharedRoomPhotoFromTrash: (photoId) => {
     if (!photoId) return;
+    void setSupabaseSharedRoomPhotoHidden(photoId, false);
     set((state) => {
       const nextSoftDeletedMap = { ...state.sharedRoomSoftDeletedMap };
       delete nextSoftDeletedMap[photoId];

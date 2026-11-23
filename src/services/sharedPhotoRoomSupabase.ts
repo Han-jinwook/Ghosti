@@ -1409,6 +1409,36 @@ export async function deleteSupabaseSharedRoomPhoto(photoItemId: string): Promis
  * - 멤버가 초대받은 공유방에서 스스로 나가면 즉시当該 방의 로컬 금고(IndexedDB) 사진을 0 Byte로 비우고
  *   서버 멤버십(ghosti_lounge_members)에서 탈퇴합니다 (내 개인 귀신계 여권과 내 기기 사진은 100% 보존).
  */
+export async function setSupabaseSharedRoomPhotoHidden(
+  photoId: string,
+  hidden: boolean
+): Promise<boolean> {
+  const cleanId = (photoId || '').trim();
+  if (!cleanId || !hasAuthenticatedHubAccountSession()) return false;
+  const rawId = cleanId.startsWith('shared_sb_') ? cleanId.slice('shared_sb_'.length) : cleanId;
+  if (!rawId) return false;
+  try {
+    const bridgeRes = await callGhostiServerBridge('photo_set_hidden_state', {
+      photoId: rawId,
+      hidden,
+    });
+    if (bridgeRes.ok) return true;
+  } catch {
+    /* fallback to direct authed update */
+  }
+  const authed = await ensureGhostiAuthedSupabaseClient();
+  if (!authed) return false;
+  try {
+    const { error } = await authed
+      .from('ghosti_room_shared_photos')
+      .update({ is_hidden_by_master: hidden })
+      .eq('id', rawId);
+    return !error;
+  } catch {
+    return false;
+  }
+}
+
 export async function leaveSupabaseSharedPhotoRoom(roomId: string): Promise<boolean> {
   const cleanRoomId = (roomId || '').trim();
   if (!cleanRoomId) return false;

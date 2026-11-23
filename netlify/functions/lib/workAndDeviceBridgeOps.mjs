@@ -2620,5 +2620,57 @@ export async function handleAuthedWorkAndDeviceAction({
     };
   }
 
+  if (action === 'photo_set_hidden_state') {
+    const rawPhotoId = String(body.photoId || '').trim().replace(/^shared_sb_/, '');
+    const hidden = Boolean(body.hidden);
+    if (!rawPhotoId) {
+      return { status: 400, body: { ok: false, reason: 'MISSING_PHOTO_ID' } };
+    }
+    const photoRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_room_shared_photos?id=eq.${encodeURIComponent(
+        rawPhotoId
+      )}&select=id,room_id,uploader_email&limit=1`,
+      { headers: srvHeaders(serviceKey) }
+    );
+    const photoRows = photoRes.ok ? await photoRes.json().catch(() => []) : [];
+    const targetPhoto = Array.isArray(photoRows) ? photoRows[0] : null;
+    if (!targetPhoto?.id) {
+      return { status: 404, body: { ok: false, reason: 'PHOTO_NOT_FOUND' } };
+    }
+    const uploaderEmail = String(targetPhoto.uploader_email || '').trim().toLowerCase();
+    let authorized = Boolean(uploaderEmail && uploaderEmail === email);
+    if (!authorized && targetPhoto.room_id) {
+      const roomRes = await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=eq.${encodeURIComponent(
+          String(targetPhoto.room_id)
+        )}&select=master_email&limit=1`,
+        { headers: srvHeaders(serviceKey) }
+      );
+      const roomRows = roomRes.ok ? await roomRes.json().catch(() => []) : [];
+      const masterEmail = String(roomRows?.[0]?.master_email || '').trim().toLowerCase();
+      if (masterEmail && masterEmail === email) {
+        authorized = true;
+      }
+    }
+    if (!authorized) {
+      return { status: 403, body: { ok: false, reason: 'FORBIDDEN' } };
+    }
+    const patchRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_room_shared_photos?id=eq.${encodeURIComponent(rawPhotoId)}`,
+      {
+        method: 'PATCH',
+        headers: srvHeaders(serviceKey, {
+          'Content-Type': 'application/json',
+          Prefer: 'return=minimal',
+        }),
+        body: JSON.stringify({ is_hidden_by_master: hidden }),
+      }
+    );
+    return {
+      status: patchRes.ok ? 200 : 500,
+      body: { ok: patchRes.ok, photoId: rawPhotoId, hidden },
+    };
+  }
+
   return null;
 }
