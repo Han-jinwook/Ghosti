@@ -856,14 +856,14 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
           <div className="flex flex-col gap-0.5">
             <div className="flex flex-wrap items-center gap-2">
               <span className="font-headline-sm text-[15.5px] text-white font-bold">
-                공유방 휴지통 ({trashedRoomPhotos.length}장)
+                공유방 휴지통 · 숨긴 사진함 ({trashedRoomPhotos.length}장)
               </span>
               <span className="px-2 py-0.5 rounded-md bg-zinc-900 border border-white/10 text-zinc-300 text-[11px] font-bold">
-                24시간 내 본인 삭제 임시 보관 · 1초 복원 지원
+                삭제 · 숨김 사진 임시 보관 · 1초 복원(숨김 해제) 지원
               </span>
             </div>
             <p className="text-[11.5px] text-zinc-400">
-              공유방에서 삭제한 사진이 여기에 임시 보관됩니다. 원본 기기(PC/스마트폰) 파일은 삭제되지 않으며, [↩️ 1초 복원]을 누르면 공유방 앨범으로 즉시 돌아옵니다.
+              공유방에서 삭제하거나 숨기기 처리한 사진이 여기에 보관됩니다. 원본 기기(PC/스마트폰) 파일은 삭제되지 않으며, [1초 복원 · 숨김 해제]를 누르면 공유방 앨범으로 즉시 돌아옵니다.
             </p>
           </div>
 

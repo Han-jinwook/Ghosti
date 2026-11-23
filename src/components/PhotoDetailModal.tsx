@@ -180,6 +180,10 @@ export const PhotoDetailModal: React.FC = () => {
     activeFamilyRoom,
     sharedRoomHostPhotos,
     sharedRoomAddedPhotos,
+    sharedRoomSoftDeletedMap,
+    softDeleteSharedRoomPhoto24h,
+    restoreSharedRoomPhotoFromTrash,
+    setDesktopTab,
   } = useSaySeeStore();
 
   const scopedPhotos = useMemo(() => {
@@ -195,7 +199,13 @@ export const PhotoDetailModal: React.FC = () => {
   const [activeTab, setActiveTab] = useState<ContextTab>('same-day');
   const [drillQuery, setDrillQuery] = useState('');
   const [actionNotice, setActionNotice] = useState<string | null>(null);
-  const [isHiddenInLounge, setIsHiddenInLounge] = useState(false);
+  const isSharedLounge =
+    activeLoungeType === 'family' ||
+    activeLoungeType === 'club' ||
+    activeLoungeType === 'student';
+  const isHiddenInLounge = Boolean(
+    selectedPhoto && (sharedRoomSoftDeletedMap[selectedPhoto.id] || selectedPhoto.quarantined)
+  );
 
   const photoNavContext = useMemo(() => {
     if (!selectedPhoto) return { list: [] as PhotoItem[], keepGroup: false };
@@ -246,7 +256,6 @@ export const PhotoDetailModal: React.FC = () => {
       const nextPhoto = photoNavList[nextIdx];
       if (!nextPhoto) return;
       setActionNotice(null);
-      setIsHiddenInLounge(false);
       setSelectedPhoto(nextPhoto, photoNavContext.keepGroup ? photoNavList : null);
     },
     [photoNavList, currentPhotoIdx, photoNavContext.keepGroup, setSelectedPhoto]
@@ -493,25 +502,50 @@ export const PhotoDetailModal: React.FC = () => {
               <span>원본 저장</span>
             </a>
 
-            <button
-              type="button"
-              onClick={() => {
-                const next = !isHiddenInLounge;
-                setIsHiddenInLounge(next);
-                setActionNotice(
-                  next
-                    ? `'${selectedPhoto.name}' 사진을 공유방 목록에서 숨겼습니다. 내 기기 원본 파일은 유지됩니다.`
-                    : `'${selectedPhoto.name}' 사진 숨김을 해제했습니다.`
-                );
-              }}
-              className={`px-3 py-1.5 rounded-lg border text-[12px] font-medium transition-colors cursor-pointer ${
-                isHiddenInLounge
-                  ? 'bg-slate-900 text-white border-slate-900'
-                  : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
-              }`}
-            >
-              <span>{isHiddenInLounge ? '숨김 해제' : '목록에서 숨기기'}</span>
-            </button>
+            {isSharedLounge && (
+              <>
+                <button
+                  type="button"
+                  onClick={() => {
+                    if (isHiddenInLounge) {
+                      restoreSharedRoomPhotoFromTrash(selectedPhoto.id);
+                      setActionNotice(
+                        `'${selectedPhoto.name}' 사진의 숨김을 해제해 공유방 앨범으로 복원했습니다.`
+                      );
+                    } else {
+                      softDeleteSharedRoomPhoto24h(selectedPhoto.id, 'host_hide');
+                      setActionNotice(
+                        `'${selectedPhoto.name}' 사진을 공유방 목록에서 숨겨 [공유방 휴지통 · 숨긴 사진함]으로 옮겼습니다. [숨긴 사진함 바로가기]에서 언제든 확인하고 숨김 해제할 수 있습니다.`
+                      );
+                    }
+                  }}
+                  className={`px-3 py-1.5 rounded-lg border text-[12px] font-medium transition-colors cursor-pointer ${
+                    isHiddenInLounge
+                      ? 'bg-slate-900 text-white border-slate-900'
+                      : 'bg-white hover:bg-slate-50 border-slate-200 text-slate-700'
+                  }`}
+                >
+                  <span>{isHiddenInLounge ? '숨김 해제' : '목록에서 숨기기'}</span>
+                </button>
+                {isHiddenInLounge && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      try {
+                        sessionStorage.setItem('ghosti_scroll_shared_trash_once', '1');
+                      } catch {
+                        /* ignore */
+                      }
+                      setSelectedPhoto(null);
+                      setDesktopTab('share');
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium transition-colors cursor-pointer"
+                  >
+                    숨긴 사진함 바로가기
+                  </button>
+                )}
+              </>
+            )}
 
             <button
               type="button"

@@ -56,6 +56,9 @@ export const GhostSearchPane: React.FC<{
     restoreSharedRoomPhotoFromTrash,
     lastSoftDeletedSharedPhoto,
     clearLastSoftDeletedSharedPhoto,
+    sharedRoomSoftDeletedMap,
+    sharedRoomAddedPhotos,
+    sharedRoomHostPhotos,
     setDesktopTab,
     openLocalFolder,
     hasExecutedUserSearch,
@@ -612,6 +615,40 @@ export const GhostSearchPane: React.FC<{
                             </div>
 
                             <div className="flex items-center gap-2">
+                              {(() => {
+                                if (
+                                  activeLoungeType !== 'family' &&
+                                  activeLoungeType !== 'club' &&
+                                  activeLoungeType !== 'student'
+                                ) {
+                                  return null;
+                                }
+                                const trashedCount = Object.keys(sharedRoomSoftDeletedMap || {}).filter(
+                                  (pid) =>
+                                    sharedRoomAddedPhotos.some((p) => p.id === pid) ||
+                                    sharedRoomHostPhotos.some((p) => p.id === pid)
+                                ).length;
+                                if (trashedCount <= 0) return null;
+                                return (
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      try {
+                                        sessionStorage.setItem(
+                                          'ghosti_scroll_shared_trash_once',
+                                          '1'
+                                        );
+                                      } catch {
+                                        /* ignore */
+                                      }
+                                      setDesktopTab('share');
+                                    }}
+                                    className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium transition-colors cursor-pointer"
+                                  >
+                                    휴지통 · 숨긴 사진 ({trashedCount}장)
+                                  </button>
+                                );
+                              })()}
                               <button
                                 onClick={() => setGroupBurstsInSearch(!groupBurstsInSearch)}
                                 className={`px-3 py-1.5 rounded-lg text-[12px] font-medium border transition-colors cursor-pointer ${
