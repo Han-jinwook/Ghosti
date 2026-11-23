@@ -2286,8 +2286,24 @@ _LAST_POPUP_OPEN_TS = 0.0
 _LAST_POPUP_OPEN_RECT: dict | None = None
 _ACTIVE_POPUP_HWND: int = 0
 _POPUP_LAUNCHING_UNTIL: float = 0.0
+_ACTIVE_POPUP_HEARTBEAT_TS: float = 0.0
+_ACTIVE_POPUP_WIN_ID: str = ""
 _POPUP_OPEN_LOCK = threading.Lock()
 _ACTIVE_POPUP_STATE_FILE = TELEMETRY_FILE.parent / "active_ghost_search_popup.json"
+
+
+def record_ghost_search_popup_heartbeat(win_id: str = "", closing: bool = False) -> None:
+    """웹 귀신검색창(?ghostSearchWindow=...)이 2.5초마다 보내는 생존 하트비트를 기록해 타 브라우저/프로필에서도 중복 창 실행을 원천 차단합니다."""
+    global _ACTIVE_POPUP_HEARTBEAT_TS, _ACTIVE_POPUP_WIN_ID
+    with _POPUP_OPEN_LOCK:
+        if closing:
+            if (not win_id) or (not _ACTIVE_POPUP_WIN_ID) or (win_id == _ACTIVE_POPUP_WIN_ID):
+                _ACTIVE_POPUP_HEARTBEAT_TS = 0.0
+                _ACTIVE_POPUP_WIN_ID = ""
+        else:
+            _ACTIVE_POPUP_HEARTBEAT_TS = time.time()
+            if win_id:
+                _ACTIVE_POPUP_WIN_ID = win_id
 
 
 def _get_hwnd_class_and_title(hwnd: int) -> tuple[str, str]:
@@ -2632,7 +2648,11 @@ def _open_ghost_search_window_popup(
                 "reused": False,
             }
 
-        if now_ts < _POPUP_LAUNCHING_UNTIL or ((now_ts - _LAST_POPUP_OPEN_TS) < 1.8 and _LAST_POPUP_OPEN_RECT is not None):
+        if (
+            (now_ts - _ACTIVE_POPUP_HEARTBEAT_TS) < 5.5
+            or now_ts < _POPUP_LAUNCHING_UNTIL
+            or ((now_ts - _LAST_POPUP_OPEN_TS) < 3.5 and _LAST_POPUP_OPEN_RECT is not None)
+        ):
             return {
                 "mode": "web_monitor_app",
                 "url": target_url,
@@ -2646,7 +2666,7 @@ def _open_ghost_search_window_popup(
         caller_fg_hwnd = int(u32.GetForegroundWindow() or 0) if sys.platform == "win32" else 0
         _LAST_POPUP_OPEN_TS = now_ts
         _LAST_POPUP_OPEN_RECT = rect
-        _POPUP_LAUNCHING_UNTIL = now_ts + 3.8
+        _POPUP_LAUNCHING_UNTIL = now_ts + 5.0
 
     record_feature_telemetry(f"ghost_search_window_{rect['stage']}")
 

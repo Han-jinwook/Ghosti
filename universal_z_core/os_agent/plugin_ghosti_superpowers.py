@@ -991,6 +991,14 @@ def open_ghost_search_window_api(params: Dict[str, Any] | None = None) -> Dict[s
     except Exception:
         pass
     data = params or {}
+    if _parse_bool(data.get("heartbeat"), False):
+        win_id = str(data.get("win_id") or "").strip()
+        spd.record_ghost_search_popup_heartbeat(win_id, closing=False)
+        return {"ok": True, "heartbeat": True}
+    if _parse_bool(data.get("closing"), False):
+        win_id = str(data.get("win_id") or "").strip()
+        spd.record_ghost_search_popup_heartbeat(win_id, closing=True)
+        return {"ok": True, "closing": True}
     query = str(data.get("query") or data.get("q") or "").strip()
     stage = str(data.get("stage") or ("medium" if query else "small")).strip().lower()
     if stage in ("gallery", "large"):

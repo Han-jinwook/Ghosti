@@ -120,13 +120,32 @@ function probeOpenGhostSearchWindowAlive(timeoutMs = 150): Promise<boolean> {
   });
 }
 
+const GHOST_SEARCH_HB_KEY = 'ghosti_search_win_hb_v1';
+
+function hasFreshGhostSearchLocalHeartbeat(maxAgeMs = 3500): boolean {
+  try {
+    if (typeof localStorage === 'undefined') return false;
+    const raw = localStorage.getItem(GHOST_SEARCH_HB_KEY);
+    if (!raw) return false;
+    const parsed = JSON.parse(raw) as { ts?: number } | null;
+    return typeof parsed?.ts === 'number' && Date.now() - parsed.ts < maxAgeMs;
+  } catch {
+    return false;
+  }
+}
+
 export async function openRealGhostSearchWindowViaDaemon(
   stage: GhostSearchStage = 'medium',
   query?: string,
 ): Promise<boolean> {
   const now = Date.now();
   broadcastFocusToOpenGhostSearchWindow(query);
-  if (_openGhostSearchInflight || now - _lastOpenGhostSearchTs < 900) {
+  // 1차 철벽 싱글톤 방어: 이미 열려 있는 귀신검색창의 1초 하트비트가 살아있거나 직전 3.5초 내 기동 중이면 절대 중복 실행 금지
+  if (
+    _openGhostSearchInflight ||
+    now - _lastOpenGhostSearchTs < 3500 ||
+    hasFreshGhostSearchLocalHeartbeat(3500)
+  ) {
     _lastGhostSearchWasReused = true;
     bringRealGhostSearchPopupToFront(stage, query);
     return true;
@@ -136,8 +155,8 @@ export async function openRealGhostSearchWindowViaDaemon(
   _lastGhostSearchWasReused = false;
 
   try {
-    // 1차 싱글톤 방어: 이미 열려 있는 귀신검색창이 BroadcastChannel 응답을 주면 중복 실행하지 않고 전면 포커스만 수행
-    const alreadyOpenInBrowser = await probeOpenGhostSearchWindowAlive(150);
+    // 2차 싱글톤 방어: 이미 열려 있는 귀신검색창이 BroadcastChannel 응답을 주면 중복 실행하지 않고 전면 포커스만 수행
+    const alreadyOpenInBrowser = await probeOpenGhostSearchWindowAlive(300);
     if (alreadyOpenInBrowser) {
       _lastGhostSearchWasReused = true;
       bringRealGhostSearchPopupToFront(stage, query);

@@ -85,6 +85,55 @@ export const DesktopDashboard: React.FC = () => {
 
     let bc: BroadcastChannel | null = null;
     const bornAt = Date.now() + Math.random();
+    const winId = `gsw_${Math.floor(bornAt)}_${Math.random().toString(36).slice(2, 7)}`;
+    const HB_KEY = 'ghosti_search_win_hb_v1';
+
+    const writeLocalHeartbeat = () => {
+      try {
+        localStorage.setItem(HB_KEY, JSON.stringify({ winId, ts: Date.now() }));
+      } catch {
+        /* ignore */
+      }
+    };
+    const clearLocalHeartbeat = () => {
+      try {
+        const raw = localStorage.getItem(HB_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as { winId?: string } | null;
+          if (!parsed?.winId || parsed.winId === winId) {
+            localStorage.removeItem(HB_KEY);
+          }
+        }
+      } catch {
+        /* ignore */
+      }
+    };
+    const sendZCoreHeartbeat = (closing = false) => {
+      if (!zCoreBridge.isConnected) return;
+      try {
+        void fetch(getZCoreUrl('/api/superpower/open_search_window'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(
+            closing ? { closing: true, win_id: winId } : { heartbeat: true, win_id: winId }
+          ),
+          keepalive: closing,
+        }).catch(() => {});
+      } catch {
+        /* ignore */
+      }
+    };
+
+    writeLocalHeartbeat();
+    sendZCoreHeartbeat(false);
+    const localHbTimer = window.setInterval(writeLocalHeartbeat, 1000);
+    const zcoreHbTimer = window.setInterval(() => sendZCoreHeartbeat(false), 2500);
+    const onUnloadCleanup = () => {
+      clearLocalHeartbeat();
+      sendZCoreHeartbeat(true);
+    };
+    window.addEventListener('beforeunload', onUnloadCleanup);
+    window.addEventListener('pagehide', onUnloadCleanup);
     try {
       if (typeof BroadcastChannel !== 'undefined') {
         bc = new BroadcastChannel('ghosti_search_window_singleton_v1');
@@ -152,6 +201,12 @@ export const DesktopDashboard: React.FC = () => {
 
     return () => {
       window.removeEventListener('resize', onPassiveResize);
+      window.removeEventListener('beforeunload', onUnloadCleanup);
+      window.removeEventListener('pagehide', onUnloadCleanup);
+      window.clearInterval(localHbTimer);
+      window.clearInterval(zcoreHbTimer);
+      clearLocalHeartbeat();
+      sendZCoreHeartbeat(true);
       try {
         bc?.close();
       } catch {
