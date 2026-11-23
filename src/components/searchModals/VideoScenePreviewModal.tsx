@@ -265,6 +265,26 @@ export const VideoScenePreviewModal: React.FC = () => {
     } else {
       setIsResolvingVideo(false);
       setResolvedVideoSrc(baseStreamUrl);
+      if (
+        videoRef.current &&
+        videoRef.current.readyState >= 1 &&
+        seekTarget > 0 &&
+        Number.isFinite(videoRef.current.duration) &&
+        videoRef.current.duration > 0.5
+      ) {
+        try {
+          const clamped = Math.min(seekTarget, Math.max(0, videoRef.current.duration - 0.1));
+          if (Math.abs(videoRef.current.currentTime - clamped) > 0.35) {
+            videoRef.current.currentTime = clamped;
+          }
+          if (Math.abs(videoRef.current.currentTime - clamped) <= 0.6) {
+            pendingSeekSecRef.current = null;
+          }
+          void videoRef.current.play().catch(() => {});
+        } catch {
+          // ignore
+        }
+      }
     }
 
     return () => {
@@ -290,6 +310,7 @@ export const VideoScenePreviewModal: React.FC = () => {
       };
 
       if (Number.isFinite(el.duration) && el.duration > 0) {
+        pendingSeekSecRef.current = null;
         const nextT = Math.max(0, Math.min(Math.max(0, el.duration - 0.1), (el.currentTime || 0) + deltaSec));
         el.currentTime = nextT;
         showHud(`${deltaSec < 0 ? `-${Math.abs(deltaSec)}초` : `+${deltaSec}초`} · ${fmtSec(nextT)}`);
@@ -436,16 +457,18 @@ export const VideoScenePreviewModal: React.FC = () => {
 
   const applyPendingSeekOnce = (vidEl: HTMLVideoElement) => {
     const targetSec = pendingSeekSecRef.current;
-    pendingSeekSecRef.current = null;
+    if (targetSec === null) return;
     try {
-      if (
-        targetSec !== null &&
-        targetSec >= 0 &&
-        Number.isFinite(vidEl.duration) &&
-        vidEl.duration > 0.5 &&
-        Math.abs(vidEl.currentTime - targetSec) > 0.15
-      ) {
-        vidEl.currentTime = Math.min(targetSec, Math.max(0, vidEl.duration - 0.1));
+      if (Number.isFinite(vidEl.duration) && vidEl.duration > 0.5) {
+        const clampedTarget = Math.min(Math.max(0, targetSec), Math.max(0, vidEl.duration - 0.1));
+        if (Math.abs(vidEl.currentTime - clampedTarget) > 0.35) {
+          vidEl.currentTime = clampedTarget;
+        }
+        // 실제로 목표 위치에 근접했거나 0초 시작일 때만 pendingSeek를 해제하여,
+        // onLoadedMetadata 시점에 seekable 범위가 아직 안 열렸더라도 onLoadedData/onCanPlay에서 1회 더 확실히 점프합니다.
+        if (clampedTarget <= 0.2 || Math.abs(vidEl.currentTime - clampedTarget) <= 0.6) {
+          pendingSeekSecRef.current = null;
+        }
       }
       void vidEl.play().catch(() => {});
     } catch {
@@ -572,6 +595,12 @@ export const VideoScenePreviewModal: React.FC = () => {
                       syncRealVideoDuration(selectedVideoModal.id, realDur);
                     }
                     applyPendingSeekOnce(el);
+                  }}
+                  onLoadedData={(e) => {
+                    applyPendingSeekOnce(e.currentTarget);
+                  }}
+                  onCanPlay={(e) => {
+                    applyPendingSeekOnce(e.currentTarget);
                   }}
                   className="w-full h-full object-contain"
                 />

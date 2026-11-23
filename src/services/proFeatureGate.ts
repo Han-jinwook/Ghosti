@@ -200,28 +200,59 @@ export async function evaluateProFeatureGate(options: {
   };
 }
 
-export async function copyTextSafeToClipboard(text: string): Promise<void> {
+export async function copyTextSafeToClipboard(text: string): Promise<boolean> {
+  const payload = String(text ?? '');
+  if (!payload) return false;
+  let copied = false;
+
+  // 1) PC Z-코어 연결 시 OS 네이티브 클립보드 API(/__merlin/clipboard)로 최우선 기록
+  // (비동기 AI 라벨링/OCR 대기 후 브라우저 일시적 사용자 제스처 만료로 navigator.clipboard가 거부되는 현상을 원천 차단)
+  if (zCoreBridge.isConnected) {
+    try {
+      const ctrl = new AbortController();
+      const tid = setTimeout(() => ctrl.abort(), 2500);
+      const res = await fetch(getZCoreUrl('/__merlin/clipboard'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text: payload }),
+        signal: ctrl.signal,
+      }).finally(() => clearTimeout(tid));
+      if (res.ok) {
+        copied = true;
+      }
+    } catch {
+      /* fallback to browser clipboard below */
+    }
+  }
+
+  // 2) 브라우저 표준 Clipboard API
   try {
     if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(text);
-      return;
+      await navigator.clipboard.writeText(payload);
+      copied = true;
+      return true;
     }
   } catch {
     /* fallback below */
   }
+
+  // 3) 구형/비활성화 폴백 execCommand
   if (typeof document !== 'undefined') {
     try {
       const ta = document.createElement('textarea');
-      ta.value = text;
+      ta.value = payload;
       ta.style.position = 'fixed';
       ta.style.opacity = '0';
       document.body.appendChild(ta);
       ta.focus();
       ta.select();
-      document.execCommand('copy');
+      if (document.execCommand('copy')) {
+        copied = true;
+      }
       document.body.removeChild(ta);
     } catch {
       /* ignore */
     }
   }
+  return copied;
 }

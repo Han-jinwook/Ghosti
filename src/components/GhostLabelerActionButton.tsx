@@ -83,11 +83,45 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
           e.stopPropagation();
           void verifyGate(vp.fullPath || vp.name).then(async (allowed) => {
             if (!allowed) return;
-            const res = await resolveSmartKoreanLabelForPhoto(vp);
-            await copyTextSafeToClipboard(res.label);
             useSaySeeStore.setState({
-              lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${res.label} (복사됨)`,
+              lastQuarantineToast: '사진 내용을 바탕으로 한글 파일명을 생성하는 중입니다...',
             });
+            try {
+              const fallbackLabel = formatQuickKoreanLabelForFile(
+                stripCollisionKeySuffix(vp.name || '사진.png'),
+                vp.date,
+                vp.tags || []
+              );
+              const res = await Promise.race([
+                resolveSmartKoreanLabelForPhoto(vp),
+                new Promise<{ displaySourceName: string; label: string; enrichedTags: string[] }>(
+                  (resolve) =>
+                    setTimeout(
+                      () =>
+                        resolve({
+                          displaySourceName: stripCollisionKeySuffix(vp.name || '사진.png'),
+                          label: fallbackLabel,
+                          enrichedTags: [],
+                        }),
+                      6500
+                    )
+                ),
+              ]);
+              await copyTextSafeToClipboard(res.label);
+              useSaySeeStore.setState({
+                lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${res.label} (복사됨)`,
+              });
+            } catch {
+              const fallbackLabel = formatQuickKoreanLabelForFile(
+                stripCollisionKeySuffix(vp.name || '사진.png'),
+                vp.date,
+                vp.tags || []
+              );
+              await copyTextSafeToClipboard(fallbackLabel);
+              useSaySeeStore.setState({
+                lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${fallbackLabel} (복사됨)`,
+              });
+            }
           });
         }}
         className="px-2 py-1 rounded-md bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-medium cursor-pointer"
@@ -108,34 +142,64 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
           useSaySeeStore.setState({
             lastQuarantineToast: '사진 내용을 바탕으로 한글 파일명을 생성하는 중입니다...',
           });
-          const res = await resolveSmartKoreanLabelForPhoto(targetPhoto);
-          await copyTextSafeToClipboard(res.label);
-          const patchPhoto = (p: PhotoItem): PhotoItem =>
-            p.id === targetPhoto.id
-              ? {
-                  ...p,
-                  tags: Array.from(new Set([...res.enrichedTags, ...(p.tags || [])])),
-                  ...(res.ocrSnippet && !(p.captionKo || '').includes('OCR:')
-                    ? {
-                        captionKo: p.captionKo
-                          ? `${p.captionKo} | OCR: ${res.ocrSnippet}`
-                          : `OCR: ${res.ocrSnippet}`,
-                      }
-                    : {}),
-                }
-              : p;
-          useSaySeeStore.setState((st) => ({
-            lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${res.label} (복사됨)`,
-            ...(res.enrichedTags.length > 0
-              ? {
-                  photos: st.photos.map(patchPhoto),
-                  searchResults: st.searchResults.map((sr) => ({
-                    ...sr,
-                    photo: patchPhoto(sr.photo),
-                  })),
-                }
-              : {}),
-          }));
+          const fallbackLabel = formatQuickKoreanLabelForFile(
+            stripCollisionKeySuffix(targetPhoto.name || '사진.png'),
+            targetPhoto.date,
+            targetPhoto.tags || []
+          );
+          try {
+            const res = await Promise.race([
+              resolveSmartKoreanLabelForPhoto(targetPhoto),
+              new Promise<{
+                displaySourceName: string;
+                label: string;
+                enrichedTags: string[];
+                ocrSnippet?: string;
+              }>((resolve) =>
+                setTimeout(
+                  () =>
+                    resolve({
+                      displaySourceName: stripCollisionKeySuffix(targetPhoto.name || '사진.png'),
+                      label: fallbackLabel,
+                      enrichedTags: [],
+                    }),
+                  6500
+                )
+              ),
+            ]);
+            await copyTextSafeToClipboard(res.label);
+            const patchPhoto = (p: PhotoItem): PhotoItem =>
+              p.id === targetPhoto.id
+                ? {
+                    ...p,
+                    tags: Array.from(new Set([...res.enrichedTags, ...(p.tags || [])])),
+                    ...(res.ocrSnippet && !(p.captionKo || '').includes('OCR:')
+                      ? {
+                          captionKo: p.captionKo
+                            ? `${p.captionKo} | OCR: ${res.ocrSnippet}`
+                            : `OCR: ${res.ocrSnippet}`,
+                        }
+                      : {}),
+                  }
+                : p;
+            useSaySeeStore.setState((st) => ({
+              lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${res.label} (복사됨)`,
+              ...(res.enrichedTags.length > 0
+                ? {
+                    photos: st.photos.map(patchPhoto),
+                    searchResults: st.searchResults.map((sr) => ({
+                      ...sr,
+                      photo: patchPhoto(sr.photo),
+                    })),
+                  }
+                : {}),
+            }));
+          } catch {
+            await copyTextSafeToClipboard(fallbackLabel);
+            useSaySeeStore.setState({
+              lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${fallbackLabel} (복사됨)`,
+            });
+          }
         });
       }}
       title="촬영일·내용 기반 한글 파일명(YYMMDD_내용)을 생성해 복사합니다"

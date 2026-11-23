@@ -7,6 +7,8 @@ import {
   pushTeleportPhotoToPcVanguard,
   tryMakeCompactThumbDataUrl,
 } from '../services/deviceIntegrationService';
+import { copyTextSafeToClipboard } from '../services/proFeatureGate';
+import { getZCoreUrl, zCoreBridge } from '../services/zCoreBridge';
 import type { PhotoItem } from '../types/saysee';
 
 type ContextTab = 'same-day' | 'similar-visual' | 'drill-down';
@@ -563,38 +565,108 @@ export const PhotoDetailModal: React.FC = () => {
             <button
               type="button"
               onClick={() => {
-                const pieces: string[] = [];
-                if (selectedPhoto.captionKo && selectedPhoto.captionKo.trim()) {
-                  pieces.push(selectedPhoto.captionKo.trim());
-                }
-                const kw = (selectedPhoto.keywordsKo || []).filter(Boolean);
-                if (kw.length > 0 && !pieces.join(' ').includes(kw[0])) {
-                  pieces.push(kw.join(' · '));
-                }
-                const tagText = (selectedPhoto.tags || []).filter(Boolean).join(' · ');
-                if (pieces.length === 0 && tagText) {
-                  pieces.push(tagText);
-                }
-                const extracted =
-                  pieces.join('\n') ||
-                  `${selectedPhoto.name}${selectedPhoto.date ? ` (${selectedPhoto.date})` : ''}`;
-                const chips = Array.from(
-                  new Set([...(selectedPhoto.keywordsKo || []), ...(selectedPhoto.tags || [])])
-                ).slice(0, 16);
-                void tryMakeCompactThumbDataUrl(selectedPhoto.thumbUrl || selectedPhoto.fullUrl).then(
-                  (thumbB64) => {
-                    pushTeleportPhotoToPcVanguard({
-                      fileName: selectedPhoto.name,
-                      ocrText: extracted,
-                      summary: selectedPhoto.name,
-                      thumbWebpBase64: thumbB64,
-                      chips,
-                    });
+                void (async () => {
+                  const pieces: string[] = [];
+                  let liveOcrText = '';
+                  const hasExistingOcr = Boolean(
+                    selectedPhoto.captionKo && selectedPhoto.captionKo.includes('OCR:')
+                  );
+                  if (!hasExistingOcr && zCoreBridge.isConnected) {
+                    try {
+                      const rawUrl = selectedPhoto.fullUrl || selectedPhoto.thumbUrl || '';
+                      let pParam = selectedPhoto.name || '';
+                      const qMatch = rawUrl.match(/[?&]p=([^&]+)/);
+                      if (qMatch?.[1]) {
+                        try {
+                          pParam = decodeURIComponent(qMatch[1]);
+                        } catch {
+                          pParam = qMatch[1];
+                        }
+                      }
+                      const ctrl = new AbortController();
+                      const tid = setTimeout(() => ctrl.abort(), 3000);
+                      const ocrRes = await fetch(getZCoreUrl('/__photos/ocr'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          p: pParam,
+                          fullPath: selectedPhoto.fullPath || '',
+                        }),
+                        signal: ctrl.signal,
+                      }).finally(() => clearTimeout(tid));
+                      if (ocrRes.ok) {
+                        const ocrJson = await ocrRes.json().catch(() => null);
+                        if (ocrJson?.ok && ocrJson?.hasText && ocrJson?.fullText) {
+                          liveOcrText = String(ocrJson.fullText).trim();
+                        }
+                      }
+                    } catch {
+                      /* fallback to metadata below */
+                    }
                   }
-                );
-                setActionNotice(
-                  `'${selectedPhoto.name}' 텍스트 정보를 내 PC 클립보드로 전송했습니다. PC에서 Ctrl + V로 붙여넣을 수 있습니다.`
-                );
+                  if (liveOcrText) {
+                    pieces.push(liveOcrText);
+                  } else if (selectedPhoto.captionKo && selectedPhoto.captionKo.trim()) {
+                    pieces.push(selectedPhoto.captionKo.trim());
+                  }
+                  const kw = (selectedPhoto.keywordsKo || []).filter(Boolean);
+                  if (kw.length > 0 && !pieces.join(' ').includes(kw[0])) {
+                    pieces.push(kw.join(' · '));
+                  }
+                  const tagText = (selectedPhoto.tags || []).filter(Boolean).join(' · ');
+                  if (pieces.length === 0 && tagText) {
+                    pieces.push(tagText);
+                  }
+                  const extracted =
+                    pieces.join('\n') ||
+                    `${selectedPhoto.name}${selectedPhoto.date ? ` (${selectedPhoto.date})` : ''}`;
+                  const chips = Array.from(
+                    new Set([...(selectedPhoto.keywordsKo || []), ...(selectedPhoto.tags || [])])
+                  ).slice(0, 16);
+
+                  // 1) 로컬 PC(Z-코어 OS 클립보드 + 브라우저 클립보드)에 즉시 복사하여 Ctrl+V 바로 붙여넣기 보장
+                  const copiedLocally = await copyTextSafeToClipboard(extracted);
+                  const thumbB64 = await tryMakeCompactThumbDataUrl(
+                    selectedPhoto.thumbUrl || selectedPhoto.fullUrl
+                  ).catch(() => '');
+
+                  // 2) PC Z-코어 연결 시 로컬 선봉대 엔드포인트(/api/teleport/ocr-vanguard)도 직접 무장
+                  if (zCoreBridge.isConnected) {
+                    try {
+                      const ctrl = new AbortController();
+                      const tid = setTimeout(() => ctrl.abort(), 2500);
+                      await fetch(getZCoreUrl('/api/teleport/ocr-vanguard'), {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                          fileName: selectedPhoto.name,
+                          ocrText: extracted,
+                          summary: selectedPhoto.name,
+                          thumbWebpBase64: thumbB64,
+                          chips,
+                        }),
+                        signal: ctrl.signal,
+                      }).finally(() => clearTimeout(tid));
+                    } catch {
+                      /* ignore local vanguard sync error */
+                    }
+                  }
+
+                  // 3) 모바일 ➔ PC 교차 기기 실시간 릴레이 전송 유지
+                  pushTeleportPhotoToPcVanguard({
+                    fileName: selectedPhoto.name,
+                    ocrText: extracted,
+                    summary: selectedPhoto.name,
+                    thumbWebpBase64: thumbB64,
+                    chips,
+                  });
+
+                  setActionNotice(
+                    copiedLocally
+                      ? `'${selectedPhoto.name}' 텍스트 정보를 내 PC 클립보드에 복사했습니다. Ctrl + V로 바로 붙여넣을 수 있습니다.`
+                      : `'${selectedPhoto.name}' 텍스트 정보를 내 PC로 전송했습니다. PC에서 Ctrl + V로 붙여넣을 수 있습니다.`
+                  );
+                })();
               }}
               className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium transition-colors cursor-pointer"
             >

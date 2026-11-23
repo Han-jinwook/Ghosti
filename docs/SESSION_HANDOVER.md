@@ -1,8 +1,8 @@
 # 📋 귀신같이 (Ghosti) 세션 릴레이 인계장 (`SESSION_HANDOVER.md`)
 
-- **최종 갱신 일시**: 2026-11-23 13:00 (KST)
-- **담당 역할**: `1·2·3귀신 통합` (금일 `2귀신` 귀신검색 · OCR · 동영상 · 라벨러 · 썸네일 초고속화 QA 전량 완결 반영)
-- **브랜치 / 기준 커밋**: `main` (`0cb3687` + 본 문서 커밋, `origin/main` 동기화 완료)
+- **최종 갱신 일시**: 2026-11-23 13:15 (KST)
+- **담당 역할**: `1·2·3귀신 통합` (금일 `2귀신` 귀신검색 · OCR · 동영상 · 라벨러 · 썸네일 초고속화 QA 반영)
+- **브랜치 / 기준 커밋**: `main` (`43a51bd` + 본 패치 커밋, `origin/main` 동기화 완료)
 - **로컬 엔진 버전**: `Merlin Z-Core v2.7.49` (전 클러스터 1·2·3·4·6호기 동기화 및 GitHub Releases 고속 CDN `z-core-latest` 연동 완료)
 
 ---
@@ -32,7 +32,11 @@
    - **수련장 도장판 실시간 연동 (`62eb30b`):** `Ctrl+0` 귀신검색창에서 `[⤢ 크게(갤러리)]`·`[⤡ 작게]` 클릭 즉시 웹 2단계 도장판에 완료(`✓`)가 찍히고 `[초기화]`도 즉시 연동되도록 해결.
    - **사진·표 OCR 독립 창 복사 버튼 통일 & 탐색기 선택 파일 `Ctrl+0` `[1]번` 고정 (`148ff2d`, `27f2ad4`):** 웹과 `Ctrl+0` OCR 창의 버튼명을 **`[📊 표 전체 엑셀(TSV)로 복사]` · `[📋 전체 텍스트 복사]` · `[🖼️ 원본 사진 복사]`**로 통일(일반 화면에서도 클립보드 즉시 복사)하고, 파일탐색기·바탕화면에서 파일을 선택한 채 `Ctrl+0`/`Ctrl+우클릭` 호출 시 해당 파일이 `[1]번` 최상단에 고정되며 우측 상세 미리보기(`[📝 사진·표 OCR 창으로 열기]`)가 바로 열리도록 개선. 또한 백그라운드 스레드의 Tcl `win.after` 직접 호출을 전면 제거하고 메인 스레드 시퀀스 폴링으로 전환.
    - **모바일 동영상 0.0초 정밀 시크(`SEEK_CLOSEST`) & 1920px NPU 한글 OCR 신뢰도·선명도 고도화 (`db7945c`):** Android `MediaPlayer.SEEK_CLOSEST` 및 1920px 정수 초 추출·신뢰도 필터링(`>= 0.68`)으로 영상 멈춤 및 오타 텍스트(`"띰 2824..."`)를 제거하고 양대 스토어 배포 확인 완료.
-   - **무(無)-FFmpeg PC 동영상(`.wmv`/`.avi`/`.mov`) `Win32 IShellItemImageFactory` 무프로세스 초고속 썸네일(`30~150ms`) · WinRT 하드웨어 가속 재생 & `[🏷️ 귀신라벨링]` 통일 (`589cc7c`, `Z-Core v2.7.49`):** FFmpeg 미설치 PC에서 PowerShell 콜드 스폰 없이 인프로세스 COM `IShellItemImageFactory`로 `.mp4`·`.mov`·`.wmv`·`.avi`·`.mkv`·`.heic` 썸네일을 `30~150ms` 내에 즉시 추출(웹 `/__videos/thumb` 백그라운드 선행 예열 및 네이티브 `Ctrl+0` 검색창 행 썸네일·우측 상세 미리보기 공통 적용)하고, `Origin` 헤더가 생략된 `<img crossOrigin="anonymous">` 요청에도 `Access-Control-Allow-Origin: *`을 상시 반환하여 사진·동영상 썸네일 깨짐과 로딩 지연을 원천 해소. 아울러 Windows 내장 `WinRT MediaTranscoder`로 `.wmv` 등 모든 영상의 H.264 스트리밍 재생을 지원하고, 버튼명을 `[🏷️ 귀신라벨링]`으로 통일하며 `#바탕 #화면` 분리 태그 오염을 제거해 사진 속 실제 피사체·글자 기반 한글 파일명(`261123_반려견_강아지.jpg` 등)이 복사되도록 완결 (`[2귀신]` 발견된 버그 잔여 **0건**).
+   - **무(無)-FFmpeg PC 동영상(`.wmv`/`.avi`/`.mov`) `Win32 IShellItemImageFactory` 무프로세스 초고속 썸네일(`30~150ms`) · WinRT 하드웨어 가속 재생 & `[🏷️ 귀신라벨링]` 통일 (`589cc7c`, `Z-Core v2.7.49`):** FFmpeg 미설치 PC에서 PowerShell 콜드 스폰 없이 인프로세스 COM `IShellItemImageFactory`로 `.mp4`·`.mov`·`.wmv`·`.avi`·`.mkv`·`.heic` 썸네일을 `30~150ms` 내에 즉시 추출(웹 `/__videos/thumb` 백그라운드 선행 예열 및 네이티브 `Ctrl+0` 검색창 행 썸네일·우측 상세 미리보기 공통 적용)하고, `Origin` 헤더가 생략된 `<img crossOrigin="anonymous">` 요청에도 `Access-Control-Allow-Origin: *`을 상시 반환하여 사진·동영상 썸네일 깨짐과 로딩 지연을 원천 해소. 아울러 Windows 내장 `WinRT MediaTranscoder`로 `.wmv` 등 모든 영상의 H.264 스트리밍 재생을 지원하고, 버튼명을 `[🏷️ 귀신라벨링]`으로 통일하며 `#바탕 #화면` 분리 태그 오염을 제거해 사진 속 실제 피사체·글자 기반 한글 파일명(`261123_반려견_강아지.jpg` 등)이 복사되도록 완결.
+8. **`[2귀신]` 연사 배지 복원(`43a51bd`) & 동영상 OCR 구간 점프·귀신라벨링/PC 텍스트 전송 클립보드 복사 근본 수정**
+   - **동영상 키워드 포착 & `MM:SS` 즉시 점프 (`aiVideoEngine.ts`, `VideoScenePreviewModal.tsx`):** `normalizeLocalVideoSceneItem`이 OCR 프레임 초(`timeSec`)를 `00:00` 체크포인트로 흡수·초기화하고 `syncRealVideoDuration`이 `matchedSeekSec`를 `0`으로 덮어쓰던 버그를 근본 교정, `vid.ocrLines` 직접 스캔 및 공백 없는 2글자 이상 한글 OCR 부분일치 + `onLoadedMetadata`/`onLoadedData`/`onCanPlay` 3중 시크 점프 적용.
+   - **`[🏷️ 귀신라벨링]` 멈춤 & 클립보드 복사 실패 해결 (`proFeatureGate.ts`, `aiPhotoFaceEngine.ts`, `GhostLabelerActionButton.tsx`):** `copyTextSafeToClipboard`에 Z-코어 OS 네이티브 클립보드(`POST /__merlin/clipboard`) 최우선 경로를 추가해 비동기 AI 대기 후 브라우저 제스처 만료로 복사가 무시되던 원인을 제거하고, 비전 폴백 `4.5초`·라벨러 전체 `6.5초` 타임아웃 및 안전 폴백으로 무한 대기 원천 차단.
+   - **사진 상세보기 `[PC로 텍스트 전송]` 클립보드 즉시 복사 (`PhotoDetailModal.tsx`):** Supabase 교차 기기 브로드캐스트에만 의존하던 기존 방식을 고쳐 로컬 Z-코어 OS 클립보드(`/ __merlin/clipboard`)·`/api/teleport/ocr-vanguard`·브라우저 클립보드에 즉시 복사(필요 시 `/__photos/ocr` 실시간 추출 포함)하도록 개선.
 
 ---
 

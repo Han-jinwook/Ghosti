@@ -538,10 +538,40 @@ export function normalizeLocalVideoSceneItem(
     sceneDescription: sem.customSceneDesc || video.sceneDescription,
   };
 
-  // 비례 타임라인 체크포인트를 기본 골격으로 생성하되, 기존 OCR 프레임이 있으면 가장 가까운 체크포인트(또는 추가 프레임)에 보존 병합
+  // 비례 타임라인 체크포인트를 기본 골격으로 생성하되, 기존 OCR 프레임 및 ocrLines는 정확한 초(timeSec)를 보존해 병합
   const propFrames = buildProportionalVideoTimelineFrames(enrichedBase, effectiveDurSec);
-  const ocrFrames = frames.filter((f) => String(f.frameId || '').startsWith('f_ocr_'));
-  for (const ofr of ocrFrames) {
+  const existingOcrFrames = frames.filter((f) => String(f.frameId || '').startsWith('f_ocr_'));
+  const ocrLineFrames: VideoSceneItem['timelineFrames'] = Array.isArray(video.ocrLines)
+    ? video.ocrLines
+        .filter((line) => line && String(line.text || '').trim().length > 0)
+        .map((line, idx) => {
+          const tSec = Math.max(0, Math.min(effectiveDurSec, Math.floor(Number(line.timeSec) || 0)));
+          const mm = String(Math.floor(tSec / 60)).padStart(2, '0');
+          const ss = String(tSec % 60).padStart(2, '0');
+          const tsLabel = line.timestamp && /^\d{1,2}:\d{2}$/.test(line.timestamp.trim())
+            ? line.timestamp.trim().padStart(5, '0')
+            : `${mm}:${ss}`;
+          const cleanText = String(line.text || '').replace(/\s+/g, ' ').trim();
+          const lineTokens = cleanText
+            .replace(/[^가-힣a-zA-Z0-9\s]/g, ' ')
+            .split(/\s+/)
+            .filter((t) => t.length >= 2)
+            .slice(0, 14);
+          return {
+            frameId: `f_ocr_line_${idx}_${tSec}`,
+            timeSec: tSec,
+            timestampText: tsLabel,
+            phaseLabel: `화면 텍스트 (${tsLabel})`,
+            thumbUrl: video.thumbUrl || '',
+            sceneCaption: `📝 [${tsLabel} 화면 텍스트] ${cleanText.slice(0, 120)}`,
+            keywords: Array.from(new Set([...lineTokens, ...sem.extraKeywords])),
+            tags: ['#화면텍스트', '#동영상OCR'],
+          };
+        })
+    : [];
+  const allOcrFrames = [...existingOcrFrames, ...ocrLineFrames];
+
+  for (const ofr of allOcrFrames) {
     const oCap = String(ofr.sceneCaption || '').trim();
     const isDefaultStub = !oCap || /\s장면\s*\(\d{2}:\d{2}\)$/.test(oCap);
     let nearest = propFrames[0];
@@ -553,9 +583,11 @@ export function normalizeLocalVideoSceneItem(
         nearest = pf;
       }
     }
-    if (nearest && minDiff <= Math.max(3, Math.round(effectiveDurSec * 0.18))) {
+    // 2초 이내로 사실상 같은 시점인 경우에만 기존 체크포인트에 병합하고,
+    // 그 외(예: 00:11, 00:50, 02:33 등)는 정확한 OCR 포착 초(timeSec)를 그대로 독립 프레임으로 보존합니다.
+    if (nearest && minDiff <= 2) {
       nearest.keywords = Array.from(new Set([...(nearest.keywords || []), ...(ofr.keywords || [])]));
-      if (!isDefaultStub) {
+      if (!isDefaultStub && !String(nearest.sceneCaption || '').includes('화면 텍스트')) {
         nearest.sceneCaption = oCap;
       }
       if (ofr.thumbUrl && !nearest.thumbUrl) {
@@ -572,10 +604,23 @@ export function normalizeLocalVideoSceneItem(
 
   const baseKey = getVideoMediaBaseKey(enrichedBase);
   const repThumb = localVideoRepThumbMap.get(baseKey) || enrichedBase.thumbUrl;
-  const currentSeek = video.matchedSeekSec ?? 0;
+  const rawCurrentSeek = Number(video.matchedSeekSec ?? 0);
+  const preservedSeekSec =
+    Number.isFinite(rawCurrentSeek) && rawCurrentSeek > 0
+      ? Math.min(rawCurrentSeek, Math.max(0, effectiveDurSec - 1))
+      : 0;
   const activeFrame =
-    propFrames.find((f) => f.timeSec === currentSeek) || propFrames[0];
+    propFrames.find((f) => Math.abs(f.timeSec - preservedSeekSec) <= 1) ||
+    (preservedSeekSec === 0 ? propFrames[0] : undefined);
   const thumbFallbackFrame = propFrames[1] || propFrames[0];
+  const preservedTs =
+    preservedSeekSec > 0
+      ? video.matchedTimestamp && video.matchedTimestamp !== '00:00'
+        ? cleanVideoTimestampLabel(video.matchedTimestamp)
+        : formatVideoDurationText(preservedSeekSec)
+      : activeFrame
+      ? cleanVideoTimestampLabel(activeFrame.timestampText)
+      : '00:00';
 
   return {
     ...enrichedBase,
@@ -583,11 +628,14 @@ export function normalizeLocalVideoSceneItem(
     durationSec: effectiveDurSec,
     durationText: nextDurationText,
     timelineFrames: propFrames,
-    matchedSeekSec: activeFrame ? activeFrame.timeSec : 0,
-    matchedTimestamp: activeFrame ? cleanVideoTimestampLabel(activeFrame.timestampText) : '00:00',
-    matchedFrameCaption: activeFrame
-      ? `[${activeFrame.timestampText} · ${activeFrame.phaseLabel}] ${activeFrame.sceneCaption}`
-      : video.matchedFrameCaption,
+    matchedSeekSec: preservedSeekSec > 0 ? preservedSeekSec : activeFrame ? activeFrame.timeSec : 0,
+    matchedTimestamp: preservedTs,
+    matchedFrameCaption:
+      preservedSeekSec > 0 && video.matchedFrameCaption
+        ? video.matchedFrameCaption
+        : activeFrame
+        ? `[${activeFrame.timestampText} · ${activeFrame.phaseLabel}] ${activeFrame.sceneCaption}`
+        : video.matchedFrameCaption,
   };
 }
 
@@ -1428,6 +1476,19 @@ export function searchVideoSceneItems(
     let bestFrameScore = 0;
     let openingFrameScore = 0;
 
+    // 화면 OCR 텍스트는 띄어쓰기가 붙어서 추출되는 경우가 많아(예: '단가및계약서', '중복당첨없음')
+    // 2글자 이상 한글 키워드·3글자 이상 영숫자 키워드의 공백 제거 부분 일치를 추가 허용합니다.
+    const matchOcrDenseToken = (tk: string, rawOcrText: string): boolean => {
+      if (!rawOcrText) return false;
+      if (matchKoreanOcrFuzzyToken(tk, rawOcrText)) return true;
+      const tkClean = tk.replace(/\s+/g, '').toLowerCase();
+      if ((/^[가-힣]{2,}$/.test(tkClean) || /^[a-z0-9]{3,}$/.test(tkClean))) {
+        const noSpace = rawOcrText.toLowerCase().replace(/[\s·|_,./()[\]{}:;-]+/g, '');
+        if (noSpace.includes(tkClean)) return true;
+      }
+      return false;
+    };
+
     for (const frame of vid.timelineFrames) {
       const ontoKws = Array.isArray((frame as any).ontologyKeywords)
         ? ((frame as any).ontologyKeywords as string[]).join(' ')
@@ -1441,7 +1502,7 @@ export function searchVideoSceneItems(
           frameHits += 6;
         } else if (matchKoTokenInStems(tk, frameStems, frameCorpusRaw)) {
           frameHits += 4;
-        } else if (isOcrFrame && matchKoreanOcrFuzzyToken(tk, `${frame.sceneCaption} ${frame.keywords.join(' ')}`)) {
+        } else if (isOcrFrame && matchOcrDenseToken(tk, `${frame.sceneCaption} ${frame.keywords.join(' ')}`)) {
           frameHits += 4;
         }
       }
@@ -1454,11 +1515,50 @@ export function searchVideoSceneItems(
       }
     }
 
-    if (!bestFrame) continue;
+    // Z-코어/모바일에서 추출한 실제 타임스탬프 OCR 라인(vid.ocrLines)을 직접 스캔하여
+    // timelineFrames에 병합되지 않았거나 초(timeSec)가 어긋난 경우에도 정확한 포착 구간(MM:SS)을 찾아냅니다.
+    let bestOcrLine: { timeSec: number; timestamp: string; text: string } | null = null;
+    let bestOcrLineScore = 0;
+    if (Array.isArray(vid.ocrLines) && vid.ocrLines.length > 0) {
+      for (const line of vid.ocrLines) {
+        const lineText = String(line?.text || '').trim();
+        if (!lineText) continue;
+        const lineStems = extractKoStems(lineText);
+        let lineHits = 0;
+        for (const tk of rawTokens) {
+          if (matchKoTokenInStems(tk, lineStems, lineText)) {
+            lineHits += 6;
+          } else if (matchOcrDenseToken(tk, lineText)) {
+            lineHits += 5;
+          }
+        }
+        const tSec = Math.max(0, Math.floor(Number(line.timeSec) || 0));
+        if (tSec <= 2 && lineHits > openingFrameScore) {
+          openingFrameScore = lineHits;
+        }
+        if (lineHits > bestOcrLineScore) {
+          bestOcrLineScore = lineHits;
+          bestOcrLine = {
+            timeSec: tSec,
+            timestamp:
+              line.timestamp && /^\d{1,2}:\d{2}$/.test(line.timestamp.trim())
+                ? line.timestamp.trim().padStart(5, '0')
+                : formatVideoDurationText(tSec),
+            text: lineText,
+          };
+        }
+      }
+    }
+
+    if (!bestFrame && !bestOcrLine) continue;
     const allFramesCorpus = vid.timelineFrames
       .map((f) => `${f.sceneCaption} ${f.keywords.join(' ')}`)
       .join(' ');
-    const fullVideoAndFrameCorpusRaw = `${videoLevelRaw} ${videoOcrCorpus} ${allFramesCorpus}`;
+    const allOcrLinesCorpus = Array.isArray(vid.ocrLines)
+      ? vid.ocrLines.map((l) => String(l?.text || '')).join(' ')
+      : '';
+    const combinedOcrRaw = `${videoOcrCorpus} ${allOcrLinesCorpus}`;
+    const fullVideoAndFrameCorpusRaw = `${videoLevelRaw} ${combinedOcrRaw} ${allFramesCorpus}`;
     const fullStems = extractKoStems(fullVideoAndFrameCorpusRaw);
     let matchedTokenCount = 0;
     let videoBaseHits = 0;
@@ -1473,26 +1573,43 @@ export function searchVideoSceneItems(
       } else if (matchKoTokenInStems(tk, fullStems, fullVideoAndFrameCorpusRaw)) {
         matchedTokenCount += 1;
         videoBaseHits += 3;
-      } else if (hasVideoOcr && matchKoreanOcrFuzzyToken(tk, `${videoOcrCorpus} ${allFramesCorpus.toLowerCase()}`)) {
+      } else if (
+        (hasVideoOcr || allOcrLinesCorpus.length > 0) &&
+        matchOcrDenseToken(tk, `${combinedOcrRaw} ${allFramesCorpus}`)
+      ) {
         matchedTokenCount += 1;
-        videoBaseHits += 2;
+        videoBaseHits += 3;
       }
     }
 
     const requiredTokenMatches =
       rawTokens.length <= 2 ? rawTokens.length : Math.max(2, Math.ceil(rawTokens.length * 0.67));
 
-    if ((bestFrameScore > 0 || videoBaseHits > 0) && matchedTokenCount >= requiredTokenMatches) {
-      const effectiveFrameScore = bestFrameScore > 0 ? bestFrameScore : 4;
+    const effectiveHitScore = Math.max(bestFrameScore, bestOcrLineScore);
+    if ((effectiveHitScore > 0 || videoBaseHits > 0) && matchedTokenCount >= requiredTokenMatches) {
+      const effectiveFrameScore = effectiveHitScore > 0 ? effectiveHitScore : 4;
       const totalScore = videoBaseHits + effectiveFrameScore + matchedTokenCount * 6;
+      const useOcrLineHit =
+        Boolean(bestOcrLine) &&
+        bestOcrLineScore > 0 &&
+        (bestOcrLineScore >= bestFrameScore || !bestFrame || (bestFrame.timeSec <= 2 && (bestOcrLine?.timeSec ?? 0) > 2));
+      const pickedSeekSec = useOcrLineHit && bestOcrLine ? bestOcrLine.timeSec : bestFrame?.timeSec ?? 0;
+      const pickedTs = useOcrLineHit && bestOcrLine
+        ? bestOcrLine.timestamp
+        : bestFrame?.timestampText || '00:00';
+      const pickedCaption = useOcrLineHit && bestOcrLine
+        ? `📝 [${bestOcrLine.timestamp} 화면 텍스트 포착] ${bestOcrLine.text.slice(0, 120)}`
+        : bestFrame?.sceneCaption || '';
       const matchedFrameThumb =
-        normalizeSampleVideoFrameUrl(bestFrame.thumbUrl) ||
+        normalizeSampleVideoFrameUrl(bestFrame?.thumbUrl) ||
         normalizeSampleVideoFrameUrl(vid.thumbUrl);
       const isLocalWholeOrOpening =
         String(vid.id || '').startsWith('local_vid_') &&
-        (bestFrame.timeSec <= 2 || (openingFrameScore > 0 && openingFrameScore >= bestFrameScore) || bestFrameScore === 0);
-      const finalSeekSec = isLocalWholeOrOpening ? 0 : bestFrame.timeSec;
-      const finalTs = finalSeekSec === 0 ? '00:00' : cleanVideoTimestampLabel(bestFrame.timestampText);
+        (pickedSeekSec <= 2 ||
+          (openingFrameScore > 0 && openingFrameScore >= effectiveHitScore) ||
+          effectiveHitScore === 0);
+      const finalSeekSec = isLocalWholeOrOpening ? 0 : pickedSeekSec;
+      const finalTs = finalSeekSec === 0 ? '00:00' : cleanVideoTimestampLabel(pickedTs);
       scored.push({
         vid: {
           ...vid,
@@ -1501,7 +1618,7 @@ export function searchVideoSceneItems(
           matchedTimestamp: finalTs,
           matchedFrameCaption: isLocalWholeOrOpening
             ? `[00:00~${vid.durationText} 전 구간] 영상 처음부터 “${query.trim()}” 장면·내용이 이어져 00:00부터 재생합니다.`
-            : bestFrame.sceneCaption,
+            : pickedCaption,
         },
         totalScore,
         matchedTokenCount,

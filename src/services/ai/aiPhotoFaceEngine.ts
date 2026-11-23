@@ -2863,55 +2863,66 @@ export async function resolveSmartKoreanLabelForPhoto(photo: PhotoItem): Promise
 
     if (tokens.length === 0) {
       try {
-        await hydrateRealMediaVectorCacheOnce();
-        const pKey = getPhotoMediaCacheKey(photo.name, photo.size);
-        let vec =
-          photo.vec && photo.vec.length === DEFAULT_DIM
-            ? photo.vec
-            : hydratedPhotoVecMap.get(pKey) || null;
-        let thumbDataUrl = '';
-        const srcUrl = photo.thumbUrl || photo.fullUrl || '';
-        if (srcUrl) {
-          const imgRes = await fetch(srcUrl);
-          if (imgRes.ok) {
-            const blob = await imgRes.blob();
-            const decoded = await decodeImageBlobToRawAndThumb(blob);
-            if (decoded) {
-              thumbDataUrl = decoded.thumbDataUrl || '';
-              if (!vec || vec.length !== DEFAULT_DIM) {
-                vec = await embedRawImageWithSharedVision(decoded.rawImg);
-                if (vec) hydratedPhotoVecMap.set(pKey, vec);
+        const visionFallbackTask = (async () => {
+          await hydrateRealMediaVectorCacheOnce();
+          const pKey = getPhotoMediaCacheKey(photo.name, photo.size);
+          let vec =
+            photo.vec && photo.vec.length === DEFAULT_DIM
+              ? photo.vec
+              : hydratedPhotoVecMap.get(pKey) || null;
+          let thumbDataUrl = '';
+          const srcUrl = photo.thumbUrl || photo.fullUrl || '';
+          if (srcUrl) {
+            const imgCtrl = new AbortController();
+            const imgTid = setTimeout(() => imgCtrl.abort(), 3000);
+            const imgRes = await fetch(srcUrl, { signal: imgCtrl.signal }).finally(() =>
+              clearTimeout(imgTid)
+            );
+            if (imgRes.ok) {
+              const blob = await imgRes.blob();
+              const decoded = await decodeImageBlobToRawAndThumb(blob);
+              if (decoded) {
+                thumbDataUrl = decoded.thumbDataUrl || '';
+                if (!vec || vec.length !== DEFAULT_DIM) {
+                  vec = await embedRawImageWithSharedVision(decoded.rawImg);
+                  if (vec) hydratedPhotoVecMap.set(pKey, vec);
+                }
               }
             }
           }
-        }
-        if (!zCoreBridge.isConnected && thumbDataUrl) {
-          const ocrRes = await recognizeDataUrlWithPaddleOcr(thumbDataUrl).catch(() => null);
-          if (ocrRes?.text) {
-            discoveredOcrSnippet = ocrRes.text.slice(0, 140);
-            tokens = extractCrispKoreanLabelTokens([ocrRes.text]);
-            for (const tk of tokens.slice(0, 2)) discoveredTagSet.add(`#${tk}`);
+          if (!zCoreBridge.isConnected && thumbDataUrl) {
+            const ocrRes = await recognizeDataUrlWithPaddleOcr(thumbDataUrl).catch(() => null);
+            if (ocrRes?.text) {
+              discoveredOcrSnippet = ocrRes.text.slice(0, 140);
+              tokens = extractCrispKoreanLabelTokens([ocrRes.text]);
+              for (const tk of tokens.slice(0, 2)) discoveredTagSet.add(`#${tk}`);
+            }
           }
-        }
-        if (tokens.length === 0 && vec && vec.length === DEFAULT_DIM) {
-          const conceptMap = await ensureGemma2ConceptProbeVecs();
-          const ranked: Array<{ probe: Gemma2ConceptProbe; sim: number }> = [];
-          for (const probe of GEMMA2_VISUAL_CONCEPT_PROBES) {
-            const pVec = conceptMap.get(probe.id);
-            if (!pVec) continue;
-            ranked.push({ probe, sim: cosineSimilarity(pVec, vec) });
+          if (tokens.length === 0 && vec && vec.length === DEFAULT_DIM) {
+            const conceptMap = await ensureGemma2ConceptProbeVecs();
+            const ranked: Array<{ probe: Gemma2ConceptProbe; sim: number }> = [];
+            for (const probe of GEMMA2_VISUAL_CONCEPT_PROBES) {
+              const pVec = conceptMap.get(probe.id);
+              if (!pVec) continue;
+              ranked.push({ probe, sim: cosineSimilarity(pVec, vec) });
+            }
+            ranked.sort((a, b) => b.sim - a.sim);
+            const bestEntry = ranked[0];
+            if (bestEntry && bestEntry.sim >= 0.56) {
+              const cleanProbeTag = bestEntry.probe.tag.replace(/^#/, '');
+              tokens = extractCrispKoreanLabelTokens([
+                cleanProbeTag,
+                ...(bestEntry.probe.keywordsKo || []),
+              ]);
+              discoveredTagSet.add(bestEntry.probe.tag);
+            }
           }
-          ranked.sort((a, b) => b.sim - a.sim);
-          const bestEntry = ranked[0];
-          if (bestEntry && bestEntry.sim >= 0.56) {
-            const cleanProbeTag = bestEntry.probe.tag.replace(/^#/, '');
-            tokens = extractCrispKoreanLabelTokens([
-              cleanProbeTag,
-              ...(bestEntry.probe.keywordsKo || []),
-            ]);
-            discoveredTagSet.add(bestEntry.probe.tag);
-          }
-        }
+        })();
+        // 시각 모델 로드/추론이 지연되더라도 라벨러가 무한 대기하지 않도록 최대 4.5초로 제한
+        await Promise.race([
+          visionFallbackTask,
+          new Promise<void>((resolve) => setTimeout(resolve, 4500)),
+        ]);
         if (tokens.length === 0) {
           const fnMeaningful = extractMeaningfulUserMediaTokens(photo.name);
           const fnLow = (photo.name || '').toLowerCase();
