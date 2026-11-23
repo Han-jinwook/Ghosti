@@ -43,6 +43,12 @@
    - **동영상 전 키워드 OCR 포착 구간(`MM:SS`) 즉시 점프 & 검색어 단독 하이라이트 (`fb481ce`, `f090ca6`):** `openingOcrLineScore` 분리로 `00:00` 프레임 상속 오염을 제거하고 `#t={초}` 미디어 프래그먼트 + 검색어 단독 하이라이트·일치 키워드 중심 발췌 적용.
    - **귀신검색창 3중 싱글톤 락 (`9275c55`, `Z-Core v2.7.53`) & 연사 배지/모달 뒤로가기 (`5781702`):** `localStorage` 1초 생존 하트비트 + `BroadcastChannel` + Z-코어 서버측 5.5초 하트비트/5초 기동 락 적용, `refreshLiveLocalFilesInSearchWindow`의 `duplicateGroupId` 보존 및 `PhotoDetailModal` `popstate`/`Backspace` 뒤로가기 지원.
 
+10. **`[1귀신]` 오후 QA 완결 · 온디바이스 얼굴 여권(`YuNet + SFace int8`) 정공법 탑재 · `Z-Core v2.7.51` 영구 충돌 방지 & 『4귀신 × 2인 QA』 `--role 4` 체제 전환 (`a2d40b4` ~ `cdbca4c`)**
+    - **노션 QA 단건 완결 (`a2d40b4`, `42345b8`, `e5e3023`, `dec133a`, `750ad32`):** 시작프로그램 스위치 카드 최우선 라우팅, 모바일 하단 안내창 노출 중 맨 위로 가기 원형 버튼 일시 숨김, iOS 당겨서 새로고침 `touchcancel` 보존·동기화 완료 대기·상단 잘림 여백 보정, 실행 취소/복원 즉시 스피너 표시, iOS `'최근 삭제된 항목'` 2줄 깔끔 줄바꿈 적용.
+    - **온디바이스 얼굴 여권 정공법 탑재 (`681c14f`, `70a71e4`, `a432c59`, `8d8a559`, `c0cab77`):** `facePassportWorker.ts`에 `YuNet(0.23MB)` + `SFace int8(9.4MB)` 탑재(로컬 우선 ➔ Cache API 영구 캐시 ➔ 무료 CDN 폴백 3단계 보완재), 본인·가족 공통 **동일 인물 3장 이상 등장** 단일 기준 통일 및 비서 선(先) 제안 연결.
+    - **`Merlin_Z_Core v2.7.51` 영구 충돌 방지 & 3·4호컴 실측 검증 (`0237ded`):** 메인 + `--seq-paste-daemon` 양쪽 Named Mutex, `--replace` 프로세스 트리(`taskkill /F /T`) 완전 정리, 구형 `seq_paste_daemon.py`·중복 스케줄러 3종 자동 숙청(`SenseTalk_Engine.exe` 100% 보호) 및 3·4호컴 SSH 단일 기동 실측 검증 완료.
+    - **『4귀신 × 2인 QA(해나라·달나라)』 `--role 4` 지원 반영 (`cdbca4c`):** `z_core_watcher.py`·`notion_qa.py`에 `--role 4` (`5. 업무 공유 S:`) 지원 추가, `AGENTS.md` 단일 본진(`D:\Ghosti`) + 파일 소유권 격리 규격으로 In-Place 교체 및 `Secretary` 회신 완료.
+
 ---
 
 ## 2. 체크인 시 확인 Todo 리스트
