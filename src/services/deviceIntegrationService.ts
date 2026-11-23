@@ -2660,8 +2660,13 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       } else if (mailboxTickCounter % 2 === 0) {
         void syncRemoteMailboxToUi(true);
       }
-      // PC 마스터: 5분마다(2.4s * 125) 6자리 연결 번호 만료 전 자동 갱신
-      if (ident.deviceKind === 'pc_master' && mailboxTickCounter % 125 === 0) {
+      // PC 마스터: 다른 기기 연결 대기 중(1대 이하)이면 4.8초마다(2.4s * 2) 즉시 동기화해
+      // 스마트폰 연결 직후 PC가 '연동 대기'에 멈추지 않도록 보장, 2대 이상 연결 후에는 5분 주기(125틱) 절전 유지
+      const cachedDevCount = loadCachedDeviceIntegrationSnapshot(normEmail)?.devices?.length || 0;
+      const shouldSyncDevicesNow =
+        ident.deviceKind === 'pc_master' &&
+        (cachedDevCount <= 1 ? mailboxTickCounter % 2 === 0 : mailboxTickCounter % 125 === 0);
+      if (shouldSyncDevicesNow) {
         void syncDeviceHeartbeatAndList().then((hbNext) => {
           if (!disposed && hbNext.ok && opts.onDevicesUpdated) {
             opts.onDevicesUpdated({

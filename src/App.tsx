@@ -966,7 +966,7 @@ export const App: React.FC = () => {
         setIsPtrRefreshing(true);
         setPtrPullDist(58);
         try {
-          window.sessionStorage.setItem('ghosti_splash_shown_v1', '1');
+          /* ignore */
         } catch {
           // ignore
         }

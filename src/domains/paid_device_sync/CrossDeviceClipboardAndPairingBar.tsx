@@ -226,55 +226,59 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
       )}
 
       {isLoggedIn && connectedDevices.length > 0 && (
-        <div className="flex flex-wrap items-center gap-2 py-1 text-[12px]">
-          <span className="text-slate-500 font-medium shrink-0">연결된 기기</span>
-          {connectedDevices.map((dev) => {
-            const isCurrent = dev.device_id === thisDeviceIdentity.deviceId;
-            const isBusy = revokingDeviceId === dev.device_id;
-            return (
-              <div
-                key={dev.device_id}
-                className="inline-flex items-center gap-2 px-2.5 py-1 rounded-lg bg-slate-50 border border-slate-200 text-[12px] text-slate-800"
-              >
-                <span className="font-medium">
-                  {dev.display_name}
-                  {isCurrent ? ' (현재 기기)' : ''}
-                </span>
-                <button
-                  type="button"
-                  disabled={isBusy}
-                  data-testid={`unlink-device-${dev.device_id}`}
-                  onClick={async () => {
+        <div className="flex flex-col gap-2 py-1 text-[12px]">
+          <div className="flex items-center justify-between gap-2">
+            <span className="text-slate-500 font-medium">연결된 기기 ({connectedDevices.length}대)</span>
+            {connectedDevices.filter((d) => d.device_id !== thisDeviceIdentity.deviceId).length >= 2 && (
+              <button
+                type="button"
+                disabled={Boolean(revokingDeviceId)}
+                onClick={async () => {
+                  const others = connectedDevices.filter(
+                    (d) => d.device_id !== thisDeviceIdentity.deviceId
+                  );
+                  for (const dev of others) {
                     setRevokingDeviceId(dev.device_id);
                     await unlinkConnectedDevice(dev.device_id);
-                    setRevokingDeviceId(null);
-                  }}
-                  className="text-slate-400 hover:text-rose-600 text-[11px] font-medium cursor-pointer disabled:opacity-50 transition-colors"
+                  }
+                  setRevokingDeviceId(null);
+                }}
+                className="px-2 py-0.5 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-800 text-[11px] font-medium cursor-pointer disabled:opacity-50 shrink-0"
+              >
+                다른 기기 전체 정리
+              </button>
+            )}
+          </div>
+          <div className="flex flex-col sm:flex-row sm:flex-wrap gap-1.5">
+            {connectedDevices.map((dev) => {
+              const isCurrent = dev.device_id === thisDeviceIdentity.deviceId;
+              const isBusy = revokingDeviceId === dev.device_id;
+              return (
+                <div
+                  key={dev.device_id}
+                  className="flex items-center justify-between gap-2.5 w-full sm:w-auto px-3 py-1.5 rounded-lg bg-slate-50 border border-slate-200 text-[12px] text-slate-800"
                 >
-                  {isBusy ? '해제 중' : '연결 해제'}
-                </button>
-              </div>
-            );
-          })}
-          {connectedDevices.filter((d) => d.device_id !== thisDeviceIdentity.deviceId).length >= 2 && (
-            <button
-              type="button"
-              disabled={Boolean(revokingDeviceId)}
-              onClick={async () => {
-                const others = connectedDevices.filter(
-                  (d) => d.device_id !== thisDeviceIdentity.deviceId
-                );
-                for (const dev of others) {
-                  setRevokingDeviceId(dev.device_id);
-                  await unlinkConnectedDevice(dev.device_id);
-                }
-                setRevokingDeviceId(null);
-              }}
-              className="px-2 py-1 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-800 text-[11px] font-medium cursor-pointer disabled:opacity-50"
-            >
-              다른 기기 전체 정리
-            </button>
-          )}
+                  <span className="font-medium truncate min-w-0">
+                    {dev.display_name}
+                    {isCurrent ? ' (현재 기기)' : ''}
+                  </span>
+                  <button
+                    type="button"
+                    disabled={isBusy}
+                    data-testid={`unlink-device-${dev.device_id}`}
+                    onClick={async () => {
+                      setRevokingDeviceId(dev.device_id);
+                      await unlinkConnectedDevice(dev.device_id);
+                      setRevokingDeviceId(null);
+                    }}
+                    className="text-slate-400 hover:text-rose-600 text-[11px] font-medium cursor-pointer disabled:opacity-50 transition-colors shrink-0"
+                  >
+                    {isBusy ? '해제 중' : '연결 해제'}
+                  </button>
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
 
