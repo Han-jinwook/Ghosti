@@ -954,6 +954,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
                       >
                         <div className="flex items-center gap-2.5">
                           <img
+                            crossOrigin="anonymous"
                             src={vp.thumbUrl}
                             alt={vp.name}
                             loading="lazy"
@@ -1033,6 +1034,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
                           } w-full overflow-hidden bg-zinc-950`}
                         >
                           <img
+                            crossOrigin="anonymous"
                             src={item.photo.thumbUrl}
                             alt={item.photo.name}
                             loading="lazy"

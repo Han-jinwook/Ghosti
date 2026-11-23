@@ -161,7 +161,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.7.10"
+CORE_VERSION = "2.7.19"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -322,9 +322,9 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                     return (True, ref_origin)
             except Exception:
                 pass
-        # Referer 도 신뢰 도메인이 아닌데 브라우저가 cross-site 요청으로 표시했다면 외부 악성 사이트 접근이므로 즉시 차단!
-        if sec_fetch_site == "cross-site":
-            return (False, "sec-fetch-site:cross-site")
+        # 브라우저 <img>/<video>/<audio> 태그는 HTTPS->HTTP(127.0.0.1) 전환 시 Origin/Referer 없이
+        # Sec-Fetch-Site: cross-site + Sec-Fetch-Dest: image/video/audio 만 전송하므로
+        # 반드시 cross-site 차단보다 먼저 읽기 전용 로컬 미디어 서빙 경로를 허용해야 미리보기가 403으로 깨지지 않습니다.
         if getattr(self, "command", "") == "GET":
             req_path = urllib.parse.urlparse(getattr(self, "path", "") or "").path.rstrip("/")
             sec_dest = (self.headers.get("Sec-Fetch-Dest") or "").strip().lower()
@@ -342,6 +342,9 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 or req_path.startswith("/__tts/audio/")
             ) and sec_dest in ("image", "video", "audio", "empty", ""):
                 return (True, None)
+        # Referer 도 신뢰 도메인이 아닌데 브라우저가 cross-site 요청으로 표시했다면 외부 악성 사이트 접근이므로 즉시 차단!
+        if sec_fetch_site == "cross-site":
+            return (False, "sec-fetch-site:cross-site")
         return (True, None)
 
     def _write_cors_headers(self, expose_range: bool = False) -> None:

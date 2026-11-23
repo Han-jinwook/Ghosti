@@ -709,6 +709,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                           className="w-8 h-8 rounded overflow-hidden border border-slate-200 bg-slate-100 shrink-0"
                         >
                           <img
+                            crossOrigin="anonymous"
                             src={sp.thumbUrl}
                             alt=""
                             loading="lazy"
@@ -1022,6 +1023,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                                 }`}
                               >
                                 <img
+                            crossOrigin="anonymous"
                                   src={ph.thumbUrl}
                                   alt={ph.name}
                                   loading="lazy"
@@ -1187,6 +1189,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                       >
                         <div className="relative aspect-[4/5] w-full overflow-hidden bg-zinc-950">
                           <img
+                            crossOrigin="anonymous"
                             src={photo.thumbUrl}
                             alt={photo.name}
                             loading="lazy"
@@ -1354,6 +1357,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                           >
                             <div className="flex items-center gap-2 min-w-0 flex-1">
                               <img
+                            crossOrigin="anonymous"
                                 src={qp.thumbUrl}
                                 alt=""
                                 loading="lazy"

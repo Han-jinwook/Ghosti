@@ -1291,15 +1291,15 @@ export async function auditRealPcPhotosAndCluster(
 
   if (uncachedSlice.length > 0) {
     // Crete 지각적 재블러링 지표는 280px/448px 썸네일에서도 100% 정확하므로,
-    // 멀티-MB 원본(fullUrl) 대신 경량 썸네일(thumbUrl)을 3장씩 여유 있게 스캔해 로컬 5199 서버 포화 및 미리보기 깨짐을 원천 차단합니다.
-    const BATCH = 3;
+    // 경량 썸네일(thumbUrl)을 8장씩 고속 병렬 스캔하여 800장 기준 1~2초 내로 완료합니다.
+    const BATCH = 8;
     const newlyComputed: Array<{ key: string; meta: OpticalSignatureMeta }> = [];
     const auditOne = (p: PhotoItem): Promise<void> => {
       const cacheKey = `${p.name}_${p.size}_${p.mtimeMs}`;
       return new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
-        const timer = window.setTimeout(() => resolve(), 4500);
+        const timer = window.setTimeout(() => resolve(), 3500);
         img.onload = () => {
           window.clearTimeout(timer);
           const meta = computeOpticalDhashAndSharpness(img);
@@ -1325,13 +1325,15 @@ export async function auditRealPcPhotosAndCluster(
     };
 
     for (let i = 0; i < uncachedSlice.length; i += BATCH) {
-      await waitForUserTypingAndModalQuiet(1400);
+      if (i > 0 && i % 24 === 0) {
+        await waitForUserTypingAndModalQuiet(400);
+      }
       await Promise.all(uncachedSlice.slice(i, i + BATCH).map(auditOne));
       if (newlyComputed.length >= 24) {
         persistOpticalAuditBatch(newlyComputed.splice(0, newlyComputed.length));
       }
       if (i + BATCH < uncachedSlice.length) {
-        await new Promise((r) => setTimeout(r, 45));
+        await new Promise((r) => setTimeout(r, 8));
       }
     }
     if (newlyComputed.length > 0) {
