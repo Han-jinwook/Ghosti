@@ -41,6 +41,10 @@ export function isNotStartedTrialResponse(gj: Record<string, unknown> | null): b
   );
 }
 
+const VERIFIED_GATE_FAST_TTL_MS = 60_000;
+const VERIFIED_GATE_FALLBACK_TTL_MS = 5 * 60_000;
+const verifiedGateCache = new Map<string, { at: number; trialBadge: string }>();
+
 export async function evaluateProFeatureGate(options: {
   actionType: ProFeatureActionType;
   filePath?: string;
@@ -77,6 +81,39 @@ export async function evaluateProFeatureGate(options: {
   const hubToken = storeState.merlinAuth?.token || '';
   const accountId = storeState.merlinAuth?.email || 'local_user';
   const isSubFromStore = Boolean(ent?.isPaidUnlimited);
+  const cacheKey = `${accountId}:${actionType}`;
+  const cachedGate = verifiedGateCache.get(cacheKey);
+  const nowMs = Date.now();
+
+  // 직전 60초 이내에 이미 권한 통과가 검증된 경우 Z-코어가 썸네일/OCR로 바쁘더라도 즉시 통과시켜 지연 오류 원천 차단
+  if (cachedGate && nowMs - cachedGate.at < VERIFIED_GATE_FAST_TTL_MS) {
+    return {
+      allowed: true,
+      state: 'allowed',
+      message: '',
+      trialBadge: cachedGate.trialBadge,
+    };
+  }
+
+  const resolveGracefulEntitlementFallback = (): ProFeatureGateResult | null => {
+    if (ent?.isPaidUnlimited || ent?.trialActive) {
+      return {
+        allowed: true,
+        state: 'allowed',
+        message: '',
+        trialBadge: ent.isPaidUnlimited ? 'Pro' : `체험 ${ent.trialDaysLeft}일 남음`,
+      };
+    }
+    if (cachedGate && Date.now() - cachedGate.at < VERIFIED_GATE_FALLBACK_TTL_MS) {
+      return {
+        allowed: true,
+        state: 'allowed',
+        message: '',
+        trialBadge: cachedGate.trialBadge,
+      };
+    }
+    return null;
+  };
 
   if (zCoreBridge.isConnected) {
     try {
@@ -91,15 +128,17 @@ export async function evaluateProFeatureGate(options: {
             hubToken,
             accountId,
           }),
-          signal: AbortSignal.timeout(2500),
+          signal: AbortSignal.timeout(5000),
         });
 
       let gateRes = await requestConsume();
       if (!gateRes.ok && actionType === 'feat_ghost_labeler') {
+        const fb = resolveGracefulEntitlementFallback();
+        if (fb) return fb;
         return {
           allowed: false,
           state: 'expired',
-          message: '귀신 라벨러 권한 확인에 실패해 실행을 보류했습니다.',
+          message: '잠시 후 다시 시도해 주세요. (권한 확인 일시 지연)',
           trialBadge: '',
         };
       }
@@ -118,7 +157,7 @@ export async function evaluateProFeatureGate(options: {
             hubToken,
             accountId,
           }),
-          signal: AbortSignal.timeout(2000),
+          signal: AbortSignal.timeout(4000),
         }).catch(() => null);
 
         gateRes = await requestConsume();
@@ -128,6 +167,10 @@ export async function evaluateProFeatureGate(options: {
       }
 
       if (!gateJson || gateJson.allowed === false) {
+        if (!gateJson) {
+          const fb = resolveGracefulEntitlementFallback();
+          if (fb) return fb;
+        }
         const rawMsg = String(gateJson?.message || '').trim();
         const isMachineCodeMsg = !rawMsg || /^[A-Z0-9_]+$/.test(rawMsg);
 
@@ -164,6 +207,7 @@ export async function evaluateProFeatureGate(options: {
         trialBadge = `체험 ${resolvedDays}일 남음`;
       }
 
+      verifiedGateCache.set(cacheKey, { at: Date.now(), trialBadge });
       return {
         allowed: true,
         state: 'allowed',
@@ -171,12 +215,9 @@ export async function evaluateProFeatureGate(options: {
         trialBadge,
       };
     } catch {
-      return {
-        allowed: false,
-        state: 'expired',
-        message: '로컬 엔진 권한 응답이 지연되어 실행을 보류했습니다.',
-        trialBadge: '',
-      };
+      // Z-코어가 썸네일·OCR 작업으로 일시 지연될 때 이미 활성화된 구독/30일 체험 권한이 있으면 차단하지 않고 즉시 실행 허용
+      const fb = resolveGracefulEntitlementFallback();
+      if (fb) return fb;
     }
   }
 
