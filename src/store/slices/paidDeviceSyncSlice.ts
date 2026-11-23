@@ -1098,7 +1098,9 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
         },
         lastQuarantineToast:
           state.syncState.privateSyncStrategy === 'shadow'
-            ? `동기화가 완료되었습니다(총 ${syncRes.mergedCatalog.length}건 · 다른 기기 사진 ${remotePhotoCountNow}장 · 문서 ${remoteDocCountNow}건).`
+            ? `일치화가 완료되었습니다(총 ${syncRes.mergedCatalog.length}건 · 다른 기기 사진 ${remotePhotoCountNow}장 · 문서 ${remoteDocCountNow}건).`
+            : getThisDeviceIdentity().deviceKind === 'mobile'
+            ? `모바일 원본 백업 전송 완료(신규 업로드 ${syncRes.mirroredUploadCount}장 · 총 ${syncRes.mergedCatalog.length}건). 연결된 PC의 [사진/Ghosti_Phone_Backup] 폴더에 자동 저장됩니다.`
             : `원본 백업이 완료되었습니다(총 ${syncRes.mergedCatalog.length}건 · 업로드 ${syncRes.mirroredUploadCount}장 · PC 저장 ${syncRes.mirroredPullCount}장 · 위치: 사진/Ghosti_Phone_Backup).`,
       };
     });

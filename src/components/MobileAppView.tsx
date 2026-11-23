@@ -1362,8 +1362,8 @@ export const MobileAppView: React.FC = () => {
                         {!isLoggedInUser
                           ? '로그인'
                           : syncState.syncing
-                          ? '동기화 중...'
-                          : '동기화'}
+                          ? '일치화 중...'
+                          : '지금 일치시키기'}
                       </button>
                     </div>
 

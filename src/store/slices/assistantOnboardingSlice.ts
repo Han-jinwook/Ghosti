@@ -2395,6 +2395,16 @@ export const createAssistantOnboardingSlice: StateCreator<
           openedOk = Boolean(j?.ok);
         }
       } else {
+        if (target === 'phone_backup') {
+          try {
+            const { pullPendingMirrorOriginalsToPcBackupFolder } = await import(
+              '../../services/deviceIntegrationService'
+            );
+            await pullPendingMirrorOriginalsToPcBackupFolder();
+          } catch {
+            /* ignore pre-open pull error */
+          }
+        }
         const r = await fetch(getZCoreUrl('/__quarantine/open-folder'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },

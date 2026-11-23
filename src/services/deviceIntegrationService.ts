@@ -649,7 +649,7 @@ export async function syncDeviceHeartbeatAndList(opts?: {
     deviceKind: ident.deviceKind,
     platform: ident.platform,
     displayName: ident.displayName,
-    appVersion: '1.0.73',
+    appVersion: '1.0.74',
     explicitTrialOptIn: Boolean(opts?.explicitTrialOptIn),
     explicitReconnect: consumeExplicitReconnect,
     forceRefreshPairingCode: Boolean(opts?.forceRefreshPairingCode),
@@ -1182,12 +1182,16 @@ export function broadcastDeviceIntegrationStateUpdate(payload: {
   devices?: GhostiConnectedDeviceDto[];
   entitlement?: GhostiDeviceEntitlementView | null;
   revokedDeviceId?: string;
+  mirrorBackupReadyCount?: number;
 }): void {
   const ident = getThisDeviceIdentity();
   const packet = {
     devices: payload.devices,
     entitlement: payload.entitlement,
     ...(payload.revokedDeviceId ? { revokedDeviceId: payload.revokedDeviceId } : {}),
+    ...(typeof payload.mirrorBackupReadyCount === 'number'
+      ? { mirrorBackupReadyCount: payload.mirrorBackupReadyCount }
+      : {}),
     senderDeviceId: ident.deviceId,
     updatedAt: Date.now(),
   };
@@ -1723,6 +1727,108 @@ export async function tryMakeCompactThumbDataUrl(srcUrl?: string): Promise<strin
   return undefined;
 }
 
+async function runWithConcurrency<T>(
+  items: T[],
+  limit: number,
+  worker: (item: T, index: number) => Promise<void>
+): Promise<void> {
+  if (items.length === 0) return;
+  let nextIdx = 0;
+  const workerCount = Math.max(1, Math.min(limit, items.length));
+  await Promise.all(
+    Array.from({ length: workerCount }, async () => {
+      while (true) {
+        const cur = nextIdx++;
+        if (cur >= items.length) break;
+        await worker(items[cur], cur);
+      }
+    })
+  );
+}
+
+/**
+ * PC 마스터(Z-코어 실행 중)가 모바일에서 업로드된 미수신 원본 백업 파일들을
+ * 내 PC [사진/Ghosti_Phone_Backup] 폴더로 병렬(4x) 자동 저장합니다.
+ */
+let mirrorPullInFlight: Promise<{ pulledCount: number; backupDirPath: string | null }> | null = null;
+export async function pullPendingMirrorOriginalsToPcBackupFolder(
+  preloadedCatalog?: GhostiShadowCatalogItem[]
+): Promise<{ pulledCount: number; backupDirPath: string | null }> {
+  const ident = getThisDeviceIdentity();
+  if (
+    ident.deviceKind !== 'pc_master' ||
+    !zCoreBridge.isConnected ||
+    !hasAuthenticatedHubAccountSession()
+  ) {
+    return { pulledCount: 0, backupDirPath: null };
+  }
+  if (mirrorPullInFlight) return mirrorPullInFlight;
+
+  const task = (async () => {
+    let catalog = preloadedCatalog;
+    if (!catalog) {
+      const res = await callGhostiServerBridge<{ items?: GhostiShadowCatalogItem[] }>(
+        'device_sync_shadow_catalog',
+        { items: [] }
+      );
+      catalog = res.ok && Array.isArray(res.items) ? res.items : [];
+    }
+    const candidates = catalog.filter(
+      (item) =>
+        Boolean(item) &&
+        item.sourceDeviceId !== ident.deviceId &&
+        item.hasMirrorBlob &&
+        Boolean(item.sha256) &&
+        !pulledMirrorHashes.has(item.sha256!)
+    );
+    let pulledCount = 0;
+    let backupDirPath: string | null = null;
+    await runWithConcurrency(candidates, 4, async (item) => {
+      const sha = item.sha256!;
+      const dlSign = await callGhostiServerBridge<{ signedDownloadUrl?: string }>(
+        'device_sign_mirror_download',
+        { sha256: sha }
+      );
+      if (!dlSign.ok || !dlSign.signedDownloadUrl) return;
+      try {
+        const pullRes = await fetch(getZCoreUrl('/__sync/mirror-pull'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            fileName: item.title || sha,
+            signedDownloadUrl: dlSign.signedDownloadUrl,
+            sha256: sha,
+          }),
+        });
+        const pj = (await pullRes.json().catch(() => ({}))) as {
+          ok?: boolean;
+          alreadyExists?: boolean;
+          savedPath?: string;
+          backupDir?: string;
+        };
+        if (pj.ok) {
+          pulledMirrorHashes.add(sha);
+          if (!pj.alreadyExists) pulledCount += 1;
+          if (pj.backupDir) {
+            backupDirPath = pj.backupDir;
+          } else if (pj.savedPath) {
+            const lastSep = Math.max(pj.savedPath.lastIndexOf('\\'), pj.savedPath.lastIndexOf('/'));
+            if (lastSep > 0) backupDirPath = pj.savedPath.slice(0, lastSep);
+          }
+        }
+      } catch {
+        /* ignore single file pull failure */
+      }
+    });
+    return { pulledCount, backupDirPath };
+  })().finally(() => {
+    mirrorPullInFlight = null;
+  });
+
+  mirrorPullInFlight = task;
+  return task;
+}
+
 export async function executeRealDeviceSyncNow(opts: {
   strategy: PrivateSyncStrategy;
   photos: PhotoItem[];
@@ -1779,17 +1885,17 @@ export async function executeRealDeviceSyncNow(opts: {
       }
     }
 
-    for (let i = 0; i < pendingOriginals.length; i++) {
-      const { photo: p, shaKey } = pendingOriginals[i];
-      opts.onProgress?.({
-        phase: '원본 안전 백업 업로드 중',
-        current: i + 1,
-        total: pendingOriginals.length,
-      });
+    let uploadDone = 0;
+    let trialAbortError: { reason?: string; message?: string } | null = null;
+    await runWithConcurrency(pendingOriginals, 4, async ({ photo: p, shaKey }) => {
+      if (trialAbortError) return;
       const candidates = [p.fullUrl, p.thumbUrl].filter(
         (u): u is string => Boolean(u && u.trim())
       );
-      if (candidates.length === 0) continue;
+      if (candidates.length === 0) {
+        uploadDone += 1;
+        return;
+      }
       let blob: Blob | null = null;
       for (const src of candidates) {
         try {
@@ -1818,7 +1924,10 @@ export async function executeRealDeviceSyncNow(opts: {
           /* ignore */
         }
       }
-      if (!blob) continue;
+      if (!blob) {
+        uploadDone += 1;
+        return;
+      }
       try {
         const signUp = await callGhostiServerBridge<{
           signedUploadUrl?: string;
@@ -1826,18 +1935,8 @@ export async function executeRealDeviceSyncNow(opts: {
           message?: string;
         }>('device_sign_mirror_upload', { sha256: shaKey });
         if (!signUp.ok && (signUp.reason === 'TRIAL_EXPIRED' || signUp.reason === 'TRIAL_OPT_IN_REQUIRED')) {
-          return {
-            ok: false,
-            reason: signUp.reason,
-            message: signUp.message,
-            mergedCatalog: [],
-            remotePhotosToMerge: [],
-            remoteDocsToMerge: [],
-            mirroredUploadCount,
-            mirroredPullCount: 0,
-            backupDirPath: null,
-            packSizeMB: 0,
-          };
+          trialAbortError = { reason: signUp.reason, message: signUp.message };
+          return;
         }
         if (signUp.ok && signUp.signedUploadUrl) {
           const putRes = await fetch(signUp.signedUploadUrl, {
@@ -1853,26 +1952,45 @@ export async function executeRealDeviceSyncNow(opts: {
         }
       } catch {
         /* continue */
+      } finally {
+        uploadDone += 1;
+        opts.onProgress?.({
+          phase: '원본 안전 백업 업로드 중',
+          current: uploadDone,
+          total: pendingOriginals.length,
+        });
       }
+    });
+    if (trialAbortError) {
+      const errObj = trialAbortError as { reason?: string; message?: string };
+      return {
+        ok: false,
+        reason: errObj.reason,
+        message: errObj.message,
+        mergedCatalog: [],
+        remotePhotosToMerge: [],
+        remoteDocsToMerge: [],
+        mirroredUploadCount,
+        mirroredPullCount: 0,
+        backupDirPath: null,
+        packSizeMB: 0,
+      };
     }
   }
 
-  // 2) 장당 ~13KB 초경량 섀도우 카탈로그 패킹 후 기기 간 양방향 병합 (사진 + PC 문서 동시)
-  const outgoingItems: Array<Record<string, unknown>> = [];
+  // 2) 장당 ~13KB 초경량 섀도우 카탈로그 패킹(6x 병렬 + 이미 경량인 썸네일은 재압축 스킵) 후 양방향 병합
+  const outgoingItems: Array<Record<string, unknown>> = new Array(activeLocalPhotos.length);
   const totalPackCount = activeLocalPhotos.length + activeLocalDocs.length;
-  for (let i = 0; i < activeLocalPhotos.length; i++) {
-    const p = activeLocalPhotos[i];
-    if (i % 10 === 0 || i === activeLocalPhotos.length - 1) {
-      opts.onProgress?.({
-        phase: '사진·문서 목록 동기화 중',
-        current: i + 1,
-        total: Math.max(1, totalPackCount),
-      });
-    }
+  let packedCount = 0;
+  await runWithConcurrency(activeLocalPhotos, 6, async (p, i) => {
     const hashSeed = await sha256HexBrowser(`${p.id}::${p.name}::${p.size}`);
     const shaKey = `${hashSeed.slice(0, 40)}.jpg`;
-    const thumbWebp = await tryMakeCompactThumbDataUrl(p.thumbUrl || p.fullUrl);
-    outgoingItems.push({
+    const rawThumb = (p.thumbUrl || p.fullUrl || '').trim();
+    const thumbWebp =
+      rawThumb.startsWith('data:image/') && rawThumb.length <= 28_000
+        ? rawThumb
+        : await tryMakeCompactThumbDataUrl(rawThumb);
+    outgoingItems[i] = {
       id: p.id,
       kind: 'photo',
       title: p.name,
@@ -1885,8 +2003,16 @@ export async function executeRealDeviceSyncNow(opts: {
       byteSize: p.size || 512000,
       sha256: shaKey,
       hasMirrorBlob: mirrorUploadedIds.has(p.id),
-    });
-  }
+    };
+    packedCount += 1;
+    if (packedCount % 8 === 0 || packedCount === activeLocalPhotos.length) {
+      opts.onProgress?.({
+        phase: '사진·문서 목록 동기화 중',
+        current: packedCount,
+        total: Math.max(1, totalPackCount),
+      });
+    }
+  });
 
   for (const doc of activeLocalDocs) {
     const hashSeed = await sha256HexBrowser(`doc::${doc.id}::${doc.fileName}`);
@@ -1957,53 +2083,26 @@ export async function executeRealDeviceSyncNow(opts: {
   let mirroredPullCount = 0;
   let backupDirPath: string | null = null;
 
+  // 모바일에서 원본 백업을 올렸다면 실시간 채널로 PC 마스터에 즉시 수신 신호 발송
+  if (
+    ident.deviceKind !== 'pc_master' &&
+    opts.strategy === 'mirror' &&
+    (mirroredUploadCount > 0 || mirrorUploadedIds.size > 0)
+  ) {
+    broadcastDeviceIntegrationStateUpdate({
+      mirrorBackupReadyCount: mirroredUploadCount || mirrorUploadedIds.size,
+    });
+  }
+
+  // PC 마스터(Z-코어 실행 중)라면 모바일에서 올린 미수신 원본 백업을 병렬(4x)로 즉시 내 PC 백업 폴더에 저장
+  if (ident.deviceKind === 'pc_master' && zCoreBridge.isConnected) {
+    const pullRes = await pullPendingMirrorOriginalsToPcBackupFolder(mergedCatalog);
+    mirroredPullCount = pullRes.pulledCount;
+    backupDirPath = pullRes.backupDirPath;
+  }
+
   for (const item of mergedCatalog) {
     if (!item || item.sourceDeviceId === ident.deviceId) continue;
-
-    // PC에서 양쪽 원본 보관(mirror) 모드일 때 스마트폰이 올린 원본을 PC 로컬 백업 폴더로 자동 다운로드
-    if (
-      opts.strategy === 'mirror' &&
-      item.hasMirrorBlob &&
-      item.sha256 &&
-      zCoreBridge.isConnected &&
-      !pulledMirrorHashes.has(item.sha256)
-    ) {
-      const dlSign = await callGhostiServerBridge<{ signedDownloadUrl?: string }>(
-        'device_sign_mirror_download',
-        { sha256: item.sha256 }
-      );
-      if (dlSign.ok && dlSign.signedDownloadUrl) {
-        try {
-          const pullRes = await fetch(getZCoreUrl('/__sync/mirror-pull'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              fileName: item.title || item.sha256,
-              signedDownloadUrl: dlSign.signedDownloadUrl,
-              sha256: item.sha256,
-            }),
-          });
-          const pj = (await pullRes.json().catch(() => ({}))) as {
-            ok?: boolean;
-            alreadyExists?: boolean;
-            savedPath?: string;
-            backupDir?: string;
-          };
-          if (pj.ok) {
-            pulledMirrorHashes.add(item.sha256);
-            if (!pj.alreadyExists) mirroredPullCount += 1;
-            if (pj.backupDir) {
-              backupDirPath = pj.backupDir;
-            } else if (pj.savedPath) {
-              const lastSep = Math.max(pj.savedPath.lastIndexOf('\\'), pj.savedPath.lastIndexOf('/'));
-              if (lastSep > 0) backupDirPath = pj.savedPath.slice(0, lastSep);
-            }
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-    }
 
     if (item.kind === 'photo' && item.thumbWebp) {
       const remoteId = `shadow-remote-${item.id}`;
@@ -2296,6 +2395,15 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         });
         if (isSelfNowRevoked && opts.onSelfRevoked) {
           opts.onSelfRevoked(mergedDevices);
+        }
+        const mirrorReadyCount = Number(payload.mirrorBackupReadyCount || 0);
+        if (
+          mirrorReadyCount > 0 &&
+          payload.senderDeviceId !== ident.deviceId &&
+          ident.deviceKind === 'pc_master' &&
+          zCoreBridge.isConnected
+        ) {
+          void pullPendingMirrorOriginalsToPcBackupFolder();
         }
       })
         .on('broadcast', { event: 'E2EE_CLIPBOARD_PUSH' }, async ({ payload }) => {
