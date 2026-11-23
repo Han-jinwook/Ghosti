@@ -1,9 +1,9 @@
 /**
- * [전용 Web Worker] 온디바이스 YuNet(232KB) 얼굴 검출 워커
+ * [전용 Web Worker] 온디바이스 YuNet(232KB) 얼굴 검출 + SFace int8(9.4MB) 128D 딥러닝 얼굴 인식 워커
  * - 메인 스레드 UI 프리징 0ms 보장
  * - /models/face/face_detection_yunet_2023mar.onnx (OpenCV Zoo Apache-2.0)
- * - 입력: 640x640 letterbox BGR Float32Array (Zero-Copy Transferable)
- * - 출력: 정규화(0..1) 얼굴 박스 + 정면도(frontalScore) + 신뢰도(score)
+ * - /models/face/face_recognition_sface_2021dec_int8.onnx (OpenCV Zoo Apache-2.0)
+ * - 스캔 종료 시 dispose로 두 ONNX 세션 RAM 즉시 반환
  */
 import * as ort from 'onnxruntime-web/webgpu';
 
@@ -27,34 +27,47 @@ interface DetectRequest {
   scoreThreshold?: number;
 }
 
+interface EmbedRequest {
+  id: number;
+  type: 'embed';
+  /** 112x112 BGR Float32Array (0..255, NCHW) */
+  faceBgrBuffer: ArrayBuffer;
+}
+
 interface DisposeRequest {
   id: number;
   type: 'dispose';
 }
 
-type WorkerRequest = DetectRequest | DisposeRequest;
+type WorkerRequest = DetectRequest | EmbedRequest | DisposeRequest;
 
-let session: ort.InferenceSession | null = null;
-let sessionPromise: Promise<ort.InferenceSession> | null = null;
+let yunetSession: ort.InferenceSession | null = null;
+let yunetPromise: Promise<ort.InferenceSession> | null = null;
+let sfaceSession: ort.InferenceSession | null = null;
+let sfacePromise: Promise<ort.InferenceSession> | null = null;
 
-async function ensureSession(): Promise<ort.InferenceSession> {
-  if (session) return session;
-  if (sessionPromise) return sessionPromise;
-
-  sessionPromise = (async () => {
-    try {
-      ort.env.wasm.simd = true;
-      if (ort.env.wasm.wasmPaths && typeof ort.env.wasm.wasmPaths === 'object') {
-        const wp = ort.env.wasm.wasmPaths as { wasm?: string };
-        if (typeof wp.wasm === 'string' && wp.wasm.includes('cdn.jsdelivr.net')) {
-          ort.env.wasm.wasmPaths = undefined;
-        }
+function configureOrtWasmOnce(): void {
+  try {
+    ort.env.wasm.simd = true;
+    if (ort.env.wasm.wasmPaths && typeof ort.env.wasm.wasmPaths === 'object') {
+      const wp = ort.env.wasm.wasmPaths as { wasm?: string };
+      if (typeof wp.wasm === 'string' && wp.wasm.includes('cdn.jsdelivr.net')) {
+        ort.env.wasm.wasmPaths = undefined;
       }
-      ort.env.wasm.numThreads = 1;
-      ort.env.wasm.proxy = false;
-    } catch {
-      /* ignore env hints */
     }
+    ort.env.wasm.numThreads = 1;
+    ort.env.wasm.proxy = false;
+  } catch {
+    /* ignore env hints */
+  }
+}
+
+async function ensureYuNet(): Promise<ort.InferenceSession> {
+  if (yunetSession) return yunetSession;
+  if (yunetPromise) return yunetPromise;
+
+  yunetPromise = (async () => {
+    configureOrtWasmOnce();
     const modelUrl = new URL('/models/face/face_detection_yunet_2023mar.onnx', self.location.origin).href;
     const resp = await fetch(modelUrl);
     if (!resp.ok) {
@@ -65,14 +78,40 @@ async function ensureSession(): Promise<ort.InferenceSession> {
       executionProviders: ['wasm'],
       graphOptimizationLevel: 'all',
     });
-    session = created;
+    yunetSession = created;
     return created;
   })().catch((err) => {
-    sessionPromise = null;
+    yunetPromise = null;
     throw err;
   });
 
-  return sessionPromise;
+  return yunetPromise;
+}
+
+async function ensureSFace(): Promise<ort.InferenceSession> {
+  if (sfaceSession) return sfaceSession;
+  if (sfacePromise) return sfacePromise;
+
+  sfacePromise = (async () => {
+    configureOrtWasmOnce();
+    const modelUrl = new URL('/models/face/face_recognition_sface_2021dec_int8.onnx', self.location.origin).href;
+    const resp = await fetch(modelUrl);
+    if (!resp.ok) {
+      throw new Error(`SFace model fetch failed: HTTP ${resp.status}`);
+    }
+    const modelBytes = new Uint8Array(await resp.arrayBuffer());
+    const created = await ort.InferenceSession.create(modelBytes, {
+      executionProviders: ['wasm'],
+      graphOptimizationLevel: 'all',
+    });
+    sfaceSession = created;
+    return created;
+  })().catch((err) => {
+    sfacePromise = null;
+    throw err;
+  });
+
+  return sfacePromise;
 }
 
 function decodeYuNetOutputs(
@@ -116,7 +155,6 @@ function decodeYuNetOutputs(
       const bh = (y2Px - y1Px) / Math.max(1, origH);
       if (bw < 0.035 || bh < 0.035) continue;
 
-      // 5점 랜드마크(오른눈, 왼눈, 코, 입우, 입좌)로 정면도(frontalScore) 계산
       const kOff = i * 10;
       const reX = (col + kps[kOff]) * stride;
       const leX = (col + kps[kOff + 2]) * stride;
@@ -167,19 +205,26 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
 
   if (msg.type === 'dispose') {
     try {
-      await session?.release?.();
+      await yunetSession?.release?.();
     } catch {
       /* ignore */
     }
-    session = null;
-    sessionPromise = null;
+    try {
+      await sfaceSession?.release?.();
+    } catch {
+      /* ignore */
+    }
+    yunetSession = null;
+    yunetPromise = null;
+    sfaceSession = null;
+    sfacePromise = null;
     self.postMessage({ id: msg.id, ok: true });
     return;
   }
 
   if (msg.type === 'detect') {
     try {
-      const s = await ensureSession();
+      const s = await ensureYuNet();
       const bgr = new Float32Array(msg.bgrBuffer);
       const inputTensor = new ort.Tensor('float32', bgr, [1, 3, 640, 640]);
       const outputs = await s.run({ input: inputTensor });
@@ -188,7 +233,7 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
         msg.origW,
         msg.origH,
         msg.scale,
-        msg.scoreThreshold ?? 0.72
+        msg.scoreThreshold ?? 0.62
       );
       self.postMessage({ id: msg.id, ok: true, faces });
     } catch (err) {
@@ -197,6 +242,36 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
         ok: false,
         error: err instanceof Error ? err.message : String(err),
         faces: [],
+      });
+    }
+    return;
+  }
+
+  if (msg.type === 'embed') {
+    try {
+      const s = await ensureSFace();
+      const bgr = new Float32Array(msg.faceBgrBuffer);
+      const inputTensor = new ort.Tensor('float32', bgr, [1, 3, 112, 112]);
+      const outputs = await s.run({ data: inputTensor });
+      const raw = outputs.fc1?.data as Float32Array | undefined;
+      if (!raw || raw.length === 0) {
+        self.postMessage({ id: msg.id, ok: false, error: 'SFace empty output' });
+        return;
+      }
+      const vec = new Float32Array(raw.length);
+      let norm = 0;
+      for (let i = 0; i < raw.length; i++) norm += raw[i] * raw[i];
+      norm = Math.sqrt(norm) + 1e-6;
+      for (let i = 0; i < raw.length; i++) vec[i] = raw[i] / norm;
+      (self as unknown as { postMessage: (m: unknown, transfer?: Transferable[]) => void }).postMessage(
+        { id: msg.id, ok: true, embeddingBuffer: vec.buffer },
+        [vec.buffer]
+      );
+    } catch (err) {
+      self.postMessage({
+        id: msg.id,
+        ok: false,
+        error: err instanceof Error ? err.message : String(err),
       });
     }
   }

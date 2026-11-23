@@ -8,11 +8,12 @@
 import type { FaceMemberCluster, PhotoItem, YearlyFaceBestCut } from '../../types/saysee';
 import type { WorkerDetectedFace } from './facePassportWorker';
 
-const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v1';
+const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v2';
 const MAX_SCAN_PHOTOS = 160;
 const MAX_CLUSTERS = 10;
 const MAX_CUTS_PER_CLUSTER = 6;
-const SIMILARITY_THRESHOLD = 0.76;
+/** OpenCV SFace 공식 동일인 코사인 유사도 임계치(0.363) 기반 */
+const SIMILARITY_THRESHOLD = 0.365;
 const SCREENSHOT_NAME_RX = /(screenshot|스크린샷|캡처|capture|화면\s*캡처|영수증|receipt|memo|메모)/i;
 
 interface CachedFaceStore {
@@ -164,14 +165,14 @@ function prepareYuNetInput(
   return { bgr, origW, origH, scale };
 }
 
-function extractCropAndEmbedding(
+function prepareFaceCropAndBgr112(
   img: HTMLImageElement,
   face: WorkerDetectedFace,
   cropCanvas: HTMLCanvasElement,
   cropCtx: CanvasRenderingContext2D,
-  featCanvas: HTMLCanvasElement,
-  featCtx: CanvasRenderingContext2D
-): { avatarDataUrl: string; embedding: Float32Array; sharpness: number } {
+  sfaceCanvas: HTMLCanvasElement,
+  sfaceCtx: CanvasRenderingContext2D
+): { avatarDataUrl: string; faceBgr112: Float32Array; sharpness: number } {
   const ow = img.naturalWidth;
   const oh = img.naturalHeight;
   const fx1 = face.x1 * ow;
@@ -194,88 +195,35 @@ function extractCropAndEmbedding(
   cropCtx.drawImage(img, sx, sy, sw, sh, 0, 0, 128, 128);
   const avatarDataUrl = cropCanvas.toDataURL('image/jpeg', 0.72);
 
-  // 특징 벡터용 타이트 얼굴 영역 (16x16)
-  featCanvas.width = 16;
-  featCanvas.height = 16;
-  featCtx.clearRect(0, 0, 16, 16);
-  featCtx.drawImage(img, fx1, fy1, fw, fh, 0, 0, 16, 16);
-  const data = featCtx.getImageData(0, 0, 16, 16).data;
+  // SFace int8 112x112 입력용 타이트 얼굴 정사각형 크롭 (약간 15% 여유)
+  const sSide = Math.max(fw, fh) * 1.15;
+  const ssx = Math.max(0, Math.min(ow - 1, cx - sSide * 0.5));
+  const ssy = Math.max(0, Math.min(oh - 1, cy - sSide * 0.5));
+  const ssw = Math.max(8, Math.min(ow - ssx, sSide));
+  const ssh = Math.max(8, Math.min(oh - ssy, sSide));
 
-  // 1) 12x12 중앙 그레이스케일 조명정규화 (144 dims)
-  const gray16 = new Float32Array(256);
-  for (let i = 0; i < 256; i++) {
-    gray16[i] = 0.299 * data[i * 4] + 0.587 * data[i * 4 + 1] + 0.114 * data[i * 4 + 2];
-  }
-  const vec = new Float32Array(144 + 48 + 16);
-  let mean = 0;
-  let k = 0;
-  for (let y = 2; y < 14; y++) {
-    for (let x = 2; x < 14; x++) {
-      const v = gray16[y * 16 + x];
-      vec[k++] = v;
-      mean += v;
+  sfaceCanvas.width = 112;
+  sfaceCanvas.height = 112;
+  sfaceCtx.clearRect(0, 0, 112, 112);
+  sfaceCtx.drawImage(img, ssx, ssy, ssw, ssh, 0, 0, 112, 112);
+  const rgba = sfaceCtx.getImageData(0, 0, 112, 112).data;
+
+  const plane = 112 * 112;
+  const faceBgr112 = new Float32Array(3 * plane);
+  let gradSum = 0;
+  for (let i = 0, p = 0; i < plane; i++, p += 4) {
+    faceBgr112[i] = rgba[p + 2]; // B
+    faceBgr112[plane + i] = rgba[p + 1]; // G
+    faceBgr112[2 * plane + i] = rgba[p]; // R
+    if (i > 112 && (i & 3) === 0) {
+      const gCur = rgba[p + 1];
+      const gLeft = rgba[p - 3];
+      const gUp = rgba[p - 112 * 4 + 1];
+      gradSum += Math.abs(gCur - gLeft) + Math.abs(gCur - gUp);
     }
   }
-  mean /= 144;
-  let std = 0;
-  for (let i = 0; i < 144; i++) {
-    const d = vec[i] - mean;
-    std += d * d;
-  }
-  std = Math.sqrt(std / 144) + 1e-4;
-  for (let i = 0; i < 144; i++) {
-    vec[i] = ((vec[i] - mean) / std) * 0.85;
-  }
-
-  // 2) 4x4 블록별 RGB 상대색감 (48 dims) + Laplacian 선명도
-  let sharpSum = 0;
-  let off = 144;
-  for (let by = 0; by < 4; by++) {
-    for (let bx = 0; bx < 4; bx++) {
-      let rS = 0;
-      let gS = 0;
-      let bS = 0;
-      for (let dy = 0; dy < 4; dy++) {
-        for (let dx = 0; dx < 4; dx++) {
-          const idx = ((by * 4 + dy) * 16 + (bx * 4 + dx)) * 4;
-          rS += data[idx];
-          gS += data[idx + 1];
-          bS += data[idx + 2];
-        }
-      }
-      const tot = rS + gS + bS + 1e-3;
-      vec[off++] = (rS / tot - 0.333) * 3.0;
-      vec[off++] = (gS / tot - 0.333) * 3.0;
-      vec[off++] = (bS / tot - 0.333) * 3.0;
-    }
-  }
-
-  // 3) 4x4 그래디언트 강도 (16 dims)
-  for (let by = 0; by < 4; by++) {
-    for (let bx = 0; bx < 4; bx++) {
-      let gMag = 0;
-      for (let dy = 1; dy < 3; dy++) {
-        for (let dx = 1; dx < 3; dx++) {
-          const y = by * 4 + dy;
-          const x = bx * 4 + dx;
-          const gx = gray16[y * 16 + Math.min(15, x + 1)] - gray16[y * 16 + Math.max(0, x - 1)];
-          const gy = gray16[Math.min(15, y + 1) * 16 + x] - gray16[Math.max(0, y - 1) * 16 + x];
-          gMag += Math.sqrt(gx * gx + gy * gy);
-        }
-      }
-      sharpSum += gMag;
-      vec[off++] = (gMag / 400) * 0.7;
-    }
-  }
-
-  // L2 normalize
-  let norm = 0;
-  for (let i = 0; i < vec.length; i++) norm += vec[i] * vec[i];
-  norm = Math.sqrt(norm) + 1e-6;
-  for (let i = 0; i < vec.length; i++) vec[i] /= norm;
-
-  const sharpness = Math.min(99, Math.max(55, Math.round(55 + (sharpSum / 1800) * 44)));
-  return { avatarDataUrl, embedding: vec, sharpness };
+  const sharpness = Math.min(99, Math.max(55, Math.round(55 + (gradSum / 35000) * 44)));
+  return { avatarDataUrl, faceBgr112, sharpness };
 }
 
 function dot(a: Float32Array, b: Float32Array): number {
@@ -483,17 +431,22 @@ export async function runOnDeviceFacePassportScan(
     let reqSeq = 1;
     const pending = new Map<
       number,
-      { resolve: (faces: WorkerDetectedFace[]) => void; timer: number }
+      { resolve: (payload: { faces?: WorkerDetectedFace[]; embeddingBuffer?: ArrayBuffer; ok: boolean }) => void; timer: number }
     >();
 
-    worker.onmessage = (ev: MessageEvent<{ id: number; ok: boolean; faces?: WorkerDetectedFace[] }>) => {
+    worker.onmessage = (
+      ev: MessageEvent<{ id: number; ok: boolean; faces?: WorkerDetectedFace[]; embeddingBuffer?: ArrayBuffer; error?: string }>
+    ) => {
       const msg = ev.data;
       if (!msg || typeof msg.id !== 'number') return;
+      if (!msg.ok && msg.error) {
+        console.warn('[GhostiFacePassport] worker error:', msg.error);
+      }
       const entry = pending.get(msg.id);
       if (!entry) return;
       window.clearTimeout(entry.timer);
       pending.delete(msg.id);
-      entry.resolve(Array.isArray(msg.faces) ? msg.faces : []);
+      entry.resolve(msg);
     };
 
     const detectInWorker = (
@@ -508,11 +461,29 @@ export async function runOnDeviceFacePassportScan(
           pending.delete(id);
           resolve([]);
         }, 12000);
-        pending.set(id, { resolve, timer });
+        pending.set(id, {
+          resolve: (res) => resolve(Array.isArray(res.faces) ? res.faces : []),
+          timer,
+        });
         worker.postMessage(
           { id, type: 'detect', bgrBuffer: bgr.buffer, origW, origH, scale, scoreThreshold: 0.62 },
           [bgr.buffer]
         );
+      });
+
+    const embedInWorker = (faceBgr112: Float32Array): Promise<Float32Array | null> =>
+      new Promise((resolve) => {
+        const id = reqSeq++;
+        const timer = window.setTimeout(() => {
+          pending.delete(id);
+          resolve(null);
+        }, 12000);
+        pending.set(id, {
+          resolve: (res) =>
+            resolve(res.ok && res.embeddingBuffer ? new Float32Array(res.embeddingBuffer) : null),
+          timer,
+        });
+        worker.postMessage({ id, type: 'embed', faceBgrBuffer: faceBgr112.buffer }, [faceBgr112.buffer]);
       });
 
     const inputCanvas = document.createElement('canvas');
@@ -543,7 +514,7 @@ export async function runOnDeviceFacePassportScan(
 
         const { year, dateStr } = parsePhotoYearAndDate(photo);
         for (const f of faces) {
-          const { avatarDataUrl, embedding, sharpness } = extractCropAndEmbedding(
+          const { avatarDataUrl, faceBgr112, sharpness } = prepareFaceCropAndBgr112(
             img,
             f,
             cropCanvas,
@@ -551,6 +522,8 @@ export async function runOnDeviceFacePassportScan(
             featCanvas,
             featCtx
           );
+          const embedding = await embedInWorker(faceBgr112);
+          if (!embedding) continue;
           extracted.push({
             photo,
             year,
