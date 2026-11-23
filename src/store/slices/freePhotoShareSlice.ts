@@ -18,6 +18,7 @@ import {
 import { analyzeMobilePickedPhotoFiles } from '../../services/mobilePhotoPicker';
 import { isCapacitorNativeMobileRuntime } from '../../services/ghostiMobileCareBridge';
 import {
+  clearStoredInviteSession,
   parseShareInviteInput,
   persistInviteContextMeta,
   readActiveInviteToken,
@@ -26,6 +27,7 @@ import {
 } from '../../services/shareInviteDeepLinkBridge';
 import {
   acceptRoomInviteAsLoggedInMember,
+  clearCachedSharedRoomTokens,
   deleteSupabaseSharedRoomPhoto,
   ensureMyRoomAndInviteToken,
   fetchGuestPreviewRoomByToken,
@@ -2364,6 +2366,9 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       : '초대받은 공유방';
 
     await leaveSupabaseSharedPhotoRoom(targetRoomId);
+    clearStoredInviteSession();
+    stripConsumedInviteParamsFromLoggedInUrl();
+    clearCachedSharedRoomTokens();
     storeSharedRefs.knownJoinedRoomIds.delete(targetRoomId);
     if (storeSharedRefs.activeSharedRoomId === targetRoomId) {
       storeSharedRefs.activeSharedRoomId = null;
@@ -2385,7 +2390,12 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         sharedRoomHostPhotos: state.sharedRoomHostPhotos,
         sharedRoomAddedPhotos: nextAdded,
       });
-      const nextResults: SearchResultItem[] = filterVisibleGalleryPhotos(nextCorpus).map(
+      const nextVisible = filterPhotosByClubFeedTrack(
+        filterVisibleGalleryPhotos(nextCorpus),
+        nextLounge,
+        state.clubFeedTrack
+      );
+      const nextResults: SearchResultItem[] = nextVisible.map(
         (photo) => ({
           photo,
           score: 0.95,
@@ -2410,7 +2420,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         lastQuarantineToast: `[${roomLabel}] 공유방에서 나왔습니다. (해당 방 로컬 캐시 0.1초 자동 삭제 완료 · 내 개인 여권과 내 사진은 100% 보존)`,
       };
     });
-    void get().syncActiveSharedRoomFromSupabase();
+    void get().syncActiveSharedRoomFromSupabase({ forceInviteToken: '' });
   },
 
   setClubSizeTier: (clubSizeTier) =>
@@ -2905,7 +2915,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     );
     const myDisplayName = candidateNames[0] || '나';
 
-    // [개인 PC 사진 유출 0%]: 현재 공유방(동호회·동창회·가족)에 실제로 올라온 공유 사진 코퍼스 안에서만 검색
+    // [개인 PC 사진 유출 0%]: 현재 공유방(동호회·동창회·가족) 및 활성 하위 탭에 실제로 올라온 공유 사진 코퍼스 안에서만 검색
     const scopedCorpus = resolveLoungePhotoCorpus({
       activeLoungeType,
       activeFamilyRoom,
@@ -2914,37 +2924,30 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       sharedRoomHostPhotos,
       sharedRoomAddedPhotos,
     });
-    const visibleRoomPhotos = filterVisibleGalleryPhotos(scopedCorpus);
+    const visibleRoomPhotos = filterPhotosByClubFeedTrack(
+      filterVisibleGalleryPhotos(scopedCorpus),
+      activeLoungeType,
+      stateNow.clubFeedTrack
+    );
 
     const escapedNames = candidateNames
       .map((n) => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
       .filter(Boolean);
     const matchedFileSet = new Set(selfCluster?.matchedPhotoFiles || []);
+    const nameRe = escapedNames.length > 0 ? new RegExp(`(${escapedNames.join('|')})`, 'i') : null;
 
+    // 업로더 닉네임(uploaderLabel)은 제외하고 실제 얼굴 클러스터·인물 태그(#이름)·캡션/키워드 매칭만 엄격 채택 (캡처/풍경 오탐 0%)
     const personMatches = visibleRoomPhotos.filter((p) => {
       if (matchedFileSet.has(p.name)) return true;
-      const hay = `${p.name} ${p.uploaderLabel || ''} ${p.captionKo || ''} ${(p.tags || []).join(' ')} ${(p.keywordsKo || []).join(' ')}`;
-      if (escapedNames.length > 0 && new RegExp(`(${escapedNames.join('|')})`, 'i').test(hay)) {
+      const nonUploaderTags = (p.tags || []).filter((t) => !t.includes('사진추가'));
+      const hay = `${p.captionKo || ''} ${nonUploaderTags.join(' ')} ${(p.keywordsKo || []).join(' ')}`;
+      if (nameRe && nameRe.test(hay)) {
         return true;
       }
       return false;
     });
 
-    const fallbackRe = isClubRoom
-      ? /(모임|동호회|산행|라운딩|번개|단체|인물)/i
-      : new RegExp(
-          `(${alumniGradYear}|수학여행|소풍|추억|학창|졸업|${alumniSchoolName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')})`,
-          'i'
-        );
-    const taggedMatches =
-      personMatches.length > 0
-        ? personMatches
-        : visibleRoomPhotos.filter((p) => {
-            const hay = `${p.name} ${p.captionKo || ''} ${(p.tags || []).join(' ')} ${(p.keywordsKo || []).join(' ')}`;
-            return fallbackRe.test(hay);
-          });
-    const targetList = taggedMatches.length > 0 ? taggedMatches : visibleRoomPhotos;
-    const matchedPhotos = targetList.map((photo, idx) => ({
+    const matchedPhotos = personMatches.map((photo, idx) => ({
       photo,
       score: Math.max(0.75, 0.99 - idx * 0.01),
       matchPercentage: Math.max(75, 99 - idx),
@@ -2954,7 +2957,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     set({
       ...(isClubRoom ? {} : { clubFeedTrack: 'memories_1989' }),
       searchSpace: 'gallery',
-      hasExecutedUserSearch: matchedPhotos.length > 0,
+      hasExecutedUserSearch: true,
       hasUserSelectedSearchTab: true,
       desktopTab: 'dashboard',
       mobileTab: 'search',
@@ -2974,9 +2977,11 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       lastQuarantineToast:
         matchedPhotos.length > 0
           ? isClubRoom
-            ? `[${myDisplayName}] 여권 기준 이 모임방 사진 중 ${matchedPhotos.length}장을 찾았습니다!`
-            : `[${myDisplayName}] 여권 기준 동창회 공유방 사진 중 ${matchedPhotos.length}장을 찾았습니다!`
-          : `아직 이 공유방에 올라온 사진이 없습니다. [+ 내 사진도 이 방에 추가하기]로 먼저 올려보세요!`,
+            ? `[${myDisplayName}] 인물 기준으로 이 모임방 사진 중 ${matchedPhotos.length}장을 찾았습니다.`
+            : `[${myDisplayName}] 인물 기준으로 동창회 공유방 사진 중 ${matchedPhotos.length}장을 찾았습니다.`
+          : visibleRoomPhotos.length === 0
+          ? `아직 이 공유방에 올라온 사진이 없습니다. [내 사진도 이 방에 추가하기]로 먼저 올려보세요.`
+          : `이 방에 [${myDisplayName}] 인물 이름표가 등록된 사진이 없습니다. 관련 없는 캡처·풍경 사진은 제외했습니다.`,
     });
   },
 });

@@ -2600,5 +2600,25 @@ export async function handleAuthedWorkAndDeviceAction({
     };
   }
 
+  if (action === 'photo_leave_shared_room') {
+    const targetRoomId = String(body.roomId || '').trim();
+    if (!targetRoomId) {
+      return { status: 400, body: { ok: false, reason: 'MISSING_ROOM_ID' } };
+    }
+    const delRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(
+        targetRoomId
+      )}&member_email=eq.${encodeURIComponent(email)}&role=neq.master`,
+      {
+        method: 'DELETE',
+        headers: srvHeaders(serviceKey, { Prefer: 'return=minimal' }),
+      }
+    );
+    return {
+      status: delRes.ok ? 200 : 500,
+      body: { ok: delRes.ok, roomId: targetRoomId },
+    };
+  }
+
   return null;
 }

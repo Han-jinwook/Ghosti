@@ -1407,7 +1407,7 @@ export async function deleteSupabaseSharedRoomPhoto(photoItemId: string): Promis
 /**
  * [Step 6 — 공유방 나가기(자퇴) & 해당 공유방 로컬 IndexedDB 금고 0.1초 즉시 소거]
  * - 멤버가 초대받은 공유방에서 스스로 나가면 즉시当該 방의 로컬 금고(IndexedDB) 사진을 0 Byte로 비우고
- *   서버 멤버십(ghosti_room_members)에서 탈퇴합니다 (내 개인 귀신계 여권과 내 기기 사진은 100% 보존).
+ *   서버 멤버십(ghosti_lounge_members)에서 탈퇴합니다 (내 개인 귀신계 여권과 내 기기 사진은 100% 보존).
  */
 export async function leaveSupabaseSharedPhotoRoom(roomId: string): Promise<boolean> {
   const cleanRoomId = (roomId || '').trim();
@@ -1419,21 +1419,19 @@ export async function leaveSupabaseSharedPhotoRoom(roomId: string): Promise<bool
     const existingJoined = getCachedJoinedSharedRoomsSync().filter((r) => r.roomId !== cleanRoomId);
     saveCachedJoinedRooms(currentEmail, existingJoined);
   }
+  clearCachedSharedRoomTokens();
   if (!hasAuthenticatedHubAccountSession()) return true;
+  try {
+    await callGhostiServerBridge('photo_leave_shared_room', { roomId: cleanRoomId });
+  } catch {
+    /* ignore bridge error and continue with direct fallback */
+  }
   const authed = await ensureGhostiAuthedSupabaseClient();
   if (!authed) return true;
   try {
-    const jwtClaims = readGhostiAuthedJwtClaims();
-    if (jwtClaims?.sub && /^[0-9a-f-]{36}$/i.test(jwtClaims.sub)) {
-      await authed
-        .from('ghosti_room_members')
-        .delete()
-        .eq('room_id', cleanRoomId)
-        .eq('member_user_id', jwtClaims.sub);
-    }
     if (currentEmail) {
       await authed
-        .from('ghosti_room_members')
+        .from('ghosti_lounge_members')
         .delete()
         .eq('room_id', cleanRoomId)
         .eq('member_email', currentEmail);
@@ -1446,7 +1444,7 @@ export async function leaveSupabaseSharedPhotoRoom(roomId: string): Promise<bool
 
 /**
  * [Step 6 — 방장의 멤버 내보내기(강퇴)]
- * - 방장이 특정 멤버를 공유방에서 내보내면 서버 멤버십(ghosti_room_members) 및 해당 멤버의 업로드 마중물을 정리합니다.
+ * - 방장이 특정 멤버를 공유방에서 내보내면 서버 멤버십(ghosti_lounge_members) 및 해당 멤버의 업로드 마중물을 정리합니다.
  */
 export async function kickMemberFromSupabaseSharedPhotoRoom(
   roomId: string,
@@ -1459,10 +1457,10 @@ export async function kickMemberFromSupabaseSharedPhotoRoom(
   if (!authed) return false;
   try {
     await authed
-      .from('ghosti_room_members')
+      .from('ghosti_lounge_members')
       .delete()
       .eq('room_id', cleanRoomId)
-      .eq('nickname', cleanNick);
+      .eq('room_persona_nickname', cleanNick);
   } catch {
     /* ignore */
   }

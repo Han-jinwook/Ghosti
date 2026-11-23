@@ -5,6 +5,8 @@ import {
 } from '../../services/p2pHybridBridge';
 import { getActivePersonaForCluster, useSaySeeStore } from '../../store/useSaySeeStore';
 import {
+  filterPhotosByClubFeedTrack,
+  filterVisibleGalleryPhotos,
   resolveInvitedHostLoungeAndRoom,
   resolveLoungePhotoCorpus,
 } from '../../store/slices/storeSharedRefs';
@@ -131,14 +133,20 @@ export const LoungeFeedContextBanner: React.FC = () => {
     setTimeout(() => setClubInviteCopied(false), 2600);
   };
 
-  const activeRoomPhotoCount = resolveLoungePhotoCorpus({
+  const activeRoomPhotoCount = filterPhotosByClubFeedTrack(
+    filterVisibleGalleryPhotos(
+      resolveLoungePhotoCorpus({
+        activeLoungeType,
+        activeFamilyRoom,
+        activeSharedRoomId,
+        photos,
+        sharedRoomHostPhotos,
+        sharedRoomAddedPhotos,
+      })
+    ),
     activeLoungeType,
-    activeFamilyRoom,
-    activeSharedRoomId,
-    photos,
-    sharedRoomHostPhotos,
-    sharedRoomAddedPhotos,
-  }).length;
+    clubFeedTrack
+  ).length;
   const estimatedOriginalSizeLabel =
     activeRoomPhotoCount === 0
       ? '0장 (0MB)'
