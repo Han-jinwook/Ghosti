@@ -435,10 +435,16 @@ export const App: React.FC = () => {
         ? 'student'
         : 'family';
 
+      const isNativeBoot = Boolean(
+        (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+      );
+      const isCleanNativeBoot =
+        isNativeBoot && !hasInviteLink && !hasWorkRoomLink && !hasPairCodeLink && !urlLounge && !urlTab;
+
       const targetLounge: LoungeType =
         hasInviteLink || hasWorkRoomLink
           ? defaultInviteLounge
-          : hasPairCodeLink
+          : hasPairCodeLink || isCleanNativeBoot
           ? 'personal'
           : urlLounge && ['personal', 'family', 'club', 'student', 'work'].includes(urlLounge)
             ? urlLounge
@@ -448,6 +454,8 @@ export const App: React.FC = () => {
           ? 'dashboard'
           : hasPairCodeLink
           ? 'sync'
+          : isCleanNativeBoot
+          ? 'trash'
           : urlTab &&
               ['trial', 'dashboard', 'trash', 'share', 'settings', 'sync', 'superpower_dojo', 'search_dojo'].includes(urlTab)
             ? urlTab
@@ -455,6 +463,8 @@ export const App: React.FC = () => {
       const targetMobileTab: MobileTab =
         hasInviteLink || hasWorkRoomLink || hasPairCodeLink
           ? 'search'
+          : isCleanNativeBoot
+          ? 'trash'
           : savedNav?.mobileTab || desktopTabToMobileTab(targetDesktopTab);
       const urlRoomId = (params.get('roomId') || '').trim() || null;
       const targetRoom: FamilyRoomId =

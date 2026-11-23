@@ -361,10 +361,35 @@ export const FreePhotoShareOverlays: React.FC = () => {
     if (typeof window === 'undefined') return;
 
     if (isCapacitorNativeMobileRuntime()) {
+      const LAST_CONSUMED_DEEPLINK_KEY = 'ghosti_last_consumed_native_deeplink_v1';
       void consumeNativePendingDeepLink()
         .then(async (res) => {
           if (res.ok && res.deepLinkUrl) {
-            await applyShareInviteDeepLink(res.deepLinkUrl, { fromNativeApp: true });
+            // 안드로이드 최근 앱(Recents)/재실행 시 OS가 과거 초대 링크 Intent를 그대로 재전달하는 경우,
+            // 이미 이전 세션에서 열었던 동일 초대 링크는 무시하고 정상적으로 귀신비서 첫 화면을 유지합니다.
+            let isStaleReplayedIntent = false;
+            try {
+              const prevRaw = localStorage.getItem(LAST_CONSUMED_DEEPLINK_KEY);
+              if (prevRaw) {
+                const prev = JSON.parse(prevRaw) as { url?: string; ts?: number } | null;
+                if (prev?.url === res.deepLinkUrl && typeof prev.ts === 'number' && Date.now() - prev.ts > 4000) {
+                  isStaleReplayedIntent = true;
+                }
+              }
+            } catch {
+              /* ignore */
+            }
+            if (!isStaleReplayedIntent) {
+              try {
+                localStorage.setItem(
+                  LAST_CONSUMED_DEEPLINK_KEY,
+                  JSON.stringify({ url: res.deepLinkUrl, ts: Date.now() })
+                );
+              } catch {
+                /* ignore */
+              }
+              await applyShareInviteDeepLink(res.deepLinkUrl, { fromNativeApp: true });
+            }
           } else if (isSharedPhotoLounge(useSaySeeStore.getState().activeLoungeType)) {
             void useSaySeeStore.getState().syncActiveSharedRoomFromSupabase();
           }
@@ -376,6 +401,14 @@ export const FreePhotoShareOverlays: React.FC = () => {
       const onLiveDeepLink = (ev: Event) => {
         const detail = (ev as CustomEvent<{ url?: string }>).detail;
         if (detail?.url) {
+          try {
+            localStorage.setItem(
+              LAST_CONSUMED_DEEPLINK_KEY,
+              JSON.stringify({ url: detail.url, ts: Date.now() })
+            );
+          } catch {
+            /* ignore */
+          }
           void applyShareInviteDeepLink(detail.url, { fromNativeApp: true });
         }
       };

@@ -187,6 +187,10 @@ public class MainActivity extends BridgeActivity {
 
     private void captureIncomingDeepLinkIntent(Intent intent) {
         if (intent == null) return;
+        // 최근 앱 목록(Recents)에서 앱을 다시 열 때 Android가 과거 초대 링크 Intent를 재전달하는 현상 원천 차단
+        if ((intent.getFlags() & Intent.FLAG_ACTIVITY_LAUNCHED_FROM_HISTORY) != 0) {
+            return;
+        }
         Uri data = intent.getData();
         if (data == null) return;
         String urlStr = data.toString();
@@ -194,6 +198,11 @@ public class MainActivity extends BridgeActivity {
         String lower = urlStr.toLowerCase();
         if (!lower.startsWith("ghosti://") && !lower.contains("invite=")) {
             return;
+        }
+        // 동일 Intent가 onCreate/recreate 시 재소비되지 않도록 즉시 소비 처리
+        try {
+            intent.setData(null);
+        } catch (Throwable ignored) {
         }
         try {
             getSharedPreferences("ghosti_deep_links", MODE_PRIVATE)
