@@ -1,7 +1,7 @@
 # 📋 『귀신Key (GhostKey)』 세션 인계장 (SESSION_HANDOVER)
 
-- **최종 체크아웃 일시**: `2026-11-24 00:25 (KST)`
-- **세션 제목 (직전 세션 마지막 작업)**: `Ghosti하위폴더단일화`
+- **최종 체크아웃 일시**: `2026-11-24 01:09 (KST)`
+- **세션 제목 (직전 세션 마지막 작업)**: `귀신Key통제권점검`
 - **현재 본진 / 브랜치 / 배포**: **`D:\Ghosti\ghostkey\`** (`Han-jinwook/Ghosti` `main` · 배포: `https://ghostkey.sundreamer.app` `Published` 확인 완료 · 구형 `D:\GhostKey` 로컬 폴더 삭제 완료)
 
 ---
