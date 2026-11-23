@@ -333,8 +333,10 @@ export interface FreePhotoShareSlice {
   addLocalPhotosToSharedRoom: (selectedIds: string[]) => void;
   removeSharedRoomPhoto: (photoId: string) => void;
   sharedRoomSoftDeletedMap: Record<string, string>;
+  lastSoftDeletedSharedPhoto: { photoId: string; mode: 'uploader_24h' | 'host_hide' } | null;
+  clearLastSoftDeletedSharedPhoto: () => void;
   sharedRoomStickOverlayMap: Record<string, SharedRoomStickOverlayEntry>;
-  softDeleteSharedRoomPhoto24h: (photoId: string) => void;
+  softDeleteSharedRoomPhoto24h: (photoId: string, mode?: 'uploader_24h' | 'host_hide') => void;
   restoreSharedRoomPhotoFromTrash: (photoId: string) => void;
   restoreAllSharedRoomTrashPhotos: (photoIds: string[]) => void;
   permanentlyDeleteSharedRoomTrashPhoto: (photoId: string) => void;
@@ -401,6 +403,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
   lastRetroScanReport: null,
   swarmFaceCandidates: [],
   sharedRoomSoftDeletedMap: readSharedRoomSoftDeletedMap(),
+  lastSoftDeletedSharedPhoto: null,
   sharedRoomStickOverlayMap: readSharedRoomStickOverlayMap(),
   setShowFaceRegistryModal: (showFaceRegistryModal) => set({ showFaceRegistryModal }),
   setDoorplatePickerClusterId: (doorplatePickerClusterId) => set({ doorplatePickerClusterId }),
@@ -1324,9 +1327,10 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     });
   },
 
-  softDeleteSharedRoomPhoto24h: (photoId) => {
+  clearLastSoftDeletedSharedPhoto: () => set({ lastSoftDeletedSharedPhoto: null }),
+
+  softDeleteSharedRoomPhoto24h: (photoId, mode = 'uploader_24h') => {
     if (!photoId) return;
-    void deleteSupabaseSharedRoomPhoto(photoId);
     set((state) => {
       const deletedAt = new Date().toISOString();
       const nextSoftDeletedMap = {
@@ -1345,12 +1349,15 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
 
       return {
         sharedRoomSoftDeletedMap: nextSoftDeletedMap,
+        lastSoftDeletedSharedPhoto: { photoId, mode },
         sharedRoomAddedPhotos: nextAdded,
         sharedRoomHostPhotos: nextHost,
         photos: nextPhotos,
         searchResults: nextResults,
         lastQuarantineToast:
-          '공유방에서 사진이 숨김·삭제 처리되어 [공유방 휴지통]으로 이동되었습니다. (내 기기 원본 보존 · 언제든 복원 가능)',
+          mode === 'host_hide'
+            ? '공유방에서 사진을 숨김 처리해 [공유방 휴지통]으로 옮겼습니다. (내 기기 원본 보존 · 언제든 복원 가능)'
+            : '공유방에서 사진을 삭제해 [공유방 휴지통]으로 옮겼습니다. (내 기기 원본 보존 · 언제든 복원 가능)',
       };
     });
   },
@@ -1377,7 +1384,12 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         sharedRoomHostPhotos: nextHost,
         sharedRoomAddedPhotos: nextAdded,
       });
-      const nextResults: SearchResultItem[] = filterVisibleGalleryPhotos(nextCorpus).map(
+      const visibleRestored = filterPhotosByClubFeedTrack(
+        filterVisibleGalleryPhotos(nextCorpus),
+        state.activeLoungeType,
+        state.clubFeedTrack
+      );
+      const nextResults: SearchResultItem[] = visibleRestored.map(
         (photo) => ({
           photo,
           score: 0.96,
@@ -1388,12 +1400,16 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
 
       return {
         sharedRoomSoftDeletedMap: nextSoftDeletedMap,
+        lastSoftDeletedSharedPhoto:
+          state.lastSoftDeletedSharedPhoto?.photoId === photoId
+            ? null
+            : state.lastSoftDeletedSharedPhoto,
         sharedRoomAddedPhotos: nextAdded,
         sharedRoomHostPhotos: nextHost,
         photos: nextPhotos,
         ...(state.hasExecutedUserSearch ? {} : { searchResults: nextResults }),
         lastQuarantineToast:
-          '↩️ [공유방 휴지통]에서 사진을 복원하여 공유방 앨범에 다시 올렸습니다!',
+          '[공유방 휴지통]에서 사진을 복원하여 공유방 앨범에 다시 올렸습니다.',
       };
     });
   },
@@ -2575,7 +2591,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
 
       return {
         alumniStickChips: newChips,
-        lastQuarantineToast: `[스틱(Chip) 3종 + 월(Month) 양방향 인덱싱 완료] [${numYear}] [${cleanPlace}] [${yearSeasonLabel}] 스틱 생성! (${expanded.slice(0, 8).join(', ')} 자동 매칭 · 귀신같이 여권 ${decadeStart}년대 바구니 직결)`,
+        lastQuarantineToast: `[스티커 3종 생성 완료] [${numYear}] [${cleanPlace}] [${yearSeasonLabel}] 스티커가 생성되었습니다.`,
       };
     });
   },

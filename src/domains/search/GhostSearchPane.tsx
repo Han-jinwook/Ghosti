@@ -52,7 +52,11 @@ export const GhostSearchPane: React.FC<{
     setGroupBurstsInSearch,
     setSelectedPhoto,
     toggleBookmark,
-    removeSharedRoomPhoto,
+    softDeleteSharedRoomPhoto24h,
+    restoreSharedRoomPhotoFromTrash,
+    lastSoftDeletedSharedPhoto,
+    clearLastSoftDeletedSharedPhoto,
+    setDesktopTab,
     openLocalFolder,
     hasExecutedUserSearch,
     refreshLiveLocalFilesInSearchWindow,
@@ -621,6 +625,56 @@ export const GhostSearchPane: React.FC<{
                             </div>
                           </div>
 
+                          {lastSoftDeletedSharedPhoto &&
+                            (activeLoungeType === 'family' ||
+                              activeLoungeType === 'club' ||
+                              activeLoungeType === 'student') && (
+                              <div className="px-3.5 py-2.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-2 text-[12px] text-slate-700">
+                                <span>
+                                  {lastSoftDeletedSharedPhoto.mode === 'host_hide'
+                                    ? '사진을 공유방에서 숨김 처리해 [공유방 휴지통]으로 옮겼습니다. (내 기기 원본 안전)'
+                                    : '사진을 삭제해 [공유방 휴지통]으로 옮겼습니다. (내 기기 원본 안전)'}
+                                </span>
+                                <div className="flex flex-wrap items-center gap-1.5 shrink-0">
+                                  <button
+                                    type="button"
+                                    onClick={() =>
+                                      restoreSharedRoomPhotoFromTrash(
+                                        lastSoftDeletedSharedPhoto.photoId
+                                      )
+                                    }
+                                    className="px-2.5 py-1 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-semibold cursor-pointer"
+                                  >
+                                    1초 복원
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => {
+                                      try {
+                                        sessionStorage.setItem(
+                                          'ghosti_scroll_shared_trash_once',
+                                          '1'
+                                        );
+                                      } catch {
+                                        /* ignore */
+                                      }
+                                      setDesktopTab('share');
+                                    }}
+                                    className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[11.5px] font-medium cursor-pointer"
+                                  >
+                                    공유방 휴지통 바로가기
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => clearLastSoftDeletedSharedPhoto()}
+                                    className="px-1.5 py-1 text-slate-400 hover:text-slate-700 text-[11px] cursor-pointer"
+                                  >
+                                    닫기
+                                  </button>
+                                </div>
+                              </div>
+                            )}
+
                           {groupedResults.length > 0 ? (
                             <>
                               <div
@@ -687,13 +741,22 @@ export const GhostSearchPane: React.FC<{
                                                 type="button"
                                                 onClick={(e) => {
                                                   e.stopPropagation();
-                                                  removeSharedRoomPhoto(item.photo.id);
+                                                  softDeleteSharedRoomPhoto24h(
+                                                    item.photo.id,
+                                                    delPerm.mode === 'host_hide'
+                                                      ? 'host_hide'
+                                                      : 'uploader_24h'
+                                                  );
                                                 }}
-                                                aria-label="공유방에서 삭제"
+                                                aria-label={
+                                                  delPerm.mode === 'host_hide'
+                                                    ? '공유방에서 숨기기'
+                                                    : '공유방에서 삭제'
+                                                }
                                                 title={
                                                   delPerm.mode === 'host_hide'
-                                                    ? '공유방에서 숨기기 (내 기기 원본 보존)'
-                                                    : '공유방에서 삭제 (내 기기 원본 보존)'
+                                                    ? '방장 권한으로 이 사진을 공유방에서 숨기고 휴지통으로 이동 (내 기기 원본 보존)'
+                                                    : '내가 올린 사진 24시간 내 삭제 후 공유방 휴지통으로 이동 (내 기기 원본 보존)'
                                                 }
                                                 className="absolute top-2 right-11 z-20 px-2 py-0.5 rounded bg-black/75 hover:bg-rose-600 text-white text-[10.5px] font-semibold cursor-pointer transition-colors"
                                               >

@@ -127,6 +127,20 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
     setTimeout(() => setHighlightTrashSection(false), 2400);
   };
 
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    try {
+      if (sessionStorage.getItem('ghosti_scroll_shared_trash_once') === '1') {
+        sessionStorage.removeItem('ghosti_scroll_shared_trash_once');
+        window.setTimeout(() => {
+          scrollToSharedTrash();
+        }, 140);
+      }
+    } catch {
+      /* ignore */
+    }
+  }, []);
+
   const memberActiveHints = swarmFaceCandidates.filter((c) => !c.applied && !c.passedToHostQueue);
   const hostCleanupQueue = swarmFaceCandidates.filter((c) => !c.applied);
   const pendingAnalogProposals = analogYearProposals.filter((p) => !p.approvedByHost);
@@ -531,7 +545,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                 type="submit"
                 className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[12px] font-extrabold cursor-pointer"
               >
-                + 스틱(Chip) 자동 생성
+                + 스티커 자동 생성
               </button>
             </div>
 
@@ -553,7 +567,7 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
           {/* 자동 생성된 스틱(Chip) 버튼들 */}
           <div className="flex flex-wrap items-center gap-2 pt-2 border-t border-white/10">
             <span className="font-label-sm text-[11.5px] text-zinc-400 font-bold">
-              ② 생성된 스틱(클릭하여 선택 후 아래 사진에 1초 부착):
+              ② 생성된 스티커(클릭하여 선택 후 아래 사진에 1초 부착):
             </span>
             {alumniStickChips.map((chip) => {
               const isSelected = selectedStickLabel === chip.label;
@@ -794,7 +808,10 @@ export const LoungeIndexingWaitingRoom: React.FC = () => {
                         <button
                           type="button"
                           onClick={() => {
-                            softDeleteSharedRoomPhoto24h(photo.id);
+                            softDeleteSharedRoomPhoto24h(
+                              photo.id,
+                              delPerm.mode === 'host_hide' ? 'host_hide' : 'uploader_24h'
+                            );
                             setLastDeletedPhotoId(photo.id);
                           }}
                           title={

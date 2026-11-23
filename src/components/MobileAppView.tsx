@@ -136,7 +136,7 @@ export const MobileAppView: React.FC = () => {
     setGroupBurstsInSearch,
     setSelectedPhoto,
     toggleBookmark,
-    removeSharedRoomPhoto,
+    softDeleteSharedRoomPhoto24h,
     activePricingPlan,
     subscribedLounges,
     syncState,
@@ -1212,7 +1212,7 @@ export const MobileAppView: React.FC = () => {
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  removeSharedRoomPhoto(item.photo.id);
+                                  softDeleteSharedRoomPhoto24h(item.photo.id, 'uploader_24h');
                                 }}
                                 aria-label="공유방에서 삭제"
                                 className="absolute top-2 right-10 z-20 px-2 py-0.5 rounded bg-black/75 hover:bg-rose-600 text-white text-[10.5px] font-semibold cursor-pointer"
