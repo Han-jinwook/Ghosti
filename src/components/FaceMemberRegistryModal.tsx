@@ -1307,14 +1307,16 @@ export const PassportDoorplateStyleModal: React.FC = () => {
                           : 'w-6 bg-zinc-900/90 border-white/15 text-zinc-400 hover:text-white'
                       }`}
                     >
-                      {confirming ? '지우기' : ''}
+                      {confirming ? '지우기' : <span className="material-symbols-outlined text-[13px] leading-none">delete</span>}
                     </button>
                   </div>
                 );
               })}
             </div>
           ) : (
-            <p className="text-[12.5px] text-zinc-500">아직 등록된 사진이 없어요.</p>
+            <p className="text-[12.5px] text-zinc-500 leading-relaxed break-keep">
+              아직 등록된 사진이 없어요. 귀신비서 채팅창에서 ‘여권 등록하자’라고 입력하면 내 사진에서 얼굴을 자동으로 찾아 등록할 수 있어요.
+            </p>
           )}
         </div>
 
