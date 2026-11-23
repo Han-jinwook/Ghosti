@@ -1280,7 +1280,7 @@ export const App: React.FC = () => {
                   : 'bottom-6'
               } mb-safe left-1/2 -translate-x-1/2 z-[110] w-[92vw] max-w-xl px-4 sm:px-5 py-3 rounded-xl bg-white border border-slate-200 text-slate-900 text-[13px] font-medium shadow-lg flex items-start justify-between gap-2.5`}
             >
-              <span className="whitespace-normal break-keep leading-snug flex-1">
+              <span className="whitespace-pre-line break-keep leading-relaxed flex-1">
                 {lastQuarantineToast}
               </span>
               <button

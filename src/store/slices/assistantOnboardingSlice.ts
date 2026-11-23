@@ -415,7 +415,7 @@ function buildQuarantineMoveStatePatch(opts: {
           demo,
         },
     lastQuarantineToast: isIosNativeApp
-      ? `사진 ${movedSet.size}장이 아이폰 『최근 삭제된 항목』에 30일간 안전 보관되었습니다. 복원은 아이폰 『사진  최근 삭제된 항목(FaceID)』에서 가능합니다.`
+      ? `사진 ${movedSet.size}장을 ‘최근 삭제된 항목’으로 옮겼습니다. (30일 보관)\n복원은 아이폰 사진 앱 › 최근 삭제된 항목에서 가능합니다.`
       : nonIosToast,
   };
 }
