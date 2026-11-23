@@ -2908,7 +2908,11 @@ export async function resolveSmartKoreanLabelForPhoto(photo: PhotoItem): Promise
             }
             ranked.sort((a, b) => b.sim - a.sim);
             const bestEntry = ranked[0];
-            if (bestEntry && bestEntry.sim >= 0.56) {
+            const secondEntry = ranked[1];
+            const margin = bestEntry && secondEntry ? bestEntry.sim - secondEntry.sim : 1;
+            // EmbeddingGemma 2 오분류 방어: 유사도 0.65 이상 + 2위와 0.015 이상 우위(또는 0.68 이상 확실한 일치)일 때만 피사체 라벨 부여,
+            // 내용이 불분명한 사진은 억지 추측 대신 안전하게 'YYMMDD_사진기록'으로 정리합니다.
+            if (bestEntry && (bestEntry.sim >= 0.68 || (bestEntry.sim >= 0.65 && margin >= 0.015))) {
               const cleanProbeTag = bestEntry.probe.tag.replace(/^#/, '');
               tokens = extractCrispKoreanLabelTokens([
                 cleanProbeTag,

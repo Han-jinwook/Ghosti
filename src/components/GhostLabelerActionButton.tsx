@@ -28,6 +28,9 @@ type GhostLabelerActionProps =
       forceSampleOnly?: boolean;
     };
 
+// 연속 클릭 시 먼저 눌렀던 느린 요청이 나중에 끝나며 최신 클립보드·토스트를 덮어쓰는 경합(Race Condition) 원천 차단
+let _latestGhostLabelerSeq = 0;
+
 export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (props) => {
   const { forceSampleOnly = false } = props;
 
@@ -54,14 +57,17 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
         type="button"
         onClick={(e) => {
           e.stopPropagation();
+          const mySeq = ++_latestGhostLabelerSeq;
           void verifyGate(doc.path || doc.fileName).then(async (allowed) => {
-            if (!allowed) return;
+            if (!allowed || mySeq !== _latestGhostLabelerSeq) return;
             const cleanDocName = stripCollisionKeySuffix(doc.fileName);
             const newLabel = formatQuickKoreanLabelForFile(cleanDocName, doc.date, [
               doc.title,
               (doc.extractedText || '').slice(0, 120),
             ]);
+            if (mySeq !== _latestGhostLabelerSeq) return;
             await copyTextSafeToClipboard(newLabel);
+            if (mySeq !== _latestGhostLabelerSeq) return;
             useSaySeeStore.setState({
               lastQuarantineToast: `파일명 생성 완료: ${newLabel} (복사됨)`,
             });
@@ -81,8 +87,9 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
         type="button"
         onClick={(e) => {
           e.stopPropagation();
+          const mySeq = ++_latestGhostLabelerSeq;
           void verifyGate(vp.fullPath || vp.name).then(async (allowed) => {
-            if (!allowed) return;
+            if (!allowed || mySeq !== _latestGhostLabelerSeq) return;
             useSaySeeStore.setState({
               lastQuarantineToast: '사진 내용을 바탕으로 한글 파일명을 생성하는 중입니다...',
             });
@@ -107,17 +114,21 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
                     )
                 ),
               ]);
+              if (mySeq !== _latestGhostLabelerSeq) return;
               await copyTextSafeToClipboard(res.label);
+              if (mySeq !== _latestGhostLabelerSeq) return;
               useSaySeeStore.setState({
                 lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${res.label} (복사됨)`,
               });
             } catch {
+              if (mySeq !== _latestGhostLabelerSeq) return;
               const fallbackLabel = formatQuickKoreanLabelForFile(
                 stripCollisionKeySuffix(vp.name || '사진.png'),
                 vp.date,
                 vp.tags || []
               );
               await copyTextSafeToClipboard(fallbackLabel);
+              if (mySeq !== _latestGhostLabelerSeq) return;
               useSaySeeStore.setState({
                 lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${fallbackLabel} (복사됨)`,
               });
@@ -137,8 +148,9 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
       type="button"
       onClick={(e) => {
         e.stopPropagation();
+        const mySeq = ++_latestGhostLabelerSeq;
         void verifyGate(targetPhoto.fullPath || targetPhoto.name).then(async (allowed) => {
-          if (!allowed) return;
+          if (!allowed || mySeq !== _latestGhostLabelerSeq) return;
           useSaySeeStore.setState({
             lastQuarantineToast: '사진 내용을 바탕으로 한글 파일명을 생성하는 중입니다...',
           });
@@ -167,7 +179,9 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
                 )
               ),
             ]);
+            if (mySeq !== _latestGhostLabelerSeq) return;
             await copyTextSafeToClipboard(res.label);
+            if (mySeq !== _latestGhostLabelerSeq) return;
             const patchPhoto = (p: PhotoItem): PhotoItem =>
               p.id === targetPhoto.id
                 ? {
@@ -195,7 +209,9 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
                 : {}),
             }));
           } catch {
+            if (mySeq !== _latestGhostLabelerSeq) return;
             await copyTextSafeToClipboard(fallbackLabel);
+            if (mySeq !== _latestGhostLabelerSeq) return;
             useSaySeeStore.setState({
               lastQuarantineToast: `🏷️ 귀신 라벨러 완료: ${fallbackLabel} (복사됨)`,
             });
