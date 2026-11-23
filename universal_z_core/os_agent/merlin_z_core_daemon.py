@@ -161,7 +161,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.7.9"
+CORE_VERSION = "2.7.19"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1123,6 +1123,29 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 return
             try:
                 self._send_json(plugin_ghosti_superpowers.play_web_enter_giggle_api(body))
+            except Exception as exc:
+                self._send_json({"ok": False, "error": str(exc)}, status=500)
+            return
+
+        if path in ("/__merlin/clipboard", "/api/ghosti/os/clipboard"):
+            if self._reject_untrusted():
+                return
+            try:
+                import seq_paste_daemon as spd
+
+                txt_v = str((body or {}).get("text") or "")
+                fp_v = str((body or {}).get("filePath") or (body or {}).get("p") or "").strip()
+                if fp_v and not txt_v:
+                    resolved_m, _, st_m = plugin_ghosti_os.resolve_local_media_file({"p": fp_v})
+                    real_fp = str(resolved_m.resolve()) if (resolved_m is not None and st_m == 200) else fp_v
+                    ok_cp = bool(spd.set_clipboard_hdrop_file(real_fp)) if Path(real_fp).exists() else False
+                    self._send_json({"ok": ok_cp, "mode": "file", "filePath": real_fp})
+                    return
+                if txt_v:
+                    spd.set_clipboard_text(txt_v)
+                    self._send_json({"ok": True, "mode": "text", "length": len(txt_v)})
+                    return
+                self._send_json({"ok": False, "error": "EMPTY_CLIPBOARD_PAYLOAD"}, status=400)
             except Exception as exc:
                 self._send_json({"ok": False, "error": str(exc)}, status=500)
             return

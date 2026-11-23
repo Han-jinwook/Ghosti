@@ -635,21 +635,26 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
     });
     const res = await consumeDevicePairingCode6(code);
     if (!res.ok) {
-      let errMsg =
-        '6자리 연결 번호를 확인하지 못했습니다. PC에서 [새 번호 발급]을 눌러 최신 번호로 다시 시도해 주세요.';
-      if (res.reason === 'AUTH_REQUIRED') {
-        errMsg = '먼저 PC와 동일한 이메일로 로그인해 주세요.';
-      } else if (res.reason === 'ACCOUNT_MISMATCH') {
+      const reasonCode = String(res.reason || '').trim();
+      let errMsg = `6자리 연결 번호를 확인하지 못했습니다(${reasonCode || 'UNKNOWN'}). PC에서 [새 번호 발급]을 눌러 다시 시도해 주세요.`;
+      if (
+        reasonCode === 'AUTH_REQUIRED' ||
+        reasonCode === 'HUB_AUTH_REQUIRED' ||
+        /토큰|auth|401/i.test(reasonCode)
+      ) {
+        errMsg =
+          '로그인 세션이 확인되지 않습니다. 로그아웃 후 PC와 동일한 이메일로 다시 로그인해 주세요.';
+      } else if (reasonCode === 'ACCOUNT_MISMATCH') {
         errMsg = res.expectedEmailHint
           ? `PC에 로그인된 이메일(${res.expectedEmailHint})과 다른 계정입니다. PC와 같은 이메일로 로그인한 뒤 다시 연결해 주세요.`
           : 'PC에 로그인된 이메일과 다른 계정입니다. PC와 같은 이메일로 로그인해 주세요.';
-      } else if (res.reason === 'CODE_EXPIRED' || res.reason === 'EXPIRED_OR_INVALID_CODE') {
+      } else if (reasonCode === 'CODE_EXPIRED' || reasonCode === 'EXPIRED_OR_INVALID_CODE') {
         errMsg =
           '연결 번호의 유효시간(30분)이 지났습니다. PC 화면에서 [새 번호 발급]을 눌러 새 번호를 확인해 주세요.';
-      } else if (res.reason === 'CODE_NOT_FOUND') {
+      } else if (reasonCode === 'CODE_NOT_FOUND') {
         errMsg =
           '일치하는 연결 번호가 없습니다. PC 화면에 표시된 6자리 숫자를 정확히 입력해 주세요.';
-      } else if (res.reason === 'TRIAL_EXPIRED') {
+      } else if (reasonCode === 'TRIAL_EXPIRED') {
         errMsg =
           '30일 무료체험이 만료되었습니다. PC 웹 화면에서 이용권을 활성화한 뒤 연결할 수 있습니다.';
       }

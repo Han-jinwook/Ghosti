@@ -1328,7 +1328,34 @@ export async function handleAuthedWorkAndDeviceAction({
     ]);
 
     const devices = listRes && listRes.ok ? await listRes.json().catch(() => []) : [];
-    const safeDevices = Array.isArray(devices) ? devices : [];
+    const rawDevices = Array.isArray(devices) ? devices : [];
+    // 7일 이상 미접속한 구 세션 유령 기기 자동 정리 (현재 접속 기기 제외)
+    const staleCutoffMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
+    const staleIds = [];
+    const safeDevices = [];
+    for (const dev of rawDevices) {
+      const lastSeenMs = Date.parse(dev?.last_seen_at || dev?.created_at || '');
+      if (dev?.device_id && dev.device_id !== deviceId && lastSeenMs > 0 && lastSeenMs < staleCutoffMs) {
+        staleIds.push(dev.device_id);
+      } else {
+        safeDevices.push(dev);
+      }
+    }
+    if (staleIds.length > 0) {
+      const nowIso = new Date().toISOString();
+      await Promise.all(
+        staleIds.map((sid) =>
+          fetch(
+            `${supabaseUrl}/rest/v1/ghosti_devices?device_id=eq.${encodeURIComponent(sid)}&owner_email=eq.${encodeURIComponent(email)}`,
+            {
+              method: 'PATCH',
+              headers: srvHeaders(serviceKey, { 'Content-Type': 'application/json' }),
+              body: JSON.stringify({ revoked_at: nowIso }),
+            }
+          ).catch(() => null)
+        )
+      );
+    }
 
     // 6자리 페어링 코드 발급/유지 (PC 마스터일 때 · 유효시간 30분, 5분 미만 남거나 강제 새로고침 시 즉시 재발급)
     let pairingCode = null;

@@ -271,17 +271,81 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
     document.body.removeChild(a);
   };
 
-  const handleCopyText = async (val: string, label: string) => {
-    if (!val.trim()) return;
-    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+  const copyTextWithFallback = async (val: string): Promise<boolean> => {
+    let copied = false;
+    if (zCoreBridge.isConnected) {
+      try {
+        const res = await fetch(getZCoreUrl('/__merlin/clipboard'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ text: val }),
+          signal: AbortSignal.timeout(1500),
+        });
+        if (res.ok) copied = true;
+      } catch {
+        /* fallback below */
+      }
+    }
+    if (typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
       try {
         await navigator.clipboard.writeText(val);
+        copied = true;
+      } catch {
+        /* fallback below */
+      }
+    }
+    if (typeof document !== 'undefined') {
+      try {
+        const ta = document.createElement('textarea');
+        ta.value = val;
+        ta.setAttribute('readonly', 'true');
+        ta.style.position = 'fixed';
+        ta.style.left = '-9999px';
+        ta.style.top = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        if (document.execCommand('copy')) {
+          copied = true;
+        }
+        document.body.removeChild(ta);
       } catch {
         /* ignore */
       }
     }
+    return copied;
+  };
+
+  const handleCopyOriginalPhoto = async () => {
+    const fileName = photo.name || 'ghosti_photo.png';
+    if (zCoreBridge.isConnected) {
+      try {
+        const targetKey = photo.fullPath || extractLocalPhotoPathParam(photo);
+        const res = await fetch(getZCoreUrl('/__merlin/clipboard'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ filePath: targetKey, p: extractLocalPhotoPathParam(photo) }),
+          signal: AbortSignal.timeout(2000),
+        });
+        if (res.ok) {
+          setCopiedNotice(`원본 사진(${fileName})이 클립보드에 복사되었습니다.`);
+          useSaySeeStore.setState({
+            lastQuarantineToast: `원본 사진(${fileName}) 복사 완료`,
+          });
+          return;
+        }
+      } catch {
+        /* fallback below */
+      }
+    }
+    await handleDownloadOriginalPhoto();
+  };
+
+  const handleCopyText = async (val: string, label: string) => {
+    if (!val.trim()) return;
+    await copyTextWithFallback(val);
     setCursorBuffer((prev) => (prev ? `${prev} / ${val}` : val));
-    setCopiedNotice(`${label} 내용이 복사되었습니다.`);
+    setCopiedNotice(`${label} 내용이 클립보드에 복사되었습니다.`);
     useSaySeeStore.setState({
       lastQuarantineToast: `${label} 복사 완료`,
     });
@@ -409,12 +473,12 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
                   onClick={() =>
                     void handleCopyText(
                       ocrResult?.tsvTable || ocrResult?.fullText || '',
-                      '표 데이터'
+                      '표 전체 엑셀(TSV)'
                     )
                   }
                   className="w-full py-2 px-3 rounded-lg bg-slate-900 hover:bg-slate-800 disabled:opacity-40 text-white text-[12.5px] font-semibold cursor-pointer"
                 >
-                  엑셀 표 형식으로 복사{ocrResult?.hasTable ? ' (표 감지됨)' : ''}
+                  표 전체 엑셀(TSV)로 복사{ocrResult?.hasTable ? ' (표 감지됨)' : ''}
                 </button>
                 <button
                   type="button"
@@ -426,13 +490,22 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
                 >
                   전체 텍스트 복사
                 </button>
-                <button
-                  type="button"
-                  onClick={() => void handleDownloadOriginalPhoto()}
-                  className="w-full py-2 px-3 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium text-center cursor-pointer"
-                >
-                  원본 사진 저장
-                </button>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => void handleCopyOriginalPhoto()}
+                    className="w-full py-2 px-2.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[12px] font-medium text-center cursor-pointer"
+                  >
+                    원본 사진 복사
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleDownloadOriginalPhoto()}
+                    className="w-full py-2 px-2.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium text-center cursor-pointer"
+                  >
+                    원본 사진 저장
+                  </button>
+                </div>
               </div>
             </div>
 

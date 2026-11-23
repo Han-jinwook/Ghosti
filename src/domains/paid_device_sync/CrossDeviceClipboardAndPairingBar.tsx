@@ -254,6 +254,25 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
               </div>
             );
           })}
+          {connectedDevices.filter((d) => d.device_id !== thisDeviceIdentity.deviceId).length >= 2 && (
+            <button
+              type="button"
+              disabled={Boolean(revokingDeviceId)}
+              onClick={async () => {
+                const others = connectedDevices.filter(
+                  (d) => d.device_id !== thisDeviceIdentity.deviceId
+                );
+                for (const dev of others) {
+                  setRevokingDeviceId(dev.device_id);
+                  await unlinkConnectedDevice(dev.device_id);
+                }
+                setRevokingDeviceId(null);
+              }}
+              className="px-2 py-1 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-slate-500 hover:text-slate-800 text-[11px] font-medium cursor-pointer disabled:opacity-50"
+            >
+              다른 기기 전체 정리
+            </button>
+          )}
         </div>
       )}
 

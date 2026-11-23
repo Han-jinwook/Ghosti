@@ -85,8 +85,7 @@ export const GhostSearchPane: React.FC<{
       if (
         cancelled ||
         watchRefreshInflightRef.current ||
-        !zCoreBridge.isConnected ||
-        (typeof document !== 'undefined' && document.visibilityState === 'hidden')
+        !zCoreBridge.isConnected
       ) {
         return;
       }
@@ -119,17 +118,23 @@ export const GhostSearchPane: React.FC<{
     };
 
     void probeWatchSig();
+    const unsubZCore = zCoreBridge.subscribe((connected) => {
+      if (connected) void probeWatchSig();
+    });
     const intervalId = window.setInterval(() => {
       void probeWatchSig();
-    }, 2200);
+    }, 1200);
     const onFocus = () => {
       void probeWatchSig();
     };
     window.addEventListener('focus', onFocus);
+    document.addEventListener('visibilitychange', onFocus);
     return () => {
       cancelled = true;
+      unsubZCore();
       window.clearInterval(intervalId);
       window.removeEventListener('focus', onFocus);
+      document.removeEventListener('visibilitychange', onFocus);
     };
   }, [ghostSearchWindowStage, desktopTab, activeLoungeType, refreshLiveLocalFilesInSearchWindow]);
 

@@ -3,6 +3,7 @@ import { getZCoreUrl, zCoreBridge } from '../services/zCoreBridge';
 import { computeGhostSearchWindowRect, DEFAULT_WORK_AREA } from '../services/ghostSearchWindowGeometry';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
+import { GhostPhotoOcrTeleportModal } from './GhostPhotoOcrTeleportModal';
 import {
   scrollAppToTop,
   useDashboardNavStore,
@@ -34,6 +35,8 @@ export const DesktopDashboard: React.FC = () => {
     isMobileDrawerOpen,
     showZCoreGuideModal,
     setShowZCoreGuideModal,
+    ocrModalPhoto,
+    setOcrModalPhoto,
   } = useDashboardNavStore();
 
   useEffect(() => {
@@ -284,6 +287,11 @@ export const DesktopDashboard: React.FC = () => {
           </>
         )}
       </div>
+
+      <GhostPhotoOcrTeleportModal
+        photo={ocrModalPhoto}
+        onClose={() => setOcrModalPhoto(null)}
+      />
 
       <MerlinZCoreGuideModal
         isOpen={showZCoreGuideModal}

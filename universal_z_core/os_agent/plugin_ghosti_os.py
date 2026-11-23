@@ -47,7 +47,7 @@ FILE_ATTRIBUTE_NORMAL = 0x80
 PLUGIN_METADATA = {
     "pluginId": "ghosti_os",
     "pluginName": "Ghosti & 3-Monsters OS + RestorePoint + RecycleBin Omni-Tracker Plugin",
-    "version": "2.7.9",
+    "version": "2.7.19",
     "type": "BUILTIN_SOFTWARE_PLUGIN",
     "port": 5199,
     "capabilities": [
@@ -2194,10 +2194,9 @@ def _run_winrt_image_ocr_raw(img_path: Path) -> Dict[str, Any]:
         # 실제 밑줄 간섭이 의심되는 저신뢰/소수 박스(<= 2줄 또는 저신뢰 박스 존재)에만 보조 비교를 수행합니다.
         if isinstance(best, dict):
             boxes0 = best.get("boxes") or []
-            if len(boxes0) >= 1:
+            if 0 < len(boxes0) <= 2:
                 avg_c0 = sum(float(b.get("conf") or 0.0) for b in boxes0) / len(boxes0)
-                min_c0 = min((float(b.get("conf") or 0.0) for b in boxes0), default=0.0)
-                needs_deunderline_check = (len(boxes0) <= 2 and avg_c0 < 0.91) or avg_c0 < 0.88 or min_c0 < 0.82
+                needs_deunderline_check = avg_c0 < 0.85
                 if needs_deunderline_check:
                     deunderlined_path = _prepare_deunderlined_image_if_needed(img_path, tmp_dir)
                     if deunderlined_path is not None:

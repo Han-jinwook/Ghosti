@@ -342,8 +342,8 @@ export async function loadInitialPhotoDataset(): Promise<{
 
   try {
     if (hasActiveGhostiLoginSession() && zCoreBridge.isConnected) {
-      const fetchListPromise = fetch(getZCoreUrl('/__photos/list')).catch(() =>
-        fetch(getZCoreUrl('/__photos/list'))
+      const fetchListPromise = fetch(getZCoreUrl('/__photos/list'), { cache: 'no-store' }).catch(() =>
+        fetch(getZCoreUrl('/__photos/list'), { cache: 'no-store' })
       );
       if (isStandaloneSearchWin) {
         // 독립 귀신검색창 오픈 시에는 IndexedDB 768D 벡터 전체 역직렬화를 기다리지 않고 파일 목록부터 0.02초 만에 즉시 표시한 뒤 백그라운드 복원합니다.

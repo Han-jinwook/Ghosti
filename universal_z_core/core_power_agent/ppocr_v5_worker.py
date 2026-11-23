@@ -28,7 +28,7 @@ _PPOCR_SUBPROCESS_LOCK = threading.Lock()
 _STDIO_WORKER_LOCK = threading.Lock()
 _STDIO_WORKER_PROC: subprocess.Popen | None = None
 _LAST_PREWARM_TS: float = 0.0
-IDLE_WORKER_TTL_SEC: float = 60.0
+IDLE_WORKER_TTL_SEC: float = 600.0
 
 THIS_DIR = Path(__file__).resolve().parent
 LOCAL_APPDATA = Path(os.environ.get("LOCALAPPDATA", str(Path.home() / "AppData" / "Local")))
@@ -1150,7 +1150,7 @@ def invoke_ppocr_subprocess(
 
         stdio_ok = False
         if priority_interactive:
-            stdio_ok = _try_stdio_worker(0.08)
+            stdio_ok = _try_stdio_worker(2.5)
         else:
             with _PPOCR_SUBPROCESS_LOCK:
                 stdio_ok = _try_stdio_worker(-1.0)
