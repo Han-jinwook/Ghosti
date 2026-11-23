@@ -861,6 +861,7 @@ export const App: React.FC = () => {
   // 모바일(iOS Safari/Chrome/인앱 · Android Chrome/삼성인터넷/인앱 · PWA) 전 화면 공통 Pull-to-refresh 핸들러
   const [ptrPullDist, setPtrPullDist] = useState(0);
   const [isPtrRefreshing, setIsPtrRefreshing] = useState(false);
+  const isPtrRefreshingRef = useRef(false);
   const ptrStartRef = useRef<{ x: number; y: number } | null>(null);
   const ptrDistRef = useRef(0);
   const ptrActivePullRef = useRef(false);
@@ -902,8 +903,43 @@ export const App: React.FC = () => {
       setPtrPullDist(0);
     };
 
+    const triggerPtrRefresh = () => {
+      if (isPtrRefreshingRef.current) return;
+      isPtrRefreshingRef.current = true;
+      ptrStartRef.current = null;
+      ptrActivePullRef.current = false;
+      setIsPtrRefreshing(true);
+      setPtrPullDist(58);
+
+      const isNativeCapacitorApp = Boolean(
+        (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+      );
+      if (isNativeCapacitorApp) {
+        // 네이티브 스토어 앱에서 화면을 아래로 당기면 WebView 리로드 없이 즉시 스마트폰 갤러리(사진·동영상) 동기화를 끝까지 대기하고 완료 피드백 제공
+        const minSpin = new Promise<void>((resolve) => window.setTimeout(resolve, 900));
+        const maxWait = new Promise<void>((resolve) => window.setTimeout(resolve, 8000));
+        const syncWork = Promise.resolve(
+          useSaySeeStore.getState().syncMobileNativeGalleryAuto({ promptPermission: true })
+        ).catch(() => undefined);
+
+        void Promise.all([minSpin, Promise.race([syncWork, maxWait])]).finally(() => {
+          ptrDistRef.current = 0;
+          isPtrRefreshingRef.current = false;
+          setIsPtrRefreshing(false);
+          setPtrPullDist(0);
+          useSaySeeStore.setState({
+            lastQuarantineToast: '최신 사진·데이터로 새로고침을 완료했습니다.',
+          });
+        });
+      } else {
+        window.setTimeout(() => {
+          window.location.reload();
+        }, 420);
+      }
+    };
+
     const onTouchStart = (e: TouchEvent) => {
-      if (isPtrRefreshing || e.touches.length !== 1) {
+      if (isPtrRefreshingRef.current || e.touches.length !== 1) {
         ptrStartRef.current = null;
         return;
       }
@@ -920,7 +956,7 @@ export const App: React.FC = () => {
     };
 
     const onTouchMove = (e: TouchEvent) => {
-      if (!ptrStartRef.current || isPtrRefreshing || e.touches.length !== 1) return;
+      if (!ptrStartRef.current || isPtrRefreshingRef.current || e.touches.length !== 1) return;
       const dx = e.touches[0].clientX - ptrStartRef.current.x;
       const dy = e.touches[0].clientY - ptrStartRef.current.y;
 
@@ -941,7 +977,7 @@ export const App: React.FC = () => {
       const iosOverscroll = curScrollTop < 0 ? Math.abs(curScrollTop) : 0;
       if (dy > 10 && dy > Math.abs(dx) * 1.2) {
         ptrActivePullRef.current = true;
-        // 최상단(scrollTop <= 0)에서 아래로 당길 때만 preventDefault로 AOS touchcancel 중단 없이 부드러운 당김 보장
+        // 최상단(scrollTop <= 0)에서 아래로 당길 때만 preventDefault로 AOS/iOS touchcancel 중단 없이 부드러운 당김 보장
         if (curScrollTop <= 0 && e.cancelable) {
           e.preventDefault();
         }
@@ -960,40 +996,24 @@ export const App: React.FC = () => {
         ptrDistRef.current,
         getRootScrollTop() < 0 ? Math.abs(getRootScrollTop()) : 0
       );
-      ptrStartRef.current = null;
-      ptrActivePullRef.current = false;
-      if (finalDist >= 50 && !isPtrRefreshing) {
-        setIsPtrRefreshing(true);
-        setPtrPullDist(58);
-        try {
-          /* ignore */
-        } catch {
-          // ignore
-        }
-        const isNativeCapacitorApp = Boolean(
-          (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
-        );
-        if (isNativeCapacitorApp) {
-          // 네이티브 스토어 앱에서 화면을 아래로 당기면 WebView 리로드 없이 즉시 스마트폰 갤러리(사진·동영상) 자동 인덱싱 수행
-          void useSaySeeStore.getState().syncMobileNativeGalleryAuto({ promptPermission: true });
-          window.setTimeout(() => {
-            ptrDistRef.current = 0;
-            setIsPtrRefreshing(false);
-            setPtrPullDist(0);
-          }, 620);
-        } else {
-          window.setTimeout(() => {
-            window.location.reload();
-          }, 420);
-        }
+      if (finalDist >= 48 && !isPtrRefreshingRef.current) {
+        triggerPtrRefresh();
       } else {
-        ptrDistRef.current = 0;
-        setPtrPullDist(0);
+        resetPtr();
       }
     };
 
     const onTouchCancel = () => {
-      if (!isPtrRefreshing) {
+      if (isPtrRefreshingRef.current) return;
+      // iOS WKWebView에서는 바운스 제스처 도중 touchend 대신 touchcancel이 먼저 들어올 수 있으므로
+      // 이미 새로고침 임계치(48px)에 도달했다면 인디케이터를 날리지 않고 그대로 새로고침을 실행합니다.
+      const finalDist = Math.max(
+        ptrDistRef.current,
+        getRootScrollTop() < 0 ? Math.abs(getRootScrollTop()) : 0
+      );
+      if (ptrActivePullRef.current && finalDist >= 48) {
+        triggerPtrRefresh();
+      } else {
         resetPtr();
       }
     };
@@ -1008,7 +1028,7 @@ export const App: React.FC = () => {
       window.removeEventListener('touchend', onTouchEnd);
       window.removeEventListener('touchcancel', onTouchCancel);
     };
-  }, [hasAnyModalOpen, isPtrRefreshing]);
+  }, [hasAnyModalOpen]);
 
   // 모바일 및 데스크톱 전 페이지 공통 '맨 위로 가기 (Scroll to Top)' 플로팅 버튼 노출 상태 (모바일 키보드 입력 포커스 중에는 가림 방지를 위해 자동 숨김)
   const [showScrollTopBtn, setShowScrollTopBtn] = useState(false);
@@ -1139,22 +1159,22 @@ export const App: React.FC = () => {
             top: 'var(--ghosti-safe-top, env(safe-area-inset-top, 0px))',
             transform: `translate3d(-50%, ${
               isPtrRefreshing
-                ? 14
-                : Math.min(56, Math.max(10, Math.round(ptrPullDist * 0.65)))
+                ? 22
+                : Math.min(64, Math.max(18, Math.round(ptrPullDist * 0.72)))
             }px, 0)`,
           }}
           className="fixed left-1/2 z-[180] pointer-events-none transition-transform duration-75"
         >
           <div className="px-4 py-2 rounded-full bg-white border border-slate-200 text-slate-800 text-[12.5px] font-medium shadow-md flex items-center gap-2 whitespace-nowrap">
             <span
-              className={`inline-block w-3.5 h-3.5 rounded-full border-2 border-slate-700 border-t-transparent ${
-                isPtrRefreshing || ptrPullDist >= 50 ? 'animate-spin' : ''
+              className={`inline-block w-3.5 h-3.5 rounded-full border-2 border-teal-600 border-t-transparent ${
+                isPtrRefreshing || ptrPullDist >= 48 ? 'animate-spin' : ''
               }`}
             />
             <span>
               {isPtrRefreshing
                 ? '새로고침 중...'
-                : ptrPullDist >= 50
+                : ptrPullDist >= 48
                 ? '손을 떼면 새로고침됩니다'
                 : '아래로 당겨서 새로고침'}
             </span>
