@@ -134,6 +134,7 @@ import {
   buildOptimisticTrialEntitlement,
   consumeDevicePairingCode6,
   executeRealDeviceSyncNow,
+  getThisDeviceIdentity,
   isCurrentAccountSyncUnlocked,
   loadCachedDeviceIntegrationSnapshot,
   loadCachedSyncedClips,
