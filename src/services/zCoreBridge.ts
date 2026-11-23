@@ -273,8 +273,18 @@ class ZCoreBridgeManager {
     if (this.pollTimer) clearInterval(this.pollTimer);
     void this.checkHealth();
     this.pollTimer = setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       void this.checkHealth();
     }, intervalMs);
+    if (typeof window !== 'undefined' && !(this as any)._visBound) {
+      (this as any)._visBound = true;
+      const onWake = () => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+        void this.checkHealth();
+      };
+      document.addEventListener('visibilitychange', onWake, { passive: true });
+      window.addEventListener('focus', onWake, { passive: true });
+    }
   }
 
   public stopHealthPolling() {

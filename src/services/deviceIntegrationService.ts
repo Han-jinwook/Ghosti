@@ -1135,36 +1135,29 @@ export async function writeTextToLocalOsClipboard(
   return false;
 }
 
-function createUnthrottledIntervalWorker(intervalMs: number, onTick: () => void): {
+function createVisibilityAwareInterval(intervalMs: number, onTick: () => void): {
   stop: () => void;
 } {
-  if (typeof window !== 'undefined' && typeof Worker !== 'undefined' && typeof Blob !== 'undefined') {
-    try {
-      const code = `const id = setInterval(() => postMessage(1), ${Math.max(250, intervalMs)}); onmessage = (e) => { if (e.data === 'stop') clearInterval(id); };`;
-      const blobUrl = URL.createObjectURL(new Blob([code], { type: 'application/javascript' }));
-      const worker = new Worker(blobUrl);
-      worker.onmessage = () => onTick();
-      return {
-        stop: () => {
-          try {
-            worker.postMessage('stop');
-            worker.terminate();
-            URL.revokeObjectURL(blobUrl);
-          } catch {
-            /* ignore */
-          }
-        },
-      };
-    } catch {
-      /* fallback to window.setInterval */
-    }
+  if (typeof window === 'undefined') {
+    return { stop: () => {} };
   }
-  const timerId = typeof window !== 'undefined' ? window.setInterval(onTick, intervalMs) : null;
+  const safeMs = Math.max(500, intervalMs);
+  const timerId = window.setInterval(() => {
+    // 크롬 백그라운드 탭 절전(Throttling)을 방해하지 않도록 hidden 상태에서는 깨우지 않음
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    onTick();
+  }, safeMs);
+  const onWake = () => {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
+    onTick();
+  };
+  document.addEventListener('visibilitychange', onWake, { passive: true });
+  window.addEventListener('focus', onWake, { passive: true });
   return {
     stop: () => {
-      if (timerId !== null && typeof window !== 'undefined') {
-        window.clearInterval(timerId);
-      }
+      window.clearInterval(timerId);
+      document.removeEventListener('visibilitychange', onWake);
+      window.removeEventListener('focus', onWake);
     },
   };
 }
@@ -2645,30 +2638,30 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       void prewarmAccountE2eeKey(normEmail, opts.userId);
     }
 
-    // PC 마스터: 백그라운드 탭(메모장·노션·카톡 등에서 Ctrl+C 복사 중)에서도 60초 스로틀링 없이 0.35초 내에 감지하는 전용 Web Worker 기동
+    // PC 마스터: 탭 활성(visible) 중에만 0.8초 주기로 OS 클립보드 감지, 백그라운드(hidden) 시 크롬 절전 존중(복귀/포커스 즉시 동기화)
     if (ident.deviceKind === 'pc_master') {
       if (osClipTicker) osClipTicker.stop();
-      osClipTicker = createUnthrottledIntervalWorker(350, () => {
+      osClipTicker = createVisibilityAwareInterval(800, () => {
         if (!zCoreBridge.isConnected || thisDeviceRevokedLocally) return;
         void inspectAndPushLocalOsClipboard(false, false);
       });
     }
 
-    // 전 기기 공통: Realtime 연결 시 4.8초 경량 보조 동기화 / 일시 순단 시 1.2초 고속 폴백 동기화 + 즉시 재연결
+    // 전 기기 공통: 탭 활성(visible) 중에만 2.4초 보조 동기화 (Realtime 수신 우선 · 백그라운드 hidden 시 0회 호출 · 복귀 즉시 동기화)
     let mailboxTickCounter = 0;
     if (mobileMailboxTicker) mobileMailboxTicker.stop();
-    mobileMailboxTicker = createUnthrottledIntervalWorker(1200, () => {
+    mobileMailboxTicker = createVisibilityAwareInterval(2400, () => {
       if (thisDeviceRevokedLocally) return;
       if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
       mailboxTickCounter += 1;
       if (!activePairSubscribed) {
         void setupRealtimeChannel();
         void syncRemoteMailboxToUi(true);
-      } else if (mailboxTickCounter % 4 === 0) {
+      } else if (mailboxTickCounter % 2 === 0) {
         void syncRemoteMailboxToUi(true);
       }
-      // PC 마스터: 5분마다(1.2s * 250) 6자리 연결 번호 만료 전 자동 갱신
-      if (ident.deviceKind === 'pc_master' && mailboxTickCounter % 250 === 0) {
+      // PC 마스터: 5분마다(2.4s * 125) 6자리 연결 번호 만료 전 자동 갱신
+      if (ident.deviceKind === 'pc_master' && mailboxTickCounter % 125 === 0) {
         void syncDeviceHeartbeatAndList().then((hbNext) => {
           if (!disposed && hbNext.ok && opts.onDevicesUpdated) {
             opts.onDevicesUpdated({

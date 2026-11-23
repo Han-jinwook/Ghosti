@@ -66,12 +66,25 @@ export function markUserSearchInputActivity(): void {
 export async function waitForUserTypingAndModalQuiet(quietWindowMs = 1600): Promise<void> {
   ensureGlobalUserInputQuietGuardBound();
   while (
+    (typeof document !== 'undefined' && document.visibilityState === 'hidden') ||
     aiRuntimeFlags.priorityVideoSearchDepth > 0 ||
     aiRuntimeFlags.activeVideoPlaybackCount > 0 ||
     aiRuntimeFlags.priorityModalGalleryOpen ||
     aiRuntimeFlags.sharedRoomSyncActive ||
     performance.now() - aiRuntimeFlags.lastUserInputAt < quietWindowMs
   ) {
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      await new Promise<void>((resolve) => {
+        const onVis = () => {
+          if (document.visibilityState !== 'hidden') {
+            document.removeEventListener('visibilitychange', onVis);
+            resolve();
+          }
+        };
+        document.addEventListener('visibilitychange', onVis, { passive: true });
+      });
+      continue;
+    }
     const remainingInputQuiet = Math.max(
       120,
       Math.min(450, quietWindowMs - (performance.now() - aiRuntimeFlags.lastUserInputAt))
@@ -797,9 +810,114 @@ export async function loadModelWithWebGpuToWasmFallback(config: any, dtypeSpec: 
   );
 }
 
+// 전용 EmbeddingGemma 2 Web Worker 브릿지 (메인 스레드 0ms 블로킹 격리)
+let embWorkerInstance: Worker | null = null;
+let embWorkerSeq = 0;
+let embWorkerTextReady = false;
+let embWorkerVisionReady = false;
+const embWorkerPending = new Map<
+  number,
+  { resolve: (v: any) => void; reject: (e: any) => void }
+>();
+
+function canUseEmbeddingWorker(): boolean {
+  return typeof window !== 'undefined' && typeof Worker !== 'undefined';
+}
+
+function getOrCreateEmbeddingWorker(): Worker | null {
+  if (!canUseEmbeddingWorker()) return null;
+  if (embWorkerInstance) return embWorkerInstance;
+  try {
+    const w = new Worker(new URL('./embeddingAiWorker.ts', import.meta.url), { type: 'module' });
+    w.onmessage = (ev: MessageEvent) => {
+      const msg = ev.data || {};
+      const entry = embWorkerPending.get(msg.id);
+      if (!entry) return;
+      embWorkerPending.delete(msg.id);
+      if (msg.ok) entry.resolve(msg.result);
+      else entry.reject(new Error(msg.error || 'EMB_WORKER_FAILED'));
+    };
+    w.onerror = () => {
+      embWorkerTextReady = false;
+      embWorkerVisionReady = false;
+      for (const [, p] of embWorkerPending) {
+        p.reject(new Error('EMB_WORKER_CRASHED'));
+      }
+      embWorkerPending.clear();
+      try {
+        w.terminate();
+      } catch {
+        /* ignore */
+      }
+      if (embWorkerInstance === w) embWorkerInstance = null;
+    };
+    embWorkerInstance = w;
+    return w;
+  } catch {
+    return null;
+  }
+}
+
+function callEmbeddingWorker<T>(
+  payload: Record<string, any>,
+  transfer: Transferable[] = []
+): Promise<T> {
+  const w = getOrCreateEmbeddingWorker();
+  if (!w) return Promise.reject(new Error('EMB_WORKER_UNAVAILABLE'));
+  const id = ++embWorkerSeq;
+  const origin =
+    typeof window !== 'undefined' && window.location?.origin?.startsWith('http')
+      ? window.location.origin
+      : 'https://ghosti.sundreamer.app';
+  return new Promise<T>((resolve, reject) => {
+    embWorkerPending.set(id, { resolve, reject });
+    w.postMessage(
+      {
+        id,
+        origin,
+        targetDtype: getOptimalEmbeddingDtype(),
+        isMobile: isMobileDeviceRuntime(),
+        ...payload,
+      },
+      transfer
+    );
+  });
+}
+
+async function terminateEmbeddingWorkerNow(): Promise<void> {
+  embWorkerTextReady = false;
+  embWorkerVisionReady = false;
+  if (!embWorkerInstance) return;
+  const w = embWorkerInstance;
+  embWorkerInstance = null;
+  try {
+    const id = ++embWorkerSeq;
+    await Promise.race([
+      new Promise<void>((resolve) => {
+        embWorkerPending.set(id, { resolve: () => resolve(), reject: () => resolve() });
+        w.postMessage({ id, type: 'disposeAll' });
+      }),
+      new Promise<void>((resolve) => setTimeout(resolve, 600)),
+    ]);
+  } catch {
+    /* ignore */
+  }
+  for (const [, p] of embWorkerPending) {
+    p.reject(new Error('EMB_WORKER_TERMINATED'));
+  }
+  embWorkerPending.clear();
+  try {
+    w.terminate();
+  } catch {
+    /* ignore */
+  }
+}
+
 export function isTextQueryEncoderReady(): boolean {
   return Boolean(
-    (searchModel && tokenizer) ||
+    embWorkerTextReady ||
+      embWorkerVisionReady ||
+      (searchModel && tokenizer) ||
       (textQueryModel && textQueryTokenizer) ||
       (sharedVisionModel && textQueryTokenizer)
   );
@@ -809,6 +927,17 @@ export async function ensureTextQueryEncoderLoaded(): Promise<boolean> {
   if (isTextQueryEncoderReady()) return true;
   if (textQueryLoading) return textQueryLoading;
   textQueryLoading = (async () => {
+    if (canUseEmbeddingWorker()) {
+      try {
+        const ok = await callEmbeddingWorker<boolean>({ type: 'ensureText' });
+        if (ok) {
+          embWorkerTextReady = true;
+          return true;
+        }
+      } catch {
+        /* fallback to main thread below */
+      }
+    }
     try {
       enableOpfsCache();
       if (!textQueryTokenizer) {
@@ -850,6 +979,12 @@ export async function ensureSearchEngineLoaded(
 
       const targetDtype = getOptimalEmbeddingDtype();
       onProgress?.('검색 엔진 준비 중...', 15);
+      // 상위 오디오+텍스트 멀티모달 모델 로드 시 중복 단독 텍스트 세션 즉시 해제 (RAM 피크 절감)
+      if (textQueryModel) {
+        const oldTm = textQueryModel;
+        textQueryModel = null;
+        await Promise.resolve(oldTm.dispose?.()).catch(() => {});
+      }
       const config: any = await loadWithR2Fallback(() => AutoConfig.from_pretrained(MODEL_ID));
       config.vision_config = null;
 
@@ -1169,6 +1304,8 @@ export async function encodeMultimodalSearchQueryVecs(
         return [];
       }
     }
+    const useWorkerForText =
+      canUseEmbeddingWorker() && (embWorkerTextReady || embWorkerVisionReady) && !(searchModel && tokenizer);
     const qModel =
       searchModel && tokenizer
         ? searchModel
@@ -1176,7 +1313,7 @@ export async function encodeMultimodalSearchQueryVecs(
         ? textQueryModel
         : sharedVisionModel;
     const qTok = searchModel && tokenizer ? tokenizer : textQueryTokenizer;
-    if (!qModel || !qTok) return [];
+    if (!useWorkerForText && (!qModel || !qTok)) return [];
 
     const coreQ = q
       .replace(
@@ -1214,12 +1351,14 @@ export async function encodeMultimodalSearchQueryVecs(
 
     const prompts = Array.from(promptSet);
     try {
-      const inferPromise = (async () => {
-        const inputs = await qTok(prompts, { padding: true, truncation: true });
-        const out = await qModel(inputs);
-        const rows = toRows(out.sentence_embedding);
-        return rows.map((r) => normalizeVector(r, DEFAULT_DIM));
-      })();
+      const inferPromise = useWorkerForText
+        ? callEmbeddingWorker<Float32Array[]>({ type: 'encodeText', prompts })
+        : (async () => {
+            const inputs = await qTok(prompts, { padding: true, truncation: true });
+            const out = await qModel(inputs);
+            const rows = toRows(out.sentence_embedding);
+            return rows.map((r) => normalizeVector(r, DEFAULT_DIM));
+          })();
       const encoded = await Promise.race([        inferPromise,
         new Promise<Float32Array[]>((resolve) => setTimeout(() => resolve([]), 4000)),
       ]);
@@ -1324,6 +1463,10 @@ export function bumpSharedVisionIdleDispose(ms = 30000): void {
       bumpSharedVisionIdleDispose(ms);
       return;
     }
+    if (embWorkerVisionReady) {
+      embWorkerVisionReady = false;
+      void callEmbeddingWorker({ type: 'disposeVision' }).catch(() => {});
+    }
     if (sharedVisionModel) {
       const m = sharedVisionModel;
       sharedVisionModel = null;
@@ -1338,6 +1481,10 @@ export async function disposeSharedVisionEncoderNow(): Promise<void> {
     clearTimeout(sharedVisionIdleTimer);
     sharedVisionIdleTimer = null;
   }
+  if (embWorkerVisionReady) {
+    embWorkerVisionReady = false;
+    await callEmbeddingWorker({ type: 'disposeVision' }).catch(() => {});
+  }
   if (sharedVisionModel) {
     const m = sharedVisionModel;
     sharedVisionModel = null;
@@ -1348,6 +1495,7 @@ export async function disposeSharedVisionEncoderNow(): Promise<void> {
 
 export async function releaseAllOnDeviceAiModelsForBackground(): Promise<void> {
   await disposeSharedVisionEncoderNow();
+  await terminateEmbeddingWorkerNow();
   if (textQueryModel) {
     const tm = textQueryModel;
     textQueryModel = null;
@@ -1358,34 +1506,77 @@ export async function releaseAllOnDeviceAiModelsForBackground(): Promise<void> {
     searchModel = null;
     await Promise.resolve(sm.dispose?.()).catch(() => {});
   }
+  // PaddleOCR(det+rec) 워커·WASM 세션도 함께 해제하여 백그라운드 탭 RAM 점유를 최소화합니다.
+  try {
+    const ocrMod = await import('./aiPaddleOcrEngine');
+    await ocrMod.releasePaddleOcrRuntime();
+  } catch {
+    /* ignore */
+  }
 }
+
+const DESKTOP_BG_MODEL_RELEASE_MS = 20_000;
+let desktopBgReleaseTimer: ReturnType<typeof setTimeout> | null = null;
 
 if (typeof window !== 'undefined' && typeof document !== 'undefined') {
   const onBgFree = () => {
-    if (!isMobileDeviceRuntime()) return;
     if (document.visibilityState === 'hidden') {
-      void releaseAllOnDeviceAiModelsForBackground();
+      if (isMobileDeviceRuntime()) {
+        void releaseAllOnDeviceAiModelsForBackground();
+      } else {
+        if (desktopBgReleaseTimer) clearTimeout(desktopBgReleaseTimer);
+        desktopBgReleaseTimer = setTimeout(() => {
+          desktopBgReleaseTimer = null;
+          if (document.visibilityState === 'hidden') {
+            void releaseAllOnDeviceAiModelsForBackground();
+          }
+        }, DESKTOP_BG_MODEL_RELEASE_MS);
+      }
+    } else if (desktopBgReleaseTimer) {
+      clearTimeout(desktopBgReleaseTimer);
+      desktopBgReleaseTimer = null;
     }
   };
   document.addEventListener('visibilitychange', onBgFree, { passive: true });
   window.addEventListener('pagehide', () => {
-    if (isMobileDeviceRuntime()) {
-      void releaseAllOnDeviceAiModelsForBackground();
+    if (desktopBgReleaseTimer) {
+      clearTimeout(desktopBgReleaseTimer);
+      desktopBgReleaseTimer = null;
     }
+    void releaseAllOnDeviceAiModelsForBackground();
   }, { passive: true });
 }
 
 export async function acquireSharedVisionEncoder(): Promise<boolean> {
-  if (sharedVisionModel && sharedVisionProcessor) {
+  if (embWorkerVisionReady || (sharedVisionModel && sharedVisionProcessor)) {
     bumpSharedVisionIdleDispose();
     return true;
   }
   if (sharedVisionLoadPromise) return sharedVisionLoadPromise;
 
   sharedVisionLoadPromise = (async () => {
+    if (canUseEmbeddingWorker()) {
+      try {
+        // 데스크톱·모바일 공통: 상위 멀티모달 비전 모델 로드 시 메인 스레드 중복 단독 텍스트 세션 즉시 해제
+        if (textQueryModel) {
+          const oldTextModel = textQueryModel;
+          textQueryModel = null;
+          await Promise.resolve(oldTextModel.dispose?.()).catch(() => {});
+        }
+        const ok = await callEmbeddingWorker<boolean>({ type: 'acquireVision' });
+        if (ok) {
+          embWorkerVisionReady = true;
+          embWorkerTextReady = true;
+          bumpSharedVisionIdleDispose();
+          return true;
+        }
+      } catch {
+        /* fallback to main thread below */
+      }
+    }
     try {
-      // [모바일 OOM 방지]: 모바일 기기에서만 단독 textQueryModel을 먼저 해제하고, 데스크톱에서는 상시 0.01초 응답을 위해 유지합니다.
-      if (textQueryModel && isMobileDeviceRuntime()) {
+      // 데스크톱·모바일 공통: 중복 단독 textQueryModel 즉시 해제하여 RAM 2중 점유 방지
+      if (textQueryModel) {
         const oldTextModel = textQueryModel;
         textQueryModel = null;
         await Promise.resolve(oldTextModel.dispose?.()).catch(() => {});
@@ -1423,7 +1614,27 @@ export async function acquireSharedVisionEncoder(): Promise<boolean> {
 export function embedRawImageWithSharedVision(rawImg: RawImage): Promise<Float32Array | null> {
   const run = async (): Promise<Float32Array | null> => {
     const ok = await acquireSharedVisionEncoder();
-    if (!ok || !sharedVisionModel || !sharedVisionProcessor) return null;
+    if (!ok) return null;
+    if (embWorkerVisionReady) {
+      try {
+        const rawBytes = new Uint8ClampedArray(rawImg.data as Uint8ClampedArray);
+        const vec = await callEmbeddingWorker<Float32Array | null>(
+          {
+            type: 'embedImage',
+            rgbaBuffer: rawBytes.buffer,
+            width: rawImg.width,
+            height: rawImg.height,
+            channels: rawImg.channels,
+          },
+          [rawBytes.buffer]
+        );
+        bumpSharedVisionIdleDispose();
+        return vec;
+      } catch {
+        return null;
+      }
+    }
+    if (!sharedVisionModel || !sharedVisionProcessor) return null;
     try {
       const inputs = await sharedVisionProcessor(null, [[rawImg]]);
       const out = await sharedVisionModel(inputs);

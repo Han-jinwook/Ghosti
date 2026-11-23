@@ -1057,23 +1057,20 @@ async function runSingleImageOcrInternal(
 /**
  * ONNX Runtime Web 단일 세션 동시성 보호 직렬화 큐로 안전하게 이미지 OCR을 수행합니다.
  */
-export function recognizeImageDataWithPaddleOcr(
-  imageData: ImageData,
+export function runPaddleOcrOnRgbaDirect(
+  rgba: Uint8ClampedArray | Uint8Array,
+  width: number,
+  height: number,
   options?: PaddleOcrOptions
 ): Promise<{ text: string; boxes: PaddleOcrBox[] }> {
   const job = inferenceChain.then(() =>
-    runSingleImageOcrInternal(imageData.data, imageData.width, imageData.height, options)
+    runSingleImageOcrInternal(rgba, width, height, options)
   );
   inferenceChain = job.catch(() => undefined);
   return job;
 }
 
-/**
- * 모바일(Android/iOS)에서 초기 동영상 OCR 선추출 직후 대형 비전 모델(350MB)을 올리기 전
- * PP-OCRv5 WASM 세션을 즉시 반환하여 2중 WASM 피크(WebView 렌더러 OOM 강제종료)를 원천 차단합니다.
- * 이후 사용자가 온디맨드 OCR을 호출하면 CacheStorage에서 0.1초 만에 자동 재로딩됩니다.
- */
-export function releasePaddleOcrRuntime(): Promise<void> {
+export function releasePaddleOcrRuntimeDirect(): Promise<void> {
   const job = inferenceChain.then(async () => {
     const activePromise = runtimePromise;
     runtimePromise = null;
@@ -1088,6 +1085,107 @@ export function releasePaddleOcrRuntime(): Promise<void> {
   });
   inferenceChain = job.catch(() => undefined);
   return job;
+}
+
+let ocrWorkerInstance: Worker | null = null;
+let ocrWorkerSeq = 0;
+const ocrWorkerPending = new Map<
+  number,
+  { resolve: (v: any) => void; reject: (e: any) => void }
+>();
+
+function getOrCreateOcrWorker(): Worker | null {
+  if (typeof window === 'undefined' || typeof Worker === 'undefined') return null;
+  if (ocrWorkerInstance) return ocrWorkerInstance;
+  try {
+    const w = new Worker(new URL('./paddleOcrWorker.ts', import.meta.url), { type: 'module' });
+    w.onmessage = (ev: MessageEvent) => {
+      const msg = ev.data || {};
+      const entry = ocrWorkerPending.get(msg.id);
+      if (!entry) return;
+      ocrWorkerPending.delete(msg.id);
+      if (msg.ok) entry.resolve(msg.result);
+      else entry.reject(new Error(msg.error || 'OCR_WORKER_FAILED'));
+    };
+    w.onerror = () => {
+      for (const [, p] of ocrWorkerPending) {
+        p.reject(new Error('OCR_WORKER_CRASHED'));
+      }
+      ocrWorkerPending.clear();
+      try {
+        w.terminate();
+      } catch {
+        /* ignore */
+      }
+      if (ocrWorkerInstance === w) ocrWorkerInstance = null;
+    };
+    ocrWorkerInstance = w;
+    return w;
+  } catch {
+    return null;
+  }
+}
+
+export function recognizeImageDataWithPaddleOcr(
+  imageData: ImageData,
+  options?: PaddleOcrOptions
+): Promise<{ text: string; boxes: PaddleOcrBox[] }> {
+  const worker = getOrCreateOcrWorker();
+  if (worker) {
+    const id = ++ocrWorkerSeq;
+    const copy = new Uint8ClampedArray(imageData.data);
+    return new Promise<{ text: string; boxes: PaddleOcrBox[] }>((resolve, reject) => {
+      ocrWorkerPending.set(id, { resolve, reject });
+      worker.postMessage(
+        {
+          id,
+          type: 'ocr',
+          rgbaBuffer: copy.buffer,
+          width: imageData.width,
+          height: imageData.height,
+          options,
+        },
+        [copy.buffer]
+      );
+    }).catch(() =>
+      runPaddleOcrOnRgbaDirect(imageData.data, imageData.width, imageData.height, options)
+    );
+  }
+  return runPaddleOcrOnRgbaDirect(imageData.data, imageData.width, imageData.height, options);
+}
+
+/**
+ * 데스크톱 백그라운드 탭 유휴 전환(20초+) 및 모바일 백그라운드/대형 비전 모델 로드 전
+ * PP-OCRv5 워커·WASM 세션을 즉시 반환하여 메모리 점유를 0MB로 되돌립니다.
+ * 이후 온디맨드 OCR 호출 시 CacheStorage에서 0.1초 만에 자동 재로딩됩니다.
+ */
+export async function releasePaddleOcrRuntime(): Promise<void> {
+  if (ocrWorkerInstance) {
+    const w = ocrWorkerInstance;
+    ocrWorkerInstance = null;
+    try {
+      const id = ++ocrWorkerSeq;
+      await Promise.race([
+        new Promise<void>((resolve) => {
+          ocrWorkerPending.set(id, { resolve: () => resolve(), reject: () => resolve() });
+          w.postMessage({ id, type: 'release' });
+        }),
+        new Promise<void>((resolve) => setTimeout(resolve, 600)),
+      ]);
+    } catch {
+      /* ignore */
+    }
+    for (const [, p] of ocrWorkerPending) {
+      p.reject(new Error('OCR_WORKER_RELEASED'));
+    }
+    ocrWorkerPending.clear();
+    try {
+      w.terminate();
+    } catch {
+      /* ignore */
+    }
+  }
+  await releasePaddleOcrRuntimeDirect();
 }
 
 export async function recognizeDataUrlWithPaddleOcr(

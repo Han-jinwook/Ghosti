@@ -179,11 +179,23 @@ class SilentIndexingBrakeManager {
     // 배터리 및 네트워크 상태 감지 (지원 브라우저)
     this.syncBatteryAndNetworkState();
 
-    // 백그라운드 틱 (화면 숨김 상태에서는 타이머 양보해 배터리 절약)
+    // 백그라운드 틱 (화면 숨김 상태에서는 타이머 양보해 배터리·크롬 CPU 절약)
     this.tickerId = window.setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       this.tickBackgroundCycle();
     }, 2500);
+
+    // 다른 크롬 탭 전환 시 백그라운드 인덱싱 즉시 일시정지, 복귀 시 즉시 재개
+    if (typeof document !== 'undefined') {
+      document.addEventListener(
+        'visibilitychange',
+        () => {
+          this.recalculateHardwareMetrics();
+          this.emit();
+        },
+        { passive: true }
+      );
+    }
 
     // Z-코어 연결 시 OS 커널 최하위 우선순위(THREAD_PRIORITY_BELOW_NORMAL) 및 50% 코어 캡 즉시 동기화
     void this.syncZCoreKernelGuard(0);
@@ -266,6 +278,14 @@ class SilentIndexingBrakeManager {
   private recalculateHardwareMetrics(): void {
     const guard = this.state.hardwareGuard;
     const isMobile = this.isMobileEnvironment();
+
+    // 0) 다른 브라우저 탭 사용 중(hidden)일 때는 데스크톱·모바일 공통 백그라운드 인덱싱 즉시 일시정지
+    if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
+      guard.thermalOrBatteryPaused = true;
+      guard.pauseReason = '다른 탭 사용 중 — 브라우저 자원 절약을 위해 백그라운드 인덱싱 일시정지 중';
+      guard.currentCpuPercent = 0;
+      return;
+    }
 
     // 4) 모바일 써멀 쿨다운 (40℃ 도달 또는 미충전 시 배터리 20% 미만 자동 일시정지)
     if (guard.estimatedTempCelsius >= 40) {
