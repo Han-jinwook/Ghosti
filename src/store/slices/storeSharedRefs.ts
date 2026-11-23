@@ -129,6 +129,33 @@ export function resolveInvitedHostLoungeAndRoom(): {
 }
 
 /**
+ * [동호회·동창회 하위 탭 엄격 분리 SSOT]
+ * - 'club'(동호회): 기본 트랙 'recent_now'(정기 모임·라운딩) vs 'memories_1989'(번개·추억 앨범)
+ * - 'student'(동창회): 기본 트랙 'memories_1989'(추억 앨범) vs 'recent_now'(최근 근황)
+ * - 업로드 시 부여된 정식 필드(sharedFeedTrack) 기준으로 각 탭에 올린 사진만 엄격히 분리 표시합니다.
+ */
+export function resolveEffectiveSharedFeedTrack(
+  photo: PhotoItem,
+  loungeType: LoungeType
+): 'memories_1989' | 'recent_now' {
+  if (photo.sharedFeedTrack === 'memories_1989' || photo.sharedFeedTrack === 'recent_now') {
+    return photo.sharedFeedTrack;
+  }
+  return loungeType === 'club' ? 'recent_now' : 'memories_1989';
+}
+
+export function filterPhotosByClubFeedTrack(
+  photos: PhotoItem[],
+  loungeType: LoungeType,
+  clubFeedTrack: 'memories_1989' | 'recent_now'
+): PhotoItem[] {
+  if (loungeType !== 'club' && loungeType !== 'student') {
+    return photos;
+  }
+  return photos.filter((p) => resolveEffectiveSharedFeedTrack(p, loungeType) === clubFeedTrack);
+}
+
+/**
  * [라운지별 사진첩 완전 분리 SSOT]
  * - 초대 링크(?invite=...) 없이 접속한 비로그인·신규 유저는 가족·동호회·동창회 모두 0장(빈 방 + 온보딩 샘플 체험 위젯)으로 통일하여 타 PC 사진 오해를 원천 차단
  * - 초대 링크로 입장한 경우에만 해당 방(예: 우리집 가족방)의 호스트 공유 사진(36장) + 추가한 사진을 노출

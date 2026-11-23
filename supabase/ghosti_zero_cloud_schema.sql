@@ -856,10 +856,15 @@ create table if not exists public.ghosti_room_shared_photos (
   original_byte_size bigint not null default 0,
   has_original_exif boolean not null default false,
   is_hidden_by_master boolean not null default false,
+  -- 동호회(정기모임·번개추억) · 동창회(추억·최근근황) 하위 탭 분리 정식 컬럼
+  feed_track text not null default 'recent_now',
   seed_expires_at timestamptz not null default (now() + interval '14 days'),
   created_at timestamptz not null default now(),
   updated_at timestamptz not null default now()
 );
+
+alter table public.ghosti_room_shared_photos
+  add column if not exists feed_track text not null default 'recent_now';
 
 alter table public.ghosti_room_shared_photos
   add column if not exists seed_expires_at timestamptz not null default (now() + interval '14 days');

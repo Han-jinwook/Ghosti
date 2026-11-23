@@ -113,6 +113,7 @@ import {
   buildBidirectionalStickKeywords,
   buildYearEquivalenceTokens,
   deriveLoungeProperNounTokens,
+  filterPhotosByClubFeedTrack,
   filterVisibleGalleryPhotos,
   getActivePersonaForCluster,
   isMobileOrStoreRuntime,
@@ -383,6 +384,12 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
             ? invInfo.hostFamilyRoom
             : state.activeFamilyRoom || '우리집'
           : state.activeFamilyRoom || '우리집';
+      const nextClubFeedTrack =
+        activeLoungeType === 'student'
+          ? 'memories_1989'
+          : activeLoungeType === 'club'
+          ? 'recent_now'
+          : state.clubFeedTrack;
       const nextCorpus = resolveLoungePhotoCorpus({
         activeLoungeType,
         activeFamilyRoom: nextFamilyRoom,
@@ -391,7 +398,12 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
         sharedRoomHostPhotos: state.sharedRoomHostPhotos,
         sharedRoomAddedPhotos: state.sharedRoomAddedPhotos,
       });
-      const refreshedGalleryResults: SearchResultItem[] = filterVisibleGalleryPhotos(nextCorpus).map(
+      const visibleForTab = filterPhotosByClubFeedTrack(
+        filterVisibleGalleryPhotos(nextCorpus),
+        activeLoungeType,
+        nextClubFeedTrack
+      );
+      const refreshedGalleryResults: SearchResultItem[] = visibleForTab.map(
         (photo) => ({
           photo,
           score: 0.95,

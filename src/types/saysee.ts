@@ -455,6 +455,8 @@ export interface PhotoItem {
   sharedOwnerEmail?: string;
   /** [방식 A] Supabase ghosti_room_shared_photos.id (UUID) */
   sharedSupabasePhotoId?: string;
+  /** [동호회·동창회 하위 탭 분리] 정식 피드 트랙 ('recent_now' | 'memories_1989') */
+  sharedFeedTrack?: 'memories_1989' | 'recent_now';
   /** [방식 A] 하트 반응 수 */
   sharedHeartCount?: number;
   /** [옛날 종이 사진 · 연도·장소 스티커(Chip) 1초 부착] 사진에 부착된 스티커 라벨 목록 */

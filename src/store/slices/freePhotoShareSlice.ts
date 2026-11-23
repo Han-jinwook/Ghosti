@@ -256,6 +256,7 @@ import {
   quarantineFailureToast,
   quarantineResultNote,
   requestQuarantineOp,
+  filterPhotosByClubFeedTrack,
   filterVisibleGalleryPhotos,
   persistSharedRoomAddedPhotos,
   resolveInvitedHostLoungeAndRoom,
@@ -1160,6 +1161,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       ? activeJoinedMeta.familyRoom
       : state.activeFamilyRoom || '우리집';
     const explicitTargetRoomId = activeJoinedMeta?.roomId || state.activeSharedRoomId || null;
+    const targetFeedTrack: ClubFeedTrackId = state.clubFeedTrack;
     const currentRoomCorpus = resolveLoungePhotoCorpus({
       activeLoungeType: targetLounge,
       activeFamilyRoom: targetFamilyRoom,
@@ -1168,8 +1170,13 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       sharedRoomHostPhotos: state.sharedRoomHostPhotos,
       sharedRoomAddedPhotos: state.sharedRoomAddedPhotos,
     });
+    const currentTrackCorpus = filterPhotosByClubFeedTrack(
+      currentRoomCorpus,
+      targetLounge,
+      targetFeedTrack
+    );
     const existingDhashes = new Set(
-      currentRoomCorpus.filter((p) => p.dhash).map((p) => String(p.dhash))
+      currentTrackCorpus.filter((p) => p.dhash).map((p) => String(p.dhash))
     );
     const pickedRaw = state.photos.filter((p) => {
       if (!idSet.has(p.id)) return false;
@@ -1236,6 +1243,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         roomId: targetRoomId,
         loungeType: targetLounge,
         familyRoom: targetFamilyRoom,
+        feedTrack: targetFeedTrack,
         uploaderUserId,
         uploaderEmail,
         uploaderNickname: uploaderNick,
@@ -1274,7 +1282,12 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         sharedRoomHostPhotos: latestState.sharedRoomHostPhotos,
         sharedRoomAddedPhotos: nextAdded,
       });
-      const nextResults: SearchResultItem[] = filterVisibleGalleryPhotos(mergedShared).map(
+      const visibleTrackPhotos = filterPhotosByClubFeedTrack(
+        filterVisibleGalleryPhotos(mergedShared),
+        targetLounge,
+        latestState.clubFeedTrack
+      );
+      const nextResults: SearchResultItem[] = visibleTrackPhotos.map(
         (photo) => ({
           photo,
           score: 0.99,
@@ -1953,7 +1966,12 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
             sharedRoomHostPhotos: stFast.sharedRoomHostPhotos,
             sharedRoomAddedPhotos: fastAdded,
           });
-          const fastResults: SearchResultItem[] = filterVisibleGalleryPhotos(fastMerged).map(
+          const fastVisible = filterPhotosByClubFeedTrack(
+            filterVisibleGalleryPhotos(fastMerged),
+            targetLounge,
+            stFast.clubFeedTrack
+          );
+          const fastResults: SearchResultItem[] = fastVisible.map(
             (photo) => ({
               photo,
               score: 0.96,
@@ -2064,7 +2082,12 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         sharedRoomHostPhotos: stNow.sharedRoomHostPhotos,
         sharedRoomAddedPhotos: nextAdded,
       });
-      const sharedGalleryResults: SearchResultItem[] = filterVisibleGalleryPhotos(mergedShared).map(
+      const visibleRemoteTrack = filterPhotosByClubFeedTrack(
+        filterVisibleGalleryPhotos(mergedShared),
+        finalLounge,
+        stNow.clubFeedTrack
+      );
+      const sharedGalleryResults: SearchResultItem[] = visibleRemoteTrack.map(
         (photo) => ({
           photo,
           score: 0.96,
@@ -2451,52 +2474,46 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     });
 
     const isClubLounge = activeLoungeType === 'club';
+    // [동호회·동창회 하위 탭 엄격 분리]: 현재 선택한 탭(clubFeedTrack)에 올린 사진만 필터링하여
+    // 정기 모임·라운딩 ↔ 번개·추억 앨범 및 1989 추억 ↔ 최근 근황 간 사진 중복 노출을 0%로 차단
+    const trackFiltered = filterPhotosByClubFeedTrack(
+      visibleRoomPhotos,
+      activeLoungeType,
+      clubFeedTrack
+    )
+      .slice()
+      .sort((a, b) => (b.mtimeMs || 0) - (a.mtimeMs || 0));
 
     if (clubFeedTrack === 'memories_1989') {
-      const priorityRe = isClubLounge
-        ? /(번개|추억|회식|뒷풀이|친목|앨범|옛날)/i
-        : new RegExp(`(${alumniGradYear}|수학여행|소풍|추억|학창|졸업|옛날)`, 'i');
-      const prioritized = [        ...visibleRoomPhotos.filter((p) => {
-          const hay = `${p.name} ${p.captionKo || ''} ${(p.tags || []).join(' ')} ${(p.keywordsKo || []).join(' ')}`;
-          return priorityRe.test(hay);
-        }),
-        ...visibleRoomPhotos.filter((p) => {
-          const hay = `${p.name} ${p.captionKo || ''} ${(p.tags || []).join(' ')} ${(p.keywordsKo || []).join(' ')}`;
-          return !priorityRe.test(hay);
-        }),
-      ];
       set({
         clubFeedTrack,
         searchSpace: 'gallery',
         hasExecutedUserSearch: false,
         hasUserSelectedSearchTab: true,
         activeQuery: isClubLounge
-          ? `번개 · 추억 앨범 (${prioritized.length}장)`
-          : ` ${alumniGradYear} 추억 앨범 (${prioritized.length}장)`,
+          ? `번개 · 추억 앨범 (${trackFiltered.length}장)`
+          : `${alumniGradYear} 추억 앨범 (${trackFiltered.length}장)`,
         matchedTags: isClubLounge
           ? ['#번개모임', '#추억앨범', '#동호회공유방']
           : [`#${alumniGradYear}추억`, '#동창회앨범', '#학창시절'],
-        searchResults: prioritized.map(toResultItem),
+        searchResults: trackFiltered.map(toResultItem),
         ...(sharedMode
           ? { matchedVideoScenes: [], matchedLocalDocs: [], matchedVaultPhotos: [] }
           : {}),
       });
     } else {
-      const latestFirst = visibleRoomPhotos
-        .slice()
-        .sort((a, b) => (b.mtimeMs || 0) - (a.mtimeMs || 0));
       set({
         clubFeedTrack,
         searchSpace: 'gallery',
         hasExecutedUserSearch: false,
         hasUserSelectedSearchTab: true,
         activeQuery: isClubLounge
-          ? `정기 모임·라운딩 (${latestFirst.length}장)`
-          : `최근 근황 (${latestFirst.length}장)`,
+          ? `정기 모임·라운딩 (${trackFiltered.length}장)`
+          : `최근 근황 (${trackFiltered.length}장)`,
         matchedTags: isClubLounge
           ? ['#정기모임', '#라운딩', '#동호회공유방']
           : ['#최근근황', '#동창모임', '#알림클린존'],
-        searchResults: latestFirst.map(toResultItem),
+        searchResults: trackFiltered.map(toResultItem),
         ...(sharedMode
           ? { matchedVideoScenes: [], matchedLocalDocs: [], matchedVaultPhotos: [] }
           : {}),

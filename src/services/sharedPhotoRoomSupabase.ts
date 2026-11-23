@@ -61,6 +61,7 @@ interface GuestPreviewPhotoDto {
   widthPx?: number;
   heightPx?: number;
   createdAt?: string;
+  feedTrack?: 'memories_1989' | 'recent_now' | null;
   heartCount?: number;
   comments?: Array<{
     id: string;
@@ -496,6 +497,10 @@ function dtoToPhotoItem(
     sharedRoomId: dto.roomId,
     sharedOwnerEmail: ownerEmail,
     sharedSupabasePhotoId: dto.id,
+    sharedFeedTrack:
+      dto.feedTrack === 'memories_1989' || dto.feedTrack === 'recent_now'
+        ? dto.feedTrack
+        : undefined,
     sharedHeartCount: dto.heartCount ?? 0,
     sharedComments: dto.comments ?? [],
   };
@@ -1004,15 +1009,25 @@ export async function fetchScopedSharedRoomPhotos(opts: {
     };
   }
 
-  const { data, error } = await authed
+  const baseSelectCols =
+    'id, room_id, uploader_nickname, thumb_webp_url, caption_ko, keywords_ko, face_person_names, shot_date_display, shot_place_display, width_px, height_px, created_at';
+  let queryRes = await authed
     .from('ghosti_room_shared_photos')
-    .select(
-      'id, room_id, uploader_nickname, thumb_webp_url, caption_ko, keywords_ko, face_person_names, shot_date_display, shot_place_display, width_px, height_px, created_at'
-    )
+    .select(`${baseSelectCols}, feed_track`)
     .eq('room_id', targetRoomId)
     .eq('is_hidden_by_master', false)
     .order('created_at', { ascending: false })
     .limit(200);
+  if (queryRes.error && /feed_track/i.test(String(queryRes.error.message || ''))) {
+    queryRes = (await authed
+      .from('ghosti_room_shared_photos')
+      .select(baseSelectCols)
+      .eq('room_id', targetRoomId)
+      .eq('is_hidden_by_master', false)
+      .order('created_at', { ascending: false })
+      .limit(200)) as unknown as typeof queryRes;
+  }
+  const { data, error } = queryRes;
 
   // 오프라인이거나 일시적 네트워크 장애 시에도 합류 멤버는 본인 기기 로컬 금고(IndexedDB)에서 해당 단일 room_id만 100% 열람!
   if (error || !Array.isArray(data)) {
@@ -1059,6 +1074,11 @@ export async function fetchScopedSharedRoomPhotos(opts: {
           widthPx: Number(row.width_px || 0),
           heightPx: Number(row.height_px || 0),
           createdAt: createdStr,
+          feedTrack:
+            (row as Record<string, unknown>).feed_track === 'memories_1989' ||
+            (row as Record<string, unknown>).feed_track === 'recent_now'
+              ? ((row as Record<string, unknown>).feed_track as 'memories_1989' | 'recent_now')
+              : null,
         },
         opts.loungeType,
         opts.familyRoom,
@@ -1078,8 +1098,19 @@ export async function fetchScopedSharedRoomPhotos(opts: {
   }
 
   if (currentEmail) {
-    if (serverItems.length > 0) {
-      await upsertMemberLocalRoomPhotos(currentEmail, targetRoomId, serverItems);
+    const localPhotosBeforeUpsert = await loadMemberLocalRoomPhotos(currentEmail, targetRoomId);
+    const localTrackById = new Map<string, 'memories_1989' | 'recent_now'>();
+    for (const lp of localPhotosBeforeUpsert) {
+      if (lp.sharedFeedTrack) {
+        localTrackById.set(lp.id, lp.sharedFeedTrack);
+      }
+    }
+    const hydratedServerItems = serverItems.map((item) => ({
+      ...item,
+      sharedFeedTrack: item.sharedFeedTrack ?? localTrackById.get(item.id),
+    }));
+    if (hydratedServerItems.length > 0) {
+      await upsertMemberLocalRoomPhotos(currentEmail, targetRoomId, hydratedServerItems);
     }
     if (hasExpiredRowsOnServer) {
       void purgeExpiredSeedPhotosAfterLocalArchive(authed, currentEmail, [targetRoomId]);
@@ -1087,7 +1118,7 @@ export async function fetchScopedSharedRoomPhotos(opts: {
     const localPhotos = await loadMemberLocalRoomPhotos(currentEmail, targetRoomId);
     // 서버에서 삭제되었거나 빈 방인데 로컬에 잘못 남았을 때를 제외하고, 14일 TTL 경과 후에도 합류 멤버 로컬 금고 영구 보존
     const mergedById = new Map<string, PhotoItem>();
-    for (const item of serverItems) {
+    for (const item of hydratedServerItems) {
       mergedById.set(item.id, { ...item, sharedRoomId: targetRoomId, sharedOwnerEmail: currentEmail });
     }
     for (const item of localPhotos) {
@@ -1134,6 +1165,7 @@ export async function uploadPhotosToSupabaseSharedRoom(opts: {
   roomId: string;
   loungeType: LoungeType;
   familyRoom: FamilyRoomId;
+  feedTrack?: 'memories_1989' | 'recent_now';
   uploaderUserId?: string;
   uploaderEmail: string;
   uploaderNickname: string;
@@ -1193,6 +1225,10 @@ export async function uploadPhotosToSupabaseSharedRoom(opts: {
       height_px: compressed.heightPx,
       original_byte_size: p.size || 0,
       has_original_exif: Boolean(p.date || p.locationKo),
+      feed_track:
+        opts.feedTrack ||
+        p.sharedFeedTrack ||
+        (opts.loungeType === 'club' ? 'recent_now' : 'memories_1989'),
     });
   }
 
@@ -1200,16 +1236,29 @@ export async function uploadPhotosToSupabaseSharedRoom(opts: {
     return { ok: false, uploadedPhotos: [], error: 'NO_VALID_PHOTOS' };
   }
 
-  const { data, error } = await authed
+  const baseInsertSelect =
+    'id, room_id, uploader_nickname, thumb_webp_url, caption_ko, keywords_ko, face_person_names, shot_date_display, shot_place_display, width_px, height_px, created_at';
+  let insertRes = await authed
     .from('ghosti_room_shared_photos')
     .insert(rowsToInsert)
-    .select(
-      'id, room_id, uploader_nickname, thumb_webp_url, caption_ko, keywords_ko, face_person_names, shot_date_display, shot_place_display, width_px, height_px, created_at'
-    );
+    .select(`${baseInsertSelect}, feed_track`);
+
+  if (insertRes.error && /feed_track/i.test(String(insertRes.error.message || ''))) {
+    const fallbackRows = rowsToInsert.map(({ feed_track: _omit, ...rest }) => rest);
+    insertRes = (await authed
+      .from('ghosti_room_shared_photos')
+      .insert(fallbackRows)
+      .select(baseInsertSelect)) as unknown as typeof insertRes;
+  }
+
+  const { data, error } = insertRes;
 
   if (error || !Array.isArray(data)) {
     return { ok: false, uploadedPhotos: [], error: error?.message || 'INSERT_FAILED' };
   }
+
+  const resolvedTrack =
+    opts.feedTrack || (opts.loungeType === 'club' ? 'recent_now' : 'memories_1989');
 
   const uploadedPhotos = data.map((row) =>
     dtoToPhotoItem(
@@ -1228,6 +1277,11 @@ export async function uploadPhotosToSupabaseSharedRoom(opts: {
         widthPx: Number(row.width_px || 0),
         heightPx: Number(row.height_px || 0),
         createdAt: String(row.created_at || ''),
+        feedTrack:
+          (row as Record<string, unknown>).feed_track === 'memories_1989' ||
+          (row as Record<string, unknown>).feed_track === 'recent_now'
+            ? ((row as Record<string, unknown>).feed_track as 'memories_1989' | 'recent_now')
+            : resolvedTrack,
       },
       opts.loungeType,
       opts.familyRoom,
