@@ -47,6 +47,7 @@ export const GhostSearchPane: React.FC<{
     matchedVideoScenes,
     setSelectedVideoModal,
     activeQuery,
+    photos,
     searchResults,
     groupBurstsInSearch,
     setGroupBurstsInSearch,
@@ -158,7 +159,7 @@ export const GhostSearchPane: React.FC<{
         burstCount: 1,
       }));
     }
-    const orderedGroups = groupBurstSearchResults(searchResults);
+    const orderedGroups = groupBurstSearchResults(searchResults, photos);
     if (!groupBurstsInSearch || searchSpace === 'vault') {
       return orderedGroups.flatMap((g) =>
         g.burstPhotos.map((photo) => ({
@@ -174,7 +175,7 @@ export const GhostSearchPane: React.FC<{
       );
     }
     return orderedGroups;
-  }, [searchResults, groupBurstsInSearch, searchSpace, hasExecutedUserSearch, activeLoungeType]);
+  }, [searchResults, photos, groupBurstsInSearch, searchSpace, hasExecutedUserSearch, activeLoungeType]);
 
   const collapsedBurstCount = searchResults.length - groupedResults.length;
 
@@ -774,8 +775,8 @@ export const GhostSearchPane: React.FC<{
                                         />
 
                                         {isBurst ? (
-                                          <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/75 text-white text-[10.5px] font-medium">
-                                            {group.burstCount}장 연사
+                                          <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/75 text-white text-[10.5px] font-semibold">
+                                            ❐ {group.burstCount}장 연사
                                           </div>
                                         ) : cleanUploader &&
                                           (activeLoungeType === 'family' ||

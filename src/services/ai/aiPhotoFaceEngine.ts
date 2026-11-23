@@ -210,13 +210,52 @@ function parseFilenameTimestampSec(name: string, fallbackMs: number): number {
  * [지침 #3] 검색 결과에서 동일 연사(Burst) 사진이 나란히 도배되지 않도록
  * dHash 및 촬영 시각(Δt ≤ 4초)·시맨틱 클러스터 기준으로 1장의 대표 카드로 묶고 [❐ N장 연사] 배지 정보를 생성합니다.
  */
-export function groupBurstSearchResults(results: SearchResultItem[]): GroupedSearchResultItem[] {
+export function groupBurstSearchResults(
+  results: SearchResultItem[],
+  allPhotos?: PhotoItem[]
+): GroupedSearchResultItem[] {
+  const dupMembersByGroupId = new Map<string, PhotoItem[]>();
+  if (Array.isArray(allPhotos) && allPhotos.length > 0) {
+    for (const p of allPhotos) {
+      if (!p || p.quarantined || !p.duplicateGroupId) continue;
+      const arr = dupMembersByGroupId.get(p.duplicateGroupId);
+      if (arr) {
+        arr.push(p);
+      } else {
+        dupMembersByGroupId.set(p.duplicateGroupId, [p]);
+      }
+    }
+  }
+
+  const expandBurstMembers = (clusterPhotos: PhotoItem[]): PhotoItem[] => {
+    const merged: PhotoItem[] = [];
+    const seenIds = new Set<string>();
+    const addPhoto = (ph: PhotoItem) => {
+      if (!ph || ph.quarantined || seenIds.has(ph.id)) return;
+      seenIds.add(ph.id);
+      merged.push(ph);
+    };
+    for (const ph of clusterPhotos) {
+      addPhoto(ph);
+      if (ph.duplicateGroupId) {
+        const siblings = dupMembersByGroupId.get(ph.duplicateGroupId);
+        if (siblings) {
+          for (const sib of siblings) addPhoto(sib);
+        }
+      }
+    }
+    return merged;
+  };
+
   if (results.length <= 1) {
-    return results.map((r) => ({
-      representative: r,
-      burstPhotos: [r.photo],
-      burstCount: 1,
-    }));
+    return results.map((r) => {
+      const burstPhotos = expandBurstMembers([r.photo]);
+      return {
+        representative: r,
+        burstPhotos,
+        burstCount: burstPhotos.length,
+      };
+    });
   }
 
   // 시간순 정렬 후 인접 연사 클러스터 구성
@@ -292,11 +331,12 @@ export function groupBurstSearchResults(results: SearchResultItem[]): GroupedSea
       return (b.item.photo.opticalSharpness ?? 0) - (a.item.photo.opticalSharpness ?? 0);
     });
     const minOrigIdx = Math.min(...cluster.map((c) => c.origIdx));
+    const expandedPhotos = expandBurstMembers(cluster.map((c) => c.item.photo));
     return {
       minOrigIdx,
       representative: bestRankOrder[0].item,
-      burstPhotos: cluster.map((c) => c.item.photo),
-      burstCount: cluster.length,
+      burstPhotos: expandedPhotos,
+      burstCount: expandedPhotos.length,
     };
   });
 

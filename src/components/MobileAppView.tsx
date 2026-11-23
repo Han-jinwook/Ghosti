@@ -397,8 +397,8 @@ export const MobileAppView: React.FC = () => {
         burstCount: 1,
       }));
     }
-    return groupBurstSearchResults(searchResults);
-  }, [searchResults, groupBurstsInSearch, searchSpace, activeLoungeType]);
+    return groupBurstSearchResults(searchResults, photos);
+  }, [searchResults, photos, groupBurstsInSearch, searchSpace, activeLoungeType]);
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });

@@ -378,7 +378,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
   const matchedTotalDocsCount = matchedLocalDocs.length + matchedVaultPhotos.length;
 
   const groupedResults = useMemo(() => {
-    const orderedGroups = groupBurstSearchResults(searchResults);
+    const orderedGroups = groupBurstSearchResults(searchResults, photos);
     if (searchSpace === 'vault') {
       return orderedGroups.flatMap((g) =>
         g.burstPhotos.map((photo) => ({
@@ -394,7 +394,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
       );
     }
     return orderedGroups;
-  }, [searchResults, searchSpace]);
+  }, [searchResults, photos, searchSpace]);
 
   const isStandaloneSearchWin = useMemo(() => {
     if (typeof window === 'undefined') return false;
@@ -1074,8 +1074,8 @@ export const Stage1MinimalSearchPreview: React.FC<{
                           />
 
                           {isBurst && (
-                            <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/75 text-white text-[10.5px] font-medium">
-                              {group.burstCount}장 연사
+                            <div className="absolute top-2 left-2 px-2 py-0.5 rounded bg-black/75 text-white text-[10.5px] font-semibold">
+                              ❐ {group.burstCount}장 연사
                             </div>
                           )}
 

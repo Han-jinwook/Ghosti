@@ -772,27 +772,47 @@ export const createAssistantOnboardingSlice: StateCreator<
         if (zCoreBridge.isConnected) {
           if (isStandaloneSearchWin) {
             // [독립 귀신검색창(?ghostSearchWindow) 초반 무렉 경량 부팅]:
-            // 정리 탭 전용 800장 광학 스캔(auditRealPcPhotosAndCluster)과 중복 WebGPU 비전 모델 기동을 생략하고,
-            // 본 창이 색인해 둔 IndexedDB 768D 벡터 캐시만 단 1회 배치로 즉시 복원합니다.
+            // 본 창이 색인해 둔 IndexedDB 768D 벡터 캐시 및 광학 연사 클러스터(duplicateGroups)를 즉시 복원하여
+            // 검색창 썸네일에서도 [❐ N장 연사] 배지와 상세 모달 연사 비교가 0.1초 만에 표시되게 합니다.
             window.setTimeout(async () => {
               try {
-                const vecMap = await hydrateCachedPhotoVectorsLightweight(get().photos);
-                if (vecMap.size > 0) {
-                  set((state) => ({
-                    photos: state.photos.map((p) => {
-                      const v = vecMap.get(p.id);
-                      return v ? { ...p, vec: v } : p;
-                    }),
-                    searchResults: state.searchResults.map((sr) => {
-                      const v = vecMap.get(sr.photo.id);
-                      return v ? { ...sr, photo: { ...sr.photo, vec: v } } : sr;
-                    }),
-                  }));
-                }
+                const currentPhotos = get().photos;
+                const [vecMap, auditRes] = await Promise.all([
+                  hydrateCachedPhotoVectorsLightweight(currentPhotos),
+                  auditRealPcPhotosAndCluster(currentPhotos),
+                ]);
+                const updatedById = new Map<string, PhotoItem>(
+                  auditRes.updatedPhotos.map((p) => [p.id, p])
+                );
+                set((state) => {
+                  const nextPhotos = state.photos.map((p) => {
+                    const audited = updatedById.get(p.id) || p;
+                    const v = vecMap.get(p.id);
+                    return v ? { ...audited, vec: v } : audited;
+                  });
+                  const nextById = new Map<string, PhotoItem>(nextPhotos.map((p) => [p.id, p]));
+                  const nextSearchResults =
+                    !state.hasExecutedUserSearch && state.activeLoungeType === 'personal'
+                      ? filterVisibleGalleryPhotos(nextPhotos).map((photo) => ({
+                          photo,
+                          score: 0.99,
+                          matchPercentage: 99,
+                          matchedBy: 'text-direct' as const,
+                        }))
+                      : state.searchResults.map((sr) => {
+                          const refreshed = nextById.get(sr.photo.id);
+                          return refreshed ? { ...sr, photo: refreshed } : sr;
+                        });
+                  return {
+                    photos: nextPhotos,
+                    duplicateGroups: auditRes.duplicateGroups,
+                    searchResults: nextSearchResults,
+                  };
+                });
               } catch {
                 /* ignore */
               }
-            }, 280);
+            }, 220);
           } else {
             // 0) 내 PC 실물 사진들의 실제 64-bit dHash 및 2D 라플라시안 선명도(흐린 사진 판별) + 다중 연사 묶음(5장·10장 세트) 즉시 클러스터링
             window.setTimeout(async () => {
@@ -804,16 +824,34 @@ export const createAssistantOnboardingSlice: StateCreator<
                 updatedPhotos.forEach((p) => {
                   if (p.trashCategory && !p.quarantined) nextTrashIds.add(p.id);
                 });
-                set({
-                  photos: updatedPhotos,
-                  duplicateGroups: realDupGroups,
-                  selectedTrashIds: nextTrashIds,
-                  activeTrashCategoryFilter:
-                    realDupGroups.length > 0
-                      ? 'duplicate'
-                      : updatedPhotos.some((p) => p.trashCategory === 'blurry' && !p.quarantined)
-                      ? 'blurry'
-                      : get().activeTrashCategoryFilter,
+                const updatedById = new Map<string, PhotoItem>(
+                  updatedPhotos.map((p) => [p.id, p])
+                );
+                set((state) => {
+                  const nextSearchResults =
+                    !state.hasExecutedUserSearch && state.activeLoungeType === 'personal'
+                      ? filterVisibleGalleryPhotos(updatedPhotos).map((photo) => ({
+                          photo,
+                          score: 0.99,
+                          matchPercentage: 99,
+                          matchedBy: 'text-direct' as const,
+                        }))
+                      : state.searchResults.map((sr) => {
+                          const refreshed = updatedById.get(sr.photo.id);
+                          return refreshed ? { ...sr, photo: refreshed } : sr;
+                        });
+                  return {
+                    photos: updatedPhotos,
+                    duplicateGroups: realDupGroups,
+                    searchResults: nextSearchResults,
+                    selectedTrashIds: nextTrashIds,
+                    activeTrashCategoryFilter:
+                      realDupGroups.length > 0
+                        ? 'duplicate'
+                        : updatedPhotos.some((p) => p.trashCategory === 'blurry' && !p.quarantined)
+                        ? 'blurry'
+                        : state.activeTrashCategoryFilter,
+                  };
                 });
               } catch {
                 /* ignore */
