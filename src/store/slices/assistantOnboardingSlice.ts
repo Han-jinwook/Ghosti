@@ -140,6 +140,7 @@ import {
   quarantineFailureToast,
   quarantineResultNote,
   requestQuarantineOp,
+  filterPhotosByClubFeedTrack,
   filterVisibleGalleryPhotos,
   resolveLoungePhotoCorpus,
   resolveViewportLayout,
@@ -625,7 +626,11 @@ export const createAssistantOnboardingSlice: StateCreator<
             matchPercentage: 98,
             matchedBy: 'text-direct'as const,
           }));
-    const initialGalleryPhotos = filterVisibleGalleryPhotos(gallerySourceCorpus).map((photo) => ({
+    const initialGalleryPhotos = filterPhotosByClubFeedTrack(
+      filterVisibleGalleryPhotos(gallerySourceCorpus),
+      activeLoungeNow,
+      get().clubFeedTrack
+    ).map((photo) => ({
       photo,
       score: 0.95,
       matchPercentage: 97,
@@ -690,7 +695,11 @@ export const createAssistantOnboardingSlice: StateCreator<
           sharedRoomHostPhotos: hostSharedPhotos,
           sharedRoomAddedPhotos: latestState.sharedRoomAddedPhotos,
         });
-        const latestGalleryResults = filterVisibleGalleryPhotos(latestCorpus).map((photo) => ({
+        const latestGalleryResults = filterPhotosByClubFeedTrack(
+          filterVisibleGalleryPhotos(latestCorpus),
+          latestLounge,
+          latestState.clubFeedTrack
+        ).map((photo) => ({
           photo,
           score: 0.95,
           matchPercentage: 97,

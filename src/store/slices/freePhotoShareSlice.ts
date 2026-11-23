@@ -1439,7 +1439,11 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         sharedRoomHostPhotos: nextHost,
         sharedRoomAddedPhotos: nextAdded,
       });
-      const nextResults: SearchResultItem[] = filterVisibleGalleryPhotos(nextCorpus).map(
+      const nextResults: SearchResultItem[] = filterPhotosByClubFeedTrack(
+        filterVisibleGalleryPhotos(nextCorpus),
+        state.activeLoungeType,
+        state.clubFeedTrack
+      ).map(
         (photo) => ({
           photo,
           score: 0.96,
@@ -1660,7 +1664,11 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       sharedRoomHostPhotos: st.sharedRoomHostPhotos,
       sharedRoomAddedPhotos: st.sharedRoomAddedPhotos,
     });
-    const sharedGalleryResults: SearchResultItem[] = filterVisibleGalleryPhotos(mergedShared).map(
+    const sharedGalleryResults: SearchResultItem[] = filterPhotosByClubFeedTrack(
+      filterVisibleGalleryPhotos(mergedShared),
+      targetLounge,
+      st.clubFeedTrack
+    ).map(
       (photo) => ({
         photo,
         score: 0.96,
@@ -2193,7 +2201,11 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         sharedRoomHostPhotos: state.sharedRoomHostPhotos,
         sharedRoomAddedPhotos: state.sharedRoomAddedPhotos,
       });
-      const nextResults: SearchResultItem[] = filterVisibleGalleryPhotos(nextCorpus).map((photo) => ({
+      const nextResults: SearchResultItem[] = filterPhotosByClubFeedTrack(
+        filterVisibleGalleryPhotos(nextCorpus),
+        loungeType,
+        loungeType === 'club' ? 'recent_now' : loungeType === 'student' ? 'memories_1989' : state.clubFeedTrack
+      ).map((photo) => ({
         photo,
         score: 0.95,
         matchPercentage: 97,
@@ -2229,7 +2241,11 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         sharedRoomHostPhotos: state.sharedRoomHostPhotos,
         sharedRoomAddedPhotos: state.sharedRoomAddedPhotos,
       });
-      const nextResults: SearchResultItem[] = filterVisibleGalleryPhotos(nextCorpus).map((photo) => ({
+      const nextResults: SearchResultItem[] = filterPhotosByClubFeedTrack(
+        filterVisibleGalleryPhotos(nextCorpus),
+        room.loungeType,
+        room.loungeType === 'club' ? 'recent_now' : room.loungeType === 'student' ? 'memories_1989' : state.clubFeedTrack
+      ).map((photo) => ({
         photo,
         score: 0.96,
         matchPercentage: 98,

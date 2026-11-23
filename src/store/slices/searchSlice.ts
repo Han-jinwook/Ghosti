@@ -130,6 +130,7 @@ import {
   quarantineFailureToast,
   quarantineResultNote,
   requestQuarantineOp,
+  filterPhotosByClubFeedTrack,
   filterVisibleGalleryPhotos,
   resolveLoungePhotoCorpus,
   restoreAllExcludedCustomFaceRegistrations,
@@ -439,7 +440,11 @@ export const createSearchSlice: StateCreator<
         sharedRoomAddedPhotos: stateNow.sharedRoomAddedPhotos,
       });
       const sourcePhotos = sharedMode
-        ? rawSourcePhotos.map(sanitizeSharedPhotoPrivacy)
+        ? filterPhotosByClubFeedTrack(
+            rawSourcePhotos.map(sanitizeSharedPhotoPrivacy),
+            stateNow.activeLoungeType,
+            stateNow.clubFeedTrack
+          )
         : isolatePersonalPhotos(rawSourcePhotos);
       const galleryPhotos = filterVisibleGalleryPhotos(sourcePhotos).map((photo) => ({
         photo,
@@ -484,7 +489,11 @@ export const createSearchSlice: StateCreator<
       sharedRoomAddedPhotos,
     });
     const sourcePhotos = sharedMode
-      ? rawSourcePhotos.map(sanitizeSharedPhotoPrivacy)
+      ? filterPhotosByClubFeedTrack(
+          rawSourcePhotos.map(sanitizeSharedPhotoPrivacy),
+          activeLoungeType,
+          get().clubFeedTrack
+        )
       : isolatePersonalPhotos(rawSourcePhotos);
     const scopedDocs = sharedMode ? [] : localDocuments;
     const scopedVideos = sharedMode ? [] : videoSceneItems;
@@ -1070,7 +1079,11 @@ export const createSearchSlice: StateCreator<
       sharedRoomAddedPhotos: stateNow.sharedRoomAddedPhotos,
     });
     const basePhotosForSearch = sharedMode
-      ? rawBasePhotosForSearch.map(sanitizeSharedPhotoPrivacy)
+      ? filterPhotosByClubFeedTrack(
+          rawBasePhotosForSearch.map(sanitizeSharedPhotoPrivacy),
+          activeLoungeType,
+          stateNow.clubFeedTrack
+        )
       : isolatePersonalPhotos(rawBasePhotosForSearch);
     const photosForSearch = isWorkLounge
       ? basePhotosForSearch.map((p) => ({
