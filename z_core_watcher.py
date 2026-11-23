@@ -527,7 +527,12 @@ def main() -> None:
                 )
                 for fname in new_or_changed_inbox:
                     fpath = claim_post_office_mail_immediately(fname)
-                    content_preview = fpath.read_text(encoding="utf-8", errors="replace")[:2000]
+                    if not fpath.exists():
+                        continue
+                    try:
+                        content_preview = fpath.read_text(encoding="utf-8", errors="replace")[:2000]
+                    except FileNotFoundError:
+                        continue
                     print(f"\n📄 파일명: {fpath.name} (선점 읽음 처리 완료)")
                     print("-" * 60)
                     print(content_preview)
