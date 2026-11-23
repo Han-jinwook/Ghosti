@@ -33,9 +33,10 @@ export const PASSPORT_REG_DONE_EVENT = 'ghosti_passport_reg_completed';
 export const PASSPORT_REG_STATE_EVENT = 'ghosti_passport_reg_state_updated';
 
 /** 사진이 거의 없는 업무용 PC는 여권 질문 자체를 생략 (기존 기준 유지) */
-export const PASSPORT_MIN_FACE_PHOTOS_FOR_ASK = 20;
+/** 얼굴 사진이 최소 이 장수 이상일 때 비서가 먼저 여권사진 등록을 제안 */
+export const PASSPORT_MIN_FACE_PHOTOS_FOR_ASK = 2;
 /** '가족으로 보이는 얼굴' 최소 등장 사진 수 (행인·스쳐 간 얼굴 제외) */
-export const FAMILY_MIN_PHOTOS = 3;
+export const FAMILY_MIN_PHOTOS = 2;
 /** 한 화면에 보여줄 최대 인원 / 사진 수 */
 const MAX_FACES = 6;
 const MAX_CUTS_PER_PERSON = 12;

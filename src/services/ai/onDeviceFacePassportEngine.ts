@@ -9,10 +9,11 @@ import type { FaceMemberCluster, PhotoItem, YearlyFaceBestCut } from '../../type
 import type { WorkerDetectedFace } from './facePassportWorker';
 
 const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v1';
-const MAX_SCAN_PHOTOS = 100;
+const MAX_SCAN_PHOTOS = 160;
 const MAX_CLUSTERS = 10;
 const MAX_CUTS_PER_CLUSTER = 6;
-const SIMILARITY_THRESHOLD = 0.78;
+const SIMILARITY_THRESHOLD = 0.76;
+const SCREENSHOT_NAME_RX = /(screenshot|스크린샷|캡처|capture|화면\s*캡처|영수증|receipt|memo|메모)/i;
 
 interface CachedFaceStore {
   fingerprint: string;
@@ -448,7 +449,7 @@ export async function runOnDeviceFacePassportScan(
     return { clusters: res, latestCorpusYear: new Date().getFullYear() };
   }
 
-  // 비격리 + 비스크린샷 + 비영수증 + 비흐림 실사진 우선 선별
+  // 비격리 + 비스크린샷 + 비영수증 + 비흐림 실사진 우선 선별 (카메라/일반 JPEG 사진을 스크린샷·PNG보다 우선 정렬)
   const candidates = photos
     .filter(
       (p) =>
@@ -461,7 +462,12 @@ export async function runOnDeviceFacePassportScan(
         p.trashCategory !== 'blurry' &&
         !p.isVaultDocument
     )
-    .sort((a, b) => (b.mtimeMs || 0) - (a.mtimeMs || 0))
+    .sort((a, b) => {
+      const aScreen = SCREENSHOT_NAME_RX.test(a.name) || /\.png$/i.test(a.name) ? 1 : 0;
+      const bScreen = SCREENSHOT_NAME_RX.test(b.name) || /\.png$/i.test(b.name) ? 1 : 0;
+      if (aScreen !== bScreen) return aScreen - bScreen;
+      return (b.mtimeMs || 0) - (a.mtimeMs || 0);
+    })
     .slice(0, MAX_SCAN_PHOTOS);
 
   if (candidates.length === 0) {
@@ -504,7 +510,7 @@ export async function runOnDeviceFacePassportScan(
         }, 12000);
         pending.set(id, { resolve, timer });
         worker.postMessage(
-          { id, type: 'detect', bgrBuffer: bgr.buffer, origW, origH, scale, scoreThreshold: 0.72 },
+          { id, type: 'detect', bgrBuffer: bgr.buffer, origW, origH, scale, scoreThreshold: 0.62 },
           [bgr.buffer]
         );
       });

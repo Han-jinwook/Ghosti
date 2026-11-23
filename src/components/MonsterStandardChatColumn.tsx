@@ -755,7 +755,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     };
   }, [sourceTab, isMobileOrStore]);
 
-  // [D-35] 🪪 여권 조용한 등록: ① 내 사진 등록 완료 → 가족 질문(따로) ② 사진 활동 직후 1회 질문
+  // [D-35] 🪪 여권 조용한 등록: ① 내 사진 등록 완료 → 가족 질문(따로) ② 얼굴 인덱싱 완료 시 비서 먼저 제안 ③ 사진 활동 직후 1회 질문
+  const faceClusterCount = useSaySeeStore((s) => s.faceClusters.length);
   useEffect(() => {
     if (sourceTab !== 'trash') return;
     const pushOnce = (idPrefix: string, msg: Omit<MonsterChatMessage, 'id' | 'role' | 'timestamp' | 'sourceTab'>) => {
@@ -811,14 +812,26 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     };
 
     const onRegState = () => {
-      // [D-35] ① 아직 첫 제안을 받지 않은 상태에서 온디바이스 얼굴 인덱싱이 완료되어 후보가 잡히면
-      // 유저가 '여권 등록'을 먼저 말할 필요 없이 귀신비서가 먼저 자연스럽게 말을 겁니다.
+      // [D-35] ① 아직 본인 여권이 미등록 상태이고, 온디바이스 얼굴 인덱싱이 완료되어 후보가 잡히면
+      // 유저가 '여권 등록'을 먼저 말할 필요 없이 귀신비서가 먼저 자연스럽게 말을 겁니다 (세션당 1회).
       const regSt = loadPassportRegState();
-      if (!regSt.firstOfferShown) {
+      const offeredThisSession = (() => {
+        try {
+          return sessionStorage.getItem('ghosti_passport_offered_this_session') === '1';
+        } catch {
+          return false;
+        }
+      })();
+      if ((!regSt.firstOfferShown || !regSt.selfClusterId) && !offeredThisSession) {
         const pending = summarizePassportPending(regSt);
         const hasSelfToAsk = pending.needsSelfPick || pending.selfPendingCount > 0;
         if (hasSelfToAsk) {
           markFirstOfferShown();
+          try {
+            sessionStorage.setItem('ghosti_passport_offered_this_session', '1');
+          } catch {
+            /* ignore */
+          }
           pushOnce('secretary_passport_first_offer_', {
             text: buildPassportSelfOfferText(loadGhostSecretaryState().nickname || ''),
             followUpSuggestions: [PASSPORT_CHIP_OPEN_SELF, PASSPORT_CHIP_LATER],
@@ -840,13 +853,13 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
 
     window.addEventListener(PASSPORT_REG_DONE_EVENT, onRegDone);
     window.addEventListener(PASSPORT_REG_STATE_EVENT, onRegState);
-    // 다른 화면에서 사진 활동이 있었다면, 귀신비서로 돌아왔을 때 한 번 묻는다
+    // 다른 화면에서 사진 활동이 있었거나 얼굴 클러스터가 막 준비되었다면 즉시 1회 묻는다
     onRegState();
     return () => {
       window.removeEventListener(PASSPORT_REG_DONE_EVENT, onRegDone);
       window.removeEventListener(PASSPORT_REG_STATE_EVENT, onRegState);
     };
-  }, [sourceTab, isMobileOrStore]);
+  }, [sourceTab, isMobileOrStore, faceClusterCount]);
   useEffect(() => {
     let cancelled = false;
     const runProactiveCheck = async () => {

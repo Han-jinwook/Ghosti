@@ -42,8 +42,19 @@ async function ensureSession(): Promise<ort.InferenceSession> {
   if (sessionPromise) return sessionPromise;
 
   sessionPromise = (async () => {
-    ort.env.wasm.numThreads = 1;
-    ort.env.wasm.proxy = false;
+    try {
+      ort.env.wasm.simd = true;
+      if (ort.env.wasm.wasmPaths && typeof ort.env.wasm.wasmPaths === 'object') {
+        const wp = ort.env.wasm.wasmPaths as { wasm?: string };
+        if (typeof wp.wasm === 'string' && wp.wasm.includes('cdn.jsdelivr.net')) {
+          ort.env.wasm.wasmPaths = undefined;
+        }
+      }
+      ort.env.wasm.numThreads = 1;
+      ort.env.wasm.proxy = false;
+    } catch {
+      /* ignore env hints */
+    }
     const modelUrl = new URL('/models/face/face_detection_yunet_2023mar.onnx', self.location.origin).href;
     const resp = await fetch(modelUrl);
     if (!resp.ok) {
@@ -103,7 +114,7 @@ function decodeYuNetOutputs(
       const y2Px = Math.min(origH, (cy + h * 0.5) / scale);
       const bw = (x2Px - x1Px) / Math.max(1, origW);
       const bh = (y2Px - y1Px) / Math.max(1, origH);
-      if (bw < 0.045 || bh < 0.045) continue;
+      if (bw < 0.035 || bh < 0.035) continue;
 
       // 5점 랜드마크(오른눈, 왼눈, 코, 입우, 입좌)로 정면도(frontalScore) 계산
       const kOff = i * 10;
