@@ -10,6 +10,7 @@ import {
   copyTextSafeToClipboard,
   evaluateProFeatureGate,
 } from '../services/proFeatureGate';
+import { markGhostDojoStep } from './ghostDojo/ghostSearchDojoShared';
 
 type GhostLabelerActionProps =
   | {
@@ -68,6 +69,7 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
             if (mySeq !== _latestGhostLabelerSeq) return;
             await copyTextSafeToClipboard(newLabel);
             if (mySeq !== _latestGhostLabelerSeq) return;
+            markGhostDojoStep('labeler');
             useSaySeeStore.setState({
               lastQuarantineToast: `파일명 생성 완료: ${newLabel} (복사됨)`,
             });
@@ -182,6 +184,7 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
             if (mySeq !== _latestGhostLabelerSeq) return;
             await copyTextSafeToClipboard(res.label);
             if (mySeq !== _latestGhostLabelerSeq) return;
+            markGhostDojoStep('labeler');
             const patchPhoto = (p: PhotoItem): PhotoItem =>
               p.id === targetPhoto.id
                 ? {

@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { getZCoreUrl, zCoreBridge } from '../services/zCoreBridge';
 import { evaluateProFeatureGate } from '../services/proFeatureGate';
+import { markGhostDojoStep } from './ghostDojo/ghostSearchDojoShared';
 import { recognizeDataUrlWithPaddleOcr } from '../services/ai/aiPaddleOcrEngine';
 import type { PhotoItem } from '../types/saysee';
 
@@ -120,6 +121,7 @@ export const GhostPhotoOcrTeleportModal: React.FC<{
           setTrialBadge(gateOutcome.trialBadge);
         }
         setGateState('allowed');
+        markGhostDojoStep('ocr');
 
         if (zCoreBridge.isConnected) {
           const targetKey = extractLocalPhotoPathParam(photo);

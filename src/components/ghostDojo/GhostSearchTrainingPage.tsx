@@ -11,6 +11,11 @@ import {
 import { playBabyGhostChime } from '../OnboardingModal';
 import { GhostSuperpowerDojo } from './GhostSuperpowerDojo';
 import {
+  GhostSearchDojoStampBoard,
+  markGhostDojoStep,
+  type GhostDojoStepId,
+} from './ghostSearchDojoShared';
+import {
   DEMO_SEARCH_SAMPLE_DOCS_2,
   DEMO_SEARCH_SAMPLE_PHOTOS_2,
   DEMO_SEARCH_SAMPLE_VIDEOS_2,
@@ -231,42 +236,8 @@ function consumePendingGhostSearchQuery(): string {
   }
 }
 
-const GAME_STORAGE_KEY = 'ghosti_search_game_v1';
-type GameStepId = 'summon' | 'medium' | 'large';
-const GAME_STEPS: Array<{ id: GameStepId; actionLabel: string; doneLabel: string }> = [
-  {
-    id: 'summon',
-    actionLabel: '⤡ 작게 모드 버튼 눌러보기',
-    doneLabel: '⤡ 작게 모드 완료',
-  },
-  {
-    id: 'large',
-    actionLabel: '⤢ 크게(갤러리) 버튼 눌러보기',
-    doneLabel: '⤢ 크게(갤러리) 모드 완료',
-  },
-];
-
 const SIMULATOR_WORK_AREA = { left: 0, top: 0, right: 1120, bottom: 660 };
-
-try {
-  if (
-    typeof window !== 'undefined' &&
-    typeof localStorage !== 'undefined' &&
-    !window.location.search.includes('ghostSearchWindow')
-  ) {
-    localStorage.removeItem(GAME_STORAGE_KEY);
-  }
-} catch {
-  /* ignore */
-}
-
-function loadGame(): Partial<Record<GameStepId, boolean>> {
-  try {
-    return JSON.parse(localStorage.getItem(GAME_STORAGE_KEY) || '{}');
-  } catch {
-    return {};
-  }
-}
+type GameStepId = GhostDojoStepId;
 
 const AUTO_MORPH_SCRIPT: Array<{
   phase: number;
@@ -797,7 +768,6 @@ const VirtualMonitorSimulator: React.FC<{
 };
 
 export const GhostSearchTrainingPage: React.FC = () => {
-  const [game, setGame] = useState(() => loadGame());
   const [connected, setConnected] = useState(zCoreBridge.isConnected);
   const [pendingQuery] = useState(() => consumePendingGhostSearchQuery());
   const [realPopupToast, setRealPopupToast] = useState<string | null>(null);
@@ -806,16 +776,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
   const isLaunchingRef = useRef(false);
 
   const markStep = (id: GameStepId) => {
-    setGame((prev) => {
-      if (prev[id]) return prev;
-      const next = { ...prev, [id]: true };
-      try {
-        localStorage.setItem(GAME_STORAGE_KEY, JSON.stringify(next));
-      } catch {
-        /* ignore */
-      }
-      return next;
-    });
+    markGhostDojoStep(id);
   };
 
   const triggerRealGhostSearchWindow = async (stage: GhostSearchStage = 'medium', query?: string) => {
@@ -865,13 +826,6 @@ export const GhostSearchTrainingPage: React.FC = () => {
   useEffect(() => zCoreBridge.subscribe((c: boolean) => setConnected(c)), []);
 
   useEffect(() => {
-    const onStorage = (e: StorageEvent) => {
-      if (e.key === GAME_STORAGE_KEY) {
-        setGame(loadGame());
-      }
-    };
-    window.addEventListener('storage', onStorage);
-
     let baseline: Record<string, number> | null = null;
     const pollTelemetry = async () => {
       if (!zCoreBridge.isConnected) return;
@@ -906,7 +860,6 @@ export const GhostSearchTrainingPage: React.FC = () => {
     void pollTelemetry();
     const timer = window.setInterval(() => void pollTelemetry(), 1200);
     return () => {
-      window.removeEventListener('storage', onStorage);
       window.clearInterval(timer);
     };
   }, []);
@@ -978,57 +931,7 @@ export const GhostSearchTrainingPage: React.FC = () => {
         </section>
 
         <section ref={monitorSectionRef} className="flex flex-col gap-2.5">
-          <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 rounded-xl bg-white border border-slate-200">
-            <div className="flex flex-col gap-0.5">
-              <h2 className="text-[14.5px] font-bold text-slate-900">
-                2단계 · 보기 크기 전환 연습
-              </h2>
-              <span className="text-[12px] text-slate-500">
-                아래 미리보기 또는 실제 귀신검색창에서 작게 / 크게(갤러리) 버튼을 눌러 화면 구성을 확인해 보세요.
-              </span>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {GAME_STEPS.map((s) => (
-                <button
-                  key={s.id}
-                  type="button"
-                  onClick={() => {
-                    const targetStage: GhostSearchStage = s.id === 'summon' ? 'small' : s.id;
-                    if (typeof window !== 'undefined') {
-                      window.dispatchEvent(
-                        new CustomEvent('ghosti_focus_virtual_monitor_window', {
-                          detail: { stage: targetStage },
-                        }),
-                      );
-                    }
-                  }}
-                  className={`px-3 py-1 rounded-md text-[12px] font-medium border cursor-pointer transition-colors ${
-                    game[s.id]
-                      ? 'border-emerald-200 text-emerald-700 bg-emerald-50'
-                      : 'border-slate-200 text-slate-700 bg-slate-50 hover:bg-slate-100'
-                  }`}
-                >
-                  {game[s.id] ? `✓ ${s.doneLabel}` : s.actionLabel}
-                </button>
-              ))}
-              {(game.summon || game.large) && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setGame({});
-                    try {
-                      localStorage.removeItem(GAME_STORAGE_KEY);
-                    } catch {
-                      /* ignore */
-                    }
-                  }}
-                  className="px-2.5 py-1 rounded-md text-[11.5px] font-medium bg-white hover:bg-slate-50 text-slate-500 border border-slate-200 cursor-pointer"
-                >
-                  도장 초기화
-                </button>
-              )}
-            </div>
-          </div>
+          <GhostSearchDojoStampBoard variant="full" />
 
           <VirtualMonitorSimulator
             onStep={markStep}

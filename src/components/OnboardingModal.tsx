@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { getZCoreUrl, hasActiveGhostiLoginSession } from '../services/zCoreBridge';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
+import { GhostSearchDojoStampBoard } from './ghostDojo/ghostSearchDojoShared';
 
 export type OnboardingTabId = 'tab1_find_care' | 'tab3_share_pro';
 
@@ -454,6 +455,15 @@ export const OnboardingModal: React.FC = () => {
                 </div>
               </div>
             </div>
+
+            <GhostSearchDojoStampBoard
+              variant="compact"
+              onJumpToSearchTab={() => {
+                cancelOnboardingIndexing();
+                setShowOnboarding(false);
+                setDesktopTab('dashboard');
+              }}
+            />
           </div>
         )}
 
