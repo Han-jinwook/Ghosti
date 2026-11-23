@@ -18,6 +18,7 @@ export default defineConfig({
     dedupe: ['react', 'react-dom', '@supabase/supabase-js', 'lucide-react', 'zustand'],
     alias: {
       '@shared': sharedSrcDir,
+      '@capacitor/core': path.join(nmDir, '@capacitor/core'),
       '@supabase/supabase-js': path.join(nmDir, '@supabase/supabase-js'),
       'lucide-react': path.join(nmDir, 'lucide-react'),
       'react-dom': path.join(nmDir, 'react-dom'),

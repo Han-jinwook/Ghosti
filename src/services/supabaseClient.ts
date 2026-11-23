@@ -231,6 +231,9 @@ export function resolveHubSupabaseBridgeEndpoint(): string {
     (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
   );
   const host = window.location?.hostname || '';
+  if (host === 'ghostkey.sundreamer.app') {
+    return '/api/hub-supabase-bridge';
+  }
   const isNonProdOrigin =
     isCapacitorNative || host === 'localhost' || host === '127.0.0.1';
   return isNonProdOrigin
