@@ -2123,12 +2123,32 @@ export const createAssistantOnboardingSlice: StateCreator<
               matchedBy: 'text-direct'as const,
             }));
 
+      let nextLastUndoBatch = state.lastUndoBatch;
+      if (nextLastUndoBatch && nextLastUndoBatch.fileNames.length > 0) {
+        const remainingUndoPhotos = updatedPhotos.filter(
+          (p) =>
+            p.quarantined &&
+            (nextLastUndoBatch!.fileNames.includes(p.id) ||
+              nextLastUndoBatch!.fileNames.includes(p.name))
+        );
+        nextLastUndoBatch =
+          remainingUndoPhotos.length === 0
+            ? null
+            : {
+                ...nextLastUndoBatch,
+                fileNames: remainingUndoPhotos.map((p) => p.id),
+                count: remainingUndoPhotos.length,
+                savedBytes: remainingUndoPhotos.reduce((acc, p) => acc + p.size, 0),
+              };
+      }
+
       return {
         photos: updatedPhotos,
         duplicateGroups: nextDupGroups,
         selectedTrashIds: nextSelectedTrashIds,
         activeTrashCategoryFilter: restoredFocusCategory || state.activeTrashCategoryFilter,
         searchResults: refreshedSearchResults,
+        lastUndoBatch: nextLastUndoBatch,
         quarantineMoving: false,
         ...(customToast ? { lastQuarantineToast: customToast } : {}),
       };
@@ -2143,8 +2163,17 @@ export const createAssistantOnboardingSlice: StateCreator<
 
   restoreFromQuarantine: async (names: string[]) => {
     if (names.length === 0 || get().quarantineMoving) return;
+    const curPhotos = get().photos;
+    const validTargets = names.filter((target) => {
+      const matched = curPhotos.find((p) => p.id === target || p.name === target);
+      return matched ? Boolean(matched.quarantined) : true;
+    });
+    if (validTargets.length === 0) {
+      set({ lastUndoBatch: null });
+      return;
+    }
     set({ quarantineMoving: true });
-    const restoreRes = await requestQuarantineOp('restore', names);
+    const restoreRes = await requestQuarantineOp('restore', validTargets);
     if (restoreRes.done.length === 0) {
       set({ quarantineMoving: false, lastQuarantineToast: quarantineFailureToast('restore', restoreRes) });
       return;
@@ -2160,10 +2189,19 @@ export const createAssistantOnboardingSlice: StateCreator<
     if (get().quarantineMoving) return;
     const { lastUndoBatch } = get();
     if (!lastUndoBatch || lastUndoBatch.fileNames.length === 0) return;
-    const names = lastUndoBatch.fileNames;
-    await get().restoreFromQuarantine(names);
+    const stillQuarantined = get().photos.filter(
+      (p) =>
+        p.quarantined &&
+        (lastUndoBatch.fileNames.includes(p.id) || lastUndoBatch.fileNames.includes(p.name))
+    );
+    if (stillQuarantined.length === 0) {
+      set({ lastUndoBatch: null });
+      return;
+    }
+    const targetIds = stillQuarantined.map((p) => p.id);
+    await get().restoreFromQuarantine(targetIds);
     // 실제로 되돌아온 사진만 Undo 목록에서 지우고, 실패한 사진은 다시 시도할 수 있게 남긴다
-    const remaining = get().photos.filter((p) => names.includes(p.id) && p.quarantined);
+    const remaining = get().photos.filter((p) => targetIds.includes(p.id) && p.quarantined);
     set({
       lastUndoBatch:
         remaining.length === 0
