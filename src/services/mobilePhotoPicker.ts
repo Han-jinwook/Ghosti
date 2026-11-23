@@ -377,6 +377,168 @@ export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalS
         const top4MinAxis =
           topK.length > 0 ? topK.reduce((s, m) => s + m.pMinAxis, 0) / topK.length : 0;
 
+        // 4) JPEG 8x8 DCT 링잉 및 썸네일(448px·280px) 리사이즈에 불변인 Crete 지각적 블러(Re-blurring) 정밀 측정
+        //    - 3x3 이항 평활화(gs) 후 7-tap(r=3) 수평/수직 재블러링 변화량으로 전역·방향성 흐림(maxSmoothedCrete) 산출
+        //    - 원본 휘도(gray) 기반 5-tap(r=2) 8x8 패치 상위 3개 강경계(df>10) 선명도(t3RawCrete)로 실내 손·인물 보케 보호
+        let maxSmoothedCrete = 0;
+        let anisoSmoothedCrete = 0;
+        let t3RawCrete = 1.0;
+
+        if (W >= 16 && H >= 16) {
+          // 4-A) 원본 휘도(gray) 5-tap(r=2) 1D 수평/수직 재블러링 -> 8x8 패치 강경계 선명도(t3RawCrete)
+          const bhRaw = new Float32Array(W * H);
+          const bvRaw = new Float32Array(W * H);
+          for (let y = 0; y < H; y++) {
+            const row = y * W;
+            for (let x = 0; x < W; x++) {
+              const x0 = x > 1 ? x - 2 : 0;
+              const x1 = x > 0 ? x - 1 : 0;
+              const x3 = x + 1 < W ? x + 1 : W - 1;
+              const x4 = x + 2 < W ? x + 2 : W - 1;
+              bhRaw[row + x] =
+                (gray[row + x0] + gray[row + x1] + gray[row + x] + gray[row + x3] + gray[row + x4]) * 0.2;
+            }
+          }
+          for (let y = 0; y < H; y++) {
+            const y0 = (y > 1 ? y - 2 : 0) * W;
+            const y1 = (y > 0 ? y - 1 : 0) * W;
+            const y2 = y * W;
+            const y3 = (y + 1 < H ? y + 1 : H - 1) * W;
+            const y4 = (y + 2 < H ? y + 2 : H - 1) * W;
+            for (let x = 0; x < W; x++) {
+              bvRaw[y2 + x] =
+                (gray[y0 + x] + gray[y1 + x] + gray[y2 + x] + gray[y3 + x] + gray[y4 + x]) * 0.2;
+            }
+          }
+
+          const pDfH = new Float64Array(64);
+          const pDvH = new Float64Array(64);
+          const pCntH = new Uint32Array(64);
+          const pDfV = new Float64Array(64);
+          const pDvV = new Float64Array(64);
+          const pCntV = new Uint32Array(64);
+          const hm1 = Math.max(1, H - 1);
+          const wm1 = Math.max(1, W - 1);
+
+          for (let y = 0; y < H - 1; y++) {
+            const py = Math.min(7, ((y * 8) / hm1) | 0);
+            const row = y * W;
+            const nextRow = (y + 1) * W;
+            for (let x = 0; x < W - 1; x++) {
+              const pxIdx = Math.min(7, ((x * 8) / wm1) | 0);
+              const pIdx = py * 8 + pxIdx;
+
+              const dfh = Math.abs(gray[row + x + 1] - gray[row + x]);
+              if (dfh > 10.0) {
+                const dbh = Math.abs(bhRaw[row + x + 1] - bhRaw[row + x]);
+                pDfH[pIdx] += dfh;
+                pDvH[pIdx] += dfh > dbh ? dfh - dbh : 0;
+                pCntH[pIdx]++;
+              }
+
+              const dfv = Math.abs(gray[nextRow + x] - gray[row + x]);
+              if (dfv > 10.0) {
+                const dbv = Math.abs(bvRaw[nextRow + x] - bvRaw[row + x]);
+                pDfV[pIdx] += dfv;
+                pDvV[pIdx] += dfv > dbv ? dfv - dbv : 0;
+                pCntV[pIdx]++;
+              }
+            }
+          }
+
+          const patchRawBlurs: number[] = [];
+          for (let k = 0; k < 64; k++) {
+            if (pCntH[k] >= 12 && pCntV[k] >= 12) {
+              const pbh = 1.0 - pDvH[k] / (pDfH[k] + 1e-5);
+              const pbv = 1.0 - pDvV[k] / (pDfV[k] + 1e-5);
+              patchRawBlurs.push(Math.max(pbh, pbv));
+            }
+          }
+          if (patchRawBlurs.length >= 2) {
+            patchRawBlurs.sort((a, b) => a - b);
+            const kTop = Math.min(3, patchRawBlurs.length);
+            let sTop = 0;
+            for (let i = 0; i < kTop; i++) sTop += patchRawBlurs[i];
+            t3RawCrete = sTop / kTop;
+          }
+
+          // 4-B) 3x3 이항 평활화(gs) -> 7-tap(r=3) 수평/수직 재블러링으로 JPEG 링잉 완전 제거 후 전역 블러 산출
+          const sw = W - 2;
+          const sh = H - 2;
+          const gs = new Float32Array(sw * sh);
+          for (let y = 0; y < sh; y++) {
+            const sy = y + 1;
+            const rTop = (sy - 1) * W;
+            const rMid = sy * W;
+            const rBot = (sy + 1) * W;
+            const outRow = y * sw;
+            for (let x = 0; x < sw; x++) {
+              const sx = x + 1;
+              gs[outRow + x] =
+                (gray[rMid + sx] * 4 +
+                  (gray[rTop + sx] + gray[rBot + sx] + gray[rMid + sx - 1] + gray[rMid + sx + 1]) * 2 +
+                  (gray[rTop + sx - 1] + gray[rTop + sx + 1] + gray[rBot + sx - 1] + gray[rBot + sx + 1])) *
+                0.0625;
+            }
+          }
+
+          const sbh = new Float32Array(sw * sh);
+          const sbv = new Float32Array(sw * sh);
+          const inv7 = 1 / 7;
+          for (let y = 0; y < sh; y++) {
+            const row = y * sw;
+            for (let x = 0; x < sw; x++) {
+              let acc = 0;
+              for (let d = -3; d <= 3; d++) {
+                const xx = x + d < 0 ? 0 : x + d >= sw ? sw - 1 : x + d;
+                acc += gs[row + xx];
+              }
+              sbh[row + x] = acc * inv7;
+            }
+          }
+          for (let y = 0; y < sh; y++) {
+            const outRow = y * sw;
+            const r0 = (y - 3 < 0 ? 0 : y - 3) * sw;
+            const r1 = (y - 2 < 0 ? 0 : y - 2) * sw;
+            const r2 = (y - 1 < 0 ? 0 : y - 1) * sw;
+            const r4 = (y + 1 >= sh ? sh - 1 : y + 1) * sw;
+            const r5 = (y + 2 >= sh ? sh - 1 : y + 2) * sw;
+            const r6 = (y + 3 >= sh ? sh - 1 : y + 3) * sw;
+            for (let x = 0; x < sw; x++) {
+              sbv[outRow + x] =
+                (gs[r0 + x] + gs[r1 + x] + gs[r2 + x] + gs[outRow + x] + gs[r4 + x] + gs[r5 + x] + gs[r6 + x]) * inv7;
+            }
+          }
+
+          let sDfHSum = 0,
+            sDvHSum = 0,
+            sDfVSum = 0,
+            sDvVSum = 0;
+          for (let y = 0; y < sh; y++) {
+            const row = y * sw;
+            for (let x = 0; x < sw - 1; x++) {
+              const df = Math.abs(gs[row + x + 1] - gs[row + x]);
+              const db = Math.abs(sbh[row + x + 1] - sbh[row + x]);
+              sDfHSum += df;
+              if (df > db) sDvHSum += df - db;
+            }
+          }
+          for (let y = 0; y < sh - 1; y++) {
+            const row = y * sw;
+            const nRow = (y + 1) * sw;
+            for (let x = 0; x < sw; x++) {
+              const df = Math.abs(gs[nRow + x] - gs[row + x]);
+              const db = Math.abs(sbv[nRow + x] - sbv[row + x]);
+              sDfVSum += df;
+              if (df > db) sDvVSum += df - db;
+            }
+          }
+          const sbH = 1.0 - sDvHSum / (sDfHSum + 1e-5);
+          const sbV = 1.0 - sDvVSum / (sDfVSum + 1e-5);
+          maxSmoothedCrete = Math.max(sbH, sbV);
+          anisoSmoothedCrete = Math.abs(sbH - sbV);
+        }
+
         // 방향성 손떨림(한 축 붕괴) 및 전역 초점 이탈은 소수의 모서리 노이즈·JPEG 블록으로 오구제되지 않도록 차단하고,
         // 실내 손·인물 보케 등 진짜 선명한 중앙 피사체만 안정적으로 보호합니다.
         const isMotionSmear = axisAnisotropy >= 1.38 && minAxisHf < 0.78;
@@ -395,21 +557,29 @@ export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalS
               minAxisHf >= 0.76) ||
             (minAxisHf >= 0.82 && hfRatio >= 1.12 && edgeCount >= 80));
 
+        const hasSharpBokehSubject = t3RawCrete <= 0.19;
+        const isCreteBlurred =
+          !hasSharpBokehSubject &&
+          (maxSmoothedCrete >= 0.525 ||
+            (anisoSmoothedCrete >= 0.08 && maxSmoothedCrete >= 0.51));
+
         const isCleanWhiteDoc = whitePct >= 58 && hfRatio >= 1.10;
         isMotionOrFocusBlurred =
           !isCleanWhiteDoc &&
-          !hasSharpForegroundSubject &&
-          (isMotionSmear ||
-            isGlobalDefocus ||
-            minAxisHf < 0.78 ||
-            hfRatio < 1.08 ||
-            top4PatchHf < 1.16 ||
-            edgeCount < 30);
+          (isCreteBlurred ||
+            (!hasSharpForegroundSubject &&
+              !hasSharpBokehSubject &&
+              (isMotionSmear ||
+                isGlobalDefocus ||
+                minAxisHf < 0.78 ||
+                hfRatio < 1.08 ||
+                top4PatchHf < 1.16 ||
+                edgeCount < 30)));
 
         const acutanceScore = Math.round(
           Math.max(
             variance * 18.0 * Math.max(0.22, minAxisHf),
-            hasSharpForegroundSubject ? 6200 * top4MinAxis : 800 * minAxisHf
+            hasSharpForegroundSubject || hasSharpBokehSubject ? 6200 * Math.max(0.5, top4MinAxis) : 800 * minAxisHf
           )
         );
         sharpness = isMotionOrFocusBlurred
@@ -977,7 +1147,7 @@ export async function analyzeMobilePickedPhotoFiles(
  * 오차 없는 정밀 연사·중복 묶음(DuplicateGroup)을 생성합니다.
  */
 const pcOpticalAuditCache = new Map<string, OpticalSignatureMeta>();
-const OPTICAL_AUDIT_IDB_NAME = 'ghosti_optical_audit_v4';
+const OPTICAL_AUDIT_IDB_NAME = 'ghosti_optical_audit_v5';
 const OPTICAL_AUDIT_IDB_STORE = 'optical_sigs';
 let opticalAuditDbPromise: Promise<IDBDatabase | null> | null = null;
 let opticalAuditHydratePromise: Promise<void> | null = null;
@@ -1357,7 +1527,7 @@ export function convertNativeGalleryVideos(nativeVideos: NativeGalleryVideoMeta[
 
 const MOBILE_GALLERY_IDB_NAME = 'ghosti_mobile_gallery_cache_v1';
 const MOBILE_GALLERY_STORE = 'snapshot';
-const MOBILE_GALLERY_CACHE_SCHEMA_VER = 10;
+const MOBILE_GALLERY_CACHE_SCHEMA_VER = 11;
 export const MOBILE_VIDEO_OCR_VER = 32;
 
 interface SerializedOpticalSig {
