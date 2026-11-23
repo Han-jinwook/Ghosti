@@ -1329,13 +1329,21 @@ export async function handleAuthedWorkAndDeviceAction({
 
     const devices = listRes && listRes.ok ? await listRes.json().catch(() => []) : [];
     const rawDevices = Array.isArray(devices) ? devices : [];
-    // 7일 이상 미접속한 구 세션 유령 기기 자동 정리 (현재 접속 기기 제외)
+    // 1) 동일 플랫폼(device_kind + platform) 내 10분 이상 비활성 중복 세션 자동 교체(시크릿/캐시삭제 재로그인 유령 기기 방지)
+    // 2) 타 플랫폼 포함 7일 이상 미접속 구 세션 자동 정리
+    const samePlatformIdleCutoffMs = Date.now() - 10 * 60 * 1000;
     const staleCutoffMs = Date.now() - 7 * 24 * 60 * 60 * 1000;
     const staleIds = [];
     const safeDevices = [];
     for (const dev of rawDevices) {
       const lastSeenMs = Date.parse(dev?.last_seen_at || dev?.created_at || '');
-      if (dev?.device_id && dev.device_id !== deviceId && lastSeenMs > 0 && lastSeenMs < staleCutoffMs) {
+      const isOther = Boolean(dev?.device_id && dev.device_id !== deviceId);
+      const isSameKindPlatform =
+        dev?.device_kind === deviceKind && dev?.platform === platform;
+      const isSamePlatformGhost =
+        isOther && isSameKindPlatform && lastSeenMs > 0 && lastSeenMs < samePlatformIdleCutoffMs;
+      const isLongStale = isOther && lastSeenMs > 0 && lastSeenMs < staleCutoffMs;
+      if (isSamePlatformGhost || isLongStale) {
         staleIds.push(dev.device_id);
       } else {
         safeDevices.push(dev);

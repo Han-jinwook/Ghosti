@@ -125,7 +125,9 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
           <h3 className="text-[14px] font-semibold text-slate-900">클립보드 공유</h3>
           {isLoggedIn && (
             <span className="text-[12px] text-slate-500">
-              · 기기 {connectedDevices.length}대 연결됨
+              {connectedDevices.length >= 2
+                ? `· 기기 ${connectedDevices.length}대 연결됨`
+                : '· 현재 기기만 로그인됨 (다른 기기 연결 대기)'}
               {!isMobileDevice && !zCoreConnected ? ' (외부 앱 자동 감지는 PC 엔진 필요)' : ''}
             </span>
           )}
