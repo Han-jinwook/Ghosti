@@ -336,8 +336,12 @@ export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalS
         const hfD1 = nd1 >= 25 ? ld1Sum / (gd1Sum + 1e-5) : hfRatio * 0.75;
         const hfD2 = nd2 >= 25 ? ld2Sum / (gd2Sum + 1e-5) : hfRatio * 0.75;
         const minAxisHf = Math.min(hfX, hfY, hfD1, hfD2);
+        const maxAxisHf = Math.max(hfX, hfY, hfD1, hfD2);
+        const axisAnisotropy = maxAxisHf / Math.max(0.01, minAxisHf);
 
         let sharp4AxisPatches = 0;
+        let centerSharp4Patches = 0;
+        let strictSharp4Patches = 0;
         const patchMetrics: Array<{ score: number; phf: number; pMinAxis: number }> = [];
         for (let k = 0; k < 64; k++) {
           const n = pCount[k];
@@ -354,6 +358,14 @@ export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalS
 
           if (phf >= 1.16 && pMinAxis >= 0.78 && pv >= 22.0) {
             sharp4AxisPatches++;
+            const pyK = (k / 8) | 0;
+            const pxK = k % 8;
+            if (pyK >= 1 && pyK <= 6 && pxK >= 1 && pxK <= 6) {
+              centerSharp4Patches++;
+            }
+          }
+          if (phf >= 1.24 && pMinAxis >= 0.86 && pv >= 30.0) {
+            strictSharp4Patches++;
           }
           patchMetrics.push({ score: phf * Math.max(0.2, pMinAxis), phf, pMinAxis });
         }
@@ -365,16 +377,34 @@ export function computeOpticalDhashAndSharpness(img: HTMLImageElement): OpticalS
         const top4MinAxis =
           topK.length > 0 ? topK.reduce((s, m) => s + m.pMinAxis, 0) / topK.length : 0;
 
+        // 방향성 손떨림(한 축 붕괴) 및 전역 초점 이탈은 소수의 모서리 노이즈·JPEG 블록으로 오구제되지 않도록 차단하고,
+        // 실내 손·인물 보케 등 진짜 선명한 중앙 피사체만 안정적으로 보호합니다.
+        const isMotionSmear = axisAnisotropy >= 1.38 && minAxisHf < 0.78;
+        const isGlobalDefocus =
+          hfRatio < 1.04 &&
+          minAxisHf < 0.80 &&
+          !(strictSharp4Patches >= 8 && centerSharp4Patches >= 6);
+
         const hasSharpForegroundSubject =
-          sharp4AxisPatches >= 2 ||
-          (sharp4AxisPatches >= 1 && top4PatchHf >= 1.22 && top4MinAxis >= 0.80) ||
-          (minAxisHf >= 0.82 && hfRatio >= 1.12 && edgeCount >= 80);
+          !isMotionSmear &&
+          !isGlobalDefocus &&
+          ((sharp4AxisPatches >= 6 && centerSharp4Patches >= 4 && minAxisHf >= 0.78) ||
+            (strictSharp4Patches >= 4 &&
+              top4PatchHf >= 1.35 &&
+              top4MinAxis >= 0.88 &&
+              minAxisHf >= 0.76) ||
+            (minAxisHf >= 0.82 && hfRatio >= 1.12 && edgeCount >= 80));
 
         const isCleanWhiteDoc = whitePct >= 58 && hfRatio >= 1.10;
         isMotionOrFocusBlurred =
           !isCleanWhiteDoc &&
           !hasSharpForegroundSubject &&
-          (minAxisHf < 0.76 || hfRatio < 1.05 || top4PatchHf < 1.12 || edgeCount < 30);
+          (isMotionSmear ||
+            isGlobalDefocus ||
+            minAxisHf < 0.78 ||
+            hfRatio < 1.08 ||
+            top4PatchHf < 1.16 ||
+            edgeCount < 30);
 
         const acutanceScore = Math.round(
           Math.max(
@@ -947,7 +977,7 @@ export async function analyzeMobilePickedPhotoFiles(
  * 오차 없는 정밀 연사·중복 묶음(DuplicateGroup)을 생성합니다.
  */
 const pcOpticalAuditCache = new Map<string, OpticalSignatureMeta>();
-const OPTICAL_AUDIT_IDB_NAME = 'ghosti_optical_audit_v3';
+const OPTICAL_AUDIT_IDB_NAME = 'ghosti_optical_audit_v4';
 const OPTICAL_AUDIT_IDB_STORE = 'optical_sigs';
 let opticalAuditDbPromise: Promise<IDBDatabase | null> | null = null;
 let opticalAuditHydratePromise: Promise<void> | null = null;
@@ -1106,11 +1136,22 @@ export async function auditRealPcPhotosAndCluster(
           applyMetaToPhoto(p, meta);
           resolve();
         };
+        const isLocalZCoreFull =
+          typeof p.fullUrl === 'string' &&
+          (p.fullUrl.startsWith('http://127.0.0.1:5199/') ||
+            p.fullUrl.startsWith('http://localhost:5199/'));
+        const primaryUrl = isLocalZCoreFull ? p.fullUrl : p.thumbUrl || p.fullUrl;
+        let triedFallback = false;
         img.onerror = () => {
+          if (!triedFallback && primaryUrl !== p.thumbUrl && p.thumbUrl) {
+            triedFallback = true;
+            img.src = p.thumbUrl;
+            return;
+          }
           window.clearTimeout(timer);
           resolve();
         };
-        img.src = p.thumbUrl || p.fullUrl;
+        img.src = primaryUrl;
       });
     };
 
@@ -1316,7 +1357,7 @@ export function convertNativeGalleryVideos(nativeVideos: NativeGalleryVideoMeta[
 
 const MOBILE_GALLERY_IDB_NAME = 'ghosti_mobile_gallery_cache_v1';
 const MOBILE_GALLERY_STORE = 'snapshot';
-const MOBILE_GALLERY_CACHE_SCHEMA_VER = 9;
+const MOBILE_GALLERY_CACHE_SCHEMA_VER = 10;
 export const MOBILE_VIDEO_OCR_VER = 32;
 
 interface SerializedOpticalSig {
