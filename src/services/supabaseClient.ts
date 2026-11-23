@@ -458,8 +458,9 @@ export async function ensureGhostiAuthedSupabaseClient(): Promise<SupabaseClient
     }
   }
 
-  // userId/email이 아직 로컬에 없더라도 서버 브릿지(hub-supabase-bridge)가 hubToken으로 직접 검증·발급함
-  if (!userId || !email) {
+  // userId/email이 아직 로컬에 없거나 기존 캐시 동기화가 실패(계정 불일치 등)하면
+  // 서버 브릿지(hub-supabase-bridge)가 hubToken 단독으로 직접 검증·재발급하도록 자동 자가 치유함
+  const tryDirectBridgeByToken = async (): Promise<SupabaseClient | null> => {
     try {
       const res = await fetch(resolveHubSupabaseBridgeEndpoint(), {
         method: 'POST',
@@ -504,6 +505,10 @@ export async function ensureGhostiAuthedSupabaseClient(): Promise<SupabaseClient
       /* ignore */
     }
     return null;
+  };
+
+  if (!userId || !email) {
+    return tryDirectBridgeByToken();
   }
 
   const synced = await syncHubUserToLocalSupabase({
@@ -513,7 +518,9 @@ export async function ensureGhostiAuthedSupabaseClient(): Promise<SupabaseClient
     hubToken,
     forceSync: true,
   });
-  if (!synced.ok) return null;
+  if (!synced.ok) {
+    return tryDirectBridgeByToken();
+  }
   return getGhostiAuthedSupabase();
 }
 

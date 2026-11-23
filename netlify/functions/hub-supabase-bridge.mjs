@@ -19,7 +19,12 @@ import {
 
 const HUB_URL = process.env.MERLIN_HUB_URL || 'https://os.sundreamer.app';
 const HUB_CLIENT_ID = process.env.MERLIN_HUB_CLIENT_ID || 'APP-01';
-const HUB_CLIENT_SECRET = (process.env.MERLIN_HUB_CLIENT_SECRET || '').trim();
+const HUB_CLIENT_SECRET = (
+  process.env.MERLIN_HUB_CLIENT_SECRET ||
+  process.env.VITE_MERLIN_CLIENT_SECRET ||
+  process.env.NEXT_PUBLIC_MERLIN_CLIENT_SECRET ||
+  'merlin-family-secret-key-2026'
+).trim();
 const ADMIN_PURGE_KEY = (
   process.env.GHOSTI_ADMIN_PURGE_KEY ||
   process.env.MERLIN_HUB_CLIENT_SECRET ||
