@@ -1670,8 +1670,8 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 className="rounded-lg bg-white border border-slate-200 px-2.5 py-2 flex items-center justify-between gap-2"
               >
                 <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-slate-900 truncate flex items-center gap-1.5">
-                    <span>{stItem.name}</span>
+                  <div className="font-semibold text-slate-900 flex items-center gap-1.5 min-w-0">
+                    <span className="truncate">{stItem.name}</span>
                     <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-normal shrink-0">
                       {stItem.locationLabel}
                     </span>

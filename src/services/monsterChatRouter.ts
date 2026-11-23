@@ -3956,94 +3956,52 @@ export async function processUnifiedMonsterChatQuery(params: {
     (/Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '') ||
       (/Macintosh/i.test(navigator.userAgent || '') && (navigator.maxTouchPoints || 0) > 1));
 
-  // 0-0G) [0토큰 즉시 실행: 시작프로그램 목록 실측 / 부팅 경과 시간 진단(내 기기 통합 불필요 안내 포함) / 순정 백신 점검]
-  // 추천 칩이나 자연어 진단 요청이 단순 파일 검색(SEARCH_ROUTING)이나 엉뚱한 요금·일상 대화로 빠지지 않도록 LLM 호출 전에 즉시 정확히 처리합니다.
-  const isExplicitStartupListInspect =
-    !/강제\s*종료|정리해|꺼\s*줘|치워|삭제해|지워/i.test(clean) &&
-    /시작\s*프로그램|자동\s*실행\s*(목록|프로그램)/i.test(clean);
-  if (isExplicitStartupListInspect) {
+  // 0-0G) [0토큰 즉시 실행: 시작프로그램 목록 & 개별 켜기/끄기(ON/OFF) 스위치 매니저]
+  // 추천 칩('부팅할 때 켜지는 시작프로그램 목록도 보여줘', '시작프로그램 목록 보여줘')이나 자연어 조회 요청이
+  // 구버전 일괄 정리 카드(DEVICE_REPAIR_GATE)나 LLM으로 빠지지 않고 즉시 스위치 카드로 열리도록 최우선 처리합니다.
+  const isStartupManagerIntent =
+    !/강제\s*종료|정리해|치워|삭제해|지워|보안\s*모듈/i.test(clean) &&
+    /(시작\s*프로그램|자동\s*실행\s*(목록|프로그램)|부팅.*?(켜지는|실행되는)\s*(프로그램|앱|목록))/i.test(clean);
+  if (isStartupManagerIntent) {
     if (isMobileClient) {
       const mobileStartupMsg =
         `지금은 **스마트폰**으로 접속해 계시네요!\n` +
-        `윈도우 시작프로그램과 은행·관공서 보안모듈 점검은 **PC(컴퓨터)에서 접속하셨을 때** 바로 보여드려요  스마트폰에서는 사진첩 중복·연사 정리와 사진·문서 내용검색을 바로 써보실 수 있어요!\n\n` +
-        ` **요금 안내**: 시작프로그램 목록 점검과 불필요 자동실행 정리는 내 PC 1대에서 무료으로 이용하실 수 있습니다!`;
+        `윈도우 시작프로그램 켜기·끄기 관리는 **PC(컴퓨터)에서 접속하셨을 때** 바로 보여드려요. 스마트폰에서는 사진첩 중복·연사 정리와 사진·문서 내용검색을 바로 써보실 수 있어요!\n\n` +
+        ` **요금 안내**: 시작프로그램 목록 점검과 켜기·끄기 관리는 내 PC 1대에서 무료로 이용하실 수 있습니다!`;
       return reply(sourceTab, mobileStartupMsg, {
-        followUpSuggestions: [          '중복·연사 사진 정리하는 법 알려줘',
+        followUpSuggestions: [
+          '중복·연사 사진 정리하는 법 알려줘',
           '귀신검색으로 내 파일 찾아볼래',
           '귀신비서의 편의 기능 알려줘',
         ],
       });
     }
-    const r = await zcoreJson<{
-      ok: boolean;
-      startupPrograms?: Array<{ name?: string; command?: string; location?: string }>;
-      spoolerAndSecurity?: {
-        cpuLoadPercent?: number;
-        activeSecurityPlugins?: Array<{ keyword?: string; label?: string; matchedProcessOrService?: string }>;
-      };
-    }>('/__zcore/os-inspect');
-    if (!r.ok) {
+    const stRes = await fetchStartupManagerPayload();
+    if (!stRes.ok || !stRes.payload) {
       const offlineStartupMsg =
-        ` **[내 PC 시작프로그램 점검 안내]**\n` +
-        `윈도우가 켜질 때 자동으로 실행되는 시작프로그램 목록과 은행·관공서 보안모듈을 실시간으로 읽어오려면 **무료 귀신비서 로컬 엔진**이 켜져 있어야 합니다.\n\n` +
-        ` **요금 안내**: 시작프로그램 목록 점검과 불필요 자동실행 정리는 내 PC 1대에서 무료으로 이용하실 수 있습니다!`;
-      speak('시작프로그램 점검은 내 PC 1대에서 평생 무료로 이용하실 수 있으며, 로컬 엔진을 켜주시면 즉시 목록을 보여드립니다.');
+        ` **[내 PC 시작프로그램 관리 안내]**\n` +
+        `윈도우가 켜질 때 자동으로 실행되는 시작프로그램 목록을 불러와 켜고 끄려면 **무료 귀신비서 로컬 엔진**이 켜져 있어야 합니다.\n\n` +
+        ` **요금 안내**: 시작프로그램 목록 점검과 켜기·끄기 관리는 내 PC 1대에서 무료로 이용하실 수 있습니다!`;
+      speak('시작프로그램 관리는 내 PC 1대에서 평생 무료로 이용하실 수 있으며, 로컬 엔진을 켜주시면 즉시 목록을 보여드립니다.');
       return reply(sourceTab, offlineStartupMsg, {
-        followUpSuggestions: [          '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
+        followUpSuggestions: [
+          '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
           '내 PC 사양이랑 남은 용량 진단해 줘',
         ],
       });
     }
-    const rawNames = (r.data.startupPrograms || [])
-      .map((s) => String(s?.name || '').trim())
-      .filter(Boolean);
-    const rawSecPlugins = (r.data.spoolerAndSecurity?.activeSecurityPlugins || [])
-      .map((p) => String(p?.label || p?.keyword || '').trim())
-      .filter(Boolean);
-    const readableStartups = formatReadableStartupItems(rawNames);
-    const readableSecPlugins = formatReadableSecurityItems(rawSecPlugins);
-    const cpuLoad = r.data.spoolerAndSecurity?.cpuLoadPercent;
-    const diagPlan = buildSetupDiagnosisPlan('pc', clean, 'pc_boot_ads');
-    const detailGroups: MonsterDetailGroup[] = [      ...(readableStartups.length > 0
-        ? [{ groupTitle: `부팅 자동실행 시작프로그램 (${rawNames.length}개)`, items: readableStartups }]
-        : []),
-      ...(readableSecPlugins.length > 0
-        ? [{ groupTitle: `상주 보안·인증 모듈 (${rawSecPlugins.length}건)`, items: readableSecPlugins }]
-        : []),
-    ];
+    const enCnt = stRes.payload.items.filter((x) => x.enabled).length;
+    const disCnt = stRes.payload.items.filter((x) => !x.enabled).length;
     speak(
-      rawNames.length > 0 || rawSecPlugins.length > 0
-        ? `부팅할 때 켜지는 시작프로그램 ${rawNames.length}개와 상주 보안모듈 ${rawSecPlugins.length}건을 확인했어요. 정리를 원하시면 응 정리해줘라고 말씀해 주세요.`
-        : '현재 부팅 시 속도를 늦추는 불필요한 시작프로그램이 없이 깨끗한 상태예요.'
+      `내 컴퓨터 부팅 시 자동 실행되는 시작프로그램 ${stRes.payload.items.length}개를 불러왔어요. 원하시는 항목의 스위치를 눌러 켜고 끌 수 있습니다.`
     );
     return reply(
       sourceTab,
-      `방금 내 컴퓨터 부팅 항목을 싹 살펴봤어요!${
-        typeof cpuLoad === 'number' ? `(현재 CPU 사용량 ${cpuLoad}%)` : ''
-      }\n` +
-        `• **부팅 자동실행 프로그램**: **${rawNames.length}개**\n` +
-        `• **안 쓰는 상주 보안·인증 모듈**: **${rawSecPlugins.length}건**\n\n` +
-        ` **요금 안내**: 시작프로그램 목록 점검과 불필요 자동실행 정리는 내 PC 1대에서 무료으로 이용하실 수 있습니다!\n` +
-        `상세 항목이 궁금하시면 아래 카드의 **[상세 목록 펼치기]**를 눌러보시고, 정리해 드릴까요?`,
+      ` **내 PC 부팅 시 자동 실행되는 시작프로그램 목록(켜짐 ${enCnt}개 · 꺼둠 ${disCnt}개)**이에요!\n원하시는 항목만 골라서 우측 스위치로 안전하게 **켜고 끄실 수 있으며**, 보안·필수 항목은 실수로 꺼지지 않게 보호해 두었습니다.`,
       {
-        cardKind: 'DEVICE_REPAIR_GATE',
-        deviceRepairPayload: {
-          title: `불필요 시작프로그램 · 보안모듈 정리 (총 ${rawNames.length + rawSecPlugins.length}건 확인)`,
-          badgeText: '필수 앱 보호',
-          rootCause:
-            rawSecPlugins.length > 0 || rawNames.length > 0
-              ? '카카오톡·클라우드 같은 필수 앱은 건드리지 않고, 컴퓨터를 느리게 만드는 불필요 자동실행·보안모듈만 골라 안전하게 정리해 드려요!'
-              : '현재 불필요한 자동실행 시작프로그램이 감지되지 않아 아주 쾌적한 상태예요!',
-          symptomQuery: clean,
-          presetId: 'pc_boot_ads',
-          hasOverlayGuide: false,
-          detailGroups,
-          completionMessage: diagPlan.completionMessage,
-        },
-        followUpSuggestions: [          '지금 바로 애드웨어·보안모듈 강제종료 및 속도 최적화 정리해줘',
-          '컴퓨터 켜둔 지 얼마나 지났는지 부팅 경과 시간 진단해줘',
-          '다운로드 폴더 방치된 설치파일(.exe) 정리해줘',
-        ],
+        cardKind: 'STARTUP_MANAGER_CARD',
+        startupManagerPayload: stRes.payload,
+        followUpSuggestions: ['설치된 프로그램 목록 보여줘', '윈도우 임시파일(Temp) 정리할 거 봐줘'],
       }
     );
   }
@@ -4141,28 +4099,6 @@ export async function processUnifiedMonsterChatQuery(params: {
       {
         cardKind: 'CLEANUP_PREVIEW_GATE',
         cleanupPreview: previewTmp,
-      }
-    );
-  }
-
-  // [🚀 고클린 대체 ②: 시작프로그램 목록 & 개별 켜기/끄기(ON/OFF) 매니저]
-  const isStartupManagerIntent =
-    !isMobileClient &&
-    /(시작\s*프로그램|자동\s*실행\s*목록|부팅.*?(켜지는|실행되는)\s*(프로그램|앱|목록))/i.test(clean);
-  if (isStartupManagerIntent) {
-    const stRes = await fetchStartupManagerPayload();
-    if (!stRes.ok || !stRes.payload) {
-      return reply(sourceTab, ` ${stRes.errorKo || '내 컴퓨터 연결(PC 엔진) 후 시작프로그램을 조회할 수 있습니다.'}`);
-    }
-    const enCnt = stRes.payload.items.filter((x) => x.enabled).length;
-    const disCnt = stRes.payload.items.filter((x) => !x.enabled).length;
-    return reply(
-      sourceTab,
-      ` **내 PC 부팅 시 자동 실행되는 시작프로그램 목록(켜짐 ${enCnt}개 · 꺼둠 ${disCnt}개)**이에요!\n원하시는 항목만 골라서 우측 스위치로 안전하게 **켜고 끄실 수 있으며**, 보안·필수 항목은 실수로 꺼지지 않게 보호해 두었습니다.`,
-      {
-        cardKind: 'STARTUP_MANAGER_CARD',
-        startupManagerPayload: stRes.payload,
-        followUpSuggestions: ['설치된 프로그램 전체 목록 보여줘', '윈도우 임시파일(Temp) 정리할 거 봐줘'],
       }
     );
   }
