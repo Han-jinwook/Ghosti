@@ -1189,14 +1189,14 @@ export const App: React.FC = () => {
       {(ptrPullDist > 0 || isPtrRefreshing) && (
         <div
           style={{
-            top: 'var(--ghosti-safe-top, env(safe-area-inset-top, 0px))',
+            top: 'calc(var(--ghosti-safe-top, env(safe-area-inset-top, 0px)) + 16px)',
             transform: `translate3d(-50%, ${
               isPtrRefreshing
-                ? 22
-                : Math.min(64, Math.max(18, Math.round(ptrPullDist * 0.72)))
+                ? 12
+                : Math.min(54, Math.max(8, Math.round(ptrPullDist * 0.6)))
             }px, 0)`,
           }}
-          className="fixed left-1/2 z-[180] pointer-events-none transition-transform duration-75"
+          className="fixed left-1/2 z-[250] pointer-events-none transition-transform duration-100"
         >
           <div className="px-4 py-2 rounded-full bg-white border border-slate-200 text-slate-800 text-[12.5px] font-medium shadow-md flex items-center gap-2 whitespace-nowrap">
             <span

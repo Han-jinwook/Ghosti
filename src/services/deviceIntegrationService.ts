@@ -649,7 +649,7 @@ export async function syncDeviceHeartbeatAndList(opts?: {
     deviceKind: ident.deviceKind,
     platform: ident.platform,
     displayName: ident.displayName,
-    appVersion: '1.0.75',
+    appVersion: '1.0.76',
     explicitTrialOptIn: Boolean(opts?.explicitTrialOptIn),
     explicitReconnect: consumeExplicitReconnect,
     forceRefreshPairingCode: Boolean(opts?.forceRefreshPairingCode),
@@ -2178,6 +2178,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     alreadyPaired?: boolean;
     deviceCount: number;
     reason?: string;
+    expectedEmailHint?: string;
   }) => void;
   onSelfRevoked?: (devices: GhostiConnectedDeviceDto[]) => void;
   onTeleportReceived?: (info: {
@@ -2703,15 +2704,6 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
           const cleanUrl = `${window.location.pathname}${nextQs ? `?${nextQs}` : ''}${window.location.hash}`;
           window.history.replaceState(window.history.state, '', cleanUrl);
         }
-        if (opts.onDevicesUpdated) {
-          const prev = loadCachedDeviceIntegrationSnapshot(normEmail);
-          opts.onDevicesUpdated({
-            devices: prev?.devices || [],
-            pairingCode: prev?.pairingCode ?? null,
-            entitlement: buildOptimisticTrialEntitlement(prev?.entitlement, 2),
-            revokedSelf: false,
-          });
-        }
         const pairRes = await consumeDevicePairingCode6(effectivePairCode);
         if (!disposed) {
           if (pairRes.ok) {
@@ -2736,6 +2728,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
               ok: false,
               deviceCount: loadCachedDeviceIntegrationSnapshot(normEmail)?.devices.length || 0,
               reason: pairRes.reason,
+              expectedEmailHint: pairRes.expectedEmailHint,
             });
           }
         }
@@ -2861,15 +2854,16 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         triggerMobileForegroundCapture();
       }
       void syncRemoteMailboxToUi(true);
+      const wasAlreadyRevoked = thisDeviceRevokedLocally;
       void syncDeviceHeartbeatAndList().then((hb) => {
         if (!disposed && hb.ok && opts.onDevicesUpdated) {
           opts.onDevicesUpdated({
-            devices: hb.devices,
+            devices: hb.revokedSelf ? [] : hb.devices,
             pairingCode: hb.pairingCode,
             entitlement: hb.entitlement,
             revokedSelf: hb.revokedSelf,
           });
-          if (hb.revokedSelf && opts.onSelfRevoked) {
+          if (hb.revokedSelf && !wasAlreadyRevoked && opts.onSelfRevoked) {
             opts.onSelfRevoked(hb.devices);
           }
         }

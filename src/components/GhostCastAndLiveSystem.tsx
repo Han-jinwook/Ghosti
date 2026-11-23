@@ -392,7 +392,7 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
           }
         }
       },
-      onPairingCompleted: ({ ok, alreadyPaired, deviceCount, reason }) => {
+      onPairingCompleted: ({ ok, alreadyPaired, deviceCount, reason, expectedEmailHint }) => {
         if (ok) {
           useSaySeeStore.setState({
             lastQuarantineToast: alreadyPaired
@@ -407,7 +407,11 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
             lastQuarantineToast:
               reason === 'AUTH_REQUIRED'
                 ? '먼저 PC와 같은 이메일로 로그인하면 QR 연결이 바로 완료됩니다.'
-                : 'QR 연결 번호가 만료되었거나 다른 계정 번호입니다. PC 화면의 최신 QR·6자리 번호를 다시 스캔해 주세요.',
+                : reason === 'ACCOUNT_MISMATCH'
+                ? `계정이 다릅니다! PC에 로그인된 이메일(${expectedEmailHint || '다른 계정'})과 같은 계정으로 다시 로그인해야 연결됩니다.`
+                : reason === 'CODE_EXPIRED'
+                ? 'QR 연결 번호가 만료되었습니다. PC 화면에서 [새 번호 발급]을 눌러 다시 스캔해 주세요.'
+                : 'QR 연결 번호를 확인하지 못했습니다. PC 화면의 최신 QR·6자리 번호를 다시 스캔해 주세요.',
           });
         }
       },

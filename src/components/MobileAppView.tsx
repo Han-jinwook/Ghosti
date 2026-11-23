@@ -793,8 +793,10 @@ export const MobileAppView: React.FC = () => {
                     PC 기기 연결 번호{' '}
                     <span className="font-mono">{qrAppBridgeCode.slice(0, 3)}-{qrAppBridgeCode.slice(3, 6)}</span>
                   </p>
-                  <p className="text-[11.5px] text-slate-500 mt-0.5">
-                    귀신같이 앱이 설치되어 있다면 아래 버튼으로 앱에서 바로 연결하세요.
+                  <p className="text-[11.5px] text-slate-500 mt-0.5 break-keep">
+                    {merlinAuth?.email && merlinAuth.userId !== 'guest'
+                      ? `현재 웹 계정(${merlinAuth.email})으로 로그인됨 · 앱에서 연결할 때도 앱 내부에서 PC와 같은 이메일로 로그인해야 연결됩니다.`
+                      : '귀신같이 앱이 설치되어 있다면 아래 버튼으로 앱에서 바로 연결하고, PC와 같은 이메일로 로그인해 주세요.'}
                   </p>
                 </div>
                 <button
