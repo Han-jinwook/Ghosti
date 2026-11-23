@@ -2182,8 +2182,32 @@ export const createAssistantOnboardingSlice: StateCreator<
       return;
     }
     set({ quarantineMoving: true });
-    const restoreRes = await requestQuarantineOp('restore', validTargets);
+    // PC Z-코어는 휴지통 장부(name) 기준으로 매칭하므로 id !== name인 기존 항목도 정확히 name으로 전달
+    const wireTargets = zCoreBridge.isConnected
+      ? validTargets.map((target) => {
+          const matched = curPhotos.find((p) => p.id === target || p.name === target);
+          return matched?.name || target;
+        })
+      : validTargets;
+    const restoreRes = await requestQuarantineOp('restore', wireTargets);
     if (restoreRes.done.length === 0) {
+      const isStaleMissingRecycle =
+        !restoreRes.offline &&
+        restoreRes.errors.length > 0 &&
+        restoreRes.errors.every((e) =>
+          /기록이 없습니다|실물 데이터가 없습니다|올바른 휴지통 항목이 아닙니다/.test(String(e?.error || ''))
+        );
+      if (isStaleMissingRecycle) {
+        const staleSet = new Set<string>([...validTargets, ...wireTargets]);
+        set((state) => ({
+          quarantineMoving: false,
+          photos: state.photos.filter((p) => !(p.quarantined && (staleSet.has(p.id) || staleSet.has(p.name)))),
+          lastUndoBatch: null,
+          lastQuarantineToast:
+            '이미 휴지통에서 비워졌거나 외부에서 복원된 이전 기록을 목록에서 정리했습니다.',
+        }));
+        return;
+      }
       set({ quarantineMoving: false, lastQuarantineToast: quarantineFailureToast('restore', restoreRes) });
       return;
     }

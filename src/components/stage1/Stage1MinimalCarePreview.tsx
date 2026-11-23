@@ -101,6 +101,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     quarantineMoving,
     setSelectedPhoto,
     lastUndoBatch,
+    lastQuarantineToast,
     undoLastQuarantine,
     dismissUndoBatch,
     setDesktopTab,
@@ -1189,6 +1190,21 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                             src={photo.thumbUrl}
                             alt={photo.name}
                             loading="lazy"
+                            onError={(e) => {
+                              const imgEl = e.currentTarget;
+                              const retryCount = Number(imgEl.dataset.retry || '0');
+                              if (retryCount >= 2) return;
+                              imgEl.dataset.retry = String(retryCount + 1);
+                              const baseUrl =
+                                retryCount === 0 && photo.thumbUrl
+                                  ? photo.thumbUrl
+                                  : photo.fullUrl || photo.thumbUrl;
+                              if (!baseUrl) return;
+                              const sep = baseUrl.includes('?') ? '&' : '?';
+                              window.setTimeout(() => {
+                                imgEl.src = `${baseUrl}${sep}_r=${retryCount + 1}`;
+                              }, 600 * (retryCount + 1));
+                            }}
                             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                           />
 
@@ -1244,13 +1260,25 @@ export const Stage1MinimalCarePreview: React.FC = () => {
           )}
 
           {/* 정리한 사진 복원 */}
-          {(quarantinedPhotos.length > 0 || lastUndoBatch) && (() => {
+          {(quarantinedPhotos.length > 0 || lastUndoBatch || lastQuarantineToast) && (() => {
             const isIosNativeTrash = !zCoreBridge.isConnected && isCapacitorIosRuntime();
             return (
               <section
                 id="ghosti-quarantine-restore-section"
                 className="p-4 sm:p-5 rounded-xl bg-white border border-slate-200 flex flex-col gap-3"
               >
+                {lastQuarantineToast && (
+                  <div className="px-3.5 py-2.5 rounded-lg bg-teal-50/70 border border-teal-200/80 flex items-center justify-between gap-2 text-[12.5px] text-teal-900 font-medium">
+                    <span className="break-keep">{lastQuarantineToast}</span>
+                    <button
+                      type="button"
+                      onClick={() => useSaySeeStore.setState({ lastQuarantineToast: null })}
+                      className="text-teal-700 hover:text-teal-950 text-[12px] font-semibold shrink-0 cursor-pointer"
+                    >
+                      닫기
+                    </button>
+                  </div>
+                )}
                 {lastUndoBatch && !isIosNativeTrash && (
                   <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
                     <span className="text-[13px] text-slate-800 font-medium break-keep">

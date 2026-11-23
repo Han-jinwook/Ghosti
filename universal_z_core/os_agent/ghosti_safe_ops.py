@@ -568,20 +568,50 @@ def restore_photos(names: List[str]) -> Dict[str, Any]:
     with _LOCK:
         rows = _read_json_list(RECYCLE_LEDGER_FILE)
         for name in names:
-            idx = next((i for i in range(len(rows) - 1, -1, -1) if rows[i].get("name") == name), None)
+            name_low = str(name or "").strip().lower()
+            idx = next(
+                (
+                    i
+                    for i in range(len(rows) - 1, -1, -1)
+                    if str(rows[i].get("name") or "").strip().lower() == name_low
+                    or Path(str(rows[i].get("originalPath") or "")).name.strip().lower() == name_low
+                ),
+                None,
+            )
             if idx is None:
                 errors.append({"file": name, "error": "귀신같이가 휴지통으로 옮긴 기록이 없습니다."})
                 continue
             row = rows[idx]
-            meta_file = row.get("recycleMetaFile") or ""
-            if not meta_file:
-                errors.append({"file": name, "error": "휴지통 위치를 확인하지 못해 자동 복원할 수 없습니다. 휴지통에서 직접 복원해 주세요."})
-                continue
-            res = restore_from_recycle_bin(meta_file, record_restore_point=False)
+            meta_file = str(row.get("recycleMetaFile") or "").strip()
+            data_file = Path(str(row.get("recycleDataFile") or "").strip()) if row.get("recycleDataFile") else None
+            orig_path_str = str(row.get("originalPath") or "").strip()
+
+            res: Dict[str, Any] = {"ok": False, "error": "휴지통 위치를 확인하지 못해 자동 복원할 수 없습니다."}
+            if meta_file:
+                res = restore_from_recycle_bin(meta_file, record_restore_point=False)
+
+            # 구버전 장부이거나 $I 메타파일이 유실되었더라도 $R 실물과 originalPath가 남아 있으면 직접 안전 복원
+            if not res.get("ok") and data_file and data_file.exists() and orig_path_str:
+                try:
+                    target = unique_target(Path(orig_path_str), "복원본")
+                    target.parent.mkdir(parents=True, exist_ok=True)
+                    shutil.move(str(data_file), str(target))
+                    if meta_file:
+                        try:
+                            Path(meta_file).unlink()
+                        except Exception:
+                            pass
+                    res = {"ok": True, "restoredPath": str(target)}
+                except Exception as exc:
+                    res = {"ok": False, "error": str(exc)}
+
             if not res.get("ok"):
+                # 이미 휴지통에서 비워졌거나 실물이 사라진 고아 항목은 장부에서도 정리
+                if not (data_file and data_file.exists()):
+                    rows.pop(idx)
                 errors.append({"file": name, "error": str(res.get("error"))})
                 continue
-            restored.append({"name": name, "restoredPath": res["restoredPath"]})
+            restored.append({"name": row.get("name") or name, "restoredPath": res["restoredPath"]})
             rows.pop(idx)
         _write_json_list_atomic(RECYCLE_LEDGER_FILE, rows)
     return {

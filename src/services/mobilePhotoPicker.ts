@@ -1147,7 +1147,7 @@ export async function analyzeMobilePickedPhotoFiles(
  * 오차 없는 정밀 연사·중복 묶음(DuplicateGroup)을 생성합니다.
  */
 const pcOpticalAuditCache = new Map<string, OpticalSignatureMeta>();
-const OPTICAL_AUDIT_IDB_NAME = 'ghosti_optical_audit_v5';
+const OPTICAL_AUDIT_IDB_NAME = 'ghosti_optical_audit_v6';
 const OPTICAL_AUDIT_IDB_STORE = 'optical_sigs';
 let opticalAuditDbPromise: Promise<IDBDatabase | null> | null = null;
 let opticalAuditHydratePromise: Promise<void> | null = null;
@@ -1290,14 +1290,16 @@ export async function auditRealPcPhotosAndCluster(
   }
 
   if (uncachedSlice.length > 0) {
-    const BATCH = 6;
+    // Crete 지각적 재블러링 지표는 280px/448px 썸네일에서도 100% 정확하므로,
+    // 멀티-MB 원본(fullUrl) 대신 경량 썸네일(thumbUrl)을 3장씩 여유 있게 스캔해 로컬 5199 서버 포화 및 미리보기 깨짐을 원천 차단합니다.
+    const BATCH = 3;
     const newlyComputed: Array<{ key: string; meta: OpticalSignatureMeta }> = [];
     const auditOne = (p: PhotoItem): Promise<void> => {
       const cacheKey = `${p.name}_${p.size}_${p.mtimeMs}`;
       return new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = 'anonymous';
-        const timer = window.setTimeout(() => resolve(), 2500);
+        const timer = window.setTimeout(() => resolve(), 4500);
         img.onload = () => {
           window.clearTimeout(timer);
           const meta = computeOpticalDhashAndSharpness(img);
@@ -1306,16 +1308,13 @@ export async function auditRealPcPhotosAndCluster(
           applyMetaToPhoto(p, meta);
           resolve();
         };
-        const isLocalZCoreFull =
-          typeof p.fullUrl === 'string' &&
-          (p.fullUrl.startsWith('http://127.0.0.1:5199/') ||
-            p.fullUrl.startsWith('http://localhost:5199/'));
-        const primaryUrl = isLocalZCoreFull ? p.fullUrl : p.thumbUrl || p.fullUrl;
+        const primaryUrl = p.thumbUrl || p.fullUrl;
+        const fallbackUrl = p.thumbUrl && p.fullUrl && p.fullUrl !== p.thumbUrl ? p.fullUrl : '';
         let triedFallback = false;
         img.onerror = () => {
-          if (!triedFallback && primaryUrl !== p.thumbUrl && p.thumbUrl) {
+          if (!triedFallback && fallbackUrl) {
             triedFallback = true;
-            img.src = p.thumbUrl;
+            img.src = fallbackUrl;
             return;
           }
           window.clearTimeout(timer);
@@ -1332,7 +1331,7 @@ export async function auditRealPcPhotosAndCluster(
         persistOpticalAuditBatch(newlyComputed.splice(0, newlyComputed.length));
       }
       if (i + BATCH < uncachedSlice.length) {
-        await new Promise((r) => setTimeout(r, 28));
+        await new Promise((r) => setTimeout(r, 45));
       }
     }
     if (newlyComputed.length > 0) {
