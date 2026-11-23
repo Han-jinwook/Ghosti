@@ -125,6 +125,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
   const [showQuarantineDrawer, setShowQuarantineDrawer] = useState<boolean>(false);
   const [activeDupSetIdx, setActiveDupSetIdx] = useState<number>(0);
   const [showAllDupSets, setShowAllDupSets] = useState<boolean>(false);
+  const [showAllSetChips, setShowAllSetChips] = useState<boolean>(false);
   const [skippedGroupIds, setSkippedGroupIds] = useState<Set<string>>(() => new Set());
   const [pausedSnapshot, setPausedSnapshot] = useState<{
     activeTrash: PhotoItem[];
@@ -755,43 +756,58 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   </div>
                   {activeDuplicateGroups.length > 0 ? (
                     <div className="flex flex-col gap-1.5">
-                      <div className="flex flex-wrap items-center gap-1.5">
-                        {activeDuplicateGroups.slice(0, 6).map((g, idx) => {
-                          const cnt = g.photoIds.filter((id) => {
-                            const ph = photoById.get(id);
-                            return ph && !ph.quarantined;
-                          }).length;
-                          const isCurSet =
-                            !showAllDupSets &&
-                            Math.min(activeDupSetIdx, activeDuplicateGroups.length - 1) === idx;
-                          return (
-                            <button
-                              key={g.groupId}
-                              type="button"
-                              onClick={() => {
-                                setShowAllDupSets(false);
-                                setActiveDupSetIdx(idx);
-                              }}
-                              className={`px-2.5 py-1 rounded-md border text-[11.5px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
-                                isCurSet
-                                  ? 'bg-slate-900 text-white border-slate-900 font-semibold'
-                                  : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
-                              }`}
-                            >
-                              {idx + 1}세트 ({cnt}장)
-                            </button>
-                          );
-                        })}
-                        {activeDuplicateGroups.length > 6 && (
-                          <button
-                            type="button"
-                            onClick={() => setShowAllDupSets((v) => !v)}
-                            className="px-2.5 py-1 rounded-md bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-[11.5px] font-medium whitespace-nowrap cursor-pointer"
+                      {(() => {
+                        const totalSets = activeDuplicateGroups.length;
+                        const clampedIdx = Math.min(activeDupSetIdx, Math.max(0, totalSets - 1));
+                        const winStart = showAllSetChips
+                          ? 0
+                          : Math.max(0, Math.min(clampedIdx - 2, Math.max(0, totalSets - 6)));
+                        const winEnd = showAllSetChips ? totalSets : Math.min(totalSets, winStart + 6);
+                        const visibleChips = activeDuplicateGroups
+                          .slice(winStart, winEnd)
+                          .map((g, i) => ({ g, idx: winStart + i }));
+                        return (
+                          <div
+                            className={`flex flex-wrap items-center gap-1.5 ${
+                              showAllSetChips ? 'max-h-28 overflow-y-auto pr-1' : ''
+                            }`}
                           >
-                            {showAllDupSets ? '접기' : `+${activeDuplicateGroups.length - 6}세트 더 보기`}
-                          </button>
-                        )}
-                      </div>
+                            {visibleChips.map(({ g, idx }) => {
+                              const cnt = g.photoIds.filter((id) => {
+                                const ph = photoById.get(id);
+                                return ph && !ph.quarantined;
+                              }).length;
+                              const isCurSet = !showAllDupSets && clampedIdx === idx;
+                              return (
+                                <button
+                                  key={g.groupId}
+                                  type="button"
+                                  onClick={() => {
+                                    setShowAllDupSets(false);
+                                    setActiveDupSetIdx(idx);
+                                  }}
+                                  className={`px-2.5 py-1 rounded-md border text-[11.5px] font-medium whitespace-nowrap transition-colors cursor-pointer ${
+                                    isCurSet
+                                      ? 'bg-slate-900 text-white border-slate-900 font-semibold'
+                                      : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200'
+                                  }`}
+                                >
+                                  {idx + 1}세트 ({cnt}장)
+                                </button>
+                              );
+                            })}
+                            {totalSets > 6 && (
+                              <button
+                                type="button"
+                                onClick={() => setShowAllSetChips((v) => !v)}
+                                className="px-2.5 py-1 rounded-md bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-600 text-[11.5px] font-medium whitespace-nowrap cursor-pointer"
+                              >
+                                {showAllSetChips ? '번호 접기' : `+${totalSets - 6}세트 번호 더 보기`}
+                              </button>
+                            )}
+                          </div>
+                        );
+                      })()}
                       <p className="text-[12.5px] text-slate-500 leading-relaxed break-keep">
                         남길 대표 사진 1장을 확인한 뒤 [휴지통으로 이동]을 눌러 정리하세요. 다른 사진을 터치하면 대표 사진이 바뀝니다.
                       </p>
