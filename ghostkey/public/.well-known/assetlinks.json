@@ -1,0 +1,14 @@
+[
+  {
+    "relation": [
+      "delegate_permission/common.handle_all_urls"
+    ],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "app.sundreamer.ghosti",
+      "sha256_cert_fingerprints": [
+        "44:6B:0E:3F:A8:A4:C4:DE:8F:E6:B2:D5:DB:E5:12:80:A9:AB:56:DE:C7:8D:38:82:A1:D6:98:21:35:C1:27:65"
+      ]
+    }
+  }
+]

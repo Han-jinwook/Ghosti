@@ -1,0 +1,61 @@
+{
+  "name": "귀신Key (GhostKey) - 하루 1시간 복붙·오타 노가다 1초 삭제기",
+  "short_name": "귀신Key",
+  "description": "무버튼 한영 오타 성형, PDF 줄바꿈·서식 세탁, 1→2→3 순차 붙여넣기, 300DPI PDF 변환, F1~F6 상용구, 7일 클립보드 검색까지 Ctrl+0 하나로 1초 해결!",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#FAF9F5",
+  "theme_color": "#FFFFFF",
+  "orientation": "any",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/apple-touch-icon.png",
+      "sizes": "180x180",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ],
+  "shortcuts": [
+    {
+      "name": "⌨ F1~F6 상용구 · 단축키 설정",
+      "short_name": "상용구 설정",
+      "description": "Ctrl+0 단축키 동작 및 F1~F6 내 개인 상용구 즉시 설정",
+      "url": "/?tab=settings",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "👻 귀신같이 본체 (평생 무료)",
+      "short_name": "귀신같이",
+      "description": "파일 안 열고 본문·사진·영상 1초 소환 귀신같이 본체 열기",
+      "url": "https://ghosti.sundreamer.app/?from=ghostkey",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "💬 센스톡 바로가기 (패밀리 SSO)",
+      "short_name": "센스톡",
+      "description": "1:1 맞춤 감성 메시지 고속 발송 비서 센스톡으로 즉시 이동",
+      "url": "/?family_jump=sensetalk",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    },
+    {
+      "name": "🛡️ 어그로필터 바로가기 (패밀리 SSO)",
+      "short_name": "어그로필터",
+      "description": "유튜브 영상 팩트 신뢰도 분석기 어그로필터로 즉시 이동",
+      "url": "/?family_jump=aggrofilter",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
+    }
+  ]
+}

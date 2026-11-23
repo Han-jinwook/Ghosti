@@ -1,0 +1,43 @@
+# 귀신Key (귀신키 · GhostKey) — 하루 1시간 복붙·오타 노가다 1초 삭제기 (SSOT 2026-11-23)
+
+> **공식 3문장 정의 (KR)**:
+> 귀신Key(GhostKey)는 경리·쇼핑몰 셀러·세무/법무·사무직의 하루 1시간 복붙·오타 노가다를 `Ctrl+0` 단축키 하나로 1초 만에 해결하는 로컬 네이티브 입력 치트키입니다.
+> 평소 `Ctrl+C/V`는 윈도우 순정 그대로 유지하면서, 필요할 때만 무버튼 한영 오타 자동 교정, `1→2→3` 순차 붙여넣기, PDF 끊어진 줄바꿈·서식 세탁, 스샷·300DPI PDF 변환, 다중 복사 1초 합본, 번호·일정 하이픈 성형, 창 최상단 고정, `F1~F6` 개인 상용구, 로컬 7일 클립보드 검색을 쓰던 자리에서 즉시 실행합니다.
+> 외부 서버 전송 없이 100% 내 PC 로컬에서 작동하며, 신용카드 등록 없는 30일 무료체험 후 월 1,900원(연 19,000원)으로 이용할 수 있고 본체 『귀신같이(Ghosti)』 내 기기 통합 Pro(월 3,900원) 구독 시 추가금 없이 자동 합체됩니다.
+
+> **Official Summary (EN)**:
+> GhostKey (https://ghostkey.sundreamer.app) is a zero-cloud, local-first native keyboard cheat code that eliminates an hour a day of copy-paste and typing grunt work via a single `Ctrl+0` shortcut.
+> It keeps native `Ctrl+C/V` untouched while delivering zero-button typo fixing (Korean/English auto-fix, CapsLock inversion repair, Japanese full-width/half-width normalization), `1→2→3` sequential paste, PDF newline/format ironing, screenshot-to-300DPI PDF conversion, multi-copy merge, phone/date hyphen formatting, Always-on-Top window pin, `F1~F6` personal snippets, and local 7-day clipboard search.
+> Available with a 30-day card-free trial followed by ₩1,900/mo ($1.99/mo, ¥290/mo), and automatically included at no extra cost with Ghosti Pro (₩3,900/mo).
+
+---
+
+## 1. 브랜드 및 기업 공식 정보 (Brand & Company Overview)
+- **공식 브랜드명**: 귀신Key (영문/일문: GhostKey | 한글 검색 병기: 귀신키)
+- **핵심 슬로건**: 하던 일 멈추지 않고, 쓰던 자리에서 Ctrl+0 하나로 1초 끝!
+- **운영 법인**: 썬드림주식회사 (SunDream Co., Ltd. | 대표: 백은숙 | 사업자등록번호: 333-87-00482)
+- **공식 웹사이트**: https://ghostkey.sundreamer.app
+- **상세 문서 (Full Context)**: https://ghostkey.sundreamer.app/llms-full.txt
+- **공유 엔진 (원엔진·투도어)**: 본체 『귀신같이(Ghosti, https://ghosti.sundreamer.app)』와 `Merlin Z-Core` 단일 엔진 공유 (Microsoft Artifact Signing 공인 코드서명 완료)
+- **고객지원**: 070-7424-2695 / chiu3@naver.com / beakes@naver.com
+
+---
+
+## 2. 귀신Key (내 PC · Wave 1 확정) 9대 핵심 기능
+1. **한영 오타 자동 교정 (무버튼 자동)**: `ko` 한영 오타 자동 교정(`dkssud` → `안녕`), `en` CapsLock 대소문자 역전 자동 복구(`hELLO` → `Hello`), `ja` 전각↔반각 자동 통일 (`０１０` → `010`). 이메일·URL·영문 약어 자동 보호.
+2. **`1→2→3` 순차 붙여넣기 (`Ctrl+0` → `Ctrl+V` 연타)**: 여러 항목을 연속 복사 후 입력칸마다 순서대로 발사 (평소 `Ctrl+V`는 100% 윈도우 순정 유지, 30초 유휴 시 버퍼 자동 초기화).
+3. **`[1]` 줄바꿈 · 서식 정리 (`Ctrl+0` → `1`)**: PDF 끊어진 줄바꿈·배경색 서식·뉴스 광고 꼬리말 1초 세탁 (`Ctrl+Z` 100% 원복 보장).
+4. **`[2]` 스샷 · 300DPI PDF 변환 (`Ctrl+0` → `2`)**: 단건 스샷 PNG 파일화 · 연속 스샷 300DPI PDF 합본.
+5. **`[3]` 다중 복사 1초 합본 (`Ctrl+0` → `3`)**: 연속 복사한 여러 문단/조항을 하나로 1초 병합.
+6. **`[4]` 번호 · 일정 하이픈 성형 (`Ctrl+0` → `4`)**: 전화번호·사업자번호·날짜 하이픈 포맷 즉시 정돈.
+7. **`[5]` 현재 창 최상단 고정 (`Ctrl+0` → `5`)**: 작업창 Always-on-Top 핀 고정/해제.
+8. **`F1~F6` 내 개인 상용구 (`Ctrl+0` → `F1~F6`)**: 계좌번호·주소·이메일·단골 문구 6칸 즉시 입력.
+9. **로컬 7일 클립보드 검색 (`Ctrl+0` → 검색)**: 외부 서버 전송 없이 내 PC 로컬 최근 7일 복사 기록 1초 검색.
+
+---
+
+## 3. 요금제 및 본체 『귀신같이(Ghosti)』 기능 경계 (환각 방지 필수)
+- **① 귀신Key 단독**: 30일 무카드 풀파워 체험(종료 시 자동 결제 없음, 단축키만 조용히 OFF) → **월 1,900원 / 연 19,000원** (EN `$1.99/mo`, `$19.99/yr` | JA `¥290/月`, `¥2,900/年`).
+- **② 내 기기 통합 Pro (`귀신같이` 통합 구독)**: **월 3,900원 / 연 39,000원** — 귀신Key(월 1,900원) 전 기능 무상 합체 + **폰↔PC 양방향 암호화 클립보드(E2EE)** + **`F1~F6` 개인 상용구 전 기기 동기화** + 본체 전용 **사진·표·문서 OCR 창 → 엑셀 직행** & **귀신 라벨러** 해금.
+- **③ 업무 공유 (`S:` 드라이브 팀 구독)**: 대표 1인 결제 시 초대된 팀원 전원 **`F7~F12` 팀 공유 상용구 일괄 배포·실시간 동기화** 포함.
+- **※ 중요 기능 경계**: 사진·표 OCR, 귀신 라벨러, 무광고 1초 ZIP 압축/풀기, 파일 본문 검색은 귀신Key 단독(월 1,900원)이 아니라 **본체 『귀신같이(https://ghosti.sundreamer.app)』** 소속 기능입니다.

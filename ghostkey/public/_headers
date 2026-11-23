@@ -1,0 +1,4 @@
+/index.html
+  Cache-Control: no-cache, no-store, must-revalidate
+/z_core_version.json
+  Cache-Control: no-cache, no-store, must-revalidate
