@@ -264,7 +264,12 @@ export const VideoScenePreviewModal: React.FC = () => {
         });
     } else {
       setIsResolvingVideo(false);
-      setResolvedVideoSrc(baseStreamUrl);
+      const urlWithoutHash = baseStreamUrl.split('#')[0];
+      const finalStreamUrl =
+        seekTarget > 0 && urlWithoutHash && !urlWithoutHash.startsWith('blob:')
+          ? `${urlWithoutHash}#t=${seekTarget}`
+          : urlWithoutHash;
+      setResolvedVideoSrc(finalStreamUrl);
       if (
         videoRef.current &&
         videoRef.current.readyState >= 1 &&
@@ -277,7 +282,7 @@ export const VideoScenePreviewModal: React.FC = () => {
           if (Math.abs(videoRef.current.currentTime - clamped) > 0.35) {
             videoRef.current.currentTime = clamped;
           }
-          if (Math.abs(videoRef.current.currentTime - clamped) <= 0.6) {
+          if (videoRef.current.readyState >= 2 && Math.abs(videoRef.current.currentTime - clamped) <= 0.6) {
             pendingSeekSecRef.current = null;
           }
           void videoRef.current.play().catch(() => {});
@@ -450,7 +455,9 @@ export const VideoScenePreviewModal: React.FC = () => {
     pendingSeekSecRef.current = seekTarget;
     setVideoPlaybackError(false);
     setResolvedVideoSrc(
-      `http://127.0.0.1:5199/__videos/stream?p=${encodeURIComponent(selectedVideoModal.videoFileName)}`
+      `http://127.0.0.1:5199/__videos/stream?p=${encodeURIComponent(selectedVideoModal.videoFileName)}${
+        seekTarget > 0 ? `#t=${seekTarget}` : ''
+      }`
     );
     return true;
   };
@@ -464,9 +471,11 @@ export const VideoScenePreviewModal: React.FC = () => {
         if (Math.abs(vidEl.currentTime - clampedTarget) > 0.35) {
           vidEl.currentTime = clampedTarget;
         }
-        // 실제로 목표 위치에 근접했거나 0초 시작일 때만 pendingSeek를 해제하여,
-        // onLoadedMetadata 시점에 seekable 범위가 아직 안 열렸더라도 onLoadedData/onCanPlay에서 1회 더 확실히 점프합니다.
-        if (clampedTarget <= 0.2 || Math.abs(vidEl.currentTime - clampedTarget) <= 0.6) {
+        // 실제로 프레임 디코딩이 준비(readyState >= 2)되고 목표 위치에 근접했을 때만 해제
+        if (
+          clampedTarget <= 0.2 ||
+          (vidEl.readyState >= 2 && Math.abs(vidEl.currentTime - clampedTarget) <= 0.6)
+        ) {
           pendingSeekSecRef.current = null;
         }
       }
@@ -551,6 +560,9 @@ export const VideoScenePreviewModal: React.FC = () => {
                   preload="auto"
                   onPlay={(e) => {
                     setIsVideoPlaying(true);
+                    if (pendingSeekSecRef.current !== null && pendingSeekSecRef.current > 0) {
+                      applyPendingSeekOnce(e.currentTarget);
+                    }
                     if (typeof document !== 'undefined' && document.fullscreenElement === e.currentTarget) {
                       e.currentTarget.blur();
                     }

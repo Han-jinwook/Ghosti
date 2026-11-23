@@ -42,10 +42,14 @@ function extractDocHighlightTokens(query: string, fallbackKeywords: string[] = [
     }
   }
 
-  for (const fk of fallbackKeywords) {
-    const cleanFk = (fk || '').trim();
-    if (cleanFk.length >= 2 && !DOC_SNIPPET_STOP_WORDS.has(cleanFk)) {
-      out.push(cleanFk);
+  // 사용자가 입력한 검색어에서 토큰이 1개 이상 추출되었으면 오직 검색어만 하이라이트합니다.
+  // (fallbackKeywords는 검색어가 비어 있거나 불용어뿐일 때만 보조 하이라이트로 사용)
+  if (out.length === 0) {
+    for (const fk of fallbackKeywords) {
+      const cleanFk = (fk || '').trim();
+      if (cleanFk.length >= 2 && !DOC_SNIPPET_STOP_WORDS.has(cleanFk)) {
+        out.push(cleanFk);
+      }
     }
   }
 
@@ -91,7 +95,8 @@ export function resolveDocExtBadge(doc: { fileName?: string; ext?: string }): st
 }
 
 export function formatVideoCardOcrSummary(
-  ocrLines?: Array<{ text: string }>
+  ocrLines?: Array<{ text: string }>,
+  query?: string
 ): string {
   if (!Array.isArray(ocrLines) || ocrLines.length === 0) return '';
   const cleaned = ocrLines
@@ -102,7 +107,11 @@ export function formatVideoCardOcrSummary(
     ...cleaned.filter((t) => /[가-힣]{2,}/.test(t)),
     ...cleaned.filter((t) => !/[가-힣]{2,}/.test(t)),
   ];
-  return koFirst.join(' · ');
+  const joined = koFirst.join(' · ');
+  if (query && query.trim()) {
+    return buildDocPreviewSnippet(joined, query, 140);
+  }
+  return joined;
 }
 
 export function buildDocPreviewSnippet(

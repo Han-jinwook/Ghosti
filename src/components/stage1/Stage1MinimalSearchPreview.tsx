@@ -778,7 +778,10 @@ export const Stage1MinimalSearchPreview: React.FC<{
                             <div className="bg-slate-50 border border-slate-200 rounded-lg p-2 min-w-0 max-w-full overflow-hidden">
                               <p className="text-[11.5px] text-slate-600 line-clamp-2 break-words m-0 p-0">
                                 {renderHighlightedDocText(
-                                  formatVideoCardOcrSummary(vid.ocrLines),
+                                  formatVideoCardOcrSummary(
+                                    vid.ocrLines,
+                                    hasExecutedUserSearch ? activeQuery : ''
+                                  ),
                                   hasExecutedUserSearch ? activeQuery : ''
                                 )}
                               </p>

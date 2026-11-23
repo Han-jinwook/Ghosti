@@ -1597,8 +1597,27 @@ export function searchVideoSceneItems(
       const pickedTs = useOcrLineHit && bestOcrLine
         ? bestOcrLine.timestamp
         : bestFrame?.timestampText || '00:00';
+      const buildCenteredOcrSnippet = (rawText: string, tokens: string[], maxLen = 130): string => {
+        const clean = String(rawText || '').replace(/\s+/g, ' ').trim();
+        if (clean.length <= maxLen) return clean;
+        const low = clean.toLowerCase();
+        let hitIdx = -1;
+        for (const tk of tokens) {
+          const idx = low.indexOf(tk.toLowerCase());
+          if (idx >= 0) {
+            hitIdx = idx;
+            break;
+          }
+        }
+        if (hitIdx > 24) {
+          const start = Math.max(0, hitIdx - 32);
+          const end = Math.min(clean.length, start + maxLen);
+          return `${start > 0 ? '…' : ''}${clean.slice(start, end).trim()}${end < clean.length ? '…' : ''}`;
+        }
+        return `${clean.slice(0, maxLen).trim()}…`;
+      };
       const pickedCaption = useOcrLineHit && bestOcrLine
-        ? `📝 [${bestOcrLine.timestamp} 화면 텍스트 포착] ${bestOcrLine.text.slice(0, 120)}`
+        ? `📝 [${bestOcrLine.timestamp} 화면 텍스트 포착] ${buildCenteredOcrSnippet(bestOcrLine.text, rawTokens, 130)}`
         : bestFrame?.sceneCaption || '';
       const matchedFrameThumb =
         normalizeSampleVideoFrameUrl(bestFrame?.thumbUrl) ||

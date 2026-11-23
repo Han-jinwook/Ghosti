@@ -67,7 +67,7 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
             });
           });
         }}
-        className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-medium transition-colors cursor-pointer"
+        className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-medium whitespace-nowrap shrink-0 transition-colors cursor-pointer"
       >
         🏷️ 귀신라벨링
       </button>
@@ -124,7 +124,7 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
             }
           });
         }}
-        className="px-2 py-1 rounded-md bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-medium cursor-pointer"
+        className="px-2 py-1 rounded-md bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[11px] font-medium whitespace-nowrap shrink-0 cursor-pointer"
       >
         🏷️ 귀신라벨링
       </button>
@@ -203,7 +203,7 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
         });
       }}
       title="촬영일·내용 기반 한글 파일명(YYMMDD_내용)을 생성해 복사합니다"
-      className="px-2 py-1 rounded-md bg-black/75 hover:bg-black text-white border border-white/20 text-[11px] font-medium shadow-xs transition-colors cursor-pointer"
+      className="px-1.5 py-1 rounded-md bg-black/75 hover:bg-black text-white border border-white/20 text-[10.5px] font-medium whitespace-nowrap shrink-0 shadow-xs transition-colors cursor-pointer"
     >
       🏷️ 귀신라벨링
     </button>
