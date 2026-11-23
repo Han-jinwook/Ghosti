@@ -601,6 +601,7 @@ export async function decryptClipboardE2ee(
 export async function syncDeviceHeartbeatAndList(opts?: {
   explicitTrialOptIn?: boolean;
   explicitReconnect?: boolean;
+  forceRefreshPairingCode?: boolean;
 }): Promise<{
   ok: boolean;
   thisDeviceId: string;
@@ -635,6 +636,7 @@ export async function syncDeviceHeartbeatAndList(opts?: {
     appVersion: '1.0.64',
     explicitTrialOptIn: Boolean(opts?.explicitTrialOptIn),
     explicitReconnect: Boolean(opts?.explicitReconnect),
+    forceRefreshPairingCode: Boolean(opts?.forceRefreshPairingCode),
   });
 
   if (!res.ok) {
@@ -686,6 +688,7 @@ export async function consumeDevicePairingCode6(code: string): Promise<{
   ok: boolean;
   alreadyPaired?: boolean;
   reason?: string;
+  expectedEmailHint?: string;
   devices: GhostiConnectedDeviceDto[];
   entitlement: GhostiDeviceEntitlementView | null;
 }> {
@@ -699,6 +702,7 @@ export async function consumeDevicePairingCode6(code: string): Promise<{
   }
   const res = await callGhostiServerBridge<{
     alreadyPaired?: boolean;
+    expectedEmailHint?: string;
     devices?: GhostiConnectedDeviceDto[];
     entitlement?: GhostiDeviceEntitlementView;
     canonicalUserId?: string;
@@ -733,6 +737,7 @@ export async function consumeDevicePairingCode6(code: string): Promise<{
     ok: Boolean(res.ok),
     alreadyPaired: Boolean(res.alreadyPaired),
     reason: res.reason,
+    expectedEmailHint: res.expectedEmailHint,
     devices: safeDevices,
     entitlement: safeEntitlement,
   };
@@ -2661,6 +2666,19 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         void syncRemoteMailboxToUi(true);
       } else if (mailboxTickCounter % 4 === 0) {
         void syncRemoteMailboxToUi(true);
+      }
+      // PC 마스터: 5분마다(1.2s * 250) 6자리 연결 번호 만료 전 자동 갱신
+      if (ident.deviceKind === 'pc_master' && mailboxTickCounter % 250 === 0) {
+        void syncDeviceHeartbeatAndList().then((hbNext) => {
+          if (!disposed && hbNext.ok && opts.onDevicesUpdated) {
+            opts.onDevicesUpdated({
+              devices: hbNext.devices,
+              pairingCode: hbNext.pairingCode,
+              entitlement: hbNext.entitlement,
+              revokedSelf: hbNext.revokedSelf,
+            });
+          }
+        });
       }
     });
   };

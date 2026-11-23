@@ -268,10 +268,12 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
               </span>
               <button
                 type="button"
-                onClick={() => void refreshDeviceIntegrationState()}
+                onClick={() =>
+                  void refreshDeviceIntegrationState({ forceRefreshPairingCode: true })
+                }
                 className="text-[11.5px] text-slate-500 hover:text-slate-800 underline cursor-pointer"
               >
-                새로고침
+                새 번호 발급
               </button>
             </>
           ) : (

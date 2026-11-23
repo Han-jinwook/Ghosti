@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { zCoreBridge, isZCoreOutdated } from '../services/zCoreBridge';
 import { hasAuthenticatedHubAccountSession } from '../services/supabaseClient';
+import { readPendingQrPairCode } from '../services/deviceIntegrationService';
 import { useSaySeeStore, type MobileTab } from '../store/useSaySeeStore';
 import {
   GhostiHeaderQuickShareButton,
@@ -170,6 +171,18 @@ export const MobileAppView: React.FC = () => {
       /* ignore */
     }
     return false;
+  });
+  const [qrAppBridgeCode, setQrAppBridgeCode] = useState<string | null>(() => {
+    if (typeof window === 'undefined' || isCapacitorNativeMobileRuntime()) return null;
+    try {
+      const params = new URLSearchParams(window.location.search);
+      const fromUrl = (params.get('pairCode') || '').replace(/\D/g, '').slice(0, 6);
+      if (fromUrl.length === 6) return fromUrl;
+      const fromPending = readPendingQrPairCode();
+      return fromPending && fromPending.length === 6 ? fromPending : null;
+    } catch {
+      return null;
+    }
   });
   const privateSyncSectionRef = useRef<HTMLElement | null>(null);
 
@@ -772,6 +785,51 @@ export const MobileAppView: React.FC = () => {
             isLandscapeCompact ? 'pt-2 pb-5 gap-2.5' : 'pt-3.5 pb-8 gap-4'
           }`}
         >
+          {qrAppBridgeCode && !isCapacitorNativeMobileRuntime() && (
+            <div className="p-3 rounded-xl bg-white border border-slate-200 flex flex-col gap-2">
+              <div className="flex items-center justify-between gap-2">
+                <div className="min-w-0">
+                  <p className="text-[13px] font-semibold text-slate-900">
+                    PC 기기 연결 번호{' '}
+                    <span className="font-mono">{qrAppBridgeCode.slice(0, 3)}-{qrAppBridgeCode.slice(3, 6)}</span>
+                  </p>
+                  <p className="text-[11.5px] text-slate-500 mt-0.5">
+                    귀신같이 앱이 설치되어 있다면 아래 버튼으로 앱에서 바로 연결하세요.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => setQrAppBridgeCode(null)}
+                  className="text-[11px] text-slate-400 hover:text-slate-700 px-1.5 py-0.5 cursor-pointer shrink-0"
+                >
+                  닫기
+                </button>
+              </div>
+              <div className="flex flex-wrap items-center gap-2">
+                <a
+                  href={`ghosti://pair?pairCode=${qrAppBridgeCode}`}
+                  className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold no-underline"
+                >
+                  귀신같이 앱에서 연결
+                </a>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!hasAuthenticatedHubAccountSession()) {
+                      window.dispatchEvent(new CustomEvent('openLoginModal'));
+                      return;
+                    }
+                    const ok = await useSaySeeStore.getState().pairWithSixDigitCode(qrAppBridgeCode);
+                    if (ok) setQrAppBridgeCode(null);
+                  }}
+                  className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium cursor-pointer"
+                >
+                  웹에서 바로 연결
+                </button>
+              </div>
+            </div>
+          )}
+
           {activeLoungeType !== 'personal' && <LoungeFeedContextBanner />}
 
           {activeLoungeType === 'personal' && <MobileCleanerRescueBanner />}

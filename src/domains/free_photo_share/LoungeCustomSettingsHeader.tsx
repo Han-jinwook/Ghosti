@@ -353,7 +353,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                     openLoginModal();
                     return;
                   }
-                  void refreshDeviceIntegrationState();
+                  void refreshDeviceIntegrationState({ forceRefreshPairingCode: true });
                 }}
                 className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium cursor-pointer"
               >
@@ -361,7 +361,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                   ? '로그인'
                   : realMobileConnected
                   ? `연결됨 (${mobilePeers[0]?.display_name || '스마트폰'})`
-                  : '상태 새로고침'}
+                  : '새 번호 받기'}
               </button>
               <button
                 type="button"

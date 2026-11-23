@@ -180,7 +180,9 @@ export interface PaidDeviceSyncSlice {
   openSubscriptionCheckout: (planId: PricingPlanId) => void;
   closeSubscriptionCheckout: () => void;
   activate30DayDeviceTrialNow: () => Promise<boolean>;
-  refreshDeviceIntegrationState: (explicitTrialOptIn?: boolean) => Promise<void>;
+  refreshDeviceIntegrationState: (
+    explicitTrialOptInOrOpts?: boolean | { explicitTrialOptIn?: boolean; forceRefreshPairingCode?: boolean }
+  ) => Promise<void>;
   pairWithSixDigitCode: (code: string) => Promise<boolean>;
   unlinkConnectedDevice: (targetDeviceId: string) => Promise<boolean>;
   reconnectThisDevice: () => Promise<boolean>;
@@ -544,7 +546,19 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
     });
   },
 
-  refreshDeviceIntegrationState: async (explicitTrialOptIn?: boolean) => {
+  refreshDeviceIntegrationState: async (
+    explicitTrialOptInOrOpts?:
+      | boolean
+      | { explicitTrialOptIn?: boolean; forceRefreshPairingCode?: boolean }
+  ) => {
+    const explicitTrialOptIn =
+      typeof explicitTrialOptInOrOpts === 'boolean'
+        ? explicitTrialOptInOrOpts
+        : Boolean(explicitTrialOptInOrOpts?.explicitTrialOptIn);
+    const forceRefreshPairingCode =
+      typeof explicitTrialOptInOrOpts === 'object' && explicitTrialOptInOrOpts !== null
+        ? Boolean(explicitTrialOptInOrOpts.forceRefreshPairingCode)
+        : false;
     const prevEntitlement = get().deviceEntitlement;
     if (explicitTrialOptIn) {
       if (prevEntitlement?.trialExpired && !prevEntitlement?.isPaidUnlimited) {
@@ -570,7 +584,10 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
         lastQuarantineToast: `30일 무료체험이 시작되었습니다(남은 기간 ${optimisticEnt.trialDaysLeft}일). 연결된 PC와 스마트폰 동기화가 활성화되었습니다.`,
       });
     }
-    const hb = await syncDeviceHeartbeatAndList({ explicitTrialOptIn });
+    const hb = await syncDeviceHeartbeatAndList({
+      explicitTrialOptIn,
+      forceRefreshPairingCode,
+    });
     if (!hb.ok) {
       if (explicitTrialOptIn) {
         saveCachedDeviceIntegrationSnapshot({ entitlement: prevEntitlement });
@@ -588,6 +605,11 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
       entitlement: hb.entitlement ?? get().deviceEntitlement,
       revokedSelf: hb.revokedSelf,
     });
+    if (forceRefreshPairingCode && hb.pairingCode) {
+      set({
+        lastQuarantineToast: `새 6자리 연결 번호(${hb.pairingCode.slice(0, 3)}-${hb.pairingCode.slice(3, 6)})가 발급되었습니다(30분 유효).`,
+      });
+    }
   },
 
   pairWithSixDigitCode: async (code: string) => {
@@ -601,12 +623,27 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
     });
     const res = await consumeDevicePairingCode6(code);
     if (!res.ok) {
+      let errMsg =
+        '6자리 연결 번호를 확인하지 못했습니다. PC에서 [새 번호 발급]을 눌러 최신 번호로 다시 시도해 주세요.';
+      if (res.reason === 'AUTH_REQUIRED') {
+        errMsg = '먼저 PC와 동일한 이메일로 로그인해 주세요.';
+      } else if (res.reason === 'ACCOUNT_MISMATCH') {
+        errMsg = res.expectedEmailHint
+          ? `PC에 로그인된 이메일(${res.expectedEmailHint})과 다른 계정입니다. PC와 같은 이메일로 로그인한 뒤 다시 연결해 주세요.`
+          : 'PC에 로그인된 이메일과 다른 계정입니다. PC와 같은 이메일로 로그인해 주세요.';
+      } else if (res.reason === 'CODE_EXPIRED' || res.reason === 'EXPIRED_OR_INVALID_CODE') {
+        errMsg =
+          '연결 번호의 유효시간(30분)이 지났습니다. PC 화면에서 [새 번호 발급]을 눌러 새 번호를 확인해 주세요.';
+      } else if (res.reason === 'CODE_NOT_FOUND') {
+        errMsg =
+          '일치하는 연결 번호가 없습니다. PC 화면에 표시된 6자리 숫자를 정확히 입력해 주세요.';
+      } else if (res.reason === 'TRIAL_EXPIRED') {
+        errMsg =
+          '30일 무료체험이 만료되었습니다. PC 웹 화면에서 이용권을 활성화한 뒤 연결할 수 있습니다.';
+      }
       set({
         deviceEntitlement: prevEntitlement,
-        lastQuarantineToast:
-          res.reason === 'AUTH_REQUIRED'
-            ? '먼저 PC와 동일한 이메일로 로그인해 주세요.'
-            : '6자리 연결 번호가 만료되었거나 일치하지 않습니다. PC 화면의 최신 번호를 확인해 주세요.',
+        lastQuarantineToast: errMsg,
       });
       return false;
     }

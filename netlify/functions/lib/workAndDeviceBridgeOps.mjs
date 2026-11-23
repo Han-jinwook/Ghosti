@@ -1330,19 +1330,21 @@ export async function handleAuthedWorkAndDeviceAction({
     const devices = listRes && listRes.ok ? await listRes.json().catch(() => []) : [];
     const safeDevices = Array.isArray(devices) ? devices : [];
 
-    // 6자리 페어링 코드 발급/유지 (PC 마스터일 때)
+    // 6자리 페어링 코드 발급/유지 (PC 마스터일 때 · 유효시간 30분, 5분 미만 남거나 강제 새로고침 시 즉시 재발급)
     let pairingCode = null;
     if (deviceKind === 'pc_master') {
       const codeRows = codeRes && codeRes.ok ? await codeRes.json().catch(() => []) : [];
+      const forceRefreshCode = Boolean(body.forceRefreshPairingCode);
       if (
+        !forceRefreshCode &&
         Array.isArray(codeRows) &&
         codeRows[0]?.code &&
-        Date.parse(codeRows[0].expires_at || '') > Date.now() + 60_000
+        Date.parse(codeRows[0].expires_at || '') > Date.now() + 5 * 60_000
       ) {
         pairingCode = String(codeRows[0].code);
       } else {
         const newCode = String(Math.floor(100000 + Math.random() * 900000));
-        const expIso = new Date(Date.now() + 15 * 60 * 1000).toISOString();
+        const expIso = new Date(Date.now() + 30 * 60 * 1000).toISOString();
         const ins = await fetch(`${supabaseUrl}/rest/v1/ghosti_pairing_codes?on_conflict=code`, {
           method: 'POST',
           headers: srvHeaders(serviceKey, {
@@ -1393,13 +1395,32 @@ export async function handleAuthedWorkAndDeviceAction({
       return { status: 200, body: { ok: false, reason: 'INVALID_CODE_FORMAT' } };
     }
     const cRes = await fetch(
-      `${supabaseUrl}/rest/v1/ghosti_pairing_codes?code=eq.${cleanCode}&owner_email=eq.${encodeURIComponent(email)}&order=expires_at.desc&limit=1`,
+      `${supabaseUrl}/rest/v1/ghosti_pairing_codes?code=eq.${cleanCode}&order=expires_at.desc&limit=1`,
       { headers: srvHeaders(serviceKey) }
     );
     const cRows = cRes.ok ? await cRes.json().catch(() => []) : [];
     const found = Array.isArray(cRows) ? cRows[0] : null;
-    if (!found || Date.parse(found.expires_at || '') <= Date.now()) {
-      return { status: 200, body: { ok: false, reason: 'EXPIRED_OR_INVALID_CODE' } };
+    if (!found) {
+      return { status: 200, body: { ok: false, reason: 'CODE_NOT_FOUND' } };
+    }
+    const foundOwner = String(found.owner_email || '').trim().toLowerCase();
+    if (foundOwner && foundOwner !== email) {
+      const [localPart, domainPart] = foundOwner.split('@');
+      const maskedLocal =
+        localPart && localPart.length > 2
+          ? `${localPart.slice(0, 2)}${'*'.repeat(Math.min(4, localPart.length - 2))}`
+          : `${(localPart || '').slice(0, 1)}***`;
+      return {
+        status: 200,
+        body: {
+          ok: false,
+          reason: 'ACCOUNT_MISMATCH',
+          expectedEmailHint: domainPart ? `${maskedLocal}@${domainPart}` : maskedLocal,
+        },
+      };
+    }
+    if (Date.parse(found.expires_at || '') <= Date.now()) {
+      return { status: 200, body: { ok: false, reason: 'CODE_EXPIRED' } };
     }
 
     const rawDevId = String(body.deviceId || '').trim();
