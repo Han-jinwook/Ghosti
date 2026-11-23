@@ -817,6 +817,9 @@ export const Stage1MinimalSearchPreview: React.FC<{
                 <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[12px] font-medium">
                   {matchedTotalDocsCount}건
                 </span>
+                <span className="text-[11.5px] text-slate-500 font-medium">
+                  · <strong className="text-teal-700 font-semibold">귀신라벨링</strong>: 클릭하면 날짜·내용 기반 한글 파일명을 바로 복사합니다
+                </span>
               </div>
 
               {!isMobileOrStore && (
@@ -1028,6 +1031,9 @@ export const Stage1MinimalSearchPreview: React.FC<{
                   {hasExecutedUserSearch ? searchResults.length : gallerySceneCount}장
                 </span>
               </div>
+              <span className="text-[11.5px] text-slate-500 font-medium">
+                <strong className="text-teal-700 font-semibold">귀신라벨링</strong>: 클릭하면 촬영일·사진 내용으로 정리된 한글 파일명을 바로 복사합니다
+              </span>
             </div>
 
             {groupedResults.length > 0 ? (
