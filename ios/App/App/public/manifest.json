@@ -1,12 +1,12 @@
 {
   "name": "귀신같이 - 파일 검색, 사진 정리, PC 연동",
   "short_name": "귀신같이",
-  "description": "광고 없는 무제한 사진 공유, 중복 사진 정리, 문서 영상 내용 찾기, 내 기기 연결까지 한 번에 해결하는 PC 모바일 초능력!",
+  "description": "문서·사진·동영상 내용 검색, 중복 사진 정리, 원본 사진 공유, 기기 통합 관리를 한곳에서 제공합니다.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",
-  "background_color": "#121318",
-  "theme_color": "#121318",
+  "background_color": "#FFFFFF",
+  "theme_color": "#FFFFFF",
   "orientation": "any",
   "icons": [
     {
@@ -30,30 +30,30 @@
   ],
   "shortcuts": [
     {
-      "name": "🎯 1초 AI 찾기 & 고스트 캐스트",
-      "short_name": "1초 찾기",
-      "description": "사진·동영상 장면·엑셀 문서 1초 내용 검색 및 모니터 크게 보기",
+      "name": "귀신검색 열기",
+      "short_name": "귀신검색",
+      "description": "사진·동영상 장면·문서 본문 내용 검색",
       "url": "/?dev=true&tab=search",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
-      "name": "💬 센스톡 바로가기 (패밀리 SSO)",
+      "name": "센스톡 바로가기",
       "short_name": "센스톡",
-      "description": "1:1 맞춤 감성 메시지 고속 발송 비서 센스톡으로 즉시 이동",
+      "description": "맞춤 메시지 발송 서비스 센스톡으로 이동",
       "url": "/?family_jump=sensetalk",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
-      "name": "🛡️ 어그로필터 바로가기 (패밀리 SSO)",
+      "name": "어그로필터 바로가기",
       "short_name": "어그로필터",
-      "description": "유튜브 영상 팩트 신뢰도 분석기 어그로필터로 즉시 이동",
+      "description": "유튜브 영상 팩트 신뢰도 분석기 어그로필터로 이동",
       "url": "/?family_jump=aggrofilter",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     },
     {
-      "name": "☀️ 썬드리머 · 🍱 뭐먹지? 패밀리 허브",
+      "name": "패밀리 허브",
       "short_name": "패밀리 허브",
-      "description": "내가 다녀간 썬드리머 패밀리 앱으로 1초 이동",
+      "description": "썬드리머 패밀리 서비스 바로가기",
       "url": "/?family_jump=sundreamer",
       "icons": [{ "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" }]
     }

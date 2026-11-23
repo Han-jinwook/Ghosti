@@ -440,12 +440,12 @@ export const VideoScenePreviewModal: React.FC = () => {
     try {
       if (
         targetSec !== null &&
-        targetSec > 0 &&
+        targetSec >= 0 &&
         Number.isFinite(vidEl.duration) &&
-        vidEl.duration > 1 &&
-        Math.abs(vidEl.currentTime - targetSec) > 0.4
+        vidEl.duration > 0.5 &&
+        Math.abs(vidEl.currentTime - targetSec) > 0.15
       ) {
-        vidEl.currentTime = Math.min(targetSec, Math.max(0, vidEl.duration - 0.5));
+        vidEl.currentTime = Math.min(targetSec, Math.max(0, vidEl.duration - 0.1));
       }
       void vidEl.play().catch(() => {});
     } catch {
@@ -752,11 +752,19 @@ export const VideoScenePreviewModal: React.FC = () => {
                     key={`${ln.timestamp}_${idx}`}
                     type="button"
                     onClick={() => {
-                      if (videoRef.current && Number.isFinite(videoRef.current.duration)) {
-                        videoRef.current.currentTime = Math.min(
-                          ln.timeSec,
-                          Math.max(0, videoRef.current.duration - 0.3)
-                        );
+                      const targetSec = Math.max(0, Number(ln.timeSec || 0));
+                      pendingSeekSecRef.current = targetSec;
+                      if (videoRef.current) {
+                        const dur = videoRef.current.duration;
+                        if (Number.isFinite(dur) && dur > 0) {
+                          videoRef.current.currentTime = Math.min(targetSec, Math.max(0, dur - 0.1));
+                        } else {
+                          try {
+                            videoRef.current.currentTime = targetSec;
+                          } catch {
+                            /* wait for metadata */
+                          }
+                        }
                         void videoRef.current.play().catch(() => {});
                       }
                     }}

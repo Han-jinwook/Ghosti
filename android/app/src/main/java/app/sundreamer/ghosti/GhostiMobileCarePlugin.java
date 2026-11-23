@@ -102,6 +102,7 @@ import org.json.JSONObject;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
@@ -2529,15 +2530,48 @@ public class GhostiMobileCarePlugin extends Plugin {
         return String.format(Locale.US, "%02d:%02d", s / 60, s % 60);
     }
 
-    private static String cleanRecognizedFrameText(Text visionText, int imgHeight) {
-        if (visionText == null) return "";
+    private static class CleanedFrameOcr {
+        final String text;
+        final float qualityScore;
+        final String normSig;
+
+        CleanedFrameOcr(String text, float qualityScore, String normSig) {
+            this.text = text;
+            this.qualityScore = qualityScore;
+            this.normSig = normSig;
+        }
+    }
+
+    private static double computeBigramOverlap(String a, String b) {
+        if (a == null || b == null || a.isEmpty() || b.isEmpty()) return 0.0;
+        if (a.equals(b)) return 1.0;
+        if (a.length() >= 4 && b.contains(a)) return 0.92;
+        if (b.length() >= 4 && a.contains(b)) return 0.92;
+        Set<String> setA = new HashSet<>();
+        for (int i = 0; i < a.length() - 1; i++) {
+            setA.add(a.substring(i, i + 2));
+        }
+        Set<String> setB = new HashSet<>();
+        for (int i = 0; i < b.length() - 1; i++) {
+            setB.add(b.substring(i, i + 2));
+        }
+        if (setA.isEmpty() || setB.isEmpty()) return 0.0;
+        int inter = 0;
+        for (String bg : setA) {
+            if (setB.contains(bg)) inter++;
+        }
+        return (double) inter / (double) Math.max(1, Math.min(setA.size(), setB.size()));
+    }
+
+    private static CleanedFrameOcr cleanRecognizedFrameText(Text visionText, int imgHeight) {
+        if (visionText == null) return new CleanedFrameOcr("", 0f, "");
         List<Text.Line> allLines = new ArrayList<>();
         for (Text.TextBlock block : visionText.getTextBlocks()) {
             if (block != null && block.getLines() != null) {
                 allLines.addAll(block.getLines());
             }
         }
-        if (allLines.isEmpty()) return "";
+        if (allLines.isEmpty()) return new CleanedFrameOcr("", 0f, "");
 
         allLines.sort((a, b) -> {
             android.graphics.Rect ra = a.getBoundingBox();
@@ -2553,42 +2587,89 @@ public class GhostiMobileCarePlugin extends Plugin {
 
         List<String> kept = new ArrayList<>();
         Set<String> seenInFrame = new LinkedHashSet<>();
+        float totalQuality = 0f;
+
         for (Text.Line line : allLines) {
-            String raw = line.getText();
+            if (line == null) continue;
+            Float lineConfObj = line.getConfidence();
+            float lineConf = (lineConfObj != null && lineConfObj > 0f) ? lineConfObj : 0.80f;
+            // 모션 블러·배경 노이즈로 인한 저신뢰도 오인식 라인 원천 컷오프
+            if (lineConf < 0.68f) continue;
+
+            List<Text.Element> elements = line.getElements();
+            String raw;
+            if (elements != null && !elements.isEmpty()) {
+                StringBuilder elemSb = new StringBuilder();
+                for (Text.Element el : elements) {
+                    if (el == null) continue;
+                    Float elConfObj = el.getConfidence();
+                    float elConf = (elConfObj != null && elConfObj > 0f) ? elConfObj : lineConf;
+                    if (elConf < 0.62f) continue;
+                    String elTxt = el.getText();
+                    if (elTxt == null) continue;
+                    // 낱글자 자모 파편 및 깨진 특수기호 제거
+                    String elClean = elTxt.replaceAll("[ㄱ-ㅎㅏ-ㅣ~`^|\\\\<>{}\\[\\]©®™]+", "").trim();
+                    if (elClean.isEmpty()) continue;
+                    // 신뢰도가 낮은 1글자 영문/기호 노이즈 차단
+                    if (elClean.length() == 1 && elConf < 0.80f && !(elClean.charAt(0) >= 0xAC00 && elClean.charAt(0) <= 0xD7A3) && !Character.isDigit(elClean.charAt(0))) {
+                        continue;
+                    }
+                    if (elemSb.length() > 0) elemSb.append(' ');
+                    elemSb.append(elClean);
+                }
+                raw = elemSb.toString();
+            } else {
+                raw = line.getText();
+            }
             if (raw == null) continue;
-            String cleaned = raw.replaceAll("\\s+", " ").trim();
+            String cleaned = raw
+                .replaceAll("[ㄱ-ㅎㅏ-ㅣ~`^|\\\\<>{}\\[\\]©®™]+", " ")
+                .replaceAll("\\s+", " ")
+                .trim();
             if (cleaned.length() < 2) continue;
+
             android.graphics.Rect box = line.getBoundingBox();
             if (box != null && imgHeight > 0 && box.bottom <= Math.round(imgHeight * 0.055f)) {
                 if (STATUS_BAR_NOISE_RX.matcher(cleaned).matches()) continue;
             }
             if (WATERMARK_NOISE_RX.matcher(cleaned).find()) continue;
             if (KBD_TOKEN_NOISE_RX.matcher(cleaned).matches()) continue;
-            // 의미 있는 한글 1자 이상 또는 영숫자 2자 이상 포함 시 채택
-            boolean hasMeaningful = false;
-            int meaningfulCount = 0;
+
+            int koreanCount = 0;
+            int alnumCount = 0;
+            int symbolCount = 0;
             for (int ci = 0; ci < cleaned.length(); ci++) {
                 char ch = cleaned.charAt(ci);
                 if (ch >= 0xAC00 && ch <= 0xD7A3) {
-                    hasMeaningful = true;
-                    meaningfulCount += 2;
+                    koreanCount++;
                 } else if (Character.isLetterOrDigit(ch)) {
-                    meaningfulCount += 1;
+                    alnumCount++;
+                } else if (!Character.isWhitespace(ch)) {
+                    symbolCount++;
                 }
             }
-            if (!hasMeaningful && meaningfulCount < 3) continue;
-            String normKey = cleaned.toLowerCase(Locale.ROOT).replaceAll("\\s+", "");
+            // 의미 있는 한글 2자 이상(또는 고신뢰도 한글 1자+영숫자) 또는 영숫자 3자 이상만 채택
+            int meaningfulScore = koreanCount * 2 + alnumCount;
+            if (koreanCount == 0 && alnumCount < 3) continue;
+            if (koreanCount == 1 && alnumCount == 0 && lineConf < 0.85f) continue;
+            if (symbolCount > koreanCount + alnumCount) continue;
+
+            String normKey = cleaned.toLowerCase(Locale.ROOT).replaceAll("[^가-힣a-z0-9]+", "");
+            if (normKey.length() < 2) continue;
             if (seenInFrame.add(normKey)) {
                 kept.add(cleaned);
+                totalQuality += (meaningfulScore * lineConf);
             }
         }
-        if (kept.isEmpty()) return "";
+        if (kept.isEmpty()) return new CleanedFrameOcr("", 0f, "");
         StringBuilder sb = new StringBuilder();
         for (int i = 0; i < kept.size(); i++) {
             if (i > 0) sb.append(" · ");
             sb.append(kept.get(i));
         }
-        return sb.toString();
+        String fullLine = sb.toString();
+        String normSig = fullLine.toLowerCase(Locale.ROOT).replaceAll("[^가-힣a-z0-9]+", "");
+        return new CleanedFrameOcr(fullLine, totalQuality, normSig);
     }
 
     private NativeVideoOcrResult extractNativeVideoOcrInternal(Context appCtx, long mediaId, int maxFrames) {
@@ -2597,6 +2678,8 @@ public class GhostiMobileCarePlugin extends Plugin {
             return cached;
         }
         List<NativeOcrLineEntry> entries = new ArrayList<>();
+        List<String> entryNormSigs = new ArrayList<>();
+        List<Float> entryQualities = new ArrayList<>();
         MediaMetadataRetriever retriever = new MediaMetadataRetriever();
         try {
             Uri videoUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, mediaId);
@@ -2609,40 +2692,67 @@ public class GhostiMobileCarePlugin extends Plugin {
                 } catch (NumberFormatException ignored) {
                 }
             }
-            int sampleCount = durMs <= 3200L ? Math.min(3, maxFrames) : (durMs <= 9000L ? Math.min(4, maxFrames) : Math.min(6, maxFrames));
-            // 6.5초 이하 짧은 촬영 클립은 I-프레임이 1개뿐일 수 있으므로 3~4지점에 한해 정밀 프레임 추출, 장편은 고속 키프레임 우선
-            int primaryOpt = durMs <= 6500L
-                ? MediaMetadataRetriever.OPTION_CLOSEST
-                : MediaMetadataRetriever.OPTION_CLOSEST_SYNC;
+            int totalSec = Math.max(1, (int) Math.floor(durMs / 1000.0));
+            int targetCap = Math.max(4, Math.min(12, maxFrames));
+            Set<Integer> candidateSecsSet = new LinkedHashSet<>();
+            if (totalSec <= targetCap) {
+                for (int s = 0; s <= totalSec; s++) {
+                    if (s * 1000L <= durMs - 120L || s == 0) {
+                        candidateSecsSet.add(s);
+                    }
+                }
+            } else {
+                for (int i = 0; i < targetCap; i++) {
+                    double ratio = targetCap == 1 ? 0.0 : ((double) i / (double) (targetCap - 1));
+                    int sec = Math.max(0, Math.min(totalSec, (int) Math.round(totalSec * ratio)));
+                    candidateSecsSet.add(sec);
+                }
+            }
 
             TextRecognizer recognizer = getKoreanRecognizer();
-            String prevNormSig = "";
-            for (int i = 0; i < sampleCount; i++) {
-                double ratio = sampleCount == 1 ? 0.35 : (0.10 + 0.80 * ((double) i / (double) (sampleCount - 1)));
-                long sampleMs = Math.max(80L, Math.min(durMs - 100L, Math.round(durMs * ratio)));
+            for (int sec : candidateSecsSet) {
+                // 정확한 정수 초(sec * 1000ms) 지점의 실제 프레임을 OPTION_CLOSEST로 추출하여 1초 앞당김 오차 원천 차단
+                long sampleMs = sec == 0 ? Math.min(120L, durMs / 2) : Math.min(durMs - 80L, sec * 1000L);
                 Bitmap bmp = null;
                 try {
                     if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
-                        bmp = retriever.getScaledFrameAtTime(sampleMs * 1000L, primaryOpt, 1280, 1280);
+                        bmp = retriever.getScaledFrameAtTime(
+                            sampleMs * 1000L,
+                            MediaMetadataRetriever.OPTION_CLOSEST,
+                            1920,
+                            1920
+                        );
                     }
                     if (bmp == null) {
-                        bmp = retriever.getFrameAtTime(sampleMs * 1000L, primaryOpt);
+                        bmp = retriever.getFrameAtTime(sampleMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST);
                     }
-                    if (bmp == null && primaryOpt != MediaMetadataRetriever.OPTION_CLOSEST_SYNC) {
+                    if (bmp == null) {
                         bmp = retriever.getFrameAtTime(sampleMs * 1000L, MediaMetadataRetriever.OPTION_CLOSEST_SYNC);
                     }
                     if (bmp == null) continue;
 
                     InputImage inputImage = InputImage.fromBitmap(bmp, 0);
                     Text visionRes = Tasks.await(recognizer.process(inputImage), 4, TimeUnit.SECONDS);
-                    String frameText = cleanRecognizedFrameText(visionRes, bmp.getHeight());
-                    if (!frameText.isEmpty()) {
-                        String normSig = frameText.toLowerCase(Locale.ROOT).replaceAll("[\\s·.,|/-]+", "");
-                        if (!normSig.isEmpty() && !normSig.equals(prevNormSig)) {
-                            prevNormSig = normSig;
-                            int sec = Math.max(0, (int) Math.round(sampleMs / 1000.0));
-                            entries.add(new NativeOcrLineEntry(sec, formatMmSs(sec), frameText));
+                    CleanedFrameOcr cleaned = cleanRecognizedFrameText(visionRes, bmp.getHeight());
+                    if (!cleaned.text.isEmpty() && !cleaned.normSig.isEmpty()) {
+                        if (!entries.isEmpty()) {
+                            int lastIdx = entries.size() - 1;
+                            String prevSig = entryNormSigs.get(lastIdx);
+                            double overlap = computeBigramOverlap(prevSig, cleaned.normSig);
+                            if (overlap >= 0.72) {
+                                // 동일 자막/장면 구간에서는 더 선명하고 신뢰도·글자수가 높은 프레임의 텍스트로 교체하되 시작 초(timeSec)는 유지
+                                if (cleaned.qualityScore > entryQualities.get(lastIdx) * 1.03f) {
+                                    NativeOcrLineEntry prevEntry = entries.get(lastIdx);
+                                    entries.set(lastIdx, new NativeOcrLineEntry(prevEntry.timeSec, prevEntry.timestamp, cleaned.text));
+                                    entryNormSigs.set(lastIdx, cleaned.normSig);
+                                    entryQualities.set(lastIdx, cleaned.qualityScore);
+                                }
+                                continue;
+                            }
                         }
+                        entries.add(new NativeOcrLineEntry(sec, formatMmSs(sec), cleaned.text));
+                        entryNormSigs.add(cleaned.normSig);
+                        entryQualities.add(cleaned.qualityScore);
                     }
                 } catch (Throwable ignored) {
                 } finally {
@@ -2672,7 +2782,7 @@ public class GhostiMobileCarePlugin extends Plugin {
     public void extractVideoNativeOcr(PluginCall call) {
         Context ctx = getContext();
         String rawId = call.getString("id", "");
-        final int maxFrames = Math.max(1, Math.min(8, call.getInt("maxFrames", 5)));
+        final int maxFrames = Math.max(1, Math.min(12, call.getInt("maxFrames", 8)));
         final String digits = rawId != null ? rawId.replaceAll("[^0-9]", "") : "";
         if (ctx == null || digits.isEmpty()) {
             JSObject empty = new JSObject();
@@ -2862,12 +2972,19 @@ public class GhostiMobileCarePlugin extends Plugin {
             videoView.setMediaController(mediaController);
 
             Uri directVideoUri = ContentUris.withAppendedId(MediaStore.Video.Media.EXTERNAL_CONTENT_URI, mediaId);
+            final android.media.MediaPlayer[] mpHolder = new android.media.MediaPlayer[] { null };
             videoView.setVideoURI(directVideoUri);
             videoView.setOnPreparedListener(mp -> {
                 try {
+                    mpHolder[0] = mp;
                     mp.setLooping(false);
                     if (initialSeekSec > 0) {
-                        videoView.seekTo(initialSeekSec * 1000);
+                        long targetMs = initialSeekSec * 1000L;
+                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                            mp.seekTo(targetMs, android.media.MediaPlayer.SEEK_CLOSEST);
+                        } else {
+                            videoView.seekTo((int) targetMs);
+                        }
                     }
                     videoView.start();
                 } catch (Throwable ignored) {
@@ -2983,7 +3100,12 @@ public class GhostiMobileCarePlugin extends Plugin {
                         rowTv.setLayoutParams(rowLp);
                         rowTv.setOnClickListener(v -> {
                             try {
-                                videoView.seekTo(Math.max(0, entry.timeSec) * 1000);
+                                long targetMs = Math.max(0, entry.timeSec) * 1000L;
+                                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O && mpHolder[0] != null) {
+                                    mpHolder[0].seekTo(targetMs, android.media.MediaPlayer.SEEK_CLOSEST);
+                                } else {
+                                    videoView.seekTo((int) targetMs);
+                                }
                                 if (!videoView.isPlaying()) videoView.start();
                                 ClipboardManager cm = (ClipboardManager) activity.getSystemService(Context.CLIPBOARD_SERVICE);
                                 if (cm != null) {
@@ -3017,7 +3139,7 @@ public class GhostiMobileCarePlugin extends Plugin {
             if (latestOcrHolder[0] == null) {
                 final Context appCtx = activity.getApplicationContext();
                 new Thread(() -> {
-                    NativeVideoOcrResult extracted = extractNativeVideoOcrInternal(appCtx, mediaId, 5);
+                    NativeVideoOcrResult extracted = extractNativeVideoOcrInternal(appCtx, mediaId, 8);
                     latestOcrHolder[0] = extracted;
                     activity.runOnUiThread(() -> {
                         if (dialog.isShowing()) {

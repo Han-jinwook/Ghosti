@@ -2016,7 +2016,7 @@ async function captureHighResFramesForVideoOcr(
           ctx.drawImage(videoEl, 0, 0, canvas.width, canvas.height);
           const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
           if (dataUrl && dataUrl.startsWith('data:image/')) {
-            results.push({ timeSec: Math.floor(sec), dataUrl });
+            results.push({ timeSec: Math.round(sec), dataUrl });
           }
         }
         window.clearTimeout(timeoutId);
@@ -2195,7 +2195,7 @@ async function captureHighResImageDataForVideoOcr(
               best = item;
             }
           }
-          chosen.push({ seekSec: best.sec, startSec: Math.floor(cl[0].sec) });
+          chosen.push({ seekSec: best.sec, startSec: Math.round(best.sec) });
         }
 
         const capped =
@@ -2384,7 +2384,7 @@ export async function extractVideoScreenTextOnDemand(
     return `${mm}:${ss}`;
   };
 
-  const memKey = `${vid.videoFileName || vid.id}|${vid.sizeMB || 0}|v32`;
+  const memKey = `${vid.videoFileName || vid.id}|${vid.sizeMB || 0}|v33`;
   const memHit = inMemoryPaddleVideoOcrCache.get(memKey);
   if (memHit && memHit.ocrLines.length > 0) {
     return memHit;
@@ -2455,7 +2455,7 @@ export async function extractVideoScreenTextOnDemand(
 
       // 2-A) 모바일 정공법(대안 B): Android ML Kit Korean v2 번들 + iOS Apple Vision ko-KR 네이티브 NPU 직결 (0.2~0.4초, WASM 경합 0%)
       if (isMobileVid) {
-        const nativeOcr = await extractNativeMobileVideoOcr(vid.id, 5);
+        const nativeOcr = await extractNativeMobileVideoOcr(vid.id, 8);
         if (nativeOcr.supported) {
           const outNative: VideoOcrExtractResult = {
             ok: nativeOcr.ok,

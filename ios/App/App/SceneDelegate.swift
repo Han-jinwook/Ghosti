@@ -967,7 +967,33 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         return String(format: "%02d:%02d", s / 60, s % 60)
     }
 
-    private static func recognizeKoreanTextInCGImage(_ cgImg: CGImage) -> String {
+    private struct IosCleanedFrameOcr {
+        let text: String
+        let qualityScore: Float
+        let normSig: String
+    }
+
+    private static func computeIosBigramOverlap(_ a: String, _ b: String) -> Double {
+        if a.isEmpty || b.isEmpty { return 0.0 }
+        if a == b { return 1.0 }
+        if a.count >= 4 && b.contains(a) { return 0.92 }
+        if b.count >= 4 && a.contains(b) { return 0.92 }
+        let charsA = Array(a)
+        let charsB = Array(b)
+        if charsA.count < 2 || charsB.count < 2 { return 0.0 }
+        var setA = Set<String>()
+        for i in 0..<(charsA.count - 1) {
+            setA.insert(String(charsA[i...i+1]))
+        }
+        var setB = Set<String>()
+        for i in 0..<(charsB.count - 1) {
+            setB.insert(String(charsB[i...i+1]))
+        }
+        let inter = setA.intersection(setB).count
+        return Double(inter) / Double(max(1, min(setA.count, setB.count)))
+    }
+
+    private static func recognizeKoreanTextInCGImage(_ cgImg: CGImage) -> IosCleanedFrameOcr {
         var observations: [VNRecognizedTextObservation] = []
         let req = VNRecognizeTextRequest { request, _ in
             if let res = request.results as? [VNRecognizedTextObservation] {
@@ -982,9 +1008,9 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         do {
             try handler.perform([req])
         } catch {
-            return ""
+            return IosCleanedFrameOcr(text: "", qualityScore: 0, normSig: "")
         }
-        if observations.isEmpty { return "" }
+        if observations.isEmpty { return IosCleanedFrameOcr(text: "", qualityScore: 0, normSig: "") }
 
         // Vision 좌표계는 좌하단 원점(y=1.0이 상단)이므로 상단부터 하단 순으로 정렬
         let sortedObs = observations.sorted { a, b in
@@ -1012,10 +1038,13 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
 
         var kept: [String] = []
         var seenNorm = Set<String>()
+        var totalQuality: Float = 0.0
         for obs in sortedObs {
             guard let topCand = obs.topCandidates(1).first else { continue }
-            if topCand.confidence < 0.30 { continue }
+            // 모션 블러·배경 노이즈로 인한 저신뢰도 오인식 라인 원천 컷오프
+            if topCand.confidence < 0.62 { continue }
             let cleaned = topCand.string
+                .replacingOccurrences(of: "[ㄱ-ㅎㅏ-ㅣ~`^|\\\\<>{}\\[\\]©®™]+", with: " ", options: .regularExpression)
                 .replacingOccurrences(of: "\\s+", with: " ", options: .regularExpression)
                 .trimmingCharacters(in: .whitespacesAndNewlines)
             if cleaned.count < 2 { continue }
@@ -1029,24 +1058,33 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
             if let kRx = kbdTokenRx, kRx.firstMatch(in: cleaned, options: [], range: nsRange) != nil {
                 continue
             }
-            var hasHangul = false
-            var meaningfulCount = 0
+            var koreanCount = 0
+            var alnumCount = 0
+            var symbolCount = 0
             for scalar in cleaned.unicodeScalars {
                 if scalar.value >= 0xAC00 && scalar.value <= 0xD7A3 {
-                    hasHangul = true
-                    meaningfulCount += 2
+                    koreanCount += 1
                 } else if CharacterSet.alphanumerics.contains(scalar) {
-                    meaningfulCount += 1
+                    alnumCount += 1
+                } else if !CharacterSet.whitespacesAndNewlines.contains(scalar) {
+                    symbolCount += 1
                 }
             }
-            if !hasHangul && meaningfulCount < 3 { continue }
-            let normKey = cleaned.lowercased().replacingOccurrences(of: " ", with: "")
+            if koreanCount == 0 && alnumCount < 3 { continue }
+            if koreanCount == 1 && alnumCount == 0 && topCand.confidence < 0.82 { continue }
+            if symbolCount > koreanCount + alnumCount { continue }
+            let normKey = cleaned.lowercased().replacingOccurrences(of: "[^가-힣a-z0-9]+", with: "", options: .regularExpression)
+            if normKey.count < 2 { continue }
             if !seenNorm.contains(normKey) {
                 seenNorm.insert(normKey)
                 kept.append(cleaned)
+                totalQuality += Float(koreanCount * 2 + alnumCount) * topCand.confidence
             }
         }
-        return kept.joined(separator: " · ")
+        if kept.isEmpty { return IosCleanedFrameOcr(text: "", qualityScore: 0, normSig: "") }
+        let joined = kept.joined(separator: " · ")
+        let normSig = joined.lowercased().replacingOccurrences(of: "[^가-힣a-z0-9]+", with: "", options: .regularExpression)
+        return IosCleanedFrameOcr(text: joined, qualityScore: totalQuality, normSig: normSig)
     }
 
     fileprivate static func extractIosVideoNativeOcrInternal(
@@ -1079,40 +1117,72 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
             }
             DispatchQueue.global(qos: .userInitiated).async {
                 let durSec = max(0.8, CMTimeGetSeconds(compAsset.duration))
-                let sampleCount = durSec <= 3.2 ? min(3, maxFrames) : (durSec <= 9.0 ? min(4, maxFrames) : min(6, maxFrames))
+                let totalSec = max(1, Int(floor(durSec)))
+                let targetCap = max(4, min(12, maxFrames))
+                var candidateSecs: [Int] = []
+                var seenSecs = Set<Int>()
+                if totalSec <= targetCap {
+                    for s in 0...totalSec {
+                        if Double(s) <= durSec - 0.12 || s == 0 {
+                            if seenSecs.insert(s).inserted {
+                                candidateSecs.append(s)
+                            }
+                        }
+                    }
+                } else {
+                    for i in 0..<targetCap {
+                        let ratio = targetCap == 1 ? 0.0 : (Double(i) / Double(targetCap - 1))
+                        let sec = max(0, min(totalSec, Int(round(Double(totalSec) * ratio))))
+                        if seenSecs.insert(sec).inserted {
+                            candidateSecs.append(sec)
+                        }
+                    }
+                }
+
                 let generator = AVAssetImageGenerator(asset: compAsset)
                 generator.appliesPreferredTrackTransform = true
-                generator.maximumSize = CGSize(width: 1440, height: 1440)
-                let tol = CMTime(seconds: durSec <= 15.0 ? 0.08 : 0.30, preferredTimescale: 600)
+                generator.maximumSize = CGSize(width: 1920, height: 1920)
+                // 정확한 정수 초(sec)의 실제 프레임을 추출하여 1초 앞당김 오차 원천 차단
+                let tol = CMTime(seconds: 0.05, preferredTimescale: 600)
                 generator.requestedTimeToleranceBefore = tol
                 generator.requestedTimeToleranceAfter = tol
 
                 var entries: [IosNativeOcrLine] = []
-                var prevNormSig = ""
-                for i in 0..<sampleCount {
-                    let ratio = sampleCount == 1 ? 0.35 : (0.10 + 0.80 * (Double(i) / Double(sampleCount - 1)))
-                    let tSec = max(0.08, min(durSec - 0.10, durSec * ratio))
+                var entryNormSigs: [String] = []
+                var entryQualities: [Float] = []
+                for secInt in candidateSecs {
+                    let tSec = secInt == 0 ? min(0.12, durSec * 0.5) : min(durSec - 0.08, Double(secInt))
                     let cmTime = CMTime(seconds: tSec, preferredTimescale: 600)
                     autoreleasepool {
                         if let cgImg = try? generator.copyCGImage(at: cmTime, actualTime: nil) {
-                            let frameText = recognizeKoreanTextInCGImage(cgImg)
-                            if !frameText.isEmpty {
-                                let normSig = frameText.lowercased().replacingOccurrences(
-                                    of: "[\\s·.,|/-]+",
-                                    with: "",
-                                    options: .regularExpression
-                                )
-                                if !normSig.isEmpty && normSig != prevNormSig {
-                                    prevNormSig = normSig
-                                    let secInt = max(0, Int(round(tSec)))
-                                    entries.append(
-                                        IosNativeOcrLine(
-                                            timeSec: secInt,
-                                            timestamp: formatMmSs(secInt),
-                                            text: frameText
-                                        )
-                                    )
+                            let cleaned = recognizeKoreanTextInCGImage(cgImg)
+                            if !cleaned.text.isEmpty && !cleaned.normSig.isEmpty {
+                                if !entries.isEmpty {
+                                    let lastIdx = entries.count - 1
+                                    let overlap = computeIosBigramOverlap(entryNormSigs[lastIdx], cleaned.normSig)
+                                    if overlap >= 0.72 {
+                                        if cleaned.qualityScore > entryQualities[lastIdx] * 1.03 {
+                                            let prevEntry = entries[lastIdx]
+                                            entries[lastIdx] = IosNativeOcrLine(
+                                                timeSec: prevEntry.timeSec,
+                                                timestamp: prevEntry.timestamp,
+                                                text: cleaned.text
+                                            )
+                                            entryNormSigs[lastIdx] = cleaned.normSig
+                                            entryQualities[lastIdx] = cleaned.qualityScore
+                                        }
+                                        return
+                                    }
                                 }
+                                entries.append(
+                                    IosNativeOcrLine(
+                                        timeSec: secInt,
+                                        timestamp: formatMmSs(secInt),
+                                        text: cleaned.text
+                                    )
+                                )
+                                entryNormSigs.append(cleaned.normSig)
+                                entryQualities.append(cleaned.qualityScore)
                             }
                         }
                     }
@@ -1129,7 +1199,7 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
 
     @objc func extractVideoNativeOcr(_ call: CAPPluginCall) {
         let rawId = call.getString("id") ?? ""
-        let maxFrames = max(1, min(8, call.getInt("maxFrames") ?? 5))
+        let maxFrames = max(1, min(12, call.getInt("maxFrames") ?? 8))
         let localId = rawId.hasPrefix("mobile_vid_")
             ? String(rawId.dropFirst("mobile_vid_".count))
             : rawId
@@ -1384,7 +1454,7 @@ private final class GhostiNativeVideoModalViewController: UIViewController {
         startDirectHardwarePlayback()
         renderOcrState()
         if currentOcrResult == nil {
-            GhostiMobileCarePlugin.extractIosVideoNativeOcrInternal(localId: localId, maxFrames: 5) { [weak self] extracted in
+            GhostiMobileCarePlugin.extractIosVideoNativeOcrInternal(localId: localId, maxFrames: 8) { [weak self] extracted in
                 DispatchQueue.main.async {
                     guard let self = self else { return }
                     self.currentOcrResult = extracted

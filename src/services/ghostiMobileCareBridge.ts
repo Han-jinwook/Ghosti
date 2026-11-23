@@ -758,7 +758,7 @@ export async function writeNativeMobileClipboardText(text: string): Promise<{
 
 export async function extractNativeMobileVideoOcr(
   videoId: string,
-  maxFrames = 5
+  maxFrames = 8
 ): Promise<{
   supported: boolean;
   ok: boolean;
