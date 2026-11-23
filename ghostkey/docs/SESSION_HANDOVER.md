@@ -1,8 +1,8 @@
 # 📋 『귀신Key (GhostKey)』 세션 인계장 (SESSION_HANDOVER)
 
-- **최종 체크아웃 일시**: `2026-11-24 00:03 (KST)`
+- **최종 체크아웃 일시**: `2026-11-24 00:25 (KST)`
 - **세션 제목 (직전 세션 마지막 작업)**: `Ghosti하위폴더단일화`
-- **현재 본진 / 브랜치 / 배포**: **`D:\Ghosti\ghostkey\`** (`Han-jinwook/Ghosti` `main` · 배포: `https://ghostkey.sundreamer.app` `Published` 확인 완료)
+- **현재 본진 / 브랜치 / 배포**: **`D:\Ghosti\ghostkey\`** (`Han-jinwook/Ghosti` `main` · 배포: `https://ghostkey.sundreamer.app` `Published` 확인 완료 · 구형 `D:\GhostKey` 로컬 폴더 삭제 완료)
 
 ---
 
@@ -23,7 +23,7 @@
 
 ---
 
-## 2. 다음 체크인 시 바로 이어할 사항 (`D:\Ghosti` 새 창에서 `"귀신키"` 입력)
-1. **구형 `D:\GhostKey` 로컬 폴더 삭제** 및 GitHub `Han-jinwook/GhostKey` 레포 Archive 처리 확인.
-2. **`D:\Ghosti` 본진에서 `python d:\Ghosti\ghostkey\z_core_watcher.py --watch` 기동** 및 `귀신Key` UX 고도화·QA 대기 (`12/17` 본체 출시 집중기 동안 노션 `귀신키` 신규 카드 추가 보류, 기존 카드 현행 보존).
-3. *(향후)* Apple Developer Portal에 iOS Extension 프로파일 2종(`app.sundreamer.ghosti.keyboard`, `app.sundreamer.ghosti.share`) + App Group(`group.app.sundreamer.ghosti`) 등록 시 `GhostKeyKeyboardExtension` / `GhostKeyShareExtension` 타겟 연결.
+## 2. 다음 체크인 시 바로 이어할 사항 (`D:\Ghosti\ghostkey` 새 창에서 `"체크인"` 입력)
+1. **미푸시 문서 2건 즉시 커밋·푸시**: `ghostkey/AGENTS.md` + `ghostkey/docs/SESSION_HANDOVER.md` (`git add ghostkey/AGENTS.md ghostkey/docs/SESSION_HANDOVER.md` ➔ `commit` ➔ `push`).
+2. **감시병 기동**: `python z_core_watcher.py --watch` 기동 및 `귀신Key` UX 고도화·QA 대기 (`12/17` 본체 출시 집중기 동안 노션 `귀신키` 신규 카드 추가 보류, 기존 카드 현행 보존).
+3. *(참고)* GitHub 구형 `Han-jinwook/GhostKey` 레포 Archive 처리 여부 확인, 향후 Apple Developer Portal 프로파일 등록 시 iOS Extension 타겟 연결.
