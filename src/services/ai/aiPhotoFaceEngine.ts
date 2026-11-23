@@ -302,11 +302,15 @@ export function groupBurstSearchResults(
       const dirB = pB.fullPath ? pB.fullPath.replace(/[\\/][^\\/]+$/, '').toLowerCase() : '';
       const sameParentFolder = !dirA || !dirB || dirA === dirB;
 
+      const sameDateNearIdentical =
+        Boolean(pA.date) && pA.date === pB.date && dhashDist <= 6;
+
       if (
-        sameParentFolder &&
-        (sameDupGroup ||
-          (dhashDist <= 8 && dt <= 5 && entry.tsSec > 0) ||
-          (sameSceneCluster && dhashDist <= 12 && dt <= 3 && entry.tsSec > 0))
+        sameDupGroup ||
+        sameDateNearIdentical ||
+        (sameParentFolder &&
+          ((dhashDist <= 8 && dt <= 5 && entry.tsSec > 0) ||
+            (sameSceneCluster && dhashDist <= 12 && dt <= 3 && entry.tsSec > 0)))
       ) {
         prevCluster.push(entry);
         if (dupId && !dupClusterMap.has(dupId)) {
@@ -323,29 +327,48 @@ export function groupBurstSearchResults(
   }
 
   // 각 연사 클러스터에서 가장 점수가 높거나 선명한 대표 1장을 선정하고 원래 검색 랭킹 순서로 정렬
-  const grouped = clusters.map((cluster) => {
-    const bestRankOrder = [...cluster].sort((a, b) => {
-      if (a.item.photo.isBestInDuplicateGroup && !b.item.photo.isBestInDuplicateGroup) return -1;
-      if (!a.item.photo.isBestInDuplicateGroup && b.item.photo.isBestInDuplicateGroup) return 1;
-      if (b.item.score !== a.item.score) return b.item.score - a.item.score;
-      return (b.item.photo.opticalSharpness ?? 0) - (a.item.photo.opticalSharpness ?? 0);
-    });
-    const minOrigIdx = Math.min(...cluster.map((c) => c.origIdx));
-    const expandedPhotos = expandBurstMembers(cluster.map((c) => c.item.photo));
-    return {
-      minOrigIdx,
-      representative: bestRankOrder[0].item,
-      burstPhotos: expandedPhotos,
-      burstCount: expandedPhotos.length,
-    };
-  });
+  // 이미 다른 연사 묶음에 흡수된 사진(id 또는 동일 duplicateGroupId)이 별도 카드로 중복 노출되지 않도록 전역 중복 제거합니다.
+  const rankedClusters = clusters
+    .map((cluster) => {
+      const bestRankOrder = [...cluster].sort((a, b) => {
+        if (a.item.photo.isBestInDuplicateGroup && !b.item.photo.isBestInDuplicateGroup) return -1;
+        if (!a.item.photo.isBestInDuplicateGroup && b.item.photo.isBestInDuplicateGroup) return 1;
+        if (b.item.score !== a.item.score) return b.item.score - a.item.score;
+        return (b.item.photo.opticalSharpness ?? 0) - (a.item.photo.opticalSharpness ?? 0);
+      });
+      const minOrigIdx = Math.min(...cluster.map((c) => c.origIdx));
+      const expandedPhotos = expandBurstMembers(cluster.map((c) => c.item.photo));
+      return {
+        minOrigIdx,
+        representative: bestRankOrder[0].item,
+        burstPhotos: expandedPhotos,
+        burstCount: expandedPhotos.length,
+      };
+    })
+    .sort((a, b) => a.minOrigIdx - b.minOrigIdx);
 
-  grouped.sort((a, b) => a.minOrigIdx - b.minOrigIdx);
-  return grouped.map(({ representative, burstPhotos, burstCount }) => ({
-    representative,
-    burstPhotos,
-    burstCount,
-  }));
+  const claimedPhotoIds = new Set<string>();
+  const claimedDupGroups = new Set<string>();
+  const grouped: GroupedSearchResultItem[] = [];
+
+  for (const g of rankedClusters) {
+    const repId = g.representative.photo.id;
+    const repDup = g.representative.photo.duplicateGroupId;
+    if (claimedPhotoIds.has(repId) || (repDup && claimedDupGroups.has(repDup))) {
+      continue;
+    }
+    for (const bp of g.burstPhotos) {
+      claimedPhotoIds.add(bp.id);
+      if (bp.duplicateGroupId) claimedDupGroups.add(bp.duplicateGroupId);
+    }
+    grouped.push({
+      representative: g.representative,
+      burstPhotos: g.burstPhotos,
+      burstCount: g.burstCount,
+    });
+  }
+
+  return grouped;
 }
 
 /**

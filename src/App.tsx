@@ -144,8 +144,43 @@ export const App: React.FC = () => {
     };
 
     window.addEventListener('popstate', handlePopState);
+    // Android Capacitor 하드웨어/제스처 뒤로가기 버튼 시 앱 종료 대신 열린 모달만 안전하게 닫기
+    let capBackHandle: { remove?: () => void } | null = null;
+    try {
+      const capApp = (
+        window as unknown as {
+          Capacitor?: {
+            Plugins?: {
+              App?: {
+                addListener?: (
+                  ev: string,
+                  cb: () => void
+                ) => Promise<{ remove?: () => void }> | { remove?: () => void };
+              };
+            };
+          };
+        }
+      ).Capacitor?.Plugins?.App;
+      if (capApp?.addListener) {
+        const res = capApp.addListener('backButton', handlePopState);
+        if (res && typeof (res as Promise<{ remove?: () => void }>).then === 'function') {
+          void (res as Promise<{ remove?: () => void }>).then((h) => {
+            capBackHandle = h;
+          });
+        } else {
+          capBackHandle = res as { remove?: () => void };
+        }
+      }
+    } catch {
+      /* ignore non-capacitor env */
+    }
     return () => {
       window.removeEventListener('popstate', handlePopState);
+      try {
+        capBackHandle?.remove?.();
+      } catch {
+        /* ignore */
+      }
       if (pushedByEffect && window.history.state?.ghostiModalOpen) {
         try {
           window.history.replaceState(

@@ -263,39 +263,6 @@ export const PhotoDetailModal: React.FC = () => {
     [photoNavList, currentPhotoIdx, photoNavContext.keepGroup, setSelectedPhoto]
   );
 
-  const isModalOpen = Boolean(selectedPhoto);
-  useEffect(() => {
-    if (!isModalOpen || typeof window === 'undefined') return;
-    let closedByPopState = false;
-    try {
-      if (!window.history.state?.ghostiPhotoModal) {
-        window.history.pushState(
-          { ...(window.history.state || {}), ghostiPhotoModal: true },
-          ''
-        );
-      }
-    } catch {
-      /* ignore history restriction */
-    }
-    const onPopState = () => {
-      closedByPopState = true;
-      setSelectedPhoto(null);
-    };
-    window.addEventListener('popstate', onPopState);
-    return () => {
-      window.removeEventListener('popstate', onPopState);
-      if (!closedByPopState) {
-        try {
-          if (window.history.state?.ghostiPhotoModal) {
-            window.history.back();
-          }
-        } catch {
-          /* ignore */
-        }
-      }
-    };
-  }, [isModalOpen, setSelectedPhoto]);
-
   useEffect(() => {
     if (!selectedPhoto) return;
     const onKeyDown = (e: KeyboardEvent) => {
