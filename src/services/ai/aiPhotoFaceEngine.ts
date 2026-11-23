@@ -2873,7 +2873,7 @@ export async function resolveSmartKoreanLabelForPhoto(
           }
         }
         const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 4500);
+        const tid = setTimeout(() => ctrl.abort(), 1800);
         const res = await fetch(getZCoreUrl('/__photos/ocr'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2959,10 +2959,10 @@ export async function resolveSmartKoreanLabelForPhoto(
             }
           }
         })();
-        // 시각 모델 로드/추론이 지연되더라도 라벨러가 무한 대기하지 않도록 최대 4.5초로 제한
+        // 시각 모델 로드/추론이 지연되더라도 알림이 늦게 뜨지 않도록 최대 1.5초로 제한
         await Promise.race([
           visionFallbackTask,
-          new Promise<void>((resolve) => setTimeout(resolve, 4500)),
+          new Promise<void>((resolve) => setTimeout(resolve, 1500)),
         ]);
         if (tokens.length === 0) {
           const fnMeaningful = extractMeaningfulUserMediaTokens(photo.name);

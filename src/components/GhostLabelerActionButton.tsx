@@ -119,7 +119,7 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
                           label: fallbackLabel,
                           enrichedTags: [],
                         }),
-                      6500
+                      2200
                     )
                 ),
               ]);
@@ -186,7 +186,7 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
                       label: fallbackLabel,
                       enrichedTags: [],
                     }),
-                  6500
+                  2200
                 )
               ),
             ]);
