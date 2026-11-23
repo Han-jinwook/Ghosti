@@ -544,7 +544,7 @@ export const GhostiShowroomLanding: React.FC<GhostiShowroomLandingProps> = ({
                 className="h-6 w-auto object-contain shrink-0"
               />
             </div>
-            <span className="hidden xl:inline-flex items-center px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium whitespace-nowrap">
+            <span className="hidden 2xl:inline-flex items-center px-2.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-slate-600 text-[12px] font-medium whitespace-nowrap">
               개인 · 민간 기업 기본 기능 무료
             </span>
           </div>

@@ -1725,7 +1725,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
         title={careScheduleSummary}
         className="px-3.5 py-2.5 bg-white border-b border-slate-200 flex items-center justify-between gap-2"
       >
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex items-center gap-2 shrink-0">
           <img
             src={GHOST_SECRETARY_AVATAR_SRC}
             alt=""
@@ -1739,11 +1739,11 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
             실행 취소 지원
           </span>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center justify-end gap-1.5 min-w-0 flex-1 overflow-hidden">
           {isMobileOrStore ? (
             <VoiceActorControlPill compact />
           ) : (
-            <span className="text-[11px] font-medium text-slate-500 whitespace-nowrap">
+            <span className="text-[11px] font-medium text-slate-500 truncate">
               {careScheduleSummary}
             </span>
           )}
