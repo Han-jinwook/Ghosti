@@ -86,6 +86,11 @@ import {
 } from '../../services/setupMonsterEngine';
 import { evaluateTrajectoryAndBuildSelfHealingOta } from '../../services/selfHealingEngine';
 import {
+  loadCachedOnDeviceFaceClusters,
+  runOnDeviceFacePassportScan,
+} from '../../services/ai/onDeviceFacePassportEngine';
+import { PASSPORT_REG_STATE_EVENT } from '../../services/passportRegistrationFlow';
+import {
   LOCAL_DOCUMENT_FILES,
   OnboardingProgressUpdate,
   PRESET_QUERIES,
@@ -551,7 +556,17 @@ export const createAssistantOnboardingSlice: StateCreator<
       isStandaloneSearchWin ? Promise.resolve([]) : fetchSharedFamilyHostPhotos(),
     ]);
 
-    const autoMultiClusters = buildAutoMultiConditionSeedClusters(faceData.clusters);
+    const cachedOnDeviceFaces =
+      faceData.clusters.length === 0 ? loadCachedOnDeviceFaceClusters() : null;
+    const rawFaceClusters =
+      faceData.clusters.length > 0
+        ? faceData.clusters
+        : cachedOnDeviceFaces?.clusters || [];
+    const effectiveLatestYear =
+      faceData.clusters.length > 0
+        ? faceData.latestCorpusYear
+        : cachedOnDeviceFaces?.latestCorpusYear || faceData.latestCorpusYear;
+    const autoMultiClusters = buildAutoMultiConditionSeedClusters(rawFaceClusters);
 
     const totalBytes = dataset.photos.reduce((a, p) => a + p.size, 0);
     const syncState = loadSyncState(dataset.photos.length, totalBytes);
@@ -667,7 +682,7 @@ export const createAssistantOnboardingSlice: StateCreator<
         localDocuments: indexedDocs,
         videoSceneItems: baseDatasetVideos,
         faceClusters: autoMultiClusters,
-        latestCorpusYear: faceData.latestCorpusYear,
+        latestCorpusYear: effectiveLatestYear,
         onboardingProgress: {
           ...INITIAL_ONBOARDING_PROGRESS,
           currentPhotoThumb: fallbackThumb,
@@ -758,6 +773,35 @@ export const createAssistantOnboardingSlice: StateCreator<
           initializing: false,
         };
       });
+    }
+
+    // [온디바이스 얼굴 여권 자동 추출 (YuNet 232KB Web Worker)]
+    // 사진 목록이 준비되면 유저가 '여권 등록'을 먼저 말할 필요 없이 백그라운드에서 얼굴을 자동 추출하고
+    // 완료 시 귀신비서가 먼저 자연스럽게 여권사진 등록을 제안합니다 (D-35).
+    if (!isStandaloneSearchWin && typeof window !== 'undefined' && enrichedPhotos.length > 0) {
+      window.setTimeout(() => {
+        void (async () => {
+          try {
+            const stNow = get();
+            const livePhotos = stNow.photos.length > 0 ? stNow.photos : enrichedPhotos;
+            if (livePhotos.length === 0) return;
+            const scanned = await runOnDeviceFacePassportScan(livePhotos, stNow.faceClusters);
+            if (scanned.clusters.length > 0) {
+              set({
+                faceClusters: buildAutoMultiConditionSeedClusters(scanned.clusters),
+                latestCorpusYear: scanned.latestCorpusYear,
+              });
+              try {
+                window.dispatchEvent(new Event(PASSPORT_REG_STATE_EVENT));
+              } catch {
+                /* ignore */
+              }
+            }
+          } catch {
+            /* ignore face scan errors */
+          }
+        })();
+      }, 1500);
     }
 
     // [의미 검색 엔진 준비 & 실사용 PC 미디어 무소음 비전 인덱싱]

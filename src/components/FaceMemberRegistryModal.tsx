@@ -1315,7 +1315,7 @@ export const PassportDoorplateStyleModal: React.FC = () => {
             </div>
           ) : (
             <p className="text-[12.5px] text-zinc-500 leading-relaxed break-keep">
-              아직 등록된 사진이 없어요. 귀신비서 채팅창에서 ‘여권 등록하자’라고 입력하면 내 사진에서 얼굴을 자동으로 찾아 등록할 수 있어요.
+              아직 등록된 사진이 없어요. 사진 불러오기가 끝나면 귀신비서가 내 얼굴을 먼저 찾아 안내해 드려요.
             </p>
           )}
         </div>

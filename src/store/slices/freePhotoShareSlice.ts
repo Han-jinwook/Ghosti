@@ -16,6 +16,7 @@ import {
   triggerSetupMonsterTtsPrewarm,
 } from '../../services/setupMonsterTts';
 import { analyzeMobilePickedPhotoFiles } from '../../services/mobilePhotoPicker';
+import { saveCachedOnDeviceFaceClusters } from '../../services/ai/onDeviceFacePassportEngine';
 import { isCapacitorNativeMobileRuntime } from '../../services/ghostiMobileCareBridge';
 import {
   clearStoredInviteSession,
@@ -646,6 +647,8 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         : get().lastQuarantineToast,
     });
 
+    saveCachedOnDeviceFaceClusters(nextClusters, get().latestCorpusYear);
+
     if (!isSecondaryRoom) {
       const serverUpdated = await updateFaceClusterRegistry({
         action: 'update',
@@ -653,7 +656,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
         registeredName: cleanName,
         relationshipTag: relationshipTag ?? '',
       });
-      if (serverUpdated) {
+      if (serverUpdated && serverUpdated.length > 0) {
         set({ faceClusters: buildAutoMultiConditionSeedClusters(serverUpdated) });
       }
     }

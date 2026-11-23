@@ -811,6 +811,21 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     };
 
     const onRegState = () => {
+      // [D-35] ① 아직 첫 제안을 받지 않은 상태에서 온디바이스 얼굴 인덱싱이 완료되어 후보가 잡히면
+      // 유저가 '여권 등록'을 먼저 말할 필요 없이 귀신비서가 먼저 자연스럽게 말을 겁니다.
+      const regSt = loadPassportRegState();
+      if (!regSt.firstOfferShown) {
+        const pending = summarizePassportPending(regSt);
+        const hasSelfToAsk = pending.needsSelfPick || pending.selfPendingCount > 0;
+        if (hasSelfToAsk) {
+          markFirstOfferShown();
+          pushOnce('secretary_passport_first_offer_', {
+            text: buildPassportSelfOfferText(loadGhostSecretaryState().nickname || ''),
+            followUpSuggestions: [PASSPORT_CHIP_OPEN_SELF, PASSPORT_CHIP_LATER],
+          });
+          return;
+        }
+      }
       const mode = passportPromptForActivity();
       if (!mode) return;
       markPassportPrompted();
