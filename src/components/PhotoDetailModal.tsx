@@ -537,7 +537,7 @@ export const PhotoDetailModal: React.FC = () => {
                         /* ignore */
                       }
                       setSelectedPhoto(null);
-                      setDesktopTab('share');
+                      setDesktopTab('trash');
                     }}
                     className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium transition-colors cursor-pointer"
                   >

@@ -646,7 +646,7 @@ export const GhostSearchPane: React.FC<{
                                       } catch {
                                         /* ignore */
                                       }
-                                      setDesktopTab('share');
+                                      setDesktopTab('trash');
                                     }}
                                     className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium transition-colors cursor-pointer"
                                   >
@@ -700,7 +700,7 @@ export const GhostSearchPane: React.FC<{
                                       } catch {
                                         /* ignore */
                                       }
-                                      setDesktopTab('share');
+                                      setDesktopTab('trash');
                                     }}
                                     className="px-2.5 py-1 rounded-md bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[11.5px] font-medium cursor-pointer"
                                   >
