@@ -31,21 +31,32 @@ export const GhostiLoadingSplash: React.FC = () => {
   const [unmounted, setUnmounted] = useState(shouldSkipSplash);
 
   useEffect(() => {
-    // 0.3초(300ms) 후 순식간에 페이드아웃 진입
+    // 0.3초(300ms) 후 순식간에 페이드아웃 진입 + 어떠한 예외 상황에서도 1.2초 내 강제 언마운트 보장
     const timer = window.setTimeout(() => {
       setDismissed(true);
     }, 300);
+    const hardUnmountTimer = window.setTimeout(() => {
+      setDismissed(true);
+      setUnmounted(true);
+    }, 1200);
 
-    return () => clearTimeout(timer);
+    return () => {
+      window.clearTimeout(timer);
+      window.clearTimeout(hardUnmountTimer);
+    };
   }, []);
 
   useEffect(() => {
     if (!dismissed) return;
-    playAppEnterGiggleSound();
+    try {
+      playAppEnterGiggleSound();
+    } catch {
+      /* ignore audio autoplay/WebView errors so splash always unmounts */
+    }
     const t = window.setTimeout(() => {
       setUnmounted(true);
     }, 150);
-    return () => clearTimeout(t);
+    return () => window.clearTimeout(t);
   }, [dismissed]);
 
   if (unmounted) return null;
