@@ -133,10 +133,14 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
           <h3 className="text-[14px] font-semibold text-slate-900">클립보드 공유</h3>
           {isLoggedIn && (
             <span className="text-[12px] text-slate-500">
-              {connectedDevices.length >= 2
+              {thisDeviceRevoked
+                ? '· 이 기기 연결 해제됨'
+                : connectedDevices.length >= 2
                 ? `· 기기 ${connectedDevices.length}대 연결됨`
                 : '· 현재 기기만 로그인됨 (다른 기기 연결 대기)'}
-              {!isMobileDevice && !zCoreConnected ? ' (외부 앱 자동 감지는 PC 엔진 필요)' : ''}
+              {!thisDeviceRevoked && !isMobileDevice && !zCoreConnected
+                ? ' (외부 앱 자동 감지는 PC 엔진 필요)'
+                : ''}
             </span>
           )}
           {isLoggedIn && deviceEntitlement?.isPaidUnlimited && !hidePricingForStore && (
@@ -233,7 +237,7 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
         </div>
       )}
 
-      {isLoggedIn && connectedDevices.length > 0 && (
+      {isLoggedIn && !thisDeviceRevoked && connectedDevices.length > 0 && (
         <div className="flex flex-col gap-2 py-1 text-[12px]">
           <div className="flex items-center justify-between gap-2">
             <span className="text-slate-500 font-medium">연결된 기기 ({connectedDevices.length}대)</span>
@@ -287,6 +291,9 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
               );
             })}
           </div>
+          <p className="text-[11px] text-slate-400 leading-snug">
+            같은 이메일 계정으로 연결된 모든 기기(PC · 아이폰 · 안드로이드)가 함께 표시됩니다.
+          </p>
         </div>
       )}
 

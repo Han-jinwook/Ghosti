@@ -820,21 +820,25 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
         nextSubscribed.work = nextEnt.workPlanId as PricingPlanId;
       }
 
+      const nextRevokedSelf =
+        payload.revokedSelf !== undefined ? payload.revokedSelf : state.thisDeviceRevoked;
+      const effectiveDevices = nextRevokedSelf ? [] : nextDevices;
+
       return {
         photos: nextPhotos,
         localDocuments: nextDocs,
         searchResults: nextSearchResults,
         subscribedLounges: nextSubscribed,
-        connectedDevices: nextDevices,
+        connectedDevices: effectiveDevices,
         devicePairingCode6:
           payload.pairingCode !== undefined ? payload.pairingCode : state.devicePairingCode6,
         deviceEntitlement: nextEnt,
-        thisDeviceRevoked:
-          payload.revokedSelf !== undefined ? payload.revokedSelf : state.thisDeviceRevoked,
-        pcAgentPairedMobile:
-          payload.devices !== undefined
-            ? hasMobile || nextDevices.length >= 2
-            : state.pcAgentPairedMobile,
+        thisDeviceRevoked: nextRevokedSelf,
+        pcAgentPairedMobile: nextRevokedSelf
+          ? false
+          : payload.devices !== undefined
+          ? hasMobile || effectiveDevices.length >= 2
+          : state.pcAgentPairedMobile,
         syncedClipboardItems: nextClips,
       };
     });

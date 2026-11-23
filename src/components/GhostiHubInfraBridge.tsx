@@ -210,6 +210,7 @@ const GhostiHubGlobalModals: React.FC = () => {
         const preLogoutToken = (localStorage.getItem('merlin_session_token') || '').trim();
         const thisDeviceId = getThisDeviceIdentity().deviceId;
         if (preLogoutToken && thisDeviceId) {
+          localStorage.setItem('ghosti_revoked_by_own_logout', '1');
           void fetch(resolveHubSupabaseBridgeEndpoint(), {
             method: 'POST',
             keepalive: true,

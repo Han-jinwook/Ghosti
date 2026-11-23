@@ -111,6 +111,23 @@ export function playAppEnterGiggleSound(forceOnModeTransition = false): void {
     return;
   }
 
+  // 모바일(iOS/AOS) WKWebView가 메모리 회수로 무음 리로드될 때 유휴 상태에서 귀신 효과음이 갑자기 재울림하지 않도록 5분 쿨다운 적용
+  try {
+    const isMobileUa =
+      typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent || '');
+    if (isMobileUa) {
+      const lastMs = Number(localStorage.getItem('ghosti_mobile_giggle_last_ms') || '0');
+      if (lastMs > 0 && Date.now() - lastMs < 5 * 60 * 1000) {
+        hasPlayedAppEnterGiggle = true;
+        (window as unknown as Record<string, unknown>)[PAGE_ENTER_GIGGLE_WIN_KEY] = true;
+        return;
+      }
+      localStorage.setItem('ghosti_mobile_giggle_last_ms', String(Date.now()));
+    }
+  } catch {
+    /* ignore storage error */
+  }
+
   hasPlayedAppEnterGiggle = true;
   (window as unknown as Record<string, unknown>)[PAGE_ENTER_GIGGLE_WIN_KEY] = true;
   isAttemptingGiggle = true;

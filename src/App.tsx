@@ -710,6 +710,11 @@ export const App: React.FC = () => {
         const parsed = new URL(rawUrl);
         const code = (parsed.searchParams.get('pairCode') || '').replace(/\D/g, '').slice(0, 6);
         if (code.length !== 6) return;
+        try {
+          sessionStorage.setItem('ghosti_explicit_reconnect_once', '1');
+        } catch {
+          /* ignore */
+        }
         savePendingQrPairCode(code);
         setViewMode('workspace');
         useSaySeeStore.setState({
@@ -917,7 +922,7 @@ export const App: React.FC = () => {
       );
       if (isNativeCapacitorApp) {
         // 네이티브 스토어 앱에서 화면을 아래로 당기면 WebView 리로드 없이 즉시 스마트폰 갤러리(사진·동영상) 동기화를 끝까지 대기하고 완료 피드백 제공
-        const minSpin = new Promise<void>((resolve) => window.setTimeout(resolve, 900));
+        const minSpin = new Promise<void>((resolve) => window.setTimeout(resolve, 1100));
         const maxWait = new Promise<void>((resolve) => window.setTimeout(resolve, 8000));
         const syncWork = Promise.resolve(
           useSaySeeStore.getState().syncMobileNativeGalleryAuto({ promptPermission: true })
@@ -975,17 +980,16 @@ export const App: React.FC = () => {
         return;
       }
 
-      const iosOverscroll = curScrollTop < 0 ? Math.abs(curScrollTop) : 0;
-      if (dy > 10 && dy > Math.abs(dx) * 1.2) {
+      if (dy > 16 && dy > Math.abs(dx) * 1.35) {
         ptrActivePullRef.current = true;
-        // 최상단(scrollTop <= 0)에서 아래로 당길 때만 preventDefault로 AOS/iOS touchcancel 중단 없이 부드러운 당김 보장
+        // 최상단(scrollTop <= 0)에서 의도적으로 아래로 당길 때만 preventDefault 적용
         if (curScrollTop <= 0 && e.cancelable) {
           e.preventDefault();
         }
-        const damped = Math.min(96, Math.max(Math.round((dy - 10) * 0.55), Math.round(iosOverscroll * 0.85)));
+        const damped = Math.min(104, Math.round((dy - 16) * 0.52));
         ptrDistRef.current = damped;
         setPtrPullDist(damped);
-      } else if (ptrActivePullRef.current && dy <= 6) {
+      } else if (ptrActivePullRef.current && dy <= 8) {
         ptrDistRef.current = 0;
         setPtrPullDist(0);
       }
@@ -993,11 +997,8 @@ export const App: React.FC = () => {
 
     const onTouchEnd = () => {
       if (!ptrStartRef.current) return;
-      const finalDist = Math.max(
-        ptrDistRef.current,
-        getRootScrollTop() < 0 ? Math.abs(getRootScrollTop()) : 0
-      );
-      if (finalDist >= 48 && !isPtrRefreshingRef.current) {
+      const finalDist = ptrDistRef.current;
+      if (ptrActivePullRef.current && finalDist >= 72 && !isPtrRefreshingRef.current) {
         triggerPtrRefresh();
       } else {
         resetPtr();
@@ -1006,13 +1007,9 @@ export const App: React.FC = () => {
 
     const onTouchCancel = () => {
       if (isPtrRefreshingRef.current) return;
-      // iOS WKWebView에서는 바운스 제스처 도중 touchend 대신 touchcancel이 먼저 들어올 수 있으므로
-      // 이미 새로고침 임계치(48px)에 도달했다면 인디케이터를 날리지 않고 그대로 새로고침을 실행합니다.
-      const finalDist = Math.max(
-        ptrDistRef.current,
-        getRootScrollTop() < 0 ? Math.abs(getRootScrollTop()) : 0
-      );
-      if (ptrActivePullRef.current && finalDist >= 48) {
+      // iOS WKWebView 바운스 중 touchcancel이 들어와도 사용자가 충분히(72px 이상) 직접 당긴 경우에만 새로고침 실행
+      const finalDist = ptrDistRef.current;
+      if (ptrActivePullRef.current && finalDist >= 72) {
         triggerPtrRefresh();
       } else {
         resetPtr();
@@ -1169,13 +1166,13 @@ export const App: React.FC = () => {
           <div className="px-4 py-2 rounded-full bg-white border border-slate-200 text-slate-800 text-[12.5px] font-medium shadow-md flex items-center gap-2 whitespace-nowrap">
             <span
               className={`inline-block w-3.5 h-3.5 rounded-full border-2 border-teal-600 border-t-transparent ${
-                isPtrRefreshing || ptrPullDist >= 48 ? 'animate-spin' : ''
+                isPtrRefreshing || ptrPullDist >= 72 ? 'animate-spin' : ''
               }`}
             />
             <span>
               {isPtrRefreshing
                 ? '새로고침 중...'
-                : ptrPullDist >= 48
+                : ptrPullDist >= 72
                 ? '손을 떼면 새로고침됩니다'
                 : '아래로 당겨서 새로고침'}
             </span>

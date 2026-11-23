@@ -621,6 +621,22 @@ export async function syncDeviceHeartbeatAndList(opts?: {
       entitlement: null,
     };
   }
+  let consumeExplicitReconnect = Boolean(opts?.explicitReconnect);
+  if (!consumeExplicitReconnect && typeof window !== 'undefined') {
+    try {
+      if (sessionStorage.getItem('ghosti_explicit_reconnect_once') === '1') {
+        sessionStorage.removeItem('ghosti_explicit_reconnect_once');
+        consumeExplicitReconnect = true;
+      }
+      if (localStorage.getItem('ghosti_revoked_by_own_logout') === '1') {
+        localStorage.removeItem('ghosti_revoked_by_own_logout');
+        consumeExplicitReconnect = true;
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+
   const res = await callGhostiServerBridge<{
     deviceId?: string;
     revokedSelf?: boolean;
@@ -633,9 +649,9 @@ export async function syncDeviceHeartbeatAndList(opts?: {
     deviceKind: ident.deviceKind,
     platform: ident.platform,
     displayName: ident.displayName,
-    appVersion: '1.0.72',
+    appVersion: '1.0.73',
     explicitTrialOptIn: Boolean(opts?.explicitTrialOptIn),
-    explicitReconnect: Boolean(opts?.explicitReconnect),
+    explicitReconnect: consumeExplicitReconnect,
     forceRefreshPairingCode: Boolean(opts?.forceRefreshPairingCode),
   });
 
@@ -2625,16 +2641,16 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     ]);
 
     if (!disposed && hb?.ok && opts.onDevicesUpdated) {
+      const hasPendingPair = Boolean(readPendingQrPairCode());
+      const effectiveRevoked = hasPendingPair ? false : hb.revokedSelf;
       opts.onDevicesUpdated({
-        devices: hb.devices,
+        devices: effectiveRevoked ? [] : hb.devices,
         pairingCode: hb.pairingCode,
         entitlement: hb.entitlement,
-        revokedSelf: hb.revokedSelf,
+        revokedSelf: effectiveRevoked,
       });
-      if (hb.revokedSelf && opts.onSelfRevoked) {
-        opts.onSelfRevoked(hb.devices);
-      }
-      // 서버가 확정한 canonicalUserId로 키 추가 예열
+      // 앱 진입/QR 스캔 중에는 이미 해제 상태였던 기기에 대해 중복 '연결 끊김' 토스트를 띄우지 않음
+      // (실시간 브로드캐스트 또는 활성 연결 -> 해제 전환 시에만 1회 안내)
       void prewarmAccountE2eeKey(normEmail, opts.userId);
     }
 
