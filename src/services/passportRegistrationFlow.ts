@@ -37,6 +37,44 @@ export const PASSPORT_REG_PENDING_OPEN_KEY = 'ghosti_passport_reg_pending_open';
 export const PASSPORT_REG_OPEN_EVENT = 'ghosti_passport_reg_open';
 export const PASSPORT_REG_DONE_EVENT = 'ghosti_passport_reg_completed';
 export const PASSPORT_REG_STATE_EVENT = 'ghosti_passport_reg_state_updated';
+export const PASSPORT_SCAN_FINISHED_EVENT = 'ghosti_passport_scan_finished';
+
+interface QueuedUserPassportWait {
+  mode: PassportRegMode;
+  nickname: string;
+  requestedAt: number;
+}
+
+let queuedUserPassportWait: QueuedUserPassportWait | null = null;
+
+export function queueUserPassportWait(mode: PassportRegMode, nickname: string): void {
+  queuedUserPassportWait = { mode, nickname, requestedAt: Date.now() };
+}
+
+export function peekQueuedUserPassportWait(): QueuedUserPassportWait | null {
+  if (!queuedUserPassportWait) return null;
+  if (Date.now() - queuedUserPassportWait.requestedAt > 5 * 60 * 1000) {
+    queuedUserPassportWait = null;
+    return null;
+  }
+  return queuedUserPassportWait;
+}
+
+export function consumeQueuedUserPassportWait(): QueuedUserPassportWait | null {
+  const cur = peekQueuedUserPassportWait();
+  queuedUserPassportWait = null;
+  return cur;
+}
+
+export function notifyPassportFaceScanFinished(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    window.dispatchEvent(new Event(PASSPORT_REG_STATE_EVENT));
+    window.dispatchEvent(new Event(PASSPORT_SCAN_FINISHED_EVENT));
+  } catch {
+    /* ignore */
+  }
+}
 
 /** 사진이 거의 없는 업무용 PC는 여권 질문 자체를 생략 (기존 기준 유지) */
 /** 본인('나')·가족 공통 단일 기준: 동일 인물이 최소 3장 이상 등장할 때만 제안 (1~2장 행인·오탐 배제) */
@@ -418,17 +456,18 @@ export function passportUnavailableReason(mode: PassportRegMode, nickname: strin
   const qualifiedSelfCandidates = rankFaceClusters(clusters, MAX_FACES, PASSPORT_MIN_FACE_PHOTOS_FOR_ASK);
 
   if (clusters.length === 0 || qualifiedSelfCandidates.length === 0) {
-    if (!engineConnected && (store.photos || []).length === 0) {
+    const justLoadedBootWindow = typeof performance !== 'undefined' && performance.now() < 10000;
+    if (!engineConnected && (store.photos || []).length === 0 && !justLoadedBootWindow) {
       return `${nick}내 컴퓨터를 먼저 연결해 주시면 사진 속 얼굴을 찾아서 바로 보여드릴게요!`;
     }
     if ((store.photos || []).length > 0 && !isOnDeviceFaceScanRunning()) {
       void (async () => {
         try {
           const cur = useSaySeeStore.getState();
-          const applyInterim = (clusters: FaceMemberCluster[], latestYear: number) => {
-            if (clusters.length === 0) return;
+          const applyInterim = (nextClusters: FaceMemberCluster[], latestYear: number) => {
+            if (nextClusters.length === 0) return;
             useSaySeeStore.setState({
-              faceClusters: buildAutoMultiConditionSeedClusters(clusters),
+              faceClusters: buildAutoMultiConditionSeedClusters(nextClusters),
               latestCorpusYear: latestYear,
             });
             window.dispatchEvent(new Event(PASSPORT_REG_STATE_EVENT));
@@ -442,10 +481,13 @@ export function passportUnavailableReason(mode: PassportRegMode, nickname: strin
           applyInterim(scanned.clusters, scanned.latestCorpusYear);
         } catch {
           /* ignore */
+        } finally {
+          notifyPassportFaceScanFinished();
         }
       })();
     }
-    if (isOnDeviceFaceScanRunning() || clusters.length === 0) {
+    if (isOnDeviceFaceScanRunning() || clusters.length === 0 || justLoadedBootWindow) {
+      queueUserPassportWait(mode, nickname);
       return `${nick}아직 사진 속 얼굴을 찾는 중이에요. 다 찾으면 바로 알려드릴게요!`;
     }
     return `${nick}같은 분이 3장 이상 나온 인물 사진을 아직 찾지 못했어요. 새 사진이 들어오면 자동으로 찾아둘게요!`;

@@ -69,10 +69,13 @@ import {
   pullGhostPassportsFromCloud,
   buildPassportExtrasFromClusters,
 } from '../services/ghostPassportSync';
+import { isOnDeviceFaceScanRunning } from '../services/ai/onDeviceFacePassportEngine';
 import {
   PASSPORT_MIN_FACE_PHOTOS_FOR_ASK,
   PASSPORT_REG_DONE_EVENT,
   PASSPORT_REG_STATE_EVENT,
+  PASSPORT_SCAN_FINISHED_EVENT,
+  consumeQueuedUserPassportWait,
   countFacePhotos,
   familyCandidates,
   findSelfCluster,
@@ -83,6 +86,8 @@ import {
   openPassportRegistration,
   passportPromptForActivity,
   passportUnavailableReason,
+  peekQueuedUserPassportWait,
+  rankFaceClusters,
   summarizePassportPending,
   type PassportRegMode,
 } from '../services/passportRegistrationFlow';
@@ -825,7 +830,71 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       }
     };
 
+    const fulfillUserWaitIfReady = (isScanFinished: boolean): boolean => {
+      const waited = peekQueuedUserPassportWait();
+      if (!waited) return false;
+      if (!isScanFinished && isOnDeviceFaceScanRunning()) return false;
+
+      const curStore = useSaySeeStore.getState();
+      const qualified = rankFaceClusters(curStore.faceClusters || [], 6, PASSPORT_MIN_FACE_PHOTOS_FOR_ASK);
+      const nick = (waited.nickname || loadGhostSecretaryState().nickname || '').trim();
+      const nickPrefix = nick ? `${nick}님, ` : '';
+
+      if (qualified.length > 0) {
+        consumeQueuedUserPassportWait();
+        const regSt = loadPassportRegState();
+        const self = findSelfCluster(regSt);
+        const openMode: PassportRegMode = waited.mode === 'family' && !self ? 'self' : waited.mode;
+        const pending = summarizePassportPending(regSt);
+        const hasRealName = Boolean((loadGhostPassportBook().self?.realName || '').trim());
+        const nothingForSelf = openMode === 'self' && self && pending.selfPendingCount === 0 && hasRealName;
+
+        if (nothingForSelf) {
+          if (familyCandidates(regSt).length > 0) {
+            pushOnce('secretary_passport_fulfilled_', {
+              text: `${nickPrefix}얼굴을 다 찾았어요! 내 여권 사진은 이미 등록되어 있어서 가족 얼굴 등록 안내를 드릴게요.\n\n${buildPassportFamilyOfferText()}`,
+              followUpSuggestions: [PASSPORT_CHIP_OPEN_FAMILY, PASSPORT_CHIP_LATER],
+            });
+          } else {
+            pushOnce('secretary_passport_fulfilled_', {
+              text: `${nickPrefix}얼굴을 다 찾았어요! 지금 찾은 사진은 이미 모두 여권에 등록되어 있습니다.`,
+            });
+          }
+          return true;
+        }
+        if (openMode === 'family' && familyCandidates(regSt).length === 0) {
+          pushOnce('secretary_passport_fulfilled_', {
+            text: `${nickPrefix}얼굴을 다 찾았어요! 지금은 새로 등록할 가족 얼굴이 없어요. 새 사진이 들어오면 다시 찾아볼게요!`,
+          });
+          return true;
+        }
+
+        openPassportRegistration(openMode);
+        markPassportPrompted();
+        const guide =
+          openMode === 'self' && !self
+            ? waited.mode === 'family'
+              ? `${nickPrefix}얼굴을 다 찾았어요! 가족 등록 전에 ${nick ? `${nick}님` : '내'} 얼굴부터 왼쪽 화면에서 선택해 주세요.`
+              : `${nickPrefix}얼굴을 다 찾았어요! 왼쪽 화면에 띄워 드렸으니 ${nick ? `${nick}님` : '내'} 얼굴을 선택해 주세요.`
+            : `${nickPrefix}얼굴을 다 찾았어요! 왼쪽 화면에 띄워 드렸으니 아닌 사진만 제외하고 [등록]을 눌러주세요.`;
+        pushOnce('secretary_passport_fulfilled_', { text: guide });
+        return true;
+      }
+
+      if (isScanFinished && (curStore.photos || []).length > 0) {
+        consumeQueuedUserPassportWait();
+        pushOnce('secretary_passport_fulfilled_', {
+          text: `${nickPrefix}사진을 모두 살펴봤지만 같은 분이 3장 이상 나온 인물 사진을 아직 찾지 못했어요. 새 사진이 들어오면 자동으로 찾아둘게요!`,
+        });
+        return true;
+      }
+      return false;
+    };
+
     const onRegState = () => {
+      // 유저가 '여권 등록'을 먼저 입력해 '다 찾으면 바로 알려드릴게요!'라고 약속한 대기 요청이 있으면 최우선 이행
+      if (fulfillUserWaitIfReady(false)) return;
+
       // [D-35] ① 아직 본인 여권이 미등록 상태이고, 온디바이스 얼굴 인덱싱이 완료되어 후보가 잡히면
       // 유저가 '여권 등록'을 먼저 말할 필요 없이 귀신비서가 먼저 자연스럽게 말을 겁니다 (세션당 1회).
       const regSt = loadPassportRegState();
@@ -866,13 +935,19 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       });
     };
 
+    const onScanFinished = () => {
+      fulfillUserWaitIfReady(true);
+    };
+
     window.addEventListener(PASSPORT_REG_DONE_EVENT, onRegDone);
     window.addEventListener(PASSPORT_REG_STATE_EVENT, onRegState);
+    window.addEventListener(PASSPORT_SCAN_FINISHED_EVENT, onScanFinished);
     // 다른 화면에서 사진 활동이 있었거나 얼굴 클러스터가 막 준비되었다면 즉시 1회 묻는다
     onRegState();
     return () => {
       window.removeEventListener(PASSPORT_REG_DONE_EVENT, onRegDone);
       window.removeEventListener(PASSPORT_REG_STATE_EVENT, onRegState);
+      window.removeEventListener(PASSPORT_SCAN_FINISHED_EVENT, onScanFinished);
     };
   }, [sourceTab, isMobileOrStore, faceClusterCount]);
   useEffect(() => {

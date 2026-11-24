@@ -89,7 +89,10 @@ import {
   loadCachedOnDeviceFaceClusters,
   runOnDeviceFacePassportScan,
 } from '../../services/ai/onDeviceFacePassportEngine';
-import { PASSPORT_REG_STATE_EVENT } from '../../services/passportRegistrationFlow';
+import {
+  PASSPORT_REG_STATE_EVENT,
+  notifyPassportFaceScanFinished,
+} from '../../services/passportRegistrationFlow';
 import {
   LOCAL_DOCUMENT_FILES,
   OnboardingProgressUpdate,
@@ -803,6 +806,8 @@ export const createAssistantOnboardingSlice: StateCreator<
         applyScannedClusters(scanned.clusters, scanned.latestCorpusYear);
       } catch {
         /* ignore face scan errors */
+      } finally {
+        notifyPassportFaceScanFinished();
       }
     };
 
