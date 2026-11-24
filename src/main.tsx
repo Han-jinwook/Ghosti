@@ -18,16 +18,33 @@ import {
 //      마운트 이전 동기 시점에 ?inviteToken=<hex>로 안전하게 승격합니다. (정식 3단 JWT eyJ...는 SSO용으로 100% 보존)
 if (typeof window !== 'undefined') {
   try {
+    const existingHubJwt = (localStorage.getItem('merlin_session_token') || '').trim();
+    const hasValidStoredJwt =
+      existingHubJwt.startsWith('eyJ') && existingHubJwt.split('.').length === 3;
+    const isLocalMarkedLoggedOut = localStorage.getItem('merlin_logged_out') === '1';
+
+    // 이미 유효한 새 JWT가 발급·저장되어 있고 localStorage 로그아웃 상태가 아니라면,
+    // 이전 탭 세션에 남아있던 sessionStorage.merlin_logged_out·포스트로그아웃 키를 즉시 정리해 F5 자동 로그아웃을 원천 차단
+    if (hasValidStoredJwt && !isLocalMarkedLoggedOut) {
+      localStorage.removeItem(GHOSTI_LOGOUT_LOCK_UNTIL_KEY);
+      localStorage.removeItem(GHOSTI_POST_LOGOUT_WORKSPACE_KEY);
+      try {
+        sessionStorage.removeItem('merlin_logged_out');
+      } catch {
+        /* ignore */
+      }
+    }
+
     const pendingLogoutLockUntil = Number(localStorage.getItem(GHOSTI_LOGOUT_LOCK_UNTIL_KEY) || 0);
     if (pendingLogoutLockUntil > 0) {
-      if (Date.now() <= pendingLogoutLockUntil) {
+      if (Date.now() <= pendingLogoutLockUntil && (!hasValidStoredJwt || isLocalMarkedLoggedOut)) {
         purgeAllGhostiLocalAuthArtifacts({ clearLogoutLock: true });
       } else {
         localStorage.removeItem(GHOSTI_LOGOUT_LOCK_UNTIL_KEY);
       }
     } else if (
-      localStorage.getItem('merlin_logged_out') === '1' &&
-      !(localStorage.getItem('merlin_session_token') || '').trim()
+      isLocalMarkedLoggedOut &&
+      !existingHubJwt
     ) {
       clearGhostiSupabaseSession();
     }

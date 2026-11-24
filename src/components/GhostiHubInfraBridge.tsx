@@ -361,6 +361,15 @@ const GhostiHubGlobalModals: React.FC = () => {
       window.dispatchEvent(new CustomEvent('ghosti_jump_to_secretary'));
       detachPendingLogoutWipe();
       const finalWipe = () => {
+        try {
+          const liveTok = (localStorage.getItem('merlin_session_token') || '').trim();
+          const hasLiveJwt = liveTok.startsWith('eyJ') && liveTok.split('.').length === 3;
+          if (hasLiveJwt && localStorage.getItem('merlin_logged_out') !== '1') {
+            return;
+          }
+        } catch {
+          /* ignore */
+        }
         purgeAllGhostiLocalAuthArtifacts({ setLogoutLockMs: 15_000 });
         clearWorkRoomLocalCachesOnLogout();
       };

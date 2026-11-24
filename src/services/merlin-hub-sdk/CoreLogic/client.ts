@@ -65,17 +65,28 @@ export function getSessionToken(): string | null {
     }
   } catch {}
   
-  // 1. 이 앱에서 명시적으로 로그아웃한 상태라면殘류 로컬 토큰이나 공용 쿠키로부터 자동 복원 금지 (게스트 유지 최우선)
-  if (
-    localStorage.getItem(SESSION_LOGGED_OUT_KEY) === '1' ||
-    sessionStorage.getItem(SESSION_LOGGED_OUT_KEY) === '1'
-  ) {
+  // 1. 이 앱에서 명시적으로 로그아웃한 상태라면 잔류 로컬 토큰이나 공용 쿠키로부터 자동 복원 금지 (게스트 유지 최우선)
+  // 단, localStorage에 이미 새 로그인 JWT가 있고 localStorage 로그아웃 플래그가 해제되었다면
+  // 타 탭 재로그인 후 남은 구형 sessionStorage.merlin_logged_out 잔재를 자가 치유해 F5 로그아웃을 방지합니다.
+  const localLoggedOut = localStorage.getItem(SESSION_LOGGED_OUT_KEY) === '1';
+  const sessionLoggedOut = sessionStorage.getItem(SESSION_LOGGED_OUT_KEY) === '1';
+  if (localLoggedOut) {
     try {
       if (localStorage.getItem(SESSION_TOKEN_KEY)) {
         localStorage.removeItem(SESSION_TOKEN_KEY);
       }
     } catch {}
     return null;
+  }
+  if (sessionLoggedOut) {
+    const existingTok = (localStorage.getItem(SESSION_TOKEN_KEY) || '').trim();
+    if (existingTok.startsWith('eyJ') && existingTok.split('.').length === 3) {
+      try {
+        sessionStorage.removeItem(SESSION_LOGGED_OUT_KEY);
+      } catch {}
+    } else {
+      return null;
+    }
   }
 
   // 2. localStorage 우선 확인
