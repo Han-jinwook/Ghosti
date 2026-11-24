@@ -77,7 +77,8 @@ export const DesktopDashboard: React.FC = () => {
 
   useEffect(() => {
     if (!ghostSearchWindowStage || isInsideIframe) return;
-    document.title = '귀신검색창 — 귀신같이';
+    // Z-코어(v2.7.53~v2.7.61) OS 창 복원/전면 소환 매칭('👻 귀신검색창' / '귀신검색창') 100% 호환 유지
+    document.title = '👻 귀신검색창 — 귀신같이';
     const onPassiveResize = () => {
       const wide = (window.innerWidth || 0) >= 1180;
       setIsGalleryViewport((prev) => (prev === wide ? prev : wide));
