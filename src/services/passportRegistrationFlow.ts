@@ -23,7 +23,12 @@ import {
   buildPassportExtrasFromClusters,
   pushGhostPassportsToCloud,
 } from './ghostPassportSync';
-import { saveCachedOnDeviceFaceClusters } from './ai/onDeviceFacePassportEngine';
+import {
+  isOnDeviceFaceScanRunning,
+  runOnDeviceFacePassportScan,
+  saveCachedOnDeviceFaceClusters,
+} from './ai/onDeviceFacePassportEngine';
+import { buildAutoMultiConditionSeedClusters } from '../store/slices/storeSharedRefs';
 
 export type PassportRegMode = 'self' | 'family';
 
@@ -407,15 +412,46 @@ export function matchPassportRegCommand(text: string): PassportRegMode | null {
 /** 등록 화면을 열 수 없는 상황(미연결·스캔 중·후보 없음)에 대한 정직한 안내 */
 export function passportUnavailableReason(mode: PassportRegMode, nickname: string, engineConnected: boolean): string | null {
   const nick = nickname ? `${nickname}님, ` : '';
+  const store = useSaySeeStore.getState();
   const clusters = liveClusters();
-  if (clusters.length === 0) {
-    return engineConnected
-      ? `${nick}아직 사진 속 얼굴을 찾는 중이에요. 다 찾으면 바로 알려드릴게요!`
-      : `${nick}내 컴퓨터를 먼저 연결해 주시면 사진 속 얼굴을 찾아서 바로 보여드릴게요!`;
+  const qualifiedSelfCandidates = rankFaceClusters(clusters, MAX_FACES, PASSPORT_MIN_FACE_PHOTOS_FOR_ASK);
+
+  if (clusters.length === 0 || qualifiedSelfCandidates.length === 0) {
+    if (!engineConnected && (store.photos || []).length === 0) {
+      return `${nick}내 컴퓨터를 먼저 연결해 주시면 사진 속 얼굴을 찾아서 바로 보여드릴게요!`;
+    }
+    if ((store.photos || []).length > 0 && !isOnDeviceFaceScanRunning()) {
+      void (async () => {
+        try {
+          const cur = useSaySeeStore.getState();
+          const applyInterim = (clusters: FaceMemberCluster[], latestYear: number) => {
+            if (clusters.length === 0) return;
+            useSaySeeStore.setState({
+              faceClusters: buildAutoMultiConditionSeedClusters(clusters),
+              latestCorpusYear: latestYear,
+            });
+            window.dispatchEvent(new Event(PASSPORT_REG_STATE_EVENT));
+          };
+          const scanned = await runOnDeviceFacePassportScan(
+            cur.photos,
+            cur.faceClusters,
+            true,
+            applyInterim
+          );
+          applyInterim(scanned.clusters, scanned.latestCorpusYear);
+        } catch {
+          /* ignore */
+        }
+      })();
+    }
+    if (isOnDeviceFaceScanRunning() || clusters.length === 0) {
+      return `${nick}아직 사진 속 얼굴을 찾는 중이에요. 다 찾으면 바로 알려드릴게요!`;
+    }
+    return `${nick}같은 분이 3장 이상 나온 인물 사진을 아직 찾지 못했어요. 새 사진이 들어오면 자동으로 찾아둘게요!`;
   }
   if (mode === 'family') {
     const st = loadPassportRegState();
-    if (!st.selfClusterId) return null; // 본인부터 고르는 화면으로 자연스럽게 연결
+    if (!findSelfCluster(st)) return null; // 본인부터 고르는 화면으로 자연스럽게 연결
     if (familyCandidates(st).length === 0) {
       return `${nick}지금은 새로 등록할 가족 얼굴이 없어요. 새 사진이 들어오면 다시 찾아볼게요!`;
     }

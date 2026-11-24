@@ -783,23 +783,30 @@ export const createAssistantOnboardingSlice: StateCreator<
             const stNow = get();
             const livePhotos = stNow.photos.length > 0 ? stNow.photos : enrichedPhotos;
             if (livePhotos.length === 0) return;
-            const scanned = await runOnDeviceFacePassportScan(livePhotos, stNow.faceClusters);
-            if (scanned.clusters.length > 0) {
+            const applyScannedClusters = (clusters: FaceMemberCluster[], latestYear: number) => {
+              if (clusters.length === 0) return;
               set({
-                faceClusters: buildAutoMultiConditionSeedClusters(scanned.clusters),
-                latestCorpusYear: scanned.latestCorpusYear,
+                faceClusters: buildAutoMultiConditionSeedClusters(clusters),
+                latestCorpusYear: latestYear,
               });
               try {
                 window.dispatchEvent(new Event(PASSPORT_REG_STATE_EVENT));
               } catch {
                 /* ignore */
               }
-            }
+            };
+            const scanned = await runOnDeviceFacePassportScan(
+              livePhotos,
+              stNow.faceClusters,
+              false,
+              applyScannedClusters
+            );
+            applyScannedClusters(scanned.clusters, scanned.latestCorpusYear);
           } catch {
             /* ignore face scan errors */
           }
         })();
-      }, 1500);
+      }, 250);
     }
 
     // [의미 검색 엔진 준비 & 실사용 PC 미디어 무소음 비전 인덱싱]

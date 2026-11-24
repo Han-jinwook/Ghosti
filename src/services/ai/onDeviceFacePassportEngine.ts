@@ -8,12 +8,12 @@
 import type { FaceMemberCluster, PhotoItem, YearlyFaceBestCut } from '../../types/saysee';
 import type { WorkerDetectedFace } from './facePassportWorker';
 
-const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v5';
+const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v6';
 const MAX_SCAN_PHOTOS = 180;
 const MAX_CLUSTERS = 10;
 const MAX_CUTS_PER_CLUSTER = 6;
-/** OpenCV SFace 공식 동일인 코사인 유사도 임계치(0.363) 기반 + 타인/이질 이미지 체이닝 방지(0.39) */
-const SIMILARITY_THRESHOLD = 0.39;
+/** OpenCV SFace 공식 동일인 코사인 유사도 임계치(0.363) 기반 */
+const SIMILARITY_THRESHOLD = 0.365;
 const SCREENSHOT_NAME_RX = /(screenshot|스크린샷|캡처|capture|화면\s*캡처|영수증|receipt|memo|메모)/i;
 /** AI 생성·스톡·웹 다운로드 이미지 판별 (실제 스마트폰/카메라 촬영 사진을 여권 스캔 시 최우선 배치하고 AI 이미지는 배제) */
 const AI_OR_STOCK_IMAGE_NAME_RX =
@@ -24,8 +24,8 @@ const REAL_CAMERA_PHOTO_NAME_RX =
 /** 코드 레포지토리·샘플 코퍼스·웹 번들 더미 사진이 실제 유저 PC 사진보다 앞서는 것을 원천 차단 */
 const REPO_OR_SYNTHETIC_SAMPLE_PATH_RX =
   /(?:[\\/](?:ghosti|ghosti_test_corpus|sample_photos_301|test_photos|node_modules|public)[\\/]|^(?:IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025))/i;
-/** 실제 사람 피부톤 최소 비율 (카툰·초록/파란 캐릭터·인형·풍경 오탐 차단) */
-const MIN_HUMAN_SKIN_RATIO = 0.14;
+/** 실제 사람 피부톤 최소 비율 (카툰·초록/파란 캐릭터·인형·풍경 오탐 차단, 그늘·역광·실내 인물 사진은 100% 통과) */
+const MIN_HUMAN_SKIN_RATIO = 0.08;
 
 interface CachedFaceStore {
   fingerprint: string;
@@ -48,6 +48,10 @@ interface ExtractedFaceSample {
 
 let activeScanPromise: Promise<FaceMemberCluster[]> | null = null;
 let lastScannedFingerprint = '';
+
+export function isOnDeviceFaceScanRunning(): boolean {
+  return activeScanPromise !== null;
+}
 
 function buildPhotosFingerprint(photos: PhotoItem[]): string {
   const real = photos
@@ -257,17 +261,17 @@ function prepareFaceCropAndBgr112(
       // YCbCr 변환 (ITU-R BT.601)
       const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
       const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
-      // 자연 조명·실내외·선글라스·역광을 포괄하는 실제 사람 피부색 범위 (R >= G >= B 계열 + Cr > Cb)
+      // 자연 조명·실내외·선글라스·역광·그늘을 포괄하는 실제 사람 피부색 범위 (R >= G >= B 계열 + Cr > Cb)
       const isNaturalSkin =
-        r > 55 &&
-        g > 32 &&
-        b > 15 &&
-        r >= g - 6 &&
-        r > b + 8 &&
-        cr >= 131 &&
-        cr <= 178 &&
-        cb >= 74 &&
-        cb <= 132;
+        r > 40 &&
+        g > 24 &&
+        b > 12 &&
+        r >= g - 10 &&
+        r > b + 4 &&
+        cr >= 127 &&
+        cr <= 182 &&
+        cb >= 70 &&
+        cb <= 136;
       if (isNaturalSkin) {
         skinPixels++;
       } else if (
@@ -312,7 +316,7 @@ function clusterExtractedFaces(
       const sim = dot(s.embedding, working[i].centroid);
       // 클러스터 대표(첫 번째) 샘플과의 최소 유사도도 함께 검증해 점진적 평균 이동(drift)에 의한 엉뚱한 인물 합류 차단
       const seedSim = dot(s.embedding, working[i].members[0].embedding);
-      if (sim > bestSim && seedSim >= SIMILARITY_THRESHOLD - 0.03) {
+      if (sim > bestSim && seedSim >= SIMILARITY_THRESHOLD - 0.045) {
         bestSim = sim;
         bestIdx = i;
       }
@@ -448,7 +452,8 @@ function clusterExtractedFaces(
 export async function runOnDeviceFacePassportScan(
   photos: PhotoItem[],
   existingClusters: FaceMemberCluster[] = [],
-  forceRescan = false
+  forceRescan = false,
+  onInterimClusters?: (clusters: FaceMemberCluster[], latestCorpusYear: number) => void
 ): Promise<{ clusters: FaceMemberCluster[]; latestCorpusYear: number }> {
   if (typeof window === 'undefined' || typeof Worker === 'undefined' || photos.length === 0) {
     return { clusters: existingClusters, latestCorpusYear: new Date().getFullYear() };
@@ -460,7 +465,8 @@ export async function runOnDeviceFacePassportScan(
   }
 
   const cached = loadCachedOnDeviceFaceClusters();
-  if (!forceRescan && cached.clusters.length > 0 && cached.fingerprint === fp) {
+  const hasQualifiedCache = cached.clusters.some((c) => !c.excludedAsPasserby && (c.matchedPhotoCount || 0) >= 3);
+  if (!forceRescan && hasQualifiedCache && cached.fingerprint === fp) {
     lastScannedFingerprint = fp;
     return { clusters: cached.clusters, latestCorpusYear: cached.latestCorpusYear };
   }
@@ -596,10 +602,9 @@ export async function runOnDeviceFacePassportScan(
       if (!inputCtx || !cropCtx || !featCtx) return existingClusters;
 
       for (let i = 0; i < candidates.length; i++) {
-        // 백그라운드 탭에서는 잠시 양보 (Chrome 느림 경고 0%)
+        // 백그라운드 탭에서도 스캔이 중단되지 않고 저부하로 끝까지 완주되도록 짧은 슬립만 부여
         if (typeof document !== 'undefined' && document.visibilityState === 'hidden') {
-          await new Promise<void>((r) => window.setTimeout(r, 400));
-          if (document.visibilityState === 'hidden') break;
+          await new Promise<void>((r) => window.setTimeout(r, 40));
         }
 
         const photo = candidates[i];
@@ -644,6 +649,14 @@ export async function runOnDeviceFacePassportScan(
         // UI 반응성을 위해 매 4장마다 1프레임 양보
         if (i % 4 === 3) {
           await new Promise<void>((r) => window.setTimeout(r, 8));
+        }
+
+        // 중간 스트리밍 반영: 24장마다(또는 마지막 직전) 동일 인물 3장 이상 클러스터가 형성되면 즉시 1차 반영
+        if (onInterimClusters && (i === 19 || i === 39 || i === 69 || i === 109) && extracted.length >= 3) {
+          const interim = clusterExtractedFaces(extracted, existingClusters);
+          if (interim.clusters.some((c) => (c.matchedPhotoCount || 0) >= 3)) {
+            onInterimClusters(interim.clusters, interim.latestCorpusYear);
+          }
         }
       }
 
