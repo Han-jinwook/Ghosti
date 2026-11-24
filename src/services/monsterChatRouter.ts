@@ -2244,44 +2244,123 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
     }
 
     const activeCnt = Math.max(0, Number(stRes.activeCount ?? 0));
+    const selfDefenseCnt = Math.max(0, Number(stRes.selfDefenseCount ?? 0));
+    const totalDetectedCnt = Math.max(activeCnt + selfDefenseCnt, Number(stRes.totalDetectedCount ?? 0));
     const ramMb = Math.max(0, Number(stRes.estimatedRamMb ?? 0));
     const activeLabels: string[] = Array.isArray(stRes.activeModuleLabels) ? stRes.activeModuleLabels : [];
+    const selfDefenseLabels: string[] = Array.isArray(stRes.selfDefenseModuleLabels)
+      ? stRes.selfDefenseModuleLabels
+      : Array.isArray(stRes.selfDefenseGuided)
+      ? stRes.selfDefenseGuided
+      : [];
     const sleepingLabels: string[] = Array.isArray(stRes.sleepingModuleLabels)
       ? stRes.sleepingModuleLabels
       : Array.isArray(stRes.sleepingServices)
       ? stRes.sleepingServices
       : [];
     const sleepingCnt = sleepingLabels.length;
-    const detailBlock =
-      activeLabels.length > 0
-        ? `\n• **실행 중인 모듈**: ${activeLabels.join(', ')}`
-        : sleepingLabels.length > 0
-        ? `\n• **절전 수면 중인 모듈**: ${sleepingLabels.join(', ')}`
+    const detailLines: string[] = [];
+    if (activeLabels.length > 0) {
+      detailLines.push(`• **절전 가능 보안 모듈 (${activeLabels.length}종)**: ${activeLabels.join(', ')}`);
+    }
+    if (selfDefenseLabels.length > 0) {
+      detailLines.push(
+        `• **커널 자가보호 보안 모듈 (${selfDefenseLabels.length}종 — 완전 삭제 권장)**: ${selfDefenseLabels.join(', ')}`
+      );
+    }
+    if (sleepingLabels.length > 0) {
+      detailLines.push(`• **절전 수면 중인 모듈 (${sleepingLabels.length}종)**: ${sleepingLabels.join(', ')}`);
+    }
+    const detailBlock = detailLines.length > 0 ? `\n${detailLines.join('\n')}` : '';
+    const selfDefenseHint =
+      selfDefenseLabels.length > 0
+        ? `\n\n🛡️ **안내**: \`${selfDefenseLabels.join(', ')}\` 등은 커널 자가보호가 걸려 있어 절전보다 **[안 쓰는 보안앱 완전 삭제]**로 깔끔히 제거하는 것을 권장합니다.`
         : '';
     const msgKo =
       ` **[내 PC 은행·관공서 보안프로그램 실시간 점검 결과]**\n` +
-      `• **현재 뒤에서 켜져 있는 보안 모듈**: **${activeCnt}종** (점유 메모리 약 ${ramMb}MB)\n` +
+      `• **현재 뒤에서 켜져 있는 보안 모듈**: **총 ${totalDetectedCnt}종** (절전 가능 ${activeCnt}종 · 자가보호 ${selfDefenseCnt}종 / 점유 메모리 약 ${ramMb}MB)\n` +
       `• **현재 절전(잠자는 중) 보안 모듈**: **${sleepingCnt}종**${detailBlock}\n` +
-      `• **자동 절전·기상 관리**: **${stRes.autoSleepEnabled ? '켜짐 (은행 접속 시 1초 자동 기상)' : '꺼짐'}**\n\n` +
+      `• **자동 절전·기상 관리**: **${stRes.autoSleepEnabled ? '켜짐 (은행 접속 시 1초 자동 기상)' : '꺼짐'}**${selfDefenseHint}\n\n` +
       (stRes.honestBriefing || '');
     speak(
-      activeCnt > 0
-        ? `현재 미사용 은행 보안프로그램 ${activeCnt}종이 실행 중입니다. 잠재울까요?`
+      totalDetectedCnt > 0
+        ? `현재 미사용 은행 보안프로그램 총 ${totalDetectedCnt}종이 실행 중입니다. 안 지우고 잠재우거나 완전 삭제할 수 있어요.`
         : `현재 뒤에서 켜져 있는 미사용 은행 보안프로그램은 0종입니다.`
     );
     return reply(sourceTab, msgKo, {
       followUpSuggestions:
-        activeCnt > 0
-          ? ['은행·관공서 보안절전', '최근 [복원 기록] 보여줘']
+        totalDetectedCnt > 0
+          ? ['안 지우고 잠재우기', '안 쓰는 보안앱 완전 삭제', '최근 [복원 기록] 보여줘']
           : sleepingCnt > 0
-          ? ['보안프로그램 즉시 깨우기', '은행 보안프로그램 원래대로 복구해줘']
-          : ['그동안 모아둔 비서 실적 보고서 보여줘'],
+          ? ['보안프로그램 즉시 깨우기', '안 쓰는 보안앱 완전 삭제', '은행 보안프로그램 원래대로 복구해줘']
+          : ['안 쓰는 보안앱 완전 삭제', '그동안 모아둔 비서 실적 보고서 보여줘'],
     });
+  }
+
+  // 0-B2) 대화형 1회성 칩: "[안 쓰는 보안앱 완전 삭제]" ➔ 심층 제거(DEEP_UNINSTALL_GATE) 카드로 직결
+  if (/안\s*쓰는\s*보안\s*(?:앱|프로그램|모듈)\s*완전\s*삭제/i.test(clean)) {
+    const scanRes = await zcoreJson<{
+      ok: boolean;
+      needsClarification?: boolean;
+      targetAppLabel?: string;
+      summaryBadge?: string;
+      honestBriefingKo?: string;
+      runningProcessCount?: number;
+      serviceAndTaskCount?: number;
+      totalResidualMb?: number;
+      estimatedRamMb?: number;
+      installedEntries?: any[];
+      runningProcesses?: any[];
+      services?: any[];
+      scheduledTasks?: string[];
+      startupEntries?: any[];
+      residualFolders?: any[];
+      foundAny?: boolean;
+    }>('/__zcore/deep-uninstall-scan', postJson({ appQuery: '보안프로그램' }));
+
+    if (!scanRes?.ok) {
+      return reply(
+        sourceTab,
+        '내 PC의 보안프로그램을 삭제하려면 **멀린 Z-코어 엔진**이 켜져 있어야 합니다. 엔진 연결 후 다시 눌러주세요!',
+        { followUpSuggestions: ['은행 보안프로그램 상태 확인해줘'] }
+      );
+    }
+
+    const deepPayload: MonsterDeepUninstallPayload = {
+      appQuery: '보안프로그램',
+      targetAppLabel: scanRes.targetAppLabel || '관공서·은행 상주 보안 플러그인 일괄',
+      summaryBadge:
+        scanRes.summaryBadge ||
+        `상주 프로세스 ${scanRes.runningProcessCount || 0}개 / 서비스·스케줄러 ${scanRes.serviceAndTaskCount || 0}개`,
+      honestBriefingKo: scanRes.honestBriefingKo || '',
+      runningProcessCount: Number(scanRes.runningProcessCount || 0),
+      serviceAndTaskCount: Number(scanRes.serviceAndTaskCount || 0),
+      totalResidualMb: Number(scanRes.totalResidualMb || 0),
+      estimatedRamMb: Number(scanRes.estimatedRamMb || 0),
+      installedEntries: Array.isArray(scanRes.installedEntries) ? scanRes.installedEntries : [],
+      runningProcesses: Array.isArray(scanRes.runningProcesses) ? scanRes.runningProcesses : [],
+      services: Array.isArray(scanRes.services) ? scanRes.services : [],
+      scheduledTasks: Array.isArray(scanRes.scheduledTasks) ? scanRes.scheduledTasks : [],
+      startupEntries: Array.isArray(scanRes.startupEntries) ? scanRes.startupEntries : [],
+      residualFolders: Array.isArray(scanRes.residualFolders) ? scanRes.residualFolders : [],
+      foundAny: Boolean(scanRes.foundAny),
+      executed: false,
+    };
+    speak('설치된 은행·관공서 보안프로그램을 모두 찾아 목록을 준비했습니다. 확인 후 진행해 주세요.');
+    return reply(
+      sourceTab,
+      scanRes.honestBriefingKo ||
+        '설치된 은행·관공서 보안프로그램과 상주 서비스를 스캔했습니다. 아래 내역을 확인하신 뒤 실행 버튼을 눌러주세요.',
+      {
+        cardKind: 'DEEP_UNINSTALL_GATE',
+        deepUninstallPayload: deepPayload,
+      }
+    );
   }
 
   // 0-C) [연속 왕복 점검 지원] "은행·관공서 보안절전 및 보안프로그램 즉시 깨우기" 동시 입력 시 절전 ➔ 기상 왕복을 1회로 일관 실행
   const hasSleepCue =
-    /(알아서\s*재우고\s*깨워|보안\s*절전|은행.*?(?:보안\s*(?:프로그램|모듈|앱)?.*?)?(?:재우|재워|절전|잠재우|잠재워|자동\s*관리)|보안\s*(?:프로그램|모듈|앱).*?(?:재우|재워|절전|잠재우|잠재워|자동\s*절전))/i.test(
+    /(안\s*지우고\s*잠재우|알아서\s*재우고\s*깨워|보안\s*절전|은행.*?(?:보안\s*(?:프로그램|모듈|앱)?.*?)?(?:재우|재워|절전|잠재우|잠재워|자동\s*관리)|보안\s*(?:프로그램|모듈|앱).*?(?:재우|재워|절전|잠재우|잠재워|자동\s*절전))/i.test(
       clean
     );
   const hasExplicitWakeCue =
@@ -2425,6 +2504,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
     return reply(sourceTab, msgKo, {
       healthRecordIssued: issuedRec,
       followUpSuggestions: [        '보안프로그램 즉시 깨우기',
+        '안 쓰는 보안앱 완전 삭제',
         '은행 보안프로그램 상태 확인해줘',
         '은행 보안프로그램 원래대로 복구해줘',
       ],

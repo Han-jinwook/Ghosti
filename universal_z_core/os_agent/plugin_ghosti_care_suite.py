@@ -963,7 +963,17 @@ def get_security_services_status() -> Dict[str, Any]:
 
     running_services: List[Dict[str, Any]] = []
     self_defense_detected: List[str] = []
+    self_defense_modules: List[Dict[str, Any]] = []
+    seen_sd_keys: set[str] = set()
     corporate_drm_protected: List[str] = []
+
+    def _classify_self_defense_module(raw_svc: str, raw_disp: str) -> Tuple[str, str]:
+        comb = f"{raw_svc} {raw_disp}".lower()
+        if any(k in comb for k in ("astx", "ahnlab", "safetransaction", "safe_transaction")):
+            return "astx", "AhnLab Safe Transaction (자가보호 금융보안)"
+        if any(k in comb for k in ("nossvc", "nprotect", "npkcrypt", "nosstarter")):
+            return "nprotect", "nProtect Online Security (자가보호 금융보안)"
+        return (raw_svc.lower() or "self_defense"), f"{raw_disp or raw_svc} (자가보호 상주 보안)"
 
     if sys.platform == "win32":
         try:
@@ -990,7 +1000,18 @@ def get_security_services_status() -> Dict[str, Any]:
                     disp_low = current_disp.lower()
 
                     if any(sd in svc_low or sd in disp_low for sd in self_defense):
-                        self_defense_detected.append("자가보호 상주 보안 서비스")
+                        sd_key, sd_label = _classify_self_defense_module(current_svc, current_disp)
+                        self_defense_detected.append(sd_label)
+                        if sd_key not in seen_sd_keys:
+                            seen_sd_keys.add(sd_key)
+                            self_defense_modules.append({
+                                "id": sd_key,
+                                "serviceName": current_svc,
+                                "displayName": sd_label,
+                                "isSelfDefense": True,
+                                "recommendUninstall": True,
+                                "estimatedRamMb": 55,
+                            })
                         current_svc = ""
                         continue
                     if any(drm in svc_low or drm in disp_low for drm in never_touch):
@@ -1012,6 +1033,28 @@ def get_security_services_status() -> Dict[str, Any]:
         except Exception:
             pass
 
+        # 유저 세션에서 실행 중인 AhnLab Safe Transaction / nProtect 프로세스도 누락 없이 집계
+        try:
+            for pinfo in _iter_windows_processes_stdlib():
+                pname = str(pinfo.get("name") or "").strip()
+                pexe = str(pinfo.get("exe") or "").strip()
+                comb = f"{pname} {pexe}".lower()
+                if any(sd in comb for sd in self_defense):
+                    sd_key, sd_label = _classify_self_defense_module(pname, pname)
+                    self_defense_detected.append(sd_label)
+                    if sd_key not in seen_sd_keys:
+                        seen_sd_keys.add(sd_key)
+                        self_defense_modules.append({
+                            "id": sd_key,
+                            "serviceName": pname,
+                            "displayName": sd_label,
+                            "isSelfDefense": True,
+                            "recommendUninstall": True,
+                            "estimatedRamMb": max(35, int(round(float(pinfo.get("memoryMb") or 45.0)))),
+                        })
+        except Exception:
+            pass
+
     active_svc_count = len(running_services)
     running_user_bridges = _scan_running_user_security_processes()
     active_labels_dedup: List[str] = []
@@ -1025,9 +1068,12 @@ def get_security_services_status() -> Dict[str, Any]:
             active_labels_dedup.append(lbl)
 
     active_count = len(active_labels_dedup)
+    self_defense_count = len(self_defense_modules)
+    total_detected_count = active_count + self_defense_count
     estimated_ram_mb = (
         sum(int(s.get("estimatedRamMb", 45)) for s in running_services)
         + sum(int(round(float(b.get("memoryMb") or 18.0))) for b in running_user_bridges)
+        + sum(int(sd.get("estimatedRamMb", 55)) for sd in self_defense_modules)
     )
 
     snap = _load_sleep_snapshot()
@@ -1048,10 +1094,21 @@ def get_security_services_status() -> Dict[str, Any]:
             if bl and bl not in sleeping_labels:
                 sleeping_labels.append(bl)
 
-    if active_count > 0:
+    sd_labels = [str(m.get("displayName") or m.get("serviceName") or "") for m in self_defense_modules if m.get("displayName") or m.get("serviceName")]
+    if active_count > 0 and self_defense_count > 0:
+        honest_message = (
+            f"👻 현재 미사용 은행·관공서 보안 모듈 총 {total_detected_count}종(절전 가능 {active_count}종 + 자가보호 {self_defense_count}종, 약 {estimated_ram_mb}MB)이 실행 중이에요. "
+            f"{', '.join(sd_labels)}는 커널 자가보호가 걸려 있어 절전보다 [안 쓰는 보안앱 완전 삭제]를 권장하며, 나머지는 [안 지우고 잠재우기]로 쿨쿨 재울 수 있습니다."
+        )
+    elif active_count > 0:
         honest_message = (
             f"👻 현재 미사용 은행·관공서 보안 모듈 {active_count}종(약 {estimated_ram_mb}MB)이 뒤에서 실행 중이에요. "
-            "삭제하지 않고 쿨쿨 잠재울까요? (은행 접속 시 또는 [보안프로그램 즉시 깨우기] 클릭 시 1초 만에 기상합니다)"
+            "안 지우고 잠재우거나(은행 접속 시 1초 자동 기상), 아예 안 쓰시면 완전 삭제도 가능합니다."
+        )
+    elif self_defense_count > 0:
+        honest_message = (
+            f"👻 현재 자가보호 상주 보안 모듈 {self_defense_count}종({', '.join(sd_labels)}, 약 {estimated_ram_mb}MB)이 뒤에서 실행 중이에요. "
+            "이 모듈들은 커널 자가보호가 걸려 있어 절전보다 [안 쓰는 보안앱 완전 삭제]로 깔끔히 제거하는 것을 권장합니다."
         )
     elif sleeping_labels and not _CURRENTLY_AWAKE:
         honest_message = (
@@ -1070,11 +1127,15 @@ def get_security_services_status() -> Dict[str, Any]:
         "ok": True,
         "featureTitle": "🏦 안 쓰는 은행·관공서 보안프로그램 자동 재우기",
         "activeCount": active_count,
+        "selfDefenseCount": self_defense_count,
+        "totalDetectedCount": total_detected_count,
         "activeServiceCount": active_svc_count,
         "estimatedRamMb": estimated_ram_mb,
         "runningServices": running_services,
         "runningUserBridges": running_user_bridges,
         "activeModuleLabels": active_labels_dedup,
+        "selfDefenseModules": self_defense_modules,
+        "selfDefenseModuleLabels": sd_labels,
         "sleepingServices": sleeping_services,
         "sleepingModuleLabels": sleeping_labels if not _CURRENTLY_AWAKE else [],
         "autoSleepEnabled": _is_bank_auto_sleep_enabled(),
@@ -4041,9 +4102,9 @@ def execute_deep_uninstall_target(
                 except Exception:
                     pass
 
-        # 3) 공식 언인스톨러 실행 (MsiExec /I -> /X 변환 및 최대 25초 종료 대기 후 잔여 폴더 확인)
+        # 3) 공식 언인스톨러 실행 (관리자 권한 runas 승격 직결 — Access is denied 방지 · MsiExec /I -> /X 변환 및 종료 대기)
         if invoke_official_uninstaller:
-            for entry in scan.get("installedEntries", [])[:3]:
+            for entry in scan.get("installedEntries", [])[:5]:
                 raw_cmd = str(entry.get("quietUninstallString") or entry.get("uninstallString") or "").strip()
                 disp = str(entry.get("displayName") or "")
                 cmd = _normalize_msi_uninstall_cmd(raw_cmd)
@@ -4051,16 +4112,52 @@ def execute_deep_uninstall_target(
                     continue
                 try:
                     is_msi = cmd.lower().startswith("msiexec") or '"msiexec' in cmd.lower()
-                    proc_u = subprocess.Popen(
-                        cmd,
-                        shell=True,
-                        creationflags=(CREATE_NO_WINDOW if is_msi else 0),
-                    )
-                    uninstaller_triggered.append(disp or cmd[:40])
-                    try:
-                        proc_u.wait(timeout=25.0)
-                    except subprocess.TimeoutExpired:
-                        pass
+                    if is_running_as_admin():
+                        proc_u = subprocess.Popen(
+                            cmd,
+                            shell=True,
+                            creationflags=(CREATE_NO_WINDOW if is_msi else 0),
+                        )
+                        uninstaller_triggered.append(disp or cmd[:40])
+                        try:
+                            proc_u.wait(timeout=25.0)
+                        except subprocess.TimeoutExpired:
+                            pass
+                    else:
+                        # 일반 권한 데몬에서는 ShellExecuteW("runas")로 관리자 권한 UAC 승격 실행하여 HKLM/서비스 삭제 권한 확보
+                        parts = _split_windows_cmdline(cmd)
+                        exe_part = parts[0] if parts else "cmd.exe"
+                        if parts and len(parts) > 1:
+                            arg_part = subprocess.list2cmdline(parts[1:])
+                        elif not parts:
+                            arg_part = f"/c {cmd}"
+                        else:
+                            arg_part = ""
+                        ret_uac = int(
+                            ctypes.windll.shell32.ShellExecuteW(
+                                None,
+                                "runas",
+                                exe_part,
+                                arg_part,
+                                None,
+                                0 if is_msi else 1,
+                            )
+                        )
+                        if ret_uac > 32:
+                            uninstaller_triggered.append(f"{disp or exe_part} (관리자 권한 실행)")
+                            time.sleep(2.5)
+                        else:
+                            # UAC 취소 또는 실행 불가 시 일반 권한 폴백
+                            proc_u = subprocess.Popen(
+                                cmd,
+                                shell=True,
+                                creationflags=(CREATE_NO_WINDOW if is_msi else 0),
+                            )
+                            uninstaller_triggered.append(disp or cmd[:40])
+                            try:
+                                proc_u.wait(timeout=15.0)
+                            except subprocess.TimeoutExpired:
+                                pass
                 except Exception:
                     continue
 
