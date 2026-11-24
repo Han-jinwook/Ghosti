@@ -388,7 +388,15 @@ export const FreePhotoShareOverlays: React.FC = () => {
               } catch {
                 /* ignore */
               }
-              await applyShareInviteDeepLink(res.deepLinkUrl, { fromNativeApp: true });
+              if (/pairCode=\d{6}/i.test(res.deepLinkUrl)) {
+                window.dispatchEvent(
+                  new CustomEvent('ghostiNativePairDeepLink', {
+                    detail: { url: res.deepLinkUrl },
+                  })
+                );
+              } else {
+                await applyShareInviteDeepLink(res.deepLinkUrl, { fromNativeApp: true });
+              }
             }
           } else if (isSharedPhotoLounge(useSaySeeStore.getState().activeLoungeType)) {
             void useSaySeeStore.getState().syncActiveSharedRoomFromSupabase();
@@ -409,7 +417,15 @@ export const FreePhotoShareOverlays: React.FC = () => {
           } catch {
             /* ignore */
           }
-          void applyShareInviteDeepLink(detail.url, { fromNativeApp: true });
+          if (/pairCode=\d{6}/i.test(detail.url)) {
+            window.dispatchEvent(
+              new CustomEvent('ghostiNativePairDeepLink', {
+                detail: { url: detail.url },
+              })
+            );
+          } else {
+            void applyShareInviteDeepLink(detail.url, { fromNativeApp: true });
+          }
         }
       };
       window.addEventListener('ghostiNativeDeepLink', onLiveDeepLink);

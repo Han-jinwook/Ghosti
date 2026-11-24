@@ -28,6 +28,11 @@ import { startPassportPhotoActivityWatcher } from './services/passportRegistrati
 import { SetupFloatingOverlayGuide } from './components/SetupMonsterModal';
 import { GhostCastAndLiveGlobalOverlay } from './components/GhostCastAndLiveSystem';
 import { FreePhotoShareOverlays } from './domains/free_photo_share/FreePhotoShareOverlays';
+import { MobileQrPairBridgeOverlay } from './domains/paid_device_sync/MobileQrPairBridgeOverlay';
+import {
+  isCapacitorNativeMobileRuntime,
+  readNativeMobileClipboardText,
+} from './services/ghostiMobileCareBridge';
 import { GhostSecretaryFirstModal } from './components/GhostSecretaryFirstGuard';
 import { GhostPhotoOcrTeleportModal } from './components/GhostPhotoOcrTeleportModal';
 import { useDashboardNavStore } from './domains/shared/dashboardNavState';
@@ -867,10 +872,39 @@ export const App: React.FC = () => {
       /* ignore */
     }
 
+    const onNativePairDeepLink = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ url?: string }>).detail;
+      if (detail?.url) {
+        handleIncomingNativePairUrl(detail.url);
+      }
+    };
+    window.addEventListener('ghostiNativePairDeepLink', onNativePairDeepLink);
+
+    // [iOS/Android 스토어 설치 후 최초 실행 시 클립보드 Deferred QR 코드(GHOSTI_PAIR_V1:XXXXXX) 자동 복구]
+    if (isCapacitorNativeMobileRuntime()) {
+      void readNativeMobileClipboardText(false)
+        .then((clipRes) => {
+          const text = String(clipRes?.text || '').trim();
+          const m = text.match(/GHOSTI_PAIR_V1:(\d{6})/);
+          if (m && m[1]) {
+            const consumedKey = `ghosti_consumed_clip_pair_${m[1]}`;
+            try {
+              if (localStorage.getItem(consumedKey) === '1') return;
+              localStorage.setItem(consumedKey, '1');
+            } catch {
+              /* ignore */
+            }
+            handleIncomingNativePairUrl(`ghosti://pair?pairCode=${m[1]}`);
+          }
+        })
+        .catch(() => {});
+    }
+
     return () => {
       window.removeEventListener('ghosti_navigate_showroom', onGoShowroom);
       window.removeEventListener('ghosti_navigate_workspace', onGoWorkspace);
       window.removeEventListener('merlinLoggedIn', onMerlinLoggedIn);
+      window.removeEventListener('ghostiNativePairDeepLink', onNativePairDeepLink);
       if (capUrlOpenHandle?.remove) {
         try {
           void capUrlOpenHandle.remove();
@@ -1254,6 +1288,8 @@ export const App: React.FC = () => {
     <GhostiHubRootProvider>
       {/* [프로필 내 본인 여권 단독 보관함 — D-35] 쇼룸·워크스페이스·모바일 전 화면 어디서든 프로필 [🛂 여권] 클릭 시 즉시 오픈 */}
       <PassportDoorplateStyleModal />
+      {/* [모바일 웹 전용 PC QR 기기 연결 브릿지] 쇼룸·워크스페이스 무관 최상단 노출 (앱 열기·스토어 이동·계정 선택) */}
+      <MobileQrPairBridgeOverlay />
 
       {/* 모바일(iOS/AOS) 전 화면 공통 상단 당겨서 새로고침(Pull-to-refresh) 플로팅 인디케이터 — iOS 상단 상태바(topSafeAreaShieldView) 차폐 영역 아래에 배치하여 상단 잘림 원천 차단 */}
       {(ptrPullDist > 0 || isPtrRefreshing) && (

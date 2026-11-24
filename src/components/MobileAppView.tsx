@@ -1457,7 +1457,7 @@ export const MobileAppView: React.FC = () => {
                 const syncStatusLine = !isLoggedInUser
                   ? '현재 게스트(비로그인) 상태입니다. PC와 같은 이메일로 먼저 로그인해야 기기를 연결할 수 있습니다.'
                   : thisDeviceRevoked
-                  ? '이 기기의 연결이 해제되었습니다. 연결 번호로 다시 등록할 수 있습니다.'
+                  ? '이 기기의 연결이 해제되었습니다. 오른쪽 [다시 연결] 버튼을 눌러 바로 복구할 수 있습니다.'
                   : !isPeerConnected
                   ? '내 PC에서도 같은 이메일로 로그인하거나 6자리 연결 번호를 입력해 주세요.'
                   : `연결된 기기 ${Math.max(2, connectedDevices.length)}대 · 최근 동기화: ${syncState.lastSyncedAt}`;
@@ -1510,12 +1510,22 @@ export const MobileAppView: React.FC = () => {
                         disabled={syncState.syncing}
                         onClick={(e) => {
                           e.stopPropagation();
+                          if (!isLoggedInUser) {
+                            window.dispatchEvent(new CustomEvent('openLoginModal'));
+                            return;
+                          }
+                          if (thisDeviceRevoked) {
+                            void useSaySeeStore.getState().reconnectThisDevice();
+                            return;
+                          }
                           void triggerSyncNow();
                         }}
                         className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold shrink-0 whitespace-nowrap ml-auto cursor-pointer"
                       >
                         {!isLoggedInUser
                           ? '로그인'
+                          : thisDeviceRevoked
+                          ? '다시 연결'
                           : syncState.syncing
                           ? '일치화 중...'
                           : '지금 일치시키기'}
