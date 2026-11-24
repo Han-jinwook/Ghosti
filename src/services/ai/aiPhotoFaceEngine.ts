@@ -189,20 +189,31 @@ export interface GroupedSearchResultItem {
 }
 
 function parseFilenameTimestampSec(name: string, fallbackMs: number): number {
-  const m = name.match(/(20\d{2})(\d{2})(\d{2})[_-](\d{2})(\d{2})(\d{2})/);
-  if (m) {
-    return Date.UTC(+m[1], +m[2] - 1, +m[3], +m[4], +m[5], +m[6]) / 1000;
+  const mFull = name.match(
+    /(?:^|[^0-9])(19\d{2}|20\d{2})[-._]?(0[1-9]|1[0-2])[-._]?(0[1-9]|[12]\d|3[01])[\s_-]+([01]\d|2[0-3])[-.:_]?([0-5]\d)[-.:_]?([0-5]\d)/
+  );
+  if (mFull) {
+    return Date.UTC(+mFull[1], +mFull[2] - 1, +mFull[3], +mFull[4], +mFull[5], +mFull[6]) / 1000;
   }
-  const msMatch = name.match(/(?:^|[_/-])(1[5-9]\d{11})(?:[_.-]|$)/);
+  const msMatch = name.match(/(?:^|[^0-9])(1[2-9]\d{11})(?:[^0-9]|$)/);
   if (msMatch) {
     return Number(msMatch[1]) / 1000;
   }
-  if (fallbackMs && fallbackMs > 946684800000) {
-    return fallbackMs / 1000;
-  }
-  const seqMatch = name.match(/(20\d{2})(\d{2})(\d{2})[_-](\d{4})(?:\D|$)/);
+  const seqMatch = name.match(/(?:^|[^0-9])(19\d{2}|20\d{2})[-._]?(0[1-9]|1[0-2])[-._]?(0[1-9]|[12]\d|3[01])[_-](\d{4})(?:\D|$)/);
   if (seqMatch) {
     return Date.UTC(+seqMatch[1], +seqMatch[2] - 1, +seqMatch[3], 12, 0, 0) / 1000 + Number(seqMatch[4]);
+  }
+  const dateOnlyMatch = name.match(
+    /(?:^|[^0-9])(19\d{2}|20\d{2})[-._]?(0[1-9]|1[0-2])[-._]?(0[1-9]|[12]\d|3[01])(?:[^0-9]|$)/
+  );
+  if (dateOnlyMatch) {
+    const baseMs = Date.UTC(+dateOnlyMatch[1], +dateOnlyMatch[2] - 1, +dateOnlyMatch[3], 12, 0, 0);
+    if (fallbackMs && fallbackMs > 631152000000) {
+      const fbDate = new Date(fallbackMs).toISOString().slice(0, 10);
+      const fnDate = `${dateOnlyMatch[1]}-${dateOnlyMatch[2]}-${dateOnlyMatch[3]}`;
+      if (fbDate === fnDate) return fallbackMs / 1000;
+    }
+    return baseMs / 1000;
   }
   return fallbackMs ? fallbackMs / 1000 : 0;
 }
@@ -884,14 +895,22 @@ export async function loadInitialPhotoDataset(): Promise<{
       : getZCoreUrl(`/__photos/file?p=${encodeURIComponent(f.path)}${locParam}${fpParam}`);
     const thumbUrl = isBundledSampleFile || isVideoFrameStillFile ? fullUrl : `${fullUrl}&thumb=1`;
 
-    const dateFromFilenameMatch = f.path.match(/(20\d{2})(\d{2})(\d{2})/);
+    const rawNameForDate = f.originalName || f.path;
+    const dateFromFilenameMatch = rawNameForDate.match(
+      /(?:^|[^0-9])(19\d{2}|20\d{2})[-._]?(0[1-9]|1[0-2])[-._]?(0[1-9]|[12]\d|3[01])(?:[^0-9]|$)/
+    );
+    const fnTsSec = parseFilenameTimestampSec(rawNameForDate, 0);
     const canonicalDate = dateFromFilenameMatch
       ? `${dateFromFilenameMatch[1]}-${dateFromFilenameMatch[2]}-${dateFromFilenameMatch[3]}`
-      : audit?.ts && audit.ts > 946684800000
+      : audit?.ts && audit.ts > 631152000000
       ? new Date(audit.ts).toISOString().slice(0, 10)
       : f.date;
     const canonicalMtimeMs =
-      audit?.ts && audit.ts > 946684800000 ? audit.ts : f.mtimeMs;
+      fnTsSec > 631152000
+        ? Math.round(fnTsSec * 1000)
+        : audit?.ts && audit.ts > 631152000000
+        ? audit.ts
+        : f.mtimeMs;
 
     if (semMeta?.captionKo) {
       staticCaptionedPhotoIds.add(f.path);
@@ -936,8 +955,18 @@ export async function loadInitialPhotoDataset(): Promise<{
     };
   };
 
-  const activePhotos = fileList.map((f) => buildPhotoItem(f, false));
-  const quarantinedPhotos = quarantinedList.map((f) => buildPhotoItem(f, true));
+  // [표시 날짜 = 정렬 날짜 일관성 보장]: 파일 복사일(st_mtime)이 아니라 카드에 표시되는 실제 촬영일(canonicalDate · canonicalMtimeMs) 최신순으로 일관 정렬
+  const sortByCaptureDesc = (a: PhotoItem, b: PhotoItem) => {
+    const da = (a.date || '').split(' ')[0];
+    const db = (b.date || '').split(' ')[0];
+    if (da !== db) return db.localeCompare(da);
+    const ma = Number(a.mtimeMs || 0);
+    const mb = Number(b.mtimeMs || 0);
+    if (ma !== mb) return mb - ma;
+    return (b.name || '').localeCompare(a.name || '');
+  };
+  const activePhotos = fileList.map((f) => buildPhotoItem(f, false)).sort(sortByCaptureDesc);
+  const quarantinedPhotos = quarantinedList.map((f) => buildPhotoItem(f, true)).sort(sortByCaptureDesc);
   const allPhotos = [...activePhotos, ...quarantinedPhotos];
   const quarantinedBytes = quarantinedList.reduce((a, b) => a + b.size, 0);
 
