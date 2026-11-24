@@ -336,7 +336,7 @@ def auto_heal_agents_and_handover_files() -> None:
     - AGENTS.md 전체 줄 수가 650줄(시스템 프롬프트 800줄 제한의 80%)을 초과하면 경보를 출력합니다.
     """
     candidate_roots = [ROOT_DIR]
-    for extra in (Path(r"D:\Ghosti"), Path(r"D:\Ghosti_Search"), Path(r"D:\Ghosti_Share")):
+    for extra in (Path(r"D:\Ghosti"),):
         if extra.exists() and extra not in candidate_roots:
             candidate_roots.append(extra)
 

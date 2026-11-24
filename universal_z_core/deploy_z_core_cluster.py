@@ -56,8 +56,6 @@ def sync_internal_z_core_mirrors():
     worktree_roots = [
         os.path.dirname(UZC_DIR),
         r"D:\Ghosti",
-        r"D:\Ghosti_Search",
-        r"D:\Ghosti_Share",
     ]
     valid_roots: list[str] = []
     seen_roots: set[str] = set()
