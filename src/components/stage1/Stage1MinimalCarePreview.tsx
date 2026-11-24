@@ -3,6 +3,7 @@ import { useSaySeeStore } from '../../store/useSaySeeStore';
 import type { PhotoItem, TrashCategory } from '../../types/saysee';
 import {
   PC_OPTICAL_AUDIT_EVENT,
+  auditRealPcPhotosAndCluster,
   isPcOpticalAuditInProgress,
 } from '../../services/mobilePhotoPicker';
 import {
@@ -302,6 +303,36 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     const clamped = Math.min(activeDupSetIdx, Math.max(0, activeDuplicateGroups.length - 1));
     setSetJumpInput(String(clamped + 1));
   }, [activeDupSetIdx, activeDuplicateGroups.length]);
+
+  React.useEffect(() => {
+    if (
+      !zConnected ||
+      isStoreAppMode ||
+      layout === 'mobile' ||
+      pcAuditBusy ||
+      skippedGroupIds.size > 0 ||
+      dupCount === 0 ||
+      activeDuplicateGroups.length > 0
+    ) {
+      return;
+    }
+    const tid = window.setTimeout(() => {
+      if (isPcOpticalAuditInProgress()) return;
+      const cur = useSaySeeStore.getState();
+      void auditRealPcPhotosAndCluster(cur.photos).then(({ updatedPhotos, duplicateGroups: nextGroups }) => {
+        const nextTrash = new Set<string>();
+        updatedPhotos.forEach((p) => {
+          if (p.trashCategory && !p.quarantined) nextTrash.add(p.id);
+        });
+        useSaySeeStore.setState({
+          photos: updatedPhotos,
+          duplicateGroups: nextGroups,
+          selectedTrashIds: nextTrash,
+        });
+      });
+    }, 180);
+    return () => window.clearTimeout(tid);
+  }, [zConnected, isStoreAppMode, layout, pcAuditBusy, skippedGroupIds.size, dupCount, activeDuplicateGroups.length]);
 
   const showDuplicatePickSection = currentTab === 'duplicate';
   const zCoreOutdated = zConnected && isZCoreOutdated(zVersion);
@@ -895,7 +926,9 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     </div>
                   ) : (
                     <p className="text-[12.5px] text-slate-500">
-                      정리할 중복·연사 사진 묶음이 없습니다.
+                      {isPcBootLoading || dupCount > 0
+                        ? '중복·연사 사진 묶음을 확인하고 있습니다...'
+                        : '정리할 중복·연사 사진 묶음이 없습니다.'}
                     </p>
                   )}
                 </div>
@@ -1088,7 +1121,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   <span className="material-symbols-outlined text-slate-400 text-[30px]">
                     {displayPhotos.length === 0 && (isStoreAppMode || layout === 'mobile')
                       ? 'add_photo_alternate'
-                      : isPcBootLoading
+                      : isPcBootLoading || dupCount > 0
                       ? 'hourglass_top'
                       : 'verified'}
                   </span>
@@ -1099,7 +1132,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                         : mobileGalleryPermissionDenied
                         ? '사진 접근 권한 허용이 필요합니다.'
                         : '표시할 사진이 없습니다.'
-                      : isPcBootLoading
+                      : isPcBootLoading || dupCount > 0
                       ? '내 PC의 중복·연사 사진 묶음을 확인하고 있습니다...'
                       : '중복되거나 연속으로 찍힌 사진 묶음이 없습니다.'}
                   </span>
@@ -1356,17 +1389,17 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                             : `정리한 사진 복원 (${quarantinedPhotos.length}장)`}
                         </span>
                         <span className="text-slate-500 text-[11.5px]">
-                          {showQuarantineDrawer ? '접기' : '펼치기'}
+                          {showQuarantineDrawer ? '접기' : '목록 펼치기'}
                         </span>
                       </button>
-                      {showQuarantineDrawer && !isIosNativeTrash && (
+                      {!isIosNativeTrash && (
                         <button
                           type="button"
                           disabled={quarantineMoving}
                           onClick={() =>
                             void restoreFromQuarantine(quarantinedPhotos.map((p) => p.id))
                           }
-                          className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer disabled:opacity-70 disabled:cursor-wait inline-flex items-center gap-1.5"
+                          className="px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer disabled:opacity-70 disabled:cursor-wait inline-flex items-center gap-1.5"
                         >
                           {quarantineMoving && (
                             <span className="inline-block w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />

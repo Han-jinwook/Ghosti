@@ -216,7 +216,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               {!message.missingFilePayload.restored && (
                 <button
                   type="button"
-                  disabled={busyId === 'missing_restore'}
+                  disabled={busyId === 'missing_restore' || busyId === 'missing_restore_all'}
                   onClick={async () => {
                     setBusyId('missing_restore');
                     const res = await executeMissingFileRecovery(
@@ -245,6 +245,45 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   {busyId === 'missing_restore' ? '복원 중...' : '원위치로 복원'}
                 </button>
               )}
+
+              {!message.missingFilePayload.restored &&
+                (() => {
+                  const qPhotos = useSaySeeStore
+                    .getState()
+                    .photos.filter((p) => p.quarantined && !/^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(p.name));
+                  if (qPhotos.length <= 1) return null;
+                  return (
+                    <button
+                      type="button"
+                      disabled={busyId === 'missing_restore' || busyId === 'missing_restore_all'}
+                      onClick={async () => {
+                        setBusyId('missing_restore_all');
+                        try {
+                          await useSaySeeStore
+                            .getState()
+                            .restoreFromQuarantine(qPhotos.map((p) => p.id));
+                          onUpdateMessage({
+                            ...message,
+                            missingFilePayload: {
+                              ...message.missingFilePayload!,
+                              restored: true,
+                              approvedTypedText: `정리한 사진 전체 복원 (${qPhotos.length}장)`,
+                              restoreError: undefined,
+                            },
+                          });
+                          onToast?.(`정리 보관함(휴지통)에 있던 사진 ${qPhotos.length}장을 한꺼번에 원래 위치로 복원했습니다.`);
+                        } finally {
+                          setBusyId(null);
+                        }
+                      }}
+                      className="px-3.5 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-semibold cursor-pointer"
+                    >
+                      {busyId === 'missing_restore_all'
+                        ? '전체 복원 중...'
+                        : `정리한 사진 전체 복원 (${qPhotos.length}장)`}
+                    </button>
+                  );
+                })()}
             </div>
 
             {message.missingFilePayload.restored && (

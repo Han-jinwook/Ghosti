@@ -549,16 +549,24 @@ export const ZCORE_OFFLINE_MESSAGE =
 type ZResult<T> = { ok: true; data: T } | { ok: false; error: string };
 
 async function zcoreJson<T = any>(path: string, init?: RequestInit, timeoutMs = 20000): Promise<ZResult<T>> {
-  for (let attempt = 0; attempt < 2; attempt++) {
+  const retryDelays = [300, 800, 1500];
+  for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
     const controller = new AbortController();
     const timer = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(getZCoreUrl(path), { ...init, signal: controller.signal });
       const ct = res.headers.get('content-type') || '';
       if (!ct.includes('application/json')) {
+        if (attempt < retryDelays.length) {
+          await new Promise((r) => setTimeout(r, retryDelays[attempt]));
+          continue;
+        }
         return { ok: false, error: ZCORE_OFFLINE_MESSAGE };
       }
       const data = (await res.json()) as any;
+      if (!zCoreBridge.isConnected) {
+        void zCoreBridge.checkHealth(true);
+      }
       if (res.status === 403) {
         return { ok: false, error: data?.error || '허용되지 않은 화면에서 요청되어 Z-코어가 실행을 거절했습니다.' };
       }
@@ -568,8 +576,8 @@ async function zcoreJson<T = any>(path: string, init?: RequestInit, timeoutMs = 
       return { ok: true, data };
     } catch (err: any) {
       clearTimeout(timer);
-      if (attempt === 0) {
-        await new Promise((r) => setTimeout(r, 350));
+      if (attempt < retryDelays.length) {
+        await new Promise((r) => setTimeout(r, retryDelays[attempt]));
         continue;
       }
       if (err?.name === 'AbortError') {
@@ -1595,7 +1603,11 @@ export async function executeMissingFileRecovery(
         .split(/[\\/]/)
         .pop();
       const candidateNames = Array.from(
-        new Set([payload.fileName, r.data.originalName, leafName].filter(Boolean) as string[])
+        new Set(
+          [payload.fileName, r.data.originalName, leafName, restoredPath, payload.originalLocation].filter(
+            Boolean
+          ) as string[]
+        )
       );
       if (candidateNames.length > 0) {
         useSaySeeStore

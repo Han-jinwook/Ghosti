@@ -966,6 +966,10 @@ export const App: React.FC = () => {
       didInitWithZCore = zCoreBridge.isConnected;
       await initApp();
     })();
+    const handleZCoreDisconnected = () => {
+      // Z-코어를 강제 종료했다가 다시 실행했을 때 handleZCoreConnected가 생략되지 않고 실시간 파일·연사 세트를 100% 재동기화하도록 플래그 초기화
+      didInitWithZCore = false;
+    };
     const handleZCoreConnected = () => {
       // 세션당 최초 1회만 연결 완료 토스트를 노출하여 반복 팝업 원천 차단
       let shouldShowToast = false;
@@ -991,6 +995,7 @@ export const App: React.FC = () => {
       didInitWithZCore = true;
       void initApp(true);
     };
+    window.addEventListener('zCoreDisconnected', handleZCoreDisconnected);
     window.addEventListener('zCoreConnected', handleZCoreConnected);
 
     // [모바일 앱 백그라운드 복귀 자동 인덱싱]:
@@ -1014,6 +1019,7 @@ export const App: React.FC = () => {
 
     return () => {
       cancelled = true;
+      window.removeEventListener('zCoreDisconnected', handleZCoreDisconnected);
       window.removeEventListener('zCoreConnected', handleZCoreConnected);
       document.removeEventListener('visibilitychange', handleMobileForegroundResume);
       window.removeEventListener('focus', handleMobileForegroundResume);

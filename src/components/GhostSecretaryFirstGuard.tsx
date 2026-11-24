@@ -37,16 +37,25 @@ export function jumpToGhostSecretary(): void {
 
 export function openGhostSecretaryFirstModal(payload: SecretaryFirstModalPayload = {}): void {
   if (typeof window === 'undefined') return;
-  try {
-    playBabyGhostChime('summon');
-  } catch {
-    /* ignore */
-  }
-  window.dispatchEvent(
-    new CustomEvent<SecretaryFirstModalPayload>('openGhostSecretaryFirstModal', {
-      detail: payload,
-    })
-  );
+  if (zCoreBridge.isConnected) return;
+  void (async () => {
+    // Z-코어를 방금 재기동한 직후(폴링 3초 간격 도래 전) 클릭했을 때 오작동 미리보기 모달이 뜨지 않도록 즉시 실시간 헬스체크 선검증
+    const aliveNow = await Promise.race([
+      zCoreBridge.checkHealth(true),
+      new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 450)),
+    ]);
+    if (aliveNow || zCoreBridge.isConnected) return;
+    try {
+      playBabyGhostChime('summon');
+    } catch {
+      /* ignore */
+    }
+    window.dispatchEvent(
+      new CustomEvent<SecretaryFirstModalPayload>('openGhostSecretaryFirstModal', {
+        detail: payload,
+      })
+    );
+  })();
 }
 
 export function useIsSecretaryFirstBrowseGuardActive(): boolean {
@@ -204,11 +213,23 @@ export const GhostSecretaryFirstModal: React.FC = () => {
 
   useEffect(() => {
     const onOpen = (ev: Event) => {
+      if (zCoreBridge.isConnected) {
+        setOpenPayload(null);
+        return;
+      }
       const custom = ev as CustomEvent<SecretaryFirstModalPayload>;
       setOpenPayload(custom.detail || { context: 'default' });
     };
+    const unsubZCore = zCoreBridge.subscribe((connected) => {
+      if (connected) {
+        setOpenPayload(null);
+      }
+    });
     window.addEventListener('openGhostSecretaryFirstModal', onOpen);
-    return () => window.removeEventListener('openGhostSecretaryFirstModal', onOpen);
+    return () => {
+      unsubZCore();
+      window.removeEventListener('openGhostSecretaryFirstModal', onOpen);
+    };
   }, []);
 
   useEffect(() => {

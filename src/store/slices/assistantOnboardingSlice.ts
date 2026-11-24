@@ -2173,16 +2173,27 @@ export const createAssistantOnboardingSlice: StateCreator<
     set((state) => {
       const restoredIdsAfterReplace = new Set<string>();
       const restoredOriginGroupIds = new Set<string>();
+      const stripDupSuffix = (s: string) =>
+        String(s || '')
+          .replace(/__[0-9A-Za-z가-힣_-]{1,18}_[0-9a-f]{6}(?=\.[^.]+$)/i, '')
+          .toLowerCase();
+      const restoredStrippedSet = new Set<string>(
+        cleanNames.map((n) => stripDupSuffix(String(n).split(/[\\/]/).pop() || n))
+      );
       let anyMatched = false;
       const firstPassPhotos = state.photos.map((p) => {
         const isNativeAsset =
           !zCoreBridge.isConnected &&
           (String(p.id || '').startsWith('ms_img_') || String(p.id || '').includes('/'));
+        const pBaseStripped = stripDupSuffix(p.name || '');
+        const pFullLower = String(p.fullPath || '').toLowerCase();
         const hit = isNativeAsset
           ? restoredSet.has(p.id)
           : restoredSet.has(p.id) ||
             restoredSet.has(p.name) ||
-            restoredLowerSet.has((p.name || '').toLowerCase());
+            restoredLowerSet.has((p.name || '').toLowerCase()) ||
+            (pFullLower.length > 0 && restoredLowerSet.has(pFullLower)) ||
+            (pBaseStripped.length > 0 && restoredStrippedSet.has(pBaseStripped));
         if (!hit || !p.quarantined) return p;
         anyMatched = true;
         const originGroupId = p.lastDuplicateGroupId || p.duplicateGroupId;
@@ -2221,6 +2232,12 @@ export const createAssistantOnboardingSlice: StateCreator<
       });
 
       if (!anyMatched) {
+        if (zCoreBridge.isConnected) {
+          // 새로고침 이전이나 윈도우 탐색기에서 지웠던 사진을 1회차에 복원한 경우에도 왼쪽 사진 목록에 즉시 나타나도록 라이브 재동기화
+          window.setTimeout(() => {
+            void get().initApp(true);
+          }, 60);
+        }
         return customToast
           ? { quarantineMoving: false, lastQuarantineToast: customToast }
           : { quarantineMoving: false };
@@ -2353,7 +2370,24 @@ export const createAssistantOnboardingSlice: StateCreator<
             return matched?.name || target;
           })
         : validTargets;
-      const restoreRes = await requestQuarantineOp('restore', wireTargets);
+      type QOpRes = Awaited<ReturnType<typeof requestQuarantineOp>>;
+      const CHUNK_SIZE = 15;
+      const doneAll: string[] = [];
+      const replacedAll: Record<string, string> = {};
+      const errorsAll: QOpRes['errors'] = [];
+      let lastRestoreRes: QOpRes | null = null;
+      for (let offset = 0; offset < wireTargets.length; offset += CHUNK_SIZE) {
+        const chunk = wireTargets.slice(offset, offset + CHUNK_SIZE);
+        const chunkRes = await requestQuarantineOp('restore', chunk);
+        lastRestoreRes = chunkRes;
+        if (chunkRes.done.length > 0) doneAll.push(...chunkRes.done);
+        if (chunkRes.replacedIds) Object.assign(replacedAll, chunkRes.replacedIds);
+        if (chunkRes.errors?.length) errorsAll.push(...chunkRes.errors);
+        if (chunkRes.offline && doneAll.length === 0) break;
+      }
+      const restoreRes: QOpRes = lastRestoreRes
+        ? { ...lastRestoreRes, done: doneAll, replacedIds: replacedAll, errors: errorsAll }
+        : { done: [], errors: [], demo: false, offline: false, replacedIds: {} };
       if (restoreRes.done.length === 0) {
         const isStaleMissingRecycle =
           !restoreRes.offline &&

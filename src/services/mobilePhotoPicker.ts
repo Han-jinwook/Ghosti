@@ -1303,10 +1303,9 @@ export async function applyCachedPcOpticalAuditInstant(photos: PhotoItem[]): Pro
 
   await hydratePcOpticalAuditCacheOnce();
 
-  const targetSlice = realCandidates.slice(0, 800);
   let cachedHits = 0;
   let uncachedCount = 0;
-  for (const p of targetSlice) {
+  for (const p of realCandidates) {
     const cacheKey = `${p.name}_${p.size}_${p.mtimeMs}`;
     const cached = pcOpticalAuditCache.get(cacheKey);
     if (cached) {
@@ -1318,7 +1317,14 @@ export async function applyCachedPcOpticalAuditInstant(photos: PhotoItem[]): Pro
   }
 
   if (cachedHits === 0 && uncachedCount > 0) {
-    // 최초 1회 미캐시 PC에서는 가짜 파일명 묶음(4세트)을 먼저 띄워 깜빡이게 하지 않고 광학 스캔 완료 시 한 번에 표시
+    // 최초 1회 미캐시 PC에서는 광학 스캔 완료 전 정적 duplicate 분류만 남아 '42장 vs 0세트' 불일치가 생기지 않도록 정리 후 스캔 완료 시 일괄 표시
+    for (const p of cloned) {
+      if (!p.quarantined && p.trashCategory === 'duplicate') {
+        p.trashCategory = resolveIntrinsicPhotoTrashCategory({ ...p, trashCategory: undefined });
+        p.duplicateGroupId = undefined;
+        p.isBestInDuplicateGroup = false;
+      }
+    }
     setPcOpticalAuditInProgress(true);
     return { updatedPhotos: cloned, duplicateGroups: [], cachedHits: 0, uncachedCount };
   }
