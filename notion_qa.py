@@ -1217,50 +1217,46 @@ def create_mission(
     [전사 강령 제16조 제5·6항 준수]
     1) 맨 첫 줄: 📌 [테스트 기준 규칙 | 기존 규칙 유지] 또는 [신규 변경 규칙] + 1~2줄 평이한 판정 기준 요약 (공허한 상투어·개발 용어 금지)
     2) 하단 체크리스트: 실제 클릭 가능한 to_do 블록 기본 최대 3개 이하(1~3개), 단 '로직' 담당 초반 둘러보기/완주/UX 점검 카드에 한해 최대 5개 이하(<= 5) 허용
-    3) 노션 DB '담당' 속성('UX' 또는 '로직') 자동 부착
+    3) 노션 DB '담당' 속성('해나라' 또는 '달나라') 자동 부착 (1·2귀신 🟢 -> '해나라', 3·4귀신 🟣 -> '달나라')
     """
     ensure_valid_token()
     SCHEMA.detect(DATABASE_ID)
     resolved_status = initial_status or STATUS_MISSION
 
-    clean_title = title.strip()
-    if not clean_title.startswith(("🎯", "📱", "🟢", "🟣")):
-        if any(tag in clean_title for tag in ("[1귀신", "[2귀신", "[3귀신", "[귀신창", "[귀신같이")):
-            clean_title = f"🎯 {clean_title}"
-        else:
-            clean_title = f"🎯 [1귀신] {clean_title}"
-
-    explicit_ux_for_role1 = (
-        (track_select_name and track_select_name.strip() == "UX")
-        or ("[UX]" in clean_title and (not track_select_name or track_select_name.strip() != "로직"))
+    clean_title = (
+        title.strip()
+        .replace("[1귀신] [UX] ", "[1귀신] ")
+        .replace("[1귀신] [로직] ", "[1귀신] ")
+        .replace("[2귀신] [UX] ", "[2귀신] ")
+        .replace("[2귀신] [로직] ", "[2귀신] ")
+        .replace("[3귀신] [UX] ", "[3귀신] ")
+        .replace("[3귀신] [로직] ", "[3귀신] ")
+        .replace("[4귀신] [UX] ", "[4귀신] ")
+        .replace("[4귀신] [로직] ", "[4귀신] ")
+        .replace("[UX] ", "")
+        .replace("[로직] ", "")
+    )
+    is_dalnara_role = any(tag in clean_title for tag in ("[3귀신", "[4귀신")) or (
+        track_select_name and track_select_name.strip() in ("달나라", "로직") and "[1귀신" not in clean_title and "[2귀신" not in clean_title
     )
 
-    if "[1귀신]" in clean_title:
-        if explicit_ux_for_role1:
-            clean_title = clean_title.replace("🟣", "🟢").replace("[로직]", "[UX]")
-            if "[UX]" not in clean_title:
-                clean_title = clean_title.replace("[1귀신]", "[1귀신] [UX]", 1)
-            if not clean_title.startswith("🟢"):
-                clean_title = "🟢 " + clean_title.lstrip("🎯🟢🟣 ")
-        else:
-            clean_title = clean_title.replace("🟢", "🟣").replace("[UX]", "[로직]")
-            if "[로직]" not in clean_title:
-                clean_title = clean_title.replace("[1귀신]", "[1귀신] [로직]", 1)
-            if not clean_title.startswith("🟣"):
-                clean_title = "🟣 " + clean_title.lstrip("🎯🟢🟣 ")
-
-    if track_select_name and track_select_name.strip() in ("UX", "로직"):
-        resolved_track = track_select_name.strip()
-    elif "[1귀신]" in clean_title and not explicit_ux_for_role1:
-        resolved_track = "로직"
-    elif "[로직]" in clean_title or "🟣" in clean_title:
-        resolved_track = "로직"
+    if is_dalnara_role:
+        clean_title = "🟣 " + clean_title.lstrip("🎯📱🟢🟣 ")
     else:
-        resolved_track = "UX"
+        if not any(tag in clean_title for tag in ("[1귀신", "[2귀신", "[3귀신", "[4귀신", "[귀신창", "[귀신같이")):
+            clean_title = f"🟢 [1귀신] {clean_title.lstrip('🎯📱🟢🟣 ')}"
+        else:
+            clean_title = "🟢 " + clean_title.lstrip("🎯📱🟢🟣 ")
+
+    if track_select_name and track_select_name.strip() in ("해나라", "달나라"):
+        resolved_track = track_select_name.strip()
+    elif is_dalnara_role or clean_title.startswith("🟣"):
+        resolved_track = "달나라"
+    else:
+        resolved_track = "해나라"
 
     is_logic_walkthrough = (
-        resolved_track == "로직"
-        and any(k in clean_title for k in ("둘러보기", "완주", "UX 점검", "UX점검"))
+        any(k in clean_title for k in ("둘러보기", "완주", "UX 점검", "UX점검"))
         and not any(k in clean_title for k in ("엣지", "스트레스", "고강도", "저강도"))
     )
     allowed_max_todos = MAX_QA_TODOS_LOGIC_WALKTHROUGH if is_logic_walkthrough else MAX_QA_TODOS_PER_CARD
@@ -1391,8 +1387,9 @@ def create_split_retest_card(source_page_id: str, new_title: str, guide_text: st
         if r_src.status_code == 200:
             src_props = r_src.json().get("properties") or {}
 
-    inferred_track = "UX" if ("[UX]" in clean_title or "🟢" in clean_title) else "로직"
-    track_val = ((src_props.get("담당") or {}).get("select") or {}).get("name") or inferred_track
+    inferred_track = "달나라" if (any(t in clean_title for t in ("[3귀신", "[4귀신")) or "🟣" in clean_title) else "해나라"
+    raw_track = ((src_props.get("담당") or {}).get("select") or {}).get("name") or inferred_track
+    track_val = "해나라" if raw_track == "UX" else ("달나라" if raw_track == "로직" else raw_track)
     app_val = ((src_props.get("앱") or {}).get("select") or {}).get("name") or "귀신같이"
 
     new_props: Dict[str, Any] = {
