@@ -43,6 +43,7 @@ import { normalizeSuggestionChips } from './ghostSecretaryEngine';
 import {
   detectAgentCareIntent,
   executeAgentCareBatchCard,
+  explainCareItemsWithGemini,
   getLastCareScanContext,
   planCareAgentTurnWithGemini,
   runAgentCareReadTools,
@@ -3784,6 +3785,18 @@ export async function processUnifiedMonsterChatQuery(params: {
           followUpSuggestions: hasUserIcon
             ? ['응, 그 아이콘만 안전하게 숨겨줘', '바탕화면 폴더랑 파일들도 전체 분석해줘']
             : ['안 쓰는 폴더 선택해서 정리할래', 'C드라이브 대용량 공간 도둑 스캔해줘'],
+        });
+      }
+
+      // Case B-2: 초보자 되묻기 질문 ("3번이랑 5번이 뭐야? 지워도 돼?", "꼭 남겨야 할 거 알려줘") ➔ 삭제 없이 친절 설명!
+      if (agentIntent.needsGeminiExplainOnly && curScanCtx && curScanCtx.items.length > 0) {
+        const expRes = await explainCareItemsWithGemini({
+          query: clean,
+          scanContext: curScanCtx,
+        });
+        speak('궁금하신 프로그램과 파일이 무엇인지 알기 쉽게 설명해 드렸어요.');
+        return reply(sourceTab, expRes.replyKo, {
+          followUpSuggestions: expRes.followUpSuggestions,
         });
       }
 

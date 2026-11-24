@@ -1877,44 +1877,85 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             )}
 
             {card.items.length > 0 && (
-              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+              <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
                 {card.items.map((it) => {
                   const checked = selectedSet.has(it.id) && !it.isProtected;
+                  const badgeStyle =
+                    it.safetyBadge === 'DANGER_DELETE'
+                      ? 'bg-rose-100 text-rose-800 border-rose-200'
+                      : it.safetyBadge === 'SAFE_DELETE'
+                      ? 'bg-orange-50 text-orange-800 border-orange-200'
+                      : it.safetyBadge === 'SAFE_CLEAN'
+                      ? 'bg-emerald-50 text-emerald-800 border-emerald-200'
+                      : it.safetyBadge === 'SLEEP_RECOMMEND'
+                      ? 'bg-amber-50 text-amber-800 border-amber-200'
+                      : 'bg-slate-100 text-slate-700 border-slate-200';
                   return (
-                    <label
+                    <div
                       key={it.id}
-                      className={`rounded-lg border px-2.5 py-2 flex items-start gap-2 cursor-pointer transition-colors ${
+                      className={`rounded-lg border px-2.5 py-2 transition-colors ${
                         it.isProtected
-                          ? 'bg-slate-100 border-slate-200 opacity-75 cursor-not-allowed'
+                          ? 'bg-slate-100 border-slate-200 opacity-75'
                           : checked
                           ? 'bg-white border-teal-300'
                           : 'bg-white border-slate-200'
                       }`}
                     >
-                      <input
-                        type="checkbox"
-                        disabled={Boolean(card.executed || it.isProtected)}
-                        checked={checked}
-                        onChange={() => toggleItem(it.id)}
-                        className="mt-0.5 accent-teal-600 cursor-pointer shrink-0"
-                      />
-                      <div className="min-w-0 flex-1">
-                        <div className="font-semibold text-slate-900 flex items-center justify-between gap-2">
-                          <span className="truncate">
-                            <span className="text-teal-700 font-mono mr-1">#{it.no}</span>
-                            {it.name}
-                          </span>
-                          {it.sizeMb > 0 && (
-                            <span className="text-[11px] font-semibold text-slate-600 shrink-0">
-                              {it.sizeMb >= 1024 ? `${(it.sizeMb / 1024).toFixed(2)}GB` : `${it.sizeMb}MB`}
+                      <div className="flex items-start gap-2">
+                        <input
+                          type="checkbox"
+                          disabled={Boolean(card.executed || it.isProtected)}
+                          checked={checked}
+                          onChange={() => toggleItem(it.id)}
+                          className="mt-0.5 accent-teal-600 cursor-pointer shrink-0"
+                        />
+                        <div className="min-w-0 flex-1 space-y-1">
+                          <div className="font-semibold text-slate-900 flex items-center justify-between gap-1.5 flex-wrap">
+                            <span
+                              onClick={() => toggleItem(it.id)}
+                              className="cursor-pointer break-words [overflow-wrap:anywhere]"
+                            >
+                              <span className="text-teal-700 font-mono mr-1">#{it.no}</span>
+                              {it.name}
                             </span>
-                          )}
+                            <div className="flex items-center gap-1 shrink-0">
+                              {it.safetyBadgeLabel && (
+                                <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold ${badgeStyle}`}>
+                                  {it.safetyBadgeLabel}
+                                </span>
+                              )}
+                              {it.sizeMb > 0 && (
+                                <span className="text-[11px] font-semibold text-slate-600">
+                                  {it.sizeMb >= 1024 ? `${(it.sizeMb / 1024).toFixed(2)}GB` : `${it.sizeMb}MB`}
+                                </span>
+                              )}
+                              {!card.executed && !it.isProtected && (
+                                <button
+                                  type="button"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    void submitExternalMonsterChatQuery(
+                                      `#${it.no}번 ${it.name} 이게 뭐 하는 프로그램이야? 지워도 돼?`,
+                                      message.sourceTab || 'trash'
+                                    );
+                                  }}
+                                  className="px-1.5 py-0.5 rounded bg-slate-100 hover:bg-teal-50 border border-slate-200 hover:border-teal-300 text-[10px] text-slate-600 hover:text-teal-800 font-medium cursor-pointer"
+                                >
+                                  이게 뭐예요?
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                          {it.plainExplainKo ? (
+                            <div className="text-[11px] text-slate-700 leading-snug break-words">
+                              💡 {it.plainExplainKo}
+                            </div>
+                          ) : it.detailKo ? (
+                            <div className="text-[11px] text-slate-500 truncate">{it.detailKo}</div>
+                          ) : null}
                         </div>
-                        {it.detailKo && (
-                          <div className="text-[11px] text-slate-500 truncate mt-0.5">{it.detailKo}</div>
-                        )}
                       </div>
-                    </label>
+                    </div>
                   );
                 })}
               </div>

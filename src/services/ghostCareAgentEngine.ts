@@ -31,6 +31,11 @@ export interface AgentCareScanItem {
   cat: string;
   sizeMb: number;
   detailKo?: string;
+  /** 초보자 눈높이 1줄 설명 ("이게 뭐 하는 프로그램인지 / 지워도 안전한지") */
+  plainExplainKo?: string;
+  /** 안전도 배지 ('DANGER_DELETE' | 'SAFE_DELETE' | 'SAFE_CLEAN' | 'SLEEP_RECOMMEND' | 'USER_CHECK') */
+  safetyBadge?: 'DANGER_DELETE' | 'SAFE_DELETE' | 'SAFE_CLEAN' | 'SLEEP_RECOMMEND' | 'USER_CHECK';
+  safetyBadgeLabel?: string;
   path?: string;
   actionType?: string;
   movableToOtherDrive?: boolean;
@@ -97,6 +102,179 @@ export function getLastCareScanContext(): AgentCareScanContext | null {
 
 export function clearLastCareScanContext(): void {
   lastCareScanContext = null;
+}
+
+/**
+ * 🌟 [초보자 눈높이 1줄 번역 사전 — 고클린과의 결정적 차별화]
+ * 영문 프로그램명·프로세스명만 나열하면 일반 유저가 멘붕하므로,
+ * 모든 스캔 항목에 "이게 뭐 하는 프로그램인지 + 지워도 되는지" 쉬운 한글 설명과 안전도 배지를 자동 부착합니다.
+ */
+export function explainCareItemForBeginner(item: {
+  id: string;
+  name: string;
+  cat: string;
+  sizeMb?: number;
+  actionType?: string;
+  isProtected?: boolean;
+}): {
+  safetyBadge: NonNullable<AgentCareScanItem['safetyBadge']>;
+  safetyBadgeLabel: string;
+  plainExplainKo: string;
+} {
+  const comb = `${item.id} ${item.name} ${item.cat}`.toLowerCase();
+
+  if (item.isProtected) {
+    return {
+      safetyBadge: 'USER_CHECK',
+      safetyBadgeLabel: '🛡️ 자동 보호',
+      plainExplainKo: '컴퓨터·업무가 정상 작동하는 데 꼭 필요한 프로그램이라 실수로 지워지지 않게 보호 중이에요.',
+    };
+  }
+  if (/datasharing|lockprofilecookie/.test(comb)) {
+    return {
+      safetyBadge: 'DANGER_DELETE',
+      safetyBadgeLabel: '🚨 위험 · 꼭 삭제',
+      plainExplainKo: '크롬 브라우저의 보안 잠금(쿠키 보호)을 몰래 풀어두는 위험한 예약 작업이에요. 바로 없애는 게 안전해요!',
+    };
+  }
+  if (/cachecloud|cacheconsole|cloudtask|storageservice|pc\s*app\s*store|pcappstore|febjb|msload|ngplus|rayitem|toast|hancapture|zsi|zum|yoondisk|yondisk|natservice|clipdown|tabbie|utilzone/.test(comb)) {
+    return {
+      safetyBadge: 'SAFE_DELETE',
+      safetyBadgeLabel: '🔴 100% 삭제 안전',
+      plainExplainKo: '무료 프로그램 깔 때 몰래 따라 들어온 광고·속도 저하 앱이에요. 지워도 내 문서·업무에 아무 지장 없고 PC가 확 빨라져요!',
+    };
+  }
+  if (/hiberfil/.test(comb)) {
+    return {
+      safetyBadge: 'SAFE_CLEAN',
+      safetyBadgeLabel: '🟢 데스크톱 즉시 확보',
+      plainExplainKo: '노트북 배터리 절전용 파일인데 데스크톱에선 쓸 일이 없어요. 끄시면 1초 만에 몇 GB가 바로 늘어나요!',
+    };
+  }
+  if (/chrome_cache|edge_cache|whale_cache|브라우저\s*캐시/.test(comb)) {
+    return {
+      safetyBadge: 'SAFE_CLEAN',
+      safetyBadgeLabel: '🟢 로그인 유지 · 안전 청소',
+      plainExplainKo: '인터넷 보며 쌓인 임시 그림 찌꺼기만 비워요. 자동로그인·비밀번호·즐겨찾기는 절대 안 풀려요!',
+    };
+  }
+  if (/kakao|카카오/.test(comb) && /캐시|cache|adfit/.test(comb)) {
+    return {
+      safetyBadge: 'SAFE_CLEAN',
+      safetyBadgeLabel: '🟢 대화·사진 보호',
+      plainExplainKo: '카카오톡 광고·임시 찌꺼기만 청소해요. 대화 내용과 카톡 받은 파일은 100% 그대로 보호됩니다!',
+    };
+  }
+  if (/temp|npm|pnpm|yarn|pip|gradle|crashdump|video_stream_cache/.test(comb)) {
+    return {
+      safetyBadge: 'SAFE_CLEAN',
+      safetyBadgeLabel: '🟢 100% 안전 청소',
+      plainExplainKo: '작업 후 남은 임시 찌꺼기 파일이에요. 지워도 프로그램 실행에 전혀 문제가 없고 용량만 깔끔히 확보돼요!',
+    };
+  }
+  if (/capcut|캡컷/.test(comb)) {
+    if (/cache|렌더링/.test(comb)) {
+      return {
+        safetyBadge: 'SAFE_CLEAN',
+        safetyBadgeLabel: '🟢 편집 원본 보호',
+        plainExplainKo: '영상 편집 앱(CapCut)의 임시 캐시만 비워요. 작업 중인 영상 프로젝트는 그대로 남아요!',
+      };
+    }
+    return {
+      safetyBadge: 'USER_CHECK',
+      safetyBadgeLabel: '🔎 확인 후 선택',
+      plainExplainKo: '영상 편집 프로그램(CapCut)이에요. 10GB 가까이 크게 자리 잡으니 영상 편집을 안 하시면 지우는 게 용량에 큰 도움이 돼요!',
+    };
+  }
+  if (/copilot/.test(comb)) {
+    return {
+      safetyBadge: 'SAFE_DELETE',
+      safetyBadgeLabel: '🔴 메모리 600MB 회수',
+      plainExplainKo: '윈도우 기본 AI 앱(Copilot)인데 안 써도 뒤에서 메모리를 600MB 넘게 먹고 있어요. 안 쓰시면 꺼두는 게 훨씬 쾌적해요!',
+    };
+  }
+  if (/ocam|오캠/.test(comb)) {
+    if (/task|스케줄러/.test(comb)) {
+      return {
+        safetyBadge: 'SAFE_DELETE',
+        safetyBadgeLabel: '🔴 100% 꺼도 안전',
+        plainExplainKo: '화면 녹화 프로그램(oCam)이 켤 때마다 몰래 띄우는 백그라운드 광고/점검 작업이에요. 꺼도 녹화 기능은 정상 작동해요!',
+      };
+    }
+    return {
+      safetyBadge: 'USER_CHECK',
+      safetyBadgeLabel: '🔎 쓰시면 유지',
+      plainExplainKo: 'PC 화면 녹화 프로그램(오캠)이에요. 평소 화면 녹화를 쓰시면 체크를 빼고 남겨두세요!',
+    };
+  }
+  if (/scapture|s캡쳐/.test(comb)) {
+    return {
+      safetyBadge: 'USER_CHECK',
+      safetyBadgeLabel: '🔎 쓰시면 유지',
+      plainExplainKo: '화면 캡처 프로그램(SCapture)이에요. 평소 즐겨 쓰시면 놔두시고, 안 쓰시면 지우셔도 됩니다!',
+    };
+  }
+  if (/고클린|goclean/.test(comb)) {
+    return {
+      safetyBadge: 'SAFE_DELETE',
+      safetyBadgeLabel: '🔴 귀신비서로 대체됨',
+      plainExplainKo: '구형 PC 정리 프로그램(고클린)이에요. 이제 광고 없는 귀신비서가 더 안전하게 대신하므로 지우셔도 됩니다!',
+    };
+  }
+  if (/hp\s*print\s*scan|제품\s*개선|hpcust|hp\s*dropbox|hp\s*google/.test(comb)) {
+    return {
+      safetyBadge: 'SAFE_DELETE',
+      safetyBadgeLabel: '🔴 인쇄 영향 없음',
+      plainExplainKo: '프린터 본체 드라이버가 아니라 뒤에서 통계만 보내는 부가 프로그램이에요. 지워도 인쇄·스캔은 100% 그대로 됩니다!',
+    };
+  }
+  if (/nprotect|ahnlab|astx|nossvc/.test(comb)) {
+    return {
+      safetyBadge: 'SAFE_DELETE',
+      safetyBadgeLabel: '🟠 CPU 과점유 · 삭제 추천',
+      plainExplainKo: '은행 보안 프로그램인데 끄지 못하게 잠겨 있어 평소에도 CPU를 많이 먹어요. 자주 안 쓰시면 지우시는 게 훨씬 빠르고, 나중에 은행 가면 자동 재설치돼요!',
+    };
+  }
+  if (item.actionType === 'SECURITY_SLEEP' || /anysign|touchen|delfino|veraport|wizvera|crossex|iniline|ipinside|keysharp|magicline|crosscert|secukit/.test(comb)) {
+    return {
+      safetyBadge: 'SLEEP_RECOMMEND',
+      safetyBadgeLabel: '🟡 안 지우고 재우기 추천',
+      plainExplainKo: '은행·홈택스·민원 사이트용 보안 프로그램이에요. 지우면 다음에 또 깔아야 하니 평소엔 쿨쿨 재워두고 은행 갈 때만 자동으로 깨워드려요!',
+    };
+  }
+  if (/miplatform|iformscan|inziiform|ozweb|ozx|aps\s*engine|yettiesoft|redbc|non-activex|e-pagesafer|markany/.test(comb)) {
+    return {
+      safetyBadge: 'SAFE_DELETE',
+      safetyBadgeLabel: '🔴 구형 관공서 · 삭제 추천',
+      plainExplainKo: '예전에 등기소·특허청·관공서 문서 출력할 때 깔린 구형 플러그인이에요. 요즘 안 들어가시면 지우셔도 전혀 문제없어요!',
+    };
+  }
+  if (/곰플레이어|gom|팟인코더|샤나인코더|vrew|포토스케이프|photoscape|calibre|reflector/.test(comb)) {
+    return {
+      safetyBadge: 'USER_CHECK',
+      safetyBadgeLabel: '🔎 안 쓰시면 삭제',
+      plainExplainKo: '영상 재생·편집·사진 꾸미기용 유틸리티 앱이에요. 최근에 쓰신 적 없으면 체크해서 깔끔하게 지우셔도 됩니다!',
+    };
+  }
+  if (/cursor|windsurf|postman|figma|antigravity/.test(comb)) {
+    return {
+      safetyBadge: 'USER_CHECK',
+      safetyBadgeLabel: '🔎 업무용 확인',
+      plainExplainKo: '개발·디자인 작업용 프로그램이에요. 직접 개발이나 디자인 작업을 하지 않으시면 지워도 업무에 지장 없어요!',
+    };
+  }
+  if (item.cat === 'USER_FOLDER' || item.cat === 'USER_LARGE_ITEM' || item.cat.startsWith('DESKTOP_')) {
+    return {
+      safetyBadge: 'USER_CHECK',
+      safetyBadgeLabel: '🔎 내용 확인 후 선택',
+      plainExplainKo: '내 파일·폴더입니다. 지우기 아까운 대용량 자료라면 삭제 대신 여유 있는 D: 드라이브로 안전하게 이사할 수 있어요!',
+    };
+  }
+  return {
+    safetyBadge: 'USER_CHECK',
+    safetyBadgeLabel: '🔎 확인 후 선택',
+    plainExplainKo: '이 프로그램이 궁금하시면 오른쪽 [이게 뭐예요?]를 누르거나 채팅창에 번호를 물어보시면 친절히 설명해 드릴게요!',
+  };
 }
 
 async function callCareApi<T = any>(
@@ -334,6 +512,14 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
       primaryTitle = `설치된 프로그램 다중 취사선택 정리 (${ap.totalCount ?? 0}개)`;
       primaryBadge = '다중 체크박스 · 2-Pass 무소음 제거';
     }
+  }
+
+  // 🌟 모든 스캔 항목에 초보자 친절 1줄 설명 & 안전도 배지 자동 부착 (고클린과 차원이 다른 쉬운 가이드)
+  for (const it of items) {
+    const exp = explainCareItemForBeginner(it);
+    it.safetyBadge = exp.safetyBadge;
+    it.safetyBadgeLabel = exp.safetyBadgeLabel;
+    it.plainExplainKo = exp.plainExplainKo;
   }
 
   const ctx: AgentCareScanContext = {
@@ -631,7 +817,104 @@ export async function executeAgentCareBatchCard(
 }
 
 /**
+ * 🌟 [초보자 질문 전용 제미니 설명기]
+ * 유저가 스캔 목록을 보고 "3번이랑 5번이 뭐 하는 애들이야? 지워도 돼?", "이 중에 꼭 남겨야 할 거 알려줘"라고 되물었을 때,
+ * 절대 삭제하지 않고 초보자 눈높이(비전문용어)로 정체·삭제 시 영향·추천 행동을 1:1 친절하게 설명합니다.
+ */
+export async function explainCareItemsWithGemini(params: {
+  query: string;
+  scanContext: AgentCareScanContext;
+}): Promise<{ replyKo: string; followUpSuggestions: string[] }> {
+  const { query, scanContext } = params;
+  const compactScan = serializeCompactScanContext(scanContext);
+
+  const prompt = [
+    '당신은 컴퓨터를 잘 모르는 일반인도 1초 만에 안심하고 결정할 수 있게 설명해 주는 『귀신같이』의 친절한 귀신비서입니다.',
+    '아래 [스캔 목록]을 보고 유저가 궁금해하는 항목(또는 전체 중 꼭 지워도 되는 것 / 남겨야 할 것)을 쉬운 일상어로 친절하게 설명해 주세요.',
+    '',
+    '[설명 절대 원칙]:',
+    '1. 개발/IT 전문용어(프로세스, 스케줄러, 레지스트리, DLL 등)를 쓰지 말고, "컴퓨터 켤 때마다 몰래 켜지는 광고 앱", "은행 들어갈 때만 필요한 보안 프로그램"처럼 초보자 일상어로 설명하세요.',
+    '2. 각 항목마다 ① 이게 뭐 하는 프로그램인지, ② 지워도 내 문서/업무에 지장 없는지, ③ [삭제 추천 / 안 지우고 재우기 추천 / 쓰시면 유지] 중 무엇을 권하는지 명확히 짚어주세요.',
+    '3. 다정하고 신뢰감 있는 귀신비서 해요체(~예요!, ~하셔도 안전해요!)로 핵심만 보기 좋게 글머리(•)로 정리해 주세요.',
+    '4. 마지막 줄에는 "원하시는 대로 \'3번이랑 오캠은 빼고 다 지워줘\'처럼 편하게 말씀해 주시면 바로 정리해 드릴게요!"라고 안내하세요.',
+    '',
+    compactScan,
+    '',
+    `[유저 질문]: "${query}"`,
+  ].join('\n');
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5500);
+  try {
+    const res = await fetch('https://os.sundreamer.app/api/ai/gemini', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-id': 'ghosti',
+        'x-ai-account': 'beakes',
+      },
+      body: JSON.stringify({
+        appId: 'ghosti',
+        account: 'beakes',
+        model: 'gemini-2.5-flash',
+        messages: [{ role: 'user', content: prompt }],
+        config: {
+          temperature: 0.25,
+          maxOutputTokens: 700,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      }),
+      signal: controller.signal,
+    });
+    if (res.ok) {
+      const data = await res.json();
+      const text = String(data?.text || '').trim();
+      if (text) {
+        return {
+          replyKo: text,
+          followUpSuggestions: [
+            '빨간색(삭제 안전) 표시된 것만 다 지워줘',
+            '은행 보안모듈은 안 지우고 재워만 줘',
+            'C드라이브 안전 캐시도 같이 정리해줘',
+          ],
+        };
+      }
+    }
+  } catch {
+    /* fallback below */
+  } finally {
+    clearTimeout(timer);
+  }
+
+  // 오프라인/타임아웃 폴백: 로컬 초보자 번역 사전으로 즉시 100% 친절 답변!
+  const matchedNums = Array.from(query.matchAll(/#?(\d+)\s*번?/g)).map((m) => Number(m[1]));
+  const picked =
+    matchedNums.length > 0
+      ? scanContext.items.filter((it) => matchedNums.includes(it.no))
+      : scanContext.items.filter((it) =>
+          query
+            .toLowerCase()
+            .split(/\s+/)
+            .some((w) => w.length >= 2 && it.name.toLowerCase().includes(w))
+        );
+  const targetList = picked.length > 0 ? picked.slice(0, 6) : scanContext.items.slice(0, 6);
+  const lines = [
+    '궁금하신 항목들을 알기 쉽게 정리해 드릴게요!',
+    ...targetList.map((it) => {
+      const exp = explainCareItemForBeginner(it);
+      return `• **#${it.no} ${it.name}** (${exp.safetyBadgeLabel}): ${exp.plainExplainKo}`;
+    }),
+    '보시고 **"체크된 것만 다 지워줘"** 또는 **"오캠이랑 4번은 빼고 나머지 다 지워줘"**처럼 편하게 말씀해 주세요!',
+  ];
+  return {
+    replyKo: lines.join('\n'),
+    followUpSuggestions: ['빨간색(삭제 안전) 항목만 다 지워줘', '은행 보안모듈은 잠재워만 줘'],
+  };
+}
+
+/**
  * 유저 발화가 신규 '제미니 에이전트 자유 문답 + 다중 PC 정리' 트랙에 해당하는지 정밀 판별
+ * - 비전문용어/일상 불만어("컴이 왜 이리 버벅거려", "이상한 거 깔렸나", "자꾸 뭐가 떠", "컴 좀 가볍게 청소하자")까지 모두 자동 인식!
  */
 export function detectAgentCareIntent(
   clean: string,
@@ -640,11 +923,33 @@ export function detectAgentCareIntent(
   matched: boolean;
   immediateReadTools: AgentCareReadTool[];
   needsGeminiMultiTurnFilter: boolean;
+  needsGeminiExplainOnly: boolean;
   isSystemIconQuery: boolean;
   isPowerBoostQuery: boolean;
 } {
+  const hasRecentScan = Boolean(
+    scanContext && scanContext.items.length > 0 && Date.now() - scanContext.updatedAt < 25 * 60 * 1000
+  );
+
+  // 1) 직전 스캔 목록을 보고 "3번 뭐야?", "이거 지워도 돼?", "이게 뭐 하는 프로그램이야?", "꼭 남겨야 할 거 알려줘" 되묻는 경우
+  const isAskingExplain =
+    hasRecentScan &&
+    /(뭐야|뭔데|뭐\s*하는|무슨\s*(앱|프로그램|파일|폴더)|지워도\s*(돼|되|괜찮|안전)|삭제해도\s*(돼|되|괜찮)|설명해|알려\s*줘|남겨야|놔둬야|지울\s*거\s*골라|추천해|어떻게\s*골라|멘붕|모르겠)/i.test(
+      clean
+    ) &&
+    !/(빼고|제외하고|나머지\s*다|일괄\s*삭제|다\s*지워|옮겨\s*줘)/i.test(clean);
+
+  // 2) 일반인 비전문용어 종합 점검 불만어 ("컴이 왜 이리 버벅거려/무거워/이상한 거 깔렸나/자꾸 뭐가 떠/컴퓨터 청소 좀 하자/가볍게 해줘/뭐 지우면 돼")
+  const isCasualFullCheckup =
+    /(컴퓨터|컴터|피씨|pc|노트북|컴)?\s*(가|이)?\s*(왜\s*이리|너무|자꾸|요즘)?\s*(버벅|느려졌|무거워|답답해|렉\s*걸|이상해|꽉\s*찬|터질|가볍게|청소\s*(좀|하자|해\s*줘)|싹\s*정리|정리\s*좀\s*하자|손\s*좀\s*보|손보자|점검\s*좀)/i.test(
+      clean
+    ) ||
+    /(이상한\s*(거|게|앱|프로그램)|광고\s*(가|창|팝업).*?(떠|뜨|나와)|뭐가\s*자꾸\s*(떠|돌아|켜져)|쓸데없는\s*(거|게|앱|프로그램)|뭐\s*(지우면|삭제하면|정리하면)\s*(돼|좋아))/i.test(
+      clean
+    );
+
   const isDiskHog =
-    /(c\s*드라이브|용량\s*(부족|꽉|없|줄|확보|도둑|주범|정리|스캔|분석|체크)|공간\s*(부족|확보|정리|도둑|주범|스캔|분석)|대용량\s*(폴더|파일|캐시|스캔|찾아)|캐시\s*(정리|청소|삭제|지워|스캔)|최대\s*절전|hiberfil|capcut|캡컷|npm|크롬\s*캐시)/i.test(
+    /(c\s*드라이브|용량\s*(부족|꽉|없|줄|확보|도둑|주범|정리|스캔|분석|체크|늘려|부족해)|공간\s*(부족|확보|정리|도둑|주범|스캔|분석|늘려)|대용량\s*(폴더|파일|캐시|스캔|찾아)|캐시\s*(정리|청소|삭제|지워|스캔)|최대\s*절전|hiberfil|capcut|캡컷|npm|크롬\s*캐시)/i.test(
       clean
     );
   const isSecurity2Tier =
@@ -652,11 +957,11 @@ export function detectAgentCareIntent(
       clean
     ) || /(보안\s*모듈.*?(필요한\s*것만|불필요한|골라|2분류|수면))/i.test(clean);
   const isDesktopDetail =
-    /(바탕화면.*?(분석|보고|상세|구성|뭐\s*있|스캔|정리|용량)|wd\s*(폴더|아이콘)|이상한\s*(폴더|아이콘)|사용자\s*폴더\s*(아이콘|숨겨|숨김|뭐야))/i.test(
+    /(바탕화면.*?(분석|보고|상세|구성|뭐\s*있|스캔|정리|용량|지저분|어지러)|wd\s*(폴더|아이콘)|이상한\s*(폴더|아이콘)|사용자\s*폴더\s*(아이콘|숨겨|숨김|뭐야))/i.test(
       clean
     );
   const isAppsSurvey =
-    /(설치된\s*(프로그램|앱)|안\s*쓰는\s*(프로그램|앱)|쓸데없는\s*(프로그램|앱)).*(전수|전체|조사|스캔|다\s*보여|골라|지워|삭제|제거)/i.test(
+    /(설치된\s*(프로그램|앱)|안\s*쓰는\s*(프로그램|앱)|쓸데없는\s*(프로그램|앱)).*(전수|전체|조사|스캔|다\s*보여|골라|지워|삭제|제거|알려)/i.test(
       clean
     );
   const isSystemIconQuery =
@@ -665,10 +970,11 @@ export function detectAgentCareIntent(
     );
   const isPowerBoostQuery = /(전원\s*(옵션|모드).*?(고성능|바꿔|전환)|고성능\s*(모드|전원))/i.test(clean);
 
-  // 직전 스캔 컨텍스트가 살아있고 유저가 취사선택·제외 필터("빼고", "놔두고", "나머지 다", "옮겨줘", "D드라이브", "#3번")를 말하는 경우
+  // 3) 직전 스캔 컨텍스트가 살아있고 유저가 취사선택·제외 필터("빼고", "놔두고", "나머지 다", "빨간색만 지워", "옮겨줘", "D드라이브", "#3번")를 말하는 경우
   const isMultiTurnFilter =
-    Boolean(scanContext && scanContext.items.length > 0 && Date.now() - scanContext.updatedAt < 25 * 60 * 1000) &&
-    /(빼고|제외하고|놔두고|놔둬|남기고|냅두고|말고|나머지\s*(다|전부|모두)|다\s*(지워|삭제|제거|정리|치워)|d\s*드라이브|옮겨\s*(줘|주세요|라)|이사\s*(해|시켜)|#\d+|\d+\s*번)/i.test(
+    hasRecentScan &&
+    !isAskingExplain &&
+    /(빼고|제외하고|놔두고|놔둬|남기고|냅두고|말고|나머지\s*(다|전부|모두)|빨간색|삭제\s*안전|다\s*(지워|삭제|제거|정리|치워)|d\s*드라이브|옮겨\s*(줘|주세요|라)|이사\s*(해|시켜)|#\d+|\d+\s*번)/i.test(
       clean
     );
 
@@ -678,10 +984,16 @@ export function detectAgentCareIntent(
   if (isDesktopDetail) readTools.push('desktop_detail_scan');
   if (isAppsSurvey) readTools.push('installed_apps_list');
 
+  // 비전문용어 일상 불만어("컴이 왜 이리 버벅거려 / 이상한 거 깔렸나 / 뭐 지우면 돼") ➔ 용량 + 애드웨어·보안모듈 2분류 자동 병렬 스캔!
+  if (readTools.length === 0 && !isAskingExplain && !isMultiTurnFilter && isCasualFullCheckup) {
+    readTools.push('disk_hog_scan', 'security_2tier_scan');
+  }
+
   return {
-    matched: readTools.length > 0 || isMultiTurnFilter || isSystemIconQuery || isPowerBoostQuery,
+    matched: readTools.length > 0 || isMultiTurnFilter || isAskingExplain || isSystemIconQuery || isPowerBoostQuery,
     immediateReadTools: readTools,
     needsGeminiMultiTurnFilter: isMultiTurnFilter,
+    needsGeminiExplainOnly: isAskingExplain,
     isSystemIconQuery,
     isPowerBoostQuery,
   };
