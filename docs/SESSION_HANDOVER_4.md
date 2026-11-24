@@ -15,8 +15,9 @@
 4. **`MerlinHub` 정밀 크로스체크 `P0 6건 + P1 4건` 전량 패치 · `Z-Core v2.8.01` 배포 · 2차 재검증 최종 `PASS (Sign-Off)` 획득 (`684c1eb`)**
    - `P0-1` `MULTI` 5대 버킷 순차 실행 & 중복 행 제거, `P0-2` `0-0A` 조건부 제외·이사 가로채기 차단, `P0-3` 일반 사무직원 자유 발화(조사 `이/가`·`답답`·`이상한 창`·`모자라`) SSOT 통합 & 별명 오인 차단, `P0-4` 현역 `SenseTalk_Engine.exe(:28888)` 완전 보호(2개 이상 중복 시 초과분만 종료), `P0-5` `incIdSet.size === 0` 시 `defaultSelected` 안전 모수 한정, `P0-6` UAC `35초` · 공용 큐(`C:\ProgramData\Merlin\care_queue`) · `SYSTEM` 헬퍼 `Users` 실행 SDDL · `ghosti_safe_ops` 승격 원복 · 단일 복원 지점 통합, `P1-1~4` 완결.
    - 3·4호기 Read-Only 실측 통과 (`3호기 VER=2.8.01 TOTAL=10 HELPER=True|SYSTEM`, `4호기 VER=2.8.01 TOTAL=20 HELPER=True|SYSTEM`).
-5. **점심 직후 자유 발화형 노션 실전 QA 미션 카드 2장(해나라·달나라) 출제 및 레거시 껍데기 폴더(`Ghosti_Search`, `Ghosti_Share`) 영구 삭제 (`df1da5a`)**
+5. **점심 직후 자유 발화형 노션 실전 QA 미션 카드 2장(해나라·달나라) 출제 · 레거시 껍데기 폴더(`Ghosti_Search`, `Ghosti_Share`) 영구 삭제 · 1~4귀신 개별 인계장 분리 및 `z_core_watcher.py` 자동 합본 세팅 (`df1da5a`, `fa66b1a`)**
    - 정해진 명령어 예시 없이 목적만 제시해 일반 사무직원 말투로 자유 대화 ➔ 비서 가이드 순응 검증하도록 개편.
+   - 4개 창 동시 체크아웃 충돌 0%를 위해 `SESSION_HANDOVER_1~4.md` 개별 저장 + 체크인 시 파이썬 0.01초 자동 합본(`SESSION_HANDOVER.md`) 세팅 및 `AGENTS.md`·`docs/README.md` 명문화 완료.
 
 ## 다음 체크인 Todo
 - [ ] **점심 직후 3호기(달나라)·4호기(해나라) 귀신비서 실전 자가케어 결과 대조**: `docs/3호4호_PC정밀진단_및_귀신비서_자가케어_대조기준서.md` 10대 지표 전/후 검증 및 피드백 반영.
