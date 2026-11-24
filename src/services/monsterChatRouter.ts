@@ -40,6 +40,14 @@ import {
   type ProactiveCareBriefingResult,
 } from './weeklyCareAndPlaceholderEngine';
 import { normalizeSuggestionChips } from './ghostSecretaryEngine';
+import {
+  detectAgentCareIntent,
+  executeAgentCareBatchCard,
+  getLastCareScanContext,
+  planCareAgentTurnWithGemini,
+  runAgentCareReadTools,
+  type MonsterAgentCareCardPayload,
+} from './ghostCareAgentEngine';
 
 /**
  * 🧹 치우기(클린몬스터) × ⚙️ 고치기(설정몬스터) 공용 대화형 AI & JSON Z-코어 위임 라우터
@@ -75,7 +83,8 @@ export type MonsterCardKind =
   | 'BOOT_CARE_PREVIEW_GATE'
   | 'DEFENDER_GUARD_CARD'
   | 'STARTUP_MANAGER_CARD'
-  | 'INSTALLED_APPS_CARD';
+  | 'INSTALLED_APPS_CARD'
+  | 'AGENT_CARE_BATCH_CARD';
 
 export interface MonsterInfoDeskPayload {
   topicBadge: string;
@@ -389,6 +398,7 @@ export interface MonsterChatMessage {
   defenderGuardPayload?: MonsterDefenderGuardPayload;
   startupManagerPayload?: MonsterStartupManagerPayload;
   installedAppsPayload?: MonsterInstalledAppsPayload;
+  agentCareCardPayload?: MonsterAgentCareCardPayload;
 }
 
 // ---------------------------------------------------------------------------
@@ -828,7 +838,7 @@ export async function callMonsterLowCostLlmJson(params: {
       : '',
     '',
     '[필수 숙지 1~4귀신 전 기능 공식 팩트 (docs/귀신비서_FAQ_원본.md SSOT — 추측·거짓 답변 금지)]:',
-    '• [1귀신 귀신비서]: ①보안프로그램은 기본 자동 절전·기상(은행 접속 시 재설치 불필요, 원할 때만 심층 완전제거 선택), ②모든 파일·사진 정리는 사전 미리보기 + 유저 클릭/"응 진행해" 승인 시에만 Windows 기본 [휴지통] 이동(임의 자동삭제 0%, C드라이브 실제 여유용량 확보는 유저가 직접 "휴지통 비워줘" 입력 시 실행), ③모든 정리·설정은 [복원 기록]/"원래대로 돌려줘"/[전체 복원]으로 1초 원복 가능, ④Windows Defender 순정 백신 통합 경호 및 1초 스마트 ZIP/암호압축 무료 내장, ⑤부품 쇼핑몰 링크 제공 금지(정확한 규격명만 복사).',
+    '• [1귀신 귀신비서]: ①보안프로그램은 사용 이력 기반 2분류(실사용 은행·관공서 모듈 무삭제 자동 절전·기상 vs 악성 애드웨어·그리드·장기 미사용 모듈 다중 취사선택 제거), ②C드라이브 공간 도둑 3초 스캔(크롬·엣지·웨일 4대 순수 캐시[쿠키·로그인 보호]·CapCut 캐시·개발 캐시·데스크톱 최대절전 hiberfil.sys·여유 D드라이브 안전 이사) 및 바탕화면 폴더 구성 분석·WD 특수아이콘 안전 숨김 지원, ③모든 파일·폴더 정리는 🟢보존(제외) vs 🔴실행 체크박스 확인 후 Windows 기본 [휴지통] 이동(영구 삭제 0%, 휴지통 비우기 전/후 용량 병기 및 유저 직접 "휴지통 비워줘" 입력 시 최종 확정), ④모든 정리·설정은 [복원 기록]/"원래대로 돌려줘"로 1초 원복, ⑤Windows Defender 순정 백신 경호 및 1초 스마트 ZIP/암호압축 무료 내장, ⑥부품 쇼핑몰 링크 제공 금지(규격명만 복사).',
     '• [2귀신 귀신검색·여권·귀신키]: ①Ctrl+0(Ctrl+우클릭)으로 👻귀신검색창([⤡작게/⤢크게]) 즉시 소환 — 제목 몰라도 문서 본문(50,000자)·사진 글자(OCR)·동영상 한글 자막 구간(MM:SS) 1초 검색, ②📝사진·표 OCR 창과 🏷️귀신 라벨러(EXIF 촬영일 최우선 보존)는 내 기기 통합 Pro(월 3,900원 · 30일 무료체험) 귀속(S: 업무 폴더 내 라벨러는 전 직원 무료), ③2어절 한영 자동 오타 변환(귀신키 연동)은 자체 오토코렉트 충돌 방지를 위해 아래아한글(HWP)·MS워드·VS Code에서는 양보하고 브라우저·카톡에서 작동, ④귀신계 여권은 5대 스타일 슬롯·시공간 동반인 맥락 결합·단일 고유 실명(본인만 실명+별명 결속)·PC↔폰 128D 벡터 무료 자동동기화로 작동하며 업무 공유(S:)에서는 미발동.',
     '• [3귀신 사진공유·기기통합]: ①3.사진 공유(우리집·본가·처가·동호회·동창회)는 방장·멤버 전원 인원·장수 무제한 평생 0원(개인 사진·영상 전용), room_id 1:1 물리 격리 및 [💌 초대받은 방] 완전 분리, 14일 마중물 + 합류 멤버 로컬 IndexedDB 영구 금고, 삭제는 방장·업로더 본인만 가능, [💻 모니터로 크게 보기] 무선 캐스트 & [📡 다 같이 보기] 0.1초 앨범 싱크 지원, ②4.내 기기 통합은 엔진 설치된 PC와 스토어 정식 모바일 앱(Android/iOS)만 실사용 기기로 같은 이메일 로그인 시 자동 연결(모바일 웹 브라우저는 쇼룸·앱 이동 다리 전용), 양방향 1초 암호화 클립보드 지원, 모바일 앱 내 결제창 비노출(PC 웹에서 관리).',
     '• [4귀신 업무공유 S:·클라우드·NAS]: ①구글 드라이브(G:)·네이버 마이박스(MYBOX)·원드라이브 폴더도 [업무 폴더 변경 (G: 연결)]로 선택 시 S:와 동시 반영, ②데스크톱 탐색기 설치 시 제목 0.1초·일반문서 본문/OCR 자동 다운로드 100% 검색(우클릭 [오프라인 사용 가능] 권장), ③.gsheet/.gdoc는 "링크가 있는 모든 사용자 보기 가능" 시 표·본문 100% 검색 / 비공개 시트는 제목 검색 후 웹 열기, ④사내 NAS 대비 외근·LTE 무설정 1초 직결·본문 1초 검색·실시간 [🔒 현재 OOO님이 사용 중] 잠금·기존 NAS 병행/대체 우위, ⑤S:는 대표 최상위 업무 폴더 1곳 연결(하위 폴더 개수 무제한), ⑥대표 1인 정액제(5인 9,900원/20인 19,000원/50인 29,000원, 30일 체험)로 초대 팀원 평생 0원이며 만료 시 S: 연결만 해제되고 원본 파일은 100% 보존, [🌙 야간·퇴근 초절전 모드](월 전기료 약 1,800원) 및 백업 PC 지원.',
@@ -3022,7 +3032,10 @@ export async function processUnifiedMonsterChatQuery(params: {
             !m.deepUninstallPayload.executed) ||
           (m.cardKind === 'BOOT_CARE_PREVIEW_GATE' &&
             m.bootCarePreviewPayload &&
-            !m.bootCarePreviewPayload.approved))
+            !m.bootCarePreviewPayload.approved) ||
+          (m.cardKind === 'AGENT_CARE_BATCH_CARD' &&
+            m.agentCareCardPayload &&
+            !m.agentCareCardPayload.executed))
     );
 
   const isPendingMissingFileRestoreApprove =
@@ -3410,6 +3423,42 @@ export async function processUnifiedMonsterChatQuery(params: {
         ],
       });
     }
+
+    if (
+      pendingApprovalMsg.cardKind === 'AGENT_CARE_BATCH_CARD' &&
+      pendingApprovalMsg.agentCareCardPayload &&
+      !pendingApprovalMsg.agentCareCardPayload.executed
+    ) {
+      const card = pendingApprovalMsg.agentCareCardPayload;
+      const execRes = await executeAgentCareBatchCard(card, clean);
+      cachedPcContext = null;
+      setSharedMonsterMessages((prev) =>
+        prev.map((m) =>
+          m.id === pendingApprovalMsg.id && m.agentCareCardPayload
+            ? {
+                ...m,
+                agentCareCardPayload: {
+                  ...m.agentCareCardPayload,
+                  executed: execRes.ok,
+                  approvedTypedText: clean,
+                  executionReportKo: execRes.reportKo,
+                  currentFreeGb: execRes.currentFreeGb ?? m.agentCareCardPayload.currentFreeGb,
+                  projectedFreeAfterEmptyGb:
+                    execRes.projectedFreeAfterEmptyGb ?? m.agentCareCardPayload.projectedFreeAfterEmptyGb,
+                },
+              }
+            : m
+        )
+      );
+      speak(execRes.ok ? '선택하신 항목들을 안전하게 정리했습니다.' : '정리 실행 결과를 확인해 주세요.');
+      return reply(sourceTab, execRes.reportKo, {
+        followUpSuggestions: [
+          '휴지통 비워줘',
+          '최근 [복원 기록] 보여줘',
+          'C드라이브 남은 용량 다시 확인해줘',
+        ],
+      });
+    }
   }
 
   // [임의 실행 0% 원칙] 대기 중인 미리보기 카드가 없을 때 "응" / "진행해"가 입력되면
@@ -3671,6 +3720,187 @@ export async function processUnifiedMonsterChatQuery(params: {
             '바탕화면이랑 다운로드 폴더 정리할 파일 봐줘',
           ],
     });
+  }
+
+  // 0-0C) [제미니 에이전트 자유 문답 + 다중 취사선택 PC 정리 트랙 (2026-11-24 Ghosti × MerlinHub 합의 5대 기둥)]
+  // - C드라이브 대용량 공간 도둑 3초 스캔 / 보안모듈·애드웨어 2분류 / 바탕화면 상세 분석 & WD 시스템 아이콘 안전 숨김
+  // - 직전 스캔 원장(lastCareScanContext)을 60개·5키로 Gemini에 주입해 "예스파일·오캠 빼고 나머지 다 지워", "큰 폴더는 D:로 옮겨줘" 멀티턴 지령 수행!
+  if (!isMobileRuntimeForChat() && !/휴지통\s*비워/i.test(clean)) {
+    const curScanCtx = getLastCareScanContext();
+    const agentIntent = detectAgentCareIntent(clean, curScanCtx);
+    if (agentIntent.matched) {
+      // Case A: 데스크톱 고성능 전원 부스터 직접 요청
+      if (agentIntent.isPowerBoostQuery && agentIntent.immediateReadTools.length === 0) {
+        const powerCard: MonsterAgentCareCardPayload = {
+          mode: 'CONFIRM_BATCH',
+          title: '데스크톱 고성능 전원 모드 전환 (배터리 가드 검증)',
+          badgeText: '데스크톱 전용 성능 부스터',
+          summaryLines: [
+            '⚡ 배터리 없는 순수 데스크톱 PC에서만 안전하게 고성능 전원 옵션으로 전환합니다 (노트북은 배터리 보호를 위해 자동 차단).',
+          ],
+          action: 'desktop_power_boost',
+          items: [
+            {
+              no: 1,
+              id: 'desktop_power_high',
+              name: 'Windows 전원 옵션 ➔ 고성능(High Performance) 전환',
+              cat: 'POWER_PLAN',
+              sizeMb: 0,
+              detailKo: '구형 CPU 클럭 저하 방지 · 언제든 균형 조정 복귀 가능',
+              defaultSelected: true,
+            },
+          ],
+          selectedIds: ['desktop_power_high'],
+          excludedNames: [],
+        };
+        return reply(
+          sourceTab,
+          '데스크톱 PC라면 전원 옵션을 **고성능**으로 바꿔 CPU 속도 저하를 막을 수 있어요! 아래 버튼을 누르시거나 **"응 진행해"**라고 말씀해 주세요.',
+          {
+            cardKind: 'AGENT_CARE_BATCH_CARD',
+            agentCareCardPayload: powerCard,
+            followUpSuggestions: ['응 진행해', 'C드라이브 용량 도둑도 스캔해줘'],
+          }
+        );
+      }
+
+      // Case B: 바탕화면 특수 시스템 아이콘(WD 등) 정체 설명 및 안전 숨김
+      if (agentIntent.isSystemIconQuery && !agentIntent.needsGeminiMultiTurnFilter) {
+        const readRes = await runAgentCareReadTools(['desktop_detail_scan']);
+        const visIcons = readRes.context.visibleSystemIcons || [];
+        const hasUserIcon = visIcons.some((ic) => ic.iconId === 'user_files');
+        const explainText = hasUserIcon
+          ? `바탕화면에 보이는 **사용자 계정 폴더(${visIcons[0].label})**는 지우면 큰일 나는 Windows 내 계정 본체 폴더예요!\n절대 삭제하지 않고 **아이콘만 바탕화면에서 깔끔하게 숨길 수 있어요.** 아래 버튼으로 바로 숨겨드릴까요?`
+          : `현재 바탕화면을 스캔해 보았어요! Windows 특수 시스템 아이콘(사용자 폴더·네트워크 등)은 파일을 지우지 않고 아이콘만 안전하게 숨기거나 복원할 수 있습니다.`;
+        const iconCard: MonsterAgentCareCardPayload = {
+          ...readRes.card,
+          mode: hasUserIcon ? 'CONFIRM_BATCH' : 'SCAN_REPORT',
+          action: hasUserIcon ? 'desktop_system_icon_toggle' : 'desktop_batch_action',
+          title: hasUserIcon ? `바탕화면 특수 아이콘(${visIcons[0].label}) 안전 숨김` : readRes.card.title,
+        };
+        return reply(sourceTab, explainText, {
+          cardKind: 'AGENT_CARE_BATCH_CARD',
+          agentCareCardPayload: iconCard,
+          followUpSuggestions: hasUserIcon
+            ? ['응, 그 아이콘만 안전하게 숨겨줘', '바탕화면 폴더랑 파일들도 전체 분석해줘']
+            : ['안 쓰는 폴더 선택해서 정리할래', 'C드라이브 대용량 공간 도둑 스캔해줘'],
+        });
+      }
+
+      // Case C: 직전 스캔 원장 기반 멀티턴 취사선택·제외 필터("예스파일·오캠 빼고 다 지워", "D:로 옮겨줘") ➔ Gemini 2.5 Flash 에이전트 플랜
+      if (agentIntent.needsGeminiMultiTurnFilter && curScanCtx && curScanCtx.items.length > 0) {
+        const pcCtxNow = await fetchRealtimePcContextForLlm();
+        const recentTurnsNow = sharedChatState.messages.slice(-6).map((m) => ({
+          role: m.role,
+          text: m.text,
+        }));
+        const plan = await planCareAgentTurnWithGemini({
+          query: clean,
+          pcContextText: pcCtxNow.summaryText,
+          scanContext: curScanCtx,
+          recentTurns: recentTurnsNow,
+        });
+
+        if (plan?.mutatingPlan) {
+          const mp = plan.mutatingPlan;
+          const excIdSet = new Set((mp.excludeIds || []).map((x) => String(x).trim().toLowerCase()));
+          const excKwList = (mp.excludeKeywords || []).map((x) => String(x).trim().toLowerCase()).filter(Boolean);
+          const incIdSet = new Set((mp.includeIds || []).map((x) => String(x).trim().toLowerCase()));
+
+          const isExcludedItem = (it: typeof curScanCtx.items[number]) => {
+            if (it.isProtected) return true;
+            const idL = it.id.toLowerCase();
+            const nmL = it.name.toLowerCase();
+            const noS = String(it.no);
+            const hashNo = `#${it.no}`;
+            if (excIdSet.has(idL) || excIdSet.has(noS) || excIdSet.has(hashNo)) return true;
+            return excKwList.some((kw) => kw.length >= 2 && (nmL.includes(kw) || idL.includes(kw)));
+          };
+
+          const excludedNames: string[] = [];
+          const selectedIds: string[] = [];
+          for (const it of curScanCtx.items) {
+            if (isExcludedItem(it)) {
+              if (!it.isProtected) excludedNames.push(it.name);
+              continue;
+            }
+            const idL = it.id.toLowerCase();
+            const nmL = it.name.toLowerCase();
+            const noS = String(it.no);
+            const hashNo = `#${it.no}`;
+            const explicitlyIncluded =
+              incIdSet.size === 0 ||
+              incIdSet.has(idL) ||
+              incIdSet.has(noS) ||
+              incIdSet.has(hashNo) ||
+              Array.from(incIdSet).some((inc) => inc.length >= 2 && nmL.includes(inc));
+            if (explicitlyIncluded) {
+              selectedIds.push(it.id);
+            }
+          }
+
+          const totalSelMb = Math.round(
+            curScanCtx.items
+              .filter((it) => selectedIds.includes(it.id))
+              .reduce((acc, it) => acc + (it.sizeMb || 0), 0)
+          );
+          const confirmCard: MonsterAgentCareCardPayload = {
+            mode: 'CONFIRM_BATCH',
+            title: mp.reasonSummaryKo || `취사선택 일괄 정리 최종 확인 (${selectedIds.length}건 예정)`,
+            badgeText: mp.moveDestinationDrive
+              ? `${mp.moveDestinationDrive} 안전 이사 확인`
+              : '휴지통 안전 보관 · 1회 최종 확인',
+            summaryLines: [
+              `🔴 정리 실행 예정: ${selectedIds.length}건${totalSelMb > 0 ? ` (약 ${(totalSelMb / 1024).toFixed(2)}GB)` : ''}`,
+              excludedNames.length > 0
+                ? `🟢 유저 지시로 보존(제외) 확정: ${excludedNames.slice(0, 8).join(', ')}`
+                : '🟢 필수 시스템·하드웨어 드라이버·개인 데이터 자동 보호됨',
+            ],
+            action: mp.action,
+            items: curScanCtx.items.slice(0, 50),
+            selectedIds,
+            excludedNames,
+            moveDestinationDrive: mp.moveDestinationDrive || '',
+            availableMoveDrives: curScanCtx.availableMoveDrives,
+            visibleSystemIcons: curScanCtx.visibleSystemIcons,
+            currentFreeGb: curScanCtx.cDriveFreeGb,
+            projectedFreeAfterEmptyGb:
+              curScanCtx.cDriveFreeGb !== undefined
+                ? Number((curScanCtx.cDriveFreeGb + totalSelMb / 1024).toFixed(1))
+                : undefined,
+            isDesktop: curScanCtx.isDesktop,
+            isHighPerformance: curScanCtx.isHighPerformance,
+          };
+
+          const replyKo =
+            `${plan.replyKo}\n` +
+            `• **🟢 보존 확정(제외)**: ${excludedNames.length > 0 ? excludedNames.join(', ') : '없음(시스템 필수 항목만 보호)'}\n` +
+            `• **🔴 실행 예정 (${selectedIds.length}건)**: 아래 체크박스를 한 번 더 확인하신 뒤 **[✅ ${selectedIds.length}건 일괄 실행]** 버튼을 누르시거나 **"응 진행해"**라고 입력해 주세요!`;
+          speak(plan.replyKo);
+          return reply(sourceTab, replyKo, {
+            cardKind: 'AGENT_CARE_BATCH_CARD',
+            agentCareCardPayload: confirmCard,
+            followUpSuggestions:
+              plan.followUpSuggestions.length > 0
+                ? plan.followUpSuggestions
+                : ['응 진행해', '휴지통 비워줘'],
+          });
+        }
+      }
+
+      // Case D: Read-Only 조회 도구 1~4개 1턴 병렬 즉시 실행 (승인 게이트 없이 바로 스캔·브리핑)
+      if (agentIntent.immediateReadTools.length > 0) {
+        const readRes = await runAgentCareReadTools(agentIntent.immediateReadTools);
+        if (readRes.ok) {
+          speak('내 피씨 정밀 스캔을 완료했습니다. 아래 목록에서 원하는 항목만 골라 정리하실 수 있어요.');
+          return reply(sourceTab, readRes.briefingKo, {
+            cardKind: 'AGENT_CARE_BATCH_CARD',
+            agentCareCardPayload: readRes.card,
+            followUpSuggestions: readRes.followUpSuggestions,
+          });
+        }
+      }
+    }
   }
 
   // 0-0B) [복원 히스토리 조회 ➔ 번호 타이핑 선택 원복 인터셉터 (0 토큰 · 블랙박스 원복 영구 기록)]

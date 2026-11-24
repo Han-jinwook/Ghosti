@@ -2024,8 +2024,29 @@ def get_outbound_work_tunnel_status() -> Dict[str, Any]:
     }
 
 
+def _cleanup_orphan_cloudflared_processes(keep_pid: int = 0) -> None:
+    """이전 Z-코어 세션에서 종료되지 않고 남은 고아 cloudflared.exe(--url http://127.0.0.1:5199) 프로세스를 정리해 26개 중복 누수를 원천 차단합니다."""
+    if os.name != "nt":
+        return
+    try:
+        ps_cmd = (
+            f"$kp={int(keep_pid or 0)}; "
+            "Get-CimInstance Win32_Process -Filter \"Name='cloudflared.exe'\" -ErrorAction SilentlyContinue | "
+            "Where-Object { $_.ProcessId -ne $kp -and $_.CommandLine -like '*127.0.0.1:5199*' } | "
+            "ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }"
+        )
+        subprocess.run(
+            ["powershell", "-NoProfile", "-Command", ps_cmd],
+            capture_output=True,
+            timeout=3.0,
+            creationflags=_CREATE_NO_WINDOW,
+        )
+    except Exception:
+        pass
+
+
 def ensure_outbound_work_tunnel(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    """대장 PC에서 상시 아웃바운드 HTTPS 직통 터널을 기동합니다 (방화벽 인바운드 포트 개방 불필요 · 대기시간 0초)."""
+    """대장 PC에서 상시 아웃바운드 HTTPS 직통 터널을 기동합니다 (방화벽 인바운드 포트 개방 불필요 · 단일 인스턴스 락으로 중복 스폰 0%)."""
     cfg = _load_sdrive_config()
     if cfg.get("workEntitlementLocked") is True:
         stop_outbound_work_tunnel()
@@ -2036,13 +2057,21 @@ def ensure_outbound_work_tunnel(data: Dict[str, Any] | None = None) -> Dict[str,
             "tunnelUrl": "",
         }
 
-    cur = get_outbound_work_tunnel_status()
-    if cur["alive"] and cur["tunnelUrl"]:
-        return cur
-    if cur["status"] in ("starting", "downloading_binary"):
-        return cur
+    with _TUNNEL_LOCK:
+        proc_existing = _TUNNEL_STATE.get("proc")
+        alive_existing = proc_existing is not None and (proc_existing.poll() is None)
+        cur_status = str(_TUNNEL_STATE.get("status") or "idle")
+        cur_url = str(_TUNNEL_STATE.get("url") or "")
+        if alive_existing and cur_url:
+            return get_outbound_work_tunnel_status()
+        if cur_status in ("starting", "downloading_binary"):
+            return get_outbound_work_tunnel_status()
+        # 동시 요청 경합(Race Condition)으로 2개 이상 스폰되지 않도록 락 안에서 즉시 starting 선점!
+        _TUNNEL_STATE["status"] = "starting"
+        _TUNNEL_STATE["error"] = ""
 
     def _spawn_worker() -> None:
+        _cleanup_orphan_cloudflared_processes(keep_pid=0)
         bin_p = _find_or_download_cloudflared_binary()
         if bin_p is None:
             with _TUNNEL_LOCK:

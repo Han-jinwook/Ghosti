@@ -43,6 +43,7 @@ import {
   buildSetupDiagnosisPlan,
   launchRealOsTopmostOverlay,
 } from '../services/setupMonsterEngine';
+import { executeAgentCareBatchCard } from '../services/ghostCareAgentEngine';
 
 interface MonsterCardProps {
   message: MonsterChatMessage;
@@ -1815,6 +1816,213 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 </div>
               ))}
             </div>
+          </div>
+        );
+      })()}
+
+      {/* 11-B7) [제미니 에이전트 자유 문답 + 다중 취사선택 PC 정리 카드 (2026-11-24 합의 5대 기둥)] */}
+      {message.cardKind === 'AGENT_CARE_BATCH_CARD' && message.agentCareCardPayload && (() => {
+        const card = message.agentCareCardPayload;
+        const selectedSet = new Set(card.selectedIds || []);
+        const selectedCount = card.items.filter((it) => selectedSet.has(it.id) && !it.isProtected).length;
+        const selectedTotalMb = Math.round(
+          card.items
+            .filter((it) => selectedSet.has(it.id) && !it.isProtected)
+            .reduce((acc, it) => acc + (it.sizeMb || 0), 0)
+        );
+        const toggleItem = (id: string) => {
+          if (card.executed) return;
+          const next = new Set(selectedSet);
+          if (next.has(id)) next.delete(id);
+          else next.add(id);
+          onUpdateMessage({
+            ...message,
+            agentCareCardPayload: {
+              ...card,
+              selectedIds: Array.from(next),
+            },
+          });
+        };
+        const setMoveDrive = (drv: string) => {
+          if (card.executed) return;
+          onUpdateMessage({
+            ...message,
+            agentCareCardPayload: {
+              ...card,
+              moveDestinationDrive: drv,
+            },
+          });
+        };
+        return (
+          <div className="rounded-xl border border-teal-200 bg-slate-50 p-3.5 space-y-2.5 text-xs overflow-hidden">
+            <div className="flex items-center justify-between gap-2 flex-wrap">
+              <div className="font-bold text-slate-900 text-[13px]">{card.title}</div>
+              <span className="px-2 py-0.5 rounded bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-semibold">
+                {card.badgeText}
+              </span>
+            </div>
+
+            {card.summaryLines && card.summaryLines.length > 0 && (
+              <div className="rounded-lg bg-white border border-slate-200 p-2.5 space-y-1 text-[11.5px] text-slate-700">
+                {card.summaryLines.map((ln, i) => (
+                  <div key={i} className="leading-snug">{ln}</div>
+                ))}
+              </div>
+            )}
+
+            {card.excludedNames && card.excludedNames.length > 0 && (
+              <div className="rounded-lg bg-emerald-50 border border-emerald-200 px-2.5 py-1.5 text-[11.5px] text-emerald-900 font-medium">
+                🟢 보존 확정(제외됨): {card.excludedNames.join(', ')}
+              </div>
+            )}
+
+            {card.items.length > 0 && (
+              <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
+                {card.items.map((it) => {
+                  const checked = selectedSet.has(it.id) && !it.isProtected;
+                  return (
+                    <label
+                      key={it.id}
+                      className={`rounded-lg border px-2.5 py-2 flex items-start gap-2 cursor-pointer transition-colors ${
+                        it.isProtected
+                          ? 'bg-slate-100 border-slate-200 opacity-75 cursor-not-allowed'
+                          : checked
+                          ? 'bg-white border-teal-300'
+                          : 'bg-white border-slate-200'
+                      }`}
+                    >
+                      <input
+                        type="checkbox"
+                        disabled={Boolean(card.executed || it.isProtected)}
+                        checked={checked}
+                        onChange={() => toggleItem(it.id)}
+                        className="mt-0.5 accent-teal-600 cursor-pointer shrink-0"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="font-semibold text-slate-900 flex items-center justify-between gap-2">
+                          <span className="truncate">
+                            <span className="text-teal-700 font-mono mr-1">#{it.no}</span>
+                            {it.name}
+                          </span>
+                          {it.sizeMb > 0 && (
+                            <span className="text-[11px] font-semibold text-slate-600 shrink-0">
+                              {it.sizeMb >= 1024 ? `${(it.sizeMb / 1024).toFixed(2)}GB` : `${it.sizeMb}MB`}
+                            </span>
+                          )}
+                        </div>
+                        {it.detailKo && (
+                          <div className="text-[11px] text-slate-500 truncate mt-0.5">{it.detailKo}</div>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </div>
+            )}
+
+            {/* 여유 드라이브(D: 등) 안전 이사 전환 스위치 */}
+            {!card.executed && card.availableMoveDrives && card.availableMoveDrives.length > 0 && (card.action === 'disk_hog_clean' || card.action === 'desktop_batch_action') && (
+              <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+                <span className="text-[11px] text-slate-600 font-medium">처리 방식:</span>
+                <button
+                  type="button"
+                  onClick={() => setMoveDrive('')}
+                  className={`px-2 py-1 rounded-md text-[11px] font-semibold border cursor-pointer ${
+                    !card.moveDestinationDrive
+                      ? 'bg-teal-600 text-white border-teal-600'
+                      : 'bg-white text-slate-700 border-slate-200'
+                  }`}
+                >
+                  🗑️ Windows 휴지통으로 안전 이동
+                </button>
+                {card.availableMoveDrives.map((dv) => (
+                  <button
+                    key={dv.drive}
+                    type="button"
+                    onClick={() => setMoveDrive(dv.drive)}
+                    className={`px-2 py-1 rounded-md text-[11px] font-semibold border cursor-pointer ${
+                      card.moveDestinationDrive === dv.drive
+                        ? 'bg-indigo-600 text-white border-indigo-600'
+                        : 'bg-white text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    📦 {dv.drive}\귀신비서_보관함 으로 안전 이사 ({dv.freeGb}GB 여유)
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {card.executed ? (
+              <div className="space-y-2">
+                <div className="rounded-lg bg-emerald-50 border border-emerald-200 p-2.5 text-[11.5px] text-emerald-950 whitespace-pre-line leading-relaxed">
+                  {card.executionReportKo || '선택한 항목의 정리가 완료되었습니다.'}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => void submitExternalMonsterChatQuery('휴지통 비워줘', message.sourceTab || 'trash')}
+                    className="px-2.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold cursor-pointer"
+                  >
+                    🗑️ 휴지통 비워서 C: 용량 확정하기
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void submitExternalMonsterChatQuery('최근 [복원 기록] 보여줘', message.sourceTab || 'trash')}
+                    className="px-2.5 py-1.5 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[11.5px] font-medium cursor-pointer"
+                  >
+                    ↩️ 복원 기록 확인
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between gap-2 flex-wrap pt-1 border-t border-slate-200">
+                <span className="text-[11px] text-slate-500">
+                  {card.currentFreeGb !== undefined && card.projectedFreeAfterEmptyGb !== undefined
+                    ? `현재 C: ${card.currentFreeGb}GB ➔ 정리·비우기 후 약 ${card.projectedFreeAfterEmptyGb}GB`
+                    : '영구 삭제 0% · Windows 기본 휴지통 안전 보관'}
+                </span>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  {card.isDesktop && card.isHighPerformance === false && (
+                    <button
+                      type="button"
+                      onClick={() => void submitExternalMonsterChatQuery('데스크톱 전원 옵션 고성능으로 바꿔줘', message.sourceTab || 'trash')}
+                      className="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-900 text-[11px] font-semibold cursor-pointer"
+                    >
+                      ⚡ 고성능 전원 전환
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    disabled={busyId === 'agent_batch_exec' || (selectedCount === 0 && card.action !== 'desktop_system_icon_toggle' && card.action !== 'desktop_power_boost')}
+                    onClick={async () => {
+                      setBusyId('agent_batch_exec');
+                      const res = await executeAgentCareBatchCard(card, '원클릭 체크박스 최종 확인 실행');
+                      setBusyId(null);
+                      onUpdateMessage({
+                        ...message,
+                        agentCareCardPayload: {
+                          ...card,
+                          executed: res.ok,
+                          executionReportKo: res.reportKo,
+                          currentFreeGb: res.currentFreeGb ?? card.currentFreeGb,
+                          projectedFreeAfterEmptyGb: res.projectedFreeAfterEmptyGb ?? card.projectedFreeAfterEmptyGb,
+                        },
+                      });
+                      onToast?.(res.ok ? '선택한 항목을 안전하게 정리했습니다!' : '정리 결과를 확인해 주세요.');
+                    }}
+                    className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white text-[12px] font-bold cursor-pointer shrink-0"
+                  >
+                    {busyId === 'agent_batch_exec'
+                      ? '안전 정리 실행 중...'
+                      : card.action === 'desktop_power_boost'
+                      ? '⚡ 고성능 전원 즉시 전환'
+                      : card.action === 'desktop_system_icon_toggle'
+                      ? '✨ 시스템 아이콘 안전 숨김'
+                      : `✅ ${selectedCount}건 일괄 실행${selectedTotalMb > 0 ? ` (${selectedTotalMb >= 1024 ? `${(selectedTotalMb / 1024).toFixed(1)}GB` : `${selectedTotalMb}MB`})` : ''} (휴지통 안전 보관)`}
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         );
       })()}
