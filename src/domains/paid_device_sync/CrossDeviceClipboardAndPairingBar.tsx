@@ -89,8 +89,9 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
     e.preventDefault();
     if (!isLoggedIn) {
       useSaySeeStore.setState({
-        lastQuarantineToast:
-          '현재 게스트(비로그인) 상태입니다. PC와 같은 이메일로 먼저 로그인한 뒤 기기를 연결해 주세요.',
+        lastQuarantineToast: isMobileDevice
+          ? '현재 게스트(비로그인) 상태입니다. PC와 같은 이메일로 먼저 로그인한 뒤 기기를 연결해 주세요.'
+          : '현재 게스트(비로그인) 상태입니다. 먼저 로그인한 뒤 스마트폰과 기기를 연결해 주세요.',
       });
       openLoginModal();
       return;
@@ -107,8 +108,9 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
     e.preventDefault();
     if (!isLoggedIn) {
       useSaySeeStore.setState({
-        lastQuarantineToast:
-          '현재 게스트(비로그인) 상태입니다. PC와 같은 이메일로 먼저 로그인해 주세요.',
+        lastQuarantineToast: isMobileDevice
+          ? '현재 게스트(비로그인) 상태입니다. PC와 같은 이메일로 먼저 로그인해 주세요.'
+          : '현재 게스트(비로그인) 상태입니다. 먼저 로그인해 주세요.',
       });
       openLoginModal();
       return;
@@ -335,7 +337,9 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
               로그인이 필요합니다 (현재 게스트 상태)
             </span>
             <span className="text-amber-800/90 text-[11.5px] leading-snug break-keep">
-              PC와 같은 이메일로 먼저 로그인해야 기기 연결(6자리 번호 · QR)과 클립보드 공유를 사용할 수 있습니다.
+              {isMobileDevice
+                ? 'PC와 같은 이메일로 먼저 로그인해야 기기 연결(6자리 번호 · QR)과 클립보드 공유를 사용할 수 있습니다.'
+                : '먼저 로그인해야 스마트폰과 기기 연결(QR · 6자리 번호) 및 클립보드 공유를 사용할 수 있습니다. (모바일 앱에서도 같은 이메일로 로그인하면 자동 연결됩니다)'}
             </span>
           </div>
           <button
@@ -343,7 +347,7 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
             onClick={openLoginModal}
             className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer shrink-0 whitespace-nowrap self-start sm:self-center"
           >
-            PC와 같은 이메일로 로그인
+            {isMobileDevice ? 'PC와 같은 이메일로 로그인' : '로그인하기'}
           </button>
         </div>
       ) : (
