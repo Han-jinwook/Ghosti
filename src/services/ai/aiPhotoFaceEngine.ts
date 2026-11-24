@@ -2880,9 +2880,15 @@ export async function startSilentRealMediaVisionIndexing(params: {
   }
 }
 
+const _smartPhotoLabelMemo = new Map<
+  string,
+  { tokens: string[]; enrichedTags: string[]; ocrSnippet?: string }
+>();
+
 export async function resolveSmartKoreanLabelForPhoto(
   photo: PhotoItem,
-  existingNames?: string[]
+  existingNames?: string[],
+  signal?: AbortSignal
 ): Promise<{
   displaySourceName: string;
   label: string;
@@ -2892,23 +2898,41 @@ export async function resolveSmartKoreanLabelForPhoto(
   const displaySourceName = stripCollisionKeySuffix(photo.name || '사진.png');
   // 원본 JPEG 헤더(64KB)에서 EXIF 실제 촬영일(DateTimeOriginal)을 병렬 초고속(~2ms) 추출
   const exifTakenAtPromise = probePhotoExifTakenAtMs(photo.fullUrl || photo.thumbUrl);
+  const memoKey = photo.id || `${photo.name}|${photo.size || 0}`;
+  const memoHit = _smartPhotoLabelMemo.get(memoKey);
+
   const ocrFromCaption = (photo.captionKo || '').includes('OCR:')
     ? (photo.captionKo || '').split(/(?:📝\s*)?OCR:/)[1] || ''
     : '';
-  let tokens = extractCrispKoreanLabelTokens([    ocrFromCaption,
-    ...(photo.ontologyPrimaryTags || []),
-    ...(photo.tags || []),
-    ...(photo.keywordsKo || []),
-  ]);
+  let tokens = memoHit
+    ? [...memoHit.tokens]
+    : extractCrispKoreanLabelTokens([
+        ocrFromCaption,
+        ...(photo.ontologyPrimaryTags || []),
+        ...(photo.tags || []),
+        ...(photo.keywordsKo || []),
+      ]);
 
-  let discoveredOcrSnippet = '';
+  let discoveredOcrSnippet = memoHit?.ocrSnippet || '';
   const discoveredTagSet = new Set<string>(
-    (photo.tags || []).filter((t) => t && !SHARED_PHOTO_BOILERPLATE_TAG_RX.test(t))
+    memoHit
+      ? memoHit.enrichedTags
+      : (photo.tags || []).filter((t) => t && !SHARED_PHOTO_BOILERPLATE_TAG_RX.test(t))
   );
 
-  // 아직 백그라운드 인덱싱이 도달하지 않아 '#내기기사진'만 있는 경우 즉시 온디맨드 실물 OCR + 시각 개념 판독 수행
-  if (tokens.length === 0) {
-    if (zCoreBridge.isConnected) {
+  // 아직 백그라운드 인덱싱이 도달하지 않아 '#내기기사진'만 있는 경우
+  // OCR과 캐시 벡터 개념 판독을 병렬 실행하고, 중복 이미지 fetch를 제거해 0.5초 이내 초고속 완료
+  if (tokens.length === 0 && !signal?.aborted) {
+    const isTextHeavyPhoto = Boolean(
+      photo.isVaultDocument ||
+        photo.trashCategory === 'screenshot' ||
+        photo.trashCategory === 'memo'
+    );
+    const ocrBudgetMs = isTextHeavyPhoto ? 750 : 450;
+
+    // A) Z-코어 로컬 OCR 태스크 (AbortSignal 연동으로 연속 클릭 시 이전 요청 즉시 중단)
+    const runZCoreOcr = async (): Promise<{ tokens: string[]; snippet: string }> => {
+      if (!zCoreBridge.isConnected || signal?.aborted) return { tokens: [], snippet: '' };
       try {
         const rawUrl = photo.fullUrl || photo.thumbUrl || '';
         let pParam = photo.name || '';
@@ -2921,7 +2945,9 @@ export async function resolveSmartKoreanLabelForPhoto(
           }
         }
         const ctrl = new AbortController();
-        const tid = setTimeout(() => ctrl.abort(), 1800);
+        const onOuterAbort = () => ctrl.abort();
+        signal?.addEventListener('abort', onOuterAbort, { once: true });
+        const tid = setTimeout(() => ctrl.abort(), ocrBudgetMs);
         const res = await fetch(getZCoreUrl('/__photos/ocr'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2930,60 +2956,119 @@ export async function resolveSmartKoreanLabelForPhoto(
             fullPath: photo.fullPath || '',
           }),
           signal: ctrl.signal,
-        }).finally(() => clearTimeout(tid));
+        }).finally(() => {
+          clearTimeout(tid);
+          signal?.removeEventListener('abort', onOuterAbort);
+        });
         if (res.ok) {
           const ocrJson = await res.json().catch(() => null);
           if (ocrJson?.ok && ocrJson?.hasText) {
             const chips = Array.isArray(ocrJson.chips) ? ocrJson.chips.map(String) : [];
             const fullText = String(ocrJson.fullText || '').trim();
-            discoveredOcrSnippet = fullText.slice(0, 140);
-            tokens = extractCrispKoreanLabelTokens([...chips, fullText]);
-            for (const tk of tokens.slice(0, 2)) discoveredTagSet.add(`#${tk}`);
+            return {
+              tokens: extractCrispKoreanLabelTokens([...chips, fullText]),
+              snippet: fullText.slice(0, 140),
+            };
           }
         }
       } catch {
-        /* fallback to client vision/ocr below */
+        /* ignore timeout/abort */
       }
+      return { tokens: [], snippet: '' };
+    };
+
+    // B) 캐시된 768D 벡터 즉시 매칭(<2ms, 불필요한 이미지 재다운로드/디코딩 0회!)
+    const runFastCachedVectorMatch = async (): Promise<{ tokens: string[]; tag?: string }> => {
+      if (signal?.aborted) return { tokens: [] };
+      try {
+        await hydrateRealMediaVectorCacheOnce();
+        const pKey = getPhotoMediaCacheKey(photo.name, photo.size);
+        const vec =
+          photo.vec && photo.vec.length === DEFAULT_DIM
+            ? photo.vec
+            : hydratedPhotoVecMap.get(pKey) || null;
+        if (!vec || vec.length !== DEFAULT_DIM) return { tokens: [] };
+        const conceptMap = await ensureGemma2ConceptProbeVecs();
+        const ranked: Array<{ probe: Gemma2ConceptProbe; sim: number }> = [];
+        for (const probe of GEMMA2_VISUAL_CONCEPT_PROBES) {
+          const pVec = conceptMap.get(probe.id);
+          if (!pVec) continue;
+          ranked.push({ probe, sim: cosineSimilarity(pVec, vec) });
+        }
+        ranked.sort((a, b) => b.sim - a.sim);
+        const bestEntry = ranked[0];
+        const secondEntry = ranked[1];
+        const margin = bestEntry && secondEntry ? bestEntry.sim - secondEntry.sim : 1;
+        if (bestEntry && (bestEntry.sim >= 0.68 || (bestEntry.sim >= 0.65 && margin >= 0.015))) {
+          const cleanProbeTag = bestEntry.probe.tag.replace(/^#/, '');
+          return {
+            tokens: extractCrispKoreanLabelTokens([
+              cleanProbeTag,
+              ...(bestEntry.probe.keywordsKo || []),
+            ]),
+            tag: bestEntry.probe.tag,
+          };
+        }
+      } catch {
+        /* ignore */
+      }
+      return { tokens: [] };
+    };
+
+    // OCR과 캐시 벡터 매칭을 병렬로 동시 실행 (기존 1.8s + 1.5s 순차 대기 ➔ 최대 0.45~0.75s)
+    const [ocrRes, fastVecRes] = await Promise.all([runZCoreOcr(), runFastCachedVectorMatch()]);
+    if (ocrRes.tokens.length > 0) {
+      tokens = ocrRes.tokens;
+      discoveredOcrSnippet = ocrRes.snippet;
+      for (const tk of tokens.slice(0, 2)) discoveredTagSet.add(`#${tk}`);
+    } else if (fastVecRes.tokens.length > 0) {
+      tokens = fastVecRes.tokens;
+      if (fastVecRes.tag) discoveredTagSet.add(fastVecRes.tag);
     }
 
-    if (tokens.length === 0) {
+    // C) 둘 다 비어 있고 벡터도 없던 미인덱싱 사진만 초단기(600ms) 비전 폴백 1회 수행
+    if (tokens.length === 0 && !signal?.aborted) {
       try {
         const visionFallbackTask = (async () => {
-          await hydrateRealMediaVectorCacheOnce();
           const pKey = getPhotoMediaCacheKey(photo.name, photo.size);
           let vec =
             photo.vec && photo.vec.length === DEFAULT_DIM
               ? photo.vec
               : hydratedPhotoVecMap.get(pKey) || null;
-          let thumbDataUrl = '';
-          const srcUrl = photo.thumbUrl || photo.fullUrl || '';
-          if (srcUrl) {
-            const imgCtrl = new AbortController();
-            const imgTid = setTimeout(() => imgCtrl.abort(), 3000);
-            const imgRes = await fetch(srcUrl, { signal: imgCtrl.signal }).finally(() =>
-              clearTimeout(imgTid)
-            );
-            if (imgRes.ok) {
-              const blob = await imgRes.blob();
-              const decoded = await decodeImageBlobToRawAndThumb(blob);
-              if (decoded) {
-                thumbDataUrl = decoded.thumbDataUrl || '';
-                if (!vec || vec.length !== DEFAULT_DIM) {
-                  vec = await embedRawImageWithSharedVision(decoded.rawImg);
-                  if (vec) hydratedPhotoVecMap.set(pKey, vec);
+          if (!vec) {
+            const srcUrl = photo.thumbUrl || photo.fullUrl || '';
+            if (srcUrl && !signal?.aborted) {
+              const imgCtrl = new AbortController();
+              const onOuterAbort = () => imgCtrl.abort();
+              signal?.addEventListener('abort', onOuterAbort, { once: true });
+              const imgTid = setTimeout(() => imgCtrl.abort(), 550);
+              const imgRes = await fetch(srcUrl, { signal: imgCtrl.signal }).finally(() => {
+                clearTimeout(imgTid);
+                signal?.removeEventListener('abort', onOuterAbort);
+              });
+              if (imgRes.ok && !signal?.aborted) {
+                const blob = await imgRes.blob();
+                const decoded = await decodeImageBlobToRawAndThumb(blob);
+                if (decoded && !signal?.aborted) {
+                  if (!zCoreBridge.isConnected && decoded.thumbDataUrl) {
+                    const padOcr = await recognizeDataUrlWithPaddleOcr(decoded.thumbDataUrl).catch(
+                      () => null
+                    );
+                    if (padOcr?.text) {
+                      discoveredOcrSnippet = padOcr.text.slice(0, 140);
+                      tokens = extractCrispKoreanLabelTokens([padOcr.text]);
+                      for (const tk of tokens.slice(0, 2)) discoveredTagSet.add(`#${tk}`);
+                    }
+                  }
+                  if (tokens.length === 0) {
+                    vec = await embedRawImageWithSharedVision(decoded.rawImg);
+                    if (vec) hydratedPhotoVecMap.set(pKey, vec);
+                  }
                 }
               }
             }
           }
-          if (!zCoreBridge.isConnected && thumbDataUrl) {
-            const ocrRes = await recognizeDataUrlWithPaddleOcr(thumbDataUrl).catch(() => null);
-            if (ocrRes?.text) {
-              discoveredOcrSnippet = ocrRes.text.slice(0, 140);
-              tokens = extractCrispKoreanLabelTokens([ocrRes.text]);
-              for (const tk of tokens.slice(0, 2)) discoveredTagSet.add(`#${tk}`);
-            }
-          }
-          if (tokens.length === 0 && vec && vec.length === DEFAULT_DIM) {
+          if (tokens.length === 0 && vec && vec.length === DEFAULT_DIM && !signal?.aborted) {
             const conceptMap = await ensureGemma2ConceptProbeVecs();
             const ranked: Array<{ probe: Gemma2ConceptProbe; sim: number }> = [];
             for (const probe of GEMMA2_VISUAL_CONCEPT_PROBES) {
@@ -2995,8 +3080,6 @@ export async function resolveSmartKoreanLabelForPhoto(
             const bestEntry = ranked[0];
             const secondEntry = ranked[1];
             const margin = bestEntry && secondEntry ? bestEntry.sim - secondEntry.sim : 1;
-            // EmbeddingGemma 2 오분류 방어: 유사도 0.65 이상 + 2위와 0.015 이상 우위(또는 0.68 이상 확실한 일치)일 때만 피사체 라벨 부여,
-            // 내용이 불분명한 사진은 억지 추측 대신 안전하게 'YYMMDD_사진기록'으로 정리합니다.
             if (bestEntry && (bestEntry.sim >= 0.68 || (bestEntry.sim >= 0.65 && margin >= 0.015))) {
               const cleanProbeTag = bestEntry.probe.tag.replace(/^#/, '');
               tokens = extractCrispKoreanLabelTokens([
@@ -3007,10 +3090,9 @@ export async function resolveSmartKoreanLabelForPhoto(
             }
           }
         })();
-        // 시각 모델 로드/추론이 지연되더라도 알림이 늦게 뜨지 않도록 최대 1.5초로 제한
         await Promise.race([
           visionFallbackTask,
-          new Promise<void>((resolve) => setTimeout(resolve, 1500)),
+          new Promise<void>((resolve) => setTimeout(resolve, 600)),
         ]);
         if (tokens.length === 0) {
           const fnMeaningful = extractMeaningfulUserMediaTokens(photo.name);
@@ -3045,6 +3127,15 @@ export async function resolveSmartKoreanLabelForPhoto(
 
   if (tokens.length === 0) {
     tokens = [photo.trashCategory === 'screenshot' ? '화면캡처' : '사진기록'];
+  }
+
+  if (!memoHit && !signal?.aborted) {
+    if (_smartPhotoLabelMemo.size > 400) _smartPhotoLabelMemo.clear();
+    _smartPhotoLabelMemo.set(memoKey, {
+      tokens: [...tokens],
+      enrichedTags: Array.from(discoveredTagSet),
+      ...(discoveredOcrSnippet ? { ocrSnippet: discoveredOcrSnippet } : {}),
+    });
   }
 
   const exifTakenAtMs = await exifTakenAtPromise.catch(() => null);

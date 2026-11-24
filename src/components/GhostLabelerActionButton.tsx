@@ -29,8 +29,20 @@ type GhostLabelerActionProps =
       forceSampleOnly?: boolean;
     };
 
-// 연속 클릭 시 먼저 눌렀던 느린 요청이 나중에 끝나며 최신 클립보드·토스트를 덮어쓰는 경합(Race Condition) 원천 차단
+// 연속 클릭 시 먼저 눌렀던 느린 요청을 즉시 중단(Abort)하고 최신 클립보드·토스트만 초고속 반영
 let _latestGhostLabelerSeq = 0;
+let _activeLabelerAbort: AbortController | null = null;
+
+function beginGhostLabelerRequest(): { seq: number; signal: AbortSignal } {
+  try {
+    _activeLabelerAbort?.abort();
+  } catch {
+    /* ignore */
+  }
+  const ctrl = new AbortController();
+  _activeLabelerAbort = ctrl;
+  return { seq: ++_latestGhostLabelerSeq, signal: ctrl.signal };
+}
 
 export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (props) => {
   const { forceSampleOnly = false } = props;
@@ -94,7 +106,7 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
         type="button"
         onClick={(e) => {
           e.stopPropagation();
-          const mySeq = ++_latestGhostLabelerSeq;
+          const { seq: mySeq, signal } = beginGhostLabelerRequest();
           void verifyGate(vp.fullPath || vp.name).then(async (allowed) => {
             if (!allowed || mySeq !== _latestGhostLabelerSeq) return;
             useSaySeeStore.setState({
@@ -109,7 +121,7 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
                 { mtimeMs: vp.mtimeMs, existingNames: existingPhotoNames }
               );
               const res = await Promise.race([
-                resolveSmartKoreanLabelForPhoto(vp, existingPhotoNames),
+                resolveSmartKoreanLabelForPhoto(vp, existingPhotoNames, signal),
                 new Promise<{ displaySourceName: string; label: string; enrichedTags: string[] }>(
                   (resolve) =>
                     setTimeout(
@@ -119,7 +131,7 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
                           label: fallbackLabel,
                           enrichedTags: [],
                         }),
-                      2200
+                      950
                     )
                 ),
               ]);
@@ -157,7 +169,7 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
       type="button"
       onClick={(e) => {
         e.stopPropagation();
-        const mySeq = ++_latestGhostLabelerSeq;
+        const { seq: mySeq, signal } = beginGhostLabelerRequest();
         void verifyGate(targetPhoto.fullPath || targetPhoto.name).then(async (allowed) => {
           if (!allowed || mySeq !== _latestGhostLabelerSeq) return;
           useSaySeeStore.setState({
@@ -172,7 +184,7 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
           );
           try {
             const res = await Promise.race([
-              resolveSmartKoreanLabelForPhoto(targetPhoto, existingPhotoNames),
+              resolveSmartKoreanLabelForPhoto(targetPhoto, existingPhotoNames, signal),
               new Promise<{
                 displaySourceName: string;
                 label: string;
@@ -186,7 +198,7 @@ export const GhostLabelerActionButton: React.FC<GhostLabelerActionProps> = (prop
                       label: fallbackLabel,
                       enrichedTags: [],
                     }),
-                  2200
+                  950
                 )
               ),
             ]);

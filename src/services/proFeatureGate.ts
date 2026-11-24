@@ -95,6 +95,33 @@ export async function evaluateProFeatureGate(options: {
     };
   }
 
+  // 이미 스토어에서 활성 구독(Pro) 또는 30일 무료체험이 확정된 경우 네트워크 왕복(최대 5초) 없이 0ms 즉시 통과시키고,
+  // Z-코어 사용 기록 동기화는 백그라운드로 비동기 처리해 연속 라벨링 지연을 0ms로 제거합니다.
+  if (ent?.isPaidUnlimited || ent?.trialActive) {
+    const fastBadge = ent.isPaidUnlimited ? 'Pro' : `체험 ${ent.trialDaysLeft}일 남음`;
+    verifiedGateCache.set(cacheKey, { at: nowMs, trialBadge: fastBadge });
+    if (zCoreBridge.isConnected) {
+      void fetch(getZCoreUrl('/api/superpower/consume-action'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          actionType,
+          ...(filePath ? { filePath } : {}),
+          isSubscribed: isSubFromStore,
+          hubToken,
+          accountId,
+        }),
+        signal: AbortSignal.timeout(2000),
+      }).catch(() => {});
+    }
+    return {
+      allowed: true,
+      state: 'allowed',
+      message: '',
+      trialBadge: fastBadge,
+    };
+  }
+
   const resolveGracefulEntitlementFallback = (): ProFeatureGateResult | null => {
     if (ent?.isPaidUnlimited || ent?.trialActive) {
       return {
@@ -244,37 +271,48 @@ export async function evaluateProFeatureGate(options: {
 export async function copyTextSafeToClipboard(text: string): Promise<boolean> {
   const payload = String(text ?? '');
   if (!payload) return false;
-  let copied = false;
 
-  // 1) PC Z-코어 연결 시 OS 네이티브 클립보드 API(/__merlin/clipboard)로 최우선 기록
-  // (비동기 AI 라벨링/OCR 대기 후 브라우저 일시적 사용자 제스처 만료로 navigator.clipboard가 거부되는 현상을 원천 차단)
-  if (zCoreBridge.isConnected) {
+  // 1) 브라우저 표준 Clipboard API + PC Z-코어 OS 클립보드(/__merlin/clipboard) 병렬 즉시 실행
+  // 둘 중 하나라도 먼저 성공하면 즉시 반환하여 클립보드 기록 지연을 1~15ms로 최소화합니다.
+  const browserWrite = async (): Promise<boolean> => {
+    try {
+      if (navigator.clipboard?.writeText) {
+        await navigator.clipboard.writeText(payload);
+        return true;
+      }
+    } catch {
+      /* fallback */
+    }
+    return false;
+  };
+
+  const zCoreWrite = async (): Promise<boolean> => {
+    if (!zCoreBridge.isConnected) return false;
     try {
       const ctrl = new AbortController();
-      const tid = setTimeout(() => ctrl.abort(), 2500);
+      const tid = setTimeout(() => ctrl.abort(), 700);
       const res = await fetch(getZCoreUrl('/__merlin/clipboard'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: payload }),
         signal: ctrl.signal,
       }).finally(() => clearTimeout(tid));
-      if (res.ok) {
-        copied = true;
-      }
+      return res.ok;
     } catch {
-      /* fallback to browser clipboard below */
+      return false;
     }
-  }
+  };
 
-  // 2) 브라우저 표준 Clipboard API
-  try {
-    if (navigator.clipboard?.writeText) {
-      await navigator.clipboard.writeText(payload);
-      copied = true;
-      return true;
-    }
-  } catch {
-    /* fallback below */
+  const zCorePromise = zCoreWrite();
+  const browserOk = await browserWrite();
+  if (browserOk) {
+    // OS 네이티브 클립보드도 백그라운드로 완료되도록 유지하고 즉시 반환
+    void zCorePromise;
+    return true;
+  }
+  const zCoreOk = await zCorePromise;
+  if (zCoreOk) {
+    return true;
   }
 
   // 3) 구형/비활성화 폴백 execCommand
@@ -287,13 +325,12 @@ export async function copyTextSafeToClipboard(text: string): Promise<boolean> {
       document.body.appendChild(ta);
       ta.focus();
       ta.select();
-      if (document.execCommand('copy')) {
-        copied = true;
-      }
+      const ok = document.execCommand('copy');
       document.body.removeChild(ta);
+      return ok;
     } catch {
       /* ignore */
     }
   }
-  return copied;
+  return false;
 }

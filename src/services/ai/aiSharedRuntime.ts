@@ -1948,7 +1948,7 @@ export async function probePhotoExifTakenAtMs(url?: string): Promise<number | nu
   }
   try {
     const ctrl = new AbortController();
-    const tid = setTimeout(() => ctrl.abort(), 650);
+    const tid = setTimeout(() => ctrl.abort(), 220);
     const headers: Record<string, string> = {};
     if (!cleanUrl.startsWith('blob:') && !cleanUrl.startsWith('data:')) {
       headers.Range = 'bytes=0-65535';
