@@ -48,10 +48,23 @@ export const AutonomousCanvasFaceAvatar: React.FC<{
 }) => {
   const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [canvasReady, setCanvasReady] = useState(false);
+  // 온디바이스 여권 스캔에서 이미 정확히 크롭·회전 보정된 data:image 아바타가 있으면
+  // 원본 파일(/__photos/file)을 다시 불러와 캔버스를 덧그리면서 생기는 0.1~0.2초 사진 겹침·회전 불일치 깜빡임을 원천 차단합니다.
+  const isDirectDataAvatar =
+    typeof fallbackAvatarUrl === 'string' && fallbackAvatarUrl.startsWith('data:image/');
 
   useEffect(() => {
     let cancelled = false;
     setCanvasReady(false);
+    if (canvasRef.current) {
+      const prevCtx = canvasRef.current.getContext('2d');
+      prevCtx?.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height);
+    }
+    if (isDirectDataAvatar || !photoFile) {
+      return () => {
+        cancelled = true;
+      };
+    }
     if (!zCoreBridge.isConnected && !hasActiveGhostiLoginSession()) {
       return () => {
         cancelled = true;
@@ -91,11 +104,11 @@ export const AutonomousCanvasFaceAvatar: React.FC<{
     img.src =
       photoFile.startsWith('http') || photoFile.startsWith('/sample_photos_301/')
         ? photoFile
-        : getZCoreUrl(`/__photos/file?p=${encodeURIComponent(photoFile)}`);
+        : getZCoreUrl(`/__photos/file?p=${encodeURIComponent(photoFile)}&thumb=1`);
     return () => {
       cancelled = true;
     };
-  }, [photoFile, boundingBox]);
+  }, [photoFile, boundingBox, isDirectDataAvatar]);
 
   const radiusClass = shape === 'square' ? 'rounded-2xl' : 'rounded-full';
 
@@ -107,13 +120,17 @@ export const AutonomousCanvasFaceAvatar: React.FC<{
           : 'border-white/20'
       } shrink-0`}
     >
-      <img src={fallbackAvatarUrl} alt={altText} className="w-full h-full object-cover" />
-      <canvas
-        ref={canvasRef}
-        className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-200 ${
-          canvasReady ? 'opacity-100' : 'opacity-0'
-        }`}
-      />
+      {fallbackAvatarUrl && (isDirectDataAvatar || !canvasReady) && (
+        <img src={fallbackAvatarUrl} alt={altText} className="w-full h-full object-cover" />
+      )}
+      {!isDirectDataAvatar && (
+        <canvas
+          ref={canvasRef}
+          className={`absolute inset-0 w-full h-full object-cover ${
+            canvasReady ? 'opacity-100' : 'opacity-0 pointer-events-none'
+          }`}
+        />
+      )}
     </div>
   );
 };

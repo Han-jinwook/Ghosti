@@ -862,6 +862,10 @@ export function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberClust
         yearlyBestCuts: activeCuts,
         activeDoorplateSlotIndex: 0,
         doorplateSlotLabelKo: activeSlot.conditionShortKo || '정면',
+        representativePhoto: activeSlot.representativePhoto || c.representativePhoto,
+        representativeYear: activeSlot.year || c.representativeYear,
+        representativeDate: activeSlot.representativeDate || c.representativeDate,
+        boundingBox: activeSlot.boundingBox || c.boundingBox,
         avatarUrl: autoDoorplateUrl,
         cropUrl: autoDoorplateUrl,
       };
