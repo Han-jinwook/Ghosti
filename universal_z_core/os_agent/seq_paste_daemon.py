@@ -2878,6 +2878,17 @@ def _get_known_user_folders_for_search() -> list[Path]:
             raw_cands.append(Path("S:\\"))
     except Exception:
         pass
+    # [사용자 지정 폴더(ghosti_custom_scan_roots.json)]
+    try:
+        custom_roots_p = Path(os.environ.get("LOCALAPPDATA") or (home / "AppData" / "Local")) / "Merlin" / "ghosti_custom_scan_roots.json"
+        if custom_roots_p.exists():
+            cr_data = json.loads(custom_roots_p.read_text(encoding="utf-8", errors="ignore"))
+            if isinstance(cr_data, list):
+                for cr_item in cr_data:
+                    if isinstance(cr_item, str) and cr_item.strip():
+                        raw_cands.append(Path(cr_item.strip()))
+    except Exception:
+        pass
     # Win32 KnownFolders: Desktop, Downloads, Documents, Pictures, Videos
     for guid_s in (
         "{B4BFCC3A-DB2C-424C-B029-7FE99A87C641}",
@@ -2912,6 +2923,59 @@ def _get_known_user_folders_for_search() -> list[Path]:
                 raw_cands.append(od / sub)
             raw_cands.append(od / "Documents" / "카카오톡 받은 파일")
             raw_cands.append(od / "문서" / "카카오톡 받은 파일")
+
+    # [모든 로컬 고정·이동식 하드 드라이브(D:~Z:, CD-ROM/네트워크 제외) 자동 편입]:
+    # C드라이브 KnownFolders뿐 아니라 D:, E:, F:, G:, I: 등 모든 하드·외장 드라이브의 파일도 귀신검색창에서 즉시 검색
+    if sys.platform == "win32":
+        try:
+            k32.GetDriveTypeW.argtypes = [wintypes.LPCWSTR]
+            k32.GetDriveTypeW.restype = wintypes.UINT
+            prev_err_mode = k32.SetErrorMode(0x0001 | 0x8000)  # SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX
+            try:
+                for drv_ord in range(ord("D"), ord("Z") + 1):
+                    drv_ch = chr(drv_ord)
+                    if drv_ch == "S":
+                        continue
+                    drv_root = f"{drv_ch}:\\"
+                    try:
+                        dtype = int(k32.GetDriveTypeW(drv_root))
+                        if dtype in (2, 3):  # DRIVE_REMOVABLE(2), DRIVE_FIXED(3)
+                            p_drv = Path(drv_root)
+                            if p_drv.exists() and p_drv.is_dir():
+                                raw_cands.append(p_drv)
+                    except Exception:
+                        continue
+            finally:
+                k32.SetErrorMode(prev_err_mode)
+        except Exception:
+            pass
+
+    # [C:\ 루트의 일반 사용자 폴더(시스템/프로그램 폴더 제외)도 자동 편입]
+    _C_ROOT_SKIP = {
+        "windows", "program files", "program files (x86)", "programdata", "users",
+        "perflogs", "recovery", "intel", "amd", "nvidia", "msocache", "inetpub",
+        "temp", "tmp", "merlintools", "merlinwaybill", "studio", "merlin_ai_models",
+        "system volume information", "$recycle.bin", "drivers", "efi", "boot",
+        "config.msi", "windows.old", "onedrivetemp", "swsetup", "dell", "hp",
+    }
+    try:
+        with os.scandir("C:\\") as it_c:
+            for c_ent in it_c:
+                try:
+                    if not c_ent.is_dir(follow_symlinks=False):
+                        continue
+                    cn_low = c_ent.name.lower()
+                    if (
+                        c_ent.name.startswith((".", "$", "~"))
+                        or cn_low in _C_ROOT_SKIP
+                        or cn_low.startswith(("python", "anaconda", "miniconda", "found.", "msdownld"))
+                    ):
+                        continue
+                    raw_cands.append(Path(c_ent.path))
+                except Exception:
+                    continue
+    except Exception:
+        pass
 
     deduped: list[Path] = []
     seen_dirs: set[str] = set()
@@ -2954,80 +3018,92 @@ def _load_doc_body_cache_fast() -> dict[str, str]:
     return {}
 
 
-def _compute_watched_folders_fast_sig() -> str:
-    """
-    [열려 있는 귀신검색창 실시간 파일 추가·변경 감지용 1ms 무핸들 시그니처]:
-    - os.scandir의 WIN32_FIND_DATA만으로 커널 핸들 오픈 0회로 (폴더수, 파일수, 최신수정시각ns, 용량합)을 반환합니다.
-    """
+_SEARCH_SKIP_SUB_DIRS = {
+    "node_modules", ".git", "appdata", "__pycache__", "venv", ".venv",
+    "dist", "build", "universal_z_core", "merlin_z_core", "$recycle.bin",
+    "system volume information", "windows", "program files", "program files (x86)",
+    "programdata", "recovery", "perflogs", "msocache", "intel", "amd", "nvidia",
+    "temp", "tmp", "cache", "caches", "logs", "obj", "bin", "debug", "release",
+    "target", "packages", "vendor", "bower_components", "site-packages",
+    "merlin_ai_models", "shadowvault", "windowsapps", "wpsystem", "wudownloadcache",
+    "config.msi", "drivers", "efi", "boot", "windows.old", "onedrivetemp",
+    ".gradle", "gradle", "pods", "android", "ios",
+}
+
+
+def _collect_search_scan_dirs(max_total_dirs: int = 450, max_per_root: int = 80, time_budget_sec: float = 0.55) -> list[Path]:
+    """모든 사용자 폴더 및 C:/D:/E:/F:/G:/S: 전 하드 드라이브에서 시스템·개발 폴더를 제외하고 최대 3단계 하위 폴더까지 초고속 수집."""
     folders = _get_known_user_folders_for_search()
-    target_exts = {
-        ".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md",
-        ".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp",
-        ".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v", ".3gp", ".ts", ".mts", ".flv",
-    }
-    skip_sub_dirs = {
-        "node_modules", ".git", "appdata", "__pycache__", "venv", ".venv",
-        "dist", "build", "universal_z_core", "merlin_z_core", "$recycle.bin",
-    }
     scan_dirs: list[Path] = []
     seen_scan_dirs: set[str] = set()
+    t_start = time.time()
+
     for root_fd in folders:
+        if len(scan_dirs) >= max_total_dirs or (time.time() - t_start) > time_budget_sec:
+            break
         norm_r = os.path.normcase(os.path.abspath(str(root_fd)))
         if norm_r not in seen_scan_dirs:
             seen_scan_dirs.add(norm_r)
             scan_dirs.append(root_fd)
+
+        # BFS 최대 3단계(L1 -> L2 -> L3) 탐색
         sub_added = 0
-        lvl1_dirs: list[Path] = []
-        try:
-            with os.scandir(root_fd) as it_sub:
-                for sub_e in it_sub:
-                    if sub_added >= 24:
-                        break
-                    try:
-                        if not sub_e.is_dir(follow_symlinks=False):
-                            continue
-                        sname = sub_e.name
-                        if sname.startswith((".", "$", "~")) or sname.lower() in skip_sub_dirs:
-                            continue
-                        norm_s = os.path.normcase(os.path.abspath(sub_e.path))
-                        if norm_s not in seen_scan_dirs:
-                            seen_scan_dirs.add(norm_s)
-                            p_sub = Path(sub_e.path)
-                            scan_dirs.append(p_sub)
-                            lvl1_dirs.append(p_sub)
-                            sub_added += 1
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-        for l1_fd in lvl1_dirs:
-            if sub_added >= 48:
+        queue_bfs: list[tuple[Path, int]] = [(root_fd, 0)]
+        while queue_bfs and sub_added < max_per_root and len(scan_dirs) < max_total_dirs:
+            if (time.time() - t_start) > time_budget_sec:
                 break
+            cur_fd, depth = queue_bfs.pop(0)
+            if depth >= 3:
+                continue
             try:
-                with os.scandir(l1_fd) as it_sub2:
-                    for sub_e2 in it_sub2:
-                        if sub_added >= 48:
+                with os.scandir(cur_fd) as it_sub:
+                    for sub_e in it_sub:
+                        if sub_added >= max_per_root or len(scan_dirs) >= max_total_dirs:
                             break
                         try:
-                            if not sub_e2.is_dir(follow_symlinks=False):
+                            if not sub_e.is_dir(follow_symlinks=False):
                                 continue
-                            sname2 = sub_e2.name
-                            if sname2.startswith((".", "$", "~")) or sname2.lower() in skip_sub_dirs:
+                            sname = sub_e.name
+                            sname_low = sname.lower()
+                            if (
+                                sname.startswith((".", "$", "~"))
+                                or sname_low in _SEARCH_SKIP_SUB_DIRS
+                                or sname_low.startswith(("found.", "msdownld", "__"))
+                            ):
                                 continue
-                            norm_s2 = os.path.normcase(os.path.abspath(sub_e2.path))
-                            if norm_s2 not in seen_scan_dirs:
-                                seen_scan_dirs.add(norm_s2)
-                                scan_dirs.append(Path(sub_e2.path))
+                            norm_s = os.path.normcase(os.path.abspath(sub_e.path))
+                            if norm_s not in seen_scan_dirs:
+                                seen_scan_dirs.add(norm_s)
+                                p_sub = Path(sub_e.path)
+                                scan_dirs.append(p_sub)
                                 sub_added += 1
+                                if depth + 1 < 3:
+                                    queue_bfs.append((p_sub, depth + 1))
                         except Exception:
                             pass
             except Exception:
                 pass
+    return scan_dirs
 
+
+def _compute_watched_folders_fast_sig() -> str:
+    """
+    [열려 있는 귀신검색창 실시간 파일 추가·변경 감지용 무핸들 시그니처]:
+    - os.scandir의 WIN32_FIND_DATA만으로 커널 핸들 오픈 0회로 (폴더수, 파일수, 최신수정시각ns, 용량합)을 반환합니다.
+    """
+    target_exts = {
+        ".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md",
+        ".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif", ".bmp", ".heic", ".heif",
+        ".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v", ".3gp", ".ts", ".mts", ".flv",
+    }
+    scan_dirs = _collect_search_scan_dirs()
     f_cnt = 0
     max_mt_ns = 0
     sz_acc = 0
+    t_sig_start = time.time()
     for fd in scan_dirs:
+        if (time.time() - t_sig_start) > 0.65:
+            break
         try:
             with os.scandir(fd) as it:
                 for entry in it:
@@ -3060,11 +3136,10 @@ def _compute_watched_folders_fast_sig() -> str:
 
 def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
     """
-    [초고속 로컬 파일 스캐너 — UI 스레드 블로킹 0%]:
-    1) os.scandir의 메모리 내 WIN32_FIND_DATA(entry.stat(follow_symlinks=False))만 사용해 수천 개 파일에 대한
-       불필요한 CreateFileW / GetFinalPathNameByHandleW(Path.resolve) 커널 호출을 100% 제거합니다.
-    2) 최신순 상위 50개 문서(by_kind["doc"][:50])만 먼저 추린 뒤 본문 스니펫을 연결하며,
-       OneDrive 미동기화 클라우드 전용 파일(FILE_ATTRIBUTE_OFFLINE / RECALL_ON_DATA_ACCESS)은 원격 다운로드를 유발하지 않도록 스킵합니다.
+    [초고속 전 하드 드라이브 로컬 파일 스캐너 — UI 스레드 블로킹 0%]:
+    1) C드라이브 KnownFolders뿐 아니라 D:/E:/F:/G:/I:/S: 등 모든 고정·이동식 하드 드라이브를 os.scandir로 무핸들 스캔합니다.
+    2) 최신순 문서 800건 + 사진 1,200건 + 영상 400건(최대 2,400건)을 인덱싱하여 보조 드라이브 파일이 150건 컷오프에 잘리지 않게 보장합니다.
+    3) OneDrive 미동기화 클라우드 전용 파일은 원격 다운로드를 유발하지 않도록 스킵합니다.
     """
     with _LOCAL_FILE_SCAN_LOCK:
         now = time.time()
@@ -3077,82 +3152,30 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
         ):
             return _LOCAL_FILE_CACHE["items"]
 
-        folders = _get_known_user_folders_for_search()
         doc_exts = {".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md"}
-        img_exts = {".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp"}
+        img_exts = {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif", ".bmp", ".heic", ".heif"}
         vid_exts = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v", ".3gp", ".ts", ".mts", ".flv"}
-        skip_sub_dirs = {
-            "node_modules", ".git", "appdata", "__pycache__", "venv", ".venv",
-            "dist", "build", "universal_z_core", "merlin_z_core", "$recycle.bin",
-        }
 
-        scan_dirs: list[Path] = []
-        seen_scan_dirs: set[str] = set()
-        for root_fd in folders:
-            norm_r = os.path.normcase(os.path.abspath(str(root_fd)))
-            if norm_r not in seen_scan_dirs:
-                seen_scan_dirs.add(norm_r)
-                scan_dirs.append(root_fd)
-            sub_added = 0
-            lvl1_dirs: list[Path] = []
-            try:
-                with os.scandir(root_fd) as it_sub:
-                    for sub_e in it_sub:
-                        if sub_added >= 24:
-                            break
-                        try:
-                            if not sub_e.is_dir(follow_symlinks=False):
-                                continue
-                            sname = sub_e.name
-                            if sname.startswith((".", "$", "~")) or sname.lower() in skip_sub_dirs:
-                                continue
-                            norm_s = os.path.normcase(os.path.abspath(sub_e.path))
-                            if norm_s not in seen_scan_dirs:
-                                seen_scan_dirs.add(norm_s)
-                                p_sub = Path(sub_e.path)
-                                scan_dirs.append(p_sub)
-                                lvl1_dirs.append(p_sub)
-                                sub_added += 1
-                        except Exception:
-                            pass
-            except Exception:
-                pass
-            for l1_fd in lvl1_dirs:
-                if sub_added >= 48:
-                    break
-                try:
-                    with os.scandir(l1_fd) as it_sub2:
-                        for sub_e2 in it_sub2:
-                            if sub_added >= 48:
-                                break
-                            try:
-                                if not sub_e2.is_dir(follow_symlinks=False):
-                                    continue
-                                sname2 = sub_e2.name
-                                if sname2.startswith((".", "$", "~")) or sname2.lower() in skip_sub_dirs:
-                                    continue
-                                norm_s2 = os.path.normcase(os.path.abspath(sub_e2.path))
-                                if norm_s2 not in seen_scan_dirs:
-                                    seen_scan_dirs.add(norm_s2)
-                                    scan_dirs.append(Path(sub_e2.path))
-                                    sub_added += 1
-                            except Exception:
-                                pass
-                except Exception:
-                    pass
-
+        scan_dirs = _collect_search_scan_dirs()
         by_kind: dict[str, list[dict]] = {"doc": [], "image": [], "video": []}
         seen_files: set[str] = set()
         CLOUD_UNHYDRATED_MASK = 0x00400000 | 0x00001000  # FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS | FILE_ATTRIBUTE_OFFLINE
 
         for fd in scan_dirs:
-            fd_str_low = str(fd).lower()
+            fd_str = str(fd)
+            fd_str_low = fd_str.lower()
+            drv_prefix = fd_str[:2].upper() if len(fd_str) >= 2 and fd_str[1] == ":" else ""
             is_s_drive_item = fd_str_low.startswith("s:") or "업무공유폴더_s" in fd_str_low
-            fd_badge = (
-                f"💼S:\\{fd.name}"
-                if (is_s_drive_item and fd.name and fd.name.lower() != "업무공유폴더_s")
-                else ("💼S:" if is_s_drive_item else fd.name)
-            )
+            if is_s_drive_item:
+                fd_badge = (
+                    f"💼S:\\{fd.name}"
+                    if (fd.name and fd.name.lower() != "업무공유폴더_s")
+                    else "💼S:"
+                )
+            elif drv_prefix and drv_prefix != "C:":
+                fd_badge = f"{drv_prefix}\\{fd.name}" if fd.name else f"{drv_prefix}\\"
+            else:
+                fd_badge = fd.name or drv_prefix or "C:\\"
             try:
                 with os.scandir(fd) as it:
                     for entry in it:
@@ -3204,10 +3227,10 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
         for fk in by_kind:
             by_kind[fk].sort(key=lambda x: x.get("ts", 0.0), reverse=True)
 
-        top_docs = by_kind["doc"][:50]
+        top_docs = by_kind["doc"][:800]
         if top_docs:
             doc_body_cache = _load_doc_body_cache_fast()
-            for d_it in top_docs:
+            for idx_d, d_it in enumerate(top_docs):
                 try:
                     fp_str = d_it["file_path"]
                     st_sz = int(d_it.get("_size") or 0)
@@ -3216,16 +3239,19 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
                     ext_d = str(d_it.get("_ext") or "")
                     body_snip = ""
                     if doc_body_cache:
-                        try:
-                            resolved_entry = Path(fp_str).resolve()
-                        except Exception:
-                            resolved_entry = Path(fp_str)
-                        sig_v3 = f"{resolved_entry}|{st_sz}|{st_mt}|v3_sota50k"
+                        sig_v3 = f"{fp_str}|{st_sz}|{st_mt}|v3_sota50k"
                         cached_txt = doc_body_cache.get(sig_v3) or ""
+                        if not cached_txt and idx_d < 80:
+                            try:
+                                resolved_entry = Path(fp_str).resolve()
+                                cached_txt = doc_body_cache.get(f"{resolved_entry}|{st_sz}|{st_mt}|v3_sota50k") or ""
+                            except Exception:
+                                pass
                         if cached_txt:
                             body_snip = re.sub(r"\s+", " ", str(cached_txt)).strip()[:1600]
                     if (
                         not body_snip
+                        and idx_d < 80
                         and ext_d in (".txt", ".csv", ".md")
                         and 0 < st_sz <= 262144
                         and (f_attrs & CLOUD_UNHYDRATED_MASK) == 0
@@ -3243,15 +3269,16 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
                 except Exception:
                     pass
 
-        top_items = top_docs + by_kind["image"][:60] + by_kind["video"][:40]
+        top_items = top_docs + by_kind["image"][:1200] + by_kind["video"][:400]
         top_items.sort(key=lambda x: x.get("ts", 0.0), reverse=True)
-        for it_f in top_items:
+        for idx_i, it_f in enumerate(top_items):
             nm = it_f.pop("_name", "")
             it_f.pop("_size", None)
             it_f.pop("_attrs", None)
             it_f.pop("_ext", None)
             it_f.pop("_badge", None)
-            it_f["vec"] = AI_ENGINE.embed_128d(nm)
+            if idx_i < 120:
+                it_f["vec"] = AI_ENGINE.embed_128d(nm)
         _LOCAL_FILE_CACHE["items"] = top_items
         _LOCAL_FILE_CACHE["ts"] = time.time()
         _LOCAL_FILE_CACHE["dir_sig"] = cur_sig

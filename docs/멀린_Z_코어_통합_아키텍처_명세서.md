@@ -583,7 +583,7 @@ exit
 
 ---
 
-## 🚀 5. 1~6호기 전 클러스터 Z-코어(`v2.7.68`) 자동 배포 (`deploy_z_core_cluster.py`) · 1ms 포트 바인딩 · 마우스 이동 GIL 진입 `0%` & `0.01ms` 무지연 `WH_MOUSE_LL` 훅(윈도우 10/11 공통) · 탐색기 COM 0.45초 워커 격리 & 이중 호출 차단 · 귀신검색창 타이핑 중 크기 요요 차단 · 탐색기/사진앱 선택 파일 `[1]`번 고정(`.jfif` 포함) · 열린 귀신검색창 실시간 파일 추가 감지(`/__zcore/watch-sig`) 및 사진·문서·동영상 3대 목록 인메모리 선행 예열 · `[📝 OCR]` `60초` 유휴 워커 · 보안절전 권한위임 헬퍼(`GhostiSecurityCareHelper`) 자동 등록 · 한국어/CamelCase 검색 형태소·초성 단일 가드 아키텍처 (2026-11-24 최신화)
+## 🚀 5. 1~6호기 전 클러스터 Z-코어(`v2.7.69`) 자동 배포 (`deploy_z_core_cluster.py`) · 1ms 포트 바인딩 · 마우스 이동 GIL 진입 `0%` & `0.01ms` 무지연 `WH_MOUSE_LL` 훅(윈도우 10/11 공통) · 탐색기 COM 0.45초 워커 격리 & 이중 호출 차단 · 귀신검색창 전 하드 드라이브(C:~Z:) 스캔 & 타이핑 중 크기 요요 차단 · 탐색기/사진앱 선택 파일 `[1]`번 고정(`.jfif` 포함) · 열린 귀신검색창 실시간 파일 추가 감지(`/__zcore/watch-sig`) 및 사진·문서·동영상 3대 목록 인메모리 선행 예열 · `[📝 OCR]` `60초` 유휴 워커 · 보안절전 권한위임 헬퍼(`GhostiSecurityCareHelper`) 자동 등록 · 한국어/CamelCase 검색 형태소·초성 단일 가드 아키텍처 (2026-11-24 최신화)
 
 1. **`ensure_port_free()` 1ms 소켓 바인딩 Fast-Path & `--seq-paste-daemon` 조기 직행 분기 (`merlin_z_core_daemon.py`)**:
    - 포트 `5199`가 이미 비어 있는 상태(최초 설치 또는 정상 종료 직후)에서 불필요한 HTTP 타임아웃(`/__merlin/health`, `/__merlin/shutdown`) 및 `netstat -ano` 전수 스캔으로 인해 기동이 6초 이상 지연되던 문제를 해결하기 위해, `ensure_port_free(port, force_replace)` 진입 즉시 `socket.bind(("127.0.0.1", port))`로 1ms 만에 빈 포트를 판별하고 즉시 HTTP 서버를 바인딩합니다. 또한 `--seq-paste-daemon`·`--smart-unzip`·`--gui-task-runner` 서브프로세스 실행 시에는 최상단에서 서버 플러그인 8종 import를 생략해 즉시 진입하고, `_start_auxiliary_watchers()`에서도 귀신창 데몬(`51988`) 기동을 0순위로 배치했습니다.
