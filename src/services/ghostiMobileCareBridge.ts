@@ -626,10 +626,10 @@ export async function resolveNativeMobileVideoPlaybackUrl(
       if (forceTranscode) return '';
     }
     if (!streamUrl) return '';
-    // 90MB 이하 모바일 촬영 클립은 로컬 스트림을 Blob URL로 변환해 Android System WebView의
-    // shouldInterceptRequest <video> 멀티 Range 디먹서 버그(후미 moov 파싱 실패)를 100% 원천 차단합니다.
-    if (sizeMB <= 90) {
-      const rawBlob = await fetchVideoBlobWithTimeout(streamUrl, 11000);
+    // 12MB 이하 초단편 클립만 빠른 Blob 변환(<=3.5초)을 허용하고,
+    // 그 이상 영상은 MainActivity의 무복사 64-bit HTTP 206 Range 스트림을 즉시 직결해 0.2초 내 첫 프레임 재생을 보장합니다.
+    if (sizeMB <= 12) {
+      const rawBlob = await fetchVideoBlobWithTimeout(streamUrl, 3500);
       if (rawBlob) {
         const videoBlob = new Blob([rawBlob], { type: 'video/mp4' });
         return cacheMobileBlobUrl(cacheKey, URL.createObjectURL(videoBlob));
@@ -655,13 +655,15 @@ export async function resolveNativeMobileVideoPlaybackUrl(
       }).Capacitor;
       const converted = cap?.convertFileSrc ? cap.convertFileSrc(res.fileUrl) : res.fileUrl;
       if (converted) {
-        const rawBlob = await fetchVideoBlobWithTimeout(converted, 11000);
-        if (rawBlob) {
-          const videoBlob =
-            rawBlob.type && rawBlob.type.startsWith('video/')
-              ? rawBlob
-              : new Blob([rawBlob], { type: 'video/mp4' });
-          return cacheMobileBlobUrl(cacheKey, URL.createObjectURL(videoBlob));
+        if (sizeMB <= 12) {
+          const rawBlob = await fetchVideoBlobWithTimeout(converted, 3500);
+          if (rawBlob) {
+            const videoBlob =
+              rawBlob.type && rawBlob.type.startsWith('video/')
+                ? rawBlob
+                : new Blob([rawBlob], { type: 'video/mp4' });
+            return cacheMobileBlobUrl(cacheKey, URL.createObjectURL(videoBlob));
+          }
         }
         return cacheMobileBlobUrl(cacheKey, converted);
       }

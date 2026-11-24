@@ -25,6 +25,7 @@ export const VideoScenePreviewModal: React.FC = () => {
   } = useSaySeeStore();
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const pendingSeekSecRef = useRef<number | null>(null);
+  const autoPlayStartedRef = useRef<boolean>(false);
   const pipeBaseSecRef = useRef<number>(0);
   const seekHudTimerRef = useRef<number>(0);
   const triedTranscodeFallbackRef = useRef<boolean>(false);
@@ -33,6 +34,7 @@ export const VideoScenePreviewModal: React.FC = () => {
   const [videoPlaybackError, setVideoPlaybackError] = useState<boolean>(false);
   const [isPortraitVideo, setIsPortraitVideo] = useState<boolean>(false);
   const [isVideoPlaying, setIsVideoPlaying] = useState<boolean>(false);
+  const [isAutoMuted, setIsAutoMuted] = useState<boolean>(false);
   const [seekHudText, setSeekHudText] = useState<string>('');
   const [isOcrExtracting, setIsOcrExtracting] = useState<boolean>(false);
   const [ocrLines, setOcrLines] = useState<VideoOcrLineItem[]>([]);
@@ -163,6 +165,8 @@ export const VideoScenePreviewModal: React.FC = () => {
     const resMatch = String(selectedVideoModal.resolution || '').match(/(\d+)\s*[xX×]\s*(\d+)/);
     setIsPortraitVideo(Boolean(resMatch && Number(resMatch[2]) > Number(resMatch[1])));
     setIsVideoPlaying(false);
+    setIsAutoMuted(false);
+    autoPlayStartedRef.current = false;
     setSeekHudText('');
     setOcrCopied(false);
 
@@ -229,7 +233,7 @@ export const VideoScenePreviewModal: React.FC = () => {
             }
           }
         })();
-      }, 700);
+      }, 2200);
     }
 
     const rawUrl = selectedVideoModal.videoUrl || '';
@@ -462,27 +466,65 @@ export const VideoScenePreviewModal: React.FC = () => {
     return true;
   };
 
+  const tryAutoPlayVideo = (vidEl: HTMLVideoElement) => {
+    if (autoPlayStartedRef.current) return;
+    if (!vidEl.paused && !vidEl.ended) {
+      autoPlayStartedRef.current = true;
+      return;
+    }
+    try {
+      const p = vidEl.play();
+      if (p && typeof p.then === 'function') {
+        p.then(() => {
+          autoPlayStartedRef.current = true;
+          setIsAutoMuted(Boolean(vidEl.muted));
+        }).catch(() => {
+          // 웹 브라우저 자동재생 정책(NotAllowedError)으로 소리 포함 재생이 막힌 경우 음소거로 즉시 자동재생 시작
+          if (!vidEl.muted) {
+            try {
+              vidEl.muted = true;
+              const mutedP = vidEl.play();
+              if (mutedP && typeof mutedP.then === 'function') {
+                mutedP
+                  .then(() => {
+                    autoPlayStartedRef.current = true;
+                    setIsAutoMuted(true);
+                  })
+                  .catch(() => {});
+              }
+            } catch {
+              /* ignore */
+            }
+          }
+        });
+      }
+    } catch {
+      /* ignore */
+    }
+  };
+
   const applyPendingSeekOnce = (vidEl: HTMLVideoElement) => {
     const targetSec = pendingSeekSecRef.current;
-    if (targetSec === null) return;
-    try {
-      if (Number.isFinite(vidEl.duration) && vidEl.duration > 0.5) {
-        const clampedTarget = Math.min(Math.max(0, targetSec), Math.max(0, vidEl.duration - 0.1));
-        if (Math.abs(vidEl.currentTime - clampedTarget) > 0.35) {
-          vidEl.currentTime = clampedTarget;
+    if (targetSec !== null) {
+      try {
+        if (Number.isFinite(vidEl.duration) && vidEl.duration > 0.5) {
+          const clampedTarget = Math.min(Math.max(0, targetSec), Math.max(0, vidEl.duration - 0.1));
+          if (Math.abs(vidEl.currentTime - clampedTarget) > 0.35) {
+            vidEl.currentTime = clampedTarget;
+          }
+          // 실제로 프레임 디코딩이 준비(readyState >= 2)되고 목표 위치에 근접했을 때만 해제
+          if (
+            clampedTarget <= 0.2 ||
+            (vidEl.readyState >= 2 && Math.abs(vidEl.currentTime - clampedTarget) <= 0.6)
+          ) {
+            pendingSeekSecRef.current = null;
+          }
         }
-        // 실제로 프레임 디코딩이 준비(readyState >= 2)되고 목표 위치에 근접했을 때만 해제
-        if (
-          clampedTarget <= 0.2 ||
-          (vidEl.readyState >= 2 && Math.abs(vidEl.currentTime - clampedTarget) <= 0.6)
-        ) {
-          pendingSeekSecRef.current = null;
-        }
+      } catch {
+        // ignore
       }
-      void vidEl.play().catch(() => {});
-    } catch {
-      // ignore
     }
+    tryAutoPlayVideo(vidEl);
   };
 
   return (
@@ -574,6 +616,9 @@ export const VideoScenePreviewModal: React.FC = () => {
                     }
                   }}
                   onVolumeChange={(e) => {
+                    if (!e.currentTarget.muted && isAutoMuted) {
+                      setIsAutoMuted(false);
+                    }
                     if (typeof document !== 'undefined' && document.fullscreenElement === e.currentTarget) {
                       e.currentTarget.blur();
                     }
@@ -622,12 +667,32 @@ export const VideoScenePreviewModal: React.FC = () => {
                     aria-label="영상 재생"
                     onClick={() => {
                       if (videoRef.current) {
+                        if (isAutoMuted) {
+                          videoRef.current.muted = false;
+                          setIsAutoMuted(false);
+                        }
+                        autoPlayStartedRef.current = true;
                         void videoRef.current.play().catch(() => {});
                       }
                     }}
                     className="absolute inset-0 m-auto w-14 h-14 rounded-full bg-black/75 hover:bg-black/85 border border-white/60 text-white flex items-center justify-center shadow-xl cursor-pointer transition-transform active:scale-95"
                   >
                     <span className="material-symbols-outlined text-[32px]">play_arrow</span>
+                  </button>
+                )}
+                {isVideoPlaying && isAutoMuted && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (videoRef.current) {
+                        videoRef.current.muted = false;
+                        setIsAutoMuted(false);
+                      }
+                    }}
+                    className="absolute top-3 left-3 z-20 px-3 py-1.5 rounded-full bg-black/80 hover:bg-black/95 border border-white/40 text-white text-[12px] font-semibold flex items-center gap-1.5 shadow-lg cursor-pointer"
+                  >
+                    <span className="material-symbols-outlined text-[15px]">volume_off</span>
+                    <span>소리 켜기</span>
                   </button>
                 )}
                 {seekHudText && (

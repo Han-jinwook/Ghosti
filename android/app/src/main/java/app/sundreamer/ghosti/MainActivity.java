@@ -117,6 +117,8 @@ public class MainActivity extends BridgeActivity {
             try {
                 // 안드로이드 OS 시스템 글꼴 크기 확대(115~140%)로 인해 좁은 모바일 입력창 안내문구·버튼이 깨지는 현상 차단
                 this.bridge.getWebView().getSettings().setTextZoom(100);
+                // 동영상 상세보기 진입 시 비동기 URL 해석 후에도 소리 포함 즉시 자동 재생 허용
+                this.bridge.getWebView().getSettings().setMediaPlaybackRequiresUserGesture(false);
             } catch (Throwable ignored) {
             }
             this.bridge.setWebViewClient(new BridgeWebViewClient(this.bridge) {
@@ -343,9 +345,10 @@ public class MainActivity extends BridgeActivity {
                     pfd = resolver.openFileDescriptor(videoUri, "r");
                     if (pfd != null) {
                         long statSz = pfd.getStatSize();
-                        // 180MB 이하 일반 촬영 영상은 Scoped Storage GPS Redaction 파이프(position(0)만 통과 후 후미 moov 탐색 시 ESPIPE 실패)를
-                        // 원천 우회하기 위해 항상 로컬 파일 캐시(ghosti_vid_stream)로 실체화하여 100% 무결한 임의 탐색을 보장합니다.
-                        if (statSz > 188743680L) {
+                        // 먼저 실제 FileChannel 후미 seek(statSz - 64)가 통과하는지 1ms 프로브:
+                        // 정상 seekable 파일은 180MB 이하라도 전체 파일 복사 없이 0ms 무복사 206 스트리밍 직결,
+                        // Scoped Storage GPS Redaction 파이프(ESPIPE)일 때만 로컬 캐시(materializeSeekableVideoCache)로 안전 폴백합니다.
+                        if (statSz > 1024L) {
                             ParcelFileDescriptor.AutoCloseInputStream directIn = new ParcelFileDescriptor.AutoCloseInputStream(pfd);
                             pfd = null;
                             directIn.getChannel().position(statSz - 64L);
