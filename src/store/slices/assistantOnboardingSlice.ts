@@ -89,11 +89,8 @@ import { evaluateTrajectoryAndBuildSelfHealingOta } from '../../services/selfHea
 import {
   loadCachedOnDeviceFaceClusters,
   runOnDeviceFacePassportScan,
+  saveCachedOnDeviceFaceClusters,
 } from '../../services/ai/onDeviceFacePassportEngine';
-import {
-  PASSPORT_REG_STATE_EVENT,
-  notifyPassportFaceScanFinished,
-} from '../../services/passportRegistrationFlow';
 import {
   LOCAL_DOCUMENT_FILES,
   OnboardingProgressUpdate,
@@ -130,9 +127,17 @@ import { loadMerlinAuth, toggleMerlinTier } from '../../services/merlinAuth';
 import { loadSyncState, saveSyncPrefs } from '../../services/syncEngine';
 import {
   executeMobileSteppingStoneScan,
+  loadGhostPassportBook,
   loadGhostSecretaryState,
   saveGhostSecretaryState,
 } from '../../services/ghostSecretaryEngine';
+import { reconcileCloudPassportsWithFaceClusters } from '../../services/ghostPassportSync';
+import {
+  PASSPORT_REG_STATE_EVENT,
+  loadPassportRegState,
+  notifyPassportFaceScanFinished,
+  savePassportRegState,
+} from '../../services/passportRegistrationFlow';
 import {
   DesktopTab,
   INITIAL_ONBOARDING_PROGRESS,
@@ -595,7 +600,29 @@ export const createAssistantOnboardingSlice: StateCreator<
     const effectiveLatestYear = hasOnDeviceCache
       ? cachedOnDeviceFaces.latestCorpusYear
       : faceData.latestCorpusYear;
-    const autoMultiClusters = buildAutoMultiConditionSeedClusters(rawFaceClusters);
+    const cloudReconciled = reconcileCloudPassportsWithFaceClusters(rawFaceClusters);
+    const passportBookInit = loadGhostPassportBook();
+    const regStateInit = loadPassportRegState();
+    const selfAliasInit = (passportBookInit.self?.nickname || loadGhostSecretaryState().nickname || '').trim();
+    const selfRealInit = (passportBookInit.self?.realName || '').trim();
+    const effectiveSelfIdInit = cloudReconciled.matchedSelfClusterId || regStateInit.selfClusterId;
+    if (cloudReconciled.matchedSelfClusterId && !regStateInit.selfClusterId) {
+      savePassportRegState({ ...regStateInit, selfClusterId: cloudReconciled.matchedSelfClusterId });
+    }
+    const autoMultiClusters = buildAutoMultiConditionSeedClusters(cloudReconciled.clusters).map((fc) => {
+      if (effectiveSelfIdInit && fc.clusterId === effectiveSelfIdInit && selfAliasInit) {
+        return {
+          ...fc,
+          registeredName: fc.registeredName || selfRealInit || selfAliasInit,
+          roomPersonas: {
+            ...(fc.roomPersonas || {}),
+            ...(selfRealInit ? { 우리집: selfRealInit } : {}),
+            personal: selfAliasInit,
+          },
+        };
+      }
+      return fc;
+    });
 
     const totalBytes = dataset.photos.reduce((a, p) => a + p.size, 0);
     const syncState = loadSyncState(dataset.photos.length, totalBytes);
@@ -842,8 +869,59 @@ export const createAssistantOnboardingSlice: StateCreator<
         if (livePhotos.length === 0) return;
         const applyScannedClusters = (clusters: FaceMemberCluster[], latestYear: number) => {
           if (clusters.length === 0) return;
+          const reconciled = reconcileCloudPassportsWithFaceClusters(clusters);
+          const bookNow = loadGhostPassportBook();
+          const regNow = loadPassportRegState();
+          const selfAlias = (bookNow.self?.nickname || loadGhostSecretaryState().nickname || '').trim();
+          const selfReal = (bookNow.self?.realName || '').trim();
+          const selfIdNow = reconciled.matchedSelfClusterId || regNow.selfClusterId;
+          if (reconciled.matchedSelfClusterId && !regNow.selfClusterId) {
+            savePassportRegState({ ...regNow, selfClusterId: reconciled.matchedSelfClusterId });
+          }
+          const enrichedClusters = buildAutoMultiConditionSeedClusters(reconciled.clusters).map((fc) => {
+            if (selfIdNow && fc.clusterId === selfIdNow && selfAlias) {
+              return {
+                ...fc,
+                registeredName: fc.registeredName || selfReal || selfAlias,
+                roomPersonas: {
+                  ...(fc.roomPersonas || {}),
+                  ...(selfReal ? { 우리집: selfReal } : {}),
+                  personal: selfAlias,
+                },
+              };
+            }
+            return fc;
+          });
+          if (reconciled.newlyMatchedNames.length > 0) {
+            saveCachedOnDeviceFaceClusters(enrichedClusters, latestYear);
+          }
+
+          // 스캔 완료 또는 클라우드 여권 매칭으로 새로 편입된 사진에도 즉시 #실명·#별명 태그 동기화
+          const tagMap = new Map<string, string[]>();
+          for (const fc of enrichedClusters) {
+            if (fc.excludedAsPasserby) continue;
+            const namesForFc = Array.from(
+              new Set([fc.registeredName, ...Object.values(fc.roomPersonas || {})].map((s) => (s || '').trim()).filter(Boolean))
+            );
+            if (namesForFc.length === 0) continue;
+            const tagsForFc = namesForFc.map((n) => `#${n}`);
+            for (const fName of fc.matchedPhotoFiles || []) {
+              const prev = tagMap.get(fName) || [];
+              tagMap.set(fName, Array.from(new Set([...prev, ...tagsForFc])));
+            }
+          }
+          const curPhotosNow = get().photos;
+          const nextPhotosNow =
+            tagMap.size > 0
+              ? curPhotosNow.map((p) => {
+                  const extra = tagMap.get(p.name);
+                  return extra && extra.length > 0 ? { ...p, tags: Array.from(new Set([...p.tags, ...extra])) } : p;
+                })
+              : curPhotosNow;
+
           set({
-            faceClusters: buildAutoMultiConditionSeedClusters(clusters),
+            faceClusters: enrichedClusters,
+            photos: nextPhotosNow,
             latestCorpusYear: latestYear,
           });
           try {

@@ -827,6 +827,14 @@ export async function callMonsterLowCostLlmJson(params: {
       ? '[iOS 전용 필수 규칙]: 현재 접속 기기는 아이폰/아이패드(iOS)입니다. Google Play·CleanX 등 안드로이드 전용 클리너 삭제 안내나 유료 요금제 안내를 절대 하지 말고, 클리너·청소앱·구독 해지를 물어보면 "아이폰(iOS)은 애플 보안 정책상 악성 청소앱이 자동 침투할 수 없으며, 정기구독 확인은 [아이폰 설정 > 내 이름(Apple 계정) > 구독]에서 안전하게 관리하실 수 있습니다"라고 안내하세요.'
       : '',
     '',
+    '[필수 숙지 클라우드·구글시트·NAS·S: 업무 공유 공식 팩트 (docs/귀신비서_FAQ_원본.md SSOT — 추측 금지)]:',
+    '• Q1(클라우드 S: 동시 연결): 기존 구글 드라이브(G:), 네이버 마이박스(MYBOX), 원드라이브 폴더도 [5. 업무 공유 (S:)] 상단 [업무 폴더 변경 (G: 연결)]로 선택하면 S: 드라이브와 동시에 연결·반영됨.',
+    '• Q2(클라우드 본문 인덱싱 원리): 순수 웹(drive.google.com)만 있는 경우 뒤지지 않으나, PC에 데스크톱 구글 드라이브(G:)/마이박스 탐색기가 깔려 있으면 제목은 0.1초 즉시, 일반 문서(.hwp/.xlsx/.pdf/.docx/사진) 본문·OCR도 자동 다운로드되어 100% 검색됨(폴더 우클릭 [오프라인 사용 가능] 권장).',
+    '• Q3(.gsheet/.gdoc 검색): "링크가 있는 모든 사용자 보기 가능"으로 공유된 시트/문서는 표·본문 글자까지 100% 검색되며, 나 혼자 보는 비공개 시트는 제목 검색 후 우측 [Google 문서·시트 웹에서 열기 ↗]로 열람(.xlsx 저장 또는 링크 보기 설정 시 본문 검색 가능).',
+    '• Q4(사내 NAS 비교): 귀신같이 S:는 ①VPN/포트포워딩 없는 외근·LTE 1초 직결, ②파일명이 아닌 HWP·엑셀·PDF 본문 단어 1초 검색(Ctrl+0), ③실시간 [🔒 현재 OOO님이 사용 중] 덮어쓰기 방지, ④기존 NAS와 동시 병행 및 노후 NAS 대체 가능.',
+    '• Q5(업무 공유 폴더 개수): S: 드라이브는 대표 최상위 업무 폴더 1곳에 연결되며, 그 안의 하위 폴더(계약서·견적서·부서별 등)는 개수 제한 없이 전부 공유·검색됨.',
+    '• Q6(팀원 요금·만료 시 원본): 방장(대표) 1인만 결제/30일 체험하면 정원(5/20/50인) 내 초대 팀원은 평생 0원 무료이며, 체험/구독 만료 시에도 S: 연결만 해제될 뿐 방장 PC 내 원본 파일은 단 1개도 삭제되지 않고 100% 보존됨(외부 서버 저장 0 Byte).',
+    '',
     historyBlock ? `[최근 대화 맥락]\n${historyBlock}\n` : '',
     `[현재 유저 입력 (${sourceTab === 'trash' ? '치우기 탭' : '고치기 탭'})]`,
     `"${query}"`,
@@ -4952,9 +4960,14 @@ export async function processUnifiedMonsterChatQuery(params: {
   const isSpeedOrStatusQuestionNotFolderCleanup =
     !/바탕화면|다운로드|폴더|설치\s*파일|잡파일|스크린샷|\.exe|\.zip|\.apk|\.msi/i.test(clean) &&
     /(속도|개선|빨라|세이브|점유율|부하|상태\s*어때|상태\s*봐|사양|스펙|잘\s*됐|된\s*거야|된거야|된\s*건가|한\s*거야|한거야|한\s*건가|메모리|램|ram|cpu)/i.test(clean);
+  const isCloudOrWorkShareFaqNotFolderCleanup =
+    /(업무\s*(?:공유|폴더)|공유\s*폴더|구글\s*드라이브|g\s*:\s*드라이브|마이박스|mybox|원드라이브|onedrive|시놀로지|\bnas\b|나스|s\s*:\s*드라이브|\.gsheet|\.gdoc|구글\s*(?:스프레드)?시트)/i.test(
+      clean
+    ) && !/(치워|삭제|청소)/i.test(clean);
 
   if (
     !isSpeedOrStatusQuestionNotFolderCleanup &&
+    !isCloudOrWorkShareFaqNotFolderCleanup &&
     (llmDecision?.intent === 'CLEANUP_FOLDER_REORG' ||
       llmDecision?.intent === 'CLEANUP_DOWNLOAD_INSTALLERS' ||
       llmDecision?.intent === 'STARTUP_INSPECT' ||

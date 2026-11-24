@@ -717,8 +717,15 @@ export async function submitPassportRegistration(
         await store.registerFaceMember(p.clusterId, searchKey, '', { silent: true });
       }
       if (nickname && safeRealName && nickname !== safeRealName) {
-        // 별명도 내부적으로 함께 묶어 별명으로 검색해도 찾아지게
-        const cluster = useSaySeeStore.getState().faceClusters.find((c) => c.clusterId === p.clusterId);
+        // 별명도 roomPersonas.personal 및 사진 태그에 함께 결속하여 실명·별명 어느 쪽으로 검색해도 동일하게 적중 보장
+        const curState = useSaySeeStore.getState();
+        const nextClustersWithAlias = curState.faceClusters.map((c) =>
+          c.clusterId !== p.clusterId
+            ? c
+            : { ...c, roomPersonas: { ...(c.roomPersonas || {}), 우리집: safeRealName, personal: nickname } }
+        );
+        useSaySeeStore.setState({ faceClusters: nextClustersWithAlias });
+        const cluster = nextClustersWithAlias.find((c) => c.clusterId === p.clusterId);
         addTagToPhotos(cluster?.matchedPhotoFiles || [], `#${nickname}`);
       }
       book = {
@@ -863,7 +870,14 @@ export async function updateSelfPassportRealName(realName: string): Promise<void
   if (st.selfClusterId) {
     await useSaySeeStore.getState().registerFaceMember(st.selfClusterId, clean, '', { silent: true });
     if (nickname && nickname !== clean) {
-      const cluster = useSaySeeStore.getState().faceClusters.find((c) => c.clusterId === st.selfClusterId);
+      const curState = useSaySeeStore.getState();
+      const nextClustersWithAlias = curState.faceClusters.map((c) =>
+        c.clusterId !== st.selfClusterId
+          ? c
+          : { ...c, roomPersonas: { ...(c.roomPersonas || {}), 우리집: clean, personal: nickname } }
+      );
+      useSaySeeStore.setState({ faceClusters: nextClustersWithAlias });
+      const cluster = nextClustersWithAlias.find((c) => c.clusterId === st.selfClusterId);
       addTagToPhotos(cluster?.matchedPhotoFiles || [], `#${nickname}`);
     }
   }

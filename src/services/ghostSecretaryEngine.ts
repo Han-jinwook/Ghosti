@@ -1210,6 +1210,49 @@ export function resolveGhostSecretaryTurn(
     }
   }
 
+  // ④-3 클라우드(G:·마이박스·원드라이브) · 구글시트(.gsheet/.gdoc) · 사내 NAS · S: 업무 공유 6대 핵심 FAQ 0토큰 즉답 (docs/귀신비서_FAQ_원본.md SSOT)
+  const matchCloudAndWorkShareFaqId = (q: string): string | null => {
+    // 실제 파일/문서 검색 요청("구글시트에서 미수금 찾아줘", "계약서 폴더에서 단가 알려줘")은 검색 라우터로 넘어가도록 제외
+    if (/(찾아\s*줘|찾아\s*봐|열어\s*줘|전달해\s*줘|보내\s*줘|얼마야)/.test(q) && !/(무료|유료|요금|돈\s*내|필요해|검색\s*돼|가능해|어떻게\s*돼)/.test(q)) {
+      return null;
+    }
+    if (/(?:\.gsheet|\.gdoc|구글\s*(?:스프레드)?시트|구글\s*문서|구글\s*독스|스프레드시트)/i.test(q) && /(검색|인덱싱|본문|글자|내용|되나|돼|가능|찾을\s*수)/i.test(q)) {
+      return 'faq_gsheet_gdoc_search';
+    }
+    if (/(?:\bnas\b|나스|시놀로지|synology|사내\s*서버)/i.test(q)) {
+      return 'faq_nas_vs_ghosti_work';
+    }
+    if (/(업무\s*(?:공유\s*)?폴더|공유\s*폴더|s\s*:\s*(?:드라이브\s*)?폴더)/i.test(q) && /(여러\s*개|몇\s*개|하나만|1개만|두\s*개|다중|복수|추가\s*지정)/i.test(q)) {
+      return 'faq_work_folder_count_limit';
+    }
+    if (
+      (/(초대받은\s*(?:팀원|직원|사람)|팀원|직원).*?(돈|결제|유료|무료|요금|내야|과금)/i.test(q)) ||
+      (/(무료\s*체험|구독|이용권|만료|끝나면).*?(내\s*파일|원본\s*파일|업무\s*파일|s\s*:\s*드라이브|파일은?\s*어떻게|삭제되나|날아가)/i.test(q))
+    ) {
+      return 'faq_work_member_free_and_expiry_safe';
+    }
+    if (/(클라우드|구글\s*드라이브|마이박스|mybox|원드라이브|onedrive)/i.test(q) && /(어떻게.*?(?:검색|인덱싱|본문|읽어)|인덱싱|오프라인\s*사용|본문\s*내용까지)/i.test(q)) {
+      return 'faq_cloud_content_indexing';
+    }
+    if (/(구글\s*드라이브|g\s*:\s*드라이브|네이버\s*마이박스|마이박스|mybox|원드라이브|onedrive)/i.test(q) && /(s\s*:|업무\s*공유|업무\s*폴더|공유로?\s*쓸|연결|연동|같이\s*쓸)/i.test(q)) {
+      return 'faq_cloud_drive_s_share';
+    }
+    return null;
+  };
+
+  const cloudWorkFaqId = matchCloudAndWorkShareFaqId(text);
+  if (cloudWorkFaqId) {
+    const sc = findScenario(cloudWorkFaqId);
+    if (sc) {
+      const rendered = renderPlaybookText(sc.response, { nickname: nickname || '회원' }).replace(/^회원님,\s*/, nickname ? `${nickname}님, ` : '');
+      return {
+        scenarioId: sc.id,
+        text: rendered,
+        nextState: st,
+      };
+    }
+  }
+
   // ⑤ 로드맵 및 앱 설정 키워드 (대본집 text_contains 자동 반영)
   for (const list of Object.values(GHOST_SECRETARY_PLAYBOOK.categories)) {
     for (const sc of list) {

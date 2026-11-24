@@ -68,6 +68,7 @@ import {
   pushGhostPassportsToCloud,
   pullGhostPassportsFromCloud,
   buildPassportExtrasFromClusters,
+  reconcileCloudPassportsWithFaceClusters,
 } from '../services/ghostPassportSync';
 import { isOnDeviceFaceScanRunning } from '../services/ai/onDeviceFacePassportEngine';
 import {
@@ -568,8 +569,34 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           });
         });
     }
-    // 같은 계정의 다른 기기(PC ↔ 모바일)에서 등록한 여권은 질문이나 알림 말풍선 없이 물밑에서 조용히 자동 동기화
-    void pullGhostPassportsFromCloud(secretaryOwnerEmail());
+    // 같은 계정의 다른 기기(PC ↔ 모바일)에서 등록한 여권(실명 + 128차원 얼굴 벡터)은 질문 없이 물밑에서 자동 동기화 및 로컬 사진첩 즉시 매칭
+    void pullGhostPassportsFromCloud(secretaryOwnerEmail()).then((pulled) => {
+      if (!pulled.ok) return;
+      const cur = useSaySeeStore.getState();
+      if (!cur.faceClusters || cur.faceClusters.length === 0) return;
+      const reconciled = reconcileCloudPassportsWithFaceClusters(cur.faceClusters);
+      if (reconciled.newlyMatchedNames.length === 0) return;
+      const tagMap = new Map<string, string[]>();
+      for (const fc of reconciled.clusters) {
+        if (fc.excludedAsPasserby) continue;
+        const namesForFc = Array.from(
+          new Set([fc.registeredName, ...Object.values(fc.roomPersonas || {})].map((s) => (s || '').trim()).filter(Boolean))
+        );
+        if (namesForFc.length === 0) continue;
+        const tagsForFc = namesForFc.map((n) => `#${n}`);
+        for (const fName of fc.matchedPhotoFiles || []) {
+          const prev = tagMap.get(fName) || [];
+          tagMap.set(fName, Array.from(new Set([...prev, ...tagsForFc])));
+        }
+      }
+      useSaySeeStore.setState({
+        faceClusters: reconciled.clusters,
+        photos: cur.photos.map((p) => {
+          const extra = tagMap.get(p.name);
+          return extra && extra.length > 0 ? { ...p, tags: Array.from(new Set([...p.tags, ...extra])) } : p;
+        }),
+      });
+    });
     return () => {
       window.removeEventListener('ghosti_jump_to_secretary', onJumpRefresh);
       window.removeEventListener('merlinSessionExpired', onJumpRefresh);

@@ -5,18 +5,29 @@
  *   동일 인물 클러스터링 및 연도별 베스트 컷(yearlyBestCuts)을 자동 구성합니다.
  * - 스캔 완료 즉시 워커를 종료해 백그라운드 RAM 점유를 0으로 유지합니다.
  */
-import type { FaceMemberCluster, PhotoItem, YearlyFaceBestCut } from '../../types/saysee';
+import type { FaceMemberCluster, PersonTimelineBucketInfo, PhotoItem, YearlyFaceBestCut } from '../../types/saysee';
 import type { WorkerDetectedFace } from './facePassportWorker';
 
-const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v11';
+export type PassportStyleSlotTag = NonNullable<YearlyFaceBestCut['conditionTag']>;
+
+const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v12';
 const MAX_SCAN_PHOTOS = 260;
 const MAX_CLUSTERS = 18;
 const MAX_CUTS_PER_CLUSTER = 6;
 /** OpenCV SFace 공식 5점 정렬(ArcFace 112x112) 기준 초기 고순도 시드 결합 임계치 */
 const SIMILARITY_THRESHOLD = 0.44;
-/** 동일인 다각도·선글라스·연도별 서브클러스터 중심 벡터 재병합 임계치 (동일 사진 동반 등장 Cannot-Link + 상위 3쌍 검증 결합) */
+/** 동일인 다각도·연도별 서브클러스터 1차 순수 벡터 재병합 임계치 */
 const MERGE_CENTROID_THRESHOLD = 0.42;
 const MERGE_TOP3_PAIR_THRESHOLD = 0.45;
+/**
+ * [특허 제3호 — 시공간 연속성(동일 촬영일) + 동반 등장 가족(Companion) 맥락 족쇄]
+ * 선글라스·챙모자·역광 등으로 눈이 가려져 중심 유사도가 0.34~0.41로 낮아지더라도,
+ * ① 두 묶음이 같은 사진에 동시 등장한 적이 없고(Cannot-Link 통과),
+ * ② 같은 날 촬영되었거나 동일한 제3의 가족과 나란히 커플·단체 컷에 동반 등장한 맥락이 입증되고,
+ * ③ 상위 3쌍 평균 유사도(>= 0.44)까지 충족하면 묻지 않고 동일 인물('선글라스·역광' 슬롯)로 자동 결합합니다.
+ */
+const CONTEXT_LOCK_CENTROID_THRESHOLD = 0.34;
+const CONTEXT_LOCK_TOP3_THRESHOLD = 0.44;
 /** 여권사진 정체성 변별 및 4~10인 가족 단체사진(280px 썸네일 내 자녀·어르신 얼굴 19~25px) 동시 포착 최소 기준 — 18px 이하 원경 노이즈 차단 */
 const MIN_PASSPORT_FACE_PX = 19;
 const MIN_PASSPORT_EYE_SPAN_PX = 5.8;
@@ -60,6 +71,9 @@ interface ExtractedFaceSample {
   frontalScore: number;
   facePxW: number;
   sharpness: number;
+  hasSunglasses: boolean;
+  styleSlot: PassportStyleSlotTag;
+  styleShortKo: string;
   boundingBox: [number, number, number, number];
   avatarDataUrl: string;
   embedding: Float32Array;
@@ -90,7 +104,7 @@ function buildPhotosFingerprint(photos: PhotoItem[]): string {
   if (real.length === 0) return '';
   const head = real.slice(0, 8).map((p) => p.name).join('|');
   const tail = real.slice(-4).map((p) => p.name).join('|');
-  return `v11:${real.length}:${head}:${tail}`;
+  return `v12:${real.length}:${head}:${tail}`;
 }
 
 export function loadCachedOnDeviceFaceClusters(): {
@@ -368,6 +382,9 @@ function prepareFaceCropAndBgr112(
   faceBgr112: Float32Array;
   sharpness: number;
   facePxW: number;
+  hasSunglasses: boolean;
+  styleSlot: PassportStyleSlotTag;
+  styleShortKo: string;
   isRealHumanFace: boolean;
 } {
   const { ow, oh } = getSourceSize(src);
@@ -380,9 +397,18 @@ function prepareFaceCropAndBgr112(
       ? Math.hypot((face.landmarks[2] - face.landmarks[0]) * ow, (face.landmarks[3] - face.landmarks[1]) * oh)
       : fw * 0.35;
 
-  // 초소형 원경 배경 얼굴(26px 미만 또는 양안 간격 8px 미만)은 112x112 확대 시 이목구비가 뭉개져 타인과 오병합되므로 여권 후보에서 배제
+  // 초소형 원경 배경 얼굴(19px 미만 또는 양안 간격 5.8px 미만)은 112x112 확대 시 이목구비가 뭉개져 타인과 오병합되므로 여권 후보에서 배제
   if (Math.min(fw, fh) < MIN_PASSPORT_FACE_PX || eyeSpanPx < MIN_PASSPORT_EYE_SPAN_PX) {
-    return { avatarDataUrl: '', faceBgr112: new Float32Array(0), sharpness: 0, facePxW: fw, isRealHumanFace: false };
+    return {
+      avatarDataUrl: '',
+      faceBgr112: new Float32Array(0),
+      sharpness: 0,
+      facePxW: fw,
+      hasSunglasses: false,
+      styleSlot: '정면·선명',
+      styleShortKo: '정면',
+      isRealHumanFace: false,
+    };
   }
 
   // 여권 아바타용 정사각형 크롭 (상하좌우 28% 여백)
@@ -471,6 +497,11 @@ function prepareFaceCropAndBgr112(
   let skinPixels = 0;
   let nonHumanColorPixels = 0;
   let foodSatPixels = 0;
+  let eyeLumaSum = 0;
+  let eyeCount = 0;
+  let cheekLumaSum = 0;
+  let cheekCount = 0;
+  let warmOutdoorPixels = 0;
 
   for (let i = 0, p = 0; i < plane; i++, p += 4) {
     const r = rgba[p];
@@ -486,14 +517,28 @@ function prepareFaceCropAndBgr112(
       gradSum += Math.abs(gCur - gLeft) + Math.abs(gCur - gUp);
     }
 
-    // 얼굴 중심 영역(볼·코·입 주변 60% 코어) 피부색 vs 캐릭터·음식(국/찌개/식판) 색감 검증
     const row = Math.floor(i / 112);
     const col = i - row * 112;
+    const luma = 0.299 * r + 0.587 * g + 0.114 * b;
+
+    // ArcFace 112x112 정렬 기준 양안(y=51.6, x=38.3·73.5) vs 양볼(y=64..84) 휘도 비교로 선글라스·챙모자 그늘 광학 판별
+    if (row >= 42 && row <= 60 && col >= 26 && col <= 86) {
+      eyeLumaSum += luma;
+      eyeCount++;
+    } else if (row >= 64 && row <= 84 && col >= 30 && col <= 82) {
+      cheekLumaSum += luma;
+      cheekCount++;
+    }
+
+    // 얼굴 중심 영역(볼·코·입 주변 60% 코어) 피부색 vs 캐릭터·음식(국/찌개/식판) 색감 검증
     if (row >= 22 && row <= 92 && col >= 22 && col <= 90) {
       coreTotal++;
       // YCbCr 변환 (ITU-R BT.601)
       const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
       const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+      if (luma >= 132 && r > b + 28) {
+        warmOutdoorPixels++;
+      }
       // 고채도 주황·노랑·빨강 국물/찌개/음식 색감 판별 (실제 사람 피부에는 나타나지 않는 극단 채도)
       const isHighSatFoodOrSauce =
         (r > 135 && g > 65 && b < 48 && r - b > 95) ||
@@ -535,7 +580,30 @@ function prepareFaceCropAndBgr112(
     foodSatRatio < 0.22 &&
     skinRatio > nonHumanRatio;
   const sharpness = Math.min(99, Math.max(55, Math.round(55 + (gradSum / 35000) * 44)));
-  return { avatarDataUrl, faceBgr112, sharpness, facePxW: fw, isRealHumanFace };
+
+  // [5대 스타일 슬롯 광학 분류]: ① 선글라스·역광 ② 야간·실내 ③ 측면·미소 ④ 야외·노을 ⑤ 정면·선명
+  const eyeLuma = eyeCount > 0 ? eyeLumaSum / eyeCount : 120;
+  const cheekLuma = cheekCount > 0 ? cheekLumaSum / cheekCount : 120;
+  const warmRatio = coreTotal > 0 ? warmOutdoorPixels / coreTotal : 0;
+  const hasSunglasses = eyeLuma < 75 && eyeLuma < cheekLuma * 0.72;
+
+  let styleSlot: PassportStyleSlotTag = '정면·선명';
+  let styleShortKo = '정면';
+  if (hasSunglasses) {
+    styleSlot = '선글라스·역광';
+    styleShortKo = '선글라스';
+  } else if (cheekLuma < 86) {
+    styleSlot = '야간·실내';
+    styleShortKo = '야간';
+  } else if (face.frontalScore < 0.87) {
+    styleSlot = '측면·미소';
+    styleShortKo = '측면';
+  } else if (warmRatio >= 0.32 || cheekLuma >= 146) {
+    styleSlot = '야외·노을';
+    styleShortKo = '야외';
+  }
+
+  return { avatarDataUrl, faceBgr112, sharpness, facePxW: fw, hasSunglasses, styleSlot, styleShortKo, isRealHumanFace };
 }
 
 function dot(a: Float32Array, b: Float32Array): number {
@@ -633,9 +701,25 @@ function clusterExtractedFaces(
     }
   }
 
-  // 동일인이 선글라스·맨얼굴·연도 차이로 2~3개 칸에 나뉜 경우 재병합
-  // 단, 같은 커플/단체 사진에 동반 등장한 인물(photoKeys 교집합 존재)은 100% 타인이므로 절대 병합하지 않고,
-  // 중심 유사도(0.42)와 상위 3쌍 평균 유사도(0.45)를 동시에 만족할 때만 병합합니다.
+  // [1단계 — 순수 고순도 벡터 재병합]: Cannot-Link 통과 + 중심 유사도(0.42) + 상위 3쌍 평균 유사도(0.45)
+  const mergeClusterPair = (idxA: number, idxB: number) => {
+    const a = working[idxA];
+    const b = working[idxB];
+    const combinedMembers = [...a.members, ...b.members];
+    const next = new Float32Array(a.centroid.length);
+    let norm = 0;
+    for (let d = 0; d < next.length; d++) {
+      next[d] = (a.centroid[d] * a.members.length + b.centroid[d] * b.members.length) / combinedMembers.length;
+      norm += next[d] * next[d];
+    }
+    norm = Math.sqrt(norm) + 1e-6;
+    for (let d = 0; d < next.length; d++) next[d] /= norm;
+    a.members = combinedMembers;
+    for (const k of b.photoKeys) a.photoKeys.add(k);
+    a.centroid = next;
+    working.splice(idxB, 1);
+  };
+
   let mergedAny = true;
   while (mergedAny && working.length > 1) {
     mergedAny = false;
@@ -656,22 +740,65 @@ function clusterExtractedFaces(
       }
     }
     if (bestI >= 0 && bestJ >= 0) {
-      const a = working[bestI];
-      const b = working[bestJ];
-      const combinedMembers = [...a.members, ...b.members];
-      const next = new Float32Array(a.centroid.length);
-      let norm = 0;
-      for (let d = 0; d < next.length; d++) {
-        next[d] = (a.centroid[d] * a.members.length + b.centroid[d] * b.members.length) / combinedMembers.length;
-        norm += next[d] * next[d];
-      }
-      norm = Math.sqrt(norm) + 1e-6;
-      for (let d = 0; d < next.length; d++) next[d] /= norm;
-      a.members = combinedMembers;
-      for (const k of b.photoKeys) a.photoKeys.add(k);
-      a.centroid = next;
-      working.splice(bestJ, 1);
+      mergeClusterPair(bestI, bestJ);
       mergedAny = true;
+    }
+  }
+
+  // [2단계 — 특허 제3호 시공간 연속성(동일 촬영일) + 동반 등장 가족(Companion) 맥락 족쇄 재병합]:
+  // 챙모자·짙은 선글라스로 눈이 가려져 중심 유사도가 0.34~0.41로 내려간 경우에도,
+  // ① 한 사진에 동시에 찍힌 적이 없고(Cannot-Link 통과),
+  // ② 제3의 주요 가족 묶음(3장 이상 등장)과 양쪽 모두 커플·단체 사진으로 동반 등장했거나 같은 날짜에 촬영되었으며,
+  // ③ 상위 3쌍 코사인 유사도가 0.44 이상이면 묻지 않고 동일 인물('선글라스·역광' 슬롯)로 자동 흡수합니다.
+  let contextMerged = true;
+  while (contextMerged && working.length > 1) {
+    contextMerged = false;
+    let bestI = -1;
+    let bestJ = -1;
+    let bestScore = -1;
+    for (let i = 0; i < working.length; i++) {
+      for (let j = i + 1; j < working.length; j++) {
+        const wi = working[i];
+        const wj = working[j];
+        if (hasPhotoOverlap(wi.photoKeys, wj.photoKeys)) continue;
+        const pairSim = dot(wi.centroid, wj.centroid);
+        if (pairSim < CONTEXT_LOCK_CENTROID_THRESHOLD) continue;
+        const top3Mean = computeTop3CrossPairMean(wi.members, wj.members);
+        if (top3Mean < CONTEXT_LOCK_TOP3_THRESHOLD) continue;
+
+        const sgRatioI = wi.members.filter((m) => m.hasSunglasses).length / Math.max(1, wi.members.length);
+        const sgRatioJ = wj.members.filter((m) => m.hasSunglasses).length / Math.max(1, wj.members.length);
+        const eitherSunglasses = sgRatioI >= 0.35 || sgRatioJ >= 0.35;
+
+        const datesI = new Set(wi.members.map((m) => m.dateStr));
+        const hasSharedDate = wj.members.some((m) => datesI.has(m.dateStr));
+
+        let hasSharedCompanion = false;
+        for (let k = 0; k < working.length; k++) {
+          if (k === i || k === j) continue;
+          if (working[k].photoKeys.size < 3) continue;
+          if (hasPhotoOverlap(wi.photoKeys, working[k].photoKeys) && hasPhotoOverlap(wj.photoKeys, working[k].photoKeys)) {
+            hasSharedCompanion = true;
+            break;
+          }
+        }
+
+        const contextLocked =
+          (hasSharedCompanion && (hasSharedDate || eitherSunglasses)) ||
+          (hasSharedDate && eitherSunglasses && top3Mean >= 0.46);
+        if (!contextLocked) continue;
+
+        const combinedScore = top3Mean + pairSim * 0.5;
+        if (combinedScore > bestScore) {
+          bestScore = combinedScore;
+          bestI = i;
+          bestJ = j;
+        }
+      }
+    }
+    if (bestI >= 0 && bestJ >= 0) {
+      mergeClusterPair(bestI, bestJ);
+      contextMerged = true;
     }
   }
 
@@ -697,34 +824,54 @@ function clusterExtractedFaces(
     );
     const rep = uniqueSamples[0];
 
-    // 연도별 베스트 컷 (1차: 서로 다른 촬영 연도별로 대표 1장씩 우선 배분 ➔ 2차: 남는 슬롯에 연도당 최대 2장까지 추가, 시각 중복 dot > 0.86 배제)
+    // [다년도 × 5대 스타일 슬롯(정면·측면·야외·선글라스·야간) 분산 선별]:
+    // 1차: 서로 다른 촬영 연도별 대표 1장씩 우선 배분
+    // 2차: 아직 비어 있는 스타일 슬롯(예: 같은 해라도 '선글라스·역광', '측면·미소' 등) 우선 보충
+    // 3차: 남은 슬롯에 연도당 최대 2장까지 채움 (시각적 동일 복제본 dot > 0.86 배제)
     const cutsByYear = new Map<number, ExtractedFaceSample[]>();
+    const filledSlots = new Set<PassportStyleSlotTag>();
     const selectedCutSamples: ExtractedFaceSample[] = [];
+    const canAddSample = (u: ExtractedFaceSample, maxPerYear: number) => {
+      if (selectedCutSamples.includes(u)) return false;
+      if ((cutsByYear.get(u.year)?.length || 0) >= maxPerYear) return false;
+      if (selectedCutSamples.some((prev) => dot(u.embedding, prev.embedding) > 0.86)) return false;
+      return true;
+    };
+    const pushCutSample = (u: ExtractedFaceSample) => {
+      const arr = cutsByYear.get(u.year) || [];
+      arr.push(u);
+      cutsByYear.set(u.year, arr);
+      filledSlots.add(u.styleSlot);
+      selectedCutSamples.push(u);
+    };
+
     for (const u of uniqueSamples) {
       if (selectedCutSamples.length >= MAX_CUTS_PER_CLUSTER) break;
       if (cutsByYear.has(u.year)) continue;
-      if (selectedCutSamples.some((prev) => dot(u.embedding, prev.embedding) > 0.86)) continue;
-      cutsByYear.set(u.year, [u]);
-      selectedCutSamples.push(u);
+      if (!canAddSample(u, 1)) continue;
+      pushCutSample(u);
     }
     if (selectedCutSamples.length < MAX_CUTS_PER_CLUSTER) {
       for (const u of uniqueSamples) {
         if (selectedCutSamples.length >= MAX_CUTS_PER_CLUSTER) break;
-        if (selectedCutSamples.includes(u)) continue;
-        if (selectedCutSamples.some((prev) => dot(u.embedding, prev.embedding) > 0.86)) continue;
-        const arr = cutsByYear.get(u.year) || [];
-        if (arr.length < 2) {
-          arr.push(u);
-          cutsByYear.set(u.year, arr);
-          selectedCutSamples.push(u);
-        }
+        if (filledSlots.has(u.styleSlot)) continue;
+        if (!canAddSample(u, 2)) continue;
+        pushCutSample(u);
       }
     }
+    if (selectedCutSamples.length < MAX_CUTS_PER_CLUSTER) {
+      for (const u of uniqueSamples) {
+        if (selectedCutSamples.length >= MAX_CUTS_PER_CLUSTER) break;
+        if (!canAddSample(u, 2)) continue;
+        pushCutSample(u);
+      }
+    }
+
     const yearlyBestCuts: YearlyFaceBestCut[] = Array.from(cutsByYear.entries())
       .sort((a, b) => b[0] - a[0])
       .flatMap(([, arr]) => arr)
       .slice(0, MAX_CUTS_PER_CLUSTER)
-      .map((u, cutIdx) => ({
+      .map((u) => ({
         year: u.year,
         representativePhoto: u.photo.name,
         representativeDate: u.dateStr,
@@ -733,9 +880,27 @@ function clusterExtractedFaces(
         avatarUrl: u.avatarDataUrl,
         cropUrl: u.avatarDataUrl,
         boundingBox: u.boundingBox,
-        conditionTag: cutIdx === 0 ? '정면·선명' : '측면·미소',
-        conditionShortKo: cutIdx === 0 ? '정면' : '자연',
+        conditionTag: u.styleSlot,
+        conditionShortKo: u.styleShortKo,
       }));
+
+    // 인물별 고유 타임라인 바구니 (단체사진 내 상대 얼굴 크기 비율이 작고 연도 폭이 짧은 자녀는 5년 주기, 일반 성인은 10년 주기)
+    const sampleYears = uniqueSamples.map((u) => u.year).filter((y) => y >= 1980);
+    const anchorYear = sampleYears.length > 0 ? Math.max(...sampleYears) : latestCorpusYear;
+    const avgFaceRatio =
+      uniqueSamples.reduce((acc, u) => acc + Math.max(0.04, (u.boundingBox[2] - u.boundingBox[0]) / 1000), 0) /
+      Math.max(1, uniqueSamples.length);
+    const isLikelyMinor = idx >= 2 && avgFaceRatio < 0.14;
+    const spanYears: 10 | 5 = isLikelyMinor ? 5 : 10;
+    const timelineBucket: PersonTimelineBucketInfo = {
+      anchorCreationYear: anchorYear,
+      bucketSpanYears: spanYears,
+      ageCategoryLabel: spanYears === 5 ? '미성년 5년 주기' : '성인 10년 주기',
+      primaryBucketRange: `${anchorYear}~${anchorYear - spanYears + 1}`,
+      forwardBucketRange: `${anchorYear + 1}~${anchorYear + spanYears}`,
+      forwardBucketActive: true,
+      filledStyleSlots: Array.from(new Set(yearlyBestCuts.map((yc) => yc.conditionTag || '정면·선명'))),
+    };
 
     // 기존 등록 정보 보존 (같은 단체 사진에 찍힌 다른 가족과 절대 섞이지 않도록 대표 사진 + 얼굴 중심 좌표까지 일치할 때만 승계)
     const matchedExisting = existingClusters.find((ec) => {
@@ -785,13 +950,15 @@ function clusterExtractedFaces(
       cropUrl: rep.avatarDataUrl,
       boundingBox: rep.boundingBox,
       yearlyBestCuts,
+      timelineBucket,
       detectedSampleCount: wc.members.length,
       matchedPhotoCount: matchedPhotoFiles.length,
       matchedPhotoFiles,
       matchedVideoSegmentCount: 0,
       matchedVideoSegments: [],
       seedDates,
-      seedVecPreview: Array.from(wc.centroid.slice(0, 8)).map((v) => +v.toFixed(4)),
+      // Supabase ghost_passports.face_vector_128d 무료 계정 동기화 및 타 기기(PC↔모바일) 자동 매칭을 위해 128차원 전체 벡터 보존
+      seedVecPreview: Array.from(wc.centroid).map((v) => +v.toFixed(5)),
     };
   });
 
@@ -1005,7 +1172,16 @@ export async function runOnDeviceFacePassportScan(
         const { year, dateStr } = parsePhotoYearAndDate(photo);
         const baseKey = normalizePhotoBaseKey(photo.name);
         for (const f of faces) {
-          const { avatarDataUrl, faceBgr112, sharpness, facePxW, isRealHumanFace } = prepareFaceCropAndBgr112(
+          const {
+            avatarDataUrl,
+            faceBgr112,
+            sharpness,
+            facePxW,
+            hasSunglasses,
+            styleSlot,
+            styleShortKo,
+            isRealHumanFace,
+          } = prepareFaceCropAndBgr112(
             activeSource,
             f,
             cropCanvas,
@@ -1025,6 +1201,9 @@ export async function runOnDeviceFacePassportScan(
             frontalScore: f.frontalScore,
             facePxW,
             sharpness,
+            hasSunglasses,
+            styleSlot,
+            styleShortKo,
             boundingBox: [
               Math.round(f.y1 * 1000),
               Math.round(f.x1 * 1000),
