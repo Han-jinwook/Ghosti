@@ -424,6 +424,37 @@ export async function acceptWorkRoomInvite(opts: {
   };
 }
 
+export interface JoinedWorkRoomSummary {
+  roomId: string;
+  roomTitle: string;
+  hostEmail: string;
+  isHost: boolean;
+  role: 'host' | 'editor' | 'viewer';
+  ownerUnlocked: boolean;
+  seatLimit: number;
+  lockReason: string | null;
+}
+
+/**
+ * 로그인한 계정이 DB(ghosti_lounge_members)에 소속된 모든 업무 공유방(방장 + 초대받은 팀원방)을 조회합니다.
+ * 재로그인·F5 새로고침·모바일 웹 수락 후 모바일 앱 재접속 시에도 초대 링크 없이 소속 업무방을 즉시 복원합니다.
+ */
+export async function fetchMyJoinedWorkRooms(): Promise<{
+  ok: boolean;
+  rooms: JoinedWorkRoomSummary[];
+}> {
+  if (!hasAuthenticatedHubAccountSession()) {
+    return { ok: false, rooms: [] };
+  }
+  const res = await callGhostiServerBridge<{
+    rooms?: JoinedWorkRoomSummary[];
+  }>('work_list_my_rooms', {});
+  if (!res.ok || !Array.isArray(res.rooms)) {
+    return { ok: false, rooms: [] };
+  }
+  return { ok: true, rooms: res.rooms };
+}
+
 export function readCachedMyWorkRoomMeta(accountEmail?: string): {
   roomId: string;
   inviteToken: string;

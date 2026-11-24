@@ -20,6 +20,7 @@ import {
   ensureMyWorkRoomAndInvite,
   fetchLocalWorkFilesNative,
   fetchLocalWorkLocksFast,
+  fetchMyJoinedWorkRooms,
   fetchWorkFilesFromHostTunnel,
   fetchWorkLocksFromHostTunnel,
   fetchWorkRoomAuthedState,
@@ -42,6 +43,7 @@ import {
   updateWorkRoomMemberRoleOnServer,
   uploadWorkFileToNativeSDrive,
   upsertWorkFilesToSupabase,
+  type JoinedWorkRoomSummary,
   type WorkBackupServerNodeDto,
   type WorkDeletedTombstoneMap,
   type WorkLoungeDocDto,
@@ -129,6 +131,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const [myRoomRole, setMyRoomRole] = useState<'host' | 'editor' | 'viewer'>('host');
   const [roomSeatLimit, setRoomSeatLimit] = useState<number>(5);
   const [remoteRoomLockReason, setRemoteRoomLockReason] = useState<string | null>(null);
+  const [joinedInvitedRoom, setJoinedInvitedRoom] = useState<JoinedWorkRoomSummary | null>(null);
   const [startingWorkTrial, setStartingWorkTrial] = useState<boolean>(false);
   const [hostTunnelStatus, setHostTunnelStatus] = useState<string>('idle');
   const [lastDeletedUndoItem, setLastDeletedUndoItem] = useState<{
@@ -181,12 +184,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const isOwnWorkUnlocked = Boolean(
     isWorkPaidActive || isWorkTrialActive || deviceEntitlement?.workSubscriptionUnlocked
   );
-  const isWorkUnlocked = inviteMeta.hasWorkInvite
+  const isJoinedInvitedMember = inviteMeta.hasWorkInvite || Boolean(joinedInvitedRoom);
+  const isWorkUnlocked = isJoinedInvitedMember
     ? !remoteRoomLockReason
     : isOwnWorkUnlocked;
 
   // 계정 전환 시 이전 계정 업무방 ID·문서 잔상 즉시 초기화 (C9 계정 격리)
   useEffect(() => {
+    setJoinedInvitedRoom(null);
     const inv = readActiveWorkRoomInviteMeta();
     if (inv.hasWorkInvite && inv.roomId) {
       setActiveWorkRoomId(inv.roomId);
@@ -202,6 +207,36 @@ export const WorkLoungeB2BHub: React.FC = () => {
       nextRoomId ? loadCachedWorkTombstones(nextRoomId, merlinAuth?.email || undefined) : {}
     );
   }, [merlinAuth?.email]);
+
+  // 로그인한 계정이 DB(ghosti_lounge_members)에 소속된 초대 업무방을 자동 복원
+  // (PC 재로그인/F5·모바일 웹 초대 수락 후 모바일 앱 재접속 시 초대 링크 재클릭 불필요)
+  useEffect(() => {
+    if (!merlinAuth?.email || !hasAuthenticatedHubAccountSession()) return undefined;
+    if (inviteMeta.hasWorkInvite) return undefined;
+    let cancelled = false;
+    void fetchMyJoinedWorkRooms().then((res) => {
+      if (cancelled || !res.ok || res.rooms.length === 0) return;
+      const invitedRoom = res.rooms.find((r) => !r.isHost) || null;
+      const hostedRoom = res.rooms.find((r) => r.isHost) || null;
+      // 본인 구독 업무방이 없거나(팀원 계정) 아직 활성 방이 없으면 초대받은 팀원방을 최우선 복원
+      if (invitedRoom && (!isOwnWorkUnlocked || !activeWorkRoomId)) {
+        setJoinedInvitedRoom(invitedRoom);
+        setActiveWorkRoomId(invitedRoom.roomId);
+        setMyRoomRole(invitedRoom.role);
+        setRoomSeatLimit(invitedRoom.seatLimit || 5);
+        setRemoteRoomLockReason(invitedRoom.ownerUnlocked ? null : (invitedRoom.lockReason || 'WORK_SUBSCRIPTION_REQUIRED'));
+        return;
+      }
+      if (hostedRoom && !activeWorkRoomId) {
+        setActiveWorkRoomId(hostedRoom.roomId);
+        setMyRoomRole('host');
+        setRoomSeatLimit(hostedRoom.seatLimit || 5);
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [merlinAuth?.email, merlinAuth?.userId, inviteMeta.hasWorkInvite, isOwnWorkUnlocked, activeWorkRoomId]);
 
   const mergeAndPersistTombstones = useCallback(
     (patch: WorkDeletedTombstoneMap, clearRelPaths?: string[]) => {
@@ -533,8 +568,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
             {
               unlocked: isWorkUnlocked,
               roomId: activeWorkRoomId || undefined,
-              isHost: !inviteMeta.hasWorkInvite,
-              planId: inviteMeta.hasWorkInvite
+              isHost: !isJoinedInvitedMember,
+              planId: isJoinedInvitedMember
                 ? 'work_invited_member'
                 : deviceEntitlement?.workPlanId || (isWorkTrialActive ? 'work_trial_30d' : ''),
             }
@@ -1348,13 +1383,37 @@ export const WorkLoungeB2BHub: React.FC = () => {
         }}
       />
 
+      {/* 모바일 브라우저에서 업무 공유 초대 링크 접속 시 귀신같이 앱으로 바로 연결 + 자동 계정 연동 안내 */}
+      {inviteMeta.hasWorkInvite &&
+        layout === 'mobile' &&
+        !isStoreAppMode &&
+        typeof window !== 'undefined' &&
+        !(window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.() && (
+          <div className="p-3.5 rounded-xl bg-teal-50 border border-teal-200 flex flex-wrap items-center justify-between gap-2.5">
+            <div className="min-w-0 flex-1">
+              <div className="text-[12.5px] font-bold text-teal-900">
+                귀신같이 모바일 앱에서 이 업무 공유방 바로 열기
+              </div>
+              <p className="text-[11.5px] text-teal-700 mt-0.5 leading-snug">
+                웹에서 이메일 로그인을 완료하면 모바일 앱에 같은 계정으로 접속할 때도 이 업무방이 자동으로 유지됩니다.
+              </p>
+            </div>
+            <a
+              href={`ghosti://work?workRoom=${encodeURIComponent(inviteMeta.roomId)}&inviteToken=${encodeURIComponent(inviteMeta.inviteToken)}&host=${encodeURIComponent(inviteMeta.hostNickname)}`}
+              className="px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold shrink-0"
+            >
+              앱에서 열기
+            </a>
+          </div>
+        )}
+
       <WorkLoungeBillingGateBanner
         isStoreAppMode={isStoreAppMode}
         isWorkUnlocked={isWorkUnlocked}
         isWorkTrialExpired={isWorkTrialExpired}
         remoteRoomLockReason={remoteRoomLockReason}
         hasUsedWorkTrial={hasUsedWorkTrial}
-        hasWorkInvite={inviteMeta.hasWorkInvite}
+        hasWorkInvite={isJoinedInvitedMember}
         startingWorkTrial={startingWorkTrial}
         onStart30DayWorkTrial={handleStart30DayWorkTrial}
         onActivatePricingPlan={activatePricingPlan}

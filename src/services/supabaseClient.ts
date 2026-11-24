@@ -139,6 +139,12 @@ export function clearGhostiLogoutLock(): void {
   if (typeof window === 'undefined') return;
   try {
     localStorage.removeItem(GHOSTI_LOGOUT_LOCK_UNTIL_KEY);
+    localStorage.removeItem('merlin_logged_out');
+    try {
+      sessionStorage.removeItem('merlin_logged_out');
+    } catch {
+      /* ignore */
+    }
   } catch {
     /* ignore */
   }

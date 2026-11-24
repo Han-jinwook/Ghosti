@@ -873,6 +873,55 @@ export async function handleAuthedWorkAndDeviceAction({
     };
   }
 
+  if (action === 'work_list_my_rooms') {
+    const memRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_lounge_members?member_email=eq.${encodeURIComponent(email)}&select=room_id,role,room_persona_nickname,created_at&order=created_at.desc&limit=30`,
+      { headers: srvHeaders(serviceKey) }
+    );
+    const memRows = memRes.ok ? await memRes.json().catch(() => []) : [];
+    const safeMems = Array.isArray(memRows) ? memRows : [];
+    const roomIds = Array.from(
+      new Set(safeMems.map((m) => String(m.room_id || '').trim()).filter(Boolean))
+    );
+    if (roomIds.length === 0) {
+      return { status: 200, body: { ok: true, rooms: [] } };
+    }
+    const inClause = roomIds.map((id) => `"${id.replace(/"/g, '')}"`).join(',');
+    const roomRes = await fetch(
+      `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?lounge_type=eq.work&room_id=in.(${encodeURIComponent(inClause)})&select=room_id,room_title,master_email,pricing_plan,created_at`,
+      { headers: srvHeaders(serviceKey) }
+    );
+    const roomRows = roomRes.ok ? await roomRes.json().catch(() => []) : [];
+    const roomById = new Map();
+    if (Array.isArray(roomRows)) {
+      for (const r of roomRows) {
+        if (r?.room_id) roomById.set(String(r.room_id), r);
+      }
+    }
+    const outRooms = [];
+    for (const m of safeMems) {
+      const rId = String(m.room_id || '').trim();
+      const room = roomById.get(rId);
+      if (!room) continue;
+      const masterEmail = String(room.master_email || '').trim().toLowerCase();
+      const isHost = masterEmail === email;
+      const rawRole = String(m.role || '').trim().toLowerCase();
+      const role = isHost || rawRole === 'master' ? 'host' : rawRole === 'viewer' ? 'viewer' : 'editor';
+      const ownerGate = await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, masterEmail);
+      outRooms.push({
+        roomId: rId,
+        roomTitle: String(room.room_title || '우리팀 업무 공유방 (S:)'),
+        hostEmail: masterEmail,
+        isHost,
+        role,
+        ownerUnlocked: Boolean(ownerGate.ok),
+        seatLimit: ownerGate.entitlement?.workSeatLimit || 5,
+        lockReason: ownerGate.ok ? null : (ownerGate.response?.body?.reason || 'WORK_SUBSCRIPTION_REQUIRED'),
+      });
+    }
+    return { status: 200, body: { ok: true, rooms: outRooms } };
+  }
+
   if (action === 'work_register_tunnel') {
     const roomId = String(body.roomId || '').trim();
     const ctx = await getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email);
