@@ -245,10 +245,13 @@ export function findSelfCluster(st = loadPassportRegState()): FaceMemberCluster 
       }
     }
   }
-  if (!found || (found.matchedPhotoCount || 0) < PASSPORT_MIN_FACE_PHOTOS_FOR_ASK) return null;
+  if (!found) return null;
   const hasConfirmed = confirmedCutsFor(found, st).length > 0;
   const hasPending = pendingCutsFor(found, st).length > 0;
-  if (!hasConfirmed && !hasPending) return null;
+  // 이미 등록 완료된 본인 여권(hasConfirmed)은 나머지 컷을 체크 해제해 matchedPhotoCount가 1~2장으로 줄어들었더라도 본인 여권으로 영구 유지!
+  if (hasConfirmed) return found;
+  if ((found.matchedPhotoCount || 0) < PASSPORT_MIN_FACE_PHOTOS_FOR_ASK) return null;
+  if (!hasPending) return null;
   return found;
 }
 
