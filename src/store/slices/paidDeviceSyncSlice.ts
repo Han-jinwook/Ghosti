@@ -650,6 +650,17 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
         errMsg = res.expectedEmailHint
           ? `PC에 로그인된 이메일(${res.expectedEmailHint})과 다른 계정입니다. PC와 같은 이메일로 로그인한 뒤 다시 연결해 주세요.`
           : 'PC에 로그인된 이메일과 다른 계정입니다. PC와 같은 이메일로 로그인해 주세요.';
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(
+            new CustomEvent('ghosti_qr_pair_result', {
+              detail: {
+                ok: false,
+                reason: 'ACCOUNT_MISMATCH',
+                expectedEmailHint: res.expectedEmailHint,
+              },
+            })
+          );
+        }
       } else if (reasonCode === 'CODE_EXPIRED' || reasonCode === 'EXPIRED_OR_INVALID_CODE') {
         errMsg =
           '연결 번호의 유효시간(30분)이 지났습니다. PC 화면에서 [새 번호 발급]을 눌러 새 번호를 확인해 주세요.';

@@ -646,12 +646,17 @@ const GhostiHubGlobalModals: React.FC = () => {
     };
     const onPageShow = (ev: PageTransitionEvent) => enforceLogoutOnHistoryRestore(ev);
     const onPopState = () => enforceLogoutOnHistoryRestore();
+    const onLogoutAndOpenLogin = () => {
+      performGhostiCleanLogout();
+      setIsLoginOpen(true);
+    };
 
     window.addEventListener('openLoginModal', onOpenLogin);
     window.addEventListener('openProfileModal', onOpenProfile);
     window.addEventListener('openPurchaseModal', onOpenPurchase);
     window.addEventListener('openGiftBoxModal', onOpenGiftBox);
     window.addEventListener('merlinSessionExpired', onHubSessionExpired);
+    window.addEventListener('ghosti_logout_and_open_login', onLogoutAndOpenLogin);
     window.addEventListener('pageshow', onPageShow);
     window.addEventListener('popstate', onPopState);
 
@@ -661,10 +666,11 @@ const GhostiHubGlobalModals: React.FC = () => {
       window.removeEventListener('openPurchaseModal', onOpenPurchase);
       window.removeEventListener('openGiftBoxModal', onOpenGiftBox);
       window.removeEventListener('merlinSessionExpired', onHubSessionExpired);
+      window.removeEventListener('ghosti_logout_and_open_login', onLogoutAndOpenLogin);
       window.removeEventListener('pageshow', onPageShow);
       window.removeEventListener('popstate', onPopState);
     };
-  }, [hideCoin]);
+  }, [hideCoin, performGhostiCleanLogout]);
 
   return (
     <>

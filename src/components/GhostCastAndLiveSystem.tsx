@@ -400,9 +400,17 @@ export const GhostCastAndLiveGlobalOverlay: React.FC = () => {
               : `QR·6자리 보안 연결 완료! 내 PC와 스마트폰이 직결되었습니다 (연결된 내 기기 ${deviceCount}대)`,
           });
           if (typeof window !== 'undefined') {
+            window.dispatchEvent(new CustomEvent('ghosti_qr_pair_result', { detail: { ok: true } }));
             window.dispatchEvent(new CustomEvent('ghosti_open_device_sync_section'));
           }
         } else {
+          if (typeof window !== 'undefined') {
+            window.dispatchEvent(
+              new CustomEvent('ghosti_qr_pair_result', {
+                detail: { ok: false, reason, expectedEmailHint },
+              })
+            );
+          }
           useSaySeeStore.setState({
             lastQuarantineToast:
               reason === 'AUTH_REQUIRED'

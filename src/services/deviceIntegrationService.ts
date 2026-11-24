@@ -2790,13 +2790,18 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
                 deviceCount: pairRes.devices.length,
               });
             }
-          } else if (opts.onPairingCompleted) {
-            opts.onPairingCompleted({
-              ok: false,
-              deviceCount: loadCachedDeviceIntegrationSnapshot(normEmail)?.devices.length || 0,
-              reason: pairRes.reason,
-              expectedEmailHint: pairRes.expectedEmailHint,
-            });
+          } else {
+            if (pairRes.reason === 'ACCOUNT_MISMATCH' || pairRes.reason === 'AUTH_REQUIRED') {
+              savePendingQrPairCode(effectivePairCode);
+            }
+            if (opts.onPairingCompleted) {
+              opts.onPairingCompleted({
+                ok: false,
+                deviceCount: loadCachedDeviceIntegrationSnapshot(normEmail)?.devices.length || 0,
+                reason: pairRes.reason,
+                expectedEmailHint: pairRes.expectedEmailHint,
+              });
+            }
           }
         }
       }

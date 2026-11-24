@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { zCoreBridge, isZCoreOutdated } from '../services/zCoreBridge';
 import { hasAuthenticatedHubAccountSession } from '../services/supabaseClient';
-import { readPendingQrPairCode } from '../services/deviceIntegrationService';
+import { readPendingQrPairCode, savePendingQrPairCode } from '../services/deviceIntegrationService';
 import { useSaySeeStore, type MobileTab } from '../store/useSaySeeStore';
 import {
   GhostiHeaderQuickShareButton,
@@ -184,7 +184,37 @@ export const MobileAppView: React.FC = () => {
       return null;
     }
   });
+  const [qrPairMismatchInfo, setQrPairMismatchInfo] = useState<{
+    expectedEmailHint?: string;
+  } | null>(null);
   const privateSyncSectionRef = useRef<HTMLElement | null>(null);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onQrPairResult = (ev: Event) => {
+      const detail = (ev as CustomEvent<{
+        ok?: boolean;
+        reason?: string;
+        expectedEmailHint?: string;
+      }>).detail;
+      if (!detail) return;
+      if (detail.ok) {
+        setQrPairMismatchInfo(null);
+        setQrAppBridgeCode(null);
+      } else if (detail.reason === 'ACCOUNT_MISMATCH') {
+        setQrPairMismatchInfo({ expectedEmailHint: detail.expectedEmailHint });
+      } else if (detail.reason === 'CODE_EXPIRED') {
+        setQrPairMismatchInfo(null);
+        setQrAppBridgeCode(null);
+      }
+    };
+    window.addEventListener('ghosti_qr_pair_result', onQrPairResult);
+    return () => window.removeEventListener('ghosti_qr_pair_result', onQrPairResult);
+  }, []);
+
+  useEffect(() => {
+    setQrPairMismatchInfo(null);
+  }, [merlinAuth?.email]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -786,54 +816,98 @@ export const MobileAppView: React.FC = () => {
           }`}
         >
           {qrAppBridgeCode && !isCapacitorNativeMobileRuntime() && (
-            <div className="p-3 rounded-xl bg-white border border-slate-200 flex flex-col gap-2">
-              <div className="flex items-center justify-between gap-2">
-                <div className="min-w-0">
-                  <p className="text-[13px] font-semibold text-slate-900">
-                    PC 기기 연결 번호{' '}
-                    <span className="font-mono">{qrAppBridgeCode.slice(0, 3)}-{qrAppBridgeCode.slice(3, 6)}</span>
-                  </p>
-                  <p className="text-[11.5px] text-slate-500 mt-0.5 break-keep">
-                    {merlinAuth?.email && merlinAuth.userId !== 'guest'
-                      ? `현재 웹 계정(${merlinAuth.email})으로 로그인됨 · 앱에서 연결할 때도 앱 내부에서 PC와 같은 이메일로 로그인해야 연결됩니다.`
-                      : '귀신같이 앱이 설치되어 있다면 아래 버튼으로 앱에서 바로 연결하고, PC와 같은 이메일로 로그인해 주세요.'}
-                  </p>
+            qrPairMismatchInfo ? (
+              <div className="p-3.5 rounded-xl bg-amber-50 border border-amber-300 flex flex-col gap-2.5">
+                <div className="flex items-start justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-bold text-amber-900">
+                      ⚠️ PC와 로그인 계정이 다릅니다
+                    </p>
+                    <p className="text-[12px] text-amber-900/90 mt-1 break-keep leading-relaxed">
+                      현재 웹에는{' '}
+                      <span className="font-semibold">{merlinAuth?.email || '다른 계정'}</span>이(가)
+                      로그인되어 있어 바로 연결할 수 없습니다. PC에 로그인된 계정(
+                      <span className="font-semibold">
+                        {qrPairMismatchInfo.expectedEmailHint || 'PC와 같은 이메일'}
+                      </span>
+                      )으로 바꾼 뒤 연결해 주세요.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setQrPairMismatchInfo(null);
+                      setQrAppBridgeCode(null);
+                    }}
+                    className="text-[11px] text-amber-700 hover:text-amber-950 px-1.5 py-0.5 cursor-pointer shrink-0"
+                  >
+                    닫기
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setQrAppBridgeCode(null)}
-                  className="text-[11px] text-slate-400 hover:text-slate-700 px-1.5 py-0.5 cursor-pointer shrink-0"
-                >
-                  닫기
-                </button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      savePendingQrPairCode(qrAppBridgeCode);
+                      setQrPairMismatchInfo(null);
+                      window.dispatchEvent(new CustomEvent('ghosti_logout_and_open_login'));
+                    }}
+                    className="px-3.5 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[12px] font-semibold cursor-pointer"
+                  >
+                    로그아웃 후 PC 계정으로 다시 로그인
+                  </button>
+                </div>
               </div>
-              <div className="flex flex-wrap items-center gap-2">
-                <a
-                  href={`ghosti://pair?pairCode=${qrAppBridgeCode}`}
-                  className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold no-underline"
-                >
-                  귀신같이 앱에서 연결
-                </a>
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!hasAuthenticatedHubAccountSession()) {
-                      useSaySeeStore.setState({
-                        lastQuarantineToast:
-                          '현재 게스트(비로그인) 상태입니다. PC와 같은 이메일로 로그인하면 바로 연결됩니다.',
-                      });
-                      window.dispatchEvent(new CustomEvent('openLoginModal'));
-                      return;
-                    }
-                    const ok = await useSaySeeStore.getState().pairWithSixDigitCode(qrAppBridgeCode);
-                    if (ok) setQrAppBridgeCode(null);
-                  }}
-                  className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium cursor-pointer"
-                >
-                  웹에서 바로 연결
-                </button>
+            ) : (
+              <div className="p-3 rounded-xl bg-white border border-slate-200 flex flex-col gap-2">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="min-w-0">
+                    <p className="text-[13px] font-semibold text-slate-900">
+                      PC 기기 연결 번호{' '}
+                      <span className="font-mono">{qrAppBridgeCode.slice(0, 3)}-{qrAppBridgeCode.slice(3, 6)}</span>
+                    </p>
+                    <p className="text-[11.5px] text-slate-500 mt-0.5 break-keep">
+                      {merlinAuth?.email && merlinAuth.userId !== 'guest'
+                        ? `현재 웹 계정(${merlinAuth.email})으로 로그인됨 · 앱에서 연결할 때도 앱 내부에서 PC와 같은 이메일로 로그인해야 연결됩니다.`
+                        : '귀신같이 앱이 설치되어 있다면 아래 버튼으로 앱에서 바로 연결하고, PC와 같은 이메일로 로그인해 주세요.'}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setQrAppBridgeCode(null)}
+                    className="text-[11px] text-slate-400 hover:text-slate-700 px-1.5 py-0.5 cursor-pointer shrink-0"
+                  >
+                    닫기
+                  </button>
+                </div>
+                <div className="flex flex-wrap items-center gap-2">
+                  <a
+                    href={`ghosti://pair?pairCode=${qrAppBridgeCode}`}
+                    className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold no-underline"
+                  >
+                    귀신같이 앱에서 연결
+                  </a>
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!hasAuthenticatedHubAccountSession()) {
+                        useSaySeeStore.setState({
+                          lastQuarantineToast:
+                            '현재 게스트(비로그인) 상태입니다. PC와 같은 이메일로 로그인하면 바로 연결됩니다.',
+                        });
+                        window.dispatchEvent(new CustomEvent('openLoginModal'));
+                        return;
+                      }
+                      const ok = await useSaySeeStore.getState().pairWithSixDigitCode(qrAppBridgeCode);
+                      if (ok) setQrAppBridgeCode(null);
+                    }}
+                    className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium cursor-pointer"
+                  >
+                    웹에서 바로 연결
+                  </button>
+                </div>
               </div>
-            </div>
+            )
           )}
 
           {activeLoungeType !== 'personal' && <LoungeFeedContextBanner />}
