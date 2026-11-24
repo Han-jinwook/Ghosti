@@ -35,6 +35,7 @@ import {
   getThisDeviceIdentity,
   loadCachedDeviceIntegrationSnapshot,
   loadCachedSyncedClips,
+  syncDeviceHeartbeatAndList,
 } from '../services/deviceIntegrationService';
 import {
   clearStoredInviteSession,
@@ -228,8 +229,8 @@ const GhostiHubGlobalModals: React.FC = () => {
               Authorization: `Bearer ${preLogoutToken}`,
             },
             body: JSON.stringify({
-              action: 'device_revoke',
-              deviceId: thisDeviceId,
+              action: 'device_revoke_device',
+              targetDeviceId: thisDeviceId,
             }),
           }).catch(() => {});
         }
@@ -697,6 +698,21 @@ const GhostiHubGlobalModals: React.FC = () => {
               signupSource: 'workspace_login_modal',
               launchNotifyOptIn: true,
               forceSync: true,
+            });
+            try {
+              localStorage.removeItem('ghosti_revoked_by_own_logout');
+            } catch {
+              /* ignore */
+            }
+            void syncDeviceHeartbeatAndList({ explicitReconnect: true }).then((hb) => {
+              if (hb?.ok) {
+                useSaySeeStore.getState().setDeviceIntegrationSnapshot({
+                  devices: hb.devices,
+                  pairingCode: hb.pairingCode,
+                  entitlement: hb.entitlement,
+                  revokedSelf: false,
+                });
+              }
             });
             let hasPendingZCoreConnect = false;
             try {

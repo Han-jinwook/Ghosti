@@ -1273,7 +1273,9 @@ export async function handleAuthedWorkAndDeviceAction({
     const displayName = String(
       body.displayName || (deviceKind === 'mobile' ? '내 스마트폰' : '메인 PC')
     ).slice(0, 48);
-    const explicitReconnect = Boolean(body.explicitReconnect || body.explicitTrialOptIn);
+    const explicitReconnect = Boolean(
+      body.explicitReconnect || body.explicitTrialOptIn || body.forceRefreshPairingCode
+    );
 
     let revokedSelf = false;
     if (!explicitReconnect) {
@@ -1365,9 +1367,9 @@ export async function handleAuthedWorkAndDeviceAction({
       );
     }
 
-    // 6자리 페어링 코드 발급/유지 (PC 마스터일 때 · 유효시간 30분, 5분 미만 남거나 강제 새로고침 시 즉시 재발급)
+    // 6자리 페어링 코드 발급/유지 (PC 마스터이면서 활성 상태일 때 · 유효시간 30분, 5분 미만 남거나 강제 새로고침 시 즉시 재발급)
     let pairingCode = null;
-    if (deviceKind === 'pc_master') {
+    if (deviceKind === 'pc_master' && !revokedSelf) {
       const codeRows = codeRes && codeRes.ok ? await codeRes.json().catch(() => []) : [];
       const forceRefreshCode = Boolean(body.forceRefreshPairingCode);
       if (
@@ -1490,7 +1492,13 @@ export async function handleAuthedWorkAndDeviceAction({
       };
     }
 
-    const [, , entRaw] = await Promise.all([
+    const nowIso = new Date().toISOString();
+    const targetDisplayName = String(
+      body.displayName || (targetKind === 'pc_master' ? '서브 PC' : '내 스마트폰')
+    ).slice(0, 48);
+    const pcDeviceIdToRestore = String(found.pc_device_id || '').trim();
+
+    const [, , , entRaw] = await Promise.all([
       fetch(`${supabaseUrl}/rest/v1/ghosti_devices?on_conflict=device_id`, {
         method: 'POST',
         headers: srvHeaders(serviceKey, {
@@ -1501,21 +1509,32 @@ export async function handleAuthedWorkAndDeviceAction({
           device_id: targetDevId,
           owner_email: email,
           device_kind: targetKind,
-          display_name: String(
-            body.displayName || (targetKind === 'pc_master' ? '서브 PC' : '내 스마트폰')
-          ).slice(0, 48),
+          display_name: targetDisplayName,
           platform: targetPlatform,
-          last_seen_at: new Date().toISOString(),
+          last_seen_at: nowIso,
           revoked_at: null,
         }),
       }),
+      pcDeviceIdToRestore && pcDeviceIdToRestore !== targetDevId
+        ? fetch(
+            `${supabaseUrl}/rest/v1/ghosti_devices?device_id=eq.${encodeURIComponent(pcDeviceIdToRestore)}&owner_email=eq.${encodeURIComponent(email)}`,
+            {
+              method: 'PATCH',
+              headers: srvHeaders(serviceKey, { 'Content-Type': 'application/json' }),
+              body: JSON.stringify({
+                revoked_at: null,
+                last_seen_at: nowIso,
+              }),
+            }
+          ).catch(() => null)
+        : Promise.resolve(null),
       found.consumed_at
         ? Promise.resolve(null)
         : fetch(`${supabaseUrl}/rest/v1/ghosti_pairing_codes?code=eq.${cleanCode}`, {
             method: 'PATCH',
             headers: srvHeaders(serviceKey, { 'Content-Type': 'application/json' }),
             body: JSON.stringify({
-              consumed_at: new Date().toISOString(),
+              consumed_at: nowIso,
               consumed_by_device_id: targetDevId,
             }),
           }),
@@ -1525,7 +1544,7 @@ export async function handleAuthedWorkAndDeviceAction({
     const [, listRes] = await Promise.all([
       !entRaw.trialOptInStartedAt
         ? (() => {
-            entRaw.trialOptInStartedAt = new Date().toISOString();
+            entRaw.trialOptInStartedAt = nowIso;
             return writeStorageJson(
               supabaseUrl,
               serviceKey,
@@ -1541,7 +1560,36 @@ export async function handleAuthedWorkAndDeviceAction({
       ),
     ]);
     const devices = listRes.ok ? await listRes.json().catch(() => []) : [];
-    const safeDevices = Array.isArray(devices) ? devices : [];
+    let safeDevices = Array.isArray(devices) ? devices : [];
+    // 네이티브 모바일 앱이 방금 페어링된 경우, 같은 폰의 직전(10분 이내) 모바일 웹 임시 기기가 중복 남아있으면 자동 정리
+    if (targetKind === 'mobile' && targetDisplayName.includes('앱')) {
+      const recentCutoffMs = Date.now() - 10 * 60 * 1000;
+      const dupWebIds = safeDevices
+        .filter(
+          (d) =>
+            d.device_id !== targetDevId &&
+            d.device_kind === 'mobile' &&
+            d.platform === targetPlatform &&
+            String(d.display_name || '').includes('웹') &&
+            Date.parse(d.last_seen_at || d.created_at || '') >= recentCutoffMs
+        )
+        .map((d) => d.device_id);
+      if (dupWebIds.length > 0) {
+        await Promise.all(
+          dupWebIds.map((dupId) =>
+            fetch(
+              `${supabaseUrl}/rest/v1/ghosti_devices?device_id=eq.${encodeURIComponent(dupId)}&owner_email=eq.${encodeURIComponent(email)}`,
+              {
+                method: 'PATCH',
+                headers: srvHeaders(serviceKey, { 'Content-Type': 'application/json' }),
+                body: JSON.stringify({ revoked_at: nowIso }),
+              }
+            ).catch(() => null)
+          )
+        );
+        safeDevices = safeDevices.filter((d) => !dupWebIds.includes(d.device_id));
+      }
+    }
     return {
       status: 200,
       body: {

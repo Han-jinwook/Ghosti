@@ -138,6 +138,60 @@ export function readPendingQrPairCode(): string | null {
   }
 }
 
+const LAST_QR_PAIR_RESULT_KEY = 'ghosti_last_qr_pair_result_v1';
+
+export interface StoredQrPairResult {
+  code: string;
+  ok: boolean;
+  reason?: string;
+  expectedEmailHint?: string;
+  ts: number;
+}
+
+export function saveLastQrPairResult(result: Omit<StoredQrPairResult, 'ts'>): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.setItem(
+      LAST_QR_PAIR_RESULT_KEY,
+      JSON.stringify({ ...result, ts: Date.now() })
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+export function readLastQrPairResult(expectedCode?: string): StoredQrPairResult | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const raw = sessionStorage.getItem(LAST_QR_PAIR_RESULT_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<StoredQrPairResult>;
+    if (!parsed || typeof parsed.ts !== 'number' || Date.now() - parsed.ts > 120_000) {
+      sessionStorage.removeItem(LAST_QR_PAIR_RESULT_KEY);
+      return null;
+    }
+    if (expectedCode && parsed.code && parsed.code !== expectedCode) return null;
+    return {
+      code: String(parsed.code || ''),
+      ok: Boolean(parsed.ok),
+      reason: parsed.reason,
+      expectedEmailHint: parsed.expectedEmailHint,
+      ts: parsed.ts,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function clearLastQrPairResult(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem(LAST_QR_PAIR_RESULT_KEY);
+  } catch {
+    /* ignore */
+  }
+}
+
 export function clearPendingQrPairCode(): void {
   if (typeof window === 'undefined') return;
   try {
@@ -458,11 +512,16 @@ export function getThisDeviceIdentity(): {
     ? 'macos'
     : 'windows';
 
+  const isNativeCap = isCapacitorNativeMobileRuntime();
   const shortSuffix = deviceId.slice(0, 4).toUpperCase();
   const displayName = isAndroid
-    ? `갤럭시·안드로이드폰 (${shortSuffix})`
+    ? isNativeCap
+      ? `갤럭시·안드로이드 앱 (${shortSuffix})`
+      : `안드로이드·웹 (${shortSuffix})`
     : isIos
-    ? `아이폰·iOS (${shortSuffix})`
+    ? isNativeCap
+      ? `아이폰·iOS 앱 (${shortSuffix})`
+      : `아이폰·웹 (${shortSuffix})`
     : isMac
     ? `Mac 데스크톱 (${shortSuffix})`
     : zCoreBridge.isConnected
@@ -2794,6 +2853,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         if (!disposed) {
           if (pairRes.ok) {
             pairedViaUrl = true;
+            saveLastQrPairResult({ code: effectivePairCode, ok: true });
             if (opts.onDevicesUpdated) {
               opts.onDevicesUpdated({
                 devices: pairRes.devices,
@@ -2810,6 +2870,12 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
               });
             }
           } else {
+            saveLastQrPairResult({
+              code: effectivePairCode,
+              ok: false,
+              reason: pairRes.reason,
+              expectedEmailHint: pairRes.expectedEmailHint,
+            });
             if (pairRes.reason === 'ACCOUNT_MISMATCH' || pairRes.reason === 'AUTH_REQUIRED') {
               savePendingQrPairCode(effectivePairCode);
             }

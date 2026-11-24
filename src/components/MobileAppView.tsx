@@ -1,7 +1,14 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { zCoreBridge, isZCoreOutdated } from '../services/zCoreBridge';
 import { hasAuthenticatedHubAccountSession } from '../services/supabaseClient';
-import { readPendingQrPairCode, savePendingQrPairCode } from '../services/deviceIntegrationService';
+import {
+  clearLastQrPairResult,
+  consumeDevicePairingCode6,
+  readLastQrPairResult,
+  readPendingQrPairCode,
+  saveLastQrPairResult,
+  savePendingQrPairCode,
+} from '../services/deviceIntegrationService';
 import { useSaySeeStore, type MobileTab } from '../store/useSaySeeStore';
 import {
   GhostiHeaderQuickShareButton,
@@ -186,7 +193,21 @@ export const MobileAppView: React.FC = () => {
   });
   const [qrPairMismatchInfo, setQrPairMismatchInfo] = useState<{
     expectedEmailHint?: string;
-  } | null>(null);
+  } | null>(() => {
+    const saved = readLastQrPairResult();
+    if (saved && !saved.ok && saved.reason === 'ACCOUNT_MISMATCH') {
+      return { expectedEmailHint: saved.expectedEmailHint };
+    }
+    return null;
+  });
+  const [qrPairCheckState, setQrPairCheckState] = useState<'idle' | 'checking' | 'ready'>(() => {
+    if (typeof window === 'undefined' || isCapacitorNativeMobileRuntime()) return 'idle';
+    const saved = readLastQrPairResult();
+    if (saved && !saved.ok && saved.reason === 'ACCOUNT_MISMATCH') return 'ready';
+    if (hasAuthenticatedHubAccountSession()) return 'checking';
+    return 'ready';
+  });
+  const prevAuthEmailRef = useRef<string>((merlinAuth?.email || '').trim().toLowerCase());
   const privateSyncSectionRef = useRef<HTMLElement | null>(null);
 
   useEffect(() => {
@@ -200,12 +221,17 @@ export const MobileAppView: React.FC = () => {
       if (!detail) return;
       if (detail.ok) {
         setQrPairMismatchInfo(null);
+        setQrPairCheckState('ready');
         setQrAppBridgeCode(null);
       } else if (detail.reason === 'ACCOUNT_MISMATCH') {
         setQrPairMismatchInfo({ expectedEmailHint: detail.expectedEmailHint });
+        setQrPairCheckState('ready');
       } else if (detail.reason === 'CODE_EXPIRED') {
         setQrPairMismatchInfo(null);
+        setQrPairCheckState('ready');
         setQrAppBridgeCode(null);
+      } else {
+        setQrPairCheckState('ready');
       }
     };
     window.addEventListener('ghosti_qr_pair_result', onQrPairResult);
@@ -213,8 +239,82 @@ export const MobileAppView: React.FC = () => {
   }, []);
 
   useEffect(() => {
-    setQrPairMismatchInfo(null);
+    const nextEmail = (merlinAuth?.email || '').trim().toLowerCase();
+    const prevEmail = prevAuthEmailRef.current;
+    // 초기 부팅('' -> 로그인 이메일 로드)에서는 경고를 지우지 않고, 실제 계정이 변경/로그아웃될 때만 초기화
+    if (prevEmail && nextEmail !== prevEmail) {
+      setQrPairMismatchInfo(null);
+      clearLastQrPairResult();
+    }
+    prevAuthEmailRef.current = nextEmail;
   }, [merlinAuth?.email]);
+
+  useEffect(() => {
+    if (!qrAppBridgeCode || isCapacitorNativeMobileRuntime()) return;
+    const saved = readLastQrPairResult(qrAppBridgeCode);
+    if (saved) {
+      if (saved.ok) {
+        setQrPairMismatchInfo(null);
+        setQrAppBridgeCode(null);
+        setQrPairCheckState('ready');
+        return;
+      }
+      if (saved.reason === 'ACCOUNT_MISMATCH') {
+        setQrPairMismatchInfo({ expectedEmailHint: saved.expectedEmailHint });
+        setQrPairCheckState('ready');
+        return;
+      }
+    }
+    const isWebAuthed = Boolean(
+      (merlinAuth?.email && merlinAuth.userId !== 'guest') || hasAuthenticatedHubAccountSession()
+    );
+    if (!isWebAuthed) {
+      setQrPairCheckState('ready');
+      return;
+    }
+    setQrPairCheckState('checking');
+    let cancelled = false;
+    const timer = window.setTimeout(async () => {
+      if (cancelled) return;
+      const latestSaved = readLastQrPairResult(qrAppBridgeCode);
+      if (latestSaved) {
+        if (latestSaved.ok) {
+          setQrPairMismatchInfo(null);
+          setQrAppBridgeCode(null);
+        } else if (latestSaved.reason === 'ACCOUNT_MISMATCH') {
+          setQrPairMismatchInfo({ expectedEmailHint: latestSaved.expectedEmailHint });
+        }
+        setQrPairCheckState('ready');
+        return;
+      }
+      const res = await consumeDevicePairingCode6(qrAppBridgeCode);
+      if (cancelled) return;
+      if (res.ok) {
+        saveLastQrPairResult({ code: qrAppBridgeCode, ok: true });
+        useSaySeeStore.getState().setDeviceIntegrationSnapshot({
+          devices: res.devices,
+          entitlement: res.entitlement,
+          revokedSelf: false,
+        });
+        setQrPairMismatchInfo(null);
+        setQrAppBridgeCode(null);
+      } else if (res.reason === 'ACCOUNT_MISMATCH') {
+        savePendingQrPairCode(qrAppBridgeCode);
+        saveLastQrPairResult({
+          code: qrAppBridgeCode,
+          ok: false,
+          reason: 'ACCOUNT_MISMATCH',
+          expectedEmailHint: res.expectedEmailHint,
+        });
+        setQrPairMismatchInfo({ expectedEmailHint: res.expectedEmailHint });
+      }
+      setQrPairCheckState('ready');
+    }, 850);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [qrAppBridgeCode, merlinAuth?.email, merlinAuth?.userId]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -837,6 +937,7 @@ export const MobileAppView: React.FC = () => {
                     type="button"
                     onClick={() => {
                       setQrPairMismatchInfo(null);
+                      clearLastQrPairResult();
                       setQrAppBridgeCode(null);
                     }}
                     className="text-[11px] text-amber-700 hover:text-amber-950 px-1.5 py-0.5 cursor-pointer shrink-0"
@@ -850,6 +951,7 @@ export const MobileAppView: React.FC = () => {
                     onClick={() => {
                       savePendingQrPairCode(qrAppBridgeCode);
                       setQrPairMismatchInfo(null);
+                      clearLastQrPairResult();
                       window.dispatchEvent(new CustomEvent('ghosti_logout_and_open_login'));
                     }}
                     className="px-3.5 py-2 rounded-lg bg-amber-600 hover:bg-amber-700 text-white text-[12px] font-semibold cursor-pointer"
@@ -857,6 +959,12 @@ export const MobileAppView: React.FC = () => {
                     로그아웃 후 PC 계정으로 다시 로그인
                   </button>
                 </div>
+              </div>
+            ) : qrPairCheckState === 'checking' ? (
+              <div className="p-3 rounded-xl bg-slate-50 border border-slate-200 flex items-center justify-between gap-2">
+                <p className="text-[12px] text-slate-600 font-medium">
+                  PC에 로그인된 계정과 일치하는지 확인하고 있습니다...
+                </p>
               </div>
             ) : (
               <div className="p-3 rounded-xl bg-white border border-slate-200 flex flex-col gap-2">

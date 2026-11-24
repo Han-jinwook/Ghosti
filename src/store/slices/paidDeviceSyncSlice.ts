@@ -220,7 +220,7 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
   telemetry: null,
   merlinAuth: loadMerlinAuth(),
   syncState: loadSyncState(0, 0),
-  connectedDevices: loadCachedDeviceIntegrationSnapshot()?.devices || [],
+  connectedDevices: [],
   devicePairingCode6: loadCachedDeviceIntegrationSnapshot()?.pairingCode || null,
   deviceEntitlement: loadCachedDeviceIntegrationSnapshot()?.entitlement || null,
   syncedClipboardItems: loadCachedSyncedClips(),
