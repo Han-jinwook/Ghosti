@@ -900,17 +900,26 @@ export async function loadInitialPhotoDataset(): Promise<{
       /(?:^|[^0-9])(19\d{2}|20\d{2})[-._]?(0[1-9]|1[0-2])[-._]?(0[1-9]|[12]\d|3[01])(?:[^0-9]|$)/
     );
     const fnTsSec = parseFilenameTimestampSec(rawNameForDate, 0);
-    const canonicalDate = dateFromFilenameMatch
-      ? `${dateFromFilenameMatch[1]}-${dateFromFilenameMatch[2]}-${dateFromFilenameMatch[3]}`
-      : audit?.ts && audit.ts > 631152000000
-      ? new Date(audit.ts).toISOString().slice(0, 10)
-      : f.date;
+    const formatLocalYmd = (ms: number): string => {
+      const dt = new Date(ms);
+      const y = dt.getFullYear();
+      const m = String(dt.getMonth() + 1).padStart(2, '0');
+      const d = String(dt.getDate()).padStart(2, '0');
+      return `${y}-${m}-${d}`;
+    };
     const canonicalMtimeMs =
       fnTsSec > 631152000
         ? Math.round(fnTsSec * 1000)
         : audit?.ts && audit.ts > 631152000000
         ? audit.ts
         : f.mtimeMs;
+    const canonicalDate = dateFromFilenameMatch
+      ? `${dateFromFilenameMatch[1]}-${dateFromFilenameMatch[2]}-${dateFromFilenameMatch[3]}`
+      : fnTsSec > 631152000
+      ? formatLocalYmd(Math.round(fnTsSec * 1000))
+      : audit?.ts && audit.ts > 631152000000
+      ? formatLocalYmd(audit.ts)
+      : f.date;
 
     if (semMeta?.captionKo) {
       staticCaptionedPhotoIds.add(f.path);
