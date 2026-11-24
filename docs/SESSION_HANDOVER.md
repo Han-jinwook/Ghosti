@@ -1,13 +1,29 @@
 # 📋 귀신같이 (Ghosti) 세션 릴레이 인계장 (`SESSION_HANDOVER.md`)
 
-- **최종 갱신 일시**: 2026-11-24 01:10 (KST)
-- **담당 역할**: `1귀신` (`1~4귀신 통합` 기준 커밋 `4e206fe` 동기화 완료)
-- **브랜치 / 기준 커밋**: `main` (`4e206fe` + 본 인계장 갱신 커밋, `origin/main` 동기화 완료)
-- **로컬 엔진 버전**: `Merlin Z-Core v2.7.51`~`v2.7.53` (전 클러스터 1·2·3·4·6호기 동기화 및 GitHub Releases 고속 CDN `z-core-latest` 연동 완료)
+- **최종 갱신 일시**: 2026-11-24 13:40 (KST)
+- **담당 역할**: `4귀신` (`1~4귀신 통합` 기준 커밋 `f198897` + 본 문서 동기화 커밋)
+- **브랜치 / 기준 커밋**: `main` (`f198897`, `origin/main` 동기화 완료)
+- **로컬 엔진 버전**: `Merlin Z-Core v2.7.60`~`v2.7.65` (전 클러스터 1·2·3·4·6호기 동기화 완료)
 
 ---
 
-## 1. 오늘 완료 내역 (2026-11-23)
+## 1. 오늘 완료 내역 (2026-11-24 — `[4귀신]` 업무 공유 `S:` 집중 완결)
+
+1. **업무 공유(`S:`) 파일탐색기 미노출 근본 수정 (`3b1a7c3`, `Z-Core v2.7.59`)**
+   - `WorkLoungeB2BHub.tsx`의 권한 동기화(`/__work/entitlement`)와 `S:` 마운트(`/__work/s-drive`) 병렬 경합을 순차 직렬화로 해소하고, 초대 팀원(`work_invited_member`)이 본인 미구독으로 `workEntitlementLocked`에 막히던 잠금 버그를 해결.
+   - `plugin_paid_work_sdrive.py`의 `sync_work_entitlement_state(unlocked=True)` 즉시 마운트 및 `merlin_z_core_daemon.py` 기동 시 `auto_mount_s_drive_if_unlocked()` 자동 복원 탑재(1~4호기 클러스터 배포 완료).
+2. **크롬 "브라우저 속도를 저하시키는 탭 수정" 경고창 `[4귀신]` 사각지대 근본 제거 (`33ce504`, `Z-Core v2.7.60`)**
+   - `WorkLoungeB2BHub.tsx` 4대 타이머(`fastLock` 2초 · `fullSync` 10초 · `loadRemoteState` 15초 · `ensureTunnel` 30초) 전원 `document.visibilityState === 'hidden'` 시 **0회 호출(완전 정지)** 전환 및 `backupServers` 참조 비교로 12초 연쇄 재기동 차단.
+   - `workRoomSyncService.ts` + `plugin_paid_work_sdrive.py`에 `knownSig` 변경 감지(`unchanged: true`)를 활성화해 파일 미변경 시 Base64 인코딩·JSON 재전송·React 리렌더링 **0회** 달성 및 [`docs/기능명세.md`](docs/기능명세.md) 8.4절 반영.
+3. **초대 팀원 업무방 DB 영구 복원(`work_list_my_rooms`) & 모바일 웹 `[앱에서 열기]` 브릿지 (`cc065ef`)**
+   - `netlify/functions/lib/workAndDeviceBridgeOps.mjs`에 `work_list_my_rooms` 신설 및 `WorkLoungeB2BHub.tsx` 자동 복원 연동 ➔ PC 재로그인/F5 및 모바일 웹 초대 수락 후 모바일 앱 재접속 시 초대 링크 없이 소속 업무방·권한 자동 복원 + 모바일 웹 상단 `ghosti://work?...` 버튼 추가.
+4. **PC 연속 새로고침(`F5`) 시 자동 로그아웃 4중 차단 + `MerlinHub` 서버 교차 보강 완결 (`2708837`, `f198897`)**
+   - 클라이언트 4중 방어(`main.tsx` 유효 JWT 보유 시 잔류 `sessionStorage.merlin_logged_out`·`GHOSTI_POST_LOGOUT_WORKSPACE_KEY` 자가 치유, `GhostiHubInfraBridge.tsx` `beforeunload finalWipe` 유효 JWT 보호, `merlin-hub-sdk` `client.ts` 부가 API 단발 `401` 세션 삭제 격리·롤링 토큰 재시도, `auth.ts` `/api/auth/me` `350ms` 2회 연속 확정 검증).
+   - 중앙 우체국으로 `MerlinHub` 교차 점검 공문 발송 ➔ `MerlinHub` 서버측 `GET /api/auth/me` `userId` PK 1순위 조회·`150ms` 내부 재시도 보강 및 허브 공식 원본 SDK(`허브_라이브러리`) 동기화 회신 수령 완료.
+
+---
+
+## 1-B. 직전 완료 내역 (2026-11-23)
 
 1. **크롬 "이 사이트가 브라우저를 느리게 함" 경고창 원천 박멸 3대 정공법 구현 및 명세 반영 (`2059023`, `7783d73`)**
    - `EmbeddingGemma 2`(8비트 `q8` 무손실)와 `PaddleOCR`을 전용 ES Module Web Worker(`embeddingAiWorker.ts`, `paddleOcrWorker.ts`)로 완전 격리해 메인 UI 블로킹 `0ms` 달성.
