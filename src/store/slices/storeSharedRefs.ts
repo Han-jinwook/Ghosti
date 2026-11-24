@@ -48,6 +48,10 @@ export function resolveInvitedHostLoungeAndRoom(): {
     return { hasActiveInvite: false, hostLounge: null, hostFamilyRoom: '우리집' };
   }
   try {
+    // 업무 공유방 초대 링크(?workRoom=...)는 사진 공유방(가족/동호회/동창회) 초대 해석에서 완전 분리
+    if (new URLSearchParams(window.location.search).has('workRoom')) {
+      return { hasActiveInvite: false, hostLounge: null, hostFamilyRoom: '우리집' };
+    }
     // 1순위: 서버 DB 검증을 마친 초대 토큰 메타(ghosti_verified_invite_v2::<token>)가 있으면
     // 탭 전환(?lounge=club / ?room=본가 등 URL 변경)이나 새로고침(F5)과 무관하게 초대받은 원래 방을 100% 불변 유지!
     const activeTok = readActiveInviteToken();

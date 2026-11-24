@@ -269,6 +269,7 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
                       <select
                         value={member.role}
                         onChange={async (e) => {
+                          const prevRole = member.role === 'viewer' ? 'viewer' : 'editor';
                           const nextRole = e.target.value as 'editor' | 'viewer';
                           setServerMembers((prev) =>
                             prev.map((sm) =>
@@ -280,6 +281,13 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
                             memberEmail: member.email,
                             role: nextRole,
                           });
+                          if (!ok) {
+                            setServerMembers((prev) =>
+                              prev.map((sm) =>
+                                sm.email === member.email ? { ...sm, role: prevRole } : sm
+                              )
+                            );
+                          }
                           showToast(
                             ok
                               ? `✓ ${member.name}님의 권한을 [${

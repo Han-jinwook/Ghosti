@@ -127,7 +127,39 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const [uploadingFiles, setUploadingFiles] = useState<boolean>(false);
   const [lastSyncedToLocalCount, setLastSyncedToLocalCount] = useState<number>(0);
   const [presencePeers, setPresencePeers] = useState<WorkRoomPresenceMember[]>([]);
-  const [serverMembers, setServerMembers] = useState<WorkRoomServerMemberDto[]>([]);
+  const readCachedServerMembers = useCallback((roomId: string, email?: string): WorkRoomServerMemberDto[] => {
+    if (typeof window === 'undefined' || !roomId || !email) return [];
+    try {
+      const key = `ghosti_work_members_v1::${email.trim().toLowerCase()}::${roomId}`;
+      const raw = localStorage.getItem(key);
+      if (!raw) return [];
+      const parsed = JSON.parse(raw);
+      return Array.isArray(parsed) ? (parsed as WorkRoomServerMemberDto[]) : [];
+    } catch {
+      return [];
+    }
+  }, []);
+  const saveCachedServerMembers = useCallback((roomId: string, members: WorkRoomServerMemberDto[], email?: string) => {
+    if (typeof window === 'undefined' || !roomId || !email) return;
+    try {
+      const key = `ghosti_work_members_v1::${email.trim().toLowerCase()}::${roomId}`;
+      localStorage.setItem(key, JSON.stringify(members));
+    } catch {
+      /* ignore */
+    }
+  }, []);
+  const [serverMembers, setServerMembers] = useState<WorkRoomServerMemberDto[]>(() => {
+    const inv = readActiveWorkRoomInviteMeta();
+    const initRoom = (inv.hasWorkInvite && inv.roomId) || readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId || '';
+    if (typeof window === 'undefined' || !initRoom || !merlinAuth?.email) return [];
+    try {
+      const raw = localStorage.getItem(`ghosti_work_members_v1::${merlinAuth.email.trim().toLowerCase()}::${initRoom}`);
+      const parsed = raw ? JSON.parse(raw) : [];
+      return Array.isArray(parsed) ? (parsed as WorkRoomServerMemberDto[]) : [];
+    } catch {
+      return [];
+    }
+  });
   const [myRoomRole, setMyRoomRole] = useState<'host' | 'editor' | 'viewer'>('host');
   const [roomSeatLimit, setRoomSeatLimit] = useState<number>(5);
   const [remoteRoomLockReason, setRemoteRoomLockReason] = useState<string | null>(null);
@@ -780,7 +812,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
         setRemoteRoomLockReason(null);
         if (authed.role) setMyRoomRole(authed.role);
         if (authed.seatLimit) setRoomSeatLimit(authed.seatLimit);
-        if (Array.isArray(authed.members)) setServerMembers(authed.members);
+        if (Array.isArray(authed.members)) {
+          setServerMembers(authed.members);
+          saveCachedServerMembers(activeWorkRoomId, authed.members, merlinAuth?.email || undefined);
+        }
         if (authed.hostTunnel?.masterServerName) {
           setMasterWorkPcName(authed.hostTunnel.masterServerName);
         }
@@ -1039,9 +1074,29 @@ export const WorkLoungeB2BHub: React.FC = () => {
     return out;
   }, [docs]);
 
+  // 방/계정 전환 시 해당 방의 캐시된 등록 팀원 목록 즉시 복원 (F5 직후 2~3초 빈 목록 깜빡임 제거)
+  useEffect(() => {
+    if (!activeWorkRoomId || !merlinAuth?.email) {
+      setServerMembers([]);
+      return;
+    }
+    const cached = readCachedServerMembers(activeWorkRoomId, merlinAuth.email);
+    if (cached.length > 0) {
+      setServerMembers(cached);
+    }
+  }, [activeWorkRoomId, merlinAuth?.email, readCachedServerMembers]);
+
+  // 권한 변경·팀원 내보내기 직후에도 즉시 캐시 동기화 (변경 직후 F5 시에도 최신 권한 유지)
+  useEffect(() => {
+    if (!activeWorkRoomId || !merlinAuth?.email || serverMembers.length === 0) return;
+    saveCachedServerMembers(activeWorkRoomId, serverMembers, merlinAuth.email);
+  }, [activeWorkRoomId, merlinAuth?.email, serverMembers, saveCachedServerMembers]);
+
   const teamMembers = useMemo(() => {
-    if (serverMembers.length > 0) {
-      return serverMembers.map((m) => {
+    // 오직 서버 DB(ghosti_lounge_members) 정식 로그인 등록 멤버만 팀원으로 표시 (비로그인 게스트 presencePeers 팀원 혼입 0%)
+    const validServerMembers = serverMembers.filter((m) => Boolean(m.email && m.email.includes('@')));
+    if (validServerMembers.length > 0) {
+      return validServerMembers.map((m) => {
         const isHost = m.role === 'master';
         const isOnline = presencePeers.some(
           (p) => p.nickname.toLowerCase() === m.nickname.toLowerCase()
@@ -1084,20 +1139,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
           ? 'PC 엔진 연결 시 S:\\ 드라이브가 자동 마운트됩니다'
           : 'S:\\ 대장 PC 직통 연결됨 (방장 1인 결제 · 전체 관리)',
     };
-    const extraPeers = presencePeers
-      .filter((p) => p.peerId !== peerIdRef.current || inviteMeta.hasWorkInvite)
-      .map((p) => ({
-        id: p.peerId,
-        email: '',
-        name: p.peerId === peerIdRef.current ? `${p.nickname} (나)` : p.nickname,
-        dept: p.sDriveConnected ? '탐색기 S:\\ 실시간 연결' : '웹 미리보기 접속 중',
-        role: p.role === 'host' ? ('editor' as const) : p.role,
-        sDriveConnected: p.sDriveConnected,
-        statusText: p.sDriveConnected
-          ? 'S:\\ 실시간 동기화됨 (초대 팀원 추가 비용 없음)'
-          : '웹 미리보기 열람 중 (PC 엔진 연결 시 S:\\ 즉시 동기화)',
-      }));
-    return [baseHost, ...extraPeers];
+    return [baseHost];
   }, [serverMembers, presencePeers, merlinAuth?.email, inviteMeta, actorNickname, isZCoreConnected]);
 
   const workPlan = (deviceEntitlement?.workPaidActive

@@ -181,6 +181,20 @@ async function verifyInviteTokenForWorkRoom(supabaseUrl, serviceKey, inviteToken
  * 방 종류(lounge_type === 'work')와 호출자의 정식 멤버십·권한('master' | 'editor' | 'viewer')을 동시에 검증합니다.
  * 가족방/동호회방 roomId를 넣어 업무방 액션을 호출하는 교차 방 접근을 100% 차단합니다.
  */
+// ghosti_lounge_members.role 정식 SQL CHECK 제약('master'|'admin'|'member') ↔ 업무 공유 권한('host'|'editor'|'viewer') 단일 매핑
+function normalizeWorkRoleFromDb(rawRole, isMaster = false) {
+  const r = String(rawRole || '').trim().toLowerCase();
+  if (isMaster || r === 'master') return 'master';
+  if (r === 'viewer' || r === 'member') return 'viewer';
+  return 'editor'; // 'admin' | 'editor'
+}
+
+function mapWorkRoleToDb(uiRole) {
+  const r = String(uiRole || '').trim().toLowerCase();
+  if (r === 'master' || r === 'host') return 'master';
+  return r === 'viewer' ? 'member' : 'admin';
+}
+
 async function getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email) {
   const cleanRoom = String(roomId || '').trim();
   const cleanEmail = String(email || '').trim().toLowerCase();
@@ -204,9 +218,7 @@ async function getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email) 
   const myRow = members.find((r) => String(r.member_email || '').toLowerCase() === cleanEmail);
 
   if (!isMaster && !myRow) return null;
-  const rawRole = isMaster ? 'master' : String(myRow?.role || 'editor').toLowerCase();
-  const normalizedRole =
-    rawRole === 'master' ? 'master' : rawRole === 'viewer' ? 'viewer' : 'editor';
+  const normalizedRole = normalizeWorkRoleFromDb(myRow?.role, isMaster);
 
   return {
     room,
@@ -823,7 +835,8 @@ export async function handleAuthedWorkAndDeviceAction({
           body: JSON.stringify({
             room_id: roomId,
             member_email: email,
-            role: verified.invite.default_role || 'member',
+            // 업무방 신규 초대 팀원은 기본 편집·업로드 허용(DB 'admin' = UI 'editor', CHECK 제약 100% 준수)
+            role: mapWorkRoleToDb(verified.invite.default_role === 'viewer' ? 'viewer' : 'editor'),
             room_persona_nickname: actorNick,
           }),
         }
@@ -849,7 +862,9 @@ export async function handleAuthedWorkAndDeviceAction({
     const { state } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
     const myRole = isMaster
       ? 'host'
-      : String(existingMember?.role || verified.invite.default_role || 'editor').toLowerCase() === 'viewer'
+      : existingMember
+      ? normalizeWorkRoleFromDb(existingMember.role, false)
+      : verified.invite.default_role === 'viewer'
       ? 'viewer'
       : 'editor';
 
@@ -875,7 +890,7 @@ export async function handleAuthedWorkAndDeviceAction({
 
   if (action === 'work_list_my_rooms') {
     const memRes = await fetch(
-      `${supabaseUrl}/rest/v1/ghosti_lounge_members?member_email=eq.${encodeURIComponent(email)}&select=room_id,role,room_persona_nickname,created_at&order=created_at.desc&limit=30`,
+      `${supabaseUrl}/rest/v1/ghosti_lounge_members?member_email=eq.${encodeURIComponent(email)}&select=room_id,role,room_persona_nickname,joined_at&order=joined_at.desc&limit=30`,
       { headers: srvHeaders(serviceKey) }
     );
     const memRows = memRes.ok ? await memRes.json().catch(() => []) : [];
@@ -905,8 +920,8 @@ export async function handleAuthedWorkAndDeviceAction({
       if (!room) continue;
       const masterEmail = String(room.master_email || '').trim().toLowerCase();
       const isHost = masterEmail === email;
-      const rawRole = String(m.role || '').trim().toLowerCase();
-      const role = isHost || rawRole === 'master' ? 'host' : rawRole === 'viewer' ? 'viewer' : 'editor';
+      const normalized = normalizeWorkRoleFromDb(m.role, isHost);
+      const role = normalized === 'master' ? 'host' : normalized;
       const ownerGate = await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, masterEmail);
       outRooms.push({
         roomId: rId,
@@ -988,17 +1003,16 @@ export async function handleAuthedWorkAndDeviceAction({
       return ownerGate.response;
     }
     const { state, tombstones } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
-    const membersList = ctx.members.map((m) => ({
-      email: String(m.member_email || '').toLowerCase(),
-      nickname: String(m.room_persona_nickname || String(m.member_email || '').split('@')[0]),
-      role:
-        String(m.member_email || '').toLowerCase() === String(ctx.room.master_email || '').toLowerCase()
-          ? 'master'
-          : String(m.role || 'editor').toLowerCase() === 'viewer'
-          ? 'viewer'
-          : 'editor',
-      joinedAt: m.joined_at || null,
-    }));
+    const membersList = ctx.members.map((m) => {
+      const mEmail = String(m.member_email || '').toLowerCase();
+      const isRoomMaster = mEmail === String(ctx.room.master_email || '').toLowerCase();
+      return {
+        email: mEmail,
+        nickname: String(m.room_persona_nickname || mEmail.split('@')[0]),
+        role: normalizeWorkRoleFromDb(m.role, isRoomMaster),
+        joinedAt: m.joined_at || null,
+      };
+    });
     return {
       status: 200,
       body: {
@@ -1222,6 +1236,7 @@ export async function handleAuthedWorkAndDeviceAction({
     if (targetEmail === String(ctx.room.master_email || '').toLowerCase()) {
       return { status: 400, body: { ok: false, reason: 'CANNOT_DEMOTE_MASTER' } };
     }
+    const dbRole = mapWorkRoleToDb(nextRole);
     const patchRes = await fetch(
       `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(roomId)}&member_email=eq.${encodeURIComponent(targetEmail)}`,
       {
@@ -1230,7 +1245,7 @@ export async function handleAuthedWorkAndDeviceAction({
           'Content-Type': 'application/json',
           Prefer: 'return=minimal',
         }),
-        body: JSON.stringify({ role: nextRole }),
+        body: JSON.stringify({ role: dbRole }),
       }
     );
     if (!patchRes.ok) {

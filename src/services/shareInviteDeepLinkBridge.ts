@@ -377,6 +377,10 @@ export function readActiveInviteToken(): string {
   if (typeof window === 'undefined') return '';
   try {
     const params = new URLSearchParams(window.location.search);
+    // 업무 공유방(?workRoom=...&inviteToken=...)의 초대 토큰을 사진 공유방(가족/동호회/동창회) 토큰으로 오인해 가족 탭으로 이동하는 버그 차단
+    if (params.has('workRoom')) {
+      return '';
+    }
     const urlTok = extractSafeRoomInviteToken(params) || '';
     if (urlTok) {
       sessionStorage.setItem(INVITE_TOKEN_KEY, urlTok);
