@@ -1632,8 +1632,73 @@ def get_or_create_photo_thumb(full_path: Path, max_px: int = 280) -> Path | None
     return None
 
 
+_ORPHAN_CACHE_GC_STAMP = MERLIN_DIR / "last_cache_gc_ts.txt"
+_ORPHAN_CACHE_GC_INTERVAL_SEC = 30 * 24 * 3600  # 30일 1회 무소음 정리
+_ORPHAN_CACHE_GC_STARTED = False
+
+
+def _trigger_monthly_orphan_cache_gc_once() -> None:
+    """30일에 1회 백그라운드 저부하로 30일 이상 미사용 썸네일 및 삭제된 파일의 OCR/문서 캐시를 정리합니다."""
+    global _ORPHAN_CACHE_GC_STARTED
+    if _ORPHAN_CACHE_GC_STARTED or os.environ.get("GHOSTI_HEADLESS_TEST") == "1":
+        return
+    _ORPHAN_CACHE_GC_STARTED = True
+
+    def _gc_worker() -> None:
+        try:
+            now_s = time.time()
+            if _ORPHAN_CACHE_GC_STAMP.exists():
+                try:
+                    last_s = float(_ORPHAN_CACHE_GC_STAMP.read_text(encoding="utf-8").strip() or "0")
+                    if (now_s - last_s) < _ORPHAN_CACHE_GC_INTERVAL_SEC:
+                        return
+                except Exception:
+                    pass
+            time.sleep(25.0)
+            cutoff = now_s - _ORPHAN_CACHE_GC_INTERVAL_SEC
+            if _PHOTO_THUMBS_DIR.exists():
+                with os.scandir(_PHOTO_THUMBS_DIR) as it:
+                    for ent in it:
+                        try:
+                            if ent.is_file(follow_symlinks=False):
+                                st = ent.stat(follow_symlinks=False)
+                                if st.st_mtime < cutoff:
+                                    os.unlink(ent.path)
+                        except Exception:
+                            pass
+            # 삭제된 파일의 문서/사진 OCR JSON 캐시 고아 항목 정리
+            for cache_file in (_DOC_TEXT_CACHE_FILE, _PHOTO_OCR_CACHE_FILE):
+                if not cache_file.exists():
+                    continue
+                try:
+                    raw = json.loads(cache_file.read_text(encoding="utf-8", errors="ignore"))
+                    if not isinstance(raw, dict):
+                        continue
+                    pruned = {}
+                    removed = 0
+                    for k, v in raw.items():
+                        p_str = str(k).split("|", 1)[0]
+                        if (":\\" in p_str or p_str.startswith("/")) and not os.path.exists(p_str):
+                            removed += 1
+                            continue
+                        pruned[k] = v
+                    if removed > 0:
+                        tmp_f = cache_file.with_suffix(".gc.tmp")
+                        tmp_f.write_text(json.dumps(pruned, ensure_ascii=False), encoding="utf-8")
+                        os.replace(tmp_f, cache_file)
+                except Exception:
+                    pass
+            _ORPHAN_CACHE_GC_STAMP.parent.mkdir(parents=True, exist_ok=True)
+            _ORPHAN_CACHE_GC_STAMP.write_text(str(int(now_s)), encoding="utf-8")
+        except Exception:
+            pass
+
+    threading.Thread(target=_gc_worker, name="GhostiMonthlyCacheGC", daemon=True).start()
+
+
 def _trigger_bg_photo_thumb_prewarm(paths: List[Path]) -> None:
     """/__photos/list 직후 백그라운드에서 저부하로 디스크 썸네일 캐시를 미리 달궈 두어 수백·수천 장 스크롤 시 대기 시간을 0ms로 만듭니다."""
+    _trigger_monthly_orphan_cache_gc_once()
     global _PREWARM_RUNNING
     if _PREWARM_RUNNING or not paths:
         return
