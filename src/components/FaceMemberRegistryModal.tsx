@@ -17,11 +17,9 @@ import { jumpToGhostSecretary } from './GhostSecretaryFirstGuard';
 import type { FaceMemberCluster, RoomPersonaMap, YearlyFaceBestCut } from '../types/saysee';
 import {
   PASSPORT_REG_STATE_EVENT,
-  confirmedCutsFor,
   cutKey,
   deletePassportCut,
-  findSelfCluster,
-  loadPassportRegState,
+  getConfirmedSelfPassportView,
   updateSelfPassportRealName,
 } from '../services/passportRegistrationFlow';
 
@@ -1227,13 +1225,15 @@ export const PassportDoorplateStyleModal: React.FC = () => {
     return () => window.removeEventListener(PASSPORT_REG_STATE_EVENT, onState);
   }, []);
 
-  const regState = useMemo(() => loadPassportRegState(), [regTick, faceClusters, doorplatePickerClusterId]);
-  const selfCluster = useMemo(() => findSelfCluster(regState), [regState, faceClusters]);
-  const cuts = useMemo(() => (selfCluster ? confirmedCutsFor(selfCluster, regState) : []), [selfCluster, regState]);
+  const { selfCluster, cuts, regState } = useMemo(
+    () => getConfirmedSelfPassportView(),
+    [regTick, faceClusters, doorplatePickerClusterId]
+  );
 
   if (!doorplatePickerClusterId) return null;
 
   const close = () => setDoorplatePickerClusterId(null);
+  const ownerClusterId = selfCluster?.clusterId || regState.selfClusterId || 'self';
 
   const handleSaveRealName = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1293,7 +1293,7 @@ export const PassportDoorplateStyleModal: React.FC = () => {
           {cuts.length > 0 ? (
             <div className="grid grid-cols-4 sm:grid-cols-5 gap-2.5">
               {cuts.map((cut) => {
-                const k = selfCluster ? cutKey(selfCluster.clusterId, cut) : String(cut.year);
+                const k = cutKey(ownerClusterId, cut);
                 const confirming = pendingDeleteKey === k;
                 return (
                   <div key={k} className="relative flex flex-col items-center gap-1">
@@ -1309,12 +1309,11 @@ export const PassportDoorplateStyleModal: React.FC = () => {
                     <button
                       type="button"
                       onClick={() => {
-                        if (!selfCluster) return;
                         if (!confirming) {
                           setPendingDeleteKey(k);
                           return;
                         }
-                        deletePassportCut(selfCluster.clusterId, cut);
+                        deletePassportCut(ownerClusterId, cut);
                         setPendingDeleteKey(null);
                       }}
                       title="지우기"

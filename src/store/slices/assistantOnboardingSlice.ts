@@ -856,7 +856,8 @@ export const createAssistantOnboardingSlice: StateCreator<
           livePhotos,
           stNow.faceClusters,
           false,
-          applyScannedClusters
+          // 이미 캐시된 얼굴 묶음이 로드된 상태에서는 20장 중간 스트리밍으로 기존 완성 묶음을 덮어쓰지 않고 최종 완료분만 반영
+          stNow.faceClusters.length === 0 ? applyScannedClusters : undefined
         );
         applyScannedClusters(scanned.clusters, scanned.latestCorpusYear);
       } catch {

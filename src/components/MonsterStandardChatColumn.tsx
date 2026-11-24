@@ -79,6 +79,7 @@ import {
   countFacePhotos,
   familyCandidates,
   findSelfCluster,
+  getConfirmedSelfPassportView,
   loadPassportRegState,
   markFirstOfferShown,
   markPassportPrompted,
@@ -353,13 +354,17 @@ function resolvePassportCommandReply(
     return { ...base, id: `secretary_passport_unavailable_${Date.now()}`, text: unavailable };
   }
 
-  const regSt = loadPassportRegState();
-  const self = findSelfCluster(regSt);
+  const { selfCluster: self, cuts: confirmedSelfCuts, regState: regSt } = getConfirmedSelfPassportView();
   // 가족을 원해도 '나'를 아직 고르지 않았다면 내 얼굴부터 자연스럽게
   const openMode: PassportRegMode = mode === 'family' && !self ? 'self' : mode;
   const pending = summarizePassportPending(regSt);
   const hasRealName = Boolean((loadGhostPassportBook().self?.realName || '').trim());
-  const nothingForSelf = openMode === 'self' && self && pending.selfPendingCount === 0 && hasRealName;
+  const nothingForSelf =
+    openMode === 'self' &&
+    Boolean(self || confirmedSelfCuts.length > 0) &&
+    confirmedSelfCuts.length > 0 &&
+    pending.selfPendingCount === 0 &&
+    hasRealName;
   if (nothingForSelf) {
     return {
       ...base,
