@@ -193,6 +193,20 @@ export const App: React.FC = () => {
     };
   }, []);
 
+  // [2귀신] 웹 화면(사진·동영상·문서 카드 포함) 어디서든 Ctrl+우클릭 시 브라우저 기본 우클릭 메뉴가 먼저 뜨지 않도록 전역 선차단
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const blockCtrlContextMenu = (e: MouseEvent) => {
+      if (e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault();
+      }
+    };
+    window.addEventListener('contextmenu', blockCtrlContextMenu, { capture: true });
+    return () => {
+      window.removeEventListener('contextmenu', blockCtrlContextMenu, { capture: true });
+    };
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined' || !hasAnyModalOpen) return;
     let pushedByEffect = false;

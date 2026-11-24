@@ -9262,6 +9262,15 @@ def main() -> None:
                     if _RBTN_HOLD_STATE.get("suppress_next_up"):
                         _RBTN_HOLD_STATE["suppress_next_up"] = False
                         return 1
+                    ctrl_u = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
+                    alt_u = (u32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0
+                    shift_u = (u32.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0
+                    if ctrl_u and not alt_u and not shift_u:
+                        fg_u = u32.GetForegroundWindow()
+                        if not _should_bypass_rclick_hook(fg_u):
+                            _RBTN_HOLD_STATE["summon_requested"] = True
+                            _RBTN_HOLD_STATE["target_hwnd"] = fg_u
+                            return 1
             except Exception:
                 pass
         return u32.CallNextHookEx(None, nCode, wParam, lParam)
