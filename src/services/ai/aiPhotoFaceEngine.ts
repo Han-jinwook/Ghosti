@@ -43,6 +43,7 @@ import {
   extractCrispKoreanLabelTokens,
   extractKoStems,
   formatQuickKoreanLabelCore,
+  probePhotoExifTakenAtMs,
   loadModelWithWebGpuToWasmFallback,
   getContrastiveNonAnimalAnchorVecs,
   getOptimalEmbeddingDtype,
@@ -2889,6 +2890,8 @@ export async function resolveSmartKoreanLabelForPhoto(
   ocrSnippet?: string;
 }> {
   const displaySourceName = stripCollisionKeySuffix(photo.name || '사진.png');
+  // 원본 JPEG 헤더(64KB)에서 EXIF 실제 촬영일(DateTimeOriginal)을 병렬 초고속(~2ms) 추출
+  const exifTakenAtPromise = probePhotoExifTakenAtMs(photo.fullUrl || photo.thumbUrl);
   const ocrFromCaption = (photo.captionKo || '').includes('OCR:')
     ? (photo.captionKo || '').split(/(?:📝\s*)?OCR:/)[1] || ''
     : '';
@@ -3044,7 +3047,9 @@ export async function resolveSmartKoreanLabelForPhoto(
     tokens = [photo.trashCategory === 'screenshot' ? '화면캡처' : '사진기록'];
   }
 
+  const exifTakenAtMs = await exifTakenAtPromise.catch(() => null);
   const label = formatQuickKoreanLabelCore(displaySourceName, photo.date, tokens, {
+    takenAtMs: exifTakenAtMs ?? undefined,
     mtimeMs: photo.mtimeMs,
     existingNames,
   });

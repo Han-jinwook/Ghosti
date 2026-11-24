@@ -1830,11 +1830,152 @@ export function extractCrispKoreanLabelTokens(inputs: Array<string | undefined |
 
 const _recentIssuedKoreanLabels = new Set<string>();
 
+const _exifTakenAtCache = new Map<string, number | null>();
+
+/**
+ * JPEG 바이너리 선두 64KB에서 EXIF DateTimeOriginal(0x9003) · DateTimeDigitized(0x9004) · DateTime(0x0132)
+ * 실제 카메라 촬영 일시를 1ms 무의존성으로 추출합니다. (파일 복사 시 덮어씌워지는 mtimeMs 오염 원천 방지)
+ */
+export function extractJpegExifDateTimeOriginalMs(buffer: ArrayBuffer): number | null {
+  try {
+    const view = new DataView(buffer);
+    const len = view.byteLength;
+    if (len < 16 || view.getUint16(0, false) !== 0xffd8) return null;
+
+    let offset = 2;
+    while (offset + 4 <= len) {
+      if (view.getUint8(offset) !== 0xff) break;
+      const marker = view.getUint8(offset + 1);
+      offset += 2;
+      if (marker === 0xda || marker === 0xd9) break; // SOS / EOI
+      if (marker === 0x01 || (marker >= 0xd0 && marker <= 0xd8)) continue;
+      if (offset + 2 > len) break;
+      const segLen = view.getUint16(offset, false);
+      if (segLen < 2 || offset + segLen > len) break;
+
+      // APP1 (0xE1) with "Exif\0\0"
+      if (
+        marker === 0xe1 &&
+        segLen >= 16 &&
+        view.getUint32(offset + 2, false) === 0x45786966 &&
+        view.getUint16(offset + 6, false) === 0x0000
+      ) {
+        const tiffStart = offset + 8;
+        if (tiffStart + 8 > len) return null;
+        const byteOrder = view.getUint16(tiffStart, false);
+        const littleEndian = byteOrder === 0x4949;
+        if (!littleEndian && byteOrder !== 0x4d4d) return null;
+        if (view.getUint16(tiffStart + 2, littleEndian) !== 42) return null;
+        const ifd0Rel = view.getUint32(tiffStart + 4, littleEndian);
+        const ifd0Offset = tiffStart + ifd0Rel;
+
+        const readAsciiAt = (valOffset: number, count: number): string => {
+          if (valOffset < 0 || valOffset + count > len || count <= 0 || count > 64) return '';
+          let out = '';
+          for (let i = 0; i < count; i++) {
+            const ch = view.getUint8(valOffset + i);
+            if (ch === 0) break;
+            out += String.fromCharCode(ch);
+          }
+          return out.trim();
+        };
+
+        const parseExifDateStr = (raw: string): number | null => {
+          const m = raw.match(/^(19\d{2}|20\d{2}):(\d{2}):(\d{2})\s+(\d{2}):(\d{2}):(\d{2})/);
+          if (!m) return null;
+          const yr = Number(m[1]);
+          const mo = Number(m[2]);
+          const dy = Number(m[3]);
+          const hh = Number(m[4]);
+          const mm = Number(m[5]);
+          const ss = Number(m[6]);
+          if (mo < 1 || mo > 12 || dy < 1 || dy > 31) return null;
+          const dt = new Date(yr, mo - 1, dy, hh, mm, ss);
+          const ms = dt.getTime();
+          return Number.isFinite(ms) && ms > 631152000000 ? ms : null; // >= 1990-01-01
+        };
+
+        const scanIfd = (ifdPos: number) => {
+          const tags = new Map<number, { type: number; count: number; valueOffset: number; rawVal32: number }>();
+          if (ifdPos + 2 > len) return tags;
+          const entryCount = view.getUint16(ifdPos, littleEndian);
+          for (let i = 0; i < entryCount; i++) {
+            const ent = ifdPos + 2 + i * 12;
+            if (ent + 12 > len) break;
+            const tag = view.getUint16(ent, littleEndian);
+            const type = view.getUint16(ent + 2, littleEndian);
+            const count = view.getUint32(ent + 4, littleEndian);
+            const rawVal32 = view.getUint32(ent + 8, littleEndian);
+            const valueOffset = count <= 4 ? ent + 8 : tiffStart + rawVal32;
+            tags.set(tag, { type, count, valueOffset, rawVal32 });
+          }
+          return tags;
+        };
+
+        const ifd0Tags = scanIfd(ifd0Offset);
+        const exifPtr = ifd0Tags.get(0x8769);
+        if (exifPtr) {
+          const exifTags = scanIfd(tiffStart + exifPtr.rawVal32);
+          for (const tagId of [0x9003, 0x9004]) {
+            const entry = exifTags.get(tagId);
+            if (entry && entry.type === 2) {
+              const parsed = parseExifDateStr(readAsciiAt(entry.valueOffset, entry.count));
+              if (parsed !== null) return parsed;
+            }
+          }
+        }
+        const dt0 = ifd0Tags.get(0x0132);
+        if (dt0 && dt0.type === 2) {
+          const parsed = parseExifDateStr(readAsciiAt(dt0.valueOffset, dt0.count));
+          if (parsed !== null) return parsed;
+        }
+        return null;
+      }
+
+      offset += segLen;
+    }
+  } catch {
+    /* ignore malformed exif */
+  }
+  return null;
+}
+
+export async function probePhotoExifTakenAtMs(url?: string): Promise<number | null> {
+  const cleanUrl = String(url || '').trim();
+  if (!cleanUrl) return null;
+  if (_exifTakenAtCache.has(cleanUrl)) {
+    return _exifTakenAtCache.get(cleanUrl) ?? null;
+  }
+  try {
+    const ctrl = new AbortController();
+    const tid = setTimeout(() => ctrl.abort(), 650);
+    const headers: Record<string, string> = {};
+    if (!cleanUrl.startsWith('blob:') && !cleanUrl.startsWith('data:')) {
+      headers.Range = 'bytes=0-65535';
+    }
+    const res = await fetch(cleanUrl, { headers, signal: ctrl.signal }).finally(() =>
+      clearTimeout(tid)
+    );
+    if (!res.ok) {
+      _exifTakenAtCache.set(cleanUrl, null);
+      return null;
+    }
+    const blob = await res.blob();
+    const headBuf = await blob.slice(0, 65536).arrayBuffer();
+    const ms = extractJpegExifDateTimeOriginalMs(headBuf);
+    if (_exifTakenAtCache.size > 300) _exifTakenAtCache.clear();
+    _exifTakenAtCache.set(cleanUrl, ms);
+    return ms;
+  } catch {
+    return null;
+  }
+}
+
 export function formatQuickKoreanLabelCore(
   fileName: string,
   dateStr?: string,
   tagsOrTitle?: string | string[],
-  options?: { mtimeMs?: number; existingNames?: string[] }
+  options?: { takenAtMs?: number; mtimeMs?: number; existingNames?: string[] }
 ): string {
   const rawName = stripCollisionKeySuffix((fileName || '파일.jpg').trim());
   const dotIdx = rawName.lastIndexOf('.');
@@ -1842,48 +1983,76 @@ export function formatQuickKoreanLabelCore(
   const ext = dotIdx > 0 ? rawName.slice(dotIdx) : '';
 
   const pad2 = (n: number) => String(Math.max(0, Math.floor(n))).padStart(2, '0');
+  const formatDateParts = (ms: number): { yymmdd: string; hhmmss: string } | null => {
+    if (!Number.isFinite(ms) || ms < 631152000000) return null; // >= 1990-01-01
+    const dt = new Date(ms);
+    if (Number.isNaN(dt.getTime())) return null;
+    return {
+      yymmdd: `${String(dt.getFullYear()).slice(-2)}${pad2(dt.getMonth() + 1)}${pad2(dt.getDate())}`,
+      hhmmss: `${pad2(dt.getHours())}${pad2(dt.getMinutes())}${pad2(dt.getSeconds())}`,
+    };
+  };
+
   let yymmdd = '';
   let hhmmss = '';
 
-  // 1) mtimeMs(실제 파일 촬영/수정 시각)에서 YYMMDD + HHMMSS 최우선 추출
-  const mtimeVal = Number(options?.mtimeMs);
-  if (Number.isFinite(mtimeVal) && mtimeVal > 946684800000) {
-    const dt = new Date(mtimeVal);
-    if (!Number.isNaN(dt.getTime())) {
-      yymmdd = `${String(dt.getFullYear()).slice(-2)}${pad2(dt.getMonth() + 1)}${pad2(dt.getDate())}`;
-      hhmmss = `${pad2(dt.getHours())}${pad2(dt.getMinutes())}${pad2(dt.getSeconds())}`;
+  // 1) EXIF 실제 카메라 촬영 일시(DateTimeOriginal) 최우선 적용
+  if (options?.takenAtMs) {
+    const exifParts = formatDateParts(Number(options.takenAtMs));
+    if (exifParts) {
+      yymmdd = exifParts.yymmdd;
+      hhmmss = exifParts.hhmmss;
     }
   }
 
-  // 2) 파일명 타임스탬프(예: 20261123_142511, 2026-11-23 14-25-11, 13자리 epoch ms) 보조 추출
-  if (!yymmdd || !hhmmss) {
-    const mStemFull = stem.match(/20(\d{2})[-._]?(\d{2})[-._]?(\d{2})[\s_-]+(\d{2})[-.:_]?(\d{2})[-.:_]?(\d{2})/);
+  // 2) 파일명 촬영 타임스탬프(예: 20180715_142210, 2018-07-15 14-22-10, 20180715, 13자리 epoch ms)
+  //    파일을 다른 PC로 복사하면 mtimeMs가 복사일로 덮어씌워지므로 파일명 촬영일이 mtimeMs보다 우선합니다.
+  if (!yymmdd) {
+    const mStemFull = stem.match(
+      /(?:^|[^0-9])(19\d{2}|20\d{2})[-._]?(0[1-9]|1[0-2])[-._]?(0[1-9]|[12]\d|3[01])[\s_-]+([01]\d|2[0-3])[-.:_]?([0-5]\d)[-.:_]?([0-5]\d)/
+    );
     if (mStemFull) {
-      if (!yymmdd) yymmdd = `${mStemFull[1]}${mStemFull[2]}${mStemFull[3]}`;
-      if (!hhmmss) hhmmss = `${mStemFull[4]}${mStemFull[5]}${mStemFull[6]}`;
-    } else if (/^1[5-9]\d{11}$/.test(stem)) {
-      const dt = new Date(Number(stem));
-      if (!Number.isNaN(dt.getTime())) {
-        if (!yymmdd) yymmdd = `${String(dt.getFullYear()).slice(-2)}${pad2(dt.getMonth() + 1)}${pad2(dt.getDate())}`;
-        if (!hhmmss) hhmmss = `${pad2(dt.getHours())}${pad2(dt.getMinutes())}${pad2(dt.getSeconds())}`;
+      yymmdd = `${mStemFull[1].slice(-2)}${mStemFull[2]}${mStemFull[3]}`;
+      hhmmss = `${mStemFull[4]}${mStemFull[5]}${mStemFull[6]}`;
+    } else {
+      const mEpoch = stem.match(/(?:^|[^0-9])(1[2-9]\d{11})(?:[^0-9]|$)/);
+      if (mEpoch) {
+        const epParts = formatDateParts(Number(mEpoch[1]));
+        if (epParts) {
+          yymmdd = epParts.yymmdd;
+          hhmmss = epParts.hhmmss;
+        }
+      }
+    }
+    if (!yymmdd) {
+      const mStemDate = stem.match(
+        /(?:^|[^0-9])(19\d{2}|20\d{2})[-._]?(0[1-9]|1[0-2])[-._]?(0[1-9]|[12]\d|3[01])(?:[^0-9]|$)/
+      );
+      if (mStemDate) {
+        yymmdd = `${mStemDate[1].slice(-2)}${mStemDate[2]}${mStemDate[3]}`;
       }
     }
   }
 
-  // 3) dateStr(YYYY-MM-DD HH:MM:SS 등) 보조 추출
+  // 3) dateStr(YYYY-MM-DD HH:MM:SS 등) 및 mtimeMs 보조 추출 (EXIF·파일명 날짜가 없을 때)
+  const mtimeParts = options?.mtimeMs ? formatDateParts(Number(options.mtimeMs)) : null;
   if (!yymmdd) {
-    const mDate = (dateStr || '').match(/20(\d{2})[-./](\d{2})[-./](\d{2})/);
+    const mDate = (dateStr || '').match(/(19\d{2}|20\d{2})[-./](0[1-9]|1[0-2])[-./](0[1-9]|[12]\d|3[01])/);
     if (mDate) {
-      yymmdd = `${mDate[1]}${mDate[2]}${mDate[3]}`;
-    } else {
-      const mStemDate = stem.match(/20(\d{6})/);
-      if (mStemDate) yymmdd = mStemDate[1];
+      yymmdd = `${mDate[1].slice(-2)}${mDate[2]}${mDate[3]}`;
+    } else if (mtimeParts) {
+      yymmdd = mtimeParts.yymmdd;
     }
   }
   if (!hhmmss) {
     const mTime = (dateStr || '').match(/(\d{2}):(\d{2})(?::(\d{2}))?/);
     if (mTime) {
       hhmmss = `${mTime[1]}${mTime[2]}${mTime[3] || '00'}`;
+    } else if (mtimeParts && (!yymmdd || mtimeParts.yymmdd === yymmdd)) {
+      hhmmss = mtimeParts.hhmmss;
+    } else if (yymmdd) {
+      // 촬영 날짜는 확정됐으나 시분초가 없는 경우(예: 2018-07-15.jpg) 복사 시각 대신 000000 고정
+      hhmmss = '000000';
     }
   }
 
