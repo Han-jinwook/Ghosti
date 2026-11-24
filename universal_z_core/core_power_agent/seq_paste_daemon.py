@@ -8888,6 +8888,7 @@ def main() -> None:
             fg_chk = u32.GetForegroundWindow()
             proc_chk = _get_process_name_from_hwnd(fg_chk).lower() if fg_chk else ""
             cls_chk = _get_win_class_only(fg_chk) if fg_chk else ""
+            sel_file_for_ui2 = ""
             if (proc_chk == "explorer.exe" and cls_chk in ("CabinetWClass", "ExploreWClass")) or cls_chk in ("Progman", "WorkerW"):
                 try:
                     sel_p = _get_explorer_selected_paths_safe(fg_chk)
@@ -8896,6 +8897,8 @@ def main() -> None:
                         disarm_sub_hotkeys()
                         show_ghost_toast(f"__UI4_ARCHIVE__|{sel_p[0]}", duration_ms=11000)
                         return
+                    if sel_p and Path(str(sel_p[0])).is_file():
+                        sel_file_for_ui2 = str(sel_p[0])
                 except Exception:
                     pass
             if proc_chk not in ("python.exe", "pythonw.exe"):
@@ -8903,7 +8906,10 @@ def main() -> None:
             play_baby_ghost_sound(mode="summon")
             record_feature_telemetry("ctrl0_summon_bar")
             disarm_sub_hotkeys()
-            show_ghost_toast("__UI2_SEARCH__|small|", duration_ms=8000)
+            if sel_file_for_ui2:
+                show_ghost_toast(f"__UI2_SEARCH__|medium|__SEL_FILE__:{sel_file_for_ui2}", duration_ms=8000)
+            else:
+                show_ghost_toast("__UI2_SEARCH__|small|", duration_ms=8000)
             return
 
         summon_had_recent_drag = bool(last_drag_select_ts > last_any_key_ts and (now_s - last_drag_select_ts) <= 20.0)

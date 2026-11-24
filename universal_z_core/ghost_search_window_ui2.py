@@ -488,12 +488,19 @@ def build_ui2_search_window(
 
     active_mode[0] = "ui2"
     set_current_open_ui_mode("ui2")
+    pinned_sel_file = ""
+    if init_query.startswith("__SEL_FILE__:"):
+        cand_sel = init_query[len("__SEL_FILE__:"):].strip()
+        if cand_sel and os.path.exists(cand_sel):
+            pinned_sel_file = cand_sel
+        init_query = ""
+
     init_mode = "large" if init_stage in ("large", "gallery") else "compact"
     st_state: dict[str, Any] = {
         "mode": init_mode,
-        "stage": "large" if init_mode == "large" else ("medium" if init_stage == "medium" or init_query.strip() else "small"),
-        "manual_stage": "large" if init_mode == "large" else None,
-        "custom_h": None if init_mode == "large" else 330,
+        "stage": "large" if init_mode == "large" else ("medium" if pinned_sel_file or init_stage == "medium" or init_query.strip() else "small"),
+        "manual_stage": "large" if init_mode == "large" else ("medium" if pinned_sel_file else None),
+        "custom_h": None if (init_mode == "large" or pinned_sel_file) else 330,
         "filter": "all",
         "sel_idx": 0,
         "items": [],
@@ -864,6 +871,26 @@ def build_ui2_search_window(
 
         pool: list[dict] = []
         seen_fpaths: set[str] = set()
+        # [탐색기·바탕화면 선택 파일 [1]번 최상단 고정]: Ctrl+0 / Ctrl+우클릭 시 직전 클립보드 대신 선택한 파일을 즉시 [1]번+우측 미리보기에 고정
+        if pinned_sel_file and os.path.exists(pinned_sel_file):
+            try:
+                p_sel_obj = Path(pinned_sel_file)
+                ext_sel = p_sel_obj.suffix.lower()
+                kind_sel = (
+                    "image"
+                    if ext_sel in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".heic", ".heif")
+                    else ("video" if ext_sel in (".mp4", ".mov", ".mkv", ".avi", ".webm", ".wmv") else "doc")
+                )
+                seen_fpaths.add(pinned_sel_file.lower())
+                pool.append({
+                    "kind": kind_sel,
+                    "file_path": pinned_sel_file,
+                    "img_path": pinned_sel_file if kind_sel == "image" else "",
+                    "ts": float(p_sel_obj.stat().st_mtime),
+                    "text": f"📌 선택한 파일 · {p_sel_obj.name} ({p_sel_obj.parent.name})",
+                })
+            except Exception:
+                pass
         for rec in reversed(global_ai_history):
             fp_hist = str(rec.get("file_path") or "")
             if fp_hist:
@@ -995,8 +1022,8 @@ def build_ui2_search_window(
         )
         prev_stage = st_state["stage"]
         prev_h = st_state.get("custom_h")
-        if st_state.get("manual_stage") == "large":
-            st_state["stage"] = "large"
+        if st_state.get("manual_stage") in ("large", "medium"):
+            st_state["stage"] = st_state["manual_stage"]
             st_state["custom_h"] = None
         else:
             st_state["stage"] = auto_stage
@@ -1216,10 +1243,12 @@ def build_ui2_search_window(
                 if r.get("kind") == "video" and r.get("video_ocr_full") and st_now != "medium":
                     _open_video_ocr_extractor(r)
                     return
-                if st_state["sel_idx"] != i_row:
+                need_preview_expand = st_state["mode"] == "compact" and st_state["stage"] == "small"
+                if st_state["sel_idx"] != i_row or need_preview_expand:
                     st_state["sel_idx"] = i_row
-                    if st_state["mode"] == "compact" and (r.get("file_path") or r.get("img_path")):
+                    if st_state["mode"] == "compact" and (r.get("file_path") or r.get("img_path") or r.get("text")):
                         st_state["stage"] = "medium"
+                        st_state["manual_stage"] = "medium"
                         st_state["custom_h"] = None
                         _resize_for_stage(activate=False)
                     _render_search_results()
