@@ -1366,7 +1366,12 @@ export const MobileAppView: React.FC = () => {
 
                             {(String(item.photo.id || '').startsWith('shared_sb_') ||
                               String(item.photo.id || '').startsWith('shared_added_')) &&
-                              hasAuthenticatedHubAccountSession() && (
+                              hasAuthenticatedHubAccountSession() &&
+                              (!activeJoinedRoomMeta ||
+                                (Boolean(merlinAuth?.email) &&
+                                  Boolean(item.photo.sharedOwnerEmail) &&
+                                  item.photo.sharedOwnerEmail?.toLowerCase() ===
+                                    merlinAuth.email.trim().toLowerCase())) && (
                               <button
                                 type="button"
                                 onClick={(e) => {

@@ -1374,7 +1374,28 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
 
   softDeleteSharedRoomPhoto24h: (photoId, mode = 'uploader_24h') => {
     if (!photoId) return;
-    void setSupabaseSharedRoomPhotoHidden(photoId, true);
+    const isRemoteSharedPhoto = String(photoId).startsWith('shared_sb_');
+    void setSupabaseSharedRoomPhotoHidden(photoId, true).then((serverOk) => {
+      if (isRemoteSharedPhoto && !serverOk) {
+        // 서버 권한 거부(예: 초대 멤버가 방장 사진 삭제 시도) 또는 동기화 실패 시 로컬 숨김을 즉시 롤백하여 PC·모바일 장수 불일치 차단
+        set((state) => {
+          const rolledBackMap = { ...state.sharedRoomSoftDeletedMap };
+          delete rolledBackMap[photoId];
+          writeSharedRoomSoftDeletedMap(rolledBackMap);
+          const unmark = (p: PhotoItem): PhotoItem =>
+            p.id === photoId ? { ...p, quarantined: false, sharedDeletedAt: undefined } : p;
+          return {
+            sharedRoomSoftDeletedMap: rolledBackMap,
+            sharedRoomAddedPhotos: state.sharedRoomAddedPhotos.map(unmark),
+            sharedRoomHostPhotos: state.sharedRoomHostPhotos.map(unmark),
+            photos: state.photos.map(unmark),
+            lastQuarantineToast:
+              '방장 또는 이 사진을 직접 올린 사람만 공유방에서 삭제할 수 있습니다.',
+          };
+        });
+        void get().syncActiveSharedRoomFromSupabase();
+      }
+    });
     set((state) => {
       const deletedAt = new Date().toISOString();
       const nextSoftDeletedMap = {
