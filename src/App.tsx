@@ -903,8 +903,8 @@ export const App: React.FC = () => {
           if (m && m[1]) {
             const consumedKey = `ghosti_consumed_clip_pair_${m[1]}`;
             try {
-              if (localStorage.getItem(consumedKey) === '1') return;
-              localStorage.setItem(consumedKey, '1');
+              if (sessionStorage.getItem(consumedKey) === '1') return;
+              sessionStorage.setItem(consumedKey, '1');
             } catch {
               /* ignore */
             }

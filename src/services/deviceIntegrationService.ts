@@ -2496,8 +2496,13 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         const mergedDevices = incomingDevices ?? prevSnap?.devices ?? [];
         const mergedEnt = incomingEnt !== undefined ? incomingEnt : prevSnap?.entitlement ?? null;
         const isSelfNowRevoked = Boolean(revokedDevId && revokedDevId === ident.deviceId);
+        const isSelfActiveInBroadcast = Boolean(
+          !isSelfNowRevoked && mergedDevices.some((d) => d.device_id === ident.deviceId)
+        );
         if (isSelfNowRevoked) {
           thisDeviceRevokedLocally = true;
+        } else if (isSelfActiveInBroadcast) {
+          thisDeviceRevokedLocally = false;
         }
         saveCachedDeviceIntegrationSnapshot(
           {
@@ -2510,7 +2515,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
           devices: mergedDevices,
           pairingCode: prevSnap?.pairingCode ?? null,
           entitlement: mergedEnt,
-          revokedSelf: isSelfNowRevoked ? true : undefined,
+          revokedSelf: isSelfNowRevoked ? true : isSelfActiveInBroadcast ? false : undefined,
         });
         if (isSelfNowRevoked && opts.onSelfRevoked) {
           opts.onSelfRevoked(mergedDevices);
@@ -2947,12 +2952,12 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       } else if (mailboxTickCounter % 2 === 0) {
         void syncRemoteMailboxToUi(true);
       }
-      // PC 마스터: 다른 기기 연결 대기 중(1대 이하)이면 4.8초마다(2.4s * 2) 즉시 동기화해
-      // 스마트폰 연결 직후 PC가 '연동 대기'에 멈추지 않도록 보장, 2대 이상 연결 후에는 5분 주기(125틱) 절전 유지
+      // PC 마스터: 다른 기기 연결 대기 중(1대 이하)이면 2.4초마다 즉시 동기화해
+      // 스마트폰 연결 직후 새로고침 없이 PC가 '연동 대기'에서 바로 '연결됨'으로 전환되도록 보장, 2대 이상 연결 후에는 5분 주기(125틱) 절전 유지
       const cachedDevCount = loadCachedDeviceIntegrationSnapshot(normEmail)?.devices?.length || 0;
       const shouldSyncDevicesNow =
         ident.deviceKind === 'pc_master' &&
-        (cachedDevCount <= 1 ? mailboxTickCounter % 2 === 0 : mailboxTickCounter % 125 === 0);
+        (cachedDevCount <= 1 ? true : mailboxTickCounter % 125 === 0);
       if (shouldSyncDevicesNow) {
         void syncDeviceHeartbeatAndList().then((hbNext) => {
           if (!disposed && hbNext.ok && opts.onDevicesUpdated) {

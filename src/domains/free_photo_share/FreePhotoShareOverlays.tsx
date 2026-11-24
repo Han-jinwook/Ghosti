@@ -365,6 +365,15 @@ export const FreePhotoShareOverlays: React.FC = () => {
       void consumeNativePendingDeepLink()
         .then(async (res) => {
           if (res.ok && res.deepLinkUrl) {
+            // 기기 연결(pairCode) 딥링크는 연결 해제 후 동일 코드 재연결 시에도 항상 즉시 실행
+            if (/pairCode=\d{6}/i.test(res.deepLinkUrl)) {
+              window.dispatchEvent(
+                new CustomEvent('ghostiNativePairDeepLink', {
+                  detail: { url: res.deepLinkUrl },
+                })
+              );
+              return;
+            }
             // 안드로이드 최근 앱(Recents)/재실행 시 OS가 과거 초대 링크 Intent를 그대로 재전달하는 경우,
             // 이미 이전 세션에서 열었던 동일 초대 링크는 무시하고 정상적으로 귀신비서 첫 화면을 유지합니다.
             let isStaleReplayedIntent = false;
@@ -388,15 +397,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
               } catch {
                 /* ignore */
               }
-              if (/pairCode=\d{6}/i.test(res.deepLinkUrl)) {
-                window.dispatchEvent(
-                  new CustomEvent('ghostiNativePairDeepLink', {
-                    detail: { url: res.deepLinkUrl },
-                  })
-                );
-              } else {
-                await applyShareInviteDeepLink(res.deepLinkUrl, { fromNativeApp: true });
-              }
+              await applyShareInviteDeepLink(res.deepLinkUrl, { fromNativeApp: true });
             }
           } else if (isSharedPhotoLounge(useSaySeeStore.getState().activeLoungeType)) {
             void useSaySeeStore.getState().syncActiveSharedRoomFromSupabase();
@@ -409,6 +410,14 @@ export const FreePhotoShareOverlays: React.FC = () => {
       const onLiveDeepLink = (ev: Event) => {
         const detail = (ev as CustomEvent<{ url?: string }>).detail;
         if (detail?.url) {
+          if (/pairCode=\d{6}/i.test(detail.url)) {
+            window.dispatchEvent(
+              new CustomEvent('ghostiNativePairDeepLink', {
+                detail: { url: detail.url },
+              })
+            );
+            return;
+          }
           try {
             localStorage.setItem(
               LAST_CONSUMED_DEEPLINK_KEY,
@@ -417,15 +426,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
           } catch {
             /* ignore */
           }
-          if (/pairCode=\d{6}/i.test(detail.url)) {
-            window.dispatchEvent(
-              new CustomEvent('ghostiNativePairDeepLink', {
-                detail: { url: detail.url },
-              })
-            );
-          } else {
-            void applyShareInviteDeepLink(detail.url, { fromNativeApp: true });
-          }
+          void applyShareInviteDeepLink(detail.url, { fromNativeApp: true });
         }
       };
       window.addEventListener('ghostiNativeDeepLink', onLiveDeepLink);
