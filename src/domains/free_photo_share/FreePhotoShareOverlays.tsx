@@ -714,47 +714,48 @@ export const FreePhotoShareOverlays: React.FC = () => {
       {showSharedPhotoUploadModal && (
         <div
           onClick={() => setShowSharedPhotoUploadModal(false)}
-          className="fixed inset-0 z-[120] bg-black/85 flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe"
+          className="fixed inset-0 z-[120] bg-slate-900/55 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe"
         >
           <div
             onClick={(e) => e.stopPropagation()}
-            className="w-full max-w-4xl max-h-[88dvh] rounded-3xl bg-zinc-950 border-2 border-[#2DD4BF]/65 p-4 sm:p-5 md:p-6 shadow-lg flex flex-col gap-3.5 sm:gap-4 overflow-hidden"
+            className="w-full max-w-4xl max-h-[88dvh] rounded-2xl bg-white border border-slate-200 p-4 sm:p-5 md:p-6 shadow-2xl flex flex-col gap-3.5 overflow-hidden"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex flex-col gap-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2">
-                  <span className="px-2.5 py-0.5 rounded-full bg-teal-500/20 border border-teal-400/40 text-teal-300 font-label-sm text-[11px] sm:text-[11.5px] font-semibold">
+                  <span className="px-2.5 py-0.5 rounded-full bg-teal-50 border border-teal-200 text-teal-700 font-label-sm text-[11px] font-semibold">
                     내 기기 사진 골라 올리기
                   </span>
                 </div>
-                <h3 className="font-headline-sm text-[16.5px] sm:text-[18px] md:text-[20px] text-white font-semibold break-keep">
+                <h3 className="font-headline-sm text-[16px] sm:text-[18px] text-slate-900 font-bold break-keep">
                   『{activeSharedRoomTitle}』에 추가할 {isMobileEnv ? '내 스마트폰 사진' : '내 컴퓨터 사진'}을 선택해 주세요
                 </h3>
-                <p className="text-[12px] text-zinc-300 break-keep">
-                  중복·흔들린 사진과 신분증 서류는 자동으로 걸러낸 깔끔한 새 사진 <strong>{uploadableLocalPhotos.length}장</strong>이 준비되어 있습니다.
+                <p className="text-[12px] text-slate-500 break-keep">
+                  중복·흔들린 사진과 신분증 서류는 자동으로 걸러낸 깔끔한 새 사진{' '}
+                  <strong className="text-slate-800">{uploadableLocalPhotos.length}장</strong>이 준비되어 있습니다.
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setShowSharedPhotoUploadModal(false)}
-                className="w-9 h-9 rounded-full bg-zinc-800 hover:bg-zinc-700 text-zinc-200 flex items-center justify-center text-sm font-bold cursor-pointer shrink-0"
+                className="w-8 h-8 rounded-full bg-slate-100 hover:bg-slate-200 text-slate-600 flex items-center justify-center text-sm font-bold cursor-pointer shrink-0"
               >
                 ✕
               </button>
             </div>
 
-            <div className="flex flex-col gap-2 pb-2 border-b border-white/10">
+            <div className="flex flex-col gap-2.5 pb-3 border-b border-slate-200">
               {/* [Step 1 — 여권·인물 자동 추출 추천 필터 탭] */}
               {uploadableLocalPhotos.length > 0 && (
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="inline-flex items-center gap-1.5 p-1 rounded-2xl bg-zinc-900 border border-white/10">
+                  <div className="inline-flex items-center gap-1 p-1 rounded-xl bg-slate-100 border border-slate-200">
                     <button
                       type="button"
                       onClick={() => setUploadModalFilterMode('all')}
-                      className={`px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer ${
+                      className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
                         uploadModalFilterMode === 'all' || recommendedLocalPhotos.length === 0
-                          ? 'bg-slate-900 text-white shadow-xs'
-                          : 'text-zinc-300 hover:text-white'
+                          ? 'bg-teal-600 text-white shadow-xs'
+                          : 'text-slate-600 hover:text-slate-900'
                       }`}
                     >
                       내 기기 전체 새 사진 ({uploadableLocalPhotos.length}장)
@@ -763,10 +764,10 @@ export const FreePhotoShareOverlays: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => setUploadModalFilterMode('passport_recommended')}
-                        className={`px-3 py-1.5 rounded-xl font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer ${
+                        className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
                           uploadModalFilterMode === 'passport_recommended'
-                            ? 'bg-slate-900 text-white shadow-xs'
-                            : 'text-amber-300 hover:text-amber-200'
+                            ? 'bg-teal-600 text-white shadow-xs'
+                            : 'text-teal-700 hover:text-teal-900'
                         }`}
                       >
                         여권·인물 매칭 추천 ({recommendedLocalPhotos.length}장)
@@ -779,7 +780,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
                       onClick={() =>
                         setSelectedSharedUploadIds(recommendedLocalPhotos.map((p) => p.id))
                       }
-                      className="px-3 py-1.5 rounded-xl bg-amber-400/15 hover:bg-amber-400/25 border border-amber-400/50 text-amber-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+                      className="px-3 py-1.5 rounded-lg bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 font-label-sm text-[11.5px] font-semibold cursor-pointer whitespace-nowrap"
                     >
                       여권 매칭 추천 {recommendedLocalPhotos.length}장 한 번에 선택
                     </button>
@@ -787,9 +788,9 @@ export const FreePhotoShareOverlays: React.FC = () => {
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="flex flex-wrap items-center gap-2">
-                  <label className="px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[11.5px] font-semibold cursor-pointer">
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <label className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-label-sm text-[11.5px] font-semibold cursor-pointer whitespace-nowrap">
                     {isMobileEnv ? '내 폰 갤러리에서 사진 고르기' : '파일 탐색기에서 직접 사진 고르기'}
                     <input
                       type="file"
@@ -805,14 +806,14 @@ export const FreePhotoShareOverlays: React.FC = () => {
                   <button
                     type="button"
                     onClick={() => setSelectedSharedUploadIds(displayedModalPhotos.map((p) => p.id))}
-                    className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-teal-400/50 text-teal-300 font-label-sm text-[11.5px] font-extrabold cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-label-sm text-[11.5px] font-semibold cursor-pointer whitespace-nowrap"
                   >
-                    현재 목록 {displayedModalPhotos.length}장 전체 선택
+                    전체 선택 ({displayedModalPhotos.length}장)
                   </button>
                   <button
                     type="button"
                     onClick={() => setSelectedSharedUploadIds([])}
-                    className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-sm text-[11.5px] font-bold cursor-pointer"
+                    className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-500 font-label-sm text-[11.5px] font-medium cursor-pointer whitespace-nowrap"
                   >
                     선택 해제
                   </button>
@@ -830,7 +831,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
                     });
                     jumpToGhostSecretary();
                   }}
-                  className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-emerald-400/40 text-emerald-300 font-label-sm text-[11.5px] font-bold cursor-pointer break-keep"
+                  className="px-3 py-1.5 rounded-lg bg-teal-50/70 hover:bg-teal-50 border border-teal-200/80 text-teal-700 font-label-sm text-[11.5px] font-semibold cursor-pointer break-keep text-left sm:text-center self-start sm:self-auto"
                 >
                   올리기 전에 귀신비서에서 중복·흔들린 사진 먼저 점검하기
                 </button>
@@ -850,14 +851,13 @@ export const FreePhotoShareOverlays: React.FC = () => {
               }}
             >
               {uploadableLocalPhotos.length === 0 ? (
-                <div className="py-10 sm:py-12 px-4 rounded-2xl bg-zinc-900/70 border border-white/10 flex flex-col items-center justify-center text-center gap-3">
-                  <span className="text-3xl">{isMobileEnv ? '' : ''}</span>
-                  <p className="text-[14px] text-white font-bold break-keep">
+                <div className="py-10 sm:py-12 px-4 rounded-xl bg-slate-50 border border-slate-200 flex flex-col items-center justify-center text-center gap-3">
+                  <p className="text-[14px] text-slate-900 font-bold break-keep">
                     {isMobileEnv
                       ? '아래 버튼을 눌러 공유방에 추가할 내 스마트폰 사진을 선택해 주세요!'
                       : '새로 추가할 내 컴퓨터 사진이 아직 보이지 않아요.'}
                   </p>
-                  <p className="text-[12px] text-zinc-400 max-w-md break-keep">
+                  <p className="text-[12px] text-slate-500 max-w-md break-keep">
                     {isMobileEnv
                       ? '내 폰 갤러리에서 원하는 사진들을 고르면 중복·흐린 사진은 자동으로 구분하여 깔끔하게 올릴 수 있어요.'
                       : '내 PC의 사진 폴더(`Pictures`)에 사진을 넣어두셨다면 로컬 엔진을 새로고침하거나 직접 사진을 골라 올릴 수 있어요.'}
@@ -867,19 +867,13 @@ export const FreePhotoShareOverlays: React.FC = () => {
                       <button
                         type="button"
                         onClick={() => void useSaySeeStore.getState().initApp(true)}
-                        className="px-4 py-2 rounded-xl bg-slate-900 text-white font-label-sm text-[12px] font-semibold cursor-pointer"
+                        className="px-4 py-2 rounded-lg bg-white hover:bg-slate-100 border border-slate-300 text-slate-800 font-label-sm text-[12px] font-semibold cursor-pointer"
                       >
                         내 컴퓨터 사진 폴더 다시 스캔하기
                       </button>
                     )}
-                    <label
-                      className={`px-4 py-2.5 rounded-xl font-label-sm text-[12.5px] font-semibold cursor-pointer ${
-                        isMobileEnv
-                          ? 'bg-slate-900 hover:bg-slate-800 text-white shadow-md'
-                          : 'bg-zinc-800 hover:bg-zinc-700 border border-white/15 text-white font-bold'
-                      }`}
-                    >
-                      {isMobileEnv ? '내 스마트폰 갤러리에서 사진 고르기' : '파일 탐색기에서 직접 사진 고르기'}
+                    <label className="px-4 py-2.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white font-label-sm text-[12.5px] font-semibold cursor-pointer shadow-xs">
+                      {isMobileEnv ? '내 폰 갤러리에서 사진 고르기' : '파일 탐색기에서 직접 사진 고르기'}
                       <input
                         type="file"
                         accept="image/*"
@@ -942,14 +936,14 @@ export const FreePhotoShareOverlays: React.FC = () => {
                           <div
                             className={`absolute top-1.5 right-1.5 w-6 h-6 rounded-full flex items-center justify-center text-[12px] font-semibold shadow ${
                               checked
-                                ? 'bg-slate-900 text-white'
-                                : 'bg-black/65 border border-white/30 text-white'
+                                ? 'bg-teal-600 text-white'
+                                : 'bg-black/45 border border-white/60 text-white'
                             }`}
                           >
                             {checked ? '✓' : ''}
                           </div>
-                          <div className="absolute inset-x-0 bottom-0 px-1.5 py-1 bg-gradient-to-t from-black/85 to-transparent text-left">
-                            <span className="block text-[10px] text-zinc-200 font-medium truncate">
+                          <div className="absolute inset-x-0 bottom-0 px-1.5 py-1 bg-gradient-to-t from-black/80 to-transparent text-left">
+                            <span className="block text-[10px] text-white font-medium truncate">
                               {p.date.split(' ')[0]}
                             </span>
                           </div>
@@ -961,15 +955,15 @@ export const FreePhotoShareOverlays: React.FC = () => {
               )}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-white/10">
-              <span className="text-[12px] text-zinc-300 font-bold">
-                선택됨: <strong className="text-[#2DD4BF]">{selectedSharedUploadIds.length}장</strong> / 전체 새 사진 {uploadableLocalPhotos.length}장
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-3 border-t border-slate-200">
+              <span className="text-[12px] text-slate-600 font-semibold">
+                선택됨: <strong className="text-teal-700">{selectedSharedUploadIds.length}장</strong> / 전체 새 사진 {uploadableLocalPhotos.length}장
               </span>
               <div className="flex items-center gap-2">
                 <button
                   type="button"
                   onClick={() => setShowSharedPhotoUploadModal(false)}
-                  className="px-4 py-2.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-white/15 text-zinc-300 font-label-md text-[12.5px] font-bold cursor-pointer"
+                  className="px-4 py-2 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 font-label-md text-[12.5px] font-semibold cursor-pointer"
                 >
                   취소
                 </button>
@@ -977,7 +971,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
                   type="button"
                   disabled={selectedSharedUploadIds.length === 0}
                   onClick={() => addLocalPhotosToSharedRoom(selectedSharedUploadIds)}
-                  className="px-4 sm:px-5 py-2.5 rounded-xl bg-[#2DD4BF] hover:bg-[#5EEAD4] disabled:opacity-40 text-zinc-950 font-label-md text-[12.5px] sm:text-[13px] font-semibold shadow-lg shadow-teal-500/25 cursor-pointer"
+                  className="px-4 sm:px-5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 disabled:opacity-40 text-white font-label-md text-[12.5px] sm:text-[13px] font-semibold shadow-xs cursor-pointer"
                 >
                   {selectedSharedUploadIds.length > 0
                     ? `선택한 ${selectedSharedUploadIds.length}장 공유방에 올리기`
