@@ -505,6 +505,8 @@ def build_ui2_search_window(
         "sel_idx": 0,
         "items": [],
         "debounce_job": None,
+        "resize_job": None,
+        "last_typing_ts": 0.0,
         "video_ocr_modal_rec": None,
         "video_ocr_loading": False,
         "video_ocr_result_text": "",
@@ -1014,24 +1016,66 @@ def build_ui2_search_window(
         has_rich = any(m[1].get("kind") in ("image", "doc", "video") for m in matched[:5]) or (
             flt_now in ("image", "video") and len(pool) > 0 and bool(q)
         )
-        auto_stage, auto_slim_h = resolve_ghost_search_auto_stage(
+        auto_stage, _auto_slim_h = resolve_ghost_search_auto_stage(
             mode=st_state["mode"],
             has_query=bool(q),
             matched_count=len(matched) if q else len(pool[:5]),
             has_rich_preview=has_rich,
         )
+        # [타이핑 중 창 크기 요요(커졌다 작아졌다 반복) 원천 차단]:
+        # 1) 소형(small) 상태에서는 결과 건수 변동에 따라 높이를 매 글자마다 들썩이지 않고 330px로 안정 유지.
+        # 2) 검색어 입력 중(q != "") 이미 medium(960x640)으로 확장된 상태라면 한글 조합 중간(0건) 등에
+        #    절대 small로 다시 쪼그라들지 않고(래치 유지) 검색어를 완전히 비웠을 때만 small로 복귀.
+        # 3) small -> medium 자동 확장은 타이핑이 멈춘 뒤(260ms) 단 1회만 부드럽게 실행.
+        stable_small_h = 330
         prev_stage = st_state["stage"]
         prev_h = st_state.get("custom_h")
+        pending_auto_expand = False
         if st_state.get("manual_stage") in ("large", "medium"):
             st_state["stage"] = st_state["manual_stage"]
             st_state["custom_h"] = None
+        elif st_state["mode"] == "large":
+            st_state["stage"] = "large"
+            st_state["custom_h"] = None
+        elif not q:
+            st_state["stage"] = "small"
+            st_state["custom_h"] = stable_small_h
         else:
-            st_state["stage"] = auto_stage
-            st_state["custom_h"] = auto_slim_h
-            if auto_stage == "medium" and prev_stage != "medium":
-                record_feature_telemetry("ghost_search_window_medium")
+            if prev_stage == "medium":
+                # 이미 중형이면 입력 도중 절대 소형으로 축소하지 않음 (요요 0%)
+                st_state["stage"] = "medium"
+                st_state["custom_h"] = None
+            elif auto_stage == "medium":
+                since_type = time.time() - float(st_state.get("last_typing_ts") or 0.0)
+                if since_type >= 0.25:
+                    st_state["stage"] = "medium"
+                    st_state["custom_h"] = None
+                    record_feature_telemetry("ghost_search_window_medium")
+                else:
+                    # 아직 타이핑 중이면 현재 소형(520x330)을 유지하고 입력 멈춤 260ms 후 1회만 확장 예약
+                    st_state["stage"] = "small"
+                    st_state["custom_h"] = stable_small_h
+                    pending_auto_expand = True
+            else:
+                st_state["stage"] = "small"
+                st_state["custom_h"] = stable_small_h
+
+        prev_rjob = st_state.get("resize_job")
+        if prev_rjob is not None:
+            try:
+                win.after_cancel(prev_rjob)
+            except Exception:
+                pass
+            st_state["resize_job"] = None
+        if pending_auto_expand and current_win[0] is win:
+            def _apply_delayed_auto_expand() -> None:
+                st_state["resize_job"] = None
+                if current_win[0] is win:
+                    _render_search_results()
+            st_state["resize_job"] = win.after(260, _apply_delayed_auto_expand)
 
         st_now = st_state["stage"]
+        cur_h = st_state.get("custom_h")
         is_lg_mode = st_state["mode"] == "large"
         toggle_mode_btn.config(
             text="⤡ 작게" if is_lg_mode else "⤢ 크게(갤러리)",
@@ -1085,7 +1129,7 @@ def build_ui2_search_window(
                 font=("Malgun Gothic", 8, "bold"),
             ).pack(side="left")
 
-        if (prev_stage != st_now or prev_h != auto_slim_h) and current_win[0] is win:
+        if (prev_stage != st_now or prev_h != cur_h) and current_win[0] is win:
             _resize_for_stage(activate=False)
 
         st_state["items"] = candidates
@@ -1538,9 +1582,17 @@ def build_ui2_search_window(
         if cur_q == last_typed_q[0]:
             return
         last_typed_q[0] = cur_q
+        st_state["last_typing_ts"] = time.time()
         if st_state["mode"] == "compact":
             st_state["manual_stage"] = None
         st_state["sel_idx"] = 0
+        prev_rjob_k = st_state.get("resize_job")
+        if prev_rjob_k is not None:
+            try:
+                win.after_cancel(prev_rjob_k)
+            except Exception:
+                pass
+            st_state["resize_job"] = None
         prev_job = st_state.get("debounce_job")
         if prev_job is not None:
             try:
@@ -1553,7 +1605,7 @@ def build_ui2_search_window(
             if current_win[0] is win:
                 _render_search_results()
 
-        st_state["debounce_job"] = win.after(55, _apply_debounced)
+        st_state["debounce_job"] = win.after(75, _apply_debounced)
 
     def _on_down(_e=None):
         if st_state["items"]:

@@ -1,9 +1,9 @@
 # 📋 귀신같이 (Ghosti) 세션 릴레이 인계장 (`SESSION_HANDOVER.md`)
 
-- **최종 갱신 일시**: 2026-11-24 14:08 (KST)
+- **최종 갱신 일시**: 2026-11-24 14:56 (KST)
 - **담당 역할**: `1~4귀신 통합` (`main` 최신 동기화 완료)
-- **브랜치 / 기준 커밋**: `main` (`c0c8e6d` + `Z-Core v2.7.67` 반영, `origin/main` 동기화 완료)
-- **로컬 엔진 버전**: `Merlin Z-Core v2.7.67` (전 클러스터 1·2·3·4호기 윈도우 10 + 로컬 6호기 윈도우 11 배포 및 헬스체크 완료)
+- **브랜치 / 기준 커밋**: `main` (`1f796d9` + `Z-Core v2.7.68` 반영, `origin/main` 동기화 완료)
+- **로컬 엔진 버전**: `Merlin Z-Core v2.7.68` (전 클러스터 1·2·3·4호기 윈도우 10 + 로컬 6호기 윈도우 11 배포 및 헬스체크 완료)
 
 ---
 
@@ -36,8 +36,8 @@
 4. **귀신검색 체험판 2단계 도장 오표시 제거 · 최소화 귀신검색창 복원 & 구버전 Z-코어 무한 열림 차단 (`a3dd0bb`, `4182b27`, `5a78972`, `1dacdb1`)**
    - `[귀신검색창 열기]` 단순 호출 시 `'작게 모드'` 도장이 오표시되던 로직을 제거하고 명시 전환 시에만 `markGhostDojoStep` SSOT 기록.
    - `DesktopDashboard.tsx`의 `open_search_window` 2.5초 하트비트 호출을 제거해 구버전 Z-코어(`<v2.7.53`) 무한 창 열림을 원천 차단하고, OS 창 타이틀 호환(`👻 귀신검색창`/`귀신검색창`)으로 최소화 창 즉시 전면 복원 보장.
-5. **윈도우 10/11 공통 `Ctrl+0`/`Ctrl+우클릭` 선택 파일(`.jfif`·사진앱 포함) `[1]`번 고정 · `WH_MOUSE_LL` 0.01ms 무지연 훅 · 탐색기 COM 0.45초 워커 격리/이중 트리거 차단 & 사진 촬영일(13자리 epoch 포함) 최신순 정렬 (`cf5eace`, `4d2af5d`, `9000ee2`, `2d6feb5`, `c0c8e6d`, `Z-Core v2.7.67`)**
-   - `seq_paste_daemon.py` · `ghost_search_window_ui2.py`: 탐색기·바탕화면(`summon_by_rclick` 커서 아래 창 우선 판별 포함) 선택 파일 및 윈도우 10/11 사진앱(`ApplicationFrameHost.exe`/`Microsoft.Photos.exe`/`Photos.exe`) 열람 파일(`.jfif` 포함) `[1]`번+우측 큰 미리보기 고정, `Ctrl+0` 키업(`<KeyRelease>`) 축소 차단 및 `manual_stage="medium"` 보존, `WH_MOUSE_LL` `0.01ms` 무지연(`_CACHED_RCLICK_BYPASS`·`WM_RBUTTONUP` Ctrl 방어·`GetModuleHandleW` 3중 등록), 탐색기 `Shell.Application` COM `0.45초` 워커 스레드 격리 + `last_summon_ts` 완료 후 재갱신/`was_ctrl0_down` 동기화 + `_is_ui_window_actually_open()` Win32 실창 검증으로 폴더 첫 호출 시 열리자마자 닫힘 및 18초 행 재기동 원천 차단(`1·2·3·4호기 + 6호기` `v2.7.67` 배포 완료).
+5. **윈도우 10/11 공통 `Ctrl+0`/`Ctrl+우클릭` 선택 파일(`.jfif`·사진앱 포함) `[1]`번 고정 · `WH_MOUSE_LL` 0.01ms 무지연 훅 · 탐색기 COM 0.45초 워커 격리/이중 트리거 차단 · 귀신검색창 입력 중 크기 요요 차단 & 사진 촬영일(13자리 epoch 포함) 최신순 정렬 (`cf5eace`, `4d2af5d`, `9000ee2`, `2d6feb5`, `c0c8e6d`, `1f796d9`, `Z-Core v2.7.68`)**
+   - `seq_paste_daemon.py` · `ghost_search_window_ui2.py`: 탐색기·바탕화면(`summon_by_rclick` 커서 아래 창 우선 판별 포함) 선택 파일 및 윈도우 10/11 사진앱(`ApplicationFrameHost.exe`/`Microsoft.Photos.exe`/`Photos.exe`) 열람 파일(`.jfif` 포함) `[1]`번+우측 큰 미리보기 고정, `Ctrl+0` 키업(`<KeyRelease>`) 축소 차단 및 `manual_stage="medium"` 보존, `WH_MOUSE_LL` `0.01ms` 무지연(`_CACHED_RCLICK_BYPASS`·`WM_RBUTTONUP` Ctrl 방어·`GetModuleHandleW` 3중 등록), 탐색기 `Shell.Application` COM `0.45초` 워커 스레드 격리 + `last_summon_ts` 완료 후 재갱신/`was_ctrl0_down` 동기화 + `_is_ui_window_actually_open()` Win32 실창 검증으로 폴더 첫 호출 시 열리자마자 닫힘 및 18초 행 재기동 원천 차단. 또한 귀신검색창 타이핑 중 `small` 높이 `330px` 고정 + 입력 멈춤(`260ms`) 후 단 1회 `medium` 확장 + 입력 중 `medium ➔ small` 역축소 차단(검색어 비울 때만 `small` 복귀)으로 화면 크기 요요 현상 원천 제거(`1·2·3·4호기 + 6호기` `v2.7.68` 배포 완료).
    - `aiPhotoFaceEngine.ts`: 귀신검색 전체 보기 사진 목록을 파일 복사일(`st_mtime`)이 아닌 카드 표시 실제 촬영일(`canonicalDate`·`canonicalMtimeMs`, `19xx`/`20xx` 및 13자리 Unix epoch ms 파일명 포함) 최신순 내림차순으로 일관 정렬 교정.
 
 ---
