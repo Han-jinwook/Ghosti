@@ -965,10 +965,42 @@ def _compute_rich_preview(file_path: Path, st: os.stat_result) -> Dict[str, Any]
                 if ext_low == ".gslides"
                 else "Google 문서"
             )
+            exported_body = ""
+            # 링크 공유('링크가 있는 모든 사용자 보기') 설정된 사내 구글시트/구글문서는 백신 오진(브라우저 쿠키 접근) 없이
+            # 공식 export 엔드포인트(CSV/TXT)로 표(행·열)와 본문 텍스트를 엑셀·워드와 동일하게 자동 인덱싱
+            if doc_id and ext_low in (".gsheet", ".gdoc"):
+                try:
+                    import urllib.request
+                    exp_fmt = "csv" if ext_low == ".gsheet" else "txt"
+                    exp_kind = "spreadsheets" if ext_low == ".gsheet" else "document"
+                    exp_url = f"https://docs.google.com/{exp_kind}/d/{doc_id}/export?format={exp_fmt}"
+                    req = urllib.request.Request(exp_url, headers={"User-Agent": "Mozilla/5.0"})
+                    with urllib.request.urlopen(req, timeout=2.5) as resp:
+                        ctype = (resp.headers.get("Content-Type") or "").lower()
+                        if "text/csv" in ctype or "text/plain" in ctype:
+                            data_txt = resp.read(262144).decode("utf-8-sig", errors="ignore").strip()
+                            if data_txt and not data_txt.lstrip().lower().startswith(("<!doctype", "<html")):
+                                if ext_low == ".gsheet":
+                                    reader = list(csv.reader(io.StringIO(data_txt)))
+                                    non_empty = [r for r in reader if any(c.strip() for c in r)]
+                                    if non_empty:
+                                        table_headers = [c.strip() or f"열 {i + 1}" for i, c in enumerate(non_empty[0][:6])]
+                                        col_n = len(table_headers)
+                                        for r in non_empty[1:8]:
+                                            table_rows.append([(c.strip() if i < len(r) else "") for i, c in enumerate((r + [""] * col_n)[:col_n])])
+                                        exported_body = "\n".join(" | ".join(r[:6]) for r in non_empty[:20])[:2400]
+                                else:
+                                    exported_body = data_txt[:2400]
+                except Exception:
+                    pass
             preview_text = (
                 f"[{kind_ko} 바로가기 — {file_path.stem}]\n"
                 + (f"원본 열기: {g_url}\n" if g_url else "")
-                + "구글 드라이브 웹 문서입니다. 파일명으로 즉시 검색되며 원본 열기로 구글 시트·문서에서 바로 편집할 수 있습니다."
+                + (
+                    f"{exported_body}"
+                    if exported_body
+                    else "구글 드라이브 웹 문서입니다. 파일명으로 즉시 검색되며(링크 공유 시트·문서는 본문·표까지 자동 인덱싱) 원본 열기로 웹에서 바로 편집할 수 있습니다."
+                )
             )
         elif ext_low in (".txt", ".md", ".json", ".log"):
             raw_bytes = file_path.read_bytes()[:131072]
