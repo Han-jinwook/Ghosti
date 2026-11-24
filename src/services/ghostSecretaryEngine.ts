@@ -1210,47 +1210,158 @@ export function resolveGhostSecretaryTurn(
     }
   }
 
-  // ④-3 클라우드(G:·마이박스·원드라이브) · 구글시트(.gsheet/.gdoc) · 사내 NAS · S: 업무 공유 6대 핵심 FAQ 0토큰 즉답 (docs/귀신비서_FAQ_원본.md SSOT)
-  const matchCloudAndWorkShareFaqId = (q: string): string | null => {
-    // 실제 파일/문서 검색 요청("구글시트에서 미수금 찾아줘", "계약서 폴더에서 단가 알려줘")은 검색 라우터로 넘어가도록 제외
-    if (/(찾아\s*줘|찾아\s*봐|열어\s*줘|전달해\s*줘|보내\s*줘|얼마야)/.test(q) && !/(무료|유료|요금|돈\s*내|필요해|검색\s*돼|가능해|어떻게\s*돼)/.test(q)) {
-      return null;
-    }
+  // ④-3 전 귀신(1·2·3·4귀신) 전 영역 28대 핵심 기능 FAQ 0토큰 즉답 매처 (docs/귀신비서_FAQ_원본.md SSOT)
+  const matchAllDomainGhostiFaq = (q: string): { id: string; text: string } | null => {
+    const nickPrefix = nickname ? `${nickname}님, ` : '';
+    // 직접 실행 명령("보안프로그램 정리해줘", "휴지통 비워줘", "원래대로 돌려줘", "사양 진단해줘", "미수금 찾아줘")은 실행 라우터로 통과
+    const isDirectActionCommand =
+      /^(?:응\s*)?(?:휴지통\s*비워|원래대로\s*(?:돌려|복원)|복원\s*기록\s*보여|보안\s*프로그램\s*정리|바탕화면\s*정리|다운로드\s*정리|사양\s*진단|내\s*컴퓨터\s*사양)/i.test(
+        q.trim()
+      ) ||
+      (/(찾아\s*줘|찾아\s*봐|열어\s*줘|전달해\s*줘|보내\s*줘|정리해\s*줘|치워\s*줘|비워\s*줘|살려\s*줘|복구해\s*줘)/.test(q) &&
+        !/(무료|유료|요금|돈\s*내|필요해|검색\s*돼|가능해|어떻게|왜|차이|제한|섞이지|다시\s*깔)/.test(q));
+    if (isDirectActionCommand) return null;
+
+    // [4귀신 영역: 클라우드 G:/MYBOX · 구글시트 · NAS · S: 업무 공유 · 야간 초절전]
     if (/(?:\.gsheet|\.gdoc|구글\s*(?:스프레드)?시트|구글\s*문서|구글\s*독스|스프레드시트)/i.test(q) && /(검색|인덱싱|본문|글자|내용|되나|돼|가능|찾을\s*수)/i.test(q)) {
-      return 'faq_gsheet_gdoc_search';
+      const sc = findScenario('faq_gsheet_gdoc_search');
+      if (sc) return { id: sc.id, text: renderPlaybookText(sc.response, { nickname: nickname || '회원' }).replace(/^회원님,\s*/, nickPrefix) };
     }
     if (/(?:\bnas\b|나스|시놀로지|synology|사내\s*서버)/i.test(q)) {
-      return 'faq_nas_vs_ghosti_work';
+      const sc = findScenario('faq_nas_vs_ghosti_work');
+      if (sc) return { id: sc.id, text: renderPlaybookText(sc.response, { nickname: nickname || '회원' }).replace(/^회원님,\s*/, nickPrefix) };
     }
     if (/(업무\s*(?:공유\s*)?폴더|공유\s*폴더|s\s*:\s*(?:드라이브\s*)?폴더)/i.test(q) && /(여러\s*개|몇\s*개|하나만|1개만|두\s*개|다중|복수|추가\s*지정)/i.test(q)) {
-      return 'faq_work_folder_count_limit';
+      const sc = findScenario('faq_work_folder_count_limit');
+      if (sc) return { id: sc.id, text: renderPlaybookText(sc.response, { nickname: nickname || '회원' }).replace(/^회원님,\s*/, nickPrefix) };
     }
     if (
-      (/(초대받은\s*(?:팀원|직원|사람)|팀원|직원).*?(돈|결제|유료|무료|요금|내야|과금)/i.test(q)) ||
-      (/(무료\s*체험|구독|이용권|만료|끝나면).*?(내\s*파일|원본\s*파일|업무\s*파일|s\s*:\s*드라이브|파일은?\s*어떻게|삭제되나|날아가)/i.test(q))
+      /(초대받은\s*(?:팀원|직원|사람)|팀원|직원).*?(돈|결제|유료|무료|요금|내야|과금)/i.test(q) ||
+      /(무료\s*체험|구독|이용권|만료|끝나면).*?(내\s*파일|원본\s*파일|업무\s*파일|s\s*:\s*드라이브|파일은?\s*어떻게|삭제되나|날아가)/i.test(q)
     ) {
-      return 'faq_work_member_free_and_expiry_safe';
+      const sc = findScenario('faq_work_member_free_and_expiry_safe');
+      if (sc) return { id: sc.id, text: renderPlaybookText(sc.response, { nickname: nickname || '회원' }).replace(/^회원님,\s*/, nickPrefix) };
     }
     if (/(클라우드|구글\s*드라이브|마이박스|mybox|원드라이브|onedrive)/i.test(q) && /(어떻게.*?(?:검색|인덱싱|본문|읽어)|인덱싱|오프라인\s*사용|본문\s*내용까지)/i.test(q)) {
-      return 'faq_cloud_content_indexing';
+      const sc = findScenario('faq_cloud_content_indexing');
+      if (sc) return { id: sc.id, text: renderPlaybookText(sc.response, { nickname: nickname || '회원' }).replace(/^회원님,\s*/, nickPrefix) };
     }
     if (/(구글\s*드라이브|g\s*:\s*드라이브|네이버\s*마이박스|마이박스|mybox|원드라이브|onedrive)/i.test(q) && /(s\s*:|업무\s*공유|업무\s*폴더|공유로?\s*쓸|연결|연동|같이\s*쓸)/i.test(q)) {
-      return 'faq_cloud_drive_s_share';
+      const sc = findScenario('faq_cloud_drive_s_share');
+      if (sc) return { id: sc.id, text: renderPlaybookText(sc.response, { nickname: nickname || '회원' }).replace(/^회원님,\s*/, nickPrefix) };
+    }
+    if (/(퇴근|야간|대장\s*pc|방장\s*pc|백업\s*pc|예비\s*서버).*?(꺼두면|끄면|전기세|전기료|초절전|고장)/i.test(q)) {
+      return {
+        id: 'faq_work_night_sleep_and_backup_pc',
+        text: `${nickPrefix}[🌙 야간·퇴근 초절전 모드]를 켜두시면 모니터 전원은 끄고 본체 수면만 막아주어 한 달 전기료 약 1,800원 수준으로 24시간 S: 드라이브를 유지하실 수 있어요! 또한 대장 PC가 꺼져도 팀원들은 30KB 요약본으로 검색·열람이 가능하며, 사내 다른 PC를 [🛡️ 백업 PC]로 지정해 두시면 부재 시에도 자동으로 이어집니다.`,
+      };
+    }
+
+    // [1귀신 영역: 보안프로그램 재설치 우려 · 임의 삭제 우려 · C드라이브/휴지통 안전핀 · 백신 · 스마트 압축]
+    if (/(은행|관공서|홈택스|보안\s*프로그램).*?(다시\s*깔|재설치|은행\s*갈\s*때|접속할\s*때)/i.test(q)) {
+      return {
+        id: 'faq_security_plugin_sleep_wake',
+        text: `${nickPrefix}다시 설치하실 필요 없어요! 귀신비서의 기본 [⚡ 보안프로그램 자동 절전·기상]은 프로그램을 무조건 지우지 않고 평소에 잠재워 두었다가, 은행이나 홈택스에 접속하실 때 자동으로 다시 깨워드리는 방식이에요(아예 안 쓰는 앱만 직접 완전 제거 선택 가능).`,
+      };
+    }
+    if (/(멋대로|마음대로|자동으로|몰래|중요한\s*파일).*?(지우|삭제|날리)/i.test(q)) {
+      return {
+        id: 'faq_no_arbitrary_delete_gate',
+        text: `${nickPrefix}귀신같이는 허락 없이 파일이나 프로그램을 임의로 자동 삭제하는 일이 0%예요! 반드시 대상 목록과 용량을 미리보기 카드로 먼저 보여드리고, 직접 버튼을 누르시거나 '응 진행해'라고 승인하셨을 때만 안전하게 휴지통으로 이동하며 중요 서류 사진은 자동으로 보호됩니다.`,
+      };
+    }
+    if (/(c\s*드라이브|용량이?\s*(?:왜|바로)\s*안\s*늘|영구\s*삭제하려면|완전히\s*(?:비우|지우)려면)/i.test(q)) {
+      return {
+        id: 'faq_recycle_bin_safety_pin',
+        text: `${nickPrefix}실수로 지운 파일을 언제든 살리실 수 있도록 정리된 파일은 먼저 윈도우 기본 [휴지통]으로 안전하게 이동하기 때문이에요! 확인을 마치고 실제 C드라이브 여유 용량을 바로 확보하고 싶으실 때는 채팅창에 직접 '휴지통 비워줘'라고 입력해 주시면 최종 비우기가 진행됩니다.`,
+      };
+    }
+    if (/(알약|v3|백신|바이러스\s*검사).*?(안\s*깔아도|깔아야|대신|검사\s*돼|해줘\?)/i.test(q)) {
+      return {
+        id: 'faq_windows_defender_guard',
+        text: `${nickPrefix}광고 창이 뜨는 사설 무료 백신을 따로 까실 필요 없어요! 귀신비서가 윈도우 공식 순정 백신(Windows Defender)을 통합 관제하여 실시간 보호 점검과 새로 내려받는 설치파일(.exe/.msi/.zip) 무소음 자동 경호를 챙겨드립니다.`,
+      };
+    }
+    if (/(알집|반디집|압축\s*파일|암호\s*압축|\bzip\b|\b7z\b).*?(풀|압축|돼|가능|없어도)/i.test(q)) {
+      return {
+        id: 'faq_smart_zip_archive',
+        text: `${nickPrefix}네, 광고 없는 [📦 1초 스마트 압축·해제] 기능이 무료로 기본 내장되어 있어요! 탐색기에서 더블클릭이나 우클릭 한 번으로 깔끔하게 압축을 풀고, 비밀번호가 걸린 암호 ZIP 압축도 바로 만드실 수 있습니다.`,
+      };
+    }
+
+    // [2귀신 영역: 아래아한글/워드 한영 예외 · F1~F6 상용구 · 문서/영상 1초 검색 · 업무공유 여권 미발동]
+    if (/(한글|\bhwp\b|워드|word|파워포인트|vs\s*code).*?(한영|영타|오타\s*변환|자동\s*변환).*?(안\s*돼|안돼|왜|작동)/i.test(q)) {
+      return {
+        id: 'faq_hwp_word_autocorrect_yield',
+        text: `${nickPrefix}아래아한글(HWP)이나 MS 워드·파워포인트·VS Code는 프로그램 자체에 독자적인 '한/영 자동 고침'이 내장되어 있어서, 동시에 개입하면 글자가 중복(안안녕녕)되거나 도로 영타로 뒤집히는 충돌을 막기 위해 양보하도록 설계되어 있어요! 대신 크롬·엣지·웨일 인터넷 창과 카카오톡·메모장 등에서는 100% 작동합니다.`,
+      };
+    }
+    if (/(f1\s*~\s*f6|상용구|순차\s*붙여넣기|여러\s*줄\s*붙여넣기)/i.test(q) && /(어떻게|뭐야|쓰는|기능|돼)/i.test(q)) {
+      return {
+        id: 'faq_f1_f6_sequential_paste',
+        text: `${nickPrefix}자주 쓰는 이메일·계좌번호·주소를 F1~F6 6개 슬롯에 저장해 1초 만에 입력하고, 여러 항목을 복사해 두었다가 엑셀이나 입력칸에 순서대로 칸 맞춰 붙여넣는 입력 초능력(자매 앱 귀신키 연동)으로 편하게 활용하실 수 있어요!`,
+      };
+    }
+    if (/(업무\s*공유|s\s*:\s*드라이브).*?(여권|인물|얼굴).*?(안\s*떠|왜|없어|안\s*나와)/i.test(q)) {
+      return {
+        id: 'faq_work_lounge_no_passport',
+        text: `${nickPrefix}회사 업무 공유(S: 드라이브)에 올라오는 현장·자재 사진과 계약서 스캔본에서는 프라이버시 보호와 업무 문서 집중을 위해 인물 여권 매칭을 발동하지 않도록 분리해 두었어요!`,
+      };
+    }
+    if (/(제목을?\s*몰라도|파일명을?\s*몰라도|문서\s*본문|동영상\s*(?:자막|장면|글자)).*?(검색|찾을\s*수|돼|가능)/i.test(q)) {
+      return {
+        id: 'faq_omni_content_video_ocr_search',
+        text: `${nickPrefix}파일 제목을 몰라도 한글(HWP)·엑셀·워드·PDF 본문(50,000자) 속 단어와 사진 속 영수증 글자, 동영상에 스쳐 지나간 한글 자막 구간(MM:SS 즉시 점프 재생)까지 Ctrl + 0 귀신검색창에서 1초 만에 찾아드려요!`,
+      };
+    }
+
+    // [3귀신 영역: 사진 공유방 인원·장수 무료 & 격리 & 삭제 권한 · 모니터 크게 보기/다 같이 보기 · 모바일 웹 다리 원칙 · 클립보드]
+    if (/(사진\s*공유|가족방|동창회방|동호회방|공유방).*?(인원|장수\s*제한|용량\s*제한|유료|무료|얼마)/i.test(q)) {
+      return {
+        id: 'faq_photo_share_unlimited_free',
+        text: `${nickPrefix}[3. 📸 사진 공유](우리집·본가·처가·동호회·동창회)는 방장도 초대받은 멤버도 인원수·사진 장수 제한 없이 100% 평생 0원(무료)이에요! 유효기간 만료 걱정 없이 사진과 동영상을 함께 모아 보실 수 있습니다.`,
+      };
+    }
+    if (/(우리집|본가|처가|초대받은\s*방|공유방).*?(섞이|합쳐|다른\s*방|보이나)/i.test(q)) {
+      return {
+        id: 'faq_photo_share_room_isolation',
+        text: `${nickPrefix}단 1장도 섞이지 않아요! 모든 사진 공유방은 고유 방 번호(room_id)로 1:1 완전 격리되며, 타인에게 초대받은 방은 상단 [💌 초대받은 방] 알약으로 내 기본 방·내 PC 개인 사진과 100% 분리되어 표시됩니다.`,
+      };
+    }
+    if (/(공유방|가족방).*?(누가\s*(?:지울|삭제)|삭제\s*권한|남이\s*지우면)/i.test(q)) {
+      return {
+        id: 'faq_photo_share_delete_permission',
+        text: `${nickPrefix}공유방 사진 삭제는 오직 '방장'과 '그 사진을 직접 올린 업로더 본인'만 할 수 있어요! 권한 없는 멤버가 삭제를 누르면 즉시 차단·원복되어 사진이 안전하게 보호됩니다.`,
+      };
+    }
+    if (/(모니터로?\s*크게\s*보기|큰\s*화면으로\s*보기|다\s*같이\s*보기|앨범\s*싱크)/i.test(q)) {
+      return {
+        id: 'faq_cast_and_live_album_sync',
+        text: `${nickPrefix}[💻 모니터로 크게 보기]를 누르면 폰 사진이 내 노트북/PC 전체화면 클린 뷰어로 0.5초 만에 뜨고 폰이 무선 리모컨이 돼요! 공유방의 [📡 다 같이 보기]를 켜면 한 분이 사진을 넘기거나 2배 확대할 때 방 멤버 전원의 화면이 0.1초 만에 똑같이 함께 움직입니다.`,
+      };
+    }
+    if (/(모바일\s*웹|사파리|크롬\s*브라우저|인터넷\s*창|앱\s*안\s*깔고).*?(기기\s*통합|연결\s*돼|쓸\s*수)/i.test(q)) {
+      return {
+        id: 'faq_mobile_web_bridge_only',
+        text: `${nickPrefix}귀신같이는 엔진이 설치된 PC와 스토어에서 설치한 정식 [모바일 앱(Android/iOS)]만 실사용 기기로 연결돼요! 모바일 웹 브라우저는 온보딩 구경과 QR·초대 링크를 정식 앱으로 넘겨주는 다리(브릿지) 역할만 수행합니다.`,
+      };
+    }
+    if (/(복사한\s*글|클립보드|ctrl\s*\+\s*c).*?(폰|스마트폰|핸드폰|붙여넣기|연동)/i.test(q)) {
+      return {
+        id: 'faq_e2ee_clipboard_sync',
+        text: `${nickPrefix}[4. 📱 내 기기 통합]을 연결하시면 PC에서 Ctrl + C로 복사한 글자·계좌번호·주소가 암호화되어 1초 만에 내 스마트폰으로 전달되고, 폰에서 복사한 글도 PC로 바로 보낼 수 있어요!`,
+      };
     }
     return null;
   };
 
-  const cloudWorkFaqId = matchCloudAndWorkShareFaqId(text);
-  if (cloudWorkFaqId) {
-    const sc = findScenario(cloudWorkFaqId);
-    if (sc) {
-      const rendered = renderPlaybookText(sc.response, { nickname: nickname || '회원' }).replace(/^회원님,\s*/, nickname ? `${nickname}님, ` : '');
-      return {
-        scenarioId: sc.id,
-        text: rendered,
-        nextState: st,
-      };
-    }
+  const matchedFaq = matchAllDomainGhostiFaq(text);
+  if (matchedFaq) {
+    return {
+      scenarioId: matchedFaq.id,
+      text: matchedFaq.text,
+      nextState: st,
+    };
   }
 
   // ⑤ 로드맵 및 앱 설정 키워드 (대본집 text_contains 자동 반영)
