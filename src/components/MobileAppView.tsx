@@ -222,7 +222,6 @@ export const MobileAppView: React.FC = () => {
       if (detail.ok) {
         setQrPairMismatchInfo(null);
         setQrPairCheckState('ready');
-        setQrAppBridgeCode(null);
       } else if (detail.reason === 'ACCOUNT_MISMATCH') {
         setQrPairMismatchInfo({ expectedEmailHint: detail.expectedEmailHint });
         setQrPairCheckState('ready');
@@ -255,7 +254,6 @@ export const MobileAppView: React.FC = () => {
     if (saved) {
       if (saved.ok) {
         setQrPairMismatchInfo(null);
-        setQrAppBridgeCode(null);
         setQrPairCheckState('ready');
         return;
       }
@@ -280,7 +278,6 @@ export const MobileAppView: React.FC = () => {
       if (latestSaved) {
         if (latestSaved.ok) {
           setQrPairMismatchInfo(null);
-          setQrAppBridgeCode(null);
         } else if (latestSaved.reason === 'ACCOUNT_MISMATCH') {
           setQrPairMismatchInfo({ expectedEmailHint: latestSaved.expectedEmailHint });
         }
@@ -291,13 +288,7 @@ export const MobileAppView: React.FC = () => {
       if (cancelled) return;
       if (res.ok) {
         saveLastQrPairResult({ code: qrAppBridgeCode, ok: true });
-        useSaySeeStore.getState().setDeviceIntegrationSnapshot({
-          devices: res.devices,
-          entitlement: res.entitlement,
-          revokedSelf: false,
-        });
         setQrPairMismatchInfo(null);
-        setQrAppBridgeCode(null);
       } else if (res.reason === 'ACCOUNT_MISMATCH') {
         savePendingQrPairCode(qrAppBridgeCode);
         saveLastQrPairResult({
@@ -975,9 +966,7 @@ export const MobileAppView: React.FC = () => {
                       <span className="font-mono">{qrAppBridgeCode.slice(0, 3)}-{qrAppBridgeCode.slice(3, 6)}</span>
                     </p>
                     <p className="text-[11.5px] text-slate-500 mt-0.5 break-keep">
-                      {merlinAuth?.email && merlinAuth.userId !== 'guest'
-                        ? `현재 웹 계정(${merlinAuth.email})으로 로그인됨 · 앱에서 연결할 때도 앱 내부에서 PC와 같은 이메일로 로그인해야 연결됩니다.`
-                        : '귀신같이 앱이 설치되어 있다면 아래 버튼으로 앱에서 바로 연결하고, PC와 같은 이메일로 로그인해 주세요.'}
+                      모바일 웹은 온보딩·앱 이동용 안내 화면입니다. 설치된 귀신같이 앱에서 PC와 같은 이메일로 로그인하면 자동으로 바로 연결됩니다.
                     </p>
                   </div>
                   <button
@@ -991,28 +980,10 @@ export const MobileAppView: React.FC = () => {
                 <div className="flex flex-wrap items-center gap-2">
                   <a
                     href={`ghosti://pair?pairCode=${qrAppBridgeCode}`}
-                    className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold no-underline"
+                    className="px-3.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold no-underline"
                   >
-                    귀신같이 앱에서 연결
+                    귀신같이 앱에서 열기
                   </a>
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      if (!hasAuthenticatedHubAccountSession()) {
-                        useSaySeeStore.setState({
-                          lastQuarantineToast:
-                            '현재 게스트(비로그인) 상태입니다. PC와 같은 이메일로 로그인하면 바로 연결됩니다.',
-                        });
-                        window.dispatchEvent(new CustomEvent('openLoginModal'));
-                        return;
-                      }
-                      const ok = await useSaySeeStore.getState().pairWithSixDigitCode(qrAppBridgeCode);
-                      if (ok) setQrAppBridgeCode(null);
-                    }}
-                    className="px-3 py-1.5 rounded-lg bg-white hover:bg-slate-50 border border-slate-200 text-slate-700 text-[12px] font-medium cursor-pointer"
-                  >
-                    웹에서 바로 연결
-                  </button>
                 </div>
               </div>
             )

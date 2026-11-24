@@ -1276,9 +1276,12 @@ export async function handleAuthedWorkAndDeviceAction({
     const explicitReconnect = Boolean(
       body.explicitReconnect || body.explicitTrialOptIn || body.forceRefreshPairingCode
     );
+    const isMobileWebSkip =
+      Boolean(body.mobileWebSkipRegister) ||
+      (deviceKind === 'mobile' && /·웹\s*\(/.test(displayName));
 
     let revokedSelf = false;
-    if (!explicitReconnect) {
+    if (!explicitReconnect && !isMobileWebSkip) {
       const selfCheckRes = await fetch(
         `${supabaseUrl}/rest/v1/ghosti_devices?device_id=eq.${encodeURIComponent(deviceId)}&owner_email=eq.${encodeURIComponent(email)}&select=device_id,revoked_at&limit=1`,
         { headers: srvHeaders(serviceKey) }
@@ -1289,7 +1292,7 @@ export async function handleAuthedWorkAndDeviceAction({
       }
     }
 
-    if (!revokedSelf) {
+    if (!revokedSelf && !isMobileWebSkip) {
       await fetch(`${supabaseUrl}/rest/v1/ghosti_devices?on_conflict=device_id`, {
         method: 'POST',
         headers: srvHeaders(serviceKey, {
@@ -1345,7 +1348,9 @@ export async function handleAuthedWorkAndDeviceAction({
       const isSamePlatformGhost =
         isOther && isSameKindPlatform && lastSeenMs > 0 && lastSeenMs < samePlatformIdleCutoffMs;
       const isLongStale = isOther && lastSeenMs > 0 && lastSeenMs < staleCutoffMs;
-      if (isSamePlatformGhost || isLongStale) {
+      const isLegacyMobileWebGhost =
+        dev?.device_kind === 'mobile' && /·웹\s*\(/.test(String(dev?.display_name || ''));
+      if (isSamePlatformGhost || isLongStale || isLegacyMobileWebGhost) {
         staleIds.push(dev.device_id);
       } else {
         safeDevices.push(dev);
@@ -1496,6 +1501,24 @@ export async function handleAuthedWorkAndDeviceAction({
     const targetDisplayName = String(
       body.displayName || (targetKind === 'pc_master' ? '서브 PC' : '내 스마트폰')
     ).slice(0, 48);
+    const isMobileWebBridge =
+      Boolean(body.mobileWebBridgeOnly) ||
+      (targetKind === 'mobile' && /·웹\s*\(/.test(targetDisplayName));
+    if (isMobileWebBridge) {
+      // 모바일 웹은 온보딩·앱 이동 다리 전용(쇼룸)이므로 기기 등록·코드 소비를 수행하지 않고 계정 일치 확인만 완료 반환
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          mobileWebBridgeOnly: true,
+          alreadyPaired: false,
+          deviceId: targetDevId,
+          devices: [],
+          entitlement: preView,
+          canonicalUserId: userId,
+        },
+      };
+    }
     const pcDeviceIdToRestore = String(found.pc_device_id || '').trim();
 
     const [, , , entRaw] = await Promise.all([

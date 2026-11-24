@@ -397,27 +397,11 @@ const GhostiHubGlobalModals: React.FC = () => {
         }
       }
 
-      let restoredMobilePaired = false;
-      if (typeof window !== 'undefined') {
-        try {
-          restoredMobilePaired =
-            localStorage.getItem(`ghosti_mobile_paired_${cleanUserEmail}`) === '1';
-        } catch {
-          restoredMobilePaired = false;
-        }
-      }
       const cachedDevSnap = loadCachedDeviceIntegrationSnapshot(cleanUserEmail);
       const isAccountTransition = didTransitionFromGuest || didSwitchAccountDirectly;
       useSaySeeStore.setState((state) => ({
-        pcAgentPairedMobile:
-          restoredMobilePaired ||
-          Boolean(cachedDevSnap?.devices?.some((d) => d.device_kind === 'mobile')) ||
-          (cachedDevSnap?.devices?.length || 0) >= 2,
-        connectedDevices: isAccountTransition
-          ? cachedDevSnap?.devices || []
-          : cachedDevSnap?.devices?.length
-          ? cachedDevSnap.devices
-          : state.connectedDevices,
+        pcAgentPairedMobile: false,
+        connectedDevices: [],
         devicePairingCode6: isAccountTransition
           ? cachedDevSnap?.pairingCode ?? null
           : cachedDevSnap?.pairingCode ?? state.devicePairingCode6,

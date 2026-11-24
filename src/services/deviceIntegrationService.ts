@@ -723,6 +723,7 @@ export async function syncDeviceHeartbeatAndList(opts?: {
     }
   }
 
+  const isMobileWeb = ident.deviceKind === 'mobile' && !isCapacitorNativeMobileRuntime();
   const res = await callGhostiServerBridge<{
     deviceId?: string;
     revokedSelf?: boolean;
@@ -735,7 +736,8 @@ export async function syncDeviceHeartbeatAndList(opts?: {
     deviceKind: ident.deviceKind,
     platform: ident.platform,
     displayName: ident.displayName,
-    appVersion: '1.0.76',
+    appVersion: '1.0.81',
+    mobileWebSkipRegister: isMobileWeb,
     explicitTrialOptIn: Boolean(opts?.explicitTrialOptIn),
     explicitReconnect: consumeExplicitReconnect,
     forceRefreshPairingCode: Boolean(opts?.forceRefreshPairingCode),
@@ -802,8 +804,10 @@ export async function consumeDevicePairingCode6(code: string): Promise<{
   if (!hasAuthenticatedHubAccountSession()) {
     return { ok: false, reason: 'AUTH_REQUIRED', devices: [], entitlement: null };
   }
+  const isMobileWeb = ident.deviceKind === 'mobile' && !isCapacitorNativeMobileRuntime();
   const res = await callGhostiServerBridge<{
     alreadyPaired?: boolean;
+    mobileWebBridgeOnly?: boolean;
     expectedEmailHint?: string;
     devices?: GhostiConnectedDeviceDto[];
     entitlement?: GhostiDeviceEntitlementView;
@@ -814,9 +818,18 @@ export async function consumeDevicePairingCode6(code: string): Promise<{
     deviceKind: ident.deviceKind,
     displayName: ident.displayName,
     platform: ident.platform,
+    mobileWebBridgeOnly: isMobileWeb,
   });
   const safeDevices = Array.isArray(res.devices) ? res.devices : [];
   const safeEntitlement = res.entitlement || null;
+  if (res.ok && res.mobileWebBridgeOnly) {
+    return {
+      ok: true,
+      alreadyPaired: false,
+      devices: [],
+      entitlement: safeEntitlement,
+    };
+  }
   if (res.ok) {
     thisDeviceRevokedLocally = false;
     if (res.canonicalUserId && typeof window !== 'undefined') {
