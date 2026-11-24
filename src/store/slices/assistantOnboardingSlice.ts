@@ -556,16 +556,14 @@ export const createAssistantOnboardingSlice: StateCreator<
       isStandaloneSearchWin ? Promise.resolve([]) : fetchSharedFamilyHostPhotos(),
     ]);
 
-    const cachedOnDeviceFaces =
-      faceData.clusters.length === 0 ? loadCachedOnDeviceFaceClusters() : null;
-    const rawFaceClusters =
-      faceData.clusters.length > 0
-        ? faceData.clusters
-        : cachedOnDeviceFaces?.clusters || [];
-    const effectiveLatestYear =
-      faceData.clusters.length > 0
-        ? faceData.latestCorpusYear
-        : cachedOnDeviceFaces?.latestCorpusYear || faceData.latestCorpusYear;
+    const cachedOnDeviceFaces = loadCachedOnDeviceFaceClusters();
+    const hasOnDeviceCache = cachedOnDeviceFaces.clusters.length > 0;
+    const rawFaceClusters = hasOnDeviceCache
+      ? cachedOnDeviceFaces.clusters
+      : faceData.clusters;
+    const effectiveLatestYear = hasOnDeviceCache
+      ? cachedOnDeviceFaces.latestCorpusYear
+      : faceData.latestCorpusYear;
     const autoMultiClusters = buildAutoMultiConditionSeedClusters(rawFaceClusters);
 
     const totalBytes = dataset.photos.reduce((a, p) => a + p.size, 0);

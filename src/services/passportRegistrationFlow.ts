@@ -23,6 +23,7 @@ import {
   buildPassportExtrasFromClusters,
   pushGhostPassportsToCloud,
 } from './ghostPassportSync';
+import { saveCachedOnDeviceFaceClusters } from './ai/onDeviceFacePassportEngine';
 
 export type PassportRegMode = 'self' | 'family';
 
@@ -154,7 +155,7 @@ export function countFacePhotos(clusters: FaceMemberCluster[]): number {
   return set.size || fallback;
 }
 
-/** 얼굴 묶음의 시기별 사진 (없으면 대표 사진 1장) */
+/** 얼굴 묶음의 시기별 사진 (없으면 대표 사진 1장, 동명 파일 복사본 중복 제거) */
 export function clusterCuts(c: FaceMemberCluster): YearlyFaceBestCut[] {
   const cuts = Array.isArray(c.yearlyBestCuts) && c.yearlyBestCuts.length > 0
     ? c.yearlyBestCuts
@@ -173,9 +174,10 @@ export function clusterCuts(c: FaceMemberCluster): YearlyFaceBestCut[] {
   const seen = new Set<string>();
   return cuts
     .filter((cut) => {
-      const k = cut.representativePhoto || `y${cut.year}`;
-      if (seen.has(k)) return false;
-      seen.add(k);
+      const rawKey = cut.representativePhoto || `y${cut.year}`;
+      const baseKey = rawKey.replace(/__[0-9A-Za-z가-힣_-]{1,18}_[0-9a-f]{6}(?=\.[^.]+$)/i, '').toLowerCase();
+      if (seen.has(baseKey)) return false;
+      seen.add(baseKey);
       return true;
     })
     .sort((a, b) => b.year - a.year)
@@ -204,7 +206,40 @@ export function confirmedCutsFor(c: FaceMemberCluster, st: PassportRegState): Ye
 
 export function findSelfCluster(st = loadPassportRegState()): FaceMemberCluster | null {
   if (!st.selfClusterId) return null;
-  const found = liveClusters().find((c) => c.clusterId === st.selfClusterId) || null;
+  const clusters = liveClusters();
+  let found = clusters.find((c) => c.clusterId === st.selfClusterId) || null;
+  if (!found && st.confirmedKeys.length > 0) {
+    // 새로고침 후 클러스터 ID가 재정렬된 경우にも 확정 등록했던 대표 사진 파일명으로 자동 복원
+    const confirmedPhotos = new Set(
+      st.confirmedKeys
+        .filter((k) => k.startsWith(`${st.selfClusterId}::`))
+        .map((k) => k.split('::')[1])
+        .filter(Boolean)
+    );
+    if (confirmedPhotos.size > 0) {
+      found =
+        clusters.find(
+          (c) =>
+            confirmedPhotos.has(c.representativePhoto) ||
+            (c.matchedPhotoFiles || []).some((f) => confirmedPhotos.has(f)) ||
+            (c.yearlyBestCuts || []).some((yc) => confirmedPhotos.has(yc.representativePhoto))
+        ) || null;
+      if (found) {
+        const migratedConfirmed = st.confirmedKeys.map((k) =>
+          k.startsWith(`${st.selfClusterId}::`) ? `${found!.clusterId}::${k.split('::')[1]}` : k
+        );
+        const migratedRejected = st.rejectedKeys.map((k) =>
+          k.startsWith(`${st.selfClusterId}::`) ? `${found!.clusterId}::${k.split('::')[1]}` : k
+        );
+        savePassportRegState({
+          ...st,
+          selfClusterId: found.clusterId,
+          confirmedKeys: Array.from(new Set(migratedConfirmed)),
+          rejectedKeys: Array.from(new Set(migratedRejected)),
+        });
+      }
+    }
+  }
   if (!found || (found.matchedPhotoCount || 0) < PASSPORT_MIN_FACE_PHOTOS_FOR_ASK) return null;
   const hasConfirmed = confirmedCutsFor(found, st).length > 0;
   const hasPending = pendingCutsFor(found, st).length > 0;
@@ -435,6 +470,8 @@ function removeCutsFromCluster(clusterId: string, rejectedFiles: string[]): void
   if (target?.registeredName) {
     stripTagFromPhotos(rejectedFiles, `#${target.registeredName.trim()}`);
   }
+  const latestStore = useSaySeeStore.getState();
+  saveCachedOnDeviceFaceClusters(latestStore.faceClusters, latestStore.latestCorpusYear);
 }
 
 export interface PassportPersonSubmission {

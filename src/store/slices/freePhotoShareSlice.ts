@@ -650,7 +650,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
 
     saveCachedOnDeviceFaceClusters(nextClusters, get().latestCorpusYear);
 
-    if (!isSecondaryRoom) {
+    if (!isSecondaryRoom && !String(clusterId || '').startsWith('ondevice_face_')) {
       const serverUpdated = await updateFaceClusterRegistry({
         action: 'update',
         clusterId,

@@ -8,13 +8,19 @@
 import type { FaceMemberCluster, PhotoItem, YearlyFaceBestCut } from '../../types/saysee';
 import type { WorkerDetectedFace } from './facePassportWorker';
 
-const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v4';
-const MAX_SCAN_PHOTOS = 160;
+const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v5';
+const MAX_SCAN_PHOTOS = 180;
 const MAX_CLUSTERS = 10;
 const MAX_CUTS_PER_CLUSTER = 6;
 /** OpenCV SFace 공식 동일인 코사인 유사도 임계치(0.363) 기반 + 타인/이질 이미지 체이닝 방지(0.39) */
 const SIMILARITY_THRESHOLD = 0.39;
 const SCREENSHOT_NAME_RX = /(screenshot|스크린샷|캡처|capture|화면\s*캡처|영수증|receipt|memo|메모)/i;
+/** AI 생성·스톡·웹 다운로드 이미지 판별 (실제 스마트폰/카메라 촬영 사진을 여권 스캔 시 최우선 배치하고 AI 이미지는 배제) */
+const AI_OR_STOCK_IMAGE_NAME_RX =
+  /(gemini_generated|chatgpt|midjourney|dall[-_]?e|stable[-_]?diffusion|comfyui|flux[-_]|stock_photo|unsplash|pexels|pixabay|freepik|shutterstock|gettyimages|ai_generated|generated_image|^image-\d{4,})/i;
+/** 스마트폰·디지털카메라 표준 촬영 파일명 패턴 (예: 20240720_182301.jpg, IMG_1234.jpg, DSC_0001.jpg, PXL_..., KakaoTalk_...) */
+const REAL_CAMERA_PHOTO_NAME_RX =
+  /^(?:(?:19|20)\d{6}[_-]\d{4,6}|IMG[_-]|DSC[_N0-9]|DCIM|PXL[_-]|SAM[_-]|GOPR|DJI[_-]|KakaoTalk_\d{8}|Photo_\d|사진|\d{8}_\d{6})/i;
 /** 코드 레포지토리·샘플 코퍼스·웹 번들 더미 사진이 실제 유저 PC 사진보다 앞서는 것을 원천 차단 */
 const REPO_OR_SYNTHETIC_SAMPLE_PATH_RX =
   /(?:[\\/](?:ghosti|ghosti_test_corpus|sample_photos_301|test_photos|node_modules|public)[\\/]|^(?:IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025))/i;
@@ -44,11 +50,20 @@ let activeScanPromise: Promise<FaceMemberCluster[]> | null = null;
 let lastScannedFingerprint = '';
 
 function buildPhotosFingerprint(photos: PhotoItem[]): string {
-  const real = photos.filter((p) => p && !p.quarantined).slice(0, 60);
+  const real = photos
+    .filter(
+      (p) =>
+        p &&
+        !p.quarantined &&
+        !REPO_OR_SYNTHETIC_SAMPLE_PATH_RX.test(p.fullPath || '') &&
+        !REPO_OR_SYNTHETIC_SAMPLE_PATH_RX.test(p.name || '') &&
+        !AI_OR_STOCK_IMAGE_NAME_RX.test(p.name || '')
+    )
+    .slice(0, 60);
   if (real.length === 0) return '';
   const head = real.slice(0, 8).map((p) => p.name).join('|');
   const tail = real.slice(-4).map((p) => p.name).join('|');
-  return `${photos.length}:${head}:${tail}`;
+  return `v5:${real.length}:${head}:${tail}`;
 }
 
 export function loadCachedOnDeviceFaceClusters(): {
@@ -338,12 +353,15 @@ function clusterExtractedFaces(
   if (allYears.length > 0) latestCorpusYear = Math.max(...allYears);
 
   const clusters: FaceMemberCluster[] = topWorking.map((wc, idx) => {
-    // 같은 사진 중복 제거 후 정면·선명도 순 정렬
+    // 같은 사진 및 동명 파일(다른 폴더의 복사본) 중복 제거 후 정면·선명도 순 정렬
     const byPhoto = new Map<string, ExtractedFaceSample>();
     for (const m of wc.members) {
-      const prev = byPhoto.get(m.photo.name);
+      const baseKey = String(m.photo.name || '')
+        .replace(/__[0-9A-Za-z가-힣_-]{1,18}_[0-9a-f]{6}(?=\.[^.]+$)/i, '')
+        .toLowerCase();
+      const prev = byPhoto.get(baseKey);
       if (!prev || m.frontalScore > prev.frontalScore) {
-        byPhoto.set(m.photo.name, m);
+        byPhoto.set(baseKey, m);
       }
     }
     const uniqueSamples = Array.from(byPhoto.values()).sort(
@@ -382,9 +400,15 @@ function clusterExtractedFaces(
       existingByPhoto.get(rep.photo.name) ||
       uniqueSamples.map((u) => existingByPhoto.get(u.photo.name)).find(Boolean);
 
-    const clusterId = matchedExisting?.clusterId || `ondevice_face_${idx + 1}_${rep.photo.name.slice(0, 18)}`;
     const matchedPhotoFiles = uniqueSamples.map((u) => u.photo.name);
     const seedDates = Array.from(new Set(uniqueSamples.map((u) => u.dateStr))).slice(0, 8);
+    // 새로고침(F5) 후 재스캔되어도 동일 인물 사진 묶음이 항상 동일한 clusterId를 유지하도록 결정론적 키 부여
+    const stablePhotoKey = matchedPhotoFiles
+      .slice()
+      .sort()[0]
+      .replace(/[^0-9A-Za-z가-힣_-]/g, '')
+      .slice(0, 24);
+    const clusterId = matchedExisting?.clusterId || `ondevice_face_${stablePhotoKey}`;
 
     return {
       clusterId,
@@ -446,7 +470,7 @@ export async function runOnDeviceFacePassportScan(
     return { clusters: res, latestCorpusYear: new Date().getFullYear() };
   }
 
-  // 비격리 + 비스크린샷 + 비영수증 + 비흐림 + 비샘플레포 실사진 우선 선별 (카메라/일반 JPEG 사진을 스크린샷·PNG보다 우선 정렬)
+  // 비격리 + 비스크린샷 + 비영수증 + 비흐림 + 비샘플레포 + 비AI생성 실사진 우선 선별
   const realUserPhotos = photos.filter(
     (p) =>
       p &&
@@ -456,9 +480,12 @@ export async function runOnDeviceFacePassportScan(
       p.trashCategory !== 'receipt' &&
       p.trashCategory !== 'document' &&
       p.trashCategory !== 'blurry' &&
+      p.trashCategory !== 'screenshot' &&
       !p.isVaultDocument &&
       !REPO_OR_SYNTHETIC_SAMPLE_PATH_RX.test(p.fullPath || '') &&
-      !REPO_OR_SYNTHETIC_SAMPLE_PATH_RX.test(p.name || '')
+      !REPO_OR_SYNTHETIC_SAMPLE_PATH_RX.test(p.name || '') &&
+      !AI_OR_STOCK_IMAGE_NAME_RX.test(p.name || '') &&
+      !SCREENSHOT_NAME_RX.test(p.name || '')
   );
   const basePool =
     realUserPhotos.length > 0
@@ -472,10 +499,16 @@ export async function runOnDeviceFacePassportScan(
             p.trashCategory !== 'receipt' &&
             p.trashCategory !== 'document' &&
             p.trashCategory !== 'blurry' &&
-            !p.isVaultDocument
+            !p.isVaultDocument &&
+            !AI_OR_STOCK_IMAGE_NAME_RX.test(p.name || '')
         );
   const candidates = basePool
     .sort((a, b) => {
+      // 1순위: 스마트폰·카메라 표준 촬영 파일(20240720_..., IMG_..., KakaoTalk_...)
+      const aCam = REAL_CAMERA_PHOTO_NAME_RX.test(a.name) && /\.jpe?g$/i.test(a.name) ? 0 : 1;
+      const bCam = REAL_CAMERA_PHOTO_NAME_RX.test(b.name) && /\.jpe?g$/i.test(b.name) ? 0 : 1;
+      if (aCam !== bCam) return aCam - bCam;
+      // 2순위: 일반 JPEG vs PNG/스크린샷
       const aScreen = SCREENSHOT_NAME_RX.test(a.name) || /\.png$/i.test(a.name) ? 1 : 0;
       const bScreen = SCREENSHOT_NAME_RX.test(b.name) || /\.png$/i.test(b.name) ? 1 : 0;
       if (aScreen !== bScreen) return aScreen - bScreen;
