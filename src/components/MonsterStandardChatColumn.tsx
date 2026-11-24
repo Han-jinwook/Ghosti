@@ -443,6 +443,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       const t = buildWelcomeTurn(loadGhostSecretaryState(), isMobileOrStore);
       saveGhostSecretaryState(t.nextState);
       setAwaitingNickname(Boolean(t.nextState.awaitingNickname));
+      setWelcomeChipsDismissed(false);
       setSharedMonsterMessages((prev) =>
         prev.map((m) => (m.id === 'monster_welcome_init' && prev.length === 1 ? { ...m, text: t.text } : m))
       );
@@ -454,6 +455,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     };
     window.addEventListener('ghosti_jump_to_secretary', onJumpRefresh);
     window.addEventListener('merlinSessionExpired', onJumpRefresh);
+    window.addEventListener('merlinLoggedIn', onJumpRefresh);
+    window.addEventListener('ghostiSupabaseUserSynced', onJumpRefresh);
 
     // [Stage 1: 최초 1회 은행 보안프로그램 속도 저하 브리핑 & 1회성 동의 칩 (한 턴 연타 금지 · 호흡 분리)]
     if (
@@ -551,6 +554,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     return () => {
       window.removeEventListener('ghosti_jump_to_secretary', onJumpRefresh);
       window.removeEventListener('merlinSessionExpired', onJumpRefresh);
+      window.removeEventListener('merlinLoggedIn', onJumpRefresh);
+      window.removeEventListener('ghostiSupabaseUserSynced', onJumpRefresh);
     };
   }, [sourceTab, isMobileOrStore]);
 

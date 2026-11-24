@@ -357,6 +357,8 @@ const GhostiHubGlobalModals: React.FC = () => {
       };
     });
     if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('merlinSessionExpired'));
+      window.dispatchEvent(new CustomEvent('ghosti_jump_to_secretary'));
       detachPendingLogoutWipe();
       const finalWipe = () => {
         purgeAllGhostiLocalAuthArtifacts({ setLogoutLockMs: 15_000 });
@@ -405,24 +407,25 @@ const GhostiHubGlobalModals: React.FC = () => {
         }
       }
       const cachedDevSnap = loadCachedDeviceIntegrationSnapshot(cleanUserEmail);
+      const isAccountTransition = didTransitionFromGuest || didSwitchAccountDirectly;
       useSaySeeStore.setState((state) => ({
         pcAgentPairedMobile:
           restoredMobilePaired ||
           Boolean(cachedDevSnap?.devices?.some((d) => d.device_kind === 'mobile')) ||
           (cachedDevSnap?.devices?.length || 0) >= 2,
-        connectedDevices: didSwitchAccountDirectly
+        connectedDevices: isAccountTransition
           ? cachedDevSnap?.devices || []
           : cachedDevSnap?.devices?.length
           ? cachedDevSnap.devices
           : state.connectedDevices,
-        devicePairingCode6: didSwitchAccountDirectly
+        devicePairingCode6: isAccountTransition
           ? cachedDevSnap?.pairingCode ?? null
           : cachedDevSnap?.pairingCode ?? state.devicePairingCode6,
-        deviceEntitlement: didSwitchAccountDirectly
+        deviceEntitlement: isAccountTransition
           ? cachedDevSnap?.entitlement ?? null
           : cachedDevSnap?.entitlement ?? state.deviceEntitlement,
         syncedClipboardItems: loadCachedSyncedClips(cleanUserEmail),
-        ...(didSwitchAccountDirectly
+        ...(isAccountTransition
           ? {
               activeSharedRoomId: null,
               activeJoinedRoomMeta: null,
@@ -430,6 +433,9 @@ const GhostiHubGlobalModals: React.FC = () => {
               sharedRoomAddedPhotos: [],
               sharedRoomHostPhotos: [],
               searchResults: [],
+              activeQuery: '',
+              hasExecutedUserSearch: false,
+              matchedTags: [],
             }
           : {}),
         merlinAuth: {
@@ -444,8 +450,9 @@ const GhostiHubGlobalModals: React.FC = () => {
       const cleanHubNick = (user.nickname || '').trim();
       bindGhostSecretaryAccountOwner(user.email, cleanHubNick);
 
-      if (didTransitionFromGuest || didSwitchAccountDirectly) {
+      if (isAccountTransition) {
         resetSharedMonsterChatToWelcome();
+        window.dispatchEvent(new CustomEvent('ghosti_jump_to_secretary'));
       }
 
       void syncHubUserToLocalSupabase({
@@ -454,16 +461,11 @@ const GhostiHubGlobalModals: React.FC = () => {
         nickname: cleanHubNick || undefined,
         hubToken: token,
       }).then(() => {
-        if (didTransitionFromGuest || didSwitchAccountDirectly) {
+        if (isAccountTransition) {
           const stNow = useSaySeeStore.getState();
           void stNow.refreshDeviceIntegrationState();
-          if (
-            stNow.activeLoungeType === 'family' ||
-            stNow.activeLoungeType === 'club' ||
-            stNow.activeLoungeType === 'student'
-          ) {
-            void stNow.syncActiveSharedRoomFromSupabase();
-          }
+          void stNow.syncActiveSharedRoomFromSupabase();
+          window.dispatchEvent(new CustomEvent('ghosti_jump_to_secretary'));
         }
       });
 
