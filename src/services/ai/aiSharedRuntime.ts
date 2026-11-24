@@ -1461,7 +1461,7 @@ export function isVideoPlaybackActive(): boolean {
   return aiRuntimeFlags.activeVideoPlaybackCount > 0;
 }
 
-export function bumpSharedVisionIdleDispose(ms = 30000): void {
+export function bumpSharedVisionIdleDispose(ms = 12000): void {
   if (sharedVisionIdleTimer) {
     clearTimeout(sharedVisionIdleTimer);
   }
@@ -1473,7 +1473,17 @@ export function bumpSharedVisionIdleDispose(ms = 30000): void {
     }
     if (embWorkerVisionReady) {
       embWorkerVisionReady = false;
-      void callEmbeddingWorker({ type: 'disposeVision' }).catch(() => {});
+      void callEmbeddingWorker({ type: 'disposeVision' })
+        .catch(() => {})
+        .finally(() => {
+          // WebAssembly 선형 메모리(수백 MB)는 dispose만으로 OS에 즉시 반환되지 않으므로
+          // 유휴 상태에서는 워커 자체를 terminate해 Chrome 탭 RAM을 150~250MB대로 즉시 회수합니다.
+          if (aiRuntimeFlags.priorityVideoSearchDepth === 0 && !aiRuntimeFlags.silentMediaIndexingRunning) {
+            void terminateEmbeddingWorkerNow();
+          }
+        });
+    } else if (embWorkerInstance && aiRuntimeFlags.priorityVideoSearchDepth === 0 && !aiRuntimeFlags.silentMediaIndexingRunning) {
+      void terminateEmbeddingWorkerNow();
     }
     if (sharedVisionModel) {
       const m = sharedVisionModel;

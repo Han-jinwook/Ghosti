@@ -9,7 +9,7 @@ import type { FaceMemberCluster, PhotoItem, YearlyFaceBestCut } from '../../type
 import type { WorkerDetectedFace } from './facePassportWorker';
 
 const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v7';
-const MAX_SCAN_PHOTOS = 260;
+const MAX_SCAN_PHOTOS = 160;
 const MAX_CLUSTERS = 10;
 const MAX_CUTS_PER_CLUSTER = 6;
 /** OpenCV SFace 공식 동일인 코사인 유사도 임계치(0.363) 기반 */

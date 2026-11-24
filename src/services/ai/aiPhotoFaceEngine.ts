@@ -2536,11 +2536,12 @@ export async function startSilentRealMediaVisionIndexing(params: {
     }
 
     // 1) 이미 IndexedDB에 비전 벡터·시맨틱/OCR 메타가 캐싱된 사진은 모델 로딩(WebGPU 컴파일) 및 재추론 없이 0.5ms 배치로 즉시 복원!
+    // [Chrome 1.9GB RAM·CPU 폭주 방어]: 1회 세션당 미색인 신규 처리는 데스크톱 120장 / 모바일 80장으로 제한해 CPU 점유를 낮게 유지
     const candidatesAll = silentIndexingBrake
       .sortPhotosRecent90DaysFirst(
         params.photos.filter((p) => !p.quarantined && (!p.vec || p.vec.length !== DEFAULT_DIM))
       )
-      .slice(0, isMobileEnv ? 120 : 360);
+      .slice(0, isMobileEnv ? 80 : 120);
 
     const unindexedPhotos: PhotoItem[] = [];
     for (const item of candidatesAll) {
@@ -2863,9 +2864,8 @@ export async function startSilentRealMediaVisionIndexing(params: {
         await new Promise((r) => setTimeout(r, 240));
       }
 
-      if (isMobileEnv) {
-        await releasePaddleOcrRuntime();
-      }
+      // 데스크톱·모바일 공통: Pass 2 OCR 완료 즉시 PaddleOCR 워커를 terminate하여 WASM 힙 RAM을 OS에 즉시 반환
+      await releasePaddleOcrRuntime();
     }
   } finally {
     aiRuntimeFlags.silentMediaIndexingRunning = false;
@@ -2875,7 +2875,7 @@ export async function startSilentRealMediaVisionIndexing(params: {
         void ensureTextQueryEncoderLoaded();
       }
     } else {
-      bumpSharedVisionIdleDispose(15000);
+      bumpSharedVisionIdleDispose(10000);
     }
   }
 }

@@ -773,41 +773,38 @@ export const createAssistantOnboardingSlice: StateCreator<
       });
     }
 
-    // [온디바이스 얼굴 여권 자동 추출 (YuNet 232KB Web Worker)]
-    // 사진 목록이 준비되면 유저가 '여권 등록'을 먼저 말할 필요 없이 백그라운드에서 얼굴을 자동 추출하고
-    // 완료 시 귀신비서가 먼저 자연스럽게 여권사진 등록을 제안합니다 (D-35).
-    if (!isStandaloneSearchWin && typeof window !== 'undefined' && enrichedPhotos.length > 0) {
-      window.setTimeout(() => {
-        void (async () => {
+    // [3대 AI/이미지 백그라운드 파이프라인 완전 직렬화 (Chrome 1.9GB RAM·CPU 동시 폭주 원천 차단)]:
+    // Stage 1: 광학 감사(dHash/흔들림) ➔ Stage 2: 온디바이스 얼굴 여권(YuNet+SFace, 완료 즉시 워커 terminate)
+    // ➔ Stage 3: 백그라운드 비전/OCR 768D 인덱싱(120장 배치, 완료 후 워커 terminate) 순으로 1개씩만 순차 실행합니다.
+    const runFacePassportStage = async (): Promise<void> => {
+      if (isStandaloneSearchWin || typeof window === 'undefined' || enrichedPhotos.length === 0) return;
+      try {
+        const stNow = get();
+        const livePhotos = stNow.photos.length > 0 ? stNow.photos : enrichedPhotos;
+        if (livePhotos.length === 0) return;
+        const applyScannedClusters = (clusters: FaceMemberCluster[], latestYear: number) => {
+          if (clusters.length === 0) return;
+          set({
+            faceClusters: buildAutoMultiConditionSeedClusters(clusters),
+            latestCorpusYear: latestYear,
+          });
           try {
-            const stNow = get();
-            const livePhotos = stNow.photos.length > 0 ? stNow.photos : enrichedPhotos;
-            if (livePhotos.length === 0) return;
-            const applyScannedClusters = (clusters: FaceMemberCluster[], latestYear: number) => {
-              if (clusters.length === 0) return;
-              set({
-                faceClusters: buildAutoMultiConditionSeedClusters(clusters),
-                latestCorpusYear: latestYear,
-              });
-              try {
-                window.dispatchEvent(new Event(PASSPORT_REG_STATE_EVENT));
-              } catch {
-                /* ignore */
-              }
-            };
-            const scanned = await runOnDeviceFacePassportScan(
-              livePhotos,
-              stNow.faceClusters,
-              false,
-              applyScannedClusters
-            );
-            applyScannedClusters(scanned.clusters, scanned.latestCorpusYear);
+            window.dispatchEvent(new Event(PASSPORT_REG_STATE_EVENT));
           } catch {
-            /* ignore face scan errors */
+            /* ignore */
           }
-        })();
-      }, 250);
-    }
+        };
+        const scanned = await runOnDeviceFacePassportScan(
+          livePhotos,
+          stNow.faceClusters,
+          false,
+          applyScannedClusters
+        );
+        applyScannedClusters(scanned.clusters, scanned.latestCorpusYear);
+      } catch {
+        /* ignore face scan errors */
+      }
+    };
 
     // [의미 검색 엔진 준비 & 실사용 PC 미디어 무소음 비전 인덱싱]
     // 데스크톱에서 Z-코어가 연결되면 내 PC 실제 동영상 키프레임 및 실사진의 768차원 비전 벡터를 조용히 인덱싱·캐싱합니다.
@@ -863,8 +860,9 @@ export const createAssistantOnboardingSlice: StateCreator<
               }
             }, 220);
           } else {
-            // 0) 내 PC 실물 사진들의 실제 64-bit dHash 및 2D 라플라시안 선명도(흐린 사진 판별) + 다중 연사 묶음(5장·10장 세트) 즉시 클러스터링
+            // Stage 1 ➔ Stage 2 ➔ Stage 3 순차 직렬 실행 (동시 워커 폭발 0%)
             window.setTimeout(async () => {
+              // Stage 1: 내 PC 실물 사진들의 실제 64-bit dHash 및 2D 라플라시안 선명도(흐린 사진 판별) + 다중 연사 묶음
               try {
                 const currentPhotos = get().photos;
                 const { updatedPhotos, duplicateGroups: realDupGroups } =
@@ -905,10 +903,13 @@ export const createAssistantOnboardingSlice: StateCreator<
               } catch {
                 /* ignore */
               }
-            }, 150);
 
-            // 첫 화면 썸네일 렌더 직후(0.9초) 동영상 키프레임 및 실사진 비전 벡터를 조용히 고속 인덱싱 (380ms 배치 반영으로 리렌더 폭주 차단)
-            window.setTimeout(() => {
+              // Stage 2: 온디바이스 얼굴 여권 추출 (YuNet + SFace int8) — 완료 후 워커 terminate로 WASM RAM 즉시 반환
+              await new Promise<void>((r) => window.setTimeout(r, 250));
+              await runFacePassportStage();
+
+              // Stage 3: 동영상 키프레임 및 실사진 비전 벡터 768D 저부하 인덱싱 (앞 2단계 종료 후 단독 실행)
+              await new Promise<void>((r) => window.setTimeout(r, 600));
               const pendingPhotoPatches = new Map<string, Partial<PhotoItem>>();
               let flushTimer = 0;
               const flushPhotoPatches = () => {
@@ -941,43 +942,45 @@ export const createAssistantOnboardingSlice: StateCreator<
                   };
                 });
               };
-              void startSilentRealMediaVisionIndexing({
-                photos: get().photos,
-                videos: get().videoSceneItems,
-                onVideoThumbHydrated: (videoFileName, thumbUrl) => {
-                  set((state) => ({
-                    videoSceneItems: state.videoSceneItems.map((v) =>
-                      v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
-                    ),
-                    matchedVideoScenes: state.matchedVideoScenes.map((v) =>
-                      v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
-                    ),
-                  }));
-                },
-                onVideoOcrHydrated: (videoFileName, ocrMeta) => {
-                  set((state) => ({
-                    videoSceneItems: state.videoSceneItems.map((v) =>
-                      v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
-                    ),
-                    matchedVideoScenes: state.matchedVideoScenes.map((v) =>
-                      v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
-                    ),
-                  }));
-                },
-                onPhotoVisionHydrated: (photoId, patch) => {
-                  const prev = pendingPhotoPatches.get(photoId);
-                  pendingPhotoPatches.set(photoId, prev ? { ...prev, ...patch } : patch);
-                  if (!flushTimer) {
-                    flushTimer = window.setTimeout(flushPhotoPatches, 380);
-                  }
-                },
-              }).finally(() => {
+              try {
+                await startSilentRealMediaVisionIndexing({
+                  photos: get().photos,
+                  videos: get().videoSceneItems,
+                  onVideoThumbHydrated: (videoFileName, thumbUrl) => {
+                    set((state) => ({
+                      videoSceneItems: state.videoSceneItems.map((v) =>
+                        v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
+                      ),
+                      matchedVideoScenes: state.matchedVideoScenes.map((v) =>
+                        v.videoFileName === videoFileName ? { ...v, thumbUrl: v.thumbUrl || thumbUrl } : v
+                      ),
+                    }));
+                  },
+                  onVideoOcrHydrated: (videoFileName, ocrMeta) => {
+                    set((state) => ({
+                      videoSceneItems: state.videoSceneItems.map((v) =>
+                        v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
+                      ),
+                      matchedVideoScenes: state.matchedVideoScenes.map((v) =>
+                        v.videoFileName === videoFileName ? { ...v, ...ocrMeta } : v
+                      ),
+                    }));
+                  },
+                  onPhotoVisionHydrated: (photoId, patch) => {
+                    const prev = pendingPhotoPatches.get(photoId);
+                    pendingPhotoPatches.set(photoId, prev ? { ...prev, ...patch } : patch);
+                    if (!flushTimer) {
+                      flushTimer = window.setTimeout(flushPhotoPatches, 380);
+                    }
+                  },
+                });
+              } finally {
                 if (flushTimer) {
                   window.clearTimeout(flushTimer);
                 }
                 flushPhotoPatches();
-              });
-            }, 900);
+              }
+            }, 200);
           }
 
           // 첫 기동 시 백그라운드 배치 OCR(10개 단위)이 진행 중이면 완료 시점에 최신 배지·텍스트 메타데이터를 자동 동기화

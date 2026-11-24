@@ -2318,7 +2318,7 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
       foundAny?: boolean;
     }>('/__zcore/deep-uninstall-scan', postJson({ appQuery: '보안프로그램' }));
 
-    if (!scanRes?.ok) {
+    if (!scanRes?.ok || !scanRes.data) {
       return reply(
         sourceTab,
         '내 PC의 보안프로그램을 삭제하려면 **멀린 Z-코어 엔진**이 켜져 있어야 합니다. 엔진 연결 후 다시 눌러주세요!',
@@ -2326,30 +2326,45 @@ async function handleSecretaryCareBriefingAndSuperpowersIfMatched(
       );
     }
 
+    const d = scanRes.data;
+    const rawFolders: Array<{ path: string; sizeMb: number }> = Array.isArray(d.residualFolders)
+      ? d.residualFolders
+          .map((f: any) =>
+            typeof f === 'string'
+              ? { path: f, sizeMb: 0 }
+              : { path: String(f?.path || ''), sizeMb: Number(f?.sizeMb || 0) }
+          )
+          .filter((f) => Boolean(f.path))
+      : [];
     const deepPayload: MonsterDeepUninstallPayload = {
-      appQuery: '보안프로그램',
-      targetAppLabel: scanRes.targetAppLabel || '관공서·은행 상주 보안 플러그인 일괄',
+      targetAppQuery: '보안프로그램',
+      targetAppLabel: d.targetAppLabel || '관공서·은행 상주 보안 플러그인 일괄',
+      foundAny: Boolean(d.foundAny),
+      needsClarification: Boolean(d.needsClarification),
+      runningProcessCount: Number(d.runningProcessCount || 0),
+      serviceAndTaskCount: Number(d.serviceAndTaskCount || 0),
+      totalResidualMb: Number(d.totalResidualMb || 0),
+      estimatedRamMb: Number(d.estimatedRamMb || 0),
       summaryBadge:
-        scanRes.summaryBadge ||
-        `상주 프로세스 ${scanRes.runningProcessCount || 0}개 / 서비스·스케줄러 ${scanRes.serviceAndTaskCount || 0}개`,
-      honestBriefingKo: scanRes.honestBriefingKo || '',
-      runningProcessCount: Number(scanRes.runningProcessCount || 0),
-      serviceAndTaskCount: Number(scanRes.serviceAndTaskCount || 0),
-      totalResidualMb: Number(scanRes.totalResidualMb || 0),
-      estimatedRamMb: Number(scanRes.estimatedRamMb || 0),
-      installedEntries: Array.isArray(scanRes.installedEntries) ? scanRes.installedEntries : [],
-      runningProcesses: Array.isArray(scanRes.runningProcesses) ? scanRes.runningProcesses : [],
-      services: Array.isArray(scanRes.services) ? scanRes.services : [],
-      scheduledTasks: Array.isArray(scanRes.scheduledTasks) ? scanRes.scheduledTasks : [],
-      startupEntries: Array.isArray(scanRes.startupEntries) ? scanRes.startupEntries : [],
-      residualFolders: Array.isArray(scanRes.residualFolders) ? scanRes.residualFolders : [],
-      foundAny: Boolean(scanRes.foundAny),
+        d.summaryBadge ||
+        `상주 프로세스 ${d.runningProcessCount || 0}개 / 서비스·스케줄러 ${d.serviceAndTaskCount || 0}개`,
+      honestBriefingKo: d.honestBriefingKo || '',
+      sampleProcesses: Array.isArray(d.runningProcesses)
+        ? d.runningProcesses.slice(0, 8).map((p: any) => (typeof p === 'string' ? p : String(p?.name || p?.processName || '')))
+        : [],
+      sampleServicesAndTasks: [
+        ...(Array.isArray(d.services) ? d.services.slice(0, 6).map((s: any) => (typeof s === 'string' ? s : String(s?.displayName || s?.name || ''))) : []),
+        ...(Array.isArray(d.scheduledTasks) ? d.scheduledTasks.slice(0, 4).map((t: any) => String(t)) : []),
+      ].filter(Boolean),
+      sampleFolders: rawFolders.slice(0, 6).map((f) => f.path),
+      residualFolderItems: rawFolders,
+      selectedFolderPaths: rawFolders.map((f) => f.path),
       executed: false,
     };
     speak('설치된 은행·관공서 보안프로그램을 모두 찾아 목록을 준비했습니다. 확인 후 진행해 주세요.');
     return reply(
       sourceTab,
-      scanRes.honestBriefingKo ||
+      d.honestBriefingKo ||
         '설치된 은행·관공서 보안프로그램과 상주 서비스를 스캔했습니다. 아래 내역을 확인하신 뒤 실행 버튼을 눌러주세요.',
       {
         cardKind: 'DEEP_UNINSTALL_GATE',
