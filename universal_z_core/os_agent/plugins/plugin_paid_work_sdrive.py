@@ -355,8 +355,17 @@ def _purge_legacy_vite_mock_files_once(vault_dir: Path) -> None:
             pass
 
 
+def _default_work_vault_dir() -> Path:
+    if not getattr(sys, "frozen", False) and os.environ.get("GHOSTI_WORK_DEV_REPO_VAULT") == "1":
+        repo_cand = Path(__file__).resolve().parents[3] / "업무공유폴더_S"
+        if repo_cand.exists():
+            return repo_cand
+    return _get_merlin_appdata_dir() / "업무공유폴더_S"
+
+
 def get_work_vault_dir(custom_target: Optional[str] = None, ensure_dirs: bool = True) -> Path:
-    """업무 폴더 실제 경로. custom_target은 반드시 _validate_custom_work_target 통과 시에만 저장됩니다."""
+    """업무 폴더 실제 경로. custom_target은 반드시 _validate_custom_work_target 통과 시에만 저장됩니다.
+    사용자 지정 폴더(예: G:\\내 드라이브\\테스트폴더)일 때는 원래 폴더 구조를 100% 보존하기 위해 기본 4개 서브폴더를 강제 생성하지 않습니다."""
     if custom_target and str(custom_target).strip():
         valid_p, _reason = _validate_custom_work_target(custom_target)
         if valid_p is not None:
@@ -364,28 +373,26 @@ def get_work_vault_dir(custom_target: Optional[str] = None, ensure_dirs: bool = 
 
     cfg = _load_sdrive_config()
     saved_dir = str(cfg.get("targetDir") or "").strip()
+    default_dir = _default_work_vault_dir()
     vault_dir: Optional[Path] = None
+    is_custom = False
 
     if saved_dir:
         valid_saved, _r = _validate_custom_work_target(saved_dir)
         if valid_saved is not None:
             vault_dir = valid_saved
-
-    # 개발 PC 전용 저장소 폴더는 명시적 환경변수가 있을 때만 사용 (배포 PC에 개발 폴더가 끼어드는 것 방지)
-    if vault_dir is None and not getattr(sys, "frozen", False) and os.environ.get("GHOSTI_WORK_DEV_REPO_VAULT") == "1":
-        repo_cand = Path(__file__).resolve().parents[3] / "업무공유폴더_S"
-        if repo_cand.exists():
-            vault_dir = repo_cand
+            is_custom = not _same_path(valid_saved, default_dir)
 
     if vault_dir is None:
-        vault_dir = _get_merlin_appdata_dir() / "업무공유폴더_S"
+        vault_dir = default_dir
 
     if ensure_dirs:
         try:
             vault_dir.mkdir(parents=True, exist_ok=True)
-            for _, folder_name in SUBFOLDER_SPECS:
-                (vault_dir / folder_name).mkdir(parents=True, exist_ok=True)
-            _purge_legacy_vite_mock_files_once(vault_dir)
+            if not is_custom:
+                for _, folder_name in SUBFOLDER_SPECS:
+                    (vault_dir / folder_name).mkdir(parents=True, exist_ok=True)
+                _purge_legacy_vite_mock_files_once(vault_dir)
         except Exception:
             pass
 
@@ -394,6 +401,7 @@ def get_work_vault_dir(custom_target: Optional[str] = None, ensure_dirs: bool = 
 
 def inspect_s_drive_status(drive_letter: str = WORK_DRIVE_PREFERRED) -> Dict[str, Any]:
     vault_dir = get_work_vault_dir(ensure_dirs=False)
+    default_dir = _default_work_vault_dir()
     mounted_letter = _mounted_letter_for_vault(vault_dir)
     return {
         "ok": True,
@@ -402,7 +410,51 @@ def inspect_s_drive_status(drive_letter: str = WORK_DRIVE_PREFERRED) -> Dict[str
         "preferredLetter": WORK_DRIVE_PREFERRED,
         "mounted": bool(mounted_letter),
         "targetDir": str(vault_dir),
+        "defaultTargetDir": str(default_dir),
+        "isCustomTarget": not _same_path(vault_dir, default_dir),
     }
+
+
+def _pick_folder_dialog_win32(initial_dir: str = "") -> Optional[str]:
+    """방장이 직접 클릭했을 때 Windows 탐색기 폴더 선택창(TopMost)을 띄워 구글 드라이브(G:) 하위 폴더 등을 선택합니다."""
+    if os.name != "nt":
+        return None
+    # Google Drive(G:/H:)가 마운트되어 있고 현재 기본 폴더 상태라면 내 드라이브를 기본 시작 경로로 제안
+    start_dir = initial_dir
+    if not start_dir or "AppData" in start_dir:
+        for cand_g in ("G:\\내 드라이브", "G:\\My Drive", "H:\\내 드라이브", "H:\\My Drive"):
+            if os.path.isdir(cand_g):
+                start_dir = cand_g
+                break
+    ps_init = (start_dir or "").replace("'", "''")
+    ps_script = (
+        "Add-Type -AssemblyName System.Windows.Forms; "
+        "$f = New-Object System.Windows.Forms.Form; $f.TopMost = $true; $f.ShowInTaskbar = $false; "
+        "$f.Width = 1; $f.Height = 1; $f.StartPosition = 'Manual'; $f.Location = New-Object System.Drawing.Point(-2000,-2000); "
+        "$f.Show(); $f.Activate(); "
+        "$d = New-Object System.Windows.Forms.FolderBrowserDialog; "
+        "$d.Description = 'S: 업무 공유 드라이브로 연결할 폴더(예: 구글 드라이브 내 테스트 폴더)를 선택해 주세요.'; "
+        "$d.ShowNewFolderButton = $true; "
+        f"if ('{ps_init}' -ne '' -and (Test-Path -LiteralPath '{ps_init}')) {{ $d.SelectedPath = '{ps_init}' }}; "
+        "if ($d.ShowDialog($f) -eq [System.Windows.Forms.DialogResult]::OK) { [Console]::Out.Write($d.SelectedPath) }; "
+        "$f.Close()"
+    )
+    try:
+        res = subprocess.run(
+            ["powershell", "-NoProfile", "-STA", "-Command", ps_script],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            timeout=180,
+            creationflags=_CREATE_NO_WINDOW,
+        )
+        picked = (res.stdout or "").strip()
+        if picked:
+            return picked
+    except Exception:
+        pass
+    return None
 
 
 def _run_subst(args: List[str]) -> Tuple[bool, str]:
@@ -426,7 +478,25 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
     action = str(payload.get("action") or "mount").strip().lower()
     open_explorer = bool(payload.get("openExplorer", False))
     custom_target = payload.get("targetDir")
+    prev_vault_dir = get_work_vault_dir(ensure_dirs=False)
 
+    if action == "pick_folder":
+        picked = _pick_folder_dialog_win32(str(prev_vault_dir))
+        if not picked:
+            return {
+                "ok": False,
+                "cancelled": True,
+                "targetDir": str(prev_vault_dir),
+                "message": "폴더 선택이 취소되었습니다.",
+            }
+        custom_target = picked
+        action = "mount"
+    elif action in ("reset_default", "reset_default_folder"):
+        default_dir = _default_work_vault_dir()
+        custom_target = str(default_dir)
+        action = "mount"
+
+    folder_switched = False
     if custom_target and str(custom_target).strip():
         valid_p, reason = _validate_custom_work_target(custom_target)
         if valid_p is None:
@@ -434,11 +504,25 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
                 "ok": False,
                 "error": "INVALID_TARGET_DIR",
                 "reason": reason,
-                "message": "이 폴더는 업무 공유 폴더로 지정할 수 없어요. (드라이브 최상위·Windows·Program Files·AppData 등 시스템 폴더 제외)",
+                "message": "이 폴더는 업무 공유 폴더로 지정할 수 없어요. (드라이브 최상위 G:\\ 자체 대신 G:\\내 드라이브\\폴더명 같은 하위 폴더를 선택해 주세요 · 시스템 폴더 제외)",
             }
-        _save_sdrive_config({"targetDir": str(valid_p)})
+        if not _same_path(prev_vault_dir, valid_p):
+            folder_switched = True
+            # 이전 업무 폴더에 연결돼 있던 우리 S: 드라이브를 먼저 해제해 동일 S: 문자를 그대로 이어받게 보장
+            if os.name == "nt":
+                for old_letter in _letters_mapped_to(prev_vault_dir):
+                    _run_subst([old_letter, "/d"])
+                _list_subst_map(force=True)
+            def _reset_known_on_switch(cur: Dict[str, Any]) -> None:
+                cur["targetDir"] = str(valid_p)
+                cur["knownRelPaths"] = []
+            _mutate_sdrive_config(_reset_known_on_switch)
+        else:
+            _save_sdrive_config({"targetDir": str(valid_p)})
 
     vault_dir = get_work_vault_dir(ensure_dirs=True)
+    default_dir = _default_work_vault_dir()
+    is_custom_now = not _same_path(vault_dir, default_dir)
 
     if action == "status":
         return inspect_s_drive_status()
@@ -542,6 +626,9 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
         "preferredLetter": preferred,
         "usedFallback": used_fallback,
         "targetDir": str(vault_dir),
+        "defaultTargetDir": str(default_dir),
+        "isCustomTarget": is_custom_now,
+        "folderSwitched": folder_switched,
         "openedExplorer": open_explorer,
         "message": msg,
     }
@@ -552,9 +639,19 @@ def is_temp_or_lock_artifact(file_name: str) -> bool:
     if not n:
         return True
     low = n.lower()
-    if n.startswith(("~$", ".~lock.", "._")) or low in ("desktop.ini", "thumbs.db", ".ds_store"):
+    if n.startswith(("~$", ".~lock.", "._")) or low in ("desktop.ini", "thumbs.db", ".ds_store", "icon\r"):
         return True
-    if low.endswith((".lck", ".tmp", ".crdownload", ".part", ".ghosti_sync_tmp", ".dwl", ".dwl2")):
+    if low.endswith((
+        ".lck",
+        ".tmp",
+        ".crdownload",
+        ".part",
+        ".ghosti_sync_tmp",
+        ".dwl",
+        ".dwl2",
+        ".tmp.drivedownload",
+        ".tmp.driveupload",
+    )):
         return True
     if n.startswith("~") and low.endswith(".hwp"):
         return True
@@ -849,6 +946,30 @@ def _compute_rich_preview(file_path: Path, st: os.stat_result) -> Dict[str, Any]
                 preview_text = "\n".join(" | ".join(r[:6]) for r in non_empty[:15])[:2800]
         elif ext_low == ".xlsx":
             table_headers, table_rows, preview_text = _parse_xlsx_preview_stdlib(file_path)
+        elif ext_low in (".gdoc", ".gsheet", ".gslides"):
+            raw_bytes = file_path.read_bytes()[:32768]
+            meta = json.loads(raw_bytes.decode("utf-8-sig", errors="ignore") or "{}")
+            doc_id = str(meta.get("doc_id") or meta.get("resource_id") or "").strip()
+            g_url = str(meta.get("url") or "").strip()
+            if not g_url and doc_id:
+                if ext_low == ".gsheet":
+                    g_url = f"https://docs.google.com/spreadsheets/d/{doc_id}/edit"
+                elif ext_low == ".gslides":
+                    g_url = f"https://docs.google.com/presentation/d/{doc_id}/edit"
+                else:
+                    g_url = f"https://docs.google.com/document/d/{doc_id}/edit"
+            kind_ko = (
+                "Google 스프레드시트"
+                if ext_low == ".gsheet"
+                else "Google 프레젠테이션"
+                if ext_low == ".gslides"
+                else "Google 문서"
+            )
+            preview_text = (
+                f"[{kind_ko} 바로가기 — {file_path.stem}]\n"
+                + (f"원본 열기: {g_url}\n" if g_url else "")
+                + "구글 드라이브 웹 문서입니다. 파일명으로 즉시 검색되며 원본 열기로 구글 시트·문서에서 바로 편집할 수 있습니다."
+            )
         elif ext_low in (".txt", ".md", ".json", ".log"):
             raw_bytes = file_path.read_bytes()[:131072]
             try:
@@ -1077,6 +1198,10 @@ def _win32_lock_owner_map(entries: List[Tuple[Path, str, os.stat_result]], fallb
     others: List[Tuple[Path, str]] = []
     for full_p, rel_p, st in entries:
         if full_p.suffix.lower() not in _LOCK_PROBE_EXTS:
+            continue
+        # Google Drive 스트리밍 미다운로드(OFFLINE / RECALL_ON_DATA_ACCESS) 파일은 CreateFileW 열기 시 강제 다운로드가 유발되므로 생략
+        f_attrs = getattr(st, "st_file_attributes", 0) or 0
+        if f_attrs & (0x1000 | 0x400000):
             continue
         (recent if now - st.st_mtime <= _LOCK_PROBE_RECENT_SEC else others).append((full_p, rel_p))
 

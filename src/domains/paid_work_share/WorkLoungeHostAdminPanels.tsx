@@ -21,6 +21,9 @@ export interface WorkLoungeHostAdminPanelsProps {
   hostTunnelStatus: string;
   masterWorkPcName: string;
   driveTargetPath: string;
+  onPickCustomWorkFolder?: () => Promise<void>;
+  onApplyCustomWorkFolderPath?: (rawPath: string) => Promise<void>;
+  onResetDefaultWorkFolder?: () => Promise<void>;
   backupServers: WorkBackupServerNodeDto[];
   lastBackupSyncedAt: string | null;
   lastBackupSyncedCount: number;
@@ -51,6 +54,9 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
   hostTunnelStatus,
   masterWorkPcName,
   driveTargetPath,
+  onPickCustomWorkFolder,
+  onApplyCustomWorkFolderPath,
+  onResetDefaultWorkFolder,
   backupServers,
   lastBackupSyncedAt,
   lastBackupSyncedCount,
@@ -102,23 +108,72 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
               <div className="text-[14px] text-slate-900 font-semibold">
                 {masterWorkPcName}
               </div>
-              <p className="text-[11.5px] text-slate-500">
+              <p className="text-[11.5px] text-slate-500 break-all">
                 업무 폴더: <code className="text-slate-700 font-mono">{driveTargetPath}</code>
               </p>
-              <div className="flex items-center gap-1.5 pt-1">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const nextName = masterWorkPcName.includes('사내 대장')
-                      ? '사무실 메인 업무 서버 (S:)'
-                      : '사내 대장 PC (S: 드라이브)';
-                    void handleSaveBackupServerConfig(nextName, backupServers);
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[11.5px] font-medium cursor-pointer transition-colors"
-                >
-                  표시 이름 변경
-                </button>
-              </div>
+              {!isMobileOrStore && myRoomRole === 'host' && (
+                <div className="flex flex-col gap-1.5 pt-1">
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    {onPickCustomWorkFolder && (
+                      <button
+                        type="button"
+                        onClick={() => void onPickCustomWorkFolder()}
+                        className="px-2.5 py-1 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-medium cursor-pointer transition-colors"
+                      >
+                        구글드라이브·지정 폴더 선택
+                      </button>
+                    )}
+                    {onResetDefaultWorkFolder && !driveTargetPath.includes('업무공유폴더_S') && (
+                      <button
+                        type="button"
+                        onClick={() => void onResetDefaultWorkFolder()}
+                        className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-600 text-[11px] font-medium cursor-pointer transition-colors"
+                      >
+                        기본 폴더 복원
+                      </button>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const nextName = masterWorkPcName.includes('사내 대장')
+                          ? '사무실 메인 업무 서버 (S:)'
+                          : '사내 대장 PC (S: 드라이브)';
+                        void handleSaveBackupServerConfig(nextName, backupServers);
+                      }}
+                      className="px-2.5 py-1 rounded-lg bg-white hover:bg-slate-100 border border-slate-200 text-slate-700 text-[11.5px] font-medium cursor-pointer transition-colors"
+                    >
+                      표시 이름 변경
+                    </button>
+                  </div>
+                  {onApplyCustomWorkFolderPath && (
+                    <form
+                      onSubmit={(e) => {
+                        e.preventDefault();
+                        const fd = new FormData(e.currentTarget);
+                        const val = String(fd.get('customTargetDir') || '').trim();
+                        if (val) {
+                          void onApplyCustomWorkFolderPath(val);
+                          e.currentTarget.reset();
+                        }
+                      }}
+                      className="flex items-center gap-1.5 pt-0.5"
+                    >
+                      <input
+                        type="text"
+                        name="customTargetDir"
+                        placeholder="예: G:\내 드라이브\테스트폴더"
+                        className="flex-1 min-w-0 px-2 py-1 rounded-lg bg-white border border-slate-300 text-slate-900 text-[11px] font-mono outline-none focus:border-teal-600"
+                      />
+                      <button
+                        type="submit"
+                        className="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-900 text-white text-[11px] font-medium shrink-0 cursor-pointer"
+                      >
+                        경로 연결
+                      </button>
+                    </form>
+                  )}
+                </div>
+              )}
             </div>
 
             <div className="lg:col-span-2 p-3.5 rounded-xl bg-slate-50 border border-slate-200 flex flex-col justify-between gap-2.5">

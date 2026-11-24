@@ -339,6 +339,20 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
           </div>
 
           <div className="flex flex-wrap items-center gap-2 pt-1">
+            {(() => {
+              const gMatch = (selectedDoc.fullTextPreview || '').match(/https:\/\/docs\.google\.com\/[^\s]+/);
+              if (!gMatch) return null;
+              return (
+                <a
+                  href={gMatch[0]}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="px-3.5 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-[12px] font-medium cursor-pointer transition-colors"
+                >
+                  Google 문서·시트 웹에서 열기 ↗
+                </a>
+              );
+            })()}
             <button
               type="button"
               onClick={async () => {

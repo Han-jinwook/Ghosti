@@ -1277,10 +1277,63 @@ export const WorkLoungeB2BHub: React.FC = () => {
     const res = await mountWorkSDriveNative({ action: 'mount', openExplorer: true });
     if (res.ok) {
       setSDriveMounted(Boolean(res.mounted));
+      if (res.targetDir) setDriveTargetPath(res.targetDir);
       showToast('윈도우 탐색기 [업무 드라이브 (S:\\)] 폴더를 열었습니다!');
     } else if (res.message) {
       showToast(res.message);
     }
+  };
+
+  const applyFolderSwitchResult = async (res: {
+    ok: boolean;
+    cancelled?: boolean;
+    mounted?: boolean;
+    targetDir?: string;
+    message?: string;
+  }) => {
+    if (res.cancelled) return;
+    if (!res.ok) {
+      showToast(res.message || '업무 폴더를 변경하지 못했습니다. 하위 폴더 경로인지 확인해 주세요.');
+      return;
+    }
+    setSDriveMounted(Boolean(res.mounted));
+    if (res.targetDir) setDriveTargetPath(res.targetDir);
+    lastWorkFilesSigRef.current = '';
+    localDocsRef.current = [];
+    setLocalDocs([]);
+    setRemoteDocs([]);
+    await syncRealWorkFiles();
+    showToast(`✓ S: 업무 폴더가 [${res.targetDir || '지정 폴더'}]로 연결되어 파일 인덱싱을 시작했습니다!`);
+  };
+
+  const handlePickCustomWorkFolder = async () => {
+    if (!isZCoreConnected) {
+      openZCoreConnectModal();
+      return;
+    }
+    showToast('윈도우 폴더 선택창에서 연결할 폴더(예: G:\\내 드라이브\\테스트폴더)를 선택해 주세요...');
+    const res = await mountWorkSDriveNative({ action: 'pick_folder', openExplorer: true });
+    await applyFolderSwitchResult(res);
+  };
+
+  const handleApplyCustomWorkFolderPath = async (rawPath: string) => {
+    const clean = rawPath.trim();
+    if (!clean) return;
+    if (!isZCoreConnected) {
+      openZCoreConnectModal();
+      return;
+    }
+    const res = await mountWorkSDriveNative({ action: 'mount', targetDir: clean, openExplorer: true });
+    await applyFolderSwitchResult(res);
+  };
+
+  const handleResetDefaultWorkFolder = async () => {
+    if (!isZCoreConnected) {
+      openZCoreConnectModal();
+      return;
+    }
+    const res = await mountWorkSDriveNative({ action: 'reset_default', openExplorer: false });
+    await applyFolderSwitchResult(res);
   };
 
   const handleUploadFiles = async (fileList: FileList | null) => {
@@ -1643,6 +1696,16 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 >
                   <span>탐색기 S:\ 열기</span>
                 </button>
+                {myRoomRole === 'host' && !inviteMeta.hasWorkInvite && (
+                  <button
+                    type="button"
+                    onClick={() => void handlePickCustomWorkFolder()}
+                    title="구글 드라이브(G:\내 드라이브\...) 하위 폴더나 기존 회사 폴더를 선택해 S: 드라이브로 그대로 연결합니다"
+                    className="px-3 py-1.5 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-teal-400/50 text-teal-200 font-label-sm text-[11.5px] font-extrabold cursor-pointer flex items-center gap-1"
+                  >
+                    <span>업무 폴더 변경 (G: 연결)</span>
+                  </button>
+                )}
               </>
             )}
 
@@ -1738,6 +1801,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
           hostTunnelStatus={hostTunnelStatus}
           masterWorkPcName={masterWorkPcName}
           driveTargetPath={driveTargetPath}
+          onPickCustomWorkFolder={handlePickCustomWorkFolder}
+          onApplyCustomWorkFolderPath={handleApplyCustomWorkFolderPath}
+          onResetDefaultWorkFolder={handleResetDefaultWorkFolder}
           backupServers={backupServers}
           lastBackupSyncedAt={lastBackupSyncedAt}
           lastBackupSyncedCount={lastBackupSyncedCount}

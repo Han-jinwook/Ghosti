@@ -499,13 +499,16 @@ export function clearWorkRoomLocalCachesOnLogout(): void {
 }
 
 export async function mountWorkSDriveNative(opts?: {
-  action?: 'mount' | 'unmount';
+  action?: 'mount' | 'unmount' | 'pick_folder' | 'reset_default';
   openExplorer?: boolean;
   targetDir?: string;
 }): Promise<{
   ok: boolean;
+  cancelled?: boolean;
   mounted?: boolean;
+  driveLetter?: string;
   targetDir?: string;
+  isCustomTarget?: boolean;
   message?: string;
 }> {
   const url = resolveWorkApiUrl('/__work/s-drive');
@@ -523,8 +526,11 @@ export async function mountWorkSDriveNative(opts?: {
     if (!res.ok) return { ok: false };
     return (await res.json()) as {
       ok: boolean;
+      cancelled?: boolean;
       mounted?: boolean;
+      driveLetter?: string;
       targetDir?: string;
+      isCustomTarget?: boolean;
       message?: string;
     };
   } catch {
