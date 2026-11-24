@@ -470,7 +470,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
                   : `${activeFamilyRoom} 가족 사진방`;
                 useSaySeeStore
                   .getState()
-                  .showToast(`『${targetLabel}』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.`);
+                  .showToast(`『${targetLabel}』 초대 링크가 복사되었습니다! (발급 후 14일간 유효 · 카톡방에 바로 붙여넣어 공유하세요)`);
               }}
               className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-400/50 text-amber-300 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 cursor-pointer transition-all"
             >
@@ -662,7 +662,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
                 if (!ok) return;
                 useSaySeeStore
                   .getState()
-                  .showToast(`『${clubBannerTitle}』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.`);
+                  .showToast(`『${clubBannerTitle}』 초대 링크가 복사되었습니다! (발급 후 14일간 유효 · 카톡방에 바로 붙여넣어 공유하세요)`);
               }}
               className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-400/50 text-amber-300 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 cursor-pointer transition-all"
             >
@@ -721,7 +721,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
               if (!ok) return;
               useSaySeeStore
                 .getState()
-                .showToast(`『${alumniBannerTitle}』 초대 링크가 복사되었습니다! 카톡방에 바로 붙여넣어 공유하세요.`);
+                .showToast(`『${alumniBannerTitle}』 초대 링크가 복사되었습니다! (발급 후 14일간 유효 · 카톡방에 바로 붙여넣어 공유하세요)`);
             }}
             className="px-3 py-2 rounded-xl bg-zinc-900 hover:bg-zinc-800 border border-amber-400/50 text-amber-300 font-label-sm text-[11.5px] font-extrabold flex items-center gap-1.5 cursor-pointer transition-all"
           >

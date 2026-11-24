@@ -2607,19 +2607,7 @@ export async function handleAuthedWorkAndDeviceAction({
 
     const myRoomId = roomIdByKey.get(requestedKey) || '';
     const myInviteToken = activeTokenByRoomId.get(myRoomId) || '';
-    if (myInviteToken && !missingInvites.some((m) => m.token === myInviteToken)) {
-      await fetch(
-        `${supabaseUrl}/rest/v1/ghosti_room_invites?token=eq.${encodeURIComponent(myInviteToken)}`,
-        {
-          method: 'PATCH',
-          headers: srvHeaders(serviceKey, {
-            'Content-Type': 'application/json',
-            Prefer: 'return=minimal',
-          }),
-          body: JSON.stringify({ expires_at: nextExpiryIso }),
-        }
-      ).catch(() => {});
-    }
+    // [확정 정책 2026-11-24]: 초대 링크는 자동 연장 없이 발급 시점부터 딱 14일 유효하며, 만료 후 재복사 시 새 링크가 발급됩니다.
 
     const roomTokensByKey = {};
     for (const [k, rId] of roomIdByKey.entries()) {

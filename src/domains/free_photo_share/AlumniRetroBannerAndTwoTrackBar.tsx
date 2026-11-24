@@ -37,9 +37,12 @@ export const AlumniRetroBannerAndTwoTrackBar: React.FC<{
       roomTitle: bannerTitle,
       promptLabel: `『${bannerTitle}』 초대 링크를 복사해 공유하세요:`,
       formatCopyText: (studentInviteUrl) =>
-        `[${bannerTitle}] ${alumniGradYear}년 추억 사진 공유방 초대 링크입니다. 로그인 없이 둘러보거나 내 사진을 함께 올릴 수 있습니다.\n${studentInviteUrl}`,
+        `[${bannerTitle}] ${alumniGradYear}년 추억 사진 공유방 초대 링크입니다. (발급 후 14일간 유효)\n${studentInviteUrl}`,
     });
     if (!ok) return;
+    useSaySeeStore
+      .getState()
+      .showToast(`『${bannerTitle}』 초대 링크가 복사되었습니다! (발급 후 14일간 유효)`);
     setInviteCopied(true);
     setTimeout(() => setInviteCopied(false), 2600);
   };

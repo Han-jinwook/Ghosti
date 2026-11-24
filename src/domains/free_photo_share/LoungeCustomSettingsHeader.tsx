@@ -250,9 +250,12 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
       defaultHostLabel: targetLounge === 'family' ? '가족방장' : '모임방장',
       promptLabel: '초대 링크를 복사해 공유하세요:',
       formatCopyText: (inviteUrl) =>
-        `[귀신같이 사진 공유방 초대]\n아래 링크에서 공유 사진을 바로 확인할 수 있습니다.\n${inviteUrl}`,
+        `[귀신같이 사진 공유방 초대]\n아래 링크에서 공유 사진을 바로 확인할 수 있습니다. (발급 후 14일간 유효)\n${inviteUrl}`,
     });
     if (!ok) return;
+    useSaySeeStore
+      .getState()
+      .showToast('초대 링크가 복사되었습니다! (발급 후 14일간 유효)');
     setInviteCopied(true);
     setTimeout(() => setInviteCopied(false), 2500);
   };
