@@ -878,7 +878,7 @@ def build_ui2_search_window(
                 ext_sel = p_sel_obj.suffix.lower()
                 kind_sel = (
                     "image"
-                    if ext_sel in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp", ".heic", ".heif")
+                    if ext_sel in (".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif", ".bmp", ".heic", ".heif")
                     else ("video" if ext_sel in (".mp4", ".mov", ".mkv", ".avi", ".webm", ".wmv") else "doc")
                 )
                 seen_fpaths.add(pinned_sel_file.lower())
@@ -909,8 +909,8 @@ def build_ui2_search_window(
                 ext_sfx = Path(efp).suffix.lower()
                 ekind = (
                     "image"
-                    if ext_sfx in (".png", ".jpg", ".jpeg", ".webp", ".gif", ".bmp")
-                    else ("video" if ext_sfx in (".mp4", ".mov", ".mkv", ".avi", ".webm") else "doc")
+                    if ext_sfx in (".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif", ".bmp", ".heic", ".heif")
+                    else ("video" if ext_sfx in (".mp4", ".mov", ".mkv", ".avi", ".webm", ".wmv") else "doc")
                 )
                 pool.append({
                     "kind": ekind,
@@ -1524,10 +1524,20 @@ def build_ui2_search_window(
                     lambda _e, fp=s_fpath: (close_win(), clicked_superpower_queue.put(("labeler", fp))),
                 )
 
+    last_typed_q = [s_entry.get()]
+
     def _on_key_rel(event=None):
         is_hovered[0] = True
-        if event and event.keysym in ("Up", "Down", "Return", "Escape", "Tab"):
+        if event and event.keysym in (
+            "Up", "Down", "Return", "Escape", "Tab",
+            "Control_L", "Control_R", "Shift_L", "Shift_R",
+            "Alt_L", "Alt_R", "Super_L", "Super_R", "Win_L", "Win_R", "Caps_Lock",
+        ):
             return
+        cur_q = s_entry.get()
+        if cur_q == last_typed_q[0]:
+            return
+        last_typed_q[0] = cur_q
         if st_state["mode"] == "compact":
             st_state["manual_stage"] = None
         st_state["sel_idx"] = 0

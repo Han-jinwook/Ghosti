@@ -8901,6 +8901,28 @@ def main() -> None:
                         sel_file_for_ui2 = str(sel_p[0])
                 except Exception:
                     pass
+            elif proc_chk in ("photos.exe", "photosapp.exe", "microsoft.photos.exe", "applicationframehost.exe"):
+                try:
+                    _, p_title = _get_hwnd_class_and_title(fg_chk)
+                    raw_fn = re.sub(r"\s*[-—–]\s*(사진|Photos)\s*$", "", p_title or "", flags=re.IGNORECASE).strip()
+                    if raw_fn and "." in raw_fn and not any(ch in raw_fn for ch in ("\\", "/", ":", "*", "?", "<", ">", "|")):
+                        home_p = Path.home()
+                        cand_dirs = [
+                            home_p / "Downloads",
+                            home_p / "Desktop",
+                            home_p / "Pictures",
+                            home_p / "OneDrive" / "Pictures",
+                            home_p / "OneDrive" / "Desktop",
+                            home_p / "Downloads" / "Telegram Desktop",
+                            home_p / "Pictures" / "Screenshots",
+                        ]
+                        for cdir in cand_dirs:
+                            cfile = cdir / raw_fn
+                            if cfile.exists() and cfile.is_file():
+                                sel_file_for_ui2 = str(cfile)
+                                break
+                except Exception:
+                    pass
             if proc_chk not in ("python.exe", "pythonw.exe"):
                 _capture_target_hwnd()
             play_baby_ghost_sound(mode="summon")
@@ -9250,33 +9272,38 @@ def main() -> None:
 
         threading.Thread(target=_worker, daemon=True).start()
 
+    _CACHED_RCLICK_BYPASS = [False]
+
+    def _is_ctrl_down_fast() -> bool:
+        return bool(
+            (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000)
+            or (u32.GetAsyncKeyState(0xA2) & 0x8000)
+            or (u32.GetAsyncKeyState(0xA3) & 0x8000)
+        )
+
     def _ll_mouse_proc(nCode: int, wParam: int, lParam: int) -> int:
         if nCode >= 0 and wParam in (WM_RBUTTONDOWN, WM_RBUTTONUP):
             try:
                 if wParam == WM_RBUTTONDOWN:
-                    ctrl_h = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
+                    ctrl_h = _is_ctrl_down_fast()
                     alt_h = (u32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0
                     shift_h = (u32.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0
-                    if ctrl_h and not alt_h and not shift_h:
-                        fg_h = u32.GetForegroundWindow()
-                        if not _should_bypass_rclick_hook(fg_h):
-                            _RBTN_HOLD_STATE["suppress_next_up"] = True
-                            _RBTN_HOLD_STATE["summon_requested"] = True
-                            _RBTN_HOLD_STATE["target_hwnd"] = fg_h
-                            return 1
+                    if ctrl_h and not alt_h and not shift_h and not _CACHED_RCLICK_BYPASS[0]:
+                        _RBTN_HOLD_STATE["suppress_next_up"] = True
+                        _RBTN_HOLD_STATE["summon_requested"] = True
+                        _RBTN_HOLD_STATE["target_hwnd"] = u32.GetForegroundWindow()
+                        return 1
                 elif wParam == WM_RBUTTONUP:
                     if _RBTN_HOLD_STATE.get("suppress_next_up"):
                         _RBTN_HOLD_STATE["suppress_next_up"] = False
                         return 1
-                    ctrl_u = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
+                    ctrl_u = _is_ctrl_down_fast()
                     alt_u = (u32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0
                     shift_u = (u32.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0
-                    if ctrl_u and not alt_u and not shift_u:
-                        fg_u = u32.GetForegroundWindow()
-                        if not _should_bypass_rclick_hook(fg_u):
-                            _RBTN_HOLD_STATE["summon_requested"] = True
-                            _RBTN_HOLD_STATE["target_hwnd"] = fg_u
-                            return 1
+                    if ctrl_u and not alt_u and not shift_u and not _CACHED_RCLICK_BYPASS[0]:
+                        _RBTN_HOLD_STATE["summon_requested"] = True
+                        _RBTN_HOLD_STATE["target_hwnd"] = u32.GetForegroundWindow()
+                        return 1
             except Exception:
                 pass
         return u32.CallNextHookEx(None, nCode, wParam, lParam)
@@ -9294,7 +9321,12 @@ def main() -> None:
                 k32.SetThreadPriority(k32.GetCurrentThread(), 2)  # THREAD_PRIORITY_HIGHEST
             except Exception:
                 pass
-            _hk = u32.SetWindowsHookExW(WH_MOUSE_LL, _ll_mouse_hook_fn_ptr, None, 0) if _ll_mouse_hook_fn_ptr else 0
+            h_mod_self = k32.GetModuleHandleW(None)
+            _hk = (
+                (u32.SetWindowsHookExW(WH_MOUSE_LL, _ll_mouse_hook_fn_ptr, h_mod_self, 0) if _ll_mouse_hook_fn_ptr else 0)
+                or (u32.SetWindowsHookExW(WH_MOUSE_LL, _ll_mouse_hook_fn_ptr, None, 0) if _ll_mouse_hook_fn_ptr else 0)
+                or u32.SetWindowsHookExW(WH_MOUSE_LL, ctypes.cast(_ll_mouse_hook_cb, ctypes.c_void_p).value or 0, h_mod_self, 0)
+            )
             _ll_mouse_hook_ready.set()
             if not _hk:
                 return
@@ -9519,6 +9551,7 @@ def main() -> None:
                     except Exception:
                         pass
                 # [WH_MOUSE_LL 훅 연동 + 폴백 Ctrl+우클릭 감지 — 윈도우 우클릭 메뉴 및 시작메뉴(Ctrl+Esc) 간섭 0%]
+                _CACHED_RCLICK_BYPASS[0] = _should_bypass_rclick_hook(u32.GetForegroundWindow())
                 if _RBTN_HOLD_STATE.get("summon_requested"):
                     _RBTN_HOLD_STATE["summon_requested"] = False
                     if (now - last_summon_ts) > 0.25:
