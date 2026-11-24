@@ -1916,6 +1916,8 @@ export function extractJpegExifDateTimeOriginalMs(buffer: ArrayBuffer): number |
         const exifPtr = ifd0Tags.get(0x8769);
         if (exifPtr) {
           const exifTags = scanIfd(tiffStart + exifPtr.rawVal32);
+          // 실제 카메라 셔터 촬영 시각(DateTimeOriginal 0x9003 / DateTimeDigitized 0x9004)만 신뢰
+          // (IFD0 ModifyDate 0x0132는 편집·저장·복사 시각으로 오염되므로 제외)
           for (const tagId of [0x9003, 0x9004]) {
             const entry = exifTags.get(tagId);
             if (entry && entry.type === 2) {
@@ -1923,11 +1925,6 @@ export function extractJpegExifDateTimeOriginalMs(buffer: ArrayBuffer): number |
               if (parsed !== null) return parsed;
             }
           }
-        }
-        const dt0 = ifd0Tags.get(0x0132);
-        if (dt0 && dt0.type === 2) {
-          const parsed = parseExifDateStr(readAsciiAt(dt0.valueOffset, dt0.count));
-          if (parsed !== null) return parsed;
         }
         return null;
       }

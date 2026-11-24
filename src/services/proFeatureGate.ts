@@ -268,52 +268,52 @@ export async function evaluateProFeatureGate(options: {
   };
 }
 
+let _latestClipboardWriteSeq = 0;
+let _activeZCoreClipboardAbort: AbortController | null = null;
+
 export async function copyTextSafeToClipboard(text: string): Promise<boolean> {
   const payload = String(text ?? '');
   if (!payload) return false;
+  const mySeq = ++_latestClipboardWriteSeq;
+  try {
+    _activeZCoreClipboardAbort?.abort();
+  } catch {
+    /* ignore */
+  }
+  _activeZCoreClipboardAbort = null;
 
-  // 1) 브라우저 표준 Clipboard API + PC Z-코어 OS 클립보드(/__merlin/clipboard) 병렬 즉시 실행
-  // 둘 중 하나라도 먼저 성공하면 즉시 반환하여 클립보드 기록 지연을 1~15ms로 최소화합니다.
-  const browserWrite = async (): Promise<boolean> => {
-    try {
-      if (navigator.clipboard?.writeText) {
-        await navigator.clipboard.writeText(payload);
-        return true;
-      }
-    } catch {
-      /* fallback */
+  // 1) 브라우저 표준 Clipboard API 최우선 (1ms 즉시 완료 — 성공 시 Z-코어 지연 덮어쓰기 원천 차단)
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(payload);
+      return true;
     }
-    return false;
-  };
+  } catch {
+    /* 브라우저 제스처 만료 등으로 거부 시 Z-코어 OS 네이티브 클립보드 폴백 */
+  }
 
-  const zCoreWrite = async (): Promise<boolean> => {
-    if (!zCoreBridge.isConnected) return false;
+  // 2) PC Z-코어 OS 네이티브 클립보드 API(/__merlin/clipboard) 폴백 (최신 요청 seq만 허용)
+  if (zCoreBridge.isConnected && mySeq === _latestClipboardWriteSeq) {
     try {
       const ctrl = new AbortController();
+      _activeZCoreClipboardAbort = ctrl;
       const tid = setTimeout(() => ctrl.abort(), 700);
       const res = await fetch(getZCoreUrl('/__merlin/clipboard'), {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ text: payload }),
         signal: ctrl.signal,
-      }).finally(() => clearTimeout(tid));
-      return res.ok;
+      }).finally(() => {
+        clearTimeout(tid);
+        if (_activeZCoreClipboardAbort === ctrl) _activeZCoreClipboardAbort = null;
+      });
+      if (res.ok) return true;
     } catch {
-      return false;
+      /* fallback below */
     }
-  };
+  }
 
-  const zCorePromise = zCoreWrite();
-  const browserOk = await browserWrite();
-  if (browserOk) {
-    // OS 네이티브 클립보드도 백그라운드로 완료되도록 유지하고 즉시 반환
-    void zCorePromise;
-    return true;
-  }
-  const zCoreOk = await zCorePromise;
-  if (zCoreOk) {
-    return true;
-  }
+  if (mySeq !== _latestClipboardWriteSeq) return false;
 
   // 3) 구형/비활성화 폴백 execCommand
   if (typeof document !== 'undefined') {
