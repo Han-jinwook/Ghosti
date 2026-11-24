@@ -14,7 +14,6 @@ import {
   pendingCutsFor,
   pickSelfCluster,
   rankFaceClusters,
-  resetSelfClusterPick,
   submitPassportRegistration,
   type PassportRegMode,
 } from '../services/passportRegistrationFlow';
@@ -219,19 +218,6 @@ export const PassportRegistrationPanel: React.FC = () => {
                   placeholder="이름 (선택)"
                   className="flex-1 min-w-[140px] h-9 px-3 rounded-lg bg-white border border-slate-300 focus:border-slate-600 outline-none text-[13px] text-slate-900 placeholder:text-slate-400"
                 />
-              )}
-              {mode === 'self' && rankFaceClusters(faceClusters || []).length > 1 && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    resetSelfClusterPick();
-                    setUnchecked(new Set());
-                    setRegTick((n) => n + 1);
-                  }}
-                  className="ml-auto px-2.5 py-1 rounded-md text-[11.5px] font-medium border border-slate-200 bg-white text-slate-600 hover:text-slate-900 cursor-pointer"
-                >
-                  다른 얼굴 고르기
-                </button>
               )}
               {mode === 'family' && (
                 <button
