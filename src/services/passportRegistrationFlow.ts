@@ -248,11 +248,9 @@ export function findSelfCluster(st = loadPassportRegState()): FaceMemberCluster 
   if (!found) return null;
   const hasConfirmed = confirmedCutsFor(found, st).length > 0;
   const hasPending = pendingCutsFor(found, st).length > 0;
-  // 이미 등록 완료된 본인 여권(hasConfirmed)은 나머지 컷을 체크 해제해 matchedPhotoCount가 1~2장으로 줄어들었더라도 본인 여권으로 영구 유지!
-  if (hasConfirmed) return found;
-  if ((found.matchedPhotoCount || 0) < PASSPORT_MIN_FACE_PHOTOS_FOR_ASK) return null;
-  if (!hasPending) return null;
-  return found;
+  // 유저가 직접 본인 얼굴로 고른 묶음은 확정 컷 또는 대기 컷이 1장이라도 있으면 그대로 본인 여권으로 유지
+  if (hasConfirmed || hasPending) return found;
+  return null;
 }
 
 /** 가족으로 보이는 얼굴 묶음 (본인·뺀 얼굴 제외, 일정 사진 수 이상, 아직 물을 사진이 있는 경우) */
@@ -605,10 +603,36 @@ export async function submitPassportRegistration(
   return { registered };
 }
 
-/** 본인 얼굴 고르기 (등록 화면 1단계) */
+/** 본인 얼굴 고르기 (등록 화면 1단계) — 가장 많은 얼굴 외 다른 인물을 골라도 이전 제외/거절 이력에 막히지 않고 즉시 사진 선택 화면으로 진입 */
 export function pickSelfCluster(clusterId: string): void {
   const st = loadPassportRegState();
-  savePassportRegState({ ...st, selfClusterId: clusterId });
+  const nextDismissed = st.dismissedClusterIds.filter((id) => id !== clusterId);
+  const target = liveClusters().find((c) => c.clusterId === clusterId);
+  let nextRejected = st.rejectedKeys;
+  let nextConfirmed = st.confirmedKeys;
+  // 이전에 가족 후보에서 [제외]하거나 컷을 모두 빼서 대기 컷이 0장이 된 인물이라도,
+  // 유저가 직접 '내 얼굴'로 선택했다면 해당 인물의 거절/이전 가족 등록 키를 풀어 즉시 선택 화면에 띄운다.
+  if (target) {
+    const tempSt: PassportRegState = { ...st, selfClusterId: clusterId, dismissedClusterIds: nextDismissed };
+    if (pendingCutsFor(target, tempSt).length === 0) {
+      const prefix = `${clusterId}::`;
+      nextRejected = st.rejectedKeys.filter((k) => !k.startsWith(prefix));
+      nextConfirmed = st.confirmedKeys.filter((k) => !k.startsWith(prefix));
+    }
+  }
+  savePassportRegState({
+    ...st,
+    selfClusterId: clusterId,
+    dismissedClusterIds: nextDismissed,
+    rejectedKeys: nextRejected,
+    confirmedKeys: nextConfirmed,
+  });
+}
+
+/** 본인 얼굴 등록 확정 전 다른 얼굴 후보로 되돌리기 */
+export function clearSelfClusterPick(): void {
+  const st = loadPassportRegState();
+  savePassportRegState({ ...st, selfClusterId: undefined });
 }
 
 /** 프로필 ➔ 여권: 사진 1장 지우기 (지운 사진은 다시 추천하지 않음, 만약 내 여권의 모든 사진을 지웠다면 다시 얼굴을 고를 수 있도록 본인 선택 상태를 초기화) */

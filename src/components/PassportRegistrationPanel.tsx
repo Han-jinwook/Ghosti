@@ -6,6 +6,8 @@ import type { FaceMemberCluster, YearlyFaceBestCut } from '../types/saysee';
 import {
   PASSPORT_REG_OPEN_EVENT,
   PASSPORT_REG_STATE_EVENT,
+  clearSelfClusterPick,
+  confirmedCutsFor,
   consumePendingPassportOpen,
   cutKey,
   familyCandidates,
@@ -275,6 +277,22 @@ export const PassportRegistrationPanel: React.FC = () => {
       })}
 
       <div className="flex items-center justify-end gap-2 pt-0.5">
+        {mode === 'self' &&
+          selfCluster &&
+          confirmedCutsFor(selfCluster, regState).length === 0 &&
+          rankFaceClusters(faceClusters || []).length > 1 && (
+            <button
+              type="button"
+              onClick={() => {
+                clearSelfClusterPick();
+                setUnchecked(new Set());
+                setRegTick((n) => n + 1);
+              }}
+              className="mr-auto px-3 py-2 rounded-lg text-[12.5px] font-medium border border-slate-200 text-slate-600 hover:bg-slate-50 cursor-pointer"
+            >
+              다른 얼굴 고르기
+            </button>
+          )}
         <button
           type="button"
           onClick={() => close(true)}
