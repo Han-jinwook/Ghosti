@@ -2,6 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { getZCoreUrl, zCoreBridge } from '../services/zCoreBridge';
 import { computeGhostSearchWindowRect, DEFAULT_WORK_AREA } from '../services/ghostSearchWindowGeometry';
 import { useSaySeeStore } from '../store/useSaySeeStore';
+import { markGhostDojoStep } from './ghostDojo/ghostSearchDojoShared';
 import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
 import { GhostPhotoOcrTeleportModal } from './GhostPhotoOcrTeleportModal';
 import {
@@ -222,18 +223,7 @@ export const DesktopDashboard: React.FC = () => {
     const hasQ = Boolean(stNow.hasExecutedUserSearch && stNow.activeQuery?.trim());
     const compactStage = hasQ ? 'medium' : 'small';
     const nextStage = nextIsLarge ? 'large' : compactStage;
-    try {
-      const saved = JSON.parse(localStorage.getItem('ghosti_search_game_v1') || '{}');
-      localStorage.setItem(
-        'ghosti_search_game_v1',
-        JSON.stringify({
-          ...saved,
-          ...(nextIsLarge ? { large: true } : { summon: true, medium: true }),
-        })
-      );
-    } catch {
-      /* ignore */
-    }
+    markGhostDojoStep(nextIsLarge ? 'large' : 'summon');
     try {
       const availW = window.screen?.availWidth || DEFAULT_WORK_AREA.right;
       const availH = window.screen?.availHeight || DEFAULT_WORK_AREA.bottom;

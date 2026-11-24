@@ -389,12 +389,6 @@ const VirtualMonitorSimulator: React.FC<{
       setStage(nextStage);
       setCustomSlimHeight(nextStage === 'small' ? 340 : undefined);
       setAutoPhase(nextStage === 'large' ? 3 : nextStage === 'medium' ? 2 : 1);
-      if (nextStage === 'large') {
-        onStep('large');
-      } else {
-        onStep('summon');
-        if (nextStage === 'medium') onStep('medium');
-      }
     };
     window.addEventListener('ghosti_focus_virtual_monitor_window', onFocusMonitorWin as EventListener);
     return () => window.removeEventListener('ghosti_focus_virtual_monitor_window', onFocusMonitorWin as EventListener);
@@ -416,7 +410,6 @@ const VirtualMonitorSimulator: React.FC<{
       setAutoPhase(3);
       onStep('large');
     } else {
-      onStep('summon');
       const cleanQ =
         hasExecutedUserSearch &&
         activeQuery &&
@@ -436,6 +429,7 @@ const VirtualMonitorSimulator: React.FC<{
       setStage(spec.stage);
       setCustomSlimHeight(spec.customHeight);
       setAutoPhase(spec.stage === 'medium' ? 2 : 1);
+      if (spec.stage === 'small') onStep('summon');
       if (spec.stage === 'medium') onStep('medium');
     }
   };
@@ -454,7 +448,6 @@ const VirtualMonitorSimulator: React.FC<{
       setStage('medium');
       setCustomSlimHeight(undefined);
       setAutoPhase(2);
-      onStep('summon');
       onStep('medium');
     } else {
       setWindowMode('large');
@@ -809,12 +802,8 @@ export const GhostSearchTrainingPage: React.FC = () => {
       isLaunchingRef.current = false;
       setIsLaunchingRealWindow(false);
     }, 600);
-    if (stage === 'large') {
-      markStep('large');
-    } else {
-      markStep('summon');
-      if (stage === 'medium') markStep('medium');
-    }
+    // [귀신검색창 열기] 단순 창 호출만으로는 '작게 모드'·'크게(갤러리)' 체험 도장을 오표시하지 않습니다.
+    // 실제 도장은 도장판 버튼 클릭 또는 검색창 내 [⤡ 작게]·[⤢ 크게(갤러리)] 명시 전환 시에만 기록됩니다.
     if (typeof window !== 'undefined') {
       window.dispatchEvent(
         new CustomEvent('ghosti_focus_virtual_monitor_window', { detail: { stage } }),
