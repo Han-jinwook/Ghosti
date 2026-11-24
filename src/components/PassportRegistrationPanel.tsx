@@ -147,7 +147,7 @@ export const PassportRegistrationPanel: React.FC = () => {
               ? selfCluster
                 ? `${nickname ? `${nickname}님` : '내'} 얼굴로 보이는 사진입니다. 아닌 사진만 선택 해제해 주세요.`
                 : `${nickname ? `${nickname}님` : '내'} 얼굴을 선택해 주세요.`
-              : '가족으로 보이는 얼굴입니다. 아닌 분은 제외해 주세요.'}
+              : '얼굴별로 자동 묶인 가족 후보입니다. 각도·선글라스 등으로 같은 분이 나뉘면 같은 이름을 적거나 아닌 분만 제외해 주세요.'}
           </p>
         </div>
         <span className="text-[11px] font-medium text-slate-500 shrink-0">내 기기에서만 처리</span>

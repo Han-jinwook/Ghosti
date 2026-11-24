@@ -320,7 +320,7 @@ self.onmessage = async (ev: MessageEvent<WorkerRequest>) => {
         msg.origW,
         msg.origH,
         msg.scale,
-        msg.scoreThreshold ?? 0.62
+        msg.scoreThreshold ?? 0.82
       );
       self.postMessage({ id: msg.id, ok: true, faces });
     } catch (err) {

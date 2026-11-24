@@ -8,24 +8,34 @@
 import type { FaceMemberCluster, PhotoItem, YearlyFaceBestCut } from '../../types/saysee';
 import type { WorkerDetectedFace } from './facePassportWorker';
 
-const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v7';
+const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v8';
 const MAX_SCAN_PHOTOS = 160;
 const MAX_CLUSTERS = 10;
 const MAX_CUTS_PER_CLUSTER = 6;
-/** OpenCV SFace 공식 동일인 코사인 유사도 임계치(0.363) 기반 */
-const SIMILARITY_THRESHOLD = 0.365;
+/** OpenCV SFace 공식 5점 정렬(ArcFace 112x112) 기준 동일인 코사인 유사도 임계치 */
+const SIMILARITY_THRESHOLD = 0.38;
+/** 동일인 각도·연도 차이로 나뉜 클러스터를 중심 벡터로 재병합하는 임계치 */
+const MERGE_CENTROID_THRESHOLD = 0.42;
+/** ArcFace / OpenCV SFace 112x112 공식 5점 기준 랜드마크 (우안, 좌안, 코, 우입꼬리, 좌입꼬리) */
+const ARCFACE_REF_112: ReadonlyArray<readonly [number, number]> = [
+  [38.2946, 51.6963],
+  [73.5318, 51.5014],
+  [56.0252, 71.7366],
+  [41.5493, 92.3655],
+  [70.7299, 92.2041],
+];
 const SCREENSHOT_NAME_RX = /(screenshot|스크린샷|캡처|캡쳐|capture|화면\s*캡처|영수증|receipt|memo|메모|오류|배너|로고|favicon|포스터|워터마크)/i;
 /** AI 생성·스톡·웹 작업 이미지 판별 */
 const AI_OR_STOCK_IMAGE_NAME_RX =
   /(gemini_generated|chatgpt|midjourney|dall[-_]?e|stable[-_]?diffusion|comfyui|flux[-_]|stock_photo|unsplash|pexels|pixabay|freepik|shutterstock|gettyimages|ai_generated|generated_image|_remix_|^image-\d{4,}|^image(\s*\(\d+\))?\.png$)/i;
 /** 시스템 임시폴더·앱 리소스·유튜브/AI/캡처 작업 폴더 (실제 내 일상·가족 사진이 아닌 폴더 배제) */
 const NON_PORTRAIT_WORK_OR_TEMP_PATH_RX =
-  /(?:[\\/](?:appdata[\\/]local[\\/]temp|tmp|jetski_recording_[^\\/]*|merlin_vid_fullocr_[^\\/]*|merlin_pdf_ppocr_[^\\/]*|crisp_thumbs|accountpictures|google ai studio|g_youtube|brandmark|ocam|급식앱\(캡쳐\)|앱오류|뭐먹지 로고|증빙서류|node_modules)[\\/]|^(?:IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025|귀신같이_캡처_))/i;
+  /(?:[\\/](?:appdata[\\/]local[\\/]temp|tmp|jetski_recording_[^\\/]*|merlin_vid_fullocr_[^\\/]*|merlin_pdf_ppocr_[^\\/]*|crisp_thumbs|accountpictures|google ai studio|g_youtube|brandmark|ocam|급식앱\(캡쳐\)|급식|식판|앱오류|뭐먹지 로고|증빙서류|node_modules)[\\/]|^(?:IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025|귀신같이_캡처_))/i;
 /** 스마트폰·디지털카메라 표준 촬영 파일명 패턴 (예: 20240720_182301.jpg, 제주대가족여행_20200622_..., IMG_1234.jpg, KakaoTalk_...) */
 const REAL_CAMERA_PHOTO_NAME_RX =
   /(?:(?:^|_)(?:19|20)\d{6}[_-]\d{4,6}|^(?:IMG[_-]|DSC[_N0-9]|DCIM|PXL[_-]|SAM[_-]|GOPR|DJI[_-]|KakaoTalk_\d{8}|Photo_\d|사진))/i;
-/** 실제 사람 피부톤 최소 비율 (카툰·초록/파란 캐릭터·인형·풍경 오탐 차단, 그늘·역광·실내 인물 사진은 100% 통과) */
-const MIN_HUMAN_SKIN_RATIO = 0.08;
+/** 실제 사람 피부톤 최소 비율 (카툰·초록/파란 캐릭터·음식·국그릇 오탐 차단, 그늘·역광·실내 인물 사진은 100% 통과) */
+const MIN_HUMAN_SKIN_RATIO = 0.12;
 
 interface CachedFaceStore {
   fingerprint: string;
@@ -67,7 +77,7 @@ function buildPhotosFingerprint(photos: PhotoItem[]): string {
   if (real.length === 0) return '';
   const head = real.slice(0, 8).map((p) => p.name).join('|');
   const tail = real.slice(-4).map((p) => p.name).join('|');
-  return `v7:${real.length}:${head}:${tail}`;
+  return `v8:${real.length}:${head}:${tail}`;
 }
 
 export function loadCachedOnDeviceFaceClusters(): {
@@ -219,17 +229,68 @@ function prepareFaceCropAndBgr112(
   cropCtx.drawImage(img, sx, sy, sw, sh, 0, 0, 128, 128);
   const avatarDataUrl = cropCanvas.toDataURL('image/jpeg', 0.72);
 
-  // SFace int8 112x112 입력용 타이트 얼굴 정사각형 크롭 (약간 15% 여유)
-  const sSide = Math.max(fw, fh) * 1.15;
-  const ssx = Math.max(0, Math.min(ow - 1, cx - sSide * 0.5));
-  const ssy = Math.max(0, Math.min(oh - 1, cy - sSide * 0.5));
-  const ssw = Math.max(8, Math.min(ow - ssx, sSide));
-  const ssh = Math.max(8, Math.min(oh - ssy, sSide));
-
+  // SFace int8 112x112 공식 5점 랜드마크 2D 유사변환(ArcFace alignCrop)
+  // (비정렬 단순 크롭 시 고개 기울기·크기 차이로 동일인이 여러 칸에 분리되거나 타인이 섞이는 문제를 근본 해결)
   sfaceCanvas.width = 112;
   sfaceCanvas.height = 112;
+  sfaceCtx.setTransform(1, 0, 0, 1, 0, 0);
   sfaceCtx.clearRect(0, 0, 112, 112);
-  sfaceCtx.drawImage(img, ssx, ssy, ssw, ssh, 0, 0, 112, 112);
+
+  let alignedOk = false;
+  if (face.landmarks && face.landmarks.length === 10) {
+    let meanSx = 0;
+    let meanSy = 0;
+    let meanDx = 0;
+    let meanDy = 0;
+    const pts: Array<[number, number]> = [];
+    for (let k = 0; k < 5; k++) {
+      const sxPt = face.landmarks[k * 2] * ow;
+      const syPt = face.landmarks[k * 2 + 1] * oh;
+      pts.push([sxPt, syPt]);
+      meanSx += sxPt;
+      meanSy += syPt;
+      meanDx += ARCFACE_REF_112[k][0];
+      meanDy += ARCFACE_REF_112[k][1];
+    }
+    meanSx /= 5;
+    meanSy /= 5;
+    meanDx /= 5;
+    meanDy /= 5;
+
+    let denom = 0;
+    let numA = 0;
+    let numB = 0;
+    for (let k = 0; k < 5; k++) {
+      const dsx = pts[k][0] - meanSx;
+      const dsy = pts[k][1] - meanSy;
+      const ddx = ARCFACE_REF_112[k][0] - meanDx;
+      const ddy = ARCFACE_REF_112[k][1] - meanDy;
+      denom += dsx * dsx + dsy * dsy;
+      numA += dsx * ddx + dsy * ddy;
+      numB += dsx * ddy - dsy * ddx;
+    }
+    if (denom > 16) {
+      const a = numA / denom;
+      const b = numB / denom;
+      const sc = Math.hypot(a, b);
+      if (sc > 0.05 && sc < 20) {
+        const tx = meanDx - (a * meanSx - b * meanSy);
+        const ty = meanDy - (b * meanSx + a * meanSy);
+        sfaceCtx.setTransform(a, b, -b, a, tx, ty);
+        sfaceCtx.drawImage(img, 0, 0);
+        sfaceCtx.setTransform(1, 0, 0, 1, 0, 0);
+        alignedOk = true;
+      }
+    }
+  }
+  if (!alignedOk) {
+    const sSide = Math.max(fw, fh) * 1.15;
+    const ssx = Math.max(0, Math.min(ow - 1, cx - sSide * 0.5));
+    const ssy = Math.max(0, Math.min(oh - 1, cy - sSide * 0.5));
+    const ssw = Math.max(8, Math.min(ow - ssx, sSide));
+    const ssh = Math.max(8, Math.min(oh - ssy, sSide));
+    sfaceCtx.drawImage(img, ssx, ssy, ssw, ssh, 0, 0, 112, 112);
+  }
   const rgba = sfaceCtx.getImageData(0, 0, 112, 112).data;
 
   const plane = 112 * 112;
@@ -238,6 +299,7 @@ function prepareFaceCropAndBgr112(
   let coreTotal = 0;
   let skinPixels = 0;
   let nonHumanColorPixels = 0;
+  let foodSatPixels = 0;
 
   for (let i = 0, p = 0; i < plane; i++, p += 4) {
     const r = rgba[p];
@@ -253,7 +315,7 @@ function prepareFaceCropAndBgr112(
       gradSum += Math.abs(gCur - gLeft) + Math.abs(gCur - gUp);
     }
 
-    // 얼굴 중심 영역(볼·코·입 주변 60% 코어) 피부색 vs 초록/파랑/원색 캐릭터 검증
+    // 얼굴 중심 영역(볼·코·입 주변 60% 코어) 피부색 vs 캐릭터·음식(국/찌개/식판) 색감 검증
     const row = Math.floor(i / 112);
     const col = i - row * 112;
     if (row >= 22 && row <= 92 && col >= 22 && col <= 90) {
@@ -261,17 +323,25 @@ function prepareFaceCropAndBgr112(
       // YCbCr 변환 (ITU-R BT.601)
       const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
       const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
-      // 자연 조명·실내외·선글라스·역광·그늘을 포괄하는 실제 사람 피부색 범위 (R >= G >= B 계열 + Cr > Cb)
+      // 고채도 주황·노랑·빨강 국물/찌개/음식 색감 판별 (실제 사람 피부에는 나타나지 않는 극단 채도)
+      const isHighSatFoodOrSauce =
+        (r > 135 && g > 65 && b < 48 && r - b > 95) ||
+        (cr > 172 && cb < 86);
+      if (isHighSatFoodOrSauce) {
+        foodSatPixels++;
+      }
+      // 자연 조명·실내외·선글라스·역광·그늘을 포괄하는 표준 사람 피부색 범위 (Chai & Ngan YCbCr)
       const isNaturalSkin =
-        r > 40 &&
-        g > 24 &&
-        b > 12 &&
-        r >= g - 10 &&
-        r > b + 4 &&
-        cr >= 127 &&
-        cr <= 182 &&
-        cb >= 70 &&
-        cb <= 136;
+        !isHighSatFoodOrSauce &&
+        r > 42 &&
+        g > 26 &&
+        b > 14 &&
+        r >= g - 8 &&
+        r > b + 6 &&
+        cr >= 131 &&
+        cr <= 170 &&
+        cb >= 78 &&
+        cb <= 130;
       if (isNaturalSkin) {
         skinPixels++;
       } else if (
@@ -287,7 +357,12 @@ function prepareFaceCropAndBgr112(
 
   const skinRatio = coreTotal > 0 ? skinPixels / coreTotal : 0;
   const nonHumanRatio = coreTotal > 0 ? nonHumanColorPixels / coreTotal : 0;
-  const isRealHumanFace = skinRatio >= MIN_HUMAN_SKIN_RATIO && nonHumanRatio < 0.28 && skinRatio > nonHumanRatio;
+  const foodSatRatio = coreTotal > 0 ? foodSatPixels / coreTotal : 0;
+  const isRealHumanFace =
+    skinRatio >= MIN_HUMAN_SKIN_RATIO &&
+    nonHumanRatio < 0.25 &&
+    foodSatRatio < 0.22 &&
+    skinRatio > nonHumanRatio;
   const sharpness = Math.min(99, Math.max(55, Math.round(55 + (gradSum / 35000) * 44)));
   return { avatarDataUrl, faceBgr112, sharpness, isRealHumanFace };
 }
@@ -339,6 +414,42 @@ function clusterExtractedFaces(
         centroid: new Float32Array(s.embedding),
         members: [s],
       });
+    }
+  }
+
+  // 동일인이 각도·연도 차이로 2~3개 칸에 나뉜 경우 중심 벡터 유사도 기반 자동 재병합
+  let mergedAny = true;
+  while (mergedAny && working.length > 1) {
+    mergedAny = false;
+    let bestI = -1;
+    let bestJ = -1;
+    let bestPairSim = MERGE_CENTROID_THRESHOLD;
+    for (let i = 0; i < working.length; i++) {
+      for (let j = i + 1; j < working.length; j++) {
+        const pairSim = dot(working[i].centroid, working[j].centroid);
+        if (pairSim > bestPairSim) {
+          bestPairSim = pairSim;
+          bestI = i;
+          bestJ = j;
+        }
+      }
+    }
+    if (bestI >= 0 && bestJ >= 0) {
+      const a = working[bestI];
+      const b = working[bestJ];
+      const combinedMembers = [...a.members, ...b.members];
+      const next = new Float32Array(a.centroid.length);
+      let norm = 0;
+      for (let d = 0; d < next.length; d++) {
+        next[d] = (a.centroid[d] * a.members.length + b.centroid[d] * b.members.length) / combinedMembers.length;
+        norm += next[d] * next[d];
+      }
+      norm = Math.sqrt(norm) + 1e-6;
+      for (let d = 0; d < next.length; d++) next[d] /= norm;
+      a.members = combinedMembers;
+      a.centroid = next;
+      working.splice(bestJ, 1);
+      mergedAny = true;
     }
   }
 
@@ -570,7 +681,7 @@ export async function runOnDeviceFacePassportScan(
           timer,
         });
         worker.postMessage(
-          { id, type: 'detect', bgrBuffer: bgr.buffer, origW, origH, scale, scoreThreshold: 0.62 },
+          { id, type: 'detect', bgrBuffer: bgr.buffer, origW, origH, scale, scoreThreshold: 0.82 },
           [bgr.buffer]
         );
       });
