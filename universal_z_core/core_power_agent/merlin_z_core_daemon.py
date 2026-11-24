@@ -174,7 +174,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.7.60"
+CORE_VERSION = "2.7.62"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1411,6 +1411,17 @@ import zipfile
 _SELF_UPDATE_IN_PROGRESS = False
 
 
+def _normalize_self_update_download_url(raw_url: str) -> str:
+    url = (raw_url or "").strip()
+    if not url:
+        return "https://github.com/Han-jinwook/Ghosti/releases/download/z-core-latest/Merlin_Z_Core.zip"
+    # window.location.origin + Z_CORE_ZIP_URL 이중 결합("https://...https://...") 자동 정화
+    second_https = url.find("https://", 8)
+    if second_https > 0:
+        url = url[second_https:]
+    return url
+
+
 def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """[화면 꺼짐 없는 3초 무소음 자동 업데이트 (Silent Self-Update)]
     - 웹앱(PWA)이 버전 차이를 감지해 호출하면, 유저에게 다운로드/압축해제를 시키지 않고
@@ -1418,9 +1429,9 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
     global _SELF_UPDATE_IN_PROGRESS
     data = body or {}
     target_version = str(data.get("targetVersion") or "").strip()
-    download_url = str(
-        data.get("downloadUrl") or "https://ghosti.sundreamer.app/Merlin_Z_Core.zip"
-    ).strip()
+    download_url = _normalize_self_update_download_url(
+        str(data.get("downloadUrl") or "https://github.com/Han-jinwook/Ghosti/releases/download/z-core-latest/Merlin_Z_Core.zip")
+    )
 
     # [핑퐁 다운그레이드 자살 루프 원천 차단]: targetVersion이 없거나 현재 실행 중인 CORE_VERSION보다 엄격히 높지 않으면 절대 종료·교체하지 않음!
     if not target_version or not _is_remote_version_newer(target_version, CORE_VERSION):

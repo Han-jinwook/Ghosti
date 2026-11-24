@@ -485,7 +485,16 @@ def sync_release_zip_and_frontend_version(exe_path: Path) -> Dict[str, Any]:
         zf.write(exe_path, arcname="Merlin_Z_Core_Setup.exe")
         zf.writestr("Merlin_Z_Core_실행.bat", bat_content.encode("utf-8"))
         zf.writestr("안내_README.txt", readme_content.encode("utf-8"))
-    os.replace(tmp_zip, zip_target)
+    try:
+        os.replace(tmp_zip, zip_target)
+    except PermissionError:
+        import shutil
+        try:
+            shutil.copyfile(tmp_zip, zip_target)
+            tmp_zip.unlink(missing_ok=True)
+        except PermissionError:
+            # public/Merlin_Z_Core.zip이 로컬 프로세스에 의해 잠겨 있을 때는 tmp_zip을 그대로 GitHub Release 업로드에 사용
+            zip_target = tmp_zip
 
     ver_json_target.write_text(
         json.dumps(
@@ -513,6 +522,75 @@ def sync_release_zip_and_frontend_version(exe_path: Path) -> Dict[str, Any]:
             bridge_ts.write_text(new_ts, encoding="utf-8")
             bridge_updated = True
 
+    gh_release_uploaded = False
+    if zip_target.exists():
+        try:
+            # 1) git credential helper에서 GitHub 토큰 조회 후 REST API로 z-core-latest 에셋 교체
+            p_cred = subprocess.Popen(
+                ["git", "credential", "fill"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            cred_out, _ = p_cred.communicate("protocol=https\nhost=github.com\n\n", timeout=8)
+            gh_token = ""
+            for ln in (cred_out or "").splitlines():
+                if ln.startswith("password="):
+                    gh_token = ln.split("=", 1)[1].strip()
+                    break
+            if gh_token:
+                import urllib.request
+
+                api_headers = {
+                    "Authorization": f"Bearer {gh_token}",
+                    "Accept": "application/vnd.github+json",
+                    "User-Agent": "Merlin-Z-Core-ReleaseSync",
+                }
+                req_rel = urllib.request.Request(
+                    "https://api.github.com/repos/Han-jinwook/Ghosti/releases/tags/z-core-latest",
+                    headers=api_headers,
+                )
+                with urllib.request.urlopen(req_rel, timeout=15) as r_rel:
+                    rel_info = json.loads(r_rel.read().decode("utf-8"))
+                rel_id = rel_info.get("id")
+                for asset in rel_info.get("assets") or []:
+                    if asset.get("name") == "Merlin_Z_Core.zip" and asset.get("id"):
+                        del_req = urllib.request.Request(
+                            f"https://api.github.com/repos/Han-jinwook/Ghosti/releases/assets/{asset['id']}",
+                            method="DELETE",
+                            headers=api_headers,
+                        )
+                        urllib.request.urlopen(del_req, timeout=15).close()
+                if rel_id:
+                    zip_bytes = zip_target.read_bytes()
+                    up_headers = {
+                        **api_headers,
+                        "Content-Type": "application/zip",
+                        "Content-Length": str(len(zip_bytes)),
+                    }
+                    up_req = urllib.request.Request(
+                        f"https://uploads.github.com/repos/Han-jinwook/Ghosti/releases/{rel_id}/assets?name=Merlin_Z_Core.zip",
+                        data=zip_bytes,
+                        method="POST",
+                        headers=up_headers,
+                    )
+                    with urllib.request.urlopen(up_req, timeout=180) as r_up:
+                        up_res = json.loads(r_up.read().decode("utf-8"))
+                        gh_release_uploaded = bool(up_res.get("id"))
+                    patch_body = json.dumps({"name": f"Merlin Z-Core Latest (v{core_version})"}).encode("utf-8")
+                    patch_req = urllib.request.Request(
+                        f"https://api.github.com/repos/Han-jinwook/Ghosti/releases/{rel_id}",
+                        data=patch_body,
+                        method="PATCH",
+                        headers={**api_headers, "Content-Type": "application/json"},
+                    )
+                    urllib.request.urlopen(patch_req, timeout=15).close()
+        except Exception:
+            gh_release_uploaded = False
+        if zip_target == tmp_zip:
+            tmp_zip.unlink(missing_ok=True)
+
     return {
         "ok": zip_target.exists(),
         "version": core_version,
@@ -520,6 +598,7 @@ def sync_release_zip_and_frontend_version(exe_path: Path) -> Dict[str, Any]:
         "zipSizeMB": round(zip_target.stat().st_size / 1024 / 1024, 1) if zip_target.exists() else 0,
         "versionJsonPath": str(ver_json_target),
         "zCoreBridgeUpdated": bridge_updated,
+        "githubReleaseUploaded": gh_release_uploaded,
     }
 
 

@@ -12,7 +12,7 @@ export const Z_CORE_PORT = 5199;
 export const Z_CORE_ORIGIN = `http://127.0.0.1:${Z_CORE_PORT}`;
 export const Z_CORE_ZIP_URL = 'https://github.com/Han-jinwook/Ghosti/releases/download/z-core-latest/Merlin_Z_Core.zip';
 /** 현재 배포 중인 최신 Z-코어 버전 (Merlin_Z_Core.zip 안의 Merlin_Z_Core_Setup.exe 버전과 반드시 일치시킬 것 — 불일치 시 self-update 루프 발생) */
-export const LATEST_Z_CORE_VERSION = '2.7.61';
+export const LATEST_Z_CORE_VERSION = '2.7.62';
 
 /**
  * 현재 브라우저 세션이 로그인된 실사용자인지, 아니면 비로그인(크롬 게스트 모드 / 시크릿 창 / 첫 방문자)인지 판별합니다.
@@ -145,7 +145,9 @@ class ZCoreBridgeManager {
     if (this.selfUpdateRequested || typeof window === 'undefined') return;
     this.selfUpdateRequested = true;
     try {
-      const originUrl = window.location.origin.startsWith('http')
+      const originUrl = Z_CORE_ZIP_URL.startsWith('http')
+        ? Z_CORE_ZIP_URL
+        : window.location.origin.startsWith('http')
         ? `${window.location.origin}${Z_CORE_ZIP_URL}`
         : `https://ghosti.sundreamer.app${Z_CORE_ZIP_URL}`;
       await fetch(`${Z_CORE_ORIGIN}/__merlin/self-update`, {
