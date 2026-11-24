@@ -1,22 +1,19 @@
 # 🟢 `[1귀신]` 세션 인계장 (`SESSION_HANDOVER_1.md` — 온보딩 · 귀신비서 · 여권)
 
-- **최종 갱신 일시**: 2026-11-24 16:42 (KST)
+- **최종 갱신 일시**: 2026-11-25 01:46 (KST)
 - **담당 역할**: `[1귀신]` (온보딩 · 귀신비서 · 사진 정리 · 얼굴 여권)
-- **세션 창 제목**: `1귀신 1.9GB패치·여권완결`
+- **세션 창 제목**: `1귀신 여권4대기획·전영역FAQ`
 
-## 완료 내역
-1. **크롬 단일 탭 1.9GB RAM·CPU 폭주 근본 패치 및 [`docs/기능명세.md`](기능명세.md) 8.4절 5대 정공법 명문화 (`96e9c7b`)**
-   - 3·4호기 속도 저하 원인이 Z-코어(42~80MB)가 아닌 크롬 단일 탭 ONNX/WASM 동시 기동 및 미종료(1.9GB RAM)임을 SSH 실측으로 규명.
-   - `assistantOnboardingSlice.ts`: 기동 시 `1단계 광학 감사(dHash) ➔ 2단계 얼굴 여권(YuNet+SFace) ➔ 3단계 비전/OCR(768D)` 100% 순차 직렬 실행(동시 워커 최대 1개).
-   - `aiSharedRuntime.ts` · `aiPhotoFaceEngine.ts` · `onDeviceFacePassportEngine.ts`: 비전 유휴 `10~12초` 시 `terminateEmbeddingWorkerNow()` 강제 종료 및 Pass 2 OCR 직후 데스크톱·모바일 공통 `releasePaddleOcrRuntime()` 호출로 OS RAM 즉시 회수, 세션당 스캔 상한 통제(데스크톱 비전 `120장` / 모바일 `80장` / 얼굴 `160장`).
-2. **온디바이스 얼굴 여권(`YuNet + SFace int8`) 정석 파이프라인 및 QA 이슈 전수 완결 (`9219edd`, `11d27eb`, `75f3014`, `3a04377`, `68a8bc6`, `5e6b1d9`)**
-   - **5점 정면 정렬 & 오탐 차단**: `SFace int8` 입력 전 ArcFace 5점 랜드마크 2D 유사변환(`112×112`) + 중심 벡터(`0.42`) 재병합으로 동일인 분리·타인 혼입 해결, `YuNet` 임계치 `0.82` 상향 + YCbCr 피부톤 및 고채도 국물/찌개/캐릭터·시스템 `Temp` 폴더 배제(4호기 임시파일 ~500건 청소 포함).
-   - **고유 `clusterId` & 영구 스냅샷 SSOT**: 단체사진 동반 등장 시에도 충돌 없는 `대표사진+얼굴좌표` 고유 `clusterId`(`v9`), 두 번째 이후 인물 클릭 시 이전 제외/거절 키 자동 해제 + `[다른 얼굴 고르기]` 버튼 + 0장 선택 시 `[1장 이상 선택]` 비활성화, 확정 여권 사진 영구 스냅샷(`confirmedSelfCuts`) 보존 및 프로필 여권 모달·채팅 단일 조회(`getConfirmedSelfPassportView`) 통합, 스캔 중 `'여권 등록'` 요청 시 완료 즉시 자동 후속 안내(`queuedUserPassportWait`), `data:image/` 아바타 이중 캔버스 덧그리기 생략(겹침 깜빡임 제거).
-3. **새로고침(`F5`) 첫 화면 지연·임시 사진 깜빡임 및 프로필 `'회'` 깜빡임 원천 제거 (`fed6795`, `08df1f3`)**
-   - 데스크톱 본 화면 `initApp` 초입 Z-코어 헬스체크 선대기 및 원격 호출 `700ms` 분리 + 첫 렌더링 직전 IndexedDB 광학 캐시(`applyCachedPcOpticalAuditInstant`) `0.01초` 선복원으로 임시 `4세트` 깜빡임 없이 최종 `56세트` 원샷 표시, `HubProfileCard` 닉네임 동기 초기화로 프로필 원 안 `'회'` 깜빡임 제거.
-4. **자체보호 보안모듈 대화형 선택지 · 30일 고아 캐시 GC · Z-코어 무인 자가업데이트 완결 (`510172c`, `ee17b69`, `8d803a0`, `d3b0ef8`)**
-   - `AhnLab Safe Transaction`·`nProtect` 자체보호 보안모듈 감지 포함 + `[안 지우고 잠재우기]` / `[안 쓰는 보안앱 완전 삭제]` 나란히 칩 및 공식 언인스톨러 UAC 직결, 원본 이동·삭제 사진의 고아 캐시 **30일 1회** 저우선순위 자동 청소(`_trigger_monthly_orphan_cache_gc_once`), `zCoreBridge.ts` 자가업데이트 이중 URL 수정 및 `build_signed_merlin_z_core.py` `z-core-latest` GitHub Release 자동 업로드 일원화, 슬로건 v3.0·마스터바이블 오리지널 문서 단독 이관 완료.
+## 완료 내역 (2026-11-24 ~ 11-25)
+1. **가족 여권 인물 누락 버그(`422f9ffd-2c1d-805b-a957-dcbfbb1171b4`) 해결 및 기획서 누락 4대 여권 스펙 100% 완결 (`8728ac7`, `5f7ab52`)**
+   - **연도별 층화 샘플링 & 단체사진 검출 강화**: `selectStratifiedFaceScanCandidates`(`MAX_SCAN_PHOTOS = 260`), 파일명 촬영일(`YYYYMMDD`·13자리 Unix epoch) 최우선 파싱, `MIN_PASSPORT_FACE_PX = 19`, 사진당 NMS 상한 `12명`, 후보 `MAX_CLUSTERS = 18` / `MAX_FACES = 12` 상향 및 20장 조기 방출 제거로 4호기 실데이터(1,772장)에서 가족 전원이 후보로 노출되도록 해결 후 `'재테스트 대기'` 전환 완료.
+   - **기획서 4대 여권 스펙 완전 구현**: ① **Pass 2 시공간 연속성 + 동반 등장 가족 맥락 족쇄**(선글라스·모자·측면 클러스터가 `Cannot-Link` 0건 + 확정 가족 동반 등장/동일 촬영일 + `cent >= 0.34` & `top3 >= 0.44` 충족 시 맨얼굴 여권으로 자동 흡수), ② **5대 스타일 슬롯(`정면·선명`, `측면·미소`, `야외·노을`, `선글라스·역광`, `야간·실내`) 광학 실측 분류 및 연령 바구니(`성인 10년` / `미성년 5년`) 태깅**, ③ **Supabase `ghost_passports` 128D 벡터 온전 업로드 및 기기 간 자동 매칭(`reconcileCloudPassportsWithFaceClusters`, `cosine >= 0.44`)**, ④ **본인(`self`) `[실명 + 프로필 별명]` 검색 바인딩 영구 유지 및 `docs/기능명세.md` In-Place 현행화**.
+2. **전 영역(`1·2·3·4귀신`) 귀신비서 FAQ 마스터 원본(`docs/귀신비서_FAQ_원본.md` v2.0, 28문 28답) 신설 및 0토큰 즉답·LLM 프롬프트 3중 탑재 (`5f7ab52`, `e221ab3`)**
+   - `docs/귀신비서_FAQ_원본.md` 신설 및 `docs/README.md` `08-B` 등록, `ghostSecretaryEngine.ts` `matchAllDomainGhostiFaq()` 0토큰 즉답 매처 + `ghost_secretary_playbook.json`(`v1.3.6`) + `monsterChatRouter.ts` LLM 시스템 프롬프트 주입 및 로컬 폴더 정리 오인식 가드 적용, `Ghosti4` 우체국 회신 2건 완결.
+3. **`1귀신` 100% 커버리지 노션 미션 카드 12장 + 해나라·달나라 긴급 필독 미션 카드 2장 출제 및 `담당(해나라/달나라)` 체계 전환 (`ec446fb`)**
+   - `notion_qa.py`에서 `[UX]`/`[로직]` 말머리를 폐지하고 `"담당"` 속성을 `1·2귀신(🟢) = 해나라`, `3·4귀신(🟣) = 달나라`로 자동 매핑하도록 개편.
+   - 테스터가 모든 미션 테스트 중 궁금한 점을 `[1. 👻 귀신비서]` 화면의 **우측 귀신비서 채팅창**에 먼저 질문하고, 엉뚱한 답변이 나오면 `[질문 + 답변 화면]`을 캡처해 `[1귀신]` 수신자로 버그 신고하도록 해나라(`422f9ffd-2c1d-8175-aaca-fef2a60d329a`)·달나라(`422f9ffd-2c1d-8130-b97f-e88edf9c3efa`) 긴급 필독 미션 카드 각 1장씩 출제 완료.
 
 ## 다음 체크인 Todo
+- [ ] **테스터 귀신비서 질문/답변 캡처 버그(`[1귀신]`) 실시간 대응**: 명백한 FAQ·프롬프트 누락 건은 `docs/귀신비서_FAQ_원본.md` + `ghostSecretaryEngine.ts` + `monsterChatRouter.ts` 즉시 보강 후 `'재테스트 대기'` 전환, 애매한 사안(비서 역량 밖 우회 분기 vs 정공법 기능 해결)은 즉시 `🚨`로 멀린님께 상의.
 - [ ] **MS 코드서명 답장 확인 후 재서명**: 멀린님 답장 대기 중 (`Merlin_Z_Core_Setup.exe` 재서명 및 `z-core-latest` GitHub Release 동시 교체).
-- [ ] **색상 톤 최종 눈검수**: 복원 완료(`6c51a21`·`f828ef3`)된 틸·에메랄드 컬러 톤에 대한 멀린님 눈검수 피드백 반영 대기.
