@@ -35,10 +35,29 @@ export interface HubProfileCardProps {
 export const HubProfileCard: React.FC<HubProfileCardProps> = ({ onSuccess, className = '', showCoin = false, hideCoinSection = false, nicknameLabel, customGiftProducts, minCustomCoin, onOpenPurchase }) => {
   const effectiveShowCoin = showCoin && !hideCoinSection;
   const { user, isLoggedIn, balance } = useHub();
+
+  const resolveSyncNickname = (u: typeof user) => {
+    const uNick = (u?.nickname || '').trim();
+    if (uNick && uNick !== '회원' && uNick !== '가족회원') return uNick;
+    if (typeof window !== 'undefined') {
+      const storedNick = (localStorage.getItem('userNickname') || '').trim();
+      if (storedNick && storedNick !== '회원' && storedNick !== '가족회원') return storedNick;
+      const e = (u?.email || localStorage.getItem('userEmail') || '').trim();
+      if (e) return e.split('@')[0];
+    } else if (u?.email) {
+      return u.email.split('@')[0];
+    }
+    return '';
+  };
+
   const [isEditing, setIsEditing] = useState(false);
-  const [nickname, setNickname] = useState('');
-  const [profileImage, setProfileImage] = useState('');
-  const [email, setEmail] = useState('');
+  const [nickname, setNickname] = useState(() => resolveSyncNickname(user));
+  const [profileImage, setProfileImage] = useState(
+    () => user?.avatar_url || (typeof window !== 'undefined' ? localStorage.getItem('userProfileImage') || '' : '')
+  );
+  const [email, setEmail] = useState(
+    () => user?.email || (typeof window !== 'undefined' ? localStorage.getItem('userEmail') || '' : '')
+  );
   const [tempNickname, setTempNickname] = useState('');
   const [tempProfileImage, setTempProfileImage] = useState('');
   const [isGiftBoxOpen, setIsGiftBoxOpen] = useState(false);
@@ -77,21 +96,22 @@ export const HubProfileCard: React.FC<HubProfileCardProps> = ({ onSuccess, class
   }, [isLoggedIn, effectiveShowCoin]);
 
   useEffect(() => {
-    // 로컬 스토리지에서 기본값 가져오기
+    // 로그인 세션(user) ➔ 로컬 스토리지 ➔ 이메일 ID 순으로 즉시 보정하여 '회' 깜빡임 원천 차단
     const storedEmail = localStorage.getItem('userEmail');
     const storedNickname = localStorage.getItem('userNickname');
     const storedProfileImage = localStorage.getItem('userProfileImage');
 
     const currentEmail = user?.email || storedEmail || '';
-    const emailId = currentEmail ? currentEmail.split('@')[0] : '회원';
-    
-    // 로컬스토리지의 닉네임이 '회원' 또는 '가족회원'이면 이메일 ID로 즉시 보정하여 UI 깜빡임 방지
-    const initNickname = (storedNickname && storedNickname !== '회원' && storedNickname !== '가족회원')
-      ? storedNickname
-      : (emailId !== '회원' ? emailId : '게스트');
+    const emailId = currentEmail ? currentEmail.split('@')[0] : '';
+    const userNick = (user?.nickname || '').trim();
+    const validUserNick = userNick && userNick !== '회원' && userNick !== '가족회원' ? userNick : '';
+    const validStoredNick =
+      storedNickname && storedNickname !== '회원' && storedNickname !== '가족회원' ? storedNickname.trim() : '';
+
+    const initNickname = validUserNick || validStoredNick || emailId || (isLoggedIn ? '' : '게스트');
 
     setNickname(initNickname);
-    setProfileImage(storedProfileImage || '');
+    setProfileImage(user?.avatar_url || storedProfileImage || '');
     setEmail(currentEmail);
 
     if (isLoggedIn) {
@@ -104,11 +124,13 @@ export const HubProfileCard: React.FC<HubProfileCardProps> = ({ onSuccess, class
           if (result.success) {
             const dbNickname = (result.nickname && result.nickname !== '회원' && result.nickname !== '가족회원') 
               ? result.nickname 
-              : emailId;
+              : (validUserNick || validStoredNick || emailId);
             const dbImage = result.avatar_url || '';
-            setNickname(dbNickname);
+            if (dbNickname) {
+              setNickname(dbNickname);
+              localStorage.setItem('userNickname', dbNickname);
+            }
             setProfileImage(dbImage);
-            localStorage.setItem('userNickname', dbNickname);
             localStorage.setItem('userProfileImage', dbImage);
           }
         })

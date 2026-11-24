@@ -43,8 +43,10 @@ export const HubAvatar: React.FC<HubAvatarProps> = ({
     );
   }
 
-  const displayId = nickname || '회원';
-  const firstChar = displayId.charAt(0).toUpperCase();
+  const trimmedNick = (nickname || '').trim();
+  const displayId =
+    trimmedNick && trimmedNick !== '회원' && trimmedNick !== '가족회원' ? trimmedNick : '';
+  const firstChar = displayId ? displayId.charAt(0).toUpperCase() : '';
 
   return (
     <div 
@@ -131,7 +133,7 @@ export const HubProfileWidget: React.FC<HubProfileWidgetProps> = ({
   // 로그인 상태 (회원 프로필)
   const displayId = (user?.nickname && user?.nickname !== '회원' && user?.nickname !== '가족회원') 
     ? user.nickname 
-    : (user?.email?.split('@')[0] || '회원');
+    : (user?.email?.split('@')[0] || '');
 
   return (
     <button
