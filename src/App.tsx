@@ -28,6 +28,7 @@ import { startPassportPhotoActivityWatcher } from './services/passportRegistrati
 import { SetupFloatingOverlayGuide } from './components/SetupMonsterModal';
 import { GhostCastAndLiveGlobalOverlay } from './components/GhostCastAndLiveSystem';
 import { FreePhotoShareOverlays } from './domains/free_photo_share/FreePhotoShareOverlays';
+import { MobileShareInviteBridgeOverlay } from './domains/free_photo_share/MobileShareInviteBridgeOverlay';
 import { MobileQrPairBridgeOverlay } from './domains/paid_device_sync/MobileQrPairBridgeOverlay';
 import {
   isCapacitorNativeMobileRuntime,
@@ -894,7 +895,7 @@ export const App: React.FC = () => {
     };
     window.addEventListener('ghostiNativePairDeepLink', onNativePairDeepLink);
 
-    // [iOS/Android 스토어 설치 후 최초 실행 시 클립보드 Deferred QR 코드(GHOSTI_PAIR_V1:XXXXXX) 자동 복구]
+    // [iOS/Android 스토어 설치 후 최초 실행 시 클립보드 Deferred QR(GHOSTI_PAIR_V1) · 초대(GHOSTI_INVITE_V1) 자동 복구]
     if (isCapacitorNativeMobileRuntime()) {
       void readNativeMobileClipboardText(false)
         .then((clipRes) => {
@@ -909,6 +910,17 @@ export const App: React.FC = () => {
               /* ignore */
             }
             handleIncomingNativePairUrl(`ghosti://pair?pairCode=${m[1]}`);
+            return;
+          }
+          if (/GHOSTI_INVITE_V1:/i.test(text)) {
+            const consumedKey = `ghosti_consumed_clip_invite_${text.slice(0, 48)}`;
+            try {
+              if (sessionStorage.getItem(consumedKey) === '1') return;
+              sessionStorage.setItem(consumedKey, '1');
+            } catch {
+              /* ignore */
+            }
+            void useSaySeeStore.getState().applyShareInviteDeepLink(text, { fromNativeApp: true });
           }
         })
         .catch(() => {});
@@ -1304,6 +1316,8 @@ export const App: React.FC = () => {
       <PassportDoorplateStyleModal />
       {/* [모바일 웹 전용 PC QR 기기 연결 브릿지] 쇼룸·워크스페이스 무관 최상단 노출 (앱 열기·스토어 이동·계정 선택) */}
       <MobileQrPairBridgeOverlay />
+      {/* [모바일 웹 전용 사진 공유방 초대 브릿지] 초대 링크 접속 시 앱 열기·스토어 설치 이동 안내 */}
+      <MobileShareInviteBridgeOverlay />
 
       {/* 모바일(iOS/AOS) 전 화면 공통 상단 당겨서 새로고침(Pull-to-refresh) 플로팅 인디케이터 — iOS 상단 상태바(topSafeAreaShieldView) 차폐 영역 아래에 배치하여 상단 잘림 원천 차단 */}
       {(ptrPullDist > 0 || isPtrRefreshing) && (

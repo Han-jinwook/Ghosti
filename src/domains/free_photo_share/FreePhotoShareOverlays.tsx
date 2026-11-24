@@ -374,14 +374,18 @@ export const FreePhotoShareOverlays: React.FC = () => {
               );
               return;
             }
-            // 안드로이드 최근 앱(Recents)/재실행 시 OS가 과거 초대 링크 Intent를 그대로 재전달하는 경우,
-            // 이미 이전 세션에서 열었던 동일 초대 링크는 무시하고 정상적으로 귀신비서 첫 화면을 유지합니다.
+            // 3초 이내 동일 딥링크 중복 수신(예: launch + appUrlOpen 동시 발화)만 방지하고,
+            // 사용자가 다시 초대 링크를 눌러 앱을 연 경우에는 정상적으로 초대방에 입장·멤버 등록되도록 허용합니다.
             let isStaleReplayedIntent = false;
             try {
               const prevRaw = localStorage.getItem(LAST_CONSUMED_DEEPLINK_KEY);
               if (prevRaw) {
                 const prev = JSON.parse(prevRaw) as { url?: string; ts?: number } | null;
-                if (prev?.url === res.deepLinkUrl && typeof prev.ts === 'number') {
+                if (
+                  prev?.url === res.deepLinkUrl &&
+                  typeof prev.ts === 'number' &&
+                  Date.now() - prev.ts < 3000
+                ) {
                   isStaleReplayedIntent = true;
                 }
               }
