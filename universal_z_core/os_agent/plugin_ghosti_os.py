@@ -969,6 +969,86 @@ _FULL_DRIVE_SCAN_STARTED = False
 _FULL_DRIVE_SCAN_LOCK = threading.Lock()
 
 
+def _classify_os_drive_and_volume(letter: str) -> dict | None:
+    """Win32 API로 드라이브의 내장/외장(USB·SD·이동식) 여부와 볼륨 고유번호(VOL_XXXXXXXX)를 판별합니다."""
+    if os.name != "nt":
+        return None
+    drv_ch = letter[:1].upper()
+    drv_root = f"{drv_ch}:\\"
+    try:
+        k32 = ctypes.windll.kernel32
+        prev_err = k32.SetErrorMode(0x0001 | 0x8000)
+        try:
+            dtype = int(k32.GetDriveTypeW(str(drv_root)))
+            if dtype not in (2, 3):
+                return None
+            if not Path(drv_root).exists():
+                return None
+            vol_name_buf = ctypes.create_unicode_buffer(260)
+            fs_name_buf = ctypes.create_unicode_buffer(260)
+            vol_serial = ctypes.c_ulong(0)
+            max_comp = ctypes.c_ulong(0)
+            fs_flags = ctypes.c_ulong(0)
+            if not k32.GetVolumeInformationW(
+                str(drv_root),
+                vol_name_buf,
+                260,
+                ctypes.byref(vol_serial),
+                ctypes.byref(max_comp),
+                ctypes.byref(fs_flags),
+                fs_name_buf,
+                260,
+            ):
+                return None
+            vol_id = f"VOL_{int(vol_serial.value) & 0xFFFFFFFF:08X}"
+            is_ext = (dtype == 2)
+            if dtype == 3 and drv_ch != "C":
+                try:
+                    import struct as _st
+                    h_dev = k32.CreateFileW(f"\\\\.\\{drv_ch}:", 0, 3, None, 3, 0, None)
+                    if h_dev and int(h_dev) != -1 and h_dev != ctypes.c_void_p(-1).value:
+                        try:
+                            q_buf = _st.pack("<III", 0, 0, 0)
+                            o_buf = ctypes.create_string_buffer(128)
+                            b_ret = ctypes.c_ulong(0)
+                            if k32.DeviceIoControl(h_dev, 0x002D1400, q_buf, len(q_buf), o_buf, 128, ctypes.byref(b_ret), None):
+                                if b_ret.value >= 32 and int(o_buf.raw[28]) in (7, 12, 13):
+                                    is_ext = True
+                        finally:
+                            k32.CloseHandle(h_dev)
+                except Exception:
+                    pass
+            return {
+                "letter": drv_ch,
+                "root": drv_root,
+                "dtype": dtype,
+                "is_external": is_ext,
+                "vol_id": vol_id,
+                "label": (vol_name_buf.value or "").strip() or ("USB 드라이브" if is_ext else "로컬 디스크"),
+            }
+        finally:
+            k32.SetErrorMode(prev_err)
+    except Exception:
+        return None
+
+
+def _is_external_volume_approved_in_policy(vol_id: str) -> bool:
+    """%LOCALAPPDATA%\\Merlin\\external_drive_policy.json에서 유저가 명시 승인('included')한 볼륨인지 확인합니다."""
+    try:
+        pol_p = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")) / "Merlin" / "external_drive_policy.json"
+        if not pol_p.exists():
+            return False
+        data = json.loads(pol_p.read_text(encoding="utf-8", errors="ignore"))
+        vols = data.get("volumes") if isinstance(data, dict) else None
+        if isinstance(vols, dict):
+            rec = vols.get(vol_id)
+            if isinstance(rec, dict) and str(rec.get("decision")) == "included":
+                return True
+    except Exception:
+        pass
+    return False
+
+
 def _start_bg_full_drive_scan_once() -> None:
     """
     [2단계 백그라운드 전체 드라이브 스캔 (1단계 우선 폴더 0.05초 즉시 개방 후 C:, D:, E: 전수 확대)]
@@ -1012,15 +1092,14 @@ def _start_bg_full_drive_scan_once() -> None:
             for letter in string.ascii_uppercase:
                 if letter in ("A", "B", "S"):
                     continue
-                drive = Path(f"{letter}:\\")
-                try:
-                    if not drive.exists():
-                        continue
-                    dtype = ctypes.windll.kernel32.GetDriveTypeW(str(drive))
-                    if dtype not in (2, 3):  # DRIVE_REMOVABLE(2), DRIVE_FIXED(3)
-                        continue
-                except Exception:
+                d_info = _classify_os_drive_and_volume(letter)
+                if not d_info:
                     continue
+                # [확정 정책]: C: 및 내장 고정 하드(is_external==False)만 유휴 시간대 자동 순차 스캔하며,
+                # USB/외장 드라이브(is_external==True)는 유저가 질문창에서 명시 승인('included')한 볼륨만 스캔!
+                if d_info["is_external"] and not _is_external_volume_approved_in_policy(d_info["vol_id"]):
+                    continue
+                drive = Path(d_info["root"])
 
                 stack: List[tuple[Path, int]] = [(drive, 0)]
                 while stack and len(discovered) < 800:

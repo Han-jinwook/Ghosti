@@ -2866,10 +2866,501 @@ def _resolve_win_known_folder_safe(guid_str: str) -> Path | None:
     return None
 
 
-def _get_known_user_folders_for_search() -> list[Path]:
+_EXTERNAL_DRIVE_POLICY_LOCK = threading.Lock()
+_EXTERNAL_DRIVE_RUNTIME_STATE: dict[str, Any] = {
+    "stage1_c_done": False,
+    "stage2_internal_done": False,
+    "active_Prompt": None,
+    "indexing_vol_id": "",
+    "indexing_drive": "",
+    "indexing_est_min": 1,
+    "indexing_pct": 0,
+    "completed_banner_until": 0.0,
+    "completed_drive": "",
+    "completed_count": 0,
+    "connected_ext_map": {},  # vol_id -> {"drive": "I:", "label": "...", "est_files": 0, "est_min": 1}
+}
+
+
+def _get_external_policy_paths() -> tuple[Path, Path]:
+    local_app = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")) / "Merlin"
+    local_app.mkdir(parents=True, exist_ok=True)
+    policy_p = local_app / "external_drive_policy.json"
+    cache_root = local_app / "external_cache"
+    cache_root.mkdir(parents=True, exist_ok=True)
+    return policy_p, cache_root
+
+
+def _load_external_drive_policy() -> dict[str, Any]:
+    policy_p, _ = _get_external_policy_paths()
+    if not policy_p.exists():
+        return {"volumes": {}}
+    try:
+        data = json.loads(policy_p.read_text(encoding="utf-8", errors="ignore"))
+        if isinstance(data, dict) and isinstance(data.get("volumes"), dict):
+            return data
+    except Exception:
+        pass
+    return {"volumes": {}}
+
+
+def _save_external_drive_policy(data: dict[str, Any]) -> None:
+    policy_p, _ = _get_external_policy_paths()
+    try:
+        policy_p.write_text(json.dumps(data, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+
+def _classify_drive_volume_and_bus(drv_letter: str) -> dict[str, Any] | None:
+    """
+    Win32 API로 드라이브(D:~Z:)의 물리 타입(내장 고정 하드 vs USB/외장 이동식)과
+    볼륨 고유번호(VolumeSerialNumber: VOL_XXXXXXXX)를 0.1ms 내에 판별합니다.
+    - USB 메모리(DRIVE_REMOVABLE=2)뿐 아니라 USB 버스(BusTypeUsb=7, SD=12, MMC=13) 외장하드도 정확히 외장으로 분류합니다.
+    """
+    if sys.platform != "win32":
+        return None
+    drv_ch = drv_letter[:1].upper()
+    drv_root = f"{drv_ch}:\\"
+    try:
+        k32.GetDriveTypeW.argtypes = [wintypes.LPCWSTR]
+        k32.GetDriveTypeW.restype = wintypes.UINT
+        prev_err = k32.SetErrorMode(0x0001 | 0x8000)
+        try:
+            dtype = int(k32.GetDriveTypeW(drv_root))
+            if dtype not in (2, 3):  # 2=DRIVE_REMOVABLE, 3=DRIVE_FIXED
+                return None
+            p_drv = Path(drv_root)
+            if not p_drv.exists() or not p_drv.is_dir():
+                return None
+
+            vol_name_buf = ctypes.create_unicode_buffer(260)
+            fs_name_buf = ctypes.create_unicode_buffer(260)
+            vol_serial = wintypes.DWORD(0)
+            max_comp_len = wintypes.DWORD(0)
+            fs_flags = wintypes.DWORD(0)
+            ok_vol = k32.GetVolumeInformationW(
+                wintypes.LPCWSTR(drv_root),
+                vol_name_buf,
+                260,
+                ctypes.byref(vol_serial),
+                ctypes.byref(max_comp_len),
+                ctypes.byref(fs_flags),
+                fs_name_buf,
+                260,
+            )
+            if not ok_vol:
+                return None
+            vol_id = f"VOL_{int(vol_serial.value) & 0xFFFFFFFF:08X}"
+            vol_label = (vol_name_buf.value or "").strip()
+
+            is_external_usb = (dtype == 2)
+            bus_type = 2 if dtype == 2 else 0
+            if dtype == 3:
+                # IOCTL_STORAGE_QUERY_PROPERTY (0x002D1400)로 물리 BusType 조회 (7=USB, 12=SD, 13=MMC)
+                try:
+                    h_dev = k32.CreateFileW(
+                        wintypes.LPCWSTR(f"\\\\.\\{drv_ch}:"),
+                        0,
+                        0x00000001 | 0x00000002,  # FILE_SHARE_READ | FILE_SHARE_WRITE
+                        None,
+                        3,  # OPEN_EXISTING
+                        0,
+                        None,
+                    )
+                    if h_dev and h_dev != wintypes.HANDLE(-1).value and int(h_dev) != -1:
+                        try:
+                            query_buf = struct.pack("<III", 0, 0, 0)  # StorageDeviceProperty=0, PropertyStandardQuery=0
+                            out_buf = ctypes.create_string_buffer(128)
+                            bytes_ret = wintypes.DWORD(0)
+                            ok_io = k32.DeviceIoControl(
+                                h_dev,
+                                0x002D1400,
+                                query_buf,
+                                len(query_buf),
+                                out_buf,
+                                128,
+                                ctypes.byref(bytes_ret),
+                                None,
+                            )
+                            if ok_io and bytes_ret.value >= 32:
+                                # STORAGE_DEVICE_DESCRIPTOR offset 28 = BusType (BYTE)
+                                bus_type = int(out_buf.raw[28])
+                                if bus_type in (7, 12, 13):
+                                    is_external_usb = True
+                        finally:
+                            k32.CloseHandle(h_dev)
+                except Exception:
+                    pass
+
+            return {
+                "letter": f"{drv_ch}:",
+                "root": drv_root,
+                "dtype": dtype,
+                "bus_type": bus_type,
+                "is_external": is_external_usb,
+                "vol_id": vol_id,
+                "label": vol_label or ("USB 드라이브" if is_external_usb else "로컬 디스크"),
+            }
+        finally:
+            k32.SetErrorMode(prev_err)
+    except Exception:
+        return None
+
+
+def _quick_probe_external_drive_candidate(drv_root: str) -> tuple[bool, int, str]:
+    """
+    [인증서(NPKI) · OS 설치용 · 파일 5개 미만 소형 USB 100% 무소음 자동 패스 판별기]:
+    - 파일을 절대 열지 않고(Read-Only os.scandir, 쓰기 0 Byte) 0.08초 내에 가볍게 확인합니다.
+    - 공동인증서(NPKI)만 있거나 실제 문서·사진·영상 파일이 5개 미만인 USB, Windows 설치 USB는
+      질문창조차 띄우지 않고 (False, count, reason)으로 조용히 스킵합니다.
+    """
+    target_exts = {
+        ".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md",
+        ".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif", ".bmp", ".heic", ".heif",
+        ".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v", ".3gp", ".ts", ".mts", ".flv",
+    }
+    root_p = Path(drv_root)
+    try:
+        if (root_p / "bootmgr").exists() and (root_p / "sources").exists():
+            return (False, 0, "OS_INSTALLER")
+    except Exception:
+        return (False, 0, "UNREADABLE")
+
+    media_cnt = 0
+    sub_dirs: list[Path] = []
+    t0 = time.time()
+    try:
+        with os.scandir(root_p) as it:
+            for ent in it:
+                try:
+                    nm = ent.name
+                    nm_low = nm.lower()
+                    if nm.startswith((".", "$", "~")) or nm_low in ("npki", "system volume information", "$recycle.bin", "autorun.inf"):
+                        continue
+                    if ent.is_dir(follow_symlinks=False):
+                        if nm_low not in _SEARCH_SKIP_SUB_DIRS and len(sub_dirs) < 40:
+                            sub_dirs.append(Path(ent.path))
+                    elif ent.is_file(follow_symlinks=False):
+                        dot = nm_low.rfind(".")
+                        if dot >= 0 and nm_low[dot:] in target_exts:
+                            media_cnt += 1
+                except Exception:
+                    pass
+    except Exception:
+        return (False, 0, "UNREADABLE")
+
+    for sd in sub_dirs:
+        if (time.time() - t0) > 0.12 or media_cnt >= 1500:
+            break
+        try:
+            with os.scandir(sd) as it2:
+                for ent2 in it2:
+                    try:
+                        nm2 = ent2.name
+                        nm2_low = nm2.lower()
+                        if nm2.startswith((".", "$", "~")):
+                            continue
+                        if ent2.is_file(follow_symlinks=False):
+                            dot2 = nm2_low.rfind(".")
+                            if dot2 >= 0 and nm2_low[dot2:] in target_exts:
+                                media_cnt += 1
+                        elif ent2.is_dir(follow_symlinks=False) and nm2_low not in _SEARCH_SKIP_SUB_DIRS:
+                            try:
+                                with os.scandir(ent2.path) as it3:
+                                    for ent3 in it3:
+                                        if ent3.is_file(follow_symlinks=False):
+                                            dot3 = ent3.name.lower().rfind(".")
+                                            if dot3 >= 0 and ent3.name.lower()[dot3:] in target_exts:
+                                                media_cnt += 1
+                            except Exception:
+                                pass
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    if media_cnt < 5:
+        return (False, media_cnt, "CERT_OR_UNDER_5")
+    return (True, media_cnt, "DATA_DRIVE")
+
+
+def _load_external_volume_local_cache(vol_id: str, current_letter: str) -> list[dict]:
+    """
+    내 PC 로컬(%LOCALAPPDATA%\\Merlin\\external_cache\\<VOL_ID>\\index_cache.json)에 격리 보관된
+    외장 드라이브 캐시를 읽어 현재 연결된 드라이브 문자(current_letter)로 경로를 매핑해 반환합니다. (USB 내부 쓰기 0 Byte)
+    """
+    _, cache_root = _get_external_policy_paths()
+    cache_file = cache_root / vol_id / "index_cache.json"
+    if not cache_file.exists():
+        return []
+    try:
+        raw = json.loads(cache_file.read_text(encoding="utf-8", errors="ignore"))
+        items = raw.get("items") if isinstance(raw, dict) else None
+        if not isinstance(items, list):
+            return []
+        drv_prefix = current_letter[:2].upper()
+        out: list[dict] = []
+        for it in items:
+            if not isinstance(it, dict):
+                continue
+            rel_p = str(it.get("rel_path") or "").lstrip("\\/")
+            full_p = f"{drv_prefix}\\{rel_p}" if rel_p else str(it.get("file_path") or "")
+            rec = {
+                "kind": str(it.get("kind") or "doc"),
+                "file_path": full_p,
+                "img_path": full_p if it.get("kind") == "image" else "",
+                "text": str(it.get("text") or ""),
+                "ts": float(it.get("ts") or 0.0),
+                "_ext_vol_id": vol_id,
+            }
+            out.append(rec)
+        return out
+    except Exception:
+        return []
+
+
+def _index_external_volume_to_local_cache_worker(vol_id: str, drv_letter: str, drv_label: str, est_min: int) -> None:
+    """
+    [외장/USB 드라이브 전용 Read-Only 로컬 인덱서]:
+    - USB 내부에는 단 1바이트도 쓰지 않고(100% Read-Only), 스캔 직후 모든 디렉터리/파일 핸들을 즉시 닫아 '안전 제거'를 방해하지 않습니다.
+    - 인덱싱 중에는 탈착 금지 안내를 표시하고, 완료 즉시 내 PC 로컬(%LOCALAPPDATA%\\Merlin\\external_cache\\<VOL_ID>)에 저장 후
+      '✅ 인덱싱 완료! 이제 언제든 안전하게 뽑으셔도 됩니다' 알림을 띄웁니다.
+    """
+    drv_prefix = drv_letter[:2].upper()
+    drv_root = f"{drv_prefix}\\"
+    with _EXTERNAL_DRIVE_POLICY_LOCK:
+        _EXTERNAL_DRIVE_RUNTIME_STATE["indexing_vol_id"] = vol_id
+        _EXTERNAL_DRIVE_RUNTIME_STATE["indexing_drive"] = drv_prefix
+        _EXTERNAL_DRIVE_RUNTIME_STATE["indexing_est_min"] = max(1, est_min)
+        _EXTERNAL_DRIVE_RUNTIME_STATE["indexing_pct"] = 5
+        pol = _load_external_drive_policy()
+        v_entry = pol.setdefault("volumes", {}).setdefault(vol_id, {})
+        v_entry.update({
+            "decision": "included",
+            "driveLetter": drv_prefix,
+            "label": drv_label,
+            "indexingStatus": "indexing",
+            "progressPct": 5,
+            "updatedAt": time.time(),
+        })
+        _save_external_drive_policy(pol)
+
+    show_ghost_toast(
+        f"⏳ 외장 드라이브({drv_prefix}) 인덱싱 중 (약 {max(1, est_min)}분 소요) — 완료 안내가 뜰 때까지 USB를 뽑지 마세요!",
+        duration_ms=4200,
+    )
+
+    doc_exts = {".pdf", ".xlsx", ".xls", ".docx", ".doc", ".hwp", ".hwpx", ".pptx", ".ppt", ".txt", ".csv", ".md"}
+    img_exts = {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif", ".bmp", ".heic", ".heif"}
+    vid_exts = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v", ".3gp", ".ts", ".mts", ".flv"}
+
+    scan_dirs: list[Path] = [Path(drv_root)]
+    seen_dirs: set[str] = {os.path.normcase(drv_root)}
+    q_bfs: list[tuple[Path, int]] = [(Path(drv_root), 0)]
+    while q_bfs and len(scan_dirs) < 260:
+        cur_d, depth = q_bfs.pop(0)
+        if depth >= 4:
+            continue
+        try:
+            with os.scandir(cur_d) as it_d:
+                for de in it_d:
+                    if len(scan_dirs) >= 260:
+                        break
+                    try:
+                        if not de.is_dir(follow_symlinks=False):
+                            continue
+                        nm = de.name
+                        nm_low = nm.lower()
+                        if nm.startswith((".", "$", "~")) or nm_low in _SEARCH_SKIP_SUB_DIRS or nm_low == "npki":
+                            continue
+                        norm_p = os.path.normcase(os.path.abspath(de.path))
+                        if norm_p not in seen_dirs:
+                            seen_dirs.add(norm_p)
+                            p_sub = Path(de.path)
+                            scan_dirs.append(p_sub)
+                            q_bfs.append((p_sub, depth + 1))
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    collected: list[dict] = []
+    total_d = max(1, len(scan_dirs))
+    for idx_fd, fd in enumerate(scan_dirs):
+        pct = min(95, max(10, int(((idx_fd + 1) / total_d) * 90)))
+        _EXTERNAL_DRIVE_RUNTIME_STATE["indexing_pct"] = pct
+        fd_badge = f"🔌{drv_prefix}\\{fd.name}" if fd.name else f"🔌{drv_prefix}\\"
+        try:
+            with os.scandir(fd) as it_f:
+                for entry in it_f:
+                    try:
+                        if not entry.is_file(follow_symlinks=False):
+                            continue
+                        name = entry.name
+                        name_low = name.lower()
+                        if (
+                            name.startswith((".", "~$", ".~lock."))
+                            or name_low in ("desktop.ini", "thumbs.db", "autorun.inf")
+                            or name_low.endswith((".lck", ".tmp", ".ghosti_sync_tmp"))
+                        ):
+                            continue
+                        dot_idx = name_low.rfind(".")
+                        if dot_idx < 0:
+                            continue
+                        ext = name_low[dot_idx:]
+                        if ext in doc_exts:
+                            fkind = "doc"
+                        elif ext in img_exts:
+                            fkind = "image"
+                        elif ext in vid_exts:
+                            fkind = "video"
+                        else:
+                            continue
+                        st = entry.stat(follow_symlinks=False)
+                        full_path_s = entry.path
+                        rel_path_s = full_path_s[3:] if len(full_path_s) > 3 and full_path_s[1:3] == ":\\" else name
+                        collected.append({
+                            "kind": fkind,
+                            "file_path": full_path_s,
+                            "rel_path": rel_path_s,
+                            "text": f"[{fd_badge}] {name}",
+                            "ts": float(st.st_mtime),
+                        })
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    collected.sort(key=lambda x: x.get("ts", 0.0), reverse=True)
+    collected = collected[:1500]
+
+    _, cache_root = _get_external_policy_paths()
+    vol_dir = cache_root / vol_id
+    vol_dir.mkdir(parents=True, exist_ok=True)
+    cache_file = vol_dir / "index_cache.json"
+    try:
+        cache_file.write_text(
+            json.dumps(
+                {
+                    "volId": vol_id,
+                    "driveLetter": drv_prefix,
+                    "label": drv_label,
+                    "indexedAt": time.time(),
+                    "itemCount": len(collected),
+                    "items": collected,
+                },
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+    except Exception:
+        pass
+
+    with _EXTERNAL_DRIVE_POLICY_LOCK:
+        _EXTERNAL_DRIVE_RUNTIME_STATE["indexing_vol_id"] = ""
+        _EXTERNAL_DRIVE_RUNTIME_STATE["indexing_pct"] = 100
+        _EXTERNAL_DRIVE_RUNTIME_STATE["completed_banner_until"] = time.time() + 18.0
+        _EXTERNAL_DRIVE_RUNTIME_STATE["completed_drive"] = drv_prefix
+        _EXTERNAL_DRIVE_RUNTIME_STATE["completed_count"] = len(collected)
+        pol = _load_external_drive_policy()
+        v_entry = pol.setdefault("volumes", {}).setdefault(vol_id, {})
+        v_entry.update({
+            "decision": "included",
+            "driveLetter": drv_prefix,
+            "label": drv_label,
+            "indexingStatus": "completed",
+            "progressPct": 100,
+            "indexedCount": len(collected),
+            "updatedAt": time.time(),
+        })
+        _save_external_drive_policy(pol)
+
+    _LOCAL_FILE_CACHE["ts"] = 0.0
+    _refresh_lightweight_local_files_async(force=True)
+    show_ghost_toast(
+        f"✅ 외장 드라이브({drv_prefix} · {len(collected)}건) 인덱싱 완료! 이제 언제든 안전하게 USB를 뽑으셔도 됩니다.",
+        duration_ms=4200,
+    )
+
+
+def decide_external_drive_action(vol_id: str, decision: str) -> None:
+    """
+    유저가 귀신검색창에서 외장 드라이브 질문에 [검색에 포함]("included") 또는 [제외(다시 묻지 않음)]("excluded")을 클릭했을 때 처리합니다.
+    """
+    norm_dec = "included" if decision == "included" else "excluded"
+    ext_info = _EXTERNAL_DRIVE_RUNTIME_STATE.get("connected_ext_map", {}).get(vol_id) or {}
+    drv_letter = str(ext_info.get("drive") or "")
+    drv_label = str(ext_info.get("label") or "외장 드라이브")
+    est_min = int(ext_info.get("est_min") or 1)
+
+    with _EXTERNAL_DRIVE_POLICY_LOCK:
+        pol = _load_external_drive_policy()
+        v_entry = pol.setdefault("volumes", {}).setdefault(vol_id, {})
+        v_entry["decision"] = norm_dec
+        v_entry["driveLetter"] = drv_letter
+        v_entry["label"] = drv_label
+        v_entry["updatedAt"] = time.time()
+        if norm_dec == "excluded":
+            v_entry["indexingStatus"] = "excluded"
+        _save_external_drive_policy(pol)
+        if _EXTERNAL_DRIVE_RUNTIME_STATE.get("active_Prompt") and _EXTERNAL_DRIVE_RUNTIME_STATE["active_Prompt"].get("vol_id") == vol_id:
+            _EXTERNAL_DRIVE_RUNTIME_STATE["active_Prompt"] = None
+
+    if norm_dec == "included" and drv_letter:
+        threading.Thread(
+            target=_index_external_volume_to_local_cache_worker,
+            args=(vol_id, drv_letter, drv_label, est_min),
+            daemon=True,
+        ).start()
+    else:
+        show_ghost_toast(f"🔌 외장 드라이브({drv_letter or vol_id})는 검색에서 제외했습니다 (다시 묻지 않음)", duration_ms=2600)
+
+
+def get_external_drive_ui_banner_state() -> dict[str, Any] | None:
+    """
+    귀신검색창(ghost_search_window_ui2.py) 상단에 표시할 외장 드라이브 상태 배너 정보를 반환합니다.
+    - status == "indexing": 인덱싱 진행 중 (탈착 금지 안내)
+    - status == "completed": 인덱싱 완료 직후 18초간 (안전 탈착 가능 안내)
+    - status == "prompt": 로컬(C: + 내장 하드) 스캔이 모두 끝난 뒤 미결정 자료용 외장 드라이브 1회 질문
+    """
+    now_b = time.time()
+    if _EXTERNAL_DRIVE_RUNTIME_STATE.get("indexing_vol_id"):
+        return {
+            "status": "indexing",
+            "vol_id": _EXTERNAL_DRIVE_RUNTIME_STATE["indexing_vol_id"],
+            "drive": _EXTERNAL_DRIVE_RUNTIME_STATE.get("indexing_drive") or "",
+            "est_min": int(_EXTERNAL_DRIVE_RUNTIME_STATE.get("indexing_est_min") or 1),
+            "pct": int(_EXTERNAL_DRIVE_RUNTIME_STATE.get("indexing_pct") or 10),
+        }
+    if now_b < float(_EXTERNAL_DRIVE_RUNTIME_STATE.get("completed_banner_until") or 0.0):
+        return {
+            "status": "completed",
+            "drive": _EXTERNAL_DRIVE_RUNTIME_STATE.get("completed_drive") or "",
+            "count": int(_EXTERNAL_DRIVE_RUNTIME_STATE.get("completed_count") or 0),
+        }
+    if not _EXTERNAL_DRIVE_RUNTIME_STATE.get("stage2_internal_done"):
+        return None
+    prompt_info = _EXTERNAL_DRIVE_RUNTIME_STATE.get("active_Prompt")
+    if isinstance(prompt_info, dict) and prompt_info.get("vol_id"):
+        drv_p = str(prompt_info.get("drive") or "")
+        if drv_p and Path(f"{drv_p}\\").exists():
+            return {
+                "status": "prompt",
+                "vol_id": prompt_info["vol_id"],
+                "drive": drv_p,
+                "label": prompt_info.get("label") or "외장 드라이브",
+                "est_files": int(prompt_info.get("est_files") or 0),
+                "est_min": int(prompt_info.get("est_min") or 1),
+            }
+    return None
+
+
+def _get_known_user_folders_for_search(include_internal_secondary_drives: bool = True) -> list[Path]:
     now_f = time.time()
-    if _KNOWN_USER_FOLDERS_CACHE["folders"] and (now_f - float(_KNOWN_USER_FOLDERS_CACHE["ts"])) < 30.0:
-        return list(_KNOWN_USER_FOLDERS_CACHE["folders"])
+    cache_key_f = "folders_all" if include_internal_secondary_drives else "folders_c_only"
+    if _KNOWN_USER_FOLDERS_CACHE.get(cache_key_f) and (now_f - float(_KNOWN_USER_FOLDERS_CACHE.get(f"ts_{cache_key_f}", 0.0))) < 25.0:
+        return list(_KNOWN_USER_FOLDERS_CACHE[cache_key_f])
     home = Path.home()
     raw_cands: list[Path] = []
     # [0순위: 업무 공유 S: 드라이브 직결] S:\가 실제 마운트된 업무공유 활성 상태일 때만 편입 ([2. 순수 개인 모드] 전환 시 업무 파일 혼입 0% 보장)
@@ -2924,33 +3415,7 @@ def _get_known_user_folders_for_search() -> list[Path]:
             raw_cands.append(od / "Documents" / "카카오톡 받은 파일")
             raw_cands.append(od / "문서" / "카카오톡 받은 파일")
 
-    # [모든 로컬 고정·이동식 하드 드라이브(D:~Z:, CD-ROM/네트워크 제외) 자동 편입]:
-    # C드라이브 KnownFolders뿐 아니라 D:, E:, F:, G:, I: 등 모든 하드·외장 드라이브의 파일도 귀신검색창에서 즉시 검색
-    if sys.platform == "win32":
-        try:
-            k32.GetDriveTypeW.argtypes = [wintypes.LPCWSTR]
-            k32.GetDriveTypeW.restype = wintypes.UINT
-            prev_err_mode = k32.SetErrorMode(0x0001 | 0x8000)  # SEM_FAILCRITICALERRORS | SEM_NOOPENFILEERRORBOX
-            try:
-                for drv_ord in range(ord("D"), ord("Z") + 1):
-                    drv_ch = chr(drv_ord)
-                    if drv_ch == "S":
-                        continue
-                    drv_root = f"{drv_ch}:\\"
-                    try:
-                        dtype = int(k32.GetDriveTypeW(drv_root))
-                        if dtype in (2, 3):  # DRIVE_REMOVABLE(2), DRIVE_FIXED(3)
-                            p_drv = Path(drv_root)
-                            if p_drv.exists() and p_drv.is_dir():
-                                raw_cands.append(p_drv)
-                    except Exception:
-                        continue
-            finally:
-                k32.SetErrorMode(prev_err_mode)
-        except Exception:
-            pass
-
-    # [C:\ 루트의 일반 사용자 폴더(시스템/프로그램 폴더 제외)도 자동 편입]
+    # [1단계: C:\ 루트의 일반 사용자 폴더(시스템/프로그램 폴더 제외) 자동 편입]
     _C_ROOT_SKIP = {
         "windows", "program files", "program files (x86)", "programdata", "users",
         "perflogs", "recovery", "intel", "amd", "nvidia", "msocache", "inetpub",
@@ -2977,6 +3442,51 @@ def _get_known_user_folders_for_search() -> list[Path]:
     except Exception:
         pass
 
+    # [2단계 & 3단계 분리: 내장 고정 하드(D:~Z:, is_external==False)만 자동 스캔에 편입하고,
+    #  USB/외장 드라이브(is_external==True)는 로컬 완료 후 인증서 필터 & 생애 1회 질문 정책으로 분리!]
+    if sys.platform == "win32" and include_internal_secondary_drives:
+        pol = _load_external_drive_policy()
+        pol_vols = pol.get("volumes") if isinstance(pol.get("volumes"), dict) else {}
+        connected_ext: dict[str, dict[str, Any]] = {}
+        first_prompt_cand: dict[str, Any] | None = None
+
+        for drv_ord in range(ord("D"), ord("Z") + 1):
+            drv_ch = chr(drv_ord)
+            if drv_ch == "S":
+                continue
+            d_info = _classify_drive_volume_and_bus(drv_ch)
+            if not d_info:
+                continue
+            if not d_info["is_external"]:
+                # 내장 고정 하드(SATA/NVMe 등): 자동 순차 스캔 편입
+                raw_cands.append(Path(d_info["root"]))
+            else:
+                # USB / 외장 드라이브: 직접 스캔 루트에 섞지 않고 볼륨 고유번호(vol_id) 정책으로 관리
+                vid = d_info["vol_id"]
+                v_rec = pol_vols.get(vid) if isinstance(pol_vols.get(vid), dict) else {}
+                dec = str(v_rec.get("decision") or "pending")
+                if dec == "excluded":
+                    continue
+                is_data_drv, est_cnt, reason = _quick_probe_external_drive_candidate(d_info["root"])
+                if not is_data_drv and dec != "included":
+                    # 인증서(NPKI) 전용 USB · 파일 5개 미만 · OS 설치 USB는 질문창조차 띄우지 않고 100% 무소음 패스!
+                    continue
+                est_min = max(1, min(15, round(max(5, est_cnt) / 450)))
+                ext_meta = {
+                    "vol_id": vid,
+                    "drive": d_info["letter"],
+                    "label": d_info["label"],
+                    "est_files": est_cnt,
+                    "est_min": est_min,
+                    "decision": dec,
+                }
+                connected_ext[vid] = ext_meta
+                if dec == "pending" and first_prompt_cand is None:
+                    first_prompt_cand = ext_meta
+
+        _EXTERNAL_DRIVE_RUNTIME_STATE["connected_ext_map"] = connected_ext
+        _EXTERNAL_DRIVE_RUNTIME_STATE["active_Prompt"] = first_prompt_cand
+
     deduped: list[Path] = []
     seen_dirs: set[str] = set()
     for d in raw_cands:
@@ -2989,6 +3499,8 @@ def _get_known_user_folders_for_search() -> list[Path]:
                 deduped.append(d)
         except Exception:
             pass
+    _KNOWN_USER_FOLDERS_CACHE[f"ts_{cache_key_f}"] = now_f
+    _KNOWN_USER_FOLDERS_CACHE[cache_key_f] = deduped
     _KNOWN_USER_FOLDERS_CACHE["ts"] = now_f
     _KNOWN_USER_FOLDERS_CACHE["folders"] = deduped
     return deduped
@@ -3270,6 +3782,31 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
                     pass
 
         top_items = top_docs + by_kind["image"][:1200] + by_kind["video"][:400]
+
+        # [3단계: 승인된('included') 연결 외장 드라이브 로컬 캐시 병합 (탈착 시 즉시 자동 숨김 · USB 내부 쓰기 0 Byte)]
+        _EXTERNAL_DRIVE_RUNTIME_STATE["stage1_c_done"] = True
+        _EXTERNAL_DRIVE_RUNTIME_STATE["stage2_internal_done"] = True
+        connected_ext = _EXTERNAL_DRIVE_RUNTIME_STATE.get("connected_ext_map") or {}
+        for vid_ext, meta_ext in list(connected_ext.items()):
+            if str(meta_ext.get("decision")) != "included":
+                continue
+            drv_ext = str(meta_ext.get("drive") or "")
+            if not drv_ext or not Path(f"{drv_ext}\\").exists():
+                continue
+            cached_ext_items = _load_external_volume_local_cache(vid_ext, drv_ext)
+            if cached_ext_items:
+                for ext_it in cached_ext_items:
+                    norm_efp = os.path.normcase(os.path.abspath(str(ext_it.get("file_path") or "")))
+                    if norm_efp not in seen_files:
+                        seen_files.add(norm_efp)
+                        top_items.append(ext_it)
+            elif not _EXTERNAL_DRIVE_RUNTIME_STATE.get("indexing_vol_id"):
+                threading.Thread(
+                    target=_index_external_volume_to_local_cache_worker,
+                    args=(vid_ext, drv_ext, str(meta_ext.get("label") or "외장 드라이브"), int(meta_ext.get("est_min") or 1)),
+                    daemon=True,
+                ).start()
+
         top_items.sort(key=lambda x: x.get("ts", 0.0), reverse=True)
         for idx_i, it_f in enumerate(top_items):
             nm = it_f.pop("_name", "")
@@ -3277,7 +3814,7 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
             it_f.pop("_attrs", None)
             it_f.pop("_ext", None)
             it_f.pop("_badge", None)
-            if idx_i < 120:
+            if idx_i < 120 and nm:
                 it_f["vec"] = AI_ENGINE.embed_128d(nm)
         _LOCAL_FILE_CACHE["items"] = top_items
         _LOCAL_FILE_CACHE["ts"] = time.time()
@@ -3795,6 +4332,8 @@ def _toast_worker() -> None:
                 "get_last_rbtn_dismiss_esc_ts": lambda: _LAST_RBTN_DISMISS_ESC_TS,
                 "get_trial_badge_summary": get_trial_badge_summary,
                 "check_feature_quota_allowed": check_feature_quota_allowed,
+                "get_external_drive_banner": get_external_drive_ui_banner_state,
+                "decide_external_drive": decide_external_drive_action,
             }
             ui2_mod.build_ui2_search_window(
                 ui2_ctx, win, init_stage, init_query, pt_x, pt_y, work_area

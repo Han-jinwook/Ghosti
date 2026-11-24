@@ -453,6 +453,8 @@ def build_ui2_search_window(
     daemon_copy_file = ctx.get("daemon_copy_file")
     get_last_rbtn_dismiss_esc_ts = ctx["get_last_rbtn_dismiss_esc_ts"]
     get_trial_badge_summary = ctx.get("get_trial_badge_summary")
+    get_external_drive_banner = ctx.get("get_external_drive_banner")
+    decide_external_drive = ctx.get("decide_external_drive")
 
     def _open_file_in_os(fpath: str) -> None:
         if not fpath or not os.path.exists(fpath):
@@ -1102,6 +1104,82 @@ def build_ui2_search_window(
             candidates = pool[:max_cnt]
             trial_lbl.config(text=f"🔍 '{q[:6]}' 일치 없음(최근목록)", fg="#FDE047")
 
+        # 🔌 [외장/USB 드라이브 생애 1회 질문 · 인덱싱 중 탈착 금지 · 완료 안내 배너]:
+        ext_banner = get_external_drive_banner() if callable(get_external_drive_banner) else None
+        if isinstance(ext_banner, dict):
+            ext_st = str(ext_banner.get("status") or "")
+            ext_drv = str(ext_banner.get("drive") or "")
+            if ext_st == "indexing":
+                ext_pct = int(ext_banner.get("pct") or 10)
+                ext_min = int(ext_banner.get("est_min") or 1)
+                ext_bar = tk.Frame(smart_tip_frame, bg="#2A1C08", highlightbackground="#F59E0B", highlightthickness=1, padx=6, pady=4)
+                ext_bar.pack(fill="x", pady=(0, 4))
+                tk.Label(
+                    ext_bar,
+                    text=f"⏳ 외장({ext_drv}) 인덱싱 중 ({ext_pct}% · 약 {ext_min}분 소요) — 완료 안내 전까지 절대 USB를 뽑지 마세요!",
+                    fg="#FDE047",
+                    bg="#2A1C08",
+                    font=("Malgun Gothic", 8, "bold"),
+                ).pack(side="left")
+            elif ext_st == "completed":
+                ext_cnt = int(ext_banner.get("count") or 0)
+                ext_bar = tk.Frame(smart_tip_frame, bg="#0D2824", highlightbackground="#10B981", highlightthickness=1, padx=6, pady=4)
+                ext_bar.pack(fill="x", pady=(0, 4))
+                tk.Label(
+                    ext_bar,
+                    text=f"✅ 외장({ext_drv} · {ext_cnt}건) 인덱싱 완료! 캐시는 내 PC에만 안전 보관되었으며 이제 뽑으셔도 됩니다.",
+                    fg="#5EEAD4",
+                    bg="#0D2824",
+                    font=("Malgun Gothic", 8, "bold"),
+                ).pack(side="left")
+            elif ext_st == "prompt":
+                ext_vid = str(ext_banner.get("vol_id") or "")
+                ext_files = int(ext_banner.get("est_files") or 0)
+                ext_min = int(ext_banner.get("est_min") or 1)
+                ext_bar = tk.Frame(smart_tip_frame, bg="#132A2E", highlightbackground="#2DD4BF", highlightthickness=1, padx=6, pady=4)
+                ext_bar.pack(fill="x", pady=(0, 4))
+
+                def _on_ext_decide(dec_val: str, vid_target: str = ext_vid) -> None:
+                    is_hovered[0] = True
+                    opened_at[0] = time.time()
+                    if callable(decide_external_drive):
+                        decide_external_drive(vid_target, dec_val)
+                    _render_search_results()
+
+                btn_no = tk.Label(
+                    ext_bar,
+                    text="제외(다시 묻지 않음)",
+                    fg="#CBD5E1",
+                    bg="#1E293B",
+                    padx=6,
+                    pady=1,
+                    font=("Malgun Gothic", 8, "bold"),
+                    cursor="hand2",
+                )
+                btn_no.pack(side="right", padx=(3, 0))
+                btn_no.bind("<Button-1>", lambda _e: _on_ext_decide("excluded"))
+
+                btn_yes = tk.Label(
+                    ext_bar,
+                    text="검색에 포함",
+                    fg="#0B1120",
+                    bg="#2DD4BF",
+                    padx=6,
+                    pady=1,
+                    font=("Malgun Gothic", 8, "bold"),
+                    cursor="hand2",
+                )
+                btn_yes.pack(side="right", padx=(4, 0))
+                btn_yes.bind("<Button-1>", lambda _e: _on_ext_decide("included"))
+
+                tk.Label(
+                    ext_bar,
+                    text=f"🔌 외장({ext_drv} · 약 {ext_files}건)도 검색할까요? (약 {ext_min}분 · 완료 전 탈착 금지)",
+                    fg="#5EEAD4",
+                    bg="#132A2E",
+                    font=("Malgun Gothic", 8, "bold"),
+                ).pack(side="left")
+
         # 👻 [글자 많은 영상 감지 메시지]: 노출된 영상 중 화면 글자(OCR)가 있거나 영상 필터일 때 1줄 팁 표시!
         rich_ocr_vid = next(
             (c for c in candidates if c.get("kind") == "video" and len(str(c.get("video_ocr_full") or "")) >= 12),
@@ -1645,10 +1723,22 @@ def build_ui2_search_window(
     _render_search_results()
 
     # [열려 있는 동안 파일 추가·변경·백그라운드 썸네일 디코딩 실시간 자동 반영 (메인 스레드 폴링으로 Tcl 스레드 충돌 0%, 닫혀 있을 때는 타이머 0개로 CPU 0.00%)]
+    last_ext_banner_sig = [""]
+
     def _poll_main_thread_ui2_updates() -> None:
         try:
             if current_win[0] is not win or not win.winfo_exists():
                 return
+            if callable(get_external_drive_banner):
+                eb_now = get_external_drive_banner()
+                eb_sig = (
+                    f"{eb_now.get('status')}|{eb_now.get('vol_id','')}|{eb_now.get('pct','')}"
+                    if isinstance(eb_now, dict)
+                    else ""
+                )
+                if eb_sig != last_ext_banner_sig[0]:
+                    last_ext_banner_sig[0] = eb_sig
+                    st_state["bg_ui_dirty"] = True
             if st_state.get("bg_ocr_done_payload") is not None:
                 ft_done = st_state["bg_ocr_done_payload"]
                 st_state["bg_ocr_done_payload"] = None
