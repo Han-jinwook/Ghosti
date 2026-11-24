@@ -1116,13 +1116,22 @@ export async function fetchScopedSharedRoomPhotos(opts: {
       void purgeExpiredSeedPhotosAfterLocalArchive(authed, currentEmail, [targetRoomId]);
     }
     const localPhotos = await loadMemberLocalRoomPhotos(currentEmail, targetRoomId);
-    // 서버에서 삭제되었거나 빈 방인데 로컬에 잘못 남았을 때를 제외하고, 14일 TTL 경과 후에도 합류 멤버 로컬 금고 영구 보존
+    // 서버에서 삭제·숨김 처리된 최근 14일 이내 사진은 로컬 금고에서도 즉시 정리하고,
+    // 14일 시드 버퍼 TTL 경과 후 서버에서 만료된 사진만 합류 멤버 로컬 금고에서 영구 보존
     const mergedById = new Map<string, PhotoItem>();
     for (const item of hydratedServerItems) {
       mergedById.set(item.id, { ...item, sharedRoomId: targetRoomId, sharedOwnerEmail: currentEmail });
     }
+    const staleDeletedLocalIds: string[] = [];
     for (const item of localPhotos) {
       if (!mergedById.has(item.id) && (!item.sharedRoomId || item.sharedRoomId === targetRoomId)) {
+        const itemTimeMs = Number(item.mtimeMs || 0);
+        const isWithin14dServerWindow =
+          itemTimeMs <= 0 || Date.now() - itemTimeMs <= SHARED_PHOTO_SEED_BUFFER_TTL_MS;
+        if (isWithin14dServerWindow) {
+          staleDeletedLocalIds.push(item.id);
+          continue;
+        }
         mergedById.set(item.id, {
           ...item,
           sharedLoungeType: opts.loungeType,
@@ -1131,6 +1140,13 @@ export async function fetchScopedSharedRoomPhotos(opts: {
           sharedOwnerEmail: currentEmail,
         });
       }
+    }
+    if (staleDeletedLocalIds.length > 0) {
+      void Promise.all(
+        staleDeletedLocalIds.map((delId) =>
+          removeMemberLocalRoomPhotoEverywhere(currentEmail, delId).catch(() => {})
+        )
+      );
     }
     const finalPhotos = Array.from(mergedById.values()).sort(
       (a, b) => (b.mtimeMs || 0) - (a.mtimeMs || 0)
@@ -1394,14 +1410,25 @@ export async function deleteSupabaseSharedRoomPhoto(photoItemId: string): Promis
   if (currentEmail) {
     await removeMemberLocalRoomPhotoEverywhere(currentEmail, photoItemId);
   }
-  const authed = await ensureGhostiAuthedSupabaseClient();
-  if (!authed) return false;
   const rawUuid = photoItemId.startsWith('shared_sb_')
     ? photoItemId.slice('shared_sb_'.length)
     : photoItemId;
   if (!/^[0-9a-f-]{36}$/i.test(rawUuid)) return false;
+  // 1) 서버 브릿지(serviceRole)로 즉시 숨김 마킹 보장 (RLS 차단 방지)
+  let bridgeOk = false;
+  try {
+    const bridgeRes = await callGhostiServerBridge('photo_set_hidden_state', {
+      photoId: rawUuid,
+      hidden: true,
+    });
+    bridgeOk = Boolean(bridgeRes.ok);
+  } catch {
+    /* fallback below */
+  }
+  const authed = await ensureGhostiAuthedSupabaseClient();
+  if (!authed) return bridgeOk;
   const { error } = await authed.from('ghosti_room_shared_photos').delete().eq('id', rawUuid);
-  return !error;
+  return !error || bridgeOk;
 }
 
 /**
@@ -1415,6 +1442,12 @@ export async function setSupabaseSharedRoomPhotoHidden(
 ): Promise<boolean> {
   const cleanId = (photoId || '').trim();
   if (!cleanId || !hasAuthenticatedHubAccountSession()) return false;
+  if (hidden) {
+    const currentEmail = resolveCurrentAuthedEmail();
+    if (currentEmail) {
+      void removeMemberLocalRoomPhotoEverywhere(currentEmail, cleanId).catch(() => {});
+    }
+  }
   const rawId = cleanId.startsWith('shared_sb_') ? cleanId.slice('shared_sb_'.length) : cleanId;
   if (!rawId) return false;
   try {
