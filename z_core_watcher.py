@@ -31,6 +31,46 @@ ROOT_DIR = Path(__file__).resolve().parent
 POST_OFFICE_DIR = Path(r"D:\Secretary\post_office")
 DOCTRINE_FILE = ROOT_DIR / "docs" / "멀린코딩강령_v20261020.md"
 HANDOVER_FILE = ROOT_DIR / "docs" / "SESSION_HANDOVER.md"
+ROLE_HANDOVER_FILES = {
+    str(i): ROOT_DIR / "docs" / f"SESSION_HANDOVER_{i}.md" for i in (1, 2, 3, 4)
+}
+
+
+def merge_role_handovers() -> bool:
+    """
+    [4개 창 동시 체크아웃 충돌 0% — 결정론적 파이썬 자동 합본기]
+    - 체크아웃 시 각 귀신 창(1~4)은 오직 자기 파일(docs/SESSION_HANDOVER_1~4.md)만 수정합니다.
+    - 체크인(또는 --merge-handover) 시 본 함수가 1~4번 파일 원문을 1줄 누락 없이 기계적으로 이어붙여
+      docs/SESSION_HANDOVER.md 통합본을 0.01초 만에 자동 생성합니다 (내용 동일 시 미기록).
+    """
+    parts: list[str] = []
+    found_any = False
+    for role_no in ("1", "2", "3", "4"):
+        rf = ROLE_HANDOVER_FILES[role_no]
+        if rf.exists():
+            found_any = True
+            body = rf.read_text(encoding="utf-8", errors="ignore").replace("\r\n", "\n").strip()
+            if body:
+                parts.append(body)
+    if not found_any or not parts:
+        return False
+
+    header = (
+        "# 📋 귀신같이 (Ghosti) 1~4귀신 통합 세션 인계장 (`SESSION_HANDOVER.md` — 자동 합본)\n\n"
+        "> ⚠️ **[자동 합본 안내 — 직접 수정 금지]**: 본 파일은 `z_core_watcher.py`가 "
+        "`SESSION_HANDOVER_1.md` ~ `SESSION_HANDOVER_4.md` 4개 파일을 기계적으로 이어붙여 생성합니다. "
+        "체크아웃 시 각 창은 **오직 자기 번호 파일(`docs/SESSION_HANDOVER_N.md`)만 수정**하세요.\n\n"
+        "---\n\n"
+    )
+    merged = header + "\n\n---\n\n".join(parts) + "\n"
+    try:
+        old = HANDOVER_FILE.read_text(encoding="utf-8", errors="ignore").replace("\r\n", "\n") if HANDOVER_FILE.exists() else ""
+        if old != merged:
+            HANDOVER_FILE.write_text(merged, encoding="utf-8")
+            return True
+    except Exception:
+        pass
+    return False
 AGY_DIR = Path.home() / ".gemini" / "antigravity"
 AGY_DB = AGY_DIR / "conversation_summaries.db"
 AGY_ANNOTATIONS = AGY_DIR / "annotations"
@@ -54,9 +94,13 @@ def _clean_summary_line(line: str) -> str:
 def derive_session_title(explicit_title: str | None = None) -> str:
     if explicit_title and explicit_title.strip():
         return re.sub(r"^\d{1,2}-\d{1,2},?\s*(?:\d{1,2}:\d{2})?\s*-\s*", "", explicit_title.strip())
-    if HANDOVER_FILE.exists():
+    role_for_title = _resolve_active_role()
+    target_handover = ROLE_HANDOVER_FILES.get(role_for_title) if role_for_title in ROLE_HANDOVER_FILES else HANDOVER_FILE
+    if not target_handover or not target_handover.exists():
+        target_handover = HANDOVER_FILE
+    if target_handover.exists():
         try:
-            text = HANDOVER_FILE.read_text(encoding="utf-8", errors="ignore")
+            text = target_handover.read_text(encoding="utf-8", errors="ignore")
             m_explicit = re.search(r"세션(?:\s*창)?\s*제목[^:\n]*:\s*([^\r\n]+)", text)
             if m_explicit:
                 val = m_explicit.group(1).strip().strip("`*")
@@ -342,7 +386,14 @@ def auto_heal_agents_and_handover_files() -> None:
 
     marker = "<!-- [PROJECT_LOCAL_RULES_BELOW] -->"
     for rdir in candidate_roots:
-        for rel in ("AGENTS.md", "docs/SESSION_HANDOVER.md"):
+        for rel in (
+            "AGENTS.md",
+            "docs/SESSION_HANDOVER.md",
+            "docs/SESSION_HANDOVER_1.md",
+            "docs/SESSION_HANDOVER_2.md",
+            "docs/SESSION_HANDOVER_3.md",
+            "docs/SESSION_HANDOVER_4.md",
+        ):
             fpath = rdir / rel
             if not fpath.exists() or not fpath.is_file():
                 continue
@@ -376,6 +427,10 @@ def auto_heal_agents_and_handover_files() -> None:
 
 def main() -> None:
     auto_heal_agents_and_handover_files()
+    merged_now = merge_role_handovers()
+    if "--merge-handover" in sys.argv:
+        print(f"📋 [1~4귀신 인계장 자동 합본 완료] docs/SESSION_HANDOVER.md ({'갱신됨' if merged_now else '최신 상태'})")
+        return
     if len(sys.argv) >= 3 and sys.argv[1] == "--set-title":
         custom_title = " ".join(sys.argv[2:])
         applied = sync_antigravity_session_title(custom_title)

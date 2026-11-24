@@ -447,3 +447,14 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
      - `3. 사진 공유 · 내 기기 통합 Pro (3귀신)`
      - `4. 업무 공유 S: (4귀신)`
   3. 각 파트별로 **`오늘 진척된 핵심 성과`**와 **`출시 100%까지 남은 갭(가장 약한 병목)`**을 명확히 짚어 보고합니다 (노션 카드 개수는 보조 근거로만 요약).
+
+---
+
+### 📋 [4개 창 동시 체크아웃 충돌 0% — 1~4귀신 개별 인계장 저장 + 체크인 자동 합본 규칙 (2026-11-25 멀린님 확정)]
+
+1. **체크아웃(저장) 시 오직 자기 번호 파일 1개만 수정 (통합본 직접 수정 금지)**:
+   - `[1귀신]` ➔ `docs/SESSION_HANDOVER_1.md`, `[2귀신]` ➔ `docs/SESSION_HANDOVER_2.md`, `[3귀신]` ➔ `docs/SESSION_HANDOVER_3.md`, `[4귀신]` ➔ `docs/SESSION_HANDOVER_4.md`만 수정·커밋합니다.
+   - 4개 창을 동시에 닫으며 체크아웃해도 서로 다른 파일만 건드리므로 덮어쓰기·증발·Git 충돌이 `0%`입니다.
+2. **체크인(읽기) 시 `z_core_watcher.py`가 0.01초 자동 합본 ➔ 1~4귀신 전체 맥락 열람**:
+   - 체크인 시 `python z_core_watcher.py --role N`을 실행하면 파이썬이 `SESSION_HANDOVER_1~4.md` 4개 원문을 누락 없이 그대로 이어붙여 [`docs/SESSION_HANDOVER.md`](file:///d:/Ghosti/docs/SESSION_HANDOVER.md) 통합본을 자동 갱신합니다.
+   - 각 에이전트는 체크인 시 합본 [`docs/SESSION_HANDOVER.md`](file:///d:/Ghosti/docs/SESSION_HANDOVER.md)를 읽어 자기 직전 작업과 다른 귀신 3명의 최신 변경 사항을 모두 파악합니다.
