@@ -150,6 +150,7 @@ import {
   type GhostiDeviceEntitlementView,
   type GhostiSyncedClipItem,
 } from '../../services/deviceIntegrationService';
+import { isCapacitorNativeMobileRuntime } from '../../services/ghostiMobileCareBridge';
 import { isPaidSubscriptionPlanId } from '../../services/subscriptionPlanCatalog';
 import type { SaySeeStore } from '../useSaySeeStore';
 
@@ -278,6 +279,9 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
     work: null,
   },
   activeLoungeType: (() => {
+    if (isCapacitorNativeMobileRuntime()) {
+      return 'personal';
+    }
     const inv = resolveInvitedHostLoungeAndRoom();
     return inv.hasActiveInvite && inv.hostLounge ? inv.hostLounge : 'personal';
   })(),

@@ -372,7 +372,7 @@ export const FreePhotoShareOverlays: React.FC = () => {
               const prevRaw = localStorage.getItem(LAST_CONSUMED_DEEPLINK_KEY);
               if (prevRaw) {
                 const prev = JSON.parse(prevRaw) as { url?: string; ts?: number } | null;
-                if (prev?.url === res.deepLinkUrl && typeof prev.ts === 'number' && Date.now() - prev.ts > 4000) {
+                if (prev?.url === res.deepLinkUrl && typeof prev.ts === 'number') {
                   isStaleReplayedIntent = true;
                 }
               }

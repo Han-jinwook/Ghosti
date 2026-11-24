@@ -478,6 +478,15 @@ export const App: React.FC = () => {
       );
       const isCleanNativeBoot =
         isNativeBoot && !hasInviteLink && !hasWorkRoomLink && !hasPairCodeLink && !urlLounge && !urlTab;
+      if (isCleanNativeBoot) {
+        try {
+          sessionStorage.removeItem('ghosti_active_invite_room');
+          sessionStorage.removeItem('ghosti_active_invite_token');
+          localStorage.removeItem('ghosti_joined_invite_room_v1');
+        } catch {
+          /* ignore */
+        }
+      }
 
       const targetLounge: LoungeType =
         hasInviteLink || hasWorkRoomLink

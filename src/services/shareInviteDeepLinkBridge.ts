@@ -411,11 +411,6 @@ export function readActiveInviteToken(): string {
 
     const ssTok = (sessionStorage.getItem(INVITE_TOKEN_KEY) || '').trim();
     if (ssTok) return ssTok;
-    const rawJoined = localStorage.getItem(JOINED_NATIVE_INVITE_KEY);
-    if (rawJoined) {
-      const joined = JSON.parse(rawJoined) as { inviteToken?: string };
-      if (joined?.inviteToken) return joined.inviteToken.trim();
-    }
   } catch {
     /* ignore */
   }
@@ -490,24 +485,6 @@ export function readCurrentInviteDisplayMeta(
         hasExplicitUrlInvite: false,
         isHostVerified: Boolean(verified),
       };
-    }
-
-    if (isCapacitorNativeMobileRuntime()) {
-      const rawJoined = localStorage.getItem(JOINED_NATIVE_INVITE_KEY);
-      if (rawJoined) {
-        const joined = JSON.parse(rawJoined) as Partial<ParsedShareInvite>;
-        if (joined?.inviteToken) {
-          const verified = readVerifiedInviteRoomMeta(joined.inviteToken);
-          return {
-            inviteCode: joined.inviteCode || defaultCode,
-            inviteToken: joined.inviteToken,
-            hostName: verified ? verified.hostName : joined.hostName || '방장',
-            roomTitle: verified ? verified.roomTitle : joined.roomTitle || defaultTitle,
-            hasExplicitUrlInvite: false,
-            isHostVerified: Boolean(verified || joined.hostName),
-          };
-        }
-      }
     }
 
     // 로그인 방장이 본인 방에서 [👀 카톡 초대 링크 수신 화면 미리보기] 버튼을 눌렀을 때: 오직 본인 계정의 별명만 표시
