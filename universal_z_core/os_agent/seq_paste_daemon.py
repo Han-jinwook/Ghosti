@@ -1464,6 +1464,9 @@ GLOBAL_AI_HISTORY: list[dict] = []
 
 def close_ghost_toast() -> None:
     """초능력 실행 또는 외부 클릭 시 귀신창(Ghost Window)을 즉시 닫음"""
+    global _CURRENT_OPEN_UI_MODE, _CURRENT_OPEN_WIN_HWND
+    _CURRENT_OPEN_UI_MODE = ""
+    _CURRENT_OPEN_WIN_HWND = 0
     _toast_queue.put(("__CLOSE__", 0))
     _toast_event.set()
 
@@ -3498,6 +3501,20 @@ def _extract_word_chips_from_text(text: str) -> list[str]:
 
 _CLICKED_SUPERPOWER_QUEUE: queue.Queue = queue.Queue()
 _CURRENT_OPEN_UI_MODE: str = ""
+_CURRENT_OPEN_WIN_HWND: int = 0
+
+
+def _is_ui_window_actually_open() -> bool:
+    """_CURRENT_OPEN_UI_MODE가 켜져 있어도 실제 Win32 창이 살아있고 보일 때만 True 반환 (유령 상태 자동 복구)."""
+    global _CURRENT_OPEN_UI_MODE, _CURRENT_OPEN_WIN_HWND
+    if not _CURRENT_OPEN_UI_MODE:
+        return False
+    hwnd_c = int(_CURRENT_OPEN_WIN_HWND or 0)
+    if hwnd_c and u32.IsWindow(hwnd_c) and u32.IsWindowVisible(hwnd_c):
+        return True
+    _CURRENT_OPEN_UI_MODE = ""
+    _CURRENT_OPEN_WIN_HWND = 0
+    return False
 _IS_UI_HOVERED: bool = False
 _SELF_CLIP_SET_TEXT: str = ""
 _SELF_CLIP_SET_UNTIL: float = 0.0
@@ -3610,7 +3627,7 @@ def _toast_worker() -> None:
             detail_win[0] = None
 
     def _close_win() -> None:
-        global _CURRENT_OPEN_UI_MODE, _IS_UI_HOVERED
+        global _CURRENT_OPEN_UI_MODE, _CURRENT_OPEN_WIN_HWND, _IS_UI_HOVERED
         _close_detail()
         if after_id[0] is not None:
             try:
@@ -3626,6 +3643,7 @@ def _toast_worker() -> None:
             current_win[0] = None
         active_mode[0] = ""
         _CURRENT_OPEN_UI_MODE = ""
+        _CURRENT_OPEN_WIN_HWND = 0
         is_hovered[0] = False
         _IS_UI_HOVERED = False
         thumb_refs.clear()
@@ -3666,6 +3684,7 @@ def _toast_worker() -> None:
             show_ghost_toast("귀신같이 기억소환 완료", duration_ms=1100)
 
     def _apply_win_topmost(win: tk.Toplevel, x: int, y: int, rw: int, rh: int, activate: bool = False) -> None:
+        global _CURRENT_OPEN_WIN_HWND
         win.geometry(f"{rw}x{rh}{x:+d}{y:+d}")
         try:
             win.update_idletasks()
@@ -3673,6 +3692,7 @@ def _toast_worker() -> None:
             wid = win.winfo_id()
             hwnd_t = u32.GetParent(wid) or wid if wid else 0
             if hwnd_t:
+                _CURRENT_OPEN_WIN_HWND = int(hwnd_t)
                 ex_st = u32.GetWindowLongW(hwnd_t, GWL_EXSTYLE)
                 if activate:
                     u32.SetWindowLongW(hwnd_t, GWL_EXSTYLE, (ex_st & ~WS_EX_NOACTIVATE) | WS_EX_TOPMOST | WS_EX_TOOLWINDOW)
@@ -8066,102 +8086,123 @@ def _get_explorer_selected_paths_safe(target_hwnd: int | None = None) -> list[st
                 pass
 
     paths: list[str] = []
-    try:
+
+    def _query_shell_com_worker(out_holder: list[list[str]]) -> None:
+        local_paths: list[str] = []
         try:
-            ctypes.windll.ole32.CoInitialize(None)
-        except Exception:
-            pass
-        import win32com.client  # type: ignore
-
-        shell = win32com.client.Dispatch("Shell.Application")
-
-        # 1) 바탕화면(Progman / WorkerW) 선택 아이콘 직접 조회
-        if cls_chk in ("Progman", "WorkerW"):
-            desk_win = shell.Windows().FindWindowSW(0, 0, 8, 0, 1)
-            if desk_win is not None:
-                sel_d = desk_win.Document.SelectedItems()
-                for idx in range(sel_d.Count):
-                    dp = sel_d.Item(idx).Path
-                    if dp and os.path.exists(dp):
-                        if Path(str(dp)).suffix.lower() not in (".lnk", ".url"):
-                            paths.append(str(dp))
-                return paths
-
-        # 2) 탐색기 폴더 창(CabinetWClass / ExploreWClass) — Win11 멀티탭 활성 탭 우선 매칭
-        active_tab_hwnd = int(u32.FindWindowExW(chk_hwnd, 0, "ShellTabWindowClass", None) or 0) if chk_hwnd else 0
-        matched_window = None
-        fallback_window = None
-        for window in shell.Windows():
             try:
-                if int(window.HWND) != chk_hwnd:
-                    continue
-                if fallback_window is None:
-                    fallback_window = window
-                if active_tab_hwnd:
-                    try:
-                        import pythoncom  # type: ignore
+                ctypes.windll.ole32.CoInitialize(None)
+            except Exception:
+                pass
+            import win32com.client  # type: ignore
 
-                        SID_STopLevelBrowser = pythoncom.MakeIID("{4C96BE40-915C-11CF-99D3-00AA004AE837}")
-                        sp = window._oleobj_.QueryInterface(pythoncom.IID_IServiceProvider)
-                        ole_win = sp.QueryService(SID_STopLevelBrowser, pythoncom.IID_IOleWindow)
-                        if int(ole_win.GetWindow()) == active_tab_hwnd:
+            shell = win32com.client.Dispatch("Shell.Application")
+
+            # 1) 바탕화면(Progman / WorkerW) 선택 아이콘 직접 조회
+            if cls_chk in ("Progman", "WorkerW"):
+                desk_win = shell.Windows().FindWindowSW(0, 0, 8, 0, 1)
+                if desk_win is not None:
+                    sel_d = desk_win.Document.SelectedItems()
+                    for idx in range(sel_d.Count):
+                        dp = sel_d.Item(idx).Path
+                        if dp and os.path.exists(dp):
+                            if Path(str(dp)).suffix.lower() not in (".lnk", ".url"):
+                                local_paths.append(str(dp))
+                    out_holder.append(local_paths)
+                    return
+
+            # 2) 탐색기 폴더 창(CabinetWClass / ExploreWClass) — Win10/Win11 멀티탭 활성 탭 우선 매칭
+            active_tab_hwnd = int(u32.FindWindowExW(chk_hwnd, 0, "ShellTabWindowClass", None) or 0) if chk_hwnd else 0
+            matched_window = None
+            fallback_window = None
+            for window in shell.Windows():
+                try:
+                    if int(window.HWND) != chk_hwnd:
+                        continue
+                    if fallback_window is None:
+                        fallback_window = window
+                    if active_tab_hwnd:
+                        try:
+                            import pythoncom  # type: ignore
+
+                            SID_STopLevelBrowser = pythoncom.MakeIID("{4C96BE40-915C-11CF-99D3-00AA004AE837}")
+                            sp = window._oleobj_.QueryInterface(pythoncom.IID_IServiceProvider)
+                            ole_win = sp.QueryService(SID_STopLevelBrowser, pythoncom.IID_IOleWindow)
+                            if int(ole_win.GetWindow()) == active_tab_hwnd:
+                                matched_window = window
+                                break
+                        except Exception:
                             matched_window = window
                             break
-                    except Exception:
+                    else:
                         matched_window = window
                         break
-                else:
-                    matched_window = window
-                    break
-            except Exception:
-                continue
+                except Exception:
+                    continue
 
-        chosen_win = matched_window or fallback_window
-        if chosen_win is not None:
-            doc = chosen_win.Document
-            sel = doc.SelectedItems()
-            for idx in range(sel.Count):
-                item_path = sel.Item(idx).Path
-                if item_path and os.path.exists(item_path):
-                    paths.append(str(item_path))
-            return paths
-    except Exception:
-        # win32com 미설치 단독 스크립트 환경 폴백 (최대 0.35초 타임아웃으로 메인루프 지연 방지)
-        try:
-            if cls_chk in ("Progman", "WorkerW"):
-                ps_q = (
-                    "$sh=New-Object -ComObject Shell.Application; $out=@(); "
-                    "$dw=$sh.Windows().FindWindowSW(0,0,8,0,1); "
-                    "if($dw){ foreach($it in $dw.Document.SelectedItems()){ if($it.Path){ $out += [string]$it.Path } } }; "
-                    "$out | ConvertTo-Json -Compress"
-                )
-            else:
-                ps_q = (
-                    f"$fg={chk_hwnd}; $sh=New-Object -ComObject Shell.Application; $out=@(); "
-                    "foreach($w in $sh.Windows()){ try { if([int64]$w.HWND -eq $fg){ "
-                    "foreach($it in $w.Document.SelectedItems()){ if($it.Path){ $out += [string]$it.Path } }; break "
-                    "} } catch {} }; $out | ConvertTo-Json -Compress"
-                )
-            r_ps = subprocess.run(
-                ["powershell", "-NoProfile", "-Command", ps_q],
-                capture_output=True,
-                text=True,
-                encoding="utf-8",
-                errors="replace",
-                timeout=0.35,
-                creationflags=0x08000000,
-            )
-            raw_s = (r_ps.stdout or "").strip()
-            if raw_s:
-                parsed_p = json.loads(raw_s)
-                cands = parsed_p if isinstance(parsed_p, list) else [parsed_p]
-                for cp in cands:
-                    if cp and os.path.exists(str(cp)):
-                        if cls_chk in ("Progman", "WorkerW") and Path(str(cp)).suffix.lower() in (".lnk", ".url"):
-                            continue
-                        paths.append(str(cp))
+            chosen_win = matched_window or fallback_window
+            if chosen_win is not None:
+                doc = chosen_win.Document
+                sel = doc.SelectedItems()
+                for idx in range(sel.Count):
+                    item_path = sel.Item(idx).Path
+                    if item_path and os.path.exists(item_path):
+                        local_paths.append(str(item_path))
+                out_holder.append(local_paths)
+                return
+            out_holder.append([])
         except Exception:
-            pass
+            # win32com 미설치 단독 스크립트 환경 폴백 (최대 0.35초 타임아웃)
+            try:
+                if cls_chk in ("Progman", "WorkerW"):
+                    ps_q = (
+                        "$sh=New-Object -ComObject Shell.Application; $out=@(); "
+                        "$dw=$sh.Windows().FindWindowSW(0,0,8,0,1); "
+                        "if($dw){ foreach($it in $dw.Document.SelectedItems()){ if($it.Path){ $out += [string]$it.Path } } }; "
+                        "$out | ConvertTo-Json -Compress"
+                    )
+                else:
+                    ps_q = (
+                        f"$fg={chk_hwnd}; $sh=New-Object -ComObject Shell.Application; $out=@(); "
+                        "foreach($w in $sh.Windows()){ try { if([int64]$w.HWND -eq $fg){ "
+                        "foreach($it in $w.Document.SelectedItems()){ if($it.Path){ $out += [string]$it.Path } }; break "
+                        "} } catch {} }; $out | ConvertTo-Json -Compress"
+                    )
+                r_ps = subprocess.run(
+                    ["powershell", "-NoProfile", "-Command", ps_q],
+                    capture_output=True,
+                    text=True,
+                    encoding="utf-8",
+                    errors="replace",
+                    timeout=0.35,
+                    creationflags=0x08000000,
+                )
+                raw_s = (r_ps.stdout or "").strip()
+                if raw_s:
+                    parsed_p = json.loads(raw_s)
+                    cands = parsed_p if isinstance(parsed_p, list) else [parsed_p]
+                    for cp in cands:
+                        if cp and os.path.exists(str(cp)):
+                            if cls_chk in ("Progman", "WorkerW") and Path(str(cp)).suffix.lower() in (".lnk", ".url"):
+                                continue
+                            local_paths.append(str(cp))
+            except Exception:
+                pass
+            out_holder.append(local_paths)
+        finally:
+            try:
+                ctypes.windll.ole32.CoUninitialize()
+            except Exception:
+                pass
+
+    # [메인 루프 영구 무블로킹]: 탐색기 COM(Shell.Application)이 네트워크 드라이브·콜드스타트로 지연돼도
+    # 최대 0.45초 이상 메인 스레드를 절대 붙잡지 않도록 워커 스레드로 격리합니다.
+    com_res: list[list[str]] = []
+    t_com = threading.Thread(target=_query_shell_com_worker, args=(com_res,), daemon=True)
+    t_com.start()
+    t_com.join(timeout=0.45)
+    if com_res:
+        paths = com_res[0]
     return paths
 
 
@@ -8881,11 +8922,21 @@ def main() -> None:
         # 귀신키 미출시 또는 권한/스위치 비활성 유저는 어느 화면(입력창·바탕화면 무관)에서 Ctrl+0을 눌러도
         # 무조건 '👻 귀신검색창(UI ②)'이 기본으로 열립니다! (탐색기에서 압축파일 선택 시에만 알집 대체 UI ④ 오픈)
         if not is_ghostkey_active_mode():
-            if _CURRENT_OPEN_UI_MODE in ("ui2", "ui3", "ui4", "ui1"):
+            if _is_ui_window_actually_open() and _CURRENT_OPEN_UI_MODE in ("ui2", "ui3", "ui4", "ui1"):
                 disarm_sub_hotkeys()
                 close_ghost_toast()
                 return
             fg_chk = u32.GetForegroundWindow()
+            # Ctrl+우클릭 호출 시 실제 마우스 커서 아래 창(탐색기 폴더·바탕화면·사진 앱)을 최우선 판별
+            if summon_by_rclick:
+                pt_rc_chk = wintypes.POINT()
+                u32.GetCursorPos(ctypes.byref(pt_rc_chk))
+                hwnd_under_chk = u32.WindowFromPoint(pt_rc_chk)
+                if hwnd_under_chk:
+                    root_under_chk = u32.GetAncestor(hwnd_under_chk, 2) or hwnd_under_chk
+                    proc_under_chk = _get_process_name_from_hwnd(root_under_chk).lower()
+                    if proc_under_chk not in ("python.exe", "pythonw.exe"):
+                        fg_chk = root_under_chk
             proc_chk = _get_process_name_from_hwnd(fg_chk).lower() if fg_chk else ""
             cls_chk = _get_win_class_only(fg_chk) if fg_chk else ""
             sel_file_for_ui2 = ""
@@ -9429,7 +9480,9 @@ def main() -> None:
                         now_hk = time.time()
                         if (now_hk - last_summon_ts) > 0.25:
                             last_summon_ts = now_hk
+                            was_ctrl0_down = True
                             trigger_master_summon()
+                            last_summon_ts = time.time()
 
                     # 1-B) 창 고정/원복 전용 핫키 (Ctrl + Alt + T)
                     elif hk_id == 4:
@@ -9556,7 +9609,9 @@ def main() -> None:
                     _RBTN_HOLD_STATE["summon_requested"] = False
                     if (now - last_summon_ts) > 0.25:
                         last_summon_ts = now
+                        was_key_down[0x9901] = True
                         trigger_master_summon(summon_by_rclick=True)
+                        last_summon_ts = time.time()
 
                 rbtn_phys_now = (u32.GetAsyncKeyState(0x02) & 0x8000) != 0
                 was_rbtn_phys = was_key_down.get(0x9901, False)
@@ -9576,9 +9631,10 @@ def main() -> None:
                         _RBTN_HOLD_STATE["x"] = pt_rc.x
                         _RBTN_HOLD_STATE["y"] = pt_rc.y
                         _release_target_rbutton_stuck(hwnd_fg_r)
-                        if (now - last_summon_ts) > 0.25:
-                            last_summon_ts = now
+                        if (time.time() - last_summon_ts) > 0.25:
+                            last_summon_ts = time.time()
                             trigger_master_summon(summon_by_rclick=True)
+                            last_summon_ts = time.time()
                     else:
                         _RBTN_HOLD_STATE["active"] = False
                         _RBTN_HOLD_STATE["dismiss_context_menu_on_up"] = False
@@ -9820,9 +9876,10 @@ def main() -> None:
                 # 오직 Ctrl + 0 만 하드웨어 폴링으로 마스터 소환!
                 ctrl0_now = ctrl_down and not alt_down and not shift_down and zero_down
                 if ctrl0_now and not was_ctrl0_down:
-                    if (now - last_summon_ts) > 0.30:
-                        last_summon_ts = now
+                    if (time.time() - last_summon_ts) > 0.30:
+                        last_summon_ts = time.time()
                         trigger_master_summon()
+                        last_summon_ts = time.time()
                 was_ctrl0_down = ctrl0_now
 
                 ctrl_alt_t_now = ctrl_down and alt_down and not shift_down and t_down
