@@ -176,7 +176,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
   const inviteMeta = useMemo(() => readActiveWorkRoomInviteMeta(), [activeWorkRoomId]);
 
-  // ── 과금·30일 무료체험·만료 잠금 판정 (Fail-Closed 3중 게이트) ──
+  // ── 과금·30일 무료체험·만료 잠금 판정 (Fail-Closed 3중 게이트 · 팀원 초대도 이메일 로그인 필수) ──
+  const isAuthenticated = Boolean(merlinAuth?.email && hasAuthenticatedHubAccountSession());
+  const isGuestInvitePending = inviteMeta.hasWorkInvite && !isAuthenticated;
   const isWorkPaidActive = Boolean(deviceEntitlement?.workPaidActive);
   const isWorkTrialActive = Boolean(deviceEntitlement?.workTrialActive);
   const isWorkTrialExpired = Boolean(deviceEntitlement?.workTrialExpired);
@@ -184,10 +186,12 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const isOwnWorkUnlocked = Boolean(
     isWorkPaidActive || isWorkTrialActive || deviceEntitlement?.workSubscriptionUnlocked
   );
-  const isJoinedInvitedMember = inviteMeta.hasWorkInvite || Boolean(joinedInvitedRoom);
-  const isWorkUnlocked = isJoinedInvitedMember
-    ? !remoteRoomLockReason
-    : isOwnWorkUnlocked;
+  const isJoinedInvitedMember = isAuthenticated && (inviteMeta.hasWorkInvite || Boolean(joinedInvitedRoom));
+  const isWorkUnlocked = isAuthenticated && (
+    isJoinedInvitedMember
+      ? !remoteRoomLockReason
+      : isOwnWorkUnlocked
+  );
 
   // 계정 전환 시 이전 계정 업무방 ID·문서 잔상 즉시 초기화 (C9 계정 격리)
   useEffect(() => {
@@ -746,7 +750,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
   // 계정별 로컬 캐시 복원 + 대장 PC 직통 HTTPS 터널 상태 동기화
   useEffect(() => {
-    if (activeWorkRoomId) {
+    if (activeWorkRoomId && isAuthenticated) {
       const knownTombs = loadCachedWorkTombstones(activeWorkRoomId, merlinAuth?.email || undefined);
       void loadCachedWorkRoomPreview(activeWorkRoomId, merlinAuth?.email || undefined).then(
         (cachedDocs) => {
@@ -760,6 +764,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
     let cancelled = false;
     const loadRemoteState = async () => {
+      if (!isAuthenticated) return;
       if (activeWorkRoomId && hasAuthenticatedHubAccountSession()) {
         const authed = await fetchWorkRoomAuthedState(activeWorkRoomId, inviteMeta.inviteToken);
         if (cancelled) return;
@@ -1407,6 +1412,36 @@ export const WorkLoungeB2BHub: React.FC = () => {
           </div>
         )}
 
+      {isGuestInvitePending ? (
+        <div
+          data-testid="work-invite-login-gate-card"
+          className="p-6 rounded-2xl bg-white border border-slate-200 shadow-sm flex flex-col gap-4 max-w-2xl"
+        >
+          <div className="flex flex-col gap-1.5">
+            <span className="inline-flex items-center self-start px-2.5 py-0.5 rounded-full bg-teal-50 border border-teal-200 text-teal-700 text-[11.5px] font-bold">
+              팀원 초대 링크 · 로그인 필요 (초대 팀원 무료)
+            </span>
+            <h3 className="text-[18px] text-slate-900 font-extrabold tracking-tight">
+              {inviteMeta.hostNickname}님이 초대한 [{inviteMeta.roomTitle}] 업무 공유방
+            </h3>
+            <p className="text-[13px] text-slate-600 leading-relaxed break-keep">
+              회사 업무 문서 보안과 팀원별 권한(편집 / 읽기 전용) 확인을 위해 로그인한 계정으로만 입장할 수 있습니다.
+              초대받은 팀원은 추가 결제 없이 무료(0원)로 이용하며, 이메일 로그인을 완료하는 즉시 이 업무 공유방에 자동 합류됩니다.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2.5 pt-1">
+            <button
+              type="button"
+              onClick={openLoginModal}
+              data-testid="work-invite-login-btn"
+              className="px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-bold cursor-pointer shadow-sm transition-colors"
+            >
+              이메일 로그인하고 업무 공유방 합류 (무료)
+            </button>
+          </div>
+        </div>
+      ) : (
+        <>
       <WorkLoungeBillingGateBanner
         isStoreAppMode={isStoreAppMode}
         isWorkUnlocked={isWorkUnlocked}
@@ -1851,6 +1886,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
         activatePricingPlan={activatePricingPlan}
         setShowProModal={setShowProModal}
       />
+        </>
+      )}
     </section>
   );
 };

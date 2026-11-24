@@ -445,7 +445,10 @@ const GhostiHubGlobalModals: React.FC = () => {
 
       if (isAccountTransition) {
         resetSharedMonsterChatToWelcome();
-        window.dispatchEvent(new CustomEvent('ghosti_jump_to_secretary'));
+        // [4귀신 근본 수정] F5 새로고침 시 세션 복원(didTransitionFromGuest) 때마다 'ghosti_jump_to_secretary'를 쏘면
+        // DesktopSidebarAndHeader가 현재 탭(업무 공유·귀신검색·사진 공유·내 기기 통합)을 무조건 귀신비서 탭으로 강제 이동시킴.
+        // 대화창(MonsterStandardChatColumn) 환영 인사 갱신 전용 이벤트('ghostiSupabaseUserSynced')만 발송해 현재 탭을 100% 보존.
+        window.dispatchEvent(new CustomEvent('ghostiSupabaseUserSynced'));
       }
 
       void syncHubUserToLocalSupabase({
@@ -458,7 +461,7 @@ const GhostiHubGlobalModals: React.FC = () => {
           const stNow = useSaySeeStore.getState();
           void stNow.refreshDeviceIntegrationState();
           void stNow.syncActiveSharedRoomFromSupabase();
-          window.dispatchEvent(new CustomEvent('ghosti_jump_to_secretary'));
+          window.dispatchEvent(new CustomEvent('ghostiSupabaseUserSynced'));
         }
       });
 
@@ -478,7 +481,7 @@ const GhostiHubGlobalModals: React.FC = () => {
           } catch {
             /* ignore */
           }
-          window.dispatchEvent(new CustomEvent('ghosti_jump_to_secretary'));
+          window.dispatchEvent(new CustomEvent('ghostiSupabaseUserSynced'));
         }
       }
 
