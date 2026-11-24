@@ -115,6 +115,79 @@ export const App: React.FC = () => {
       ocrModalPhoto
   );
 
+  // 안드로이드 네이티브(MainActivity OnBackPressedCallback)에서 직접 호출하는 전역 뒤로가기 핸들러
+  // (@capacitor/app 미설치 환경에서도 하드웨어/제스처 뒤로가기 시 앱 종료 대신 모달 닫기 -> 탭 복귀 순으로 안전하게 처리)
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const handleNativeBack = (): boolean => {
+      const st = useSaySeeStore.getState();
+      const navSt = useDashboardNavStore.getState();
+      let closedModal = false;
+      if (navSt.ocrModalPhoto) {
+        navSt.setOcrModalPhoto(null);
+        closedModal = true;
+      } else if (st.selectedPhoto) {
+        st.setSelectedPhoto(null);
+        closedModal = true;
+      } else if (st.selectedVideoModal) {
+        st.setSelectedVideoModal(null);
+        closedModal = true;
+      } else if (st.selectedDocModal) {
+        st.setSelectedDocModal(null);
+        closedModal = true;
+      } else if (st.showSharedPhotoUploadModal) {
+        st.setShowSharedPhotoUploadModal(false);
+        closedModal = true;
+      } else if (st.showFaceRegistryModal) {
+        st.setShowFaceRegistryModal(false);
+        closedModal = true;
+      } else if (st.doorplatePickerClusterId) {
+        st.setDoorplatePickerClusterId(null);
+        closedModal = true;
+      } else if (st.showProModal) {
+        st.setShowProModal(false);
+        closedModal = true;
+      } else if (st.showSetupMonsterModal) {
+        st.setShowSetupMonsterModal(false);
+        closedModal = true;
+      } else if (st.showOnboarding) {
+        st.setShowOnboarding(false);
+        closedModal = true;
+      } else if (st.guestJoinWallReason) {
+        useSaySeeStore.setState({ guestJoinWallReason: null });
+        closedModal = true;
+      }
+      if (closedModal) {
+        try {
+          if (window.history.state?.ghostiModalOpen) {
+            window.history.replaceState(
+              { ...(window.history.state || {}), ghostiModalOpen: false },
+              ''
+            );
+          }
+        } catch {
+          /* ignore */
+        }
+        return true;
+      }
+      if (st.activeLoungeType !== 'personal' || st.mobileTab !== 'trash') {
+        useSaySeeStore.setState({
+          activeLoungeType: 'personal',
+          desktopTab: 'trash',
+          mobileTab: 'trash',
+        });
+        return true;
+      }
+      return false;
+    };
+    (window as unknown as { __ghostiHandleNativeBack?: () => boolean }).__ghostiHandleNativeBack =
+      handleNativeBack;
+    return () => {
+      delete (window as unknown as { __ghostiHandleNativeBack?: () => boolean })
+        .__ghostiHandleNativeBack;
+    };
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined' || !hasAnyModalOpen) return;
     let pushedByEffect = false;
@@ -144,43 +217,8 @@ export const App: React.FC = () => {
     };
 
     window.addEventListener('popstate', handlePopState);
-    // Android Capacitor 하드웨어/제스처 뒤로가기 버튼 시 앱 종료 대신 열린 모달만 안전하게 닫기
-    let capBackHandle: { remove?: () => void } | null = null;
-    try {
-      const capApp = (
-        window as unknown as {
-          Capacitor?: {
-            Plugins?: {
-              App?: {
-                addListener?: (
-                  ev: string,
-                  cb: () => void
-                ) => Promise<{ remove?: () => void }> | { remove?: () => void };
-              };
-            };
-          };
-        }
-      ).Capacitor?.Plugins?.App;
-      if (capApp?.addListener) {
-        const res = capApp.addListener('backButton', handlePopState);
-        if (res && typeof (res as Promise<{ remove?: () => void }>).then === 'function') {
-          void (res as Promise<{ remove?: () => void }>).then((h) => {
-            capBackHandle = h;
-          });
-        } else {
-          capBackHandle = res as { remove?: () => void };
-        }
-      }
-    } catch {
-      /* ignore non-capacitor env */
-    }
     return () => {
       window.removeEventListener('popstate', handlePopState);
-      try {
-        capBackHandle?.remove?.();
-      } catch {
-        /* ignore */
-      }
       if (pushedByEffect && window.history.state?.ghostiModalOpen) {
         try {
           window.history.replaceState(
@@ -590,6 +628,7 @@ export const App: React.FC = () => {
 
     const onNavPopState = (event: PopStateEvent) => {
       const st = useSaySeeStore.getState();
+      const navSt = useDashboardNavStore.getState();
       const modalWasOpen = Boolean(
         st.selectedPhoto ||
           st.selectedVideoModal ||
@@ -598,7 +637,10 @@ export const App: React.FC = () => {
           st.showSetupMonsterModal ||
           st.showOnboarding ||
           st.showFaceRegistryModal ||
-          st.doorplatePickerClusterId
+          st.doorplatePickerClusterId ||
+          st.showSharedPhotoUploadModal ||
+          st.guestJoinWallReason ||
+          navSt.ocrModalPhoto
       );
       if (modalWasOpen) {
         return;

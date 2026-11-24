@@ -258,77 +258,140 @@ export function groupBurstSearchResults(
     });
   }
 
-  // 시간순 정렬 후 인접 연사 클러스터 구성
+  // Union-Find(서로소 집합)으로 연사·중복·동일 사진 묶음을 전역 무결성으로 병합
+  const n = results.length;
+  const parent = Array.from({ length: n }, (_, i) => i);
+  const find = (x: number): number => {
+    let cur = x;
+    while (parent[cur] !== cur) {
+      parent[cur] = parent[parent[cur]];
+      cur = parent[cur];
+    }
+    return cur;
+  };
+  const union = (a: number, b: number) => {
+    const ra = find(a);
+    const rb = find(b);
+    if (ra !== rb) parent[rb] = ra;
+  };
+
   const withTs = results.map((r, origIdx) => ({
     item: r,
     origIdx,
     tsSec: parseFilenameTimestampSec(r.photo.name, r.photo.mtimeMs),
+    dateKey: (r.photo.date || '').split(' ')[0].trim(),
+    normName: (r.photo.name || '').trim().toLowerCase(),
+    validDhash: r.photo.dhash && r.photo.dhash !== '0' ? r.photo.dhash : '',
   }));
 
-  const sortedByTime = [...withTs].sort(
-    (a, b) => a.tsSec - b.tsSec || a.item.photo.name.localeCompare(b.item.photo.name)
-  );
+  // 1) 동일 duplicateGroupId 전역 병합
+  const dupGroupFirstIdx = new Map<string, number>();
+  // 2) 동일 파일명+용량 또는 완전 동일 dHash 전역 병합
+  const exactDhashFirstIdx = new Map<string, number>();
+  const nameSizeFirstIdx = new Map<string, number>();
+  const byDateBuckets = new Map<string, typeof withTs>();
 
-  const clusters: (typeof withTs)[] = [];
-  const dupClusterMap = new Map<string, typeof withTs>();
-
-  for (const entry of sortedByTime) {
+  for (const entry of withTs) {
     const dupId = entry.item.photo.duplicateGroupId;
     if (dupId) {
-      const existingDupCluster = dupClusterMap.get(dupId);
-      if (existingDupCluster) {
-        existingDupCluster.push(entry);
-        continue;
-      }
+      const first = dupGroupFirstIdx.get(dupId);
+      if (first !== undefined) union(first, entry.origIdx);
+      else dupGroupFirstIdx.set(dupId, entry.origIdx);
     }
 
-    const prevCluster = clusters[clusters.length - 1];
-    if (prevCluster) {
-      const last = prevCluster[prevCluster.length - 1];
-      const pA = last.item.photo;
-      const pB = entry.item.photo;
-      const dt = Math.abs(entry.tsSec - last.tsSec);
-      const dhashDist =
-        pA.dhash && pA.dhash !== '0' && pB.dhash && pB.dhash !== '0'
-          ? hammingDistanceHex64(pA.dhash, pB.dhash)
-          : 64;
-      const sameDupGroup =
-        Boolean(pA.duplicateGroupId) && pA.duplicateGroupId === pB.duplicateGroupId;
-      const sameSceneCluster =
-        (pA.clusterId !== undefined && pA.clusterId === pB.clusterId) ||
-        (Boolean(pA.tags[0]) && pA.tags[0] === pB.tags[0]);
-
-      const dirA = pA.fullPath ? pA.fullPath.replace(/[\\/][^\\/]+$/, '').toLowerCase() : '';
-      const dirB = pB.fullPath ? pB.fullPath.replace(/[\\/][^\\/]+$/, '').toLowerCase() : '';
-      const sameParentFolder = !dirA || !dirB || dirA === dirB;
-
-      const sameDateNearIdentical =
-        Boolean(pA.date) && pA.date === pB.date && dhashDist <= 6;
-
-      if (
-        sameDupGroup ||
-        sameDateNearIdentical ||
-        (sameParentFolder &&
-          ((dhashDist <= 8 && dt <= 5 && entry.tsSec > 0) ||
-            (sameSceneCluster && dhashDist <= 12 && dt <= 3 && entry.tsSec > 0)))
-      ) {
-        prevCluster.push(entry);
-        if (dupId && !dupClusterMap.has(dupId)) {
-          dupClusterMap.set(dupId, prevCluster);
-        }
-        continue;
-      }
+    if (entry.validDhash) {
+      const first = exactDhashFirstIdx.get(entry.validDhash);
+      if (first !== undefined) union(first, entry.origIdx);
+      else exactDhashFirstIdx.set(entry.validDhash, entry.origIdx);
     }
-    const newCluster = [entry];
-    clusters.push(newCluster);
-    if (dupId) {
-      dupClusterMap.set(dupId, newCluster);
+
+    if (entry.normName && entry.item.photo.size > 0) {
+      const nsKey = `${entry.normName}::${entry.item.photo.size}`;
+      const first = nameSizeFirstIdx.get(nsKey);
+      if (first !== undefined) union(first, entry.origIdx);
+      else nameSizeFirstIdx.set(nsKey, entry.origIdx);
+    }
+
+    if (entry.dateKey && entry.validDhash) {
+      const bucket = byDateBuckets.get(entry.dateKey);
+      if (bucket) bucket.push(entry);
+      else byDateBuckets.set(entry.dateKey, [entry]);
     }
   }
 
-  // 각 연사 클러스터에서 가장 점수가 높거나 선명한 대표 1장을 선정하고 원래 검색 랭킹 순서로 정렬
-  // 이미 다른 연사 묶음에 흡수된 사진(id 또는 동일 duplicateGroupId)이 별도 카드로 중복 노출되지 않도록 전역 중복 제거합니다.
-  const rankedClusters = clusters
+  // 3) 같은 날짜 내 근접 동일 dHash(≤ 6) 전역 병합 (시간순 중간에 다른 사진이 끼어 있어도 누락 없음)
+  for (const bucket of byDateBuckets.values()) {
+    if (bucket.length < 2) continue;
+    const maxCheck = Math.min(bucket.length, 160);
+    for (let i = 0; i < maxCheck; i++) {
+      const a = bucket[i];
+      for (let j = i + 1; j < maxCheck; j++) {
+        const b = bucket[j];
+        if (find(a.origIdx) === find(b.origIdx)) continue;
+        if (hammingDistanceHex64(a.validDhash, b.validDhash) <= 6) {
+          union(a.origIdx, b.origIdx);
+        }
+      }
+    }
+  }
+
+  // 4) 시간순 인접 연사 클러스터 병합 (같은 폴더 + 짧은 촬영 간격)
+  const sortedByTime = [...withTs].sort(
+    (a, b) => a.tsSec - b.tsSec || a.item.photo.name.localeCompare(b.item.photo.name)
+  );
+  for (let i = 1; i < sortedByTime.length; i++) {
+    const prev = sortedByTime[i - 1];
+    const curr = sortedByTime[i];
+    if (find(prev.origIdx) === find(curr.origIdx)) continue;
+
+    const pA = prev.item.photo;
+    const pB = curr.item.photo;
+    const dt = Math.abs(curr.tsSec - prev.tsSec);
+    const dhashDist =
+      prev.validDhash && curr.validDhash
+        ? hammingDistanceHex64(prev.validDhash, curr.validDhash)
+        : 64;
+    const sameSceneCluster =
+      (pA.clusterId !== undefined && pA.clusterId === pB.clusterId) ||
+      (Boolean(pA.tags[0]) && pA.tags[0] === pB.tags[0]);
+    const dirA = pA.fullPath ? pA.fullPath.replace(/[\\/][^\\/]+$/, '').toLowerCase() : '';
+    const dirB = pB.fullPath ? pB.fullPath.replace(/[\\/][^\\/]+$/, '').toLowerCase() : '';
+    const sameParentFolder = !dirA || !dirB || dirA === dirB;
+
+    if (
+      sameParentFolder &&
+      curr.tsSec > 0 &&
+      ((dhashDist <= 8 && dt <= 5) || (sameSceneCluster && dhashDist <= 12 && dt <= 3))
+    ) {
+      union(prev.origIdx, curr.origIdx);
+    }
+  }
+
+  // 5) allPhotos의 duplicateGroupId 확장 멤버까지 교차 확인하여 겹치는 컴포넌트 최종 병합
+  const photoIdToOwnerIdx = new Map<string, number>();
+  for (const entry of withTs) {
+    const expanded = expandBurstMembers([entry.item.photo]);
+    for (const ep of expanded) {
+      const existingOwner = photoIdToOwnerIdx.get(ep.id);
+      if (existingOwner !== undefined) {
+        union(existingOwner, entry.origIdx);
+      } else {
+        photoIdToOwnerIdx.set(ep.id, entry.origIdx);
+      }
+    }
+  }
+
+  // 컴포넌트 수집
+  const componentMap = new Map<number, typeof withTs>();
+  for (const entry of withTs) {
+    const root = find(entry.origIdx);
+    const arr = componentMap.get(root);
+    if (arr) arr.push(entry);
+    else componentMap.set(root, [entry]);
+  }
+
+  // 각 최종 컴포넌트에서 가장 점수가 높거나 선명한 대표 1장을 선정하고 원래 검색 랭킹 순서로 정렬
+  return Array.from(componentMap.values())
     .map((cluster) => {
       const bestRankOrder = [...cluster].sort((a, b) => {
         if (a.item.photo.isBestInDuplicateGroup && !b.item.photo.isBestInDuplicateGroup) return -1;
@@ -345,30 +408,12 @@ export function groupBurstSearchResults(
         burstCount: expandedPhotos.length,
       };
     })
-    .sort((a, b) => a.minOrigIdx - b.minOrigIdx);
-
-  const claimedPhotoIds = new Set<string>();
-  const claimedDupGroups = new Set<string>();
-  const grouped: GroupedSearchResultItem[] = [];
-
-  for (const g of rankedClusters) {
-    const repId = g.representative.photo.id;
-    const repDup = g.representative.photo.duplicateGroupId;
-    if (claimedPhotoIds.has(repId) || (repDup && claimedDupGroups.has(repDup))) {
-      continue;
-    }
-    for (const bp of g.burstPhotos) {
-      claimedPhotoIds.add(bp.id);
-      if (bp.duplicateGroupId) claimedDupGroups.add(bp.duplicateGroupId);
-    }
-    grouped.push({
-      representative: g.representative,
-      burstPhotos: g.burstPhotos,
-      burstCount: g.burstCount,
-    });
-  }
-
-  return grouped;
+    .sort((a, b) => a.minOrigIdx - b.minOrigIdx)
+    .map(({ representative, burstPhotos, burstCount }) => ({
+      representative,
+      burstPhotos,
+      burstCount,
+    }));
 }
 
 /**

@@ -18,6 +18,7 @@ import android.webkit.RenderProcessGoneDetail;
 import android.webkit.WebResourceRequest;
 import android.webkit.WebResourceResponse;
 import android.webkit.WebView;
+import androidx.activity.OnBackPressedCallback;
 import androidx.core.graphics.Insets;
 import androidx.core.view.ViewCompat;
 import androidx.core.view.WindowCompat;
@@ -81,6 +82,32 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(GhostiMobileCarePlugin.class);
         super.onCreate(savedInstanceState);
         captureIncomingDeepLinkIntent(getIntent());
+
+        // [2귀신] 안드로이드 하드웨어/제스처 뒤로가기 시 앱 즉시 종료 방지:
+        // 열려 있는 사진 상세/OCR/공유 모달이 있으면 모달만 닫고, 하위 탭이면 홈으로 복귀하며, 루트 홈일 때만 백그라운드로 이동합니다.
+        getOnBackPressedDispatcher().addCallback(this, new OnBackPressedCallback(true) {
+            @Override
+            public void handleOnBackPressed() {
+                WebView wv = (bridge != null) ? bridge.getWebView() : null;
+                if (wv == null) {
+                    moveTaskToBack(true);
+                    return;
+                }
+                wv.evaluateJavascript(
+                    "(function(){ try { return typeof window.__ghostiHandleNativeBack === 'function' ? !!window.__ghostiHandleNativeBack() : false; } catch(e) { return false; } })()",
+                    value -> {
+                        if ("true".equals(value)) {
+                            return;
+                        }
+                        if (wv.canGoBack()) {
+                            wv.goBack();
+                        } else {
+                            moveTaskToBack(true);
+                        }
+                    }
+                );
+            }
+        });
 
         // [스마트폰 카메라/갤러리 동영상 무복사 64-bit HTTP 206 Range 스트리밍 브릿지 & WebView 렌더러 강제종료 방어]:
         // 1) Capacitor 기본 WebViewLocalServer는 content:// 요청 시 FileChannel.position(seek)을 누락하므로 64-bit Range 206 송출.
