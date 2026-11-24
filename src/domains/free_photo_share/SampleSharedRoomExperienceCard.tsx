@@ -86,7 +86,7 @@ export const SampleSharedRoomExperienceCard: React.FC<{
           <button
             type="button"
             onClick={() => useSaySeeStore.getState().requestAddMyPhotosToSharedRoom()}
-            className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-medium cursor-pointer transition-colors"
+            className="px-4 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer transition-colors"
           >
             사진 올려서 공유방 시작하기
           </button>
@@ -113,7 +113,7 @@ export const SampleSharedRoomExperienceCard: React.FC<{
             />
             <button
               type="submit"
-              className="px-3.5 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-medium cursor-pointer shrink-0 transition-colors"
+              className="px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-semibold cursor-pointer shrink-0 transition-colors"
             >
               입장
             </button>

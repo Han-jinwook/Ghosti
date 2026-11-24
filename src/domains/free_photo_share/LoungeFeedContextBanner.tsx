@@ -210,7 +210,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
       <div className="px-4 py-3.5 rounded-2xl bg-[#18181B] border border-slate-200/50 shadow-sm flex flex-col gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex flex-wrap items-center gap-2 text-[12.5px]">
-            <span className="px-2.5 py-1 rounded-lg font-extrabold text-[11px] bg-slate-900 text-white">
+            <span className="px-2.5 py-1 rounded-lg font-extrabold text-[11px] bg-teal-600 text-white">
               {p2pOriginalSummoned
                 ? '✓ 내 기기 원본 자동 동기화 ON'
                 : 'ℹ️ 내 기기 원본 동기화 안내'}
@@ -389,7 +389,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
         }`}
       >
         <div className="flex flex-wrap items-center gap-2 min-w-0">
-          <span className="px-2.5 py-0.5 rounded-full bg-slate-900 text-white font-label-sm text-[11px] font-semibold shrink-0">
+          <span className="px-2.5 py-0.5 rounded-full bg-teal-600 text-white font-label-sm text-[11px] font-semibold shrink-0">
             초대받은 독립 공유방
           </span>
           <span className="font-label-sm text-[12.5px] font-extrabold break-keep">
@@ -445,7 +445,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
             <button
               type="button"
               onClick={() => useSaySeeStore.getState().requestAddMyPhotosToSharedRoom()}
-              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[12px] font-semibold shadow-md shadow-teal-500/20 flex items-center gap-1.5 cursor-pointer transition-all"
+              className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-label-sm text-[12px] font-semibold shadow-sm flex items-center gap-1.5 cursor-pointer transition-all"
             >
               <span>내 사진도 이 방에 추가하기</span>
             </button>
@@ -509,14 +509,14 @@ export const LoungeFeedContextBanner: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2">
-            <div className="inline-flex p-0.5 rounded-xl bg-zinc-900 border border-white/10">
+            <div className="inline-flex p-0.5 rounded-xl bg-slate-100 border border-slate-200">
               <button
                 type="button"
                 onClick={() => setClubFeedTrack('recent_now')}
-                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
                   clubFeedTrack === 'recent_now'
-                    ? 'bg-primary-container text-zinc-950 shadow-xs'
-                    : 'text-zinc-400 hover:text-white'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 정기 모임·라운딩
@@ -525,10 +525,10 @@ export const LoungeFeedContextBanner: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setClubFeedTrack('memories_1989')}
-                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-extrabold transition-all cursor-pointer whitespace-nowrap ${
+                className={`px-3 py-1.5 rounded-lg font-label-sm text-[11.5px] font-semibold transition-all cursor-pointer whitespace-nowrap ${
                   clubFeedTrack === 'memories_1989'
-                    ? 'bg-primary-container text-zinc-950 shadow-xs'
-                    : 'text-zinc-400 hover:text-white'
+                    ? 'bg-teal-600 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
                 번개 · 추억 앨범
@@ -544,7 +544,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
                 }
                 void findMySchoolDaysPhotosFast();
               }}
-              className="px-3 py-1.5 rounded-xl bg-primary-container/15 hover:bg-primary-container/25 border border-primary-container/40 text-primary-container font-label-sm text-[11.5px] font-extrabold cursor-pointer whitespace-nowrap"
+              className="px-3 py-1.5 rounded-xl bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-800 font-label-sm text-[11.5px] font-semibold cursor-pointer whitespace-nowrap"
             >
               내 모임 사진 1초 찾기
             </button>
@@ -645,7 +645,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
             <button
               type="button"
               onClick={() => useSaySeeStore.getState().requestAddMyPhotosToSharedRoom()}
-              className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[12px] font-semibold shadow-md shadow-teal-500/20 flex items-center gap-1.5 cursor-pointer transition-all"
+              className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-label-sm text-[12px] font-semibold shadow-sm flex items-center gap-1.5 cursor-pointer transition-all"
             >
               <span>내 사진도 이 방에 추가하기</span>
             </button>
@@ -704,7 +704,7 @@ export const LoungeFeedContextBanner: React.FC = () => {
           <button
             type="button"
             onClick={() => useSaySeeStore.getState().requestAddMyPhotosToSharedRoom()}
-            className="px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-label-sm text-[12px] font-semibold shadow-md shadow-teal-500/20 flex items-center gap-1.5 cursor-pointer transition-all"
+            className="px-3.5 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white font-label-sm text-[12px] font-semibold shadow-sm flex items-center gap-1.5 cursor-pointer transition-all"
           >
             <span>내 사진도 이 방에 추가하기</span>
           </button>

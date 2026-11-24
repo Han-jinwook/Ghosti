@@ -89,9 +89,9 @@ export const AlumniRetroBannerAndTwoTrackBar: React.FC<{
             <button
               type="button"
               onClick={() => setClubFeedTrack('memories_1989')}
-              className={`px-3 py-1 rounded-md text-[12px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-1 rounded-md text-[12px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                 clubFeedTrack === 'memories_1989'
-                  ? 'bg-white text-slate-900 shadow-xs'
+                  ? 'bg-teal-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -101,9 +101,9 @@ export const AlumniRetroBannerAndTwoTrackBar: React.FC<{
             <button
               type="button"
               onClick={() => setClubFeedTrack('recent_now')}
-              className={`px-3 py-1 rounded-md text-[12px] font-medium transition-colors cursor-pointer whitespace-nowrap ${
+              className={`px-3 py-1 rounded-md text-[12px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
                 clubFeedTrack === 'recent_now'
-                  ? 'bg-white text-slate-900 shadow-xs'
+                  ? 'bg-teal-600 text-white shadow-xs'
                   : 'text-slate-600 hover:text-slate-900'
               }`}
             >
@@ -130,7 +130,7 @@ export const AlumniRetroBannerAndTwoTrackBar: React.FC<{
             <button
               type="button"
               onClick={() => approveAllAnalogYearProposals()}
-              className="px-3 py-1.5 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12px] font-medium cursor-pointer whitespace-nowrap transition-colors"
+              className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer whitespace-nowrap transition-colors"
             >
               연도 제보 승인 ({pendingProposals.length})
             </button>
