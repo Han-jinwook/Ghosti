@@ -206,6 +206,9 @@ export function findSelfCluster(st = loadPassportRegState()): FaceMemberCluster 
   if (!st.selfClusterId) return null;
   const found = liveClusters().find((c) => c.clusterId === st.selfClusterId) || null;
   if (!found || (found.matchedPhotoCount || 0) < PASSPORT_MIN_FACE_PHOTOS_FOR_ASK) return null;
+  const hasConfirmed = confirmedCutsFor(found, st).length > 0;
+  const hasPending = pendingCutsFor(found, st).length > 0;
+  if (!hasConfirmed && !hasPending) return null;
   return found;
 }
 
@@ -532,14 +535,33 @@ export function pickSelfCluster(clusterId: string): void {
   savePassportRegState({ ...st, selfClusterId: clusterId });
 }
 
-/** 프로필 ➔ 여권: 사진 1장 지우기 (지운 사진은 다시 추천하지 않음, 빈 자리는 이후 새 사진으로 조용히 채워짐) */
+/** 본인 얼굴 다시 고르기 (잘못 골랐거나 다른 얼굴을 고르고 싶을 때) */
+export function resetSelfClusterPick(): void {
+  const st = loadPassportRegState();
+  savePassportRegState({ ...st, selfClusterId: undefined });
+}
+
+/** 프로필 ➔ 여권: 사진 1장 지우기 (지운 사진은 다시 추천하지 않음, 만약 내 여권의 모든 사진을 지웠다면 다시 얼굴을 고를 수 있도록 본인 선택 상태를 초기화) */
 export function deletePassportCut(clusterId: string, cut: YearlyFaceBestCut): void {
   const st = loadPassportRegState();
   const k = cutKey(clusterId, cut);
+  const nextConfirmed = st.confirmedKeys.filter((x) => x !== k);
+  const nextRejected = Array.from(new Set([...st.rejectedKeys, k]));
+  const remainingSelfConfirmed = nextConfirmed.filter((x) => x.startsWith(`${clusterId}::`));
+  const shouldResetSelfPick = st.selfClusterId === clusterId && remainingSelfConfirmed.length === 0;
+  if (shouldResetSelfPick) {
+    try {
+      sessionStorage.removeItem('ghosti_passport_offered_this_session');
+    } catch {
+      /* ignore */
+    }
+  }
   savePassportRegState({
     ...st,
-    confirmedKeys: st.confirmedKeys.filter((x) => x !== k),
-    rejectedKeys: Array.from(new Set([...st.rejectedKeys, k])),
+    selfClusterId: shouldResetSelfPick ? undefined : st.selfClusterId,
+    firstOfferShown: shouldResetSelfPick ? false : st.firstOfferShown,
+    confirmedKeys: nextConfirmed,
+    rejectedKeys: nextRejected,
   });
   if (cut.representativePhoto) removeCutsFromCluster(clusterId, [cut.representativePhoto]);
 }

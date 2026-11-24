@@ -822,7 +822,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           return false;
         }
       })();
-      if ((!regSt.firstOfferShown || !regSt.selfClusterId) && !offeredThisSession) {
+      const selfActive = findSelfCluster(regSt);
+      if ((!regSt.firstOfferShown || !selfActive) && !offeredThisSession) {
         const pending = summarizePassportPending(regSt);
         const hasSelfToAsk = pending.needsSelfPick || pending.selfPendingCount > 0;
         if (hasSelfToAsk) {

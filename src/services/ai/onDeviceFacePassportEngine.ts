@@ -8,13 +8,16 @@
 import type { FaceMemberCluster, PhotoItem, YearlyFaceBestCut } from '../../types/saysee';
 import type { WorkerDetectedFace } from './facePassportWorker';
 
-const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v3';
+const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v4';
 const MAX_SCAN_PHOTOS = 160;
 const MAX_CLUSTERS = 10;
 const MAX_CUTS_PER_CLUSTER = 6;
 /** OpenCV SFace 공식 동일인 코사인 유사도 임계치(0.363) 기반 + 타인/이질 이미지 체이닝 방지(0.39) */
 const SIMILARITY_THRESHOLD = 0.39;
 const SCREENSHOT_NAME_RX = /(screenshot|스크린샷|캡처|capture|화면\s*캡처|영수증|receipt|memo|메모)/i;
+/** 코드 레포지토리·샘플 코퍼스·웹 번들 더미 사진이 실제 유저 PC 사진보다 앞서는 것을 원천 차단 */
+const REPO_OR_SYNTHETIC_SAMPLE_PATH_RX =
+  /(?:[\\/](?:ghosti|ghosti_test_corpus|sample_photos_301|test_photos|node_modules|public)[\\/]|^(?:IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025))/i;
 /** 실제 사람 피부톤 최소 비율 (카툰·초록/파란 캐릭터·인형·풍경 오탐 차단) */
 const MIN_HUMAN_SKIN_RATIO = 0.14;
 
@@ -443,19 +446,35 @@ export async function runOnDeviceFacePassportScan(
     return { clusters: res, latestCorpusYear: new Date().getFullYear() };
   }
 
-  // 비격리 + 비스크린샷 + 비영수증 + 비흐림 실사진 우선 선별 (카메라/일반 JPEG 사진을 스크린샷·PNG보다 우선 정렬)
-  const candidates = photos
-    .filter(
-      (p) =>
-        p &&
-        !p.quarantined &&
-        p.thumbUrl &&
-        p.trashCategory !== 'memo' &&
-        p.trashCategory !== 'receipt' &&
-        p.trashCategory !== 'document' &&
-        p.trashCategory !== 'blurry' &&
-        !p.isVaultDocument
-    )
+  // 비격리 + 비스크린샷 + 비영수증 + 비흐림 + 비샘플레포 실사진 우선 선별 (카메라/일반 JPEG 사진을 스크린샷·PNG보다 우선 정렬)
+  const realUserPhotos = photos.filter(
+    (p) =>
+      p &&
+      !p.quarantined &&
+      p.thumbUrl &&
+      p.trashCategory !== 'memo' &&
+      p.trashCategory !== 'receipt' &&
+      p.trashCategory !== 'document' &&
+      p.trashCategory !== 'blurry' &&
+      !p.isVaultDocument &&
+      !REPO_OR_SYNTHETIC_SAMPLE_PATH_RX.test(p.fullPath || '') &&
+      !REPO_OR_SYNTHETIC_SAMPLE_PATH_RX.test(p.name || '')
+  );
+  const basePool =
+    realUserPhotos.length > 0
+      ? realUserPhotos
+      : photos.filter(
+          (p) =>
+            p &&
+            !p.quarantined &&
+            p.thumbUrl &&
+            p.trashCategory !== 'memo' &&
+            p.trashCategory !== 'receipt' &&
+            p.trashCategory !== 'document' &&
+            p.trashCategory !== 'blurry' &&
+            !p.isVaultDocument
+        );
+  const candidates = basePool
     .sort((a, b) => {
       const aScreen = SCREENSHOT_NAME_RX.test(a.name) || /\.png$/i.test(a.name) ? 1 : 0;
       const bScreen = SCREENSHOT_NAME_RX.test(b.name) || /\.png$/i.test(b.name) ? 1 : 0;
