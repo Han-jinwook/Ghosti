@@ -829,10 +829,43 @@ export function buildAutoMultiConditionSeedClusters(rawClusters: FaceMemberClust
       avatarUrl: c.cropUrl || c.avatarUrl,
       cropUrl: c.cropUrl || c.avatarUrl,
       boundingBox: c.boundingBox,
-      conditionTag: '정면·선명'as const,
+      conditionTag: '정면·선명' as const,
       conditionShortKo: '① 정면',
       sourceDeviceKo: '귀신같이 여권 최신 기준컷',
     };
+
+    // 온디바이스 실제 검출 클러스터(ondevice_face_*)는 가짜 연도·중복 5슬롯 패딩 없이 실제 고유 사진 컷만 보존
+    if (String(c.clusterId || '').startsWith('ondevice_face_')) {
+      const seenPhotos = new Set<string>();
+      const realUniqueCuts = mergedYearlyRaw.filter((yc) => {
+        const key = String(yc.representativePhoto || '').trim();
+        if (!key || seenPhotos.has(key)) return false;
+        seenPhotos.add(key);
+        return true;
+      });
+      const activeCuts = realUniqueCuts.length > 0 ? realUniqueCuts : [slot1Anchor];
+      const activeSlot = activeCuts[0];
+      const autoDoorplateUrl =
+        activeSlot.cropUrl || activeSlot.avatarUrl || c.cropUrl || c.avatarUrl;
+      return {
+        ...c,
+        registeredName: userOverride?.registeredName ?? c.registeredName ?? '',
+        relationshipTag: userOverride?.relationshipTag ?? c.relationshipTag ?? '',
+        excludedAsPasserby:
+          userOverride?.excludedAsPasserby !== undefined
+            ? userOverride.excludedAsPasserby
+            : c.excludedAsPasserby,
+        passportEmail,
+        timelineBucket,
+        roomPersonas,
+        crossLoungeEvolutionNote,
+        yearlyBestCuts: activeCuts,
+        activeDoorplateSlotIndex: 0,
+        doorplateSlotLabelKo: activeSlot.conditionShortKo || '정면',
+        avatarUrl: autoDoorplateUrl,
+        cropUrl: autoDoorplateUrl,
+      };
+    }
 
     const secondCut = mergedYearlyRaw[1] || slot1Anchor;
     const thirdCut = mergedYearlyRaw[2] || secondCut;

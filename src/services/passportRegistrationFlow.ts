@@ -204,7 +204,9 @@ export function confirmedCutsFor(c: FaceMemberCluster, st: PassportRegState): Ye
 
 export function findSelfCluster(st = loadPassportRegState()): FaceMemberCluster | null {
   if (!st.selfClusterId) return null;
-  return liveClusters().find((c) => c.clusterId === st.selfClusterId) || null;
+  const found = liveClusters().find((c) => c.clusterId === st.selfClusterId) || null;
+  if (!found || (found.matchedPhotoCount || 0) < PASSPORT_MIN_FACE_PHOTOS_FOR_ASK) return null;
+  return found;
 }
 
 /** 가족으로 보이는 얼굴 묶음 (본인·뺀 얼굴 제외, 일정 사진 수 이상, 아직 물을 사진이 있는 경우) */

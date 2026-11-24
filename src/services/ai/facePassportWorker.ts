@@ -15,6 +15,8 @@ export interface WorkerDetectedFace {
   y1: number;
   x2: number;
   y2: number;
+  /** 5 facial landmarks in 0..1 normalized original image coordinates: [reX,reY, leX,leY, noseX,noseY, rmX,rmY, lmX,lmY] */
+  landmarks?: [number, number, number, number, number, number, number, number, number, number];
 }
 
 interface DetectRequest {
@@ -206,13 +208,37 @@ function decodeYuNetOutputs(
 
       const kOff = i * 10;
       const reX = (col + kps[kOff]) * stride;
+      const reY = (row + kps[kOff + 1]) * stride;
       const leX = (col + kps[kOff + 2]) * stride;
+      const leY = (row + kps[kOff + 3]) * stride;
       const noseX = (col + kps[kOff + 4]) * stride;
+      const noseY = (row + kps[kOff + 5]) * stride;
+      const rmX = (col + kps[kOff + 6]) * stride;
+      const rmY = (row + kps[kOff + 7]) * stride;
+      const lmX = (col + kps[kOff + 8]) * stride;
+      const lmY = (row + kps[kOff + 9]) * stride;
+
+      // 랜드마크 해부학적 기하 검증 (카툰·캐릭터·사물 오탐 차단)
+      const boxH = Math.max(8, h);
+      const boxW = Math.max(8, w);
       const eyeMid = (reX + leX) * 0.5;
-      const eyeSpan = Math.max(4, Math.abs(leX - reX));
-      const yawAsym = Math.min(1, Math.abs(noseX - eyeMid) / (eyeSpan * 0.75));
+      const eyeMidY = (reY + leY) * 0.5;
+      const mouthMidY = (rmY + lmY) * 0.5;
+      const eyeSpan = Math.abs(leX - reX);
+      const mouthSpan = Math.abs(lmX - rmX);
+      // 1) 오른쪽 눈(이미지상 좌측)은 왼쪽 눈(이미지상 우측)보다 좌측에 위치하고 적절한 간격을 유지해야 함
+      if (leX <= reX || eyeSpan < boxW * 0.16 || eyeSpan > boxW * 0.82) continue;
+      // 2) 눈 기울기(roll)가 과도하게 뒤틀린 비정상 오탐 배제
+      if (Math.abs(leY - reY) > eyeSpan * 0.65) continue;
+      // 3) 눈 → 코 → 입 수직 순서 및 최소 간격 검증
+      if (noseY <= eyeMidY + boxH * 0.04 || mouthMidY <= noseY + boxH * 0.04) continue;
+      if (mouthSpan < boxW * 0.1 || mouthSpan > boxW * 0.85) continue;
+
+      const yawAsym = Math.min(1, Math.abs(noseX - eyeMid) / (Math.max(4, eyeSpan) * 0.75));
       const frontalScore = Math.max(0.45, Math.min(0.99, +(score * (1 - yawAsym * 0.35)).toFixed(3)));
 
+      const invW = 1 / Math.max(1, origW * scale);
+      const invH = 1 / Math.max(1, origH * scale);
       rawFaces.push({
         score: +score.toFixed(3),
         frontalScore,
@@ -220,6 +246,18 @@ function decodeYuNetOutputs(
         y1: y1Px / Math.max(1, origH),
         x2: x2Px / Math.max(1, origW),
         y2: y2Px / Math.max(1, origH),
+        landmarks: [
+          Math.max(0, Math.min(1, reX * invW)),
+          Math.max(0, Math.min(1, reY * invH)),
+          Math.max(0, Math.min(1, leX * invW)),
+          Math.max(0, Math.min(1, leY * invH)),
+          Math.max(0, Math.min(1, noseX * invW)),
+          Math.max(0, Math.min(1, noseY * invH)),
+          Math.max(0, Math.min(1, rmX * invW)),
+          Math.max(0, Math.min(1, rmY * invH)),
+          Math.max(0, Math.min(1, lmX * invW)),
+          Math.max(0, Math.min(1, lmY * invH)),
+        ],
       });
     }
   }

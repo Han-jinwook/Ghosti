@@ -8,13 +8,15 @@
 import type { FaceMemberCluster, PhotoItem, YearlyFaceBestCut } from '../../types/saysee';
 import type { WorkerDetectedFace } from './facePassportWorker';
 
-const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v2';
+const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v3';
 const MAX_SCAN_PHOTOS = 160;
 const MAX_CLUSTERS = 10;
 const MAX_CUTS_PER_CLUSTER = 6;
-/** OpenCV SFace 공식 동일인 코사인 유사도 임계치(0.363) 기반 */
-const SIMILARITY_THRESHOLD = 0.365;
+/** OpenCV SFace 공식 동일인 코사인 유사도 임계치(0.363) 기반 + 타인/이질 이미지 체이닝 방지(0.39) */
+const SIMILARITY_THRESHOLD = 0.39;
 const SCREENSHOT_NAME_RX = /(screenshot|스크린샷|캡처|capture|화면\s*캡처|영수증|receipt|memo|메모)/i;
+/** 실제 사람 피부톤 최소 비율 (카툰·초록/파란 캐릭터·인형·풍경 오탐 차단) */
+const MIN_HUMAN_SKIN_RATIO = 0.14;
 
 interface CachedFaceStore {
   fingerprint: string;
@@ -172,7 +174,7 @@ function prepareFaceCropAndBgr112(
   cropCtx: CanvasRenderingContext2D,
   sfaceCanvas: HTMLCanvasElement,
   sfaceCtx: CanvasRenderingContext2D
-): { avatarDataUrl: string; faceBgr112: Float32Array; sharpness: number } {
+): { avatarDataUrl: string; faceBgr112: Float32Array; sharpness: number; isRealHumanFace: boolean } {
   const ow = img.naturalWidth;
   const oh = img.naturalHeight;
   const fx1 = face.x1 * ow;
@@ -211,19 +213,61 @@ function prepareFaceCropAndBgr112(
   const plane = 112 * 112;
   const faceBgr112 = new Float32Array(3 * plane);
   let gradSum = 0;
+  let coreTotal = 0;
+  let skinPixels = 0;
+  let nonHumanColorPixels = 0;
+
   for (let i = 0, p = 0; i < plane; i++, p += 4) {
-    faceBgr112[i] = rgba[p + 2]; // B
-    faceBgr112[plane + i] = rgba[p + 1]; // G
-    faceBgr112[2 * plane + i] = rgba[p]; // R
+    const r = rgba[p];
+    const g = rgba[p + 1];
+    const b = rgba[p + 2];
+    faceBgr112[i] = b; // B
+    faceBgr112[plane + i] = g; // G
+    faceBgr112[2 * plane + i] = r; // R
     if (i > 112 && (i & 3) === 0) {
-      const gCur = rgba[p + 1];
+      const gCur = g;
       const gLeft = rgba[p - 3];
       const gUp = rgba[p - 112 * 4 + 1];
       gradSum += Math.abs(gCur - gLeft) + Math.abs(gCur - gUp);
     }
+
+    // 얼굴 중심 영역(볼·코·입 주변 60% 코어) 피부색 vs 초록/파랑/원색 캐릭터 검증
+    const row = Math.floor(i / 112);
+    const col = i - row * 112;
+    if (row >= 22 && row <= 92 && col >= 22 && col <= 90) {
+      coreTotal++;
+      // YCbCr 변환 (ITU-R BT.601)
+      const cb = 128 - 0.168736 * r - 0.331264 * g + 0.5 * b;
+      const cr = 128 + 0.5 * r - 0.418688 * g - 0.081312 * b;
+      // 자연 조명·실내외·선글라스·역광을 포괄하는 실제 사람 피부색 범위 (R >= G >= B 계열 + Cr > Cb)
+      const isNaturalSkin =
+        r > 55 &&
+        g > 32 &&
+        b > 15 &&
+        r >= g - 6 &&
+        r > b + 8 &&
+        cr >= 131 &&
+        cr <= 178 &&
+        cb >= 74 &&
+        cb <= 132;
+      if (isNaturalSkin) {
+        skinPixels++;
+      } else if (
+        // 초록/연두/파랑/보라/원색 노랑 등 사람 얼굴 중심부에 나타날 수 없는 캐릭터·사물 색상
+        (g > r + 12 && g > b + 15) ||
+        (b > r + 18 && b > g + 10) ||
+        (r > 150 && g > 155 && b < 75 && cr < 134)
+      ) {
+        nonHumanColorPixels++;
+      }
+    }
   }
+
+  const skinRatio = coreTotal > 0 ? skinPixels / coreTotal : 0;
+  const nonHumanRatio = coreTotal > 0 ? nonHumanColorPixels / coreTotal : 0;
+  const isRealHumanFace = skinRatio >= MIN_HUMAN_SKIN_RATIO && nonHumanRatio < 0.28 && skinRatio > nonHumanRatio;
   const sharpness = Math.min(99, Math.max(55, Math.round(55 + (gradSum / 35000) * 44)));
-  return { avatarDataUrl, faceBgr112, sharpness };
+  return { avatarDataUrl, faceBgr112, sharpness, isRealHumanFace };
 }
 
 function dot(a: Float32Array, b: Float32Array): number {
@@ -248,7 +292,9 @@ function clusterExtractedFaces(
     let bestSim = SIMILARITY_THRESHOLD;
     for (let i = 0; i < working.length; i++) {
       const sim = dot(s.embedding, working[i].centroid);
-      if (sim > bestSim) {
+      // 클러스터 대표(첫 번째) 샘플과의 최소 유사도도 함께 검증해 점진적 평균 이동(drift)에 의한 엉뚱한 인물 합류 차단
+      const seedSim = dot(s.embedding, working[i].members[0].embedding);
+      if (sim > bestSim && seedSim >= SIMILARITY_THRESHOLD - 0.03) {
         bestSim = sim;
         bestIdx = i;
       }
@@ -514,7 +560,7 @@ export async function runOnDeviceFacePassportScan(
 
         const { year, dateStr } = parsePhotoYearAndDate(photo);
         for (const f of faces) {
-          const { avatarDataUrl, faceBgr112, sharpness } = prepareFaceCropAndBgr112(
+          const { avatarDataUrl, faceBgr112, sharpness, isRealHumanFace } = prepareFaceCropAndBgr112(
             img,
             f,
             cropCanvas,
@@ -522,6 +568,7 @@ export async function runOnDeviceFacePassportScan(
             featCanvas,
             featCtx
           );
+          if (!isRealHumanFace) continue;
           const embedding = await embedInWorker(faceBgr112);
           if (!embedding) continue;
           extracted.push({
