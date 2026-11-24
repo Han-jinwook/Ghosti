@@ -1999,13 +1999,15 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   {card.executionReportKo || '선택한 항목의 정리가 완료되었습니다.'}
                 </div>
                 <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => void submitExternalMonsterChatQuery('휴지통 비워줘', message.sourceTab || 'trash')}
-                    className="px-2.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold cursor-pointer"
-                  >
-                    🗑️ 휴지통 비워서 C: 용량 확정하기
-                  </button>
+                  {card.action !== 'hidden_rats_apply' && (
+                    <button
+                      type="button"
+                      onClick={() => void submitExternalMonsterChatQuery('휴지통 비워줘', message.sourceTab || 'trash')}
+                      className="px-2.5 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold cursor-pointer"
+                    >
+                      🗑️ 휴지통 비워서 C: 용량 확정하기
+                    </button>
+                  )}
                   <button
                     type="button"
                     onClick={() => void submitExternalMonsterChatQuery('최근 [복원 기록] 보여줘', message.sourceTab || 'trash')}
@@ -2059,6 +2061,8 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                       ? '⚡ 고성능 전원 즉시 전환'
                       : card.action === 'desktop_system_icon_toggle'
                       ? '✨ 시스템 아이콘 안전 숨김'
+                      : card.action === 'hidden_rats_apply'
+                      ? `✅ ${selectedCount}건 안전 차단·수동전환 실행 (1초 원복 보장)`
                       : `✅ ${selectedCount}건 일괄 실행${selectedTotalMb > 0 ? ` (${selectedTotalMb >= 1024 ? `${(selectedTotalMb / 1024).toFixed(1)}GB` : `${selectedTotalMb}MB`})` : ''} (휴지통 안전 보관)`}
                   </button>
                 </div>

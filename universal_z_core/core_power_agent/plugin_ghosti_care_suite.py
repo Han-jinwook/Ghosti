@@ -714,8 +714,91 @@ def _perform_direct_sc_operations(
     return [r for r in results if r]
 
 
+def execute_elevated_agent_care_queue(
+    mode: str,
+    extra_payload: Dict[str, Any],
+    allow_uac_prompt: bool = True,
+) -> Dict[str, Any]:
+    """
+    [Zero-Trust 최고권한 헬퍼 에이전트 큐 브릿지]
+    - 허용 모드: 'batch_uninstall'({entries:[{hive,subkey}]}), 'eradicate_pups'({pupIds:[...]}), 'powercfg'({powerAction:'hiber_off'|'power_high'})
+    - 웹/LLM이 보낸 임의 커맨드 문자열은 절대 받지 않고 오직 검증된 식별자만 전달합니다.
+    """
+    _ensure_care_dir()
+    if sys.platform != "win32":
+        return {"ok": False, "error": "WINDOWS_ONLY"}
+    if mode not in ("batch_uninstall", "eradicate_pups", "powercfg", "hidden_rats_apply"):
+        return {"ok": False, "error": "INVALID_AGENT_MODE"}
+
+    req_id = f"agent_{mode}_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}"
+    queue_payload = {
+        "requestId": req_id,
+        "mode": mode,
+        **extra_payload,
+        "requestedAt": datetime.datetime.now().isoformat(),
+        "completed": False,
+    }
+    try:
+        ELEVATED_ACTION_QUEUE_FILE.write_text(
+            json.dumps(queue_payload, ensure_ascii=False, indent=2),
+            encoding="utf-8",
+        )
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
+
+    max_polls = 240 if mode == "batch_uninstall" else 90
+    if is_security_care_helper_task_registered():
+        try:
+            subprocess.run(
+                ["schtasks", "/run", "/tn", SECURITY_CARE_HELPER_TASK_NAME],
+                capture_output=True,
+                timeout=3.0,
+                creationflags=CREATE_NO_WINDOW,
+            )
+            for _ in range(max_polls):
+                time.sleep(0.25)
+                if ELEVATED_ACTION_QUEUE_FILE.exists():
+                    data = json.loads(ELEVATED_ACTION_QUEUE_FILE.read_text(encoding="utf-8"))
+                    if data.get("requestId") == req_id and data.get("completed"):
+                        return {**data, "ok": bool(data.get("ok", True)), "elevationMethod": "SCHTASKS_HIGHEST_ZERO_UAC"}
+        except Exception:
+            pass
+        return {"ok": False, "error": "SCHTASKS_TIMEOUT"}
+
+    if not allow_uac_prompt:
+        return {"ok": False, "error": "HELPER_NOT_REGISTERED"}
+
+    _, exe_str, params = _build_care_cli_command("--install-and-run-helper", with_arg_placeholder=False)
+    try:
+        ret_box: List[int] = [0]
+
+        def _invoke_runas() -> None:
+            try:
+                ret_box[0] = int(
+                    ctypes.windll.shell32.ShellExecuteW(
+                        None, "runas", exe_str, params, str(Path(exe_str).parent), 0
+                    )
+                )
+            except Exception:
+                ret_box[0] = 0
+
+        t_uac = threading.Thread(target=_invoke_runas, daemon=True)
+        t_uac.start()
+        t_uac.join(timeout=4.0)
+        if not t_uac.is_alive() and ret_box[0] > 32:
+            for _ in range(max_polls):
+                time.sleep(0.25)
+                if ELEVATED_ACTION_QUEUE_FILE.exists():
+                    data = json.loads(ELEVATED_ACTION_QUEUE_FILE.read_text(encoding="utf-8"))
+                    if data.get("requestId") == req_id and data.get("completed"):
+                        return {**data, "ok": bool(data.get("ok", True)), "elevationMethod": "RUNAS_ONCE_REGISTERED"}
+    except Exception:
+        pass
+    return {"ok": False, "error": "UAC_DECLINED_OR_TIMEOUT"}
+
+
 def _process_elevated_helper_queue(install_task_too: bool = False) -> None:
-    """승격된 헬퍼 프로세스에서 호출되어 작업 스케줄러 등록 및 화이트리스트 검증된 서비스 제어를 수행합니다."""
+    """승격된 헬퍼 프로세스에서 호출되어 작업 스케줄러 등록 및 화이트리스트/Zero-Trust 검증된 작업을 수행합니다."""
     _ensure_care_dir()
     if install_task_too:
         _register_security_care_helper_task_as_admin()
@@ -727,18 +810,63 @@ def _process_elevated_helper_queue(install_task_too: bool = False) -> None:
         if data.get("completed"):
             return
         mode = str(data.get("mode") or "sleep").strip().lower()
-        if mode not in ("sleep", "wake", "restore"):
-            data["completed"] = True
-            data["processedServices"] = []
-            data["rejectedReason"] = "INVALID_MODE"
-        else:
+        if mode in ("sleep", "wake", "restore"):
             raw_names = [str(x) for x in (data.get("serviceNames") or []) if x]
             safe_names = _filter_strictly_whitelisted_services(raw_names)
             raw_st_map = data.get("startTypesMap")
             st_map = {str(k): str(v) for k, v in raw_st_map.items()} if isinstance(raw_st_map, dict) else {}
             processed = _perform_direct_sc_operations(mode, safe_names, start_types_map=st_map) if safe_names else []
             data["completed"] = True
+            data["ok"] = True
             data["processedServices"] = processed
+        elif mode == "batch_uninstall":
+            from plugins import plugin_ghosti_agent_care as _ag_care
+            entries = [e for e in (data.get("entries") or []) if isinstance(e, dict)]
+            res_u = _ag_care.execute_elevated_registry_uninstall_verified(entries)
+            data["completed"] = True
+            data["ok"] = bool(res_u.get("ok"))
+            data["uninstallResults"] = res_u.get("results", [])
+        elif mode == "eradicate_pups":
+            from plugins import plugin_ghosti_agent_care as _ag_care
+            pup_ids = [str(x) for x in (data.get("pupIds") or []) if x in _ag_care.KNOWN_PUP_CATALOG]
+            pup_res = [_ag_care.eradicate_known_pup_by_id(pid) for pid in pup_ids]
+            data["completed"] = True
+            data["ok"] = True
+            data["pupResults"] = pup_res
+        elif mode == "hidden_rats_apply":
+            from plugins import plugin_ghosti_agent_care as _ag_care
+            d_tasks = [str(x) for x in (data.get("disableTasks") or []) if x]
+            m_svcs = [str(x) for x in (data.get("manualServices") or []) if x]
+            res_hr = _ag_care.execute_elevated_hidden_rats_verified(d_tasks, m_svcs)
+            data["completed"] = True
+            data["ok"] = bool(res_hr.get("ok"))
+            data["disabledTasks"] = res_hr.get("disabledTasks", [])
+            data["manualServices"] = res_hr.get("manualServices", [])
+        elif mode == "powercfg":
+            from plugins import plugin_ghosti_agent_care as _ag_care
+            pact = str(data.get("powerAction") or "")
+            desk = _ag_care.is_pure_desktop_pc()
+            if not desk.get("isDesktop"):
+                data["completed"] = True
+                data["ok"] = False
+                data["rejectedReason"] = "LAPTOP_BATTERY_GUARD_BLOCKED"
+            elif pact == "hiber_off":
+                r = subprocess.run(["powercfg", "-h", "off"], capture_output=True, timeout=6.0, creationflags=CREATE_NO_WINDOW)
+                data["completed"] = True
+                data["ok"] = r.returncode == 0
+            elif pact == "power_high":
+                r = subprocess.run(["powercfg", "/setactive", "8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c"], capture_output=True, timeout=6.0, creationflags=CREATE_NO_WINDOW)
+                data["completed"] = True
+                data["ok"] = r.returncode == 0
+            else:
+                data["completed"] = True
+                data["ok"] = False
+                data["rejectedReason"] = "INVALID_POWERCFG_ACTION"
+        else:
+            data["completed"] = True
+            data["ok"] = False
+            data["processedServices"] = []
+            data["rejectedReason"] = "INVALID_MODE"
         data["completedAt"] = datetime.datetime.now().isoformat()
         ELEVATED_ACTION_QUEUE_FILE.write_text(
             json.dumps(data, ensure_ascii=False, indent=2),
@@ -4602,6 +4730,16 @@ READONLY_CARE_ACTIONS = {
     "defender/history",
     "explorer-selected",
     "explorer_selected",
+    "disk-hog-scan",
+    "disk_hog_scan",
+    "security-2tier-scan",
+    "security_2tier_scan",
+    "desktop-detail-scan",
+    "desktop_detail_scan",
+    "desktop-system-icons",
+    "desktop_system_icons",
+    "hidden-rats-scan",
+    "hidden_rats_scan",
 }
 
 
@@ -4719,6 +4857,13 @@ def handle_care_suite_request(action: str, payload: Optional[Dict[str, Any]] = N
                 filter_query=str(data.get("query") or data.get("filter") or ""),
                 limit=int(data.get("limit") or 80),
             )
+        try:
+            from plugins import plugin_ghosti_agent_care as _ag_care
+            delegated_agent = _ag_care.handle_agent_care_action(act, data)
+            if delegated_agent is not None:
+                return delegated_agent
+        except Exception as exc_ag:
+            return {"ok": False, "error": f"AGENT_CARE_ERROR: {exc_ag}"}
         return {"ok": False, "error": f"UNKNOWN_CARE_SUITE_ACTION: {action}"}
     except Exception as exc:
         return {
@@ -4746,6 +4891,12 @@ def start_care_suite_background_watchers() -> None:
     def _watcher_loop() -> None:
         try:
             register_explorer_context_menu()
+        except Exception:
+            pass
+        try:
+            from plugins import plugin_ghosti_agent_care as _ag_care
+            _ag_care.sweep_disabled_pup_remnants_to_recycle()
+            _ag_care.cleanup_legacy_duplicate_merlin_daemons()
         except Exception:
             pass
 

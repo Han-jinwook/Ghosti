@@ -727,7 +727,7 @@ def execute_elevated_agent_care_queue(
     _ensure_care_dir()
     if sys.platform != "win32":
         return {"ok": False, "error": "WINDOWS_ONLY"}
-    if mode not in ("batch_uninstall", "eradicate_pups", "powercfg"):
+    if mode not in ("batch_uninstall", "eradicate_pups", "powercfg", "hidden_rats_apply"):
         return {"ok": False, "error": "INVALID_AGENT_MODE"}
 
     req_id = f"agent_{mode}_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}"
@@ -833,6 +833,15 @@ def _process_elevated_helper_queue(install_task_too: bool = False) -> None:
             data["completed"] = True
             data["ok"] = True
             data["pupResults"] = pup_res
+        elif mode == "hidden_rats_apply":
+            from plugins import plugin_ghosti_agent_care as _ag_care
+            d_tasks = [str(x) for x in (data.get("disableTasks") or []) if x]
+            m_svcs = [str(x) for x in (data.get("manualServices") or []) if x]
+            res_hr = _ag_care.execute_elevated_hidden_rats_verified(d_tasks, m_svcs)
+            data["completed"] = True
+            data["ok"] = bool(res_hr.get("ok"))
+            data["disabledTasks"] = res_hr.get("disabledTasks", [])
+            data["manualServices"] = res_hr.get("manualServices", [])
         elif mode == "powercfg":
             from plugins import plugin_ghosti_agent_care as _ag_care
             pact = str(data.get("powerAction") or "")
@@ -4729,6 +4738,8 @@ READONLY_CARE_ACTIONS = {
     "desktop_detail_scan",
     "desktop-system-icons",
     "desktop_system_icons",
+    "hidden-rats-scan",
+    "hidden_rats_scan",
 }
 
 

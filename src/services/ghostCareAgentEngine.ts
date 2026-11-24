@@ -14,7 +14,8 @@ export type AgentCareReadTool =
   | 'disk_hog_scan'
   | 'security_2tier_scan'
   | 'desktop_detail_scan'
-  | 'installed_apps_list';
+  | 'installed_apps_list'
+  | 'hidden_rats_scan';
 
 export type AgentCareMutatingAction =
   | 'disk_hog_clean'
@@ -22,7 +23,8 @@ export type AgentCareMutatingAction =
   | 'desktop_batch_action'
   | 'security_2tier_apply'
   | 'desktop_system_icon_toggle'
-  | 'desktop_power_boost';
+  | 'desktop_power_boost'
+  | 'hidden_rats_apply';
 
 export interface AgentCareScanItem {
   no: number;
@@ -38,6 +40,11 @@ export interface AgentCareScanItem {
   safetyBadgeLabel?: string;
   path?: string;
   actionType?: string;
+  ratKind?: 'SCHEDULED_TASK' | 'WINDOWS_SERVICE' | 'STARTUP_ITEM' | 'HIGH_MEM_PROCESS';
+  targetKey?: string;
+  executePath?: string;
+  arguments?: string;
+  publisher?: string;
   movableToOtherDrive?: boolean;
   defaultSelected?: boolean;
   isProtected?: boolean;
@@ -45,7 +52,7 @@ export interface AgentCareScanItem {
 
 export interface AgentCareScanContext {
   updatedAt: number;
-  scanKind: 'DISK_HOG' | 'SECURITY_2TIER' | 'DESKTOP_DETAIL' | 'INSTALLED_APPS' | 'MULTI';
+  scanKind: 'DISK_HOG' | 'SECURITY_2TIER' | 'DESKTOP_DETAIL' | 'INSTALLED_APPS' | 'HIDDEN_RATS' | 'MULTI';
   cDriveFreeGb?: number;
   cDriveTotalGb?: number;
   cDriveUsedPct?: number;
@@ -331,6 +338,94 @@ export function serializeCompactScanContext(ctx: AgentCareScanContext | null): s
 }
 
 /**
+ * 🧠 [2차 고도화 도구 2: 카탈로그에 없는 처음 보는 미등록 쥐새끼를 제미니가 서명사·경로·인자 보고 초보자 언어로 3단 자동 해석]
+ */
+async function enrichUnknownRatsWithGemini(unknownItems: AgentCareScanItem[]): Promise<void> {
+  if (!unknownItems.length) return;
+  const payload = unknownItems.slice(0, 25).map((it) => ({
+    id: it.id,
+    name: it.name,
+    kind: it.ratKind || it.cat,
+    exe: (it.executePath || '').slice(0, 90),
+    args: (it.arguments || '').slice(0, 80),
+    pub: (it.publisher || '').slice(0, 40),
+  }));
+  const prompt = [
+    '당신은 Windows PC 내부에 숨어 돌아가는 처음 보는 백그라운드 스케줄러·서비스·시작프로그램의 정체를 초보자 눈높이로 1줄 해석해 주는 보안 비서입니다.',
+    '아래 목록 각각의 실행경로·인자·서명사를 보고 3단계 중 하나로 분류하고 쉬운 한글 1줄 설명을 JSON 배열로 반환하세요.',
+    '- tier: "DANGER_DELETE"(광고·위험·쿠키잠금해제·미서명 쥐새끼 ➔ 차단 권장) | "SLEEP_RECOMMEND"(즐겨쓰는 웹하드·유틸리티 상주 서비스 ➔ 앱 삭제 말고 수동전환/자동실행 해제 권장) | "USER_CHECK"(정상/업무용 확인 필요)',
+    '- badge: "🔴 차단·제거 권장" | "🟡 수동전환·자동실행 해제" | "🔎 확인 후 선택"',
+    '- explainKo: 개발용어 없이 초보자가 1초 만에 이해하는 1문장 (예: "예스파일 웹하드 서비스인데 앱을 꺼도 뒤에서 계속 돌고 있어요. 앱을 지우지 않고 켤 때만 돌게 수동으로 바꿀 수 있어요!")',
+    '',
+    JSON.stringify(payload),
+    '',
+    '반드시 순수 JSON 배열만 출력하세요: [{"id":"...","tier":"...","badge":"...","explainKo":"..."}]',
+  ].join('\n');
+
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), 5000);
+  try {
+    const res = await fetch('https://os.sundreamer.app/api/ai/gemini', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-client-id': 'ghosti',
+        'x-ai-account': 'beakes',
+      },
+      body: JSON.stringify({
+        appId: 'ghosti',
+        account: 'beakes',
+        model: 'gemini-2.5-flash',
+        messages: [{ role: 'user', content: prompt }],
+        config: {
+          temperature: 0.15,
+          maxOutputTokens: 900,
+          thinkingConfig: { thinkingBudget: 0 },
+        },
+      }),
+      signal: controller.signal,
+    });
+    if (!res.ok) return;
+    const data = await res.json();
+    const raw = String(data?.text || '')
+      .replace(/^```json\s*/i, '')
+      .replace(/^```\s*/i, '')
+      .replace(/\s*```$/i, '')
+      .trim();
+    const sIdx = raw.indexOf('[');
+    const eIdx = raw.lastIndexOf(']');
+    if (sIdx < 0 || eIdx <= sIdx) return;
+    const arr = JSON.parse(raw.slice(sIdx, eIdx + 1));
+    if (!Array.isArray(arr)) return;
+    const map = new Map<string, any>();
+    for (const row of arr) {
+      if (row && typeof row.id === 'string') map.set(row.id, row);
+    }
+    for (const it of unknownItems) {
+      const hit = map.get(it.id);
+      if (hit) {
+        if (hit.tier === 'DANGER_DELETE' || hit.tier === 'SAFE_DELETE' || hit.tier === 'SLEEP_RECOMMEND' || hit.tier === 'USER_CHECK') {
+          it.safetyBadge = hit.tier;
+        }
+        if (typeof hit.badge === 'string' && hit.badge.trim()) {
+          it.safetyBadgeLabel = hit.badge.trim();
+        }
+        if (typeof hit.explainKo === 'string' && hit.explainKo.trim()) {
+          it.plainExplainKo = hit.explainKo.trim();
+        }
+        if (hit.tier === 'DANGER_DELETE' || hit.tier === 'SAFE_DELETE') {
+          it.defaultSelected = true;
+        }
+      }
+    }
+  } catch {
+    /* keep fallback */
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+/**
  * [Read-Only 도구 병렬 실행기] 승인 게이트 없이 1턴에 복수 조회 도구를 병렬 실행하고
  * lastCareScanContext를 최신화합니다.
  */
@@ -342,11 +437,12 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
   followUpSuggestions: string[];
 }> {
   const uniqueTools = Array.from(new Set(tools));
-  const [diskRes, secRes, deskRes, appsRes] = await Promise.all([
+  const [diskRes, secRes, deskRes, appsRes, ratsRes] = await Promise.all([
     uniqueTools.includes('disk_hog_scan') ? callCareApi<any>('/api/care/disk-hog-scan') : Promise.resolve(null),
     uniqueTools.includes('security_2tier_scan') ? callCareApi<any>('/api/care/security-2tier-scan') : Promise.resolve(null),
     uniqueTools.includes('desktop_detail_scan') ? callCareApi<any>('/api/care/desktop-detail-scan') : Promise.resolve(null),
     uniqueTools.includes('installed_apps_list') ? callCareApi<any>('/api/care/installed-apps-list?limit=80') : Promise.resolve(null),
+    uniqueTools.includes('hidden_rats_scan') ? callCareApi<any>('/api/care/hidden-rats-scan') : Promise.resolve(null),
   ]);
 
   const items: AgentCareScanItem[] = [];
@@ -514,12 +610,52 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
     }
   }
 
-  // 🌟 모든 스캔 항목에 초보자 친절 1줄 설명 & 안전도 배지 자동 부착 (고클린과 차원이 다른 쉬운 가이드)
+  // 5) [2차 고도화] 미등록 신종 쥐새끼(비-MS 스케줄러·비-Windows 서비스·자동실행·고메모리) 전수 수색 결과 반영
+  const unknownRatsToEnrich: AgentCareScanItem[] = [];
+  if (ratsRes?.ok && ratsRes.data) {
+    const rt = ratsRes.data;
+    summaryLines.push(
+      `🕵️ 숨은 백그라운드 전수 수색: 비-MS 스케줄러 ${rt.taskCount ?? 0}건 · 비-Windows 상주 서비스 ${rt.serviceCount ?? 0}건 · 부팅 자동실행 ${rt.startupCount ?? 0}건`
+    );
+    for (const ri of (rt.items || []).slice(0, 45)) {
+      const scanIt: AgentCareScanItem = {
+        no: idx++,
+        id: String(ri.id),
+        name: String(ri.name),
+        cat: String(ri.cat || 'RAT_TASK'),
+        sizeMb: Number(ri.sizeMb || 0),
+        detailKo: `${ri.publisher || '서명 미확인'} · ${ri.arguments || ri.executePath || ''}`,
+        actionType: String(ri.recommendedAction || 'DISABLE_TASK'),
+        ratKind: ri.ratKind,
+        targetKey: String(ri.targetKey || ''),
+        executePath: String(ri.executePath || ''),
+        arguments: String(ri.arguments || ''),
+        publisher: String(ri.publisher || ''),
+        defaultSelected: Boolean(ri.defaultSelected),
+        isProtected: Boolean(ri.isProtected),
+      };
+      items.push(scanIt);
+    }
+    if (uniqueTools.length === 1) {
+      scanKind = 'HIDDEN_RATS';
+      primaryAction = 'hidden_rats_apply';
+      primaryTitle = `숨은 백그라운드·신종 쥐새끼 전수 수색 (${rt.count ?? 0}건)`;
+      primaryBadge = '미등록 스케줄러·서비스 수동전환';
+    }
+  }
+
+  // 🌟 모든 스캔 항목에 초보자 친절 1줄 설명 & 안전도 배지 자동 부착 + 카탈로그에 없는 미등록 쥐새끼는 제미니로 즉시 정체 해석!
   for (const it of items) {
     const exp = explainCareItemForBeginner(it);
     it.safetyBadge = exp.safetyBadge;
     it.safetyBadgeLabel = exp.safetyBadgeLabel;
     it.plainExplainKo = exp.plainExplainKo;
+    if (it.ratKind && exp.plainExplainKo.includes('오른쪽 [이게 뭐예요?]')) {
+      unknownRatsToEnrich.push(it);
+    }
+  }
+  if (unknownRatsToEnrich.length > 0) {
+    await enrichUnknownRatsWithGemini(unknownRatsToEnrich);
   }
 
   const ctx: AgentCareScanContext = {
@@ -571,6 +707,10 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
   } else if (scanKind === 'SECURITY_2TIER') {
     followUps.push('빨간색 애드웨어·그리드만 다 지우고, 은행 보안모듈은 잠재워줘');
     followUps.push('C드라이브 대용량 공간 도둑도 스캔해줘');
+  } else if (scanKind === 'HIDDEN_RATS') {
+    followUps.push('빨간색(차단 권장) 항목만 다 끄고, 서비스는 수동으로 바꿔줘');
+    followUps.push('이 중에서 뭐가 제일 느리게 만드는 놈이야?');
+    followUps.push('C드라이브 대용량 공간 도둑도 같이 찾아줘');
   } else if (scanKind === 'DESKTOP_DETAIL') {
     if (visibleSysIcons.length > 0) {
       followUps.push('바탕화면 이상한 사용자 폴더 아이콘만 안전하게 숨겨줘');
@@ -614,8 +754,8 @@ export async function planCareAgentTurnWithGemini(params: {
     '',
     '[절대 경계 헌법 (ALLOW / DENY)]:',
     '✅ ALLOW (허용 도구):',
-    '  - 조회(readTools): "disk_hog_scan"(C드라이브 대용량·캐시·hiberfil 스캔), "security_2tier_scan"(보안모듈 수면 vs 악성애드웨어·그리드 2분류), "desktop_detail_scan"(바탕화면 폴더 구성·특수아이콘 진단), "installed_apps_list"(설치 앱 전체 목록)',
-    '  - 변경(mutatingPlan.action): "disk_hog_clean"(캐시·hiberfil 정리/D: 이사), "batch_deep_uninstall"(다중 앱·애드웨어 취사선택 일괄 제거), "desktop_batch_action"(바탕화면 선택 항목 휴지통/D: 이사/아이콘 숨김), "security_2tier_apply"(실사용 보안모듈 수면 + 애드웨어 삭제), "desktop_system_icon_toggle"(WD 사용자폴더 등 특수아이콘 숨김), "desktop_power_boost"(데스크톱 고성능 전원 전환)',
+    '  - 조회(readTools): "disk_hog_scan"(C드라이브 대용량·캐시·hiberfil 스캔), "security_2tier_scan"(보안모듈 수면 vs 악성애드웨어·그리드 2분류), "hidden_rats_scan"(미등록 신종 쥐새끼·비-MS 스케줄러·비-Windows 서비스·자동실행·고메모리 전수 수색), "desktop_detail_scan"(바탕화면 폴더 구성·특수아이콘 진단), "installed_apps_list"(설치 앱 전체 목록)',
+    '  - 변경(mutatingPlan.action): "disk_hog_clean"(캐시·hiberfil 정리/D: 이사), "batch_deep_uninstall"(다중 앱·애드웨어 취사선택 일괄 제거), "hidden_rats_apply"(숨은 스케줄러 차단·서비스 수동전환·부팅 자동실행 해제 — 앱 삭제 없이 1초 원복), "desktop_batch_action"(바탕화면 선택 항목 휴지통/D: 이사/아이콘 숨김), "security_2tier_apply"(실사용 보안모듈 수면 + 애드웨어 삭제), "desktop_system_icon_toggle"(WD 사용자폴더 등 특수아이콘 숨김), "desktop_power_boost"(데스크톱 고성능 전원 전환)',
     '🚫 DENY (절대 금지): 임의 Shell/PowerShell 생성 금지, 시스템 폴더 삭제 금지, 영구 삭제 금지(모든 파일·폴더는 Windows 휴지통으로만 이동), 하드웨어 드라이버(NVIDIA/AMD/Intel/Realtek) 삭제 금지.',
     '',
     '[멀티턴 취사선택·제외 필터 파싱 규칙]:',
@@ -634,7 +774,7 @@ export async function planCareAgentTurnWithGemini(params: {
     '  "replyKo": "따뜻하고 똑부러지는 귀신비서 해요체 1~2문장 안내 (제외된 항목과 정리할 항목을 명확히 짚어줄 것)",',
     '  "readTools": [],',
     '  "mutatingPlan": null | {',
-    '    "action": "disk_hog_clean" | "batch_deep_uninstall" | "desktop_batch_action" | "security_2tier_apply" | "desktop_system_icon_toggle" | "desktop_power_boost",',
+    '    "action": "disk_hog_clean" | "batch_deep_uninstall" | "hidden_rats_apply" | "desktop_batch_action" | "security_2tier_apply" | "desktop_system_icon_toggle" | "desktop_power_boost",',
     '    "includeIds": ["스캔원장의 id 또는 앱/폴더명"],',
     '    "excludeIds": ["제외할 id 또는 #번호"],',
     '    "excludeKeywords": ["유저가 놔두라고 한 앱/폴더 이름 키워드"],',
@@ -716,6 +856,54 @@ export async function executeAgentCareBatchCard(
     .filter((it) => !selectedSet.has(it.id) && !it.isProtected)
     .map((it) => it.name);
   const allExcluded = Array.from(new Set([...(card.excludedNames || []), ...unselectedNames]));
+
+  if (card.action === 'hidden_rats_apply' || selectedItems.some((i) => Boolean(i.ratKind))) {
+    const ratItems = selectedItems.filter((i) => Boolean(i.ratKind));
+    const nonRatItems = selectedItems.filter((i) => !i.ratKind);
+    const reportBlocks: string[] = [];
+    let anyOk = false;
+
+    if (ratItems.length > 0) {
+      const disableTasks = ratItems.filter((i) => i.ratKind === 'SCHEDULED_TASK' && i.targetKey).map((i) => i.targetKey!);
+      const manualServices = ratItems.filter((i) => i.ratKind === 'WINDOWS_SERVICE' && i.targetKey).map((i) => i.targetKey!);
+      const disableStartups = ratItems.filter((i) => i.ratKind === 'STARTUP_ITEM' && i.targetKey).map((i) => i.targetKey!);
+      const stopProcesses = ratItems.filter((i) => i.ratKind === 'HIGH_MEM_PROCESS' && i.targetKey).map((i) => i.targetKey!);
+      const rRat = await callCareApi<any>(
+        '/api/care/hidden-rats-apply',
+        {
+          disableTasks,
+          manualServices,
+          disableStartups,
+          stopProcesses,
+          userApprovalTypedText: userApprovalText,
+        },
+        45000
+      );
+      if (rRat.ok) anyOk = true;
+      if (rRat.data?.reportKo) reportBlocks.push(String(rRat.data.reportKo));
+    }
+
+    if (nonRatItems.length > 0) {
+      const subRes = await executeAgentCareBatchCard(
+        {
+          ...card,
+          action: card.action === 'hidden_rats_apply' ? 'batch_deep_uninstall' : card.action,
+          items: nonRatItems,
+          selectedIds: nonRatItems.map((i) => i.id),
+        },
+        userApprovalText
+      );
+      if (subRes.ok) anyOk = true;
+      if (subRes.reportKo) reportBlocks.push(subRes.reportKo);
+    }
+
+    return {
+      ok: anyOk,
+      reportKo:
+        reportBlocks.join('\n\n') ||
+        (anyOk ? '선택하신 숨은 백그라운드 항목을 안전하게 정리했습니다!' : '처리할 숨은 항목이 없거나 권한 확인이 필요합니다.'),
+    };
+  }
 
   if (card.action === 'desktop_power_boost') {
     const r = await callCareApi<any>('/api/care/desktop-power-boost', { userApprovalTypedText: userApprovalText }, 15000);
@@ -978,15 +1166,21 @@ export function detectAgentCareIntent(
       clean
     );
 
+  const isHiddenRats =
+    /(쥐새끼|스파이웨어|몰래\s*(도|돌|켜|숨|깔)|숨은\s*(앱|프로그램|서비스|스케줄러|프로세스|악성|광고)|백그라운드.*?(전수|수색|조사|찾아|스캔|뭐\s*돌)|수동\s*(전환|으로\s*바꿔)|예스파일|mspcmanager|edgeautolaunch)/i.test(
+      clean
+    );
+
   const readTools: AgentCareReadTool[] = [];
   if (isDiskHog) readTools.push('disk_hog_scan');
   if (isSecurity2Tier) readTools.push('security_2tier_scan');
   if (isDesktopDetail) readTools.push('desktop_detail_scan');
   if (isAppsSurvey) readTools.push('installed_apps_list');
+  if (isHiddenRats) readTools.push('hidden_rats_scan');
 
-  // 비전문용어 일상 불만어("컴이 왜 이리 버벅거려 / 이상한 거 깔렸나 / 뭐 지우면 돼") ➔ 용량 + 애드웨어·보안모듈 2분류 자동 병렬 스캔!
+  // 비전문용어 일상 불만어("컴이 왜 이리 버벅거려 / 이상한 거 깔렸나 / 뭐 지우면 돼") ➔ 용량 + 애드웨어·보안모듈 + 미등록 숨은 쥐새끼까지 자동 병렬 스캔!
   if (readTools.length === 0 && !isAskingExplain && !isMultiTurnFilter && isCasualFullCheckup) {
-    readTools.push('disk_hog_scan', 'security_2tier_scan');
+    readTools.push('disk_hog_scan', 'security_2tier_scan', 'hidden_rats_scan');
   }
 
   return {

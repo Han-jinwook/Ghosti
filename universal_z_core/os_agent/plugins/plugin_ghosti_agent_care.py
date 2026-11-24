@@ -1752,6 +1752,480 @@ def cleanup_legacy_duplicate_merlin_daemons() -> Dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# 5-B. [2차 고도화] 미등록 신종 쥐새끼 전수 수색 (hidden-rats-scan) & 안전 수동전환/차단 (hidden-rats-apply)
+# ---------------------------------------------------------------------------
+_PROTECTED_SERVICE_OR_TASK_TOKENS = (
+    "merlin", "ghosti", "senstalk", "sensebot", "sundream", "tailscale", "openssh", "sshd",
+    "windefend", "msmpeng", "securityhealth", "mpssvc", "wscsvc", "spooler", "audiosrv",
+    "nvidia", "nvdisplay", "amd", "radeon", "ati", "intel", "realtek", "igfx", "seagull",
+    "googledrive", "onedrive", "kakaotalk", "telegram", "antigravity", "nplace", "waybill",
+    "studio_", "chrome", "chromoting", "msedgeupdate", "googleupdater", "googleuserpeh",
+    "mountpostoffice", "mousewithoutborders",
+    "windows defender", "microsoft defender", "v3lite", "ahnlab", "fasoo", "softcamp", "markany",
+)
+
+
+def _is_protected_rat_target(*fields: str) -> bool:
+    comb = " ".join(str(x or "") for x in fields).lower()
+    return any(tok in comb for tok in _PROTECTED_SERVICE_OR_TASK_TOKENS) or _is_hardware_driver_or_core(comb)
+
+
+def scan_hidden_background_rats() -> Dict[str, Any]:
+    r"""
+    [2차 고도화 도구 1: 카탈로그에 없는 미등록 신종 쥐새끼 전수 수색 — 3초 고속 단일 파이프라인]
+    1) 비-Microsoft 작업 스케줄러 전체 (\Microsoft\* 제외) + 실행 파일 서명 상태
+    2) 실행 중인 비-Windows 서비스 전체 (C:\Windows\System32 순정 OS 제외)
+    3) 시작프로그램 (HKCU/HKLM Run + Startup 폴더)
+    4) 고메모리 점유 비-Windows 프로세스 TOP 15
+    """
+    t0 = time.perf_counter()
+    if sys.platform != "win32":
+        return {"ok": False, "error": "WINDOWS_ONLY", "items": []}
+
+    ps_script = r"""
+$ErrorActionPreference = 'SilentlyContinue'
+$ProgressPreference = 'SilentlyContinue'
+[Console]::OutputEncoding = [System.Text.Encoding]::UTF8
+
+$sigCache = @{}
+function Get-QuickSig($rawPath) {
+    if (-not $rawPath) { return @{ status='None'; pub='' } }
+    $p = $rawPath.Trim().Trim('"')
+    if ($p -match '^([A-Za-z]:\\[^"]*?\.(?:exe|dll|vbs|bat|cmd))') { $p = $matches[1] }
+    $p = [Environment]::ExpandEnvironmentVariables($p)
+    if (-not $p -or -not (Test-Path -LiteralPath $p -PathType Leaf)) { return @{ status='Missing'; pub='' } }
+    $key = $p.ToLower()
+    if ($sigCache.ContainsKey($key)) { return $sigCache[$key] }
+    $s = Get-AuthenticodeSignature -LiteralPath $p
+    $pub = ''
+    if ($s.SignerCertificate -and $s.SignerCertificate.Subject) {
+        if ($s.SignerCertificate.Subject -match 'CN=([^,]+)') { $pub = $matches[1].Trim('"') }
+        else { $pub = $s.SignerCertificate.Subject.Substring(0, [math]::Min(48, $s.SignerCertificate.Subject.Length)) }
+    }
+    $res = @{ status = [string]$s.Status; pub = $pub }
+    $sigCache[$key] = $res
+    return $res
+}
+
+$tasks = @()
+Get-ScheduledTask | Where-Object { $_.TaskPath -notlike '\Microsoft*' -and $_.State -ne 'Disabled' } | Select-Object -First 40 | ForEach-Object {
+    $act = $_.Actions | Select-Object -First 1
+    $exe = [string]$act.Execute
+    $arg = [string]$act.Arguments
+    $sig = Get-QuickSig $exe
+    $tasks += [PSCustomObject]@{
+        taskPath = "$($_.TaskPath)$($_.TaskName)"
+        taskName = $_.TaskName
+        state = $_.State.ToString()
+        executePath = $exe
+        arguments = $arg
+        sigStatus = $sig.status
+        publisher = $sig.pub
+    }
+}
+
+$services = @()
+Get-CimInstance Win32_Service | Where-Object {
+    $_.State -eq 'Running' -and $_.PathName -and $_.PathName -notmatch 'Windows\\System32|Windows\\servicing|Microsoft\.NET|Windows Defender'
+} | Select-Object -First 30 | ForEach-Object {
+    $sig = Get-QuickSig $_.PathName
+    $services += [PSCustomObject]@{
+        serviceName = $_.Name
+        displayName = $_.DisplayName
+        startMode = $_.StartMode
+        binaryPath = $_.PathName
+        sigStatus = $sig.status
+        publisher = $sig.pub
+    }
+}
+
+$procs = Get-Process | Group-Object ProcessName | ForEach-Object {
+    $memMB = [math]::Round(($_.Group | Measure-Object WorkingSet64 -Sum).Sum / 1MB, 1)
+    $pPath = ($_.Group | Where-Object { $_.Path } | Select-Object -First 1).Path
+    [PSCustomObject]@{
+        name = $_.Name
+        count = $_.Count
+        memMb = $memMB
+        path = [string]$pPath
+    }
+} | Where-Object { $_.memMb -ge 35 -and $_.path -and $_.path -notmatch 'Windows\\System32|Windows\\Explorer\.EXE' } | Sort-Object memMb -Descending | Select-Object -First 15
+
+[PSCustomObject]@{
+    tasks = $tasks
+    services = $services
+    highMemProcs = $procs
+} | ConvertTo-Json -Depth 4 -Compress
+"""
+    raw_tasks: List[Dict[str, Any]] = []
+    raw_services: List[Dict[str, Any]] = []
+    raw_procs: List[Dict[str, Any]] = []
+    try:
+        import base64
+        enc_cmd = base64.b64encode(ps_script.encode("utf-16-le")).decode("ascii")
+        r = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", enc_cmd],
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="replace",
+            timeout=14.0,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        out_s = (r.stdout or "").strip()
+        idx_j = out_s.find("{")
+        if idx_j >= 0:
+            parsed = json.loads(out_s[idx_j:])
+            t_v = parsed.get("tasks") or []
+            s_v = parsed.get("services") or []
+            p_v = parsed.get("highMemProcs") or []
+            raw_tasks = [t_v] if isinstance(t_v, dict) else list(t_v)
+            raw_services = [s_v] if isinstance(s_v, dict) else list(s_v)
+            raw_procs = [p_v] if isinstance(p_v, dict) else list(p_v)
+    except Exception:
+        pass
+
+    # 시작프로그램 (HKCU/HKLM Run + Startup 폴더 통합)
+    import plugin_ghosti_care_suite as care_suite
+
+    startup_items: List[Dict[str, Any]] = []
+    try:
+        st_res = care_suite.list_startup_programs()
+        for it in (st_res.get("items") or []):
+            if it.get("enabled"):
+                startup_items.append({
+                    "startupId": str(it.get("id") or ""),
+                    "name": str(it.get("name") or ""),
+                    "command": str(it.get("command") or ""),
+                    "location": str(it.get("locationLabel") or ""),
+                    "isProtected": bool(it.get("isProtected")) or _is_protected_rat_target(str(it.get("name") or ""), str(it.get("command") or "")),
+                    "source": "REGISTRY_RUN",
+                })
+    except Exception:
+        pass
+
+    for folder_lbl, sdir in (
+        ("내 계정 시작폴더", APPDATA / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"),
+        ("공용 시작폴더", PROGRAMDATA / "Microsoft" / "Windows" / "Start Menu" / "Programs" / "Startup"),
+    ):
+        if sdir.is_dir():
+            try:
+                for e in sdir.iterdir():
+                    if e.name.lower() == "desktop.ini":
+                        continue
+                    startup_items.append({
+                        "startupId": f"STARTUP_FILE::{str(e)}",
+                        "name": e.name,
+                        "command": str(e),
+                        "location": folder_lbl,
+                        "isProtected": _is_protected_rat_target(e.name, str(e)),
+                        "source": "STARTUP_FOLDER",
+                    })
+            except Exception:
+                pass
+
+    # 50건 이내 통합 항목 리스트 구성 (제미니 정체 해석 & 3단 분류 + 체크박스 바인딩용)
+    unified: List[Dict[str, Any]] = []
+    idx_no = 1
+
+    for t in raw_tasks:
+        tpath = str(t.get("taskPath") or "").strip()
+        tname = str(t.get("taskName") or tpath.split("\\")[-1]).strip()
+        exe_p = str(t.get("executePath") or "").strip()
+        args = str(t.get("arguments") or "").strip()
+        sig = str(t.get("sigStatus") or "")
+        pub = str(t.get("publisher") or "")
+        prot = _is_protected_rat_target(tname, tpath, exe_p, pub)
+        if prot:
+            continue
+        is_suspicious_sig = sig in ("NotSigned", "HashMismatch", "UnknownError") or "lockprofilecookie" in args.lower() or "zum.com" in args.lower()
+        unified.append({
+            "no": idx_no,
+            "id": f"rat_task::{tpath}",
+            "ratKind": "SCHEDULED_TASK",
+            "targetKey": tpath,
+            "name": f"[스케줄러] {tname}",
+            "cat": "RAT_TASK_SUSPICIOUS" if is_suspicious_sig else "RAT_TASK",
+            "sizeMb": 0,
+            "executePath": exe_p,
+            "arguments": args[:140],
+            "publisher": pub or (f"서명상태:{sig}" if sig else "미확인"),
+            "sigStatus": sig,
+            "state": str(t.get("state") or ""),
+            "recommendedAction": "DISABLE_TASK",
+            "defaultSelected": bool(is_suspicious_sig or any(k in f"{tname} {exe_p}".lower() for k in ("cache", "cloudtask", "storage", "febjb", "ocam", "clipdown", "toast", "zsi", "msload", "ngplus", "rayitem", "hp", "whaleupdate", "datasharing"))),
+            "isProtected": False,
+        })
+        idx_no += 1
+
+    for s in raw_services:
+        sname = str(s.get("serviceName") or "").strip()
+        disp = str(s.get("displayName") or sname).strip()
+        bpath = str(s.get("binaryPath") or "").strip()
+        smode = str(s.get("startMode") or "")
+        sig = str(s.get("sigStatus") or "")
+        pub = str(s.get("publisher") or "")
+        prot = _is_protected_rat_target(sname, disp, bpath, pub)
+        if prot:
+            continue
+        unified.append({
+            "no": idx_no,
+            "id": f"rat_svc::{sname}",
+            "ratKind": "WINDOWS_SERVICE",
+            "targetKey": sname,
+            "name": f"[상주 서비스] {disp} ({sname})",
+            "cat": "RAT_SERVICE_AUTO" if smode.lower() == "auto" else "RAT_SERVICE",
+            "sizeMb": 0,
+            "executePath": bpath,
+            "arguments": f"시작유형: {smode}",
+            "publisher": pub or (f"서명상태:{sig}" if sig else "미확인"),
+            "sigStatus": sig,
+            "startMode": smode,
+            "recommendedAction": "SET_SERVICE_MANUAL",
+            "defaultSelected": smode.lower() == "auto",
+            "isProtected": False,
+        })
+        idx_no += 1
+
+    for st in startup_items:
+        if st.get("isProtected"):
+            continue
+        sid = str(st.get("startupId") or "")
+        sname = str(st.get("name") or "")
+        scmd = str(st.get("command") or "")
+        unified.append({
+            "no": idx_no,
+            "id": f"rat_startup::{sid}",
+            "ratKind": "STARTUP_ITEM",
+            "targetKey": sid,
+            "name": f"[부팅 자동실행] {sname}",
+            "cat": "RAT_STARTUP",
+            "sizeMb": 0,
+            "executePath": scmd[:160],
+            "arguments": str(st.get("location") or ""),
+            "publisher": str(st.get("source") or ""),
+            "recommendedAction": "DISABLE_STARTUP",
+            "defaultSelected": any(k in f"{sname} {scmd}".lower() for k in ("edgeautolaunch", "mspcmanager", "magicline", "figma", "ocam", "clipdown", "mybox", "naver")),
+            "isProtected": False,
+        })
+        idx_no += 1
+
+    # 고메모리 비-Windows 프로세스 중 참고용 항목 추가 (크롬/엣지/카톡 등 정상 앱도 메모리 점유 안내)
+    high_mem_summary: List[Dict[str, Any]] = []
+    for pr in raw_procs:
+        pname = str(pr.get("name") or "")
+        mem_mb = float(pr.get("memMb") or 0)
+        pcnt = int(pr.get("count") or 1)
+        ppath = str(pr.get("path") or "")
+        high_mem_summary.append({"name": pname, "count": pcnt, "memMb": mem_mb, "path": ppath})
+        if any(k in pname.lower() for k in ("copilot", "mspcmanager", "msedgewebview2", "ocam", "cacheconsole", "cloudtask")):
+            if not any(pname.lower() in str(u.get("name") or "").lower() for u in unified):
+                unified.append({
+                    "no": idx_no,
+                    "id": f"rat_proc::{pname}",
+                    "ratKind": "HIGH_MEM_PROCESS",
+                    "targetKey": pname,
+                    "name": f"[메모리 과점유] {pname} (x{pcnt})",
+                    "cat": "RAT_HIGH_MEM",
+                    "sizeMb": mem_mb,
+                    "executePath": ppath,
+                    "arguments": f"RAM {mem_mb}MB 점유 ({pcnt}개 실행 중)",
+                    "publisher": "백그라운드 상주",
+                    "recommendedAction": "STOP_PROCESS",
+                    "defaultSelected": "copilot" in pname.lower() or "mspcmanager" in pname.lower() or "cache" in pname.lower() or "cloudtask" in pname.lower(),
+                    "isProtected": False,
+                })
+                idx_no += 1
+
+    return {
+        "ok": True,
+        "count": len(unified),
+        "taskCount": sum(1 for x in unified if x["ratKind"] == "SCHEDULED_TASK"),
+        "serviceCount": sum(1 for x in unified if x["ratKind"] == "WINDOWS_SERVICE"),
+        "startupCount": sum(1 for x in unified if x["ratKind"] == "STARTUP_ITEM"),
+        "items": unified[:50],
+        "highMemProcs": high_mem_summary[:15],
+        "elapsedMs": round((time.perf_counter() - t0) * 1000, 1),
+    }
+
+
+def execute_elevated_hidden_rats_verified(
+    disable_tasks: List[str],
+    manual_services: List[str],
+) -> Dict[str, Any]:
+    """
+    [Zero-Trust 최고권한 헬퍼 내부 실행 함수 — 2차 고도화]
+    - OS 핵심·하드웨어 드라이버·보호 서비스/스케줄러를 2중 재검증 후 차단/수동전환 수행
+    - 원래 서비스 시작 유형(origStart)을 기록해 반환하여 [복원 기록] 1초 원복 보장
+    """
+    if sys.platform != "win32":
+        return {"ok": False, "disabledTasks": [], "manualServices": []}
+
+    import plugin_ghosti_care_suite as care_suite
+
+    done_tasks: List[str] = []
+    done_services: List[Dict[str, str]] = []
+
+    for raw_t in (disable_tasks or []):
+        tn = str(raw_t or "").strip()
+        if not tn or tn.lower().startswith("\\microsoft\\") or _is_protected_rat_target(tn):
+            continue
+        if not tn.startswith("\\"):
+            tn = "\\" + tn
+        subprocess.run(["schtasks", "/End", "/TN", tn], capture_output=True, timeout=2.0, creationflags=CREATE_NO_WINDOW)
+        r = subprocess.run(["schtasks", "/Change", "/TN", tn, "/DISABLE"], capture_output=True, timeout=2.5, creationflags=CREATE_NO_WINDOW)
+        if r.returncode == 0:
+            done_tasks.append(tn)
+
+    for raw_s in (manual_services or []):
+        sn = str(raw_s or "").strip()
+        if not sn or not re.match(r"^[A-Za-z0-9_.\- ]{1,80}$", sn) or _is_protected_rat_target(sn):
+            continue
+        orig_st = care_suite._query_service_start_type(sn)
+        r_cfg = subprocess.run(["sc", "config", sn, "start=", "demand"], capture_output=True, timeout=2.5, creationflags=CREATE_NO_WINDOW)
+        subprocess.run(["sc", "stop", sn], capture_output=True, timeout=3.0, creationflags=CREATE_NO_WINDOW)
+        if r_cfg.returncode == 0:
+            done_services.append({"serviceName": sn, "origStart": orig_st})
+
+    return {"ok": True, "disabledTasks": done_tasks, "manualServices": done_services}
+
+
+def apply_hidden_rats_cleanup(
+    disable_tasks: Optional[List[str]] = None,
+    manual_services: Optional[List[str]] = None,
+    disable_startups: Optional[List[str]] = None,
+    stop_processes: Optional[List[str]] = None,
+    user_approval_text: str = "숨은 백그라운드 항목 안전 정리 승인",
+) -> Dict[str, Any]:
+    """
+    [2차 고도화 도구 3: 숨은 쥐새끼 안전 차단 · 서비스 수동(Manual) 전환 · 시작프로그램 해제 + [복원 기록] 1초 원복]
+    - 앱을 삭제하지 않고 '수동(Manual)' 전환 또는 스케줄러 비활성화 + 모든 변경사항을 restore_points.json에 기록합니다.
+    """
+    import plugin_ghosti_care_suite as care_suite
+    import ghosti_safe_ops as safe_ops
+
+    safe_tasks = [str(x).strip() for x in (disable_tasks or []) if str(x).strip() and not _is_protected_rat_target(str(x))]
+    safe_svcs = [str(x).strip() for x in (manual_services or []) if str(x).strip() and not _is_protected_rat_target(str(x))]
+    safe_startups = [str(x).strip() for x in (disable_startups or []) if str(x).strip() and not _is_protected_rat_target(str(x))]
+    safe_procs = [str(x).strip() for x in (stop_processes or []) if str(x).strip() and not _is_protected_rat_target(str(x))]
+
+    done_tasks: List[str] = []
+    done_svcs: List[Dict[str, str]] = []
+    done_startups: List[str] = []
+    done_procs: List[str] = []
+    restore_ops: List[Dict[str, Any]] = []
+
+    # 1) 스케줄러 비활성화 & 서비스 수동 전환 (Zero-Trust 최고권한 헬퍼 경유)
+    if safe_tasks or safe_svcs:
+        if care_suite.is_running_as_admin():
+            res_el = execute_elevated_hidden_rats_verified(safe_tasks, safe_svcs)
+        else:
+            res_el = care_suite.execute_elevated_agent_care_queue(
+                "hidden_rats_apply",
+                {"disableTasks": safe_tasks, "manualServices": safe_svcs},
+            )
+            if not res_el.get("ok"):
+                # 일반 권한에서도 사용자 본인 소유 스케줄러는 직접 비활성화 시도
+                res_el = execute_elevated_hidden_rats_verified(safe_tasks, [])
+        done_tasks = list(res_el.get("disabledTasks") or [])
+        done_svcs = list(res_el.get("manualServices") or [])
+
+        for tn in done_tasks:
+            restore_ops.append({
+                "op": "ADWARE_TASK_DISABLE",
+                "name": f"스케줄러:{tn.lstrip(chr(92))}",
+                "targetKind": "task",
+                "target": tn.lstrip("\\"),
+                "fromPath": "작업 스케줄러 활성",
+                "toPath": "비활성화(Disabled)",
+                "rolledBack": False,
+            })
+        for sv in done_svcs:
+            sn = str(sv.get("serviceName") or "")
+            ost = str(sv.get("origStart") or "auto")
+            restore_ops.append({
+                "op": "ADWARE_TASK_DISABLE",
+                "name": f"서비스 수동전환:{sn}",
+                "targetKind": "service",
+                "target": sn,
+                "origStart": ost,
+                "fromPath": f"자동실행({ost})",
+                "toPath": "수동전환(Manual · 앱 켤 때만 작동)",
+                "rolledBack": False,
+            })
+
+    # 2) 시작프로그램 해제 (HKCU/HKLM Run 백업 제거 + Startup 폴더 파일은 Windows 휴지통 이동)
+    for st_id in safe_startups:
+        if st_id.startswith("STARTUP_FILE::"):
+            fpath = Path(st_id[len("STARTUP_FILE::"):])
+            if fpath.exists():
+                r_rb = _send_path_safe_recycle(fpath)
+                if r_rb.get("ok"):
+                    done_startups.append(f"{fpath.name} (시작폴더 ➔ 휴지통)")
+                    restore_ops.append({
+                        "op": "PHOTO_RECYCLE",
+                        "name": fpath.name,
+                        "fromPath": str(fpath),
+                        "toPath": r_rb.get("recycleDataFile") or "WINDOWS_RECYCLE_BIN",
+                        "recycleMetaFile": r_rb.get("recycleMetaFile", ""),
+                        "sizeBytes": 0,
+                        "rolledBack": False,
+                    })
+        elif "::" in st_id:
+            r_tog = care_suite.toggle_startup_program(st_id, enable=False, user_approval_text=user_approval_text)
+            if r_tog.get("ok"):
+                done_startups.append(str(r_tog.get("name") or st_id))
+
+    # 3) 과점유 백그라운드 프로세스 안전 종료 (예: copilotapp.exe, MSPCManager 등)
+    for pname in safe_procs:
+        exe_nm = pname if pname.lower().endswith(".exe") else f"{pname}.exe"
+        if _is_protected_rat_target(exe_nm):
+            continue
+        rk = subprocess.run(["taskkill", "/F", "/IM", exe_nm, "/T"], capture_output=True, timeout=2.5, creationflags=CREATE_NO_WINDOW)
+        if rk.returncode == 0:
+            done_procs.append(exe_nm)
+
+    restore_id = ""
+    if restore_ops:
+        try:
+            pt = safe_ops.add_restore_point(
+                summary=f"숨은 백그라운드 항목 안전 정리 (스케줄러 {len(done_tasks)} · 수동전환 {len(done_svcs)} · 시작 {len(done_startups)})",
+                user_prompt="숨은 백그라운드 프로그램 정리",
+                preview=", ".join([t.lstrip("\\") for t in done_tasks[:3]] + [s["serviceName"] for s in done_svcs[:3]] + done_startups[:2]),
+                operations=restore_ops,
+                user_approval_text=user_approval_text,
+            )
+            restore_id = str(pt.get("restoreId") or "")
+        except Exception:
+            pass
+
+    lines = ["✅ **[숨은 백그라운드 항목 안전 정리 완료]**"]
+    if done_tasks:
+        lines.append(f"• **작업 스케줄러 비활성화 ({len(done_tasks)}건)**: {', '.join(t.lstrip(chr(92)) for t in done_tasks[:8])}")
+    if done_svcs:
+        lines.append(f"• **상주 서비스 '수동(Manual)' 무삭제 절전 ({len(done_svcs)}건 — 앱 켤 때만 작동)**: {', '.join(s['serviceName'] for s in done_svcs[:8])}")
+    if done_startups:
+        lines.append(f"• **부팅 자동실행 해제 ({len(done_startups)}건)**: {', '.join(done_startups[:8])}")
+    if done_procs:
+        lines.append(f"• **과점유 백그라운드 프로세스 종료 ({len(done_procs)}건)**: {', '.join(done_procs[:6])}")
+    if restore_id:
+        lines.append(f"• **↩️ 1초 원복 보장**: **[복원 기록 {restore_id}]**에 원래 설정이 모두 백업되어, 채팅창에 **\"아까 끈 거 다시 켜줘\"**라고 말씀하시면 1초 만에 원래대로 되돌려 드려요!")
+
+    total_done = len(done_tasks) + len(done_svcs) + len(done_startups) + len(done_procs)
+    if total_done == 0:
+        lines.append("• 변경된 항목이 없거나 관리자 권한 확인이 필요했습니다.")
+
+    return {
+        "ok": total_done > 0,
+        "disabledTasks": done_tasks,
+        "manualServices": done_svcs,
+        "disabledStartups": done_startups,
+        "stoppedProcesses": done_procs,
+        "restoreId": restore_id,
+        "reportKo": "\n".join(lines),
+    }
+
+
+# ---------------------------------------------------------------------------
 # 6. 통합 액션 디스패처 (plugin_ghosti_care_suite.py 에서 호출)
 # ---------------------------------------------------------------------------
 AGENT_CARE_READONLY_ACTIONS = {
@@ -1763,6 +2237,8 @@ AGENT_CARE_READONLY_ACTIONS = {
     "desktop_detail_scan",
     "desktop-system-icons",
     "desktop_system_icons",
+    "hidden-rats-scan",
+    "hidden_rats_scan",
 }
 
 AGENT_CARE_ALL_ACTIONS = AGENT_CARE_READONLY_ACTIONS | {
@@ -1778,6 +2254,8 @@ AGENT_CARE_ALL_ACTIONS = AGENT_CARE_READONLY_ACTIONS | {
     "desktop_power_boost",
     "eradicate-pup",
     "eradicate_pup",
+    "hidden-rats-apply",
+    "hidden_rats_apply",
 }
 
 
@@ -1825,4 +2303,14 @@ def handle_agent_care_action(action: str, payload: Optional[Dict[str, Any]] = No
         return boost_desktop_power_plan()
     if act in ("eradicate-pup", "eradicate_pup"):
         return eradicate_known_pup_by_id(str(data.get("pupId") or ""))
+    if act in ("hidden-rats-scan", "hidden_rats_scan"):
+        return scan_hidden_background_rats()
+    if act in ("hidden-rats-apply", "hidden_rats_apply"):
+        return apply_hidden_rats_cleanup(
+            disable_tasks=data.get("disableTasks"),
+            manual_services=data.get("manualServices"),
+            disable_startups=data.get("disableStartups"),
+            stop_processes=data.get("stopProcesses"),
+            user_approval_text=str(data.get("userApprovalTypedText") or "숨은 백그라운드 항목 안전 정리 승인"),
+        )
     return None
