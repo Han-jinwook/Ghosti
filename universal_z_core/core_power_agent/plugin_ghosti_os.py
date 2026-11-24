@@ -703,12 +703,15 @@ _SKIP_DIR_NAMES = {
     ".venv",
     "dist",
     "build",
+    "temp",
+    "tmp",
+    "_internal",
+    "_tk_data",
+    "accountpictures",
+    "crisp_thumbs",
     "merlin_z_core",
     "universal_z_core",
     "sample_photos_301",
-    "ghosti_test_corpus",
-    "test_photos",
-    "test_docs",
     "merlin_ai_models",
     "merlinfamilyos",
     "antigravity",
@@ -721,6 +724,13 @@ _SKIP_DIR_NAMES = {
     "program files",
     "program files (x86)",
 }
+_SKIP_DIR_PREFIXES = (
+    "jetski_recording_",
+    "merlin_vid_fullocr_",
+    "merlin_pdf_ppocr_",
+    "merlin_zcore_",
+    "_mei",
+)
 _ALLOW_CORPUS_DIRS: set[str] = set()
 _CUSTOM_SCAN_ROOTS_FILE = LOCAL_APPDATA / "Merlin" / "ghosti_custom_scan_roots.json"
 _WORK_SDRIVE_CONFIG_FILE = LOCAL_APPDATA / "Merlin" / "work_sdrive_config.json"
