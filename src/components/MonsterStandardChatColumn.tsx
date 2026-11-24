@@ -366,6 +366,15 @@ function resolvePassportCommandReply(
     pending.selfPendingCount === 0 &&
     hasRealName;
   if (nothingForSelf) {
+    if (pending.familyPersonCount > 0) {
+      openPassportRegistration('family');
+      markPassportPrompted();
+      return {
+        ...base,
+        id: `secretary_passport_open_family_${Date.now()}`,
+        text: `${nickPrefix}내 여권 사진은 이미 등록되어 있어, 이어서 가족 후보 화면을 왼쪽에 띄워 드렸습니다. 이름을 적거나 아닌 사진만 빼고 [등록]을 눌러주세요.`,
+      };
+    }
     return {
       ...base,
       id: `secretary_passport_done_${Date.now()}`,

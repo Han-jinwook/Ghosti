@@ -747,7 +747,9 @@ export async function submitPassportRegistration(
       if (safeRealName) {
         await store.registerFaceMember(p.clusterId, safeRealName, '', { silent: true });
         book = upsertPassportMember(book, safeRealName);
-        registeredNames.push(safeRealName);
+        if (!registeredNames.includes(safeRealName)) {
+          registeredNames.push(safeRealName);
+        }
       }
       registered += p.acceptedCuts.length;
     }

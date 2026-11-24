@@ -8,14 +8,18 @@
 import type { FaceMemberCluster, PhotoItem, YearlyFaceBestCut } from '../../types/saysee';
 import type { WorkerDetectedFace } from './facePassportWorker';
 
-const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v9';
+const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v10';
 const MAX_SCAN_PHOTOS = 160;
 const MAX_CLUSTERS = 10;
 const MAX_CUTS_PER_CLUSTER = 6;
-/** OpenCV SFace 공식 5점 정렬(ArcFace 112x112) 기준 동일인 코사인 유사도 임계치 */
-const SIMILARITY_THRESHOLD = 0.38;
-/** 동일인 각도·연도 차이로 나뉜 클러스터를 중심 벡터로 재병합하는 임계치 */
+/** OpenCV SFace 공식 5점 정렬(ArcFace 112x112) 기준 초기 고순도 시드 결합 임계치 */
+const SIMILARITY_THRESHOLD = 0.44;
+/** 동일인 다각도·선글라스·연도별 서브클러스터 중심 벡터 재병합 임계치 (동일 사진 동반 등장 Cannot-Link + 상위 3쌍 검증 결합) */
 const MERGE_CENTROID_THRESHOLD = 0.42;
+const MERGE_TOP3_PAIR_THRESHOLD = 0.45;
+/** 여권사진 정체성 변별을 위한 원본/썸네일 내 최소 얼굴 크기(px) 및 양안 간격(px) — 초소형 배경 흐림 오병합 원천 차단 */
+const MIN_PASSPORT_FACE_PX = 26;
+const MIN_PASSPORT_EYE_SPAN_PX = 8.0;
 /** ArcFace / OpenCV SFace 112x112 공식 5점 기준 랜드마크 (우안, 좌안, 코, 우입꼬리, 좌입꼬리) */
 const ARCFACE_REF_112: ReadonlyArray<readonly [number, number]> = [
   [38.2946, 51.6963],
@@ -28,12 +32,12 @@ const SCREENSHOT_NAME_RX = /(screenshot|스크린샷|캡처|캡쳐|capture|화�
 /** AI 생성·스톡·웹 작업 이미지 판별 */
 const AI_OR_STOCK_IMAGE_NAME_RX =
   /(gemini_generated|chatgpt|midjourney|dall[-_]?e|stable[-_]?diffusion|comfyui|flux[-_]|stock_photo|unsplash|pexels|pixabay|freepik|shutterstock|gettyimages|ai_generated|generated_image|_remix_|^image-\d{4,}|^image(\s*\(\d+\))?\.png$)/i;
-/** 시스템 임시폴더·앱 리소스·유튜브/AI/캡처 작업 폴더 (실제 내 일상·가족 사진이 아닌 폴더 배제) */
+/** 시스템 임시폴더·앱 리소스·유튜브/AI/전자책/마케팅 작업 폴더 (실제 내 일상·가족 사진이 아닌 폴더 배제) */
 const NON_PORTRAIT_WORK_OR_TEMP_PATH_RX =
-  /(?:[\\/](?:appdata[\\/]local[\\/]temp|tmp|jetski_recording_[^\\/]*|merlin_vid_fullocr_[^\\/]*|merlin_pdf_ppocr_[^\\/]*|crisp_thumbs|accountpictures|google ai studio|g_youtube|brandmark|ocam|급식앱\(캡쳐\)|급식|식판|앱오류|뭐먹지 로고|증빙서류|node_modules)[\\/]|^(?:IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025|귀신같이_캡처_))/i;
-/** 스마트폰·디지털카메라 표준 촬영 파일명 패턴 (예: 20240720_182301.jpg, 제주대가족여행_20200622_..., IMG_1234.jpg, KakaoTalk_...) */
+  /(?:[\\/](?:appdata[\\/]local[\\/]temp|tmp|jetski_recording_[^\\/]*|merlin_vid_fullocr_[^\\/]*|merlin_pdf_ppocr_[^\\/]*|crisp_thumbs|accountpictures|google ai studio|g_youtube|ai캐릭터|오일요법|캘리버 서재|calibre|의료기라벨|amd-catalyst|merlintools[\\/]assets|[^\\/]+_files|brandmark|ocam|급식앱\(캡쳐\)|급식|식판|앱오류|뭐먹지 로고|증빙서류|node_modules)[\\/]|^(?:IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025|귀신같이_캡처_))/i;
+/** 스마트폰·디지털카메라·클라우드 앨범 표준 촬영 파일명 패턴 (예: 20240720_182301.jpg, 제주대가족여행_20200622_..., 1721441387443.jpg, IMG_1234.jpg, KakaoTalk_...) */
 const REAL_CAMERA_PHOTO_NAME_RX =
-  /(?:(?:^|_)(?:19|20)\d{6}[_-]\d{4,6}|^(?:IMG[_-]|DSC[_N0-9]|DCIM|PXL[_-]|SAM[_-]|GOPR|DJI[_-]|KakaoTalk_\d{8}|Photo_\d|사진))/i;
+  /(?:(?:^|_)(?:19|20)\d{6}[_-]\d{4,6}|^1[5-8]\d{11}(?:\(\d+\))?\.jpe?g$|^(?:IMG[_-]|DSC[_N0-9]|DCIM|PXL[_-]|SAM[_-]|GOPR|DJI[_-]|KakaoTalk_\d{8}|사진))/i;
 /** 실제 사람 피부톤 최소 비율 (카툰·초록/파란 캐릭터·음식·국그릇 오탐 차단, 그늘·역광·실내 인물 사진은 100% 통과) */
 const MIN_HUMAN_SKIN_RATIO = 0.12;
 
@@ -46,14 +50,22 @@ interface CachedFaceStore {
 
 interface ExtractedFaceSample {
   photo: PhotoItem;
+  baseKey: string;
   year: number;
   dateStr: string;
   score: number;
   frontalScore: number;
+  facePxW: number;
   sharpness: number;
   boundingBox: [number, number, number, number];
   avatarDataUrl: string;
   embedding: Float32Array;
+}
+
+function normalizePhotoBaseKey(photoName: string): string {
+  return String(photoName || '')
+    .replace(/__[0-9A-Za-z가-힣_-]{1,18}_[0-9a-f]{6}(?=\.[^.]+$)/i, '')
+    .toLowerCase();
 }
 
 let activeScanPromise: Promise<FaceMemberCluster[]> | null = null;
@@ -77,7 +89,7 @@ function buildPhotosFingerprint(photos: PhotoItem[]): string {
   if (real.length === 0) return '';
   const head = real.slice(0, 8).map((p) => p.name).join('|');
   const tail = real.slice(-4).map((p) => p.name).join('|');
-  return `v9:${real.length}:${head}:${tail}`;
+  return `v10:${real.length}:${head}:${tail}`;
 }
 
 export function loadCachedOnDeviceFaceClusters(): {
@@ -179,13 +191,60 @@ function loadImageForFaceScan(url: string): Promise<HTMLImageElement | null> {
   });
 }
 
-function prepareYuNetInput(
+type ScanImageSource = HTMLImageElement | HTMLCanvasElement;
+
+function getSourceSize(src: ScanImageSource): { ow: number; oh: number } {
+  if (src instanceof HTMLCanvasElement) {
+    return { ow: src.width, oh: src.height };
+  }
+  return { ow: src.naturalWidth, oh: src.naturalHeight };
+}
+
+/**
+ * 무EXIF 상하반전(180°)·측면회전(90°/270°) 촬영 사진을 정방향(0°) 캔버스로 복원
+ * - degCw = 90(시계 90°), 180(상하반전), 270(반시계 90°)
+ */
+function drawRotatedSource(
   img: HTMLImageElement,
+  degCw: 90 | 180 | 270,
+  rotCanvas: HTMLCanvasElement,
+  rotCtx: CanvasRenderingContext2D
+): HTMLCanvasElement {
+  const iw = img.naturalWidth;
+  const ih = img.naturalHeight;
+  rotCtx.setTransform(1, 0, 0, 1, 0, 0);
+  if (degCw === 180) {
+    rotCanvas.width = iw;
+    rotCanvas.height = ih;
+    rotCtx.clearRect(0, 0, iw, ih);
+    rotCtx.translate(iw, ih);
+    rotCtx.rotate(Math.PI);
+    rotCtx.drawImage(img, 0, 0);
+  } else if (degCw === 90) {
+    rotCanvas.width = ih;
+    rotCanvas.height = iw;
+    rotCtx.clearRect(0, 0, ih, iw);
+    rotCtx.translate(ih, 0);
+    rotCtx.rotate(Math.PI / 2);
+    rotCtx.drawImage(img, 0, 0);
+  } else {
+    rotCanvas.width = ih;
+    rotCanvas.height = iw;
+    rotCtx.clearRect(0, 0, ih, iw);
+    rotCtx.translate(0, iw);
+    rotCtx.rotate(-Math.PI / 2);
+    rotCtx.drawImage(img, 0, 0);
+  }
+  rotCtx.setTransform(1, 0, 0, 1, 0, 0);
+  return rotCanvas;
+}
+
+function prepareYuNetInput(
+  src: ScanImageSource,
   canvas: HTMLCanvasElement,
   ctx: CanvasRenderingContext2D
 ): { bgr: Float32Array; origW: number; origH: number; scale: number } {
-  const origW = img.naturalWidth;
-  const origH = img.naturalHeight;
+  const { ow: origW, oh: origH } = getSourceSize(src);
   const scale = Math.min(640 / origW, 640 / origH);
   const nw = Math.max(1, Math.round(origW * scale));
   const nh = Math.max(1, Math.round(origH * scale));
@@ -194,7 +253,7 @@ function prepareYuNetInput(
   canvas.height = 640;
   ctx.fillStyle = '#000000';
   ctx.fillRect(0, 0, 640, 640);
-  ctx.drawImage(img, 0, 0, nw, nh);
+  ctx.drawImage(src, 0, 0, nw, nh);
 
   const rgba = ctx.getImageData(0, 0, 640, 640).data;
   const planeSize = 640 * 640;
@@ -208,19 +267,33 @@ function prepareYuNetInput(
 }
 
 function prepareFaceCropAndBgr112(
-  img: HTMLImageElement,
+  src: ScanImageSource,
   face: WorkerDetectedFace,
   cropCanvas: HTMLCanvasElement,
   cropCtx: CanvasRenderingContext2D,
   sfaceCanvas: HTMLCanvasElement,
   sfaceCtx: CanvasRenderingContext2D
-): { avatarDataUrl: string; faceBgr112: Float32Array; sharpness: number; isRealHumanFace: boolean } {
-  const ow = img.naturalWidth;
-  const oh = img.naturalHeight;
+): {
+  avatarDataUrl: string;
+  faceBgr112: Float32Array;
+  sharpness: number;
+  facePxW: number;
+  isRealHumanFace: boolean;
+} {
+  const { ow, oh } = getSourceSize(src);
   const fx1 = face.x1 * ow;
   const fy1 = face.y1 * oh;
   const fw = Math.max(8, (face.x2 - face.x1) * ow);
   const fh = Math.max(8, (face.y2 - face.y1) * oh);
+  const eyeSpanPx =
+    face.landmarks && face.landmarks.length === 10
+      ? Math.hypot((face.landmarks[2] - face.landmarks[0]) * ow, (face.landmarks[3] - face.landmarks[1]) * oh)
+      : fw * 0.35;
+
+  // 초소형 원경 배경 얼굴(26px 미만 또는 양안 간격 8px 미만)은 112x112 확대 시 이목구비가 뭉개져 타인과 오병합되므로 여권 후보에서 배제
+  if (Math.min(fw, fh) < MIN_PASSPORT_FACE_PX || eyeSpanPx < MIN_PASSPORT_EYE_SPAN_PX) {
+    return { avatarDataUrl: '', faceBgr112: new Float32Array(0), sharpness: 0, facePxW: fw, isRealHumanFace: false };
+  }
 
   // 여권 아바타용 정사각형 크롭 (상하좌우 28% 여백)
   const side = Math.max(fw, fh) * 1.56;
@@ -234,7 +307,7 @@ function prepareFaceCropAndBgr112(
   cropCanvas.width = 128;
   cropCanvas.height = 128;
   cropCtx.clearRect(0, 0, 128, 128);
-  cropCtx.drawImage(img, sx, sy, sw, sh, 0, 0, 128, 128);
+  cropCtx.drawImage(src, sx, sy, sw, sh, 0, 0, 128, 128);
   const avatarDataUrl = cropCanvas.toDataURL('image/jpeg', 0.72);
 
   // SFace int8 112x112 공식 5점 랜드마크 2D 유사변환(ArcFace alignCrop)
@@ -285,7 +358,7 @@ function prepareFaceCropAndBgr112(
         const tx = meanDx - (a * meanSx - b * meanSy);
         const ty = meanDy - (b * meanSx + a * meanSy);
         sfaceCtx.setTransform(a, b, -b, a, tx, ty);
-        sfaceCtx.drawImage(img, 0, 0);
+        sfaceCtx.drawImage(src, 0, 0);
         sfaceCtx.setTransform(1, 0, 0, 1, 0, 0);
         alignedOk = true;
       }
@@ -297,7 +370,7 @@ function prepareFaceCropAndBgr112(
     const ssy = Math.max(0, Math.min(oh - 1, cy - sSide * 0.5));
     const ssw = Math.max(8, Math.min(ow - ssx, sSide));
     const ssh = Math.max(8, Math.min(oh - ssy, sSide));
-    sfaceCtx.drawImage(img, ssx, ssy, ssw, ssh, 0, 0, 112, 112);
+    sfaceCtx.drawImage(src, ssx, ssy, ssw, ssh, 0, 0, 112, 112);
   }
   const rgba = sfaceCtx.getImageData(0, 0, 112, 112).data;
 
@@ -372,7 +445,7 @@ function prepareFaceCropAndBgr112(
     foodSatRatio < 0.22 &&
     skinRatio > nonHumanRatio;
   const sharpness = Math.min(99, Math.max(55, Math.round(55 + (gradSum / 35000) * 44)));
-  return { avatarDataUrl, faceBgr112, sharpness, isRealHumanFace };
+  return { avatarDataUrl, faceBgr112, sharpness, facePxW: fw, isRealHumanFace };
 }
 
 function dot(a: Float32Array, b: Float32Array): number {
@@ -382,6 +455,41 @@ function dot(a: Float32Array, b: Float32Array): number {
   return s;
 }
 
+function hasPhotoOverlap(aKeys: Set<string>, bKeys: Set<string>): boolean {
+  const [smaller, larger] = aKeys.size <= bKeys.size ? [aKeys, bKeys] : [bKeys, aKeys];
+  for (const k of smaller) {
+    if (larger.has(k)) return true;
+  }
+  return false;
+}
+
+function computeTop3CrossPairMean(a: ExtractedFaceSample[], b: ExtractedFaceSample[]): number {
+  let t1 = -1;
+  let t2 = -1;
+  let t3 = -1;
+  let count = 0;
+  for (let i = 0; i < a.length; i++) {
+    for (let j = 0; j < b.length; j++) {
+      const s = dot(a[i].embedding, b[j].embedding);
+      count++;
+      if (s > t1) {
+        t3 = t2;
+        t2 = t1;
+        t1 = s;
+      } else if (s > t2) {
+        t3 = t2;
+        t2 = s;
+      } else if (s > t3) {
+        t3 = s;
+      }
+    }
+  }
+  if (count === 0) return -1;
+  if (count === 1) return t1;
+  if (count === 2) return (t1 + t2) / 2;
+  return (t1 + t2 + t3) / 3;
+}
+
 function clusterExtractedFaces(
   samples: ExtractedFaceSample[],
   existingClusters: FaceMemberCluster[]
@@ -389,17 +497,25 @@ function clusterExtractedFaces(
   interface WorkingCluster {
     centroid: Float32Array;
     members: ExtractedFaceSample[];
+    photoKeys: Set<string>;
   }
   const working: WorkingCluster[] = [];
 
-  for (const s of samples) {
+  // 가장 크고 정면인 선명한 얼굴이 각 인물 클러스터의 기준 시드(members[0])가 되도록 품질순 정렬
+  const orderedSamples = samples
+    .slice()
+    .sort((a, b) => b.frontalScore * Math.min(80, b.facePxW) - a.frontalScore * Math.min(80, a.facePxW));
+
+  for (const s of orderedSamples) {
     let bestIdx = -1;
     let bestSim = SIMILARITY_THRESHOLD;
     for (let i = 0; i < working.length; i++) {
+      // [동일 사진 동반 등장 분리(Cannot-Link)]: 한 사진에서 동시에 검출된 두 얼굴은 서로 다른 인물이므로 절대 같은 칸에 넣지 않음
+      if (working[i].photoKeys.has(s.baseKey)) continue;
       const sim = dot(s.embedding, working[i].centroid);
-      // 클러스터 대표(첫 번째) 샘플과의 최소 유사도도 함께 검증해 점진적 평균 이동(drift)에 의한 엉뚱한 인물 합류 차단
+      // 클러스터 대표(첫 번째) 샘플과의 최소 유사도도 함께 검증해 점진적 평균 이동(drift)에 의한 타인 합류 원천 차단
       const seedSim = dot(s.embedding, working[i].members[0].embedding);
-      if (sim > bestSim && seedSim >= SIMILARITY_THRESHOLD - 0.045) {
+      if (sim > bestSim && seedSim >= SIMILARITY_THRESHOLD - 0.04) {
         bestSim = sim;
         bestIdx = i;
       }
@@ -407,6 +523,7 @@ function clusterExtractedFaces(
     if (bestIdx >= 0) {
       const wc = working[bestIdx];
       wc.members.push(s);
+      wc.photoKeys.add(s.baseKey);
       const n = wc.members.length;
       const next = new Float32Array(wc.centroid.length);
       let norm = 0;
@@ -421,11 +538,14 @@ function clusterExtractedFaces(
       working.push({
         centroid: new Float32Array(s.embedding),
         members: [s],
+        photoKeys: new Set([s.baseKey]),
       });
     }
   }
 
-  // 동일인이 각도·연도 차이로 2~3개 칸에 나뉜 경우 중심 벡터 유사도 기반 자동 재병합
+  // 동일인이 선글라스·맨얼굴·연도 차이로 2~3개 칸에 나뉜 경우 재병합
+  // 단, 같은 커플/단체 사진에 동반 등장한 인물(photoKeys 교집합 존재)은 100% 타인이므로 절대 병합하지 않고,
+  // 중심 유사도(0.42)와 상위 3쌍 평균 유사도(0.45)를 동시에 만족할 때만 병합합니다.
   let mergedAny = true;
   while (mergedAny && working.length > 1) {
     mergedAny = false;
@@ -434,8 +554,11 @@ function clusterExtractedFaces(
     let bestPairSim = MERGE_CENTROID_THRESHOLD;
     for (let i = 0; i < working.length; i++) {
       for (let j = i + 1; j < working.length; j++) {
+        if (hasPhotoOverlap(working[i].photoKeys, working[j].photoKeys)) continue;
         const pairSim = dot(working[i].centroid, working[j].centroid);
-        if (pairSim > bestPairSim) {
+        if (pairSim <= bestPairSim) continue;
+        const top3Mean = computeTop3CrossPairMean(working[i].members, working[j].members);
+        if (top3Mean >= MERGE_TOP3_PAIR_THRESHOLD) {
           bestPairSim = pairSim;
           bestI = i;
           bestJ = j;
@@ -455,6 +578,7 @@ function clusterExtractedFaces(
       norm = Math.sqrt(norm) + 1e-6;
       for (let d = 0; d < next.length; d++) next[d] /= norm;
       a.members = combinedMembers;
+      for (const k of b.photoKeys) a.photoKeys.add(k);
       a.centroid = next;
       working.splice(bestJ, 1);
       mergedAny = true;
@@ -473,12 +597,9 @@ function clusterExtractedFaces(
     // 같은 사진 및 동명 파일(다른 폴더의 복사본) 중복 제거 후 정면·선명도 순 정렬
     const byPhoto = new Map<string, ExtractedFaceSample>();
     for (const m of wc.members) {
-      const baseKey = String(m.photo.name || '')
-        .replace(/__[0-9A-Za-z가-힣_-]{1,18}_[0-9a-f]{6}(?=\.[^.]+$)/i, '')
-        .toLowerCase();
-      const prev = byPhoto.get(baseKey);
+      const prev = byPhoto.get(m.baseKey);
       if (!prev || m.frontalScore > prev.frontalScore) {
-        byPhoto.set(baseKey, m);
+        byPhoto.set(m.baseKey, m);
       }
     }
     const uniqueSamples = Array.from(byPhoto.values()).sort(
@@ -486,13 +607,18 @@ function clusterExtractedFaces(
     );
     const rep = uniqueSamples[0];
 
-    // 연도별 베스트 컷 (연도당 최대 2장, 전체 최대 6장)
+    // 연도별 베스트 컷 (연도당 최대 2장, 전체 최대 6장 — 파일명이 달라도 시각적으로 동일한 중복 사본/연사는 제외)
     const cutsByYear = new Map<number, ExtractedFaceSample[]>();
+    const selectedCutSamples: ExtractedFaceSample[] = [];
     for (const u of uniqueSamples) {
+      if (selectedCutSamples.some((prev) => dot(u.embedding, prev.embedding) > 0.94)) {
+        continue;
+      }
       const arr = cutsByYear.get(u.year) || [];
       if (arr.length < 2) {
         arr.push(u);
         cutsByYear.set(u.year, arr);
+        selectedCutSamples.push(u);
       }
     }
     const yearlyBestCuts: YearlyFaceBestCut[] = Array.from(cutsByYear.entries())
@@ -637,7 +763,7 @@ export async function runOnDeviceFacePassportScan(
         );
   const candidates = basePool
     .sort((a, b) => {
-      // 1순위: 스마트폰·카메라 표준 촬영 파일(20240720_..., 제주대가족여행_20200622_..., IMG_..., KakaoTalk_...)
+      // 1순위: 스마트폰·카메라 표준 촬영 파일(20240720_..., 제주대가족여행_20200622_..., 1721441387443.jpg, IMG_..., KakaoTalk_...)
       const aCam = REAL_CAMERA_PHOTO_NAME_RX.test(a.name) && /\.jpe?g$/i.test(a.name) ? 0 : 1;
       const bCam = REAL_CAMERA_PHOTO_NAME_RX.test(b.name) && /\.jpe?g$/i.test(b.name) ? 0 : 1;
       if (aCam !== bCam) return aCam - bCam;
@@ -684,7 +810,8 @@ export async function runOnDeviceFacePassportScan(
       bgr: Float32Array,
       origW: number,
       origH: number,
-      scale: number
+      scale: number,
+      scoreThreshold = 0.82
     ): Promise<WorkerDetectedFace[]> =>
       new Promise((resolve) => {
         const id = reqSeq++;
@@ -697,7 +824,7 @@ export async function runOnDeviceFacePassportScan(
           timer,
         });
         worker.postMessage(
-          { id, type: 'detect', bgrBuffer: bgr.buffer, origW, origH, scale, scoreThreshold: 0.82 },
+          { id, type: 'detect', bgrBuffer: bgr.buffer, origW, origH, scale, scoreThreshold },
           [bgr.buffer]
         );
       });
@@ -719,6 +846,8 @@ export async function runOnDeviceFacePassportScan(
 
     const inputCanvas = document.createElement('canvas');
     const inputCtx = inputCanvas.getContext('2d', { willReadFrequently: true });
+    const rotCanvas = document.createElement('canvas');
+    const rotCtx = rotCanvas.getContext('2d');
     const cropCanvas = document.createElement('canvas');
     const cropCtx = cropCanvas.getContext('2d');
     const featCanvas = document.createElement('canvas');
@@ -726,7 +855,7 @@ export async function runOnDeviceFacePassportScan(
 
     const extracted: ExtractedFaceSample[] = [];
     try {
-      if (!inputCtx || !cropCtx || !featCtx) return existingClusters;
+      if (!inputCtx || !rotCtx || !cropCtx || !featCtx) return existingClusters;
 
       for (let i = 0; i < candidates.length; i++) {
         // 백그라운드 탭에서도 스캔이 중단되지 않고 저부하로 끝까지 완주되도록 짧은 슬립만 부여
@@ -738,14 +867,59 @@ export async function runOnDeviceFacePassportScan(
         const img = await loadImageForFaceScan(photo.thumbUrl);
         if (!img) continue;
 
-        const { bgr, origW, origH, scale } = prepareYuNetInput(img, inputCanvas, inputCtx);
-        const faces = await detectInWorker(bgr, origW, origH, scale);
+        const iw = img.naturalWidth;
+        const ih = img.naturalHeight;
+        // 세로로 극단적으로 긴 스마트폰 화면 캡처(9:19 비율 등) 배제
+        if (Math.min(iw, ih) / Math.max(1, Math.max(iw, ih)) < 0.52) {
+          continue;
+        }
+
+        let activeSource: ScanImageSource = img;
+        const in0 = prepareYuNetInput(img, inputCanvas, inputCtx);
+        let faces = await detectInWorker(in0.bgr, in0.origW, in0.origH, in0.scale, 0.82);
+        const maxScore0 = faces.length > 0 ? faces[0].score : 0;
+
+        // [무EXIF 회전 사진 정방향(0°) 자동 복원]:
+        // 1) 상하반전(180°) 촬영본은 0°에서 미검출되거나 뒤집힌 얼굴로 저신뢰(<0.935) 오검출되어 타인끼리 한 줄에 뒤섞이므로 180° 정방향을 검증
+        if (faces.length === 0 || maxScore0 < 0.935) {
+          const src180 = drawRotatedSource(img, 180, rotCanvas, rotCtx);
+          const in180 = prepareYuNetInput(src180, inputCanvas, inputCtx);
+          const faces180 = await detectInWorker(in180.bgr, in180.origW, in180.origH, in180.scale, 0.84);
+          const maxScore180 = faces180.length > 0 ? faces180[0].score : 0;
+          if (maxScore180 >= 0.87 && maxScore180 > maxScore0 + 0.015) {
+            activeSource = src180;
+            faces = faces180;
+          }
+        }
+
+        // 2) 0°와 180° 모두 얼굴이 없을 때만 시계 90° / 반시계 90°(270°) 측면 회전 촬영본을 정방향 복원
+        if (faces.length === 0) {
+          const src90 = drawRotatedSource(img, 90, rotCanvas, rotCtx);
+          const in90 = prepareYuNetInput(src90, inputCanvas, inputCtx);
+          const faces90 = await detectInWorker(in90.bgr, in90.origW, in90.origH, in90.scale, 0.86);
+          const maxScore90 = faces90.length > 0 ? faces90[0].score : 0;
+
+          const src270 = drawRotatedSource(img, 270, rotCanvas, rotCtx);
+          const in270 = prepareYuNetInput(src270, inputCanvas, inputCtx);
+          const faces270 = await detectInWorker(in270.bgr, in270.origW, in270.origH, in270.scale, 0.86);
+          const maxScore270 = faces270.length > 0 ? faces270[0].score : 0;
+
+          if (maxScore90 >= 0.88 && maxScore90 >= maxScore270) {
+            activeSource = drawRotatedSource(img, 90, rotCanvas, rotCtx);
+            faces = faces90;
+          } else if (maxScore270 >= 0.88) {
+            activeSource = src270;
+            faces = faces270;
+          }
+        }
+
         if (faces.length === 0) continue;
 
         const { year, dateStr } = parsePhotoYearAndDate(photo);
+        const baseKey = normalizePhotoBaseKey(photo.name);
         for (const f of faces) {
-          const { avatarDataUrl, faceBgr112, sharpness, isRealHumanFace } = prepareFaceCropAndBgr112(
-            img,
+          const { avatarDataUrl, faceBgr112, sharpness, facePxW, isRealHumanFace } = prepareFaceCropAndBgr112(
+            activeSource,
             f,
             cropCanvas,
             cropCtx,
@@ -757,10 +931,12 @@ export async function runOnDeviceFacePassportScan(
           if (!embedding) continue;
           extracted.push({
             photo,
+            baseKey,
             year,
             dateStr,
             score: f.score,
             frontalScore: f.frontalScore,
+            facePxW,
             sharpness,
             boundingBox: [
               Math.round(f.y1 * 1000),
