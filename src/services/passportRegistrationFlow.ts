@@ -214,7 +214,8 @@ export function findSelfCluster(st = loadPassportRegState()): FaceMemberCluster 
   const clusters = liveClusters();
   let found = clusters.find((c) => c.clusterId === st.selfClusterId) || null;
   if (!found && st.confirmedKeys.length > 0) {
-    // 새로고침 후 클러스터 ID가 재정렬된 경우にも 확정 등록했던 대표 사진 파일명으로 자동 복원
+    // 새로고침 후 클러스터 ID가 갱신된 경우 확정 등록했던 대표 사진 파일명으로 복원하되,
+    // 같은 단체 사진에 찍힌 다른 가족과 섞이지 않도록 representativePhoto 일치(단독 매칭)만 우선 인정
     const confirmedPhotos = new Set(
       st.confirmedKeys
         .filter((k) => k.startsWith(`${st.selfClusterId}::`))
@@ -222,13 +223,12 @@ export function findSelfCluster(st = loadPassportRegState()): FaceMemberCluster 
         .filter(Boolean)
     );
     if (confirmedPhotos.size > 0) {
-      found =
-        clusters.find(
-          (c) =>
-            confirmedPhotos.has(c.representativePhoto) ||
-            (c.matchedPhotoFiles || []).some((f) => confirmedPhotos.has(f)) ||
-            (c.yearlyBestCuts || []).some((yc) => confirmedPhotos.has(yc.representativePhoto))
-        ) || null;
+      const repMatches = clusters.filter((c) => confirmedPhotos.has(c.representativePhoto));
+      const cutMatches =
+        repMatches.length === 1
+          ? repMatches
+          : clusters.filter((c) => (c.yearlyBestCuts || []).some((yc) => confirmedPhotos.has(yc.representativePhoto)));
+      found = repMatches.length === 1 ? repMatches[0] : cutMatches.length === 1 ? cutMatches[0] : null;
       if (found) {
         const migratedConfirmed = st.confirmedKeys.map((k) =>
           k.startsWith(`${st.selfClusterId}::`) ? `${found!.clusterId}::${k.split('::')[1]}` : k
@@ -533,6 +533,7 @@ export async function submitPassportRegistration(
   const secSt = loadGhostSecretaryState();
   const nickname = (secSt.nickname || book.self?.nickname || '').trim();
   let registered = 0;
+  let dismissedCount = 0;
   const registeredNames: string[] = [];
 
   for (const p of people) {
@@ -543,6 +544,7 @@ export async function submitPassportRegistration(
       confirmedKeys.delete(cutKey(p.clusterId, cut));
     });
     if (p.dismissPerson) {
+      dismissedCount += 1;
       st = {
         ...st,
         rejectedKeys: Array.from(rejectedKeys),
@@ -550,11 +552,28 @@ export async function submitPassportRegistration(
       };
       continue;
     }
-    p.acceptedCuts.forEach((cut) => confirmedKeys.add(cutKey(p.clusterId, cut)));
-    st = { ...st, confirmedKeys: Array.from(confirmedKeys), rejectedKeys: Array.from(rejectedKeys) };
 
     const realName = p.realName.trim();
     const safeRealName = realName && !isRelationTagOnly(realName) ? realName : '';
+    const existingConfirmedForCluster = Array.from(confirmedKeys).filter((k) => k.startsWith(`${p.clusterId}::`));
+
+    // 사진을 모두 체크 해제해 선택된 사진이 0장이고 기존 확정 컷도 0장인 경우: 빈 여권으로 잘못 등록하지 않고 선택 해제만 반영
+    if (p.acceptedCuts.length === 0 && existingConfirmedForCluster.length === 0) {
+      st = {
+        ...st,
+        selfClusterId: mode === 'self' && st.selfClusterId === p.clusterId ? undefined : st.selfClusterId,
+        confirmedKeys: Array.from(confirmedKeys),
+        rejectedKeys: Array.from(rejectedKeys),
+      };
+      removeCutsFromCluster(
+        p.clusterId,
+        p.rejectedCuts.map((c) => c.representativePhoto).filter(Boolean)
+      );
+      continue;
+    }
+
+    p.acceptedCuts.forEach((cut) => confirmedKeys.add(cutKey(p.clusterId, cut)));
+    st = { ...st, confirmedKeys: Array.from(confirmedKeys), rejectedKeys: Array.from(rejectedKeys) };
 
     if (mode === 'self') {
       // 공식 여권 이름 = 실명. 실명이 비어 있으면 검색용으로 별명을 임시 키로 쓰되 여권 이름은 비워 둔다.
@@ -576,8 +595,8 @@ export async function submitPassportRegistration(
         },
       };
       st = { ...st, selfClusterId: p.clusterId };
-      registered += p.acceptedCuts.length;
-    } else {
+      registered += p.acceptedCuts.length || (safeRealName ? 1 : 0);
+    } else if (p.acceptedCuts.length > 0) {
       if (safeRealName) {
         await store.registerFaceMember(p.clusterId, safeRealName, '', { silent: true });
         book = upsertPassportMember(book, safeRealName);
@@ -594,11 +613,15 @@ export async function submitPassportRegistration(
   }
 
   saveGhostPassportBook(book);
-  savePassportRegState({ ...st, firstOfferShown: true });
-  try {
-    window.dispatchEvent(new CustomEvent(PASSPORT_REG_DONE_EVENT, { detail: { mode, registered, names: registeredNames } }));
-  } catch {
-    /* ignore */
+  savePassportRegState({ ...st, firstOfferShown: registered > 0 || dismissedCount > 0 ? true : st.firstOfferShown });
+  if (registered > 0 || dismissedCount > 0) {
+    try {
+      window.dispatchEvent(
+        new CustomEvent(PASSPORT_REG_DONE_EVENT, { detail: { mode, registered, dismissedCount, names: registeredNames } })
+      );
+    } catch {
+      /* ignore */
+    }
   }
   return { registered };
 }

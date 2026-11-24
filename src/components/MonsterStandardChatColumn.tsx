@@ -776,8 +776,17 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     };
 
     const onRegDone = (e: Event) => {
-      const mode = (e as CustomEvent<{ mode?: PassportRegMode }>).detail?.mode;
+      const detail = (e as CustomEvent<{ mode?: PassportRegMode; registered?: number; dismissedCount?: number; names?: string[] }>).detail;
+      const mode = detail?.mode;
+      const registered = Number(detail?.registered || 0);
+      const dismissedCount = Number(detail?.dismissedCount || 0);
       syncPassportAfterRegistration();
+      if (registered <= 0) {
+        if (dismissedCount > 0) {
+          pushOnce('secretary_passport_dismissed_', { text: '선택하신 얼굴을 후보에서 제외했습니다.' });
+        }
+        return;
+      }
       if (mode === 'self') {
         const hasFamily = familyCandidates().length > 0;
         if (hasFamily) {

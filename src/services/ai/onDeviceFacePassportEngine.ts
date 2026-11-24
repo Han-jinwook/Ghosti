@@ -8,7 +8,7 @@
 import type { FaceMemberCluster, PhotoItem, YearlyFaceBestCut } from '../../types/saysee';
 import type { WorkerDetectedFace } from './facePassportWorker';
 
-const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v8';
+const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v9';
 const MAX_SCAN_PHOTOS = 160;
 const MAX_CLUSTERS = 10;
 const MAX_CUTS_PER_CLUSTER = 6;
@@ -77,7 +77,7 @@ function buildPhotosFingerprint(photos: PhotoItem[]): string {
   if (real.length === 0) return '';
   const head = real.slice(0, 8).map((p) => p.name).join('|');
   const tail = real.slice(-4).map((p) => p.name).join('|');
-  return `v8:${real.length}:${head}:${tail}`;
+  return `v9:${real.length}:${head}:${tail}`;
 }
 
 export function loadCachedOnDeviceFaceClusters(): {
@@ -91,6 +91,14 @@ export function loadCachedOnDeviceFaceClusters(): {
     const parsed = JSON.parse(raw) as CachedFaceStore;
     if (!parsed || !Array.isArray(parsed.clusters)) {
       return { latestCorpusYear: new Date().getFullYear(), clusters: [], fingerprint: '' };
+    }
+    // 중복 clusterId 오염 캐시 방어 검증
+    const seenIds = new Set<string>();
+    for (const c of parsed.clusters) {
+      if (!c?.clusterId || seenIds.has(c.clusterId)) {
+        return { latestCorpusYear: new Date().getFullYear(), clusters: [], fingerprint: '' };
+      }
+      seenIds.add(c.clusterId);
     }
     return {
       latestCorpusYear: Number(parsed.latestCorpusYear) || new Date().getFullYear(),
@@ -455,13 +463,7 @@ function clusterExtractedFaces(
 
   working.sort((a, b) => b.members.length - a.members.length);
   const topWorking = working.slice(0, MAX_CLUSTERS);
-  const existingByPhoto = new Map<string, FaceMemberCluster>();
-  for (const ec of existingClusters) {
-    if (ec.representativePhoto) existingByPhoto.set(ec.representativePhoto, ec);
-    for (const f of ec.matchedPhotoFiles || []) {
-      if (!existingByPhoto.has(f)) existingByPhoto.set(f, ec);
-    }
-  }
+  const usedClusterIds = new Set<string>();
 
   let latestCorpusYear = new Date().getFullYear();
   const allYears = samples.map((s) => s.year).filter((y) => y >= 1980);
@@ -510,20 +512,34 @@ function clusterExtractedFaces(
         conditionShortKo: cutIdx === 0 ? '정면' : '자연',
       }));
 
-    // 기존 등록 정보 보존
-    const matchedExisting =
-      existingByPhoto.get(rep.photo.name) ||
-      uniqueSamples.map((u) => existingByPhoto.get(u.photo.name)).find(Boolean);
+    // 기존 등록 정보 보존 (같은 단체 사진에 찍힌 다른 가족과 절대 섞이지 않도록 대표 사진 + 얼굴 중심 좌표까지 일치할 때만 승계)
+    const matchedExisting = existingClusters.find((ec) => {
+      if (!ec?.clusterId || usedClusterIds.has(ec.clusterId)) return false;
+      if (!ec.representativePhoto || !ec.boundingBox) return false;
+      const ecCy = (ec.boundingBox[0] + ec.boundingBox[2]) * 0.5;
+      const ecCx = (ec.boundingBox[1] + ec.boundingBox[3]) * 0.5;
+      return uniqueSamples.some((u) => {
+        if (u.photo.name !== ec.representativePhoto) return false;
+        const uCy = (u.boundingBox[0] + u.boundingBox[2]) * 0.5;
+        const uCx = (u.boundingBox[1] + u.boundingBox[3]) * 0.5;
+        return Math.abs(uCx - ecCx) < 120 && Math.abs(uCy - ecCy) < 120;
+      });
+    });
 
     const matchedPhotoFiles = uniqueSamples.map((u) => u.photo.name);
     const seedDates = Array.from(new Set(uniqueSamples.map((u) => u.dateStr))).slice(0, 8);
-    // 새로고침(F5) 후 재스캔되어도 동일 인물 사진 묶음이 항상 동일한 clusterId를 유지하도록 결정론적 키 부여
-    const stablePhotoKey = matchedPhotoFiles
-      .slice()
-      .sort()[0]
+    // 부부·가족이 같은 사진에 함께 찍혀 있어도 100% 서로 다른 고유 clusterId를 갖도록 대표 사진 + 대표 얼굴 좌표 조합 및 중복 방지 보장
+    const repPhotoClean = String(rep.photo.name || `face${idx}`)
       .replace(/[^0-9A-Za-z가-힣_-]/g, '')
-      .slice(0, 24);
-    const clusterId = matchedExisting?.clusterId || `ondevice_face_${stablePhotoKey}`;
+      .slice(0, 20);
+    const repBy = Math.round((rep.boundingBox[0] + rep.boundingBox[2]) / 40);
+    const repBx = Math.round((rep.boundingBox[1] + rep.boundingBox[3]) / 40);
+    let candidateId = matchedExisting?.clusterId || `ondevice_face_${repPhotoClean}_b${repBy}_${repBx}`;
+    if (usedClusterIds.has(candidateId)) {
+      candidateId = `ondevice_face_${repPhotoClean}_b${repBy}_${repBx}_p${idx + 1}`;
+    }
+    usedClusterIds.add(candidateId);
+    const clusterId = candidateId;
 
     return {
       clusterId,

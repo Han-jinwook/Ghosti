@@ -109,8 +109,24 @@ export const PassportRegistrationPanel: React.FC = () => {
       return next;
     });
 
+  const totalPendingCutCount = people.reduce((acc, c) => acc + pendingCutsFor(c, regState).length, 0);
+  const selectedCutCount = people.reduce((acc, c) => {
+    if (dismissed.has(c.clusterId)) return acc;
+    const cuts = pendingCutsFor(c, regState);
+    return acc + cuts.filter((cut) => !unchecked.has(cutKey(c.clusterId, cut))).length;
+  }, 0);
+  const nameOnlySelfUpdate =
+    mode === 'self' &&
+    Boolean(selfCluster) &&
+    totalPendingCutCount === 0 &&
+    Boolean((names[selfCluster!.clusterId] ?? '').trim());
+  const canSubmit =
+    mode === 'self'
+      ? selectedCutCount > 0 || nameOnlySelfUpdate
+      : selectedCutCount > 0 || dismissed.size > 0;
+
   const handleSubmit = async () => {
-    if (busy) return;
+    if (busy || !canSubmit) return;
     setBusy(true);
     try {
       await submitPassportRegistration(
@@ -276,6 +292,12 @@ export const PassportRegistrationPanel: React.FC = () => {
         );
       })}
 
+      {mode === 'self' && selfCluster && totalPendingCutCount > 0 && selectedCutCount === 0 && (
+        <p className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 break-keep">
+          선택된 내 사진이 0장입니다. 내 사진이 1장 이상 체크되어 있어야 등록되며, 다른 분 사진이라면 왼쪽 아래 <strong>[다른 얼굴 고르기]</strong>를 눌러 주세요.
+        </p>
+      )}
+
       <div className="flex items-center justify-end gap-2 pt-0.5">
         {mode === 'self' &&
           selfCluster &&
@@ -303,11 +325,17 @@ export const PassportRegistrationPanel: React.FC = () => {
         {people.length > 0 && (
           <button
             type="button"
-            disabled={busy}
+            disabled={busy || !canSubmit}
             onClick={() => void handleSubmit()}
-            className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer disabled:opacity-50"
+            className="px-4 py-2 rounded-lg bg-slate-900 hover:bg-slate-800 text-white text-[12.5px] font-semibold cursor-pointer disabled:opacity-40 disabled:cursor-not-allowed"
           >
-            {busy ? '등록 중...' : '등록'}
+            {busy
+              ? '등록 중...'
+              : !canSubmit
+              ? '1장 이상 선택'
+              : mode === 'family' && selectedCutCount === 0 && dismissed.size > 0
+              ? '제외 반영'
+              : '등록'}
           </button>
         )}
       </div>
