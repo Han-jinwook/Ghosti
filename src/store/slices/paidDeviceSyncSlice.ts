@@ -636,9 +636,11 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
       prevEntitlement,
       Math.max(2, get().connectedDevices.length)
     );
-    set({
+    set((state) => ({
       deviceEntitlement: optimisticEnt,
-    });
+      syncState: { ...state.syncState, syncing: true },
+      lastQuarantineToast: '⏳ PC와 연결하는 중입니다... (2~3초 정도 걸릴 수 있습니다)',
+    }));
     const res = await consumeDevicePairingCode6(code);
     if (!res.ok) {
       const reasonCode = String(res.reason || '').trim();
@@ -675,22 +677,24 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
         errMsg =
           '30일 무료체험이 만료되었습니다. PC 웹 화면에서 이용권을 활성화한 뒤 연결할 수 있습니다.';
       }
-      set({
+      set((state) => ({
         deviceEntitlement: prevEntitlement,
+        syncState: { ...state.syncState, syncing: false },
         lastQuarantineToast: errMsg,
-      });
+      }));
       return false;
     }
     const hasMobile = res.devices.some((d) => d.device_kind === 'mobile');
-    set({
+    set((state) => ({
       connectedDevices: res.devices,
       deviceEntitlement: res.entitlement,
       thisDeviceRevoked: false,
       pcAgentPairedMobile: hasMobile || res.devices.length >= 2,
+      syncState: { ...state.syncState, syncing: false },
       lastQuarantineToast: res.alreadyPaired
         ? `이미 연결된 기기입니다(연결된 기기 ${res.devices.length}대).`
         : `내 PC와 스마트폰 연결이 완료되었습니다(${res.devices.length}대 연결됨).`,
-    });
+    }));
     return true;
   },
 
