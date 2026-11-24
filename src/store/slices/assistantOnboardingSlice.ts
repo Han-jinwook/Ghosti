@@ -856,8 +856,8 @@ export const createAssistantOnboardingSlice: StateCreator<
           livePhotos,
           stNow.faceClusters,
           false,
-          // 이미 캐시된 얼굴 묶음이 로드된 상태에서는 20장 중간 스트리밍으로 기존 완성 묶음을 덮어쓰지 않고 최종 완료분만 반영
-          stNow.faceClusters.length === 0 ? applyScannedClusters : undefined
+          // 초기 부분 스캔(20~40장) 결과로 여권 패널이 먼저 열려 가족 일부만 노출되는 레이스를 막기 위해 완주 후 일괄 반영
+          undefined
         );
         applyScannedClusters(scanned.clusters, scanned.latestCorpusYear);
       } catch {

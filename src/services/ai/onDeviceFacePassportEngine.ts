@@ -8,18 +8,18 @@
 import type { FaceMemberCluster, PhotoItem, YearlyFaceBestCut } from '../../types/saysee';
 import type { WorkerDetectedFace } from './facePassportWorker';
 
-const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v10';
-const MAX_SCAN_PHOTOS = 160;
-const MAX_CLUSTERS = 10;
+const ONDEVICE_FACE_CACHE_KEY = 'ghosti_ondevice_face_clusters_v11';
+const MAX_SCAN_PHOTOS = 260;
+const MAX_CLUSTERS = 18;
 const MAX_CUTS_PER_CLUSTER = 6;
 /** OpenCV SFace 공식 5점 정렬(ArcFace 112x112) 기준 초기 고순도 시드 결합 임계치 */
 const SIMILARITY_THRESHOLD = 0.44;
 /** 동일인 다각도·선글라스·연도별 서브클러스터 중심 벡터 재병합 임계치 (동일 사진 동반 등장 Cannot-Link + 상위 3쌍 검증 결합) */
 const MERGE_CENTROID_THRESHOLD = 0.42;
 const MERGE_TOP3_PAIR_THRESHOLD = 0.45;
-/** 여권사진 정체성 변별을 위한 원본/썸네일 내 최소 얼굴 크기(px) 및 양안 간격(px) — 초소형 배경 흐림 오병합 원천 차단 */
-const MIN_PASSPORT_FACE_PX = 26;
-const MIN_PASSPORT_EYE_SPAN_PX = 8.0;
+/** 여권사진 정체성 변별 및 4~10인 가족 단체사진(280px 썸네일 내 자녀·어르신 얼굴 19~25px) 동시 포착 최소 기준 — 18px 이하 원경 노이즈 차단 */
+const MIN_PASSPORT_FACE_PX = 19;
+const MIN_PASSPORT_EYE_SPAN_PX = 5.8;
 /** ArcFace / OpenCV SFace 112x112 공식 5점 기준 랜드마크 (우안, 좌안, 코, 우입꼬리, 좌입꼬리) */
 const ARCFACE_REF_112: ReadonlyArray<readonly [number, number]> = [
   [38.2946, 51.6963],
@@ -32,12 +32,15 @@ const SCREENSHOT_NAME_RX = /(screenshot|스크린샷|캡처|캡쳐|capture|화�
 /** AI 생성·스톡·웹 작업 이미지 판별 */
 const AI_OR_STOCK_IMAGE_NAME_RX =
   /(gemini_generated|chatgpt|midjourney|dall[-_]?e|stable[-_]?diffusion|comfyui|flux[-_]|stock_photo|unsplash|pexels|pixabay|freepik|shutterstock|gettyimages|ai_generated|generated_image|_remix_|^image-\d{4,}|^image(\s*\(\d+\))?\.png$)/i;
-/** 시스템 임시폴더·앱 리소스·유튜브/AI/전자책/마케팅 작업 폴더 (실제 내 일상·가족 사진이 아닌 폴더 배제) */
+/** 시스템 임시폴더·앱 리소스·유튜브/AI/전자책/마케팅/음식전용 폴더 (실제 내 일상·가족 인물 사진이 아닌 폴더 배제) */
 const NON_PORTRAIT_WORK_OR_TEMP_PATH_RX =
-  /(?:[\\/](?:appdata[\\/]local[\\/]temp|tmp|jetski_recording_[^\\/]*|merlin_vid_fullocr_[^\\/]*|merlin_pdf_ppocr_[^\\/]*|crisp_thumbs|accountpictures|google ai studio|g_youtube|ai캐릭터|오일요법|캘리버 서재|calibre|의료기라벨|amd-catalyst|merlintools[\\/]assets|[^\\/]+_files|brandmark|ocam|급식앱\(캡쳐\)|급식|식판|앱오류|뭐먹지 로고|증빙서류|node_modules)[\\/]|^(?:IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025|귀신같이_캡처_))/i;
+  /(?:[\\/](?:appdata[\\/]local[\\/]temp|tmp|jetski_recording_[^\\/]*|merlin_vid_fullocr_[^\\/]*|merlin_pdf_ppocr_[^\\/]*|crisp_thumbs|accountpictures|google ai studio|g_youtube|ai캐릭터|오일요법|캘리버 서재|calibre|의료기라벨|amd-catalyst|merlintools[\\/]assets|[^\\/]+_files|brandmark|ocam|급식앱\(캡쳐\)|급식|식판|앱오류|뭐먹지 로고|증빙서류|node_modules|03_맛집_음식_고기_카페_디저트|맛집_음식)[\\/]|^(?:IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025|귀신같이_캡처_))/i;
 /** 스마트폰·디지털카메라·클라우드 앨범 표준 촬영 파일명 패턴 (예: 20240720_182301.jpg, 제주대가족여행_20200622_..., 1721441387443.jpg, IMG_1234.jpg, KakaoTalk_...) */
 const REAL_CAMERA_PHOTO_NAME_RX =
   /(?:(?:^|_)(?:19|20)\d{6}[_-]\d{4,6}|^1[5-8]\d{11}(?:\(\d+\))?\.jpe?g$|^(?:IMG[_-]|DSC[_N0-9]|DCIM|PXL[_-]|SAM[_-]|GOPR|DJI[_-]|KakaoTalk_\d{8}|사진))/i;
+/** 가족·인물·여행 폴더/파일명 우선 가중치 힌트 */
+const PORTRAIT_FOLDER_OR_NAME_HINT_RX =
+  /(가족|인물|커플|모임|스냅|여행|제주|스키|생일|돌잔치|결혼|휴가|아이|아들|딸|부모|엄마|아빠|할머니|할아버지)/i;
 /** 실제 사람 피부톤 최소 비율 (카툰·초록/파란 캐릭터·음식·국그릇 오탐 차단, 그늘·역광·실내 인물 사진은 100% 통과) */
 const MIN_HUMAN_SKIN_RATIO = 0.12;
 
@@ -76,20 +79,18 @@ export function isOnDeviceFaceScanRunning(): boolean {
 }
 
 function buildPhotosFingerprint(photos: PhotoItem[]): string {
-  const real = photos
-    .filter(
-      (p) =>
-        p &&
-        !p.quarantined &&
-        !NON_PORTRAIT_WORK_OR_TEMP_PATH_RX.test(p.fullPath || '') &&
-        !NON_PORTRAIT_WORK_OR_TEMP_PATH_RX.test(p.name || '') &&
-        !AI_OR_STOCK_IMAGE_NAME_RX.test(p.name || '')
-    )
-    .slice(0, 60);
+  const real = photos.filter(
+    (p) =>
+      p &&
+      !p.quarantined &&
+      !NON_PORTRAIT_WORK_OR_TEMP_PATH_RX.test(p.fullPath || '') &&
+      !NON_PORTRAIT_WORK_OR_TEMP_PATH_RX.test(p.name || '') &&
+      !AI_OR_STOCK_IMAGE_NAME_RX.test(p.name || '')
+  );
   if (real.length === 0) return '';
   const head = real.slice(0, 8).map((p) => p.name).join('|');
   const tail = real.slice(-4).map((p) => p.name).join('|');
-  return `v10:${real.length}:${head}:${tail}`;
+  return `v11:${real.length}:${head}:${tail}`;
 }
 
 export function loadCachedOnDeviceFaceClusters(): {
@@ -143,6 +144,28 @@ export function saveCachedOnDeviceFaceClusters(
 
 function parsePhotoYearAndDate(photo: PhotoItem): { year: number; dateStr: string } {
   const nowYear = new Date().getFullYear();
+  const cleanName = normalizePhotoBaseKey(photo.name || '');
+
+  // 1순위: 파일명에 명시된 실제 촬영일자(예: 제주대가족여행_20200622_..., 20240720_182301.jpg) — 폴더 복사일(st_mtime=2026) 오염 방지
+  const nm = cleanName.match(/(?:^|\D)(19[89]\d|20[0-3]\d)[-_.]?(0[1-9]|1[0-2])[-_.]?(0[1-9]|[12]\d|3[01])(?:\D|$)/);
+  if (nm) {
+    const y = Math.min(nowYear, Math.max(1980, Number(nm[1])));
+    return { year: y, dateStr: `${y}-${nm[2]}-${nm[3]}` };
+  }
+
+  // 2순위: 13자리 밀리초 타임스탬프 파일명(예: 1721441387443.jpg)
+  const epochMatch = cleanName.match(/^(1[4-9]\d{11})(?:\(\d+\))?\.[a-z0-9]+$/i);
+  if (epochMatch) {
+    const dt = new Date(Number(epochMatch[1]));
+    const y = dt.getFullYear();
+    if (y >= 2014 && y <= nowYear) {
+      const m = String(dt.getMonth() + 1).padStart(2, '0');
+      const d = String(dt.getDate()).padStart(2, '0');
+      return { year: y, dateStr: `${y}-${m}-${d}` };
+    }
+  }
+
+  // 3순위: EXIF / 메타데이터 촬영일(photo.date)
   const dateRaw = String(photo.date || '').trim();
   const dm = dateRaw.match(/(19\d{2}|20\d{2})[-./]?(\d{2})?[-./]?(\d{2})?/);
   if (dm) {
@@ -151,19 +174,86 @@ function parsePhotoYearAndDate(photo: PhotoItem): { year: number; dateStr: strin
     const d = dm[3] || '01';
     return { year: y, dateStr: `${y}-${m}-${d}` };
   }
-  const nm = String(photo.name || '').match(/(19\d{2}|20\d{2})(\d{2})(\d{2})/);
-  if (nm) {
-    const y = Math.min(nowYear, Math.max(1980, Number(nm[1])));
-    return { year: y, dateStr: `${y}-${nm[2]}-${nm[3]}` };
-  }
+
   if (photo.mtimeMs && photo.mtimeMs > 946684800000) {
     const dt = new Date(photo.mtimeMs);
-    const y = dt.getFullYear();
+    const y = Math.min(nowYear, Math.max(1980, dt.getFullYear()));
     const m = String(dt.getMonth() + 1).padStart(2, '0');
     const d = String(dt.getDate()).padStart(2, '0');
     return { year: y, dateStr: `${y}-${m}-${d}` };
   }
   return { year: nowYear, dateStr: `${nowYear}-01-01` };
+}
+
+/**
+ * 연도별 균등 층화 표집(Stratified Multi-Year Portrait-First Sampling)
+ * - 최신 특정 연도(예: 2024 커플 여행 170장)가 스캔 쿼터를 독점해 과거 가족 여행 폴더(2017~2020 자녀·부모님 사진)가
+ *   통째로 누락되는 현상을 원천 차단합니다.
+ * - 동명 중복 사본을 먼저 걸러낸 뒤 촬영 연도별로 버킷을 나누고, 각 연도 안에서는 가족·인물·여행 폴더 및 카메라 원본 JPEG를
+ *   우선 정렬하여 모든 연도에서 라운드로빈으로 고르게 추출합니다.
+ */
+function selectStratifiedFaceScanCandidates(basePool: PhotoItem[], maxCount: number): PhotoItem[] {
+  const byBaseKey = new Map<string, PhotoItem>();
+  for (const p of basePool) {
+    const key = normalizePhotoBaseKey(p.name);
+    const prev = byBaseKey.get(key);
+    if (!prev) {
+      byBaseKey.set(key, p);
+    } else {
+      const prevHasHashSuffix = /__[0-9A-Za-z가-힣_-]{1,18}_[0-9a-f]{6}(?=\.[^.]+$)/i.test(prev.name);
+      const curHasHashSuffix = /__[0-9A-Za-z가-힣_-]{1,18}_[0-9a-f]{6}(?=\.[^.]+$)/i.test(p.name);
+      if (prevHasHashSuffix && !curHasHashSuffix) {
+        byBaseKey.set(key, p);
+      }
+    }
+  }
+
+  const deduped = Array.from(byBaseKey.values());
+  const byYear = new Map<number, PhotoItem[]>();
+  for (const p of deduped) {
+    const { year } = parsePhotoYearAndDate(p);
+    const list = byYear.get(year);
+    if (list) list.push(p);
+    else byYear.set(year, [p]);
+  }
+
+  const scoreCandidatePriority = (p: PhotoItem): number => {
+    const pathAndName = `${p.fullPath || ''} ${p.name || ''}`;
+    let rank = 0;
+    if (!PORTRAIT_FOLDER_OR_NAME_HINT_RX.test(pathAndName)) rank += 10;
+    if (!(REAL_CAMERA_PHOTO_NAME_RX.test(p.name) && /\.jpe?g$/i.test(p.name))) rank += 4;
+    if (SCREENSHOT_NAME_RX.test(p.name) || /\.png$/i.test(p.name)) rank += 20;
+    return rank;
+  };
+
+  const yearsDesc = Array.from(byYear.keys()).sort((a, b) => b - a);
+  for (const y of yearsDesc) {
+    const arr = byYear.get(y)!;
+    arr.sort((a, b) => {
+      const pa = scoreCandidatePriority(a);
+      const pb = scoreCandidatePriority(b);
+      if (pa !== pb) return pa - pb;
+      return (b.mtimeMs || 0) - (a.mtimeMs || 0);
+    });
+  }
+
+  const selected: PhotoItem[] = [];
+  const cursors = new Map<number, number>(yearsDesc.map((y) => [y, 0]));
+  while (selected.length < maxCount) {
+    let pickedInRound = false;
+    for (const y of yearsDesc) {
+      const arr = byYear.get(y)!;
+      const idx = cursors.get(y) || 0;
+      if (idx < arr.length) {
+        selected.push(arr[idx]);
+        cursors.set(y, idx + 1);
+        pickedInRound = true;
+        if (selected.length >= maxCount) break;
+      }
+    }
+    if (!pickedInRound) break;
+  }
+  return selected;
 }
 
 function loadImageForFaceScan(url: string): Promise<HTMLImageElement | null> {
@@ -607,18 +697,27 @@ function clusterExtractedFaces(
     );
     const rep = uniqueSamples[0];
 
-    // 연도별 베스트 컷 (연도당 최대 2장, 전체 최대 6장 — 파일명이 달라도 시각적으로 동일한 중복 사본/연사는 제외)
+    // 연도별 베스트 컷 (1차: 서로 다른 촬영 연도별로 대표 1장씩 우선 배분 ➔ 2차: 남는 슬롯에 연도당 최대 2장까지 추가, 시각 중복 dot > 0.86 배제)
     const cutsByYear = new Map<number, ExtractedFaceSample[]>();
     const selectedCutSamples: ExtractedFaceSample[] = [];
     for (const u of uniqueSamples) {
-      if (selectedCutSamples.some((prev) => dot(u.embedding, prev.embedding) > 0.94)) {
-        continue;
-      }
-      const arr = cutsByYear.get(u.year) || [];
-      if (arr.length < 2) {
-        arr.push(u);
-        cutsByYear.set(u.year, arr);
-        selectedCutSamples.push(u);
+      if (selectedCutSamples.length >= MAX_CUTS_PER_CLUSTER) break;
+      if (cutsByYear.has(u.year)) continue;
+      if (selectedCutSamples.some((prev) => dot(u.embedding, prev.embedding) > 0.86)) continue;
+      cutsByYear.set(u.year, [u]);
+      selectedCutSamples.push(u);
+    }
+    if (selectedCutSamples.length < MAX_CUTS_PER_CLUSTER) {
+      for (const u of uniqueSamples) {
+        if (selectedCutSamples.length >= MAX_CUTS_PER_CLUSTER) break;
+        if (selectedCutSamples.includes(u)) continue;
+        if (selectedCutSamples.some((prev) => dot(u.embedding, prev.embedding) > 0.86)) continue;
+        const arr = cutsByYear.get(u.year) || [];
+        if (arr.length < 2) {
+          arr.push(u);
+          cutsByYear.set(u.year, arr);
+          selectedCutSamples.push(u);
+        }
       }
     }
     const yearlyBestCuts: YearlyFaceBestCut[] = Array.from(cutsByYear.entries())
@@ -761,19 +860,7 @@ export async function runOnDeviceFacePassportScan(
             !p.isVaultDocument &&
             !AI_OR_STOCK_IMAGE_NAME_RX.test(p.name || '')
         );
-  const candidates = basePool
-    .sort((a, b) => {
-      // 1순위: 스마트폰·카메라 표준 촬영 파일(20240720_..., 제주대가족여행_20200622_..., 1721441387443.jpg, IMG_..., KakaoTalk_...)
-      const aCam = REAL_CAMERA_PHOTO_NAME_RX.test(a.name) && /\.jpe?g$/i.test(a.name) ? 0 : 1;
-      const bCam = REAL_CAMERA_PHOTO_NAME_RX.test(b.name) && /\.jpe?g$/i.test(b.name) ? 0 : 1;
-      if (aCam !== bCam) return aCam - bCam;
-      // 2순위: 일반 JPEG vs PNG/스크린샷
-      const aScreen = SCREENSHOT_NAME_RX.test(a.name) || /\.png$/i.test(a.name) ? 1 : 0;
-      const bScreen = SCREENSHOT_NAME_RX.test(b.name) || /\.png$/i.test(b.name) ? 1 : 0;
-      if (aScreen !== bScreen) return aScreen - bScreen;
-      return (b.mtimeMs || 0) - (a.mtimeMs || 0);
-    })
-    .slice(0, MAX_SCAN_PHOTOS);
+  const candidates = selectStratifiedFaceScanCandidates(basePool, MAX_SCAN_PHOTOS);
 
   if (candidates.length === 0) {
     return { clusters: existingClusters, latestCorpusYear: new Date().getFullYear() };
@@ -876,7 +963,7 @@ export async function runOnDeviceFacePassportScan(
 
         let activeSource: ScanImageSource = img;
         const in0 = prepareYuNetInput(img, inputCanvas, inputCtx);
-        let faces = await detectInWorker(in0.bgr, in0.origW, in0.origH, in0.scale, 0.82);
+        let faces = await detectInWorker(in0.bgr, in0.origW, in0.origH, in0.scale, 0.80);
         const maxScore0 = faces.length > 0 ? faces[0].score : 0;
 
         // [무EXIF 회전 사진 정방향(0°) 자동 복원]:
@@ -954,8 +1041,9 @@ export async function runOnDeviceFacePassportScan(
           await new Promise<void>((r) => window.setTimeout(r, 8));
         }
 
-        // 중간 스트리밍 반영: 24장마다(또는 마지막 직전) 동일 인물 3장 이상 클러스터가 형성되면 즉시 1차 반영
-        if (onInterimClusters && (i === 19 || i === 39 || i === 69 || i === 109) && extracted.length >= 3) {
+        // 중간 스트리밍 반영: 초기 20~40장 부분 결과로 여권 패널이 성급히 열려 가족 일부만 노출되는 레이스를 막기 위해
+        // 충분한 다년도 표본(180장 이상)이 누적되었을 때만 1회 선반영
+        if (onInterimClusters && i === 179 && candidates.length > 200 && extracted.length >= 6) {
           const interim = clusterExtractedFaces(extracted, existingClusters);
           if (interim.clusters.some((c) => (c.matchedPhotoCount || 0) >= 3)) {
             onInterimClusters(interim.clusters, interim.latestCorpusYear);

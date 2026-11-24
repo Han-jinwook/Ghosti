@@ -850,7 +850,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       if (!isScanFinished && isOnDeviceFaceScanRunning()) return false;
 
       const curStore = useSaySeeStore.getState();
-      const qualified = rankFaceClusters(curStore.faceClusters || [], 6, PASSPORT_MIN_FACE_PHOTOS_FOR_ASK);
+      const qualified = rankFaceClusters(curStore.faceClusters || [], 12, PASSPORT_MIN_FACE_PHOTOS_FOR_ASK);
       const nick = (waited.nickname || loadGhostSecretaryState().nickname || '').trim();
       const nickPrefix = nick ? `${nick}님, ` : '';
 

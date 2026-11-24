@@ -81,8 +81,9 @@ export function notifyPassportFaceScanFinished(): void {
 export const PASSPORT_MIN_FACE_PHOTOS_FOR_ASK = 3;
 /** '가족으로 보이는 얼굴' 최소 등장 사진 수 (본인과 동일하게 3장 이상) */
 export const FAMILY_MIN_PHOTOS = 3;
-/** 한 화면에 보여줄 최대 인원 / 사진 수 */
-const MAX_FACES = 6;
+/** 한 화면에 보여줄 최대 인원 / 사진 수 (부모님·자녀·조부모 대가족 전원 표시) */
+export const MAX_PASSPORT_CANDIDATE_FACES = 12;
+const MAX_FACES = MAX_PASSPORT_CANDIDATE_FACES;
 const MAX_CUTS_PER_PERSON = 12;
 
 export interface PassportRegState {
@@ -382,14 +383,17 @@ export function getConfirmedSelfPassportView(): {
 
 /** 가족으로 보이는 얼굴 묶음 (본인·뺀 얼굴 제외, 일정 사진 수 이상, 아직 물을 사진이 있는 경우) */
 export function familyCandidates(st = loadPassportRegState()): FaceMemberCluster[] {
-  const dismissed = new Set(st.dismissedClusterIds);
+  const self = findSelfCluster(st);
+  const freshSt = self ? loadPassportRegState() : st;
+  const selfId = self?.clusterId || freshSt.selfClusterId;
+  const dismissed = new Set(freshSt.dismissedClusterIds);
   return rankFaceClusters(liveClusters(), 30)
     .filter(
       (c) =>
-        c.clusterId !== st.selfClusterId &&
+        c.clusterId !== selfId &&
         !dismissed.has(c.clusterId) &&
         (c.matchedPhotoCount || 0) >= FAMILY_MIN_PHOTOS &&
-        pendingCutsFor(c, st).length > 0
+        pendingCutsFor(c, freshSt).length > 0
     )
     .slice(0, MAX_FACES);
 }

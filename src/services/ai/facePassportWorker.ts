@@ -281,7 +281,7 @@ function decodeYuNetOutputs(
       }
     }
     if (!dup) kept.push(f);
-    if (kept.length >= 6) break;
+    if (kept.length >= 12) break;
   }
   return kept;
 }
