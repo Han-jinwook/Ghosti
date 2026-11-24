@@ -1049,6 +1049,293 @@ def _is_external_volume_approved_in_policy(vol_id: str) -> bool:
     return False
 
 
+_WEB_EXT_DRIVE_LOCK = threading.Lock()
+_WEB_EXT_DRIVE_STATE: dict = {
+    "indexing_vol_id": "",
+    "indexing_drive": "",
+    "indexing_est_min": 1,
+    "indexing_pct": 0,
+    "completed_until": 0.0,
+    "completed_drive": "",
+    "completed_count": 0,
+    "connected_map": {},
+}
+
+
+def _quick_probe_os_external_drive(drv_root: str) -> tuple[bool, int, str]:
+    """인증서(NPKI) 전용 · OS 설치용 · 파일 5개 미만 USB를 Read-Only os.scandir로 0.08초 내 자동 패스 판별합니다."""
+    target_exts = _IMAGE_EXTS | _DOC_EXTS | _VIDEO_EXTS
+    root_p = Path(drv_root)
+    try:
+        if (root_p / "bootmgr").exists() and (root_p / "sources").exists():
+            return (False, 0, "OS_INSTALLER")
+    except Exception:
+        return (False, 0, "UNREADABLE")
+
+    media_cnt = 0
+    sub_dirs: List[Path] = []
+    t0 = time.time()
+    try:
+        with os.scandir(root_p) as it:
+            for ent in it:
+                try:
+                    nm = ent.name
+                    nm_low = nm.lower()
+                    if nm.startswith((".", "$", "~")) or nm_low in ("npki", "system volume information", "$recycle.bin", "autorun.inf"):
+                        continue
+                    if ent.is_dir(follow_symlinks=False):
+                        if nm_low not in _SKIP_DIR_NAMES and len(sub_dirs) < 40:
+                            sub_dirs.append(Path(ent.path))
+                    elif ent.is_file(follow_symlinks=False):
+                        dot = nm_low.rfind(".")
+                        if dot >= 0 and nm_low[dot:] in target_exts:
+                            media_cnt += 1
+                except Exception:
+                    pass
+    except Exception:
+        return (False, 0, "UNREADABLE")
+
+    for sd in sub_dirs:
+        if (time.time() - t0) > 0.12 or media_cnt >= 1500:
+            break
+        try:
+            with os.scandir(sd) as it2:
+                for ent2 in it2:
+                    try:
+                        nm2 = ent2.name
+                        nm2_low = nm2.lower()
+                        if nm2.startswith((".", "$", "~")):
+                            continue
+                        if ent2.is_file(follow_symlinks=False):
+                            dot2 = nm2_low.rfind(".")
+                            if dot2 >= 0 and nm2_low[dot2:] in target_exts:
+                                media_cnt += 1
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+    if media_cnt < 5:
+        return (False, media_cnt, "CERT_OR_UNDER_5")
+    return (True, media_cnt, "DATA_DRIVE")
+
+
+def get_external_drives_status() -> dict:
+    """GET /__zcore/external-drives — 웹 2. 귀신검색 화면용 외장/USB 질문·탈착금지·완료 배너 상태 반환."""
+    now_s = time.time()
+    if _WEB_EXT_DRIVE_STATE.get("indexing_vol_id"):
+        return {
+            "ok": True,
+            "banner": {
+                "status": "indexing",
+                "volId": _WEB_EXT_DRIVE_STATE["indexing_vol_id"],
+                "drive": _WEB_EXT_DRIVE_STATE["indexing_drive"],
+                "estMin": int(_WEB_EXT_DRIVE_STATE.get("indexing_est_min") or 1),
+                "pct": int(_WEB_EXT_DRIVE_STATE.get("indexing_pct") or 10),
+            },
+        }
+    if now_s < float(_WEB_EXT_DRIVE_STATE.get("completed_until") or 0.0):
+        return {
+            "ok": True,
+            "banner": {
+                "status": "completed",
+                "drive": _WEB_EXT_DRIVE_STATE["completed_drive"],
+                "count": int(_WEB_EXT_DRIVE_STATE.get("completed_count") or 0),
+            },
+        }
+
+    pol_p = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")) / "Merlin" / "external_drive_policy.json"
+    pol_vols = {}
+    if pol_p.exists():
+        try:
+            raw = json.loads(pol_p.read_text(encoding="utf-8", errors="ignore"))
+            if isinstance(raw, dict) and isinstance(raw.get("volumes"), dict):
+                pol_vols = raw["volumes"]
+        except Exception:
+            pass
+
+    import string
+    connected_map = {}
+    first_prompt = None
+    for letter in string.ascii_uppercase:
+        if letter in ("A", "B", "C", "S"):
+            continue
+        d_info = _classify_os_drive_and_volume(letter)
+        if not d_info or not d_info["is_external"]:
+            continue
+        vid = d_info["vol_id"]
+        v_rec = pol_vols.get(vid) if isinstance(pol_vols.get(vid), dict) else {}
+        dec = str(v_rec.get("decision") or "pending")
+        if dec == "excluded":
+            continue
+        if str(v_rec.get("indexingStatus") or "") == "indexing" and (now_s - float(v_rec.get("updatedAt") or 0.0)) < 600.0:
+            return {
+                "ok": True,
+                "banner": {
+                    "status": "indexing",
+                    "volId": vid,
+                    "drive": f"{letter}:",
+                    "estMin": int(v_rec.get("estimatedMinutes") or 1),
+                    "pct": int(v_rec.get("progressPct") or 20),
+                },
+            }
+        is_data, est_cnt, _ = _quick_probe_os_external_drive(d_info["root"])
+        if not is_data and dec != "included":
+            continue
+        est_min = max(1, min(15, round(max(5, est_cnt) / 450)))
+        meta = {
+            "volId": vid,
+            "drive": f"{letter}:",
+            "label": d_info["label"],
+            "estFiles": est_cnt,
+            "estMin": est_min,
+            "decision": dec,
+        }
+        connected_map[vid] = meta
+        if dec == "pending" and first_prompt is None:
+            first_prompt = meta
+
+    _WEB_EXT_DRIVE_STATE["connected_map"] = connected_map
+    if first_prompt:
+        return {"ok": True, "banner": {"status": "prompt", **first_prompt}}
+    return {"ok": True, "banner": None}
+
+
+def decide_external_drive_web(payload: dict) -> dict:
+    """POST /__zcore/external-drives/decide — 웹 2. 귀신검색에서 외장 드라이브 [검색에 포함 / 제외] 결정 처리."""
+    global _FULL_DRIVE_SCAN_STARTED, _BG_INDEX_BUMP_SEQ
+    vol_id = str((payload or {}).get("volId") or "").strip()
+    decision = "included" if str((payload or {}).get("decision") or "").strip() == "included" else "excluded"
+    if not vol_id:
+        return {"ok": False, "error": "MISSING_VOL_ID"}
+
+    meta = (_WEB_EXT_DRIVE_STATE.get("connected_map") or {}).get(vol_id) or {}
+    drv_letter = str(meta.get("drive") or (payload or {}).get("drive") or "").strip()
+    drv_label = str(meta.get("label") or "외장 드라이브")
+    est_min = int(meta.get("estMin") or 1)
+
+    merlin_dir = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")) / "Merlin"
+    merlin_dir.mkdir(parents=True, exist_ok=True)
+    pol_p = merlin_dir / "external_drive_policy.json"
+    pol = {"volumes": {}}
+    if pol_p.exists():
+        try:
+            raw = json.loads(pol_p.read_text(encoding="utf-8", errors="ignore"))
+            if isinstance(raw, dict) and isinstance(raw.get("volumes"), dict):
+                pol = raw
+        except Exception:
+            pass
+    v_entry = pol.setdefault("volumes", {}).setdefault(vol_id, {})
+    v_entry.update({
+        "decision": decision,
+        "driveLetter": drv_letter,
+        "label": drv_label,
+        "estimatedMinutes": est_min,
+        "indexingStatus": "indexing" if decision == "included" else "excluded",
+        "progressPct": 10 if decision == "included" else 0,
+        "updatedAt": time.time(),
+    })
+    try:
+        pol_p.write_text(json.dumps(pol, ensure_ascii=False, indent=2), encoding="utf-8")
+    except Exception:
+        pass
+
+    if decision == "included" and drv_letter:
+        def _bg_web_ext_index() -> None:
+            global _FULL_DRIVE_SCAN_STARTED, _BG_INDEX_BUMP_SEQ
+            drv_prefix = drv_letter[:2].upper()
+            drv_root = f"{drv_prefix}\\"
+            _WEB_EXT_DRIVE_STATE["indexing_vol_id"] = vol_id
+            _WEB_EXT_DRIVE_STATE["indexing_drive"] = drv_prefix
+            _WEB_EXT_DRIVE_STATE["indexing_est_min"] = est_min
+            _WEB_EXT_DRIVE_STATE["indexing_pct"] = 10
+            try:
+                target_exts = _IMAGE_EXTS | _DOC_EXTS | _VIDEO_EXTS
+                scan_dirs: List[Path] = [Path(drv_root)]
+                seen_d = {os.path.normcase(drv_root)}
+                q_bfs: List[tuple[Path, int]] = [(Path(drv_root), 0)]
+                while q_bfs and len(scan_dirs) < 260:
+                    cur_d, depth = q_bfs.pop(0)
+                    if depth >= 4:
+                        continue
+                    try:
+                        with os.scandir(cur_d) as it_d:
+                            for de in it_d:
+                                if len(scan_dirs) >= 260:
+                                    break
+                                if de.is_dir(follow_symlinks=False):
+                                    nm_l = de.name.lower()
+                                    if de.name.startswith((".", "$", "~")) or nm_l in _SKIP_DIR_NAMES or nm_l == "npki":
+                                        continue
+                                    np_s = os.path.normcase(os.path.abspath(de.path))
+                                    if np_s not in seen_d:
+                                        seen_d.add(np_s)
+                                        ps = Path(de.path)
+                                        scan_dirs.append(ps)
+                                        q_bfs.append((ps, depth + 1))
+                    except Exception:
+                        pass
+                items = []
+                total_d = max(1, len(scan_dirs))
+                for idx_fd, fd in enumerate(scan_dirs):
+                    _WEB_EXT_DRIVE_STATE["indexing_pct"] = min(95, max(15, int(((idx_fd + 1) / total_d) * 90)))
+                    fd_badge = f"🔌{drv_prefix}\\{fd.name}" if fd.name else f"🔌{drv_prefix}\\"
+                    try:
+                        with os.scandir(fd) as it_f:
+                            for ent in it_f:
+                                if not ent.is_file(follow_symlinks=False):
+                                    continue
+                                nm = ent.name
+                                nm_l = nm.lower()
+                                dot = nm_l.rfind(".")
+                                if dot < 0 or nm_l[dot:] not in target_exts:
+                                    continue
+                                ext = nm_l[dot:]
+                                fkind = "image" if ext in _IMAGE_EXTS else ("video" if ext in _VIDEO_EXTS else "doc")
+                                st = ent.stat(follow_symlinks=False)
+                                full_s = ent.path
+                                rel_s = full_s[3:] if len(full_s) > 3 and full_s[1:3] == ":\\" else nm
+                                items.append({
+                                    "kind": fkind,
+                                    "file_path": full_s,
+                                    "rel_path": rel_s,
+                                    "text": f"[{fd_badge}] {nm}",
+                                    "ts": float(st.st_mtime),
+                                })
+                    except Exception:
+                        pass
+                items.sort(key=lambda x: x.get("ts", 0.0), reverse=True)
+                items = items[:1500]
+                ext_cache_dir = merlin_dir / "external_cache" / vol_id
+                ext_cache_dir.mkdir(parents=True, exist_ok=True)
+                (ext_cache_dir / "index_cache.json").write_text(
+                    json.dumps({"volId": vol_id, "driveLetter": drv_prefix, "label": drv_label, "indexedAt": time.time(), "itemCount": len(items), "items": items}, ensure_ascii=False),
+                    encoding="utf-8",
+                )
+                # 웹 2. 귀신검색 2단계 전체 드라이브 목록에도 즉시 편입
+                with _FULL_DRIVE_SCAN_LOCK:
+                    _FULL_DRIVE_SCAN_STARTED = False
+                _start_bg_full_drive_scan_once()
+                _BG_INDEX_BUMP_SEQ += 1
+                _WATCH_SIG_TTL_CACHE["ts"] = 0.0
+                _PHOTOS_RESP_MEM_CACHE["sig"] = ""
+                _DOCS_RESP_MEM_CACHE["sig"] = ""
+                _VIDEOS_RESP_MEM_CACHE["sig"] = ""
+                _WEB_EXT_DRIVE_STATE["completed_drive"] = drv_prefix
+                _WEB_EXT_DRIVE_STATE["completed_count"] = len(items)
+                _WEB_EXT_DRIVE_STATE["completed_until"] = time.time() + 18.0
+                v_entry.update({"indexingStatus": "completed", "progressPct": 100, "indexedCount": len(items), "updatedAt": time.time()})
+                pol_p.write_text(json.dumps(pol, ensure_ascii=False, indent=2), encoding="utf-8")
+            except Exception:
+                pass
+            finally:
+                _WEB_EXT_DRIVE_STATE["indexing_vol_id"] = ""
+
+        threading.Thread(target=_bg_web_ext_index, daemon=True, name="GhostiWebExtDriveIndex").start()
+        return {"ok": True, "status": "indexing", "volId": vol_id, "drive": drv_letter, "estMin": est_min}
+
+    return {"ok": True, "status": "excluded", "volId": vol_id}
+
+
 def _start_bg_full_drive_scan_once() -> None:
     """
     [2단계 백그라운드 전체 드라이브 스캔 (1단계 우선 폴더 0.05초 즉시 개방 후 C:, D:, E: 전수 확대)]
@@ -1767,6 +2054,23 @@ def _trigger_monthly_orphan_cache_gc_once() -> None:
                         os.replace(tmp_f, cache_file)
                 except Exception:
                     pass
+            # 30일 이상 미사용(미접속) 외장 드라이브 로컬 격리 캐시(%LOCALAPPDATA%\Merlin\external_cache\<VOL_ID>) 자동 정리
+            try:
+                import shutil
+                ext_cache_root = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local")) / "Merlin" / "external_cache"
+                if ext_cache_root.exists():
+                    for vol_dir in ext_cache_root.iterdir():
+                        try:
+                            if not vol_dir.is_dir():
+                                continue
+                            idx_f = vol_dir / "index_cache.json"
+                            mt_ref = idx_f.stat().st_mtime if idx_f.exists() else vol_dir.stat().st_mtime
+                            if mt_ref < cutoff:
+                                shutil.rmtree(vol_dir, ignore_errors=True)
+                        except Exception:
+                            pass
+            except Exception:
+                pass
             _ORPHAN_CACHE_GC_STAMP.parent.mkdir(parents=True, exist_ok=True)
             _ORPHAN_CACHE_GC_STAMP.write_text(str(int(now_s)), encoding="utf-8")
         except Exception:

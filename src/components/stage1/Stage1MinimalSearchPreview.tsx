@@ -36,6 +36,7 @@ import {
   DEMO_SEARCH_SAMPLE_PHOTOS_2,
   DEMO_SEARCH_SAMPLE_VIDEOS_2,
 } from './stage1DemoSamples';
+import { ExternalDrivePromptBanner } from './ExternalDrivePromptBanner';
 
 const STAGE1_ROLLING_INTERVAL_MS = 180_000;
 
@@ -495,6 +496,8 @@ export const Stage1MinimalSearchPreview: React.FC<{
             내 기기 검색
           </h1>
         </div>
+
+        <ExternalDrivePromptBanner forceSampleOnly={forceSampleOnly} />
 
         <section className="w-full flex flex-col gap-2.5">
           <Stage1IsolatedSearchInputForm

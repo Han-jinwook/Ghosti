@@ -174,7 +174,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.7.71"
+CORE_VERSION = "2.7.72"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -764,6 +764,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_ghosti_os.get_local_watch_signature(qp))
             return
 
+        if path in ("/__zcore/external-drives", "/api/ghosti/external-drives"):
+            self._send_json(plugin_ghosti_os.get_external_drives_status())
+            return
+
         if path in ("/__photos/list", "/api/ghosti/photos/list"):
             try:
                 import ppocr_v5_worker
@@ -1212,6 +1216,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             prefix = "/api/aggrofilter" if path.startswith("/api/aggrofilter") else "/aggrofilter"
             sub = path[len(prefix) :].strip("/") or "extract"
             self._send_json(plugin_aggrofilter.handle_post(sub, body))
+            return
+
+        if path in ("/__zcore/external-drives/decide", "/api/ghosti/external-drives/decide"):
+            self._send_json(plugin_ghosti_os.decide_external_drive_web(payload))
             return
 
         if path.startswith("/__zcore/") or path.startswith("/api/ghosti/"):
