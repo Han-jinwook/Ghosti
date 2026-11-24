@@ -1820,6 +1820,16 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
       set({ isLoadingSharedRoomPhotos: true });
       const previewRes = await fetchGuestPreviewRoomByToken(parsed.inviteToken);
       if (previewRes.ok && previewRes.room) {
+        if (previewRes.room.loungeType === 'work') {
+          // 서버 DB 기준 업무 공유방 토큰이면 사진 공유 탭에 절대 표시하지 않고 업무 공유 탭으로 격리
+          set({
+            activeLoungeType: 'work',
+            activeSharedRoomId: null,
+            activeJoinedRoomMeta: null,
+            isLoadingSharedRoomPhotos: false,
+          });
+          return false;
+        }
         previewValid = true;
         resolvedRoomId = previewRes.room.roomId;
         resolvedLounge = previewRes.room.loungeType;

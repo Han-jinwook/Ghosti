@@ -186,7 +186,11 @@ export function parseShareInviteInput(rawInput: string | null | undefined): Pars
   }
 
   if (!params) return null;
+  // [3귀신↔4귀신 영역 격리] 업무 공유방(?workRoom=... 또는 ?invite=work...) 링크는 사진 공유 파서가 절대 가로채지 않습니다.
+  const workRoomRaw = (params.get('workRoom') || '').trim();
   const inviteRaw = (params.get('invite') || '').trim();
+  if (workRoomRaw || /^work/i.test(inviteRaw)) return null;
+
   const inviteToken = extractSafeRoomInviteToken(params);
   if (!inviteRaw && !inviteToken) return null;
 

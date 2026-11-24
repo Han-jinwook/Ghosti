@@ -23,6 +23,10 @@ function resolveInitialWebInvite(): ParsedShareInvite | null {
   if (!isMobileWebBrowser()) return null;
   try {
     const params = new URLSearchParams(window.location.search);
+    // 업무 공유방(?workRoom=... 또는 ?invite=work...) 링크는 4귀신 업무 공유 브릿지가 처리하도록 절대 가로채지 않음
+    if (params.has('workRoom') || /^work/i.test((params.get('invite') || '').trim())) {
+      return null;
+    }
     if (!params.has('invite') && !params.has('inviteToken') && !params.has('token')) {
       return null;
     }
