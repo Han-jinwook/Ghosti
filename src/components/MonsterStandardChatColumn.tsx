@@ -17,6 +17,8 @@ import {
 } from '../services/monsterChatRouter';
 import { MonsterInteractiveCardView } from './MonsterInteractiveCards';
 import { VoiceActorControlPill } from './VoiceActorControlPill';
+import { detectAgentCareIntent, getLastCareScanContext } from '../services/ghostCareAgentEngine';
+import { flushUnmatchedQuestionsToCloud } from '../services/ghostPassportSync';
 import {
   unlockMobileAudioOnUserGesture,
   notifyMicSessionEndedForTts,
@@ -49,6 +51,7 @@ import {
   setPassportSelf,
   questPromptFor,
   logUnmatchedQuestion,
+  loadUnmatchedQuestions,
   canKnockToday,
   todayKey,
   executeMobileSteppingStoneScan,
@@ -1193,7 +1196,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           /은행·관공서\s*보안프로그램.*?깨워드릴까요|(?:숨은\s*초능력|편의\s*기능).*?알려드릴까요/.test(m.text || '')
       );
     const isDirectCareOrStatusCommand =
-      /(진행해|실행해|정리해|치워\s*(?:줘|주세요)|복구해|복원\s*기록|복원\s*지점|복원해|되돌려|원복|원래대로|진행된|진행한|정리된|정리한|다\s*된|완료된|개선된|빨라졌|1초\s*건강|건강\s*검진|임시\s*설치|바탕화면|다운로드|기본\s*압축\s*앱|[c-zC-Z]\s*드라이브|용량\s*(?:부족|꽉|없|확보|도둑|주범|정리|스캔|분석|늘려)|공간\s*(?:부족|확보|정리|도둑|주범|스캔|분석|늘려)|캐시\s*(?:정리|청소|삭제|지워|스캔)|최대\s*절전|hiberfil|capcut|캡컷|wd\s*(?:폴더|아이콘)|이상한\s*(?:폴더|아이콘|거|게|앱|프로그램)|자꾸\s*(?:떠|뜨|돌아|켜져)|쓸데없는\s*(?:거|게|앱|프로그램)|뭐\s*(?:지우면|삭제하면|정리하면)|무거워|가볍게|청소\s*(?:좀|하자)|손\s*좀\s*보|손보자|지워도\s*(?:돼|되|괜찮)|이게\s*뭐야|뭐\s*하는\s*(?:앱|프로그램)|쥐새끼|스파이웨어|몰래|숨은|수동\s*전환|예스파일|mspcmanager|사용자\s*폴더|전원\s*(?:옵션|모드)|고성능\s*(?:모드|전원)|빼고|제외하고|놔두고|나머지\s*다|빨간색|옮겨\s*(?:줘|주세요)|사양|스펙|상태\s*봐|손봐\s*(?:줘|주세요)|느려|느린|버벅|부팅|재부팅|경과\s*시간|켜\s*둔\s*지|안\s*끄고|진단해|점검해|시작\s*프로그램|자동\s*실행|애드웨어|보안\s*모듈|보안\s*프로그램|보안\s*쓰레기|백신|디펜더|바이러스|랜섬웨어|알아서\s*재우고|숨은\s*초능력|비서\s*실적|실적\s*보고서|우클릭\s*0\.35초|은행\s*업무.*?깨워|강제\s*종료|지워\s*(?:줘|주세요)|삭제해\s*(?:줘|주세요)|적출|언인스톨|뿌리째|뿌리\s*뽑|유령\s*앱|온보딩\s*[123]\s*탭|스튜디오\s*문의방|복사\s*기록.*?(보관|바꿔)|상용구|cleanx|클린\s*x|클린엑스|청소\s*앱|클리너|(?:구독|정기\s*구독|정기\s*결제|자동\s*결제|주간\s*결제)\s*(?:해지|취소|확인|관리|알려|어디|어떻게|방법)|해지\s*(?:알려|어디|어떻게|방법))/i.test(
+      detectAgentCareIntent(raw, getLastCareScanContext()).matched ||
+      /(진행해|실행해|정리해|치워\s*(?:줘|주세요)|복구해|복원\s*기록|복원\s*지점|복원해|되돌려|원복|원래대로|휴지통|비워|진행된|진행한|정리된|정리한|다\s*된|완료된|개선된|빨라졌|1초\s*건강|건강\s*검진|임시\s*설치|바탕화면|다운로드|기본\s*압축\s*앱|[c-zC-Z]\s*드라이브|(?:저장\s*)?(?:용량|공간|하드|디스크)(?:이|가|은|는|도)?\s*(?:너무\s*|많이\s*)?(?:부족|모자라|꽉|없|확보|도둑|주범|정리|스캔|분석|늘려)|파일(?:이|가)?\s*안\s*(?:받아|열려|깔려|저장)|캐시\s*(?:정리|청소|삭제|지워|스캔)|최대\s*절전|hiberfil|capcut|캡컷|wd\s*(?:폴더|아이콘)|(?:이상한|수상한|광고)\s*(?:창|팝업|배너|알림|화면|폴더|아이콘|거|게|앱|프로그램)|자꾸.*?(?:떠|뜨|돌아|켜져|나와)|쓸데없는\s*(?:거|게|앱|프로그램)|뭐\s*(?:지우면|삭제하면|정리하면)|무거워|답답|렉\s*걸|멈칫|가볍게|청소\s*(?:좀|하자)|손\s*좀\s*보|손보자|지워도\s*(?:돼|되|괜찮)|이게\s*뭐야|뭐\s*하는\s*(?:앱|프로그램)|쥐새끼|스파이웨어|몰래|숨은|수동\s*전환|예스파일|mspcmanager|사용자\s*폴더|전원\s*(?:옵션|모드)|고성능\s*(?:모드|전원)|빼고|제외하고|놔두고|나머지\s*다|빨간색|옮겨\s*(?:줘|주세요)|사양|스펙|상태\s*봐|손봐\s*(?:줘|주세요)|느려|느린|버벅|부팅|재부팅|경과\s*시간|켜\s*둔\s*지|안\s*끄고|진단해|점검해|시작\s*프로그램|자동\s*실행|애드웨어|보안\s*모듈|보안\s*프로그램|보안\s*쓰레기|백신|디펜더|바이러스|랜섬웨어|알아서\s*재우고|숨은\s*초능력|비서\s*실적|실적\s*보고서|우클릭\s*0\.35초|은행\s*업무.*?깨워|강제\s*종료|지워\s*(?:줘|주세요)|삭제해\s*(?:줘|주세요)|적출|언인스톨|뿌리째|뿌리\s*뽑|유령\s*앱|온보딩\s*[123]\s*탭|스튜디오\s*문의방|복사\s*기록.*?(보관|바꿔)|상용구|cleanx|클린\s*x|클린엑스|청소\s*앱|클리너|(?:구독|정기\s*구독|정기\s*결제|자동\s*결제|주간\s*결제)\s*(?:해지|취소|확인|관리|알려|어디|어떻게|방법)|해지\s*(?:알려|어디|어떻게|방법))/i.test(
         raw
       );
     const preStForPlaybook = loadGhostSecretaryState();
@@ -1209,7 +1213,8 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     const isAnsweringInitialNickname =
       (Boolean(preStForPlaybook.awaitingNickname) || isLastBubbleAskingNickname) &&
       raw.length <= 36 &&
-      !/(진단해|점검해|정리해|치워|지워|삭제해|복구해|복원해|손봐|알려\s*줘|보여\s*줘|찾아\s*줘|깨워|재워|구독|해지|결제|청소\s*앱|클리너)/i.test(raw);
+      !isDirectCareOrStatusCommand &&
+      !/(진단해|점검해|정리해|치워|지워|삭제해|복구해|복원해|손봐|알려\s*줘|보여\s*줘|찾아\s*줘|깨워|재워|구독|해지|결제|청소\s*앱|클리너|컴퓨터|컴터|피씨|용량|공간|모자라|답답|버벅|느려|이상한|팝업)/i.test(raw);
     const shouldBypassSecretaryPlaybook =
       !isNickOrStoreSpecial &&
       !isAnsweringInitialNickname &&
@@ -1464,8 +1469,18 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       });
       setSharedMonsterMessages((prev) => [...prev, assistantMsg]);
       if (sourceTab === 'trash' && !assistantMsg.cardKind) {
-        // 대본집·손보기 라우터 어디에도 정형 매칭되지 않은 자유 질문 → 주간 대본집 편입 후보로 포집
+        // 대본집·손보기 라우터 어디에도 정형 매칭되지 않은 자유 질문 → 주간 대본집 편입 후보로 포집 + 비차단 클라우드 전송
         logUnmatchedQuestion(raw, 'no_playbook_match');
+        try {
+          const curEmail = (localStorage.getItem('ghosti_hub_user_email') || '').trim().toLowerCase();
+          if (curEmail) {
+            void flushUnmatchedQuestionsToCloud(curEmail, loadUnmatchedQuestions().slice(-5)).then((r) => {
+              if (r.ok) localStorage.removeItem('ghosti_unmatched_questions_v1');
+            });
+          }
+        } catch {
+          /* non-blocking */
+        }
       }
       // [UX 점검 #3] 엔진 연결 직후 자동 실행되는 첫 분석 질문(SECRETARY_FIRST_CARE_QUERY)도 '첫 건강검진'으로 인정 —
       //  깨끗한 PC(정리할 상주 모듈 0건 → 복원 기록 미발급)에서도 홀림 퀘스트(손없는 날 알림 → 음성검색 → 여권)가 끊기지 않게 이어간다

@@ -1049,9 +1049,20 @@ def rollback_restore_point(restore_id: str, user_rollback_text: str = "") -> Dic
                             if not cmd_v:
                                 err_reg = "원본 명령 기록 없음"
                             else:
-                                with _wr.OpenKey(r_root, r_sub, 0, _wr.KEY_WRITE) as rk:
-                                    _wr.SetValueEx(rk, name, 0, _wr.REG_SZ, cmd_v)
-                                ok_reg = True
+                                try:
+                                    with _wr.OpenKey(r_root, r_sub, 0, _wr.KEY_WRITE) as rk:
+                                        _wr.SetValueEx(rk, name, 0, _wr.REG_SZ, cmd_v)
+                                    ok_reg = True
+                                except PermissionError:
+                                    try:
+                                        import plugin_ghosti_care_suite as _cs_rb
+                                        q_rb = _cs_rb.execute_elevated_agent_care_queue("hidden_rats_rollback", {"ops": [op]})
+                                        if f"reg::{tag}::{name}" in (q_rb.get("restoredKeys") or []):
+                                            ok_reg = True
+                                        else:
+                                            err_reg = "관리자 권한 확인 필요"
+                                    except Exception as e_el_reg:
+                                        err_reg = str(e_el_reg)
                         except Exception as e_reg:
                             err_reg = str(e_reg)
                     else:
@@ -1078,13 +1089,29 @@ def rollback_restore_point(restore_id: str, user_rollback_text: str = "") -> Dic
                                         subprocess.run(["sc", "start", target], capture_output=True, text=True,
                                                        timeout=8, creationflags=0x08000000)
                                     else:
-                                        err_task = "관리자 권한 필요 또는 서비스 설정 변경 실패"
+                                        try:
+                                            import plugin_ghosti_care_suite as _cs_rb
+                                            q_rb = _cs_rb.execute_elevated_agent_care_queue("hidden_rats_rollback", {"ops": [op]})
+                                            if f"service::{target}" in (q_rb.get("restoredKeys") or []):
+                                                ok_task = True
+                                        except Exception:
+                                            pass
+                                        if not ok_task:
+                                            err_task = "관리자 권한 필요 또는 서비스 설정 변경 실패"
                                 else:
                                     err_task = "원래 시작 유형 기록 없음"
                             else:
-                                r2 = subprocess.run(["schtasks", "/Change", "/TN", "\\" + target, "/ENABLE"],
+                                r2 = subprocess.run(["schtasks", "/Change", "/TN", "\\" + target.lstrip("\\"), "/ENABLE"],
                                                     capture_output=True, text=True, timeout=5, creationflags=0x08000000)
                                 ok_task = r2.returncode == 0
+                                if not ok_task:
+                                    try:
+                                        import plugin_ghosti_care_suite as _cs_rb
+                                        q_rb = _cs_rb.execute_elevated_agent_care_queue("hidden_rats_rollback", {"ops": [op]})
+                                        if f"task::{target.lstrip(chr(92))}" in (q_rb.get("restoredKeys") or []):
+                                            ok_task = True
+                                    except Exception:
+                                        pass
                                 if not ok_task:
                                     err_task = "작업 스케줄러 복구 실패"
                         except Exception as e_t:

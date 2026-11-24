@@ -372,17 +372,18 @@ export async function pullGhostPassportsFromCloud(
   return { ok: true, newNames };
 }
 
-/** 로컬에 쌓인 미등록 질문을 서버로 올리고, 성공분만 로컬에서 비운다 (Opt-in 동의 시에만 작동) */
+/** 로컬에 쌓인 미등록·제미니 개입 질문을 서버로 비차단 업로드한다 (생체 얼굴 데이터와 무관한 질문 텍스트 300자 요약) */
 export async function flushUnmatchedQuestionsToCloud(
   ownerEmail: string,
   queue: UnmatchedQuestion[]
 ): Promise<{ ok: boolean; sent: number }> {
-  if (!isPassportCloudSyncOptedIn()) {
-    return { ok: false, sent: 0 };
-  }
   const sb = getGhostiAuthedSupabase();
   if (!sb || !queue.length) return { ok: false, sent: 0 };
-  const rows = queue.map((q) => ({ owner_email: ownerEmail ? ownerEmail.toLowerCase() : null, question: q.text, reason: q.reason }));
+  const rows = queue.slice(-30).map((q) => ({
+    owner_email: ownerEmail ? ownerEmail.toLowerCase() : null,
+    question: String(q.text || '').slice(0, 300),
+    reason: q.reason === 'feature_request' ? 'feature_request' : 'no_playbook_match',
+  }));
   const { error } = await sb.from('unmatched_questions').insert(rows);
   return error ? { ok: false, sent: 0 } : { ok: true, sent: rows.length };
 }

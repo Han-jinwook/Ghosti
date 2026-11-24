@@ -118,6 +118,7 @@ def sync_internal_z_core_mirrors():
         os.path.join(UZC_DIR, "os_agent", "ppocr_v5_worker.py"),
         os.path.join(UZC_DIR, "os_agent", "merlin_z_core_os.py"),
         os.path.join(UZC_DIR, "os_agent", "ghosti_safe_ops.py"),
+        os.path.join(UZC_DIR, "os_agent", "plugins", "plugin_ghosti_agent_care.py"),
         os.path.join(UZC_DIR, "os_agent", "security_services_whitelist.json"),
         os.path.join(UZC_DIR, "os_agent", "ghosti_setup_parity.py"),
         os.path.join(UZC_DIR, "os_agent", "plugin_senstalk.py"),
@@ -173,6 +174,7 @@ def sync_internal_z_core_mirrors():
                 os.path.join("os_agent", "plugin_ghosti_os.py"),
                 os.path.join("os_agent", "plugin_ghosti_care_suite.py"),
                 os.path.join("os_agent", "plugin_ghosti_superpowers.py"),
+                os.path.join("os_agent", "plugins", "plugin_ghosti_agent_care.py"),
                 os.path.join("os_agent", "plugins", "plugin_paid_work_sdrive.py"),
                 os.path.join("os_agent", "plugins", "plugin_paid_sync_ghostwin.py"),
                 os.path.join("os_agent", "ppocr_v5_worker.py"),
@@ -184,6 +186,9 @@ def sync_internal_z_core_mirrors():
                 os.path.join("os_agent", "plugin_senstalk.py"),
                 os.path.join("os_agent", "seq_paste_daemon.py"),
                 os.path.join("os_agent", "ghost_search_window_ui2.py"),
+                os.path.join("core_power_agent", "merlin_z_core_daemon.py"),
+                os.path.join("core_power_agent", "plugin_ghosti_care_suite.py"),
+                os.path.join("core_power_agent", "plugins", "plugin_ghosti_agent_care.py"),
                 os.path.join("core_power_agent", "seq_paste_daemon.py"),
                 os.path.join("core_power_agent", "ghost_search_window_ui2.py"),
             ):
@@ -471,9 +476,22 @@ $prn = New-ScheduledTaskPrincipal -UserId '{remote_user}' -LogonType Interactive
 $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero)
 Register-ScheduledTask -TaskName 'StartMerlinZCore5199' -Action $act -Trigger $trg -Principal $prn -Settings $set -Force | Out-Null
 Unregister-ScheduledTask -TaskName 'Ghosti_SecurityCare_ElevatedHelper' -Confirm:$false -ErrorAction SilentlyContinue
+New-Item -ItemType Directory -Force -Path 'C:\\ProgramData\\Merlin\\care_queue' | Out-Null
+icacls 'C:\\ProgramData\\Merlin\\care_queue' /grant '*S-1-5-32-545:(OI)(CI)M' 2>$null | Out-Null
 $hAct = New-ScheduledTaskAction -Execute $exe -Argument '--run-elevated-helper'
-$hPrn = New-ScheduledTaskPrincipal -UserId '{remote_user}' -LogonType Interactive -RunLevel Highest
+$hPrn = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
 Register-ScheduledTask -TaskName 'GhostiSecurityCareHelper' -Action $hAct -Principal $hPrn -Settings $set -Force | Out-Null
+try {{
+    $svc = New-Object -ComObject 'Schedule.Service'
+    $svc.Connect()
+    $task = $svc.GetFolder('\\').GetTask('GhostiSecurityCareHelper')
+    $sd = $task.GetSecurityDescriptor(0xF)
+    if ($sd -and $sd -notmatch ';;;BU\\)') {{
+        if ($sd.Contains('S:')) {{ $sd = $sd -replace 'S:', '(A;;GRGX;;;BU)S:' }}
+        else {{ $sd = $sd + '(A;;GRGX;;;BU)' }}
+        $task.SetSecurityDescriptor($sd, 0)
+    }}
+}} catch {{ }}
 Start-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContinue
 """
     try:

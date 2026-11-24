@@ -61,6 +61,8 @@ CORE_APP_PROTECTED_TOKENS = (
     "merlin", "ghosti", "senstalk", "sensebot", "sundream", "tailscale",
     "windows defender", "securityhealth", "microsoft edge", "google chrome",
     "kakaotalk", "카카오톡", "telegram", "google drive", "onedrive", "mybox",
+    "microsoft office", "microsoft 365", "office 16", "한컴", "hancom", "한글과컴퓨터",
+    "python", "node.js", "git", "antigravity",
 )
 
 # 브라우저 프로필 내 오직 허용되는 4대 순수 캐시 하위 경로 (Cookies / Login Data / Local Storage / IndexedDB 절대 불가침)
@@ -1230,8 +1232,13 @@ def execute_elevated_registry_uninstall_verified(entries: List[Dict[str, str]]) 
         except Exception as exc:
             results.append({"name": disp, "pass": 1, "status": f"ERROR:{exc}"})
 
+    # SYSTEM(Session 0) 헬퍼에서 실행 중일 때는 GUI 확인창이 안 보이므로 Pass 2는 인터랙티브 세션으로 위임
+    is_session0_system = os.environ.get("USERNAME", "").upper() == "SYSTEM" or os.environ.get("SESSIONNAME", "").lower() == "services"
     # Pass 2: GUI 확인이 필요한 구형 앱 — 화면 전면 표시, 최대 45초 대기 후 다음으로 스킵
     for disp, cmd in pass2_gui:
+        if is_session0_system:
+            results.append({"name": disp, "pass": 2, "status": "DEFERRED_TO_INTERACTIVE"})
+            continue
         try:
             p = subprocess.Popen(cmd, shell=True)
             try:
@@ -1298,22 +1305,37 @@ def execute_batch_deep_uninstall(
                 for pid in valid_pups:
                     pup_results.append(eradicate_known_pup_by_id(pid))
 
-    # 2) 설치 앱 Zero-Trust 레지스트리 식별자 수집 + 2-Pass 배치 언인스톨
+    # 2) 설치 앱 Zero-Trust 레지스트리 식별자 수집 + 2-Pass 배치 언인스톨 (HKCU는 현재 유저 세션에서 직접 실행)
     reg_entries: List[Dict[str, str]] = []
+    hkcu_entries: List[Dict[str, str]] = []
     for app_q in target_apps:
         ent = _find_uninstall_registry_entry(app_q)
         if ent:
-            reg_entries.append({"hive": ent["hive"], "subkey": ent["subkey"], "displayName": ent["displayName"]})
+            item_e = {"hive": ent["hive"], "subkey": ent["subkey"], "displayName": ent["displayName"]}
+            if ent["hive"] == "HKCU":
+                hkcu_entries.append(item_e)
+            else:
+                reg_entries.append(item_e)
 
     uninstall_results: List[Dict[str, Any]] = []
+    if hkcu_entries:
+        u_hkcu = execute_elevated_registry_uninstall_verified(hkcu_entries)
+        uninstall_results.extend(list(u_hkcu.get("results") or []))
+
     if reg_entries:
         if care_suite.is_running_as_admin():
             u_res = execute_elevated_registry_uninstall_verified(reg_entries)
-            uninstall_results = list(u_res.get("results") or [])
+            uninstall_results.extend(list(u_res.get("results") or []))
         else:
             q_u = care_suite.execute_elevated_agent_care_queue("batch_uninstall", {"entries": reg_entries})
             if q_u.get("ok") and isinstance(q_u.get("uninstallResults"), list):
-                uninstall_results = list(q_u.get("uninstallResults") or [])
+                for ur in list(q_u.get("uninstallResults") or []):
+                    if ur.get("status") == "DEFERRED_TO_INTERACTIVE":
+                        nm_d = str(ur.get("name") or "")
+                        r_fb = care_suite.execute_deep_uninstall_target(nm_d, invoke_official_uninstaller=True, user_approval_text=user_approval_text)
+                        uninstall_results.append({"name": nm_d, "pass": 2, "status": "DONE" if r_fb.get("ok") else "SKIPPED"})
+                    else:
+                        uninstall_results.append(ur)
             else:
                 # 헬퍼 미등록 시 기존 안전 폴백 (1개씩)
                 for app_q in target_apps[:8]:
@@ -1708,9 +1730,10 @@ def boost_desktop_power_plan() -> Dict[str, Any]:
 
 def cleanup_legacy_duplicate_merlin_daemons() -> Dict[str, Any]:
     """
-    [기둥 5: Z-코어 자체 정화]
-    1) 3호기 등에 남아 있는 구버전 Startup\\MerlinSeqPaste.vbs 를 휴지통으로 안전 이동
-    2) 4호기 등에 남아 있는 구버전 독립 SensTalk_Engine.exe 자동실행(HKCU\\Run\\SensTalk_Engine) 백업·제거 및 중복 프로세스 종료
+    [기둥 5: Z-코어 자체 정화 — 현역 SenseTalk_Engine(28888) 절대 보호]
+    1) 구버전 Startup\\MerlinSeqPaste.vbs 및 HKCU\\Run\\MerlinSeqPaste 제거
+    2) SenseTalk_Engine.exe는 정식 현역 엔진(포트 28888 단독 구동)이므로 자동실행 레지스트리를 절대 건드리지 않으며,
+       실행 중인 프로세스가 2개 이상 중복 떠 있을 때만 가장 최신 PID 1개는 보존하고 초과 중복 PID만 정리합니다.
     """
     cleaned: List[str] = []
     if sys.platform != "win32":
@@ -1726,26 +1749,30 @@ def cleanup_legacy_duplicate_merlin_daemons() -> Dict[str, Any]:
     if winreg is not None:
         try:
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r"Software\Microsoft\Windows\CurrentVersion\Run", 0, winreg.KEY_READ | winreg.KEY_SET_VALUE) as rk:
-                for legacy_val in ("MerlinSeqPaste", "SensTalk_Engine"):
-                    try:
-                        val_data, _ = winreg.QueryValueEx(rk, legacy_val)
-                        if val_data:
-                            winreg.DeleteValue(rk, legacy_val)
-                            cleaned.append(f"HKCU\\Run\\{legacy_val} 구버전 자동실행 제거")
-                    except OSError:
-                        pass
+                try:
+                    val_data, _ = winreg.QueryValueEx(rk, "MerlinSeqPaste")
+                    if val_data:
+                        winreg.DeleteValue(rk, "MerlinSeqPaste")
+                        cleaned.append("HKCU\\Run\\MerlinSeqPaste 구버전 자동실행 제거")
+                except OSError:
+                    pass
         except Exception:
             pass
     try:
-        # 독립 실행 중인 구버전 SenseTalk_Engine.exe 정리 (현재 Z-코어 5199 내장 플러그인으로 100% 통합됨)
-        r_kill = subprocess.run(
-            ["taskkill", "/F", "/IM", "SenseTalk_Engine.exe", "/T"],
+        ps_dup = (
+            "$procs = @(Get-Process -Name 'SenseTalk_Engine' -ErrorAction SilentlyContinue | Sort-Object StartTime -Descending); "
+            "if ($procs.Count -gt 1) { $old = $procs | Select-Object -Skip 1; foreach ($p in $old) { Stop-Process -Id $p.Id -Force -ErrorAction SilentlyContinue; Write-Output $p.Id } }"
+        )
+        r_dup = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-Command", ps_dup],
             capture_output=True,
-            timeout=2.0,
+            text=True,
+            timeout=4.0,
             creationflags=CREATE_NO_WINDOW,
         )
-        if r_kill.returncode == 0:
-            cleaned.append("구버전 중복 SenseTalk_Engine.exe 종료")
+        killed_pids = [ln.strip() for ln in (r_dup.stdout or "").splitlines() if ln.strip().isdigit()]
+        if killed_pids:
+            cleaned.append(f"중복 실행된 초과 SenseTalk_Engine.exe 정리 ({len(killed_pids)}개 종료 · 최신 현역 1개 유지)")
     except Exception:
         pass
     return {"ok": True, "cleaned": cleaned}
@@ -2051,19 +2078,21 @@ $procs = Get-Process | Group-Object ProcessName | ForEach-Object {
 def execute_elevated_hidden_rats_verified(
     disable_tasks: List[str],
     manual_services: List[str],
+    disable_hklm_runs: Optional[List[str]] = None,
 ) -> Dict[str, Any]:
     """
     [Zero-Trust 최고권한 헬퍼 내부 실행 함수 — 2차 고도화]
-    - OS 핵심·하드웨어 드라이버·보호 서비스/스케줄러를 2중 재검증 후 차단/수동전환 수행
-    - 원래 서비스 시작 유형(origStart)을 기록해 반환하여 [복원 기록] 1초 원복 보장
+    - OS 핵심·하드웨어 드라이버·보호 서비스/스케줄러를 2중 재검증 후 차단/수동전환/HKLM 자동실행 해제 수행
+    - 원래 서비스 시작 유형(origStart) 및 원본 명령을 반환하여 [복원 기록] 단일 원자 1초 원복 보장
     """
     if sys.platform != "win32":
-        return {"ok": False, "disabledTasks": [], "manualServices": []}
+        return {"ok": False, "disabledTasks": [], "manualServices": [], "disabledHklmRuns": []}
 
     import plugin_ghosti_care_suite as care_suite
 
     done_tasks: List[str] = []
     done_services: List[Dict[str, str]] = []
+    done_hklm_runs: List[Dict[str, str]] = []
 
     for raw_t in (disable_tasks or []):
         tn = str(raw_t or "").strip()
@@ -2086,7 +2115,76 @@ def execute_elevated_hidden_rats_verified(
         if r_cfg.returncode == 0:
             done_services.append({"serviceName": sn, "origStart": orig_st})
 
-    return {"ok": True, "disabledTasks": done_tasks, "manualServices": done_services}
+    if winreg is not None:
+        for st_id in (disable_hklm_runs or []):
+            tag, sep, vname = str(st_id or "").strip().partition("::")
+            if not sep or not vname or tag not in ("HKLM", "HKLM_WOW64") or _is_protected_rat_target(vname):
+                continue
+            sub_k = (
+                r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run"
+                if tag == "HKLM_WOW64"
+                else r"Software\Microsoft\Windows\CurrentVersion\Run"
+            )
+            try:
+                with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, sub_k, 0, winreg.KEY_READ | winreg.KEY_SET_VALUE) as rk:
+                    cmd_val, _ = winreg.QueryValueEx(rk, vname)
+                    if _is_protected_rat_target(vname, str(cmd_val)):
+                        continue
+                    winreg.DeleteValue(rk, vname)
+                    done_hklm_runs.append({"tag": tag, "name": vname, "runSubkey": sub_k, "command": str(cmd_val)})
+            except OSError:
+                continue
+
+    return {"ok": True, "disabledTasks": done_tasks, "manualServices": done_services, "disabledHklmRuns": done_hklm_runs}
+
+
+def execute_elevated_hidden_rats_rollback_verified(ops: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """
+    [Zero-Trust 헬퍼 전용 원복기 — 표준 유저 계정(4호기 등)에서도 1초 완벽 원복 보장]
+    restore_points.json의 ADWARE_TASK_DISABLE / REGISTRY_RUN_RESTORE(HKLM) 항목을 최고권한으로 복구합니다.
+    """
+    restored_keys: List[str] = []
+    if sys.platform != "win32":
+        return {"ok": False, "restoredKeys": restored_keys}
+    for op in (ops or []):
+        if not isinstance(op, dict):
+            continue
+        kind = str(op.get("op") or "")
+        if kind == "ADWARE_TASK_DISABLE":
+            t_kind = str(op.get("targetKind") or "")
+            target = str(op.get("target") or "").strip()
+            if not target:
+                continue
+            if t_kind == "service" and re.match(r"^[A-Za-z0-9_.\- ]{1,80}$", target):
+                orig = str(op.get("origStart") or "auto").strip().lower()
+                if orig not in ("auto", "delayed-auto", "demand"):
+                    orig = "auto"
+                r1 = subprocess.run(["sc", "config", target, "start=", orig], capture_output=True, timeout=3.0, creationflags=CREATE_NO_WINDOW)
+                if r1.returncode == 0:
+                    if orig in ("auto", "delayed-auto"):
+                        subprocess.run(["sc", "start", target], capture_output=True, timeout=4.0, creationflags=CREATE_NO_WINDOW)
+                    restored_keys.append(f"service::{target}")
+            elif t_kind == "task":
+                tn = target if target.startswith("\\") else "\\" + target
+                r2 = subprocess.run(["schtasks", "/Change", "/TN", tn, "/ENABLE"], capture_output=True, timeout=3.0, creationflags=CREATE_NO_WINDOW)
+                if r2.returncode == 0:
+                    restored_keys.append(f"task::{target.lstrip(chr(92))}")
+        elif kind == "REGISTRY_RUN_RESTORE" and winreg is not None:
+            tag = str(op.get("tag") or "")
+            vname = str(op.get("name") or "").strip()
+            sub_k = str(op.get("runSubkey") or r"Software\Microsoft\Windows\CurrentVersion\Run")
+            cmd_v = str(op.get("command") or "")
+            if tag in ("HKLM", "HKLM_WOW64") and vname and cmd_v and sub_k in (
+                r"Software\Microsoft\Windows\CurrentVersion\Run",
+                r"Software\WOW6432Node\Microsoft\Windows\CurrentVersion\Run",
+            ):
+                try:
+                    with winreg.OpenKey(winreg.HKEY_LOCAL_MACHINE, sub_k, 0, winreg.KEY_SET_VALUE) as rk:
+                        winreg.SetValueEx(rk, vname, 0, winreg.REG_SZ, cmd_v)
+                    restored_keys.append(f"reg::{tag}::{vname}")
+                except OSError:
+                    continue
+    return {"ok": True, "restoredKeys": restored_keys}
 
 
 def apply_hidden_rats_cleanup(
@@ -2114,20 +2212,37 @@ def apply_hidden_rats_cleanup(
     done_procs: List[str] = []
     restore_ops: List[Dict[str, Any]] = []
 
-    # 1) 스케줄러 비활성화 & 서비스 수동 전환 (Zero-Trust 최고권한 헬퍼 경유)
-    if safe_tasks or safe_svcs:
+    hklm_startup_ids = [s for s in safe_startups if s.startswith("HKLM::") or s.startswith("HKLM_WOW64::")]
+    other_startup_ids = [s for s in safe_startups if s not in hklm_startup_ids]
+
+    # 1) 스케줄러 비활성화 & 서비스 수동 전환 & HKLM 시작프로그램 해제 (Zero-Trust 최고권한 헬퍼 경유 — 단일 원자 복원 지점 통합)
+    if safe_tasks or safe_svcs or hklm_startup_ids:
         if care_suite.is_running_as_admin():
-            res_el = execute_elevated_hidden_rats_verified(safe_tasks, safe_svcs)
+            res_el = execute_elevated_hidden_rats_verified(safe_tasks, safe_svcs, hklm_startup_ids)
         else:
             res_el = care_suite.execute_elevated_agent_care_queue(
                 "hidden_rats_apply",
-                {"disableTasks": safe_tasks, "manualServices": safe_svcs},
+                {"disableTasks": safe_tasks, "manualServices": safe_svcs, "disableHklmRuns": hklm_startup_ids},
             )
             if not res_el.get("ok"):
                 # 일반 권한에서도 사용자 본인 소유 스케줄러는 직접 비활성화 시도
-                res_el = execute_elevated_hidden_rats_verified(safe_tasks, [])
+                res_el = execute_elevated_hidden_rats_verified(safe_tasks, [], [])
         done_tasks = list(res_el.get("disabledTasks") or [])
         done_svcs = list(res_el.get("manualServices") or [])
+        for hr in list(res_el.get("disabledHklmRuns") or []):
+            vnm = str(hr.get("name") or "")
+            if vnm:
+                done_startups.append(vnm)
+                restore_ops.append({
+                    "op": "REGISTRY_RUN_RESTORE",
+                    "name": vnm,
+                    "tag": str(hr.get("tag") or "HKLM"),
+                    "runSubkey": str(hr.get("runSubkey") or r"Software\Microsoft\Windows\CurrentVersion\Run"),
+                    "command": str(hr.get("command") or ""),
+                    "fromPath": f"{hr.get('tag')} 자동실행 켜짐",
+                    "toPath": "자동실행 꺼짐",
+                    "rolledBack": False,
+                })
 
         for tn in done_tasks:
             restore_ops.append({
@@ -2153,8 +2268,8 @@ def apply_hidden_rats_cleanup(
                 "rolledBack": False,
             })
 
-    # 2) 시작프로그램 해제 (HKCU/HKLM Run 백업 제거 + Startup 폴더 파일은 Windows 휴지통 이동)
-    for st_id in safe_startups:
+    # 2) 내 계정(HKCU Run + Startup 폴더) 시작프로그램 해제 (별도 복원지점 쪼개짐 없이 단일 restore_ops로 통합!)
+    for st_id in other_startup_ids:
         if st_id.startswith("STARTUP_FILE::"):
             fpath = Path(st_id[len("STARTUP_FILE::"):])
             if fpath.exists():
@@ -2170,10 +2285,28 @@ def apply_hidden_rats_cleanup(
                         "sizeBytes": 0,
                         "rolledBack": False,
                     })
-        elif "::" in st_id:
-            r_tog = care_suite.toggle_startup_program(st_id, enable=False, user_approval_text=user_approval_text)
-            if r_tog.get("ok"):
-                done_startups.append(str(r_tog.get("name") or st_id))
+        elif st_id.startswith("HKCU::") and winreg is not None:
+            vname = st_id.partition("::")[2].strip()
+            sub_k = r"Software\Microsoft\Windows\CurrentVersion\Run"
+            if vname and not _is_protected_rat_target(vname):
+                try:
+                    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, sub_k, 0, winreg.KEY_READ | winreg.KEY_SET_VALUE) as rk:
+                        cmd_val, _ = winreg.QueryValueEx(rk, vname)
+                        if not _is_protected_rat_target(vname, str(cmd_val)):
+                            winreg.DeleteValue(rk, vname)
+                            done_startups.append(vname)
+                            restore_ops.append({
+                                "op": "REGISTRY_RUN_RESTORE",
+                                "name": vname,
+                                "tag": "HKCU",
+                                "runSubkey": sub_k,
+                                "command": str(cmd_val),
+                                "fromPath": "HKCU 자동실행 켜짐",
+                                "toPath": "자동실행 꺼짐",
+                                "rolledBack": False,
+                            })
+                except OSError:
+                    pass
 
     # 3) 과점유 백그라운드 프로세스 안전 종료 (예: copilotapp.exe, MSPCManager 등)
     for pname in safe_procs:

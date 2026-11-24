@@ -69,7 +69,28 @@ CARE_SETTINGS_FILE = CARE_DIR / "care_suite_settings.json"
 GUARDIAN_DB_FILE = CARE_DIR / "defender_guardian_history.db"
 CARE_METRICS_FILE = CARE_DIR / "weekly_care_metrics.json"
 EXTRACTED_INDEX_QUEUE_FILE = CARE_DIR / "extracted_files_index_queue.json"
+SHARED_CARE_QUEUE_DIR = Path(os.environ.get("PROGRAMDATA", r"C:\ProgramData")) / "Merlin" / "care_queue"
+SHARED_ELEVATED_QUEUE_FILE = SHARED_CARE_QUEUE_DIR / "security_elevated_action_queue.json"
 ELEVATED_ACTION_QUEUE_FILE = CARE_DIR / "security_elevated_action_queue.json"
+
+
+def _resolve_elevated_queue_file(explicit_path: str = "") -> Path:
+    """표준 유저(4호기 등) <-> 관리자/SYSTEM 프로필 간 큐 파일 불일치를 원천 차단합니다."""
+    if explicit_path:
+        p = Path(explicit_path.strip().strip('"'))
+        if p.name == "security_elevated_action_queue.json":
+            try:
+                p.parent.mkdir(parents=True, exist_ok=True)
+                return p
+            except Exception:
+                pass
+    try:
+        if SHARED_CARE_QUEUE_DIR.is_dir() and os.access(str(SHARED_CARE_QUEUE_DIR), os.W_OK):
+            return SHARED_ELEVATED_QUEUE_FILE
+    except Exception:
+        pass
+    _ensure_care_dir()
+    return ELEVATED_ACTION_QUEUE_FILE
 
 SECURITY_CARE_HELPER_TASK_NAME = "GhostiSecurityCareHelper"
 
@@ -383,32 +404,49 @@ def is_security_care_helper_task_registered() -> bool:
 
 
 def _register_security_care_helper_task_as_admin() -> bool:
-    """관리자 권한 컨텍스트에서 작업 스케줄러 최고권한(HIGHEST) 헬퍼를 등록합니다."""
+    """관리자 권한 컨텍스트에서 SYSTEM 최고권한 헬퍼(표준 유저 실행 허용 SDDL + 공용 큐 폴더 ACL)를 등록합니다."""
     if sys.platform != "win32":
         return False
-    tr_cmd, _, _ = _build_care_cli_command("--run-elevated-helper", with_arg_placeholder=False)
     try:
-        r = subprocess.run(
-            [
-                "schtasks",
-                "/create",
-                "/tn",
-                SECURITY_CARE_HELPER_TASK_NAME,
-                "/tr",
-                tr_cmd,
-                "/sc",
-                "ONCE",
-                "/st",
-                "00:00",
-                "/rl",
-                "HIGHEST",
-                "/f",
-            ],
+        SHARED_CARE_QUEUE_DIR.mkdir(parents=True, exist_ok=True)
+        subprocess.run(
+            ["icacls", str(SHARED_CARE_QUEUE_DIR), "/grant", "*S-1-5-32-545:(OI)(CI)M"],
             capture_output=True,
-            timeout=3.5,
+            timeout=3.0,
             creationflags=CREATE_NO_WINDOW,
         )
-        ok = r.returncode == 0
+    except Exception:
+        pass
+    _, exe_str, _ = _build_care_cli_command("--run-elevated-helper", with_arg_placeholder=False)
+    ps_reg = f"""
+$ErrorActionPreference = 'SilentlyContinue'
+$exe = '{exe_str}'
+$act = New-ScheduledTaskAction -Execute $exe -Argument '--run-elevated-helper'
+$prn = New-ScheduledTaskPrincipal -UserId 'SYSTEM' -LogonType ServiceAccount -RunLevel Highest
+$set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::FromMinutes(5))
+Register-ScheduledTask -TaskName '{SECURITY_CARE_HELPER_TASK_NAME}' -Action $act -Principal $prn -Settings $set -Force | Out-Null
+$svc = New-Object -ComObject 'Schedule.Service'
+$svc.Connect()
+$task = $svc.GetFolder('\\').GetTask('{SECURITY_CARE_HELPER_TASK_NAME}')
+$sd = $task.GetSecurityDescriptor(0xF)
+if ($sd -and $sd -notmatch ';;;BU\\)') {{
+    if ($sd.Contains('S:')) {{ $sd = $sd -replace 'S:', '(A;;GRGX;;;BU)S:' }}
+    else {{ $sd = $sd + '(A;;GRGX;;;BU)' }}
+    $task.SetSecurityDescriptor($sd, 0)
+}}
+Write-Output 'HELPER_OK'
+"""
+    try:
+        import base64
+        enc = base64.b64encode(ps_reg.encode("utf-16-le")).decode("ascii")
+        r = subprocess.run(
+            ["powershell", "-NoProfile", "-NonInteractive", "-EncodedCommand", enc],
+            capture_output=True,
+            text=True,
+            timeout=8.0,
+            creationflags=CREATE_NO_WINDOW,
+        )
+        ok = "HELPER_OK" in (r.stdout or "")
         _HELPER_TASK_REGISTERED_CACHE["checked_ts"] = time.monotonic() if ok else 0.0
         _HELPER_TASK_REGISTERED_CACHE["value"] = True if ok else None
         return ok
@@ -525,15 +563,16 @@ def execute_elevated_service_control(
         "completed": False,
         "processedServices": [],
     }
+    q_file = _resolve_elevated_queue_file()
     try:
-        ELEVATED_ACTION_QUEUE_FILE.write_text(
+        q_file.write_text(
             json.dumps(queue_payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
     except Exception:
         pass
 
-    # 1) 이미 작업 스케줄러 최고권한 헬퍼가 등록된 경우 -> UAC 팝업 0회로 즉시 트리거 (PyInstaller 66MB 첫 언패킹 고려 최대 10초 폴링)
+    # 1) 이미 작업 스케줄러 최고권한 헬퍼가 등록된 경우 -> UAC 팝업 0회로 즉시 트리거 (PyInstaller 66MB 첫 언패킹 고려 최대 12초 폴링)
     if is_security_care_helper_task_registered():
         if not clean_names:
             return {"ok": True, "processedServices": [], "elevationMethod": "SCHTASKS_ALREADY_READY", "uacPromptShown": False}
@@ -546,20 +585,21 @@ def execute_elevated_service_control(
                 creationflags=CREATE_NO_WINDOW,
             )
             sch_ok = (r_sch.returncode == 0)
-            for _ in range(100):
-                time.sleep(0.1)
-                if ELEVATED_ACTION_QUEUE_FILE.exists():
-                    data = json.loads(ELEVATED_ACTION_QUEUE_FILE.read_text(encoding="utf-8"))
-                    if data.get("requestId") == req_id and data.get("completed"):
-                        return {
-                            "ok": True,
-                            "processedServices": list(data.get("processedServices") or []),
-                            "elevationMethod": "SCHTASKS_HIGHEST_ZERO_UAC",
-                            "uacPromptShown": False,
-                        }
+            if sch_ok:
+                for _ in range(120):
+                    time.sleep(0.1)
+                    if q_file.exists():
+                        data = json.loads(q_file.read_text(encoding="utf-8"))
+                        if data.get("requestId") == req_id and data.get("completed"):
+                            return {
+                                "ok": True,
+                                "processedServices": list(data.get("processedServices") or []),
+                                "elevationMethod": "SCHTASKS_HIGHEST_ZERO_UAC",
+                                "uacPromptShown": False,
+                            }
         except Exception:
             pass
-        if sch_ok or not allow_uac_prompt:
+        if not allow_uac_prompt:
             return {
                 "ok": False,
                 "processedServices": [],
@@ -575,8 +615,9 @@ def execute_elevated_service_control(
             "uacPromptShown": False,
         }
 
-    # 2) 최초 1회: 유저 명시적 클릭 시에만 ShellExecuteW(None, "runas", ...)로 헬퍼 등록 + 즉시 실행 (비대화형 세션 블로킹 방지를 위해 데몬 스레드 실행)
+    # 2) 최초 1회: 유저 명시적 클릭 시에만 ShellExecuteW(None, "runas", ...)로 헬퍼 등록 + 즉시 실행 (표준 유저 암호 입력 고려 최대 35초 대기)
     _, exe_str, params = _build_care_cli_command("--install-and-run-helper", with_arg_placeholder=False)
+    params_with_q = f'{params} --queue-file "{q_file}"'
     try:
         ret_box: List[int] = [0]
 
@@ -587,7 +628,7 @@ def execute_elevated_service_control(
                         None,
                         "runas",
                         exe_str,
-                        params,
+                        params_with_q,
                         str(Path(exe_str).parent),
                         0,  # SW_HIDE
                     )
@@ -597,12 +638,12 @@ def execute_elevated_service_control(
 
         t_uac = threading.Thread(target=_invoke_runas, daemon=True)
         t_uac.start()
-        t_uac.join(timeout=3.5)
+        t_uac.join(timeout=35.0)
         if not t_uac.is_alive() and ret_box[0] > 32:
-            for _ in range(35):
-                time.sleep(0.1)
-                if ELEVATED_ACTION_QUEUE_FILE.exists():
-                    data = json.loads(ELEVATED_ACTION_QUEUE_FILE.read_text(encoding="utf-8"))
+            for _ in range(80):
+                time.sleep(0.15)
+                if q_file.exists():
+                    data = json.loads(q_file.read_text(encoding="utf-8"))
                     if data.get("requestId") == req_id and data.get("completed"):
                         return {
                             "ok": True,
@@ -721,15 +762,16 @@ def execute_elevated_agent_care_queue(
 ) -> Dict[str, Any]:
     """
     [Zero-Trust 최고권한 헬퍼 에이전트 큐 브릿지]
-    - 허용 모드: 'batch_uninstall'({entries:[{hive,subkey}]}), 'eradicate_pups'({pupIds:[...]}), 'powercfg'({powerAction:'hiber_off'|'power_high'})
+    - 허용 모드: 'batch_uninstall', 'eradicate_pups', 'powercfg', 'hidden_rats_apply', 'hidden_rats_rollback'
     - 웹/LLM이 보낸 임의 커맨드 문자열은 절대 받지 않고 오직 검증된 식별자만 전달합니다.
     """
     _ensure_care_dir()
     if sys.platform != "win32":
         return {"ok": False, "error": "WINDOWS_ONLY"}
-    if mode not in ("batch_uninstall", "eradicate_pups", "powercfg", "hidden_rats_apply"):
+    if mode not in ("batch_uninstall", "eradicate_pups", "powercfg", "hidden_rats_apply", "hidden_rats_rollback"):
         return {"ok": False, "error": "INVALID_AGENT_MODE"}
 
+    q_file = _resolve_elevated_queue_file()
     req_id = f"agent_{mode}_{int(time.time() * 1000)}_{uuid.uuid4().hex[:6]}"
     queue_payload = {
         "requestId": req_id,
@@ -739,7 +781,7 @@ def execute_elevated_agent_care_queue(
         "completed": False,
     }
     try:
-        ELEVATED_ACTION_QUEUE_FILE.write_text(
+        q_file.write_text(
             json.dumps(queue_payload, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
@@ -749,26 +791,29 @@ def execute_elevated_agent_care_queue(
     max_polls = 240 if mode == "batch_uninstall" else 90
     if is_security_care_helper_task_registered():
         try:
-            subprocess.run(
+            r_run = subprocess.run(
                 ["schtasks", "/run", "/tn", SECURITY_CARE_HELPER_TASK_NAME],
                 capture_output=True,
                 timeout=3.0,
                 creationflags=CREATE_NO_WINDOW,
             )
-            for _ in range(max_polls):
-                time.sleep(0.25)
-                if ELEVATED_ACTION_QUEUE_FILE.exists():
-                    data = json.loads(ELEVATED_ACTION_QUEUE_FILE.read_text(encoding="utf-8"))
-                    if data.get("requestId") == req_id and data.get("completed"):
-                        return {**data, "ok": bool(data.get("ok", True)), "elevationMethod": "SCHTASKS_HIGHEST_ZERO_UAC"}
+            if r_run.returncode == 0:
+                for _ in range(max_polls):
+                    time.sleep(0.25)
+                    if q_file.exists():
+                        data = json.loads(q_file.read_text(encoding="utf-8"))
+                        if data.get("requestId") == req_id and data.get("completed"):
+                            return {**data, "ok": bool(data.get("ok", True)), "elevationMethod": "SCHTASKS_HIGHEST_ZERO_UAC"}
         except Exception:
             pass
-        return {"ok": False, "error": "SCHTASKS_TIMEOUT"}
+        if not allow_uac_prompt:
+            return {"ok": False, "error": "SCHTASKS_TIMEOUT"}
 
     if not allow_uac_prompt:
         return {"ok": False, "error": "HELPER_NOT_REGISTERED"}
 
     _, exe_str, params = _build_care_cli_command("--install-and-run-helper", with_arg_placeholder=False)
+    params_with_q = f'{params} --queue-file "{q_file}"'
     try:
         ret_box: List[int] = [0]
 
@@ -776,7 +821,7 @@ def execute_elevated_agent_care_queue(
             try:
                 ret_box[0] = int(
                     ctypes.windll.shell32.ShellExecuteW(
-                        None, "runas", exe_str, params, str(Path(exe_str).parent), 0
+                        None, "runas", exe_str, params_with_q, str(Path(exe_str).parent), 0
                     )
                 )
             except Exception:
@@ -784,12 +829,12 @@ def execute_elevated_agent_care_queue(
 
         t_uac = threading.Thread(target=_invoke_runas, daemon=True)
         t_uac.start()
-        t_uac.join(timeout=4.0)
+        t_uac.join(timeout=35.0)
         if not t_uac.is_alive() and ret_box[0] > 32:
             for _ in range(max_polls):
                 time.sleep(0.25)
-                if ELEVATED_ACTION_QUEUE_FILE.exists():
-                    data = json.loads(ELEVATED_ACTION_QUEUE_FILE.read_text(encoding="utf-8"))
+                if q_file.exists():
+                    data = json.loads(q_file.read_text(encoding="utf-8"))
                     if data.get("requestId") == req_id and data.get("completed"):
                         return {**data, "ok": bool(data.get("ok", True)), "elevationMethod": "RUNAS_ONCE_REGISTERED"}
     except Exception:
@@ -797,16 +842,19 @@ def execute_elevated_agent_care_queue(
     return {"ok": False, "error": "UAC_DECLINED_OR_TIMEOUT"}
 
 
-def _process_elevated_helper_queue(install_task_too: bool = False) -> None:
+def _process_elevated_helper_queue(install_task_too: bool = False, explicit_queue_file: str = "") -> None:
     """승격된 헬퍼 프로세스에서 호출되어 작업 스케줄러 등록 및 화이트리스트/Zero-Trust 검증된 작업을 수행합니다."""
     _ensure_care_dir()
     if install_task_too:
         _register_security_care_helper_task_as_admin()
 
-    if not ELEVATED_ACTION_QUEUE_FILE.exists():
+    q_file = _resolve_elevated_queue_file(explicit_queue_file)
+    if not q_file.exists() and ELEVATED_ACTION_QUEUE_FILE.exists():
+        q_file = ELEVATED_ACTION_QUEUE_FILE
+    if not q_file.exists():
         return
     try:
-        data = json.loads(ELEVATED_ACTION_QUEUE_FILE.read_text(encoding="utf-8"))
+        data = json.loads(q_file.read_text(encoding="utf-8"))
         if data.get("completed"):
             return
         mode = str(data.get("mode") or "sleep").strip().lower()
@@ -837,11 +885,20 @@ def _process_elevated_helper_queue(install_task_too: bool = False) -> None:
             from plugins import plugin_ghosti_agent_care as _ag_care
             d_tasks = [str(x) for x in (data.get("disableTasks") or []) if x]
             m_svcs = [str(x) for x in (data.get("manualServices") or []) if x]
-            res_hr = _ag_care.execute_elevated_hidden_rats_verified(d_tasks, m_svcs)
+            d_hklm = [str(x) for x in (data.get("disableHklmRuns") or []) if x]
+            res_hr = _ag_care.execute_elevated_hidden_rats_verified(d_tasks, m_svcs, d_hklm)
             data["completed"] = True
             data["ok"] = bool(res_hr.get("ok"))
             data["disabledTasks"] = res_hr.get("disabledTasks", [])
             data["manualServices"] = res_hr.get("manualServices", [])
+            data["disabledHklmRuns"] = res_hr.get("disabledHklmRuns", [])
+        elif mode == "hidden_rats_rollback":
+            from plugins import plugin_ghosti_agent_care as _ag_care
+            ops = [x for x in (data.get("ops") or []) if isinstance(x, dict)]
+            res_rb = _ag_care.execute_elevated_hidden_rats_rollback_verified(ops)
+            data["completed"] = True
+            data["ok"] = bool(res_rb.get("ok"))
+            data["restoredKeys"] = res_rb.get("restoredKeys", [])
         elif mode == "powercfg":
             from plugins import plugin_ghosti_agent_care as _ag_care
             pact = str(data.get("powerAction") or "")
@@ -868,7 +925,7 @@ def _process_elevated_helper_queue(install_task_too: bool = False) -> None:
             data["processedServices"] = []
             data["rejectedReason"] = "INVALID_MODE"
         data["completedAt"] = datetime.datetime.now().isoformat()
-        ELEVATED_ACTION_QUEUE_FILE.write_text(
+        q_file.write_text(
             json.dumps(data, ensure_ascii=False, indent=2),
             encoding="utf-8",
         )
@@ -5165,13 +5222,14 @@ def handle_care_cli_args(argv: Optional[List[str]] = None) -> bool:
     parser.add_argument("--unregister-menu", action="store_true")
     parser.add_argument("--install-and-run-helper", action="store_true")
     parser.add_argument("--run-elevated-helper", action="store_true")
+    parser.add_argument("--queue-file", dest="queue_file", type=str, default="")
     args, _ = parser.parse_known_args(raw_argv)
 
     if args.install_and_run_helper:
-        _process_elevated_helper_queue(install_task_too=True)
+        _process_elevated_helper_queue(install_task_too=True, explicit_queue_file=args.queue_file)
         return True
     if args.run_elevated_helper:
-        _process_elevated_helper_queue(install_task_too=False)
+        _process_elevated_helper_queue(install_task_too=False, explicit_queue_file=args.queue_file)
         return True
     if args.register_menu:
         print(json.dumps(register_explorer_context_menu(), ensure_ascii=False))

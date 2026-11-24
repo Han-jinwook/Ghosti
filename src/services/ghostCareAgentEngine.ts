@@ -363,7 +363,7 @@ async function enrichUnknownRatsWithGemini(unknownItems: AgentCareScanItem[]): P
   ].join('\n');
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5000);
+  const timer = setTimeout(() => controller.abort(), 8500);
   try {
     const res = await fetch('https://os.sundreamer.app/api/ai/gemini', {
       method: 'POST',
@@ -610,24 +610,51 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
     }
   }
 
-  // 5) [2차 고도화] 미등록 신종 쥐새끼(비-MS 스케줄러·비-Windows 서비스·자동실행·고메모리) 전수 수색 결과 반영
+  // 5) [2차 고도화] 미등록 신종 쥐새끼(비-MS 스케줄러·비-Windows 서비스·자동실행·고메모리) 전수 수색 결과 반영 (보안·PUP 2분류와 중복 행 자동 제거)
   const unknownRatsToEnrich: AgentCareScanItem[] = [];
   if (ratsRes?.ok && ratsRes.data) {
     const rt = ratsRes.data;
     summaryLines.push(
       `🕵️ 숨은 백그라운드 전수 수색: 비-MS 스케줄러 ${rt.taskCount ?? 0}건 · 비-Windows 상주 서비스 ${rt.serviceCount ?? 0}건 · 부팅 자동실행 ${rt.startupCount ?? 0}건`
     );
+    const existingSigTokens = items
+      .map((ex) =>
+        String(ex.name || '')
+          .toLowerCase()
+          .replace(/\[.*?\]|\(.*?\)/g, ' ')
+          .trim()
+      )
+      .filter((s) => s.length >= 3);
+    const isDuplicateOfSecScan = (riName: string, riKey: string) => {
+      if (!secRes?.ok) return false;
+      const probe = `${riName} ${riKey}`.toLowerCase();
+      const knownOverlap = [
+        'cachecloud', 'cacheconsole', 'cacheservice', 'frontserviceupdater',
+        'cloudtask', 'storageservice', 'pcappstore', 'febjb', 'datasharing',
+        'msload', 'ngplus', 'rayitem', 'shellexecuteas', 'e0477272', 'toast',
+        'ocamtask', 'clipdown', 'nossvc', 'nprotect', 'magicline', 'crossex',
+        'anysign', 'touchen', 'veraport', 'delfino', 'ipinside', 'keysharp',
+      ];
+      if (knownOverlap.some((tok) => probe.includes(tok) && existingSigTokens.some((es) => es.includes(tok.slice(0, 5))))) {
+        return true;
+      }
+      return false;
+    };
+
     for (const ri of (rt.items || []).slice(0, 45)) {
+      const rName = String(ri.name || '');
+      const rKey = String(ri.targetKey || '');
+      if (isDuplicateOfSecScan(rName, rKey)) continue;
       const scanIt: AgentCareScanItem = {
         no: idx++,
         id: String(ri.id),
-        name: String(ri.name),
+        name: rName,
         cat: String(ri.cat || 'RAT_TASK'),
         sizeMb: Number(ri.sizeMb || 0),
         detailKo: `${ri.publisher || '서명 미확인'} · ${ri.arguments || ri.executePath || ''}`,
         actionType: String(ri.recommendedAction || 'DISABLE_TASK'),
         ratKind: ri.ratKind,
-        targetKey: String(ri.targetKey || ''),
+        targetKey: rKey,
         executePath: String(ri.executePath || ''),
         arguments: String(ri.arguments || ''),
         publisher: String(ri.publisher || ''),
@@ -643,6 +670,11 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
       primaryBadge = '미등록 스케줄러·서비스 수동전환';
     }
   }
+
+  // 번호 재정렬 (중복 제거 후 1..N 연속 번호 유지)
+  items.forEach((it, i) => {
+    it.no = i + 1;
+  });
 
   // 🌟 모든 스캔 항목에 초보자 친절 1줄 설명 & 안전도 배지 자동 부착 + 카탈로그에 없는 미등록 쥐새끼는 제미니로 즉시 정체 해석!
   for (const it of items) {
@@ -789,7 +821,7 @@ export async function planCareAgentTurnWithGemini(params: {
     .join('\n');
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5500);
+  const timer = setTimeout(() => controller.abort(), 8500);
   try {
     const res = await fetch('https://os.sundreamer.app/api/ai/gemini', {
       method: 'POST',
@@ -811,7 +843,7 @@ export async function planCareAgentTurnWithGemini(params: {
       }),
       signal: controller.signal,
     });
-    if (!res.ok) return null;
+    if (!res.ok) return buildLocalMultiTurnFilterFallback(query, scanContext);
     const data = await res.json();
     const raw = String(data?.text || '')
       .replace(/^```json\s*/i, '')
@@ -820,9 +852,10 @@ export async function planCareAgentTurnWithGemini(params: {
       .trim();
     const sIdx = raw.indexOf('{');
     const eIdx = raw.lastIndexOf('}');
-    if (sIdx < 0 || eIdx <= sIdx) return null;
+    if (sIdx < 0 || eIdx <= sIdx) return buildLocalMultiTurnFilterFallback(query, scanContext);
     const parsed = JSON.parse(raw.slice(sIdx, eIdx + 1));
-    if (!parsed || typeof parsed.replyKo !== 'string') return null;
+    if (!parsed || typeof parsed.replyKo !== 'string') return buildLocalMultiTurnFilterFallback(query, scanContext);
+    logGeminiCareTurnNonBlocking(query, parsed.replyKo, 'care_plan');
     return {
       replyKo: parsed.replyKo.trim(),
       readTools: Array.isArray(parsed.readTools) ? parsed.readTools : [],
@@ -832,10 +865,103 @@ export async function planCareAgentTurnWithGemini(params: {
         : [],
     };
   } catch {
-    return null;
+    return buildLocalMultiTurnFilterFallback(query, scanContext);
   } finally {
     clearTimeout(timer);
   }
+}
+
+/**
+ * [2층 제미니 비차단 텔레메트리 로거 — 0ms 지연, 주 1회 1층 정규식 승격용]
+ */
+function logGeminiCareTurnNonBlocking(query: string, aiReply: string, stage: string): void {
+  try {
+    if (typeof localStorage === 'undefined') return;
+    const maskedQ = String(query || '')
+      .replace(/[A-Za-z]:\\Users\\[^\\\s]+/gi, 'C:\\Users\\*')
+      .slice(0, 240);
+    const key = 'ghosti_gemini_care_telemetry_v1';
+    const prev = JSON.parse(localStorage.getItem(key) || '[]');
+    const next = Array.isArray(prev) ? prev : [];
+    next.push({
+      at: new Date().toISOString(),
+      stage,
+      q: maskedQ,
+      replyPreview: String(aiReply || '').slice(0, 180),
+    });
+    localStorage.setItem(key, JSON.stringify(next.slice(-150)));
+  } catch {
+    /* non-blocking */
+  }
+}
+
+/**
+ * [P1-3 로컬 결정론적 멀티턴 필터 폴백]
+ * 네트워크 지연·쿼터 전환으로 제미니가 타임아웃 나더라도 "오캠이랑 3번 빼고 다 지워", "D드라이브로 옮겨줘"를 0ms로 정확히 파싱해 확인 카드를 생성합니다.
+ */
+export function buildLocalMultiTurnFilterFallback(
+  query: string,
+  scanContext: AgentCareScanContext | null
+): AgentCareLlmPlan | null {
+  if (!scanContext || scanContext.items.length === 0) return null;
+  const q = query.trim();
+  const moveDrvMatch = q.match(/([d-zD-Z])\s*:?\s*드라이브/);
+  const moveDrive = moveDrvMatch ? `${moveDrvMatch[1].toUpperCase()}:` : '';
+
+  const excludeIds: string[] = [];
+  const excludeKeywords: string[] = [];
+
+  const excClauseMatch = q.match(/^(.+?)\s*(?:은|는|이랑|랑|하고|과|와|,)?\s*(?:빼고|제외하고|제외|놔두고|놔둬|남기고|냅두고|말고)/i);
+  if (excClauseMatch && excClauseMatch[1]) {
+    const rawPart = excClauseMatch[1];
+    for (const nm of rawPart.matchAll(/#?(\d+)\s*번?/g)) {
+      excludeIds.push(`#${nm[1]}`);
+    }
+    const tokens = rawPart
+      .replace(/#?\d+\s*번?/g, ' ')
+      .split(/[,/·]|이랑|랑|하고|그리고|및|\s+/)
+      .map((t) => t.replace(/(은|는|이|가|을|를|만|도)$/, '').trim())
+      .filter((t) => t.length >= 2 && !/^(내가|쓰는|사용하는|프로그램|앱|파일|폴더|항목)$/.test(t));
+    excludeKeywords.push(...tokens);
+  }
+
+  const includeIds: string[] = [];
+  if (!excClauseMatch) {
+    for (const nm of q.matchAll(/#?(\d+)\s*번?/g)) {
+      includeIds.push(`#${nm[1]}`);
+    }
+    if (moveDrive && /다운로드/.test(q)) {
+      const dl = scanContext.items.find((i) => /다운로드|download/i.test(i.name));
+      if (dl) includeIds.push(dl.id);
+    }
+  }
+
+  const defaultAction: AgentCareMutatingAction =
+    scanContext.scanKind === 'HIDDEN_RATS'
+      ? 'hidden_rats_apply'
+      : scanContext.scanKind === 'DESKTOP_DETAIL'
+      ? 'desktop_batch_action'
+      : scanContext.scanKind === 'DISK_HOG' || Boolean(moveDrive)
+      ? 'disk_hog_clean'
+      : 'batch_deep_uninstall';
+
+  return {
+    replyKo: moveDrive
+      ? `말씀하신 대로 선택 항목을 **${moveDrive}\\귀신비서_보관함**으로 안전하게 옮길 준비를 마쳤어요! 아래 목록을 확인 후 실행해 주세요.`
+      : excludeKeywords.length > 0 || excludeIds.length > 0
+      ? `말씀하신 보존 항목은 안전하게 제외하고, 정리 권장 항목만 골라두었어요! 한 번 더 확인 후 실행해 주세요.`
+      : `요청하신 기준에 맞춰 안전 정리 대상을 준비했어요! 아래 체크박스를 확인 후 실행해 주세요.`,
+    readTools: [],
+    mutatingPlan: {
+      action: defaultAction,
+      includeIds,
+      excludeIds,
+      excludeKeywords,
+      moveDestinationDrive: moveDrive || undefined,
+      reasonSummaryKo: moveDrive ? `${moveDrive} 드라이브 안전 이사 확인` : '취사선택 일괄 정리 최종 확인',
+    },
+    followUpSuggestions: ['응 진행해', '휴지통 비워줘'],
+  };
 }
 
 /**
@@ -857,55 +983,8 @@ export async function executeAgentCareBatchCard(
     .map((it) => it.name);
   const allExcluded = Array.from(new Set([...(card.excludedNames || []), ...unselectedNames]));
 
-  if (card.action === 'hidden_rats_apply' || selectedItems.some((i) => Boolean(i.ratKind))) {
-    const ratItems = selectedItems.filter((i) => Boolean(i.ratKind));
-    const nonRatItems = selectedItems.filter((i) => !i.ratKind);
-    const reportBlocks: string[] = [];
-    let anyOk = false;
-
-    if (ratItems.length > 0) {
-      const disableTasks = ratItems.filter((i) => i.ratKind === 'SCHEDULED_TASK' && i.targetKey).map((i) => i.targetKey!);
-      const manualServices = ratItems.filter((i) => i.ratKind === 'WINDOWS_SERVICE' && i.targetKey).map((i) => i.targetKey!);
-      const disableStartups = ratItems.filter((i) => i.ratKind === 'STARTUP_ITEM' && i.targetKey).map((i) => i.targetKey!);
-      const stopProcesses = ratItems.filter((i) => i.ratKind === 'HIGH_MEM_PROCESS' && i.targetKey).map((i) => i.targetKey!);
-      const rRat = await callCareApi<any>(
-        '/api/care/hidden-rats-apply',
-        {
-          disableTasks,
-          manualServices,
-          disableStartups,
-          stopProcesses,
-          userApprovalTypedText: userApprovalText,
-        },
-        45000
-      );
-      if (rRat.ok) anyOk = true;
-      if (rRat.data?.reportKo) reportBlocks.push(String(rRat.data.reportKo));
-    }
-
-    if (nonRatItems.length > 0) {
-      const subRes = await executeAgentCareBatchCard(
-        {
-          ...card,
-          action: card.action === 'hidden_rats_apply' ? 'batch_deep_uninstall' : card.action,
-          items: nonRatItems,
-          selectedIds: nonRatItems.map((i) => i.id),
-        },
-        userApprovalText
-      );
-      if (subRes.ok) anyOk = true;
-      if (subRes.reportKo) reportBlocks.push(subRes.reportKo);
-    }
-
-    return {
-      ok: anyOk,
-      reportKo:
-        reportBlocks.join('\n\n') ||
-        (anyOk ? '선택하신 숨은 백그라운드 항목을 안전하게 정리했습니다!' : '처리할 숨은 항목이 없거나 권한 확인이 필요합니다.'),
-    };
-  }
-
-  if (card.action === 'desktop_power_boost') {
+  // 전용 비-아이템 단일 액션 처리
+  if (card.action === 'desktop_power_boost' && selectedItems.every((i) => i.cat === 'POWER_PLAN')) {
     const r = await callCareApi<any>('/api/care/desktop-power-boost', { userApprovalTypedText: userApprovalText }, 15000);
     return {
       ok: r.ok,
@@ -913,7 +992,7 @@ export async function executeAgentCareBatchCard(
     };
   }
 
-  if (card.action === 'desktop_system_icon_toggle') {
+  if (card.action === 'desktop_system_icon_toggle' && selectedItems.length === 0) {
     const iconIds = (card.visibleSystemIcons || []).map((i) => i.iconId);
     const targetId = iconIds[0] || 'user_files';
     const r = await callCareApi<any>('/api/care/desktop-icon-toggle', { iconId: targetId, hide: true }, 10000);
@@ -923,30 +1002,82 @@ export async function executeAgentCareBatchCard(
     };
   }
 
-  if (card.action === 'disk_hog_clean') {
-    const r = await callCareApi<any>(
+  // [P0-1 정공법] MULTI 복합 스캔에서도 단 1건의 누락이 없도록 선택된 항목을 실제 성격별 5대 버킷으로 분리해 순차 실행!
+  const DISK_HOG_CATS = new Set([
+    'SAFE_CACHE',
+    'DESKTOP_HIBERFIL',
+    'USER_FOLDER',
+    'APP_DATA_HOG',
+    'USER_LARGE_ITEM',
+  ]);
+  const ratItems = selectedItems.filter((i) => Boolean(i.ratKind));
+  const diskHogItems = selectedItems.filter((i) => !i.ratKind && DISK_HOG_CATS.has(i.cat));
+  const desktopItems = selectedItems.filter(
+    (i) => !i.ratKind && !DISK_HOG_CATS.has(i.cat) && i.cat.startsWith('DESKTOP_')
+  );
+  const sleepItems = selectedItems.filter(
+    (i) => !i.ratKind && !DISK_HOG_CATS.has(i.cat) && !i.cat.startsWith('DESKTOP_') && i.actionType === 'SECURITY_SLEEP'
+  );
+  const uninstallOrPupItems = selectedItems.filter(
+    (i) =>
+      !i.ratKind &&
+      !DISK_HOG_CATS.has(i.cat) &&
+      !i.cat.startsWith('DESKTOP_') &&
+      i.actionType !== 'SECURITY_SLEEP' &&
+      i.cat !== 'POWER_PLAN'
+  );
+
+  const reportBlocks: string[] = [];
+  let anyOk = false;
+  let updatedFreeGb: number | undefined;
+  let updatedProjGb: number | undefined;
+
+  // 버킷 1: 숨은 쥐새끼 차단 · 서비스 수동 전환 · 시작프로그램 해제
+  if (ratItems.length > 0) {
+    const disableTasks = ratItems.filter((i) => i.ratKind === 'SCHEDULED_TASK' && i.targetKey).map((i) => i.targetKey!);
+    const manualServices = ratItems.filter((i) => i.ratKind === 'WINDOWS_SERVICE' && i.targetKey).map((i) => i.targetKey!);
+    const disableStartups = ratItems.filter((i) => i.ratKind === 'STARTUP_ITEM' && i.targetKey).map((i) => i.targetKey!);
+    const stopProcesses = ratItems.filter((i) => i.ratKind === 'HIGH_MEM_PROCESS' && i.targetKey).map((i) => i.targetKey!);
+    const rRat = await callCareApi<any>(
+      '/api/care/hidden-rats-apply',
+      {
+        disableTasks,
+        manualServices,
+        disableStartups,
+        stopProcesses,
+        userApprovalTypedText: userApprovalText,
+      },
+      45000
+    );
+    if (rRat.ok) anyOk = true;
+    if (rRat.data?.reportKo) reportBlocks.push(String(rRat.data.reportKo));
+  }
+
+  // 버킷 2: C드라이브 대용량 캐시 · hiberfil.sys · D: 드라이브 안전 이사
+  if (diskHogItems.length > 0) {
+    const rDisk = await callCareApi<any>(
       '/api/care/disk-hog-clean',
       {
-        includeIds: selectedItems.map((i) => i.id),
+        includeIds: diskHogItems.map((i) => i.id),
         excludeIds: card.excludedNames || [],
         moveDestinationDrive: card.moveDestinationDrive || '',
         userApprovalTypedText: userApprovalText,
       },
       60000
     );
-    return {
-      ok: r.ok,
-      reportKo: String(r.data?.reportKo || r.data?.message || (r.ok ? '대용량 공간 정리를 완료했습니다!' : `정리 중 오류가 발생했습니다(${r.error}).`)),
-      currentFreeGb: typeof r.data?.currentFreeGb === 'number' ? r.data.currentFreeGb : undefined,
-      projectedFreeAfterEmptyGb:
-        typeof r.data?.projectedFreeAfterEmptyGb === 'number' ? r.data.projectedFreeAfterEmptyGb : undefined,
-    };
+    if (rDisk.ok) anyOk = true;
+    if (rDisk.data?.reportKo || rDisk.data?.message) {
+      reportBlocks.push(String(rDisk.data.reportKo || rDisk.data.message));
+    }
+    if (typeof rDisk.data?.currentFreeGb === 'number') updatedFreeGb = rDisk.data.currentFreeGb;
+    if (typeof rDisk.data?.projectedFreeAfterEmptyGb === 'number') updatedProjGb = rDisk.data.projectedFreeAfterEmptyGb;
   }
 
-  if (card.action === 'desktop_batch_action') {
-    const paths = selectedItems.map((i) => i.path || '').filter(Boolean);
+  // 버킷 3: 바탕화면 선택 파일/폴더 휴지통 이동 · D: 이사 · 특수아이콘 숨김
+  if (desktopItems.length > 0 || (card.action === 'desktop_batch_action' && card.visibleSystemIcons?.length)) {
+    const paths = desktopItems.map((i) => i.path || '').filter(Boolean);
     const isMove = Boolean(card.moveDestinationDrive);
-    const r = await callCareApi<any>(
+    const rDesk = await callCareApi<any>(
       '/api/care/desktop-batch-action',
       {
         recyclePaths: isMove ? [] : paths,
@@ -957,22 +1088,13 @@ export async function executeAgentCareBatchCard(
       },
       45000
     );
-    return {
-      ok: r.ok,
-      reportKo: String(r.data?.reportKo || (r.ok ? '바탕화면 선택 정리를 완료했습니다!' : `정리 중 오류가 발생했습니다(${r.error}).`)),
-    };
+    if (rDesk.ok) anyOk = true;
+    if (rDesk.data?.reportKo) reportBlocks.push(String(rDesk.data.reportKo));
   }
 
-  // batch_deep_uninstall 또는 security_2tier_apply
-  const pupIds = selectedItems.filter((i) => i.id.startsWith('pup_')).map((i) => i.id);
-  const sleepItems = selectedItems.filter((i) => i.actionType === 'SECURITY_SLEEP');
-  const appNames = selectedItems
-    .filter((i) => !i.id.startsWith('pup_') && i.actionType !== 'SECURITY_SLEEP')
-    .map((i) => i.name);
-
-  const reportBlocks: string[] = [];
-  let anyOk = false;
-
+  // 버킷 4: 악성 PUP 적출 + 설치 앱 2-Pass 심층 제거
+  const pupIds = uninstallOrPupItems.filter((i) => i.id.startsWith('pup_')).map((i) => i.id);
+  const appNames = uninstallOrPupItems.filter((i) => !i.id.startsWith('pup_')).map((i) => i.name);
   if (appNames.length > 0 || pupIds.length > 0) {
     const rBatch = await callCareApi<any>(
       '/api/care/batch-deep-uninstall',
@@ -988,6 +1110,7 @@ export async function executeAgentCareBatchCard(
     if (rBatch.data?.reportKo) reportBlocks.push(String(rBatch.data.reportKo));
   }
 
+  // 버킷 5: 실사용 은행·관공서 보안모듈 무삭제 수면
   if (sleepItems.length > 0 || card.action === 'security_2tier_apply') {
     const rSlp = await callCareApi<any>('/api/care/sleep', { explicitOptIn: true }, 20000);
     if (rSlp.ok) anyOk = true;
@@ -1001,6 +1124,8 @@ export async function executeAgentCareBatchCard(
     reportKo:
       reportBlocks.join('\n\n') ||
       (anyOk ? '선택하신 항목들을 깔끔하게 정리했습니다!' : '선택된 실행 대상이 없거나 처리 중 오류가 발생했습니다.'),
+    currentFreeGb: updatedFreeGb,
+    projectedFreeAfterEmptyGb: updatedProjGb,
   };
 }
 
@@ -1032,7 +1157,7 @@ export async function explainCareItemsWithGemini(params: {
   ].join('\n');
 
   const controller = new AbortController();
-  const timer = setTimeout(() => controller.abort(), 5500);
+  const timer = setTimeout(() => controller.abort(), 8500);
   try {
     const res = await fetch('https://os.sundreamer.app/api/ai/gemini', {
       method: 'POST',
@@ -1058,6 +1183,7 @@ export async function explainCareItemsWithGemini(params: {
       const data = await res.json();
       const text = String(data?.text || '').trim();
       if (text) {
+        logGeminiCareTurnNonBlocking(query, text, 'item_explain');
         return {
           replyKo: text,
           followUpSuggestions: [
@@ -1115,6 +1241,18 @@ export function detectAgentCareIntent(
   isSystemIconQuery: boolean;
   isPowerBoostQuery: boolean;
 } {
+  // [P1-1] 복원 기록 조회·원복 발화는 절대 스캔/삭제 에이전트가 가로채지 않도록 즉시 양보!
+  if (/(복원\s*기록|복원\s*지점|되돌려|되돌리|원복|원래대로|(?:방금|아까|최근|이전).*?(?:취소|복원|복구|되돌))/i.test(clean)) {
+    return {
+      matched: false,
+      immediateReadTools: [],
+      needsGeminiMultiTurnFilter: false,
+      needsGeminiExplainOnly: false,
+      isSystemIconQuery: false,
+      isPowerBoostQuery: false,
+    };
+  }
+
   const hasRecentScan = Boolean(
     scanContext && scanContext.items.length > 0 && Date.now() - scanContext.updatedAt < 25 * 60 * 1000
   );
@@ -1127,17 +1265,22 @@ export function detectAgentCareIntent(
     ) &&
     !/(빼고|제외하고|나머지\s*다|일괄\s*삭제|다\s*지워|옮겨\s*줘)/i.test(clean);
 
-  // 2) 일반인 비전문용어 종합 점검 불만어 ("컴이 왜 이리 버벅거려/무거워/이상한 거 깔렸나/자꾸 뭐가 떠/컴퓨터 청소 좀 하자/가볍게 해줘/뭐 지우면 돼")
+  // 2) 일반 사무직원 비전문용어 종합 점검 불만어 (조사 이/가/은/는/도 허용 + 답답/이상한 창·팝업/버벅대/멈칫 전면 포괄)
   const isCasualFullCheckup =
-    /(컴퓨터|컴터|피씨|pc|노트북|컴)?\s*(가|이)?\s*(왜\s*이리|너무|자꾸|요즘)?\s*(버벅|느려졌|무거워|답답해|렉\s*걸|이상해|꽉\s*찬|터질|가볍게|청소\s*(좀|하자|해\s*줘)|싹\s*정리|정리\s*좀\s*하자|손\s*좀\s*보|손보자|점검\s*좀)/i.test(
+    /(?:컴퓨터|컴터|피씨|pc|노트북|컴|화면|마우스|창|업무).*?(?:버벅|느려|느린|무거워|무겁|답답|렉\s*걸|먹통|멈칫|이상해|가볍게|청소\s*(?:좀|하자|해)|정리\s*좀|손\s*좀\s*보|손보자|점검\s*좀|상태\s*좀|봐\s*줘|봐\s*주세요)/i.test(
       clean
     ) ||
-    /(이상한\s*(거|게|앱|프로그램)|광고\s*(가|창|팝업).*?(떠|뜨|나와)|뭐가\s*자꾸\s*(떠|돌아|켜져)|쓸데없는\s*(거|게|앱|프로그램)|뭐\s*(지우면|삭제하면|정리하면)\s*(돼|좋아))/i.test(
+    /(?:왜\s*이리|왜\s*이렇게|너무|자꾸|요즘|갑자기)\s*(?:버벅|느려|무거워|답답|렉\s*걸|멈칫|멈춰|끊겨)/i.test(clean) ||
+    /(?:이상한|모르는|수상한|광고)\s*(?:창|팝업|배너|알림|메시지|화면|거|게|앱|프로그램)(?:이|가|은|는|들)?.*?(?:떠|뜨|나와|열려|돌아|켜져|깔렸|있|봐\s*줘|없애|치워)?/i.test(
+      clean
+    ) ||
+    /(?:창|팝업|광고|배너|뭐)(?:이|가)?\s*자꾸\s*(?:떠|뜨|나와|열려|돌아|켜져)|자꾸.*?(?:창|팝업|광고|배너|이상한).*?(?:떠|뜨|나와|켜져)|쓸데없는\s*(?:거|게|앱|프로그램)|뭐\s*(?:지우면|삭제하면|정리하면)\s*(?:돼|좋아|될까)/i.test(
       clean
     );
 
+  // 조사(이/가/은/는/도) 허용 C드라이브·저장공간 부족 발화 ("저장 공간이 모자라서 파일이 안 받아져", "용량이 부족해")
   const isDiskHog =
-    /(c\s*드라이브|용량\s*(부족|꽉|없|줄|확보|도둑|주범|정리|스캔|분석|체크|늘려|부족해)|공간\s*(부족|확보|정리|도둑|주범|스캔|분석|늘려)|대용량\s*(폴더|파일|캐시|스캔|찾아)|캐시\s*(정리|청소|삭제|지워|스캔)|최대\s*절전|hiberfil|capcut|캡컷|npm|크롬\s*캐시)/i.test(
+    /(?:[c-zC-Z]\s*드라이브|(?:저장\s*)?(?:용량|공간|하드|디스크|ssd)(?:이|가|은|는|도)?\s*(?:너무\s*|자꾸\s*|많이\s*|다\s*)?(?:부족|모자라|꽉|없|줄|찼|차서|안\s*남|확보|도둑|주범|정리|스캔|분석|체크|늘려)|파일(?:이|가)?\s*안\s*(?:받아|열려|깔려|저장)|대용량\s*(?:폴더|파일|캐시|스캔|찾아)|캐시\s*(?:정리|청소|삭제|지워|스캔)|최대\s*절전|hiberfil|capcut|캡컷|npm|크롬\s*캐시)/i.test(
       clean
     );
   const isSecurity2Tier =
@@ -1162,7 +1305,7 @@ export function detectAgentCareIntent(
   const isMultiTurnFilter =
     hasRecentScan &&
     !isAskingExplain &&
-    /(빼고|제외하고|놔두고|놔둬|남기고|냅두고|말고|나머지\s*(다|전부|모두)|빨간색|삭제\s*안전|다\s*(지워|삭제|제거|정리|치워)|d\s*드라이브|옮겨\s*(줘|주세요|라)|이사\s*(해|시켜)|#\d+|\d+\s*번)/i.test(
+    /(빼고|제외|놔두고|놔둬|남기고|냅두고|말고|나머지\s*(?:다|전부|모두)?|빨간색|차단\s*권장|삭제\s*안전|안전\s*캐시만|수동\s*(?:전환|으로)|다\s*(?:지워|삭제|제거|정리|치워|꺼)|[d-zD-Z]\s*:?\s*드라이브|옮겨\s*(?:줘|주세요|라)?|이사\s*(?:해|시켜)?|#\d+|\d+\s*번|만\s*(?:지워|삭제|정리|꺼|치워|숨겨))/i.test(
       clean
     );
 

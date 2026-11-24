@@ -3428,7 +3428,11 @@ export async function processUnifiedMonsterChatQuery(params: {
     if (
       pendingApprovalMsg.cardKind === 'AGENT_CARE_BATCH_CARD' &&
       pendingApprovalMsg.agentCareCardPayload &&
-      !pendingApprovalMsg.agentCareCardPayload.executed
+      !pendingApprovalMsg.agentCareCardPayload.executed &&
+      (pendingApprovalMsg.agentCareCardPayload.selectedIds?.length || 0) > 0 &&
+      !/(빼고|제외|놔두|놔둬|남기|냅두|말고|나머지|빨간색|차단\s*권장|삭제\s*안전|안전\s*캐시만|수동\s*전환|수동으로|[d-zD-Z]\s*:?\s*(?:드라이브|로\s*옮|로\s*이사)|이사|옮겨|#\d+|\d+\s*번|만\s*(?:지워|삭제|제거|정리|꺼|치워|숨겨))/i.test(
+        clean
+      )
     ) {
       const card = pendingApprovalMsg.agentCareCardPayload;
       const execRes = await executeAgentCareBatchCard(card, clean);
@@ -3723,10 +3727,18 @@ export async function processUnifiedMonsterChatQuery(params: {
     });
   }
 
+  // [P1-1] 직전 말풍선이 [복원 기록] 목록(RESTORE_POINTS_LIST)이고 유저가 번호("1번", "#1")를 입력한 경우 0-0B가 최우선 처리하도록 보호
+  const lastAssistantMsgPreCare = [...sharedChatState.messages].reverse().find((m) => m.role === 'assistant');
+  const isSelectingRestoreNumberNow =
+    lastAssistantMsgPreCare?.cardKind === 'RESTORE_POINTS_LIST' &&
+    /^\s*(#?\d+\s*(번)?|첫\s*번째|두\s*번째|세\s*번째)(\s*(복원|되돌|원복|진행|실행|취소|해\s*줘|해\s*주세요|할래|선택))?\s*[.!~]?$/i.test(
+      clean
+    );
+
   // 0-0C) [제미니 에이전트 자유 문답 + 다중 취사선택 PC 정리 트랙 (2026-11-24 Ghosti × MerlinHub 합의 5대 기둥)]
   // - C드라이브 대용량 공간 도둑 3초 스캔 / 보안모듈·애드웨어 2분류 / 바탕화면 상세 분석 & WD 시스템 아이콘 안전 숨김
   // - 직전 스캔 원장(lastCareScanContext)을 60개·5키로 Gemini에 주입해 "예스파일·오캠 빼고 나머지 다 지워", "큰 폴더는 D:로 옮겨줘" 멀티턴 지령 수행!
-  if (!isMobileRuntimeForChat() && !/휴지통\s*비워/i.test(clean)) {
+  if (!isMobileRuntimeForChat() && !/휴지통\s*비워/i.test(clean) && !isSelectingRestoreNumberNow) {
     const curScanCtx = getLastCareScanContext();
     const agentIntent = detectAgentCareIntent(clean, curScanCtx);
     if (agentIntent.matched) {
@@ -3830,6 +3842,10 @@ export async function processUnifiedMonsterChatQuery(params: {
             return excKwList.some((kw) => kw.length >= 2 && (nmL.includes(kw) || idL.includes(kw)));
           };
 
+          const isExplicitForceAllApps =
+            curScanCtx.scanKind === 'INSTALLED_APPS' &&
+            /(설치된\s*(?:프로그램|앱)\s*(?:전부|모두|싹\s*다)|전부\s*다\s*삭제)/i.test(clean);
+
           const excludedNames: string[] = [];
           const selectedIds: string[] = [];
           for (const it of curScanCtx.items) {
@@ -3841,12 +3857,15 @@ export async function processUnifiedMonsterChatQuery(params: {
             const nmL = it.name.toLowerCase();
             const noS = String(it.no);
             const hashNo = `#${it.no}`;
+            // [P0-5] incIdSet이 비어 있을 때는 USER_CHECK(오피스·한컴·다운로드 원본 등 defaultSelected=false)까지 전체 폭발하지 않고,
+            // 원래 안전 권장(defaultSelected=true)된 캐시·애드웨어·차단권장 항목만 기본 모수로 선택합니다!
             const explicitlyIncluded =
-              incIdSet.size === 0 ||
-              incIdSet.has(idL) ||
-              incIdSet.has(noS) ||
-              incIdSet.has(hashNo) ||
-              Array.from(incIdSet).some((inc) => inc.length >= 2 && nmL.includes(inc));
+              incIdSet.size === 0
+                ? Boolean(it.defaultSelected) || isExplicitForceAllApps
+                : incIdSet.has(idL) ||
+                  incIdSet.has(noS) ||
+                  incIdSet.has(hashNo) ||
+                  Array.from(incIdSet).some((inc) => inc.length >= 2 && nmL.includes(inc));
             if (explicitlyIncluded) {
               selectedIds.push(it.id);
             }
