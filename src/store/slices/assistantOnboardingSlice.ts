@@ -10,6 +10,7 @@ import {
 import {
   analyzeMobilePickedPhotoFiles,
   analyzeNativeGalleryPhotoBatch,
+  applyCachedPcOpticalAuditInstant,
   auditRealPcPhotosAndCluster,
   clusterPhotosIntoDuplicateGroups,
   convertNativeGalleryVideos,
@@ -514,11 +515,12 @@ export const createAssistantOnboardingSlice: StateCreator<
         }
       })();
 
-    // 독립 귀신검색창(?ghostSearchWindow) 첫 기동 시 크롬 --app 프로세스 콜드스타트 중 260ms 헬스체크가 먼저 타임아웃되어
-    // 미연결 빈 상태로 1차 initApp() 후 재연결 2차 initApp(true)가 이중 실행되는 현상을 원천 차단합니다.
-    if (isStandaloneSearchWin && !zCoreBridge.isConnected) {
-      await Promise.race([        zCoreBridge.checkHealth(true),
-        new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 1200)),
+    // 데스크톱(본 웹 화면 + 독립 귀신검색창 공통) 첫 기동·새로고침 시 헬스체크 응답 전에 빈 상태(0장)로 1차 initApp() 후
+    // 재연결 2차 initApp(true)가 이중 실행되어 화면이 멈추거나 깜빡이는 현상을 원천 차단합니다.
+    if (!isCapacitorNativeMobileRuntime() && !zCoreBridge.isConnected) {
+      await Promise.race([
+        zCoreBridge.checkHealth(true),
+        new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 950)),
       ]);
     }
 
@@ -551,13 +553,39 @@ export const createAssistantOnboardingSlice: StateCreator<
         .catch(() => {});
     }
 
-    const [dataset, telemetry, indexedDocs, indexedVideos, faceData, hostSharedPhotos] = await Promise.all([      photoDatasetPromise,
-      isStandaloneSearchWin ? Promise.resolve(null) : detectHardwareTelemetry(),
+    const rawTelemetryPromise = isStandaloneSearchWin ? Promise.resolve(null) : detectHardwareTelemetry();
+    const rawHostSharedPromise = isStandaloneSearchWin ? Promise.resolve([] as PhotoItem[]) : fetchSharedFamilyHostPhotos();
+
+    const [dataset, telemetry, indexedDocs, indexedVideos, faceData, hostSharedPhotos] = await Promise.all([
+      photoDatasetPromise,
+      Promise.race([
+        rawTelemetryPromise,
+        new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 700)),
+      ]),
       fetchIndexedDocuments(),
       fetchIndexedVideos(),
       fetchAutonomousFaceClusters(),
-      isStandaloneSearchWin ? Promise.resolve([]) : fetchSharedFamilyHostPhotos(),
+      Promise.race([
+        rawHostSharedPromise,
+        new Promise<PhotoItem[]>((resolve) => window.setTimeout(() => resolve([]), 700)),
+      ]),
     ]);
+
+    // 원격 공유방 사진이나 하드웨어 텔레메트리가 700ms보다 늦게 도착하더라도 로컬 사진 첫 화면을 막지 않고 뒤에서 조용히 보강
+    void rawTelemetryPromise
+      .then((lateTel) => {
+        if (lateTel && !get().telemetry) {
+          set({ telemetry: { ...lateTel, lastQueryMs: 0.4 } });
+        }
+      })
+      .catch(() => {});
+    void rawHostSharedPromise
+      .then((lateShared) => {
+        if (Array.isArray(lateShared) && lateShared.length > 0 && get().sharedRoomHostPhotos.length === 0) {
+          set({ sharedRoomHostPhotos: lateShared });
+        }
+      })
+      .catch(() => {});
 
     const cachedOnDeviceFaces = loadCachedOnDeviceFaceClusters();
     const hasOnDeviceCache = cachedOnDeviceFaces.clusters.length > 0;
@@ -596,7 +624,7 @@ export const createAssistantOnboardingSlice: StateCreator<
     const baseDatasetVideos =
       indexedVideos.length > 0 ? indexedVideos : existingMobileVideos;
 
-    const enrichedPhotos = baseDatasetPhotos.map((p) => {
+    let enrichedPhotos = baseDatasetPhotos.map((p) => {
       const extraTags = memberTagsByPhoto.get(p.name);
       if (!extraTags || extraTags.length === 0) return p;
       return {
@@ -604,6 +632,27 @@ export const createAssistantOnboardingSlice: StateCreator<
         tags: Array.from(new Set([...p.tags, ...extraTags])),
       };
     });
+
+    // [새로고침(F5) 가짜 4세트 ➔ 진짜 56세트 두 번 깜빡임 원천 제거]:
+    // IndexedDB에 캐시된 광학 해시(dHash·선명도)를 첫 화면 렌더링 직전에 0.01초 만에 입혀,
+    // 파일명 기준 임시 사진이 잠깐 떴다 사라지는 현상 없이 처음부터 최종 정리 후보 세트를 바로 표시합니다.
+    let initialDuplicateGroups = dataset.duplicateGroups;
+    let uncachedOpticalCount = enrichedPhotos.length;
+    if (
+      !isCapacitorNativeMobileRuntime() &&
+      zCoreBridge.isConnected &&
+      !isStandaloneSearchWin &&
+      enrichedPhotos.length > 0
+    ) {
+      try {
+        const instantAudit = await applyCachedPcOpticalAuditInstant(enrichedPhotos);
+        enrichedPhotos = instantAudit.updatedPhotos;
+        initialDuplicateGroups = instantAudit.duplicateGroups;
+        uncachedOpticalCount = instantAudit.uncachedCount;
+      } catch {
+        /* fallback to background audit */
+      }
+    }
 
     const localChips = buildLocalSentenceSamplesFromCorpus(enrichedPhotos);
     const fallbackThumb = enrichedPhotos[0]?.thumbUrl || '';
@@ -679,7 +728,7 @@ export const createAssistantOnboardingSlice: StateCreator<
       set({
         photos: enrichedPhotos,
         sharedRoomHostPhotos: hostSharedPhotos,
-        duplicateGroups: dataset.duplicateGroups,
+        duplicateGroups: initialDuplicateGroups,
         localDocuments: indexedDocs,
         videoSceneItems: baseDatasetVideos,
         faceClusters: autoMultiClusters,
@@ -730,7 +779,13 @@ export const createAssistantOnboardingSlice: StateCreator<
         return {
           photos: enrichedPhotos,
           sharedRoomHostPhotos: hostSharedPhotos,
-          duplicateGroups: dataset.duplicateGroups,
+          duplicateGroups: initialDuplicateGroups,
+          activeTrashCategoryFilter:
+            initialDuplicateGroups.length > 0
+              ? 'duplicate'
+              : enrichedPhotos.some((p) => p.trashCategory === 'blurry' && !p.quarantined)
+              ? 'blurry'
+              : latestState.activeTrashCategoryFilter,
           localDocuments: indexedDocs,
           matchedLocalDocs: latestSharedMode ? [] : effectiveInitialDocs,
           matchedVaultPhotos: latestSharedMode ? [] : initialVaultPhotos,
@@ -867,46 +922,48 @@ export const createAssistantOnboardingSlice: StateCreator<
           } else {
             // Stage 1 ➔ Stage 2 ➔ Stage 3 순차 직렬 실행 (동시 워커 폭발 0%)
             window.setTimeout(async () => {
-              // Stage 1: 내 PC 실물 사진들의 실제 64-bit dHash 및 2D 라플라시안 선명도(흐린 사진 판별) + 다중 연사 묶음
-              try {
-                const currentPhotos = get().photos;
-                const { updatedPhotos, duplicateGroups: realDupGroups } =
-                  await auditRealPcPhotosAndCluster(currentPhotos);
-                const nextTrashIds = new Set<string>();
-                updatedPhotos.forEach((p) => {
-                  if (p.trashCategory && !p.quarantined) nextTrashIds.add(p.id);
-                });
-                const updatedById = new Map<string, PhotoItem>(
-                  updatedPhotos.map((p) => [p.id, p])
-                );
-                set((state) => {
-                  const nextSearchResults =
-                    !state.hasExecutedUserSearch && state.activeLoungeType === 'personal'
-                      ? filterVisibleGalleryPhotos(updatedPhotos).map((photo) => ({
-                          photo,
-                          score: 0.99,
-                          matchPercentage: 99,
-                          matchedBy: 'text-direct' as const,
-                        }))
-                      : state.searchResults.map((sr) => {
-                          const refreshed = updatedById.get(sr.photo.id);
-                          return refreshed ? { ...sr, photo: refreshed } : sr;
-                        });
-                  return {
-                    photos: updatedPhotos,
-                    duplicateGroups: realDupGroups,
-                    searchResults: nextSearchResults,
-                    selectedTrashIds: nextTrashIds,
-                    activeTrashCategoryFilter:
-                      realDupGroups.length > 0
-                        ? 'duplicate'
-                        : updatedPhotos.some((p) => p.trashCategory === 'blurry' && !p.quarantined)
-                        ? 'blurry'
-                        : state.activeTrashCategoryFilter,
-                  };
-                });
-              } catch {
-                /* ignore */
+              // Stage 1: 미캐시 신규 사진이 남아 있을 때만 광학 dHash·선명도 추가 스캔 수행 (캐시 100% 적중 시 재렌더 0회)
+              if (uncachedOpticalCount > 0) {
+                try {
+                  const currentPhotos = get().photos;
+                  const { updatedPhotos, duplicateGroups: realDupGroups } =
+                    await auditRealPcPhotosAndCluster(currentPhotos);
+                  const nextTrashIds = new Set<string>();
+                  updatedPhotos.forEach((p) => {
+                    if (p.trashCategory && !p.quarantined) nextTrashIds.add(p.id);
+                  });
+                  const updatedById = new Map<string, PhotoItem>(
+                    updatedPhotos.map((p) => [p.id, p])
+                  );
+                  set((state) => {
+                    const nextSearchResults =
+                      !state.hasExecutedUserSearch && state.activeLoungeType === 'personal'
+                        ? filterVisibleGalleryPhotos(updatedPhotos).map((photo) => ({
+                            photo,
+                            score: 0.99,
+                            matchPercentage: 99,
+                            matchedBy: 'text-direct' as const,
+                          }))
+                        : state.searchResults.map((sr) => {
+                            const refreshed = updatedById.get(sr.photo.id);
+                            return refreshed ? { ...sr, photo: refreshed } : sr;
+                          });
+                    return {
+                      photos: updatedPhotos,
+                      duplicateGroups: realDupGroups,
+                      searchResults: nextSearchResults,
+                      selectedTrashIds: nextTrashIds,
+                      activeTrashCategoryFilter:
+                        realDupGroups.length > 0
+                          ? 'duplicate'
+                          : updatedPhotos.some((p) => p.trashCategory === 'blurry' && !p.quarantined)
+                          ? 'blurry'
+                          : state.activeTrashCategoryFilter,
+                    };
+                  });
+                } catch {
+                  /* ignore */
+                }
               }
 
               // Stage 2: 온디바이스 얼굴 여권 추출 (YuNet + SFace int8) — 완료 후 워커 terminate로 WASM RAM 즉시 반환

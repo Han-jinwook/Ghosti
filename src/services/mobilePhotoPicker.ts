@@ -1222,6 +1222,116 @@ function persistOpticalAuditBatch(entries: Array<{ key: string; meta: OpticalSig
   });
 }
 
+export const PC_OPTICAL_AUDIT_EVENT = 'ghosti_pc_optical_audit_state';
+let pcOpticalAuditInProgress = false;
+
+export function isPcOpticalAuditInProgress(): boolean {
+  return pcOpticalAuditInProgress;
+}
+
+function setPcOpticalAuditInProgress(next: boolean): void {
+  if (pcOpticalAuditInProgress === next) return;
+  pcOpticalAuditInProgress = next;
+  if (typeof window !== 'undefined') {
+    try {
+      window.dispatchEvent(new Event(PC_OPTICAL_AUDIT_EVENT));
+    } catch {
+      /* ignore */
+    }
+  }
+}
+
+function applyOpticalMetaToPhoto(p: PhotoItem, meta: OpticalSignatureMeta): void {
+  opticalSigByPhotoId.set(p.id, meta);
+  p.dhash = meta.dhash;
+  p.opticalSharpness = meta.sharpness;
+  if (
+    p.trashCategory === 'blurry' &&
+    !meta.isMotionOrFocusBlurred &&
+    !/blur|흔들/i.test(p.name || '')
+  ) {
+    p.trashCategory = undefined;
+    p.intrinsicTrashCategory = undefined;
+    p.trashConfidence = undefined;
+    p.tags = (p.tags || []).filter((t) => !t.includes('흔들림') && !t.includes('초점이탈'));
+  }
+  if (!p.trashCategory && !p.isVaultDocument) {
+    const isPhoneOrDesktopUiCapture =
+      meta.aspect >= 1.96 ||
+      meta.aspect <= 0.51 ||
+      (meta.whitePct >= 74 && /\.png$/i.test(p.name));
+    if (isPhoneOrDesktopUiCapture) {
+      p.trashCategory = 'screenshot';
+      p.intrinsicTrashCategory = 'screenshot';
+      p.trashConfidence = 0.96;
+      if (!p.tags.some((t) => t.includes('스크린샷'))) {
+        p.tags = ['#스크린샷·화면캡처', ...p.tags];
+      }
+    } else if (
+      meta.whitePct < 50 &&
+      meta.isMotionOrFocusBlurred &&
+      !(meta.aspect >= 1.95 && meta.aspect <= 2.35)
+    ) {
+      p.trashCategory = 'blurry';
+      p.intrinsicTrashCategory = 'blurry';
+      p.trashConfidence = 0.95;
+      if (!p.tags.includes('#초점이탈·심한흔들림')) {
+        p.tags = ['#초점이탈·심한흔들림', ...p.tags];
+      }
+    }
+  }
+}
+
+/**
+ * [새로고침(F5) 첫 화면 0.05초 무깜빡임 복원]:
+ * IndexedDB에 이미 저장된 광학 해시(pcOpticalAuditCache)를 이미지 네트워크 재로딩 없이 즉시 입혀,
+ * 가짜 파일명 기준 4세트 ➔ 실제 광학 56세트로 화면이 두 번 튀는 현상을 원천 제거합니다.
+ */
+export async function applyCachedPcOpticalAuditInstant(photos: PhotoItem[]): Promise<{
+  updatedPhotos: PhotoItem[];
+  duplicateGroups: DuplicateGroup[];
+  cachedHits: number;
+  uncachedCount: number;
+}> {
+  const isSample = (name: string) =>
+    /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(name);
+  const cloned = photos.map((p) => ({ ...p, tags: [...(p.tags || [])] }));
+  const realCandidates = cloned.filter((p) => !p.quarantined && !isSample(p.name));
+  if (realCandidates.length === 0) {
+    return { updatedPhotos: cloned, duplicateGroups: [], cachedHits: 0, uncachedCount: 0 };
+  }
+
+  await hydratePcOpticalAuditCacheOnce();
+
+  const targetSlice = realCandidates.slice(0, 800);
+  let cachedHits = 0;
+  let uncachedCount = 0;
+  for (const p of targetSlice) {
+    const cacheKey = `${p.name}_${p.size}_${p.mtimeMs}`;
+    const cached = pcOpticalAuditCache.get(cacheKey);
+    if (cached) {
+      applyOpticalMetaToPhoto(p, cached);
+      cachedHits++;
+    } else {
+      uncachedCount++;
+    }
+  }
+
+  if (cachedHits === 0 && uncachedCount > 0) {
+    // 최초 1회 미캐시 PC에서는 가짜 파일명 묶음(4세트)을 먼저 띄워 깜빡이게 하지 않고 광학 스캔 완료 시 한 번에 표시
+    setPcOpticalAuditInProgress(true);
+    return { updatedPhotos: cloned, duplicateGroups: [], cachedHits: 0, uncachedCount };
+  }
+
+  const clustered = clusterPhotosIntoDuplicateGroups(cloned.filter((p) => !isSample(p.name)));
+  return {
+    updatedPhotos: clustered.updatedPhotos,
+    duplicateGroups: clustered.duplicateGroups,
+    cachedHits,
+    uncachedCount,
+  };
+}
+
 export async function auditRealPcPhotosAndCluster(
   photos: PhotoItem[]
 ): Promise<{ updatedPhotos: PhotoItem[]; duplicateGroups: DuplicateGroup[] }> {
@@ -1230,118 +1340,83 @@ export async function auditRealPcPhotosAndCluster(
 
   const realCandidates = photos.filter((p) => !p.quarantined && !isSample(p.name));
   if (realCandidates.length === 0) {
+    setPcOpticalAuditInProgress(false);
     return { updatedPhotos: photos, duplicateGroups: [] };
   }
 
-  await hydratePcOpticalAuditCacheOnce();
+  setPcOpticalAuditInProgress(true);
+  try {
+    await hydratePcOpticalAuditCacheOnce();
 
-  const targetSlice = realCandidates.slice(0, 800);
-  const uncachedSlice: PhotoItem[] = [];
+    const targetSlice = realCandidates.slice(0, 800);
+    const uncachedSlice: PhotoItem[] = [];
 
-  const applyMetaToPhoto = (p: PhotoItem, meta: OpticalSignatureMeta) => {
-    opticalSigByPhotoId.set(p.id, meta);
-    p.dhash = meta.dhash;
-    p.opticalSharpness = meta.sharpness;
-    if (
-      p.trashCategory === 'blurry' &&
-      !meta.isMotionOrFocusBlurred &&
-      !/blur|흔들/i.test(p.name || '')
-    ) {
-      p.trashCategory = undefined;
-      p.intrinsicTrashCategory = undefined;
-      p.trashConfidence = undefined;
-      p.tags = (p.tags || []).filter((t) => !t.includes('흔들림') && !t.includes('초점이탈'));
-    }
-    if (!p.trashCategory && !p.isVaultDocument) {
-      const isPhoneOrDesktopUiCapture =
-        meta.aspect >= 1.96 ||
-        meta.aspect <= 0.51 ||
-        (meta.whitePct >= 74 && /\.png$/i.test(p.name));
-      if (isPhoneOrDesktopUiCapture) {
-        p.trashCategory = 'screenshot';
-        p.intrinsicTrashCategory = 'screenshot';
-        p.trashConfidence = 0.96;
-        if (!p.tags.some((t) => t.includes('스크린샷'))) {
-          p.tags = ['#스크린샷·화면캡처', ...p.tags];
-        }
-      } else if (
-        meta.whitePct < 50 &&
-        meta.isMotionOrFocusBlurred &&
-        !(meta.aspect >= 1.95 && meta.aspect <= 2.35)
-      ) {
-        p.trashCategory = 'blurry';
-        p.intrinsicTrashCategory = 'blurry';
-        p.trashConfidence = 0.95;
-        if (!p.tags.includes('#초점이탈·심한흔들림')) {
-          p.tags = ['#초점이탈·심한흔들림', ...p.tags];
-        }
-      }
-    }
-  };
-
-  for (const p of targetSlice) {
-    const cacheKey = `${p.name}_${p.size}_${p.mtimeMs}`;
-    const cached = pcOpticalAuditCache.get(cacheKey);
-    if (cached) {
-      applyMetaToPhoto(p, cached);
-    } else {
-      uncachedSlice.push(p);
-    }
-  }
-
-  if (uncachedSlice.length > 0) {
-    // Crete 지각적 재블러링 지표는 280px/448px 썸네일에서도 100% 정확하므로,
-    // 경량 썸네일(thumbUrl)을 8장씩 고속 병렬 스캔하여 800장 기준 1~2초 내로 완료합니다.
-    const BATCH = 8;
-    const newlyComputed: Array<{ key: string; meta: OpticalSignatureMeta }> = [];
-    const auditOne = (p: PhotoItem): Promise<void> => {
+    for (const p of targetSlice) {
       const cacheKey = `${p.name}_${p.size}_${p.mtimeMs}`;
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = 'anonymous';
-        const timer = window.setTimeout(() => resolve(), 3500);
-        img.onload = () => {
-          window.clearTimeout(timer);
-          const meta = computeOpticalDhashAndSharpness(img);
-          pcOpticalAuditCache.set(cacheKey, meta);
-          newlyComputed.push({ key: cacheKey, meta });
-          applyMetaToPhoto(p, meta);
-          resolve();
-        };
-        const primaryUrl = p.thumbUrl || p.fullUrl;
-        const fallbackUrl = p.thumbUrl && p.fullUrl && p.fullUrl !== p.thumbUrl ? p.fullUrl : '';
-        let triedFallback = false;
-        img.onerror = () => {
-          if (!triedFallback && fallbackUrl) {
-            triedFallback = true;
-            img.src = fallbackUrl;
-            return;
-          }
-          window.clearTimeout(timer);
-          resolve();
-        };
-        img.src = primaryUrl;
-      });
-    };
+      const cached = pcOpticalAuditCache.get(cacheKey);
+      if (cached) {
+        applyOpticalMetaToPhoto(p, cached);
+      } else {
+        uncachedSlice.push(p);
+      }
+    }
 
-    for (let i = 0; i < uncachedSlice.length; i += BATCH) {
-      if (i > 0 && i % 24 === 0) {
-        await waitForUserTypingAndModalQuiet(400);
+    if (uncachedSlice.length > 0) {
+      // Crete 지각적 재블러링 지표는 280px/448px 썸네일에서도 100% 정확하므로,
+      // 경량 썸네일(thumbUrl)을 8장씩 고속 병렬 스캔하여 800장 기준 1~2초 내로 완료합니다.
+      const BATCH = 8;
+      const newlyComputed: Array<{ key: string; meta: OpticalSignatureMeta }> = [];
+      const auditOne = (p: PhotoItem): Promise<void> => {
+        const cacheKey = `${p.name}_${p.size}_${p.mtimeMs}`;
+        return new Promise((resolve) => {
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          const timer = window.setTimeout(() => resolve(), 3500);
+          img.onload = () => {
+            window.clearTimeout(timer);
+            const meta = computeOpticalDhashAndSharpness(img);
+            pcOpticalAuditCache.set(cacheKey, meta);
+            newlyComputed.push({ key: cacheKey, meta });
+            applyOpticalMetaToPhoto(p, meta);
+            resolve();
+          };
+          const primaryUrl = p.thumbUrl || p.fullUrl;
+          const fallbackUrl = p.thumbUrl && p.fullUrl && p.fullUrl !== p.thumbUrl ? p.fullUrl : '';
+          let triedFallback = false;
+          img.onerror = () => {
+            if (!triedFallback && fallbackUrl) {
+              triedFallback = true;
+              img.src = fallbackUrl;
+              return;
+            }
+            window.clearTimeout(timer);
+            resolve();
+          };
+          img.src = primaryUrl;
+        });
+      };
+
+      for (let i = 0; i < uncachedSlice.length; i += BATCH) {
+        if (i > 0 && i % 24 === 0) {
+          await waitForUserTypingAndModalQuiet(400);
+        }
+        await Promise.all(uncachedSlice.slice(i, i + BATCH).map(auditOne));
+        if (newlyComputed.length >= 24) {
+          persistOpticalAuditBatch(newlyComputed.splice(0, newlyComputed.length));
+        }
+        if (i + BATCH < uncachedSlice.length) {
+          await new Promise((r) => setTimeout(r, 8));
+        }
       }
-      await Promise.all(uncachedSlice.slice(i, i + BATCH).map(auditOne));
-      if (newlyComputed.length >= 24) {
-        persistOpticalAuditBatch(newlyComputed.splice(0, newlyComputed.length));
-      }
-      if (i + BATCH < uncachedSlice.length) {
-        await new Promise((r) => setTimeout(r, 8));
+      if (newlyComputed.length > 0) {
+        persistOpticalAuditBatch(newlyComputed);
       }
     }
-    if (newlyComputed.length > 0) {
-      persistOpticalAuditBatch(newlyComputed);
-    }
+
+    return clusterPhotosIntoDuplicateGroups(photos.filter((p) => !isSample(p.name)));
+  } finally {
+    setPcOpticalAuditInProgress(false);
   }
-
-  return clusterPhotosIntoDuplicateGroups(photos.filter((p) => !isSample(p.name)));
 }
 
 /**

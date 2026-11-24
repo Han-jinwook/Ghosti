@@ -1,6 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useSaySeeStore } from '../../store/useSaySeeStore';
 import type { PhotoItem, TrashCategory } from '../../types/saysee';
+import {
+  PC_OPTICAL_AUDIT_EVENT,
+  isPcOpticalAuditInProgress,
+} from '../../services/mobilePhotoPicker';
 import {
   zCoreBridge,
   isZCoreOutdated,
@@ -107,6 +111,8 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     setDesktopTab,
     setMobileTab,
     runTextQuery,
+    initialized,
+    initializing,
     isStoreAppMode,
     mobileGalleryScanning,
     mobileGalleryPermissionDenied,
@@ -115,6 +121,14 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     pendingReturnShareRoom,
     returnToSharedRoomAndOpenUpload,
   } = useSaySeeStore();
+
+  const [pcAuditBusy, setPcAuditBusy] = useState(() => isPcOpticalAuditInProgress());
+  useEffect(() => {
+    const syncAudit = () => setPcAuditBusy(isPcOpticalAuditInProgress());
+    window.addEventListener(PC_OPTICAL_AUDIT_EVENT, syncAudit);
+    return () => window.removeEventListener(PC_OPTICAL_AUDIT_EVENT, syncAudit);
+  }, []);
+  const isPcBootLoading = !(isStoreAppMode || layout === 'mobile') && (!initialized || initializing || pcAuditBusy);
 
   const [externalQueryTrigger] = useState<{
     id: number;
@@ -462,6 +476,10 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     : isCapacitorNativeMobileRuntime()
                     ? '표시할 사진이 없습니다.'
                     : '스마트폰 앱에서 사진첩 접근을 허용하면 자동으로 분류됩니다.'}
+                </span>
+              ) : isPcBootLoading && quarantinedPhotos.length === 0 ? (
+                <span className="text-slate-600 font-medium text-[13.5px]">
+                  내 PC의 정리 후보 사진(중복·연사·캡처·흔들림)을 불러오고 있습니다...
                 </span>
               ) : (
                 <span className="text-slate-700 font-medium text-[14px]">
@@ -1070,6 +1088,8 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   <span className="material-symbols-outlined text-slate-400 text-[30px]">
                     {displayPhotos.length === 0 && (isStoreAppMode || layout === 'mobile')
                       ? 'add_photo_alternate'
+                      : isPcBootLoading
+                      ? 'hourglass_top'
                       : 'verified'}
                   </span>
                   <span className="text-[14.5px] text-slate-800 font-semibold break-keep">
@@ -1079,6 +1099,8 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                         : mobileGalleryPermissionDenied
                         ? '사진 접근 권한 허용이 필요합니다.'
                         : '표시할 사진이 없습니다.'
+                      : isPcBootLoading
+                      ? '내 PC의 중복·연사 사진 묶음을 확인하고 있습니다...'
                       : '중복되거나 연속으로 찍힌 사진 묶음이 없습니다.'}
                   </span>
                   {displayPhotos.length === 0 &&
