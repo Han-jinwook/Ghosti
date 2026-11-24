@@ -1017,12 +1017,21 @@ export const App: React.FC = () => {
         (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
       );
       if (isNativeCapacitorApp) {
-        // 네이티브 스토어 앱에서 화면을 아래로 당기면 WebView 리로드 없이 즉시 스마트폰 갤러리(사진·동영상) 동기화를 끝까지 대기하고 완료 피드백 제공
+        // 네이티브 스토어 앱에서 화면을 아래로 당기면 내 폰 갤러리·공유방·내 기기 통합 최신 상태를 함께 동기화
         const minSpin = new Promise<void>((resolve) => window.setTimeout(resolve, 1100));
         const maxWait = new Promise<void>((resolve) => window.setTimeout(resolve, 8000));
-        const syncWork = Promise.resolve(
-          useSaySeeStore.getState().syncMobileNativeGalleryAuto({ promptPermission: true })
-        ).catch(() => undefined);
+        const stNow = useSaySeeStore.getState();
+        const isSharedLounge =
+          stNow.activeLoungeType === 'family' ||
+          stNow.activeLoungeType === 'club' ||
+          stNow.activeLoungeType === 'student';
+        const syncWork = Promise.allSettled([
+          stNow.syncMobileNativeGalleryAuto({ promptPermission: true }),
+          isSharedLounge
+            ? stNow.syncActiveSharedRoomFromSupabase()
+            : Promise.resolve(),
+          stNow.refreshDeviceIntegrationState(),
+        ]).then(() => undefined);
 
         void Promise.all([minSpin, Promise.race([syncWork, maxWait])]).finally(() => {
           ptrDistRef.current = 0;
