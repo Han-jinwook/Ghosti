@@ -358,23 +358,43 @@ export async function hubFetch<T = any>(
   };
 
   // 세션 토큰이 있으면 Authorization 헤더 추가
-  const token = getSessionToken();
-  if (token) {
-    headers['Authorization'] = `Bearer ${token}`;
+  const sentToken = getSessionToken();
+  if (sentToken) {
+    headers['Authorization'] = `Bearer ${sentToken}`;
   }
 
   let lastError: Error | null = null;
+  const isAuthMeEndpoint = path.startsWith('/api/auth/me');
 
   for (let attempt = 0; attempt < retries; attempt++) {
     try {
       const res = await fetch(url, { ...options, headers });
       const data = await res.json().catch(() => ({}));
 
-      // 401 → JWT 만료 — 세션 클리어 후 이벤트 발행
+      // 401 처리:
+      // 1) 롤링 세션(newToken) 경합으로 요청 도중 토큰이 이미 갱신되었다면 즉시 새 토큰으로 1회 재시도 (세션 삭제 금지)
+      // 2) /api/wallet/balance 등 부가 API의 단발 401은 세션을 일방적으로 죽이지 않고 호출자에게 401만 반환
+      // 3) /api/auth/me 의 401 역시 checkSession()의 2회 연속 확정 검증을 거치도록 여기서는 즉시 clearSessionToken 금지
       if (res.status === 401) {
-        clearSessionToken();
-        if (typeof window !== 'undefined') {
-          window.dispatchEvent(new CustomEvent('merlinSessionExpired'));
+        const latestToken = getSessionToken();
+        if (latestToken && latestToken !== sentToken && attempt < retries - 1) {
+          headers['Authorization'] = `Bearer ${latestToken}`;
+          continue;
+        }
+        if (!isAuthMeEndpoint && typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(
+              'ghosti_last_hub_401_trace',
+              JSON.stringify({
+                at: new Date().toISOString(),
+                path,
+                status: 401,
+                error: (data as any)?.error || (data as any)?.message || '',
+              })
+            );
+          } catch {
+            /* ignore */
+          }
         }
         return { ok: false, status: 401, data: data as T };
       }

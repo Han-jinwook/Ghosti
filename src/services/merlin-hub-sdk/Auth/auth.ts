@@ -131,25 +131,87 @@ export async function checkSession(): Promise<SessionResult> {
   const token = getSessionToken();
   if (!token) return { valid: false, status: 401 };
 
-  try {
+  const probeOnce = async () => {
     const timestamp = Date.now();
-    const { ok, status, data } = await hubFetch<{ success: boolean; user: any }>(`/api/auth/me?t=${timestamp}`);
+    return hubFetch<{ success: boolean; user: any; error?: string; message?: string }>(
+      `/api/auth/me?t=${timestamp}`
+    );
+  };
+
+  try {
+    let { ok, status, data } = await probeOnce();
 
     // 🚨 인플라이트 요청 도중 사용자가 [로그아웃]을 클릭한 경우(merlin_logged_out === '1'),
     // 뒤늦게 도착한 newToken이 로그아웃 플래그를 지우고 세션을 부활시키지 못하도록 즉시 중단!
     if (typeof window !== 'undefined' && localStorage.getItem('merlin_logged_out') === '1') {
       return { valid: false, status: 401 };
     }
-    
+
+    // F5 연타·롤링 토큰 교체 경합·허브 일시 401로 인한 오탐 로그아웃 방지:
+    // 첫 응답이 401/403 또는 !success이면 350ms 후 최신 토큰으로 1회 재검증한 뒤,
+    // 2회 연속 인증 거부일 때만 세션을 정리하고 원인 추적 로그를 남깁니다.
+    const looksRejected = (!ok && (status === 401 || status === 403)) || (ok && !data?.success);
+    if (looksRejected) {
+      await new Promise((r) => setTimeout(r, 350));
+      if (typeof window !== 'undefined' && localStorage.getItem('merlin_logged_out') === '1') {
+        return { valid: false, status: 401 };
+      }
+      const second = await probeOnce();
+      ok = second.ok;
+      status = second.status;
+      data = second.data;
+      if (typeof window !== 'undefined' && localStorage.getItem('merlin_logged_out') === '1') {
+        return { valid: false, status: 401 };
+      }
+    }
+
     if (!ok) {
       if (status === 401 || status === 403) {
+        if (typeof window !== 'undefined') {
+          try {
+            localStorage.setItem(
+              'ghosti_last_session_logout_trace',
+              JSON.stringify({
+                at: new Date().toISOString(),
+                path: '/api/auth/me',
+                status,
+                error: (data as any)?.error || (data as any)?.message || '',
+                tokenTail: token.slice(-8),
+              })
+            );
+          } catch {
+            /* ignore */
+          }
+        }
         clearSessionToken();
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('merlinSessionExpired'));
+        }
       }
       return { valid: false, status };
     }
 
     if (!data?.success) {
+      if (typeof window !== 'undefined') {
+        try {
+          localStorage.setItem(
+            'ghosti_last_session_logout_trace',
+            JSON.stringify({
+              at: new Date().toISOString(),
+              path: '/api/auth/me',
+              status: status || 200,
+              error: (data as any)?.error || (data as any)?.message || 'SUCCESS_FALSE',
+              tokenTail: token.slice(-8),
+            })
+          );
+        } catch {
+          /* ignore */
+        }
+      }
       clearSessionToken();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('merlinSessionExpired'));
+      }
       return { valid: false, status: 401 };
     }
     
