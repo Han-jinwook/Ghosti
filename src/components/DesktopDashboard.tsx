@@ -110,29 +110,13 @@ export const DesktopDashboard: React.FC = () => {
         /* ignore */
       }
     };
-    const sendZCoreHeartbeat = (closing = false) => {
-      if (!zCoreBridge.isConnected) return;
-      try {
-        void fetch(getZCoreUrl('/api/superpower/open_search_window'), {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify(
-            closing ? { closing: true, win_id: winId } : { heartbeat: true, win_id: winId }
-          ),
-          keepalive: closing,
-        }).catch(() => {});
-      } catch {
-        /* ignore */
-      }
-    };
-
+    // [무한 창 열림 원천 차단]: 구버전 Z-코어(<v2.7.53) 설치파일에서 /api/superpower/open_search_window로
+    // heartbeat/closing을 보내면 매 2.5초마다 새 귀신검색창을 무한 기동하는 치명적 역호환 버그를 원천 제거합니다.
+    // 싱글톤 방어는 localStorage 1초 하트비트 + BroadcastChannel + Z-코어 HWND 추적으로 100% 완결됩니다.
     writeLocalHeartbeat();
-    sendZCoreHeartbeat(false);
     const localHbTimer = window.setInterval(writeLocalHeartbeat, 1000);
-    const zcoreHbTimer = window.setInterval(() => sendZCoreHeartbeat(false), 2500);
     const onUnloadCleanup = () => {
       clearLocalHeartbeat();
-      sendZCoreHeartbeat(true);
     };
     window.addEventListener('beforeunload', onUnloadCleanup);
     window.addEventListener('pagehide', onUnloadCleanup);
@@ -206,9 +190,7 @@ export const DesktopDashboard: React.FC = () => {
       window.removeEventListener('beforeunload', onUnloadCleanup);
       window.removeEventListener('pagehide', onUnloadCleanup);
       window.clearInterval(localHbTimer);
-      window.clearInterval(zcoreHbTimer);
       clearLocalHeartbeat();
-      sendZCoreHeartbeat(true);
       try {
         bc?.close();
       } catch {
