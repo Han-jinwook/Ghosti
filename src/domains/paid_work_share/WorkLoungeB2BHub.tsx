@@ -140,6 +140,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const localDocsRef = useRef<WorkLoungeDocDto[]>([]);
   const remoteDocsRef = useRef<WorkLoungeDocDto[]>([]);
   remoteDocsRef.current = remoteDocs;
+  const backupServersRef = useRef<WorkBackupServerNodeDto[]>(backupServers);
+  backupServersRef.current = backupServers;
+  const lastWorkFilesSigRef = useRef<string>('');
   const deletedTombstonesRef = useRef<WorkDeletedTombstoneMap>(deletedTombstones);
   deletedTombstonesRef.current = deletedTombstones;
   const inFlightDeletesRef = useRef<Set<string>>(new Set());
@@ -192,6 +195,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     const cachedMeta = readCachedMyWorkRoomMeta(merlinAuth?.email || undefined);
     const nextRoomId = cachedMeta?.roomId || '';
     setActiveWorkRoomId(nextRoomId);
+    lastWorkFilesSigRef.current = '';
     setLocalDocs([]);
     setRemoteDocs([]);
     setDeletedTombstones(
@@ -328,19 +332,25 @@ export const WorkLoungeB2BHub: React.FC = () => {
     }
   };
 
-  const syncRealWorkFiles = useCallback(async () => {
+  const syncRealWorkFiles = useCallback(async (forceRefresh = false) => {
     const res = await fetchLocalWorkFilesNative({
       includeSyncBase64: Boolean(activeWorkRoomId && isWorkUnlocked),
       author: actorNickname,
+      knownSig: forceRefresh ? undefined : lastWorkFilesSigRef.current || undefined,
     });
     if (!res.ok) return;
-    setSDriveMounted(res.mounted);
+    setSDriveMounted((prev) => (prev === res.mounted ? prev : res.mounted));
     if (res.targetDir) {
-      setDriveTargetPath(res.targetDir);
+      setDriveTargetPath((prev) => (prev === res.targetDir ? prev : res.targetDir!));
     }
-
     if (res.localDeletedTombstones && Object.keys(res.localDeletedTombstones).length > 0) {
       mergeAndPersistTombstones(res.localDeletedTombstones);
+    }
+    if (res.unchanged) {
+      return;
+    }
+    if (res.listSig) {
+      lastWorkFilesSigRef.current = res.listSig;
     }
 
     const activeLocalDocs = res.docs.filter((d) => !inFlightDeletesRef.current.has(d.relPath));
@@ -551,14 +561,17 @@ export const WorkLoungeB2BHub: React.FC = () => {
       void syncAndMount();
 
       const fastLockInterval = window.setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
         void pollLocalLocksFast();
-      }, 1000);
+      }, 2000);
       const fullSyncInterval = window.setInterval(() => {
+        if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
         void syncRealWorkFiles();
-      }, 4000);
+      }, 10000);
       const onFocusOrVisible = () => {
         if (document.visibilityState === 'visible') {
           void pollLocalLocksFast();
+          void syncRealWorkFiles();
         }
       };
       window.addEventListener('focus', onFocusOrVisible);
@@ -732,7 +745,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
           setMasterWorkPcName(authed.hostTunnel.masterServerName);
         }
         if (Array.isArray(authed.hostTunnel?.backupServers)) {
-          setBackupServers(authed.hostTunnel.backupServers);
+          const nextServers = authed.hostTunnel.backupServers;
+          setBackupServers((prev) =>
+            JSON.stringify(prev) === JSON.stringify(nextServers) ? prev : nextServers
+          );
         }
         mergeAndPersistTombstones(authed.deletedTombstones);
         if (authed.docs.length > 0 || !isZCoreConnected) {
@@ -757,11 +773,19 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
     void loadRemoteState();
     const pollId = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       void loadRemoteState();
-    }, 12000);
+    }, 15000);
+    const onVisibleRemote = () => {
+      if (document.visibilityState === 'visible') {
+        void loadRemoteState();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibleRemote);
     return () => {
       cancelled = true;
       window.clearInterval(pollId);
+      document.removeEventListener('visibilitychange', onVisibleRemote);
     };
   }, [
     activeWorkRoomId,

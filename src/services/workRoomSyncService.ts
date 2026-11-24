@@ -571,8 +571,11 @@ export function mapRawWorkFileToDto(rf: Record<string, unknown>, idx: number): W
 export async function fetchLocalWorkFilesNative(opts?: {
   includeSyncBase64?: boolean;
   author?: string;
+  knownSig?: string;
 }): Promise<{
   ok: boolean;
+  unchanged?: boolean;
+  listSig?: string;
   mounted: boolean;
   targetDir?: string;
   docs: WorkLoungeDocDto[];
@@ -593,6 +596,7 @@ export async function fetchLocalWorkFilesNative(opts?: {
     const qs = new URLSearchParams();
     if (opts?.includeSyncBase64) qs.set('includeSyncBase64', '1');
     if (opts?.author) qs.set('author', opts.author);
+    if (opts?.knownSig) qs.set('knownSig', opts.knownSig);
     const fullUrl = qs.toString() ? `${base}?${qs.toString()}` : base;
     const res = await fetch(fullUrl);
     if (!res.ok) {
@@ -606,12 +610,29 @@ export async function fetchLocalWorkFilesNative(opts?: {
     }
     const data = (await res.json()) as {
       ok?: boolean;
+      unchanged?: boolean;
+      listSig?: string;
       mounted?: boolean;
       targetDir?: string;
       files?: Array<Record<string, unknown>>;
       locallyDeletedRelPaths?: string[];
       localDeletedTombstones?: WorkDeletedTombstoneMap;
     };
+    if (data?.ok && data.unchanged === true) {
+      return {
+        ok: true,
+        unchanged: true,
+        listSig: typeof data.listSig === 'string' ? data.listSig : opts?.knownSig,
+        mounted: Boolean(data.mounted),
+        targetDir: data.targetDir,
+        docs: [],
+        locallyDeletedRelPaths: [],
+        localDeletedTombstones:
+          data.localDeletedTombstones && typeof data.localDeletedTombstones === 'object'
+            ? data.localDeletedTombstones
+            : {},
+      };
+    }
     if (!data?.ok || !Array.isArray(data.files)) {
       return {
         ok: false,
@@ -623,6 +644,8 @@ export async function fetchLocalWorkFilesNative(opts?: {
     }
     return {
       ok: true,
+      unchanged: false,
+      listSig: typeof data.listSig === 'string' ? data.listSig : '',
       mounted: Boolean(data.mounted),
       targetDir: data.targetDir,
       docs: data.files.map((rf, i) => mapRawWorkFileToDto(rf, i)),

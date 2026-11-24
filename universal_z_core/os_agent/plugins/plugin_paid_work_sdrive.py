@@ -1247,8 +1247,8 @@ def list_work_files(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         "locallyDeletedRelPaths": locally_deleted,
         "localDeletedTombstones": local_tombs,
     }
-    if known_sig and known_sig == list_sig and not locally_deleted and not include_sync_b64:
-        resp["unchanged"] = True  # 변경 없음 → 수천 개 파일 목록 재전송 생략
+    if known_sig and known_sig == list_sig and not locally_deleted:
+        resp["unchanged"] = True  # 변경 없음 → Base64 인코딩 및 수천 개 파일 목록 재전송 완전 생략
         return resp
 
     if include_sync_b64:
