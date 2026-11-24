@@ -26,9 +26,6 @@ function resolveInitialWebInvite(): ParsedShareInvite | null {
     if (!params.has('invite') && !params.has('inviteToken') && !params.has('token')) {
       return null;
     }
-    if (params.get('preview') === 'guest') {
-      return null;
-    }
     return parseShareInviteInput(window.location.href);
   } catch {
     return null;
