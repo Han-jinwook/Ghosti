@@ -2138,6 +2138,12 @@ def sync_work_entitlement_state(data: Dict[str, Any] | None = None) -> Dict[str,
             "message": "🔒 업무 공유 이용 기간이 종료되어 S: 드라이브 연결을 해제했습니다. 업무 폴더 안의 원본 파일은 100% 그대로 보존됩니다.",
         }
 
+    # 활성 상태: 윈도우에서 S: 드라이브가 아직 미연결이면 즉시 자동 마운트(권한 동기화↔마운트 경합 0%)
+    if os.name == "nt":
+        status_before = inspect_s_drive_status()
+        if not status_before.get("mounted"):
+            mount_or_unmount_s_drive({"action": "mount", "openExplorer": False})
+
     # 활성 상태 + 방장 PC이면 아웃바운드 직통 터널도 자동 준비
     tunnel_info = ensure_outbound_work_tunnel() if is_host else get_outbound_work_tunnel_status()
     status_info = inspect_s_drive_status()
@@ -2149,6 +2155,20 @@ def sync_work_entitlement_state(data: Dict[str, Any] | None = None) -> Dict[str,
         "targetDir": status_info.get("targetDir"),
         "tunnel": tunnel_info,
     }
+
+
+def auto_mount_s_drive_if_unlocked() -> Dict[str, Any]:
+    """Z-코어 기동 시(PC 재부팅·엔진 자동 업데이트 후) 기존에 업무 공유 권한이 해금된 PC라면
+    탐색기 [S: 드라이브]를 즉시 자동 복원합니다 (미개통·만료 상태는 절대 마운트하지 않음)."""
+    if os.name != "nt":
+        return {"ok": False, "skipped": "NOT_WINDOWS"}
+    try:
+        cfg = _load_sdrive_config()
+        if cfg.get("workEntitlementLocked") is False:
+            return mount_or_unmount_s_drive({"action": "mount", "openExplorer": False})
+        return {"ok": True, "skipped": "LOCKED_OR_UNINITIALIZED", "mounted": False}
+    except Exception as exc:
+        return {"ok": False, "error": str(exc)}
 
 
 def handle_action(act: str, data: Dict[str, Any]) -> Dict[str, Any] | None:

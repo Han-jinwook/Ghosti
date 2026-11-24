@@ -174,7 +174,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.7.53"
+CORE_VERSION = "2.7.59"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -2240,6 +2240,11 @@ def main() -> None:
         ),
         flush=True,
     )
+    threading.Thread(
+        target=plugin_paid_work_sdrive.auto_mount_s_drive_if_unlocked,
+        name="sdrive-boot-automount",
+        daemon=True,
+    ).start()
     srv.serve_forever()
 
 

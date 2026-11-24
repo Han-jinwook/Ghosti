@@ -876,17 +876,31 @@ export function isCurrentAccountWorkShareUnlocked(email?: string): boolean {
 let lastSyncedPcEngineSubFlag: string | null = null;
 export async function syncEntitlementToLocalPcEngine(
   entitlement: GhostiDeviceEntitlementView | null,
-  accountEmail?: string
+  accountEmail?: string,
+  workOverride?: {
+    unlocked?: boolean;
+    roomId?: string;
+    isHost?: boolean;
+    planId?: string;
+    force?: boolean;
+  }
 ): Promise<void> {
   if (typeof window === 'undefined' || !zCoreBridge.isConnected) return;
   const isSub = Boolean(entitlement?.isPaidUnlimited);
-  const isWorkUnlocked = Boolean(
-    entitlement?.workSubscriptionUnlocked || entitlement?.workPaidActive || entitlement?.workTrialActive
-  );
+  const isWorkUnlocked =
+    workOverride?.unlocked !== undefined
+      ? Boolean(workOverride.unlocked)
+      : Boolean(
+          entitlement?.workSubscriptionUnlocked ||
+            entitlement?.workPaidActive ||
+            entitlement?.workTrialActive
+        );
   const devCnt = Math.max(1, Number(entitlement?.activeDeviceCount || 1));
   const cleanEmail = (accountEmail || '').trim().toLowerCase();
-  const sig = `${cleanEmail}::${isSub ? '1' : '0'}::${isWorkUnlocked ? '1' : '0'}::${devCnt}`;
-  if (lastSyncedPcEngineSubFlag === sig) return;
+  const roomId = (workOverride?.roomId || '').trim();
+  const isHost = Boolean(workOverride?.isHost);
+  const sig = `${cleanEmail}::${isSub ? '1' : '0'}::${isWorkUnlocked ? '1' : '0'}::${devCnt}::${roomId}::${isHost ? '1' : '0'}`;
+  if (!workOverride?.force && lastSyncedPcEngineSubFlag === sig) return;
   lastSyncedPcEngineSubFlag = sig;
   try {
     const qs = new URLSearchParams({
@@ -902,7 +916,12 @@ export async function syncEntitlementToLocalPcEngine(
         body: JSON.stringify({
           unlocked: isWorkUnlocked,
           email: cleanEmail,
-          planId: entitlement?.workPlanId || (entitlement?.workTrialActive ? 'work_trial_30d' : ''),
+          roomId,
+          isHost,
+          planId:
+            workOverride?.planId ||
+            entitlement?.workPlanId ||
+            (entitlement?.workTrialActive ? 'work_trial_30d' : ''),
           reason: entitlement?.workTrialExpired ? 'WORK_TRIAL_EXPIRED' : 'WORK_SUBSCRIPTION_REQUIRED',
         }),
       }).catch(() => null),

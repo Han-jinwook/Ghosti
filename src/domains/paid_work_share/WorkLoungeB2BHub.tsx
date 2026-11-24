@@ -252,10 +252,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
     };
   }, []);
 
-  // PC 엔진 연결 시 예비 서버 설정 로드 및 권한 상태 동기화 (만료 시 S: 자동 해제 · 원본 파일 100% 보존)
+  // PC 엔진 연결 시 예비 서버 설정 로드 (권한·S: 마운트 순차 동기화는 아래 마운트 이펙트에서 단일 직렬 처리)
   useEffect(() => {
     if (!isZCoreConnected || isMobileOrStore) return;
-    void syncEntitlementToLocalPcEngine(deviceEntitlement || null, merlinAuth?.email || undefined);
     void manageWorkBackupServersNative({ subAction: 'get' }).then((res) => {
       if (res.ok) {
         if (res.masterServerName) setMasterWorkPcName(res.masterServerName);
@@ -267,7 +266,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
         }
       }
     });
-  }, [isZCoreConnected, isMobileOrStore, deviceEntitlement, merlinAuth?.email]);
+  }, [isZCoreConnected, isMobileOrStore]);
 
   const openZCoreConnectModal = () => {
     if (typeof window !== 'undefined') {
@@ -506,7 +505,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     }
   }, [isZCoreConnected, actorNickname, isWorkUnlocked, syncRealWorkFiles]);
 
-  // PC 엔진 연결 시: 구독/체험 활성 상태일 때만 S: 마운트 + 상시 아웃바운드 HTTPS 직통 터널 기동 (만료 시 S: 자동 해제 · 원본 파일 보존)
+  // PC 엔진 연결 시: 권한 동기화 ➔ S: 마운트/해제 순차 직렬 실행 (경합·초대 팀원 잠금 원천 차단)
   useEffect(() => {
     if (isMobileOrStore) return undefined;
 
@@ -515,22 +514,41 @@ export const WorkLoungeB2BHub: React.FC = () => {
       window.location.hostname === 'localhost' ||
       window.location.hostname === '127.0.0.1'
     ) {
-      if (isWorkUnlocked) {
-        void mountWorkSDriveNative({ action: 'mount', openExplorer: false }).then((mRes) => {
+      let cancelled = false;
+      const syncAndMount = async () => {
+        if (isZCoreConnected) {
+          await syncEntitlementToLocalPcEngine(
+            deviceEntitlement || null,
+            merlinAuth?.email || undefined,
+            {
+              unlocked: isWorkUnlocked,
+              roomId: activeWorkRoomId || undefined,
+              isHost: !inviteMeta.hasWorkInvite,
+              planId: inviteMeta.hasWorkInvite
+                ? 'work_invited_member'
+                : deviceEntitlement?.workPlanId || (isWorkTrialActive ? 'work_trial_30d' : ''),
+            }
+          );
+        }
+        if (cancelled) return;
+        if (isWorkUnlocked) {
+          const mRes = await mountWorkSDriveNative({ action: 'mount', openExplorer: false });
+          if (cancelled) return;
           if (mRes.ok) {
             setSDriveMounted(Boolean(mRes.mounted));
             if (mRes.targetDir) setDriveTargetPath(mRes.targetDir);
           }
           void syncRealWorkFiles();
-        });
-      } else {
-        // 만료/미개통 상태: S: 드라이브 연결 해제하되 폴더 내 로컬 원본 목록은 그대로 열람·보존
-        void mountWorkSDriveNative({ action: 'unmount', openExplorer: false }).then((mRes) => {
+        } else {
+          // 만료/미개통 상태: S: 드라이브 연결 해제하되 폴더 내 로컬 원본 목록은 그대로 열람·보존
+          const mRes = await mountWorkSDriveNative({ action: 'unmount', openExplorer: false });
+          if (cancelled) return;
           setSDriveMounted(false);
           if (mRes.targetDir) setDriveTargetPath(mRes.targetDir);
           void syncRealWorkFiles();
-        });
-      }
+        }
+      };
+      void syncAndMount();
 
       const fastLockInterval = window.setInterval(() => {
         void pollLocalLocksFast();
@@ -546,6 +564,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
       window.addEventListener('focus', onFocusOrVisible);
       document.addEventListener('visibilitychange', onFocusOrVisible);
       return () => {
+        cancelled = true;
         window.clearInterval(fastLockInterval);
         window.clearInterval(fullSyncInterval);
         window.removeEventListener('focus', onFocusOrVisible);
@@ -557,6 +576,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
     isZCoreConnected,
     isMobileOrStore,
     isWorkUnlocked,
+    isWorkTrialActive,
+    inviteMeta.hasWorkInvite,
+    deviceEntitlement,
+    merlinAuth?.email,
     activeWorkRoomId,
     syncRealWorkFiles,
     pollLocalLocksFast,
@@ -1132,6 +1155,19 @@ export const WorkLoungeB2BHub: React.FC = () => {
       openZCoreConnectModal();
       return;
     }
+    await syncEntitlementToLocalPcEngine(
+      deviceEntitlement || null,
+      merlinAuth?.email || undefined,
+      {
+        unlocked: true,
+        roomId: activeWorkRoomId || undefined,
+        isHost: !inviteMeta.hasWorkInvite,
+        planId: inviteMeta.hasWorkInvite
+          ? 'work_invited_member'
+          : deviceEntitlement?.workPlanId || (isWorkTrialActive ? 'work_trial_30d' : ''),
+        force: true,
+      }
+    );
     const res = await mountWorkSDriveNative({ action: 'mount', openExplorer: true });
     if (res.ok) {
       setSDriveMounted(Boolean(res.mounted));
