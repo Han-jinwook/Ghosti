@@ -894,7 +894,7 @@ def get_ime_is_korean(fg_hwnd: int | None = None) -> bool:
             seen_h.add(h_cand)
             hime = imm32.ImmGetDefaultIMEWnd(h_cand)
             if hime:
-                ok_m, mode = _send_msg_timeout_val(hime, WM_IME_CONTROL, IMC_GETCONVERSIONMODE, 0, timeout_ms=90)
+                ok_m, mode = _send_msg_timeout_val(hime, WM_IME_CONTROL, IMC_GETCONVERSIONMODE, 0, timeout_ms=35)
                 if ok_m and (mode & IME_CMODE_NATIVE) != 0:
                     return True
     return False
@@ -4318,6 +4318,9 @@ def _toast_worker() -> None:
     - [창 UI ②] 👻 귀신검색창 (소·중·대): 바탕화면/일반 화면 소환 또는 검색 전환 시 독립 실행되는 3단 검색창
     - [창 UI ③] 📸 사진·OCR 공간이동창: 스샷 직후 소환 시 독립 실행되는 좌측 사진·표 / 우측 OCR 칩 전용창
     """
+    global _UI_LOOP_HEARTBEAT_TS, _UI_LOOP_STAGE
+    _UI_LOOP_HEARTBEAT_TS = time.time()
+    _UI_LOOP_STAGE = "tk_init"
     import tkinter as tk
     try:
         from PIL import Image, ImageTk
@@ -4327,77 +4330,92 @@ def _toast_worker() -> None:
 
     root = tk.Tk()
     root.withdraw()
+    _UI_LOOP_HEARTBEAT_TS = time.time()
+    _UI_LOOP_STAGE = "tk_ready"
 
-    # [초기 로딩 지연 근본 제거]: 데몬 기동 시 백그라운드에서 ghost_search_window_ui2 모듈 선행 로드 +
-    # 완전 비가시(withdraw) Toplevel & 맑은 고딕 GDI 폰트 래스터 캐시 선행 워밍업 (화면 깜빡임 0%, 첫 소환 렌더링 <5ms 보장)
+    # [부팅 중 ui_stage=init 19초 오판 자폭 원천 차단]:
+    # ghost_search_window_ui2 선행 로드·폰트 워밍업·로고 PNG 리사이즈는
+    # root.mainloop()와 _poll_queue() 박동이 즉시 시작된 뒤(80ms 후) 비차단으로 실행합니다.
     _preloaded_ui2_mod = None
-    try:
-        if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
-            _mp_init = str(getattr(sys, "_MEIPASS"))
-            if _mp_init and (not sys.path or sys.path[0] != _mp_init):
-                if _mp_init in sys.path:
-                    sys.path.remove(_mp_init)
-                sys.path.insert(0, _mp_init)
-        for _cand_dir in (Path(__file__).resolve().parent, Path(__file__).resolve().parent / "os_agent"):
-            _c_str = str(_cand_dir)
-            if _cand_dir.exists() and _c_str not in sys.path:
-                sys.path.insert(0, _c_str)
-        import ghost_search_window_ui2 as _preloaded_ui2_mod  # type: ignore
-    except Exception:
-        _preloaded_ui2_mod = None
-
-    try:
-        _warm_top = tk.Toplevel(root)
-        _warm_top.withdraw()
-        _warm_top.overrideredirect(True)
-        tk.Label(_warm_top, text="👻귀신같이검색창", font=("Malgun Gothic", 9, "bold")).pack()
-        tk.Entry(_warm_top, font=("Malgun Gothic", 9)).pack()
-        _warm_top.update_idletasks()
-        _warm_top.destroy()
-    except Exception:
-        pass
-
     ghost_symbol_photo = None
     ghost_wordmark_photo = None
-    try:
-        meipass_assets = Path(getattr(sys, "_MEIPASS", str(Path(__file__).resolve().parent))) / "assets"
-        meipass_root = Path(getattr(sys, "_MEIPASS", str(Path(__file__).resolve().parent)))
-        sym_candidates = [
-            meipass_assets / "gwisinkachi_app_icon_512.png",
-            meipass_root / "logo-symbol.png",
-            Path(__file__).resolve().parent / "assets" / "gwisinkachi_app_icon_512.png",
-            Path(__file__).resolve().parent / "os_agent" / "assets" / "gwisinkachi_app_icon_512.png",
-            Path(__file__).resolve().parent / "logo-symbol.png",
-            Path("C:/MerlinTools/assets/gwisinkachi_app_icon_512.png"),
-            Path("D:/Ghosti/universal_z_core/os_agent/assets/gwisinkachi_app_icon_512.png"),
-            Path("D:/Ghosti/public/gwisinkachi_app_icon_512.png"),
-        ]
-        for sc in sym_candidates:
-            if sc.exists():
-                sym_img = Image.open(sc).convert("RGBA").resize((28, 28), Image.Resampling.LANCZOS)
-                ghost_symbol_photo = ImageTk.PhotoImage(sym_img, master=root)
-                break
 
-        wm_candidates = [
-            meipass_assets / "gwisinkachi_3d_wordmark_dark.png",
-            meipass_assets / "gwisinkachi_3d_wordmark_light.png",
-            Path(__file__).resolve().parent / "assets" / "gwisinkachi_3d_wordmark_dark.png",
-            Path(__file__).resolve().parent / "os_agent" / "assets" / "gwisinkachi_3d_wordmark_dark.png",
-            Path("C:/MerlinTools/assets/gwisinkachi_3d_wordmark_dark.png"),
-            Path("D:/Ghosti/universal_z_core/os_agent/assets/gwisinkachi_3d_wordmark_dark.png"),
-            Path("D:/Ghosti/public/gwisinkachi_3d_wordmark_dark.png"),
-            Path("D:/Ghosti/public/gwisinkachi_3d_wordmark_light.png"),
-        ]
-        for wc in wm_candidates:
-            if wc.exists():
-                wm_raw = Image.open(wc).convert("RGBA")
-                target_h = 22
-                target_w = max(56, int(wm_raw.width * (target_h / max(1, wm_raw.height))))
-                wm_img = wm_raw.resize((target_w, target_h), Image.Resampling.LANCZOS)
-                ghost_wordmark_photo = ImageTk.PhotoImage(wm_img, master=root)
-                break
-    except Exception:
-        pass
+    def _post_init_ui_assets_warmup() -> None:
+        nonlocal _preloaded_ui2_mod, ghost_symbol_photo, ghost_wordmark_photo
+        global _UI_LOOP_HEARTBEAT_TS, _UI_LOOP_STAGE
+        _UI_LOOP_HEARTBEAT_TS = time.time()
+        _UI_LOOP_STAGE = "warmup_ui2"
+        try:
+            if getattr(sys, "frozen", False) and hasattr(sys, "_MEIPASS"):
+                _mp_init = str(getattr(sys, "_MEIPASS"))
+                if _mp_init and (not sys.path or sys.path[0] != _mp_init):
+                    if _mp_init in sys.path:
+                        sys.path.remove(_mp_init)
+                    sys.path.insert(0, _mp_init)
+            for _cand_dir in (Path(__file__).resolve().parent, Path(__file__).resolve().parent / "os_agent"):
+                _c_str = str(_cand_dir)
+                if _cand_dir.exists() and _c_str not in sys.path:
+                    sys.path.insert(0, _c_str)
+            import ghost_search_window_ui2 as _u2_pre  # type: ignore
+            _preloaded_ui2_mod = _u2_pre
+        except Exception:
+            _preloaded_ui2_mod = None
+        _UI_LOOP_HEARTBEAT_TS = time.time()
+        try:
+            _warm_top = tk.Toplevel(root)
+            _warm_top.withdraw()
+            _warm_top.overrideredirect(True)
+            tk.Label(_warm_top, text="👻귀신같이검색창", font=("Malgun Gothic", 9, "bold")).pack()
+            tk.Entry(_warm_top, font=("Malgun Gothic", 9)).pack()
+            _warm_top.update_idletasks()
+            _warm_top.destroy()
+        except Exception:
+            pass
+        _UI_LOOP_HEARTBEAT_TS = time.time()
+        try:
+            if Image is not None and ImageTk is not None:
+                meipass_assets = Path(getattr(sys, "_MEIPASS", str(Path(__file__).resolve().parent))) / "assets"
+                meipass_root = Path(getattr(sys, "_MEIPASS", str(Path(__file__).resolve().parent)))
+                sym_candidates = [
+                    meipass_assets / "gwisinkachi_app_icon_512.png",
+                    meipass_root / "logo-symbol.png",
+                    Path(__file__).resolve().parent / "assets" / "gwisinkachi_app_icon_512.png",
+                    Path(__file__).resolve().parent / "os_agent" / "assets" / "gwisinkachi_app_icon_512.png",
+                    Path(__file__).resolve().parent / "logo-symbol.png",
+                    Path("C:/MerlinTools/assets/gwisinkachi_app_icon_512.png"),
+                    Path("D:/Ghosti/universal_z_core/os_agent/assets/gwisinkachi_app_icon_512.png"),
+                    Path("D:/Ghosti/public/gwisinkachi_app_icon_512.png"),
+                ]
+                for sc in sym_candidates:
+                    if sc.exists():
+                        sym_img = Image.open(sc).convert("RGBA").resize((28, 28), Image.Resampling.LANCZOS)
+                        ghost_symbol_photo = ImageTk.PhotoImage(sym_img, master=root)
+                        break
+
+                wm_candidates = [
+                    meipass_assets / "gwisinkachi_3d_wordmark_dark.png",
+                    meipass_assets / "gwisinkachi_3d_wordmark_light.png",
+                    Path(__file__).resolve().parent / "assets" / "gwisinkachi_3d_wordmark_dark.png",
+                    Path(__file__).resolve().parent / "os_agent" / "assets" / "gwisinkachi_3d_wordmark_dark.png",
+                    Path("C:/MerlinTools/assets/gwisinkachi_3d_wordmark_dark.png"),
+                    Path("D:/Ghosti/universal_z_core/os_agent/assets/gwisinkachi_3d_wordmark_dark.png"),
+                    Path("D:/Ghosti/public/gwisinkachi_3d_wordmark_dark.png"),
+                    Path("D:/Ghosti/public/gwisinkachi_3d_wordmark_light.png"),
+                ]
+                for wc in wm_candidates:
+                    if wc.exists():
+                        wm_raw = Image.open(wc).convert("RGBA")
+                        target_h = 22
+                        target_w = max(56, int(wm_raw.width * (target_h / max(1, wm_raw.height))))
+                        wm_img = wm_raw.resize((target_w, target_h), Image.Resampling.LANCZOS)
+                        ghost_wordmark_photo = ImageTk.PhotoImage(wm_img, master=root)
+                        break
+        except Exception:
+            pass
+        _UI_LOOP_HEARTBEAT_TS = time.time()
+        _UI_LOOP_STAGE = "poll_idle"
+
+    root.after(80, _post_init_ui_assets_warmup)
 
     current_win: list[tk.Toplevel | None] = [None]
     detail_win: list[tk.Toplevel | None] = [None]
@@ -5890,8 +5908,9 @@ def acquire_single_instance(in_process: bool = False) -> socket.socket | None:
                             now_p = time.time()
                             main_lag = now_p - _MAIN_LOOP_HEARTBEAT_TS
                             ui_lag = now_p - _UI_LOOP_HEARTBEAT_TS
+                            ui_ping_limit = 45.0 if _UI_LOOP_STAGE in ("init", "tk_init", "tk_ready", "warmup_ui2") else 15.0
                             healthy = _MODAL_PROMPT_ACTIVE or (
-                                main_lag < 15.0 and ui_lag < 15.0
+                                main_lag < 15.0 and ui_lag < ui_ping_limit
                             )
                             if healthy:
                                 try:
@@ -9826,9 +9845,8 @@ def main(in_process: bool = False) -> None:
         # 무조건 '👻 귀신검색창(UI ②)'이 기본으로 열립니다! (탐색기에서 압축파일 선택 시에만 알집 대체 UI ④ 오픈)
         if not is_ghostkey_active_mode():
             if _is_ui_window_actually_open() and _CURRENT_OPEN_UI_MODE in ("ui2", "ui3", "ui4", "ui1"):
-                # 실제 창이 방금 열린 지 0.40초 미만(연속 키바운스·이중 감지)일 때만 닫지 않고 전면 복원!
-                # (호출 직전 갱신되는 last_summon_ts 대신 실제 오픈 시각 _LAST_UI_OPENED_TS 기준으로 판별)
-                if (now_s - _LAST_UI_OPENED_TS) < 0.40:
+                # 실제 창이 방금 열린 지 0.18초 미만(물리 키바운스·이중 감지)일 때만 닫지 않고 전면 복원!
+                if (now_s - _LAST_UI_OPENED_TS) < 0.18:
                     _log_seq_diag("SUMMON_LIFT_DEBOUNCE", f"src={source} mode={_CURRENT_OPEN_UI_MODE}")
                     show_ghost_toast("__LIFT__", duration_ms=0)
                     return
@@ -10259,6 +10277,7 @@ def main(in_process: bool = False) -> None:
                     shift_h = (u32.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0
                     if ctrl_h and not alt_h and not shift_h and not _CACHED_RCLICK_BYPASS[0]:
                         _RBTN_HOLD_STATE["suppress_next_up"] = True
+                        _RBTN_HOLD_STATE["down_ts"] = time.time()
                         _RBTN_HOLD_STATE["summon_requested"] = True
                         _RBTN_HOLD_STATE["target_hwnd"] = u32.GetForegroundWindow()
                         return 1
@@ -10266,6 +10285,9 @@ def main(in_process: bool = False) -> None:
                     if _RBTN_HOLD_STATE.get("suppress_next_up"):
                         _RBTN_HOLD_STATE["suppress_next_up"] = False
                         return 1
+                    # WM_RBUTTONDOWN 직후(0.6초 이내) 릴리즈는 중복 소환 발화 차단 (연속 클릭 씹힘·딜레이 0%)
+                    if (time.time() - float(_RBTN_HOLD_STATE.get("down_ts") or 0.0)) < 0.6:
+                        return u32.CallNextHookEx(None, nCode, wParam, lParam)
                     ctrl_u = _is_ctrl_down_fast()
                     alt_u = (u32.GetAsyncKeyState(VK_MENU) & 0x8000) != 0
                     shift_u = (u32.GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0
@@ -10380,7 +10402,9 @@ def main(in_process: bool = False) -> None:
                 now_w = time.time()
                 main_lag_w = now_w - _MAIN_LOOP_HEARTBEAT_TS
                 ui_lag_w = now_w - _UI_LOOP_HEARTBEAT_TS
-                ui_hung = _TOAST_WORKER_STARTED and ui_lag_w > 18.0
+                # 초기 부팅(tk_init/init) 중 Windows Defender 스캔 지연은 45초 유예로 오판 자폭 원천 차단
+                ui_limit = 45.0 if _UI_LOOP_STAGE in ("init", "tk_init", "tk_ready", "warmup_ui2") else 18.0
+                ui_hung = _TOAST_WORKER_STARTED and ui_lag_w > ui_limit
                 if not _MODAL_PROMPT_ACTIVE and (main_lag_w > 18.0 or ui_hung):
                     _log_seq_diag(
                         "HANG_WATCHDOG_EXIT",
@@ -10468,7 +10492,7 @@ def main(in_process: bool = False) -> None:
                     # 1) 마스터 트리거 (오직 Ctrl + 0만!)
                     if hk_id in (1, 2):
                         now_hk = time.time()
-                        if (now_hk - last_summon_ts) > 0.25:
+                        if (now_hk - last_summon_ts) > 0.16:
                             last_summon_ts = now_hk
                             was_ctrl0_down = True
                             trigger_master_summon(source=f"hotkey_{hk_id}")
@@ -10610,7 +10634,7 @@ def main(in_process: bool = False) -> None:
                 _CACHED_RCLICK_BYPASS[0] = _should_bypass_rclick_hook(u32.GetForegroundWindow())
                 if _RBTN_HOLD_STATE.get("summon_requested"):
                     _RBTN_HOLD_STATE["summon_requested"] = False
-                    if (now - last_summon_ts) > 0.25:
+                    if (now - last_summon_ts) > 0.16:
                         last_summon_ts = now
                         was_key_down[0x9901] = True
                         trigger_master_summon(summon_by_rclick=True, source="rclick_hook")

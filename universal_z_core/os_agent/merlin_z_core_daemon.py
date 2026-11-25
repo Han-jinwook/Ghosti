@@ -219,7 +219,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.8.99"
+CORE_VERSION = "2.9.10"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -965,7 +965,7 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             return
 
         if path in ("/__sync/clipboard", "/api/sync/clipboard"):
-            self._send_json(plugin_paid_sync_ghostwin.get_os_clipboard_text())
+            self._send_json(plugin_paid_sync_ghostwin.get_os_clipboard_text(qp))
             return
 
         if path in ("/__videos/list", "/__videos/index", "/api/ghosti/videos/list"):

@@ -154,12 +154,12 @@ def ensure_superpower_daemon_running() -> bool:
         pass
 
     with _DAEMON_LOCK:
-        # 1) 이미 스폰한 자식 프로세스가 살아있고 PyInstaller 압축해제 유예시간(45초) 이내면 중복 스폰 방지
+        # 1) 이미 스폰한 자식 프로세스가 살아있고 --onedir 초기 기동 유예시간(12초) 이내면 중복 스폰 방지
         now_sp = time.time()
         if (
             _LAST_SPAWNED_PROC is not None
             and _LAST_SPAWNED_PROC.poll() is None
-            and (now_sp - _LAST_SPAWN_TS) < 45.0
+            and (now_sp - _LAST_SPAWN_TS) < 12.0
         ):
             return True
 

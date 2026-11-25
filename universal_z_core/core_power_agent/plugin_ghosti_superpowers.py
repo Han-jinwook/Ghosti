@@ -39,6 +39,7 @@ _DAEMON_THREAD_STARTED = False
 _DAEMON_WATCHDOG_STARTED = False
 _DAEMON_LOCK = threading.Lock()
 _LAST_SPAWNED_PROC: subprocess.Popen | None = None
+_IN_PROCESS_DAEMON_THREAD: threading.Thread | None = None
 _LAST_SPAWN_TS: float = 0.0
 _HUB_SUB_CACHE: Dict[str, tuple[float, bool]] = {}
 _HUB_SUB_CACHE_LOCK = threading.Lock()
@@ -114,10 +115,11 @@ def _resolve_verified_subscription(data: Dict[str, Any], m_entry: Dict[str, Any]
 
 def shutdown_superpower_daemon_for_update() -> None:
     """무소음 자가 업데이트(updater.bat) 전에 포트 51988 귀신창 데몬을 깔끔히 종료해 .exe 파일 잠금을 즉시 해제합니다."""
-    global _LAST_SPAWNED_PROC, _LAST_SPAWN_TS
+    global _LAST_SPAWNED_PROC, _IN_PROCESS_DAEMON_THREAD, _LAST_SPAWN_TS
     if os.name != "nt":
         return
     _LAST_SPAWNED_PROC = None
+    _IN_PROCESS_DAEMON_THREAD = None
     _LAST_SPAWN_TS = 0.0
     try:
         import socket
@@ -130,11 +132,11 @@ def shutdown_superpower_daemon_for_update() -> None:
 
 def ensure_superpower_daemon_running() -> bool:
     """
-    [프로세스 완전 분리 모드 + PING/PONG 활성 검증 + 66MB 단일 .exe 압축해제 중복 스폰 원천 차단 (Z-Core v2.5.39)]
-    - 귀신창 데몬(seq_paste_daemon, 포트 51988)은 메인 Z-코어(5199)와 반드시 별도 프로세스로 분리합니다.
-    - 51988 포트가 열려 있고 __PING__ -> PONG(메인 루프·UI 루프 정상 박동) 응답이 오면 즉시 True를 반환합니다.
-    - 직전에 기동한 자식 프로세스(_LAST_SPAWNED_PROC)가 아직 살아 있고 PyInstaller _MEI 압축해제 중(45초 유예)이라면
-      8초 워치독이 중복 프로세스를 연쇄 스폰(Fork-Stampede)하지 않도록 즉시 대기 반환합니다!
+    [프로세스 완전 분리 모드 + 0순위 병렬 기동 + PING/PONG 활성 검증 (Z-Core v2.8.69)]:
+    - 귀신창 데몬(seq_paste_daemon, 포트 51988)은 Tkinter/WH_MOUSE_LL/COM과 메인 5199 HTTP 서버 간
+      GIL·GUI 동반 데드락(Hang)을 물리적으로 0% 차단하기 위해 반드시 독립 프로세스로 완전 분리합니다.
+    - 대신 merlin_z_core_daemon.py 기동 0순위(_self_purge_legacy_conflicts 이전)에 즉시 병렬 스폰하여
+      10초 앞단 지연을 제거하고, 45초 유예로 중복 스폰(Fork-Stampede)을 원천 차단합니다.
     """
     global _LAST_SPAWNED_PROC, _LAST_SPAWN_TS
     if os.name != "nt":
@@ -142,8 +144,8 @@ def ensure_superpower_daemon_running() -> bool:
     try:
         import socket
 
-        with socket.create_connection(("127.0.0.1", 51988), timeout=1.0) as conn:
-            conn.settimeout(1.2)
+        with socket.create_connection(("127.0.0.1", 51988), timeout=0.8) as conn:
+            conn.settimeout(1.0)
             conn.sendall(b"__PING__")
             reply = conn.recv(64)
             if b"PONG" in reply:
@@ -152,21 +154,21 @@ def ensure_superpower_daemon_running() -> bool:
         pass
 
     with _DAEMON_LOCK:
-        # 1) 이미 스폰한 자식 프로세스가 아직 살아 있고 부팅/압축해제 유예시간(45초) 이내면 중복 스폰 절대 금지!
+        # 1) 이미 스폰한 자식 프로세스가 살아있고 --onedir 초기 기동 유예시간(12초) 이내면 중복 스폰 방지
         now_sp = time.time()
         if (
             _LAST_SPAWNED_PROC is not None
             and _LAST_SPAWNED_PROC.poll() is None
-            and (now_sp - _LAST_SPAWN_TS) < 45.0
+            and (now_sp - _LAST_SPAWN_TS) < 12.0
         ):
             return True
 
-        # 2) 포트 51988 재확인 (동시 호출 중복 스폰 방지)
+        # 2) 포트 51988 재확인
         try:
             import socket
 
-            with socket.create_connection(("127.0.0.1", 51988), timeout=0.6) as conn2:
-                conn2.settimeout(0.8)
+            with socket.create_connection(("127.0.0.1", 51988), timeout=0.5) as conn2:
+                conn2.settimeout(0.7)
                 conn2.sendall(b"__PING__")
                 if b"PONG" in conn2.recv(64):
                     return True
