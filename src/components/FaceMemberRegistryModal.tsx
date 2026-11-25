@@ -1201,6 +1201,7 @@ export const PassportDoorplateStyleModal: React.FC = () => {
   const [nickname, setNickname] = useState<string>('');
   const [regTick, setRegTick] = useState(0);
   const [pendingDeleteKey, setPendingDeleteKey] = useState<string | null>(null);
+  const backdropMouseDownRef = React.useRef(false);
 
   useEffect(() => {
     if (!doorplatePickerClusterId) return;
@@ -1246,10 +1247,22 @@ export const PassportDoorplateStyleModal: React.FC = () => {
   return (
     <div
       className="fixed inset-0 z-[140] bg-black/80 backdrop-blur-md flex items-center justify-center p-3 sm:p-4 pt-safe pb-safe overflow-y-auto"
-      onClick={close}
+      onMouseDown={(e) => {
+        backdropMouseDownRef.current = e.target === e.currentTarget;
+      }}
+      onClick={(e) => {
+        if (backdropMouseDownRef.current && e.target === e.currentTarget) {
+          close();
+        }
+        backdropMouseDownRef.current = false;
+      }}
     >
       <div
         className="w-full max-w-lg rounded-3xl bg-[#121318] border border-primary-container/40 text-zinc-100 shadow-2xl overflow-hidden flex flex-col max-h-[90dvh] my-auto"
+        onMouseDown={(e) => {
+          backdropMouseDownRef.current = false;
+          e.stopPropagation();
+        }}
         onClick={(e) => e.stopPropagation()}
       >
         {/* 헤더 — [D-35] 유저 화면 용어는 '여권' 하나만 */}

@@ -601,7 +601,7 @@ export const HubLogoutCard: React.FC<HubLogoutCardProps> = ({
         <div className="p-3.5 sm:p-4 flex flex-col gap-2">
           <button
             onClick={handleLogout}
-            className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-slate-50 border border-slate-200 text-slate-700 text-xs sm:text-sm font-bold rounded-xl hover:bg-slate-100 transition-colors shadow-xs cursor-pointer"
+            className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-teal-50 border border-teal-200 text-teal-800 text-xs sm:text-sm font-bold rounded-xl hover:bg-teal-100 transition-colors shadow-xs cursor-pointer"
           >
             <LogOut className="h-3.5 w-3.5" />
             로그아웃
@@ -612,7 +612,7 @@ export const HubLogoutCard: React.FC<HubLogoutCardProps> = ({
               setWithdrawError(null);
               setShowWithdrawModal(true);
             }}
-            className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-white border border-rose-200/80 text-rose-600 text-xs font-semibold rounded-xl hover:bg-rose-50 transition-colors cursor-pointer"
+            className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-slate-50/70 border border-slate-200/80 text-slate-400 text-xs font-medium rounded-xl hover:bg-slate-100 hover:text-slate-600 transition-colors cursor-pointer"
           >
             <UserX className="h-3.5 w-3.5" />
             회원 탈퇴
