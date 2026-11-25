@@ -2625,16 +2625,18 @@ export async function handleAuthedWorkAndDeviceAction({
     const allItems = Object.values(byId).sort(
       (a, b) => (Date.parse(b.syncedAt || '') || 0) - (Date.parse(a.syncedAt || '') || 0)
     );
-    const nextById = {};
-    for (const it of allItems) nextById[it.id] = it;
+    if (incoming.length > 0) {
+      const nextById = {};
+      for (const it of allItems) nextById[it.id] = it;
 
-    await writeStorageJson(
-      supabaseUrl,
-      serviceKey,
-      DEVICE_BUCKET,
-      `${emailHash}/shadow_catalog_v1.json`,
-      { updatedAt: new Date().toISOString(), byId: nextById }
-    );
+      await writeStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/shadow_catalog_v1.json`,
+        { updatedAt: new Date().toISOString(), byId: nextById }
+      );
+    }
     return { status: 200, body: { ok: true, items: allItems, entitlement: gate.entitlement } };
   }
 

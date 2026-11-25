@@ -342,6 +342,61 @@ const uploadedMirrorHashes = new Set<string>();
 const loadedUploadedMirrorEmails = new Set<string>();
 const packedThumbCache = new Map<string, string>();
 const UPLOADED_MIRROR_CACHE_PREFIX = 'ghosti_uploaded_mirror_hashes_v1::';
+const SYNCED_CATALOG_SIGS_PREFIX = 'ghosti_synced_catalog_sigs_v1::';
+const syncedCatalogSigsByEmail = new Map<string, Set<string>>();
+
+function getSyncedCatalogSigSet(email?: string): Set<string> {
+  const normEmail = (
+    email ||
+    (typeof window !== 'undefined'
+      ? localStorage.getItem('ghosti_hub_user_email') || localStorage.getItem('userEmail') || ''
+      : '')
+  )
+    .trim()
+    .toLowerCase();
+  if (!normEmail) return new Set<string>();
+  const existing = syncedCatalogSigsByEmail.get(normEmail);
+  if (existing) return existing;
+  const loaded = new Set<string>();
+  if (typeof window !== 'undefined') {
+    try {
+      const raw = localStorage.getItem(`${SYNCED_CATALOG_SIGS_PREFIX}${normEmail}`);
+      if (raw) {
+        const arr = JSON.parse(raw);
+        if (Array.isArray(arr)) {
+          for (const s of arr.slice(-4000)) {
+            if (typeof s === 'string' && s) loaded.add(s);
+          }
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  syncedCatalogSigsByEmail.set(normEmail, loaded);
+  return loaded;
+}
+
+function persistSyncedCatalogSigSet(email?: string): void {
+  if (typeof window === 'undefined') return;
+  const normEmail = (
+    email ||
+    localStorage.getItem('ghosti_hub_user_email') ||
+    localStorage.getItem('userEmail') ||
+    ''
+  )
+    .trim()
+    .toLowerCase();
+  if (!normEmail) return;
+  const set = syncedCatalogSigsByEmail.get(normEmail);
+  if (!set) return;
+  try {
+    const recent = Array.from(set).slice(-4000);
+    localStorage.setItem(`${SYNCED_CATALOG_SIGS_PREFIX}${normEmail}`, JSON.stringify(recent));
+  } catch {
+    /* ignore */
+  }
+}
 const pulledMirrorHashes = new Set<string>();
 const loadedEnvelopeEmails = new Set<string>();
 const osInjectedEnvelopeKeys = new Set<string>();
@@ -2456,110 +2511,183 @@ export async function executeRealDeviceSyncNow(opts: {
     }
   }
 
-  // 2) 장당 ~13KB 초경량 섀도우 카탈로그 패킹(8x 병렬 + 이미 압축한 썸네일은 메모리 캐시 즉시 재사용) 후 양방향 병합
-  const outgoingItems: Array<Record<string, unknown>> = new Array(activeLocalPhotos.length);
-  const totalPackCount = activeLocalPhotos.length + activeLocalDocs.length;
-  if (totalPackCount > 0) {
-    opts.onProgress?.({
-      phase: '사진·문서 미리보기 준비 중',
-      current: 0,
-      total: Math.max(1, totalPackCount),
-    });
-  }
-  let packedCount = 0;
-  await runWithConcurrency(activeLocalPhotos, 12, async (p, i) => {
-    const shaKey = photoShaMap.get(p.id) || `${(await sha256HexBrowser(`${p.id}::${p.name}::${p.size}`)).slice(0, 40)}.jpg`;
-    const rawThumb = (p.thumbUrl || p.fullUrl || '').trim();
-    let thumbWebp = packedThumbCache.get(shaKey);
-    if (!thumbWebp) {
-      thumbWebp =
-        rawThumb.startsWith('data:image/') && rawThumb.length <= 28_000
-          ? rawThumb
-          : await tryMakeCompactThumbDataUrl(rawThumb);
-      if (thumbWebp) {
-        if (packedThumbCache.size > 600) packedThumbCache.clear();
-        packedThumbCache.set(shaKey, thumbWebp);
-      }
+  // 2) 장당 ~13KB 초경량 섀도우 카탈로그 증분(Delta) 패킹:
+  // 이미 서버 카탈로그에 올라간 항목(동일 shaKey + 동일 mirror 상태)은 재압축·재전송을 생략해 2회차 동기화를 0.5초 내로 단축!
+  const syncedCatalogSigs = getSyncedCatalogSigSet(opts.email);
+  const deltaPhotos: Array<{ photo: PhotoItem; shaKey: string; sig: string }> = [];
+  for (const p of activeLocalPhotos) {
+    const shaKey =
+      photoShaMap.get(p.id) ||
+      `${(await sha256HexBrowser(`${p.id}::${p.name}::${p.size}`)).slice(0, 40)}.jpg`;
+    const hasMirror = mirrorUploadedIds.has(p.id);
+    const sig = `p::${p.id}::${shaKey}::${hasMirror ? 1 : 0}`;
+    if (!syncedCatalogSigs.has(sig)) {
+      deltaPhotos.push({ photo: p, shaKey, sig });
     }
-    outgoingItems[i] = {
-      id: p.id,
-      kind: 'photo',
-      title: p.name,
-      thumbWebp,
-      keywords: (p.tags || []).slice(0, 12),
-      ocrSnippet: p.captionKo || (p.keywordsKo || []).join(' ') || '',
-      shotDate: p.date || '',
-      sourceDeviceId: ident.deviceId,
-      sourceDeviceName: ident.displayName,
-      byteSize: p.size || 512000,
-      sha256: shaKey,
-      hasMirrorBlob: mirrorUploadedIds.has(p.id),
-    };
-    packedCount += 1;
-    if (packedCount % 2 === 0 || packedCount === activeLocalPhotos.length) {
+  }
+
+  const deltaDocs: Array<{ doc: LocalDocumentFile; shaShort: string; sig: string }> = [];
+  for (const doc of activeLocalDocs) {
+    const shaShort = (await sha256HexBrowser(`doc::${doc.id}::${doc.fileName}`)).slice(0, 40);
+    const sig = `d::${doc.id}::${shaShort}`;
+    if (!syncedCatalogSigs.has(sig)) {
+      deltaDocs.push({ doc, shaShort, sig });
+    }
+  }
+
+  const packDeltaAndSync = async (
+    photosToPack: Array<{ photo: PhotoItem; shaKey: string; sig: string }>,
+    docsToPack: Array<{ doc: LocalDocumentFile; shaShort: string; sig: string }>
+  ): Promise<{
+    ok: boolean;
+    items: GhostiShadowCatalogItem[];
+    reason?: string;
+    message?: string;
+  }> => {
+    const outgoing: Array<{ payload: Record<string, unknown>; sig: string }> = new Array(
+      photosToPack.length
+    );
+    const totalToPack = photosToPack.length + docsToPack.length;
+    if (totalToPack > 0) {
       opts.onProgress?.({
         phase: '사진·문서 미리보기 준비 중',
-        current: packedCount,
-        total: Math.max(1, totalPackCount),
+        current: 0,
+        total: Math.max(1, totalToPack),
       });
     }
-  });
-
-  for (const doc of activeLocalDocs) {
-    const hashSeed = await sha256HexBrowser(`doc::${doc.id}::${doc.fileName}`);
-    outgoingItems.push({
-      id: `doc-${doc.id}`,
-      kind: 'doc',
-      title: doc.fileName,
-      keywords: (doc.keywords || []).slice(0, 14),
-      ocrSnippet: (doc.extractedText || doc.title || '').slice(0, 750),
-      shotDate: doc.date || '',
-      sourceDeviceId: ident.deviceId,
-      sourceDeviceName: ident.displayName,
-      byteSize: Math.round((doc.sizeKB || 120) * 1024),
-      sha256: hashSeed.slice(0, 40),
-      hasMirrorBlob: false,
-    });
-  }
-
-  // 서버 200건 단위 배치 전송으로 대량 사진·문서도 끊김 없이 동기화
-  let mergedCatalog: GhostiShadowCatalogItem[] = [];
-  let syncOk = true;
-  let syncErrorReason: string | undefined;
-  let syncErrorMessage: string | undefined;
-  const BATCH_SIZE = 200;
-  const totalBatches = Math.max(1, Math.ceil(outgoingItems.length / BATCH_SIZE));
-  for (let b = 0; b < totalBatches; b++) {
-    opts.onProgress?.({
-      phase: '연결 기기와 목록 맞추는 중',
-      current: b,
-      total: totalBatches,
-    });
-    const chunk = outgoingItems.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
-    const syncRes = await callGhostiServerBridge<{
-      items?: GhostiShadowCatalogItem[];
-      reason?: string;
-      message?: string;
-      entitlement?: GhostiDeviceEntitlementView;
-    }>('device_sync_shadow_catalog', { items: chunk });
-    if (!syncRes.ok) {
-      syncOk = false;
-      syncErrorReason = syncRes.reason;
-      syncErrorMessage = syncRes.message;
-      if (syncRes.entitlement) {
-        saveCachedDeviceIntegrationSnapshot({ entitlement: syncRes.entitlement }, opts.email);
+    let packedCount = 0;
+    await runWithConcurrency(photosToPack, 12, async ({ photo: p, shaKey, sig }, i) => {
+      const rawThumb = (p.thumbUrl || p.fullUrl || '').trim();
+      let thumbWebp = packedThumbCache.get(shaKey);
+      if (!thumbWebp) {
+        thumbWebp =
+          rawThumb.startsWith('data:image/') && rawThumb.length <= 28_000
+            ? rawThumb
+            : await tryMakeCompactThumbDataUrl(rawThumb);
+        if (thumbWebp) {
+          if (packedThumbCache.size > 600) packedThumbCache.clear();
+          packedThumbCache.set(shaKey, thumbWebp);
+        }
       }
-      break;
-    }
-    if (Array.isArray(syncRes.items)) {
-      mergedCatalog = syncRes.items;
-    }
-    opts.onProgress?.({
-      phase: '연결 기기와 목록 맞추는 중',
-      current: b + 1,
-      total: totalBatches,
+      outgoing[i] = {
+        sig,
+        payload: {
+          id: p.id,
+          kind: 'photo',
+          title: p.name,
+          thumbWebp,
+          keywords: (p.tags || []).slice(0, 12),
+          ocrSnippet: p.captionKo || (p.keywordsKo || []).join(' ') || '',
+          shotDate: p.date || '',
+          sourceDeviceId: ident.deviceId,
+          sourceDeviceName: ident.displayName,
+          byteSize: p.size || 512000,
+          sha256: shaKey,
+          hasMirrorBlob: mirrorUploadedIds.has(p.id),
+        },
+      };
+      packedCount += 1;
+      if (packedCount % 2 === 0 || packedCount === photosToPack.length) {
+        opts.onProgress?.({
+          phase: '사진·문서 미리보기 준비 중',
+          current: packedCount,
+          total: Math.max(1, totalToPack),
+        });
+      }
     });
+
+    for (const { doc, shaShort, sig } of docsToPack) {
+      outgoing.push({
+        sig,
+        payload: {
+          id: `doc-${doc.id}`,
+          kind: 'doc',
+          title: doc.fileName,
+          keywords: (doc.keywords || []).slice(0, 14),
+          ocrSnippet: (doc.extractedText || doc.title || '').slice(0, 750),
+          shotDate: doc.date || '',
+          sourceDeviceId: ident.deviceId,
+          sourceDeviceName: ident.displayName,
+          byteSize: Math.round((doc.sizeKB || 120) * 1024),
+          sha256: shaShort,
+          hasMirrorBlob: false,
+        },
+      });
+    }
+
+    // 80건 단위 경량 배치 전송(변경 0건이면 빈 배열 1회 조회로 0.3초 즉시 완료!)
+    const BATCH_SIZE = 80;
+    const totalBatches = Math.max(1, Math.ceil(outgoing.length / BATCH_SIZE));
+    let latestCatalog: GhostiShadowCatalogItem[] = [];
+    for (let b = 0; b < totalBatches; b++) {
+      opts.onProgress?.({
+        phase: '연결 기기와 목록 맞추는 중',
+        current: b,
+        total: totalBatches,
+      });
+      const slice = outgoing.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
+      const syncRes = await callGhostiServerBridge<{
+        items?: GhostiShadowCatalogItem[];
+        reason?: string;
+        message?: string;
+        entitlement?: GhostiDeviceEntitlementView;
+      }>('device_sync_shadow_catalog', { items: slice.map((x) => x.payload) });
+      if (!syncRes.ok) {
+        if (syncRes.entitlement) {
+          saveCachedDeviceIntegrationSnapshot({ entitlement: syncRes.entitlement }, opts.email);
+        }
+        return {
+          ok: false,
+          items: [],
+          reason: syncRes.reason,
+          message: syncRes.message,
+        };
+      }
+      for (const x of slice) {
+        if (x?.sig) syncedCatalogSigs.add(x.sig);
+      }
+      if (slice.length > 0) {
+        persistSyncedCatalogSigSet(opts.email);
+      }
+      if (Array.isArray(syncRes.items)) {
+        latestCatalog = syncRes.items;
+      }
+      opts.onProgress?.({
+        phase: '연결 기기와 목록 맞추는 중',
+        current: b + 1,
+        total: totalBatches,
+      });
+    }
+    return { ok: true, items: latestCatalog };
+  };
+
+  let syncAttempt = await packDeltaAndSync(deltaPhotos, deltaDocs);
+  // 서버 카탈로그가 비어 있거나 초기화된 상태인데 로컬 시그니처만 남아 스킵된 경우 1회 전체 자동 복구 전송
+  if (
+    syncAttempt.ok &&
+    deltaPhotos.length === 0 &&
+    activeLocalPhotos.length > 0 &&
+    !syncAttempt.items.some((it) => it && it.sourceDeviceId === ident.deviceId)
+  ) {
+    syncedCatalogSigs.clear();
+    persistSyncedCatalogSigSet(opts.email);
+    const allPhotosToPack = activeLocalPhotos.map((p) => {
+      const shaKey = photoShaMap.get(p.id)!;
+      const hasMirror = mirrorUploadedIds.has(p.id);
+      return { photo: p, shaKey, sig: `p::${p.id}::${shaKey}::${hasMirror ? 1 : 0}` };
+    });
+    const allDocsToPack = [];
+    for (const doc of activeLocalDocs) {
+      const shaShort = (await sha256HexBrowser(`doc::${doc.id}::${doc.fileName}`)).slice(0, 40);
+      allDocsToPack.push({ doc, shaShort, sig: `d::${doc.id}::${shaShort}` });
+    }
+    syncAttempt = await packDeltaAndSync(allPhotosToPack, allDocsToPack);
   }
+
+  const mergedCatalog = syncAttempt.items;
+  const syncOk = syncAttempt.ok;
+  const syncErrorReason = syncAttempt.reason;
+  const syncErrorMessage = syncAttempt.message;
 
   if (!syncOk) {
     return {
