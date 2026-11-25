@@ -571,11 +571,19 @@ def update_pc5(core_ver: str):
 def main():
     src_changed = bool(sync_internal_z_core_mirrors())
     core_ver = ensure_release_zip_and_bridge_synced(force_rebuild=src_changed)
-    update_pc1()
-    update_pc1_remote(core_ver)
-    update_pc2(core_ver)
-    update_pc3(core_ver)
-    update_pc4(core_ver)
+    import datetime as _dt
+    _now_hr = _dt.datetime.now().hour
+    _is_qa_work_hours = (9 <= _now_hr < 15)
+    if _is_qa_work_hours:
+        log("🕘 [근무시간(09:00~15:00) 안전 배포 모드] 1·2호기는 건드리지 않고 오직 3호기·4호기만 Z-코어를 업데이트합니다.")
+        update_pc3(core_ver)
+        update_pc4(core_ver)
+    else:
+        update_pc1()
+        update_pc1_remote(core_ver)
+        update_pc2(core_ver)
+        update_pc3(core_ver)
+        update_pc4(core_ver)
     # 5호기(집 PC)는 오프라인 상태일 수 있으므로 2초 TCP 사전 체크 후 도달 가능할 때만 배포
     try:
         import socket
