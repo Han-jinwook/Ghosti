@@ -4371,6 +4371,7 @@ def _toast_worker() -> None:
     after_id: list[str | None] = [None]
     is_hovered: list[bool] = [False]
     win_rect: list[tuple[int, int, int, int]] = [(0, 0, 0, 0)]
+    ui_dragging: list[bool] = [False]
     was_mouse_down: list[bool] = [False]
     opened_at: list[float] = [0.0]
     thumb_refs: list = []
@@ -4412,6 +4413,7 @@ def _toast_worker() -> None:
         _CURRENT_OPEN_UI_MODE = ""
         _CURRENT_OPEN_WIN_HWND = 0
         is_hovered[0] = False
+        ui_dragging[0] = False
         _IS_UI_HOVERED = False
         thumb_refs.clear()
 
@@ -4533,6 +4535,8 @@ def _toast_worker() -> None:
                 "was_mouse_down": was_mouse_down,
                 "is_hovered": is_hovered,
                 "current_win": current_win,
+                "win_rect": win_rect,
+                "ui_dragging": ui_dragging,
                 "apply_win_topmost": _apply_win_topmost,
                 "record_feature_telemetry": record_feature_telemetry,
                 "thumb_refs": thumb_refs,
@@ -5180,11 +5184,13 @@ def _toast_worker() -> None:
                     _schedule_close(1800)
                 is_hovered[0] = inside_rect
                 _IS_UI_HOVERED = inside_rect
+                if not lbtn_down and ui_dragging[0]:
+                    ui_dragging[0] = False
                 if esc_down and active_mode[0] in ("ui1", "ui2", "ui3", "ui4"):
                     if (time.time() - opened_at[0]) > 0.25 and (time.time() - _LAST_RBTN_DISMISS_ESC_TS) > 0.45:
                         _close_win()
                         _CLICKED_SUPERPOWER_QUEUE.put(("disarm_only", 0))
-                elif mouse_down and not was_mouse_down[0]:
+                elif mouse_down and not was_mouse_down[0] and not ui_dragging[0]:
                     if (time.time() - opened_at[0]) > 0.22 and not inside_rect:
                         _close_win()
                         _CLICKED_SUPERPOWER_QUEUE.put(("disarm_only", 0))

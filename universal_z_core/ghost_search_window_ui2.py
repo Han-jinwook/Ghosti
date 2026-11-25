@@ -444,6 +444,8 @@ def build_ui2_search_window(
     was_mouse_down = ctx["was_mouse_down"]
     is_hovered = ctx["is_hovered"]
     current_win = ctx["current_win"]
+    win_rect_ref = ctx.get("win_rect")
+    ui_dragging_ref = ctx.get("ui_dragging")
     apply_win_topmost = ctx["apply_win_topmost"]
     record_feature_telemetry = ctx["record_feature_telemetry"]
     thumb_refs = ctx["thumb_refs"]
@@ -618,6 +620,7 @@ def build_ui2_search_window(
         "video_ocr_copied_msg": "",
         "bg_ui_dirty": False,
         "bg_ocr_done_payload": None,
+        "user_pos": None,
     }
     try:
         record_feature_telemetry(f"ghost_search_window_{st_state['stage']}")
@@ -644,6 +647,7 @@ def build_ui2_search_window(
         padx=5,
         pady=1,
         font=("Malgun Gothic", 8, "bold"),
+        cursor="fleur",
     )
     title_badge.pack(side="left", padx=(0, 6))
 
@@ -837,14 +841,147 @@ def build_ui2_search_window(
             margin_px=16,
             custom_height=st_state.get("custom_h"),
         )
+        rw_t = int(r3["width"])
+        rh_t = int(r3["height"])
+        tx = int(r3["x"])
+        ty = int(r3["y"])
+        # 사용자가 드래그로 옮겨놓은 위치가 있으면 열려 있는 동안 확장/필터 전환 시 옮긴 자리를 유지
+        user_pos = st_state.get("user_pos")
+        if isinstance(user_pos, tuple) and len(user_pos) == 2:
+            ux, uy = int(user_pos[0]), int(user_pos[1])
+            if sys.platform == "win32":
+                try:
+                    u32_r = ctypes.windll.user32
+                    vx = int(u32_r.GetSystemMetrics(76))  # SM_XVIRTUALSCREEN
+                    vy = int(u32_r.GetSystemMetrics(77))  # SM_YVIRTUALSCREEN
+                    vw = int(u32_r.GetSystemMetrics(78)) or 1920  # SM_CXVIRTUALSCREEN
+                    vh = int(u32_r.GetSystemMetrics(79)) or 1080  # SM_CYVIRTUALSCREEN
+                    tx = max(vx + 4, min(ux, vx + vw - rw_t - 4))
+                    ty = max(vy + 4, min(uy, vy + vh - rh_t - 4))
+                except Exception:
+                    tx, ty = ux, uy
+            else:
+                tx, ty = ux, uy
         if activate:
             was_mouse_down[0] = True
-        apply_win_topmost(win, int(r3["x"]), int(r3["y"]), int(r3["width"]), int(r3["height"]), activate=activate)
+        apply_win_topmost(win, tx, ty, rw_t, rh_t, activate=activate)
         if activate:
             try:
                 s_entry.focus_force()
             except Exception:
                 pass
+
+    # [상단 헤더·필터바 드래그 자유 이동 (멀티모니터 지원 · 바깥 클릭 오닫힘 0%)]:
+    # 버튼·검색 입력칸을 제외한 헤더(로고·배지·빈 공간)·필터바 빈 공간을 좌클릭 드래그해 원하는 위치로 즉시 이동합니다.
+    _drag_state: dict[str, Any] = {"active": False, "dx": 0, "dy": 0, "w": 520, "h": 330, "hwnd": 0}
+
+    def _on_drag_start(event) -> None:
+        try:
+            if current_win[0] is not win or not win.winfo_exists():
+                return
+            is_hovered[0] = True
+            was_mouse_down[0] = True
+            opened_at[0] = time.time()
+            if isinstance(ui_dragging_ref, list) and ui_dragging_ref:
+                ui_dragging_ref[0] = True
+            wx = int(win.winfo_x())
+            wy = int(win.winfo_y())
+            ww = max(120, int(win.winfo_width() or 520))
+            wh = max(80, int(win.winfo_height() or 330))
+            hwnd_d = 0
+            if sys.platform == "win32":
+                try:
+                    u32_d = ctypes.windll.user32
+                    wid_d = win.winfo_id()
+                    hwnd_d = int(u32_d.GetParent(wid_d) or wid_d) if wid_d else 0
+                    if hwnd_d and u32_d.IsWindow(hwnd_d):
+                        rc_d = wintypes.RECT()
+                        if u32_d.GetWindowRect(hwnd_d, ctypes.byref(rc_d)) and rc_d.right > rc_d.left and rc_d.bottom > rc_d.top:
+                            wx, wy = int(rc_d.left), int(rc_d.top)
+                            ww, wh = int(rc_d.right - rc_d.left), int(rc_d.bottom - rc_d.top)
+                except Exception:
+                    hwnd_d = 0
+            _drag_state["active"] = True
+            _drag_state["dx"] = int(event.x_root) - wx
+            _drag_state["dy"] = int(event.y_root) - wy
+            _drag_state["w"] = ww
+            _drag_state["h"] = wh
+            _drag_state["hwnd"] = hwnd_d
+        except Exception:
+            pass
+
+    def _on_drag_motion(event) -> None:
+        if not _drag_state.get("active"):
+            return
+        try:
+            if current_win[0] is not win or not win.winfo_exists():
+                _drag_state["active"] = False
+                return
+            is_hovered[0] = True
+            was_mouse_down[0] = True
+            nx = int(event.x_root) - int(_drag_state["dx"])
+            ny = int(event.y_root) - int(_drag_state["dy"])
+            ww = int(_drag_state["w"])
+            wh = int(_drag_state["h"])
+            if sys.platform == "win32":
+                try:
+                    u32_m = ctypes.windll.user32
+                    vx = int(u32_m.GetSystemMetrics(76))
+                    vy = int(u32_m.GetSystemMetrics(77))
+                    vw = int(u32_m.GetSystemMetrics(78)) or 1920
+                    vh = int(u32_m.GetSystemMetrics(79)) or 1080
+                    nx = max(vx - ww + 100, min(nx, vx + vw - 100))
+                    ny = max(vy, min(ny, vy + vh - 48))
+                except Exception:
+                    pass
+            st_state["user_pos"] = (nx, ny)
+            hwnd_d = int(_drag_state.get("hwnd") or 0)
+            if sys.platform == "win32" and hwnd_d:
+                try:
+                    u32_m = ctypes.windll.user32
+                    # HWND_TOPMOST(-1), SWP_NOSIZE(0x0001) | SWP_NOACTIVATE(0x0010) | SWP_SHOWWINDOW(0x0040)
+                    u32_m.SetWindowPos(hwnd_d, -1, nx, ny, 0, 0, 0x0001 | 0x0010 | 0x0040)
+                except Exception:
+                    win.geometry(f"+{nx:+d}+{ny:+d}")
+            else:
+                win.geometry(f"+{nx:+d}+{ny:+d}")
+            if isinstance(win_rect_ref, list) and win_rect_ref:
+                win_rect_ref[0] = (nx, ny, nx + ww, ny + wh)
+        except Exception:
+            pass
+
+    def _on_drag_end(_event=None) -> None:
+        if not _drag_state.get("active"):
+            return
+        _drag_state["active"] = False
+        opened_at[0] = time.time()
+        was_mouse_down[0] = True
+        is_hovered[0] = True
+        if isinstance(ui_dragging_ref, list) and ui_dragging_ref:
+            ui_dragging_ref[0] = False
+        user_p = st_state.get("user_pos")
+        if isinstance(user_p, tuple) and len(user_p) == 2:
+            try:
+                win.geometry(f"+{int(user_p[0]):+d}+{int(user_p[1]):+d}")
+            except Exception:
+                pass
+
+    _drag_widgets: list[Any] = [hdr, title_badge, fbar, trial_lbl, outer]
+    if ghost_symbol_photo is not None:
+        try:
+            ic_lbl.config(cursor="fleur")
+            _drag_widgets.append(ic_lbl)
+        except Exception:
+            pass
+    for _dw in _drag_widgets:
+        try:
+            if _dw in (hdr, fbar, trial_lbl):
+                _dw.config(cursor="fleur")
+            _dw.bind("<ButtonPress-1>", _on_drag_start, add="+")
+            _dw.bind("<B1-Motion>", _on_drag_motion, add="+")
+            _dw.bind("<ButtonRelease-1>", _on_drag_end, add="+")
+        except Exception:
+            pass
 
     def _set_explicit_stage(target_st: str) -> str:
         is_hovered[0] = True
