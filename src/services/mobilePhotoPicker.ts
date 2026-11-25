@@ -1295,8 +1295,12 @@ export async function applyCachedPcOpticalAuditInstant(photos: PhotoItem[]): Pro
 }> {
   const isSample = (name: string) =>
     /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(name);
+  const isRemoteOrShared = (p: PhotoItem) => {
+    const id = String(p.id || '');
+    return id.startsWith('shadow-remote-') || id.startsWith('shared_sb_') || id.startsWith('shared_added_');
+  };
   const cloned = photos.map((p) => ({ ...p, tags: [...(p.tags || [])] }));
-  const realCandidates = cloned.filter((p) => !p.quarantined && !isSample(p.name));
+  const realCandidates = cloned.filter((p) => !p.quarantined && !isSample(p.name) && !isRemoteOrShared(p));
   if (realCandidates.length === 0) {
     return { updatedPhotos: cloned, duplicateGroups: [], cachedHits: 0, uncachedCount: 0 };
   }
@@ -1329,9 +1333,16 @@ export async function applyCachedPcOpticalAuditInstant(photos: PhotoItem[]): Pro
     return { updatedPhotos: cloned, duplicateGroups: [], cachedHits: 0, uncachedCount };
   }
 
-  const clustered = clusterPhotosIntoDuplicateGroups(cloned.filter((p) => !isSample(p.name)));
+  const clustered = clusterPhotosIntoDuplicateGroups(
+    cloned.filter((p) => !isSample(p.name) && !isRemoteOrShared(p))
+  );
+  // 원격/공유 사진은 클러스터링 대상에서 제외하되 photos 배열 내 검색용 항목은 손실 없이 유지
+  const remoteOrSharedKept = cloned.filter((p) => isRemoteOrShared(p));
   return {
-    updatedPhotos: clustered.updatedPhotos,
+    updatedPhotos:
+      remoteOrSharedKept.length > 0
+        ? [...clustered.updatedPhotos, ...remoteOrSharedKept]
+        : clustered.updatedPhotos,
     duplicateGroups: clustered.duplicateGroups,
     cachedHits,
     uncachedCount,
@@ -1343,8 +1354,12 @@ export async function auditRealPcPhotosAndCluster(
 ): Promise<{ updatedPhotos: PhotoItem[]; duplicateGroups: DuplicateGroup[] }> {
   const isSample = (name: string) =>
     /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(name);
+  const isRemoteOrShared = (p: PhotoItem) => {
+    const id = String(p.id || '');
+    return id.startsWith('shadow-remote-') || id.startsWith('shared_sb_') || id.startsWith('shared_added_');
+  };
 
-  const realCandidates = photos.filter((p) => !p.quarantined && !isSample(p.name));
+  const realCandidates = photos.filter((p) => !p.quarantined && !isSample(p.name) && !isRemoteOrShared(p));
   if (realCandidates.length === 0) {
     setPcOpticalAuditInProgress(false);
     return { updatedPhotos: photos, duplicateGroups: [] };
@@ -1419,7 +1434,17 @@ export async function auditRealPcPhotosAndCluster(
       }
     }
 
-    return clusterPhotosIntoDuplicateGroups(photos.filter((p) => !isSample(p.name)));
+    const clustered = clusterPhotosIntoDuplicateGroups(
+      photos.filter((p) => !isSample(p.name) && !isRemoteOrShared(p))
+    );
+    const remoteOrSharedKept = photos.filter((p) => isRemoteOrShared(p));
+    return {
+      updatedPhotos:
+        remoteOrSharedKept.length > 0
+          ? [...clustered.updatedPhotos, ...remoteOrSharedKept]
+          : clustered.updatedPhotos,
+      duplicateGroups: clustered.duplicateGroups,
+    };
   } finally {
     setPcOpticalAuditInProgress(false);
   }

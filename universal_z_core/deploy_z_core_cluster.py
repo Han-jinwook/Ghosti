@@ -603,9 +603,10 @@ if (Test-Path 'C:\\Users\\{remote_user}\\AppData\\Local\\Merlin_Mode_Vault') {{
 }}
 Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'MerlinSeqPaste' -ErrorAction SilentlyContinue
 Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'MerlinZCoreDaemon' -Value "`"$exe`""
+$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
 $act = New-ScheduledTaskAction -Execute $exe -Argument '--replace'
-$trg = New-ScheduledTaskTrigger -AtLogOn -User '{remote_user}'
-$prn = New-ScheduledTaskPrincipal -UserId '{remote_user}' -LogonType Interactive -RunLevel Limited
+$trg = New-ScheduledTaskTrigger -AtLogOn -User $me
+$prn = New-ScheduledTaskPrincipal -UserId $me -LogonType Interactive -RunLevel Limited
 $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances Parallel
 Stop-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContinue
 Register-ScheduledTask -TaskName 'StartMerlinZCore5199' -Action $act -Trigger $trg -Principal $prn -Settings $set -Force | Out-Null
@@ -660,7 +661,7 @@ Write-Output 'SWAP_OK'
                 timeout=12,
             )
             if chk.returncode == 0 and f'"{core_ver}"' in chk.stdout and "|51988=1" in chk.stdout:
-                log(f"✅ {label} Z-코어 v{core_ver} + 귀신창(51988) 무중단 원자적 스왑 및 기동 확인 성공!")
+                log(f"✅ {label} Z-코어 v{core_ver} + 귀신검색창(51988) 무중단 원자적 스왑 및 기동 확인 성공!")
                 return
             if chk.returncode == 0 and f'"{core_ver}"' in chk.stdout and attempt >= 11:
                 log(f"✅ {label} Z-코어 v{core_ver} + 자동실행(Run & ONLOGON) 기동 확인 성공!")

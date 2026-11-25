@@ -189,12 +189,30 @@ export const Stage1MinimalCarePreview: React.FC = () => {
 
   const isShowroomSamplePhoto = (name: string): boolean =>
     /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(name);
-  const hasAnyRealUserPhoto = photos.some((p) => !isShowroomSamplePhoto(p.name));
-  const isRealDeviceMode =
-    zConnected || Boolean(isStoreAppMode) || layout === 'mobile' || hasAnyRealUserPhoto;
-  const displayPhotos = isRealDeviceMode
-    ? photos.filter((p) => !isShowroomSamplePhoto(p.name))
-    : photos;
+  const isRemoteOrSharedPhoto = (p: PhotoItem): boolean => {
+    const id = String(p.id || '');
+    return (
+      id.startsWith('shadow-remote-') ||
+      id.startsWith('shared_sb_') ||
+      id.startsWith('shared_added_')
+    );
+  };
+  const isDesktopWebMode = !isCapacitorNativeMobileRuntime() && !isStoreAppMode && layout !== 'mobile';
+  // [엔진 미연결·재연결 시 타 기기/잔존 사진 혼입 0% 차단]:
+  // 1) 1. 귀신비서 사진 정리는 현재 내 기기 로컬 실물 사진만 대상이므로, 4. 내 기기 통합 원격 썸네일(shadow-remote-*)과 공유방 사진은 절대 섞지 않는다.
+  // 2) PC 웹에서는 Z-코어 엔진이 실제로 연결(zConnected === true)된 상태에서만 로컬 PC 정리 후보를 표시한다 (끊김·재연결 중 이전/원격 사진 및 깨진 썸네일 노출 차단).
+  const localOnlyPhotos = photos.filter((p) => !isRemoteOrSharedPhoto(p));
+  const hasAnyRealUserPhoto = localOnlyPhotos.some((p) => !isShowroomSamplePhoto(p.name));
+  const isRealDeviceMode = isDesktopWebMode
+    ? zConnected
+    : zConnected || Boolean(isStoreAppMode) || layout === 'mobile' || hasAnyRealUserPhoto;
+  const displayPhotos = isDesktopWebMode
+    ? zConnected
+      ? localOnlyPhotos.filter((p) => !isShowroomSamplePhoto(p.name))
+      : []
+    : isRealDeviceMode
+    ? localOnlyPhotos.filter((p) => !isShowroomSamplePhoto(p.name))
+    : localOnlyPhotos;
 
   const skippedPhotoIds = React.useMemo(() => {
     if (skippedGroupIds.size === 0) return new Set<string>();
@@ -666,6 +684,12 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                   설정에서 전체 허용
                 </button>
               </div>
+            </div>
+          )}
+
+          {isDesktopWebMode && !zConnected && (
+            <div className="px-3.5 py-2.5 rounded-xl bg-amber-50 border border-amber-200 text-[12.5px] text-amber-900 font-medium break-keep">
+              내 PC 엔진 연결을 확인하고 있어요. 연결되기 전에는 다른 기기 사진이나 이전 캐시 사진을 섞어 띄우지 않으며, 연결 즉시 내 PC 사진만 정확히 불러옵니다.
             </div>
           )}
 

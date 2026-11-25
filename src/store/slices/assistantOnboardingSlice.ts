@@ -655,8 +655,10 @@ export const createAssistantOnboardingSlice: StateCreator<
       }
     }
 
-    const existingMobilePicked = !zCoreBridge.isConnected ? get().photos : [];
-    const existingMobileVideos = !zCoreBridge.isConnected ? get().videoSceneItems : [];
+    const existingMobilePicked =
+      isCapacitorNativeMobileRuntime() && !zCoreBridge.isConnected ? get().photos : [];
+    const existingMobileVideos =
+      isCapacitorNativeMobileRuntime() && !zCoreBridge.isConnected ? get().videoSceneItems : [];
     const baseDatasetPhotos =
       dataset.photos.length > 0 ? dataset.photos : existingMobilePicked;
     const baseDatasetVideos =
