@@ -344,8 +344,34 @@ export const Stage1MinimalSearchPreview: React.FC<{
   const [isZCoreConnected, setIsZCoreConnected] = useState(zCoreBridge.isConnected);
 
   useEffect(() => {
-    return zCoreBridge.subscribe((connected) => setIsZCoreConnected(connected));
+    setIsZCoreConnected(zCoreBridge.isConnected);
+    const unsub = zCoreBridge.subscribe((connected) => setIsZCoreConnected(connected));
+    if (!zCoreBridge.isConnected) {
+      void zCoreBridge.checkHealth(true).then((ok) => {
+        if (ok) setIsZCoreConnected(true);
+      });
+    }
+    return unsub;
   }, []);
+
+  const isGhostSearchWindowMode = useMemo(() => {
+    if (typeof window === 'undefined') return false;
+    return Boolean(new URLSearchParams(window.location.search).get('ghostSearchWindow'));
+  }, []);
+
+  // 실제 내 컴퓨터 파일이 이미 로드되었거나(사진·영상·문서 중 로컬 경로 존재 또는 샘플 상한 초과),
+  // 엔진이 띄워준 귀신검색창(?ghostSearchWindow=1) 모드라면 '샘플 미리보기' 거짓 배너를 절대 노출하지 않음!
+  const hasRealLocalFiles = useMemo(() => {
+    if (forceSampleOnly) return false;
+    if (
+      photos.some((p) => Boolean((p as any).localPath || (p as any).filePath) || String((p as any).thumbnailUrl || (p as any).url || (p as any).src || '').includes(':5199')) ||
+      localDocuments.some((d) => Boolean((d as any).filePath || (d as any).localPath) || String((d as any).url || '').includes(':5199')) ||
+      videoSceneItems.some((v) => Boolean((v as any).filePath || (v as any).localPath) || String((v as any).videoUrl || '').includes(':5199'))
+    ) {
+      return true;
+    }
+    return photos.length > 10 || localDocuments.length > 5 || videoSceneItems.length > 5;
+  }, [forceSampleOnly, photos, localDocuments, videoSceneItems]);
 
   const isMobile = layout === 'mobile';
   const isMobileOrStore = isMobile || Boolean(isStoreAppMode);
@@ -624,7 +650,7 @@ export const Stage1MinimalSearchPreview: React.FC<{
             <div className="w-full px-3 py-2 rounded-lg bg-slate-50 border border-slate-200 text-[12px] text-slate-600">
               샘플 미리보기 화면입니다 (사진 2 · 동영상 2 · 문서 2). 실제 PC 파일은 귀신비서 연결 후 Ctrl + 0 검색창에서 찾습니다.
             </div>
-          ) : isZCoreConnected ? (
+          ) : isZCoreConnected || isGhostSearchWindowMode || hasRealLocalFiles ? (
             <SilentIndexingStatusBar variant="search-bar" />
           ) : isMobile || isStoreAppMode ? (
             <div className="w-full px-3.5 py-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3">

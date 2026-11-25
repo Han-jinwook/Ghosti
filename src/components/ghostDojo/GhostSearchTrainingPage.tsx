@@ -831,7 +831,16 @@ export const GhostSearchTrainingPage: React.FC = () => {
     }
   }, [pendingQuery]);
 
-  useEffect(() => zCoreBridge.subscribe((c: boolean) => setConnected(c)), []);
+  useEffect(() => {
+    setConnected(zCoreBridge.isConnected);
+    const unsub = zCoreBridge.subscribe((c: boolean) => setConnected(c));
+    if (!zCoreBridge.isConnected) {
+      void zCoreBridge.checkHealth(true).then((ok) => {
+        if (ok) setConnected(true);
+      });
+    }
+    return unsub;
+  }, []);
 
   useEffect(() => {
     let baseline: Record<string, number> | null = null;
