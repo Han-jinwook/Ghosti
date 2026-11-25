@@ -2594,6 +2594,14 @@ export async function handleAuthedWorkAndDeviceAction({
     const gate = await assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash);
     if (!gate.ok) return gate.response;
     const incoming = Array.isArray(body.items) ? body.items.slice(0, 250) : [];
+    const returnItems = body.returnItems !== false;
+    const stripThumbs = Boolean(body.stripThumbs);
+    const callerDeviceId = String(body.callerDeviceId || '').trim();
+    const callerKind = String(body.callerKind || '').trim();
+    const knownRemoteSet = Array.isArray(body.knownRemoteIds)
+      ? new Set(body.knownRemoteIds.slice(0, 5000).map((x) => String(x || '')))
+      : null;
+
     const catalog = await readStorageJson(
       supabaseUrl,
       serviceKey,
@@ -2637,7 +2645,55 @@ export async function handleAuthedWorkAndDeviceAction({
         { updatedAt: new Date().toISOString(), byId: nextById }
       );
     }
-    return { status: 200, body: { ok: true, items: allItems, entitlement: gate.entitlement } };
+
+    const totalCatalogCount = allItems.length;
+    const hasCallerDeviceItems = callerDeviceId
+      ? allItems.some((it) => it && it.sourceDeviceId === callerDeviceId)
+      : false;
+
+    if (!returnItems) {
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          items: [],
+          totalCatalogCount,
+          hasCallerDeviceItems,
+          entitlement: gate.entitlement,
+        },
+      };
+    }
+
+    let responseItems = allItems;
+    if (stripThumbs) {
+      responseItems = allItems.map((it) => ({ ...it, thumbWebp: undefined, ocrSnippet: '' }));
+    } else if (callerDeviceId && knownRemoteSet) {
+      responseItems = [];
+      for (const it of allItems) {
+        if (!it || it.sourceDeviceId === callerDeviceId) continue;
+        if (!knownRemoteSet.has(it.id)) {
+          responseItems.push(it);
+        } else if (callerKind === 'pc_master' && it.hasMirrorBlob && it.sha256) {
+          responseItems.push({
+            ...it,
+            thumbWebp: undefined,
+            ocrSnippet: '',
+            keywords: [],
+          });
+        }
+      }
+    }
+
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        items: responseItems,
+        totalCatalogCount,
+        hasCallerDeviceItems,
+        entitlement: gate.entitlement,
+      },
+    };
   }
 
   if (action === 'device_sync_snippets') {
@@ -2683,6 +2739,7 @@ export async function handleAuthedWorkAndDeviceAction({
     const gate = await assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash);
     if (!gate.ok) return gate.response;
     const rawList = Array.isArray(body.sha256List) ? body.sha256List : [];
+    const skipExisting = Boolean(body.skipExisting);
     const cleanList = Array.from(
       new Set(
         rawList
@@ -2691,29 +2748,62 @@ export async function handleAuthedWorkAndDeviceAction({
       )
     ).slice(0, 60);
     if (cleanList.length === 0) {
-      return { status: 200, body: { ok: true, urls: {} } };
+      return { status: 200, body: { ok: true, urls: {}, alreadyUploaded: [] } };
     }
     await ensureVaultBuckets(supabaseUrl, serviceKey, false);
+
+    // 서버 mirror_blobs에 이미 보관된 파일은 서명 발급·재전송 없이 즉시 alreadyUploaded로 반환
+    const existingNames = new Set();
+    try {
+      for (let off = 0; off < 3000; off += 1000) {
+        const listRes = await fetch(`${supabaseUrl}/storage/v1/object/list/${DEVICE_BUCKET}`, {
+          method: 'POST',
+          headers: srvHeaders(serviceKey, { 'Content-Type': 'application/json' }),
+          body: JSON.stringify({
+            prefix: `${emailHash}/mirror_blobs/`,
+            limit: 1000,
+            offset: off,
+          }),
+        });
+        if (!listRes.ok) break;
+        const rows = await listRes.json().catch(() => []);
+        if (!Array.isArray(rows) || rows.length === 0) break;
+        for (const r of rows) {
+          if (r?.name) existingNames.add(String(r.name));
+        }
+        if (rows.length < 1000) break;
+      }
+    } catch {
+      /* fallback to signing all */
+    }
+
+    const alreadyUploaded = cleanList.filter((cur) => existingNames.has(cur));
+    const toSign = skipExisting
+      ? cleanList.filter((cur) => !existingNames.has(cur))
+      : cleanList;
+
     const urls = {};
     const CONCURRENCY = 12;
     let idx = 0;
-    await Promise.all(
-      Array.from({ length: Math.min(CONCURRENCY, cleanList.length) }, async () => {
-        while (idx < cleanList.length) {
-          const cur = cleanList[idx++];
-          const signed = await createSignedUploadUrl(
-            supabaseUrl,
-            serviceKey,
-            DEVICE_BUCKET,
-            `${emailHash}/mirror_blobs/${cur}`
-          );
-          if (signed?.ok && signed.signedUploadUrl) {
-            urls[cur] = signed.signedUploadUrl;
+    if (toSign.length > 0) {
+      await Promise.all(
+        Array.from({ length: Math.min(CONCURRENCY, toSign.length) }, async () => {
+          while (idx < toSign.length) {
+            const cur = toSign[idx++];
+            const signed = await createSignedUploadUrl(
+              supabaseUrl,
+              serviceKey,
+              DEVICE_BUCKET,
+              `${emailHash}/mirror_blobs/${cur}`
+            );
+            if (signed?.ok && signed.signedUploadUrl) {
+              urls[cur] = signed.signedUploadUrl;
+            }
           }
-        }
-      })
-    );
-    return { status: 200, body: { ok: true, urls } };
+        })
+      );
+    }
+    return { status: 200, body: { ok: true, urls, alreadyUploaded } };
   }
 
   if (action === 'device_sign_mirror_downloads_batch') {

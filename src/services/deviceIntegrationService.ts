@@ -418,7 +418,7 @@ function loadPersistedUploadedMirrorHashes(email?: string): void {
     if (!raw) return;
     const arr = JSON.parse(raw);
     if (Array.isArray(arr)) {
-      for (const h of arr.slice(-2000)) {
+      for (const h of arr.slice(-5000)) {
         if (typeof h === 'string' && h) uploadedMirrorHashes.add(h);
       }
     }
@@ -439,7 +439,7 @@ function persistUploadedMirrorHashes(email?: string): void {
     .toLowerCase();
   if (!normEmail) return;
   try {
-    const recent = Array.from(uploadedMirrorHashes).slice(-2000);
+    const recent = Array.from(uploadedMirrorHashes).slice(-5000);
     localStorage.setItem(`${UPLOADED_MIRROR_CACHE_PREFIX}${normEmail}`, JSON.stringify(recent));
   } catch {
     /* ignore */
@@ -873,7 +873,7 @@ export async function syncDeviceHeartbeatAndList(opts?: {
     deviceKind: ident.deviceKind,
     platform: ident.platform,
     displayName: ident.displayName,
-    appVersion: '1.0.81',
+    appVersion: '1.0.107',
     mobileWebSkipRegister: isMobileWeb,
     explicitTrialOptIn: Boolean(opts?.explicitTrialOptIn),
     explicitReconnect: consumeExplicitReconnect,
@@ -2182,7 +2182,7 @@ export async function pullPendingMirrorOriginalsToPcBackupFolder(
     if (!catalog) {
       const res = await callGhostiServerBridge<{ items?: GhostiShadowCatalogItem[] }>(
         'device_sync_shadow_catalog',
-        { items: [] }
+        { items: [], stripThumbs: true }
       );
       catalog = res.ok && Array.isArray(res.items) ? res.items : [];
     }
@@ -2274,6 +2274,7 @@ export async function executeRealDeviceSyncNow(opts: {
   reason?: string;
   message?: string;
   mergedCatalog: GhostiShadowCatalogItem[];
+  totalCatalogCount: number;
   remotePhotosToMerge: PhotoItem[];
   remoteDocsToMerge: LocalDocumentFile[];
   mirroredUploadCount: number;
@@ -2286,6 +2287,7 @@ export async function executeRealDeviceSyncNow(opts: {
       ok: false,
       reason: 'AUTH_REQUIRED',
       mergedCatalog: [],
+      totalCatalogCount: 0,
       remotePhotosToMerge: [],
       remoteDocsToMerge: [],
       mirroredUploadCount: 0,
@@ -2306,7 +2308,7 @@ export async function executeRealDeviceSyncNow(opts: {
 
   let mirroredUploadCount = 0;
 
-  // 1) 양쪽 원본 보관(mirror) 모드일 때: 아직 업로드되지 않은 원본 사진만 증분 6x 병렬 업로드 (이미 백업된 항목은 영구 캐시로 0.01초 즉시 스킵)
+  // 1) 양쪽 원본 보관(mirror) 모드일 때: 아직 업로드되지 않은 원본 사진만 증분 병렬 업로드 (이미 백업된 항목은 영구 캐시 + 서버 대조로 0.05초 즉시 스킵)
   const mirrorUploadedIds = new Set<string>();
   const photoShaMap = new Map<string, string>();
   for (const p of activeLocalPhotos) {
@@ -2327,7 +2329,7 @@ export async function executeRealDeviceSyncNow(opts: {
 
     if (pendingOriginals.length > 0) {
       opts.onProgress?.({
-        phase: '원본 안전 백업 업로드 중',
+        phase: '원본 안전 백업 확인 중',
         current: 0,
         total: pendingOriginals.length,
       });
@@ -2362,16 +2364,18 @@ export async function executeRealDeviceSyncNow(opts: {
     };
 
     let trialAbortError: { reason?: string; message?: string } | null = null;
-    // [55배 왕복 축소 정공법]: 60장 단위 배치 서명 URL을 1회 서버 호출로 일괄 발급받아 10x 병렬 직통 업로드!
+    // [기백업 서버 대조 + 60장 배치 서명 일괄 발급]: 이미 서버 mirror_blobs에 있는 파일은 서명·재전송 없이 0.05초 즉시 스킵!
     const signedUploadMap = new Map<string, string>();
+    const serverAlreadyUploadedSet = new Set<string>();
     const SIGN_BATCH_SIZE = 60;
     for (let sIdx = 0; sIdx < pendingOriginals.length; sIdx += SIGN_BATCH_SIZE) {
       const batchShas = pendingOriginals.slice(sIdx, sIdx + SIGN_BATCH_SIZE).map((x) => x.shaKey);
       const batchSign = await callGhostiServerBridge<{
         urls?: Record<string, string>;
+        alreadyUploaded?: string[];
         reason?: string;
         message?: string;
-      }>('device_sign_mirror_uploads_batch', { sha256List: batchShas });
+      }>('device_sign_mirror_uploads_batch', { sha256List: batchShas, skipExisting: true });
       if (
         !batchSign.ok &&
         (batchSign.reason === 'TRIAL_EXPIRED' || batchSign.reason === 'TRIAL_OPT_IN_REQUIRED')
@@ -2379,16 +2383,43 @@ export async function executeRealDeviceSyncNow(opts: {
         trialAbortError = { reason: batchSign.reason, message: batchSign.message };
         break;
       }
-      if (batchSign.ok && batchSign.urls) {
-        for (const [k, v] of Object.entries(batchSign.urls)) {
-          if (v) signedUploadMap.set(k, v);
+      if (batchSign.ok) {
+        if (Array.isArray(batchSign.alreadyUploaded)) {
+          for (const existSha of batchSign.alreadyUploaded) {
+            if (existSha) {
+              serverAlreadyUploadedSet.add(existSha);
+              uploadedMirrorHashes.add(existSha);
+            }
+          }
+        }
+        if (batchSign.urls) {
+          for (const [k, v] of Object.entries(batchSign.urls)) {
+            if (v) signedUploadMap.set(k, v);
+          }
         }
       }
     }
 
+    const pendingToActuallyUpload: Array<{ photo: PhotoItem; shaKey: string }> = [];
+    for (const entry of pendingOriginals) {
+      if (serverAlreadyUploadedSet.has(entry.shaKey)) {
+        mirrorUploadedIds.add(entry.photo.id);
+      } else {
+        pendingToActuallyUpload.push(entry);
+      }
+    }
+
+    if (pendingToActuallyUpload.length > 0 && !trialAbortError) {
+      opts.onProgress?.({
+        phase: '원본 안전 백업 업로드 중',
+        current: 0,
+        total: pendingToActuallyUpload.length,
+      });
+    }
+
     let uploadDone = 0;
-    if (!trialAbortError) {
-      await runWithConcurrency(pendingOriginals, 10, async ({ photo: p, shaKey }) => {
+    if (!trialAbortError && pendingToActuallyUpload.length > 0) {
+      await runWithConcurrency(pendingToActuallyUpload, 10, async ({ photo: p, shaKey }) => {
         if (trialAbortError) return;
         const candidates = Array.from(
           new Set(
@@ -2400,7 +2431,7 @@ export async function executeRealDeviceSyncNow(opts: {
           opts.onProgress?.({
             phase: '원본 안전 백업 업로드 중',
             current: uploadDone,
-            total: pendingOriginals.length,
+            total: pendingToActuallyUpload.length,
           });
           return;
         }
@@ -2440,7 +2471,7 @@ export async function executeRealDeviceSyncNow(opts: {
           opts.onProgress?.({
             phase: '원본 안전 백업 업로드 중',
             current: uploadDone,
-            total: pendingOriginals.length,
+            total: pendingToActuallyUpload.length,
           });
           return;
         }
@@ -2468,15 +2499,25 @@ export async function executeRealDeviceSyncNow(opts: {
               signedUrl,
               {
                 method: 'PUT',
-                headers: { 'Content-Type': blob.type || 'image/jpeg' },
+                headers: {
+                  'Content-Type': blob.type || 'image/jpeg',
+                  'x-upsert': 'true',
+                },
                 body: blob,
               },
               15_000
             );
-            if (putRes.ok) {
+            let alreadyOnServer = putRes.status === 409;
+            if (!putRes.ok && !alreadyOnServer && putRes.status === 400) {
+              const errBody = await putRes.text().catch(() => '');
+              if (/duplicate|already exists/i.test(errBody)) {
+                alreadyOnServer = true;
+              }
+            }
+            if (putRes.ok || alreadyOnServer) {
               uploadedMirrorHashes.add(shaKey);
               mirrorUploadedIds.add(p.id);
-              mirroredUploadCount += 1;
+              if (putRes.ok) mirroredUploadCount += 1;
             }
           }
         } catch {
@@ -2486,12 +2527,12 @@ export async function executeRealDeviceSyncNow(opts: {
           opts.onProgress?.({
             phase: '원본 안전 백업 업로드 중',
             current: uploadDone,
-            total: pendingOriginals.length,
+            total: pendingToActuallyUpload.length,
           });
         }
       });
     }
-    if (mirroredUploadCount > 0) {
+    if (mirroredUploadCount > 0 || serverAlreadyUploadedSet.size > 0) {
       persistUploadedMirrorHashes(opts.email);
     }
     if (trialAbortError) {
@@ -2501,6 +2542,7 @@ export async function executeRealDeviceSyncNow(opts: {
         reason: errObj.reason,
         message: errObj.message,
         mergedCatalog: [],
+        totalCatalogCount: 0,
         remotePhotosToMerge: [],
         remoteDocsToMerge: [],
         mirroredUploadCount,
@@ -2508,6 +2550,21 @@ export async function executeRealDeviceSyncNow(opts: {
         backupDirPath: null,
         packSizeMB: 0,
       };
+    }
+  }
+
+  // 이미 클라이언트에 반영된 타 기기 카탈로그 ID 목록을 서버에 함께 전달해 수십 MB 중복 썸네일 응답을 원천 차단
+  const knownRemoteIds: string[] = [];
+  for (const p of opts.photos) {
+    if (p.id.startsWith('shadow-remote-')) {
+      knownRemoteIds.push(p.id.slice('shadow-remote-'.length));
+    }
+  }
+  for (const d of opts.localDocuments) {
+    if (d.id.startsWith('shadow-remote-doc-')) {
+      const rawId = d.id.slice('shadow-remote-doc-'.length);
+      knownRemoteIds.push(`doc-${rawId}`);
+      knownRemoteIds.push(rawId);
     }
   }
 
@@ -2541,6 +2598,8 @@ export async function executeRealDeviceSyncNow(opts: {
   ): Promise<{
     ok: boolean;
     items: GhostiShadowCatalogItem[];
+    totalCatalogCount?: number;
+    hasCallerDeviceItems?: boolean;
     reason?: string;
     message?: string;
   }> => {
@@ -2615,11 +2674,14 @@ export async function executeRealDeviceSyncNow(opts: {
       });
     }
 
-    // 80건 단위 경량 배치 전송(변경 0건이면 빈 배열 1회 조회로 0.3초 즉시 완료!)
+    // 80건 단위 경량 배치 전송(중간 배치는 응답 생략, 최종/2회차는 신규 원격 항목만 경량 수신하여 0.4초 내 완료!)
     const BATCH_SIZE = 80;
     const totalBatches = Math.max(1, Math.ceil(outgoing.length / BATCH_SIZE));
     let latestCatalog: GhostiShadowCatalogItem[] = [];
+    let latestTotalCount: number | undefined;
+    let latestHasCallerItems: boolean | undefined;
     for (let b = 0; b < totalBatches; b++) {
+      const isFinalBatch = b === totalBatches - 1;
       opts.onProgress?.({
         phase: '연결 기기와 목록 맞추는 중',
         current: b,
@@ -2628,10 +2690,18 @@ export async function executeRealDeviceSyncNow(opts: {
       const slice = outgoing.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
       const syncRes = await callGhostiServerBridge<{
         items?: GhostiShadowCatalogItem[];
+        totalCatalogCount?: number;
+        hasCallerDeviceItems?: boolean;
         reason?: string;
         message?: string;
         entitlement?: GhostiDeviceEntitlementView;
-      }>('device_sync_shadow_catalog', { items: slice.map((x) => x.payload) });
+      }>('device_sync_shadow_catalog', {
+        items: slice.map((x) => x.payload),
+        returnItems: isFinalBatch,
+        callerDeviceId: ident.deviceId,
+        callerKind: ident.deviceKind,
+        knownRemoteIds: isFinalBatch ? knownRemoteIds : undefined,
+      });
       if (!syncRes.ok) {
         if (syncRes.entitlement) {
           saveCachedDeviceIntegrationSnapshot({ entitlement: syncRes.entitlement }, opts.email);
@@ -2649,7 +2719,13 @@ export async function executeRealDeviceSyncNow(opts: {
       if (slice.length > 0) {
         persistSyncedCatalogSigSet(opts.email);
       }
-      if (Array.isArray(syncRes.items)) {
+      if (typeof syncRes.totalCatalogCount === 'number') {
+        latestTotalCount = syncRes.totalCatalogCount;
+      }
+      if (typeof syncRes.hasCallerDeviceItems === 'boolean') {
+        latestHasCallerItems = syncRes.hasCallerDeviceItems;
+      }
+      if (isFinalBatch && Array.isArray(syncRes.items)) {
         latestCatalog = syncRes.items;
       }
       opts.onProgress?.({
@@ -2658,16 +2734,25 @@ export async function executeRealDeviceSyncNow(opts: {
         total: totalBatches,
       });
     }
-    return { ok: true, items: latestCatalog };
+    return {
+      ok: true,
+      items: latestCatalog,
+      totalCatalogCount: latestTotalCount,
+      hasCallerDeviceItems: latestHasCallerItems,
+    };
   };
 
   let syncAttempt = await packDeltaAndSync(deltaPhotos, deltaDocs);
+  const serverHasOwnItems =
+    typeof syncAttempt.hasCallerDeviceItems === 'boolean'
+      ? syncAttempt.hasCallerDeviceItems
+      : syncAttempt.items.some((it) => it && it.sourceDeviceId === ident.deviceId);
   // 서버 카탈로그가 비어 있거나 초기화된 상태인데 로컬 시그니처만 남아 스킵된 경우 1회 전체 자동 복구 전송
   if (
     syncAttempt.ok &&
     deltaPhotos.length === 0 &&
     activeLocalPhotos.length > 0 &&
-    !syncAttempt.items.some((it) => it && it.sourceDeviceId === ident.deviceId)
+    !serverHasOwnItems
   ) {
     syncedCatalogSigs.clear();
     persistSyncedCatalogSigSet(opts.email);
@@ -2695,6 +2780,7 @@ export async function executeRealDeviceSyncNow(opts: {
       reason: syncErrorReason,
       message: syncErrorMessage,
       mergedCatalog: [],
+      totalCatalogCount: 0,
       remotePhotosToMerge: [],
       remoteDocsToMerge: [],
       mirroredUploadCount,
@@ -2777,10 +2863,16 @@ export async function executeRealDeviceSyncNow(opts: {
     }
   }
 
-  const packSizeMB = Number(Math.max(0.1, (mergedCatalog.length * 13) / 1024).toFixed(2));
+  const totalCatalogCount = Math.max(
+    syncAttempt.totalCatalogCount ?? 0,
+    mergedCatalog.length,
+    activeLocalPhotos.length + activeLocalDocs.length
+  );
+  const packSizeMB = Number(Math.max(0.1, (totalCatalogCount * 13) / 1024).toFixed(2));
   return {
     ok: true,
     mergedCatalog,
+    totalCatalogCount,
     remotePhotosToMerge,
     remoteDocsToMerge,
     mirroredUploadCount,

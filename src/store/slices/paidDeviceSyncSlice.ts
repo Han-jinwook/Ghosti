@@ -1096,6 +1096,8 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
         Math.max(0.01, localBytes / (1024 * 1024 * 1024)).toFixed(2)
       );
 
+      const totalSyncedCount = syncRes.totalCatalogCount ?? syncRes.mergedCatalog.length;
+
       return {
         photos: mergedPhotos,
         localDocuments: mergedDocs,
@@ -1115,19 +1117,22 @@ export const createPaidDeviceSyncSlice: StateCreator<SaySeeStore, [], [], PaidDe
           packSizeMB: syncRes.packSizeMB || state.syncState.packSizeMB,
           originalSizeGB: realOriginalSizeGB,
           connectedPeer: peerNames || state.syncState.connectedPeer,
-          lastSyncedAt: `방금 전 (전체 ${syncRes.mergedCatalog.length}건 · 타 기기 사진 ${remotePhotoCountNow}장 · 문서 ${remoteDocCountNow}건)`,
+          lastSyncedAt: `방금 전 (전체 ${totalSyncedCount}건 · 타 기기 사진 ${remotePhotoCountNow}장 · 문서 ${remoteDocCountNow}건)`,
         },
         lastQuarantineToast:
           state.syncState.privateSyncStrategy === 'shadow'
-            ? `일치화가 완료되었습니다(총 ${syncRes.mergedCatalog.length}건 · 다른 기기 사진 ${remotePhotoCountNow}장 · 문서 ${remoteDocCountNow}건).`
+            ? `일치화가 완료되었습니다(총 ${totalSyncedCount}건 · 다른 기기 사진 ${remotePhotoCountNow}장 · 문서 ${remoteDocCountNow}건).`
             : getThisDeviceIdentity().deviceKind === 'mobile'
-            ? `모바일 원본 백업 전송 완료(신규 업로드 ${syncRes.mirroredUploadCount}장 · 총 ${syncRes.mergedCatalog.length}건). 연결된 PC의 [사진/Ghosti_Phone_Backup] 폴더에 자동 저장됩니다.`
-            : `원본 백업이 완료되었습니다(총 ${syncRes.mergedCatalog.length}건 · 업로드 ${syncRes.mirroredUploadCount}장 · PC 저장 ${syncRes.mirroredPullCount}장 · 위치: 사진/Ghosti_Phone_Backup).`,
+            ? `모바일 원본 백업 전송 완료(신규 업로드 ${syncRes.mirroredUploadCount}장 · 총 ${totalSyncedCount}건). 연결된 PC의 [사진/Ghosti_Phone_Backup] 폴더에 자동 저장됩니다.`
+            : `원본 백업이 완료되었습니다(총 ${totalSyncedCount}건 · 업로드 ${syncRes.mirroredUploadCount}장 · PC 저장 ${syncRes.mirroredPullCount}장 · 위치: 사진/Ghosti_Phone_Backup).`,
       };
     });
 
-    // 4) 새로고침(F5) 증발 방지를 위해 타 기기 사진·문서를 IndexedDB에 영속 캐시
-    if (merlinAuth.email) {
+    // 4) 새로고침(F5) 증발 방지를 위해 새로 합류한 타 기기 사진·문서가 있을 때만 IndexedDB 영속 캐시 갱신 (2회차 무변경 시 0초 스킵)
+    if (
+      merlinAuth.email &&
+      (syncRes.remotePhotosToMerge.length > 0 || syncRes.remoteDocsToMerge.length > 0)
+    ) {
       void saveRemoteShadowCache(merlinAuth.email, nextPhotosForCache, nextDocsForCache);
     }
   },
