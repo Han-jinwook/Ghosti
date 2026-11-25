@@ -15,6 +15,7 @@ import {
   cacheWorkRoomPreviewLocally,
   clearActiveWorkRoomInviteMeta,
   clearCachedJoinedWorkRoomMeta,
+  clearPendingKickedWorkRoomNotice,
   connectWorkRoomRealtimeChannel,
   deleteWorkFileShared,
   downloadWorkFileOriginal,
@@ -28,6 +29,8 @@ import {
   fetchWorkRoomAuthedState,
   fetchWorkRoomCloudPreview,
   getActiveHostTunnelSession,
+  isLocalZCoreHostTunnelActive,
+  isSharedLocalHostPcProtectedForAccount,
   loadCachedWorkRoomPreview,
   loadCachedWorkTombstones,
   lookupWorkTombstone,
@@ -39,10 +42,12 @@ import {
   readActiveWorkRoomInviteMeta,
   readCachedJoinedWorkRoomMeta,
   readCachedMyWorkRoomMeta,
+  readPendingKickedWorkRoomNotice,
   removeWorkRoomMemberOnServer,
   sanitizeWorkLockOwner,
   saveCachedJoinedWorkRoomMeta,
   saveCachedWorkTombstones,
+  savePendingKickedWorkRoomNotice,
   setWorkNightPowerSaveNative,
   sortWorkRoomServerMembers,
   updateWorkRoomMemberRoleOnServer,
@@ -239,33 +244,16 @@ export const WorkLoungeB2BHub: React.FC = () => {
     }
   }, [mobileTab]);
 
-  const [kickedFromRoomTitle, setKickedFromRoomTitle] = useState<string | null>(null);
+  const [kickedFromRoomTitle, setKickedFromRoomTitle] = useState<string | null>(() =>
+    readPendingKickedWorkRoomNotice(merlinAuth?.email || undefined)
+  );
   const memberMutationEpochRef = useRef<number>(0);
   const recentlyKickedEmailsRef = useRef<Map<string, number>>(new Map());
 
-  const markMemberMutation = useCallback((kickedEmail?: string) => {
-    memberMutationEpochRef.current += 1;
-    if (kickedEmail) {
-      recentlyKickedEmailsRef.current.set(kickedEmail.trim().toLowerCase(), Date.now() + 12_000);
-    }
-  }, []);
-
-  const filterOutRecentlyKicked = useCallback(
-    (list: WorkRoomServerMemberDto[]): WorkRoomServerMemberDto[] => {
-      if (recentlyKickedEmailsRef.current.size === 0) return list;
-      const now = Date.now();
-      return list.filter((m) => {
-        const exp = recentlyKickedEmailsRef.current.get(m.email.toLowerCase());
-        if (!exp) return true;
-        if (exp <= now) {
-          recentlyKickedEmailsRef.current.delete(m.email.toLowerCase());
-          return true;
-        }
-        return false;
-      });
-    },
-    []
-  );
+  const handleConfirmKickedNotice = useCallback(() => {
+    clearPendingKickedWorkRoomNotice(merlinAuth?.email || undefined);
+    setKickedFromRoomTitle(null);
+  }, [merlinAuth?.email]);
 
   const inviteMeta = useMemo(
     () => readActiveWorkRoomInviteMeta(),
@@ -278,6 +266,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     const onWorkInviteApplied = (ev: Event) => {
       const detail = (ev as CustomEvent<{ roomId?: string }>).detail;
       acceptedInviteTokenRef.current = '';
+      clearPendingKickedWorkRoomNotice(merlinAuth?.email || undefined);
       setKickedFromRoomTitle(null);
       setWorkInviteTick((v) => v + 1);
       if (detail?.roomId) {
@@ -293,7 +282,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
       window.removeEventListener('ghostiWorkInviteApplied', onWorkInviteApplied);
       window.removeEventListener('ghostiWorkInviteCleared', onWorkInviteCleared);
     };
-  }, []);
+  }, [merlinAuth?.email]);
 
   // ── 과금·30일 무료체험·만료 잠금 판정 (Fail-Closed 3중 게이트 · 팀원 초대도 이메일 로그인 필수) ──
   const isAuthenticated = Boolean(merlinAuth?.email && hasAuthenticatedHubAccountSession());
@@ -312,6 +301,39 @@ export const WorkLoungeB2BHub: React.FC = () => {
       : isOwnWorkUnlocked
   );
 
+  const markMemberMutation = useCallback(
+    (kickedEmail?: string) => {
+      memberMutationEpochRef.current += 1;
+      if (kickedEmail) {
+        recentlyKickedEmailsRef.current.set(kickedEmail.trim().toLowerCase(), Date.now() + 12_000);
+        // 방장 PC에서 팀원을 내보낼 때 동일 PC의 다른 브라우저 세션 간섭이 있더라도 방장 S: 드라이브를 항상 유지
+        if (zCoreBridge.isConnected && !isJoinedInvitedMember && myRoomRole === 'host' && isWorkUnlocked) {
+          void mountWorkSDriveNative({ action: 'mount', openExplorer: false }).then((m) => {
+            if (m.ok && m.mounted) setSDriveMounted(true);
+          });
+        }
+      }
+    },
+    [isJoinedInvitedMember, isWorkUnlocked, myRoomRole]
+  );
+
+  const filterOutRecentlyKicked = useCallback(
+    (list: WorkRoomServerMemberDto[]): WorkRoomServerMemberDto[] => {
+      if (recentlyKickedEmailsRef.current.size === 0) return list;
+      const now = Date.now();
+      return list.filter((m) => {
+        const exp = recentlyKickedEmailsRef.current.get(m.email.toLowerCase());
+        if (!exp) return true;
+        if (exp <= now) {
+          recentlyKickedEmailsRef.current.delete(m.email.toLowerCase());
+          return true;
+        }
+        return false;
+      });
+    },
+    []
+  );
+
   const performKickedOrRemovedCleanup = useCallback(
     (roomIdToClear: string, roomTitleHint?: string, notifyToast = true) => {
       const cleanEmail = (merlinAuth?.email || '').trim().toLowerCase();
@@ -327,6 +349,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
           }
         }
       }
+      localDocsRef.current = [];
       setJoinedInvitedRoom(null);
       setServerMembers([]);
       setRemoteDocs([]);
@@ -335,18 +358,30 @@ export const WorkLoungeB2BHub: React.FC = () => {
       setMyRoomRole('host');
       setSDriveMounted(false);
       if (roomTitleHint) {
+        savePendingKickedWorkRoomNotice(roomTitleHint, cleanEmail || undefined);
         setKickedFromRoomTitle(roomTitleHint);
       }
       if (zCoreBridge.isConnected && !isOwnWorkUnlocked) {
-        void syncEntitlementToLocalPcEngine(deviceEntitlement || null, cleanEmail || undefined, {
-          unlocked: false,
-          roomId: '',
-          isHost: false,
-          force: true,
+        void isSharedLocalHostPcProtectedForAccount({
+          accountEmail: cleanEmail || undefined,
+          isOwnHostSubscriptionExpired: false,
+        }).then((protectHostPc) => {
+          if (protectHostPc) return;
+          void syncEntitlementToLocalPcEngine(deviceEntitlement || null, cleanEmail || undefined, {
+            unlocked: false,
+            roomId: '',
+            isHost: false,
+            force: true,
+          });
+          void mountWorkSDriveNative({
+            action: 'unmount',
+            openExplorer: false,
+            accountEmail: cleanEmail || undefined,
+            isOwnHostSubscriptionExpired: false,
+          });
         });
-        void mountWorkSDriveNative({ action: 'unmount', openExplorer: false });
       }
-      if (notifyToast) {
+      if (notifyToast && !roomTitleHint) {
         showToast('참여 중이던 업무 공유방에서 연결이 해제되었습니다.');
       }
     },
@@ -368,7 +403,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
   // 계정 전환 시 이전 계정 업무방 ID·문서 잔상 즉시 초기화 및 새 계정 캐시 선복원 (C9 계정 격리)
   useEffect(() => {
     acceptedInviteTokenRef.current = '';
-    setKickedFromRoomTitle(null);
+    setKickedFromRoomTitle(readPendingKickedWorkRoomNotice(merlinAuth?.email || undefined));
     const inv = readActiveWorkRoomInviteMeta();
     if (inv.hasWorkInvite && inv.roomId) {
       setJoinedInvitedRoom(null);
@@ -459,10 +494,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
         const hostedRoom = res.rooms.find((r) => r.isHost) || null;
         if (!invitedRoom) {
           clearCachedJoinedWorkRoomMeta(merlinAuth.email);
+          setJoinedInvitedRoom(null);
         }
       // 본인 구독 업무방이 없거나(팀원 계정) 아직 활성 방이 없으면 초대받은 팀원방을 최우선 복원
       if (invitedRoom && (!isOwnWorkUnlocked || !activeWorkRoomId || activeWorkRoomId === invitedRoom.roomId)) {
-        setKickedFromRoomTitle(null);
         setJoinedInvitedRoom(invitedRoom);
         saveCachedJoinedWorkRoomMeta(invitedRoom, merlinAuth.email);
         if (activeWorkRoomId !== invitedRoom.roomId) {
@@ -512,7 +547,6 @@ export const WorkLoungeB2BHub: React.FC = () => {
         return;
       }
       if (hostedRoom && (!activeWorkRoomId || activeWorkRoomId === hostedRoom.roomId)) {
-        setKickedFromRoomTitle(null);
         if (activeWorkRoomId !== hostedRoom.roomId) {
           setActiveWorkRoomId(hostedRoom.roomId);
         }
@@ -688,13 +722,39 @@ export const WorkLoungeB2BHub: React.FC = () => {
   };
 
   const syncRealWorkFiles = useCallback(async (forceRefresh = false) => {
+    if (!isWorkUnlocked) {
+      const hasOwnExpiredHostVault = Boolean(
+        readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId &&
+          deviceEntitlement?.workTrialExpired &&
+          !isOwnWorkUnlocked
+      );
+      if (!hasOwnExpiredHostVault || Boolean(kickedFromRoomTitle)) {
+        if (localDocsRef.current.length > 0) {
+          localDocsRef.current = [];
+          setLocalDocs([]);
+        }
+        return;
+      }
+    }
     const res = await fetchLocalWorkFilesNative({
       includeSyncBase64: Boolean(activeWorkRoomId && isWorkUnlocked),
       author: actorNickname,
       knownSig: forceRefresh ? undefined : lastWorkFilesSigRef.current || undefined,
     });
     if (!res.ok) return;
-    setSDriveMounted((prev) => (prev === res.mounted ? prev : res.mounted));
+    if (
+      !res.mounted &&
+      isWorkUnlocked &&
+      !isJoinedInvitedMember &&
+      myRoomRole === 'host' &&
+      isZCoreConnected
+    ) {
+      void mountWorkSDriveNative({ action: 'mount', openExplorer: false }).then((m) => {
+        if (m.ok && m.mounted) setSDriveMounted(true);
+      });
+    } else {
+      setSDriveMounted((prev) => (prev === res.mounted ? prev : res.mounted));
+    }
     if (res.targetDir) {
       setDriveTargetPath((prev) => (prev === res.targetDir ? prev : res.targetDir!));
     }
@@ -814,7 +874,19 @@ export const WorkLoungeB2BHub: React.FC = () => {
         });
       }
     }
-  }, [activeWorkRoomId, actorNickname, isWorkUnlocked, merlinAuth?.email, mergeAndPersistTombstones]);
+  }, [
+    activeWorkRoomId,
+    actorNickname,
+    deviceEntitlement?.workTrialExpired,
+    isJoinedInvitedMember,
+    isOwnWorkUnlocked,
+    isWorkUnlocked,
+    isZCoreConnected,
+    kickedFromRoomTitle,
+    merlinAuth?.email,
+    mergeAndPersistTombstones,
+    myRoomRole,
+  ]);
 
   const pollLocalLocksFast = useCallback(async () => {
     if (isZCoreConnected) {
@@ -901,6 +973,12 @@ export const WorkLoungeB2BHub: React.FC = () => {
         }
         if (cancelled) return;
         if (isWorkUnlocked) {
+          if (isJoinedInvitedMember && (await isLocalZCoreHostTunnelActive())) {
+            if (cancelled) return;
+            setSDriveMounted(true);
+            void syncRealWorkFiles();
+            return;
+          }
           const mRes = await mountWorkSDriveNative({ action: 'mount', openExplorer: false });
           if (cancelled) return;
           if (mRes.ok) {
@@ -909,12 +987,27 @@ export const WorkLoungeB2BHub: React.FC = () => {
           }
           void syncRealWorkFiles();
         } else {
-          // 만료/미개통 상태: S: 드라이브 연결 해제하되 폴더 내 로컬 원본 목록은 그대로 열람·보존
-          const mRes = await mountWorkSDriveNative({ action: 'unmount', openExplorer: false });
+          // 만료/미개통 상태: 본인 방장 구독 만료 시에만 S: 드라이브 연결 해제(동일 PC 방장 가동 중이면 S: 보호!)
+          const isOwnHostSubscriptionExpired = Boolean(
+            readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId &&
+              deviceEntitlement?.workTrialExpired &&
+              !isOwnWorkUnlocked
+          );
+          const mRes = await mountWorkSDriveNative({
+            action: 'unmount',
+            openExplorer: false,
+            accountEmail: merlinAuth?.email || undefined,
+            isOwnHostSubscriptionExpired,
+          });
           if (cancelled) return;
           setSDriveMounted(false);
           if (mRes.targetDir) setDriveTargetPath(mRes.targetDir);
-          void syncRealWorkFiles();
+          if (isOwnHostSubscriptionExpired && !kickedFromRoomTitle) {
+            void syncRealWorkFiles();
+          } else {
+            localDocsRef.current = [];
+            setLocalDocs([]);
+          }
         }
       };
       void syncAndMount();
@@ -2031,6 +2124,44 @@ export const WorkLoungeB2BHub: React.FC = () => {
         }}
       />
 
+      {/* 공유방 연결 해제(내보내기) 확인 안내 창 — 사용자가 직접 [확인] 버튼을 누르기 전까지 자동 소멸 금지 */}
+      {kickedFromRoomTitle && !inviteMeta.hasWorkInvite && (
+        <div
+          data-testid="work-room-kicked-modal"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="work-room-kicked-modal-title"
+          className="fixed inset-0 z-[120] bg-black/70 backdrop-blur-[2px] flex items-center justify-center p-4"
+        >
+          <div className="w-full max-w-md rounded-2xl bg-white dark:bg-zinc-950 border border-rose-300 dark:border-rose-400/55 shadow-2xl p-6 flex flex-col gap-4">
+            <div className="flex flex-col gap-2">
+              <span className="inline-flex self-start px-2.5 py-0.5 rounded-full bg-rose-50 dark:bg-rose-950/90 border border-rose-200 dark:border-rose-400/50 text-rose-700 dark:text-rose-200 text-[11.5px] font-extrabold">
+                공유방 연결 해제 안내
+              </span>
+              <h3
+                id="work-room-kicked-modal-title"
+                className="text-[17px] text-slate-900 dark:text-white font-extrabold leading-snug break-keep"
+              >
+                참여 중이던 [{kickedFromRoomTitle}] 업무 공유방에서 연결이 해제되었습니다
+              </h3>
+              <p className="text-[13px] text-slate-600 dark:text-zinc-300 leading-relaxed break-keep">
+                방장님이 팀원 연결을 해제하여 이 계정의 공유 문서함 화면이 정리되었습니다. 다시 참여하려면 방장님께 새 초대 링크를 요청해 주세요.
+              </p>
+            </div>
+            <div className="flex justify-end pt-1">
+              <button
+                type="button"
+                data-testid="work-room-kicked-confirm-btn"
+                onClick={handleConfirmKickedNotice}
+                className="w-full sm:w-auto min-w-[110px] px-5 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-[13.5px] font-extrabold cursor-pointer shadow-sm transition-colors"
+              >
+                확인
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* 모바일 브라우저에서 업무 공유 초대 링크 접속 시 귀신같이 앱으로 바로 연결 + 자동 계정 연동 안내 */}
       {inviteMeta.hasWorkInvite &&
         layout === 'mobile' &&
@@ -2138,7 +2269,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
                   </p>
                   <button
                     type="button"
-                    onClick={() => setKickedFromRoomTitle(null)}
+                    onClick={handleConfirmKickedNotice}
                     className="px-2 py-0.5 rounded-md bg-white border border-rose-200 text-rose-700 text-[11px] font-bold shrink-0 cursor-pointer"
                   >
                     확인
@@ -2169,12 +2300,12 @@ export const WorkLoungeB2BHub: React.FC = () => {
               참여 중이던 [{kickedFromRoomTitle}] 업무 공유방에서 연결이 해제되었습니다.
             </span>
             <span className="text-[12px] text-rose-200/90 break-keep">
-              공유 문서함 화면과 윈도우 탐색기 S: 드라이브 연결이 모두 안전하게 정리되었습니다. 다시 합류하려면 방장님께 새 초대 링크를 요청해 주세요.
+              이 계정의 공유 문서함 화면이 안전하게 정리되었습니다. 다시 합류하려면 방장님께 새 초대 링크를 요청해 주세요.
             </span>
           </div>
           <button
             type="button"
-            onClick={() => setKickedFromRoomTitle(null)}
+            onClick={handleConfirmKickedNotice}
             className="px-3 py-1.5 rounded-xl bg-black/35 hover:bg-black/55 border border-rose-300/35 text-rose-100 text-[11.5px] font-bold cursor-pointer shrink-0"
           >
             확인
