@@ -1704,6 +1704,20 @@ export async function handleAuthedWorkAndDeviceAction({
     }
     const pcDeviceIdToRestore = String(found.pc_device_id || '').trim();
 
+    // 새 QR 코드를 스캔하더라도 이 기기(targetDevId)가 이미 활성 연결 상태였다면 alreadyPaired=true로 정확히 판정
+    let deviceAlreadyActive = false;
+    try {
+      const exDevRes = await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_devices?device_id=eq.${encodeURIComponent(targetDevId)}&owner_email=eq.${encodeURIComponent(email)}&revoked_at=is.null&select=device_id&limit=1`,
+        { headers: srvHeaders(serviceKey) }
+      );
+      const exDevRows = exDevRes.ok ? await exDevRes.json().catch(() => []) : [];
+      deviceAlreadyActive = Array.isArray(exDevRows) && exDevRows.length > 0;
+    } catch {
+      /* ignore */
+    }
+    const effectiveAlreadyPaired = Boolean(alreadyPaired || deviceAlreadyActive);
+
     const [, , , entRaw] = await Promise.all([
       fetch(`${supabaseUrl}/rest/v1/ghosti_devices?on_conflict=device_id`, {
         method: 'POST',
@@ -1800,7 +1814,7 @@ export async function handleAuthedWorkAndDeviceAction({
       status: 200,
       body: {
         ok: true,
-        alreadyPaired,
+        alreadyPaired: effectiveAlreadyPaired,
         deviceId: targetDevId,
         devices: safeDevices,
         entitlement: computeEntitlementView(entRaw, safeDevices.length),

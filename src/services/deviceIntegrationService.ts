@@ -1514,37 +1514,45 @@ export async function pullDelayedE2eeClipboardMailbox(opts: {
     };
     const envKey = `${env.senderDeviceId || ''}:${resolvedHash}:${env.createdAt || ''}`;
     if (isFromOtherDevice && !deliveredRemoteEnvelopeKeys.has(envKey)) {
-      rememberDeliveredEnvelope(envKey, normEmail);
       if (!newestExternalItem) {
         newestExternalItem = itemObj;
         newestExternalEnvKey = envKey;
+      } else {
+        rememberDeliveredEnvelope(envKey, normEmail);
       }
     }
     decryptedList.push(itemObj);
   }
 
   // 타 기기에서 새로 도착한 최신 클립보드를 내 OS 클립보드에 1회 자동 주입 (Echo-Loop 원천 차단)
-  if (opts.injectToOsClipboard && newestExternalItem && newestExternalEnvKey) {
-    const createdMs = Date.parse(newestExternalItem.createdAt || '') || Date.now();
-    const isFresh = Date.now() - createdMs <= 10 * 60 * 1000;
-    if (isFresh && !osInjectedEnvelopeKeys.has(newestExternalEnvKey)) {
-      const injected = await writeTextToLocalOsClipboard(
-        newestExternalItem.text,
-        newestExternalItem.clipHash
-      );
-      if (injected) {
-        osInjectedEnvelopeKeys.add(newestExternalEnvKey);
-        if (pendingOsInjectClip?.envKey === newestExternalEnvKey) {
-          pendingOsInjectClip = null;
+  // 주의: OS 주입에 성공한 뒤에만 deliveredRemoteEnvelopeKeys에 각인하여, 앱 복귀 전환 중 일시 실패 시 다음 틱에서 반드시 재주입 보장
+  if (newestExternalItem && newestExternalEnvKey) {
+    if (opts.injectToOsClipboard) {
+      const createdMs = Date.parse(newestExternalItem.createdAt || '') || Date.now();
+      const isFresh = Date.now() - createdMs <= 10 * 60 * 1000;
+      if (isFresh && !osInjectedEnvelopeKeys.has(newestExternalEnvKey)) {
+        const injected = await writeTextToLocalOsClipboard(
+          newestExternalItem.text,
+          newestExternalItem.clipHash
+        );
+        if (injected) {
+          osInjectedEnvelopeKeys.add(newestExternalEnvKey);
+          rememberDeliveredEnvelope(newestExternalEnvKey, normEmail);
+          if (pendingOsInjectClip?.envKey === newestExternalEnvKey) {
+            pendingOsInjectClip = null;
+          }
+        } else {
+          pendingOsInjectClip = {
+            envKey: newestExternalEnvKey,
+            clipHash: newestExternalItem.clipHash,
+            text: newestExternalItem.text,
+          };
         }
-      } else if (ident.deviceKind === 'pc_master') {
-        // Z-코어가 아직 연결 핸드셰이크 중이면 연결 직후 자동 주입하도록 대기열에 보관
-        pendingOsInjectClip = {
-          envKey: newestExternalEnvKey,
-          clipHash: newestExternalItem.clipHash,
-          text: newestExternalItem.text,
-        };
+      } else {
+        rememberDeliveredEnvelope(newestExternalEnvKey, normEmail);
       }
+    } else {
+      rememberDeliveredEnvelope(newestExternalEnvKey, normEmail);
     }
   }
 
@@ -2547,13 +2555,13 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
             cachedUid ? [cachedUid] : undefined
           );
           if (!plain) return;
-          rememberDeliveredEnvelope(envKey, normEmail);
           const resolvedHash = hash || (await sha256HexBrowser(plain));
 
           const injected = await writeTextToLocalOsClipboard(plain, resolvedHash);
           if (injected) {
             osInjectedEnvelopeKeys.add(envKey);
-          } else if (ident.deviceKind === 'pc_master') {
+            rememberDeliveredEnvelope(envKey, normEmail);
+          } else {
             pendingOsInjectClip = { envKey, clipHash: resolvedHash, text: plain };
           }
 
@@ -2693,9 +2701,11 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
   const inspectAndPushLocalOsClipboard = async (
     isBaselineOnly = false,
     isUserGesture = false
-  ): Promise<void> => {
-    if (disposed || checkingOsClip || thisDeviceRevokedLocally || !hasAuthenticatedHubAccountSession()) return;
-    if (!isBaselineOnly && !isCurrentAccountSyncUnlocked(normEmail)) return;
+  ): Promise<'PUSHED' | 'EMPTY' | 'SKIPPED'> => {
+    if (disposed || checkingOsClip || thisDeviceRevokedLocally || !hasAuthenticatedHubAccountSession()) {
+      return 'SKIPPED';
+    }
+    if (!isBaselineOnly && !isCurrentAccountSyncUnlocked(normEmail)) return 'SKIPPED';
     checkingOsClip = true;
     try {
       const res = await captureAndPushCurrentOsClipboard({
@@ -2706,9 +2716,11 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       });
       if (!disposed && res.ok && res.item) {
         opts.onIncomingClip(res.item, { isLocalAutoCapture: true });
+        return 'PUSHED';
       }
+      return res.reason === 'EMPTY' ? 'EMPTY' : 'SKIPPED';
     } catch {
-      /* ignore */
+      return 'SKIPPED';
     } finally {
       checkingOsClip = false;
     }
@@ -2763,19 +2775,48 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     }
   };
 
-  const triggerMobileForegroundCapture = () => {
+  let mobileResumeRetryTimer: number | null = null;
+  const triggerMobileForegroundCapture = (alsoSyncRemoteAfter = false) => {
     if (disposed || thisDeviceRevokedLocally || ident.deviceKind !== 'mobile' || typeof window === 'undefined') return;
     if (mobileResumeCaptureTimer !== null) {
       window.clearTimeout(mobileResumeCaptureTimer);
     }
-    // 안드로이드 10+ WindowFocus 확보 직후(120ms) 빠르게 OS 클립보드 읽기 + IME/공유시트 대기열 발송
-    mobileResumeCaptureTimer = window.setTimeout(() => {
+    if (mobileResumeRetryTimer !== null) {
+      window.clearTimeout(mobileResumeRetryTimer);
+      mobileResumeRetryTimer = null;
+    }
+    // 1단계(180ms): 안드로이드 10+ WindowFocus·iOS UIPasteboard 확보 직후 로컬 복사본을 먼저 읽어 PC로 전송한 뒤 원격 우체통 수신
+    mobileResumeCaptureTimer = window.setTimeout(async () => {
       mobileResumeCaptureTimer = null;
-      if (!disposed && document.visibilityState === 'visible') {
-        void flushPendingNativeMobileClips();
-        void inspectAndPushLocalOsClipboard(false, false);
+      if (disposed || document.visibilityState !== 'visible') return;
+      await flushPendingNativeMobileClips();
+      const firstResult = await inspectAndPushLocalOsClipboard(false, false);
+      if (disposed) return;
+      // 2단계(650ms): 안드로이드 10+에서 첫 180ms가 포커스 전환 전이라 EMPTY였다면 1회 재시도
+      if (firstResult === 'EMPTY') {
+        mobileResumeRetryTimer = window.setTimeout(async () => {
+          mobileResumeRetryTimer = null;
+          if (disposed || document.visibilityState !== 'visible') return;
+          await inspectAndPushLocalOsClipboard(false, false);
+          if (alsoSyncRemoteAfter && !disposed) {
+            await syncRemoteMailboxToUi(true);
+          }
+        }, 500);
+        return;
       }
-    }, 120);
+      if (alsoSyncRemoteAfter && !disposed) {
+        if (pendingOsInjectClip) {
+          const pending = pendingOsInjectClip;
+          pendingOsInjectClip = null;
+          const ok = await writeTextToLocalOsClipboard(pending.text, pending.clipHash);
+          if (ok) {
+            osInjectedEnvelopeKeys.add(pending.envKey);
+            rememberDeliveredEnvelope(pending.envKey, normEmail);
+          }
+        }
+        await syncRemoteMailboxToUi(true);
+      }
+    }, 180);
   };
 
   const boot = async () => {
@@ -2834,8 +2875,8 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
             capApp.addListener('appStateChange', (st) => {
               if (disposed || !st?.isActive) return;
               if (!activePairSubscribed) void setupRealtimeChannel();
-              triggerMobileForegroundCapture();
-              void syncRemoteMailboxToUi(true);
+              // 모바일 복귀 시 로컬 복사본을 먼저 PC로 올린 뒤 원격 우체통 수신 (원격 주입이 방금 복사한 글자를 덮어쓰는 레이스 차단)
+              triggerMobileForegroundCapture(true);
             })
           )
             .then((handle) => {
@@ -2930,47 +2971,65 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       void prewarmAccountE2eeKey(normEmail, opts.userId);
     }
 
-    // PC 마스터: 탭 활성(visible) 중에만 0.8초 주기로 OS 클립보드 감지, 백그라운드(hidden) 시 크롬 절전 존중(복귀/포커스 즉시 동기화)
+    // PC 마스터: 다른 앱(메모장·카톡·다른 크롬 탭)에서 Ctrl+C 복사할 때도 1초 내 자동 감지·전송
+    // (/__sync/clipboard는 0.2ms 로컬 Win32 시퀀스 확인으로 CPU 0%)
     if (ident.deviceKind === 'pc_master') {
       if (osClipTicker) osClipTicker.stop();
-      osClipTicker = createVisibilityAwareInterval(800, () => {
-        if (!zCoreBridge.isConnected || thisDeviceRevokedLocally) return;
+      const pcClipTimerId = window.setInterval(() => {
+        if (disposed || !zCoreBridge.isConnected || thisDeviceRevokedLocally) return;
         void inspectAndPushLocalOsClipboard(false, false);
-      });
+      }, 1000);
+      osClipTicker = {
+        stop: () => window.clearInterval(pcClipTimerId),
+      };
     }
 
-    // 전 기기 공통: 탭 활성(visible) 중에만 2.4초 보조 동기화 (Realtime 수신 우선 · 백그라운드 hidden 시 0회 호출 · 복귀 즉시 동기화)
+    // 전 기기 공통: PC 마스터는 다른 창(메모장 Ctrl+V) 작업 중에도 백그라운드 수신 보강, 모바일은 탭 활성(visible) 중에만 동기화
     let mailboxTickCounter = 0;
     if (mobileMailboxTicker) mobileMailboxTicker.stop();
-    mobileMailboxTicker = createVisibilityAwareInterval(2400, () => {
-      if (thisDeviceRevokedLocally) return;
-      if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
-      mailboxTickCounter += 1;
-      if (!activePairSubscribed) {
-        void setupRealtimeChannel();
-        void syncRemoteMailboxToUi(true);
-      } else if (mailboxTickCounter % 2 === 0) {
-        void syncRemoteMailboxToUi(true);
-      }
-      // PC 마스터: 다른 기기 연결 대기 중(1대 이하)이면 2.4초마다 즉시 동기화해
-      // 스마트폰 연결 직후 새로고침 없이 PC가 '연동 대기'에서 바로 '연결됨'으로 전환되도록 보장, 2대 이상 연결 후에는 5분 주기(125틱) 절전 유지
-      const cachedDevCount = loadCachedDeviceIntegrationSnapshot(normEmail)?.devices?.length || 0;
-      const shouldSyncDevicesNow =
-        ident.deviceKind === 'pc_master' &&
-        (cachedDevCount <= 1 ? true : mailboxTickCounter % 125 === 0);
-      if (shouldSyncDevicesNow) {
-        void syncDeviceHeartbeatAndList().then((hbNext) => {
-          if (!disposed && hbNext.ok && opts.onDevicesUpdated) {
-            opts.onDevicesUpdated({
-              devices: hbNext.devices,
-              pairingCode: hbNext.pairingCode,
-              entitlement: hbNext.entitlement,
-              revokedSelf: hbNext.revokedSelf,
-            });
-          }
-        });
-      }
-    });
+    if (ident.deviceKind === 'pc_master') {
+      const pcMailboxTimerId = window.setInterval(() => {
+        if (disposed || thisDeviceRevokedLocally) return;
+        const isHidden = typeof document !== 'undefined' && document.visibilityState === 'hidden';
+        mailboxTickCounter += 1;
+        if (!activePairSubscribed) {
+          void setupRealtimeChannel();
+          void syncRemoteMailboxToUi(true);
+        } else if (!isHidden ? mailboxTickCounter % 2 === 0 : mailboxTickCounter % 3 === 0) {
+          void syncRemoteMailboxToUi(true);
+        }
+        if (isHidden) return;
+        const cachedDevCount = loadCachedDeviceIntegrationSnapshot(normEmail)?.devices?.length || 0;
+        const shouldSyncDevicesNow = cachedDevCount <= 1 ? true : mailboxTickCounter % 125 === 0;
+        if (shouldSyncDevicesNow) {
+          void syncDeviceHeartbeatAndList().then((hbNext) => {
+            if (!disposed && hbNext.ok && opts.onDevicesUpdated) {
+              opts.onDevicesUpdated({
+                devices: hbNext.devices,
+                pairingCode: hbNext.pairingCode,
+                entitlement: hbNext.entitlement,
+                revokedSelf: hbNext.revokedSelf,
+              });
+            }
+          });
+        }
+      }, 2400);
+      mobileMailboxTicker = {
+        stop: () => window.clearInterval(pcMailboxTimerId),
+      };
+    } else {
+      mobileMailboxTicker = createVisibilityAwareInterval(2400, () => {
+        if (thisDeviceRevokedLocally) return;
+        if (typeof document !== 'undefined' && document.visibilityState !== 'visible') return;
+        mailboxTickCounter += 1;
+        if (!activePairSubscribed) {
+          void setupRealtimeChannel();
+          void syncRemoteMailboxToUi(true);
+        } else if (mailboxTickCounter % 2 === 0) {
+          void syncRemoteMailboxToUi(true);
+        }
+      });
+    }
   };
 
   void boot();
@@ -3012,10 +3071,10 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     }
     if (ident.deviceKind === 'pc_master') {
       void inspectAndPushLocalOsClipboard(false, false);
+      void syncRemoteMailboxToUi(true);
     } else {
-      triggerMobileForegroundCapture();
+      triggerMobileForegroundCapture(true);
     }
-    void syncRemoteMailboxToUi(true);
   };
 
   const onVisibility = () => {
@@ -3025,10 +3084,10 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       }
       if (ident.deviceKind === 'pc_master') {
         void inspectAndPushLocalOsClipboard(false, false);
+        void syncRemoteMailboxToUi(true);
       } else {
-        triggerMobileForegroundCapture();
+        triggerMobileForegroundCapture(true);
       }
-      void syncRemoteMailboxToUi(true);
       const wasAlreadyRevoked = thisDeviceRevokedLocally;
       void syncDeviceHeartbeatAndList().then((hb) => {
         if (!disposed && hb.ok && opts.onDevicesUpdated) {
@@ -3059,6 +3118,54 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     void flushPendingNativeMobileClips();
   };
 
+  const onNativePairDeepLink = (ev: Event) => {
+    if (disposed) return;
+    const rawUrl = String((ev as CustomEvent<{ url?: string }>).detail?.url || '').trim();
+    const m = rawUrl.match(/pairCode=(\d{6})/i);
+    if (!m || !m[1]) return;
+    const code = m[1];
+    clearPendingQrPairCode();
+    void consumeDevicePairingCode6(code).then((pairRes) => {
+      if (disposed) return;
+      if (pairRes.ok) {
+        saveLastQrPairResult({ code, ok: true });
+        if (opts.onDevicesUpdated) {
+          opts.onDevicesUpdated({
+            devices: pairRes.devices,
+            pairingCode: loadCachedDeviceIntegrationSnapshot(normEmail)?.pairingCode ?? null,
+            entitlement: pairRes.entitlement,
+            revokedSelf: false,
+          });
+        }
+        if (opts.onPairingCompleted) {
+          opts.onPairingCompleted({
+            ok: true,
+            alreadyPaired: pairRes.alreadyPaired,
+            deviceCount: pairRes.devices.length,
+          });
+        }
+      } else {
+        saveLastQrPairResult({
+          code,
+          ok: false,
+          reason: pairRes.reason,
+          expectedEmailHint: pairRes.expectedEmailHint,
+        });
+        if (pairRes.reason === 'ACCOUNT_MISMATCH' || pairRes.reason === 'AUTH_REQUIRED') {
+          savePendingQrPairCode(code);
+        }
+        if (opts.onPairingCompleted) {
+          opts.onPairingCompleted({
+            ok: false,
+            deviceCount: loadCachedDeviceIntegrationSnapshot(normEmail)?.devices.length || 0,
+            reason: pairRes.reason,
+            expectedEmailHint: pairRes.expectedEmailHint,
+          });
+        }
+      }
+    });
+  };
+
   if (typeof document !== 'undefined') {
     document.addEventListener('visibilitychange', onVisibility);
     document.addEventListener('copy', onBrowserCopy);
@@ -3067,6 +3174,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     window.addEventListener('focus', onWindowFocus);
     window.addEventListener('online', onOnline);
     window.addEventListener('ghostiNativeClipCaptured', onNativeClipCaptured);
+    window.addEventListener('ghostiNativePairDeepLink', onNativePairDeepLink);
   }
 
   return () => {
@@ -3074,6 +3182,10 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     if (mobileResumeCaptureTimer !== null && typeof window !== 'undefined') {
       window.clearTimeout(mobileResumeCaptureTimer);
       mobileResumeCaptureTimer = null;
+    }
+    if (mobileResumeRetryTimer !== null && typeof window !== 'undefined') {
+      window.clearTimeout(mobileResumeRetryTimer);
+      mobileResumeRetryTimer = null;
     }
     if (zCoreUnsubscribe) {
       zCoreUnsubscribe();
@@ -3096,6 +3208,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       window.removeEventListener('focus', onWindowFocus);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('ghostiNativeClipCaptured', onNativeClipCaptured);
+      window.removeEventListener('ghostiNativePairDeepLink', onNativePairDeepLink);
     }
     cleanup();
   };
