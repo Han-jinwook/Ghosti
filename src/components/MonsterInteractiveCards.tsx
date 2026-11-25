@@ -1754,32 +1754,66 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
       )}
 
       {/* 11-B5) 시작프로그램 관리 카드 */}
-      {message.cardKind === 'STARTUP_MANAGER_CARD' && message.startupManagerPayload && (
+      {message.cardKind === 'STARTUP_MANAGER_CARD' && message.startupManagerPayload && (() => {
+        const items = message.startupManagerPayload.items;
+        const enabledCnt = items.filter((x) => x.enabled).length;
+        const disabledCnt = items.filter((x) => !x.enabled).length;
+        return (
         <div className="rounded-xl border border-slate-200 bg-slate-50 p-3.5 space-y-2.5 text-xs">
-          <div className="font-bold text-slate-900 text-[13px]">
-            부팅 시작프로그램 관리 ({message.startupManagerPayload.items.length}개)
+          <div className="flex items-center justify-between gap-2">
+            <div className="font-bold text-slate-900 text-[13px]">
+              부팅 시작프로그램 관리 ({items.length}개)
+            </div>
+            <span className="text-[11px] font-medium text-slate-500 shrink-0">
+              켜짐 {enabledCnt}개 · 꺼둠 {disabledCnt}개
+            </span>
           </div>
 
           {message.startupManagerPayload.lastToggleNoteKo && (
-            <div className="px-2.5 py-1.5 rounded-lg bg-white border border-slate-200 text-slate-700 text-[11.5px]">
+            <div
+              className={`px-2.5 py-1.5 rounded-lg border text-[11.5px] leading-snug ${
+                message.startupManagerPayload.lastToggleOk === false
+                  ? 'bg-amber-50 border-amber-200 text-amber-900'
+                  : 'bg-emerald-50 border-emerald-200 text-emerald-900'
+              }`}
+            >
               {message.startupManagerPayload.lastToggleNoteKo}
             </div>
           )}
 
           <div className="space-y-1.5 max-h-64 overflow-y-auto pr-1">
-            {message.startupManagerPayload.items.map((stItem) => (
+            {items.map((stItem) => {
+              const isBusyRow = busyId === `st_${stItem.id}`;
+              const shortLoc = !stItem.enabled
+                ? '꺼둠 · 다시 켜기 가능'
+                : stItem.requiresAdmin
+                ? '공용(관리자 권한)'
+                : '내 계정';
+              return (
               <div
                 key={stItem.id}
                 className="rounded-lg bg-white border border-slate-200 px-2.5 py-2 flex items-center justify-between gap-2"
               >
-                <div className="min-w-0 flex-1">
-                  <div className="font-semibold text-slate-900 flex items-center gap-1.5 min-w-0">
-                    <span className="truncate">{stItem.name}</span>
-                    <span className="text-[10px] px-1.5 py-0.5 rounded bg-slate-100 text-slate-500 font-normal shrink-0">
-                      {stItem.locationLabel}
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="font-semibold text-slate-900 truncate" title={stItem.name}>
+                    {stItem.name}
+                  </div>
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <span
+                      className={`text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0 ${
+                        !stItem.enabled
+                          ? 'bg-slate-100 text-slate-500'
+                          : stItem.requiresAdmin
+                          ? 'bg-amber-50 text-amber-700'
+                          : 'bg-sky-50 text-sky-700'
+                      }`}
+                    >
+                      {shortLoc}
+                    </span>
+                    <span className="text-[10.5px] text-slate-400 font-mono truncate" title={stItem.command}>
+                      {stItem.command}
                     </span>
                   </div>
-                  <div className="text-[10.5px] text-slate-400 font-mono truncate">{stItem.command}</div>
                 </div>
                 {stItem.isProtected ? (
                   <span className="px-2 py-1 rounded bg-slate-100 text-slate-500 text-[10.5px] font-medium shrink-0">
@@ -1788,35 +1822,72 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                 ) : (
                   <button
                     type="button"
-                    disabled={busyId === `st_${stItem.id}`}
+                    disabled={isBusyRow}
+                    title={stItem.requiresAdmin ? '공용(PC 전체) 항목은 윈도우 관리자 허용 창이 뜰 수 있어요.' : undefined}
                     onClick={async () => {
                       setBusyId(`st_${stItem.id}`);
-                      const res = await toggleStartupProgramItem(stItem.id, !stItem.enabled);
+                      const targetEnable = !stItem.enabled;
+                      const res = await toggleStartupProgramItem(stItem.id, targetEnable);
                       const fresh = await fetchStartupManagerPayload();
                       setBusyId(null);
+
+                      // 기존 행 순서를 그대로 유지하면서 상태만 제자리 갱신(클릭 직후 항목이 아래로 사라져 안 바뀐 것처럼 보이는 현상 방지)
+                      const prevItems = message.startupManagerPayload!.items;
+                      let nextItems = prevItems;
+                      if (fresh.payload?.items && fresh.payload.items.length > 0) {
+                        const freshById = new Map(fresh.payload.items.map((x) => [x.id.toLowerCase(), x]));
+                        const preserved = prevItems
+                          .map((old) => freshById.get(old.id.toLowerCase()))
+                          .filter((x): x is NonNullable<typeof x> => Boolean(x));
+                        const preservedIds = new Set(preserved.map((x) => x.id.toLowerCase()));
+                        const added = fresh.payload.items.filter((x) => !preservedIds.has(x.id.toLowerCase()));
+                        nextItems = [...preserved, ...added];
+                      } else if (res.ok) {
+                        nextItems = prevItems.map((it) =>
+                          it.id === stItem.id
+                            ? {
+                                ...it,
+                                enabled: targetEnable,
+                                locationLabel: targetEnable ? it.locationLabel : '꺼둠 · 다시 켜기 가능',
+                              }
+                            : it
+                        );
+                      }
+
+                      const nextEn = nextItems.filter((x) => x.enabled).length;
+                      const nextDis = nextItems.filter((x) => !x.enabled).length;
+                      const updatedText = message.text.replace(
+                        /\(켜짐\s*\d+개\s*·\s*꺼둠\s*\d+개\)/,
+                        `(켜짐 ${nextEn}개 · 꺼둠 ${nextDis}개)`
+                      );
+
                       onUpdateMessage({
                         ...message,
+                        text: updatedText,
                         startupManagerPayload: {
-                          items: fresh.payload?.items || message.startupManagerPayload!.items,
+                          items: nextItems,
                           lastToggleNoteKo: res.message,
+                          lastToggleOk: res.ok,
                         },
                       });
                       onToast?.(res.message);
                     }}
-                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold shrink-0 cursor-pointer border transition-colors ${
+                    className={`px-2.5 py-1 rounded-md text-[11px] font-semibold shrink-0 cursor-pointer border transition-colors disabled:opacity-60 ${
                       stItem.enabled
                         ? 'bg-emerald-50 border-emerald-200 text-emerald-800 hover:bg-rose-50 hover:border-rose-200 hover:text-rose-700'
-                        : 'bg-slate-100 border-slate-200 text-slate-500 hover:bg-slate-200 hover:text-slate-800'
+                        : 'bg-slate-100 border-slate-200 text-slate-600 hover:bg-emerald-50 hover:border-emerald-200 hover:text-emerald-800'
                     }`}
                   >
-                    {stItem.enabled ? '켜짐 (끄기)' : '꺼짐 (켜기)'}
+                    {isBusyRow ? '변경 중...' : stItem.enabled ? '켜짐 (끄기)' : '꺼짐 (켜기)'}
                   </button>
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         </div>
-      )}
+        );
+      })()}
 
       {/* 11-B6) 설치된 프로그램 목록 카드 */}
       {message.cardKind === 'INSTALLED_APPS_CARD' && message.installedAppsPayload && (() => {

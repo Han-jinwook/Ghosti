@@ -338,6 +338,7 @@ export interface MonsterStartupItem {
 export interface MonsterStartupManagerPayload {
   items: MonsterStartupItem[];
   lastToggleNoteKo?: string;
+  lastToggleOk?: boolean;
 }
 
 export interface MonsterInstalledAppItem {
@@ -1473,7 +1474,8 @@ export async function toggleStartupProgramItem(
 ): Promise<{ ok: boolean; message: string }> {
   const r = await zcoreJson<any>(
     '/api/care/startup-toggle',
-    postJson({ id, enable, userApprovalTypedText: `시작프로그램 ${enable ? '켜기' : '끄기'} 스위치 승인` })
+    postJson({ id, enable, userApprovalTypedText: `시작프로그램 ${enable ? '켜기' : '끄기'} 스위치 승인` }),
+    35000
   );
   if (!r.ok || !r.data?.ok) {
     return {

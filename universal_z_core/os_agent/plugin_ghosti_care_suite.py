@@ -4595,8 +4595,82 @@ def list_startup_programs() -> Dict[str, Any]:
     }
 
 
+def _elevated_hklm_run_toggle(
+    op: str,
+    sub_k: str,
+    vname: str,
+    cmd_val: str = "",
+    timeout_sec: float = 28.0,
+) -> Tuple[bool, str]:
+    """HKLM 공용 시작프로그램 켜기/끄기를 위해 1회 Windows UAC(runas)로 레지스트리 변경을 실행합니다."""
+    if sys.platform != "win32":
+        return False, "WINDOWS_ONLY"
+    import base64
+    import tempfile
+
+    reg_path = f"HKLM:\\{sub_k}"
+    out_file = Path(tempfile.gettempdir()) / f"ghosti_st_uac_{int(time.time() * 1000)}_{os.getpid()}.json"
+    ps_payload = json.dumps(
+        {
+            "op": op,
+            "regPath": reg_path,
+            "name": vname,
+            "value": cmd_val,
+            "outFile": str(out_file),
+        },
+        ensure_ascii=False,
+    )
+    payload_b64 = base64.b64encode(ps_payload.encode("utf-8")).decode("ascii")
+    ps_script = (
+        f"$cfg = [System.Text.Encoding]::UTF8.GetString([Convert]::FromBase64String('{payload_b64}')) | ConvertFrom-Json\n"
+        "$res = @{ ok = $false; err = '' }\n"
+        "try {\n"
+        "  if ($cfg.op -eq 'delete') {\n"
+        "    Remove-ItemProperty -Path $cfg.regPath -Name $cfg.name -ErrorAction Stop\n"
+        "    $res.ok = $true\n"
+        "  } elseif ($cfg.op -eq 'set') {\n"
+        "    if (-not (Test-Path $cfg.regPath)) { New-Item -Path $cfg.regPath -Force | Out-Null }\n"
+        "    Set-ItemProperty -Path $cfg.regPath -Name $cfg.name -Value $cfg.value -Type String -ErrorAction Stop\n"
+        "    $res.ok = $true\n"
+        "  }\n"
+        "} catch {\n"
+        "  $res.err = $_.Exception.Message\n"
+        "}\n"
+        "$res | ConvertTo-Json -Compress | Set-Content -Path $cfg.outFile -Encoding UTF8\n"
+    )
+    enc_cmd = base64.b64encode(ps_script.encode("utf-16-le")).decode("ascii")
+    params = f"-NoProfile -NonInteractive -WindowStyle Hidden -EncodedCommand {enc_cmd}"
+    try:
+        rc = ctypes.windll.shell32.ShellExecuteW(None, "runas", "powershell.exe", params, None, 0)
+        if int(rc) <= 32:
+            return False, "UAC_CANCELLED"
+    except Exception as exc:
+        return False, str(exc)
+
+    deadline = time.time() + timeout_sec
+    while time.time() < deadline:
+        if out_file.is_file():
+            try:
+                raw = out_file.read_text(encoding="utf-8-sig", errors="ignore").strip()
+                if raw:
+                    data = json.loads(raw)
+                    try:
+                        out_file.unlink(missing_ok=True)
+                    except Exception:
+                        pass
+                    return bool(data.get("ok")), str(data.get("err") or "")
+            except Exception:
+                pass
+        time.sleep(0.25)
+    try:
+        out_file.unlink(missing_ok=True)
+    except Exception:
+        pass
+    return False, "UAC_TIMEOUT"
+
+
 def toggle_startup_program(item_id: str, enable: bool, user_approval_text: str = "") -> Dict[str, Any]:
-    """특정 시작프로그램 1개를 안전하게 켜거나(ON) 끕니다(OFF, 백업 보관 + 복원기록 등록)."""
+    """특정 시작프로그램 1개를 안전하게 켜거나(ON) 끕니다(OFF, 백업 보관 + 복원기록 등록). 공용(HKLM) 항목은 UAC 승격으로 직접 처리합니다."""
     if sys.platform != "win32" or winreg is None:
         return {"ok": False, "error": "WINDOWS_ONLY"}
     tag, sep, vname = (item_id or "").strip().partition("::")
@@ -4611,7 +4685,7 @@ def toggle_startup_program(item_id: str, enable: bool, user_approval_text: str =
     backup_val_name = f"{tag}__{vname}"
 
     if not enable:
-        # OFF: 원본 명령 백업 후 Run에서 제거 (보호 대상 차단)
+        # OFF: 보호 대상 차단 후 Run에서 제거 (성공 후에만 백업 기록하여 고아 백업 원천 차단)
         wl_data = load_security_whitelist(allow_remote_sync=False)
         drm_tokens = tuple(
             str(x).strip().lower()
@@ -4627,18 +4701,26 @@ def toggle_startup_program(item_id: str, enable: bool, user_approval_text: str =
         if any(t in f"{vname} {cmd_val}".lower() for t in drm_tokens):
             return {"ok": False, "error": "PROTECTED_STARTUP", "message": f"'{vname}' 항목은 시스템·보안 필수 모듈이어서 안전을 위해 끄지 않습니다."}
         try:
-            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, STARTUP_BACKUP_SUBKEY) as bk:
-                winreg.SetValueEx(bk, backup_val_name, 0, winreg.REG_SZ, str(cmd_val))
             with winreg.OpenKey(root_h, sub_k, 0, winreg.KEY_SET_VALUE) as rk_w:
                 winreg.DeleteValue(rk_w, vname)
         except PermissionError:
-            return {
-                "ok": False,
-                "error": "ADMIN_REQUIRED",
-                "message": f"'{vname}' 항목은 PC 전체(관리자) 시작프로그램이어서 표준 권한에서는 변경하지 않았습니다.",
-            }
+            ok_uac, err_uac = _elevated_hklm_run_toggle("delete", sub_k, vname)
+            if not ok_uac:
+                msg = (
+                    f"'{vname}' 항목은 공용(관리자) 시작프로그램입니다. 윈도우 관리자 허용 창에서 '예'를 눌러주셔야 끌 수 있어요."
+                    if err_uac in ("UAC_CANCELLED", "UAC_TIMEOUT")
+                    else f"'{vname}' 공용 시작프로그램을 끄지 못했습니다 ({err_uac})."
+                )
+                return {"ok": False, "error": err_uac or "ADMIN_REQUIRED", "message": msg}
         except OSError as exc:
             return {"ok": False, "error": str(exc), "message": f"시작프로그램 변경 실패: {exc}"}
+
+        try:
+            with winreg.CreateKey(winreg.HKEY_CURRENT_USER, STARTUP_BACKUP_SUBKEY) as bk:
+                winreg.SetValueEx(bk, backup_val_name, 0, winreg.REG_SZ, str(cmd_val))
+        except OSError:
+            pass
+
         try:
             import ghosti_safe_ops as _safe_st
             _safe_st.add_restore_point(
@@ -4662,7 +4744,7 @@ def toggle_startup_program(item_id: str, enable: bool, user_approval_text: str =
             "id": item_id,
             "name": vname,
             "enabled": False,
-            "message": f"✅ 부팅 시 자동 실행되던 '{vname}' 항목을 껐습니다! (언제든 같은 스위치로 다시 켤 수 있어요)",
+            "message": f"✅ 부팅 시 자동 실행되던 '{vname}' 항목을 껐습니다! (현재 실행 중인 창은 건드리지 않았으며 언제든 다시 켤 수 있어요)",
         }
     else:
         # ON: 백업에서 읽어 다시 Run에 복원
@@ -4674,19 +4756,26 @@ def toggle_startup_program(item_id: str, enable: bool, user_approval_text: str =
         try:
             with winreg.OpenKey(root_h, sub_k, 0, winreg.KEY_SET_VALUE) as rk_w:
                 winreg.SetValueEx(rk_w, vname, 0, winreg.REG_SZ, str(cmd_val))
+        except PermissionError:
+            ok_uac, err_uac = _elevated_hklm_run_toggle("set", sub_k, vname, str(cmd_val))
+            if not ok_uac:
+                msg = (
+                    f"'{vname}' 항목은 공용(관리자) 시작프로그램입니다. 윈도우 관리자 허용 창에서 '예'를 눌러주셔야 다시 켤 수 있어요."
+                    if err_uac in ("UAC_CANCELLED", "UAC_TIMEOUT")
+                    else f"'{vname}' 공용 시작프로그램을 복원하지 못했습니다 ({err_uac})."
+                )
+                return {"ok": False, "error": err_uac or "ADMIN_REQUIRED", "message": msg}
+        except OSError as exc:
+            return {"ok": False, "error": str(exc), "message": f"시작프로그램 복원 실패: {exc}"}
+
+        try:
             with winreg.OpenKey(winreg.HKEY_CURRENT_USER, STARTUP_BACKUP_SUBKEY, 0, winreg.KEY_SET_VALUE) as bk_w:
                 try:
                     winreg.DeleteValue(bk_w, backup_val_name)
                 except OSError:
                     pass
-        except PermissionError:
-            return {
-                "ok": False,
-                "error": "ADMIN_REQUIRED",
-                "message": f"'{vname}' 항목은 관리자 권한 영역이어서 복원하지 못했습니다.",
-            }
-        except OSError as exc:
-            return {"ok": False, "error": str(exc), "message": f"시작프로그램 복원 실패: {exc}"}
+        except OSError:
+            pass
         return {
             "ok": True,
             "id": item_id,

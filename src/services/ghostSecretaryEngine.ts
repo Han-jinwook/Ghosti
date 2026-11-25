@@ -68,13 +68,19 @@ export function extractTextContainsKeywords(trigger: string): string[] {
   return Array.from(m[1].matchAll(/['"]([^'"]+)['"]/g)).map((x) => x[1]);
 }
 
-/** {nickname} 등 치환. 값이 없는 자리표시자는 안전한 기본값 또는 빈 문자열로 처리(중괄호 노출 방지) */
+/** {nickname} 등 치환. 별명이 미설정이면 '회원' 기본값으로 통일해 '님,' 단독 노출을 원천 차단합니다. */
 export function renderPlaybookText(template: string, vars: Record<string, string | number | undefined>): string {
+  const rawNick = vars.nickname === undefined || vars.nickname === null ? '' : String(vars.nickname).trim();
+  const safeVars: Record<string, string | number | undefined> = {
+    ...vars,
+    nickname: rawNick || '회원',
+  };
   return template
     .replace(/\{(\w+)\}/g, (_, key: string) => {
-      const v = vars[key];
+      const v = safeVars[key];
       return v === undefined || v === null ? '' : String(v);
     })
+    .replace(/『회원』님/g, '회원님')
     .replace(/\(\s*\)/g, '')
     .replace(/[ \t]{2,}/g, ' ')
     .trim();
