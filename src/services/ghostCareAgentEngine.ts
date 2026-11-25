@@ -1305,13 +1305,15 @@ export function detectAgentCareIntent(
     clean === '좋아, 알려줘' ||
     clean === '좋아, 예쁘게 바꿔줘' ||
     /(?:cpu|메모리|램|ram).*(?:제일\s*많이|가장\s*많이|많이\s*쓰는|점유|먹는)/i.test(clean);
-  const isAskingExplain =
-    hasRecentScan &&
+  const isExplainQuestionText =
     !isQuestChipOrCpuRamAsk &&
-    /(뭐야|뭔데|뭐\s*하는|무슨\s*(앱|프로그램|파일|폴더)|지워도\s*(돼|되|괜찮|안전)|삭제해도\s*(돼|되|괜찮)|설명해|(?:이거|이\s*항목|#?\d+\s*번|남겨야|지워야|뭐\s*지우|어떻게\s*골라).*?알려\s*줘|남겨야|놔둬야|지울\s*거\s*골라|추천해|어떻게\s*골라|멘붕|모르겠)/i.test(
+    /(뭐야|뭔데|뭔가요|뭐예요|뭐\s*하는|무슨\s*(앱|프로그램|파일|폴더|기능|설정)|지워도\s*(돼|되|괜찮|안전)|삭제해도\s*(돼|되|괜찮)|설명해|(?:이거|이\s*항목|#?\d+\s*번|남겨야|지워야|뭐\s*지우|어떻게\s*골라).*?알려\s*줘|남겨야|놔둬야|지울\s*거\s*골라|추천해|어떻게\s*골라|멘붕|모르겠)/i.test(
       clean
     ) &&
     !/(빼고|제외하고|나머지\s*다|일괄\s*삭제|다\s*지워|옮겨\s*줘)/i.test(clean);
+  const isPowerExplainQuestion =
+    isExplainQuestionText && /(전원\s*(옵션|모드)|고성능\s*(모드|전원|전환))/i.test(clean);
+  const isAskingExplain = (hasRecentScan && isExplainQuestionText) || isPowerExplainQuestion;
 
   // 2) 일반 사무직원 비전문용어 종합 점검 불만어 (조사 이/가/은/는/도 허용 + 답답/이상한 창·팝업/버벅대/멈칫 전면 포괄)
   const isCasualFullCheckup =
@@ -1347,7 +1349,8 @@ export function detectAgentCareIntent(
     /(wd\s*(폴더|아이콘)|이상한\s*(폴더|아이콘)|사용자\s*폴더\s*(아이콘|숨겨|숨김|지워도|뭐야)|바탕화면\s*(시스템|특수)\s*아이콘)/i.test(
       clean
     );
-  const isPowerBoostQuery = /(전원\s*(옵션|모드).*?(고성능|바꿔|전환)|고성능\s*(모드|전원))/i.test(clean);
+  const isPowerBoostQuery =
+    !isExplainQuestionText && /(전원\s*(옵션|모드).*?(고성능|바꿔|전환)|고성능\s*(모드|전원))/i.test(clean);
 
   // 3) 직전 스캔 컨텍스트가 살아있고 유저가 취사선택·제외 필터("빼고", "놔두고", "나머지 다", "빨간색만 지워", "옮겨줘", "D드라이브", "#3번")를 말하는 경우
   const isMultiTurnFilter =

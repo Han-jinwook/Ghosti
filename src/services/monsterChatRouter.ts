@@ -3887,8 +3887,23 @@ export async function processUnifiedMonsterChatQuery(params: {
     const curScanCtx = getLastCareScanContext();
     const agentIntent = detectAgentCareIntent(clean, curScanCtx);
     if (agentIntent.matched) {
+      // Case A-0: 데스크톱 고성능 전원 모드 '이게 뭐예요?' / 설명 질문 ➔ 카드 반복 대신 쉬운 한글로 친절 설명!
+      if (
+        agentIntent.needsGeminiExplainOnly &&
+        /(전원\s*(옵션|모드)|고성능\s*(모드|전원|전환))/i.test(clean)
+      ) {
+        const powerExplainKo =
+          `⚡ **Windows 전원 옵션 ➔ 고성능(High Performance) 전환**은 지우는 프로그램이 아니라 **Windows 기본 속도 설정**이에요!\n\n` +
+          `• **무엇을 바꾸나요?**: 기본 '균형 조정' 모드에서는 전기를 아끼려고 CPU 속도를 수시로 낮추는데, 데스크톱 PC에서 **고성능**으로 바꾸면 CPU가 버벅이지 않고 본래 속도를 꾸준히 유지합니다.\n` +
+          `• **안전한가요?**: 배터리가 없는 순수 데스크톱 PC에서만 동작(노트북 자동 차단)하며, 파일이나 프로그램을 삭제하지 않습니다. 원하실 때 언제든 원래 **'균형 조정'**으로 바로 되돌릴 수 있어요!`;
+        speak('고성능 전원 모드는 삭제하는 프로그램이 아니라 데스크톱 피씨의 씨피유 속도 저하를 막는 윈도우 기본 설정입니다.');
+        return reply(sourceTab, powerExplainKo, {
+          followUpSuggestions: ['응 진행해', 'C드라이브 용량 도둑도 스캔해줘'],
+        });
+      }
+
       // Case A: 데스크톱 고성능 전원 부스터 직접 요청
-      if (agentIntent.isPowerBoostQuery && agentIntent.immediateReadTools.length === 0) {
+      if (agentIntent.isPowerBoostQuery && !agentIntent.needsGeminiExplainOnly && agentIntent.immediateReadTools.length === 0) {
         const powerCard: MonsterAgentCareCardPayload = {
           mode: 'CONFIRM_BATCH',
           title: '데스크톱 고성능 전원 모드 전환 (배터리 가드 검증)',
@@ -3905,6 +3920,8 @@ export async function processUnifiedMonsterChatQuery(params: {
               cat: 'POWER_PLAN',
               sizeMb: 0,
               detailKo: '구형 CPU 클럭 저하 방지 · 언제든 균형 조정 복귀 가능',
+              plainExplainKo:
+                '구형 CPU 속도 저하를 막는 Windows 기본 설정이에요. 삭제하는 프로그램이 아니며 언제든 원래 균형 조정 모드로 되돌릴 수 있어요.',
               defaultSelected: true,
             },
           ],

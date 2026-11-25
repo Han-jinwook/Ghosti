@@ -2068,8 +2068,12 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                                   type="button"
                                   onClick={(e) => {
                                     e.stopPropagation();
+                                    const askPrompt =
+                                      it.cat === 'POWER_PLAN' || card.action === 'desktop_power_boost'
+                                        ? `#${it.no}번 ${it.name} 이게 뭔가요? 자세히 설명해줘`
+                                        : `#${it.no}번 ${it.name} 이게 뭐 하는 프로그램이야? 지워도 돼?`;
                                     void submitExternalMonsterChatQuery(
-                                      `#${it.no}번 ${it.name} 이게 뭐 하는 프로그램이야? 지워도 돼?`,
+                                      askPrompt,
                                       message.sourceTab || 'trash'
                                     );
                                   }}
@@ -2085,7 +2089,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                               💡 {it.plainExplainKo}
                             </div>
                           ) : it.detailKo ? (
-                            <div className="text-[11px] text-slate-500 truncate">{it.detailKo}</div>
+                            <div className="text-[11px] text-slate-500 leading-snug break-words">{it.detailKo}</div>
                           ) : null}
                         </div>
                       </div>
