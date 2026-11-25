@@ -44,7 +44,11 @@ import {
   buildSetupDiagnosisPlan,
   launchRealOsTopmostOverlay,
 } from '../services/setupMonsterEngine';
-import { executeAgentCareBatchCard } from '../services/ghostCareAgentEngine';
+import {
+  classifyCareItemBucket,
+  executeAgentCareBatchCard,
+  type CareNormalizedBucketId,
+} from '../services/ghostCareAgentEngine';
 
 interface MonsterCardProps {
   message: MonsterChatMessage;
@@ -71,6 +75,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
   const [extraSupportSending, setExtraSupportSending] = useState(false);
   const [customScanPath, setCustomScanPath] = useState('');
   const [appFilterQuery, setAppFilterQuery] = useState('');
+  const [activeCareBucket, setActiveCareBucket] = useState<CareNormalizedBucketId | null>(null);
 
   useEffect(() => {
     if (message.cardKind !== 'DEFENDER_GUARD_CARD' || !message.defenderGuardPayload?.scanRunning) {
@@ -1917,16 +1922,28 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                   key={app.name}
                   className="rounded-lg bg-white border border-slate-200 px-2.5 py-2 flex items-center justify-between gap-2"
                 >
-                  <div className="min-w-0 flex-1">
-                    <div className="font-semibold text-slate-900 truncate">
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="font-semibold text-slate-900 break-words leading-snug">
                       {app.name}{' '}
                       {app.sizeMb > 0 && (
-                        <span className="text-[10.5px] text-slate-500 font-normal">({app.sizeMb}MB)</span>
+                        <span className="text-[10.5px] text-slate-500 font-normal">
+                          ({app.sizeMb >= 1024 ? `${(app.sizeMb / 1024).toFixed(1)}GB` : `${app.sizeMb}MB`})
+                        </span>
                       )}
                     </div>
-                    <div className="text-[10.5px] text-slate-400 truncate">
-                      {app.publisher || '제조사 미표기'}
-                      {app.installDate ? ` · 설치일 ${app.installDate}` : ''}
+                    {app.plainRoleKo && (
+                      <div className="text-[11px] text-slate-700 leading-snug">
+                        💡 {app.plainRoleKo}
+                      </div>
+                    )}
+                    <div className="text-[10.5px] text-slate-500 flex items-center gap-1.5 flex-wrap">
+                      {app.lastUsedLabelKo ? (
+                        <span className="font-medium text-slate-700">🕒 {app.lastUsedLabelKo}</span>
+                      ) : null}
+                      <span>
+                        {app.publisher || '제조사 미표기'}
+                        {app.installDate ? ` · 설치일 ${app.installDate}` : ''}
+                      </span>
                     </div>
                   </div>
                   {app.isProtected ? (
@@ -1987,21 +2004,109 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             },
           });
         };
+        const hasFourGrid = Boolean(card.fourBucketSummaries && card.fourBucketSummaries.length === 4);
+        const currentBucket: CareNormalizedBucketId | null = hasFourGrid
+          ? activeCareBucket === null
+            ? card.defaultActiveBucket || 'STORAGE'
+            : activeCareBucket
+          : null;
+        const visibleItems = hasFourGrid
+          ? currentBucket
+            ? card.items.filter((it) => classifyCareItemBucket(it) === currentBucket)
+            : []
+          : card.items;
+        const activeBucketMeta = hasFourGrid
+          ? card.fourBucketSummaries!.find((b) => b.bucketId === currentBucket)
+          : undefined;
+        const canOfferMoveDrive =
+          !card.executed &&
+          Boolean(card.availableMoveDrives && card.availableMoveDrives.length > 0) &&
+          (card.action === 'disk_hog_clean' ||
+            card.action === 'desktop_batch_action' ||
+            (hasFourGrid && (currentBucket === 'STORAGE' || currentBucket === 'DESKTOP')));
+
         return (
-          <div className="rounded-xl border border-teal-200 bg-slate-50 p-3.5 space-y-2.5 text-xs overflow-hidden">
+          <div className="rounded-xl border border-teal-200 bg-slate-50 p-3.5 space-y-2.5 text-xs overflow-hidden shadow-xs">
             <div className="flex items-center justify-between gap-2 flex-wrap">
               <div className="font-bold text-slate-900 text-[13px]">{card.title}</div>
-              <span className="px-2 py-0.5 rounded bg-teal-50 border border-teal-200 text-teal-800 text-[11px] font-semibold">
-                {card.badgeText}
+              <span className="px-2 py-0.5 rounded bg-teal-50 border border-teal-200 text-teal-800 text-[10.5px] font-semibold">
+                🕰️ 1초 되돌리기 보장 · {card.badgeText}
               </span>
             </div>
 
-            {card.summaryLines && card.summaryLines.length > 0 && (
-              <div className="rounded-lg bg-white border border-slate-200 p-2.5 space-y-1 text-[11.5px] text-slate-700">
-                {card.summaryLines.map((ln, i) => (
-                  <div key={i} className="leading-snug">{ln}</div>
-                ))}
+            {/* 🏆 『PC 손보기 4 + 1 정규 카테고리』 상단 2×2 동적 요약 성적표 그리드 */}
+            {hasFourGrid ? (
+              <div className="space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                  {card.fourBucketSummaries!.map((bk) => {
+                    const isOpen = currentBucket === bk.bucketId;
+                    const bucketSelCnt = card.items.filter(
+                      (it) =>
+                        classifyCareItemBucket(it) === bk.bucketId &&
+                        selectedSet.has(it.id) &&
+                        !it.isProtected
+                    ).length;
+                    const toneChip =
+                      bk.statusTone === 'ALERT'
+                        ? 'bg-rose-100 text-rose-800 border-rose-200'
+                        : bk.statusTone === 'WARN'
+                        ? 'bg-amber-50 text-amber-800 border-amber-200'
+                        : 'bg-emerald-50 text-emerald-800 border-emerald-200';
+                    return (
+                      <button
+                        key={bk.bucketId}
+                        type="button"
+                        onClick={() =>
+                          setActiveCareBucket((prev) => {
+                            const eff = prev === null ? card.defaultActiveBucket || 'STORAGE' : prev;
+                            return eff === bk.bucketId ? ('NONE' as any) : bk.bucketId;
+                          })
+                        }
+                        className={`text-left rounded-xl border p-2.5 transition-all cursor-pointer ${
+                          isOpen
+                            ? 'bg-white border-teal-500 ring-2 ring-teal-500/20 shadow-xs'
+                            : 'bg-white/90 hover:bg-white border-slate-200 hover:border-teal-300'
+                        }`}
+                      >
+                        <div className="flex items-center justify-between gap-1.5">
+                          <span className="font-bold text-[12.5px] text-slate-900">
+                            <span className="text-teal-700 mr-1">{bk.stepNo}</span>
+                            {bk.titleKo}
+                          </span>
+                          <span className={`px-1.5 py-0.5 rounded border text-[10px] font-semibold shrink-0 ${toneChip}`}>
+                            {card.executed && bucketSelCnt > 0 ? '🟢 정리 완료' : bk.statusBadgeKo}
+                          </span>
+                        </div>
+                        <div className="mt-1 text-[11px] font-medium text-slate-700 leading-snug break-words">
+                          {bk.headlineMetricKo}
+                        </div>
+                        <div className="mt-1.5 flex items-center justify-between text-[10.5px] text-slate-500">
+                          <span>
+                            {bk.subtitleKo}
+                            {bucketSelCnt > 0 && !card.executed ? (
+                              <strong className="ml-1 text-teal-700">· 선택 {bucketSelCnt}건</strong>
+                            ) : null}
+                          </span>
+                          <span className="font-semibold text-teal-700 shrink-0">
+                            {isOpen ? '접기 ▲' : `상세(${bk.itemCount}) ▾`}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
               </div>
+            ) : (
+              card.summaryLines &&
+              card.summaryLines.length > 0 && (
+                <div className="rounded-lg bg-white border border-slate-200 p-2.5 space-y-1 text-[11.5px] text-slate-700">
+                  {card.summaryLines.map((ln, i) => (
+                    <div key={i} className="leading-snug">
+                      {ln}
+                    </div>
+                  ))}
+                </div>
+              )
             )}
 
             {card.excludedNames && card.excludedNames.length > 0 && (
@@ -2010,9 +2115,50 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
               </div>
             )}
 
-            {card.items.length > 0 && (
+            {/* 선택된 칸의 세부 내역 아코디언 펼침 영역 */}
+            {hasFourGrid && activeBucketMeta && (
+              <div className="flex items-center justify-between gap-2 px-1 pt-0.5">
+                <div className="font-bold text-[12px] text-slate-800">
+                  ▼ [{activeBucketMeta.stepNo} {activeBucketMeta.titleKo}] 세부 내역 ({visibleItems.length}건)
+                </div>
+                {currentBucket === 'SPEED' && !card.executed && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void submitExternalMonsterChatQuery('시작프로그램 목록 보여줘', message.sourceTab || 'trash')
+                    }
+                    className="px-2 py-0.5 rounded bg-white hover:bg-teal-50 border border-slate-200 text-[10.5px] font-semibold text-teal-700 cursor-pointer"
+                  >
+                    ⚙️ 시작프로그램 개별 스위치 열기
+                  </button>
+                )}
+                {currentBucket === 'SECURITY' && !card.executed && (
+                  <button
+                    type="button"
+                    onClick={() =>
+                      void submitExternalMonsterChatQuery('윈도우 순정 백신 검사해줘', message.sourceTab || 'trash')
+                    }
+                    className="px-2 py-0.5 rounded bg-white hover:bg-teal-50 border border-slate-200 text-[10.5px] font-semibold text-teal-700 cursor-pointer"
+                  >
+                    🛡️ 순정 백신 상태·검사
+                  </button>
+                )}
+              </div>
+            )}
+
+            {hasFourGrid && currentBucket && visibleItems.length === 0 && (
+              <div className="rounded-lg bg-white border border-slate-200 p-3 text-[11.5px] text-slate-600 flex items-center justify-between gap-2 flex-wrap">
+                <span>
+                  {currentBucket === 'DESKTOP' && (card.photoCleanupCandidateCount || 0) > 0
+                    ? `바탕화면은 깔끔하며, 왼쪽 사진 정리 탭에 정리 후보 사진 ${card.photoCleanupCandidateCount}장이 준비되어 있어요!`
+                    : '이 영역은 현재 특별히 손볼 항목 없이 깨끗하고 쾌적한 상태입니다! 👍'}
+                </span>
+              </div>
+            )}
+
+            {visibleItems.length > 0 && (
               <div className="space-y-1.5 max-h-72 overflow-y-auto pr-1">
-                {card.items.map((it) => {
+                {visibleItems.map((it) => {
                   const checked = selectedSet.has(it.id) && !it.isProtected;
                   const badgeStyle =
                     it.safetyBadge === 'DANGER_DELETE'
@@ -2084,6 +2230,21 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
                               )}
                             </div>
                           </div>
+                          {/* 잊고 있던 앱 전용 3대 안심 힌트 배지 줄 (용도 + 마지막 사용 시점) */}
+                          {(it.plainRoleKo || it.lastUsedLabelKo) && (
+                            <div className="flex items-center gap-1.5 flex-wrap text-[10.5px]">
+                              {it.plainRoleKo && (
+                                <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">
+                                  📌 용도: {it.plainRoleKo}
+                                </span>
+                              )}
+                              {it.lastUsedLabelKo && (
+                                <span className="px-1.5 py-0.5 rounded bg-slate-100 text-slate-700 font-medium">
+                                  🕒 {it.lastUsedLabelKo}
+                                </span>
+                              )}
+                            </div>
+                          )}
                           {it.plainExplainKo ? (
                             <div className="text-[11px] text-slate-700 leading-snug break-words">
                               💡 {it.plainExplainKo}
@@ -2100,7 +2261,7 @@ export const MonsterInteractiveCardView: React.FC<MonsterCardProps> = ({
             )}
 
             {/* 여유 드라이브(D: 등) 안전 이사 전환 스위치 */}
-            {!card.executed && card.availableMoveDrives && card.availableMoveDrives.length > 0 && (card.action === 'disk_hog_clean' || card.action === 'desktop_batch_action') && (
+            {canOfferMoveDrive && card.availableMoveDrives && (
               <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
                 <span className="text-[11px] text-slate-600 font-medium">처리 방식:</span>
                 <button

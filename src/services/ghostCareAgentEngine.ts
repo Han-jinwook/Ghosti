@@ -26,15 +26,35 @@ export type AgentCareMutatingAction =
   | 'desktop_power_boost'
   | 'hidden_rats_apply';
 
+export type CareNormalizedBucketId = 'SPEED' | 'SECURITY' | 'STORAGE' | 'DESKTOP';
+
+export interface CareFourBucketSummary {
+  bucketId: CareNormalizedBucketId;
+  stepNo: string;
+  titleKo: string;
+  subtitleKo: string;
+  statusTone: 'GOOD' | 'WARN' | 'ALERT';
+  statusBadgeKo: string;
+  headlineMetricKo: string;
+  itemCount: number;
+  selectedCount?: number;
+  reclaimableMb?: number;
+}
+
 export interface AgentCareScanItem {
   no: number;
   id: string;
   name: string;
   cat: string;
+  bucketId?: CareNormalizedBucketId;
   sizeMb: number;
   detailKo?: string;
   /** 초보자 눈높이 1줄 설명 ("이게 뭐 하는 프로그램인지 / 지워도 안전한지") */
   plainExplainKo?: string;
+  /** 설치 앱 전용 3대 안심 힌트: ① 용도 / ② 마지막 사용 시점 */
+  plainRoleKo?: string;
+  lastUsedLabelKo?: string;
+  lastUsedStatus?: string;
   /** 안전도 배지 ('DANGER_DELETE' | 'SAFE_DELETE' | 'SAFE_CLEAN' | 'SLEEP_RECOMMEND' | 'USER_CHECK') */
   safetyBadge?: 'DANGER_DELETE' | 'SAFE_DELETE' | 'SAFE_CLEAN' | 'SLEEP_RECOMMEND' | 'USER_CHECK';
   safetyBadgeLabel?: string;
@@ -69,6 +89,12 @@ export interface MonsterAgentCareCardPayload {
   title: string;
   badgeText: string;
   summaryLines: string[];
+  /** 『PC 손보기 4+1 정규 카테고리』 상단 4칸 동적 요약표 데이터 */
+  fourBucketSummaries?: CareFourBucketSummary[];
+  defaultActiveBucket?: CareNormalizedBucketId;
+  liveCpuPct?: number | null;
+  liveRamPct?: number | null;
+  photoCleanupCandidateCount?: number;
   action: AgentCareMutatingAction;
   items: AgentCareScanItem[];
   selectedIds: string[];
@@ -100,7 +126,237 @@ export interface AgentCareLlmPlan {
   followUpSuggestions: string[];
 }
 
-// 모듈 전역 직전 스캔 컨텍스트 원장 (멀티턴 문답에서 번호·ID 1:1 바인딩 SSOT)
+/**
+ * 🏆 『PC 손보기 4 + 1 정규 카테고리』 분류기 (SSOT)
+ * - ① SPEED    : ⚡ 속도 높이기 (메모리·CPU·부팅 자동실행·서비스 수동전환·고성능 전원)
+ * - ② SECURITY : 🛡️ 광고·보안앱 정리 (애드웨어·스파이웨어·그리드·은행보안 잠재우기)
+ * - ③ STORAGE  : 💾 용량 늘리기 (안전 캐시·최대절전·잊고 있던 미사용 앱·D: 이사)
+ * - ④ DESKTOP  : 🗂️ 바탕화면·사진 정돈 (바탕화면 파일/폴더·특수 아이콘 숨김)
+ */
+export function classifyCareItemBucket(item: AgentCareScanItem): CareNormalizedBucketId {
+  if (item.bucketId) return item.bucketId;
+  const cat = String(item.cat || '').toUpperCase();
+  if (cat.startsWith('DESKTOP_')) return 'DESKTOP';
+  if (
+    cat === 'SAFE_CACHE' ||
+    cat === 'DESKTOP_HIBERFIL' ||
+    cat === 'USER_FOLDER' ||
+    cat === 'APP_DATA_HOG' ||
+    cat === 'USER_LARGE_ITEM' ||
+    cat === 'INSTALLED_APP' ||
+    cat === 'PROTECTED_APP'
+  ) {
+    return 'STORAGE';
+  }
+  if (
+    cat === 'PUP_ADWARE' ||
+    cat === 'ACTIVE_BANK_SECURITY' ||
+    item.actionType === 'SECURITY_SLEEP' ||
+    item.actionType === 'PUP_ERADICATE'
+  ) {
+    return 'SECURITY';
+  }
+  if (item.ratKind) {
+    // 위험/광고 스케줄러는 ② 광고·보안앱으로, 일반 상주 서비스/부팅 자동실행/고메모리 앱은 ① 속도 높이기로 분류
+    if (item.safetyBadge === 'DANGER_DELETE' || item.safetyBadge === 'SAFE_DELETE') {
+      return 'SECURITY';
+    }
+    return 'SPEED';
+  }
+  if (cat === 'POWER_PLAN') return 'SPEED';
+  return 'STORAGE';
+}
+
+export function buildCareFourBucketSummaries(params: {
+  items: AgentCareScanItem[];
+  selectedIds: string[];
+  cDriveFreeGb?: number;
+  cDriveUsedPct?: number;
+  isDesktop?: boolean;
+  isHighPerformance?: boolean;
+  liveCpuPct?: number | null;
+  liveRamPct?: number | null;
+  photoCleanupCandidateCount?: number;
+  visibleSystemIconsCount?: number;
+}): {
+  summaries: CareFourBucketSummary[];
+  defaultActiveBucket: CareNormalizedBucketId;
+} {
+  const {
+    items,
+    selectedIds,
+    cDriveFreeGb,
+    cDriveUsedPct,
+    isDesktop,
+    isHighPerformance,
+    liveCpuPct,
+    liveRamPct,
+    photoCleanupCandidateCount = 0,
+    visibleSystemIconsCount = 0,
+  } = params;
+  const selSet = new Set(selectedIds);
+  const byBucket: Record<CareNormalizedBucketId, AgentCareScanItem[]> = {
+    SPEED: [],
+    SECURITY: [],
+    STORAGE: [],
+    DESKTOP: [],
+  };
+  for (const it of items) {
+    const b = classifyCareItemBucket(it);
+    it.bucketId = b;
+    byBucket[b].push(it);
+  }
+
+  // ① 속도 높이기
+  const speedList = byBucket.SPEED.filter((i) => !i.isProtected);
+  const speedPowerNeed = Boolean(isDesktop && isHighPerformance === false);
+  const ramWarn = typeof liveRamPct === 'number' && liveRamPct >= 75;
+  const speedTone: CareFourBucketSummary['statusTone'] =
+    ramWarn || speedList.length >= 6 ? 'ALERT' : speedList.length > 0 || speedPowerNeed ? 'WARN' : 'GOOD';
+  const speedBadge =
+    speedTone === 'ALERT'
+      ? `🔴 점검 권장`
+      : speedTone === 'WARN'
+      ? `🟡 ${speedList.length + (speedPowerNeed ? 1 : 0)}건 개선 가능`
+      : '🟢 쾌적';
+  const speedHeadlineParts: string[] = [];
+  if (typeof liveRamPct === 'number') speedHeadlineParts.push(`메모리 ${liveRamPct}%`);
+  else if (typeof liveCpuPct === 'number') speedHeadlineParts.push(`CPU ${liveCpuPct}%`);
+  if (speedList.length > 0) speedHeadlineParts.push(`자동실행·상주 ${speedList.length}건`);
+  else if (speedPowerNeed) speedHeadlineParts.push('고성능 전원 전환 가능');
+  else speedHeadlineParts.push('백그라운드 양호');
+
+  // ② 광고·보안앱 정리
+  const secList = byBucket.SECURITY.filter((i) => !i.isProtected);
+  const dangerCount = secList.filter(
+    (i) => i.safetyBadge === 'DANGER_DELETE' || i.safetyBadge === 'SAFE_DELETE'
+  ).length;
+  const sleepCount = secList.filter((i) => i.safetyBadge === 'SLEEP_RECOMMEND').length;
+  const secTone: CareFourBucketSummary['statusTone'] =
+    dangerCount > 0 ? 'ALERT' : sleepCount > 0 || secList.length > 0 ? 'WARN' : 'GOOD';
+  const secBadge =
+    dangerCount > 0
+      ? `🔴 광고·위험 ${dangerCount}건`
+      : sleepCount > 0
+      ? `🟡 보안앱 ${sleepCount}건 수면`
+      : '🟢 깨끗함';
+  const secHeadline =
+    dangerCount > 0 && sleepCount > 0
+      ? `광고앱 ${dangerCount}건 · 은행보안 ${sleepCount}건`
+      : dangerCount > 0
+      ? `몰래 깔린 광고·불필요 앱 ${dangerCount}건`
+      : sleepCount > 0
+      ? `은행·관공서 보안앱 ${sleepCount}건 잠재우기`
+      : '몰래 깔린 광고앱 없음';
+
+  // ③ 용량 늘리기 (저장공간 + 잊고 있던 앱)
+  const storList = byBucket.STORAGE.filter((i) => !i.isProtected);
+  const storReclaimMb = Math.round(
+    storList
+      .filter((i) => i.cat === 'SAFE_CACHE' || i.cat === 'DESKTOP_HIBERFIL' || selSet.has(i.id))
+      .reduce((acc, i) => acc + (i.sizeMb || 0), 0)
+  );
+  const staleAppCount = storList.filter(
+    (i) =>
+      i.cat === 'INSTALLED_APP' &&
+      (i.lastUsedStatus === 'DORMANT' ||
+        i.lastUsedStatus === 'STALE' ||
+        i.lastUsedStatus === 'UNUSED_SINCE_INSTALL')
+  ).length;
+  const lowDisk = (typeof cDriveFreeGb === 'number' && cDriveFreeGb < 25) || (typeof cDriveUsedPct === 'number' && cDriveUsedPct >= 85);
+  const storTone: CareFourBucketSummary['statusTone'] =
+    lowDisk ? 'ALERT' : storReclaimMb >= 512 || staleAppCount > 0 || storList.length > 0 ? 'WARN' : 'GOOD';
+  const storBadge = lowDisk
+    ? `🔴 여유 ${cDriveFreeGb ?? '?'}GB`
+    : storReclaimMb >= 1024
+    ? `🟡 +${(storReclaimMb / 1024).toFixed(1)}GB 가능`
+    : staleAppCount > 0
+    ? `🟡 묵은 앱 ${staleAppCount}개`
+    : storList.length > 0
+    ? `🟡 ${storList.length}건 확인`
+    : '🟢 여유 충분';
+  const storHeadlineParts: string[] = [];
+  if (typeof cDriveFreeGb === 'number') storHeadlineParts.push(`C: 여유 ${cDriveFreeGb}GB`);
+  if (storReclaimMb >= 100) {
+    storHeadlineParts.push(
+      `즉시 +${storReclaimMb >= 1024 ? `${(storReclaimMb / 1024).toFixed(1)}GB` : `${storReclaimMb}MB`}`
+    );
+  }
+  if (staleAppCount > 0) storHeadlineParts.push(`안 쓰는 앱 ${staleAppCount}개`);
+  if (storHeadlineParts.length === 0) storHeadlineParts.push(`점검 항목 ${storList.length}건`);
+
+  // ④ 바탕화면·사진 정돈
+  const deskList = byBucket.DESKTOP.filter((i) => !i.isProtected);
+  const deskTotalCount = deskList.length + visibleSystemIconsCount;
+  const deskTone: CareFourBucketSummary['statusTone'] =
+    deskList.length >= 15 ? 'WARN' : deskTotalCount > 0 || photoCleanupCandidateCount > 0 ? 'WARN' : 'GOOD';
+  const deskBadge =
+    deskList.length > 0
+      ? `🟡 바탕화면 ${deskList.length}개`
+      : photoCleanupCandidateCount > 0
+      ? `🟡 사진 ${photoCleanupCandidateCount}장`
+      : '🟢 정돈됨';
+  const deskHeadlineParts: string[] = [];
+  if (deskList.length > 0) deskHeadlineParts.push(`바탕화면 ${deskList.length}개`);
+  if (photoCleanupCandidateCount > 0) deskHeadlineParts.push(`정리 후보 사진 ${photoCleanupCandidateCount}장`);
+  if (deskHeadlineParts.length === 0) deskHeadlineParts.push('바탕화면 깔끔함');
+
+  const summaries: CareFourBucketSummary[] = [
+    {
+      bucketId: 'SPEED',
+      stepNo: '①',
+      titleKo: '⚡ 속도 높이기',
+      subtitleKo: '메모리 · CPU · 부팅 자동실행',
+      statusTone: speedTone,
+      statusBadgeKo: speedBadge,
+      headlineMetricKo: speedHeadlineParts.join(' · '),
+      itemCount: byBucket.SPEED.length,
+      selectedCount: byBucket.SPEED.filter((i) => selSet.has(i.id) && !i.isProtected).length,
+    },
+    {
+      bucketId: 'SECURITY',
+      stepNo: '②',
+      titleKo: '🛡️ 광고 · 보안앱',
+      subtitleKo: '애드웨어 · 은행보안 · 순정백신',
+      statusTone: secTone,
+      statusBadgeKo: secBadge,
+      headlineMetricKo: secHeadline,
+      itemCount: byBucket.SECURITY.length,
+      selectedCount: byBucket.SECURITY.filter((i) => selSet.has(i.id) && !i.isProtected).length,
+    },
+    {
+      bucketId: 'STORAGE',
+      stepNo: '③',
+      titleKo: '💾 용량 · 묵은 앱',
+      subtitleKo: '임시캐시 · 안 쓰는 앱 · D: 이사',
+      statusTone: storTone,
+      statusBadgeKo: storBadge,
+      headlineMetricKo: storHeadlineParts.join(' · '),
+      itemCount: byBucket.STORAGE.length,
+      selectedCount: byBucket.STORAGE.filter((i) => selSet.has(i.id) && !i.isProtected).length,
+      reclaimableMb: storReclaimMb,
+    },
+    {
+      bucketId: 'DESKTOP',
+      stepNo: '④',
+      titleKo: '🗂️ 바탕화면 · 사진',
+      subtitleKo: '화면 파일 정돈 · 중복사진',
+      statusTone: deskTone,
+      statusBadgeKo: deskBadge,
+      headlineMetricKo: deskHeadlineParts.join(' · '),
+      itemCount: byBucket.DESKTOP.length,
+      selectedCount: byBucket.DESKTOP.filter((i) => selSet.has(i.id) && !i.isProtected).length,
+    },
+  ];
+
+  // 가장 시급하거나 실제 항목이 가장 많은 칸을 기본 펼침 탭으로 자동 선택
+  const alertHit = summaries.find((s) => s.statusTone === 'ALERT' && s.itemCount > 0);
+  const nonEmptyHit = summaries.find((s) => s.itemCount > 0);
+  const defaultActiveBucket: CareNormalizedBucketId =
+    alertHit?.bucketId || nonEmptyHit?.bucketId || 'STORAGE';
+
+  return { summaries, defaultActiveBucket };
+}
 let lastCareScanContext: AgentCareScanContext | null = null;
 
 export function getLastCareScanContext(): AgentCareScanContext | null {
@@ -586,18 +842,38 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
     }
   }
 
-  // 4) 설치된 전체 프로그램 목록 (다중 취사선택 삭제용)
+  // 4) 설치된 전체 프로그램 목록 (잊고 있던 미사용 앱 3대 안심 힌트 포함: 용도 · 마지막 사용 시점 · 안전도)
   if (appsRes?.ok && appsRes.data) {
     const ap = appsRes.data;
-    summaryLines.push(`📦 설치된 프로그램 전수 스캔: 총 ${ap.totalCount ?? 0}개 (하드웨어 드라이버·핵심 앱 자동 보호)`);
-    for (const a of (ap.items || []).slice(0, 50)) {
+    const staleCnt = Number(ap.staleUnusedCount ?? 0);
+    summaryLines.push(
+      `📦 설치된 프로그램 스캔: 총 ${ap.totalCount ?? 0}개` +
+        (staleCnt > 0 ? ` (오래 안 쓴 묵은 앱 ${staleCnt}개 발견)` : '') +
+        ` — 용도와 마지막 사용 시점을 보고 골라 지우실 수 있어요`
+    );
+    const appSliceLimit = uniqueTools.length > 1 ? 25 : 50;
+    for (const a of (ap.items || []).slice(0, appSliceLimit)) {
+      const roleKo = String(a.plainRoleKo || '').trim();
+      const lastUsedKo = String(a.lastUsedLabelKo || '').trim();
+      const lastSt = String(a.lastUsedStatus || '').trim();
+      // 멀티 종합 점검에서는 보호된 시스템 부품은 제외하고 실제 유저가 판단할 앱(특히 오래 안 쓴 앱·대용량 앱) 위주로 노출
+      if (uniqueTools.length > 1 && a.isProtected) continue;
       items.push({
         no: idx++,
         id: `inst_${idx}_${String(a.name || '').slice(0, 20)}`,
         name: String(a.name || ''),
         cat: a.isProtected ? 'PROTECTED_APP' : 'INSTALLED_APP',
+        bucketId: 'STORAGE',
         sizeMb: Number(a.sizeMb || 0),
-        detailKo: `${a.publisher || '제조사 미표기'}${a.installDate ? ` · 설치일 ${a.installDate}` : ''}`,
+        plainRoleKo: roleKo || undefined,
+        lastUsedLabelKo: lastUsedKo || undefined,
+        lastUsedStatus: lastSt || undefined,
+        detailKo: [
+          roleKo || a.publisher || '설치 프로그램',
+          lastUsedKo || (a.installDate ? `설치일 ${a.installDate}` : ''),
+        ]
+          .filter(Boolean)
+          .join(' · '),
         isProtected: Boolean(a.isProtected),
         defaultSelected: false,
       });
@@ -605,8 +881,8 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
     if (uniqueTools.length === 1) {
       scanKind = 'INSTALLED_APPS';
       primaryAction = 'batch_deep_uninstall';
-      primaryTitle = `설치된 프로그램 다중 취사선택 정리 (${ap.totalCount ?? 0}개)`;
-      primaryBadge = '다중 체크박스 · 2-Pass 무소음 제거';
+      primaryTitle = `설치된 프로그램 · 잊고 있던 앱 정리 (${ap.totalCount ?? 0}개)`;
+      primaryBadge = '용도 · 마지막 사용 시점 안심 힌트';
     }
   }
 
@@ -683,16 +959,35 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
     const exp = explainCareItemForBeginner(it);
     it.safetyBadge = exp.safetyBadge;
     it.safetyBadgeLabel = exp.safetyBadgeLabel;
-    it.plainExplainKo = exp.plainExplainKo;
+    // 설치 앱에 Z-코어 실측 용도/마지막 사용 시점 힌트가 있고 기본 문구가 범용 폴백일 때는 3대 안심 힌트 문장으로 더 선명하게 보강!
+    if (
+      it.cat === 'INSTALLED_APP' &&
+      it.plainRoleKo &&
+      exp.plainExplainKo.includes('오른쪽 [이게 뭐예요?]')
+    ) {
+      const staleNote =
+        it.lastUsedStatus === 'DORMANT' || it.lastUsedStatus === 'STALE' || it.lastUsedStatus === 'UNUSED_SINCE_INSTALL'
+          ? '오랫동안 쓰신 흔적이 없으니 더 이상 안 쓰시면 지워 용량을 확보하셔도 안전해요! (내 개인 문서·사진 원본은 지워지지 않아요)'
+          : it.lastUsedStatus === 'ACTIVE_NOW' || it.lastUsedStatus === 'RECENT'
+          ? '최근에 사용 중인 프로그램이니 평소 쓰신다면 체크하지 말고 그대로 두세요!'
+          : '자주 쓰지 않는 프로그램이라면 체크해서 깔끔하게 정리하셔도 괜찮아요!';
+      it.plainExplainKo = `${it.plainRoleKo}예요. ${staleNote}`;
+    } else {
+      it.plainExplainKo = exp.plainExplainKo;
+    }
     if (exp.safetyBadge === 'USER_CHECK' || exp.safetyBadge === 'SLEEP_RECOMMEND') {
       it.defaultSelected = false;
     }
-    if (it.ratKind && exp.plainExplainKo.includes('오른쪽 [이게 뭐예요?]')) {
+    if (it.ratKind && it.plainExplainKo.includes('오른쪽 [이게 뭐예요?]')) {
       unknownRatsToEnrich.push(it);
     }
+    it.bucketId = classifyCareItemBucket(it);
   }
   if (unknownRatsToEnrich.length > 0) {
     await enrichUnknownRatsWithGemini(unknownRatsToEnrich);
+    for (const u of unknownRatsToEnrich) {
+      u.bucketId = classifyCareItemBucket(u);
+    }
   }
 
   const ctx: AgentCareScanContext = {
@@ -711,13 +1006,33 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
   lastCareScanContext = ctx;
 
   const defaultSelectedIds = items.filter((it) => it.defaultSelected && !it.isProtected).map((it) => it.id);
+  const { summaries: fourBucketSummaries, defaultActiveBucket } =
+    uniqueTools.length > 1
+      ? buildCareFourBucketSummaries({
+          items,
+          selectedIds: defaultSelectedIds,
+          cDriveFreeGb: cFreeGb,
+          cDriveUsedPct: cUsedPct,
+          isDesktop,
+          isHighPerformance,
+          visibleSystemIconsCount: visibleSysIcons.length,
+        })
+      : { summaries: undefined, defaultActiveBucket: undefined };
+
+  if (uniqueTools.length > 1) {
+    primaryTitle = '🩺 내 PC 한눈에 4대 진단 리포트';
+    primaryBadge = '칸을 누르면 세부 내역이 펼쳐집니다';
+  }
+
   const card: MonsterAgentCareCardPayload = {
     mode: 'SCAN_REPORT',
     title: primaryTitle,
     badgeText: primaryBadge,
     summaryLines,
+    fourBucketSummaries,
+    defaultActiveBucket,
     action: primaryAction,
-    items: items.slice(0, 50),
+    items: items.slice(0, 85),
     selectedIds: defaultSelectedIds,
     excludedNames: [],
     availableMoveDrives: availMoveDrives,
@@ -1372,9 +1687,22 @@ export function detectAgentCareIntent(
   if (isAppsSurvey) readTools.push('installed_apps_list');
   if (isHiddenRats) readTools.push('hidden_rats_scan');
 
-  // 비전문용어 일상 불만어("컴이 왜 이리 버벅거려 / 이상한 거 깔렸나 / 뭐 지우면 돼") ➔ 용량 + 애드웨어·보안모듈 + 미등록 숨은 쥐새끼까지 자동 병렬 스캔!
+  // 비전문용어 일상 불만어("컴이 왜 이리 버벅거려 / 이상한 거 깔렸나 / 컴퓨터 손 좀 봐줘 / 정리하자") ➔ 『4+1 정규 카테고리』 5대 조회 도구 일괄 병렬 스캔!
   if (readTools.length === 0 && !isAskingExplain && !isMultiTurnFilter && isCasualFullCheckup) {
-    readTools.push('disk_hog_scan', 'security_2tier_scan', 'hidden_rats_scan');
+    readTools.push(
+      'disk_hog_scan',
+      'security_2tier_scan',
+      'hidden_rats_scan',
+      'installed_apps_list',
+      'desktop_detail_scan'
+    );
+  } else if (
+    isDiskHog &&
+    !readTools.includes('installed_apps_list') &&
+    /(프로그램|앱|정리|늘려|확보|부족|꽉)/i.test(clean)
+  ) {
+    // 저장공간 확보 요청 시 잊고 있던 대용량 미사용 앱도 함께 볼 수 있도록 동시 스캔
+    readTools.push('installed_apps_list');
   }
 
   return {

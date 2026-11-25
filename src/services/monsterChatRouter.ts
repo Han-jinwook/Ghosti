@@ -41,6 +41,7 @@ import {
 } from './weeklyCareAndPlaceholderEngine';
 import { normalizeSuggestionChips } from './ghostSecretaryEngine';
 import {
+  buildCareFourBucketSummaries,
   detectAgentCareIntent,
   executeAgentCareBatchCard,
   explainCareItemsWithGemini,
@@ -347,6 +348,9 @@ export interface MonsterInstalledAppItem {
   version: string;
   installDate: string;
   sizeMb: number;
+  plainRoleKo?: string;
+  lastUsedLabelKo?: string;
+  lastUsedStatus?: string;
   isProtected: boolean;
 }
 
@@ -4227,8 +4231,40 @@ export async function processUnifiedMonsterChatQuery(params: {
             extraTopLines.length > 0
               ? `${extraTopLines.join('\n')}\n\n${readRes.briefingKo}`
               : readRes.briefingKo;
+          const storePhotos = useSaySeeStore.getState().photos || [];
+          const photoCleanupCnt = storePhotos.filter(
+            (p: any) =>
+              p &&
+              !p.isTrashed &&
+              !p.isVaultDocument &&
+              !/^s:[\\/]/i.test(String(p.filePath || p.url || '')) &&
+              (p.cleanupTag === 'duplicate' ||
+                p.cleanupTag === 'parking_receipt' ||
+                p.cleanupTag === 'screenshot' ||
+                p.cleanupTag === 'blurry')
+          ).length;
+          const rebuilt4Plus1 =
+            agentIntent.immediateReadTools.length > 1
+              ? buildCareFourBucketSummaries({
+                  items: readRes.card.items,
+                  selectedIds: readRes.card.selectedIds,
+                  cDriveFreeGb: readRes.context.cDriveFreeGb,
+                  cDriveUsedPct: readRes.context.cDriveUsedPct,
+                  isDesktop: readRes.context.isDesktop,
+                  isHighPerformance: readRes.context.isHighPerformance,
+                  liveCpuPct: typeof cpuPct === 'number' ? cpuPct : null,
+                  liveRamPct: typeof ramPct === 'number' ? ramPct : null,
+                  photoCleanupCandidateCount: photoCleanupCnt,
+                  visibleSystemIconsCount: (readRes.context.visibleSystemIcons || []).length,
+                })
+              : null;
           const enrichedCard: MonsterAgentCareCardPayload = {
             ...readRes.card,
+            fourBucketSummaries: rebuilt4Plus1?.summaries ?? readRes.card.fourBucketSummaries,
+            defaultActiveBucket: rebuilt4Plus1?.defaultActiveBucket ?? readRes.card.defaultActiveBucket,
+            liveCpuPct: typeof cpuPct === 'number' ? cpuPct : null,
+            liveRamPct: typeof ramPct === 'number' ? ramPct : null,
+            photoCleanupCandidateCount: photoCleanupCnt,
             summaryLines:
               extraTopLines.length > 0
                 ? [...extraTopLines.map((l) => l.replace(/^•\s*/, '').replace(/\*\*/g, '')), ...readRes.card.summaryLines]

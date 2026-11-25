@@ -4785,11 +4785,160 @@ def toggle_startup_program(item_id: str, enable: bool, user_approval_text: str =
         }
 
 
+def _infer_plain_app_role_ko(name: str, publisher: str = "") -> str:
+    """일반 유저가 이름만 봐도 '무슨 용도의 앱인지' 1초 만에 이해하도록 쉬운 한글 1줄 역할을 반환합니다."""
+    comb = f"{name} {publisher}".lower()
+    if any(k in comb for k in ("merlin", "ghosti", "귀신같이", "senstalk", "센스톡", "sundream")):
+        return "귀신같이·멀린 패밀리 필수 엔진"
+    if any(k in comb for k in ("nvidia", "geforce", "radeon", "amd software", "intel(r) graphics")):
+        return "그래픽카드 화면 드라이버 (필수 보호)"
+    if any(k in comb for k in ("realtek", "dolby", "nahimic", "audio driver")):
+        return "사운드·스피커 오디오 드라이버 (필수 보호)"
+    if any(k in comb for k in ("chipset", "mei", "rapid storage", "wi-fi", "wireless", "bluetooth", "lan driver")):
+        return "메인보드·인터넷·블루투스 장치 드라이버 (필수 보호)"
+    if any(k in comb for k in ("visual c++", ".net runtime", "edgewebview2", "directx")):
+        return "윈도우 프로그램 실행 공용 부품 (필수 보호)"
+    if any(k in comb for k in ("pc app store", "pcappstore", "cachecloud", "cloudtask", "storageservice", "utilzone", "tabbie", "yoondisk", "natservice", "clipdown")):
+        return "무료 유틸 설치 시 함께 깔린 광고·제휴 번들 프로그램"
+    if any(k in comb for k in ("고클린", "goclean")):
+        return "구형 PC 정리 유틸리티 (귀신비서로 대체 가능)"
+    if any(k in comb for k in ("알약", "alyac", "v3 lite", "ahnlab v3", "avast", "mcafee", "norton")):
+        return "외부 사설 백신 프로그램 (윈도우 순정 백신으로 대체 가능)"
+    if any(k in comb for k in ("알집", "alzip", "반디집", "bandizip", "7-zip", "winrar")):
+        return "압축 풀기·묶기 프로그램"
+    if any(k in comb for k in ("nprotect", "ahnlab safe", "astx", "touchen", "anysign", "veraport", "wizvera", "delfino", "crossex", "iniline", "ipinside", "keysharp", "magicline", "crosscert", "secukit")):
+        return "은행·홈택스·관공서 키보드/인증서 보안 프로그램"
+    if any(k in comb for k in ("miplatform", "iformscan", "inziiform", "ozweb", "ozx", "markany", "e-pagesafer", "redbc", "kipo")):
+        return "관공서·등기소·특허청 문서 출력용 구형 플러그인"
+    if any(k in comb for k in ("capcut", "캡컷", "premiere", "davinci", "vrew", "곰믹스", "샤나인코더", "팟인코더")):
+        return "동영상 편집·인코딩 프로그램"
+    if any(k in comb for k in ("ocam", "오캠", "obs studio", "bandicam", "반디캠")):
+        return "PC 화면 녹화·캡처 프로그램"
+    if any(k in comb for k in ("scapture", "s캡쳐", "알캡처", "alcapture", "hancapture", "한캡처", "greenshot", "sharex")):
+        return "화면 캡처 도구"
+    if any(k in comb for k in ("포토스케이프", "photoscape", "photoshop", "illustrator", "gimp", "꿀뷰", "알씨")):
+        return "사진 보기·보정·편집 프로그램"
+    if any(k in comb for k in ("곰플레이어", "gom player", "potplayer", "팟플레이어", "kmplayer", "vlc")):
+        return "동영상 재생 플레이어"
+    if "calibre" in comb:
+        return "전자책(eBook) 뷰어·관리 프로그램"
+    if any(k in comb for k in ("kakaotalk", "카카오톡", "line", "telegram", "slack", "discord", "zoom", "teams")):
+        return "메신저·화상회의 프로그램"
+    if any(k in comb for k in ("한컴", "한글", "hancom", "hnc", "microsoft office", "microsoft 365", "onenote", "acrobat", "pdf")):
+        return "문서 작성·열람 오피스 프로그램"
+    if any(k in comb for k in ("google play games", "play games")):
+        return "구글 모바일 게임을 PC에서 실행하는 런처"
+    if any(k in comb for k in ("google drive", "onedrive", "dropbox", "mybox", "마이박스")):
+        return "클라우드 폴더 동기화 프로그램"
+    if any(k in comb for k in ("microsoft edge", "chrome", "whale", "웨일", "firefox", "opera", "brave")):
+        return "인터넷 웹 브라우저"
+    if disp_only := name.strip().lower():
+        if disp_only in ("사진", "microsoft photos", "photos"):
+            return "윈도우 기본 사진·앨범 뷰어"
+    if "aippt" in comb:
+        return "AI 발표자료(PPT) 제작 도구"
+    if any(k in comb for k in ("hp ", "hewlett-packard", "canon", "epson", "brother", "samsung printer")):
+        if any(k in comb for k in ("개선 연구", "dropbox", "google drive", "print scan doctor")):
+            return "프린터 부가 통계·연동 플러그인 (지워도 인쇄 가능)"
+        return "프린터·복합기 인쇄 관련 프로그램"
+    if any(k in comb for k in ("steam", "riot", "epic games", "nexon", "stove", "battle.net", "roblox", "minecraft")):
+        return "게임 런처 또는 PC 게임"
+    if any(k in comb for k in ("cursor", "windsurf", "antigravity", "visual studio", "vscode", "python", "node.js", "git", "postman", "docker", "figma")):
+        return "개발·디자인 전문 작업 도구"
+    if "copilot" in comb:
+        return "윈도우 기본 AI 보조 앱"
+    if "tailscale" in comb or "wireguard" in comb or "openvpn" in comb:
+        return "원격 네트워크·VPN 연결 도구"
+    return f"{publisher} 설치 프로그램" if publisher else "사용자 설치 응용 프로그램"
+
+
+def _estimate_dir_recent_activity_ts(folder: Path, max_entries: int = 35) -> float:
+    """관리자 권한 없이 폴더 내 설정·실행·로그 파일의 가장 최근 수정/접근 시각(epoch)을 최대 35개 항목 한도로 초고속 조회합니다."""
+    best = 0.0
+    try:
+        if not folder.exists() or not folder.is_dir():
+            return 0.0
+        cnt = 0
+        with os.scandir(str(folder)) as it:
+            for entry in it:
+                cnt += 1
+                if cnt > max_entries:
+                    break
+                try:
+                    st = entry.stat(follow_symlinks=False)
+                    if entry.is_file(follow_symlinks=False):
+                        if st.st_mtime > best:
+                            best = st.st_mtime
+                    elif entry.is_dir(follow_symlinks=False) and cnt <= 8:
+                        # 1단계 하위 폴더의 mtime만 가볍게 반영
+                        if st.st_mtime > best:
+                            best = st.st_mtime
+                except OSError:
+                    continue
+    except OSError:
+        return 0.0
+    return best
+
+
 def list_installed_programs(filter_query: str = "", limit: int = 80) -> Dict[str, Any]:
-    """내 PC에 설치된 전체 프로그램 목록(용량·설치일·제조사 포함)을 조회하여 이름을 몰라도 골라서 정리할 수 있게 합니다."""
+    """내 PC에 설치된 전체 프로그램 목록(용량·설치일·제조사 + 용도·마지막 사용 시점·안전 힌트 포함)을 조회합니다."""
     if sys.platform != "win32" or winreg is None:
         return {"ok": False, "error": "WINDOWS_ONLY", "items": []}
     q_low = (filter_query or "").strip().lower()
+    now_ts = time.time()
+
+    # 1) 현재 실행 중인 프로세스 이름 집합 (실행 중이면 '지금 사용 중')
+    running_proc_stems = set()
+    try:
+        for p_info in _iter_windows_processes_stdlib():
+            p_nm = str(p_info.get("name") or "").lower().strip()
+            if p_nm.endswith(".exe"):
+                p_nm = p_nm[:-4]
+            if len(p_nm) >= 3:
+                running_proc_stems.add(p_nm)
+    except Exception:
+        pass
+
+    # 2) Windows Recent 폴더 최근 열람 흔적 및 Local/Roaming AppData 1계층 폴더 mtime 맵 (0.02초 초고속 수집)
+    recent_token_ts: Dict[str, float] = {}
+    try:
+        appdata_roam = Path(os.environ.get("APPDATA") or (Path.home() / "AppData" / "Roaming"))
+        appdata_local = Path(os.environ.get("LOCALAPPDATA") or (Path.home() / "AppData" / "Local"))
+        recent_dir = appdata_roam / "Microsoft" / "Windows" / "Recent"
+        if recent_dir.is_dir():
+            with os.scandir(str(recent_dir)) as rit:
+                for idx_r, entry in enumerate(rit):
+                    if idx_r > 250:
+                        break
+                    try:
+                        nm_low = entry.name.lower()
+                        mt = entry.stat(follow_symlinks=False).st_mtime
+                        if mt > recent_token_ts.get(nm_low, 0.0):
+                            recent_token_ts[nm_low] = mt
+                    except OSError:
+                        continue
+        appdata_dir_ts: Dict[str, float] = {}
+        for ad_root in (appdata_local, appdata_roam):
+            if not ad_root.is_dir():
+                continue
+            with os.scandir(str(ad_root)) as ait:
+                for idx_a, entry in enumerate(ait):
+                    if idx_a > 200:
+                        break
+                    try:
+                        if entry.is_dir(follow_symlinks=False):
+                            key_low = entry.name.lower()
+                            sub_ts = max(
+                                entry.stat(follow_symlinks=False).st_mtime,
+                                _estimate_dir_recent_activity_ts(Path(entry.path), max_entries=20),
+                            )
+                            if sub_ts > appdata_dir_ts.get(key_low, 0.0):
+                                appdata_dir_ts[key_low] = sub_ts
+                    except OSError:
+                        continue
+    except Exception:
+        appdata_dir_ts = {}
+
     uninstall_roots = [
         (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall"),
         (winreg.HKEY_LOCAL_MACHINE, r"SOFTWARE\WOW6432Node\Microsoft\Windows\CurrentVersion\Uninstall"),
@@ -4824,36 +4973,169 @@ def list_installed_programs(filter_query: str = "", limit: int = 80) -> Dict[str
                             pub = str(_qv("Publisher") or "").strip()
                             ver = str(_qv("DisplayVersion") or "").strip()
                             inst_dt = str(_qv("InstallDate") or "").strip()
+                            inst_loc = str(_qv("InstallLocation") or "").strip().strip('"')
+                            disp_icon = str(_qv("DisplayIcon") or "").strip().strip('"')
                             est_kb = _qv("EstimatedSize")
                             size_mb = round(int(est_kb) / 1024.0, 1) if isinstance(est_kb, int) and est_kb > 0 else 0.0
                             if q_low and q_low not in disp_low and q_low not in pub.lower():
                                 continue
                             seen_names.add(disp_low)
                             is_prot = _is_protected_system_entity(disp_low) or any(
-                                x in disp_low for x in ("merlin", "ghosti", "senstalk", "sundream")
+                                x in disp_low for x in ("merlin", "ghosti", "senstalk", "sundream", "tailscale")
                             )
+
+                            install_date_fmt = (
+                                f"{inst_dt[:4]}-{inst_dt[4:6]}-{inst_dt[6:8]}"
+                                if len(inst_dt) == 8 and inst_dt.isdigit()
+                                else inst_dt
+                            )
+                            install_epoch = 0.0
+                            if len(inst_dt) == 8 and inst_dt.isdigit():
+                                try:
+                                    import datetime as _dt
+                                    install_epoch = _dt.datetime(
+                                        int(inst_dt[:4]), int(inst_dt[4:6]), int(inst_dt[6:8])
+                                    ).timestamp()
+                                except Exception:
+                                    install_epoch = 0.0
+
+                            # 앱 폴더 후보 경로 추출 (InstallLocation 또는 DisplayIcon/UninstallString 상위 폴더)
+                            cand_dir: Optional[Path] = None
+                            if inst_loc:
+                                p_loc = Path(inst_loc)
+                                if p_loc.is_dir():
+                                    cand_dir = p_loc
+                            if cand_dir is None:
+                                for raw_cmd in (disp_icon, uninst):
+                                    if not raw_cmd:
+                                        continue
+                                    cleaned_cmd = raw_cmd.split(",")[0].strip().strip('"')
+                                    if ".exe" in cleaned_cmd.lower():
+                                        exe_idx = cleaned_cmd.lower().find(".exe") + 4
+                                        exe_p = Path(cleaned_cmd[:exe_idx].strip().strip('"'))
+                                        if exe_p.parent.is_dir() and "system32" not in str(exe_p.parent).lower() and "windows\\installer" not in str(exe_p.parent).lower():
+                                            cand_dir = exe_p.parent
+                                            break
+
+                            # 폴더 용량 보정 (레지스트리에 EstimatedSize가 0으로 비어 있는 대형 앱 CapCut 등 실측)
+                            if size_mb <= 0.0 and cand_dir is not None:
+                                try:
+                                    est_bytes = _calc_dir_size_fast(cand_dir, max_files=220)
+                                    if est_bytes > 0:
+                                        size_mb = round(est_bytes / (1024.0 * 1024.0), 1)
+                                except Exception:
+                                    pass
+
+                            # 마지막 사용 시점 교차 실측 (추측 0% · Google/Microsoft 회사명 오탐 배제)
+                            brand_stopwords = {
+                                "64bit", "64-bit", "32bit", "x64", "x86", "for", "windows", "the", "app",
+                                "service", "client", "program", "google", "microsoft", "naver", "kakao",
+                                "samsung", "intel", "amd", "nvidia", "adobe", "apple", "corporation",
+                                "inc", "ltd", "desktop", "player", "studio", "user", "ide",
+                            }
+                            tokens = [
+                                t for t in (
+                                    disp_low.replace("(", " ").replace(")", " ").replace("-", " ").split()
+                                    + ([cand_dir.name.lower()] if cand_dir and cand_dir.name.lower() not in brand_stopwords else [])
+                                )
+                                if len(t) >= 3 and t not in brand_stopwords and not t[0].isdigit()
+                            ]
+                            is_running_now = any(
+                                (rp == tok or rp.startswith(tok) or (len(tok) >= 5 and tok in rp)) and len(rp) >= 4
+                                for tok in tokens[:3]
+                                for rp in running_proc_stems
+                            )
+
+                            best_activity_ts = 0.0
+                            if cand_dir is not None:
+                                best_activity_ts = max(best_activity_ts, _estimate_dir_recent_activity_ts(cand_dir, max_entries=30))
+                            for tok in tokens[:3]:
+                                if len(tok) < 4:
+                                    continue
+                                for ad_k, ad_ts in appdata_dir_ts.items():
+                                    if ad_k == tok or ad_k.startswith(tok) or (len(tok) >= 5 and tok in ad_k):
+                                        if ad_ts > best_activity_ts:
+                                            best_activity_ts = ad_ts
+                                for rc_k, rc_ts in recent_token_ts.items():
+                                    if tok in rc_k and rc_ts > best_activity_ts:
+                                        best_activity_ts = rc_ts
+
+                            # 설치 당일 파일 생성 시각과 구분해 실제 마지막 활동일 산출
+                            last_used_days: Optional[int] = None
+                            last_used_status = "UNKNOWN"
+                            if is_running_now:
+                                last_used_days = 0
+                                last_used_status = "ACTIVE_NOW"
+                                last_used_label = "🟢 지금 실행 중"
+                            elif best_activity_ts > 0 and best_activity_ts <= now_ts + 86400:
+                                days_ago = max(0, int((now_ts - best_activity_ts) // 86400))
+                                last_used_days = days_ago
+                                if install_epoch > 0 and abs(best_activity_ts - install_epoch) < 86400 * 2 and days_ago >= 30:
+                                    last_used_status = "UNUSED_SINCE_INSTALL"
+                                    months = max(1, days_ago // 30)
+                                    last_used_label = (
+                                        f"⚪ 설치 후 미사용 추정 ({days_ago // 365}년 전 설치)"
+                                        if days_ago >= 365
+                                        else f"⚪ 설치 후 미사용 추정 (약 {months}개월 전 설치)"
+                                    )
+                                elif days_ago <= 14:
+                                    last_used_status = "RECENT"
+                                    last_used_label = "🟢 최근 사용 (오늘)" if days_ago == 0 else f"🟢 최근 사용 ({days_ago}일 전)"
+                                elif days_ago < 90:
+                                    last_used_status = "OCCASIONAL"
+                                    weeks = max(2, days_ago // 7)
+                                    last_used_label = f"🟡 마지막 흔적 약 {weeks}주 전"
+                                elif days_ago < 365:
+                                    last_used_status = "STALE"
+                                    months = max(3, days_ago // 30)
+                                    last_used_label = f"🟠 약 {months}개월간 미사용"
+                                else:
+                                    last_used_status = "DORMANT"
+                                    years = max(1, days_ago // 365)
+                                    last_used_label = f"⚪ {years}년 이상 장기 미사용"
+                            elif install_epoch > 0:
+                                inst_days = max(0, int((now_ts - install_epoch) // 86400))
+                                last_used_days = inst_days
+                                last_used_status = "INSTALL_ONLY" if inst_days >= 90 else "UNKNOWN"
+                                last_used_label = f"❔ 사용 시점 미상 (설치일 {install_date_fmt})"
+                            else:
+                                last_used_label = "❔ 사용 시점 확인 불가"
+
+                            plain_role = _infer_plain_app_role_ko(disp, pub)
                             apps.append({
                                 "name": disp,
                                 "publisher": pub,
                                 "version": ver,
-                                "installDate": (
-                                    f"{inst_dt[:4]}-{inst_dt[4:6]}-{inst_dt[6:8]}"
-                                    if len(inst_dt) == 8 and inst_dt.isdigit()
-                                    else inst_dt
-                                ),
+                                "installDate": install_date_fmt,
                                 "sizeMb": size_mb,
                                 "isProtected": is_prot,
+                                "plainRoleKo": plain_role,
+                                "lastUsedDaysAgo": last_used_days,
+                                "lastUsedStatus": last_used_status,
+                                "lastUsedLabelKo": last_used_label,
                             })
                     except OSError:
                         continue
         except OSError:
             continue
 
-    apps.sort(key=lambda x: (-x["sizeMb"], x["name"].lower()))
+    # 오래 안 쓴 미보호 앱 · 용량 큰 앱이 먼저 보이도록 스마트 정렬 (보호 시스템 앱은 하단 배치)
+    def _app_sort_key(a: Dict[str, Any]) -> Tuple[int, int, float, str]:
+        prot_rank = 1 if a.get("isProtected") else 0
+        st = a.get("lastUsedStatus")
+        stale_rank = 0 if st in ("DORMANT", "STALE", "UNUSED_SINCE_INSTALL") else (1 if st in ("INSTALL_ONLY", "OCCASIONAL", "UNKNOWN") else 2)
+        return (prot_rank, stale_rank, -float(a.get("sizeMb") or 0.0), str(a.get("name") or "").lower())
+
+    apps.sort(key=_app_sort_key)
     total_cnt = len(apps)
+    stale_cnt = sum(
+        1 for a in apps
+        if not a.get("isProtected") and a.get("lastUsedStatus") in ("DORMANT", "STALE", "UNUSED_SINCE_INSTALL")
+    )
     return {
         "ok": True,
         "totalCount": total_cnt,
+        "staleUnusedCount": stale_cnt,
         "items": apps[: max(10, min(200, int(limit or 80)))],
     }
 
