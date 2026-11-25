@@ -2014,7 +2014,6 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     if (!opts?.forceInviteToken && Date.now() - lastDeepLinkHydratedAt < 1200) {
       return;
     }
-    const reqSeq = ++sharedRoomSyncSeq;
     const targetLounge = stBefore.activeLoungeType;
     const targetFamilyRoom = stBefore.activeFamilyRoom || '우리집';
     const explicitRoomId = (
@@ -2038,6 +2037,7 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     ) {
       return;
     }
+    const reqSeq = ++sharedRoomSyncSeq;
     inflightRoomSyncSig = candidateSig;
     inflightRoomSyncAt = Date.now();
     const inviteToken = (opts?.forceInviteToken ?? readActiveInviteToken()).trim();

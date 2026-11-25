@@ -11,6 +11,7 @@ import {
   loadMemberLocalRoomPhotos,
   purgeMemberLocalRoomVault,
   removeMemberLocalRoomPhotoEverywhere,
+  saveMemberLocalRoomPhotos,
   upsertMemberLocalRoomPhotos,
 } from './sharedRoomLocalVault';
 import {
@@ -1139,11 +1140,6 @@ export async function fetchScopedSharedRoomPhotos(opts: {
       ...item,
       sharedFeedTrack: item.sharedFeedTrack ?? localTrackById.get(item.id),
     }));
-    if (hydratedServerItems.length > 0) {
-      void upsertMemberLocalRoomPhotos(currentEmail, targetRoomId, hydratedServerItems).catch(
-        () => {}
-      );
-    }
     if (hasExpiredRowsOnServer) {
       void purgeExpiredSeedPhotosAfterLocalArchive(authed, currentEmail, [targetRoomId]);
     }
@@ -1153,14 +1149,12 @@ export async function fetchScopedSharedRoomPhotos(opts: {
     for (const item of hydratedServerItems) {
       mergedById.set(item.id, { ...item, sharedRoomId: targetRoomId, sharedOwnerEmail: currentEmail });
     }
-    const staleDeletedLocalIds: string[] = [];
     for (const item of localPhotosBeforeUpsert) {
       if (!mergedById.has(item.id) && (!item.sharedRoomId || item.sharedRoomId === targetRoomId)) {
         const itemTimeMs = Number(item.mtimeMs || 0);
         const isWithin14dServerWindow =
           itemTimeMs <= 0 || Date.now() - itemTimeMs <= SHARED_PHOTO_SEED_BUFFER_TTL_MS;
         if (isWithin14dServerWindow) {
-          staleDeletedLocalIds.push(item.id);
           continue;
         }
         mergedById.set(item.id, {
@@ -1172,16 +1166,11 @@ export async function fetchScopedSharedRoomPhotos(opts: {
         });
       }
     }
-    if (staleDeletedLocalIds.length > 0) {
-      void Promise.all(
-        staleDeletedLocalIds.map((delId) =>
-          removeMemberLocalRoomPhotoEverywhere(currentEmail, delId).catch(() => {})
-        )
-      );
-    }
     const finalPhotos = Array.from(mergedById.values()).sort(
       (a, b) => (b.mtimeMs || 0) - (a.mtimeMs || 0)
     );
+    // 병합·삭제 정리된 최종 목록 1회만 로컬 금고에 비차단 저장 (upsert와 delete 경합 원천 제거)
+    void saveMemberLocalRoomPhotos(currentEmail, targetRoomId, finalPhotos).catch(() => {});
     return {
       roomId: targetRoomId,
       inviteToken: isJoinedOtherRoom
