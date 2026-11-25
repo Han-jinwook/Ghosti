@@ -1560,10 +1560,31 @@ export async function handleAuthedWorkAndDeviceAction({
   // ===================================================================
   const emailHash = sha256Hex(email).slice(0, 32);
 
+  // 동일 PC(같은 브라우저)에서 A계정 ➔ B계정 전환 시 구버전 클라이언트가 같은 device_id를 보내더라도
+  // 타 계정의 ghosti_devices 행(owner_email)을 덮어쓰지 못하도록 계정별 결정적 UUID로 안전 격리
+  const resolveOwnedDeviceId = async (rawCandidate) => {
+    const clean = String(rawCandidate || '').trim();
+    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(clean);
+    if (!isUuid) return crypto.randomUUID();
+    try {
+      const ownerCheckRes = await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_devices?device_id=eq.${encodeURIComponent(clean)}&select=owner_email&limit=1`,
+        { headers: srvHeaders(serviceKey) }
+      );
+      const ownerRows = ownerCheckRes.ok ? await ownerCheckRes.json().catch(() => []) : [];
+      const existingOwner = String(ownerRows?.[0]?.owner_email || '').trim().toLowerCase();
+      if (existingOwner && existingOwner !== email) {
+        const h = sha256Hex(`ghosti-dev-scope-v1::${email}::${clean}`);
+        return `${h.slice(0, 8)}-${h.slice(8, 12)}-4${h.slice(13, 16)}-a${h.slice(17, 20)}-${h.slice(20, 32)}`;
+      }
+    } catch {
+      /* fallback to clean uuid */
+    }
+    return clean;
+  };
+
   if (action === 'device_heartbeat_and_list') {
-    const rawDevId = String(body.deviceId || '').trim();
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawDevId);
-    const deviceId = isUuid ? rawDevId : crypto.randomUUID();
+    const deviceId = await resolveOwnedDeviceId(body.deviceId);
     const deviceKind = body.deviceKind === 'mobile' ? 'mobile' : 'pc_master';
     const platform = ['windows', 'macos', 'android', 'ios', 'web'].includes(String(body.platform))
       ? String(body.platform)
@@ -1765,9 +1786,7 @@ export async function handleAuthedWorkAndDeviceAction({
       return { status: 200, body: { ok: false, reason: 'CODE_EXPIRED' } };
     }
 
-    const rawDevId = String(body.deviceId || '').trim();
-    const isUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(rawDevId);
-    const targetDevId = isUuid ? rawDevId : crypto.randomUUID();
+    const targetDevId = await resolveOwnedDeviceId(body.deviceId);
     const targetKind = body.deviceKind === 'pc_master' ? 'pc_master' : 'mobile';
     const targetPlatform = ['windows', 'macos', 'android', 'ios', 'web'].includes(String(body.platform))
       ? String(body.platform)

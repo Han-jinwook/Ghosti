@@ -2437,11 +2437,18 @@ public class GhostiMobileCarePlugin extends Plugin {
         }
         final String limited = clean.length() > 32000 ? clean.substring(0, 32000) : clean;
         final String hash = sha256HexUtf8(limited);
-        sLastInjectedClipHash = hash;
-        sLastInjectedClipAtMs = System.currentTimeMillis();
         new Handler(android.os.Looper.getMainLooper()).post(() -> {
             boolean ok = false;
             try {
+                Activity act = getActivity();
+                if (act == null || act.isFinishing() || act.isDestroyed()) {
+                    JSObject ret = new JSObject();
+                    ret.put("ok", false);
+                    ret.put("clipHash", hash);
+                    ret.put("reason", "ACTIVITY_NOT_ACTIVE");
+                    call.resolve(ret);
+                    return;
+                }
                 ClipboardManager cm = (ClipboardManager) ctx.getSystemService(Context.CLIPBOARD_SERVICE);
                 if (cm != null) {
                     cm.setPrimaryClip(ClipData.newPlainText("Ghosti", limited));
@@ -2449,6 +2456,10 @@ public class GhostiMobileCarePlugin extends Plugin {
                 }
             } catch (Throwable ignored) {
                 ok = false;
+            }
+            if (ok) {
+                sLastInjectedClipHash = hash;
+                sLastInjectedClipAtMs = System.currentTimeMillis();
             }
             JSObject ret = new JSObject();
             ret.put("ok", ok);

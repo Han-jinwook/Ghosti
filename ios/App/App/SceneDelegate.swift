@@ -263,6 +263,12 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         }
         let limited = raw.count > 32000 ? String(raw.prefix(32000)) : raw
         DispatchQueue.main.async { [weak self] in
+            // iOS는 앱이 백그라운드/비활성(.active 아님) 상태일 때 UIPasteboard 쓰기를 무음 거부하므로,
+            // 거짓 성공(ok:true)을 반환해 영구 스킵되지 않도록 false 반환 후 포그라운드 복귀 시 즉시 재주입 보장
+            if UIApplication.shared.applicationState != .active {
+                call.resolve(["ok": false, "reason": "APP_NOT_ACTIVE"])
+                return
+            }
             let pb = UIPasteboard.general
             pb.string = limited
             let cc = pb.changeCount
