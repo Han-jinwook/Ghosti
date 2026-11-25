@@ -3224,6 +3224,32 @@ public class GhostiMobileCarePlugin extends Plugin {
     }
 
     @PluginMethod
+    public void syncSharedClipboardAuth(PluginCall call) {
+        Context ctx = getContext();
+        JSObject ret = new JSObject();
+        if (ctx == null) {
+            ret.put("ok", false);
+            call.resolve(ret);
+            return;
+        }
+        try {
+            GhostiNativeClipboardSync.saveAuthContext(
+                ctx,
+                call.getString("email", ""),
+                call.getString("canonicalUserId", ""),
+                call.getString("hubToken", ""),
+                call.getString("deviceId", ""),
+                call.getString("deviceName", ""),
+                call.getString("bridgeUrl", "")
+            );
+            ret.put("ok", true);
+        } catch (Throwable ignored) {
+            ret.put("ok", false);
+        }
+        call.resolve(ret);
+    }
+
+    @PluginMethod
     public void syncSharedClipboardHistory(PluginCall call) {
         Context ctx = getContext();
         if (ctx == null) {

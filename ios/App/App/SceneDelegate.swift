@@ -1627,6 +1627,14 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         SceneDelegateProxy.shared.scene(scene, willConnectTo: session, options: connectionOptions)
     }
 
+    func sceneDidBecomeActive(_ scene: UIScene) {
+        DispatchQueue.main.async { [weak self] in
+            guard let bridgeVC = self?.window?.rootViewController as? GhostiBridgeViewController else { return }
+            let js = "window.dispatchEvent(new CustomEvent('ghostiNativeAppResumed', { detail: { hasWindowFocus: true, platform: 'ios' } }));"
+            bridgeVC.webView?.evaluateJavaScript(js, completionHandler: nil)
+        }
+    }
+
     func scene(_ scene: UIScene, openURLContexts URLContexts: Set<UIOpenURLContext>) {
         if let openUrl = URLContexts.first?.url {
             recordAndDispatchIncomingUrl(openUrl)

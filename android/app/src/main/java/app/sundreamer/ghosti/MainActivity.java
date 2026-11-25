@@ -207,6 +207,39 @@ public class MainActivity extends BridgeActivity {
         }
     }
 
+    private long lastResumeDispatchAtMs = 0L;
+
+    private void notifyWebViewAppResumed(boolean hasWindowFocus) {
+        if (this.bridge == null || this.bridge.getWebView() == null) return;
+        long now = SystemClock.elapsedRealtime();
+        if (!hasWindowFocus && (now - lastResumeDispatchAtMs) < 350L) return;
+        lastResumeDispatchAtMs = now;
+        final boolean focusFlag = hasWindowFocus;
+        this.bridge.getWebView().post(() -> {
+            try {
+                this.bridge.getWebView().evaluateJavascript(
+                    "window.dispatchEvent(new CustomEvent('ghostiNativeAppResumed', { detail: { hasWindowFocus: " + focusFlag + ", platform: 'android' } }));",
+                    null
+                );
+            } catch (Throwable ignored) {
+            }
+        });
+    }
+
+    @Override
+    public void onResume() {
+        super.onResume();
+        notifyWebViewAppResumed(hasWindowFocus());
+    }
+
+    @Override
+    public void onWindowFocusChanged(boolean hasFocus) {
+        super.onWindowFocusChanged(hasFocus);
+        if (hasFocus) {
+            notifyWebViewAppResumed(true);
+        }
+    }
+
     @Override
     protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);

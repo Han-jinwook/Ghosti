@@ -166,6 +166,8 @@ public class GhostiClipboardImeService extends InputMethodService {
         super.onStartInputView(info, restarting);
         captureCurrentOsClipboardIfChanged(false);
         refreshClipListView();
+        // 본체 앱을 열지 않고도 키보드 오픈 즉시 PC의 최신 E2EE 클립보드를 직통 수신·목록 갱신
+        GhostiNativeClipboardSync.pullRemoteAsync(this, () -> refreshClipListView());
     }
 
     private void captureCurrentOsClipboardIfChanged(boolean userTriggered) {

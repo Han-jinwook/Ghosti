@@ -153,6 +153,14 @@ export interface GhostiMobileCarePluginInterface {
     ocrLines?: Array<{ timeSec: number; timestamp: string; text: string }>;
     fullText?: string;
   }>;
+  syncSharedClipboardAuth(options: {
+    email: string;
+    canonicalUserId: string;
+    hubToken: string;
+    deviceId: string;
+    deviceName: string;
+    bridgeUrl: string;
+  }): Promise<{ ok: boolean }>;
   syncSharedClipboardHistory(options: {
     items: Array<{ clipHash: string; text: string; senderName: string; createdAt: string }>;
   }): Promise<{ ok: boolean; count?: number }>;
@@ -843,6 +851,23 @@ export async function openNativeMobileVideoPlayerModal(options: {
     /* 구버전 네이티브 래퍼(v1.0.54 이하) 미지원 시 WebView 모달 폴백 */
   }
   return { supported: false, ok: false, hasText: false, ocrLines: [], fullText: '' };
+}
+
+export async function syncSharedNativeClipboardAuth(options: {
+  email: string;
+  canonicalUserId: string;
+  hubToken: string;
+  deviceId: string;
+  deviceName: string;
+  bridgeUrl: string;
+}): Promise<boolean> {
+  if (!isCapacitorAndroidRuntime()) return false;
+  try {
+    const res = await GhostiMobileCareNative.syncSharedClipboardAuth(options);
+    return Boolean(res?.ok);
+  } catch {
+    return false;
+  }
 }
 
 export async function syncSharedNativeClipboardHistory(

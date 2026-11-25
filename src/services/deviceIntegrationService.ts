@@ -5,12 +5,16 @@ import {
   ensureGhostiPublicSupabaseClient,
   hasAuthenticatedHubAccountSession,
   readGhostiAuthedJwtClaims,
+  resolveHubSupabaseBridgeEndpoint,
   supabase,
 } from './supabaseClient';
+import { getSessionToken } from './merlin-hub-sdk/CoreLogic/client';
 import {
   consumePendingNativeClipboardOutbound,
+  isCapacitorAndroidRuntime,
   isCapacitorNativeMobileRuntime,
   readNativeMobileClipboardText,
+  syncSharedNativeClipboardAuth,
   syncSharedNativeClipboardHistory,
   writeNativeMobileClipboardText,
 } from './ghostiMobileCareBridge';
@@ -106,6 +110,7 @@ const DELIVERED_ENVELOPES_PREFIX = 'ghosti_delivered_clip_envelopes_v1::';
 const CACHED_RECEIVED_CLIPS_PREFIX = 'ghosti_received_e2ee_clips_v2::';
 const CACHED_DEVICE_SNAPSHOT_PREFIX = 'ghosti_device_integration_cache_v1::';
 const CANONICAL_E2EE_UID_PREFIX = 'ghosti_e2ee_canonical_uid_v1::';
+const LAST_SYNCED_OS_CLIP_HASH_PREFIX = 'ghosti_last_synced_os_clip_hash_v1::';
 const PENDING_PAIR_CODE_SESSION_KEY = 'ghosti_pending_pair_code_v1';
 const DEVICE_SYNC_BROADCAST_CHANNEL = 'ghosti_device_sync_bus_v1';
 
@@ -1343,10 +1348,47 @@ let pendingClipBroadcastPacket: {
   createdAt: string;
 } | null = null;
 
+function saveLastSyncedOsClipHash(hash: string, email?: string): void {
+  if (!hash || typeof window === 'undefined') return;
+  const normEmail = (
+    email ||
+    localStorage.getItem('ghosti_hub_user_email') ||
+    localStorage.getItem('userEmail') ||
+    ''
+  )
+    .trim()
+    .toLowerCase();
+  if (!normEmail) return;
+  try {
+    localStorage.setItem(`${LAST_SYNCED_OS_CLIP_HASH_PREFIX}${normEmail}`, hash);
+  } catch {
+    /* ignore */
+  }
+}
+
+function loadLastSyncedOsClipHash(email?: string): string {
+  if (typeof window === 'undefined') return '';
+  const normEmail = (
+    email ||
+    localStorage.getItem('ghosti_hub_user_email') ||
+    localStorage.getItem('userEmail') ||
+    ''
+  )
+    .trim()
+    .toLowerCase();
+  if (!normEmail) return '';
+  try {
+    return (localStorage.getItem(`${LAST_SYNCED_OS_CLIP_HASH_PREFIX}${normEmail}`) || '').trim();
+  } catch {
+    return '';
+  }
+}
+
 export function markLocalClipboardSelfInjected(clipHash: string): void {
   if (!clipHash) return;
   recentRemoteInjectedHashes.set(clipHash, Date.now());
   lastObservedOsClipHash = clipHash;
+  saveLastSyncedOsClipHash(clipHash);
 }
 
 export async function writeTextToLocalOsClipboard(
@@ -1509,6 +1551,7 @@ export async function pushCrossDeviceClipboardText(opts: {
   lastAutoPushedClipHash = clipHash;
   lastAutoPushedAtMs = nowMs;
   lastObservedOsClipHash = clipHash;
+  saveLastSyncedOsClipHash(clipHash, normEmail);
   lastLocalPushTimestampMs = nowMs;
 
   const ident = getThisDeviceIdentity(normEmail);
@@ -1568,7 +1611,7 @@ export async function pushCrossDeviceClipboardText(opts: {
   const mailboxPersistPromise = callGhostiServerBridge<{
     count?: number;
     canonicalUserId?: string;
-  }>('device_push_e2ee_clip', broadcastPayload)
+  }>('device_push_e2ee_clip', broadcastPayload, { keepalive: true })
     .then((res) => {
       if (res?.ok && res.canonicalUserId) {
         saveCanonicalE2eeUid(normEmail, res.canonicalUserId);
@@ -3034,7 +3077,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     await syncRemoteMailboxToUi(!pushedLocalNow);
   };
 
-  const triggerMobileForegroundCapture = (alsoSyncRemoteAfter = false) => {
+  const triggerMobileForegroundCapture = (alsoSyncRemoteAfter = false, initialDelayMs = 160) => {
     if (disposed || thisDeviceRevokedLocally || ident.deviceKind !== 'mobile' || typeof window === 'undefined') return;
     if (mobileResumeCaptureTimer !== null) {
       window.clearTimeout(mobileResumeCaptureTimer);
@@ -3043,7 +3086,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       window.clearTimeout(mobileResumeRetryTimer);
       mobileResumeRetryTimer = null;
     }
-    // 1단계(180ms): 안드로이드 10+ WindowFocus·iOS UIPasteboard 확보 직후 로컬 복사본을 먼저 읽어 PC로 전송한 뒤 원격 우체통 수신
+    // 1단계: 안드로이드 onWindowFocusChanged(40ms) · iOS sceneDidBecomeActive 직후 로컬 복사본을 먼저 읽어 PC로 전송한 뒤 원격 우체통 수신
     mobileResumeCaptureTimer = window.setTimeout(async () => {
       mobileResumeCaptureTimer = null;
       if (disposed || document.visibilityState !== 'visible') return;
@@ -3052,7 +3095,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         await flushPendingNativeMobileClips();
         const firstResult = await inspectAndPushLocalOsClipboard(false, false);
         if (disposed) return;
-        // 2단계(+420ms) / 3단계(+550ms): 안드로이드 10+에서 첫 180ms가 WindowFocus 획득 전이라 EMPTY였다면 최대 2회 재시도
+        // 2단계(+380ms) / 3단계(+550ms): 안드로이드 10+에서 포커스 전환 직전이라 EMPTY였다면 최대 2회 재시도
         if (firstResult === 'EMPTY') {
           mobileResumeRetryTimer = window.setTimeout(async () => {
             mobileResumeRetryTimer = null;
@@ -3083,7 +3126,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
             } finally {
               mobileResumeCaptureRunning = false;
             }
-          }, 420);
+          }, 380);
           return;
         }
         await finishMobileForegroundSync(firstResult === 'PUSHED', alsoSyncRemoteAfter);
@@ -3091,7 +3134,22 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       } catch {
         mobileResumeCaptureRunning = false;
       }
-    }, 180);
+    }, Math.max(20, initialDelayMs));
+  };
+
+  const pushNativeClipboardAuthContext = () => {
+    if (!isCapacitorAndroidRuntime() || typeof window === 'undefined') return;
+    const hubToken = (getSessionToken() || localStorage.getItem('merlin_session_token') || '').trim();
+    const canonicalUid = resolveCanonicalE2eeUserId(opts.userId, normEmail);
+    if (!hubToken || !canonicalUid || !normEmail) return;
+    void syncSharedNativeClipboardAuth({
+      email: normEmail,
+      canonicalUserId: canonicalUid,
+      hubToken,
+      deviceId: ident.deviceId,
+      deviceName: ident.displayName,
+      bridgeUrl: resolveHubSupabaseBridgeEndpoint(),
+    });
   };
 
   const boot = async () => {
@@ -3101,6 +3159,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       if (existingCached.length > 0) {
         void syncSharedNativeClipboardHistory(existingCached);
       }
+      pushNativeClipboardAuthContext();
       void flushPendingNativeMobileClips();
     }
 
@@ -3128,7 +3187,18 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
         }
       });
     } else {
-      void inspectAndPushLocalOsClipboard(true, false);
+      // [안드로이드 AOS 신규 복사 삼킴 버그 수정]:
+      // 안드로이드에서는 앱 새로 열기·새로고침 시 방금 타 앱에서 복사해 온 글자를 baselineOnly로 삼키지 않고,
+      // 직전 동기화 해시(localStorage)와 다르면 즉시 PC로 전송합니다. (iOS는 불필요한 부팅 팝업 방지를 위해 baselineOnly 유지)
+      const persistedHash = loadLastSyncedOsClipHash(normEmail);
+      if (persistedHash && !lastObservedOsClipHash) {
+        lastObservedOsClipHash = persistedHash;
+      }
+      if (isCapacitorAndroidRuntime()) {
+        triggerMobileForegroundCapture(false, 120);
+      } else {
+        void inspectAndPushLocalOsClipboard(true, false);
+      }
       // Capacitor 네이티브 앱(Android/iOS) 백그라운드 복귀 이벤트(appStateChange) 직접 감지
       try {
         const capApp = (
@@ -3244,6 +3314,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       // 앱 진입/QR 스캔 중에는 이미 해제 상태였던 기기에 대해 중복 '연결 끊김' 토스트를 띄우지 않음
       // (실시간 브로드캐스트 또는 활성 연결 -> 해제 전환 시에만 1회 안내)
       void prewarmAccountE2eeKey(normEmail, opts.userId);
+      pushNativeClipboardAuthContext();
     }
 
     // PC 마스터: 다른 앱(메모장·카톡·다른 크롬 탭)에서 Ctrl+C / Ctrl+V 할 때도 크롬 백그라운드 탭 60초 절전(Throttling)에 걸리지 않도록
@@ -3431,6 +3502,22 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     void flushPendingNativeMobileClips();
   };
 
+  // Android MainActivity(onWindowFocusChanged/onResume) & iOS SceneDelegate(sceneDidBecomeActive)에서
+  // 직접 발사되는 네이티브 포그라운드 복귀 이벤트 — 새로고침 없이 0.1초 만에 양방향 클립보드 즉시 동기화!
+  const onNativeAppResumed = (ev: Event) => {
+    if (disposed) return;
+    const detail = (ev as CustomEvent<{ hasWindowFocus?: boolean }>).detail;
+    if (!isRealtimeChannelActuallyHealthy()) {
+      void setupRealtimeChannel(true);
+    }
+    if (ident.deviceKind === 'mobile') {
+      triggerMobileForegroundCapture(true, detail?.hasWindowFocus ? 40 : 160);
+    } else {
+      void inspectAndPushLocalOsClipboard(false, false);
+      void syncRemoteMailboxToUi(true);
+    }
+  };
+
   const onNativePairDeepLink = (ev: Event) => {
     if (disposed) return;
     const rawUrl = String((ev as CustomEvent<{ url?: string }>).detail?.url || '').trim();
@@ -3487,6 +3574,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
     window.addEventListener('focus', onWindowFocus);
     window.addEventListener('online', onOnline);
     window.addEventListener('ghostiNativeClipCaptured', onNativeClipCaptured);
+    window.addEventListener('ghostiNativeAppResumed', onNativeAppResumed);
     window.addEventListener('ghostiNativePairDeepLink', onNativePairDeepLink);
   }
 
@@ -3521,6 +3609,7 @@ export function startDeviceIntegrationRealtimeRuntime(opts: {
       window.removeEventListener('focus', onWindowFocus);
       window.removeEventListener('online', onOnline);
       window.removeEventListener('ghostiNativeClipCaptured', onNativeClipCaptured);
+      window.removeEventListener('ghostiNativeAppResumed', onNativeAppResumed);
       window.removeEventListener('ghostiNativePairDeepLink', onNativePairDeepLink);
     }
     cleanup();

@@ -9,6 +9,8 @@ import {
 import {
   getNativeClipboardImeStatus,
   isCapacitorAndroidRuntime,
+  isCapacitorIosRuntime,
+  openNativeAppPermissionSettings,
   openNativeClipboardImeSettings,
 } from '../../services/ghostiMobileCareBridge';
 import { zCoreBridge } from '../../services/zCoreBridge';
@@ -444,8 +446,8 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
             </span>
             <span className="text-[11.5px] text-teal-800/90 leading-snug break-keep">
               {androidImeStatus.enabled
-                ? '카톡·크롬 입력창에서 키보드 전환(🌐)을 누르면 7일 클립보드와 1→2→3 순차 붙여넣기가 바로 뜹니다.'
-                : '시스템 키보드 목록에서 [귀신 7일 클립보드]를 켜 두면 카톡·크롬에서 바로 꺼내 쓸 수 있습니다.'}
+                ? '카톡·크롬·메모장에서 앱을 열지 않고도 키보드 전환(🌐)으로 PC 복사본을 바로 붙여넣고, 텍스트 선택 [귀신 클립보드 저장]으로 PC에 즉시 전송됩니다.'
+                : '시스템 키보드 목록에서 [귀신 7일 클립보드]를 켜 두면 앱을 열지 않고 카톡·크롬에서 PC↔폰 복사본을 바로 주고받을 수 있습니다.'}
             </span>
           </div>
           <div className="flex items-center gap-1.5 shrink-0">
@@ -467,6 +469,27 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
               </button>
             )}
           </div>
+        </div>
+      )}
+
+      {/* 3.6. iOS '붙여넣기 허용' 매번 팝업 1회 영구 해제 바로가기 */}
+      {isCapacitorIosRuntime() && (
+        <div className="px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[12px]">
+          <div className="flex flex-col gap-0.5 min-w-0">
+            <span className="font-semibold text-slate-900">
+              아이폰 &apos;붙여넣기 허용&apos; 팝업 매번 안 뜨게 하기 (1회 설정)
+            </span>
+            <span className="text-[11.5px] text-slate-600 leading-snug break-keep">
+              아이폰 <strong>설정 → 귀신같이 → 다른 앱에서 붙여넣기 → 허용</strong>으로 1번만 바꿔두면 팝업 없이 바로 자동 연동됩니다.
+            </span>
+          </div>
+          <button
+            type="button"
+            onClick={() => void openNativeAppPermissionSettings()}
+            className="px-2.5 py-1.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-semibold cursor-pointer whitespace-nowrap shrink-0 self-start sm:self-center"
+          >
+            아이폰 설정 열기
+          </button>
         </div>
       )}
 

@@ -211,9 +211,28 @@ public final class GhostiSharedClipboardStore {
         } catch (Throwable ignored) {
         }
 
-        // 본체 WebView가 살아 있으면 즉시 JS 이벤트로 알림 (0.05초 PC E2EE 전송)
+        // 1) 본체 앱이 닫혀 있거나 백그라운드여도 Java 백그라운드 스레드가 0.3초 만에 PC로 직통 E2EE 전송!
+        GhostiNativeClipboardSync.pushEntryAsync(ctx, entry);
+        // 2) 본체 WebView가 살아 있으면 실시간 목록 UI도 즉시 갱신 알림
         GhostiMobileCarePlugin.notifyNativeClipboardCaptured(entry);
         return entry;
+    }
+
+    public static synchronized void removePendingOutboundByHash(Context ctx, String clipHash) {
+        if (ctx == null || clipHash == null || clipHash.isEmpty()) return;
+        try {
+            SharedPreferences prefs = ctx.getApplicationContext().getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE);
+            JSONArray pending = new JSONArray(prefs.getString(KEY_PENDING_OUTBOUND, "[]"));
+            JSONArray kept = new JSONArray();
+            for (int i = 0; i < pending.length(); i++) {
+                JSONObject o = pending.optJSONObject(i);
+                if (o != null && !clipHash.equals(o.optString("clipHash", ""))) {
+                    kept.put(o);
+                }
+            }
+            prefs.edit().putString(KEY_PENDING_OUTBOUND, kept.toString()).apply();
+        } catch (Throwable ignored) {
+        }
     }
 
     /**
