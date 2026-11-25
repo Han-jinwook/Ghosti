@@ -194,6 +194,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
     return cachedJoined && !cachedJoined.isHost ? cachedJoined : null;
   });
   const [authSyncTick, setAuthSyncTick] = useState<number>(0);
+  const [workInviteTick, setWorkInviteTick] = useState<number>(0);
+  const [isCheckingJoinedRooms, setIsCheckingJoinedRooms] = useState<boolean>(false);
   const [startingWorkTrial, setStartingWorkTrial] = useState<boolean>(false);
   const [hostTunnelStatus, setHostTunnelStatus] = useState<string>('idle');
   const [lastDeletedUndoItem, setLastDeletedUndoItem] = useState<{
@@ -236,7 +238,25 @@ export const WorkLoungeB2BHub: React.FC = () => {
     }
   }, [mobileTab]);
 
-  const inviteMeta = useMemo(() => readActiveWorkRoomInviteMeta(), [activeWorkRoomId]);
+  const inviteMeta = useMemo(
+    () => readActiveWorkRoomInviteMeta(),
+    [activeWorkRoomId, workInviteTick]
+  );
+
+  // 모바일 앱 실행 중(Warm/Cold) 업무 공유방 초대 딥링크 수신 시 즉시 초대 컨텍스트·방 ID 전환
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    const onWorkInviteApplied = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ roomId?: string }>).detail;
+      acceptedInviteTokenRef.current = '';
+      setWorkInviteTick((v) => v + 1);
+      if (detail?.roomId) {
+        setActiveWorkRoomId(detail.roomId);
+      }
+    };
+    window.addEventListener('ghostiWorkInviteApplied', onWorkInviteApplied);
+    return () => window.removeEventListener('ghostiWorkInviteApplied', onWorkInviteApplied);
+  }, []);
 
   // ── 과금·30일 무료체험·만료 잠금 판정 (Fail-Closed 3중 게이트 · 팀원 초대도 이메일 로그인 필수) ──
   const isAuthenticated = Boolean(merlinAuth?.email && hasAuthenticatedHubAccountSession());
@@ -337,17 +357,29 @@ export const WorkLoungeB2BHub: React.FC = () => {
     if (!merlinAuth?.email || !hasAuthenticatedHubAccountSession()) return undefined;
     if (inviteMeta.hasWorkInvite) return undefined;
     let cancelled = false;
-    void fetchMyJoinedWorkRooms().then((res) => {
-      if (cancelled || !res.ok) return;
-      if (res.rooms.length === 0) {
-        clearCachedJoinedWorkRoomMeta(merlinAuth.email);
-        return;
-      }
-      const invitedRoom = res.rooms.find((r) => !r.isHost) || null;
-      const hostedRoom = res.rooms.find((r) => r.isHost) || null;
-      if (!invitedRoom) {
-        clearCachedJoinedWorkRoomMeta(merlinAuth.email);
-      }
+    setIsCheckingJoinedRooms(true);
+    void fetchMyJoinedWorkRooms()
+      .then((res) => {
+        if (cancelled || !res.ok) return;
+        if (res.rooms.length === 0) {
+          clearCachedJoinedWorkRoomMeta(merlinAuth.email);
+          if (!isOwnWorkUnlocked) {
+            if (activeWorkRoomId) {
+              void purgeLocalWorkRoomDocs(activeWorkRoomId, merlinAuth.email);
+            }
+            setJoinedInvitedRoom(null);
+            setServerMembers([]);
+            setRemoteDocs([]);
+            setLocalDocs([]);
+            setActiveWorkRoomId('');
+          }
+          return;
+        }
+        const invitedRoom = res.rooms.find((r) => !r.isHost) || null;
+        const hostedRoom = res.rooms.find((r) => r.isHost) || null;
+        if (!invitedRoom) {
+          clearCachedJoinedWorkRoomMeta(merlinAuth.email);
+        }
       // 본인 구독 업무방이 없거나(팀원 계정) 아직 활성 방이 없으면 초대받은 팀원방을 최우선 복원
       if (invitedRoom && (!isOwnWorkUnlocked || !activeWorkRoomId || activeWorkRoomId === invitedRoom.roomId)) {
         setJoinedInvitedRoom(invitedRoom);
@@ -406,7 +438,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
           saveCachedServerMembers(hostedRoom.roomId, sorted, merlinAuth.email);
         }
       }
-    });
+      })
+      .finally(() => {
+        if (!cancelled) setIsCheckingJoinedRooms(false);
+      });
     return () => {
       cancelled = true;
     };
@@ -1010,9 +1045,12 @@ export const WorkLoungeB2BHub: React.FC = () => {
           ) {
             setRemoteRoomLockReason(authed.reason);
           } else if (authed.reason === 'NOT_A_WORK_ROOM_MEMBER' && !inviteMeta.hasWorkInvite) {
+            void purgeLocalWorkRoomDocs(activeWorkRoomId, merlinAuth?.email || undefined);
             clearCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined);
             setJoinedInvitedRoom(null);
             setServerMembers([]);
+            setRemoteDocs([]);
+            setLocalDocs([]);
             setActiveWorkRoomId('');
           }
           return;
@@ -1756,6 +1794,66 @@ export const WorkLoungeB2BHub: React.FC = () => {
             </button>
           </div>
         </div>
+      ) : isMobileOrStore && (!isAuthenticated || !activeWorkRoomId || !isWorkUnlocked) ? (
+        <div
+          data-testid="mobile-work-share-empty-guide"
+          className="p-5 rounded-2xl bg-white border border-slate-200 shadow-xs flex flex-col gap-3"
+        >
+          {!isAuthenticated ? (
+            <>
+              <div className="flex flex-col gap-1">
+                <span className="inline-flex self-start px-2.5 py-0.5 rounded-full bg-teal-50 border border-teal-200 text-teal-700 text-[11px] font-bold">
+                  업무 공유 (S:) · 로그인 필요
+                </span>
+                <h3 className="text-[16px] text-slate-900 font-bold mt-0.5 break-keep">
+                  참여 중인 업무 공유방을 불러오려면 로그인해 주세요
+                </h3>
+                <p className="text-[12.5px] text-slate-600 leading-relaxed break-keep">
+                  사내 PC에서 업무 공유방을 이용 중인 이메일로 로그인하거나, 방장님께 받은 업무 공유방 초대 링크를 열어 로그인하면 무료로 바로 연결됩니다.
+                </p>
+              </div>
+              <div className="pt-0.5">
+                <button
+                  type="button"
+                  onClick={openLoginModal}
+                  className="px-4 py-2 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-[12.5px] font-bold cursor-pointer"
+                >
+                  이메일 로그인
+                </button>
+              </div>
+            </>
+          ) : isCheckingJoinedRooms && !remoteRoomLockReason ? (
+            <div className="py-4 flex items-center gap-2.5 text-[13px] text-slate-600 font-medium">
+              <span className="inline-block w-4 h-4 rounded-full border-2 border-teal-600 border-t-transparent animate-spin shrink-0" />
+              <span>참여 중인 업무 공유방을 확인하고 있습니다...</span>
+            </div>
+          ) : remoteRoomLockReason === 'WORK_TRIAL_EXPIRED' ||
+            remoteRoomLockReason === 'WORK_SUBSCRIPTION_REQUIRED' ? (
+            <div className="flex flex-col gap-1.5">
+              <span className="inline-flex self-start px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold">
+                업무 공유방 연결 일시 중지
+              </span>
+              <h3 className="text-[15.5px] text-slate-900 font-bold break-keep">
+                현재 이 업무 공유방의 이용 기간이 종료되었습니다
+              </h3>
+              <p className="text-[12.5px] text-slate-600 leading-relaxed break-keep">
+                사내 메인 PC 업무 폴더 안의 원본 문서는 안전하게 그대로 보존되어 있습니다. 방장 PC에서 업무 공유 연결이 다시 활성화되면 이 스마트폰에서도 자동으로 다시 열립니다.
+              </p>
+            </div>
+          ) : (
+            <div className="flex flex-col gap-1.5">
+              <span className="inline-flex self-start px-2.5 py-0.5 rounded-full bg-slate-100 border border-slate-200 text-slate-700 text-[11px] font-bold">
+                참여 중인 업무 공유방 없음
+              </span>
+              <h3 className="text-[16px] text-slate-900 font-bold break-keep">
+                현재 연결된 업무 공유방이 없습니다
+              </h3>
+              <p className="text-[12.5px] text-slate-600 leading-relaxed break-keep">
+                방장님께 받은 <b>업무 공유방 초대 링크</b>를 눌러 합류하거나, 사내 메인 PC의 <b>[업무 공유 (S:)]</b> 메뉴에서 업무 공유방을 시작하면 이 스마트폰에서도 실시간으로 문서와 현장 사진을 함께 볼 수 있습니다.
+              </p>
+            </div>
+          )}
+        </div>
       ) : (
         <>
       <WorkLoungeBillingGateBanner
@@ -2120,45 +2218,53 @@ export const WorkLoungeB2BHub: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center justify-between gap-2 px-0.5">
-            <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
-              {WORK_LOUNGE_FOLDERS.map((folder) => {
-                const active = selectedFolderId === folder.id && viewMode === 'explorer';
-                const isAllActive =
-                  folder.id === 'all' && (selectedFolderId === 'all' || viewMode === 'semantic');
-                const highlight = active || isAllActive;
-                const count = folderCounts[folder.id] ?? folder.count;
-                return (
-                  <button
-                    key={folder.id}
-                    type="button"
-                    onClick={() => {
-                      setSelectedFolderId(folder.id);
-                      setViewMode(folder.id === 'all' ? 'semantic' : 'explorer');
-                    }}
-                    className={`px-3 py-1.5 rounded-full font-label-sm text-[11.5px] flex items-center gap-1.5 transition-all shrink-0 cursor-pointer border ${
-                      highlight
-                        ? 'bg-primary-container text-zinc-950 border-primary-container font-extrabold'
-                        : 'bg-zinc-900/80 hover:bg-zinc-800 text-zinc-300 border-white/10 font-bold'
-                    }`}
-                  >
-                    <span>
-                      {folder.id === 'all'
-                        ? 'S:\\ 전체'
-                        : folder.id === 'root'
-                        ? 'S:\\ 루트'
-                        : `${folder.name}`}
-                    </span>
-                    <span
-                      className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
-                        highlight ? 'bg-black/15 text-zinc-950 font-semibold' : 'text-zinc-400'
+            {(!isMobileOrStore || docs.length > 0) && (
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar py-0.5">
+                {WORK_LOUNGE_FOLDERS.filter((folder) => {
+                  if (!isMobileOrStore) return true;
+                  if (folder.id === 'all') return true;
+                  return (folderCounts[folder.id] ?? 0) > 0;
+                }).map((folder) => {
+                  const active = selectedFolderId === folder.id && viewMode === 'explorer';
+                  const isAllActive =
+                    folder.id === 'all' && (selectedFolderId === 'all' || viewMode === 'semantic');
+                  const highlight = active || isAllActive;
+                  const count = folderCounts[folder.id] ?? folder.count;
+                  return (
+                    <button
+                      key={folder.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedFolderId(folder.id);
+                        setViewMode(folder.id === 'all' ? 'semantic' : 'explorer');
+                      }}
+                      className={`px-3 py-1.5 rounded-full font-label-sm text-[11.5px] flex items-center gap-1.5 transition-all shrink-0 cursor-pointer border ${
+                        highlight
+                          ? 'bg-teal-600 text-white border-teal-600 font-extrabold'
+                          : 'bg-white dark:bg-zinc-900/80 hover:bg-slate-100 dark:hover:bg-zinc-800 text-slate-700 dark:text-zinc-300 border-slate-200 dark:border-white/10 font-bold'
                       }`}
                     >
-                      {count}
-                    </span>
-                  </button>
-                );
-              })}
-            </div>
+                      <span>
+                        {folder.id === 'all'
+                          ? 'S:\\ 전체'
+                          : folder.id === 'root'
+                          ? 'S:\\ 루트'
+                          : `${folder.name}`}
+                      </span>
+                      <span
+                        className={`px-1.5 py-0.2 rounded-full text-[10px] font-mono ${
+                          highlight
+                            ? 'bg-white/20 text-white font-semibold'
+                            : 'bg-slate-100 dark:bg-white/10 text-slate-600 dark:text-zinc-300'
+                        }`}
+                      >
+                        {count}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
 
             {dynamicQuickQueries.length > 0 && (
               <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11.5px] text-slate-500 dark:text-zinc-400">

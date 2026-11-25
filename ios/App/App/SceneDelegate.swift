@@ -1589,7 +1589,11 @@ class SceneDelegate: UIResponder, UIWindowSceneDelegate {
         guard let url = url else { return }
         let urlStr = url.absoluteString
         let lower = urlStr.lowercased()
-        guard lower.hasPrefix("ghosti://") || lower.contains("invite=") else { return }
+        guard lower.hasPrefix("ghosti://")
+            || lower.contains("invite=")
+            || lower.contains("invitetoken=")
+            || lower.contains("workroom=")
+            || lower.contains("paircode=") else { return }
         UserDefaults.standard.set(urlStr, forKey: "ghosti_pending_deep_link_url")
         DispatchQueue.main.async { [weak self] in
             guard let bridgeVC = self?.window?.rootViewController as? GhostiBridgeViewController else { return }

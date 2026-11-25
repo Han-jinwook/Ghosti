@@ -25,6 +25,7 @@ import {
 } from '../../services/shareInviteDeepLinkBridge';
 import { registerLocalPhotoPreviewDataUrl } from '../../services/sharedPhotoRoomSupabase';
 import { loadPassportFlowState } from '../../services/passportRegistrationFlow';
+import { parseWorkInviteInput } from '../../services/workRoomSyncService';
 
 const PERSISTENT_BATCH_THUMB_CACHE = new Map<string, string>();
 const INFLIGHT_BATCH_THUMB_IDS = new Set<string>();
@@ -374,6 +375,14 @@ export const FreePhotoShareOverlays: React.FC = () => {
               );
               return;
             }
+            if (parseWorkInviteInput(res.deepLinkUrl)) {
+              window.dispatchEvent(
+                new CustomEvent('ghostiNativeWorkDeepLink', {
+                  detail: { url: res.deepLinkUrl },
+                })
+              );
+              return;
+            }
             // 3초 이내 동일 딥링크 중복 수신(예: launch + appUrlOpen 동시 발화)만 방지하고,
             // 사용자가 다시 초대 링크를 눌러 앱을 연 경우에는 정상적으로 초대방에 입장·멤버 등록되도록 허용합니다.
             let isStaleReplayedIntent = false;
@@ -417,6 +426,14 @@ export const FreePhotoShareOverlays: React.FC = () => {
           if (/pairCode=\d{6}/i.test(detail.url)) {
             window.dispatchEvent(
               new CustomEvent('ghostiNativePairDeepLink', {
+                detail: { url: detail.url },
+              })
+            );
+            return;
+          }
+          if (parseWorkInviteInput(detail.url)) {
+            window.dispatchEvent(
+              new CustomEvent('ghostiNativeWorkDeepLink', {
                 detail: { url: detail.url },
               })
             );

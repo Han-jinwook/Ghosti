@@ -2318,7 +2318,9 @@ public class GhostiMobileCarePlugin extends Plugin {
                         if (responseCode == InstallReferrerClient.InstallReferrerResponse.OK) {
                             ReferrerDetails details = referrerClient.getInstallReferrer();
                             String rawRef = details != null ? details.getInstallReferrer() : "";
-                            if (rawRef != null && rawRef.contains("invite=")) {
+                            if (rawRef != null && rawRef.contains("workRoom=")) {
+                                resolvedInviteUrl = "ghosti://work?" + rawRef;
+                            } else if (rawRef != null && rawRef.contains("invite=")) {
                                 resolvedInviteUrl = "ghosti://invite?" + rawRef;
                             } else if (rawRef != null && rawRef.contains("pairCode=")) {
                                 resolvedInviteUrl = "ghosti://pair?" + rawRef;

@@ -225,7 +225,11 @@ public class MainActivity extends BridgeActivity {
         String urlStr = data.toString();
         if (urlStr == null || urlStr.trim().isEmpty()) return;
         String lower = urlStr.toLowerCase();
-        if (!lower.startsWith("ghosti://") && !lower.contains("invite=")) {
+        if (!lower.startsWith("ghosti://")
+            && !lower.contains("invite=")
+            && !lower.contains("invitetoken=")
+            && !lower.contains("workroom=")
+            && !lower.contains("paircode=")) {
             return;
         }
         // 동일 Intent가 onCreate/recreate 시 재소비되지 않도록 즉시 소비 처리

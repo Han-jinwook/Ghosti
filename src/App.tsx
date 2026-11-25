@@ -30,6 +30,11 @@ import { GhostCastAndLiveGlobalOverlay } from './components/GhostCastAndLiveSyst
 import { FreePhotoShareOverlays } from './domains/free_photo_share/FreePhotoShareOverlays';
 import { MobileShareInviteBridgeOverlay } from './domains/free_photo_share/MobileShareInviteBridgeOverlay';
 import { MobileQrPairBridgeOverlay } from './domains/paid_device_sync/MobileQrPairBridgeOverlay';
+import { MobileWorkInviteBridgeOverlay } from './domains/paid_work_share/MobileWorkInviteBridgeOverlay';
+import {
+  parseWorkInviteInput,
+  saveActiveWorkRoomInviteMeta,
+} from './services/workRoomSyncService';
 import {
   isCapacitorNativeMobileRuntime,
   readNativeMobileClipboardText,
@@ -54,6 +59,7 @@ export const App: React.FC = () => {
     dismissQuarantineToast,
     lastUndoBatch,
     quarantineMoving,
+    quarantineOpKind,
     undoLastQuarantine,
     dismissUndoBatch,
     selectedPhoto,
@@ -818,10 +824,24 @@ export const App: React.FC = () => {
     window.addEventListener('ghosti_navigate_workspace', onGoWorkspace);
     window.addEventListener('merlinLoggedIn', onMerlinLoggedIn);
 
-    // [네이티브 Android/iOS 앱 QR 스캔 App Links / Universal Links 딥링크 즉시 바인딩]
+    // [네이티브 Android/iOS 앱 QR 스캔 · 업무 공유방(S:) 초대 App Links / Universal Links 딥링크 즉시 바인딩]
     let capUrlOpenHandle: { remove?: () => Promise<void> | void } | null = null;
+    const handleIncomingNativeWorkUrl = (rawUrl?: string | null): boolean => {
+      if (!rawUrl) return false;
+      const parsedWork = parseWorkInviteInput(rawUrl);
+      if (!parsedWork) return false;
+      saveActiveWorkRoomInviteMeta(parsedWork);
+      setViewMode('workspace');
+      useSaySeeStore.setState({
+        activeLoungeType: 'work',
+        desktopTab: 'dashboard',
+        mobileTab: 'search',
+      });
+      return true;
+    };
     const handleIncomingNativePairUrl = (rawUrl?: string | null) => {
       if (!rawUrl) return;
+      if (handleIncomingNativeWorkUrl(rawUrl)) return;
       try {
         const parsed = new URL(rawUrl);
         const code = (parsed.searchParams.get('pairCode') || '').replace(/\D/g, '').slice(0, 6);
@@ -893,9 +913,16 @@ export const App: React.FC = () => {
         handleIncomingNativePairUrl(detail.url);
       }
     };
+    const onNativeWorkDeepLink = (ev: Event) => {
+      const detail = (ev as CustomEvent<{ url?: string }>).detail;
+      if (detail?.url) {
+        handleIncomingNativeWorkUrl(detail.url);
+      }
+    };
     window.addEventListener('ghostiNativePairDeepLink', onNativePairDeepLink);
+    window.addEventListener('ghostiNativeWorkDeepLink', onNativeWorkDeepLink);
 
-    // [iOS/Android 스토어 설치 후 최초 실행 시 클립보드 Deferred QR(GHOSTI_PAIR_V1) · 초대(GHOSTI_INVITE_V1) 자동 복구]
+    // [iOS/Android 스토어 설치 후 최초 실행 시 클립보드 Deferred QR(GHOSTI_PAIR_V1) · 업무방(GHOSTI_WORK_INVITE_V1) · 사진방(GHOSTI_INVITE_V1) 자동 복구]
     if (isCapacitorNativeMobileRuntime()) {
       void readNativeMobileClipboardText(false)
         .then((clipRes) => {
@@ -910,6 +937,17 @@ export const App: React.FC = () => {
               /* ignore */
             }
             handleIncomingNativePairUrl(`ghosti://pair?pairCode=${m[1]}`);
+            return;
+          }
+          if (/GHOSTI_WORK_INVITE_V1:/i.test(text)) {
+            const consumedKey = `ghosti_consumed_clip_work_${text.slice(0, 56)}`;
+            try {
+              if (sessionStorage.getItem(consumedKey) === '1') return;
+              sessionStorage.setItem(consumedKey, '1');
+            } catch {
+              /* ignore */
+            }
+            handleIncomingNativeWorkUrl(text);
             return;
           }
           if (/GHOSTI_INVITE_V1:/i.test(text)) {
@@ -931,6 +969,7 @@ export const App: React.FC = () => {
       window.removeEventListener('ghosti_navigate_workspace', onGoWorkspace);
       window.removeEventListener('merlinLoggedIn', onMerlinLoggedIn);
       window.removeEventListener('ghostiNativePairDeepLink', onNativePairDeepLink);
+      window.removeEventListener('ghostiNativeWorkDeepLink', onNativeWorkDeepLink);
       if (capUrlOpenHandle?.remove) {
         try {
           void capUrlOpenHandle.remove();
@@ -1324,6 +1363,8 @@ export const App: React.FC = () => {
       <MobileQrPairBridgeOverlay />
       {/* [모바일 웹 전용 사진 공유방 초대 브릿지] 초대 링크 접속 시 앱 열기·스토어 설치 이동 안내 */}
       <MobileShareInviteBridgeOverlay />
+      {/* [모바일 웹 전용 업무 공유방(S:) 초대 브릿지] 업무방 초대 링크 접속 시 앱 열기·스토어 설치 이동 안내 */}
+      <MobileWorkInviteBridgeOverlay />
 
       {/* 모바일(iOS/AOS) 전 화면 공통 상단 당겨서 새로고침(Pull-to-refresh) 플로팅 인디케이터 — iOS 상단 상태바(topSafeAreaShieldView) 차폐 영역 아래에 배치하여 상단 잘림 원천 차단 */}
       {(ptrPullDist > 0 || isPtrRefreshing) && (
@@ -1408,11 +1449,11 @@ export const App: React.FC = () => {
               } mb-safe left-1/2 -translate-x-1/2 z-[115] w-[94%] max-w-xl px-4 sm:px-5 py-3 rounded-xl bg-slate-900 border border-slate-800 text-white shadow-lg flex flex-wrap items-center justify-between gap-2.5 sm:gap-3`}
             >
               <div className="flex items-center gap-2 min-w-0">
-                {quarantineMoving && (
+                {quarantineMoving && quarantineOpKind === 'restore' && (
                   <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-teal-400 border-t-transparent animate-spin shrink-0" />
                 )}
                 <span className="text-[13px] font-medium break-keep">
-                  {quarantineMoving
+                  {quarantineMoving && quarantineOpKind === 'restore'
                     ? `사진 ${lastUndoBatch.count}장을 원래 위치로 복원하고 있습니다...`
                     : `방금 정리한 ${lastUndoBatch.count}장이 휴지통으로 이동되었습니다.`}
                 </span>
@@ -1425,10 +1466,10 @@ export const App: React.FC = () => {
                   onClick={() => void undoLastQuarantine()}
                   className="px-3.5 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 disabled:bg-teal-600/80 disabled:cursor-wait text-white text-[12px] font-semibold transition-colors whitespace-nowrap cursor-pointer inline-flex items-center gap-1.5"
                 >
-                  {quarantineMoving && (
+                  {quarantineMoving && quarantineOpKind === 'restore' && (
                     <span className="inline-block w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
                   )}
-                  {quarantineMoving ? '복원 중...' : '실행 취소'}
+                  {quarantineMoving && quarantineOpKind === 'restore' ? '복원 중...' : '실행 취소'}
                 </button>
                 <button
                   type="button"

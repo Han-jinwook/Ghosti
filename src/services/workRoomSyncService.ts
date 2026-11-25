@@ -281,6 +281,140 @@ function resolveWorkApiUrl(path: string): string | null {
   return null;
 }
 
+export function parseWorkInviteInput(
+  rawInput: string | null | undefined
+): WorkRoomInviteMeta | null {
+  if (!rawInput) return null;
+  let text = rawInput.trim();
+  if (!text) return null;
+
+  const clipMatch = text.match(/GHOSTI_WORK_INVITE_V1:([A-Za-z0-9+/=%._?&=-]+)/i);
+  if (clipMatch && clipMatch[1]) {
+    try {
+      text = `ghosti://work?${decodeURIComponent(clipMatch[1])}`;
+    } catch {
+      text = `ghosti://work?${clipMatch[1]}`;
+    }
+  } else {
+    const urlMatch = text.match(/(https?:\/\/[^\s]+|ghosti:\/\/[^\s]+)/i);
+    if (urlMatch && urlMatch[1]) {
+      text = urlMatch[1];
+    }
+  }
+
+  let params: URLSearchParams | null = null;
+  let isWorkSchemeHost = false;
+  try {
+    if (text.startsWith('http://') || text.startsWith('https://') || text.startsWith('ghosti://')) {
+      isWorkSchemeHost = /^ghosti:\/\/work(?:\b|\/|\?|$)/i.test(text);
+      const normalized = text.startsWith('ghosti://')
+        ? text.replace(/^ghosti:\/\//i, 'https://ghosti.local/')
+        : text;
+      const u = new URL(normalized);
+      params = u.searchParams;
+    } else if (text.includes('workRoom=')) {
+      params = new URLSearchParams(text.startsWith('?') ? text.slice(1) : text);
+    }
+  } catch {
+    const qIdx = text.indexOf('?');
+    if (qIdx >= 0) {
+      params = new URLSearchParams(text.slice(qIdx + 1));
+    }
+  }
+
+  if (!params) return null;
+  const roomId = (params.get('workRoom') || '').trim();
+  if (!roomId && !isWorkSchemeHost) return null;
+  if (!roomId) return null;
+
+  const rawToken = (params.get('inviteToken') || params.get('token') || '').trim();
+  const inviteToken =
+    rawToken.startsWith('eyJ') && rawToken.split('.').length === 3 ? '' : rawToken;
+  const hostNickname = (params.get('host') || '').trim() || '방장';
+  const roomTitle = (params.get('title') || '').trim() || '우리팀 업무 공유방 (S:)';
+
+  return {
+    hasWorkInvite: true,
+    roomId,
+    inviteToken,
+    hostNickname,
+    roomTitle,
+  };
+}
+
+export function saveActiveWorkRoomInviteMeta(meta: WorkRoomInviteMeta): void {
+  if (typeof window === 'undefined' || !meta.roomId) return;
+  const resolved: WorkRoomInviteMeta = {
+    hasWorkInvite: true,
+    roomId: meta.roomId.trim(),
+    inviteToken: (meta.inviteToken || '').trim(),
+    hostNickname: (meta.hostNickname || '').trim() || '방장',
+    roomTitle: (meta.roomTitle || '').trim() || '우리팀 업무 공유방 (S:)',
+  };
+  try {
+    sessionStorage.setItem(WORK_INVITE_SESSION_KEY, JSON.stringify(resolved));
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new CustomEvent('ghostiWorkInviteApplied', { detail: resolved }));
+  } catch {
+    /* ignore */
+  }
+}
+
+export function buildWorkRoomNativeSchemeUrl(meta: {
+  roomId: string;
+  inviteToken?: string;
+  hostNickname?: string;
+  roomTitle?: string;
+}): string {
+  const qs = new URLSearchParams();
+  qs.set('lounge', 'work');
+  qs.set('tab', 'dashboard');
+  qs.set('workRoom', meta.roomId.trim());
+  if (meta.inviteToken?.trim()) {
+    qs.set('inviteToken', meta.inviteToken.trim());
+  }
+  if (meta.hostNickname?.trim()) {
+    qs.set('host', meta.hostNickname.trim());
+  }
+  if (meta.roomTitle?.trim()) {
+    qs.set('title', meta.roomTitle.trim());
+  }
+  return `ghosti://work?${qs.toString()}`;
+}
+
+export function buildDeferredWorkInviteClipboardToken(meta: {
+  roomId: string;
+  inviteToken?: string;
+  hostNickname?: string;
+  roomTitle?: string;
+}): string {
+  const qs = new URLSearchParams();
+  qs.set('workRoom', meta.roomId.trim());
+  if (meta.inviteToken?.trim()) qs.set('inviteToken', meta.inviteToken.trim());
+  if (meta.hostNickname?.trim()) qs.set('host', meta.hostNickname.trim());
+  if (meta.roomTitle?.trim()) qs.set('title', meta.roomTitle.trim());
+  return `GHOSTI_WORK_INVITE_V1:${encodeURIComponent(qs.toString())}`;
+}
+
+export function buildAndroidPlayStoreWorkInviteUrl(meta: {
+  roomId: string;
+  inviteToken?: string;
+  hostNickname?: string;
+  roomTitle?: string;
+}): string {
+  const qs = new URLSearchParams();
+  qs.set('workRoom', meta.roomId.trim());
+  if (meta.inviteToken?.trim()) qs.set('inviteToken', meta.inviteToken.trim());
+  if (meta.hostNickname?.trim()) qs.set('host', meta.hostNickname.trim());
+  if (meta.roomTitle?.trim()) qs.set('title', meta.roomTitle.trim());
+  return `https://play.google.com/store/apps/details?id=app.sundreamer.ghosti&referrer=${encodeURIComponent(
+    qs.toString()
+  )}`;
+}
+
 export function readActiveWorkRoomInviteMeta(): WorkRoomInviteMeta {
   const empty: WorkRoomInviteMeta = {
     hasWorkInvite: false,
