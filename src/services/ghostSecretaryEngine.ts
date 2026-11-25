@@ -1151,6 +1151,37 @@ export function resolveGhostSecretaryTurn(
     };
   }
 
+  // ③-0) 퀘스트 전용 수락 칩('좋아, 알려줘' / '좋아, 예쁘게 바꿔줘')은 중간에 다른 대화를 나눈 뒤
+  // 위쪽 말풍선의 버튼을 뒤늦게 눌러도 직전 답변 리플레이 없이 정확히 해당 알림/라벨러 설정을 켠다.
+  if (text === QUEST_YES_ALERT) {
+    const consents = { ...(st.consents || {}), sonFreeAndSpeedAlert: true };
+    const nextStep: QuestStep =
+      st.questStep === 'son_free'
+        ? !ctx.isMobileEnv
+          ? 'done'
+          : nextQuest('son_free')
+        : st.questStep || 'done';
+    return {
+      scenarioId: 'quest_son_free_day_and_speed_alert_accepted',
+      text: '좋아요, 켜뒀어요! 매주 정기 점검 시간에 기기 상태를 확인하고, 평소보다 속도가 20% 이상 느려지면 채팅으로 바로 알려드릴게요.',
+      nextState: { ...st, consents, questStep: nextStep === 'voice' ? 'done' : nextStep },
+    };
+  }
+  if (text === QUEST_YES_LABELER) {
+    const consents = { ...(st.consents || {}), labeler: true };
+    const nextStep: QuestStep = st.questStep === 'labeler' ? nextQuest('labeler') : st.questStep || 'done';
+    const prompt = st.questStep === 'labeler' ? questPromptFor(nextStep, nickname) : null;
+    const promptBody = prompt ? prompt.text.replace(/^좋아요!\s*/, '') : '';
+    return {
+      scenarioId: prompt?.id || 'quest_labeler_accepted',
+      text: prompt
+        ? `좋아요, 켜뒀어요! ${promptBody}`
+        : '좋아요, 켜뒀어요! 앞으로 새로 들어오는 사진·파일 이름을 알아보기 쉽게 정리해 드릴게요.',
+      followUps: prompt?.followUps,
+      nextState: { ...st, consents, questStep: nextStep === 'voice' ? 'done' : nextStep },
+    };
+  }
+
   // ③ 홀림 퀘스트 응답 (단, '응 진행해', '응 정리해줘', '응 복구해줘' 같은 손보기 실행/원복 승인 명령은 손보기 라우터가 우선 처리하도록 제외)
   if (
     !isCareActionApprovalText &&

@@ -3783,6 +3783,101 @@ export async function processUnifiedMonsterChatQuery(params: {
       clean
     );
 
+  // 0-0C-0) [실시간 CPU·메모리 최다 점유 앱 직답]: "지금 CPU·메모리 제일 많이 쓰는 앱 알려줘" 클릭/입력 시
+  // 직전 디스크 스캔 캐시 설명으로 오인하지 않고, 실시간 CPU·메모리·상위 점유 앱 TOP 목록을 즉시 실측 보고합니다.
+  if (
+    !isMobileRuntimeForChat() &&
+    /(?:cpu|메모리|램|ram).*(?:제일\s*많이|가장\s*많이|많이\s*쓰는|점유|먹는)/i.test(clean)
+  ) {
+    cachedPcContext = null;
+    const [liveCtx, ratsRes] = await Promise.all([
+      fetchRealtimePcContextForLlm().catch(() => null),
+      zcoreJson<any>('/api/care/hidden-rats-scan', undefined, 10000).catch(() => ({ ok: false as const, error: '' })),
+    ]);
+    const sp = liveCtx?.specData || {};
+    const sec = liveCtx?.osInspectData?.spoolerAndSecurity || {};
+    const cpuPct = sec?.cpuLoadPercent;
+    const ramPct = sp?.ramUsedPercent ?? sec?.ramUsedPercent;
+    const ramGb = sp?.ramTotalGb ?? sec?.ramTotalGb;
+    const ramFreeGb = sec?.ramFreeGb;
+    const browserBn = sec?.browserMemoryBottleneck || null;
+    const guiApps: Array<{ name?: string; count?: number; memoryMb?: number }> = Array.isArray(sec?.runningGuiApps)
+      ? sec.runningGuiApps
+      : [];
+    const ratItemsRaw: Array<any> = ratsRes.ok && Array.isArray(ratsRes.data?.items) ? ratsRes.data.items : [];
+    const highMemRats = ratItemsRaw
+      .filter((it) => it?.ratKind === 'HIGH_MEM_PROCESS' && Number(it?.sizeMb || 0) >= 60)
+      .sort((a, b) => Number(b.sizeMb || 0) - Number(a.sizeMb || 0));
+
+    const lines: string[] = ['**[실시간 CPU · 메모리 점유 현황]**'];
+    lines.push(
+      `• **CPU / 메모리**: ${cpuPct != null ? `CPU 부하 **${cpuPct}%**` : 'CPU 정상'}${
+        ramPct !== undefined
+          ? ` · 메모리 **${ramPct}%** 사용 중${ramGb ? ` (총 ${ramGb}GB${ramFreeGb !== undefined ? ` · 여유 ${ramFreeGb}GB` : ''})` : ''}`
+          : ''
+      }`
+    );
+
+    const rankedRows: Array<{ label: string; mb: number }> = [];
+    const seenKeys = new Set<string>();
+    if (browserBn?.browserName && Number(browserBn.browserMemoryMb || 0) >= 100) {
+      seenKeys.add('chrome');
+      seenKeys.add('msedge');
+      seenKeys.add('whale');
+      rankedRows.push({
+        label: `**${browserBn.browserName}** (${browserBn.processCount ?? '?'}개 프로세스 · 약 ${browserBn.browserMemoryGb}GB${
+          browserBn.browserSharePercent ? ` · 전체 RAM의 ${browserBn.browserSharePercent}%` : ''
+        })`,
+        mb: Number(browserBn.browserMemoryMb || 0),
+      });
+    }
+    for (const g of guiApps) {
+      const nm = String(g?.name || '').trim();
+      const mb = Number(g?.memoryMb || 0);
+      if (!nm || mb < 60 || seenKeys.has(nm.toLowerCase())) continue;
+      seenKeys.add(nm.toLowerCase());
+      const memTxt = mb >= 1024 ? `${(mb / 1024).toFixed(1)}GB` : `${Math.round(mb)}MB`;
+      rankedRows.push({
+        label: `**${nm}** (${memTxt}${g.count && g.count > 1 ? ` · ${g.count}개` : ''})`,
+        mb,
+      });
+    }
+    for (const hm of highMemRats) {
+      const nm = String(hm?.name || '').replace(/^\[메모리\s*과점유\]\s*/i, '').trim();
+      const k = nm.split(/\s+/)[0].toLowerCase();
+      const mb = Number(hm?.sizeMb || 0);
+      if (!nm || mb < 60 || seenKeys.has(k)) continue;
+      seenKeys.add(k);
+      const memTxt = mb >= 1024 ? `${(mb / 1024).toFixed(1)}GB` : `${Math.round(mb)}MB`;
+      rankedRows.push({ label: `**${nm}** (${memTxt})`, mb });
+    }
+    rankedRows.sort((a, b) => b.mb - a.mb);
+
+    if (rankedRows.length > 0) {
+      lines.push('');
+      lines.push('**현재 메모리를 가장 많이 쓰고 있는 앱 TOP**');
+      rankedRows.slice(0, 6).forEach((row, i) => {
+        lines.push(`${i + 1}. ${row.label}`);
+      });
+    } else {
+      lines.push('• 현재 비정상적으로 메모리를 과점유 중인 백그라운드 앱이 없습니다.');
+    }
+
+    if (browserBn?.detected) {
+      lines.push('');
+      lines.push(`💡 안 쓰는 **${browserBn.browserName}** 탭을 몇 개 닫고 브라우저를 한 번 재시작하시면 즉시 체감 속도가 빨라집니다.`);
+    }
+
+    speak('현재 피씨의 실시간 씨피유와 메모리를 가장 많이 쓰는 앱을 실측해 정리해 드렸습니다.');
+    return reply(sourceTab, lines.join('\n'), {
+      followUpSuggestions: [
+        '빨간색(삭제·차단 안전) 항목만 정리해줘',
+        '은행·관공서 보안절전',
+        '데스크톱 전원 옵션 고성능으로 바꿔줘',
+      ],
+    });
+  }
+
   // 0-0C) [제미니 에이전트 자유 문답 + 다중 취사선택 PC 정리 트랙 (2026-11-24 Ghosti × MerlinHub 합의 5대 기둥)]
   // - C드라이브 대용량 공간 도둑 3초 스캔 / 보안모듈·애드웨어 2분류 / 바탕화면 상세 분석 & WD 시스템 아이콘 안전 숨김
   // - 직전 스캔 원장(lastCareScanContext)을 60개·5키로 Gemini에 주입해 "예스파일·오캠 빼고 나머지 다 지워", "큰 폴더는 D:로 옮겨줘" 멀티턴 지령 수행!

@@ -1248,7 +1248,10 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       raw.length <= 36 &&
       !isDirectCareOrStatusCommand &&
       !/(진단해|점검해|정리해|치워|지워|삭제해|복구해|복원해|손봐|알려\s*줘|보여\s*줘|찾아\s*줘|깨워|재워|구독|해지|결제|청소\s*앱|클리너|컴퓨터|컴터|피씨|용량|공간|모자라|답답|버벅|느려|이상한|팝업)/i.test(raw);
+    const isExplicitQuestConsentChip =
+      raw === '좋아, 알려줘' || raw === '좋아, 예쁘게 바꿔줘';
     const shouldBypassSecretaryPlaybook =
+      !isExplicitQuestConsentChip &&
       !isNickOrStoreSpecial &&
       !isAnsweringInitialNickname &&
       (isDirectCareOrStatusCommand ||

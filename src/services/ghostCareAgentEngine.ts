@@ -1064,39 +1064,61 @@ export async function executeAgentCareBatchCard(
   let updatedFreeGb: number | undefined;
   let updatedProjGb: number | undefined;
 
-  // 버킷 1: 숨은 쥐새끼 차단 · 서비스 수동 전환 · 시작프로그램 해제
-  if (ratItems.length > 0) {
-    const disableTasks = ratItems.filter((i) => i.ratKind === 'SCHEDULED_TASK' && i.targetKey).map((i) => i.targetKey!);
-    const manualServices = ratItems.filter((i) => i.ratKind === 'WINDOWS_SERVICE' && i.targetKey).map((i) => i.targetKey!);
-    const disableStartups = ratItems.filter((i) => i.ratKind === 'STARTUP_ITEM' && i.targetKey).map((i) => i.targetKey!);
-    const stopProcesses = ratItems.filter((i) => i.ratKind === 'HIGH_MEM_PROCESS' && i.targetKey).map((i) => i.targetKey!);
-    const rRat = await callCareApi<any>(
-      '/api/care/hidden-rats-apply',
-      {
-        disableTasks,
-        manualServices,
-        disableStartups,
-        stopProcesses,
-        userApprovalTypedText: userApprovalText,
-      },
-      45000
-    );
+  // [병렬 고속 실행]: 서로 충돌하지 않는 버킷(스케줄러·서비스 / 안전 캐시 / 바탕화면 / 보안모듈 수면)을
+  // 순차 대기 대신 Promise.all로 병렬 실행해 '안전 정리 실행 중...' 체감 대기 시간을 절반 이하로 단축합니다.
+  const [rRat, rDisk, rDesk, rSlp] = await Promise.all([
+    ratItems.length > 0
+      ? callCareApi<any>(
+          '/api/care/hidden-rats-apply',
+          {
+            disableTasks: ratItems.filter((i) => i.ratKind === 'SCHEDULED_TASK' && i.targetKey).map((i) => i.targetKey!),
+            manualServices: ratItems.filter((i) => i.ratKind === 'WINDOWS_SERVICE' && i.targetKey).map((i) => i.targetKey!),
+            disableStartups: ratItems.filter((i) => i.ratKind === 'STARTUP_ITEM' && i.targetKey).map((i) => i.targetKey!),
+            stopProcesses: ratItems.filter((i) => i.ratKind === 'HIGH_MEM_PROCESS' && i.targetKey).map((i) => i.targetKey!),
+            userApprovalTypedText: userApprovalText,
+          },
+          45000
+        )
+      : Promise.resolve(null),
+    diskHogItems.length > 0
+      ? callCareApi<any>(
+          '/api/care/disk-hog-clean',
+          {
+            includeIds: diskHogItems.map((i) => i.id),
+            excludeIds: card.excludedNames || [],
+            moveDestinationDrive: card.moveDestinationDrive || '',
+            userApprovalTypedText: userApprovalText,
+          },
+          60000
+        )
+      : Promise.resolve(null),
+    desktopItems.length > 0 || (card.action === 'desktop_batch_action' && card.visibleSystemIcons?.length)
+      ? (() => {
+          const paths = desktopItems.map((i) => i.path || '').filter(Boolean);
+          const isMove = Boolean(card.moveDestinationDrive);
+          return callCareApi<any>(
+            '/api/care/desktop-batch-action',
+            {
+              recyclePaths: isMove ? [] : paths,
+              movePaths: isMove ? paths : [],
+              moveDestinationDrive: card.moveDestinationDrive || 'D:',
+              hideSystemIcons: card.visibleSystemIcons?.length && paths.length === 0 ? ['user_files'] : [],
+              userApprovalTypedText: userApprovalText,
+            },
+            45000
+          );
+        })()
+      : Promise.resolve(null),
+    sleepItems.length > 0 || card.action === 'security_2tier_apply'
+      ? callCareApi<any>('/api/care/sleep', { explicitOptIn: true }, 55000)
+      : Promise.resolve(null),
+  ]);
+
+  if (rRat) {
     if (rRat.ok) anyOk = true;
     if (rRat.data?.reportKo) reportBlocks.push(String(rRat.data.reportKo));
   }
-
-  // 버킷 2: C드라이브 대용량 캐시 · hiberfil.sys · D: 드라이브 안전 이사
-  if (diskHogItems.length > 0) {
-    const rDisk = await callCareApi<any>(
-      '/api/care/disk-hog-clean',
-      {
-        includeIds: diskHogItems.map((i) => i.id),
-        excludeIds: card.excludedNames || [],
-        moveDestinationDrive: card.moveDestinationDrive || '',
-        userApprovalTypedText: userApprovalText,
-      },
-      60000
-    );
+  if (rDisk) {
     if (rDisk.ok) anyOk = true;
     if (rDisk.data?.reportKo || rDisk.data?.message) {
       reportBlocks.push(String(rDisk.data.reportKo || rDisk.data.message));
@@ -1104,27 +1126,18 @@ export async function executeAgentCareBatchCard(
     if (typeof rDisk.data?.currentFreeGb === 'number') updatedFreeGb = rDisk.data.currentFreeGb;
     if (typeof rDisk.data?.projectedFreeAfterEmptyGb === 'number') updatedProjGb = rDisk.data.projectedFreeAfterEmptyGb;
   }
-
-  // 버킷 3: 바탕화면 선택 파일/폴더 휴지통 이동 · D: 이사 · 특수아이콘 숨김
-  if (desktopItems.length > 0 || (card.action === 'desktop_batch_action' && card.visibleSystemIcons?.length)) {
-    const paths = desktopItems.map((i) => i.path || '').filter(Boolean);
-    const isMove = Boolean(card.moveDestinationDrive);
-    const rDesk = await callCareApi<any>(
-      '/api/care/desktop-batch-action',
-      {
-        recyclePaths: isMove ? [] : paths,
-        movePaths: isMove ? paths : [],
-        moveDestinationDrive: card.moveDestinationDrive || 'D:',
-        hideSystemIcons: card.visibleSystemIcons?.length && paths.length === 0 ? ['user_files'] : [],
-        userApprovalTypedText: userApprovalText,
-      },
-      45000
-    );
+  if (rDesk) {
     if (rDesk.ok) anyOk = true;
     if (rDesk.data?.reportKo) reportBlocks.push(String(rDesk.data.reportKo));
   }
+  if (rSlp) {
+    if (rSlp.ok) anyOk = true;
+    if (rSlp.data?.toastMessage) {
+      reportBlocks.push(`🌙 **[실사용 보안모듈 무삭제 수면 적용]**\n${rSlp.data.toastMessage}`);
+    }
+  }
 
-  // 버킷 4: 악성 PUP 적출 + 설치 앱 2-Pass 심층 제거
+  // 버킷 4: 악성 PUP 적출 + 설치 앱 2-Pass 심층 제거 (MSI/설치기 경합 방지를 위해 단독 실행)
   const pupIds = uninstallOrPupItems.filter((i) => i.id.startsWith('pup_')).map((i) => i.id);
   const appNames = uninstallOrPupItems.filter((i) => !i.id.startsWith('pup_')).map((i) => i.name);
   if (appNames.length > 0 || pupIds.length > 0) {
@@ -1145,15 +1158,6 @@ export async function executeAgentCareBatchCard(
       reportBlocks.push(
         `⚠️ **[일부 프로그램 제거 미완료]** 선택한 프로그램(${appNames.length + pupIds.length}건) 중 일부는 제거 창이 닫혔거나 시간이 초과되어 건너뛰었습니다. 필요한 항목만 개별 체크해 다시 시도해 주세요.`
       );
-    }
-  }
-
-  // 버킷 5: 실사용 은행·관공서 보안모듈 무삭제 수면
-  if (sleepItems.length > 0 || card.action === 'security_2tier_apply') {
-    const rSlp = await callCareApi<any>('/api/care/sleep', { explicitOptIn: true }, 55000);
-    if (rSlp.ok) anyOk = true;
-    if (rSlp.data?.toastMessage) {
-      reportBlocks.push(`🌙 **[실사용 보안모듈 무삭제 수면 적용]**\n${rSlp.data.toastMessage}`);
     }
   }
 
@@ -1296,9 +1300,15 @@ export function detectAgentCareIntent(
   );
 
   // 1) 직전 스캔 목록을 보고 "3번 뭐야?", "이거 지워도 돼?", "이게 뭐 하는 프로그램이야?", "꼭 남겨야 할 거 알려줘" 되묻는 경우
+  // (주의: "좋아, 알려줘" 퀘스트 수락 칩이나 "지금 CPU·메모리 제일 많이 쓰는 앱 알려줘" 같은 실시간 점유 조회는 절대 가로채지 않음!)
+  const isQuestChipOrCpuRamAsk =
+    clean === '좋아, 알려줘' ||
+    clean === '좋아, 예쁘게 바꿔줘' ||
+    /(?:cpu|메모리|램|ram).*(?:제일\s*많이|가장\s*많이|많이\s*쓰는|점유|먹는)/i.test(clean);
   const isAskingExplain =
     hasRecentScan &&
-    /(뭐야|뭔데|뭐\s*하는|무슨\s*(앱|프로그램|파일|폴더)|지워도\s*(돼|되|괜찮|안전)|삭제해도\s*(돼|되|괜찮)|설명해|알려\s*줘|남겨야|놔둬야|지울\s*거\s*골라|추천해|어떻게\s*골라|멘붕|모르겠)/i.test(
+    !isQuestChipOrCpuRamAsk &&
+    /(뭐야|뭔데|뭐\s*하는|무슨\s*(앱|프로그램|파일|폴더)|지워도\s*(돼|되|괜찮|안전)|삭제해도\s*(돼|되|괜찮)|설명해|(?:이거|이\s*항목|#?\d+\s*번|남겨야|지워야|뭐\s*지우|어떻게\s*골라).*?알려\s*줘|남겨야|놔둬야|지울\s*거\s*골라|추천해|어떻게\s*골라|멘붕|모르겠)/i.test(
       clean
     ) &&
     !/(빼고|제외하고|나머지\s*다|일괄\s*삭제|다\s*지워|옮겨\s*줘)/i.test(clean);
