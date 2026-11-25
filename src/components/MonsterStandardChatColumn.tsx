@@ -960,6 +960,15 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
     };
 
     const onRegState = () => {
+      // 비로그인 초대 링크 열람 모드이거나 데스크톱 PC 엔진 미연결·미동의 상태에서는 여권사진 등록을 선제 안내하지 않음
+      const curStoreForPassport = useSaySeeStore.getState();
+      if (
+        curStoreForPassport.isGuestPreviewMode ||
+        (!isMobileOrStore && (!zCoreBridge.isConnected || !hasActiveGhostiLoginSession()))
+      ) {
+        return;
+      }
+
       // 유저가 '여권 등록'을 먼저 입력해 '다 찾으면 바로 알려드릴게요!'라고 약속한 대기 요청이 있으면 최우선 이행
       if (fulfillUserWaitIfReady(false)) return;
 

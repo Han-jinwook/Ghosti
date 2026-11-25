@@ -1,5 +1,5 @@
 import type { StateCreator } from 'zustand';
-import { getZCoreUrl, zCoreBridge, ensureLoginAndZCoreReady } from '../../services/zCoreBridge';
+import { getZCoreUrl, hasActiveGhostiLoginSession, zCoreBridge, ensureLoginAndZCoreReady } from '../../services/zCoreBridge';
 import { submitExternalMonsterChatQuery } from '../../services/monsterChatRouter';
 import {
   isMobileVoiceEnvironment,
@@ -533,9 +533,14 @@ export const createAssistantOnboardingSlice: StateCreator<
 
     // 데스크톱(본 웹 화면 + 독립 귀신검색창 공통) 첫 기동·새로고침 시 헬스체크 응답 전에 빈 상태(0장)로 1차 initApp() 후
     // 재연결 2차 initApp(true)가 이중 실행되어 화면이 멈추거나 깜빡이는 현상을 원천 차단합니다.
-    if (!isCapacitorNativeMobileRuntime() && !zCoreBridge.isConnected) {
+    // 단, 비로그인·엔진 미동의·공유방 초대 링크 게스트 세션에서는 백그라운드 PC Z-코어(5199)에 무단 자동 연결하지 않습니다.
+    if (
+      !isCapacitorNativeMobileRuntime() &&
+      !zCoreBridge.isConnected &&
+      (isStandaloneSearchWin || hasActiveGhostiLoginSession())
+    ) {
       await Promise.race([
-        zCoreBridge.checkHealth(true),
+        zCoreBridge.checkHealth(isStandaloneSearchWin),
         new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 950)),
       ]);
     }
@@ -603,11 +608,17 @@ export const createAssistantOnboardingSlice: StateCreator<
       })
       .catch(() => {});
 
-    const cachedOnDeviceFaces = loadCachedOnDeviceFaceClusters();
+    const canUseDesktopLocalFaces =
+      isCapacitorNativeMobileRuntime() || (zCoreBridge.isConnected && hasActiveGhostiLoginSession());
+    const cachedOnDeviceFaces = canUseDesktopLocalFaces
+      ? loadCachedOnDeviceFaceClusters()
+      : { clusters: [], latestCorpusYear: 2026 };
     const hasOnDeviceCache = cachedOnDeviceFaces.clusters.length > 0;
     const rawFaceClusters = hasOnDeviceCache
       ? cachedOnDeviceFaces.clusters
-      : faceData.clusters;
+      : canUseDesktopLocalFaces
+      ? faceData.clusters
+      : [];
     const effectiveLatestYear = hasOnDeviceCache
       ? cachedOnDeviceFaces.latestCorpusYear
       : faceData.latestCorpusYear;
@@ -876,6 +887,9 @@ export const createAssistantOnboardingSlice: StateCreator<
     // ➔ Stage 3: 백그라운드 비전/OCR 768D 인덱싱(120장 배치, 완료 후 워커 terminate) 순으로 1개씩만 순차 실행합니다.
     const runFacePassportStage = async (): Promise<void> => {
       if (isStandaloneSearchWin || typeof window === 'undefined' || enrichedPhotos.length === 0) return;
+      if (!isCapacitorNativeMobileRuntime() && (!zCoreBridge.isConnected || !hasActiveGhostiLoginSession())) {
+        return;
+      }
       try {
         const stNow = get();
         const livePhotos = stNow.photos.length > 0 ? stNow.photos : enrichedPhotos;

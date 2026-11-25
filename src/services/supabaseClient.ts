@@ -571,10 +571,12 @@ export function purgeAllGhostiLocalAuthArtifacts(opts?: {
     localStorage.removeItem('userEmail');
     localStorage.removeItem('userProfileImage');
     localStorage.removeItem('ghosti_prelaunch_verified_email');
+    localStorage.removeItem('ghosti_secretary_engine_agreed');
     localStorage.setItem('merlin_logged_out', '1');
     try {
       sessionStorage.removeItem('merlin_session_token');
       sessionStorage.removeItem('merlin_cached_user');
+      sessionStorage.removeItem('ghosti_one_stop_agreed');
       sessionStorage.setItem('merlin_logged_out', '1');
     } catch {
       /* ignore */

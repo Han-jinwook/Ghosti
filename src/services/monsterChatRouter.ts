@@ -12,7 +12,7 @@ import {
   resolveTargetDocAndBuildFactAnswer,
   dispatchFileToKakaoRealChatroom,
 } from './voiceSearchAndAiBatonEngine';
-import { getZCoreUrl, zCoreBridge } from './zCoreBridge';
+import { getZCoreUrl, hasActiveGhostiLoginSession, zCoreBridge } from './zCoreBridge';
 import {
   isAndroidMobileBrowserOrApp,
   isCapacitorNativeMobileRuntime,
@@ -577,8 +577,8 @@ async function zcoreJson<T = any>(path: string, init?: RequestInit, timeoutMs = 
         return { ok: false, error: ZCORE_OFFLINE_MESSAGE };
       }
       const data = (await res.json()) as any;
-      if (!zCoreBridge.isConnected) {
-        void zCoreBridge.checkHealth(true);
+      if (!zCoreBridge.isConnected && hasActiveGhostiLoginSession()) {
+        void zCoreBridge.checkHealth(false);
       }
       if (res.status === 403) {
         return { ok: false, error: data?.error || '허용되지 않은 화면에서 요청되어 Z-코어가 실행을 거절했습니다.' };

@@ -536,6 +536,10 @@ export const Stage1MinimalCarePreview: React.FC = () => {
                     ? '표시할 사진이 없습니다.'
                     : '스마트폰 앱에서 사진첩 접근을 허용하면 자동으로 분류됩니다.'}
                 </span>
+              ) : isDesktopWebMode && !zConnected ? (
+                <span className="text-slate-600 font-medium text-[13.5px]">
+                  오른쪽 귀신비서에서 내 컴퓨터를 연결하면 내 PC의 정리 후보 사진을 확인할 수 있습니다.
+                </span>
               ) : isPcBootLoading && quarantinedPhotos.length === 0 ? (
                 <span className="text-slate-600 font-medium text-[13.5px]">
                   내 PC의 정리 후보 사진(중복·연사·캡처·흔들림)을 불러오고 있습니다...

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from 'react';
 import { useSaySeeStore } from '../store/useSaySeeStore';
-import { zCoreBridge } from '../services/zCoreBridge';
+import { hasActiveGhostiLoginSession, zCoreBridge } from '../services/zCoreBridge';
 import { isMobileVoiceEnvironment } from '../services/setupMonsterTts';
 import { playBabyGhostChime } from './OnboardingModal';
 
@@ -40,10 +40,13 @@ export function openGhostSecretaryFirstModal(payload: SecretaryFirstModalPayload
   if (zCoreBridge.isConnected) return;
   void (async () => {
     // Z-코어를 방금 재기동한 직후(폴링 3초 간격 도래 전) 클릭했을 때 오작동 미리보기 모달이 뜨지 않도록 즉시 실시간 헬스체크 선검증
-    const aliveNow = await Promise.race([
-      zCoreBridge.checkHealth(true),
-      new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 450)),
-    ]);
+    // 단, 비로그인·미동의·초대 링크 게스트 세션에서는 백그라운드 PC 데몬에 무단 자동 연결하지 않음
+    const aliveNow = hasActiveGhostiLoginSession()
+      ? await Promise.race([
+          zCoreBridge.checkHealth(false),
+          new Promise<boolean>((resolve) => window.setTimeout(() => resolve(false), 450)),
+        ])
+      : false;
     if (aliveNow || zCoreBridge.isConnected) return;
     try {
       playBabyGhostChime('summon');
@@ -73,30 +76,24 @@ export function useIsSecretaryFirstBrowseGuardActive(): boolean {
 
   if (connected) return false;
   if (layout === 'mobile' || isStoreAppMode || isMobileVoiceEnvironment()) return false;
-  if (isGuestPreviewMode) return false;
   if (
     activeLoungeType === 'family' ||
     activeLoungeType === 'club' ||
     activeLoungeType === 'student' ||
-    activeLoungeType === 'work' ||
-    isInvitedMemberSession
+    activeLoungeType === 'work'
   ) {
     return false;
   }
 
   if (typeof window !== 'undefined') {
     const params = new URLSearchParams(window.location.search);
-    if (
-      params.get('preview') === 'guest' ||
-      params.has('invite') ||
-      params.has('workRoom') ||
-      params.has('token') ||
-      params.get('ghostSearchWindow')
-    ) {
+    if (params.get('ghostSearchWindow')) {
       return false;
     }
   }
 
+  void isGuestPreviewMode;
+  void isInvitedMemberSession;
   return true;
 }
 

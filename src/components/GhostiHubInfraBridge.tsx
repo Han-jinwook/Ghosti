@@ -293,6 +293,7 @@ const GhostiHubGlobalModals: React.FC = () => {
     clearGhostSecretaryAccountNicknameOnLogout();
     resetSharedMonsterChatToWelcome();
     clearCachedSharedRoomTokens();
+    zCoreBridge.disconnectForLogout();
     storeSharedRefs.activeSharedRoomId = null;
     storeSharedRefs.knownJoinedRoomIds.clear();
     if (!hasUrlInviteToken) {
@@ -303,29 +304,18 @@ const GhostiHubGlobalModals: React.FC = () => {
         state.activeLoungeType === 'family' ||
         state.activeLoungeType === 'club' ||
         state.activeLoungeType === 'student';
-      const cleanedLocalPhotos = state.photos.filter(
-        (p) =>
-          !String(p.id || '').startsWith('shadow-remote-') &&
-          !String(p.id || '').startsWith('shared_sb_') &&
-          !String(p.id || '').startsWith('shared_added_')
-      );
-      const cleanedLocalDocs = state.localDocuments.filter(
-        (d) => !String(d.id || '').startsWith('shadow-remote-doc-')
-      );
       const cleanedSearchResults = isInSharedLounge
         ? []
-        : state.searchResults.filter(
-            (r) =>
-              !String(r.photo?.id || '').startsWith('shadow-remote-') &&
-              !String(r.photo?.id || '').startsWith('shared_sb_') &&
-              !String(r.photo?.id || '').startsWith('shared_added_')
-          );
+        : [];
       return {
-        photos: cleanedLocalPhotos,
-        localDocuments: cleanedLocalDocs,
-        matchedLocalDocs: state.matchedLocalDocs.filter(
-          (d) => !String(d.id || '').startsWith('shadow-remote-doc-')
-        ),
+        photos: [],
+        duplicateGroups: [],
+        faceClusters: [],
+        localDocuments: [],
+        matchedLocalDocs: [],
+        videoSceneItems: [],
+        matchedVideoScenes: [],
+        matchedVaultPhotos: [],
         pcAgentPairedMobile: false,
         thisDeviceRevoked: false,
         connectedDevices: [],
