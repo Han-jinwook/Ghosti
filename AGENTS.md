@@ -458,3 +458,10 @@ otion_qa.py, z_core_watcher.py) 역시 [멀린허브], 충전소, 귀신코인, 
 2. **체크인(읽기) 시 `z_core_watcher.py`가 0.01초 자동 합본 ➔ 1~4귀신 전체 맥락 열람**:
    - 체크인 시 `python z_core_watcher.py --role N`을 실행하면 파이썬이 `SESSION_HANDOVER_1~4.md` 4개 원문을 누락 없이 그대로 이어붙여 [`docs/SESSION_HANDOVER.md`](file:///d:/Ghosti/docs/SESSION_HANDOVER.md) 통합본을 자동 갱신합니다.
    - 각 에이전트는 체크인 시 합본 [`docs/SESSION_HANDOVER.md`](file:///d:/Ghosti/docs/SESSION_HANDOVER.md)를 읽어 자기 직전 작업과 다른 귀신 3명의 최신 변경 사항을 모두 파악합니다.
+
+---
+
+### 🔕 [멀린님 직접 모델 선정·토큰 관리 원칙 — 모델 언급·전환 제동 전면 금지 (2026-11-25 멀린님 지시)]
+
+- 모델 선정과 토큰 쿼터 관리는 **멀린님이 직접 설정·운용**하시므로, 에이전트는 체크인·버그 감지·코딩 착수·작업 완료 등 **어떠한 순간에도 채팅창에서 모델 이름이나 모델 변경·전환·복귀·코딩 모델 방어 문구를 일절 언급하지 않습니다.**
+- 현재 선택된 모델 상태 그대로 제동 없이 즉시 작업을 수행합니다.
