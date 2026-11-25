@@ -28,32 +28,32 @@
 
 # 🔵 `[2귀신]` 세션 인계장 (`SESSION_HANDOVER_2.md` — 귀신검색 · 귀신창 · OCR · 라벨러)
 
-- **최종 갱신 일시**: 2026-11-25 01:46 (KST)
+- **최종 갱신 일시**: 2026-11-25 16:32 (KST)
 - **담당 역할**: `[2귀신]` (귀신검색 · `Ctrl+0` 귀신창 · 사진/표 OCR · 귀신라벨링 · 동영상 재생)
-- **공정 달성률**: 코드 완성도 **`100%`** (`Z-Core v2.7.72` / 커밋 `10eb694`) · 테스팅 완성도 **`76%`** (완료 17건 / 재테스트 대기 2건 / 미결 버그 0건 / 신규 미션 8건)
-- **세션 창 제목**: `2귀신 코드100%·미션8건출제`
+- **공정 달성률**: 코드 완성도 **`94%`** (`Z-Core v2.9.9` / 커밋 `8486b00`) · 테스팅 완성도 **`45%`** (완료 5건 / 테스트 중 1건 / 재테스트 대기 3건 / 테스트 미션 9건 / 미결 버그 0건)
+- **세션 창 제목**: `2귀신 Z코어v2.9.9·문서최신화`
 
 ## 완료 내역
-1. **안드로이드 네이티브 뒤로가기 앱 종료 방지 & 연사 묶음 전역 Union-Find 병합 (`52b06be`, 모바일 `v1.0.77`)**
-   - `@capacitor/app` 미설치로 무동작하던 뒤로가기를 `MainActivity.java` `OnBackPressedCallback` ➔ `App.tsx` `window.__ghostiHandleNativeBack()` 직결로 해결.
-   - `aiPhotoFaceEngine.ts` `groupBurstSearchResults`를 전역 Union-Find 병합(동일 `duplicateGroupId`·동일/근접 `dHash`·동일 파일명/용량·확장 멤버 교차 병합)으로 전면 교체해 배지 없는 중복 카드 분리 노출 제거.
-2. **동영상 상세보기 자동 재생 복원 & 무복사 즉시 HTTP 206 스트리밍 (`d9c440c`, 모바일 `v1.0.78`)**
-   - `MainActivity.java` `setMediaPlaybackRequiresUserGesture(false)` 해제 + 1ms 후미 `FileChannel` 프로브 무복사 HTTP 206 스트리밍(`180MB` 이하 강제 전체 복사 제거), `ghostiMobileCareBridge.ts` 12MB 초과 영상 통째 Blob 다운로드 제거, `VideoScenePreviewModal.tsx` 일반 재생(`0초`) 자동 재생 분리 및 웹 정책 차단 시 음소거 즉시 재생(`소리 켜기` 버튼) 적용.
-3. **귀신라벨링 원본 EXIF 촬영일 우선 · 0.5초 초고속화 & 클립보드 경합 원천 차단 (`93a211a`, `236a5c6`, `167792a`)**
-   - `aiSharedRuntime.ts`: 원본 JPEG 64KB 헤더 초고속 EXIF `DateTimeOriginal`/`DateTimeDigitized`(`0x9003`/`0x9004`, IFD0 수정일 `0x0132` 제외) 1순위 ➔ 파일명 촬영 타임스탬프 2순위 ➔ `dateStr` ➔ `mtimeMs` 최후 폴백으로 교정.
-   - `proFeatureGate.ts` · `aiPhotoFaceEngine.ts` · `GhostLabelerActionButton.tsx`: 활성 Pro/체험 `0ms` 통과, OCR+캐시벡터 병렬 실행(중복 이미지 fetch 제거), 결과 메모이제이션, 연속 클릭 시 이전 요청 `AbortController` 즉시 중단(`0.95초` 상한), 브라우저 Clipboard `1ms` 우선 + 단조 `seq`/Z-코어 `Abort` 경합 차단.
-4. **귀신검색 체험판 2단계 도장 오표시 제거 · 최소화 귀신검색창 복원 & 구버전 Z-코어 무한 열림 차단 (`a3dd0bb`, `4182b27`, `5a78972`, `1dacdb1`)**
-   - `[귀신검색창 열기]` 단순 호출 시 `'작게 모드'` 도장이 오표시되던 로직을 제거하고 명시 전환 시에만 `markGhostDojoStep` SSOT 기록.
-   - `DesktopDashboard.tsx`의 `open_search_window` 2.5초 하트비트 호출을 제거해 구버전 Z-코어(`<v2.7.53`) 무한 창 열림을 원천 차단하고, OS 창 타이틀 호환(`👻 귀신검색창`/`귀신검색창`)으로 최소화 창 즉시 전면 복원 보장.
-5. **윈도우 10/11 공통 `Ctrl+0`/`Ctrl+우클릭` 선택 파일(`.jfif`·사진앱 포함) `[1]`번 고정 · `WH_MOUSE_LL` 0.01ms 무지연 훅 · 내장 하드 순차 렌더링 & USB/외장 볼륨 생애 1회 질문 · 사진 촬영일 최신순 정렬 (`cf5eace` ~ `48e34e9`)**
-   - `seq_paste_daemon.py` · `ghost_search_window_ui2.py` · `plugin_ghosti_os.py`: 탐색기·바탕화면·사진앱 선택 파일 `[1]`번+우측 큰 미리보기 고정, `Ctrl+0` 키업 축소 차단, `Shell.Application` COM `0.45초` 워커 격리, 타이핑 중 요요 제거, 3단계 드라이브 정책(C: 즉시 ➔ 내장 D:~Z: 유휴 ➔ USB 생애 1회 질문·Read-Only 0바이트·로컬 `%LOCALAPPDATA%\Merlin\external_cache\<VOL_ID>` 격리·분리 시 즉시 숨김) 완결.
-   - `aiPhotoFaceEngine.ts`: 귀신검색 전체 보기 사진 목록을 파일 복사일이 아닌 실제 촬영일(`canonicalDate`·`canonicalMtimeMs`, 13자리 Unix epoch ms 포함) 최신순 내림차순으로 일관 정렬 교정.
-6. **웹 `2. 귀신검색` 외장 드라이브 배너 연동 · 30일 외장 캐시 GC (`10eb694`, 코드 100%) & 노션 100% 완주 미션 8건 출제**
-   - `ExternalDrivePromptBanner.tsx` · `Stage1MinimalSearchPreview.tsx` · `merlin_z_core_daemon.py` (`GET /__zcore/external-drives`, `POST /__zcore/external-drives/decide`): 네이티브 UI2 배너와 1:1 동등 UX(유휴 0px·hidden 0폴링) + `_trigger_monthly_orphan_cache_gc_once()` 내 30일 미접속 외장 캐시 자동 정리 완결.
-   - 노션 `[테스트 미션]` 신규 8건 출제 (USB 1/2·2/2, 윈도우10 실전, 모바일 `v1.0.78`, 100% 완주 1/4~4/4).
+1. **귀신검색창(`51988`) 5대 먹통·부팅 공백 근본 처치 & 전 클러스터 배포 (`Z-Core v2.8.61 ~ v2.9.9`, `d463420` · `ff11622` · `9ab4b47` · `ab35d0f`)**
+   - PyInstaller `--onefile` ➔ **`--onedir`** 전환(`Merlin_Z_Core_Setup.exe` + `_internal/`)으로 123초 `_MEI` 2차 압축해제/Defender 지연을 제거하고 부팅을 `1~2초`로 단축.
+   - `seq_paste_daemon.py` 기동 순서 역전(`0.1초` `RegisterHotKey(Ctrl+0)`·`WH_MOUSE_LL`·`PeekMessageW` 최우선 바인딩, 무거운 `Tkinter/PIL/OCR` 에셋 예열은 `root.mainloop()` 진입 후 `root.after(80)` 및 백그라운드 스레드로 지연).
+   - 초기 부팅 중 워치독 오판 자살(`ui_stage=init` 19.7초 킬) 원천 차단(초기 워밍업 스테이지 45초 부팅 유예 + `plugin_ghosti_superpowers.py` `--onedir` 재스폰 유예 `45초 ➔ 12초` 단축).
+   - Win32 Named Mutex(`Local\MerlinGhostiSeqPasteDaemon_v1`) 원자적 핸드오프(`_release_single_instance_mutex` 선반납 + `WaitForSingleObject(2.5s)`), 28개 전 구역 동기 `SendMessageW` `0건` 전수 박멸(`_send_msg_timeout_val`), `WH_MOUSE_LL` 90초 주기 무중단 `Hook-Swap`(`WM_APP_REHOOK`), 롤링 블랙박스 진단 로그(`%LOCALAPPDATA%\Ghosti\data\seq_paste_diag.log`, 512KB), `WM_RBUTTONUP` 중복 발화 억제 적용.
+   - 1~6호기 전 클러스터 `Z-Core v2.9.9` 무중단 배포 및 `zcore_board.py` 공용 엔진 작업 문패 반납 완료.
+2. **2계층 전 드라이브 공정 라운드-로빈 BFS 스캔 & `바다`/`캠핑`/`우루과이` 누락 근본 해결 (`2046ef8` · `811050c`, `v2.8.64 ~ v2.8.91`)**
+   - `ghosti_setup_parity.py`: 드라이브 간(`C:`·`D:`·`E:`) 1:1 교차 + 드라이브 내 주요 폴더(`Desktop`/`Downloads`/`Documents`/`Pictures`/`Videos`/`카카오톡 받은 파일`) 1:1 교차 스캔으로 특정 대용량 폴더의 1,200폴더 상한 독점 원천 차단.
+   - `C:\` 직하 개발 레포(`.git`/`package.json` 등) 및 보안 폴더(`xecuressl`/`wizvera` 등) 자동 배제, `C:\MerlinTools\Ghosti_Test_Corpus` 자동 포함, 드라이브별 공정 쿼터(`_select_fair_by_drive`, 최대 14,000건) 적용 (4호기 실측: `C:` 스캔 폴더 `1,212 ➔ 84개`, `바다` `1 ➔ 47건`, `캠핑` `2 ➔ 54건`, `우루과이` `0 ➔ 3건`).
+3. **한글 IME 실시간 미확정 음절(`ImmGetCompositionStringW`) · 활성 창 한/영 상태 자동 계승 · `UI2` `0.72ms` 스템 캐시 · `[원본 열기]` 3중 폴백 (`fd174a0` · `66e2420`, `v2.8.79 ~ v2.8.94`)**
+   - `ghost_search_window_ui2.py` · `seq_paste_daemon.py`: 스페이스바/엔터 확정 전 조합 중인 마지막 한글 음절(`'바'` + `'다'` ➔ `'바다'`) 실시간 결합 검색 + 소환 직전 활성 창의 한/영 상태(`ImmGetConversionStatus` & `WM_IME_CONTROL`, 바탕화면 경유 시 직전 0.45초 사용자 창 상태 유지) 자동 동기화.
+   - `UI2` 14,000건 사전 토크나이즈 스템 캐시(`_s_title`/`_s_sub`/`_s_tags`)로 타이핑 1글자당 필터링 `94.2ms ➔ 0.72ms`(130배 단축), `[원본 열기]` STA COM `CoInitializeEx` + `os.startfile` + `ShellExecuteW("open")` 3중 폴백 및 `selected_fp_lock` 적용.
+4. **상단 타이틀바·필터바 자유 드래그 이동 (`4c55e23`, `v2.8.93` — 해나라님 테스트 통과 `완료`!) & `[조용한 정리 | 빠른 정리]` 토글 안내 일원화 (`f7ea54d`)**
+   - 다중 모니터 클램핑, 드래그 중 외부 클릭 오닫힘 방어(`ui_dragging`), 드래그 후 `small ➔ medium` 확장 시 이동 위치 유지 및 닫은 뒤 재소환 시 마우스 커서 위치 초기화.
+   - `SilentIndexingStatusBar.tsx` 토글 명칭 통일 및 인라인 한 줄/툴팁 차이점 설명 추가.
+5. **문서 3종 In-Place 최신화 (`8486b00`)**
+   - `docs/기능명세.md`, `docs/멀린_Z_코어_통합_아키텍처_명세서.md`, `docs/README.md`에 `Z-Core v2.9.9` 아키텍처 및 `[2귀신]` 5대 핵심 변경사항 100% 반영 완료.
 
 ## 다음 체크인 Todo
-- [ ] `python d:\Ghosti\z_core_watcher.py --watch --role 2` 기동 후 해나라님 재테스트 대기 2건(`귀신창 크기 요요` · `C드라이브 외 검색`) 및 신규 미션 8건 피드백/버그 즉시 대응 (테스팅 `76% ➔ 100%` 마감).
+- [ ] `python d:\Ghosti\z_core_watcher.py --watch --role 2` 기동 후 해나라님 `테스트 중`(1건: `C드라이브만 검색`), `재테스트 대기`(3건: `귀신검색창 실행 안됨 재발생` · `검색창 언어 문제` · `작은 귀신검색창 무관 파일 노출`), `테스트 미션`(9건) 피드백/버그 즉시 대응 (테스팅 `45% ➔ 100%` 완주).
 
 ---
 
@@ -88,27 +88,30 @@
 
 ---
 
-# 🟣 `[4귀신]` 세션 인계장 (`SESSION_HANDOVER_4.md` — 업무 공유 `S:` · 귀신비서 에이전트 1·2차 고도화)
+# 🟣 `[4귀신]` 세션 인계장 (`SESSION_HANDOVER_4.md` — 업무 공유 `S:` · 1PC 단일 계정 점유 · 귀신비서 고도화)
 
-- **최종 갱신 일시**: 2026-11-25 01:41 (KST)
-- **담당 역할**: `[4귀신]` (업무 공유 `S:` + 귀신비서 제미니 에이전트 PC 자가케어 1·2차 고도화 전담)
-- **로컬 엔진 버전**: `Merlin Z-Core v2.8.01` (`684c1eb` · `df1da5a`, 로컬 6호기 · 1~4호기 클러스터 배포 및 `SYSTEM` 헬퍼 실측 통과)
+- **최종 갱신 일시**: 2026-11-25 15:37 (KST)
+- **담당 역할**: `[4귀신]` (`5. 업무 공유 (S:)` 전담 + 귀신비서 제미니 에이전트 PC 자가케어 1·2차 고도화)
+- **최신 배포 버전**: **`Merlin Z-Core v2.9.19`** (전 클러스터 1~6호기 무중단 원자적 스왑 완료) · 양대 모바일 스토어 **`v1.0.109 (109)`** (`e1c4548`)
 - **세션 창 제목**: `4귀신 비서고도화·v2.8.01완결`
 
 ## 완료 내역 (2026-11-24 ~ 11-25)
-1. **업무 공유(`S:`) 마운트·초절전·팀원 DB 복원 · PC 연속 F5 로그아웃 4중 차단 (`3b1a7c3`, `33ce504`, `cc065ef`, `2708837`, `f198897`)**
-   - `WorkLoungeB2BHub.tsx` 직렬 마운트 및 재부팅 자동 복원, 4대 타이머 `hidden` 시 0회 정지 + `knownSig` 유휴 Base64/리렌더링 0회, `work_list_my_rooms` 초대 팀원 영구 복원, F5 자동 로그아웃 4중 차단 및 `MerlinHub` 교차 보강 완결.
-2. **3호기(달나라)·4호기(해나라) PC 실측 전수 진단 기준서 작성 (`docs/3호4호_PC정밀진단_및_귀신비서_자가케어_대조기준서.md`)**
-   - 내일 점심 실전 자가케어 대조용 Before 원본 보존 (**원격 정리·삭제 0건 유지**).
-3. **귀신비서 제미니 에이전트 자유 문답 + 다중 PC 정리 1차(5대 기둥) · 2차(미등록 숨은 쥐새끼 전수 수색 & 무삭제 서비스 수동 전환) 구현 (`394a66b`, `a381f07`, `d1cf567`, `e5811b5`)**
-   - `plugin_ghosti_agent_care.py` · `plugin_ghosti_care_suite.py` · `ghostCareAgentEngine.ts` · `monsterChatRouter.ts` · `MonsterInteractiveCards.tsx`: `C:` 공간 도둑 3초 스캔 + `D:\귀신비서_보관함` 안전 이사, 데스크톱 배터리 가드(`hiberfil.sys`/고성능), 보안모듈·애드웨어 2분류 + Zero-Trust 2-Pass 배치 언인스톨 + `.disabled_by_ghosti` 잠금 DLL 적출, 바탕화면 상세 분석 & `WD` 시스템 아이콘 안전 숨김, `cloudflared.exe` 단일 락, `GET /api/care/hidden-rats-scan`(PowerShell `-EncodedCommand`) + 제미니 3단계 정체 해석(`enrichUnknownRatsWithGemini`) + `[이게 뭐예요?]` Q&A + `POST /api/care/hidden-rats-apply`(무삭제 `Manual` 전환 + 1초 원복).
-4. **`MerlinHub` 정밀 크로스체크 `P0 6건 + P1 4건` 전량 패치 · `Z-Core v2.8.01` 배포 · 2차 재검증 최종 `PASS (Sign-Off)` 획득 (`684c1eb`)**
-   - `P0-1` `MULTI` 5대 버킷 순차 실행 & 중복 행 제거, `P0-2` `0-0A` 조건부 제외·이사 가로채기 차단, `P0-3` 일반 사무직원 자유 발화(조사 `이/가`·`답답`·`이상한 창`·`모자라`) SSOT 통합 & 별명 오인 차단, `P0-4` 현역 `SenseTalk_Engine.exe(:28888)` 완전 보호(2개 이상 중복 시 초과분만 종료), `P0-5` `incIdSet.size === 0` 시 `defaultSelected` 안전 모수 한정, `P0-6` UAC `35초` · 공용 큐(`C:\ProgramData\Merlin\care_queue`) · `SYSTEM` 헬퍼 `Users` 실행 SDDL · `ghosti_safe_ops` 승격 원복 · 단일 복원 지점 통합, `P1-1~4` 완결.
-   - 3·4호기 Read-Only 실측 통과 (`3호기 VER=2.8.01 TOTAL=10 HELPER=True|SYSTEM`, `4호기 VER=2.8.01 TOTAL=20 HELPER=True|SYSTEM`).
-5. **점심 직후 자유 발화형 노션 실전 QA 미션 카드 2장(해나라·달나라) 출제 · 레거시 껍데기 폴더(`Ghosti_Search`, `Ghosti_Share`) 영구 삭제 · 1~4귀신 개별 인계장 분리 및 `z_core_watcher.py` 자동 합본 세팅 (`df1da5a`, `fa66b1a`)**
-   - 정해진 명령어 예시 없이 목적만 제시해 일반 사무직원 말투로 자유 대화 ➔ 비서 가이드 순응 검증하도록 개편.
-   - 4개 창 동시 체크아웃 충돌 0%를 위해 `SESSION_HANDOVER_1~4.md` 개별 저장 + 체크인 시 파이썬 0.01초 자동 합본(`SESSION_HANDOVER.md`) 세팅 및 `AGENTS.md`·`docs/README.md` 명문화 완료.
+1. **동일 PC 동시 1계정 단독 점유(카카오톡 PC 방식) SSOT 구축·검증·배포 (`d4dd45d`, `v1.0.108` / `Z-Core v2.8.99`)**
+   - 구 다중 계정 공존 임시 코드(`accountWorkEntitlements` 등) 전면 폐기 후 `docs/정책_및_핵심원칙.md` §5.4-⑨ 확정안 반영.
+   - Z-코어 `GET/POST /__merlin/account-owner`(`%LOCALAPPDATA%\Merlin\active_pc_account_owner.json`, 탭별 `sessions` 추적 · `75s` TTL · `pagehide` 시 세션 슬롯만 즉시 반납하여 대장 PC 24시간 `S:` 유지와 순차 교대 로그인 마찰 0초 양립) + 프론트 공용 SSOT `src/services/pcSingleAccountGuard.ts` + `GhostiHubInfraBridge.tsx` 충돌 전환 모달(`[이 계정으로 전환하기]` 클릭 시 기존 창 4초 내 `DISPLACED_BY_OTHER_ACCOUNT` 자동 로그아웃·`S:` 해제) 완결 및 `3귀신` 연동 인계 완료.
+2. **업무 공유(`S:`) 팀원 내보내기(Kick) 보안·UX·모바일 미참여 화면 정합화 (`906b6cd`, `7dc39a1`, `f138275`, `1e50cb8`)**
+   - 내보내기 재확인 모달 단순화, 확인 즉시 팀원 카드 제거·초대 토큰 자동 회전, 피추방 팀원 화면에서 사용자가 `[확인]`을 누를 때까지 유지되는 `[공유방 연결 해제 안내]` 모달 적용.
+   - `_TUNNEL_LOCK` 재진입 교착(`Lock` ➔ `RLock`) 근본 수정, 비활성 본인 방장방(`isHost && !ownerGate.ok`)을 `work_list_my_rooms`에서 제외해 모바일 앱이 항상 `'현재 연결된 업무 공유방이 없습니다'`로 일관 표시되도록 교정, 새 초대 링크 재합류 시 이전 해제 안내 기록 즉시 소거.
+3. **업무 공유(`S:`) 실전 연동 4대 버그 근본 처치 (`e1c4548`, `v1.0.109` / `Z-Core v2.9.19`, 카드 `41df9ffd`)**
+   - **별명 자가 치유**: 초대 수락 직후 허브 세션 동기화 틈새에 `'초대 팀원'` 임시 문자열이 DB에 저장되던 버그를 클라이언트·서버 양단에서 원천 차단하고, 기존 `'초대 팀원'` DB 레코드도 허브 실닉네임/이메일 아이디로 자동 PATCH 치유.
+   - **팀원 PC `.jpg` `[⏳ 업로드 중...]` 무한 대기 해소**: 비방장(팀원 PC)에서 `upsertWorkFilesToSupabase`가 방장 전용 아웃바운드 터널을 오기동해 자기 터널로 덮어쓰던 근본 원인을 `isHost` 가드 + Z-코어 `WORK_HOST_ONLY_TUNNEL` 차단으로 박멸하고, 업로드 `AbortController` 타임아웃(12~15초) 및 터널 회전 시 1회 자동 재획득 + `try/finally` 상태 해제 적용.
+   - **`(n건 동기화됨)` 숫자 반복 증가 차단**: `mapRawWorkFileToDto` 가짜 해시 문자열 제거, `pull_sync_work_files` 크기·수정시각(`±3초`)·바이트 해시 3중 멱등성 검증 및 `pullSig` 변경 시에만 동기화 실행하도록 교정.
+   - **팀원 카드 깜빡임(생겼다 사라짐) 해소**: `REQUEST_WORK_SNAPSHOT` 시 방장의 구 메모리 멤버 목록 브로드캐스트 제거, 초대 수락 즉시 `WORK_MEMBERS_UPDATED` 전파, `joinedInvitedRoom`/`serverMembers` 참조 안정화로 불필요한 Realtime 재연결 루프 제거.
+4. **귀신비서 제미니 에이전트 자유 문답 + 다중 PC 정리 1·2차 고도화 및 `MerlinHub` 크로스체크 `PASS` (`394a66b` ~ `684c1eb`)**
+   - `C:` 공간 도둑 3초 스캔·`D:\귀신비서_보관함` 이사, 데스크톱 배터리 가드, 보안모듈·애드웨어 2분류, 미등록 숨은 쥐새끼 전수 수색(`GET /api/care/hidden-rats-scan`) + 제미니 3단계 해석 + 무삭제 `Manual` 전환(`POST /api/care/hidden-rats-apply`) 완결.
+5. **현 시점 `[4귀신]` 공정 달성률 (2026-11-25 15:37 기준)**
+   - **코드 완성도 `94%` / 실기기 테스팅 완성도 `35%`** (노션 카드 완료 5건, 재테스트 대기 2건, 발견된 버그 0건, 미착수 실전 테스트 미션 10건 대기).
 
 ## 다음 체크인 Todo
-- [ ] **점심 직후 3호기(달나라)·4호기(해나라) 귀신비서 실전 자가케어 결과 대조**: `docs/3호4호_PC정밀진단_및_귀신비서_자가케어_대조기준서.md` 10대 지표 전/후 검증 및 피드백 반영.
-- [ ] **제미니 2층 응답·오류(`👎`) 피드백 DB 고도화**: 필요 시 `ghosti_gemini_feedback_logs` 정식 테이블 + 말풍선 `👍/👎` 버튼 + 주간 정규식 승격 감사 스크립트(`audit_gemini_feedback.py`) 구축.
+- [ ] **재테스트 대기 2건(`팀원 내보내기 S: 보호`, `실전 연동 1/2 별명·업로드·동기화`) 테스터 확인 결과 대응**.
+- [ ] **미착수 실전 미션 10건(`G:` 구글드라이브·`MYBOX` 동시 연결, `.gsheet` 검색, 외부망 LTE 직통 터널·모바일 현장 업로드, 5인 정원 초과 차단, 야간 초절전 하룻밤 가동, 달나라 PC 대화형 자가케어) 피드백 즉시 패치**.
