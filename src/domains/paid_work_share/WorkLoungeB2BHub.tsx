@@ -2046,6 +2046,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
           myRoomRole={myRoomRole}
           activeWorkRoomId={activeWorkRoomId}
           setServerMembers={setServerMembers}
+          onPersistMembersCache={(nextMembers) => {
+            if (activeWorkRoomId && merlinAuth?.email) {
+              saveCachedServerMembers(activeWorkRoomId, nextMembers, merlinAuth.email);
+            }
+          }}
           showToast={showToast}
         />
 

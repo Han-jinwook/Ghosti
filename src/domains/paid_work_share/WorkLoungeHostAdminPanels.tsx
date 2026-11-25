@@ -46,6 +46,7 @@ export interface WorkLoungeHostAdminPanelsProps {
   myRoomRole: 'host' | 'editor' | 'viewer';
   activeWorkRoomId: string;
   setServerMembers: React.Dispatch<React.SetStateAction<WorkRoomServerMemberDto[]>>;
+  onPersistMembersCache?: (members: WorkRoomServerMemberDto[]) => void;
   showToast: (msg: string) => void;
 }
 
@@ -75,8 +76,50 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
   myRoomRole,
   activeWorkRoomId,
   setServerMembers,
+  onPersistMembersCache,
   showToast,
 }) => {
+  const [pendingKickMember, setPendingKickMember] = React.useState<WorkTeamMemberViewItem | null>(
+    null
+  );
+  const [isKickingMember, setIsKickingMember] = React.useState<boolean>(false);
+
+  React.useEffect(() => {
+    if (!pendingKickMember) return undefined;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && !isKickingMember) {
+        setPendingKickMember(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [pendingKickMember, isKickingMember]);
+
+  const handleConfirmKickMember = async () => {
+    if (!pendingKickMember || isKickingMember) return;
+    const target = pendingKickMember;
+    setIsKickingMember(true);
+    try {
+      const ok = await removeWorkRoomMemberOnServer({
+        roomId: activeWorkRoomId,
+        memberEmail: target.email,
+      });
+      if (ok) {
+        setServerMembers((prev) => {
+          const next = prev.filter((sm) => sm.email !== target.email);
+          onPersistMembersCache?.(next);
+          return next;
+        });
+        setPendingKickMember(null);
+        showToast(`${target.name}님을 업무 공유방에서 내보냈습니다.`);
+      } else {
+        showToast('팀원 내보내기 처리에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+      }
+    } finally {
+      setIsKickingMember(false);
+    }
+  };
+
   return (
     <>
       {showBackupManager && (
@@ -358,18 +401,8 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
                       </select>
                       <button
                         type="button"
-                        onClick={async () => {
-                          const ok = await removeWorkRoomMemberOnServer({
-                            roomId: activeWorkRoomId,
-                            memberEmail: member.email,
-                          });
-                          if (ok) {
-                            setServerMembers((prev) =>
-                              prev.filter((sm) => sm.email !== member.email)
-                            );
-                            showToast(`${member.name}님을 업무 공유방에서 내보냈습니다.`);
-                          }
-                        }}
+                        onClick={() => setPendingKickMember(member)}
+                        data-testid={`work-member-kick-btn-${member.email}`}
                         className="px-2 py-1 rounded-md bg-white hover:bg-rose-50 border border-rose-200 text-rose-700 text-[10.5px] font-medium cursor-pointer"
                       >
                         내보내기
@@ -383,6 +416,61 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
                 </div>
               </div>
             ))}
+          </div>
+        </div>
+      )}
+
+      {pendingKickMember && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          data-testid="work-member-kick-confirm-modal"
+          onClick={() => {
+            if (!isKickingMember) setPendingKickMember(null);
+          }}
+          className="fixed inset-0 z-[120] flex items-center justify-center bg-black/55 backdrop-blur-[2px] p-4"
+        >
+          <div
+            onClick={(e) => e.stopPropagation()}
+            className="w-full max-w-md rounded-2xl bg-white border border-slate-200 shadow-2xl p-5 flex flex-col gap-3.5"
+          >
+            <div className="flex flex-col gap-1">
+              <span className="inline-flex self-start px-2.5 py-0.5 rounded-full bg-rose-50 border border-rose-200 text-rose-700 text-[11px] font-bold">
+                팀원 내보내기 재확인
+              </span>
+              <h3 className="text-[16px] text-slate-900 font-extrabold tracking-tight mt-0.5">
+                {pendingKickMember.name}님을 업무 공유방에서 내보내시겠습니까?
+              </h3>
+              {pendingKickMember.email && (
+                <span className="text-[11.5px] text-slate-500 font-mono truncate">
+                  계정: {pendingKickMember.email}
+                </span>
+              )}
+            </div>
+            <p className="text-[12.5px] text-slate-600 leading-relaxed break-keep">
+              내보내기를 확인하면 이 팀원의 업무 공유방 문서 열람 및 S: 드라이브 연결 권한이 즉시 해제됩니다.
+              (실수로 내보내더라도 다시 초대 링크를 보내면 언제든 재합류할 수 있습니다)
+            </p>
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                disabled={isKickingMember}
+                onClick={() => setPendingKickMember(null)}
+                data-testid="work-member-kick-cancel-btn"
+                className="px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-[12.5px] font-semibold cursor-pointer disabled:opacity-50 transition-colors"
+              >
+                취소
+              </button>
+              <button
+                type="button"
+                disabled={isKickingMember}
+                onClick={() => void handleConfirmKickMember()}
+                data-testid="work-member-kick-confirm-btn"
+                className="px-4 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-[12.5px] font-bold cursor-pointer disabled:opacity-60 shadow-sm transition-colors"
+              >
+                {isKickingMember ? '내보내는 중...' : '내보내기 확인'}
+              </button>
+            </div>
           </div>
         </div>
       )}
