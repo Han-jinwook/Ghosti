@@ -1,7 +1,8 @@
 /**
- * Version: v2.3.7
- * Last Updated: 2026-11-20
+ * Version: v2.3.8
+ * Last Updated: 2026-11-25
  * Merlin Hub SDK — 프로필/선물함/알림/로그아웃 카드
+ * - v2.3.8: HubLogoutCard 1-A 공식 표준(로그아웃 순정 블루 강조 + 회원탈퇴 저강조 연회색, Merlin Hub SDK v2.26.5) 동기화
  * - v2.3.7: 로그아웃 시 루트('/') 강제 이동 및 sessionStorage.clear()·profileUpdated 역호출 제거로 온보딩 튕김·뒤로가기 세션 부활 원천 차단 (현재 화면 즉시 게스트 전환)
  * - v2.3.6: 프로필 모달 오픈 직후 빠른 [로그아웃] 클릭 시 인플라이트 getProfile() 응답 차단 및 location.replace 단일 리로드 정리
  * - v2.3.5: HubLogoutCard 내 [회원 탈퇴] 버튼 및 안전 2중 확인 모달 탑재 (개별 앱 단독 탈퇴 API + onWithdrawApp 콜백 지원)
@@ -601,7 +602,7 @@ export const HubLogoutCard: React.FC<HubLogoutCardProps> = ({
         <div className="p-3.5 sm:p-4 flex flex-col gap-2">
           <button
             onClick={handleLogout}
-            className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-teal-50 border border-teal-200 text-teal-800 text-xs sm:text-sm font-bold rounded-xl hover:bg-teal-100 transition-colors shadow-xs cursor-pointer"
+            className="flex items-center justify-center gap-1.5 w-full px-3 py-2 bg-blue-50/80 border border-blue-200 text-blue-700 text-xs sm:text-sm font-bold rounded-xl hover:bg-blue-100 transition-colors shadow-xs cursor-pointer"
           >
             <LogOut className="h-3.5 w-3.5" />
             로그아웃
