@@ -191,10 +191,12 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(name);
   const isRemoteOrSharedPhoto = (p: PhotoItem): boolean => {
     const id = String(p.id || '');
+    const fp = String(p.fullPath || '');
     return (
       id.startsWith('shadow-remote-') ||
       id.startsWith('shared_sb_') ||
-      id.startsWith('shared_added_')
+      id.startsWith('shared_added_') ||
+      /^s:[\\/]/i.test(fp)
     );
   };
   const isDesktopWebMode = !isCapacitorNativeMobileRuntime() && !isStoreAppMode && layout !== 'mobile';

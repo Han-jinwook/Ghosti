@@ -1297,7 +1297,13 @@ export async function applyCachedPcOpticalAuditInstant(photos: PhotoItem[]): Pro
     /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(name);
   const isRemoteOrShared = (p: PhotoItem) => {
     const id = String(p.id || '');
-    return id.startsWith('shadow-remote-') || id.startsWith('shared_sb_') || id.startsWith('shared_added_');
+    const fp = String(p.fullPath || '');
+    return (
+      id.startsWith('shadow-remote-') ||
+      id.startsWith('shared_sb_') ||
+      id.startsWith('shared_added_') ||
+      /^s:[\\/]/i.test(fp)
+    );
   };
   const cloned = photos.map((p) => ({ ...p, tags: [...(p.tags || [])] }));
   const realCandidates = cloned.filter((p) => !p.quarantined && !isSample(p.name) && !isRemoteOrShared(p));
@@ -1336,7 +1342,7 @@ export async function applyCachedPcOpticalAuditInstant(photos: PhotoItem[]): Pro
   const clustered = clusterPhotosIntoDuplicateGroups(
     cloned.filter((p) => !isSample(p.name) && !isRemoteOrShared(p))
   );
-  // 원격/공유 사진은 클러스터링 대상에서 제외하되 photos 배열 내 검색용 항목은 손실 없이 유지
+  // 원격/공유/업무공유 S: 사진은 개인 정리 클러스터링 대상에서 제외하되 photos 배열 내 검색용 항목은 손실 없이 유지
   const remoteOrSharedKept = cloned.filter((p) => isRemoteOrShared(p));
   return {
     updatedPhotos:
@@ -1356,7 +1362,13 @@ export async function auditRealPcPhotosAndCluster(
     /^(IMG_2025|PET_2025|TRV_2025|DOC_2025|MEMO_2025|Screenshot_2025|BLUR_2025)/.test(name);
   const isRemoteOrShared = (p: PhotoItem) => {
     const id = String(p.id || '');
-    return id.startsWith('shadow-remote-') || id.startsWith('shared_sb_') || id.startsWith('shared_added_');
+    const fp = String(p.fullPath || '');
+    return (
+      id.startsWith('shadow-remote-') ||
+      id.startsWith('shared_sb_') ||
+      id.startsWith('shared_added_') ||
+      /^s:[\\/]/i.test(fp)
+    );
   };
 
   const realCandidates = photos.filter((p) => !p.quarantined && !isSample(p.name) && !isRemoteOrShared(p));
@@ -1369,7 +1381,8 @@ export async function auditRealPcPhotosAndCluster(
   try {
     await hydratePcOpticalAuditCacheOnce();
 
-    const targetSlice = realCandidates.slice(0, 800);
+    // /__photos/list 최대치(2000)와 일치시켜 새로고침·재연결 전후 후보 장수 일관성 100% 보장
+    const targetSlice = realCandidates.slice(0, 2000);
     const uncachedSlice: PhotoItem[] = [];
 
     for (const p of targetSlice) {
@@ -1384,7 +1397,7 @@ export async function auditRealPcPhotosAndCluster(
 
     if (uncachedSlice.length > 0) {
       // Crete 지각적 재블러링 지표는 280px/448px 썸네일에서도 100% 정확하므로,
-      // 경량 썸네일(thumbUrl)을 8장씩 고속 병렬 스캔하여 800장 기준 1~2초 내로 완료합니다.
+      // 경량 썸네일(thumbUrl)을 8장씩 고속 병렬 스캔하며 재연결 직후 일시 실패 시 1회 재시도해 누락 장수 편차를 차단합니다.
       const BATCH = 8;
       const newlyComputed: Array<{ key: string; meta: OpticalSignatureMeta }> = [];
       const auditOne = (p: PhotoItem): Promise<void> => {
@@ -1392,26 +1405,40 @@ export async function auditRealPcPhotosAndCluster(
         return new Promise((resolve) => {
           const img = new Image();
           img.crossOrigin = 'anonymous';
-          const timer = window.setTimeout(() => resolve(), 3500);
-          img.onload = () => {
+          let settled = false;
+          const finish = () => {
+            if (settled) return;
+            settled = true;
             window.clearTimeout(timer);
+            resolve();
+          };
+          const timer = window.setTimeout(finish, 6000);
+          img.onload = () => {
             const meta = computeOpticalDhashAndSharpness(img);
             pcOpticalAuditCache.set(cacheKey, meta);
             newlyComputed.push({ key: cacheKey, meta });
             applyOpticalMetaToPhoto(p, meta);
-            resolve();
+            finish();
           };
           const primaryUrl = p.thumbUrl || p.fullUrl;
           const fallbackUrl = p.thumbUrl && p.fullUrl && p.fullUrl !== p.thumbUrl ? p.fullUrl : '';
-          let triedFallback = false;
+          let retryStage = 0;
           img.onerror = () => {
-            if (!triedFallback && fallbackUrl) {
-              triedFallback = true;
+            if (settled) return;
+            if (retryStage === 0 && primaryUrl) {
+              retryStage = 1;
+              const sep = primaryUrl.includes('?') ? '&' : '?';
+              window.setTimeout(() => {
+                if (!settled) img.src = `${primaryUrl}${sep}_r=1`;
+              }, 350);
+              return;
+            }
+            if (retryStage < 2 && fallbackUrl) {
+              retryStage = 2;
               img.src = fallbackUrl;
               return;
             }
-            window.clearTimeout(timer);
-            resolve();
+            finish();
           };
           img.src = primaryUrl;
         });
