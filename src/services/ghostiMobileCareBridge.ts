@@ -861,7 +861,7 @@ export async function syncSharedNativeClipboardAuth(options: {
   deviceName: string;
   bridgeUrl: string;
 }): Promise<boolean> {
-  if (!isCapacitorAndroidRuntime()) return false;
+  if (!isCapacitorNativeMobileRuntime()) return false;
   try {
     const res = await GhostiMobileCareNative.syncSharedClipboardAuth(options);
     return Boolean(res?.ok);

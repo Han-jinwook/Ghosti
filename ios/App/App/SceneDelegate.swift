@@ -183,6 +183,9 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
         CAPPluginMethod(name: "setNativeThemeMode", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "readClipboardText", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "writeClipboardText", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "syncSharedClipboardAuth", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "syncSharedClipboardHistory", returnType: CAPPluginReturnPromise),
+        CAPPluginMethod(name: "consumePendingNativeClipboardOutbound", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "extractVideoNativeOcr", returnType: CAPPluginReturnPromise),
         CAPPluginMethod(name: "openNativeVideoPlayerModal", returnType: CAPPluginReturnPromise)
     ]
@@ -276,6 +279,43 @@ public class GhostiMobileCarePlugin: CAPPlugin, CAPBridgedPlugin {
             self?.lastObservedChangeCount = cc
             call.resolve(["ok": true, "changeCount": cc])
         }
+    }
+
+    @objc func syncSharedClipboardAuth(_ call: CAPPluginCall) {
+        let email = call.getString("email") ?? ""
+        let canonicalUid = call.getString("canonicalUserId") ?? ""
+        let hubToken = call.getString("hubToken") ?? ""
+        let deviceId = call.getString("deviceId") ?? ""
+        let deviceName = call.getString("deviceName") ?? "내 아이폰"
+        let bridgeUrl = call.getString("bridgeUrl") ?? GhostKeySharedClipboardStore.defaultBridgeUrl
+        GhostKeySharedClipboardStore.saveAuthContext(
+            email: email,
+            canonicalUserId: canonicalUid,
+            hubToken: hubToken,
+            deviceId: deviceId,
+            deviceName: deviceName,
+            bridgeUrl: bridgeUrl
+        )
+        call.resolve(["ok": true])
+    }
+
+    @objc func syncSharedClipboardHistory(_ call: CAPPluginCall) {
+        let rawArr = (call.getArray("items") as? [[String: Any]]) ?? []
+        let count = GhostKeySharedClipboardStore.mergeFromWebHistory(rawArr)
+        call.resolve(["ok": true, "count": count])
+    }
+
+    @objc func consumePendingNativeClipboardOutbound(_ call: CAPPluginCall) {
+        let pending = GhostKeySharedClipboardStore.consumePendingOutbound()
+        let out: [[String: Any]] = pending.map { it in
+            [
+                "clipHash": it.clipHash,
+                "text": it.text,
+                "senderName": it.senderName,
+                "createdAt": it.createdAt
+            ]
+        }
+        call.resolve(["ok": true, "items": out])
     }
 
     @objc func setNativeThemeMode(_ call: CAPPluginCall) {

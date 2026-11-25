@@ -219,7 +219,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.9.19"
+CORE_VERSION = "2.9.20"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -968,6 +968,10 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_paid_sync_ghostwin.get_os_clipboard_text(qp))
             return
 
+        if path in ("/__sync/auth-context", "/api/sync/auth-context"):
+            self._send_json(plugin_paid_sync_ghostwin.get_clipboard_e2ee_auth_status(qp))
+            return
+
         if path in ("/__videos/list", "/__videos/index", "/api/ghosti/videos/list"):
             self._send_json(plugin_ghosti_os.list_local_videos(qp))
             return
@@ -1386,9 +1390,15 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             self._send_json(plugin_paid_work_sdrive.manage_backup_server_nodes(body))
             return
 
-        # [5. 내 기기 통합 네이티브 클립보드 주입 & 원본 미러링 저장 API]
+        # [5. 내 기기 통합 네이티브 클립보드 주입 · 0.2초 직통 E2EE 컨텍스트 & 원본 미러링 저장 API]
         if path in ("/__sync/clipboard", "/api/sync/clipboard"):
             self._send_json(plugin_paid_sync_ghostwin.set_os_clipboard_text(body))
+            return
+
+        if path in ("/__sync/auth-context", "/api/sync/auth-context"):
+            if self._reject_untrusted():
+                return
+            self._send_json(plugin_paid_sync_ghostwin.set_clipboard_e2ee_auth_context(body))
             return
 
         if path in ("/__sync/mirror-pull", "/api/sync/mirror-pull"):
@@ -2375,6 +2385,10 @@ def main() -> None:
             pass
         try:
             plugin_ghosti_os.start_local_media_list_prewarmer()
+        except Exception:
+            pass
+        try:
+            plugin_paid_sync_ghostwin.start_native_clipboard_e2ee_daemon()
         except Exception:
             pass
 

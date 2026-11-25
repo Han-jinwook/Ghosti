@@ -472,21 +472,21 @@ export const CrossDeviceClipboardAndPairingBar: React.FC<{ compact?: boolean }> 
         </div>
       )}
 
-      {/* 3.6. iOS '붙여넣기 허용' 매번 팝업 1회 영구 해제 바로가기 */}
+      {/* 3.6. iOS 입력창 직결 키보드 & '붙여넣기 허용' 1회 영구 해제 바로가기 */}
       {isCapacitorIosRuntime() && (
-        <div className="px-3 py-2.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[12px]">
+        <div className="px-3 py-2.5 rounded-lg bg-teal-50/70 border border-teal-200 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-[12px]">
           <div className="flex flex-col gap-0.5 min-w-0">
-            <span className="font-semibold text-slate-900">
-              아이폰 &apos;붙여넣기 허용&apos; 팝업 매번 안 뜨게 하기 (1회 설정)
+            <span className="font-semibold text-teal-900">
+              아이폰 앱 열지 않고 바로 붙여넣기 · 팝업 없애기 (1회 설정)
             </span>
-            <span className="text-[11.5px] text-slate-600 leading-snug break-keep">
-              아이폰 <strong>설정 → 귀신같이 → 다른 앱에서 붙여넣기 → 허용</strong>으로 1번만 바꿔두면 팝업 없이 바로 자동 연동됩니다.
+            <span className="text-[11.5px] text-teal-800/90 leading-snug break-keep">
+              ① <strong>설정 → 일반 → 키보드 → 키보드 → 귀신 7일 클립보드(전체 접근 허용)</strong>를 켜면 카톡·메모장에서 앱을 열지 않고 바로 주고받으며, ② <strong>설정 → 귀신같이 → 다른 앱에서 붙여넣기 → 허용</strong>으로 바꾸면 확인 팝업이 다시 뜨지 않습니다.
             </span>
           </div>
           <button
             type="button"
             onClick={() => void openNativeAppPermissionSettings()}
-            className="px-2.5 py-1.5 rounded-md bg-slate-900 hover:bg-slate-800 text-white text-[11.5px] font-semibold cursor-pointer whitespace-nowrap shrink-0 self-start sm:self-center"
+            className="px-2.5 py-1.5 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold cursor-pointer whitespace-nowrap shrink-0 self-start sm:self-center"
           >
             아이폰 설정 열기
           </button>

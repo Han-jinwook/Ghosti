@@ -43,6 +43,7 @@ import {
 } from '../services/workRoomSyncService';
 import { resetSharedMonsterChatToWelcome } from '../services/monsterChatRouter';
 import {
+  clearPcZCoreClipboardAuthContext,
   getThisDeviceIdentity,
   loadCachedDeviceIntegrationSnapshot,
   loadCachedSyncedClips,
@@ -304,6 +305,7 @@ const GhostiHubGlobalModals: React.FC = () => {
     clearGhostSecretaryAccountNicknameOnLogout();
     resetSharedMonsterChatToWelcome();
     clearCachedSharedRoomTokens();
+    clearPcZCoreClipboardAuthContext();
     zCoreBridge.disconnectForLogout();
     storeSharedRefs.activeSharedRoomId = null;
     storeSharedRefs.knownJoinedRoomIds.clear();

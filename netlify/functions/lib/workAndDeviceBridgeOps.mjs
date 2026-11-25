@@ -2587,60 +2587,84 @@ export async function handleAuthedWorkAndDeviceAction({
     if (!cipherB64 || !ivB64 || !clipHash || cipherB64.length > 128000) {
       return { status: 400, body: { ok: false, reason: 'INVALID_E2EE_CLIP_PAYLOAD' } };
     }
-    const nowMs = Date.now();
-    const CLIPBOARD_TTL_MS = 7 * 24 * 3600 * 1000; // 7일(168시간) 보관 통일
-    const CLIPBOARD_MAX_ITEMS = 500;
-    const cutoffMs = nowMs - CLIPBOARD_TTL_MS;
-    const rawClientCreatedAt = String(body.createdAt || '').trim();
-    const parsedClientMs = rawClientCreatedAt ? Date.parse(rawClientCreatedAt) : NaN;
-    const effectiveCreatedAt =
-      Number.isFinite(parsedClientMs) && Math.abs(nowMs - parsedClientMs) <= 5 * 60 * 1000
-        ? new Date(parsedClientMs).toISOString()
-        : new Date(nowMs).toISOString();
-    const mailbox = await readStorageJson(
-      supabaseUrl,
-      serviceKey,
-      DEVICE_BUCKET,
-      `${emailHash}/clipboard_mailbox_v1.json`,
-      { items: [] }
-    );
-    const existing = Array.isArray(mailbox.items) ? mailbox.items : [];
-    const filtered = existing.filter(
-      (it) => it && it.clipHash !== clipHash && (Date.parse(it.createdAt || '') || 0) >= cutoffMs
-    );
-    filtered.unshift({
-      clipHash,
-      cipherB64,
-      ivB64,
-      senderDeviceId,
-      senderName,
-      createdAt: effectiveCreatedAt,
-    });
-    const trimmed = filtered.slice(0, CLIPBOARD_MAX_ITEMS);
-    const saved = await writeStorageJson(
-      supabaseUrl,
-      serviceKey,
-      DEVICE_BUCKET,
-      `${emailHash}/clipboard_mailbox_v1.json`,
-      { updatedAt: new Date(nowMs).toISOString(), items: trimmed }
-    );
-    if (!saved) {
-      return {
-        status: 502,
-        body: { ok: false, reason: 'CLIPBOARD_MAILBOX_WRITE_FAILED' },
-      };
+    if (!globalThis.__ghostiClipMailboxLocks) {
+      globalThis.__ghostiClipMailboxLocks = new Map();
     }
-    return {
-      status: 200,
-      body: {
-        ok: true,
-        count: trimmed.length,
-        retentionDays: 7,
-        maxItems: CLIPBOARD_MAX_ITEMS,
-        canonicalUserId: userId,
-        canonicalEmail: email,
-      },
-    };
+    const lockMap = globalThis.__ghostiClipMailboxLocks;
+    const prevLock = lockMap.get(emailHash) || Promise.resolve();
+    let releaseLock = () => {};
+    const nextLock = new Promise((resolve) => {
+      releaseLock = resolve;
+    });
+    lockMap.set(
+      emailHash,
+      prevLock.catch(() => {}).then(() => nextLock)
+    );
+    try {
+      await prevLock.catch(() => {});
+      const nowMs = Date.now();
+      const CLIPBOARD_TTL_MS = 7 * 24 * 3600 * 1000; // 7일(168시간) 보관 통일
+      const CLIPBOARD_MAX_ITEMS = 500;
+      const cutoffMs = nowMs - CLIPBOARD_TTL_MS;
+      const rawClientCreatedAt = String(body.createdAt || '').trim();
+      const parsedClientMs = rawClientCreatedAt ? Date.parse(rawClientCreatedAt) : NaN;
+      const effectiveCreatedAt =
+        Number.isFinite(parsedClientMs) && Math.abs(nowMs - parsedClientMs) <= 5 * 60 * 1000
+          ? new Date(parsedClientMs).toISOString()
+          : new Date(nowMs).toISOString();
+      const mailbox = await readStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/clipboard_mailbox_v1.json`,
+        { items: [] }
+      );
+      const existing = Array.isArray(mailbox.items) ? mailbox.items : [];
+      const filtered = existing.filter(
+        (it) => it && it.clipHash !== clipHash && (Date.parse(it.createdAt || '') || 0) >= cutoffMs
+      );
+      filtered.unshift({
+        clipHash,
+        cipherB64,
+        ivB64,
+        senderDeviceId,
+        senderName,
+        createdAt: effectiveCreatedAt,
+      });
+      filtered.sort(
+        (a, b) => (Date.parse(b?.createdAt || '') || 0) - (Date.parse(a?.createdAt || '') || 0)
+      );
+      const trimmed = filtered.slice(0, CLIPBOARD_MAX_ITEMS);
+      const saved = await writeStorageJson(
+        supabaseUrl,
+        serviceKey,
+        DEVICE_BUCKET,
+        `${emailHash}/clipboard_mailbox_v1.json`,
+        { updatedAt: new Date(nowMs).toISOString(), items: trimmed }
+      );
+      if (!saved) {
+        return {
+          status: 502,
+          body: { ok: false, reason: 'CLIPBOARD_MAILBOX_WRITE_FAILED' },
+        };
+      }
+      return {
+        status: 200,
+        body: {
+          ok: true,
+          count: trimmed.length,
+          retentionDays: 7,
+          maxItems: CLIPBOARD_MAX_ITEMS,
+          canonicalUserId: userId,
+          canonicalEmail: email,
+        },
+      };
+    } finally {
+      releaseLock();
+      if (lockMap.get(emailHash) === nextLock) {
+        lockMap.delete(emailHash);
+      }
+    }
   }
 
   if (action === 'device_pull_e2ee_clips') {
@@ -2659,6 +2683,9 @@ export async function handleAuthedWorkAndDeviceAction({
     );
     const items = (Array.isArray(mailbox.items) ? mailbox.items : [])
       .filter((it) => it && (Date.parse(it.createdAt || '') || 0) >= cutoffMs)
+      .sort(
+        (a, b) => (Date.parse(b?.createdAt || '') || 0) - (Date.parse(a?.createdAt || '') || 0)
+      )
       .slice(0, CLIPBOARD_MAX_ITEMS);
     return {
       status: 200,
