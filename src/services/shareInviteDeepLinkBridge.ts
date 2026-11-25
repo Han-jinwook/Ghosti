@@ -1,5 +1,5 @@
 import type { FamilyRoomId, LoungeType } from '../types/saysee';
-import { OFFICIAL_LAUNCH_LIVE } from '../components/GhostiShowroomLanding';
+import { OFFICIAL_LAUNCH_LIVE } from '../components/showroom/showroomDataAndUtils';
 import { hasAuthenticatedHubAccountSession } from './supabaseClient';
 import { isCapacitorNativeMobileRuntime } from './ghostiMobileCareBridge';
 import { resolveAccountScopedNickname } from './ghostSecretaryEngine';
