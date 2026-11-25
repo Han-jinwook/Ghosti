@@ -249,19 +249,46 @@ function clusterDismissSignature(c: Pick<FaceMemberCluster, 'representativePhoto
   return photo ? `${photo}::${box}` : '';
 }
 
-/** 아직 묻지 않은(등록·거절 안 된) 시기별 사진 */
+/** 아직 묻지 않은(등록·거절 안 된) 시기별 사진 (이미 5장이 채워진 시기 바구니는 자동 재추천 생략) */
 export function pendingCutsFor(c: FaceMemberCluster, st: PassportRegState): YearlyFaceBestCut[] {
   const confirmed = new Set(st.confirmedKeys);
   const rejected = new Set(st.rejectedKeys);
-  const selfSavedPhotos =
-    c.clusterId === st.selfClusterId
-      ? new Set((st.confirmedSelfCuts || []).map((yc) => yc.representativePhoto).filter(Boolean))
-      : new Set<string>();
-  return clusterCuts(c).filter((cut) => {
+  const isSelf = c.clusterId === st.selfClusterId;
+  const selfSavedPhotos = isSelf
+    ? new Set((st.confirmedSelfCuts || []).map((yc) => yc.representativePhoto).filter(Boolean))
+    : new Set<string>();
+  const rejectedPhotosForCluster = new Set(
+    st.rejectedKeys
+      .filter((k) => k.startsWith(`${c.clusterId}::`) || (isSelf && Boolean(st.selfClusterId) && k.startsWith(`${st.selfClusterId}::`)))
+      .map((k) => k.split('::')[1])
+      .filter(Boolean)
+  );
+
+  // 인물별 고유 시기 바구니(성인 10년 / 미성년 5년)별 이미 등록된 장수를 계산하여,
+  // 빈 자리(< 5장)가 남은 바구니나 새 시기의 사진만 조용히 채워주고 이미 5장이 찬 바구니는 중복 재안내하지 않는다.
+  const spanYears = c.timelineBucket?.bucketSpanYears === 5 ? 5 : 10;
+  const anchorYear = c.timelineBucket?.anchorCreationYear || c.representativeYear || new Date().getFullYear();
+  const bucketIndexOf = (year: number) => Math.floor((anchorYear - (year || anchorYear)) / spanYears);
+  const confirmedCountByBucket = new Map<number, number>();
+  for (const cc of confirmedCutsFor(c, st)) {
+    const bIdx = bucketIndexOf(cc.year);
+    confirmedCountByBucket.set(bIdx, (confirmedCountByBucket.get(bIdx) || 0) + 1);
+  }
+
+  const pendingCountByBucket = new Map<number, number>();
+  const out: YearlyFaceBestCut[] = [];
+  for (const cut of clusterCuts(c)) {
     const k = cutKey(c.clusterId, cut);
-    if (cut.representativePhoto && selfSavedPhotos.has(cut.representativePhoto)) return false;
-    return !confirmed.has(k) && !rejected.has(k);
-  });
+    if (cut.representativePhoto && selfSavedPhotos.has(cut.representativePhoto)) continue;
+    if (cut.representativePhoto && rejectedPhotosForCluster.has(cut.representativePhoto)) continue;
+    if (confirmed.has(k) || rejected.has(k)) continue;
+    const bIdx = bucketIndexOf(cut.year);
+    const alreadyInBucket = (confirmedCountByBucket.get(bIdx) || 0) + (pendingCountByBucket.get(bIdx) || 0);
+    if (alreadyInBucket >= 5) continue;
+    pendingCountByBucket.set(bIdx, (pendingCountByBucket.get(bIdx) || 0) + 1);
+    out.push(cut);
+  }
+  return out;
 }
 
 /** 여권에 등록된 시기별 사진 (프로필 표시용 — 클러스터 컷 + 영구 보존된 확정 스냅샷 통합) */
