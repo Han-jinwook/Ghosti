@@ -2,7 +2,7 @@
 # -*- coding: utf-8 -*-
 """
 👻 귀신같이 (Ghosti) — 사내 실무 도그푸딩 & 순수 QA 겸용 『3대 모드 원클릭 전환기』
-- 버전: v1.0.0
+- 버전: v1.1.0
 - 핵심 설계 원칙:
   1. 프로덕션 웹 코드(src/*, https://ghosti.sundreamer.app) 무간섭 0.00% 원칙:
      테스트용 URL 파라미터(?factoryReset 등)를 실서버 웹 코드에 일절 넣지 않고,
@@ -42,15 +42,16 @@ import urllib.request
 import webbrowser
 import zipfile
 
-SWITCHER_VERSION = "1.0.0"
+SWITCHER_VERSION = "1.1.0"
 WINDOW_TITLE = f"👻 귀신같이 3대 모드 전환기 v{SWITCHER_VERSION}"
 
 GHOSTI_ORIGIN = "https://ghosti.sundreamer.app"
 GHOSTI_HOST = "ghosti.sundreamer.app"
 GHOSTI_LDB_PREFIX = b"_https://ghosti.sundreamer.app\x00"
+LEVELDB_MAX_SEQ = (1 << 56) - 1
 
 URL_MODE1_CLEAN_SHOWROOM = "https://ghosti.sundreamer.app/"
-URL_MODE2_PERSONAL = "https://ghosti.sundreamer.app/?dev=true&lounge=personal&tab=secretary"
+URL_MODE2_PERSONAL = "https://ghosti.sundreamer.app/?dev=true&lounge=personal&tab=trash"
 URL_MODE3_WORK_DEFAULT = "https://ghosti.sundreamer.app/?dev=true&lounge=work&tab=work"
 
 CREATE_NO_WINDOW = 0x08000000 if os.name == "nt" else 0
@@ -274,35 +275,79 @@ def _read_sstable_records(filepath: Path) -> List[Tuple[int, int, bytes, bytes]]
     return records
 
 
-def _iter_wal_batches(filepath: Path):
-    raw = filepath.read_bytes()
+def _scan_wal_batches(raw: bytes) -> Tuple[List[bytes], bool]:
+    """LevelDB WAL을 CRC32C 검증과 함께 파싱하여 (유효 배치 목록, 꼬리 손상/미완결 여부)를 반환합니다."""
     block_size = 32768
     pos = 0
+    n = len(raw)
+    batches: List[bytes] = []
     frag = bytearray()
-    while pos < len(raw):
+    in_frag = False
+    tail_dirty = False
+
+    while pos < n:
         rem = block_size - (pos % block_size)
         if rem < 7:
             pos += rem
             continue
+        if pos + 7 > n:
+            tail_dirty = True
+            break
         crc_m, length, rtype = struct.unpack_from("<IHB", raw, pos)
         if length == 0 and rtype == 0 and crc_m == 0:
+            # LevelDB zero-padded trailer to end of 32KB block
+            pos += rem
+            frag = bytearray()
+            in_frag = False
+            continue
+        if rtype not in (1, 2, 3, 4) or (7 + length) > rem or (pos + 7 + length) > n:
+            tail_dirty = True
+            frag = bytearray()
+            in_frag = False
             pos += rem
             continue
-        if pos + 7 + length > len(raw):
-            break
-        pos += 7
-        chunk = raw[pos : pos + length]
-        pos += length
+        chunk = raw[pos + 7 : pos + 7 + length]
+        expected_crc = mask_crc(crc32c(bytes([rtype]) + chunk))
+        if expected_crc != crc_m:
+            tail_dirty = True
+            frag = bytearray()
+            in_frag = False
+            pos += rem
+            continue
+        pos += 7 + length
         if rtype == 1:
-            yield bytes(chunk)
+            frag = bytearray()
+            in_frag = False
+            tail_dirty = False
+            batches.append(bytes(chunk))
         elif rtype == 2:
             frag = bytearray(chunk)
+            in_frag = True
+            tail_dirty = True
         elif rtype == 3:
-            frag.extend(chunk)
+            if in_frag:
+                frag.extend(chunk)
+                tail_dirty = True
+            else:
+                tail_dirty = True
         elif rtype == 4:
-            frag.extend(chunk)
-            yield bytes(frag)
-            frag = bytearray()
+            if in_frag:
+                frag.extend(chunk)
+                batches.append(bytes(frag))
+                frag = bytearray()
+                in_frag = False
+                tail_dirty = False
+            else:
+                tail_dirty = True
+
+    return batches, (tail_dirty or in_frag)
+
+
+def _iter_wal_batches(filepath: Path):
+    raw = filepath.read_bytes()
+    batches, _ = _scan_wal_batches(raw)
+    for b in batches:
+        yield b
 
 
 def _read_wal_records(filepath: Path) -> List[Tuple[int, int, bytes, bytes]]:
@@ -311,22 +356,43 @@ def _read_wal_records(filepath: Path) -> List[Tuple[int, int, bytes, bytes]]:
         if len(batch) < 12:
             continue
         seq, count = struct.unpack_from("<QI", batch, 0)
+        if seq == 0 or seq > LEVELDB_MAX_SEQ or count == 0 or count > 500_000:
+            continue
+        if seq + count - 1 > LEVELDB_MAX_SEQ:
+            continue
         pos = 12
-        for i in range(count):
-            if pos >= len(batch):
-                break
-            vtype = batch[pos]
-            pos += 1
-            klen, pos = read_varint(batch, pos)
-            ukey = batch[pos : pos + klen]
-            pos += klen
-            if vtype == 1:
-                vlen, pos = read_varint(batch, pos)
-                val = batch[pos : pos + vlen]
-                pos += vlen
-            else:
-                val = b""
-            records.append((seq + i, vtype, ukey, val))
+        batch_recs: List[Tuple[int, int, bytes, bytes]] = []
+        valid_batch = True
+        try:
+            for i in range(count):
+                if pos >= len(batch):
+                    valid_batch = False
+                    break
+                vtype = batch[pos]
+                pos += 1
+                if vtype not in (0, 1):
+                    valid_batch = False
+                    break
+                klen, pos = read_varint(batch, pos)
+                if pos + klen > len(batch):
+                    valid_batch = False
+                    break
+                ukey = batch[pos : pos + klen]
+                pos += klen
+                if vtype == 1:
+                    vlen, pos = read_varint(batch, pos)
+                    if pos + vlen > len(batch):
+                        valid_batch = False
+                        break
+                    val = batch[pos : pos + vlen]
+                    pos += vlen
+                else:
+                    val = b""
+                batch_recs.append((seq + i, vtype, ukey, val))
+        except Exception:
+            valid_batch = False
+        if valid_batch and len(batch_recs) == count:
+            records.extend(batch_recs)
     return records
 
 
@@ -347,7 +413,7 @@ def _parse_manifest_state(manifest_path: Path) -> Tuple[int, int]:
                     _, pos = read_varint(edit, pos)
                 elif tag == 4:
                     s, pos = read_varint(edit, pos)
-                    if s > last_seq:
+                    if s > last_seq and s <= LEVELDB_MAX_SEQ:
                         last_seq = s
                 elif tag == 5:
                     _, pos = read_varint(edit, pos)
@@ -402,19 +468,26 @@ def read_leveldb_state(leveldb_dir: Path) -> Optional[Tuple[Dict[bytes, bytes], 
                         all_recs.extend(_read_wal_records(fp))
                     except Exception:
                         pass
-        if active_log == 0 and log_files:
-            active_log = max(log_files)
+        valid_logs = [n for n in log_files if n >= active_log]
+        if valid_logs:
+            target_log = max(active_log, max(valid_logs))
+        elif active_log > 0:
+            target_log = active_log
+        elif log_files:
+            target_log = max(log_files)
+        else:
+            target_log = 1
         all_recs.sort(key=lambda x: x[0])
         kv: Dict[bytes, bytes] = {}
         max_seq = last_seq
         for seq, vtype, ukey, val in all_recs:
-            if seq > max_seq:
+            if seq <= LEVELDB_MAX_SEQ and seq > max_seq:
                 max_seq = seq
             if vtype == 1:
                 kv[ukey] = val
             elif vtype == 0:
                 kv.pop(ukey, None)
-        return kv, active_log, max_seq
+        return kv, target_log, max_seq
     except Exception:
         return None
 
@@ -422,7 +495,8 @@ def read_leveldb_state(leveldb_dir: Path) -> Optional[Tuple[Dict[bytes, bytes], 
 def append_wal_write_batch(wal_path: Path, start_seq: int, ops: List[Tuple[int, bytes, bytes]]) -> None:
     if not ops:
         return
-    payload = bytearray(struct.pack("<QI", start_seq, len(ops)))
+    safe_seq = max(1, min(int(start_seq), LEVELDB_MAX_SEQ - len(ops) - 1))
+    payload = bytearray(struct.pack("<QI", safe_seq, len(ops)))
     for vtype, ukey, val in ops:
         payload.append(vtype)
         payload.extend(encode_varint(len(ukey)))
@@ -432,10 +506,16 @@ def append_wal_write_batch(wal_path: Path, start_seq: int, ops: List[Tuple[int, 
             payload.extend(val)
 
     block_size = 32768
-    cur_size = wal_path.stat().st_size if wal_path.exists() else 0
+    cur_size = 0
+    tail_dirty = False
+    if wal_path.exists():
+        existing_raw = wal_path.read_bytes()
+        cur_size = len(existing_raw)
+        _, tail_dirty = _scan_wal_batches(existing_raw)
+
     out = bytearray()
     rem_in_block = block_size - (cur_size % block_size)
-    if rem_in_block < 7:
+    if (tail_dirty and (cur_size % block_size != 0)) or rem_in_block < 7:
         out.extend(b"\x00" * rem_in_block)
         rem_in_block = block_size
 
@@ -464,8 +544,22 @@ def append_wal_write_batch(wal_path: Path, start_seq: int, ops: List[Tuple[int, 
             out.extend(b"\x00" * rem_in_block)
             rem_in_block = block_size
 
-    with open(wal_path, "ab") as f:
-        f.write(out)
+    last_err: Optional[Exception] = None
+    for attempt in range(3):
+        try:
+            with open(wal_path, "ab") as f:
+                f.write(out)
+                f.flush()
+                try:
+                    os.fsync(f.fileno())
+                except Exception:
+                    pass
+            return
+        except OSError as exc:
+            last_err = exc
+            time.sleep(0.25 * (attempt + 1))
+    if last_err is not None:
+        raise last_err
 
 
 def decode_blink_ls_bytes(raw: bytes) -> str:
@@ -525,12 +619,11 @@ def iter_chromium_profiles(custom_roots: Optional[List[Tuple[str, Path]]] = None
     return out
 
 
-def close_running_chromium_browsers_gracefully() -> List[str]:
-    """실행 중인 Chrome/Edge/Whale 창에 WM_CLOSE를 보내 LevelDB를 안전하게 플러시한 뒤 종료합니다."""
+def _list_running_chromium_browsers() -> List[str]:
     if os.name != "nt":
         return []
     targets = ("chrome.exe", "msedge.exe", "whale.exe")
-    closed_any: List[str] = []
+    running: List[str] = []
     for exe in targets:
         try:
             chk = subprocess.run(
@@ -542,9 +635,23 @@ def close_running_chromium_browsers_gracefully() -> List[str]:
                 timeout=4,
                 creationflags=CREATE_NO_WINDOW,
             )
-            if exe.lower() not in (chk.stdout or "").lower():
-                continue
-            closed_any.append(exe)
+            if exe.lower() in (chk.stdout or "").lower():
+                running.append(exe)
+        except Exception:
+            pass
+    return running
+
+
+def close_running_chromium_browsers_gracefully() -> List[str]:
+    """실행 중인 Chrome/Edge/Whale 창에 WM_CLOSE를 보내 LevelDB를 안전하게 플러시한 뒤 완전 종료를 검증합니다."""
+    if os.name != "nt":
+        return []
+    closed_any = _list_running_chromium_browsers()
+    if not closed_any:
+        return []
+
+    for exe in closed_any:
+        try:
             # 1단계: 강제(/F) 없이 정상 종료 요청 -> 열린 탭 세션 보존 & LevelDB 정상 기록
             subprocess.run(
                 ["taskkill", "/IM", exe],
@@ -555,39 +662,159 @@ def close_running_chromium_browsers_gracefully() -> List[str]:
         except Exception:
             pass
 
-    if not closed_any:
-        return []
-
-    deadline = time.time() + 2.8
+    deadline = time.time() + 3.0
     while time.time() < deadline:
-        still_alive = False
-        for exe in closed_any:
-            r = subprocess.run(
-                ["tasklist", "/FI", f"IMAGENAME eq {exe}", "/NH"],
-                capture_output=True,
-                text=True,
-                encoding="cp949",
-                errors="ignore",
-                timeout=3,
-                creationflags=CREATE_NO_WINDOW,
-            )
-            if exe.lower() in (r.stdout or "").lower():
-                still_alive = True
-                break
-        if not still_alive:
+        if not _list_running_chromium_browsers():
             break
         time.sleep(0.25)
 
-    # 백그라운드 잔여 헬퍼 프로세스가 LOCK을 쥐고 있으면 정리
-    for exe in closed_any:
-        subprocess.run(
-            ["taskkill", "/F", "/IM", exe],
-            capture_output=True,
-            timeout=4,
-            creationflags=CREATE_NO_WINDOW,
-        )
+    # 백그라운드 잔여 헬퍼 프로세스가 LOCK/WAL을 쥐고 있으면 강제 정리 후 0개 확인까지 대기
+    for _ in range(2):
+        still = _list_running_chromium_browsers()
+        if not still:
+            break
+        for exe in still:
+            try:
+                subprocess.run(
+                    ["taskkill", "/F", "/T", "/IM", exe],
+                    capture_output=True,
+                    timeout=4,
+                    creationflags=CREATE_NO_WINDOW,
+                )
+            except Exception:
+                pass
+        wait_until = time.time() + 2.0
+        while time.time() < wait_until:
+            if not _list_running_chromium_browsers():
+                break
+            time.sleep(0.2)
+
     time.sleep(0.35)
     return closed_any
+
+
+def _lookup_windows_app_path(exe_name: str) -> Optional[str]:
+    if os.name != "nt":
+        return None
+    try:
+        import winreg
+
+        for hive in (winreg.HKEY_CURRENT_USER, winreg.HKEY_LOCAL_MACHINE):
+            try:
+                with winreg.OpenKey(
+                    hive, rf"Software\Microsoft\Windows\CurrentVersion\App Paths\{exe_name}"
+                ) as k:
+                    val, _ = winreg.QueryValueEx(k, "")
+                    cand = str(val or "").strip().strip('"')
+                    if cand and os.path.isfile(cand):
+                        return cand
+            except OSError:
+                continue
+    except Exception:
+        pass
+    return None
+
+
+def find_browser_executable(preferred_exes: Optional[List[str]] = None) -> Optional[str]:
+    """실제 설치된 Chrome/Edge/Whale 실행파일 경로를 우선순위(직전 실행 브라우저 우선)로 찾습니다."""
+    la = str(get_local_appdata())
+    pf = os.environ.get("ProgramFiles") or r"C:\Program Files"
+    pf86 = os.environ.get("ProgramFiles(x86)") or r"C:\Program Files (x86)"
+
+    known_paths: Dict[str, List[str]] = {
+        "chrome.exe": [
+            os.path.join(pf, "Google", "Chrome", "Application", "chrome.exe"),
+            os.path.join(pf86, "Google", "Chrome", "Application", "chrome.exe"),
+            os.path.join(la, "Google", "Chrome", "Application", "chrome.exe"),
+        ],
+        "msedge.exe": [
+            os.path.join(pf86, "Microsoft", "Edge", "Application", "msedge.exe"),
+            os.path.join(pf, "Microsoft", "Edge", "Application", "msedge.exe"),
+            os.path.join(la, "Microsoft", "Edge", "Application", "msedge.exe"),
+        ],
+        "whale.exe": [
+            os.path.join(pf, "Naver", "Naver Whale", "Application", "whale.exe"),
+            os.path.join(pf86, "Naver", "Naver Whale", "Application", "whale.exe"),
+            os.path.join(la, "Naver", "Naver Whale", "Application", "whale.exe"),
+        ],
+    }
+
+    order: List[str] = []
+    for exe in (preferred_exes or []):
+        low = exe.lower()
+        if low in known_paths and low not in order:
+            order.append(low)
+    for default_exe in ("chrome.exe", "msedge.exe", "whale.exe"):
+        if default_exe not in order:
+            order.append(default_exe)
+
+    for exe in order:
+        reg_hit = _lookup_windows_app_path(exe)
+        if reg_hit:
+            return reg_hit
+        for cand in known_paths[exe]:
+            if os.path.isfile(cand):
+                return cand
+    return None
+
+
+def launch_url_in_visible_browser(url: str, preferred_exes: Optional[List[str]] = None) -> bool:
+    """pythonw.exe 백그라운드 스레드에서도 100% 확실하게 실제 브라우저 새 창으로 URL을 엽니다."""
+    if os.name != "nt":
+        try:
+            return bool(webbrowser.open(url))
+        except Exception:
+            return False
+
+    env_clean = dict(os.environ)
+    env_clean.pop("_MEIPASS2", None)
+    env_clean.pop("_MEIPASS", None)
+
+    exe_path = find_browser_executable(preferred_exes)
+    if exe_path:
+        try:
+            si = subprocess.STARTUPINFO()
+            si.dwFlags |= subprocess.STARTF_USESHOWWINDOW
+            si.wShowWindow = 1  # SW_SHOWNORMAL
+            subprocess.Popen(
+                [exe_path, "--new-window", url],
+                env=env_clean,
+                startupinfo=si,
+                creationflags=DETACHED_PROCESS | CREATE_NEW_PROCESS_GROUP,
+                close_fds=True,
+            )
+            time.sleep(0.8)
+            exe_name = os.path.basename(exe_path).lower()
+            if exe_name in [b.lower() for b in _list_running_chromium_browsers()]:
+                return True
+        except Exception:
+            pass
+
+    # 2차 폴백: Windows ShellExecute (os.startfile)
+    try:
+        os.startfile(url)  # type: ignore[attr-defined]
+        time.sleep(0.6)
+        if _list_running_chromium_browsers():
+            return True
+    except Exception:
+        pass
+
+    # 3차 폴백: cmd /c start "" <url>
+    try:
+        subprocess.Popen(
+            ["cmd", "/c", "start", "", url],
+            env=env_clean,
+            creationflags=CREATE_NO_WINDOW,
+            close_fds=True,
+        )
+        return True
+    except Exception:
+        pass
+
+    try:
+        return bool(webbrowser.open(url))
+    except Exception:
+        return False
 
 
 def inspect_browser_ghosti_session(
@@ -756,8 +983,11 @@ def backup_mode3_browser_session_if_active(
     return False
 
 
-def backup_personal_indexeddb(custom_roots: Optional[List[Tuple[str, Path]]] = None) -> None:
-    """Mode 1 백지화 직전 귀신같이 IndexedDB(768D 벡터·광학 캐시)를 백업합니다 (비어있지 않을 때만 갱신)."""
+def backup_personal_indexeddb(
+    custom_roots: Optional[List[Tuple[str, Path]]] = None,
+    move_mode: bool = False,
+) -> None:
+    """Mode 1 백지화 직전 귀신같이 IndexedDB(768D 벡터·광학 캐시)를 백업합니다 (move_mode=True 시 즉시 이동)."""
     idb_root = get_personal_db_backup_dir() / "browser_indexeddb"
     for bid, pname, pdir in iter_chromium_profiles(custom_roots):
         idb_parent = pdir / "IndexedDB"
@@ -773,7 +1003,22 @@ def backup_personal_indexeddb(custom_roots: Optional[List[Tuple[str, Path]]] = N
                 if dst.exists():
                     shutil.rmtree(dst, ignore_errors=True)
                 dst.parent.mkdir(parents=True, exist_ok=True)
-                shutil.copytree(src, dst, ignore=shutil.ignore_patterns("LOCK"))
+                if move_mode:
+                    try:
+                        lock_f = src / "LOCK"
+                        if lock_f.exists():
+                            try:
+                                lock_f.unlink()
+                            except Exception:
+                                pass
+                        shutil.move(str(src), str(dst))
+                        continue
+                    except Exception:
+                        pass
+                try:
+                    shutil.copytree(src, dst, ignore=shutil.ignore_patterns("LOCK"))
+                except Exception:
+                    pass
 
 
 def restore_personal_indexeddb_if_missing(custom_roots: Optional[List[Tuple[str, Path]]] = None) -> None:
@@ -793,7 +1038,10 @@ def restore_personal_indexeddb_if_missing(custom_roots: Optional[List[Tuple[str,
             src = src_base / sub_name
             dst = idb_parent / sub_name
             if src.is_dir() and not dst.exists():
-                shutil.copytree(src, dst, ignore=shutil.ignore_patterns("LOCK"))
+                try:
+                    shutil.copytree(src, dst, ignore=shutil.ignore_patterns("LOCK"))
+                except Exception:
+                    pass
 
 
 def _clear_host_exact_ghosti_cookies(profile_dir: Path) -> None:
@@ -811,65 +1059,100 @@ def _clear_host_exact_ghosti_cookies(profile_dir: Path) -> None:
             pass
 
 
-def apply_browser_mode1_clean_slate(custom_roots: Optional[List[Tuple[str, Path]]] = None) -> None:
-    """Mode 1: 귀신같이 웹의 모든 LocalStorage·IndexedDB를 비우고 merlin_logged_out='1'만 기록합니다."""
+def _verify_profile_logged_out(ls_dir: Path) -> bool:
+    st = read_leveldb_state(ls_dir)
+    if not st:
+        return False
+    kv, _, _ = st
+    lo = kv.get(make_ghosti_ls_key("merlin_logged_out"))
+    tok = kv.get(make_ghosti_ls_key("merlin_session_token"))
+    supa = kv.get(make_ghosti_ls_key("ghosti_supabase_access_token"))
+    return decode_blink_ls_bytes(lo or b"") == "1" and not tok and not supa
+
+
+def apply_browser_mode1_clean_slate(custom_roots: Optional[List[Tuple[str, Path]]] = None) -> Dict[str, int]:
+    """Mode 1: 귀신같이 웹의 모든 LocalStorage·IndexedDB를 비우고 merlin_logged_out='1'만 기록·검증합니다."""
+    total = 0
+    verified = 0
+    errors = 0
     for _, _, pdir in iter_chromium_profiles(custom_roots):
-        # 1) Ghosti 전용 IndexedDB 폴더 삭제
-        idb_parent = pdir / "IndexedDB"
-        if idb_parent.is_dir():
-            for item in idb_parent.glob("*ghosti.sundreamer.app*"):
-                shutil.rmtree(item, ignore_errors=True)
+        total += 1
+        try:
+            # 1) Ghosti 전용 IndexedDB 폴더 삭제
+            idb_parent = pdir / "IndexedDB"
+            if idb_parent.is_dir():
+                for item in idb_parent.glob("*ghosti.sundreamer.app*"):
+                    shutil.rmtree(item, ignore_errors=True)
 
-        # 2) LocalStorage에서 _https://ghosti.sundreamer.app 키만 전수 삭제 + merlin_logged_out='1' 기록
-        ls_dir = pdir / "Local Storage" / "leveldb"
-        if ls_dir.is_dir():
-            st = read_leveldb_state(ls_dir)
-            if st:
-                kv, active_log, max_seq = st
-                ops: List[Tuple[int, bytes, bytes]] = []
-                for ukey in kv:
-                    if ukey.startswith(GHOSTI_LDB_PREFIX):
-                        ops.append((0, ukey, b""))
-                ops.append((1, make_ghosti_ls_key("merlin_logged_out"), encode_blink_ls_str("1")))
-                wal_p = ls_dir / f"{active_log:06d}.log"
-                append_wal_write_batch(wal_p, max_seq + 1, ops)
+            # 2) LocalStorage에서 _https://ghosti.sundreamer.app 키만 전수 삭제 + merlin_logged_out='1' 기록
+            ls_dir = pdir / "Local Storage" / "leveldb"
+            if ls_dir.is_dir():
+                st = read_leveldb_state(ls_dir)
+                if st:
+                    kv, active_log, max_seq = st
+                    ops: List[Tuple[int, bytes, bytes]] = []
+                    for ukey in kv:
+                        if ukey.startswith(GHOSTI_LDB_PREFIX):
+                            ops.append((0, ukey, b""))
+                    ops.append((1, make_ghosti_ls_key("merlin_logged_out"), encode_blink_ls_str("1")))
+                    wal_p = ls_dir / f"{active_log:06d}.log"
+                    append_wal_write_batch(wal_p, max_seq + 1, ops)
+                    if _verify_profile_logged_out(ls_dir):
+                        verified += 1
+                    else:
+                        errors += 1
 
-        # 3) host-only 쿠키 정리 (.sundreamer.app 보존)
-        _clear_host_exact_ghosti_cookies(pdir)
+            # 3) host-only 쿠키 정리 (.sundreamer.app 보존)
+            _clear_host_exact_ghosti_cookies(pdir)
+        except Exception:
+            errors += 1
+    return {"profilesTotal": total, "verifiedLoggedOut": verified, "errors": errors}
 
 
-def apply_browser_mode2_pure_personal(custom_roots: Optional[List[Tuple[str, Path]]] = None) -> None:
+def apply_browser_mode2_pure_personal(custom_roots: Optional[List[Tuple[str, Path]]] = None) -> Dict[str, int]:
     """Mode 2: 개인 IndexedDB·상용구는 보존하고 귀신같이 로그인 세션·업무방 키만 분리(merlin_logged_out='1')합니다."""
     restore_personal_indexeddb_if_missing(custom_roots)
+    total = 0
+    verified = 0
+    errors = 0
     for _, _, pdir in iter_chromium_profiles(custom_roots):
         ls_dir = pdir / "Local Storage" / "leveldb"
         if not ls_dir.is_dir():
             continue
-        st = read_leveldb_state(ls_dir)
-        if not st:
-            continue
-        kv, active_log, max_seq = st
-        ops: List[Tuple[int, bytes, bytes]] = []
-        for ukey in kv:
-            jk = parse_ghosti_js_key(ukey)
-            if jk is None:
+        total += 1
+        try:
+            st = read_leveldb_state(ls_dir)
+            if not st:
                 continue
-            jkl = jk.lower()
-            is_auth_or_work = (
-                jk in AUTH_AND_WORK_KEY_EXACT
-                or (jkl.startswith("sb-") and jkl.endswith("-auth-token"))
-                or "work_room" in jkl
-                or "workroom" in jkl
-                or jkl.startswith("ghosti_mobile_paired_")
-            )
-            if is_auth_or_work:
-                ops.append((0, ukey, b""))
-        ops.append((1, make_ghosti_ls_key("merlin_logged_out"), encode_blink_ls_str("1")))
-        ops.append((1, make_ghosti_ls_key("ghosti_onboarding_completed"), encode_blink_ls_str("true")))
-        ops.append((1, make_ghosti_ls_key("ghosti_secretary_engine_agreed"), encode_blink_ls_str("1")))
-        wal_p = ls_dir / f"{active_log:06d}.log"
-        append_wal_write_batch(wal_p, max_seq + 1, ops)
-        _clear_host_exact_ghosti_cookies(pdir)
+            kv, active_log, max_seq = st
+            ops: List[Tuple[int, bytes, bytes]] = []
+            for ukey in kv:
+                jk = parse_ghosti_js_key(ukey)
+                if jk is None:
+                    continue
+                jkl = jk.lower()
+                is_auth_or_work = (
+                    jk in AUTH_AND_WORK_KEY_EXACT
+                    or (jkl.startswith("sb-") and jkl.endswith("-auth-token"))
+                    or "work_room" in jkl
+                    or "workroom" in jkl
+                    or jkl.startswith("ghosti_mobile_paired_")
+                )
+                if is_auth_or_work:
+                    ops.append((0, ukey, b""))
+            ops.append((1, make_ghosti_ls_key("merlin_logged_out"), encode_blink_ls_str("1")))
+            ops.append((1, make_ghosti_ls_key("ghosti_onboarding_completed"), encode_blink_ls_str("true")))
+            ops.append((1, make_ghosti_ls_key("ghosti_secretary_engine_agreed"), encode_blink_ls_str("1")))
+            wal_p = ls_dir / f"{active_log:06d}.log"
+            append_wal_write_batch(wal_p, max_seq + 1, ops)
+            if _verify_profile_logged_out(ls_dir):
+                verified += 1
+            else:
+                errors += 1
+            _clear_host_exact_ghosti_cookies(pdir)
+        except Exception:
+            errors += 1
+    return {"profilesTotal": total, "verifiedLoggedOut": verified, "errors": errors}
 
 
 def apply_browser_mode3_work_restore(custom_roots: Optional[List[Tuple[str, Path]]] = None) -> str:
@@ -884,47 +1167,53 @@ def apply_browser_mode3_work_restore(custom_roots: Optional[List[Tuple[str, Path
         except Exception:
             saved_profiles = {}
 
+    profiles = iter_chromium_profiles(custom_roots)
+    has_exact_match = any(f"{bid}::{pname}" in saved_profiles for bid, pname, _ in profiles)
     fallback_entries: Optional[List[Dict[str, str]]] = None
-    for entries in saved_profiles.values():
-        if entries:
-            fallback_entries = entries
-            break
+    if not has_exact_match:
+        for entries in saved_profiles.values():
+            if entries:
+                fallback_entries = entries
+                break
 
     restored_host_room = False
-    for bid, pname, pdir in iter_chromium_profiles(custom_roots):
+    for bid, pname, pdir in profiles:
         ls_dir = pdir / "Local Storage" / "leveldb"
         if not ls_dir.is_dir():
             continue
-        st = read_leveldb_state(ls_dir)
-        if not st:
-            continue
-        kv, active_log, max_seq = st
-        ops: List[Tuple[int, bytes, bytes]] = []
-        target_entries = saved_profiles.get(f"{bid}::{pname}") or fallback_entries
+        try:
+            st = read_leveldb_state(ls_dir)
+            if not st:
+                continue
+            kv, active_log, max_seq = st
+            ops: List[Tuple[int, bytes, bytes]] = []
+            target_entries = saved_profiles.get(f"{bid}::{pname}") or fallback_entries
 
-        if target_entries:
-            for ukey in kv:
-                if ukey.startswith(GHOSTI_LDB_PREFIX):
-                    ops.append((0, ukey, b""))
-            for item in target_entries:
-                uk = bytes.fromhex(item["k"])
-                uv = bytes.fromhex(item["v"])
-                jk = parse_ghosti_js_key(uk)
-                if jk == "merlin_logged_out":
-                    continue
-                if jk == "ghosti_my_work_room_meta_v1" and decode_blink_ls_bytes(uv).strip():
-                    restored_host_room = True
-                ops.append((1, uk, uv))
-        else:
-            # 최초 진입 시: merlin_logged_out만 해제하여 SSO 쿠키 또는 즉시 로그인 활성화
-            lo_key = make_ghosti_ls_key("merlin_logged_out")
-            if lo_key in kv:
-                ops.append((0, lo_key, b""))
-            ops.append((1, make_ghosti_ls_key("ghosti_onboarding_completed"), encode_blink_ls_str("true")))
+            if target_entries:
+                for ukey in kv:
+                    if ukey.startswith(GHOSTI_LDB_PREFIX):
+                        ops.append((0, ukey, b""))
+                for item in target_entries:
+                    uk = bytes.fromhex(item["k"])
+                    uv = bytes.fromhex(item["v"])
+                    jk = parse_ghosti_js_key(uk)
+                    if jk == "merlin_logged_out":
+                        continue
+                    if jk == "ghosti_my_work_room_meta_v1" and decode_blink_ls_bytes(uv).strip():
+                        restored_host_room = True
+                    ops.append((1, uk, uv))
+            else:
+                # 스냅샷에 해당 프로필이 없던 경우: merlin_logged_out만 해제하여 즉시 로그인 가능 상태로 정리
+                lo_key = make_ghosti_ls_key("merlin_logged_out")
+                if lo_key in kv:
+                    ops.append((0, lo_key, b""))
+                ops.append((1, make_ghosti_ls_key("ghosti_onboarding_completed"), encode_blink_ls_str("true")))
 
-        if ops:
-            wal_p = ls_dir / f"{active_log:06d}.log"
-            append_wal_write_batch(wal_p, max_seq + 1, ops)
+            if ops:
+                wal_p = ls_dir / f"{active_log:06d}.log"
+                append_wal_write_batch(wal_p, max_seq + 1, ops)
+        except Exception:
+            pass
 
     url_file = vault / "work_room_url.json"
     if not restored_host_room and url_file.is_file():
@@ -1005,6 +1294,56 @@ def count_personal_merlin_cache_items() -> int:
     return cnt
 
 
+def get_user_downloads_dir() -> Path:
+    """Windows 실제 사용자 다운로드 폴더 경로를 반환합니다(레지스트리 커스텀 경로 우선)."""
+    if os.name == "nt":
+        try:
+            import winreg
+
+            with winreg.OpenKey(
+                winreg.HKEY_CURRENT_USER,
+                r"Software\Microsoft\Windows\CurrentVersion\Explorer\Shell Folders",
+            ) as k:
+                val, _ = winreg.QueryValueEx(k, "{374DE290-123F-4565-9164-39C4925E467B}")
+                if val and os.path.isdir(str(val)):
+                    return Path(str(val))
+        except Exception:
+            pass
+    return Path.home() / "Downloads"
+
+
+def clean_downloads_zcore_artifacts(downloads_dir: Optional[Path] = None) -> int:
+    """Mode 1 백지화 시 다운로드 폴더에 남은 Merlin_Z_Core* 폴더·압축·설치파일을 깔끔히 정리합니다."""
+    dl = downloads_dir if downloads_dir is not None else get_user_downloads_dir()
+    if not dl.is_dir():
+        return 0
+    removed = 0
+    try:
+        for item in list(dl.iterdir()):
+            low = item.name.lower()
+            if not low.startswith("merlin_z_core"):
+                continue
+            try:
+                if item.is_dir():
+                    shutil.rmtree(item, ignore_errors=False)
+                else:
+                    item.unlink()
+                removed += 1
+            except Exception:
+                try:
+                    if item.is_dir():
+                        shutil.rmtree(item, ignore_errors=True)
+                    elif item.exists():
+                        item.unlink(missing_ok=True)
+                    if not item.exists():
+                        removed += 1
+                except Exception:
+                    pass
+    except Exception:
+        pass
+    return removed
+
+
 def cache_installer_exe_if_available() -> Optional[Path]:
     cached = get_cached_installer_path()
     candidates = [
@@ -1012,6 +1351,22 @@ def cache_installer_exe_if_available() -> Optional[Path]:
         Path(r"D:\Ghosti\universal_z_core\os_agent\dist\Merlin_Z_Core_Setup.exe"),
         Path(r"C:\MerlinTools\universal_z_core\os_agent\dist\Merlin_Z_Core_Setup.exe"),
     ]
+    dl = get_user_downloads_dir()
+    if dl.is_dir():
+        try:
+            for item in dl.iterdir():
+                low = item.name.lower()
+                if not low.startswith("merlin_z_core"):
+                    continue
+                if item.is_file() and low.endswith(".exe"):
+                    candidates.append(item)
+                elif item.is_dir():
+                    sub_exe = item / "Merlin_Z_Core_Setup.exe"
+                    if sub_exe.is_file():
+                        candidates.append(sub_exe)
+        except Exception:
+            pass
+
     for cand in candidates:
         if cand.is_file() and cand.stat().st_size > 1_000_000:
             try:
@@ -1032,7 +1387,7 @@ def ensure_installer_exe_ready() -> Optional[Path]:
     try:
         req = urllib.request.Request(
             "https://ghosti.sundreamer.app/Merlin_Z_Core.zip",
-            headers={"User-Agent": "GhostiModeSwitcher/1.0"},
+            headers={"User-Agent": f"GhostiModeSwitcher/{SWITCHER_VERSION}"},
         )
         with urllib.request.urlopen(req, timeout=25) as resp:
             zbytes = resp.read()
@@ -1047,7 +1402,8 @@ def ensure_installer_exe_ready() -> Optional[Path]:
     return None
 
 
-def backup_personal_merlin_dir_if_nonempty() -> None:
+def backup_personal_merlin_dir_if_nonempty(move_mode: bool = False) -> None:
+    """개인 인덱싱 DB(%LOCALAPPDATA%\\Merlin)를 금고에 보관합니다(move_mode=True 시 동일 드라이브 즉시 이동)."""
     mdir = get_merlin_data_dir()
     if not mdir.is_dir():
         return
@@ -1058,12 +1414,23 @@ def backup_personal_merlin_dir_if_nonempty() -> None:
     if not items:
         return
     dst_root = get_personal_db_backup_dir() / "merlin_local_files"
-    if dst_root.exists():
+    if not move_mode and dst_root.exists():
         shutil.rmtree(dst_root, ignore_errors=True)
     dst_root.mkdir(parents=True, exist_ok=True)
     for item in items:
         target = dst_root / item.name
         try:
+            if target.exists():
+                if target.is_dir():
+                    shutil.rmtree(target, ignore_errors=True)
+                else:
+                    target.unlink(missing_ok=True)
+            if move_mode:
+                try:
+                    shutil.move(str(item), str(target))
+                    continue
+                except Exception:
+                    pass
             if item.is_dir():
                 shutil.copytree(item, target)
             elif item.is_file():
@@ -1072,17 +1439,23 @@ def backup_personal_merlin_dir_if_nonempty() -> None:
             pass
 
 
-def restore_personal_merlin_dir_if_missing() -> None:
+def restore_personal_merlin_dir_if_missing(move_mode: bool = False) -> None:
     src_root = get_personal_db_backup_dir() / "merlin_local_files"
     if not src_root.is_dir():
         return
     mdir = get_merlin_data_dir()
     mdir.mkdir(parents=True, exist_ok=True)
-    for item in src_root.iterdir():
+    for item in list(src_root.iterdir()):
         target = mdir / item.name
         if target.exists():
             continue
         try:
+            if move_mode:
+                try:
+                    shutil.move(str(item), str(target))
+                    continue
+                except Exception:
+                    pass
             if item.is_dir():
                 shutil.copytree(item, target)
             elif item.is_file():
@@ -1218,8 +1591,11 @@ def restore_and_mount_work_sdrive() -> str:
     return str(target_dir)
 
 
-def stop_and_uninstall_zcore_completely() -> None:
-    """Z코어(5199) · 귀신창(51988) 종료, 시작프로그램 해제, 설치 폴더 및 %LOCALAPPDATA%\\Merlin 완전 삭제."""
+def stop_and_uninstall_zcore_completely(
+    delete_merlin_dir: bool = True,
+    clean_downloads: bool = True,
+) -> int:
+    """Z코어(5199) 종료, 시작프로그램 해제, 설치 폴더·데이터 폴더 및 다운로드 폴더 Merlin_Z_Core* 정리."""
     for url in ("http://127.0.0.1:5199/__merlin/shutdown", "http://127.0.0.1:51988/__merlin/shutdown"):
         try:
             req = urllib.request.Request(url, headers={"Origin": GHOSTI_ORIGIN})
@@ -1259,10 +1635,16 @@ def stop_and_uninstall_zcore_completely() -> None:
                 creationflags=CREATE_NO_WINDOW,
             )
 
-    time.sleep(0.7)
-    for folder in (get_merlin_program_dir(), get_merlin_data_dir()):
-        if folder.exists():
-            shutil.rmtree(folder, ignore_errors=True)
+    time.sleep(0.6)
+    prog_dir = get_merlin_program_dir()
+    if prog_dir.exists():
+        shutil.rmtree(prog_dir, ignore_errors=True)
+    if delete_merlin_dir:
+        mdir = get_merlin_data_dir()
+        if mdir.exists():
+            shutil.rmtree(mdir, ignore_errors=True)
+    dl_removed = clean_downloads_zcore_artifacts() if clean_downloads else 0
+    return dl_removed
 
 
 def ensure_zcore_installed_and_running() -> bool:
@@ -1281,14 +1663,14 @@ def ensure_zcore_installed_and_running() -> bool:
         shutil.copy2(src_exe, installed_exe)
 
     if os.name == "nt":
-        user_name = os.environ.get("USERNAME") or ""
         ps_reg = f"""
 $exe = '{str(installed_exe)}'
 Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'MerlinZCoreDaemon' -Value "`"$exe`""
-if ('{user_name}' -ne '') {{
+$me = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+if ($me) {{
     $act = New-ScheduledTaskAction -Execute $exe -Argument '--replace'
-    $trg = New-ScheduledTaskTrigger -AtLogOn -User '{user_name}'
-    $prn = New-ScheduledTaskPrincipal -UserId '{user_name}' -LogonType Interactive -RunLevel Limited
+    $trg = New-ScheduledTaskTrigger -AtLogOn -User $me
+    $prn = New-ScheduledTaskPrincipal -UserId $me -LogonType Interactive -RunLevel Limited
     $set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero)
     Register-ScheduledTask -TaskName 'StartMerlinZCore5199' -Action $act -Trigger $trg -Principal $prn -Settings $set -Force | Out-Null
 }}
@@ -1326,61 +1708,96 @@ def switch_to_mode(mode_num: int, open_browser: bool = True, progress_cb: Option
             progress_cb(msg)
 
     if mode_num == 1:
-        step("1/4 · 안전 금고에 현재 엔진·업무방·인덱싱 DB 백업 중...")
+        step("1/4 · 엔진 종료·금고 보관 및 다운로드 폴더 정리 중...")
         cache_installer_exe_if_available()
-        close_running_chromium_browsers_gracefully()
-        backup_mode3_browser_session_if_active()
-        backup_personal_indexeddb()
-        backup_personal_merlin_dir_if_nonempty()
         backup_and_detach_work_sdrive(move_out_of_merlin=True)
+        stop_and_uninstall_zcore_completely(delete_merlin_dir=False, clean_downloads=False)
+        backup_personal_merlin_dir_if_nonempty(move_mode=True)
+        mdir = get_merlin_data_dir()
+        if mdir.exists():
+            shutil.rmtree(mdir, ignore_errors=True)
+        dl_removed = clean_downloads_zcore_artifacts()
 
-        step("2/4 · Z코어 종료·자동실행 해제 및 로컬 DB 완전 삭제 중...")
-        stop_and_uninstall_zcore_completely()
+        step("2/4 · 브라우저 안전 종료 및 세션 스냅샷 백업 중...")
+        closed_browsers = close_running_chromium_browsers_gracefully()
+        backup_mode3_browser_session_if_active()
+        backup_personal_indexeddb(move_mode=True)
 
-        step("3/4 · 브라우저에서 귀신같이 웹 세션·IndexedDB만 핀셋 초기화 중...")
-        apply_browser_mode1_clean_slate()
+        step("3/4 · 전 브라우저 귀신같이 로그아웃·초기화 및 검증 중...")
+        if _list_running_chromium_browsers():
+            close_running_chromium_browsers_gracefully()
+        b_stats = apply_browser_mode1_clean_slate()
+        if _list_running_chromium_browsers():
+            close_running_chromium_browsers_gracefully()
+            b_stats = apply_browser_mode1_clean_slate()
 
+        opened = False
         if open_browser:
             step("4/4 · 첫 방문자 백지 쇼룸 화면 여는 중...")
-            webbrowser.open(URL_MODE1_CLEAN_SHOWROOM)
-        return {"ok": True, "mode": 1, "url": URL_MODE1_CLEAN_SHOWROOM}
+            opened = launch_url_in_visible_browser(URL_MODE1_CLEAN_SHOWROOM, closed_browsers)
+        return {
+            "ok": True,
+            "mode": 1,
+            "url": URL_MODE1_CLEAN_SHOWROOM,
+            "downloadsCleaned": dl_removed,
+            "browserStats": b_stats,
+            "browserOpened": opened,
+        }
 
     if mode_num == 2:
-        step("1/4 · 직전 업무방(S: · 로그인 세션) 안전 금고 스냅샷 백업 중...")
+        step("1/4 · 업무 드라이브(S:) 안전 금고 백업 및 분리 중...")
         cache_installer_exe_if_available()
-        close_running_chromium_browsers_gracefully()
-        backup_mode3_browser_session_if_active()
         backup_and_detach_work_sdrive(move_out_of_merlin=True)
 
         step("2/4 · 개인 인덱싱 DB 보존 확인 및 Z코어 엔진 가동 중...")
-        restore_personal_merlin_dir_if_missing()
+        restore_personal_merlin_dir_if_missing(move_mode=True)
         ensure_zcore_installed_and_running()
 
-        step("3/4 · 귀신같이 웹만 로그아웃(순수 개인 단독 모드) 전환 중...")
-        apply_browser_mode2_pure_personal()
+        step("3/4 · 브라우저에서 귀신같이 웹만 로그아웃(순수 개인 모드) 전환 중...")
+        closed_browsers = close_running_chromium_browsers_gracefully()
+        backup_mode3_browser_session_if_active()
+        if _list_running_chromium_browsers():
+            close_running_chromium_browsers_gracefully()
+        b_stats = apply_browser_mode2_pure_personal()
 
+        opened = False
         if open_browser:
             step("4/4 · 순수 개인 모드 워크스페이스 여는 중...")
-            webbrowser.open(URL_MODE2_PERSONAL)
-        return {"ok": True, "mode": 2, "url": URL_MODE2_PERSONAL}
+            opened = launch_url_in_visible_browser(URL_MODE2_PERSONAL, closed_browsers)
+        return {
+            "ok": True,
+            "mode": 2,
+            "url": URL_MODE2_PERSONAL,
+            "browserStats": b_stats,
+            "browserOpened": opened,
+        }
 
     if mode_num == 3:
-        step("1/4 · 브라우저 세션 복원 준비 중...")
+        step("1/4 · 개인 DB 복원 · Z코어 가동 및 S:\\ 업무 드라이브 마운트 중...")
         cache_installer_exe_if_available()
-        close_running_chromium_browsers_gracefully()
-        restore_personal_merlin_dir_if_missing()
-
-        step("2/4 · Z코어 가동 및 윈도우 S:\\ 업무 드라이브 복원·마운트 중...")
+        restore_personal_merlin_dir_if_missing(move_mode=True)
         ensure_zcore_installed_and_running()
         s_target = restore_and_mount_work_sdrive()
 
+        step("2/4 · 브라우저 안전 종료 중...")
+        closed_browsers = close_running_chromium_browsers_gracefully()
+
         step("3/4 · 금고에서 귀신같이 로그인 세션·업무방 상태 100% 복원 중...")
+        if _list_running_chromium_browsers():
+            close_running_chromium_browsers_gracefully()
         target_url = apply_browser_mode3_work_restore()
 
+        opened = False
         if open_browser:
             step("4/4 · 사무실 업무공유방(S:) 화면 여는 중...")
-            webbrowser.open(target_url)
-        return {"ok": True, "mode": 3, "url": target_url, "sDriveTarget": s_target}
+            opened = launch_url_in_visible_browser(target_url, closed_browsers)
+        return {
+            "ok": True,
+            "mode": 3,
+            "url": target_url,
+            "sDriveTarget": s_target,
+            "browserOpened": opened,
+        }
 
     raise ValueError(f"Unsupported mode: {mode_num}")
 
@@ -1501,10 +1918,32 @@ def run_isolated_selftest() -> int:
             assert s3["workRoomTitle"] == "썬드림 실무방", f"Mode 3 must restore Korean room title: {s3}"
             assert s3["hasIndexedDb"] is True, "Mode 3 must restore IndexedDB backup"
             assert url3 == URL_MODE3_WORK_DEFAULT
+
+            # [검증 4] 손상된 WAL 꼬리(Profile 11 실사례) + 비정상 대용량 seq 방어 + 로그아웃 복구 검증
+            with open(wal_p, "ab") as f:
+                f.write(b"\xde\xad\xbe\xef\x10\x00\x01" + b"\xff" * 40)  # bad CRC & truncated/corrupt tail
+            st_dirty = read_leveldb_state(ls_dir)
+            assert st_dirty is not None and st_dirty[2] < 1_000_000, f"Corrupt WAL tail must not poison max_seq: {st_dirty}"
+            res_m1_corrupt = apply_browser_mode1_clean_slate(roots)
+            assert res_m1_corrupt["verifiedLoggedOut"] == 1 and res_m1_corrupt["errors"] == 0, f"Corrupt WAL recovery failed: {res_m1_corrupt}"
+            s1_after = inspect_browser_ghosti_session(roots)
+            assert s1_after["loggedIn"] is False and s1_after["loggedOutFlag"] is True, f"Mode 1 after corrupt WAL must log out: {s1_after}"
+
+            # [검증 5] 다운로드 폴더 Merlin_Z_Core* 정리 검증 (타 파일 100% 보존)
+            fake_dl = tmp / "Downloads"
+            fake_dl.mkdir(parents=True, exist_ok=True)
+            (fake_dl / "Merlin_Z_Core").mkdir()
+            (fake_dl / "Merlin_Z_Core" / "Merlin_Z_Core_Setup.exe").write_bytes(b"FAKE")
+            (fake_dl / "Merlin_Z_Core.zip").write_bytes(b"ZIP")
+            (fake_dl / "important_user_doc.pdf").write_bytes(b"KEEP")
+            cleaned = clean_downloads_zcore_artifacts(fake_dl)
+            assert cleaned == 2, f"Expected 2 Merlin_Z_Core artifacts cleaned, got {cleaned}"
+            assert not (fake_dl / "Merlin_Z_Core").exists() and not (fake_dl / "Merlin_Z_Core.zip").exists()
+            assert (fake_dl / "important_user_doc.pdf").is_file(), "User non-ZCore download must remain untouched!"
         finally:
             if old_la is not None:
                 os.environ["LOCALAPPDATA"] = old_la
-        print("SELFTEST_OK: 3->2->1->3 roundtrip & SenseTalk/Notion isolation 100% verified")
+        print("SELFTEST_OK: 3->2->1->3 roundtrip, corrupt WAL recovery, Downloads cleanup & SenseTalk/Notion isolation 100% verified")
         return 0
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
@@ -1632,8 +2071,7 @@ def launch_gui() -> None:
             lbl_mode.config(text=f"현재 판정: {d['modeLabel']}")
             if d["zcoreAlive"]:
                 ver_txt = f"v{d['zcoreVersion']}" if d["zcoreVersion"] else "연결됨"
-                p_txt = " + 귀신창 ON" if d["pasteDaemonAlive"] else ""
-                lbl_zcore.config(text=f"• PC 엔진 (Z코어) : 🟢 실행 중 ({ver_txt}{p_txt})", fg="#86EFAC")
+                lbl_zcore.config(text=f"• PC 엔진 (Z코어) : 🟢 실행 중 ({ver_txt})", fg="#86EFAC")
             else:
                 lbl_zcore.config(text="• PC 엔진 (Z코어) : ⚪ 꺼짐 / 미설치 (첫 방문자 상태)", fg="#CBD5E1")
 
@@ -1691,14 +2129,20 @@ def launch_gui() -> None:
 
         def worker() -> None:
             try:
-                switch_to_mode(
+                want_open = bool(open_browser_var.get())
+                if want_open:
+                    root.after(0, lambda: root.attributes("-topmost", False))
+                res = switch_to_mode(
                     mode_num,
-                    open_browser=bool(open_browser_var.get()),
+                    open_browser=want_open,
                     progress_cb=lambda m: root.after(0, lambda msg=m: status_bar.config(text=msg, fg="#FBBF24")),
                 )
+                b_stats = res.get("browserStats") or {}
+                v_cnt = b_stats.get("verifiedLoggedOut")
+                v_suffix = f" (브라우저 {v_cnt}개 프로필 검증)" if isinstance(v_cnt, int) and v_cnt > 0 else ""
                 done_names = {
-                    1: "✅ [1. 완전 백지 모드] 초기화 완료!",
-                    2: "✅ [2. 순수 개인 모드] 전환 완료! (개인 DB 보존 · S: 분리)",
+                    1: f"✅ [1. 완전 백지 모드] 초기화 완료!{v_suffix}",
+                    2: f"✅ [2. 순수 개인 모드] 전환 완료!{v_suffix}",
                     3: "✅ [3. 사무실 업무공유 모드] S:\\ 및 로그인 복귀 완료!",
                 }
                 root.after(0, lambda: status_bar.config(text=done_names[mode_num], fg="#34D399"))

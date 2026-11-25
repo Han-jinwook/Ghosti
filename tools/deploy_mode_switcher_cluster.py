@@ -181,12 +181,27 @@ Write-Output ("SHORTCUT_CREATED=" + $lnkExists + " | PATH=" + $lnkPath)
 
 def main() -> int:
     key_path = resolve_ssh_key()
+    only_filter: List[str] = []
+    for arg in sys.argv[1:]:
+        if arg.startswith("--only="):
+            only_filter.extend(x.strip() for x in arg.split("=", 1)[1].split(",") if x.strip())
+    selected_nodes = TARGET_NODES
+    if only_filter:
+        selected_nodes = [
+            n for n in TARGET_NODES if any(f"{tok}호컴" in n[0] or tok == n[1] for tok in only_filter)
+        ]
+        if not selected_nodes:
+            print(f"❌ 일치하는 대상 PC가 없습니다: {only_filter}")
+            return 1
+        print(f"🎯 핀셋 배포 대상: {[n[0] for n in selected_nodes]}", flush=True)
+
     ok_all = True
-    for label, host, user in TARGET_NODES:
+    for label, host, user in selected_nodes:
         if not deploy_to_node(label, host, user, key_path):
             ok_all = False
     if ok_all:
-        print("\n🎉 1~5호컴 전체 바탕화면 배포 및 무결성 검증 완료! (6호컴 제외 준수)")
+        scope = ", ".join(n[0] for n in selected_nodes) if only_filter else "1~5호컴 전체"
+        print(f"\n🎉 {scope} 바탕화면 배포 및 무결성 검증 완료! (6호컴 제외 준수)")
         return 0
     print("\n⚠️ 일부 PC 배포 중 경고가 발생했습니다.")
     return 1
