@@ -5824,15 +5824,16 @@ export async function processUnifiedMonsterChatQuery(params: {
     });
   }
 
-  // 10) 오프라인 폴백 (모바일 앱과 PC 환경을 명확히 구분하여 친절하고 정직하게 안내 — 모바일에서 PC Z-코어 미연결 오표시 원천 차단)
+  // 10) 오프라인 폴백 (내부 LLM용 PC 컨텍스트 원문 노출 원천 차단 — 모바일과 PC 환경을 구분해 깔끔한 안내만 표시)
   const tipRes = pickNextShortformTipOnCompletion({ contextTag: 'os_repair', subscribedLounges: [] });
   if (isMobileRuntimeForChat()) {
     return reply(
       sourceTab,
-      `말씀하신 **"${clean}"** 내용을 확인했습니다!\n${pcCtx.summaryText}\n\n찾으실 **사진·동영상·문서 검색어**(예: "풍경", "강아지", "영수증")를 편하게 말씀하시거나 아래 추천 버튼을 눌러 보세요:`,
+      `말씀하신 **"${clean}"** 내용을 확인했어요!\n찾으실 **사진·동영상·문서 검색어**(예: "풍경", "강아지", "영수증")나 원하시는 기능을 편하게 말씀하시거나 아래 추천 버튼을 눌러 보세요.`,
       {
         shortformTip: tipRes.tip,
-        followUpSuggestions: [          '풍경 사진 찾아줘',
+        followUpSuggestions: [
+          '풍경 사진 찾아줘',
           '영수증이나 계약서 문서 찾아줘',
           '중복·흔들린 사진 정리할 거 봐줘',
         ],
@@ -5841,11 +5842,11 @@ export async function processUnifiedMonsterChatQuery(params: {
   }
   return reply(
     sourceTab,
-    `말씀하신 **"${clean}"** 내용을 확인했습니다!\n${pcCtx.summaryText}\n\n아래 기능 중 원하시는 항목을 편하게 말씀해 주시거나 아래 추천 버튼을 눌러 주세요:\n• **사라진 파일 1초 추적·복구** · **다운로드/바탕화면 정리**\n• **자주 가는 사이트 바탕화면 바로가기** · **[복원 기록] 되돌리기**\n• **내 PC 실측 사양 & 업그레이드 상담**`,
+    `말씀하신 **"${clean}"** 내용을 확인했어요! 조금 더 구체적으로 말씀해 주시거나 아래 기능 중 원하시는 항목을 눌러 주세요.\n• **별명(닉네임) 확인·변경** (예: "은호라고 불러줘")\n• **사라진 파일 1초 추적·복구** · **다운로드/바탕화면 정리**\n• **내 PC 실측 사양 & 속도 진단** · **[복원 기록] 되돌리기**`,
     {
-      cardKind: 'DEVICE_REPAIR_GATE',
       shortformTip: tipRes.tip,
-      followUpSuggestions: [        '내 컴퓨터 실시간 사양으로 포토샵이랑 배그 잘 돌아가?',
+      followUpSuggestions: [
+        '내 컴퓨터 실시간 사양으로 포토샵이랑 배그 잘 돌아가?',
         '다운로드 폴더 방치된 설치파일(.exe/.apk) 미리보고 정리해 줘',
         '최근 [복원 기록] 보여줘',
       ],
