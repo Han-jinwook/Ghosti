@@ -3547,16 +3547,17 @@ _SCAN_DIRS_CACHE: dict = {"ts": 0.0, "dirs": []}
 
 
 def _collect_search_scan_dirs(
-    max_total_dirs: int = 3200,
-    max_per_root: int = 450,
-    time_budget_sec: float = 5.0,
+    max_total_dirs: int = 6000,
+    max_per_drive: int = 1200,
+    time_budget_sec: float = 8.0,
     force: bool = False,
 ) -> list[Path]:
     """
-    [전 하드 드라이브 Starvation 0% 공정 라운드-로빈 폴더 수집기]:
-    - Pass 1: 모든 사용자 폴더 및 C:/D:/E:/F:/G:/S: 드라이브 루트를 타임아웃 없이 100% 먼저 편입.
-    - Pass 2: 각 루트별 BFS 큐를 라운드-로빈(1폴더씩 교대 확장)으로 최대 4단계까지 공정 탐색하여
-      어느 한 폴더가 느리거나 하위 폴더가 많아도 다른 드라이브(D:/E:/F:/G:)가 절대 누락되지 않도록 보장.
+    [전 PC 전 하드 드라이브 1:1 공정 라운드-로빈 폴더 수집기 (Starvation 0%)]:
+    - 기존 방식은 C: 사용자 폴더 25~30개가 D:/E:/F:/G: 루트 1개와 동급으로 돌아 C:가 30턴 돌 때 D:가 1턴만 돌고,
+      구글드라이브(G:/H:) 같은 가상 드라이브가 전체 시간 예산을 소진해 보조 하드를 누락시키는 문제가 있었습니다.
+    - 개선: 모든 루트를 드라이브 문자별(C:, D:, E:, F:, G:, H:, S:)로 그룹화하여 각 드라이브에 정확히 1:1 동일 턴과
+      독립 폴더 상한(1,200개/드라이브)·독립 시간 예산(로컬 NTFS 3.5초, 가상/클라우드 드라이브 2.0초)을 배분합니다.
     """
     now_c = time.time()
     if not force and _SCAN_DIRS_CACHE["dirs"] and (now_c - float(_SCAN_DIRS_CACHE["ts"])) < 20.0:
@@ -3567,39 +3568,65 @@ def _collect_search_scan_dirs(
     seen_scan_dirs: set[str] = set()
     t_start = time.time()
 
-    root_states: list[dict[str, Any]] = []
+    drive_groups: dict[str, dict[str, Any]] = {}
     for root_fd in folders:
         norm_r = os.path.normcase(os.path.abspath(str(root_fd)))
         if norm_r not in seen_scan_dirs:
             seen_scan_dirs.add(norm_r)
             scan_dirs.append(root_fd)
         rs = str(root_fd)
-        is_drive_root = len(rs) <= 3 and len(rs) >= 2 and rs[1] == ":"
-        cap_for_root = max(max_per_root, 900) if is_drive_root else max_per_root
-        root_states.append({
-            "queue": [(root_fd, 0)],
-            "added": 0,
-            "cap": cap_for_root,
-        })
+        drv_key = rs[:2].upper() if len(rs) >= 2 and rs[1] == ":" else "OTHER"
+        grp = drive_groups.get(drv_key)
+        if grp is None:
+            is_virtual_cloud = False
+            if len(drv_key) == 2 and drv_key != "C:" and drv_key != "S:":
+                try:
+                    drv_root_chk = f"{drv_key}\\"
+                    if (
+                        os.path.exists(os.path.join(drv_root_chk, ".shortcut-targets-by-id"))
+                        or os.path.exists(os.path.join(drv_root_chk, "내 드라이브"))
+                        or os.path.exists(os.path.join(drv_root_chk, "My Drive"))
+                    ):
+                        is_virtual_cloud = True
+                except Exception:
+                    pass
+            grp = {
+                "drv": drv_key,
+                "queue": [],
+                "added": 0,
+                "cap": 600 if is_virtual_cloud else max_per_drive,
+                "elapsed": 0.0,
+                "time_cap": 2.0 if is_virtual_cloud else 3.5,
+                "is_virtual": is_virtual_cloud,
+            }
+            drive_groups[drv_key] = grp
+        grp["queue"].append((root_fd, 0))
 
-    max_depth = 4
+    # 로컬 물리 드라이브(S:, D:, E:, F:, C: 등)를 가상 클라우드 드라이브(G:/H:)보다 먼저 라운드-로빈 배치
+    ordered_groups = sorted(
+        drive_groups.values(),
+        key=lambda g: (1 if g["is_virtual"] else 0, 0 if g["drv"] == "S:" else (2 if g["drv"] == "C:" else 1), g["drv"]),
+    )
+
+    max_depth = 5
     active = True
     while active and len(scan_dirs) < max_total_dirs and (time.time() - t_start) <= time_budget_sec:
         active = False
-        for st in root_states:
+        for grp in ordered_groups:
             if len(scan_dirs) >= max_total_dirs or (time.time() - t_start) > time_budget_sec:
                 break
-            q_list = st["queue"]
-            if not q_list or st["added"] >= st["cap"]:
+            q_list = grp["queue"]
+            if not q_list or grp["added"] >= grp["cap"] or grp["elapsed"] >= grp["time_cap"]:
                 continue
             active = True
             cur_fd, depth = q_list.pop(0)
             if depth >= max_depth:
                 continue
+            t_step = time.time()
             try:
                 with os.scandir(cur_fd) as it_sub:
                     for sub_e in it_sub:
-                        if st["added"] >= st["cap"] or len(scan_dirs) >= max_total_dirs:
+                        if grp["added"] >= grp["cap"] or len(scan_dirs) >= max_total_dirs:
                             break
                         try:
                             if not sub_e.is_dir(follow_symlinks=False):
@@ -3617,13 +3644,14 @@ def _collect_search_scan_dirs(
                                 seen_scan_dirs.add(norm_s)
                                 p_sub = Path(sub_e.path)
                                 scan_dirs.append(p_sub)
-                                st["added"] += 1
+                                grp["added"] += 1
                                 if depth + 1 < max_depth:
                                     q_list.append((p_sub, depth + 1))
                         except Exception:
                             pass
             except Exception:
                 pass
+            grp["elapsed"] += max(0.0, time.time() - t_step)
 
     _SCAN_DIRS_CACHE["dirs"] = list(scan_dirs)
     _SCAN_DIRS_CACHE["ts"] = time.time()
@@ -3694,7 +3722,7 @@ def _select_fair_by_drive(items: list[dict], limit: int) -> list[dict]:
         by_drv.setdefault(drv_k, []).append(it)
     if len(by_drv) <= 1:
         return items[:limit]
-    per_drv_quota = max(120, limit // max(2, len(by_drv) + 1))
+    per_drv_quota = max(1, limit // max(1, len(by_drv)))
     selected: list[dict] = []
     leftover: list[dict] = []
     for drv_items in by_drv.values():
@@ -3801,7 +3829,7 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
         for fk in by_kind:
             by_kind[fk].sort(key=lambda x: x.get("ts", 0.0), reverse=True)
 
-        top_docs = _select_fair_by_drive(by_kind["doc"], 2500)
+        top_docs = _select_fair_by_drive(by_kind["doc"], 6000)
         if top_docs:
             doc_body_cache = _load_doc_body_cache_fast()
             for idx_d, d_it in enumerate(top_docs):
@@ -3845,8 +3873,8 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
 
         top_items = (
             top_docs
-            + _select_fair_by_drive(by_kind["image"], 2500)
-            + _select_fair_by_drive(by_kind["video"], 800)
+            + _select_fair_by_drive(by_kind["image"], 6000)
+            + _select_fair_by_drive(by_kind["video"], 2000)
         )
 
         # [3단계: 승인된('included') 연결 외장 드라이브 로컬 캐시 병합 (탈착 시 즉시 자동 숨김 · USB 내부 쓰기 0 Byte)]

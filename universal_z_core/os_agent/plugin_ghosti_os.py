@@ -1336,10 +1336,40 @@ def decide_external_drive_web(payload: dict) -> dict:
     return {"ok": True, "status": "excluded", "volId": vol_id}
 
 
+def _select_fair_entries_by_drive(entries: List[Any], path_getter, limit: int) -> List[Any]:
+    """
+    [웹 2. 귀신검색 전 드라이브 공정 쿼터 선발기]:
+    - C: 또는 D: 한쪽 드라이브에 최신 파일이 몰려 있을 때 전역 mtime 상위 N건 컷오프에서
+      다른 드라이브(C:/D:/E:/F:/G:/H:/S:) 파일이 0건으로 밀려나는 현상을 원천 차단합니다.
+    """
+    if len(entries) <= limit:
+        return list(entries)
+    by_drv: Dict[str, List[Any]] = {}
+    for item in entries:
+        fp = str(path_getter(item) or "")
+        dk = fp[:2].upper() if len(fp) >= 2 and fp[1] == ":" else "OTHER"
+        by_drv.setdefault(dk, []).append(item)
+    if len(by_drv) <= 1:
+        return list(entries[:limit])
+    per_drv_quota = max(1, limit // max(1, len(by_drv)))
+    selected: List[Any] = []
+    leftover: List[Any] = []
+    for drv_list in by_drv.values():
+        selected.extend(drv_list[:per_drv_quota])
+        if len(drv_list) > per_drv_quota:
+            leftover.extend(drv_list[per_drv_quota:])
+    if len(selected) < limit and leftover:
+        selected.extend(leftover[: limit - len(selected)])
+    return selected[:limit]
+
+
 def _start_bg_full_drive_scan_once() -> None:
     """
-    [2단계 백그라운드 전체 드라이브 스캔 (1단계 우선 폴더 0.05초 즉시 개방 후 C:, D:, E: 전수 확대)]
-    - 사용자가 일일이 폴더를 선택 지정할 필요 없이, 우선 폴더 먼저 열고 뒤이어 내 PC 전 드라이브를 저부하 스로틀링으로 훑습니다.
+    [2단계 백그라운드 전체 드라이브 스캔 (1단계 우선 폴더 0.05초 즉시 개방 후 전 PC 모든 하드 드라이브 공정 확대)]
+    - 로컬 물리 드라이브(D:, E:, F:... -> C:)를 가상/클라우드 드라이브(G:/H: 구글드라이브)보다 먼저 스캔하고
+      드라이브 1개가 끝날 때마다 즉시 _FULL_DRIVE_EXTRA_DIRS에 점진 반영하여 대기 지연을 없앱니다.
+    - 보조 드라이브(D:/E:/F:)의 프로젝트/업무 폴더 안에 들어 있는 실제 문서·이미지(.xlsx/.pdf/.hwp/.png 등)도
+      depth<=2까지 누락 없이 편입하며, 가상 드라이브는 독립 시간 상한(2.5초)으로 타임아웃을 방지합니다.
     """
     global _FULL_DRIVE_SCAN_STARTED, _BG_INDEX_BUMP_SEQ
     if os.environ.get("GHOSTI_HEADLESS_TEST") == "1" or os.name != "nt":
@@ -1352,7 +1382,7 @@ def _start_bg_full_drive_scan_once() -> None:
     def _bg_worker() -> None:
         global _BG_INDEX_BUMP_SEQ
         try:
-            time.sleep(1.5)
+            time.sleep(0.8)
             apply_hardware_protection_guard(mode="silent", batch_count=0)
             target_exts = _IMAGE_EXTS | _DOC_EXTS | _VIDEO_EXTS
             skip_top_names = {
@@ -1369,6 +1399,9 @@ def _start_bg_full_drive_scan_once() -> None:
                 "tmp",
                 "node_modules",
                 "msocache",
+                "boot",
+                "drivers",
+                "efi",
             }
             known_roots_low = {str(r.resolve()).lower() for r in _get_user_scan_roots() if r.exists()}
             discovered: List[Path] = []
@@ -1376,21 +1409,44 @@ def _start_bg_full_drive_scan_once() -> None:
             batch_counter = 0
 
             import string
+            drive_candidates: List[tuple[int, str, Path, bool]] = []
             for letter in string.ascii_uppercase:
                 if letter in ("A", "B", "S"):
                     continue
                 d_info = _classify_os_drive_and_volume(letter)
                 if not d_info:
                     continue
-                # [확정 정책]: C: 및 내장 고정 하드(is_external==False)만 유휴 시간대 자동 순차 스캔하며,
-                # USB/외장 드라이브(is_external==True)는 유저가 질문창에서 명시 승인('included')한 볼륨만 스캔!
                 if d_info["is_external"] and not _is_external_volume_approved_in_policy(d_info["vol_id"]):
                     continue
-                drive = Path(d_info["root"])
+                drv_root = Path(d_info["root"])
+                is_virtual = False
+                if letter != "C":
+                    try:
+                        if (
+                            (drv_root / ".shortcut-targets-by-id").exists()
+                            or (drv_root / "내 드라이브").exists()
+                            or (drv_root / "My Drive").exists()
+                        ):
+                            is_virtual = True
+                    except Exception:
+                        pass
+                # 우선순위: 0=내장 보조 하드(D:/E:/F:), 1=C:, 2=가상/클라우드 드라이브(G:/H:)
+                prio = 2 if is_virtual else (1 if letter == "C" else 0)
+                drive_candidates.append((prio, letter, drv_root, is_virtual))
+            drive_candidates.sort(key=lambda x: (x[0], x[1]))
 
+            for _prio, letter, drive, is_virtual in drive_candidates:
                 stack: List[tuple[Path, int]] = [(drive, 0)]
                 per_drive_discovered = 0
-                while stack and per_drive_discovered < 350 and len(discovered) < 1600:
+                per_drive_cap = 220 if is_virtual else 450
+                drv_time_cap = 2.5 if is_virtual else 4.5
+                t_drv_start = time.time()
+                while (
+                    stack
+                    and per_drive_discovered < per_drive_cap
+                    and len(discovered) < 2400
+                    and (time.time() - t_drv_start) < drv_time_cap
+                ):
                     cur, depth = stack.pop(0)
                     try:
                         cur_res = cur.resolve()
@@ -1408,13 +1464,17 @@ def _start_bg_full_drive_scan_once() -> None:
                                     if dent.is_dir(follow_symlinks=False):
                                         if (
                                             depth < 5
-                                            and not nm.startswith(".")
+                                            and not nm.startswith((".", "$", "~"))
                                             and nm_low not in skip_top_names
                                             and nm_low not in _SKIP_DIR_NAMES
                                             and not nm_low.startswith(_SKIP_DIR_PREFIXES)
                                         ):
                                             p_sub = Path(dent.path)
-                                            if not _is_code_repo_dir(p_sub):
+                                            # 보조 드라이브(D:/E:/F:)의 업무·프로젝트 최상위 폴더에 보관된 실제 문서·사진이
+                                            # .git/package.json 존재만으로 통째로 누락되지 않도록 depth<=1은 허용
+                                            if letter != "C" and depth <= 1:
+                                                sub_cands.append(p_sub)
+                                            elif not _is_code_repo_dir(p_sub):
                                                 sub_cands.append(p_sub)
                                     elif not has_media and dent.is_file(follow_symlinks=False):
                                         dot = nm_low.rfind(".")
@@ -1427,22 +1487,23 @@ def _start_bg_full_drive_scan_once() -> None:
                             per_drive_discovered += 1
                         stack.extend((sd, depth + 1) for sd in sub_cands)
                         batch_counter += 1
-                        if batch_counter % 20 == 0:
+                        if batch_counter % 25 == 0:
                             apply_hardware_protection_guard(mode="silent", batch_count=batch_counter)
-                            time.sleep(0.02)
+                            time.sleep(0.01)
                     except Exception:
                         pass
 
-            if discovered:
-                with _FULL_DRIVE_SCAN_LOCK:
-                    _FULL_DRIVE_EXTRA_DIRS[:] = discovered
-                with _SCAN_DIRS_CACHE_LOCK:
-                    _SCAN_DIRS_MEM_CACHE.clear()
-                _BG_INDEX_BUMP_SEQ += 1
-                _WATCH_SIG_TTL_CACHE["ts"] = 0.0
-                _PHOTOS_RESP_MEM_CACHE["sig"] = ""
-                _DOCS_RESP_MEM_CACHE["sig"] = ""
-                _VIDEOS_RESP_MEM_CACHE["sig"] = ""
+                # 드라이브 1개 스캔이 끝날 때마다 즉시 반영하여 느린 가상 드라이브 완료를 기다리지 않고 D:/E:/F: 즉시 노출!
+                if per_drive_discovered > 0:
+                    with _FULL_DRIVE_SCAN_LOCK:
+                        _FULL_DRIVE_EXTRA_DIRS[:] = list(discovered)
+                    with _SCAN_DIRS_CACHE_LOCK:
+                        _SCAN_DIRS_MEM_CACHE.clear()
+                    _BG_INDEX_BUMP_SEQ += 1
+                    _WATCH_SIG_TTL_CACHE["ts"] = 0.0
+                    _PHOTOS_RESP_MEM_CACHE["sig"] = ""
+                    _DOCS_RESP_MEM_CACHE["sig"] = ""
+                    _VIDEOS_RESP_MEM_CACHE["sig"] = ""
         except Exception:
             pass
 
@@ -1776,9 +1837,10 @@ def list_local_photos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
             pass
 
     raw_photo_candidates.sort(key=lambda item: item[3].st_mtime, reverse=True)
+    fair_photo_candidates = _select_fair_entries_by_drive(raw_photo_candidates, lambda item: item[2], 2000)
     files: List[Dict[str, Any]] = []
     seen_keys: set[str] = set()
-    for d, d_label, abs_str, st, resolved, nm in raw_photo_candidates[:1500]:
+    for d, d_label, abs_str, st, resolved, nm in fair_photo_candidates:
         photo_key = _make_collision_safe_media_key(resolved, d.name, seen_keys)
         _PHOTO_PATH_INDEX[photo_key] = resolved
         files.append({
@@ -1836,7 +1898,10 @@ def get_local_watch_signature(params: Dict[str, Any] | None = None) -> Dict[str,
     file_count = 0
     max_mtime_ns = 0
     size_acc = 0
+    t_ws_start = time.monotonic()
     for d in scan_dirs:
+        if (time.monotonic() - t_ws_start) > 1.2:
+            break
         try:
             with os.scandir(d) as it:
                 for entry in it:
@@ -3232,8 +3297,9 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
         except Exception:
             pass
 
-    # 최신 수정 문서 우선 정렬 (방금 저장·스캔한 계약서/영수증 PDF가 즉시 1순위로 본문 추출되도록 보장)
+    # 최신 수정 문서 우선 정렬 + 전 드라이브 공정 쿼터 선발(한쪽 드라이브에 최신 파일이 몰려도 타 드라이브 누락 0%)
     raw_entries.sort(key=lambda item: item[2].st_mtime, reverse=True)
+    fair_doc_entries = _select_fair_entries_by_drive(raw_entries, lambda item: str(item[1]), 800)
     docs: List[Dict[str, Any]] = []
     deferred_pdfs: List[Path] = []
     doc_cache_ref = _load_doc_text_cache()
@@ -3256,7 +3322,7 @@ def list_local_docs(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     # [HTTP 응답 스레드 무거운 PDF 이미지 OCR 동기 블로킹 원천 금지 (13.6초 ➔ 30ms)]:
     # 전자 PDF 본문(pypdfium2) 및 TXT/DOCX/XLSX/PPTX/HWP는 즉시 고속 추출하여 메모리에 캐싱하고,
     # 텍스트 레이어가 없는 스캔 이미지 PDF의 래스터 OCR만 백그라운드 스레드(_bg_prewarm_pdf_ocr_worker)로 분리합니다.
-    for d, entry, st in raw_entries[:300]:
+    for d, entry, st in fair_doc_entries:
         try:
             ext_low = entry.suffix.lower()
             stem = entry.stem.replace("_", " ").replace("-", " ").strip()
@@ -5271,6 +5337,7 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
             pass
 
     raw_video_candidates.sort(key=lambda item: item[2].st_mtime, reverse=True)
+    fair_video_candidates = _select_fair_entries_by_drive(raw_video_candidates, lambda item: str(item[1]), 500)
     videos: List[Dict[str, Any]] = []
     seen_keys: set[str] = set()
     ff = find_ffmpeg_exe()
@@ -5279,7 +5346,7 @@ def list_local_videos(params: Dict[str, Any] | None = None) -> Dict[str, Any]:
     prewarm_targets: List[Path] = []
     vthumb_prewarm_targets: List[tuple[Path, float]] = []
 
-    for d, resolved, st in raw_video_candidates[:300]:
+    for d, resolved, st in fair_video_candidates:
         try:
             entry = resolved
             norm_vid = str(resolved).lower()
