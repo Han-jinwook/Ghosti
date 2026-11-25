@@ -2671,6 +2671,80 @@ export async function handleAuthedWorkAndDeviceAction({
     return { status: 200, body: { ok: true, ...current } };
   }
 
+  if (action === 'device_sign_mirror_uploads_batch') {
+    const gate = await assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash);
+    if (!gate.ok) return gate.response;
+    const rawList = Array.isArray(body.sha256List) ? body.sha256List : [];
+    const cleanList = Array.from(
+      new Set(
+        rawList
+          .map((s) => String(s || '').replace(/[^a-fA-F0-9_.-]/g, '').slice(0, 80))
+          .filter(Boolean)
+      )
+    ).slice(0, 60);
+    if (cleanList.length === 0) {
+      return { status: 200, body: { ok: true, urls: {} } };
+    }
+    await ensureVaultBuckets(supabaseUrl, serviceKey, false);
+    const urls = {};
+    const CONCURRENCY = 12;
+    let idx = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, cleanList.length) }, async () => {
+        while (idx < cleanList.length) {
+          const cur = cleanList[idx++];
+          const signed = await createSignedUploadUrl(
+            supabaseUrl,
+            serviceKey,
+            DEVICE_BUCKET,
+            `${emailHash}/mirror_blobs/${cur}`
+          );
+          if (signed?.ok && signed.signedUploadUrl) {
+            urls[cur] = signed.signedUploadUrl;
+          }
+        }
+      })
+    );
+    return { status: 200, body: { ok: true, urls } };
+  }
+
+  if (action === 'device_sign_mirror_downloads_batch') {
+    const gate = await assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash);
+    if (!gate.ok) return gate.response;
+    const rawList = Array.isArray(body.sha256List) ? body.sha256List : [];
+    const cleanList = Array.from(
+      new Set(
+        rawList
+          .map((s) => String(s || '').replace(/[^a-fA-F0-9_.-]/g, '').slice(0, 80))
+          .filter(Boolean)
+      )
+    ).slice(0, 60);
+    if (cleanList.length === 0) {
+      return { status: 200, body: { ok: true, urls: {} } };
+    }
+    const urls = {};
+    const CONCURRENCY = 12;
+    let idx = 0;
+    await Promise.all(
+      Array.from({ length: Math.min(CONCURRENCY, cleanList.length) }, async () => {
+        while (idx < cleanList.length) {
+          const cur = cleanList[idx++];
+          const signed = await createSignedDownloadUrl(
+            supabaseUrl,
+            serviceKey,
+            DEVICE_BUCKET,
+            `${emailHash}/mirror_blobs/${cur}`,
+            600
+          );
+          if (signed?.ok && signed.signedDownloadUrl) {
+            urls[cur] = signed.signedDownloadUrl;
+          }
+        }
+      })
+    );
+    return { status: 200, body: { ok: true, urls } };
+  }
+
   if (action === 'device_sign_mirror_upload') {
     const gate = await assertDeviceSyncUnlocked(supabaseUrl, serviceKey, emailHash);
     if (!gate.ok) return gate.response;

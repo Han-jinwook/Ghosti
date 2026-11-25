@@ -1028,6 +1028,8 @@ export function isCurrentAccountWorkShareUnlocked(email?: string): boolean {
 }
 
 import {
+  isLocalZCoreHostTunnelActive,
+  isSharedLocalHostPcProtectedForAccount,
   readActiveWorkRoomInviteMeta,
   readCachedJoinedWorkRoomMeta,
   readCachedMyWorkRoomMeta,
@@ -1099,24 +1101,42 @@ export async function syncEntitlementToLocalPcEngine(
       isSubscribed: isSub ? 'true' : 'false',
       linkedDeviceCount: String(devCnt),
     });
+
+    // 방장과 팀원이 동일한 물리 PC에서 브라우저/계정만 분리해 사용할 때,
+    // 팀원 계정의 내보내기(unlocked=false)나 비방장 진입(isHost=false)이 방장의 탐색기 S: 드라이브·터널을 해제하지 않도록 보호
+    const isOwnHostSubscriptionExpired = Boolean(
+      cachedHostRoom?.roomId && entitlement?.workTrialExpired && !ownWorkUnlocked
+    );
+    let skipWorkEntitlementPost = false;
+    if (!isWorkUnlocked) {
+      skipWorkEntitlementPost = await isSharedLocalHostPcProtectedForAccount({
+        accountEmail: cleanEmail || undefined,
+        isOwnHostSubscriptionExpired,
+      });
+    } else if (!isHost) {
+      skipWorkEntitlementPost = await isLocalZCoreHostTunnelActive();
+    }
+
     await Promise.all([
       fetch(getZCoreUrl(`/api/superpower/status?${qs.toString()}`), { method: 'GET' }),
-      fetch(getZCoreUrl('/__work/entitlement'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          unlocked: isWorkUnlocked,
-          email: cleanEmail,
-          roomId,
-          isHost,
-          planId:
-            workOverride?.planId ||
-            (!isHost && invitedWorkUnlocked
-              ? 'work_invited_member'
-              : entitlement?.workPlanId || (entitlement?.workTrialActive ? 'work_trial_30d' : '')),
-          reason: entitlement?.workTrialExpired ? 'WORK_TRIAL_EXPIRED' : 'WORK_SUBSCRIPTION_REQUIRED',
-        }),
-      }).catch(() => null),
+      skipWorkEntitlementPost
+        ? Promise.resolve(null)
+        : fetch(getZCoreUrl('/__work/entitlement'), {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              unlocked: isWorkUnlocked,
+              email: cleanEmail,
+              roomId,
+              isHost,
+              planId:
+                workOverride?.planId ||
+                (!isHost && invitedWorkUnlocked
+                  ? 'work_invited_member'
+                  : entitlement?.workPlanId || (entitlement?.workTrialActive ? 'work_trial_30d' : '')),
+              reason: entitlement?.workTrialExpired ? 'WORK_TRIAL_EXPIRED' : 'WORK_SUBSCRIPTION_REQUIRED',
+            }),
+          }).catch(() => null),
     ]);
   } catch {
     lastSyncedPcEngineSubFlag = null;
@@ -2112,20 +2132,41 @@ export async function pullPendingMirrorOriginalsToPcBackupFolder(
     );
     let pulledCount = 0;
     let backupDirPath: string | null = null;
-    await runWithConcurrency(candidates, 4, async (item) => {
-      const sha = item.sha256!;
-      const dlSign = await callGhostiServerBridge<{ signedDownloadUrl?: string }>(
-        'device_sign_mirror_download',
-        { sha256: sha }
+    // 60장 단위 배치 서명 URL 일괄 발급으로 Netlify 왕복 50배 축소 + 6x 병렬 PC 저장
+    const signedDlMap = new Map<string, string>();
+    const dlBatchSize = 60;
+    for (let i = 0; i < candidates.length; i += dlBatchSize) {
+      const batchShas = candidates.slice(i, i + dlBatchSize).map((c) => c.sha256!);
+      const batchRes = await callGhostiServerBridge<{ urls?: Record<string, string> }>(
+        'device_sign_mirror_downloads_batch',
+        { sha256List: batchShas }
       );
-      if (!dlSign.ok || !dlSign.signedDownloadUrl) return;
+      if (batchRes.ok && batchRes.urls) {
+        for (const [k, v] of Object.entries(batchRes.urls)) {
+          if (v) signedDlMap.set(k, v);
+        }
+      }
+    }
+    await runWithConcurrency(candidates, 6, async (item) => {
+      const sha = item.sha256!;
+      let signedDownloadUrl = signedDlMap.get(sha);
+      if (!signedDownloadUrl) {
+        const dlSign = await callGhostiServerBridge<{ signedDownloadUrl?: string }>(
+          'device_sign_mirror_download',
+          { sha256: sha }
+        );
+        if (dlSign.ok && dlSign.signedDownloadUrl) {
+          signedDownloadUrl = dlSign.signedDownloadUrl;
+        }
+      }
+      if (!signedDownloadUrl) return;
       try {
         const pullRes = await fetch(getZCoreUrl('/__sync/mirror-pull'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({
             fileName: item.title || sha,
-            signedDownloadUrl: dlSign.signedDownloadUrl,
+            signedDownloadUrl,
             sha256: sha,
           }),
         });
@@ -2228,6 +2269,24 @@ export async function executeRealDeviceSyncNow(opts: {
       });
     }
 
+    const dataUrlToBlobFast = (dataUrl: string): Blob | null => {
+      try {
+        const commaIdx = dataUrl.indexOf(',');
+        if (commaIdx < 0) return null;
+        const header = dataUrl.slice(0, commaIdx);
+        const mimeMatch = header.match(/data:([^;]+)/);
+        const mime = mimeMatch ? mimeMatch[1] : 'image/jpeg';
+        const b64 = dataUrl.slice(commaIdx + 1);
+        const bin = atob(b64);
+        const len = bin.length;
+        const bytes = new Uint8Array(len);
+        for (let k = 0; k < len; k += 1) bytes[k] = bin.charCodeAt(k);
+        return new Blob([bytes], { type: mime });
+      } catch {
+        return null;
+      }
+    };
+
     const fetchWithTimeout = async (url: string, init?: RequestInit, timeoutMs = 12_000): Promise<Response> => {
       const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
       const tid = ctrl ? window.setTimeout(() => ctrl.abort(), timeoutMs) : null;
@@ -2238,96 +2297,136 @@ export async function executeRealDeviceSyncNow(opts: {
       }
     };
 
-    let uploadDone = 0;
     let trialAbortError: { reason?: string; message?: string } | null = null;
-    await runWithConcurrency(pendingOriginals, 6, async ({ photo: p, shaKey }) => {
-      if (trialAbortError) return;
-      const candidates = [p.fullUrl, p.thumbUrl].filter(
-        (u): u is string => Boolean(u && u.trim())
-      );
-      if (candidates.length === 0) {
-        uploadDone += 1;
-        opts.onProgress?.({
-          phase: '원본 안전 백업 업로드 중',
-          current: uploadDone,
-          total: pendingOriginals.length,
-        });
-        return;
+    // [55배 왕복 축소 정공법]: 60장 단위 배치 서명 URL을 1회 서버 호출로 일괄 발급받아 10x 병렬 직통 업로드!
+    const signedUploadMap = new Map<string, string>();
+    const SIGN_BATCH_SIZE = 60;
+    for (let sIdx = 0; sIdx < pendingOriginals.length; sIdx += SIGN_BATCH_SIZE) {
+      const batchShas = pendingOriginals.slice(sIdx, sIdx + SIGN_BATCH_SIZE).map((x) => x.shaKey);
+      const batchSign = await callGhostiServerBridge<{
+        urls?: Record<string, string>;
+        reason?: string;
+        message?: string;
+      }>('device_sign_mirror_uploads_batch', { sha256List: batchShas });
+      if (
+        !batchSign.ok &&
+        (batchSign.reason === 'TRIAL_EXPIRED' || batchSign.reason === 'TRIAL_OPT_IN_REQUIRED')
+      ) {
+        trialAbortError = { reason: batchSign.reason, message: batchSign.message };
+        break;
       }
-      let blob: Blob | null = null;
-      for (const src of candidates) {
-        try {
-          const blobRes = await fetchWithTimeout(src, undefined, 8_000);
-          if (!blobRes.ok) continue;
-          const b = await blobRes.blob();
-          if (b.size > 0 && b.size <= 25 * 1024 * 1024) {
-            blob = b;
-            break;
-          }
-        } catch {
-          /* try next candidate */
+      if (batchSign.ok && batchSign.urls) {
+        for (const [k, v] of Object.entries(batchSign.urls)) {
+          if (v) signedUploadMap.set(k, v);
         }
       }
-      if (!blob) {
+    }
+
+    let uploadDone = 0;
+    if (!trialAbortError) {
+      await runWithConcurrency(pendingOriginals, 10, async ({ photo: p, shaKey }) => {
+        if (trialAbortError) return;
+        const candidates = Array.from(
+          new Set(
+            [p.fullUrl, p.thumbUrl].filter((u): u is string => Boolean(u && u.trim()))
+          )
+        );
+        if (candidates.length === 0) {
+          uploadDone += 1;
+          opts.onProgress?.({
+            phase: '원본 안전 백업 업로드 중',
+            current: uploadDone,
+            total: pendingOriginals.length,
+          });
+          return;
+        }
+        let blob: Blob | null = null;
+        for (const src of candidates) {
+          if (src.startsWith('data:')) {
+            const fastB = dataUrlToBlobFast(src);
+            if (fastB && fastB.size > 0 && fastB.size <= 25 * 1024 * 1024) {
+              blob = fastB;
+              break;
+            }
+          }
+          try {
+            const blobRes = await fetchWithTimeout(src, undefined, 8_000);
+            if (!blobRes.ok) continue;
+            const b = await blobRes.blob();
+            if (b.size > 0 && b.size <= 25 * 1024 * 1024) {
+              blob = b;
+              break;
+            }
+          } catch {
+            /* try next candidate */
+          }
+        }
+        if (!blob) {
+          try {
+            const compactFallback = await tryMakeCompactThumbDataUrl(p.thumbUrl || p.fullUrl);
+            if (compactFallback) {
+              blob = dataUrlToBlobFast(compactFallback);
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+        if (!blob) {
+          uploadDone += 1;
+          opts.onProgress?.({
+            phase: '원본 안전 백업 업로드 중',
+            current: uploadDone,
+            total: pendingOriginals.length,
+          });
+          return;
+        }
         try {
-          const compactFallback = await tryMakeCompactThumbDataUrl(p.thumbUrl || p.fullUrl);
-          if (compactFallback) {
-            const fbRes = await fetchWithTimeout(compactFallback, undefined, 5_000);
-            if (fbRes.ok) {
-              const fbBlob = await fbRes.blob();
-              if (fbBlob.size > 0) blob = fbBlob;
+          let signedUrl = signedUploadMap.get(shaKey);
+          if (!signedUrl) {
+            const signUp = await callGhostiServerBridge<{
+              signedUploadUrl?: string;
+              reason?: string;
+              message?: string;
+            }>('device_sign_mirror_upload', { sha256: shaKey });
+            if (
+              !signUp.ok &&
+              (signUp.reason === 'TRIAL_EXPIRED' || signUp.reason === 'TRIAL_OPT_IN_REQUIRED')
+            ) {
+              trialAbortError = { reason: signUp.reason, message: signUp.message };
+              return;
+            }
+            if (signUp.ok && signUp.signedUploadUrl) {
+              signedUrl = signUp.signedUploadUrl;
+            }
+          }
+          if (signedUrl) {
+            const putRes = await fetchWithTimeout(
+              signedUrl,
+              {
+                method: 'PUT',
+                headers: { 'Content-Type': blob.type || 'image/jpeg' },
+                body: blob,
+              },
+              15_000
+            );
+            if (putRes.ok) {
+              uploadedMirrorHashes.add(shaKey);
+              mirrorUploadedIds.add(p.id);
+              mirroredUploadCount += 1;
             }
           }
         } catch {
-          /* ignore */
+          /* continue */
+        } finally {
+          uploadDone += 1;
+          opts.onProgress?.({
+            phase: '원본 안전 백업 업로드 중',
+            current: uploadDone,
+            total: pendingOriginals.length,
+          });
         }
-      }
-      if (!blob) {
-        uploadDone += 1;
-        opts.onProgress?.({
-          phase: '원본 안전 백업 업로드 중',
-          current: uploadDone,
-          total: pendingOriginals.length,
-        });
-        return;
-      }
-      try {
-        const signUp = await callGhostiServerBridge<{
-          signedUploadUrl?: string;
-          reason?: string;
-          message?: string;
-        }>('device_sign_mirror_upload', { sha256: shaKey });
-        if (!signUp.ok && (signUp.reason === 'TRIAL_EXPIRED' || signUp.reason === 'TRIAL_OPT_IN_REQUIRED')) {
-          trialAbortError = { reason: signUp.reason, message: signUp.message };
-          return;
-        }
-        if (signUp.ok && signUp.signedUploadUrl) {
-          const putRes = await fetchWithTimeout(
-            signUp.signedUploadUrl,
-            {
-              method: 'PUT',
-              headers: { 'Content-Type': blob.type || 'image/jpeg' },
-              body: blob,
-            },
-            15_000
-          );
-          if (putRes.ok) {
-            uploadedMirrorHashes.add(shaKey);
-            mirrorUploadedIds.add(p.id);
-            mirroredUploadCount += 1;
-          }
-        }
-      } catch {
-        /* continue */
-      } finally {
-        uploadDone += 1;
-        opts.onProgress?.({
-          phase: '원본 안전 백업 업로드 중',
-          current: uploadDone,
-          total: pendingOriginals.length,
-        });
-      }
-    });
+      });
+    }
     if (mirroredUploadCount > 0) {
       persistUploadedMirrorHashes(opts.email);
     }
@@ -2359,7 +2458,7 @@ export async function executeRealDeviceSyncNow(opts: {
     });
   }
   let packedCount = 0;
-  await runWithConcurrency(activeLocalPhotos, 8, async (p, i) => {
+  await runWithConcurrency(activeLocalPhotos, 12, async (p, i) => {
     const shaKey = photoShaMap.get(p.id) || `${(await sha256HexBrowser(`${p.id}::${p.name}::${p.size}`)).slice(0, 40)}.jpg`;
     const rawThumb = (p.thumbUrl || p.fullUrl || '').trim();
     let thumbWebp = packedThumbCache.get(shaKey);

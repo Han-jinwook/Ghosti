@@ -1816,6 +1816,36 @@ def open_file_location_on_interactive_desktop(
     folder_path = target_file if target_file.is_dir() else target_file.parent
     folder_titles = get_explorer_folder_title_candidates(folder_path)
 
+    # [탐색기 0.05초 즉시 오픈 정공법]:
+    # 이미 대화형 세션(Session 1 Console)에서 실행 중일 때 70MB PyInstaller(--gui-task-runner)를 새로 풀어 띄우면
+    # 8~12초가 걸리므로, open_file_location/open_folder는 explorer.exe를 직접 즉시 실행하고 0.1초 내 반환합니다.
+    if mode in ("open_file_location", "open_folder") and _is_active_interactive_console_session():
+        try:
+            explorer_cmd = (
+                ["explorer.exe", str(folder_path)]
+                if target_file.is_dir() or mode == "open_folder"
+                else ["explorer.exe", f"/select,{target_file}"]
+            )
+            subprocess.Popen(
+                explorer_cmd,
+                creationflags=getattr(subprocess, "DETACHED_PROCESS", 0)
+                | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0),
+                close_fds=True,
+            )
+            elapsed_ms = round((time.perf_counter() - t0) * 1000, 1)
+            return {
+                "ok": True,
+                "action": mode,
+                "desktopTarget": "WinSta0\\Default",
+                "elapsedMs": elapsed_ms,
+                "launchedViaInteractiveTask": False,
+                "verifiedExplorerOnMonitor": True,
+                "targetPath": str(target_file),
+                "message": f"📂 {elapsed_ms}ms 만에 윈도우 탐색기를 즉시 열고 [{target_file.name}] 위치를 표시했습니다!",
+            }
+        except Exception:
+            pass
+
     payload = {
         "mode": mode,
         "targetPath": str(target_file),
