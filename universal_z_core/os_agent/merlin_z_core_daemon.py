@@ -174,7 +174,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.8.19"
+CORE_VERSION = "2.8.29"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1449,6 +1449,18 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
             "version": CORE_VERSION,
         }
 
+    # [원격 스테이징 배포 중 상호 배제]: SSH 무중단 배포(staging.exe 존재 & 120초 이내) 중이면 자가업데이트 양보
+    try:
+        _staging_p = Path(sys.executable).resolve().parent / "Merlin_Z_Core_Setup.staging.exe"
+        if _staging_p.exists() and (time.time() - _staging_p.stat().st_mtime) < 120.0:
+            return {
+                "ok": True,
+                "status": "SKIPPED_REMOTE_STAGING_ACTIVE",
+                "version": CORE_VERSION,
+            }
+    except Exception:
+        pass
+
     if _SELF_UPDATE_IN_PROGRESS:
         return {
             "ok": True,
@@ -1545,21 +1557,27 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
                 _SELF_UPDATE_IN_PROGRESS = False
                 return
 
-            # PyInstaller 부모 부트로더(_MEI 정리) 파일 잠금이 해제될 때까지 최대 15초 재시도 후 무소음 교체·재기동
+            # Chrome/VSCode 정공법 Rename-Aside: 실행 중/좀비 잠금 파일도 옆으로 이름 변경 후 새 exe 즉시 배치 + 인터랙티브 재기동
             bat_path = update_dir / "updater.bat"
+            zombie_name = f"{current_exe.name}.zombie_{int(time.time())}.tmp"
             bat_content = (
                 "@echo off\r\n"
                 "setlocal\r\n"
                 'set "_MEIPASS2="\r\n'
                 'set "_MEIPASS="\r\n'
-                "timeout /t 2 /nobreak > NUL\r\n"
-                "for /L %%i in (1,1,15) do (\r\n"
-                f'  copy /y "{extracted_exe}" "{current_exe}" > NUL 2>&1 && goto :LAUNCH\r\n'
+                "timeout /t 1 /nobreak > NUL\r\n"
+                "taskkill /F /T /IM Merlin_Z_Core_Setup.exe > NUL 2>&1\r\n"
+                f'del /f /q "{current_exe.parent}\\*.zombie_*.tmp" > NUL 2>&1\r\n'
+                "for /L %%i in (1,1,10) do (\r\n"
+                f'  if exist "{current_exe}" ren "{current_exe}" "{zombie_name}" > NUL 2>&1\r\n'
+                f'  move /y "{extracted_exe}" "{current_exe}" > NUL 2>&1 && goto :LAUNCH\r\n'
+                "  taskkill /F /T /IM Merlin_Z_Core_Setup.exe > NUL 2>&1\r\n"
                 "  timeout /t 1 /nobreak > NUL\r\n"
                 ")\r\n"
                 ":LAUNCH\r\n"
-                f'del /f /q "{extracted_exe}" > NUL 2>&1\r\n'
-                f'start "" "{current_exe}" --replace\r\n'
+                f'del /f /q "{current_exe.parent}\\*.zombie_*.tmp" > NUL 2>&1\r\n'
+                f'if exist "{extracted_exe}" del /f /q "{extracted_exe}" > NUL 2>&1\r\n'
+                'schtasks /run /tn "StartMerlinZCore5199" > NUL 2>&1 || start "" "' + str(current_exe) + '" --replace\r\n'
                 'del "%~f0"\r\n'
             )
             bat_path.write_text(bat_content, encoding="mbcs", errors="replace")

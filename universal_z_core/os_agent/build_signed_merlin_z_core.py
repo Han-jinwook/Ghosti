@@ -633,19 +633,44 @@ def main() -> None:
         sys.exit(0 if sign_res.get("signed") else 1)
 
     if args.build:
-        out: Dict[str, Any] = {"build": build_with_pyinstaller(console=args.console)}
-        if out["build"]["built"]:
-            # Windows 11 Smart App Control(애플리케이션 제어 정책, WinError 4551) 환경에서는
-            # 미서명 exe 실행이 차단되므로 반드시 MS 코드 서명을 먼저 날인한 뒤 기동 검증 및 ZIP 패키징을 수행합니다!
-            ensure_ms_signing_tools_installed()
-            out["sign"] = sign_binary_with_ms_codesign(exe)
-            out["authenticode"] = verify_authenticode_signature(exe)
-            out["verify"] = verify_built_exe(exe, port=args.verify_port)
-            if (out.get("verify") or {}).get("ok"):
-                out["releaseSync"] = sync_release_zip_and_frontend_version(exe)
-        out["ok"] = bool(out["build"]["built"] and (out.get("verify") or {}).get("ok"))
-        print(json.dumps(out, ensure_ascii=False, indent=2))
-        sys.exit(0 if out["ok"] else 1)
+        # [4개 귀신 창 동시 빌드 충돌 원천 차단]: deploy_z_core_cluster.py가 잡은 락이 없으면 직접 동일 OS 파일 락 획득
+        _lock_file_handle = None
+        if os.name == "nt" and os.environ.get("MERLIN_ZCORE_LOCK_HELD") != "1":
+            import msvcrt as _msvcrt
+            import time as _time
+            _lock_p = THIS_DIR.parent / ".zcore_deploy.lock"
+            _lock_file_handle = open(_lock_p, "a+b")
+            _t0 = _time.time()
+            while True:
+                try:
+                    _lock_file_handle.seek(0)
+                    _msvcrt.locking(_lock_file_handle.fileno(), _msvcrt.LK_NBLCK, 1)
+                    break
+                except OSError:
+                    if (_time.time() - _t0) >= 180.0:
+                        raise TimeoutError("다른 창이 Z-코어 빌드를 점유 중입니다.")
+                    _time.sleep(1.0)
+        try:
+            out: Dict[str, Any] = {"build": build_with_pyinstaller(console=args.console)}
+            if out["build"]["built"]:
+                ensure_ms_signing_tools_installed()
+                out["sign"] = sign_binary_with_ms_codesign(exe)
+                out["authenticode"] = verify_authenticode_signature(exe)
+                out["verify"] = verify_built_exe(exe, port=args.verify_port)
+                if (out.get("verify") or {}).get("ok"):
+                    out["releaseSync"] = sync_release_zip_and_frontend_version(exe)
+            out["ok"] = bool(out["build"]["built"] and (out.get("verify") or {}).get("ok"))
+            print(json.dumps(out, ensure_ascii=False, indent=2))
+            sys.exit(0 if out["ok"] else 1)
+        finally:
+            if _lock_file_handle is not None and os.name == "nt":
+                try:
+                    import msvcrt as _msvcrt
+                    _lock_file_handle.seek(0)
+                    _msvcrt.locking(_lock_file_handle.fileno(), _msvcrt.LK_UNLCK, 1)
+                    _lock_file_handle.close()
+                except Exception:
+                    pass
 
     signtool = find_signtool()
     dlib = find_azure_dlib()

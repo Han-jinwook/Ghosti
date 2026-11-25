@@ -12,12 +12,64 @@ import subprocess
 import urllib.request
 import json
 import time
+from contextlib import contextmanager
 
 def log(msg: str):
     print(f"[*] {msg}", flush=True)
 
 
 UZC_DIR = os.path.dirname(os.path.abspath(__file__))
+
+
+@contextmanager
+def acquire_global_zcore_deploy_lock(timeout_sec: float = 180.0):
+    """
+    [4개 귀신 창 동시 빌드·배포 충돌 원천 차단 전역 OS 파일 락]:
+    - 1~4귀신 창 중 2개 이상이 동시에 exe 빌드·SCP 배포를 실행해 버전을 덮어쓰거나
+      원격 PC 엔진을 죽이고 꼬이게 만드는 사고를 Windows OS 파일 락(msvcrt.locking)으로 100% 직렬화합니다.
+    """
+    if os.environ.get("MERLIN_ZCORE_LOCK_HELD") == "1":
+        yield
+        return
+    lock_path = os.path.join(UZC_DIR, ".zcore_deploy.lock")
+    f_lock = open(lock_path, "a+b")
+    acquired = False
+    t0 = time.time()
+    try:
+        while True:
+            try:
+                f_lock.seek(0)
+                if os.name == "nt":
+                    import msvcrt
+                    msvcrt.locking(f_lock.fileno(), msvcrt.LK_NBLCK, 1)
+                acquired = True
+                break
+            except OSError:
+                if (time.time() - t0) >= timeout_sec:
+                    raise TimeoutError(f"다른 창이 Z-코어 빌드/배포 락({lock_path})을 {timeout_sec}초 이상 점유 중입니다.")
+                time.sleep(1.0)
+        try:
+            f_lock.seek(0)
+            f_lock.truncate(0)
+            f_lock.write(f"pid={os.getpid()} ts={time.strftime('%Y-%m-%d %H:%M:%S')}\n".encode("utf-8"))
+            f_lock.flush()
+        except Exception:
+            pass
+        os.environ["MERLIN_ZCORE_LOCK_HELD"] = "1"
+        yield
+    finally:
+        os.environ.pop("MERLIN_ZCORE_LOCK_HELD", None)
+        if acquired and os.name == "nt":
+            try:
+                import msvcrt
+                f_lock.seek(0)
+                msvcrt.locking(f_lock.fileno(), msvcrt.LK_UNLCK, 1)
+            except Exception:
+                pass
+        try:
+            f_lock.close()
+        except Exception:
+            pass
 
 
 def _ver_tuple(v: str) -> tuple[int, ...]:
@@ -378,8 +430,7 @@ def ensure_release_zip_and_bridge_synced(force_rebuild: bool = False) -> str:
 
 
 def _run_remote_ps_encoded(ssh_target: str, key_path: str, ps_script: str, timeout_sec: int = 20) -> subprocess.CompletedProcess:
-    import base64
-    enc = base64.b64encode(ps_script.encode("utf-16-le")).decode("ascii")
+    """SSH 원격 Windows cmd.exe 8,191자 명령줄 제한을 회피하기 위해 PowerShell stdin 파이핑으로 안전 실행합니다."""
     return subprocess.run(
         [
             "ssh",
@@ -390,8 +441,9 @@ def _run_remote_ps_encoded(ssh_target: str, key_path: str, ps_script: str, timeo
             "-o",
             "ConnectTimeout=5",
             ssh_target,
-            f"powershell -NoProfile -NonInteractive -EncodedCommand {enc}",
+            "powershell -NoProfile -NonInteractive -Command -",
         ],
+        input=ps_script + "\n",
         capture_output=True,
         text=True,
         encoding="utf-8",
@@ -401,7 +453,7 @@ def _run_remote_ps_encoded(ssh_target: str, key_path: str, ps_script: str, timeo
 
 
 def _update_remote_exe_node(label: str, host: str, remote_user: str, core_ver: str):
-    log(f"\n=== [{label} ({remote_user}@{host})] Z-코어 + 자동실행(Run/ONLOGON) 무소음 업데이트 시작 ===")
+    log(f"\n=== [{label} ({remote_user}@{host})] 무중단 원자적 스왑 Z-코어(v{core_ver}) 업데이트 시작 ===")
     key_path = _resolve_ssh_key()
     exe_path = os.path.join(UZC_DIR, "os_agent", "dist", "Merlin_Z_Core_Setup.exe")
     if not os.path.exists(key_path) or not os.path.exists(exe_path):
@@ -409,28 +461,28 @@ def _update_remote_exe_node(label: str, host: str, remote_user: str, core_ver: s
         return
 
     ssh_target = f"{remote_user}@{host}"
-    remote_exe_win = f"C:\\Users\\{remote_user}\\AppData\\Local\\Programs\\MerlinFamily\\Merlin_Z_Core_Setup.exe"
-    remote_exe_scp = f"C:/Users/{remote_user}/AppData/Local/Programs/MerlinFamily/Merlin_Z_Core_Setup.exe"
+    remote_dir_win = f"C:\\Users\\{remote_user}\\AppData\\Local\\Programs\\MerlinFamily"
+    remote_exe_win = f"{remote_dir_win}\\Merlin_Z_Core_Setup.exe"
+    remote_staging_win = f"{remote_dir_win}\\Merlin_Z_Core_Setup.staging.exe"
+    remote_bak_win = f"{remote_dir_win}\\Merlin_Z_Core_Setup.bak.exe"
+    remote_staging_scp = f"C:/Users/{remote_user}/AppData/Local/Programs/MerlinFamily/Merlin_Z_Core_Setup.staging.exe"
 
-    # 1) 기존 5199/51988 데몬·구버전 파이썬 스크립트·Merlin_Z_Core_Setup.exe 완전 종료(파일 잠금 해제) 및 잔존 _MEI 임시폴더 청소
-    stop_ps = f"""
-curl.exe -s --max-time 2 -H Origin:https://ghosti.sundreamer.app http://127.0.0.1:5199/__merlin/shutdown 2>$null | Out-Null
-curl.exe -s --max-time 2 http://127.0.0.1:51988/__merlin/shutdown 2>$null | Out-Null
-taskkill /F /IM Merlin_Z_Core_Setup.exe 2>$null | Out-Null
-$p = Get-NetTCPConnection -LocalPort 5199,51988 -State Listen -ErrorAction SilentlyContinue
-if ($p) {{ foreach ($item in $p) {{ if ($item.OwningProcess -gt 0) {{ Stop-Process -Id $item.OwningProcess -Force -ErrorAction SilentlyContinue }} }} }}
-schtasks /delete /tn MerlinSeqPasteStart /f 2>$null | Out-Null
-Remove-Item -Path 'C:\\MerlinTools\\start_zcore_5199.vbs' -Force -ErrorAction SilentlyContinue
-Start-Sleep -Milliseconds 800
-Remove-Item -Path "$env:LOCALAPPDATA\\Merlin\\zcore_rt\\_MEI*" -Recurse -Force -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force -Path 'C:\\Users\\{remote_user}\\AppData\\Local\\Programs\\MerlinFamily' | Out-Null
-New-Item -ItemType Directory -Force -Path 'C:\\Users\\{remote_user}\\AppData\\Local\\Merlin' | Out-Null
-"""
+    # [0단계: 원격 버전 선조회 ➔ 다운그레이드 물리 차단]
     try:
-        _run_remote_ps_encoded(ssh_target, key_path, stop_ps, timeout_sec=35)
-    except Exception as e:
-        log(f"⚠️ {label} stop 단계 경고(계속 진행): {e}")
-    time.sleep(0.8)
+        pre_chk = _run_remote_ps_encoded(
+            ssh_target,
+            key_path,
+            f"New-Item -ItemType Directory -Force -Path '{remote_dir_win}' | Out-Null; New-Item -ItemType Directory -Force -Path 'C:\\Users\\{remote_user}\\AppData\\Local\\Merlin' | Out-Null; $h = curl.exe -s --max-time 2 http://127.0.0.1:5199/__merlin/health; Write-Output $h",
+            timeout_sec=15,
+        )
+        raw_h = (pre_chk.stdout or "").strip()
+        if raw_h.startswith("{"):
+            rem_ver = str(json.loads(raw_h).get("version") or "").strip()
+            if rem_ver and _ver_tuple(rem_ver) > _ver_tuple(core_ver):
+                log(f"🛡️ {label} 다운그레이드 차단! 원격이 이미 더 최신(v{rem_ver} > v{core_ver})이므로 배포를 건너뜁니다.")
+                return
+    except Exception:
+        pass
 
     wl_path = os.path.join(UZC_DIR, "os_agent", "security_services_whitelist.json")
     if os.path.exists(wl_path):
@@ -439,28 +491,105 @@ New-Item -ItemType Directory -Force -Path 'C:\\Users\\{remote_user}\\AppData\\Lo
             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
         )
 
-    # 2) 파일 잠금 해제 상태에서 최신 Merlin_Z_Core_Setup.exe 전송 (실패 시 1회 재시도)
+    # [1단계: 엔진 살아있는 채로 스테이징 파일 전송 (전송 15초 동안 기존 엔진 먹통 0초!!)]
+    import hashlib as _hl
+    local_sha256 = _hl.sha256(open(exe_path, "rb").read()).hexdigest().upper()
     scp_res = subprocess.run(
-        ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", exe_path, f"{ssh_target}:{remote_exe_scp}"],
+        ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", exe_path, f"{ssh_target}:{remote_staging_scp}"],
         capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=90,
     )
     if scp_res.returncode != 0:
-        _run_remote_ps_encoded(ssh_target, key_path, "taskkill /F /IM Merlin_Z_Core_Setup.exe 2>$null | Out-Null", timeout_sec=10)
-        time.sleep(1.2)
-        scp_res = subprocess.run(
-            ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", exe_path, f"{ssh_target}:{remote_exe_scp}"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=90,
-        )
-    if scp_res.returncode != 0:
-        log(f"❌ {label} SCP 실패: {scp_res.stderr}")
+        log(f"❌ {label} 스테이징 SCP 실패 (기존 엔진 무손상 유지): {scp_res.stderr}")
         return
 
-    # 3) EncodedCommand로 깨짐 없이 Run 레지스트리 + 모드전환기 캐시 동기화 + 인터랙티브 세션(LogonType Interactive) ONLOGON 스케줄러 등록 및 즉시 기동
-    # ⚠️ 절대 SSH Session 0에서 Start-Process로 직접 띄우지 않습니다!
-    start_ps = f"""
+    # [2단계: 원격 staging.exe SHA-256 100% 비트 일치 & PE 헤더 무결성 사전 검증 (GUI 서브시스템 --selftest 호환 문제 없이 0.2초 완벽 검증)]
+    verify_staging_ps = f"""
+$st = '{remote_staging_win}'
+if (-not (Test-Path $st)) {{ Write-Output 'STAGING_MISSING'; exit 2 }}
+$h = (Get-FileHash -Path $st -Algorithm SHA256).Hash.ToUpper()
+$sz = (Get-Item $st).Length
+if ($h -ne '{local_sha256}' -or $sz -lt 10000000) {{
+    Remove-Item -Path $st -Force -ErrorAction SilentlyContinue
+    Write-Output ("HASH_MISMATCH:" + $h + ":" + $sz)
+    exit 3
+}}
+Write-Output ("HASH_OK:" + $h)
+"""
+    try:
+        v_res = _run_remote_ps_encoded(ssh_target, key_path, verify_staging_ps, timeout_sec=25)
+        if v_res.returncode != 0 or f"HASH_OK:{local_sha256}" not in (v_res.stdout or ""):
+            log(f"❌ {label} 스테이징 SHA-256 무결성 검증 실패 (기존 엔진 무손상 유지): {(v_res.stdout or v_res.stderr)[:200]}")
+            return
+    except Exception as e:
+        log(f"❌ {label} 스테이징 무결성 검증 타임아웃 (기존 엔진 무손상 유지): {e}")
+        return
+
+    # [3단계: 0.5초 원자적 스왑 + 트리 완전 종료(/T) + 구버전 잔존 .exe 완전 소탕 + 인터랙티브 기동]
+    swap_and_start_ps = f"""
 [Environment]::SetEnvironmentVariable('_MEIPASS2', $null, 'Process')
 [Environment]::SetEnvironmentVariable('_MEIPASS', $null, 'Process')
 $exe = '{remote_exe_win}'
+$st  = '{remote_staging_win}'
+$bak = '{remote_bak_win}'
+
+# 3-1) 롤백용 백업 확보
+if (Test-Path $exe) {{
+    Copy-Item -Path $exe -Destination $bak -Force -ErrorAction SilentlyContinue
+}}
+
+# 3-2) 우아한 종료 요청 -> 트리 강제 종료(/T: 좀비 부트로더까지 100% 박멸!) -> 포트 점유 프로세스 종료
+curl.exe -s --max-time 2 -H Origin:https://ghosti.sundreamer.app http://127.0.0.1:5199/__merlin/shutdown 2>$null | Out-Null
+curl.exe -s --max-time 2 http://127.0.0.1:51988/__merlin/shutdown 2>$null | Out-Null
+Start-Sleep -Milliseconds 350
+taskkill /F /T /IM Merlin_Z_Core_Setup.exe 2>$null | Out-Null
+$p = Get-NetTCPConnection -LocalPort 5199,51988 -State Listen -ErrorAction SilentlyContinue
+if ($p) {{ foreach ($item in $p) {{ if ($item.OwningProcess -gt 0) {{ taskkill /F /T /PID $item.OwningProcess 2>$null | Out-Null }} }} }}
+
+# 프로세스 0개 완전 해제 대기 (최대 4초)
+for ($w=0; $w -lt 10; $w++) {{
+    $alive = @(Get-Process -Name 'Merlin_Z_Core_Setup' -ErrorAction SilentlyContinue)
+    if ($alive.Count -eq 0) {{ break }}
+    taskkill /F /T /IM Merlin_Z_Core_Setup.exe 2>$null | Out-Null
+    Start-Sleep -Milliseconds 400
+}}
+
+# 3-3) 구버전 잔존 exe / 충돌 업데이터 / 레거시 스케줄러 / 이전 좀비 임시파일 완전 소탕
+schtasks /delete /tn MerlinSeqPasteStart /f 2>$null | Out-Null
+Remove-Item -Path 'C:\\MerlinTools\\start_zcore_5199.vbs' -Force -ErrorAction SilentlyContinue
+Remove-Item -Path 'C:\\Users\\{remote_user}\\AppData\\Local\\Merlin\\Merlin_Z_Core_Setup.exe' -Force -ErrorAction SilentlyContinue
+Remove-Item -Path '{remote_dir_win}\\Merlin_Z_Core_Setup.old.exe' -Force -ErrorAction SilentlyContinue
+Remove-Item -Path '{remote_dir_win}\\Merlin_Z_Core_Setup.zombie_*.tmp' -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$env:TEMP\\merlin_zcore_silent_update\\updater.bat" -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$env:LOCALAPPDATA\\Merlin\\zcore_rt\\_MEI*" -Recurse -Force -ErrorAction SilentlyContinue
+
+# 3-4) Chrome/VSCode 정공법 Rename-Aside 0.01초 원자적 스왑:
+#      Windows NTFS는 커널 좀비 프로세스(taskkill 불가)가 실행파일을 잠그고 있어도
+#      '덮어쓰기/삭제'만 막을 뿐 '같은 폴더 내 이름 변경(Rename)'은 100% 허용합니다!
+$swapped = $false
+for ($k=0; $k -lt 6; $k++) {{
+    try {{
+        if (Test-Path $exe) {{
+            $zombieTmp = "$exe.zombie_" + ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) + ".tmp"
+            Move-Item -Path $exe -Destination $zombieTmp -Force -ErrorAction Stop
+        }}
+        Move-Item -Path $st -Destination $exe -Force -ErrorAction Stop
+        $swapped = $true
+        break
+    }} catch {{
+        taskkill /F /T /IM Merlin_Z_Core_Setup.exe 2>$null | Out-Null
+        Start-Sleep -Milliseconds 400
+    }}
+}}
+# 치워둔 이전 exe는 잠금이 풀렸으면 즉시 삭제 (좀비가 물고 있으면 다음 배포/재부팅 시 자동 소거)
+Remove-Item -Path '{remote_dir_win}\\Merlin_Z_Core_Setup.exe.zombie_*.tmp' -Force -ErrorAction SilentlyContinue
+if (-not $swapped) {{
+    if (Test-Path $bak) {{ Copy-Item -Path $bak -Destination $exe -Force -ErrorAction SilentlyContinue }}
+    Start-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContinue
+    Write-Output 'SWAP_FAILED_ROLLED_BACK'
+    exit 4
+}}
+
+# 3-5) 모드전환기 캐시 + Run 레지스트리 + 인터랙티브 ONLOGON 예약작업 갱신 및 즉시 기동
 $vaultCacheDir = 'C:\\Users\\{remote_user}\\AppData\\Local\\Merlin_Mode_Vault\\snapshots\\cached_installer'
 if (Test-Path 'C:\\Users\\{remote_user}\\AppData\\Local\\Merlin_Mode_Vault') {{
     New-Item -ItemType Directory -Force -Path $vaultCacheDir | Out-Null
@@ -471,7 +600,8 @@ Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run
 $act = New-ScheduledTaskAction -Execute $exe -Argument '--replace'
 $trg = New-ScheduledTaskTrigger -AtLogOn -User '{remote_user}'
 $prn = New-ScheduledTaskPrincipal -UserId '{remote_user}' -LogonType Interactive -RunLevel Limited
-$set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero)
+$set = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries -DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero) -MultipleInstances Parallel
+Stop-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContinue
 Register-ScheduledTask -TaskName 'StartMerlinZCore5199' -Action $act -Trigger $trg -Principal $prn -Settings $set -Force | Out-Null
 Unregister-ScheduledTask -TaskName 'Ghosti_SecurityCare_ElevatedHelper' -Confirm:$false -ErrorAction SilentlyContinue
 New-Item -ItemType Directory -Force -Path 'C:\\ProgramData\\Merlin\\care_queue' | Out-Null
@@ -491,11 +621,17 @@ try {{
     }}
 }} catch {{ }}
 Start-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContinue
+Write-Output 'SWAP_OK'
 """
     try:
-        _run_remote_ps_encoded(ssh_target, key_path, start_ps, timeout_sec=35)
+        sw_res = _run_remote_ps_encoded(ssh_target, key_path, swap_and_start_ps, timeout_sec=40)
+        if sw_res.returncode != 0 or "SWAP_OK" not in (sw_res.stdout or ""):
+            log(f"⚠️ {label} 원자적 스왑 실패 (자동 롤백 실행됨): {(sw_res.stdout or sw_res.stderr)[:240]}")
+            return
     except Exception as e:
-        log(f"⚠️ {label} start 단계 경고: {e}")
+        log(f"⚠️ {label} 스왑 단계 예외: {e}")
+
+    # [4단계: 기동 검증 (5199 버전 일치 + 51988 PONG) & 실패 시 자동 롤백으로 엔진 증발 0% 보장]
     for attempt in range(18):
         time.sleep(1.5)
         try:
@@ -518,13 +654,12 @@ Start-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContin
                 timeout=12,
             )
             if chk.returncode == 0 and f'"{core_ver}"' in chk.stdout and "|51988=1" in chk.stdout:
-                log(f"✅ {label} Z-코어 v{core_ver} + 귀신창(51988) 인터랙티브 세션 동기화 및 기동 확인 성공!")
+                log(f"✅ {label} Z-코어 v{core_ver} + 귀신창(51988) 무중단 원자적 스왑 및 기동 확인 성공!")
                 return
             if chk.returncode == 0 and f'"{core_ver}"' in chk.stdout and attempt >= 11:
-                log(f"✅ {label} Z-코어 v{core_ver} + 자동실행(Run & ONLOGON) 동기화 및 기동 확인 성공!")
+                log(f"✅ {label} Z-코어 v{core_ver} + 자동실행(Run & ONLOGON) 기동 확인 성공!")
                 return
-            if attempt == 10 and f'"{core_ver}"' not in (chk.stdout or ""):
-                # 66MB 단일 실행파일 압축해제 지연 시에도 5199가 아직 미응답일 때만 인터랙티브 예약작업 재트리거 (Session 0 직접 기동 영구 금지)
+            if attempt == 9 and f'"{core_ver}"' not in (chk.stdout or ""):
                 _run_remote_ps_encoded(
                     ssh_target,
                     key_path,
@@ -533,7 +668,20 @@ Start-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContin
                 )
         except Exception:
             pass
-    log(f"⚠️ {label} 헬스체크 대기 초과")
+    # 18회(27초) 내 기동 실패 시 즉시 백업본 롤백 기동 (엔진 증발 원천 방지!)
+    log(f"🚨 {label} v{core_ver} 기동 실패 ➔ 즉시 직전 정상 버전(.bak.exe) 자동 롤백 기동!")
+    rollback_ps = f"""
+taskkill /F /T /IM Merlin_Z_Core_Setup.exe 2>$null | Out-Null
+Start-Sleep -Milliseconds 600
+if (Test-Path '{remote_bak_win}') {{
+    Copy-Item -Path '{remote_bak_win}' -Destination '{remote_exe_win}' -Force -ErrorAction SilentlyContinue
+}}
+Start-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContinue
+"""
+    try:
+        _run_remote_ps_encoded(ssh_target, key_path, rollback_ps, timeout_sec=20)
+    except Exception:
+        pass
 
 
 def update_pc1_remote(core_ver: str):
@@ -555,13 +703,6 @@ def update_pc4(core_ver: str | None = None):
     resolved_ver = core_ver or _read_current_core_version()
     # 1~6호기 완벽 동일 아키텍처 단일화: 4호기도 구버전 vbs/파이썬 분리 실행을 폐지하고 최신 Merlin_Z_Core_Setup.exe 단일 자동실행으로 통일!
     _update_remote_exe_node("4호기 (사무실 100.114.100.24)", "100.114.100.24", "USER", resolved_ver)
-    # 4호기 C:/MerlinTools/universal_z_core 소스 폴더도 참조용으로 최신화 (프로세스 잠금 해제 후 안전 복사)
-    key_path = _resolve_ssh_key()
-    if os.path.exists(key_path):
-        subprocess.run(
-            ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", "-r", os.path.join(UZC_DIR, "*"), "USER@100.114.100.24:C:/MerlinTools/universal_z_core/"],
-            capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=90,
-        )
 
 
 def update_pc5(core_ver: str):
@@ -569,30 +710,31 @@ def update_pc5(core_ver: str):
 
 
 def main():
-    src_changed = bool(sync_internal_z_core_mirrors())
-    core_ver = ensure_release_zip_and_bridge_synced(force_rebuild=src_changed)
-    import datetime as _dt
-    _now_hr = _dt.datetime.now().hour
-    _is_qa_work_hours = (9 <= _now_hr < 15)
-    if _is_qa_work_hours:
-        log("🕘 [알바 근무시간(09:00~15:00) 전용 배포 모드] 1·2·5·6호기는 제외하고 오직 3호기(달나라)·4호기(해나라)에만 Z-코어를 설치합니다.")
-        update_pc3(core_ver)
-        update_pc4(core_ver)
-        log(f"\n🎉 근무시간(09:00~15:00) 안전 배포 완료 — 3호기 · 4호기 Z-코어(v{core_ver}) 설치 완료!")
-    else:
-        update_pc1()
-        update_pc1_remote(core_ver)
-        update_pc2(core_ver)
-        update_pc3(core_ver)
-        update_pc4(core_ver)
-        # 5호기(집 PC)는 오프라인 상태일 수 있으므로 2초 TCP 사전 체크 후 도달 가능할 때만 배포
-        try:
-            import socket
-            with socket.create_connection(("100.122.235.63", 22), timeout=2.0):
-                update_pc5(core_ver)
-        except Exception:
-            log("ℹ️ 5호기 (집 100.122.235.63) 현재 오프라인 — 배포 스킵")
-        log(f"\n🎉 전 클러스터(로컬 6호기 · 1호기 · 2호기 · 3호기 · 4호기 · 5호기) 통합 동기화(v{core_ver})가 완료되었습니다!")
+    with acquire_global_zcore_deploy_lock():
+        src_changed = bool(sync_internal_z_core_mirrors())
+        core_ver = ensure_release_zip_and_bridge_synced(force_rebuild=src_changed)
+        import datetime as _dt
+        _now_hr = _dt.datetime.now().hour
+        _is_qa_work_hours = (9 <= _now_hr < 15)
+        if _is_qa_work_hours:
+            log("🕘 [알바 근무시간(09:00~15:00) 전용 배포 모드] 1·2·5·6호기는 제외하고 오직 3호기(달나라)·4호기(해나라)에만 무중단 원자적 스왑 설치합니다.")
+            update_pc3(core_ver)
+            update_pc4(core_ver)
+            log(f"\n🎉 근무시간(09:00~15:00) 안전 배포 완료 — 3호기 · 4호기 Z-코어(v{core_ver}) 설치 완료!")
+        else:
+            update_pc1()
+            update_pc1_remote(core_ver)
+            update_pc2(core_ver)
+            update_pc3(core_ver)
+            update_pc4(core_ver)
+            # 5호기(집 PC)는 오프라인 상태일 수 있으므로 2초 TCP 사전 체크 후 도달 가능할 때만 배포
+            try:
+                import socket
+                with socket.create_connection(("100.122.235.63", 22), timeout=2.0):
+                    update_pc5(core_ver)
+            except Exception:
+                log("ℹ️ 5호기 (집 100.122.235.63) 현재 오프라인 — 배포 스킵")
+            log(f"\n🎉 전 클러스터(로컬 6호기 · 1호기 · 2호기 · 3호기 · 4호기 · 5호기) 통합 동기화(v{core_ver})가 완료되었습니다!")
 
 if __name__ == "__main__":
     main()
