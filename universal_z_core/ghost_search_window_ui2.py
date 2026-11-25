@@ -282,7 +282,17 @@ def _get_or_make_preview_bytes(img_path_str: str) -> tuple[bytes, str]:
                 out = (bio.getvalue(), dim_str)
         else:
             try:
+                from PIL import ImageFile as _ImgFile, ImageOps as _ImgOps
+                _ImgFile.LOAD_TRUNCATED_IMAGES = True
+            except Exception:
+                _ImgOps = None
+            try:
                 with Image.open(img_path_str) as raw_im:
+                    try:
+                        if _ImgOps is not None:
+                            raw_im = _ImgOps.exif_transpose(raw_im)
+                    except Exception:
+                        pass
                     dim_str = f"{raw_im.width}×{raw_im.height}px"
                     im_copy = raw_im.convert("RGB")
                     resamp = getattr(getattr(Image, "Resampling", Image), "BILINEAR", Image.NEAREST)
@@ -895,10 +905,62 @@ def build_ui2_search_window(
                 })
             except Exception:
                 pass
+        local_files_ready = True
+        if callable(peek_lightweight_local_files):
+            local_files_list, local_files_ready = peek_lightweight_local_files()
+            if not local_files_ready and callable(refresh_lightweight_local_files_async) and not st_state.get("bg_scan_scheduled"):
+                st_state["bg_scan_scheduled"] = True
+
+                def _on_bg_files_ready() -> None:
+                    st_state["bg_scan_scheduled"] = False
+                    st_state["bg_ui_dirty"] = True
+
+                refresh_lightweight_local_files_async(_on_bg_files_ready)
+        else:
+            local_files_list = get_lightweight_local_files()
+
+        local_file_names_low: set[str] = set()
+        for _fl in local_files_list:
+            _fp0 = str(_fl.get("file_path") or "").strip()
+            if _fp0:
+                try:
+                    local_file_names_low.add(Path(_fp0).name.lower())
+                except Exception:
+                    pass
+
+        _CLIP_FNAME_RE = re.compile(
+            r"^[^\r\n\\/:*?\"<>|]{1,180}\.(?:jpg|jpeg|jfif|png|webp|gif|bmp|heic|heif|mp4|mov|avi|mkv|wmv|pdf|docx?|xlsx?|pptx?|hwpx?|txt|csv)$",
+            re.IGNORECASE,
+        )
+        seen_clip_texts: set[str] = set()
         for rec in reversed(global_ai_history):
-            fp_hist = str(rec.get("file_path") or "")
+            fp_hist = str(rec.get("file_path") or "").strip()
             if fp_hist:
-                seen_fpaths.add(fp_hist.lower())
+                fp_low = fp_hist.lower()
+                if fp_low in seen_fpaths:
+                    continue
+                seen_fpaths.add(fp_low)
+                pool.append(rec)
+                continue
+            # [가짜 JPG 파일 오인 및 클립보드 텍스트 중복 노출 원천 차단]:
+            # 귀신라벨링 등으로 복사한 파일명 문자열('260525_193256_공원길_가로수.jpg')이
+            # file_path 없는 텍스트 기록으로 여러 번 중복 쌓여 실제 사진 파일처럼 보이던 버그 근본 교정!
+            raw_clip_t = str(rec.get("text") or "").strip()
+            if not raw_clip_t:
+                continue
+            norm_clip_t = re.sub(r"\s+", " ", raw_clip_t).lower()
+            if norm_clip_t in seen_clip_texts:
+                continue
+            seen_clip_texts.add(norm_clip_t)
+            if rec.get("kind", "text") == "text" and _CLIP_FNAME_RE.match(raw_clip_t):
+                # 내 PC 실제 파일 목록에 같은 이름의 파일이 있으면 가짜 텍스트 대신 실제 파일(미리보기 포함)만 표시
+                if raw_clip_t.lower() in local_file_names_low:
+                    continue
+                labeled_rec = dict(rec)
+                labeled_rec["text"] = f"[📋 복사한 이름] {raw_clip_t}"
+                labeled_rec["_is_copied_filename_text"] = True
+                pool.append(labeled_rec)
+                continue
             pool.append(rec)
 
         # [봉인 존중 연동] 사용자가 더블클릭·우클릭으로 직접 압축을 푼 직후 등록된 문서·본문 스니펫 0.05초 즉시 편입
@@ -925,20 +987,6 @@ def build_ui2_search_window(
                 })
         except Exception:
             pass
-
-        local_files_ready = True
-        if callable(peek_lightweight_local_files):
-            local_files_list, local_files_ready = peek_lightweight_local_files()
-            if not local_files_ready and callable(refresh_lightweight_local_files_async) and not st_state.get("bg_scan_scheduled"):
-                st_state["bg_scan_scheduled"] = True
-
-                def _on_bg_files_ready() -> None:
-                    st_state["bg_scan_scheduled"] = False
-                    st_state["bg_ui_dirty"] = True
-
-                refresh_lightweight_local_files_async(_on_bg_files_ready)
-        else:
-            local_files_list = get_lightweight_local_files()
 
         for frec in local_files_list:
             fp_loc = str(frec.get("file_path") or "")
@@ -1507,6 +1555,17 @@ def build_ui2_search_window(
                     bg="#0F172A",
                     font=("Malgun Gothic", 8, "bold"),
                     anchor="w",
+                ).pack(fill="x", pady=(0, 4))
+            elif sel_rec.get("_is_copied_filename_text"):
+                tk.Label(
+                    preview_pane,
+                    text="📋 클립보드에 복사해 둔 이름(글자)입니다 — 실제 사진 파일이 아님",
+                    fg="#FBBF24",
+                    bg="#0F172A",
+                    font=("Malgun Gothic", 8, "bold"),
+                    anchor="w",
+                    wraplength=350,
+                    justify="left",
                 ).pack(fill="x", pady=(0, 4))
 
             disp_preview_txt = _mask_sensitive_doc_text(
