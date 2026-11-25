@@ -1081,6 +1081,27 @@ def _start_bg_full_drive_scan_once() -> None:
     threading.Thread(target=_bg_worker, daemon=True, name="GhostiFullDriveScanStage2").start()
 
 
+def _get_active_pc_account_backup_sub() -> str:
+    try:
+        from plugins import plugin_paid_sync_ghostwin as _psg  # type: ignore
+
+        return _psg.sanitize_account_backup_folder()
+    except Exception:
+        return ""
+
+
+def _is_other_account_phone_backup_dir(target_dir: Path, active_backup_sub: str) -> bool:
+    if not active_backup_sub:
+        return False
+    try:
+        parent_name = target_dir.parent.name.lower()
+        if parent_name == "ghosti_phone_backup":
+            return target_dir.name.lower() != active_backup_sub.lower()
+    except Exception:
+        pass
+    return False
+
+
 def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
     # [165ms ➔ 0.05ms 초고속 폴더 트리 캐시]: 루트 디렉터리 목록 + 루트 mtime_ns가 동일하면 12초간 하위 폴더 트리 탐색을 재사용하고,
     # 루트에 새 폴더가 생성·삭제되는 즉시 root_sig가 변해 0ms 지연으로 재스캔합니다.
@@ -1089,7 +1110,8 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
     with _FULL_DRIVE_SCAN_LOCK:
         extra_dirs = list(_FULL_DRIVE_EXTRA_DIRS)
     excluded_work_dir = _get_unmounted_work_vault_dir_to_exclude()
-    root_sig_parts: List[str] = [str(max_depth), str(len(extra_dirs)), str(excluded_work_dir or "")]
+    active_backup_sub = _get_active_pc_account_backup_sub()
+    root_sig_parts: List[str] = [str(max_depth), str(len(extra_dirs)), str(excluded_work_dir or ""), active_backup_sub]
     for r in roots:
         try:
             st_r = os.stat(r)
@@ -1142,6 +1164,8 @@ def _iter_scan_dirs(roots: List[Path], max_depth: int = 3) -> List[Path]:
                                 continue
                             p_sub = Path(dent.path)
                             if _is_under_excluded_work_vault(p_sub, excluded_work_dir):
+                                continue
+                            if _is_other_account_phone_backup_dir(p_sub, active_backup_sub):
                                 continue
                             if not _is_code_repo_dir(p_sub):
                                 sub_dirs.append(p_sub)
@@ -5151,11 +5175,23 @@ def handle_quarantine(action: str, payload: Dict[str, Any] | None = None) -> Dic
                 zos.open_file_location_on_interactive_desktop(tp, mode="open_file_location")
                 return {"ok": True, "opened": str(tp), "selectedFile": tp.is_file()}
         if target == "phone_backup":
+            acct_email = str(data.get("accountEmail") or data.get("email") or "").strip()
+            sub_folder = ""
+            try:
+                from plugins import plugin_paid_sync_ghostwin as _psg  # type: ignore
+
+                sub_folder = _psg.sanitize_account_backup_folder(acct_email)
+            except Exception:
+                sub_folder = ""
             bdir = safe.known_folder("pictures") / "Ghosti_Phone_Backup"
+            if sub_folder:
+                bdir = bdir / sub_folder
             try:
                 bdir.mkdir(parents=True, exist_ok=True)
             except Exception:
                 bdir = Path.home() / "Pictures" / "Ghosti_Phone_Backup"
+                if sub_folder:
+                    bdir = bdir / sub_folder
                 bdir.mkdir(parents=True, exist_ok=True)
             zos.open_file_location_on_interactive_desktop(bdir, mode="open_file_location")
             return {"ok": True, "opened": str(bdir)}

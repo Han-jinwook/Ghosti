@@ -1452,6 +1452,23 @@ function loadLastSyncedOsClipHash(email?: string): string {
   }
 }
 
+export function formatAccountBackupSubfolder(explicitEmail?: string): string {
+  const raw = (
+    explicitEmail ||
+    (typeof window !== 'undefined'
+      ? localStorage.getItem('ghosti_hub_user_email') || localStorage.getItem('userEmail') || ''
+      : '')
+  )
+    .trim()
+    .toLowerCase();
+  if (!raw) return '';
+  return raw
+    .replace(/@/g, '_')
+    .replace(/[^a-z0-9._-]+/g, '_')
+    .replace(/^[._-]+|[._-]+$/g, '')
+    .slice(0, 64);
+}
+
 export function markLocalClipboardSelfInjected(clipHash: string): void {
   if (!clipHash) return;
   recentRemoteInjectedHashes.set(clipHash, Date.now());
@@ -1471,6 +1488,14 @@ export async function writeTextToLocalOsClipboard(
 
   const ident = getThisDeviceIdentity();
   if (ident.deviceKind === 'pc_master') {
+    if (isLocalPcBlockedByOtherAccount()) return false;
+    const ownerEmail = (
+      typeof window !== 'undefined'
+        ? localStorage.getItem('ghosti_hub_user_email') || localStorage.getItem('userEmail') || ''
+        : ''
+    )
+      .trim()
+      .toLowerCase();
     if (zCoreBridge.isConnected) {
       try {
         const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -1478,11 +1503,15 @@ export async function writeTextToLocalOsClipboard(
         const res = await fetch(getZCoreUrl('/__sync/clipboard'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ text: clean }),
+          body: JSON.stringify({ text: clean, accountEmail: ownerEmail }),
           ...(ctrl ? { signal: ctrl.signal } : {}),
         });
         if (tid !== null) window.clearTimeout(tid);
-        if (res.ok) return true;
+        if (res.ok) {
+          const data = (await res.json().catch(() => ({}))) as { ok?: boolean };
+          if (data?.ok !== false) return true;
+          return false;
+        }
       } catch {
         /* fallback to navigator.clipboard */
       }
@@ -1847,12 +1876,25 @@ export async function readCurrentOsClipboardForDevice(opts?: {
   const ident = getThisDeviceIdentity();
 
   if (ident.deviceKind === 'pc_master') {
+    if (isLocalPcBlockedByOtherAccount()) {
+      return { text: '', source: 'none' };
+    }
+    const ownerEmail = (
+      typeof window !== 'undefined'
+        ? localStorage.getItem('ghosti_hub_user_email') || localStorage.getItem('userEmail') || ''
+        : ''
+    )
+      .trim()
+      .toLowerCase();
     if (zCoreBridge.isConnected) {
       try {
         const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
         const tid = ctrl ? window.setTimeout(() => ctrl.abort(), 2200) : null;
+        const clipUrl = ownerEmail
+          ? `${getZCoreUrl('/__sync/clipboard')}?email=${encodeURIComponent(ownerEmail)}`
+          : getZCoreUrl('/__sync/clipboard');
         const res = await fetch(
-          getZCoreUrl('/__sync/clipboard'),
+          clipUrl,
           ctrl ? { signal: ctrl.signal } : undefined
         );
         if (tid !== null) window.clearTimeout(tid);
@@ -2155,10 +2197,18 @@ export async function pullPendingMirrorOriginalsToPcBackupFolder(
   if (
     ident.deviceKind !== 'pc_master' ||
     !zCoreBridge.isConnected ||
-    !hasAuthenticatedHubAccountSession()
+    !hasAuthenticatedHubAccountSession() ||
+    isLocalPcBlockedByOtherAccount()
   ) {
     return { pulledCount: 0, backupDirPath: null };
   }
+  const ownerEmail = (
+    typeof window !== 'undefined'
+      ? localStorage.getItem('ghosti_hub_user_email') || localStorage.getItem('userEmail') || ''
+      : ''
+  )
+    .trim()
+    .toLowerCase();
   if (mirrorPullInFlight) return mirrorPullInFlight;
 
   const task = (async () => {
@@ -2216,6 +2266,7 @@ export async function pullPendingMirrorOriginalsToPcBackupFolder(
             fileName: item.title || sha,
             signedDownloadUrl,
             sha256: sha,
+            accountEmail: ownerEmail,
           }),
         });
         const pj = (await pullRes.json().catch(() => ({}))) as {

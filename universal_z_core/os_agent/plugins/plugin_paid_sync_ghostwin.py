@@ -17,10 +17,48 @@ import ctypes
 import hashlib
 import json
 import os
+import re
 import time
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, Optional
 import urllib.request
+
+try:
+    from plugins.plugin_paid_work_sdrive import (  # type: ignore
+        _load_sdrive_config,
+        check_pc_account_owner_allowed,
+    )
+except Exception:
+    try:
+        from .plugin_paid_work_sdrive import (  # type: ignore
+            _load_sdrive_config,
+            check_pc_account_owner_allowed,
+        )
+    except Exception:
+        def check_pc_account_owner_allowed(req_email: Optional[str]) -> Optional[Dict[str, Any]]:  # type: ignore
+            return None
+
+        def _load_sdrive_config() -> Dict[str, Any]:  # type: ignore
+            return {}
+
+
+def sanitize_account_backup_folder(account_email: Optional[str] = None) -> str:
+    """계정 이메일을 안전한 하위 폴더명(예: merlin@gmail.com ➔ merlin_gmail.com)으로 변환합니다."""
+    clean = str(account_email or "").strip().lower()
+    if not clean:
+        try:
+            local_app = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+            owner_p = Path(local_app) / "Merlin_Z_Core" / "active_pc_account_owner.json"
+            if owner_p.exists():
+                st = json.loads(owner_p.read_text(encoding="utf-8", errors="ignore"))
+                if isinstance(st, dict):
+                    clean = str(st.get("activeEmail") or "").strip().lower()
+        except Exception:
+            clean = ""
+    if not clean:
+        return ""
+    safe = re.sub(r"[^a-z0-9._-]+", "_", clean.replace("@", "_")).strip("._-")
+    return safe[:64]
 
 GHOSTWIN_LOCAL_PORT = 51988
 CF_UNICODETEXT = 13
@@ -74,8 +112,14 @@ def _configure_win32_clip_funcs() -> tuple[Any, Any]:
     return u32, k32
 
 
-def get_os_clipboard_text() -> Dict[str, Any]:
+def get_os_clipboard_text(qp: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """Windows OS 클립보드의 현재 유니코드 텍스트와 해시를 읽고, 자체 주입(Echo) 여부를 반환합니다."""
+    params = qp or {}
+    req_email = str(params.get("email") or params.get("accountEmail") or "").strip()
+    if req_email:
+        blocked = check_pc_account_owner_allowed(req_email)
+        if blocked is not None:
+            return blocked
     if os.name != "nt":
         return {"ok": True, "text": "", "clipHash": "", "isSelfInjected": False, "seqNum": 0}
 
@@ -132,6 +176,11 @@ def set_os_clipboard_text(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """타 기기(스마트폰/서브 PC)에서 수신한 클립보드를 무한 반사 루프 없이 Windows 클립보드에 1회 주입합니다."""
     global _LAST_INJECTED_CLIP_HASH, _LAST_INJECTED_CLIP_SEQ
     payload = data or {}
+    req_email = str(payload.get("accountEmail") or payload.get("email") or "").strip()
+    if req_email:
+        blocked = check_pc_account_owner_allowed(req_email)
+        if blocked is not None:
+            return blocked
     text_val = str(payload.get("text") or "").strip()
     if not text_val:
         return {"ok": False, "error": "EMPTY_CLIPBOARD_TEXT"}
@@ -189,29 +238,36 @@ def set_os_clipboard_text(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     return {"ok": True, "clipHash": new_hash, "seqNum": after_seq}
 
 
-def resolve_phone_backup_dir() -> Path:
-    """Windows 탐색기 좌측 [사진] 실제 경로(OneDrive 리디렉션 포함) 하위의 Ghosti_Phone_Backup 단일 SSOT 경로를 반환합니다."""
+def resolve_phone_backup_dir(account_email: Optional[str] = None) -> Path:
+    """Windows 탐색기 좌측 [사진] 실제 경로 하위의 계정별 격리 백업 폴더(Ghosti_Phone_Backup/<계정폴더>)를 반환합니다."""
+    base_dir = Path.home() / "Pictures" / "Ghosti_Phone_Backup"
     try:
         import ghosti_safe_ops as _safe_ops  # type: ignore
 
         pic_dir = _safe_ops.known_folder("pictures")
         if pic_dir:
-            return Path(pic_dir) / "Ghosti_Phone_Backup"
+            base_dir = Path(pic_dir) / "Ghosti_Phone_Backup"
     except Exception:
         pass
-    return Path.home() / "Pictures" / "Ghosti_Phone_Backup"
+    sub = sanitize_account_backup_folder(account_email)
+    return (base_dir / sub) if sub else base_dir
 
 
 def save_mirrored_device_file(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
-    """폰·서브PC에서 미러링된 원본 사진·문서를 내 PC [사진\\Ghosti_Phone_Backup]에 안전하게 보관합니다."""
+    """폰·서브PC에서 미러링된 원본 사진·문서를 내 PC [사진\\Ghosti_Phone_Backup\\<계정폴더>]에 안전하게 보관합니다."""
     payload = data or {}
+    req_email = str(payload.get("accountEmail") or payload.get("email") or "").strip()
+    if req_email:
+        blocked = check_pc_account_owner_allowed(req_email)
+        if blocked is not None:
+            return blocked
     raw_name = os.path.basename(str(payload.get("fileName") or "").strip())
     if not raw_name:
         return {"ok": False, "error": "EMPTY_FILE_NAME"}
     if Path(raw_name).suffix.lower() in _BLOCKED_EXEC_EXTS:
         return {"ok": False, "error": "BLOCKED_EXECUTABLE_EXTENSION"}
 
-    backup_dir = resolve_phone_backup_dir()
+    backup_dir = resolve_phone_backup_dir(req_email)
     backup_dir.mkdir(parents=True, exist_ok=True)
     target = backup_dir / raw_name
 
@@ -278,7 +334,7 @@ def handle_action(act: str, data: Dict[str, Any]) -> Dict[str, Any] | None:
         return {"ok": True, "track": "paid-sync", "ghostWinDaemon": gw}
 
     if act == "paid-sync-get-clipboard":
-        return get_os_clipboard_text()
+        return get_os_clipboard_text(data)
 
     if act == "paid-sync-set-clipboard":
         return set_os_clipboard_text(data)
@@ -290,7 +346,8 @@ def handle_action(act: str, data: Dict[str, Any]) -> Dict[str, Any] | None:
         target_name = os.path.basename(str(data.get("fileName") or data.get("fileId") or "").strip())
         if not target_name:
             return {"ok": False, "track": "paid-sync", "error": "EMPTY_FILE_NAME"}
-        backup_dir = resolve_phone_backup_dir()
+        req_email = str(data.get("accountEmail") or data.get("email") or "").strip()
+        backup_dir = resolve_phone_backup_dir(req_email)
         existing = backup_dir / target_name
         if existing.exists() and existing.is_file():
             return {

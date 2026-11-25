@@ -2891,10 +2891,15 @@ export const createAssistantOnboardingSlice: StateCreator<
       }
       let openedOk = false;
       if (target === 'phone_backup') {
+        const curEmail = (get().merlinAuth?.email || '').trim().toLowerCase();
         const r = await fetch(getZCoreUrl('/__quarantine/open-folder'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ target: 'phone_backup', ...(cleanTargetPath ? { targetPath: cleanTargetPath } : {}) }),
+          body: JSON.stringify({
+            target: 'phone_backup',
+            accountEmail: curEmail,
+            ...(cleanTargetPath ? { targetPath: cleanTargetPath } : {}),
+          }),
         });
         const j = r.ok ? await r.json().catch(() => null) : null;
         openedOk = Boolean(j?.ok);

@@ -630,7 +630,15 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
               )}
               {isLoggedInUser ? (
                 <span className="text-[12px] text-slate-500">
-                  백업 위치: {lastPhoneBackupFolderPath || '내 PC / 사진(Pictures) / Ghosti_Phone_Backup'}
+                  백업 위치:{' '}
+                  {lastPhoneBackupFolderPath ||
+                    `내 PC / 사진(Pictures) / Ghosti_Phone_Backup / ${(merlinAuth?.email || '')
+                      .trim()
+                      .toLowerCase()
+                      .replace(/@/g, '_')
+                      .replace(/[^a-z0-9._-]+/g, '_')
+                      .replace(/^[._-]+|[._-]+$/g, '')
+                      .slice(0, 64)}`}
                 </span>
               ) : (
                 <span className="text-[12px] text-slate-500">
