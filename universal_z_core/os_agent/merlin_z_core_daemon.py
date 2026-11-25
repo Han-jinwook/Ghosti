@@ -174,7 +174,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.8.29"
+CORE_VERSION = "2.8.39"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -316,6 +316,17 @@ def remove_win32_tray_icon() -> None:
 
 class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+    # [CloseWait 소켓 수백 개 누적 & 커널 좀비 원천 박멸]:
+    # HTTP/1.1 Keep-Alive 무기한 블로킹을 차단해 요청 완료 즉시 소켓을 OS에 반납하고, 유휴 소켓도 15초 내 강제 회수!
+    timeout = 15.0
+
+    def setup(self) -> None:
+        super().setup()
+        self.close_connection = True
+        try:
+            self.request.settimeout(15.0)
+        except Exception:
+            pass
 
     def log_message(self, format: str, *args: Any) -> None:
         return
@@ -752,7 +763,18 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 return
             remove_win32_tray_icon()
             self._send_json({"ok": True, "message": "Merlin_Z_Core shutting down", "version": CORE_VERSION})
-            threading.Thread(target=lambda: (time.sleep(0.15), os._exit(0)), daemon=True).start()
+            def _graceful_exit_get() -> None:
+                time.sleep(0.12)
+                try:
+                    plugin_ghosti_superpowers.shutdown_superpower_daemon_for_update()
+                except Exception:
+                    pass
+                try:
+                    self.server.server_close()
+                except Exception:
+                    pass
+                os._exit(0)
+            threading.Thread(target=_graceful_exit_get, daemon=True).start()
             return
 
         # 외부 악성 사이트(<img src>, <video src>, <script>, cross-site fetch)가 내 PC 파일·사진·보안 API를 조회/조작하는 것을 일괄 차단
@@ -1056,7 +1078,18 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 return
             remove_win32_tray_icon()
             self._send_json({"ok": True, "message": "Merlin_Z_Core shutting down", "version": CORE_VERSION})
-            threading.Thread(target=lambda: (time.sleep(0.15), os._exit(0)), daemon=True).start()
+            def _graceful_exit_get() -> None:
+                time.sleep(0.12)
+                try:
+                    plugin_ghosti_superpowers.shutdown_superpower_daemon_for_update()
+                except Exception:
+                    pass
+                try:
+                    self.server.server_close()
+                except Exception:
+                    pass
+                os._exit(0)
+            threading.Thread(target=_graceful_exit_get, daemon=True).start()
             return
 
         if path in ("/__merlin/ self-update", "/__merlin/self-update", "/__zcore/self-update"):

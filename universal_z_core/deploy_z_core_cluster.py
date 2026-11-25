@@ -537,20 +537,26 @@ if (Test-Path $exe) {{
     Copy-Item -Path $exe -Destination $bak -Force -ErrorAction SilentlyContinue
 }}
 
-# 3-2) 우아한 종료 요청 -> 트리 강제 종료(/T: 좀비 부트로더까지 100% 박멸!) -> 포트 점유 프로세스 종료
+# 3-2) 우아한 종료 우선 대기(최대 3.5초: 5199/51988 소켓을 OS에 정상 반납하도록 유도하여 커널 좀비 생성 원천 차단!)
+#      3.5초 내 자진 종료되지 않은 먹통 프로세스에만 최후 수단으로 taskkill /F /T 적용
 curl.exe -s --max-time 2 -H Origin:https://ghosti.sundreamer.app http://127.0.0.1:5199/__merlin/shutdown 2>$null | Out-Null
 curl.exe -s --max-time 2 http://127.0.0.1:51988/__merlin/shutdown 2>$null | Out-Null
-Start-Sleep -Milliseconds 350
-taskkill /F /T /IM Merlin_Z_Core_Setup.exe 2>$null | Out-Null
-$p = Get-NetTCPConnection -LocalPort 5199,51988 -State Listen -ErrorAction SilentlyContinue
-if ($p) {{ foreach ($item in $p) {{ if ($item.OwningProcess -gt 0) {{ taskkill /F /T /PID $item.OwningProcess 2>$null | Out-Null }} }} }}
-
-# 프로세스 0개 완전 해제 대기 (최대 4초)
-for ($w=0; $w -lt 10; $w++) {{
-    $alive = @(Get-Process -Name 'Merlin_Z_Core_Setup' -ErrorAction SilentlyContinue)
-    if ($alive.Count -eq 0) {{ break }}
+for ($g=0; $g -lt 10; $g++) {{
+    $alive_g = @(Get-Process -Name 'Merlin_Z_Core_Setup' -ErrorAction SilentlyContinue)
+    if ($alive_g.Count -eq 0) {{ break }}
+    Start-Sleep -Milliseconds 350
+}}
+$still_alive = @(Get-Process -Name 'Merlin_Z_Core_Setup' -ErrorAction SilentlyContinue)
+if ($still_alive.Count -gt 0) {{
     taskkill /F /T /IM Merlin_Z_Core_Setup.exe 2>$null | Out-Null
-    Start-Sleep -Milliseconds 400
+    $p = Get-NetTCPConnection -LocalPort 5199,51988 -State Listen -ErrorAction SilentlyContinue
+    if ($p) {{ foreach ($item in $p) {{ if ($item.OwningProcess -gt 0) {{ taskkill /F /T /PID $item.OwningProcess 2>$null | Out-Null }} }} }}
+    for ($w=0; $w -lt 8; $w++) {{
+        $alive = @(Get-Process -Name 'Merlin_Z_Core_Setup' -ErrorAction SilentlyContinue)
+        if ($alive.Count -eq 0) {{ break }}
+        taskkill /F /T /IM Merlin_Z_Core_Setup.exe 2>$null | Out-Null
+        Start-Sleep -Milliseconds 400
+    }}
 }}
 
 # 3-3) 구버전 잔존 exe / 충돌 업데이터 / 레거시 스케줄러 / 이전 좀비 임시파일 완전 소탕
