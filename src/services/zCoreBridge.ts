@@ -92,6 +92,8 @@ class ZCoreBridgeManager {
   private listeners: Set<(connected: boolean) => void> = new Set();
   private pollTimer: any = null;
   private selfUpdateRequested: boolean = false;
+  private selfUpdateCooldownUntil: number = 0;
+  private selfUpdateGraceUntil: number = 0;
   private consecutiveFailures: number = 0;
 
   private constructor() {
@@ -142,8 +144,13 @@ class ZCoreBridgeManager {
    *   백그라운드에서 로컬 데몬(`/__merlin/self-update`)에 자가 교체(`updater.bat` 스왑)를 지시합니다.
    */
   public async triggerSilentSelfUpdate(): Promise<void> {
-    if (this.selfUpdateRequested || typeof window === 'undefined') return;
+    if (typeof window === 'undefined') return;
+    const now = Date.now();
+    if (this.selfUpdateRequested || now < this.selfUpdateCooldownUntil) return;
     this.selfUpdateRequested = true;
+    // 개발 중 ZIP 버전 타이밍 어긋남으로 인한 무한 재시작 방지 (15분 쿨다운) + 재시작 구간(30초) 동안 미연결 팝업 차단 유예
+    this.selfUpdateCooldownUntil = now + 15 * 60 * 1000;
+    this.selfUpdateGraceUntil = now + 30 * 1000;
     try {
       const originUrl = Z_CORE_ZIP_URL.startsWith('http')
         ? Z_CORE_ZIP_URL
@@ -259,6 +266,11 @@ class ZCoreBridgeManager {
       } catch {
         /* ignore */
       }
+    }
+
+    // 자동 업데이트(self-update) 재시작 유예 구간(30초) 동안은 일시 끊김을 미연결로 오판해 다운로드 팝업을 띄우지 않음
+    if (this.isConnected && Date.now() < this.selfUpdateGraceUntil) {
+      return true;
     }
 
     this.consecutiveFailures += 1;

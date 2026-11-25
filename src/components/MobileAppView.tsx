@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { zCoreBridge, isZCoreOutdated } from '../services/zCoreBridge';
+import { zCoreBridge } from '../services/zCoreBridge';
 import { hasAuthenticatedHubAccountSession } from '../services/supabaseClient';
 import {
   clearLastQrPairResult,
@@ -105,18 +105,8 @@ export const MobileAppView: React.FC = () => {
   useEffect(() => {
     const onOpenZCoreGuide = () => setShowZCoreGuideModal(true);
     window.addEventListener('openZCoreGuideModal', onOpenZCoreGuide);
-    const unsub = zCoreBridge.subscribe((conn) => {
-      if (
-        conn &&
-        typeof sessionStorage !== 'undefined' &&
-        sessionStorage.getItem('ghosti_initial_indexing_done') !== '1' && isZCoreOutdated(zCoreBridge.version)
-      ) {
-        setShowZCoreGuideModal(true);
-      }
-    });
     return () => {
       window.removeEventListener('openZCoreGuideModal', onOpenZCoreGuide);
-      unsub();
     };
   }, []);
 
