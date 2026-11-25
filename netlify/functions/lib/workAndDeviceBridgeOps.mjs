@@ -195,6 +195,50 @@ function mapWorkRoleToDb(uiRole) {
   return r === 'viewer' ? 'member' : 'admin';
 }
 
+/**
+ * 업무 공유방 팀원 목록 결정론적 고정 정렬 (PostgreSQL MVCC 업데이트 순서 흔들림 0%):
+ * 1순위: 방장(role === 'master') 항상 1번 고정
+ * 2순위: 합류 시각(joined_at) 오름차순 (권한 PATCH 후 F5 시에도 순서 불변)
+ * 3순위: 이메일(member_email) 사전순 오름차순
+ */
+function sortAndMapWorkMembers(rawMembers, masterEmail, fallbackHostNickname = '') {
+  const cleanMaster = String(masterEmail || '').trim().toLowerCase();
+  const byEmail = new Map();
+  for (const m of Array.isArray(rawMembers) ? rawMembers : []) {
+    const mEmail = String(m?.member_email || m?.email || '').trim().toLowerCase();
+    if (!mEmail || !mEmail.includes('@')) continue;
+    const isRoomMaster = Boolean(cleanMaster && mEmail === cleanMaster);
+    byEmail.set(mEmail, {
+      email: mEmail,
+      nickname: String(m.room_persona_nickname || m.nickname || mEmail.split('@')[0]),
+      role: normalizeWorkRoleFromDb(m.role, isRoomMaster),
+      joinedAt: m.joined_at || m.joinedAt || null,
+    });
+  }
+  if (cleanMaster && cleanMaster.includes('@') && !byEmail.has(cleanMaster)) {
+    byEmail.set(cleanMaster, {
+      email: cleanMaster,
+      nickname: String(fallbackHostNickname || cleanMaster.split('@')[0]),
+      role: 'master',
+      joinedAt: null,
+    });
+  }
+  const list = Array.from(byEmail.values());
+  list.sort((a, b) => {
+    const aHost = a.role === 'master' ? 0 : 1;
+    const bHost = b.role === 'master' ? 0 : 1;
+    if (aHost !== bHost) return aHost - bHost;
+    const aTs = a.joinedAt ? Date.parse(a.joinedAt) : NaN;
+    const bTs = b.joinedAt ? Date.parse(b.joinedAt) : NaN;
+    const aValid = Number.isFinite(aTs);
+    const bValid = Number.isFinite(bTs);
+    if (aValid && bValid && aTs !== bTs) return aTs - bTs;
+    if (aValid !== bValid) return aValid ? -1 : 1;
+    return a.email.localeCompare(b.email);
+  });
+  return list;
+}
+
 async function getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email) {
   const cleanRoom = String(roomId || '').trim();
   const cleanEmail = String(email || '').trim().toLowerCase();
@@ -210,7 +254,7 @@ async function getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email) 
 
   const isMaster = String(room.master_email || '').toLowerCase() === cleanEmail;
   const memRes = await fetch(
-    `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(cleanRoom)}&select=member_email,role,room_persona_nickname,joined_at`,
+    `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(cleanRoom)}&select=member_email,role,room_persona_nickname,joined_at&order=joined_at.asc,member_email.asc`,
     { headers: srvHeaders(serviceKey) }
   );
   const memRows = memRes.ok ? await memRes.json().catch(() => []) : [];
@@ -801,11 +845,11 @@ export async function handleAuthedWorkAndDeviceAction({
 
     const isMaster = String(verified.room.master_email || '').toLowerCase() === email;
     const memRes = await fetch(
-      `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(roomId)}&select=member_email,role`,
+      `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(roomId)}&select=member_email,role,room_persona_nickname,joined_at&order=joined_at.asc,member_email.asc`,
       { headers: srvHeaders(serviceKey) }
     );
     const memRows = memRes.ok ? await memRes.json().catch(() => []) : [];
-    const members = Array.isArray(memRows) ? memRows : [];
+    const members = Array.isArray(memRows) ? [...memRows] : [];
     const existingMember = members.find(
       (r) => String(r.member_email || '').toLowerCase() === email
     );
@@ -824,19 +868,20 @@ export async function handleAuthedWorkAndDeviceAction({
           },
         };
       }
+      const targetDbRole = mapWorkRoleToDb(verified.invite.default_role === 'viewer' ? 'viewer' : 'editor');
       const insRes = await fetch(
         `${supabaseUrl}/rest/v1/ghosti_lounge_members?on_conflict=room_id,member_email`,
         {
           method: 'POST',
           headers: srvHeaders(serviceKey, {
             'Content-Type': 'application/json',
-            Prefer: 'resolution=merge-duplicates,return=minimal',
+            Prefer: 'resolution=merge-duplicates,return=representation',
           }),
           body: JSON.stringify({
             room_id: roomId,
             member_email: email,
             // 업무방 신규 초대 팀원은 기본 편집·업로드 허용(DB 'admin' = UI 'editor', CHECK 제약 100% 준수)
-            role: mapWorkRoleToDb(verified.invite.default_role === 'viewer' ? 'viewer' : 'editor'),
+            role: targetDbRole,
             room_persona_nickname: actorNick,
           }),
         }
@@ -844,6 +889,14 @@ export async function handleAuthedWorkAndDeviceAction({
       if (!insRes.ok) {
         return { status: 502, body: { ok: false, reason: 'WORK_MEMBER_JOIN_FAILED' } };
       }
+      const insRows = await insRes.json().catch(() => []);
+      const insertedRow = Array.isArray(insRows) && insRows[0] ? insRows[0] : null;
+      members.push({
+        member_email: email,
+        role: insertedRow?.role || targetDbRole,
+        room_persona_nickname: insertedRow?.room_persona_nickname || actorNick,
+        joined_at: insertedRow?.joined_at || new Date().toISOString(),
+      });
       // 초대 토큰 사용 횟수(used_count) 원자적 증가
       const nextUsed = Number(verified.invite.used_count || 0) + 1;
       await fetch(
@@ -859,7 +912,12 @@ export async function handleAuthedWorkAndDeviceAction({
       );
     }
 
-    const { state } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
+    const { state, tombstones } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
+    const membersList = sortAndMapWorkMembers(
+      members,
+      verified.room.master_email,
+      verified.hostNickname
+    );
     const myRole = isMaster
       ? 'host'
       : existingMember
@@ -877,6 +935,8 @@ export async function handleAuthedWorkAndDeviceAction({
         hostNickname: verified.hostNickname,
         role: myRole,
         seatLimit,
+        members: membersList,
+        deletedTombstones: tombstones,
         hostTunnel: {
           tunnelUrl: state.hostTunnelUrl,
           accessKey: state.hostAccessKey,
@@ -902,36 +962,104 @@ export async function handleAuthedWorkAndDeviceAction({
       return { status: 200, body: { ok: true, rooms: [] } };
     }
     const inClause = roomIds.map((id) => `"${id.replace(/"/g, '')}"`).join(',');
-    const roomRes = await fetch(
-      `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?lounge_type=eq.work&room_id=in.(${encodeURIComponent(inClause)})&select=room_id,room_title,master_email,pricing_plan,created_at`,
-      { headers: srvHeaders(serviceKey) }
-    );
-    const roomRows = roomRes.ok ? await roomRes.json().catch(() => []) : [];
+    const [roomRes, allRoomMemRes] = await Promise.all([
+      fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?lounge_type=eq.work&room_id=in.(${encodeURIComponent(inClause)})&select=room_id,room_title,master_email,pricing_plan,created_at`,
+        { headers: srvHeaders(serviceKey) }
+      ),
+      fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=in.(${encodeURIComponent(inClause)})&select=room_id,member_email,role,room_persona_nickname,joined_at&order=joined_at.asc,member_email.asc`,
+        { headers: srvHeaders(serviceKey) }
+      ),
+    ]);
+    const [roomRows, allRoomMemRows] = await Promise.all([
+      roomRes.ok ? roomRes.json().catch(() => []) : Promise.resolve([]),
+      allRoomMemRes.ok ? allRoomMemRes.json().catch(() => []) : Promise.resolve([]),
+    ]);
     const roomById = new Map();
     if (Array.isArray(roomRows)) {
       for (const r of roomRows) {
         if (r?.room_id) roomById.set(String(r.room_id), r);
       }
     }
+    const membersByRoomId = new Map();
+    if (Array.isArray(allRoomMemRows)) {
+      for (const rm of allRoomMemRows) {
+        const rid = String(rm?.room_id || '').trim();
+        if (!rid) continue;
+        const arr = membersByRoomId.get(rid) || [];
+        arr.push(rm);
+        membersByRoomId.set(rid, arr);
+      }
+    }
+
+    const validWorkRoomIds = Array.from(roomById.keys());
+    const uniqueMasterEmails = Array.from(
+      new Set(
+        validWorkRoomIds
+          .map((rid) => String(roomById.get(rid)?.master_email || '').trim().toLowerCase())
+          .filter(Boolean)
+      )
+    );
+    const [gateEntries, p2pEntries] = await Promise.all([
+      Promise.all(
+        uniqueMasterEmails.map(async (mEmail) => [
+          mEmail,
+          await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, mEmail),
+        ])
+      ),
+      Promise.all(
+        validWorkRoomIds.map(async (rid) => [
+          rid,
+          await readWorkRoomP2pState(supabaseUrl, serviceKey, rid),
+        ])
+      ),
+    ]);
+    const gateByMaster = new Map(gateEntries);
+    const p2pByRoomId = new Map(p2pEntries);
+
     const outRooms = [];
+    const seenOutRooms = new Set();
     for (const m of safeMems) {
       const rId = String(m.room_id || '').trim();
+      if (!rId || seenOutRooms.has(rId)) continue;
       const room = roomById.get(rId);
       if (!room) continue;
+      seenOutRooms.add(rId);
       const masterEmail = String(room.master_email || '').trim().toLowerCase();
       const isHost = masterEmail === email;
       const normalized = normalizeWorkRoleFromDb(m.role, isHost);
       const role = normalized === 'master' ? 'host' : normalized;
-      const ownerGate = await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, masterEmail);
+      const ownerGate =
+        gateByMaster.get(masterEmail) ||
+        (await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, masterEmail));
+      const sortedMembers = sortAndMapWorkMembers(membersByRoomId.get(rId) || [], masterEmail);
+      const hostMember = sortedMembers.find((sm) => sm.role === 'master');
+      const p2p = p2pByRoomId.get(rId);
       outRooms.push({
         roomId: rId,
         roomTitle: String(room.room_title || '우리팀 업무 공유방 (S:)'),
         hostEmail: masterEmail,
+        hostNickname: hostMember?.nickname || masterEmail.split('@')[0] || '방장',
         isHost,
         role,
         ownerUnlocked: Boolean(ownerGate.ok),
         seatLimit: ownerGate.entitlement?.workSeatLimit || 5,
-        lockReason: ownerGate.ok ? null : (ownerGate.response?.body?.reason || 'WORK_SUBSCRIPTION_REQUIRED'),
+        lockReason: ownerGate.ok
+          ? null
+          : ownerGate.response?.body?.reason || 'WORK_SUBSCRIPTION_REQUIRED',
+        members: sortedMembers,
+        deletedTombstones: ownerGate.ok ? p2p?.tombstones || {} : {},
+        hostTunnel:
+          ownerGate.ok && p2p?.state
+            ? {
+                tunnelUrl: p2p.state.hostTunnelUrl,
+                accessKey: p2p.state.hostAccessKey,
+                updatedAt: p2p.state.hostUpdatedAt,
+                masterServerName: p2p.state.masterServerName,
+                backupServers: p2p.state.backupServers,
+              }
+            : undefined,
       });
     }
     return { status: 200, body: { ok: true, rooms: outRooms } };
@@ -1003,16 +1131,7 @@ export async function handleAuthedWorkAndDeviceAction({
       return ownerGate.response;
     }
     const { state, tombstones } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
-    const membersList = ctx.members.map((m) => {
-      const mEmail = String(m.member_email || '').toLowerCase();
-      const isRoomMaster = mEmail === String(ctx.room.master_email || '').toLowerCase();
-      return {
-        email: mEmail,
-        nickname: String(m.room_persona_nickname || mEmail.split('@')[0]),
-        role: normalizeWorkRoleFromDb(m.role, isRoomMaster),
-        joinedAt: m.joined_at || null,
-      };
-    });
+    const membersList = sortAndMapWorkMembers(ctx.members, ctx.room.master_email);
     return {
       status: 200,
       body: {

@@ -13,6 +13,7 @@ import {
 import {
   acceptWorkRoomInvite,
   cacheWorkRoomPreviewLocally,
+  clearCachedJoinedWorkRoomMeta,
   connectWorkRoomRealtimeChannel,
   deleteWorkFileShared,
   downloadWorkFileOriginal,
@@ -35,11 +36,14 @@ import {
   openGhostSearchForWorkSDrive,
   pullSyncRemoteWorkFilesToLocalSDrive,
   readActiveWorkRoomInviteMeta,
+  readCachedJoinedWorkRoomMeta,
   readCachedMyWorkRoomMeta,
   removeWorkRoomMemberOnServer,
   sanitizeWorkLockOwner,
+  saveCachedJoinedWorkRoomMeta,
   saveCachedWorkTombstones,
   setWorkNightPowerSaveNative,
+  sortWorkRoomServerMembers,
   updateWorkRoomMemberRoleOnServer,
   uploadWorkFileToNativeSDrive,
   upsertWorkFilesToSupabase,
@@ -111,14 +115,19 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const [activeWorkRoomId, setActiveWorkRoomId] = useState<string>(() => {
     const inv = readActiveWorkRoomInviteMeta();
     if (inv.hasWorkInvite && inv.roomId) return inv.roomId;
-    return readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId || '';
+    return (
+      readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId ||
+      readCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined)?.roomId ||
+      ''
+    );
   });
   const [deletedTombstones, setDeletedTombstones] = useState<WorkDeletedTombstoneMap>(() => {
     const inv = readActiveWorkRoomInviteMeta();
     const initRoom =
       (inv.hasWorkInvite && inv.roomId
         ? inv.roomId
-        : readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId) || '';
+        : readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId ||
+          readCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined)?.roomId) || '';
     return initRoom ? loadCachedWorkTombstones(initRoom, merlinAuth?.email || undefined) : {};
   });
   const [hasAuthoritativeRemoteState, setHasAuthoritativeRemoteState] = useState<boolean>(false);
@@ -134,7 +143,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
       const raw = localStorage.getItem(key);
       if (!raw) return [];
       const parsed = JSON.parse(raw);
-      return Array.isArray(parsed) ? (parsed as WorkRoomServerMemberDto[]) : [];
+      return Array.isArray(parsed)
+        ? sortWorkRoomServerMembers(parsed as WorkRoomServerMemberDto[])
+        : [];
     } catch {
       return [];
     }
@@ -143,27 +154,46 @@ export const WorkLoungeB2BHub: React.FC = () => {
     if (typeof window === 'undefined' || !roomId || !email) return;
     try {
       const key = `ghosti_work_members_v1::${email.trim().toLowerCase()}::${roomId}`;
-      localStorage.setItem(key, JSON.stringify(members));
+      localStorage.setItem(key, JSON.stringify(sortWorkRoomServerMembers(members)));
     } catch {
       /* ignore */
     }
   }, []);
   const [serverMembers, setServerMembers] = useState<WorkRoomServerMemberDto[]>(() => {
     const inv = readActiveWorkRoomInviteMeta();
-    const initRoom = (inv.hasWorkInvite && inv.roomId) || readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId || '';
+    const initRoom =
+      (inv.hasWorkInvite && inv.roomId) ||
+      readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId ||
+      readCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined)?.roomId ||
+      '';
     if (typeof window === 'undefined' || !initRoom || !merlinAuth?.email) return [];
     try {
       const raw = localStorage.getItem(`ghosti_work_members_v1::${merlinAuth.email.trim().toLowerCase()}::${initRoom}`);
       const parsed = raw ? JSON.parse(raw) : [];
-      return Array.isArray(parsed) ? (parsed as WorkRoomServerMemberDto[]) : [];
+      return Array.isArray(parsed)
+        ? sortWorkRoomServerMembers(parsed as WorkRoomServerMemberDto[])
+        : [];
     } catch {
       return [];
     }
   });
-  const [myRoomRole, setMyRoomRole] = useState<'host' | 'editor' | 'viewer'>('host');
-  const [roomSeatLimit, setRoomSeatLimit] = useState<number>(5);
-  const [remoteRoomLockReason, setRemoteRoomLockReason] = useState<string | null>(null);
-  const [joinedInvitedRoom, setJoinedInvitedRoom] = useState<JoinedWorkRoomSummary | null>(null);
+  const [myRoomRole, setMyRoomRole] = useState<'host' | 'editor' | 'viewer'>(() => {
+    const cachedJoined = readCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined);
+    return cachedJoined && !cachedJoined.isHost ? cachedJoined.role : 'host';
+  });
+  const [roomSeatLimit, setRoomSeatLimit] = useState<number>(() => {
+    const cachedJoined = readCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined);
+    return cachedJoined?.seatLimit || 5;
+  });
+  const [remoteRoomLockReason, setRemoteRoomLockReason] = useState<string | null>(() => {
+    const cachedJoined = readCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined);
+    return cachedJoined && !cachedJoined.ownerUnlocked ? cachedJoined.lockReason : null;
+  });
+  const [joinedInvitedRoom, setJoinedInvitedRoom] = useState<JoinedWorkRoomSummary | null>(() => {
+    const cachedJoined = readCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined);
+    return cachedJoined && !cachedJoined.isHost ? cachedJoined : null;
+  });
+  const [authSyncTick, setAuthSyncTick] = useState<number>(0);
   const [startingWorkTrial, setStartingWorkTrial] = useState<boolean>(false);
   const [hostTunnelStatus, setHostTunnelStatus] = useState<string>('idle');
   const [lastDeletedUndoItem, setLastDeletedUndoItem] = useState<{
@@ -225,54 +255,61 @@ export const WorkLoungeB2BHub: React.FC = () => {
       : isOwnWorkUnlocked
   );
 
-  // 계정 전환 시 이전 계정 업무방 ID·문서 잔상 즉시 초기화 (C9 계정 격리)
+  // 로그인 직후 허브 토큰·Supabase 세션 동기화 완료 시 지연 없이 소속 방·팀원 목록 즉시 조회 트리거
   useEffect(() => {
-    setJoinedInvitedRoom(null);
+    if (typeof window === 'undefined') return undefined;
+    const onAuthSynced = () => setAuthSyncTick((v) => v + 1);
+    window.addEventListener('ghostiSupabaseUserSynced', onAuthSynced);
+    window.addEventListener('merlinLoggedIn', onAuthSynced);
+    return () => {
+      window.removeEventListener('ghostiSupabaseUserSynced', onAuthSynced);
+      window.removeEventListener('merlinLoggedIn', onAuthSynced);
+    };
+  }, []);
+
+  // 계정 전환 시 이전 계정 업무방 ID·문서 잔상 즉시 초기화 및 새 계정 캐시 선복원 (C9 계정 격리)
+  useEffect(() => {
+    acceptedInviteTokenRef.current = '';
     const inv = readActiveWorkRoomInviteMeta();
     if (inv.hasWorkInvite && inv.roomId) {
+      setJoinedInvitedRoom(null);
       setActiveWorkRoomId(inv.roomId);
+      const cachedMems = merlinAuth?.email
+        ? readCachedServerMembers(inv.roomId, merlinAuth.email)
+        : [];
+      setServerMembers(cachedMems);
       return;
     }
-    const cachedMeta = readCachedMyWorkRoomMeta(merlinAuth?.email || undefined);
-    const nextRoomId = cachedMeta?.roomId || '';
+    const cachedHostMeta = readCachedMyWorkRoomMeta(merlinAuth?.email || undefined);
+    const cachedJoinedMeta = readCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined);
+    if (cachedJoinedMeta && !cachedJoinedMeta.isHost && !cachedHostMeta) {
+      setJoinedInvitedRoom(cachedJoinedMeta);
+      setMyRoomRole(cachedJoinedMeta.role);
+      setRoomSeatLimit(cachedJoinedMeta.seatLimit || 5);
+      setRemoteRoomLockReason(
+        cachedJoinedMeta.ownerUnlocked
+          ? null
+          : cachedJoinedMeta.lockReason || 'WORK_SUBSCRIPTION_REQUIRED'
+      );
+    } else {
+      setJoinedInvitedRoom(null);
+      setMyRoomRole('host');
+      setRemoteRoomLockReason(null);
+    }
+    const nextRoomId = cachedHostMeta?.roomId || cachedJoinedMeta?.roomId || '';
     setActiveWorkRoomId(nextRoomId);
+    setServerMembers(
+      nextRoomId && merlinAuth?.email
+        ? readCachedServerMembers(nextRoomId, merlinAuth.email)
+        : []
+    );
     lastWorkFilesSigRef.current = '';
     setLocalDocs([]);
     setRemoteDocs([]);
     setDeletedTombstones(
       nextRoomId ? loadCachedWorkTombstones(nextRoomId, merlinAuth?.email || undefined) : {}
     );
-  }, [merlinAuth?.email]);
-
-  // 로그인한 계정이 DB(ghosti_lounge_members)에 소속된 초대 업무방을 자동 복원
-  // (PC 재로그인/F5·모바일 웹 초대 수락 후 모바일 앱 재접속 시 초대 링크 재클릭 불필요)
-  useEffect(() => {
-    if (!merlinAuth?.email || !hasAuthenticatedHubAccountSession()) return undefined;
-    if (inviteMeta.hasWorkInvite) return undefined;
-    let cancelled = false;
-    void fetchMyJoinedWorkRooms().then((res) => {
-      if (cancelled || !res.ok || res.rooms.length === 0) return;
-      const invitedRoom = res.rooms.find((r) => !r.isHost) || null;
-      const hostedRoom = res.rooms.find((r) => r.isHost) || null;
-      // 본인 구독 업무방이 없거나(팀원 계정) 아직 활성 방이 없으면 초대받은 팀원방을 최우선 복원
-      if (invitedRoom && (!isOwnWorkUnlocked || !activeWorkRoomId)) {
-        setJoinedInvitedRoom(invitedRoom);
-        setActiveWorkRoomId(invitedRoom.roomId);
-        setMyRoomRole(invitedRoom.role);
-        setRoomSeatLimit(invitedRoom.seatLimit || 5);
-        setRemoteRoomLockReason(invitedRoom.ownerUnlocked ? null : (invitedRoom.lockReason || 'WORK_SUBSCRIPTION_REQUIRED'));
-        return;
-      }
-      if (hostedRoom && !activeWorkRoomId) {
-        setActiveWorkRoomId(hostedRoom.roomId);
-        setMyRoomRole('host');
-        setRoomSeatLimit(hostedRoom.seatLimit || 5);
-      }
-    });
-    return () => {
-      cancelled = true;
-    };
-  }, [merlinAuth?.email, merlinAuth?.userId, inviteMeta.hasWorkInvite, isOwnWorkUnlocked, activeWorkRoomId]);
+  }, [merlinAuth?.email, readCachedServerMembers]);
 
   const mergeAndPersistTombstones = useCallback(
     (patch: WorkDeletedTombstoneMap, clearRelPaths?: string[]) => {
@@ -293,6 +330,96 @@ export const WorkLoungeB2BHub: React.FC = () => {
     },
     [activeWorkRoomId, merlinAuth?.email]
   );
+
+  // 로그인한 계정이 DB(ghosti_lounge_members)에 소속된 초대 업무방 및 전체 팀원 목록을 단일 왕복으로 즉시 복원
+  // (PC 재로그인/F5·모바일 웹 초대 수락 후 모바일 앱 재접속 시 초대 링크 재클릭 및 2단 대기 불필요)
+  useEffect(() => {
+    if (!merlinAuth?.email || !hasAuthenticatedHubAccountSession()) return undefined;
+    if (inviteMeta.hasWorkInvite) return undefined;
+    let cancelled = false;
+    void fetchMyJoinedWorkRooms().then((res) => {
+      if (cancelled || !res.ok) return;
+      if (res.rooms.length === 0) {
+        clearCachedJoinedWorkRoomMeta(merlinAuth.email);
+        return;
+      }
+      const invitedRoom = res.rooms.find((r) => !r.isHost) || null;
+      const hostedRoom = res.rooms.find((r) => r.isHost) || null;
+      if (!invitedRoom) {
+        clearCachedJoinedWorkRoomMeta(merlinAuth.email);
+      }
+      // 본인 구독 업무방이 없거나(팀원 계정) 아직 활성 방이 없으면 초대받은 팀원방을 최우선 복원
+      if (invitedRoom && (!isOwnWorkUnlocked || !activeWorkRoomId || activeWorkRoomId === invitedRoom.roomId)) {
+        setJoinedInvitedRoom(invitedRoom);
+        saveCachedJoinedWorkRoomMeta(invitedRoom, merlinAuth.email);
+        if (activeWorkRoomId !== invitedRoom.roomId) {
+          setActiveWorkRoomId(invitedRoom.roomId);
+        }
+        setMyRoomRole(invitedRoom.role);
+        setRoomSeatLimit(invitedRoom.seatLimit || 5);
+        setRemoteRoomLockReason(
+          invitedRoom.ownerUnlocked
+            ? null
+            : invitedRoom.lockReason || 'WORK_SUBSCRIPTION_REQUIRED'
+        );
+        if (Array.isArray(invitedRoom.members) && invitedRoom.members.length > 0) {
+          const sorted = sortWorkRoomServerMembers(invitedRoom.members);
+          setServerMembers(sorted);
+          saveCachedServerMembers(invitedRoom.roomId, sorted, merlinAuth.email);
+        }
+        if (invitedRoom.deletedTombstones && Object.keys(invitedRoom.deletedTombstones).length > 0) {
+          mergeAndPersistTombstones(invitedRoom.deletedTombstones);
+        }
+        if (invitedRoom.hostTunnel?.masterServerName) {
+          setMasterWorkPcName(invitedRoom.hostTunnel.masterServerName);
+        }
+        if (Array.isArray(invitedRoom.hostTunnel?.backupServers)) {
+          setBackupServers(invitedRoom.hostTunnel.backupServers);
+        }
+        if (invitedRoom.hostTunnel?.tunnelUrl) {
+          void fetchWorkFilesFromHostTunnel(
+            invitedRoom.hostTunnel.tunnelUrl,
+            invitedRoom.hostTunnel.accessKey
+          ).then((fromTunnel) => {
+            if (!cancelled && fromTunnel.ok) {
+              setRemoteDocs(fromTunnel.docs);
+              mergeAndPersistTombstones(fromTunnel.deletedTombstones);
+              void cacheWorkRoomPreviewLocally(
+                invitedRoom.roomId,
+                fromTunnel.docs,
+                merlinAuth.email
+              );
+            }
+          });
+        }
+        return;
+      }
+      if (hostedRoom && (!activeWorkRoomId || activeWorkRoomId === hostedRoom.roomId)) {
+        if (activeWorkRoomId !== hostedRoom.roomId) {
+          setActiveWorkRoomId(hostedRoom.roomId);
+        }
+        setMyRoomRole('host');
+        setRoomSeatLimit(hostedRoom.seatLimit || 5);
+        if (Array.isArray(hostedRoom.members) && hostedRoom.members.length > 0) {
+          const sorted = sortWorkRoomServerMembers(hostedRoom.members);
+          setServerMembers(sorted);
+          saveCachedServerMembers(hostedRoom.roomId, sorted, merlinAuth.email);
+        }
+      }
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [
+    merlinAuth?.email,
+    merlinAuth?.userId,
+    authSyncTick,
+    inviteMeta.hasWorkInvite,
+    isOwnWorkUnlocked,
+    activeWorkRoomId,
+    saveCachedServerMembers,
+    mergeAndPersistTombstones,
+  ]);
 
   useEffect(() => {
     if (!activeWorkRoomId) return;
@@ -736,7 +863,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     });
   }, [inviteMeta.hasWorkInvite, activeWorkRoomId, isOwnWorkUnlocked, actorNickname, merlinAuth?.email]);
 
-  // 초대 링크(?workRoom=...&inviteToken=...)로 들어온 팀원이 로그인 완료 시 DB 정식 멤버로 자동 편입 (정원 5/20/50인 검사)
+  // 초대 링크(?workRoom=...&inviteToken=...)로 들어온 팀원이 로그인 완료 시 DB 정식 멤버로 자동 편입 및 본인 포함 전체 팀원 즉시 표시
   useEffect(() => {
     if (
       !inviteMeta.hasWorkInvite ||
@@ -747,11 +874,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
       return;
     }
     acceptedInviteTokenRef.current = inviteMeta.inviteToken;
+    let cancelled = false;
     void acceptWorkRoomInvite({
       inviteToken: inviteMeta.inviteToken,
       nickname: actorNickname,
     }).then((accepted) => {
+      if (cancelled) return;
       if (!accepted.ok) {
+        acceptedInviteTokenRef.current = '';
         if (accepted.reason === 'WORK_SEAT_LIMIT_EXCEEDED') {
           showToast(
             accepted.message ||
@@ -765,22 +895,93 @@ export const WorkLoungeB2BHub: React.FC = () => {
         }
         return;
       }
+      const targetRoomId = accepted.roomId || activeWorkRoomId;
       if (accepted.roomId && accepted.roomId !== activeWorkRoomId) {
         setActiveWorkRoomId(accepted.roomId);
       }
-      if (accepted.role) setMyRoomRole(accepted.role);
+      const nextRole = accepted.role || 'editor';
+      setMyRoomRole(nextRole);
       if (accepted.seatLimit) setRoomSeatLimit(accepted.seatLimit);
+      setRemoteRoomLockReason(null);
+
+      if (targetRoomId && nextRole !== 'host') {
+        const joinedSummary: JoinedWorkRoomSummary = {
+          roomId: targetRoomId,
+          roomTitle: accepted.roomTitle || inviteMeta.roomTitle,
+          hostEmail: '',
+          hostNickname: accepted.hostNickname || inviteMeta.hostNickname,
+          isHost: false,
+          role: nextRole,
+          ownerUnlocked: true,
+          seatLimit: accepted.seatLimit || 5,
+          lockReason: null,
+        };
+        setJoinedInvitedRoom(joinedSummary);
+        saveCachedJoinedWorkRoomMeta(joinedSummary, merlinAuth?.email || undefined);
+      }
+
+      if (Array.isArray(accepted.members) && accepted.members.length > 0 && targetRoomId) {
+        const sorted = sortWorkRoomServerMembers(accepted.members);
+        setServerMembers(sorted);
+        saveCachedServerMembers(targetRoomId, sorted, merlinAuth?.email || undefined);
+      } else if (targetRoomId) {
+        void fetchWorkRoomAuthedState(targetRoomId, inviteMeta.inviteToken, {
+          skipBlockingTunnelFetch: true,
+        }).then((fresh) => {
+          if (!cancelled && fresh.ok && Array.isArray(fresh.members)) {
+            const sorted = sortWorkRoomServerMembers(fresh.members);
+            setServerMembers(sorted);
+            saveCachedServerMembers(targetRoomId, sorted, merlinAuth?.email || undefined);
+          }
+        });
+      }
+
+      if (accepted.deletedTombstones && Object.keys(accepted.deletedTombstones).length > 0) {
+        mergeAndPersistTombstones(accepted.deletedTombstones);
+      }
+      if (accepted.hostTunnel?.masterServerName) {
+        setMasterWorkPcName(accepted.hostTunnel.masterServerName);
+      }
+      if (Array.isArray(accepted.hostTunnel?.backupServers)) {
+        setBackupServers(accepted.hostTunnel.backupServers);
+      }
+      if (accepted.hostTunnel?.tunnelUrl && (!isZCoreConnected || nextRole !== 'host')) {
+        void fetchWorkFilesFromHostTunnel(
+          accepted.hostTunnel.tunnelUrl,
+          accepted.hostTunnel.accessKey
+        ).then((fromTunnel) => {
+          if (!cancelled && fromTunnel.ok && targetRoomId) {
+            setRemoteDocs(fromTunnel.docs);
+            mergeAndPersistTombstones(fromTunnel.deletedTombstones);
+            void cacheWorkRoomPreviewLocally(
+              targetRoomId,
+              fromTunnel.docs,
+              merlinAuth?.email || undefined
+            );
+          }
+        });
+      }
     });
+    return () => {
+      cancelled = true;
+    };
   }, [
     inviteMeta.hasWorkInvite,
     inviteMeta.inviteToken,
+    inviteMeta.roomTitle,
+    inviteMeta.hostNickname,
     actorNickname,
     activeWorkRoomId,
+    isZCoreConnected,
     merlinAuth?.userId,
+    merlinAuth?.email,
+    authSyncTick,
+    saveCachedServerMembers,
+    mergeAndPersistTombstones,
     showToast,
   ]);
 
-  // 계정별 로컬 캐시 복원 + 대장 PC 직통 HTTPS 터널 상태 동기화
+  // 계정별 로컬 캐시 복원 + 서버 DB 팀원 목록 즉시 반영(터널 대기 0ms) + 대장 PC 직통 터널 비동기 파일 동기화
   useEffect(() => {
     if (activeWorkRoomId && isAuthenticated) {
       const knownTombs = loadCachedWorkTombstones(activeWorkRoomId, merlinAuth?.email || undefined);
@@ -798,7 +999,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
     const loadRemoteState = async () => {
       if (!isAuthenticated) return;
       if (activeWorkRoomId && hasAuthenticatedHubAccountSession()) {
-        const authed = await fetchWorkRoomAuthedState(activeWorkRoomId, inviteMeta.inviteToken);
+        const authed = await fetchWorkRoomAuthedState(activeWorkRoomId, inviteMeta.inviteToken, {
+          skipBlockingTunnelFetch: true,
+        });
         if (cancelled) return;
         if (!authed.ok) {
           if (
@@ -806,6 +1009,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
             authed.reason === 'WORK_SUBSCRIPTION_REQUIRED'
           ) {
             setRemoteRoomLockReason(authed.reason);
+          } else if (authed.reason === 'NOT_A_WORK_ROOM_MEMBER' && !inviteMeta.hasWorkInvite) {
+            clearCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined);
+            setJoinedInvitedRoom(null);
+            setServerMembers([]);
+            setActiveWorkRoomId('');
           }
           return;
         }
@@ -813,8 +1021,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
         if (authed.role) setMyRoomRole(authed.role);
         if (authed.seatLimit) setRoomSeatLimit(authed.seatLimit);
         if (Array.isArray(authed.members)) {
-          setServerMembers(authed.members);
-          saveCachedServerMembers(activeWorkRoomId, authed.members, merlinAuth?.email || undefined);
+          const sortedMembers = sortWorkRoomServerMembers(authed.members);
+          setServerMembers(sortedMembers);
+          saveCachedServerMembers(activeWorkRoomId, sortedMembers, merlinAuth?.email || undefined);
         }
         if (authed.hostTunnel?.masterServerName) {
           setMasterWorkPcName(authed.hostTunnel.masterServerName);
@@ -826,15 +1035,23 @@ export const WorkLoungeB2BHub: React.FC = () => {
           );
         }
         mergeAndPersistTombstones(authed.deletedTombstones);
-        if (authed.docs.length > 0 || !isZCoreConnected) {
-          setRemoteDocs(authed.docs);
-          void cacheWorkRoomPreviewLocally(
-            activeWorkRoomId,
-            authed.docs,
-            merlinAuth?.email || undefined
-          );
-        }
         setHasAuthoritativeRemoteState(true);
+
+        if (authed.hostTunnel?.tunnelUrl && (!isZCoreConnected || authed.role !== 'host')) {
+          void fetchWorkFilesFromHostTunnel(
+            authed.hostTunnel.tunnelUrl,
+            authed.hostTunnel.accessKey
+          ).then((fromTunnel) => {
+            if (cancelled || !fromTunnel.ok) return;
+            setRemoteDocs(fromTunnel.docs);
+            mergeAndPersistTombstones(fromTunnel.deletedTombstones);
+            void cacheWorkRoomPreviewLocally(
+              activeWorkRoomId,
+              fromTunnel.docs,
+              merlinAuth?.email || undefined
+            );
+          });
+        }
         return;
       }
       if (inviteMeta.hasWorkInvite && inviteMeta.inviteToken) {
@@ -866,9 +1083,12 @@ export const WorkLoungeB2BHub: React.FC = () => {
     activeWorkRoomId,
     inviteMeta.hasWorkInvite,
     inviteMeta.inviteToken,
+    isAuthenticated,
     isZCoreConnected,
     merlinAuth?.userId,
     merlinAuth?.email,
+    authSyncTick,
+    saveCachedServerMembers,
     mergeAndPersistTombstones,
   ]);
 
@@ -1094,7 +1314,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
   const teamMembers = useMemo(() => {
     // 오직 서버 DB(ghosti_lounge_members) 정식 로그인 등록 멤버만 팀원으로 표시 (비로그인 게스트 presencePeers 팀원 혼입 0%)
-    const validServerMembers = serverMembers.filter((m) => Boolean(m.email && m.email.includes('@')));
+    // 1순위 방장(master) ➔ 2순위 합류 시각 오름차순 ➔ 3순위 이메일 사전순 고정 정렬로 F5·권한 변경 시 카드 순서 불변 보장
+    const validServerMembers = sortWorkRoomServerMembers(serverMembers);
     if (validServerMembers.length > 0) {
       return validServerMembers.map((m) => {
         const isHost = m.role === 'master';
@@ -1618,7 +1839,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 onClick={async () => {
                   await removeWorkRoomMemberOnServer({ roomId: activeWorkRoomId });
                   await purgeLocalWorkRoomDocs(activeWorkRoomId, merlinAuth?.email || undefined);
+                  clearCachedJoinedWorkRoomMeta(merlinAuth?.email || undefined);
                   sessionStorage.removeItem('ghosti_active_work_room_invite_v1');
+                  setJoinedInvitedRoom(null);
+                  setServerMembers([]);
                   setRemoteDocs([]);
                   setActiveWorkRoomId('');
                   showToast('초대받은 업무 공유방에서 나왔으며 내 기기의 해당 방 임시 캐시를 정리했습니다.');

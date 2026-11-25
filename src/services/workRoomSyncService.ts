@@ -73,10 +73,46 @@ export interface WorkRoomServerMemberDto {
   joinedAt?: string | null;
 }
 
+/**
+ * 팀원 권한 및 S: 드라이브 연결 관리 카드 순서 고정 정렬 (F5·권한 변경 시 순서 변동 0%):
+ * 1순위: 방장(role === 'master') 1번 고정
+ * 2순위: 합류 시각(joinedAt) 오름차순
+ * 3순위: 이메일(email) 사전순 오름차순
+ */
+export function sortWorkRoomServerMembers(
+  members?: WorkRoomServerMemberDto[] | null
+): WorkRoomServerMemberDto[] {
+  if (!Array.isArray(members) || members.length === 0) return [];
+  const dedup = new Map<string, WorkRoomServerMemberDto>();
+  for (const m of members) {
+    const cleanEmail = String(m?.email || '').trim().toLowerCase();
+    if (!cleanEmail || !cleanEmail.includes('@')) continue;
+    dedup.set(cleanEmail, {
+      email: cleanEmail,
+      nickname: String(m.nickname || cleanEmail.split('@')[0]),
+      role: m.role === 'master' ? 'master' : m.role === 'viewer' ? 'viewer' : 'editor',
+      joinedAt: m.joinedAt || null,
+    });
+  }
+  return Array.from(dedup.values()).sort((a, b) => {
+    const aHost = a.role === 'master' ? 0 : 1;
+    const bHost = b.role === 'master' ? 0 : 1;
+    if (aHost !== bHost) return aHost - bHost;
+    const aTs = a.joinedAt ? Date.parse(a.joinedAt) : NaN;
+    const bTs = b.joinedAt ? Date.parse(b.joinedAt) : NaN;
+    const aValid = Number.isFinite(aTs);
+    const bValid = Number.isFinite(bTs);
+    if (aValid && bValid && aTs !== bTs) return aTs - bTs;
+    if (aValid !== bValid) return aValid ? -1 : 1;
+    return a.email.localeCompare(b.email);
+  });
+}
+
 export type WorkDeletedTombstoneMap = Record<string, { deletedAt: string; deletedBy?: string; relPath?: string }>;
 
 const WORK_INVITE_SESSION_KEY = 'ghosti_active_work_room_invite_v1';
 const MY_WORK_ROOM_CACHE_PREFIX = 'ghosti_my_work_room_meta_v2::';
+const JOINED_WORK_ROOM_CACHE_PREFIX = 'ghosti_joined_work_room_meta_v1::';
 const LOCAL_WORK_TOMBSTONES_PREFIX = 'ghosti_work_tombstones_v2::';
 
 let activeHostTunnelSession: {
@@ -387,6 +423,8 @@ export async function acceptWorkRoomInvite(opts: {
   hostNickname?: string;
   role?: 'host' | 'editor' | 'viewer';
   seatLimit?: number;
+  members?: WorkRoomServerMemberDto[];
+  deletedTombstones?: WorkDeletedTombstoneMap;
   hostTunnel?: WorkHostTunnelEndpointDto;
   reason?: string;
   message?: string;
@@ -401,6 +439,8 @@ export async function acceptWorkRoomInvite(opts: {
     hostNickname?: string;
     role?: 'host' | 'editor' | 'viewer';
     seatLimit?: number;
+    members?: WorkRoomServerMemberDto[];
+    deletedTombstones?: WorkDeletedTombstoneMap;
     hostTunnel?: WorkHostTunnelEndpointDto;
     reason?: string;
     message?: string;
@@ -411,6 +451,9 @@ export async function acceptWorkRoomInvite(opts: {
   if (res.ok && res.roomId && res.hostTunnel?.tunnelUrl) {
     setActiveHostTunnelSession(res.roomId, res.hostTunnel);
   }
+  const sortedMembers = Array.isArray(res.members)
+    ? sortWorkRoomServerMembers(res.members)
+    : undefined;
   return {
     ok: Boolean(res.ok && res.roomId),
     roomId: res.roomId,
@@ -418,6 +461,8 @@ export async function acceptWorkRoomInvite(opts: {
     hostNickname: res.hostNickname,
     role: res.role,
     seatLimit: res.seatLimit,
+    members: sortedMembers,
+    deletedTombstones: normalizeWorkTombstoneMap(res.deletedTombstones),
     hostTunnel: res.hostTunnel,
     reason: res.reason,
     message: res.message,
@@ -428,16 +473,20 @@ export interface JoinedWorkRoomSummary {
   roomId: string;
   roomTitle: string;
   hostEmail: string;
+  hostNickname?: string;
   isHost: boolean;
   role: 'host' | 'editor' | 'viewer';
   ownerUnlocked: boolean;
   seatLimit: number;
   lockReason: string | null;
+  members?: WorkRoomServerMemberDto[];
+  deletedTombstones?: WorkDeletedTombstoneMap;
+  hostTunnel?: WorkHostTunnelEndpointDto;
 }
 
 /**
  * 로그인한 계정이 DB(ghosti_lounge_members)에 소속된 모든 업무 공유방(방장 + 초대받은 팀원방)을 조회합니다.
- * 재로그인·F5 새로고침·모바일 웹 수락 후 모바일 앱 재접속 시에도 초대 링크 없이 소속 업무방을 즉시 복원합니다.
+ * 재로그인·F5 새로고침·모바일 웹 수락 후 모바일 앱 재접속 시에도 초대 링크 없이 소속 업무방과 전체 팀원 목록을 단일 왕복으로 즉시 복원합니다.
  */
 export async function fetchMyJoinedWorkRooms(): Promise<{
   ok: boolean;
@@ -452,7 +501,83 @@ export async function fetchMyJoinedWorkRooms(): Promise<{
   if (!res.ok || !Array.isArray(res.rooms)) {
     return { ok: false, rooms: [] };
   }
-  return { ok: true, rooms: res.rooms };
+  const normalizedRooms = res.rooms.map((r) => {
+    if (r.roomId && r.hostTunnel?.tunnelUrl) {
+      setActiveHostTunnelSession(r.roomId, r.hostTunnel);
+    }
+    return {
+      ...r,
+      members: Array.isArray(r.members) ? sortWorkRoomServerMembers(r.members) : undefined,
+      deletedTombstones: r.deletedTombstones
+        ? normalizeWorkTombstoneMap(r.deletedTombstones)
+        : undefined,
+    };
+  });
+  return { ok: true, rooms: normalizedRooms };
+}
+
+export function readCachedJoinedWorkRoomMeta(accountEmail?: string): JoinedWorkRoomSummary | null {
+  if (typeof window === 'undefined') return null;
+  try {
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    if (scopeEmail === 'anonymous') return null;
+    const raw = localStorage.getItem(`${JOINED_WORK_ROOM_CACHE_PREFIX}${scopeEmail}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<JoinedWorkRoomSummary>;
+    if (!parsed?.roomId) return null;
+    return {
+      roomId: parsed.roomId,
+      roomTitle: parsed.roomTitle || '우리팀 업무 공유방 (S:)',
+      hostEmail: parsed.hostEmail || '',
+      hostNickname: parsed.hostNickname || '방장',
+      isHost: Boolean(parsed.isHost),
+      role: parsed.role === 'viewer' ? 'viewer' : parsed.role === 'host' ? 'host' : 'editor',
+      ownerUnlocked: parsed.ownerUnlocked !== false,
+      seatLimit: Number(parsed.seatLimit || 5),
+      lockReason: parsed.lockReason || null,
+    };
+  } catch {
+    return null;
+  }
+}
+
+export function saveCachedJoinedWorkRoomMeta(
+  summary: JoinedWorkRoomSummary,
+  accountEmail?: string
+): void {
+  if (typeof window === 'undefined' || !summary?.roomId) return;
+  try {
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    if (scopeEmail === 'anonymous') return;
+    localStorage.setItem(
+      `${JOINED_WORK_ROOM_CACHE_PREFIX}${scopeEmail}`,
+      JSON.stringify({
+        roomId: summary.roomId,
+        roomTitle: summary.roomTitle,
+        hostEmail: summary.hostEmail,
+        hostNickname: summary.hostNickname,
+        isHost: summary.isHost,
+        role: summary.role,
+        ownerUnlocked: summary.ownerUnlocked,
+        seatLimit: summary.seatLimit,
+        lockReason: summary.lockReason,
+      })
+    );
+  } catch {
+    /* ignore */
+  }
+}
+
+export function clearCachedJoinedWorkRoomMeta(accountEmail?: string): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const scopeEmail = resolveCurrentWorkAccountEmail(accountEmail);
+    if (scopeEmail !== 'anonymous') {
+      localStorage.removeItem(`${JOINED_WORK_ROOM_CACHE_PREFIX}${scopeEmail}`);
+    }
+  } catch {
+    /* ignore */
+  }
 }
 
 export function readCachedMyWorkRoomMeta(accountEmail?: string): {
@@ -850,10 +975,13 @@ export async function fetchWorkFilesFromHostTunnel(
   if (!cleanUrl) {
     return { ok: false, docs: [], deletedTombstones: {} };
   }
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), 5000) : null;
   try {
     const res = await fetch(`${cleanUrl}/__work/files`, {
       method: 'GET',
       headers: cleanKey ? { 'X-Ghosti-Work-Key': cleanKey } : {},
+      ...(ctrl ? { signal: ctrl.signal } : {}),
     });
     if (!res.ok) {
       return { ok: false, docs: [], deletedTombstones: {} };
@@ -873,6 +1001,8 @@ export async function fetchWorkFilesFromHostTunnel(
     };
   } catch {
     return { ok: false, docs: [], deletedTombstones: {} };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -886,10 +1016,13 @@ export async function fetchWorkLocksFromHostTunnel(
   const cleanUrl = (tunnelUrl || activeHostTunnelSession?.tunnelUrl || '').trim().replace(/\/+$/, '');
   const cleanKey = (accessKey ?? activeHostTunnelSession?.accessKey ?? '').trim();
   if (!cleanUrl) return { ok: false, locks: {} };
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), 2500) : null;
   try {
     const res = await fetch(`${cleanUrl}/__work/locks`, {
       method: 'GET',
       headers: cleanKey ? { 'X-Ghosti-Work-Key': cleanKey } : {},
+      ...(ctrl ? { signal: ctrl.signal } : {}),
     });
     if (!res.ok) return { ok: false, locks: {} };
     const data = (await res.json()) as {
@@ -907,6 +1040,8 @@ export async function fetchWorkLocksFromHostTunnel(
     return { ok: true, locks: cleanLocks };
   } catch {
     return { ok: false, locks: {} };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
 }
 
@@ -1433,7 +1568,8 @@ export async function fetchWorkRoomCloudPreview(inviteToken: string): Promise<{
 
 export async function fetchWorkRoomAuthedState(
   roomId: string,
-  inviteToken?: string
+  inviteToken?: string,
+  opts?: { skipBlockingTunnelFetch?: boolean }
 ): Promise<{
   ok: boolean;
   role?: 'host' | 'editor' | 'viewer';
@@ -1470,11 +1606,14 @@ export async function fetchWorkRoomAuthedState(
   }
 
   const tombstones = normalizeWorkTombstoneMap(res.deletedTombstones);
+  const sortedMembers = Array.isArray(res.members)
+    ? sortWorkRoomServerMembers(res.members)
+    : undefined;
   let tunnelDocs: WorkLoungeDocDto[] = [];
   if (res.hostTunnel?.tunnelUrl) {
     setActiveHostTunnelSession(roomId, res.hostTunnel);
-    // 내 PC가 대장 PC가 아닌 경우(외부 팀원/모바일), 대장 PC 직통 HTTPS 터널에서 실시간 S:\ 목록을 0초 직결로 가져옴
-    if (!zCoreBridge.isConnected || res.role !== 'host') {
+    // skipBlockingTunnelFetch 활성화 시 팀원 목록(members)·권한을 0ms 먼저 반환하고 터널 파일 조회는 비동기로 분리
+    if (!opts?.skipBlockingTunnelFetch && (!zCoreBridge.isConnected || res.role !== 'host')) {
       const fromTunnel = await fetchWorkFilesFromHostTunnel(
         res.hostTunnel.tunnelUrl,
         res.hostTunnel.accessKey
@@ -1489,7 +1628,7 @@ export async function fetchWorkRoomAuthedState(
     ok: true,
     role: res.role,
     seatLimit: res.seatLimit,
-    members: res.members,
+    members: sortedMembers,
     hostTunnel: res.hostTunnel,
     docs: tunnelDocs,
     deletedTombstones: tombstones,
