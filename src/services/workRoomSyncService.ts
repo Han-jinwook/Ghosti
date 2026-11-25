@@ -363,6 +363,41 @@ export function saveActiveWorkRoomInviteMeta(meta: WorkRoomInviteMeta): void {
   }
 }
 
+/**
+ * 초대 링크 수락 완료 직후 또는 방장에게 내보내진(Kicked) 경우,
+ * URL 쿼리스트링(?workRoom=...&inviteToken=...) 및 sessionStorage 초대 잔상을 깨끗이 소거합니다.
+ * (내보내진 팀원 화면에 옛 초대 배너·가짜 방장 카드가 남거나 F5 시 구 토큰으로 재입장하는 현상을 100% 차단)
+ */
+export function clearActiveWorkRoomInviteMeta(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    sessionStorage.removeItem(WORK_INVITE_SESSION_KEY);
+  } catch {
+    /* ignore */
+  }
+  try {
+    const u = new URL(window.location.href);
+    let mutated = false;
+    for (const key of ['workRoom', 'inviteToken', 'token', 'host', 'title']) {
+      if (u.searchParams.has(key)) {
+        u.searchParams.delete(key);
+        mutated = true;
+      }
+    }
+    if (mutated) {
+      const nextRel = `${u.pathname}${u.search ? u.search : ''}${u.hash || ''}`;
+      window.history.replaceState(window.history.state, '', nextRel);
+    }
+  } catch {
+    /* ignore */
+  }
+  try {
+    window.dispatchEvent(new CustomEvent('ghostiWorkInviteCleared'));
+  } catch {
+    /* ignore */
+  }
+}
+
 export function buildWorkRoomNativeSchemeUrl(meta: {
   roomId: string;
   inviteToken?: string;
@@ -1638,16 +1673,33 @@ export async function updateWorkRoomMemberRoleOnServer(opts: {
 export async function removeWorkRoomMemberOnServer(opts: {
   roomId: string;
   memberEmail?: string;
-}): Promise<{ ok: boolean; members?: WorkRoomServerMemberDto[] }> {
+}): Promise<{ ok: boolean; members?: WorkRoomServerMemberDto[]; inviteToken?: string }> {
   if (!opts.roomId || !hasAuthenticatedHubAccountSession()) return { ok: false };
-  const res = await callGhostiServerBridge<{ members?: WorkRoomServerMemberDto[] }>(
-    'work_remove_member',
-    opts,
-    { keepalive: true }
-  );
+  const res = await callGhostiServerBridge<{
+    members?: WorkRoomServerMemberDto[];
+    inviteToken?: string;
+  }>('work_remove_member', opts, { keepalive: true });
+  if (res.ok && res.inviteToken && typeof window !== 'undefined') {
+    try {
+      const scopeEmail = resolveCurrentWorkAccountEmail();
+      const prevRaw = localStorage.getItem(`${MY_WORK_ROOM_CACHE_PREFIX}${scopeEmail}`);
+      if (prevRaw) {
+        const prevObj = JSON.parse(prevRaw) as Record<string, unknown>;
+        if (prevObj?.roomId === opts.roomId) {
+          localStorage.setItem(
+            `${MY_WORK_ROOM_CACHE_PREFIX}${scopeEmail}`,
+            JSON.stringify({ ...prevObj, inviteToken: res.inviteToken })
+          );
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
   return {
     ok: Boolean(res.ok),
     members: Array.isArray(res.members) ? sortWorkRoomServerMembers(res.members) : undefined,
+    inviteToken: res.inviteToken,
   };
 }
 

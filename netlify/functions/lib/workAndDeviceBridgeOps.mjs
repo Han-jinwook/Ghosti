@@ -1192,13 +1192,8 @@ export async function handleAuthedWorkAndDeviceAction({
     const roomId = String(body.roomId || '').trim();
     const ctx = await getWorkRoomMemberContext(supabaseUrl, serviceKey, roomId, email);
     if (!ctx) {
-      if (body.inviteToken) {
-        return handlePublicWorkPreviewAction({
-          supabaseUrl,
-          serviceKey,
-          inviteToken: body.inviteToken,
-        });
-      }
+      // 인증된 사용자(email 확인됨)가 ghosti_lounge_members에 없다면 아직 초대 수락 전이거나 방장에게 내보내진 상태이므로
+      // 절대 handlePublicWorkPreviewAction(ok: true)으로 우회하지 않고 명확히 NOT_A_WORK_ROOM_MEMBER를 반환합니다.
       return { status: 403, body: { ok: false, reason: 'NOT_A_WORK_ROOM_MEMBER' } };
     }
     const ownerGate = await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, ctx.room.master_email);
@@ -1481,18 +1476,15 @@ export async function handleAuthedWorkAndDeviceAction({
     if (!ctx) {
       return { status: 403, body: { ok: false, reason: 'NOT_A_WORK_ROOM_MEMBER' } };
     }
-    if (targetEmail !== email && !ctx.isMaster) {
+    const isKickingOther = targetEmail !== email;
+    if (isKickingOther && !ctx.isMaster) {
       return { status: 403, body: { ok: false, reason: 'ONLY_MASTER_CAN_KICK_MEMBER' } };
     }
     if (targetEmail === String(ctx.room.master_email || '').toLowerCase()) {
       return { status: 400, body: { ok: false, reason: 'MASTER_CANNOT_LEAVE_OWN_ROOM' } };
     }
-    const matchedRow = (ctx.members || []).find(
-      (m) => String(m?.member_email || '').trim().toLowerCase() === targetEmail
-    );
-    const storedEmail = matchedRow ? String(matchedRow.member_email).trim() : targetEmail;
     const delRes = await fetch(
-      `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(roomId)}&member_email=eq.${encodeURIComponent(storedEmail)}`,
+      `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(roomId)}&member_email=ilike.${encodeURIComponent(targetEmail)}`,
       {
         method: 'DELETE',
         headers: srvHeaders(serviceKey),
@@ -1501,6 +1493,46 @@ export async function handleAuthedWorkAndDeviceAction({
     if (!delRes.ok) {
       return { status: 502, body: { ok: false, reason: 'WORK_MEMBER_REMOVE_FAILED' } };
     }
+
+    // 방장이 팀원을 내보낸 경우 기존 초대 링크를 즉시 폐기·회전하여 내보내진 팀원이 옛 링크(F5 등)로 재합류하지 못하게 원천 차단
+    let rotatedInviteToken = '';
+    if (isKickingOther && ctx.isMaster) {
+      try {
+        const ownerGate = await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, ctx.room.master_email);
+        const seatLimit = ownerGate.entitlement?.workSeatLimit || 5;
+        await fetch(
+          `${supabaseUrl}/rest/v1/ghosti_room_invites?room_id=eq.${encodeURIComponent(roomId)}&revoked_at=is.null`,
+          {
+            method: 'PATCH',
+            headers: srvHeaders(serviceKey, {
+              'Content-Type': 'application/json',
+              Prefer: 'return=minimal',
+            }),
+            body: JSON.stringify({ revoked_at: new Date().toISOString() }),
+          }
+        );
+        rotatedInviteToken = sha256Hex(`${crypto.randomUUID()}:${roomId}:${Date.now()}`).slice(0, 36);
+        const exp = new Date(Date.now() + 14 * 24 * 3600 * 1000).toISOString();
+        await fetch(`${supabaseUrl}/rest/v1/ghosti_room_invites`, {
+          method: 'POST',
+          headers: srvHeaders(serviceKey, {
+            'Content-Type': 'application/json',
+            Prefer: 'return=minimal',
+          }),
+          body: JSON.stringify({
+            token: rotatedInviteToken,
+            room_id: roomId,
+            created_by_email: email,
+            default_role: 'member',
+            max_uses: seatLimit,
+            expires_at: exp,
+          }),
+        });
+      } catch {
+        /* ignore invite rotation failure */
+      }
+    }
+
     const remainingRaw = (ctx.members || []).filter(
       (m) => String(m?.member_email || '').trim().toLowerCase() !== targetEmail
     );
@@ -1512,6 +1544,7 @@ export async function handleAuthedWorkAndDeviceAction({
         roomId,
         removedEmail: targetEmail,
         members: sortedMembers,
+        ...(rotatedInviteToken ? { inviteToken: rotatedInviteToken } : {}),
       },
     };
   }

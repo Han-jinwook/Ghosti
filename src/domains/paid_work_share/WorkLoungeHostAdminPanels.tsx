@@ -48,6 +48,7 @@ export interface WorkLoungeHostAdminPanelsProps {
   setServerMembers: React.Dispatch<React.SetStateAction<WorkRoomServerMemberDto[]>>;
   onPersistMembersCache?: (members: WorkRoomServerMemberDto[]) => void;
   onBroadcastMembersUpdated?: (members: WorkRoomServerMemberDto[]) => void;
+  onMarkMemberMutation?: (kickedEmail?: string) => void;
   showToast: (msg: string) => void;
 }
 
@@ -79,6 +80,7 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
   setServerMembers,
   onPersistMembersCache,
   onBroadcastMembersUpdated,
+  onMarkMemberMutation,
   showToast,
 }) => {
   const [pendingKickMember, setPendingKickMember] = React.useState<WorkTeamMemberViewItem | null>(
@@ -100,18 +102,21 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
   const handleConfirmKickMember = async () => {
     if (!pendingKickMember || isKickingMember) return;
     const target = pendingKickMember;
+    const targetEmailLow = (target.email || '').trim().toLowerCase();
     setIsKickingMember(true);
+    // 진행 중이던 이전 주기 조회(loadRemoteState / fetchMyJoinedWorkRooms)가 뒤늦게 도착해 내보낸 카드를 되살리는 경합 원천 차단
+    onMarkMemberMutation?.(targetEmailLow);
     try {
       const kickRes = await removeWorkRoomMemberOnServer({
         roomId: activeWorkRoomId,
-        memberEmail: target.email,
+        memberEmail: targetEmailLow,
       });
       if (kickRes.ok) {
+        onMarkMemberMutation?.(targetEmailLow);
         setServerMembers((prev) => {
-          const next =
-            kickRes.members && kickRes.members.length > 0
-              ? kickRes.members
-              : prev.filter((sm) => sm.email !== target.email);
+          const base =
+            kickRes.members && kickRes.members.length > 0 ? kickRes.members : prev;
+          const next = base.filter((sm) => sm.email.toLowerCase() !== targetEmailLow);
           onPersistMembersCache?.(next);
           onBroadcastMembersUpdated?.(next);
           return next;
@@ -377,6 +382,7 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
                             member.role === 'viewer' ? 'viewer' : 'editor';
                           const nextRole: 'editor' | 'viewer' =
                             e.target.value === 'viewer' ? 'viewer' : 'editor';
+                          onMarkMemberMutation?.();
                           let optimisticNext: WorkRoomServerMemberDto[] = [];
                           setServerMembers((prev) => {
                             optimisticNext = prev.map((sm) =>
@@ -394,6 +400,7 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
                             memberEmail: member.email,
                             role: nextRole,
                           });
+                          onMarkMemberMutation?.();
                           if (!roleRes.ok) {
                             setServerMembers((prev) => {
                               const reverted: WorkRoomServerMemberDto[] = prev.map((sm) =>
