@@ -3476,14 +3476,35 @@ def _get_known_user_folders_for_search(include_internal_secondary_drives: bool =
             raw_cands.append(od / "Documents" / "카카오톡 받은 파일")
             raw_cands.append(od / "문서" / "카카오톡 받은 파일")
 
-    # [1단계: C:\ 루트의 일반 사용자 폴더(시스템/프로그램 폴더 제외) 자동 편입]
+    # [1단계: C:\ 루트의 일반 사용자 폴더(시스템/보안/개발코드 폴더 제외) 자동 편입]
     _C_ROOT_SKIP = {
         "windows", "program files", "program files (x86)", "programdata", "users",
         "perflogs", "recovery", "intel", "amd", "nvidia", "msocache", "inetpub",
         "temp", "tmp", "merlintools", "merlinwaybill", "studio", "merlin_ai_models",
         "system volume information", "$recycle.bin", "drivers", "efi", "boot",
         "config.msi", "windows.old", "onedrivetemp", "swsetup", "dell", "hp",
+        "documents and settings", "xecuressl", "wizvera", "ahnlab", "nprotect",
+        "touchen", "iniline", "softforum", "crosscert", "dreamsecurity", "yettiesoft",
+        "markany", "raonsecure", "kings",
     }
+
+    def _is_code_repo_dir_fast(dp: Path) -> bool:
+        try:
+            for marker in (".git", "package.json", "requirements.txt", "pyproject.toml", "Cargo.toml", "go.mod"):
+                if (dp / marker).exists():
+                    return True
+        except Exception:
+            pass
+        return False
+
+    # QA/사용자 명시 코퍼스 폴더가 존재하는 경우(일반 PC엔 미존재) AppData 초기화 후에도 안전하게 자동 편입
+    try:
+        _corpus_c = Path("C:\\MerlinTools\\Ghosti_Test_Corpus")
+        if _corpus_c.exists() and _corpus_c.is_dir():
+            raw_cands.append(_corpus_c)
+    except Exception:
+        pass
+
     try:
         with os.scandir("C:\\") as it_c:
             for c_ent in it_c:
@@ -3497,7 +3518,10 @@ def _get_known_user_folders_for_search(include_internal_secondary_drives: bool =
                         or cn_low.startswith(("python", "anaconda", "miniconda", "found.", "msdownld"))
                     ):
                         continue
-                    raw_cands.append(Path(c_ent.path))
+                    p_c = Path(c_ent.path)
+                    if _is_code_repo_dir_fast(p_c):
+                        continue
+                    raw_cands.append(p_c)
                 except Exception:
                     continue
     except Exception:
@@ -3608,17 +3632,16 @@ _SCAN_DIRS_CACHE: dict = {"ts": 0.0, "dirs": []}
 
 
 def _collect_search_scan_dirs(
-    max_total_dirs: int = 6000,
-    max_per_drive: int = 1200,
-    time_budget_sec: float = 8.0,
+    max_total_dirs: int = 8000,
+    max_per_drive: int = 2400,
+    time_budget_sec: float = 9.0,
     force: bool = False,
 ) -> list[Path]:
     """
-    [전 PC 전 하드 드라이브 1:1 공정 라운드-로빈 폴더 수집기 (Starvation 0%)]:
-    - 기존 방식은 C: 사용자 폴더 25~30개가 D:/E:/F:/G: 루트 1개와 동급으로 돌아 C:가 30턴 돌 때 D:가 1턴만 돌고,
-      구글드라이브(G:/H:) 같은 가상 드라이브가 전체 시간 예산을 소진해 보조 하드를 누락시키는 문제가 있었습니다.
-    - 개선: 모든 루트를 드라이브 문자별(C:, D:, E:, F:, G:, H:, S:)로 그룹화하여 각 드라이브에 정확히 1:1 동일 턴과
-      독립 폴더 상한(1,200개/드라이브)·독립 시간 예산(로컬 NTFS 3.5초, 가상/클라우드 드라이브 2.0초)을 배분합니다.
+    [전 PC 전 하드 드라이브 2계층 공정 라운드-로빈 폴더 수집기 (Starvation 0%)]:
+    - 1계층(드라이브 간 1:1): S:, D:, E:, F:, C:, G: 등 각 드라이브에 독립 폴더 상한(2,400/드라이브)·독립 시간 예산(로컬 4.5s, 가상 2.0s) 배분.
+    - 2계층(드라이브 내부 루트 간 1:1): C: 내부에서도 Desktop/Downloads/Documents/Pictures/Videos/카카오톡/사용자폴더가
+      각각 독립 서브큐로 교대 확장되어, Documents·Downloads 하위 폴더가 많아도 사진(Pictures)·영상(Videos)이 절대 잘리지 않음!
     """
     now_c = time.time()
     if not force and _SCAN_DIRS_CACHE["dirs"] and (now_c - float(_SCAN_DIRS_CACHE["ts"])) < 20.0:
@@ -3653,15 +3676,16 @@ def _collect_search_scan_dirs(
                     pass
             grp = {
                 "drv": drv_key,
-                "queue": [],
+                "sub_queues": [],
+                "rr_idx": 0,
                 "added": 0,
                 "cap": 600 if is_virtual_cloud else max_per_drive,
                 "elapsed": 0.0,
-                "time_cap": 2.0 if is_virtual_cloud else 3.5,
+                "time_cap": 2.0 if is_virtual_cloud else 4.5,
                 "is_virtual": is_virtual_cloud,
             }
             drive_groups[drv_key] = grp
-        grp["queue"].append((root_fd, 0))
+        grp["sub_queues"].append([(root_fd, 0)])
 
     # 로컬 물리 드라이브(S:, D:, E:, F:, C: 등)를 가상 클라우드 드라이브(G:/H:)보다 먼저 라운드-로빈 배치
     ordered_groups = sorted(
@@ -3676,11 +3700,24 @@ def _collect_search_scan_dirs(
         for grp in ordered_groups:
             if len(scan_dirs) >= max_total_dirs or (time.time() - t_start) > time_budget_sec:
                 break
-            q_list = grp["queue"]
-            if not q_list or grp["added"] >= grp["cap"] or grp["elapsed"] >= grp["time_cap"]:
+            if grp["added"] >= grp["cap"] or grp["elapsed"] >= grp["time_cap"]:
+                continue
+            sub_qs = grp["sub_queues"]
+            n_sq = len(sub_qs)
+            if n_sq == 0:
+                continue
+            # 드라이브 내부 각 루트(Desktop/Downloads/Documents/Pictures/Videos 등)를 1:1 공정 라운드-로빈으로 선택
+            chosen_q = None
+            for _off in range(n_sq):
+                idx_try = (grp["rr_idx"] + _off) % n_sq
+                if sub_qs[idx_try]:
+                    chosen_q = sub_qs[idx_try]
+                    grp["rr_idx"] = (idx_try + 1) % n_sq
+                    break
+            if chosen_q is None:
                 continue
             active = True
-            cur_fd, depth = q_list.pop(0)
+            cur_fd, depth = chosen_q.pop(0)
             if depth >= max_depth:
                 continue
             t_step = time.time()
@@ -3707,7 +3744,7 @@ def _collect_search_scan_dirs(
                                 scan_dirs.append(p_sub)
                                 grp["added"] += 1
                                 if depth + 1 < max_depth:
-                                    q_list.append((p_sub, depth + 1))
+                                    chosen_q.append((p_sub, depth + 1))
                         except Exception:
                             pass
             except Exception:
