@@ -60,6 +60,7 @@ export const App: React.FC = () => {
     lastUndoBatch,
     quarantineMoving,
     quarantineOpKind,
+    quarantineRestoreScope,
     undoLastQuarantine,
     dismissUndoBatch,
     selectedPhoto,
@@ -1449,11 +1450,11 @@ export const App: React.FC = () => {
               } mb-safe left-1/2 -translate-x-1/2 z-[115] w-[94%] max-w-xl px-4 sm:px-5 py-3 rounded-xl bg-slate-900 border border-slate-800 text-white shadow-lg flex flex-wrap items-center justify-between gap-2.5 sm:gap-3`}
             >
               <div className="flex items-center gap-2 min-w-0">
-                {quarantineMoving && quarantineOpKind === 'restore' && (
+                {quarantineMoving && quarantineOpKind === 'restore' && quarantineRestoreScope === 'undo' && (
                   <span className="inline-block w-3.5 h-3.5 rounded-full border-2 border-teal-400 border-t-transparent animate-spin shrink-0" />
                 )}
                 <span className="text-[13px] font-medium break-keep">
-                  {quarantineMoving && quarantineOpKind === 'restore'
+                  {quarantineMoving && quarantineOpKind === 'restore' && quarantineRestoreScope === 'undo'
                     ? `사진 ${lastUndoBatch.count}장을 원래 위치로 복원하고 있습니다...`
                     : `방금 정리한 ${lastUndoBatch.count}장이 휴지통으로 이동되었습니다.`}
                 </span>
@@ -1466,10 +1467,10 @@ export const App: React.FC = () => {
                   onClick={() => void undoLastQuarantine()}
                   className="px-3.5 py-1.5 rounded-lg bg-teal-500 hover:bg-teal-400 disabled:bg-teal-600/80 disabled:cursor-wait text-white text-[12px] font-semibold transition-colors whitespace-nowrap cursor-pointer inline-flex items-center gap-1.5"
                 >
-                  {quarantineMoving && quarantineOpKind === 'restore' && (
+                  {quarantineMoving && quarantineOpKind === 'restore' && quarantineRestoreScope === 'undo' && (
                     <span className="inline-block w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
                   )}
-                  {quarantineMoving && quarantineOpKind === 'restore' ? '복원 중...' : '실행 취소'}
+                  {quarantineMoving && quarantineOpKind === 'restore' && quarantineRestoreScope === 'undo' ? '복원 중...' : '실행 취소'}
                 </button>
                 <button
                   type="button"

@@ -229,6 +229,8 @@ export interface AssistantOnboardingSlice {
   activeTrashCategoryFilter: TrashCategory | 'all' | 'none';
   quarantineMoving: boolean;
   quarantineOpKind: 'idle' | 'move' | 'restore';
+  quarantineRestoreScope: 'idle' | 'single' | 'all' | 'undo';
+  quarantineRestoringIds: string[];
   lastQuarantineToast: string | null;
   lastUndoBatch: UndoQuarantineBatch | null;
   setActiveTrashCategoryFilter: (cat: TrashCategory | 'all' | 'none') => void;
@@ -246,7 +248,7 @@ export interface AssistantOnboardingSlice {
   ) => Promise<void>;
   moveSelectedToQuarantine: () => Promise<void>;
   moveAllTrashToQuarantine: () => Promise<void>;
-  restoreFromQuarantine: (names: string[]) => Promise<void>;
+  restoreFromQuarantine: (names: string[], scope?: 'single' | 'all' | 'undo') => Promise<void>;
   syncPhotosAfterExternalRestore: (
     names: string[],
     replacedIds?: Record<string, string>,
@@ -1912,6 +1914,8 @@ export const createAssistantOnboardingSlice: StateCreator<
   activeTrashCategoryFilter: 'duplicate',
   quarantineMoving: false,
   quarantineOpKind: 'idle',
+  quarantineRestoreScope: 'idle',
+  quarantineRestoringIds: [],
   lastQuarantineToast: null,
   lastUndoBatch: null,
 
@@ -2511,6 +2515,12 @@ export const createAssistantOnboardingSlice: StateCreator<
               };
       }
 
+      // 1장 이상 복원을 직접 수행해 완료 알림(customToast)을 띄울 때는 직전 '휴지통으로 이동되었습니다' 배너를 닫아
+      // 하단 알림창이 즉시 '사진 N장을 복원했습니다'로 깔끔하게 전환되도록 보장
+      if (customToast) {
+        nextLastUndoBatch = null;
+      }
+
       return {
         photos: updatedPhotos,
         duplicateGroups: nextDupGroups,
@@ -2520,6 +2530,8 @@ export const createAssistantOnboardingSlice: StateCreator<
         lastUndoBatch: nextLastUndoBatch,
         quarantineMoving: false,
         quarantineOpKind: 'idle',
+        quarantineRestoreScope: 'idle',
+        quarantineRestoringIds: [],
         ...(customToast ? { lastQuarantineToast: customToast } : {}),
       };
     });
@@ -2531,7 +2543,7 @@ export const createAssistantOnboardingSlice: StateCreator<
     }
   },
 
-  restoreFromQuarantine: async (names: string[]) => {
+  restoreFromQuarantine: async (names: string[], scope?: 'single' | 'all' | 'undo') => {
     if (names.length === 0 || get().quarantineMoving) return;
     const curPhotos = get().photos;
     // 동일 파일명이 activePhotos(quarantined: false)에도 존재할 때 curPhotos.find()가
@@ -2548,7 +2560,13 @@ export const createAssistantOnboardingSlice: StateCreator<
       set({ lastUndoBatch: null });
       return;
     }
-    set({ quarantineMoving: true, quarantineOpKind: 'restore' });
+    const effectiveScope: 'single' | 'all' | 'undo' = scope ?? (validTargets.length === 1 ? 'single' : 'all');
+    set({
+      quarantineMoving: true,
+      quarantineOpKind: 'restore',
+      quarantineRestoreScope: effectiveScope,
+      quarantineRestoringIds: validTargets,
+    });
     try {
       // PC Z-코어는 휴지통 장부(name) 기준으로 매칭하므로 id !== name인 기존 항목도 정확히 name으로 전달
       const wireTargets = zCoreBridge.isConnected
@@ -2589,6 +2607,8 @@ export const createAssistantOnboardingSlice: StateCreator<
           set((state) => ({
             quarantineMoving: false,
             quarantineOpKind: 'idle',
+            quarantineRestoreScope: 'idle',
+            quarantineRestoringIds: [],
             photos: state.photos.filter((p) => !(p.quarantined && (staleSet.has(p.id) || staleSet.has(p.name)))),
             lastUndoBatch: null,
             lastQuarantineToast:
@@ -2596,7 +2616,13 @@ export const createAssistantOnboardingSlice: StateCreator<
           }));
           return;
         }
-        set({ quarantineMoving: false, quarantineOpKind: 'idle', lastQuarantineToast: quarantineFailureToast('restore', restoreRes) });
+        set({
+          quarantineMoving: false,
+          quarantineOpKind: 'idle',
+          quarantineRestoreScope: 'idle',
+          quarantineRestoringIds: [],
+          lastQuarantineToast: quarantineFailureToast('restore', restoreRes),
+        });
         return;
       }
       get().syncPhotosAfterExternalRestore(
@@ -2606,7 +2632,12 @@ export const createAssistantOnboardingSlice: StateCreator<
       );
     } finally {
       if (get().quarantineMoving) {
-        set({ quarantineMoving: false, quarantineOpKind: 'idle' });
+        set({
+          quarantineMoving: false,
+          quarantineOpKind: 'idle',
+          quarantineRestoreScope: 'idle',
+          quarantineRestoringIds: [],
+        });
       }
     }
   },
@@ -2625,7 +2656,7 @@ export const createAssistantOnboardingSlice: StateCreator<
       return;
     }
     const targetIds = stillQuarantined.map((p) => p.id);
-    await get().restoreFromQuarantine(targetIds);
+    await get().restoreFromQuarantine(targetIds, 'undo');
     // 실제로 되돌아온 사진만 Undo 목록에서 지우고, 실패한 사진은 다시 시도할 수 있게 남긴다
     const remaining = get().photos.filter((p) => targetIds.includes(p.id) && p.quarantined);
     set({
