@@ -29,13 +29,19 @@ import {
   resolveHubSupabaseBridgeEndpoint,
 } from '../services/supabaseClient';
 import { clearCachedSharedRoomTokens } from '../services/sharedPhotoRoomSupabase';
-import { clearWorkRoomLocalCachesOnLogout } from '../services/workRoomSyncService';
+import {
+  clearWorkRoomLocalCachesOnLogout,
+  ensureLocalHostOutboundTunnelAndRegister,
+  fetchMyJoinedWorkRooms,
+  saveCachedJoinedWorkRoomMeta,
+} from '../services/workRoomSyncService';
 import { resetSharedMonsterChatToWelcome } from '../services/monsterChatRouter';
 import {
   getThisDeviceIdentity,
   loadCachedDeviceIntegrationSnapshot,
   loadCachedSyncedClips,
   syncDeviceHeartbeatAndList,
+  syncEntitlementToLocalPcEngine,
 } from '../services/deviceIntegrationService';
 import {
   clearStoredInviteSession,
@@ -490,6 +496,44 @@ const GhostiHubGlobalModals: React.FC = () => {
           void useSaySeeStore.getState().initApp(true);
         }
       });
+
+      // 대장 PC에서 [귀신비서]·[사진 공유] 등 다른 탭에 머물더라도 소속 업무방 권한 및 상시 아웃바운드 HTTPS 직통 터널을 자동 유지·등록
+      // (팀원 PC나 방장 본인의 모바일 앱에서 언제 접속하더라도 0초 만에 S:\ 문서 목록이 일치하도록 보장)
+      const isNativeMobile =
+        typeof window !== 'undefined' &&
+        Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
+      if (!isNativeMobile) {
+        void zCoreBridge.checkHealth(false).then(async (alive) => {
+          if (!alive) return;
+          const joined = await fetchMyJoinedWorkRooms();
+          if (!joined.ok || joined.rooms.length === 0) return;
+          const curEnt = useSaySeeStore.getState().deviceEntitlement;
+          const hosted = joined.rooms.find((r) => r.isHost && r.ownerUnlocked);
+          const invited = joined.rooms.find((r) => !r.isHost);
+          if (invited) {
+            saveCachedJoinedWorkRoomMeta(invited, cleanUserEmail);
+          }
+          if (hosted) {
+            await syncEntitlementToLocalPcEngine(curEnt, cleanUserEmail, {
+              unlocked: true,
+              roomId: hosted.roomId,
+              isHost: true,
+              planId: curEnt?.workPlanId || 'work_trial_30d',
+            });
+            await ensureLocalHostOutboundTunnelAndRegister(hosted.roomId, {
+              masterServerName: hosted.hostTunnel?.masterServerName,
+              backupServers: hosted.hostTunnel?.backupServers,
+            });
+          } else if (invited && invited.ownerUnlocked) {
+            await syncEntitlementToLocalPcEngine(curEnt, cleanUserEmail, {
+              unlocked: true,
+              roomId: invited.roomId,
+              isHost: false,
+              planId: 'work_invited_member',
+            });
+          }
+        });
+      }
     } else if (!isLoggedIn) {
       const hasUrlInviteToken = Boolean(readActiveInviteToken());
       const isMarkedLoggedOut =

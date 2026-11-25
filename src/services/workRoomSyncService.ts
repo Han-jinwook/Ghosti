@@ -1179,11 +1179,14 @@ export async function fetchWorkLocksFromHostTunnel(
   }
 }
 
+let lastRegisteredHostTunnelSig = '';
+
 export async function ensureLocalHostOutboundTunnelAndRegister(
   roomId: string,
   extra?: {
     masterServerName?: string;
     backupServers?: WorkBackupServerNodeDto[];
+    forceRegister?: boolean;
   }
 ): Promise<{
   ok: boolean;
@@ -1191,7 +1194,8 @@ export async function ensureLocalHostOutboundTunnelAndRegister(
   tunnelUrl: string;
   accessKey: string;
 }> {
-  if (!zCoreBridge.isConnected || !roomId) {
+  const cleanRoomId = (roomId || '').trim();
+  if (!zCoreBridge.isConnected || !cleanRoomId) {
     return { ok: false, status: 'disconnected', tunnelUrl: '', accessKey: '' };
   }
   try {
@@ -1203,32 +1207,61 @@ export async function ensureLocalHostOutboundTunnelAndRegister(
     if (!res.ok) {
       return { ok: false, status: 'error', tunnelUrl: '', accessKey: '' };
     }
-    const data = (await res.json()) as {
+    let data = (await res.json()) as {
       ok?: boolean;
       status?: string;
       tunnelUrl?: string;
       accessKey?: string;
     };
-    const tunnelUrl = (data.tunnelUrl || '').trim().replace(/\/+$/, '');
-    const accessKey = (data.accessKey || '').trim();
+    let tunnelUrl = (data.tunnelUrl || '').trim().replace(/\/+$/, '');
+    let accessKey = (data.accessKey || '').trim();
+    let status = data.status || (tunnelUrl ? 'connected' : 'starting');
+
+    // cloudflared 최초 기동(starting / downloading_binary) 시 20초 주기까지 방치하지 않고 1초 간격으로 즉시 대기 후 서버에 터널 등록!
+    if (!tunnelUrl && (status === 'starting' || status === 'downloading_binary')) {
+      for (let attempt = 0; attempt < 15; attempt += 1) {
+        await new Promise((r) => setTimeout(r, 1000));
+        if (!zCoreBridge.isConnected) break;
+        try {
+          const pollRes = await fetch(getZCoreUrl('/__work/tunnel'), { method: 'GET' });
+          if (!pollRes.ok) break;
+          data = (await pollRes.json()) as typeof data;
+          tunnelUrl = (data.tunnelUrl || '').trim().replace(/\/+$/, '');
+          accessKey = (data.accessKey || accessKey).trim();
+          status = data.status || (tunnelUrl ? 'connected' : 'starting');
+          if (tunnelUrl || (status !== 'starting' && status !== 'downloading_binary')) {
+            break;
+          }
+        } catch {
+          break;
+        }
+      }
+    }
+
     if (tunnelUrl && hasAuthenticatedHubAccountSession()) {
-      setActiveHostTunnelSession(roomId, {
+      setActiveHostTunnelSession(cleanRoomId, {
         tunnelUrl,
         accessKey,
         masterServerName: extra?.masterServerName,
         backupServers: extra?.backupServers,
       });
-      await callGhostiServerBridge('work_register_tunnel', {
-        roomId,
-        tunnelUrl,
-        accessKey,
-        ...(extra?.masterServerName ? { masterServerName: extra.masterServerName } : {}),
-        ...(extra?.backupServers ? { backupServers: extra.backupServers } : {}),
-      });
+      const regSig = `${cleanRoomId}::${tunnelUrl}::${accessKey}::${extra?.masterServerName || ''}::${JSON.stringify(extra?.backupServers || [])}`;
+      if (extra?.forceRegister || regSig !== lastRegisteredHostTunnelSig) {
+        const regRes = await callGhostiServerBridge('work_register_tunnel', {
+          roomId: cleanRoomId,
+          tunnelUrl,
+          accessKey,
+          ...(extra?.masterServerName ? { masterServerName: extra.masterServerName } : {}),
+          ...(extra?.backupServers ? { backupServers: extra.backupServers } : {}),
+        });
+        if (regRes.ok) {
+          lastRegisteredHostTunnelSig = regSig;
+        }
+      }
     }
     return {
       ok: Boolean(data.ok),
-      status: data.status || (tunnelUrl ? 'connected' : 'starting'),
+      status: tunnelUrl ? 'connected' : status,
       tunnelUrl,
       accessKey,
     };
@@ -1821,15 +1854,28 @@ export function connectWorkRoomRealtimeChannel(opts: {
   let channel: RealtimeChannel | null = null;
   let disposed = false;
 
-  const stripHeavyPayload = (docs: WorkLoungeDocDto[]) =>
-    docs.slice(0, 120).map((d) => ({
-      ...d,
-      // Realtime Broadcast 메모리 패스스루(서버 DB 저장 0 Byte): 120KB 이하 경량 파일만 인라인 패스스루하고 대용량은 대장 PC 직통 터널에서 수신
-      inlineSyncBase64:
-        d.inlineSyncBase64 && d.inlineSyncBase64.length <= 120_000
-          ? d.inlineSyncBase64
-          : undefined,
-    }));
+  const stripHeavyPayload = (docs: WorkLoungeDocDto[]) => {
+    // Supabase Realtime WebSocket 프레임 한도(~250KB) 초과로 전체 브로드캐스트가 드롭되는 현상 원천 차단:
+    // 본문 요약·썸네일을 경량화하고 inlineSyncBase64 총합을 140KB 이내로 제한 (원본·전체 미리보기는 대장 PC HTTPS 직통 터널에서 무손실 수신)
+    let inlineBudgetRemaining = 140_000;
+    return docs.slice(0, 120).map((d) => {
+      let safeInline: string | undefined;
+      if (
+        d.inlineSyncBase64 &&
+        d.inlineSyncBase64.length <= 60_000 &&
+        d.inlineSyncBase64.length <= inlineBudgetRemaining
+      ) {
+        safeInline = d.inlineSyncBase64;
+        inlineBudgetRemaining -= d.inlineSyncBase64.length;
+      }
+      return {
+        ...d,
+        fullTextPreview: d.fullTextPreview ? d.fullTextPreview.slice(0, 900) : d.fullTextPreview,
+        imageBase64: d.imageBase64 && d.imageBase64.length <= 18_000 ? d.imageBase64 : undefined,
+        inlineSyncBase64: safeInline,
+      };
+    });
+  };
 
   const start = async () => {
     // 비로그인 상태에서는 업무방 Realtime 채널 연결을 허용하지 않음 (Fail-Closed)

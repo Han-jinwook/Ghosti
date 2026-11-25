@@ -695,6 +695,81 @@ export async function handlePublicWorkPreviewAction({
 }
 
 /**
+ * 대장 PC 데몬(Merlin_Z_Core) 상시 터널 자동 갱신 핸들러 (Zero-Cloud · 서버 파일 저장 0 Byte):
+ * - PC 재부팅이나 Z-코어 자동 업데이트 시 브라우저가 닫혀 있어도 기등록된 방 전용 256-bit 비밀 키(hostAccessKey)가
+ *   상수 시간 비교(timingSafeEqual)로 정확히 일치하는 방장 PC에 한해 새 trycloudflare 터널 주소만 갱신합니다.
+ */
+export async function handleDaemonWorkTunnelRefreshAction({
+  supabaseUrl,
+  serviceKey,
+  body,
+}) {
+  const roomId = String(body?.roomId || '').trim();
+  const hostEmail = String(body?.hostEmail || '').trim().toLowerCase();
+  const accessKey = String(body?.accessKey || '').trim();
+  const rawUrl = String(body?.tunnelUrl || '').trim().replace(/\/+$/, '');
+  if (
+    !roomId ||
+    !hostEmail ||
+    accessKey.length < 24 ||
+    !/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/i.test(rawUrl)
+  ) {
+    return { status: 400, body: { ok: false, reason: 'INVALID_DAEMON_TUNNEL_REFRESH_PARAMS' } };
+  }
+
+  const roomRes = await fetch(
+    `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?room_id=eq.${encodeURIComponent(roomId)}&lounge_type=eq.work&select=room_id,lounge_type,master_email&limit=1`,
+    { headers: srvHeaders(serviceKey) }
+  );
+  const roomRows = roomRes.ok ? await roomRes.json().catch(() => []) : [];
+  const room = Array.isArray(roomRows) ? roomRows[0] : null;
+  if (!room || String(room.master_email || '').trim().toLowerCase() !== hostEmail) {
+    return { status: 403, body: { ok: false, reason: 'WORK_ROOM_MASTER_MISMATCH' } };
+  }
+
+  const ownerGate = await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, room.master_email);
+  if (!ownerGate.ok) {
+    return ownerGate.response;
+  }
+
+  const { state } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
+  const savedKey = String(state.hostAccessKey || '').trim();
+  if (savedKey.length < 24) {
+    return { status: 403, body: { ok: false, reason: 'HOST_ACCESS_KEY_NOT_BOUND_YET' } };
+  }
+  const bufProvided = Buffer.from(accessKey, 'utf8');
+  const bufSaved = Buffer.from(savedKey, 'utf8');
+  if (
+    bufProvided.length !== bufSaved.length ||
+    !crypto.timingSafeEqual(bufProvided, bufSaved)
+  ) {
+    return { status: 403, body: { ok: false, reason: 'HOST_ACCESS_KEY_MISMATCH' } };
+  }
+
+  state.hostTunnelUrl = rawUrl;
+  state.hostUpdatedAt = new Date().toISOString();
+  if (body?.masterServerName) {
+    state.masterServerName = String(body.masterServerName).trim().slice(0, 48);
+  }
+  if (Array.isArray(body?.backupServers)) {
+    state.backupServers = body.backupServers.slice(0, 2);
+  }
+  const okWrite = await writeWorkRoomP2pState(supabaseUrl, serviceKey, roomId, state);
+  if (!okWrite) {
+    return { status: 502, body: { ok: false, reason: 'WORK_TUNNEL_STATE_SAVE_FAILED' } };
+  }
+  return {
+    status: 200,
+    body: {
+      ok: true,
+      roomId,
+      tunnelUrl: state.hostTunnelUrl,
+      updatedAt: state.hostUpdatedAt,
+    },
+  };
+}
+
+/**
  * 허브 인증 완료 사용자 전용 업무공유(S:) & 내 기기 통합 핸들러
  */
 export async function handleAuthedWorkAndDeviceAction({
@@ -1075,8 +1150,8 @@ export async function handleAuthedWorkAndDeviceAction({
     if (!ownerGate.ok) {
       return ownerGate.response;
     }
-    if (!ctx.isMaster && ctx.role === 'viewer') {
-      return { status: 403, body: { ok: false, reason: 'WORK_TUNNEL_REGISTER_FORBIDDEN' } };
+    if (!ctx.isMaster) {
+      return { status: 403, body: { ok: false, reason: 'WORK_TUNNEL_REGISTER_MASTER_ONLY' } };
     }
     const rawUrl = String(body.tunnelUrl || '').trim().replace(/\/+$/, '');
     if (rawUrl && !/^https:\/\/[a-z0-9-]+\.trycloudflare\.com$/i.test(rawUrl)) {

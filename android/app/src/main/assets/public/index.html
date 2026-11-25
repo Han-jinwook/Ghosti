@@ -152,36 +152,29 @@
     />
     <script>
       try {
-        if (
-          window.sessionStorage.getItem('ghosti_splash_shown_v1') === '1' ||
-          window.location.search.indexOf('ghostSearchWindow=') !== -1 ||
-          window.location.search.indexOf('tab=search_dojo') !== -1
-        ) {
-          var _gs = document.createElement('style');
-          _gs.textContent = '#ghosti-boot-splash{display:none!important}';
-          document.head.appendChild(_gs);
-        }
+        window.__GHOSTI_BOOT_ERR__ = '';
+        window.addEventListener('error', function (ev) {
+          if (!window.__GHOSTI_BOOT_ERR__) {
+            window.__GHOSTI_BOOT_ERR__ = String((ev && (ev.message || (ev.error && ev.error.message))) || 'Script error');
+          }
+        });
+        window.addEventListener('unhandledrejection', function (ev) {
+          if (!window.__GHOSTI_BOOT_ERR__) {
+            var r = ev && ev.reason;
+            window.__GHOSTI_BOOT_ERR__ = String((r && r.message) || r || 'Promise rejection');
+          }
+        });
       } catch (e) {}
     </script>
-    <script type="module" crossorigin src="/assets/index-DUgwKRTT.js"></script>
+    <script type="module" crossorigin src="/assets/index-DwcA84qY.js"></script>
     <link rel="modulepreload" crossorigin href="/assets/rolldown-runtime-COiEfhsA.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-core-BY6iO2wC.js">
     <link rel="modulepreload" crossorigin href="/assets/config-Ch-Obw4u.js">
     <link rel="modulepreload" crossorigin href="/assets/vendor-ai-DOnw82vz.js">
-    <link rel="stylesheet" crossorigin href="/assets/index-B7MM_mEM.css">
+    <link rel="stylesheet" crossorigin href="/assets/index-B57bubWF.css">
   </head>
   <body class="bg-surface text-on-surface font-body-md antialiased selection:bg-primary-container selection:text-on-primary-container min-h-screen">
     <div id="root">
-      <div
-        id="ghosti-boot-splash"
-        style="position:fixed;inset:0;z-index:200;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:16px;background:radial-gradient(circle at 50% 46%, #13254b 0%, #0b1331 52%, #070424 100%);"
-      >
-        <img
-          src="/gwisinkachi_splash_master.jpg"
-          alt="귀신같이 (Ghosti)"
-          style="width:100%;max-width:680px;height:auto;border-radius:24px;display:block;"
-        />
-      </div>
       <noscript>
         <h1>귀신같이(Ghosti) — 파일 내용 검색 · 기기 정리 · 원본 사진 공유</h1>
         <p>귀신같이(Ghosti)는 은행 보안프로그램 절전 전환과 중복 사진 정리, 문서 본문·사진·동영상 장면 검색, 가족·모임 원본 사진 공유, 팀 공용 폴더(S: 드라이브)를 지원하는 기기 내 로컬 관리 도구입니다.</p>

@@ -432,10 +432,42 @@ export const WorkLoungeB2BHub: React.FC = () => {
         }
         setMyRoomRole('host');
         setRoomSeatLimit(hostedRoom.seatLimit || 5);
+        setRemoteRoomLockReason(
+          hostedRoom.ownerUnlocked
+            ? null
+            : hostedRoom.lockReason || 'WORK_SUBSCRIPTION_REQUIRED'
+        );
         if (Array.isArray(hostedRoom.members) && hostedRoom.members.length > 0) {
           const sorted = sortWorkRoomServerMembers(hostedRoom.members);
           setServerMembers(sorted);
           saveCachedServerMembers(hostedRoom.roomId, sorted, merlinAuth.email);
+        }
+        if (hostedRoom.deletedTombstones && Object.keys(hostedRoom.deletedTombstones).length > 0) {
+          mergeAndPersistTombstones(hostedRoom.deletedTombstones);
+        }
+        if (hostedRoom.hostTunnel?.masterServerName) {
+          setMasterWorkPcName(hostedRoom.hostTunnel.masterServerName);
+        }
+        if (Array.isArray(hostedRoom.hostTunnel?.backupServers)) {
+          setBackupServers(hostedRoom.hostTunnel.backupServers);
+        }
+        // 서버관리자(방장) 본인 계정으로 모바일 앱이나 외부 브라우저(!zCoreBridge.isConnected)에서 접속할 때도
+        // 사내 대장 PC의 상시 아웃바운드 HTTPS 직통 터널에서 S:\ 공용 문서를 즉시 불러와 PC와 100% 일치시킴!
+        if (hostedRoom.hostTunnel?.tunnelUrl && !zCoreBridge.isConnected) {
+          void fetchWorkFilesFromHostTunnel(
+            hostedRoom.hostTunnel.tunnelUrl,
+            hostedRoom.hostTunnel.accessKey
+          ).then((fromTunnel) => {
+            if (!cancelled && fromTunnel.ok) {
+              setRemoteDocs(fromTunnel.docs);
+              mergeAndPersistTombstones(fromTunnel.deletedTombstones);
+              void cacheWorkRoomPreviewLocally(
+                hostedRoom.roomId,
+                fromTunnel.docs,
+                merlinAuth.email
+              );
+            }
+          });
         }
       }
       })
@@ -759,6 +791,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
     ) {
       let cancelled = false;
       const syncAndMount = async () => {
+        // 로그인된 초대 팀원이 첫 진입 시 소속 업무방 조회(fetchMyJoinedWorkRooms) 완료 전에 오잠금/해제되는 현상 방지
+        if (!isWorkUnlocked && isAuthenticated && isCheckingJoinedRooms) {
+          return;
+        }
         if (isZCoreConnected) {
           await syncEntitlementToLocalPcEngine(
             deviceEntitlement || null,
@@ -766,7 +802,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
             {
               unlocked: isWorkUnlocked,
               roomId: activeWorkRoomId || undefined,
-              isHost: !isJoinedInvitedMember,
+              isHost: !isJoinedInvitedMember && myRoomRole === 'host',
               planId: isJoinedInvitedMember
                 ? 'work_invited_member'
                 : deviceEntitlement?.workPlanId || (isWorkTrialActive ? 'work_trial_30d' : ''),
@@ -821,8 +857,12 @@ export const WorkLoungeB2BHub: React.FC = () => {
   }, [
     isZCoreConnected,
     isMobileOrStore,
+    isAuthenticated,
+    isCheckingJoinedRooms,
     isWorkUnlocked,
     isWorkTrialActive,
+    isJoinedInvitedMember,
+    myRoomRole,
     inviteMeta.hasWorkInvite,
     deviceEntitlement,
     merlinAuth?.email,
@@ -831,9 +871,11 @@ export const WorkLoungeB2BHub: React.FC = () => {
     pollLocalLocksFast,
   ]);
 
-  // 대장 PC에서 업무 공유가 해금되어 있으면 상시 아웃바운드 HTTPS 직통 터널을 자동 가동·등록 (전국 어디서나 0초 직결)
+  // 대장 PC(방장 전용)에서 업무 공유가 해금되어 있으면 상시 아웃바운드 HTTPS 직통 터널을 자동 가동·등록 (초대 팀원 PC는 등록 금지!)
   useEffect(() => {
     if (
+      isJoinedInvitedMember ||
+      myRoomRole !== 'host' ||
       inviteMeta.hasWorkInvite ||
       !isZCoreConnected ||
       !isWorkUnlocked ||
@@ -861,6 +903,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     };
     void ensureTunnel();
     const timer = window.setInterval(() => {
+      if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       void ensureTunnel();
     }, 20000);
     return () => {
@@ -868,6 +911,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
       window.clearInterval(timer);
     };
   }, [
+    isJoinedInvitedMember,
+    myRoomRole,
     inviteMeta.hasWorkInvite,
     isZCoreConnected,
     isWorkUnlocked,
@@ -1089,6 +1134,16 @@ export const WorkLoungeB2BHub: React.FC = () => {
               merlinAuth?.email || undefined
             );
           });
+        } else if (
+          (!isZCoreConnected || authed.role !== 'host') &&
+          remoteDocsRef.current.length === 0
+        ) {
+          // 대장 PC가 방금 터널 기동 중(starting, 3~5초 소요)일 때 15초 주기까지 기다리지 않고 3.5초 뒤 즉시 1회 재확인
+          window.setTimeout(() => {
+            if (!cancelled && remoteDocsRef.current.length === 0) {
+              void loadRemoteState();
+            }
+          }, 3500);
         }
         return;
       }
@@ -1154,6 +1209,13 @@ export const WorkLoungeB2BHub: React.FC = () => {
           return true;
         });
         setRemoteDocs(cleaned);
+        if (activeWorkRoomId && cleaned.length > 0) {
+          void cacheWorkRoomPreviewLocally(
+            activeWorkRoomId,
+            cleaned,
+            merlinAuth?.email || undefined
+          );
+        }
       },
       onRemoteFileDeleted: (relPath, deletedAt) => {
         mergeAndPersistTombstones({ [relPath.toLowerCase()]: { relPath, deletedAt } });
@@ -1192,11 +1254,18 @@ export const WorkLoungeB2BHub: React.FC = () => {
       onRemoteTunnelEndpoint: (ep) => {
         if (ep.masterServerName) setMasterWorkPcName(ep.masterServerName);
         if (Array.isArray(ep.backupServers)) setBackupServers(ep.backupServers);
-        if (!isZCoreConnected || inviteMeta.hasWorkInvite) {
+        if (!isZCoreConnected || myRoomRole !== 'host' || isJoinedInvitedMember) {
           void fetchWorkFilesFromHostTunnel(ep.tunnelUrl, ep.accessKey).then((fromTunnel) => {
             if (fromTunnel.ok) {
               setRemoteDocs(fromTunnel.docs);
               mergeAndPersistTombstones(fromTunnel.deletedTombstones);
+              if (activeWorkRoomId) {
+                void cacheWorkRoomPreviewLocally(
+                  activeWorkRoomId,
+                  fromTunnel.docs,
+                  merlinAuth?.email || undefined
+                );
+              }
             }
           });
         }
@@ -1213,6 +1282,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     actorNickname,
     myRoomRole,
     isZCoreConnected,
+    isJoinedInvitedMember,
     inviteMeta.hasWorkInvite,
     merlinAuth?.email,
     mergeAndPersistTombstones,
@@ -1975,7 +2045,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
               className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full border text-[11.5px] font-bold ${
                 isZCoreConnected && sDriveMounted
                   ? 'bg-emerald-500/10 border-emerald-400/25 text-emerald-300'
-                  : inviteMeta.hasWorkInvite && docs.length > 0
+                  : docs.length > 0 || Boolean(getActiveHostTunnelSession()?.tunnelUrl)
                   ? 'bg-cyan-500/15 border-cyan-400/35 text-cyan-200'
                   : 'bg-zinc-900 border-white/15 text-zinc-300'
               }`}
@@ -1984,16 +2054,16 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 className={`w-1.5 h-1.5 rounded-full ${
                   isZCoreConnected && sDriveMounted
                     ? 'bg-emerald-400'
-                    : inviteMeta.hasWorkInvite && docs.length > 0
+                    : docs.length > 0 || Boolean(getActiveHostTunnelSession()?.tunnelUrl)
                     ? 'bg-cyan-400'
                     : 'bg-zinc-500'
                 }`}
               />
               {isZCoreConnected
                 ? `${sDriveMounted ? 'S:\\ 마운트 완료' : 'S:\\ 미연결(원본 보존)'} · 팀원 ${teamMembers.length}/${roomSeatLimit}명 · ${docs.length}건`
-                : inviteMeta.hasWorkInvite
-                ? `대장 PC 직통 연결됨 · ${docs.length}건`
-                : '연결된 사무실 PC 없음 · 0건'}
+                : docs.length > 0 || Boolean(getActiveHostTunnelSession()?.tunnelUrl) || isJoinedInvitedMember
+                ? `대장 PC 직통 연결됨 · 팀원 ${teamMembers.length}/${roomSeatLimit}명 · ${docs.length}건`
+                : '사내 대장 PC 직통 연결 확인 중 · 0건'}
             </span>
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-400/25 text-[11px] text-cyan-300 font-bold">
               현장·증빙 사진 AI 분석 · 인물 여권 미발동(검색 제외)
@@ -2246,9 +2316,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
                     >
                       <span>
                         {folder.id === 'all'
-                          ? 'S:\\ 전체'
+                          ? '전체 폴더'
                           : folder.id === 'root'
-                          ? 'S:\\ 루트'
+                          ? 'S:\\ 최상단'
                           : `${folder.name}`}
                       </span>
                       <span
@@ -2299,6 +2369,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
         isSidePeekOpen={isSidePeekOpen}
         setIsSidePeekOpen={setIsSidePeekOpen}
         viewMode={viewMode}
+        selectedFolderId={selectedFolderId}
+        selectedFolderLabel={
+          WORK_LOUNGE_FOLDERS.find((f) => f.id === selectedFolderId)?.path || selectedFolderId
+        }
         filteredDocs={filteredDocs}
         selectedDoc={selectedDoc}
         setSelectedDocId={setSelectedDocId}

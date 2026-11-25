@@ -945,6 +945,12 @@ export function isCurrentAccountWorkShareUnlocked(email?: string): boolean {
   return Boolean(ent.workSubscriptionUnlocked);
 }
 
+import {
+  readActiveWorkRoomInviteMeta,
+  readCachedJoinedWorkRoomMeta,
+  readCachedMyWorkRoomMeta,
+} from './workRoomSyncService';
+
 let lastSyncedPcEngineSubFlag: string | null = null;
 export async function syncEntitlementToLocalPcEngine(
   entitlement: GhostiDeviceEntitlementView | null,
@@ -959,18 +965,49 @@ export async function syncEntitlementToLocalPcEngine(
 ): Promise<void> {
   if (typeof window === 'undefined' || !zCoreBridge.isConnected) return;
   const isSub = Boolean(entitlement?.isPaidUnlimited);
+  const cleanEmail = (
+    accountEmail ||
+    localStorage.getItem('merlin_hub_user_email') ||
+    localStorage.getItem('ghosti_hub_user_email') ||
+    ''
+  )
+    .trim()
+    .toLowerCase();
+
+  // 업무 공유 탭 밖(내 기기 통합·구독 결제창 등)에서 호출되더라도 기존 소속 업무방(방장방·초대팀원방) 권한·roomId가 덮어써지지 않게 보호
+  const activeInvite = readActiveWorkRoomInviteMeta();
+  const cachedHostRoom = readCachedMyWorkRoomMeta(cleanEmail || undefined);
+  const cachedJoinedRoom = readCachedJoinedWorkRoomMeta(cleanEmail || undefined);
+  const ownWorkUnlocked = Boolean(
+    entitlement?.workSubscriptionUnlocked ||
+      entitlement?.workPaidActive ||
+      entitlement?.workTrialActive
+  );
+  const invitedWorkUnlocked = Boolean(
+    activeInvite.hasWorkInvite ||
+      (cachedJoinedRoom && !cachedJoinedRoom.isHost && cachedJoinedRoom.ownerUnlocked !== false)
+  );
   const isWorkUnlocked =
     workOverride?.unlocked !== undefined
       ? Boolean(workOverride.unlocked)
-      : Boolean(
-          entitlement?.workSubscriptionUnlocked ||
-            entitlement?.workPaidActive ||
-            entitlement?.workTrialActive
-        );
+      : Boolean(ownWorkUnlocked || invitedWorkUnlocked);
+
+  const fallbackRoomId = activeInvite.hasWorkInvite
+    ? activeInvite.roomId
+    : ownWorkUnlocked && cachedHostRoom?.roomId
+    ? cachedHostRoom.roomId
+    : cachedJoinedRoom?.roomId || cachedHostRoom?.roomId || '';
+  const roomId = (workOverride?.roomId ?? fallbackRoomId).trim();
+
+  const fallbackIsHost = activeInvite.hasWorkInvite
+    ? false
+    : cachedJoinedRoom && !cachedJoinedRoom.isHost && roomId === cachedJoinedRoom.roomId
+    ? false
+    : Boolean(ownWorkUnlocked);
+  const isHost =
+    workOverride?.isHost !== undefined ? Boolean(workOverride.isHost) : fallbackIsHost;
+
   const devCnt = Math.max(1, Number(entitlement?.activeDeviceCount || 1));
-  const cleanEmail = (accountEmail || '').trim().toLowerCase();
-  const roomId = (workOverride?.roomId || '').trim();
-  const isHost = Boolean(workOverride?.isHost);
   const sig = `${cleanEmail}::${isSub ? '1' : '0'}::${isWorkUnlocked ? '1' : '0'}::${devCnt}::${roomId}::${isHost ? '1' : '0'}`;
   if (!workOverride?.force && lastSyncedPcEngineSubFlag === sig) return;
   lastSyncedPcEngineSubFlag = sig;
@@ -992,8 +1029,9 @@ export async function syncEntitlementToLocalPcEngine(
           isHost,
           planId:
             workOverride?.planId ||
-            entitlement?.workPlanId ||
-            (entitlement?.workTrialActive ? 'work_trial_30d' : ''),
+            (!isHost && invitedWorkUnlocked
+              ? 'work_invited_member'
+              : entitlement?.workPlanId || (entitlement?.workTrialActive ? 'work_trial_30d' : '')),
           reason: entitlement?.workTrialExpired ? 'WORK_TRIAL_EXPIRED' : 'WORK_SUBSCRIPTION_REQUIRED',
         }),
       }).catch(() => null),

@@ -2045,6 +2045,88 @@ def _cleanup_orphan_cloudflared_processes(keep_pid: int = 0) -> None:
         pass
 
 
+_TUNNEL_WATCHDOG: Dict[str, Any] = {"thread": None}
+_SERVER_BRIDGE_ENDPOINTS = (
+    "https://ghosti.sundreamer.app/.netlify/functions/hub-supabase-bridge",
+    "https://ghosti-app.netlify.app/.netlify/functions/hub-supabase-bridge",
+)
+
+
+def _notify_server_bridge_tunnel_url(tunnel_url: str) -> bool:
+    """대장 PC의 Z-코어가 새 아웃바운드 터널 주소(*.trycloudflare.com)를 확보한 즉시,
+    브라우저 창이 닫혀 있거나 다른 탭에 있어도 서버 중매 상태(p2p_state_v2.json)에 즉시 자동 갱신합니다."""
+    clean_url = str(tunnel_url or "").strip().rstrip("/")
+    if not clean_url or ".trycloudflare.com" not in clean_url.lower():
+        return False
+    cfg = _load_sdrive_config()
+    if cfg.get("workEntitlementLocked") is True or not cfg.get("isWorkHost"):
+        return False
+    room_id = str(cfg.get("activeWorkRoomId") or "").strip()
+    host_email = str(cfg.get("activeAccountEmail") or "").strip().lower()
+    access_key = str(cfg.get("workRoomAccessKey") or "").strip()
+    if not room_id or not host_email or len(access_key) < 24:
+        return False
+    payload_bytes = json.dumps(
+        {
+            "action": "work_refresh_tunnel_by_key",
+            "roomId": room_id,
+            "hostEmail": host_email,
+            "accessKey": access_key,
+            "tunnelUrl": clean_url,
+            "masterServerName": str(cfg.get("masterServerName") or "").strip()[:48],
+            "backupServers": list(cfg.get("backupServers") or [])[:2],
+        },
+        ensure_ascii=False,
+    ).encode("utf-8")
+    for endpoint in _SERVER_BRIDGE_ENDPOINTS:
+        try:
+            req = urllib.request.Request(
+                endpoint,
+                data=payload_bytes,
+                method="POST",
+                headers={
+                    "Content-Type": "application/json",
+                    "Origin": "https://sundreamer.app",
+                    "User-Agent": "MerlinZCoreWorkTunnel/2.8",
+                },
+            )
+            with urllib.request.urlopen(req, timeout=6.0) as resp:
+                body_raw = resp.read().decode("utf-8", errors="ignore")
+                parsed = json.loads(body_raw or "{}")
+                if resp.status == 200 and parsed.get("ok"):
+                    return True
+        except Exception:
+            continue
+    return False
+
+
+def _tunnel_watchdog_loop() -> None:
+    import time as _time
+
+    while True:
+        _time.sleep(25.0)
+        try:
+            cfg = _load_sdrive_config()
+            if cfg.get("workEntitlementLocked") is True or not cfg.get("isWorkHost"):
+                continue
+            with _TUNNEL_LOCK:
+                proc = _TUNNEL_STATE.get("proc")
+                alive = proc is not None and (proc.poll() is None)
+                status = str(_TUNNEL_STATE.get("status") or "idle")
+            if not alive and status not in ("starting", "downloading_binary"):
+                ensure_outbound_work_tunnel()
+        except Exception:
+            pass
+
+
+def _ensure_tunnel_watchdog_started() -> None:
+    th = _TUNNEL_WATCHDOG.get("thread")
+    if th is None or not th.is_alive():
+        th = threading.Thread(target=_tunnel_watchdog_loop, name="ghosti-work-tunnel-watchdog", daemon=True)
+        _TUNNEL_WATCHDOG["thread"] = th
+        th.start()
+
+
 def ensure_outbound_work_tunnel(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """대장 PC에서 상시 아웃바운드 HTTPS 직통 터널을 기동합니다 (방화벽 인바운드 포트 개방 불필요 · 단일 인스턴스 락으로 중복 스폰 0%)."""
     cfg = _load_sdrive_config()
@@ -2056,6 +2138,8 @@ def ensure_outbound_work_tunnel(data: Dict[str, Any] | None = None) -> Dict[str,
             "status": "locked",
             "tunnelUrl": "",
         }
+
+    _ensure_tunnel_watchdog_started()
 
     with _TUNNEL_LOCK:
         proc_existing = _TUNNEL_STATE.get("proc")
@@ -2110,6 +2194,11 @@ def ensure_outbound_work_tunnel(data: Dict[str, Any] | None = None) -> Dict[str,
                         _TUNNEL_STATE["url"] = found_url
                         _TUNNEL_STATE["status"] = "connected"
                     _save_sdrive_config({"lastTunnelUrl": found_url})
+                    threading.Thread(
+                        target=_notify_server_bridge_tunnel_url,
+                        args=(found_url,),
+                        daemon=True,
+                    ).start()
         except Exception as exc:
             with _TUNNEL_LOCK:
                 _TUNNEL_STATE["status"] = "error"
@@ -2273,15 +2362,30 @@ def sync_work_entitlement_state(data: Dict[str, Any] | None = None) -> Dict[str,
     payload = data or {}
     unlocked = bool(payload.get("unlocked", False))
     email = str(payload.get("email") or "").strip().lower()
-    room_id = str(payload.get("roomId") or "").strip()
+    raw_room_id = str(payload.get("roomId") or "").strip()
     plan_id = str(payload.get("planId") or "").strip()
     reason = str(payload.get("reason") or "").strip()
-    is_host = bool(payload.get("isHost", False))
+    has_explicit_is_host = "isHost" in payload
+    raw_is_host = bool(payload.get("isHost", False))
+
+    effective_state: Dict[str, Any] = {"roomId": raw_room_id, "isHost": raw_is_host}
 
     def _apply_ent(cur: Dict[str, Any]) -> None:
         prev_email = str(cur.get("activeAccountEmail") or "").strip().lower()
         prev_room = str(cur.get("activeWorkRoomId") or "").strip()
+        prev_is_host = bool(cur.get("isWorkHost", False))
         by_scope: Dict[str, Any] = dict(cur.get("scopedWorkLedgers") or {})
+
+        # 동일 계정에서 탭 외부(내 기기 통합 등) 공용 권한 호출이 roomId=""로 들어와 기존 활성 업무방 ID·원장을 지우는 현상 원천 차단
+        room_id = raw_room_id
+        if unlocked and not room_id and email and email == prev_email and prev_room:
+            room_id = prev_room
+        is_host = raw_is_host if (raw_room_id or not (email and email == prev_email and prev_room)) else (raw_is_host or prev_is_host)
+        if not has_explicit_is_host and email and email == prev_email:
+            is_host = prev_is_host
+
+        effective_state["roomId"] = room_id
+        effective_state["isHost"] = is_host
 
         # 기존 계정·방의 원장을 슬롯에 백업하고 새 계정·방 원장으로 전환 (계정 A → B 전환 시 혼입 차단)
         if prev_email or prev_room:
@@ -2303,6 +2407,7 @@ def sync_work_entitlement_state(data: Dict[str, Any] | None = None) -> Dict[str,
         cur["scopedWorkLedgers"] = by_scope
         cur["activeAccountEmail"] = email
         cur["activeWorkRoomId"] = room_id
+        cur["isWorkHost"] = bool(is_host and unlocked)
         cur["workEntitlementLocked"] = not unlocked
         cur["workPlanId"] = plan_id
         cur["workLockReason"] = "" if unlocked else (reason or "SUBSCRIPTION_REQUIRED")
@@ -2330,8 +2435,15 @@ def sync_work_entitlement_state(data: Dict[str, Any] | None = None) -> Dict[str,
         if not status_before.get("mounted"):
             mount_or_unmount_s_drive({"action": "mount", "openExplorer": False})
 
-    # 활성 상태 + 방장 PC이면 아웃바운드 직통 터널도 자동 준비
-    tunnel_info = ensure_outbound_work_tunnel() if is_host else get_outbound_work_tunnel_status()
+    # 활성 상태 + 방장 PC이면 아웃바운드 직통 터널도 자동 준비 및 서버 중매 상태 동기화
+    is_host_final = bool(effective_state.get("isHost"))
+    tunnel_info = ensure_outbound_work_tunnel() if is_host_final else get_outbound_work_tunnel_status()
+    if is_host_final and tunnel_info.get("tunnelUrl") and effective_state.get("roomId"):
+        threading.Thread(
+            target=_notify_server_bridge_tunnel_url,
+            args=(str(tunnel_info.get("tunnelUrl")),),
+            daemon=True,
+        ).start()
     status_info = inspect_s_drive_status()
     return {
         "ok": True,
@@ -2345,13 +2457,18 @@ def sync_work_entitlement_state(data: Dict[str, Any] | None = None) -> Dict[str,
 
 def auto_mount_s_drive_if_unlocked() -> Dict[str, Any]:
     """Z-코어 기동 시(PC 재부팅·엔진 자동 업데이트 후) 기존에 업무 공유 권한이 해금된 PC라면
-    탐색기 [S: 드라이브]를 즉시 자동 복원합니다 (미개통·만료 상태는 절대 마운트하지 않음)."""
+    탐색기 [S: 드라이브]와 방장 직통 터널(Outbound 443)을 즉시 자동 복원합니다 (미개통·만료 상태는 절대 마운트하지 않음)."""
     if os.name != "nt":
         return {"ok": False, "skipped": "NOT_WINDOWS"}
     try:
         cfg = _load_sdrive_config()
         if cfg.get("workEntitlementLocked") is False:
-            return mount_or_unmount_s_drive({"action": "mount", "openExplorer": False})
+            mount_res = mount_or_unmount_s_drive({"action": "mount", "openExplorer": False})
+            if cfg.get("isWorkHost") or (
+                str(cfg.get("workPlanId") or "").strip() not in ("", "work_invited_member")
+            ):
+                ensure_outbound_work_tunnel()
+            return mount_res
         return {"ok": True, "skipped": "LOCKED_OR_UNINITIALIZED", "mounted": False}
     except Exception as exc:
         return {"ok": False, "error": str(exc)}

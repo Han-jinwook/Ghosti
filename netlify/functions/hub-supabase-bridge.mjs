@@ -14,6 +14,7 @@
 import crypto from 'node:crypto';
 import {
   handleAuthedWorkAndDeviceAction,
+  handleDaemonWorkTunnelRefreshAction,
   handlePublicWorkPreviewAction,
 } from './lib/workAndDeviceBridgeOps.mjs';
 
@@ -355,6 +356,16 @@ export default async (req) => {
       supabaseUrl,
       serviceKey,
       inviteToken: body?.inviteToken || '',
+    });
+    return json(out.status, out.body);
+  }
+
+  // 대장 PC 데몬(Merlin_Z_Core) 상시 터널 주소 자동 갱신 (기등록 256-bit hostAccessKey 상수 시간 검증)
+  if (reqAction === 'work_refresh_tunnel_by_key') {
+    const out = await handleDaemonWorkTunnelRefreshAction({
+      supabaseUrl,
+      serviceKey,
+      body,
     });
     return json(out.status, out.body);
   }

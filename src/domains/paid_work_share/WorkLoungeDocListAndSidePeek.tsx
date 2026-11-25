@@ -13,6 +13,8 @@ export interface WorkLoungeDocListAndSidePeekProps {
   isSidePeekOpen: boolean;
   setIsSidePeekOpen: React.Dispatch<React.SetStateAction<boolean>>;
   viewMode: 'semantic' | 'explorer';
+  selectedFolderId?: string;
+  selectedFolderLabel?: string;
   filteredDocs: WorkLoungeDocDto[];
   selectedDoc: WorkLoungeDocDto | null;
   setSelectedDocId: React.Dispatch<React.SetStateAction<string>>;
@@ -48,6 +50,8 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
   isSidePeekOpen,
   setIsSidePeekOpen,
   viewMode,
+  selectedFolderId = 'all',
+  selectedFolderLabel,
   filteredDocs,
   selectedDoc,
   setSelectedDocId,
@@ -86,7 +90,12 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
         <div className="rounded-xl bg-white border border-slate-200 overflow-hidden">
           <div className="px-4 py-2.5 bg-slate-50 border-b border-slate-200 flex flex-wrap items-center justify-between gap-1.5 text-[12px] text-slate-600 font-medium">
             <span className="break-keep">
-              {viewMode === 'explorer' ? '폴더별 보기' : '본문·표 내용 검색'} ({filteredDocs.length}건) · 항목을 선택하면{' '}
+              {selectedFolderId !== 'all'
+                ? `폴더별 보기 · ${selectedFolderLabel || selectedFolderId}`
+                : viewMode === 'explorer'
+                ? '전체 폴더 통합 보기'
+                : '본문·표 내용 검색 · 전체 폴더'}{' '}
+              ({filteredDocs.length}건) · 항목을 선택하면{' '}
               <span className="xl:hidden">아래에 미리보기가 열립니다</span>
               <span className="hidden xl:inline">우측에 미리보기가 열립니다</span>
             </span>
@@ -153,6 +162,10 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
             <div className="flex flex-col divide-y divide-slate-100">
               {filteredDocs.map((doc) => {
                 const isSelected = isSidePeekOpen && selectedDoc && doc.id === selectedDoc.id;
+                const cleanSummary = doc.summaryTitle.replace(/\[.*?\]\s*/g, '').trim();
+                const showDistinctSummary =
+                  Boolean(cleanSummary) &&
+                  cleanSummary.toLowerCase() !== doc.fileName.trim().toLowerCase();
                 return (
                   <div
                     key={doc.id}
@@ -169,21 +182,29 @@ export const WorkLoungeDocListAndSidePeek: React.FC<WorkLoungeDocListAndSidePeek
                     }`}
                   >
                     <div className="flex flex-wrap items-center justify-between gap-2">
-                      <div className="flex items-center gap-2.5 min-w-0 flex-1">
+                      <div className="flex items-center gap-2 min-w-0 flex-1">
                         <span className="px-1.5 py-0.5 rounded bg-slate-100 border border-slate-200 text-slate-700 text-[10.5px] font-semibold shrink-0">
                           {doc.ext}
                         </span>
                         <span className="text-[13.5px] text-slate-900 font-medium truncate">
                           {doc.fileName}
                         </span>
-                        <span className="hidden md:inline text-[12px] text-slate-500 truncate">
-                          · {doc.summaryTitle.replace(/\[.*?\]\s*/g, '')}
-                        </span>
+                        {showDistinctSummary && (
+                          <span className="hidden md:inline text-[12px] text-slate-500 truncate">
+                            · {cleanSummary}
+                          </span>
+                        )}
                       </div>
 
-                      <div className="flex items-center gap-2.5 shrink-0">
-                        <span className="hidden sm:inline text-[11.5px] text-slate-500">
-                          {doc.folderPath} · {doc.sizeLabel} · {doc.updatedAt}
+                      <div className="flex flex-wrap items-center gap-2 shrink-0">
+                        <span
+                          data-testid="work-doc-folder-path-badge"
+                          className="inline-flex items-center px-2 py-0.5 rounded bg-teal-50 border border-teal-200/80 text-teal-800 text-[11px] font-semibold font-mono"
+                        >
+                          {doc.folderPath}
+                        </span>
+                        <span className="text-[11.5px] text-slate-500">
+                          {doc.sizeLabel} · {doc.updatedAt}
                         </span>
                         {doc.lockedBy ? (
                           <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-medium">
