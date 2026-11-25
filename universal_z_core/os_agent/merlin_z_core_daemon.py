@@ -126,22 +126,67 @@ if "--ppocr-worker" in sys.argv:
 # 무거운 서버 플러그인 8종(plugin_ghosti_os, plugin_senstalk, plugin_aggrofilter 등) import를 100% 생략하여 초기 기동 지연을 원천 차단!
 _early_argv = sys.argv[1:]
 if "--seq-paste-daemon" in _early_argv:
-    # [영구 충돌 방지] --seq-paste-daemon 단일 인스턴스 Windows Named Mutex 강제
-    # 어떤 경우에도 전역 키보드/클립보드 후킹이 2중으로 걸리지 않도록 원천 차단
+    # [영구 충돌 방지 + Hang 자폭 무중단 승계] --seq-paste-daemon 단일 인스턴스 Windows Named Mutex
+    # - 기존 살아있는 정상(PONG) 데몬이 있으면 중복 실행을 즉시 차단(os._exit(0))
+    # - 반대로 직전 데몬이 Hang 자폭·교체 중(PONG 불응 또는 --replace)이면 즉시 자살하지 않고
+    #   최대 2.5초 WaitForSingleObject로 뮤텍스 반납을 기다려 0초 공백으로 승계합니다.
     _seq_paste_mutex = None
     if os.name == "nt":
         try:
             import ctypes as _ct_sp
+            import socket as _sock_sp
 
             _k32_sp = _ct_sp.windll.kernel32
-            _seq_paste_mutex = _k32_sp.CreateMutexW(None, True, "Local\\Merlin_SeqPaste_SingleInstance")
-            if _k32_sp.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
-                os._exit(0)
+            _k32_sp.CreateMutexW.argtypes = [_ct_sp.c_void_p, _ct_sp.c_int, _ct_sp.c_wchar_p]
+            _k32_sp.CreateMutexW.restype = _ct_sp.c_void_p
+            _k32_sp.WaitForSingleObject.argtypes = [_ct_sp.c_void_p, _ct_sp.c_uint32]
+            _k32_sp.WaitForSingleObject.restype = _ct_sp.c_uint32
+            _k32_sp.CloseHandle.argtypes = [_ct_sp.c_void_p]
+            _k32_sp.CloseHandle.restype = _ct_sp.c_int
+            _seq_paste_mutex = _k32_sp.CreateMutexW(None, 0, "Local\\Merlin_SeqPaste_SingleInstance")
+            if _seq_paste_mutex:
+                _w_res = _k32_sp.WaitForSingleObject(_seq_paste_mutex, 0)
+                if _w_res not in (0, 0x80):  # WAIT_OBJECT_0, WAIT_ABANDONED
+                    _want_rep = "--replace" in _early_argv
+                    _alive_pong = False
+                    if not _want_rep:
+                        try:
+                            with _sock_sp.create_connection(("127.0.0.1", 51988), timeout=0.45) as _sc_sp:
+                                _sc_sp.settimeout(0.55)
+                                _sc_sp.sendall(b"__PING__")
+                                if b"PONG" in _sc_sp.recv(64):
+                                    _alive_pong = True
+                        except Exception:
+                            _alive_pong = False
+                    if _alive_pong:
+                        try:
+                            _k32_sp.CloseHandle(_seq_paste_mutex)
+                        except Exception:
+                            pass
+                        os._exit(0)
+                    # 직전 프로세스가 자폭/종료 중이면 최대 2.5초 대기 후 뮤텍스 승계
+                    _w_res2 = _k32_sp.WaitForSingleObject(_seq_paste_mutex, 2500)
+                    if _w_res2 not in (0, 0x80):
+                        # 2.5초 후에도 여전히 정상 PONG 중이면 중복 진입 포기
+                        try:
+                            with _sock_sp.create_connection(("127.0.0.1", 51988), timeout=0.45) as _sc_sp2:
+                                _sc_sp2.settimeout(0.55)
+                                _sc_sp2.sendall(b"__PING__")
+                                if b"PONG" in _sc_sp2.recv(64):
+                                    _k32_sp.CloseHandle(_seq_paste_mutex)
+                                    os._exit(0)
+                        except Exception:
+                            pass
         except Exception:
             pass
     sys.argv = [sys.argv[0]] + [a for a in _early_argv if a != "--seq-paste-daemon"]
     import seq_paste_daemon
 
+    if _seq_paste_mutex and hasattr(seq_paste_daemon, "set_single_instance_mutex_handle"):
+        try:
+            seq_paste_daemon.set_single_instance_mutex_handle(int(_seq_paste_mutex))
+        except Exception:
+            pass
     seq_paste_daemon.main()
     sys.exit(0)
 
@@ -174,7 +219,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.8.89"
+CORE_VERSION = "2.8.90"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")

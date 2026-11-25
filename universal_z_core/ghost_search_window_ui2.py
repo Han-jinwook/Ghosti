@@ -574,11 +574,31 @@ def build_ui2_search_window(
     active_mode[0] = "ui2"
     set_current_open_ui_mode("ui2")
     pinned_sel_file = ""
+    pinned_sel_rec: dict[str, Any] | None = None
     if init_query.startswith("__SEL_FILE__:"):
         cand_sel = init_query[len("__SEL_FILE__:"):].strip()
         if cand_sel and os.path.exists(cand_sel):
             pinned_sel_file = cand_sel
+            try:
+                p_sel_obj = Path(pinned_sel_file)
+                ext_sel = p_sel_obj.suffix.lower()
+                kind_sel = (
+                    "image"
+                    if ext_sel in (".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif", ".bmp", ".heic", ".heif")
+                    else ("video" if ext_sel in (".mp4", ".mov", ".mkv", ".avi", ".webm", ".wmv") else "doc")
+                )
+                pinned_sel_rec = {
+                    "kind": kind_sel,
+                    "file_path": pinned_sel_file,
+                    "img_path": pinned_sel_file if kind_sel == "image" else "",
+                    "ts": float(p_sel_obj.stat().st_mtime),
+                    "text": f"📌 선택한 파일 · {p_sel_obj.name} ({p_sel_obj.parent.name})",
+                }
+            except Exception:
+                pinned_sel_rec = None
         init_query = ""
+    _local_names_cache: dict[str, Any] = {"list_id": 0, "list_len": -1, "names": set()}
+    _ext_exists_cache: dict[str, tuple[float, bool]] = {}
 
     init_mode = "large" if init_stage in ("large", "gallery") else "compact"
     st_state: dict[str, Any] = {
@@ -1004,26 +1024,10 @@ def build_ui2_search_window(
 
         pool: list[dict] = []
         seen_fpaths: set[str] = set()
-        # [탐색기·바탕화면 선택 파일 [1]번 최상단 고정]: Ctrl+0 / Ctrl+우클릭 시 직전 클립보드 대신 선택한 파일을 즉시 [1]번+우측 미리보기에 고정
-        if pinned_sel_file and os.path.exists(pinned_sel_file):
-            try:
-                p_sel_obj = Path(pinned_sel_file)
-                ext_sel = p_sel_obj.suffix.lower()
-                kind_sel = (
-                    "image"
-                    if ext_sel in (".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif", ".bmp", ".heic", ".heif")
-                    else ("video" if ext_sel in (".mp4", ".mov", ".mkv", ".avi", ".webm", ".wmv") else "doc")
-                )
-                seen_fpaths.add(pinned_sel_file.lower())
-                pool.append({
-                    "kind": kind_sel,
-                    "file_path": pinned_sel_file,
-                    "img_path": pinned_sel_file if kind_sel == "image" else "",
-                    "ts": float(p_sel_obj.stat().st_mtime),
-                    "text": f"📌 선택한 파일 · {p_sel_obj.name} ({p_sel_obj.parent.name})",
-                })
-            except Exception:
-                pass
+        # [탐색기·바탕화면 선택 파일 [1]번 최상단 고정]: 창 열기 시 1회 캐싱한 레코드를 즉시 편입(매 렌더링 디스크 stat 0회)
+        if pinned_sel_rec is not None and pinned_sel_file:
+            seen_fpaths.add(pinned_sel_file.lower())
+            pool.append(pinned_sel_rec)
         local_files_ready = True
         if callable(peek_lightweight_local_files):
             local_files_list, local_files_ready = peek_lightweight_local_files()
@@ -1038,14 +1042,26 @@ def build_ui2_search_window(
         else:
             local_files_list = get_lightweight_local_files()
 
-        local_file_names_low: set[str] = set()
-        for _fl in local_files_list:
-            _fp0 = str(_fl.get("file_path") or "").strip()
-            if _fp0:
-                try:
-                    local_file_names_low.add(Path(_fp0).name.lower())
-                except Exception:
-                    pass
+        # [UI 스레드 O(1) 파일명 셋 캐시]: 14,000건에 대해 매 타수마다 Path() 객체를 생성하던 병목 제거
+        _lf_id = id(local_files_list)
+        _lf_len = len(local_files_list)
+        if _local_names_cache["list_id"] == _lf_id and _local_names_cache["list_len"] == _lf_len:
+            local_file_names_low = _local_names_cache["names"]
+        else:
+            _new_names: set[str] = set()
+            for _fl in local_files_list:
+                _fp0 = _fl.get("file_path")
+                if _fp0:
+                    _s0 = str(_fp0)
+                    _bn = _s0.rsplit("\\", 1)[-1]
+                    if "/" in _bn:
+                        _bn = _bn.rsplit("/", 1)[-1]
+                    if _bn:
+                        _new_names.add(_bn.lower())
+            _local_names_cache["list_id"] = _lf_id
+            _local_names_cache["list_len"] = _lf_len
+            _local_names_cache["names"] = _new_names
+            local_file_names_low = _new_names
 
         _CLIP_FNAME_RE = re.compile(
             r"^[^\r\n\\/:*?\"<>|]{1,180}\.(?:jpg|jpeg|jfif|png|webp|gif|bmp|heic|heif|mp4|mov|avi|mkv|wmv|pdf|docx?|xlsx?|pptx?|hwpx?|txt|csv)$",
@@ -1082,11 +1098,20 @@ def build_ui2_search_window(
                 continue
             pool.append(rec)
 
-        # [봉인 존중 연동] 사용자가 더블클릭·우클릭으로 직접 압축을 푼 직후 등록된 문서·본문 스니펫 0.05초 즉시 편입
+        # [봉인 존중 연동] 사용자가 더블클릭·우클릭으로 직접 압축을 푼 직후 등록된 문서·본문 스니펫 0.05초 즉시 편입 (30초 존재 캐시로 UI I/O 블로킹 0%)
         try:
-            for erec in _load_extracted_queue_fast():
+            _now_ex = time.time()
+            for erec in _load_extracted_queue_fast()[:30]:
                 efp = str(erec.get("filePath") or "").strip()
-                if not efp or efp.lower() in seen_fpaths or not os.path.exists(efp):
+                if not efp or efp.lower() in seen_fpaths:
+                    continue
+                _ex_hit = _ext_exists_cache.get(efp)
+                if _ex_hit is not None and (_now_ex - _ex_hit[0]) < 30.0:
+                    _efp_ok = _ex_hit[1]
+                else:
+                    _efp_ok = os.path.exists(efp)
+                    _ext_exists_cache[efp] = (_now_ex, _efp_ok)
+                if not _efp_ok:
                     continue
                 seen_fpaths.add(efp.lower())
                 efn = str(erec.get("fileName") or Path(efp).name)
@@ -1154,9 +1179,24 @@ def build_ui2_search_window(
                     r.pop("_search_cho", None)
                 t_low = cached_low
                 t_exp = r.get("_search_exp") or t_low
-                fp_stem_raw = Path(str(r.get("file_path") or r.get("img_path") or "")).stem
-                fp_stem_low = fp_stem_raw.lower()
-                fp_stem_exp = _expand_camel_search_text(fp_stem_raw)
+                fp_stem_low = r.get("_stem_low")
+                if fp_stem_low is None:
+                    _fp_any = r.get("file_path") or r.get("img_path") or ""
+                    if _fp_any:
+                        _bn_s = str(_fp_any).rsplit("\\", 1)[-1]
+                        if "/" in _bn_s:
+                            _bn_s = _bn_s.rsplit("/", 1)[-1]
+                        _dot_s = _bn_s.rfind(".")
+                        fp_stem_raw = _bn_s[:_dot_s] if _dot_s > 0 else _bn_s
+                        fp_stem_low = fp_stem_raw.lower()
+                        fp_stem_exp = _expand_camel_search_text(fp_stem_raw)
+                    else:
+                        fp_stem_low = ""
+                        fp_stem_exp = ""
+                    r["_stem_low"] = fp_stem_low
+                    r["_stem_exp"] = fp_stem_exp
+                else:
+                    fp_stem_exp = r.get("_stem_exp") or fp_stem_low
                 sc = 0.0
                 if fp_stem_low and (q_low in fp_stem_low or (len(q_terms) > 1 and all(tm in fp_stem_exp for tm in q_terms))):
                     sc = 1.15
@@ -1844,17 +1884,7 @@ def build_ui2_search_window(
 
     last_typed_q = [_get_live_entry_query()]
 
-    def _on_key_rel(event=None):
-        is_hovered[0] = True
-        if event and event.keysym in (
-            "Up", "Down", "Return", "Escape", "Tab",
-            "Control_L", "Control_R", "Shift_L", "Shift_R",
-            "Alt_L", "Alt_R", "Super_L", "Super_R", "Win_L", "Win_R", "Caps_Lock",
-        ):
-            return
-        cur_q = _get_live_entry_query()
-        if cur_q == last_typed_q[0]:
-            return
+    def _schedule_query_render(cur_q: str) -> None:
         last_typed_q[0] = cur_q
         st_state["selected_fp_lock"] = ""
         st_state["last_typing_ts"] = time.time()
@@ -1881,6 +1911,19 @@ def build_ui2_search_window(
                 _render_search_results()
 
         st_state["debounce_job"] = win.after(75, _apply_debounced)
+
+    def _on_key_rel(event=None):
+        is_hovered[0] = True
+        if event and event.keysym in (
+            "Up", "Down", "Return", "Escape", "Tab",
+            "Control_L", "Control_R", "Shift_L", "Shift_R",
+            "Alt_L", "Alt_R", "Super_L", "Super_R", "Win_L", "Win_R", "Caps_Lock",
+        ):
+            return
+        cur_q = _get_live_entry_query()
+        if cur_q == last_typed_q[0]:
+            return
+        _schedule_query_render(cur_q)
 
     def _on_down(_e=None):
         if st_state["items"]:
@@ -1942,16 +1985,10 @@ def build_ui2_search_window(
                 st_state["video_ocr_loading"] = False
                 st_state["video_ocr_result_text"] = ft_done
                 st_state["bg_ui_dirty"] = True
-            # [한글 IME 조합음 실시간 감시]: KeyRelease가 누락되거나 IME 조합 중 음절이 바뀐 경우도 70ms 내 자동 동기화
+            # [한글 IME 조합음 실시간 감시]: KeyRelease가 누락되거나 IME 조합 중 음절이 바뀐 경우도 75ms 디바운스 경유 동기화(UI 프리징 0%)
             live_q_poll = _get_live_entry_query()
             if live_q_poll != last_typed_q[0]:
-                last_typed_q[0] = live_q_poll
-                st_state["selected_fp_lock"] = ""
-                st_state["last_typing_ts"] = time.time()
-                if st_state["mode"] == "compact":
-                    st_state["manual_stage"] = None
-                st_state["sel_idx"] = 0
-                st_state["bg_ui_dirty"] = True
+                _schedule_query_render(live_q_poll)
             if st_state.get("bg_ui_dirty"):
                 st_state["bg_ui_dirty"] = False
                 _render_search_results()

@@ -351,6 +351,67 @@ _RBTN_HOLD_STATE: dict = {
 _LAST_RBTN_DISMISS_ESC_TS: float = 0.0
 _MAIN_LOOP_HEARTBEAT_TS: float = time.time()
 _UI_LOOP_HEARTBEAT_TS: float = time.time()
+_MAIN_LOOP_STAGE: str = "init"
+_UI_LOOP_STAGE: str = "init"
+_SINGLE_INSTANCE_MUTEX_HANDLE: int = 0
+_SEQ_DIAG_LOG_LOCK = threading.Lock()
+
+
+def set_single_instance_mutex_handle(handle_val: int) -> None:
+    """merlin_z_core_daemon.py에서 획득한 단일 인스턴스 Named Mutex 핸들을 등록합니다."""
+    global _SINGLE_INSTANCE_MUTEX_HANDLE
+    _SINGLE_INSTANCE_MUTEX_HANDLE = int(handle_val or 0)
+
+
+def _release_single_instance_mutex() -> None:
+    """자폭·교체 직전에 Named Mutex를 먼저 반납하여 후계 프로세스가 ERROR_ALREADY_EXISTS로 자살하지 않게 보장합니다."""
+    global _SINGLE_INSTANCE_MUTEX_HANDLE
+    h_mtx = int(_SINGLE_INSTANCE_MUTEX_HANDLE or 0)
+    if not h_mtx or sys.platform != "win32":
+        return
+    _SINGLE_INSTANCE_MUTEX_HANDLE = 0
+    try:
+        k32.ReleaseMutex.argtypes = [wintypes.HANDLE]
+        k32.ReleaseMutex.restype = wintypes.BOOL
+        k32.ReleaseMutex(wintypes.HANDLE(h_mtx))
+    except Exception:
+        pass
+    try:
+        k32.CloseHandle.argtypes = [wintypes.HANDLE]
+        k32.CloseHandle.restype = wintypes.BOOL
+        k32.CloseHandle(wintypes.HANDLE(h_mtx))
+    except Exception:
+        pass
+
+
+def _log_seq_diag(event: str, detail: str = "") -> None:
+    """
+    [경량 블랙박스 진단 로그 — 200KB 롤링]:
+    기동 소요 시간·RegisterHotKey/WH_MOUSE_LL 상태·소환 진입·Hang 자폭 사유를 기록해
+    현장 먹통 이슈 발생 시 추측 없이 1초 만에 원인을 핀셋 특정합니다.
+    """
+    try:
+        log_p = _MERLIN_APPDATA / "seq_paste_diag.log"
+        ts_s = time.strftime("%Y-%m-%d %H:%M:%S")
+        line = f"[{ts_s}] pid={os.getpid()} {event}"
+        if detail:
+            line += f" | {detail}"
+        line += "\n"
+        with _SEQ_DIAG_LOG_LOCK:
+            log_p.parent.mkdir(parents=True, exist_ok=True)
+            if log_p.exists() and log_p.stat().st_size > 204800:
+                try:
+                    tail_b = log_p.read_bytes()[-102400:]
+                    nl_idx = tail_b.find(b"\n")
+                    if nl_idx >= 0:
+                        tail_b = tail_b[nl_idx + 1 :]
+                    log_p.write_bytes(tail_b)
+                except Exception:
+                    pass
+            with open(log_p, "a", encoding="utf-8", errors="ignore") as f:
+                f.write(line)
+    except Exception:
+        pass
 
 
 def _send_msg_timeout_val(
@@ -5050,8 +5111,9 @@ def _toast_worker() -> None:
         _apply_win_topmost(win, x, y, rw, rh, activate=False)
 
     def _poll_queue() -> None:
-        global _CURRENT_OPEN_UI_MODE, _UI_LOOP_HEARTBEAT_TS, _IS_UI_HOVERED, _LAST_UI_OPENED_TS
+        global _CURRENT_OPEN_UI_MODE, _UI_LOOP_HEARTBEAT_TS, _IS_UI_HOVERED, _LAST_UI_OPENED_TS, _UI_LOOP_STAGE
         _UI_LOOP_HEARTBEAT_TS = time.time()
+        _UI_LOOP_STAGE = "poll_start"
         try:
             if current_win[0] is not None:
                 try:
@@ -5747,8 +5809,10 @@ def acquire_single_instance(in_process: bool = False) -> socket.socket | None:
                             data = b""
                         if b"__PING__" in data or b"/__merlin/ping" in data or b"/health" in data:
                             now_p = time.time()
+                            main_lag = now_p - _MAIN_LOOP_HEARTBEAT_TS
+                            ui_lag = now_p - _UI_LOOP_HEARTBEAT_TS
                             healthy = _MODAL_PROMPT_ACTIVE or (
-                                (now_p - _MAIN_LOOP_HEARTBEAT_TS) < 15.0 and (now_p - _UI_LOOP_HEARTBEAT_TS) < 15.0
+                                main_lag < 15.0 and ui_lag < 15.0
                             )
                             if healthy:
                                 try:
@@ -5766,6 +5830,10 @@ def acquire_single_instance(in_process: bool = False) -> socket.socket | None:
                                     pass
                                 conn.close()
                             else:
+                                _log_seq_diag(
+                                    "PING_UNHEALTHY_EXIT",
+                                    f"main_lag={main_lag:.1f}s ui_lag={ui_lag:.1f}s main_stage={_MAIN_LOOP_STAGE} ui_stage={_UI_LOOP_STAGE} open_mode={_CURRENT_OPEN_UI_MODE}",
+                                )
                                 try:
                                     conn.close()
                                     srv_sock.close()
@@ -5774,9 +5842,11 @@ def acquire_single_instance(in_process: bool = False) -> socket.socket | None:
                                 if in_process:
                                     _IN_PROCESS_STOP_EVENT.set()
                                     break
+                                _release_single_instance_mutex()
                                 os._exit(1)
                             continue
                         if b"__REPLACE__" in data or b"/__merlin/shutdown" in data:
+                            _log_seq_diag("REPLACE_EXIT", f"in_process={in_process}")
                             if b"HTTP/" in data:
                                 try:
                                     conn.sendall(b"HTTP/1.1 200 OK\r\nContent-Length: 2\r\nConnection: close\r\n\r\nOK")
@@ -5790,6 +5860,7 @@ def acquire_single_instance(in_process: bool = False) -> socket.socket | None:
                             if in_process:
                                 _IN_PROCESS_STOP_EVENT.set()
                                 break
+                            _release_single_instance_mutex()
                             os._exit(0)
                         conn.close()
                         if data.startswith(b"__OPEN_UI2__|"):
@@ -7146,12 +7217,13 @@ def _replace_edit_control_current_line_atomic(
 
         s_dw = wintypes.DWORD(0)
         e_dw = wintypes.DWORD(0)
-        u32.SendMessageW(edit_child, EM_GETSEL, ctypes.addressof(s_dw), ctypes.addressof(e_dw))
+        _send_msg_timeout_val(edit_child, EM_GETSEL, ctypes.addressof(s_dw), ctypes.addressof(e_dw), 120)
         s_pos, e_pos = s_dw.value, e_dw.value
         if s_pos == 0 and e_pos == 0:
-            sel_ret = u32.SendMessageW(edit_child, EM_GETSEL, 0, 0)
-            s_pos = sel_ret & 0xFFFF
-            e_pos = (sel_ret >> 16) & 0xFFFF
+            _ok_sr, sel_ret = _send_msg_timeout_val(edit_child, EM_GETSEL, 0, 0, 120)
+            if _ok_sr:
+                s_pos = sel_ret & 0xFFFF
+                e_pos = (sel_ret >> 16) & 0xFFFF
 
         use_full_sel = False
         if s_pos != e_pos and 0 <= s_pos < e_pos <= utf16_total:
@@ -7218,22 +7290,22 @@ def _replace_edit_control_current_line_atomic(
         prev_ime_kor = get_ime_is_korean(root_hwnd)
         set_ime_language(target_korean=(target_lang == "KO"))
         if is_rich:
-            u32.SendMessageW(edit_child, 0x0458, 0, 0)  # EM_STOPGROUPTYPING
+            _send_msg_timeout_val(edit_child, 0x0458, 0, 0, 120)  # EM_STOPGROUPTYPING
         if use_full_sel or (line_start == 0 and line_end >= utf16_total):
-            u32.SendMessageW(edit_child, EM_SETSEL, 0, -1)
+            _send_msg_timeout_val(edit_child, EM_SETSEL, 0, -1, 120)
             rbuf = ctypes.create_unicode_buffer(final_out_win)
-            u32.SendMessageW(edit_child, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+            _send_msg_timeout_val(edit_child, EM_REPLACESEL, 1, ctypes.addressof(rbuf), 150)
             if not auto_triggered and s_pos != e_pos:
-                u32.SendMessageW(edit_child, EM_SETSEL, 0, -1)
+                _send_msg_timeout_val(edit_child, EM_SETSEL, 0, -1, 120)
         else:
-            u32.SendMessageW(edit_child, EM_SETSEL, line_start, line_end)
+            _send_msg_timeout_val(edit_child, EM_SETSEL, line_start, line_end, 120)
             rbuf = ctypes.create_unicode_buffer(final_out_win)
-            u32.SendMessageW(edit_child, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+            _send_msg_timeout_val(edit_child, EM_REPLACESEL, 1, ctypes.addressof(rbuf), 150)
             if not auto_triggered and s_pos != e_pos:
                 rep_utf16_len = len(final_out.encode("utf-16-le")) // 2
-                u32.SendMessageW(edit_child, EM_SETSEL, line_start, line_start + rep_utf16_len)
+                _send_msg_timeout_val(edit_child, EM_SETSEL, line_start, line_start + rep_utf16_len, 120)
         if is_rich:
-            u32.SendMessageW(edit_child, 0x0458, 0, 0)  # EM_STOPGROUPTYPING
+            _send_msg_timeout_val(edit_child, 0x0458, 0, 0, 120)  # EM_STOPGROUPTYPING
 
         full_after, _, _ = _get_edit_full_text_and_index_str(edit_child)
         arm_undo_snapshot(
@@ -7275,7 +7347,7 @@ def _polish_notepad_previous_line_on_enter(edit_child: int, allow_typo_morph: bo
             full_text, idx_text, _ = _get_edit_full_text_and_index_str(edit_child)
             if not idx_text:
                 continue
-            u32.SendMessageW(edit_child, EM_GETSEL, ctypes.addressof(s_dw), ctypes.addressof(e_dw))
+            _send_msg_timeout_val(edit_child, EM_GETSEL, ctypes.addressof(s_dw), ctypes.addressof(e_dw), 120)
             s_pos, e_pos = s_dw.value, e_dw.value
             if s_pos != e_pos or s_pos < 1:
                 continue
@@ -7335,14 +7407,14 @@ def _polish_notepad_previous_line_on_enter(edit_child: int, allow_typo_morph: bo
         root_hwnd = u32.GetAncestor(edit_child, 2) or edit_child
         prev_ime_kor = get_ime_is_korean(root_hwnd)
         set_ime_language(target_korean=(target_lang == "KO"))
-        u32.SendMessageW(edit_child, 0x0458, 0, 0)  # EM_STOPGROUPTYPING
-        u32.SendMessageW(edit_child, EM_SETSEL, prev_start, prev_start + prev_len)
+        _send_msg_timeout_val(edit_child, 0x0458, 0, 0, 120)  # EM_STOPGROUPTYPING
+        _send_msg_timeout_val(edit_child, EM_SETSEL, prev_start, prev_start + prev_len, 120)
         rbuf = ctypes.create_unicode_buffer(polished)
-        u32.SendMessageW(edit_child, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+        _send_msg_timeout_val(edit_child, EM_REPLACESEL, 1, ctypes.addressof(rbuf), 150)
         delta_utf16 = (len(polished.encode("utf-16-le")) // 2) - prev_len
         new_caret = max(0, s_pos + delta_utf16)
-        u32.SendMessageW(edit_child, EM_SETSEL, new_caret, new_caret)
-        u32.SendMessageW(edit_child, 0x0458, 0, 0)  # EM_STOPGROUPTYPING
+        _send_msg_timeout_val(edit_child, EM_SETSEL, new_caret, new_caret, 120)
+        _send_msg_timeout_val(edit_child, 0x0458, 0, 0, 120)  # EM_STOPGROUPTYPING
 
         full_after, _, _ = _get_edit_full_text_and_index_str(edit_child)
         arm_undo_snapshot(
@@ -7607,7 +7679,7 @@ def superpower_1_clean_and_iron_lines(
                 utf16_total = len(utf16_b) // 2
                 s_dw = wintypes.DWORD(0)
                 e_dw = wintypes.DWORD(0)
-                u32.SendMessageW(ed_target, EM_GETSEL, ctypes.addressof(s_dw), ctypes.addressof(e_dw))
+                _send_msg_timeout_val(ed_target, EM_GETSEL, ctypes.addressof(s_dw), ctypes.addressof(e_dw), 120)
                 s_pos, e_pos = s_dw.value, e_dw.value
                 norm_doc = full_before.replace("\r\n", "\n").replace("\r", "\n").strip()
                 norm_clip = (clip_txt or "").replace("\r\n", "\n").replace("\r", "\n").strip()
@@ -7622,15 +7694,15 @@ def superpower_1_clean_and_iron_lines(
                     out_win = out_seg.replace("\r\n", "\n").replace("\n", "\r\n") if not is_rich else out_seg
                     if out_seg.strip() != src_seg.strip():
                         if has_sel:
-                            u32.SendMessageW(ed_target, EM_SETSEL, s_pos, e_pos)
+                            _send_msg_timeout_val(ed_target, EM_SETSEL, s_pos, e_pos, 120)
                             rbuf = ctypes.create_unicode_buffer(out_win)
-                            u32.SendMessageW(ed_target, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+                            _send_msg_timeout_val(ed_target, EM_REPLACESEL, 1, ctypes.addressof(rbuf), 150)
                             rep_u16 = len(out_seg.encode("utf-16-le")) // 2
-                            u32.SendMessageW(ed_target, EM_SETSEL, s_pos, s_pos + rep_u16)
+                            _send_msg_timeout_val(ed_target, EM_SETSEL, s_pos, s_pos + rep_u16, 120)
                         else:
-                            u32.SendMessageW(ed_target, EM_SETSEL, 0, -1)
+                            _send_msg_timeout_val(ed_target, EM_SETSEL, 0, -1, 120)
                             rbuf = ctypes.create_unicode_buffer(out_win)
-                            u32.SendMessageW(ed_target, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+                            _send_msg_timeout_val(ed_target, EM_REPLACESEL, 1, ctypes.addressof(rbuf), 150)
                         full_after, _, _ = _get_edit_full_text_and_index_str(ed_target)
                         root_h = u32.GetAncestor(ed_target, 2) or ed_target
                         arm_undo_snapshot(
@@ -7705,7 +7777,7 @@ def superpower_1_clean_and_iron_lines(
                     full_before_ins, _, is_rich_ins = _get_edit_full_text_and_index_str(ed_target)
                     ins_str = out_clip if is_rich_ins else out_clip_win
                     rbuf_ins = ctypes.create_unicode_buffer(ins_str)
-                    u32.SendMessageW(ed_target, EM_REPLACESEL, 1, ctypes.addressof(rbuf_ins))
+                    _send_msg_timeout_val(ed_target, EM_REPLACESEL, 1, ctypes.addressof(rbuf_ins), 150)
                     full_after_ins, _, _ = _get_edit_full_text_and_index_str(ed_target)
                     root_ins = u32.GetAncestor(ed_target, 2) or ed_target
                     arm_undo_snapshot(
@@ -7840,13 +7912,14 @@ def _get_win_class_only(hwnd: int) -> str:
 
 
 def _get_win_class_and_title(hwnd: int) -> tuple[str, str]:
+    """크로스-프로세스 먹통 창에서도 무한 대기하지 않도록 WM_GETTEXT 80ms 타임아웃으로 창 제목을 안전 조회합니다."""
     if not hwnd:
         return "", ""
     cls_buf = ctypes.create_unicode_buffer(128)
     u32.GetClassNameW(hwnd, cls_buf, 128)
     title_buf = ctypes.create_unicode_buffer(512)
-    u32.GetWindowTextW(hwnd, title_buf, 512)
-    return cls_buf.value or "", title_buf.value or ""
+    _ok_gt, _ = _send_msg_timeout_val(hwnd, 0x000D, 512, ctypes.addressof(title_buf), 80)  # WM_GETTEXT
+    return cls_buf.value or "", (title_buf.value if _ok_gt else "") or ""
 
 
 # [귀신창 실시간 타이핑 수호신: 자체 오토코렉트/코드 에디터 프로그램 이중 변환 충돌 방지 예외 블랙리스트]
@@ -9079,7 +9152,7 @@ def superpower_fixed_snippet(slot_num: int, daemon_set_cb) -> None:
         arm_undo_snapshot(fg_h, ed_h, "", val, mode="snippet")
         if ed_h and u32.IsWindow(ed_h):
             rbuf = ctypes.create_unicode_buffer(val)
-            u32.SendMessageW(ed_h, EM_REPLACESEL, 1, ctypes.addressof(rbuf))
+            _send_msg_timeout_val(ed_h, EM_REPLACESEL, 1, ctypes.addressof(rbuf), 150)
         else:
             orig_clip = get_clipboard_text()
             daemon_set_cb(val)
@@ -9155,6 +9228,7 @@ def _start_first_summon_prewarmer() -> None:
 # =====================================================================
 def main(in_process: bool = False) -> None:
     global _IN_PROCESS_MODE
+    t_boot_start = time.perf_counter()
     _IN_PROCESS_MODE = bool(in_process)
     if in_process:
         _IN_PROCESS_STOP_EVENT.clear()
@@ -9169,17 +9243,20 @@ def main(in_process: bool = False) -> None:
         except Exception:
             pass
 
-    # [최우선 0.01초 단축키 선등록]: 스니펫/히스토리/워밍업보다 먼저 RegisterHotKey를 걸어
-    # Z-코어 실행 직후 첫 Ctrl+0 입력이 절대 무시되지 않도록 보장!
-    u32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_NOREPEAT, VK_0)
-    u32.RegisterHotKey(None, 2, MOD_CONTROL | MOD_NOREPEAT, VK_NUMPAD0)
-    u32.RegisterHotKey(None, 4, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x54)  # Ctrl + Alt + T (항상 위 창고정/해제)
+    # [최우선 0.05초 단축키·UI 선등록]: 무거운 히스토리/드라이브스캔/Kiwi 워밍업은
+    # 메인 이벤트 루프와 WH_MOUSE_LL 훅이 완전히 살아난 뒤 백그라운드로 지연 실행하여
+    # 재기동 직후 9초 먹통을 0.1초 이내로 원천 제거합니다!
+    _hk1_ok = bool(u32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_NOREPEAT, VK_0))
+    _hk1_err = int(k32.GetLastError()) if not _hk1_ok else 0
+    _hk2_ok = bool(u32.RegisterHotKey(None, 2, MOD_CONTROL | MOD_NOREPEAT, VK_NUMPAD0))
+    _hk4_ok = bool(u32.RegisterHotKey(None, 4, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x54))  # Ctrl + Alt + T (항상 위 창고정/해제)
     u32.SetTimer(None, 1, 25, None)
+    _log_seq_diag(
+        "BOOT_HOTKEY",
+        f"hk1={_hk1_ok}(err={_hk1_err}) hk2={_hk2_ok} hk4={_hk4_ok} elapsed_ms={(time.perf_counter()-t_boot_start)*1000:.1f}",
+    )
 
     _ensure_toast_worker()
-    ensure_default_snippets()
-    _ensure_kiwi_warmup_async()
-    _start_first_summon_prewarmer()
 
     seq_mode: bool = False
     pasting_started: bool = False
@@ -9345,25 +9422,41 @@ def main(in_process: bool = False) -> None:
         except Exception:
             pass
 
-    _load_history_from_disk()
-
-    # 데몬 기동 직후 현재 클립보드에 들어있는 텍스트/이미지를 초기 기억 히스토리에 적재
-    try:
-        init_clip = get_clipboard_text()
-        if init_clip and len(init_clip.strip()) >= 2:
-            record_ai_history(init_clip)
-        # Session 1 창 진단 스냅샷 기록 (무인 원격 점검용)
-        util_init = _find_visible_utility_windows()
-        diag_list = []
-        for uh in util_init:
-            c_n, t_n = _get_win_class_and_title(uh)
-            diag_list.append({"hwnd": uh, "cls": c_n, "title": t_n, "ex": hex(u32.GetWindowLongW(uh, GWL_EXSTYLE))})
-        (_MERLIN_APPDATA / "ghost_window_session1_diag.json").write_text(
-            json.dumps({"pid": os.getpid(), "ts": time.time(), "util_windows": diag_list}, ensure_ascii=False, indent=2),
-            encoding="utf-8",
-        )
-    except Exception:
-        pass
+    # [0.1초 메인 루프 선진입 보장]: 무거운 히스토리 임베딩·초기 클립보드·창 스냅샷·Kiwi·드라이브 스캔은
+    # 마우스 훅 + PeekMessageW 메인 루프 가동 직후 백그라운드 스레드에서 시차 실행합니다.
+    def _deferred_startup_init_worker() -> None:
+        try:
+            time.sleep(0.25)
+            ensure_default_snippets()
+        except Exception:
+            pass
+        try:
+            _load_history_from_disk()
+        except Exception:
+            pass
+        try:
+            init_clip = get_clipboard_text()
+            if init_clip and len(init_clip.strip()) >= 2:
+                record_ai_history(init_clip)
+            util_init = _find_visible_utility_windows()
+            diag_list = []
+            for uh in util_init:
+                c_n, t_n = _get_win_class_and_title(uh)
+                diag_list.append({"hwnd": uh, "cls": c_n, "title": t_n, "ex": hex(u32.GetWindowLongW(uh, GWL_EXSTYLE))})
+            (_MERLIN_APPDATA / "ghost_window_session1_diag.json").write_text(
+                json.dumps({"pid": os.getpid(), "ts": time.time(), "util_windows": diag_list}, ensure_ascii=False, indent=2),
+                encoding="utf-8",
+            )
+        except Exception:
+            pass
+        try:
+            time.sleep(0.6)
+            _start_first_summon_prewarmer()
+            time.sleep(0.6)
+            _ensure_kiwi_warmup_async()
+            _log_seq_diag("DEFERRED_WARMUP_SCHEDULED", f"history={len(GLOBAL_AI_HISTORY)}")
+        except Exception:
+            pass
 
     last_summon_raw_clip: str = ""
     last_consumed_image_ts: float = 0.0
@@ -9635,7 +9728,7 @@ def main(in_process: bool = False) -> None:
                 return cnt
         return 0
 
-    def trigger_master_summon(summon_by_rclick: bool = False) -> None:
+    def trigger_master_summon(summon_by_rclick: bool = False, source: str = "unknown") -> None:
         """
         [마스터 기획 정본 v2.1 — 귀신호출 2종(Ctrl+0 / Ctrl+우클릭) 100% 동일 조건 분기 + 재호출 토글]:
         0) [연속 재호출 토글]: 이미 귀신창/귀신검색창이 떠 있는 상태에서 한 번 더 호출하면 즉시 [기본 귀신창 ⇄ 귀신검색창] 상호 전환!
@@ -9646,7 +9739,8 @@ def main(in_process: bool = False) -> None:
         3) [창 UI ① 기본 귀신창]: 일반 입력창에서 드래그/물음표 없이 소환 시 ➔ 기본 귀신창 직행 (타이핑 시작 시 검색창 자동 변신)!
         """
         nonlocal seq_mode, pasting_started, copied_after_trigger, seq_queue, last_summon_raw_clip, last_consumed_image_ts, last_hdrop_copy_ts, last_question_mark_ts, last_drag_select_ts, summon_had_recent_drag, last_alpha_type_ts, pending_first_typo
-        global _IS_INPUT_SUMMON_CONTEXT, _LAST_UI_OPENED_TS
+        global _IS_INPUT_SUMMON_CONTEXT, _LAST_UI_OPENED_TS, _MAIN_LOOP_STAGE
+        _MAIN_LOOP_STAGE = f"summon:{source}"
         now_s = time.time()
         # [원엔진·투도어 기본 동작 (멀린님 7번 지시 확정)]:
         # 귀신키 미출시 또는 권한/스위치 비활성 유저는 어느 화면(입력창·바탕화면 무관)에서 Ctrl+0을 눌러도
@@ -9656,8 +9750,10 @@ def main(in_process: bool = False) -> None:
                 # 실제 창이 방금 열린 지 0.40초 미만(연속 키바운스·이중 감지)일 때만 닫지 않고 전면 복원!
                 # (호출 직전 갱신되는 last_summon_ts 대신 실제 오픈 시각 _LAST_UI_OPENED_TS 기준으로 판별)
                 if (now_s - _LAST_UI_OPENED_TS) < 0.40:
+                    _log_seq_diag("SUMMON_LIFT_DEBOUNCE", f"src={source} mode={_CURRENT_OPEN_UI_MODE}")
                     show_ghost_toast("__LIFT__", duration_ms=0)
                     return
+                _log_seq_diag("SUMMON_TOGGLE_CLOSE", f"src={source} mode={_CURRENT_OPEN_UI_MODE}")
                 disarm_sub_hotkeys()
                 close_ghost_toast()
                 return
@@ -9715,6 +9811,10 @@ def main(in_process: bool = False) -> None:
             record_feature_telemetry("ctrl0_summon_bar")
             disarm_sub_hotkeys()
             _LAST_UI_OPENED_TS = time.time()
+            _log_seq_diag(
+                "SUMMON_OPEN_UI2",
+                f"src={source} fg_proc={proc_chk} cls={cls_chk} sel={bool(sel_file_for_ui2)}",
+            )
             if sel_file_for_ui2:
                 show_ghost_toast(f"__UI2_SEARCH__|medium|__SEL_FILE__:{sel_file_for_ui2}", duration_ms=8000)
             else:
@@ -10097,12 +10197,25 @@ def main(in_process: bool = False) -> None:
 
     # WH_MOUSE_LL 훅은 순수 네이티브 x64 기계어 프리필터 스텁을 거쳐 WM_MOUSEMOVE(마우스 이동)가 Python GIL에 0회 진입하게 하며,
     # 실제 우클릭(WM_RBUTTONDOWN/UP)만 THREAD_PRIORITY_HIGHEST 전용 GetMessageW 스레드에서 즉시 처리하여 마우스 끊김을 물리적으로 0%로 차단합니다.
+    # 또한 Windows LowLevelHooksTimeout 사일런트 탈락을 자동 자가치유하도록 WM_APP_REHOOK(원자적 Hook-Swap)을 지원합니다.
     _ll_mouse_hook_cb = LowLevelMouseProcType(_ll_mouse_proc)
     _ll_mouse_native_stub_ptr = _create_x64_rclick_prefilter_stub(_ll_mouse_hook_cb)
     _ll_mouse_hook_fn_ptr = _ll_mouse_native_stub_ptr or (ctypes.cast(_ll_mouse_hook_cb, ctypes.c_void_p).value or 0)
     _ll_mouse_hook_ready = threading.Event()
 
     _ll_mouse_hook_handle: list[int] = [0]
+    _ll_mouse_hook_tid: list[int] = [0]
+    _ll_mouse_hook_thread: list[threading.Thread | None] = [None]
+    WM_APP_REHOOK = 0x8001
+
+    def _install_ll_mouse_hook_once() -> int:
+        h_mod_self = k32.GetModuleHandleW(None)
+        _hk_new = (
+            (u32.SetWindowsHookExW(WH_MOUSE_LL, _ll_mouse_hook_fn_ptr, h_mod_self, 0) if _ll_mouse_hook_fn_ptr else 0)
+            or (u32.SetWindowsHookExW(WH_MOUSE_LL, _ll_mouse_hook_fn_ptr, None, 0) if _ll_mouse_hook_fn_ptr else 0)
+            or u32.SetWindowsHookExW(WH_MOUSE_LL, ctypes.cast(_ll_mouse_hook_cb, ctypes.c_void_p).value or 0, h_mod_self, 0)
+        )
+        return int(_hk_new or 0)
 
     def _dedicated_mouse_hook_worker() -> None:
         try:
@@ -10110,18 +10223,35 @@ def main(in_process: bool = False) -> None:
                 k32.SetThreadPriority(k32.GetCurrentThread(), 2)  # THREAD_PRIORITY_HIGHEST
             except Exception:
                 pass
-            h_mod_self = k32.GetModuleHandleW(None)
-            _hk = (
-                (u32.SetWindowsHookExW(WH_MOUSE_LL, _ll_mouse_hook_fn_ptr, h_mod_self, 0) if _ll_mouse_hook_fn_ptr else 0)
-                or (u32.SetWindowsHookExW(WH_MOUSE_LL, _ll_mouse_hook_fn_ptr, None, 0) if _ll_mouse_hook_fn_ptr else 0)
-                or u32.SetWindowsHookExW(WH_MOUSE_LL, ctypes.cast(_ll_mouse_hook_cb, ctypes.c_void_p).value or 0, h_mod_self, 0)
-            )
-            _ll_mouse_hook_handle[0] = int(_hk or 0)
+            try:
+                _ll_mouse_hook_tid[0] = int(k32.GetCurrentThreadId())
+            except Exception:
+                _ll_mouse_hook_tid[0] = 0
+            _hk = _install_ll_mouse_hook_once()
+            _ll_mouse_hook_handle[0] = _hk
             _ll_mouse_hook_ready.set()
+            _log_seq_diag(
+                "MOUSE_HOOK_INIT",
+                f"ok={bool(_hk)} tid={_ll_mouse_hook_tid[0]} stub={bool(_ll_mouse_native_stub_ptr)}",
+            )
             if not _hk:
                 return
             _m_msg = wintypes.MSG()
             while (not _IN_PROCESS_STOP_EVENT.is_set()) and u32.GetMessageW(ctypes.byref(_m_msg), None, 0, 0) > 0:
+                if _m_msg.message == WM_APP_REHOOK:
+                    # [무중단 원자적 Hook-Swap]: 새 훅을 먼저 성공 등록한 뒤에만 구 훅을 해제해 단 1ms의 공백도 허용하지 않음!
+                    _old_hk = _ll_mouse_hook_handle[0]
+                    _new_hk = _install_ll_mouse_hook_once()
+                    if _new_hk:
+                        _ll_mouse_hook_handle[0] = _new_hk
+                        if _old_hk:
+                            try:
+                                u32.UnhookWindowsHookEx(_old_hk)
+                            except Exception:
+                                pass
+                    else:
+                        _log_seq_diag("MOUSE_HOOK_REHOOK_FAIL", f"err={int(k32.GetLastError())}")
+                    continue
                 u32.TranslateMessage(ctypes.byref(_m_msg))
                 u32.DispatchMessageW(ctypes.byref(_m_msg))
             try:
@@ -10130,11 +10260,25 @@ def main(in_process: bool = False) -> None:
                     _ll_mouse_hook_handle[0] = 0
             except Exception:
                 pass
-        except Exception:
+        except Exception as _m_exc:
+            _log_seq_diag("MOUSE_HOOK_ERR", repr(_m_exc))
             _ll_mouse_hook_ready.set()
 
-    threading.Thread(target=_dedicated_mouse_hook_worker, daemon=True).start()
-    _ll_mouse_hook_ready.wait(timeout=1.0)
+    def _ensure_mouse_hook_worker_alive() -> None:
+        th = _ll_mouse_hook_thread[0]
+        if th is not None and th.is_alive() and _ll_mouse_hook_handle[0]:
+            return
+        _ll_mouse_hook_ready.clear()
+        new_th = threading.Thread(target=_dedicated_mouse_hook_worker, daemon=True)
+        _ll_mouse_hook_thread[0] = new_th
+        new_th.start()
+        _ll_mouse_hook_ready.wait(timeout=1.0)
+
+    _ensure_mouse_hook_worker_alive()
+    last_mouse_rehook_ts: float = time.time()
+
+    # 무거운 초기화는 메인 루프·마우스 훅 준비 완료 직후 백그라운드에서 지연 실행
+    threading.Thread(target=_deferred_startup_init_worker, daemon=True).start()
 
     msg = wintypes.MSG()
     PM_REMOVE = 0x0001
@@ -10142,23 +10286,33 @@ def main(in_process: bool = False) -> None:
     last_fs_signal_poll_ts: float = 0.0
     # [절대 금기]: 데몬 기동·재기동 시 유저가 호출하지 않았는데 귀신창이 혼자 튀어나오는 현상 영구 차단!
     pending_init_show_ts: float = 0.0
-    global _MAIN_LOOP_HEARTBEAT_TS
+    global _MAIN_LOOP_HEARTBEAT_TS, _MAIN_LOOP_STAGE
     _MAIN_LOOP_HEARTBEAT_TS = time.time()
+    _MAIN_LOOP_STAGE = "loop_ready"
+    _log_seq_diag("MAIN_LOOP_READY", f"boot_ms={(time.perf_counter()-t_boot_start)*1000:.1f}")
 
     def _self_hang_watchdog() -> None:
         while not _IN_PROCESS_STOP_EVENT.is_set():
             time.sleep(6.0)
             try:
                 now_w = time.time()
-                ui_hung = _TOAST_WORKER_STARTED and (now_w - _UI_LOOP_HEARTBEAT_TS) > 18.0
-                if not _MODAL_PROMPT_ACTIVE and ((now_w - _MAIN_LOOP_HEARTBEAT_TS) > 18.0 or ui_hung):
+                main_lag_w = now_w - _MAIN_LOOP_HEARTBEAT_TS
+                ui_lag_w = now_w - _UI_LOOP_HEARTBEAT_TS
+                ui_hung = _TOAST_WORKER_STARTED and ui_lag_w > 18.0
+                if not _MODAL_PROMPT_ACTIVE and (main_lag_w > 18.0 or ui_hung):
+                    _log_seq_diag(
+                        "HANG_WATCHDOG_EXIT",
+                        f"main_lag={main_lag_w:.1f}s ui_lag={ui_lag_w:.1f}s main_stage={_MAIN_LOOP_STAGE} ui_stage={_UI_LOOP_STAGE} open_mode={_CURRENT_OPEN_UI_MODE}",
+                    )
+                    try:
+                        lock_sock.close()
+                    except Exception:
+                        pass
                     if in_process:
-                        try:
-                            lock_sock.close()
-                        except Exception:
-                            pass
                         _IN_PROCESS_STOP_EVENT.set()
                         return
+                    # [핵심 근본 수정]: 후계 프로세스 스폰 전에 Named Mutex를 먼저 반납해 ERROR_ALREADY_EXISTS 자살을 원천 차단!
+                    _release_single_instance_mutex()
                     try:
                         if getattr(sys, "frozen", False):
                             clean_env = {k: v for k, v in os.environ.items() if k not in ("_MEIPASS2", "_MEIPASS")}
@@ -10218,6 +10372,7 @@ def main(in_process: bool = False) -> None:
 
     while not _IN_PROCESS_STOP_EVENT.is_set():
         _MAIN_LOOP_HEARTBEAT_TS = time.time()
+        _MAIN_LOOP_STAGE = "peek"
         had_hotkey = False
         while u32.PeekMessageW(ctypes.byref(msg), None, 0, 0, PM_REMOVE) != 0:
             if msg.message == WM_QUIT_MSG:
@@ -10234,7 +10389,7 @@ def main(in_process: bool = False) -> None:
                         if (now_hk - last_summon_ts) > 0.25:
                             last_summon_ts = now_hk
                             was_ctrl0_down = True
-                            trigger_master_summon()
+                            trigger_master_summon(source=f"hotkey_{hk_id}")
                             last_summon_ts = time.time()
 
                     # 1-B) 창 고정/원복 전용 핫키 (Ctrl + Alt + T)
@@ -10272,13 +10427,26 @@ def main(in_process: bool = False) -> None:
                 now = time.time()
                 if (now - last_hotkey_rebind_ts) > 15.0:
                     last_hotkey_rebind_ts = now
+                    _MAIN_LOOP_STAGE = "health_rebind"
                     try:
                         lock_sock = _ensure_single_instance_socket_alive(lock_sock)
                         _ensure_toast_worker()
+                        _ensure_mouse_hook_worker_alive()
                         u32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_NOREPEAT, VK_0)
                         u32.RegisterHotKey(None, 2, MOD_CONTROL | MOD_NOREPEAT, VK_NUMPAD0)
                         u32.RegisterHotKey(None, 4, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x54)
                         u32.SetTimer(None, 1, 25, None)
+                        # [WH_MOUSE_LL 사일런트 탈락 영구 자가치유]: 90초마다 유휴 시점에 무중단 원자적 Hook-Swap
+                        if (
+                            (now - last_mouse_rehook_ts) > 90.0
+                            and (now - last_summon_ts) > 5.0
+                            and not ((u32.GetAsyncKeyState(0x02) & 0x8000) != 0)
+                            and _ll_mouse_hook_tid[0]
+                        ):
+                            last_mouse_rehook_ts = now
+                            u32.PostThreadMessageW.argtypes = [wintypes.DWORD, wintypes.UINT, wintypes.WPARAM, wintypes.LPARAM]
+                            u32.PostThreadMessageW.restype = wintypes.BOOL
+                            u32.PostThreadMessageW(wintypes.DWORD(int(_ll_mouse_hook_tid[0])), WM_APP_REHOOK, 0, 0)
                     except Exception:
                         pass
                 while not _CLICKED_SUPERPOWER_QUEUE.empty():
@@ -10363,7 +10531,7 @@ def main(in_process: bool = False) -> None:
                     if (now - last_summon_ts) > 0.25:
                         last_summon_ts = now
                         was_key_down[0x9901] = True
-                        trigger_master_summon(summon_by_rclick=True)
+                        trigger_master_summon(summon_by_rclick=True, source="rclick_hook")
                         last_summon_ts = time.time()
 
                 rbtn_phys_now = (u32.GetAsyncKeyState(0x02) & 0x8000) != 0
@@ -10386,7 +10554,7 @@ def main(in_process: bool = False) -> None:
                         _release_target_rbutton_stuck(hwnd_fg_r)
                         if (time.time() - last_summon_ts) > 0.25:
                             last_summon_ts = time.time()
-                            trigger_master_summon(summon_by_rclick=True)
+                            trigger_master_summon(summon_by_rclick=True, source="rclick_poll")
                             last_summon_ts = time.time()
                     else:
                         _RBTN_HOLD_STATE["active"] = False
@@ -10572,23 +10740,27 @@ def main(in_process: bool = False) -> None:
                         # 유저의 직접 파일 복사(CF_HDROP) 시각 기록 (데몬 자체 라벨러 CF_HDROP 재주입은 _SELF_HDROP_UNTIL로 제외)
                         if now >= _SELF_HDROP_UNTIL and get_clipboard_hdrop_files():
                             last_hdrop_copy_ts = now
-                        # 텍스트가 아닌 경우 스샷 이미지(Bitmap)인지 확인하여 다중 스샷->PDF 버퍼에 적재
-                        try:
-                            from PIL import Image, ImageGrab
-                            clip_img = ImageGrab.grabclipboard()
-                            if isinstance(clip_img, Image.Image):
-                                buf = io.BytesIO()
-                                clip_img.save(buf, "PNG")
-                                png_bytes = buf.getvalue()
-                                if png_bytes != last_image_sig:
-                                    last_image_sig = png_bytes
-                                    if last_image_ts > 0 and (now - last_image_ts) > IMAGE_CLEAN_SECONDS:
-                                        recent_images.clear()
-                                    recent_images.append(png_bytes)
-                                    last_image_ts = now
-                                    record_ai_image_history(png_bytes)
-                        except Exception:
-                            pass
+                        # 텍스트가 아닌 경우 스샷 이미지(Bitmap)는 메인 루프 블로킹 방지를 위해 백그라운드 스레드에서 PNG 인코딩·저장
+                        def _capture_clip_img_bg(ts_cap: float) -> None:
+                            nonlocal last_image_sig, last_image_ts
+                            try:
+                                from PIL import Image, ImageGrab
+                                clip_img = ImageGrab.grabclipboard()
+                                if isinstance(clip_img, Image.Image):
+                                    buf = io.BytesIO()
+                                    clip_img.save(buf, "PNG")
+                                    png_bytes = buf.getvalue()
+                                    if png_bytes != last_image_sig:
+                                        last_image_sig = png_bytes
+                                        if last_image_ts > 0 and (ts_cap - last_image_ts) > IMAGE_CLEAN_SECONDS:
+                                            recent_images.clear()
+                                        recent_images.append(png_bytes)
+                                        last_image_ts = ts_cap
+                                        record_ai_image_history(png_bytes)
+                            except Exception:
+                                pass
+
+                        threading.Thread(target=_capture_clip_img_bg, args=(now,), daemon=True).start()
 
                 # 3) Ctrl + V 및 마스터 트리거(Ctrl + 0) 물리 키 입력 감지
                 # - Windows 입력기와 타 앱이 RegisterHotKey(Ctrl+0)를 가로채더라도 GetAsyncKeyState 하드웨어 폴링으로 100% 작동 보장!
@@ -10631,7 +10803,7 @@ def main(in_process: bool = False) -> None:
                 if ctrl0_now and not was_ctrl0_down:
                     if (time.time() - last_summon_ts) > 0.30:
                         last_summon_ts = time.time()
-                        trigger_master_summon()
+                        trigger_master_summon(source="ctrl0_poll")
                         last_summon_ts = time.time()
                 was_ctrl0_down = ctrl0_now
 
@@ -10758,15 +10930,15 @@ def main(in_process: bool = False) -> None:
                                         if idx_at_txt:
                                             s_at = wintypes.DWORD(0)
                                             e_at = wintypes.DWORD(0)
-                                            u32.SendMessageW(ed_prev, EM_GETSEL, ctypes.addressof(s_at), ctypes.addressof(e_at))
+                                            _send_msg_timeout_val(ed_prev, EM_GETSEL, ctypes.addressof(s_at), ctypes.addressof(e_at), 120)
                                             ln_st_at, ln_ed_at, cur_ln_at = _get_logical_line_bounds_utf16(
                                                 idx_at_txt.encode("utf-16-le"), s_at.value
                                             )
                                             if cur_ln_at.endswith(conv_prev + "@") and ln_ed_at > ln_st_at:
                                                 new_ln_at = cur_ln_at[: -(len(conv_prev) + 1)] + raw_rest
-                                                u32.SendMessageW(ed_prev, EM_SETSEL, ln_st_at, ln_ed_at)
+                                                _send_msg_timeout_val(ed_prev, EM_SETSEL, ln_st_at, ln_ed_at, 120)
                                                 rb_at = ctypes.create_unicode_buffer(new_ln_at)
-                                                u32.SendMessageW(ed_prev, EM_REPLACESEL, 1, ctypes.addressof(rb_at))
+                                                _send_msg_timeout_val(ed_prev, EM_REPLACESEL, 1, ctypes.addressof(rb_at), 150)
                                                 restored_ok = True
                                     if not restored_ok and conv_prev:
                                         release_all_modifiers()
