@@ -23,6 +23,8 @@ import json
 import os
 from pathlib import Path
 import re
+import subprocess
+import sys
 import threading
 import time
 import tkinter as tk
@@ -466,15 +468,86 @@ def build_ui2_search_window(
     get_external_drive_banner = ctx.get("get_external_drive_banner")
     decide_external_drive = ctx.get("decide_external_drive")
 
-    def _open_file_in_os(fpath: str) -> None:
-        if not fpath or not os.path.exists(fpath):
+    def _open_file_in_os(fpath: str) -> str:
+        abs_fp = os.path.abspath(fpath) if fpath else ""
+        if not abs_fp or not os.path.exists(abs_fp):
             toast_queue.put(("⚠️ 원본 파일을 찾을 수 없습니다.", 2000))
-            return
+            return "break"
+
+        def _launch_worker(target_p: str) -> None:
+            opened = False
+            if sys.platform == "win32":
+                com_inited = False
+                try:
+                    # Windows ShellExecuteW(한컴PDF/사진앱/DDE 핸들러 포함)는 STA COM 초기화가 필수이며
+                    # DETACHED_PROCESS 데몬 스레드에서 단순 os.startfile이 무응답 실패하는 문제를 원천 차단합니다.
+                    hr = ctypes.windll.ole32.CoInitializeEx(None, 0x2)  # COINIT_APARTMENTTHREADED
+                    com_inited = hr in (0, 1)
+                except Exception:
+                    pass
+                try:
+                    shell32 = ctypes.windll.shell32
+                    shell32.ShellExecuteW.argtypes = [
+                        wintypes.HWND,
+                        wintypes.LPCWSTR,
+                        wintypes.LPCWSTR,
+                        wintypes.LPCWSTR,
+                        wintypes.LPCWSTR,
+                        ctypes.c_int,
+                    ]
+                    shell32.ShellExecuteW.restype = ctypes.c_void_p
+                    rc = int(
+                        shell32.ShellExecuteW(
+                            None,
+                            "open",
+                            target_p,
+                            None,
+                            os.path.dirname(target_p) or None,
+                            1,  # SW_SHOWNORMAL
+                        )
+                        or 0
+                    )
+                    if rc > 32:
+                        opened = True
+                except Exception:
+                    pass
+                finally:
+                    if com_inited:
+                        try:
+                            ctypes.windll.ole32.CoUninitialize()
+                        except Exception:
+                            pass
+                if not opened:
+                    try:
+                        os.startfile(target_p)
+                        opened = True
+                    except Exception:
+                        pass
+                if not opened:
+                    try:
+                        subprocess.Popen(
+                            ["cmd.exe", "/c", "start", "", target_p],
+                            creationflags=0x08000000,
+                            close_fds=True,
+                        )
+                        opened = True
+                    except Exception:
+                        pass
+            else:
+                try:
+                    os.startfile(target_p)
+                    opened = True
+                except Exception:
+                    pass
+            if not opened:
+                toast_queue.put(("⚠️ 파일 열기에 실패했습니다.", 2200))
+
         try:
+            threading.Thread(target=_launch_worker, args=(abs_fp,), daemon=True).start()
             close_win()
-            os.startfile(fpath)
         except Exception:
             toast_queue.put(("⚠️ 파일 열기에 실패했습니다.", 2200))
+        return "break"
 
     def _copy_item_to_clipboard(text_val: str = "", file_path: str = "") -> None:
         fp = (file_path or "").strip()
@@ -639,6 +712,52 @@ def build_ui2_search_window(
     s_entry.pack(side="left", fill="x", expand=True, padx=(0, 4))
     if init_query:
         s_entry.insert(0, init_query)
+
+    def _get_live_entry_query() -> str:
+        """
+        [Windows 한글 IME 조합 중 마지막 글자 실시간 결합 — '바다' 입력 시 '바'만 검색되던 근본 결함 영구 해소]:
+        - Tkinter Entry.get()은 Windows 한글 IME가 조합 중인 마지막 음절('다')을 확정(Space/Enter/클릭) 전까지
+          반환하지 않아, 화면에는 '바다'가 보이는데 '바' 결과가 뜨고 클릭 순간 목록이 뒤바뀌는 버그가 발생합니다.
+        - imm32.ImmGetCompositionStringW(GCS_COMPSTR)로 조합 중인 음절을 실시간 읽어 커서 위치에 합쳐 반환합니다.
+        """
+        base_txt = s_entry.get()
+        if sys.platform != "win32":
+            return base_txt
+        try:
+            hwnd_e = s_entry.winfo_id()
+            if not hwnd_e:
+                return base_txt
+            imm32 = ctypes.windll.imm32
+            imm32.ImmGetContext.argtypes = [wintypes.HWND]
+            imm32.ImmGetContext.restype = wintypes.HANDLE
+            imm32.ImmReleaseContext.argtypes = [wintypes.HWND, wintypes.HANDLE]
+            imm32.ImmReleaseContext.restype = wintypes.BOOL
+            imm32.ImmGetCompositionStringW.argtypes = [
+                wintypes.HANDLE,
+                wintypes.DWORD,
+                ctypes.c_void_p,
+                wintypes.DWORD,
+            ]
+            imm32.ImmGetCompositionStringW.restype = ctypes.c_long
+            himc = imm32.ImmGetContext(hwnd_e)
+            if not himc:
+                return base_txt
+            try:
+                cb = imm32.ImmGetCompositionStringW(himc, 0x0008, None, 0)  # GCS_COMPSTR
+                if cb and cb > 0:
+                    buf = ctypes.create_unicode_buffer(cb // 2 + 1)
+                    got = imm32.ImmGetCompositionStringW(himc, 0x0008, buf, cb)
+                    if got > 0 and buf.value:
+                        try:
+                            ins_idx = int(s_entry.index(tk.INSERT))
+                        except Exception:
+                            ins_idx = len(base_txt)
+                        return base_txt[:ins_idx] + buf.value + base_txt[ins_idx:]
+            finally:
+                imm32.ImmReleaseContext(hwnd_e, himc)
+        except Exception:
+            pass
+        return base_txt
 
     # 2단 필터 바: [전체] [📄문서] [🖼️사진] [🎬영상] + 우측 안내
     fbar = tk.Frame(outer, bg="#0B1120")
@@ -880,7 +999,7 @@ def build_ui2_search_window(
                 ins_b.bind("<Button-1>", lambda _e, t=res_str: paste_to_target(text_val=t, file_path=""))
             return
 
-        q = s_entry.get().strip()
+        q = _get_live_entry_query().strip()
         vid_ocr_map = _load_local_video_ocr_by_name()
 
         pool: list[dict] = []
@@ -1259,6 +1378,13 @@ def build_ui2_search_window(
             _resize_for_stage(activate=False)
 
         st_state["items"] = candidates
+        locked_fp = str(st_state.get("selected_fp_lock") or "").strip().lower()
+        if locked_fp and candidates:
+            for _ci, _crec in enumerate(candidates):
+                _cfp = str(_crec.get("img_path") or _crec.get("file_path") or "").strip().lower()
+                if _cfp and _cfp == locked_fp:
+                    st_state["sel_idx"] = _ci
+                    break
         st_state["sel_idx"] = min(st_state["sel_idx"], max(0, len(candidates) - 1))
 
         if not candidates:
@@ -1426,13 +1552,14 @@ def build_ui2_search_window(
                 need_preview_expand = st_state["mode"] == "compact" and st_state["stage"] == "small"
                 if st_state["sel_idx"] != i_row or need_preview_expand:
                     st_state["sel_idx"] = i_row
+                    st_state["selected_fp_lock"] = str(r.get("img_path") or r.get("file_path") or "").strip()
                     if st_state["mode"] == "compact" and (r.get("file_path") or r.get("img_path") or r.get("text")):
                         st_state["stage"] = "medium"
                         st_state["manual_stage"] = "medium"
                         st_state["custom_h"] = None
                         _resize_for_stage(activate=False)
                     _render_search_results()
-                    return
+                    return "break"
                 fpath = str(r.get("file_path") or r.get("img_path") or "").strip()
                 if fpath and not is_input_context:
                     _open_file_in_os(fpath)
@@ -1715,7 +1842,7 @@ def build_ui2_search_window(
                     lambda _e, fp=s_fpath: (close_win(), clicked_superpower_queue.put(("labeler", fp))),
                 )
 
-    last_typed_q = [s_entry.get()]
+    last_typed_q = [_get_live_entry_query()]
 
     def _on_key_rel(event=None):
         is_hovered[0] = True
@@ -1725,10 +1852,11 @@ def build_ui2_search_window(
             "Alt_L", "Alt_R", "Super_L", "Super_R", "Win_L", "Win_R", "Caps_Lock",
         ):
             return
-        cur_q = s_entry.get()
+        cur_q = _get_live_entry_query()
         if cur_q == last_typed_q[0]:
             return
         last_typed_q[0] = cur_q
+        st_state["selected_fp_lock"] = ""
         st_state["last_typing_ts"] = time.time()
         if st_state["mode"] == "compact":
             st_state["manual_stage"] = None
@@ -1813,6 +1941,16 @@ def build_ui2_search_window(
                 st_state["bg_ocr_done_payload"] = None
                 st_state["video_ocr_loading"] = False
                 st_state["video_ocr_result_text"] = ft_done
+                st_state["bg_ui_dirty"] = True
+            # [한글 IME 조합음 실시간 감시]: KeyRelease가 누락되거나 IME 조합 중 음절이 바뀐 경우도 70ms 내 자동 동기화
+            live_q_poll = _get_live_entry_query()
+            if live_q_poll != last_typed_q[0]:
+                last_typed_q[0] = live_q_poll
+                st_state["selected_fp_lock"] = ""
+                st_state["last_typing_ts"] = time.time()
+                if st_state["mode"] == "compact":
+                    st_state["manual_stage"] = None
+                st_state["sel_idx"] = 0
                 st_state["bg_ui_dirty"] = True
             if st_state.get("bg_ui_dirty"):
                 st_state["bg_ui_dirty"] = False

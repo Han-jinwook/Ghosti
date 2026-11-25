@@ -12,7 +12,7 @@ export const Z_CORE_PORT = 5199;
 export const Z_CORE_ORIGIN = `http://127.0.0.1:${Z_CORE_PORT}`;
 export const Z_CORE_ZIP_URL = 'https://github.com/Han-jinwook/Ghosti/releases/download/z-core-latest/Merlin_Z_Core.zip';
 /** 현재 배포 중인 최신 Z-코어 버전 (Merlin_Z_Core.zip 안의 Merlin_Z_Core_Setup.exe 버전과 반드시 일치시킬 것 — 불일치 시 self-update 루프 발생) */
-export const LATEST_Z_CORE_VERSION = '2.8.64';
+export const LATEST_Z_CORE_VERSION = '2.8.79';
 
 /**
  * 현재 브라우저 세션이 로그인된 실사용자인지, 아니면 비로그인(크롬 게스트 모드 / 시크릿 창 / 첫 방문자)인지 판별합니다.
@@ -42,15 +42,28 @@ export function hasActiveGhostiLoginSession(): boolean {
     if (hasActiveLogoutLock || isLoggedOut) {
       return false;
     }
+    const hubToken = (localStorage.getItem('merlin_session_token') || '').trim();
+    const hubEmail = (localStorage.getItem('ghosti_hub_user_email') || '').trim();
+    const hasHubLogin = Boolean((hubToken && hubToken.includes('.')) || hubEmail);
+    // [비로그인 공유방 초대 링크 열람 격리]:
+    // 비로그인 상태에서 가족·동호회·동창회 초대 링크(?invite= / ?inviteToken= / ?preview=guest)로 접속한 게스트는
+    // 이번 세션에서 명시적으로 PC 연결에 동의(ghosti_one_stop_agreed)하기 전까지 로컬 Z-코어에 자동 연결하지 않습니다.
+    const isUnauthedInvitePreview =
+      !hasHubLogin &&
+      (params.has('invite') ||
+        params.has('inviteToken') ||
+        params.get('preview') === 'guest' ||
+        Boolean(sessionStorage.getItem('ghosti_active_invite_token')));
+    if (isUnauthedInvitePreview) {
+      return sessionStorage.getItem('ghosti_one_stop_agreed') === '1';
+    }
     if (
       sessionStorage.getItem('ghosti_one_stop_agreed') === '1' ||
       localStorage.getItem('ghosti_secretary_engine_agreed') === '1'
     ) {
       return true;
     }
-    const hubToken = (localStorage.getItem('merlin_session_token') || '').trim();
-    const hubEmail = (localStorage.getItem('ghosti_hub_user_email') || '').trim();
-    if ((hubToken && hubToken.includes('.')) || hubEmail) {
+    if (hasHubLogin) {
       return true;
     }
     return false;
@@ -307,6 +320,24 @@ class ZCoreBridgeManager {
       this.pollTimer = null;
     }
   }
+
+  public disconnectForLogout() {
+    this.consecutiveFailures = 0;
+    this.selfUpdateRequested = false;
+    try {
+      sessionStorage.removeItem('ghosti_one_stop_agreed');
+      localStorage.removeItem('ghosti_secretary_engine_agreed');
+    } catch {
+      /* ignore */
+    }
+    if (this.isConnected) {
+      this.isConnected = false;
+      this.notify();
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('zCoreDisconnected'));
+      }
+    }
+  }
 }
 
 export const zCoreBridge = ZCoreBridgeManager.getInstance();
@@ -418,8 +449,10 @@ export function ensureLoginAndZCoreReady(_actionName = '실행'): boolean {
       );
       return false;
     }
-    // 귀신비서 안에서는 조용히 헬스체크 재확인만 수행 (방해 팝업 띄우지 않음)
-    void zCoreBridge.checkHealth(true);
+    // 귀신비서 안에서는 로그인·동의된 세션일 때만 조용히 헬스체크 재확인 수행 (비로그인·미동의 게스트 자동 연결 차단)
+    if (hasActiveGhostiLoginSession()) {
+      void zCoreBridge.checkHealth(false);
+    }
     return false;
   }
 
