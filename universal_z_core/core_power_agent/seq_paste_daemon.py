@@ -3539,38 +3539,67 @@ _SEARCH_SKIP_SUB_DIRS = {
     "target", "packages", "vendor", "bower_components", "site-packages",
     "merlin_ai_models", "shadowvault", "windowsapps", "wpsystem", "wudownloadcache",
     "config.msi", "drivers", "efi", "boot", "windows.old", "onedrivetemp",
-    ".gradle", "gradle", "pods", "android", "ios",
+    ".gradle", "gradle", "pods", "android", "ios", ".next", ".nuxt", ".vite",
+    ".cache", "coverage", "storybook-static", "documents and settings",
 }
 
+_SCAN_DIRS_CACHE: dict = {"ts": 0.0, "dirs": []}
 
-def _collect_search_scan_dirs(max_total_dirs: int = 450, max_per_root: int = 80, time_budget_sec: float = 0.55) -> list[Path]:
-    """모든 사용자 폴더 및 C:/D:/E:/F:/G:/S: 전 하드 드라이브에서 시스템·개발 폴더를 제외하고 최대 3단계 하위 폴더까지 초고속 수집."""
+
+def _collect_search_scan_dirs(
+    max_total_dirs: int = 3200,
+    max_per_root: int = 450,
+    time_budget_sec: float = 5.0,
+    force: bool = False,
+) -> list[Path]:
+    """
+    [전 하드 드라이브 Starvation 0% 공정 라운드-로빈 폴더 수집기]:
+    - Pass 1: 모든 사용자 폴더 및 C:/D:/E:/F:/G:/S: 드라이브 루트를 타임아웃 없이 100% 먼저 편입.
+    - Pass 2: 각 루트별 BFS 큐를 라운드-로빈(1폴더씩 교대 확장)으로 최대 4단계까지 공정 탐색하여
+      어느 한 폴더가 느리거나 하위 폴더가 많아도 다른 드라이브(D:/E:/F:/G:)가 절대 누락되지 않도록 보장.
+    """
+    now_c = time.time()
+    if not force and _SCAN_DIRS_CACHE["dirs"] and (now_c - float(_SCAN_DIRS_CACHE["ts"])) < 20.0:
+        return list(_SCAN_DIRS_CACHE["dirs"])
+
     folders = _get_known_user_folders_for_search()
     scan_dirs: list[Path] = []
     seen_scan_dirs: set[str] = set()
     t_start = time.time()
 
+    root_states: list[dict[str, Any]] = []
     for root_fd in folders:
-        if len(scan_dirs) >= max_total_dirs or (time.time() - t_start) > time_budget_sec:
-            break
         norm_r = os.path.normcase(os.path.abspath(str(root_fd)))
         if norm_r not in seen_scan_dirs:
             seen_scan_dirs.add(norm_r)
             scan_dirs.append(root_fd)
+        rs = str(root_fd)
+        is_drive_root = len(rs) <= 3 and len(rs) >= 2 and rs[1] == ":"
+        cap_for_root = max(max_per_root, 900) if is_drive_root else max_per_root
+        root_states.append({
+            "queue": [(root_fd, 0)],
+            "added": 0,
+            "cap": cap_for_root,
+        })
 
-        # BFS 최대 3단계(L1 -> L2 -> L3) 탐색
-        sub_added = 0
-        queue_bfs: list[tuple[Path, int]] = [(root_fd, 0)]
-        while queue_bfs and sub_added < max_per_root and len(scan_dirs) < max_total_dirs:
-            if (time.time() - t_start) > time_budget_sec:
+    max_depth = 4
+    active = True
+    while active and len(scan_dirs) < max_total_dirs and (time.time() - t_start) <= time_budget_sec:
+        active = False
+        for st in root_states:
+            if len(scan_dirs) >= max_total_dirs or (time.time() - t_start) > time_budget_sec:
                 break
-            cur_fd, depth = queue_bfs.pop(0)
-            if depth >= 3:
+            q_list = st["queue"]
+            if not q_list or st["added"] >= st["cap"]:
+                continue
+            active = True
+            cur_fd, depth = q_list.pop(0)
+            if depth >= max_depth:
                 continue
             try:
                 with os.scandir(cur_fd) as it_sub:
                     for sub_e in it_sub:
-                        if sub_added >= max_per_root or len(scan_dirs) >= max_total_dirs:
+                        if st["added"] >= st["cap"] or len(scan_dirs) >= max_total_dirs:
                             break
                         try:
                             if not sub_e.is_dir(follow_symlinks=False):
@@ -3588,17 +3617,20 @@ def _collect_search_scan_dirs(max_total_dirs: int = 450, max_per_root: int = 80,
                                 seen_scan_dirs.add(norm_s)
                                 p_sub = Path(sub_e.path)
                                 scan_dirs.append(p_sub)
-                                sub_added += 1
-                                if depth + 1 < 3:
-                                    queue_bfs.append((p_sub, depth + 1))
+                                st["added"] += 1
+                                if depth + 1 < max_depth:
+                                    q_list.append((p_sub, depth + 1))
                         except Exception:
                             pass
             except Exception:
                 pass
+
+    _SCAN_DIRS_CACHE["dirs"] = list(scan_dirs)
+    _SCAN_DIRS_CACHE["ts"] = time.time()
     return scan_dirs
 
 
-def _compute_watched_folders_fast_sig() -> str:
+def _compute_watched_folders_fast_sig(scan_dirs: list[Path] | None = None) -> str:
     """
     [열려 있는 귀신검색창 실시간 파일 추가·변경 감지용 무핸들 시그니처]:
     - os.scandir의 WIN32_FIND_DATA만으로 커널 핸들 오픈 0회로 (폴더수, 파일수, 최신수정시각ns, 용량합)을 반환합니다.
@@ -3608,13 +3640,14 @@ def _compute_watched_folders_fast_sig() -> str:
         ".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif", ".bmp", ".heic", ".heif",
         ".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v", ".3gp", ".ts", ".mts", ".flv",
     }
-    scan_dirs = _collect_search_scan_dirs()
+    if scan_dirs is None:
+        scan_dirs = _collect_search_scan_dirs()
     f_cnt = 0
     max_mt_ns = 0
     sz_acc = 0
     t_sig_start = time.time()
     for fd in scan_dirs:
-        if (time.time() - t_sig_start) > 0.65:
+        if (time.time() - t_sig_start) > 1.8:
             break
         try:
             with os.scandir(fd) as it:
@@ -3646,16 +3679,46 @@ def _compute_watched_folders_fast_sig() -> str:
     return f"{len(scan_dirs)}:{f_cnt}:{max_mt_ns}:{sz_acc}"
 
 
+def _select_fair_by_drive(items: list[dict], limit: int) -> list[dict]:
+    """
+    [드라이브별 공정 쿼터 선선발]:
+    - C: 드라이브에 최신 파일이 수천 개 몰려 있어도 D:/E:/F:/G:/S: 드라이브 파일이 전역 최신순 컷오프에서
+      밀려 탈락하지 않도록, 각 드라이브별 최소 보장 쿼터를 먼저 확보한 뒤 잔여 슬롯을 전체 최신순으로 채웁니다.
+    """
+    if len(items) <= limit:
+        return list(items)
+    by_drv: dict[str, list[dict]] = {}
+    for it in items:
+        fp = str(it.get("file_path") or "")
+        drv_k = fp[:2].upper() if len(fp) >= 2 and fp[1] == ":" else "OTHER"
+        by_drv.setdefault(drv_k, []).append(it)
+    if len(by_drv) <= 1:
+        return items[:limit]
+    per_drv_quota = max(120, limit // max(2, len(by_drv) + 1))
+    selected: list[dict] = []
+    leftover: list[dict] = []
+    for drv_items in by_drv.values():
+        selected.extend(drv_items[:per_drv_quota])
+        if len(drv_items) > per_drv_quota:
+            leftover.extend(drv_items[per_drv_quota:])
+    if len(selected) < limit and leftover:
+        leftover.sort(key=lambda x: x.get("ts", 0.0), reverse=True)
+        selected.extend(leftover[: limit - len(selected)])
+    selected.sort(key=lambda x: x.get("ts", 0.0), reverse=True)
+    return selected[:limit]
+
+
 def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
     """
     [초고속 전 하드 드라이브 로컬 파일 스캐너 — UI 스레드 블로킹 0%]:
-    1) C드라이브 KnownFolders뿐 아니라 D:/E:/F:/G:/I:/S: 등 모든 고정·이동식 하드 드라이브를 os.scandir로 무핸들 스캔합니다.
-    2) 최신순 문서 800건 + 사진 1,200건 + 영상 400건(최대 2,400건)을 인덱싱하여 보조 드라이브 파일이 150건 컷오프에 잘리지 않게 보장합니다.
+    1) C드라이브 KnownFolders뿐 아니라 D:/E:/F:/G:/I:/S: 등 모든 고정·이동식 하드 드라이브를 라운드-로빈 os.scandir로 누락 없이 스캔합니다.
+    2) 드라이브별 공정 쿼터 + 최신순 문서 2,500건 + 사진 2,500건 + 영상 800건(최대 5,800건)을 인덱싱하여 보조 드라이브 파일이 C: 파일에 밀려 잘리지 않게 보장합니다.
     3) OneDrive 미동기화 클라우드 전용 파일은 원격 다운로드를 유발하지 않도록 스킵합니다.
     """
     with _LOCAL_FILE_SCAN_LOCK:
         now = time.time()
-        cur_sig = _compute_watched_folders_fast_sig()
+        scan_dirs = _collect_search_scan_dirs(force=force)
+        cur_sig = _compute_watched_folders_fast_sig(scan_dirs=scan_dirs)
         if (
             not force
             and _LOCAL_FILE_CACHE["ts"] > 0.0
@@ -3668,7 +3731,6 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
         img_exts = {".png", ".jpg", ".jpeg", ".jfif", ".webp", ".gif", ".bmp", ".heic", ".heif"}
         vid_exts = {".mp4", ".mov", ".avi", ".mkv", ".webm", ".wmv", ".m4v", ".3gp", ".ts", ".mts", ".flv"}
 
-        scan_dirs = _collect_search_scan_dirs()
         by_kind: dict[str, list[dict]] = {"doc": [], "image": [], "video": []}
         seen_files: set[str] = set()
         CLOUD_UNHYDRATED_MASK = 0x00400000 | 0x00001000  # FILE_ATTRIBUTE_RECALL_ON_DATA_ACCESS | FILE_ATTRIBUTE_OFFLINE
@@ -3739,7 +3801,7 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
         for fk in by_kind:
             by_kind[fk].sort(key=lambda x: x.get("ts", 0.0), reverse=True)
 
-        top_docs = by_kind["doc"][:800]
+        top_docs = _select_fair_by_drive(by_kind["doc"], 2500)
         if top_docs:
             doc_body_cache = _load_doc_body_cache_fast()
             for idx_d, d_it in enumerate(top_docs):
@@ -3781,7 +3843,11 @@ def _scan_lightweight_local_files_sync(force: bool = False) -> list[dict]:
                 except Exception:
                     pass
 
-        top_items = top_docs + by_kind["image"][:1200] + by_kind["video"][:400]
+        top_items = (
+            top_docs
+            + _select_fair_by_drive(by_kind["image"], 2500)
+            + _select_fair_by_drive(by_kind["video"], 800)
+        )
 
         # [3단계: 승인된('included') 연결 외장 드라이브 로컬 캐시 병합 (탈착 시 즉시 자동 숨김 · USB 내부 쓰기 0 Byte)]
         _EXTERNAL_DRIVE_RUNTIME_STATE["stage1_c_done"] = True
