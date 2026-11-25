@@ -575,41 +575,24 @@ def main():
     _now_hr = _dt.datetime.now().hour
     _is_qa_work_hours = (9 <= _now_hr < 15)
     if _is_qa_work_hours:
-        log("🕘 [근무시간(09:00~15:00) 안전 배포 모드] 1·2호기는 건드리지 않고 오직 3호기·4호기만 Z-코어를 업데이트합니다.")
+        log("🕘 [알바 근무시간(09:00~15:00) 전용 배포 모드] 1·2·5·6호기는 제외하고 오직 3호기(달나라)·4호기(해나라)에만 Z-코어를 설치합니다.")
         update_pc3(core_ver)
         update_pc4(core_ver)
+        log(f"\n🎉 근무시간(09:00~15:00) 안전 배포 완료 — 3호기 · 4호기 Z-코어(v{core_ver}) 설치 완료!")
     else:
         update_pc1()
         update_pc1_remote(core_ver)
         update_pc2(core_ver)
         update_pc3(core_ver)
         update_pc4(core_ver)
-    # 5호기(집 PC)는 오프라인 상태일 수 있으므로 2초 TCP 사전 체크 후 도달 가능할 때만 배포
-    try:
-        import socket
-        with socket.create_connection(("100.122.235.63", 22), timeout=2.0):
-            update_pc5(core_ver)
-    except Exception:
-        log("ℹ️ 5호기 (집 100.122.235.63) 현재 오프라인 — 배포 스킵")
-    # 빌드된 최신 Merlin_Z_Core.zip 및 z_core_version.json도 2·3귀신 워크트리에 동시 복사
-    import shutil
-    repo_root = os.path.dirname(UZC_DIR)
-    for wt_root in (r"D:\Ghosti", r"D:\Ghosti_Search", r"D:\Ghosti_Share"):
-        if os.path.isdir(wt_root) and os.path.abspath(wt_root).lower() != os.path.abspath(repo_root).lower():
-            for rel_p in (
-                os.path.join("public", "z_core_version.json"),
-                os.path.join("public", "Merlin_Z_Core.zip"),
-                os.path.join("universal_z_core", "os_agent", "dist", "Merlin_Z_Core_Setup.exe"),
-            ):
-                sp = os.path.join(repo_root, rel_p)
-                dp = os.path.join(wt_root, rel_p)
-                if os.path.exists(sp):
-                    try:
-                        os.makedirs(os.path.dirname(dp), exist_ok=True)
-                        shutil.copy2(sp, dp)
-                    except Exception:
-                        pass
-    log(f"\n🎉 전 클러스터(로컬 6호기 · 1호기 · 2호기 · 3호기 · 4호기 · 5호기) 및 1~3귀신 워크트리 통합 동기화(v{core_ver})가 완료되었습니다!")
+        # 5호기(집 PC)는 오프라인 상태일 수 있으므로 2초 TCP 사전 체크 후 도달 가능할 때만 배포
+        try:
+            import socket
+            with socket.create_connection(("100.122.235.63", 22), timeout=2.0):
+                update_pc5(core_ver)
+        except Exception:
+            log("ℹ️ 5호기 (집 100.122.235.63) 현재 오프라인 — 배포 스킵")
+        log(f"\n🎉 전 클러스터(로컬 6호기 · 1호기 · 2호기 · 3호기 · 4호기 · 5호기) 통합 동기화(v{core_ver})가 완료되었습니다!")
 
 if __name__ == "__main__":
     main()
