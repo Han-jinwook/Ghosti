@@ -1389,7 +1389,8 @@ def _start_bg_full_drive_scan_once() -> None:
                 drive = Path(d_info["root"])
 
                 stack: List[tuple[Path, int]] = [(drive, 0)]
-                while stack and len(discovered) < 800:
+                per_drive_discovered = 0
+                while stack and per_drive_discovered < 350 and len(discovered) < 1600:
                     cur, depth = stack.pop(0)
                     try:
                         cur_res = cur.resolve()
@@ -1423,6 +1424,7 @@ def _start_bg_full_drive_scan_once() -> None:
                                     pass
                         if has_media and cur_low not in known_roots_low:
                             discovered.append(cur_res)
+                            per_drive_discovered += 1
                         stack.extend((sd, depth + 1) for sd in sub_cands)
                         batch_counter += 1
                         if batch_counter % 20 == 0:
