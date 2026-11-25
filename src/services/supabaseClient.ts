@@ -251,7 +251,7 @@ export function resolveHubSupabaseBridgeEndpoint(): string {
 export async function callGhostiServerBridge<T = Record<string, unknown>>(
   action: string,
   payload: Record<string, unknown> = {},
-  opts?: { allowAnonymous?: boolean }
+  opts?: { allowAnonymous?: boolean; keepalive?: boolean }
 ): Promise<T & { ok?: boolean; reason?: string }> {
   const endpoint = resolveHubSupabaseBridgeEndpoint();
   const hubToken =
@@ -270,6 +270,7 @@ export async function callGhostiServerBridge<T = Record<string, unknown>>(
       method: 'POST',
       headers,
       body: JSON.stringify({ action, ...payload }),
+      ...(opts?.keepalive ? { keepalive: true } : {}),
     });
     const json = (await res.json().catch(() => ({ ok: false }))) as T & {
       ok?: boolean;

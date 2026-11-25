@@ -1430,14 +1430,21 @@ export async function handleAuthedWorkAndDeviceAction({
     if (targetEmail === String(ctx.room.master_email || '').toLowerCase()) {
       return { status: 400, body: { ok: false, reason: 'CANNOT_DEMOTE_MASTER' } };
     }
+    const matchedRow = (ctx.members || []).find(
+      (m) => String(m?.member_email || '').trim().toLowerCase() === targetEmail
+    );
+    if (!matchedRow) {
+      return { status: 404, body: { ok: false, reason: 'WORK_MEMBER_NOT_FOUND' } };
+    }
+    const storedEmail = String(matchedRow.member_email).trim();
     const dbRole = mapWorkRoleToDb(nextRole);
     const patchRes = await fetch(
-      `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(roomId)}&member_email=eq.${encodeURIComponent(targetEmail)}`,
+      `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(roomId)}&member_email=eq.${encodeURIComponent(storedEmail)}`,
       {
         method: 'PATCH',
         headers: srvHeaders(serviceKey, {
           'Content-Type': 'application/json',
-          Prefer: 'return=minimal',
+          Prefer: 'return=representation',
         }),
         body: JSON.stringify({ role: dbRole }),
       }
@@ -1445,7 +1452,26 @@ export async function handleAuthedWorkAndDeviceAction({
     if (!patchRes.ok) {
       return { status: 502, body: { ok: false, reason: 'WORK_ROLE_UPDATE_FAILED' } };
     }
-    return { status: 200, body: { ok: true, roomId, memberEmail: targetEmail, role: nextRole } };
+    const patchedRows = await patchRes.json().catch(() => []);
+    if (!Array.isArray(patchedRows) || patchedRows.length === 0) {
+      return { status: 404, body: { ok: false, reason: 'WORK_ROLE_NO_ROW_MATCHED' } };
+    }
+    const nextRawMembers = (ctx.members || []).map((m) =>
+      String(m?.member_email || '').trim().toLowerCase() === targetEmail
+        ? { ...m, role: dbRole }
+        : m
+    );
+    const sortedMembers = sortAndMapWorkMembers(nextRawMembers, ctx.room.master_email);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        roomId,
+        memberEmail: targetEmail,
+        role: nextRole,
+        members: sortedMembers,
+      },
+    };
   }
 
   if (action === 'work_remove_member') {
@@ -1461,8 +1487,12 @@ export async function handleAuthedWorkAndDeviceAction({
     if (targetEmail === String(ctx.room.master_email || '').toLowerCase()) {
       return { status: 400, body: { ok: false, reason: 'MASTER_CANNOT_LEAVE_OWN_ROOM' } };
     }
+    const matchedRow = (ctx.members || []).find(
+      (m) => String(m?.member_email || '').trim().toLowerCase() === targetEmail
+    );
+    const storedEmail = matchedRow ? String(matchedRow.member_email).trim() : targetEmail;
     const delRes = await fetch(
-      `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(roomId)}&member_email=eq.${encodeURIComponent(targetEmail)}`,
+      `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(roomId)}&member_email=eq.${encodeURIComponent(storedEmail)}`,
       {
         method: 'DELETE',
         headers: srvHeaders(serviceKey),
@@ -1471,7 +1501,19 @@ export async function handleAuthedWorkAndDeviceAction({
     if (!delRes.ok) {
       return { status: 502, body: { ok: false, reason: 'WORK_MEMBER_REMOVE_FAILED' } };
     }
-    return { status: 200, body: { ok: true, roomId, removedEmail: targetEmail } };
+    const remainingRaw = (ctx.members || []).filter(
+      (m) => String(m?.member_email || '').trim().toLowerCase() !== targetEmail
+    );
+    const sortedMembers = sortAndMapWorkMembers(remainingRaw, ctx.room.master_email);
+    return {
+      status: 200,
+      body: {
+        ok: true,
+        roomId,
+        removedEmail: targetEmail,
+        members: sortedMembers,
+      },
+    };
   }
 
   if (action === 'work_revoke_invite') {

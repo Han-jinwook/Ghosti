@@ -1619,19 +1619,36 @@ export async function updateWorkRoomMemberRoleOnServer(opts: {
   roomId: string;
   memberEmail: string;
   role: 'editor' | 'viewer';
-}): Promise<boolean> {
-  if (!opts.roomId || !opts.memberEmail || !hasAuthenticatedHubAccountSession()) return false;
-  const res = await callGhostiServerBridge('work_set_member_role', opts);
-  return Boolean(res.ok);
+}): Promise<{ ok: boolean; members?: WorkRoomServerMemberDto[] }> {
+  if (!opts.roomId || !opts.memberEmail || !hasAuthenticatedHubAccountSession()) {
+    return { ok: false };
+  }
+  // 권한 변경 직후 즉시 F5를 눌러도 브라우저 커널이 DB PATCH 요청을 끝까지 완수하도록 keepalive 활성화
+  const res = await callGhostiServerBridge<{ members?: WorkRoomServerMemberDto[] }>(
+    'work_set_member_role',
+    opts,
+    { keepalive: true }
+  );
+  return {
+    ok: Boolean(res.ok),
+    members: Array.isArray(res.members) ? sortWorkRoomServerMembers(res.members) : undefined,
+  };
 }
 
 export async function removeWorkRoomMemberOnServer(opts: {
   roomId: string;
   memberEmail?: string;
-}): Promise<boolean> {
-  if (!opts.roomId || !hasAuthenticatedHubAccountSession()) return false;
-  const res = await callGhostiServerBridge('work_remove_member', opts);
-  return Boolean(res.ok);
+}): Promise<{ ok: boolean; members?: WorkRoomServerMemberDto[] }> {
+  if (!opts.roomId || !hasAuthenticatedHubAccountSession()) return { ok: false };
+  const res = await callGhostiServerBridge<{ members?: WorkRoomServerMemberDto[] }>(
+    'work_remove_member',
+    opts,
+    { keepalive: true }
+  );
+  return {
+    ok: Boolean(res.ok),
+    members: Array.isArray(res.members) ? sortWorkRoomServerMembers(res.members) : undefined,
+  };
 }
 
 export async function revokeAndRotateWorkInviteOnServer(roomId: string): Promise<{
@@ -1839,19 +1856,23 @@ export function connectWorkRoomRealtimeChannel(opts: {
   nickname: string;
   role: 'host' | 'editor' | 'viewer';
   getLocalDocs: () => WorkLoungeDocDto[];
+  getLocalMembers?: () => WorkRoomServerMemberDto[];
   onRemoteSnapshot: (docs: WorkLoungeDocDto[]) => void;
   onRemoteFileDeleted: (relPath: string, deletedAt: string) => void;
   onRemoteLockMap: (locksByRelPath: Record<string, string | null>) => void;
   onPresenceMembers: (members: WorkRoomPresenceMember[]) => void;
   onRemoteTunnelEndpoint?: (tunnel: WorkHostTunnelEndpointDto) => void;
+  onRemoteMembersUpdated?: (members: WorkRoomServerMemberDto[]) => void;
 }): {
   broadcastSnapshot: (docs: WorkLoungeDocDto[]) => void;
   broadcastFileDeleted: (relPath: string, deletedAt: string) => void;
   broadcastLocks: (locksByRelPath: Record<string, string | null>) => void;
   broadcastTunnelEndpoint: (tunnel: WorkHostTunnelEndpointDto) => void;
+  broadcastMembersUpdated: (members: WorkRoomServerMemberDto[]) => void;
   dispose: () => void;
 } {
   let channel: RealtimeChannel | null = null;
+  let activeSbClient: typeof supabase = null;
   let disposed = false;
 
   const stripHeavyPayload = (docs: WorkLoungeDocDto[]) => {
@@ -1880,9 +1901,12 @@ export function connectWorkRoomRealtimeChannel(opts: {
   const start = async () => {
     // 비로그인 상태에서는 업무방 Realtime 채널 연결을 허용하지 않음 (Fail-Closed)
     if (!hasAuthenticatedHubAccountSession()) return;
-    const ok = await ensureGhostiAuthedSupabaseClient();
-    if (!ok || disposed || !supabase) return;
-    const sbClient = supabase;
+    // RLS 보호 Realtime 채널(ghosti:room:<roomId>, to authenticated) 통과를 위해 반드시 인증 JWT가 탑재된 authedSb 사용!
+    const authedSb = await ensureGhostiAuthedSupabaseClient();
+    if (disposed) return;
+    const sbClient = authedSb || supabase;
+    if (!sbClient) return;
+    activeSbClient = sbClient;
 
     channel = sbClient.channel(`ghosti:room:${opts.roomId}`, {
       config: {
@@ -1912,6 +1936,16 @@ export function connectWorkRoomRealtimeChannel(opts: {
             event: 'WORK_SNAPSHOT',
             payload: { sender: opts.peerId, docs: stripHeavyPayload(curDocs) },
           });
+        }
+        if (opts.role === 'host' && opts.getLocalMembers) {
+          const curMems = opts.getLocalMembers();
+          if (curMems.length > 0) {
+            void channel.send({
+              type: 'broadcast',
+              event: 'WORK_MEMBERS_UPDATED',
+              payload: { sender: opts.peerId, members: sortWorkRoomServerMembers(curMems) },
+            });
+          }
         }
         if (
           activeHostTunnelSession &&
@@ -1951,6 +1985,12 @@ export function connectWorkRoomRealtimeChannel(opts: {
         };
         setActiveHostTunnelSession(opts.roomId, ep);
         opts.onRemoteTunnelEndpoint?.(ep);
+      })
+      .on('broadcast', { event: 'WORK_MEMBERS_UPDATED' }, ({ payload }) => {
+        if (disposed || !Array.isArray(payload?.members)) return;
+        opts.onRemoteMembersUpdated?.(
+          sortWorkRoomServerMembers(payload.members as WorkRoomServerMemberDto[])
+        );
       })
       .subscribe(async (status) => {
         if (status !== 'SUBSCRIBED' || !channel || disposed) return;
@@ -2012,10 +2052,18 @@ export function connectWorkRoomRealtimeChannel(opts: {
         payload: tunnel,
       });
     },
+    broadcastMembersUpdated: (members: WorkRoomServerMemberDto[]) => {
+      if (!channel || disposed) return;
+      void channel.send({
+        type: 'broadcast',
+        event: 'WORK_MEMBERS_UPDATED',
+        payload: { sender: opts.peerId, members: sortWorkRoomServerMembers(members) },
+      });
+    },
     dispose: () => {
       disposed = true;
-      if (channel && supabase) {
-        void supabase.removeChannel(channel);
+      if (channel && activeSbClient) {
+        void activeSbClient.removeChannel(channel);
         channel = null;
       }
     },

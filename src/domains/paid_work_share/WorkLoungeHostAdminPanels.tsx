@@ -47,6 +47,7 @@ export interface WorkLoungeHostAdminPanelsProps {
   activeWorkRoomId: string;
   setServerMembers: React.Dispatch<React.SetStateAction<WorkRoomServerMemberDto[]>>;
   onPersistMembersCache?: (members: WorkRoomServerMemberDto[]) => void;
+  onBroadcastMembersUpdated?: (members: WorkRoomServerMemberDto[]) => void;
   showToast: (msg: string) => void;
 }
 
@@ -77,6 +78,7 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
   activeWorkRoomId,
   setServerMembers,
   onPersistMembersCache,
+  onBroadcastMembersUpdated,
   showToast,
 }) => {
   const [pendingKickMember, setPendingKickMember] = React.useState<WorkTeamMemberViewItem | null>(
@@ -100,14 +102,18 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
     const target = pendingKickMember;
     setIsKickingMember(true);
     try {
-      const ok = await removeWorkRoomMemberOnServer({
+      const kickRes = await removeWorkRoomMemberOnServer({
         roomId: activeWorkRoomId,
         memberEmail: target.email,
       });
-      if (ok) {
+      if (kickRes.ok) {
         setServerMembers((prev) => {
-          const next = prev.filter((sm) => sm.email !== target.email);
+          const next =
+            kickRes.members && kickRes.members.length > 0
+              ? kickRes.members
+              : prev.filter((sm) => sm.email !== target.email);
           onPersistMembersCache?.(next);
+          onBroadcastMembersUpdated?.(next);
           return next;
         });
         setPendingKickMember(null);
@@ -367,31 +373,52 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
                       <select
                         value={member.role}
                         onChange={async (e) => {
-                          const prevRole = member.role === 'viewer' ? 'viewer' : 'editor';
-                          const nextRole = e.target.value as 'editor' | 'viewer';
-                          setServerMembers((prev) =>
-                            prev.map((sm) =>
-                              sm.email === member.email ? { ...sm, role: nextRole } : sm
-                            )
-                          );
-                          const ok = await updateWorkRoomMemberRoleOnServer({
+                          const prevRole: 'editor' | 'viewer' =
+                            member.role === 'viewer' ? 'viewer' : 'editor';
+                          const nextRole: 'editor' | 'viewer' =
+                            e.target.value === 'viewer' ? 'viewer' : 'editor';
+                          let optimisticNext: WorkRoomServerMemberDto[] = [];
+                          setServerMembers((prev) => {
+                            optimisticNext = prev.map((sm) =>
+                              sm.email.toLowerCase() === member.email.toLowerCase()
+                                ? { ...sm, role: nextRole }
+                                : sm
+                            );
+                            return optimisticNext;
+                          });
+                          if (optimisticNext.length > 0) {
+                            onBroadcastMembersUpdated?.(optimisticNext);
+                          }
+                          const roleRes = await updateWorkRoomMemberRoleOnServer({
                             roomId: activeWorkRoomId,
                             memberEmail: member.email,
                             role: nextRole,
                           });
-                          if (!ok) {
-                            setServerMembers((prev) =>
-                              prev.map((sm) =>
-                                sm.email === member.email ? { ...sm, role: prevRole } : sm
-                              )
-                            );
+                          if (!roleRes.ok) {
+                            setServerMembers((prev) => {
+                              const reverted: WorkRoomServerMemberDto[] = prev.map((sm) =>
+                                sm.email.toLowerCase() === member.email.toLowerCase()
+                                  ? { ...sm, role: prevRole }
+                                  : sm
+                              );
+                              onPersistMembersCache?.(reverted);
+                              onBroadcastMembersUpdated?.(reverted);
+                              return reverted;
+                            });
+                            showToast('권한 변경 저장에 실패했습니다. 잠시 후 다시 시도해 주세요.');
+                            return;
+                          }
+                          if (roleRes.members && roleRes.members.length > 0) {
+                            setServerMembers(roleRes.members);
+                            onPersistMembersCache?.(roleRes.members);
+                            onBroadcastMembersUpdated?.(roleRes.members);
+                          } else if (optimisticNext.length > 0) {
+                            onPersistMembersCache?.(optimisticNext);
                           }
                           showToast(
-                            ok
-                              ? `✓ ${member.name}님의 권한을 [${
-                                  nextRole === 'viewer' ? '읽기·다운로드 전용' : '편집·업로드 허용'
-                                }]으로 변경했습니다.`
-                              : '권한 변경 저장에 실패했습니다.'
+                            `✓ ${member.name}님의 권한을 [${
+                              nextRole === 'viewer' ? '읽기·다운로드 전용' : '편집·업로드 허용'
+                            }]으로 변경했습니다.`
                           );
                         }}
                         className="px-2 py-1 rounded-md bg-white border border-slate-300 text-slate-800 text-[11px] font-medium shrink-0 cursor-pointer"
@@ -409,8 +436,14 @@ export const WorkLoungeHostAdminPanels: React.FC<WorkLoungeHostAdminPanelsProps>
                       </button>
                     </div>
                   ) : (
-                    <span className="px-2 py-0.5 rounded-md bg-white border border-slate-200 text-slate-600 text-[10.5px] font-medium shrink-0">
-                      {member.role === 'viewer' ? '읽기 전용' : '편집·업로드'}
+                    <span
+                      className={`px-2 py-0.5 rounded-md border text-[10.5px] font-semibold shrink-0 ${
+                        member.role === 'viewer'
+                          ? 'bg-amber-50 border-amber-200 text-amber-800'
+                          : 'bg-teal-50 border-teal-200 text-teal-800'
+                      }`}
+                    >
+                      {member.role === 'viewer' ? '읽기·다운로드 전용' : '편집·업로드 허용'}
                     </span>
                   )}
                 </div>

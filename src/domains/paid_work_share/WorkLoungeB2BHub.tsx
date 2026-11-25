@@ -1101,12 +1101,42 @@ export const WorkLoungeB2BHub: React.FC = () => {
           return;
         }
         setRemoteRoomLockReason(null);
-        if (authed.role) setMyRoomRole(authed.role);
         if (authed.seatLimit) setRoomSeatLimit(authed.seatLimit);
+        const cleanMyEmail = (merlinAuth?.email || '').trim().toLowerCase();
         if (Array.isArray(authed.members)) {
           const sortedMembers = sortWorkRoomServerMembers(authed.members);
           setServerMembers(sortedMembers);
           saveCachedServerMembers(activeWorkRoomId, sortedMembers, merlinAuth?.email || undefined);
+          const myRow = cleanMyEmail
+            ? sortedMembers.find((m) => m.email.toLowerCase() === cleanMyEmail)
+            : undefined;
+          const resolvedRole: 'host' | 'editor' | 'viewer' | undefined = myRow
+            ? myRow.role === 'master'
+              ? 'host'
+              : myRow.role
+            : authed.role;
+          if (resolvedRole) {
+            setMyRoomRole(resolvedRole);
+            if (resolvedRole !== 'host') {
+              setJoinedInvitedRoom((prev) => {
+                const nextJoined: JoinedWorkRoomSummary = {
+                  roomId: activeWorkRoomId,
+                  roomTitle: prev?.roomTitle || inviteMeta.roomTitle || '우리팀 업무 공유방 (S:)',
+                  hostEmail: prev?.hostEmail || '',
+                  hostNickname: prev?.hostNickname || inviteMeta.hostNickname || '방장',
+                  isHost: false,
+                  role: resolvedRole,
+                  ownerUnlocked: true,
+                  seatLimit: authed.seatLimit || prev?.seatLimit || 5,
+                  lockReason: null,
+                };
+                saveCachedJoinedWorkRoomMeta(nextJoined, merlinAuth?.email || undefined);
+                return nextJoined;
+              });
+            }
+          }
+        } else if (authed.role) {
+          setMyRoomRole(authed.role);
         }
         if (authed.hostTunnel?.masterServerName) {
           setMasterWorkPcName(authed.hostTunnel.masterServerName);
@@ -1138,7 +1168,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
           (!isZCoreConnected || authed.role !== 'host') &&
           remoteDocsRef.current.length === 0
         ) {
-          // 대장 PC가 방금 터널 기동 중(starting, 3~5초 소요)일 때 15초 주기까지 기다리지 않고 3.5초 뒤 즉시 1회 재확인
+          // 대장 PC가 방금 터널 기동 중(starting, 3~5초 소요)일 때 주기까지 기다리지 않고 3.5초 뒤 즉시 1회 재확인
           window.setTimeout(() => {
             if (!cancelled && remoteDocsRef.current.length === 0) {
               void loadRemoteState();
@@ -1160,22 +1190,26 @@ export const WorkLoungeB2BHub: React.FC = () => {
     const pollId = window.setInterval(() => {
       if (typeof document !== 'undefined' && document.visibilityState === 'hidden') return;
       void loadRemoteState();
-    }, 15000);
+    }, 6000);
     const onVisibleRemote = () => {
-      if (document.visibilityState === 'visible') {
+      if (typeof document === 'undefined' || document.visibilityState === 'visible') {
         void loadRemoteState();
       }
     };
+    window.addEventListener('focus', onVisibleRemote);
     document.addEventListener('visibilitychange', onVisibleRemote);
     return () => {
       cancelled = true;
       window.clearInterval(pollId);
+      window.removeEventListener('focus', onVisibleRemote);
       document.removeEventListener('visibilitychange', onVisibleRemote);
     };
   }, [
     activeWorkRoomId,
     inviteMeta.hasWorkInvite,
     inviteMeta.inviteToken,
+    inviteMeta.roomTitle,
+    inviteMeta.hostNickname,
     isAuthenticated,
     isZCoreConnected,
     merlinAuth?.userId,
@@ -1185,7 +1219,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
     mergeAndPersistTombstones,
   ]);
 
-  // 방장 ↔ 팀원 실시간 신호·잠금·삭제 Tombstone·터널 주소 중매 채널 연결 (서버 파일 저장 0 Byte)
+  const serverMembersRef = useRef<WorkRoomServerMemberDto[]>(serverMembers);
+  serverMembersRef.current = serverMembers;
+
+  // 방장 ↔ 팀원 실시간 신호·잠금·삭제 Tombstone·터널 주소·팀원 권한 중매 채널 연결 (서버 파일 저장 0 Byte)
   useEffect(() => {
     if (!activeWorkRoomId || !isWorkUnlocked || !hasAuthenticatedHubAccountSession()) {
       return undefined;
@@ -1196,6 +1233,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
       nickname: actorNickname,
       role: myRoomRole,
       getLocalDocs: () => localDocsRef.current,
+      getLocalMembers: () => serverMembersRef.current,
       onRemoteSnapshot: (incomingDocs) => {
         const curTombs = deletedTombstonesRef.current;
         const cleaned = incomingDocs.filter((d) => {
@@ -1270,6 +1308,48 @@ export const WorkLoungeB2BHub: React.FC = () => {
           });
         }
       },
+      onRemoteMembersUpdated: (incomingMembers) => {
+        const sorted = sortWorkRoomServerMembers(incomingMembers);
+        const cleanMyEmail = (merlinAuth?.email || '').trim().toLowerCase();
+        if (cleanMyEmail && sorted.length > 0) {
+          const myRow = sorted.find((m) => m.email.toLowerCase() === cleanMyEmail);
+          if (!myRow && !isOwnWorkUnlocked) {
+            // 방장이 나를 내보낸 경우 즉시 업무방 화면·로컬 캐시 정리
+            void purgeLocalWorkRoomDocs(activeWorkRoomId, cleanMyEmail);
+            clearCachedJoinedWorkRoomMeta(cleanMyEmail);
+            setJoinedInvitedRoom(null);
+            setServerMembers([]);
+            setRemoteDocs([]);
+            setLocalDocs([]);
+            setActiveWorkRoomId('');
+            return;
+          }
+          if (myRow) {
+            const nextRole: 'host' | 'editor' | 'viewer' =
+              myRow.role === 'master' ? 'host' : myRow.role;
+            setMyRoomRole(nextRole);
+            if (nextRole !== 'host') {
+              setJoinedInvitedRoom((prev) => {
+                const nextJoined: JoinedWorkRoomSummary = {
+                  roomId: activeWorkRoomId,
+                  roomTitle: prev?.roomTitle || inviteMeta.roomTitle || '우리팀 업무 공유방 (S:)',
+                  hostEmail: prev?.hostEmail || '',
+                  hostNickname: prev?.hostNickname || inviteMeta.hostNickname || '방장',
+                  isHost: false,
+                  role: nextRole,
+                  ownerUnlocked: true,
+                  seatLimit: prev?.seatLimit || roomSeatLimit || 5,
+                  lockReason: null,
+                };
+                saveCachedJoinedWorkRoomMeta(nextJoined, cleanMyEmail);
+                return nextJoined;
+              });
+            }
+          }
+        }
+        setServerMembers(sorted);
+        saveCachedServerMembers(activeWorkRoomId, sorted, merlinAuth?.email || undefined);
+      },
     });
     realtimeRef.current = handle;
     return () => {
@@ -1279,12 +1359,17 @@ export const WorkLoungeB2BHub: React.FC = () => {
   }, [
     activeWorkRoomId,
     isWorkUnlocked,
+    isOwnWorkUnlocked,
+    roomSeatLimit,
     actorNickname,
     myRoomRole,
     isZCoreConnected,
     isJoinedInvitedMember,
     inviteMeta.hasWorkInvite,
+    inviteMeta.roomTitle,
+    inviteMeta.hostNickname,
     merlinAuth?.email,
+    saveCachedServerMembers,
     mergeAndPersistTombstones,
   ]);
 
@@ -2065,6 +2150,18 @@ export const WorkLoungeB2BHub: React.FC = () => {
                 ? `대장 PC 직통 연결됨 · 팀원 ${teamMembers.length}/${roomSeatLimit}명 · ${docs.length}건`
                 : '사내 대장 PC 직통 연결 확인 중 · 0건'}
             </span>
+            {myRoomRole !== 'host' && (
+              <span
+                data-testid="work-my-role-live-badge"
+                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full border text-[11px] font-bold ${
+                  myRoomRole === 'viewer'
+                    ? 'bg-amber-500/15 border-amber-400/45 text-amber-200'
+                    : 'bg-teal-500/15 border-teal-400/45 text-teal-200'
+                }`}
+              >
+                내 권한: {myRoomRole === 'viewer' ? '읽기·다운로드 전용' : '편집·업로드 허용'}
+              </span>
+            )}
             <span className="inline-flex items-center gap-1 px-2.5 py-0.5 rounded-full bg-cyan-500/10 border border-cyan-400/25 text-[11px] text-cyan-300 font-bold">
               현장·증빙 사진 AI 분석 · 인물 여권 미발동(검색 제외)
             </span>
@@ -2218,6 +2315,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
             if (activeWorkRoomId && merlinAuth?.email) {
               saveCachedServerMembers(activeWorkRoomId, nextMembers, merlinAuth.email);
             }
+          }}
+          onBroadcastMembersUpdated={(nextMembers) => {
+            realtimeRef.current?.broadcastMembersUpdated(nextMembers);
           }}
           showToast={showToast}
         />
