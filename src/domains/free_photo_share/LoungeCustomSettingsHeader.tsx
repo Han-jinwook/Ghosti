@@ -595,9 +595,38 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
                 })()}
               </span>
               {syncState.syncing && deviceSyncProgress && (
-                <span className="text-[12px] text-teal-700 font-medium">
-                  {deviceSyncProgress.phase} ({deviceSyncProgress.current}/{Math.max(1, deviceSyncProgress.total)})
-                </span>
+                <div className="flex flex-col gap-1 max-w-sm pt-0.5">
+                  <div className="flex items-center justify-between gap-2 text-[12px] text-teal-700 font-semibold">
+                    <span>{deviceSyncProgress.phase}</span>
+                    <span className="tabular-nums">
+                      {deviceSyncProgress.current}/{Math.max(1, deviceSyncProgress.total)} (
+                      {Math.min(
+                        100,
+                        Math.round(
+                          (deviceSyncProgress.current / Math.max(1, deviceSyncProgress.total)) * 100
+                        )
+                      )}
+                      %)
+                    </span>
+                  </div>
+                  <div className="w-full h-1.5 rounded-full bg-teal-100 overflow-hidden">
+                    <div
+                      className="h-full rounded-full bg-teal-600 transition-all duration-300"
+                      style={{
+                        width: `${Math.min(
+                          100,
+                          Math.max(
+                            6,
+                            Math.round(
+                              (deviceSyncProgress.current / Math.max(1, deviceSyncProgress.total)) *
+                                100
+                            )
+                          )
+                        )}%`,
+                      }}
+                    />
+                  </div>
+                </div>
               )}
               {isLoggedInUser ? (
                 <span className="text-[12px] text-slate-500">

@@ -126,6 +126,7 @@ export const MobileAppView: React.FC = () => {
     activePricingPlan,
     subscribedLounges,
     syncState,
+    deviceSyncProgress,
     setPrivateSyncStrategy,
     triggerSyncNow,
     pcAgentPairedMobile,
@@ -1507,17 +1508,79 @@ export const MobileAppView: React.FC = () => {
                           }
                           void triggerSyncNow();
                         }}
-                        className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[11.5px] font-semibold shrink-0 whitespace-nowrap ml-auto cursor-pointer"
+                        className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 disabled:bg-teal-600/80 text-white text-[11.5px] font-semibold shrink-0 whitespace-nowrap ml-auto cursor-pointer inline-flex items-center gap-1.5"
                       >
+                        {syncState.syncing && (
+                          <span className="inline-block w-3 h-3 rounded-full border-2 border-white/40 border-t-white animate-spin" />
+                        )}
                         {!isLoggedInUser
                           ? '로그인'
                           : thisDeviceRevoked
                           ? '다시 연결'
                           : syncState.syncing
-                          ? '일치화 중...'
+                          ? (() => {
+                              const pct = deviceSyncProgress
+                                ? Math.min(
+                                    99,
+                                    Math.max(
+                                      1,
+                                      Math.round(
+                                        (deviceSyncProgress.current /
+                                          Math.max(1, deviceSyncProgress.total)) *
+                                          100
+                                      )
+                                    )
+                                  )
+                                : null;
+                              return pct !== null ? `일치화 중 ${pct}%` : '일치화 중...';
+                            })()
                           : '지금 일치시키기'}
                       </button>
                     </div>
+
+                    {syncState.syncing && (
+                      <div className="px-4 pb-3 pt-0.5 flex flex-col gap-1.5 bg-teal-50/50 border-t border-teal-100">
+                        <div className="flex items-center justify-between gap-2 text-[11.5px]">
+                          <span className="font-semibold text-teal-800 truncate">
+                            {deviceSyncProgress?.phase || '연결 기기와 사진·문서를 맞추고 있어요'}
+                          </span>
+                          <span className="font-bold text-teal-700 shrink-0 tabular-nums">
+                            {deviceSyncProgress
+                              ? `${deviceSyncProgress.current}/${Math.max(1, deviceSyncProgress.total)} (${Math.min(
+                                  100,
+                                  Math.round(
+                                    (deviceSyncProgress.current /
+                                      Math.max(1, deviceSyncProgress.total)) *
+                                      100
+                                  )
+                                )}%)`
+                              : '진행 중...'}
+                          </span>
+                        </div>
+                        <div className="w-full h-1.5 rounded-full bg-teal-100 overflow-hidden">
+                          <div
+                            className="h-full rounded-full bg-teal-600 transition-all duration-300"
+                            style={{
+                              width: `${
+                                deviceSyncProgress
+                                  ? Math.min(
+                                      100,
+                                      Math.max(
+                                        6,
+                                        Math.round(
+                                          (deviceSyncProgress.current /
+                                            Math.max(1, deviceSyncProgress.total)) *
+                                            100
+                                        )
+                                      )
+                                    )
+                                  : 12
+                              }%`,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )}
 
                     {showPrivateSyncSection && (
                       <div className="px-4 pb-4 pt-3 border-t border-slate-100 flex flex-col gap-3">

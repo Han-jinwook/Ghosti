@@ -2789,16 +2789,6 @@ export const createAssistantOnboardingSlice: StateCreator<
           openedOk = Boolean(j?.ok);
         }
       } else {
-        if (target === 'phone_backup') {
-          try {
-            const { pullPendingMirrorOriginalsToPcBackupFolder } = await import(
-              '../../services/deviceIntegrationService'
-            );
-            await pullPendingMirrorOriginalsToPcBackupFolder();
-          } catch {
-            /* ignore pre-open pull error */
-          }
-        }
         const r = await fetch(getZCoreUrl('/__quarantine/open-folder'), {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
@@ -2806,6 +2796,24 @@ export const createAssistantOnboardingSlice: StateCreator<
         });
         const j = r.ok ? await r.json().catch(() => null) : null;
         openedOk = Boolean(j?.ok);
+        // [탐색기 0.1초 즉시 오픈 정공법]: 백업 폴더 열기 전에 전체 원본 다운로드를 블로킹 대기하지 않고
+        // Windows 탐색기를 먼저 즉시 띄운 뒤, 미수신 스마트폰 원본은 백그라운드로 실시간 채워 넣음
+        if (target === 'phone_backup' && openedOk) {
+          void import('../../services/deviceIntegrationService')
+            .then(({ pullPendingMirrorOriginalsToPcBackupFolder }) =>
+              pullPendingMirrorOriginalsToPcBackupFolder()
+            )
+            .then((pullRes) => {
+              if (pullRes && pullRes.pulledCount > 0) {
+                set({
+                  lastQuarantineToast: `스마트폰 원본 사진 ${pullRes.pulledCount}장을 [Ghosti_Phone_Backup] 폴더에 추가 저장했습니다.`,
+                });
+              }
+            })
+            .catch(() => {
+              /* ignore background pull error */
+            });
+        }
       }
       if (!openedOk) {
         set({ lastQuarantineToast: '내 컴퓨터 연결(PC 엔진) 상태를 확인한 뒤 다시 폴더 열기를 눌러 주세요.' });

@@ -334,9 +334,57 @@ export function buildOptimisticTrialEntitlement(
 }
 
 const uploadedMirrorHashes = new Set<string>();
+const loadedUploadedMirrorEmails = new Set<string>();
+const packedThumbCache = new Map<string, string>();
+const UPLOADED_MIRROR_CACHE_PREFIX = 'ghosti_uploaded_mirror_hashes_v1::';
 const pulledMirrorHashes = new Set<string>();
 const loadedEnvelopeEmails = new Set<string>();
 const osInjectedEnvelopeKeys = new Set<string>();
+
+function loadPersistedUploadedMirrorHashes(email?: string): void {
+  if (typeof window === 'undefined') return;
+  const normEmail = (
+    email ||
+    localStorage.getItem('ghosti_hub_user_email') ||
+    localStorage.getItem('userEmail') ||
+    ''
+  )
+    .trim()
+    .toLowerCase();
+  if (!normEmail || loadedUploadedMirrorEmails.has(normEmail)) return;
+  loadedUploadedMirrorEmails.add(normEmail);
+  try {
+    const raw = localStorage.getItem(`${UPLOADED_MIRROR_CACHE_PREFIX}${normEmail}`);
+    if (!raw) return;
+    const arr = JSON.parse(raw);
+    if (Array.isArray(arr)) {
+      for (const h of arr.slice(-2000)) {
+        if (typeof h === 'string' && h) uploadedMirrorHashes.add(h);
+      }
+    }
+  } catch {
+    /* ignore */
+  }
+}
+
+function persistUploadedMirrorHashes(email?: string): void {
+  if (typeof window === 'undefined') return;
+  const normEmail = (
+    email ||
+    localStorage.getItem('ghosti_hub_user_email') ||
+    localStorage.getItem('userEmail') ||
+    ''
+  )
+    .trim()
+    .toLowerCase();
+  if (!normEmail) return;
+  try {
+    const recent = Array.from(uploadedMirrorHashes).slice(-2000);
+    localStorage.setItem(`${UPLOADED_MIRROR_CACHE_PREFIX}${normEmail}`, JSON.stringify(recent));
+  } catch {
+    /* ignore */
+  }
+}
 
 function resolveScopedClipStorageKey(explicitEmail?: string): string | null {
   if (typeof window === 'undefined' || !hasAuthenticatedHubAccountSession()) return null;
@@ -2099,7 +2147,8 @@ export async function executeRealDeviceSyncNow(opts: {
     };
   }
 
-  const ident = getThisDeviceIdentity();
+  const ident = getThisDeviceIdentity(opts.email);
+  loadPersistedUploadedMirrorHashes(opts.email);
   const activeLocalPhotos = opts.photos.filter(
     (p) => !p.quarantined && !p.id.startsWith('shadow-remote-')
   );
@@ -2109,13 +2158,18 @@ export async function executeRealDeviceSyncNow(opts: {
 
   let mirroredUploadCount = 0;
 
-  // 1) 양쪽 원본 보관(mirror) 모드일 때: 아직 업로드되지 않은 원본 사진 전체를 증분 업로드
+  // 1) 양쪽 원본 보관(mirror) 모드일 때: 아직 업로드되지 않은 원본 사진만 증분 6x 병렬 업로드 (이미 백업된 항목은 영구 캐시로 0.01초 즉시 스킵)
   const mirrorUploadedIds = new Set<string>();
+  const photoShaMap = new Map<string, string>();
+  for (const p of activeLocalPhotos) {
+    const hashSeed = await sha256HexBrowser(`${p.id}::${p.name}::${p.size}`);
+    photoShaMap.set(p.id, `${hashSeed.slice(0, 40)}.jpg`);
+  }
+
   if (opts.strategy === 'mirror') {
     const pendingOriginals: Array<{ photo: PhotoItem; shaKey: string }> = [];
     for (const p of activeLocalPhotos) {
-      const hashSeed = await sha256HexBrowser(`${p.id}::${p.name}::${p.size}`);
-      const shaKey = `${hashSeed.slice(0, 40)}.jpg`;
+      const shaKey = photoShaMap.get(p.id)!;
       if (uploadedMirrorHashes.has(shaKey)) {
         mirrorUploadedIds.add(p.id);
       } else {
@@ -2123,21 +2177,44 @@ export async function executeRealDeviceSyncNow(opts: {
       }
     }
 
+    if (pendingOriginals.length > 0) {
+      opts.onProgress?.({
+        phase: '원본 안전 백업 업로드 중',
+        current: 0,
+        total: pendingOriginals.length,
+      });
+    }
+
+    const fetchWithTimeout = async (url: string, init?: RequestInit, timeoutMs = 12_000): Promise<Response> => {
+      const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+      const tid = ctrl ? window.setTimeout(() => ctrl.abort(), timeoutMs) : null;
+      try {
+        return await fetch(url, { ...(init || {}), ...(ctrl ? { signal: ctrl.signal } : {}) });
+      } finally {
+        if (tid !== null) window.clearTimeout(tid);
+      }
+    };
+
     let uploadDone = 0;
     let trialAbortError: { reason?: string; message?: string } | null = null;
-    await runWithConcurrency(pendingOriginals, 4, async ({ photo: p, shaKey }) => {
+    await runWithConcurrency(pendingOriginals, 6, async ({ photo: p, shaKey }) => {
       if (trialAbortError) return;
       const candidates = [p.fullUrl, p.thumbUrl].filter(
         (u): u is string => Boolean(u && u.trim())
       );
       if (candidates.length === 0) {
         uploadDone += 1;
+        opts.onProgress?.({
+          phase: '원본 안전 백업 업로드 중',
+          current: uploadDone,
+          total: pendingOriginals.length,
+        });
         return;
       }
       let blob: Blob | null = null;
       for (const src of candidates) {
         try {
-          const blobRes = await fetch(src);
+          const blobRes = await fetchWithTimeout(src, undefined, 8_000);
           if (!blobRes.ok) continue;
           const b = await blobRes.blob();
           if (b.size > 0 && b.size <= 25 * 1024 * 1024) {
@@ -2152,7 +2229,7 @@ export async function executeRealDeviceSyncNow(opts: {
         try {
           const compactFallback = await tryMakeCompactThumbDataUrl(p.thumbUrl || p.fullUrl);
           if (compactFallback) {
-            const fbRes = await fetch(compactFallback);
+            const fbRes = await fetchWithTimeout(compactFallback, undefined, 5_000);
             if (fbRes.ok) {
               const fbBlob = await fbRes.blob();
               if (fbBlob.size > 0) blob = fbBlob;
@@ -2164,6 +2241,11 @@ export async function executeRealDeviceSyncNow(opts: {
       }
       if (!blob) {
         uploadDone += 1;
+        opts.onProgress?.({
+          phase: '원본 안전 백업 업로드 중',
+          current: uploadDone,
+          total: pendingOriginals.length,
+        });
         return;
       }
       try {
@@ -2177,11 +2259,15 @@ export async function executeRealDeviceSyncNow(opts: {
           return;
         }
         if (signUp.ok && signUp.signedUploadUrl) {
-          const putRes = await fetch(signUp.signedUploadUrl, {
-            method: 'PUT',
-            headers: { 'Content-Type': blob.type || 'image/jpeg' },
-            body: blob,
-          });
+          const putRes = await fetchWithTimeout(
+            signUp.signedUploadUrl,
+            {
+              method: 'PUT',
+              headers: { 'Content-Type': blob.type || 'image/jpeg' },
+              body: blob,
+            },
+            15_000
+          );
           if (putRes.ok) {
             uploadedMirrorHashes.add(shaKey);
             mirrorUploadedIds.add(p.id);
@@ -2199,6 +2285,9 @@ export async function executeRealDeviceSyncNow(opts: {
         });
       }
     });
+    if (mirroredUploadCount > 0) {
+      persistUploadedMirrorHashes(opts.email);
+    }
     if (trialAbortError) {
       const errObj = trialAbortError as { reason?: string; message?: string };
       return {
@@ -2216,18 +2305,31 @@ export async function executeRealDeviceSyncNow(opts: {
     }
   }
 
-  // 2) 장당 ~13KB 초경량 섀도우 카탈로그 패킹(6x 병렬 + 이미 경량인 썸네일은 재압축 스킵) 후 양방향 병합
+  // 2) 장당 ~13KB 초경량 섀도우 카탈로그 패킹(8x 병렬 + 이미 압축한 썸네일은 메모리 캐시 즉시 재사용) 후 양방향 병합
   const outgoingItems: Array<Record<string, unknown>> = new Array(activeLocalPhotos.length);
   const totalPackCount = activeLocalPhotos.length + activeLocalDocs.length;
+  if (totalPackCount > 0) {
+    opts.onProgress?.({
+      phase: '사진·문서 미리보기 준비 중',
+      current: 0,
+      total: Math.max(1, totalPackCount),
+    });
+  }
   let packedCount = 0;
-  await runWithConcurrency(activeLocalPhotos, 6, async (p, i) => {
-    const hashSeed = await sha256HexBrowser(`${p.id}::${p.name}::${p.size}`);
-    const shaKey = `${hashSeed.slice(0, 40)}.jpg`;
+  await runWithConcurrency(activeLocalPhotos, 8, async (p, i) => {
+    const shaKey = photoShaMap.get(p.id) || `${(await sha256HexBrowser(`${p.id}::${p.name}::${p.size}`)).slice(0, 40)}.jpg`;
     const rawThumb = (p.thumbUrl || p.fullUrl || '').trim();
-    const thumbWebp =
-      rawThumb.startsWith('data:image/') && rawThumb.length <= 28_000
-        ? rawThumb
-        : await tryMakeCompactThumbDataUrl(rawThumb);
+    let thumbWebp = packedThumbCache.get(shaKey);
+    if (!thumbWebp) {
+      thumbWebp =
+        rawThumb.startsWith('data:image/') && rawThumb.length <= 28_000
+          ? rawThumb
+          : await tryMakeCompactThumbDataUrl(rawThumb);
+      if (thumbWebp) {
+        if (packedThumbCache.size > 600) packedThumbCache.clear();
+        packedThumbCache.set(shaKey, thumbWebp);
+      }
+    }
     outgoingItems[i] = {
       id: p.id,
       kind: 'photo',
@@ -2243,9 +2345,9 @@ export async function executeRealDeviceSyncNow(opts: {
       hasMirrorBlob: mirrorUploadedIds.has(p.id),
     };
     packedCount += 1;
-    if (packedCount % 8 === 0 || packedCount === activeLocalPhotos.length) {
+    if (packedCount % 2 === 0 || packedCount === activeLocalPhotos.length) {
       opts.onProgress?.({
-        phase: '사진·문서 목록 동기화 중',
+        phase: '사진·문서 미리보기 준비 중',
         current: packedCount,
         total: Math.max(1, totalPackCount),
       });
@@ -2269,7 +2371,7 @@ export async function executeRealDeviceSyncNow(opts: {
     });
   }
 
-  // 서버 250건 단위 배치 전송으로 대량 사진·문서도 끊김 없이 동기화
+  // 서버 200건 단위 배치 전송으로 대량 사진·문서도 끊김 없이 동기화
   let mergedCatalog: GhostiShadowCatalogItem[] = [];
   let syncOk = true;
   let syncErrorReason: string | undefined;
@@ -2277,6 +2379,11 @@ export async function executeRealDeviceSyncNow(opts: {
   const BATCH_SIZE = 200;
   const totalBatches = Math.max(1, Math.ceil(outgoingItems.length / BATCH_SIZE));
   for (let b = 0; b < totalBatches; b++) {
+    opts.onProgress?.({
+      phase: '연결 기기와 목록 맞추는 중',
+      current: b,
+      total: totalBatches,
+    });
     const chunk = outgoingItems.slice(b * BATCH_SIZE, (b + 1) * BATCH_SIZE);
     const syncRes = await callGhostiServerBridge<{
       items?: GhostiShadowCatalogItem[];
@@ -2296,6 +2403,11 @@ export async function executeRealDeviceSyncNow(opts: {
     if (Array.isArray(syncRes.items)) {
       mergedCatalog = syncRes.items;
     }
+    opts.onProgress?.({
+      phase: '연결 기기와 목록 맞추는 중',
+      current: b + 1,
+      total: totalBatches,
+    });
   }
 
   if (!syncOk) {
