@@ -5611,15 +5611,25 @@ def play_baby_ghost_sound(mode: str = "typo") -> None:
 # =====================================================================
 # 클립보드 · 키보드 · UI 접근성 트리(IUIAutomation) 문맥 추출
 # =====================================================================
-def acquire_single_instance() -> socket.socket | None:
+_IN_PROCESS_MODE: bool = False
+_IN_PROCESS_STOP_EVENT = threading.Event()
+
+
+def request_in_process_stop() -> None:
+    """In-Process 모드에서 메인 Z-코어를 종료하지 않고 귀신창 데몬 스레드만 깔끔히 중지합니다."""
+    _IN_PROCESS_STOP_EVENT.set()
+
+
+def acquire_single_instance(in_process: bool = False) -> socket.socket | None:
     """
     단일 인스턴스 보장 + 정상 실행 중 데몬 무간섭 보호 + 명시적 교체(--replace) 지원:
     - --replace 없이 실행되었는데 이미 51988 포트에서 정상 박동(PONG) 중인 데몬이 있으면
       기존 데몬을 죽이지 않고 즉시 조용히 종료(return None)하여 중복 스폰 충돌을 원천 차단합니다!
     - --replace가 지정되었거나 기존 51988 점유 프로세스가 응답 불능일 때만 교체 승계합니다.
+    - in_process=True일 때는 __REPLACE__/건강검사 실패 시 os._exit() 대신 _IN_PROCESS_STOP_EVENT로 스레드만 종료합니다.
     """
     global _MAIN_LOOP_HEARTBEAT_TS, _UI_LOOP_HEARTBEAT_TS
-    force_replace = "--replace" in sys.argv
+    force_replace = ("--replace" in sys.argv) and (not in_process)
     if not force_replace:
         try:
             with socket.create_connection(("127.0.0.1", LOCK_PORT), timeout=0.8) as chk_c:
@@ -5686,6 +5696,9 @@ def acquire_single_instance() -> socket.socket | None:
                                     srv_sock.close()
                                 except Exception:
                                     pass
+                                if in_process:
+                                    _IN_PROCESS_STOP_EVENT.set()
+                                    break
                                 os._exit(1)
                             continue
                         if b"__REPLACE__" in data or b"/__merlin/shutdown" in data:
@@ -5699,6 +5712,9 @@ def acquire_single_instance() -> socket.socket | None:
                                 srv_sock.close()
                             except Exception:
                                 pass
+                            if in_process:
+                                _IN_PROCESS_STOP_EVENT.set()
+                                break
                             os._exit(0)
                         conn.close()
                         if data.startswith(b"__OPEN_UI2__|"):
@@ -9062,8 +9078,13 @@ def _start_first_summon_prewarmer() -> None:
 # =====================================================================
 # 메인 이벤트 루프
 # =====================================================================
-def main() -> None:
-    lock_sock = acquire_single_instance()
+def main(in_process: bool = False) -> None:
+    global _IN_PROCESS_MODE
+    _IN_PROCESS_MODE = bool(in_process)
+    if in_process:
+        _IN_PROCESS_STOP_EVENT.clear()
+
+    lock_sock = acquire_single_instance(in_process=in_process)
     if lock_sock is None:
         return
 
@@ -9073,15 +9094,17 @@ def main() -> None:
         except Exception:
             pass
 
-    _ensure_toast_worker()
-    ensure_default_snippets()
-    _ensure_kiwi_warmup_async()
-    _start_first_summon_prewarmer()
-
+    # [최우선 0.01초 단축키 선등록]: 스니펫/히스토리/워밍업보다 먼저 RegisterHotKey를 걸어
+    # Z-코어 실행 직후 첫 Ctrl+0 입력이 절대 무시되지 않도록 보장!
     u32.RegisterHotKey(None, 1, MOD_CONTROL | MOD_NOREPEAT, VK_0)
     u32.RegisterHotKey(None, 2, MOD_CONTROL | MOD_NOREPEAT, VK_NUMPAD0)
     u32.RegisterHotKey(None, 4, MOD_CONTROL | MOD_ALT | MOD_NOREPEAT, 0x54)  # Ctrl + Alt + T (항상 위 창고정/해제)
     u32.SetTimer(None, 1, 25, None)
+
+    _ensure_toast_worker()
+    ensure_default_snippets()
+    _ensure_kiwi_warmup_async()
+    _start_first_summon_prewarmer()
 
     seq_mode: bool = False
     pasting_started: bool = False
@@ -9998,6 +10021,8 @@ def main() -> None:
     _ll_mouse_hook_fn_ptr = _ll_mouse_native_stub_ptr or (ctypes.cast(_ll_mouse_hook_cb, ctypes.c_void_p).value or 0)
     _ll_mouse_hook_ready = threading.Event()
 
+    _ll_mouse_hook_handle: list[int] = [0]
+
     def _dedicated_mouse_hook_worker() -> None:
         try:
             try:
@@ -10010,13 +10035,20 @@ def main() -> None:
                 or (u32.SetWindowsHookExW(WH_MOUSE_LL, _ll_mouse_hook_fn_ptr, None, 0) if _ll_mouse_hook_fn_ptr else 0)
                 or u32.SetWindowsHookExW(WH_MOUSE_LL, ctypes.cast(_ll_mouse_hook_cb, ctypes.c_void_p).value or 0, h_mod_self, 0)
             )
+            _ll_mouse_hook_handle[0] = int(_hk or 0)
             _ll_mouse_hook_ready.set()
             if not _hk:
                 return
             _m_msg = wintypes.MSG()
-            while u32.GetMessageW(ctypes.byref(_m_msg), None, 0, 0) > 0:
+            while (not _IN_PROCESS_STOP_EVENT.is_set()) and u32.GetMessageW(ctypes.byref(_m_msg), None, 0, 0) > 0:
                 u32.TranslateMessage(ctypes.byref(_m_msg))
                 u32.DispatchMessageW(ctypes.byref(_m_msg))
+            try:
+                if _ll_mouse_hook_handle[0]:
+                    u32.UnhookWindowsHookEx(_ll_mouse_hook_handle[0])
+                    _ll_mouse_hook_handle[0] = 0
+            except Exception:
+                pass
         except Exception:
             _ll_mouse_hook_ready.set()
 
@@ -10033,11 +10065,18 @@ def main() -> None:
     _MAIN_LOOP_HEARTBEAT_TS = time.time()
 
     def _self_hang_watchdog() -> None:
-        while True:
+        while not _IN_PROCESS_STOP_EVENT.is_set():
             time.sleep(6.0)
             try:
                 now_w = time.time()
                 if not _MODAL_PROMPT_ACTIVE and (now_w - _MAIN_LOOP_HEARTBEAT_TS) > 18.0:
+                    if in_process:
+                        try:
+                            lock_sock.close()
+                        except Exception:
+                            pass
+                        _IN_PROCESS_STOP_EVENT.set()
+                        return
                     try:
                         if getattr(sys, "frozen", False):
                             clean_env = {k: v for k, v in os.environ.items() if k not in ("_MEIPASS2", "_MEIPASS")}
@@ -10095,7 +10134,7 @@ def main() -> None:
             complete_feature_action_success("feat_1_seq_paste")
             show_ghost_toast("👻 귀신같이 순차붙여넣기 완료!", duration_ms=1600)
 
-    while True:
+    while not _IN_PROCESS_STOP_EVENT.is_set():
         _MAIN_LOOP_HEARTBEAT_TS = time.time()
         had_hotkey = False
         while u32.PeekMessageW(ctypes.byref(msg), None, 0, 0, PM_REMOVE) != 0:
@@ -11246,6 +11285,23 @@ def main() -> None:
 
         if not had_hotkey:
             time.sleep(0.015)
+
+    try:
+        u32.UnregisterHotKey(None, 1)
+        u32.UnregisterHotKey(None, 2)
+        u32.UnregisterHotKey(None, 4)
+    except Exception:
+        pass
+    try:
+        if _ll_mouse_hook_handle[0]:
+            u32.UnhookWindowsHookEx(_ll_mouse_hook_handle[0])
+            _ll_mouse_hook_handle[0] = 0
+    except Exception:
+        pass
+    try:
+        lock_sock.close()
+    except Exception:
+        pass
 
 
 def run_quota_self_test() -> int:

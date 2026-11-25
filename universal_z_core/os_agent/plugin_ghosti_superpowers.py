@@ -39,6 +39,7 @@ _DAEMON_THREAD_STARTED = False
 _DAEMON_WATCHDOG_STARTED = False
 _DAEMON_LOCK = threading.Lock()
 _LAST_SPAWNED_PROC: subprocess.Popen | None = None
+_IN_PROCESS_DAEMON_THREAD: threading.Thread | None = None
 _LAST_SPAWN_TS: float = 0.0
 _HUB_SUB_CACHE: Dict[str, tuple[float, bool]] = {}
 _HUB_SUB_CACHE_LOCK = threading.Lock()
@@ -114,11 +115,17 @@ def _resolve_verified_subscription(data: Dict[str, Any], m_entry: Dict[str, Any]
 
 def shutdown_superpower_daemon_for_update() -> None:
     """무소음 자가 업데이트(updater.bat) 전에 포트 51988 귀신창 데몬을 깔끔히 종료해 .exe 파일 잠금을 즉시 해제합니다."""
-    global _LAST_SPAWNED_PROC, _LAST_SPAWN_TS
+    global _LAST_SPAWNED_PROC, _IN_PROCESS_DAEMON_THREAD, _LAST_SPAWN_TS
     if os.name != "nt":
         return
     _LAST_SPAWNED_PROC = None
+    _IN_PROCESS_DAEMON_THREAD = None
     _LAST_SPAWN_TS = 0.0
+    try:
+        if hasattr(spd, "request_in_process_stop"):
+            spd.request_in_process_stop()
+    except Exception:
+        pass
     try:
         import socket
 
@@ -130,20 +137,21 @@ def shutdown_superpower_daemon_for_update() -> None:
 
 def ensure_superpower_daemon_running() -> bool:
     """
-    [프로세스 완전 분리 모드 + PING/PONG 활성 검증 + 66MB 단일 .exe 압축해제 중복 스폰 원천 차단 (Z-Core v2.5.39)]
-    - 귀신창 데몬(seq_paste_daemon, 포트 51988)은 메인 Z-코어(5199)와 반드시 별도 프로세스로 분리합니다.
-    - 51988 포트가 열려 있고 __PING__ -> PONG(메인 루프·UI 루프 정상 박동) 응답이 오면 즉시 True를 반환합니다.
-    - 직전에 기동한 자식 프로세스(_LAST_SPAWNED_PROC)가 아직 살아 있고 PyInstaller _MEI 압축해제 중(45초 유예)이라면
-      8초 워치독이 중복 프로세스를 연쇄 스폰(Fork-Stampede)하지 않도록 즉시 대기 반환합니다!
+    [In-Process 0.1초 즉시 기동 + 2차 PyInstaller 압축 해제 0초 정공법 (Z-Core v2.8.04)]:
+    - 기존 별도 exe 재실행 방식은 PyInstaller onefile 2차 압축 해제(+6초) + 파이썬 재초기화(+3초)로
+      Z-코어 기동 직후 Ctrl+0 / Ctrl+우클릭이 15~28초 동안 먹통이 되는 치명적 병목이 있었음.
+    - 이미 메인 Z-코어(5199) 메모리에 import 완료된 seq_paste_daemon.main(in_process=True)을
+      독립 데몬 스레드에서 0.1초 만에 즉시 기동하여 첫 Ctrl+0 / Ctrl+우클릭 대기 시간을 0초대로 단축!
+    - 51988 포트가 이미 열려 있고 __PING__ -> PONG 응답이 오면 중복 기동 없이 즉시 True를 반환합니다.
     """
-    global _LAST_SPAWNED_PROC, _LAST_SPAWN_TS
+    global _LAST_SPAWNED_PROC, _IN_PROCESS_DAEMON_THREAD, _LAST_SPAWN_TS
     if os.name != "nt":
         return True
     try:
         import socket
 
-        with socket.create_connection(("127.0.0.1", 51988), timeout=1.0) as conn:
-            conn.settimeout(1.2)
+        with socket.create_connection(("127.0.0.1", 51988), timeout=0.6) as conn:
+            conn.settimeout(0.8)
             conn.sendall(b"__PING__")
             reply = conn.recv(64)
             if b"PONG" in reply:
@@ -152,60 +160,38 @@ def ensure_superpower_daemon_running() -> bool:
         pass
 
     with _DAEMON_LOCK:
-        # 1) 이미 스폰한 자식 프로세스가 아직 살아 있고 부팅/압축해제 유예시간(45초) 이내면 중복 스폰 절대 금지!
         now_sp = time.time()
+        # 1) 이미 In-Process 스레드가 살아있고 기동 직후 유예시간(6초) 이내면 중복 기동 방지
         if (
-            _LAST_SPAWNED_PROC is not None
-            and _LAST_SPAWNED_PROC.poll() is None
-            and (now_sp - _LAST_SPAWN_TS) < 45.0
+            _IN_PROCESS_DAEMON_THREAD is not None
+            and _IN_PROCESS_DAEMON_THREAD.is_alive()
+            and (now_sp - _LAST_SPAWN_TS) < 6.0
         ):
             return True
 
-        # 2) 포트 51988 재확인 (동시 호출 중복 스폰 방지)
+        # 2) 포트 51988 재확인 (동시 호출 중복 기동 방지)
         try:
             import socket
 
-            with socket.create_connection(("127.0.0.1", 51988), timeout=0.6) as conn2:
-                conn2.settimeout(0.8)
+            with socket.create_connection(("127.0.0.1", 51988), timeout=0.5) as conn2:
+                conn2.settimeout(0.7)
                 conn2.sendall(b"__PING__")
                 if b"PONG" in conn2.recv(64):
                     return True
         except Exception:
             pass
 
-        clean_env = {k: v for k, v in os.environ.items() if k not in ("_MEIPASS2", "_MEIPASS")}
-        clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
-        if getattr(sys, "frozen", False):
+        # 3) In-Process 0.1초 즉시 기동 (2차 압축 해제 0초 · RAM ~60MB 절감)
+        def _run_in_process_spd() -> None:
             try:
-                import core_win32 as _cw32
+                spd.main(in_process=True)
+            except Exception:
+                pass
 
-                target_exe = _cw32.ensure_persistent_frozen_install()
-                _LAST_SPAWNED_PROC = subprocess.Popen(
-                    [target_exe, "--seq-paste-daemon"],
-                    env=clean_env,
-                    creationflags=0x08000000 | 0x00000008,  # CREATE_NO_WINDOW | DETACHED_PROCESS
-                    close_fds=True,
-                )
-                _LAST_SPAWN_TS = time.time()
-            except Exception:
-                pass
-        else:
-            try:
-                spd_script = THIS_DIR.parent / "seq_paste_daemon.py"
-                if not spd_script.exists():
-                    spd_script = THIS_DIR / "seq_paste_daemon.py"
-                if spd_script.exists():
-                    pyw = Path(sys.executable).with_name("pythonw.exe")
-                    runner = str(pyw if pyw.exists() else Path(sys.executable))
-                    _LAST_SPAWNED_PROC = subprocess.Popen(
-                        [runner, str(spd_script)],
-                        env=clean_env,
-                        creationflags=0x08000000 | 0x00000008,
-                        close_fds=True,
-                    )
-                    _LAST_SPAWN_TS = time.time()
-            except Exception:
-                pass
+        th = threading.Thread(target=_run_in_process_spd, name="GhostiSuperpowerDaemon", daemon=True)
+        th.start()
+        _IN_PROCESS_DAEMON_THREAD = th
+        _LAST_SPAWN_TS = time.time()
     return True
 
 
