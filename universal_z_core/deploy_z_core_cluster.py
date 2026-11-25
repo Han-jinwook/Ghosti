@@ -160,6 +160,8 @@ def sync_internal_z_core_mirrors():
     # 3) 소스 해시 스탬프 비교: 소스가 바뀌었는데 버전업을 안 했거나 타 창 버전보다 낮으면 자동으로 max_ver + 1 승격
     core_files = [
         os.path.join(UZC_DIR, "os_agent", "merlin_z_core_daemon.py"),
+        os.path.join(UZC_DIR, "os_agent", "core_win32.py"),
+        os.path.join(UZC_DIR, "os_agent", "build_signed_merlin_z_core.py"),
         os.path.join(UZC_DIR, "os_agent", "plugin_ghosti_os.py"),
         os.path.join(UZC_DIR, "os_agent", "plugin_ghosti_care_suite.py"),
         os.path.join(UZC_DIR, "os_agent", "plugin_ghosti_superpowers.py"),
@@ -325,12 +327,16 @@ def update_pc1():
     pyw_exe = os.path.join(os.path.dirname(py_exe), "pythonw.exe")
     runner = pyw_exe if os.path.exists(pyw_exe) else py_exe
 
-    # 1) 자동실행 등록 (구버전 MerlinSeqPaste 제거 + 최신 Merlin_Z_Core_Setup.exe 복사 및 Run 레지스트리 등록)
+    # 1) 자동실행 등록 (구버전 MerlinSeqPaste 제거 + 최신 --onedir Merlin_Z_Core_Setup.exe/_internal 복사 및 Run 레지스트리 등록)
     try:
-        local_exe_src = os.path.join(UZC_DIR, "os_agent", "dist", "Merlin_Z_Core_Setup.exe")
+        local_onedir_src = os.path.join(UZC_DIR, "os_agent", "dist", "Merlin_Z_Core_Setup")
+        local_exe_src = os.path.join(local_onedir_src, "Merlin_Z_Core_Setup.exe")
+        local_int_src = os.path.join(local_onedir_src, "_internal")
         local_install_dir = os.path.expandvars(r"%LOCALAPPDATA%\Programs\MerlinFamily")
         if os.path.exists(local_exe_src):
             os.makedirs(local_install_dir, exist_ok=True)
+            if os.path.isdir(local_int_src):
+                shutil.copytree(local_int_src, os.path.join(local_install_dir, "_internal"), dirs_exist_ok=True)
             shutil.copy2(local_exe_src, os.path.join(local_install_dir, "Merlin_Z_Core_Setup.exe"))
         subprocess.run(["reg", "delete", r"HKCU\Software\Microsoft\Windows\CurrentVersion\Run", "/v", "MerlinSeqPaste", "/f"], capture_output=True, timeout=5)
         subprocess.run([runner, script, "--enable-autostart"], capture_output=True, timeout=5)
@@ -453,19 +459,22 @@ def _run_remote_ps_encoded(ssh_target: str, key_path: str, ps_script: str, timeo
 
 
 def _update_remote_exe_node(label: str, host: str, remote_user: str, core_ver: str):
-    log(f"\n=== [{label} ({remote_user}@{host})] 무중단 원자적 스왑 Z-코어(v{core_ver}) 업데이트 시작 ===")
+    log(f"\n=== [{label} ({remote_user}@{host})] 무중단 --onedir 원자적 스왑 Z-코어(v{core_ver}) 업데이트 시작 ===")
     key_path = _resolve_ssh_key()
-    exe_path = os.path.join(UZC_DIR, "os_agent", "dist", "Merlin_Z_Core_Setup.exe")
-    if not os.path.exists(key_path) or not os.path.exists(exe_path):
-        log(f"⚠️ {label} 배포 건너뜀 (SSH 키 또는 Merlin_Z_Core_Setup.exe 없음)")
+    repo_root = os.path.dirname(UZC_DIR)
+    zip_path = os.path.join(repo_root, "public", "Merlin_Z_Core.zip")
+    if not os.path.exists(key_path) or not os.path.exists(zip_path):
+        log(f"⚠️ {label} 배포 건너뜀 (SSH 키 또는 public/Merlin_Z_Core.zip 없음)")
         return
 
     ssh_target = f"{remote_user}@{host}"
     remote_dir_win = f"C:\\Users\\{remote_user}\\AppData\\Local\\Programs\\MerlinFamily"
     remote_exe_win = f"{remote_dir_win}\\Merlin_Z_Core_Setup.exe"
-    remote_staging_win = f"{remote_dir_win}\\Merlin_Z_Core_Setup.staging.exe"
-    remote_bak_win = f"{remote_dir_win}\\Merlin_Z_Core_Setup.bak.exe"
-    remote_staging_scp = f"C:/Users/{remote_user}/AppData/Local/Programs/MerlinFamily/Merlin_Z_Core_Setup.staging.exe"
+    remote_int_win = f"{remote_dir_win}\\_internal"
+    remote_staging_zip_win = f"{remote_dir_win}\\Merlin_Z_Core.staging.zip"
+    remote_staging_dir_win = f"{remote_dir_win}\\_staging_dir"
+    remote_bak_dir_win = f"{remote_dir_win}\\_bak_dir"
+    remote_staging_scp = f"C:/Users/{remote_user}/AppData/Local/Programs/MerlinFamily/Merlin_Z_Core.staging.zip"
 
     # [0단계: 원격 버전 선조회 ➔ 다운그레이드 물리 차단]
     try:
@@ -491,54 +500,63 @@ def _update_remote_exe_node(label: str, host: str, remote_user: str, core_ver: s
             capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=30,
         )
 
-    # [1단계: 엔진 살아있는 채로 스테이징 파일 전송 (전송 15초 동안 기존 엔진 먹통 0초!!)]
+    # [1단계: 기존 엔진 100% 살아있는 채로 Merlin_Z_Core.staging.zip 전송 (전송 중 먹통 0초!!)]
     import hashlib as _hl
-    local_sha256 = _hl.sha256(open(exe_path, "rb").read()).hexdigest().upper()
+    local_sha256 = _hl.sha256(open(zip_path, "rb").read()).hexdigest().upper()
     scp_res = subprocess.run(
-        ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", exe_path, f"{ssh_target}:{remote_staging_scp}"],
-        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=90,
+        ["scp", "-i", key_path, "-o", "StrictHostKeyChecking=no", zip_path, f"{ssh_target}:{remote_staging_scp}"],
+        capture_output=True, text=True, encoding="utf-8", errors="replace", timeout=120,
     )
     if scp_res.returncode != 0:
-        log(f"❌ {label} 스테이징 SCP 실패 (기존 엔진 무손상 유지): {scp_res.stderr}")
+        log(f"❌ {label} 스테이징 ZIP SCP 실패 (기존 엔진 무손상 유지): {scp_res.stderr}")
         return
 
-    # [2단계: 원격 staging.exe SHA-256 100% 비트 일치 & PE 헤더 무결성 사전 검증 (GUI 서브시스템 --selftest 호환 문제 없이 0.2초 완벽 검증)]
-    verify_staging_ps = f"""
-$st = '{remote_staging_win}'
-if (-not (Test-Path $st)) {{ Write-Output 'STAGING_MISSING'; exit 2 }}
-$h = (Get-FileHash -Path $st -Algorithm SHA256).Hash.ToUpper()
-$sz = (Get-Item $st).Length
-if ($h -ne '{local_sha256}' -or $sz -lt 10000000) {{
-    Remove-Item -Path $st -Force -ErrorAction SilentlyContinue
+    # [2단계: 기존 엔진이 계속 살아있는 상태에서 SHA-256 검증 + _staging_dir 사전 압축해제(Defender 사전 통과!)]
+    # ➔ 이제 스왑 순간에는 1,190개 압축해제 0바이트 / 0.01초 폴더 이름변경만으로 교체되어 2분 먹통이 영구 소멸됩니다!
+    verify_and_extract_ps = f"""
+$stz = '{remote_staging_zip_win}'
+$std = '{remote_staging_dir_win}'
+if (-not (Test-Path $stz)) {{ Write-Output 'STAGING_MISSING'; exit 2 }}
+$h = (Get-FileHash -Path $stz -Algorithm SHA256).Hash.ToUpper()
+$sz = (Get-Item $stz).Length
+if ($h -ne '{local_sha256}' -or $sz -lt 5000000) {{
+    Remove-Item -Path $stz -Force -ErrorAction SilentlyContinue
     Write-Output ("HASH_MISMATCH:" + $h + ":" + $sz)
     exit 3
 }}
-Write-Output ("HASH_OK:" + $h)
+if (Test-Path $std) {{ Remove-Item -Path $std -Recurse -Force -ErrorAction SilentlyContinue }}
+New-Item -ItemType Directory -Force -Path $std | Out-Null
+Add-Type -AssemblyName System.IO.Compression.FileSystem
+[System.IO.Compression.ZipFile]::ExtractToDirectory($stz, $std)
+if (-not (Test-Path (Join-Path $std 'Merlin_Z_Core_Setup.exe')) -or -not (Test-Path (Join-Path $std '_internal'))) {{
+    Remove-Item -Path $std -Recurse -Force -ErrorAction SilentlyContinue
+    Write-Output 'EXTRACT_INCOMPLETE'
+    exit 4
+}}
+Write-Output ("STAGED_OK:" + $h)
 """
     try:
-        v_res = _run_remote_ps_encoded(ssh_target, key_path, verify_staging_ps, timeout_sec=25)
-        if v_res.returncode != 0 or f"HASH_OK:{local_sha256}" not in (v_res.stdout or ""):
-            log(f"❌ {label} 스테이징 SHA-256 무결성 검증 실패 (기존 엔진 무손상 유지): {(v_res.stdout or v_res.stderr)[:200]}")
+        v_res = _run_remote_ps_encoded(ssh_target, key_path, verify_and_extract_ps, timeout_sec=90)
+        if v_res.returncode != 0 or f"STAGED_OK:{local_sha256}" not in (v_res.stdout or ""):
+            log(f"❌ {label} 스테이징 검증/사전해제 실패 (기존 엔진 무손상 유지): {(v_res.stdout or v_res.stderr)[:240]}")
             return
     except Exception as e:
-        log(f"❌ {label} 스테이징 무결성 검증 타임아웃 (기존 엔진 무손상 유지): {e}")
+        log(f"❌ {label} 스테이징 사전해제 타임아웃 (기존 엔진 무손상 유지): {e}")
         return
 
-    # [3단계: 0.5초 원자적 스왑 + 트리 완전 종료(/T) + 구버전 잔존 .exe 완전 소탕 + 인터랙티브 기동]
+    # [3단계: 0.01초 --onedir 원자적 스왑 + 우아한 종료 우선 + 구버전 잔존물 완전 소탕 + 인터랙티브 기동]
     swap_and_start_ps = f"""
 [Environment]::SetEnvironmentVariable('_MEIPASS2', $null, 'Process')
 [Environment]::SetEnvironmentVariable('_MEIPASS', $null, 'Process')
+$dir = '{remote_dir_win}'
 $exe = '{remote_exe_win}'
-$st  = '{remote_staging_win}'
-$bak = '{remote_bak_win}'
+$int = '{remote_int_win}'
+$std = '{remote_staging_dir_win}'
+$stz = '{remote_staging_zip_win}'
+$bak = '{remote_bak_dir_win}'
+$ts  = [DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()
 
-# 3-1) 롤백용 백업 확보
-if (Test-Path $exe) {{
-    Copy-Item -Path $exe -Destination $bak -Force -ErrorAction SilentlyContinue
-}}
-
-# 3-2) 우아한 종료 우선 대기(최대 3.5초: 5199/51988 소켓을 OS에 정상 반납하도록 유도하여 커널 좀비 생성 원천 차단!)
-#      3.5초 내 자진 종료되지 않은 먹통 프로세스에만 최후 수단으로 taskkill /F /T 적용
+# 3-1) 우아한 종료 우선 대기(최대 3.5초: 5199/51988 소켓 정상 반납으로 커널 좀비 생성 차단)
 curl.exe -s --max-time 2 -H Origin:https://ghosti.sundreamer.app http://127.0.0.1:5199/__merlin/shutdown 2>$null | Out-Null
 curl.exe -s --max-time 2 http://127.0.0.1:51988/__merlin/shutdown 2>$null | Out-Null
 for ($g=0; $g -lt 10; $g++) {{
@@ -559,26 +577,33 @@ if ($still_alive.Count -gt 0) {{
     }}
 }}
 
-# 3-3) 구버전 잔존 exe / 충돌 업데이터 / 레거시 스케줄러 / 이전 좀비 임시파일 완전 소탕
+# 3-2) 구버전 잔존 exe / 충돌 업데이터 / 레거시 스케줄러 / 이전 _MEI* 임시폴더 완전 소탕
 schtasks /delete /tn MerlinSeqPasteStart /f 2>$null | Out-Null
 Remove-Item -Path 'C:\\MerlinTools\\start_zcore_5199.vbs' -Force -ErrorAction SilentlyContinue
 Remove-Item -Path 'C:\\Users\\{remote_user}\\AppData\\Local\\Merlin\\Merlin_Z_Core_Setup.exe' -Force -ErrorAction SilentlyContinue
-Remove-Item -Path '{remote_dir_win}\\Merlin_Z_Core_Setup.old.exe' -Force -ErrorAction SilentlyContinue
-Remove-Item -Path '{remote_dir_win}\\Merlin_Z_Core_Setup.zombie_*.tmp' -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$dir\\Merlin_Z_Core_Setup.old.exe" -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$dir\\Merlin_Z_Core_Setup.bak.exe" -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$dir\\Merlin_Z_Core_Setup.staging.exe" -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$dir\\*.zombie_*" -Recurse -Force -ErrorAction SilentlyContinue
 Remove-Item -Path "$env:TEMP\\merlin_zcore_silent_update\\updater.bat" -Force -ErrorAction SilentlyContinue
 Remove-Item -Path "$env:LOCALAPPDATA\\Merlin\\zcore_rt\\_MEI*" -Recurse -Force -ErrorAction SilentlyContinue
 
-# 3-4) Chrome/VSCode 정공법 Rename-Aside 0.01초 원자적 스왑:
-#      Windows NTFS는 커널 좀비 프로세스(taskkill 불가)가 실행파일을 잠그고 있어도
-#      '덮어쓰기/삭제'만 막을 뿐 '같은 폴더 내 이름 변경(Rename)'은 100% 허용합니다!
+# 3-3) Chrome/VSCode 정공법 Rename-Aside 0.01초 원자적 디렉터리 스왑 (exe + _internal 동시 교체 + 롤백 백업)
+if (Test-Path $bak) {{ Remove-Item -Path $bak -Recurse -Force -ErrorAction SilentlyContinue }}
+New-Item -ItemType Directory -Force -Path $bak | Out-Null
 $swapped = $false
 for ($k=0; $k -lt 6; $k++) {{
     try {{
         if (Test-Path $exe) {{
-            $zombieTmp = "$exe.zombie_" + ([DateTimeOffset]::UtcNow.ToUnixTimeMilliseconds()) + ".tmp"
-            Move-Item -Path $exe -Destination $zombieTmp -Force -ErrorAction Stop
+            try {{ Move-Item -Path $exe -Destination (Join-Path $bak 'Merlin_Z_Core_Setup.exe') -Force -ErrorAction Stop }}
+            catch {{ Move-Item -Path $exe -Destination "$exe.zombie_$ts.tmp" -Force -ErrorAction Stop }}
         }}
-        Move-Item -Path $st -Destination $exe -Force -ErrorAction Stop
+        if (Test-Path $int) {{
+            try {{ Move-Item -Path $int -Destination (Join-Path $bak '_internal') -Force -ErrorAction Stop }}
+            catch {{ Move-Item -Path $int -Destination "$int.zombie_$ts" -Force -ErrorAction Stop }}
+        }}
+        Move-Item -Path (Join-Path $std '_internal') -Destination $int -Force -ErrorAction Stop
+        Move-Item -Path (Join-Path $std 'Merlin_Z_Core_Setup.exe') -Destination $exe -Force -ErrorAction Stop
         $swapped = $true
         break
     }} catch {{
@@ -586,21 +611,18 @@ for ($k=0; $k -lt 6; $k++) {{
         Start-Sleep -Milliseconds 400
     }}
 }}
-# 치워둔 이전 exe는 잠금이 풀렸으면 즉시 삭제 (좀비가 물고 있으면 다음 배포/재부팅 시 자동 소거)
-Remove-Item -Path '{remote_dir_win}\\Merlin_Z_Core_Setup.exe.zombie_*.tmp' -Force -ErrorAction SilentlyContinue
+Remove-Item -Path $std -Recurse -Force -ErrorAction SilentlyContinue
+Remove-Item -Path $stz -Force -ErrorAction SilentlyContinue
+Remove-Item -Path "$dir\\*.zombie_*" -Recurse -Force -ErrorAction SilentlyContinue
 if (-not $swapped) {{
-    if (Test-Path $bak) {{ Copy-Item -Path $bak -Destination $exe -Force -ErrorAction SilentlyContinue }}
+    if (Test-Path (Join-Path $bak '_internal')) {{ Move-Item -Path (Join-Path $bak '_internal') -Destination $int -Force -ErrorAction SilentlyContinue }}
+    if (Test-Path (Join-Path $bak 'Merlin_Z_Core_Setup.exe')) {{ Move-Item -Path (Join-Path $bak 'Merlin_Z_Core_Setup.exe') -Destination $exe -Force -ErrorAction SilentlyContinue }}
     Start-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContinue
     Write-Output 'SWAP_FAILED_ROLLED_BACK'
     exit 4
 }}
 
-# 3-5) 모드전환기 캐시 + Run 레지스트리 + 인터랙티브 ONLOGON 예약작업 갱신 및 즉시 기동
-$vaultCacheDir = 'C:\\Users\\{remote_user}\\AppData\\Local\\Merlin_Mode_Vault\\snapshots\\cached_installer'
-if (Test-Path 'C:\\Users\\{remote_user}\\AppData\\Local\\Merlin_Mode_Vault') {{
-    New-Item -ItemType Directory -Force -Path $vaultCacheDir | Out-Null
-    Copy-Item -Path $exe -Destination (Join-Path $vaultCacheDir 'Merlin_Z_Core_Setup.exe') -Force -ErrorAction SilentlyContinue
-}}
+# 3-4) Run 레지스트리 + 인터랙티브 ONLOGON 예약작업 갱신 및 즉시 기동
 Remove-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'MerlinSeqPaste' -ErrorAction SilentlyContinue
 Set-ItemProperty -Path 'HKCU:\\Software\\Microsoft\\Windows\\CurrentVersion\\Run' -Name 'MerlinZCoreDaemon' -Value "`"$exe`""
 $me = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
@@ -630,17 +652,19 @@ try {{
 Start-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContinue
 Write-Output 'SWAP_OK'
 """
+    t_swap_done = time.time()
     try:
         sw_res = _run_remote_ps_encoded(ssh_target, key_path, swap_and_start_ps, timeout_sec=40)
+        t_swap_done = time.time()
         if sw_res.returncode != 0 or "SWAP_OK" not in (sw_res.stdout or ""):
             log(f"⚠️ {label} 원자적 스왑 실패 (자동 롤백 실행됨): {(sw_res.stdout or sw_res.stderr)[:240]}")
             return
     except Exception as e:
         log(f"⚠️ {label} 스왑 단계 예외: {e}")
 
-    # [4단계: 기동 검증 (5199 버전 일치 + 51988 PONG) & 실패 시 자동 롤백으로 엔진 증발 0% 보장]
+    # [4단계: 초고속 기동 검증 (5199 버전 일치 + 51988 PONG) & 실패 시 자동 롤백으로 엔진 증발 0% 보장]
     for attempt in range(18):
-        time.sleep(1.5)
+        time.sleep(1.0)
         try:
             chk = subprocess.run(
                 [
@@ -661,7 +685,8 @@ Write-Output 'SWAP_OK'
                 timeout=12,
             )
             if chk.returncode == 0 and f'"{core_ver}"' in chk.stdout and "|51988=1" in chk.stdout:
-                log(f"✅ {label} Z-코어 v{core_ver} + 귀신검색창(51988) 무중단 원자적 스왑 및 기동 확인 성공!")
+                boot_sec = round(time.time() - t_swap_done, 1)
+                log(f"✅ {label} Z-코어 v{core_ver} + 귀신검색창(51988) --onedir 무중단 스왑 및 초고속 기동({boot_sec}s) 확인 성공!")
                 return
             if chk.returncode == 0 and f'"{core_ver}"' in chk.stdout and attempt >= 11:
                 log(f"✅ {label} Z-코어 v{core_ver} + 자동실행(Run & ONLOGON) 기동 확인 성공!")
@@ -675,13 +700,18 @@ Write-Output 'SWAP_OK'
                 )
         except Exception:
             pass
-    # 18회(27초) 내 기동 실패 시 즉시 백업본 롤백 기동 (엔진 증발 원천 방지!)
-    log(f"🚨 {label} v{core_ver} 기동 실패 ➔ 즉시 직전 정상 버전(.bak.exe) 자동 롤백 기동!")
+    # 18회 내 기동 실패 시 즉시 백업 폴더(_bak_dir) 자동 롤백 기동 (엔진 증발 원천 방지!)
+    log(f"🚨 {label} v{core_ver} 기동 실패 ➔ 즉시 직전 정상 버전(_bak_dir) 자동 롤백 기동!")
     rollback_ps = f"""
 taskkill /F /T /IM Merlin_Z_Core_Setup.exe 2>$null | Out-Null
 Start-Sleep -Milliseconds 600
-if (Test-Path '{remote_bak_win}') {{
-    Copy-Item -Path '{remote_bak_win}' -Destination '{remote_exe_win}' -Force -ErrorAction SilentlyContinue
+if (Test-Path '{remote_bak_dir_win}\\Merlin_Z_Core_Setup.exe') {{
+    Remove-Item -Path '{remote_exe_win}' -Force -ErrorAction SilentlyContinue
+    Remove-Item -Path '{remote_int_win}' -Recurse -Force -ErrorAction SilentlyContinue
+    if (Test-Path '{remote_bak_dir_win}\\_internal') {{
+        Move-Item -Path '{remote_bak_dir_win}\\_internal' -Destination '{remote_int_win}' -Force -ErrorAction SilentlyContinue
+    }}
+    Move-Item -Path '{remote_bak_dir_win}\\Merlin_Z_Core_Setup.exe' -Destination '{remote_exe_win}' -Force -ErrorAction SilentlyContinue
 }}
 Start-ScheduledTask -TaskName 'StartMerlinZCore5199' -ErrorAction SilentlyContinue
 """

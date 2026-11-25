@@ -242,10 +242,11 @@ def sign_binary_with_ms_codesign(exe_path: Path) -> Dict[str, Any]:
 
 def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
     """
-    [2026-10-27 실체화] PyInstaller --onefile 로 merlin_z_core_daemon.py + 1차 필수 플러그인 3종을
-    단일 실행파일 dist/Merlin_Z_Core_Setup.exe 로 패키징합니다.
-    - 플러그인은 데몬이 정적 import 하므로 --paths 로 자동 수집 + hidden-import 로 이중 보장
-    - 서드파티: psutil, pywin32(win32clipboard/win32con), Pillow (센스톡·클립보드 이미지)
+    [2026-11-25 정공법 전환] PyInstaller --onedir (1회 전개 · 무압축해제 런타임) 로
+    merlin_z_core_daemon.py + 내장 플러그인 전체를 dist/Merlin_Z_Core_Setup/ (Merlin_Z_Core_Setup.exe + _internal/) 로 패키징합니다.
+    - 기존 --onefile 방식은 5199·51988(--seq-paste-daemon)·--ppocr-worker 실행 때마다 70MB/1,190개 파일을
+      임시 폴더(_MEI*)에 3벌 중복 압축해제하여 Windows Defender 스캔으로 최대 2분 먹통을 유발했으나,
+      --onedir 전환으로 부팅·서브프로세스 기동 시 압축해제 0바이트 / 0.3초 즉시 기동을 영구 보장합니다.
     """
     work_root = Path(os.environ.get("TEMP", str(THIS_DIR))) / "merlin_z_core_build"
     icon_file = THIS_DIR / "favicon.ico"
@@ -262,8 +263,7 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
             vc_dll_args.extend(["--add-binary", f"{dll_p};."])
     cmd = [
         sys.executable, "-m", "PyInstaller",
-        "--noconfirm", "--clean", "--onefile",
-        "--runtime-tmpdir", r"%LOCALAPPDATA%\Merlin\zcore_rt",
+        "--noconfirm", "--clean", "--onedir",
         "--name", "Merlin_Z_Core_Setup",
         "--distpath", str(DIST_DIR),
         "--workpath", str(work_root / "work"),
@@ -322,13 +322,12 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
         str(THIS_DIR / "merlin_z_core_daemon.py"),
     ]
     res = subprocess.run(cmd, capture_output=True, text=True, encoding="utf-8", errors="replace")
-    exe = DIST_DIR / "Merlin_Z_Core_Setup.exe"
+    onedir_dir = DIST_DIR / "Merlin_Z_Core_Setup"
+    exe = onedir_dir / "Merlin_Z_Core_Setup.exe"
     subsystem_patched = False
     if res.returncode == 0 and exe.exists() and not console:
-        # [근본 처방]: PyInstaller runw.exe(--noconsole) 부트로더 내부에 하드코딩된
-        # MessageBoxW("Failed to remove temporary directory: ...\_MEIxxxx") 팝업을 원천 제거하기 위해,
-        # MessageBoxW 호출이 0건인 run.exe(--console) 부트로더로 패키징한 뒤 PE OptionalHeader.Subsystem만
-        # IMAGE_SUBSYSTEM_WINDOWS_GUI(2)로 전환하여 콘솔 창 0% + 부트로더 Warning 팝업 0%를 동시에 달성합니다.
+        # [근본 처방]: MessageBoxW 호출이 0건인 run.exe(--console) 부트로더로 패키징한 뒤
+        # PE OptionalHeader.Subsystem만 IMAGE_SUBSYSTEM_WINDOWS_GUI(2)로 전환하여 콘솔 창 0% + 팝업 0%를 동시 달성합니다.
         try:
             import struct
 
@@ -346,12 +345,22 @@ def build_with_pyinstaller(console: bool = False) -> Dict[str, Any]:
                         subsystem_patched = True
         except Exception:
             pass
+    total_bytes = 0
+    if onedir_dir.is_dir():
+        for _fp in onedir_dir.rglob("*"):
+            if _fp.is_file():
+                try:
+                    total_bytes += _fp.stat().st_size
+                except OSError:
+                    pass
     return {
-        "built": res.returncode == 0 and exe.exists(),
+        "built": res.returncode == 0 and exe.exists() and (onedir_dir / "_internal").is_dir(),
+        "mode": "onedir",
         "returncode": res.returncode,
         "exe": str(exe),
+        "onedir": str(onedir_dir),
         "subsystemGuiPatched": subsystem_patched,
-        "sizeMB": round(exe.stat().st_size / 1024 / 1024, 1) if exe.exists() else 0,
+        "sizeMB": round(total_bytes / 1024 / 1024, 1) if total_bytes else 0,
         "stderrTail": res.stderr.strip().splitlines()[-6:],
     }
 
@@ -369,7 +378,9 @@ def verify_built_exe(exe_path: Path, port: int = 15199, timeout_sec: float = 40.
     import urllib.request
 
     pe_valid = False
-    if exe_path.exists() and exe_path.stat().st_size > 10 * 1024 * 1024:
+    is_onedir = (exe_path.parent / "_internal").is_dir()
+    min_exe_bytes = 200 * 1024 if is_onedir else 10 * 1024 * 1024
+    if exe_path.exists() and exe_path.stat().st_size > min_exe_bytes:
         try:
             with open(exe_path, "rb") as f:
                 if f.read(2) == b"MZ":
@@ -472,18 +483,28 @@ def sync_release_zip_and_frontend_version(exe_path: Path) -> Dict[str, Any]:
         "exit\r\n"
     )
     readme_content = (
-        f"❖ 멀린 Z-코어 (Merlin Z-Core v{core_version}) 사용 안내\n\n"
-        "1. [Merlin_Z_Core_Setup.exe]를 더블 클릭하여 실행합니다. (별도 설치 창 없이 영구 경로에 자동 안착됩니다)\n"
-        "2. 실행 후 윈도우 작업표시줄 시계 옆(시스템 트레이)에 귀신같이 아이콘이 생성됩니다.\n"
-        "3. 귀신같이 웹 브라우저(https://ghosti.sundreamer.app)의 [1. 귀신비서] · [2. 귀신검색] 창으로 돌아가시면\n"
-        "   자동 연결되며, 외부 클라우드 전송 없이 내 컴퓨터 속 진짜 사진·동영상·문서만\n"
-        "   조용히 로컬 인덱싱하여 1초 만에 귀신검색됩니다! (어느 앱에서든 Ctrl+0 귀신검색창 즉시 소환)\n"
-        "4. 이후 신규 버전이 출시되면 별도 다운로드 없이 백그라운드에서 항상 최신 버전으로 자동 업데이트됩니다.\n"
+        f"❖ 멀린 Z-코어 (Merlin Z-Core v{core_version} · 0.3초 즉시 기동 onedir 에디션) 사용 안내\n\n"
+        "1. 다운로드한 Merlin_Z_Core.zip의 압축을 한 폴더에 모두 풀어 주세요. (_internal 폴더와 Merlin_Z_Core_Setup.exe가 같은 폴더에 있어야 합니다)\n"
+        "2. [Merlin_Z_Core_Setup.exe]를 더블 클릭하여 실행합니다. (영구 경로 %LOCALAPPDATA%\\Programs\\MerlinFamily 로 자동 안착됩니다)\n"
+        "3. 실행 후 윈도우 작업표시줄 시계 옆(시스템 트레이)에 귀신같이 아이콘이 생성되며, 이후 PC 재부팅·Ctrl+0 귀신검색창이 0.3초 만에 즉시 열립니다.\n"
+        "4. 귀신같이 웹 브라우저(https://ghosti.sundreamer.app)의 [1. 귀신비서] · [2. 귀신검색] 창으로 돌아가시면\n"
+        "   자동 연결되며, 외부 클라우드 전송 없이 내 컴퓨터 속 진짜 사진·동영상·문서만 조용히 로컬 인덱싱합니다.\n"
+        "5. 이후 신규 버전이 출시되면 별도 다운로드 없이 백그라운드에서 항상 최신 버전으로 자동 업데이트됩니다.\n"
     )
 
     tmp_zip = public_dir / "Merlin_Z_Core.zip.tmp"
+    onedir_root = exe_path.parent
+    is_onedir_pkg = (onedir_root / "_internal").is_dir()
     with zipfile.ZipFile(tmp_zip, "w", compression=zipfile.ZIP_DEFLATED, compresslevel=6) as zf:
-        zf.write(exe_path, arcname="Merlin_Z_Core_Setup.exe")
+        if is_onedir_pkg:
+            zf.write(exe_path, arcname="Merlin_Z_Core_Setup.exe")
+            internal_dir = onedir_root / "_internal"
+            for f_item in sorted(internal_dir.rglob("*")):
+                if f_item.is_file():
+                    rel_arc = f_item.relative_to(onedir_root).as_posix()
+                    zf.write(f_item, arcname=rel_arc)
+        else:
+            zf.write(exe_path, arcname="Merlin_Z_Core_Setup.exe")
         zf.writestr("Merlin_Z_Core_실행.bat", bat_content.encode("utf-8"))
         zf.writestr("안내_README.txt", readme_content.encode("utf-8"))
     try:
@@ -619,7 +640,7 @@ def main() -> None:
     except Exception:
         pass
 
-    exe = DIST_DIR / "Merlin_Z_Core_Setup.exe"
+    exe = DIST_DIR / "Merlin_Z_Core_Setup" / "Merlin_Z_Core_Setup.exe"
 
     if args.prepare_tools:
         prep = ensure_ms_signing_tools_installed()

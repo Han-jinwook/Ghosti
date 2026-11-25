@@ -63,9 +63,9 @@ def get_persistent_zcore_exe_path() -> str:
 
 def ensure_persistent_frozen_install() -> str:
     """
-    PyInstaller 단일 실행파일(.exe)로 실행된 경우(예: Downloads 폴더에서 실행),
+    PyInstaller 패키징 실행파일(.exe + --onedir _internal/)로 실행된 경우(예: Downloads 폴더에서 실행),
     유저가 나중에 Downloads 폴더를 비우더라도 자동실행·더블클릭 압축·권한 헬퍼가 영구 작동하도록
-    표준 경로(%LOCALAPPDATA%\\Programs\\MerlinFamily\\Merlin_Z_Core_Setup.exe) 및
+    표준 경로(%LOCALAPPDATA%\\Programs\\MerlinFamily\\Merlin_Z_Core_Setup.exe 및 _internal\\)와
     보조 에셋(%LOCALAPPDATA%\\Ghosti\\bin\\)에 최신 바이너리를 무소음 동기화합니다.
     """
     if not getattr(sys, "frozen", False):
@@ -73,12 +73,18 @@ def ensure_persistent_frozen_install() -> str:
     cur_exe = os.path.abspath(sys.executable)
     target_exe = get_persistent_zcore_exe_path()
     try:
-        os.makedirs(os.path.dirname(target_exe), exist_ok=True)
+        target_dir = os.path.dirname(target_exe)
+        cur_dir = os.path.dirname(cur_exe)
+        os.makedirs(target_dir, exist_ok=True)
         if os.path.normcase(cur_exe) != os.path.normcase(target_exe):
             import hashlib
             import shutil
 
-            need_copy = not os.path.exists(target_exe)
+            cur_internal = os.path.join(cur_dir, "_internal")
+            dst_internal = os.path.join(target_dir, "_internal")
+            has_onedir_internal = os.path.isdir(cur_internal)
+
+            need_copy = not os.path.exists(target_exe) or (has_onedir_internal and not os.path.isdir(dst_internal))
             if not need_copy:
                 try:
                     if os.path.getsize(cur_exe) != os.path.getsize(target_exe):
@@ -89,6 +95,23 @@ def ensure_persistent_frozen_install() -> str:
                 except Exception:
                     need_copy = True
             if need_copy:
+                if has_onedir_internal:
+                    staging_internal = os.path.join(target_dir, "_internal.staging")
+                    if os.path.exists(staging_internal):
+                        shutil.rmtree(staging_internal, ignore_errors=True)
+                    shutil.copytree(cur_internal, staging_internal, dirs_exist_ok=True)
+                    if os.path.exists(dst_internal):
+                        zombie_int = os.path.join(target_dir, f"_internal.zombie_{int(time.time())}")
+                        try:
+                            os.replace(dst_internal, zombie_int)
+                            shutil.rmtree(zombie_int, ignore_errors=True)
+                        except OSError:
+                            shutil.rmtree(dst_internal, ignore_errors=True)
+                    try:
+                        os.replace(staging_internal, dst_internal)
+                    except OSError:
+                        shutil.copytree(staging_internal, dst_internal, dirs_exist_ok=True)
+                        shutil.rmtree(staging_internal, ignore_errors=True)
                 tmp_exe = target_exe + ".tmp"
                 shutil.copy2(cur_exe, tmp_exe)
                 try:

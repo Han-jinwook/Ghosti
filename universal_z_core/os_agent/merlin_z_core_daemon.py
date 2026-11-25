@@ -174,7 +174,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.8.62"
+CORE_VERSION = "2.8.63"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -1482,15 +1482,17 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
             "version": CORE_VERSION,
         }
 
-    # [원격 스테이징 배포 중 상호 배제]: SSH 무중단 배포(staging.exe 존재 & 120초 이내) 중이면 자가업데이트 양보
+    # [원격 스테이징 배포 중 상호 배제]: SSH 무중단 배포(staging.zip / staging.exe 존재 & 180초 이내) 중이면 자가업데이트 양보
     try:
-        _staging_p = Path(sys.executable).resolve().parent / "Merlin_Z_Core_Setup.staging.exe"
-        if _staging_p.exists() and (time.time() - _staging_p.stat().st_mtime) < 120.0:
-            return {
-                "ok": True,
-                "status": "SKIPPED_REMOTE_STAGING_ACTIVE",
-                "version": CORE_VERSION,
-            }
+        _exe_dir = Path(sys.executable).resolve().parent
+        for _st_name in ("Merlin_Z_Core.staging.zip", "Merlin_Z_Core_Setup.staging.exe"):
+            _staging_p = _exe_dir / _st_name
+            if _staging_p.exists() and (time.time() - _staging_p.stat().st_mtime) < 180.0:
+                return {
+                    "ok": True,
+                    "status": "SKIPPED_REMOTE_STAGING_ACTIVE",
+                    "version": CORE_VERSION,
+                }
     except Exception:
         pass
 
@@ -1535,31 +1537,46 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
                 zip_bytes = resp.read()
             zip_path.write_bytes(zip_bytes)
 
-            extracted_exe: Path | None = None
+            import shutil as _shutil_u
+
+            extract_root = update_dir / "extracted"
+            if extract_root.exists():
+                _shutil_u.rmtree(extract_root, ignore_errors=True)
+            extract_root.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(zip_path, "r") as zf:
-                for member in zf.namelist():
-                    if member.lower().endswith(".exe"):
-                        zf.extract(member, update_dir)
-                        extracted_exe = (update_dir / member).resolve()
+                zf.extractall(extract_root)
+
+            extracted_exe: Path | None = None
+            direct_cand = extract_root / "Merlin_Z_Core_Setup.exe"
+            if direct_cand.exists():
+                extracted_exe = direct_cand.resolve()
+            else:
+                for _cand in extract_root.rglob("*.exe"):
+                    if _cand.name.lower() == "merlin_z_core_setup.exe":
+                        extracted_exe = _cand.resolve()
                         break
 
             if not extracted_exe or not extracted_exe.exists():
                 _SELF_UPDATE_IN_PROGRESS = False
                 return
 
-            # [무한 자살 루프 방어 1]: 다운로드된 ZIP 내 exe가 현재 실행 중인 exe와 바이트 단위로 동일하면 종료·교체를 수행하지 않음
-            try:
-                import hashlib
+            extracted_internal = extracted_exe.parent / "_internal"
+            is_onedir_update = extracted_internal.is_dir()
 
-                if (
-                    current_exe.exists()
-                    and hashlib.sha256(extracted_exe.read_bytes()).hexdigest()
-                    == hashlib.sha256(current_exe.read_bytes()).hexdigest()
-                ):
-                    _SELF_UPDATE_IN_PROGRESS = False
-                    return
-            except Exception:
-                pass
+            # [무한 자살 루프 방어 1]: 구형 단일 exe 모드일 때 동일 바이트면 즉시 중단
+            if not is_onedir_update:
+                try:
+                    import hashlib
+
+                    if (
+                        current_exe.exists()
+                        and hashlib.sha256(extracted_exe.read_bytes()).hexdigest()
+                        == hashlib.sha256(current_exe.read_bytes()).hexdigest()
+                    ):
+                        _SELF_UPDATE_IN_PROGRESS = False
+                        return
+                except Exception:
+                    pass
 
             # [무한 자살 & 깨진 바이너리 방어 2]: 교체 전 extracted_exe --selftest를 실행하여
             # 1) NameError 등 크래시 없이 정상 실행되는지 확인하고,
@@ -1590,9 +1607,18 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
                 _SELF_UPDATE_IN_PROGRESS = False
                 return
 
-            # Chrome/VSCode 정공법 Rename-Aside: 실행 중/좀비 잠금 파일도 옆으로 이름 변경 후 새 exe 즉시 배치 + 인터랙티브 재기동
+            # Chrome/VSCode 정공법 Rename-Aside: 실행 중/좀비 잠금 파일·_internal 폴더도 옆으로 이름 변경 후 즉시 배치 + 인터랙티브 재기동
             bat_path = update_dir / "updater.bat"
-            zombie_name = f"{current_exe.name}.zombie_{int(time.time())}.tmp"
+            ts_tag = int(time.time())
+            zombie_name = f"{current_exe.name}.zombie_{ts_tag}.tmp"
+            zombie_int_name = f"_internal.zombie_{ts_tag}"
+            cur_internal = current_exe.parent / "_internal"
+            internal_swap_block = ""
+            if is_onedir_update:
+                internal_swap_block = (
+                    f'  if exist "{cur_internal}" ren "{cur_internal}" "{zombie_int_name}" > NUL 2>&1\r\n'
+                    f'  if exist "{extracted_internal}" (move /y "{extracted_internal}" "{cur_internal}" > NUL 2>&1 || robocopy "{extracted_internal}" "{cur_internal}" /E /MOVE /NFL /NDL /NJH /NJS /NC /NS > NUL 2>&1)\r\n'
+                )
             bat_content = (
                 "@echo off\r\n"
                 "setlocal\r\n"
@@ -1603,13 +1629,15 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
                 f'del /f /q "{current_exe.parent}\\*.zombie_*.tmp" > NUL 2>&1\r\n'
                 "for /L %%i in (1,1,10) do (\r\n"
                 f'  if exist "{current_exe}" ren "{current_exe}" "{zombie_name}" > NUL 2>&1\r\n'
-                f'  move /y "{extracted_exe}" "{current_exe}" > NUL 2>&1 && goto :LAUNCH\r\n'
+                + internal_swap_block
+                + f'  move /y "{extracted_exe}" "{current_exe}" > NUL 2>&1 && goto :LAUNCH\r\n'
                 "  taskkill /F /T /IM Merlin_Z_Core_Setup.exe > NUL 2>&1\r\n"
                 "  timeout /t 1 /nobreak > NUL\r\n"
                 ")\r\n"
                 ":LAUNCH\r\n"
                 f'del /f /q "{current_exe.parent}\\*.zombie_*.tmp" > NUL 2>&1\r\n'
-                f'if exist "{extracted_exe}" del /f /q "{extracted_exe}" > NUL 2>&1\r\n'
+                f'rmdir /s /q "{current_exe.parent}\\{zombie_int_name}" > NUL 2>&1\r\n'
+                f'rmdir /s /q "{extract_root}" > NUL 2>&1\r\n'
                 'schtasks /run /tn "StartMerlinZCore5199" > NUL 2>&1 || start "" "' + str(current_exe) + '" --replace\r\n'
                 'del "%~f0"\r\n'
             )
