@@ -65,6 +65,8 @@ import {
   isNo,
   parseNicknameSettingIntent,
   normalizeSuggestionChipTone,
+  syncProfileNicknameFromHubEvent,
+  syncSecretaryNicknameToHubProfile,
   type GhostSecretaryState,
 } from '../services/ghostSecretaryEngine';
 import {
@@ -477,9 +479,18 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       refreshWelcomeForSecretary();
     };
     window.addEventListener('ghosti_jump_to_secretary', onJumpRefresh);
+    const onProfileUpdated = () => {
+      try {
+        const synced = syncProfileNicknameFromHubEvent(localStorage.getItem('userNickname') || '');
+        if (synced) setAwaitingNickname(false);
+      } catch {
+        /* ignore */
+      }
+    };
     window.addEventListener('merlinSessionExpired', onJumpRefresh);
     window.addEventListener('merlinLoggedIn', onJumpRefresh);
     window.addEventListener('ghostiSupabaseUserSynced', onJumpRefresh);
+    window.addEventListener('profileUpdated', onProfileUpdated);
 
     // [Stage 1: 최초 1회 은행 보안프로그램 속도 저하 브리핑 & 1회성 동의 칩 (한 턴 연타 금지 · 호흡 분리)]
     if (
@@ -605,6 +616,7 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
       window.removeEventListener('merlinSessionExpired', onJumpRefresh);
       window.removeEventListener('merlinLoggedIn', onJumpRefresh);
       window.removeEventListener('ghostiSupabaseUserSynced', onJumpRefresh);
+      window.removeEventListener('profileUpdated', onProfileUpdated);
     };
   }, [sourceTab, isMobileOrStore]);
 
@@ -1408,8 +1420,16 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           saveGhostPassportBook(setPassportSelf(loadGhostPassportBook(), nextState.nickname));
           try {
             localStorage.setItem('userNickname', nextState.nickname);
+            localStorage.setItem('ghosti_hub_user_nickname', nextState.nickname);
           } catch {
             /* ignore */
+          }
+          if (
+            nextState.nickname !== secretaryState.nickname ||
+            turn.scenarioId === 'nickname_registered' ||
+            turn.scenarioId === 'profile_change_nickname'
+          ) {
+            void syncSecretaryNicknameToHubProfile(nextState.nickname);
           }
         }
         setAwaitingNickname(Boolean(nextState.awaitingNickname));

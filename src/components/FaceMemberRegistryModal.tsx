@@ -1221,9 +1221,29 @@ export const PassportDoorplateStyleModal: React.FC = () => {
   }, [doorplatePickerClusterId]);
 
   useEffect(() => {
-    const onState = () => setRegTick((n) => n + 1);
+    const syncNick = () => {
+      const book = loadGhostPassportBook();
+      const secSt = loadGhostSecretaryState();
+      let storedNick = '';
+      try {
+        storedNick = localStorage.getItem('userNickname') || '';
+      } catch {
+        /* ignore */
+      }
+      setNickname((secSt.nickname || storedNick || book.self?.nickname || '').trim());
+    };
+    const onState = () => {
+      syncNick();
+      setRegTick((n) => n + 1);
+    };
     window.addEventListener(PASSPORT_REG_STATE_EVENT, onState);
-    return () => window.removeEventListener(PASSPORT_REG_STATE_EVENT, onState);
+    window.addEventListener('profileUpdated', onState);
+    window.addEventListener('ghosti_ghost_secretary_state_updated', onState);
+    return () => {
+      window.removeEventListener(PASSPORT_REG_STATE_EVENT, onState);
+      window.removeEventListener('profileUpdated', onState);
+      window.removeEventListener('ghosti_ghost_secretary_state_updated', onState);
+    };
   }, []);
 
   const { selfCluster, cuts, regState } = useMemo(
@@ -1279,15 +1299,15 @@ export const PassportDoorplateStyleModal: React.FC = () => {
         </div>
 
         <div className="p-4 sm:p-5 overflow-y-auto flex flex-col gap-4">
-          {/* 이름(실명) — 공유방 어디서나 같은 이름 · 별명은 내부적으로 함께 묶여 검색 */}
+          {/* 이름(실명) — 공유방 어디서나 같은 이름 · 프로필 닉네임은 내 프로필·귀신비서와 1개로 통일 결속 */}
           <form onSubmit={(e) => void handleSaveRealName(e)} className="flex flex-col gap-1.5">
-            <label className="text-[12px] font-bold text-zinc-400">이름</label>
+            <label className="text-[12px] font-bold text-zinc-400">여권 이름 (실명 · 사진 검색용)</label>
             <div className="flex items-center gap-2">
               <input
                 type="text"
                 value={realNameInput}
                 onChange={(e) => setRealNameInput(e.target.value)}
-                placeholder="이름"
+                placeholder="실명 입력 (선택)"
                 maxLength={18}
                 className="flex-1 h-10 px-3.5 rounded-xl bg-zinc-950 border border-white/15 focus:border-primary-container outline-none text-[13.5px] text-white placeholder:text-zinc-600"
               />
@@ -1299,7 +1319,11 @@ export const PassportDoorplateStyleModal: React.FC = () => {
                 저장
               </button>
             </div>
-            {nickname && <span className="text-[11.5px] text-zinc-500">별명 {nickname}</span>}
+            {nickname && (
+              <span className="text-[11.5px] text-zinc-500">
+                프로필 닉네임: {nickname} (내 프로필·귀신비서 공통)
+              </span>
+            )}
           </form>
 
           {/* 시기별 사진 — 보기 + 지우기(🗑)만 */}

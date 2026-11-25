@@ -9,6 +9,7 @@
  */
 import playbookJson from '../data/ghost_secretary_playbook.json';
 import { isAndroidMobileBrowserOrApp, isIosMobileBrowserOrApp } from './ghostiMobileCareBridge';
+import { updateProfile as updateHubProfile } from './merlin-hub-sdk/Auth/auth';
 
 // ─────────────────────────────────────────────────────────────
 // 대본집 타입 & 로딩
@@ -632,16 +633,26 @@ export function bindGhostSecretaryAccountOwner(
         awaitingNickname: !cleanHubNick,
       };
       writeJson(GHOST_SECRETARY_STATE_KEY, nextSt);
+      if (cleanHubNick) {
+        saveGhostPassportBook(setPassportSelf(loadGhostPassportBook(), cleanHubNick));
+      }
     } else {
-      const healedNick =
-        !rawSt.nickname || isInvalidNicknameCandidate(rawSt.nickname)
+      // [단일 SSOT 통일]: 내 프로필 닉네임(MerlinHub)이 유효한 고유값이면 귀신비서 별명과 100% 일치시킵니다.
+      const isGenericHubNick = cleanHubNick === '회원' || cleanHubNick === '가족회원';
+      const unifiedNick =
+        cleanHubNick && !isGenericHubNick
+          ? cleanHubNick
+          : !rawSt.nickname || isInvalidNicknameCandidate(rawSt.nickname)
           ? cleanHubNick || undefined
           : rawSt.nickname;
       writeJson(GHOST_SECRETARY_STATE_KEY, {
         ...rawSt,
         ownerEmail: cleanEmail,
-        ...(healedNick ? { nickname: healedNick, awaitingNickname: false } : {}),
+        ...(unifiedNick ? { nickname: unifiedNick, awaitingNickname: false } : {}),
       });
+      if (unifiedNick) {
+        saveGhostPassportBook(setPassportSelf(loadGhostPassportBook(), unifiedNick));
+      }
     }
     if (cleanHubNick) {
       localStorage.setItem('ghosti_hub_user_nickname', cleanHubNick);
@@ -652,6 +663,66 @@ export function bindGhostSecretaryAccountOwner(
     localStorage.setItem(LAST_ACTIVE_ACCOUNT_EMAIL_KEY, cleanEmail);
   } catch {
     /* ignore storage error */
+  }
+}
+
+/**
+ * [양방향 동기화 ①: 내 프로필 → 귀신비서·여권]
+ * 우측 상단 [내 프로필]에서 닉네임을 수정(profileUpdated)하면 귀신비서 호칭과 여권 프로필 닉네임을 즉시 일치시킵니다.
+ */
+export function syncProfileNicknameFromHubEvent(rawNick: string): string | null {
+  if (typeof window === 'undefined') return null;
+  const clean = (rawNick || '').trim();
+  if (!clean || clean === '회원' || clean === '가족회원' || TEST_ACCOUNT_NICKNAMES.has(clean) || isInvalidNicknameCandidate(clean)) {
+    return null;
+  }
+  const cur = loadGhostSecretaryState();
+  if (cur.nickname !== clean || cur.awaitingNickname) {
+    saveGhostSecretaryState({
+      ...cur,
+      nickname: clean,
+      awaitingNickname: false,
+    });
+  }
+  const book = loadGhostPassportBook();
+  if (book.self?.nickname !== clean) {
+    saveGhostPassportBook(setPassportSelf(book, clean));
+  }
+  try {
+    localStorage.setItem('userNickname', clean);
+    localStorage.setItem('ghosti_hub_user_nickname', clean);
+  } catch {
+    /* ignore */
+  }
+  return clean;
+}
+
+/**
+ * [양방향 동기화 ②: 귀신비서 채팅 → 내 프로필(MerlinHub)]
+ * 귀신비서 채팅창에서 별명(닉네임)을 등록·변경하면 로그인 계정의 [내 프로필] 닉네임도 즉시 함께 저장합니다.
+ */
+export async function syncSecretaryNicknameToHubProfile(rawNick: string): Promise<void> {
+  if (typeof window === 'undefined') return;
+  const clean = (rawNick || '').trim();
+  if (!clean || isInvalidNicknameCandidate(clean)) return;
+  try {
+    localStorage.setItem('userNickname', clean);
+    localStorage.setItem('ghosti_hub_user_nickname', clean);
+    const hasLoginToken =
+      Boolean((localStorage.getItem('merlin_session_token') || '').trim()) &&
+      localStorage.getItem('merlin_logged_out') !== '1';
+    if (hasLoginToken) {
+      const avatarUrl = localStorage.getItem('userProfileImage') || '';
+      const res = await updateHubProfile({ nickname: clean, avatar_url: avatarUrl });
+      if (res?.success) {
+        const finalNick = (res.nickname || clean).trim();
+        localStorage.setItem('userNickname', finalNick);
+        localStorage.setItem('ghosti_hub_user_nickname', finalNick);
+      }
+    }
+    window.dispatchEvent(new Event('profileUpdated'));
+  } catch {
+    /* non-blocking */
   }
 }
 
@@ -1076,6 +1147,7 @@ export function resolveGhostSecretaryTurn(
       saveGhostPassportBook(setPassportSelf(loadGhostPassportBook(), newNick));
       try {
         localStorage.setItem('userNickname', newNick);
+        localStorage.setItem('ghosti_hub_user_nickname', newNick);
       } catch {
         /* ignore */
       }
