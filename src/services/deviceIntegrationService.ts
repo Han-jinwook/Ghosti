@@ -1036,6 +1036,7 @@ import {
 } from './workRoomSyncService';
 
 let lastSyncedPcEngineSubFlag: string | null = null;
+let lastSyncedPcEngineAtMs = 0;
 export async function syncEntitlementToLocalPcEngine(
   entitlement: GhostiDeviceEntitlementView | null,
   accountEmail?: string,
@@ -1093,8 +1094,16 @@ export async function syncEntitlementToLocalPcEngine(
 
   const devCnt = Math.max(1, Number(entitlement?.activeDeviceCount || 1));
   const sig = `${cleanEmail}::${isSub ? '1' : '0'}::${isWorkUnlocked ? '1' : '0'}::${devCnt}::${roomId}::${isHost ? '1' : '0'}`;
-  if (!workOverride?.force && lastSyncedPcEngineSubFlag === sig) return;
+  const nowMs = Date.now();
+  if (
+    !workOverride?.force &&
+    lastSyncedPcEngineSubFlag === sig &&
+    (!isWorkUnlocked || nowMs - lastSyncedPcEngineAtMs < 12_000)
+  ) {
+    return;
+  }
   lastSyncedPcEngineSubFlag = sig;
+  lastSyncedPcEngineAtMs = nowMs;
   try {
     const qs = new URLSearchParams({
       accountId: cleanEmail || 'local_user',

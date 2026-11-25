@@ -477,7 +477,13 @@ export const WorkLoungeB2BHub: React.FC = () => {
       .then((res) => {
         if (cancelled || !res.ok) return;
         if (res.rooms.length === 0) {
+          const prevJoined = readCachedJoinedWorkRoomMeta(merlinAuth.email);
           clearCachedJoinedWorkRoomMeta(merlinAuth.email);
+          setRemoteRoomLockReason(null);
+          if (prevJoined && !prevJoined.isHost) {
+            performKickedOrRemovedCleanup(prevJoined.roomId, prevJoined.roomTitle, false);
+            return;
+          }
           if (!isOwnWorkUnlocked) {
             if (activeWorkRoomId) {
               void purgeLocalWorkRoomDocs(activeWorkRoomId, merlinAuth.email);
@@ -493,8 +499,13 @@ export const WorkLoungeB2BHub: React.FC = () => {
         const invitedRoom = res.rooms.find((r) => !r.isHost) || null;
         const hostedRoom = res.rooms.find((r) => r.isHost) || null;
         if (!invitedRoom) {
+          const prevJoined = readCachedJoinedWorkRoomMeta(merlinAuth.email);
           clearCachedJoinedWorkRoomMeta(merlinAuth.email);
           setJoinedInvitedRoom(null);
+          if (prevJoined && !prevJoined.isHost && (!hostedRoom || !hostedRoom.ownerUnlocked)) {
+            performKickedOrRemovedCleanup(prevJoined.roomId, prevJoined.roomTitle, false);
+            return;
+          }
         }
       // 본인 구독 업무방이 없거나(팀원 계정) 아직 활성 방이 없으면 초대받은 팀원방을 최우선 복원
       if (invitedRoom && (!isOwnWorkUnlocked || !activeWorkRoomId || activeWorkRoomId === invitedRoom.roomId)) {
@@ -547,6 +558,16 @@ export const WorkLoungeB2BHub: React.FC = () => {
         return;
       }
       if (hostedRoom && (!activeWorkRoomId || activeWorkRoomId === hostedRoom.roomId)) {
+        // 미개통(WORK_SUBSCRIPTION_REQUIRED) 또는 모바일 비활성 방장 껍데기 방은 복원하지 않고 '참여 중인 업무 공유방 없음'으로 유지
+        if (!hostedRoom.ownerUnlocked && (hostedRoom.lockReason !== 'WORK_TRIAL_EXPIRED' || isMobileOrStore)) {
+          setRemoteRoomLockReason(null);
+          if (!isOwnWorkUnlocked) {
+            setServerMembers([]);
+            setRemoteDocs([]);
+            setActiveWorkRoomId('');
+          }
+          return;
+        }
         if (activeWorkRoomId !== hostedRoom.roomId) {
           setActiveWorkRoomId(hostedRoom.roomId);
         }
@@ -2247,8 +2268,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
               <span className="inline-block w-4 h-4 rounded-full border-2 border-teal-600 border-t-transparent animate-spin shrink-0" />
               <span>참여 중인 업무 공유방을 확인하고 있습니다...</span>
             </div>
-          ) : remoteRoomLockReason === 'WORK_TRIAL_EXPIRED' ||
-            remoteRoomLockReason === 'WORK_SUBSCRIPTION_REQUIRED' ? (
+          ) : Boolean(joinedInvitedRoom) &&
+            (remoteRoomLockReason === 'WORK_TRIAL_EXPIRED' ||
+              remoteRoomLockReason === 'WORK_SUBSCRIPTION_REQUIRED') ? (
             <div className="flex flex-col gap-1.5">
               <span className="inline-flex self-start px-2.5 py-0.5 rounded-full bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-bold">
                 업무 공유방 연결 일시 중지

@@ -877,14 +877,20 @@ export async function isLocalZCoreHostTunnelActive(): Promise<boolean> {
     const data = (await res.json()) as {
       status?: string;
       tunnelUrl?: string;
+      isWorkHost?: boolean;
+      workEntitlementLocked?: boolean;
+      activeOwnerEmail?: string;
     };
     const status = String(data?.status || '').trim().toLowerCase();
     const tunnelUrl = String(data?.tunnelUrl || '').trim();
+    const activeOwnerEmail = String(data?.activeOwnerEmail || '').trim().toLowerCase();
     return (
       status === 'connected' ||
       status === 'starting' ||
       status === 'downloading_binary' ||
-      Boolean(tunnelUrl)
+      Boolean(tunnelUrl) ||
+      Boolean(activeOwnerEmail) ||
+      Boolean(data?.isWorkHost && data?.workEntitlementLocked === false)
     );
   } catch {
     return false;
@@ -908,8 +914,22 @@ export async function isSharedLocalHostPcProtectedForAccount(opts?: {
 }
 
 export function clearWorkRoomLocalCachesOnLogout(): void {
+  const prevEmail = resolveCurrentWorkAccountEmail();
   activeHostTunnelSession = null;
   if (typeof window === 'undefined') return;
+  if (zCoreBridge.isConnected && prevEmail && prevEmail !== 'anonymous') {
+    void fetch(getZCoreUrl('/__work/entitlement'), {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        unlocked: false,
+        email: prevEmail,
+        roomId: '',
+        isHost: false,
+        explicitLogout: true,
+      }),
+    }).catch(() => null);
+  }
   try {
     localStorage.removeItem('ghosti_my_work_room_meta_v1');
     sessionStorage.removeItem(WORK_INVITE_SESSION_KEY);
@@ -950,6 +970,7 @@ export async function mountWorkSDriveNative(opts?: {
   }
   const url = resolveWorkApiUrl('/__work/s-drive');
   if (!url) return { ok: false };
+  const resolvedEmail = resolveCurrentWorkAccountEmail(opts?.accountEmail);
   try {
     const res = await fetch(url, {
       method: 'POST',
@@ -957,6 +978,7 @@ export async function mountWorkSDriveNative(opts?: {
       body: JSON.stringify({
         action: opts?.action || 'mount',
         openExplorer: Boolean(opts?.openExplorer),
+        ...(resolvedEmail && resolvedEmail !== 'anonymous' ? { email: resolvedEmail } : {}),
         ...(opts?.targetDir ? { targetDir: opts.targetDir } : {}),
       }),
     });

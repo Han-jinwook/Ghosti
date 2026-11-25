@@ -1108,6 +1108,14 @@ export async function handleAuthedWorkAndDeviceAction({
       const ownerGate =
         gateByMaster.get(masterEmail) ||
         (await assertWorkOwnerUnlocked(supabaseUrl, serviceKey, masterEmail));
+      const resolvedLockReason = ownerGate.ok
+        ? null
+        : ownerGate.response?.body?.reason || 'WORK_SUBSCRIPTION_REQUIRED';
+      // 체험·유료 구독을 한 번도 시작하지 않은 빈 방장 껍데기 방(WORK_SUBSCRIPTION_REQUIRED)은 반환에서 제외해
+      // 내보내진 팀원 모바일·웹에서 '업무 공유방 연결 일시 중지(이용 기간 종료)'로 오표시되는 현상을 원천 차단
+      if (isHost && !ownerGate.ok && resolvedLockReason !== 'WORK_TRIAL_EXPIRED') {
+        continue;
+      }
       const sortedMembers = sortAndMapWorkMembers(membersByRoomId.get(rId) || [], masterEmail);
       const hostMember = sortedMembers.find((sm) => sm.role === 'master');
       const p2p = p2pByRoomId.get(rId);
@@ -1120,9 +1128,7 @@ export async function handleAuthedWorkAndDeviceAction({
         role,
         ownerUnlocked: Boolean(ownerGate.ok),
         seatLimit: ownerGate.entitlement?.workSeatLimit || 5,
-        lockReason: ownerGate.ok
-          ? null
-          : ownerGate.response?.body?.reason || 'WORK_SUBSCRIPTION_REQUIRED',
+        lockReason: resolvedLockReason,
         members: sortedMembers,
         deletedTombstones: ownerGate.ok ? p2p?.tombstones || {} : {},
         hostTunnel:
