@@ -3838,6 +3838,35 @@ export async function processUnifiedMonsterChatQuery(params: {
 
       // Case C: 직전 스캔 원장 기반 멀티턴 취사선택·제외 필터("예스파일·오캠 빼고 다 지워", "D:로 옮겨줘") ➔ Gemini 2.5 Flash 에이전트 플랜
       if (agentIntent.needsGeminiMultiTurnFilter && curScanCtx && curScanCtx.items.length > 0) {
+        // [안전 캐시만 요청 정밀 가드]: 실제 스캔에 안전 캐시가 0건인데 프로그램 제거 15건이 대신 체크되는 오작동 원천 차단
+        const wantsSafeCacheOnlyTurn = /(?:안전\s*)?캐시만/i.test(clean);
+        const wantsRedSafeOnlyTurn = /(빨간색|삭제\s*안전|차단\s*권장|100%\s*삭제)/i.test(clean);
+        if (wantsSafeCacheOnlyTurn) {
+          const safeCacheOnlyItems = curScanCtx.items.filter(
+            (it) => !it.isProtected && (it.cat === 'SAFE_CACHE' || it.cat === 'DESKTOP_HIBERFIL')
+          );
+          if (safeCacheOnlyItems.length === 0) {
+            const pcCtxFast = await fetchRealtimePcContextForLlm();
+            const ramPct = pcCtxFast.specData?.ramUsedPercent;
+            const cpuPct = pcCtxFast.osInspectData?.spoolerAndSecurity?.cpuLoadPercent;
+            const liveLine =
+              ramPct !== undefined || cpuPct !== null
+                ? `\n• **현재 PC 실시간 부하**: ${cpuPct != null ? `CPU ${cpuPct}%` : 'CPU 확인됨'}${ramPct !== undefined ? ` · 메모리 ${ramPct}% 사용 중` : ''}`
+                : '';
+            return reply(
+              sourceTab,
+              `방금 스캔에서는 별도로 비울 **안전 캐시 항목이 없었어요(0MB)**.${liveLine}\n` +
+                `프로그램 제거 창이 뜨지 않도록 설치된 앱은 건드리지 않았습니다. 아래 버튼으로 **빨간색(100% 안전) 백그라운드 항목만 정리**하거나, **실시간 CPU·메모리 점유 원인**을 바로 확인해 보세요!`,
+              {
+                followUpSuggestions: [
+                  '빨간색(삭제·차단 안전) 항목만 정리해줘',
+                  '지금 CPU·메모리 제일 많이 쓰는 앱 알려줘',
+                ],
+              }
+            );
+          }
+        }
+
         const pcCtxNow = await fetchRealtimePcContextForLlm();
         const recentTurnsNow = sharedChatState.messages.slice(-6).map((m) => ({
           role: m.role,
@@ -3858,6 +3887,8 @@ export async function processUnifiedMonsterChatQuery(params: {
 
           const isExcludedItem = (it: typeof curScanCtx.items[number]) => {
             if (it.isProtected) return true;
+            if (wantsSafeCacheOnlyTurn && it.cat !== 'SAFE_CACHE' && it.cat !== 'DESKTOP_HIBERFIL') return true;
+            if (wantsRedSafeOnlyTurn && it.safetyBadge !== 'DANGER_DELETE' && it.safetyBadge !== 'SAFE_DELETE') return true;
             const idL = it.id.toLowerCase();
             const nmL = it.name.toLowerCase();
             const noS = String(it.no);
@@ -3874,18 +3905,18 @@ export async function processUnifiedMonsterChatQuery(params: {
           const selectedIds: string[] = [];
           for (const it of curScanCtx.items) {
             if (isExcludedItem(it)) {
-              if (!it.isProtected) excludedNames.push(it.name);
+              if (!it.isProtected && !wantsSafeCacheOnlyTurn && !wantsRedSafeOnlyTurn) excludedNames.push(it.name);
               continue;
             }
             const idL = it.id.toLowerCase();
             const nmL = it.name.toLowerCase();
             const noS = String(it.no);
             const hashNo = `#${it.no}`;
-            // [P0-5] incIdSet이 비어 있을 때는 USER_CHECK(오피스·한컴·다운로드 원본 등 defaultSelected=false)까지 전체 폭발하지 않고,
-            // 원래 안전 권장(defaultSelected=true)된 캐시·애드웨어·차단권장 항목만 기본 모수로 선택합니다!
+            // [P0-5] incIdSet이 비어 있을 때는 USER_CHECK(쓰시면 유지·확인 후 선택)까지 폭발하지 않고,
+            // 원래 안전 권장(defaultSelected=true && safetyBadge !== 'USER_CHECK') 항목만 기본 모수로 선택합니다!
             const explicitlyIncluded =
               incIdSet.size === 0
-                ? Boolean(it.defaultSelected) || isExplicitForceAllApps
+                ? (Boolean(it.defaultSelected) && it.safetyBadge !== 'USER_CHECK') || isExplicitForceAllApps
                 : incIdSet.has(idL) ||
                   incIdSet.has(noS) ||
                   incIdSet.has(hashNo) ||
@@ -3946,10 +3977,34 @@ export async function processUnifiedMonsterChatQuery(params: {
 
       // Case D: Read-Only 조회 도구 1~4개 1턴 병렬 즉시 실행 (승인 게이트 없이 바로 스캔·브리핑)
       if (agentIntent.immediateReadTools.length > 0) {
-        const readRes = await runAgentCareReadTools(agentIntent.immediateReadTools);
+        const [readRes, livePcCtx] = await Promise.all([
+          runAgentCareReadTools(agentIntent.immediateReadTools),
+          fetchRealtimePcContextForLlm().catch(() => null),
+        ]);
         if (readRes.ok) {
+          const isWebReloadSlowQuery =
+            /(새로고침|로딩|웹\s*페이지|브라우저|크롬|귀신같이)/i.test(clean) &&
+            /(느려|느린|길어|오래|버벅|안\s*열|먹통|멈)/i.test(clean);
+          const cpuPct = livePcCtx?.osInspectData?.spoolerAndSecurity?.cpuLoadPercent;
+          const ramPct = livePcCtx?.specData?.ramUsedPercent;
+          const ramGb = livePcCtx?.specData?.ramTotalGb;
+          const extraTopLines: string[] = [];
+          if (cpuPct != null || ramPct !== undefined) {
+            extraTopLines.push(
+              `• **실시간 PC 부하**: ${cpuPct != null ? `CPU ${cpuPct}%` : 'CPU 정상'}${ramPct !== undefined ? ` · 메모리 ${ramPct}%${ramGb ? ` (총 ${ramGb}GB)` : ''}` : ''}`
+            );
+          }
+          if (isWebReloadSlowQuery) {
+            extraTopLines.push(
+              `• **새로고침·로딩 지연 핵심 점검**: 열려 있는 브라우저 탭이 많거나 메모리가 80% 이상 차 있으면 새로고침이 느려집니다. 안 쓰는 탭을 닫고 아래 **빨간색(100% 안전)** 백그라운드 항목을 정리한 뒤, 데스크톱이라면 **고성능 전원 전환**을 함께 적용해 보세요!`
+            );
+          }
+          const finalBriefing =
+            extraTopLines.length > 0
+              ? `${extraTopLines.join('\n')}\n\n${readRes.briefingKo}`
+              : readRes.briefingKo;
           speak('내 피씨 정밀 스캔을 완료했습니다. 아래 목록에서 원하는 항목만 골라 정리하실 수 있어요.');
-          return reply(sourceTab, readRes.briefingKo, {
+          return reply(sourceTab, finalBriefing, {
             cardKind: 'AGENT_CARE_BATCH_CARD',
             agentCareCardPayload: readRes.card,
             followUpSuggestions: readRes.followUpSuggestions,

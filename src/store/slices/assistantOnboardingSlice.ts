@@ -576,23 +576,39 @@ export const createAssistantOnboardingSlice: StateCreator<
 
     const rawTelemetryPromise = isStandaloneSearchWin ? Promise.resolve(null) : detectHardwareTelemetry();
     const rawHostSharedPromise = isStandaloneSearchWin ? Promise.resolve([] as PhotoItem[]) : fetchSharedFamilyHostPhotos();
+    const rawDocsPromise = fetchIndexedDocuments();
+    const rawVideosPromise = fetchIndexedVideos();
+    const rawFacesPromise = fetchAutonomousFaceClusters();
 
+    // [F5 새로고침 장시간 로딩 원천 차단]: 문서·동영상·얼굴 인덱스 응답이 지연되더라도
+    // 800ms 내에 첫 화면을 먼저 열어주고, 늦게 도착한 목록은 백그라운드에서 조용히 보강합니다.
     const [dataset, telemetry, indexedDocs, indexedVideos, faceData, hostSharedPhotos] = await Promise.all([
       photoDatasetPromise,
       Promise.race([
         rawTelemetryPromise,
         new Promise<null>((resolve) => window.setTimeout(() => resolve(null), 700)),
       ]),
-      fetchIndexedDocuments(),
-      fetchIndexedVideos(),
-      fetchAutonomousFaceClusters(),
+      Promise.race([
+        rawDocsPromise,
+        new Promise<LocalDocumentFile[]>((resolve) => window.setTimeout(() => resolve([]), 800)),
+      ]),
+      Promise.race([
+        rawVideosPromise,
+        new Promise<VideoSceneItem[]>((resolve) => window.setTimeout(() => resolve([]), 800)),
+      ]),
+      Promise.race([
+        rawFacesPromise,
+        new Promise<{ latestCorpusYear: number; clusters: FaceMemberCluster[] }>((resolve) =>
+          window.setTimeout(() => resolve({ latestCorpusYear: 2026, clusters: [] }), 800)
+        ),
+      ]),
       Promise.race([
         rawHostSharedPromise,
         new Promise<PhotoItem[]>((resolve) => window.setTimeout(() => resolve([]), 700)),
       ]),
     ]);
 
-    // 원격 공유방 사진이나 하드웨어 텔레메트리가 700ms보다 늦게 도착하더라도 로컬 사진 첫 화면을 막지 않고 뒤에서 조용히 보강
+    // 원격 공유방 사진·텔레메트리·문서·동영상이 첫 렌더 마감(700~800ms)보다 늦게 도착해도 F5 로딩을 막지 않고 뒤에서 조용히 보강
     void rawTelemetryPromise
       .then((lateTel) => {
         if (lateTel && !get().telemetry) {
@@ -605,6 +621,30 @@ export const createAssistantOnboardingSlice: StateCreator<
         if (Array.isArray(lateShared) && lateShared.length > 0 && get().sharedRoomHostPhotos.length === 0) {
           set({ sharedRoomHostPhotos: lateShared });
         }
+      })
+      .catch(() => {});
+    void rawDocsPromise
+      .then((lateDocs) => {
+        if (!Array.isArray(lateDocs) || lateDocs.length === 0) return;
+        const stNow = get();
+        if (stNow.localDocuments.length >= lateDocs.length) return;
+        const sharedNow = isSharedPhotoLounge(stNow.activeLoungeType);
+        set({
+          localDocuments: lateDocs,
+          matchedLocalDocs: sharedNow ? stNow.matchedLocalDocs : stNow.hasExecutedUserSearch ? stNow.matchedLocalDocs : lateDocs,
+        });
+      })
+      .catch(() => {});
+    void rawVideosPromise
+      .then((lateVideos) => {
+        if (!Array.isArray(lateVideos) || lateVideos.length === 0) return;
+        const stNow = get();
+        if (stNow.videoSceneItems.length >= lateVideos.length) return;
+        const sharedNow = isSharedPhotoLounge(stNow.activeLoungeType);
+        set({
+          videoSceneItems: lateVideos,
+          matchedVideoScenes: sharedNow ? stNow.matchedVideoScenes : stNow.hasExecutedUserSearch ? stNow.matchedVideoScenes : lateVideos,
+        });
       })
       .catch(() => {});
 
@@ -1072,12 +1112,12 @@ export const createAssistantOnboardingSlice: StateCreator<
                 }
               }
 
-              // Stage 2: 온디바이스 얼굴 여권 추출 (YuNet + SFace int8) — 완료 후 워커 terminate로 WASM RAM 즉시 반환
-              await new Promise<void>((r) => window.setTimeout(r, 250));
+              // Stage 2: 온디바이스 얼굴 여권 추출 (YuNet + SFace int8) — 새로고침 직후 UI 조작 여유를 둔 뒤 저부하 실행
+              await new Promise<void>((r) => window.setTimeout(r, 1500));
               await runFacePassportStage();
 
-              // Stage 3: 동영상 키프레임 및 실사진 비전 벡터 768D 저부하 인덱싱 (앞 2단계 종료 후 단독 실행)
-              await new Promise<void>((r) => window.setTimeout(r, 600));
+              // Stage 3: 동영상 키프레임 및 실사진 비전 벡터 768D 저부하 인덱싱 (앞 2단계 종료 후 충분한 여유 간격 뒤 단독 실행)
+              await new Promise<void>((r) => window.setTimeout(r, 2500));
               const pendingPhotoPatches = new Map<string, Partial<PhotoItem>>();
               let flushTimer = 0;
               const flushPhotoPatches = () => {

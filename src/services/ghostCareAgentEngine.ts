@@ -677,11 +677,16 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
   });
 
   // 🌟 모든 스캔 항목에 초보자 친절 1줄 설명 & 안전도 배지 자동 부착 + 카탈로그에 없는 미등록 쥐새끼는 제미니로 즉시 정체 해석!
+  // [안전 체크 원칙]: '쓰시면 유지 / 확인 후 선택(USER_CHECK)' 및 '안 지우고 재우기 추천(SLEEP_RECOMMEND)' 항목은
+  // 실수로 삭제 창이 뜨지 않도록 절대 기본 자동 체크(defaultSelected=true)하지 않습니다.
   for (const it of items) {
     const exp = explainCareItemForBeginner(it);
     it.safetyBadge = exp.safetyBadge;
     it.safetyBadgeLabel = exp.safetyBadgeLabel;
     it.plainExplainKo = exp.plainExplainKo;
+    if (exp.safetyBadge === 'USER_CHECK' || exp.safetyBadge === 'SLEEP_RECOMMEND') {
+      it.defaultSelected = false;
+    }
     if (it.ratKind && exp.plainExplainKo.includes('오른쪽 [이게 뭐예요?]')) {
       unknownRatsToEnrich.push(it);
     }
@@ -729,13 +734,20 @@ export async function runAgentCareReadTools(tools: AgentCareReadTool[]): Promise
     `아래 카드에서 체크박스를 골라 누르시거나, 채팅창에 **"오캠이랑 4번은 빼고 나머지 다 지워줘"**, **"다운로드 큰 폴더는 D드라이브로 옮겨줘"**처럼 편하게 말씀해 주세요! (모든 정리는 영구 삭제 없이 안전하게 **Windows 휴지통**으로만 이동합니다)`,
   ];
 
+  const hasSafeCacheItems = items.some(
+    (it) => it.cat === 'SAFE_CACHE' || it.cat === 'DESKTOP_HIBERFIL'
+  );
   const followUps: string[] = [];
   if (scanKind === 'DISK_HOG' || uniqueTools.includes('disk_hog_scan')) {
-    followUps.push('체크된 안전 캐시만 지금 다 정리해줘');
-    if (availMoveDrives.length > 0) {
+    if (hasSafeCacheItems) {
+      followUps.push('체크된 안전 캐시만 지금 다 정리해줘');
+    } else {
+      followUps.push('빨간색(삭제·차단 안전) 항목만 정리해줘');
+    }
+    if (availMoveDrives.length > 0 && items.some((it) => it.movableToOtherDrive)) {
       followUps.push(`다운로드 큰 파일은 ${availMoveDrives[0].drive} 드라이브로 옮겨줘`);
     }
-    followUps.push('안 쓰는 프로그램이랑 애드웨어도 조사해줘');
+    followUps.push('지금 CPU·메모리 제일 많이 쓰는 앱 알려줘');
   } else if (scanKind === 'SECURITY_2TIER') {
     followUps.push('빨간색 애드웨어·그리드만 다 지우고, 은행 보안모듈은 잠재워줘');
     followUps.push('C드라이브 대용량 공간 도둑도 스캔해줘');
@@ -926,9 +938,27 @@ export function buildLocalMultiTurnFilterFallback(
   }
 
   const includeIds: string[] = [];
+  const wantsSafeCacheOnly = /(?:안전\s*)?캐시만/i.test(q);
+  const wantsRedSafeOnly = /(빨간색|삭제\s*안전|차단\s*권장|100%\s*삭제)/i.test(q);
   if (!excClauseMatch) {
     for (const nm of q.matchAll(/#?(\d+)\s*번?/g)) {
       includeIds.push(`#${nm[1]}`);
+    }
+    if (wantsSafeCacheOnly) {
+      for (const it of scanContext.items) {
+        if (!it.isProtected && (it.cat === 'SAFE_CACHE' || it.cat === 'DESKTOP_HIBERFIL')) {
+          includeIds.push(it.id);
+        }
+      }
+    } else if (wantsRedSafeOnly) {
+      for (const it of scanContext.items) {
+        if (
+          !it.isProtected &&
+          (it.safetyBadge === 'DANGER_DELETE' || it.safetyBadge === 'SAFE_DELETE')
+        ) {
+          includeIds.push(it.id);
+        }
+      }
     }
     if (moveDrive && /다운로드/.test(q)) {
       const dl = scanContext.items.find((i) => /다운로드|download/i.test(i.name));
@@ -937,7 +967,9 @@ export function buildLocalMultiTurnFilterFallback(
   }
 
   const defaultAction: AgentCareMutatingAction =
-    scanContext.scanKind === 'HIDDEN_RATS'
+    wantsSafeCacheOnly
+      ? 'disk_hog_clean'
+      : scanContext.scanKind === 'HIDDEN_RATS'
       ? 'hidden_rats_apply'
       : scanContext.scanKind === 'DESKTOP_DETAIL'
       ? 'desktop_batch_action'
@@ -1107,7 +1139,13 @@ export async function executeAgentCareBatchCard(
       120000
     );
     if (rBatch.ok) anyOk = true;
-    if (rBatch.data?.reportKo) reportBlocks.push(String(rBatch.data.reportKo));
+    if (rBatch.data?.reportKo) {
+      reportBlocks.push(String(rBatch.data.reportKo));
+    } else if (!rBatch.ok) {
+      reportBlocks.push(
+        `⚠️ **[일부 프로그램 제거 미완료]** 선택한 프로그램(${appNames.length + pupIds.length}건) 중 일부는 제거 창이 닫혔거나 시간이 초과되어 건너뛰었습니다. 필요한 항목만 개별 체크해 다시 시도해 주세요.`
+      );
+    }
   }
 
   // 버킷 5: 실사용 은행·관공서 보안모듈 무삭제 수면

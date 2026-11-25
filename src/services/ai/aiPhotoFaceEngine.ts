@@ -462,16 +462,17 @@ export async function loadInitialPhotoDataset(): Promise<{
 
   try {
     if (hasActiveGhostiLoginSession() && zCoreBridge.isConnected) {
-      const fetchListPromise = fetch(getZCoreUrl('/__photos/list'), { cache: 'no-store' }).catch(() =>
-        fetch(getZCoreUrl('/__photos/list'), { cache: 'no-store' })
-      );
-      if (isStandaloneSearchWin) {
-        // 독립 귀신검색창 오픈 시에는 IndexedDB 768D 벡터 전체 역직렬화를 기다리지 않고 파일 목록부터 0.02초 만에 즉시 표시한 뒤 백그라운드 복원합니다.
-        void hydrateRealMediaVectorCacheOnce();
-      } else {
-        await Promise.all([hydrateRealMediaVectorCacheOnce(), fetchListPromise]);
-      }
-      const res = await fetchListPromise;
+      const fetchWithTimeout = () => {
+        const ctrl = new AbortController();
+        const tid = typeof window !== 'undefined' ? window.setTimeout(() => ctrl.abort(), 4500) : null;
+        return fetch(getZCoreUrl('/__photos/list'), { cache: 'no-store', signal: ctrl.signal }).finally(() => {
+          if (tid !== null) window.clearTimeout(tid);
+        });
+      };
+      // [F5 새로고침 0.2초 즉시 렌더]: 메인 웹과 독립 검색창 모두 IndexedDB 768D 벡터 역직렬화를 기다리지 않고
+      // 파일 목록부터 즉시 표시한 뒤 벡터 캐시는 백그라운드(Stage 3)에서 무중단 복원합니다.
+      void hydrateRealMediaVectorCacheOnce();
+      const res = await fetchWithTimeout().catch(() => fetchWithTimeout());
       const json = await res.json();
       fileList = json.files ?? [];
       quarantinedList = json.quarantined ?? [];
