@@ -166,23 +166,51 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
               {guard.pauseReason} ({snap.archiveProgressPercent}%)
             </span>
           ) : (
-            <span className="text-slate-500">
-              {isTurbo ? '빠른 정리 중' : '조용한 정리 중'}
+            <span className="text-slate-600">
+              <span className="font-medium text-slate-700">
+                {isTurbo ? '빠른 정리 중' : '조용한 정리 중'}
+              </span>
+              <span className="text-slate-400 ml-1">
+                {isTurbo
+                  ? '(여유 자원을 더 써서 빠르게 정리 · 과열 방지)'
+                  : '(다른 작업 방해·소음 없이 천천히 정리)'}
+              </span>
             </span>
           )}
         </div>
 
-        <button
-          type="button"
-          onClick={() => silentIndexingBrake.toggleSpeedMode()}
-          className={`px-2.5 py-1 rounded-md text-[11.5px] font-medium cursor-pointer whitespace-nowrap shrink-0 transition-colors border ${
-            isTurbo
-              ? 'bg-slate-900 hover:bg-slate-800 border-slate-900 text-white'
-              : 'bg-slate-50 hover:bg-slate-100 border-slate-200 text-slate-700'
-          }`}
+        <div
+          role="group"
+          aria-label="정리 속도 선택"
+          className="inline-flex items-center rounded-md bg-slate-100 border border-slate-200 p-0.5 shrink-0"
         >
-          {isTurbo ? '조용한 모드로 전환' : '빠르게 정리'}
-        </button>
+          <button
+            type="button"
+            aria-pressed={!isTurbo}
+            title="조용한 정리: 다른 작업 중 버벅임·팬 소음 없이 천천히 정리합니다 (기본 · CPU 15% 이하)"
+            onClick={() => silentIndexingBrake.setSpeedMode('silent')}
+            className={`px-2 py-0.5 rounded text-[11.5px] font-medium cursor-pointer whitespace-nowrap transition-colors ${
+              !isTurbo
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            조용한 정리
+          </button>
+          <button
+            type="button"
+            aria-pressed={isTurbo}
+            title="빠른 정리: 컴퓨터 여유 자원을 더 사용해 빠르게 정리합니다 (과열·버벅임 보호 최대 50% 유지)"
+            onClick={() => silentIndexingBrake.setSpeedMode('turbo')}
+            className={`px-2 py-0.5 rounded text-[11.5px] font-medium cursor-pointer whitespace-nowrap transition-colors ${
+              isTurbo
+                ? 'bg-slate-900 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900'
+            }`}
+          >
+            빠른 정리
+          </button>
+        </div>
       </div>
 
       {showPriorityJumpToast && snap.lastPriorityJump && (
