@@ -16,6 +16,7 @@ import {
   pendingCutsFor,
   pickSelfCluster,
   rankFaceClusters,
+  registeredMergeTargets,
   submitPassportRegistration,
   type PassportRegMode,
 } from '../services/passportRegistrationFlow';
@@ -29,6 +30,7 @@ export const PassportRegistrationPanel: React.FC = () => {
   const [unchecked, setUnchecked] = useState<Set<string>>(new Set());
   const [names, setNames] = useState<Record<string, string>>({});
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
+  const [mergeTargets, setMergeTargets] = useState<Record<string, string>>({});
   const [busy, setBusy] = useState(false);
   const sectionRef = useRef<HTMLElement | null>(null);
 
@@ -48,6 +50,7 @@ export const PassportRegistrationPanel: React.FC = () => {
         setUnchecked(new Set());
         setNames({});
         setDismissed(new Set());
+        setMergeTargets({});
         setMode(m);
       }
     };
@@ -71,6 +74,14 @@ export const PassportRegistrationPanel: React.FC = () => {
     return [];
   }, [mode, selfCluster, regState]);
 
+  const availableMergeTargets = useMemo(() => {
+    if (mode !== 'family') return [];
+    const candidateIds = new Set(people.map((p) => p.clusterId));
+    return registeredMergeTargets(regState).filter((t) => !candidateIds.has(t.clusterId));
+  }, [mode, regState, people]);
+  const selfMergeTarget = availableMergeTargets.find((t) => t.isSelf) || null;
+  const familyMergeTargets = availableMergeTargets.filter((t) => !t.isSelf);
+
   const pickCandidates = useMemo(
     () => (mode === 'self' && !selfCluster ? rankFaceClusters(faceClusters || []) : []),
     [mode, selfCluster, faceClusters]
@@ -83,6 +94,7 @@ export const PassportRegistrationPanel: React.FC = () => {
       setUnchecked(new Set());
       setNames({});
       setDismissed(new Set());
+      setMergeTargets({});
       if (deferred && closingMode) {
         window.dispatchEvent(new CustomEvent(PASSPORT_REG_DEFERRED_EVENT, { detail: { mode: closingMode } }));
       }
@@ -115,6 +127,11 @@ export const PassportRegistrationPanel: React.FC = () => {
     const cuts = pendingCutsFor(c, regState);
     return acc + cuts.filter((cut) => !unchecked.has(cutKey(c.clusterId, cut))).length;
   }, 0);
+  const mergedSelectedCutCount = people.reduce((acc, c) => {
+    if (dismissed.has(c.clusterId) || !mergeTargets[c.clusterId]) return acc;
+    const cuts = pendingCutsFor(c, regState);
+    return acc + cuts.filter((cut) => !unchecked.has(cutKey(c.clusterId, cut))).length;
+  }, 0);
   const nameOnlySelfUpdate =
     mode === 'self' &&
     Boolean(selfCluster) &&
@@ -134,6 +151,7 @@ export const PassportRegistrationPanel: React.FC = () => {
         people.map((c) => {
           const cuts = pendingCutsFor(c, regState);
           const isDismissed = dismissed.has(c.clusterId);
+          const mergeIntoClusterId = isDismissed ? undefined : mergeTargets[c.clusterId] || undefined;
           const accepted: YearlyFaceBestCut[] = [];
           const rejected: YearlyFaceBestCut[] = [];
           cuts.forEach((cut) => {
@@ -146,6 +164,7 @@ export const PassportRegistrationPanel: React.FC = () => {
             rejectedCuts: rejected,
             realName: (names[c.clusterId] ?? (mode === 'self' ? savedRealName : c.registeredName || '')).trim(),
             dismissPerson: isDismissed,
+            mergeIntoClusterId,
           };
         })
       );
@@ -165,7 +184,7 @@ export const PassportRegistrationPanel: React.FC = () => {
               ? selfCluster
                 ? `${nickname ? `${nickname}님` : '내'} 얼굴로 보이는 사진입니다. 아닌 사진만 선택 해제해 주세요.`
                 : `${nickname ? `${nickname}님` : '내'} 얼굴을 선택해 주세요.`
-              : '얼굴별로 자동 묶인 가족 후보입니다. 각도·선글라스 등으로 같은 분이 나뉘면 같은 이름을 적거나 아닌 분만 제외해 주세요.'}
+              : '얼굴별로 자동 묶인 가족 후보입니다. 선글라스·모자 쓴 내 사진이나 이미 등록한 가족이 뜨면 [내 여권에 합치기]로 바로 합칠 수 있고, [제외]한 얼굴은 다시 묻지 않아요.'}
           </p>
         </div>
         <span className="text-[11px] font-medium text-slate-500 shrink-0">내 기기에서만 처리</span>
@@ -206,18 +225,24 @@ export const PassportRegistrationPanel: React.FC = () => {
       {people.map((c) => {
         const cuts = pendingCutsFor(c, regState);
         const isDismissed = dismissed.has(c.clusterId);
+        const mergeTargetId = !isDismissed ? mergeTargets[c.clusterId] || '' : '';
+        const mergedTarget = mergeTargetId
+          ? availableMergeTargets.find((t) => t.clusterId === mergeTargetId) || null
+          : null;
         const nameValue = names[c.clusterId] ?? (mode === 'self' ? savedRealName : c.registeredName || '');
-        const showNameInput = mode === 'family' || !savedRealName;
+        const showNameInput = (mode === 'family' || !savedRealName) && !mergedTarget;
         return (
           <div
             key={c.clusterId}
             className={`flex flex-col gap-2.5 p-3 rounded-lg border ${
               isDismissed
                 ? 'opacity-45 border-dashed border-slate-300'
+                : mergedTarget
+                ? 'border-teal-300 bg-teal-50/60'
                 : 'border-slate-200 bg-slate-50'
             }`}
           >
-            <div className="flex items-center gap-2.5 flex-wrap">
+            <div className="flex items-center gap-2 flex-wrap">
               {mode === 'family' && (
                 <AutonomousCanvasFaceAvatar
                   photoFile={c.representativePhoto}
@@ -227,6 +252,21 @@ export const PassportRegistrationPanel: React.FC = () => {
                   sizeClass="w-11 h-11"
                 />
               )}
+              {isDismissed && mode === 'family' && (
+                <span className="text-[12px] text-slate-500 break-keep">
+                  제외됨 — 반영하면 다시 묻지 않아요.
+                </span>
+              )}
+              {mergedTarget && !isDismissed && (
+                <div className="flex-1 min-w-[160px] flex items-center gap-1.5 px-3 h-9 rounded-lg bg-teal-100/80 border border-teal-300 text-teal-900 text-[12.5px] font-semibold">
+                  <span>🔗</span>
+                  <span className="truncate">
+                    {mergedTarget.isSelf
+                      ? `내 여권(${mergedTarget.label})에 합치기 선택됨`
+                      : `${mergedTarget.label} 여권에 합치기 선택됨`}
+                  </span>
+                </div>
+              )}
               {showNameInput && !isDismissed && (
                 <input
                   type="text"
@@ -234,24 +274,81 @@ export const PassportRegistrationPanel: React.FC = () => {
                   maxLength={18}
                   onChange={(e) => setNames((prev) => ({ ...prev, [c.clusterId]: e.target.value }))}
                   placeholder="이름 (선택)"
-                  className="flex-1 min-w-[140px] h-9 px-3 rounded-lg bg-white border border-slate-300 focus:border-slate-600 outline-none text-[13px] text-slate-900 placeholder:text-slate-400"
+                  className="flex-1 min-w-[130px] h-9 px-3 rounded-lg bg-white border border-slate-300 focus:border-slate-600 outline-none text-[13px] text-slate-900 placeholder:text-slate-400"
                 />
               )}
               {mode === 'family' && (
-                <button
-                  type="button"
-                  onClick={() =>
-                    setDismissed((prev) => {
-                      const next = new Set(prev);
-                      if (next.has(c.clusterId)) next.delete(c.clusterId);
-                      else next.add(c.clusterId);
-                      return next;
-                    })
-                  }
-                  className="ml-auto px-2.5 py-1 rounded-md text-[11.5px] font-medium border border-slate-200 bg-white text-slate-600 hover:text-slate-900 cursor-pointer"
-                >
-                  {isDismissed ? '되돌리기' : '제외'}
-                </button>
+                <div className="ml-auto flex items-center gap-1.5 flex-wrap">
+                  {!isDismissed && selfMergeTarget && (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setMergeTargets((prev) => {
+                          const next = { ...prev };
+                          if (next[c.clusterId] === selfMergeTarget.clusterId) {
+                            delete next[c.clusterId];
+                          } else {
+                            next[c.clusterId] = selfMergeTarget.clusterId;
+                          }
+                          return next;
+                        });
+                      }}
+                      className={`px-2.5 py-1.5 rounded-md text-[11.5px] font-semibold border cursor-pointer transition-colors ${
+                        mergeTargetId === selfMergeTarget.clusterId
+                          ? 'bg-teal-700 border-teal-700 text-white hover:bg-teal-800'
+                          : 'bg-white border-teal-300 text-teal-800 hover:bg-teal-50'
+                      }`}
+                    >
+                      {mergeTargetId === selfMergeTarget.clusterId ? '✓ 내 여권 합치기 취소' : '👤 내 여권에 합치기'}
+                    </button>
+                  )}
+                  {!isDismissed && familyMergeTargets.length > 0 && (
+                    <select
+                      aria-label="기존 가족 여권에 합치기"
+                      value={familyMergeTargets.some((t) => t.clusterId === mergeTargetId) ? mergeTargetId : ''}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setMergeTargets((prev) => {
+                          const next = { ...prev };
+                          if (!val) delete next[c.clusterId];
+                          else next[c.clusterId] = val;
+                          return next;
+                        });
+                      }}
+                      className="h-[30px] px-2 rounded-md text-[11.5px] font-medium border border-slate-200 bg-white text-slate-700 hover:border-slate-400 outline-none cursor-pointer"
+                    >
+                      <option value="">기존 가족에 합치기</option>
+                      {familyMergeTargets.map((t) => (
+                        <option key={t.clusterId} value={t.clusterId}>
+                          {t.label} 여권에 합치기
+                        </option>
+                      ))}
+                    </select>
+                  )}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDismissed((prev) => {
+                        const next = new Set(prev);
+                        if (next.has(c.clusterId)) {
+                          next.delete(c.clusterId);
+                        } else {
+                          next.add(c.clusterId);
+                          setMergeTargets((mt) => {
+                            if (!mt[c.clusterId]) return mt;
+                            const copy = { ...mt };
+                            delete copy[c.clusterId];
+                            return copy;
+                          });
+                        }
+                        return next;
+                      });
+                    }}
+                    className="px-2.5 py-1.5 rounded-md text-[11.5px] font-medium border border-slate-200 bg-white text-slate-600 hover:text-slate-900 cursor-pointer"
+                  >
+                    {isDismissed ? '되돌리기' : '제외'}
+                  </button>
+                </div>
               )}
             </div>
             {!isDismissed && cuts.length > 0 && (
@@ -335,6 +432,8 @@ export const PassportRegistrationPanel: React.FC = () => {
               ? '1장 이상 선택'
               : mode === 'family' && selectedCutCount === 0 && dismissed.size > 0
               ? '제외 반영'
+              : mode === 'family' && mergedSelectedCutCount > 0 && mergedSelectedCutCount === selectedCutCount
+              ? '여권에 합치기'
               : '등록'}
           </button>
         )}

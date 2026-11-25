@@ -865,12 +865,36 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
           pushOnce('secretary_mobile_pc_bridge_', { text: pcBridge.text, showMobileToPcBridgeButton: true });
         }
       } else {
-        const names = (e as CustomEvent<{ names?: string[] }>).detail?.names || [];
-        pushOnce('secretary_passport_done_', {
-          text: names[0]
-            ? `등록이 완료되었습니다. 이제 귀신검색에서 "${names[0]} 웃는 사진"처럼 찾아보실 수 있습니다.`
-            : '등록이 완료되었습니다.',
-        });
+        const detail =
+          (
+            e as CustomEvent<{
+              registered?: number;
+              mergedCount?: number;
+              mergedNames?: string[];
+              dismissedCount?: number;
+              names?: string[];
+            }>
+          ).detail || {};
+        const names = detail.names || [];
+        const mergedNames = detail.mergedNames || [];
+        if (names[0]) {
+          pushOnce('secretary_passport_done_', {
+            text: `등록이 완료되었습니다. 이제 귀신검색에서 "${names[0]} 웃는 사진"처럼 찾아보실 수 있습니다.`,
+          });
+        } else if ((detail.mergedCount || 0) > 0) {
+          const targetLabel = mergedNames[0] ? `(${mergedNames[0]})` : '';
+          pushOnce('secretary_passport_done_', {
+            text: `선택한 사진을 기존 여권${targetLabel}에 합쳐 두었습니다. [내 프로필 ➔ 여권]에서도 바로 확인하실 수 있어요.`,
+          });
+        } else if ((detail.dismissedCount || 0) > 0 && (detail.registered || 0) === 0) {
+          pushOnce('secretary_passport_done_', {
+            text: '제외하신 얼굴은 앞으로 다시 묻지 않도록 반영했습니다.',
+          });
+        } else {
+          pushOnce('secretary_passport_done_', {
+            text: '등록이 완료되었습니다.',
+          });
+        }
       }
     };
 
