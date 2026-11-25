@@ -3,7 +3,6 @@ import { getZCoreUrl, zCoreBridge } from '../services/zCoreBridge';
 import { computeGhostSearchWindowRect, DEFAULT_WORK_AREA } from '../services/ghostSearchWindowGeometry';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { markGhostDojoStep } from './ghostDojo/ghostSearchDojoShared';
-import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
 import { GhostPhotoOcrTeleportModal } from './GhostPhotoOcrTeleportModal';
 import {
   scrollAppToTop,
@@ -34,22 +33,17 @@ export const DesktopDashboard: React.FC = () => {
 
   const {
     isMobileDrawerOpen,
-    showZCoreGuideModal,
-    setShowZCoreGuideModal,
     ocrModalPhoto,
     setOcrModalPhoto,
   } = useDashboardNavStore();
 
   useEffect(() => {
-    const onOpenZCoreGuide = () => setShowZCoreGuideModal(true);
-    window.addEventListener('openZCoreGuideModal', onOpenZCoreGuide);
     const unsub = zCoreBridge.subscribe(() => {});
     void zCoreBridge.checkHealth();
     return () => {
-      window.removeEventListener('openZCoreGuideModal', onOpenZCoreGuide);
       unsub();
     };
-  }, [setShowZCoreGuideModal]);
+  }, []);
 
   const [ghostSearchWindowStage] = useState<'small' | 'medium' | 'large' | null>(() => {
     if (typeof window === 'undefined') return null;
@@ -319,16 +313,6 @@ export const DesktopDashboard: React.FC = () => {
       <GhostPhotoOcrTeleportModal
         photo={ocrModalPhoto}
         onClose={() => setOcrModalPhoto(null)}
-      />
-
-      <MerlinZCoreGuideModal
-        isOpen={showZCoreGuideModal}
-        onClose={() => {
-          if (typeof sessionStorage !== 'undefined') {
-            sessionStorage.setItem('ghosti_zcore_prompt_dismissed', '1');
-          }
-          setShowZCoreGuideModal(false);
-        }}
       />
     </div>
   );

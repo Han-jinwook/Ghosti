@@ -15,7 +15,6 @@ import {
   GhostiTopRightHubAnchor,
 } from './GhostiHubInfraBridge';
 import { GhostiBrandLogo } from './GhostiBrandLogo';
-import { MerlinZCoreGuideModal } from './MerlinZCoreGuideModal';
 import type { FamilyRoomId, LoungeType } from '../types/saysee';
 import {
   cleanVideoTimestampLabel,
@@ -100,16 +99,6 @@ const MOBILE_LOUNGE_SUBMENUS: Record<
 };
 
 export const MobileAppView: React.FC = () => {
-  const [showZCoreGuideModal, setShowZCoreGuideModal] = useState(false);
-
-  useEffect(() => {
-    const onOpenZCoreGuide = () => setShowZCoreGuideModal(true);
-    window.addEventListener('openZCoreGuideModal', onOpenZCoreGuide);
-    return () => {
-      window.removeEventListener('openZCoreGuideModal', onOpenZCoreGuide);
-    };
-  }, []);
-
   const {
     mobileTab,
     setMobileTab,
@@ -1680,7 +1669,6 @@ export const MobileAppView: React.FC = () => {
           })}
         </nav>
       )}
-      <MerlinZCoreGuideModal isOpen={showZCoreGuideModal} onClose={() => setShowZCoreGuideModal(false)} />
     </div>
   );
 };

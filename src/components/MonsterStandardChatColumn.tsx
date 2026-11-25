@@ -1356,7 +1356,6 @@ export const MonsterStandardChatColumn: React.FC<MonsterStandardChatColumnProps>
               text: riteText,
             },
           ]);
-          window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
           setSharedMonsterBusy(false);
           return;
         }

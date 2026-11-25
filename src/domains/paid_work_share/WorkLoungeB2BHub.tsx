@@ -539,7 +539,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
   const openZCoreConnectModal = () => {
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
+      window.dispatchEvent(new CustomEvent('ghosti_jump_to_secretary'));
     }
   };
 

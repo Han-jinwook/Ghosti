@@ -774,10 +774,7 @@ const GhostiHubGlobalModals: React.FC = () => {
                 const ok = zCoreBridge.isConnected || (await zCoreBridge.checkHealth(true));
                 if (ok) {
                   void useSaySeeStore.getState().initApp(true);
-                  window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
-                  return;
                 }
-                window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
               })();
             }
           }

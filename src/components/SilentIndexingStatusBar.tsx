@@ -129,15 +129,13 @@ export const SilentIndexingStatusBar: React.FC<SilentIndexingStatusBarProps> = (
     >
       <div className="flex flex-wrap items-center justify-between gap-2 w-full">
         <div className="flex flex-wrap items-center gap-1.5 text-[12px] min-w-0">
-          <button
-            type="button"
-            onClick={() => window.dispatchEvent(new CustomEvent('openZCoreGuideModal'))}
-            title="내 PC 연결 상태 보기"
-            className="inline-flex items-center gap-1.5 font-semibold text-slate-800 hover:underline cursor-pointer shrink-0"
+          <span
+            title="내 PC 연결 상태"
+            className="inline-flex items-center gap-1.5 font-semibold text-slate-800 shrink-0"
           >
             <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />
             <span>내 PC 연결됨</span>
-          </button>
+          </span>
 
           {recentInlineFiles.length > 0 && <span className="text-slate-300">·</span>}
 

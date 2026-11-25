@@ -122,11 +122,6 @@ def shutdown_superpower_daemon_for_update() -> None:
     _IN_PROCESS_DAEMON_THREAD = None
     _LAST_SPAWN_TS = 0.0
     try:
-        if hasattr(spd, "request_in_process_stop"):
-            spd.request_in_process_stop()
-    except Exception:
-        pass
-    try:
         import socket
 
         with socket.create_connection(("127.0.0.1", 51988), timeout=0.45) as conn:
@@ -137,21 +132,20 @@ def shutdown_superpower_daemon_for_update() -> None:
 
 def ensure_superpower_daemon_running() -> bool:
     """
-    [In-Process 0.1초 즉시 기동 + 2차 PyInstaller 압축 해제 0초 정공법 (Z-Core v2.8.04)]:
-    - 기존 별도 exe 재실행 방식은 PyInstaller onefile 2차 압축 해제(+6초) + 파이썬 재초기화(+3초)로
-      Z-코어 기동 직후 Ctrl+0 / Ctrl+우클릭이 15~28초 동안 먹통이 되는 치명적 병목이 있었음.
-    - 이미 메인 Z-코어(5199) 메모리에 import 완료된 seq_paste_daemon.main(in_process=True)을
-      독립 데몬 스레드에서 0.1초 만에 즉시 기동하여 첫 Ctrl+0 / Ctrl+우클릭 대기 시간을 0초대로 단축!
-    - 51988 포트가 이미 열려 있고 __PING__ -> PONG 응답이 오면 중복 기동 없이 즉시 True를 반환합니다.
+    [프로세스 완전 분리 모드 + 0순위 병렬 기동 + PING/PONG 활성 검증 (Z-Core v2.8.69)]:
+    - 귀신창 데몬(seq_paste_daemon, 포트 51988)은 Tkinter/WH_MOUSE_LL/COM과 메인 5199 HTTP 서버 간
+      GIL·GUI 동반 데드락(Hang)을 물리적으로 0% 차단하기 위해 반드시 독립 프로세스로 완전 분리합니다.
+    - 대신 merlin_z_core_daemon.py 기동 0순위(_self_purge_legacy_conflicts 이전)에 즉시 병렬 스폰하여
+      10초 앞단 지연을 제거하고, 45초 유예로 중복 스폰(Fork-Stampede)을 원천 차단합니다.
     """
-    global _LAST_SPAWNED_PROC, _IN_PROCESS_DAEMON_THREAD, _LAST_SPAWN_TS
+    global _LAST_SPAWNED_PROC, _LAST_SPAWN_TS
     if os.name != "nt":
         return True
     try:
         import socket
 
-        with socket.create_connection(("127.0.0.1", 51988), timeout=0.6) as conn:
-            conn.settimeout(0.8)
+        with socket.create_connection(("127.0.0.1", 51988), timeout=0.8) as conn:
+            conn.settimeout(1.0)
             conn.sendall(b"__PING__")
             reply = conn.recv(64)
             if b"PONG" in reply:
@@ -160,16 +154,16 @@ def ensure_superpower_daemon_running() -> bool:
         pass
 
     with _DAEMON_LOCK:
+        # 1) 이미 스폰한 자식 프로세스가 살아있고 PyInstaller 압축해제 유예시간(45초) 이내면 중복 스폰 방지
         now_sp = time.time()
-        # 1) 이미 In-Process 스레드가 살아있고 기동 직후 유예시간(6초) 이내면 중복 기동 방지
         if (
-            _IN_PROCESS_DAEMON_THREAD is not None
-            and _IN_PROCESS_DAEMON_THREAD.is_alive()
-            and (now_sp - _LAST_SPAWN_TS) < 6.0
+            _LAST_SPAWNED_PROC is not None
+            and _LAST_SPAWNED_PROC.poll() is None
+            and (now_sp - _LAST_SPAWN_TS) < 45.0
         ):
             return True
 
-        # 2) 포트 51988 재확인 (동시 호출 중복 기동 방지)
+        # 2) 포트 51988 재확인
         try:
             import socket
 
@@ -181,17 +175,39 @@ def ensure_superpower_daemon_running() -> bool:
         except Exception:
             pass
 
-        # 3) In-Process 0.1초 즉시 기동 (2차 압축 해제 0초 · RAM ~60MB 절감)
-        def _run_in_process_spd() -> None:
+        clean_env = {k: v for k, v in os.environ.items() if k not in ("_MEIPASS2", "_MEIPASS")}
+        clean_env["PYINSTALLER_RESET_ENVIRONMENT"] = "1"
+        if getattr(sys, "frozen", False):
             try:
-                spd.main(in_process=True)
+                import core_win32 as _cw32
+
+                target_exe = _cw32.ensure_persistent_frozen_install()
+                _LAST_SPAWNED_PROC = subprocess.Popen(
+                    [target_exe, "--seq-paste-daemon"],
+                    env=clean_env,
+                    creationflags=0x08000000 | 0x00000008,  # CREATE_NO_WINDOW | DETACHED_PROCESS
+                    close_fds=True,
+                )
+                _LAST_SPAWN_TS = time.time()
             except Exception:
                 pass
-
-        th = threading.Thread(target=_run_in_process_spd, name="GhostiSuperpowerDaemon", daemon=True)
-        th.start()
-        _IN_PROCESS_DAEMON_THREAD = th
-        _LAST_SPAWN_TS = time.time()
+        else:
+            try:
+                spd_script = THIS_DIR.parent / "seq_paste_daemon.py"
+                if not spd_script.exists():
+                    spd_script = THIS_DIR / "seq_paste_daemon.py"
+                if spd_script.exists():
+                    pyw = Path(sys.executable).with_name("pythonw.exe")
+                    runner = str(pyw if pyw.exists() else Path(sys.executable))
+                    _LAST_SPAWNED_PROC = subprocess.Popen(
+                        [runner, str(spd_script)],
+                        env=clean_env,
+                        creationflags=0x08000000 | 0x00000008,
+                        close_fds=True,
+                    )
+                    _LAST_SPAWN_TS = time.time()
+            except Exception:
+                pass
     return True
 
 

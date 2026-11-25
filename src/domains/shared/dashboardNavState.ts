@@ -26,8 +26,6 @@ interface DashboardNavState {
   setIsDeviceIntegrationOpen: (v: boolean) => void;
   ocrModalPhoto: PhotoItem | null;
   setOcrModalPhoto: (v: PhotoItem | null) => void;
-  showZCoreGuideModal: boolean;
-  setShowZCoreGuideModal: (v: boolean) => void;
 }
 
 const NAV_STATE_STORAGE_KEY = 'ghosti_dashboard_nav_state_v1';
@@ -79,6 +77,4 @@ export const useDashboardNavStore = create<DashboardNavState>((set) => ({
   },
   ocrModalPhoto: null,
   setOcrModalPhoto: (v) => set({ ocrModalPhoto: v }),
-  showZCoreGuideModal: false,
-  setShowZCoreGuideModal: (v) => set({ showZCoreGuideModal: v }),
 }));

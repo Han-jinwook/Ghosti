@@ -99,7 +99,7 @@ export const LoungeCustomSettingsHeader: React.FC = () => {
   };
   const openZCoreGuideModal = () => {
     if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
+      window.dispatchEvent(new CustomEvent('ghosti_jump_to_secretary'));
     }
   };
 

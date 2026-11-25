@@ -4757,11 +4757,8 @@ export async function processUnifiedMonsterChatQuery(params: {
       typeof navigator !== 'undefined' &&
       /Android|iPhone|iPad|iPod|Mobile/i.test(navigator.userAgent || '');
     if (!isMobileRuntime && !zCoreBridge.isConnected) {
-      if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
-      }
       const promptMsg =
-        '제가 웹 화면 밖으로 손이 닿아 실제 내 컴퓨터의 묵은 먼지와 보안 모듈을 점검하려면 **내 컴퓨터 연결(무광고 · 외부 전송 0%)**을 딱 한 번 켜주셔야 해요! 지금 연결 안내창을 띄워 드렸어요 ';
+        '제가 웹 화면 밖으로 손이 닿아 실제 내 컴퓨터의 묵은 먼지와 보안 모듈을 점검하려면 왼쪽 상단의 **내 컴퓨터 연결(무광고 · 외부 전송 0%)**을 딱 한 번 켜주셔야 해요!';
       speak(promptMsg);
       return reply(sourceTab, promptMsg, {
         followUpSuggestions: [          '응, 내 컴퓨터 연결하고 누가 속도 잡아먹는지 분석해줘',

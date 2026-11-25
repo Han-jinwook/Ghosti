@@ -12,7 +12,7 @@ export const Z_CORE_PORT = 5199;
 export const Z_CORE_ORIGIN = `http://127.0.0.1:${Z_CORE_PORT}`;
 export const Z_CORE_ZIP_URL = 'https://github.com/Han-jinwook/Ghosti/releases/download/z-core-latest/Merlin_Z_Core.zip';
 /** 현재 배포 중인 최신 Z-코어 버전 (Merlin_Z_Core.zip 안의 Merlin_Z_Core_Setup.exe 버전과 반드시 일치시킬 것 — 불일치 시 self-update 루프 발생) */
-export const LATEST_Z_CORE_VERSION = '2.8.59';
+export const LATEST_Z_CORE_VERSION = '2.8.60';
 
 /**
  * 현재 브라우저 세션이 로그인된 실사용자인지, 아니면 비로그인(크롬 게스트 모드 / 시크릿 창 / 첫 방문자)인지 판별합니다.
@@ -374,7 +374,7 @@ export function requestConnectMyComputer(): void {
     }
   }
 
-  // 이미 Z-코어가 실행 중이면 다운로드 안내 대신 즉시 헬스체크 후 연결 완료 처리
+  // 이미 Z-코어가 실행 중이면 즉시 헬스체크 후 연결 완료 처리, 미실행 시 귀신비서 인라인 안내로 이동
   void zCoreBridge.checkHealth(true).then((alive) => {
     if (alive) {
       try {
@@ -386,14 +386,13 @@ export function requestConnectMyComputer(): void {
       window.dispatchEvent(new CustomEvent('zCoreConnected', { detail: { ok: true } }));
       return;
     }
-    window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
+    window.dispatchEvent(new CustomEvent('ghosti_jump_to_secretary'));
   });
 }
 
 /**
  * [귀신같이 기본 실행 게이트 (Fundamental Execution Gate)]
  * - PC 로컬 파일 액션은 『1. 👻 귀신비서』와의 문답을 통해 로컬 Z-코어(`127.0.0.1:5199`)가 연결된 후에만 실행됩니다.
- * - 아직 Z-코어가 연결되지 않은 상태에서 타 메뉴 활동을 클릭하면 『👻 귀신비서』와 먼저 대화하도록 귀엽게 안내합니다.
  */
 export function ensureLoginAndZCoreReady(_actionName = '실행'): boolean {
   if (typeof window === 'undefined') return true;
@@ -419,12 +418,8 @@ export function ensureLoginAndZCoreReady(_actionName = '실행'): boolean {
       );
       return false;
     }
-    // 귀신비서 안에서는 0.1초 즉시 확인 후 미설치/미실행일 때 연결 모달 안내
-    void zCoreBridge.checkHealth(true).then((ok) => {
-      if (!ok) {
-        window.dispatchEvent(new CustomEvent('openZCoreGuideModal'));
-      }
-    });
+    // 귀신비서 안에서는 조용히 헬스체크 재확인만 수행 (방해 팝업 띄우지 않음)
+    void zCoreBridge.checkHealth(true);
     return false;
   }
 
