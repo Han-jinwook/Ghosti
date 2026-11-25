@@ -184,7 +184,7 @@ export const PassportRegistrationPanel: React.FC = () => {
               ? selfCluster
                 ? `${nickname ? `${nickname}님` : '내'} 얼굴로 보이는 사진입니다. 아닌 사진만 선택 해제해 주세요.`
                 : `${nickname ? `${nickname}님` : '내'} 얼굴을 선택해 주세요.`
-              : '얼굴별로 자동 묶인 가족 후보입니다. 선글라스·모자 쓴 내 사진이나 이미 등록한 가족이 뜨면 [내 여권에 합치기]로 바로 합칠 수 있고, [제외]한 얼굴은 다시 묻지 않아요.'}
+              : '사진 속 얼굴을 사람별로 자동 묶었어요. 선글라스·모자 때문에 다른 사람처럼 따로 뜬 내 사진이나 이미 등록한 가족 사진은 [내 사진이에요]·[이미 등록한 같은 분]으로 원래 여권에 합칠 수 있고, [제외]한 얼굴은 다시 묻지 않아요.'}
           </p>
         </div>
         <span className="text-[11px] font-medium text-slate-500 shrink-0">내 기기에서만 처리</span>
@@ -258,12 +258,12 @@ export const PassportRegistrationPanel: React.FC = () => {
                 </span>
               )}
               {mergedTarget && !isDismissed && (
-                <div className="flex-1 min-w-[160px] flex items-center gap-1.5 px-3 h-9 rounded-lg bg-teal-100/80 border border-teal-300 text-teal-900 text-[12.5px] font-semibold">
+                <div className="flex-1 min-w-[180px] flex items-center gap-1.5 px-3 min-h-9 py-1.5 rounded-lg bg-teal-100/80 border border-teal-300 text-teal-900 text-[12px] font-semibold break-keep">
                   <span>🔗</span>
-                  <span className="truncate">
+                  <span>
                     {mergedTarget.isSelf
-                      ? `내 여권(${mergedTarget.label})에 합치기 선택됨`
-                      : `${mergedTarget.label} 여권에 합치기 선택됨`}
+                      ? `내 사진으로 선택됨 — 내 여권(${mergedTarget.label})에 함께 저장해요`
+                      : `이미 등록한 ${mergedTarget.label}님과 같은 분으로 선택됨 — 원래 여권에 함께 저장해요`}
                   </span>
                 </div>
               )}
@@ -299,12 +299,12 @@ export const PassportRegistrationPanel: React.FC = () => {
                           : 'bg-white border-teal-300 text-teal-800 hover:bg-teal-50'
                       }`}
                     >
-                      {mergeTargetId === selfMergeTarget.clusterId ? '✓ 내 여권 합치기 취소' : '👤 내 여권에 합치기'}
+                      {mergeTargetId === selfMergeTarget.clusterId ? '✓ 내 여권 합치기 취소' : '👤 내 사진이에요 (내 여권에 합치기)'}
                     </button>
                   )}
                   {!isDismissed && familyMergeTargets.length > 0 && (
                     <select
-                      aria-label="기존 가족 여권에 합치기"
+                      aria-label="이미 등록한 같은 분 여권에 합치기"
                       value={familyMergeTargets.some((t) => t.clusterId === mergeTargetId) ? mergeTargetId : ''}
                       onChange={(e) => {
                         const val = e.target.value;
@@ -317,10 +317,10 @@ export const PassportRegistrationPanel: React.FC = () => {
                       }}
                       className="h-[30px] px-2 rounded-md text-[11.5px] font-medium border border-slate-200 bg-white text-slate-700 hover:border-slate-400 outline-none cursor-pointer"
                     >
-                      <option value="">기존 가족에 합치기</option>
+                      <option value="">이미 등록한 같은 분과 합치기</option>
                       {familyMergeTargets.map((t) => (
                         <option key={t.clusterId} value={t.clusterId}>
-                          {t.label} 여권에 합치기
+                          {t.label}님과 같은 분이에요 (합치기)
                         </option>
                       ))}
                     </select>
@@ -433,7 +433,7 @@ export const PassportRegistrationPanel: React.FC = () => {
               : mode === 'family' && selectedCutCount === 0 && dismissed.size > 0
               ? '제외 반영'
               : mode === 'family' && mergedSelectedCutCount > 0 && mergedSelectedCutCount === selectedCutCount
-              ? '여권에 합치기'
+              ? '원래 여권에 합쳐서 저장'
               : '등록'}
           </button>
         )}
