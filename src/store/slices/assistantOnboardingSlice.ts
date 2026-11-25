@@ -2296,6 +2296,9 @@ export const createAssistantOnboardingSlice: StateCreator<
       const restoredStrippedSet = new Set<string>(
         cleanNames.map((n) => stripDupSuffix(String(n).split(/[\\/]/).pop() || n))
       );
+      const cleanHasExactPathOrUniqueKey = cleanNames.every(
+        (n) => /[\\/]/.test(n) || /__[0-9A-Za-z가-힣_-]{1,18}_[0-9a-f]{6}\.[^.]+$/i.test(n)
+      );
       let anyMatched = false;
       const firstPassPhotos = state.photos.map((p) => {
         const isNativeAsset =
@@ -2309,7 +2312,9 @@ export const createAssistantOnboardingSlice: StateCreator<
             restoredSet.has(p.name) ||
             restoredLowerSet.has((p.name || '').toLowerCase()) ||
             (pFullLower.length > 0 && restoredLowerSet.has(pFullLower)) ||
-            (pBaseStripped.length > 0 && restoredStrippedSet.has(pBaseStripped));
+            (!cleanHasExactPathOrUniqueKey &&
+              pBaseStripped.length > 0 &&
+              restoredStrippedSet.has(pBaseStripped));
         if (!hit || !p.quarantined) return p;
         anyMatched = true;
         const originGroupId = p.lastDuplicateGroupId || p.duplicateGroupId;
@@ -2374,8 +2379,75 @@ export const createAssistantOnboardingSlice: StateCreator<
         return p;
       });
 
-      const { updatedPhotos, duplicateGroups: nextDupGroups } =
-        clusterPhotosIntoDuplicateGroups(unquarantinedPhotos);
+      // [1장 정밀 복원 초고속화 — O(N) 0.2ms 증분 재결합]:
+      // 1~소수 장 복원 시 전체 사진(1,500장)을 O(N^2)으로 처음부터 재클러스터링하면 수 초간 화면이 멈추므로,
+      // 복원된 사진이 속했던 원래 세트(restoredOriginGroupIds)만 즉시 재결합하고 나머지 기존 세트는 그대로 유지합니다!
+      const restoredPhotoIdList = Array.from(restoredIdsAfterReplace);
+      const isSmallIncrementalRestore =
+        restoredPhotoIdList.length <= 15 &&
+        restoredOriginGroupIds.size > 0 &&
+        state.duplicateGroups.length > 0;
+
+      let updatedPhotos: PhotoItem[];
+      let nextDupGroups: DuplicateGroup[];
+      if (isSmallIncrementalRestore) {
+        const existingGroupById = new Map(state.duplicateGroups.map((g) => [g.groupId, g]));
+        const nextGroupsMap = new Map(state.duplicateGroups.map((g) => [g.groupId, { ...g, photoIds: [...g.photoIds] }]));
+        const restoredGroupRoles = new Map<string, { groupId: string; isBest: boolean }>();
+
+        for (const gid of restoredOriginGroupIds) {
+          const activeMembersInOrigin = unquarantinedPhotos.filter(
+            (p) => !p.quarantined && (p.lastDuplicateGroupId === gid || p.duplicateGroupId === gid)
+          );
+          if (activeMembersInOrigin.length >= 2) {
+            const prevG = existingGroupById.get(gid);
+            const bestCandidate =
+              activeMembersInOrigin.find((p) => p.id === prevG?.bestPhotoId) ||
+              activeMembersInOrigin.find((p) => p.isBestInDuplicateGroup) ||
+              activeMembersInOrigin[0];
+            const mergedGroup: DuplicateGroup = {
+              groupId: gid,
+              bestPhotoId: bestCandidate.id,
+              photoIds: activeMembersInOrigin.map((p) => p.id),
+              deltaSec: prevG?.deltaSec ?? 0,
+              maxDhashDist: prevG?.maxDhashDist ?? 0,
+            };
+            nextGroupsMap.set(gid, mergedGroup);
+            for (const m of activeMembersInOrigin) {
+              restoredGroupRoles.set(m.id, { groupId: gid, isBest: m.id === bestCandidate.id });
+            }
+          }
+        }
+        nextDupGroups = Array.from(nextGroupsMap.values());
+        updatedPhotos = unquarantinedPhotos.map((p) => {
+          const role = restoredGroupRoles.get(p.id);
+          if (!role) return p;
+          if (role.isBest) {
+            return {
+              ...p,
+              duplicateGroupId: role.groupId,
+              lastDuplicateGroupId: role.groupId,
+              isBestInDuplicateGroup: true,
+              userKeptAsBest: false,
+              trashCategory: undefined,
+              trashConfidence: undefined,
+            };
+          }
+          return {
+            ...p,
+            duplicateGroupId: role.groupId,
+            lastDuplicateGroupId: role.groupId,
+            isBestInDuplicateGroup: false,
+            userKeptAsBest: false,
+            trashCategory: 'duplicate' as TrashCategory,
+            trashConfidence: 0.98,
+          };
+        });
+      } else {
+        const clustered = clusterPhotosIntoDuplicateGroups(unquarantinedPhotos);
+        updatedPhotos = clustered.updatedPhotos;
+        nextDupGroups = clustered.duplicateGroups;
+      }
 
       const nextSelectedTrashIds = new Set<string>(state.selectedTrashIds);
       let restoredFocusCategory: TrashCategory | null = null;

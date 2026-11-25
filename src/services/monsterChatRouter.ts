@@ -1640,13 +1640,16 @@ export async function executeMissingFileRecovery(
       const leafName = String(restoredPath || '')
         .split(/[\\/]/)
         .pop();
-      const candidateNames = Array.from(
-        new Set(
-          [payload.fileName, r.data.originalName, leafName, restoredPath, payload.originalLocation].filter(
-            Boolean
-          ) as string[]
-        )
+      // [단일 1장 정밀 복원 불변식]: 동명 파일(cover.jpg 등)이 여러 폴더에 있을 때
+      // fullPath(restoredPath / originalLocation)가 있으면 반드시 정확한 경로 1건만 매칭해
+      // 같은 이름의 다른 폴더 사진들까지 한꺼번에 복원되는 현상을 원천 차단합니다!
+      const exactFullPaths = Array.from(
+        new Set([restoredPath, payload.originalLocation].filter((v): v is string => Boolean(v && /[\\/]/.test(v))))
       );
+      const candidateNames =
+        exactFullPaths.length > 0
+          ? exactFullPaths
+          : Array.from(new Set([payload.fileName, r.data.originalName, leafName].filter(Boolean) as string[]));
       if (candidateNames.length > 0) {
         useSaySeeStore
           .getState()
