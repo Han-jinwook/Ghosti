@@ -1082,9 +1082,8 @@ export function isCurrentAccountWorkShareUnlocked(email?: string): boolean {
   return Boolean(ent.workSubscriptionUnlocked);
 }
 
+import { isLocalPcBlockedByOtherAccount } from './pcSingleAccountGuard';
 import {
-  isLocalZCoreHostTunnelActive,
-  isSharedLocalHostPcProtectedForAccount,
   readActiveWorkRoomInviteMeta,
   readCachedJoinedWorkRoomMeta,
   readCachedMyWorkRoomMeta,
@@ -1103,7 +1102,9 @@ export async function syncEntitlementToLocalPcEngine(
     force?: boolean;
   }
 ): Promise<void> {
-  if (typeof window === 'undefined' || !zCoreBridge.isConnected) return;
+  if (typeof window === 'undefined' || !zCoreBridge.isConnected || isLocalPcBlockedByOtherAccount()) {
+    return;
+  }
   const isSub = Boolean(entitlement?.isPaidUnlimited);
   const cleanEmail = (
     accountEmail ||
@@ -1166,41 +1167,24 @@ export async function syncEntitlementToLocalPcEngine(
       linkedDeviceCount: String(devCnt),
     });
 
-    // 방장과 팀원이 동일한 물리 PC에서 브라우저/계정만 분리해 사용할 때,
-    // 팀원 계정의 내보내기(unlocked=false)나 비방장 진입(isHost=false)이 방장의 탐색기 S: 드라이브·터널을 해제하지 않도록 보호
-    const isOwnHostSubscriptionExpired = Boolean(
-      cachedHostRoom?.roomId && entitlement?.workTrialExpired && !ownWorkUnlocked
-    );
-    let skipWorkEntitlementPost = false;
-    if (!isWorkUnlocked) {
-      skipWorkEntitlementPost = await isSharedLocalHostPcProtectedForAccount({
-        accountEmail: cleanEmail || undefined,
-        isOwnHostSubscriptionExpired,
-      });
-    } else if (!isHost) {
-      skipWorkEntitlementPost = await isLocalZCoreHostTunnelActive();
-    }
-
     await Promise.all([
       fetch(getZCoreUrl(`/api/superpower/status?${qs.toString()}`), { method: 'GET' }),
-      skipWorkEntitlementPost
-        ? Promise.resolve(null)
-        : fetch(getZCoreUrl('/__work/entitlement'), {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              unlocked: isWorkUnlocked,
-              email: cleanEmail,
-              roomId,
-              isHost,
-              planId:
-                workOverride?.planId ||
-                (!isHost && invitedWorkUnlocked
-                  ? 'work_invited_member'
-                  : entitlement?.workPlanId || (entitlement?.workTrialActive ? 'work_trial_30d' : '')),
-              reason: entitlement?.workTrialExpired ? 'WORK_TRIAL_EXPIRED' : 'WORK_SUBSCRIPTION_REQUIRED',
-            }),
-          }).catch(() => null),
+      fetch(getZCoreUrl('/__work/entitlement'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          unlocked: isWorkUnlocked,
+          email: cleanEmail,
+          roomId,
+          isHost,
+          planId:
+            workOverride?.planId ||
+            (!isHost && invitedWorkUnlocked
+              ? 'work_invited_member'
+              : entitlement?.workPlanId || (entitlement?.workTrialActive ? 'work_trial_30d' : '')),
+          reason: entitlement?.workTrialExpired ? 'WORK_TRIAL_EXPIRED' : 'WORK_SUBSCRIPTION_REQUIRED',
+        }),
+      }).catch(() => null),
     ]);
   } catch {
     lastSyncedPcEngineSubFlag = null;

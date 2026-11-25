@@ -473,39 +473,187 @@ def _run_subst(args: List[str]) -> Tuple[bool, str]:
         return False, str(exc)
 
 
-def _resolve_effective_pc_work_owner(cur: Dict[str, Any]) -> Optional[Dict[str, Any]]:
-    """동일 물리 PC에서 여러 브라우저/계정(예: 방장 창 + 초대 팀원 창)을 함께 사용할 때,
-    단 1개라도 업무 공유 권한이 활성(unlocked=True)인 계정이 있으면(방장 최우선) S: 드라이브와 터널 소유자로 반환합니다."""
-    raw_map = cur.get("accountWorkEntitlements")
-    ent_map: Dict[str, Any] = dict(raw_map) if isinstance(raw_map, dict) else {}
-    if not ent_map and cur.get("workEntitlementLocked") is False:
-        legacy_email = str(cur.get("activeAccountEmail") or "").strip().lower()
-        if legacy_email:
-            ent_map[legacy_email] = {
-                "unlocked": True,
-                "isHost": bool(cur.get("isWorkHost", False)),
-                "roomId": str(cur.get("activeWorkRoomId") or "").strip(),
-                "planId": str(cur.get("workPlanId") or "").strip(),
-                "updatedAt": str(cur.get("workEntitlementSyncedAt") or ""),
+_OWNER_LOCK = threading.RLock()
+_PC_OWNER_TTL_MS = 75_000  # 백그라운드 크롬 탭 타이머 스로틀링(최대 60초) 보호 + 비정상 종료 자동 만료
+
+
+def _owner_file_paths() -> Tuple[Path, Path]:
+    primary = _get_merlin_appdata_dir() / "active_pc_account_owner.json"
+    local_app = os.environ.get("LOCALAPPDATA") or str(Path.home() / "AppData" / "Local")
+    compat_dir = Path(local_app) / "Merlin_Z_Core"
+    return primary, compat_dir / "active_pc_account_owner.json"
+
+
+def _mask_email_for_display(email: str) -> str:
+    clean = str(email or "").strip().lower()
+    if "@" not in clean:
+        return clean[:2] + "***" if len(clean) > 2 else "다른 계정"
+    local_part, domain = clean.split("@", 1)
+    if len(local_part) <= 2:
+        masked_local = (local_part[:1] or "a") + "***"
+    else:
+        masked_local = local_part[:2] + "***"
+    return f"{masked_local}@{domain}"
+
+
+def _now_epoch_ms() -> int:
+    import time as _t
+
+    return int(_t.time() * 1000)
+
+
+def _load_pc_owner_state_unlocked() -> Dict[str, Any]:
+    primary, compat = _owner_file_paths()
+    for cand in (primary, compat):
+        if cand.exists():
+            try:
+                raw = json.loads(cand.read_text(encoding="utf-8", errors="ignore"))
+                if isinstance(raw, dict):
+                    return raw
+            except Exception:
+                pass
+    return {"activeEmail": "", "updatedAtMs": 0, "sessions": {}}
+
+
+def _save_pc_owner_state_unlocked(state: Dict[str, Any]) -> None:
+    primary, compat = _owner_file_paths()
+    txt = json.dumps(state, ensure_ascii=False, indent=2)
+    for dst in (primary, compat):
+        try:
+            dst.parent.mkdir(parents=True, exist_ok=True)
+            tmp = dst.with_name(dst.name + ".tmp")
+            tmp.write_text(txt, encoding="utf-8")
+            os.replace(tmp, dst)
+        except Exception:
+            pass
+
+
+def _prune_and_get_live_owner_unlocked(state: Dict[str, Any], now_ms: int) -> Tuple[str, Dict[str, int]]:
+    active_email = str(state.get("activeEmail") or "").strip().lower()
+    raw_sessions = state.get("sessions")
+    live_sessions: Dict[str, int] = {}
+    if isinstance(raw_sessions, dict):
+        for sid, ts_val in raw_sessions.items():
+            try:
+                ts_int = int(ts_val or 0)
+            except Exception:
+                ts_int = 0
+            if sid and (now_ms - ts_int) <= _PC_OWNER_TTL_MS:
+                live_sessions[str(sid)] = ts_int
+    upd_ms = int(state.get("updatedAtMs") or 0)
+    if not active_email:
+        return "", {}
+    if live_sessions:
+        return active_email, live_sessions
+    # 구버전 세션ID 미전송 호출 호환: updatedAtMs가 TTL 이내이고 sessions 기록 자체가 없었던 경우만 활성 인정
+    if not isinstance(raw_sessions, dict) and (now_ms - upd_ms) <= _PC_OWNER_TTL_MS:
+        return active_email, {"legacy": upd_ms}
+    return "", {}
+
+
+def check_pc_account_owner_allowed(req_email: Optional[str]) -> Optional[Dict[str, Any]]:
+    """[정책 §5.4-⑨] 현재 PC를 다른 계정이 실시간 단독 점유 중이면 409 PC_OWNED_BY_OTHER_ACCOUNT 차단을 반환합니다."""
+    clean_req = str(req_email or "").strip().lower()
+    with _OWNER_LOCK:
+        now_ms = _now_epoch_ms()
+        st = _load_pc_owner_state_unlocked()
+        live_owner, _ = _prune_and_get_live_owner_unlocked(st, now_ms)
+        if live_owner and clean_req and clean_req != live_owner:
+            return {
+                "ok": False,
+                "error": "PC_OWNED_BY_OTHER_ACCOUNT",
+                "reason": "PC_OWNED_BY_OTHER_ACCOUNT",
+                "activeEmailMasked": _mask_email_for_display(live_owner),
             }
-    candidates: List[Tuple[int, str, str, Dict[str, Any]]] = []
-    for raw_email, info in ent_map.items():
-        clean_em = str(raw_email or "").strip().lower()
-        if not clean_em or not isinstance(info, dict) or not bool(info.get("unlocked")):
-            continue
-        is_h = 1 if bool(info.get("isHost")) else 0
-        upd = str(info.get("updatedAt") or "")
-        candidates.append((is_h, upd, clean_em, info))
-    if not candidates:
-        return None
-    candidates.sort(key=lambda item: (item[0], item[1]), reverse=True)
-    _, _, win_email, win_info = candidates[0]
-    return {
-        "email": win_email,
-        "roomId": str(win_info.get("roomId") or "").strip(),
-        "isHost": bool(win_info.get("isHost")),
-        "planId": str(win_info.get("planId") or "").strip(),
-    }
+    return None
+
+
+def handle_pc_account_owner(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
+    """카카오톡 PC 방식 1 PC = 1 활성 계정 단독 점유 게이트웨이 (GET/POST /__merlin/account-owner)."""
+    payload = data or {}
+    action = str(payload.get("action") or "status").strip().lower()
+    email = str(payload.get("email") or "").strip().lower()
+    session_id = str(payload.get("sessionId") or "default").strip()[:80] or "default"
+    force_switch = bool(payload.get("forceSwitch", False))
+
+    need_force_unmount_prev = False
+
+    with _OWNER_LOCK:
+        now_ms = _now_epoch_ms()
+        st = _load_pc_owner_state_unlocked()
+        live_owner, live_sessions = _prune_and_get_live_owner_unlocked(st, now_ms)
+        last_recorded_email = str(st.get("activeEmail") or "").strip().lower()
+
+        if action == "status":
+            return {
+                "ok": True,
+                "activeEmail": live_owner,
+                "activeEmailMasked": _mask_email_for_display(live_owner) if live_owner else "",
+                "sessionCount": len(live_sessions),
+                "updatedAtMs": int(st.get("updatedAtMs") or 0),
+            }
+
+        if action == "release_session":
+            if email and last_recorded_email == email and isinstance(st.get("sessions"), dict):
+                next_sessions = dict(live_sessions)
+                next_sessions.pop(session_id, None)
+                st["sessions"] = next_sessions
+                if not next_sessions:
+                    st["updatedAtMs"] = 0
+                _save_pc_owner_state_unlocked(st)
+            return {"ok": True, "releasedSession": session_id}
+
+        if action == "release":
+            if not email or last_recorded_email == email or live_owner == email:
+                st = {"activeEmail": "", "updatedAtMs": 0, "sessions": {}}
+                _save_pc_owner_state_unlocked(st)
+                need_force_unmount_prev = True
+            res_rel = {"ok": True, "released": True}
+        elif action in ("claim", "heartbeat"):
+            if not email:
+                return {"ok": False, "reason": "EMPTY_EMAIL"}
+            if live_owner and live_owner != email and not force_switch:
+                reason_code = (
+                    "DISPLACED_BY_OTHER_ACCOUNT"
+                    if action == "heartbeat"
+                    else "PC_OWNED_BY_OTHER_ACCOUNT"
+                )
+                return {
+                    "ok": False,
+                    "reason": reason_code,
+                    "activeEmailMasked": _mask_email_for_display(live_owner),
+                }
+            switched_accounts = bool(last_recorded_email and last_recorded_email != email)
+            next_sessions = dict(live_sessions) if (live_owner == email and not force_switch) else {}
+            next_sessions[session_id] = now_ms
+            st = {
+                "activeEmail": email,
+                "updatedAtMs": now_ms,
+                "sessions": next_sessions,
+            }
+            _save_pc_owner_state_unlocked(st)
+            if switched_accounts or (live_owner and live_owner != email and force_switch):
+                need_force_unmount_prev = True
+            res_rel = {
+                "ok": True,
+                "activeEmail": email,
+                "activeEmailMasked": _mask_email_for_display(email),
+                "switched": switched_accounts,
+            }
+        else:
+            return {"ok": False, "reason": f"UNKNOWN_OWNER_ACTION:{action}"}
+
+    if need_force_unmount_prev:
+        def _lock_prev_work_cfg(cur: Dict[str, Any]) -> None:
+            cur["workEntitlementLocked"] = True
+            cur["isWorkHost"] = False
+            cur.pop("accountWorkEntitlements", None)
+
+        _mutate_sdrive_config(_lock_prev_work_cfg)
+        mount_or_unmount_s_drive({"action": "unmount", "forceUnmount": True})
+        stop_outbound_work_tunnel()
+
+    return res_rel
 
 
 def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
@@ -513,7 +661,28 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
     action = str(payload.get("action") or "mount").strip().lower()
     open_explorer = bool(payload.get("openExplorer", False))
     custom_target = payload.get("targetDir")
+    req_email = str(payload.get("email") or payload.get("accountEmail") or "").strip().lower()
     prev_vault_dir = get_work_vault_dir(ensure_dirs=False)
+
+    if action != "status" and not bool(payload.get("forceUnmount")):
+        owner_block = check_pc_account_owner_allowed(req_email)
+        if owner_block is not None:
+            return owner_block
+        if action == "unmount" and not req_email:
+            with _OWNER_LOCK:
+                live_owner, _ = _prune_and_get_live_owner_unlocked(_load_pc_owner_state_unlocked(), _now_epoch_ms())
+            cfg_cur = _load_sdrive_config()
+            if (
+                live_owner
+                and str(cfg_cur.get("activeAccountEmail") or "").strip().lower() == live_owner
+                and cfg_cur.get("workEntitlementLocked") is False
+            ):
+                return {
+                    "ok": False,
+                    "error": "PC_OWNED_BY_OTHER_ACCOUNT",
+                    "reason": "PC_OWNED_BY_OTHER_ACCOUNT",
+                    "activeEmailMasked": _mask_email_for_display(live_owner),
+                }
 
     if action == "pick_folder":
         picked = _pick_folder_dialog_win32(str(prev_vault_dir))
@@ -563,21 +732,6 @@ def mount_or_unmount_s_drive(data: Dict[str, Any] | None = None) -> Dict[str, An
         return inspect_s_drive_status()
 
     if action == "unmount":
-        if not bool(payload.get("forceUnmount")):
-            cfg_u = _load_sdrive_config()
-            winner_u = _resolve_effective_pc_work_owner(cfg_u)
-            req_email = str(payload.get("email") or payload.get("accountEmail") or "").strip().lower()
-            if winner_u is not None and (not req_email or req_email != winner_u["email"]):
-                cur_mounted = _mounted_letter_for_vault(vault_dir)
-                return {
-                    "ok": True,
-                    "mounted": bool(cur_mounted),
-                    "sharedHostProtected": True,
-                    "activeOwnerEmail": winner_u["email"],
-                    "driveLetter": cur_mounted or WORK_DRIVE_PREFERRED,
-                    "targetDir": str(vault_dir),
-                    "message": "동일 PC에서 방장 업무 공유(S: 드라이브)가 가동 중이므로 탐색기 S: 드라이브 연결을 유지했습니다.",
-                }
         released: List[str] = []
         failed: List[str] = []
         if os.name == "nt":
@@ -2053,7 +2207,7 @@ atexit.register(lambda: stop_outbound_work_tunnel())
 def get_outbound_work_tunnel_status() -> Dict[str, Any]:
     cfg = _load_sdrive_config()
     access_key = get_or_create_work_access_key(rotate=False)
-    owner = _resolve_effective_pc_work_owner(cfg)
+    active_owner = str(cfg.get("activeAccountEmail") or "").strip().lower()
     with _TUNNEL_LOCK:
         proc = _TUNNEL_STATE.get("proc")
         alive = proc is not None and (proc.poll() is None)
@@ -2073,7 +2227,7 @@ def get_outbound_work_tunnel_status() -> Dict[str, Any]:
         "error": err,
         "isWorkHost": bool(cfg.get("isWorkHost")),
         "workEntitlementLocked": bool(cfg.get("workEntitlementLocked", True)),
-        "activeOwnerEmail": str((owner or {}).get("email") or ""),
+        "activeOwnerEmail": active_owner if not bool(cfg.get("workEntitlementLocked", True)) else "",
         "nightPowerSaveEnabled": bool(cfg.get("nightPowerSaveEnabled")),
     }
 
@@ -2424,64 +2578,36 @@ def sync_work_entitlement_state(data: Dict[str, Any] | None = None) -> Dict[str,
     has_explicit_is_host = "isHost" in payload
     raw_is_host = bool(payload.get("isHost", False))
 
-    effective_state: Dict[str, Any] = {
-        "roomId": raw_room_id,
-        "isHost": raw_is_host,
-        "winner": None,
-    }
+    # [정책 §5.4-⑨] 1 PC 1계정 단독 점유: 타 계정이 현재 PC를 실시간 점유 중이면 비소유 계정의 권한/언마운트 요청을 100% 차단(No-op)
+    owner_block = check_pc_account_owner_allowed(email)
+    if owner_block is not None:
+        return owner_block
+
+    effective_state: Dict[str, Any] = {"roomId": raw_room_id, "isHost": raw_is_host}
 
     def _apply_ent(cur: Dict[str, Any]) -> None:
         prev_email = str(cur.get("activeAccountEmail") or "").strip().lower()
         prev_room = str(cur.get("activeWorkRoomId") or "").strip()
         prev_is_host = bool(cur.get("isWorkHost", False))
         by_scope: Dict[str, Any] = dict(cur.get("scopedWorkLedgers") or {})
-        raw_map = cur.get("accountWorkEntitlements")
-        ent_map: Dict[str, Any] = dict(raw_map) if isinstance(raw_map, dict) else {}
-
-        # 레거시 단일 슬롯에 활성 방장 권한이 있던 경우 계정별 원장으로 자동 승계
-        if not ent_map and cur.get("workEntitlementLocked") is False and prev_email:
-            ent_map[prev_email] = {
-                "unlocked": True,
-                "isHost": prev_is_host,
-                "roomId": prev_room,
-                "planId": str(cur.get("workPlanId") or "").strip(),
-                "updatedAt": str(cur.get("workEntitlementSyncedAt") or ""),
-            }
-
-        prev_entry = ent_map.get(email) if (email and isinstance(ent_map.get(email), dict)) else {}
-        prev_entry_room = str(prev_entry.get("roomId") or "").strip()
-        prev_entry_host = bool(prev_entry.get("isHost", False))
+        cur.pop("accountWorkEntitlements", None)
 
         # 동일 계정에서 탭 외부(내 기기 통합 등) 공용 권한 호출이 roomId=""로 들어와 기존 활성 업무방 ID·원장을 지우는 현상 원천 차단
         room_id = raw_room_id
-        if unlocked and not room_id and email:
-            room_id = prev_entry_room or (prev_room if email == prev_email else "")
-        is_host = raw_is_host if (raw_room_id or not prev_entry) else (raw_is_host or prev_entry_host)
-        if not has_explicit_is_host and email:
-            if prev_entry:
-                is_host = prev_entry_host
-            elif email == prev_email:
-                is_host = prev_is_host
+        if unlocked and not room_id and email and email == prev_email and prev_room:
+            room_id = prev_room
+        is_host = (
+            raw_is_host
+            if (raw_room_id or not (email and email == prev_email and prev_room))
+            else (raw_is_host or prev_is_host)
+        )
+        if not has_explicit_is_host and email and email == prev_email:
+            is_host = prev_is_host
 
-        if email:
-            ent_map[email] = {
-                "unlocked": unlocked,
-                "isHost": bool(is_host and unlocked),
-                "roomId": room_id if unlocked else "",
-                "planId": plan_id if unlocked else "",
-                "updatedAt": _iso_utc(),
-            }
-        cur["accountWorkEntitlements"] = ent_map
+        effective_state["roomId"] = room_id
+        effective_state["isHost"] = is_host
 
-        winner = _resolve_effective_pc_work_owner(cur)
-        effective_state["winner"] = winner
-        target_email = winner["email"] if winner is not None else email
-        target_room = winner["roomId"] if winner is not None else room_id
-        target_is_host = bool(winner["isHost"]) if winner is not None else False
-        effective_state["roomId"] = target_room
-        effective_state["isHost"] = target_is_host
-
-        # 기존 계정·방의 원장을 슬롯에 백업하고 새 계정·방 원장으로 전환 (계정 A → B 전환 시 혼입 차단)
+        # 기존 계정·방의 원장을 슬롯에 백업하고 새 계정·방 원장으로 전환 (순차 교대 사용 시 혼입 차단)
         if prev_email or prev_room:
             prev_key = f"{prev_email}::{prev_room}"
             by_scope[prev_key] = {
@@ -2490,8 +2616,8 @@ def sync_work_entitlement_state(data: Dict[str, Any] | None = None) -> Dict[str,
                 "uploaderByRelPath": dict(cur.get("uploaderByRelPath") or {}),
                 "hiddenRelPaths": list(cur.get("hiddenRelPaths") or []),
             }
-        new_key = f"{target_email}::{target_room}"
-        if (target_email != prev_email or target_room != prev_room) and (target_email or target_room):
+        new_key = f"{email}::{room_id}"
+        if (email != prev_email or room_id != prev_room) and (email or room_id):
             restored = by_scope.get(new_key) if isinstance(by_scope.get(new_key), dict) else {}
             cur["knownRelPaths"] = list(restored.get("knownRelPaths") or [])
             cur["deletedTombstones"] = dict(restored.get("deletedTombstones") or {})
@@ -2499,20 +2625,18 @@ def sync_work_entitlement_state(data: Dict[str, Any] | None = None) -> Dict[str,
             cur["hiddenRelPaths"] = list(restored.get("hiddenRelPaths") or [])
 
         cur["scopedWorkLedgers"] = by_scope
-        cur["activeAccountEmail"] = target_email
-        cur["activeWorkRoomId"] = target_room
-        cur["isWorkHost"] = bool(winner is not None and target_is_host)
-        cur["workEntitlementLocked"] = winner is None
-        cur["workPlanId"] = winner["planId"] if winner is not None else plan_id
-        cur["workLockReason"] = "" if winner is not None else (reason or "SUBSCRIPTION_REQUIRED")
+        cur["activeAccountEmail"] = email
+        cur["activeWorkRoomId"] = room_id if unlocked else ""
+        cur["isWorkHost"] = bool(is_host and unlocked)
+        cur["workEntitlementLocked"] = not unlocked
+        cur["workPlanId"] = plan_id if unlocked else ""
+        cur["workLockReason"] = "" if unlocked else (reason or "SUBSCRIPTION_REQUIRED")
         cur["workEntitlementSyncedAt"] = _iso_utc()
 
     _mutate_sdrive_config(_apply_ent)
 
-    winner_after = effective_state.get("winner")
-    if winner_after is None:
-        # 이 PC의 모든 계정이 미개통/만료/내보내기 상태일 때만 S: 드라이브 연결 해제 (원본 파일은 100% 보존)
-        unmount_res = mount_or_unmount_s_drive({"action": "unmount", "forceUnmount": True})
+    if not unlocked:
+        unmount_res = mount_or_unmount_s_drive({"action": "unmount", "email": email, "forceUnmount": True})
         stop_outbound_work_tunnel()
         return {
             "ok": True,
@@ -2524,11 +2648,10 @@ def sync_work_entitlement_state(data: Dict[str, Any] | None = None) -> Dict[str,
             "message": "🔒 업무 공유 이용 기간이 종료되어 S: 드라이브 연결을 해제했습니다. 업무 폴더 안의 원본 파일은 100% 그대로 보존됩니다.",
         }
 
-    # 동일 PC에 활성 방장(또는 활성 팀원) 계정이 존재하면 S: 드라이브 연결과 방장 직통 터널을 100% 보호·유지!
     if os.name == "nt":
         status_before = inspect_s_drive_status()
         if not status_before.get("mounted"):
-            mount_or_unmount_s_drive({"action": "mount", "openExplorer": False})
+            mount_or_unmount_s_drive({"action": "mount", "email": email, "openExplorer": False})
 
     is_host_final = bool(effective_state.get("isHost"))
     tunnel_info = ensure_outbound_work_tunnel() if is_host_final else get_outbound_work_tunnel_status()
@@ -2539,21 +2662,10 @@ def sync_work_entitlement_state(data: Dict[str, Any] | None = None) -> Dict[str,
             daemon=True,
         ).start()
     status_info = inspect_s_drive_status()
-    if not unlocked:
-        return {
-            "ok": True,
-            "unlocked": False,
-            "sharedHostProtected": True,
-            "activeOwnerEmail": winner_after.get("email"),
-            "mounted": status_info.get("mounted", False),
-            "driveLetter": status_info.get("driveLetter", WORK_DRIVE_PREFERRED),
-            "targetDir": status_info.get("targetDir"),
-            "tunnel": tunnel_info,
-        }
     return {
         "ok": True,
         "unlocked": True,
-        "activeOwnerEmail": winner_after.get("email"),
+        "activeOwnerEmail": email,
         "mounted": status_info.get("mounted", False),
         "driveLetter": status_info.get("driveLetter", WORK_DRIVE_PREFERRED),
         "targetDir": status_info.get("targetDir"),

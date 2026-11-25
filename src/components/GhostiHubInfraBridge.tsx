@@ -3,6 +3,7 @@ import { X } from 'lucide-react';
 import {
   HubProvider,
   useHub,
+  logout as hubSdkLogout,
   HubProfileWidget,
   HubProfileCard,
   HubNotificationCard,
@@ -16,6 +17,11 @@ import {
   HubSupportLink,
   HubNotifier,
 } from '../services/merlin-hub-sdk/react';
+import {
+  claimOrHeartbeatLocalPcAccountOwner,
+  releaseLocalPcTabSessionOnUnload,
+  setLocalPcOwnershipBlockedState,
+} from '../services/pcSingleAccountGuard';
 import { useSaySeeStore } from '../store/useSaySeeStore';
 import { storeSharedRefs } from '../store/slices/storeSharedRefs';
 import { zCoreBridge } from '../services/zCoreBridge';
@@ -202,6 +208,11 @@ const GhostiHubGlobalModals: React.FC = () => {
     returnToCheckoutPlan?: PricingPlanId;
   }>({});
   const [isGiftBoxOpen, setIsGiftBoxOpen] = useState(false);
+  const [pcAccountConflict, setPcAccountConflict] = useState<{
+    activeEmailMasked: string;
+    currentEmail: string;
+  } | null>(null);
+  const [switchingPcOwner, setSwitchingPcOwner] = useState(false);
   const wasLoggedInRef = useRef(false);
   const lastAuthedEmailRef = useRef('');
   const logoutInProgressRef = useRef(false);
@@ -481,20 +492,27 @@ const GhostiHubGlobalModals: React.FC = () => {
         }
       }
 
-      void zCoreBridge.checkHealth(false).then((alive) => {
-        if (alive) {
-          void useSaySeeStore.getState().initApp(true);
-        }
-      });
-
-      // 대장 PC에서 [귀신비서]·[사진 공유] 등 다른 탭에 머물더라도 소속 업무방 권한 및 상시 아웃바운드 HTTPS 직통 터널을 자동 유지·등록
-      // (팀원 PC나 방장 본인의 모바일 앱에서 언제 접속하더라도 0초 만에 S:\ 문서 목록이 일치하도록 보장)
       const isNativeMobile =
         typeof window !== 'undefined' &&
         Boolean((window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.());
       if (!isNativeMobile) {
         void zCoreBridge.checkHealth(false).then(async (alive) => {
           if (!alive) return;
+          // [정책 §5.4-⑨] 카카오톡 PC 방식 1 PC = 1 활성 계정 단독 점유 선점 검사
+          const ownerRes = await claimOrHeartbeatLocalPcAccountOwner({
+            email: cleanUserEmail,
+            action: 'claim',
+          });
+          if (!ownerRes.ok && ownerRes.reason === 'PC_OWNED_BY_OTHER_ACCOUNT') {
+            setPcAccountConflict({
+              activeEmailMasked: ownerRes.activeEmailMasked || '다른 계정',
+              currentEmail: cleanUserEmail,
+            });
+            return;
+          }
+          setPcAccountConflict(null);
+          void useSaySeeStore.getState().initApp(true);
+
           const joined = await fetchMyJoinedWorkRooms();
           if (!joined.ok || joined.rooms.length === 0) return;
           const curEnt = useSaySeeStore.getState().deviceEntitlement;
@@ -523,8 +541,16 @@ const GhostiHubGlobalModals: React.FC = () => {
             });
           }
         });
+      } else {
+        void zCoreBridge.checkHealth(false).then((alive) => {
+          if (alive) {
+            void useSaySeeStore.getState().initApp(true);
+          }
+        });
       }
     } else if (!isLoggedIn) {
+      setPcAccountConflict(null);
+      setLocalPcOwnershipBlockedState(false);
       const hasUrlInviteToken = Boolean(readActiveInviteToken());
       const isMarkedLoggedOut =
         typeof window !== 'undefined' && localStorage.getItem('merlin_logged_out') === '1';
@@ -874,9 +900,229 @@ const GhostiHubGlobalModals: React.FC = () => {
         />
       )}
 
+      <PcSingleAccountGuardOverlay
+        isLoggedIn={isLoggedIn}
+        userEmail={user?.email || ''}
+        conflict={pcAccountConflict}
+        setConflict={setPcAccountConflict}
+        switching={switchingPcOwner}
+        setSwitching={setSwitchingPcOwner}
+        onPerformLogout={() => {
+          setPcAccountConflict(null);
+          setLocalPcOwnershipBlockedState(false);
+          try {
+            hubSdkLogout();
+          } catch {
+            /* ignore */
+          }
+          performGhostiCleanLogout();
+        }}
+      />
+
       <HubBugReporter appId="Ghosti" appVersion="v1.0.7" />
       <HubNotifier />
     </>
+  );
+};
+
+interface PcSingleAccountGuardOverlayProps {
+  isLoggedIn: boolean;
+  userEmail: string;
+  conflict: { activeEmailMasked: string; currentEmail: string } | null;
+  setConflict: React.Dispatch<
+    React.SetStateAction<{ activeEmailMasked: string; currentEmail: string } | null>
+  >;
+  switching: boolean;
+  setSwitching: React.Dispatch<React.SetStateAction<boolean>>;
+  onPerformLogout: () => void;
+}
+
+const PcSingleAccountGuardOverlay: React.FC<PcSingleAccountGuardOverlayProps> = ({
+  isLoggedIn,
+  userEmail,
+  conflict,
+  setConflict,
+  switching,
+  setSwitching,
+  onPerformLogout,
+}) => {
+  const cleanEmail = (userEmail || '').trim().toLowerCase();
+  const conflictRef = useRef(conflict);
+  conflictRef.current = conflict;
+  const logoutCbRef = useRef(onPerformLogout);
+  logoutCbRef.current = onPerformLogout;
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !isLoggedIn || !cleanEmail) return undefined;
+    const isNativeMobile = Boolean(
+      (window as unknown as { Capacitor?: { isNativePlatform?: () => boolean } }).Capacitor?.isNativePlatform?.()
+    );
+    if (isNativeMobile) return undefined;
+
+    let cancelled = false;
+
+    const verifyOrHeartbeat = async (mode: 'claim' | 'heartbeat') => {
+      if (cancelled || !zCoreBridge.isConnected) return;
+      if (mode === 'heartbeat' && conflictRef.current) return;
+      const res = await claimOrHeartbeatLocalPcAccountOwner({
+        email: cleanEmail,
+        action: mode,
+      });
+      if (cancelled) return;
+      if (!res.ok) {
+        if (res.reason === 'DISPLACED_BY_OTHER_ACCOUNT') {
+          logoutCbRef.current();
+          useSaySeeStore
+            .getState()
+            .showToast('다른 창에서 새 계정으로 전환되어 로그아웃되었습니다.');
+          return;
+        }
+        if (res.reason === 'PC_OWNED_BY_OTHER_ACCOUNT') {
+          setConflict({
+            activeEmailMasked: res.activeEmailMasked || '다른 계정',
+            currentEmail: cleanEmail,
+          });
+        }
+        return;
+      }
+      if (conflictRef.current) {
+        setConflict(null);
+      }
+    };
+
+    const unsubZCore = zCoreBridge.subscribe((connected) => {
+      if (connected && !cancelled) {
+        void verifyOrHeartbeat('claim');
+      }
+    });
+
+    const intervalId = window.setInterval(() => {
+      void verifyOrHeartbeat('heartbeat');
+    }, 4000);
+
+    const onVisible = () => {
+      if (document.visibilityState === 'visible') {
+        void verifyOrHeartbeat('heartbeat');
+      }
+    };
+    const onPageHide = () => {
+      if (!conflictRef.current) {
+        releaseLocalPcTabSessionOnUnload(cleanEmail);
+      }
+    };
+
+    window.addEventListener('focus', onVisible);
+    document.addEventListener('visibilitychange', onVisible);
+    window.addEventListener('pagehide', onPageHide);
+
+    return () => {
+      cancelled = true;
+      unsubZCore();
+      window.clearInterval(intervalId);
+      window.removeEventListener('focus', onVisible);
+      document.removeEventListener('visibilitychange', onVisible);
+      window.removeEventListener('pagehide', onPageHide);
+    };
+  }, [isLoggedIn, cleanEmail, setConflict]);
+
+  const handleForceSwitchHere = async () => {
+    if (!conflict || switching) return;
+    setSwitching(true);
+    try {
+      const sw = await claimOrHeartbeatLocalPcAccountOwner({
+        email: conflict.currentEmail,
+        action: 'claim',
+        forceSwitch: true,
+      });
+      if (sw.ok) {
+        setConflict(null);
+        setLocalPcOwnershipBlockedState(false);
+        void useSaySeeStore.getState().initApp(true);
+        void useSaySeeStore.getState().refreshDeviceIntegrationState();
+        const joined = await fetchMyJoinedWorkRooms();
+        if (joined.ok && joined.rooms.length > 0) {
+          const curEnt = useSaySeeStore.getState().deviceEntitlement;
+          const hosted = joined.rooms.find((r) => r.isHost && r.ownerUnlocked);
+          const invited = joined.rooms.find((r) => !r.isHost);
+          if (invited) {
+            saveCachedJoinedWorkRoomMeta(invited, conflict.currentEmail);
+          }
+          if (hosted) {
+            await syncEntitlementToLocalPcEngine(curEnt, conflict.currentEmail, {
+              unlocked: true,
+              roomId: hosted.roomId,
+              isHost: true,
+              planId: curEnt?.workPlanId || 'work_trial_30d',
+              force: true,
+            });
+            await ensureLocalHostOutboundTunnelAndRegister(hosted.roomId, {
+              masterServerName: hosted.hostTunnel?.masterServerName,
+              backupServers: hosted.hostTunnel?.backupServers,
+              forceRegister: true,
+            });
+          } else if (invited && invited.ownerUnlocked) {
+            await syncEntitlementToLocalPcEngine(curEnt, conflict.currentEmail, {
+              unlocked: true,
+              roomId: invited.roomId,
+              isHost: false,
+              planId: 'work_invited_member',
+              force: true,
+            });
+          }
+        }
+        window.dispatchEvent(new CustomEvent('ghostiSupabaseUserSynced'));
+        useSaySeeStore
+          .getState()
+          .showToast('이 PC의 연결 계정이 현재 계정으로 전환되었습니다.');
+      }
+    } finally {
+      setSwitching(false);
+    }
+  };
+
+  if (!conflict) return null;
+
+  return (
+    <div
+      data-testid="pc-single-account-conflict-modal"
+      role="dialog"
+      aria-modal="true"
+      className="fixed inset-0 z-[220] bg-black/70 backdrop-blur-[2px] flex items-center justify-center p-4"
+    >
+      <div className="w-full max-w-md rounded-2xl bg-white dark:bg-zinc-950 border border-amber-300 dark:border-amber-400/55 shadow-2xl p-6 flex flex-col gap-4">
+        <div className="flex flex-col gap-2">
+          <span className="inline-flex self-start px-2.5 py-0.5 rounded-full bg-amber-50 dark:bg-amber-950/90 border border-amber-200 dark:border-amber-400/50 text-amber-800 dark:text-amber-200 text-[11.5px] font-extrabold">
+            1 PC 1계정 보호 (카카오톡 PC 방식)
+          </span>
+          <h3 className="text-[17px] text-slate-900 dark:text-white font-extrabold leading-snug break-keep">
+            현재 이 PC에는 이미 다른 계정({conflict.activeEmailMasked})이 연결되어 있습니다.
+          </h3>
+          <p className="text-[13px] text-slate-600 dark:text-zinc-300 leading-relaxed break-keep">
+            한 PC에서는 한 번에 하나의 계정만 사용할 수 있습니다. 이 계정으로 전환하면 기존 계정의 로컬 연결과 공유 드라이브(S:)가 해제되고 기존 창은 로그아웃됩니다.
+          </p>
+        </div>
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-end gap-2 pt-1">
+          <button
+            type="button"
+            data-testid="pc-account-conflict-logout-btn"
+            onClick={onPerformLogout}
+            disabled={switching}
+            className="px-4 py-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-zinc-900 dark:hover:bg-zinc-800 border border-slate-200 dark:border-white/15 text-slate-700 dark:text-zinc-200 text-[13px] font-bold cursor-pointer"
+          >
+            로그아웃
+          </button>
+          <button
+            type="button"
+            data-testid="pc-account-force-switch-btn"
+            onClick={() => void handleForceSwitchHere()}
+            disabled={switching}
+            className="px-4 py-2.5 rounded-xl bg-teal-600 hover:bg-teal-700 text-white text-[13px] font-extrabold cursor-pointer shadow-sm disabled:opacity-60"
+          >
+            {switching ? '전환 중...' : '이 계정으로 전환하기 (기존 계정 연결 해제)'}
+          </button>
+        </div>
+      </div>
+    </div>
   );
 };
 

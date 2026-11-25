@@ -826,109 +826,17 @@ export function clearPendingKickedWorkRoomNotice(accountEmail?: string): void {
   }
 }
 
-export function hasAnotherUnlockedWorkHostInBrowserStorage(currentEmail?: string): boolean {
-  if (typeof window === 'undefined') return false;
-  const cleanCurrent = (currentEmail || '').trim().toLowerCase();
-  const prefix = 'ghosti_cached_device_snapshot_v1::';
-  try {
-    for (let i = 0; i < localStorage.length; i += 1) {
-      const k = localStorage.key(i);
-      if (!k || !k.startsWith(prefix)) continue;
-      const otherEmail = k.slice(prefix.length).trim().toLowerCase();
-      if (!otherEmail || otherEmail === cleanCurrent) continue;
-      const raw = localStorage.getItem(k);
-      if (!raw) continue;
-      const parsed = JSON.parse(raw) as {
-        entitlement?: {
-          workPaidActive?: boolean;
-          workPaidExpiresAt?: string | null;
-          workTrialActive?: boolean;
-          workTrialDaysLeft?: number;
-          workSubscriptionUnlocked?: boolean;
-        } | null;
-      };
-      const ent = parsed?.entitlement;
-      if (!ent) continue;
-      if (ent.workPaidActive) {
-        const expMs = ent.workPaidExpiresAt ? Date.parse(ent.workPaidExpiresAt) : NaN;
-        if (!Number.isFinite(expMs) || expMs > Date.now()) return true;
-      }
-      if (ent.workTrialActive && Number(ent.workTrialDaysLeft || 0) > 0) return true;
-      if (ent.workSubscriptionUnlocked) return true;
-    }
-  } catch {
-    /* ignore */
-  }
-  return false;
-}
-
-export async function isLocalZCoreHostTunnelActive(): Promise<boolean> {
-  if (typeof window === 'undefined' || !zCoreBridge.isConnected) return false;
-  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
-  const timer = ctrl ? setTimeout(() => ctrl.abort(), 1500) : null;
-  try {
-    const res = await fetch(getZCoreUrl('/__work/tunnel'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'status' }),
-      ...(ctrl ? { signal: ctrl.signal } : {}),
-    });
-    if (!res.ok) return false;
-    const data = (await res.json()) as {
-      status?: string;
-      tunnelUrl?: string;
-      isWorkHost?: boolean;
-      workEntitlementLocked?: boolean;
-      activeOwnerEmail?: string;
-    };
-    const status = String(data?.status || '').trim().toLowerCase();
-    const tunnelUrl = String(data?.tunnelUrl || '').trim();
-    const activeOwnerEmail = String(data?.activeOwnerEmail || '').trim().toLowerCase();
-    return (
-      status === 'connected' ||
-      status === 'starting' ||
-      status === 'downloading_binary' ||
-      Boolean(tunnelUrl) ||
-      Boolean(activeOwnerEmail) ||
-      Boolean(data?.isWorkHost && data?.workEntitlementLocked === false)
-    );
-  } catch {
-    return false;
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
-
-export async function isSharedLocalHostPcProtectedForAccount(opts?: {
-  accountEmail?: string;
-  isOwnHostSubscriptionExpired?: boolean;
-}): Promise<boolean> {
-  if (hasAnotherUnlockedWorkHostInBrowserStorage(opts?.accountEmail)) {
-    return true;
-  }
-  if (!zCoreBridge.isConnected) return false;
-  if (opts?.isOwnHostSubscriptionExpired) {
-    return false;
-  }
-  return isLocalZCoreHostTunnelActive();
-}
+import {
+  isLocalPcBlockedByOtherAccount,
+  releaseLocalPcAccountOwner,
+} from './pcSingleAccountGuard';
 
 export function clearWorkRoomLocalCachesOnLogout(): void {
   const prevEmail = resolveCurrentWorkAccountEmail();
   activeHostTunnelSession = null;
   if (typeof window === 'undefined') return;
-  if (zCoreBridge.isConnected && prevEmail && prevEmail !== 'anonymous') {
-    void fetch(getZCoreUrl('/__work/entitlement'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        unlocked: false,
-        email: prevEmail,
-        roomId: '',
-        isHost: false,
-        explicitLogout: true,
-      }),
-    }).catch(() => null);
+  if (prevEmail && prevEmail !== 'anonymous') {
+    void releaseLocalPcAccountOwner(prevEmail);
   }
   try {
     localStorage.removeItem('ghosti_my_work_room_meta_v1');
@@ -943,30 +851,21 @@ export async function mountWorkSDriveNative(opts?: {
   openExplorer?: boolean;
   targetDir?: string;
   accountEmail?: string;
-  isOwnHostSubscriptionExpired?: boolean;
 }): Promise<{
   ok: boolean;
   cancelled?: boolean;
   mounted?: boolean;
-  sharedHostProtected?: boolean;
   driveLetter?: string;
   targetDir?: string;
   isCustomTarget?: boolean;
   message?: string;
 }> {
-  if (opts?.action === 'unmount') {
-    const protectHost = await isSharedLocalHostPcProtectedForAccount({
-      accountEmail: opts.accountEmail,
-      isOwnHostSubscriptionExpired: opts.isOwnHostSubscriptionExpired,
-    });
-    if (protectHost) {
-      return {
-        ok: true,
-        mounted: true,
-        sharedHostProtected: true,
-        message: '동일 PC에서 방장 업무 공유(S: 드라이브)가 가동 중이므로 탐색기 S: 드라이브를 그대로 유지했습니다.',
-      };
-    }
+  if (isLocalPcBlockedByOtherAccount()) {
+    return {
+      ok: false,
+      mounted: false,
+      message: '현재 이 PC는 다른 계정에 연결되어 있습니다. 한 PC에서는 한 번에 하나의 계정만 사용할 수 있습니다.',
+    };
   }
   const url = resolveWorkApiUrl('/__work/s-drive');
   if (!url) return { ok: false };

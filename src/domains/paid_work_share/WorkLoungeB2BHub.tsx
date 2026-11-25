@@ -10,6 +10,7 @@ import {
   activateDevicePlanPersistent,
   syncEntitlementToLocalPcEngine,
 } from '../../services/deviceIntegrationService';
+import { isLocalPcBlockedByOtherAccount } from '../../services/pcSingleAccountGuard';
 import {
   acceptWorkRoomInvite,
   cacheWorkRoomPreviewLocally,
@@ -29,8 +30,6 @@ import {
   fetchWorkRoomAuthedState,
   fetchWorkRoomCloudPreview,
   getActiveHostTunnelSession,
-  isLocalZCoreHostTunnelActive,
-  isSharedLocalHostPcProtectedForAccount,
   loadCachedWorkRoomPreview,
   loadCachedWorkTombstones,
   lookupWorkTombstone,
@@ -366,24 +365,17 @@ export const WorkLoungeB2BHub: React.FC = () => {
         savePendingKickedWorkRoomNotice(roomTitleHint, cleanEmail || undefined);
         setKickedFromRoomTitle(roomTitleHint);
       }
-      if (zCoreBridge.isConnected && !isOwnWorkUnlocked) {
-        void isSharedLocalHostPcProtectedForAccount({
+      if (zCoreBridge.isConnected && !isOwnWorkUnlocked && !isLocalPcBlockedByOtherAccount()) {
+        void syncEntitlementToLocalPcEngine(deviceEntitlement || null, cleanEmail || undefined, {
+          unlocked: false,
+          roomId: '',
+          isHost: false,
+          force: true,
+        });
+        void mountWorkSDriveNative({
+          action: 'unmount',
+          openExplorer: false,
           accountEmail: cleanEmail || undefined,
-          isOwnHostSubscriptionExpired: false,
-        }).then((protectHostPc) => {
-          if (protectHostPc) return;
-          void syncEntitlementToLocalPcEngine(deviceEntitlement || null, cleanEmail || undefined, {
-            unlocked: false,
-            roomId: '',
-            isHost: false,
-            force: true,
-          });
-          void mountWorkSDriveNative({
-            action: 'unmount',
-            openExplorer: false,
-            accountEmail: cleanEmail || undefined,
-            isOwnHostSubscriptionExpired: false,
-          });
         });
       }
       if (notifyToast && !roomTitleHint) {
@@ -981,6 +973,12 @@ export const WorkLoungeB2BHub: React.FC = () => {
     ) {
       let cancelled = false;
       const syncAndMount = async () => {
+        if (isLocalPcBlockedByOtherAccount()) {
+          setSDriveMounted(false);
+          localDocsRef.current = [];
+          setLocalDocs([]);
+          return;
+        }
         // 로그인된 초대 팀원이 첫 진입 시 소속 업무방 조회(fetchMyJoinedWorkRooms) 완료 전에 오잠금/해제되는 현상 방지
         if (!isWorkUnlocked && isAuthenticated && isCheckingJoinedRooms) {
           return;
@@ -999,15 +997,13 @@ export const WorkLoungeB2BHub: React.FC = () => {
             }
           );
         }
-        if (cancelled) return;
+        if (cancelled || isLocalPcBlockedByOtherAccount()) return;
         if (isWorkUnlocked) {
-          if (isJoinedInvitedMember && (await isLocalZCoreHostTunnelActive())) {
-            if (cancelled) return;
-            setSDriveMounted(true);
-            void syncRealWorkFiles();
-            return;
-          }
-          const mRes = await mountWorkSDriveNative({ action: 'mount', openExplorer: false });
+          const mRes = await mountWorkSDriveNative({
+            action: 'mount',
+            openExplorer: false,
+            accountEmail: merlinAuth?.email || undefined,
+          });
           if (cancelled) return;
           if (mRes.ok) {
             setSDriveMounted(Boolean(mRes.mounted));
@@ -1015,17 +1011,14 @@ export const WorkLoungeB2BHub: React.FC = () => {
           }
           void syncRealWorkFiles();
         } else {
-          // 만료/미개통 상태: 본인 방장 구독 만료 시에만 S: 드라이브 연결 해제(동일 PC 방장 가동 중이면 S: 보호!)
+          // 만료/미개통 상태: 현재 단독 점유 계정의 S: 드라이브 연결 해제(폴더 내 원본 목록은 본인 만료 시에만 열람·보존)
           const isOwnHostSubscriptionExpired = Boolean(
-            readCachedMyWorkRoomMeta(merlinAuth?.email || undefined)?.roomId &&
-              deviceEntitlement?.workTrialExpired &&
-              !isOwnWorkUnlocked
+            deviceEntitlement?.workTrialExpired && !isOwnWorkUnlocked
           );
           const mRes = await mountWorkSDriveNative({
             action: 'unmount',
             openExplorer: false,
             accountEmail: merlinAuth?.email || undefined,
-            isOwnHostSubscriptionExpired,
           });
           if (cancelled) return;
           setSDriveMounted(false);

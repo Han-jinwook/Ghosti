@@ -126,22 +126,67 @@ if "--ppocr-worker" in sys.argv:
 # 무거운 서버 플러그인 8종(plugin_ghosti_os, plugin_senstalk, plugin_aggrofilter 등) import를 100% 생략하여 초기 기동 지연을 원천 차단!
 _early_argv = sys.argv[1:]
 if "--seq-paste-daemon" in _early_argv:
-    # [영구 충돌 방지] --seq-paste-daemon 단일 인스턴스 Windows Named Mutex 강제
-    # 어떤 경우에도 전역 키보드/클립보드 후킹이 2중으로 걸리지 않도록 원천 차단
+    # [영구 충돌 방지 + Hang 자폭 무중단 승계] --seq-paste-daemon 단일 인스턴스 Windows Named Mutex
+    # - 기존 살아있는 정상(PONG) 데몬이 있으면 중복 실행을 즉시 차단(os._exit(0))
+    # - 반대로 직전 데몬이 Hang 자폭·교체 중(PONG 불응 또는 --replace)이면 즉시 자살하지 않고
+    #   최대 2.5초 WaitForSingleObject로 뮤텍스 반납을 기다려 0초 공백으로 승계합니다.
     _seq_paste_mutex = None
     if os.name == "nt":
         try:
             import ctypes as _ct_sp
+            import socket as _sock_sp
 
             _k32_sp = _ct_sp.windll.kernel32
-            _seq_paste_mutex = _k32_sp.CreateMutexW(None, True, "Local\\Merlin_SeqPaste_SingleInstance")
-            if _k32_sp.GetLastError() == 183:  # ERROR_ALREADY_EXISTS
-                os._exit(0)
+            _k32_sp.CreateMutexW.argtypes = [_ct_sp.c_void_p, _ct_sp.c_int, _ct_sp.c_wchar_p]
+            _k32_sp.CreateMutexW.restype = _ct_sp.c_void_p
+            _k32_sp.WaitForSingleObject.argtypes = [_ct_sp.c_void_p, _ct_sp.c_uint32]
+            _k32_sp.WaitForSingleObject.restype = _ct_sp.c_uint32
+            _k32_sp.CloseHandle.argtypes = [_ct_sp.c_void_p]
+            _k32_sp.CloseHandle.restype = _ct_sp.c_int
+            _seq_paste_mutex = _k32_sp.CreateMutexW(None, 0, "Local\\Merlin_SeqPaste_SingleInstance")
+            if _seq_paste_mutex:
+                _w_res = _k32_sp.WaitForSingleObject(_seq_paste_mutex, 0)
+                if _w_res not in (0, 0x80):  # WAIT_OBJECT_0, WAIT_ABANDONED
+                    _want_rep = "--replace" in _early_argv
+                    _alive_pong = False
+                    if not _want_rep:
+                        try:
+                            with _sock_sp.create_connection(("127.0.0.1", 51988), timeout=0.45) as _sc_sp:
+                                _sc_sp.settimeout(0.55)
+                                _sc_sp.sendall(b"__PING__")
+                                if b"PONG" in _sc_sp.recv(64):
+                                    _alive_pong = True
+                        except Exception:
+                            _alive_pong = False
+                    if _alive_pong:
+                        try:
+                            _k32_sp.CloseHandle(_seq_paste_mutex)
+                        except Exception:
+                            pass
+                        os._exit(0)
+                    # 직전 프로세스가 자폭/종료 중이면 최대 2.5초 대기 후 뮤텍스 승계
+                    _w_res2 = _k32_sp.WaitForSingleObject(_seq_paste_mutex, 2500)
+                    if _w_res2 not in (0, 0x80):
+                        # 2.5초 후에도 여전히 정상 PONG 중이면 중복 진입 포기
+                        try:
+                            with _sock_sp.create_connection(("127.0.0.1", 51988), timeout=0.45) as _sc_sp2:
+                                _sc_sp2.settimeout(0.55)
+                                _sc_sp2.sendall(b"__PING__")
+                                if b"PONG" in _sc_sp2.recv(64):
+                                    _k32_sp.CloseHandle(_seq_paste_mutex)
+                                    os._exit(0)
+                        except Exception:
+                            pass
         except Exception:
             pass
     sys.argv = [sys.argv[0]] + [a for a in _early_argv if a != "--seq-paste-daemon"]
     import seq_paste_daemon
 
+    if _seq_paste_mutex and hasattr(seq_paste_daemon, "set_single_instance_mutex_handle"):
+        try:
+            seq_paste_daemon.set_single_instance_mutex_handle(int(_seq_paste_mutex))
+        except Exception:
+            pass
     seq_paste_daemon.main()
     sys.exit(0)
 
@@ -174,7 +219,7 @@ import plugin_ghosti_superpowers  # noqa: E402
 from plugins import plugin_paid_work_sdrive  # noqa: E402
 from plugins import plugin_paid_sync_ghostwin  # noqa: E402
 
-CORE_VERSION = "2.8.01"
+CORE_VERSION = "2.8.99"
 STANDARD_PORT = 5199
 _BUNDLE_DIR = Path(getattr(sys, "_MEIPASS", str(THIS_DIR)))
 TRAY_ICON_ICO = (_BUNDLE_DIR / "favicon.ico") if (_BUNDLE_DIR / "favicon.ico").exists() else (THIS_DIR / "favicon.ico")
@@ -316,6 +361,17 @@ def remove_win32_tray_icon() -> None:
 
 class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
     protocol_version = "HTTP/1.1"
+    # [CloseWait 소켓 수백 개 누적 & 커널 좀비 원천 박멸]:
+    # HTTP/1.1 Keep-Alive 무기한 블로킹을 차단해 요청 완료 즉시 소켓을 OS에 반납하고, 유휴 소켓도 15초 내 강제 회수!
+    timeout = 15.0
+
+    def setup(self) -> None:
+        super().setup()
+        self.close_connection = True
+        try:
+            self.request.settimeout(15.0)
+        except Exception:
+            pass
 
     def log_message(self, format: str, *args: Any) -> None:
         return
@@ -752,11 +808,26 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 return
             remove_win32_tray_icon()
             self._send_json({"ok": True, "message": "Merlin_Z_Core shutting down", "version": CORE_VERSION})
-            threading.Thread(target=lambda: (time.sleep(0.15), os._exit(0)), daemon=True).start()
+            def _graceful_exit_get() -> None:
+                time.sleep(0.12)
+                try:
+                    plugin_ghosti_superpowers.shutdown_superpower_daemon_for_update()
+                except Exception:
+                    pass
+                try:
+                    self.server.server_close()
+                except Exception:
+                    pass
+                os._exit(0)
+            threading.Thread(target=_graceful_exit_get, daemon=True).start()
             return
 
         # 외부 악성 사이트(<img src>, <video src>, <script>, cross-site fetch)가 내 PC 파일·사진·보안 API를 조회/조작하는 것을 일괄 차단
         if self._reject_untrusted():
+            return
+
+        if path in ("/__merlin/account-owner", "/api/merlin/account-owner"):
+            self._send_json(plugin_paid_work_sdrive.handle_pc_account_owner({"action": "status", **qp}))
             return
 
         # [귀신같이 내 PC 전수 인덱싱 API: 사진 / 서류 / 동영상]
@@ -1056,7 +1127,18 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
                 return
             remove_win32_tray_icon()
             self._send_json({"ok": True, "message": "Merlin_Z_Core shutting down", "version": CORE_VERSION})
-            threading.Thread(target=lambda: (time.sleep(0.15), os._exit(0)), daemon=True).start()
+            def _graceful_exit_get() -> None:
+                time.sleep(0.12)
+                try:
+                    plugin_ghosti_superpowers.shutdown_superpower_daemon_for_update()
+                except Exception:
+                    pass
+                try:
+                    self.server.server_close()
+                except Exception:
+                    pass
+                os._exit(0)
+            threading.Thread(target=_graceful_exit_get, daemon=True).start()
             return
 
         if path in ("/__merlin/ self-update", "/__merlin/self-update", "/__zcore/self-update"):
@@ -1069,6 +1151,12 @@ class MerlinUnifiedHTTPHandler(BaseHTTPRequestHandler):
             if self._reject_untrusted():
                 return
             self._send_json(plugin_ghosti_os.get_photo_thumbs_batch(body))
+            return
+
+        if path in ("/__merlin/account-owner", "/api/merlin/account-owner"):
+            if self._reject_untrusted():
+                return
+            self._send_json(plugin_paid_work_sdrive.handle_pc_account_owner(body))
             return
 
         if path == "/__merlin/query":
@@ -1449,6 +1537,20 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
             "version": CORE_VERSION,
         }
 
+    # [원격 스테이징 배포 중 상호 배제]: SSH 무중단 배포(staging.zip / staging.exe 존재 & 180초 이내) 중이면 자가업데이트 양보
+    try:
+        _exe_dir = Path(sys.executable).resolve().parent
+        for _st_name in ("Merlin_Z_Core.staging.zip", "Merlin_Z_Core_Setup.staging.exe"):
+            _staging_p = _exe_dir / _st_name
+            if _staging_p.exists() and (time.time() - _staging_p.stat().st_mtime) < 180.0:
+                return {
+                    "ok": True,
+                    "status": "SKIPPED_REMOTE_STAGING_ACTIVE",
+                    "version": CORE_VERSION,
+                }
+    except Exception:
+        pass
+
     if _SELF_UPDATE_IN_PROGRESS:
         return {
             "ok": True,
@@ -1490,31 +1592,46 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
                 zip_bytes = resp.read()
             zip_path.write_bytes(zip_bytes)
 
-            extracted_exe: Path | None = None
+            import shutil as _shutil_u
+
+            extract_root = update_dir / "extracted"
+            if extract_root.exists():
+                _shutil_u.rmtree(extract_root, ignore_errors=True)
+            extract_root.mkdir(parents=True, exist_ok=True)
             with zipfile.ZipFile(zip_path, "r") as zf:
-                for member in zf.namelist():
-                    if member.lower().endswith(".exe"):
-                        zf.extract(member, update_dir)
-                        extracted_exe = (update_dir / member).resolve()
+                zf.extractall(extract_root)
+
+            extracted_exe: Path | None = None
+            direct_cand = extract_root / "Merlin_Z_Core_Setup.exe"
+            if direct_cand.exists():
+                extracted_exe = direct_cand.resolve()
+            else:
+                for _cand in extract_root.rglob("*.exe"):
+                    if _cand.name.lower() == "merlin_z_core_setup.exe":
+                        extracted_exe = _cand.resolve()
                         break
 
             if not extracted_exe or not extracted_exe.exists():
                 _SELF_UPDATE_IN_PROGRESS = False
                 return
 
-            # [무한 자살 루프 방어 1]: 다운로드된 ZIP 내 exe가 현재 실행 중인 exe와 바이트 단위로 동일하면 종료·교체를 수행하지 않음
-            try:
-                import hashlib
+            extracted_internal = extracted_exe.parent / "_internal"
+            is_onedir_update = extracted_internal.is_dir()
 
-                if (
-                    current_exe.exists()
-                    and hashlib.sha256(extracted_exe.read_bytes()).hexdigest()
-                    == hashlib.sha256(current_exe.read_bytes()).hexdigest()
-                ):
-                    _SELF_UPDATE_IN_PROGRESS = False
-                    return
-            except Exception:
-                pass
+            # [무한 자살 루프 방어 1]: 구형 단일 exe 모드일 때 동일 바이트면 즉시 중단
+            if not is_onedir_update:
+                try:
+                    import hashlib
+
+                    if (
+                        current_exe.exists()
+                        and hashlib.sha256(extracted_exe.read_bytes()).hexdigest()
+                        == hashlib.sha256(current_exe.read_bytes()).hexdigest()
+                    ):
+                        _SELF_UPDATE_IN_PROGRESS = False
+                        return
+                except Exception:
+                    pass
 
             # [무한 자살 & 깨진 바이너리 방어 2]: 교체 전 extracted_exe --selftest를 실행하여
             # 1) NameError 등 크래시 없이 정상 실행되는지 확인하고,
@@ -1545,21 +1662,38 @@ def trigger_silent_self_update(body: Dict[str, Any] | None = None) -> Dict[str, 
                 _SELF_UPDATE_IN_PROGRESS = False
                 return
 
-            # PyInstaller 부모 부트로더(_MEI 정리) 파일 잠금이 해제될 때까지 최대 15초 재시도 후 무소음 교체·재기동
+            # Chrome/VSCode 정공법 Rename-Aside: 실행 중/좀비 잠금 파일·_internal 폴더도 옆으로 이름 변경 후 즉시 배치 + 인터랙티브 재기동
             bat_path = update_dir / "updater.bat"
+            ts_tag = int(time.time())
+            zombie_name = f"{current_exe.name}.zombie_{ts_tag}.tmp"
+            zombie_int_name = f"_internal.zombie_{ts_tag}"
+            cur_internal = current_exe.parent / "_internal"
+            internal_swap_block = ""
+            if is_onedir_update:
+                internal_swap_block = (
+                    f'  if exist "{cur_internal}" ren "{cur_internal}" "{zombie_int_name}" > NUL 2>&1\r\n'
+                    f'  if exist "{extracted_internal}" (move /y "{extracted_internal}" "{cur_internal}" > NUL 2>&1 || robocopy "{extracted_internal}" "{cur_internal}" /E /MOVE /NFL /NDL /NJH /NJS /NC /NS > NUL 2>&1)\r\n'
+                )
             bat_content = (
                 "@echo off\r\n"
                 "setlocal\r\n"
                 'set "_MEIPASS2="\r\n'
                 'set "_MEIPASS="\r\n'
-                "timeout /t 2 /nobreak > NUL\r\n"
-                "for /L %%i in (1,1,15) do (\r\n"
-                f'  copy /y "{extracted_exe}" "{current_exe}" > NUL 2>&1 && goto :LAUNCH\r\n'
+                "timeout /t 1 /nobreak > NUL\r\n"
+                "taskkill /F /T /IM Merlin_Z_Core_Setup.exe > NUL 2>&1\r\n"
+                f'del /f /q "{current_exe.parent}\\*.zombie_*.tmp" > NUL 2>&1\r\n'
+                "for /L %%i in (1,1,10) do (\r\n"
+                f'  if exist "{current_exe}" ren "{current_exe}" "{zombie_name}" > NUL 2>&1\r\n'
+                + internal_swap_block
+                + f'  move /y "{extracted_exe}" "{current_exe}" > NUL 2>&1 && goto :LAUNCH\r\n'
+                "  taskkill /F /T /IM Merlin_Z_Core_Setup.exe > NUL 2>&1\r\n"
                 "  timeout /t 1 /nobreak > NUL\r\n"
                 ")\r\n"
                 ":LAUNCH\r\n"
-                f'del /f /q "{extracted_exe}" > NUL 2>&1\r\n'
-                f'start "" "{current_exe}" --replace\r\n'
+                f'del /f /q "{current_exe.parent}\\*.zombie_*.tmp" > NUL 2>&1\r\n'
+                f'rmdir /s /q "{current_exe.parent}\\{zombie_int_name}" > NUL 2>&1\r\n'
+                f'rmdir /s /q "{extract_root}" > NUL 2>&1\r\n'
+                'schtasks /run /tn "StartMerlinZCore5199" > NUL 2>&1 || start "" "' + str(current_exe) + '" --replace\r\n'
                 'del "%~f0"\r\n'
             )
             bat_path.write_text(bat_content, encoding="mbcs", errors="replace")
@@ -2196,7 +2330,13 @@ def main() -> None:
     start_win32_tray_icon(args.port, replaced_pids=replaced_pids)
 
     def _start_auxiliary_watchers() -> None:
-        # [0순위 기동]: 귀신창 데몬(51988)을 가장 먼저 즉시 기동하여 Z-코어 실행 직후 첫 Ctrl+0 / Ctrl+우클릭 대기시간을 최소화!
+        # [진짜 0순위 0.1초 즉시 기동]: 귀신창 데몬(51988, In-Process)을 _self_purge_legacy_conflicts(10초 WMI 스캔)보다
+        # 가장 먼저 0.1초 만에 기동하여 Z-코어 실행 직후 첫 Ctrl+0 / Ctrl+우클릭 대기시간을 0초대로 단축!
+        try:
+            plugin_ghosti_superpowers.ensure_superpower_daemon_running()
+            plugin_ghosti_superpowers.start_superpower_daemon_watchdog(lambda: _SELF_UPDATE_IN_PROGRESS)
+        except Exception:
+            pass
         if getattr(sys, "frozen", False):
             try:
                 w32.ensure_persistent_frozen_install()
@@ -2205,11 +2345,6 @@ def main() -> None:
         # [구형 찌꺼기 자동 숙청]: 구형 seq_paste_daemon.py 및 중복 작업 스케줄러 정리 (SenseTalk_Engine.exe 제외)
         try:
             _self_purge_legacy_conflicts()
-        except Exception:
-            pass
-        try:
-            plugin_ghosti_superpowers.ensure_superpower_daemon_running()
-            plugin_ghosti_superpowers.start_superpower_daemon_watchdog(lambda: _SELF_UPDATE_IN_PROGRESS)
         except Exception:
             pass
         if getattr(sys, "frozen", False):
