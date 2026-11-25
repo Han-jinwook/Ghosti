@@ -4317,24 +4317,38 @@ def _toast_worker() -> None:
         global _CURRENT_OPEN_WIN_HWND
         win.geometry(f"{rw}x{rh}{x:+d}{y:+d}")
         try:
-            win.update_idletasks()
+            win.attributes("-topmost", True)
             win.deiconify()
+            win.update_idletasks()
             wid = win.winfo_id()
             hwnd_t = u32.GetParent(wid) or wid if wid else 0
             if hwnd_t:
                 _CURRENT_OPEN_WIN_HWND = int(hwnd_t)
                 ex_st = u32.GetWindowLongW(hwnd_t, GWL_EXSTYLE)
+                SWP_FRAMECHANGED = 0x0020
                 if activate:
                     u32.SetWindowLongW(hwnd_t, GWL_EXSTYLE, (ex_st & ~WS_EX_NOACTIVATE) | WS_EX_TOPMOST | WS_EX_TOOLWINDOW)
-                    u32.SetWindowPos(hwnd_t, HWND_TOPMOST, x, y, rw, rh, SWP_SHOWWINDOW)
-                    u32.SetForegroundWindow(hwnd_t)
+                    u32.ShowWindow(hwnd_t, 5)  # SW_SHOW
+                    u32.SetWindowPos(hwnd_t, HWND_TOPMOST, x, y, rw, rh, SWP_FRAMECHANGED | SWP_SHOWWINDOW)
+                    u32.BringWindowToTop(hwnd_t)
+                    # [Windows Foreground Lock 100% 돌파]: 단순 SetForegroundWindow는 크롬·노션·탐색기 위에서
+                    # 무시되어 "소리만 나고 창이 뒤로 숨는" 버그를 유발하므로 AttachThreadInput 기반 강제 활성 사용!
+                    if not _focus_hwnd_reliable(hwnd_t):
+                        u32.SetForegroundWindow(hwnd_t)
                 else:
                     u32.SetWindowLongW(hwnd_t, GWL_EXSTYLE, ex_st | WS_EX_NOACTIVATE | WS_EX_TOPMOST | WS_EX_TOOLWINDOW)
-                    u32.SetWindowPos(hwnd_t, HWND_TOPMOST, x, y, rw, rh, SWP_NOACTIVATE | SWP_SHOWWINDOW)
+                    u32.ShowWindow(hwnd_t, 4)  # SW_SHOWNOACTIVATE
+                    u32.SetWindowPos(hwnd_t, HWND_TOPMOST, x, y, rw, rh, SWP_NOACTIVATE | SWP_FRAMECHANGED | SWP_SHOWWINDOW)
         except Exception:
             pass
-        win.lift()
+        try:
+            win.lift()
+            win.update()
+        except Exception:
+            pass
         win_rect[0] = (x, y, x + rw, y + rh)
+        opened_at[0] = time.time()
+        was_mouse_down[0] = True
 
     # =================================================================
     # [창 UI ②] 👻 귀신검색창 (Ghosti 본진 전담 모듈 ghost_search_window_ui2 우선 위임 + 내장 폴백)
@@ -5004,7 +5018,10 @@ def _toast_worker() -> None:
             rbtn_down = (u32.GetAsyncKeyState(0x02) & 0x8000) != 0
             ctrl_held = (u32.GetAsyncKeyState(VK_CONTROL) & 0x8000) != 0
             esc_down = (u32.GetAsyncKeyState(0x1B) & 0x8000) != 0
-            # Ctrl+우클릭 재호출 토글은 보호하면서, Ctrl 없는 일반 바깥 우클릭(Pass-through) 및 좌클릭 시 즉시 창을 닫음
+            # [Ctrl+우클릭 릴리즈 오판 닫힘 원천 차단]:
+            # Ctrl+우클릭 소환 직후 유저가 Ctrl을 마우스 우클릭보다 먼저 떼더라도(rbtn_down 유지)
+            # 외부 클릭으로 오인해 창을 닫지 않도록, '신규 눌림' 상태만 추적합니다.
+            phys_any_btn = lbtn_down or rbtn_down
             mouse_down = lbtn_down or (rbtn_down and not ctrl_held)
             if current_win[0] is not None:
                 pt_click = wintypes.POINT()
@@ -5020,10 +5037,10 @@ def _toast_worker() -> None:
                         _close_win()
                         _CLICKED_SUPERPOWER_QUEUE.put(("disarm_only", 0))
                 elif mouse_down and not was_mouse_down[0]:
-                    if (time.time() - opened_at[0]) > 0.45 and not inside_rect:
+                    if (time.time() - opened_at[0]) > 0.65 and not inside_rect:
                         _close_win()
                         _CLICKED_SUPERPOWER_QUEUE.put(("disarm_only", 0))
-            was_mouse_down[0] = mouse_down
+            was_mouse_down[0] = phys_any_btn
 
             msg_item = None
             need_lift = False
@@ -5489,7 +5506,15 @@ def _toast_worker() -> None:
                         y = max(m_top + 12, min(pt.y + 16, m_bottom - req_h - 16))
                         _apply_win_topmost(win, x, y, req_w, req_h, activate=False)
                         _schedule_close(duration_ms)
-        except Exception:
+        except Exception as _ui_exc:
+            try:
+                import traceback as _tb_ui
+                err_log_p = _MERLIN_APPDATA / "ui2_error.log"
+                err_log_p.parent.mkdir(parents=True, exist_ok=True)
+                with open(err_log_p, "a", encoding="utf-8", errors="ignore") as _ef:
+                    _ef.write(f"\n[{time.strftime('%Y-%m-%d %H:%M:%S')}] {_ui_exc}\n{_tb_ui.format_exc()}\n")
+            except Exception:
+                pass
             try:
                 _close_win()
             except Exception:
@@ -9578,6 +9603,10 @@ def main(in_process: bool = False) -> None:
         # 무조건 '👻 귀신검색창(UI ②)'이 기본으로 열립니다! (탐색기에서 압축파일 선택 시에만 알집 대체 UI ④ 오픈)
         if not is_ghostkey_active_mode():
             if _is_ui_window_actually_open() and _CURRENT_OPEN_UI_MODE in ("ui2", "ui3", "ui4", "ui1"):
+                # 방금 열린 지 0.45초 미만(연속 키바운스·이중 감지)이면 닫지 않고 최상단 전면 복원만 수행!
+                if (now_s - last_summon_ts) < 0.45:
+                    show_ghost_toast("__LIFT__", duration_ms=0)
+                    return
                 disarm_sub_hotkeys()
                 close_ghost_toast()
                 return
