@@ -451,8 +451,10 @@ export interface PhotoItem {
   sharedFamilyRoom?: FamilyRoomId;
   /** [방식 A] Supabase 정식 공유방 ID (room_id 격리 키) */
   sharedRoomId?: string;
-  /** [방식 A] 업로더 계정 이메일 (로그인 멤버 조회 시에만 사용, 무가입 프리뷰에서는 비노출) */
+  /** [방식 A] 로컬 금고 격리용 현재 로그인 계정 이메일 */
   sharedOwnerEmail?: string;
+  /** [방식 A] 실제 사진을 올린 업로더 이메일 (삭제 권한 판별 SSOT) */
+  sharedUploaderEmail?: string;
   /** [방식 A] Supabase ghosti_room_shared_photos.id (UUID) */
   sharedSupabasePhotoId?: string;
   /** [동호회·동창회 하위 탭 분리] 정식 피드 트랙 ('recent_now' | 'memories_1989') */

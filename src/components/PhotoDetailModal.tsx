@@ -180,6 +180,8 @@ export const PhotoDetailModal: React.FC = () => {
     triggerGuestJoinWall,
     activeLoungeType,
     activeFamilyRoom,
+    activeJoinedRoomMeta,
+    merlinAuth,
     sharedRoomHostPhotos,
     sharedRoomAddedPhotos,
     sharedRoomSoftDeletedMap,
@@ -207,6 +209,15 @@ export const PhotoDetailModal: React.FC = () => {
     activeLoungeType === 'student';
   const isHiddenInLounge = Boolean(
     selectedPhoto && (sharedRoomSoftDeletedMap[selectedPhoto.id] || selectedPhoto.quarantined)
+  );
+  const canHideOrDeleteInSharedLounge = Boolean(
+    isSharedLounge &&
+      selectedPhoto &&
+      (!activeJoinedRoomMeta ||
+        (Boolean(merlinAuth?.email) &&
+          Boolean(selectedPhoto.sharedUploaderEmail) &&
+          selectedPhoto.sharedUploaderEmail?.toLowerCase() ===
+            merlinAuth.email.trim().toLowerCase()))
   );
 
   const photoNavContext = useMemo(() => {
@@ -504,7 +515,7 @@ export const PhotoDetailModal: React.FC = () => {
               <span>원본 저장</span>
             </a>
 
-            {isSharedLounge && (
+            {canHideOrDeleteInSharedLounge && (
               <>
                 <button
                   type="button"
@@ -515,7 +526,10 @@ export const PhotoDetailModal: React.FC = () => {
                         `'${selectedPhoto.name}' 사진의 숨김을 해제해 공유방 앨범으로 복원했습니다.`
                       );
                     } else {
-                      softDeleteSharedRoomPhoto24h(selectedPhoto.id, 'host_hide');
+                      softDeleteSharedRoomPhoto24h(
+                        selectedPhoto.id,
+                        activeJoinedRoomMeta ? 'uploader_24h' : 'host_hide'
+                      );
                       setActionNotice(
                         `'${selectedPhoto.name}' 사진을 공유방 목록에서 숨겨 [공유방 휴지통 · 숨긴 사진함]으로 옮겼습니다. [숨긴 사진함 바로가기]에서 언제든 확인하고 숨김 해제할 수 있습니다.`
                       );

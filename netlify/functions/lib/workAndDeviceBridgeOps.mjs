@@ -2531,21 +2531,34 @@ export async function handleAuthedWorkAndDeviceAction({
     let sanitizedClientNick =
       rawMasterNick && !genericLabels.has(rawMasterNick) ? rawMasterNick : '';
 
-    // 타 계정 별명('ㅇㄴ' 등)이 구버전 클라이언트 캐시로 넘어온 경우 public.users 대조로 원천 배제
-    if (sanitizedClientNick && sanitizedClientNick !== verifiedHubNick) {
-      try {
-        const otherRes = await fetch(
-          `${supabaseUrl}/rest/v1/users?nickname=eq.${encodeURIComponent(
-            sanitizedClientNick
-          )}&email=neq.${encodeURIComponent(email)}&select=id&limit=1`,
-          { headers: srvHeaders(serviceKey) }
-        );
-        const otherRows = otherRes.ok ? await otherRes.json().catch(() => []) : [];
-        if (Array.isArray(otherRows) && otherRows.length > 0) {
-          sanitizedClientNick = '';
-        }
-      } catch {
-        /* ignore lookup failure */
+    // 독립적인 초기 3개 조회(타 계정 별명 충돌 · 내 방 목록 · 내 합류 멤버십)를 병렬 실행하여 모바일 사진공유 탭 첫 로딩 지연 단축
+    const [otherRes, existRoomsRes, preMemRowsRes] = await Promise.all([
+      sanitizedClientNick && sanitizedClientNick !== verifiedHubNick
+        ? fetch(
+            `${supabaseUrl}/rest/v1/users?nickname=eq.${encodeURIComponent(
+              sanitizedClientNick
+            )}&email=neq.${encodeURIComponent(email)}&select=id&limit=1`,
+            { headers: srvHeaders(serviceKey) }
+          ).catch(() => null)
+        : Promise.resolve(null),
+      fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?master_email=eq.${encodeURIComponent(
+          email
+        )}&lounge_type=in.(family,club)&order=created_at.asc&limit=30`,
+        { headers: srvHeaders(serviceKey) }
+      ),
+      fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_members?member_email=eq.${encodeURIComponent(
+          email
+        )}&select=room_id,role&limit=60`,
+        { headers: srvHeaders(serviceKey) }
+      ).catch(() => null),
+    ]);
+
+    if (otherRes && otherRes.ok) {
+      const otherRows = await otherRes.json().catch(() => []);
+      if (Array.isArray(otherRows) && otherRows.length > 0) {
+        sanitizedClientNick = '';
       }
     }
 
@@ -2566,12 +2579,6 @@ export async function handleAuthedWorkAndDeviceAction({
       standardRoomSpecs.push({ lt: dbLoungeType, st: dbSubType, defaultTitle: roomTitle });
     }
 
-    const existRoomsRes = await fetch(
-      `${supabaseUrl}/rest/v1/ghosti_lounge_rooms?master_email=eq.${encodeURIComponent(
-        email
-      )}&lounge_type=in.(family,club)&order=created_at.asc&limit=30`,
-      { headers: srvHeaders(serviceKey) }
-    );
     const existRoomRows = existRoomsRes.ok ? await existRoomsRes.json().catch(() => []) : [];
     const existingRoomByKey = new Map();
     if (Array.isArray(existRoomRows)) {
@@ -2651,23 +2658,24 @@ export async function handleAuthedWorkAndDeviceAction({
       room_persona_nickname: effectiveMasterNick,
     }));
 
-    // 방장 본인의 room_persona_nickname을 항상 최신 계정 별명으로 일괄 동기화
-    await fetch(`${supabaseUrl}/rest/v1/ghosti_lounge_members?on_conflict=room_id,member_email`, {
-      method: 'POST',
-      headers: srvHeaders(serviceKey, {
-        'Content-Type': 'application/json',
-        Prefer: 'resolution=merge-duplicates,return=minimal',
-      }),
-      body: JSON.stringify(masterMemberPayloads),
-    });
-
     const inMyRoomClause = allMyRoomIds.map((id) => `"${id.replace(/"/g, '')}"`).join(',');
-    const invRes = await fetch(
-      `${supabaseUrl}/rest/v1/ghosti_room_invites?room_id=in.(${encodeURIComponent(
-        inMyRoomClause
-      )})&revoked_at=is.null&order=created_at.desc&limit=50`,
-      { headers: srvHeaders(serviceKey) }
-    );
+    // 방장 별명 동기화 Upsert와 내 방 초대 토큰 조회를 병렬 실행
+    const [, invRes] = await Promise.all([
+      fetch(`${supabaseUrl}/rest/v1/ghosti_lounge_members?on_conflict=room_id,member_email`, {
+        method: 'POST',
+        headers: srvHeaders(serviceKey, {
+          'Content-Type': 'application/json',
+          Prefer: 'resolution=merge-duplicates,return=minimal',
+        }),
+        body: JSON.stringify(masterMemberPayloads),
+      }),
+      fetch(
+        `${supabaseUrl}/rest/v1/ghosti_room_invites?room_id=in.(${encodeURIComponent(
+          inMyRoomClause
+        )})&revoked_at=is.null&order=created_at.desc&limit=50`,
+        { headers: srvHeaders(serviceKey) }
+      ),
+    ]);
     const invRows = invRes.ok ? await invRes.json().catch(() => []) : [];
     const activeTokenByRoomId = new Map();
     const nowMs = Date.now();
@@ -2743,13 +2751,15 @@ export async function handleAuthedWorkAndDeviceAction({
     const joinedRooms = [];
     try {
       const myOwnSet = new Set(allMyRoomIds);
-      const memRowsRes = await fetch(
-        `${supabaseUrl}/rest/v1/ghosti_lounge_members?member_email=eq.${encodeURIComponent(
-          email
-        )}&select=room_id,role&limit=60`,
-        { headers: srvHeaders(serviceKey) }
-      );
-      const memRows = memRowsRes.ok ? await memRowsRes.json().catch(() => []) : [];
+      const memRowsRes =
+        preMemRowsRes ||
+        (await fetch(
+          `${supabaseUrl}/rest/v1/ghosti_lounge_members?member_email=eq.${encodeURIComponent(
+            email
+          )}&select=room_id,role&limit=60`,
+          { headers: srvHeaders(serviceKey) }
+        ));
+      const memRows = memRowsRes && memRowsRes.ok ? await memRowsRes.json().catch(() => []) : [];
       const joinedRoomIds = Array.from(
         new Set(
           (Array.isArray(memRows) ? memRows : [])

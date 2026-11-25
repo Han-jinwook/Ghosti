@@ -47,6 +47,8 @@ let sharedRoomSyncSeq = 0;
 let lastDeepLinkHydratedAt = 0;
 let lastCompletedRoomSig = '';
 let lastCompletedRoomAt = 0;
+let inflightRoomSyncSig = '';
+let inflightRoomSyncAt = 0;
 
 const SHARED_ROOM_SOFT_DELETED_STORAGE_KEY = 'ghosti_shared_room_soft_deleted_v1';
 const SHARED_ROOM_STICK_OVERLAY_STORAGE_KEY = 'ghosti_shared_room_stickers_v1';
@@ -1482,6 +1484,9 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
 
   restoreAllSharedRoomTrashPhotos: (photoIds) => {
     if (!photoIds || photoIds.length === 0) return;
+    for (const pid of photoIds) {
+      if (pid) void setSupabaseSharedRoomPhotoHidden(pid, false);
+    }
     const idSet = new Set(photoIds);
     set((state) => {
       const nextSoftDeletedMap = { ...state.sharedRoomSoftDeletedMap };
@@ -2020,12 +2025,21 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     const candidateSig = `${targetLounge}|${targetFamilyRoom}|${explicitRoomId || ''}`;
     if (
       !opts?.forceInviteToken &&
+      candidateSig === inflightRoomSyncSig &&
+      Date.now() - inflightRoomSyncAt < 6000
+    ) {
+      return;
+    }
+    if (
+      !opts?.forceInviteToken &&
       explicitRoomId &&
       candidateSig === lastCompletedRoomSig &&
       Date.now() - lastCompletedRoomAt < 1000
     ) {
       return;
     }
+    inflightRoomSyncSig = candidateSig;
+    inflightRoomSyncAt = Date.now();
     const inviteToken = (opts?.forceInviteToken ?? readActiveInviteToken()).trim();
     const shouldLoadFromRemote = Boolean(inviteToken || hasAuthenticatedHubAccountSession());
 
@@ -2116,6 +2130,10 @@ export const createFreePhotoShareSlice: StateCreator<SaySeeStore, [], [], FreePh
     } finally {
       if (reqSeq === sharedRoomSyncSeq) {
         aiRuntimeFlags.sharedRoomSyncActive = false;
+        if (inflightRoomSyncSig === candidateSig) {
+          inflightRoomSyncSig = '';
+          inflightRoomSyncAt = 0;
+        }
       }
     }
 

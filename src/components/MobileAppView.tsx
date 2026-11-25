@@ -1369,14 +1369,17 @@ export const MobileAppView: React.FC = () => {
                               hasAuthenticatedHubAccountSession() &&
                               (!activeJoinedRoomMeta ||
                                 (Boolean(merlinAuth?.email) &&
-                                  Boolean(item.photo.sharedOwnerEmail) &&
-                                  item.photo.sharedOwnerEmail?.toLowerCase() ===
+                                  Boolean(item.photo.sharedUploaderEmail) &&
+                                  item.photo.sharedUploaderEmail?.toLowerCase() ===
                                     merlinAuth.email.trim().toLowerCase())) && (
                               <button
                                 type="button"
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  softDeleteSharedRoomPhoto24h(item.photo.id, 'uploader_24h');
+                                  softDeleteSharedRoomPhoto24h(
+                                    item.photo.id,
+                                    activeJoinedRoomMeta ? 'uploader_24h' : 'host_hide'
+                                  );
                                 }}
                                 aria-label="공유방에서 삭제"
                                 className="absolute top-2 right-10 z-20 px-2 py-0.5 rounded bg-black/75 hover:bg-rose-600 text-white text-[10.5px] font-semibold cursor-pointer"

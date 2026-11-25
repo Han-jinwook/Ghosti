@@ -51,6 +51,7 @@ interface EnsureRoomRpcResponse {
 interface GuestPreviewPhotoDto {
   id: string;
   roomId: string;
+  uploaderEmail?: string;
   uploaderNickname: string;
   thumbWebpUrl: string;
   captionKo?: string;
@@ -97,6 +98,9 @@ export interface JoinedSharedPhotoRoomInfo {
 const MY_ROOM_TOKEN_SESSION_PREFIX = 'ghosti_my_room_token_v1::';
 const JOINED_ROOMS_SESSION_PREFIX = 'ghosti_joined_rooms_v1::';
 const LEFT_ROOMS_LOCAL_PREFIX = 'ghosti_left_shared_rooms_v1::';
+const ROOM_TOKEN_CACHE_TTL_MS = 24 * 60 * 60 * 1000;
+const JOINED_ROOMS_CACHE_TTL_MS = 12 * 60 * 60 * 1000;
+const JOINED_ROOMS_BG_REVALIDATE_MS = 5 * 60 * 1000;
 
 function readLocallyLeftRoomIdSet(email: string): Set<string> {
   const cleanEmail = (email || '').trim().toLowerCase();
@@ -160,8 +164,14 @@ function saveCachedJoinedRooms(email: string, rooms: JoinedSharedPhotoRoomInfo[]
   const payload = { rooms: filteredRooms, cachedAt: Date.now() };
   joinedRoomsMemoryCache.set(cleanEmail, payload);
   if (typeof window !== 'undefined') {
+    const serialized = JSON.stringify(payload);
     try {
-      sessionStorage.setItem(`${JOINED_ROOMS_SESSION_PREFIX}${cleanEmail}`, JSON.stringify(payload));
+      localStorage.setItem(`${JOINED_ROOMS_SESSION_PREFIX}${cleanEmail}`, serialized);
+    } catch {
+      /* ignore */
+    }
+    try {
+      sessionStorage.setItem(`${JOINED_ROOMS_SESSION_PREFIX}${cleanEmail}`, serialized);
     } catch {
       /* ignore */
     }
@@ -174,18 +184,20 @@ export function getCachedJoinedSharedRoomsSync(): JoinedSharedPhotoRoomInfo[] {
   if (!email) return [];
   const leftSet = readLocallyLeftRoomIdSet(email);
   const mem = joinedRoomsMemoryCache.get(email);
-  if (mem && Date.now() - mem.cachedAt < 25 * 60 * 1000) {
+  if (mem && Date.now() - mem.cachedAt < JOINED_ROOMS_CACHE_TTL_MS) {
     return mem.rooms.filter((r) => !leftSet.has(r.roomId));
   }
   if (typeof window === 'undefined') return [];
   try {
-    const raw = sessionStorage.getItem(`${JOINED_ROOMS_SESSION_PREFIX}${email}`);
+    const raw =
+      localStorage.getItem(`${JOINED_ROOMS_SESSION_PREFIX}${email}`) ||
+      sessionStorage.getItem(`${JOINED_ROOMS_SESSION_PREFIX}${email}`);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as { rooms?: JoinedSharedPhotoRoomInfo[]; cachedAt?: number };
     if (
       Array.isArray(parsed?.rooms) &&
       typeof parsed.cachedAt === 'number' &&
-      Date.now() - parsed.cachedAt < 25 * 60 * 1000
+      Date.now() - parsed.cachedAt < JOINED_ROOMS_CACHE_TTL_MS
     ) {
       const cleanRooms = parsed.rooms.filter((r) => !leftSet.has(r.roomId));
       joinedRoomsMemoryCache.set(email, { rooms: cleanRooms, cachedAt: parsed.cachedAt });
@@ -200,8 +212,14 @@ export function getCachedJoinedSharedRoomsSync(): JoinedSharedPhotoRoomInfo[] {
 function saveCachedRoomTokenEntry(cacheKey: string, entry: CachedRoomTokenEntry): void {
   roomTokenCache.set(cacheKey, entry);
   if (typeof window !== 'undefined') {
+    const serialized = JSON.stringify(entry);
     try {
-      sessionStorage.setItem(`${MY_ROOM_TOKEN_SESSION_PREFIX}${cacheKey}`, JSON.stringify(entry));
+      localStorage.setItem(`${MY_ROOM_TOKEN_SESSION_PREFIX}${cacheKey}`, serialized);
+    } catch {
+      /* ignore */
+    }
+    try {
+      sessionStorage.setItem(`${MY_ROOM_TOKEN_SESSION_PREFIX}${cacheKey}`, serialized);
     } catch {
       /* ignore */
     }
@@ -210,19 +228,21 @@ function saveCachedRoomTokenEntry(cacheKey: string, entry: CachedRoomTokenEntry)
 
 function readCachedRoomTokenEntry(cacheKey: string): CachedRoomTokenEntry | null {
   const mem = roomTokenCache.get(cacheKey);
-  if (mem && Date.now() - mem.cachedAt < 25 * 60 * 1000) {
+  if (mem && Date.now() - mem.cachedAt < ROOM_TOKEN_CACHE_TTL_MS) {
     return mem;
   }
   if (typeof window === 'undefined') return null;
   try {
-    const raw = sessionStorage.getItem(`${MY_ROOM_TOKEN_SESSION_PREFIX}${cacheKey}`);
+    const raw =
+      localStorage.getItem(`${MY_ROOM_TOKEN_SESSION_PREFIX}${cacheKey}`) ||
+      sessionStorage.getItem(`${MY_ROOM_TOKEN_SESSION_PREFIX}${cacheKey}`);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as Partial<CachedRoomTokenEntry>;
     if (
       parsed?.roomId &&
       parsed?.inviteToken &&
       typeof parsed.cachedAt === 'number' &&
-      Date.now() - parsed.cachedAt < 25 * 60 * 1000
+      Date.now() - parsed.cachedAt < ROOM_TOKEN_CACHE_TTL_MS
     ) {
       const restored: CachedRoomTokenEntry = {
         roomId: parsed.roomId,
@@ -244,20 +264,22 @@ export function clearCachedSharedRoomTokens(): void {
   joinedRoomsMemoryCache.clear();
   inflightEnsureRoomMap.clear();
   if (typeof window !== 'undefined') {
-    try {
-      const keysToRemove: string[] = [];
-      for (let i = 0; i < sessionStorage.length; i += 1) {
-        const k = sessionStorage.key(i);
-        if (
-          k &&
-          (k.startsWith(MY_ROOM_TOKEN_SESSION_PREFIX) || k.startsWith(JOINED_ROOMS_SESSION_PREFIX))
-        ) {
-          keysToRemove.push(k);
+    for (const storage of [localStorage, sessionStorage]) {
+      try {
+        const keysToRemove: string[] = [];
+        for (let i = 0; i < storage.length; i += 1) {
+          const k = storage.key(i);
+          if (
+            k &&
+            (k.startsWith(MY_ROOM_TOKEN_SESSION_PREFIX) || k.startsWith(JOINED_ROOMS_SESSION_PREFIX))
+          ) {
+            keysToRemove.push(k);
+          }
         }
+        keysToRemove.forEach((k) => storage.removeItem(k));
+      } catch {
+        /* ignore */
       }
-      keysToRemove.forEach((k) => sessionStorage.removeItem(k));
-    } catch {
-      /* ignore */
     }
   }
 }
@@ -496,6 +518,7 @@ function dtoToPhotoItem(
     sharedFamilyRoom: familyRoom,
     sharedRoomId: dto.roomId,
     sharedOwnerEmail: ownerEmail,
+    sharedUploaderEmail: dto.uploaderEmail ? dto.uploaderEmail.trim().toLowerCase() : undefined,
     sharedSupabasePhotoId: dto.id,
     sharedFeedTrack:
       dto.feedTrack === 'memories_1989' || dto.feedTrack === 'recent_now'
@@ -585,14 +608,18 @@ export async function ensureMyRoomAndInviteToken(opts: {
   if (fastEmail && !opts.forceRefresh) {
     const { dbLoungeType, dbSubType } = mapUiLoungeToDbRoom(opts.loungeType, opts.familyRoom);
     const fastCached = readCachedRoomTokenEntry(`${fastEmail}:${dbLoungeType}:${dbSubType}`);
+    const hydratedJoinedList = getCachedJoinedSharedRoomsSync();
     const cachedJoined = joinedRoomsMemoryCache.get(fastEmail);
     if (fastCached?.roomId && fastCached?.inviteToken && cachedJoined) {
+      if (Date.now() - cachedJoined.cachedAt > JOINED_ROOMS_BG_REVALIDATE_MS) {
+        void ensureMyRoomAndInviteToken({ ...opts, forceRefresh: true }).catch(() => {});
+      }
       return {
         ok: true,
         roomId: fastCached.roomId,
         inviteToken: fastCached.inviteToken,
         masterNickname: fastCached.masterNickname,
-        joinedRooms: cachedJoined.rooms,
+        joinedRooms: hydratedJoinedList,
       };
     }
   }
@@ -1010,7 +1037,7 @@ export async function fetchScopedSharedRoomPhotos(opts: {
   }
 
   const baseSelectCols =
-    'id, room_id, uploader_nickname, thumb_webp_url, caption_ko, keywords_ko, face_person_names, shot_date_display, shot_place_display, width_px, height_px, created_at';
+    'id, room_id, uploader_email, uploader_nickname, thumb_webp_url, caption_ko, keywords_ko, face_person_names, shot_date_display, shot_place_display, width_px, height_px, created_at';
   let queryRes = await authed
     .from('ghosti_room_shared_photos')
     .select(`${baseSelectCols}, feed_track`)
@@ -1062,6 +1089,9 @@ export async function fetchScopedSharedRoomPhotos(opts: {
         {
           id: String(row.id),
           roomId: rId,
+          uploaderEmail: String((row as Record<string, unknown>).uploader_email || '')
+            .trim()
+            .toLowerCase() || undefined,
           uploaderNickname: String(row.uploader_nickname || '멤버'),
           thumbWebpUrl: String(row.thumb_webp_url || ''),
           captionKo: String(row.caption_ko || ''),
@@ -1110,12 +1140,13 @@ export async function fetchScopedSharedRoomPhotos(opts: {
       sharedFeedTrack: item.sharedFeedTrack ?? localTrackById.get(item.id),
     }));
     if (hydratedServerItems.length > 0) {
-      await upsertMemberLocalRoomPhotos(currentEmail, targetRoomId, hydratedServerItems);
+      void upsertMemberLocalRoomPhotos(currentEmail, targetRoomId, hydratedServerItems).catch(
+        () => {}
+      );
     }
     if (hasExpiredRowsOnServer) {
       void purgeExpiredSeedPhotosAfterLocalArchive(authed, currentEmail, [targetRoomId]);
     }
-    const localPhotos = await loadMemberLocalRoomPhotos(currentEmail, targetRoomId);
     // 서버에서 삭제·숨김 처리된 최근 14일 이내 사진은 로컬 금고에서도 즉시 정리하고,
     // 14일 시드 버퍼 TTL 경과 후 서버에서 만료된 사진만 합류 멤버 로컬 금고에서 영구 보존
     const mergedById = new Map<string, PhotoItem>();
@@ -1123,7 +1154,7 @@ export async function fetchScopedSharedRoomPhotos(opts: {
       mergedById.set(item.id, { ...item, sharedRoomId: targetRoomId, sharedOwnerEmail: currentEmail });
     }
     const staleDeletedLocalIds: string[] = [];
-    for (const item of localPhotos) {
+    for (const item of localPhotosBeforeUpsert) {
       if (!mergedById.has(item.id) && (!item.sharedRoomId || item.sharedRoomId === targetRoomId)) {
         const itemTimeMs = Number(item.mtimeMs || 0);
         const isWithin14dServerWindow =
@@ -1253,7 +1284,7 @@ export async function uploadPhotosToSupabaseSharedRoom(opts: {
   }
 
   const baseInsertSelect =
-    'id, room_id, uploader_nickname, thumb_webp_url, caption_ko, keywords_ko, face_person_names, shot_date_display, shot_place_display, width_px, height_px, created_at';
+    'id, room_id, uploader_email, uploader_nickname, thumb_webp_url, caption_ko, keywords_ko, face_person_names, shot_date_display, shot_place_display, width_px, height_px, created_at';
   let insertRes = await authed
     .from('ghosti_room_shared_photos')
     .insert(rowsToInsert)
@@ -1281,6 +1312,10 @@ export async function uploadPhotosToSupabaseSharedRoom(opts: {
       {
         id: String(row.id),
         roomId: String(row.room_id),
+        uploaderEmail:
+          String((row as Record<string, unknown>).uploader_email || cleanEmail)
+            .trim()
+            .toLowerCase() || undefined,
         uploaderNickname: String(row.uploader_nickname || cleanNick),
         thumbWebpUrl: String(row.thumb_webp_url || ''),
         captionKo: String(row.caption_ko || ''),
@@ -1456,17 +1491,23 @@ export async function setSupabaseSharedRoomPhotoHidden(
       hidden,
     });
     if (bridgeRes.ok) return true;
+    // 서버가 명시적으로 권한 없음(FORBIDDEN) 또는 존재하지 않는 사진(PHOTO_NOT_FOUND)을 반환한 경우
+    // 직접 Supabase UPDATE 폴백으로 넘겨 거짓 성공(0행 업데이트)이 발생하는 것을 원천 차단
+    if (bridgeRes.reason === 'FORBIDDEN' || bridgeRes.reason === 'PHOTO_NOT_FOUND') {
+      return false;
+    }
   } catch {
     /* fallback to direct authed update */
   }
   const authed = await ensureGhostiAuthedSupabaseClient();
   if (!authed) return false;
   try {
-    const { error } = await authed
+    const { data, error } = await authed
       .from('ghosti_room_shared_photos')
       .update({ is_hidden_by_master: hidden })
-      .eq('id', rawId);
-    return !error;
+      .eq('id', rawId)
+      .select('id');
+    return !error && Array.isArray(data) && data.length > 0;
   } catch {
     return false;
   }
