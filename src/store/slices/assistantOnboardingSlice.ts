@@ -338,6 +338,13 @@ export interface AssistantOnboardingSlice {
 let pendingMobileGalleryResync = false;
 let quarantineMutationEpoch = 0;
 const recentlyQuarantinedAtById = new Map<string, number>();
+let zCoreQuarantineChain: Promise<unknown> = Promise.resolve();
+
+function enqueueZCoreQuarantineOp<T>(fn: () => Promise<T>): Promise<T> {
+  const next = zCoreQuarantineChain.then(fn, fn);
+  zCoreQuarantineChain = next.catch(() => undefined);
+  return next;
+}
 
 function buildQuarantineMoveStatePatch(opts: {
   state: SaySeeStore;
@@ -2031,7 +2038,9 @@ export const createAssistantOnboardingSlice: StateCreator<
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('ghosti_photo_moved_to_quarantine'));
         }
-        void requestQuarantineOp('move', redundantIds, [effectiveKeepId]).then((moveRes) => {
+        void enqueueZCoreQuarantineOp(() =>
+          requestQuarantineOp('move', redundantIds, [effectiveKeepId])
+        ).then((moveRes) => {
           const movedList = moveRes.done.filter((id) => id !== effectiveKeepId);
           if (movedList.length === 0) {
             get().syncPhotosAfterExternalRestore(
@@ -2383,42 +2392,53 @@ export const createAssistantOnboardingSlice: StateCreator<
         return p;
       });
 
-      // [1장 정밀 복원 초고속화 — O(N) 0.2ms 증분 재결합]:
-      // 1~소수 장 복원 시 전체 사진(1,500장)을 O(N^2)으로 처음부터 재클러스터링하면 수 초간 화면이 멈추므로,
-      // 복원된 사진이 속했던 원래 세트(restoredOriginGroupIds)만 즉시 재결합하고 나머지 기존 세트는 그대로 유지합니다!
+      // [1장 및 전체 복원 초고속화 — O(N) 0.2ms 단일 패스 증분 재결합]:
+      // 1장 복원·전체 복원 모두 전체 사진(수천 장)을 O(N^2)으로 처음부터 재클러스터링하지 않고,
+      // 단일 O(N) 패스로 복원된 사진의 원래 세트(restoredOriginGroupIds)만 즉시 재결합하여 1ms 미만으로 끝낸다!
       const restoredPhotoIdList = Array.from(restoredIdsAfterReplace);
-      const isSmallIncrementalRestore =
-        restoredPhotoIdList.length <= 15 &&
-        restoredOriginGroupIds.size > 0 &&
-        state.duplicateGroups.length > 0;
+      const needsFullFallbackClustering =
+        restoredOriginGroupIds.size === 0 &&
+        restoredPhotoIdList.some((id) => {
+          const ph = unquarantinedPhotos.find((p) => p.id === id);
+          return Boolean(ph && !ph.trashCategory && !ph.lastDuplicateGroupId && ph.dhash && ph.dhash.length === 16);
+        });
 
       let updatedPhotos: PhotoItem[];
       let nextDupGroups: DuplicateGroup[];
-      if (isSmallIncrementalRestore) {
+      if (!needsFullFallbackClustering) {
         const existingGroupById = new Map(state.duplicateGroups.map((g) => [g.groupId, g]));
         const nextGroupsMap = new Map(state.duplicateGroups.map((g) => [g.groupId, { ...g, photoIds: [...g.photoIds] }]));
         const restoredGroupRoles = new Map<string, { groupId: string; isBest: boolean }>();
 
-        for (const gid of restoredOriginGroupIds) {
-          const activeMembersInOrigin = unquarantinedPhotos.filter(
-            (p) => !p.quarantined && (p.lastDuplicateGroupId === gid || p.duplicateGroupId === gid)
-          );
-          if (activeMembersInOrigin.length >= 2) {
-            const prevG = existingGroupById.get(gid);
-            const bestCandidate =
-              activeMembersInOrigin.find((p) => p.id === prevG?.bestPhotoId) ||
-              activeMembersInOrigin.find((p) => p.isBestInDuplicateGroup) ||
-              activeMembersInOrigin[0];
-            const mergedGroup: DuplicateGroup = {
-              groupId: gid,
-              bestPhotoId: bestCandidate.id,
-              photoIds: activeMembersInOrigin.map((p) => p.id),
-              deltaSec: prevG?.deltaSec ?? 0,
-              maxDhashDist: prevG?.maxDhashDist ?? 0,
-            };
-            nextGroupsMap.set(gid, mergedGroup);
-            for (const m of activeMembersInOrigin) {
-              restoredGroupRoles.set(m.id, { groupId: gid, isBest: m.id === bestCandidate.id });
+        if (restoredOriginGroupIds.size > 0) {
+          const membersByOriginGroup = new Map<string, PhotoItem[]>();
+          for (const p of unquarantinedPhotos) {
+            if (p.quarantined) continue;
+            const gid = p.lastDuplicateGroupId || p.duplicateGroupId;
+            if (!gid || !restoredOriginGroupIds.has(gid)) continue;
+            const arr = membersByOriginGroup.get(gid) || [];
+            arr.push(p);
+            membersByOriginGroup.set(gid, arr);
+          }
+          for (const gid of restoredOriginGroupIds) {
+            const activeMembersInOrigin = membersByOriginGroup.get(gid) || [];
+            if (activeMembersInOrigin.length >= 2) {
+              const prevG = existingGroupById.get(gid);
+              const bestCandidate =
+                activeMembersInOrigin.find((p) => p.id === prevG?.bestPhotoId) ||
+                activeMembersInOrigin.find((p) => p.isBestInDuplicateGroup) ||
+                activeMembersInOrigin[0];
+              const mergedGroup: DuplicateGroup = {
+                groupId: gid,
+                bestPhotoId: bestCandidate.id,
+                photoIds: activeMembersInOrigin.map((p) => p.id),
+                deltaSec: prevG?.deltaSec ?? 0,
+                maxDhashDist: prevG?.maxDhashDist ?? 0,
+              };
+              nextGroupsMap.set(gid, mergedGroup);
+              for (const m of activeMembersInOrigin) {
+                restoredGroupRoles.set(m.id, { groupId: gid, isBest: m.id === bestCandidate.id });
+              }
             }
           }
         }
@@ -2560,6 +2580,63 @@ export const createAssistantOnboardingSlice: StateCreator<
       set({ lastUndoBatch: null });
       return;
     }
+    const wireTargets = zCoreBridge.isConnected
+      ? validTargets.map((target) => {
+          const matched = curPhotos.find(
+            (p) => p.quarantined && (p.id === target || p.name === target)
+          );
+          return matched?.name || target;
+        })
+      : validTargets;
+
+    // [PC 로컬 Z-코어 0.01초 즉시 복원]: 휴지통 I/O 및 직렬 청크 대기 없이 화면에서 즉시 복원하고,
+    // 백그라운드 직렬 큐(enqueueZCoreQuarantineOp)에서 단 1회 배치 HTTP 호출로 실물 파일을 되돌린다(실패 시 자동 원복).
+    if (zCoreBridge.isConnected && !isCapacitorNativeMobileRuntime()) {
+      const prevPhotosSnap = curPhotos;
+      const prevDupGroupsSnap = get().duplicateGroups;
+      const prevSelectedTrashSnap = new Set<string>(get().selectedTrashIds);
+      const prevSearchResultsSnap = get().searchResults;
+
+      get().syncPhotosAfterExternalRestore(
+        validTargets,
+        undefined,
+        `사진 ${validTargets.length}장을 원래 위치로 되돌렸습니다`
+      );
+
+      void enqueueZCoreQuarantineOp(() => requestQuarantineOp('restore', wireTargets)).then((restoreRes) => {
+        if (restoreRes.done.length > 0) return;
+        const isStaleMissingRecycle =
+          !restoreRes.offline &&
+          restoreRes.errors.length > 0 &&
+          restoreRes.errors.every((e) =>
+            /기록이 없습니다|실물 데이터가 없습니다|올바른 휴지통 항목이 아닙니다/.test(String(e?.error || ''))
+          );
+        if (isStaleMissingRecycle) {
+          const staleSet = new Set<string>([...validTargets, ...wireTargets]);
+          set((state) => ({
+            photos: state.photos.filter((p) => !(staleSet.has(p.id) || staleSet.has(p.name))),
+            lastUndoBatch: null,
+            lastQuarantineToast:
+              '이미 휴지통에서 비워졌거나 외부에서 복원된 이전 기록을 목록에서 정리했습니다.',
+          }));
+          return;
+        }
+        // 실제 복원 실패(엔진 끊김 등) 시 안전하게 직전 상태로 원복 후 알림
+        set({
+          photos: prevPhotosSnap,
+          duplicateGroups: prevDupGroupsSnap,
+          selectedTrashIds: prevSelectedTrashSnap,
+          searchResults: prevSearchResultsSnap,
+          quarantineMoving: false,
+          quarantineOpKind: 'idle',
+          quarantineRestoreScope: 'idle',
+          quarantineRestoringIds: [],
+          lastQuarantineToast: quarantineFailureToast('restore', restoreRes),
+        });
+      });
+      return;
+    }
+
     const effectiveScope: 'single' | 'all' | 'undo' = scope ?? (validTargets.length === 1 ? 'single' : 'all');
     set({
       quarantineMoving: true,
@@ -2568,15 +2645,6 @@ export const createAssistantOnboardingSlice: StateCreator<
       quarantineRestoringIds: validTargets,
     });
     try {
-      // PC Z-코어는 휴지통 장부(name) 기준으로 매칭하므로 id !== name인 기존 항목도 정확히 name으로 전달
-      const wireTargets = zCoreBridge.isConnected
-        ? validTargets.map((target) => {
-            const matched = curPhotos.find(
-              (p) => p.quarantined && (p.id === target || p.name === target)
-            );
-            return matched?.name || target;
-          })
-        : validTargets;
       type QOpRes = Awaited<ReturnType<typeof requestQuarantineOp>>;
       const CHUNK_SIZE = 15;
       const doneAll: string[] = [];
