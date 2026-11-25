@@ -142,6 +142,7 @@ export const Stage1MinimalCarePreview: React.FC = () => {
   const [zVersion, setZVersion] = useState<string | null>(zCoreBridge.version);
   const [isCleanupPaused, setIsCleanupPaused] = useState<boolean>(false);
   const [showQuarantineDrawer, setShowQuarantineDrawer] = useState<boolean>(false);
+  const [showScrollTop, setShowScrollTop] = useState<boolean>(false);
   const [activeDupSetIdx, setActiveDupSetIdx] = useState<number>(0);
   const [showAllDupSets, setShowAllDupSets] = useState<boolean>(false);
   const [setJumpInput, setSetJumpInput] = useState<string>('1');
@@ -174,9 +175,15 @@ export const Stage1MinimalCarePreview: React.FC = () => {
     };
     window.addEventListener('ghosti_trigger_mobile_photo_picker', onTriggerMobilePicker);
     window.addEventListener('ghosti_open_mobile_quarantine_drawer', onOpenMobileQuarantine);
+    const onScroll = () => {
+      setShowScrollTop(window.scrollY > 360);
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       window.removeEventListener('ghosti_trigger_mobile_photo_picker', onTriggerMobilePicker);
       window.removeEventListener('ghosti_open_mobile_quarantine_drawer', onOpenMobileQuarantine);
+      window.removeEventListener('scroll', onScroll);
     };
   }, []);
 
@@ -828,6 +835,166 @@ export const Stage1MinimalCarePreview: React.FC = () => {
             </div>
           )}
 
+          {/* 정리한 사진 복원 (휴지통 — 0장일 때도 사라지지 않고 상단 고정 위치에 유지, 561장 펼침 시에도 묻히지 않음) */}
+          {(() => {
+            const isIosNativeTrash = !zCoreBridge.isConnected && isCapacitorIosRuntime();
+            return (
+              <section
+                id="ghosti-quarantine-restore-section"
+                className="p-3.5 sm:p-4 rounded-xl bg-white border border-slate-200 flex flex-col gap-3"
+              >
+                {lastQuarantineToast && (
+                  <div className="px-3.5 py-2.5 rounded-lg bg-teal-50/70 border border-teal-200/80 flex items-center justify-between gap-2 text-[12.5px] text-teal-900 font-medium">
+                    <span className="whitespace-pre-line break-keep leading-relaxed">{lastQuarantineToast}</span>
+                    <button
+                      type="button"
+                      onClick={() => useSaySeeStore.setState({ lastQuarantineToast: null })}
+                      className="text-teal-700 hover:text-teal-950 text-[12px] font-semibold shrink-0 cursor-pointer"
+                    >
+                      닫기
+                    </button>
+                  </div>
+                )}
+                {lastUndoBatch && !isIosNativeTrash && (
+                  <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
+                    <span className="text-[13px] text-slate-800 font-medium break-keep">
+                      방금 정리한 {lastUndoBatch.count}장({fmtMB(lastUndoBatch.savedBytes)})이 휴지통으로 이동되었습니다.
+                    </span>
+
+                    <div className="flex items-center gap-2">
+                      <button
+                        type="button"
+                        disabled={quarantineMoving}
+                        onClick={() => void undoLastQuarantine()}
+                        className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer disabled:opacity-70 disabled:cursor-wait inline-flex items-center gap-1.5"
+                      >
+                        {quarantineMoving && quarantineOpKind === 'restore' && quarantineRestoreScope === 'undo' && (
+                          <span className="inline-block w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                        )}
+                        {quarantineMoving && quarantineOpKind === 'restore' && quarantineRestoreScope === 'undo' ? '복원 중...' : '되돌리기'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={dismissUndoBatch}
+                        className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
+                        title="닫기"
+                      >
+                        <span className="material-symbols-outlined text-[16px]">close</span>
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {isIosNativeTrash && quarantinedPhotos.length > 0 && (
+                  <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
+                    <p className="text-[12.5px] text-slate-700 leading-relaxed break-keep">
+                      아이폰 보안 정책에 따라 ‘사진 → 최근 삭제된 항목’에 30일간 보관되며, 해당 메뉴에서 원본을 복원할 수 있습니다.
+                    </p>
+                  </div>
+                )}
+
+                {quarantinedPhotos.length > 0 ? (
+                  <>
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setShowQuarantineDrawer((v) => !v)}
+                        className="w-full sm:w-auto px-3.5 py-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 text-[12.5px] font-semibold flex items-center justify-between gap-2.5 cursor-pointer"
+                      >
+                        <span>
+                          {isIosNativeTrash
+                            ? `최근 정리 내역 (${quarantinedPhotos.length}장)`
+                            : `휴지통 · 정리한 사진 복원 (${quarantinedPhotos.length}장)`}
+                        </span>
+                        <span className="text-slate-500 text-[11.5px]">
+                          {showQuarantineDrawer ? '접기' : '목록 펼치기'}
+                        </span>
+                      </button>
+                      {!isIosNativeTrash && (
+                        <button
+                          type="button"
+                          disabled={quarantineMoving}
+                          onClick={() =>
+                            void restoreFromQuarantine(
+                              quarantinedPhotos.map((p) => p.id),
+                              'all'
+                            )
+                          }
+                          className="px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer disabled:opacity-70 disabled:cursor-wait inline-flex items-center gap-1.5"
+                        >
+                          {quarantineMoving && quarantineOpKind === 'restore' && quarantineRestoreScope === 'all' && (
+                            <span className="inline-block w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                          )}
+                          {quarantineMoving && quarantineOpKind === 'restore' && quarantineRestoreScope === 'all'
+                            ? '전체 복원 중...'
+                            : `전체 복원 (${quarantinedPhotos.length}장)`}
+                        </button>
+                      )}
+                    </div>
+
+                    {showQuarantineDrawer && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 p-3 rounded-lg bg-slate-50 border border-slate-200 max-h-64 overflow-y-auto">
+                        {quarantinedPhotos.map((qp) => {
+                          const isThisRowRestoring =
+                            quarantineMoving &&
+                            quarantineOpKind === 'restore' &&
+                            quarantineRestoreScope === 'single' &&
+                            (quarantineRestoringIds.includes(qp.id) || quarantineRestoringIds.includes(qp.name));
+                          return (
+                            <div
+                              key={qp.id}
+                              className="p-2 rounded-lg bg-white border border-slate-200 flex items-center justify-between gap-2.5"
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <img
+                                  crossOrigin="anonymous"
+                                  src={qp.thumbUrl}
+                                  alt=""
+                                  loading="lazy"
+                                  className="w-9 h-9 rounded object-cover border border-slate-200 shrink-0 bg-slate-100"
+                                />
+                                <span className="text-[11.5px] text-slate-800 font-medium break-all leading-snug">
+                                  {qp.name}
+                                </span>
+                              </div>
+                              {isIosNativeTrash ? (
+                                <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10.5px] font-medium shrink-0">
+                                  30일 보관
+                                </span>
+                              ) : (
+                                <button
+                                  type="button"
+                                  disabled={quarantineMoving}
+                                  onClick={() => void restoreFromQuarantine([qp.id], 'single')}
+                                  className="px-2.5 py-1 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-semibold shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-wait inline-flex items-center gap-1"
+                                >
+                                  {isThisRowRestoring && (
+                                    <span className="inline-block w-2.5 h-2.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
+                                  )}
+                                  {isThisRowRestoring ? '복원 중...' : '복원'}
+                                </button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+                  </>
+                ) : (
+                  <div className="flex flex-wrap items-center justify-between gap-2 text-[12.5px] text-slate-600">
+                    <span className="font-semibold text-slate-700 inline-flex items-center gap-1.5">
+                      <span className="material-symbols-outlined text-[16px] text-slate-500">delete</span>
+                      {isIosNativeTrash ? '최근 정리 내역 (0장)' : '휴지통 · 정리한 사진 복원 (0장)'}
+                    </span>
+                    <span className="text-[12px] text-slate-400 break-keep">
+                      정리한 사진이 생기면 여기서 1장씩 또는 전체 복원할 수 있어요.
+                    </span>
+                  </div>
+                )}
+              </section>
+            );
+          })()}
+
           {/* 중복·연사 세트별 정리 */}
           {showDuplicatePickSection && (
             <div className="p-4 sm:p-5 rounded-xl bg-white border border-slate-200 flex flex-col gap-4">
@@ -1319,156 +1486,6 @@ export const Stage1MinimalCarePreview: React.FC = () => {
               )}
             </section>
           )}
-
-          {/* 정리한 사진 복원 */}
-          {(quarantinedPhotos.length > 0 || lastUndoBatch || lastQuarantineToast) && (() => {
-            const isIosNativeTrash = !zCoreBridge.isConnected && isCapacitorIosRuntime();
-            return (
-              <section
-                id="ghosti-quarantine-restore-section"
-                className="p-4 sm:p-5 rounded-xl bg-white border border-slate-200 flex flex-col gap-3"
-              >
-                {lastQuarantineToast && (
-                  <div className="px-3.5 py-2.5 rounded-lg bg-teal-50/70 border border-teal-200/80 flex items-center justify-between gap-2 text-[12.5px] text-teal-900 font-medium">
-                    <span className="whitespace-pre-line break-keep leading-relaxed">{lastQuarantineToast}</span>
-                    <button
-                      type="button"
-                      onClick={() => useSaySeeStore.setState({ lastQuarantineToast: null })}
-                      className="text-teal-700 hover:text-teal-950 text-[12px] font-semibold shrink-0 cursor-pointer"
-                    >
-                      닫기
-                    </button>
-                  </div>
-                )}
-                {lastUndoBatch && !isIosNativeTrash && (
-                  <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200 flex flex-wrap items-center justify-between gap-3">
-                    <span className="text-[13px] text-slate-800 font-medium break-keep">
-                      방금 정리한 {lastUndoBatch.count}장({fmtMB(lastUndoBatch.savedBytes)})이 휴지통으로 이동되었습니다.
-                    </span>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        type="button"
-                        disabled={quarantineMoving}
-                        onClick={() => void undoLastQuarantine()}
-                        className="px-3 py-1.5 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer disabled:opacity-70 disabled:cursor-wait inline-flex items-center gap-1.5"
-                      >
-                        {quarantineMoving && quarantineOpKind === 'restore' && quarantineRestoreScope === 'undo' && (
-                          <span className="inline-block w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                        )}
-                        {quarantineMoving && quarantineOpKind === 'restore' && quarantineRestoreScope === 'undo' ? '복원 중...' : '되돌리기'}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={dismissUndoBatch}
-                        className="p-1 text-slate-400 hover:text-slate-700 cursor-pointer"
-                        title="닫기"
-                      >
-                        <span className="material-symbols-outlined text-[16px]">close</span>
-                      </button>
-                    </div>
-                  </div>
-                )}
-
-                {isIosNativeTrash && quarantinedPhotos.length > 0 && (
-                  <div className="p-3.5 rounded-lg bg-slate-50 border border-slate-200">
-                    <p className="text-[12.5px] text-slate-700 leading-relaxed break-keep">
-                      아이폰 보안 정책에 따라 ‘사진 → 최근 삭제된 항목’에 30일간 보관되며, 해당 메뉴에서 원본을 복원할 수 있습니다.
-                    </p>
-                  </div>
-                )}
-
-                {quarantinedPhotos.length > 0 && (
-                  <>
-                    <div className="flex flex-wrap items-center justify-between gap-2">
-                      <button
-                        type="button"
-                        onClick={() => setShowQuarantineDrawer((v) => !v)}
-                        className="w-full sm:w-auto px-3.5 py-2 rounded-lg bg-slate-50 hover:bg-slate-100 border border-slate-200 text-slate-800 text-[12.5px] font-semibold flex items-center justify-between gap-2.5 cursor-pointer"
-                      >
-                        <span>
-                          {isIosNativeTrash
-                            ? `최근 정리 내역 (${quarantinedPhotos.length}장)`
-                            : `정리한 사진 복원 (${quarantinedPhotos.length}장)`}
-                        </span>
-                        <span className="text-slate-500 text-[11.5px]">
-                          {showQuarantineDrawer ? '접기' : '목록 펼치기'}
-                        </span>
-                      </button>
-                      {!isIosNativeTrash && (
-                        <button
-                          type="button"
-                          disabled={quarantineMoving}
-                          onClick={() =>
-                            void restoreFromQuarantine(
-                              quarantinedPhotos.map((p) => p.id),
-                              'all'
-                            )
-                          }
-                          className="px-3.5 py-2 rounded-lg bg-teal-600 hover:bg-teal-700 text-white text-[12px] font-semibold cursor-pointer disabled:opacity-70 disabled:cursor-wait inline-flex items-center gap-1.5"
-                        >
-                          {quarantineMoving && quarantineOpKind === 'restore' && quarantineRestoreScope === 'all' && (
-                            <span className="inline-block w-3 h-3 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                          )}
-                          {quarantineMoving && quarantineOpKind === 'restore' && quarantineRestoreScope === 'all'
-                            ? '전체 복원 중...'
-                            : `전체 복원 (${quarantinedPhotos.length}장)`}
-                        </button>
-                      )}
-                    </div>
-
-                    {showQuarantineDrawer && (
-                      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-2 p-3 rounded-lg bg-slate-50 border border-slate-200 max-h-64 overflow-y-auto">
-                        {quarantinedPhotos.map((qp) => {
-                          const isThisRowRestoring =
-                            quarantineMoving &&
-                            quarantineOpKind === 'restore' &&
-                            quarantineRestoreScope === 'single' &&
-                            (quarantineRestoringIds.includes(qp.id) || quarantineRestoringIds.includes(qp.name));
-                          return (
-                            <div
-                              key={qp.id}
-                              className="p-2 rounded-lg bg-white border border-slate-200 flex items-center justify-between gap-2.5"
-                            >
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <img
-                                  crossOrigin="anonymous"
-                                  src={qp.thumbUrl}
-                                  alt=""
-                                  loading="lazy"
-                                  className="w-9 h-9 rounded object-cover border border-slate-200 shrink-0 bg-slate-100"
-                                />
-                                <span className="text-[11.5px] text-slate-800 font-medium break-all leading-snug">
-                                  {qp.name}
-                                </span>
-                              </div>
-                              {isIosNativeTrash ? (
-                                <span className="px-2 py-0.5 rounded bg-slate-100 text-slate-600 text-[10.5px] font-medium shrink-0">
-                                  30일 보관
-                                </span>
-                              ) : (
-                                <button
-                                  type="button"
-                                  disabled={quarantineMoving}
-                                  onClick={() => void restoreFromQuarantine([qp.id], 'single')}
-                                  className="px-2.5 py-1 rounded-md bg-teal-600 hover:bg-teal-700 text-white text-[11px] font-semibold shrink-0 cursor-pointer disabled:opacity-50 disabled:cursor-wait inline-flex items-center gap-1"
-                                >
-                                  {isThisRowRestoring && (
-                                    <span className="inline-block w-2.5 h-2.5 rounded-full border-2 border-white border-t-transparent animate-spin" />
-                                  )}
-                                  {isThisRowRestoring ? '복원 중...' : '복원'}
-                                </button>
-                              )}
-                            </div>
-                          );
-                        })}
-                      </div>
-                    )}
-                  </>
-                )}
-              </section>
-            );
-          })()}
         </GhostSecretaryFirstGuard>
 
         {/* 우측: 귀신비서 대화창 */}
@@ -1517,6 +1534,21 @@ export const Stage1MinimalCarePreview: React.FC = () => {
           />
         </div>
       </div>
+
+      {showScrollTop && (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })}
+          aria-label="맨 위로 이동"
+          title="맨 위로 올라가기"
+          className={`fixed right-5 ${
+            layout === 'mobile' ? 'bottom-24' : 'bottom-6'
+          } z-[95] inline-flex items-center gap-1.5 px-3.5 py-2.5 rounded-full bg-slate-900/90 hover:bg-slate-800 text-white text-[12px] font-semibold shadow-lg border border-white/15 backdrop-blur-xs cursor-pointer transition-all`}
+        >
+          <span className="material-symbols-outlined text-[16px]">arrow_upward</span>
+          <span>맨 위로</span>
+        </button>
+      )}
     </div>
   );
 };
