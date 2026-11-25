@@ -1841,6 +1841,10 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
         remote_sha = str(item.get("sha256") or "").strip()
         remote_mtime = _parse_iso_mtime_sec(item.get("fileMtimeIso") or item.get("fileMtime"))
         uploader = str(item.get("uploaderNickname") or item.get("author") or "").strip()
+        try:
+            expected_size = int(item.get("byteSize") or item.get("size") or 0)
+        except Exception:
+            expected_size = 0
         if not rel_p or not b64_raw:
             skipped += 1
             continue
@@ -1863,14 +1867,34 @@ def pull_sync_work_files(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
                 skipped += 1
                 continue
             st = target.stat()
-            if remote_sha:
+            is_valid_hex_sha = len(remote_sha) == 64 and all(c in "0123456789abcdefABCDEF" for c in remote_sha)
+            if is_valid_hex_sha:
                 local_meta = _extract_rich_preview_cached(target, st)
-                if local_meta.get("sha256") == remote_sha:
+                if str(local_meta.get("sha256") or "").lower() == remote_sha.lower():
                     if uploader and up_map.get(rel_p) != uploader:
                         up_map[rel_p] = uploader
                     added_rel_set.add(rel_p)
                     skipped += 1
                     continue
+            # 이미 동일 크기·동일 수정시각(±3초)으로 동기화된 파일은 재기록하지 않고 스킵 (주기 폴링 시 무한 +N건 누적 원천 차단)
+            if expected_size > 0 and st.st_size == expected_size and remote_mtime > 0 and abs(st.st_mtime - remote_mtime) <= 3.0:
+                if uploader and up_map.get(rel_p) != uploader:
+                    up_map[rel_p] = uploader
+                added_rel_set.add(rel_p)
+                skipped += 1
+                continue
+            if not is_valid_hex_sha and b64_raw:
+                try:
+                    cand_b64 = b64_raw.split(",", 1)[1] if (b64_raw.startswith("data:") and "," in b64_raw) else b64_raw
+                    cand_bytes = base64.b64decode(cand_b64)
+                    if st.st_size == len(cand_bytes) and hashlib.sha256(target.read_bytes()).digest() == hashlib.sha256(cand_bytes).digest():
+                        if uploader and up_map.get(rel_p) != uploader:
+                            up_map[rel_p] = uploader
+                        added_rel_set.add(rel_p)
+                        skipped += 1
+                        continue
+                except Exception:
+                    pass
             # [최신본 보호 가드]: 원격 수정시각을 알 수 없거나(0) 내 로컬 파일이 2초 이상 더 최신이면 덮어쓰지 않음!
             if remote_mtime <= 0 or st.st_mtime > remote_mtime + 2.0:
                 skipped += 1
@@ -2338,12 +2362,12 @@ def _ensure_tunnel_watchdog_started() -> None:
 def ensure_outbound_work_tunnel(data: Dict[str, Any] | None = None) -> Dict[str, Any]:
     """대장 PC에서 상시 아웃바운드 HTTPS 직통 터널을 기동합니다 (방화벽 인바운드 포트 개방 불필요 · 단일 인스턴스 락으로 중복 스폰 0%)."""
     cfg = _load_sdrive_config()
-    if cfg.get("workEntitlementLocked") is True:
+    if cfg.get("workEntitlementLocked") is True or not bool(cfg.get("isWorkHost")):
         stop_outbound_work_tunnel()
         return {
             "ok": False,
-            "error": "WORK_SUBSCRIPTION_LOCKED",
-            "status": "locked",
+            "error": "WORK_SUBSCRIPTION_LOCKED" if cfg.get("workEntitlementLocked") is True else "WORK_HOST_ONLY_TUNNEL",
+            "status": "locked" if cfg.get("workEntitlementLocked") is True else "member_client_only",
             "tunnelUrl": "",
         }
 

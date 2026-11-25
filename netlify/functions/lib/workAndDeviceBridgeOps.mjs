@@ -195,6 +195,41 @@ function mapWorkRoleToDb(uiRole) {
   return r === 'viewer' ? 'member' : 'admin';
 }
 
+const GENERIC_PLACEHOLDER_WORK_NICKS = new Set([
+  '초대 팀원',
+  '초대팀원',
+  '팀원',
+  '방장(나)',
+  '방장',
+  '게스트',
+  '익명',
+  'anonymous',
+  'guest',
+  'member',
+]);
+
+function isGenericPlaceholderWorkNick(raw) {
+  const clean = String(raw || '').trim();
+  if (!clean) return true;
+  return (
+    GENERIC_PLACEHOLDER_WORK_NICKS.has(clean) ||
+    GENERIC_PLACEHOLDER_WORK_NICKS.has(clean.toLowerCase())
+  );
+}
+
+function resolveCleanWorkMemberNickname(rawNick, fallbackHubNick, memberEmail) {
+  const cand = String(rawNick || '').trim();
+  if (cand && !isGenericPlaceholderWorkNick(cand)) {
+    return cand.slice(0, 32);
+  }
+  const hubCand = String(fallbackHubNick || '').trim();
+  if (hubCand && !isGenericPlaceholderWorkNick(hubCand)) {
+    return hubCand.slice(0, 32);
+  }
+  const emailPrefix = String(memberEmail || '').trim().split('@')[0];
+  return (emailPrefix || '팀원').slice(0, 32);
+}
+
 /**
  * 업무 공유방 팀원 목록 결정론적 고정 정렬 (PostgreSQL MVCC 업데이트 순서 흔들림 0%):
  * 1순위: 방장(role === 'master') 항상 1번 고정
@@ -210,7 +245,11 @@ function sortAndMapWorkMembers(rawMembers, masterEmail, fallbackHostNickname = '
     const isRoomMaster = Boolean(cleanMaster && mEmail === cleanMaster);
     byEmail.set(mEmail, {
       email: mEmail,
-      nickname: String(m.room_persona_nickname || m.nickname || mEmail.split('@')[0]),
+      nickname: resolveCleanWorkMemberNickname(
+        m.room_persona_nickname || m.nickname,
+        isRoomMaster ? fallbackHostNickname : '',
+        mEmail
+      ),
       role: normalizeWorkRoleFromDb(m.role, isRoomMaster),
       joinedAt: m.joined_at || m.joinedAt || null,
     });
@@ -218,7 +257,7 @@ function sortAndMapWorkMembers(rawMembers, masterEmail, fallbackHostNickname = '
   if (cleanMaster && cleanMaster.includes('@') && !byEmail.has(cleanMaster)) {
     byEmail.set(cleanMaster, {
       email: cleanMaster,
-      nickname: String(fallbackHostNickname || cleanMaster.split('@')[0]),
+      nickname: resolveCleanWorkMemberNickname(fallbackHostNickname, '', cleanMaster),
       role: 'master',
       joinedAt: null,
     });
@@ -785,7 +824,11 @@ export async function handleAuthedWorkAndDeviceAction({
   supabaseUrl,
   serviceKey,
 }) {
-  const actorNick = String(body.nickname || body.actorNickname || hubNickname || email.split('@')[0]);
+  const actorNick = resolveCleanWorkMemberNickname(
+    body.nickname || body.actorNickname,
+    hubNickname,
+    email
+  );
 
   // ===================================================================
   // A. 6. 💼 업무 공유 (S: 드라이브 · Zero-Cloud 대장 PC 직통 터널) 액션군
@@ -985,6 +1028,24 @@ export async function handleAuthedWorkAndDeviceAction({
           body: JSON.stringify({ used_count: nextUsed }),
         }
       );
+    } else if (
+      existingMember &&
+      isGenericPlaceholderWorkNick(existingMember.room_persona_nickname) &&
+      actorNick &&
+      !isGenericPlaceholderWorkNick(actorNick)
+    ) {
+      existingMember.room_persona_nickname = actorNick;
+      await fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(roomId)}&member_email=eq.${encodeURIComponent(email)}`,
+        {
+          method: 'PATCH',
+          headers: srvHeaders(serviceKey, {
+            'Content-Type': 'application/json',
+            Prefer: 'return=minimal',
+          }),
+          body: JSON.stringify({ room_persona_nickname: actorNick }),
+        }
+      ).catch(() => null);
     }
 
     const { state, tombstones } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
@@ -1207,6 +1268,28 @@ export async function handleAuthedWorkAndDeviceAction({
       return ownerGate.response;
     }
     const { state, tombstones } = await readWorkRoomP2pState(supabaseUrl, serviceKey, roomId);
+    const myMemberRow = Array.isArray(ctx.members)
+      ? ctx.members.find((r) => String(r.member_email || '').toLowerCase() === email)
+      : null;
+    if (
+      myMemberRow &&
+      isGenericPlaceholderWorkNick(myMemberRow.room_persona_nickname) &&
+      actorNick &&
+      !isGenericPlaceholderWorkNick(actorNick)
+    ) {
+      myMemberRow.room_persona_nickname = actorNick;
+      fetch(
+        `${supabaseUrl}/rest/v1/ghosti_lounge_members?room_id=eq.${encodeURIComponent(roomId)}&member_email=eq.${encodeURIComponent(email)}`,
+        {
+          method: 'PATCH',
+          headers: srvHeaders(serviceKey, {
+            'Content-Type': 'application/json',
+            Prefer: 'return=minimal',
+          }),
+          body: JSON.stringify({ room_persona_nickname: actorNick }),
+        }
+      ).catch(() => null);
+    }
     const membersList = sortAndMapWorkMembers(ctx.members, ctx.room.master_email);
     return {
       status: 200,

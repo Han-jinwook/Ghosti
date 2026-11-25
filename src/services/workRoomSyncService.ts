@@ -73,6 +73,71 @@ export interface WorkRoomServerMemberDto {
   joinedAt?: string | null;
 }
 
+const GENERIC_WORK_PLACEHOLDER_NICKS = new Set([
+  '초대 팀원',
+  '초대팀원',
+  '팀원',
+  '방장(나)',
+  '방장',
+  '게스트',
+  '익명',
+  'anonymous',
+  'guest',
+  'member',
+]);
+
+export function isGenericWorkPlaceholderNickname(raw?: string | null): boolean {
+  const clean = String(raw || '').trim();
+  if (!clean) return true;
+  return (
+    GENERIC_WORK_PLACEHOLDER_NICKS.has(clean) ||
+    GENERIC_WORK_PLACEHOLDER_NICKS.has(clean.toLowerCase())
+  );
+}
+
+export function resolveCleanWorkClientNickname(
+  explicitNick?: string | null,
+  explicitEmail?: string | null
+): string {
+  const cand = String(explicitNick || '').trim();
+  if (cand && !isGenericWorkPlaceholderNickname(cand)) {
+    return cand.slice(0, 32);
+  }
+  if (typeof window !== 'undefined') {
+    try {
+      const savedHubNick = (localStorage.getItem('ghosti_hub_user_nickname') || '').trim();
+      if (savedHubNick && !isGenericWorkPlaceholderNickname(savedHubNick)) {
+        return savedHubNick.slice(0, 32);
+      }
+      const rawUser =
+        localStorage.getItem('merlin_hub_user') || localStorage.getItem('merlin_cached_user');
+      if (rawUser) {
+        const parsed = JSON.parse(rawUser) as { nickname?: string; email?: string };
+        const userNick = String(parsed?.nickname || '').trim();
+        if (userNick && !isGenericWorkPlaceholderNickname(userNick)) {
+          return userNick.slice(0, 32);
+        }
+      }
+    } catch {
+      /* ignore */
+    }
+  }
+  const resolvedEmail = String(
+    explicitEmail ||
+      (typeof window !== 'undefined'
+        ? localStorage.getItem('merlin_hub_user_email') ||
+          localStorage.getItem('ghosti_hub_user_email') ||
+          ''
+        : '')
+  )
+    .trim()
+    .toLowerCase();
+  if (resolvedEmail && resolvedEmail.includes('@') && resolvedEmail !== 'anonymous') {
+    return resolvedEmail.split('@')[0].slice(0, 32);
+  }
+  return '';
+}
+
 /**
  * 팀원 권한 및 S: 드라이브 연결 관리 카드 순서 고정 정렬 (F5·권한 변경 시 순서 변동 0%):
  * 1순위: 방장(role === 'master') 1번 고정
@@ -87,9 +152,12 @@ export function sortWorkRoomServerMembers(
   for (const m of members) {
     const cleanEmail = String(m?.email || '').trim().toLowerCase();
     if (!cleanEmail || !cleanEmail.includes('@')) continue;
+    const cleanNick = !isGenericWorkPlaceholderNickname(m.nickname)
+      ? String(m.nickname).trim()
+      : cleanEmail.split('@')[0];
     dedup.set(cleanEmail, {
       email: cleanEmail,
-      nickname: String(m.nickname || cleanEmail.split('@')[0]),
+      nickname: cleanNick,
       role: m.role === 'master' ? 'master' : m.role === 'viewer' ? 'viewer' : 'editor',
       joinedAt: m.joinedAt || null,
     });
@@ -615,7 +683,7 @@ export async function acceptWorkRoomInvite(opts: {
     message?: string;
   }>('work_accept_invite', {
     inviteToken: cleanTok,
-    nickname: (opts.nickname || '팀원').trim(),
+    nickname: resolveCleanWorkClientNickname(opts.nickname),
   });
   if (res.ok && res.roomId && res.hostTunnel?.tunnelUrl) {
     setActiveHostTunnelSession(res.roomId, res.hostTunnel);
@@ -932,7 +1000,7 @@ export function mapRawWorkFileToDto(rf: Record<string, unknown>, idx: number): W
     fileMtimeIso: mtimeIso,
     author,
     lockedBy,
-    sha256: String(rf.sha256 || `${byteSize}_${mtimeIso}`),
+    sha256: typeof rf.sha256 === 'string' ? rf.sha256.trim() : '',
     cacheSizeLabel: zCoreBridge.isConnected ? 'S:\\ 실시간 직결' : '웹 미리보기 동기화됨',
     summaryTitle: String(
       rf.summaryTitle || (isImage ? `[이미지 미리보기] ${name}` : `[문서 미리보기] ${name}`)
@@ -1103,22 +1171,57 @@ export async function fetchLocalWorkLocksFast(author?: string): Promise<{
   }
 }
 
+async function fetchWithTimeout(
+  url: string,
+  init: RequestInit,
+  timeoutMs: number
+): Promise<Response> {
+  const ctrl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+  const timer = ctrl ? setTimeout(() => ctrl.abort(), timeoutMs) : null;
+  try {
+    return await fetch(url, {
+      ...init,
+      ...(ctrl ? { signal: ctrl.signal } : {}),
+    });
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
+}
+
 export async function uploadWorkFileToNativeSDrive(opts: {
   file: File;
   folderId?: string;
   author?: string;
   roomId?: string;
+  isHost?: boolean;
 }): Promise<{ ok: boolean; relPath?: string; sDrivePath?: string; error?: string }> {
   if (opts.file.size > 50 * 1024 * 1024) {
     return { ok: false, error: 'EXCEEDS_50MB_LIMIT' };
   }
   const localUrl = resolveWorkApiUrl('/__work/upload');
-  const tunnel =
+  let tunnel =
+    !opts.isHost &&
     activeHostTunnelSession &&
     (!opts.roomId || activeHostTunnelSession.roomId === opts.roomId) &&
     activeHostTunnelSession.tunnelUrl
       ? activeHostTunnelSession
       : null;
+
+  // 초대 팀원이 업로드할 때 아직 메모리에 대장 PC 터널 주소가 없다면 서버에서 최신 터널 주소를 즉시 1회 확보
+  if (!opts.isHost && !tunnel && opts.roomId && hasAuthenticatedHubAccountSession()) {
+    try {
+      const freshState = await callGhostiServerBridge<{ hostTunnel?: WorkHostTunnelEndpointDto }>(
+        'work_get_room_state',
+        { roomId: opts.roomId }
+      );
+      if (freshState.ok && freshState.hostTunnel?.tunnelUrl) {
+        setActiveHostTunnelSession(opts.roomId, freshState.hostTunnel);
+        tunnel = getActiveHostTunnelSession();
+      }
+    } catch {
+      /* ignore */
+    }
+  }
 
   if (!localUrl && !tunnel) {
     return { ok: false, error: 'PC_ENGINE_OR_TUNNEL_NOT_CONNECTED' };
@@ -1140,16 +1243,20 @@ export async function uploadWorkFileToNativeSDrive(opts: {
     author: opts.author || '',
   });
 
-  // 1) 내 PC 엔진 연결 시 로컬 S:\에 즉시 기록
+  // 1) 내 PC 엔진 연결 시 로컬 S:\에 즉시 기록 (15초 타임아웃으로 무한 대기 원천 차단)
   let localResult: { ok: boolean; relPath?: string; sDrivePath?: string; error?: string } | null =
     null;
   if (localUrl) {
     try {
-      const res = await fetch(localUrl, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: bodyPayload,
-      });
+      const res = await fetchWithTimeout(
+        localUrl,
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: bodyPayload,
+        },
+        15000
+      );
       localResult = (await res.json()) as {
         ok: boolean;
         relPath?: string;
@@ -1161,30 +1268,60 @@ export async function uploadWorkFileToNativeSDrive(opts: {
     }
   }
 
-  // 2) 외부 팀원(또는 모바일)이 대장 PC 직통 HTTPS 터널에 연결된 경우 대장 PC S:\에도 직접 전송 (서버 파일 저장 0 Byte)
-  if (tunnel) {
-    try {
-      const tRes = await fetch(`${tunnel.tunnelUrl}/__work/upload`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(tunnel.accessKey ? { 'X-Ghosti-Work-Key': tunnel.accessKey } : {}),
+  // 2) 초대 팀원(또는 모바일)인 경우 대장 PC 직통 HTTPS 터널로도 전송해 방장 S:\에도 즉시 반영 (12초 타임아웃 + 터널 회전 시 1회 자동 재획득)
+  if (!opts.isHost && tunnel) {
+    const pushToTunnel = async (ep: NonNullable<typeof tunnel>) => {
+      const tRes = await fetchWithTimeout(
+        `${ep.tunnelUrl}/__work/upload`,
+        {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(ep.accessKey ? { 'X-Ghosti-Work-Key': ep.accessKey } : {}),
+          },
+          body: bodyPayload,
         },
-        body: bodyPayload,
-      });
-      if (tRes.ok) {
-        const tj = (await tRes.json()) as {
-          ok: boolean;
-          relPath?: string;
-          sDrivePath?: string;
-          error?: string;
-        };
-        if (tj.ok) {
-          return localResult?.ok ? localResult : tj;
-        }
+        12000
+      );
+      if (!tRes.ok) return null;
+      const tj = (await tRes.json()) as {
+        ok: boolean;
+        relPath?: string;
+        sDrivePath?: string;
+        error?: string;
+      };
+      return tj?.ok ? tj : null;
+    };
+
+    try {
+      const pushed = await pushToTunnel(tunnel);
+      if (pushed) {
+        return localResult?.ok ? localResult : pushed;
       }
     } catch {
-      /* fallback to localResult */
+      /* retry once with refreshed tunnel URL below */
+    }
+
+    if (opts.roomId && hasAuthenticatedHubAccountSession()) {
+      try {
+        const refreshed = await callGhostiServerBridge<{ hostTunnel?: WorkHostTunnelEndpointDto }>(
+          'work_get_room_state',
+          { roomId: opts.roomId }
+        );
+        const nextUrl = (refreshed.hostTunnel?.tunnelUrl || '').trim().replace(/\/+$/, '');
+        if (refreshed.ok && nextUrl && nextUrl !== tunnel.tunnelUrl) {
+          setActiveHostTunnelSession(opts.roomId, refreshed.hostTunnel);
+          const nextSession = getActiveHostTunnelSession();
+          if (nextSession) {
+            const retried = await pushToTunnel(nextSession).catch(() => null);
+            if (retried) {
+              return localResult?.ok ? localResult : retried;
+            }
+          }
+        }
+      } catch {
+        /* fallback to localResult */
+      }
     }
   }
 
@@ -1338,12 +1475,6 @@ export async function ensureLocalHostOutboundTunnelAndRegister(
     }
 
     if (tunnelUrl && hasAuthenticatedHubAccountSession()) {
-      setActiveHostTunnelSession(cleanRoomId, {
-        tunnelUrl,
-        accessKey,
-        masterServerName: extra?.masterServerName,
-        backupServers: extra?.backupServers,
-      });
       const regSig = `${cleanRoomId}::${tunnelUrl}::${accessKey}::${extra?.masterServerName || ''}::${JSON.stringify(extra?.backupServers || [])}`;
       if (extra?.forceRegister || regSig !== lastRegisteredHostTunnelSig) {
         const regRes = await callGhostiServerBridge('work_register_tunnel', {
@@ -1353,13 +1484,20 @@ export async function ensureLocalHostOutboundTunnelAndRegister(
           ...(extra?.masterServerName ? { masterServerName: extra.masterServerName } : {}),
           ...(extra?.backupServers ? { backupServers: extra.backupServers } : {}),
         });
-        if (regRes.ok) {
-          lastRegisteredHostTunnelSig = regSig;
+        if (!regRes.ok) {
+          return { ok: false, status: 'forbidden_not_host', tunnelUrl: '', accessKey: '' };
         }
+        lastRegisteredHostTunnelSig = regSig;
       }
+      setActiveHostTunnelSession(cleanRoomId, {
+        tunnelUrl,
+        accessKey,
+        masterServerName: extra?.masterServerName,
+        backupServers: extra?.backupServers,
+      });
     }
     return {
-      ok: Boolean(data.ok),
+      ok: Boolean(data.ok && tunnelUrl),
       status: tunnelUrl ? 'connected' : status,
       tunnelUrl,
       accessKey,
@@ -1386,6 +1524,7 @@ export async function pullSyncRemoteWorkFilesToLocalSDrive(
     .map((d) => ({
       relPath: d.relPath,
       sha256: d.sha256,
+      byteSize: d.byteSize,
       fileMtimeIso: d.fileMtimeIso,
       uploaderNickname: d.author,
       base64Data: d.inlineSyncBase64,
@@ -1403,23 +1542,26 @@ export async function pullSyncRemoteWorkFilesToLocalSDrive(
     );
     for (const d of needFetchDocs.slice(0, 15)) {
       try {
-        const pRes = await fetch(
+        const pRes = await fetchWithTimeout(
           `${tunnel.tunnelUrl}/__work/file-sync-payload?relPath=${encodeURIComponent(d.relPath)}`,
           {
             method: 'GET',
             headers: tunnel.accessKey ? { 'X-Ghosti-Work-Key': tunnel.accessKey } : {},
-          }
+          },
+          8000
         );
         if (pRes.ok) {
           const pj = (await pRes.json()) as {
             ok?: boolean;
             base64Data?: string;
+            size?: number;
             mtime?: string;
           };
           if (pj?.ok && pj.base64Data) {
             inlineItems.push({
               relPath: d.relPath,
               sha256: d.sha256,
+              byteSize: Number(pj.size || d.byteSize || 0),
               fileMtimeIso: pj.mtime || d.fileMtimeIso,
               uploaderNickname: d.author,
               base64Data: pj.base64Data,
@@ -1437,14 +1579,18 @@ export async function pullSyncRemoteWorkFilesToLocalSDrive(
 
   if (inlineItems.length > 0 || Object.keys(tombstones).length > 0) {
     try {
-      const res = await fetch(getZCoreUrl('/__work/pull-sync'), {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          files: inlineItems,
-          deletedTombstones: tombstones,
-        }),
-      });
+      const res = await fetchWithTimeout(
+        getZCoreUrl('/__work/pull-sync'),
+        {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            files: inlineItems,
+            deletedTombstones: tombstones,
+          }),
+        },
+        15000
+      );
       if (res.ok) {
         const json = (await res.json()) as {
           ok?: boolean;
@@ -1939,17 +2085,20 @@ export async function upsertWorkFilesToSupabase(opts: {
   roomId: string;
   docs: WorkLoungeDocDto[];
   actorNickname: string;
+  isHost?: boolean;
 }): Promise<{
   ok: boolean;
   mergedDocs?: WorkLoungeDocDto[];
   deletedTombstones?: WorkDeletedTombstoneMap;
   uploadedLargeBlob?: boolean;
 }> {
-  // [Zero-Cloud 원칙]: 서버에는 파일·본문을 업로드하지 않으며, 대장 PC의 상시 HTTPS 직통 터널과 Tombstone 상태만 동기화합니다.
+  // [Zero-Cloud 원칙]: 서버에는 파일·본문을 업로드하지 않으며, 대장 PC(방장 전용)의 상시 HTTPS 직통 터널과 Tombstone 상태만 동기화합니다.
   if (!opts.roomId || !hasAuthenticatedHubAccountSession()) {
     return { ok: false };
   }
-  await ensureLocalHostOutboundTunnelAndRegister(opts.roomId);
+  if (opts.isHost) {
+    await ensureLocalHostOutboundTunnelAndRegister(opts.roomId);
+  }
   const res = await callGhostiServerBridge<{
     deletedTombstones?: WorkDeletedTombstoneMap;
     hostTunnel?: WorkHostTunnelEndpointDto;
@@ -1973,6 +2122,7 @@ export function connectWorkRoomRealtimeChannel(opts: {
   role: 'host' | 'editor' | 'viewer';
   getLocalDocs: () => WorkLoungeDocDto[];
   getLocalMembers?: () => WorkRoomServerMemberDto[];
+  onSubscribed?: () => void;
   onRemoteSnapshot: (docs: WorkLoungeDocDto[]) => void;
   onRemoteFileDeleted: (relPath: string, deletedAt: string) => void;
   onRemoteLockMap: (locksByRelPath: Record<string, string | null>) => void;
@@ -2053,17 +2203,8 @@ export function connectWorkRoomRealtimeChannel(opts: {
             payload: { sender: opts.peerId, docs: stripHeavyPayload(curDocs) },
           });
         }
-        if (opts.role === 'host' && opts.getLocalMembers) {
-          const curMems = opts.getLocalMembers();
-          if (curMems.length > 0) {
-            void channel.send({
-              type: 'broadcast',
-              event: 'WORK_MEMBERS_UPDATED',
-              payload: { sender: opts.peerId, members: sortWorkRoomServerMembers(curMems) },
-            });
-          }
-        }
         if (
+          opts.role === 'host' &&
           activeHostTunnelSession &&
           activeHostTunnelSession.roomId === opts.roomId &&
           activeHostTunnelSession.tunnelUrl
@@ -2117,6 +2258,7 @@ export function connectWorkRoomRealtimeChannel(opts: {
           sDriveConnected: zCoreBridge.isConnected,
           onlineAt: new Date().toISOString(),
         });
+        opts.onSubscribed?.();
         void channel.send({
           type: 'broadcast',
           event: 'REQUEST_WORK_SNAPSHOT',

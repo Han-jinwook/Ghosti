@@ -43,6 +43,7 @@ import {
   readCachedMyWorkRoomMeta,
   readPendingKickedWorkRoomNotice,
   removeWorkRoomMemberOnServer,
+  resolveCleanWorkClientNickname,
   sanitizeWorkLockOwner,
   saveCachedJoinedWorkRoomMeta,
   saveCachedWorkTombstones,
@@ -73,6 +74,44 @@ const WORK_LOUNGE_FOLDERS = [
   { id: 'tax', name: '03_세금계산서_회계증빙', count: 0, path: 'S:\\03_세금계산서_회계증빙' },
   { id: 'site', name: '04_현장시공_도면_미디어', count: 0, path: 'S:\\04_현장시공_도면_미디어' },
 ];
+
+function areWorkServerMembersEqual(
+  a: WorkRoomServerMemberDto[],
+  b: WorkRoomServerMemberDto[]
+): boolean {
+  if (a === b) return true;
+  if (a.length !== b.length) return false;
+  for (let i = 0; i < a.length; i += 1) {
+    if (
+      a[i].email !== b[i].email ||
+      a[i].nickname !== b[i].nickname ||
+      a[i].role !== b[i].role ||
+      (a[i].joinedAt || '') !== (b[i].joinedAt || '')
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function isSameJoinedWorkRoomSummary(
+  a: JoinedWorkRoomSummary | null,
+  b: JoinedWorkRoomSummary | null
+): boolean {
+  if (a === b) return true;
+  if (!a || !b) return false;
+  return (
+    a.roomId === b.roomId &&
+    a.roomTitle === b.roomTitle &&
+    a.hostEmail === b.hostEmail &&
+    (a.hostNickname || '') === (b.hostNickname || '') &&
+    a.isHost === b.isHost &&
+    a.role === b.role &&
+    a.ownerUnlocked === b.ownerUnlocked &&
+    a.seatLimit === b.seatLimit &&
+    (a.lockReason || '') === (b.lockReason || '')
+  );
+}
 
 export const WorkLoungeB2BHub: React.FC = () => {
   const {
@@ -253,6 +292,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
   const isAcceptingInviteRef = useRef<boolean>(false);
   const memberMutationEpochRef = useRef<number>(0);
   const recentlyKickedEmailsRef = useRef<Map<string, number>>(new Map());
+  const pendingMembersBroadcastRef = useRef<WorkRoomServerMemberDto[] | null>(null);
+  const lastPullSyncSigRef = useRef<string>('');
 
   const handleConfirmKickedNotice = useCallback(() => {
     clearPendingKickedWorkRoomNotice(merlinAuth?.email || undefined);
@@ -400,6 +441,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
   // 계정 전환 시 이전 계정 업무방 ID·문서 잔상 즉시 초기화 및 새 계정 캐시 선복원 (C9 계정 격리)
   useEffect(() => {
     acceptedInviteTokenRef.current = '';
+    lastPullSyncSigRef.current = '';
+    pendingMembersBroadcastRef.current = null;
     const inv = readActiveWorkRoomInviteMeta();
     if (inv.hasWorkInvite && inv.roomId) {
       clearPendingKickedWorkRoomNotice(merlinAuth?.email || undefined);
@@ -508,7 +551,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
         }
       // 본인 구독 업무방이 없거나(팀원 계정) 아직 활성 방이 없으면 초대받은 팀원방을 최우선 복원
       if (invitedRoom && (!isOwnWorkUnlocked || !activeWorkRoomId || activeWorkRoomId === invitedRoom.roomId)) {
-        setJoinedInvitedRoom(invitedRoom);
+        setJoinedInvitedRoom((prev) =>
+          isSameJoinedWorkRoomSummary(prev, invitedRoom) ? prev : invitedRoom
+        );
         saveCachedJoinedWorkRoomMeta(invitedRoom, merlinAuth.email);
         if (activeWorkRoomId !== invitedRoom.roomId) {
           setActiveWorkRoomId(invitedRoom.roomId);
@@ -526,7 +571,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
           invitedRoom.members.length > 0
         ) {
           const sorted = filterOutRecentlyKicked(sortWorkRoomServerMembers(invitedRoom.members));
-          setServerMembers(sorted);
+          setServerMembers((prev) => (areWorkServerMembersEqual(prev, sorted) ? prev : sorted));
           saveCachedServerMembers(invitedRoom.roomId, sorted, merlinAuth.email);
         }
         if (invitedRoom.deletedTombstones && Object.keys(invitedRoom.deletedTombstones).length > 0) {
@@ -583,7 +628,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
           hostedRoom.members.length > 0
         ) {
           const sorted = filterOutRecentlyKicked(sortWorkRoomServerMembers(hostedRoom.members));
-          setServerMembers(sorted);
+          setServerMembers((prev) => (areWorkServerMembersEqual(prev, sorted) ? prev : sorted));
           saveCachedServerMembers(hostedRoom.roomId, sorted, merlinAuth.email);
         }
         if (hostedRoom.deletedTombstones && Object.keys(hostedRoom.deletedTombstones).length > 0) {
@@ -646,13 +691,10 @@ export const WorkLoungeB2BHub: React.FC = () => {
   }, [activeWorkRoomId, merlinAuth?.email]);
 
   const actorNickname = useMemo(() => {
-    if (typeof window !== 'undefined') {
-      const savedNick = (localStorage.getItem('ghosti_hub_user_nickname') || '').trim();
-      if (savedNick) return savedNick;
-    }
-    if (merlinAuth?.email) return merlinAuth.email.split('@')[0];
-    return inviteMeta.hasWorkInvite ? '초대 팀원' : '방장(나)';
-  }, [merlinAuth?.email, inviteMeta.hasWorkInvite]);
+    const clean = resolveCleanWorkClientNickname(undefined, merlinAuth?.email || undefined);
+    if (clean) return clean;
+    return inviteMeta.hasWorkInvite ? '팀원' : '방장';
+  }, [merlinAuth?.email, authSyncTick, inviteMeta.hasWorkInvite]);
 
   const peerIdRef = useRef<string>(`peer_${Math.random().toString(36).slice(2, 10)}`);
 
@@ -765,13 +807,30 @@ export const WorkLoungeB2BHub: React.FC = () => {
     if (
       !res.mounted &&
       isWorkUnlocked &&
-      !isJoinedInvitedMember &&
-      myRoomRole === 'host' &&
-      isZCoreConnected
+      isZCoreConnected &&
+      !isLocalPcBlockedByOtherAccount()
     ) {
-      void mountWorkSDriveNative({ action: 'mount', openExplorer: false }).then((m) => {
-        if (m.ok && m.mounted) setSDriveMounted(true);
-      });
+      const amHost = !isJoinedInvitedMember && myRoomRole === 'host';
+      void syncEntitlementToLocalPcEngine(
+        deviceEntitlement || null,
+        merlinAuth?.email || undefined,
+        {
+          unlocked: true,
+          roomId: activeWorkRoomId || undefined,
+          isHost: amHost,
+          planId: isJoinedInvitedMember
+            ? 'work_invited_member'
+            : deviceEntitlement?.workPlanId || (isWorkTrialActive ? 'work_trial_30d' : ''),
+        }
+      ).then(() =>
+        mountWorkSDriveNative({
+          action: 'mount',
+          openExplorer: false,
+          accountEmail: merlinAuth?.email || undefined,
+        }).then((m) => {
+          if (m.ok && m.mounted) setSDriveMounted(true);
+        })
+      );
     } else {
       setSDriveMounted((prev) => (prev === res.mounted ? prev : res.mounted));
     }
@@ -871,7 +930,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
     if (activeWorkRoomId && uploadableDocs.length > 0) {
       const cloudSig = uploadableDocs
-        .map((d) => `${d.relPath}:${d.sha256}:${d.lockedBy || ''}`)
+        .map((d) => `${d.relPath}:${d.byteSize}:${d.fileMtimeIso}:${d.sha256}:${d.lockedBy || ''}`)
         .join('|');
       if (cloudSig !== prevCloudUpsertSigRef.current) {
         realtimeRef.current?.broadcastSnapshot(uploadableDocs);
@@ -884,6 +943,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
           roomId: activeWorkRoomId,
           docs: uploadableDocs,
           actorNickname,
+          isHost: !isJoinedInvitedMember && myRoomRole === 'host',
         }).then((upRes) => {
           if (upRes.ok) {
             prevCloudUpsertSigRef.current = cloudSig;
@@ -1164,7 +1224,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     let cancelled = false;
     void acceptWorkRoomInvite({
       inviteToken: inviteMeta.inviteToken,
-      nickname: actorNickname,
+      nickname: resolveCleanWorkClientNickname(undefined, merlinAuth?.email || undefined),
     })
       .then((accepted) => {
         if (cancelled) return;
@@ -1220,16 +1280,20 @@ export const WorkLoungeB2BHub: React.FC = () => {
 
         if (Array.isArray(accepted.members) && accepted.members.length > 0 && targetRoomId) {
           const sorted = filterOutRecentlyKicked(sortWorkRoomServerMembers(accepted.members));
-          setServerMembers(sorted);
+          setServerMembers((prev) => (areWorkServerMembersEqual(prev, sorted) ? prev : sorted));
           saveCachedServerMembers(targetRoomId, sorted, merlinAuth?.email || undefined);
+          pendingMembersBroadcastRef.current = sorted;
+          realtimeRef.current?.broadcastMembersUpdated(sorted);
         } else if (targetRoomId) {
           void fetchWorkRoomAuthedState(targetRoomId, '', {
             skipBlockingTunnelFetch: true,
           }).then((fresh) => {
             if (!cancelled && fresh.ok && Array.isArray(fresh.members)) {
               const sorted = filterOutRecentlyKicked(sortWorkRoomServerMembers(fresh.members));
-              setServerMembers(sorted);
+              setServerMembers((prev) => (areWorkServerMembersEqual(prev, sorted) ? prev : sorted));
               saveCachedServerMembers(targetRoomId, sorted, merlinAuth?.email || undefined);
+              pendingMembersBroadcastRef.current = sorted;
+              realtimeRef.current?.broadcastMembersUpdated(sorted);
             }
           });
         }
@@ -1283,6 +1347,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
     showToast,
   ]);
 
+  const hasJoinedInvitedRoom = Boolean(joinedInvitedRoom);
+  const joinedInvitedRoomTitle = joinedInvitedRoom?.roomTitle || '';
+
   // 계정별 로컬 캐시 복원 + 서버 DB 팀원 목록 즉시 반영(터널 대기 0ms) + 대장 PC 직통 터널 비동기 파일 동기화
   useEffect(() => {
     if (activeWorkRoomId && isAuthenticated) {
@@ -1304,7 +1371,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
         // 초대 링크로 방금 들어와 acceptWorkRoomInvite가 진행 중인 첫 순간에는 그 응답을 기다림
         if (
           isAcceptingInviteRef.current ||
-          (inviteMeta.hasWorkInvite && inviteMeta.inviteToken && !joinedInvitedRoom)
+          (inviteMeta.hasWorkInvite && inviteMeta.inviteToken && !hasJoinedInvitedRoom)
         ) {
           return;
         }
@@ -1326,7 +1393,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
           ) {
             performKickedOrRemovedCleanup(
               activeWorkRoomId,
-              joinedInvitedRoom?.roomTitle || inviteMeta.roomTitle || '우리팀 업무 공유방 (S:)'
+              joinedInvitedRoomTitle || inviteMeta.roomTitle || '우리팀 업무 공유방 (S:)'
             );
           }
           return;
@@ -1338,7 +1405,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
           // 내보내기/권한 변경 직후 이전 주기 조회가 늦게 도착한 경우 멤버 목록 덮어쓰기 차단
           if (epochAtStart === memberMutationEpochRef.current) {
             const sortedMembers = filterOutRecentlyKicked(sortWorkRoomServerMembers(authed.members));
-            setServerMembers(sortedMembers);
+            setServerMembers((prev) =>
+              areWorkServerMembersEqual(prev, sortedMembers) ? prev : sortedMembers
+            );
             saveCachedServerMembers(activeWorkRoomId, sortedMembers, merlinAuth?.email || undefined);
             const myRow = cleanMyEmail
               ? sortedMembers.find((m) => m.email.toLowerCase() === cleanMyEmail)
@@ -1363,6 +1432,9 @@ export const WorkLoungeB2BHub: React.FC = () => {
                     seatLimit: authed.seatLimit || prev?.seatLimit || 5,
                     lockReason: null,
                   };
+                  if (isSameJoinedWorkRoomSummary(prev, nextJoined)) {
+                    return prev;
+                  }
                   saveCachedJoinedWorkRoomMeta(nextJoined, merlinAuth?.email || undefined);
                   return nextJoined;
                 });
@@ -1440,7 +1512,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
     };
   }, [
     activeWorkRoomId,
-    joinedInvitedRoom,
+    hasJoinedInvitedRoom,
+    joinedInvitedRoomTitle,
     inviteMeta.hasWorkInvite,
     inviteMeta.inviteToken,
     inviteMeta.roomTitle,
@@ -1471,6 +1544,12 @@ export const WorkLoungeB2BHub: React.FC = () => {
       role: myRoomRole,
       getLocalDocs: () => localDocsRef.current,
       getLocalMembers: () => serverMembersRef.current,
+      onSubscribed: () => {
+        if (pendingMembersBroadcastRef.current && pendingMembersBroadcastRef.current.length > 0) {
+          handle.broadcastMembersUpdated(pendingMembersBroadcastRef.current);
+          pendingMembersBroadcastRef.current = null;
+        }
+      },
       onRemoteSnapshot: (incomingDocs) => {
         const curTombs = deletedTombstonesRef.current;
         const cleaned = incomingDocs.filter((d) => {
@@ -1554,12 +1633,12 @@ export const WorkLoungeB2BHub: React.FC = () => {
             !myRow &&
             !isAcceptingInviteRef.current &&
             !inviteMeta.hasWorkInvite &&
-            (myRoomRole !== 'host' || Boolean(joinedInvitedRoom) || !isOwnWorkUnlocked)
+            (myRoomRole !== 'host' || hasJoinedInvitedRoom || !isOwnWorkUnlocked)
           ) {
             // 방장이 나를 내보낸 경우 즉시 초대 세션·업무방 화면·S: 마운트·로컬 캐시 일괄 해제!
             performKickedOrRemovedCleanup(
               activeWorkRoomId,
-              joinedInvitedRoom?.roomTitle || inviteMeta.roomTitle || '우리팀 업무 공유방 (S:)'
+              joinedInvitedRoomTitle || inviteMeta.roomTitle || '우리팀 업무 공유방 (S:)'
             );
             return;
           }
@@ -1582,13 +1661,16 @@ export const WorkLoungeB2BHub: React.FC = () => {
                   seatLimit: prev?.seatLimit || roomSeatLimit || 5,
                   lockReason: null,
                 };
+                if (isSameJoinedWorkRoomSummary(prev, nextJoined)) {
+                  return prev;
+                }
                 saveCachedJoinedWorkRoomMeta(nextJoined, cleanMyEmail);
                 return nextJoined;
               });
             }
           }
         }
-        setServerMembers(sorted);
+        setServerMembers((prev) => (areWorkServerMembersEqual(prev, sorted) ? prev : sorted));
         saveCachedServerMembers(activeWorkRoomId, sorted, merlinAuth?.email || undefined);
       },
     });
@@ -1599,7 +1681,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
     };
   }, [
     activeWorkRoomId,
-    joinedInvitedRoom,
+    hasJoinedInvitedRoom,
+    joinedInvitedRoomTitle,
     isWorkUnlocked,
     isOwnWorkUnlocked,
     roomSeatLimit,
@@ -1617,7 +1700,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
     mergeAndPersistTombstones,
   ]);
 
-  // 팀원 PC에서 PC 엔진이 켜져 있을 때 대장 PC 직통 터널로부터 내 S:\ 폴더로 자동 동기화
+  // 팀원(및 방장) PC에서 PC 엔진이 켜져 있을 때 실제 원격 파일 목록이 변경된 경우에만 내 S:\ 폴더로 동기화 (6초 폴링 시 중복 다운로드·숫자 무한 누적 원천 차단)
   useEffect(() => {
     if (
       !isZCoreConnected ||
@@ -1629,19 +1712,38 @@ export const WorkLoungeB2BHub: React.FC = () => {
       return;
     }
 
+    const pullSig =
+      remoteDocs
+        .map((d) => `${d.relPath}:${d.byteSize}:${d.fileMtimeIso}:${d.sha256}`)
+        .sort()
+        .join('|') +
+      '::' +
+      Object.entries(deletedTombstones)
+        .map(([k, v]) => `${k}:${v?.deletedAt || ''}`)
+        .sort()
+        .join('|');
+    if (pullSig === lastPullSyncSigRef.current) {
+      return;
+    }
+    lastPullSyncSigRef.current = pullSig;
+
     void pullSyncRemoteWorkFilesToLocalSDrive(remoteDocs, {
       roomId: activeWorkRoomId,
       inviteToken: inviteMeta.inviteToken,
       deletedTombstones,
     }).then((pulled) => {
-      if (pulled.ok && (pulled.syncedCount > 0 || pulled.removedCount > 0)) {
+      if (!pulled.ok) {
+        lastPullSyncSigRef.current = '';
+        return;
+      }
+      if (pulled.syncedCount > 0 || pulled.removedCount > 0) {
         if (pulled.syncedCount > 0) {
-          setLastSyncedToLocalCount((prev) => prev + pulled.syncedCount);
+          setLastSyncedToLocalCount(pulled.syncedCount);
           showToast(
             `공유 업무 문서 ${pulled.syncedCount}건이 내 컴퓨터 [S:\\ 드라이브]로 자동 동기화되었습니다!`
           );
         }
-        void syncRealWorkFiles();
+        void syncRealWorkFiles(true);
       }
     });
   }, [
@@ -1940,8 +2042,8 @@ export const WorkLoungeB2BHub: React.FC = () => {
       {
         unlocked: true,
         roomId: activeWorkRoomId || undefined,
-        isHost: !inviteMeta.hasWorkInvite,
-        planId: inviteMeta.hasWorkInvite
+        isHost: !isJoinedInvitedMember && myRoomRole === 'host',
+        planId: isJoinedInvitedMember
           ? 'work_invited_member'
           : deviceEntitlement?.workPlanId || (isWorkTrialActive ? 'work_trial_30d' : ''),
         force: true,
@@ -2033,31 +2135,45 @@ export const WorkLoungeB2BHub: React.FC = () => {
     }
     setUploadingFiles(true);
     let okCount = 0;
+    let lastError = '';
     const uploadedRelPaths: string[] = [];
-    for (const file of Array.from(fileList)) {
-      const uploaded = await uploadWorkFileToNativeSDrive({
-        file,
-        folderId: selectedFolderId,
-        author: actorNickname,
-        roomId: activeWorkRoomId,
-      });
-      if (uploaded.ok) {
-        okCount += 1;
-        if (uploaded.relPath) uploadedRelPaths.push(uploaded.relPath);
+    const amHost = !isJoinedInvitedMember && myRoomRole === 'host';
+    try {
+      for (const file of Array.from(fileList)) {
+        const uploaded = await uploadWorkFileToNativeSDrive({
+          file,
+          folderId: selectedFolderId,
+          author: actorNickname,
+          roomId: activeWorkRoomId,
+          isHost: amHost,
+        });
+        if (uploaded.ok) {
+          okCount += 1;
+          if (uploaded.relPath) uploadedRelPaths.push(uploaded.relPath);
+        } else if (uploaded.error) {
+          lastError = uploaded.error;
+        }
       }
-    }
-    setUploadingFiles(false);
-    if (okCount > 0) {
-      if (uploadedRelPaths.length > 0) {
-        mergeAndPersistTombstones({}, uploadedRelPaths);
+      if (okCount > 0) {
+        if (uploadedRelPaths.length > 0) {
+          mergeAndPersistTombstones({}, uploadedRelPaths);
+        }
+        showToast(`업무 파일 ${okCount}건이 S:\\ 드라이브 및 팀원 공유 목록에 즉시 반영되었습니다!`);
+        if (isZCoreConnected) {
+          await syncRealWorkFiles(true);
+        } else if (hasTunnel) {
+          const fromTunnel = await fetchWorkFilesFromHostTunnel();
+          if (fromTunnel.ok) setRemoteDocs(fromTunnel.docs);
+        }
+      } else {
+        showToast(
+          lastError === 'EXCEEDS_50MB_LIMIT'
+            ? '한 번에 50MB 이하 파일만 추가할 수 있습니다.'
+            : '파일 업로드 연결이 지연되었습니다. 잠시 후 다시 시도해 주세요.'
+        );
       }
-      showToast(`업무 파일 ${okCount}건이 S:\\ 드라이브 및 팀원 공유 목록에 즉시 반영되었습니다!`);
-      if (isZCoreConnected) {
-        await syncRealWorkFiles();
-      } else if (hasTunnel) {
-        const fromTunnel = await fetchWorkFilesFromHostTunnel();
-        if (fromTunnel.ok) setRemoteDocs(fromTunnel.docs);
-      }
+    } finally {
+      setUploadingFiles(false);
     }
   };
 
@@ -2393,7 +2509,7 @@ export const WorkLoungeB2BHub: React.FC = () => {
               </span>
               <span className="text-[11.5px] text-emerald-300 font-bold">
                 {isZCoreConnected
-                  ? `✓ 내 컴퓨터 연결됨 · 윈도우 탐색기 S:\\ 실시간 동기화 가동 중${lastSyncedToLocalCount > 0 ? ` (+${lastSyncedToLocalCount}건 동기화됨)` : ''}`
+                  ? `✓ 내 컴퓨터 연결됨 · 윈도우 탐색기 S:\\ 실시간 동기화 가동 중${(localDocs.length || lastSyncedToLocalCount) > 0 ? ` (${localDocs.length || lastSyncedToLocalCount}건 동기화됨)` : ''}`
                   : '대장 PC 직통 연결 — 웹 미리보기 & 실시간 열람 잠금 확인 가능'}
               </span>
             </div>
