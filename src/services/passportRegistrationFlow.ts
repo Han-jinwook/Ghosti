@@ -28,7 +28,10 @@ import {
   runOnDeviceFacePassportScan,
   saveCachedOnDeviceFaceClusters,
 } from './ai/onDeviceFacePassportEngine';
-import { buildAutoMultiConditionSeedClusters } from '../store/slices/storeSharedRefs';
+import {
+  buildAutoMultiConditionSeedClusters,
+  saveCustomFaceRegistration,
+} from '../store/slices/storeSharedRefs';
 
 export type PassportRegMode = 'self' | 'family';
 
@@ -85,6 +88,8 @@ export const FAMILY_MIN_PHOTOS = 3;
 export const MAX_PASSPORT_CANDIDATE_FACES = 12;
 const MAX_FACES = MAX_PASSPORT_CANDIDATE_FACES;
 const MAX_CUTS_PER_PERSON = 12;
+/** 내 프로필 ➔ 여권 등 확정·합치기 완료 사진 보관 상한 (선글라스·모자 합치기 컷이 연도순 잘림으로 누락되지 않도록 충분히 보존) */
+const MAX_CONFIRMED_CUTS_PER_PERSON = 36;
 
 export interface PassportRegState {
   /** 유저가 '이게 나'라고 고른 얼굴 묶음 */
@@ -97,6 +102,8 @@ export interface PassportRegState {
   rejectedKeys: string[];
   /** 가족 등록 화면에서 '이분은 아님'으로 뺀 얼굴 묶음 */
   dismissedClusterIds: string[];
+  /** 재스캔으로 clusterId가 바뀌어도 제외한 인물이 다시 뜨지 않도록 대표 사진 + 얼굴 좌표 버킷 서명 보관 */
+  dismissedSignatures?: string[];
   /** 첫 등록 제안을 한 번이라도 보여줬는지 */
   firstOfferShown?: boolean;
   /** 사진 활동 카운터 (검색·사진 추가 시 증가) */
@@ -115,6 +122,7 @@ const EMPTY_STATE: PassportRegState = {
   confirmedSelfCuts: [],
   rejectedKeys: [],
   dismissedClusterIds: [],
+  dismissedSignatures: [],
   activitySeq: 0,
 };
 
@@ -130,6 +138,7 @@ export function loadPassportRegState(): PassportRegState {
       confirmedSelfCuts: Array.isArray(parsed.confirmedSelfCuts) ? parsed.confirmedSelfCuts : [],
       rejectedKeys: Array.isArray(parsed.rejectedKeys) ? parsed.rejectedKeys : [],
       dismissedClusterIds: Array.isArray(parsed.dismissedClusterIds) ? parsed.dismissedClusterIds : [],
+      dismissedSignatures: Array.isArray(parsed.dismissedSignatures) ? parsed.dismissedSignatures : [],
       activitySeq: typeof parsed.activitySeq === 'number' ? parsed.activitySeq : 0,
     };
   } catch {
@@ -204,7 +213,7 @@ export function countFacePhotos(clusters: FaceMemberCluster[]): number {
 }
 
 /** 얼굴 묶음의 시기별 사진 (없으면 대표 사진 1장, 동명 파일 복사본 중복 제거) */
-export function clusterCuts(c: FaceMemberCluster): YearlyFaceBestCut[] {
+export function clusterCuts(c: FaceMemberCluster, limit = MAX_CUTS_PER_PERSON): YearlyFaceBestCut[] {
   const cuts = Array.isArray(c.yearlyBestCuts) && c.yearlyBestCuts.length > 0
     ? c.yearlyBestCuts
     : [
@@ -229,7 +238,19 @@ export function clusterCuts(c: FaceMemberCluster): YearlyFaceBestCut[] {
       return true;
     })
     .sort((a, b) => b.year - a.year)
-    .slice(0, MAX_CUTS_PER_PERSON);
+    .slice(0, limit);
+}
+
+function clusterDismissSignature(c: Pick<FaceMemberCluster, 'representativePhoto' | 'boundingBox'>): string {
+  const photo = (c.representativePhoto || '')
+    .replace(/__[0-9A-Za-z가-힣_-]{1,18}_[0-9a-f]{6}(?=\.[^.]+$)/i, '')
+    .trim()
+    .toLowerCase();
+  const box =
+    Array.isArray(c.boundingBox) && c.boundingBox.length >= 4
+      ? `${Math.round(c.boundingBox[0] / 40)}_${Math.round(c.boundingBox[1] / 40)}`
+      : 'nobox';
+  return photo ? `${photo}::${box}` : '';
 }
 
 /** 아직 묻지 않은(등록·거절 안 된) 시기별 사진 */
@@ -257,7 +278,7 @@ export function confirmedCutsFor(c: FaceMemberCluster, st: PassportRegState): Ye
       .map((k) => k.split('::')[1])
       .filter(Boolean)
   );
-  const fromCluster = clusterCuts(c).filter((cut) => {
+  const fromCluster = clusterCuts(c, MAX_CONFIRMED_CUTS_PER_PERSON).filter((cut) => {
     const k = cutKey(c.clusterId, cut);
     return confirmed.has(k) && !rejected.has(k);
   });
@@ -272,7 +293,7 @@ export function confirmedCutsFor(c: FaceMemberCluster, st: PassportRegState): Ye
     seen.add(pName);
     merged.push(snap);
   }
-  return merged.sort((a, b) => b.year - a.year).slice(0, MAX_CUTS_PER_PERSON);
+  return merged.sort((a, b) => b.year - a.year).slice(0, MAX_CONFIRMED_CUTS_PER_PERSON);
 }
 
 export function findSelfCluster(st = loadPassportRegState()): FaceMemberCluster | null {
@@ -429,14 +450,14 @@ export function familyCandidates(st = loadPassportRegState()): FaceMemberCluster
   const freshSt = self ? loadPassportRegState() : st;
   const selfId = self?.clusterId || freshSt.selfClusterId;
   const dismissed = new Set(freshSt.dismissedClusterIds);
+  const dismissedSigs = new Set(freshSt.dismissedSignatures || []);
   return rankFaceClusters(liveClusters(), 30)
-    .filter(
-      (c) =>
-        c.clusterId !== selfId &&
-        !dismissed.has(c.clusterId) &&
-        (c.matchedPhotoCount || 0) >= FAMILY_MIN_PHOTOS &&
-        pendingCutsFor(c, freshSt).length > 0
-    )
+    .filter((c) => {
+      if (c.clusterId === selfId || dismissed.has(c.clusterId)) return false;
+      const sig = clusterDismissSignature(c);
+      if (sig && dismissedSigs.has(sig)) return false;
+      return (c.matchedPhotoCount || 0) >= FAMILY_MIN_PHOTOS && pendingCutsFor(c, freshSt).length > 0;
+    })
     .slice(0, MAX_FACES);
 }
 
@@ -729,7 +750,7 @@ function mergeClusterIntoTarget(
         ? c
         : {
             ...c,
-            yearlyBestCuts: mergedYearlyCuts.slice(0, MAX_CUTS_PER_PERSON),
+            yearlyBestCuts: mergedYearlyCuts.slice(0, MAX_CONFIRMED_CUTS_PER_PERSON),
             matchedPhotoFiles: mergedMatchedFiles,
             matchedPhotoCount: Math.max(c.matchedPhotoCount || 0, mergedMatchedFiles.length),
           }
@@ -742,6 +763,116 @@ function mergeClusterIntoTarget(
   }
   const latestStore = useSaySeeStore.getState();
   saveCachedOnDeviceFaceClusters(latestStore.faceClusters, latestStore.latestCorpusYear);
+}
+
+/** 가족 후보 카드에서 [제외]를 누른 즉시 영구 제외를 저장한다 (되돌리기 전까지 새로고침·재질문 시에도 절대 재노출 안 됨) */
+export function dismissFamilyCandidateImmediately(
+  cluster: FaceMemberCluster,
+  cuts: YearlyFaceBestCut[]
+): void {
+  const st = loadPassportRegState();
+  const confirmedKeys = new Set(st.confirmedKeys);
+  const rejectedKeys = new Set(st.rejectedKeys);
+  cuts.forEach((cut) => {
+    const k = cutKey(cluster.clusterId, cut);
+    rejectedKeys.add(k);
+    confirmedKeys.delete(k);
+  });
+  const sig = clusterDismissSignature(cluster);
+  const nextSigs = sig
+    ? Array.from(new Set([...(st.dismissedSignatures || []), sig]))
+    : st.dismissedSignatures || [];
+  const nextSt: PassportRegState = {
+    ...st,
+    firstOfferShown: true,
+    confirmedKeys: Array.from(confirmedKeys),
+    rejectedKeys: Array.from(rejectedKeys),
+    dismissedClusterIds: Array.from(new Set([...st.dismissedClusterIds, cluster.clusterId])),
+    dismissedSignatures: nextSigs,
+  };
+
+  saveCustomFaceRegistration(cluster.clusterId, { excludedAsPasserby: true });
+  const curStore = useSaySeeStore.getState();
+  const nextClusters = curStore.faceClusters.map((c) =>
+    c.clusterId === cluster.clusterId ? { ...c, excludedAsPasserby: true } : c
+  );
+  useSaySeeStore.setState({ faceClusters: nextClusters });
+  saveCachedOnDeviceFaceClusters(nextClusters, curStore.latestCorpusYear);
+  savePassportRegState(nextSt);
+}
+
+/** 같은 세션 화면 안에서 방금 [제외]한 카드를 [되돌리기]로 즉시 원복한다 */
+export function undoDismissFamilyCandidate(
+  cluster: FaceMemberCluster,
+  cuts: YearlyFaceBestCut[]
+): void {
+  const st = loadPassportRegState();
+  const undoKeys = new Set(cuts.map((cut) => cutKey(cluster.clusterId, cut)));
+  const sig = clusterDismissSignature(cluster);
+  const nextSt: PassportRegState = {
+    ...st,
+    rejectedKeys: st.rejectedKeys.filter((k) => !undoKeys.has(k)),
+    dismissedClusterIds: st.dismissedClusterIds.filter((id) => id !== cluster.clusterId),
+    dismissedSignatures: sig
+      ? (st.dismissedSignatures || []).filter((s) => s !== sig)
+      : st.dismissedSignatures || [],
+  };
+
+  saveCustomFaceRegistration(cluster.clusterId, { excludedAsPasserby: false });
+  const curStore = useSaySeeStore.getState();
+  const exists = curStore.faceClusters.some((c) => c.clusterId === cluster.clusterId);
+  const nextClusters = exists
+    ? curStore.faceClusters.map((c) =>
+        c.clusterId === cluster.clusterId ? { ...c, excludedAsPasserby: false } : c
+      )
+    : [...curStore.faceClusters, { ...cluster, excludedAsPasserby: false }];
+  useSaySeeStore.setState({ faceClusters: nextClusters });
+  saveCachedOnDeviceFaceClusters(nextClusters, curStore.latestCorpusYear);
+  savePassportRegState(nextSt);
+}
+
+/** 가족 후보 카드 1건만 즉시 기존 여권(내 여권 · 이미 등록한 가족 여권)에 합쳐서 저장한다 */
+export async function mergeFamilyCandidateImmediately(
+  sourceCluster: FaceMemberCluster,
+  targetClusterId: string,
+  acceptedCuts: YearlyFaceBestCut[],
+  rejectedCuts: YearlyFaceBestCut[]
+): Promise<{ merged: number; targetLabel: string; isSelf: boolean }> {
+  if (!sourceCluster?.clusterId || !targetClusterId || acceptedCuts.length === 0) {
+    return { merged: 0, targetLabel: '', isSelf: false };
+  }
+  const normalizedAccepted: YearlyFaceBestCut[] = acceptedCuts.map((cut) => ({
+    ...cut,
+    representativePhoto: cut.representativePhoto || sourceCluster.representativePhoto || '',
+    boundingBox: cut.boundingBox || sourceCluster.boundingBox,
+    cropUrl: cut.cropUrl || cut.avatarUrl || sourceCluster.cropUrl || sourceCluster.avatarUrl || '',
+    avatarUrl: cut.avatarUrl || cut.cropUrl || sourceCluster.avatarUrl || sourceCluster.cropUrl || '',
+  }));
+  const book = loadGhostPassportBook();
+  const secSt = loadGhostSecretaryState();
+  const nickname = (secSt.nickname || book.self?.nickname || '').trim();
+  const savedSelfRealName = (book.self?.realName || '').trim();
+  const st = loadPassportRegState();
+  const activeSelf = findSelfCluster(st);
+  const selfClusterId = activeSelf?.clusterId || st.selfClusterId;
+  const isSelf = Boolean(selfClusterId && targetClusterId === selfClusterId);
+  const targetCluster = useSaySeeStore
+    .getState()
+    .faceClusters.find((c) => c.clusterId === targetClusterId);
+  const targetLabel = isSelf
+    ? savedSelfRealName || nickname || '나'
+    : (targetCluster?.registeredName || '').trim();
+
+  const res = await submitPassportRegistration('family', [
+    {
+      clusterId: sourceCluster.clusterId,
+      acceptedCuts: normalizedAccepted,
+      rejectedCuts,
+      realName: targetLabel,
+      mergeIntoClusterId: targetClusterId,
+    },
+  ]);
+  return { merged: res.merged, targetLabel, isSelf };
 }
 
 export interface PassportPersonSubmission {
@@ -788,10 +919,22 @@ export async function submitPassportRegistration(
     });
     if (p.dismissPerson) {
       dismissedCount += 1;
+      const sourceCluster = useSaySeeStore.getState().faceClusters.find((c) => c.clusterId === p.clusterId);
+      const sig = sourceCluster ? clusterDismissSignature(sourceCluster) : '';
+      saveCustomFaceRegistration(p.clusterId, { excludedAsPasserby: true });
+      const curStore = useSaySeeStore.getState();
+      const nextClusters = curStore.faceClusters.map((c) =>
+        c.clusterId === p.clusterId ? { ...c, excludedAsPasserby: true } : c
+      );
+      useSaySeeStore.setState({ faceClusters: nextClusters });
+      saveCachedOnDeviceFaceClusters(nextClusters, curStore.latestCorpusYear);
       st = {
         ...st,
         rejectedKeys: Array.from(rejectedKeys),
         dismissedClusterIds: Array.from(new Set([...st.dismissedClusterIds, p.clusterId])),
+        dismissedSignatures: sig
+          ? Array.from(new Set([...(st.dismissedSignatures || []), sig]))
+          : st.dismissedSignatures || [],
       };
       continue;
     }
@@ -848,7 +991,19 @@ export async function submitPassportRegistration(
         ? savedSelfRealName || nickname || '나'
         : (targetCluster?.registeredName || safeRealName || '').trim();
 
-      p.acceptedCuts.forEach((cut) => {
+      const sourceClusterBeforeMerge = useSaySeeStore
+        .getState()
+        .faceClusters.find((c) => c.clusterId === p.clusterId);
+      const sourceSig = sourceClusterBeforeMerge ? clusterDismissSignature(sourceClusterBeforeMerge) : '';
+      const normalizedAcceptedCuts: YearlyFaceBestCut[] = p.acceptedCuts.map((ac) => ({
+        ...ac,
+        representativePhoto: ac.representativePhoto || sourceClusterBeforeMerge?.representativePhoto || '',
+        boundingBox: ac.boundingBox || sourceClusterBeforeMerge?.boundingBox,
+        cropUrl: ac.cropUrl || ac.avatarUrl || sourceClusterBeforeMerge?.cropUrl || sourceClusterBeforeMerge?.avatarUrl || '',
+        avatarUrl: ac.avatarUrl || ac.cropUrl || sourceClusterBeforeMerge?.avatarUrl || sourceClusterBeforeMerge?.cropUrl || '',
+      }));
+
+      normalizedAcceptedCuts.forEach((cut) => {
         confirmedKeys.add(cutKey(effectiveMergeTargetId, cut));
         rejectedKeys.delete(cutKey(effectiveMergeTargetId, cut));
       });
@@ -862,39 +1017,59 @@ export async function submitPassportRegistration(
         ? [targetDisplayName]
         : [];
 
+      const existingSelfCutsBeforeMerge =
+        isSelfTarget && targetCluster
+          ? confirmedCutsFor(targetCluster, st)
+          : Array.isArray(st.confirmedSelfCuts)
+          ? st.confirmedSelfCuts
+          : [];
+
       mergeClusterIntoTarget(
         p.clusterId,
         effectiveMergeTargetId,
-        p.acceptedCuts,
+        normalizedAcceptedCuts,
         p.rejectedCuts.map((c) => c.representativePhoto).filter(Boolean),
         tagsToAdd
       );
+      saveCustomFaceRegistration(p.clusterId, { excludedAsPasserby: true });
 
       let nextConfirmedSelfCuts = st.confirmedSelfCuts;
       if (isSelfTarget) {
         const rejPhotoSet = new Set(p.rejectedCuts.map((c) => c.representativePhoto).filter(Boolean));
-        const prevSelfCuts = Array.isArray(st.confirmedSelfCuts)
-          ? st.confirmedSelfCuts.filter((c) => !rejPhotoSet.has(c.representativePhoto))
-          : [];
-        const seenSelfPhotos = new Set(prevSelfCuts.map((c) => c.representativePhoto).filter(Boolean));
-        const mergedSelfCuts = [...prevSelfCuts];
-        for (const ac of p.acceptedCuts) {
+        const baseSelfCuts = [
+          ...existingSelfCutsBeforeMerge,
+          ...(Array.isArray(st.confirmedSelfCuts) ? st.confirmedSelfCuts : []),
+        ].filter((c) => c.representativePhoto && !rejPhotoSet.has(c.representativePhoto));
+        const seenSelfPhotos = new Set<string>();
+        const mergedSelfCuts: YearlyFaceBestCut[] = [];
+        for (const c of baseSelfCuts) {
+          if (seenSelfPhotos.has(c.representativePhoto)) continue;
+          seenSelfPhotos.add(c.representativePhoto);
+          mergedSelfCuts.push(c);
+        }
+        for (const ac of normalizedAcceptedCuts) {
           if (!ac.representativePhoto || seenSelfPhotos.has(ac.representativePhoto)) continue;
           seenSelfPhotos.add(ac.representativePhoto);
           mergedSelfCuts.push(ac);
         }
-        nextConfirmedSelfCuts = mergedSelfCuts.sort((a, b) => b.year - a.year).slice(0, MAX_CUTS_PER_PERSON);
+        nextConfirmedSelfCuts = mergedSelfCuts
+          .sort((a, b) => b.year - a.year)
+          .slice(0, MAX_CONFIRMED_CUTS_PER_PERSON);
       }
 
       st = {
         ...st,
+        selfClusterId: isSelfTarget ? effectiveMergeTargetId : st.selfClusterId,
         confirmedKeys: Array.from(confirmedKeys),
         rejectedKeys: Array.from(rejectedKeys),
         confirmedSelfCuts: nextConfirmedSelfCuts,
         dismissedClusterIds: Array.from(new Set([...st.dismissedClusterIds, p.clusterId])),
+        dismissedSignatures: sourceSig
+          ? Array.from(new Set([...(st.dismissedSignatures || []), sourceSig]))
+          : st.dismissedSignatures || [],
       };
-      mergedCount += p.acceptedCuts.length;
-      registered += p.acceptedCuts.length;
+      mergedCount += normalizedAcceptedCuts.length;
+      registered += normalizedAcceptedCuts.length;
       if (targetDisplayName && !mergedNames.includes(targetDisplayName)) {
         mergedNames.push(targetDisplayName);
       }
@@ -962,7 +1137,7 @@ export async function submitPassportRegistration(
       st = {
         ...st,
         selfClusterId: p.clusterId,
-        confirmedSelfCuts: mergedSelfCuts.sort((a, b) => b.year - a.year).slice(0, MAX_CUTS_PER_PERSON),
+        confirmedSelfCuts: mergedSelfCuts.sort((a, b) => b.year - a.year).slice(0, MAX_CONFIRMED_CUTS_PER_PERSON),
       };
       registered += p.acceptedCuts.length || (safeRealName ? 1 : 0);
     } else if (p.acceptedCuts.length > 0) {
